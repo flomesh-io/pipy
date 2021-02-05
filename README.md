@@ -6,7 +6,7 @@ lightweight and fast, making it one of the best choices for service mesh sidecar
 
 With builtin JavaScript support, thanks to QuickJS, Pipy is highly
 customizable and also predictable in performance with no garbage collection
-burden found in other scriptable counterparts.
+overhead found in other scriptable counterparts.
 
 At its core, Pipy has a modular design with many small reusable modules
 that can be chained together to make a pipeline, through which network data
@@ -21,7 +21,7 @@ Before building, the following tools are required to be installed first:
 * Clang
 * CMake 2.8+
 
-The build process is as simple as this:
+The build process is as simple as:
 
 ```bash
 export CC=clang
@@ -34,16 +34,16 @@ make
 
 The executable is located at `bin/pipy`. Type `bin/pipy -h` for usage information.
 
-# How to run 
+# How to Run
 
 ## CLI
-~~~
+```bash
 pipy test/001-echo/pipy.cfg --reuse-port --watch-config-file &
-~~~
+```
 
-## K8S
+## Kubernetes
 
-[Follow this link to run pipy on k8s as CRD.](https://github.com/flomesh-io/pipy-operator/blob/main/README.md#quickstart)
+[Follow this link to run Pipy on Kubernetes as a CRD.](https://github.com/flomesh-io/pipy-operator/blob/main/README.md#quickstart)
 
 # Terminology
 
@@ -97,8 +97,9 @@ state, called `context`, associated to them. Sessions have that.
 
 Sessions have their contexts created when incoming connections first open, and destroyed
 when the connections close. When a session calls up another session inside Pipy by refering
-to a different pipeline, the new session can inherit the context from its parent session, or
-create its own new context.
+to a different pipeline, the new session will inherit the context from its parent session,
+unless the new session is to be shared by multiple source sessions, in which case the new
+session will create its own context.
 
 ## Context
 
@@ -131,44 +132,49 @@ comes a series of module definitions. Each module definition includes the name o
 optionally, its parameters. Each parameter is written as `<name> = <value>`.
 
 ```
-# First pipeline
-pipeline <name>
-  <module>
-    <parameter> = <value>
-    <parameter> = <value>
-    ...
-  <module>
-    <parameter> = <value>
-    <parameter> = <value>
-    ...
-  ...
+# Start of Pipy configuration
+pipy
 
-# Second pipeline
-pipeline <name>
-  <module>
-    <parameter> = <value>
-    <parameter> = <value>
+  # First pipeline
+  pipeline <name>
+    <module>
+      <parameter> = <value>
+      <parameter> = <value>
+      ...
+    <module>
+      <parameter> = <value>
+      <parameter> = <value>
+      ...
     ...
-  ...
 
-# More pipelines if needed
-...
+  # Second pipeline
+  pipeline <name>
+    <module>
+      <parameter> = <value>
+      <parameter> = <value>
+      ...
+    ...
+
+  # More pipelines if needed
+  ...
 
 ```
 
-The cascading in Pipy configurations is determined by indentation. Pipeline definitions
-are on the top with no indentations. Module definitions should be indented deeper than
-pipelines. Module parameters should be indented deeper than their modules.
+The cascading in Pipy configurations is determined by indentation. Pipy configuration files
+always start with word _pipy_, taking up the entire first line with no indentation, followed
+by pipeline definitions with one level deeper indentation. Module definitions should be
+indented deeper than pipelines. Module parameters should be indented deeper than their modules.
 
-Lines started with `#` are comments. Line trailing comments are not supported.
+Comments are started with `#`. They can appear at the end of a line, or take up its own line.
 
 For example, a pipeline that says 'Hey, wassup!' to any HTTP requests would be something
 like this:
 
 ```
-pipeline 0.0.0.0:8080
-  decode-http-request
-  hello
-    message = Hey, wassup!\n
-  encode-http-response
+pipy
+  pipeline :6000
+    decode-http-request
+    hello
+      message = Hey, wassup!\n
+    encode-http-response
 ```
