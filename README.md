@@ -143,7 +143,7 @@ You can find Pipy documentation under `docs/`.
 
 # Copyright & License
 
-Please see COPYRIGHT and LICENCE.
+Please see [COPYRIGHT](https://github.com/flomesh-io/pipy/blob/main/COPYRIGHT) and [LICENCE](https://github.com/flomesh-io/pipy/blob/main/LICENCE).
 
 # Contact
 
