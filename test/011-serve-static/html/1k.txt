@@ -1,0 +1,21 @@
+Usage: pipy [options] <config filename>
+
+Options:
+  -h, -help, --help                    Show help information
+  -v, -version, --version              Show version information
+  --list-modules                       List all supported modules
+  --help-modules                       Show help information for all supported modules
+  --log-level=<debug|info|warn|error>  Set the level of log output
+  --verify                             Verify configuration only
+  --watch-config-file                  Reload configuration when config file changes
+  --reuse-port                         Enable kernel load balancing for all listening ports
+
+Usage: pipy [options] <config filename>
+Usage: pipy [options] <config filename>
+
+Options:
+  -h, -help, --help                    Show help information
+  -v, -version, --version              Show version information
+  --list-modules                       List all supported modules
+  --help-modules                       Show help information for all supported modules
+

@@ -1,0 +1,42 @@
+{
+    "uuid": "bc17de60-6b62-11eb-87e6-c13da3d84fe1",
+    "timestamp": 1612935737158158,
+    "type": "request",
+    "body": "{\"name\":\"pipy\"}",
+    "env": {
+        "SHELL": "/bin/bash",
+        "COLORTERM": "truecolor",
+        "XDG_CONFIG_DIRS": "/etc/xdg/xdg-ubuntu:/etc/xdg",
+        "XDG_MENU_PREFIX": "gnome-",
+        "TERM_PROGRAM_VERSION": "1.52.1",
+        "GNOME_DESKTOP_SESSION_ID": "this-is-deprecated",
+        "GNOME_SHELL_SESSION_MODE": "ubuntu",
+        "DESKTOP_SESSION": "ubuntu",
+        "XDG_SESSION_DESKTOP": "ubuntu",
+        "LOGNAME": "rahlga",
+        "XDG_SESSION_TYPE": "x11",
+        "PANEL_GDK_CORE_DEVICE_EVENTS": "0",
+        "WINDOWPATH": "2",
+        "HOME": "/home/rahlga",
+        "USERNAME": "rahlga",
+        "TERM": "xterm-256color",
+        "LESSOPEN": "| /usr/bin/lesspipe %s",
+        "VSCODE_GIT_IPC_HANDLE": "/run/user/1000/vscode-git-064fec8b33.sock",
+        "GNOME_TERMINAL_SERVICE": ":1.87",
+        "DISPLAY": ":1.0",
+        "GDMSESSION": "ubuntu",
+        "TERM_PROGRAM": "vscode",
+        "_": "bin/pipy"
+    },
+    "ctx": {
+        "in.method": "POST",
+        "in.path": "/",
+        "in.protocol": "HTTP/1.1",
+        "in.request.accept": "*/*",
+        "in.request.content-length": "15",
+        "in.request.content-type": "application/x-www-form-urlencoded",
+        "in.request.host": "localhost:6000",
+        "in.request.user-agent": "curl/7.68.0",
+        "uuid": "bc17de60-6b62-11eb-87e6-c13da3d84fe1"
+    }
+}
