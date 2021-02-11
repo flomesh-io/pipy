@@ -138,8 +138,8 @@ kubectl apply -f config/samples/sidecar/007-deployment-pipy.yaml
 
 You can find Pipy documentation under `docs/`.
 
-* Overview
-* Configuration
+* [Overview](https://github.com/flomesh-io/pipy/blob/main/docs/overview.md)
+* [Configuration](https://github.com/flomesh-io/pipy/blob/main/docs/configuration.md)
 
 # Copyright & License
 
