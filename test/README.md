@@ -88,8 +88,8 @@ high traffic volumes.
 This test demonstrates how Pipy can be used to inspect Dubbo traffic and act as a
 REST-to-Dubbo converter where Dubbo providers are exposed as RESTful services speaking JSON.
 
-## 015 xml
+## 016 xml
 
-This test shows how XML documents can be formatted with indentations after being decoded
-and then encoded as they pass through XML codec modules.
+This test shows how XML documents can be transformed into JSON after being decoded first as
+XML and then encoded as JSON while they pass through XML/JSON codec modules.
 
