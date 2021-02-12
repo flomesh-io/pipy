@@ -24,16 +24,18 @@ RUN rm -fr pipy/build \
 
 FROM alpine:3.12 as prod
 COPY --from=builder /pipy/bin/pipy /usr/local/bin/pipy
-RUN  apk add --no-cache ca-certificates libstdc++ libcap su-exec tar curl busybox-extras iptables tzdata socat logrotate jq
-RUN  mkdir /etc/pipy \
-     && adduser -Su 1340 pipy \
-     && chmod -R g=u /usr/local/bin/pipy /etc/pipy \
-     && chown -R pipy:0 /usr/local/bin/pipy /etc/pipy \
-	 && setcap cap\_net\_admin=eip /usr/local/bin/pipy \
-	 && chmod +x /usr/local/bin/pipy
+COPY --from=builder /etc/pipy /etc/pipy
+RUN apk add --no-cache ca-certificates libstdc++ libcap su-exec tar curl busybox-extras iptables tzdata socat logrotate jq
+RUN adduser -Su 1340 pipy \
+    && setcap cap\_net\_admin=eip /usr/local/bin/pipy \
+    && chmod -R g=u /usr/local/bin/pipy /etc/pipy \
+    && chown -R pipy:0 /usr/local/bin/pipy /etc/pipy 
+
 COPY docker-entrypoint.sh /docker-entrypoint.sh
+
 USER pipy
 EXPOSE 6000
 STOPSIGNAL SIGQUIT
+
 ENTRYPOINT ["/docker-entrypoint.sh"]
 CMD ["pipy", "docker-start"]
