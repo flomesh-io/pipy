@@ -4,7 +4,7 @@ Pipy是一个轻量、高性能、高稳定、可编程的网络代理。Pipy核
 Pipy的可执行文件在5M左右，基于Alpine的镜像是10M左右，运行期的内存占用10M左右，因此Pipy非常
 适合做sidecar proxy。
 
-Pipy内置了QuickJS(https://github.com/bellard/quickjs)作为脚本扩展，使得Pipy可以用JS脚本
+Pipy内置了[QuickJS](https://github.com/bellard/quickjs) 作为脚本扩展，使得Pipy可以用JS脚本
 快速扩展需要定制的逻辑与功能。QuickJS的“确定性垃圾回收（GC）”机制，进一步保证了Pipy的可靠性与确定性，
 避免了很多脚本类语言因GC导致的不确定性问题。
 
@@ -84,7 +84,7 @@ $ pipy test/001-echo/pipy.cfg --watch-config-file
 ```
 
 在Linux或者BSD系统上，可以通过如下命令启动两个（或者多个）Pipy监听同一个端口，内核会自动的在多个进程间负载均衡流量。这极大的提高了吞吐能力。同时，
-这种进程间share nothing的结构回避了很多多进程/多线程的复杂度，使得Pipy在通过多进程横向扩展吞吐能力的同时，没有引入新的复杂度和不确定行：
+这种进程间share nothing的结构回避了很多多进程/多线程的复杂度，使得Pipy在通过多进程横向扩展吞吐能力的同时，没有引入新的复杂度和不确定性：
 
 ```
 $ pipy test/001-echo/pipy.cfg --reuse-port &
