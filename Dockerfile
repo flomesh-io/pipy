@@ -1,11 +1,11 @@
-FROM alpine:3.12
+FROM alpine:3.12 as builder
 LABEL maintainer="Kevein Liu<khas@flomesh.io>"
 
 ENV  pkg_prefix              /usr/local
 ENV  pkg_confdir	     /etc/pipy
 ENV  pkg_bindir              ${pkg_prefix}/bin
 ENV  CXX       		     clang++
-ENV  CC			     clang 
+ENV  CC			     clang
 
 COPY . /pipy
 
@@ -21,22 +21,19 @@ RUN rm -fr pipy/build \
         && cp -r /pipy/test ${pkg_confdir} \
 	&& apk del .build-deps
 
-RUN rm -fr /pipy \
-	&& adduser -Su 1340 pipy \
-        && apk add --no-cache libstdc++ su-exec tar curl busybox-extras iptables tzdata socat logrotate jq \
-        && chown -R pipy:0 /usr/local/bin/pipy /etc/pipy \
-        && chmod -R g=u /usr/local/bin/pipy /etc/pipy \
-	&& setcap cap\_net\_admin=eip /usr/local/bin/pipy
 
-
+FROM alpine:3.12 as prod
+COPY --from=builder /pipy/bin/pipy /usr/local/bin/pipy
+RUN  apk add --no-cache ca-certificates libstdc++ libcap su-exec tar curl busybox-extras iptables tzdata socat logrotate jq
+RUN  mkdir /etc/pipy \
+     && adduser -Su 1340 pipy \
+     && chmod -R g=u /usr/local/bin/pipy /etc/pipy \
+     && chown -R pipy:0 /usr/local/bin/pipy /etc/pipy \
+	 && setcap cap\_net\_admin=eip /usr/local/bin/pipy \
+	 && chmod +x /usr/local/bin/pipy
 COPY docker-entrypoint.sh /docker-entrypoint.sh
-
-ENTRYPOINT ["/docker-entrypoint.sh"]
-
-STOPSIGNAL SIGQUIT
-
+USER pipy
 EXPOSE 6000
-
+STOPSIGNAL SIGQUIT
+ENTRYPOINT ["/docker-entrypoint.sh"]
 CMD ["pipy", "docker-start"]
-
-

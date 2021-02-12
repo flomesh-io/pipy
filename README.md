@@ -1,6 +1,6 @@
 # Pipy
 
-Pipy is a cloud-native high-performance programmable proxy. Written
+Pipy is a tiny, high performance, highly stable, programmable proxy. Written
 in C++, built on top of Asio asynchronous I/O library, Pipy is extremely
 lightweight and fast, making it one of the best choices for service mesh sidecars.
 
