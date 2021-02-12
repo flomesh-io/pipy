@@ -23,7 +23,7 @@ RUN rm -fr pipy/build \
 
 RUN rm -fr /pipy \
 	&& adduser -Su 1340 pipy \
-        && apk add --no-cache libstdc++ su-exec tar curl busybox-extras iptables tzdata socat logrotate jq \
+        && apk add --no-cache libcap libstdc++ su-exec tar curl busybox-extras iptables tzdata socat logrotate jq \
         && chown -R pipy:0 /usr/local/bin/pipy /etc/pipy \
         && chmod -R g=u /usr/local/bin/pipy /etc/pipy \
 	&& setcap cap\_net\_admin=eip /usr/local/bin/pipy
