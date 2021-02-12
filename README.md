@@ -155,4 +155,4 @@ Please see [COPYRIGHT](https://github.com/flomesh-io/pipy/blob/main/COPYRIGHT) a
 
 # Multi-Language
 
-## [中文版](https://github.com/flomesh-io/pipy/README_zh.md)
+## [中文版](https://github.com/flomesh-io/pipy/blob/main/README_zh.md)
