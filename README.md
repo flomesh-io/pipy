@@ -105,19 +105,25 @@ Pipy Docker image can be configured with a few environment variables:
 * `PIPY_SPAWN=n` for the number of Pipy instances you want to start, where `n` is the number
   of instantces subtracted by 1. For example, you use `PIPY_SPAWN=3` for 4 instances.
 
+
 ```
-docker run -it --rm -e PIPY_CONFIG_FILE=/etc/pipy/test/001-echo/pipy.cfg flomesh/pipy:latest
+git clone https://github.com/flomesh-io/pipy.git
+cd pipy 
 ```
 
 ```
-docker run -it --rm -e PIPY_CONFIG_FILE=/etc/pipy/test/011-serve-static/pipy.cfg -e PIPY_SPAWN=1 -p 8000:6000 flomesh/pipy:latest
+docker run -it --rm -e PIPY_CONFIG_FILE=/etc/pipy/test/001-echo/pipy.cfg  -v $(pwd)/test:/etc/pipy/test/ flomesh/pipy:latest
+```
+
+```
+docker run -it --rm -e PIPY_CONFIG_FILE=/etc/pipy/test/011-serve-static/pipy.cfg -e PIPY_SPAWN=1 -p 8000:6000   -v $(pwd)/test:/etc/pipy/test/ flomesh/pipy:latest
 ```
 
 Pipy also supports [transparent proxy](https://www.kernel.org/doc/Documentation/networking/tproxy.txt "Linux Transparent Proxy")
 in Docker environment where `NET_ADMIN` capability is enabled by adding `--cap-add NET_ADMIN` option to the startup command:
 
 ```
-docker run -it --rm -e PIPY_CONFIG_FILE=/etc/pipy/test/001-echo/pipy.cfg --cap-add NET_ADMIN flomesh/pipy:latest
+docker run -it --rm -e PIPY_CONFIG_FILE=/etc/pipy/test/001-echo/pipy.cfg --cap-add NET_ADMIN -v $(pwd)/test:/etc/pipy/test/ flomesh/pipy:latest
 ```
 
 ## Run on Kubernetes
