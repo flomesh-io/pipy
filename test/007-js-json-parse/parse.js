@@ -3,7 +3,7 @@
 //
 
 export default (output, context) => (
-  readBody(buffer => {
+  readBody(output, buffer => {
     let obj = null;
     try {
       obj = JSON.parse(buffer.toString());
@@ -19,7 +19,7 @@ export default (output, context) => (
 // of a complete message and returns it as a whole buffer.
 //
 
-const readBody = cb => {
+const readBody = (output, cb) => {
   let buffer = null;
 
   return (input) => {
@@ -28,6 +28,11 @@ const readBody = cb => {
 
     } else if (input instanceof Event) {
       switch (input.type) {
+        case 'sessionstart':
+        case 'sessionend':
+          output(input);
+          break;
+
         case 'messagestart':
           buffer = new Buffer();
           break;

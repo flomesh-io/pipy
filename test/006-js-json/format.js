@@ -3,7 +3,7 @@
 //
 
 export default (output, context) => (
-  buildJsonTree(obj => {
+  buildJsonTree(output, obj => {
     output(new Event('messagestart'));
     output(new Buffer(
       JSON.stringify(obj, null, 2) + '\n'
@@ -17,7 +17,7 @@ export default (output, context) => (
 // a plain JavaScript object.
 //
 
-const buildJsonTree = (cb) => {
+const buildJsonTree = (output, cb) => {
   let root, stack, lastKey;
 
   const append = (v) => {
@@ -39,6 +39,8 @@ const buildJsonTree = (cb) => {
   return input => {
     if (input instanceof Event) {
       switch (input.type) {
+        case 'sessionstart':
+        case 'sessionend': output(input); break;
         case 'messagestart': stack = []; break;
         case 'messageend': cb(root); break;
         case 'mapstart': push({}); break;

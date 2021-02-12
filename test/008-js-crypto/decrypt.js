@@ -9,6 +9,11 @@ export default (output, context) => {
 
     } else if (input instanceof Event) {
       switch (input.type) {
+        case 'sessionstart':
+        case 'sessionend':
+          output(input);
+          break;
+
         case 'messagestart':
           buffer = new Buffer();
           break;
