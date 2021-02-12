@@ -107,7 +107,7 @@ docker run -it --rm -e PIPY_CONFIG_FILE=/etc/pipy/test/001-echo/pipy.cfg flomesh
 docker run -it --rm -e PIPY_CONFIG_FILE=/etc/pipy/test/011-serve-static/pipy.cfg -e PIPY_SPAWN=1 -p 8000:6000 flomesh/pipy:latest
 ```
 
-当作为sidecar proxy运行的时候，Pipy支持“透明代理(https://www.kernel.org/doc/Documentation/networking/tproxy.txt "Linux Transparent Proxy")”。
+当作为sidecar proxy运行的时候，Pipy支持“[透明代理](https://www.kernel.org/doc/Documentation/networking/tproxy.txt)”。
 启动时加入NET_ADMIN就可以了。
 
 ```
@@ -140,7 +140,7 @@ kubectl apply -f config/samples/sidecar/007-deployment-pipy.yaml
 
 详见：
 * [版权](https://github.com/flomesh-io/pipy/blob/main/COPYRIGHT) 
-* [授权]](https://github.com/flomesh-io/pipy/blob/main/LICENCE).
+* [授权](https://github.com/flomesh-io/pipy/blob/main/LICENCE).
 
 # 联系方式
 
