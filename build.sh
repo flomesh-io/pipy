@@ -95,8 +95,10 @@ function build() {
   cd ${PIPY_DIR}/build
   $CMAKE -DCMAKE_BUILD_TYPE=Release $PIPY_DIR
   make -j${__NPROC}
+  if [ $? -eq 0 ];then 
+    echo "pipy now is in ${PIPY_DIR}/bin"
+  fi
   cd - 2>&1 > /dev/null
-  echo "pipy now is in ${PIPY_DIR}/bin"
 }
 
 #function __testcases() {
