@@ -199,7 +199,7 @@ namespace http {
               for (auto &ch : name) ch = std::tolower(ch);
               if (name == "content-length") m_content_length = std::atoi(m_value.str().c_str());
               else if (name == "transfer-encoding") m_transfer_encoding = m_value.str();
-              if (!m_var_headers.empty()) ctx->variables[m_var_headers + name] = m_value.str();
+              else if (!m_var_headers.empty()) ctx->variables[m_var_headers + name] = m_value.str();
               m_state = HEADER_NAME;
               m_name.clear();
             } else {
@@ -407,7 +407,7 @@ namespace http {
               for (auto &ch : name) ch = std::tolower(ch);
               if (name == "content-length") m_content_length = std::atoi(m_value.str().c_str());
               else if (name == "transfer-encoding") m_transfer_encoding = m_value.str();
-              if (!m_var_headers.empty()) ctx->variables[m_var_headers + name] = m_value.str();
+              else if (!m_var_headers.empty()) ctx->variables[m_var_headers + name] = m_value.str();
               m_state = HEADER_NAME;
               m_name.clear();
             } else {

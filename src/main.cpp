@@ -34,6 +34,7 @@
 
 #include <iostream>
 #include <signal.h>
+#include <openssl/opensslv.h>
 
 // all modules
 #include "modules/clone.hpp"
@@ -109,9 +110,11 @@ static std::map<std::string, Module*> s_module_registry {
 //
 
 static void show_version() {
-  std::cout << "Version    : " << PIPED_VERSION << std::endl;
-  std::cout << "Commit     : " << PIPED_COMMIT << std::endl;
-  std::cout << "Commit Date: " << PIPED_COMMIT_DATE << std::endl;
+  std::cout << "Version     : " << PIPY_VERSION << std::endl;
+  std::cout << "Commit      : " << PIPY_COMMIT << std::endl;
+  std::cout << "Commit Date : " << PIPY_COMMIT_DATE << std::endl;
+  std::cout << "Host        : " << PIPY_HOST << std::endl;
+  std::cout << "OpenSSL     : " << OPENSSL_VERSION_TEXT << std::endl;
 }
 
 //

@@ -14,9 +14,9 @@ echo "
 #ifndef __VERSION_H__
 #define __VERSION_H__
 
-#define PIPED_VERSION \"$VERSION\"
-#define PIPED_COMMIT \"$COMMIT\"
-#define PIPED_COMMIT_DATE \"$COMMIT_DATE\"
+#define PIPY_VERSION \"$VERSION\"
+#define PIPY_COMMIT \"$COMMIT\"
+#define PIPY_COMMIT_DATE \"$COMMIT_DATE\"
 
 #endif // __VERSION_H__
 " > $1

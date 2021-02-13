@@ -14,6 +14,7 @@ set(CMAKE_CXX_FLAGS -std=c++11)
 add_definitions(
   -D_GNU_SOURCE
   -DCONFIG_VERSION="2020-11-08"
+  -DPIPY_HOST="${CMAKE_HOST_SYSTEM} ${CMAKE_HOST_SYSTEM_PROCESSOR}"
 )
 
 include_directories(
