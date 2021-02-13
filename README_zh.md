@@ -140,7 +140,7 @@ kubectl apply -f config/samples/sidecar/007-deployment-pipy.yaml
 
 详见：
 * [版权](https://github.com/flomesh-io/pipy/blob/main/COPYRIGHT) 
-* [授权](https://github.com/flomesh-io/pipy/blob/main/LICENCE).
+* [授权](https://github.com/flomesh-io/pipy/blob/main/LICENCE)
 
 # 联系方式
 
