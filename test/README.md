@@ -93,3 +93,6 @@ REST-to-Dubbo converter where Dubbo providers are exposed as RESTful services sp
 This test shows how XML documents can be transformed into JSON after being decoded first as
 XML and then encoded as JSON while they pass through XML/JSON codec modules.
 
+# Translations
+
+## [中文版](https://github.com/flomesh-io/pipy/blob/main/test/README_zh.md)

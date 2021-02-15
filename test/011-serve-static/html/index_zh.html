@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>您好，Pipy~</title>
+  </head>
+  <body>
+    <ul>
+      <li><a href="./index.html">English</a></li>
+    </ul>
+    <p>Pipy是一个轻量、高性能、高稳定、可编程的网络代理。Pipy核心框架使用C++开发，网络IO采用ASIO库。 Pipy的可执行文件在5M左右，基于Alpine的镜像是10M左右，运行期的内存占用10M左右，因此Pipy非常 适合做sidecar proxy。</p>
+    <p>Pipy内置了QuickJS 作为脚本扩展，使得Pipy可以用JS脚本 快速扩展需要定制的逻辑与功能。QuickJS的“确定性垃圾回收（GC）”机制，进一步保证了Pipy的可靠性与确定性， 避免了很多脚本类语言因GC导致的不确定性问题。</p>
+    <p>Pipy采用了模块化、链式的处理架构，对网络数据块通过一个一个顺序执行的模块完成处理。这种简单的架构使得Pipy 底层简单可靠，同时具备了动态编排流量的能力，兼顾了简单和灵活。通过使用REUSE_PORT的机制（新的Linux和BSD 都支持该功能），Pipy可以以多进程模式运行，使得Pipy不仅仅可以用于sidecar模式，也适用与大规模的流量处理。 在实践中，Pipy独立部署的时候用作“软负载”，可以实现媲美硬件的负载均衡吞吐能力和低延迟，同时具有灵活的扩展性。</p>  
+  </body>
+</html>
