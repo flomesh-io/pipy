@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Hello</title>
+  </head>
+  <body>
+    <h1 id="pipy">Pipy</h1>
+    <p>Pipy is a tiny, high performance, highly stable, programmable proxy. Written
+    in C++, built on top of Asio asynchronous I/O library, Pipy is extremely
+    lightweight and fast, making it one of the best choices for service mesh sidecars.</p>
+    <p>With builtin JavaScript support, thanks to QuickJS, Pipy is highly
+    customizable and also predictable in performance with no garbage collection
+    overhead seen in other scriptable counterparts.</p>
+    <p>At its core, Pipy has a modular design with many small reusable modules
+    that can be chained together to make a pipeline, through which network data
+    flow and get processed on the way. The way Pipy is designed makes it versatile
+    enough for not only sidecars but also other use cases involving intermediate
+    message processing between network nodes.</p>
+    <h1 id="compatibility">Compatibility</h1>
+    <p>Pipy is designed for high compatibility across different operating systems and
+    CPU architectures. Pipy has been fully tested on these platforms:</p>
+    <ul>
+    <li>CentOS 7</li>
+    <li>Ubuntu 18/20</li>
+    <li>FreeBSD 12/13</li>
+    <li>macOS Big Sur</li>
+    </ul>
+    <p>CentOS7/REHL7 or FreeBSD are recommended in production environments.</p>
+    <h1 id="how-to-build">How to Build</h1>
+    <h2 id="build-from-scratch">Build from Scratch</h2>
+    <p>Before building, the following tools are required to be installed first:</p>
+    <ul>
+    <li>Clang 5.0+</li>
+    <li>CMake 3.0+</li>
+    </ul>
+    <p>With the above tools installed, just run the build script to start building:</p>
+    <pre><code>./build.<span class="hljs-keyword">sh</span>
+    </code></pre><p>The executable is located under <code>bin/</code>. Type <code>bin/pipy -h</code> for more information.</p>
+    <h2 id="build-the-docker-image">Build the Docker Image</h2>
+    <p>To build the Docker image, run the following commands:</p>
+    <pre><code><span class="hljs-comment">cd</span> <span class="hljs-comment">pipy</span>
+    <span class="hljs-comment">sudo</span> <span class="hljs-comment">docker</span> <span class="hljs-comment">build</span> <span class="hljs-literal">-</span><span class="hljs-literal">-</span><span class="hljs-comment">squash</span> <span class="hljs-literal">-</span><span class="hljs-literal">-</span><span class="hljs-comment">rm</span> <span class="hljs-literal">-</span><span class="hljs-comment">t</span> <span class="hljs-comment">pipy</span> <span class="hljs-string">.</span>
+    </code></pre><blockquote>
+    <p>Note: For a smaller image, you might want to use <code>--squash</code> option. It is an experimental feature, so
+    you have to add <code>{ &quot;experimental&quot;: true }</code> to <code>/etc/docker/daemon.json</code> and restart Docker daemon
+    to enable it.</p>
+    <p>For more information about Docker&#39;s <code>--squash</code> option, please refer to
+    <a href="https://docs.docker.com/engine/reference/commandline/image_build/">Docker Documentation</a></p>
+    </blockquote>
+    <h1 id="quick-start">Quick Start</h1>
+    <h2 id="install-with-rpm">Install with RPM</h2>
+    <pre><code>yum -y install http:<span class="hljs-regexp">//</span>repo.flomesh.cn<span class="hljs-regexp">/pipy/</span>pipy-latest.el7_pl.x86_64.rpm
+    </code></pre><h2 id="show-command-line-options">Show Command Line Options</h2>
+    <pre><code>$ pipy <span class="hljs-comment">--help</span>
+    </code></pre><h2 id="list-modules-and-parameters">List Modules and Parameters</h2>
+    <pre><code>$ pipy <span class="hljs-comment">--list-modules</span>
+    $ pipy <span class="hljs-comment">--help-modules</span>
+    </code></pre><h2 id="run-on-cli">Run on CLI</h2>
+    <p>Let&#39;s take the echo server in <code>test/001-echo/</code> as an example. To start a single-worker
+    Pipy that auto-reloads when the configuration file changes:</p>
+    <pre><code><span class="hljs-symbol">$</span> pipy test/<span class="hljs-number">001</span>-echo/pipy.cfg --watch-config-<span class="hljs-keyword">file</span>
+    </code></pre><p>To start two Pipy instances load balancing on the same port:</p>
+    <pre><code>$ pipy test/<span class="hljs-number">001</span>-echo/pipy<span class="hljs-selector-class">.cfg</span> --reuse-port &amp;
+    $ pipy test/<span class="hljs-number">001</span>-echo/pipy<span class="hljs-selector-class">.cfg</span> --reuse-port &amp;
+    </code></pre><h2 id="run-with-docker">Run with Docker</h2>
+    <p>Pipy Docker image can be configured with a few environment variables:</p>
+    <ul>
+    <li><p><code>PIPY_CONFIG_FILE=&lt;/path/to/config-file&gt;</code> for the location of Pipy configuration file</p>
+    </li>
+    <li><p><code>PIPY_SPAWN=n</code> for the number of Pipy instances you want to start, where <code>n</code> is the number
+    of instantces subtracted by 1. For example, you use <code>PIPY_SPAWN=3</code> for 4 instances.</p>
+    </li>
+    </ul>
+    <pre><code>docker <span class="hljs-keyword">run</span><span class="bash"> -it --rm <span class="hljs-_">-e</span> PIPY_CONFIG_FILE=/etc/pipy/<span class="hljs-built_in">test</span>/001-echo/pipy.cfg flomesh/pipy:latest</span>
+    </code></pre><pre><code>docker <span class="hljs-keyword">run</span><span class="bash"> -it --rm <span class="hljs-_">-e</span> PIPY_CONFIG_FILE=/etc/pipy/<span class="hljs-built_in">test</span>/011-serve-static/pipy.cfg <span class="hljs-_">-e</span> PIPY_SPAWN=1 -p 8000:6000 flomesh/pipy:latest</span>
+    </code></pre><p>Pipy also supports <a href="https://www.kernel.org/doc/Documentation/networking/tproxy.txt" title="Linux Transparent Proxy">transparent proxy</a>
+    in Docker environment where <code>NET_ADMIN</code> capability is enabled by adding <code>--cap-add NET_ADMIN</code> option to the startup command:</p>
+    <pre><code>docker <span class="hljs-keyword">run</span><span class="bash"> -it --rm <span class="hljs-_">-e</span> PIPY_CONFIG_FILE=/etc/pipy/<span class="hljs-built_in">test</span>/001-echo/pipy.cfg --cap-add NET_ADMIN flomesh/pipy:latest</span>
+    </code></pre><h2 id="run-on-kubernetes">Run on Kubernetes</h2>
+    <p>You can run Pipy on Kubernetes by using <a href="https://github.com/flomesh-io/pipy-operator">pipy-operator</a>:</p>
+    <pre><code>git clone https:<span class="hljs-comment">//github.com/flomesh-io/pipy-operator</span>
+    cd pipy-operator
+    kubectl apply -f etc/cert-manager-v1.<span class="hljs-number">1.0</span><span class="hljs-selector-class">.yaml</span>
+    kubectl apply -f artifact/pipy-operator<span class="hljs-selector-class">.yaml</span>
+    kubectl apply -f config/samples/standalone/<span class="hljs-number">001</span>-echo<span class="hljs-selector-class">.yaml</span>
+    kubectl apply -f config/samples/ingress/<span class="hljs-number">001</span>-routing<span class="hljs-selector-class">.yaml</span>
+    kubectl apply -f config/samples/sidecar/<span class="hljs-number">007</span>-deployment-pipy.yaml
+    </code></pre><h1 id="documentation">Documentation</h1>
+    <p>You can find Pipy documentation under <code>docs/</code>.</p>
+    <ul>
+    <li><a href="https://github.com/flomesh-io/pipy/blob/main/docs/overview.md">Overview</a></li>
+    <li><a href="https://github.com/flomesh-io/pipy/blob/main/docs/configuration.md">Configuration</a></li>
+    </ul>
+    <h1 id="copyright-license">Copyright &amp; License</h1>
+    <p>Please see <a href="https://github.com/flomesh-io/pipy/blob/main/COPYRIGHT">COPYRIGHT</a> and <a href="https://github.com/flomesh-io/pipy/blob/main/LICENCE">LICENCE</a>.</p>
+    <h1 id="contact">Contact</h1>
+    <ul>
+    <li>For security issues, please send an email to security@flomesh.io</li>
+    <li>For legal issues, please send an email to legal@flomesh.io</li>
+    <li>For commercial, sales and marketing topics, please send an email to sales@flomesh.io</li>
+    <li>For other topics not suitable for the public, please send an email to pipy@flomesh.io</li>
+    <li>For public discussions, please go to GitHub issues: <a href="https://github.com/flomesh-io/pipy/issues">https://github.com/flomesh-io/pipy/issues</a></li>
+    </ul>
+    <h1 id="translations">Translations</h1>
+    <h2 id="-https-github-com-flomesh-io-pipy-blob-main-readme_zh-md-"><a href="https://github.com/flomesh-io/pipy/blob/main/README_zh.md">中文版</a></h2>
+  </body>
+</html>
