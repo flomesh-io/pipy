@@ -16,18 +16,22 @@ TEST_CASE_DIR=${TEST_CASE_DIR:-$PIPY_DIR/test}
 __NPROC=${NPROC:-$(getconf _NPROCESSORS_ONLN)}
 
 BUILD_ONLY=false
+BUILD_CONTAINER=false
 TEST_ONLY=false
 TEST_CASE=all
 
+IMAGE_TAG=latest
+DOCKERFILE=Dockerfile
+
 ##### End Default environment variables #########
 
-SHORT_OPTS="bthr:"
-LONG_OPTS="test:,help,build-only,test-only"
+SHORT_OPTS="bthcr:"
 
 function usage() {
-    echo "Usage: $0 [-h|-b|-t|-r <xxx>]" 1>&2
+    echo "Usage: $0 [-h|-b|-c|-t|-r <xxx>]" 1>&2
     echo "       -h           Show this help message"
     echo "       -b           Build only, do not run any test cases"
+    echo "       -c           Build container image"
     echo "       -t           Test only, do not build pipy binary"
     echo "       -r <number>  Run specific test case, with number, like 001"
     echo ""
@@ -46,6 +50,10 @@ while true ; do
       ;;
     -t)
       TEST_ONLY=true
+      shift
+      ;;
+    -c)
+      BUILD_CONTAINER=true
       shift
       ;;
     -r)
@@ -115,6 +123,10 @@ function __test() {
 
 if ! $TEST_ONLY ; then
   build
+fi
+
+if ! $TEST_ONLY && $BUILD_CONTAINER; then
+  sudo docker build --rm -t pipy:$IMAGE_TAG -f $DOCKERFILE $PIPY_DIR
 fi
 
 #if [ ! $BUILD_ONLY ]; then
