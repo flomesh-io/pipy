@@ -46,7 +46,7 @@
 
 ## 011 serve-static
 
-该示例演示了如何使用pipy服务静态内容的能力--指定一个目录，设置文件扩展名和MIME_TYPE映射关系，一个最简单的web服务器就实现了，并且是高性能、低资源占用的。在基本的内测（wrk -c100 -t1 -d10 http://localhost:6000/）中，该示例在各个平台的测试结果（TPS）都是Nginx的二倍左右。注：测试系统和Nginx都没有做任何优化，如CentOS7就是“最小化安装+yum install nginx”。
+该示例演示了如何使用pipy服务静态内容的能力--指定一个目录，设置文件扩展名和MIME_TYPE映射关系，一个最简单的web服务器就实现了，并且是高性能、低资源占用的。在基本的内测（wrk -c100 -t1 -d10 http://localhost:6000/ ）中，该示例在各个平台的测试结果（TPS）都是Nginx的二倍左右。注：测试系统和Nginx都没有做任何优化，如CentOS7就是“最小化安装+yum install nginx”。
 
 ## 012 logging
 
