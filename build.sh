@@ -139,9 +139,9 @@ function __test() {
   echo "Yet to finalize"
 }
 
-#if ! $TEST_ONLY ; then
-#  build
-#fi
+if ! $TEST_ONLY ; then
+  build
+fi
 
 if ! $TEST_ONLY && $BUILD_CONTAINER; then
   sudo docker build --rm -t pipy:$IMAGE_TAG -f $DOCKERFILE $PIPY_DIR
