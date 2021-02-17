@@ -5,8 +5,18 @@ PIPY_CONF=pipy.cfg
 
 if [[ "$OSTYPE" == "linux-gnu"* ]]; then
   PIPY_DIR=$(dirname $(readlink -e $(basename $0)))
-else
-  PIPY_DIR=`pwd`
+elif [[ "$OSTYPE" == "darwin"* ]]; then
+  cd `dirname $0`
+  TARGET_FILE=`basename $0`
+  while [ -L "$TARGET_FILE" ]
+  do
+    TARGET_FILE=$(readlink $TARGET_FILE)
+    cd $(dirname $TARGET_FILE)
+    TARGET_FILE=$(basename $TARGET_FILE)
+  done
+  PHYS_DIR=$(pwd -P)
+  RESULT=$PHYS_DIR/$TARGET_FILE
+  PIPY_DIR=$(dirname $RESULT)
 fi
 
 TEST_CASE_DIR=${TEST_CASE_DIR:-$PIPY_DIR/test}
@@ -17,6 +27,7 @@ __NPROC=${NPROC:-$(getconf _NPROCESSORS_ONLN)}
 
 BUILD_ONLY=false
 BUILD_CONTAINER=false
+BUILD_RPM=false
 TEST_ONLY=false
 TEST_CASE=all
 
@@ -25,15 +36,17 @@ DOCKERFILE=Dockerfile
 
 ##### End Default environment variables #########
 
-SHORT_OPTS="bthcr:"
+SHORT_OPTS="bthcr:p:"
 
 function usage() {
-    echo "Usage: $0 [-h|-b|-c|-t|-r <xxx>]" 1>&2
-    echo "       -h           Show this help message"
-    echo "       -b           Build only, do not run any test cases"
-    echo "       -c           Build container image"
-    echo "       -t           Test only, do not build pipy binary"
-    echo "       -r <number>  Run specific test case, with number, like 001"
+    echo "Usage: $0 [-h|-b|-c|-p <xxx>|-t|-r <xxx>]" 1>&2
+    echo "       -h                     Show this help message"
+    echo "       -b                     Build only, do not run any test cases"
+    echo "       -c                     Build container image"
+    echo "       -p <version-revision>  Build RHEL/CentOS rpm package, like 0.2.0-15, should be one
+    of release tag"
+    echo "       -t                     Test only, do not build pipy binary"
+    echo "       -r <number>            Run specific test case, with number, like 001"
     echo ""
     exit 1
 }
@@ -55,6 +68,11 @@ while true ; do
     -c)
       BUILD_CONTAINER=true
       shift
+      ;;
+    -p)
+      BUILD_RPM=true
+      RELEASE_VERSION="$2"
+      shift 2
       ;;
     -r)
       TEST_CASE+="$2 "
@@ -127,6 +145,48 @@ fi
 
 if ! $TEST_ONLY && $BUILD_CONTAINER; then
   sudo docker build --rm -t pipy:$IMAGE_TAG -f $DOCKERFILE $PIPY_DIR
+fi
+
+# Build RPM from container
+if ! $TEST_ONLY && $BUILD_RPM; then
+  cd $PIPY_DIR
+  git checkout $RELEASE_VERSION
+  if [ $? -ne 0 ]; then
+    echo "Cannot find tag $RELEASE_VERSION"
+    exit -1
+  fi
+
+  COMMIT_ID=$(git log -1 --format=%H)
+  COMMIT_DATE=$(git log -1 --format=%cD)
+  VERSION=$(echo $RELEASE_VERSION | cut -d\- -f 1)
+  REVISION=$(echo $RELEASE_VERSION | cut -d\- -f 2)
+ 
+  __CHANGELOG=`mktemp`
+  git log --format="* %cd %aN%n- (%h) %s%d%n" --date=local | sed -r 's/[0-9]+:[0-9]+:[0-9]+ //' > $__CHANGELOG
+  cat $__CHANGELOG
+
+  if [ ! -s $__CHANGELOG ]; then
+    echo "Cannot parse change log"
+    exit -1
+  fi
+
+  cd ..
+  tar zcvf pipy.tar.gz pipy
+  mv pipy.tar.gz $PIPY_DIR/rpm
+
+  cd $PIPY_DIR/rpm
+  cat $__CHANGELOG >> pipy.spec
+  rm -f $__CHANGELOG
+
+  sudo docker build -t pipy-rpm:$RELEASE_VERSION \
+    --build-arg VERSION=$VERSION \
+    --build-arg REVISION=$REVISION \
+    --build-arg COMMIT_ID=$COMMIT_ID \
+    --build-arg COMMIT_DATE="$COMMIT_DATE" \
+    -f $DOCKERFILE .
+  sudo docker run -it --rm -v $PIPY_DIR/rpm:/data pipy-rpm:$RELEASE_VERSION cp /rpm/pipy-community-${RELEASE_VERSION}.el7.x86_64.rpm /data
+  git checkout -- $PIPY_DIR/rpm/pipy.spec
+  rm -f $PIPY_DIR/rpm/pipy.tar.gz
 fi
 
 #if [ ! $BUILD_ONLY ]; then
