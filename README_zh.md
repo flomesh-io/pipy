@@ -11,12 +11,12 @@ Pipy 采用了模块化、链式的处理架构，用顺序执行的模块来对
 
 ## 兼容性
 
-Pipy 在设计时注重兼容性，可以支持多种操作系统平台与 CPU 架构，目前开发团队测试过的平台和架构包括：
+兼容性是 Pipy 的设计重点之一，它可以支持多种操作系统平台与 CPU 架构，目前开发团队已经完成了在下列平台和架构上的[测试](doc-fix/test)：
 
 * Alpine 3
 * CentOS 7
 * FreeBSD 12/13
-* macOS M1/x86（不支持REUSE_PORT）
+* macOS M1/x86（不支持 `REUSE_PORT`）
 * Ubuntu 18/20
 
 生产环境推荐使用 CentOS 7（及同类品）或者 FreeBSD。
@@ -30,7 +30,7 @@ Pipy 在设计时注重兼容性，可以支持多种操作系统平台与 CPU �
 * Clang 5.0+
 * CMake 3.0+
 
-满足clang和cmake版本后，直接运行如下编译命令：
+满足 clang 和 cmake 版本后，直接运行如下编译命令：
 
 ```command
 $ ./build.sh
@@ -39,7 +39,7 @@ $ ./build.sh
 
 Pipy 编译生成的单一可执行文件会输出到 `bin/pipy` 目录，可以运行 `bin/pipy -h` 获取更多信息。
 
-### 构建Docker镜像
+### 构建 Docker 镜像
 
 使用如下命令构建 Docker 镜像：
 
@@ -84,7 +84,7 @@ $ pipy test/001-echo/pipy.cfg --watch-config-file
 ...
 ```
 
-在 Linux 或者 BSD 系统上，可以通过如下命令启动两个（或者多个）Pipy 监听同一个端口，内核会自动的在多个进程间负载均衡流量。这极大的提高了吞吐能力。同时，
+在 Linux 或者 BSD 系统上，可以通过如下命令启动两个（或者多个）Pipy 监听同一个端口，内核会自动的在多个进程间负载均衡流量，这种方式极大地提高了吞吐能力。同时，
 这种进程间 Share nothing 的结构降低了多进程/多线程的复杂度，使得 Pipy 在通过多进程横向扩展吞吐能力的同时，没有引入新的复杂度和不确定性：
 
 ```command
@@ -139,15 +139,10 @@ $ kubectl apply -f config/samples/sidecar/007-deployment-pipy.yaml
 
 文档在保存在 [`docs`](docs) 目录：
 
-* [概述](https://github.com/flomesh-io/pipy/blob/main/docs/overview.md)
-* [配置](https://github.com/flomesh-io/pipy/blob/main/docs/configuration.md)
-
-## 版权与授权
-
-详见：
-
-* [版权](https://github.com/flomesh-io/pipy/blob/main/COPYRIGHT) 
-* [授权](https://github.com/flomesh-io/pipy/blob/main/LICENCE)
+* [概述](docs/overview.md)
+* [配置](docs/configuration.md)
+* [版权](main/COPYRIGHT)
+* [授权](main/LICENCE)
 
 ## 联系方式
 
@@ -155,4 +150,4 @@ $ kubectl apply -f config/samples/sidecar/007-deployment-pipy.yaml
 * 法务问题：legal@flomesh.io
 * 商用、市场相关：sales@flomesh.io
 * 其他非公开话题：pipy@flomesh.io
-* 其他任何问题，欢迎给我们提issue：`https://github.com/flomesh-io/pipy/issues`
+* 其他任何问题，欢迎给我们[提 issue](https://github.com/flomesh-io/pipy/issues)
