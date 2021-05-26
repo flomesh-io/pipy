@@ -237,6 +237,29 @@ function Editor() {
   const [ showAddFile, setShowAddFile ] = React.useState(false);
   const [ showDeleteFile, setShowDeleteFile ] = React.useState(false);
 
+  const saveFile = React.useCallback(
+    async () => {
+      const file = store.currentFile;
+      globalState.showWaiting('Saving...');
+      try {
+        const res = await fetch('/api/files' + file.name, {
+          method: 'POST',
+          headers: {
+            'content-type': 'text/plain',
+          },
+          body: file.model.getValue(),
+        });
+        if (res.status === 201) {
+          file.save();
+          if (file === store.currentFile) setSaved(file.saved());
+        }
+      } finally {
+        globalState.showWaiting(null);
+      }
+    },
+    [globalState]
+  );
+
   // Create Monaco editor
   React.useEffect(
     () => {
@@ -250,11 +273,11 @@ function Editor() {
             detectIndentation: false,
           }
         );
-        editor.setModel(store.currentFile?.model);
         resize = () => editor.layout();
         window.addEventListener('resize', resize);
         editorRef.current = editor;
         layoutUpdaterRef.current = resize;
+        if (store.treeSelected) selectFile(store.treeSelected);
       });
       return () => {
         window.removeEventListener('resize', resize);
@@ -285,7 +308,7 @@ function Editor() {
         return () => div && div.removeEventListener('keydown', save);
       }
     },
-    []
+    [saveFile]
   );
 
   // Fetch file list
@@ -308,7 +331,7 @@ function Editor() {
         })();
       }
     },
-    []
+    [globalState]
   );
 
   // Update layout when open/close console
@@ -316,7 +339,6 @@ function Editor() {
     () => updateLayout(),
     [showConsole]
   );
-
   const updateLayout = () => {
     layoutUpdaterRef.current?.();
   }
@@ -364,26 +386,6 @@ function Editor() {
         editorRef.current.setModel(model);
         setSaved(file.saved());
       }
-    }
-  }
-
-  const saveFile = async () => {
-    const file = store.currentFile;
-    globalState.showWaiting('Saving...');
-    try {
-      const res = await fetch('/api/files' + file.name, {
-        method: 'POST',
-        headers: {
-          'content-type': 'text/plain',
-        },
-        body: file.model.getValue(),
-      });
-      if (res.status === 201) {
-        file.save();
-        if (file === store.currentFile) setSaved(file.saved());
-      }
-    } finally {
-      globalState.showWaiting(null);
     }
   }
 
