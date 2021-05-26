@@ -1,0 +1,214 @@
+{
+  "CATALOG": {
+    "CD": [
+      {
+        "YEAR": "1985",
+        "PRICE": "10.90",
+        "COUNTRY": "USA",
+        "COMPANY": "Columbia",
+        "ARTIST": "Bob Dylan",
+        "TITLE": "Empire Burlesque"
+      },
+      {
+        "YEAR": "1988",
+        "PRICE": "9.90",
+        "COUNTRY": "UK",
+        "COMPANY": "CBS Records",
+        "ARTIST": "Bonnie Tylor",
+        "TITLE": "Hide your heart"
+      },
+      {
+        "YEAR": "1982",
+        "PRICE": "9.90",
+        "COUNTRY": "USA",
+        "COMPANY": "RCA",
+        "ARTIST": "Dolly Parton",
+        "TITLE": "Greatest Hits"
+      },
+      {
+        "YEAR": "1990",
+        "PRICE": "10.20",
+        "COUNTRY": "UK",
+        "COMPANY": "Virgin redords",
+        "ARTIST": "Gary More",
+        "TITLE": "Still got the blues"
+      },
+      {
+        "YEAR": "1997",
+        "PRICE": "9.90",
+        "COUNTRY": "EU",
+        "COMPANY": "BMG",
+        "ARTIST": "Eros Ramazzotti",
+        "TITLE": "Eros"
+      },
+      {
+        "YEAR": "1998",
+        "PRICE": "10.90",
+        "COUNTRY": "UK",
+        "COMPANY": "Polydor",
+        "ARTIST": "Bee Gees",
+        "TITLE": "One night only"
+      },
+      {
+        "YEAR": "1973",
+        "PRICE": "8.10",
+        "COUNTRY": "UK",
+        "COMPANY": "CBS",
+        "ARTIST": "Dr.Hook",
+        "TITLE": "Sylvias Mother"
+      },
+      {
+        "YEAR": "1990",
+        "PRICE": "8.50",
+        "COUNTRY": "UK",
+        "COMPANY": "Pickwick",
+        "ARTIST": "Rod Stewart",
+        "TITLE": "Maggie May"
+      },
+      {
+        "YEAR": "1996",
+        "PRICE": "10.80",
+        "COUNTRY": "EU",
+        "COMPANY": "Polydor",
+        "ARTIST": "Andrea Bocelli",
+        "TITLE": "Romanza"
+      },
+      {
+        "YEAR": "1987",
+        "PRICE": "8.70",
+        "COUNTRY": "USA",
+        "COMPANY": "Atlantic",
+        "ARTIST": "Percy Sledge",
+        "TITLE": "When a man loves a woman"
+      },
+      {
+        "YEAR": "1995",
+        "PRICE": "10.90",
+        "COUNTRY": "EU",
+        "COMPANY": "Mega",
+        "ARTIST": "Savage Rose",
+        "TITLE": "Black angel"
+      },
+      {
+        "YEAR": "1999",
+        "PRICE": "10.20",
+        "COUNTRY": "USA",
+        "COMPANY": "Grammy",
+        "ARTIST": "Many",
+        "TITLE": "1999 Grammy Nominees"
+      },
+      {
+        "YEAR": "1995",
+        "PRICE": "8.70",
+        "COUNTRY": "UK",
+        "COMPANY": "Mucik Master",
+        "ARTIST": "Kenny Rogers",
+        "TITLE": "For the good times"
+      },
+      {
+        "YEAR": "1997",
+        "PRICE": "9.90",
+        "COUNTRY": "USA",
+        "COMPANY": "Columbia",
+        "ARTIST": "Will Smith",
+        "TITLE": "Big Willie style"
+      },
+      {
+        "YEAR": "1971",
+        "PRICE": "8.20",
+        "COUNTRY": "UK",
+        "COMPANY": "Polydor",
+        "ARTIST": "Van Morrison",
+        "TITLE": "Tupelo Honey"
+      },
+      {
+        "YEAR": "1996",
+        "PRICE": "7.90",
+        "COUNTRY": "Norway",
+        "COMPANY": "WEA",
+        "ARTIST": "Jorn Hoel",
+        "TITLE": "Soulsville"
+      },
+      {
+        "YEAR": "1990",
+        "PRICE": "8.90",
+        "COUNTRY": "UK",
+        "COMPANY": "Island",
+        "ARTIST": "Cat Stevens",
+        "TITLE": "The very best of"
+      },
+      {
+        "YEAR": "1988",
+        "PRICE": "8.90",
+        "COUNTRY": "UK",
+        "COMPANY": "A and M",
+        "ARTIST": "Sam Brown",
+        "TITLE": "Stop"
+      },
+      {
+        "YEAR": "1987",
+        "PRICE": "7.90",
+        "COUNTRY": "UK",
+        "COMPANY": "Siren",
+        "ARTIST": "T`Pau",
+        "TITLE": "Bridge of Spies"
+      },
+      {
+        "YEAR": "1983",
+        "PRICE": "8.90",
+        "COUNTRY": "UK",
+        "COMPANY": "Capitol",
+        "ARTIST": "Tina Turner",
+        "TITLE": "Private Dancer"
+      },
+      {
+        "YEAR": "1983",
+        "PRICE": "7.80",
+        "COUNTRY": "EU",
+        "COMPANY": "Medley",
+        "ARTIST": "Kim Larsen",
+        "TITLE": "Midt om natten"
+      },
+      {
+        "YEAR": "1991",
+        "PRICE": "9.90",
+        "COUNTRY": "UK",
+        "COMPANY": "DECCA",
+        "ARTIST": "Luciano Pavarotti",
+        "TITLE": "Pavarotti Gala Concert"
+      },
+      {
+        "YEAR": "1987",
+        "PRICE": "7.90",
+        "COUNTRY": "USA",
+        "COMPANY": "Atlantic",
+        "ARTIST": "Otis Redding",
+        "TITLE": "The dock of the bay"
+      },
+      {
+        "YEAR": "1985",
+        "PRICE": "7.20",
+        "COUNTRY": "EU",
+        "COMPANY": "Elektra",
+        "ARTIST": "Simply Red",
+        "TITLE": "Picture book"
+      },
+      {
+        "YEAR": "1987",
+        "PRICE": "7.80",
+        "COUNTRY": "UK",
+        "COMPANY": "London",
+        "ARTIST": "The Communards",
+        "TITLE": "Red"
+      },
+      {
+        "YEAR": "1987",
+        "PRICE": "8.20",
+        "COUNTRY": "USA",
+        "COMPANY": "EMI",
+        "ARTIST": "Joe Cocker",
+        "TITLE": "Unchain my heart"
+      }
+    ]
+  }
+}

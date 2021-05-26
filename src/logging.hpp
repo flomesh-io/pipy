@@ -26,9 +26,9 @@
 #ifndef LOGGING_H
 #define LOGGING_H
 
-#include "ns.hpp"
+#include "pjs/pjs.hpp"
 
-NS_BEGIN
+namespace pipy {
 
 //
 // Log
@@ -38,19 +38,27 @@ class Log {
 public:
   enum Level {
     DEBUG,
-    INFO,
     WARN,
     ERROR,
+    INFO,
   };
 
   static void set_level(Level level);
 
+  static void print(const std::string &line);
+  static void print(const char *fmt, ...);
   static void debug(const char *fmt, ...);
   static void info(const char *fmt, ...);
   static void warn(const char *fmt, ...);
   static void error(const char *fmt, ...);
+
+  static void pjs_location(const std::string &source, int line, int column);
+  static void pjs_error(const pjs::Context::Error &err);
+  static void pjs_error(const pjs::Context::Error &err, const std::string &source);
+
+  static auto tail(size_t first, std::string &log) -> size_t;
 };
 
-NS_END
+} // namespace pipy
 
 #endif // LOGGING_H

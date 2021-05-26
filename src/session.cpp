@@ -25,47 +25,144 @@
 
 #include "session.hpp"
 #include "pipeline.hpp"
+#include "module.hpp"
+#include "filter.hpp"
 
-NS_BEGIN
+namespace pipy {
 
-Session::Session(
-  Pipeline *pipeline,
-  const std::list<std::unique_ptr<Module>> &chain
-) : m_pipeline(pipeline)
+//
+// ReusableSession
+//
+
+ReusableSession::ReusableSession(Pipeline *pipeline)
+  : m_pipeline(pipeline)
 {
-  m_chain = new Chain {
-    nullptr, nullptr,
-    [this](std::unique_ptr<Object> obj) {
-      if (m_output) m_output(std::move(obj));
-    }
+  Event::Receiver output = [this](Event *inp) {
+    pjs::Ref<Event> ref(inp);
+    if (m_output) m_output(inp);
+    if (inp->is<SessionEnd>()) m_done = true;
   };
-  for (auto i = chain.rbegin(); i != chain.rend(); ++i) {
-    auto module = (*i)->clone();
-    auto output = m_chain->output;
-    m_chain = new Chain {
-      m_chain, module,
-      [=](std::unique_ptr<Object> obj) {
-        module->pipe(m_context, std::move(obj), output);
-      }
+
+  Filter *last_filter = nullptr;
+  const auto &filters = pipeline->filters();
+  for (auto i = filters.rbegin(); i != filters.rend(); ++i) {
+    auto filter = (*i)->clone();
+    filter->m_pipeline = m_pipeline;
+    filter->m_reusable_session = this;
+    filter->m_next = last_filter;
+    filter->m_output = output;
+    filter->reset();
+    output = [=](Event *inp) {
+      pjs::Ref<Event> ref(inp);
+      if (!m_context->ok()) return;
+      filter->process(m_context, inp);
     };
+    last_filter = filter;
+  }
+
+  m_filters = last_filter;
+}
+
+ReusableSession::~ReusableSession() {
+  auto p = m_filters;
+  while (p) {
+    auto f = p;
+    p = p->m_next;
+    delete f;
   }
 }
 
-Session::~Session() {
-  for (auto p = m_chain; p; ) {
-    auto next = p->next;
-    delete p->module;
-    delete p;
-    p = next;
-  }
+void ReusableSession::abort() {
+  if (m_output) m_output(SessionEnd::make(SessionEnd::RUNTIME_ERROR));
+  m_done = true;
 }
 
-void Session::input(std::unique_ptr<Object> obj) {
-  m_chain->output(std::move(obj));
-}
-
-void Session::free() {
+void ReusableSession::free() {
+  reset();
   m_pipeline->free(this);
 }
 
-NS_END
+void ReusableSession::reset() {
+  for (auto *f = m_filters; f; f = f->m_next) f->reset();
+  m_context = nullptr;
+  m_output = nullptr;
+  m_done = false;
+}
+
+} // namespace pipy
+
+//
+// Session
+//
+
+namespace pjs {
+
+using namespace pipy;
+
+template<> void ClassDef<Session>::init() {
+  ctor([](Context &ctx) -> Object* {
+    Str *filename, *pipeline;
+    if (!ctx.arguments(2, &filename, &pipeline)) return nullptr;
+    auto root = static_cast<pipy::Context*>(ctx.root());
+    auto mod = root->worker()->get_module(filename);
+    if (!mod) {
+      std::string msg("module not found: ");
+      ctx.error(msg + filename->str());
+      return nullptr;
+    }
+    auto p = mod->find_named_pipeline(pipeline);
+    if (!p) {
+      std::string msg("pipeline not found: ");
+      ctx.error(msg + pipeline->str());
+      return nullptr;
+    }
+    return Session::make(root, p);
+  });
+
+  accessor("done", [](Object *obj, Value &ret) { ret.set(obj->as<Session>()->done()); });
+  accessor("remoteAddress", [](Object *obj, Value &ret) { ret.set(obj->as<Session>()->remote_address()); });
+  accessor("remotePort", [](Object *obj, Value &ret) { ret.set(obj->as<Session>()->remote_port()); });
+  accessor("localAddress", [](Object *obj, Value &ret) { ret.set(obj->as<Session>()->local_address()); });
+  accessor("localPort", [](Object *obj, Value &ret) { ret.set(obj->as<Session>()->local_port()); });
+
+  method("input", [](Context &ctx, Object *obj, Value &ret) {
+    auto *session = obj->as<Session>();
+    auto *evt_class = class_of<Event>();
+    auto *msg_class = class_of<Message>();
+    for (int i = 0, n = ctx.argc(); i < n; i++) {
+      auto &arg = ctx.arg(i);
+      if (arg.is_array()) {
+        auto *a = arg.as<Array>();
+        auto last = a->iterate_while([=](Value &v, int) {
+          if (v.is_instance_of(evt_class)) {
+            session->input(v.as<Event>());
+            return true;
+          } else if (v.is_instance_of(msg_class)) {
+            session->input(v.as<Message>());
+            return true;
+          } else {
+            return false;
+          }
+        });
+        if (last < n) {
+          ctx.error("not an Event object");
+          break;
+        }
+      } else if (arg.is_instance_of(evt_class)) {
+        session->input(arg.as<Event>());
+      } else if (arg.is_instance_of(msg_class)) {
+        session->input(arg.as<Message>());
+      } else {
+        ctx.error("not an Event object");
+        break;
+      }
+    }
+  });
+}
+
+template<> void ClassDef<Constructor<Session>>::init() {
+  super<Function>();
+  ctor();
+}
+
+} // namespace pjs

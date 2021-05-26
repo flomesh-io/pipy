@@ -27,20 +27,22 @@
 
 #include <iostream>
 
-NS_BEGIN
+namespace pipy {
 
 void Options::show_help() {
-  std::cout << "Usage: pipy [options] <config filename>" << std::endl;
+  std::cout << "Usage: pipy [options] <script filename>" << std::endl;
   std::cout << std::endl;
   std::cout << "Options:" << std::endl;
   std::cout << "  -h, -help, --help                    Show help information" << std::endl;
   std::cout << "  -v, -version, --version              Show version information" << std::endl;
-  std::cout << "  --list-modules                       List all supported modules" << std::endl;
-  std::cout << "  --help-modules                       Show help information for all supported modules" << std::endl;
+  std::cout << "  --list-filters                       List all filters" << std::endl;
+  std::cout << "  --help-filters                       Show detailed usage information for all filters" << std::endl;
   std::cout << "  --log-level=<debug|info|warn|error>  Set the level of log output" << std::endl;
   std::cout << "  --verify                             Verify configuration only" << std::endl;
-  std::cout << "  --watch-config-file                  Reload configuration when config file changes" << std::endl;
   std::cout << "  --reuse-port                         Enable kernel load balancing for all listening ports" << std::endl;
+#ifdef PIPY_USE_GUI
+  std::cout << "  --gui-port=<port>                    Enable web GUI on the specified port" << std::endl;
+#endif
   std::cout << std::endl;
 }
 
@@ -48,11 +50,11 @@ Options::Options(int argc, char *argv[]) {
   for (int i = 1; i < argc; i++) {
     std::string term(argv[i]);
     if (term[0] != '-') {
-      if (!config_filename.empty()) {
-        std::string msg("redundant config filename: ");
+      if (!filename.empty()) {
+        std::string msg("redundant filename: ");
         throw std::runtime_error(msg + term);
       }
-      config_filename = term;
+      filename = term;
     } else {
       auto i = term.find('=');
       auto k = (i == std::string::npos ? term : term.substr(0, i));
@@ -61,25 +63,27 @@ Options::Options(int argc, char *argv[]) {
         version = true;
       } else if (k == "-h" || k == "-help" || k == "--help") {
         help = true;
-      } else if (k == "--help-modules") {
-        help_modules = true;
-      } else if (k == "--list-modules") {
-        list_modules = true;
+      } else if (k == "--help-filters") {
+        help_filters = true;
+      } else if (k == "--list-filters") {
+        list_filters = true;
       } else if (k == "--log-level") {
         if (v == "debug") log_level = Log::DEBUG;
-        else if (v == "info") log_level = Log::INFO;
         else if (v == "warn") log_level = Log::WARN;
         else if (v == "error") log_level = Log::ERROR;
+        else if (v == "info") log_level = Log::INFO;
         else {
           std::string msg("unknown log level: ");
           throw std::runtime_error(msg + v);
         }
       } else if (k == "--verify") {
         verify = true;
-      } else if (k == "--watch-config-file") {
-        watch_config_file = true;
       } else if (k == "--reuse-port") {
         reuse_port = true;
+#ifdef PIPY_USE_GUI
+      } else if (k == "--gui-port") {
+        gui_port = std::atoi(v.c_str());
+#endif
       } else {
         std::string msg("unknown option: ");
         throw std::runtime_error(msg + k);
@@ -88,4 +92,4 @@ Options::Options(int argc, char *argv[]) {
   }
 }
 
-NS_END
+} // namespace pipy

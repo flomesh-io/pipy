@@ -24,86 +24,58 @@
  */
 
 #include "pipeline.hpp"
+#include "filter.hpp"
 #include "session.hpp"
 #include "logging.hpp"
 
-NS_BEGIN
+namespace pipy {
 
-std::map<std::string, Pipeline*> Pipeline::s_named_pipelines;
-size_t Pipeline::s_session_total = 0;
+std::set<Pipeline*> Pipeline::s_all_pipelines;
 
-auto Pipeline::get(const std::string &name) -> Pipeline* {
-  auto p = s_named_pipelines.find(name);
-  if (p == s_named_pipelines.end()) return nullptr;
-  return p->second;
-}
-
-void Pipeline::add(const std::string &name, Pipeline *pipeline) {
-  s_named_pipelines[name] = pipeline;
-}
-
-void Pipeline::remove(const std::string &name) {
-  auto p = s_named_pipelines.find(name);
-  if (p == s_named_pipelines.end()) return;
-  auto pipeline = p->second;
-  s_named_pipelines.erase(p);
-  pipeline->m_removing = true;
-  pipeline->clean();
-}
-
-Pipeline::Pipeline(std::list<std::unique_ptr<Module>> &chain)
-  : m_chain(std::move(chain))
+Pipeline::Pipeline(Module *module, Type type, const std::string &name)
+  : m_module(module)
+  , m_type(type)
+  , m_name(name)
 {
+  s_all_pipelines.insert(this);
 }
 
 Pipeline::~Pipeline() {
-  while (!m_pool.empty()) {
-    delete m_pool.back();
-    m_pool.pop_back();
+  auto *ptr = m_pool;
+  while (ptr) {
+    auto *session = ptr;
+    ptr = ptr->m_next;
+    delete session;
   }
+  s_all_pipelines.erase(this);
 }
 
-void Pipeline::update(std::list<std::unique_ptr<Module>> &chain) {
-  m_chain = std::move(chain);
-  while (!m_pool.empty()) {
-    delete m_pool.back();
-    m_pool.pop_back();
-  }
-  m_version++;
+void Pipeline::append(Filter *filter) {
+  filter->m_pipeline = this;
+  m_filters.emplace_back(filter);
 }
 
-auto Pipeline::alloc(std::shared_ptr<Context> ctx) -> Session* {
-  Session *session = nullptr;
-  if (m_pool.empty()) {
-    session = new Session(this, m_chain);
-    session->m_version = m_version;
-    m_allocated++;
+auto Pipeline::alloc() -> ReusableSession* {
+  retain();
+  ReusableSession *session = nullptr;
+  if (m_pool) {
+    session = m_pool;
+    m_pool = session->m_next;
   } else {
-    session = m_pool.back();
-    m_pool.pop_back();
+    session = new ReusableSession(this);
+    m_allocated++;
   }
-  session->m_context = ctx ? ctx : std::make_shared<Context>();
-  s_session_total++;
-  Log::debug("Session: %p, allocated", session);
+  m_active++;
+  Log::debug("Session: %p, allocated, pipeline: %s", session, m_name.c_str());
   return session;
 }
 
-void Pipeline::free(Session *session) {
-  if (session->m_version == m_version) {
-    m_pool.push_back(session);
-  } else {
-    delete session;
-    m_allocated--;
-  }
-  s_session_total--;
-  Log::debug("Session: %p, freed", session);
-  clean();
+void Pipeline::free(ReusableSession *session) {
+  session->m_next = m_pool;
+  m_pool = session;
+  m_active--;
+  Log::debug("Session: %p, freed, pipeline: %s", session, m_name.c_str());
+  release();
 }
 
-void Pipeline::clean() {
-  if (m_removing && m_pool.size() == m_allocated) {
-    delete this;
-  }
-}
-
-NS_END
+} // namespace pipy

@@ -24,85 +24,49 @@
  */
 
 #include "context.hpp"
+#include "worker.hpp"
+#include "session.hpp"
+#include "logging.hpp"
 
-#include <cstring>
-#include <chrono>
-
-NS_BEGIN
+namespace pipy {
 
 //
 // Context
 //
 
 uint64_t Context::s_context_id = 0;
+uint64_t Context::s_context_total = 0;
 
-Context::Context() {
+Context::Context(Worker *worker, pjs::Object *global, ContextData *data)
+  : pjs::Context(global, data ? data->elements() : nullptr)
+  , m_worker(worker)
+  , m_data(data)
+{
+  if (data) {
+    for (size_t i = 0, n = data->size(); i < n; i++) {
+      data->at(i)->as<ContextDataBase>()->m_context = this;
+    }
+  }
   if (!++s_context_id) s_context_id++;
-  id = s_context_id;
-}
-
-Context::Context(const Context &rhs) : Context() {
-  remote_addr = rhs.remote_addr;
-  remote_port = rhs.remote_port;
-  local_addr = rhs.local_addr;
-  local_port = rhs.local_port;
-  variables = rhs.variables;
+  m_id = s_context_id;
+  Log::debug("Context: %p, allocated, id = %llu, total = %llu", this, m_id, ++s_context_total);
 }
 
 Context::~Context() {
+  if (m_data) m_data->free();
+  Log::debug("Context: %p, freed, id = %llu, total = %llu", this, m_id, --s_context_total);
 }
 
-auto Context::evaluate(const std::string &str, bool *solved) const -> std::string {
-  std::string result;
-  if (solved) *solved = true;
-  for (size_t i = 0; i < str.length(); ++i) {
-    auto ch = str[i];
-    if (ch == '$' && str[i+1] == '{') {
-      size_t s = i + 2, j = s;
-      while (j < str.length() && str[j] != '}') ++j;
-      std::string name(str.c_str() + s, j - s);
-      if (name.length() > 2 && name[0] == '_' && name[1] == '_') {
-        if (name == "__remote_addr") result += remote_addr;
-        else if (name == "__remote_port") result += std::to_string(remote_port);
-        else if (name == "__local_addr") result += local_addr;
-        else if (name == "__local_port") result += std::to_string(local_port);
-        else if (solved) *solved = false;
-      } else {
-        auto it = variables.find(name);
-        if (it == variables.end()) {
-          if (solved) *solved = false;
-        } else {
-          result += it->second;
-        }
-      }
-      i = j;
-    } else {
-      result += ch;
-    }
-  }
-  return result;
+} // namespace pipy
+
+namespace pjs {
+
+using namespace pipy;
+
+template<> void ClassDef<ContextDataBase>::init() {
+  accessor("__filename", [](Object *obj, Value &ret) { ret.set(obj->as<ContextDataBase>()->filename()); });
+  accessor("__argv", [](Object *obj, Value &ret) { ret.set(obj->as<ContextDataBase>()->argv()); });
+  accessor("__inbound", [](Object *obj, Value &ret) { ret.set(obj->as<ContextDataBase>()->inbound()); });
 }
 
-//
-// Context::Queue
-//
-
-void Context::Queue::clear() {
-  m_buffer.clear();
-}
-
-void Context::Queue::send(std::unique_ptr<Object> obj) {
-  for (const auto &out : m_receivers) {
-    out(clone_object(obj));
-  }
-  m_buffer.push_back(std::move(obj));
-}
-
-void Context::Queue::receive(Object::Receiver receiver) {
-  m_receivers.push_back(receiver);
-  for (const auto &obj : m_buffer) {
-    receiver(clone_object(obj));
-  }
-}
-
-NS_END
+} // namespace pjs

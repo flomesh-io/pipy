@@ -1,4 +1,4 @@
-Name:		pipy-community
+Name:		pipy-pjs
 Version: 	%{getenv:VERSION}
 Release: 	%{getenv:REVISION}%{?dist}
 

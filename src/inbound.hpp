@@ -26,18 +26,13 @@
 #ifndef INBOUND_HPP
 #define INBOUND_HPP
 
-#include "ns.hpp"
 #include "net.hpp"
-#include "pool.hpp"
+#include "pjs/pjs.hpp"
 
-#include <functional>
-#include <list>
-#include <memory>
+namespace pipy {
 
-NS_BEGIN
-
-class Context;
 class Data;
+class Listener;
 class Pipeline;
 class Session;
 
@@ -45,37 +40,91 @@ class Session;
 // Inbound
 //
 
-class Inbound : public Pooled<Inbound> {
+class Inbound : public pjs::ObjectTemplate<Inbound> {
 public:
-  Inbound();
-  ~Inbound();
-
   void accept(
-    Pipeline* pipeline,
+    Listener* listener,
     asio::ip::tcp::acceptor &acceptor,
     std::function<void(const std::error_code&)> on_result
   );
 
-  void send(std::unique_ptr<Data> data);
+  auto id() const -> uint64_t { return m_id; }
+
+  auto remote_address() -> pjs::Str* {
+    if (!m_str_remote_addr) {
+      m_str_remote_addr = pjs::Str::make(m_remote_addr);
+    }
+    return m_str_remote_addr;
+  }
+
+  auto local_address() -> pjs::Str* {
+    if (!m_str_local_addr) {
+      m_str_local_addr = pjs::Str::make(m_local_addr);
+    }
+    return m_str_local_addr;
+  }
+
+  auto remote_port() const -> int { return m_remote_port; }
+  auto local_port() const -> int { return m_local_port; }
+
+  void set_keep_alive_request(bool b) { m_keep_alive = b; }
+  void increase_request_count() { m_request_count++; }
+  bool increase_response_count();
+
+  auto session() const -> Session* { return m_session; }
+  void pause();
+  void resume();
+  void send(const pjs::Ref<Data> &data);
   void flush();
   void end();
 
 private:
-  Session* m_session = nullptr;
-  asio::ip::tcp::socket m_socket;
+  Inbound();
+  Inbound(asio::ssl::context &ssl_context);
+  ~Inbound();
+
+  enum ReceivingState {
+    RECEIVING,
+    PAUSING,
+    PAUSED,
+  };
+
+  uint64_t m_id;
+  pjs::Ref<Session> m_session;
   asio::ip::tcp::endpoint m_peer;
-  std::string m_peer_addr;
+  asio::ip::tcp::socket m_socket;
+  asio::ssl::stream<asio::ip::tcp::socket> m_ssl_socket;
+  pjs::Ref<pjs::Str> m_str_remote_addr;
+  pjs::Ref<pjs::Str> m_str_local_addr;
+  std::string m_remote_addr;
+  std::string m_local_addr;
+  int m_remote_port = 0;
+  int m_local_port = 0;
   Data m_buffer;
+  ReceivingState m_receiving_state = RECEIVING;
+  bool m_ssl = false;
   bool m_pumping = false;
   bool m_reading_ended = false;
   bool m_writing_ended = false;
+  bool m_keep_alive = true;
+  int m_request_count = 0;
+  int m_response_count = 0;
 
+  auto socket() -> asio::basic_socket<asio::ip::tcp>& {
+    return m_ssl ? m_ssl_socket.lowest_layer() : m_socket;
+  }
+
+  void start(Pipeline *pipeline);
   void receive();
   void pump();
   void close();
   void free();
+
+  static uint64_t s_inbound_id;
+
+  friend class pjs::ObjectTemplate<Inbound>;
 };
 
-NS_END
+} // namespace pipy
 
 #endif // INBOUND_HPP

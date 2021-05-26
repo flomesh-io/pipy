@@ -26,55 +26,129 @@
 #ifndef SESSION_HPP
 #define SESSION_HPP
 
-#include "ns.hpp"
-#include "object.hpp"
+#include "context.hpp"
+#include "pipeline.hpp"
+#include "event.hpp"
+#include "filter.hpp"
+#include "message.hpp"
+#include "inbound.hpp"
 
-#include <functional>
 #include <list>
-#include <memory>
 
-NS_BEGIN
+namespace pipy {
 
-class Context;
-class Pipeline;
-class Listener;
-class Module;
+class Session;
+class Filter;
+
+//
+// ReusableSession
+//
+
+class ReusableSession {
+public:
+  auto pipeline() const -> Pipeline* { return m_pipeline; }
+  auto session() const -> Session* { return m_session; }
+
+private:
+  ReusableSession(Pipeline *pipeline);
+  ~ReusableSession();
+
+  void input(Event *evt) {
+    pjs::Ref<Event> e(evt);
+    if (auto f = m_filters) {
+      f->process(m_context, evt);
+    } else {
+      if (m_output) m_output(evt);
+      if (evt->is<SessionEnd>()) m_done = true;
+    }
+  }
+
+  void abort();
+  void free();
+
+  Pipeline* m_pipeline;
+  Filter* m_filters;
+  ReusableSession* m_next = nullptr;
+  Session* m_session = nullptr;
+  pjs::Ref<Context> m_context;
+  Event::Receiver m_output;
+  bool m_done = false;
+
+  void reset();
+
+  friend class Pipeline;
+  friend class Session;
+  friend class Filter;
+};
 
 //
 // Session
 //
 
-class Session {
+class Session : public pjs::ObjectTemplate<Session> {
 public:
-  auto context() const -> Context& { return *m_context; }
-  void input(std::unique_ptr<Object> obj);
-  void output(Object::Receiver output) { m_output = output; }
-  void free();
+  auto context() const -> Context* {
+    return m_reusable_session->m_context;
+  }
+
+  auto pipeline() const -> Pipeline* {
+    return m_reusable_session->m_pipeline;
+  }
+
+  auto remote_address() const -> pjs::Str* {
+    auto inbound = m_reusable_session->m_context->inbound();
+    return inbound ? inbound->remote_address() : pjs::Str::empty.get();
+  }
+
+  auto local_address() const -> pjs::Str* {
+    auto inbound = m_reusable_session->m_context->inbound();
+    return inbound ? inbound->local_address() : pjs::Str::empty.get();
+  }
+
+  auto remote_port() const -> int {
+    auto inbound = m_reusable_session->m_context->inbound();
+    return inbound ? inbound->remote_port() : 0;
+  }
+
+  auto local_port() const -> int {
+    auto inbound = m_reusable_session->m_context->inbound();
+    return inbound ? inbound->local_port() : 0;
+  }
+
+  void input(Event *evt) {
+    m_reusable_session->input(evt);
+  }
+
+  void input(Message *msg) {
+    m_reusable_session->input(MessageStart::make(msg->head()));
+    m_reusable_session->input(msg->body());
+    m_reusable_session->input(MessageEnd::make());
+  }
+
+  void on_output(Event::Receiver out) { m_reusable_session->m_output = out; }
+
+  bool done() const { return m_reusable_session->m_done; }
 
 private:
-  struct Chain {
-    Chain* next;
-    Module* module;
-    Object::Receiver output;
-  };
+  Session(Context *ctx, Pipeline *pipeline)
+    : m_reusable_session(pipeline->alloc())
+  {
+    m_reusable_session->m_context = ctx;
+    m_reusable_session->m_session = this;
+  }
 
-  Session(
-    Pipeline *pipeline,
-    const std::list<std::unique_ptr<Module>> &chain
-  );
+  ~Session() {
+    Context *ctx = m_reusable_session->m_context;
+    m_reusable_session->m_context = nullptr;
+    m_reusable_session->m_session = nullptr;
+    m_reusable_session->free();
+  }
 
-  ~Session();
+  ReusableSession* m_reusable_session;
 
-  Pipeline* m_pipeline;
-  Session* m_next = nullptr;
-  std::shared_ptr<Context> m_context;
-  Object::Receiver m_output;
-  Chain* m_chain;
-  uint64_t m_version = 0;
-
-  friend class Pipeline;
+  friend class pjs::ObjectTemplate<Session>;
 };
 
-NS_END
+} // namespace pipy
 
 #endif // SESSION_HPP

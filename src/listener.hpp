@@ -26,15 +26,14 @@
 #ifndef LISTENER_HPP
 #define LISTENER_HPP
 
-#include "ns.hpp"
 #include "net.hpp"
-#include "pipeline.hpp"
 
 #include <functional>
-#include <memory>
 #include <string>
 
-NS_BEGIN
+namespace pipy {
+
+class Pipeline;
 
 //
 // Listener
@@ -42,28 +41,52 @@ NS_BEGIN
 
 class Listener {
 public:
-  static void run();
-  static void stop();
-  static auto listen(const std::string &ip, int port, Pipeline *pipeline) -> Listener*;
-  static void set_timeout(double duration, std::function<void()> handler);
-  static void set_reuse_port(bool enabled);
+  static auto make(const std::string &ip, int port, bool reuse) -> Listener* {
+    return new Listener(ip, port, reuse);
+  }
+
+  static auto make(const std::string &ip, int port, bool reuse, asio::ssl::context &&ssl_context) -> Listener* {
+    return new Listener(ip, port, reuse, std::move(ssl_context));
+  }
+
+  static auto get(int port) -> Listener* {
+    auto i = s_all_listeners.find(port);
+    if (i == s_all_listeners.end()) return nullptr;
+    return i->second;
+  }
+
+  static void close_all() {
+    for (auto &i : s_all_listeners) {
+      i.second->close();
+    }
+  }
 
   auto ip() const -> const std::string& { return m_ip; }
   auto port() const -> int { return m_port; }
-
+  auto pipeline() const -> Pipeline* { return m_pipeline; }
+  void open(Pipeline *pipeline);
   void close();
 
 private:
-  Listener(const std::string &ip, int port, Pipeline *pipeline);
+  Listener(const std::string &ip, int port, bool reuse);
+  Listener(const std::string &ip, int port, bool reuse, asio::ssl::context &&ssl_context);
+  ~Listener();
 
+  void start();
   void accept();
 
   std::string m_ip;
   int m_port;
+  bool m_reuse;
+  bool m_ssl;
   asio::ip::tcp::acceptor m_acceptor;
-  Pipeline* m_pipeline;
+  asio::ssl::context m_ssl_context;
+  pjs::Ref<Pipeline> m_pipeline;
+
+  static std::list<asio::steady_timer*> s_timer_pool;
+  static std::map<int, Listener*> s_all_listeners;
 };
 
-NS_END
+} // namespace pipy
 
 #endif // LISTENER_HPP
