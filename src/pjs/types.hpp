@@ -932,7 +932,6 @@ inline auto Class::init(Object *obj, Object *prototype) -> Object* {
     }
     obj->m_ht = prototype->m_ht;
   } else {
-    printf("!!!\n");
     Object::assign(obj, prototype);
   }
   obj->m_class = this;

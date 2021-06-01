@@ -531,7 +531,12 @@ template<> void ClassDef<URLRouter>::init() {
   ctor([](Context &ctx) -> Object* {
     Object *rules = nullptr;
     if (!ctx.arguments(0, &rules)) return nullptr;
-    return URLRouter::make(rules);
+    try {
+      return URLRouter::make(rules);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+      return nullptr;
+    }
   });
 
   method("add", [](Context &ctx, Object *obj, Value &ret) {
