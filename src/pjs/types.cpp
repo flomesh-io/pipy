@@ -844,36 +844,34 @@ auto Array::findIndex(std::function<bool(Value&, int)> callback) -> int {
 }
 
 auto Array::flat(int depth) -> Array* {
-  auto out = make(length());
-  auto i = 0;
+  auto out = make();
   std::function<void(Value&, int)> expand;
   expand = [&](Value &v, int d) {
     if (v.is_array() && d <= depth) {
-      v.as<Array>()->iterate_all([&](Value &v, int i) {
+      v.as<Array>()->iterate_all([&](Value &v, int) {
         expand(v, d + 1);
       });
     } else {
-      out->set(i++, v);
+      out->push(v);
     }
   };
-  iterate_all([&](Value &v, int i) {
+  iterate_all([&](Value &v, int) {
     expand(v, 1);
   });
   return out;
 }
 
 auto Array::flatMap(std::function<bool(Value&, int, Value&)> callback) -> Array* {
-  auto out = make(length());
-  auto i = 0;
+  auto out = make();
   iterate_while([&](Value &v, int i) -> bool {
     Value ret;
     if (!callback(v, i, ret)) return false;
     if (ret.is_array()) {
       ret.as<Array>()->iterate_all([&](Value &v, int) {
-        out->set(i++, v);
+        out->push(v);
       });
     } else {
-      out->set(i++, ret);
+      out->push(ret);
     }
     return true;
   });
@@ -948,12 +946,6 @@ void Array::shift(Value &result) {
       values[0].~Value();
       std::memmove(values, values + 1, (size - 1) * sizeof(Value));
       new (values + (size - 1)) Value(Value::empty);
-    }
-    for (auto p = m_sparse.begin(); p != m_sparse.end(); ) {
-      auto i = p->first;
-      if (i > 0) m_sparse[i - 1] = p->second;
-      auto q = p; ++p;
-      m_sparse.erase(q);
     }
     m_size--;
   } else {

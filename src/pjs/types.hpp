@@ -1614,83 +1614,58 @@ public:
 
 class Array : public ObjectTemplate<Array> {
 public:
-  auto length() const -> size_t { return m_size; }
+  static const size_t MAX_SIZE = 0x100000;
 
-  void length(size_t n) {
+  auto length() const -> int { return m_size; }
+
+  void length(int n) {
+    if (n < 0) n = 0;
     if (n < m_size) {
-      auto cap = m_data->size();
+      auto end = std::min((int)m_data->size(), m_size);
       auto values = m_data->elements();
-      for (auto i = n; i < m_size && i < cap; i++) {
+      for (auto i = n; i < end; i++) {
         values[i] = Value::empty;
       }
-    }
-    for (auto p = m_sparse.begin(); p != m_sparse.end(); ) {
-      auto q = p; ++p;
-      auto i = q->first;
-      if (i >= n) m_sparse.erase(q);
     }
     m_size = n;
   }
 
   void get(int i, Value &v) const {
-    if (i < 0 || i >= m_size) {
-      v = Value::undefined;
+    if (0 <= i && i < m_data->size()) {
+      v = m_data->at(i);
     } else {
-      if (i < m_data->size()) {
-        v = m_data->at(i);
-      } else {
-        auto p = m_sparse.find(i);
-        if (p == m_sparse.end()) {
-          v = Value::undefined;
-        } else {
-          v = p->second;
-        }
-      }
+      v = Value::undefined;
     }
   }
 
   void set(int i, const Value &v) {
-    if (i < 0) return;
-    if (i < MAX_CAPACITY) {
-      if (i >= m_data->size()) {
-        auto *data = Data::make(1 << power(i));
-        auto *values = data->elements();
-        auto *old = m_data->elements();
-        for (size_t i = 0; i < m_size; i++) values[i] = std::move(old[i]);
-        m_data->free();
-        m_data = data;
-        values[i] = v;
-      } else {
-        m_data->at(i) = v;
-      }
+    if (i >= m_data->size()) {
+      auto new_size = 1 << power(i + 1);
+      if (new_size > MAX_SIZE) return; // TODO: report error
+      auto *data = Data::make(new_size);
+      auto *new_values = data->elements();
+      auto *old_values = m_data->elements();
+      auto end = std::min((int)m_data->size(), m_size);
+      for (int i = 0; i < end; i++) new_values[i] = std::move(old_values[i]);
+      m_data->free();
+      m_data = data;
+      new_values[i] = v;
     } else {
-      m_sparse[i] = v;
+      m_data->at(i) = v;
     }
-    m_size = std::max(m_size, size_t(i) + 1);
+    m_size = std::max(m_size, i + 1);
   }
 
   void clear(int i) {
-    if (i < 0 || i >= m_size) return;
-    auto values = m_data->elements();
-    if (i < m_data->size()) {
-      values[i] = Value::empty;
-    } else {
-      m_sparse.erase(i);
-    }
+    if (i < 0 || i >= m_size || i >= m_data->size()) return;
+    m_data->at(i) = Value::empty;
   }
 
   int iterate_while(std::function<bool(Value&, int)> callback) {
     auto values = m_data->elements();
-    size_t i = 0;
-    while (i < m_size && i < m_data->size()) {
+    for (int i = 0, n = std::min((int)m_data->size(), m_size); i < n; i++) {
       auto &v = values[i];
       if (!v.is_empty() && !callback(v, i)) return i;
-      i++;
-    }
-    for (auto &p : m_sparse) {
-      if (!callback(p.second, p.first)) {
-        return p.first;
-      }
     }
     return m_size;
   }
@@ -1720,7 +1695,7 @@ public:
 
 private:
   Array(size_t size = 0)
-    : m_data(Data::make(capacity(size)))
+    : m_data(Data::make(std::max(2, 1 << power(std::max(0, int(size))))))
     , m_size(size) {}
 
   ~Array() {
@@ -1728,21 +1703,11 @@ private:
     free(m_data);
   }
 
-  static const size_t MIN_CAPACITY = 2;
-  static const size_t MAX_CAPACITY = 0x10000;
-
   Data* m_data;
-  size_t m_size;
-  std::map<size_t, Value> m_sparse;
-
-  static auto capacity(size_t size) -> size_t {
-    if (size < MIN_CAPACITY) return MIN_CAPACITY;
-    if (size > MAX_CAPACITY) return MAX_CAPACITY;
-    return size;
-  }
+  int m_size;
 
   static auto power(size_t size) -> size_t {
-    return sizeof(unsigned int) * 8 - __builtin_clz(size);
+    return sizeof(unsigned int) * 8 - __builtin_clz(size - 1);
   }
 
   friend class ObjectTemplate<Array>;

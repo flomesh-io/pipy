@@ -971,11 +971,11 @@ Expr* ExpressionParser::expression(bool no_comma) {
     for (;;) {
       auto t = peek();
       auto is_end = (
-        t == Token::eof ||
-        t.id() == Token::OPR(")") ||
-        t.id() == Token::OPR("]") ||
-        t.id() == Token::OPR("}") ||
-        t.id() == Token::OPR(",") && no_comma
+        (t == Token::eof) ||
+        (t.id() == Token::OPR(")")) ||
+        (t.id() == Token::OPR("]")) ||
+        (t.id() == Token::OPR("}")) ||
+        (t.id() == Token::OPR(",") && no_comma)
       );
       if (t == Token::err) return error(UnknownToken);
       if (!is_end && !t.is_operator()) return error(UnexpectedToken);
