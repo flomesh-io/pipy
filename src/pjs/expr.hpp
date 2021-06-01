@@ -425,7 +425,7 @@ public:
 private:
   std::vector<std::unique_ptr<Expr>> m_inputs;
   std::unique_ptr<Expr> m_output;
-  size_t m_argc;
+  size_t m_argc = 0;
   bool m_need_unpack = false;
   std::vector<pjs::Scope::Variable> m_variables;
   Ref<Method> m_method;
