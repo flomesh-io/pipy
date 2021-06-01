@@ -57,6 +57,7 @@ public:
   void decode_dubbo();
   void decode_http_request();
   void decode_http_response();
+  void decompress_body(pjs::Str *algorithm);
   void demux(pjs::Str *target);
   void dummy();
   void dump(const pjs::Value &tag);

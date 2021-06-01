@@ -47,6 +47,7 @@
 
 // All filters
 #include "filters/connect.hpp"
+#include "filters/decompress-body.hpp"
 #include "filters/demux.hpp"
 #include "filters/dubbo.hpp"
 #include "filters/dummy.hpp"
@@ -77,6 +78,7 @@ using namespace pipy;
 
 static std::list<Filter*> s_filters {
   new Connect,
+  new DecompressBody,
   new Demux,
   new dubbo::Decoder,
   new http::RequestDecoder,
@@ -451,7 +453,7 @@ int main(int argc, char *argv[]) {
 
     Configuration::set_reuse_port(opts.reuse_port);
 
-    char full_path[1000];
+    char full_path[PATH_MAX];
     realpath(opts.filename.c_str(), full_path);
 
     struct stat st;

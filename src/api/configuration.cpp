@@ -35,6 +35,7 @@
 
 // all filters
 #include "filters/connect.hpp"
+#include "filters/decompress-body.hpp"
 #include "filters/demux.hpp"
 #include "filters/dubbo.hpp"
 #include "filters/dummy.hpp"
@@ -170,6 +171,12 @@ void Configuration::decode_http_request() {
 
 void Configuration::decode_http_response() {
   append_filter(new http::ResponseDecoder());
+}
+
+void Configuration::decompress_body(pjs::Str *algorithm) {
+  auto algo = pjs::EnumDef<DecompressBody::Algorithm>::value(algorithm);
+  if (int(algo) < 0) throw std::runtime_error("unknown decompression algorithm");
+  append_filter(new DecompressBody(algo));
 }
 
 void Configuration::demux(pjs::Str *target) {
@@ -455,6 +462,18 @@ template<> void ClassDef<Configuration>::init() {
   method("decodeHttpResponse", [](Context &ctx, Object *thiz, Value &result) {
     try {
       thiz->as<Configuration>()->decode_http_response();
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // Configuration.decompressMessageBody
+  method("decompressMessageBody", [](Context &ctx, Object *thiz, Value &result) {
+    Str *algorithm;
+    if (!ctx.arguments(1, &algorithm)) return;
+    try {
+      thiz->as<Configuration>()->decompress_body(algorithm);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

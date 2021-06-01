@@ -43,6 +43,7 @@ add_executable(pipy
   src/event.cpp
   src/filter.cpp
   src/filters/connect.cpp
+  src/filters/decompress-body.cpp
   src/filters/demux.cpp
   src/filters/dubbo.cpp
   src/filters/dummy.cpp
