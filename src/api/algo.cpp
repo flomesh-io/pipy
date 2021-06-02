@@ -552,11 +552,17 @@ template<> void ClassDef<URLRouter>::init() {
 
   method("find", [](Context &ctx, Object *obj, Value &ret) {
     std::string url;
-    if (!ctx.arguments(1, &url)) return;
-    for (int i = 1; i < ctx.argc(); i++) {
-      auto s = ctx.arg(i).to_string();
-      url = pipy::utils::path_join(url, s->str());
-      s->release();
+    for (int i = 0; i < ctx.argc(); i++) {
+      const auto &seg = ctx.arg(i);
+      if (!seg.is_nullish()) {
+        auto s = seg.to_string();
+        if (url.empty()) {
+          url = s->str();
+        } else {
+          url = pipy::utils::path_join(url, s->str());
+        }
+        s->release();
+      }
     }
     obj->as<URLRouter>()->find(url, ret);
   });
