@@ -142,9 +142,9 @@ void DecompressBody::reset()
 void DecompressBody::process(Context *ctx, Event *inp) {
   if (m_session_end) return;
 
-  if (inp->is<Data>()) {
+  if (auto *data = inp->as<Data>()) {
     if (m_decompressor) {
-      if (!m_decompressor->process(inp->as<Data>())) {
+      if (!m_decompressor->process(data)) {
         Log::warn("[decompress] decompression error");
         m_decompressor->end();
         m_decompressor = nullptr;

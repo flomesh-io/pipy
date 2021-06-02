@@ -73,7 +73,7 @@ public:
   void on_message(pjs::Function *callback);
   void on_start(pjs::Function *callback);
   void print();
-  void proxy(const pjs::Value &target, pjs::Object *options);
+  void proxy_socks4(pjs::Str *target, pjs::Function *on_connect);
   void replace_body(const pjs::Value &replacement);
   void replace_event(Event::Type type, const pjs::Value &replacement);
   void replace_message(const pjs::Value &replacement);

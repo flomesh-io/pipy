@@ -66,6 +66,7 @@
 #include "filters/replace-event.hpp"
 #include "filters/replace-message.hpp"
 #include "filters/replace-start.hpp"
+#include "filters/socks4.hpp"
 #include "filters/tap.hpp"
 #include "filters/use.hpp"
 #include "filters/wait.hpp"
@@ -100,6 +101,7 @@ static std::list<Filter*> s_filters {
   new OnBody,
   new OnMessage,
   new Print,
+  new ProxySOCKS4,
   new ReplaceStart,
   new ReplaceEvent(Event::Type::Data),
   new ReplaceEvent(Event::Type::MessageStart),
