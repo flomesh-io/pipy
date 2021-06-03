@@ -37,11 +37,13 @@ namespace pipy {
 uint64_t Context::s_context_id = 0;
 uint64_t Context::s_context_total = 0;
 
-Context::Context(Worker *worker, pjs::Object *global, ContextData *data)
+Context::Context(ContextGroup *group, Worker *worker, pjs::Object *global, ContextData *data)
   : pjs::Context(global, data ? data->elements() : nullptr)
+  , m_group(group ? group : new ContextGroup())
   , m_worker(worker)
   , m_data(data)
 {
+  m_group->add(this);
   if (data) {
     for (size_t i = 0, n = data->size(); i < n; i++) {
       data->at(i)->as<ContextDataBase>()->m_context = this;
@@ -53,6 +55,7 @@ Context::Context(Worker *worker, pjs::Object *global, ContextData *data)
 }
 
 Context::~Context() {
+  m_group->remove(this);
   if (m_data) m_data->free();
   Log::debug("Context: %p, freed, id = %llu, total = %llu", this, m_id, --s_context_total);
 }

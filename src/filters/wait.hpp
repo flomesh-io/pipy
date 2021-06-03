@@ -40,7 +40,7 @@ class Session;
 // Wait
 //
 
-class Wait : public Filter, public Context::Waiter {
+class Wait : public Filter, public ContextGroup::Waiter {
 public:
   Wait();
   Wait(pjs::Function *condition);

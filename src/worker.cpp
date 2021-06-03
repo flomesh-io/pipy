@@ -216,7 +216,7 @@ auto Worker::load_module(const std::string &path) -> Module* {
 }
 
 auto Worker::new_loading_context() -> Context* {
-  return new Context(this, m_global_object);
+  return new Context(nullptr, this, m_global_object);
 }
 
 auto Worker::new_runtime_context(Context *base) -> Context* {
@@ -226,7 +226,10 @@ auto Worker::new_runtime_context(Context *base) -> Context* {
     if (base) proto = base->m_data->at(i);
     data->at(i) = m_modules[i]->new_context_data(proto);
   }
-  auto ctx = new Context(this, m_global_object, data);
+  auto ctx = new Context(
+    base ? base->group() : nullptr,
+    this, m_global_object, data
+  );
   if (base) ctx->m_inbound = base->m_inbound;
   return ctx;
 }

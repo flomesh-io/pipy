@@ -103,15 +103,23 @@ void Fork::process(Context *ctx, Event *inp) {
       if (session_data && session_data->is_array()) {
         m_sessions = session_data->as<pjs::Array>()->map(
           [&](pjs::Value &v, int, pjs::Value &ret) -> bool {
-            auto session = Session::make(root, pipeline);
-            if (v.is_object()) pjs::Object::assign(session, v.o());
+            auto context = root;
+            if (v.is_object()) {
+              context = mod->worker()->new_runtime_context(root);
+              pjs::Object::assign(context->data(mod->index()), v.o());
+            }
+            auto session = Session::make(context, pipeline);
             ret.set(session);
             return true;
           }
         );
       } else {
-        auto session = Session::make(root, pipeline);
-        pjs::Object::assign(session, session_data);
+        auto context = root;
+        if (session_data) {
+          context = mod->worker()->new_runtime_context(root);
+          pjs::Object::assign(context->data(mod->index()), session_data);
+        }
+        auto session = Session::make(context, pipeline);
         m_sessions = pjs::Array::make(1);
         m_sessions->set(0, session);
       }

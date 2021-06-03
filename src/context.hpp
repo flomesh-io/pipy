@@ -31,6 +31,7 @@
 
 namespace pipy {
 
+class ContextGroup;
 class ContextDataBase;
 class Worker;
 class Inbound;
@@ -43,56 +44,25 @@ class Session;
 class Context :
   public pjs::Context,
   public pjs::RefCount<Context>,
-  public pjs::Pooled<Context>
+  public pjs::Pooled<Context>,
+  public List<Context>::Item
 {
 public:
   auto id() const -> uint64_t { return m_id; }
   auto data(int i) const -> ContextDataBase* { return m_data->at(i)->as<ContextDataBase>(); }
+  auto group() const -> ContextGroup* { return m_group; }
   auto worker() const -> Worker* { return m_worker; }
   auto inbound() const -> Inbound* { return m_inbound; }
-
-  class Waiter : public List<Waiter>::Item {
-  public:
-    void wait(Context *ctx) {
-      if (!m_context) {
-        m_context = ctx;
-        m_context->m_waiters.push(this);
-      }
-    }
-
-    void cancel() {
-      if (m_context) {
-        m_context->m_waiters.remove(this);
-        m_context = nullptr;
-      }
-    }
-
-  private:
-    virtual void on_notify(Context *ctx) = 0;
-
-    Context* m_context = nullptr;
-
-    friend class Context;
-  };
-
-  void notify() {
-    Waiter *p = m_waiters.head();
-    while (p) {
-      auto waiter = p;
-      p = p->next();
-      waiter->on_notify(this);
-    }
-  }
 
 private:
   typedef pjs::PooledArray<pjs::Ref<pjs::Object>> ContextData;
 
-  Context(Worker *worker, pjs::Object *global, ContextData *data = nullptr);
+  Context(ContextGroup *group, Worker *worker, pjs::Object *global, ContextData *data = nullptr);
   ~Context();
 
   uint64_t m_id;
+  ContextGroup* m_group;
   Worker* m_worker;
-  List<Waiter> m_waiters;
   ContextData* m_data;
   Inbound* m_inbound = nullptr;
 
@@ -103,6 +73,61 @@ private:
   friend class Worker;
   friend class Waiter;
   friend class Inbound;
+};
+
+//
+// ContextGroup
+//
+
+class ContextGroup : public pjs::Pooled<ContextGroup> {
+public:
+  class Waiter : public List<Waiter>::Item {
+  public:
+    void wait(ContextGroup *context_group) {
+      if (!m_context_group) {
+        m_context_group = context_group;
+        m_context_group->m_waiters.push(this);
+      }
+    }
+
+    void cancel() {
+      if (m_context_group) {
+        m_context_group->m_waiters.remove(this);
+        m_context_group = nullptr;
+      }
+    }
+
+  private:
+    virtual void on_notify(Context *ctx) = 0;
+
+    ContextGroup* m_context_group = nullptr;
+
+    friend class ContextGroup;
+  };
+
+  void add(Context *ctx) {
+    m_contexts.push(ctx);
+  }
+
+  void remove(Context *ctx) {
+    m_contexts.remove(ctx);
+    if (m_contexts.empty()) {
+      delete this;
+    }
+  }
+
+  void notify(Context *ctx) {
+    Waiter *p = m_waiters.head();
+    while (p) {
+      auto waiter = p;
+      p = p->next();
+      waiter->on_notify(ctx);
+    }
+  }
+
+private:
+  List<Context> m_contexts;
+  List<Waiter> m_waiters;
 };
 
 //

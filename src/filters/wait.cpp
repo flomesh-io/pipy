@@ -88,7 +88,7 @@ void Wait::process(Context *ctx, Event *inp) {
       m_buffer.flush(out());
       output(inp);
     } else {
-      Waiter::wait(ctx);
+      Waiter::wait(ctx->group());
       m_buffer.push(inp);
     }
   }

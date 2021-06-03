@@ -104,11 +104,11 @@ void Demux::process(Context *ctx, Event *inp) {
         channel->output_end = true;
       } else {
         channel->buffer.push(inp);
-        if (inp->is<MessageEnd>()) channel->output_end = true;
+        if (inp->is<MessageEnd>()) {
+          channel->output_end = true;
+        }
       }
-      auto context = ctx;
-      auto sent = flush(); // this lambda (and ctx) could be gone after flush()
-      if (sent) context->notify();
+      flush();
     });
     channel->session = session;
     m_queue.push(channel);

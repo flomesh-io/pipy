@@ -147,7 +147,7 @@ void Exec::process(Context *ctx, Event *inp) {
     m_stdout->on_read(
       [=](Event *inp) {
         output(inp);
-        ctx->notify();
+        ctx->group()->notify(ctx);
       }
     );
 
@@ -170,7 +170,7 @@ void Exec::process(Context *ctx, Event *inp) {
         m_pid,
         [=]() {
           output(SessionEnd::make());
-          ctx->notify();
+          ctx->group()->notify(ctx);
         }
       );
     }

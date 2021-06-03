@@ -131,7 +131,6 @@ void Mux::process(Context *ctx, Event *inp) {
           m_queue.pop();
         }
         output(inp);
-        ctx->notify();
       };
       m_queue.push(channel);
       m_session->input(channel, ctx, m_head, m_body);

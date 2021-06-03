@@ -156,7 +156,7 @@ void Connect::process(Context *ctx, Event *inp) {
         outbound->on_delete([this]() { m_outbound = nullptr; });
         outbound->on_receive([=](Event *inp) {
           output(inp);
-          ctx->notify();
+          ctx->group()->notify(ctx);
         });
         outbound->connect(host, port);
         m_outbound = outbound;
