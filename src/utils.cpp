@@ -26,10 +26,19 @@
 #include "utils.hpp"
 
 #include <sys/stat.h>
+#include <cmath>
 
-NS_BEGIN
+namespace pipy {
 
 namespace utils {
+
+auto to_string(double n) -> std::string {
+  if (std::isnan(n)) return "NaN";
+  if (std::isinf(n)) return n > 0 ? "Infinity" : "-Infinity";
+  double i; std::modf(n, &i);
+  if (std::modf(n, &i) == 0) return std::to_string(int64_t(i));
+  return std::to_string(n);
+}
 
 auto get_param(const std::map<std::string, std::string> &params, const char *name, const char *value) -> std::string {
   auto it = params.find(name);
@@ -130,7 +139,7 @@ auto lower(const std::string &str) -> std::string {
   return lstr;
 }
 
-auto escape(const std::string str) -> std::string {
+auto escape(const std::string &str) -> std::string {
   std::string str2;
   for (auto c : str) {
     switch (c) {
@@ -172,6 +181,167 @@ auto unescape(const std::string &str) -> std::string {
   return str2;
 }
 
+auto decode_hex(void *out, const char *inp, int len) -> int {
+  if (len % 2) return -1;
+  for (int i = 0; i < len; i += 2) {
+    auto h = inp[i+0];
+    auto l = inp[i+1];
+    if ('0' <= h && h <= '9') h -= '0';
+    else if ('a' <= h && h <= 'f') h -= 'a' - 10;
+    else if ('A' <= h && h <= 'F') h -= 'A' - 10;
+    else return -1;
+    if ('0' <= l && l <= '9') l -= '0';
+    else if ('a' <= l && l <= 'f') l -= 'a' - 10;
+    else if ('A' <= l && l <= 'F') l -= 'A' - 10;
+    else return -1;
+    *((char*)out + (i>>1)) = (h << 4) | l;
+  }
+  return len >> 1;
+}
+
+auto encode_hex(char *out, const void *inp, int len) -> int {
+  return -1;
+}
+
+auto decode_base64(void *out, const char *inp, int len) -> int {
+  auto *buf = (char *)out;
+  if (len % 4 > 0) return -1;
+  uint32_t w = 0, n = 0, c = 0;
+  for (int i = 0; i < len; i++) {
+    int ch = inp[i];
+    if (ch == '=') {
+      if (n == 3 && i + 1 == len) {
+        buf[c++] = (w >> 10) & 255;
+        buf[c++] = (w >> 2) & 255;
+        break;
+      } else if (n == 2 && i + 2 == len && inp[i+1] == '=') {
+        buf[c++] = (w >> 4) & 255;
+        break;
+      } else {
+        return -1;
+      }
+    }
+    else if (ch == '+') ch = 62;
+    else if (ch == '/') ch = 63;
+    else if ('0' <= ch && ch <= '9') ch = ch - '0' + 52;
+    else if ('a' <= ch && ch <= 'z') ch = ch - 'a' + 26;
+    else if ('A' <= ch && ch <= 'Z') ch = ch - 'A';
+    else return -1;
+    w = (w << 6) | ch;
+    if (++n == 4) {
+      buf[c++] = (w >> 16) & 255;
+      buf[c++] = (w >> 8) & 255;
+      buf[c++] = (w >> 0) & 255;
+      w = n = 0;
+    }
+  }
+  return c;
+}
+
+auto encode_base64(char *out, const void *inp, int len) -> int {
+  static char tab[] = {
+    "ABCDEFGHIJKLMNOP"
+    "QRSTUVWXYZabcdef"
+    "ghijklmnopqrstuv"
+    "wxyz0123456789+/"
+  };
+  uint32_t w = 0, n = 0, c = 0;
+  for (int i = 0; i < len; i++) {
+    w = (w << 8) | ((const uint8_t *)inp)[i];
+    if (++n == 3) {
+      out[c++] = tab[(w >> 18) & 63];
+      out[c++] = tab[(w >> 12) & 63];
+      out[c++] = tab[(w >> 6) & 63];
+      out[c++] = tab[(w >> 0) & 63];
+      w = n = 0;
+    }
+  }
+  switch (n) {
+    case 1:
+      w <<= 16;
+      out[c++] = tab[(w >> 18) & 63];
+      out[c++] = tab[(w >> 12) & 63];
+      out[c++] = '=';
+      out[c++] = '=';
+      break;
+    case 2:
+      w <<= 8;
+      out[c++] = tab[(w >> 18) & 63];
+      out[c++] = tab[(w >> 12) & 63];
+      out[c++] = tab[(w >> 6) & 63];
+      out[c++] = '=';
+      break;
+  }
+  return c;
+}
+
+auto decode_base64url(void *out, const char *inp, int len) -> int {
+  auto *buf = (char *)out;
+  uint32_t w = 0, n = 0, c = 0;
+  for (int i = 0; i < len; i++) {
+    int ch = inp[i];
+    if (ch == '-') ch = 62;
+    else if (ch == '_') ch = 63;
+    else if ('0' <= ch && ch <= '9') ch = ch - '0' + 52;
+    else if ('a' <= ch && ch <= 'z') ch = ch - 'a' + 26;
+    else if ('A' <= ch && ch <= 'Z') ch = ch - 'A';
+    else return -1;
+    w = (w << 6) | ch;
+    if (++n == 4) {
+      buf[c++] = (w >> 16) & 255;
+      buf[c++] = (w >> 8) & 255;
+      buf[c++] = (w >> 0) & 255;
+      w = n = 0;
+    }
+  }
+  switch (len % 4) {
+  case 3:
+    buf[c++] = (w >> 10) & 255;
+    buf[c++] = (w >> 2) & 255;
+    break;
+  case 2:
+    buf[c++] = (w >> 4) & 255;
+    break;
+  case 1:
+    return -1;
+  }
+  return c;
+}
+
+auto encode_base64url(char *out, const void *inp, int len) -> int {
+  static char tab[] = {
+    "ABCDEFGHIJKLMNOP"
+    "QRSTUVWXYZabcdef"
+    "ghijklmnopqrstuv"
+    "wxyz0123456789-_"
+  };
+  uint32_t w = 0, n = 0, c = 0;
+  for (int i = 0; i < len; i++) {
+    w = (w << 8) | ((const uint8_t *)inp)[i];
+    if (++n == 3) {
+      out[c++] = tab[(w >> 18) & 63];
+      out[c++] = tab[(w >> 12) & 63];
+      out[c++] = tab[(w >> 6) & 63];
+      out[c++] = tab[(w >> 0) & 63];
+      w = n = 0;
+    }
+  }
+  switch (n) {
+    case 1:
+      w <<= 16;
+      out[c++] = tab[(w >> 18) & 63];
+      out[c++] = tab[(w >> 12) & 63];
+      break;
+    case 2:
+      w <<= 8;
+      out[c++] = tab[(w >> 18) & 63];
+      out[c++] = tab[(w >> 12) & 63];
+      out[c++] = tab[(w >> 6) & 63];
+      break;
+  }
+  return c;
+}
+
 auto path_join(const std::string &base, const std::string &path) -> std::string {
   if (!base.empty() && base.back() == '/') {
     if (!path.empty() && path.front() == '/') {
@@ -188,6 +358,27 @@ auto path_join(const std::string &base, const std::string &path) -> std::string 
   }
 }
 
+auto path_normalize(const std::string &path) -> std::string {
+  std::string output;
+  for (size_t i = 0, j = 0; i < path.length(); i = j + 1) {
+    j = i;
+    while (j < path.length() && path[j] != '/') j++;
+    if (j == 0) continue;
+    if (path[i] == '.') {
+      if (j == 1) continue;
+      if (j == 2 && path[i+1] == '.') {
+        auto p = output.find_last_of('/');
+        if (p == std::string::npos) output.clear();
+        else output = output.substr(0, p);
+        continue;
+      }
+    }
+    output += '/';
+    output += path.substr(i, j - i);
+  }
+  return output;
+}
+
 } // namespace utils
 
-NS_END
+} // namespace pipy

@@ -26,15 +26,12 @@
 #ifndef BUFFER_HPP
 #define BUFFER_HPP
 
-#include "ns.hpp"
-#include "object.hpp"
+#include "event.hpp"
 
 #include <list>
 #include <string>
 
-NS_BEGIN
-
-struct Object;
+namespace pipy {
 
 //
 // CharBuf
@@ -42,7 +39,7 @@ struct Object;
 
 template<int N>
 class CharBuf {
-  char m_buf[N];
+  char m_buf[N+1];
   int  m_len = 0;
 
 public:
@@ -64,6 +61,11 @@ public:
 
   auto str() const -> std::string {
     return std::string(m_buf, m_len);
+  }
+
+  auto c_str() -> const char* {
+    m_buf[m_len] = 0;
+    return m_buf;
   }
 
   void push(char c) {
@@ -78,7 +80,7 @@ public:
 
 template<int N>
 class ByteBuf {
-  char m_buf[N];
+  char m_buf[N+1];
   int  m_len = 0;
 
 public:
@@ -102,67 +104,50 @@ public:
     return std::string(m_buf, m_len);
   }
 
+  auto c_str() -> const char* {
+    m_buf[m_len] = 0;
+    return m_buf;
+  }
+
   void push(char c) {
     if (m_len < N) m_buf[m_len++] = c;
   }
 };
 
 //
-// Buffer
+// EventBuffer
 //
 
-class Buffer {
+class EventBuffer {
 public:
-  Buffer() {}
-
-  Buffer(Buffer &&rhs) {
-    m_objects = std::move(rhs.m_objects);
+  bool empty() const {
+    return m_buffer.empty();
   }
 
-  void operator=(Buffer &&rhs) {
-    m_objects = std::move(rhs.m_objects);
+  void push(Event *e) {
+    e->retain();
+    m_buffer.push_back(e);
   }
 
-  auto size() const -> size_t {
-    return m_objects.size();
-  }
-
-  void clear() {
-    m_objects.clear();
-  }
-
-  auto first() const -> const std::unique_ptr<Object>& {
-    return m_objects.front();
-  }
-
-  void push(std::unique_ptr<Object> obj) {
-    m_objects.push_back(std::move(obj));
-  }
-
-  auto pop() -> std::unique_ptr<Object> {
-    if (m_objects.size() == 0) return nullptr;
-    auto obj = std::move(m_objects.back());
-    m_objects.pop_back();
-    return obj;
-  }
-
-  auto shift() -> std::unique_ptr<Object> {
-    if (m_objects.size() == 0) return nullptr;
-    auto obj = std::move(m_objects.front());
-    m_objects.pop_front();
-    return obj;
-  }
-
-  void send(Object::Receiver out) {
-    for (const auto &obj : m_objects) {
-      out(clone_object(obj));
+  void flush(const Event::Receiver &out) {
+    std::list<Event*> events(std::move(m_buffer));
+    for (auto *e : events) {
+      out(e);
+      e->release();
     }
   }
 
+  void clear() {
+    for (auto *e : m_buffer) {
+      e->release();
+    }
+    m_buffer.clear();
+  }
+
 private:
-  std::list<std::unique_ptr<Object>> m_objects;
+  std::list<Event*> m_buffer;
 };
 
-NS_END
+} // namespace pipy
 
 #endif // BUFFER_HPP

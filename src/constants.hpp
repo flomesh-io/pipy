@@ -26,14 +26,12 @@
 #ifndef CONSTANTS_HPP
 #define CONSTANTS_HPP
 
-#include "ns.hpp"
-
-NS_BEGIN
+namespace pipy {
 
 const size_t DATA_CHUNK_SIZE = 0x4000;
 const size_t RECEIVE_BUFFER_SIZE = 0x10000;
 const size_t SEND_BUFFER_FLUSH_SIZE = 0x1000;
 
-NS_END
+} // namespace pipy
 
 #endif // CONSTANTS_HPP

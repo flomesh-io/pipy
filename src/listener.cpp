@@ -25,61 +25,63 @@
 
 #include "listener.hpp"
 #include "inbound.hpp"
-#include "session.hpp"
+#include "pipeline.hpp"
 #include "logging.hpp"
 
-#include <memory>
+#include <set>
 
-NS_BEGIN
+namespace pipy {
 
 using tcp = asio::ip::tcp;
 
-asio::io_service g_io_service;
+std::map<int, Listener*> Listener::s_all_listeners;
 
-static std::list<asio::steady_timer*> s_timer_pool;
-static bool s_reuse_port = false;
-
-void Listener::run() {
-  g_io_service.run();
-}
-
-void Listener::stop() {
-  g_io_service.stop();
-}
-
-auto Listener::listen(const std::string &ip, int port, Pipeline *pipeline) -> Listener* {
-  return new Listener(ip, port, pipeline);
-}
-
-void Listener::set_timeout(double duration, std::function<void()> handler) {
-  asio::steady_timer *timer = nullptr;
-
-  if (s_timer_pool.size() > 0) {
-    timer = s_timer_pool.back();
-    s_timer_pool.pop_back();
-  } else {
-    timer = new asio::steady_timer(g_io_service);
-  }
-
-  timer->expires_after(std::chrono::milliseconds((long long)(duration * 1000)));
-  timer->async_wait([=](const asio::error_code &ec) {
-    s_timer_pool.push_back(timer);
-    handler();
-  });
-}
-
-void Listener::set_reuse_port(bool enabled) {
-  s_reuse_port = enabled;
-}
-
-Listener::Listener(const std::string &ip, int port, Pipeline *pipeline)
+Listener::Listener(const std::string &ip, int port, bool reuse)
   : m_ip(ip)
   , m_port(port)
-  , m_acceptor(g_io_service)
-  , m_pipeline(pipeline)
+  , m_reuse(reuse)
+  , m_acceptor(Net::service())
+  , m_ssl_context(asio::ssl::context::sslv23)
+  , m_ssl(false)
 {
-  tcp::resolver resolver(g_io_service);
-  tcp::resolver::query query(ip, std::to_string(port));
+  s_all_listeners[port] = this;
+}
+
+Listener::Listener(const std::string &ip, int port, bool reuse, asio::ssl::context &&ssl_context)
+  : m_ip(ip)
+  , m_port(port)
+  , m_reuse(reuse)
+  , m_acceptor(Net::service())
+  , m_ssl_context(std::move(ssl_context))
+  , m_ssl(true)
+{
+  s_all_listeners[port] = this;
+}
+
+Listener::~Listener() {
+  auto i = s_all_listeners.find(m_port);
+  if (i != s_all_listeners.end() && i->second == this) {
+    s_all_listeners.erase(i);
+  }
+}
+
+void Listener::open(Pipeline *pipeline) {
+  if (m_pipeline) {
+    m_pipeline = pipeline;
+  } else {
+    m_pipeline = pipeline;
+    start();
+  }
+}
+
+void Listener::close() {
+  m_acceptor.close();
+  m_pipeline = nullptr;
+}
+
+void Listener::start() {
+  tcp::resolver resolver(Net::service());
+  tcp::resolver::query query(m_ip, std::to_string(m_port));
   tcp::endpoint endpoint = *resolver.resolve(query);
 
   m_acceptor.open(endpoint.protocol());
@@ -92,11 +94,11 @@ Listener::Listener(const std::string &ip, int port, Pipeline *pipeline)
   setsockopt(sock, SOL_IP, IP_TRANSPARENT, &enabled, sizeof(enabled));
 #endif
 
-  if (s_reuse_port) {
-#ifdef __linux__
-    setsockopt(sock, SOL_SOCKET, SO_REUSEPORT, &enabled, sizeof(enabled));
-#elif defined(__FreeBSD__)
+  if (m_reuse) {
+#ifdef __FreeBSD__
     setsockopt(sock, SOL_SOCKET, SO_REUSEPORT_LB, &enabled, sizeof(enabled));
+#else
+    setsockopt(sock, SOL_SOCKET, SO_REUSEPORT, &enabled, sizeof(enabled));
 #endif
   }
 
@@ -105,19 +107,13 @@ Listener::Listener(const std::string &ip, int port, Pipeline *pipeline)
 
   accept();
 
-  Log::info("Listening on %s:%d", ip.c_str(), port);
-}
-
-void Listener::close() {
-  m_acceptor.close();
-  delete this;
+  Log::info("[listener] Listening on %s:%d", m_ip.c_str(), m_port);
 }
 
 void Listener::accept() {
-  auto inbound = new Inbound;
+  auto inbound = m_ssl ? Inbound::make(m_ssl_context) : Inbound::make();
   inbound->accept(
-    m_pipeline,
-    m_acceptor,
+    this, m_acceptor,
     [=](const std::error_code &ec) {
       if (ec != asio::error::operation_aborted) {
         accept();
@@ -126,4 +122,4 @@ void Listener::accept() {
   );
 }
 
-NS_END
+} // namespace pipy

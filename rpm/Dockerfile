@@ -2,7 +2,7 @@ FROM centos:7
 LABEL maintainer="Kevein Liu<k@polaristech.io>"
 
 ARG VERSION
-ENV VERSION=${VERSION:-0.2.0}
+ENV VERSION=${VERSION:-0.4.0}
 
 ARG REVISION
 ENV REVISION=${REVISION:-1}

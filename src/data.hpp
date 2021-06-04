@@ -26,29 +26,29 @@
 #ifndef DATA_HPP
 #define DATA_HPP
 
-#include "object.hpp"
+#include "event.hpp"
 #include "constants.hpp"
+#include "utils.hpp"
 
 #include <cstring>
-#include <functional>
 
-NS_BEGIN
+namespace pipy {
 
 //
 // Data
 //
 
-class Data : public Object, public Pooled<Data> {
+class Data : public pjs::ObjectTemplate<Data, Event> {
   virtual auto type() const -> Type override {
-    return Object::Data;
+    return Event::Data;
   }
 
   virtual auto name() const -> const char* override {
     return "Data";
   }
 
-  virtual auto clone() const -> Object* override {
-    return new Data(*this);
+  virtual auto clone() const -> Event* override {
+    return make(*this);
   }
 
   struct Chunk : public Pooled<Chunk> {
@@ -112,6 +112,15 @@ class Data : public Object, public Pooled<Data> {
   };
 
 public:
+  enum class Encoding {
+    UTF8,
+    Hex,
+    Base64,
+    Base64Url,
+  };
+
+  static auto flush() -> Data*;
+
   class Chunks {
     friend class Data;
     View* m_head;
@@ -154,9 +163,7 @@ public:
   Data()
     : m_head(nullptr)
     , m_tail(nullptr)
-    , m_size(0)
-  {
-  }
+    , m_size(0) {}
 
   Data(int size)
     : m_head(nullptr)
@@ -193,10 +200,40 @@ public:
     push(data, size);
   }
 
-  Data(const char *str) : Data(str, std::strlen(str)) {
+  Data(const std::string &str) : Data(str.c_str(), str.length())
+  {
   }
 
-  Data(const std::string &str) : Data(str.c_str(), str.length()) {
+  Data(const std::string &str, Encoding encoding) : Data() {
+    switch (encoding) {
+      case Encoding::UTF8: push(str); break;
+      case Encoding::Hex: {
+        if (str.length() % 2) throw std::runtime_error("incomplete hex string");
+        int len = str.length() >> 1;
+        char buf[len];
+        len = utils::decode_hex(buf, str.c_str(), str.length());
+        if (len < 0) throw std::runtime_error("invalid hex string");
+        push(buf, len);
+        break;
+      }
+      case Encoding::Base64: {
+        if (str.length() % 4) throw std::runtime_error("incomplete Base64 string");
+        int len = (str.length() >> 2) * 3;
+        char buf[len];
+        len = utils::decode_base64(buf, str.c_str(), str.length());
+        if (len < 0) throw std::runtime_error("invalid Base64 encoding");
+        push(buf, len);
+        break;
+      }
+      case Encoding::Base64Url: {
+        int len = ((str.length() + 3) >> 2) * 3;
+        char buf[len];
+        len = utils::decode_base64url(buf, str.c_str(), str.length());
+        if (len < 0) throw std::runtime_error("invalid Base64Url encoding");
+        push(buf, len);
+        break;
+      }
+    }
   }
 
   Data(const Data &other)
@@ -253,7 +290,7 @@ public:
     return m_size;
   }
 
-  Chunks chunks() {
+  Chunks chunks() const {
     return Chunks(m_head);
   }
 
@@ -305,58 +342,64 @@ public:
     push(&ch, 1);
   }
 
-  auto pop(int n) -> Data {
-    Data buf;
+  void pop(int n) {
     while (auto view = m_tail) {
       if (n <= 0) break;
       if (view->length <= n) {
         n -= view->length;
-        buf.unshift_view(pop_view());
+        delete pop_view();
       } else {
-        buf.unshift_view(view->pop(n));
+        delete view->pop(n);
         m_size -= n;
         break;
       }
     }
-    return buf;
   }
 
-  auto pop_until(std::function<bool(int)> f) -> Data {
-    Data buf;
+  void pop(int n, Data &out) {
     while (auto view = m_tail) {
-      auto data = view->chunk->data;
-      auto size = view->length;
-      auto tail = view->offset + size - 1;
-      auto n = 0; while (n < size && !f(data[tail - n])) ++n;
-      if (n == size) {
-        buf.unshift_view(pop_view());
+      if (n <= 0) break;
+      if (view->length <= n) {
+        n -= view->length;
+        out.unshift_view(pop_view());
       } else {
-        buf.unshift_view(view->pop(n));
+        out.unshift_view(view->pop(n));
         m_size -= n;
         break;
       }
     }
-    return buf;
   }
 
-  auto shift(int n) -> Data {
-    Data buf;
+  void shift(int n) {
     while (auto view = m_head) {
       if (n <= 0) break;
       if (view->length <= n) {
         n -= view->length;
-        buf.push_view(shift_view());
+        delete shift_view();
       } else {
-        buf.push_view(view->shift(n));
+        delete view->shift(n);
         m_size -= n;
         break;
       }
     }
-    return buf;
   }
 
-  auto shift(std::function<bool(int)> f) -> Data {
-    Data buf;
+  void shift(int n, Data &out) {
+    while (auto view = m_head) {
+      if (n <= 0) break;
+      if (view->length <= n) {
+        n -= view->length;
+        out.push_view(shift_view());
+      } else {
+        out.push_view(view->shift(n));
+        m_size -= n;
+        break;
+      }
+    }
+  }
+
+  auto shift(std::function<bool(int)> f) -> Data* {
+    Data *buf = make();
     while (auto view = m_head) {
       auto data = view->chunk->data;
       auto size = view->length;
@@ -364,9 +407,9 @@ public:
       auto n = 0;
       while (n < size) if (f(data[head + n++])) break;
       if (n == size) {
-        buf.push_view(shift_view());
+        buf->push_view(shift_view());
       } else {
-        buf.push_view(view->shift(n));
+        buf->push_view(view->shift(n));
         m_size -= n;
         break;
       }
@@ -374,22 +417,36 @@ public:
     return buf;
   }
 
-  auto shift_until(std::function<bool(int)> f) -> Data {
-    Data buf;
+  void shift_while(std::function<bool(int)> f, Data &out) {
     while (auto view = m_head) {
       auto data = view->chunk->data;
       auto size = view->length;
       auto head = view->offset;
-      auto n = 0; while (n < size && !f(data[head + n])) ++n;
+      auto n = 0; while (n < size && f(data[head + n])) ++n;
       if (n == size) {
-        buf.push_view(shift_view());
+        out.push_view(shift_view());
       } else {
-        buf.push_view(view->shift(n));
+        out.push_view(view->shift(n));
         m_size -= n;
         break;
       }
     }
-    return buf;
+  }
+
+  void shift_to(std::function<bool(int)> f, Data &out) {
+    while (auto view = m_head) {
+      auto data = view->chunk->data;
+      auto size = view->length;
+      auto head = view->offset;
+      auto n = 0; for (; n < size; ++n) if (f(data[head + n])) { ++n; break; }
+      if (n == size) {
+        out.push_view(shift_view());
+      } else {
+        out.push_view(view->shift(n));
+        m_size -= n;
+        break;
+      }
+    }
   }
 
   void to_chunks(std::function<void(const uint8_t*, int)> cb) {
@@ -407,7 +464,7 @@ public:
     }
   }
 
-  auto to_string() -> std::string {
+  virtual auto to_string() const -> std::string override {
     std::string str(m_size, 0);
     int i = 0;
     for (auto view = m_head; view; view = view->next) {
@@ -416,6 +473,15 @@ public:
       i += length;
     }
     return str;
+  }
+
+  auto to_string(Encoding encoding) const -> std::string {
+    switch (encoding) {
+      case Encoding::UTF8: return to_string();
+      case Encoding::Hex: throw std::runtime_error("TODO");
+      case Encoding::Base64: throw std::runtime_error("TODO");
+      case Encoding::Base64Url: throw std::runtime_error("TODO");
+    }
   }
 
 private:
@@ -491,6 +557,6 @@ private:
   }
 };
 
-NS_END
+} // namespace pipy
 
 #endif // DATA_HPP

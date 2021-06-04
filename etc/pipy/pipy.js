@@ -1,0 +1,5 @@
+pipy()
+    .listen(6000)
+        .decodeHttpRequest()
+        .replaceMessage(new Message('Hello!\n'))
+        .encodeHttpResponse()

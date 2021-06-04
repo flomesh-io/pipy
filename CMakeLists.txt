@@ -1,6 +1,8 @@
 cmake_minimum_required (VERSION 2.8)
 project(pipy)
 
+option(PIPY_GUI "include builtin GUI" OFF)
+
 add_subdirectory(deps/yajl-2.1.0)
 
 option(BUILD_shared "build a shared expat library" OFF)
@@ -13,7 +15,6 @@ set(CMAKE_CXX_FLAGS -std=c++11)
 
 add_definitions(
   -D_GNU_SOURCE
-  -DCONFIG_VERSION="2020-11-08"
   -DPIPY_HOST="${CMAKE_HOST_SYSTEM} ${CMAKE_HOST_SYSTEM_PROCESSOR}"
 )
 
@@ -24,60 +25,94 @@ include_directories(
   "${CMAKE_BINARY_DIR}/deps/yajl-2.1.0/yajl-2.1.0/include"
   "${CMAKE_BINARY_DIR}/deps/libexpat-R_2_2_6/expat/lib"
   "${CMAKE_SOURCE_DIR}/deps/libexpat-R_2_2_6/expat/lib"
-  "${CMAKE_SOURCE_DIR}/deps/quickjs-2020-11-08"
 )
 
 add_executable(pipy
-  deps/quickjs-2020-11-08/cutils.c
-  deps/quickjs-2020-11-08/libregexp.c
-  deps/quickjs-2020-11-08/libunicode.c
-  deps/quickjs-2020-11-08/quickjs.c
-  src/config.cpp
+  src/api/algo.cpp
+  src/api/configuration.cpp
+  src/api/console.cpp
+  src/api/crypto.cpp
+  src/api/hessian.cpp
+  src/api/http.cpp
+  src/api/json.cpp
+  src/api/os.cpp
+  src/api/url.cpp
+  src/api/xml.cpp
   src/context.cpp
-  src/crypto.cpp
+  src/data.cpp
+  src/event.cpp
+  src/filter.cpp
+  src/filters/connect.cpp
+  src/filters/decompress-body.cpp
+  src/filters/demux.cpp
+  src/filters/dubbo.cpp
+  src/filters/dummy.cpp
+  src/filters/dump.cpp
+  src/filters/exec.cpp
+  src/filters/fork.cpp
+  src/filters/http.cpp
+  src/filters/link.cpp
+  src/filters/mux.cpp
+  src/filters/on-body.cpp
+  src/filters/on-event.cpp
+  src/filters/on-message.cpp
+  src/filters/on-start.cpp
+  src/filters/print.cpp
+  src/filters/replace-body.cpp
+  src/filters/replace-event.cpp
+  src/filters/replace-message.cpp
+  src/filters/replace-start.cpp
+  src/filters/socks4.cpp
+  src/filters/tap.cpp
+  src/filters/use.cpp
+  src/filters/wait.cpp
+  src/fstream.cpp
+  src/graph.cpp
+  src/gui.cpp
   src/inbound.cpp
-  src/js.cpp
   src/listener.cpp
   src/logging.cpp
   src/main.cpp
-  src/match.cpp
-  src/metrics.cpp
+  src/message.cpp
   src/module.cpp
-  src/modules/clone.cpp
-  src/modules/counter.cpp
-  src/modules/dubbo.cpp
-  src/modules/dummy.cpp
-  src/modules/erase.cpp
-  src/modules/filter.cpp
-  src/modules/hello.cpp
-  src/modules/hessian2.cpp
-  src/modules/http.cpp
-  src/modules/insert.cpp
-  src/modules/json.cpp
-  src/modules/message.cpp
-  src/modules/print.cpp
-  src/modules/prometheus.cpp
-  src/modules/proxy.cpp
-  src/modules/queue.cpp
-  src/modules/script.cpp
-  src/modules/serve-static.cpp
-  src/modules/tap.cpp
-  src/modules/timestamp.cpp
-  src/modules/xml.cpp
+  src/net.cpp
   src/options.cpp
   src/outbound.cpp
   src/pipeline.cpp
+  src/pjs/builtin.cpp
+  src/pjs/expr.cpp
+  src/pjs/parser.cpp
+  src/pjs/types.cpp
   src/session.cpp
+  src/tar.cpp
+  src/task.cpp
   src/utils.cpp
+  src/worker.cpp
 )
 
-add_custom_command(OUTPUT ${CMAKE_BINARY_DIR}/deps/version.h
+add_custom_command(
+  OUTPUT ${CMAKE_BINARY_DIR}/deps/version.h
   COMMAND ${CMAKE_SOURCE_DIR}/generate_version_h.sh
   ARGS ${CMAKE_BINARY_DIR}/deps/version.h
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 
-add_custom_target(GenVerH DEPENDS ${CMAKE_BINARY_DIR}/deps/version.h)
+add_custom_target(GenVer DEPENDS ${CMAKE_BINARY_DIR}/deps/version.h)
+add_dependencies(pipy yajl_s expat crypto ssl GenVer)
 
-add_dependencies(pipy yajl_s expat crypto ssl GenVerH)
+if(PIPY_GUI)
+  add_definitions(-DPIPY_USE_GUI)
 
-target_link_libraries(pipy yajl_s expat crypto ssl -pthread)
+  add_custom_command(
+    OUTPUT ${CMAKE_BINARY_DIR}/deps/gui.tar.h
+    COMMAND node
+    ARGS pack.js ${CMAKE_BINARY_DIR}/deps/gui.tar.h
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/gui
+    DEPENDS gui/pack.js ${CMAKE_SOURCE_DIR}/gui/public/index.html
+  )
+
+  add_custom_target(GenGui DEPENDS ${CMAKE_BINARY_DIR}/deps/gui.tar.h)
+  add_dependencies(pipy GenGui)
+
+endif()
+
+target_link_libraries(pipy z yajl_s expat crypto ssl -pthread)

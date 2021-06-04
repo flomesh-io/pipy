@@ -24,12 +24,101 @@
  */
 
 #include "module.hpp"
-#include "listener.hpp"
+#include "worker.hpp"
+#include "pipeline.hpp"
+#include "api/configuration.hpp"
+#include "graph.hpp"
+#include "utils.hpp"
+#include "logging.hpp"
 
-NS_BEGIN
+#include <fstream>
+#include <sstream>
 
-void Module::set_timeout(double duration, std::function<void()> handler) {
-  Listener::set_timeout(duration, handler);
+namespace pipy {
+
+Module::Module(Worker *worker, int index)
+  : m_worker(worker)
+  , m_index(index)
+{
 }
 
-NS_END
+bool Module::load(const std::string &path) {
+  auto full_path = utils::path_join(m_worker->root_path(), path);
+
+  std::ifstream fs(full_path, std::ios::in);
+  if (!fs.is_open()) {
+    Log::error("[pjs] Cannot open script at %s", path.c_str());
+    return false;
+  }
+
+  std::stringstream ss;
+  fs >> ss.rdbuf();
+  m_source = ss.str();
+
+  std::string error;
+  int error_line, error_column;
+  auto expr = pjs::Parser::parse(m_source, error, error_line, error_column);
+  m_script = std::unique_ptr<pjs::Expr>(expr);
+
+  if (!expr) {
+    Log::pjs_location(m_source, error_line, error_column);
+    Log::error("[pjs] Syntax error: %s at line %d column %d", error.c_str(), error_line, error_column);
+    return false;
+  }
+
+  pjs::Ref<Context> ctx = m_worker->new_loading_context();
+  expr->resolve(*ctx, m_index);
+
+  pjs::Value result;
+  if (!expr->eval(*ctx, result)) {
+    ctx->backtrace("(root)");
+    Log::pjs_error(ctx->error(), m_source);
+    return false;
+  }
+
+  if (!result.is_class(pjs::class_of<Configuration>())) {
+    auto *s = result.to_string();
+    Log::error("[pjs] Script returned %s", s->c_str());
+    Log::error("[pjs] Script did not return a Configuration object");
+    s->release();
+    return false;
+  }
+
+  std::string title("Module ");
+  title += path;
+
+  Log::info("[config]");
+  Log::info("[config] %s", title.c_str());
+  Log::info("[config] %s", std::string(title.length(), '=').c_str());
+  Log::info("[config]");
+
+  Graph g;
+  auto config = result.as<Configuration>();
+  config->draw(g);
+
+  error.clear();
+  auto lines = g.to_text(error);
+  for (const auto &l : lines) {
+    Log::info("[config]  %s", l.c_str());
+  }
+
+  if (!error.empty()) {
+    Log::error("[config] %s", error.c_str());
+    return false;
+  }
+
+  m_path = path;
+  m_filename = pjs::Str::make(path);
+  m_configuration = config;
+
+  return true;
+}
+
+void Module::start() {
+  m_configuration->apply(this);
+}
+
+void Module::unload() {
+}
+
+} // namespace pipy

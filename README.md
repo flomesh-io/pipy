@@ -4,15 +4,15 @@ Pipy is a tiny, high performance, highly stable, programmable proxy. Written
 in C++, built on top of Asio asynchronous I/O library, Pipy is extremely
 lightweight and fast, making it one of the best choices for service mesh sidecars.
 
-With builtin JavaScript support, thanks to QuickJS, Pipy is highly
+With builtin JavaScript support, thanks to PipyJS, Pipy is highly
 customizable and also predictable in performance with no garbage collection
-overhead seen in other scriptable counterparts.
+overhead found in other scriptable counterparts.
 
-At its core, Pipy has a modular design with many small reusable modules
-that can be chained together to make a pipeline, through which network data
-flow and get processed on the way. The way Pipy is designed makes it versatile
-enough for not only sidecars but also other use cases involving intermediate
-message processing between network nodes.
+At its core, Pipy has a modular design with a set of fundamental filters
+that can be chained together to make a pipeline, through which network data can
+flow and get processed along the way. The way Pipy is designed makes it versatile
+enough for not only service mesh sidecars but also other use cases involving
+intermediate message processing between network nodes.
 
 # Compatibility
 
@@ -34,6 +34,7 @@ Before building, the following tools are required to be installed first:
 
 * Clang 5.0+
 * CMake 3.0+
+* Node.js v12+ (only required if the builtin web UI is turned on)
 
 With the above tools installed, just run the build script to start building:
 
@@ -73,27 +74,26 @@ yum -y install http://repo.flomesh.cn/pipy/pipy-latest.el7_pl.x86_64.rpm
 $ pipy --help
 ```
 
-## List Modules and Parameters
+## List Builtin Filters and Their Parameters
 
 ```
-$ pipy --list-modules
-$ pipy --help-modules
+$ pipy --list-filters
+$ pipy --help-filters
 ```
 
 ## Run on CLI
 
-Let's take the echo server in `test/001-echo/` as an example. To start a single-worker
-Pipy that auto-reloads when the configuration file changes:
+Let's take the echo server in `test/001-echo/` as an example. To start a Pipy instance
+that echos whatever the request has in its body, say
 
 ```
-$ pipy test/001-echo/pipy.cfg --watch-config-file
+$ pipy test/001-echo/pipy.js
 ```
 
-To start two Pipy instances load balancing on the same port:
+Or, while developing and debugging, one can start Pipy in web UI mode by using:
 
 ```
-$ pipy test/001-echo/pipy.cfg --reuse-port &
-$ pipy test/001-echo/pipy.cfg --reuse-port &
+$ pipy test/ --gui-port=6060
 ```
 
 ## Run with Docker

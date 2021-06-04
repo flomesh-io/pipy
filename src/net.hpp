@@ -26,16 +26,30 @@
 #ifndef NET_HPP
 #define NET_HPP
 
-#include "object.hpp"
 #include "data.hpp"
 
 #define ASIO_STANDALONE
 #include <asio.hpp>
 #include <asio/ssl.hpp>
 
-NS_BEGIN
+namespace pipy {
 
-extern asio::io_service g_io_service;
+//
+// Net
+//
+
+class Net {
+public:
+  static auto service() -> asio::io_service& {
+    return s_io_service;
+  }
+
+  static void run();
+  static void stop();
+
+private:
+  static asio::io_service s_io_service;
+};
 
 //
 // Asio buffer array adapter
@@ -74,35 +88,35 @@ public:
   auto end() const -> Iterator { return Iterator(m_chunks.end()); }
 };
 
-NS_END
+} // namespace pipy
 
 template<>
 inline auto asio::buffer_sequence_begin(
-  const NS::DataChunks &chunks
-) -> NS::DataChunks::Iterator {
+  const pipy::DataChunks &chunks
+) -> pipy::DataChunks::Iterator {
   return chunks.begin();
 }
 
 template<>
 inline auto asio::buffer_sequence_end(
-  const NS::DataChunks &chunks
-) -> NS::DataChunks::Iterator {
+  const pipy::DataChunks &chunks
+) -> pipy::DataChunks::Iterator {
   return chunks.end();
 }
 
 template<>
-class std::iterator_traits<NS::DataChunks::Iterator> {
+class std::iterator_traits<pipy::DataChunks::Iterator> {
 public:
   typedef size_t difference_type;
 };
 
 template<>
-inline void std::advance(NS::DataChunks::Iterator &i, size_t n) {
+inline void std::advance(pipy::DataChunks::Iterator &i, size_t n) {
   while (n-- > 0) ++i;
 }
 
 template<>
-class asio::is_const_buffer_sequence<NS::DataChunks> {
+class asio::is_const_buffer_sequence<pipy::DataChunks> {
 public:
   const static bool value = true;
 };

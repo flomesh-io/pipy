@@ -26,42 +26,57 @@
 #ifndef MODULE_HPP
 #define MODULE_HPP
 
-#include "ns.hpp"
+#include "pjs/pjs.hpp"
 #include "context.hpp"
-#include "data.hpp"
+#include "worker.hpp"
+#include "task.hpp"
 
-#include <functional>
-#include <list>
-#include <map>
-#include <memory>
-#include <string>
+namespace pipy {
 
-NS_BEGIN
-
-//
-// Module
-//
+class Configuration;
+class Pipeline;
 
 class Module {
 public:
-  virtual ~Module() {}
+  bool load(const std::string &path);
+  void unload();
+  void start();
 
-  virtual auto help() -> std::list<std::string> { return std::list<std::string>(); }
+  auto new_context_data(pjs::Object *prototype = nullptr) -> pjs::Object* {
+    auto obj = new ContextDataBase(m_filename);
+    if (prototype) obj->argv(prototype->as<ContextDataBase>()->argv());
+    m_context_class->init(obj, prototype);
+    return obj;
+  }
 
-  virtual void config(const std::map<std::string, std::string> &params) {}
+  auto worker() const -> Worker* { return m_worker; }
+  auto index() const -> int { return m_index; }
+  auto path() const -> const std::string& { return m_path; }
+  auto source() const -> const std::string& { return m_source; }
 
-  virtual auto clone() -> Module* = 0;
+  auto find_named_pipeline(pjs::Str *name) -> Pipeline* {
+    auto i = m_named_pipelines.find(name);
+    if (i == m_named_pipelines.end()) return nullptr;
+    return i->second;
+  }
 
-  virtual void pipe(
-    std::shared_ptr<Context> ctx,
-    std::unique_ptr<Object> obj,
-    Object::Receiver out
-  ) = 0;
+private:
+  Module(Worker *worker, int index);
 
-protected:
-  void set_timeout(double duration, std::function<void()> handler);
+  Worker* m_worker;
+  int m_index;
+  std::string m_path;
+  std::string m_source;
+  std::unique_ptr<pjs::Expr> m_script;
+  pjs::Ref<pjs::Str> m_filename;
+  pjs::Ref<Configuration> m_configuration;
+  pjs::Ref<pjs::Class> m_context_class;
+  std::unordered_map<pjs::Ref<pjs::Str>, pjs::Ref<Pipeline>> m_named_pipelines;
+
+  friend class Configuration;
+  friend class Worker;
 };
 
-NS_END
+} // namespace pipy
 
 #endif // MODULE_HPP

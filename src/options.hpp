@@ -26,12 +26,11 @@
 #ifndef OPTIONS_HPP
 #define OPTIONS_HPP
 
-#include "ns.hpp"
 #include "logging.hpp"
 
 #include <string>
 
-NS_BEGIN
+namespace pipy {
 
 //
 // Options
@@ -43,17 +42,17 @@ public:
 
   Options(int argc, char *argv[]);
 
-  std::string config_filename;
+  std::string filename;
   bool        version = false;
   bool        help = false;
-  bool        help_modules = false;
-  bool        list_modules = false;
+  bool        help_filters = false;
+  bool        list_filters = false;
   bool        verify = false;
-  bool        watch_config_file = false;
   bool        reuse_port = false;
+  int         gui_port = 0;
   Log::Level  log_level = Log::ERROR;
 };
 
-NS_END
+} // namespace pipy
 
 #endif // OPTIONS_HPP

@@ -26,55 +26,67 @@
 #ifndef PIPELINE_HPP
 #define PIPELINE_HPP
 
-#include "ns.hpp"
-#include "module.hpp"
+#include "pjs/pjs.hpp"
 
-#include <functional>
 #include <list>
-#include <map>
 #include <memory>
-#include <string>
+#include <set>
 
-NS_BEGIN
+namespace pipy {
 
-class Session;
+class Module;
+class Filter;
+class ReusableSession;
 
 //
 // Pipeline
 //
 
-class Pipeline {
+class Pipeline : public pjs::RefCount<Pipeline> {
 public:
-  static auto get(const std::string &name) -> Pipeline*;
-  static void add(const std::string &name, Pipeline *pipeline);
-  static void remove(const std::string &name);
+  enum Type {
+    NAMED,
+    LISTEN,
+    TASK,
+  };
 
-  static auto session_total() -> size_t { return s_session_total; }
+  static auto make(Module *module, Type type, const std::string &name) -> Pipeline* {
+    return new Pipeline(module, type, name);
+  }
 
-  Pipeline(std::list<std::unique_ptr<Module>> &chain);
+  static void for_each(std::function<void(Pipeline*)> callback) {
+    for (const auto p : s_all_pipelines) {
+      callback(p);
+    }
+  }
 
-  auto alloc(std::shared_ptr<Context> ctx = nullptr) -> Session*;
-  void update(std::list<std::unique_ptr<Module>> &chain);
+  auto module() const -> Module* { return m_module; }
+  auto type() const -> Type { return m_type; }
+  auto name() const -> const std::string& { return m_name; }
+  auto allocated() const -> size_t { return m_allocated; }
+  auto active() const -> size_t { return m_active; }
+  auto filters() const -> const std::list<std::unique_ptr<Filter>>& { return m_filters; }
+  void append(Filter *filter);
+  auto alloc() -> ReusableSession*;
+  void free(ReusableSession *session);
 
 private:
-  static std::map<std::string, Pipeline*> s_named_pipelines;
-  static size_t s_session_total;
-
+  Pipeline(Module *module, Type type, const std::string &name);
   ~Pipeline();
 
-  std::list<std::unique_ptr<Module>> m_chain;
-  std::list<Session*> m_pool;
-  uint64_t m_version = 0;
+  Module* m_module;
+  Type m_type;
+  std::string m_name;
+  std::list<std::unique_ptr<Filter>> m_filters;
+  ReusableSession* m_pool = nullptr;
   size_t m_allocated = 0;
-  size_t m_pooled = 0;
-  bool m_removing = false;
+  size_t m_active = 0;
 
-  void free(Session *session);
-  void clean();
+  static std::set<Pipeline*> s_all_pipelines;
 
-  friend class Session;
+  friend class pjs::RefCount<Pipeline>;
 };
 
-NS_END
+} // namespace pipy
 
 #endif // PIPELINE_HPP

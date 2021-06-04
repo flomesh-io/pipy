@@ -103,10 +103,10 @@ fi
 
 CMAKE=
 function __build_deps_check() {
-  if [ ! -z $(command -v cmake) ]; then
-    export CMAKE=cmake
-  elif [ ! -z $(command -v cmake3) ]; then
+  if [ ! -z $(command -v cmake3) ]; then
     export CMAKE=cmake3
+  elif [ ! -z $(command -v cmake) ]; then
+    export CMAKE=cmake
   fi
   clang --version 2>&1 > /dev/null && clang++ --version 2>&1 > /dev/null && export __CLANG_EXIST=true
   if [ "x"$CMAKE = "x" ] || ! $__CLANG_EXIST ; then echo "Command \`cmake\` or \`clang\` not found." && exit -1; fi
@@ -114,6 +114,10 @@ function __build_deps_check() {
 
 function build() {
   __build_deps_check
+  cd ${PIPY_DIR}
+  BRANCH=`git branch --show-current`
+  git fetch
+  git pull origin $BRANCH
   export CC=clang
   export CXX=clang++
   mkdir ${PIPY_DIR}/build 2>&1 > /dev/null || true
@@ -184,7 +188,7 @@ if ! $TEST_ONLY && $BUILD_RPM; then
     --build-arg COMMIT_ID=$COMMIT_ID \
     --build-arg COMMIT_DATE="$COMMIT_DATE" \
     -f $DOCKERFILE .
-  sudo docker run -it --rm -v $PIPY_DIR/rpm:/data pipy-rpm:$RELEASE_VERSION cp /rpm/pipy-community-${RELEASE_VERSION}.el7.x86_64.rpm /data
+  sudo docker run -it --rm -v $PIPY_DIR/rpm:/data pipy-rpm:$RELEASE_VERSION cp /rpm/pipy-${RELEASE_VERSION}.el7.x86_64.rpm /data
   git checkout -- $PIPY_DIR/rpm/pipy.spec
   rm -f $PIPY_DIR/rpm/pipy.tar.gz
 fi

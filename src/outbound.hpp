@@ -26,52 +26,54 @@
 #ifndef OUTBOUND_HPP
 #define OUTBOUND_HPP
 
-#include "ns.hpp"
 #include "net.hpp"
-#include "pool.hpp"
-#include "object.hpp"
+#include "event.hpp"
+#include "timer.hpp"
 
-#include <functional>
-#include <list>
-#include <memory>
+namespace pipy {
 
-NS_BEGIN
-
-class Context;
 class Data;
-class Session;
 
 //
 // Outbound
 //
 
-class Outbound : public Pooled<Outbound> {
+class Outbound : public pjs::Pooled<Outbound> {
 public:
   Outbound();
-  Outbound(asio::ssl::context &&ssl_context);
+  Outbound(asio::ssl::context &ssl_context);
   ~Outbound();
+
+  auto host() const -> const std::string& { return m_host; }
+  auto address() const -> const std::string& { return m_address; }
+  auto port() const -> int { return m_port; }
+  bool connected() const { return m_connected; }
+  bool overflowed() const { return m_overflowed; }
+  auto retries() const -> int { return m_retries; }
+  auto buffered() const -> int { return m_buffer.size(); }
 
   void set_retry_count(int n) { m_retry_count = n; }
   void set_retry_delay(double t) { m_retry_delay = t; }
   void set_buffer_limit(size_t size) { m_buffer_limit = size; }
 
-  void connect(
-    const std::string &host, int port,
-    Object::Receiver on_output
-  );
+  void on_receive(const Event::Receiver &receiver) { m_receiver = receiver; }
+  void on_delete(const std::function<void()> &callback) { m_on_delete = callback; }
+  void connect(const std::string &host, int port);
 
-  void send(std::unique_ptr<Data> data);
+  void send(const pjs::Ref<Data> &data);
   void flush();
   void end();
 
 private:
   std::string m_host;
+  std::string m_address;
   int m_port;
-  Object::Receiver m_output;
+  Event::Receiver m_receiver;
+  std::function<void()> m_on_delete;
   asio::ip::tcp::resolver m_resolver;
   asio::ip::tcp::socket m_socket;
-  asio::ssl::context m_ssl_context;
   asio::ssl::stream<asio::ip::tcp::socket> m_ssl_socket;
+  Timer m_timer;
   int m_retry_count = 0;
   double m_retry_delay = 0;
   int m_retries = 0;
@@ -85,6 +87,8 @@ private:
   bool m_writing_ended = false;
 
   void connect(double delay);
+  bool should_reconnect();
+  void cancel_connecting();
   void reconnect();
   void receive();
   void pump();
@@ -92,6 +96,6 @@ private:
   void free();
 };
 
-NS_END
+} // namespace pipy
 
 #endif // OUTBOUND_HPP

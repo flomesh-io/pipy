@@ -26,17 +26,15 @@
 #ifndef UTILS_HPP
 #define UTILS_HPP
 
-#include "ns.hpp"
-
 #include <list>
 #include <map>
 #include <stdexcept>
 #include <string>
 
-NS_BEGIN
-
+namespace pipy {
 namespace utils {
 
+auto to_string(double n) -> std::string;
 auto get_param(const std::map<std::string, std::string> &params, const char *name, const char *value = nullptr) -> std::string;
 bool get_host_port(const std::string &str, std::string &ip, int &port);
 bool get_ip_port(const std::string &str, std::string &ip, int &port);
@@ -48,10 +46,16 @@ auto split(const std::string &str, char sep) -> std::list<std::string>;
 auto lower(const std::string &str) -> std::string;
 auto escape(const std::string &str) -> std::string;
 auto unescape(const std::string &str) -> std::string;
+auto decode_hex(void *out, const char *inp, int len) -> int;
+auto encode_hex(char *out, const void *inp, int len) -> int;
+auto decode_base64(void *out, const char *inp, int len) -> int;
+auto encode_base64(char *out, const void *inp, int len) -> int;
+auto decode_base64url(void *out, const char *inp, int len) -> int;
+auto encode_base64url(char *out, const void *inp, int len) -> int;
 auto path_join(const std::string &base, const std::string &path) -> std::string;
+auto path_normalize(const std::string &path) -> std::string;
 
 } // namespace utils
-
-NS_END
+} // namespace pipy
 
 #endif // UTILS_HPP

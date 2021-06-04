@@ -24,27 +24,26 @@
  */
 
 #include "outbound.hpp"
-#include "listener.hpp"
 #include "constants.hpp"
 #include "logging.hpp"
 
-NS_BEGIN
+namespace pipy {
 
 using tcp = asio::ip::tcp;
 
+static asio::ssl::context s_default_ssl_context(asio::ssl::context::sslv23_client);
+
 Outbound::Outbound()
-  : m_resolver(g_io_service)
-  , m_socket(g_io_service)
-  , m_ssl_context(asio::ssl::context::sslv3)
-  , m_ssl_socket(g_io_service, m_ssl_context)
+  : m_resolver(Net::service())
+  , m_socket(Net::service())
+  , m_ssl_socket(Net::service(), s_default_ssl_context)
 {
 }
 
-Outbound::Outbound(asio::ssl::context &&ssl_context)
-  : m_resolver(g_io_service)
-  , m_socket(g_io_service)
-  , m_ssl_context(std::move(ssl_context))
-  , m_ssl_socket(g_io_service, m_ssl_context)
+Outbound::Outbound(asio::ssl::context &ssl_context)
+  : m_resolver(Net::service())
+  , m_socket(Net::service())
+  , m_ssl_socket(Net::service(), ssl_context)
   , m_ssl(true)
 {
   m_ssl_socket.set_verify_mode(asio::ssl::verify_none);
@@ -54,20 +53,18 @@ Outbound::Outbound(asio::ssl::context &&ssl_context)
 }
 
 Outbound::~Outbound() {
+  if (m_on_delete) {
+    m_on_delete();
+  }
 }
 
-void Outbound::connect(
-  const std::string &host, int port,
-  Object::Receiver on_output
-) {
+void Outbound::connect(const std::string &host, int port) {
   m_host = host;
   m_port = port;
-  m_output = on_output;
-
   connect(0);
 }
 
-void Outbound::send(std::unique_ptr<Data> data) {
+void Outbound::send(const pjs::Ref<Data> &data) {
   if (!m_writing_ended) {
     if (data->size() > 0) {
       if (!m_overflowed) {
@@ -97,7 +94,6 @@ void Outbound::flush() {
 void Outbound::end() {
   if (!m_writing_ended) {
     m_writing_ended = true;
-    m_output = [](std::unique_ptr<Object>) {};
     pump();
     close();
     free();
@@ -109,7 +105,7 @@ void Outbound::connect(double delay) {
   auto start_session = [=]() {
     Log::debug("Outbound: %p, connected to upstream %s", this, m_host.c_str());
     m_connected = true;
-    m_output(make_object<SessionStart>());
+    m_address = (m_ssl ? m_ssl_socket.lowest_layer() : m_socket).remote_endpoint().address().to_string();
     if (m_writing_ended && m_buffer.empty()) {
       m_reading_ended = true;
       close();
@@ -125,10 +121,17 @@ void Outbound::connect(double delay) {
       Log::error(
         "Outbound: %p, cannot connect to %s:%d, %s",
         this, m_host.c_str(), m_port, ec.message().c_str());
-      m_output(make_object<SessionEnd>(
-        ec.message(),
-        SessionEnd::CONNECTION_REFUSED));
-      reconnect();
+      if (should_reconnect()) {
+        reconnect();
+      } else {
+        if (m_receiver) {
+          pjs::Ref<SessionEnd> evt(SessionEnd::make(
+            ec.message(),
+            SessionEnd::CONNECTION_REFUSED));
+          m_receiver(evt);
+        }
+        cancel_connecting();
+      }
       return;
     }
 
@@ -142,10 +145,13 @@ void Outbound::connect(double delay) {
         Log::error(
           "Outbound: %p, handshake failed to %s:%d, %s",
           this, m_host.c_str(), m_port, ec.message().c_str());
-        m_output(make_object<SessionEnd>(
-          ec.message(),
-          SessionEnd::CONNECTION_REFUSED));
-        reconnect();
+        if (m_receiver) {
+          pjs::Ref<SessionEnd> evt(SessionEnd::make(
+            ec.message(),
+            SessionEnd::CONNECTION_REFUSED));
+          m_receiver(evt);
+        }
+        cancel_connecting();
       } else {
         start_session();
       }
@@ -160,10 +166,13 @@ void Outbound::connect(double delay) {
       Log::error(
         "Outbound: %p, failed to resolve hostname %s, %s",
         this, m_host.c_str(), ec.message().c_str());
-      m_output(make_object<SessionEnd>(
-        ec.message(),
-        SessionEnd::CANNOT_RESOLVE));
-      reconnect();
+      if (m_receiver) {
+        pjs::Ref<SessionEnd> evt(SessionEnd::make(
+          ec.message(),
+          SessionEnd::CANNOT_RESOLVE));
+        m_receiver(evt);
+      }
+      cancel_connecting();
       return;
     }
 
@@ -181,35 +190,41 @@ void Outbound::connect(double delay) {
   };
 
   if (delay > 0) {
-    Listener::set_timeout(delay, resolve);
+    m_timer.schedule(delay, resolve);
   } else {
     resolve();
   }
 }
 
-void Outbound::reconnect() {
+bool Outbound::should_reconnect() {
   if (m_retry_count >= 0 && m_retries >= m_retry_count) {
-    m_reading_ended = true;
-    free();
+    return false;
   } else {
-    std::error_code ec;
-    m_socket.close(ec);
-    m_ssl_socket.lowest_layer().close(ec);
-    m_retries++;
-    connect(m_retry_delay);
+    return true;
   }
 }
 
+void Outbound::cancel_connecting() {
+  m_reading_ended = true;
+  free();
+}
+
+void Outbound::reconnect() {
+  std::error_code ec;
+  m_socket.close(ec);
+  m_ssl_socket.lowest_layer().close(ec);
+  m_retries++;
+  connect(m_retry_delay);
+}
+
 void Outbound::receive() {
-  auto buffer = new Data(RECEIVE_BUFFER_SIZE);
+  pjs::Ref<Data> buffer(Data::make(RECEIVE_BUFFER_SIZE));
 
   auto on_received = [=](const std::error_code &ec, size_t n) {
     if (n > 0) {
       buffer->pop(buffer->size() - n);
-      m_output(std::unique_ptr<Object>(buffer));
-      m_output(make_object<Data>()); // flush
-    } else {
-      delete buffer;
+      if (m_receiver) m_receiver(buffer);
+      if (m_receiver) m_receiver(Data::flush());
     }
 
     if (ec) {
@@ -217,15 +232,27 @@ void Outbound::receive() {
         Log::debug(
           "Outbound: %p, connection closed by upstream %s:%d",
           this, m_host.c_str(), m_port);
-        m_output(make_object<SessionEnd>(SessionEnd::NO_ERROR));
+        if (m_receiver) {
+          pjs::Ref<SessionEnd> evt(SessionEnd::make(SessionEnd::NO_ERROR));
+          m_receiver(evt);
+        }
       } else if (ec != asio::error::operation_aborted) {
         auto msg = ec.message();
         Log::warn(
           "Outbound: %p, error reading from upstream %s:%d, %s",
           this, m_host.c_str(), m_port, msg.c_str());
-        m_output(make_object<SessionEnd>(SessionEnd::READ_ERROR));
+        if (m_receiver) {
+          pjs::Ref<SessionEnd> evt(SessionEnd::make(SessionEnd::READ_ERROR));
+          m_receiver(evt);
+        }
       }
-      reconnect();
+
+      if (should_reconnect()) {
+        reconnect();
+      } else {
+        m_reading_ended = true;
+        free();
+      }
 
     } else {
       receive();
@@ -260,7 +287,7 @@ void Outbound::pump() {
       m_buffer.clear();
       m_writing_ended = true;
 
-    } else if (m_buffer.size() > 0) {
+    } else {
       pump();
     }
 
@@ -307,9 +334,9 @@ void Outbound::close() {
 }
 
 void Outbound::free() {
-  if (m_reading_ended && m_writing_ended && !m_pumping && m_buffer.empty()) {
+  if (!m_pumping && m_reading_ended && m_writing_ended) {
     delete this;
   }
 }
 
-NS_END
+} // namespace pipy

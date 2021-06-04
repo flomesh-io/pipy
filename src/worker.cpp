@@ -1,0 +1,254 @@
+/*
+ *  Copyright (c) 2019 by flomesh.io
+ *
+ *  Unless prior written consent has been obtained from the copyright
+ *  owner, the following shall not be allowed.
+ *
+ *  1. The distribution of any source codes, header files, make files,
+ *     or libraries of the software.
+ *
+ *  2. Disclosure of any source codes pertaining to the software to any
+ *     additional parties.
+ *
+ *  3. Alteration or removal of any notices in or on the software or
+ *     within the documentation included within the software.
+ *
+ *  ALL SOURCE CODE AS WELL AS ALL DOCUMENTATION INCLUDED WITH THIS
+ *  SOFTWARE IS PROVIDED IN AN “AS IS” CONDITION, WITHOUT WARRANTY OF ANY
+ *  KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ *  OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+ *  IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+ *  CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+ *  TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+ *  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ */
+
+#include "worker.hpp"
+#include "module.hpp"
+#include "event.hpp"
+#include "message.hpp"
+#include "session.hpp"
+#include "api/algo.hpp"
+#include "api/configuration.hpp"
+#include "api/console.hpp"
+#include "api/crypto.hpp"
+#include "api/hessian.hpp"
+#include "api/http.hpp"
+#include "api/json.hpp"
+#include "api/os.hpp"
+#include "api/url.hpp"
+#include "api/xml.hpp"
+#include "logging.hpp"
+
+#include <array>
+#include <stdexcept>
+
+//
+// Global
+//
+
+namespace pipy {
+
+class Global : public pjs::ObjectTemplate<Global>
+{
+};
+
+} // namespace pipy
+
+namespace pjs {
+
+using namespace pipy;
+
+template<> void ClassDef<Global>::init() {
+  ctor();
+
+  // Object
+  variable("Object", class_of<Constructor<Object>>());
+
+  // Boolean
+  variable("Boolean", class_of<Constructor<Boolean>>());
+
+  // Number
+  variable("Number", class_of<Constructor<Number>>());
+
+  // String
+  variable("String", class_of<Constructor<String>>());
+
+  // Array
+  variable("Array", class_of<Constructor<Array>>());
+
+  // Date
+  variable("Date", class_of<Constructor<Date>>());
+
+  // RegExp
+  variable("RegExp", class_of<Constructor<RegExp>>());
+
+  // JSON
+  variable("JSON", class_of<JSON>());
+
+  // XML
+  variable("XML", class_of<XML>());
+
+  // Hessian
+  variable("Hessian", class_of<Hessian>());
+
+  // console
+  variable("console", class_of<Console>());
+
+  // os
+  variable("os", class_of<OS>());
+
+  // URL
+  variable("URL", class_of<Constructor<URL>>());
+
+  // Session
+  variable("Session", class_of<Constructor<Session>>());
+
+  // Data
+  variable("Data", class_of<Constructor<pipy::Data>>());
+
+  // Message
+  variable("Message", class_of<Constructor<Message>>());
+
+  // MessageStart
+  variable("MessageStart", class_of<Constructor<MessageStart>>());
+
+  // MessageEnd
+  variable("MessageEnd", class_of<Constructor<MessageEnd>>());
+
+  // SessionEnd
+  variable("SessionEnd", class_of<Constructor<SessionEnd>>());
+
+  // http
+  variable("http", class_of<http::Http>());
+
+  // crypto
+  variable("crypto", class_of<crypto::Crypto>());
+
+  // algo
+  variable("algo", class_of<algo::Algo>());
+
+  // repeat
+  method("repeat", [](Context &ctx, Object *obj, Value &ret) {
+    int count;
+    Function *f;
+    if (ctx.try_arguments(1, &f)) {
+      Value idx;
+      for (int i = 0;; i++) {
+        idx.set(i);
+        (*f)(ctx, 1, &idx, ret);
+        if (!ctx.ok()) break;
+        if (!ret.to_boolean()) break;
+      }
+    } else if (ctx.try_arguments(2, &count, &f)) {
+      Value idx;
+      for (int i = 0; i < count; i++) {
+        idx.set(i);
+        (*f)(ctx, 1, &idx, ret);
+        if (!ctx.ok()) break;
+        if (!ret.to_boolean()) break;
+      }
+    } else {
+      ctx.error_argument_type(0, "a function");
+    }
+  });
+
+  // pipy
+  method("pipy", [](Context &ctx, Object *obj, Value &ret) {
+    Object *context_prototype = nullptr;
+    if (!ctx.arguments(0, &context_prototype)) return;
+    try {
+      auto config = Configuration::make(context_prototype);
+      ret.set(config);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+}
+
+} // namespace pjs
+
+//
+// Worker
+//
+
+namespace pipy {
+
+Worker* Worker::s_current = nullptr;
+std::set<Worker*> Worker::s_all_workers;
+
+Worker::Worker(const std::string &root_path)
+  : m_root_path(root_path)
+  , m_global_object(Global::make())
+{
+  s_all_workers.insert(this);
+}
+
+Worker::~Worker() {
+  if (s_current == this) s_current = nullptr;
+  s_all_workers.erase(this);
+}
+
+auto Worker::get_module(pjs::Str *filename) -> Module* {
+  auto i = m_module_name_map.find(filename);
+  if (i == m_module_name_map.end()) return nullptr;
+  return i->second;
+}
+
+auto Worker::find_module(const std::string &path) -> Module* {
+  auto i = m_module_map.find(path);
+  if (i == m_module_map.end()) return nullptr;
+  return i->second;
+}
+
+auto Worker::load_module(const std::string &path) -> Module* {
+  auto i = m_module_map.find(path);
+  if (i != m_module_map.end()) return i->second;
+  auto l = m_modules.size();
+  auto mod = new Module(this, l);
+  m_module_map[path] = mod;
+  m_module_name_map[pjs::Str::make(path)] = mod;
+  m_modules.push_back(mod);
+  if (!m_root) m_root = mod;
+  if (!mod->load(path)) return nullptr;
+  return mod;
+}
+
+auto Worker::new_loading_context() -> Context* {
+  return new Context(nullptr, this, m_global_object);
+}
+
+auto Worker::new_runtime_context(Context *base) -> Context* {
+  auto data = ContextData::make(m_modules.size());
+  for (size_t i = 0; i < m_modules.size(); i++) {
+    pjs::Object *proto = nullptr;
+    if (base) proto = base->m_data->at(i);
+    data->at(i) = m_modules[i]->new_context_data(proto);
+  }
+  auto ctx = new Context(
+    base ? base->group() : nullptr,
+    this, m_global_object, data
+  );
+  if (base) ctx->m_inbound = base->m_inbound;
+  return ctx;
+}
+
+bool Worker::start() {
+  Task::stop_all();
+  try {
+    for (auto i : m_modules) {
+      i->start();
+    }
+    s_current = this;
+    return true;
+  } catch (std::runtime_error &err) {
+    Log::error("%s", err.what());
+    return false;
+  }
+}
+
+void Worker::unload() {
+}
+
+} // namespace pipy

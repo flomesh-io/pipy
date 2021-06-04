@@ -5,7 +5,7 @@ After=network.target
 [Service]
 EnvironmentFile=-/etc/sysconfig/pipy
 Type=simple
-ExecStart=/usr/local/bin/pipy $PIPY_CONFIG_FILE  --watch-config-file
+ExecStart=/usr/local/bin/pipy $PIPY_CONFIG_FILE 
 KillMode=process
 StandardOutput=syslog
 StandardError=inherit

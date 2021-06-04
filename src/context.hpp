@@ -26,71 +26,132 @@
 #ifndef CONTEXT_HPP
 #define CONTEXT_HPP
 
-#include "ns.hpp"
-#include "pool.hpp"
-#include "object.hpp"
+#include "pjs/pjs.hpp"
+#include "list.hpp"
 
-#include <string>
-#include <map>
-#include <functional>
+namespace pipy {
 
-NS_BEGIN
+class ContextGroup;
+class ContextDataBase;
+class Worker;
+class Inbound;
+class Session;
 
 //
 // Context
 //
 
-class Context : public Pooled<Context> {
+class Context :
+  public pjs::Context,
+  public pjs::RefCount<Context>,
+  public pjs::Pooled<Context>,
+  public List<Context>::Item
+{
 public:
-  Context();
-  Context(const Context &rhs);
+  auto id() const -> uint64_t { return m_id; }
+  auto data(int i) const -> ContextDataBase* { return m_data->at(i)->as<ContextDataBase>(); }
+  auto group() const -> ContextGroup* { return m_group; }
+  auto worker() const -> Worker* { return m_worker; }
+  auto inbound() const -> Inbound* { return m_inbound; }
+
+private:
+  typedef pjs::PooledArray<pjs::Ref<pjs::Object>> ContextData;
+
+  Context(ContextGroup *group, Worker *worker, pjs::Object *global, ContextData *data = nullptr);
   ~Context();
 
-  uint64_t id;
-  std::string remote_addr;
-  std::string local_addr;
-  int remote_port = 0;
-  int local_port = 0;
-  std::map<std::string, std::string> variables;
+  uint64_t m_id;
+  ContextGroup* m_group;
+  Worker* m_worker;
+  ContextData* m_data;
+  Inbound* m_inbound = nullptr;
 
-  bool find(const std::string &key, std::string &val) {
-    const auto p = variables.find(key);
-    if (p == variables.end()) return false;
-    val = p->second;
-    return true;
-  }
+  static uint64_t s_context_id;
+  static uint64_t s_context_total;
 
-  auto evaluate(const std::string &str, bool *solved = nullptr) const -> std::string;
+  friend class pjs::RefCount<Context>;
+  friend class Worker;
+  friend class Waiter;
+  friend class Inbound;
+};
 
-  //
-  // Context::Queue
-  //
+//
+// ContextGroup
+//
 
-  class Queue : public Pool<Queue> {
+class ContextGroup : public pjs::Pooled<ContextGroup> {
+public:
+  class Waiter : public List<Waiter>::Item {
   public:
-    void clear();
-    void send(std::unique_ptr<Object> obj);
-    void receive(Object::Receiver receiver);
+    void wait(ContextGroup *context_group) {
+      if (!m_context_group) {
+        m_context_group = context_group;
+        m_context_group->m_waiters.push(this);
+      }
+    }
+
+    void cancel() {
+      if (m_context_group) {
+        m_context_group->m_waiters.remove(this);
+        m_context_group = nullptr;
+      }
+    }
 
   private:
-    std::list<Object::Receiver> m_receivers;
-    std::list<std::unique_ptr<Object>> m_buffer;
+    virtual void on_notify(Context *ctx) = 0;
+
+    ContextGroup* m_context_group = nullptr;
+
+    friend class ContextGroup;
   };
 
-  auto get_queue(const std::string &name) -> Queue* {
-    const auto p = m_queues.find(name);
-    if (p != m_queues.end()) return p->second.get();
-    auto ds = new Queue();
-    m_queues.emplace(name, ds);
-    return ds;
+  void add(Context *ctx) {
+    m_contexts.push(ctx);
+  }
+
+  void remove(Context *ctx) {
+    m_contexts.remove(ctx);
+    if (m_contexts.empty()) {
+      delete this;
+    }
+  }
+
+  void notify(Context *ctx) {
+    Waiter *p = m_waiters.head();
+    while (p) {
+      auto waiter = p;
+      p = p->next();
+      waiter->on_notify(ctx);
+    }
   }
 
 private:
-  std::map<std::string, std::unique_ptr<Queue>> m_queues;
-
-  static uint64_t s_context_id;
+  List<Context> m_contexts;
+  List<Waiter> m_waiters;
 };
 
-NS_END
+//
+// ContextDataBase
+//
+
+class ContextDataBase : public pjs::ObjectTemplate<ContextDataBase> {
+public:
+  ContextDataBase(pjs::Str *filename)
+    : m_filename(filename) {}
+
+  auto filename() const -> pjs::Str* { return m_filename; }
+  auto argv() const -> pjs::Array* { return m_argv; }
+  void argv(pjs::Array *argv) { m_argv = argv; }
+  auto inbound() const -> Inbound* { return m_context->inbound(); }
+
+protected:
+  Context* m_context;
+  pjs::Ref<pjs::Str> m_filename;
+  pjs::Ref<pjs::Array> m_argv;
+
+  friend class Context;
+};
+
+} // namespace pipy
 
 #endif // CONTEXT_HPP
