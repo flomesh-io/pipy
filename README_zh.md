@@ -80,7 +80,7 @@ $ pipy --help-modules
 以演示案例 `test/001-echo` 为例，可以用这个方式运行（其中的 `--watch-config-file` 参数用于在配置文件变化时自动重新加载配置）：
 
 ```command
-$ pipy test/001-echo/pipy.cfg --watch-config-file
+$ pipy test/001-echo/pipy.cfg
 ...
 ```
 
@@ -101,20 +101,12 @@ Pipy 的 Docker 镜像识别如下的环境变量：
 * `PIPY_SPAWN=n` 定义了同时运行的 Pipy 进程数量；注意 `n` 是目标进程数减一。也就是说，如果希望运行两个 Pipy 进程，那么 `PIPY_SPAWN=1` 就可以。
 
 ```command
-$ docker run -it --rm -e PIPY_CONFIG_FILE=/etc/pipy/test/001-echo/pipy.cfg flomesh/pipy:latest
+$ docker run -it --rm -e PIPY_CONFIG_FILE=/etc/pipy/test/001-echo/pipy.cfg flomesh/pipy-pjs:latest
 ...
 ```
 
 ```command
-docker run -it --rm -e PIPY_CONFIG_FILE=/etc/pipy/test/011-serve-static/pipy.cfg -e PIPY_SPAWN=1 -p 8000:6000 flomesh/pipy:latest
-...
-```
-
-当作为 Sidecar proxy 运行的时候，Pipy 支持“[透明代理](https://www.kernel.org/doc/Documentation/networking/tproxy.txt)”。
-启动时加入 `NET_ADMIN` 就可以了。
-
-```command
-$ docker run -it --rm -e PIPY_CONFIG_FILE=/etc/pipy/test/001-echo/pipy.cfg --cap-add NET_ADMIN flomesh/pipy:latest
+docker run -it --rm -e PIPY_CONFIG_FILE=/etc/pipy/test/011-serve-static/pipy.cfg -e PIPY_SPAWN=1 -p 8000:6000 flomesh/pipy-pjs:latest
 ...
 ```
 
