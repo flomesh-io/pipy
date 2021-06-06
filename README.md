@@ -1,18 +1,22 @@
 # Pipy
 
-Pipy is a tiny, high performance, highly stable, programmable proxy. Written
-in C++, built on top of Asio asynchronous I/O library, Pipy is extremely
-lightweight and fast, making it one of the best choices for service mesh sidecars.
+Pipy is a high performance programmable network proxy. Written in C++, Pipy is extremely
+lightweight and fast, making it an ideal solution to service mesh proxies.
 
-With builtin JavaScript support, thanks to PipyJS, Pipy is highly
-customizable and also predictable in performance with no garbage collection
-overhead found in other scriptable counterparts.
+With the builtin JavaScript support, thanks to PipyJS, Pipy is highly
+customizable as well as predictable in performance since PipyJS opts for reference
+counting memory management and thus has no uneven garbage collection
+overhead we constantly see in other similar systems.
 
-At its core, Pipy has a modular design with a set of fundamental filters
-that can be chained together to make a pipeline, through which network data can
-flow and get processed along the way. The way Pipy is designed makes it versatile
-enough for not only service mesh sidecars but also other use cases involving
-intermediate message processing between network nodes.
+At its core, Pipy is of a modular design provided with a range of fundamental
+filters that can be chained up to make a pipeline, where network data is pumped
+in and get processed. The way Pipy is designed makes it extremely versatile
+even outside of a service mesh environment. Due to its scriptable nature, it also
+benefits any sorts of situations involving intermediate message processing between
+network nodes where Pipy can be used as a forward/backward proxy, a load balancer,
+an API gateway, a static HTTP server, a node in a CDN, a health checker, a serverless
+function trigger, or however you want to combine all those features by just a few lines
+of script.
 
 # Compatibility
 
@@ -30,23 +34,24 @@ CentOS7/REHL7 or FreeBSD are recommended in production environments.
 
 ## Build from Scratch
 
-Before building, the following tools are required to be installed first:
+Before building, the following prerequisites are required to be installed first:
 
 * Clang 5.0+
 * CMake 3.0+
-* Node.js v12+ (only required if the builtin web UI is turned on)
+* Node.js v12+ (only required if the builtin web UI is enabled)
+* zlib
 
-With the above tools installed, just run the build script to start building:
+With the above all installed, run the build script to start building:
 
 ```
 ./build.sh
 ```
 
-The executable is located under `bin/`. Type `bin/pipy -h` for more information.
+The final executable product will be located under `bin/`. Type `bin/pipy -h` for help information.
 
-## Build the Docker Image
+## Build a Docker Image
 
-To build the Docker image, run the following commands:
+To build a Docker image, run the following commands:
 
 ```
 cd pipy
@@ -54,8 +59,8 @@ sudo docker build --squash --rm -t pipy .
 ```
 
 > Note: For a smaller image, you might want to use `--squash` option. It is an experimental feature, so
-you have to add `{ "experimental": true }` to `/etc/docker/daemon.json` and restart Docker daemon
-to enable it.
+you need to add `{ "experimental": true }` to `/etc/docker/daemon.json` and restart Docker daemon
+before using it.
 >
 > For more information about Docker's `--squash` option, please refer to
 [Docker Documentation](https://docs.docker.com/engine/reference/commandline/image_build/)
@@ -83,22 +88,24 @@ $ pipy --help-filters
 
 ## Run on CLI
 
-Let's take the echo server in `test/001-echo/` as an example. To start a Pipy instance
-that echos whatever the request has in its body, say
+To start a Pipy proxy, run `pipy` with a PipyJS script file, for example, the script
+in `test/001-echo/` if you need a simple echo server that responds with the same message
+body as in every incoming request:
 
 ```
 $ pipy test/001-echo/pipy.js
 ```
 
-Or, while developing and debugging, one can start Pipy in web UI mode by using:
+Alternatively, while developing and debugging, one can start Pipy in web UI mode without
+specifying any specific script file but only a working directory:
 
 ```
 $ pipy test/ --gui-port=6060
 ```
 
-## Run with Docker
+## Run in Docker
 
-Pipy Docker image can be configured with a few environment variables:
+The Pipy Docker image can be configured with a few environment variables:
 
 * `PIPY_CONFIG_FILE=</path/to/config-file>` for the location of Pipy configuration file
 
@@ -136,14 +143,15 @@ You can find Pipy documentation under `docs/`.
 
 # Copyright & License
 
-Please see [COPYRIGHT](https://github.com/flomesh-io/pipy/blob/main/COPYRIGHT) and [LICENCE](https://github.com/flomesh-io/pipy/blob/main/LICENCE).
+Please refer to [COPYRIGHT](https://github.com/flomesh-io/pipy/blob/main/COPYRIGHT)
+and [LICENCE](https://github.com/flomesh-io/pipy/blob/main/LICENCE).
 
 # Contact
 
-* For security issues, please send an email to security@flomesh.io
-* For legal issues, please send an email to legal@flomesh.io
-* For commercial, sales and marketing topics, please send an email to sales@flomesh.io
-* For other topics not suitable for the public, please send an email to pipy@flomesh.io
+* For security issues, please email to security@flomesh.io
+* For legal issues, please email to legal@flomesh.io
+* For commercial, sales and marketing topics, please email to sales@flomesh.io
+* For other topics not suitable for the public, please email to pipy@flomesh.io
 * For public discussions, please go to GitHub issues: https://github.com/flomesh-io/pipy/issues
 
 # Translations
