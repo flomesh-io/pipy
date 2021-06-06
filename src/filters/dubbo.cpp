@@ -176,7 +176,7 @@ Encoder::Encoder()
 }
 
 Encoder::Encoder(pjs::Object *head)
-  : m_head_object(head)
+  : m_head(head)
   , m_prop_id("id")
   , m_prop_status("status")
   , m_prop_is_request("isRequest")
@@ -186,7 +186,7 @@ Encoder::Encoder(pjs::Object *head)
 }
 
 Encoder::Encoder(const Encoder &r)
-  : Encoder(r.m_head_object)
+  : Encoder(r.m_head)
 {
 }
 
@@ -226,10 +226,11 @@ void Encoder::process(Context *ctx, Event *inp) {
   } else if (inp->is<MessageEnd>()) {
     if (!m_message_start) return;
 
-    pjs::Value val(m_head_object), head_object;
-    if (!eval(*ctx, val, head_object)) return;
+    pjs::Value head_obj(m_head), head;
+    if (!eval(*ctx, head_obj, head)) return;
+    if (!head.is_object() || head.is_null()) head.set(m_message_start->head());
 
-    pjs::Object *obj = head_object.is_object() ? head_object.o() : m_message_start->head();
+    pjs::Object *obj = head.is_object() ? head.o() : nullptr;
     auto R = get_header(*ctx, obj, m_prop_id, m_auto_id++);
     auto S = get_header(*ctx, obj, m_prop_status, 0);
     char F = get_header(*ctx, obj, m_prop_is_request, 1) ? 0x82 : 0x02;
@@ -240,26 +241,26 @@ void Encoder::process(Context *ctx, Event *inp) {
     if (D) F |= 0x40;
     if (E) F |= 0x20;
 
-    char head[16];
-    head[0] = 0xda;
-    head[1] = 0xbb;
-    head[2] = F;
-    head[3] = S;
-    head[4] = R >> 56;
-    head[5] = R >> 48;
-    head[6] = R >> 40;
-    head[7] = R >> 32;
-    head[8] = R >> 24;
-    head[9] = R >> 16;
-    head[10] = R >> 8;
-    head[11] = R >> 0;
-    head[12] = L >> 24;
-    head[13] = L >> 16;
-    head[14] = L >> 8;
-    head[15] = L >> 0;
+    char header[16];
+    header[0] = 0xda;
+    header[1] = 0xbb;
+    header[2] = F;
+    header[3] = S;
+    header[4] = R >> 56;
+    header[5] = R >> 48;
+    header[6] = R >> 40;
+    header[7] = R >> 32;
+    header[8] = R >> 24;
+    header[9] = R >> 16;
+    header[10] = R >> 8;
+    header[11] = R >> 0;
+    header[12] = L >> 24;
+    header[13] = L >> 16;
+    header[14] = L >> 8;
+    header[15] = L >> 0;
 
     output(MessageStart::make());
-    output(Data::make(head, sizeof(head)));
+    output(Data::make(header, sizeof(header)));
     output(m_buffer);
     output(inp);
 

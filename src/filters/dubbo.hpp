@@ -92,7 +92,7 @@ private:
 private:
   pjs::Ref<Data> m_buffer;
   pjs::Ref<MessageStart> m_message_start;
-  pjs::Ref<pjs::Object> m_head_object;
+  pjs::Ref<pjs::Object> m_head;
   pjs::PropertyCache m_prop_id;
   pjs::PropertyCache m_prop_status;
   pjs::PropertyCache m_prop_is_request;
