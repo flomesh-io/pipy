@@ -7,9 +7,11 @@ ENV  pkg_bindir              ${pkg_prefix}/bin
 ENV  CXX       		     clang++
 ENV  CC			     clang
 
+ENV NODE_VERSION   12.22.1-r0
+
 COPY . /pipy
 
-RUN apk add --no-cache --virtual .build-deps openssh-client git cmake clang alpine-sdk linux-headers zlib zlib-dev
+RUN apk add --no-cache --virtual .build-deps openssh-client git cmake clang alpine-sdk linux-headers nodejs=${NODE_VERSION} npm=${NODE_VERSION} autoconf automake libtool tiff jpeg zlib zlib-dev pkgconf nasm file musl-dev
 
 RUN rm -fr pipy/build \
         && mkdir pipy/build \
