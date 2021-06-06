@@ -101,6 +101,14 @@ if $BUILD_ONLY && $TEST_ONLY ; then
   usage
 fi
 
+function version_compare() {
+  if [ "$(printf '%s\n' "$1" "$2" | sort -V | head -n1)" = "$1" ]; then
+    true
+  else
+    return 125
+  fi
+}
+
 CMAKE=
 function __build_deps_check() {
   if [ ! -z $(command -v cmake3) ]; then
@@ -110,6 +118,12 @@ function __build_deps_check() {
   fi
   clang --version 2>&1 > /dev/null && clang++ --version 2>&1 > /dev/null && export __CLANG_EXIST=true
   if [ "x"$CMAKE = "x" ] || ! $__CLANG_EXIST ; then echo "Command \`cmake\` or \`clang\` not found." && exit -1; fi
+  __NODE_VERSION=`node --version 2> /dev/null`
+  version_compare "v12" "$__NODE_VERSION"
+  if [ $? -ne 0 ]; then
+    echo "NodeJS is too old, the minimal requirement is NodeJS 12."
+    exit -1
+  fi
 }
 
 function build() {
@@ -120,10 +134,13 @@ function build() {
   git pull origin $BRANCH
   export CC=clang
   export CXX=clang++
+  cd ${PIPY_DIR}/gui
+  npm install
+  npm run build
   mkdir ${PIPY_DIR}/build 2>&1 > /dev/null || true
   rm -fr ${PIPY_DIR}/build/*
   cd ${PIPY_DIR}/build
-  $CMAKE -DCMAKE_BUILD_TYPE=Release $PIPY_DIR
+  $CMAKE -DPIPY_GUI=ON -DCMAKE_BUILD_TYPE=Release $PIPY_DIR
   make -j${__NPROC}
   if [ $? -eq 0 ];then 
     echo "pipy now is in ${PIPY_DIR}/bin"

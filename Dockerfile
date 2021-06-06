@@ -9,12 +9,15 @@ ENV  CC			     clang
 
 COPY . /pipy
 
-RUN apk add --no-cache --virtual .build-deps openssh-client git cmake clang alpine-sdk linux-headers
+RUN apk add --no-cache --virtual .build-deps openssh-client git cmake clang alpine-sdk linux-headers zlib zlib-dev
 
 RUN rm -fr pipy/build \
         && mkdir pipy/build \
-        && cd pipy/build \
-        && cmake -DCMAKE_BUILD_TYPE=Release .. \
+        && cd pipy/gui \
+        && npm install \
+        && npm run build \
+        && cd ../build \
+        && cmake -DPIPY_GUI=ON -DCMAKE_BUILD_TYPE=Release .. \
         && make -j$(getconf _NPROCESSORS_ONLN) \
         && mkdir ${pkg_confdir} \
         && cp /pipy/bin/pipy ${pkg_bindir} \
