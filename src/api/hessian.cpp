@@ -44,6 +44,7 @@ template<> void ClassDef<Hessian>::init() {
   method("decode", [](Context &ctx, Object *obj, Value &ret) {
     pipy::Data *data;
     if (!ctx.arguments(1, &data)) return;
+    if (!data) { ret = Value::null; return; }
     try {
       Hessian::decode(*data, ret);
     } catch (std::runtime_error &err) {
