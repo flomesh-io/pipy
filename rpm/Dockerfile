@@ -1,8 +1,8 @@
 FROM centos:7
-LABEL maintainer="Kevein Liu<k@polaristech.io>"
+LABEL maintainer="Kevein Liu<kevein@flomesh.cn>"
 
 ARG VERSION
-ENV VERSION=${VERSION:-0.4.0}
+ENV VERSION=${VERSION:-0.6.0}
 
 ARG REVISION
 ENV REVISION=${REVISION:-1}
@@ -20,8 +20,10 @@ COPY rpmmacros /rpmmacros
 COPY pipy.tar.gz /pipy.tar.gz
 COPY pipy.spec /pipy.spec
 
-RUN yum install -y -q make unzip rpm-build rpmdevtools git chrpath expat-devel \
+RUN yum install -y -q make unzip rpm-build rpmdevtools git chrpath expat-devel zlib-devel \
         && rpmdev-setuptree \
+        && curl -sL https://rpm.nodesource.com/setup_12.x | bash - \
+        && yum install -y -q nodejs \
         && mv /rpmmacros ~/.rpmmacros \
         && yum install -y centos-release-scl epel-release \
         && yum install -y llvm-toolset-7 cmake3 
