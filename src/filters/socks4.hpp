@@ -47,6 +47,7 @@ private:
 
   virtual auto help() -> std::list<std::string> override;
   virtual void dump(std::ostream &out) override;
+  virtual auto draw(std::list<std::string> &links, bool &fork) -> std::string override;
   virtual auto clone() -> Filter* override;
   virtual void reset() override;
   virtual void process(Context *ctx, Event *inp) override;
