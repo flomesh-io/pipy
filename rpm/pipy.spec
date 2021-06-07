@@ -71,6 +71,6 @@ rm -rf %{buildroot}
 %attr(644, root, root) /etc/systemd/system/pipy.service
 %attr(644, root, root) /etc/sysconfig/pipy
 
-%config /etc/pipy/pipy.cfg
+%config /etc/pipy/pipy.js
 
 %changelog
