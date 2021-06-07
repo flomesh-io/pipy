@@ -21,10 +21,14 @@ Pipy is a tiny, high performance, highly stable, programmable proxy.
 %setup -c -q -n %{name}-%{version} -T -a0
 
 %build
+cd pipy/gui
+npm install
+npm run build
+cd ../..
 rm -fr pipy/build
 %{__mkdir} pipy/build
 cd pipy/build
-CXX=clang++ CC=clang cmake3 -DCMAKE_BUILD_TYPE=Release ..
+CXX=clang++ CC=clang cmake3  -DPIPY_GUI=ON -DCMAKE_BUILD_TYPE=Release ..
 make -j$(getconf _NPROCESSORS_ONLN)
 
 
