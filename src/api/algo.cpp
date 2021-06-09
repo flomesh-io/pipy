@@ -29,6 +29,20 @@
 namespace pipy {
 namespace algo {
 
+//
+// Algo
+//
+
+auto Algo::hash(const pjs::Value &value) -> size_t {
+  std::hash<pjs::Value> hash;
+  auto h = hash(value);
+  return h;
+}
+
+//
+// Cache
+//
+
 Cache::Cache(pjs::Function *allocate, pjs::Function *free)
   : m_allocate(allocate)
   , m_free(free)
@@ -721,6 +735,13 @@ template<> void ClassDef<Algo>::init() {
   variable("RoundRobinLoadBalancer", class_of<Constructor<RoundRobinLoadBalancer>>());
   variable("LeastWorkLoadBalancer", class_of<Constructor<LeastWorkLoadBalancer>>());
   variable("ResourcePool", class_of<Constructor<ResourcePool>>());
+
+  method("hash", [](Context &ctx, Object *obj, Value &ret) {
+    Value value;
+    if (!ctx.arguments(0, &value)) return;
+    auto h = Algo::hash(value);
+    ret.set(double(h & ((1ull << 53)-1)));
+  });
 }
 
 } // namespace pjs

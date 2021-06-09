@@ -210,8 +210,9 @@ private:
 // Algo
 //
 
-class Algo : public pjs::ObjectTemplate<Algo>
-{
+class Algo : public pjs::ObjectTemplate<Algo> {
+public:
+  static auto hash(const pjs::Value &value) -> size_t;
 };
 
 } // namespace algo
