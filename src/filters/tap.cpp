@@ -88,7 +88,9 @@ void Tap::process(Context *ctx, Event *inp) {
     auto *s = account_name.to_string();
     m_queue = m_accounts->get(s->str());
     s->release();
-    if (quota.is_number()) {
+    if (quota.is_nullish()) {
+      m_queue->setup(-1, false);
+    } else if (quota.is_number()) {
       m_queue->setup(quota.n(), false);
     } else {
       auto *s = quota.to_string();
@@ -110,9 +112,9 @@ void Tap::process(Context *ctx, Event *inp) {
 
 void Tap::Queue::setup(int quota, bool is_data) {
   m_initial_quota = quota;
-  m_is_data = is_data;
   if (!m_has_set) {
     m_current_quota = quota;
+    m_is_data = is_data;
     m_has_set = true;
   }
 }
@@ -132,7 +134,7 @@ void Tap::Queue::push(Context *ctx, Event *e, Event::Receiver out) {
 }
 
 void Tap::Queue::pump() {
-  while (!m_queue.empty() && (m_initial_quota < 0 || m_current_quota > 0)) {
+  while (!m_queue.empty() && (unlimited() || m_current_quota > 0)) {
     auto &head = m_queue.front();
     auto e = head.event;
     auto f = head.out;
@@ -172,7 +174,7 @@ void Tap::Queue::supply() {
 }
 
 auto Tap::Queue::deduct_data(Event *e) -> Data* {
-  if (m_initial_quota < 0) return nullptr;
+  if (unlimited()) return nullptr;
   if (e->is<Data>()) {
     auto data = e->as<Data>();
     if (data->size() <= m_current_quota) {
