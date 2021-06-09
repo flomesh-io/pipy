@@ -1279,7 +1279,7 @@ private:
 
   template<class T>
   bool get_arg(bool set_error, int i, T **o) {
-    if (!arg(i).is_null() && !arg(i).is_instance_of<T>()) {
+    if (arg(i).is_null() || !arg(i).is_instance_of<T>()) {
       if (set_error) {
         std::string type("an instance of ");
         type += class_of<T>()->name();
@@ -1287,7 +1287,7 @@ private:
       }
       return false;
     }
-    *o = arg(i).is_null() ? nullptr : arg(i).as<T>();
+    *o = arg(i).as<T>();
     return true;
   }
 };

@@ -503,6 +503,55 @@ void ResourcePool::free_tenant(const pjs::Value &tenant) {
   m_tenants.erase(i);
 }
 
+//
+// Percentile
+//
+
+Percentile::Percentile(pjs::Array *scores)
+  : m_scores(scores->length())
+  , m_buckets(scores->length())
+{
+  double last = std::numeric_limits<double>::min();
+  scores->iterate_all(
+    [&](pjs::Value &v, int i) {
+      auto score = v.to_number();
+      if (score <= last) throw std::runtime_error("scores are not in ascending order");
+      m_scores[i] = score;
+      last = score;
+    }
+  );
+
+  reset();
+}
+
+void Percentile::reset() {
+  for (auto &n : m_buckets) n = 0;
+  m_score_count = 0;
+}
+
+void Percentile::score(double score) {
+  for (size_t i = 0, n = m_scores.size(); i < n; i++) {
+    if (score <= m_scores[i]) {
+      m_buckets[i]++;
+      m_score_count++;
+      break;
+    }
+  }
+}
+
+auto Percentile::calculate(int percentage) -> double {
+  if (percentage <= 0) return 0;
+  size_t total = m_score_count * percentage / 100;
+  size_t count = 0;
+  for (size_t i = 0, n = m_buckets.size(); i < n; i++) {
+    count += m_buckets[i];
+    if (count >= total) {
+      return m_scores[i];
+    }
+  }
+  return std::numeric_limits<double>::infinity();
+}
+
 } // namespace algo
 } // namespace pipy
 
@@ -724,6 +773,44 @@ template<> void ClassDef<Constructor<ResourcePool>>::init() {
 }
 
 //
+// Percentile
+//
+
+template<> void ClassDef<Percentile>::init() {
+  ctor([](Context &ctx) -> Object* {
+    Array *scores;
+    if (!ctx.arguments(1, &scores)) return nullptr;
+    try {
+      return Percentile::make(scores);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+      return nullptr;
+    }
+  });
+
+  method("reset", [](Context &ctx, Object *obj, Value &ret) {
+    obj->as<Percentile>()->reset();
+  });
+
+  method("score", [](Context &ctx, Object *obj, Value &ret) {
+    double score;
+    if (!ctx.arguments(1, &score)) return;
+    obj->as<Percentile>()->score(score);
+  });
+
+  method("calculate", [](Context &ctx, Object *obj, Value &ret) {
+    int percentage;
+    if (!ctx.arguments(1, &percentage)) return;
+    ret.set(obj->as<Percentile>()->calculate(percentage));
+  });
+}
+
+template<> void ClassDef<Constructor<Percentile>>::init() {
+  super<Function>();
+  ctor();
+}
+
+//
 // Algo
 //
 
@@ -735,6 +822,7 @@ template<> void ClassDef<Algo>::init() {
   variable("RoundRobinLoadBalancer", class_of<Constructor<RoundRobinLoadBalancer>>());
   variable("LeastWorkLoadBalancer", class_of<Constructor<LeastWorkLoadBalancer>>());
   variable("ResourcePool", class_of<Constructor<ResourcePool>>());
+  variable("Percentile", class_of<Constructor<Percentile>>());
 
   method("hash", [](Context &ctx, Object *obj, Value &ret) {
     Value value;
