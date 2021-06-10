@@ -207,11 +207,32 @@ private:
 };
 
 //
+// Percentile
+//
+
+class Percentile : public pjs::ObjectTemplate<Percentile> {
+public:
+  void reset();
+  void score(double score);
+  auto calculate(int percentage) -> double;
+
+private:
+  Percentile(pjs::Array *scores);
+
+  std::vector<double> m_scores;
+  std::vector<size_t> m_buckets;
+  size_t m_score_count;
+
+  friend class pjs::ObjectTemplate<Percentile>;
+};
+
+//
 // Algo
 //
 
-class Algo : public pjs::ObjectTemplate<Algo>
-{
+class Algo : public pjs::ObjectTemplate<Algo> {
+public:
+  static auto hash(const pjs::Value &value) -> size_t;
 };
 
 } // namespace algo

@@ -35,6 +35,7 @@
 #include "api/hessian.hpp"
 #include "api/http.hpp"
 #include "api/json.hpp"
+#include "api/netmask.hpp"
 #include "api/os.hpp"
 #include "api/url.hpp"
 #include "api/xml.hpp"
@@ -100,6 +101,9 @@ template<> void ClassDef<Global>::init() {
 
   // URL
   variable("URL", class_of<Constructor<URL>>());
+
+  // Netmask
+  variable("Netmask", class_of<Constructor<Netmask>>());
 
   // Session
   variable("Session", class_of<Constructor<Session>>());

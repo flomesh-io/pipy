@@ -483,7 +483,7 @@ private:
             }
             m_p->filters.emplace_back(std::move(f));
 
-          } else if (m == "fork" || m == "mux" || m == "demux") {
+          } else if (m == "fork" || m == "mux" || m == "demux" || m == "proxySOCKS4") {
             Graph::Filter f;
             f.name = m;
             f.fork = m == "fork";

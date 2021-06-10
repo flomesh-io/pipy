@@ -57,6 +57,7 @@ private:
   public:
     void setup(int quota, bool is_data);
     void push(Context *ctx, Event *e, Event::Receiver out);
+    bool unlimited() const { return m_initial_quota < 0; }
     bool blocking() const { return !m_queue.empty(); }
 
   private:

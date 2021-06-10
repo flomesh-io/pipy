@@ -67,6 +67,12 @@ void ProxySOCKS4::dump(std::ostream &out) {
   out << "proxySOCKS4";
 }
 
+auto ProxySOCKS4::draw(std::list<std::string> &links, bool &fork) -> std::string {
+  links.push_back(m_target->str());
+  fork = false;
+  return "proxySOCKS4";
+}
+
 auto ProxySOCKS4::clone() -> Filter* {
   return new ProxySOCKS4(m_target, m_on_connect);
 }

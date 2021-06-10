@@ -23,54 +23,51 @@
  *  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef SOCKS4_HPP
-#define SOCKS4_HPP
+#ifndef NETMASK_HPP
+#define NETMASK_HPP
 
-#include "filter.hpp"
+#include "pjs/pjs.hpp"
 
 namespace pipy {
 
-class Session;
-
 //
-// ProxySOCKS4
+// Netmask
 //
 
-class ProxySOCKS4 : public Filter {
+class Netmask : public pjs::ObjectTemplate<Netmask> {
 public:
-  ProxySOCKS4();
-  ProxySOCKS4(pjs::Str *target, pjs::Function *on_connect);
+  auto base() -> pjs::Str*;
+  auto mask() -> pjs::Str*;
+  auto bitmask() const -> int { return m_bitmask; }
+  auto hostmask() -> pjs::Str*;
+  auto broadcast() -> pjs::Str*;
+  auto size() const -> int { return 1 << (32 - m_bitmask); }
+  auto first() -> pjs::Str*;
+  auto last() -> pjs::Str*;
+  bool contains(pjs::Str *addr);
+
+  virtual auto to_string() const -> std::string override {
+    return m_cidr->str();
+  }
 
 private:
-  ProxySOCKS4(const ProxySOCKS4 &r);
-  ~ProxySOCKS4();
+  Netmask(pjs::Str *cidr);
 
-  virtual auto help() -> std::list<std::string> override;
-  virtual void dump(std::ostream &out) override;
-  virtual auto draw(std::list<std::string> &links, bool &fork) -> std::string override;
-  virtual auto clone() -> Filter* override;
-  virtual void reset() override;
-  virtual void process(Context *ctx, Event *inp) override;
+  pjs::Ref<pjs::Str> m_cidr;
+  pjs::Ref<pjs::Str> m_base;
+  pjs::Ref<pjs::Str> m_mask;
+  pjs::Ref<pjs::Str> m_hostmask;
+  pjs::Ref<pjs::Str> m_broadcast;
+  pjs::Ref<pjs::Str> m_first;
+  pjs::Ref<pjs::Str> m_last;
 
-  enum State {
-    READ_COMMAND,
-    READ_USER_ID,
-    READ_DOMAIN,
-  };
+  int m_bitmask;
+  uint32_t m_ip4_base;
+  uint32_t m_ip4_mask;
 
-  pjs::Ref<pjs::Str> m_target;
-  pjs::Ref<pjs::Function> m_on_connect;
-  pjs::Ref<Session> m_session;
-  State m_state = READ_COMMAND;
-  uint8_t m_command[8];
-  char m_user_id[256];
-  char m_domain[256];
-  int m_command_read_ptr = 0;
-  int m_user_id_read_ptr = 0;
-  int m_domain_read_ptr = 0;
-  bool m_session_end = false;
+  friend class pjs::ObjectTemplate<Netmask>;
 };
 
 } // namespace pipy
 
-#endif // SOCKS4_HPP
+#endif // NETMASK_HPP

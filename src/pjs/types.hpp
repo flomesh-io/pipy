@@ -422,8 +422,9 @@ public:
         auto s = m_super;
         if (!s) s = class_of<Object>();
         int status;
-        auto full_name = abi::__cxa_demangle(typeid(T).name(), 0, 0, &status);
-        m_c = Class::make(full_name, s, m_fields);
+        auto c_name = typeid(T).name();
+        auto cxx_name = abi::__cxa_demangle(c_name, 0, 0, &status);
+        m_c = Class::make(cxx_name ? cxx_name : c_name, s, m_fields);
         m_c->set_ctor(m_ctor);
         m_c->set_geti(m_geti);
         m_c->set_seti(m_seti);
@@ -1278,7 +1279,7 @@ private:
 
   template<class T>
   bool get_arg(bool set_error, int i, T **o) {
-    if (!arg(i).is_null() && !arg(i).is_instance_of<T>()) {
+    if (arg(i).is_null() || !arg(i).is_instance_of<T>()) {
       if (set_error) {
         std::string type("an instance of ");
         type += class_of<T>()->name();
@@ -1286,7 +1287,7 @@ private:
       }
       return false;
     }
-    *o = arg(i).is_null() ? nullptr : arg(i).as<T>();
+    *o = arg(i).as<T>();
     return true;
   }
 };
