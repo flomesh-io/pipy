@@ -88,7 +88,7 @@ private:
 
 class ResponseDecoder : public Filter {
 public:
-  ResponseDecoder();
+  ResponseDecoder(bool bodiless);
 
 private:
   ResponseDecoder(const ResponseDecoder &r);
@@ -117,6 +117,7 @@ private:
   CharBuf<0x10000> m_value;
   pjs::Ref<ResponseHead> m_head;
   std::string m_transfer_encoding;
+  bool m_bodiless;
   bool m_session_end = false;
   bool m_chunked;
   int m_content_length;
@@ -182,6 +183,7 @@ private:
   pjs::PropertyCache m_prop_status;
   pjs::PropertyCache m_prop_status_text;
   pjs::PropertyCache m_prop_headers;
+  pjs::PropertyCache m_prop_bodiless;
   bool m_session_end = false;
 
   static std::string s_default_protocol;
