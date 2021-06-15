@@ -416,8 +416,8 @@ void FunctionLiteral::resolve(Context &ctx, int l) {
   auto nvar = int(m_variables.size());
   char name[100];
   std::sprintf(name, "(anonymous function at line %d column %d)", line(), column());
-  m_method = new Method(
-    name, argc, nvar,
+  m_method = Method::make(
+    name, argc, nvar, &m_variables[0],
     [this](Context &ctx, Object*, Value &result) {
       if (m_need_unpack) {
         auto scope = ctx.scope();

@@ -349,6 +349,10 @@ static void on_sig_hup(int) {
   s_need_reload = true;
 }
 
+void main_trigger_reload() {
+  s_need_reload = true;
+}
+
 //
 // Handle SIGINT
 //

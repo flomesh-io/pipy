@@ -70,7 +70,12 @@ Configuration::Configuration(pjs::Object *context_prototype) {
   std::list<pjs::Field*> fields;
   if (context_prototype) {
     context_prototype->iterate_all([&](pjs::Str *key, pjs::Value &val) {
-      fields.push_back(new pjs::Variable(key->str(), val, pjs::Field::Enumerable | pjs::Field::Writable));
+      fields.push_back(
+        pjs::Variable::make(
+          key->str(), val,
+          pjs::Field::Enumerable | pjs::Field::Writable
+        )
+      );
     });
   }
 
