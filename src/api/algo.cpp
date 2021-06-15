@@ -780,6 +780,10 @@ template<> void ClassDef<Percentile>::init() {
   ctor([](Context &ctx) -> Object* {
     Array *scores;
     if (!ctx.arguments(1, &scores)) return nullptr;
+    if (!scores) {
+      ctx.error_argument_type(0, "an array");
+      return nullptr;
+    }
     try {
       return Percentile::make(scores);
     } catch (std::runtime_error &err) {

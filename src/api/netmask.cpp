@@ -93,7 +93,6 @@ Netmask::Netmask(pjs::Str *cidr) : m_cidr(cidr) {
       (i <= 2 && *ptr != '.') ||
       (i == 3 && *ptr != '/' && *ptr != '\0')
     ) {
-      printf("%d: %d\n", i, n);
       throw std::runtime_error("invalid CIDR notation");
     }
     ip[i] = n;
