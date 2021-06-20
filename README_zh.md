@@ -28,14 +28,14 @@ Pipy 采用了模块化、链式的处理架构，用顺序执行的模块来对
 这次迭代我们引入了web编辑器。启动pipy时使用--gui-port=6060来开启该功能，如：
 
 ~~~~
-pipy test --gui-port=6060
+$pipy test --gui-port=6060
 ~~~~
 
-启动pipy后，用浏览器访问 http://localhost:6060/ 就可以看到pipy控制台。控制台采用类似vscode的布局和操作体验。具体的使用可以参考[docs/pipy-console_zh.md]。
+启动pipy后，用浏览器访问 http://localhost:6060/ 就可以看到pipy控制台。控制台采用类似vscode的布局和操作体验。具体的使用可以参考[pipy console基本使用文档](docs/pipy-console-intro_zh.md)。
 
 pipy console的设计目的包括如下两个：
 * 流量编辑人员可以快速的编辑pipy js(PJS)脚本，进行调试；同时pipy console以图形化方式展示流量处理逻辑，可以帮助使用者在复杂逻辑情况下快速理解处理逻辑
-* 在云端的开发测试环境中，用户可以不用登陆服务器就完成PJS脚本的调试，如加入打印语句等。对比ssh到服务器，或者attach到k8s容器内，pipy web console更加易于使用
+* 在云端的开发测试环境中，用户可以不用登陆服务器就完成PJS脚本的调试，如加入打印语句等。对比ssh到服务器，或者attach到k8s容器内，pipy console更加易于使用
 
 需要注意的是：pipy console不适合生产环境，不要在不信任的环境里开启pipy console功能，会有安全问题。
 
@@ -52,7 +52,6 @@ pipy console的设计目的包括如下两个：
 
 ```command
 $ ./build.sh
-...
 ```
 
 Pipy 编译生成的单一可执行文件会输出到 `bin/pipy` 目录，可以运行 `bin/pipy -h` 获取更多信息。
@@ -64,7 +63,6 @@ Pipy 编译生成的单一可执行文件会输出到 `bin/pipy` 目录，可以
 ```command
 $ cd pipy
 $ sudo docker build --rm -t pipy .
-...
 ```
 
 > 注：可以使用 `--squash` 的参数来构建更小的镜像。参考文档：[Docker Documentation](https://docs.docker.com/engine/reference/commandline/image_build/)
@@ -79,21 +77,18 @@ Github的Release页面提供了多种平台的可执行文件，下载对应的�
 
 ```command
 $ yum -y install http://repo.flomesh.cn/pipy/pipy-latest.el7_pl.x86_64.rpm
-...
 ```
 
 ### 命令行参数
 
 ```command
 $ pipy --help
-...
 ```
 
 ### 模块列表及参数
 
 ```command
 $ pipy --list-modules
-...
 $ pipy --help-modules
 ```
 
@@ -103,13 +98,11 @@ $ pipy --help-modules
 
 ```command
 $ pipy test/001-echo/pipy.js
-...
 ```
 
 或者使用pipy console:
 ```command
 $ pipy test/ --gui-port=6060
-...
 ```
 然后使用浏览器访问 http://localhost:6060/ 就可以了。
 
@@ -131,12 +124,10 @@ Pipy 的 Docker 镜像识别如下的环境变量：
 
 ```command
 $ docker run -it --rm -e PIPY_CONFIG_FILE=/etc/pipy/test/001-echo/pipy.js flomesh/pipy-pjs:latest
-...
 ```
 
 ```command
 docker run -it --rm -e PIPY_CONFIG_FILE=/etc/pipy/test/011-serve-static/pipy.js -e PIPY_SPAWN=1 -p 8000:6000 flomesh/pipy-pjs:latest
-...
 ```
 
 ## 在 Kubernetes 上运行 Pipy
@@ -151,15 +142,33 @@ $ kubectl apply -f artifact/pipy-operator.yaml
 $ kubectl apply -f config/samples/standalone/001-echo.yaml
 $ kubectl apply -f config/samples/ingress/001-routing.yaml
 $ kubectl apply -f config/samples/sidecar/007-deployment-pipy.yaml
-...
 ```
 
 ## 文档
 
 文档在保存在 [`docs`](docs) 目录：
 
-* [概述](docs/overview.md)
-* [配置](docs/configuration.md)
+* [概述](docs/overview_zh.md)
+* [基础教程](docs/tutor_zh.md)
+    * [000-启动与web控制台的使用](docs/pipy-console-intro_zh.md)
+    * [001-连通性测试](docs/tutor-001-echo_zh.md)
+    * [002-基本输出](docs/tutor-002-hello_zh.md)
+    * [003-输出动态内容](docs/tutor-003-hello-ip_zh.md)
+    * [004-HTTP反向代理](docs/tutor-004-http-proxy_zh.md)
+    * [005-负载均衡](docs/tutor-005-load-balancing_zh.md)
+    * [006-指标统计与输出](docs/tutor-006-metrics_zh.md)
+    * [007-日志与数据采集](docs/tutor-007-logging_zh.md)
+    * [008-限流限速](docs/tutor-008-throttle_zh.md)
+    * [009-TLS](docs/tutor-009-tls_zh.md)
+    * [010-JWT](docs/tutor-010-jwt_zh.md)
+    * [011]
+    * [012-xml转换为json](docs/tutor-012-xml2json_zh.md)
+    * [013-hessian转换为json](docs/tutor-013-hessian2json_zh.md)
+    * [014-执行命令](docs/tutor-014-exec_zh.md)
+    * [015-静态web服务器](docs/tutor-015-http-static-server_zh.md)
+    * [016-sock4代理](docs/tutor-016-socks4-proxy_zh.md)
+* [使用场景示例](docs/scenarios_zh.md)
+* [配置](docs/configuration_zh.md)
 * [版权](COPYRIGHT)
 * [授权](LICENCE)
 
