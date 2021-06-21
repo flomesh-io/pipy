@@ -35,6 +35,54 @@ namespace pipy {
 namespace crypto {
 
 //
+// AliasType
+//
+
+enum class AliasType {
+  sm2,
+};
+
+//
+// PublicKey
+//
+
+class PublicKey : public pjs::ObjectTemplate<PublicKey> {
+public:
+  auto pkey() const -> EVP_PKEY* { return m_pkey; }
+
+private:
+  PublicKey(Data *data, pjs::Object *options);
+  PublicKey(pjs::Str *data, pjs::Object *options);
+  ~PublicKey();
+
+  EVP_PKEY* m_pkey = nullptr;
+
+  static auto read_pem(const void *data, size_t size) -> EVP_PKEY*;
+
+  friend class pjs::ObjectTemplate<PublicKey>;
+};
+
+//
+// PrivateKey
+//
+
+class PrivateKey : public pjs::ObjectTemplate<PrivateKey> {
+public:
+  auto pkey() const -> EVP_PKEY* { return m_pkey; }
+
+private:
+  PrivateKey(Data *data, pjs::Object *options);
+  PrivateKey(pjs::Str *data, pjs::Object *options);
+  ~PrivateKey();
+
+  EVP_PKEY* m_pkey = nullptr;
+
+  static auto read_pem(const void *data, size_t size) -> EVP_PKEY*;
+
+  friend class pjs::ObjectTemplate<PrivateKey>;
+};
+
+//
 // Cipher
 //
 
@@ -49,6 +97,8 @@ public:
     sm4_ctr,
   };
 
+  static auto cipher(Algorithm algorithm) -> const EVP_CIPHER*;
+
   auto update(Data *data) -> Data*;
   auto update(pjs::Str *str) -> Data*;
   auto final() -> Data*;
@@ -57,7 +107,7 @@ private:
   Cipher(Algorithm algorithm, pjs::Object *options);
   ~Cipher();
 
-  EVP_CIPHER_CTX* m_cctx = nullptr;
+  EVP_CIPHER_CTX* m_ctx = nullptr;
 
   friend class pjs::ObjectTemplate<Cipher>;
 };
@@ -76,7 +126,7 @@ private:
   Decipher(Cipher::Algorithm algorithm, pjs::Object *options);
   ~Decipher();
 
-  EVP_CIPHER_CTX* m_cctx = nullptr;
+  EVP_CIPHER_CTX* m_ctx = nullptr;
 
   friend class pjs::ObjectTemplate<Decipher>;
 };
@@ -150,6 +200,27 @@ private:
 };
 
 //
+// Sign
+//
+
+class Sign : public pjs::ObjectTemplate<Sign> {
+public:
+  void update(Data *data);
+  void update(pjs::Str *str, Data::Encoding enc);
+  auto sign(PrivateKey *key, Object *options = nullptr) -> Data*;
+  auto sign(PrivateKey *key, Data::Encoding enc, Object *options = nullptr) -> pjs::Str*;
+
+private:
+  Sign(Hash::Algorithm algorithm);
+  ~Sign();
+
+  const EVP_MD* m_md = nullptr;
+  EVP_MD_CTX* m_ctx = nullptr;
+
+  friend class pjs::ObjectTemplate<Sign>;
+};
+
+//
 // Verify
 //
 
@@ -157,8 +228,8 @@ class Verify : public pjs::ObjectTemplate<Verify> {
 public:
   void update(Data *data);
   void update(pjs::Str *str, Data::Encoding enc);
-  bool verify(pjs::Str *key, Data *signature);
-  bool verify(pjs::Str *key, pjs::Str *signature, Data::Encoding enc);
+  bool verify(PublicKey *key, Data *signature, Object *options = nullptr);
+  bool verify(PublicKey *key, pjs::Str *signature, Data::Encoding enc, Object *options = nullptr);
 
 private:
   Verify(Hash::Algorithm algorithm);

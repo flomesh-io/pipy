@@ -48,25 +48,221 @@ static void throw_error() {
 }
 
 //
+// Options
+//
+
+enum class Options {
+  alias_type,
+  id,
+  key,
+  iv,
+};
+
+static void set_pkey_options(EVP_PKEY *pkey, pjs::Object *options) {
+  if (options) {
+    pjs::Value v;
+    options->get(pjs::EnumDef<Options>::name(Options::alias_type), v);
+    if (!v.is_undefined()) {
+      if (!v.is_string()) throw std::runtime_error("options.aliasType requires a string");
+      auto alias_type = pjs::EnumDef<AliasType>::value(v.s());
+      if (int(alias_type) < 0) throw std::runtime_error("invalid options.aliasType");
+      switch (alias_type) {
+        case AliasType::sm2:
+          if (EVP_PKEY_set_alias_type(pkey, EVP_PKEY_SM2) <= 0) throw_error();
+          break;
+      }
+    }
+  }
+}
+
+static void set_pkey_ctx_options(EVP_PKEY_CTX *ctx, pjs::Object *options) {
+  if (options) {
+    pjs::Value v;
+    options->get(pjs::EnumDef<Options>::name(Options::id), v);
+    if (!v.is_undefined()) {
+      if (!v.is<Data>()) throw std::runtime_error("options.id requires a Data object");
+      auto buf = v.as<Data>()->to_bytes();
+      if (EVP_PKEY_CTX_set1_id(ctx, &buf[0], buf.size()) <= 0) throw_error();
+    }
+  }
+}
+
+static auto get_cipher_key(const EVP_CIPHER *cipher, pjs::Object *options, uint8_t *key) -> size_t {
+  pjs::Value val;
+  options->get(pjs::EnumDef<Options>::name(Options::key), val);
+  if (val.is<Data>()) {
+    auto *data = val.as<Data>();
+    if (data->size() > EVP_MAX_KEY_LENGTH) throw std::runtime_error("options.key is too long");
+    data->to_bytes(key);
+    return data->size();
+  } else if (val.is_string()) {
+    auto *str = val.s();
+    if (str->length() > EVP_MAX_KEY_LENGTH) throw std::runtime_error("options.key is too long");
+    std::memcpy(key, str->c_str(), str->length());
+    return str->length();
+  } else {
+    throw std::runtime_error("options.key requires a Data object or a string");
+  }
+}
+
+static auto get_cipher_iv(const EVP_CIPHER *cipher, pjs::Object *options, uint8_t *iv) -> size_t {
+  pjs::Value val;
+  auto iv_size = EVP_CIPHER_iv_length(cipher);
+  options->get(pjs::EnumDef<Options>::name(Options::iv), val);
+  if (val.is<Data>()) {
+    auto *data = val.as<Data>();
+    if (data->size() != iv_size) {
+      std::string msg("options.iv length should be ");
+      throw std::runtime_error(msg + std::to_string(iv_size));
+    }
+    data->to_bytes(iv);
+    return iv_size;
+  } else if (val.is_string()) {
+    auto *str = val.s();
+    if (str->length() != iv_size) {
+      std::string msg("options.iv length should be ");
+      throw std::runtime_error(msg + std::to_string(iv_size));
+    }
+    std::memcpy(iv, str->c_str(), str->length());
+    return iv_size;
+  } else if (iv_size > 0) {
+    throw std::runtime_error("options.iv requires a Data object or a string");
+  } else {
+    return 0;
+  }
+}
+
+//
+// PublicKey
+//
+
+PublicKey::PublicKey(Data *data, pjs::Object *options) {
+  auto buf = data->to_bytes();
+  m_pkey = read_pem(&buf[0], buf.size());
+  set_pkey_options(m_pkey, options);
+}
+
+PublicKey::PublicKey(pjs::Str *data, pjs::Object *options) {
+  m_pkey = read_pem(data->c_str(), data->length());
+  set_pkey_options(m_pkey, options);
+}
+
+PublicKey::~PublicKey() {
+  if (m_pkey) EVP_PKEY_free(m_pkey);
+}
+
+auto PublicKey::read_pem(const void *data, size_t size) -> EVP_PKEY* {
+  auto bio = BIO_new_mem_buf(data, size);
+  auto pkey = PEM_read_bio_PUBKEY(bio, nullptr, nullptr, nullptr);
+  BIO_free(bio);
+  if (!pkey) throw_error();
+  return pkey;
+}
+
+//
+// PrivateKey
+//
+
+PrivateKey::PrivateKey(Data *data, pjs::Object *options) {
+  auto buf = data->to_bytes();
+  m_pkey = read_pem(&buf[0], buf.size());
+  set_pkey_options(m_pkey, options);
+}
+
+PrivateKey::PrivateKey(pjs::Str *data, pjs::Object *options) {
+  m_pkey = read_pem(data->c_str(), data->length());
+  set_pkey_options(m_pkey, options);
+}
+
+PrivateKey::~PrivateKey() {
+  if (m_pkey) EVP_PKEY_free(m_pkey);
+}
+
+auto PrivateKey::read_pem(const void *data, size_t size) -> EVP_PKEY* {
+  auto bio = BIO_new_mem_buf(data, size);
+  auto pkey = PEM_read_bio_PrivateKey(bio, nullptr, nullptr, nullptr);
+  BIO_free(bio);
+  if (!pkey) throw_error();
+  return pkey;
+}
+
+//
 // Cipher
 //
 
+auto Cipher::cipher(Algorithm algorithm) -> const EVP_CIPHER* {
+  switch (algorithm) {
+    case Algorithm::sm4_cbc    : return EVP_sm4_cbc();
+    case Algorithm::sm4_ecb    : return EVP_sm4_ecb();
+    case Algorithm::sm4_cfb    : return EVP_sm4_cfb();
+    case Algorithm::sm4_cfb128 : return EVP_sm4_cfb128();
+    case Algorithm::sm4_ofb    : return EVP_sm4_ofb();
+    case Algorithm::sm4_ctr    : return EVP_sm4_ctr();
+  }
+  return nullptr;
+}
+
 Cipher::Cipher(Algorithm algorithm, pjs::Object *options) {
+  uint8_t key[EVP_MAX_KEY_LENGTH];
+  uint8_t iv[EVP_MAX_IV_LENGTH];
+
+  auto *cipher = Cipher::cipher(algorithm);
+
+  get_cipher_key(cipher, options, key);
+  get_cipher_iv(cipher, options, iv);
+
+  m_ctx = EVP_CIPHER_CTX_new();
+  if (!m_ctx) throw_error();
+
+  if (!EVP_EncryptInit_ex(m_ctx, cipher, nullptr, key, iv)) throw_error();
 }
 
 Cipher::~Cipher() {
+  if (m_ctx) EVP_CIPHER_CTX_free(m_ctx);
 }
 
 auto Cipher::update(Data *data) -> Data* {
-  return nullptr;
+  auto out = Data::make();
+  auto block_size = EVP_CIPHER_CTX_block_size(m_ctx);
+  uint8_t buf[DATA_CHUNK_SIZE + block_size];
+  for (const auto &c : data->chunks()) {
+    auto ptr = std::get<0>(c);
+    auto len = std::get<1>(c);
+    int n = 0;
+    if (!EVP_EncryptUpdate(m_ctx, buf, &n, (const unsigned char *)ptr, len)) {
+      out->release();
+      throw_error();
+    }
+    out->push(buf, n);
+  }
+  return out;
 }
 
 auto Cipher::update(pjs::Str *str) -> Data* {
-  return nullptr;
+  auto out = Data::make();
+  auto block_size = EVP_CIPHER_CTX_block_size(m_ctx);
+  uint8_t buf[DATA_CHUNK_SIZE + block_size];
+  for (size_t i = 0, l = str->length(); i < l; i += DATA_CHUNK_SIZE) {
+    int n = 0;
+    if (!EVP_EncryptUpdate(
+      m_ctx, buf, &n,
+      (const unsigned char *)str->c_str() + i,
+      std::min(l - i, DATA_CHUNK_SIZE)
+    )) {
+      out->release();
+      throw_error();
+    }
+    out->push(buf, n);
+  }
+  return out;
 }
 
 auto Cipher::final() -> Data* {
-  return nullptr;
+  auto block_size = EVP_CIPHER_CTX_block_size(m_ctx);
+  uint8_t buf[block_size];
+  int len = 0;
+  if (!EVP_EncryptFinal(m_ctx, buf, &len)) throw_error();
+  return Data::make((const uint8_t *)buf, len);
 }
 
 //
@@ -74,21 +270,66 @@ auto Cipher::final() -> Data* {
 //
 
 Decipher::Decipher(Cipher::Algorithm algorithm, pjs::Object *options) {
+  uint8_t key[EVP_MAX_KEY_LENGTH];
+  uint8_t iv[EVP_MAX_IV_LENGTH];
+
+  auto *cipher = Cipher::cipher(algorithm);
+
+  get_cipher_key(cipher, options, key);
+  get_cipher_iv(cipher, options, iv);
+
+  m_ctx = EVP_CIPHER_CTX_new();
+  if (!m_ctx) throw_error();
+
+  if (!EVP_DecryptInit_ex(m_ctx, cipher, nullptr, key, iv)) throw_error();
 }
 
 Decipher::~Decipher() {
+  if (m_ctx) EVP_CIPHER_CTX_free(m_ctx);
 }
 
 auto Decipher::update(Data *data) -> Data* {
-  return nullptr;
+  auto out = Data::make();
+  auto block_size = EVP_CIPHER_CTX_block_size(m_ctx);
+  uint8_t buf[DATA_CHUNK_SIZE + block_size];
+  for (const auto &c : data->chunks()) {
+    auto ptr = std::get<0>(c);
+    auto len = std::get<1>(c);
+    int n = 0;
+    if (!EVP_DecryptUpdate(m_ctx, buf, &n, (const unsigned char *)ptr, len)) {
+      out->release();
+      throw_error();
+    }
+    out->push(buf, n);
+  }
+  return out;
 }
 
 auto Decipher::update(pjs::Str *str) -> Data* {
-  return nullptr;
+  auto out = Data::make();
+  auto block_size = EVP_CIPHER_CTX_block_size(m_ctx);
+  uint8_t buf[DATA_CHUNK_SIZE + block_size];
+  for (size_t i = 0, l = str->length(); i < l; i += DATA_CHUNK_SIZE) {
+    int n = 0;
+    if (!EVP_DecryptUpdate(
+      m_ctx, buf, &n,
+      (const unsigned char *)str->c_str() + i,
+      std::min(l - i, DATA_CHUNK_SIZE)
+    )) {
+      out->release();
+      throw_error();
+    }
+    out->push(buf, n);
+  }
+  return out;
 }
 
-auto final() -> Data* {
-  return nullptr;
+auto Decipher::final() -> Data* {
+  auto block_size = EVP_CIPHER_CTX_block_size(m_ctx);
+  uint8_t buf[block_size];
+  int len = 0;
+  if (!EVP_DecryptFinal(m_ctx, buf, &len)) throw_error();
+  return Data::make((const uint8_t *)buf, len);
 }
 
 //
@@ -192,10 +433,8 @@ auto Hash::digest(Data::Encoding enc) -> pjs::Str* {
 
 Hmac::Hmac(Hash::Algorithm algorithm, Data *key) {
   m_ctx = HMAC_CTX_new();
-  auto len = key->size();
-  uint8_t buf[len];
-  key->to_bytes(buf);
-  HMAC_Init_ex(m_ctx, buf, len, Hash::digest(algorithm), nullptr);
+  auto buf = key->to_bytes();
+  HMAC_Init_ex(m_ctx, &buf[0], buf.size(), Hash::digest(algorithm), nullptr);
 }
 
 Hmac::Hmac(Hash::Algorithm algorithm, pjs::Str *key) {
@@ -262,13 +501,77 @@ auto Hmac::digest(Data::Encoding enc) -> pjs::Str* {
 }
 
 //
+// Sign
+//
+
+Sign::Sign(Hash::Algorithm algorithm) {
+  m_md = Hash::digest(algorithm);
+  m_ctx = EVP_MD_CTX_new();
+  if (!m_ctx) throw_error();
+  if (!EVP_DigestInit_ex(m_ctx, m_md, nullptr)) throw_error();
+}
+
+Sign::~Sign() {
+  EVP_MD_CTX_free(m_ctx);
+}
+
+void Sign::update(Data *data) {
+  for (const auto &c : data->chunks()) {
+    auto ptr = std::get<0>(c);
+    auto len = std::get<1>(c);
+    if (!EVP_DigestUpdate(m_ctx, (unsigned char *)ptr, len)) throw_error();
+  }
+}
+
+void Sign::update(pjs::Str *str, Data::Encoding enc) {
+  switch (enc) {
+    case Data::Encoding::UTF8:
+      if (!EVP_DigestUpdate(m_ctx, (unsigned char *)str->c_str(), str->length())) throw_error();
+      break;
+    default: {
+      Data data(str->str(), enc);
+      update(&data);
+      break;
+    }
+  }
+}
+
+auto Sign::sign(PrivateKey *key, Object *options) -> Data* {
+  unsigned char hash[EVP_MAX_MD_SIZE];
+  unsigned int size;
+  if (!EVP_DigestFinal_ex(m_ctx, hash, &size)) throw_error();
+
+  auto ctx = EVP_PKEY_CTX_new(key->pkey(), nullptr);
+  if (!ctx) throw_error();
+  if (EVP_PKEY_sign_init(ctx) <= 0) throw_error();
+  if (EVP_PKEY_CTX_set_signature_md(ctx, m_md) <= 0) throw_error();
+
+  EVP_PKEY_CTX_set_rsa_padding(ctx, RSA_PKCS1_PADDING);
+  set_pkey_ctx_options(ctx, options);
+
+  size_t sig_len;
+  if (EVP_PKEY_sign(ctx, nullptr, &sig_len, hash, size) <= 0) throw_error();
+  unsigned char sig[sig_len];
+  if (EVP_PKEY_sign(ctx, sig, &sig_len, hash, size) <= 0) throw_error();
+
+  EVP_PKEY_CTX_free(ctx);
+  return Data::make(&sig[0], sig_len);
+}
+
+auto Sign::sign(PrivateKey *key, Data::Encoding enc, Object *options) -> pjs::Str* {
+  pjs::Ref<Data> data = sign(key, options);
+  return pjs::Str::make(data->to_string(enc));
+}
+
+//
 // Verify
 //
 
 Verify::Verify(Hash::Algorithm algorithm) {
   m_md = Hash::digest(algorithm);
   m_ctx = EVP_MD_CTX_new();
-  EVP_DigestInit_ex(m_ctx, m_md, nullptr);
+  if (!m_ctx) throw_error();
+  if (!EVP_DigestInit_ex(m_ctx, m_md, nullptr)) throw_error();
 }
 
 Verify::~Verify() {
@@ -279,14 +582,14 @@ void Verify::update(Data *data) {
   for (const auto &c : data->chunks()) {
     auto ptr = std::get<0>(c);
     auto len = std::get<1>(c);
-    EVP_DigestUpdate(m_ctx, (unsigned char *)ptr, len);
+    if (!EVP_DigestUpdate(m_ctx, (unsigned char *)ptr, len)) throw_error();
   }
 }
 
 void Verify::update(pjs::Str *str, Data::Encoding enc) {
   switch (enc) {
     case Data::Encoding::UTF8:
-      EVP_DigestUpdate(m_ctx, (unsigned char *)str->c_str(), str->length());
+      if (!EVP_DigestUpdate(m_ctx, (unsigned char *)str->c_str(), str->length())) throw_error();
       break;
     default: {
       Data data(str->str(), enc);
@@ -296,39 +599,30 @@ void Verify::update(pjs::Str *str, Data::Encoding enc) {
   }
 }
 
-bool Verify::verify(pjs::Str *key, Data *signature) {
+bool Verify::verify(PublicKey *key, Data *signature, Object *options) {
   unsigned char hash[EVP_MAX_MD_SIZE];
   unsigned int size;
-  EVP_DigestFinal_ex(m_ctx, hash, &size);
+  if (!EVP_DigestFinal_ex(m_ctx, hash, &size)) throw_error();
 
-  auto sig_len = signature->size();
-  uint8_t sig[sig_len];
-  signature->to_bytes(sig);
+  auto ctx = EVP_PKEY_CTX_new(key->pkey(), nullptr);
+  if (!ctx) throw_error();
+  if (EVP_PKEY_verify_init(ctx) <= 0) throw_error();
+  if (EVP_PKEY_CTX_set_signature_md(ctx, m_md) < 0) throw_error();
 
-  auto bio = BIO_new_mem_buf(key->c_str(), key->length());
-  auto pkey = PEM_read_bio_PUBKEY(bio, nullptr, nullptr, nullptr);
-  if (!pkey) {
-    BIO_reset(bio);
-    pkey = PEM_read_bio_PrivateKey(bio, nullptr, nullptr, nullptr);
-  }
-  BIO_free(bio);
-  if (!pkey) throw_error();
-
-  auto ctx = EVP_PKEY_CTX_new(pkey, nullptr);
-  EVP_PKEY_verify_init(ctx);
   EVP_PKEY_CTX_set_rsa_padding(ctx, RSA_PKCS1_PADDING);
-  EVP_PKEY_CTX_set_signature_md(ctx, m_md);
-  auto result = EVP_PKEY_verify(ctx, sig, sig_len, hash, size);
+  set_pkey_ctx_options(ctx, options);
+
+  auto sig = signature->to_bytes();
+  auto result = EVP_PKEY_verify(ctx, &sig[0], sig.size(), hash, size);
   EVP_PKEY_CTX_free(ctx);
-  EVP_PKEY_free(pkey);
 
   if (result < 0) throw_error();
   return result == 1;
 }
 
-bool Verify::verify(pjs::Str *key, pjs::Str *signature, Data::Encoding enc) {
+bool Verify::verify(PublicKey *key, pjs::Str *signature, Data::Encoding enc, Object *options) {
   Data sig(signature->str(), enc);
-  return verify(key, &sig);
+  return verify(key, &sig, options);
 }
 
 //
@@ -454,10 +748,8 @@ void JWT::sign(pjs::Str *key) {
 }
 
 bool JWT::verify(Data *key) {
-  auto len = key->size();
-  uint8_t buf[len];
-  key->to_bytes(buf);
-  return verify((char *)buf, len);
+  auto buf = key->to_bytes();
+  return verify((const char *)&buf[0], buf.size());
 }
 
 bool JWT::verify(pjs::Str *key) {
@@ -605,6 +897,83 @@ namespace pjs {
 using namespace pipy::crypto;
 
 //
+// Options
+//
+
+template<> void EnumDef<Options>::init() {
+  define(Options::alias_type, "aliasType");
+  define(Options::id, "id");
+  define(Options::key, "key");
+  define(Options::iv, "iv");
+}
+
+//
+// AliasType
+//
+
+template<> void EnumDef<AliasType>::init() {
+  define(AliasType::sm2, "sm2");
+}
+
+//
+// PublicKey
+//
+
+template<> void ClassDef<PublicKey>::init() {
+  ctor([](Context &ctx) -> Object* {
+    Str *data_str;
+    pipy::Data *data;
+    Object *options = nullptr;
+    try {
+      if (ctx.try_arguments(1, &data_str, &options)) {
+        return PublicKey::make(data_str, options);
+      } else if (ctx.arguments(1, &data, &options)) {
+        return PublicKey::make(data, options);
+      } else {
+        return nullptr;
+      }
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+      return nullptr;
+    }
+  });
+}
+
+template<> void ClassDef<Constructor<PublicKey>>::init() {
+  super<Function>();
+  ctor();
+}
+
+//
+// PrivateKey
+//
+
+template<> void ClassDef<PrivateKey>::init() {
+  ctor([](Context &ctx) -> Object* {
+    Str *data_str;
+    pipy::Data *data;
+    Object *options = nullptr;
+    try {
+      if (ctx.try_arguments(1, &data_str, &options)) {
+        return PrivateKey::make(data_str, options);
+      } else if (ctx.arguments(1, &data, &options)) {
+        return PrivateKey::make(data, options);
+      } else {
+        return nullptr;
+      }
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+      return nullptr;
+    }
+  });
+}
+
+template<> void ClassDef<Constructor<PrivateKey>>::init() {
+  super<Function>();
+  ctor();
+}
+
+//
 // Cipher
 //
 
@@ -615,6 +984,114 @@ template<> void EnumDef<Cipher::Algorithm>::init() {
   define(Cipher::Algorithm::sm4_cfb128, "sm4-cfb128");
   define(Cipher::Algorithm::sm4_ofb, "sm4-ofb");
   define(Cipher::Algorithm::sm4_ctr, "sm4-ctr");
+}
+
+template<> void ClassDef<Cipher>::init() {
+  ctor([](Context &ctx) -> Object* {
+    Str *algorithm_name;
+    Object *options;
+    if (!ctx.arguments(2, &algorithm_name, &options)) return nullptr;
+    if (!options) {
+      ctx.error("options cannot be null");
+      return nullptr;
+    }
+    auto algorithm = EnumDef<Cipher::Algorithm>::value(algorithm_name);
+    if (int(algorithm) < 0) {
+      ctx.error("unknown cipher");
+      return nullptr;
+    }
+    try {
+      return Cipher::make(algorithm, options);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+      return nullptr;
+    }
+  });
+
+  method("update", [](Context &ctx, Object *obj, Value &ret) {
+    Str *str;
+    pipy::Data *data;
+    try {
+      if (ctx.try_arguments(1, &str)) {
+        ret.set(obj->as<Cipher>()->update(str));
+      } else if (ctx.try_arguments(1, &data)) {
+        ret.set(obj->as<Cipher>()->update(data));
+      } else {
+        ctx.error_argument_type(0, "a Data object or a string");
+      }
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  method("final", [](Context &ctx, Object *obj, Value &ret) {
+    try {
+      ret.set(obj->as<Cipher>()->final());
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+}
+
+template<> void ClassDef<Constructor<Cipher>>::init() {
+  super<Function>();
+  ctor();
+}
+
+//
+// Decipher
+//
+
+template<> void ClassDef<Decipher>::init() {
+  ctor([](Context &ctx) -> Object* {
+    Str *algorithm_name;
+    Object *options;
+    if (!ctx.arguments(2, &algorithm_name, &options)) return nullptr;
+    if (!options) {
+      ctx.error("options cannot be null");
+      return nullptr;
+    }
+    auto algorithm = EnumDef<Cipher::Algorithm>::value(algorithm_name);
+    if (int(algorithm) < 0) {
+      ctx.error("unknown cipher");
+      return nullptr;
+    }
+    try {
+      return Decipher::make(algorithm, options);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+      return nullptr;
+    }
+  });
+
+  method("update", [](Context &ctx, Object *obj, Value &ret) {
+    Str *str;
+    pipy::Data *data;
+    try {
+      if (ctx.try_arguments(1, &str)) {
+        ret.set(obj->as<Decipher>()->update(str));
+      } else if (ctx.try_arguments(1, &data)) {
+        ret.set(obj->as<Decipher>()->update(data));
+      } else {
+        ctx.error_argument_type(0, "a Data object or a string");
+      }
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  method("final", [](Context &ctx, Object *obj, Value &ret) {
+    try {
+      ret.set(obj->as<Decipher>()->final());
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+}
+
+template<> void ClassDef<Constructor<Decipher>>::init() {
+  super<Function>();
+  ctor();
 }
 
 //
@@ -764,6 +1241,88 @@ template<> void ClassDef<Constructor<Hmac>>::init() {
 }
 
 //
+// Sign
+//
+
+template<> void ClassDef<Sign>::init() {
+  ctor([](Context &ctx) -> Object* {
+    Str *algorithm_name;
+    if (!ctx.arguments(1, &algorithm_name)) return nullptr;
+    auto algorithm = EnumDef<Hash::Algorithm>::value(algorithm_name);
+    if (int(algorithm) < 0) {
+      ctx.error("unknown message digest");
+      return nullptr;
+    }
+    try {
+      return Sign::make(algorithm);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+      return nullptr;
+    }
+  });
+
+  method("update", [](Context &ctx, Object *obj, Value &ret) {
+    pipy::Data *data;
+    Str *str, *encoding_name = nullptr;
+    try {
+      if (ctx.try_arguments(1, &data)) {
+        obj->as<Sign>()->update(data);
+      } else if (ctx.try_arguments(1, &str, &encoding_name)) {
+        auto encoding = EnumDef<pipy::Data::Encoding>::value(encoding_name, pipy::Data::Encoding::UTF8);
+        if (int(encoding) < 0) {
+          ctx.error("unknown encoding");
+        } else {
+          obj->as<Sign>()->update(str, encoding);
+        }
+      } else {
+        ctx.error_argument_type(0, "a Data object or a string");
+      }
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  method("sign", [](Context &ctx, Object *obj, Value &ret) {
+    PrivateKey *key;
+    Str *encoding_name = nullptr;
+    Object *options = nullptr;
+    try {
+      if (ctx.try_arguments(1, &key, &options) ||
+          ctx.try_arguments(1, &key, &encoding_name, &options)
+      ) {
+        if (!key) {
+          ctx.error_argument_type(0, "a PrivateKey object");
+          return;
+        }
+        auto encoding = EnumDef<pipy::Data::Encoding>::value(encoding_name, pipy::Data::Encoding::UTF8);
+        if (int(encoding) < 0) {
+          ctx.error("unknown encoding");
+          return;
+        }
+        try {
+          if (encoding_name) {
+            ret.set(obj->as<Sign>()->sign(key, encoding, options));
+          } else {
+            ret.set(obj->as<Sign>()->sign(key, options));
+          }
+        } catch(std::runtime_error &err) {
+          ctx.error(err);
+        }
+      } else if (ctx.arguments(1, &key)) {
+        ctx.error_argument_type(1, "a object or a string");
+      }
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+}
+
+template<> void ClassDef<Constructor<Sign>>::init() {
+  super<Function>();
+  ctor();
+}
+
+//
 // Verify
 //
 
@@ -776,49 +1335,67 @@ template<> void ClassDef<Verify>::init() {
       ctx.error("unknown message digest");
       return nullptr;
     }
-    return Verify::make(algorithm);
+    try {
+      return Verify::make(algorithm);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+      return nullptr;
+    }
   });
 
   method("update", [](Context &ctx, Object *obj, Value &ret) {
     pipy::Data *data;
     Str *str, *encoding_name = nullptr;
-    if (ctx.try_arguments(1, &data)) {
-      obj->as<Verify>()->update(data);
-    } else if (ctx.try_arguments(1, &str, &encoding_name)) {
-      auto encoding = EnumDef<pipy::Data::Encoding>::value(encoding_name, pipy::Data::Encoding::UTF8);
-      if (int(encoding) < 0) {
-        ctx.error("unknown encoding");
+    try {
+      if (ctx.try_arguments(1, &data)) {
+        obj->as<Verify>()->update(data);
+      } else if (ctx.try_arguments(1, &str, &encoding_name)) {
+        auto encoding = EnumDef<pipy::Data::Encoding>::value(encoding_name, pipy::Data::Encoding::UTF8);
+        if (int(encoding) < 0) {
+          ctx.error("unknown encoding");
+        } else {
+          obj->as<Verify>()->update(str, encoding);
+        }
       } else {
-        obj->as<Verify>()->update(str, encoding);
+        ctx.error_argument_type(0, "a Data object or a string");
       }
-    } else {
-      ctx.error_argument_type(0, "a Data object or a string");
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
     }
-    ret = Value::undefined;
   });
 
   method("verify", [](Context &ctx, Object *obj, Value &ret) {
-    Str *key, *signature_str = nullptr, *encoding_name = nullptr;
+    PublicKey *key;
+    Str *signature_str = nullptr, *encoding_name = nullptr;
     pipy::Data *signature = nullptr;
-    if (ctx.try_arguments(2, &key, &signature) ||
-        ctx.try_arguments(2, &key, &signature_str, &encoding_name)
-    ) {
-      auto encoding = EnumDef<pipy::Data::Encoding>::value(encoding_name, pipy::Data::Encoding::UTF8);
-      if (int(encoding) < 0) {
-        ctx.error("unknown encoding");
-        return;
-      }
-      try {
-        if (signature) {
-          ret.set(obj->as<Verify>()->verify(key, signature));
-        } else {
-          ret.set(obj->as<Verify>()->verify(key, signature_str, encoding));
+    Object *options = nullptr;
+    try {
+      if (ctx.try_arguments(2, &key, &signature, &options) ||
+          ctx.try_arguments(2, &key, &signature_str, &encoding_name, &options)
+      ) {
+        if (!key) {
+          ctx.error_argument_type(0, "a PublicKey object");
+          return;
         }
-      } catch(std::runtime_error &err) {
-        ctx.error(err);
+        auto encoding = EnumDef<pipy::Data::Encoding>::value(encoding_name, pipy::Data::Encoding::UTF8);
+        if (int(encoding) < 0) {
+          ctx.error("unknown encoding");
+          return;
+        }
+        try {
+          if (signature) {
+            ret.set(obj->as<Verify>()->verify(key, signature, options));
+          } else {
+            ret.set(obj->as<Verify>()->verify(key, signature_str, encoding, options));
+          }
+        } catch(std::runtime_error &err) {
+          ctx.error(err);
+        }
+      } else if (ctx.arguments(1, &key)) {
+        ctx.error_argument_type(1, "a Data object or a string");
       }
-    } else if (ctx.arguments(1, &key)) {
-      ctx.error_argument_type(1, "a Data object or a string");
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
     }
   });
 }
@@ -919,8 +1496,13 @@ template<> void ClassDef<Constructor<JWT>>::init() {
 
 template<> void ClassDef<Crypto>::init() {
   ctor();
+  variable("PublicKey", class_of<Constructor<PublicKey>>());
+  variable("PrivateKey", class_of<Constructor<PrivateKey>>());
+  variable("Cipher", class_of<Constructor<Cipher>>());
+  variable("Decipher", class_of<Constructor<Decipher>>());
   variable("Hash", class_of<Constructor<Hash>>());
   variable("Hmac", class_of<Constructor<Hmac>>());
+  variable("Sign", class_of<Constructor<Sign>>());
   variable("Verify", class_of<Constructor<Verify>>());
   variable("JWT", class_of<Constructor<JWT>>());
   variable("JWK", class_of<Constructor<JWK>>());
