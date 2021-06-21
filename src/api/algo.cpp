@@ -264,15 +264,25 @@ RoundRobinLoadBalancer::RoundRobinLoadBalancer()
 {
 }
 
-RoundRobinLoadBalancer::RoundRobinLoadBalancer(pjs::Object *rules)
+RoundRobinLoadBalancer::RoundRobinLoadBalancer(pjs::Object *targets)
   : RoundRobinLoadBalancer()
 {
-  if (rules) {
-    rules->iterate_all(
-      [this](pjs::Str *k, pjs::Value &v) {
-        set(k, v.to_number());
-      }
-    );
+  if (targets) {
+    if (targets->is_array()) {
+      targets->as<pjs::Array>()->iterate_all(
+        [this](pjs::Value &v, int) {
+          auto *s = v.to_string();
+          set(s, 1);
+          s->release();
+        }
+      );
+    } else {
+      targets->iterate_all(
+        [this](pjs::Str *k, pjs::Value &v) {
+          set(k, v.to_number());
+        }
+      );
+    }
   }
 }
 
@@ -362,15 +372,25 @@ LeastWorkLoadBalancer::LeastWorkLoadBalancer()
 {
 }
 
-LeastWorkLoadBalancer::LeastWorkLoadBalancer(pjs::Object *rules)
+LeastWorkLoadBalancer::LeastWorkLoadBalancer(pjs::Object *targets)
   : LeastWorkLoadBalancer()
 {
-  if (rules) {
-    rules->iterate_all(
-      [this](pjs::Str *k, pjs::Value &v) {
-        set(k, v.to_number());
-      }
-    );
+  if (targets) {
+    if (targets->is_array()) {
+      targets->as<pjs::Array>()->iterate_all(
+        [this](pjs::Value &v, int) {
+          auto *s = v.to_string();
+          set(s, 1);
+          s->release();
+        }
+      );
+    } else {
+      targets->iterate_all(
+        [this](pjs::Str *k, pjs::Value &v) {
+          set(k, v.to_number());
+        }
+      );
+    }
   }
 }
 
@@ -673,9 +693,9 @@ template<> void ClassDef<Constructor<HashingLoadBalancer>>::init() {
 
 template<> void ClassDef<RoundRobinLoadBalancer>::init() {
   ctor([](Context &ctx) -> Object* {
-    Object *rules = nullptr;
-    if (!ctx.arguments(0, &rules)) return nullptr;
-    return RoundRobinLoadBalancer::make(rules);
+    Object *targets = nullptr;
+    if (!ctx.arguments(0, &targets)) return nullptr;
+    return RoundRobinLoadBalancer::make(targets);
   });
 
   method("set", [](Context &ctx, Object *obj, Value &ret) {
@@ -705,9 +725,9 @@ template<> void ClassDef<Constructor<RoundRobinLoadBalancer>>::init() {
 
 template<> void ClassDef<LeastWorkLoadBalancer>::init() {
   ctor([](Context &ctx) -> Object* {
-    Object *rules = nullptr;
-    if (!ctx.arguments(0, &rules)) return nullptr;
-    return LeastWorkLoadBalancer::make(rules);
+    Object *targets = nullptr;
+    if (!ctx.arguments(0, &targets)) return nullptr;
+    return LeastWorkLoadBalancer::make(targets);
   });
 
   method("set", [](Context &ctx, Object *obj, Value &ret) {
