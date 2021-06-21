@@ -26,6 +26,7 @@
 #ifndef UTILS_HPP
 #define UTILS_HPP
 
+#include <functional>
 #include <list>
 #include <map>
 #include <stdexcept>
@@ -46,14 +47,136 @@ auto split(const std::string &str, char sep) -> std::list<std::string>;
 auto lower(const std::string &str) -> std::string;
 auto escape(const std::string &str) -> std::string;
 auto unescape(const std::string &str) -> std::string;
-auto decode_hex(void *out, const char *inp, int len) -> int;
 auto encode_hex(char *out, const void *inp, int len) -> int;
-auto decode_base64(void *out, const char *inp, int len) -> int;
+auto decode_hex(void *out, const char *inp, int len) -> int;
 auto encode_base64(char *out, const void *inp, int len) -> int;
-auto decode_base64url(void *out, const char *inp, int len) -> int;
+auto decode_base64(void *out, const char *inp, int len) -> int;
 auto encode_base64url(char *out, const void *inp, int len) -> int;
+auto decode_base64url(void *out, const char *inp, int len) -> int;
 auto path_join(const std::string &base, const std::string &path) -> std::string;
 auto path_normalize(const std::string &path) -> std::string;
+
+//
+// HexEncoder
+//
+
+class HexEncoder {
+public:
+  HexEncoder(const std::function<void(char)> &output)
+    : m_output(output) {}
+
+  void input(uint8_t b);
+
+private:
+  const std::function<void(char)> m_output;
+};
+
+//
+// HexDecoder
+//
+
+class HexDecoder {
+public:
+  HexDecoder(const std::function<void(int)> &output)
+    : m_output(output) {}
+
+  bool input(char c);
+
+private:
+  const std::function<void(int)> m_output;
+  uint8_t m_byte = 0;
+  int m_shift = 0;
+};
+
+//
+// Base64Encoder
+//
+
+class Base64Encoder {
+public:
+  static size_t max_output_size(size_t input_size) {
+    return input_size * 4 / 3 + 4;
+  }
+
+  Base64Encoder(const std::function<void(char)> &output)
+    : m_output(output) {}
+
+  void input(uint8_t b);
+  void flush();
+
+private:
+  const std::function<void(char)> m_output;
+  uint32_t m_triplet = 0;
+  int m_shift = 0;
+};
+
+//
+// Base64Decoder
+//
+
+class Base64Decoder {
+public:
+  static size_t max_output_size(size_t input_size) {
+    return input_size * 3 / 4 + 3;
+  }
+
+  Base64Decoder(const std::function<void(uint8_t)> &output)
+    : m_output(output) {}
+
+  bool input(char c);
+  bool complete() { return !m_shift; }
+
+private:
+  const std::function<void(uint8_t)> m_output;
+  uint32_t m_triplet = 0;
+  int m_shift = 0;
+  bool m_done = false;
+};
+
+//
+// Base64UrlEncoder
+//
+
+class Base64UrlEncoder {
+public:
+  static size_t max_output_size(size_t input_size) {
+    return input_size * 4 / 3 + 4;
+  }
+
+  Base64UrlEncoder(const std::function<void(char)> &output)
+    : m_output(output) {}
+
+  void input(uint8_t b);
+  void flush();
+
+private:
+  const std::function<void(char)> m_output;
+  uint32_t m_triplet = 0;
+  int m_shift = 0;
+};
+
+//
+// Base64UrlDecoder
+//
+
+class Base64UrlDecoder {
+public:
+  static size_t max_output_size(size_t input_size) {
+    return input_size * 3 / 4 + 3;
+  }
+
+  Base64UrlDecoder(const std::function<void(uint8_t)> &output)
+    : m_output(output) {}
+
+  bool input(char c);
+  bool flush();
+
+private:
+  const std::function<void(uint8_t)> m_output;
+  uint32_t m_triplet = 0;
+  int m_shift = 0;
+  bool m_done = false;
+};
 
 } // namespace utils
 } // namespace pipy

@@ -181,165 +181,95 @@ auto unescape(const std::string &str) -> std::string {
   return str2;
 }
 
+auto encode_hex(char *out, const void *inp, int len) -> int {
+  int n = 0;
+  HexEncoder encoder(
+    [&](char c) {
+      out[n++] = c;
+    }
+  );
+  const auto *buf = (const uint8_t *)inp;
+  for (int i = 0; i < len; i++) {
+    encoder.input(buf[i]);
+  }
+  return n;
+}
+
 auto decode_hex(void *out, const char *inp, int len) -> int {
   if (len % 2) return -1;
-  for (int i = 0; i < len; i += 2) {
-    auto h = inp[i+0];
-    auto l = inp[i+1];
-    if ('0' <= h && h <= '9') h -= '0';
-    else if ('a' <= h && h <= 'f') h -= 'a' - 10;
-    else if ('A' <= h && h <= 'F') h -= 'A' - 10;
-    else return -1;
-    if ('0' <= l && l <= '9') l -= '0';
-    else if ('a' <= l && l <= 'f') l -= 'a' - 10;
-    else if ('A' <= l && l <= 'F') l -= 'A' - 10;
-    else return -1;
-    *((char*)out + (i>>1)) = (h << 4) | l;
-  }
-  return len >> 1;
-}
-
-auto encode_hex(char *out, const void *inp, int len) -> int {
-  return -1;
-}
-
-auto decode_base64(void *out, const char *inp, int len) -> int {
-  auto *buf = (char *)out;
-  if (len % 4 > 0) return -1;
-  uint32_t w = 0, n = 0, c = 0;
+  auto *buf = (uint8_t *)out;
+  int n = 0;
+  HexDecoder decoder(
+    [&](uint8_t b) {
+      buf[n++] = b;
+    }
+  );
   for (int i = 0; i < len; i++) {
-    int ch = inp[i];
-    if (ch == '=') {
-      if (n == 3 && i + 1 == len) {
-        buf[c++] = (w >> 10) & 255;
-        buf[c++] = (w >> 2) & 255;
-        break;
-      } else if (n == 2 && i + 2 == len && inp[i+1] == '=') {
-        buf[c++] = (w >> 4) & 255;
-        break;
-      } else {
-        return -1;
-      }
-    }
-    else if (ch == '+') ch = 62;
-    else if (ch == '/') ch = 63;
-    else if ('0' <= ch && ch <= '9') ch = ch - '0' + 52;
-    else if ('a' <= ch && ch <= 'z') ch = ch - 'a' + 26;
-    else if ('A' <= ch && ch <= 'Z') ch = ch - 'A';
-    else return -1;
-    w = (w << 6) | ch;
-    if (++n == 4) {
-      buf[c++] = (w >> 16) & 255;
-      buf[c++] = (w >> 8) & 255;
-      buf[c++] = (w >> 0) & 255;
-      w = n = 0;
-    }
+    decoder.input(inp[i]);
   }
-  return c;
+  return n;
 }
 
 auto encode_base64(char *out, const void *inp, int len) -> int {
-  static char tab[] = {
-    "ABCDEFGHIJKLMNOP"
-    "QRSTUVWXYZabcdef"
-    "ghijklmnopqrstuv"
-    "wxyz0123456789+/"
-  };
-  uint32_t w = 0, n = 0, c = 0;
-  for (int i = 0; i < len; i++) {
-    w = (w << 8) | ((const uint8_t *)inp)[i];
-    if (++n == 3) {
-      out[c++] = tab[(w >> 18) & 63];
-      out[c++] = tab[(w >> 12) & 63];
-      out[c++] = tab[(w >> 6) & 63];
-      out[c++] = tab[(w >> 0) & 63];
-      w = n = 0;
+  int n = 0;
+  Base64Encoder encoder(
+    [&](char c) {
+      out[n++] = c;
     }
+  );
+  const auto *buf = (const uint8_t *)inp;
+  for (int i = 0; i < len; i++) {
+    encoder.input(buf[i]);
   }
-  switch (n) {
-    case 1:
-      w <<= 16;
-      out[c++] = tab[(w >> 18) & 63];
-      out[c++] = tab[(w >> 12) & 63];
-      out[c++] = '=';
-      out[c++] = '=';
-      break;
-    case 2:
-      w <<= 8;
-      out[c++] = tab[(w >> 18) & 63];
-      out[c++] = tab[(w >> 12) & 63];
-      out[c++] = tab[(w >> 6) & 63];
-      out[c++] = '=';
-      break;
-  }
-  return c;
+  encoder.flush();
+  return n;
 }
 
-auto decode_base64url(void *out, const char *inp, int len) -> int {
-  auto *buf = (char *)out;
-  uint32_t w = 0, n = 0, c = 0;
-  for (int i = 0; i < len; i++) {
-    int ch = inp[i];
-    if (ch == '-') ch = 62;
-    else if (ch == '_') ch = 63;
-    else if ('0' <= ch && ch <= '9') ch = ch - '0' + 52;
-    else if ('a' <= ch && ch <= 'z') ch = ch - 'a' + 26;
-    else if ('A' <= ch && ch <= 'Z') ch = ch - 'A';
-    else return -1;
-    w = (w << 6) | ch;
-    if (++n == 4) {
-      buf[c++] = (w >> 16) & 255;
-      buf[c++] = (w >> 8) & 255;
-      buf[c++] = (w >> 0) & 255;
-      w = n = 0;
+auto decode_base64(void *out, const char *inp, int len) -> int {
+  if (len % 4 > 0) return -1;
+  auto *buf = (uint8_t *)out;
+  int n = 0;
+  Base64Decoder decoder(
+    [&](uint8_t b) {
+      buf[n++] = b;
     }
+  );
+  for (int i = 0; i < len; i++) {
+    int c = inp[i];
+    if (!decoder.input(c)) return -1;
   }
-  switch (len % 4) {
-  case 3:
-    buf[c++] = (w >> 10) & 255;
-    buf[c++] = (w >> 2) & 255;
-    break;
-  case 2:
-    buf[c++] = (w >> 4) & 255;
-    break;
-  case 1:
-    return -1;
-  }
-  return c;
+  return decoder.complete() ? n : -1;
 }
 
 auto encode_base64url(char *out, const void *inp, int len) -> int {
-  static char tab[] = {
-    "ABCDEFGHIJKLMNOP"
-    "QRSTUVWXYZabcdef"
-    "ghijklmnopqrstuv"
-    "wxyz0123456789-_"
-  };
-  uint32_t w = 0, n = 0, c = 0;
+  int n = 0;
+  Base64UrlEncoder encoder(
+    [&](char c) {
+      out[n++] = c;
+    }
+  );
+  const auto *buf = (const uint8_t *)inp;
   for (int i = 0; i < len; i++) {
-    w = (w << 8) | ((const uint8_t *)inp)[i];
-    if (++n == 3) {
-      out[c++] = tab[(w >> 18) & 63];
-      out[c++] = tab[(w >> 12) & 63];
-      out[c++] = tab[(w >> 6) & 63];
-      out[c++] = tab[(w >> 0) & 63];
-      w = n = 0;
+    encoder.input(buf[i]);
+  }
+  encoder.flush();
+  return n;
+}
+
+auto decode_base64url(void *out, const char *inp, int len) -> int {
+  auto *buf = (uint8_t *)out;
+  int n = 0;
+  Base64UrlDecoder decoder(
+    [&](uint8_t b) {
+      buf[n++] = b;
+    }
+  );
+  for (int i = 0; i < len; i++) {
+    if (!decoder.input(inp[i])) {
+      return -1;
     }
   }
-  switch (n) {
-    case 1:
-      w <<= 16;
-      out[c++] = tab[(w >> 18) & 63];
-      out[c++] = tab[(w >> 12) & 63];
-      break;
-    case 2:
-      w <<= 8;
-      out[c++] = tab[(w >> 18) & 63];
-      out[c++] = tab[(w >> 12) & 63];
-      out[c++] = tab[(w >> 6) & 63];
-      break;
-  }
-  return c;
+  return decoder.flush() ? n : -1;
 }
 
 auto path_join(const std::string &base, const std::string &path) -> std::string {
@@ -377,6 +307,209 @@ auto path_normalize(const std::string &path) -> std::string {
     output += path.substr(i, j - i);
   }
   return output;
+}
+
+//
+// HexEncoder
+//
+
+static char s_hex_tab[] = {
+  "0123456789abcdef"
+};
+
+void HexEncoder::input(uint8_t b) {
+  m_output(s_hex_tab[(b >> 4) & 15]);
+  m_output(s_hex_tab[(b >> 0) & 15]);
+}
+
+//
+// HexDecoder
+//
+
+bool HexDecoder::input(char c) {
+  if ('0' <= c && c <= '9') c = c - '0'; else
+  if ('a' <= c && c <= 'f') c = c - 'a' + 10; else
+  if ('A' <= c && c <= 'F') c = c - 'A' + 10; else
+  return false;
+  m_byte = (m_byte << 4) | c;
+  if (++m_shift == 2) {
+    m_output(m_byte);
+    m_byte = 0;
+    m_shift = 0;
+  }
+  return true;
+}
+
+//
+// Base64Encoder
+//
+
+static char s_base64_tab[] = {
+  "ABCDEFGHIJKLMNOP"
+  "QRSTUVWXYZabcdef"
+  "ghijklmnopqrstuv"
+  "wxyz0123456789+/"
+};
+
+void Base64Encoder::input(uint8_t b) {
+  auto triplet = m_triplet = (m_triplet << 8) | b;
+  if (++m_shift == 3) {
+    auto &out = m_output;
+    out(s_base64_tab[(triplet >> 18) & 63]);
+    out(s_base64_tab[(triplet >> 12) & 63]);
+    out(s_base64_tab[(triplet >>  6) & 63]);
+    out(s_base64_tab[(triplet >>  0) & 63]);
+    m_shift = 0;
+    m_triplet = 0;
+  }
+}
+
+void Base64Encoder::flush() {
+  auto triplet = m_triplet;
+  auto &out = m_output;
+  switch (m_shift) {
+    case 1:
+      triplet <<= 16;
+      out(s_base64_tab[(triplet >> 18) & 63]);
+      out(s_base64_tab[(triplet >> 12) & 63]);
+      out('=');
+      out('=');
+      break;
+    case 2:
+      triplet <<= 8;
+      out(s_base64_tab[(triplet >> 18) & 63]);
+      out(s_base64_tab[(triplet >> 12) & 63]);
+      out(s_base64_tab[(triplet >>  6) & 63]);
+      out('=');
+      break;
+  }
+}
+
+//
+// Base64Decoder
+//
+
+bool Base64Decoder::input(char c) {
+  if (m_done) {
+    if (c == '=' && m_shift == 3) {
+      m_shift = 0;
+      return true;
+    } else {
+      return false;
+    }
+  }
+  if (c == '=') {
+    m_done = true;
+    if (m_shift == 3) {
+      m_output((m_triplet >> 10) & 255);
+      m_output((m_triplet >>  2) & 255);
+      m_shift = 0;
+      return true;
+    } else if (m_shift == 2) {
+      m_output((m_triplet >> 4) & 255);
+      m_shift = 3;
+      return true;
+    } else {
+      return false;
+    }
+  }
+  else if (c == '+') c = 62;
+  else if (c == '/') c = 63;
+  else if ('0' <= c && c <= '9') c = c - '0' + 52;
+  else if ('a' <= c && c <= 'z') c = c - 'a' + 26;
+  else if ('A' <= c && c <= 'Z') c = c - 'A';
+  else return false;
+  auto triplet = m_triplet = (m_triplet << 6) | c;
+  if (++m_shift == 4) {
+    auto &out = m_output;
+    out((triplet >> 16) & 255);
+    out((triplet >>  8) & 255);
+    out((triplet >>  0) & 255);
+    m_shift = 0;
+    m_triplet = 0;
+  }
+  return true;
+}
+
+//
+// Base64UrlEncoder
+//
+
+static char s_base64url_tab[] = {
+  "ABCDEFGHIJKLMNOP"
+  "QRSTUVWXYZabcdef"
+  "ghijklmnopqrstuv"
+  "wxyz0123456789-_"
+};
+
+void Base64UrlEncoder::input(uint8_t b) {
+  auto triplet = m_triplet = (m_triplet << 8) | b;
+  if (++m_shift == 3) {
+    auto &out = m_output;
+    out(s_base64url_tab[(triplet >> 18) & 63]);
+    out(s_base64url_tab[(triplet >> 12) & 63]);
+    out(s_base64url_tab[(triplet >>  6) & 63]);
+    out(s_base64url_tab[(triplet >>  0) & 63]);
+    m_shift = 0;
+    m_triplet = 0;
+  }
+}
+
+void Base64UrlEncoder::flush() {
+  auto triplet = m_triplet;
+  auto &out = m_output;
+  switch (m_shift) {
+    case 1:
+      triplet <<= 16;
+      out(s_base64url_tab[(triplet >> 18) & 63]);
+      out(s_base64url_tab[(triplet >> 12) & 63]);
+      break;
+    case 2:
+      triplet <<= 8;
+      out(s_base64url_tab[(triplet >> 18) & 63]);
+      out(s_base64url_tab[(triplet >> 12) & 63]);
+      out(s_base64url_tab[(triplet >>  6) & 63]);
+      break;
+  }
+}
+
+//
+// Base64UrlDecoder
+//
+
+bool Base64UrlDecoder::input(char c) {
+  if (m_done) return false;
+  else if (c == '-') c = 62;
+  else if (c == '_') c = 63;
+  else if ('0' <= c && c <= '9') c = c - '0' + 52;
+  else if ('a' <= c && c <= 'z') c = c - 'a' + 26;
+  else if ('A' <= c && c <= 'Z') c = c - 'A';
+  else return false;
+  auto triplet = m_triplet = (m_triplet << 6) | c;
+  if (++m_shift == 4) {
+    auto &out = m_output;
+    out((triplet >> 16) & 255);
+    out((triplet >>  8) & 255);
+    out((triplet >>  0) & 255);
+    m_shift = 0;
+    m_triplet = 0;
+  }
+  return true;
+}
+
+bool Base64UrlDecoder::flush() {
+  if (m_done) return false;
+  else m_done = true;
+  if (m_shift == 3) {
+    m_output((m_triplet >> 10) & 255);
+    m_output((m_triplet >>  2) & 255);
+    return true;
+  } else if (m_shift == 2) {
+    m_output((m_triplet >> 4) & 255);
+    return true;
+  } else {
+    return false;
+  }
 }
 
 } // namespace utils
