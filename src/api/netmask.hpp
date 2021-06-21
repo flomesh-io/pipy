@@ -45,6 +45,7 @@ public:
   auto first() -> pjs::Str*;
   auto last() -> pjs::Str*;
   bool contains(pjs::Str *addr);
+  auto next() -> pjs::Str*;
 
   virtual auto to_string() const -> std::string override {
     return m_cidr->str();
@@ -62,6 +63,7 @@ private:
   pjs::Ref<pjs::Str> m_last;
 
   int m_bitmask;
+  uint32_t m_next = 1;
   uint32_t m_ip4_base;
   uint32_t m_ip4_mask;
 
