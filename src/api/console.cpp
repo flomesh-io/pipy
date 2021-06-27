@@ -49,7 +49,7 @@ template<> void ClassDef<Console>::init() {
 
     size_t i = 0;
     while (i < s.length()) {
-      auto j = 0;
+      auto j = i;
       while (j < s.length() && s[j] != '\n') j++;
       Log::info("[pjs] %s", s.substr(i, j - i).c_str());
       i = j + 1;
