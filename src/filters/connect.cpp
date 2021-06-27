@@ -149,7 +149,7 @@ void Connect::process(Context *ctx, Event *inp) {
       if (utils::get_host_port(s->str(), host, port)) {
         auto outbound = m_ssl_context
           ? new Outbound(*m_ssl_context)
-          : new Outbound();
+          : new Outbound(m_buffer_limit);
         outbound->set_buffer_limit(m_buffer_limit);
         outbound->set_retry_count(m_retry_count);
         outbound->set_retry_delay(m_retry_delay);

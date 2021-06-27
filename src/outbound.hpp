@@ -40,7 +40,7 @@ class Data;
 
 class Outbound : public pjs::Pooled<Outbound> {
 public:
-  Outbound();
+  Outbound(int buffer_limit = 0);
   Outbound(asio::ssl::context &ssl_context);
   ~Outbound();
 
@@ -78,7 +78,8 @@ private:
   double m_retry_delay = 0;
   int m_retries = 0;
   Data m_buffer;
-  size_t m_buffer_limit = 0;
+  size_t m_buffer_limit;
+  size_t m_discarded_data_size = 0;
   bool m_ssl = false;
   bool m_connected = false;
   bool m_overflowed = false;

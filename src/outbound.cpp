@@ -33,10 +33,11 @@ using tcp = asio::ip::tcp;
 
 static asio::ssl::context s_default_ssl_context(asio::ssl::context::sslv23_client);
 
-Outbound::Outbound()
+Outbound::Outbound(int buffer_limit)
   : m_resolver(Net::service())
   , m_socket(Net::service())
   , m_ssl_socket(Net::service(), s_default_ssl_context)
+  , m_buffer_limit(buffer_limit)
 {
 }
 
@@ -45,6 +46,7 @@ Outbound::Outbound(asio::ssl::context &ssl_context)
   , m_socket(Net::service())
   , m_ssl_socket(Net::service(), ssl_context)
   , m_ssl(true)
+  , m_buffer_limit(0)
 {
   m_ssl_socket.set_verify_mode(asio::ssl::verify_none);
   m_ssl_socket.set_verify_callback([](bool preverified, asio::ssl::verify_context &ctx) {
@@ -78,6 +80,8 @@ void Outbound::send(const pjs::Ref<Data> &data) {
       if (!m_overflowed) {
         m_buffer.push(*data);
         if (m_buffer.size() >= SEND_BUFFER_FLUSH_SIZE) pump();
+      } else {
+        m_discarded_data_size += data->size();
       }
     } else {
       pump();
@@ -228,15 +232,17 @@ void Outbound::receive() {
     }
 
     if (ec) {
-      if (ec == asio::error::eof) {
+      if (ec == asio::error::eof || ec == asio::error::operation_aborted) {
         Log::debug(
-          "Outbound: %p, connection closed by upstream %s:%d",
+          ec == asio::error::eof
+            ? "Outbound: %p, connection closed by upstream %s:%d"
+            : "Outbound: %p, closed connection to upstream %s:%d",
           this, m_host.c_str(), m_port);
         if (m_receiver) {
           pjs::Ref<SessionEnd> evt(SessionEnd::make(SessionEnd::NO_ERROR));
           m_receiver(evt);
         }
-      } else if (ec != asio::error::operation_aborted) {
+      } else {
         auto msg = ec.message();
         Log::warn(
           "Outbound: %p, error reading from upstream %s:%d, %s",
@@ -291,8 +297,12 @@ void Outbound::pump() {
       pump();
     }
 
-    if (m_overflowed && m_buffer.size() < m_buffer_limit) {
-      m_overflowed = false;
+    if (m_overflowed && m_buffer.size() == 0) {
+      Log::error(
+        "Outbound: %p, %d bytes sending to upstream %s:%d were discared due to overflow",
+        this, m_discarded_data_size, m_host.c_str(), m_port
+      );
+      m_writing_ended = true;
     }
 
     if (m_writing_ended) {
