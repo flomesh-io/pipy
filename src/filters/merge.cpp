@@ -23,7 +23,7 @@
  *  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include "mux.hpp"
+#include "merge.hpp"
 #include "context.hpp"
 #include "module.hpp"
 #include "pipeline.hpp"
@@ -34,58 +34,54 @@
 namespace pipy {
 
 //
-// Mux
+// Merge
 //
 
-Mux::Mux()
+Merge::Merge()
 {
 }
 
-Mux::Mux(pjs::Str *target, pjs::Function *selector)
+Merge::Merge(pjs::Str *target, pjs::Function *selector)
   : m_session_pool(std::make_shared<SessionPool>())
   , m_target(target)
   , m_selector(selector)
 {
 }
 
-Mux::Mux(const Mux &r)
+Merge::Merge(const Merge &r)
   : m_session_pool(r.m_session_pool)
   , m_target(r.m_target)
   , m_selector(r.m_selector)
 {
 }
 
-Mux::~Mux() {
+Merge::~Merge() {
 }
 
-auto Mux::help() -> std::list<std::string> {
+auto Merge::help() -> std::list<std::string> {
   return {
-    "mux(target[, selector])",
-    "Runs messages from different sessions through a shared pipeline session",
+    "merge(target[, selector])",
+    "Merges messages from different sessions to a shared pipeline session",
     "target = <string> Name of the pipeline to send messages to",
     "selector = <function> Callback function that gives the name of a session for reuse",
   };
 }
 
-void Mux::dump(std::ostream &out) {
-  out << "mux";
+void Merge::dump(std::ostream &out) {
+  out << "merge";
 }
 
-auto Mux::draw(std::list<std::string> &links, bool &fork) -> std::string {
+auto Merge::draw(std::list<std::string> &links, bool &fork) -> std::string {
   links.push_back(m_target->str());
-  fork = false;
-  return "mux";
+  fork = true;
+  return "merge";
 }
 
-auto Mux::clone() -> Filter* {
-  return new Mux(*this);
+auto Merge::clone() -> Filter* {
+  return new Merge(*this);
 }
 
-void Mux::reset() {
-  while (!m_queue.empty()) {
-    m_queue.front()->on_output = nullptr;
-    m_queue.pop();
-  }
+void Merge::reset() {
   m_session_pool->free(m_session);
   m_session = nullptr;
   m_head = nullptr;
@@ -93,14 +89,14 @@ void Mux::reset() {
   m_session_end = false;
 }
 
-void Mux::process(Context *ctx, Event *inp) {
+void Merge::process(Context *ctx, Event *inp) {
   if (m_session_end) return;
 
   if (!m_session) {
     auto mod = pipeline()->module();
     auto pipeline = mod->find_named_pipeline(m_target);
     if (!pipeline) {
-      Log::error("[mux] unknown pipeline: %s", m_target->c_str());
+      Log::error("[merge] unknown pipeline: %s", m_target->c_str());
       abort();
       return;
     }
@@ -124,21 +120,15 @@ void Mux::process(Context *ctx, Event *inp) {
 
   } else if (inp->is<MessageEnd>()) {
     if (m_body) {
-      auto channel = new Channel;
-      channel->on_output = [=](Event *inp) {
-        if (m_queue.empty()) return;
-        if (inp->is<MessageEnd>() || inp->is<SessionEnd>()) {
-          m_queue.pop();
-        }
-        output(inp);
-      };
-      m_queue.push(channel);
-      m_session->input(channel, ctx, m_head, m_body);
+      m_session->input(ctx, m_head, m_body);
       m_head = nullptr;
       m_body = nullptr;
     }
+  }
 
-  } else if (inp->is<SessionEnd>()) {
+  output(inp);
+
+  if (inp->is<SessionEnd>()) {
     m_session_pool->free(m_session);
     m_session = nullptr;
     m_head = nullptr;
@@ -147,7 +137,7 @@ void Mux::process(Context *ctx, Event *inp) {
   }
 }
 
-void Mux::SessionPool::start_cleaning() {
+void Merge::SessionPool::start_cleaning() {
   if (m_cleaning_scheduled) return;
   m_timer.schedule(1, [this]() {
     m_cleaning_scheduled = false;
@@ -156,7 +146,7 @@ void Mux::SessionPool::start_cleaning() {
   m_cleaning_scheduled = true;
 }
 
-void Mux::SessionPool::clean() {
+void Merge::SessionPool::clean() {
   auto p = m_free_sessions.head();
   while (p) {
     auto session = p;
@@ -172,38 +162,12 @@ void Mux::SessionPool::clean() {
   }
 }
 
-void Mux::SharedSession::input(Channel *channel, Context *ctx, pjs::Object *head, Data *body) {
+void Merge::SharedSession::input(Context *ctx, pjs::Object *head, Data *body) {
   if (!m_session || m_session->done()) {
     m_session = nullptr;
     m_session = Session::make(ctx, m_pipeline);
-    m_session->on_output([this](Event *inp) {
-      if (m_queue.empty()) return;
-      if (inp->is<SessionEnd>()) {
-        while (!m_queue.empty()) {
-          auto &output = m_queue.front()->on_output;
-          if (output) output(inp);
-          m_queue.pop();
-        }
-      } else {
-        auto channel = m_queue.front().get();
-        auto &output = channel->on_output;
-        if (output) output(inp);
-        if (inp->is<MessageEnd>()) m_queue.pop();
-      }
-    });
   }
 
-  if (m_queue.size() >= m_buffer_limit) {
-    pjs::Ref<SessionEnd> end(SessionEnd::make(SessionEnd::BUFFER_OVERFLOW));
-    while (!m_queue.empty()) {
-      auto &output = m_queue.front()->on_output;
-      if (output) output(end);
-      m_queue.pop();
-    }
-    Log::warn("[mux] buffer overflow");
-  }
-
-  m_queue.push(std::unique_ptr<Channel>(channel));
   m_session->input(MessageStart::make(head));
   if (body) m_session->input(body);
   m_session->input(MessageEnd::make());

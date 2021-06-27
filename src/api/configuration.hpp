@@ -67,6 +67,7 @@ public:
   void exec(const pjs::Value &command);
   void fork(pjs::Str *target, pjs::Object *session_data);
   void link(size_t count, pjs::Str **targets, pjs::Function **conditions);
+  void merge(pjs::Str *target, pjs::Function *selector);
   void mux(pjs::Str *target, pjs::Function *selector);
   void on_body(pjs::Function *callback);
   void on_event(Event::Type type, pjs::Function *callback);

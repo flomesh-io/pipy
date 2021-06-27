@@ -53,6 +53,7 @@ add_executable(pipy
   src/filters/fork.cpp
   src/filters/http.cpp
   src/filters/link.cpp
+  src/filters/merge.cpp
   src/filters/mux.cpp
   src/filters/on-body.cpp
   src/filters/on-event.cpp

@@ -56,6 +56,7 @@
 #include "filters/fork.hpp"
 #include "filters/http.hpp"
 #include "filters/link.hpp"
+#include "filters/merge.hpp"
 #include "filters/mux.hpp"
 #include "filters/on-body.hpp"
 #include "filters/on-event.hpp"
@@ -93,6 +94,7 @@ static std::list<Filter*> s_filters {
   new Exec,
   new Fork,
   new Link,
+  new Merge,
   new Mux,
   new OnStart,
   new OnEvent(Event::Type::Data),

@@ -44,6 +44,7 @@
 #include "filters/fork.hpp"
 #include "filters/http.hpp"
 #include "filters/link.hpp"
+#include "filters/merge.hpp"
 #include "filters/mux.hpp"
 #include "filters/on-body.hpp"
 #include "filters/on-event.hpp"
@@ -223,6 +224,10 @@ void Configuration::link(size_t count, pjs::Str **targets, pjs::Function **condi
     routes.emplace_back(targets[i], conditions[i]);
   }
   append_filter(new Link(routes));
+}
+
+void Configuration::merge(pjs::Str *target, pjs::Function *selector) {
+  append_filter(new Merge(target, selector));
 }
 
 void Configuration::mux(pjs::Str *target, pjs::Function *selector) {
@@ -607,6 +612,19 @@ template<> void ClassDef<Configuration>::init() {
     }
     try {
       thiz->as<Configuration>()->link(n, targets, conditions);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // Configuration.merge
+  method("merge", [](Context &ctx, Object *thiz, Value &result) {
+    pjs::Str *target;
+    pjs::Function *selector = nullptr;
+    if (!ctx.arguments(1, &target, &selector)) return;
+    try {
+      thiz->as<Configuration>()->merge(target, selector);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
