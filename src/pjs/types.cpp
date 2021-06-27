@@ -416,6 +416,13 @@ template<> void ClassDef<String>::init() {
     }
   });
 
+  method("toLowerCase", [](Context &ctx, Object *obj, Value &ret) {
+    ret.set(obj->as<String>()->to_lower_case());
+  });
+
+  method("toUpperCase", [](Context &ctx, Object *obj, Value &ret) {
+    ret.set(obj->as<String>()->to_upper_case());
+  });
 }
 
 template<> void ClassDef<Constructor<String>>::init() {
@@ -534,6 +541,22 @@ auto String::substring(int start, int end) -> Str* {
   if (end > max_len) end = max_len;
   if (end <= start) return Str::empty;
   return Str::make(m_s->str().substr(start, end - start));
+}
+
+auto String::to_lower_case() -> Str* {
+  auto s = m_s->str();
+  for (auto &c : s) {
+    c = std::tolower(c);
+  }
+  return Str::make(s);
+}
+
+auto String::to_upper_case() -> Str* {
+  auto s = m_s->str();
+  for (auto &c : s) {
+    c = std::toupper(c);
+  }
+  return Str::make(s);
 }
 
 //
@@ -790,7 +813,30 @@ template<> void ClassDef<Array>::init() {
     ret.set(found);
   });
 
-  // "sort",
+  method("sort", [](Context &ctx, Object *obj, Value &ret) {
+    Function *comparator = nullptr;
+    if (!ctx.arguments(0, &comparator)) return;
+    if (comparator) {
+      bool has_error = false;
+      obj->as<Array>()->sort(
+        [&](const Value &a, const Value &b) -> bool {
+          if (has_error) return false;
+          if (b.is_empty() || b.is_undefined()) return true;
+          if (a.is_empty() || a.is_undefined()) return false;
+          Value argv[2], ret;
+          argv[0] = a;
+          argv[1] = b;
+          (*comparator)(ctx, 2, argv, ret);
+          if (!ctx.ok()) has_error = true;
+          return ret.is_number() && ret.n() <= 0;
+        }
+      );
+    } else {
+      obj->as<Array>()->sort();
+    }
+    ret.set(obj);
+  });
+
   // "splice",
   // "unshift",
   // "values",
@@ -951,6 +997,31 @@ void Array::shift(Value &result) {
   } else {
     result = Value::undefined;
   }
+}
+
+void Array::sort() {
+  auto size = std::min(m_size, int(m_data->size()));
+  std::sort(
+    m_data->elements(),
+    m_data->elements() + size,
+    [](const Value &a, const Value &b) -> bool {
+      auto sa = a.to_string();
+      auto sb = b.to_string();
+      auto less = sa->str() < sb->str();
+      sa->release();
+      sb->release();
+      return less;
+    }
+  );
+}
+
+void Array::sort(const std::function<bool(const Value&, const Value&)> &comparator) {
+  auto size = std::min(m_size, int(m_data->size()));
+  std::sort(
+    m_data->elements(),
+    m_data->elements() + size,
+    comparator
+  );
 }
 
 //
