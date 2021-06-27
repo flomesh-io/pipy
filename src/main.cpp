@@ -62,6 +62,7 @@
 #include "filters/on-event.hpp"
 #include "filters/on-message.hpp"
 #include "filters/on-start.hpp"
+#include "filters/pack.hpp"
 #include "filters/print.hpp"
 #include "filters/replace-body.hpp"
 #include "filters/replace-event.hpp"
@@ -103,6 +104,7 @@ static std::list<Filter*> s_filters {
   new OnEvent(Event::Type::SessionEnd),
   new OnBody,
   new OnMessage,
+  new Pack,
   new Print,
   new ProxySOCKS4,
   new ReplaceStart,

@@ -34,6 +34,46 @@ auto Data::flush() -> Data* {
   return s_flush;
 }
 
+void Data::pack(const Data &data, double vacancy) {
+  if (&data == this) return;
+  auto occupancy = DATA_CHUNK_SIZE - int(DATA_CHUNK_SIZE * vacancy);
+  for (auto view = data.m_head; view; view = view->next) {
+    auto tail = m_tail;
+    if (!tail) {
+      push_view(new View(view));
+      continue;
+    }
+    auto tail_offset = tail->offset;
+    auto tail_length = tail->length;
+    if (tail_length < occupancy || view->length + tail_length <= DATA_CHUNK_SIZE) {
+      if (tail_offset > 0 || tail->chunk->retain_count > 1) {
+        tail = tail->clone();
+        delete pop_view();
+        push_view(tail);
+      }
+      auto tail_room = DATA_CHUNK_SIZE - tail_length;
+      auto length = std::min(view->length, int(tail_room));
+      std::memcpy(
+        tail->chunk->data + tail_length,
+        view->chunk->data + view->offset,
+        length
+      );
+      tail->length += length;
+      if (length < view->length) {
+        push_view(
+          new View(
+            view->chunk,
+            view->offset + length,
+            view->length - length
+          )
+        );
+      }
+    } else {
+      push_view(new View(view));
+    }
+  }
+}
+
 } // namespace pipy
 
 namespace pjs {

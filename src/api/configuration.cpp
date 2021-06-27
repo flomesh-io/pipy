@@ -50,6 +50,7 @@
 #include "filters/on-event.hpp"
 #include "filters/on-message.hpp"
 #include "filters/on-start.hpp"
+#include "filters/pack.hpp"
 #include "filters/print.hpp"
 #include "filters/replace-body.hpp"
 #include "filters/replace-event.hpp"
@@ -248,6 +249,10 @@ void Configuration::on_message(pjs::Function *callback) {
 
 void Configuration::on_start(pjs::Function *callback) {
   append_filter(new OnStart(callback));
+}
+
+void Configuration::pack(int batch_size, pjs::Object *options) {
+  append_filter(new Pack(batch_size, options));
 }
 
 void Configuration::print() {
@@ -722,6 +727,19 @@ template<> void ClassDef<Configuration>::init() {
     if (!ctx.arguments(1, &callback)) return;
     try {
       thiz->as<Configuration>()->on_event(Event::SessionEnd, callback);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // Configuration.pack
+  method("pack", [](Context &ctx, Object *thiz, Value &result) {
+    int batch_size = 1;
+    Object *options = nullptr;
+    if (!ctx.arguments(0, &batch_size, &options)) return;
+    try {
+      thiz->as<Configuration>()->pack(batch_size, options);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

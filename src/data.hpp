@@ -109,6 +109,12 @@ class Data : public pjs::ObjectTemplate<Data, Event> {
       length -= n;
       return view;
     }
+
+    View* clone() {
+      auto new_chunk = new Chunk;
+      std::memcpy(new_chunk->data, chunk->data + offset, length);
+      return new View(new_chunk, 0, length);
+    }
   };
 
 public:
@@ -314,6 +320,7 @@ public:
   }
 
   void push(const Data &data) {
+    if (&data == this) return;
     for (auto view = data.m_head; view; view = view->next) {
       push_view(new View(view));
     }
@@ -458,6 +465,8 @@ public:
     }
   }
 
+  void pack(const Data &data, double vacancy = 0.5);
+
   void to_chunks(std::function<void(const uint8_t*, int)> cb) {
     for (auto view = m_head; view; view = view->next) {
       cb((uint8_t*)view->chunk->data + view->offset, view->length);
@@ -531,6 +540,7 @@ public:
         encoder.flush();
         return str;
       }
+      default: return to_string();
     }
   }
 

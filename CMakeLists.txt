@@ -59,6 +59,7 @@ add_executable(pipy
   src/filters/on-event.cpp
   src/filters/on-message.cpp
   src/filters/on-start.cpp
+  src/filters/pack.cpp
   src/filters/print.cpp
   src/filters/replace-body.cpp
   src/filters/replace-event.cpp
