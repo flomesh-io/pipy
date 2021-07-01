@@ -82,8 +82,9 @@ static std::list<Filter*> s_filters {
   new DecompressBody,
   new Demux,
   new dubbo::Decoder,
+  new http::ResponseDecoder(true),
   new http::RequestDecoder,
-  new http::ResponseDecoder,
+  new http::ResponseDecoder(false),
   new Dummy,
   new Dump,
   new dubbo::Encoder,
@@ -346,6 +347,10 @@ static bool s_need_reload = false;
 
 static void on_sig_hup(int) {
   Log::info("Received SIGHUP, reloading script...");
+  s_need_reload = true;
+}
+
+void main_trigger_reload() {
   s_need_reload = true;
 }
 

@@ -26,6 +26,7 @@
 #ifndef PJS_TYPES_HPP
 #define PJS_TYPES_HPP
 
+#include <cassert>
 #include <cmath>
 #include <cxxabi.h>
 #include <functional>
@@ -540,14 +541,6 @@ template<class T> std::map<Str*, T> EnumDef<T>::m_str_to_val;
 
 class Accessor : public Field {
 public:
-  Accessor(
-    const std::string &name,
-    std::function<void(Object*, Value&)> getter,
-    std::function<void(Object*, const Value&)> setter = nullptr
-  ) : Field(name, Field::Accessor)
-    , m_getter(getter)
-    , m_setter(setter) {}
-
   void get(Object *obj, Value &val) {
     m_getter(obj, val);
   }
@@ -557,8 +550,19 @@ public:
   }
 
 private:
+  Accessor(
+    const std::string &name,
+    std::function<void(Object*, Value&)> getter,
+    std::function<void(Object*, const Value&)> setter = nullptr
+  ) : Field(name, Field::Accessor)
+    , m_getter(getter)
+    , m_setter(setter) {}
+
   std::function<void(Object*, Value&)> m_getter;
   std::function<void(Object*, const Value&)> m_setter;
+
+  template<class T>
+  friend class ClassDef;
 };
 
 template<class T>
@@ -874,43 +878,48 @@ inline auto Value::to_string(Object *obj) -> Str* { return Str::make(obj->to_str
 
 class Variable : public Field {
 public:
-  Variable(const std::string &name, int options = 0, int id = -1) : Field(name, Field::Variable, options, id) {}
-  Variable(const std::string &name, const Value &value, int options = 0, int id = -1) : Field(name, Field::Variable, options, id), m_value(value) {}
+  template<typename... Args>
+  static auto make(Args&&... args) -> Variable* {
+    return new Variable(std::forward<Args>(args)...);
+  }
 
   auto value() const -> const Value& { return m_value; }
 
 private:
+  Variable(const std::string &name, int options = 0, int id = -1) : Field(name, Field::Variable, options, id) {}
+  Variable(const std::string &name, const Value &value, int options = 0, int id = -1) : Field(name, Field::Variable, options, id), m_value(value) {}
+
   Value m_value;
 };
 
 template<class T>
 void ClassDef<T>::variable(const std::string &name) {
-  m_fields.push_back(new Variable(name, Field::Enumerable | Field::Writable));
+  m_fields.push_back(Variable::make(name, Field::Enumerable | Field::Writable));
 }
 
 template<class T>
 void ClassDef<T>::variable(const std::string &name, typename T::Field id, int options) {
-  m_fields.push_back(new Variable(name, options, int(id)));
+  m_fields.push_back(Variable::make(name, options, int(id)));
 }
 
 template<class T>
 void ClassDef<T>::variable(const std::string &name, const Value &value, int options) {
-  m_fields.push_back(new Variable(name, value, options));
+  m_fields.push_back(Variable::make(name, value, options));
 }
 
 template<class T>
 void ClassDef<T>::variable(const std::string &name, const Value &value, typename T::Field id, int options) {
-  m_fields.push_back(new Variable(name, value, options, int(id)));
+  m_fields.push_back(Variable::make(name, value, options, int(id)));
 }
 
 template<class T>
 void ClassDef<T>::variable(const std::string &name, Class *clazz, int options) {
-  m_fields.push_back(new Variable(name, clazz->construct(), options));
+  m_fields.push_back(Variable::make(name, clazz->construct(), options));
 }
 
 template<class T>
 void ClassDef<T>::variable(const std::string &name, Class *clazz, typename T::Field id, int options) {
-  m_fields.push_back(new Variable(name, clazz->construct(), options, int(id)));
+  m_fields.push_back(Variable::make(name, clazz->construct(), options, int(id)));
 }
 
 inline auto Class::init(Object *obj, Object *prototype) -> Object* {
@@ -1279,7 +1288,7 @@ private:
 
   template<class T>
   bool get_arg(bool set_error, int i, T **o) {
-    if (arg(i).is_null() || !arg(i).is_instance_of<T>()) {
+    if (!arg(i).is_null() && !arg(i).is_instance_of<T>()) {
       if (set_error) {
         std::string type("an instance of ");
         type += class_of<T>()->name();
@@ -1287,7 +1296,7 @@ private:
       }
       return false;
     }
-    *o = arg(i).as<T>();
+    *o = arg(i).is_null() ? nullptr : arg(i).as<T>();
     return true;
   }
 };
@@ -1303,20 +1312,20 @@ inline auto Class::construct() -> Object* {
 
 class Method : public Field {
 public:
-  Method(
-    const std::string &name, int argc, int nvar,
+  static auto make(
+    const std::string &name,
+    int argc, int nvar, Scope::Variable *variables,
     std::function<void(Context&, Object*, Value&)> invoke,
     Class *constructor_class = nullptr
-  ) : Field(name, Field::Method)
-    , m_argc(argc)
-    , m_nvar(nvar)
-    , m_invoke(invoke)
-    , m_constructor_class(constructor_class) {}
+  ) -> Method* {
+    assert(nvar >= argc);
+    return new Method(name, argc, nvar, variables, invoke, constructor_class);
+  }
 
   auto constructor_class() const -> Class* { return m_constructor_class; }
 
   void invoke(Context &ctx, Scope *scope, Object *thiz, int argc, Value argv[], Value &retv) {
-    auto callee_scope = Scope::make(scope, m_nvar);
+    auto callee_scope = Scope::make(scope, m_nvar, m_variables);
     Context fctx(ctx, m_argc, callee_scope);
     fctx.init(argc, argv);
     retv = Value::undefined;
@@ -1338,9 +1347,22 @@ public:
   }
 
 private:
+  Method(
+    const std::string &name,
+    int argc, int nvar, Scope::Variable *variables,
+    std::function<void(Context&, Object*, Value&)> invoke,
+    Class *constructor_class = nullptr
+  ) : Field(name, Field::Method)
+    , m_argc(argc)
+    , m_nvar(nvar)
+    , m_variables(variables)
+    , m_invoke(invoke)
+    , m_constructor_class(constructor_class) {}
+
   int m_argc;
   int m_nvar;
   std::function<void(Context&, Object*, Value&)> m_invoke;
+  Scope::Variable* m_variables;
   Class* m_constructor_class;
 };
 
@@ -1350,7 +1372,7 @@ void ClassDef<T>::method(
   std::function<void(Context&, Object*, Value&)> invoke,
   Class *constructor_class
 ) {
-  m_fields.push_back(new Method(name, 0, 0, invoke, constructor_class));
+  m_fields.push_back(Method::make(name, 0, 0, nullptr, invoke, constructor_class));
 }
 
 //
@@ -1404,10 +1426,10 @@ class ConstructorTemplate : public ObjectTemplate<Constructor<T>, Function> {
 protected:
   ConstructorTemplate() {
     auto c = class_of<T>();
-    Function::m_method = new Method(
-      c->name(), 0, 0,
+    Function::m_method = Method::make(
+      c->name(), 0, 0, nullptr,
       [this](Context &ctx, Object *obj, Value &ret) {
-        (*this)(ctx, obj, ret);
+        (*static_cast<Constructor<T>*>(this))(ctx, obj, ret);
       }, c);
   }
 

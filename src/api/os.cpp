@@ -81,6 +81,31 @@ template<> void ClassDef<OS>::init() {
     ret.set(data);
   });
 
+  // os.writeFile
+  method("writeFile", [](Context &ctx, Object*, Value &ret) {
+    Str *filename;
+    Str *str = nullptr;
+    pipy::Data *data = nullptr;
+    if (!ctx.try_arguments(2, &filename, &str) &&
+        !ctx.arguments(2, &filename, &data))
+    {
+      return;
+    }
+    std::ofstream fs(filename->str(), std::ios::out|std::ios::trunc);
+    if (!fs.is_open()) {
+      Log::error("os.writeFile: cannot open file: %s", filename->c_str());
+      ret = Value::null;
+      return;
+    }
+    if (str) {
+      fs.write(str->c_str(), str->length());
+    } else {
+      for (const auto &c : data->chunks()) {
+        fs.write(std::get<0>(c), std::get<1>(c));
+      }
+    }
+  });
+
   // os.stat
   method("stat", [](Context &ctx, Object*, Value &ret) {
     Str *filename;

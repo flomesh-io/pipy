@@ -42,7 +42,7 @@ using namespace pipy;
 
 template<> void EnumDef<pipy::Data::Encoding>::init() {
   define(pipy::Data::Encoding::UTF8, "utf8");
-  define(pipy::Data::Encoding::Hex, "hdex");
+  define(pipy::Data::Encoding::Hex, "hex");
   define(pipy::Data::Encoding::Base64, "base64");
   define(pipy::Data::Encoding::Base64Url, "base64url");
 }
@@ -56,7 +56,7 @@ template<> void ClassDef<pipy::Data>::init() {
     pipy::Data *data;
     try {
       if (ctx.try_arguments(0, &size)) {
-        return pipy::Data::make(size);
+        return pipy::Data::make(size, 0);
       } else if (ctx.try_arguments(1, &str, &encoding)) {
         auto enc = EnumDef<pipy::Data::Encoding>::value(encoding, pipy::Data::Encoding::UTF8);
         if (int(enc) < 0) {
@@ -96,6 +96,17 @@ template<> void ClassDef<pipy::Data>::init() {
     auto *out = pipy::Data::make();
     obj->as<pipy::Data>()->shift(count, *out);
     ret.set(out);
+  });
+
+  method("toString", [](Context &ctx, Object *obj, Value &ret) {
+    Str *encoding = nullptr;
+    if (!ctx.arguments(0, &encoding)) return;
+    auto enc = EnumDef<pipy::Data::Encoding>::value(encoding, pipy::Data::Encoding::UTF8);
+    if (int(enc) < 0) {
+      ctx.error("unknown encoding");
+      return;
+    }
+    ret.set(obj->as<pipy::Data>()->to_string(enc));
   });
 }
 

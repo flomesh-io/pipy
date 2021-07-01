@@ -46,6 +46,17 @@ static void parse_transfer_encoding(
   if (is_chunked) content_length = 0;
 }
 
+static bool is_content_length(const std::string &s) {
+  static const std::string lowercase("content-length");
+  if (s.length() != lowercase.length()) return false;
+  for (size_t i = 0; i < lowercase.length(); i++) {
+    if (std::tolower(s[i]) != lowercase[i]) {
+      return false;
+    }
+  }
+  return true;
+}
+
 //
 // RequestDecoder
 //
@@ -270,12 +281,13 @@ void RequestDecoder::end_message(Context *ctx) {
 // ResponseDecoder
 //
 
-ResponseDecoder::ResponseDecoder()
+ResponseDecoder::ResponseDecoder(bool bodiless)
+  : m_bodiless(bodiless)
 {
 }
 
 ResponseDecoder::ResponseDecoder(const ResponseDecoder &r)
-  : ResponseDecoder()
+  : ResponseDecoder(r.m_bodiless)
 {
 }
 
@@ -284,14 +296,25 @@ ResponseDecoder::~ResponseDecoder()
 }
 
 auto ResponseDecoder::help() -> std::list<std::string> {
-  return {
-    "decodeHttpResponse()",
-    "Deframes an HTTP response message",
-  };
+  if (m_bodiless) {
+    return {
+      "decodeHttpBodilessResponse()",
+      "Deframes an HTTP response message without a body (response to a HEAD request)",
+    };
+  } else {
+    return {
+      "decodeHttpResponse()",
+      "Deframes an HTTP response message",
+    };
+  }
 }
 
 void ResponseDecoder::dump(std::ostream &out) {
-  out << "decodeHttpResponse";
+  if (m_bodiless) {
+    out << "decodeHttpBodilessResponse";
+  } else {
+    out << "decodeHttpResponse";
+  }
 }
 
 void ResponseDecoder::reset() {
@@ -586,11 +609,14 @@ void RequestEncoder::process(Context *ctx, Event *inp) {
 
     if (obj_headers) {
       obj_headers->iterate_all([&](pjs::Str *key, const pjs::Value &val) {
+        if (val.is_nullish()) return;
         auto s = val.to_string();
-        header_data->push(key->str());
-        header_data->push(": ");
-        header_data->push(s->str());
-        header_data->push("\r\n");
+        if (!is_content_length(s->str())) {
+          header_data->push(key->str());
+          header_data->push(": ");
+          header_data->push(s->str());
+          header_data->push("\r\n");
+        }
         s->release();
       });
     }
@@ -786,6 +812,7 @@ ResponseEncoder::ResponseEncoder(pjs::Object *head)
   , m_prop_status("status")
   , m_prop_status_text("statusText")
   , m_prop_headers("headers")
+  , m_prop_bodiless("bodiless")
 {
 }
 
@@ -843,18 +870,21 @@ void ResponseEncoder::process(Context *ctx, Event *inp) {
     int num_status = 0;
     pjs::Str *str_status_text = nullptr;
     pjs::Object *obj_headers = nullptr;
+    bool is_bodiless = false;
 
     if (head.is_object()) {
       if (auto obj = head.o()) {
-        pjs::Value protocol, status, status_text, headers;
+        pjs::Value protocol, status, status_text, headers, bodiless;
         m_prop_protocol.get(obj, protocol);
         m_prop_status.get(obj, status);
         m_prop_status_text.get(obj, status_text);
         m_prop_headers.get(obj, headers);
+        m_prop_bodiless.get(obj, bodiless);
         if (protocol.to_boolean()) str_protocol = protocol.to_string();
         if (status.to_boolean()) num_status = status.to_number();
         if (status_text.to_boolean()) str_status_text = status_text.to_string();
         if (headers.is_object()) obj_headers = headers.o()->retain();
+        is_bodiless = bodiless.to_boolean();
       }
     }
 
@@ -872,11 +902,14 @@ void ResponseEncoder::process(Context *ctx, Event *inp) {
 
     if (obj_headers) {
       obj_headers->iterate_all([&](pjs::Str *key, const pjs::Value &val) {
+        if (val.is_nullish()) return;
         auto s = val.to_string();
-        header_data->push(key->str());
-        header_data->push(": ");
-        header_data->push(s->str());
-        header_data->push("\r\n");
+        if (is_bodiless || !is_content_length(s->str())) {
+          header_data->push(key->str());
+          header_data->push(": ");
+          header_data->push(s->str());
+          header_data->push("\r\n");
+        }
         s->release();
       });
     }
@@ -887,9 +920,13 @@ void ResponseEncoder::process(Context *ctx, Event *inp) {
       header_data->push(s_header_connection_close);
     }
 
-    header_data->push(s_header_content_length);
-    header_data->push(std::to_string(m_buffer->size()));
-    header_data->push("\r\n\r\n");
+    if (!is_bodiless) {
+      header_data->push(s_header_content_length);
+      header_data->push(std::to_string(m_buffer->size()));
+      header_data->push("\r\n");
+    }
+
+    header_data->push("\r\n");
 
     if (str_protocol) str_protocol->release();
     if (str_status_text) str_status_text->release();
@@ -897,7 +934,7 @@ void ResponseEncoder::process(Context *ctx, Event *inp) {
 
     output(m_message_start);
     output(header_data);
-    output(m_buffer);
+    if (!is_bodiless) output(m_buffer);
     output(inp);
 
     if (!keep_alive) output(SessionEnd::make());

@@ -62,7 +62,10 @@ bool Module::load(const std::string &path) {
 
   if (!expr) {
     Log::pjs_location(m_source, error_line, error_column);
-    Log::error("[pjs] Syntax error: %s at line %d column %d", error.c_str(), error_line, error_column);
+    Log::error(
+      "[pjs] Syntax error: %s at line %d column %d in %s",
+      error.c_str(), error_line, error_column, path.c_str()
+    );
     return false;
   }
 

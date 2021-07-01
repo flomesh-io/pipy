@@ -70,7 +70,12 @@ Configuration::Configuration(pjs::Object *context_prototype) {
   std::list<pjs::Field*> fields;
   if (context_prototype) {
     context_prototype->iterate_all([&](pjs::Str *key, pjs::Value &val) {
-      fields.push_back(new pjs::Variable(key->str(), val, pjs::Field::Enumerable | pjs::Field::Writable));
+      fields.push_back(
+        pjs::Variable::make(
+          key->str(), val,
+          pjs::Field::Enumerable | pjs::Field::Writable
+        )
+      );
     });
   }
 
@@ -170,8 +175,8 @@ void Configuration::decode_http_request() {
   append_filter(new http::RequestDecoder());
 }
 
-void Configuration::decode_http_response() {
-  append_filter(new http::ResponseDecoder());
+void Configuration::decode_http_response(bool bodiless) {
+  append_filter(new http::ResponseDecoder(bodiless));
 }
 
 void Configuration::decompress_body(pjs::Str *algorithm) {
@@ -453,6 +458,16 @@ template<> void ClassDef<Configuration>::init() {
     }
   });
 
+  // Configuration.decodeHttpBodilessResponse
+  method("decodeHttpBodilessResponse", [](Context &ctx, Object *thiz, Value &result) {
+    try {
+      thiz->as<Configuration>()->decode_http_response(true);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
   // Configuration.decodeHttpRequest
   method("decodeHttpRequest", [](Context &ctx, Object *thiz, Value &result) {
     try {
@@ -466,7 +481,7 @@ template<> void ClassDef<Configuration>::init() {
   // Configuration.decodeHttpResponse
   method("decodeHttpResponse", [](Context &ctx, Object *thiz, Value &result) {
     try {
-      thiz->as<Configuration>()->decode_http_response();
+      thiz->as<Configuration>()->decode_http_response(false);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

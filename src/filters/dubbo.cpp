@@ -284,7 +284,7 @@ long long Encoder::get_header(
   if (!obj) return value;
   pjs::Value v;
   prop.get(obj, v);
-  return (long long)v.to_number();
+  return v.is_undefined() ? value : (long long)v.to_number();
 }
 
 } // namespace dubbo

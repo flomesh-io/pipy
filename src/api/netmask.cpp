@@ -93,7 +93,6 @@ Netmask::Netmask(pjs::Str *cidr) : m_cidr(cidr) {
       (i <= 2 && *ptr != '.') ||
       (i == 3 && *ptr != '/' && *ptr != '\0')
     ) {
-      printf("%d: %d\n", i, n);
       throw std::runtime_error("invalid CIDR notation");
     }
     ip[i] = n;
@@ -163,6 +162,12 @@ bool Netmask::contains(pjs::Str *addr) {
   return (get_ip4(ip) & m_ip4_mask) == m_ip4_base;
 }
 
+auto Netmask::next() -> pjs::Str* {
+  if (m_next == ~m_ip4_mask) return pjs::Str::empty.get();
+  auto n = m_next++;
+  return ip4_to_str(m_ip4_base | n);
+}
+
 } // namespace pipy
 
 namespace pjs {
@@ -198,6 +203,10 @@ template<> void ClassDef<Netmask>::init() {
     Str *addr;
     if (!ctx.arguments(1, &addr)) return;
     ret.set(obj->as<Netmask>()->contains(addr));
+  });
+
+  method("next", [](Context &ctx, Object *obj, Value &ret) {
+    ret.set(obj->as<Netmask>()->next());
   });
 }
 

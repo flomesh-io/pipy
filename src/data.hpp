@@ -206,31 +206,40 @@ public:
 
   Data(const std::string &str, Encoding encoding) : Data() {
     switch (encoding) {
-      case Encoding::UTF8: push(str); break;
+      case Encoding::UTF8:
+        push(str);
+        break;
       case Encoding::Hex: {
         if (str.length() % 2) throw std::runtime_error("incomplete hex string");
-        int len = str.length() >> 1;
-        char buf[len];
-        len = utils::decode_hex(buf, str.c_str(), str.length());
-        if (len < 0) throw std::runtime_error("invalid hex string");
-        push(buf, len);
+        utils::HexDecoder decoder([this](uint8_t b) { push(b); });
+        for (auto c : str) {
+          if (!decoder.input(c)) {
+            throw std::runtime_error("invalid hex encoding");
+          }
+        }
         break;
       }
       case Encoding::Base64: {
         if (str.length() % 4) throw std::runtime_error("incomplete Base64 string");
-        int len = (str.length() >> 2) * 3;
-        char buf[len];
-        len = utils::decode_base64(buf, str.c_str(), str.length());
-        if (len < 0) throw std::runtime_error("invalid Base64 encoding");
-        push(buf, len);
+        utils::Base64Decoder decoder([this](uint8_t b) { push(b); });
+        for (auto c : str) {
+          if (!decoder.input(c)) {
+            throw std::runtime_error("invalid Base64 encoding");
+          }
+        }
+        if (!decoder.complete()) throw std::runtime_error("incomplete Base64 encoding");
         break;
       }
       case Encoding::Base64Url: {
-        int len = ((str.length() + 3) >> 2) * 3;
-        char buf[len];
-        len = utils::decode_base64url(buf, str.c_str(), str.length());
-        if (len < 0) throw std::runtime_error("invalid Base64Url encoding");
-        push(buf, len);
+        utils::Base64UrlDecoder decoder([this](uint8_t b) { push(b); });
+        for (auto c : str) {
+          if (!decoder.input(c)) {
+            throw std::runtime_error("invalid Base64 encoding");
+          }
+        }
+        if (!decoder.flush()) {
+          throw std::runtime_error("invalid Base64 encoding");
+        }
         break;
       }
     }
@@ -455,13 +464,24 @@ public:
     }
   }
 
-  void to_bytes(uint8_t *buf) {
+  void to_bytes(uint8_t *buf) const {
     auto p = buf;
     for (auto view = m_head; view; view = view->next) {
       auto length = view->length;
       std::memcpy(p, view->chunk->data + view->offset, length);
       p += length;
     }
+  }
+
+  void to_bytes(std::vector<uint8_t> &buf) const {
+    buf.resize(size());
+    to_bytes(&buf[0]);
+  }
+
+  auto to_bytes() const -> std::vector<uint8_t> {
+    std::vector<uint8_t> ret;
+    to_bytes(ret);
+    return ret;
   }
 
   virtual auto to_string() const -> std::string override {
@@ -477,10 +497,40 @@ public:
 
   auto to_string(Encoding encoding) const -> std::string {
     switch (encoding) {
-      case Encoding::UTF8: return to_string();
-      case Encoding::Hex: throw std::runtime_error("TODO");
-      case Encoding::Base64: throw std::runtime_error("TODO");
-      case Encoding::Base64Url: throw std::runtime_error("TODO");
+      case Encoding::UTF8:
+        return to_string();
+      case Encoding::Hex: {
+        std::string str;
+        utils::HexEncoder encoder([&](char c) { str += c; });
+        for (const auto &c : chunks()) {
+          auto ptr = std::get<0>(c);
+          auto len = std::get<1>(c);
+          for (int i = 0; i < len; i++) encoder.input(ptr[i]);
+        }
+        return str;
+      }
+      case Encoding::Base64: {
+        std::string str;
+        utils::Base64Encoder encoder([&](char c) { str += c; });
+        for (const auto &c : chunks()) {
+          auto ptr = std::get<0>(c);
+          auto len = std::get<1>(c);
+          for (int i = 0; i < len; i++) encoder.input(ptr[i]);
+        }
+        encoder.flush();
+        return str;
+      }
+      case Encoding::Base64Url: {
+        std::string str;
+        utils::Base64Encoder encoder([&](char c) { str += c; });
+        for (const auto &c : chunks()) {
+          auto ptr = std::get<0>(c);
+          auto len = std::get<1>(c);
+          for (int i = 0; i < len; i++) encoder.input(ptr[i]);
+        }
+        encoder.flush();
+        return str;
+      }
     }
   }
 

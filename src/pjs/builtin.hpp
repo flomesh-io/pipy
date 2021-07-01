@@ -55,6 +55,7 @@ private:
 
 template<>
 class Constructor<Date> : public ConstructorTemplate<Date> {
+public:
   void operator()(Context &ctx, Object *obj, Value &ret) {
   }
 };
