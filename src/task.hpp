@@ -42,17 +42,11 @@ public:
     return new Task(interval, pipeline);
   }
 
-  static void stop_all() {
-    for (auto *task : s_all_tasks) {
-      task->stop();
-    }
-  }
-
   auto name() const -> const std::string& { return m_name; }
   auto pipeline() const -> Pipeline* { return m_pipeline; }
   auto session() const -> Session* { return m_session; }
   bool active() const;
-  void start();
+  bool start();
 
 private:
   Task(const std::string &interval, Pipeline *pipeline);
@@ -67,9 +61,10 @@ private:
 
   void schedule(double interval);
   void tick();
+  void run();
   void stop();
 
-  static std::set<Task*> s_all_tasks;
+  friend class Worker;
 };
 
 } // namespace pipy

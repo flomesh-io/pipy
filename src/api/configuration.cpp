@@ -143,6 +143,13 @@ void Configuration::listen(int port, pjs::Object *options) {
   m_current_filters = &m_listens.back().filters;
 }
 
+void Configuration::task() {
+  std::string name("Task #");
+  name += std::to_string(m_tasks.size() + 1);
+  m_tasks.push_back({ name, "" });
+  m_current_filters = &m_tasks.back().filters;
+}
+
 void Configuration::task(double interval) {
   if (interval < 0.01 || interval > 24 * 60 * 60) throw std::runtime_error("time interval out of range");
   std::string name("Task #");
@@ -327,7 +334,8 @@ void Configuration::apply(Module *mod) {
 
   for (auto &i : m_tasks) {
     auto p = make_pipeline(Pipeline::TASK, i.name, i.filters);
-    Task::make(i.interval, p)->start();
+    auto t = Task::make(i.interval, p);
+    mod->worker()->add_task(t);
   }
 }
 
@@ -419,7 +427,9 @@ template<> void ClassDef<Configuration>::init() {
     double interval;
     std::string interval_str;
     try {
-      if (ctx.try_arguments(1, &interval)) {
+      if (ctx.argc() == 0) {
+        thiz->as<Configuration>()->task();
+      } else if (ctx.try_arguments(1, &interval)) {
         thiz->as<Configuration>()->task(interval);
       } else if (ctx.try_arguments(1, &interval_str)) {
         thiz->as<Configuration>()->task(interval_str);

@@ -136,7 +136,4 @@ void Module::start() {
   m_configuration->apply(this);
 }
 
-void Module::unload() {
-}
-
 } // namespace pipy

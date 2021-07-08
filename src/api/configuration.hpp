@@ -50,6 +50,7 @@ public:
 
   void connect(const pjs::Value &target, pjs::Object *options);
   void listen(int port, pjs::Object *options);
+  void task();
   void task(double interval);
   void task(const std::string &interval);
   void pipeline(const std::string &name);

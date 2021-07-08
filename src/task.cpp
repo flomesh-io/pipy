@@ -33,26 +33,28 @@
 
 namespace pipy {
 
-std::set<Task*> Task::s_all_tasks;
-
 Task::Task(const std::string &interval, Pipeline *pipeline)
   : m_name(interval)
   , m_interval(utils::get_seconds(interval))
   , m_pipeline(pipeline)
 {
-  s_all_tasks.insert(this);
 }
 
 Task::~Task() {
-  s_all_tasks.erase(this);
 }
 
 bool Task::active() const {
   return m_session && !m_session->done();
 }
 
-void Task::start() {
-  schedule(0);
+bool Task::start() {
+  if (m_name.empty()) {
+    run();
+    return true;
+  } else {
+    schedule(0);
+    return true;
+  }
 }
 
 void Task::stop() {
@@ -78,15 +80,17 @@ void Task::tick() {
       delete this;
     }
   } else {
-    if (!active()) {
-      m_session = nullptr;
-      auto ctx = m_pipeline->module()->worker()->new_runtime_context();
-      m_session = Session::make(ctx, m_pipeline);
-      m_session->input(MessageStart::make());
-      m_session->input(MessageEnd::make());
-    }
+    if (!active()) run();
     schedule(m_interval);
   }
+}
+
+void Task::run() {
+  m_session = nullptr;
+  auto ctx = m_pipeline->module()->worker()->new_runtime_context();
+  m_session = Session::make(ctx, m_pipeline);
+  m_session->input(MessageStart::make());
+  m_session->input(MessageEnd::make());
 }
 
 } // namespace pipy

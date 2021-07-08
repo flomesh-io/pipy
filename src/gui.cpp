@@ -191,10 +191,10 @@ private:
         auto filename = utils::path_normalize(req->body()->to_string());
         auto worker = Worker::make(m_root_path);
         if (worker->load_module(filename) && worker->start()) {
-          if (current_worker) current_worker->unload();
+          if (current_worker) current_worker->stop();
           return m_response_created;
         } else {
-          worker->unload();
+          worker->stop();
           return m_response_bad_request;
         }
 

@@ -392,7 +392,7 @@ static void start_checking_signals() {
       Log::info("Stopped.");
     } else if (s_need_shutdown) {
       Listener::close_all();
-      Task::stop_all();
+      if (auto worker = Worker::current()) worker->stop();
       int n = 0;
       Pipeline::for_each(
         [&](Pipeline *pipeline) {
@@ -415,10 +415,10 @@ static void start_checking_signals() {
         auto root_name = current_worker->root()->path();
         auto worker = Worker::make(root_path);
         if (worker->load_module(root_name) && worker->start()) {
-          current_worker->unload();
+          current_worker->stop();
           Log::info("Script reloaded: %s", root_name.c_str());
         } else {
-          worker->unload();
+          worker->stop();
           Log::error("Failed reloading script: %s", root_name.c_str());
         }
       }

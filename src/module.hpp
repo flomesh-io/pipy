@@ -42,7 +42,6 @@ public:
   static void reset_script(const std::string &path);
 
   bool load(const std::string &path);
-  void unload();
   void start();
 
   auto new_context_data(pjs::Object *prototype = nullptr) -> pjs::Object* {

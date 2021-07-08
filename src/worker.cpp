@@ -25,6 +25,7 @@
 
 #include "worker.hpp"
 #include "module.hpp"
+#include "task.hpp"
 #include "event.hpp"
 #include "message.hpp"
 #include "session.hpp"
@@ -232,20 +233,30 @@ auto Worker::new_runtime_context(Context *base) -> Context* {
 }
 
 bool Worker::start() {
-  Task::stop_all();
   try {
     for (auto i : m_modules) {
       i->start();
     }
     s_current = this;
-    return true;
   } catch (std::runtime_error &err) {
     Log::error("%s", err.what());
     return false;
   }
+
+  for (auto *task : m_tasks) {
+    if (!task->start()) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
-void Worker::unload() {
+void Worker::stop() {
+  for (auto *task : m_tasks) {
+    task->stop();
+  }
+  m_tasks.clear();
 }
 
 } // namespace pipy
