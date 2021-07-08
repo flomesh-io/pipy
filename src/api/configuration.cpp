@@ -56,6 +56,7 @@
 #include "filters/replace-event.hpp"
 #include "filters/replace-message.hpp"
 #include "filters/replace-start.hpp"
+#include "filters/socks.hpp"
 #include "filters/socks4.hpp"
 #include "filters/tap.hpp"
 #include "filters/use.hpp"
@@ -264,6 +265,10 @@ void Configuration::pack(int batch_size, pjs::Object *options) {
 
 void Configuration::print() {
   append_filter(new Print());
+}
+
+void Configuration::proxy_socks(pjs::Str *target, pjs::Function *on_connect) {
+  append_filter(new ProxySOCKS(target, on_connect));
 }
 
 void Configuration::proxy_socks4(pjs::Str *target, pjs::Function *on_connect) {
@@ -844,6 +849,19 @@ template<> void ClassDef<Configuration>::init() {
   method("print", [](Context &ctx, Object *thiz, Value &result) {
     try {
       thiz->as<Configuration>()->print();
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // Configuration.proxySOCKS
+  method("proxySOCKS", [](Context &ctx, Object *thiz, Value &result) {
+    Str *target;
+    Function *on_connect;
+    if (!ctx.arguments(2, &target, &on_connect)) return;
+    try {
+      thiz->as<Configuration>()->proxy_socks(target, on_connect);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

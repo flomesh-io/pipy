@@ -66,6 +66,7 @@ add_executable(pipy
   src/filters/replace-event.cpp
   src/filters/replace-message.cpp
   src/filters/replace-start.cpp
+  src/filters/socks.cpp
   src/filters/socks4.cpp
   src/filters/tap.cpp
   src/filters/use.cpp
