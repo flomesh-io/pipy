@@ -603,6 +603,90 @@ template<> void ClassDef<Configuration>::init() {
     }
   });
 
+  // Configuration.handleSessionStart
+  method("handleSessionStart", [](Context &ctx, Object *thiz, Value &result) {
+    Function *callback = nullptr;
+    if (!ctx.arguments(1, &callback)) return;
+    try {
+      thiz->as<Configuration>()->on_start(callback);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // Configuration.handleData
+  method("handleData", [](Context &ctx, Object *thiz, Value &result) {
+    Function *callback = nullptr;
+    if (!ctx.arguments(1, &callback)) return;
+    try {
+      thiz->as<Configuration>()->on_event(Event::Data, callback);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // Configuration.handleMessage
+  method("handleMessage", [](Context &ctx, Object *thiz, Value &result) {
+    Function *callback = nullptr;
+    if (!ctx.arguments(1, &callback)) return;
+    try {
+      thiz->as<Configuration>()->on_message(callback);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // Configuration.handleMessageStart
+  method("handleMessageStart", [](Context &ctx, Object *thiz, Value &result) {
+    Function *callback = nullptr;
+    if (!ctx.arguments(1, &callback)) return;
+    try {
+      thiz->as<Configuration>()->on_event(Event::MessageStart, callback);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // Configuration.handleMessageBody
+  method("handleMessageBody", [](Context &ctx, Object *thiz, Value &result) {
+    Function *callback = nullptr;
+    if (!ctx.arguments(1, &callback)) return;
+    try {
+      thiz->as<Configuration>()->on_body(callback);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // Configuration.handleMessageEnd
+  method("handleMessageEnd", [](Context &ctx, Object *thiz, Value &result) {
+    Function *callback = nullptr;
+    if (!ctx.arguments(1, &callback)) return;
+    try {
+      thiz->as<Configuration>()->on_event(Event::MessageEnd, callback);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // Configuration.handleSessionEnd
+  method("handleSessionEnd", [](Context &ctx, Object *thiz, Value &result) {
+    Function *callback = nullptr;
+    if (!ctx.arguments(1, &callback)) return;
+    try {
+      thiz->as<Configuration>()->on_event(Event::SessionEnd, callback);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
   // Configuration.link
   method("link", [](Context &ctx, Object *thiz, Value &result) {
     int n = (ctx.argc() + 1) >> 1;
