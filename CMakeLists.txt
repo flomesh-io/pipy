@@ -37,6 +37,7 @@ add_executable(pipy
   src/api/json.cpp
   src/api/netmask.cpp
   src/api/os.cpp
+  src/api/pipy.cpp
   src/api/url.cpp
   src/api/xml.cpp
   src/context.cpp

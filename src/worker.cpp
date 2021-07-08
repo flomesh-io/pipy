@@ -37,6 +37,7 @@
 #include "api/json.hpp"
 #include "api/netmask.hpp"
 #include "api/os.hpp"
+#include "api/pipy.hpp"
 #include "api/url.hpp"
 #include "api/xml.hpp"
 #include "logging.hpp"
@@ -134,6 +135,9 @@ template<> void ClassDef<Global>::init() {
   // algo
   variable("algo", class_of<algo::Algo>());
 
+  // pipy
+  variable("pipy", class_of<Pipy>());
+
   // repeat
   method("repeat", [](Context &ctx, Object *obj, Value &ret) {
     int count;
@@ -176,43 +180,6 @@ Worker::Worker(const std::string &root_path)
   , m_global_object(Global::make())
 {
   s_all_workers.insert(this);
-
-  m_method_pipy = pjs::Method::make(
-    "pipy", 0, 0, nullptr,
-    [](pjs::Context &ctx, pjs::Object*, pjs::Value &ret) {
-      pjs::Value ret_obj;
-      pjs::Object *context_prototype = nullptr;
-      if (!ctx.arguments(0, &context_prototype)) return;
-      if (context_prototype && context_prototype->is_function()) {
-        auto *f = context_prototype->as<pjs::Function>();
-        (*f)(ctx, 0, nullptr, ret_obj);
-        if (!ctx.ok()) return;
-        if (!ret_obj.is_object()) {
-          ctx.error("function did not return an object");
-          return;
-        }
-        context_prototype = ret_obj.o();
-      }
-      try {
-        auto config = Configuration::make(context_prototype);
-        ret.set(config);
-      } catch (std::runtime_error &err) {
-        ctx.error(err);
-      }
-    }
-  );
-
-  m_method_restart = pjs::Method::make(
-    "restart", 0, 0, nullptr,
-    [this](pjs::Context &ctx, pjs::Object*, pjs::Value &ret) {
-      main_trigger_reload();
-    }
-  );
-
-  auto *pipy = pjs::Function::make(m_method_pipy, m_global_object);
-  auto *restart = pjs::Function::make(m_method_restart, pipy);
-  pipy->ht_set("restart", restart);
-  m_global_object->ht_set("pipy", pipy);
 }
 
 Worker::~Worker() {

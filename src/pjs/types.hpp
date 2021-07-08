@@ -1633,6 +1633,22 @@ inline auto Value::f() const -> Function* {
   return static_cast<Function*>(m_v.o);
 }
 
+template<class T>
+class FunctionTemplate : public ObjectTemplate<T, Function> {
+protected:
+  FunctionTemplate() {
+    auto c = class_of<T>();
+    Function::m_method = Method::make(
+      c->name(), 0, 0, nullptr,
+      [this](Context &ctx, Object *obj, Value &ret) {
+        (*static_cast<T*>(this))(ctx, obj, ret);
+      }
+    );
+  }
+
+  void operator()(Context &ctx, Object *obj, Value &ret) {}
+};
+
 //
 // Constructor
 //

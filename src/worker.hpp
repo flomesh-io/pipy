@@ -69,8 +69,6 @@ private:
 
   std::string m_root_path;
   Module* m_root = nullptr;
-  pjs::Ref<pjs::Method> m_method_pipy;
-  pjs::Ref<pjs::Method> m_method_restart;
   pjs::Ref<pjs::Object> m_global_object;
   std::map<std::string, Module*> m_module_map;
   std::map<pjs::Ref<pjs::Str>, Module*> m_module_name_map;

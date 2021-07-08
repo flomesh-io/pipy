@@ -36,6 +36,18 @@
 
 namespace pipy {
 
+std::map<std::string, std::string> Module::s_overriden_scripts;
+
+void Module::set_script(const std::string &path, const std::string &script) {
+  auto key = utils::path_normalize(path);
+  s_overriden_scripts[key] = script;
+}
+
+void Module::reset_script(const std::string &path) {
+  auto key = utils::path_normalize(path);
+  s_overriden_scripts.erase(key);
+}
+
 Module::Module(Worker *worker, int index)
   : m_worker(worker)
   , m_index(index)
@@ -43,17 +55,20 @@ Module::Module(Worker *worker, int index)
 }
 
 bool Module::load(const std::string &path) {
-  auto full_path = utils::path_join(m_worker->root_path(), path);
-
-  std::ifstream fs(full_path, std::ios::in);
-  if (!fs.is_open()) {
-    Log::error("[pjs] Cannot open script at %s", path.c_str());
-    return false;
+  auto i = s_overriden_scripts.find(path);
+  if (i != s_overriden_scripts.end()) {
+    m_source = i->second;
+  } else {
+    auto full_path = utils::path_join(m_worker->root_path(), path);
+    std::ifstream fs(full_path, std::ios::in);
+    if (!fs.is_open()) {
+      Log::error("[pjs] Cannot open script at %s", path.c_str());
+      return false;
+    }
+    std::stringstream ss;
+    fs >> ss.rdbuf();
+    m_source = ss.str();
   }
-
-  std::stringstream ss;
-  fs >> ss.rdbuf();
-  m_source = ss.str();
 
   std::string error;
   int error_line, error_column;
