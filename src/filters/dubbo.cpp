@@ -259,7 +259,7 @@ void Encoder::process(Context *ctx, Event *inp) {
     header[14] = L >> 8;
     header[15] = L >> 0;
 
-    output(MessageStart::make());
+    output(m_message_start);
     output(Data::make(header, sizeof(header)));
     output(m_buffer);
     output(inp);

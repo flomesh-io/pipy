@@ -70,7 +70,7 @@ private:
       : m_pipeline(pipeline)
       , m_name(name) {}
 
-    void input(Context *ctx, pjs::Object *head, Data *body);
+    void input(Context *ctx, pjs::Object *mctx, pjs::Object *head, Data *body);
 
   private:
     int m_share_count = 1;
@@ -119,6 +119,7 @@ private:
   std::shared_ptr<SessionPool> m_session_pool;
   pjs::Ref<pjs::Str> m_target;
   pjs::Ref<pjs::Function> m_selector;
+  pjs::Ref<pjs::Object> m_mctx;
   pjs::Ref<pjs::Object> m_head;
   pjs::Ref<Data> m_body;
   pjs::Ref<SharedSession> m_session;

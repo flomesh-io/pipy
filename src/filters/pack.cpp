@@ -112,6 +112,7 @@ void Pack::process(Context *ctx, Event *inp) {
 
   if (auto e = inp->as<MessageStart>()) {
     if (m_message_starts == 0) {
+      m_mctx = e->context();
       m_head = e->head();
       m_buffer = Data::make();
     }
@@ -139,9 +140,10 @@ void Pack::process(Context *ctx, Event *inp) {
 }
 
 void Pack::flush(MessageEnd *end) {
-  output(MessageStart::make(m_head));
+  output(MessageStart::make(m_mctx, m_head));
   output(m_buffer);
   output(end);
+  m_mctx = nullptr;
   m_head = nullptr;
   m_buffer = nullptr;
   m_message_starts = 0;

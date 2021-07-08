@@ -40,14 +40,18 @@ auto Filter::draw(std::list<std::string> &links, bool &fork) -> std::string {
   return ss.str();
 }
 
-bool Filter::output(const pjs::Value &evt) {
+bool Filter::output(const pjs::Value &evt, pjs::Object *ctx) {
   if (evt.is_instance_of(pjs::class_of<Event>())) {
     output(evt.as<Event>());
     return true;
   } else if (evt.is_instance_of(pjs::class_of<Message>())) {
     auto *msg = evt.as<Message>();
     auto *body = msg->body();
-    output(MessageStart::make(msg->head()));
+    if (ctx && !msg->context()) {
+      output(MessageStart::make(ctx, msg->head()));
+    } else {
+      output(MessageStart::make(msg->context(), msg->head()));
+    }
     if (body) output(body);
     output(MessageEnd::make());
     return true;
@@ -60,7 +64,11 @@ bool Filter::output(const pjs::Value &evt) {
       } else if (v.is_instance_of(pjs::class_of<Message>())) {
         auto *msg = v.as<Message>();
         auto *body = msg->body();
-        output(MessageStart::make(msg->head()));
+        if (ctx && !msg->context()) {
+          output(MessageStart::make(ctx, msg->head()));
+        } else {
+          output(MessageStart::make(msg->context(), msg->head()));
+        }
         if (body) output(body);
         output(MessageEnd::make());
         return true;

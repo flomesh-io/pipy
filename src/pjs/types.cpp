@@ -115,6 +115,12 @@ void Context::error_argument_count(int n) {
   error(s);
 }
 
+void Context::error_argument_count(int min, int max) {
+  char s[200];
+  std::sprintf(s, "requires %d to %d arguments", min, max);
+  error(s);
+}
+
 void Context::error_argument_type(int i, const char *type) {
   char s[200];
   std::sprintf(s, "argument #%d expects %s", i + 1, type);
@@ -215,7 +221,7 @@ template<> void ClassDef<Constructor<Object>>::init() {
 
   method("entries", [](Context &ctx, Object*, Value &ret) {
     Object *obj;
-    if (!ctx.arguments(1, &obj) && obj) return;
+    if (!ctx.arguments(1, &obj)) return;
     ret.set(Object::entries(obj));
   });
 
@@ -227,13 +233,13 @@ template<> void ClassDef<Constructor<Object>>::init() {
 
   method("keys", [](Context &ctx, Object*, Value &ret) {
     Object *obj;
-    if (!ctx.arguments(1, &obj) && obj) return;
+    if (!ctx.arguments(1, &obj)) return;
     ret.set(Object::keys(obj));
   });
 
   method("values", [](Context &ctx, Object*, Value &ret) {
     Object *obj;
-    if (!ctx.arguments(1, &obj) && obj) return;
+    if (!ctx.arguments(1, &obj)) return;
     ret.set(Object::values(obj));
   });
 }
@@ -262,6 +268,7 @@ auto Object::entries(Object *obj) -> Array* {
 }
 
 auto Object::from_entries(Array *arr) -> Object* {
+  if (!arr) return nullptr;
   auto obj = make();
   arr->iterate_all([=](Value &v, int) {
     if (v.is_array()) {
@@ -278,6 +285,7 @@ auto Object::from_entries(Array *arr) -> Object* {
 }
 
 auto Object::keys(Object *obj) -> Array* {
+  if (!obj) return nullptr;
   auto *a = Array::make(obj->ht_size());
   int i = 0;
   obj->iterate_all([&](Str *k, Value &v) {
@@ -287,6 +295,7 @@ auto Object::keys(Object *obj) -> Array* {
 }
 
 auto Object::values(Object *obj) -> Array* {
+  if (!obj) return nullptr;
   auto *a = Array::make(obj->ht_size());
   int i = 0;
   obj->iterate_all([&](Str *k, Value &v) {

@@ -1396,6 +1396,7 @@ public:
   void error(const std::string &msg);
   void error(const std::runtime_error &err);
   void error_argument_count(int n);
+  void error_argument_count(int min, int max);
   void error_argument_type(int i, const char *type);
   void backtrace(int line, int column);
   void backtrace(const std::string &name);

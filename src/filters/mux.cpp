@@ -88,6 +88,7 @@ void Mux::reset() {
   }
   m_session_pool->free(m_session);
   m_session = nullptr;
+  m_mctx = nullptr;
   m_head = nullptr;
   m_body = nullptr;
   m_session_end = false;
@@ -116,6 +117,7 @@ void Mux::process(Context *ctx, Event *inp) {
   }
 
   if (auto e = inp->as<MessageStart>()) {
+    m_mctx = e->context();
     m_head = e->head();
     m_body = Data::make();
 
@@ -133,7 +135,8 @@ void Mux::process(Context *ctx, Event *inp) {
         output(inp);
       };
       m_queue.push(channel);
-      m_session->input(channel, ctx, m_head, m_body);
+      m_session->input(channel, ctx, m_mctx, m_head, m_body);
+      m_mctx = nullptr;
       m_head = nullptr;
       m_body = nullptr;
     }
@@ -141,6 +144,7 @@ void Mux::process(Context *ctx, Event *inp) {
   } else if (inp->is<SessionEnd>()) {
     m_session_pool->free(m_session);
     m_session = nullptr;
+    m_mctx = nullptr;
     m_head = nullptr;
     m_body = nullptr;
     m_session_end = true;
@@ -172,7 +176,7 @@ void Mux::SessionPool::clean() {
   }
 }
 
-void Mux::SharedSession::input(Channel *channel, Context *ctx, pjs::Object *head, Data *body) {
+void Mux::SharedSession::input(Channel *channel, Context *ctx, pjs::Object *mctx, pjs::Object *head, Data *body) {
   if (!m_session || m_session->done()) {
     m_session = nullptr;
     m_session = Session::make(ctx, m_pipeline);
@@ -204,7 +208,7 @@ void Mux::SharedSession::input(Channel *channel, Context *ctx, pjs::Object *head
   }
 
   m_queue.push(std::unique_ptr<Channel>(channel));
-  m_session->input(MessageStart::make(head));
+  m_session->input(MessageStart::make(mctx, head));
   if (body) m_session->input(body);
   m_session->input(MessageEnd::make());
 }

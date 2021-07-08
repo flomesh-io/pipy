@@ -73,17 +73,25 @@ public:
 
 class MessageStart : public pjs::ObjectTemplate<MessageStart, Event> {
 public:
+  auto context() -> pjs::Object* { return m_context; }
   auto head() -> pjs::Object* { return m_head; }
 
 private:
   MessageStart() {}
 
   MessageStart(pjs::Object *head)
-    : m_head(head) {}
+    : m_context(pjs::Object::make())
+    , m_head(head) {}
+
+  MessageStart(pjs::Object *context, pjs::Object *head)
+    : m_context(context)
+    , m_head(head) {}
 
   MessageStart(const MessageStart &r)
-    : m_head(r.m_head) {}
+    : m_context(r.m_context)
+    , m_head(r.m_head) {}
 
+  pjs::Ref<pjs::Object> m_context;
   pjs::Ref<pjs::Object> m_head;
 
   virtual auto type() const -> Type override { return Event::MessageStart; }
