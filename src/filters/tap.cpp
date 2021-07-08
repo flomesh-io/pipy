@@ -88,16 +88,17 @@ void Tap::process(Context *ctx, Event *inp) {
     auto *s = account_name.to_string();
     m_queue = m_accounts->get(s->str());
     s->release();
-    if (quota.is_nullish()) {
-      m_queue->setup(-1, false);
-    } else if (quota.is_number()) {
-      m_queue->setup(quota.n(), false);
-    } else {
-      auto *s = quota.to_string();
-      m_queue->setup(utils::get_byte_size(s->str()), true);
-      s->release();
-    }
+    set_quota(quota);
     m_initialized = true;
+
+  } else if (m_queue && m_quota.is_function()) {
+    auto now = utils::now();;
+    if (now - m_queue->setup_time() >= 5000) {
+      pjs::Value quota;
+      if (eval(*ctx, m_quota, quota)) {
+        set_quota(quota);
+      }
+    }
   }
 
   if (inp->is<SessionEnd>()) {
@@ -110,6 +111,18 @@ void Tap::process(Context *ctx, Event *inp) {
   }
 }
 
+void Tap::set_quota(const pjs::Value &quota) {
+  if (quota.is_nullish()) {
+    m_queue->setup(-1, false);
+  } else if (quota.is_number()) {
+    m_queue->setup(quota.n(), false);
+  } else {
+    auto *s = quota.to_string();
+    m_queue->setup(utils::get_byte_size(s->str()), true);
+    s->release();
+  }
+}
+
 void Tap::Queue::setup(int quota, bool is_data) {
   m_initial_quota = quota;
   if (!m_has_set) {
@@ -117,6 +130,7 @@ void Tap::Queue::setup(int quota, bool is_data) {
     m_is_data = is_data;
     m_has_set = true;
   }
+  m_setup_time = utils::now();
 }
 
 void Tap::Queue::push(Context *ctx, Event *e, Event::Receiver out) {

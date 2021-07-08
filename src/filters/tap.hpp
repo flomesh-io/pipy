@@ -31,6 +31,7 @@
 #include "timer.hpp"
 
 #include <unordered_map>
+#include <chrono>
 
 namespace pipy {
 
@@ -56,6 +57,7 @@ private:
   class Queue {
   public:
     void setup(int quota, bool is_data);
+    auto setup_time() const -> double { return m_setup_time; }
     void push(Context *ctx, Event *e, Event::Receiver out);
     bool unlimited() const { return m_initial_quota < 0; }
     bool blocking() const { return !m_queue.empty(); }
@@ -74,6 +76,7 @@ private:
     bool m_has_set = false;
     bool m_blocking = false;
     bool m_supplying = false;
+    double m_setup_time = 0;
     Timer m_timer;
 
     auto deduct_data(Event *e) -> Data*;
@@ -102,6 +105,8 @@ private:
   Queue* m_queue = nullptr;
   bool m_initialized = false;
   bool m_session_end = false;
+
+  void set_quota(const pjs::Value &quota);
 };
 
 } // namespace pipy

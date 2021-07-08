@@ -27,6 +27,7 @@
 
 #include <sys/stat.h>
 #include <cmath>
+#include <chrono>
 
 namespace pipy {
 
@@ -38,6 +39,12 @@ auto to_string(double n) -> std::string {
   double i; std::modf(n, &i);
   if (std::modf(n, &i) == 0) return std::to_string(int64_t(i));
   return std::to_string(n);
+}
+
+auto now() -> double {
+  auto t = std::chrono::system_clock::now().time_since_epoch();
+  auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(t).count();
+  return double(ms);
 }
 
 auto get_param(const std::map<std::string, std::string> &params, const char *name, const char *value) -> std::string {
