@@ -129,7 +129,7 @@ function __build_deps_check() {
 function build() {
   __build_deps_check
   cd ${PIPY_DIR}
-  BRANCH=`git branch --show-current`
+  BRANCH=`git rev-parse --abbrev-ref HEAD`
   git fetch
   git pull origin $BRANCH
   export CC=clang
