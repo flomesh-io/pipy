@@ -56,7 +56,6 @@ private:
   size_t m_buffer_limit = 0;
   int m_retry_count = 0;
   double m_retry_delay = 0;
-  std::shared_ptr<asio::ssl::context> m_ssl_context;
   Outbound* m_outbound = nullptr;
   bool m_session_end = false;
 };

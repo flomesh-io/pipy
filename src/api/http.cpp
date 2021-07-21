@@ -61,6 +61,8 @@ static std::map<std::string, std::string> s_content_types = {
   { "json"  , "application/json" },
 };
 
+static Data::Producer s_dp_http_file("http.File");
+
 auto File::from(const std::string &path) -> File* {
   try {
     return File::make(path);
@@ -94,7 +96,7 @@ File::File(const std::string &path) {
     char buf[DATA_CHUNK_SIZE];
     while (!fs.eof()) {
       fs.read(buf, sizeof(buf));
-      data->push(buf, fs.gcount());
+      s_dp_http_file.push(data, buf, fs.gcount());
     }
     return data;
   });
@@ -110,7 +112,7 @@ File::File(Tarball *tarball, const std::string &path) {
     size_t size;
     auto ptr = tarball->get(filename, size);
     if (!ptr) return nullptr;
-    return Data::make(ptr, size);
+    return s_dp_http_file.make(ptr, size);
   });
 
   m_path = pjs::Str::make(path);
@@ -238,7 +240,7 @@ bool File::decompress() {
         zs.avail_out = sizeof(buf);
         auto ret = inflate(&zs, Z_NO_FLUSH);
         if (auto size = sizeof(buf) - zs.avail_out) {
-          m_data->push(buf, size);
+          s_dp_http_file.push(m_data, buf, size);
         }
         if (ret == Z_STREAM_END) { done = true; break; }
         if (ret != Z_OK) {

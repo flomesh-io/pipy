@@ -48,13 +48,15 @@ class Configuration : public pjs::ObjectTemplate<Configuration> {
 public:
   static void set_reuse_port(bool b) { s_reuse_port = b; }
 
-  void connect(const pjs::Value &target, pjs::Object *options);
   void listen(int port, pjs::Object *options);
   void task();
   void task(double interval);
   void task(const std::string &interval);
   void pipeline(const std::string &name);
 
+  void accept_tls(pjs::Str *target, pjs::Object *options);
+  void connect(const pjs::Value &target, pjs::Object *options);
+  void connect_tls(pjs::Str *target, pjs::Object *options);
   void decode_dubbo();
   void decode_http_request();
   void decode_http_response(bool bodiless);
@@ -95,9 +97,8 @@ private:
   struct ListenConfig {
     std::string ip;
     int port;
-    bool reuse;
-    bool ssl;
-    asio::ssl::context ssl_context;
+    bool reuse_port;
+    int max_connections;
     std::list<std::unique_ptr<Filter>> filters;
   };
 

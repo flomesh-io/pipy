@@ -217,6 +217,8 @@ void Encoder::reset() {
 }
 
 void Encoder::process(Context *ctx, Event *inp) {
+  static Data::Producer s_dp("encodeDubbo");
+
   if (m_session_end) return;
 
   if (auto start = inp->as<MessageStart>()) {
@@ -260,7 +262,7 @@ void Encoder::process(Context *ctx, Event *inp) {
     header[15] = L >> 0;
 
     output(m_message_start);
-    output(Data::make(header, sizeof(header)));
+    output(s_dp.make(header, sizeof(header)));
     output(m_buffer);
     output(inp);
 

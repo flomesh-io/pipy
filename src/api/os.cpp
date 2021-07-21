@@ -64,6 +64,8 @@ template<> void ClassDef<OS>::init() {
 
   // os.readFile
   method("readFile", [](Context &ctx, Object*, Value &ret) {
+    static pipy::Data::Producer s_dp("os.readFile");
+
     Str *filename;
     if (!ctx.arguments(1, &filename)) return;
     std::ifstream fs(filename->str(), std::ios::in);
@@ -76,7 +78,7 @@ template<> void ClassDef<OS>::init() {
     char buf[1024];
     while (!fs.eof()) {
       fs.read(buf, sizeof(buf));
-      data->push(buf, fs.gcount());
+      s_dp.push(data, buf, fs.gcount());
     }
     ret.set(data);
   });

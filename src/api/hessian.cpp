@@ -729,6 +729,8 @@ void Hessian::decode(const Data &data, pjs::Value &val) {
 }
 
 bool Hessian::encode(const pjs::Value &val, Data &data) {
+  static Data::Producer s_dp("Hessian");
+
   int level = 0;
 
   auto write_str = [&](const std::string &str) {
@@ -751,66 +753,66 @@ bool Hessian::encode(const pjs::Value &val, Data &data) {
     }
 
     if (n < 32) {
-      data.push((char)n);
-      data.push(str.c_str());
+      s_dp.push(&data, (char)n);
+      s_dp.push(&data, str.c_str());
     } else if (n < 1024) {
-      data.push((char)(n >> 8) | 0x30);
-      data.push((char)(n >> 0));
-      data.push(str.c_str());
+      s_dp.push(&data, (char)(n >> 8) | 0x30);
+      s_dp.push(&data, (char)(n >> 0));
+      s_dp.push(&data, str.c_str());
     } else if (n < 65536) {
-      data.push('S');
-      data.push((char)(n >> 8));
-      data.push((char)(n >> 0));
-      data.push(str.c_str());
+      s_dp.push(&data, 'S');
+      s_dp.push(&data, (char)(n >> 8));
+      s_dp.push(&data, (char)(n >> 0));
+      s_dp.push(&data, str.c_str());
     } else {
-      data.push('S');
-      data.push(0xff);
-      data.push(0xff);
-      data.push(str.c_str(), 65536);
+      s_dp.push(&data, 'S');
+      s_dp.push(&data, 0xff);
+      s_dp.push(&data, 0xff);
+      s_dp.push(&data, str.c_str(), 65536);
     }
   };
 
   std::function<bool(const pjs::Value&)> write;
   write = [&](const pjs::Value &v) -> bool {
     if (v.is_undefined()) {
-      data.push('N');
+      s_dp.push(&data, 'N');
 
     } else if (v.is_boolean()) {
-      data.push(v.b() ? 'T' : 'F');
+      s_dp.push(&data, v.b() ? 'T' : 'F');
 
     } else if (v.is_number()) {
       auto n = v.n();
       double i;
       if (std::isnan(n) || std::isinf(n) || std::modf(n, &i)) {
         int64_t tmp; *(double*)&tmp = n;
-        data.push('D');
-        data.push((char)(tmp >> 56));
-        data.push((char)(tmp >> 48));
-        data.push((char)(tmp >> 40));
-        data.push((char)(tmp >> 32));
-        data.push((char)(tmp >> 24));
-        data.push((char)(tmp >> 16));
-        data.push((char)(tmp >> 8 ));
-        data.push((char)(tmp >> 0 ));
+        s_dp.push(&data, 'D');
+        s_dp.push(&data, (char)(tmp >> 56));
+        s_dp.push(&data, (char)(tmp >> 48));
+        s_dp.push(&data, (char)(tmp >> 40));
+        s_dp.push(&data, (char)(tmp >> 32));
+        s_dp.push(&data, (char)(tmp >> 24));
+        s_dp.push(&data, (char)(tmp >> 16));
+        s_dp.push(&data, (char)(tmp >> 8 ));
+        s_dp.push(&data, (char)(tmp >> 0 ));
 
       } else {
         auto n = int64_t(v.n());
         if (std::numeric_limits<int>::min() <= n && n <= std::numeric_limits<int>::max()) {
-          data.push('I');
-          data.push((char)(n >> 24));
-          data.push((char)(n >> 16));
-          data.push((char)(n >> 8 ));
-          data.push((char)(n >> 0 ));
+          s_dp.push(&data, 'I');
+          s_dp.push(&data, (char)(n >> 24));
+          s_dp.push(&data, (char)(n >> 16));
+          s_dp.push(&data, (char)(n >> 8 ));
+          s_dp.push(&data, (char)(n >> 0 ));
         } else {
-          data.push('L');
-          data.push((char)(n >> 56));
-          data.push((char)(n >> 48));
-          data.push((char)(n >> 40));
-          data.push((char)(n >> 32));
-          data.push((char)(n >> 24));
-          data.push((char)(n >> 16));
-          data.push((char)(n >> 8 ));
-          data.push((char)(n >> 0 ));
+          s_dp.push(&data, 'L');
+          s_dp.push(&data, (char)(n >> 56));
+          s_dp.push(&data, (char)(n >> 48));
+          s_dp.push(&data, (char)(n >> 40));
+          s_dp.push(&data, (char)(n >> 32));
+          s_dp.push(&data, (char)(n >> 24));
+          s_dp.push(&data, (char)(n >> 16));
+          s_dp.push(&data, (char)(n >> 8 ));
+          s_dp.push(&data, (char)(n >> 0 ));
         }
       }
 
@@ -820,26 +822,26 @@ bool Hessian::encode(const pjs::Value &val, Data &data) {
     } else if (v.is_object()) {
 
       if (v.is_array()) {
-        if (level++ > 0) data.push(0x57);
+        if (level++ > 0) s_dp.push(&data, 0x57);
         auto a = v.as<pjs::Array>();
         auto n = a->iterate_while([&](pjs::Value &v, int i) -> bool {
           return write(v);
         });
         if (n < a->length()) return false;
-        if (--level > 0) data.push('Z');
+        if (--level > 0) s_dp.push(&data, 'Z');
 
       } else if (!v.o()) {
-        data.push('N');
+        s_dp.push(&data, 'N');
 
       } else {
-        data.push('H');
+        s_dp.push(&data, 'H');
         level++;
         auto done = v.o()->iterate_while([&](pjs::Str *k, pjs::Value &v) -> bool {
           write_str(k->str());
           return write(v);
         });
         if (!done) return false;
-        data.push('Z');
+        s_dp.push(&data, 'Z');
         level--;
       }
     }

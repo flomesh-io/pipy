@@ -27,6 +27,7 @@
 #define LISTENER_HPP
 
 #include "net.hpp"
+#include "inbound.hpp"
 
 #include <functional>
 #include <string>
@@ -41,18 +42,20 @@ class Pipeline;
 
 class Listener {
 public:
-  static auto make(const std::string &ip, int port, bool reuse) -> Listener* {
-    return new Listener(ip, port, reuse);
-  }
-
-  static auto make(const std::string &ip, int port, bool reuse, asio::ssl::context &&ssl_context) -> Listener* {
-    return new Listener(ip, port, reuse, std::move(ssl_context));
+  static auto make(const std::string &ip, int port) -> Listener* {
+    return new Listener(ip, port);
   }
 
   static auto get(int port) -> Listener* {
     auto i = s_all_listeners.find(port);
     if (i == s_all_listeners.end()) return nullptr;
     return i->second;
+  }
+
+  static void for_each(const std::function<void(Listener*)> &cb) {
+    for (const auto &p : s_all_listeners) {
+      cb(p.second);
+    }
   }
 
   static void close_all() {
@@ -67,24 +70,42 @@ public:
   void open(Pipeline *pipeline);
   void close();
 
+  auto peak_connections() const -> int { return m_peak_connections; }
+
+  void set_reuse_port(bool reuse);
+  void set_max_connections(int n);
+
+  void for_each_inbound(const std::function<void(Inbound*)> &cb) {
+    for (auto p = m_inbounds.head(); p; p = p->next()) {
+      cb(p);
+    }
+  }
+
 private:
-  Listener(const std::string &ip, int port, bool reuse);
-  Listener(const std::string &ip, int port, bool reuse, asio::ssl::context &&ssl_context);
+  Listener(const std::string &ip, int port);
   ~Listener();
 
   void start();
   void accept();
+  void pause();
+  void resume();
+  void close(Inbound *inbound);
 
   std::string m_ip;
   int m_port;
-  bool m_reuse;
-  bool m_ssl;
+  int m_max_connections = -1;
+  int m_peak_connections = 0;
+  bool m_reuse_port = false;
+  bool m_open = false;
+  bool m_paused = false;
   asio::ip::tcp::acceptor m_acceptor;
-  asio::ssl::context m_ssl_context;
   pjs::Ref<Pipeline> m_pipeline;
+  List<Inbound> m_inbounds;
 
   static std::list<asio::steady_timer*> s_timer_pool;
   static std::map<int, Listener*> s_all_listeners;
+
+  friend class Inbound;
 };
 
 } // namespace pipy

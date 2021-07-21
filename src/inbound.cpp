@@ -36,27 +36,14 @@ namespace pipy {
 
 using tcp = asio::ip::tcp;
 
-static asio::ssl::context s_default_ssl_context(asio::ssl::context::sslv23_client);
-
 uint64_t Inbound::s_inbound_id = 0;
 
-Inbound::Inbound()
-  : m_socket(Net::service())
-  , m_ssl_socket(Net::service(), s_default_ssl_context)
+Inbound::Inbound(Listener *listener)
+  : m_listener(listener)
+  , m_socket(Net::service())
 {
   if (!++s_inbound_id) s_inbound_id++;
   m_id = s_inbound_id;
-  retain();
-}
-
-Inbound::Inbound(asio::ssl::context &ssl_context)
-  : m_socket(Net::service())
-  , m_ssl_socket(Net::service(), ssl_context)
-  , m_ssl(true)
-{
-  if (!++s_inbound_id) s_inbound_id++;
-  m_id = s_inbound_id;
-  retain();
 }
 
 Inbound::~Inbound() {
@@ -64,6 +51,7 @@ Inbound::~Inbound() {
     auto *ctx = m_session->context();
     ctx->m_inbound = nullptr;
   }
+  m_listener->close(this);
 }
 
 void Inbound::accept(
@@ -71,11 +59,13 @@ void Inbound::accept(
   asio::ip::tcp::acceptor &acceptor,
   std::function<void(const std::error_code&)> on_result
 ) {
+  retain();
   acceptor.async_accept(
-    socket(), m_peer,
+    m_socket, m_peer,
     [=](const std::error_code &ec) {
       m_remote_addr = m_peer.address().to_string();
       m_remote_port = m_peer.port();
+      on_result(ec);
       if (ec) {
         if (ec != asio::error::operation_aborted) {
           Log::warn(
@@ -84,7 +74,7 @@ void Inbound::accept(
         }
         release();
       } else {
-        const auto &local = socket().local_endpoint();
+        const auto &local = m_socket.local_endpoint();
         m_local_addr = local.address().to_string();
         m_local_port = local.port();
 
@@ -92,24 +82,8 @@ void Inbound::accept(
           "Inbound: %p, connection accepted from downstream %s",
           this, m_remote_addr.c_str());
 
-        if (m_ssl) {
-          m_ssl_socket.async_handshake(
-            asio::ssl::stream_base::server,
-            [=](const std::error_code &ec) {
-              if (ec) {
-                Log::warn(
-                  "Inbound: %p, handshake failed to %s:%d, %s",
-                  this, m_remote_addr.c_str(), m_remote_port, ec.message().c_str());
-              } else {
-                start(listener->pipeline());
-              }
-            }
-          );
-        } else {
-          start(listener->pipeline());
-        }
+        start(listener->pipeline());
       }
-      on_result(ec);
     }
   );
 }
@@ -188,7 +162,9 @@ void Inbound::start(Pipeline *pipeline) {
 }
 
 void Inbound::receive() {
-  pjs::Ref<Data> buffer(Data::make(RECEIVE_BUFFER_SIZE));
+  static Data::Producer s_data_producer("Inbound");
+
+  pjs::Ref<Data> buffer(Data::make(RECEIVE_BUFFER_SIZE, &s_data_producer));
 
   auto on_received = [=](const std::error_code &ec, std::size_t n) {
     if (n > 0) {
@@ -221,15 +197,9 @@ void Inbound::receive() {
     }
   };
 
-  if (m_ssl) {
-    m_ssl_socket.async_read_some(
-      DataChunks(buffer->chunks()),
-      on_received);
-  } else {
-    m_socket.async_read_some(
-      DataChunks(buffer->chunks()),
-      on_received);
-  }
+  m_socket.async_read_some(
+    DataChunks(buffer->chunks()),
+    on_received);
 }
 
 void Inbound::pump() {
@@ -258,15 +228,9 @@ void Inbound::pump() {
     }
   };
 
-  if (m_ssl) {
-    m_ssl_socket.async_write_some(
-      DataChunks(m_buffer.chunks()),
-      on_sent);
-  } else {
-    m_socket.async_write_some(
-      DataChunks(m_buffer.chunks()),
-      on_sent);
-  }
+  m_socket.async_write_some(
+    DataChunks(m_buffer.chunks()),
+    on_sent);
 
   m_pumping = true;
 }
@@ -275,7 +239,7 @@ void Inbound::close() {
   if (m_pumping) return;
 
   std::error_code ec;
-  socket().close(ec);
+  m_socket.close(ec);
   if (ec) {
     Log::error("Inbound: %p, error closing socket to %s, %s", this, m_remote_addr.c_str(), ec.message().c_str());
   } else {

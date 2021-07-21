@@ -28,9 +28,11 @@
 
 #include "event.hpp"
 #include "constants.hpp"
+#include "list.hpp"
 #include "utils.hpp"
 
 #include <cstring>
+#include <functional>
 
 namespace pipy {
 
@@ -39,6 +41,60 @@ namespace pipy {
 //
 
 class Data : public pjs::ObjectTemplate<Data, Event> {
+private:
+  struct Chunk;
+
+public:
+  enum class Encoding {
+    UTF8,
+    Hex,
+    Base64,
+    Base64Url,
+  };
+
+  class Producer : public List<Producer>::Item {
+  public:
+    static void for_each(const std::function<void(Producer*)> &cb) {
+      for (auto p = s_all_producers.head(); p; p = p->next()) {
+        cb(p);
+      }
+    }
+
+    Producer(const std::string &name) : m_name(name) {
+      s_all_producers.push(this);
+    }
+
+    auto name() const -> const std::string& { return m_name; }
+    auto peak() const -> int { return m_peak; }
+    auto current() const -> int { return m_current; }
+
+    Data* make(int size) { return Data::make(size, this); }
+    Data* make(int size, int value) { return Data::make(size, value, this); }
+    Data* make(const void *data, int size) { return Data::make(data, size, this); }
+    Data* make(const std::string &str) { return Data::make(str, this); }
+    Data* make(const std::string &str, Encoding encoding) { return Data::make(str, encoding, this); }
+
+    void push(Data *data, const void *p, int n) { data->push(p, n, this); }
+    void push(Data *data, const std::string &str) { data->push(str, this); }
+    void push(Data *data, const char *str) { data->push(str, this); }
+    void push(Data *data, char ch) { data->push(ch, this); }
+
+    void pack(Data *data, Data *appendant, double vacancy = 0.5) { data->pack(*appendant, this, vacancy); }
+
+  private:
+    std::string m_name;
+    int m_peak = 0;
+    int m_current = 0;
+
+    void increase() { m_peak = std::max(m_peak, ++m_current); }
+    void decrease() { m_current--; }
+
+    static List<Producer> s_all_producers;
+
+    friend struct Chunk;
+  };
+
+private:
   virtual auto type() const -> Type override {
     return Event::Data;
   }
@@ -52,11 +108,18 @@ class Data : public pjs::ObjectTemplate<Data, Event> {
   }
 
   struct Chunk : public Pooled<Chunk> {
-    char   data[DATA_CHUNK_SIZE];
-    int    retain_count = 0;
-    int    size() const { return sizeof(data); }
-    void   retain() { ++retain_count; }
-    void   release() { if (!--retain_count) delete this; }
+    char data[DATA_CHUNK_SIZE];
+    int retain_count = 0;
+
+    Chunk(Producer *producer) : m_producer(producer) { producer->increase(); }
+    ~Chunk() { m_producer->decrease(); }
+
+    auto size() const -> int { return sizeof(data); }
+    void retain() { ++retain_count; }
+    void release() { if (!--retain_count) delete this; }
+
+  private:
+    Producer* m_producer;
   };
 
   struct View : public Pooled<View> {
@@ -110,21 +173,15 @@ class Data : public pjs::ObjectTemplate<Data, Event> {
       return view;
     }
 
-    View* clone() {
-      auto new_chunk = new Chunk;
+    View* clone(Producer *producer) {
+      if (!producer) producer = &s_unknown_producer;
+      auto new_chunk = new Chunk(producer);
       std::memcpy(new_chunk->data, chunk->data + offset, length);
       return new View(new_chunk, 0, length);
     }
   };
 
 public:
-  enum class Encoding {
-    UTF8,
-    Hex,
-    Base64,
-    Base64Url,
-  };
-
   static auto flush() -> Data*;
 
   class Chunks {
@@ -171,26 +228,28 @@ public:
     , m_tail(nullptr)
     , m_size(0) {}
 
-  Data(int size)
+  Data(int size, Producer *producer)
     : m_head(nullptr)
     , m_tail(nullptr)
     , m_size(0)
   {
+    if (!producer) producer = &s_unknown_producer;
     while (size > 0) {
-      auto chunk = new Chunk;
+      auto chunk = new Chunk(producer);
       auto length = std::min(size, chunk->size());
       push_view(new View(chunk, 0, length));
       size -= length;
     }
   }
 
-  Data(int size, int value)
+  Data(int size, int value, Producer *producer)
     : m_head(nullptr)
     , m_tail(nullptr)
     , m_size(0)
   {
+    if (!producer) producer = &s_unknown_producer;
     while (size > 0) {
-      auto chunk = new Chunk;
+      auto chunk = new Chunk(producer);
       auto length = std::min(size, chunk->size());
       std::memset(chunk->data, value, length);
       push_view(new View(chunk, 0, length));
@@ -198,26 +257,26 @@ public:
     }
   }
 
-  Data(const void *data, int size)
+  Data(const void *data, int size, Producer *producer)
     : m_head(nullptr)
     , m_tail(nullptr)
     , m_size(0)
   {
-    push(data, size);
+    push(data, size, producer);
   }
 
-  Data(const std::string &str) : Data(str.c_str(), str.length())
+  Data(const std::string &str, Producer *producer) : Data(str.c_str(), str.length(), producer)
   {
   }
 
-  Data(const std::string &str, Encoding encoding) : Data() {
+  Data(const std::string &str, Encoding encoding, Producer *producer) : Data() {
     switch (encoding) {
       case Encoding::UTF8:
-        push(str);
+        push(str, producer);
         break;
       case Encoding::Hex: {
         if (str.length() % 2) throw std::runtime_error("incomplete hex string");
-        utils::HexDecoder decoder([this](uint8_t b) { push(b); });
+        utils::HexDecoder decoder([&](uint8_t b) { push(b, producer); });
         for (auto c : str) {
           if (!decoder.input(c)) {
             throw std::runtime_error("invalid hex encoding");
@@ -227,7 +286,7 @@ public:
       }
       case Encoding::Base64: {
         if (str.length() % 4) throw std::runtime_error("incomplete Base64 string");
-        utils::Base64Decoder decoder([this](uint8_t b) { push(b); });
+        utils::Base64Decoder decoder([&](uint8_t b) { push(b, producer); });
         for (auto c : str) {
           if (!decoder.input(c)) {
             throw std::runtime_error("invalid Base64 encoding");
@@ -237,7 +296,7 @@ public:
         break;
       }
       case Encoding::Base64Url: {
-        utils::Base64UrlDecoder decoder([this](uint8_t b) { push(b); });
+        utils::Base64UrlDecoder decoder([&](uint8_t b) { push(b, producer); });
         for (auto c : str) {
           if (!decoder.input(c)) {
             throw std::runtime_error("invalid Base64 encoding");
@@ -326,15 +385,16 @@ public:
     }
   }
 
-  void push(const std::string &str) {
-    push(str.c_str(), str.length());
+  void push(const std::string &str, Producer *producer) {
+    push(str.c_str(), str.length(), producer);
   }
 
-  void push(const char *str) {
-    push(str, std::strlen(str));
+  void push(const char *str, Producer *producer) {
+    push(str, std::strlen(str), producer);
   }
 
-  void push(const void *data, int n) {
+  void push(const void *data, int n, Producer *producer) {
+    if (!producer) producer = &s_unknown_producer;
     const char *p = (const char*)data;
     if (auto view = m_tail) {
       auto chunk = view->chunk;
@@ -346,7 +406,7 @@ public:
       }
     }
     while (n > 0) {
-      auto view = new View(new Chunk, 0, 0);
+      auto view = new View(new Chunk(producer), 0, 0);
       auto added = view->push(p, n);
       p += added;
       n -= added;
@@ -354,8 +414,8 @@ public:
     }
   }
 
-  void push(char ch) {
-    push(&ch, 1);
+  void push(char ch, Producer *producer) {
+    push(&ch, 1, producer);
   }
 
   void pop(int n) {
@@ -465,7 +525,7 @@ public:
     }
   }
 
-  void pack(const Data &data, double vacancy = 0.5);
+  void pack(const Data &data, Producer *producer, double vacancy = 0.5);
 
   void to_chunks(std::function<void(const uint8_t*, int)> cb) {
     for (auto view = m_head; view; view = view->next) {
@@ -615,6 +675,8 @@ private:
     m_head = view;
     m_size += size;
   }
+
+  static Producer s_unknown_producer;
 };
 
 } // namespace pipy

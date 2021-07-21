@@ -25,6 +25,12 @@
 
 #include "message.hpp"
 
+namespace pipy {
+
+Data::Producer Message::s_dp("Message");
+
+} // namespace pipy
+
 namespace pjs {
 
 template<> void ClassDef<pipy::Message>::init() {

@@ -101,6 +101,8 @@ void Pack::reset() {
 }
 
 void Pack::process(Context *ctx, Event *inp) {
+  static Data::Producer s_dp("pack");
+
   if (m_session_end) return;
 
   if (m_timeout > 0) {
@@ -121,7 +123,7 @@ void Pack::process(Context *ctx, Event *inp) {
 
   } else if (auto data = inp->as<Data>()) {
     if (m_buffer) {
-      m_buffer->pack(*data, m_vacancy);
+      s_dp.pack(m_buffer, data, m_vacancy);
       return;
     }
 

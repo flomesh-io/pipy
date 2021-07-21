@@ -217,6 +217,8 @@ bool JSON::encode(
   int space,
   Data &data
 ) {
+  static Data::Producer s_dp("JSON");
+
   static std::string s_null("null");
   static std::string s_true("true");
   static std::string s_false("false");
@@ -233,65 +235,65 @@ bool JSON::encode(
 
   write = [&](pjs::Value &v, int l) -> bool {
     if (v.is_undefined() || v.is_null()) {
-      data.push(s_null);
+      s_dp.push(&data, s_null);
     } else if (v.is_boolean()) {
-      data.push(v.b() ? s_true : s_false);
+      s_dp.push(&data, v.b() ? s_true : s_false);
     } else if (v.is_number()) {
       auto n = v.n();
       double i;
       if (std::isnan(n) || std::isinf(n)) {
-        data.push(s_null);
+        s_dp.push(&data, s_null);
       } else if (std::modf(n, &i) == 0) {
-        data.push(std::to_string(int64_t(i)));
+        s_dp.push(&data, std::to_string(int64_t(i)));
       } else {
-        data.push(std::to_string(n));
+        s_dp.push(&data, std::to_string(n));
       }
     } else if (v.is_string()) {
-      data.push('"');
-      data.push(utils::escape(v.s()->str()));
-      data.push('"');
+      s_dp.push(&data, '"');
+      s_dp.push(&data, utils::escape(v.s()->str()));
+      s_dp.push(&data, '"');
     } else if (v.is_array()) {
       std::string indent(space * l + space, ' ');
       bool first = true;
-      data.push(space ? "[\n" : "[");
+      s_dp.push(&data, space ? "[\n" : "[");
       auto a = v.as<pjs::Array>();
       auto n = a->iterate_while([&](pjs::Value &v, int i) -> bool {
         pjs::Value v2(v);
         if (replacer && !replacer(a, i, v2)) return false;
         if (v2.is_undefined() || v2.is_function()) v2 = pjs::Value::null;
-        if (first) first = false; else data.push(space ? ",\n" : ",");
-        if (space) data.push(indent);
+        if (first) first = false; else s_dp.push(&data, space ? ",\n" : ",");
+        if (space) s_dp.push(&data, indent);
         write(v2, l + 1);
         return true;
       });
       if (n < a->length()) return false;
       if (space) {
-        data.push('\n');
-        data.push(std::string(space * l, ' '));
+        s_dp.push(&data, '\n');
+        s_dp.push(&data, std::string(space * l, ' '));
       }
-      data.push(']');
+      s_dp.push(&data, ']');
     } else if (v.is_object()) {
       std::string indent(space * l + space, ' ');
       bool first = true;
-      data.push(space ? "{\n" : "{");
+      s_dp.push(&data, space ? "{\n" : "{");
       auto o = v.o();
       auto done = o->iterate_while([&](pjs::Str *k, pjs::Value &v) {
         pjs::Value v2(v);
         if (replacer && !replacer(o, k, v2)) return false;
         if (v2.is_undefined() || v2.is_function()) return true;
-        if (first) first = false; else data.push(space ? ",\n" : ",");
-        if (space) data.push(indent);
-        data.push('"');
-        data.push(utils::escape(k->str()));
-        data.push(space ? "\": " : "\":");
+        if (first) first = false; else s_dp.push(&data, space ? ",\n" : ",");
+        if (space) s_dp.push(&data, indent);
+        s_dp.push(&data, '"');
+        s_dp.push(&data, utils::escape(k->str()));
+        s_dp.push(&data, space ? "\": " : "\":");
         return write(v2, l + 1);
       });
       if (!done) return false;
       if (space) {
-        data.push('\n');
-        data.push(std::string(space * l, ' '));
+        s_dp.push(&data, '\n');
+        s_dp.push(&data, std::string(space * l, ' '));
       }
-      data.push('}');
+      s_dp.push(&data, '}');
     }
     return true;
   };

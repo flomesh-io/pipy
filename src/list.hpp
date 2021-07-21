@@ -44,6 +44,7 @@ public:
   };
 
   bool empty() const { return !m_head; }
+  auto size() const -> size_t { return m_size; }
   auto head() const -> T* { return static_cast<T*>(m_head); }
   auto tail() const -> T* { return static_cast<T*>(m_tail); }
 
@@ -55,17 +56,20 @@ public:
     } else {
       m_tail = m_head = item;
     }
+    m_size++;
   }
 
   void remove(Item *item) {
     if (item->m_next) item->m_next->m_back = item->m_back; else m_tail = item->m_back;
     if (item->m_back) item->m_back->m_next = item->m_next; else m_head = item->m_next;
     item->m_back = item->m_next = nullptr;
+    m_size--;
   }
 
 private:
   Item* m_head = nullptr;
   Item* m_tail = nullptr;
+  size_t m_size = 0;
 };
 
 } // namespace pipy

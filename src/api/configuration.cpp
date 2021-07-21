@@ -59,6 +59,7 @@
 #include "filters/socks.hpp"
 #include "filters/socks4.hpp"
 #include "filters/tap.hpp"
+#include "filters/tls.hpp"
 #include "filters/use.hpp"
 #include "filters/wait.hpp"
 
@@ -92,53 +93,29 @@ Configuration::Configuration(pjs::Object *context_prototype) {
 }
 
 void Configuration::listen(int port, pjs::Object *options) {
+  int max_connections = -1;
   bool reuse_port = s_reuse_port;
-  bool ssl = false;
-  std::string cert_pem, key_pem;
 
   if (options) {
-    pjs::Value reuse, tls;
-    options->get("reuse", reuse);
-    options->get("tls", tls);
+    pjs::Value reuse, max_conn;
+    options->get("reusePort", reuse);
+    options->get("maxConnections", max_conn);
 
     if (!reuse.is_undefined()) {
       reuse_port = reuse.to_boolean();
     }
 
-    if (!tls.is_undefined()) {
-      if (!tls.is_object()) throw std::runtime_error("option tls must be an object");
-      if (auto *o = tls.o()) {
-        ssl = true;
-        pjs::Value cert, key;
-        o->get("cert", cert);
-        o->get("key", key);
-        if (!cert.is_undefined()) {
-          auto *s = cert.to_string();
-          cert_pem = s->str();
-          s->release();
-        }
-        if (!key.is_undefined()) {
-          auto *s = key.to_string();
-          key_pem = s->str();
-          s->release();
-        }
-      }
+    if (!max_conn.is_undefined()) {
+      if (!max_conn.is_number()) throw std::runtime_error("option.maxConnections expects a number");
+      max_connections = max_conn.n();
     }
-  }
-
-  asio::ssl::context ssl_context(asio::ssl::context::sslv23);
-
-  if (ssl) {
-    if (!cert_pem.empty()) ssl_context.use_certificate_chain(asio::const_buffer(cert_pem.c_str(), cert_pem.length()));
-    if (!key_pem.empty()) ssl_context.use_private_key(asio::const_buffer(key_pem.c_str(), key_pem.length()), asio::ssl::context::pem);
   }
 
   m_listens.push_back({
     "0.0.0.0",
     port,
     reuse_port,
-    ssl,
-    std::move(ssl_context)
+    max_connections,
   });
 
   m_current_filters = &m_listens.back().filters;
@@ -173,8 +150,16 @@ void Configuration::pipeline(const std::string &name) {
   m_current_filters = &m_named_pipelines.back().filters;
 }
 
+void Configuration::accept_tls(pjs::Str *target, pjs::Object *options) {
+  append_filter(new tls::Server(target, options));
+}
+
 void Configuration::connect(const pjs::Value &target, pjs::Object *options) {
   append_filter(new Connect(target, options));
+}
+
+void Configuration::connect_tls(pjs::Str *target, pjs::Object *options) {
+  append_filter(new tls::Client(target, options));
 }
 
 void Configuration::decode_dubbo() {
@@ -329,11 +314,9 @@ void Configuration::apply(Module *mod) {
     auto name = i.ip + ':' + std::to_string(i.port);
     auto p = make_pipeline(Pipeline::LISTEN, name, i.filters);
     auto listener = Listener::get(i.port);
-    if (!listener) {
-      listener = i.ssl
-        ? Listener::make(i.ip, i.port, i.reuse, std::move(i.ssl_context))
-        : Listener::make(i.ip, i.port, i.reuse);
-    }
+    if (!listener) listener = Listener::make(i.ip, i.port);
+    listener->set_reuse_port(i.reuse_port);
+    listener->set_max_connections(i.max_connections);
     listener->open(p);
   }
 
@@ -448,6 +431,23 @@ template<> void ClassDef<Configuration>::init() {
     }
   });
 
+  // Configuration.acceptTLS
+  method("acceptTLS", [](Context &ctx, Object *thiz, Value &result) {
+    Str *target;
+    Object *options;
+    if (!ctx.arguments(2, &target, &options)) return;
+    if (!options) {
+      ctx.error_argument_type(1, "a non-null object");
+      return;
+    }
+    try {
+      thiz->as<Configuration>()->accept_tls(target, options);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
   // Configuration.connect
   method("connect", [](Context &ctx, Object *thiz, Value &result) {
     Value target;
@@ -455,6 +455,19 @@ template<> void ClassDef<Configuration>::init() {
     if (!ctx.arguments(1, &target, &options)) return;
     try {
       thiz->as<Configuration>()->connect(target, options);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // Configuration.connectTLS
+  method("connectTLS", [](Context &ctx, Object *thiz, Value &result) {
+    Str *target;
+    Object *options = nullptr;
+    if (!ctx.arguments(1, &target, &options)) return;
+    try {
+      thiz->as<Configuration>()->connect_tls(target, options);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

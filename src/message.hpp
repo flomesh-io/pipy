@@ -49,7 +49,7 @@ private:
     : m_body(body) {}
 
   Message(const std::string &body)
-    : m_body(Data::make(body)) {}
+    : m_body(s_dp.make(body)) {}
 
   Message(pjs::Object *head, Data *body)
     : m_head(head)
@@ -57,7 +57,7 @@ private:
 
   Message(pjs::Object *head, const std::string &body)
     : m_head(head)
-    , m_body(Data::make(body)) {}
+    , m_body(s_dp.make(body)) {}
 
   Message(pjs::Object *context, pjs::Object *head, Data *body)
     : m_context(context)
@@ -67,13 +67,15 @@ private:
   Message(pjs::Object *context, pjs::Object *head, const std::string &body)
     : m_context(context)
     , m_head(head)
-    , m_body(Data::make(body)) {}
+    , m_body(s_dp.make(body)) {}
 
   ~Message() {}
 
   pjs::Ref<pjs::Object> m_context;
   pjs::Ref<pjs::Object> m_head;
   pjs::Ref<Data> m_body;
+
+  static Data::Producer s_dp;
 
   friend class pjs::ObjectTemplate<Message>;
 };

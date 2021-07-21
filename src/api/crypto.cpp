@@ -40,6 +40,13 @@
 namespace pipy {
 namespace crypto {
 
+static Data::Producer s_dp_cipher("Cipher");
+static Data::Producer s_dp_decipher("Decipher");
+static Data::Producer s_dp_hmac("Hmac");
+static Data::Producer s_dp_hash("Hash");
+static Data::Producer s_dp_sign("Sign");
+static Data::Producer s_dp_verify("Verify");
+
 static void throw_error() {
   char str[1000];
   auto err = ERR_get_error();
@@ -187,6 +194,31 @@ auto PrivateKey::read_pem(const void *data, size_t size) -> EVP_PKEY* {
 }
 
 //
+// Certificate
+//
+
+Certificate::Certificate(Data *data) {
+  auto buf = data->to_bytes();
+  m_x509 = read_pem(&buf[0], buf.size());
+}
+
+Certificate::Certificate(pjs::Str *data) {
+  m_x509 = read_pem(data->c_str(), data->length());
+}
+
+Certificate::~Certificate() {
+  if (m_x509) X509_free(m_x509);
+}
+
+auto Certificate::read_pem(const void *data, size_t size) -> X509* {
+  auto bio = BIO_new_mem_buf(data, size);
+  auto x509 = PEM_read_bio_X509(bio, nullptr, nullptr, nullptr);
+  BIO_free(bio);
+  if (!x509) throw_error();
+  return x509;
+}
+
+//
 // Cipher
 //
 
@@ -233,7 +265,7 @@ auto Cipher::update(Data *data) -> Data* {
       out->release();
       throw_error();
     }
-    out->push(buf, n);
+    s_dp_cipher.push(out, buf, n);
   }
   return out;
 }
@@ -252,7 +284,7 @@ auto Cipher::update(pjs::Str *str) -> Data* {
       out->release();
       throw_error();
     }
-    out->push(buf, n);
+    s_dp_cipher.push(out, buf, n);
   }
   return out;
 }
@@ -262,7 +294,7 @@ auto Cipher::final() -> Data* {
   uint8_t buf[block_size];
   int len = 0;
   if (!EVP_EncryptFinal(m_ctx, buf, &len)) throw_error();
-  return Data::make((const uint8_t *)buf, len);
+  return s_dp_cipher.make((const uint8_t *)buf, len);
 }
 
 //
@@ -300,7 +332,7 @@ auto Decipher::update(Data *data) -> Data* {
       out->release();
       throw_error();
     }
-    out->push(buf, n);
+    s_dp_decipher.push(out, buf, n);
   }
   return out;
 }
@@ -319,7 +351,7 @@ auto Decipher::update(pjs::Str *str) -> Data* {
       out->release();
       throw_error();
     }
-    out->push(buf, n);
+    s_dp_decipher.push(out, buf, n);
   }
   return out;
 }
@@ -329,7 +361,7 @@ auto Decipher::final() -> Data* {
   uint8_t buf[block_size];
   int len = 0;
   if (!EVP_DecryptFinal(m_ctx, buf, &len)) throw_error();
-  return Data::make((const uint8_t *)buf, len);
+  return s_dp_decipher.make((const uint8_t *)buf, len);
 }
 
 //
@@ -387,7 +419,7 @@ void Hash::update(pjs::Str *str, Data::Encoding enc) {
       EVP_DigestUpdate(m_ctx, (unsigned char *)str->c_str(), str->length());
       break;
     default: {
-      Data data(str->str(), enc);
+      Data data(str->str(), enc, &s_dp_hash);
       update(&data);
       break;
     }
@@ -398,7 +430,7 @@ auto Hash::digest() -> Data* {
   char hash[EVP_MAX_MD_SIZE];
   unsigned int size;
   EVP_DigestFinal_ex(m_ctx, (unsigned char *)hash, &size);
-  return Data::make(hash, size);
+  return s_dp_hash.make(hash, size);
 }
 
 auto Hash::digest(Data::Encoding enc) -> pjs::Str* {
@@ -460,7 +492,7 @@ void Hmac::update(pjs::Str *str, Data::Encoding enc) {
       HMAC_Update(m_ctx, (unsigned char *)str->c_str(), str->length());
       break;
     default: {
-      Data data(str->str(), enc);
+      Data data(str->str(), enc, &s_dp_hmac);
       update(&data);
       break;
     }
@@ -471,7 +503,7 @@ auto Hmac::digest() -> Data* {
   char hash[EVP_MAX_MD_SIZE];
   unsigned int size;
   HMAC_Final(m_ctx, (unsigned char *)hash, &size);
-  return Data::make(hash, size);
+  return s_dp_hmac.make(hash, size);
 }
 
 auto Hmac::digest(Data::Encoding enc) -> pjs::Str* {
@@ -529,7 +561,7 @@ void Sign::update(pjs::Str *str, Data::Encoding enc) {
       if (!EVP_DigestUpdate(m_ctx, (unsigned char *)str->c_str(), str->length())) throw_error();
       break;
     default: {
-      Data data(str->str(), enc);
+      Data data(str->str(), enc, &s_dp_sign);
       update(&data);
       break;
     }
@@ -555,7 +587,7 @@ auto Sign::sign(PrivateKey *key, Object *options) -> Data* {
   if (EVP_PKEY_sign(ctx, sig, &sig_len, hash, size) <= 0) throw_error();
 
   EVP_PKEY_CTX_free(ctx);
-  return Data::make(&sig[0], sig_len);
+  return s_dp_sign.make(&sig[0], sig_len);
 }
 
 auto Sign::sign(PrivateKey *key, Data::Encoding enc, Object *options) -> pjs::Str* {
@@ -592,7 +624,7 @@ void Verify::update(pjs::Str *str, Data::Encoding enc) {
       if (!EVP_DigestUpdate(m_ctx, (unsigned char *)str->c_str(), str->length())) throw_error();
       break;
     default: {
-      Data data(str->str(), enc);
+      Data data(str->str(), enc, &s_dp_verify);
       update(&data);
       break;
     }
@@ -621,7 +653,7 @@ bool Verify::verify(PublicKey *key, Data *signature, Object *options) {
 }
 
 bool Verify::verify(PublicKey *key, pjs::Str *signature, Data::Encoding enc, Object *options) {
-  Data sig(signature->str(), enc);
+  Data sig(signature->str(), enc, &s_dp_verify);
   return verify(key, &sig, options);
 }
 
@@ -969,6 +1001,34 @@ template<> void ClassDef<PrivateKey>::init() {
 }
 
 template<> void ClassDef<Constructor<PrivateKey>>::init() {
+  super<Function>();
+  ctor();
+}
+
+//
+// Certificate
+//
+
+template<> void ClassDef<Certificate>::init() {
+  ctor([](Context &ctx) -> Object* {
+    Str *data_str;
+    pipy::Data *data;
+    try {
+      if (ctx.try_arguments(1, &data_str)) {
+        return Certificate::make(data_str);
+      } else if (ctx.arguments(1, &data)) {
+        return Certificate::make(data);
+      } else {
+        return nullptr;
+      }
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+      return nullptr;
+    }
+  });
+}
+
+template<> void ClassDef<Constructor<Certificate>>::init() {
   super<Function>();
   ctor();
 }
@@ -1498,6 +1558,7 @@ template<> void ClassDef<Crypto>::init() {
   ctor();
   variable("PublicKey", class_of<Constructor<PublicKey>>());
   variable("PrivateKey", class_of<Constructor<PrivateKey>>());
+  variable("Certificate", class_of<Constructor<Certificate>>());
   variable("Cipher", class_of<Constructor<Cipher>>());
   variable("Decipher", class_of<Constructor<Decipher>>());
   variable("Hash", class_of<Constructor<Hash>>());

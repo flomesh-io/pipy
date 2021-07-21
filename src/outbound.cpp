@@ -25,39 +25,29 @@
 
 #include "outbound.hpp"
 #include "constants.hpp"
+#include "utils.hpp"
 #include "logging.hpp"
 
 namespace pipy {
 
 using tcp = asio::ip::tcp;
 
-static asio::ssl::context s_default_ssl_context(asio::ssl::context::sslv23_client);
+List<Outbound> Outbound::s_all_outbounds;
 
-Outbound::Outbound(int buffer_limit)
+Outbound::Outbound()
   : m_resolver(Net::service())
   , m_socket(Net::service())
-  , m_ssl_socket(Net::service(), s_default_ssl_context)
-  , m_buffer_limit(buffer_limit)
 {
-}
-
-Outbound::Outbound(asio::ssl::context &ssl_context)
-  : m_resolver(Net::service())
-  , m_socket(Net::service())
-  , m_ssl_socket(Net::service(), ssl_context)
-  , m_ssl(true)
-  , m_buffer_limit(0)
-{
-  m_ssl_socket.set_verify_mode(asio::ssl::verify_none);
-  m_ssl_socket.set_verify_callback([](bool preverified, asio::ssl::verify_context &ctx) {
-    return preverified;
-  });
+  Log::debug("Outbound: %p, allocated", this);
+  s_all_outbounds.push(this);
 }
 
 Outbound::~Outbound() {
+  Log::debug("Outbound: %p, freed", this);
   if (m_on_delete) {
     m_on_delete();
   }
+  s_all_outbounds.remove(this);
 }
 
 void Outbound::connect(const std::string &host, int port) {
@@ -108,8 +98,9 @@ void Outbound::connect(double delay) {
 
   auto start_session = [=]() {
     Log::debug("Outbound: %p, connected to upstream %s", this, m_host.c_str());
+    m_connection_time += utils::now() - m_start_time;
     m_connected = true;
-    m_address = (m_ssl ? m_ssl_socket.lowest_layer() : m_socket).remote_endpoint().address().to_string();
+    m_address = m_socket.remote_endpoint().address().to_string();
     if (m_writing_ended && m_buffer.empty()) {
       m_reading_ended = true;
       close();
@@ -128,38 +119,16 @@ void Outbound::connect(double delay) {
       if (should_reconnect()) {
         reconnect();
       } else {
-        if (m_receiver) {
-          pjs::Ref<SessionEnd> evt(SessionEnd::make(
-            ec.message(),
-            SessionEnd::CONNECTION_REFUSED));
-          m_receiver(evt);
-        }
+        pjs::Ref<SessionEnd> evt(SessionEnd::make(
+          ec.message(),
+          SessionEnd::CONNECTION_REFUSED));
+        if (output(evt)) return;
         cancel_connecting();
       }
       return;
     }
 
-    if (!m_ssl) {
-      start_session();
-      return;
-    }
-
-    m_ssl_socket.async_handshake(asio::ssl::stream_base::client, [=](const std::error_code &ec) {
-      if (ec) {
-        Log::error(
-          "Outbound: %p, handshake failed to %s:%d, %s",
-          this, m_host.c_str(), m_port, ec.message().c_str());
-        if (m_receiver) {
-          pjs::Ref<SessionEnd> evt(SessionEnd::make(
-            ec.message(),
-            SessionEnd::CONNECTION_REFUSED));
-          m_receiver(evt);
-        }
-        cancel_connecting();
-      } else {
-        start_session();
-      }
-    });
+    start_session();
   };
 
   auto on_resolved = [=](
@@ -170,24 +139,19 @@ void Outbound::connect(double delay) {
       Log::error(
         "Outbound: %p, failed to resolve hostname %s, %s",
         this, m_host.c_str(), ec.message().c_str());
-      if (m_receiver) {
-        pjs::Ref<SessionEnd> evt(SessionEnd::make(
-          ec.message(),
-          SessionEnd::CANNOT_RESOLVE));
-        m_receiver(evt);
-      }
+      pjs::Ref<SessionEnd> evt(SessionEnd::make(
+        ec.message(),
+        SessionEnd::CANNOT_RESOLVE));
+      if (output(evt)) return;
       cancel_connecting();
       return;
     }
 
-    if (m_ssl) {
-      m_ssl_socket.lowest_layer().async_connect(*result, on_connected);
-    } else {
-      m_socket.async_connect(*result, on_connected);
-    }
+    m_socket.async_connect(*result, on_connected);
   };
 
   auto resolve = [=]() {
+    m_start_time = utils::now();
     m_resolver.async_resolve(
       tcp::resolver::query(m_host, std::to_string(m_port)),
       on_resolved);
@@ -216,19 +180,20 @@ void Outbound::cancel_connecting() {
 void Outbound::reconnect() {
   std::error_code ec;
   m_socket.close(ec);
-  m_ssl_socket.lowest_layer().close(ec);
   m_retries++;
   connect(m_retry_delay);
 }
 
 void Outbound::receive() {
-  pjs::Ref<Data> buffer(Data::make(RECEIVE_BUFFER_SIZE));
+  static Data::Producer s_data_producer("Outbound");
+
+  pjs::Ref<Data> buffer(Data::make(RECEIVE_BUFFER_SIZE, &s_data_producer));
 
   auto on_received = [=](const std::error_code &ec, size_t n) {
     if (n > 0) {
       buffer->pop(buffer->size() - n);
-      if (m_receiver) m_receiver(buffer);
-      if (m_receiver) m_receiver(Data::flush());
+      if (output(buffer)) return;
+      if (output(Data::flush())) return;
     }
 
     if (ec) {
@@ -238,19 +203,15 @@ void Outbound::receive() {
             ? "Outbound: %p, connection closed by upstream %s:%d"
             : "Outbound: %p, closed connection to upstream %s:%d",
           this, m_host.c_str(), m_port);
-        if (m_receiver) {
-          pjs::Ref<SessionEnd> evt(SessionEnd::make(SessionEnd::NO_ERROR));
-          m_receiver(evt);
-        }
+        pjs::Ref<SessionEnd> evt(SessionEnd::make(SessionEnd::NO_ERROR));
+        if (output(evt)) return;
       } else {
         auto msg = ec.message();
         Log::warn(
           "Outbound: %p, error reading from upstream %s:%d, %s",
           this, m_host.c_str(), m_port, msg.c_str());
-        if (m_receiver) {
-          pjs::Ref<SessionEnd> evt(SessionEnd::make(SessionEnd::READ_ERROR));
-          m_receiver(evt);
-        }
+        pjs::Ref<SessionEnd> evt(SessionEnd::make(SessionEnd::READ_ERROR));
+        if (output(evt)) return;
       }
 
       if (should_reconnect()) {
@@ -265,15 +226,22 @@ void Outbound::receive() {
     }
   };
 
-  if (m_ssl) {
-    m_ssl_socket.async_read_some(
-      DataChunks(buffer->chunks()),
-      on_received);
-  } else {
-    m_socket.async_read_some(
-      DataChunks(buffer->chunks()),
-      on_received);
+  m_socket.async_read_some(
+    DataChunks(buffer->chunks()),
+    on_received);
+}
+
+bool Outbound::output(Event *evt) {
+  if (m_receiver) {
+    m_outputing = true;
+    m_receiver(evt);
+    m_outputing = false;
+    if (m_freed) {
+      delete this;
+      return true;
+    }
   }
+  return false;
 }
 
 void Outbound::pump() {
@@ -311,17 +279,10 @@ void Outbound::pump() {
     }
   };
 
-  if (m_ssl) {
-    m_ssl_socket.async_write_some(
-      DataChunks(m_buffer.chunks()),
-      on_sent
-    );
-  } else {
-    m_socket.async_write_some(
-      DataChunks(m_buffer.chunks()),
-      on_sent
-    );
-  }
+  m_socket.async_write_some(
+    DataChunks(m_buffer.chunks()),
+    on_sent
+  );
 
   m_pumping = true;
 }
@@ -331,11 +292,7 @@ void Outbound::close() {
   if (m_pumping) return;
 
   std::error_code ec;
-  if (m_ssl) {
-    m_ssl_socket.lowest_layer().close(ec);
-  } else {
-    m_socket.close(ec);
-  }
+  m_socket.close(ec);
   if (ec) {
     Log::error("Outbound: %p, error closing socket to %s:%d, %s", this, m_host.c_str(), m_port, ec.message().c_str());
   } else {
@@ -345,7 +302,11 @@ void Outbound::close() {
 
 void Outbound::free() {
   if (!m_pumping && m_reading_ended && m_writing_ended) {
-    delete this;
+    if (m_outputing) {
+      m_freed = true;
+    } else {
+      delete this;
+    }
   }
 }
 

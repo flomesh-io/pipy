@@ -63,6 +63,8 @@ template<class T> Class* class_of();
 template<class T>
 class RefCount {
 public:
+  int ref_count() const { return m_refs; }
+
   T* retain() {
     m_refs++;
     return static_cast<T*>(this);

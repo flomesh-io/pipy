@@ -28,6 +28,7 @@
 
 #include "net.hpp"
 #include "pjs/pjs.hpp"
+#include "list.hpp"
 
 namespace pipy {
 
@@ -40,7 +41,10 @@ class Session;
 // Inbound
 //
 
-class Inbound : public pjs::ObjectTemplate<Inbound> {
+class Inbound :
+  public pjs::ObjectTemplate<Inbound>,
+  public List<Inbound>::Item
+{
 public:
   void accept(
     Listener* listener,
@@ -66,6 +70,7 @@ public:
 
   auto remote_port() const -> int { return m_remote_port; }
   auto local_port() const -> int { return m_local_port; }
+  auto buffered() const -> int { return m_buffer.size(); }
 
   void set_keep_alive_request(bool b) { m_keep_alive = b; }
   void increase_request_count() { m_request_count++; }
@@ -79,8 +84,7 @@ public:
   void end();
 
 private:
-  Inbound();
-  Inbound(asio::ssl::context &ssl_context);
+  Inbound(Listener *listener);
   ~Inbound();
 
   enum ReceivingState {
@@ -89,11 +93,11 @@ private:
     PAUSED,
   };
 
+  Listener* m_listener;
   uint64_t m_id;
   pjs::Ref<Session> m_session;
   asio::ip::tcp::endpoint m_peer;
   asio::ip::tcp::socket m_socket;
-  asio::ssl::stream<asio::ip::tcp::socket> m_ssl_socket;
   pjs::Ref<pjs::Str> m_str_remote_addr;
   pjs::Ref<pjs::Str> m_str_local_addr;
   std::string m_remote_addr;
@@ -102,17 +106,12 @@ private:
   int m_local_port = 0;
   Data m_buffer;
   ReceivingState m_receiving_state = RECEIVING;
-  bool m_ssl = false;
   bool m_pumping = false;
   bool m_reading_ended = false;
   bool m_writing_ended = false;
   bool m_keep_alive = true;
   int m_request_count = 0;
   int m_response_count = 0;
-
-  auto socket() -> asio::basic_socket<asio::ip::tcp>& {
-    return m_ssl ? m_ssl_socket.lowest_layer() : m_socket;
-  }
 
   void start(Pipeline *pipeline);
   void receive();

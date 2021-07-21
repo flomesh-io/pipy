@@ -87,13 +87,15 @@ void ProxySOCKS4::reset() {
 }
 
 void ProxySOCKS4::process(Context *ctx, Event *inp) {
+  static Data::Producer s_dp("proxySOCKS4");
+
   if (m_session_end) return;
 
   auto reply = [this](int rep) {
     uint8_t buf[8] = { 0 };
     buf[1] = rep;
-    output(Data::make(buf, sizeof(buf)));
-    output(Data::make()); // flush
+    output(s_dp.make(buf, sizeof(buf)));
+    output(Data::flush());
   };
 
   auto close = [this](Event *inp) {

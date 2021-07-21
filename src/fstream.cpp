@@ -30,8 +30,9 @@
 
 namespace pipy {
 
-FileStream::FileStream(int fd)
+FileStream::FileStream(int fd, Data::Producer *dp)
   : m_stream(Net::service(), fd)
+  , m_dp(dp)
 {
   read();
 }
@@ -79,7 +80,7 @@ void FileStream::end() {
 }
 
 void FileStream::read() {
-  pjs::Ref<Data> buffer(Data::make(RECEIVE_BUFFER_SIZE));
+  pjs::Ref<Data> buffer(m_dp->make(RECEIVE_BUFFER_SIZE));
 
   auto on_received = [=](const std::error_code &ec, size_t n) {
     if (n > 0) {

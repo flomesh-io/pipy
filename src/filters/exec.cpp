@@ -95,6 +95,8 @@ void Exec::reset() {
 }
 
 void Exec::process(Context *ctx, Event *inp) {
+  static Data::Producer s_dp("exec");
+
   if (m_session_end) return;
 
   if (inp->is<SessionEnd>()) {
@@ -139,10 +141,10 @@ void Exec::process(Context *ctx, Event *inp) {
     pipe(in);
     pipe(out);
 
-    m_stdin = new FileStream(in[1]);
+    m_stdin = new FileStream(in[1], &s_dp);
     m_stdin->on_delete([this]() { m_stdin = nullptr; });
 
-    m_stdout = new FileStream(out[0]);
+    m_stdout = new FileStream(out[0], &s_dp);
     m_stdout->on_delete([this]() { m_stdout = nullptr; });
     m_stdout->on_read(
       [=](Event *inp) {

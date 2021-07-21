@@ -84,18 +84,20 @@ void ProxySOCKS::reset() {
 }
 
 void ProxySOCKS::process(Context *ctx, Event *inp) {
+  static Data::Producer s_dp("proxySOCKS");
+
   if (m_session_end) return;
 
   auto reply = [this](const uint8_t *buf, size_t len) {
-    output(Data::make(buf, len));
-    output(Data::make()); // flush
+    output(s_dp.make(buf, len));
+    output(Data::flush());
   };
 
   auto reply_socks4 = [this](int rep) {
     uint8_t buf[8] = { 0 };
     buf[1] = rep;
-    output(Data::make(buf, sizeof(buf)));
-    output(Data::make()); // flush
+    output(s_dp.make(buf, sizeof(buf)));
+    output(Data::flush());
   };
 
   auto reply_socks5 = [this](int rep) {
@@ -103,8 +105,8 @@ void ProxySOCKS::process(Context *ctx, Event *inp) {
     buf[0] = 0x05;
     buf[1] = rep;
     buf[3] = 0x01;
-    output(Data::make(buf, sizeof(buf)));
-    output(Data::make()); // flush
+    output(s_dp.make(buf, sizeof(buf)));
+    output(Data::flush());
   };
 
   auto close = [this](Event *inp) {

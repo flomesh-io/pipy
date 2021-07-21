@@ -54,7 +54,7 @@ private:
   virtual void reset() override;
   virtual void process(Context *ctx, Event *inp) override;
 
-  class Queue {
+  class Queue : public pjs::Pooled<Queue> {
   public:
     void setup(int quota, bool is_data);
     auto setup_time() const -> double { return m_setup_time; }
@@ -100,6 +100,7 @@ private:
   };
 
   std::shared_ptr<Accounts> m_accounts;
+  std::unique_ptr<Queue> m_session_queue;
   pjs::Value m_quota;
   pjs::Value m_account;
   Queue* m_queue = nullptr;

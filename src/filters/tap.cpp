@@ -75,6 +75,7 @@ auto Tap::clone() -> Filter* {
 }
 
 void Tap::reset() {
+  m_session_queue = nullptr;
   m_queue = nullptr;
   m_initialized = false;
   m_session_end = false;
@@ -85,9 +86,14 @@ void Tap::process(Context *ctx, Event *inp) {
     pjs::Value account_name, quota;
     if (!eval(*ctx, m_account, account_name)) return;
     if (!eval(*ctx, m_quota, quota)) return;
-    auto *s = account_name.to_string();
-    m_queue = m_accounts->get(s->str());
-    s->release();
+    if (account_name.is_undefined()) {
+      m_session_queue = std::unique_ptr<Queue>(new Queue);
+      m_queue = m_session_queue.get();
+    } else {
+      auto *s = account_name.to_string();
+      m_queue = m_accounts->get(s->str());
+      s->release();
+    }
     set_quota(quota);
     m_initialized = true;
 
