@@ -514,6 +514,8 @@ bool Base64UrlDecoder::flush() {
   } else if (m_shift == 2) {
     m_output((m_triplet >> 4) & 255);
     return true;
+  } else if (m_shift == 0) {
+    return true;
   } else {
     return false;
   }
