@@ -317,6 +317,9 @@ void ProxySOCKS::process(Context *ctx, Event *inp) {
     }
 
   } else if (inp->is<SessionEnd>()) {
+    if (m_session) {
+      m_session->input(inp);
+    }
     close(inp);
   }
 }
