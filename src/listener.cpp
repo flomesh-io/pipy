@@ -107,7 +107,9 @@ void Listener::start() {
   m_acceptor.bind(endpoint);
   m_acceptor.listen(asio::socket_base::max_connections);
 
-  accept();
+  if (m_max_connections < 0 || m_inbounds.size() < m_max_connections) {
+    accept();
+  }
 
   Log::info("[listener] Listening on %s:%d", m_ip.c_str(), m_port);
 }
