@@ -40,14 +40,14 @@ Tap::Tap()
 }
 
 Tap::Tap(const pjs::Value &quota, const pjs::Value &account)
-  : m_accounts(std::make_shared<Accounts>())
+  : m_account_manager(std::make_shared<AccountManager>())
   , m_quota(quota)
   , m_account(account)
 {
 }
 
 Tap::Tap(const Tap &r)
-  : m_accounts(r.m_accounts)
+  : m_account_manager(r.m_account_manager)
   , m_quota(r.m_quota)
   , m_account(r.m_account)
 {
@@ -75,31 +75,40 @@ auto Tap::clone() -> Filter* {
 }
 
 void Tap::reset() {
-  m_session_queue = nullptr;
-  m_queue = nullptr;
+  if (m_channel) {
+    m_current_account->clear(m_channel);
+    delete m_channel;
+    m_channel = nullptr;
+  }
+  if (m_session_account) {
+    m_account_manager->close(m_session_account);
+    m_session_account = nullptr;
+  }
+  m_current_account = nullptr;
   m_initialized = false;
   m_session_end = false;
 }
 
 void Tap::process(Context *ctx, Event *inp) {
   if (!m_initialized) {
-    pjs::Value account_name, quota;
-    if (!eval(*ctx, m_account, account_name)) return;
+    pjs::Value account, quota;
+    if (!eval(*ctx, m_account, account)) return;
     if (!eval(*ctx, m_quota, quota)) return;
-    if (account_name.is_undefined()) {
-      m_session_queue = std::unique_ptr<Queue>(new Queue);
-      m_queue = m_session_queue.get();
+    if (account.is_undefined()) {
+      m_session_account = m_account_manager->get();
+      m_current_account = m_session_account;
     } else {
-      auto *s = account_name.to_string();
-      m_queue = m_accounts->get(s->str());
+      auto *s = account.to_string();
+      m_current_account = m_account_manager->get(s->str());
       s->release();
     }
     set_quota(quota);
+    m_channel = new Channel(ctx, out());
     m_initialized = true;
 
-  } else if (m_queue && m_quota.is_function()) {
-    auto now = utils::now();;
-    if (now - m_queue->setup_time() >= 5000) {
+  } else if (m_current_account && m_quota.is_function()) {
+    auto now = utils::now();
+    if (now - m_current_account->setup_time() >= 5000) {
       pjs::Value quota;
       if (eval(*ctx, m_quota, quota)) {
         set_quota(quota);
@@ -108,112 +117,147 @@ void Tap::process(Context *ctx, Event *inp) {
   }
 
   if (inp->is<SessionEnd>()) {
-    m_queue = nullptr;
+    if (m_channel) {
+      m_current_account->clear(m_channel);
+      delete m_channel;
+      m_channel = nullptr;
+    }
+    if (m_session_account) {
+      m_account_manager->close(m_session_account);
+      m_session_account = nullptr;
+    }
+    m_current_account = nullptr;
     m_session_end = true;
     output(inp);
 
-  } else if (m_queue) {
-    m_queue->push(ctx, inp, [=](const pjs::Ref<Event> &inp) { output(inp); });
+  } else if (m_channel) {
+    m_channel->push(inp);
+    m_current_account->queue(m_channel);
   }
 }
 
 void Tap::set_quota(const pjs::Value &quota) {
   if (quota.is_nullish()) {
-    m_queue->setup(-1, false);
+    m_current_account->setup(-1, false);
   } else if (quota.is_number()) {
-    m_queue->setup(quota.n(), false);
+    m_current_account->setup(quota.n(), false);
   } else {
     auto *s = quota.to_string();
-    m_queue->setup(utils::get_byte_size(s->str()), true);
+    m_current_account->setup(utils::get_byte_size(s->str()), true);
     s->release();
   }
 }
 
-void Tap::Queue::setup(int quota, bool is_data) {
+void Tap::Account::setup(int quota, bool is_data) {
   m_initial_quota = quota;
-  if (!m_has_set) {
+  if (!m_is_set_up) {
     m_current_quota = quota;
     m_is_data = is_data;
-    m_has_set = true;
+    m_is_set_up = true;
   }
   m_setup_time = utils::now();
 }
 
-void Tap::Queue::push(Context *ctx, Event *e, Event::Receiver out) {
-  m_queue.emplace_back();
-  auto &i = m_queue.back();
-  i.event = e;
-  i.out = out;
+void Tap::Account::queue(Channel *channel) {
+  m_queue.push_back(channel);
   pump();
-  if (!m_queue.empty()) {
-    if (auto inbound = ctx->inbound()) {
-      m_paused_contexts.insert(ctx);
-      inbound->pause();
-    }
-  }
 }
 
-void Tap::Queue::pump() {
+void Tap::Account::clear(Channel *channel) {
+  m_queue.remove(channel);
+}
+
+void Tap::Account::pump() {
   while (!m_queue.empty() && (unlimited() || m_current_quota > 0)) {
-    auto &head = m_queue.front();
-    auto e = head.event;
-    auto f = head.out;
-    if (m_is_data) {
-      auto partial = deduct_data(e);
-      if (partial) {
-        f(partial);
-      } else {
+    auto channel = m_queue.front();
+    if (unlimited()) {
+      channel->drain();
+      m_queue.pop_front();
+    } else if (m_is_data) {
+      if (channel->deduct_by_data(m_current_quota)) {
         m_queue.pop_front();
-        f(e);
       }
     } else {
-      deduct_message(e);
-      m_queue.pop_front();
-      f(e);
+      if (channel->deduct_by_message(m_current_quota)) {
+        m_queue.pop_front();
+      }
     }
   }
   if (m_queue.empty()) {
-    for (const auto &ctx : m_paused_contexts) {
-      if (auto inbound = ctx->inbound()) {
-        inbound->resume();
-      }
+    for (auto *channel : m_paused_channels) {
+      channel->resume();
     }
-    m_paused_contexts.clear();
+    m_paused_channels.clear();
+  } else {
+    for (auto *channel : m_queue) {
+      channel->pause();
+      m_paused_channels.insert(channel);
+    }
   }
-  supply();
 }
 
-void Tap::Queue::supply() {
-  if (m_supplying) return;
-  m_timer.schedule(1.0, [=]() {
-    m_current_quota = m_initial_quota;
-    m_supplying = false;
-    pump();
-  });
-  m_supplying = true;
+void Tap::Account::supply() {
+  m_current_quota = m_initial_quota;
+  pump();
 }
 
-auto Tap::Queue::deduct_data(Event *e) -> Data* {
-  if (unlimited()) return nullptr;
-  if (e->is<Data>()) {
-    auto data = e->as<Data>();
-    if (data->size() <= m_current_quota) {
-      m_current_quota -= data->size();
-      return nullptr;
+void Tap::Channel::push(Event *inp) {
+  m_buffer.push_back(inp);
+}
+
+void Tap::Channel::drain() {
+  auto e = m_buffer.front().get();
+  m_out(e);
+  m_buffer.pop_front();
+}
+
+bool Tap::Channel::deduct_by_data(int &quota) {
+  if (m_buffer.empty()) return true;
+  auto e = m_buffer.front().get();
+  if (auto data = e->as<Data>()) {
+    if (data->size() <= quota) {
+      quota -= data->size();
+      m_out(e);
+      m_buffer.pop_front();
+      return true;
     } else {
       auto partial = Data::make();
-      data->shift(m_current_quota, *partial);
-      m_current_quota = 0;
-      return partial;
+      data->shift(quota, *partial);
+      quota = 0;
+      m_out(partial);
+      return false;
     }
+  } else {
+    m_out(e);
+    m_buffer.pop_front();
+    return true;
   }
-  return nullptr;
 }
 
-void Tap::Queue::deduct_message(Event *e) {
-  if (m_initial_quota < 0) return;
-  if (e->is<MessageEnd>()) {
-    m_current_quota--;
+bool Tap::Channel::deduct_by_message(int &quota) {
+  if (m_buffer.empty()) return true;
+  auto e = m_buffer.front().get();
+  if (e->is<MessageEnd>()) quota--;
+  m_out(e);
+  m_buffer.pop_front();
+  return true;
+}
+
+void Tap::Channel::pause() {
+  if (!m_paused) {
+    if (auto inbound = m_ctx->inbound()) {
+      inbound->pause();
+    }
+    m_paused = true;
+  }
+}
+
+void Tap::Channel::resume() {
+  if (m_paused) {
+    if (auto inbound = m_ctx->inbound()) {
+      inbound->resume();
+    }
+    m_paused = false;
   }
 }
 
