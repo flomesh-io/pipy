@@ -155,6 +155,11 @@ void Outbound::connect(double delay) {
     m_resolver.async_resolve(
       tcp::resolver::query(m_host, std::to_string(m_port)),
       on_resolved);
+    if (m_retries > 0) {
+      Log::warn("Outbound: %p, retry connection to upstream %s:%d... (times = %d)",
+        this, m_host.c_str(), m_port, m_retries
+      );
+    }
   };
 
   if (delay > 0) {
@@ -214,12 +219,8 @@ void Outbound::receive() {
         if (output(evt)) return;
       }
 
-      if (should_reconnect()) {
-        reconnect();
-      } else {
-        m_reading_ended = true;
-        free();
-      }
+      m_reading_ended = true;
+      free();
 
     } else {
       receive();
