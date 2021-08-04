@@ -69,6 +69,7 @@ add_executable(pipy
   src/filters/socks.cpp
   src/filters/socks4.cpp
   src/filters/tap.cpp
+  src/filters/tls.cpp
   src/filters/use.cpp
   src/filters/wait.cpp
   src/fstream.cpp
