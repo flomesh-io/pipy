@@ -58,8 +58,8 @@ public:
   void connect(const pjs::Value &target, pjs::Object *options);
   void connect_tls(pjs::Str *target, pjs::Object *options);
   void decode_dubbo();
-  void decode_http_request();
-  void decode_http_response(bool bodiless);
+  void decode_http_request(pjs::Object *options);
+  void decode_http_response(pjs::Object *options);
   void decompress_body(pjs::Str *algorithm);
   void demux(pjs::Str *target);
   void dummy();
@@ -84,6 +84,7 @@ public:
   void replace_event(Event::Type type, const pjs::Value &replacement);
   void replace_message(const pjs::Value &replacement, int size_limit);
   void replace_start(const pjs::Value &replacement);
+  void serve_http(pjs::Str *target, pjs::Object *options);
   void tap(const pjs::Value &quota, const pjs::Value &account);
   void use(Module *module, pjs::Str *pipeline, pjs::Object *argv);
   void wait(pjs::Function *condition);

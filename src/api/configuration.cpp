@@ -166,12 +166,12 @@ void Configuration::decode_dubbo() {
   append_filter(new dubbo::Decoder());
 }
 
-void Configuration::decode_http_request() {
-  append_filter(new http::RequestDecoder());
+void Configuration::decode_http_request(pjs::Object *options) {
+  append_filter(new http::RequestDecoder(options));
 }
 
-void Configuration::decode_http_response(bool bodiless) {
-  append_filter(new http::ResponseDecoder(bodiless));
+void Configuration::decode_http_response(pjs::Object *options) {
+  append_filter(new http::ResponseDecoder(options));
 }
 
 void Configuration::decompress_body(pjs::Str *algorithm) {
@@ -274,6 +274,10 @@ void Configuration::replace_message(const pjs::Value &replacement, int size_limi
 
 void Configuration::replace_start(const pjs::Value &replacement) {
   append_filter(new ReplaceStart(replacement));
+}
+
+void Configuration::serve_http(pjs::Str *target, pjs::Object *options) {
+  append_filter(new http::Server(target));
 }
 
 void Configuration::tap(const pjs::Value &quota, const pjs::Value &account) {
@@ -496,20 +500,12 @@ template<> void ClassDef<Configuration>::init() {
     }
   });
 
-  // Configuration.decodeHttpBodilessResponse
-  method("decodeHttpBodilessResponse", [](Context &ctx, Object *thiz, Value &result) {
-    try {
-      thiz->as<Configuration>()->decode_http_response(true);
-      result.set(thiz);
-    } catch (std::runtime_error &err) {
-      ctx.error(err);
-    }
-  });
-
   // Configuration.decodeHttpRequest
   method("decodeHttpRequest", [](Context &ctx, Object *thiz, Value &result) {
+    pjs::Object *options = nullptr;
+    if (!ctx.arguments(0, &options)) return;
     try {
-      thiz->as<Configuration>()->decode_http_request();
+      thiz->as<Configuration>()->decode_http_request(options);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -518,8 +514,10 @@ template<> void ClassDef<Configuration>::init() {
 
   // Configuration.decodeHttpResponse
   method("decodeHttpResponse", [](Context &ctx, Object *thiz, Value &result) {
+    pjs::Object *options = nullptr;
+    if (!ctx.arguments(0, &options)) return;
     try {
-      thiz->as<Configuration>()->decode_http_response(false);
+      thiz->as<Configuration>()->decode_http_response(options);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1014,6 +1012,19 @@ template<> void ClassDef<Configuration>::init() {
     if (!ctx.arguments(0, &replacement)) return;
     try {
       thiz->as<Configuration>()->replace_event(Event::SessionEnd, replacement);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // Configuration.serveHTTP
+  method("serveHTTP", [](Context &ctx, Object *thiz, Value &result) {
+    pjs::Str *target;
+    pjs::Object *options = nullptr;
+    if (!ctx.arguments(1, &target, &options)) return;
+    try {
+      thiz->as<Configuration>()->serve_http(target, options);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

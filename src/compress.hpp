@@ -23,41 +23,30 @@
  *  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef REPLACE_MESSAGE_HPP
-#define REPLACE_MESSAGE_HPP
+#ifndef COMPRESS_HPP
+#define COMPRESS_HPP
 
-#include "filter.hpp"
-#include "data.hpp"
+#include "event.hpp"
 
 namespace pipy {
 
+class Data;
+
 //
-// ReplaceMessage
+// Decompressor
 //
 
-class ReplaceMessage : public Filter {
+class Decompressor {
 public:
-  ReplaceMessage();
-  ReplaceMessage(const pjs::Value &replacement, int size_limit = -1);
+  static Decompressor* inflate(const Event::Receiver &out);
 
-private:
-  ReplaceMessage(const ReplaceMessage &r);
-  ~ReplaceMessage();
+  virtual bool process(const Data *data) = 0;
+  virtual bool end() = 0;
 
-  virtual auto help() -> std::list<std::string> override;
-  virtual void dump(std::ostream &out) override;
-  virtual auto clone() -> Filter* override;
-  virtual void reset() override;
-  virtual void process(Context *ctx, Event *inp) override;
-
-  pjs::Ref<pjs::Object> m_mctx;
-  pjs::Ref<pjs::Object> m_head;
-  pjs::Ref<Data> m_body;
-  pjs::Value m_replacement;
-  int m_size_limit;
-  int m_discarded_size = 0;
+protected:
+  ~Decompressor() {}
 };
 
 } // namespace pipy
 
-#endif // REPLACE_MESSAGE_HPP
+#endif // COMPRESS_HPP

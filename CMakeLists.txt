@@ -40,6 +40,7 @@ add_executable(pipy
   src/api/pipy.cpp
   src/api/url.cpp
   src/api/xml.cpp
+  src/compress.cpp
   src/context.cpp
   src/data.cpp
   src/event.cpp

@@ -29,8 +29,12 @@
 #include "filter.hpp"
 #include "buffer.hpp"
 #include "data.hpp"
+#include "session.hpp"
 
 namespace pipy {
+
+class Decompressor;
+
 namespace http {
 
 class RequestHead;
@@ -43,6 +47,7 @@ class ResponseHead;
 class RequestDecoder : public Filter {
 public:
   RequestDecoder();
+  RequestDecoder(pjs::Object *options);
 
 private:
   RequestDecoder(const RequestDecoder &r);
@@ -71,9 +76,12 @@ private:
   CharBuf<0x10000> m_value;
   pjs::Ref<RequestHead> m_head;
   std::string m_protocol;
+  std::string m_content_encoding;
   std::string m_transfer_encoding;
   std::string m_connection;
   std::string m_keep_alive;
+  pjs::Value m_decompress;
+  Decompressor* m_decompressor = nullptr;
   bool m_session_end = false;
   bool m_chunked = false;
   bool m_connected = false;
@@ -89,7 +97,9 @@ private:
 
 class ResponseDecoder : public Filter {
 public:
-  ResponseDecoder(bool bodiless);
+  ResponseDecoder();
+  ResponseDecoder(pjs::Object *options);
+  ResponseDecoder(const std::function<bool()> &bodiless);
 
 private:
   ResponseDecoder(const ResponseDecoder &r);
@@ -117,11 +127,17 @@ private:
   CharBuf<0x10000> m_name;
   CharBuf<0x10000> m_value;
   pjs::Ref<ResponseHead> m_head;
+  std::string m_content_encoding;
   std::string m_transfer_encoding;
-  bool m_bodiless;
+  std::function<bool()> m_bodiless_func;
+  pjs::Value m_bodiless;
+  pjs::Value m_decompress;
+  Decompressor* m_decompressor = nullptr;
   bool m_session_end = false;
   bool m_chunked;
   int m_content_length;
+
+  bool is_bodiless(Context *ctx);
 };
 
 //
@@ -193,6 +209,36 @@ private:
   static std::string s_header_connection_keep_alive;
   static std::string s_header_connection_close;
   static std::string s_header_content_length;
+};
+
+//
+// Server
+//
+
+class Server : public Filter {
+public:
+  Server();
+  Server(pjs::Str *target);
+
+  class Handler {
+  public:
+    virtual void input(Data *data) = 0;
+    virtual void close() = 0;
+  };
+
+private:
+  Server(const Server &r);
+  ~Server();
+
+  virtual auto help() -> std::list<std::string> override;
+  virtual void dump(std::ostream &out) override;
+  virtual auto clone() -> Filter* override;
+  virtual void reset() override;
+  virtual void process(Context *ctx, Event *inp) override;
+
+  pjs::Ref<pjs::Str> m_target;
+  Handler* m_handler = nullptr;
+  bool m_session_end = false;
 };
 
 } // namespace http
