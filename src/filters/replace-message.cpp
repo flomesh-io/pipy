@@ -25,6 +25,7 @@
 
 #include "replace-message.hpp"
 #include "message.hpp"
+#include "logging.hpp"
 
 namespace pipy {
 
@@ -36,13 +37,14 @@ ReplaceMessage::ReplaceMessage()
 {
 }
 
-ReplaceMessage::ReplaceMessage(const pjs::Value &replacement)
+ReplaceMessage::ReplaceMessage(const pjs::Value &replacement, int size_limit)
   : m_replacement(replacement)
+  , m_size_limit(size_limit)
 {
 }
 
 ReplaceMessage::ReplaceMessage(const ReplaceMessage &r)
-  : ReplaceMessage(r.m_replacement)
+  : ReplaceMessage(r.m_replacement, r.m_size_limit)
 {
 }
 
@@ -52,8 +54,9 @@ ReplaceMessage::~ReplaceMessage()
 
 auto ReplaceMessage::help() -> std::list<std::string> {
   return {
-    "replaceMessage([replacement])",
+    "replaceMessage([sizeLimit, ]replacement)",
     "Replaces a complete message including the head and the body",
+    "sizeLimit = <number|string> Maximum number of bytes to collect from the message body",
     "callback = <object|function> Replacement events or a callback function that returns replacement events",
   };
 }
@@ -67,6 +70,10 @@ auto ReplaceMessage::clone() -> Filter* {
 }
 
 void ReplaceMessage::reset() {
+  m_mctx = nullptr;
+  m_head = nullptr;
+  m_body = nullptr;
+  m_discarded_size = 0;
 }
 
 void ReplaceMessage::process(Context *ctx, Event *inp) {
@@ -77,13 +84,34 @@ void ReplaceMessage::process(Context *ctx, Event *inp) {
     return;
 
   } else if (auto data = inp->as<Data>()) {
-    if (m_body) {
-      m_body->push(*data);
+    if (m_body && data->size() > 0) {
+      if (m_size_limit >= 0) {
+        auto room = m_size_limit - m_body->size();
+        if (room >= data->size()) {
+          m_body->push(*data);
+        } else if (room > 0) {
+          Data buf(*data);
+          auto discard = buf.size() - room;
+          buf.pop(discard);
+          m_body->push(buf);
+          m_discarded_size += discard;
+        } else {
+          m_discarded_size += data->size();
+        }
+      } else {
+        m_body->push(*data);
+      }
       return;
     }
 
   } else if (inp->is<MessageEnd>()) {
     if (m_body) {
+      if (m_discarded_size > 0) {
+        Log::error(
+          "[replaceMessage] %d bytes were discarded due to buffer size limit of %d",
+          m_discarded_size, m_size_limit
+        );
+      }
       if (m_replacement.is_function()) {
         pjs::Value arg(Message::make(m_mctx, m_head, m_body)), result;
         if (callback(*ctx, m_replacement.f(), 1, &arg, result)) {
@@ -95,6 +123,7 @@ void ReplaceMessage::process(Context *ctx, Event *inp) {
       m_mctx = nullptr;
       m_head = nullptr;
       m_body = nullptr;
+      m_discarded_size = 0;
       return;
     }
   }

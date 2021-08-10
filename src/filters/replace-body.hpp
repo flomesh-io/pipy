@@ -38,7 +38,7 @@ namespace pipy {
 class ReplaceBody : public Filter {
 public:
   ReplaceBody();
-  ReplaceBody(const pjs::Value &replacement);
+  ReplaceBody(const pjs::Value &replacement, int size_limit = -1);
 
 private:
   ReplaceBody(const ReplaceBody &r);
@@ -52,6 +52,8 @@ private:
 
   pjs::Ref<Data> m_body;
   pjs::Value m_replacement;
+  int m_size_limit;
+  int m_discarded_size = 0;
 };
 
 } // namespace pipy

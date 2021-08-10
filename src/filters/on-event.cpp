@@ -52,25 +52,25 @@ auto OnEvent::help() -> std::list<std::string> {
   switch (m_type) {
     case Event::Type::Data:
       return {
-        "onData(callback)",
+        "handleData(callback)",
         "Handles a Data event",
         "callback = <function> Callback function that receives a Data event",
       };
     case Event::Type::MessageStart:
       return {
-        "onMessageStart(callback)",
+        "handleMessageStart(callback)",
         "Handles a MessageStart event",
         "callback = <function> Callback function that receives a MessageStart event",
       };
     case Event::Type::MessageEnd:
       return {
-        "onMessageEnd(callback)",
+        "handleMessageEnd(callback)",
         "Handles a MessageEnd event",
         "callback = <function> Callback function that receives a MessageEnd event",
       };
     case Event::Type::SessionEnd:
       return {
-        "onSessionEnd(callback)",
+        "handleSessionEnd(callback)",
         "Handles a SessionEnd event",
         "callback = <function> Callback function that receives a SessionEnd event",
       };
@@ -80,10 +80,10 @@ auto OnEvent::help() -> std::list<std::string> {
 
 void OnEvent::dump(std::ostream &out) {
   switch (m_type) {
-    case Event::Type::Data: out << "onData"; break;
-    case Event::Type::MessageStart: out << "onMessageStart"; break;
-    case Event::Type::MessageEnd: out << "onMessageEnd"; break;
-    case Event::Type::SessionEnd: out << "onSessionEnd"; break;
+    case Event::Type::Data: out << "handleData"; break;
+    case Event::Type::MessageStart: out << "handleMessageStart"; break;
+    case Event::Type::MessageEnd: out << "handleMessageEnd"; break;
+    case Event::Type::SessionEnd: out << "handleSessionEnd"; break;
     default: break;
   }
 }

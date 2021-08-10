@@ -228,16 +228,16 @@ void Configuration::mux(pjs::Str *target, pjs::Function *selector) {
   append_filter(new Mux(target, selector));
 }
 
-void Configuration::on_body(pjs::Function *callback) {
-  append_filter(new OnBody(callback));
+void Configuration::on_body(pjs::Function *callback, int size_limit) {
+  append_filter(new OnBody(callback, size_limit));
 }
 
 void Configuration::on_event(Event::Type type, pjs::Function *callback) {
   append_filter(new OnEvent(type, callback));
 }
 
-void Configuration::on_message(pjs::Function *callback) {
-  append_filter(new OnMessage(callback));
+void Configuration::on_message(pjs::Function *callback, int size_limit) {
+  append_filter(new OnMessage(callback, size_limit));
 }
 
 void Configuration::on_start(pjs::Function *callback) {
@@ -260,16 +260,16 @@ void Configuration::proxy_socks4(pjs::Str *target, pjs::Function *on_connect) {
   append_filter(new ProxySOCKS4(target, on_connect));
 }
 
-void Configuration::replace_body(const pjs::Value &replacement) {
-  append_filter(new ReplaceBody(replacement));
+void Configuration::replace_body(const pjs::Value &replacement, int size_limit) {
+  append_filter(new ReplaceBody(replacement, size_limit));
 }
 
 void Configuration::replace_event(Event::Type type, const pjs::Value &replacement) {
   append_filter(new ReplaceEvent(type, replacement));
 }
 
-void Configuration::replace_message(const pjs::Value &replacement) {
-  append_filter(new ReplaceMessage(replacement));
+void Configuration::replace_message(const pjs::Value &replacement, int size_limit) {
+  append_filter(new ReplaceMessage(replacement, size_limit));
 }
 
 void Configuration::replace_start(const pjs::Value &replacement) {
@@ -648,9 +648,16 @@ template<> void ClassDef<Configuration>::init() {
   // Configuration.handleMessage
   method("handleMessage", [](Context &ctx, Object *thiz, Value &result) {
     Function *callback = nullptr;
-    if (!ctx.arguments(1, &callback)) return;
+    int size_limit = -1;
+    std::string size_limit_str;
+    if (ctx.try_arguments(2, &size_limit_str, &callback)) {
+      size_limit = utils::get_byte_size(size_limit_str);
+    } else if (
+      !ctx.try_arguments(2, &size_limit, &callback) &&
+      !ctx.arguments(1, &callback)
+    ) return;
     try {
-      thiz->as<Configuration>()->on_message(callback);
+      thiz->as<Configuration>()->on_message(callback, size_limit);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -672,9 +679,16 @@ template<> void ClassDef<Configuration>::init() {
   // Configuration.handleMessageBody
   method("handleMessageBody", [](Context &ctx, Object *thiz, Value &result) {
     Function *callback = nullptr;
-    if (!ctx.arguments(1, &callback)) return;
+    int size_limit = -1;
+    std::string size_limit_str;
+    if (ctx.try_arguments(2, &size_limit_str, &callback)) {
+      size_limit = utils::get_byte_size(size_limit_str);
+    } else if (
+      !ctx.try_arguments(2, &size_limit, &callback) &&
+      !ctx.arguments(1, &callback)
+    ) return;
     try {
-      thiz->as<Configuration>()->on_body(callback);
+      thiz->as<Configuration>()->on_body(callback, size_limit);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -788,9 +802,16 @@ template<> void ClassDef<Configuration>::init() {
   // Configuration.onMessage
   method("onMessage", [](Context &ctx, Object *thiz, Value &result) {
     Function *callback = nullptr;
-    if (!ctx.arguments(1, &callback)) return;
+    int size_limit = -1;
+    std::string size_limit_str;
+    if (ctx.try_arguments(2, &size_limit_str, &callback)) {
+      size_limit = utils::get_byte_size(size_limit_str);
+    } else if (
+      !ctx.try_arguments(2, &size_limit, &callback) &&
+      !ctx.arguments(1, &callback)
+    ) return;
     try {
-      thiz->as<Configuration>()->on_message(callback);
+      thiz->as<Configuration>()->on_message(callback, size_limit);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -812,9 +833,16 @@ template<> void ClassDef<Configuration>::init() {
   // Configuration.onMessageBody
   method("onMessageBody", [](Context &ctx, Object *thiz, Value &result) {
     Function *callback = nullptr;
-    if (!ctx.arguments(1, &callback)) return;
+    int size_limit = -1;
+    std::string size_limit_str;
+    if (ctx.try_arguments(2, &size_limit_str, &callback)) {
+      size_limit = utils::get_byte_size(size_limit_str);
+    } else if (
+      !ctx.try_arguments(2, &size_limit, &callback) &&
+      !ctx.arguments(1, &callback)
+    ) return;
     try {
-      thiz->as<Configuration>()->on_body(callback);
+      thiz->as<Configuration>()->on_body(callback, size_limit);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -921,9 +949,16 @@ template<> void ClassDef<Configuration>::init() {
   // Configuration.replaceMessage
   method("replaceMessage", [](Context &ctx, Object *thiz, Value &result) {
     Value replacement;
-    if (!ctx.arguments(0, &replacement)) return;
+    int size_limit = -1;
+    std::string size_limit_str;
+    if (ctx.try_arguments(1, &size_limit_str, &replacement)) {
+      size_limit = utils::get_byte_size(size_limit_str);
+    } else if (
+      !ctx.try_arguments(1, &size_limit, &replacement) &&
+      !ctx.arguments(0, &replacement)
+    ) return;
     try {
-      thiz->as<Configuration>()->replace_message(replacement);
+      thiz->as<Configuration>()->replace_message(replacement, size_limit);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -945,9 +980,16 @@ template<> void ClassDef<Configuration>::init() {
   // Configuration.replaceMessageBody
   method("replaceMessageBody", [](Context &ctx, Object *thiz, Value &result) {
     Value replacement;
-    if (!ctx.arguments(0, &replacement)) return;
+    int size_limit = -1;
+    std::string size_limit_str;
+    if (ctx.try_arguments(1, &size_limit_str, &replacement)) {
+      size_limit = utils::get_byte_size(size_limit_str);
+    } else if (
+      !ctx.try_arguments(1, &size_limit, &replacement) &&
+      !ctx.arguments(0, &replacement)
+    ) return;
     try {
-      thiz->as<Configuration>()->replace_body(replacement);
+      thiz->as<Configuration>()->replace_body(replacement, size_limit);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
