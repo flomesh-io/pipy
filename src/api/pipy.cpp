@@ -24,8 +24,10 @@
  */
 
 #include "pipy.hpp"
+#include "codebase.hpp"
 #include "configuration.hpp"
 #include "module.hpp"
+#include "utils.hpp"
 
 extern void main_trigger_reload();
 
@@ -86,6 +88,13 @@ template<> void ClassDef<Pipy>::init() {
 
   variable("script", class_of<Pipy::Script>());
   variable("store", class_of<Pipy::Store>());
+
+  method("load", [](Context &ctx, Object*, Value &ret) {
+    std::string filename;
+    if (!ctx.arguments(1, &filename)) return;
+    auto path = utils::path_normalize(filename);
+    ret.set(Codebase::current()->get(path));
+  });
 
   method("restart", [](Context&, Object*, Value&) {
     main_trigger_reload();

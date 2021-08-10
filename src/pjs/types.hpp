@@ -403,8 +403,8 @@ public:
   static const Ref<Str> bool_false;
 
   static auto make(const std::string &str) -> Str* {
-    const auto i = s_ht.find(str);
-    if (i != s_ht.end()) return i->second;
+    const auto i = ht().find(str);
+    if (i != ht().end()) return i->second;
     return new Str(str);
   }
 
@@ -430,14 +430,14 @@ private:
   std::string m_str;
 
   Str(const std::string &str) : m_str(str) {
-    s_ht[str] = this;
+    ht()[str] = this;
   }
 
   ~Str() {
-    s_ht.erase(m_str);
+    ht().erase(m_str);
   }
 
-  static std::unordered_map<std::string, Str*> s_ht;
+  static auto ht() -> std::unordered_map<std::string, Str*>&;
 
   friend class RefCount<Str>;
 };
@@ -766,6 +766,7 @@ public:
   Value(uint64_t n) : m_t(Type::Number) { m_v.n = n; }
   Value(double n) : m_t(Type::Number) { m_v.n = n; }
   Value(const char *s) : m_t(Type::String) { m_v.s = Str::make(s)->retain(); }
+  Value(const char *s, size_t n) : m_t(Type::String) { m_v.s = Str::make(s, n)->retain(); }
   Value(const std::string &s) : m_t(Type::String) { m_v.s = Str::make(s)->retain(); }
   Value(Str *s) : m_t(Type::String) { m_v.s = s; s->retain(); }
   Value(Object *o) : m_t(Type::Object) { m_v.o = o; if (o) retain(o); }

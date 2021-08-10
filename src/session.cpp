@@ -55,7 +55,9 @@ ReusableSession::ReusableSession(Pipeline *pipeline)
     output = [=](Event *inp) {
       pjs::Ref<Event> ref(inp);
       if (!m_context->ok()) return;
+      enter_processing();
       filter->process(m_context, inp);
+      leave_processing();
     };
     last_filter = filter;
   }
@@ -72,14 +74,38 @@ ReusableSession::~ReusableSession() {
   }
 }
 
+void ReusableSession::input(Event *evt) {
+  enter_processing();
+
+  pjs::Ref<Event> e(evt);
+  if (auto f = m_filters) {
+    f->process(m_context, evt);
+  } else {
+    if (m_output) m_output(evt);
+    if (evt->is<SessionEnd>()) m_done = true;
+  }
+
+  leave_processing();
+}
+
+void ReusableSession::input(Message *msg) {
+  if (!m_freed) input(MessageStart::make(msg->context(), msg->head()));
+  if (!m_freed) input(msg->body());
+  if (!m_freed) input(MessageEnd::make());
+}
+
 void ReusableSession::abort() {
   if (m_output) m_output(SessionEnd::make(SessionEnd::RUNTIME_ERROR));
   m_done = true;
 }
 
 void ReusableSession::free() {
-  reset();
-  m_pipeline->free(this);
+  if (m_processing_level > 0) {
+    m_freed = true;
+  } else {
+    reset();
+    m_pipeline->free(this);
+  }
 }
 
 void ReusableSession::reset() {
@@ -87,6 +113,7 @@ void ReusableSession::reset() {
   m_context = nullptr;
   m_output = nullptr;
   m_done = false;
+  m_freed = false;
 }
 
 } // namespace pipy

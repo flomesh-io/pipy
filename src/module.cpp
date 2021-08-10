@@ -24,6 +24,7 @@
  */
 
 #include "module.hpp"
+#include "codebase.hpp"
 #include "worker.hpp"
 #include "pipeline.hpp"
 #include "api/configuration.hpp"
@@ -59,15 +60,12 @@ bool Module::load(const std::string &path) {
   if (i != s_overriden_scripts.end()) {
     m_source = i->second;
   } else {
-    auto full_path = utils::path_join(m_worker->root_path(), path);
-    std::ifstream fs(full_path, std::ios::in);
-    if (!fs.is_open()) {
+    auto data = Codebase::current()->get(path);
+    if (!data) {
       Log::error("[pjs] Cannot open script at %s", path.c_str());
       return false;
     }
-    std::stringstream ss;
-    fs >> ss.rdbuf();
-    m_source = ss.str();
+    m_source = data->to_string();
   }
 
   std::string error;

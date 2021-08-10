@@ -26,6 +26,7 @@
 #include "version.h"
 
 #include "api/configuration.hpp"
+#include "codebase.hpp"
 #include "gui.hpp"
 #include "listener.hpp"
 #include "module.hpp"
@@ -36,16 +37,16 @@
 #include "utils.hpp"
 #include "worker.hpp"
 
-#include <iostream>
+#include <limits.h>
+#include <signal.h>
+#include <stdlib.h>
+
 #include <list>
 #include <string>
 #include <tuple>
 
 #include <openssl/opensslv.h>
 #include <openssl/ssl.h>
-#include <signal.h>
-#include <sys/stat.h>
-#include <unistd.h>
 
 // All filters
 #include "filters/connect.hpp"
@@ -497,19 +498,51 @@ static void start_checking_signals() {
       if (!current_worker) {
         Log::error("No script running");
       } else {
-        auto root_path = current_worker->root_path();
-        auto root_name = current_worker->root()->path();
-        auto worker = Worker::make(root_path);
-        if (worker->load_module(root_name) && worker->start()) {
-          current_worker->stop();
-          Log::info("Script reloaded: %s", root_name.c_str());
-        } else {
-          worker->stop();
-          Log::error("Failed reloading script: %s", root_name.c_str());
-        }
+        auto codebase = Codebase::current();
+        codebase->update([](bool ok) {
+          if (!ok) {
+            Log::error("Failed updating script");
+            return;
+          }
+          auto codebase = Codebase::current();
+          auto &entry = codebase->entry();
+          if (entry.empty()) {
+            Log::error("Script has no entry point");
+            return;
+          }
+          auto current_worker = Worker::current();
+          auto worker = Worker::make();
+          if (worker->load_module(entry) && worker->start()) {
+            current_worker->stop();
+            Log::info("Script reloaded");
+          } else {
+            worker->stop();
+            Log::error("Failed reloading script");
+          }
+        });
       }
     }
     timer.schedule(0.2, poll);
+  };
+  poll();
+}
+
+//
+// Periodically check signals
+//
+
+static void start_checking_updates() {
+  static Timer timer;
+  static std::function<void()> poll;
+  poll = [&]() {
+    Codebase::current()->check(
+      [&](bool updated) {
+        if (updated) {
+          s_need_reload = true;
+        }
+      }
+    );
+    timer.schedule(5, poll);
   };
   poll();
 }
@@ -524,6 +557,8 @@ int main(int argc, char *argv[]) {
   OpenSSL_add_all_algorithms();
 
   tls::TLSSession::init();
+
+  int ret_val = 0;
 
   try {
     Options opts(argc, argv);
@@ -556,52 +591,70 @@ int main(int argc, char *argv[]) {
 
     Configuration::set_reuse_port(opts.reuse_port);
 
-    char full_path[PATH_MAX];
-    realpath(opts.filename.c_str(), full_path);
+    if (!std::strncmp(opts.filename.c_str(), "http://", 7)) {
+      auto codebase = new CodebaseHTTP(opts.filename);
+      codebase->set_current();
 
-    struct stat st;
-    if (stat(full_path, &st)) {
-      std::string msg("file or directory does not exist: ");
-      throw std::runtime_error(msg + full_path);
-    }
-
-    std::string root_path, root_name;
-    if (S_ISDIR(st.st_mode)) {
-      if (!opts.gui_port) {
-        throw std::runtime_error("script file not specified");
-      }
-      root_path = full_path;
     } else {
-      std::string script_path(full_path);
-      auto i = script_path.find_last_of("/\\");
-      root_path = script_path.substr(0, i);
-      root_name = script_path.substr(i);
+      char full_path[PATH_MAX];
+      realpath(opts.filename.c_str(), full_path);
+      auto codebase = new CodebaseFS(full_path);
+      codebase->set_current();
+      chdir(codebase->base().c_str());
     }
 
-    chdir(root_path.c_str());
+    Gui gui;
 
-    signal(SIGTSTP, on_sig_tstp);
-    signal(SIGHUP, on_sig_hup);
-    signal(SIGINT, on_sig_int);
+    Codebase::current()->update(
+      [&](bool ok) {
+        if (!ok) {
+          ret_val = -1;
+          return;
+        }
 
-    Gui gui(root_path);
-    if (opts.gui_port) {
-      gui.open(opts.gui_port);
-      opts.verify = false;
-    }
+        const auto &entry = Codebase::current()->entry();
+        if (entry.empty() && !opts.gui_port) {
+          std::cerr << "No script file specified" << std::endl;
+          ret_val = -1;
+          return;
+        }
 
-    if (!root_name.empty()) {
-      auto worker = Worker::make(root_path);
-      auto mod = worker->load_module(root_name);
-      if (!mod) return -1;
-      if (!opts.verify) if (!worker->start()) return -1;
-    }
+        if (!entry.empty()) {
+          auto worker = Worker::make();
+          auto mod = worker->load_module(entry);
 
-    if (!opts.verify) {
-      start_checking_signals();
-      Net::run();
-    }
+          if (!mod) {
+            ret_val = -1;
+            Net::stop();
+            return;
+          }
 
+          if (opts.verify) {
+            Net::stop();
+            return;
+          }
+
+          if (!worker->start()) {
+            ret_val = -1;
+            Net::stop();
+            return;
+          }
+        }
+
+        if (opts.gui_port && !opts.verify) {
+          gui.open(opts.gui_port);
+        }
+
+        signal(SIGTSTP, on_sig_tstp);
+        signal(SIGHUP, on_sig_hup);
+        signal(SIGINT, on_sig_int);
+
+        start_checking_signals();
+        start_checking_updates();
+      }
+    );
+
+    Net::run();
     std::cout << "Done." << std::endl;
 
   } catch (std::runtime_error &e) {
@@ -609,5 +662,5 @@ int main(int argc, char *argv[]) {
     return -1;
   }
 
-  return 0;
+  return ret_val;
 }
