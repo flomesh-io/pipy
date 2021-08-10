@@ -71,6 +71,7 @@ void ReplaceMessage::reset() {
 
 void ReplaceMessage::process(Context *ctx, Event *inp) {
   if (auto e = inp->as<MessageStart>()) {
+    m_mctx = e->context();
     m_head = e->head();
     m_body = Data::make();
     return;
@@ -84,13 +85,14 @@ void ReplaceMessage::process(Context *ctx, Event *inp) {
   } else if (inp->is<MessageEnd>()) {
     if (m_body) {
       if (m_replacement.is_function()) {
-        pjs::Value arg(Message::make(m_head, m_body)), result;
+        pjs::Value arg(Message::make(m_mctx, m_head, m_body)), result;
         if (callback(*ctx, m_replacement.f(), 1, &arg, result)) {
-          output(result);
+          output(result, m_mctx);
         }
       } else {
-        output(m_replacement);
+        output(m_replacement, m_mctx);
       }
+      m_mctx = nullptr;
       m_head = nullptr;
       m_body = nullptr;
       return;

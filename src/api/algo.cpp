@@ -43,9 +43,11 @@ auto Algo::hash(const pjs::Value &value) -> size_t {
 // Cache
 //
 
-Cache::Cache(pjs::Function *allocate, pjs::Function *free)
-  : m_allocate(allocate)
+Cache::Cache(int size_limit, pjs::Function *allocate, pjs::Function *free)
+  : m_size_limit(size_limit)
+  , m_allocate(allocate)
   , m_free(free)
+  , m_cache(pjs::OrderedHash<pjs::Value, Entry>::make())
 {
 }
 
@@ -53,33 +55,79 @@ Cache::~Cache() {
 }
 
 bool Cache::get(pjs::Context &ctx, const pjs::Value &key, pjs::Value &value) {
-  auto i = m_cache.find(key);
-  if (i != m_cache.end()) {
-    value = i->second.value;
+  Entry entry;
+  bool found = m_cache->use(key, entry);
+  if (!found) {
+    if (!m_allocate) return false;
+    pjs::Value arg(key);
+    (*m_allocate)(ctx, 1, &arg, value);
+    if (!ctx.ok()) return false;
+    entry.value = value;
+    m_cache->set(key, entry);
+    return true;
+  } else {
+    value = entry.value;
     return true;
   }
+}
 
-  if (!m_allocate) return false;
+void Cache::set(pjs::Context &ctx, const pjs::Value &key, const pjs::Value &value) {
+  Entry entry;
+  entry.value = value;
+  if (m_cache->set(key, entry)) {
+    if (m_size_limit > 0 && m_cache->size() > m_size_limit) {
+      int n = m_cache->size() - m_size_limit;
+      pjs::OrderedHash<pjs::Value, Entry>::Iterator it(m_cache);
+      if (m_free) {
+        pjs::Value argv[2], ret;
+        while (auto *p = it.next()) {
+          argv[0] = p->k;
+          argv[1] = p->v.value;
+          (*m_free)(ctx, 2, argv, ret);
+          if (!ctx.ok()) break;
+          m_cache->erase(p->k);
+          if (!--n) break;
+        }
+      }
+      if (n > 0) {
+        while (auto *p = it.next()) {
+          m_cache->erase(p->k);
+          if (!--n) break;
+        }
+      }
+    }
+  }
+}
 
-  pjs::Value arg(key);
-  (*m_allocate)(ctx, 1, &arg, value);
-  if (!ctx.ok()) return false;
-
-  m_cache[key].value = value;
-  return true;
+bool Cache::remove(pjs::Context &ctx, const pjs::Value &key) {
+  if (m_free) {
+    Entry entry;
+    auto found = m_cache->get(key, entry);
+    if (found) {
+      pjs::Value argv[2], ret;
+      argv[0] = key;
+      argv[1] = entry.value;
+      (*m_free)(ctx, 2, argv, ret);
+      m_cache->erase(key);
+    }
+    return found;
+  } else {
+    return m_cache->erase(key);
+  }
 }
 
 bool Cache::clear(pjs::Context &ctx) {
   if (m_free) {
-    for (auto &p : m_cache) {
+    pjs::OrderedHash<pjs::Value, Entry>::Iterator it(m_cache);
+    while (auto *p = it.next()) {
       pjs::Value argv[2], ret;
-      argv[0] = p.first;
-      argv[1] = p.second.value;
+      argv[0] = p->k;
+      argv[1] = p->v.value;
       (*m_free)(ctx, 2, argv, ret);
       if (!ctx.ok()) return false;
     }
   }
-  m_cache.clear();
+  m_cache->clear();
   return true;
 }
 
@@ -585,15 +633,33 @@ using namespace pipy::algo;
 
 template<> void ClassDef<Cache>::init() {
   ctor([](Context &ctx) -> Object* {
-    Function *allocate, *free = nullptr;
-    if (!ctx.arguments(1, &allocate, &free)) return nullptr;
-    return Cache::make(allocate, free);
+    int size_limit;
+    Function *allocate = nullptr, *free = nullptr;
+    if (ctx.try_arguments(0, &allocate, &free)) {
+      return Cache::make(0, allocate, free);
+    } else if (ctx.arguments(1, &size_limit, &allocate, &free)) {
+      return Cache::make(size_limit, allocate, free);
+    } else {
+      return nullptr;
+    }
   });
 
   method("get", [](Context &ctx, Object *obj, Value &ret) {
     Value key;
     if (!ctx.arguments(1, &key)) return;
     obj->as<Cache>()->get(ctx, key, ret);
+  });
+
+  method("set", [](Context &ctx, Object *obj, Value &ret) {
+    Value key, val;
+    if (!ctx.arguments(2, &key, &val)) return;
+    obj->as<Cache>()->set(ctx, key, val);
+  });
+
+  method("remove", [](Context &ctx, Object *obj, Value &ret) {
+    Value key;
+    if (!ctx.arguments(1, &key)) return;
+    ret.set(obj->as<Cache>()->remove(ctx, key));
   });
 
   method("clear", [](Context &ctx, Object *obj, Value &ret) {

@@ -42,19 +42,22 @@ namespace algo {
 class Cache : public pjs::ObjectTemplate<Cache> {
 public:
   bool get(pjs::Context &ctx, const pjs::Value &key, pjs::Value &value);
+  void set(pjs::Context &ctx, const pjs::Value &key, const pjs::Value &value);
+  bool remove(pjs::Context &ctx, const pjs::Value &key);
   bool clear(pjs::Context &ctx);
 
 private:
-  Cache(pjs::Function *allocate, pjs::Function *free = nullptr);
+  Cache(int size_limit, pjs::Function *allocate, pjs::Function *free = nullptr);
   ~Cache();
 
   struct Entry {
     pjs::Value value;
   };
 
+  int m_size_limit;
   pjs::Ref<pjs::Function> m_allocate;
   pjs::Ref<pjs::Function> m_free;
-  std::unordered_map<pjs::Value, Entry> m_cache;
+  pjs::Ref<pjs::OrderedHash<pjs::Value, Entry>> m_cache;
 
   friend class pjs::ObjectTemplate<Cache>;
 };

@@ -217,6 +217,8 @@ void Encoder::reset() {
 }
 
 void Encoder::process(Context *ctx, Event *inp) {
+  static Data::Producer s_dp("encodeDubbo");
+
   if (m_session_end) return;
 
   if (auto start = inp->as<MessageStart>()) {
@@ -259,8 +261,8 @@ void Encoder::process(Context *ctx, Event *inp) {
     header[14] = L >> 8;
     header[15] = L >> 0;
 
-    output(MessageStart::make());
-    output(Data::make(header, sizeof(header)));
+    output(m_message_start);
+    output(s_dp.make(header, sizeof(header)));
     output(m_buffer);
     output(inp);
 
@@ -284,7 +286,9 @@ long long Encoder::get_header(
   if (!obj) return value;
   pjs::Value v;
   prop.get(obj, v);
-  return v.is_undefined() ? value : (long long)v.to_number();
+  if (v.is_undefined()) return value;
+  if (v.is_string()) return std::atoll(v.s()->c_str());
+  return (long long)v.to_number();
 }
 
 } // namespace dubbo

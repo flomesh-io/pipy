@@ -44,18 +44,22 @@
 #include "filters/fork.hpp"
 #include "filters/http.hpp"
 #include "filters/link.hpp"
+#include "filters/merge.hpp"
 #include "filters/mux.hpp"
 #include "filters/on-body.hpp"
 #include "filters/on-event.hpp"
 #include "filters/on-message.hpp"
 #include "filters/on-start.hpp"
+#include "filters/pack.hpp"
 #include "filters/print.hpp"
 #include "filters/replace-body.hpp"
 #include "filters/replace-event.hpp"
 #include "filters/replace-message.hpp"
 #include "filters/replace-start.hpp"
+#include "filters/socks.hpp"
 #include "filters/socks4.hpp"
 #include "filters/tap.hpp"
+#include "filters/tls.hpp"
 #include "filters/use.hpp"
 #include "filters/wait.hpp"
 
@@ -89,56 +93,39 @@ Configuration::Configuration(pjs::Object *context_prototype) {
 }
 
 void Configuration::listen(int port, pjs::Object *options) {
+  int max_connections = -1;
   bool reuse_port = s_reuse_port;
-  bool ssl = false;
-  std::string cert_pem, key_pem;
 
   if (options) {
-    pjs::Value reuse, tls;
-    options->get("reuse", reuse);
-    options->get("tls", tls);
+    pjs::Value reuse, max_conn;
+    options->get("reusePort", reuse);
+    options->get("maxConnections", max_conn);
 
     if (!reuse.is_undefined()) {
       reuse_port = reuse.to_boolean();
     }
 
-    if (!tls.is_undefined()) {
-      if (!tls.is_object()) throw std::runtime_error("option tls must be an object");
-      if (auto *o = tls.o()) {
-        ssl = true;
-        pjs::Value cert, key;
-        o->get("cert", cert);
-        o->get("key", key);
-        if (!cert.is_undefined()) {
-          auto *s = cert.to_string();
-          cert_pem = s->str();
-          s->release();
-        }
-        if (!key.is_undefined()) {
-          auto *s = key.to_string();
-          key_pem = s->str();
-          s->release();
-        }
-      }
+    if (!max_conn.is_undefined()) {
+      if (!max_conn.is_number()) throw std::runtime_error("option.maxConnections expects a number");
+      max_connections = max_conn.n();
     }
-  }
-
-  asio::ssl::context ssl_context(asio::ssl::context::sslv23);
-
-  if (ssl) {
-    if (!cert_pem.empty()) ssl_context.use_certificate_chain(asio::const_buffer(cert_pem.c_str(), cert_pem.length()));
-    if (!key_pem.empty()) ssl_context.use_private_key(asio::const_buffer(key_pem.c_str(), key_pem.length()), asio::ssl::context::pem);
   }
 
   m_listens.push_back({
     "0.0.0.0",
     port,
     reuse_port,
-    ssl,
-    std::move(ssl_context)
+    max_connections,
   });
 
   m_current_filters = &m_listens.back().filters;
+}
+
+void Configuration::task() {
+  std::string name("Task #");
+  name += std::to_string(m_tasks.size() + 1);
+  m_tasks.push_back({ name, "" });
+  m_current_filters = &m_tasks.back().filters;
 }
 
 void Configuration::task(double interval) {
@@ -163,8 +150,16 @@ void Configuration::pipeline(const std::string &name) {
   m_current_filters = &m_named_pipelines.back().filters;
 }
 
+void Configuration::accept_tls(pjs::Str *target, pjs::Object *options) {
+  append_filter(new tls::Server(target, options));
+}
+
 void Configuration::connect(const pjs::Value &target, pjs::Object *options) {
   append_filter(new Connect(target, options));
+}
+
+void Configuration::connect_tls(pjs::Str *target, pjs::Object *options) {
+  append_filter(new tls::Client(target, options));
 }
 
 void Configuration::decode_dubbo() {
@@ -225,6 +220,10 @@ void Configuration::link(size_t count, pjs::Str **targets, pjs::Function **condi
   append_filter(new Link(routes));
 }
 
+void Configuration::merge(pjs::Str *target, pjs::Function *selector) {
+  append_filter(new Merge(target, selector));
+}
+
 void Configuration::mux(pjs::Str *target, pjs::Function *selector) {
   append_filter(new Mux(target, selector));
 }
@@ -245,8 +244,16 @@ void Configuration::on_start(pjs::Function *callback) {
   append_filter(new OnStart(callback));
 }
 
+void Configuration::pack(int batch_size, pjs::Object *options) {
+  append_filter(new Pack(batch_size, options));
+}
+
 void Configuration::print() {
   append_filter(new Print());
+}
+
+void Configuration::proxy_socks(pjs::Str *target, pjs::Function *on_connect) {
+  append_filter(new ProxySOCKS(target, on_connect));
 }
 
 void Configuration::proxy_socks4(pjs::Str *target, pjs::Function *on_connect) {
@@ -307,17 +314,16 @@ void Configuration::apply(Module *mod) {
     auto name = i.ip + ':' + std::to_string(i.port);
     auto p = make_pipeline(Pipeline::LISTEN, name, i.filters);
     auto listener = Listener::get(i.port);
-    if (!listener) {
-      listener = i.ssl
-        ? Listener::make(i.ip, i.port, i.reuse, std::move(i.ssl_context))
-        : Listener::make(i.ip, i.port, i.reuse);
-    }
+    if (!listener) listener = Listener::make(i.ip, i.port);
+    listener->set_reuse_port(i.reuse_port);
+    listener->set_max_connections(i.max_connections);
     listener->open(p);
   }
 
   for (auto &i : m_tasks) {
     auto p = make_pipeline(Pipeline::TASK, i.name, i.filters);
-    Task::make(i.interval, p)->start();
+    auto t = Task::make(i.interval, p);
+    mod->worker()->add_task(t);
   }
 }
 
@@ -409,7 +415,9 @@ template<> void ClassDef<Configuration>::init() {
     double interval;
     std::string interval_str;
     try {
-      if (ctx.try_arguments(1, &interval)) {
+      if (ctx.argc() == 0) {
+        thiz->as<Configuration>()->task();
+      } else if (ctx.try_arguments(1, &interval)) {
         thiz->as<Configuration>()->task(interval);
       } else if (ctx.try_arguments(1, &interval_str)) {
         thiz->as<Configuration>()->task(interval_str);
@@ -423,6 +431,23 @@ template<> void ClassDef<Configuration>::init() {
     }
   });
 
+  // Configuration.acceptTLS
+  method("acceptTLS", [](Context &ctx, Object *thiz, Value &result) {
+    Str *target;
+    Object *options;
+    if (!ctx.arguments(2, &target, &options)) return;
+    if (!options) {
+      ctx.error_argument_type(1, "a non-null object");
+      return;
+    }
+    try {
+      thiz->as<Configuration>()->accept_tls(target, options);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
   // Configuration.connect
   method("connect", [](Context &ctx, Object *thiz, Value &result) {
     Value target;
@@ -430,6 +455,19 @@ template<> void ClassDef<Configuration>::init() {
     if (!ctx.arguments(1, &target, &options)) return;
     try {
       thiz->as<Configuration>()->connect(target, options);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // Configuration.connectTLS
+  method("connectTLS", [](Context &ctx, Object *thiz, Value &result) {
+    Str *target;
+    Object *options = nullptr;
+    if (!ctx.arguments(1, &target, &options)) return;
+    try {
+      thiz->as<Configuration>()->connect_tls(target, options);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -583,6 +621,90 @@ template<> void ClassDef<Configuration>::init() {
     }
   });
 
+  // Configuration.handleSessionStart
+  method("handleSessionStart", [](Context &ctx, Object *thiz, Value &result) {
+    Function *callback = nullptr;
+    if (!ctx.arguments(1, &callback)) return;
+    try {
+      thiz->as<Configuration>()->on_start(callback);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // Configuration.handleData
+  method("handleData", [](Context &ctx, Object *thiz, Value &result) {
+    Function *callback = nullptr;
+    if (!ctx.arguments(1, &callback)) return;
+    try {
+      thiz->as<Configuration>()->on_event(Event::Data, callback);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // Configuration.handleMessage
+  method("handleMessage", [](Context &ctx, Object *thiz, Value &result) {
+    Function *callback = nullptr;
+    if (!ctx.arguments(1, &callback)) return;
+    try {
+      thiz->as<Configuration>()->on_message(callback);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // Configuration.handleMessageStart
+  method("handleMessageStart", [](Context &ctx, Object *thiz, Value &result) {
+    Function *callback = nullptr;
+    if (!ctx.arguments(1, &callback)) return;
+    try {
+      thiz->as<Configuration>()->on_event(Event::MessageStart, callback);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // Configuration.handleMessageBody
+  method("handleMessageBody", [](Context &ctx, Object *thiz, Value &result) {
+    Function *callback = nullptr;
+    if (!ctx.arguments(1, &callback)) return;
+    try {
+      thiz->as<Configuration>()->on_body(callback);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // Configuration.handleMessageEnd
+  method("handleMessageEnd", [](Context &ctx, Object *thiz, Value &result) {
+    Function *callback = nullptr;
+    if (!ctx.arguments(1, &callback)) return;
+    try {
+      thiz->as<Configuration>()->on_event(Event::MessageEnd, callback);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // Configuration.handleSessionEnd
+  method("handleSessionEnd", [](Context &ctx, Object *thiz, Value &result) {
+    Function *callback = nullptr;
+    if (!ctx.arguments(1, &callback)) return;
+    try {
+      thiz->as<Configuration>()->on_event(Event::SessionEnd, callback);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
   // Configuration.link
   method("link", [](Context &ctx, Object *thiz, Value &result) {
     int n = (ctx.argc() + 1) >> 1;
@@ -607,6 +729,19 @@ template<> void ClassDef<Configuration>::init() {
     }
     try {
       thiz->as<Configuration>()->link(n, targets, conditions);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // Configuration.merge
+  method("merge", [](Context &ctx, Object *thiz, Value &result) {
+    pjs::Str *target;
+    pjs::Function *selector = nullptr;
+    if (!ctx.arguments(1, &target, &selector)) return;
+    try {
+      thiz->as<Configuration>()->merge(target, selector);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -710,10 +845,36 @@ template<> void ClassDef<Configuration>::init() {
     }
   });
 
+  // Configuration.pack
+  method("pack", [](Context &ctx, Object *thiz, Value &result) {
+    int batch_size = 1;
+    Object *options = nullptr;
+    if (!ctx.arguments(0, &batch_size, &options)) return;
+    try {
+      thiz->as<Configuration>()->pack(batch_size, options);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
   // Configuration.print
   method("print", [](Context &ctx, Object *thiz, Value &result) {
     try {
       thiz->as<Configuration>()->print();
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // Configuration.proxySOCKS
+  method("proxySOCKS", [](Context &ctx, Object *thiz, Value &result) {
+    Str *target;
+    Function *on_connect;
+    if (!ctx.arguments(2, &target, &on_connect)) return;
+    try {
+      thiz->as<Configuration>()->proxy_socks(target, on_connect);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

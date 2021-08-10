@@ -60,6 +60,8 @@ private:
   }
 
   virtual bool process(const Data *data) override {
+    static Data::Producer s_dp("decompressBody");
+
     if (m_done) return true;
     unsigned char buf[DATA_CHUNK_SIZE];
     pjs::Ref<Data> output_data(Data::make());
@@ -71,7 +73,7 @@ private:
         m_zs.avail_out = sizeof(buf);
         auto ret = inflate(&m_zs, Z_NO_FLUSH);
         if (auto size = sizeof(buf) - m_zs.avail_out) {
-          output_data->push(buf, size);
+          s_dp.push(output_data, buf, size);
         }
         if (ret == Z_STREAM_END) { m_done = true; break; }
         if (ret != Z_OK) {

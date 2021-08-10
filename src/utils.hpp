@@ -36,6 +36,7 @@ namespace pipy {
 namespace utils {
 
 auto to_string(double n) -> std::string;
+auto now() -> double;
 auto get_param(const std::map<std::string, std::string> &params, const char *name, const char *value = nullptr) -> std::string;
 bool get_host_port(const std::string &str, std::string &ip, int &port);
 bool get_ip_port(const std::string &str, std::string &ip, int &port);

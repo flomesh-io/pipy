@@ -76,6 +76,7 @@ private:
   std::string m_keep_alive;
   bool m_session_end = false;
   bool m_chunked = false;
+  bool m_connected = false;
   int m_content_length;
 
   bool is_keep_alive();

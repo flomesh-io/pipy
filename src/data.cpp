@@ -29,9 +29,53 @@
 
 namespace pipy {
 
+List<Data::Producer> Data::Producer::s_all_producers;
+Data::Producer Data::s_unknown_producer("Unknown");
+
 auto Data::flush() -> Data* {
   static pjs::Ref<Data> s_flush(Data::make());
   return s_flush;
+}
+
+void Data::pack(const Data &data, Producer *producer, double vacancy) {
+  if (&data == this) return;
+  if (!producer) producer = &s_unknown_producer;
+  auto occupancy = DATA_CHUNK_SIZE - int(DATA_CHUNK_SIZE * vacancy);
+  for (auto view = data.m_head; view; view = view->next) {
+    auto tail = m_tail;
+    if (!tail) {
+      push_view(new View(view));
+      continue;
+    }
+    auto tail_offset = tail->offset;
+    auto tail_length = tail->length;
+    if (tail_length < occupancy || view->length + tail_length <= DATA_CHUNK_SIZE) {
+      if (tail_offset > 0 || tail->chunk->retain_count > 1) {
+        tail = tail->clone(producer);
+        delete pop_view();
+        push_view(tail);
+      }
+      auto tail_room = DATA_CHUNK_SIZE - tail_length;
+      auto length = std::min(view->length, int(tail_room));
+      std::memcpy(
+        tail->chunk->data + tail_length,
+        view->chunk->data + view->offset,
+        length
+      );
+      tail->length += length;
+      if (length < view->length) {
+        push_view(
+          new View(
+            view->chunk,
+            view->offset + length,
+            view->length - length
+          )
+        );
+      }
+    } else {
+      push_view(new View(view));
+    }
+  }
 }
 
 } // namespace pipy
@@ -47,6 +91,8 @@ template<> void EnumDef<pipy::Data::Encoding>::init() {
   define(pipy::Data::Encoding::Base64Url, "base64url");
 }
 
+static pipy::Data::Producer s_script_data_producer("Script");
+
 template<> void ClassDef<pipy::Data>::init() {
   super<Event>();
 
@@ -56,14 +102,14 @@ template<> void ClassDef<pipy::Data>::init() {
     pipy::Data *data;
     try {
       if (ctx.try_arguments(0, &size)) {
-        return pipy::Data::make(size, 0);
+        return s_script_data_producer.make(size, 0);
       } else if (ctx.try_arguments(1, &str, &encoding)) {
         auto enc = EnumDef<pipy::Data::Encoding>::value(encoding, pipy::Data::Encoding::UTF8);
         if (int(enc) < 0) {
           ctx.error("unknown encoding");
           return nullptr;
         }
-        return pipy::Data::make(str->str(), enc);
+        return s_script_data_producer.make(str->str(), enc);
       } else if (ctx.try_arguments(1, &data, &encoding) && data) {
         return pipy::Data::make(*data);
       }
@@ -84,7 +130,7 @@ template<> void ClassDef<pipy::Data>::init() {
     if (ctx.try_arguments(1, &data) && data) {
       obj->as<pipy::Data>()->push(*data->as<pipy::Data>());
     } else if (ctx.try_arguments(1, &str)) {
-      obj->as<pipy::Data>()->push(str->str());
+      s_script_data_producer.push(obj->as<pipy::Data>(), str->str());
     } else {
       ctx.error_argument_type(0, "a Data or a string");
     }

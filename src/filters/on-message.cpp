@@ -67,12 +67,14 @@ auto OnMessage::clone() -> Filter* {
 }
 
 void OnMessage::reset() {
+  m_mctx = nullptr;
   m_head = nullptr;
   m_body = nullptr;
 }
 
 void OnMessage::process(Context *ctx, Event *inp) {
   if (auto e = inp->as<MessageStart>()) {
+    m_mctx = e->context();
     m_head = e->head();
     m_body = Data::make();
 
@@ -81,8 +83,9 @@ void OnMessage::process(Context *ctx, Event *inp) {
 
   } else if (inp->is<MessageEnd>()) {
     if (m_body) {
-      pjs::Value arg(Message::make(m_head, m_body)), result;
+      pjs::Value arg(Message::make(m_mctx, m_head, m_body)), result;
       if (!callback(*ctx, m_callback, 1, &arg, result)) return;
+      m_mctx = nullptr;
       m_head = nullptr;
       m_body = nullptr;
     }

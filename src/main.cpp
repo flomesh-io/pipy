@@ -26,11 +26,12 @@
 #include "version.h"
 
 #include "api/configuration.hpp"
-#include "options.hpp"
 #include "gui.hpp"
 #include "listener.hpp"
 #include "module.hpp"
 #include "net.hpp"
+#include "options.hpp"
+#include "outbound.hpp"
 #include "task.hpp"
 #include "utils.hpp"
 #include "worker.hpp"
@@ -41,6 +42,7 @@
 #include <tuple>
 
 #include <openssl/opensslv.h>
+#include <openssl/ssl.h>
 #include <signal.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -56,18 +58,22 @@
 #include "filters/fork.hpp"
 #include "filters/http.hpp"
 #include "filters/link.hpp"
+#include "filters/merge.hpp"
 #include "filters/mux.hpp"
 #include "filters/on-body.hpp"
 #include "filters/on-event.hpp"
 #include "filters/on-message.hpp"
 #include "filters/on-start.hpp"
+#include "filters/pack.hpp"
 #include "filters/print.hpp"
 #include "filters/replace-body.hpp"
 #include "filters/replace-event.hpp"
 #include "filters/replace-message.hpp"
 #include "filters/replace-start.hpp"
+#include "filters/socks.hpp"
 #include "filters/socks4.hpp"
 #include "filters/tap.hpp"
+#include "filters/tls.hpp"
 #include "filters/use.hpp"
 #include "filters/wait.hpp"
 
@@ -78,7 +84,9 @@ using namespace pipy;
 //
 
 static std::list<Filter*> s_filters {
+  new tls::Server,
   new Connect,
+  new tls::Client,
   new DecompressBody,
   new Demux,
   new dubbo::Decoder,
@@ -93,6 +101,7 @@ static std::list<Filter*> s_filters {
   new Exec,
   new Fork,
   new Link,
+  new Merge,
   new Mux,
   new OnStart,
   new OnEvent(Event::Type::Data),
@@ -101,7 +110,9 @@ static std::list<Filter*> s_filters {
   new OnEvent(Event::Type::SessionEnd),
   new OnBody,
   new OnMessage,
+  new Pack,
   new Print,
+  new ProxySOCKS,
   new ProxySOCKS4,
   new ReplaceStart,
   new ReplaceEvent(Event::Type::Data),
@@ -251,14 +262,40 @@ void print_table(const T &header, const std::list<T> &rows) {
 
 static void show_status() {
   std::string indentation("  ");
-  std::list<std::array<std::string, 3>> pipelines;
   std::list<std::array<std::string, 2>> objects;
+  std::list<std::array<std::string, 3>> chunks;
+  std::list<std::array<std::string, 3>> pipelines;
+  std::list<std::array<std::string, 3>> inbounds;
+  std::list<std::array<std::string, 6>> outbounds;
 
   int total_allocated = 0;
   int total_active = 0;
+  int total_chunks = 0;
   int total_instances = 0;
+  int total_inbound_connections = 0;
+  int total_inbound_buffered = 0;
 
   auto current_worker = Worker::current();
+
+  for (const auto &i : pjs::Class::all()) {
+    if (auto n = i.second->object_count()) {
+      objects.push_back({ indentation + i.first, std::to_string(n) });
+      total_instances += n;
+    }
+  }
+
+  objects.push_back({ "TOTAL", std::to_string(total_instances) });
+
+  Data::Producer::for_each([&](Data::Producer *producer) {
+    chunks.push_back({
+      producer->name(),
+      std::to_string(producer->current() * DATA_CHUNK_SIZE / 1024),
+      std::to_string(producer->peak() * DATA_CHUNK_SIZE / 1024),
+    });
+    total_chunks += producer->current();
+  });
+
+  chunks.push_back({ "TOTAL", std::to_string(total_chunks * DATA_CHUNK_SIZE / 1024), "n/a" });
 
   std::multimap<std::string, Pipeline*> stale_pipelines;
   std::multimap<std::string, Pipeline*> current_pipelines;
@@ -312,19 +349,73 @@ static void show_status() {
     std::to_string(total_active),
   });
 
-  for (const auto &i : pjs::Class::all()) {
-    if (auto n = i.second->object_count()) {
-      objects.push_back({ indentation + i.first, std::to_string(n) });
-      total_instances += n;
-    }
+  Listener::for_each([&](Listener *listener) {
+    int count = 0;
+    int buffered = 0;
+    listener->for_each_inbound([&](Inbound *inbound) {
+      count++;
+      buffered += inbound->buffered();
+    });
+    char count_peak[100];
+    sprintf(count_peak, "%d/%d", count, listener->peak_connections());
+    inbounds.push_back({
+      std::to_string(listener->port()),
+      std::string(count_peak),
+      std::to_string(buffered/1024),
+    });
+    total_inbound_connections += count;
+    total_inbound_buffered += buffered;
+  });
+
+  inbounds.push_back({
+    "TOTAL",
+    std::to_string(total_inbound_connections),
+    std::to_string(total_inbound_buffered),
+  });
+
+  struct OutboundSum {
+    int connections = 0;
+    int buffered = 0;
+    int overflowed = 0;
+    double max_connection_time = 0;
+    double avg_connection_time = 0;
+  };
+
+  std::map<std::string, OutboundSum> outbound_sums;
+  Outbound::for_each([&](Outbound *outbound) {
+    char key[1000];
+    std::sprintf(key, "%s:%d", outbound->host().c_str(), outbound->port());
+    auto conn_time = outbound->connection_time() / (outbound->retries() + 1);
+    auto &sum = outbound_sums[key];
+    sum.connections++;
+    sum.buffered += outbound->buffered();
+    sum.overflowed += outbound->overflowed();
+    sum.max_connection_time = std::max(sum.max_connection_time, conn_time);
+    sum.avg_connection_time += conn_time;
+  });
+
+  for (const auto &p : outbound_sums) {
+    const auto &sum = p.second;
+    outbounds.push_back({
+      p.first,
+      std::to_string(sum.connections),
+      std::to_string(sum.buffered/1024),
+      std::to_string(sum.overflowed),
+      std::to_string(int(sum.max_connection_time)),
+      std::to_string(int(sum.avg_connection_time / sum.connections)),
+    });
   }
 
-  objects.push_back({ "TOTAL", std::to_string(total_instances) });
-
+  std::cout << std::endl;
+  print_table({ "CLASS", "#INSTANCES" }, objects );
+  std::cout << std::endl;
+  print_table({ "DATA", "CURRENT(KB)", "PEAK(KB)" }, chunks );
   std::cout << std::endl;
   print_table({ "PIPELINE", "#ALLOCATED", "#ACTIVE" }, pipelines);
   std::cout << std::endl;
-  print_table({ "CLASS", "#INSTANCES" }, objects );
+  print_table({ "INBOUND", "#CONNECTIONS", "BUFFERED(KB)" }, inbounds);
+  std::cout << std::endl;
+  print_table({ "OUTBOUND", "#CONNECTIONS", "BUFFERED(KB)", "#OVERFLOWED", "MAX_CONN_TIME", "AVG_CONN_TIME" }, outbounds);
   std::cout << std::endl;
 }
 
@@ -335,7 +426,6 @@ static void show_status() {
 static bool s_need_dump = false;
 
 static void on_sig_tstp(int) {
-  Log::info("Received SIGTSTP, dumping...");
   s_need_dump = true;
 }
 
@@ -346,7 +436,6 @@ static void on_sig_tstp(int) {
 static bool s_need_reload = false;
 
 static void on_sig_hup(int) {
-  Log::info("Received SIGHUP, reloading script...");
   s_need_reload = true;
 }
 
@@ -363,10 +452,8 @@ static bool s_force_shutdown = false;
 
 static void on_sig_int(int) {
   if (s_need_shutdown) {
-    Log::info("Forcing to shut down...");
     s_force_shutdown = true;
   } else {
-    Log::info("Received SIGINT, shutting down...");
     s_need_shutdown = true;
   }
 }
@@ -380,15 +467,18 @@ static void start_checking_signals() {
   static std::function<void()> poll;
   poll = [&]() {
     if (s_need_dump) {
+      Log::info("Received SIGTSTP, dumping...");
       show_status();
       s_need_dump = false;
     }
     if (s_force_shutdown) {
+      Log::info("Forcing to shut down...");
       Net::stop();
       Log::info("Stopped.");
     } else if (s_need_shutdown) {
+      Log::info("Received SIGINT, shutting down...");
       Listener::close_all();
-      Task::stop_all();
+      if (auto worker = Worker::current()) worker->stop();
       int n = 0;
       Pipeline::for_each(
         [&](Pipeline *pipeline) {
@@ -411,15 +501,15 @@ static void start_checking_signals() {
         auto root_name = current_worker->root()->path();
         auto worker = Worker::make(root_path);
         if (worker->load_module(root_name) && worker->start()) {
-          current_worker->unload();
+          current_worker->stop();
           Log::info("Script reloaded: %s", root_name.c_str());
         } else {
-          worker->unload();
+          worker->stop();
           Log::error("Failed reloading script: %s", root_name.c_str());
         }
       }
     }
-    timer.schedule(1, poll);
+    timer.schedule(0.2, poll);
   };
   poll();
 }
@@ -429,6 +519,12 @@ static void start_checking_signals() {
 //
 
 int main(int argc, char *argv[]) {
+  SSL_load_error_strings();
+  SSL_library_init();
+  OpenSSL_add_all_algorithms();
+
+  tls::TLSSession::init();
+
   try {
     Options opts(argc, argv);
 

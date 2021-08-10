@@ -47,6 +47,8 @@
 
 namespace pipy {
 
+static Data::Producer s_dp_gui("GUI");
+
 //
 // GuiService
 //
@@ -139,7 +141,7 @@ private:
     if (path == "/api/files") {
       std::string json;
       file_tree_to_json(m_root_path, json);
-      return Message::make(m_response_head_json, Data::make(json));
+      return Message::make(m_response_head_json, s_dp_gui.make(json));
 
     // /api/files/*
     } else if (!std::strncmp(path.c_str(), "/api/files/", 11)) {
@@ -153,7 +155,7 @@ private:
         char buf[DATA_CHUNK_SIZE];
         while (!fs.eof()) {
           fs.read(buf, sizeof(buf));
-          data->push(buf, fs.gcount());
+          s_dp_gui.push(data, buf, fs.gcount());
         }
         return Message::make(m_response_head_text, data);
 
@@ -183,7 +185,7 @@ private:
         if (auto worker = Worker::current()) {
           filename = worker->root()->path();
         }
-        return Message::make(m_response_head_text, Data::make(filename));
+        return Message::make(m_response_head_text, s_dp_gui.make(filename));
 
       // POST /api/program
       } else if (method == "POST") {
@@ -191,10 +193,10 @@ private:
         auto filename = utils::path_normalize(req->body()->to_string());
         auto worker = Worker::make(m_root_path);
         if (worker->load_module(filename) && worker->start()) {
-          if (current_worker) current_worker->unload();
+          if (current_worker) current_worker->stop();
           return m_response_created;
         } else {
-          worker->unload();
+          worker->stop();
           return m_response_bad_request;
         }
 
@@ -212,7 +214,7 @@ private:
       if (method != "GET") return m_response_method_not_allowed;
       return Message::make(
         m_response_head_json,
-        Data::make(config_to_json())
+        s_dp_gui.make(config_to_json())
       );
 
     // POST /api/graph
@@ -225,12 +227,12 @@ private:
         g.to_json(err, ss);
         return Message::make(
           m_response_head_json,
-          Data::make(ss.str())
+          s_dp_gui.make(ss.str())
         );
       }
       return Message::make(
         m_response_head_json_error,
-        Data::make(
+        s_dp_gui.make(
           std::string("{\"error\":\"") + utils::escape(err) + "\"}"
         )
       );
@@ -247,7 +249,7 @@ private:
       head->headers(headers);
       headers->ht_set("content-type", "text/plain");
       headers->ht_set("x-log-size", std::to_string(tail_size));
-      return Message::make(head, Data::make(log_text));
+      return Message::make(head, s_dp_gui.make(log_text));
 
     // Static GUI content
     } else {
@@ -572,7 +574,7 @@ void Gui::open(int port) {
   pipeline->append(new http::RequestDecoder());
   pipeline->append(new GuiService(m_root_path, m_www_files));
   pipeline->append(new http::ResponseEncoder());
-  auto listener = Listener::make("0.0.0.0", port, false);
+  auto listener = Listener::make("0.0.0.0", port);
   listener->open(pipeline);
 }
 

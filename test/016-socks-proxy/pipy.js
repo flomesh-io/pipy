@@ -4,7 +4,7 @@ pipy({
 })
 
 .listen(6080)
-  .proxySOCKS4(
+  .proxySOCKS(
     'connect',
     (addr, port) => (
       _addr = addr,

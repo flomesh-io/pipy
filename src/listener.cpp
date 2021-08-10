@@ -24,7 +24,6 @@
  */
 
 #include "listener.hpp"
-#include "inbound.hpp"
 #include "pipeline.hpp"
 #include "logging.hpp"
 
@@ -36,24 +35,10 @@ using tcp = asio::ip::tcp;
 
 std::map<int, Listener*> Listener::s_all_listeners;
 
-Listener::Listener(const std::string &ip, int port, bool reuse)
+Listener::Listener(const std::string &ip, int port)
   : m_ip(ip)
   , m_port(port)
-  , m_reuse(reuse)
   , m_acceptor(Net::service())
-  , m_ssl_context(asio::ssl::context::sslv23)
-  , m_ssl(false)
-{
-  s_all_listeners[port] = this;
-}
-
-Listener::Listener(const std::string &ip, int port, bool reuse, asio::ssl::context &&ssl_context)
-  : m_ip(ip)
-  , m_port(port)
-  , m_reuse(reuse)
-  , m_acceptor(Net::service())
-  , m_ssl_context(std::move(ssl_context))
-  , m_ssl(true)
 {
   s_all_listeners[port] = this;
 }
@@ -66,10 +51,11 @@ Listener::~Listener() {
 }
 
 void Listener::open(Pipeline *pipeline) {
-  if (m_pipeline) {
+  if (m_open) {
     m_pipeline = pipeline;
   } else {
     m_pipeline = pipeline;
+    m_open = true;
     start();
   }
 }
@@ -77,6 +63,22 @@ void Listener::open(Pipeline *pipeline) {
 void Listener::close() {
   m_acceptor.close();
   m_pipeline = nullptr;
+  m_open = false;
+}
+
+void Listener::set_reuse_port(bool reuse) {
+  m_reuse_port = reuse;
+}
+
+void Listener::set_max_connections(int n) {
+  m_max_connections = n;
+  if (m_open) {
+    if (n >= 0 && m_inbounds.size() >= n) {
+      pause();
+    } else {
+      resume();
+    }
+  }
 }
 
 void Listener::start() {
@@ -94,7 +96,7 @@ void Listener::start() {
   setsockopt(sock, SOL_IP, IP_TRANSPARENT, &enabled, sizeof(enabled));
 #endif
 
-  if (m_reuse) {
+  if (m_reuse_port) {
 #ifdef __FreeBSD__
     setsockopt(sock, SOL_SOCKET, SO_REUSEPORT_LB, &enabled, sizeof(enabled));
 #else
@@ -105,21 +107,50 @@ void Listener::start() {
   m_acceptor.bind(endpoint);
   m_acceptor.listen(asio::socket_base::max_connections);
 
-  accept();
+  if (m_max_connections < 0 || m_inbounds.size() < m_max_connections) {
+    accept();
+  }
 
   Log::info("[listener] Listening on %s:%d", m_ip.c_str(), m_port);
 }
 
+void Listener::close(Inbound *inbound) {
+  m_inbounds.remove(inbound);
+  if (m_max_connections < 0 || m_inbounds.size() < m_max_connections) {
+    resume();
+  }
+}
+
 void Listener::accept() {
-  auto inbound = m_ssl ? Inbound::make(m_ssl_context) : Inbound::make();
+  auto inbound = Inbound::make(this);
   inbound->accept(
     this, m_acceptor,
     [=](const std::error_code &ec) {
+      m_inbounds.push(inbound);
       if (ec != asio::error::operation_aborted) {
-        accept();
+        m_peak_connections = std::max(m_peak_connections, int(m_inbounds.size()));
+        if (m_max_connections > 0 && m_inbounds.size() >= m_max_connections) {
+          pause();
+        } else {
+          accept();
+        }
       }
     }
   );
+}
+
+void Listener::pause() {
+  if (!m_paused) {
+    m_acceptor.cancel();
+    m_paused = true;
+  }
+}
+
+void Listener::resume() {
+  if (m_paused) {
+    accept();
+    m_paused = false;
+  }
 }
 
 } // namespace pipy

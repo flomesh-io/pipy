@@ -24,6 +24,7 @@
  */
 
 #include "builtin.hpp"
+#include "utils.hpp"
 
 #include <chrono>
 #include <sstream>
@@ -50,9 +51,7 @@ template<> void ClassDef<Constructor<Date>>::init() {
 }
 
 auto Date::now() -> double {
-  auto t = std::chrono::system_clock::now().time_since_epoch();
-  auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(t).count();
-  return double(ms);
+  return pipy::utils::now();
 }
 
 } // namespace pjs

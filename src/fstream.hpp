@@ -39,7 +39,7 @@ class Data;
 
 class FileStream : public pjs::Pooled<FileStream> {
 public:
-  FileStream(int fd);
+  FileStream(int fd, Data::Producer *dp);
   ~FileStream();
 
   auto fd() const -> int { return m_fd; }
@@ -55,6 +55,7 @@ public:
 
 private:
   int m_fd;
+  Data::Producer* m_dp;
   asio::posix::stream_descriptor m_stream;
   Event::Receiver m_reader;
   std::function<void()> m_on_delete;

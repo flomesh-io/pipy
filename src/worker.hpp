@@ -35,6 +35,7 @@
 namespace pipy {
 
 class Module;
+class Task;
 
 //
 // Worker
@@ -56,10 +57,11 @@ public:
   auto get_module(pjs::Str *filename) -> Module*;
   auto find_module(const std::string &path) -> Module*;
   auto load_module(const std::string &path) -> Module*;
+  void add_task(Task *task) { m_tasks.push_back(task); }
   auto new_loading_context() -> Context*;
   auto new_runtime_context(Context *base = nullptr) -> Context*;
   bool start();
-  void unload();
+  void stop();
 
 private:
   Worker(const std::string &root_path);
@@ -69,12 +71,11 @@ private:
 
   std::string m_root_path;
   Module* m_root = nullptr;
-  pjs::Ref<pjs::Method> m_method_pipy;
-  pjs::Ref<pjs::Method> m_method_restart;
   pjs::Ref<pjs::Object> m_global_object;
   std::map<std::string, Module*> m_module_map;
   std::map<pjs::Ref<pjs::Str>, Module*> m_module_name_map;
   std::vector<Module*> m_modules;
+  std::vector<Task*> m_tasks;
 
   static Worker* s_current;
   static std::set<Worker*> s_all_workers;

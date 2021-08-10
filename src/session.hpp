@@ -120,7 +120,7 @@ public:
   }
 
   void input(Message *msg) {
-    m_reusable_session->input(MessageStart::make(msg->head()));
+    m_reusable_session->input(MessageStart::make(msg->context(), msg->head()));
     m_reusable_session->input(msg->body());
     m_reusable_session->input(MessageEnd::make());
   }

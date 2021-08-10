@@ -37,6 +37,7 @@ add_executable(pipy
   src/api/json.cpp
   src/api/netmask.cpp
   src/api/os.cpp
+  src/api/pipy.cpp
   src/api/url.cpp
   src/api/xml.cpp
   src/context.cpp
@@ -53,18 +54,22 @@ add_executable(pipy
   src/filters/fork.cpp
   src/filters/http.cpp
   src/filters/link.cpp
+  src/filters/merge.cpp
   src/filters/mux.cpp
   src/filters/on-body.cpp
   src/filters/on-event.cpp
   src/filters/on-message.cpp
   src/filters/on-start.cpp
+  src/filters/pack.cpp
   src/filters/print.cpp
   src/filters/replace-body.cpp
   src/filters/replace-event.cpp
   src/filters/replace-message.cpp
   src/filters/replace-start.cpp
+  src/filters/socks.cpp
   src/filters/socks4.cpp
   src/filters/tap.cpp
+  src/filters/tls.cpp
   src/filters/use.cpp
   src/filters/wait.cpp
   src/fstream.cpp

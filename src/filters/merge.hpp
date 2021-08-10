@@ -23,15 +23,13 @@
  *  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef MUX_HPP
-#define MUX_HPP
+#ifndef MERGE_HPP
+#define MERGE_HPP
 
 #include "filter.hpp"
 #include "session.hpp"
-#include "list.hpp"
 #include "timer.hpp"
 
-#include <queue>
 #include <memory>
 #include <unordered_map>
 
@@ -41,17 +39,17 @@ class Data;
 class Pipeline;
 
 //
-// Mux
+// Merge
 //
 
-class Mux : public Filter {
+class Merge : public Filter {
 public:
-  Mux();
-  Mux(pjs::Str *target, pjs::Function *selector);
+  Merge();
+  Merge(pjs::Str *target, pjs::Function *selector);
 
 private:
-  Mux(const Mux &r);
-  ~Mux();
+  Merge(const Merge &r);
+  ~Merge();
 
   virtual auto help() -> std::list<std::string> override;
   virtual void dump(std::ostream &out) override;
@@ -61,10 +59,6 @@ private:
   virtual void process(Context *ctx, Event *inp) override;
 
 private:
-  struct Channel : public pjs::Pooled<Channel> {
-    Event::Receiver on_output;
-  };
-
   class SessionPool;
 
   class SharedSession :
@@ -72,21 +66,18 @@ private:
     public pjs::RefCount<SharedSession>
   {
   public:
-    SharedSession(Pipeline *pipeline, pjs::Str *name, int buffer_limit)
+    SharedSession(Pipeline *pipeline, pjs::Str *name)
       : m_pipeline(pipeline)
-      , m_name(name)
-      , m_buffer_limit(buffer_limit) {}
+      , m_name(name) {}
 
-    void input(Channel *channel, Context *ctx, pjs::Object *mctx, pjs::Object *head, Data *body);
+    void input(Context *ctx, pjs::Object *mctx, pjs::Object *head, Data *body);
 
   private:
     int m_share_count = 1;
     int m_free_time;
-    int m_buffer_limit;
     Pipeline* m_pipeline;
     pjs::Ref<pjs::Str> m_name;
     pjs::Ref<Session> m_session;
-    std::queue<std::unique_ptr<Channel>> m_queue;
 
     friend class SessionPool;
   };
@@ -100,7 +91,7 @@ private:
         if (!session->m_share_count++) m_free_sessions.remove(session);
         return session;
       }
-      auto session = new SharedSession(pipeline, name, m_buffer_limit);
+      auto session = new SharedSession(pipeline, name);
       m_sessions[name] = session;
       return session;
     }
@@ -116,7 +107,6 @@ private:
     }
 
   private:
-    int m_buffer_limit = 100;
     std::unordered_map<pjs::Ref<pjs::Str>, pjs::Ref<SharedSession>> m_sessions;
     List<SharedSession> m_free_sessions;
     bool m_cleaning_scheduled = false;
@@ -133,10 +123,9 @@ private:
   pjs::Ref<pjs::Object> m_head;
   pjs::Ref<Data> m_body;
   pjs::Ref<SharedSession> m_session;
-  std::queue<Channel*> m_queue;
   bool m_session_end = false;
 };
 
 } // namespace pipy
 
-#endif // MUX_HPP
+#endif // MERGE_HPP

@@ -23,39 +23,33 @@
  *  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include "console.hpp"
-#include "logging.hpp"
+#ifndef API_PIPY_H
+#define API_PIPY_H
 
-#include <sstream>
+#include "pjs/pjs.hpp"
 
-namespace pjs {
+namespace pipy {
 
-using namespace pipy;
+class Pipy : public pjs::FunctionTemplate<Pipy> {
+public:
+  class Script : public pjs::ObjectTemplate<Script> {
+  public:
+    static void set(const std::string &path, const std::string &content);
+    static void reset(const std::string &path);
+  };
 
-template<> void ClassDef<Console>::init() {
-  ctor();
+  class Store : public pjs::ObjectTemplate<Store> {
+  public:
+    static void set(const std::string &key, const std::string &value);
+    static bool get(const std::string &key, std::string &value);
 
-  // console.log
-  method("log", [](Context &ctx, Object *, Value &result) {
-    std::stringstream ss;
-    for (int i = 0; i < ctx.argc(); i++) {
-      if (i > 0) ss << ' ';
-      auto str = ctx.arg(i).to_string();
-      ss << str->c_str();
-      str->release();
-    }
+  private:
+    static std::map<std::string, std::string> s_values;
+  };
 
-    const auto &s = ss.str();
+  void operator()(pjs::Context &ctx, pjs::Object *obj, pjs::Value &ret);
+};
 
-    size_t i = 0;
-    while (i < s.length()) {
-      auto j = i;
-      while (j < s.length() && s[j] != '\n') j++;
-      Log::info("[pjs] %s", s.substr(i, j - i).c_str());
-      i = j + 1;
-    }
-  });
+} // namespace pipy
 
-}
-
-} // namespace pjs
+#endif // API_PIPY_H

@@ -83,6 +83,26 @@ private:
 };
 
 //
+// Certificate
+//
+
+class Certificate : public pjs::ObjectTemplate<Certificate> {
+public:
+  auto x509() const -> X509* { return m_x509; }
+
+private:
+  Certificate(Data *data);
+  Certificate(pjs::Str *data);
+  ~Certificate();
+
+  X509* m_x509 = nullptr;
+
+  static auto read_pem(const void *data, size_t size) -> X509*;
+
+  friend class pjs::ObjectTemplate<Certificate>;
+};
+
+//
 // Cipher
 //
 

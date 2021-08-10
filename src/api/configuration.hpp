@@ -48,12 +48,15 @@ class Configuration : public pjs::ObjectTemplate<Configuration> {
 public:
   static void set_reuse_port(bool b) { s_reuse_port = b; }
 
-  void connect(const pjs::Value &target, pjs::Object *options);
   void listen(int port, pjs::Object *options);
+  void task();
   void task(double interval);
   void task(const std::string &interval);
   void pipeline(const std::string &name);
 
+  void accept_tls(pjs::Str *target, pjs::Object *options);
+  void connect(const pjs::Value &target, pjs::Object *options);
+  void connect_tls(pjs::Str *target, pjs::Object *options);
   void decode_dubbo();
   void decode_http_request();
   void decode_http_response(bool bodiless);
@@ -67,12 +70,15 @@ public:
   void exec(const pjs::Value &command);
   void fork(pjs::Str *target, pjs::Object *session_data);
   void link(size_t count, pjs::Str **targets, pjs::Function **conditions);
+  void merge(pjs::Str *target, pjs::Function *selector);
   void mux(pjs::Str *target, pjs::Function *selector);
   void on_body(pjs::Function *callback);
   void on_event(Event::Type type, pjs::Function *callback);
   void on_message(pjs::Function *callback);
   void on_start(pjs::Function *callback);
+  void pack(int batch_size, pjs::Object *options);
   void print();
+  void proxy_socks(pjs::Str *target, pjs::Function *on_connect);
   void proxy_socks4(pjs::Str *target, pjs::Function *on_connect);
   void replace_body(const pjs::Value &replacement);
   void replace_event(Event::Type type, const pjs::Value &replacement);
@@ -91,9 +97,8 @@ private:
   struct ListenConfig {
     std::string ip;
     int port;
-    bool reuse;
-    bool ssl;
-    asio::ssl::context ssl_context;
+    bool reuse_port;
+    int max_connections;
     std::list<std::unique_ptr<Filter>> filters;
   };
 

@@ -63,6 +63,8 @@ template<class T> Class* class_of();
 template<class T>
 class RefCount {
 public:
+  int ref_count() const { return m_refs; }
+
   T* retain() {
     m_refs++;
     return static_cast<T*>(this);
@@ -94,24 +96,60 @@ public:
   template<class U> Ref(const Ref<U> &r) : m_p(static_cast<T*>(r.get())) { if (m_p) m_p->retain(); }
   template<class U> Ref(Ref<U> &&r)      : m_p(static_cast<T*>(r.get())) { r.m_p = nullptr; }
 
-  ~Ref() { release(); }
+  ~Ref() { reset(); }
 
-  Ref& operator=(T *p)         { if (m_p != p) { release(); m_p = p; if (p) p->retain(); } return *this; }
-  Ref& operator=(const Ref &r) { if (m_p != r.m_p) { release(); m_p = r.m_p; if (m_p) m_p->retain(); } return *this; }
-  Ref& operator=(Ref &&r)      { if (m_p != r.m_p) { release(); m_p = r.m_p; } r.m_p = nullptr; return *this; }
+  Ref& operator=(T *p)         { if (m_p != p) { reset(); m_p = p; if (p) p->retain(); } return *this; }
+  Ref& operator=(const Ref &r) { if (m_p != r.m_p) { reset(); m_p = r.m_p; if (m_p) m_p->retain(); } return *this; }
+  Ref& operator=(Ref &&r)      { if (m_p != r.m_p) { reset(); m_p = r.m_p; } r.m_p = nullptr; return *this; }
 
   T* get() const { return m_p; }
   T* operator->() const { return m_p; }
   T& operator*() const { return *m_p; }
   operator T*() const { return m_p; }
 
+  auto release() -> T* {
+    auto p = m_p;
+    m_p = nullptr;
+    return p;
+  }
+
   template<class U> operator Ref<U>() { return Ref<U>(static_cast<U*>(m_p)); }
 
 private:
   T* m_p;
 
-  void release() { if (m_p) m_p->release(); }
+  void reset() { if (m_p) m_p->release(); }
 };
+
+} // namespace pjs
+
+namespace std {
+
+template<class T>
+struct equal_to<pjs::Ref<T>> {
+  bool operator()(const pjs::Ref<T> &a, const pjs::Ref<T> &b) const {
+    return a.get() == b.get();
+  }
+};
+
+template<class T>
+struct less<pjs::Ref<T>> {
+  bool operator()(const pjs::Ref<T> &a, const pjs::Ref<T> &b) const {
+    return a.get() < b.get();
+  }
+};
+
+template<class T>
+struct hash<pjs::Ref<T>> {
+  size_t operator()(const pjs::Ref<T> &k) const {
+    hash<T*> h;
+    return h(k.get());
+  }
+};
+
+} // namespace std
+
+namespace pjs {
 
 //
 // Pooled
@@ -223,6 +261,131 @@ private:
 
 template<class T>
 std::vector<PooledArray<T>*> PooledArray<T>::m_pools;
+
+//
+// OrderedHash
+// TODO: Use pooled allocators
+//
+
+template<class K, class V>
+class OrderedHash : public Pooled<OrderedHash<K, V>, RefCount<OrderedHash<K, V>>> {
+public:
+  struct Entry {
+    K k;
+    V v;
+    Entry(const K &k, const V &v) : k(k), v(v) {}
+  };
+
+  class Iterator {
+  public:
+    Iterator(OrderedHash<K, V> *h)
+      : m_h(h)
+      , m_i(h->m_entries.begin())
+      , m_next(h->m_iterators)
+    {
+      if (m_next) m_next->m_prev = this;
+      h->m_iterators = this;
+      h->retain();
+    }
+
+    ~Iterator() {
+      if (m_next) m_next->m_prev = m_prev;
+      if (m_prev) m_prev->m_next = m_next; else m_h->m_iterators = m_next;
+      m_h->release();
+    }
+
+    auto next() -> Entry* {
+      if (m_i == m_h->m_entries.end()) return nullptr;
+      return &*m_i++;
+    }
+
+  private:
+    OrderedHash<K, V> *m_h;
+    typename std::list<Entry>::iterator m_i;
+    Iterator* m_next;
+    Iterator* m_prev = nullptr;
+
+    friend class OrderedHash<K, V>;
+  };
+
+  template<typename... Args>
+  static auto make(Args&&... args) -> OrderedHash<K, V>* {
+    return new OrderedHash<K, V>(std::forward<Args>(args)...);
+  }
+
+  auto size() const -> size_t {
+    return m_entries.size();
+  }
+
+  bool has(const K &k) {
+    return m_map.count(k) > 0;
+  }
+
+  bool get(const K &k, V &v) {
+    auto i = m_map.find(k);
+    if (i == m_map.end()) return false;
+    v = i->second->v;
+    return true;
+  }
+
+  bool use(const K &k, V &v) {
+    auto i = m_map.find(k);
+    if (i == m_map.end()) return false;
+    v = i->second->v;
+    auto a = i->second;
+    auto b = a; ++b;
+    m_entries.splice(m_entries.end(), m_entries, a, b);
+    return true;
+  }
+
+  bool set(const K &k, const V &v) {
+    auto i = m_map.find(k);
+    if (i == m_map.end()) {
+      auto p = m_entries.emplace(m_entries.end(), k, v);
+      m_map[k] = p;
+      return true;
+    } else {
+      i->second->v = v;
+      return false;
+    }
+  }
+
+  bool erase(const K &k) {
+    auto i = m_map.find(k);
+    if (i == m_map.end()) return false;
+    for (auto p = m_iterators; p; p = p->m_next) {
+      if (p->m_i == i->second) p->m_i++;
+    }
+    m_entries.erase(i->second);
+    m_map.erase(i);
+    return true;
+  }
+
+  void clear() {
+    m_map.clear();
+    m_entries.clear();
+    for (auto p = m_iterators; p; p = p->m_next) {
+      p->m_i = m_entries.end();
+    }
+  }
+
+private:
+  OrderedHash() {}
+
+  OrderedHash(const OrderedHash &rval)
+    : m_entries(rval.m_entries)
+  {
+    for (auto i = m_entries.begin(); i != m_entries.end(); i++) {
+      m_map[i->k] = i;
+    }
+  }
+
+  std::list<Entry> m_entries;
+  std::unordered_map<K, typename std::list<Entry>::iterator> m_map;
+  Iterator* m_iterators = nullptr;
+
+  friend class Iterator;
+};
 
 //
 // Str
@@ -657,6 +820,7 @@ public:
       case Value::Type::String: return s()->length() > 0;
       case Value::Type::Object: return o() ? true : false;
     }
+    return false;
   }
 
   auto to_number() const -> double {
@@ -679,6 +843,7 @@ public:
         }
       }
     }
+    return 0;
   }
 
   auto to_string() const -> Str* {
@@ -690,6 +855,7 @@ public:
       case Value::Type::String: return s()->retain();
       case Value::Type::Object: return o() ? to_string(o())->retain() : Str::null->retain();
     }
+    return Str::empty.get();
   }
 
   auto to_object() const -> Object* {
@@ -701,6 +867,7 @@ public:
       case Value::Type::String: return retain(box_string());
       case Value::Type::Object: return o() ? retain(o()) : nullptr;
     }
+    return nullptr;
   }
 
 private:
@@ -753,6 +920,65 @@ private:
   auto box_string() const -> Object*;
 };
 
+} // namespace pjs
+
+namespace std {
+
+template<>
+struct equal_to<pjs::Value> {
+  bool operator()(const pjs::Value &a, const pjs::Value &b) const {
+    if (a.type() != b.type()) return false;
+    if (a.is_string() || a.is_object()) {
+      return a.o() == b.o();
+    } else if (a.is_number()) {
+      return a.n() == b.n();
+    } else if (a.is_boolean()) {
+      return a.b() == b.b();
+    } else {
+      return true;
+    }
+  }
+};
+
+template<>
+struct less<pjs::Value> {
+  bool operator()(const pjs::Value &a, const pjs::Value &b) const {
+    if (a.type() == b.type()) {
+      if (a.is_string() || a.is_object()) {
+        return a.o() < b.o();
+      } else if (a.is_number()) {
+        return a.n() < b.n();
+      } else if (a.is_boolean()) {
+        return a.b() < b.b();
+      } else {
+        return false;
+      }
+    } else {
+      return a.type() < b.type();
+    }
+  }
+};
+
+template<>
+struct hash<pjs::Value> {
+  size_t operator()(const pjs::Value &v) const {
+    if (v.is_string()) {
+      hash<std::string> h;
+      return h(v.s()->str());
+    } else if (v.is_object()) {
+      hash<pjs::Object*> h;
+      return h(v.o());
+    } else {
+      hash<double> h;
+      return h(v.n());
+    }
+  }
+};
+
+} // namespace std
+
+namespace pjs {
+
 //
 // Data
 //
@@ -790,12 +1016,11 @@ public:
   bool has(Str *key);
   void get(Str *key, Value &val);
   void set(Str *key, const Value &val);
-  auto ht_size() const -> size_t { return m_ht.size(); }
-  bool ht_has(Str *key) { return m_ht.count(key) > 0; }
+  auto ht_size() const -> size_t { return m_hash ? m_hash->size() : 0; }
+  bool ht_has(Str *key) { return m_hash ? m_hash->has(key) : false; }
   void ht_get(Str *key, Value &val);
   void ht_set(Str *key, const Value &val);
   bool ht_delete(Str *key);
-  void ht_clear();
 
   void get(const std::string &key, Value &val) {
     Ref<Str> s(Str::make(key));
@@ -838,14 +1063,14 @@ public:
 
 protected:
   Object() {}
-  ~Object() { ht_clear(); if (m_class) m_class->free(this); }
+  ~Object() { if (m_class) m_class->free(this); }
 
   virtual void finalize() { delete this; }
 
 private:
   Class* m_class = nullptr;
   Data* m_data = nullptr;
-  std::unordered_map<Str*, Value> m_ht;
+  Ref<OrderedHash<Ref<Str>, Value>> m_hash;
   int m_refs = 0;
 
   friend class Class;
@@ -940,7 +1165,7 @@ inline auto Class::init(Object *obj, Object *prototype) -> Object* {
         data->at(i) = prototype->m_data->at(i);
       }
     }
-    obj->m_ht = prototype->m_ht;
+    obj->m_hash = prototype->m_hash;
   } else {
     Object::assign(obj, prototype);
   }
@@ -996,29 +1221,19 @@ inline void Object::set(Str *key, const Value &val) {
 }
 
 inline void Object::ht_get(Str *key, Value &val) {
-  auto i = m_ht.find(key);
-  if (i != m_ht.end()) {
-    val = i->second;
-  } else {
+  if (!m_hash || !m_hash->get(key, val)) {
     val = Value::undefined;
   }
 }
 
 inline void Object::ht_set(Str *key, const Value &val) {
-  auto result = m_ht.emplace(key, val);
-  if (result.second) key->retain();
-  else result.first->second = val;
+  if (!m_hash) m_hash = OrderedHash<Ref<Str>, Value>::make();
+  m_hash->set(key, val);
 }
 
 inline bool Object::ht_delete(Str *key) {
-  auto deleted = m_ht.erase(key) > 0;
-  if (deleted) key->release();
-  return deleted;
-}
-
-inline void Object::ht_clear() {
-  for (auto &p : m_ht) p.first->release();
-  m_ht.clear();
+  if (!m_hash) return false;
+  return m_hash->erase(key);
 }
 
 inline void Object::iterate_all(std::function<void(Str*, Value&)> callback) {
@@ -1028,8 +1243,11 @@ inline void Object::iterate_all(std::function<void(Str*, Value&)> callback) {
       callback(f->key(), m_data->at(i));
     }
   }
-  for (auto &p : m_ht) {
-    callback(p.first, p.second);
+  if (m_hash) {
+    OrderedHash<Ref<Str>, Value>::Iterator iterator(m_hash);
+    while (auto *ent = iterator.next()) {
+      callback(ent->k, ent->v);
+    }
   }
 }
 
@@ -1042,9 +1260,12 @@ inline bool Object::iterate_while(std::function<bool(Str*, Value&)> callback) {
       }
     }
   }
-  for (auto &p : m_ht) {
-    if (!callback(p.first, p.second)) {
-      return false;
+  if (m_hash) {
+    OrderedHash<Ref<Str>, Value>::Iterator iterator(m_hash);
+    while (auto *ent = iterator.next()) {
+      if (!callback(ent->k, ent->v)) {
+        return false;
+      }
     }
   }
   return true;
@@ -1177,6 +1398,7 @@ public:
   void error(const std::string &msg);
   void error(const std::runtime_error &err);
   void error_argument_count(int n);
+  void error_argument_count(int min, int max);
   void error_argument_type(int i, const char *type);
   void backtrace(int line, int column);
   void backtrace(const std::string &name);
@@ -1414,6 +1636,22 @@ inline auto Value::f() const -> Function* {
   return static_cast<Function*>(m_v.o);
 }
 
+template<class T>
+class FunctionTemplate : public ObjectTemplate<T, Function> {
+protected:
+  FunctionTemplate() {
+    auto c = class_of<T>();
+    Function::m_method = Method::make(
+      c->name(), 0, 0, nullptr,
+      [this](Context &ctx, Object *obj, Value &ret) {
+        (*static_cast<T*>(this))(ctx, obj, ret);
+      }
+    );
+  }
+
+  void operator()(Context &ctx, Object *obj, Value &ret) {}
+};
+
 //
 // Constructor
 //
@@ -1603,6 +1841,8 @@ public:
   bool starts_with(Str *search, int position = 0);
   auto substring(int start) -> Str*;
   auto substring(int start, int end) -> Str*;
+  auto to_lower_case() -> Str*;
+  auto to_upper_case() -> Str*;
 
 private:
   String(Str *s) : m_s(s) {}
@@ -1715,6 +1955,8 @@ public:
   void reduce(std::function<bool(Value&, Value&, int)> callback, Value &result);
   void reduce(std::function<bool(Value&, Value&, int)> callback, Value &initial, Value &result);
   void shift(Value &result);
+  void sort();
+  void sort(const std::function<bool(const Value&, const Value&)> &comparator);
 
 private:
   Array(size_t size = 0)
@@ -1768,82 +2010,5 @@ private:
 };
 
 } // namespace pjs
-
-namespace std {
-
-template<class T>
-struct hash<pjs::Ref<T>> {
-  size_t operator()(const pjs::Ref<T> &k) const {
-    hash<T*> h;
-    return h(k.get());
-  }
-};
-
-template<>
-struct hash<pjs::Value> {
-  size_t operator()(const pjs::Value &v) const {
-    if (v.is_string()) {
-      hash<std::string> h;
-      return h(v.s()->str());
-    } else if (v.is_object()) {
-      hash<pjs::Object*> h;
-      return h(v.o());
-    } else {
-      hash<double> h;
-      return h(v.n());
-    }
-  }
-};
-
-template<class T>
-struct equal_to<pjs::Ref<T>> {
-  bool operator()(const pjs::Ref<T> &a, const pjs::Ref<T> &b) const {
-    return a.get() == b.get();
-  }
-};
-
-template<>
-struct equal_to<pjs::Value> {
-  bool operator()(const pjs::Value &a, const pjs::Value &b) const {
-    if (a.type() != b.type()) return false;
-    if (a.is_string() || a.is_object()) {
-      return a.o() == b.o();
-    } else if (a.is_number()) {
-      return a.n() == b.n();
-    } else if (a.is_boolean()) {
-      return a.b() == b.b();
-    } else {
-      return true;
-    }
-  }
-};
-
-template<class T>
-struct less<pjs::Ref<T>> {
-  bool operator()(const pjs::Ref<T> &a, const pjs::Ref<T> &b) const {
-    return a.get() < b.get();
-  }
-};
-
-template<>
-struct less<pjs::Value> {
-  bool operator()(const pjs::Value &a, const pjs::Value &b) const {
-    if (a.type() == b.type()) {
-      if (a.is_string() || a.is_object()) {
-        return a.o() < b.o();
-      } else if (a.is_number()) {
-        return a.n() < b.n();
-      } else if (a.is_boolean()) {
-        return a.b() < b.b();
-      } else {
-        return false;
-      }
-    } else {
-      return a.type() < b.type();
-    }
-  }
-};
-
-} // namespace std
 
 #endif // PJS_TYPES_HPP

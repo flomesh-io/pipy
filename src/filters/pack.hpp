@@ -23,39 +23,54 @@
  *  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include "console.hpp"
-#include "logging.hpp"
+#ifndef PACK_HPP
+#define PACK_HPP
 
-#include <sstream>
+#include "filter.hpp"
+#include "data.hpp"
+#include "timer.hpp"
 
-namespace pjs {
+#include <chrono>
+#include <memory>
 
-using namespace pipy;
+namespace pipy {
 
-template<> void ClassDef<Console>::init() {
-  ctor();
+//
+// Pack
+//
 
-  // console.log
-  method("log", [](Context &ctx, Object *, Value &result) {
-    std::stringstream ss;
-    for (int i = 0; i < ctx.argc(); i++) {
-      if (i > 0) ss << ' ';
-      auto str = ctx.arg(i).to_string();
-      ss << str->c_str();
-      str->release();
-    }
+class Pack : public Filter {
+public:
+  Pack();
+  Pack(int batch_size, pjs::Object *options);
 
-    const auto &s = ss.str();
+private:
+  Pack(const Pack &r);
+  ~Pack();
 
-    size_t i = 0;
-    while (i < s.length()) {
-      auto j = i;
-      while (j < s.length() && s[j] != '\n') j++;
-      Log::info("[pjs] %s", s.substr(i, j - i).c_str());
-      i = j + 1;
-    }
-  });
+  virtual auto help() -> std::list<std::string> override;
+  virtual void dump(std::ostream &out) override;
+  virtual auto clone() -> Filter* override;
+  virtual void reset() override;
+  virtual void process(Context *ctx, Event *inp) override;
 
-}
+  int m_batch_size;
+  int m_message_starts = 0;
+  int m_message_ends = 0;
+  double m_timeout = 0;
+  double m_vacancy = 0.5;
+  pjs::Ref<pjs::Object> m_mctx;
+  pjs::Ref<pjs::Object> m_head;
+  pjs::Ref<Data> m_buffer;
+  std::unique_ptr<Timer> m_timer;
+  std::chrono::steady_clock::time_point m_last_input_time;
+  bool m_session_end = false;
 
-} // namespace pjs
+  void flush(MessageEnd *end);
+  void schedule_timeout();
+  void check_timeout();
+};
+
+} // namespace pipy
+
+#endif // PACK_HPP

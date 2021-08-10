@@ -30,8 +30,6 @@
 
 #include <iostream>
 #include <ctime>
-#include <chrono>
-#include <iomanip>
 #include <sstream>
 
 namespace pipy {

@@ -93,6 +93,7 @@ void RequestDecoder::reset() {
   m_state = METHOD;
   m_name.clear();
   m_head = nullptr;
+  m_connected = false;
   m_session_end = false;
 }
 
@@ -101,7 +102,13 @@ void RequestDecoder::process(Context *ctx, Event *inp) {
 
   // Data
   if (auto data = inp->as<Data>()) {
+    if (m_connected) {
+      output(data);
+      return;
+    }
+
     while (!data->empty()) {
+
       auto is_body = (m_state == BODY);
       auto is_end = false;
 
@@ -170,6 +177,10 @@ void RequestDecoder::process(Context *ctx, Event *inp) {
               end_message(ctx);
               m_state = METHOD;
               m_name.clear();
+              if (m_connected) {
+                output(MessageStart::make());
+                return true;
+              }
             }
           } else {
             m_name.push(c);
@@ -236,6 +247,10 @@ void RequestDecoder::process(Context *ctx, Event *inp) {
             end_message(ctx);
             m_state = METHOD;
             m_name.clear();
+            if (m_connected) {
+              output(MessageStart::make());
+              return true;
+            }
           }
           break;
         }
@@ -251,6 +266,7 @@ void RequestDecoder::process(Context *ctx, Event *inp) {
 
   // End of session
   } else if (inp->is<SessionEnd>()) {
+    if (m_connected) output(MessageEnd::make());
     m_session_end = true;
     output(inp);
   }
@@ -270,6 +286,10 @@ bool RequestDecoder::is_keep_alive() {
 }
 
 void RequestDecoder::end_message(Context *ctx) {
+  static pjs::Ref<pjs::Str> CONNECT(pjs::Str::make("CONNECT"));
+  if (m_head->method() == CONNECT.get()) {
+    m_connected = true;
+  }
   if (auto inbound = ctx->inbound()) {
     inbound->set_keep_alive_request(is_keep_alive());
     inbound->increase_request_count();
@@ -567,6 +587,8 @@ void RequestEncoder::reset() {
 }
 
 void RequestEncoder::process(Context *ctx, Event *inp) {
+  static Data::Producer s_dp("encodeHttpRequest");
+
   if (m_session_end) return;
 
   if (inp->is<MessageStart>()) {
@@ -600,30 +622,30 @@ void RequestEncoder::process(Context *ctx, Event *inp) {
     }
 
     auto header_data = Data::make();
-    header_data->push(str_method ? str_method->str() : s_default_method);
-    header_data->push(' ');
-    header_data->push(str_path ? str_path->str() : s_default_path);
-    header_data->push(' ');
-    header_data->push(str_protocol ? str_protocol->str() : s_default_protocol);
-    header_data->push("\r\n");
+    s_dp.push(header_data, str_method ? str_method->str() : s_default_method);
+    s_dp.push(header_data, ' ');
+    s_dp.push(header_data, str_path ? str_path->str() : s_default_path);
+    s_dp.push(header_data, ' ');
+    s_dp.push(header_data, str_protocol ? str_protocol->str() : s_default_protocol);
+    s_dp.push(header_data, "\r\n");
 
     if (obj_headers) {
       obj_headers->iterate_all([&](pjs::Str *key, const pjs::Value &val) {
         if (val.is_nullish()) return;
         auto s = val.to_string();
         if (!is_content_length(s->str())) {
-          header_data->push(key->str());
-          header_data->push(": ");
-          header_data->push(s->str());
-          header_data->push("\r\n");
+          s_dp.push(header_data, key->str());
+          s_dp.push(header_data, ": ");
+          s_dp.push(header_data, s->str());
+          s_dp.push(header_data, "\r\n");
         }
         s->release();
       });
     }
 
-    header_data->push(s_header_content_length);
-    header_data->push(std::to_string(m_buffer->size()));
-    header_data->push("\r\n\r\n");
+    s_dp.push(header_data, s_header_content_length);
+    s_dp.push(header_data, std::to_string(m_buffer->size()));
+    s_dp.push(header_data, "\r\n\r\n");
 
     if (str_protocol) str_protocol->release();
     if (str_method) str_method->release();
@@ -848,6 +870,8 @@ void ResponseEncoder::reset() {
 }
 
 void ResponseEncoder::process(Context *ctx, Event *inp) {
+  static Data::Producer s_dp("encodeHttpResponse");
+
   if (m_session_end) return;
 
   if (inp->is<MessageStart>()) {
@@ -889,44 +913,44 @@ void ResponseEncoder::process(Context *ctx, Event *inp) {
     }
 
     auto header_data = Data::make();
-    header_data->push(str_protocol ? str_protocol->str() : s_default_protocol);
-    header_data->push(' ');
-    header_data->push(num_status ? std::to_string(num_status) : s_default_status);
-    header_data->push(' ');
-    if (str_status_text) header_data->push(str_status_text->str());
+    s_dp.push(header_data, str_protocol ? str_protocol->str() : s_default_protocol);
+    s_dp.push(header_data, ' ');
+    s_dp.push(header_data, num_status ? std::to_string(num_status) : s_default_status);
+    s_dp.push(header_data, ' ');
+    if (str_status_text) s_dp.push(header_data, str_status_text->str());
     else {
       const auto *status_name = lookup_status_text(num_status);
-      header_data->push(status_name ? std::string(status_name) : s_default_status_text);
+      s_dp.push(header_data, status_name ? std::string(status_name) : s_default_status_text);
     }
-    header_data->push("\r\n");
+    s_dp.push(header_data, "\r\n");
 
     if (obj_headers) {
       obj_headers->iterate_all([&](pjs::Str *key, const pjs::Value &val) {
         if (val.is_nullish()) return;
         auto s = val.to_string();
         if (is_bodiless || !is_content_length(s->str())) {
-          header_data->push(key->str());
-          header_data->push(": ");
-          header_data->push(s->str());
-          header_data->push("\r\n");
+          s_dp.push(header_data, key->str());
+          s_dp.push(header_data, ": ");
+          s_dp.push(header_data, s->str());
+          s_dp.push(header_data, "\r\n");
         }
         s->release();
       });
     }
 
     if (keep_alive) {
-      header_data->push(s_header_connection_keep_alive);
+      s_dp.push(header_data, s_header_connection_keep_alive);
     } else {
-      header_data->push(s_header_connection_close);
+      s_dp.push(header_data, s_header_connection_close);
     }
 
     if (!is_bodiless) {
-      header_data->push(s_header_content_length);
-      header_data->push(std::to_string(m_buffer->size()));
-      header_data->push("\r\n");
+      s_dp.push(header_data, s_header_content_length);
+      s_dp.push(header_data, std::to_string(m_buffer->size()));
+      s_dp.push(header_data, "\r\n");
     }
 
-    header_data->push("\r\n");
+    s_dp.push(header_data, "\r\n");
 
     if (str_protocol) str_protocol->release();
     if (str_status_text) str_status_text->release();

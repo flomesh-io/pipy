@@ -214,6 +214,7 @@ auto XML::decode(const Data &data) -> Node* {
 }
 
 bool XML::encode(Node *doc, int space, Data &data) {
+  static Data::Producer s_dp("XML");
   static std::string s_head("<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
 
   auto children = doc->children();
@@ -232,18 +233,18 @@ bool XML::encode(Node *doc, int space, Data &data) {
     if (node->name() == 0) return;
 
     std::string padding(space * l, ' ');
-    if (space) data.push(padding);
-    data.push('<');
-    data.push(node->name()->str());
+    if (space) s_dp.push(&data, padding);
+    s_dp.push(&data, '<');
+    s_dp.push(&data, node->name()->str());
     if (auto attrs = node->attributes()) {
       attrs->iterate_all([&](pjs::Str *k, pjs::Value &v) {
         auto *s = v.to_string();
-        data.push(' ');
-        data.push(k->str());
-        data.push('=');
-        data.push('"');
-        data.push(s->str());
-        data.push('"');
+        s_dp.push(&data, ' ');
+        s_dp.push(&data, k->str());
+        s_dp.push(&data, '=');
+        s_dp.push(&data, '"');
+        s_dp.push(&data, s->str());
+        s_dp.push(&data, '"');
         s->release();
       });
     }
@@ -257,8 +258,8 @@ bool XML::encode(Node *doc, int space, Data &data) {
         children->get(0, front);
         if (!front.is_instance_of<XML::Node>()) {
           auto *s = front.to_string();
-          data.push('>');
-          data.push(s->str());
+          s_dp.push(&data, '>');
+          s_dp.push(&data, s->str());
           s->release();
           is_closed = true;
           is_text = true;
@@ -266,38 +267,38 @@ bool XML::encode(Node *doc, int space, Data &data) {
       }
 
       if (!is_text && children->length() > 0) {
-        data.push('>');
-        if (space) data.push('\n');
+        s_dp.push(&data, '>');
+        if (space) s_dp.push(&data, '\n');
         is_closed = true;
         std::string padding(space * l + space, ' ');
         children->iterate_all([&](pjs::Value &v, int) {
           if (v.is_instance_of<XML::Node>()) {
             write(v.as<XML::Node>(), l + 1);
           } else {
-            if (space) data.push(padding);
+            if (space) s_dp.push(&data, padding);
             auto *s = v.to_string();
-            data.push(s->str());
+            s_dp.push(&data, s->str());
             s->release();
-            if (space) data.push('\n');
+            if (space) s_dp.push(&data, '\n');
           }
         });
       }
     }
 
     if (is_closed) {
-      if (space && !is_text) data.push(padding);
-      data.push("</");
-      data.push(node->name()->str());
-      data.push('>');
-      if (space) data.push('\n');
+      if (space && !is_text) s_dp.push(&data, padding);
+      s_dp.push(&data, "</");
+      s_dp.push(&data, node->name()->str());
+      s_dp.push(&data, '>');
+      if (space) s_dp.push(&data, '\n');
     } else {
-      data.push("/>");
-      if (space) data.push('\n');
+      s_dp.push(&data, "/>");
+      if (space) s_dp.push(&data, '\n');
     }
   };
 
-  data.push(s_head);
-  if (space) data.push('\n');
+  s_dp.push(&data, s_head);
+  if (space) s_dp.push(&data, '\n');
   write(root.as<XML::Node>(), 0);
   return true;
 }

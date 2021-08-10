@@ -29,6 +29,9 @@
 #include "net.hpp"
 #include "event.hpp"
 #include "timer.hpp"
+#include "list.hpp"
+
+#include <functional>
 
 namespace pipy {
 
@@ -38,11 +41,16 @@ class Data;
 // Outbound
 //
 
-class Outbound : public pjs::Pooled<Outbound> {
+class Outbound : public pjs::Pooled<Outbound>, public List<Outbound>::Item {
 public:
   Outbound();
-  Outbound(asio::ssl::context &ssl_context);
   ~Outbound();
+
+  static void for_each(const std::function<void(Outbound*)> &cb) {
+    for (auto p = s_all_outbounds.head(); p; p = p->next()) {
+      cb(p);
+    }
+  }
 
   auto host() const -> const std::string& { return m_host; }
   auto address() const -> const std::string& { return m_address; }
@@ -51,10 +59,11 @@ public:
   bool overflowed() const { return m_overflowed; }
   auto retries() const -> int { return m_retries; }
   auto buffered() const -> int { return m_buffer.size(); }
+  auto connection_time() const -> double { return m_connection_time; }
 
+  void set_buffer_limit(size_t size) { m_buffer_limit = size; }
   void set_retry_count(int n) { m_retry_count = n; }
   void set_retry_delay(double t) { m_retry_delay = t; }
-  void set_buffer_limit(size_t size) { m_buffer_limit = size; }
 
   void on_receive(const Event::Receiver &receiver) { m_receiver = receiver; }
   void on_delete(const std::function<void()> &callback) { m_on_delete = callback; }
@@ -72,17 +81,20 @@ private:
   std::function<void()> m_on_delete;
   asio::ip::tcp::resolver m_resolver;
   asio::ip::tcp::socket m_socket;
-  asio::ssl::stream<asio::ip::tcp::socket> m_ssl_socket;
   Timer m_timer;
   int m_retry_count = 0;
   double m_retry_delay = 0;
   int m_retries = 0;
+  double m_start_time = 0;
+  double m_connection_time = 0;
   Data m_buffer;
   size_t m_buffer_limit = 0;
-  bool m_ssl = false;
+  size_t m_discarded_data_size = 0;
   bool m_connected = false;
   bool m_overflowed = false;
   bool m_pumping = false;
+  bool m_outputing = false;
+  bool m_freed = false;
   bool m_reading_ended = false;
   bool m_writing_ended = false;
 
@@ -91,9 +103,12 @@ private:
   void cancel_connecting();
   void reconnect();
   void receive();
+  bool output(Event *evt);
   void pump();
   void close();
   void free();
+
+  static List<Outbound> s_all_outbounds;
 };
 
 } // namespace pipy

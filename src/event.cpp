@@ -36,10 +36,16 @@ template<> void ClassDef<Event>::init()
 template<> void ClassDef<MessageStart>::init() {
   super<Event>();
   ctor([](Context &ctx) -> Object* {
-    Object *head = nullptr;
-    if (!ctx.arguments(0, &head)) return nullptr;
-    return MessageStart::make(head);
+    Object *context = nullptr, *head = nullptr;
+    if (ctx.try_arguments(2, &context, &head)) {
+      return MessageStart::make(context, head);
+    } else if (ctx.arguments(0, &head)) {
+      return MessageStart::make(head);
+    } else {
+      return nullptr;
+    }
   });
+  accessor("context", [](Object *obj, Value &val) { val.set(obj->as<MessageStart>()->context()); });
   accessor("head", [](Object *obj, Value &val) { val.set(obj->as<MessageStart>()->head()); });
 }
 

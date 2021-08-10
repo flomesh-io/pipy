@@ -38,8 +38,10 @@ class Pipeline;
 
 class Module {
 public:
+  static void set_script(const std::string &path, const std::string &script);
+  static void reset_script(const std::string &path);
+
   bool load(const std::string &path);
-  void unload();
   void start();
 
   auto new_context_data(pjs::Object *prototype = nullptr) -> pjs::Object* {
@@ -72,6 +74,8 @@ private:
   pjs::Ref<Configuration> m_configuration;
   pjs::Ref<pjs::Class> m_context_class;
   std::unordered_map<pjs::Ref<pjs::Str>, pjs::Ref<Pipeline>> m_named_pipelines;
+
+  static std::map<std::string, std::string> s_overriden_scripts;
 
   friend class Configuration;
   friend class Worker;
