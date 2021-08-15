@@ -113,6 +113,7 @@ class HashingLoadBalancer : public pjs::ObjectTemplate<HashingLoadBalancer> {
 public:
   void add(pjs::Str *target);
   auto select(const pjs::Value &tag) -> pjs::Str*;
+  void deselect(pjs::Str *target) {}
 
 private:
   HashingLoadBalancer();
@@ -132,6 +133,7 @@ class RoundRobinLoadBalancer : public pjs::ObjectTemplate<RoundRobinLoadBalancer
 public:
   void set(pjs::Str *target, int weight);
   auto select(const pjs::Value &tag = pjs::Value::undefined) -> pjs::Str*;
+  void deselect(pjs::Str *target) {}
 
 private:
   RoundRobinLoadBalancer();
