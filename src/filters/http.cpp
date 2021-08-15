@@ -1544,6 +1544,7 @@ void Encoder::output_head() {
   if (headers.is_object()) {
     headers.o()->iterate_all(
       [&](pjs::Str *k, pjs::Value &v) {
+        if (k == s_connection || k == s_keep_alive) return;
         s_dp.push(buffer, k->str());
         s_dp.push(buffer, ": ");
         if (k == s_content_length) {
@@ -1553,7 +1554,7 @@ void Encoder::output_head() {
             s_dp.push(buffer, str);
             content_length_written = true;
           }
-        } else if (k != s_connection && k != s_keep_alive) {
+        } else {
           auto s = v.to_string();
           s_dp.push(buffer, s->str());
           s_dp.push(buffer, "\r\n");
