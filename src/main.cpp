@@ -50,7 +50,7 @@
 
 // All filters
 #include "filters/connect.hpp"
-#include "filters/decompress-body.hpp"
+#include "filters/decompress-message.hpp"
 #include "filters/demux.hpp"
 #include "filters/dubbo.hpp"
 #include "filters/dummy.hpp"
@@ -88,7 +88,8 @@ static std::list<Filter*> s_filters {
   new tls::Server,
   new Connect,
   new tls::Client,
-  new DecompressBody,
+  new DecompressHTTP,
+  new DecompressMessage,
   new Demux,
   new dubbo::Decoder,
   new http::RequestDecoder,

@@ -35,7 +35,7 @@
 
 // all filters
 #include "filters/connect.hpp"
-#include "filters/decompress-body.hpp"
+#include "filters/decompress-message.hpp"
 #include "filters/demux.hpp"
 #include "filters/dubbo.hpp"
 #include "filters/dummy.hpp"
@@ -174,10 +174,12 @@ void Configuration::decode_http_response(pjs::Object *options) {
   append_filter(new http::ResponseDecoder(options));
 }
 
-void Configuration::decompress_body(pjs::Str *algorithm) {
-  auto algo = pjs::EnumDef<DecompressBody::Algorithm>::value(algorithm);
-  if (int(algo) < 0) throw std::runtime_error("unknown decompression algorithm");
-  append_filter(new DecompressBody(algo));
+void Configuration::decompress_http(pjs::Function *enable) {
+  append_filter(new DecompressHTTP(enable));
+}
+
+void Configuration::decompress_message(const pjs::Value &algorithm) {
+  append_filter(new DecompressMessage(algorithm));
 }
 
 void Configuration::demux(pjs::Str *target) {
@@ -524,12 +526,24 @@ template<> void ClassDef<Configuration>::init() {
     }
   });
 
-  // Configuration.decompressMessageBody
-  method("decompressMessageBody", [](Context &ctx, Object *thiz, Value &result) {
-    Str *algorithm;
+  // Configuration.decompressHTTP
+  method("decompressHTTP", [](Context &ctx, Object *thiz, Value &result) {
+    pjs::Function *enable = nullptr;
+    if (!ctx.arguments(0, &enable)) return;
+    try {
+      thiz->as<Configuration>()->decompress_http(enable);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // Configuration.decompressMessage
+  method("decompressMessage", [](Context &ctx, Object *thiz, Value &result) {
+    pjs::Value algorithm;
     if (!ctx.arguments(1, &algorithm)) return;
     try {
-      thiz->as<Configuration>()->decompress_body(algorithm);
+      thiz->as<Configuration>()->decompress_message(algorithm);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
