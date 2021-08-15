@@ -30,6 +30,7 @@
 #include "pipeline.hpp"
 #include "module.hpp"
 #include "inbound.hpp"
+#include "utils.hpp"
 #include "logging.hpp"
 
 #include <queue>
@@ -170,6 +171,7 @@ void RequestDecoder::process(Context *ctx, Event *inp) {
             m_connection.clear();
             m_keep_alive.clear();
             m_chunked = false;
+            m_content_encoding.clear();
             m_content_length = 0;
           } else {
             m_name.push(c);
@@ -440,6 +442,7 @@ void ResponseDecoder::process(Context *ctx, Event *inp) {
             m_name.clear();
             m_transfer_encoding.clear();
             m_chunked = false;
+            m_content_encoding.clear();
             m_content_length = 0;
           } else {
             m_name.push(c);
@@ -1059,17 +1062,20 @@ void ResponseEncoder::process(Context *ctx, Event *inp) {
   }
 }
 
-static pjs::Ref<pjs::Str> s_protocol(pjs::Str::make("protocol"));
-static pjs::Ref<pjs::Str> s_method(pjs::Str::make("method"));
-static pjs::Ref<pjs::Str> s_path(pjs::Str::make("path"));
-static pjs::Ref<pjs::Str> s_status(pjs::Str::make("status"));
-static pjs::Ref<pjs::Str> s_status_text(pjs::Str::make("statusText"));
-static pjs::Ref<pjs::Str> s_headers(pjs::Str::make("headers"));
-static pjs::Ref<pjs::Str> s_connection(pjs::Str::make("connection"));
-static pjs::Ref<pjs::Str> s_keep_alive(pjs::Str::make("keep-alive"));
-static pjs::Ref<pjs::Str> s_transfer_encoding(pjs::Str::make("transfer-encoding"));
-static pjs::Ref<pjs::Str> s_content_length(pjs::Str::make("content-length"));
-static pjs::Ref<pjs::Str> s_content_encoding(pjs::Str::make("content-encoding"));
+static const pjs::Ref<pjs::Str> s_protocol(pjs::Str::make("protocol"));
+static const pjs::Ref<pjs::Str> s_method(pjs::Str::make("method"));
+static const pjs::Ref<pjs::Str> s_head(pjs::Str::make("HEAD"));
+static const pjs::Ref<pjs::Str> s_path(pjs::Str::make("path"));
+static const pjs::Ref<pjs::Str> s_status(pjs::Str::make("status"));
+static const pjs::Ref<pjs::Str> s_status_text(pjs::Str::make("statusText"));
+static const pjs::Ref<pjs::Str> s_headers(pjs::Str::make("headers"));
+static const pjs::Ref<pjs::Str> s_http_1_0(pjs::Str::make("HTTP/1.0"));
+static const pjs::Ref<pjs::Str> s_connection(pjs::Str::make("connection"));
+static const pjs::Ref<pjs::Str> s_keep_alive(pjs::Str::make("keep-alive"));
+static const pjs::Ref<pjs::Str> s_close(pjs::Str::make("close"));
+static const pjs::Ref<pjs::Str> s_transfer_encoding(pjs::Str::make("transfer-encoding"));
+static const pjs::Ref<pjs::Str> s_content_length(pjs::Str::make("content-length"));
+static const pjs::Ref<pjs::Str> s_content_encoding(pjs::Str::make("content-encoding"));
 
 //
 // Decoder
@@ -1077,17 +1083,25 @@ static pjs::Ref<pjs::Str> s_content_encoding(pjs::Str::make("content-encoding"))
 
 class Decoder {
 public:
-  Decoder(const Event::Receiver &output)
-    : m_output(output) {}
+  Decoder(bool is_response, const Event::Receiver &output)
+    : m_output(output)
+    , m_is_response(is_response) {}
 
   void reset() {
     m_state = HEAD;
     m_head_buffer.clear();
     m_head = nullptr;
     m_body_size = 0;
+    m_is_bodiless = false;
+    m_is_final = false;
   }
 
-  void input(Data *data);
+  void input(const pjs::Ref<Data> &data);
+
+  bool is_bodiless() const { return m_is_bodiless; }
+  bool is_final() const { return m_is_final; }
+
+  void set_bodiless(bool b) { m_is_bodiless = b; }
 
 private:
   const static int MAX_HEADER_SIZE = 0x1000;
@@ -1109,9 +1123,22 @@ private:
   Data m_head_buffer;
   pjs::Ref<MessageHead> m_head;
   int m_body_size = 0;
+  bool m_is_response;
+  bool m_is_bodiless = false;
+  bool m_is_final = false;
+
+  void output_start() {
+    m_output(MessageStart::make(m_head));
+  }
+
+  void output_end() {
+    m_output(MessageEnd::make());
+    m_is_bodiless = false;
+    m_is_final = false;
+  }
 };
 
-void Decoder::input(Data *data) {
+void Decoder::input(const pjs::Ref<Data> &data) {
   while (!data->empty()) {
     auto state = m_state;
     pjs::Ref<Data> output(Data::make());
@@ -1218,7 +1245,7 @@ void Decoder::input(Data *data) {
             break;
           }
         }
-        if (!strncmp(segs[0].c_str(), "HTTP/", 5)) {
+        if (m_is_response) {
           auto res = ResponseHead::make();
           res->protocol(pjs::Str::make(segs[0]));
           res->status(std::atoi(segs[1].c_str()));
@@ -1226,10 +1253,12 @@ void Decoder::input(Data *data) {
           m_head = res;
         } else {
           auto req = RequestHead::make();
-          req->method(pjs::Str::make(segs[0]));
+          auto method = pjs::Str::make(segs[0]);
+          req->method(method);
           req->path(pjs::Str::make(segs[1]));
           req->protocol(pjs::Str::make(segs[2]));
           m_head = req;
+          m_is_bodiless = (method == s_head);
         }
         m_head->headers(pjs::Object::make());
         state = HEADER;
@@ -1253,27 +1282,50 @@ void Decoder::input(Data *data) {
           }
           state = HEADER;
           m_head_buffer.clear();
+
         } else {
           m_body_size = 0;
           m_head_buffer.clear();
-          pjs::Value transfer_encoding;
-          m_head->headers()->get(s_transfer_encoding, transfer_encoding);
-          if (transfer_encoding.is_string() && !strncmp(transfer_encoding.s()->c_str(), "chunked", 7)) {
-            state = CHUNK_HEAD;
-            m_output(MessageStart::make(m_head));
+
+          pjs::Value connection, transfer_encoding, content_length;
+          pjs::Object* headers = m_head->headers();
+          headers->get(s_connection, connection);
+          headers->get(s_transfer_encoding, transfer_encoding);
+          headers->get(s_content_length, content_length);
+          headers->ht_delete(s_content_length);
+
+          // Connection and Keep-Alive
+          if (connection.is_string()) {
+            m_is_final = (connection.s() == s_close);
           } else {
-            pjs::Value content_length;
-            m_head->headers()->get(s_content_length, content_length);
+            m_is_final = (m_head->protocol() == s_http_1_0);
+          }
+
+          // Transfer-Encoding and Content-Length
+          if (transfer_encoding.is_string() && !strncmp(transfer_encoding.s()->c_str(), "chunked", 7)) {
+            output_start();
+            if (m_is_response && m_is_bodiless) {
+              output_end();
+              state = HEAD;
+            } else {
+              state = CHUNK_HEAD;
+            }
+          } else {
             if (content_length.is_string()) {
               m_body_size = std::atoi(content_length.s()->c_str());
             }
             if (m_body_size > 0) {
-              state = BODY;
-              m_output(MessageStart::make(m_head));
+              output_start();
+              if (m_is_response && m_is_bodiless) {
+                output_end();
+                state = HEAD;
+              } else {
+                state = BODY;
+              }
             } else {
+              output_start();
+              output_end();
               state = HEAD;
-              m_output(MessageStart::make(m_head));
-              m_output(MessageEnd::make());
             }
           }
         }
@@ -1281,8 +1333,7 @@ void Decoder::input(Data *data) {
       }
       case HEAD:
         if (m_state != HEAD) {
-          m_output(MessageEnd::make());
-          // TODO: Handle session end
+          output_end();
         }
         break;
       default: break;
@@ -1305,9 +1356,16 @@ public:
   void reset() {
     m_start = nullptr;
     m_buffer = nullptr;
+    m_is_bodiless = false;
+    m_is_final = false;
   }
 
-  void input(Event *evt);
+  void input(const pjs::Ref<Event> &evt);
+
+  bool is_bodiless() const { return m_is_bodiless; }
+
+  void set_bodiless(bool b) { m_is_bodiless = b; }
+  void set_final(bool b) { m_is_final = b; }
 
 private:
   Event::Receiver m_output;
@@ -1316,6 +1374,8 @@ private:
   int m_content_length = -1;
   bool m_chunked = false;
   bool m_is_response;
+  bool m_is_bodiless = false;
+  bool m_is_final = false;
 
   void output_head();
 
@@ -1324,7 +1384,7 @@ private:
 
 Data::Producer Encoder::s_dp("HTTP Encoder");
 
-void Encoder::input(Event *evt) {
+void Encoder::input(const pjs::Ref<Event> &evt) {
   if (auto start = evt->as<MessageStart>()) {
     m_start = start;
     m_buffer = nullptr;
@@ -1360,30 +1420,45 @@ void Encoder::input(Event *evt) {
 
   } else if (auto data = evt->as<Data>()) {
     if (m_start) {
-      if (m_buffer) {
-        m_buffer->push(*data);
-      } else {
-        if (m_chunked && !data->empty()) {
-          char str[100];
-          std::sprintf(str, "%X\r\n", data->size());
-          m_output(s_dp.make(str, std::strlen(str)));
+      if (!m_is_response || !m_is_bodiless) {
+        if (m_buffer) {
+          m_buffer->push(*data);
+        } else {
+          if (m_chunked && !data->empty()) {
+            auto buf = Data::make();
+            char str[100];
+            std::sprintf(str, "%X\r\n", data->size());
+            s_dp.push(buf, str);
+            buf->push(*data);
+            s_dp.push(buf, "\r\n");
+            m_output(buf);
+          } else {
+            m_output(data);
+          }
         }
-        m_output(data);
       }
     }
 
   } else if (evt->is<MessageEnd>()) {
     if (m_start) {
-      if (m_chunked) {
-        m_output(s_dp.make("0\r\n\r\n"));
-      } else if (m_buffer) {
-        m_content_length = m_buffer->size();
-        output_head();
-        if (!m_buffer->empty()) m_output(m_buffer);
+      if (!m_is_response || !m_is_bodiless) {
+        if (m_chunked) {
+          m_output(s_dp.make("0\r\n\r\n"));
+        } else if (m_buffer) {
+          m_content_length = m_buffer->size();
+          output_head();
+          if (!m_buffer->empty()) m_output(m_buffer);
+        }
       }
       m_output(evt);
+      if (m_is_response && m_is_final) {
+        m_output(SessionEnd::make());
+      }
     }
     reset();
+
+  } else if (evt->is<SessionEnd>()) {
+    m_output(evt);
   }
 }
 
@@ -1437,6 +1512,7 @@ void Encoder::output_head() {
     }
 
     if (method.is_string()) {
+      m_is_bodiless = (method.s() == s_head);
       s_dp.push(buffer, method.s()->str());
       s_dp.push(buffer, ' ');
     } else {
@@ -1477,7 +1553,7 @@ void Encoder::output_head() {
             s_dp.push(buffer, str);
             content_length_written = true;
           }
-        } else {
+        } else if (k != s_connection && k != s_keep_alive) {
           auto s = v.to_string();
           s_dp.push(buffer, s->str());
           s_dp.push(buffer, "\r\n");
@@ -1487,32 +1563,42 @@ void Encoder::output_head() {
     );
   }
 
-  if (!content_length_written && !m_chunked) {
+  if (!content_length_written && !m_chunked && m_content_length > 0) {
     char str[100];
     std::sprintf(str, ": %d\r\n", m_content_length);
     s_dp.push(buffer, s_content_length->str());
     s_dp.push(buffer, str);
   }
 
+  if (m_is_final) {
+    static std::string str("connection: close\r\n");
+    s_dp.push(buffer, str);
+  } else {
+    static std::string str("connection: keep-alive\r\n");
+    s_dp.push(buffer, str);
+  }
+
   s_dp.push(buffer, "\r\n");
+
+  m_output(m_start);
   m_output(buffer);
 }
 
 //
-// ServerHandlerV1
+// ServerConnection
 //
 
-class ServerHandlerV1 : public Server::Handler, public pjs::Pooled<ServerHandlerV1> {
+class ServerConnection : public pjs::Pooled<ServerConnection> {
 public:
-  ServerHandlerV1(
-    const std::function<Session*()> &on_new_channel,
+  ServerConnection(
+    const std::function<Session*()> &new_session,
     const Event::Receiver &on_output
-  ) :
-    m_decoder([this](Event *evt) { process(evt); }),
-    m_encoder(true, on_output),
-    m_new_channel(on_new_channel) {}
+  )
+    : m_new_session(new_session)
+    , m_decoder(false, [this](Event *evt) { feed(evt); })
+    , m_encoder(true, on_output) {}
 
-  ~ServerHandlerV1() {
+  ~ServerConnection() {
     while (!m_queue.empty()) {
       auto channel = m_queue.front();
       m_queue.pop();
@@ -1520,164 +1606,343 @@ public:
     }
   }
 
+  void input(Data *data) {
+    m_decoder.input(data);
+  }
+
 private:
-  struct Channel : public pjs::Pooled<Channel> {
+  struct Stream : public pjs::Pooled<Stream> {
     pjs::Ref<Session> session;
     EventBuffer buffer;
     bool input_end = false;
     bool output_end = false;
-    ~Channel() { session->on_output(nullptr); }
+    bool bodiless = false;
+    bool final = false;
+    ~Stream() { session->on_output(nullptr); }
   };
 
+  std::function<Session*()> m_new_session;
   Decoder m_decoder;
   Encoder m_encoder;
-  std::function<Session*()> m_new_channel;
-  std::queue<Channel*> m_queue;
+  std::queue<Stream*> m_queue;
 
-  virtual void input(Data *data) override {
-    m_decoder.input(data);
-  }
+  void feed(Event *evt) {
+    if (auto start = evt->as<MessageStart>()) {
+      auto stream = new Stream;
+      auto session = m_new_session();
+      session->on_output([=](Event *inp) {
+        if (stream->output_end) return;
+        if (inp->is<SessionEnd>()) {
+          stream->buffer.push(MessageEnd::make());
+          stream->output_end = true;
+        } else {
+          stream->buffer.push(inp);
+          if (inp->is<MessageEnd>()) {
+            stream->output_end = true;
+          }
+        }
+        pump();
+      });
+      stream->session = session;
+      stream->bodiless = m_decoder.is_bodiless();
+      stream->final = m_decoder.is_final();
+      m_queue.push(stream);
+      session->input(evt);
 
-  virtual void close() override {
-    delete this;
-  }
-
-  void process(Event *evt);
-  void pump();
-};
-
-void ServerHandlerV1::process(Event *evt) {
-  if (evt->is<MessageStart>()) {
-    auto channel = new Channel;
-    auto session = m_new_channel();
-    session->on_output([=](Event *inp) {
-      if (channel->output_end) return;
-      if (inp->is<SessionEnd>()) {
-        channel->output_end = true;
-      } else {
-        channel->buffer.push(inp);
-        if (inp->is<MessageEnd>()) {
-          channel->output_end = true;
+    } else if (!m_queue.empty()) {
+      auto stream = m_queue.back();
+      if (!stream->input_end) {
+        auto is_end = evt->is<MessageEnd>();
+        stream->session->input(evt); // evt is gone after this
+        if (is_end) {
+          stream->input_end = true;
         }
       }
-      pump();
-    });
-    channel->session = session;
-    m_queue.push(channel);
-    session->input(evt);
+    }
+  }
 
-  } else if (!m_queue.empty()) {
-    auto channel = m_queue.back();
-    if (!channel->input_end) {
-      auto is_end = evt->is<MessageEnd>();
-      channel->session->input(evt); // evt is gone after this
-      if (is_end) {
-        channel->input_end = true;
+  void pump() {
+
+    // Flush all completed streams in the front
+    while (!m_queue.empty()) {
+      auto stream = m_queue.front();
+      if (!stream->output_end) break;
+      m_queue.pop();
+      auto &buffer = stream->buffer;
+      if (!buffer.empty()) {
+        m_encoder.set_bodiless(stream->bodiless);
+        m_encoder.set_final(stream->final);
+        buffer.flush([this](Event *evt) {
+          m_encoder.input(evt);
+        });
+      }
+      delete stream;
+    }
+
+    // Flush the first stream in queue
+    if (!m_queue.empty()) {
+      auto stream = m_queue.front();
+      auto &buffer = stream->buffer;
+      if (!buffer.empty()) {
+        m_encoder.set_bodiless(stream->bodiless);
+        m_encoder.set_final(stream->final);
+        buffer.flush([this](Event *evt) {
+          m_encoder.input(evt);
+        });
       }
     }
   }
-}
-
-void ServerHandlerV1::pump() {
-
-  // Flush all completed channels in the front
-  while (!m_queue.empty()) {
-    auto channel = m_queue.front();
-    if (!channel->output_end) break;
-    m_queue.pop();
-    auto &buffer = channel->buffer;
-    if (!buffer.empty()) {
-      buffer.flush([this](Event *evt) {
-        m_encoder.input(evt);
-      });
-    }
-    delete channel;
-  }
-
-  // Flush the first channel in queue
-  if (!m_queue.empty()) {
-    auto channel = m_queue.front();
-    auto &buffer = channel->buffer;
-    if (!buffer.empty()) {
-      buffer.flush([this](Event *evt) {
-        m_encoder.input(evt);
-      });
-    }
-  }
-}
+};
 
 //
-// Server
+// Demux
 //
 
-Server::Server()
+Demux::Demux()
 {
 }
 
-Server::Server(pjs::Str *target)
+Demux::Demux(pjs::Str *target)
   : m_target(target)
 {
 }
 
-Server::Server(const Server &r)
+Demux::Demux(const Demux &r)
   : m_target(r.m_target)
 {
 }
 
-Server::~Server()
+Demux::~Demux()
 {
 }
 
-auto Server::help() -> std::list<std::string> {
+auto Demux::help() -> std::list<std::string> {
   return {
-    "serveHTTP(target)",
-    "Deframes and serves HTTP requests in another pipeline",
-    "target = <string> Name of the pipeline to send deframed request messages",
+    "demuxHTTP(target)",
+    "Deframes HTTP requests, sends each to a separate pipeline session, and frames their responses",
+    "target = <string> Name of the pipeline to receive deframed requests",
   };
 }
 
-void Server::dump(std::ostream &out) {
-  out << "serveHTTP";
+void Demux::dump(std::ostream &out) {
+  out << "demuxHTTP";
 }
 
-auto Server::clone() -> Filter* {
-  return new Server(*this);
+auto Demux::clone() -> Filter* {
+  return new Demux(*this);
 }
 
-void Server::reset() {
-  if (m_handler) {
-    m_handler->close();
-    m_handler = nullptr;
-  }
+void Demux::reset() {
+  delete m_connection;
+  m_connection = nullptr;
   m_session_end = false;
 }
 
-void Server::process(Context *ctx, Event *inp) {
+void Demux::process(Context *ctx, Event *inp) {
   if (m_session_end) return;
 
-  if (!m_handler) {
+  if (!m_connection) {
     auto mod = pipeline()->module();
     auto pipeline = mod->find_named_pipeline(m_target);
     if (!pipeline) {
-      Log::error("[serveHttp] unknown pipeline: %s", m_target->c_str());
+      Log::error("[demux] unknown pipeline: %s", m_target->c_str());
       abort();
       return;
     }
 
     auto worker = mod->worker();
 
-    m_handler = new ServerHandlerV1(
+    m_connection = new ServerConnection(
       [=]() { return Session::make(worker->new_runtime_context(ctx), pipeline); },
       [=](Event *evt) { output(evt); }
     );
   }
 
   if (auto data = inp->as<Data>()) {
-    m_handler->input(data);
+    m_connection->input(data);
 
   } else if (inp->is<SessionEnd>()) {
     m_session_end = true;
   }
+}
+
+//
+// ClientConnection
+//
+
+class ClientConnection : public MuxBase::Connection, public pjs::Pooled<ClientConnection> {
+public:
+  ClientConnection()
+    : m_encoder(false, [this](Event *evt) { send(evt); })
+    , m_decoder(true, [this](Event *evt) { feed(evt); }) {}
+
+private:
+  class Stream : public Connection::Stream, public pjs::Pooled<Stream> {
+  public:
+    Stream(ClientConnection *connection, MessageStart *start, const Event::Receiver &on_output)
+      : m_connection(connection)
+      , m_start(start)
+      , m_buffer(Data::make())
+      , m_output(on_output) {}
+
+  private:
+    virtual void input(Data *data) override {
+      m_buffer->push(*data);
+      m_connection->pump();
+    }
+
+    virtual void end() override {
+      m_end = MessageEnd::make();
+      m_connection->pump();
+    }
+
+    virtual void close() override {
+      if (!m_input_end) end();
+      m_output = nullptr;
+      if (!m_queued) delete this;
+    }
+
+    ClientConnection* m_connection;
+    Event::Receiver m_output;
+    pjs::Ref<MessageStart> m_start;
+    pjs::Ref<MessageEnd> m_end;
+    pjs::Ref<Data> m_buffer;
+    bool m_queued = true;
+    bool m_input_end = false;
+    bool m_output_end = false;
+    bool m_bodiless = false;
+
+    friend class ClientConnection;
+  };
+
+  Encoder m_encoder;
+  Decoder m_decoder;
+  std::list<Stream*> m_queue;
+
+  virtual auto stream(MessageStart *start, const Event::Receiver &on_output) -> Connection::Stream* override {
+    auto s = new Stream(this, start, on_output);
+    m_queue.push_back(s);
+    pump();
+    return s;
+  }
+
+  virtual void receive(Event *evt) override {
+    if (auto data = evt->as<Data>()) {
+      m_decoder.input(data);
+    }
+  }
+
+  virtual void close() override {
+    delete this;
+  }
+
+  void pump() {
+    if (!m_queue.empty()) {
+      auto stream = m_queue.front();
+      if (!stream->m_input_end) {
+        auto &start = stream->m_start;
+        auto &data = stream->m_buffer;
+        auto &end = stream->m_end;
+        if (start) {
+          m_encoder.input(start);
+          stream->m_bodiless = m_encoder.is_bodiless();
+          start = nullptr;
+        }
+        if (!data->empty()) {
+          m_encoder.input(data);
+          data = Data::make();
+        }
+        if (end) {
+          m_encoder.input(end);
+          end = nullptr;
+          stream->m_input_end = true;
+        }
+      }
+      clean();
+    }
+  }
+
+  void feed(const pjs::Ref<Event> &evt) {
+    for (auto *stream : m_queue) {
+      if (!stream->m_output_end) {
+        auto &output = stream->m_output;
+        if (output) output(evt);
+        if (evt->is<MessageStart>()) {
+          m_decoder.set_bodiless(stream->m_bodiless);
+        } else if (evt->is<MessageEnd>()) {
+          if (m_decoder.is_final()) reset();
+          stream->m_output_end = true;
+          clean();
+          pump();
+        }
+        break;
+      }
+    }
+  }
+
+  void clean() {
+    while (!m_queue.empty()) {
+      auto stream = m_queue.front();
+      if (!stream->m_input_end || !stream->m_output_end) break;
+      m_queue.pop_front();
+      if (stream->m_output) {
+        stream->m_queued = false;
+      } else {
+        delete stream;
+      }
+    }
+  }
+
+  ~ClientConnection() {
+    for (auto *stream : m_queue) {
+      delete stream;
+    }
+  }
+
+  friend class Stream;
+};
+
+//
+// Mux
+//
+
+Mux::Mux()
+{
+}
+
+Mux::Mux(pjs::Str *target, const pjs::Value &channel)
+  : MuxBase(target, channel)
+{
+}
+
+Mux::Mux(const Mux &r)
+  : MuxBase(r)
+{
+}
+
+Mux::~Mux()
+{
+}
+
+auto Mux::help() -> std::list<std::string> {
+  return {
+    "muxHTTP(target[, channel])",
+    "Frames HTTP requests, send to a new or shared pipeline session, and deframes its responses",
+    "target = <string> Name of the pipeline to receive framed requests",
+    "channel = <number|string|function> Key of the shared pipeline session",
+  };
+}
+
+void Mux::dump(std::ostream &out) {
+  out << "muxHTTP";
+}
+
+auto Mux::clone() -> Filter* {
+  return new Mux(*this);
+}
+
+auto Mux::new_connection() -> Connection* {
+  return new ClientConnection;
 }
 
 } // namespace http

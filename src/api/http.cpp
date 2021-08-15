@@ -265,13 +265,13 @@ template<> void EnumDef<StringConstants>::init() {
 }
 
 template<> void ClassDef<MessageHead>::init() {
+  variable("protocol", MessageHead::Field::protocol);
   variable("headers", MessageHead::Field::headers);
 }
 
 template<> void ClassDef<RequestHead>::init() {
   super<MessageHead>();
   ctor();
-  variable("protocol", RequestHead::Field::protocol);
   variable("method", RequestHead::Field::method);
   variable("path", RequestHead::Field::path);
 }
@@ -279,7 +279,6 @@ template<> void ClassDef<RequestHead>::init() {
 template<> void ClassDef<ResponseHead>::init() {
   super<MessageHead>();
   ctor();
-  variable("protocol", ResponseHead::Field::protocol);
   variable("status", ResponseHead::Field::status);
   variable("statusText", ResponseHead::Field::statusText);
 }

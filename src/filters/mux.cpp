@@ -34,6 +34,151 @@
 namespace pipy {
 
 //
+// MuxBase
+//
+
+MuxBase::MuxBase()
+{
+}
+
+MuxBase::MuxBase(const MuxBase &r)
+  : m_connection_manager(r.m_connection_manager)
+  , m_target(r.m_target)
+  , m_channel(r.m_channel)
+{
+}
+
+MuxBase::MuxBase(pjs::Str *target, const pjs::Value &channel)
+  : m_connection_manager(std::make_shared<ConnectionManager>(this))
+  , m_target(target)
+  , m_channel(channel)
+{
+}
+
+void MuxBase::reset() {
+  if (m_stream) {
+    m_stream->close();
+    m_stream = nullptr;
+  }
+  if (m_connection) {
+    m_connection_manager->free(m_connection);
+    m_connection = nullptr;
+  }
+  m_session_end = false;
+}
+
+void MuxBase::process(Context *ctx, Event *inp) {
+  if (m_session_end) return;
+
+  if (!m_connection) {
+    auto mod = pipeline()->module();
+    auto pipeline = mod->find_named_pipeline(m_target);
+    if (!pipeline) {
+      Log::error("[mux] unknown pipeline: %s", m_target->c_str());
+      abort();
+      return;
+    }
+
+    pjs::Value key;
+    if (!eval(*ctx, m_channel, key)) return;
+
+    m_connection = m_connection_manager->get(key);
+    m_connection->m_pipeline = pipeline;
+    m_connection->m_context = mod->worker()->new_runtime_context(ctx);
+  }
+
+  if (auto start = inp->as<MessageStart>()) {
+    if (!m_stream) {
+      m_stream = m_connection->stream(start, out());
+    }
+
+  } else if (auto data = inp->as<Data>()) {
+    if (m_stream) {
+      m_stream->input(data);
+    }
+
+  } else if (inp->is<MessageEnd>()) {
+    if (m_stream) {
+      m_stream->end();
+    }
+
+  } else if (inp->is<SessionEnd>()) {
+    if (m_stream) {
+      m_stream->end();
+    }
+    m_session_end = true;
+  }
+}
+
+//
+// MuxBase::ConnectionManager
+//
+
+auto MuxBase::ConnectionManager::get(const pjs::Value &key) -> Connection* {
+  if (key.is_undefined()) {
+    return m_mux->new_connection();
+  } else {
+    auto i = m_connections.find(key);
+    if (i != m_connections.end()) {
+      auto connection = i->second;
+      if (!connection->m_share_count) {
+        m_free_connections.erase(connection);
+      }
+      connection->m_share_count++;
+      return connection;
+    }
+    auto connection = m_mux->new_connection();
+    connection->m_key = key;
+    m_connections[key] = connection;
+    return connection;
+  }
+}
+
+void MuxBase::ConnectionManager::free(Connection *connection) {
+  if (connection->m_key.is_undefined()) {
+    connection->close();
+  } else if (!--connection->m_share_count) {
+    connection->m_free_time = utils::now();
+    m_free_connections.insert(connection);
+  }
+}
+
+void MuxBase::ConnectionManager::recycle() {
+  auto now = utils::now();
+  auto i = m_free_connections.begin();
+  while (i != m_free_connections.end()) {
+    auto j = i++;
+    auto connection = *j;
+    if (now - connection->m_free_time >= 10*1000) {
+      m_free_connections.erase(j);
+      m_connections.erase(connection->m_key);
+      connection->close();
+    }
+  }
+
+  m_recycle_timer.schedule(1, [this]() { recycle(); });
+}
+
+//
+// MuxBase::Connection
+//
+
+void MuxBase::Connection::send(Event *evt) {
+  if (!m_session) {
+    m_session = Session::make(m_context, m_pipeline);
+    m_session->on_output([this](Event *inp) { receive(inp); });
+  }
+  m_session->input(evt);
+}
+
+void MuxBase::Connection::reset() {
+  if (m_session) {
+    m_session->on_output(nullptr);
+    m_session = nullptr;
+  }
+}
+
+//
 // Mux
 //
 

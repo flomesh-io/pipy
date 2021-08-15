@@ -63,6 +63,7 @@ public:
   void decompress_http(pjs::Function *enable);
   void decompress_message(const pjs::Value &algorithm);
   void demux(pjs::Str *target);
+  void demux_http(pjs::Str *target, pjs::Object *options);
   void dummy();
   void dump(const pjs::Value &tag);
   void encode_dubbo(pjs::Object *message_obj);
@@ -73,6 +74,7 @@ public:
   void link(size_t count, pjs::Str **targets, pjs::Function **conditions);
   void merge(pjs::Str *target, pjs::Function *selector);
   void mux(pjs::Str *target, pjs::Function *selector);
+  void mux_http(pjs::Str *target, const pjs::Value &channel);
   void on_body(pjs::Function *callback, int size_limit);
   void on_event(Event::Type type, pjs::Function *callback);
   void on_message(pjs::Function *callback, int size_limit);
@@ -85,7 +87,6 @@ public:
   void replace_event(Event::Type type, const pjs::Value &replacement);
   void replace_message(const pjs::Value &replacement, int size_limit);
   void replace_start(const pjs::Value &replacement);
-  void serve_http(pjs::Str *target, pjs::Object *options);
   void tap(const pjs::Value &quota, const pjs::Value &account);
   void use(Module *module, pjs::Str *pipeline, pjs::Object *argv);
   void wait(pjs::Function *condition);

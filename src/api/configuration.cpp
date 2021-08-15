@@ -186,6 +186,10 @@ void Configuration::demux(pjs::Str *target) {
   append_filter(new Demux(target));
 }
 
+void Configuration::demux_http(pjs::Str *target, pjs::Object *options) {
+  append_filter(new http::Demux(target));
+}
+
 void Configuration::dummy() {
   append_filter(new Dummy());
 }
@@ -228,6 +232,10 @@ void Configuration::merge(pjs::Str *target, pjs::Function *selector) {
 
 void Configuration::mux(pjs::Str *target, pjs::Function *selector) {
   append_filter(new Mux(target, selector));
+}
+
+void Configuration::mux_http(pjs::Str *target, const pjs::Value &channel) {
+  append_filter(new http::Mux(target, channel));
 }
 
 void Configuration::on_body(pjs::Function *callback, int size_limit) {
@@ -276,10 +284,6 @@ void Configuration::replace_message(const pjs::Value &replacement, int size_limi
 
 void Configuration::replace_start(const pjs::Value &replacement) {
   append_filter(new ReplaceStart(replacement));
-}
-
-void Configuration::serve_http(pjs::Str *target, pjs::Object *options) {
-  append_filter(new http::Server(target));
 }
 
 void Configuration::tap(const pjs::Value &quota, const pjs::Value &account) {
@@ -486,6 +490,19 @@ template<> void ClassDef<Configuration>::init() {
     if (!ctx.arguments(1, &target)) return;
     try {
       thiz->as<Configuration>()->demux(target);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // Configuration.demuxHTTP
+  method("demuxHTTP", [](Context &ctx, Object *thiz, Value &result) {
+    pjs::Str *target;
+    pjs::Object *options = nullptr;
+    if (!ctx.arguments(1, &target, &options)) return;
+    try {
+      thiz->as<Configuration>()->demux_http(target, options);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -787,6 +804,19 @@ template<> void ClassDef<Configuration>::init() {
     }
   });
 
+  // Configuration.muxHTTP
+  method("muxHTTP", [](Context &ctx, Object *thiz, Value &result) {
+    pjs::Str *target;
+    pjs::Value channel;
+    if (!ctx.arguments(1, &target, &channel)) return;
+    try {
+      thiz->as<Configuration>()->mux_http(target, channel);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
   // Configuration.onSessionStart
   method("onSessionStart", [](Context &ctx, Object *thiz, Value &result) {
     Function *callback = nullptr;
@@ -1026,19 +1056,6 @@ template<> void ClassDef<Configuration>::init() {
     if (!ctx.arguments(0, &replacement)) return;
     try {
       thiz->as<Configuration>()->replace_event(Event::SessionEnd, replacement);
-      result.set(thiz);
-    } catch (std::runtime_error &err) {
-      ctx.error(err);
-    }
-  });
-
-  // Configuration.serveHTTP
-  method("serveHTTP", [](Context &ctx, Object *thiz, Value &result) {
-    pjs::Str *target;
-    pjs::Object *options = nullptr;
-    if (!ctx.arguments(1, &target, &options)) return;
-    try {
-      thiz->as<Configuration>()->serve_http(target, options);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

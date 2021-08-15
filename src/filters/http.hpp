@@ -26,10 +26,13 @@
 #ifndef HTTP_HPP
 #define HTTP_HPP
 
-#include "filter.hpp"
+#include "mux.hpp"
 #include "buffer.hpp"
 #include "data.hpp"
 #include "session.hpp"
+
+#include <unordered_map>
+#include <unordered_set>
 
 namespace pipy {
 
@@ -212,23 +215,19 @@ private:
 };
 
 //
-// Server
+// Demux
 //
 
-class Server : public Filter {
-public:
-  Server();
-  Server(pjs::Str *target);
+class ServerConnection;
 
-  class Handler {
-  public:
-    virtual void input(Data *data) = 0;
-    virtual void close() = 0;
-  };
+class Demux : public Filter {
+public:
+  Demux();
+  Demux(pjs::Str *target);
 
 private:
-  Server(const Server &r);
-  ~Server();
+  Demux(const Demux &r);
+  ~Demux();
 
   virtual auto help() -> std::list<std::string> override;
   virtual void dump(std::ostream &out) override;
@@ -237,8 +236,27 @@ private:
   virtual void process(Context *ctx, Event *inp) override;
 
   pjs::Ref<pjs::Str> m_target;
-  Handler* m_handler = nullptr;
+  ServerConnection* m_connection = nullptr;
   bool m_session_end = false;
+};
+
+//
+// Mux
+//
+
+class Mux : public MuxBase {
+public:
+  Mux();
+  Mux(pjs::Str *target, const pjs::Value &channel);
+
+private:
+  Mux(const Mux &r);
+  ~Mux();
+
+  virtual auto help() -> std::list<std::string> override;
+  virtual void dump(std::ostream &out) override;
+  virtual auto clone() -> Filter* override;
+  virtual auto new_connection() -> Connection* override;
 };
 
 } // namespace http
