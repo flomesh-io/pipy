@@ -124,14 +124,14 @@ void Dump::process(Context *ctx, Event *inp) {
             txt.clear();
           }
         }
-        if (!txt.empty()) {
-          std::string line = hex;
-          for (int n = 16 - hex.length() / 3; n > 0; --n) line += " - ";
-          line += " | ";
-          line += txt;
-          line += std::string(16 - txt.length(), '.');
-          Log::print(line);
-        }
+      }
+      if (!txt.empty()) {
+        std::string line = hex;
+        for (int n = 16 - hex.length() / 3; n > 0; --n) line += " - ";
+        line += " | ";
+        line += txt;
+        line += std::string(16 - txt.length(), '.');
+        Log::print(line);
       }
       Log::print(hline);
     }
