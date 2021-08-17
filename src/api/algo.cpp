@@ -746,6 +746,12 @@ template<> void ClassDef<HashingLoadBalancer>::init() {
       ret.set(target);
     }
   });
+
+  method("deselect", [](Context &ctx, Object *obj, Value &ret) {
+    Str *target = nullptr;
+    if (!ctx.arguments(1, &target)) return;
+    obj->as<HashingLoadBalancer>()->deselect(target);
+  });
 }
 
 template<> void ClassDef<Constructor<HashingLoadBalancer>>::init() {
@@ -777,6 +783,12 @@ template<> void ClassDef<RoundRobinLoadBalancer>::init() {
     if (auto target = obj->as<RoundRobinLoadBalancer>()->select(tag)) {
       ret.set(target);
     }
+  });
+
+  method("deselect", [](Context &ctx, Object *obj, Value &ret) {
+    Str *target = nullptr;
+    if (!ctx.arguments(1, &target)) return;
+    obj->as<RoundRobinLoadBalancer>()->deselect(target);
   });
 }
 

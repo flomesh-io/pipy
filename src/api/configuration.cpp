@@ -35,7 +35,7 @@
 
 // all filters
 #include "filters/connect.hpp"
-#include "filters/decompress-body.hpp"
+#include "filters/decompress-message.hpp"
 #include "filters/demux.hpp"
 #include "filters/dubbo.hpp"
 #include "filters/dummy.hpp"
@@ -166,22 +166,28 @@ void Configuration::decode_dubbo() {
   append_filter(new dubbo::Decoder());
 }
 
-void Configuration::decode_http_request() {
-  append_filter(new http::RequestDecoder());
+void Configuration::decode_http_request(pjs::Object *options) {
+  append_filter(new http::RequestDecoder(options));
 }
 
-void Configuration::decode_http_response(bool bodiless) {
-  append_filter(new http::ResponseDecoder(bodiless));
+void Configuration::decode_http_response(pjs::Object *options) {
+  append_filter(new http::ResponseDecoder(options));
 }
 
-void Configuration::decompress_body(pjs::Str *algorithm) {
-  auto algo = pjs::EnumDef<DecompressBody::Algorithm>::value(algorithm);
-  if (int(algo) < 0) throw std::runtime_error("unknown decompression algorithm");
-  append_filter(new DecompressBody(algo));
+void Configuration::decompress_http(pjs::Function *enable) {
+  append_filter(new DecompressHTTP(enable));
+}
+
+void Configuration::decompress_message(const pjs::Value &algorithm) {
+  append_filter(new DecompressMessage(algorithm));
 }
 
 void Configuration::demux(pjs::Str *target) {
   append_filter(new Demux(target));
+}
+
+void Configuration::demux_http(pjs::Str *target, pjs::Object *options) {
+  append_filter(new http::Demux(target));
 }
 
 void Configuration::dummy() {
@@ -228,16 +234,20 @@ void Configuration::mux(pjs::Str *target, pjs::Function *selector) {
   append_filter(new Mux(target, selector));
 }
 
-void Configuration::on_body(pjs::Function *callback) {
-  append_filter(new OnBody(callback));
+void Configuration::mux_http(pjs::Str *target, const pjs::Value &channel) {
+  append_filter(new http::Mux(target, channel));
+}
+
+void Configuration::on_body(pjs::Function *callback, int size_limit) {
+  append_filter(new OnBody(callback, size_limit));
 }
 
 void Configuration::on_event(Event::Type type, pjs::Function *callback) {
   append_filter(new OnEvent(type, callback));
 }
 
-void Configuration::on_message(pjs::Function *callback) {
-  append_filter(new OnMessage(callback));
+void Configuration::on_message(pjs::Function *callback, int size_limit) {
+  append_filter(new OnMessage(callback, size_limit));
 }
 
 void Configuration::on_start(pjs::Function *callback) {
@@ -260,16 +270,16 @@ void Configuration::proxy_socks4(pjs::Str *target, pjs::Function *on_connect) {
   append_filter(new ProxySOCKS4(target, on_connect));
 }
 
-void Configuration::replace_body(const pjs::Value &replacement) {
-  append_filter(new ReplaceBody(replacement));
+void Configuration::replace_body(const pjs::Value &replacement, int size_limit) {
+  append_filter(new ReplaceBody(replacement, size_limit));
 }
 
 void Configuration::replace_event(Event::Type type, const pjs::Value &replacement) {
   append_filter(new ReplaceEvent(type, replacement));
 }
 
-void Configuration::replace_message(const pjs::Value &replacement) {
-  append_filter(new ReplaceMessage(replacement));
+void Configuration::replace_message(const pjs::Value &replacement, int size_limit) {
+  append_filter(new ReplaceMessage(replacement, size_limit));
 }
 
 void Configuration::replace_start(const pjs::Value &replacement) {
@@ -486,6 +496,19 @@ template<> void ClassDef<Configuration>::init() {
     }
   });
 
+  // Configuration.demuxHTTP
+  method("demuxHTTP", [](Context &ctx, Object *thiz, Value &result) {
+    pjs::Str *target;
+    pjs::Object *options = nullptr;
+    if (!ctx.arguments(1, &target, &options)) return;
+    try {
+      thiz->as<Configuration>()->demux_http(target, options);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
   // Configuration.decodeDubbo
   method("decodeDubbo", [](Context &ctx, Object *thiz, Value &result) {
     try {
@@ -496,20 +519,12 @@ template<> void ClassDef<Configuration>::init() {
     }
   });
 
-  // Configuration.decodeHttpBodilessResponse
-  method("decodeHttpBodilessResponse", [](Context &ctx, Object *thiz, Value &result) {
-    try {
-      thiz->as<Configuration>()->decode_http_response(true);
-      result.set(thiz);
-    } catch (std::runtime_error &err) {
-      ctx.error(err);
-    }
-  });
-
   // Configuration.decodeHttpRequest
   method("decodeHttpRequest", [](Context &ctx, Object *thiz, Value &result) {
+    pjs::Object *options = nullptr;
+    if (!ctx.arguments(0, &options)) return;
     try {
-      thiz->as<Configuration>()->decode_http_request();
+      thiz->as<Configuration>()->decode_http_request(options);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -518,20 +533,34 @@ template<> void ClassDef<Configuration>::init() {
 
   // Configuration.decodeHttpResponse
   method("decodeHttpResponse", [](Context &ctx, Object *thiz, Value &result) {
+    pjs::Object *options = nullptr;
+    if (!ctx.arguments(0, &options)) return;
     try {
-      thiz->as<Configuration>()->decode_http_response(false);
+      thiz->as<Configuration>()->decode_http_response(options);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
     }
   });
 
-  // Configuration.decompressMessageBody
-  method("decompressMessageBody", [](Context &ctx, Object *thiz, Value &result) {
-    Str *algorithm;
+  // Configuration.decompressHTTP
+  method("decompressHTTP", [](Context &ctx, Object *thiz, Value &result) {
+    pjs::Function *enable = nullptr;
+    if (!ctx.arguments(0, &enable)) return;
+    try {
+      thiz->as<Configuration>()->decompress_http(enable);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // Configuration.decompressMessage
+  method("decompressMessage", [](Context &ctx, Object *thiz, Value &result) {
+    pjs::Value algorithm;
     if (!ctx.arguments(1, &algorithm)) return;
     try {
-      thiz->as<Configuration>()->decompress_body(algorithm);
+      thiz->as<Configuration>()->decompress_message(algorithm);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -648,9 +677,16 @@ template<> void ClassDef<Configuration>::init() {
   // Configuration.handleMessage
   method("handleMessage", [](Context &ctx, Object *thiz, Value &result) {
     Function *callback = nullptr;
-    if (!ctx.arguments(1, &callback)) return;
+    int size_limit = -1;
+    std::string size_limit_str;
+    if (ctx.try_arguments(2, &size_limit_str, &callback)) {
+      size_limit = utils::get_byte_size(size_limit_str);
+    } else if (
+      !ctx.try_arguments(2, &size_limit, &callback) &&
+      !ctx.arguments(1, &callback)
+    ) return;
     try {
-      thiz->as<Configuration>()->on_message(callback);
+      thiz->as<Configuration>()->on_message(callback, size_limit);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -672,9 +708,16 @@ template<> void ClassDef<Configuration>::init() {
   // Configuration.handleMessageBody
   method("handleMessageBody", [](Context &ctx, Object *thiz, Value &result) {
     Function *callback = nullptr;
-    if (!ctx.arguments(1, &callback)) return;
+    int size_limit = -1;
+    std::string size_limit_str;
+    if (ctx.try_arguments(2, &size_limit_str, &callback)) {
+      size_limit = utils::get_byte_size(size_limit_str);
+    } else if (
+      !ctx.try_arguments(2, &size_limit, &callback) &&
+      !ctx.arguments(1, &callback)
+    ) return;
     try {
-      thiz->as<Configuration>()->on_body(callback);
+      thiz->as<Configuration>()->on_body(callback, size_limit);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -761,6 +804,19 @@ template<> void ClassDef<Configuration>::init() {
     }
   });
 
+  // Configuration.muxHTTP
+  method("muxHTTP", [](Context &ctx, Object *thiz, Value &result) {
+    pjs::Str *target;
+    pjs::Value channel;
+    if (!ctx.arguments(1, &target, &channel)) return;
+    try {
+      thiz->as<Configuration>()->mux_http(target, channel);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
   // Configuration.onSessionStart
   method("onSessionStart", [](Context &ctx, Object *thiz, Value &result) {
     Function *callback = nullptr;
@@ -788,9 +844,16 @@ template<> void ClassDef<Configuration>::init() {
   // Configuration.onMessage
   method("onMessage", [](Context &ctx, Object *thiz, Value &result) {
     Function *callback = nullptr;
-    if (!ctx.arguments(1, &callback)) return;
+    int size_limit = -1;
+    std::string size_limit_str;
+    if (ctx.try_arguments(2, &size_limit_str, &callback)) {
+      size_limit = utils::get_byte_size(size_limit_str);
+    } else if (
+      !ctx.try_arguments(2, &size_limit, &callback) &&
+      !ctx.arguments(1, &callback)
+    ) return;
     try {
-      thiz->as<Configuration>()->on_message(callback);
+      thiz->as<Configuration>()->on_message(callback, size_limit);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -812,9 +875,16 @@ template<> void ClassDef<Configuration>::init() {
   // Configuration.onMessageBody
   method("onMessageBody", [](Context &ctx, Object *thiz, Value &result) {
     Function *callback = nullptr;
-    if (!ctx.arguments(1, &callback)) return;
+    int size_limit = -1;
+    std::string size_limit_str;
+    if (ctx.try_arguments(2, &size_limit_str, &callback)) {
+      size_limit = utils::get_byte_size(size_limit_str);
+    } else if (
+      !ctx.try_arguments(2, &size_limit, &callback) &&
+      !ctx.arguments(1, &callback)
+    ) return;
     try {
-      thiz->as<Configuration>()->on_body(callback);
+      thiz->as<Configuration>()->on_body(callback, size_limit);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -921,9 +991,16 @@ template<> void ClassDef<Configuration>::init() {
   // Configuration.replaceMessage
   method("replaceMessage", [](Context &ctx, Object *thiz, Value &result) {
     Value replacement;
-    if (!ctx.arguments(0, &replacement)) return;
+    int size_limit = -1;
+    std::string size_limit_str;
+    if (ctx.try_arguments(1, &size_limit_str, &replacement)) {
+      size_limit = utils::get_byte_size(size_limit_str);
+    } else if (
+      !ctx.try_arguments(1, &size_limit, &replacement) &&
+      !ctx.arguments(0, &replacement)
+    ) return;
     try {
-      thiz->as<Configuration>()->replace_message(replacement);
+      thiz->as<Configuration>()->replace_message(replacement, size_limit);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -945,9 +1022,16 @@ template<> void ClassDef<Configuration>::init() {
   // Configuration.replaceMessageBody
   method("replaceMessageBody", [](Context &ctx, Object *thiz, Value &result) {
     Value replacement;
-    if (!ctx.arguments(0, &replacement)) return;
+    int size_limit = -1;
+    std::string size_limit_str;
+    if (ctx.try_arguments(1, &size_limit_str, &replacement)) {
+      size_limit = utils::get_byte_size(size_limit_str);
+    } else if (
+      !ctx.try_arguments(1, &size_limit, &replacement) &&
+      !ctx.arguments(0, &replacement)
+    ) return;
     try {
-      thiz->as<Configuration>()->replace_body(replacement);
+      thiz->as<Configuration>()->replace_body(replacement, size_limit);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

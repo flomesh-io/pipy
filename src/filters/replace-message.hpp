@@ -38,7 +38,7 @@ namespace pipy {
 class ReplaceMessage : public Filter {
 public:
   ReplaceMessage();
-  ReplaceMessage(const pjs::Value &replacement);
+  ReplaceMessage(const pjs::Value &replacement, int size_limit = -1);
 
 private:
   ReplaceMessage(const ReplaceMessage &r);
@@ -54,6 +54,8 @@ private:
   pjs::Ref<pjs::Object> m_head;
   pjs::Ref<Data> m_body;
   pjs::Value m_replacement;
+  int m_size_limit;
+  int m_discarded_size = 0;
 };
 
 } // namespace pipy

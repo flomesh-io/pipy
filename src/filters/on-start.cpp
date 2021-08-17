@@ -47,14 +47,14 @@ OnStart::~OnStart()
 
 auto OnStart::help() -> std::list<std::string> {
   return {
-    "onSessionStart(callback)",
+    "handleSessionStart(callback)",
     "Handles the initial event in a session",
     "callback = <function> Callback function that receives the initial event",
   };
 }
 
 void OnStart::dump(std::ostream &out) {
-  out << "onSessionStart";
+  out << "handleSessionStart";
 }
 
 auto OnStart::clone() -> Filter* {

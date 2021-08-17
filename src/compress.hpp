@@ -23,49 +23,30 @@
  *  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef DECOMPRESS_BODY_HPP
-#define DECOMPRESS_BODY_HPP
+#ifndef COMPRESS_HPP
+#define COMPRESS_HPP
 
-#include "filter.hpp"
+#include "event.hpp"
 
 namespace pipy {
 
 class Data;
 
 //
-// DecompressBody
+// Decompressor
 //
 
-class DecompressBody : public Filter {
+class Decompressor {
 public:
-  enum class Algorithm {
-    INFLATE,
-  };
+  static Decompressor* inflate(const Event::Receiver &out);
 
-  class Decompressor {
-  public:
-    virtual bool process(const Data *data) = 0;
-    virtual bool end() = 0;
-  };
+  virtual bool process(const Data *data) = 0;
+  virtual bool end() = 0;
 
-  DecompressBody();
-  DecompressBody(Algorithm algorithm);
-
-private:
-  DecompressBody(const DecompressBody &r);
-  ~DecompressBody();
-
-  virtual auto help() -> std::list<std::string> override;
-  virtual void dump(std::ostream &out) override;
-  virtual auto clone() -> Filter* override;
-  virtual void reset() override;
-  virtual void process(Context *ctx, Event *inp) override;
-
-  Algorithm m_algorithm;
-  Decompressor* m_decompressor = nullptr;
-  bool m_session_end = false;
+protected:
+  ~Decompressor() {}
 };
 
 } // namespace pipy
 
-#endif // DECOMPRESS_BODY_HPP
+#endif // COMPRESS_HPP

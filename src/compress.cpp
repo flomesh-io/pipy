@@ -23,10 +23,9 @@
  *  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include "decompress-body.hpp"
+#include "compress.hpp"
 #include "data.hpp"
 #include "pjs/pjs.hpp"
-#include "logging.hpp"
 
 #define ZLIB_CONST
 #include <zlib.h>
@@ -37,7 +36,7 @@ namespace pipy {
 // Inflate
 //
 
-class Inflate : public pjs::Pooled<Inflate>, public DecompressBody::Decompressor {
+class Inflate : public pjs::Pooled<Inflate>, public Decompressor {
 public:
   Inflate(const Event::Receiver &out)
     : m_out(out)
@@ -60,7 +59,7 @@ private:
   }
 
   virtual bool process(const Data *data) override {
-    static Data::Producer s_dp("decompressBody");
+    static Data::Producer s_dp("inflate");
 
     if (m_done) return true;
     unsigned char buf[DATA_CHUNK_SIZE];
@@ -71,7 +70,7 @@ private:
       do {
         m_zs.next_out = buf;
         m_zs.avail_out = sizeof(buf);
-        auto ret = inflate(&m_zs, Z_NO_FLUSH);
+        auto ret = ::inflate(&m_zs, Z_NO_FLUSH);
         if (auto size = sizeof(buf) - m_zs.avail_out) {
           s_dp.push(output_data, buf, size);
         }
@@ -94,97 +93,11 @@ private:
 };
 
 //
-// DecompressBody
+// Decompressor
 //
 
-DecompressBody::DecompressBody()
-  : DecompressBody(Algorithm::INFLATE)
-{
-}
-
-DecompressBody::DecompressBody(Algorithm algorithm)
-  : m_algorithm(algorithm)
-{
-}
-
-DecompressBody::DecompressBody(const DecompressBody &r)
-  : DecompressBody(r.m_algorithm)
-{
-}
-
-DecompressBody::~DecompressBody()
-{
-}
-
-auto DecompressBody::help() -> std::list<std::string> {
-  return {
-    "decompressMessageBody(algorithm)",
-    "Decompresses the data in message bodies",
-    "algorithm = <string> Currently can be 'inflate' only",
-  };
-}
-
-void DecompressBody::dump(std::ostream &out) {
-  out << "decompressMessageBody";
-}
-
-auto DecompressBody::clone() -> Filter* {
-  return new DecompressBody(*this);
-}
-
-void DecompressBody::reset()
-{
-  if (m_decompressor) {
-    m_decompressor->end();
-    m_decompressor = nullptr;
-  }
-  m_session_end = false;
-}
-
-void DecompressBody::process(Context *ctx, Event *inp) {
-  if (m_session_end) return;
-
-  if (auto *data = inp->as<Data>()) {
-    if (m_decompressor) {
-      if (!m_decompressor->process(data)) {
-        Log::warn("[decompress] decompression error");
-        m_decompressor->end();
-        m_decompressor = nullptr;
-      }
-    }
-    return;
-  }
-
-  if (inp->is<MessageStart>()) {
-    if (!m_decompressor) {
-      switch (m_algorithm) {
-        case Algorithm::INFLATE:
-          m_decompressor = new Inflate(out());
-          break;
-      }
-    }
-
-  } else if (inp->is<MessageEnd>()) {
-    if (m_decompressor) {
-      m_decompressor->end();
-      m_decompressor = nullptr;
-    }
-
-  } else if (inp->is<SessionEnd>()) {
-    m_session_end = true;
-  }
-
-  output(inp);
+Decompressor* Decompressor::inflate(const Event::Receiver &out) {
+  return new Inflate(out);
 }
 
 } // namespace pipy
-
-namespace pjs {
-
-using namespace pipy;
-
-template<> void EnumDef<DecompressBody::Algorithm>::init() {
-  define(DecompressBody::Algorithm::INFLATE, "inflate");
-}
-
-} // namespace pjs

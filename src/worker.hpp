@@ -43,15 +43,14 @@ class Task;
 
 class Worker {
 public:
-  static auto make(const std::string &root_path) -> Worker* {
-    return new Worker(root_path);
+  static auto make() -> Worker* {
+    return new Worker();
   }
 
   static auto current() -> Worker* {
     return s_current;
   }
 
-  auto root_path() const -> const std::string& { return m_root_path; }
   auto root() const -> Module* { return m_root; }
   auto global_object() const -> pjs::Object* { return m_global_object; }
   auto get_module(pjs::Str *filename) -> Module*;
@@ -64,12 +63,11 @@ public:
   void stop();
 
 private:
-  Worker(const std::string &root_path);
+  Worker();
   ~Worker();
 
   typedef pjs::PooledArray<pjs::Ref<pjs::Object>> ContextData;
 
-  std::string m_root_path;
   Module* m_root = nullptr;
   pjs::Ref<pjs::Object> m_global_object;
   std::map<std::string, Module*> m_module_map;

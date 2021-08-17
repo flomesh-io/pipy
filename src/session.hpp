@@ -53,18 +53,22 @@ private:
   ReusableSession(Pipeline *pipeline);
   ~ReusableSession();
 
-  void input(Event *evt) {
-    pjs::Ref<Event> e(evt);
-    if (auto f = m_filters) {
-      f->process(m_context, evt);
-    } else {
-      if (m_output) m_output(evt);
-      if (evt->is<SessionEnd>()) m_done = true;
-    }
-  }
-
+  void input(Event *evt);
+  void input(Message *msg);
   void abort();
   void free();
+
+  void enter_processing() {
+    m_processing_level++;
+  }
+
+  void leave_processing() {
+    if (--m_processing_level == 0) {
+      if (m_freed) {
+        free();
+      }
+    }
+  }
 
   Pipeline* m_pipeline;
   Filter* m_filters;
@@ -72,7 +76,9 @@ private:
   Session* m_session = nullptr;
   pjs::Ref<Context> m_context;
   Event::Receiver m_output;
+  int m_processing_level = 0;
   bool m_done = false;
+  bool m_freed = false;
 
   void reset();
 
@@ -120,9 +126,7 @@ public:
   }
 
   void input(Message *msg) {
-    m_reusable_session->input(MessageStart::make(msg->context(), msg->head()));
-    m_reusable_session->input(msg->body());
-    m_reusable_session->input(MessageEnd::make());
+    m_reusable_session->input(msg);
   }
 
   void on_output(Event::Receiver out) { m_reusable_session->m_output = out; }
@@ -133,13 +137,11 @@ private:
   Session(Context *ctx, Pipeline *pipeline)
     : m_reusable_session(pipeline->alloc())
   {
-    m_reusable_session->m_context = ctx;
     m_reusable_session->m_session = this;
+    m_reusable_session->m_context = ctx;
   }
 
   ~Session() {
-    Context *ctx = m_reusable_session->m_context;
-    m_reusable_session->m_context = nullptr;
     m_reusable_session->m_session = nullptr;
     m_reusable_session->free();
   }

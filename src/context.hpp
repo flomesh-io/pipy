@@ -48,6 +48,8 @@ class Context :
   public List<Context>::Item
 {
 public:
+  Context();
+
   auto id() const -> uint64_t { return m_id; }
   auto data(int i) const -> ContextDataBase* { return m_data->at(i)->as<ContextDataBase>(); }
   auto group() const -> ContextGroup* { return m_group; }

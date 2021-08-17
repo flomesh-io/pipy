@@ -24,6 +24,7 @@
  */
 
 #include "gui.hpp"
+#include "codebase.hpp"
 #include "pipeline.hpp"
 #include "listener.hpp"
 #include "message.hpp"
@@ -41,8 +42,6 @@
 #include "gui.tar.h"
 #endif
 
-#include <dirent.h>
-#include <fstream>
 #include <sstream>
 
 namespace pipy {
@@ -55,9 +54,8 @@ static Data::Producer s_dp_gui("GUI");
 
 class GuiService : public Filter {
 public:
-  GuiService(const std::string &root_path, Tarball &www_files)
+  GuiService(Tarball &www_files)
     : m_www_files(www_files)
-    , m_root_path(root_path)
   {
     auto create_response_head = [](const std::string &content_type) -> http::ResponseHead* {
       auto head = http::ResponseHead::make();
@@ -89,7 +87,7 @@ private:
   virtual void dump(std::ostream &out) override {}
 
   virtual auto clone() -> Filter* override {
-    return new GuiService(m_root_path, m_www_files);
+    return new GuiService(m_www_files);
   }
 
   virtual void reset() override {
@@ -121,7 +119,6 @@ private:
   }
 
   Tarball& m_www_files;
-  std::string m_root_path;
   std::map<std::string, pjs::Ref<http::File>> m_www_file_cache;
   pjs::Ref<pjs::Object> m_head;
   pjs::Ref<Data> m_body;
@@ -140,7 +137,7 @@ private:
     // GET /api/files
     if (path == "/api/files") {
       std::string json;
-      file_tree_to_json(m_root_path, json);
+      file_tree_to_json("", json);
       return Message::make(m_response_head_json, s_dp_gui.make(json));
 
     // /api/files/*
@@ -149,26 +146,14 @@ private:
 
       // GET /api/files/*
       if (method == "GET") {
-        std::ifstream fs(m_root_path + filename, std::ios::in);
-        if (!fs.is_open()) return m_response_not_found;
-        auto *data = pipy::Data::make();
-        char buf[DATA_CHUNK_SIZE];
-        while (!fs.eof()) {
-          fs.read(buf, sizeof(buf));
-          s_dp_gui.push(data, buf, fs.gcount());
-        }
+        auto data = Codebase::current()->get(filename);
+        if (!data) return m_response_not_found;
         return Message::make(m_response_head_text, data);
 
       // POST /api/files/*
       } else if (method == "POST") {
-        std::ofstream fs(m_root_path + filename, std::ios::out | std::ios::trunc);
-        if (!fs.is_open()) return m_response_not_found;
-        if (auto data = req->body()) {
-          for (const auto &c : data->chunks()) {
-            fs.write(std::get<0>(c), std::get<1>(c));
-          }
-        }
-        fs.close();
+        auto data = req->body();
+        Codebase::current()->set(filename, data);
         return m_response_created;
 
       // Unsupported method
@@ -191,7 +176,7 @@ private:
       } else if (method == "POST") {
         auto current_worker = Worker::current();
         auto filename = utils::path_normalize(req->body()->to_string());
-        auto worker = Worker::make(m_root_path);
+        auto worker = Worker::make();
         if (worker->load_module(filename) && worker->start()) {
           if (current_worker) current_worker->stop();
           return m_response_created;
@@ -282,26 +267,25 @@ private:
 
   void file_tree_to_json(const std::string &path, std::string &json) {
     json += '{';
-    if (DIR *dir = opendir(path.c_str())) {
-      struct dirent entry;
-      struct dirent *result;
-      bool first = true;
-      while (!readdir_r(dir, &entry, &result)) {
-        if (!result) break;
-        if (entry.d_name[0] == '.') continue;
-        if (first) first = false; else json += ',';
+    auto list = Codebase::current()->list(path);
+    bool first = true;
+    for (const auto &name : list) {
+      if (first) first = false; else json += ',';
+      if (name.back() == '/') {
+        auto sub = name.substr(0, name.length() - 1);
         json += '"';
-        json += utils::escape(entry.d_name);
+        json += utils::escape(sub);
         json += '"';
         json += ':';
-        if (entry.d_type == DT_DIR) {
-          file_tree_to_json(path + '/' + entry.d_name, json);
-        } else {
-          json += '"';
-          json += '"';
-        }
+        file_tree_to_json(path + '/' + sub, json);
+      } else {
+        json += '"';
+        json += utils::escape(name);
+        json += '"';
+        json += ':';
+        json += '"';
+        json += '"';
       }
-      closedir(dir);
     }
     json += '}';
   }
@@ -558,13 +542,12 @@ private:
 // Gui
 //
 
-Gui::Gui(const std::string &root_path)
+Gui::Gui()
 #ifdef PIPY_USE_GUI
   : m_www_files((const char *)s_gui_tar, sizeof(s_gui_tar))
 #else
   : m_www_files(nullptr, 0)
 #endif
-  , m_root_path(root_path)
 {
 }
 
@@ -572,7 +555,7 @@ void Gui::open(int port) {
   Log::info("[gui] Starting GUI service...");
   auto pipeline = Pipeline::make(nullptr, Pipeline::LISTEN, "GUI");
   pipeline->append(new http::RequestDecoder());
-  pipeline->append(new GuiService(m_root_path, m_www_files));
+  pipeline->append(new GuiService(m_www_files));
   pipeline->append(new http::ResponseEncoder());
   auto listener = Listener::make("0.0.0.0", port);
   listener->open(pipeline);

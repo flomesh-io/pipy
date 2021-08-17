@@ -176,9 +176,8 @@ namespace pipy {
 Worker* Worker::s_current = nullptr;
 std::set<Worker*> Worker::s_all_workers;
 
-Worker::Worker(const std::string &root_path)
-  : m_root_path(root_path)
-  , m_global_object(Global::make())
+Worker::Worker()
+  : m_global_object(Global::make())
 {
   s_all_workers.insert(this);
 }

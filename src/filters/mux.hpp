@@ -34,11 +34,97 @@
 #include <queue>
 #include <memory>
 #include <unordered_map>
+#include <unordered_set>
 
 namespace pipy {
 
 class Data;
 class Pipeline;
+
+//
+// MuxBase
+//
+
+class MuxBase : public Filter {
+public:
+
+  //
+  // MuxBase::Connection
+  //
+
+  class Connection {
+  public:
+    class Stream {
+    public:
+      virtual void input(Data *data) = 0;
+      virtual void end() = 0;
+      virtual void close() = 0;
+    };
+
+    virtual auto stream(MessageStart *start, const Event::Receiver &on_output) -> Stream* = 0;
+    virtual void receive(Event *evt) = 0;
+    virtual void close() = 0;
+
+  protected:
+    ~Connection() {
+      if (m_session) {
+        m_session->on_output(nullptr);
+      }
+    }
+
+    void send(Event *evt);
+    void reset();
+
+  private:
+    Pipeline* m_pipeline = nullptr;
+    pjs::Ref<Context> m_context;
+    pjs::Value m_key;
+    pjs::Ref<Session> m_session;
+    int m_share_count = 1;
+    double m_free_time = 0;
+
+    friend class MuxBase;
+  };
+
+protected:
+  MuxBase();
+  MuxBase(const MuxBase &r);
+  MuxBase(pjs::Str *target, const pjs::Value &channel);
+
+  virtual auto new_connection() -> Connection* = 0;
+
+private:
+  virtual void reset() override;
+  virtual void process(Context *ctx, Event *inp) override;
+
+  //
+  // MuxBase::ConnectionManager
+  //
+
+  class ConnectionManager {
+  public:
+    ConnectionManager(MuxBase *mux)
+      : m_mux(mux) { recycle(); }
+
+    auto get(const pjs::Value &key) -> Connection*;
+    void free(Connection *connection);
+
+  private:
+    MuxBase* m_mux;
+    std::unordered_map<pjs::Value, Connection*> m_connections;
+    std::unordered_set<Connection*> m_free_connections;
+    Timer m_recycle_timer;
+
+    void recycle();
+  };
+
+  std::shared_ptr<ConnectionManager> m_connection_manager;
+  pjs::Ref<pjs::Str> m_target;
+  pjs::Value m_channel;
+  Connection* m_connection = nullptr;
+  Connection::Stream* m_stream = nullptr;
+  bool m_session_end = false;
+};
 
 //
 // Mux
