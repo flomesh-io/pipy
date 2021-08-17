@@ -269,7 +269,8 @@ void CodebaseHTTP::download_next(const std::function<void(bool)> &on_complete) {
     return;
   }
 
-  auto path = m_base + m_dl_list.front();
+  auto name = m_dl_list.front();
+  auto path = m_base + name;
   m_dl_list.pop_front();
   m_fetch(
     Fetch::GET,
@@ -296,7 +297,7 @@ void CodebaseHTTP::download_next(const std::function<void(bool)> &on_complete) {
         );
       }
 
-      m_dl_temp[path] = body;
+      m_dl_temp[name] = body;
       download_next(on_complete);
     }
   );
