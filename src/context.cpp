@@ -37,6 +37,11 @@ namespace pipy {
 uint64_t Context::s_context_id = 0;
 uint64_t Context::s_context_total = 0;
 
+Context::Context()
+  : Context(nullptr, nullptr, nullptr)
+{
+}
+
 Context::Context(ContextGroup *group, Worker *worker, pjs::Object *global, ContextData *data)
   : pjs::Context(global, data ? data->elements() : nullptr)
   , m_group(group ? group : new ContextGroup())

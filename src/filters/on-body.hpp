@@ -38,7 +38,7 @@ namespace pipy {
 class OnBody : public Filter {
 public:
   OnBody();
-  OnBody(pjs::Function *callback);
+  OnBody(pjs::Function *callback, int size_limit = -1);
 
 private:
   OnBody(const OnBody &r);
@@ -52,6 +52,8 @@ private:
 
   pjs::Ref<Data> m_body;
   pjs::Ref<pjs::Function> m_callback;
+  int m_size_limit;
+  int m_discarded_size = 0;
 };
 
 } // namespace pipy

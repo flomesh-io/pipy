@@ -34,8 +34,6 @@ namespace pjs {
 // Str
 //
 
-std::unordered_map<std::string, Str*> Str::s_ht;
-
 const Ref<Str> Str::empty(Str::make(""));
 const Ref<Str> Str::nan(Str::make("NaN"));
 const Ref<Str> Str::pos_inf(Str::make("Infinity"));
@@ -44,6 +42,11 @@ const Ref<Str> Str::undefined(Str::make("undefined"));
 const Ref<Str> Str::null(Str::make("null"));
 const Ref<Str> Str::bool_true(Str::make("true"));
 const Ref<Str> Str::bool_false(Str::make("false"));
+
+auto Str::ht() -> std::unordered_map<std::string, Str*>& {
+  static std::unordered_map<std::string, Str*> s_ht;
+  return s_ht;
+}
 
 auto Str::parse_int() const -> double {
   const auto *p = m_str.c_str();

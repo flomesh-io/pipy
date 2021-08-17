@@ -24,7 +24,7 @@
  */
 
 #include "http.hpp"
-#include "worker.hpp"
+#include "codebase.hpp"
 #include "context.hpp"
 #include "tar.hpp"
 #include "utils.hpp"
@@ -88,17 +88,7 @@ File::File(const std::string &path) {
   }
 
   load(filename, [](const std::string &filename) -> Data* {
-    struct stat st;
-    if (!stat(filename.c_str(), &st) && S_ISDIR(st.st_mode)) return nullptr;
-    std::ifstream fs(filename, std::ios::in);
-    if (!fs.is_open()) return nullptr;
-    auto *data = pipy::Data::make();
-    char buf[DATA_CHUNK_SIZE];
-    while (!fs.eof()) {
-      fs.read(buf, sizeof(buf));
-      s_dp_http_file.push(data, buf, fs.gcount());
-    }
-    return data;
+    return Codebase::current()->get(filename);
   });
 
   m_path = pjs::Str::make(path);
@@ -275,13 +265,13 @@ template<> void EnumDef<StringConstants>::init() {
 }
 
 template<> void ClassDef<MessageHead>::init() {
+  variable("protocol", MessageHead::Field::protocol);
   variable("headers", MessageHead::Field::headers);
 }
 
 template<> void ClassDef<RequestHead>::init() {
   super<MessageHead>();
   ctor();
-  variable("protocol", RequestHead::Field::protocol);
   variable("method", RequestHead::Field::method);
   variable("path", RequestHead::Field::path);
 }
@@ -289,23 +279,16 @@ template<> void ClassDef<RequestHead>::init() {
 template<> void ClassDef<ResponseHead>::init() {
   super<MessageHead>();
   ctor();
-  variable("protocol", ResponseHead::Field::protocol);
   variable("status", ResponseHead::Field::status);
   variable("statusText", ResponseHead::Field::statusText);
 }
 
 template<> void ClassDef<File>::init() {
   ctor([](Context &ctx) -> Object* {
-    Str* path;
+    std::string path;
     if (!ctx.arguments(1, &path)) return nullptr;
-    auto root = static_cast<pipy::Context*>(ctx.root());
-    auto worker = root->worker();
-    auto full_path = utils::path_join(
-      worker->root_path(),
-      utils::path_normalize(path->str())
-    );
     try {
-      return File::make(full_path);
+      return File::make(path);
     } catch (std::runtime_error &err) {
       ctx.error(err);
       return nullptr;
@@ -324,15 +307,9 @@ template<> void ClassDef<Constructor<File>>::init() {
   ctor();
 
   method("from", [](Context &ctx, Object *obj, Value &ret) {
-    Str* path;
+    std::string path;
     if (!ctx.arguments(1, &path)) return;
-    auto root = static_cast<pipy::Context*>(ctx.root());
-    auto worker = root->worker();
-    auto full_path = utils::path_join(
-      worker->root_path(),
-      utils::path_normalize(path->str())
-    );
-    ret.set(File::from(full_path));
+    ret.set(File::from(path));
   });
 }
 

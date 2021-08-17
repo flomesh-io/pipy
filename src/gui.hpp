@@ -32,13 +32,12 @@ namespace pipy {
 
 class Gui {
 public:
-  Gui(const std::string &root_path);
+  Gui();
 
   void open(int port);
 
 private:
   Tarball m_www_files;
-  std::string m_root_path;
 };
 
 } // namespace pipy

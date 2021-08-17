@@ -40,12 +40,15 @@ add_executable(pipy
   src/api/pipy.cpp
   src/api/url.cpp
   src/api/xml.cpp
+  src/codebase.cpp
+  src/compress.cpp
   src/context.cpp
   src/data.cpp
   src/event.cpp
+  src/fetch.cpp
   src/filter.cpp
   src/filters/connect.cpp
-  src/filters/decompress-body.cpp
+  src/filters/decompress-message.cpp
   src/filters/demux.cpp
   src/filters/dubbo.cpp
   src/filters/dummy.cpp

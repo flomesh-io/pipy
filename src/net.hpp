@@ -90,35 +90,43 @@ public:
 
 } // namespace pipy
 
+namespace asio {
+
 template<>
-inline auto asio::buffer_sequence_begin(
+inline auto buffer_sequence_begin(
   const pipy::DataChunks &chunks
 ) -> pipy::DataChunks::Iterator {
   return chunks.begin();
 }
 
 template<>
-inline auto asio::buffer_sequence_end(
+inline auto buffer_sequence_end(
   const pipy::DataChunks &chunks
 ) -> pipy::DataChunks::Iterator {
   return chunks.end();
 }
 
 template<>
-class std::iterator_traits<pipy::DataChunks::Iterator> {
+class is_const_buffer_sequence<pipy::DataChunks> {
+public:
+  const static bool value = true;
+};
+
+} // namespace asio
+
+namespace std {
+
+template<>
+class iterator_traits<pipy::DataChunks::Iterator> {
 public:
   typedef size_t difference_type;
 };
 
 template<>
-inline void std::advance(pipy::DataChunks::Iterator &i, size_t n) {
+inline void advance(pipy::DataChunks::Iterator &i, size_t n) {
   while (n-- > 0) ++i;
 }
 
-template<>
-class asio::is_const_buffer_sequence<pipy::DataChunks> {
-public:
-  const static bool value = true;
-};
+} // namespace std
 
 #endif // NET_HPP

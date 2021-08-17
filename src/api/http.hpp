@@ -40,8 +40,15 @@ namespace http {
 class MessageHead : public pjs::ObjectTemplate<MessageHead> {
 public:
   enum class Field {
+    protocol,
     headers,
   };
+
+  auto protocol() -> pjs::Str* {
+    pjs::Value ret;
+    pjs::get<MessageHead>(this, MessageHead::Field::protocol, ret);
+    return ret.is_string() ? ret.s() : pjs::Str::empty.get();
+  }
 
   auto headers() -> Object* {
     pjs::Value ret;
@@ -49,22 +56,16 @@ public:
     return ret.is_object() ? ret.o() : nullptr;
   }
 
+  void protocol(pjs::Str *s) { pjs::set<MessageHead>(this, MessageHead::Field::protocol, s); }
   void headers(pjs::Object *o) { pjs::set<MessageHead>(this, MessageHead::Field::headers, o); }
 };
 
 class RequestHead : public pjs::ObjectTemplate<RequestHead, MessageHead> {
 public:
   enum class Field {
-    protocol,
     method,
     path,
   };
-
-  auto protocol() -> pjs::Str* {
-    pjs::Value ret;
-    pjs::get<RequestHead>(this, RequestHead::Field::protocol, ret);
-    return ret.is_string() ? ret.s() : pjs::Str::empty.get();
-  }
 
   auto method() -> pjs::Str* {
     pjs::Value ret;
@@ -78,7 +79,6 @@ public:
     return ret.is_string() ? ret.s() : pjs::Str::empty.get();
   }
 
-  void protocol(pjs::Str *s) { pjs::set<RequestHead>(this, RequestHead::Field::protocol, s); }
   void method(pjs::Str *s) { pjs::set<RequestHead>(this, RequestHead::Field::method, s); }
   void path(pjs::Str *s) { pjs::set<RequestHead>(this, RequestHead::Field::path, s); }
 };
@@ -86,17 +86,10 @@ public:
 class ResponseHead : public pjs::ObjectTemplate<ResponseHead, MessageHead> {
 public:
   enum class Field {
-    protocol,
     status,
     statusText,
     bodiless,
   };
-
-  auto protocol() -> pjs::Str* {
-    pjs::Value ret;
-    pjs::get<ResponseHead>(this, ResponseHead::Field::protocol, ret);
-    return ret.is_string() ? ret.s() : pjs::Str::empty.get();
-  }
 
   auto status() -> int {
     pjs::Value ret;
@@ -116,7 +109,6 @@ public:
     return ret.to_string();
   }
 
-  void protocol(pjs::Str *s) { pjs::set<ResponseHead>(this, ResponseHead::Field::protocol, s); }
   void status(int n) { pjs::set<ResponseHead>(this, ResponseHead::Field::status, n); }
   void status_text(pjs::Str *s) { pjs::set<ResponseHead>(this, ResponseHead::Field::statusText, s); }
   void bodiless(bool b) { pjs::set<ResponseHead>(this, ResponseHead::Field::bodiless, b); }

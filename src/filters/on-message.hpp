@@ -38,7 +38,7 @@ namespace pipy {
 class OnMessage : public Filter {
 public:
   OnMessage();
-  OnMessage(pjs::Function *callback);
+  OnMessage(pjs::Function *callback, int size_limit = -1);
 
 private:
   OnMessage(const OnMessage &r);
@@ -54,6 +54,8 @@ private:
   pjs::Ref<pjs::Object> m_head;
   pjs::Ref<Data> m_body;
   pjs::Ref<pjs::Function> m_callback;
+  int m_size_limit;
+  int m_discarded_size = 0;
 };
 
 } // namespace pipy
