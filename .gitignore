@@ -1,6 +1,6 @@
 .DS_Store
 .*.swp
 .vscode/
-
+.gitconfig
 bin/
 build/
