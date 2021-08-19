@@ -140,6 +140,19 @@ public:
   };
 
   //
+  // Expr::Imports
+  //
+
+  class Imports {
+  public:
+    void add(Str *name, int file, Str *original_name);
+    bool get(Str *name, int *file, Str **original_name);
+
+  private:
+    std::map<Ref<Str>, std::pair<int, Ref<Str>>> m_imports;
+  };
+
+  //
   // Expression base methods
   //
 
@@ -154,7 +167,7 @@ public:
   virtual bool eval(Context &ctx, Value &result) = 0;
   virtual bool assign(Context &ctx, Value &value) { return error(ctx, "cannot assign to a right-value"); }
   virtual bool clear(Context &ctx, Value &result) { return error(ctx, "cannot delete a value"); }
-  virtual void resolve(Context &ctx, int l) {}
+  virtual void resolve(Context &ctx, int l, Imports *imports) {}
   virtual auto reduce(Reducer &r) -> Reducer::Value* { return r.undefined(); }
   virtual auto reduce_lval(Reducer &r, Reducer::Value *rval) -> Reducer::Value* { return r.undefined(); }
   virtual void dump(std::ostream &out, const std::string &indent = "") = 0;
@@ -163,6 +176,7 @@ public:
   // Expression location in script
   //
 
+  int file() const { return m_file; }
   int line() const { return m_line; }
   int column() const { return m_column; }
 
@@ -174,11 +188,12 @@ public:
 protected:
   bool error(Context &ctx, const std::string &msg) {
     ctx.error(msg);
-    ctx.backtrace(m_line, m_column);
+    ctx.backtrace(m_file, m_line, m_column);
     return false;
   }
 
 private:
+  int m_file = -1;
   int m_line = 0;
   int m_column = 0;
 };
@@ -194,7 +209,7 @@ public:
   Discard(Expr *x) : m_x(x) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual void resolve(Context &ctx, int l) override;
+  virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -234,7 +249,7 @@ public:
   virtual bool is_argument_list() const override;
   virtual bool is_comma_ended() const override { return m_is_comma_ended; }
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual void resolve(Context &ctx, int l) override;
+  virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -252,7 +267,7 @@ public:
     : m_exprs(std::move(exprs)) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual void resolve(Context &ctx, int l) override;
+  virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -346,7 +361,7 @@ public:
   virtual void unpack(std::vector<Ref<Str>> &args, std::vector<Ref<Str>> &vars) const override;
   virtual bool unpack(Context &ctx, Value &arg, int &var) override;
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual void resolve(Context &ctx, int l) override;
+  virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -362,7 +377,7 @@ public:
   ArrayExpansion(Expr *expr) : m_array(expr) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual void resolve(Context &ctx, int l) override;
+  virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -384,7 +399,7 @@ public:
   virtual void unpack(std::vector<Ref<Str>> &args, std::vector<Ref<Str>> &vars) const override;
   virtual bool unpack(Context &ctx, Value &arg, int &var) override;
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual void resolve(Context &ctx, int l) override;
+  virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -419,7 +434,7 @@ public:
   }
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual void resolve(Context &ctx, int l) override;
+  virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -511,13 +526,14 @@ public:
   virtual bool eval(Context &ctx, Value &result) override;
   virtual bool assign(Context &ctx, Value &value) override;
   virtual bool clear(Context &ctx, Value &result) override;
-  virtual void resolve(Context &ctx, int l) override;
+  virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual auto reduce(Reducer &r) -> Reducer::Value* override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
   Ref<Str> m_key;
   int m_l = -1;
+  Imports* m_imports = nullptr;
   std::unique_ptr<Expr> m_resolved;
 
   void resolve(Context &ctx);
@@ -540,7 +556,7 @@ public:
   virtual bool eval(Context &ctx, Value &result) override;
   virtual bool assign(Context &ctx, Value &value) override;
   virtual bool clear(Context &ctx, Value &result) override;
-  virtual void resolve(Context &ctx, int l) override;
+  virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual auto reduce(Reducer &r) -> Reducer::Value* override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -559,7 +575,7 @@ public:
   OptionalProperty(Expr *obj, Expr *key) : m_obj(obj), m_key(key) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual void resolve(Context &ctx, int l) override;
+  virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -585,7 +601,7 @@ public:
   Construction(Expr *func, std::vector<std::unique_ptr<Expr>> &&argv) : m_func(func), m_argv(std::move(argv)) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual void resolve(Context &ctx, int l) override;
+  virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -608,7 +624,7 @@ public:
   Invocation(Expr *func, std::vector<std::unique_ptr<Expr>> &&argv) : m_func(func), m_argv(std::move(argv)) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual void resolve(Context &ctx, int l) override;
+  virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual auto reduce(Reducer &r) -> Reducer::Value* override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -632,7 +648,7 @@ public:
   OptionalInvocation(Expr *func, std::vector<std::unique_ptr<Expr>> &&argv) : m_func(func), m_argv(std::move(argv)) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual void resolve(Context &ctx, int l) override;
+  virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -649,7 +665,7 @@ public:
   Plus(Expr *x) : m_x(x) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual void resolve(Context &ctx, int l) override;
+  virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -665,7 +681,7 @@ public:
   Negation(Expr *x) : m_x(x) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual void resolve(Context &ctx, int l) override;
+  virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -681,7 +697,7 @@ public:
   Addition(Expr *a, Expr *b) : m_a(a), m_b(b) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual void resolve(Context &ctx, int l) override;
+  virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -698,7 +714,7 @@ public:
   Subtraction(Expr *a, Expr *b) : m_a(a), m_b(b) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual void resolve(Context &ctx, int l) override;
+  virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -715,7 +731,7 @@ public:
   Multiplication(Expr *a, Expr *b) : m_a(a), m_b(b) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual void resolve(Context &ctx, int l) override;
+  virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -732,7 +748,7 @@ public:
   Division(Expr *a, Expr *b) : m_a(a), m_b(b) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual void resolve(Context &ctx, int l) override;
+  virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -749,7 +765,7 @@ public:
   Remainder(Expr *a, Expr *b) : m_a(a), m_b(b) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual void resolve(Context &ctx, int l) override;
+  virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -766,7 +782,7 @@ public:
   Exponentiation(Expr *a, Expr *b) : m_a(a), m_b(b) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual void resolve(Context &ctx, int l) override;
+  virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -783,7 +799,7 @@ public:
   ShiftLeft(Expr *a, Expr *b) : m_a(a), m_b(b) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual void resolve(Context &ctx, int l) override;
+  virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -800,7 +816,7 @@ public:
   ShiftRight(Expr *a, Expr *b) : m_a(a), m_b(b) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual void resolve(Context &ctx, int l) override;
+  virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -817,7 +833,7 @@ public:
   UnsignedShiftRight(Expr *a, Expr *b) : m_a(a), m_b(b) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual void resolve(Context &ctx, int l) override;
+  virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -834,7 +850,7 @@ public:
   BitwiseNot(Expr *x) : m_x(x) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual void resolve(Context &ctx, int l) override;
+  virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -850,7 +866,7 @@ public:
   BitwiseAnd(Expr *a, Expr *b) : m_a(a), m_b(b) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual void resolve(Context &ctx, int l) override;
+  virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -867,7 +883,7 @@ public:
   BitwiseOr(Expr *a, Expr *b) : m_a(a), m_b(b) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual void resolve(Context &ctx, int l) override;
+  virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -884,7 +900,7 @@ public:
   BitwiseXor(Expr *a, Expr *b) : m_a(a), m_b(b) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual void resolve(Context &ctx, int l) override;
+  virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -901,7 +917,7 @@ public:
   LogicalNot(Expr *x) : m_x(x) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual void resolve(Context &ctx, int l) override;
+  virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -917,7 +933,7 @@ public:
   LogicalAnd(Expr *a, Expr *b) : m_a(a), m_b(b) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual void resolve(Context &ctx, int l) override;
+  virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -934,7 +950,7 @@ public:
   LogicalOr(Expr *a, Expr *b) : m_a(a), m_b(b) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual void resolve(Context &ctx, int l) override;
+  virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -951,7 +967,7 @@ public:
   NullishCoalescing(Expr *a, Expr *b) : m_a(a), m_b(b) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual void resolve(Context &ctx, int l) override;
+  virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -968,7 +984,7 @@ public:
   Equality(Expr *a, Expr *b) : m_a(a), m_b(b) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual void resolve(Context &ctx, int l) override;
+  virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -985,7 +1001,7 @@ public:
   Inequality(Expr *a, Expr *b) : m_a(a), m_b(b) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual void resolve(Context &ctx, int l) override;
+  virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -1002,7 +1018,7 @@ public:
   Identity(Expr *a, Expr *b) : m_a(a), m_b(b) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual void resolve(Context &ctx, int l) override;
+  virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -1019,7 +1035,7 @@ public:
   Nonidentity(Expr *a, Expr *b) : m_a(a), m_b(b) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual void resolve(Context &ctx, int l) override;
+  virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -1036,7 +1052,7 @@ public:
   GreaterThan(Expr *a, Expr *b) : m_a(a), m_b(b) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual void resolve(Context &ctx, int l) override;
+  virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -1053,7 +1069,7 @@ public:
   GreaterThanOrEqual(Expr *a, Expr *b) : m_a(a), m_b(b) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual void resolve(Context &ctx, int l) override;
+  virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -1070,7 +1086,7 @@ public:
   LessThan(Expr *a, Expr *b) : m_a(a), m_b(b) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual void resolve(Context &ctx, int l) override;
+  virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -1087,7 +1103,7 @@ public:
   LessThanOrEqual(Expr *a, Expr *b) : m_a(a), m_b(b) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual void resolve(Context &ctx, int l) override;
+  virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -1104,7 +1120,7 @@ public:
   In(Expr *a, Expr *b) : m_a(a), m_b(b) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual void resolve(Context &ctx, int l) override;
+  virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -1122,7 +1138,7 @@ public:
   InstanceOf(Expr *a, Expr *b) : m_a(a), m_b(b) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual void resolve(Context &ctx, int l) override;
+  virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -1148,7 +1164,7 @@ public:
   TypeOf(Expr *x) : m_x(x) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual void resolve(Context &ctx, int l) override;
+  virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -1164,7 +1180,7 @@ public:
   PostIncrement(Expr *x) : m_x(x) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual void resolve(Context &ctx, int l) override;
+  virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -1180,7 +1196,7 @@ public:
   PostDecrement(Expr *x) : m_x(x) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual void resolve(Context &ctx, int l) override;
+  virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -1196,7 +1212,7 @@ public:
   PreIncrement(Expr *x) : m_x(x) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual void resolve(Context &ctx, int l) override;
+  virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -1212,7 +1228,7 @@ public:
   PreDecrement(Expr *x) : m_x(x) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual void resolve(Context &ctx, int l) override;
+  virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -1228,7 +1244,7 @@ public:
   Delete(Expr *x) : m_x(x) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual void resolve(Context &ctx, int l) override;
+  virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -1244,7 +1260,7 @@ public:
   Assignment(Expr *l, Expr *r) : m_l(l), m_r(r) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual void resolve(Context &ctx, int l) override;
+  virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -1261,7 +1277,7 @@ public:
   AdditionAssignment(Expr *l, Expr *r) : m_l(l), m_r(r) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual void resolve(Context &ctx, int l) override;
+  virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -1278,7 +1294,7 @@ public:
   SubtractionAssignment(Expr *l, Expr *r) : m_l(l), m_r(r) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual void resolve(Context &ctx, int l) override;
+  virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -1295,7 +1311,7 @@ public:
   MultiplicationAssignment(Expr *l, Expr *r) : m_l(l), m_r(r) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual void resolve(Context &ctx, int l) override;
+  virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -1312,7 +1328,7 @@ public:
   DivisionAssignment(Expr *l, Expr *r) : m_l(l), m_r(r) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual void resolve(Context &ctx, int l) override;
+  virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -1329,7 +1345,7 @@ public:
   RemainderAssignment(Expr *l, Expr *r) : m_l(l), m_r(r) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual void resolve(Context &ctx, int l) override;
+  virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -1346,7 +1362,7 @@ public:
   ExponentiationAssignment(Expr *l, Expr *r) : m_l(l), m_r(r) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual void resolve(Context &ctx, int l) override;
+  virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -1363,7 +1379,7 @@ public:
   ShiftLeftAssignment(Expr *l, Expr *r) : m_l(l), m_r(r) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual void resolve(Context &ctx, int l) override;
+  virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -1380,7 +1396,7 @@ public:
   ShiftRightAssignment(Expr *l, Expr *r) : m_l(l), m_r(r) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual void resolve(Context &ctx, int l) override;
+  virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -1397,7 +1413,7 @@ public:
   UnsignedShiftRightAssignment(Expr *l, Expr *r) : m_l(l), m_r(r) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual void resolve(Context &ctx, int l) override;
+  virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -1414,7 +1430,7 @@ public:
   BitwiseAndAssignment(Expr *l, Expr *r) : m_l(l), m_r(r) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual void resolve(Context &ctx, int l) override;
+  virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -1431,7 +1447,7 @@ public:
   BitwiseOrAssignment(Expr *l, Expr *r) : m_l(l), m_r(r) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual void resolve(Context &ctx, int l) override;
+  virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -1448,7 +1464,7 @@ public:
   BitwiseXorAssignment(Expr *l, Expr *r) : m_l(l), m_r(r) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual void resolve(Context &ctx, int l) override;
+  virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -1465,7 +1481,7 @@ public:
   LogicalAndAssignment(Expr *l, Expr *r) : m_l(l), m_r(r) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual void resolve(Context &ctx, int l) override;
+  virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -1482,7 +1498,7 @@ public:
   LogicalOrAssignment(Expr *l, Expr *r) : m_l(l), m_r(r) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual void resolve(Context &ctx, int l) override;
+  virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -1499,7 +1515,7 @@ public:
   LogicalNullishAssignment(Expr *l, Expr *r) : m_l(l), m_r(r) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual void resolve(Context &ctx, int l) override;
+  virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -1516,7 +1532,7 @@ public:
   Conditional(Expr *a, Expr *b, Expr *c) : m_a(a), m_b(b), m_c(c) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual void resolve(Context &ctx, int l) override;
+  virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:

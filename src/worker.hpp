@@ -57,6 +57,8 @@ public:
   auto find_module(const std::string &path) -> Module*;
   auto load_module(const std::string &path) -> Module*;
   void add_task(Task *task) { m_tasks.push_back(task); }
+  void add_export(pjs::Str *ns, pjs::Str *name, Module *module);
+  auto get_export(pjs::Str *ns, pjs::Str *name) -> Module*;
   auto new_loading_context() -> Context*;
   auto new_runtime_context(Context *base = nullptr) -> Context*;
   bool start();
@@ -67,6 +69,7 @@ private:
   ~Worker();
 
   typedef pjs::PooledArray<pjs::Ref<pjs::Object>> ContextData;
+  typedef std::map<pjs::Ref<pjs::Str>, Module*> Namespace;
 
   Module* m_root = nullptr;
   pjs::Ref<pjs::Object> m_global_object;
@@ -74,6 +77,7 @@ private:
   std::map<pjs::Ref<pjs::Str>, Module*> m_module_name_map;
   std::vector<Module*> m_modules;
   std::vector<Task*> m_tasks;
+  std::map<pjs::Ref<pjs::Str>, Namespace> m_namespaces;
 
   static Worker* s_current;
   static std::set<Worker*> s_all_workers;

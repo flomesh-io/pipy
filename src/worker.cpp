@@ -212,6 +212,27 @@ auto Worker::load_module(const std::string &path) -> Module* {
   return mod;
 }
 
+void Worker::add_export(pjs::Str *ns, pjs::Str *name, Module *module) {
+  auto &names = m_namespaces[ns];
+  auto i = names.find(name);
+  if (i != names.end()) {
+    std::string msg("duplicated variable exporting name ");
+    msg += name->str();
+    msg += " from ";
+    msg += module->path();
+    throw std::runtime_error(msg);
+  }
+  names[name] = module;
+}
+
+auto Worker::get_export(pjs::Str *ns, pjs::Str *name) -> Module* {
+  auto i = m_namespaces.find(ns);
+  if (i == m_namespaces.end()) return nullptr;
+  auto j = i->second.find(name);
+  if (j == i->second.end()) return nullptr;
+  return j->second;
+}
+
 auto Worker::new_loading_context() -> Context* {
   return new Context(nullptr, this, m_global_object);
 }
@@ -233,9 +254,9 @@ auto Worker::new_runtime_context(Context *base) -> Context* {
 
 bool Worker::start() {
   try {
-    for (auto i : m_modules) {
-      i->start();
-    }
+    for (auto i : m_modules) i->bind_exports();
+    for (auto i : m_modules) i->bind_imports();
+    for (auto i : m_modules) i->start();
     s_current = this;
   } catch (std::runtime_error &err) {
     Log::error("%s", err.what());

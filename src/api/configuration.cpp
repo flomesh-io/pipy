@@ -70,26 +70,47 @@ namespace pipy {
 
 bool Configuration::s_reuse_port = false;
 
-Configuration::Configuration(pjs::Object *context_prototype) {
-  std::list<pjs::Field*> fields;
-  if (context_prototype) {
-    context_prototype->iterate_all([&](pjs::Str *key, pjs::Value &val) {
-      fields.push_back(
-        pjs::Variable::make(
-          key->str(), val,
-          pjs::Field::Enumerable | pjs::Field::Writable
-        )
-      );
-    });
+Configuration::Configuration(pjs::Object *context_prototype)
+  : m_context_prototype(context_prototype)
+{
+  if (!m_context_prototype) {
+    m_context_prototype = pjs::Object::make();
   }
+}
 
-  auto cls = pjs::Class::make(
-    "ContextData",
-    pjs::class_of<ContextDataBase>(),
-    fields
+void Configuration::add_export(pjs::Str *ns, pjs::Object *variables) {
+  if (ns->str().empty()) throw std::runtime_error("namespace cannot be empty");
+  if (!variables) throw std::runtime_error("variable list cannot be null");
+  variables->iterate_all(
+    [&](pjs::Str *k, pjs::Value &v) {
+      if (k->str().empty()) throw std::runtime_error("variable name cannot be empty");
+      m_exports.emplace_back();
+      auto &imp = m_exports.back();
+      imp.ns = ns;
+      imp.name = k;
+      imp.value = v;
+    }
   );
+}
 
-  m_context_class = cls;
+void Configuration::add_import(pjs::Object *variables) {
+  if (!variables) throw std::runtime_error("variable list cannot be null");
+  variables->iterate_all(
+    [&](pjs::Str *k, pjs::Value &v) {
+      if (k->str().empty()) throw std::runtime_error("variable name cannot be empty");
+      if (v.is_string()) {
+        if (v.s()->str().empty()) throw std::runtime_error("namespace cannot be empty");
+        m_imports.emplace_back();
+        auto &imp = m_imports.back();
+        imp.ns = v.s();
+        imp.name = k;
+        imp.original_name = k;
+      } else {
+        std::string msg("namespace expected for import: ");
+        throw std::runtime_error(msg + k->str());
+      }
+    }
+  );
 }
 
 void Configuration::listen(int port, pjs::Object *options) {
@@ -298,7 +319,49 @@ void Configuration::wait(pjs::Function *condition) {
   append_filter(new Wait(condition));
 }
 
+void Configuration::bind_exports(Worker *worker, Module *module) {
+  for (const auto &exp : m_exports) {
+    if (m_context_prototype->has(exp.name)) {
+      std::string msg("duplicated variable name ");
+      msg += exp.name->str();
+      throw std::runtime_error(msg);
+    }
+    m_context_prototype->set(exp.name, exp.value);
+    worker->add_export(exp.ns, exp.name, module);
+  }
+}
+
+void Configuration::bind_imports(Worker *worker, Module *module, pjs::Expr::Imports *imports) {
+  for (const auto &imp : m_imports) {
+    auto m = worker->get_export(imp.ns, imp.original_name);
+    if (!m) {
+      std::string msg("cannot import variable ");
+      msg += imp.name->str();
+      msg += " in ";
+      msg += module->path();
+      throw std::runtime_error(msg);
+    }
+    imports->add(imp.name, m->index(), imp.original_name);
+  }
+}
+
 void Configuration::apply(Module *mod) {
+  std::list<pjs::Field*> fields;
+  m_context_prototype->iterate_all([&](pjs::Str *key, pjs::Value &val) {
+    fields.push_back(
+      pjs::Variable::make(
+        key->str(), val,
+        pjs::Field::Enumerable | pjs::Field::Writable
+      )
+    );
+  });
+
+  m_context_class = pjs::Class::make(
+    "ContextData",
+    pjs::class_of<ContextDataBase>(),
+    fields
+  );
+
   mod->m_context_class = m_context_class;
 
   auto make_pipeline = [&](
@@ -389,6 +452,31 @@ namespace pjs {
 using namespace pipy;
 
 template<> void ClassDef<Configuration>::init() {
+
+  // Configuration.export
+  method("export", [](Context &ctx, Object *thiz, Value &result) {
+    pjs::Str *ns;
+    pjs::Object *variables;
+    if (!ctx.arguments(2, &ns, &variables)) return;
+    try {
+      thiz->as<Configuration>()->add_export(ns, variables);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // Configuration.import
+  method("import", [](Context &ctx, Object *thiz, Value &result) {
+    pjs::Object *variables;
+    if (!ctx.arguments(1, &variables)) return;
+    try {
+      thiz->as<Configuration>()->add_import(variables);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
 
   // Configuration.listen
   method("listen", [](Context &ctx, Object *thiz, Value &result) {

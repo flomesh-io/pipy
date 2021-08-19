@@ -39,6 +39,7 @@ namespace pipy {
 class Filter;
 class Graph;
 class Module;
+class Worker;
 
 //
 // Configuration
@@ -46,7 +47,22 @@ class Module;
 
 class Configuration : public pjs::ObjectTemplate<Configuration> {
 public:
+  struct Export {
+    pjs::Ref<pjs::Str> ns;
+    pjs::Ref<pjs::Str> name;
+    pjs::Value value;
+  };
+
+  struct Import {
+    pjs::Ref<pjs::Str> ns;
+    pjs::Ref<pjs::Str> name;
+    pjs::Ref<pjs::Str> original_name;
+  };
+
   static void set_reuse_port(bool b) { s_reuse_port = b; }
+
+  void add_export(pjs::Str *ns, pjs::Object *variables);
+  void add_import(pjs::Object *variables);
 
   void listen(int port, pjs::Object *options);
   void task();
@@ -91,6 +107,8 @@ public:
   void use(Module *module, pjs::Str *pipeline, pjs::Object *argv);
   void wait(pjs::Function *condition);
 
+  void bind_exports(Worker *worker, Module *module);
+  void bind_imports(Worker *worker, Module *module, pjs::Expr::Imports *imports);
   void apply(Module *module);
   void draw(Graph &g);
 
@@ -116,7 +134,10 @@ private:
     std::list<std::unique_ptr<Filter>> filters;
   };
 
+  pjs::Ref<pjs::Object> m_context_prototype;
   pjs::Ref<pjs::Class> m_context_class;
+  std::list<Export> m_exports;
+  std::list<Import> m_imports;
   std::list<ListenConfig> m_listens;
   std::list<TaskConfig> m_tasks;
   std::list<NamedPipelineConfig> m_named_pipelines;
