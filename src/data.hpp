@@ -474,23 +474,25 @@ public:
     }
   }
 
-  auto shift(std::function<bool(int)> f) -> Data* {
-    Data *buf = make();
+  void shift(std::function<int(int)> f, Data &out) {
     while (auto view = m_head) {
       auto data = view->chunk->data;
       auto size = view->length;
       auto head = view->offset;
       auto n = 0;
-      while (n < size) if (f(data[head + n++])) break;
+      for (; n < size; ++n) {
+        auto ret = f(data[head + n]);
+        if (ret > 0) { ++n; break; }
+        if (ret < 0) break;
+      }
       if (n == size) {
-        buf->push_view(shift_view());
+        out.push_view(shift_view());
       } else {
-        buf->push_view(view->shift(n));
+        out.push_view(view->shift(n));
         m_size -= n;
         break;
       }
     }
-    return buf;
   }
 
   void shift_while(std::function<bool(int)> f, Data &out) {
@@ -498,7 +500,8 @@ public:
       auto data = view->chunk->data;
       auto size = view->length;
       auto head = view->offset;
-      auto n = 0; while (n < size && f(data[head + n])) ++n;
+      auto n = 0;
+      while (n < size && f(data[head + n])) ++n;
       if (n == size) {
         out.push_view(shift_view());
       } else {
@@ -514,7 +517,8 @@ public:
       auto data = view->chunk->data;
       auto size = view->length;
       auto head = view->offset;
-      auto n = 0; for (; n < size; ++n) if (f(data[head + n])) { ++n; break; }
+      auto n = 0;
+      for (; n < size; ++n) if (f(data[head + n])) { ++n; break; }
       if (n == size) {
         out.push_view(shift_view());
       } else {

@@ -103,6 +103,7 @@ public:
   void replace_event(Event::Type type, const pjs::Value &replacement);
   void replace_message(const pjs::Value &replacement, int size_limit);
   void replace_start(const pjs::Value &replacement);
+  void split(pjs::Function *callback);
   void tap(const pjs::Value &quota, const pjs::Value &account);
   void use(Module *module, pjs::Str *pipeline, pjs::Object *argv);
   void wait(pjs::Function *condition);

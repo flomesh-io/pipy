@@ -58,6 +58,7 @@
 #include "filters/replace-start.hpp"
 #include "filters/socks.hpp"
 #include "filters/socks4.hpp"
+#include "filters/split.hpp"
 #include "filters/tap.hpp"
 #include "filters/tls.hpp"
 #include "filters/use.hpp"
@@ -305,6 +306,10 @@ void Configuration::replace_message(const pjs::Value &replacement, int size_limi
 
 void Configuration::replace_start(const pjs::Value &replacement) {
   append_filter(new ReplaceStart(replacement));
+}
+
+void Configuration::split(pjs::Function *callback) {
+  append_filter(new Split(callback));
 }
 
 void Configuration::tap(const pjs::Value &quota, const pjs::Value &account) {
@@ -1144,6 +1149,18 @@ template<> void ClassDef<Configuration>::init() {
     if (!ctx.arguments(0, &replacement)) return;
     try {
       thiz->as<Configuration>()->replace_event(Event::SessionEnd, replacement);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // Configuration.split
+  method("split", [](Context &ctx, Object *thiz, Value &result) {
+    Function *callback;
+    if (!ctx.arguments(1, &callback)) return;
+    try {
+      thiz->as<Configuration>()->split(callback);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

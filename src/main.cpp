@@ -73,6 +73,7 @@
 #include "filters/replace-start.hpp"
 #include "filters/socks.hpp"
 #include "filters/socks4.hpp"
+#include "filters/split.hpp"
 #include "filters/tap.hpp"
 #include "filters/tls.hpp"
 #include "filters/use.hpp"
@@ -124,6 +125,7 @@ static std::list<Filter*> s_filters {
   new ReplaceEvent(Event::Type::SessionEnd),
   new ReplaceBody,
   new ReplaceMessage,
+  new Split,
   new Tap,
   new Use,
   new Wait,

@@ -71,6 +71,7 @@ add_executable(pipy
   src/filters/replace-start.cpp
   src/filters/socks.cpp
   src/filters/socks4.cpp
+  src/filters/split.cpp
   src/filters/tap.cpp
   src/filters/tls.cpp
   src/filters/use.cpp
