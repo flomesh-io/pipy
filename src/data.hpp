@@ -570,8 +570,19 @@ public:
 
   auto to_string(Encoding encoding) const -> std::string {
     switch (encoding) {
-      case Encoding::UTF8:
+      case Encoding::UTF8: {
+        utils::Utf8Decoder decoder([](int) {});
+        for (const auto &c : chunks()) {
+          auto ptr = std::get<0>(c);
+          auto len = std::get<1>(c);
+          for (int i = 0; i < len; i++) {
+            if (!decoder.input(ptr[i])) {
+              throw std::runtime_error("invalid UTF-8 encoding");
+            }
+          }
+        }
         return to_string();
+      }
       case Encoding::Hex: {
         std::string str;
         utils::HexEncoder encoder([&](char c) { str += c; });
