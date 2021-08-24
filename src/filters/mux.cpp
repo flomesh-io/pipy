@@ -89,7 +89,7 @@ void MuxBase::process(Context *ctx, Event *inp) {
     if (!eval(*ctx, m_channel, key)) return;
     m_connection = m_connection_manager->get(key);
     m_connection->m_pipeline = m_pipeline;
-    m_connection->m_context = pipeline()->module()->worker()->new_runtime_context(ctx);
+    m_connection->m_context = new_context(ctx);
   }
 
   if (auto start = inp->as<MessageStart>()) {

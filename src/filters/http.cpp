@@ -440,7 +440,13 @@ void Encoder::input(const pjs::Ref<Event> &evt) {
     m_chunked = false;
 
     if (auto head = start->head()) {
-      pjs::Value headers, transfer_encoding, content_length;
+      pjs::Value method, headers, transfer_encoding, content_length;
+      if (!m_is_response) {
+        head->get(s_method, method);
+        if (method.is_string() && method.s() == s_head) {
+          m_is_bodiless = true;
+        }
+      }
       head->get(s_headers, headers);
       if (headers.is_object()) {
         headers.o()->get(s_transfer_encoding, transfer_encoding);
@@ -560,7 +566,6 @@ void Encoder::output_head() {
     }
 
     if (method.is_string()) {
-      m_is_bodiless = (method.s() == s_head);
       s_dp.push(buffer, method.s()->str());
       s_dp.push(buffer, ' ');
     } else {
@@ -1069,6 +1074,12 @@ void Demux::dump(std::ostream &out) {
   out << "demuxHTTP";
 }
 
+auto Demux::draw(std::list<std::string> &links, bool &fork) -> std::string {
+  links.push_back(m_target->str());
+  fork = false;
+  return "demuxHTTP";
+}
+
 void Demux::bind() {
   if (!m_pipeline) {
     m_pipeline = pipeline(m_target);
@@ -1249,6 +1260,11 @@ Mux::Mux()
 {
 }
 
+Mux::Mux(Pipeline *pipeline, const pjs::Value &channel)
+  : MuxBase(pipeline, channel)
+{
+}
+
 Mux::Mux(pjs::Str *target, const pjs::Value &channel)
   : MuxBase(target, channel)
 {
@@ -1274,6 +1290,12 @@ auto Mux::help() -> std::list<std::string> {
 
 void Mux::dump(std::ostream &out) {
   out << "muxHTTP";
+}
+
+auto Mux::draw(std::list<std::string> &links, bool &fork) -> std::string {
+  links.push_back(target()->str());
+  fork = false;
+  return "muxHTTP";
 }
 
 auto Mux::clone() -> Filter* {

@@ -41,6 +41,7 @@ namespace pipy {
 class Demux : public Filter {
 public:
   Demux();
+  Demux(Pipeline *pipeline);
   Demux(pjs::Str *target);
 
 private:

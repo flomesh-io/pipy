@@ -39,6 +39,11 @@ Demux::Demux()
 {
 }
 
+Demux::Demux(Pipeline *pipeline)
+  : m_pipeline(pipeline)
+{
+}
+
 Demux::Demux(pjs::Str *target)
   : m_target(target)
 {
@@ -95,9 +100,8 @@ void Demux::process(Context *ctx, Event *inp) {
   if (m_session_end) return;
 
   if (inp->is<MessageStart>()) {
-    auto mod = pipeline()->module();
     auto channel = new Channel;
-    auto context = mod->worker()->new_runtime_context(ctx);
+    auto context = new_context(ctx);
     auto session = Session::make(context, m_pipeline);
     session->on_output([=](Event *inp) {
       if (channel->output_end) return;

@@ -51,6 +51,12 @@ auto Filter::pipeline(pjs::Str *name) -> Pipeline* {
   }
 }
 
+auto Filter::new_context(Context *base) -> Context* {
+  auto mod = m_pipeline->module();
+  if (!mod) return new Context();
+  return mod->worker()->new_runtime_context(base);
+}
+
 bool Filter::output(const pjs::Value &evt, pjs::Object *ctx) {
   if (evt.is_instance_of(pjs::class_of<Event>())) {
     output(evt.as<Event>());

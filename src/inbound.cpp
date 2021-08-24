@@ -137,7 +137,7 @@ void Inbound::start(Pipeline *pipeline) {
   auto mod = pipeline->module();
   auto ctx = mod
     ? mod->worker()->new_runtime_context()
-    : new pipy::Context(nullptr, nullptr, nullptr); // for the internal GUI service only
+    : new pipy::Context();
   ctx->m_inbound = this;
   m_session = Session::make(ctx, pipeline);
   m_session->on_output([=](const pjs::Ref<Event> &obj) {

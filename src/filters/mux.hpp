@@ -92,6 +92,8 @@ protected:
   MuxBase(Pipeline *pipeline, const pjs::Value &channel);
   MuxBase(pjs::Str *target, const pjs::Value &channel);
 
+  auto target() const -> pjs::Str* { return m_target; }
+
   virtual auto new_connection() -> Connection* = 0;
 
 private:
