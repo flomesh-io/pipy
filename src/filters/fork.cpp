@@ -40,16 +40,16 @@ Fork::Fork()
 {
 }
 
-Fork::Fork(pjs::Str *target, pjs::Object *session_data)
+Fork::Fork(pjs::Str *target, pjs::Object *initializers)
   : m_target(target)
-  , m_session_data(session_data)
+  , m_initializers(initializers)
 {
 }
 
 Fork::Fork(const Fork &r)
   : m_pipeline(r.m_pipeline)
   , m_target(r.m_target)
-  , m_session_data(r.m_session_data)
+  , m_initializers(r.m_initializers)
 {
 }
 
@@ -58,10 +58,10 @@ Fork::~Fork() {
 
 auto Fork::help() -> std::list<std::string> {
   return {
-    "fork(target[, sessionData])",
+    "fork(target[, initializers])",
     "Sends copies of events to other pipeline sessions",
     "target = <string> Name of the pipeline to send event copies to",
-    "sessionData = <object/array/function> Data of `this` in the forked sessions",
+    "initializers = <array|function> Functions to initialize each session",
   };
 }
 
@@ -97,18 +97,18 @@ void Fork::process(Context *ctx, Event *inp) {
     auto root = static_cast<Context*>(ctx->root());
     auto mod = pipeline()->module();
     pjs::Value ret;
-    pjs::Object *session_data = m_session_data.get();
-    if (session_data && session_data->is_function()) {
-      if (!callback(*ctx, session_data->as<pjs::Function>(), 0, nullptr, ret)) return;
-      if (!ret.is_object()) {
-        Log::error("[fork] invalid session data");
+    pjs::Object *initializers = m_initializers.get();
+    if (initializers && initializers->is_function()) {
+      if (!callback(*ctx, initializers->as<pjs::Function>(), 0, nullptr, ret)) return;
+      if (!ret.is_array()) {
+        Log::error("[fork] invalid initializer list");
         abort();
         return;
       }
-      session_data = ret.o();
+      initializers = ret.o();
     }
-    if (session_data && session_data->is_array()) {
-      m_sessions = session_data->as<pjs::Array>()->map(
+    if (initializers && initializers->is_array()) {
+      m_sessions = initializers->as<pjs::Array>()->map(
         [&](pjs::Value &v, int, pjs::Value &ret) -> bool {
           auto context = root;
           if (v.is_object()) {
@@ -122,9 +122,9 @@ void Fork::process(Context *ctx, Event *inp) {
       );
     } else {
       auto context = root;
-      if (session_data) {
+      if (initializers) {
         context = mod->worker()->new_runtime_context(root);
-        pjs::Object::assign(context->data(mod->index()), session_data);
+        pjs::Object::assign(context->data(mod->index()), initializers);
       }
       auto session = Session::make(context, m_pipeline);
       m_sessions = pjs::Array::make(1);

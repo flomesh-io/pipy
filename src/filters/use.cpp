@@ -40,10 +40,9 @@ Use::Use()
 {
 }
 
-Use::Use(Module *module, pjs::Str *pipeline_name, pjs::Object *argv)
+Use::Use(Module *module, pjs::Str *pipeline_name)
   : m_module(module)
   , m_pipeline_name(pipeline_name)
-  , m_argv(argv)
 {
 }
 
@@ -51,7 +50,6 @@ Use::Use(const Use &r)
   : m_module(r.m_module)
   , m_pipeline(r.m_pipeline)
   , m_pipeline_name(r.m_pipeline_name)
-  , m_argv(r.m_argv)
 {
 }
 
@@ -61,11 +59,10 @@ Use::~Use()
 
 auto Use::help() -> std::list<std::string> {
   return {
-    "use(module, pipeline[, argv...])",
+    "use(module, pipeline)",
     "Sends events to a pipeline in a different module",
     "module = <string> Filename of the module",
     "pipeline = <string> Name of the pipeline",
-    "argv = <array|function> Arguments that are visible from the new session with __argv",
   };
 }
 
@@ -101,23 +98,8 @@ void Use::process(Context *ctx, Event *inp) {
 
   if (!m_session) {
     auto root = static_cast<Context*>(ctx->root());
-    auto session = Session::make(root, m_pipeline);
-    if (m_argv) {
-      if (m_argv->is_function()) {
-        pjs::Value ret;
-        if (!callback(*ctx, m_argv->as<pjs::Function>(), 0, nullptr, ret)) return;
-        if (!ret.is_array()) {
-          auto a = pjs::Array::make(1);
-          a->set(0, ret);
-          ret = a;
-        }
-        ctx->data(m_module->index())->argv(ret.as<pjs::Array>());
-      } else if (m_argv->is_array()) {
-        ctx->data(m_module->index())->argv(m_argv->as<pjs::Array>());
-      }
-    }
-    session->on_output(out());
-    m_session = session;
+    m_session = Session::make(root, m_pipeline);
+    m_session->on_output(out());
   }
 
   if (m_session) {

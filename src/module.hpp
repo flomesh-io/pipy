@@ -49,7 +49,6 @@ public:
 
   auto new_context_data(pjs::Object *prototype = nullptr) -> pjs::Object* {
     auto obj = new ContextDataBase(m_filename);
-    if (prototype) obj->argv(prototype->as<ContextDataBase>()->argv());
     m_context_class->init(obj, prototype);
     return obj;
   }

@@ -86,7 +86,7 @@ public:
   void encode_http_request();
   void encode_http_response(pjs::Object *options);
   void exec(const pjs::Value &command);
-  void fork(pjs::Str *target, pjs::Object *session_data);
+  void fork(pjs::Str *target, pjs::Object *initializers);
   void link(size_t count, pjs::Str **targets, pjs::Function **conditions);
   void merge(pjs::Str *target, pjs::Function *selector);
   void mux(pjs::Str *target, pjs::Function *selector);
@@ -105,7 +105,7 @@ public:
   void replace_start(const pjs::Value &replacement);
   void split(pjs::Function *callback);
   void tap(const pjs::Value &quota, const pjs::Value &account);
-  void use(Module *module, pjs::Str *pipeline, pjs::Object *argv);
+  void use(Module *module, pjs::Str *pipeline);
   void wait(pjs::Function *condition);
 
   void bind_pipelines();

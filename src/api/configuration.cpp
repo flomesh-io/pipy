@@ -236,8 +236,8 @@ void Configuration::exec(const pjs::Value &command) {
   append_filter(new Exec(command));
 }
 
-void Configuration::fork(pjs::Str *target, pjs::Object *session_data) {
-  append_filter(new Fork(target, session_data));
+void Configuration::fork(pjs::Str *target, pjs::Object *initializers) {
+  append_filter(new Fork(target, initializers));
 }
 
 void Configuration::link(size_t count, pjs::Str **targets, pjs::Function **conditions) {
@@ -319,8 +319,8 @@ void Configuration::tap(const pjs::Value &quota, const pjs::Value &account) {
   append_filter(new Tap(quota, account));
 }
 
-void Configuration::use(Module *module, pjs::Str *pipeline, pjs::Object *argv) {
-  append_filter(new Use(module, pipeline, argv));
+void Configuration::use(Module *module, pjs::Str *pipeline) {
+  append_filter(new Use(module, pipeline));
 }
 
 void Configuration::wait(pjs::Function *condition) {
@@ -733,10 +733,10 @@ template<> void ClassDef<Configuration>::init() {
   // Configuration.fork
   method("fork", [](Context &ctx, Object *thiz, Value &result) {
     pjs::Str *target;
-    pjs::Object *session_data = nullptr;
-    if (!ctx.arguments(1, &target, &session_data)) return;
+    pjs::Object *initializers = nullptr;
+    if (!ctx.arguments(1, &target, &initializers)) return;
     try {
-      thiz->as<Configuration>()->fork(target, session_data);
+      thiz->as<Configuration>()->fork(target, initializers);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1183,20 +1183,7 @@ template<> void ClassDef<Configuration>::init() {
   method("use", [](Context &ctx, Object *thiz, Value &result) {
     std::string module;
     Str *pipeline;
-    Object* argv = nullptr;
     if (!ctx.arguments(2, &module, &pipeline)) return;
-    if (ctx.argc() == 3) {
-      auto &arg3 = ctx.arg(2);
-      if (arg3.is_array() || arg3.is_function()) {
-        argv = arg3.o();
-      }
-    } else if (ctx.argc() > 2) {
-      auto a = Array::make(ctx.argc() - 2);
-      for (int i = 2; i < ctx.argc(); i++) {
-        a->set(i - 2, ctx.arg(i));
-      }
-      argv = a;
-    }
     auto path = utils::path_normalize(module);
     auto root = static_cast<pipy::Context*>(ctx.root());
     auto worker = root->worker();
@@ -1208,7 +1195,7 @@ template<> void ClassDef<Configuration>::init() {
       return;
     }
     try {
-      thiz->as<Configuration>()->use(mod, pipeline, argv);
+      thiz->as<Configuration>()->use(mod, pipeline);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

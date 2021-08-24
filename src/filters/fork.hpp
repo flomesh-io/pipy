@@ -39,7 +39,7 @@ class Session;
 class Fork : public Filter {
 public:
   Fork();
-  Fork(pjs::Str *target, pjs::Object *session_data);
+  Fork(pjs::Str *target, pjs::Object *initializers);
 
 private:
   Fork(const Fork &r);
@@ -56,7 +56,7 @@ private:
 private:
   Pipeline* m_pipeline = nullptr;
   pjs::Ref<pjs::Str> m_target;
-  pjs::Ref<pjs::Object> m_session_data;
+  pjs::Ref<pjs::Object> m_initializers;
   pjs::Ref<pjs::Array> m_sessions;
   bool m_session_end = false;
 };

@@ -40,7 +40,7 @@ class Session;
 class Use : public Filter {
 public:
   Use();
-  Use(Module *module, pjs::Str *pipeline_name, pjs::Object *argv);
+  Use(Module *module, pjs::Str *pipeline_name);
 
 private:
   Use(const Use &r);
@@ -56,7 +56,6 @@ private:
   Module* m_module = nullptr;
   Pipeline* m_pipeline = nullptr;
   pjs::Ref<pjs::Str> m_pipeline_name;
-  pjs::Ref<pjs::Object> m_argv;
   pjs::Ref<Session> m_session;
   bool m_session_end = false;
 };
