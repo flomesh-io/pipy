@@ -74,7 +74,7 @@ public:
   void connect(const pjs::Value &target, pjs::Object *options);
   void connect_tls(pjs::Str *target, pjs::Object *options);
   void decode_dubbo();
-  void decode_http_request(pjs::Object *options);
+  void decode_http_request();
   void decode_http_response(pjs::Object *options);
   void decompress_http(pjs::Function *enable);
   void decompress_message(const pjs::Value &algorithm);
@@ -83,8 +83,8 @@ public:
   void dummy();
   void dump(const pjs::Value &tag);
   void encode_dubbo(pjs::Object *message_obj);
-  void encode_http_request(pjs::Object *request_obj);
-  void encode_http_response(pjs::Object *response_obj);
+  void encode_http_request();
+  void encode_http_response(pjs::Object *options);
   void exec(const pjs::Value &command);
   void fork(pjs::Str *target, pjs::Object *session_data);
   void link(size_t count, pjs::Str **targets, pjs::Function **conditions);
@@ -108,6 +108,7 @@ public:
   void use(Module *module, pjs::Str *pipeline, pjs::Object *argv);
   void wait(pjs::Function *condition);
 
+  void bind_pipelines();
   void bind_exports(Worker *worker, Module *module);
   void bind_imports(Worker *worker, Module *module, pjs::Expr::Imports *imports);
   void apply(Module *module);

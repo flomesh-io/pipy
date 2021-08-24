@@ -256,7 +256,8 @@ bool Worker::start() {
   try {
     for (auto i : m_modules) i->bind_exports();
     for (auto i : m_modules) i->bind_imports();
-    for (auto i : m_modules) i->start();
+    for (auto i : m_modules) i->make_pipelines();
+    for (auto i : m_modules) i->bind_pipelines();
     s_current = this;
   } catch (std::runtime_error &err) {
     Log::error("%s", err.what());

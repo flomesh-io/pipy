@@ -72,10 +72,6 @@ public:
   auto local_port() const -> int { return m_local_port; }
   auto buffered() const -> int { return m_buffer.size(); }
 
-  void set_keep_alive_request(bool b) { m_keep_alive = b; }
-  void increase_request_count() { m_request_count++; }
-  bool increase_response_count();
-
   auto session() const -> Session* { return m_session; }
   void pause();
   void resume();
@@ -109,9 +105,6 @@ private:
   bool m_pumping = false;
   bool m_reading_ended = false;
   bool m_writing_ended = false;
-  bool m_keep_alive = true;
-  int m_request_count = 0;
-  int m_response_count = 0;
 
   void start(Pipeline *pipeline);
   void receive();

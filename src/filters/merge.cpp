@@ -49,7 +49,8 @@ Merge::Merge(pjs::Str *target, pjs::Function *selector)
 }
 
 Merge::Merge(const Merge &r)
-  : m_session_pool(r.m_session_pool)
+  : m_pipeline(r.m_pipeline)
+  , m_session_pool(r.m_session_pool)
   , m_target(r.m_target)
   , m_selector(r.m_selector)
 {
@@ -77,6 +78,12 @@ auto Merge::draw(std::list<std::string> &links, bool &fork) -> std::string {
   return "merge";
 }
 
+void Merge::bind() {
+  if (!m_pipeline) {
+    m_pipeline = pipeline(m_target);
+  }
+}
+
 auto Merge::clone() -> Filter* {
   return new Merge(*this);
 }
@@ -94,21 +101,14 @@ void Merge::process(Context *ctx, Event *inp) {
   if (m_session_end) return;
 
   if (!m_session) {
-    auto mod = pipeline()->module();
-    auto pipeline = mod->find_named_pipeline(m_target);
-    if (!pipeline) {
-      Log::error("[merge] unknown pipeline: %s", m_target->c_str());
-      abort();
-      return;
-    }
     if (m_selector) {
       pjs::Value ret;
       if (!callback(*ctx, m_selector, 0, nullptr, ret)) return;
       auto s = ret.to_string();
-      m_session = m_session_pool->alloc(pipeline, s);
+      m_session = m_session_pool->alloc(m_pipeline, s);
       s->release();
     } else {
-      m_session = m_session_pool->alloc(pipeline, pjs::Str::empty);
+      m_session = m_session_pool->alloc(m_pipeline, pjs::Str::empty);
     }
   }
 

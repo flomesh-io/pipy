@@ -47,6 +47,7 @@ public:
   virtual auto help() -> std::list<std::string> { return std::list<std::string>(); }
   virtual void dump(std::ostream &out) = 0;
   virtual auto draw(std::list<std::string> &links, bool &fork) -> std::string;
+  virtual void bind() {}
   virtual auto clone() -> Filter* = 0;
   virtual void reset() = 0;
   virtual void process(Context *ctx, Event *inp) = 0;
@@ -54,6 +55,7 @@ public:
   auto pipeline() const -> Pipeline* { return m_pipeline; }
 
 protected:
+  auto pipeline(pjs::Str *name) -> Pipeline*;
   auto out() const -> const Event::Receiver& { return m_output; }
   void output(Event *inp) { m_output(inp); }
   bool output(const pjs::Value &evt, pjs::Object *mctx = nullptr);

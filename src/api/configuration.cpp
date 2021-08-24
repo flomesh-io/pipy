@@ -188,8 +188,8 @@ void Configuration::decode_dubbo() {
   append_filter(new dubbo::Decoder());
 }
 
-void Configuration::decode_http_request(pjs::Object *options) {
-  append_filter(new http::RequestDecoder(options));
+void Configuration::decode_http_request() {
+  append_filter(new http::RequestDecoder());
 }
 
 void Configuration::decode_http_response(pjs::Object *options) {
@@ -224,8 +224,8 @@ void Configuration::encode_dubbo(pjs::Object *message_obj) {
   append_filter(new dubbo::Encoder(message_obj));
 }
 
-void Configuration::encode_http_request(pjs::Object *request_obj) {
-  append_filter(new http::RequestEncoder(request_obj));
+void Configuration::encode_http_request() {
+  append_filter(new http::RequestEncoder());
 }
 
 void Configuration::encode_http_response(pjs::Object *response_obj) {
@@ -243,9 +243,12 @@ void Configuration::fork(pjs::Str *target, pjs::Object *session_data) {
 void Configuration::link(size_t count, pjs::Str **targets, pjs::Function **conditions) {
   std::list<Link::Route> routes;
   for (size_t i = 0; i < count; i++) {
-    routes.emplace_back(targets[i], conditions[i]);
+    routes.emplace_back();
+    auto &r = routes.back();
+    r.name = targets[i];
+    r.condition = conditions[i];
   }
-  append_filter(new Link(routes));
+  append_filter(new Link(std::move(routes)));
 }
 
 void Configuration::merge(pjs::Str *target, pjs::Function *selector) {
@@ -379,6 +382,7 @@ void Configuration::apply(Module *mod) {
     for (auto &f : filters) {
       pipeline->append(f.release());
     }
+    mod->m_pipelines.push_back(pipeline);
     return pipeline;
   };
 
@@ -612,20 +616,18 @@ template<> void ClassDef<Configuration>::init() {
     }
   });
 
-  // Configuration.decodeHttpRequest
-  method("decodeHttpRequest", [](Context &ctx, Object *thiz, Value &result) {
-    pjs::Object *options = nullptr;
-    if (!ctx.arguments(0, &options)) return;
+  // Configuration.decodeHTTPRequest
+  method("decodeHTTPRequest", [](Context &ctx, Object *thiz, Value &result) {
     try {
-      thiz->as<Configuration>()->decode_http_request(options);
+      thiz->as<Configuration>()->decode_http_request();
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
     }
   });
 
-  // Configuration.decodeHttpResponse
-  method("decodeHttpResponse", [](Context &ctx, Object *thiz, Value &result) {
+  // Configuration.decodeHTTPResponse
+  method("decodeHTTPResponse", [](Context &ctx, Object *thiz, Value &result) {
     pjs::Object *options = nullptr;
     if (!ctx.arguments(0, &options)) return;
     try {
@@ -694,24 +696,22 @@ template<> void ClassDef<Configuration>::init() {
     }
   });
 
-  // Configuration.encodeHttpRequest
-  method("encodeHttpRequest", [](Context &ctx, Object *thiz, Value &result) {
-    Object *request_obj = nullptr;
-    if (!ctx.arguments(0, &request_obj)) return;
+  // Configuration.encodeHTTPRequest
+  method("encodeHTTPRequest", [](Context &ctx, Object *thiz, Value &result) {
     try {
-      thiz->as<Configuration>()->encode_http_request(request_obj);
+      thiz->as<Configuration>()->encode_http_request();
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
     }
   });
 
-  // Configuration.encodeHttpResponse
-  method("encodeHttpResponse", [](Context &ctx, Object *thiz, Value &result) {
-    Object *response_obj = nullptr;
-    if (!ctx.arguments(0, &response_obj)) return;
+  // Configuration.encodeHTTPResponse
+  method("encodeHTTPResponse", [](Context &ctx, Object *thiz, Value &result) {
+    Object *options = nullptr;
+    if (!ctx.arguments(0, &options)) return;
     try {
-      thiz->as<Configuration>()->encode_http_response(response_obj);
+      thiz->as<Configuration>()->encode_http_response(options);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

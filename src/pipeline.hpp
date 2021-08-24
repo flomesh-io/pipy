@@ -67,6 +67,7 @@ public:
   auto active() const -> size_t { return m_active; }
   auto filters() const -> const std::list<std::unique_ptr<Filter>>& { return m_filters; }
   void append(Filter *filter);
+  void bind();
   auto alloc() -> ReusableSession*;
   void free(ReusableSession *session);
 

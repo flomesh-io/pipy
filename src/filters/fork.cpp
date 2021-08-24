@@ -47,7 +47,9 @@ Fork::Fork(pjs::Str *target, pjs::Object *session_data)
 }
 
 Fork::Fork(const Fork &r)
-  : Fork(r.m_target, r.m_session_data)
+  : m_pipeline(r.m_pipeline)
+  , m_target(r.m_target)
+  , m_session_data(r.m_session_data)
 {
 }
 
@@ -73,6 +75,12 @@ auto Fork::draw(std::list<std::string> &links, bool &fork) -> std::string {
   return "fork";
 }
 
+void Fork::bind() {
+  if (!m_pipeline) {
+    m_pipeline = pipeline(m_target);
+  }
+}
+
 auto Fork::clone() -> Filter* {
   return new Fork(*this);
 }
@@ -88,45 +96,39 @@ void Fork::process(Context *ctx, Event *inp) {
   if (!m_sessions) {
     auto root = static_cast<Context*>(ctx->root());
     auto mod = pipeline()->module();
-    if (auto pipeline = mod->find_named_pipeline(m_target)) {
-      pjs::Value ret;
-      pjs::Object *session_data = m_session_data.get();
-      if (session_data && session_data->is_function()) {
-        if (!callback(*ctx, session_data->as<pjs::Function>(), 0, nullptr, ret)) return;
-        if (!ret.is_object()) {
-          Log::error("[fork] invalid session data");
-          abort();
-          return;
-        }
-        session_data = ret.o();
+    pjs::Value ret;
+    pjs::Object *session_data = m_session_data.get();
+    if (session_data && session_data->is_function()) {
+      if (!callback(*ctx, session_data->as<pjs::Function>(), 0, nullptr, ret)) return;
+      if (!ret.is_object()) {
+        Log::error("[fork] invalid session data");
+        abort();
+        return;
       }
-      if (session_data && session_data->is_array()) {
-        m_sessions = session_data->as<pjs::Array>()->map(
-          [&](pjs::Value &v, int, pjs::Value &ret) -> bool {
-            auto context = root;
-            if (v.is_object()) {
-              context = mod->worker()->new_runtime_context(root);
-              pjs::Object::assign(context->data(mod->index()), v.o());
-            }
-            auto session = Session::make(context, pipeline);
-            ret.set(session);
-            return true;
+      session_data = ret.o();
+    }
+    if (session_data && session_data->is_array()) {
+      m_sessions = session_data->as<pjs::Array>()->map(
+        [&](pjs::Value &v, int, pjs::Value &ret) -> bool {
+          auto context = root;
+          if (v.is_object()) {
+            context = mod->worker()->new_runtime_context(root);
+            pjs::Object::assign(context->data(mod->index()), v.o());
           }
-        );
-      } else {
-        auto context = root;
-        if (session_data) {
-          context = mod->worker()->new_runtime_context(root);
-          pjs::Object::assign(context->data(mod->index()), session_data);
+          auto session = Session::make(context, m_pipeline);
+          ret.set(session);
+          return true;
         }
-        auto session = Session::make(context, pipeline);
-        m_sessions = pjs::Array::make(1);
-        m_sessions->set(0, session);
-      }
+      );
     } else {
-      Log::error("[fork] unknown pipeline: %s", m_target->c_str());
-      m_session_end = true;
-      return;
+      auto context = root;
+      if (session_data) {
+        context = mod->worker()->new_runtime_context(root);
+        pjs::Object::assign(context->data(mod->index()), session_data);
+      }
+      auto session = Session::make(context, m_pipeline);
+      m_sessions = pjs::Array::make(1);
+      m_sessions->set(0, session);
     }
   }
 

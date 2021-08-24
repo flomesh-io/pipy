@@ -139,8 +139,14 @@ void Module::bind_imports() {
   m_configuration->bind_imports(m_worker, this, m_imports.get());
 }
 
-void Module::start() {
+void Module::make_pipelines() {
   m_configuration->apply(this);
+}
+
+void Module::bind_pipelines() {
+  for (const auto &p : m_pipelines) {
+    p->bind();
+  }
 }
 
 } // namespace pipy

@@ -40,8 +40,8 @@ Link::Link()
 {
 }
 
-Link::Link(const std::list<Route> &routes)
-  : m_routes(std::make_shared<std::list<Route>>(routes))
+Link::Link(std::list<Route> &&routes)
+  : m_routes(std::make_shared<std::list<Route>>(std::move(routes)))
 {
 }
 
@@ -69,10 +69,19 @@ void Link::dump(std::ostream &out) {
 
 auto Link::draw(std::list<std::string> &links, bool &fork) -> std::string {
   for (const auto &r : *m_routes) {
-    links.push_back(r.first->str());
+    links.push_back(r.name->str());
   }
   fork = false;
   return "link";
+}
+
+void Link::bind() {
+  auto mod = pipeline()->module();
+  for (auto &r : *m_routes) {
+    if (!r.pipeline) {
+      r.pipeline = pipeline(r.name);
+    }
+  }
 }
 
 auto Link::clone() -> Filter* {
@@ -91,24 +100,17 @@ void Link::process(Context *ctx, Event *inp) {
   if (!m_session) {
     for (const auto &r : *m_routes) {
       bool chosen = true;
-      if (r.second) {
+      if (r.condition) {
         pjs::Value ret;
-        if (!callback(*ctx, r.second, 0, nullptr, ret)) return;
+        if (!callback(*ctx, r.condition, 0, nullptr, ret)) return;
         chosen = ret.to_boolean();
       }
       if (chosen) {
         auto root = static_cast<Context*>(ctx->root());
-        auto mod = pipeline()->module();
-        if (auto pipeline = mod->find_named_pipeline(r.first)) {
-          auto session = Session::make(root, pipeline);
-          session->on_output(out());
-          m_session = session;
-          m_buffer.flush([=](Event *inp) { session->input(inp); });
-        } else {
-          Log::error("[link] unknown pipeline: %s", r.first->c_str());
-          abort();
-          return;
-        }
+        auto session = Session::make(root, r.pipeline);
+        session->on_output(out());
+        m_session = session;
+        m_buffer.flush([=](Event *inp) { session->input(inp); });
         break;
       }
     }

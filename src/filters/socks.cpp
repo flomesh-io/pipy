@@ -46,7 +46,9 @@ ProxySOCKS::ProxySOCKS(pjs::Str *target, pjs::Function *on_connect)
 }
 
 ProxySOCKS::ProxySOCKS(const ProxySOCKS &r)
-  : ProxySOCKS()
+  : m_pipeline(r.m_pipeline)
+  , m_target(r.m_target)
+  , m_on_connect(r.m_on_connect)
 {
 }
 
@@ -73,8 +75,14 @@ auto ProxySOCKS::draw(std::list<std::string> &links, bool &fork) -> std::string 
   return "proxySOCKS";
 }
 
+void ProxySOCKS::bind() {
+  if (!m_pipeline) {
+    m_pipeline = pipeline(m_target);
+  }
+}
+
 auto ProxySOCKS::clone() -> Filter* {
-  return new ProxySOCKS(m_target, m_on_connect);
+  return new ProxySOCKS(*this);
 }
 
 void ProxySOCKS::reset() {
@@ -132,20 +140,15 @@ void ProxySOCKS::process(Context *ctx, Event *inp) {
     callback(*ctx, m_on_connect, 3, argv, ret);
     if (ret.to_boolean()) {
       auto root = static_cast<Context*>(ctx->root());
-      auto mod = pipeline()->module();
-      if (auto pipeline = mod->find_named_pipeline(m_target)) {
-        auto session = Session::make(root, pipeline);
-        session->on_output(out());
-        m_session = session;
-        if (version == 4) {
-          reply_socks4(0x5a);
-        } else {
-          reply_socks5(0x00);
-        }
-        return;
+      auto session = Session::make(root, m_pipeline);
+      session->on_output(out());
+      m_session = session;
+      if (version == 4) {
+        reply_socks4(0x5a);
       } else {
-        Log::error("[link] unknown pipeline: %s", m_target->c_str());
+        reply_socks5(0x00);
       }
+      return;
     }
     if (version == 4) {
       reply_socks4(0x5b);

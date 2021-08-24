@@ -43,8 +43,16 @@ MuxBase::MuxBase()
 
 MuxBase::MuxBase(const MuxBase &r)
   : m_connection_manager(r.m_connection_manager)
+  , m_pipeline(r.m_pipeline)
   , m_target(r.m_target)
   , m_channel(r.m_channel)
+{
+}
+
+MuxBase::MuxBase(Pipeline *pipeline, const pjs::Value &channel)
+  : m_connection_manager(std::make_shared<ConnectionManager>(this))
+  , m_pipeline(pipeline)
+  , m_channel(channel)
 {
 }
 
@@ -53,6 +61,12 @@ MuxBase::MuxBase(pjs::Str *target, const pjs::Value &channel)
   , m_target(target)
   , m_channel(channel)
 {
+}
+
+void MuxBase::bind() {
+  if (!m_pipeline) {
+    m_pipeline = pipeline(m_target);
+  }
 }
 
 void MuxBase::reset() {
@@ -71,20 +85,11 @@ void MuxBase::process(Context *ctx, Event *inp) {
   if (m_session_end) return;
 
   if (!m_connection) {
-    auto mod = pipeline()->module();
-    auto pipeline = mod->find_named_pipeline(m_target);
-    if (!pipeline) {
-      Log::error("[mux] unknown pipeline: %s", m_target->c_str());
-      abort();
-      return;
-    }
-
     pjs::Value key;
     if (!eval(*ctx, m_channel, key)) return;
-
     m_connection = m_connection_manager->get(key);
-    m_connection->m_pipeline = pipeline;
-    m_connection->m_context = mod->worker()->new_runtime_context(ctx);
+    m_connection->m_pipeline = m_pipeline;
+    m_connection->m_context = pipeline()->module()->worker()->new_runtime_context(ctx);
   }
 
   if (auto start = inp->as<MessageStart>()) {
@@ -195,6 +200,7 @@ Mux::Mux(pjs::Str *target, pjs::Function *selector)
 
 Mux::Mux(const Mux &r)
   : m_session_pool(r.m_session_pool)
+  , m_pipeline(r.m_pipeline)
   , m_target(r.m_target)
   , m_selector(r.m_selector)
 {
@@ -222,6 +228,12 @@ auto Mux::draw(std::list<std::string> &links, bool &fork) -> std::string {
   return "mux";
 }
 
+void Mux::bind() {
+  if (!m_pipeline) {
+    m_pipeline = pipeline(m_target);
+  }
+}
+
 auto Mux::clone() -> Filter* {
   return new Mux(*this);
 }
@@ -243,21 +255,14 @@ void Mux::process(Context *ctx, Event *inp) {
   if (m_session_end) return;
 
   if (!m_session) {
-    auto mod = pipeline()->module();
-    auto pipeline = mod->find_named_pipeline(m_target);
-    if (!pipeline) {
-      Log::error("[mux] unknown pipeline: %s", m_target->c_str());
-      abort();
-      return;
-    }
     if (m_selector) {
       pjs::Value ret;
       if (!callback(*ctx, m_selector, 0, nullptr, ret)) return;
       auto s = ret.to_string();
-      m_session = m_session_pool->alloc(pipeline, s);
+      m_session = m_session_pool->alloc(m_pipeline, s);
       s->release();
     } else {
-      m_session = m_session_pool->alloc(pipeline, pjs::Str::empty);
+      m_session = m_session_pool->alloc(m_pipeline, pjs::Str::empty);
     }
   }
 

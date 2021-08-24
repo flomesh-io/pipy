@@ -88,15 +88,6 @@ void Inbound::accept(
   );
 }
 
-bool Inbound::increase_response_count() {
-  m_response_count++;
-  if (m_response_count == m_request_count) {
-    return m_keep_alive;
-  } else {
-    return true;
-  }
-}
-
 void Inbound::pause() {
   if (m_receiving_state == RECEIVING) {
     m_receiving_state = PAUSING;

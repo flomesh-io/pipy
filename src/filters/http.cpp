@@ -38,734 +38,21 @@
 namespace pipy {
 namespace http {
 
-static void parse_transfer_encoding(
-  const std::string &transfer_encoding,
-  int &content_length,
-  bool &is_chunked
-) {
-  is_chunked = false;
-  for (size_t i = 0; i < transfer_encoding.size(); i++) {
-    size_t j = i; while (std::isalpha(transfer_encoding[j])) j++;
-    if (j - i == 7 && !std::strncmp(&transfer_encoding[i], "chunked", 7)) is_chunked = true;
-    i = j + 1;
-  }
-  if (is_chunked) content_length = 0;
-}
-
-static bool is_content_length(const std::string &s) {
-  static const std::string lowercase("content-length");
-  if (s.length() != lowercase.length()) return false;
-  for (size_t i = 0; i < lowercase.length(); i++) {
-    if (std::tolower(s[i]) != lowercase[i]) {
-      return false;
-    }
-  }
-  return true;
-}
-
-//
-// RequestDecoder
-//
-
-RequestDecoder::RequestDecoder()
-{
-}
-
-RequestDecoder::RequestDecoder(pjs::Object *options) {
-  if (options) {
-    options->get("decompress", m_decompress);
-  }
-}
-
-RequestDecoder::RequestDecoder(const RequestDecoder &r)
-  : m_decompress(r.m_decompress)
-{
-}
-
-RequestDecoder::~RequestDecoder()
-{
-}
-
-auto RequestDecoder::help() -> std::list<std::string> {
-  return {
-    "decodeHttpRequest([options])",
-    "Deframes an HTTP request message",
-    "options = <object> Options including decompress"
-  };
-}
-
-void RequestDecoder::dump(std::ostream &out) {
-  out << "decodeHttpRequest";
-}
-
-auto RequestDecoder::clone() -> Filter* {
-  return new RequestDecoder(*this);
-}
-
-void RequestDecoder::reset() {
-  if (m_decompressor) {
-    m_decompressor->end();
-    m_decompressor = nullptr;
-  }
-  m_state = METHOD;
-  m_name.clear();
-  m_head = nullptr;
-  m_connected = false;
-  m_session_end = false;
-}
-
-void RequestDecoder::process(Context *ctx, Event *inp) {
-  if (m_session_end) return;
-
-  // Data
-  if (auto data = inp->as<Data>()) {
-    if (m_connected) {
-      output(data);
-      return;
-    }
-
-    while (!data->empty()) {
-
-      auto is_body = (m_state == BODY);
-      auto is_end = false;
-
-      // Read up to body data boundaries
-      pjs::Ref<Data> read(Data::make());
-      data->shift_to([&](int c) {
-
-        // Parse one character
-        switch (m_state) {
-
-        // Read method
-        case METHOD:
-          if (c == ' ') {
-            m_head = RequestHead::make();
-            m_head->headers(pjs::Object::make());
-            m_head->method(pjs::Str::make(m_name.str()));
-            m_state = PATH;
-            m_name.clear();
-          } else {
-            m_name.push(c);
-          }
-          break;
-
-        // Read path
-        case PATH:
-          if (c == ' ') {
-            m_head->path(pjs::Str::make(m_name.str()));
-            m_state = PROTOCOL;
-            m_name.clear();
-          } else {
-            m_name.push(c);
-          }
-          break;
-
-        // Read protocol
-        case PROTOCOL:
-          if (c == '\n') {
-            m_protocol = m_name.str();
-            m_head->protocol(pjs::Str::make(m_protocol));
-            m_state = HEADER_NAME;
-            m_name.clear();
-            m_transfer_encoding.clear();
-            m_connection.clear();
-            m_keep_alive.clear();
-            m_chunked = false;
-            m_content_encoding.clear();
-            m_content_length = 0;
-          } else {
-            m_name.push(c);
-          }
-          break;
-
-        // Read header name
-        case HEADER_NAME:
-          if (c == ':') {
-            m_state = HEADER_VALUE;
-            m_value.clear();
-          } else if (c == '\n' && m_name.empty()) {
-            output(MessageStart::make(m_head));
-            parse_transfer_encoding(m_transfer_encoding, m_content_length, m_chunked);
-            if (!m_chunked && m_content_length <= 0) {
-              end_message(ctx);
-              m_state = METHOD;
-              m_name.clear();
-              if (m_connected) {
-                output(MessageStart::make());
-                return true;
-              }
-            } else {
-              if (m_content_encoding == "gzip") {
-                pjs::Value ret;
-                eval(*ctx, m_decompress, ret);
-                if (ret.to_boolean()) {
-                  m_decompressor = Decompressor::inflate(out());
-                }
-              }
-              if (m_chunked) {
-                m_state = CHUNK_HEAD;
-              } else {
-                m_state = BODY;
-                return true;
-              }
-            }
-          } else {
-            m_name.push(c);
-          }
-          break;
-
-        // Read header value
-        case HEADER_VALUE:
-          if (c == '\n') {
-            auto name = m_name.str();
-            for (auto &ch : name) ch = std::tolower(ch);
-            if (name == "content-encoding") m_content_encoding = m_value.str();
-            if (name == "content-length") m_content_length = std::atoi(m_value.c_str());
-            else if (name == "transfer-encoding") m_transfer_encoding = m_value.str();
-            else if (name == "connection") m_connection = m_value.str();
-            else if (name == "keep-alive") m_keep_alive = m_value.str();
-            else if (auto headers = m_head->as<RequestHead>()->headers()) {
-              pjs::Ref<pjs::Str> key(pjs::Str::make(name));
-              headers->ht_set(key, m_value.str());
-            }
-            m_state = HEADER_NAME;
-            m_name.clear();
-          } else {
-            m_value.push(c);
-          }
-          break;
-
-        // Read body
-        case BODY:
-          if (!--m_content_length) {
-            if (m_chunked) {
-              m_state = CHUNK_TAIL;
-            } else {
-              m_state = METHOD;
-              m_name.clear();
-              is_end = true;
-            }
-            return true;
-          }
-          break;
-
-        // Read chunk length
-        case CHUNK_HEAD:
-          if (c == '\n') {
-            if (m_content_length > 0) {
-              m_state = BODY;
-              return true;
-            } else {
-              m_state = CHUNK_TAIL_LAST;
-            }
-          }
-          else if ('0' <= c && c <= '9') m_content_length = (m_content_length << 4) + (c - '0');
-          else if ('a' <= c && c <= 'f') m_content_length = (m_content_length << 4) + (c - 'a') + 10;
-          else if ('A' <= c && c <= 'F') m_content_length = (m_content_length << 4) + (c - 'A') + 10;
-          break;
-
-        // Read chunk ending
-        case CHUNK_TAIL:
-          if (c == '\n') m_state = CHUNK_HEAD;
-          break;
-
-        // Read the last chunk ending
-        case CHUNK_TAIL_LAST:
-          if (c == '\n') {
-            end_message(ctx);
-            m_state = METHOD;
-            m_name.clear();
-            if (m_connected) {
-              output(MessageStart::make());
-              return true;
-            }
-          }
-          break;
-        }
-        return false;
-
-      }, *read);
-
-      if (is_body && !read->empty()) {
-        if (m_decompressor) {
-          m_decompressor->process(read);
-        } else {
-          output(read);
-        }
-      }
-
-      if (is_end) {
-        if (m_decompressor) {
-          m_decompressor->end();
-          m_decompressor = nullptr;
-        }
-        end_message(ctx);
-      }
-    }
-
-  // End of session
-  } else if (inp->is<SessionEnd>()) {
-    if (m_connected) output(MessageEnd::make());
-    m_session_end = true;
-    output(inp);
-  }
-}
-
-bool RequestDecoder::is_keep_alive() {
-  if (!m_connection.empty()) {
-    if (!strncmp(m_connection.c_str(), "close", 5)) {
-      return false;
-    }
-  } else if (m_keep_alive.empty()) {
-    if (!strcasecmp(m_protocol.c_str(), "HTTP/1.0")) {
-      return false;
-    }
-  }
-  return true;
-}
-
-void RequestDecoder::end_message(Context *ctx) {
-  static pjs::Ref<pjs::Str> CONNECT(pjs::Str::make("CONNECT"));
-  if (m_head->method() == CONNECT.get()) {
-    m_connected = true;
-  }
-  if (auto inbound = ctx->inbound()) {
-    inbound->set_keep_alive_request(is_keep_alive());
-    inbound->increase_request_count();
-  }
-  output(MessageEnd::make());
-}
-
-//
-// ResponseDecoder
-//
-
-ResponseDecoder::ResponseDecoder()
-{
-}
-
-ResponseDecoder::ResponseDecoder(pjs::Object *options) {
-  if (options) {
-    options->get("bodiless", m_bodiless);
-    options->get("decompress", m_decompress);
-  }
-}
-
-ResponseDecoder::ResponseDecoder(const std::function<bool()> &bodiless)
-  : m_bodiless_func(bodiless)
-{
-}
-
-ResponseDecoder::ResponseDecoder(const ResponseDecoder &r)
-  : m_bodiless(r.m_bodiless)
-  , m_bodiless_func(r.m_bodiless_func)
-  , m_decompress(r.m_decompress)
-{
-}
-
-ResponseDecoder::~ResponseDecoder()
-{
-}
-
-auto ResponseDecoder::help() -> std::list<std::string> {
-  return {
-    "decodeHttpResponse([options])",
-    "Deframes an HTTP response message",
-    "options = <object> Options including bodiless and decompress"
-  };
-}
-
-void ResponseDecoder::dump(std::ostream &out) {
-  out << "decodeHttpResponse";
-}
-
-void ResponseDecoder::reset() {
-  if (m_decompressor) {
-    m_decompressor->end();
-    m_decompressor = nullptr;
-  }
-  m_state = PROTOCOL;
-  m_name.clear();
-  m_head = nullptr;
-  m_session_end = false;
-}
-
-auto ResponseDecoder::clone() -> Filter* {
-  return new ResponseDecoder(*this);
-}
-
-void ResponseDecoder::process(Context *ctx, Event *inp) {
-  if (m_session_end) return;
-
-  // Data
-  if (auto data = inp->as<Data>()) {
-    while (!data->empty()) {
-      auto is_body = (m_state == BODY);
-      auto is_end = false;
-
-      // Read up to body data boundaries
-      pjs::Ref<Data> read(Data::make());
-      data->shift_to([&](int c) {
-
-        // Parse one character
-        switch (m_state) {
-
-        // Read protocol
-        case PROTOCOL:
-          if (c == ' ') {
-            m_head = ResponseHead::make();
-            m_head->headers(pjs::Object::make());
-            m_head->protocol(pjs::Str::make(m_name.str()));
-            m_state = STATUS_CODE;
-            m_name.clear();
-          } else {
-            m_name.push(c);
-          }
-          break;
-
-        // Read status code
-        case STATUS_CODE:
-          if (c == ' ') {
-            m_head->status(std::atoi(m_name.c_str()));
-            m_state = STATUS;
-            m_name.clear();
-          } else {
-            m_name.push(c);
-          }
-          break;
-
-        // Read status
-        case STATUS:
-          if (c == '\n') {
-            m_head->status_text(pjs::Str::make(m_name.str()));
-            m_state = HEADER_NAME;
-            m_name.clear();
-            m_transfer_encoding.clear();
-            m_chunked = false;
-            m_content_encoding.clear();
-            m_content_length = 0;
-          } else {
-            m_name.push(c);
-          }
-          break;
-
-        // Read header name
-        case HEADER_NAME:
-          if (c == ':') {
-            m_state = HEADER_VALUE;
-            m_value.clear();
-          } else if (c == '\n' && m_name.empty()) {
-            output(MessageStart::make(m_head));
-            parse_transfer_encoding(m_transfer_encoding, m_content_length, m_chunked);
-            if (is_bodiless(ctx)) {
-              output(MessageEnd::make());
-              m_state = PROTOCOL;
-            } else if (!m_chunked && m_content_length <= 0) {
-              output(MessageEnd::make());
-              m_state = PROTOCOL;
-            } else {
-              if (m_content_encoding == "gzip") {
-                pjs::Value ret;
-                eval(*ctx, m_decompress, ret);
-                if (ret.to_boolean()) {
-                  m_decompressor = Decompressor::inflate(out());
-                }
-              }
-              if (m_chunked) {
-                m_state = CHUNK_HEAD;
-              } else {
-                m_state = BODY;
-                return true;
-              }
-            }
-          } else {
-            m_name.push(c);
-          }
-          break;
-
-        // Read header value
-        case HEADER_VALUE:
-          if (c == '\n') {
-            auto name = m_name.str();
-            for (auto &ch : name) ch = std::tolower(ch);
-            if (name == "content-encoding") m_content_encoding = m_value.str();
-            if (name == "content-length") m_content_length = std::atoi(m_value.str().c_str());
-            else if (name == "transfer-encoding") m_transfer_encoding = m_value.str();
-            else if (auto headers = m_head->as<ResponseHead>()->headers()) {
-              pjs::Ref<pjs::Str> key(pjs::Str::make(name));
-              headers->ht_set(key, m_value.str());
-            }
-            m_state = HEADER_NAME;
-            m_name.clear();
-          } else {
-            m_value.push(c);
-          }
-          break;
-
-        // Read body
-        case BODY:
-          if (!--m_content_length) {
-            if (m_chunked) {
-              m_state = CHUNK_TAIL;
-            } else {
-              m_state = PROTOCOL;
-              is_end = true;
-            }
-            return true;
-          }
-          break;
-
-        // Read chunk length
-        case CHUNK_HEAD:
-          if (c == '\n') {
-            if (m_content_length > 0) {
-              m_state = BODY;
-              return true;
-            } else {
-              m_state = CHUNK_TAIL_LAST;
-            }
-          }
-          else if ('0' <= c && c <= '9') m_content_length = (m_content_length << 4) + (c - '0');
-          else if ('a' <= c && c <= 'f') m_content_length = (m_content_length << 4) + (c - 'a') + 10;
-          else if ('A' <= c && c <= 'F') m_content_length = (m_content_length << 4) + (c - 'A') + 10;
-          break;
-
-        // Read chunk ending
-        case CHUNK_TAIL:
-          if (c == '\n') m_state = CHUNK_HEAD;
-          break;
-
-        // Read the last chunk ending
-        case CHUNK_TAIL_LAST:
-          if (c == '\n') {
-            if (m_decompressor) {
-              m_decompressor->end();
-              m_decompressor = nullptr;
-            }
-            output(MessageEnd::make());
-            m_state = PROTOCOL;
-          }
-        }
-        return false;
-
-      }, *read);
-
-      if (is_body && !read->empty()) {
-        if (m_decompressor) {
-          m_decompressor->process(read);
-        } else {
-          output(read);
-        }
-      }
-
-      if (is_end) {
-        if (m_decompressor) {
-          m_decompressor->end();
-          m_decompressor = nullptr;
-        }
-        output(MessageEnd::make());
-      }
-    }
-
-  // End of session
-  } else if (auto end = inp->as<SessionEnd>()) {
-    m_session_end = true;
-
-    if (end->error()) {
-      int status_code = 0;
-      const char *status_text = nullptr;
-      switch (end->error()) {
-        case SessionEnd::CANNOT_RESOLVE:
-          status_code = 503;
-          status_text = "Cannot Resolve";
-          break;
-        case SessionEnd::CONNECTION_REFUSED:
-          status_code = 503;
-          status_text = "Connection Refused";
-          break;
-        case SessionEnd::UNAUTHORIZED:
-          status_code = 401;
-          status_text = "Unauthorized";
-          break;
-        case SessionEnd::READ_ERROR:
-          status_code = 502;
-          status_text = "Read Error";
-          break;
-        default:
-          status_code = 500;
-          status_text = "Internal Server Error";
-          break;
-      }
-      auto head = ResponseHead::make();
-      head->headers(pjs::Object::make());
-      head->protocol(pjs::Str::make(m_name.str()));
-      head->status(status_code);
-      head->status_text(pjs::Str::make(status_text));
-      output(MessageStart::make(head));
-      output(MessageEnd::make());
-      output(SessionEnd::make());
-    } else {
-      output(inp);
-    }
-  }
-}
-
-bool ResponseDecoder::is_bodiless(Context *ctx) {
-  if (m_bodiless_func) {
-    return m_bodiless_func();
-  } else {
-    pjs::Value ret;
-    eval(*ctx, m_bodiless, ret);
-    return ret.to_boolean();
-  }
-}
-
-//
-// RequestEncoder
-//
-
-std::string RequestEncoder::s_default_protocol("HTTP/1.1");
-std::string RequestEncoder::s_default_method("GET");
-std::string RequestEncoder::s_default_path("/");
-std::string RequestEncoder::s_header_content_length("Content-Length: ");
-
-RequestEncoder::RequestEncoder()
-{
-}
-
-RequestEncoder::RequestEncoder(pjs::Object *head)
-  : m_head(head)
-  , m_prop_protocol("protocol")
-  , m_prop_method("method")
-  , m_prop_path("path")
-  , m_prop_headers("headers")
-{
-}
-
-RequestEncoder::RequestEncoder(const RequestEncoder &r)
-  : RequestEncoder(r.m_head)
-{
-}
-
-RequestEncoder::~RequestEncoder()
-{
-}
-
-auto RequestEncoder::help() -> std::list<std::string> {
-  return {
-    "encodeHttpRequest([head])",
-    "Frames an HTTP request message",
-    "head = <object|function> Request head including protocol, method, path, headers",
-  };
-}
-
-void RequestEncoder::dump(std::ostream &out) {
-  out << "encodeHttpRequest";
-}
-
-auto RequestEncoder::clone() -> Filter* {
-  return new RequestEncoder(*this);
-}
-
-void RequestEncoder::reset() {
-  m_message_start = nullptr;
-  m_buffer = nullptr;
-  m_session_end = false;
-}
-
-void RequestEncoder::process(Context *ctx, Event *inp) {
-  static Data::Producer s_dp("encodeHttpRequest");
-
-  if (m_session_end) return;
-
-  if (inp->is<MessageStart>()) {
-    m_message_start = inp->as<MessageStart>();
-    m_buffer = Data::make();
-
-  } else if (inp->is<MessageEnd>()) {
-    if (!m_message_start) return;
-
-    pjs::Value head_obj(m_head), head;
-    if (!eval(*ctx, head_obj, head)) return;
-    if (!head.is_object() || head.is_null()) head.set(m_message_start->head());
-
-    pjs::Str *str_protocol = nullptr;
-    pjs::Str *str_method = nullptr;
-    pjs::Str *str_path = nullptr;
-    pjs::Object *obj_headers = nullptr;
-
-    if (head.is_object()) {
-      if (auto obj = head.o()) {
-        pjs::Value protocol, method, path, headers;
-        m_prop_protocol.get(obj, protocol);
-        m_prop_method.get(obj, method);
-        m_prop_path.get(obj, path);
-        m_prop_headers.get(obj, headers);
-        if (protocol.to_boolean()) str_protocol = protocol.to_string();
-        if (method.to_boolean()) str_method = method.to_string();
-        if (path.to_boolean()) str_path = path.to_string();
-        if (headers.is_object()) obj_headers = headers.o()->retain();
-      }
-    }
-
-    auto header_data = Data::make();
-    s_dp.push(header_data, str_method ? str_method->str() : s_default_method);
-    s_dp.push(header_data, ' ');
-    s_dp.push(header_data, str_path ? str_path->str() : s_default_path);
-    s_dp.push(header_data, ' ');
-    s_dp.push(header_data, str_protocol ? str_protocol->str() : s_default_protocol);
-    s_dp.push(header_data, "\r\n");
-
-    if (obj_headers) {
-      obj_headers->iterate_all([&](pjs::Str *key, const pjs::Value &val) {
-        if (val.is_nullish()) return;
-        auto s = val.to_string();
-        if (!is_content_length(s->str())) {
-          s_dp.push(header_data, key->str());
-          s_dp.push(header_data, ": ");
-          s_dp.push(header_data, s->str());
-          s_dp.push(header_data, "\r\n");
-        }
-        s->release();
-      });
-    }
-
-    s_dp.push(header_data, s_header_content_length);
-    s_dp.push(header_data, std::to_string(m_buffer->size()));
-    s_dp.push(header_data, "\r\n\r\n");
-
-    if (str_protocol) str_protocol->release();
-    if (str_method) str_method->release();
-    if (str_path) str_path->release();
-    if (obj_headers) obj_headers->release();
-
-    output(m_message_start);
-    output(header_data);
-    output(m_buffer);
-    output(inp);
-
-    m_message_start = nullptr;
-    m_buffer = nullptr;
-
-  } else if (auto data = inp->as<Data>()) {
-    if (m_buffer) m_buffer->push(*data);
-
-  } else if (inp->is<SessionEnd>()) {
-    m_session_end = true;
-    output(inp);
-  }
-}
-
-//
-// ResponseEncoder
-//
-
-std::string ResponseEncoder::s_default_protocol("HTTP/1.1");
-std::string ResponseEncoder::s_default_status("200");
-std::string ResponseEncoder::s_default_status_text("OK");
-std::string ResponseEncoder::s_header_connection_keep_alive("Connection: keep-alive\r\n");
-std::string ResponseEncoder::s_header_connection_close("Connection: close\r\n");
-std::string ResponseEncoder::s_header_content_length("Content-Length: ");
+static const pjs::Ref<pjs::Str> s_protocol(pjs::Str::make("protocol"));
+static const pjs::Ref<pjs::Str> s_method(pjs::Str::make("method"));
+static const pjs::Ref<pjs::Str> s_head(pjs::Str::make("HEAD"));
+static const pjs::Ref<pjs::Str> s_path(pjs::Str::make("path"));
+static const pjs::Ref<pjs::Str> s_status(pjs::Str::make("status"));
+static const pjs::Ref<pjs::Str> s_status_text(pjs::Str::make("statusText"));
+static const pjs::Ref<pjs::Str> s_headers(pjs::Str::make("headers"));
+static const pjs::Ref<pjs::Str> s_http_1_0(pjs::Str::make("HTTP/1.0"));
+static const pjs::Ref<pjs::Str> s_http_1_1(pjs::Str::make("HTTP/1.1"));
+static const pjs::Ref<pjs::Str> s_connection(pjs::Str::make("connection"));
+static const pjs::Ref<pjs::Str> s_keep_alive(pjs::Str::make("keep-alive"));
+static const pjs::Ref<pjs::Str> s_close(pjs::Str::make("close"));
+static const pjs::Ref<pjs::Str> s_transfer_encoding(pjs::Str::make("transfer-encoding"));
+static const pjs::Ref<pjs::Str> s_content_length(pjs::Str::make("content-length"));
+static const pjs::Ref<pjs::Str> s_content_encoding(pjs::Str::make("content-encoding"));
 
 // HTTP status code as in:
 // https://www.iana.org/assignments/http-status-codes/http-status-codes.txt
@@ -911,234 +198,23 @@ static auto lookup_status_text(int status) -> const char* {
   return nullptr;
 }
 
-ResponseEncoder::ResponseEncoder()
-{
-}
-
-ResponseEncoder::ResponseEncoder(pjs::Object *head)
-  : m_head(head)
-  , m_prop_protocol("protocol")
-  , m_prop_status("status")
-  , m_prop_status_text("statusText")
-  , m_prop_headers("headers")
-  , m_prop_bodiless("bodiless")
-{
-}
-
-ResponseEncoder::ResponseEncoder(const ResponseEncoder &r)
-  : ResponseEncoder(r.m_head)
-{
-}
-
-ResponseEncoder::~ResponseEncoder()
-{
-}
-
-auto ResponseEncoder::help() -> std::list<std::string> {
-  return {
-    "encodeHttpResponse([head])",
-    "Frames an HTTP response message",
-    "head = <object|function> Response head including protocol, status, statusText, headers",
-  };
-}
-
-void ResponseEncoder::dump(std::ostream &out) {
-  out << "encodeHttpResponse";
-}
-
-auto ResponseEncoder::clone() -> Filter* {
-  return new ResponseEncoder(*this);
-}
-
-void ResponseEncoder::reset() {
-  m_message_start = nullptr;
-  m_buffer = nullptr;
-  m_session_end = false;
-}
-
-void ResponseEncoder::process(Context *ctx, Event *inp) {
-  static Data::Producer s_dp("encodeHttpResponse");
-
-  if (m_session_end) return;
-
-  if (inp->is<MessageStart>()) {
-    m_message_start = inp;
-    m_buffer = Data::make();
-
-  } else if (inp->is<MessageEnd>()) {
-    if (!m_message_start) return;
-
-    bool keep_alive = true;
-    if (auto inbound = ctx->inbound()) {
-      keep_alive = inbound->increase_response_count();
-    }
-
-    pjs::Value head_obj(m_head), head;
-    if (!eval(*ctx, head_obj, head)) return;
-    if (!head.is_object() || head.is_null()) head.set(m_message_start->head());
-
-    pjs::Str *str_protocol = nullptr;
-    int num_status = 0;
-    pjs::Str *str_status_text = nullptr;
-    pjs::Object *obj_headers = nullptr;
-    bool is_bodiless = false;
-
-    if (head.is_object()) {
-      if (auto obj = head.o()) {
-        pjs::Value protocol, status, status_text, headers, bodiless;
-        m_prop_protocol.get(obj, protocol);
-        m_prop_status.get(obj, status);
-        m_prop_status_text.get(obj, status_text);
-        m_prop_headers.get(obj, headers);
-        m_prop_bodiless.get(obj, bodiless);
-        if (protocol.to_boolean()) str_protocol = protocol.to_string();
-        if (status.to_boolean()) num_status = status.to_number();
-        if (status_text.to_boolean()) str_status_text = status_text.to_string();
-        if (headers.is_object()) obj_headers = headers.o()->retain();
-        is_bodiless = bodiless.to_boolean();
-      }
-    }
-
-    auto header_data = Data::make();
-    s_dp.push(header_data, str_protocol ? str_protocol->str() : s_default_protocol);
-    s_dp.push(header_data, ' ');
-    s_dp.push(header_data, num_status ? std::to_string(num_status) : s_default_status);
-    s_dp.push(header_data, ' ');
-    if (str_status_text) s_dp.push(header_data, str_status_text->str());
-    else {
-      const auto *status_name = lookup_status_text(num_status);
-      s_dp.push(header_data, status_name ? std::string(status_name) : s_default_status_text);
-    }
-    s_dp.push(header_data, "\r\n");
-
-    if (obj_headers) {
-      obj_headers->iterate_all([&](pjs::Str *key, const pjs::Value &val) {
-        if (val.is_nullish()) return;
-        auto s = val.to_string();
-        if (is_bodiless || !is_content_length(s->str())) {
-          s_dp.push(header_data, key->str());
-          s_dp.push(header_data, ": ");
-          s_dp.push(header_data, s->str());
-          s_dp.push(header_data, "\r\n");
-        }
-        s->release();
-      });
-    }
-
-    if (keep_alive) {
-      s_dp.push(header_data, s_header_connection_keep_alive);
-    } else {
-      s_dp.push(header_data, s_header_connection_close);
-    }
-
-    if (!is_bodiless) {
-      s_dp.push(header_data, s_header_content_length);
-      s_dp.push(header_data, std::to_string(m_buffer->size()));
-      s_dp.push(header_data, "\r\n");
-    }
-
-    s_dp.push(header_data, "\r\n");
-
-    if (str_protocol) str_protocol->release();
-    if (str_status_text) str_status_text->release();
-    if (obj_headers) obj_headers->release();
-
-    output(m_message_start);
-    output(header_data);
-    if (!is_bodiless) output(m_buffer);
-    output(inp);
-
-    if (!keep_alive) output(SessionEnd::make());
-
-    m_message_start = nullptr;
-    m_buffer = nullptr;
-
-  } else if (auto data = inp->as<Data>()) {
-    if (m_buffer) m_buffer->push(*data);
-
-  } else if (inp->is<SessionEnd>()) {
-    m_session_end = true;
-    output(inp);
-  }
-}
-
-static const pjs::Ref<pjs::Str> s_protocol(pjs::Str::make("protocol"));
-static const pjs::Ref<pjs::Str> s_method(pjs::Str::make("method"));
-static const pjs::Ref<pjs::Str> s_head(pjs::Str::make("HEAD"));
-static const pjs::Ref<pjs::Str> s_path(pjs::Str::make("path"));
-static const pjs::Ref<pjs::Str> s_status(pjs::Str::make("status"));
-static const pjs::Ref<pjs::Str> s_status_text(pjs::Str::make("statusText"));
-static const pjs::Ref<pjs::Str> s_headers(pjs::Str::make("headers"));
-static const pjs::Ref<pjs::Str> s_http_1_0(pjs::Str::make("HTTP/1.0"));
-static const pjs::Ref<pjs::Str> s_connection(pjs::Str::make("connection"));
-static const pjs::Ref<pjs::Str> s_keep_alive(pjs::Str::make("keep-alive"));
-static const pjs::Ref<pjs::Str> s_close(pjs::Str::make("close"));
-static const pjs::Ref<pjs::Str> s_transfer_encoding(pjs::Str::make("transfer-encoding"));
-static const pjs::Ref<pjs::Str> s_content_length(pjs::Str::make("content-length"));
-static const pjs::Ref<pjs::Str> s_content_encoding(pjs::Str::make("content-encoding"));
-
 //
 // Decoder
 //
 
-class Decoder {
-public:
-  Decoder(bool is_response, const Event::Receiver &output)
-    : m_output(output)
-    , m_is_response(is_response) {}
+void Decoder::reset() {
+  m_state = HEAD;
+  m_head_buffer.clear();
+  m_head = nullptr;
+  m_body_size = 0;
+  m_is_bodiless = false;
+  m_is_final = false;
+}
 
-  void reset() {
-    m_state = HEAD;
-    m_head_buffer.clear();
-    m_head = nullptr;
-    m_body_size = 0;
-    m_is_bodiless = false;
-    m_is_final = false;
-  }
-
-  void input(const pjs::Ref<Data> &data);
-
-  bool is_bodiless() const { return m_is_bodiless; }
-  bool is_final() const { return m_is_final; }
-
-  void set_bodiless(bool b) { m_is_bodiless = b; }
-
-private:
-  const static int MAX_HEADER_SIZE = 0x1000;
-
-  enum State {
-    HEAD,
-    HEAD_EOL,
-    HEADER,
-    HEADER_EOL,
-    BODY,
-    CHUNK_HEAD,
-    CHUNK_BODY,
-    CHUNK_TAIL,
-    CHUNK_LAST,
-  };
-
-  Event::Receiver m_output;
-  State m_state = HEAD;
-  Data m_head_buffer;
-  pjs::Ref<MessageHead> m_head;
-  int m_body_size = 0;
-  bool m_is_response;
-  bool m_is_bodiless = false;
-  bool m_is_final = false;
-
-  void output_start() {
-    m_output(MessageStart::make(m_head));
-  }
-
-  void output_end() {
-    m_output(MessageEnd::make());
-    m_is_bodiless = false;
-    m_is_final = false;
-  }
-};
-
-void Decoder::input(const pjs::Ref<Data> &data) {
+void Decoder::input(
+  const pjs::Ref<Data> &data,
+  const std::function<void(MessageHead*)> &on_message_start
+) {
   while (!data->empty()) {
     auto state = m_state;
     pjs::Ref<Data> output(Data::make());
@@ -1303,7 +379,7 @@ void Decoder::input(const pjs::Ref<Data> &data) {
 
           // Transfer-Encoding and Content-Length
           if (transfer_encoding.is_string() && !strncmp(transfer_encoding.s()->c_str(), "chunked", 7)) {
-            output_start();
+            output_start(on_message_start);
             if (m_is_response && m_is_bodiless) {
               output_end();
               state = HEAD;
@@ -1315,7 +391,7 @@ void Decoder::input(const pjs::Ref<Data> &data) {
               m_body_size = std::atoi(content_length.s()->c_str());
             }
             if (m_body_size > 0) {
-              output_start();
+              output_start(on_message_start);
               if (m_is_response && m_is_bodiless) {
                 output_end();
                 state = HEAD;
@@ -1323,7 +399,7 @@ void Decoder::input(const pjs::Ref<Data> &data) {
                 state = BODY;
               }
             } else {
-              output_start();
+              output_start(on_message_start);
               output_end();
               state = HEAD;
             }
@@ -1347,42 +423,14 @@ void Decoder::input(const pjs::Ref<Data> &data) {
 // Encoder
 //
 
-class Encoder {
-public:
-  Encoder(bool is_response, const Event::Receiver &output)
-    : m_output(output)
-    , m_is_response(is_response) {}
-
-  void reset() {
-    m_start = nullptr;
-    m_buffer = nullptr;
-    m_is_bodiless = false;
-    m_is_final = false;
-  }
-
-  void input(const pjs::Ref<Event> &evt);
-
-  bool is_bodiless() const { return m_is_bodiless; }
-
-  void set_bodiless(bool b) { m_is_bodiless = b; }
-  void set_final(bool b) { m_is_final = b; }
-
-private:
-  Event::Receiver m_output;
-  pjs::Ref<MessageStart> m_start;
-  pjs::Ref<Data> m_buffer;
-  int m_content_length = -1;
-  bool m_chunked = false;
-  bool m_is_response;
-  bool m_is_bodiless = false;
-  bool m_is_final = false;
-
-  void output_head();
-
-  static Data::Producer s_dp;
-};
-
 Data::Producer Encoder::s_dp("HTTP Encoder");
+
+void Encoder::reset() {
+  m_start = nullptr;
+  m_buffer = nullptr;
+  m_is_bodiless = false;
+  m_is_final = false;
+}
 
 void Encoder::input(const pjs::Ref<Event> &evt) {
   if (auto start = evt->as<MessageStart>()) {
@@ -1586,6 +634,292 @@ void Encoder::output_head() {
 }
 
 //
+// RequestDecoder
+//
+
+RequestDecoder::RequestDecoder()
+  : m_decoder(false, [this](Event *evt) { output(evt); })
+{
+}
+
+RequestDecoder::RequestDecoder(const RequestDecoder &r)
+  : RequestDecoder()
+{
+}
+
+RequestDecoder::~RequestDecoder()
+{
+}
+
+auto RequestDecoder::help() -> std::list<std::string> {
+  return {
+    "decodeHTTPRequest()",
+    "Deframes an HTTP request message",
+  };
+}
+
+void RequestDecoder::dump(std::ostream &out) {
+  out << "decodeHTTPRequest";
+}
+
+auto RequestDecoder::clone() -> Filter* {
+  return new RequestDecoder(*this);
+}
+
+void RequestDecoder::reset() {
+  m_decoder.reset();
+  m_session_end = false;
+}
+
+void RequestDecoder::process(Context *ctx, Event *inp) {
+  if (m_session_end) return;
+
+  // Data
+  if (auto data = inp->as<Data>()) {
+    m_decoder.input(data);
+
+  // End of session
+  } else if (inp->is<SessionEnd>()) {
+    m_session_end = true;
+    output(inp);
+  }
+}
+
+//
+// ResponseDecoder
+//
+
+ResponseDecoder::ResponseDecoder()
+  : m_decoder(true, [this](Event *evt) { output(evt); })
+{
+}
+
+ResponseDecoder::ResponseDecoder(pjs::Object *options)
+  : m_decoder(true, [this](Event *evt) { output(evt); })
+{
+  if (options) {
+    options->get("bodiless", m_bodiless);
+  }
+}
+
+ResponseDecoder::ResponseDecoder(const std::function<bool()> &bodiless)
+  : m_decoder(true, [this](Event *evt) { output(evt); })
+  , m_bodiless_func(bodiless)
+{
+}
+
+ResponseDecoder::ResponseDecoder(const ResponseDecoder &r)
+  : m_decoder(true, [this](Event *evt) { output(evt); })
+  , m_bodiless(r.m_bodiless)
+  , m_bodiless_func(r.m_bodiless_func)
+{
+}
+
+ResponseDecoder::~ResponseDecoder()
+{
+}
+
+auto ResponseDecoder::help() -> std::list<std::string> {
+  return {
+    "decodeHTTPResponse([options])",
+    "Deframes an HTTP response message",
+    "options = <object> Options currently including only bodiless"
+  };
+}
+
+void ResponseDecoder::dump(std::ostream &out) {
+  out << "decodeHTTPResponse";
+}
+
+void ResponseDecoder::reset() {
+  m_decoder.reset();
+  m_session_end = false;
+}
+
+auto ResponseDecoder::clone() -> Filter* {
+  return new ResponseDecoder(*this);
+}
+
+void ResponseDecoder::process(Context *ctx, Event *inp) {
+  if (m_session_end) return;
+
+  // Data
+  if (auto data = inp->as<Data>()) {
+    m_decoder.input(
+      data,
+      [=](MessageHead*) {
+        m_decoder.set_bodiless(is_bodiless(ctx));
+      }
+    );
+
+  // End of session
+  } else if (auto end = inp->as<SessionEnd>()) {
+    m_session_end = true;
+
+    if (end->error()) {
+      int status_code = 0;
+      const char *status_text = nullptr;
+      switch (end->error()) {
+        case SessionEnd::CANNOT_RESOLVE:
+          status_code = 503;
+          status_text = "Cannot Resolve";
+          break;
+        case SessionEnd::CONNECTION_REFUSED:
+          status_code = 503;
+          status_text = "Connection Refused";
+          break;
+        case SessionEnd::UNAUTHORIZED:
+          status_code = 401;
+          status_text = "Unauthorized";
+          break;
+        case SessionEnd::READ_ERROR:
+          status_code = 502;
+          status_text = "Read Error";
+          break;
+        default:
+          status_code = 500;
+          status_text = "Internal Server Error";
+          break;
+      }
+      auto head = ResponseHead::make();
+      head->headers(pjs::Object::make());
+      head->protocol(s_http_1_1);
+      head->status(status_code);
+      head->status_text(pjs::Str::make(status_text));
+      output(MessageStart::make(head));
+      output(MessageEnd::make());
+    }
+
+    output(inp);
+  }
+}
+
+bool ResponseDecoder::is_bodiless(Context *ctx) {
+  if (m_bodiless_func) {
+    return m_bodiless_func();
+  } else {
+    pjs::Value ret;
+    eval(*ctx, m_bodiless, ret);
+    return ret.to_boolean();
+  }
+}
+
+//
+// RequestEncoder
+//
+
+RequestEncoder::RequestEncoder()
+  : m_encoder(false, [this](Event *evt) { output(evt); })
+{
+}
+
+RequestEncoder::RequestEncoder(const RequestEncoder &r)
+  : RequestEncoder()
+{
+}
+
+RequestEncoder::~RequestEncoder()
+{
+}
+
+auto RequestEncoder::help() -> std::list<std::string> {
+  return {
+    "encodeHTTPRequest()",
+    "Frames an HTTP request message",
+  };
+}
+
+void RequestEncoder::dump(std::ostream &out) {
+  out << "encodeHTTPRequest";
+}
+
+auto RequestEncoder::clone() -> Filter* {
+  return new RequestEncoder(*this);
+}
+
+void RequestEncoder::reset() {
+  m_encoder.reset();
+  m_session_end = false;
+}
+
+void RequestEncoder::process(Context *ctx, Event *inp) {
+  static Data::Producer s_dp("encodeHTTPRequest");
+
+  if (m_session_end) return;
+
+  if (inp->is<SessionEnd>()) {
+    m_session_end = true;
+    output(inp);
+  } else {
+    m_encoder.input(inp);
+  }
+}
+
+//
+// ResponseEncoder
+//
+
+ResponseEncoder::ResponseEncoder()
+  : m_encoder(true, [this](Event *evt) { output(evt); })
+{
+}
+
+ResponseEncoder::ResponseEncoder(pjs::Object *options)
+  : m_encoder(true, [this](Event *evt) { output(evt); })
+{
+  if (options) {
+    options->get("bodiless", m_bodiless);
+  }
+}
+
+ResponseEncoder::ResponseEncoder(const ResponseEncoder &r)
+  : m_encoder(true, [this](Event *evt) { output(evt); })
+  , m_bodiless(r.m_bodiless)
+{
+}
+
+ResponseEncoder::~ResponseEncoder()
+{
+}
+
+auto ResponseEncoder::help() -> std::list<std::string> {
+  return {
+    "encodeHTTPResponse([options])",
+    "Frames an HTTP response message",
+    "options = <object> Options currently including only bodiless",
+  };
+}
+
+void ResponseEncoder::dump(std::ostream &out) {
+  out << "encodeHTTPResponse";
+}
+
+auto ResponseEncoder::clone() -> Filter* {
+  return new ResponseEncoder(*this);
+}
+
+void ResponseEncoder::reset() {
+  m_encoder.reset();
+  m_session_end = false;
+}
+
+void ResponseEncoder::process(Context *ctx, Event *inp) {
+  if (m_session_end) return;
+
+  if (inp->is<SessionEnd>()) {
+    m_session_end = true;
+    output(inp);
+  } else {
+    if (inp->is<MessageStart>()) {
+      pjs::Value bodiless;
+      if (!eval(*ctx, m_bodiless, bodiless)) return;
+      m_encoder.set_bodiless(bodiless.to_boolean());
+    }
+    m_encoder.input(inp);
+  }
+}
+
+//
 // ServerConnection
 //
 
@@ -1703,13 +1037,19 @@ Demux::Demux()
 {
 }
 
+Demux::Demux(Pipeline *pipeline)
+  : m_pipeline(pipeline)
+{
+}
+
 Demux::Demux(pjs::Str *target)
   : m_target(target)
 {
 }
 
 Demux::Demux(const Demux &r)
-  : m_target(r.m_target)
+  : m_pipeline(r.m_pipeline)
+  , m_target(r.m_target)
 {
 }
 
@@ -1729,6 +1069,12 @@ void Demux::dump(std::ostream &out) {
   out << "demuxHTTP";
 }
 
+void Demux::bind() {
+  if (!m_pipeline) {
+    m_pipeline = pipeline(m_target);
+  }
+}
+
 auto Demux::clone() -> Filter* {
   return new Demux(*this);
 }
@@ -1743,16 +1089,8 @@ void Demux::process(Context *ctx, Event *inp) {
   if (m_session_end) return;
 
   if (!m_connection) {
-    auto mod = pipeline()->module();
-    auto pipeline = mod->find_named_pipeline(m_target);
-    if (!pipeline) {
-      Log::error("[demux] unknown pipeline: %s", m_target->c_str());
-      abort();
-      return;
-    }
-
-    auto worker = mod->worker();
-
+    auto worker = pipeline()->module()->worker();
+    auto pipeline = m_pipeline;
     m_connection = new ServerConnection(
       [=]() { return Session::make(worker->new_runtime_context(ctx), pipeline); },
       [=](Event *evt) { output(evt); }

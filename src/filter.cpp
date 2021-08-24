@@ -40,6 +40,17 @@ auto Filter::draw(std::list<std::string> &links, bool &fork) -> std::string {
   return ss.str();
 }
 
+auto Filter::pipeline(pjs::Str *name) -> Pipeline* {
+  auto mod = m_pipeline->module();
+  if (auto p = mod->find_named_pipeline(name)) {
+    return p;
+  } else {
+    std::string msg("unknown pipeline: ");
+    msg += name->str();
+    throw std::runtime_error(msg);
+  }
+}
+
 bool Filter::output(const pjs::Value &evt, pjs::Object *ctx) {
   if (evt.is_instance_of(pjs::class_of<Event>())) {
     output(evt.as<Event>());

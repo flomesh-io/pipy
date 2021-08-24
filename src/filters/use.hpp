@@ -48,11 +48,13 @@ private:
 
   virtual auto help() -> std::list<std::string> override;
   virtual void dump(std::ostream &out) override;
+  virtual void bind() override;
   virtual auto clone() -> Filter* override;
   virtual void reset() override;
   virtual void process(Context *ctx, Event *inp) override;
 
   Module* m_module = nullptr;
+  Pipeline* m_pipeline = nullptr;
   pjs::Ref<pjs::Str> m_pipeline_name;
   pjs::Ref<pjs::Object> m_argv;
   pjs::Ref<Session> m_session;

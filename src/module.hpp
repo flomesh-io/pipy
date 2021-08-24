@@ -44,7 +44,8 @@ public:
   bool load(const std::string &path);
   void bind_exports();
   void bind_imports();
-  void start();
+  void make_pipelines();
+  void bind_pipelines();
 
   auto new_context_data(pjs::Object *prototype = nullptr) -> pjs::Object* {
     auto obj = new ContextDataBase(m_filename);
@@ -76,6 +77,7 @@ private:
   pjs::Ref<pjs::Str> m_filename;
   pjs::Ref<Configuration> m_configuration;
   pjs::Ref<pjs::Class> m_context_class;
+  std::list<pjs::Ref<Pipeline>> m_pipelines;
   std::unordered_map<pjs::Ref<pjs::Str>, pjs::Ref<Pipeline>> m_named_pipelines;
 
   static std::map<std::string, std::string> s_overriden_scripts;
