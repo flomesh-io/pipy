@@ -15,9 +15,9 @@ pipy()
 
 .listen(6080)
   .tap('100k') // Limit 100K bytes per second
-  .decodeHttpRequest()
+  .decodeHTTPRequest()
   .tap(1000) // Limit to 1000 messages per second
   .replaceMessage(
     new Message('Hello!\n')
   )
-  .encodeHttpResponse()
+  .encodeHTTPResponse()

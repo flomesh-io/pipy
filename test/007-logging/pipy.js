@@ -33,7 +33,7 @@ pipy({
 
 // Extract request info
 .pipeline('in')
-  .decodeHttpRequest()
+  .decodeHTTPRequest()
   .onMessageStart(
     e => (
       _startTime = Date.now(),
@@ -51,7 +51,7 @@ pipy({
 
 // Extract response info
 .pipeline('out')
-  .decodeHttpResponse()
+  .decodeHTTPResponse()
   .onMessageStart(
     e => (
       _responseTime = Date.now(),
@@ -101,12 +101,12 @@ pipy({
 
 // Shared logging session
 .pipeline('mux')
-  .encodeHttpRequest({
+  .encodeHTTPRequest({
     method: 'POST',
     path: '/where/to/post/the/log',
   })
   .connect('127.0.0.1:8123')
-  .decodeHttpResponse()
+  .decodeHTTPResponse()
 
 // Regularly flush the logging session
 .task('1s')
@@ -115,16 +115,16 @@ pipy({
 
 // Mock logging service on port 8123
 .listen(8123)
-  .decodeHttpRequest()
+  .decodeHTTPRequest()
   .replaceMessage(
     new Message('OK')
   )
-  .encodeHttpResponse()
+  .encodeHTTPResponse()
 
 // Mock service on port 8080
 .listen(8080)
-  .decodeHttpRequest()
+  .decodeHTTPRequest()
   .replaceMessage(
     new Message('Hi, there!\n')
   )
-  .encodeHttpResponse()
+  .encodeHTTPResponse()

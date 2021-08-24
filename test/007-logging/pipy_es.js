@@ -33,7 +33,7 @@ pipy({
 
 // Extract request info
 .pipeline('in')
-  .decodeHttpRequest()
+  .decodeHTTPRequest()
   .onMessageStart(
     e => (
       _startTime = Date.now(),
@@ -51,7 +51,7 @@ pipy({
 
 // Extract response info
 .pipeline('out')
-  .decodeHttpResponse()
+  .decodeHTTPResponse()
   .onMessageStart(
     e => (
       _responseTime = Date.now(),
@@ -102,13 +102,13 @@ pipy({
 
 // Shared logging session
 .pipeline('mux')
-  .encodeHttpRequest({
+  .encodeHTTPRequest({
     method: 'POST',
     path: '/cars/_doc/_bulk',
     headers: {"Authorization": 'Basic ZWxhc3RpYzoxMjM0NTY=', "Content-Type": "application/json" }
   }) 
   .connect('47.110.85.213:9200')
-  .decodeHttpResponse() 
+  .decodeHTTPResponse() 
 
 // Regularly flush the logging session
 .task('1s')
@@ -119,16 +119,16 @@ pipy({
 
 // Mock logging service on port 8123
 .listen(8123)
-  .decodeHttpRequest()
+  .decodeHTTPRequest()
   .replaceMessage(
     new Message('OK')
   )
-  .encodeHttpResponse()
+  .encodeHTTPResponse()
 
 // Mock service on port 8080
 .listen(8080)
-  .decodeHttpRequest()
+  .decodeHTTPRequest()
   .replaceMessage(
     new Message('Hi, there!\n' + Date.now())
   )
-  .encodeHttpResponse()
+  .encodeHTTPResponse()

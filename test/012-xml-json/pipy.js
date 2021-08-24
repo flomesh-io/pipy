@@ -43,7 +43,7 @@ pipy({
 
 // XML -> JSON
 .listen(6080)
-  .decodeHttpRequest()
+  .decodeHTTPRequest()
   .replaceMessageBody(
     data => (
       JSON.encode(
@@ -53,11 +53,11 @@ pipy({
       )
     )
   )
-  .encodeHttpResponse()
+  .encodeHTTPResponse()
 
 // JSON -> XML
 .listen(6081)
-  .decodeHttpRequest()
+  .decodeHTTPRequest()
   .replaceMessageBody(
     data => (
       XML.encode(
@@ -69,4 +69,4 @@ pipy({
       )
     )
   )
-  .encodeHttpResponse()
+  .encodeHTTPResponse()

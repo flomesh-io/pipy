@@ -7,7 +7,7 @@ pipy({
 
 // Inbound file request
 .listen(6080)
-  .decodeHttpRequest()
+  .decodeHTTPRequest()
   .onMessageStart(
     e => _file = _cache.get(e.head.path)
   )
@@ -18,7 +18,7 @@ pipy({
     'serve', () => _file,
     '404'
   )
-  .encodeHttpResponse()
+  .encodeHTTPResponse()
 
 // Serve the file
 .pipeline('serve')
