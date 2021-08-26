@@ -311,6 +311,10 @@ void Configuration::replace_start(const pjs::Value &replacement) {
   append_filter(new ReplaceStart(replacement));
 }
 
+void Configuration::serve_http(pjs::Object *handler) {
+  append_filter(new http::Server(handler));
+}
+
 void Configuration::split(pjs::Function *callback) {
   append_filter(new Split(callback));
 }
@@ -1149,6 +1153,18 @@ template<> void ClassDef<Configuration>::init() {
     if (!ctx.arguments(0, &replacement)) return;
     try {
       thiz->as<Configuration>()->replace_event(Event::SessionEnd, replacement);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // Configuration.serveHTTP
+  method("serveHTTP", [](Context &ctx, Object *thiz, Value &result) {
+    Object *handler;
+    if (!ctx.arguments(1, &handler)) return;
+    try {
+      thiz->as<Configuration>()->serve_http(handler);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

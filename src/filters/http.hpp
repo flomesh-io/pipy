@@ -32,6 +32,7 @@
 #include "session.hpp"
 #include "api/http.hpp"
 
+#include <queue>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -278,6 +279,45 @@ private:
   virtual auto draw(std::list<std::string> &links, bool &fork) -> std::string override;
   virtual auto clone() -> Filter* override;
   virtual auto new_connection() -> Connection* override;
+};
+
+//
+// Server
+//
+
+class Server : public Filter {
+public:
+  Server();
+  Server(const std::function<Message*(Context*, Message*)> &handler);
+  Server(pjs::Object *handler);
+
+private:
+  Server(const Server &r);
+  ~Server();
+
+  virtual auto help() -> std::list<std::string> override;
+  virtual void dump(std::ostream &out) override;
+  virtual auto clone() -> Filter* override;
+  virtual void reset() override;
+  virtual void process(Context *ctx, Event *inp) override;
+
+  struct Request {
+    bool is_bodiless;
+    bool is_final;
+  };
+
+  std::function<Message*(Context*, Message*)> m_handler_func;
+  pjs::Ref<pjs::Object> m_handler;
+  Decoder m_decoder;
+  Encoder m_encoder;
+  Context* m_context = nullptr;
+  pjs::Ref<MessageStart> m_head;
+  pjs::Ref<Data> m_body;
+  std::list<Request> m_queue;
+  bool m_session_end = false;
+
+  void request(Event *evt);
+  void response(Event *evt);
 };
 
 } // namespace http

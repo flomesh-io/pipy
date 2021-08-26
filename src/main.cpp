@@ -125,6 +125,7 @@ static std::list<Filter*> s_filters {
   new ReplaceEvent(Event::Type::SessionEnd),
   new ReplaceBody,
   new ReplaceMessage,
+  new http::Server,
   new Split,
   new Tap,
   new Use,

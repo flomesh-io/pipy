@@ -617,7 +617,7 @@ void Encoder::output_head() {
     );
   }
 
-  if (!content_length_written && !m_chunked && m_content_length > 0) {
+  if (!content_length_written && !m_chunked && (m_content_length > 0 || m_is_response)) {
     char str[100];
     std::sprintf(str, ": %d\r\n", m_content_length);
     s_dp.push(buffer, s_content_length->str());
@@ -1304,6 +1304,143 @@ auto Mux::clone() -> Filter* {
 
 auto Mux::new_connection() -> Connection* {
   return new ClientConnection;
+}
+
+//
+// Server
+//
+
+Server::Server()
+  : m_decoder(false, [this](Event *evt) { request(evt); })
+  , m_encoder(true, [this](Event *evt) { response(evt); })
+{
+}
+
+Server::Server(const std::function<Message*(Context*, Message*)> &handler)
+  : m_decoder(false, [this](Event *evt) { request(evt); })
+  , m_encoder(true, [this](Event *evt) { response(evt); })
+  , m_handler_func(handler)
+{
+}
+
+Server::Server(pjs::Object *handler)
+  : m_decoder(false, [this](Event *evt) { request(evt); })
+  , m_encoder(true, [this](Event *evt) { response(evt); })
+  , m_handler(handler)
+{
+}
+
+Server::Server(const Server &r)
+  : m_decoder(false, [this](Event *evt) { request(evt); })
+  , m_encoder(true, [this](Event *evt) { response(evt); })
+  , m_handler_func(r.m_handler_func)
+  , m_handler(r.m_handler)
+{
+}
+
+Server::~Server()
+{
+}
+
+auto Server::help() -> std::list<std::string> {
+  return {
+    "serveHTTP(handler)",
+    "Serves HTTP requests with a handler function",
+    "handler = <function> Function that returns a response message",
+  };
+}
+
+void Server::dump(std::ostream &out) {
+  out << "serveHTTP";
+}
+
+auto Server::clone() -> Filter* {
+  return new Server(*this);
+}
+
+void Server::reset() {
+  m_decoder.reset();
+  m_encoder.reset();
+  m_context = nullptr;
+  m_head = nullptr;
+  m_body = nullptr;
+  m_queue.clear();
+  m_session_end = false;
+}
+
+void Server::process(Context *ctx, Event *inp) {
+  if (m_session_end) return;
+
+  if (auto data = inp->as<Data>()) {
+    m_context = ctx;
+    m_decoder.input(data);
+
+  } else if (inp->is<SessionEnd>()) {
+    output(inp);
+    m_session_end = true;
+  }
+}
+
+void Server::request(Event *evt) {
+  if (auto start = evt->as<MessageStart>()) {
+    m_head = start->head();
+    m_body = Data::make();
+
+    m_queue.push_back({
+      m_decoder.is_bodiless(),
+      m_decoder.is_final(),
+    });
+
+  } else if (auto data = evt->as<Data>()) {
+    if (m_body) {
+      m_body->push(*data);
+    }
+
+  } else if (evt->is<MessageEnd>()) {
+    if (!m_queue.empty()) {
+      auto &req = m_queue.front();
+      m_encoder.set_bodiless(req.is_bodiless);
+      m_encoder.set_final(req.is_final);
+      m_queue.pop_front();
+
+      pjs::Ref<Message> msg(Message::make(m_head, m_body));
+
+      if (m_handler_func) {
+        msg = m_handler_func(m_context, msg);
+      } else if (m_handler && m_handler->is_function()) {
+        pjs::Value arg(msg), ret;
+        if (!callback(*m_context, m_handler->as<pjs::Function>(), 1, &arg, ret)) return;
+        if (ret.is_object()) {
+          msg = ret.o();
+        } else {
+          msg = nullptr;
+          if (!ret.is_undefined()) {
+            Log::error("[serveHTTP] handler did not return a valid message");
+          }
+        }
+      } else if (m_handler && m_handler->is_instance_of<Message>()) {
+        msg = m_handler->as<Message>();
+      } else {
+        msg = nullptr;
+      }
+
+      if (msg) {
+        m_encoder.input(MessageStart::make(msg->head()));
+        if (auto *body = msg->body()) m_encoder.input(body);
+        m_encoder.input(MessageEnd::make());
+      } else {
+        m_encoder.input(MessageStart::make());
+        m_encoder.input(MessageEnd::make());
+      }
+    }
+
+    m_head = nullptr;
+    m_body = nullptr;
+  }
+}
+
+void Server::response(Event *evt) {
+  output(evt);
 }
 
 } // namespace http
