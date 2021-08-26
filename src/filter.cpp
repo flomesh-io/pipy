@@ -57,18 +57,14 @@ auto Filter::new_context(Context *base) -> Context* {
   return mod->worker()->new_runtime_context(base);
 }
 
-bool Filter::output(const pjs::Value &evt, pjs::Object *ctx) {
+bool Filter::output(const pjs::Value &evt) {
   if (evt.is_instance_of(pjs::class_of<Event>())) {
     output(evt.as<Event>());
     return true;
   } else if (evt.is_instance_of(pjs::class_of<Message>())) {
     auto *msg = evt.as<Message>();
     auto *body = msg->body();
-    if (ctx && !msg->context()) {
-      output(MessageStart::make(ctx, msg->head()));
-    } else {
-      output(MessageStart::make(msg->context(), msg->head()));
-    }
+    output(MessageStart::make(msg->head()));
     if (body) output(body);
     output(MessageEnd::make());
     return true;
@@ -81,11 +77,7 @@ bool Filter::output(const pjs::Value &evt, pjs::Object *ctx) {
       } else if (v.is_instance_of(pjs::class_of<Message>())) {
         auto *msg = v.as<Message>();
         auto *body = msg->body();
-        if (ctx && !msg->context()) {
-          output(MessageStart::make(ctx, msg->head()));
-        } else {
-          output(MessageStart::make(msg->context(), msg->head()));
-        }
+        output(MessageStart::make(msg->head()));
         if (body) output(body);
         output(MessageEnd::make());
         return true;

@@ -50,7 +50,6 @@ private:
   virtual void reset() override;
   virtual void process(Context *ctx, Event *inp) override;
 
-  pjs::Ref<pjs::Object> m_mctx;
   pjs::Ref<pjs::Object> m_head;
   pjs::Ref<Data> m_body;
   pjs::Ref<pjs::Function> m_callback;

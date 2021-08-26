@@ -59,7 +59,7 @@ protected:
   auto new_context(Context *base = nullptr) -> Context*;
   auto out() const -> const Event::Receiver& { return m_output; }
   void output(Event *inp) { m_output(inp); }
-  bool output(const pjs::Value &evt, pjs::Object *mctx = nullptr);
+  bool output(const pjs::Value &evt);
   bool eval(Context &ctx, pjs::Value &param, pjs::Value &result);
   bool callback(Context &ctx, pjs::Function *func, int argc, pjs::Value argv[], pjs::Value &result);
   void abort();

@@ -89,7 +89,7 @@ void ReusableSession::input(Event *evt) {
 }
 
 void ReusableSession::input(Message *msg) {
-  if (!m_freed) input(MessageStart::make(msg->context(), msg->head()));
+  if (!m_freed) input(MessageStart::make(msg->head()));
   if (!m_freed) if (auto *body = msg->body()) input(body);
   if (!m_freed) input(MessageEnd::make());
 }

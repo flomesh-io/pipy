@@ -68,17 +68,13 @@ void ReplaceStart::reset() {
 void ReplaceStart::process(Context *ctx, Event *inp) {
   if (!m_started) {
     m_started = true;
-    pjs::Object *mctx = nullptr;
-    if (auto *start = inp->as<MessageStart>()) {
-      mctx = start->context();
-    }
     if (m_replacement.is_function()) {
       pjs::Value arg(inp), result;
       if (callback(*ctx, m_replacement.f(), 1, &arg, result)) {
-        output(result, mctx);
+        output(result);
       }
     } else {
-      output(m_replacement, mctx);
+      output(m_replacement);
     }
 
   } else {

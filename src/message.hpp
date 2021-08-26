@@ -36,11 +36,8 @@ namespace pipy {
 
 class Message : public pjs::ObjectTemplate<Message> {
 public:
-  auto context() const -> pjs::Object* { return m_context; }
   auto head() const -> pjs::Object* { return m_head; }
   auto body() const -> Data* { return m_body; }
-
-  void set_context(pjs::Object *context) { m_context = context; }
 
 private:
   Message() {}
@@ -59,19 +56,8 @@ private:
     : m_head(head)
     , m_body(s_dp.make(body)) {}
 
-  Message(pjs::Object *context, pjs::Object *head, Data *body)
-    : m_context(context)
-    , m_head(head)
-    , m_body(body) {}
-
-  Message(pjs::Object *context, pjs::Object *head, const std::string &body)
-    : m_context(context)
-    , m_head(head)
-    , m_body(s_dp.make(body)) {}
-
   ~Message() {}
 
-  pjs::Ref<pjs::Object> m_context;
   pjs::Ref<pjs::Object> m_head;
   pjs::Ref<Data> m_body;
 

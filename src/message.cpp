@@ -72,7 +72,6 @@ template<> void ClassDef<pipy::Message>::init() {
     }
   });
 
-  accessor("context", [](Object *obj, Value &ret) { ret.set(obj->as<pipy::Message>()->context()); });
   accessor("head", [](Object *obj, Value &ret) { ret.set(obj->as<pipy::Message>()->head()); });
   accessor("body", [](Object *obj, Value &ret) { ret.set(obj->as<pipy::Message>()->body()); });
 }

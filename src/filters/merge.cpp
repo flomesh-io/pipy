@@ -91,7 +91,6 @@ auto Merge::clone() -> Filter* {
 void Merge::reset() {
   m_session_pool->free(m_session);
   m_session = nullptr;
-  m_mctx = nullptr;
   m_head = nullptr;
   m_body = nullptr;
   m_session_end = false;
@@ -113,7 +112,6 @@ void Merge::process(Context *ctx, Event *inp) {
   }
 
   if (auto e = inp->as<MessageStart>()) {
-    m_mctx = e->context();
     m_head = e->head();
     m_body = Data::make();
 
@@ -122,8 +120,7 @@ void Merge::process(Context *ctx, Event *inp) {
 
   } else if (inp->is<MessageEnd>()) {
     if (m_body) {
-      m_session->input(ctx, m_mctx, m_head, m_body);
-      m_mctx = nullptr;
+      m_session->input(ctx, m_head, m_body);
       m_head = nullptr;
       m_body = nullptr;
     }
@@ -134,7 +131,6 @@ void Merge::process(Context *ctx, Event *inp) {
   if (inp->is<SessionEnd>()) {
     m_session_pool->free(m_session);
     m_session = nullptr;
-    m_mctx = nullptr;
     m_head = nullptr;
     m_body = nullptr;
     m_session_end = true;
@@ -166,13 +162,13 @@ void Merge::SessionPool::clean() {
   }
 }
 
-void Merge::SharedSession::input(Context *ctx, pjs::Object *mctx, pjs::Object *head, Data *body) {
+void Merge::SharedSession::input(Context *ctx, pjs::Object *head, Data *body) {
   if (!m_session || m_session->done()) {
     m_session = nullptr;
     m_session = Session::make(ctx, m_pipeline);
   }
 
-  m_session->input(MessageStart::make(mctx, head));
+  m_session->input(MessageStart::make(head));
   if (body) m_session->input(body);
   m_session->input(MessageEnd::make());
 }
