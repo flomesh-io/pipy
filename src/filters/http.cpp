@@ -53,6 +53,11 @@ static const pjs::Ref<pjs::Str> s_close(pjs::Str::make("close"));
 static const pjs::Ref<pjs::Str> s_transfer_encoding(pjs::Str::make("transfer-encoding"));
 static const pjs::Ref<pjs::Str> s_content_length(pjs::Str::make("content-length"));
 static const pjs::Ref<pjs::Str> s_content_encoding(pjs::Str::make("content-encoding"));
+static const pjs::Ref<pjs::Str> s_bad_gateway(pjs::Str::make("Bad Gateway"));
+static const pjs::Ref<pjs::Str> s_cannot_resolve(pjs::Str::make("Cannot Resolve"));
+static const pjs::Ref<pjs::Str> s_connection_refused(pjs::Str::make("Connection Refused"));
+static const pjs::Ref<pjs::Str> s_unauthorized(pjs::Str::make("Unauthorized"));
+static const pjs::Ref<pjs::Str> s_read_error(pjs::Str::make("Read Error"));
 
 // HTTP status code as in:
 // https://www.iana.org/assignments/http-status-codes/http-status-codes.txt
@@ -417,6 +422,44 @@ void Decoder::input(
 
     m_state = state;
   }
+}
+
+void Decoder::end(SessionEnd *end) {
+  if (m_is_response && (m_state == HEAD || m_state == HEADER) && end->error()) {
+    int status_code = 0;
+    pjs::Str *status_text = nullptr;
+    switch (end->error()) {
+    case SessionEnd::CANNOT_RESOLVE:
+      status_code = 502;
+      status_text = s_cannot_resolve;
+      break;
+    case SessionEnd::CONNECTION_REFUSED:
+      status_code = 502;
+      status_text = s_connection_refused;
+      break;
+    case SessionEnd::UNAUTHORIZED:
+      status_code = 401;
+      status_text = s_unauthorized;
+      break;
+    case SessionEnd::READ_ERROR:
+      status_code = 502;
+      status_text = s_read_error;
+      break;
+    default:
+      status_code = 502;
+      status_text = s_bad_gateway;
+      break;
+    }
+    auto head = ResponseHead::make();
+    head->headers(pjs::Object::make());
+    head->protocol(s_http_1_1);
+    head->status(status_code);
+    head->status_text(status_text);
+    m_output(MessageStart::make(head));
+    m_output(MessageEnd::make());
+    m_output(SessionEnd::make());
+  }
+  m_output(end);
 }
 
 //
@@ -1179,6 +1222,9 @@ private:
   virtual void receive(Event *evt) override {
     if (auto data = evt->as<Data>()) {
       m_decoder.input(data);
+    } else if (auto end = evt->as<SessionEnd>()) {
+      m_decoder.end(end);
+      reset();
     }
   }
 
@@ -1312,27 +1358,27 @@ auto Mux::new_connection() -> Connection* {
 
 Server::Server()
   : m_decoder(false, [this](Event *evt) { request(evt); })
-  , m_encoder(true, [this](Event *evt) { response(evt); })
+  , m_encoder(true, [this](Event *evt) { output(evt); })
 {
 }
 
 Server::Server(const std::function<Message*(Context*, Message*)> &handler)
   : m_decoder(false, [this](Event *evt) { request(evt); })
-  , m_encoder(true, [this](Event *evt) { response(evt); })
+  , m_encoder(true, [this](Event *evt) { output(evt); })
   , m_handler_func(handler)
 {
 }
 
 Server::Server(pjs::Object *handler)
   : m_decoder(false, [this](Event *evt) { request(evt); })
-  , m_encoder(true, [this](Event *evt) { response(evt); })
+  , m_encoder(true, [this](Event *evt) { output(evt); })
   , m_handler(handler)
 {
 }
 
 Server::Server(const Server &r)
   : m_decoder(false, [this](Event *evt) { request(evt); })
-  , m_encoder(true, [this](Event *evt) { response(evt); })
+  , m_encoder(true, [this](Event *evt) { output(evt); })
   , m_handler_func(r.m_handler_func)
   , m_handler(r.m_handler)
 {
@@ -1381,7 +1427,7 @@ void Server::process(Context *ctx, Event *inp) {
   }
 }
 
-void Server::request(Event *evt) {
+void Server::request(const pjs::Ref<Event> &evt) {
   if (auto start = evt->as<MessageStart>()) {
     m_head = start->head();
     m_body = Data::make();
@@ -1425,22 +1471,20 @@ void Server::request(Event *evt) {
       }
 
       if (msg) {
-        m_encoder.input(MessageStart::make(msg->head()));
+        pjs::Ref<MessageStart> start(MessageStart::make(msg->head()));
+        m_encoder.input(start);
         if (auto *body = msg->body()) m_encoder.input(body);
-        m_encoder.input(MessageEnd::make());
+        m_encoder.input(evt);
       } else {
-        m_encoder.input(MessageStart::make());
-        m_encoder.input(MessageEnd::make());
+        pjs::Ref<MessageStart> start(MessageStart::make());
+        m_encoder.input(start);
+        m_encoder.input(evt);
       }
     }
 
     m_head = nullptr;
     m_body = nullptr;
   }
-}
-
-void Server::response(Event *evt) {
-  output(evt);
 }
 
 } // namespace http

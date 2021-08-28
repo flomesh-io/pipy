@@ -57,6 +57,8 @@ public:
     const std::function<void(MessageHead*)> &on_message_start = nullptr
   );
 
+  void end(SessionEnd *end);
+
   bool is_bodiless() const { return m_is_bodiless; }
   bool is_final() const { return m_is_final; }
 
@@ -316,8 +318,7 @@ private:
   std::list<Request> m_queue;
   bool m_session_end = false;
 
-  void request(Event *evt);
-  void response(Event *evt);
+  void request(const pjs::Ref<Event> &evt);
 };
 
 } // namespace http
