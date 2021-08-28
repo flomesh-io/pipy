@@ -304,6 +304,7 @@ public:
   bool verify(Data *key);
   bool verify(pjs::Str *key);
   bool verify(JWK *key);
+  bool verify(PrivateKey *key);
 
 private:
   JWT(pjs::Str *token);

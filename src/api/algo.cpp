@@ -494,12 +494,14 @@ auto LeastWorkLoadBalancer::select(const pjs::Value &tag) -> pjs::Str* {
 }
 
 void LeastWorkLoadBalancer::deselect(pjs::Str *target) {
-  auto i = m_targets.find(target);
-  if (i != m_targets.end()) {
-    auto &t = i->second;
-    if (t.hits > 0) {
-      t.hits--;
-      t.usage = double(t.hits) / t.weight;
+  if (target) {
+    auto i = m_targets.find(target);
+    if (i != m_targets.end()) {
+      auto &t = i->second;
+      if (t.hits > 0) {
+        t.hits--;
+        t.usage = double(t.hits) / t.weight;
+      }
     }
   }
 }
@@ -749,7 +751,7 @@ template<> void ClassDef<HashingLoadBalancer>::init() {
 
   method("deselect", [](Context &ctx, Object *obj, Value &ret) {
     Str *target = nullptr;
-    if (!ctx.arguments(1, &target)) return;
+    if (!ctx.arguments(0, &target)) return;
     obj->as<HashingLoadBalancer>()->deselect(target);
   });
 }
@@ -787,7 +789,7 @@ template<> void ClassDef<RoundRobinLoadBalancer>::init() {
 
   method("deselect", [](Context &ctx, Object *obj, Value &ret) {
     Str *target = nullptr;
-    if (!ctx.arguments(1, &target)) return;
+    if (!ctx.arguments(0, &target)) return;
     obj->as<RoundRobinLoadBalancer>()->deselect(target);
   });
 }
@@ -825,7 +827,7 @@ template<> void ClassDef<LeastWorkLoadBalancer>::init() {
 
   method("deselect", [](Context &ctx, Object *obj, Value &ret) {
     Str *target = nullptr;
-    if (!ctx.arguments(1, &target)) return;
+    if (!ctx.arguments(0, &target)) return;
     obj->as<LeastWorkLoadBalancer>()->deselect(target);
   });
 }
