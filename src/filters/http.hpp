@@ -100,6 +100,10 @@ private:
     m_is_bodiless = false;
     m_is_final = false;
   }
+
+  bool is_bodiless_response() const {
+    return m_is_response && m_is_bodiless;
+  }
 };
 
 //
@@ -132,6 +136,10 @@ private:
   bool m_is_final = false;
 
   void output_head();
+
+  bool is_bodiless_response() const {
+    return m_is_response && m_is_bodiless;
+  }
 
   static Data::Producer s_dp;
 };

@@ -373,7 +373,7 @@ void Decoder::input(
           headers->get(s_connection, connection);
           headers->get(s_transfer_encoding, transfer_encoding);
           headers->get(s_content_length, content_length);
-          headers->ht_delete(s_content_length);
+          if (!is_bodiless_response()) headers->ht_delete(s_content_length);
 
           // Connection and Keep-Alive
           if (connection.is_string()) {
@@ -385,7 +385,7 @@ void Decoder::input(
           // Transfer-Encoding and Content-Length
           if (transfer_encoding.is_string() && !strncmp(transfer_encoding.s()->c_str(), "chunked", 7)) {
             output_start(on_message_start);
-            if (m_is_response && m_is_bodiless) {
+            if (is_bodiless_response()) {
               output_end();
               state = HEAD;
             } else {
@@ -397,7 +397,7 @@ void Decoder::input(
             }
             if (m_body_size > 0) {
               output_start(on_message_start);
-              if (m_is_response && m_is_bodiless) {
+              if (is_bodiless_response()) {
                 output_end();
                 state = HEAD;
               } else {
@@ -457,7 +457,6 @@ void Decoder::end(SessionEnd *end) {
     head->status_text(status_text);
     m_output(MessageStart::make(head));
     m_output(MessageEnd::make());
-    m_output(SessionEnd::make());
   }
   m_output(end);
 }
@@ -509,7 +508,9 @@ void Encoder::input(const pjs::Ref<Event> &evt) {
       }
     }
 
-    if (m_chunked || m_content_length >= 0) {
+    if (is_bodiless_response()) {
+      m_content_length = 0;
+    } else if (m_chunked || m_content_length >= 0) {
       output_head();
     } else {
       m_buffer = Data::make();
@@ -517,35 +518,33 @@ void Encoder::input(const pjs::Ref<Event> &evt) {
 
   } else if (auto data = evt->as<Data>()) {
     if (m_start) {
-      if (!m_is_response || !m_is_bodiless) {
-        if (m_buffer) {
-          m_buffer->push(*data);
-        } else {
-          if (m_chunked && !data->empty()) {
-            auto buf = Data::make();
-            char str[100];
-            std::sprintf(str, "%X\r\n", data->size());
-            s_dp.push(buf, str);
-            buf->push(*data);
-            s_dp.push(buf, "\r\n");
-            m_output(buf);
-          } else {
-            m_output(data);
-          }
-        }
+      if (is_bodiless_response()) {
+        m_content_length += data->size();
+      } else if (m_buffer) {
+        m_buffer->push(*data);
+      } else if (m_chunked && !data->empty()) {
+        auto buf = Data::make();
+        char str[100];
+        std::sprintf(str, "%X\r\n", data->size());
+        s_dp.push(buf, str);
+        buf->push(*data);
+        s_dp.push(buf, "\r\n");
+        m_output(buf);
+      } else {
+        m_output(data);
       }
     }
 
   } else if (evt->is<MessageEnd>()) {
     if (m_start) {
-      if (!m_is_response || !m_is_bodiless) {
-        if (m_chunked) {
-          m_output(s_dp.make("0\r\n\r\n"));
-        } else if (m_buffer) {
-          m_content_length = m_buffer->size();
-          output_head();
-          if (!m_buffer->empty()) m_output(m_buffer);
-        }
+      if (is_bodiless_response()) {
+        output_head();
+      } else if (m_chunked) {
+        m_output(s_dp.make("0\r\n\r\n"));
+      } else if (m_buffer) {
+        m_content_length = m_buffer->size();
+        output_head();
+        if (!m_buffer->empty()) m_output(m_buffer);
       }
       m_output(evt);
       if (m_is_response && m_is_final) {
@@ -641,21 +640,22 @@ void Encoder::output_head() {
     headers.o()->iterate_all(
       [&](pjs::Str *k, pjs::Value &v) {
         if (k == s_connection || k == s_keep_alive) return;
+        if (k == s_content_length && m_chunked) return;
         s_dp.push(buffer, k->str());
         s_dp.push(buffer, ": ");
         if (k == s_content_length) {
-          if (!m_chunked) {
+          content_length_written = true;
+          if (!is_bodiless_response()) {
             char str[100];
             std::sprintf(str, "%d\r\n", m_content_length);
             s_dp.push(buffer, str);
-            content_length_written = true;
+            return;
           }
-        } else {
-          auto s = v.to_string();
-          s_dp.push(buffer, s->str());
-          s_dp.push(buffer, "\r\n");
-          s->release();
         }
+        auto s = v.to_string();
+        s_dp.push(buffer, s->str());
+        s_dp.push(buffer, "\r\n");
+        s->release();
       }
     );
   }
@@ -1221,6 +1221,12 @@ private:
 
   virtual void receive(Event *evt) override {
     if (auto data = evt->as<Data>()) {
+      for (auto *stream : m_queue) {
+        if (!stream->m_output_end) {
+          m_decoder.set_bodiless(stream->m_bodiless);
+          break;
+        }
+      }
       m_decoder.input(data);
     } else if (auto end = evt->as<SessionEnd>()) {
       m_decoder.end(end);
@@ -1263,9 +1269,7 @@ private:
       if (!stream->m_output_end) {
         auto &output = stream->m_output;
         if (output) output(evt);
-        if (evt->is<MessageStart>()) {
-          m_decoder.set_bodiless(stream->m_bodiless);
-        } else if (evt->is<MessageEnd>()) {
+        if (evt->is<MessageEnd>()) {
           if (m_decoder.is_final()) reset();
           stream->m_output_end = true;
           clean();
