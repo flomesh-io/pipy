@@ -104,7 +104,7 @@ void ReplaceMessage::process(Context *ctx, Event *inp) {
 
   } else if (inp->is<MessageEnd>()) {
     if (m_body) {
-      if (m_discarded_size > 0) {
+      if (m_discarded_size > 0 && m_size_limit > 0) {
         Log::error(
           "[replaceMessage] %d bytes were discarded due to buffer size limit of %d",
           m_discarded_size, m_size_limit
