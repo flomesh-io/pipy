@@ -141,7 +141,9 @@ auto MuxBase::ConnectionManager::get(const pjs::Value &key) -> Connection* {
 
 void MuxBase::ConnectionManager::free(Connection *connection) {
   if (connection->m_key.is_undefined()) {
-    connection->close();
+    connection->reset();
+    connection->m_free_time = utils::now() - 10*1000;
+    m_free_connections.insert(connection);
   } else if (!--connection->m_share_count) {
     connection->m_free_time = utils::now();
     m_free_connections.insert(connection);
