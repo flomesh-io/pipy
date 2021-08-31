@@ -97,14 +97,13 @@ void ReplaceEvent::reset() {
 
 void ReplaceEvent::process(Context *ctx, Event *inp) {
   if (inp->type() == m_type) {
-    pjs::Object *mctx = m_type == Event::MessageStart ? inp->as<MessageStart>()->context() : nullptr;
     if (m_replacement.is_function()) {
       pjs::Value arg(inp), result;
       if (callback(*ctx, m_replacement.f(), 1, &arg, result)) {
-        output(result, mctx);
+        output(result);
       }
     } else {
-      output(m_replacement, mctx);
+      output(m_replacement);
     }
   } else {
     output(inp);

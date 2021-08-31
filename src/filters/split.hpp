@@ -23,49 +23,36 @@
  *  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef MESSAGE_HPP
-#define MESSAGE_HPP
+#ifndef SPLIT_HPP
+#define SPLIT_HPP
 
-#include "data.hpp"
+#include "filter.hpp"
+#include "pjs/pjs.hpp"
 
 namespace pipy {
 
 //
-// Message
+// Split
 //
 
-class Message : public pjs::ObjectTemplate<Message> {
+class Split : public Filter {
 public:
-  auto head() const -> pjs::Object* { return m_head; }
-  auto body() const -> Data* { return m_body; }
+  Split();
+  Split(pjs::Function *callback);
 
 private:
-  Message() {}
+  Split(const Split &r);
+  ~Split();
 
-  Message(Data *body)
-    : m_body(body) {}
+  virtual auto help() -> std::list<std::string> override;
+  virtual void dump(std::ostream &out) override;
+  virtual auto clone() -> Filter* override;
+  virtual void reset() override;
+  virtual void process(Context *ctx, Event *inp) override;
 
-  Message(const std::string &body)
-    : m_body(s_dp.make(body)) {}
-
-  Message(pjs::Object *head, Data *body)
-    : m_head(head)
-    , m_body(body) {}
-
-  Message(pjs::Object *head, const std::string &body)
-    : m_head(head)
-    , m_body(s_dp.make(body)) {}
-
-  ~Message() {}
-
-  pjs::Ref<pjs::Object> m_head;
-  pjs::Ref<Data> m_body;
-
-  static Data::Producer s_dp;
-
-  friend class pjs::ObjectTemplate<Message>;
+  pjs::Ref<pjs::Function> m_callback;
 };
 
 } // namespace pipy
 
-#endif // MESSAGE_HPP
+#endif // SPLIT_HPP

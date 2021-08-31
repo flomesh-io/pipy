@@ -73,6 +73,7 @@
 #include "filters/replace-start.hpp"
 #include "filters/socks.hpp"
 #include "filters/socks4.hpp"
+#include "filters/split.hpp"
 #include "filters/tap.hpp"
 #include "filters/tls.hpp"
 #include "filters/use.hpp"
@@ -124,6 +125,8 @@ static std::list<Filter*> s_filters {
   new ReplaceEvent(Event::Type::SessionEnd),
   new ReplaceBody,
   new ReplaceMessage,
+  new http::Server,
+  new Split,
   new Tap,
   new Use,
   new Wait,
@@ -530,20 +533,22 @@ static void start_checking_signals() {
 }
 
 //
-// Periodically check signals
+// Periodically check codebase updates
 //
 
 static void start_checking_updates() {
   static Timer timer;
   static std::function<void()> poll;
   poll = [&]() {
-    Codebase::current()->check(
-      [&](bool updated) {
-        if (updated) {
-          s_need_reload = true;
+    if (!s_need_shutdown) {
+      Codebase::current()->check(
+        [&](bool updated) {
+          if (updated) {
+            s_need_reload = true;
+          }
         }
-      }
-    );
+      );
+    }
     timer.schedule(5, poll);
   };
   poll();

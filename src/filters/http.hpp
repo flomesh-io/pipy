@@ -30,18 +30,119 @@
 #include "buffer.hpp"
 #include "data.hpp"
 #include "session.hpp"
+#include "api/http.hpp"
 
+#include <queue>
 #include <unordered_map>
 #include <unordered_set>
 
 namespace pipy {
 
-class Decompressor;
-
 namespace http {
 
-class RequestHead;
-class ResponseHead;
+//
+// Decoder
+//
+
+class Decoder {
+public:
+  Decoder(bool is_response, const Event::Receiver &output)
+    : m_output(output)
+    , m_is_response(is_response) {}
+
+  void reset();
+
+  void input(
+    const pjs::Ref<Data> &data,
+    const std::function<void(MessageHead*)> &on_message_start = nullptr
+  );
+
+  void end(SessionEnd *end);
+
+  bool is_bodiless() const { return m_is_bodiless; }
+  bool is_final() const { return m_is_final; }
+
+  void set_bodiless(bool b) { m_is_bodiless = b; }
+
+private:
+  const static int MAX_HEADER_SIZE = 0x1000;
+
+  enum State {
+    HEAD,
+    HEAD_EOL,
+    HEADER,
+    HEADER_EOL,
+    BODY,
+    CHUNK_HEAD,
+    CHUNK_BODY,
+    CHUNK_TAIL,
+    CHUNK_LAST,
+  };
+
+  Event::Receiver m_output;
+  State m_state = HEAD;
+  Data m_head_buffer;
+  pjs::Ref<MessageHead> m_head;
+  int m_body_size = 0;
+  bool m_is_response;
+  bool m_is_bodiless = false;
+  bool m_is_final = false;
+
+  void output_start(const std::function<void(MessageHead*)> &on_message_start) {
+    if (on_message_start) {
+      on_message_start(m_head);
+    }
+    m_output(MessageStart::make(m_head));
+  }
+
+  void output_end() {
+    m_output(MessageEnd::make());
+    m_is_bodiless = false;
+    m_is_final = false;
+  }
+
+  bool is_bodiless_response() const {
+    return m_is_response && m_is_bodiless;
+  }
+};
+
+//
+// Encoder
+//
+
+class Encoder {
+public:
+  Encoder(bool is_response, const Event::Receiver &output)
+    : m_output(output)
+    , m_is_response(is_response) {}
+
+  void reset();
+
+  void input(const pjs::Ref<Event> &evt);
+
+  bool is_bodiless() const { return m_is_bodiless; }
+
+  void set_bodiless(bool b) { m_is_bodiless = b; }
+  void set_final(bool b) { m_is_final = b; }
+
+private:
+  Event::Receiver m_output;
+  pjs::Ref<MessageStart> m_start;
+  pjs::Ref<Data> m_buffer;
+  int m_content_length = -1;
+  bool m_chunked = false;
+  bool m_is_response;
+  bool m_is_bodiless = false;
+  bool m_is_final = false;
+
+  void output_head();
+
+  bool is_bodiless_response() const {
+    return m_is_response && m_is_bodiless;
+  }
+
+  static Data::Producer s_dp;
+};
 
 //
 // RequestDecoder
@@ -50,7 +151,6 @@ class ResponseHead;
 class RequestDecoder : public Filter {
 public:
   RequestDecoder();
-  RequestDecoder(pjs::Object *options);
 
 private:
   RequestDecoder(const RequestDecoder &r);
@@ -62,36 +162,8 @@ private:
   virtual void reset() override;
   virtual void process(Context *ctx, Event *inp) override;
 
-  enum State {
-    METHOD,
-    PATH,
-    PROTOCOL,
-    HEADER_NAME,
-    HEADER_VALUE,
-    BODY,
-    CHUNK_HEAD,
-    CHUNK_TAIL,
-    CHUNK_TAIL_LAST,
-  };
-
-  State m_state;
-  CharBuf<0x10000> m_name;
-  CharBuf<0x10000> m_value;
-  pjs::Ref<RequestHead> m_head;
-  std::string m_protocol;
-  std::string m_content_encoding;
-  std::string m_transfer_encoding;
-  std::string m_connection;
-  std::string m_keep_alive;
-  pjs::Value m_decompress;
-  Decompressor* m_decompressor = nullptr;
+  Decoder m_decoder;
   bool m_session_end = false;
-  bool m_chunked = false;
-  bool m_connected = false;
-  int m_content_length;
-
-  bool is_keep_alive();
-  void end_message(Context *ctx);
 };
 
 //
@@ -114,31 +186,10 @@ private:
   virtual void reset() override;
   virtual void process(Context *ctx, Event *inp) override;
 
-  enum State {
-    PROTOCOL,
-    STATUS_CODE,
-    STATUS,
-    HEADER_NAME,
-    HEADER_VALUE,
-    BODY,
-    CHUNK_HEAD,
-    CHUNK_TAIL,
-    CHUNK_TAIL_LAST,
-  };
-
-  State m_state;
-  CharBuf<0x10000> m_name;
-  CharBuf<0x10000> m_value;
-  pjs::Ref<ResponseHead> m_head;
-  std::string m_content_encoding;
-  std::string m_transfer_encoding;
+  Decoder m_decoder;
   std::function<bool()> m_bodiless_func;
   pjs::Value m_bodiless;
-  pjs::Value m_decompress;
-  Decompressor* m_decompressor = nullptr;
   bool m_session_end = false;
-  bool m_chunked;
-  int m_content_length;
 
   bool is_bodiless(Context *ctx);
 };
@@ -150,7 +201,6 @@ private:
 class RequestEncoder : public Filter {
 public:
   RequestEncoder();
-  RequestEncoder(pjs::Object *head);
 
 private:
   RequestEncoder(const RequestEncoder &r);
@@ -162,19 +212,8 @@ private:
   virtual void reset() override;
   virtual void process(Context *ctx, Event *inp) override;
 
-  pjs::Ref<MessageStart> m_message_start;
-  pjs::Ref<pjs::Object> m_head;
-  pjs::Ref<Data> m_buffer;
-  pjs::PropertyCache m_prop_protocol;
-  pjs::PropertyCache m_prop_method;
-  pjs::PropertyCache m_prop_path;
-  pjs::PropertyCache m_prop_headers;
+  Encoder m_encoder;
   bool m_session_end = false;
-
-  static std::string s_default_protocol;
-  static std::string s_default_method;
-  static std::string s_default_path;
-  static std::string s_header_content_length;
 };
 
 //
@@ -184,7 +223,7 @@ private:
 class ResponseEncoder : public Filter {
 public:
   ResponseEncoder();
-  ResponseEncoder(pjs::Object *head);
+  ResponseEncoder(pjs::Object *options);
 
 private:
   ResponseEncoder(const ResponseEncoder &r);
@@ -196,22 +235,9 @@ private:
   virtual void reset() override;
   virtual void process(Context *ctx, Event *inp) override;
 
-  pjs::Ref<MessageStart> m_message_start;
-  pjs::Ref<pjs::Object> m_head;
-  pjs::Ref<Data> m_buffer;
-  pjs::PropertyCache m_prop_protocol;
-  pjs::PropertyCache m_prop_status;
-  pjs::PropertyCache m_prop_status_text;
-  pjs::PropertyCache m_prop_headers;
-  pjs::PropertyCache m_prop_bodiless;
+  Encoder m_encoder;
+  pjs::Value m_bodiless;
   bool m_session_end = false;
-
-  static std::string s_default_protocol;
-  static std::string s_default_status;
-  static std::string s_default_status_text;
-  static std::string s_header_connection_keep_alive;
-  static std::string s_header_connection_close;
-  static std::string s_header_content_length;
 };
 
 //
@@ -223,6 +249,7 @@ class ServerConnection;
 class Demux : public Filter {
 public:
   Demux();
+  Demux(Pipeline *pipeline);
   Demux(pjs::Str *target);
 
 private:
@@ -231,10 +258,13 @@ private:
 
   virtual auto help() -> std::list<std::string> override;
   virtual void dump(std::ostream &out) override;
+  virtual auto draw(std::list<std::string> &links, bool &fork) -> std::string override;
+  virtual void bind() override;
   virtual auto clone() -> Filter* override;
   virtual void reset() override;
   virtual void process(Context *ctx, Event *inp) override;
 
+  Pipeline* m_pipeline = nullptr;
   pjs::Ref<pjs::Str> m_target;
   ServerConnection* m_connection = nullptr;
   bool m_session_end = false;
@@ -247,6 +277,7 @@ private:
 class Mux : public MuxBase {
 public:
   Mux();
+  Mux(Pipeline *pipeline, const pjs::Value &channel);
   Mux(pjs::Str *target, const pjs::Value &channel);
 
 private:
@@ -255,8 +286,47 @@ private:
 
   virtual auto help() -> std::list<std::string> override;
   virtual void dump(std::ostream &out) override;
+  virtual auto draw(std::list<std::string> &links, bool &fork) -> std::string override;
   virtual auto clone() -> Filter* override;
   virtual auto new_connection() -> Connection* override;
+};
+
+//
+// Server
+//
+
+class Server : public Filter {
+public:
+  Server();
+  Server(const std::function<Message*(Context*, Message*)> &handler);
+  Server(pjs::Object *handler);
+
+private:
+  Server(const Server &r);
+  ~Server();
+
+  virtual auto help() -> std::list<std::string> override;
+  virtual void dump(std::ostream &out) override;
+  virtual auto clone() -> Filter* override;
+  virtual void reset() override;
+  virtual void process(Context *ctx, Event *inp) override;
+
+  struct Request {
+    bool is_bodiless;
+    bool is_final;
+  };
+
+  std::function<Message*(Context*, Message*)> m_handler_func;
+  pjs::Ref<pjs::Object> m_handler;
+  Decoder m_decoder;
+  Encoder m_encoder;
+  Context* m_context = nullptr;
+  pjs::Ref<MessageStart> m_head;
+  pjs::Ref<Data> m_body;
+  std::list<Request> m_queue;
+  bool m_session_end = false;
+
+  void request(const pjs::Ref<Event> &evt);
 };
 
 } // namespace http

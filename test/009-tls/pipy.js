@@ -1,21 +1,33 @@
 pipy()
 
 .listen(6080)
-  .connect(
-    '127.0.0.1:6443',
-    {
-      tls: {},
-    }
-  )
+  .connectTLS('tls-encrypted', {
+    certificate: {
+      cert: new crypto.Certificate(os.readFile('client-cert.pem')),
+      key: new crypto.PrivateKey(os.readFile('client-key.pem')),
+    },
+    trusted: [
+      new crypto.Certificate(os.readFile('ca-cert.pem')),
+    ],
+  })
 
-.listen(6443, {
-  tls: {
-    cert: os.readFile('cert.pem').toString(),
-    key: os.readFile('key.pem').toString(),
-  },
-})
-  .decodeHttpRequest()
+.pipeline('tls-encrypted')
+  .connect('127.0.0.1:6443')
+
+.listen(6443)
+  .acceptTLS('tls-offloaded', {
+    certificate: {
+      cert: new crypto.Certificate(os.readFile('server-cert.pem')),
+      key: new crypto.PrivateKey(os.readFile('server-key.pem')),
+    },
+    trusted: [
+      new crypto.Certificate(os.readFile('client-cert.pem')),
+    ],
+  })
+
+.pipeline('tls-offloaded')
+  .decodeHTTPRequest()
   .replaceMessage(
-    new Message('Hello!\n')
+    new Message('Hi, there!\n')
   )
-  .encodeHttpResponse()
+  .encodeHTTPResponse()

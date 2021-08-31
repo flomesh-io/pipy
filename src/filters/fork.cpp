@@ -40,14 +40,16 @@ Fork::Fork()
 {
 }
 
-Fork::Fork(pjs::Str *target, pjs::Object *session_data)
+Fork::Fork(pjs::Str *target, pjs::Object *initializers)
   : m_target(target)
-  , m_session_data(session_data)
+  , m_initializers(initializers)
 {
 }
 
 Fork::Fork(const Fork &r)
-  : Fork(r.m_target, r.m_session_data)
+  : m_pipeline(r.m_pipeline)
+  , m_target(r.m_target)
+  , m_initializers(r.m_initializers)
 {
 }
 
@@ -56,10 +58,10 @@ Fork::~Fork() {
 
 auto Fork::help() -> std::list<std::string> {
   return {
-    "fork(target[, sessionData])",
+    "fork(target[, initializers])",
     "Sends copies of events to other pipeline sessions",
     "target = <string> Name of the pipeline to send event copies to",
-    "sessionData = <object/array/function> Data of `this` in the forked sessions",
+    "initializers = <array|function> Functions to initialize each session",
   };
 }
 
@@ -71,6 +73,12 @@ auto Fork::draw(std::list<std::string> &links, bool &fork) -> std::string {
   links.push_back(m_target->str());
   fork = true;
   return "fork";
+}
+
+void Fork::bind() {
+  if (!m_pipeline) {
+    m_pipeline = pipeline(m_target);
+  }
 }
 
 auto Fork::clone() -> Filter* {
@@ -88,45 +96,39 @@ void Fork::process(Context *ctx, Event *inp) {
   if (!m_sessions) {
     auto root = static_cast<Context*>(ctx->root());
     auto mod = pipeline()->module();
-    if (auto pipeline = mod->find_named_pipeline(m_target)) {
-      pjs::Value ret;
-      pjs::Object *session_data = m_session_data.get();
-      if (session_data && session_data->is_function()) {
-        if (!callback(*ctx, session_data->as<pjs::Function>(), 0, nullptr, ret)) return;
-        if (!ret.is_object()) {
-          Log::error("[fork] invalid session data");
-          abort();
-          return;
-        }
-        session_data = ret.o();
+    pjs::Value ret;
+    pjs::Object *initializers = m_initializers.get();
+    if (initializers && initializers->is_function()) {
+      if (!callback(*ctx, initializers->as<pjs::Function>(), 0, nullptr, ret)) return;
+      if (!ret.is_array()) {
+        Log::error("[fork] invalid initializer list");
+        abort();
+        return;
       }
-      if (session_data && session_data->is_array()) {
-        m_sessions = session_data->as<pjs::Array>()->map(
-          [&](pjs::Value &v, int, pjs::Value &ret) -> bool {
-            auto context = root;
-            if (v.is_object()) {
-              context = mod->worker()->new_runtime_context(root);
-              pjs::Object::assign(context->data(mod->index()), v.o());
-            }
-            auto session = Session::make(context, pipeline);
-            ret.set(session);
-            return true;
+      initializers = ret.o();
+    }
+    if (initializers && initializers->is_array()) {
+      m_sessions = initializers->as<pjs::Array>()->map(
+        [&](pjs::Value &v, int, pjs::Value &ret) -> bool {
+          auto context = root;
+          if (v.is_object()) {
+            context = mod->worker()->new_runtime_context(root);
+            pjs::Object::assign(context->data(mod->index()), v.o());
           }
-        );
-      } else {
-        auto context = root;
-        if (session_data) {
-          context = mod->worker()->new_runtime_context(root);
-          pjs::Object::assign(context->data(mod->index()), session_data);
+          auto session = Session::make(context, m_pipeline);
+          ret.set(session);
+          return true;
         }
-        auto session = Session::make(context, pipeline);
-        m_sessions = pjs::Array::make(1);
-        m_sessions->set(0, session);
-      }
+      );
     } else {
-      Log::error("[fork] unknown pipeline: %s", m_target->c_str());
-      m_session_end = true;
-      return;
+      auto context = root;
+      if (initializers) {
+        context = mod->worker()->new_runtime_context(root);
+        pjs::Object::assign(context->data(mod->index()), initializers);
+      }
+      auto session = Session::make(context, m_pipeline);
+      m_sessions = pjs::Array::make(1);
+      m_sessions->set(0, session);
     }
   }
 

@@ -40,6 +40,23 @@ template<> void pjs::EnumDef<expr::TypeOf::Type>::init() {
   define(expr::TypeOf::Type::Function, "function");
 }
 
+//
+// Expr::Imports
+//
+
+void Expr::Imports::add(Str *name, int file, Str *original_name) {
+  m_imports[name] = { file, original_name };
+}
+
+bool Expr::Imports::get(Str *name, int *file, Str **original_name) {
+  auto i = m_imports.find(name);
+  if (i == m_imports.end()) return false;
+  const auto &imp = i->second;
+  *file = imp.first;
+  *original_name = imp.second;
+  return true;
+}
+
 namespace expr {
 
 //
@@ -52,8 +69,8 @@ bool Discard::eval(Context &ctx, Value &result) {
   return true;
 }
 
-void Discard::resolve(Context &ctx, int l) {
-  m_x->resolve(ctx, l);
+void Discard::resolve(Context &ctx, int l, Imports *imports) {
+  m_x->resolve(ctx, l, imports);
 }
 
 void Discard::dump(std::ostream &out, const std::string &indent) {
@@ -84,9 +101,9 @@ bool Compound::eval(Context &ctx, Value &result) {
   return true;
 }
 
-void Compound::resolve(Context &ctx, int l) {
+void Compound::resolve(Context &ctx, int l, Imports *imports) {
   for (const auto &p : m_exprs) {
-    p->resolve(ctx, l);
+    p->resolve(ctx, l, imports);
   }
 }
 
@@ -115,9 +132,9 @@ bool Concatenation::eval(Context &ctx, Value &result) {
   return true;
 }
 
-void Concatenation::resolve(Context &ctx, int l) {
+void Concatenation::resolve(Context &ctx, int l, Imports *imports) {
   for (const auto &p : m_exprs) {
-    p->resolve(ctx, l);
+    p->resolve(ctx, l, imports);
   }
 }
 
@@ -284,12 +301,12 @@ bool ObjectLiteral::eval(Context &ctx, Value &result) {
   return true;
 }
 
-void ObjectLiteral::resolve(Context &ctx, int l) {
+void ObjectLiteral::resolve(Context &ctx, int l, Imports *imports) {
   for (const auto &p : m_list) {
     auto k = p.first.get();
     auto v = p.second.get();
-    if (k) k->resolve(ctx, l);
-    if (v) v->resolve(ctx, l);
+    if (k) k->resolve(ctx, l, imports);
+    if (v) v->resolve(ctx, l, imports);
   }
 }
 
@@ -314,8 +331,8 @@ bool ArrayExpansion::eval(Context &ctx, Value &result) {
   return m_array->eval(ctx, result);
 }
 
-void ArrayExpansion::resolve(Context &ctx, int l) {
-  m_array->resolve(ctx, l);
+void ArrayExpansion::resolve(Context &ctx, int l, Imports *imports) {
+  m_array->resolve(ctx, l, imports);
 }
 
 void ArrayExpansion::dump(std::ostream &out, const std::string &indent) {
@@ -388,9 +405,9 @@ bool ArrayLiteral::eval(Context &ctx, Value &result) {
   return true;
 }
 
-void ArrayLiteral::resolve(Context &ctx, int l) {
+void ArrayLiteral::resolve(Context &ctx, int l, Imports *imports) {
   for (const auto &p : m_list) {
-    p->resolve(ctx, l);
+    p->resolve(ctx, l, imports);
   }
 }
 
@@ -411,7 +428,7 @@ bool FunctionLiteral::eval(Context &ctx, Value &result) {
   return true;
 }
 
-void FunctionLiteral::resolve(Context &ctx, int l) {
+void FunctionLiteral::resolve(Context &ctx, int l, Imports *imports) {
   auto argc = int(m_argc);
   auto nvar = int(m_variables.size());
   char name[100];
@@ -434,7 +451,7 @@ void FunctionLiteral::resolve(Context &ctx, int l) {
   );
 
   Context fctx(ctx, argc, Scope::make(ctx.scope(), m_variables.size(), &m_variables[0]));
-  m_output->resolve(fctx, l);
+  m_output->resolve(fctx, l, imports);
 }
 
 void FunctionLiteral::dump(std::ostream &out, const std::string &indent) {
@@ -561,8 +578,9 @@ bool Identifier::clear(Context &ctx, Value &result) {
   return m_resolved->clear(ctx, result);
 }
 
-void Identifier::resolve(Context &ctx, int l) {
+void Identifier::resolve(Context &ctx, int l, Imports *imports) {
   m_l = l;
+  m_imports = imports;
   resolve(ctx);
 }
 
@@ -585,6 +603,17 @@ void Identifier::resolve(Context &ctx) {
     if (l->has(m_key)) {
       m_resolved.reset(locate(new Local(m_l, m_key)));
       return;
+    }
+  }
+  if (m_imports) {
+    int file;
+    Str *key;
+    if (m_imports->get(m_key, &file, &key)) {
+      auto l = ctx.l(file);
+      if (l->has(key)) {
+        m_resolved.reset(locate(new Local(file, key)));
+        return;
+      }
     }
   }
   if (ctx.g()->has(m_key)) {
@@ -677,9 +706,9 @@ bool Property::clear(Context &ctx, Value &result) {
   return true;
 }
 
-void Property::resolve(Context &ctx, int l) {
-  m_obj->resolve(ctx, l);
-  m_key->resolve(ctx, l);
+void Property::resolve(Context &ctx, int l, Imports *imports) {
+  m_obj->resolve(ctx, l, imports);
+  m_key->resolve(ctx, l, imports);
 }
 
 auto Property::reduce(Reducer &r) -> Reducer::Value* {
@@ -721,9 +750,9 @@ bool OptionalProperty::eval(Context &ctx, Value &result) {
   return true;
 }
 
-void OptionalProperty::resolve(Context &ctx, int l) {
-  m_obj->resolve(ctx, l);
-  m_key->resolve(ctx, l);
+void OptionalProperty::resolve(Context &ctx, int l, Imports *imports) {
+  m_obj->resolve(ctx, l, imports);
+  m_key->resolve(ctx, l, imports);
 }
 
 void OptionalProperty::dump(std::ostream &out, const std::string &indent) {
@@ -746,14 +775,14 @@ bool Construction::eval(Context &ctx, Value &result) {
   }
   result.set(f.as<Function>()->construct(ctx, argc, argv));
   if (ctx.ok()) return true;
-  ctx.backtrace(line(), column());
+  ctx.backtrace(file(), line(), column());
   return false;
 }
 
-void Construction::resolve(Context &ctx, int l) {
-  m_func->resolve(ctx, l);
+void Construction::resolve(Context &ctx, int l, Imports *imports) {
+  m_func->resolve(ctx, l, imports);
   for (const auto &p : m_argv) {
-    p->resolve(ctx, l);
+    p->resolve(ctx, l, imports);
   }
 }
 
@@ -777,14 +806,14 @@ bool Invocation::eval(Context &ctx, Value &result) {
   }
   (*f.as<Function>())(ctx, argc, argv, result);
   if (ctx.ok()) return true;
-  ctx.backtrace(line(), column());
+  ctx.backtrace(file(), line(), column());
   return false;
 }
 
-void Invocation::resolve(Context &ctx, int l) {
-  m_func->resolve(ctx, l);
+void Invocation::resolve(Context &ctx, int l, Imports *imports) {
+  m_func->resolve(ctx, l, imports);
   for (const auto &p : m_argv) {
-    p->resolve(ctx, l);
+    p->resolve(ctx, l, imports);
   }
 }
 
@@ -821,14 +850,14 @@ bool OptionalInvocation::eval(Context &ctx, Value &result) {
   }
   (*f.as<Function>())(ctx, argc, argv, result);
   if (ctx.ok()) return true;
-  ctx.backtrace(line(), column());
+  ctx.backtrace(file(), line(), column());
   return false;
 }
 
-void OptionalInvocation::resolve(Context &ctx, int l) {
-  m_func->resolve(ctx, l);
+void OptionalInvocation::resolve(Context &ctx, int l, Imports *imports) {
+  m_func->resolve(ctx, l, imports);
   for (const auto &p : m_argv) {
-    p->resolve(ctx, l);
+    p->resolve(ctx, l, imports);
   }
 }
 
@@ -849,8 +878,8 @@ bool Plus::eval(Context &ctx, Value &result) {
   return true;
 }
 
-void Plus::resolve(Context &ctx, int l) {
-  m_x->resolve(ctx, l);
+void Plus::resolve(Context &ctx, int l, Imports *imports) {
+  m_x->resolve(ctx, l, imports);
 }
 
 void Plus::dump(std::ostream &out, const std::string &indent) {
@@ -869,8 +898,8 @@ bool Negation::eval(Context &ctx, Value &result) {
   return true;
 }
 
-void Negation::resolve(Context &ctx, int l) {
-  m_x->resolve(ctx, l);
+void Negation::resolve(Context &ctx, int l, Imports *imports) {
+  m_x->resolve(ctx, l, imports);
 }
 
 void Negation::dump(std::ostream &out, const std::string &indent) {
@@ -900,9 +929,9 @@ bool Addition::eval(Context &ctx, Value &result) {
   return true;
 }
 
-void Addition::resolve(Context &ctx, int l) {
-  m_a->resolve(ctx, l);
-  m_b->resolve(ctx, l);
+void Addition::resolve(Context &ctx, int l, Imports *imports) {
+  m_a->resolve(ctx, l, imports);
+  m_b->resolve(ctx, l, imports);
 }
 
 void Addition::dump(std::ostream &out, const std::string &indent) {
@@ -925,9 +954,9 @@ bool Subtraction::eval(Context &ctx, Value &result) {
   return true;
 }
 
-void Subtraction::resolve(Context &ctx, int l) {
-  m_a->resolve(ctx, l);
-  m_b->resolve(ctx, l);
+void Subtraction::resolve(Context &ctx, int l, Imports *imports) {
+  m_a->resolve(ctx, l, imports);
+  m_b->resolve(ctx, l, imports);
 }
 
 void Subtraction::dump(std::ostream &out, const std::string &indent) {
@@ -950,9 +979,9 @@ bool Multiplication::eval(Context &ctx, Value &result) {
   return true;
 }
 
-void Multiplication::resolve(Context &ctx, int l) {
-  m_a->resolve(ctx, l);
-  m_b->resolve(ctx, l);
+void Multiplication::resolve(Context &ctx, int l, Imports *imports) {
+  m_a->resolve(ctx, l, imports);
+  m_b->resolve(ctx, l, imports);
 }
 
 void Multiplication::dump(std::ostream &out, const std::string &indent) {
@@ -975,9 +1004,9 @@ bool Division::eval(Context &ctx, Value &result) {
   return true;
 }
 
-void Division::resolve(Context &ctx, int l) {
-  m_a->resolve(ctx, l);
-  m_b->resolve(ctx, l);
+void Division::resolve(Context &ctx, int l, Imports *imports) {
+  m_a->resolve(ctx, l, imports);
+  m_b->resolve(ctx, l, imports);
 }
 
 void Division::dump(std::ostream &out, const std::string &indent) {
@@ -1000,9 +1029,9 @@ bool Remainder::eval(Context &ctx, Value &result) {
   return true;
 }
 
-void Remainder::resolve(Context &ctx, int l) {
-  m_a->resolve(ctx, l);
-  m_b->resolve(ctx, l);
+void Remainder::resolve(Context &ctx, int l, Imports *imports) {
+  m_a->resolve(ctx, l, imports);
+  m_b->resolve(ctx, l, imports);
 }
 
 void Remainder::dump(std::ostream &out, const std::string &indent) {
@@ -1025,9 +1054,9 @@ bool Exponentiation::eval(Context &ctx, Value &result) {
   return true;
 }
 
-void Exponentiation::resolve(Context &ctx, int l) {
-  m_a->resolve(ctx, l);
-  m_b->resolve(ctx, l);
+void Exponentiation::resolve(Context &ctx, int l, Imports *imports) {
+  m_a->resolve(ctx, l, imports);
+  m_b->resolve(ctx, l, imports);
 }
 
 void Exponentiation::dump(std::ostream &out, const std::string &indent) {
@@ -1050,9 +1079,9 @@ bool ShiftLeft::eval(Context &ctx, Value &result) {
   return true;
 }
 
-void ShiftLeft::resolve(Context &ctx, int l) {
-  m_a->resolve(ctx, l);
-  m_b->resolve(ctx, l);
+void ShiftLeft::resolve(Context &ctx, int l, Imports *imports) {
+  m_a->resolve(ctx, l, imports);
+  m_b->resolve(ctx, l, imports);
 }
 
 void ShiftLeft::dump(std::ostream &out, const std::string &indent) {
@@ -1075,9 +1104,9 @@ bool ShiftRight::eval(Context &ctx, Value &result) {
   return true;
 }
 
-void ShiftRight::resolve(Context &ctx, int l) {
-  m_a->resolve(ctx, l);
-  m_b->resolve(ctx, l);
+void ShiftRight::resolve(Context &ctx, int l, Imports *imports) {
+  m_a->resolve(ctx, l, imports);
+  m_b->resolve(ctx, l, imports);
 }
 
 void ShiftRight::dump(std::ostream &out, const std::string &indent) {
@@ -1100,9 +1129,9 @@ bool UnsignedShiftRight::eval(Context &ctx, Value &result) {
   return true;
 }
 
-void UnsignedShiftRight::resolve(Context &ctx, int l) {
-  m_a->resolve(ctx, l);
-  m_b->resolve(ctx, l);
+void UnsignedShiftRight::resolve(Context &ctx, int l, Imports *imports) {
+  m_a->resolve(ctx, l, imports);
+  m_b->resolve(ctx, l, imports);
 }
 
 void UnsignedShiftRight::dump(std::ostream &out, const std::string &indent) {
@@ -1122,8 +1151,8 @@ bool BitwiseNot::eval(Context &ctx, Value &result) {
   return true;
 }
 
-void BitwiseNot::resolve(Context &ctx, int l) {
-  m_x->resolve(ctx, l);
+void BitwiseNot::resolve(Context &ctx, int l, Imports *imports) {
+  m_x->resolve(ctx, l, imports);
 }
 
 void BitwiseNot::dump(std::ostream &out, const std::string &indent) {
@@ -1145,9 +1174,9 @@ bool BitwiseAnd::eval(Context &ctx, Value &result) {
   return true;
 }
 
-void BitwiseAnd::resolve(Context &ctx, int l) {
-  m_a->resolve(ctx, l);
-  m_b->resolve(ctx, l);
+void BitwiseAnd::resolve(Context &ctx, int l, Imports *imports) {
+  m_a->resolve(ctx, l, imports);
+  m_b->resolve(ctx, l, imports);
 }
 
 void BitwiseAnd::dump(std::ostream &out, const std::string &indent) {
@@ -1170,9 +1199,9 @@ bool BitwiseOr::eval(Context &ctx, Value &result) {
   return true;
 }
 
-void BitwiseOr::resolve(Context &ctx, int l) {
-  m_a->resolve(ctx, l);
-  m_b->resolve(ctx, l);
+void BitwiseOr::resolve(Context &ctx, int l, Imports *imports) {
+  m_a->resolve(ctx, l, imports);
+  m_b->resolve(ctx, l, imports);
 }
 
 void BitwiseOr::dump(std::ostream &out, const std::string &indent) {
@@ -1195,9 +1224,9 @@ bool BitwiseXor::eval(Context &ctx, Value &result) {
   return true;
 }
 
-void BitwiseXor::resolve(Context &ctx, int l) {
-  m_a->resolve(ctx, l);
-  m_b->resolve(ctx, l);
+void BitwiseXor::resolve(Context &ctx, int l, Imports *imports) {
+  m_a->resolve(ctx, l, imports);
+  m_b->resolve(ctx, l, imports);
 }
 
 void BitwiseXor::dump(std::ostream &out, const std::string &indent) {
@@ -1217,8 +1246,8 @@ bool LogicalNot::eval(Context &ctx, Value &result) {
   return true;
 }
 
-void LogicalNot::resolve(Context &ctx, int l) {
-  m_x->resolve(ctx, l);
+void LogicalNot::resolve(Context &ctx, int l, Imports *imports) {
+  m_x->resolve(ctx, l, imports);
 }
 
 void LogicalNot::dump(std::ostream &out, const std::string &indent) {
@@ -1237,9 +1266,9 @@ bool LogicalAnd::eval(Context &ctx, Value &result) {
   return true;
 }
 
-void LogicalAnd::resolve(Context &ctx, int l) {
-  m_a->resolve(ctx, l);
-  m_b->resolve(ctx, l);
+void LogicalAnd::resolve(Context &ctx, int l, Imports *imports) {
+  m_a->resolve(ctx, l, imports);
+  m_b->resolve(ctx, l, imports);
 }
 
 void LogicalAnd::dump(std::ostream &out, const std::string &indent) {
@@ -1259,9 +1288,9 @@ bool LogicalOr::eval(Context &ctx, Value &result) {
   return true;
 }
 
-void LogicalOr::resolve(Context &ctx, int l) {
-  m_a->resolve(ctx, l);
-  m_b->resolve(ctx, l);
+void LogicalOr::resolve(Context &ctx, int l, Imports *imports) {
+  m_a->resolve(ctx, l, imports);
+  m_b->resolve(ctx, l, imports);
 }
 
 void LogicalOr::dump(std::ostream &out, const std::string &indent) {
@@ -1281,9 +1310,9 @@ bool NullishCoalescing::eval(Context &ctx, Value &result) {
   return true;
 }
 
-void NullishCoalescing::resolve(Context &ctx, int l) {
-  m_a->resolve(ctx, l);
-  m_b->resolve(ctx, l);
+void NullishCoalescing::resolve(Context &ctx, int l, Imports *imports) {
+  m_a->resolve(ctx, l, imports);
+  m_b->resolve(ctx, l, imports);
 }
 
 void NullishCoalescing::dump(std::ostream &out, const std::string &indent) {
@@ -1320,9 +1349,9 @@ bool Equality::eval(Context &ctx, Value &result) {
   return true;
 }
 
-void Equality::resolve(Context &ctx, int l) {
-  m_a->resolve(ctx, l);
-  m_b->resolve(ctx, l);
+void Equality::resolve(Context &ctx, int l, Imports *imports) {
+  m_a->resolve(ctx, l, imports);
+  m_b->resolve(ctx, l, imports);
 }
 
 void Equality::dump(std::ostream &out, const std::string &indent) {
@@ -1359,9 +1388,9 @@ bool Inequality::eval(Context &ctx, Value &result) {
   return true;
 }
 
-void Inequality::resolve(Context &ctx, int l) {
-  m_a->resolve(ctx, l);
-  m_b->resolve(ctx, l);
+void Inequality::resolve(Context &ctx, int l, Imports *imports) {
+  m_a->resolve(ctx, l, imports);
+  m_b->resolve(ctx, l, imports);
 }
 
 void Inequality::dump(std::ostream &out, const std::string &indent) {
@@ -1393,9 +1422,9 @@ bool Identity::eval(Context &ctx, Value &result) {
   return true;
 }
 
-void Identity::resolve(Context &ctx, int l) {
-  m_a->resolve(ctx, l);
-  m_b->resolve(ctx, l);
+void Identity::resolve(Context &ctx, int l, Imports *imports) {
+  m_a->resolve(ctx, l, imports);
+  m_b->resolve(ctx, l, imports);
 }
 
 void Identity::dump(std::ostream &out, const std::string &indent) {
@@ -1427,9 +1456,9 @@ bool Nonidentity::eval(Context &ctx, Value &result) {
   return true;
 }
 
-void Nonidentity::resolve(Context &ctx, int l) {
-  m_a->resolve(ctx, l);
-  m_b->resolve(ctx, l);
+void Nonidentity::resolve(Context &ctx, int l, Imports *imports) {
+  m_a->resolve(ctx, l, imports);
+  m_b->resolve(ctx, l, imports);
 }
 
 void Nonidentity::dump(std::ostream &out, const std::string &indent) {
@@ -1458,9 +1487,9 @@ bool GreaterThan::eval(Context &ctx, Value &result) {
   return true;
 }
 
-void GreaterThan::resolve(Context &ctx, int l) {
-  m_a->resolve(ctx, l);
-  m_b->resolve(ctx, l);
+void GreaterThan::resolve(Context &ctx, int l, Imports *imports) {
+  m_a->resolve(ctx, l, imports);
+  m_b->resolve(ctx, l, imports);
 }
 
 void GreaterThan::dump(std::ostream &out, const std::string &indent) {
@@ -1489,9 +1518,9 @@ bool GreaterThanOrEqual::eval(Context &ctx, Value &result) {
   return true;
 }
 
-void GreaterThanOrEqual::resolve(Context &ctx, int l) {
-  m_a->resolve(ctx, l);
-  m_b->resolve(ctx, l);
+void GreaterThanOrEqual::resolve(Context &ctx, int l, Imports *imports) {
+  m_a->resolve(ctx, l, imports);
+  m_b->resolve(ctx, l, imports);
 }
 
 void GreaterThanOrEqual::dump(std::ostream &out, const std::string &indent) {
@@ -1520,9 +1549,9 @@ bool LessThan::eval(Context &ctx, Value &result) {
   return true;
 }
 
-void LessThan::resolve(Context &ctx, int l) {
-  m_a->resolve(ctx, l);
-  m_b->resolve(ctx, l);
+void LessThan::resolve(Context &ctx, int l, Imports *imports) {
+  m_a->resolve(ctx, l, imports);
+  m_b->resolve(ctx, l, imports);
 }
 
 void LessThan::dump(std::ostream &out, const std::string &indent) {
@@ -1551,9 +1580,9 @@ bool LessThanOrEqual::eval(Context &ctx, Value &result) {
   return true;
 }
 
-void LessThanOrEqual::resolve(Context &ctx, int l) {
-  m_a->resolve(ctx, l);
-  m_b->resolve(ctx, l);
+void LessThanOrEqual::resolve(Context &ctx, int l, Imports *imports) {
+  m_a->resolve(ctx, l, imports);
+  m_b->resolve(ctx, l, imports);
 }
 
 void LessThanOrEqual::dump(std::ostream &out, const std::string &indent) {
@@ -1583,9 +1612,9 @@ bool In::eval(Context &ctx, Value &result) {
   return true;
 }
 
-void In::resolve(Context &ctx, int l) {
-  m_a->resolve(ctx, l);
-  m_b->resolve(ctx, l);
+void In::resolve(Context &ctx, int l, Imports *imports) {
+  m_a->resolve(ctx, l, imports);
+  m_b->resolve(ctx, l, imports);
 }
 
 void In::dump(std::ostream &out, const std::string &indent) {
@@ -1615,9 +1644,9 @@ bool InstanceOf::eval(Context &ctx, Value &result) {
   return true;
 }
 
-void InstanceOf::resolve(Context &ctx, int l) {
-  m_a->resolve(ctx, l);
-  m_b->resolve(ctx, l);
+void InstanceOf::resolve(Context &ctx, int l, Imports *imports) {
+  m_a->resolve(ctx, l, imports);
+  m_b->resolve(ctx, l, imports);
 }
 
 void InstanceOf::dump(std::ostream &out, const std::string &indent) {
@@ -1649,8 +1678,8 @@ bool TypeOf::eval(Context &ctx, Value &result) {
   return true;
 }
 
-void TypeOf::resolve(Context &ctx, int l) {
-  m_x->resolve(ctx, l);
+void TypeOf::resolve(Context &ctx, int l, Imports *imports) {
+  m_x->resolve(ctx, l, imports);
 }
 
 void TypeOf::dump(std::ostream &out, const std::string &indent) {
@@ -1668,8 +1697,8 @@ bool PostIncrement::eval(Context &ctx, Value &result) {
   return m_x->assign(ctx, v);
 }
 
-void PostIncrement::resolve(Context &ctx, int l) {
-  m_x->resolve(ctx, l);
+void PostIncrement::resolve(Context &ctx, int l, Imports *imports) {
+  m_x->resolve(ctx, l, imports);
 }
 
 void PostIncrement::dump(std::ostream &out, const std::string &indent) {
@@ -1687,8 +1716,8 @@ bool PostDecrement::eval(Context &ctx, Value &result) {
   return m_x->assign(ctx, v);
 }
 
-void PostDecrement::resolve(Context &ctx, int l) {
-  m_x->resolve(ctx, l);
+void PostDecrement::resolve(Context &ctx, int l, Imports *imports) {
+  m_x->resolve(ctx, l, imports);
 }
 
 void PostDecrement::dump(std::ostream &out, const std::string &indent) {
@@ -1706,8 +1735,8 @@ bool PreIncrement::eval(Context &ctx, Value &result) {
   return m_x->assign(ctx, result);
 }
 
-void PreIncrement::resolve(Context &ctx, int l) {
-  m_x->resolve(ctx, l);
+void PreIncrement::resolve(Context &ctx, int l, Imports *imports) {
+  m_x->resolve(ctx, l, imports);
 }
 
 void PreIncrement::dump(std::ostream &out, const std::string &indent) {
@@ -1725,8 +1754,8 @@ bool PreDecrement::eval(Context &ctx, Value &result) {
   return m_x->assign(ctx, result);
 }
 
-void PreDecrement::resolve(Context &ctx, int l) {
-  m_x->resolve(ctx, l);
+void PreDecrement::resolve(Context &ctx, int l, Imports *imports) {
+  m_x->resolve(ctx, l, imports);
 }
 
 void PreDecrement::dump(std::ostream &out, const std::string &indent) {
@@ -1742,8 +1771,8 @@ bool Delete::eval(Context &ctx, Value &result) {
   return m_x->clear(ctx, result);
 }
 
-void Delete::resolve(Context &ctx, int l) {
-  m_x->resolve(ctx, l);
+void Delete::resolve(Context &ctx, int l, Imports *imports) {
+  m_x->resolve(ctx, l, imports);
 }
 
 void Delete::dump(std::ostream &out, const std::string &indent) {
@@ -1760,9 +1789,9 @@ bool Assignment::eval(Context &ctx, Value &result) {
   return m_l->assign(ctx, result);
 }
 
-void Assignment::resolve(Context &ctx, int l) {
-  m_l->resolve(ctx, l);
-  m_r->resolve(ctx, l);
+void Assignment::resolve(Context &ctx, int l, Imports *imports) {
+  m_l->resolve(ctx, l, imports);
+  m_r->resolve(ctx, l, imports);
 }
 
 void Assignment::dump(std::ostream &out, const std::string &indent) {
@@ -1793,9 +1822,9 @@ bool AdditionAssignment::eval(Context &ctx, Value &result) {
   return m_l->assign(ctx, result);
 }
 
-void AdditionAssignment::resolve(Context &ctx, int l) {
-  m_l->resolve(ctx, l);
-  m_r->resolve(ctx, l);
+void AdditionAssignment::resolve(Context &ctx, int l, Imports *imports) {
+  m_l->resolve(ctx, l, imports);
+  m_r->resolve(ctx, l, imports);
 }
 
 void AdditionAssignment::dump(std::ostream &out, const std::string &indent) {
@@ -1818,9 +1847,9 @@ bool SubtractionAssignment::eval(Context &ctx, Value &result) {
   return m_l->assign(ctx, result);
 }
 
-void SubtractionAssignment::resolve(Context &ctx, int l) {
-  m_l->resolve(ctx, l);
-  m_r->resolve(ctx, l);
+void SubtractionAssignment::resolve(Context &ctx, int l, Imports *imports) {
+  m_l->resolve(ctx, l, imports);
+  m_r->resolve(ctx, l, imports);
 }
 
 void SubtractionAssignment::dump(std::ostream &out, const std::string &indent) {
@@ -1843,9 +1872,9 @@ bool MultiplicationAssignment::eval(Context &ctx, Value &result) {
   return m_l->assign(ctx, result);
 }
 
-void MultiplicationAssignment::resolve(Context &ctx, int l) {
-  m_l->resolve(ctx, l);
-  m_r->resolve(ctx, l);
+void MultiplicationAssignment::resolve(Context &ctx, int l, Imports *imports) {
+  m_l->resolve(ctx, l, imports);
+  m_r->resolve(ctx, l, imports);
 }
 
 void MultiplicationAssignment::dump(std::ostream &out, const std::string &indent) {
@@ -1868,9 +1897,9 @@ bool DivisionAssignment::eval(Context &ctx, Value &result) {
   return m_l->assign(ctx, result);
 }
 
-void DivisionAssignment::resolve(Context &ctx, int l) {
-  m_l->resolve(ctx, l);
-  m_r->resolve(ctx, l);
+void DivisionAssignment::resolve(Context &ctx, int l, Imports *imports) {
+  m_l->resolve(ctx, l, imports);
+  m_r->resolve(ctx, l, imports);
 }
 
 void DivisionAssignment::dump(std::ostream &out, const std::string &indent) {
@@ -1893,9 +1922,9 @@ bool RemainderAssignment::eval(Context &ctx, Value &result) {
   return m_l->assign(ctx, result);
 }
 
-void RemainderAssignment::resolve(Context &ctx, int l) {
-  m_l->resolve(ctx, l);
-  m_r->resolve(ctx, l);
+void RemainderAssignment::resolve(Context &ctx, int l, Imports *imports) {
+  m_l->resolve(ctx, l, imports);
+  m_r->resolve(ctx, l, imports);
 }
 
 void RemainderAssignment::dump(std::ostream &out, const std::string &indent) {
@@ -1918,9 +1947,9 @@ bool ExponentiationAssignment::eval(Context &ctx, Value &result) {
   return m_l->assign(ctx, result);
 }
 
-void ExponentiationAssignment::resolve(Context &ctx, int l) {
-  m_l->resolve(ctx, l);
-  m_r->resolve(ctx, l);
+void ExponentiationAssignment::resolve(Context &ctx, int l, Imports *imports) {
+  m_l->resolve(ctx, l, imports);
+  m_r->resolve(ctx, l, imports);
 }
 
 void ExponentiationAssignment::dump(std::ostream &out, const std::string &indent) {
@@ -1943,9 +1972,9 @@ bool ShiftLeftAssignment::eval(Context &ctx, Value &result) {
   return m_l->assign(ctx, result);
 }
 
-void ShiftLeftAssignment::resolve(Context &ctx, int l) {
-  m_l->resolve(ctx, l);
-  m_r->resolve(ctx, l);
+void ShiftLeftAssignment::resolve(Context &ctx, int l, Imports *imports) {
+  m_l->resolve(ctx, l, imports);
+  m_r->resolve(ctx, l, imports);
 }
 
 void ShiftLeftAssignment::dump(std::ostream &out, const std::string &indent) {
@@ -1968,9 +1997,9 @@ bool ShiftRightAssignment::eval(Context &ctx, Value &result) {
   return m_l->assign(ctx, result);
 }
 
-void ShiftRightAssignment::resolve(Context &ctx, int l) {
-  m_l->resolve(ctx, l);
-  m_r->resolve(ctx, l);
+void ShiftRightAssignment::resolve(Context &ctx, int l, Imports *imports) {
+  m_l->resolve(ctx, l, imports);
+  m_r->resolve(ctx, l, imports);
 }
 
 void ShiftRightAssignment::dump(std::ostream &out, const std::string &indent) {
@@ -1993,9 +2022,9 @@ bool UnsignedShiftRightAssignment::eval(Context &ctx, Value &result) {
   return m_l->assign(ctx, result);
 }
 
-void UnsignedShiftRightAssignment::resolve(Context &ctx, int l) {
-  m_l->resolve(ctx, l);
-  m_r->resolve(ctx, l);
+void UnsignedShiftRightAssignment::resolve(Context &ctx, int l, Imports *imports) {
+  m_l->resolve(ctx, l, imports);
+  m_r->resolve(ctx, l, imports);
 }
 
 void UnsignedShiftRightAssignment::dump(std::ostream &out, const std::string &indent) {
@@ -2018,9 +2047,9 @@ bool BitwiseAndAssignment::eval(Context &ctx, Value &result) {
   return m_l->assign(ctx, result);
 }
 
-void BitwiseAndAssignment::resolve(Context &ctx, int l) {
-  m_l->resolve(ctx, l);
-  m_r->resolve(ctx, l);
+void BitwiseAndAssignment::resolve(Context &ctx, int l, Imports *imports) {
+  m_l->resolve(ctx, l, imports);
+  m_r->resolve(ctx, l, imports);
 }
 
 void BitwiseAndAssignment::dump(std::ostream &out, const std::string &indent) {
@@ -2043,9 +2072,9 @@ bool BitwiseOrAssignment::eval(Context &ctx, Value &result) {
   return m_l->assign(ctx, result);
 }
 
-void BitwiseOrAssignment::resolve(Context &ctx, int l) {
-  m_l->resolve(ctx, l);
-  m_r->resolve(ctx, l);
+void BitwiseOrAssignment::resolve(Context &ctx, int l, Imports *imports) {
+  m_l->resolve(ctx, l, imports);
+  m_r->resolve(ctx, l, imports);
 }
 
 void BitwiseOrAssignment::dump(std::ostream &out, const std::string &indent) {
@@ -2068,9 +2097,9 @@ bool BitwiseXorAssignment::eval(Context &ctx, Value &result) {
   return m_l->assign(ctx, result);
 }
 
-void BitwiseXorAssignment::resolve(Context &ctx, int l) {
-  m_l->resolve(ctx, l);
-  m_r->resolve(ctx, l);
+void BitwiseXorAssignment::resolve(Context &ctx, int l, Imports *imports) {
+  m_l->resolve(ctx, l, imports);
+  m_r->resolve(ctx, l, imports);
 }
 
 void BitwiseXorAssignment::dump(std::ostream &out, const std::string &indent) {
@@ -2090,9 +2119,9 @@ bool LogicalAndAssignment::eval(Context &ctx, Value &result) {
   return m_l->assign(ctx, result);
 }
 
-void LogicalAndAssignment::resolve(Context &ctx, int l) {
-  m_l->resolve(ctx, l);
-  m_r->resolve(ctx, l);
+void LogicalAndAssignment::resolve(Context &ctx, int l, Imports *imports) {
+  m_l->resolve(ctx, l, imports);
+  m_r->resolve(ctx, l, imports);
 }
 
 void LogicalAndAssignment::dump(std::ostream &out, const std::string &indent) {
@@ -2112,9 +2141,9 @@ bool LogicalOrAssignment::eval(Context &ctx, Value &result) {
   return m_l->assign(ctx, result);
 }
 
-void LogicalOrAssignment::resolve(Context &ctx, int l) {
-  m_l->resolve(ctx, l);
-  m_r->resolve(ctx, l);
+void LogicalOrAssignment::resolve(Context &ctx, int l, Imports *imports) {
+  m_l->resolve(ctx, l, imports);
+  m_r->resolve(ctx, l, imports);
 }
 
 void LogicalOrAssignment::dump(std::ostream &out, const std::string &indent) {
@@ -2134,9 +2163,9 @@ bool LogicalNullishAssignment::eval(Context &ctx, Value &result) {
   return m_l->assign(ctx, result);
 }
 
-void LogicalNullishAssignment::resolve(Context &ctx, int l) {
-  m_l->resolve(ctx, l);
-  m_r->resolve(ctx, l);
+void LogicalNullishAssignment::resolve(Context &ctx, int l, Imports *imports) {
+  m_l->resolve(ctx, l, imports);
+  m_r->resolve(ctx, l, imports);
 }
 
 void LogicalNullishAssignment::dump(std::ostream &out, const std::string &indent) {
@@ -2159,10 +2188,10 @@ bool Conditional::eval(Context &ctx, Value &result) {
   }
 }
 
-void Conditional::resolve(Context &ctx, int l) {
-  m_a->resolve(ctx, l);
-  m_b->resolve(ctx, l);
-  m_c->resolve(ctx, l);
+void Conditional::resolve(Context &ctx, int l, Imports *imports) {
+  m_a->resolve(ctx, l, imports);
+  m_b->resolve(ctx, l, imports);
+  m_c->resolve(ctx, l, imports);
 }
 
 void Conditional::dump(std::ostream &out, const std::string &indent) {

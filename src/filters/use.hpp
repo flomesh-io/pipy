@@ -40,7 +40,7 @@ class Session;
 class Use : public Filter {
 public:
   Use();
-  Use(Module *module, pjs::Str *pipeline_name, pjs::Object *argv);
+  Use(Module *module, pjs::Str *pipeline_name);
 
 private:
   Use(const Use &r);
@@ -48,13 +48,14 @@ private:
 
   virtual auto help() -> std::list<std::string> override;
   virtual void dump(std::ostream &out) override;
+  virtual void bind() override;
   virtual auto clone() -> Filter* override;
   virtual void reset() override;
   virtual void process(Context *ctx, Event *inp) override;
 
   Module* m_module = nullptr;
+  Pipeline* m_pipeline = nullptr;
   pjs::Ref<pjs::Str> m_pipeline_name;
-  pjs::Ref<pjs::Object> m_argv;
   pjs::Ref<Session> m_session;
   bool m_session_end = false;
 };

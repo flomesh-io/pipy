@@ -48,6 +48,7 @@ private:
   virtual auto help() -> std::list<std::string> override;
   virtual void dump(std::ostream &out) override;
   virtual auto draw(std::list<std::string> &links, bool &fork) -> std::string override;
+  virtual void bind() override;
   virtual auto clone() -> Filter* override;
   virtual void reset() override;
   virtual void process(Context *ctx, Event *inp) override;
@@ -73,6 +74,7 @@ private:
     READ_SOCKS5_DSTPORT,
   };
 
+  Pipeline* m_pipeline = nullptr;
   pjs::Ref<pjs::Str> m_target;
   pjs::Ref<pjs::Function> m_on_connect;
   pjs::Ref<Session> m_session;

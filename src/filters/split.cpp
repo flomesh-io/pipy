@@ -23,58 +23,75 @@
  *  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include "replace-start.hpp"
+#include "split.hpp"
+#include "data.hpp"
 
 namespace pipy {
 
-ReplaceStart::ReplaceStart()
+//
+// Split
+//
+
+Split::Split()
 {
 }
 
-ReplaceStart::ReplaceStart(const pjs::Value &replacement)
-  : m_replacement(replacement)
+Split::Split(pjs::Function *callback)
+  : m_callback(callback)
 {
 }
 
-ReplaceStart::ReplaceStart(const ReplaceStart &r)
-  : m_replacement(r.m_replacement)
+Split::Split(const Split &r)
+  : m_callback(r.m_callback)
 {
 }
 
-ReplaceStart::~ReplaceStart()
+Split::~Split()
 {
 }
 
-auto ReplaceStart::help() -> std::list<std::string> {
+auto Split::help() -> std::list<std::string> {
   return {
-    "replaceSessionStart(callback)",
-    "Replaces the initial event in a session",
-    "callback = <object|function> Replacement events or a callback function that returns replacement events",
+    "split(callback)",
+    "Splits data chunks into smaller chunks",
+    "callback = <function> A callback function that receives each byte as input and decides where to split"
   };
 }
 
-void ReplaceStart::dump(std::ostream &out) {
-  out << "replaceSessionStart";
+void Split::dump(std::ostream &out) {
+  out << "split";
 }
 
-auto ReplaceStart::clone() -> Filter* {
-  return new ReplaceStart(*this);
+auto Split::clone() -> Filter* {
+  return new Split(*this);
 }
 
-void ReplaceStart::reset() {
-  m_started = false;
+void Split::reset()
+{
 }
 
-void ReplaceStart::process(Context *ctx, Event *inp) {
-  if (!m_started) {
-    m_started = true;
-    if (m_replacement.is_function()) {
-      pjs::Value arg(inp), result;
-      if (callback(*ctx, m_replacement.f(), 1, &arg, result)) {
-        output(result);
-      }
-    } else {
-      output(m_replacement);
+void Split::process(Context *ctx, Event *inp) {
+  if (auto data = inp->as<Data>()) {
+    while (!data->empty()) {
+      pjs::Ref<Data> buf(Data::make());
+      bool error = false;
+      data->shift(
+        [&](int c) -> int {
+          pjs::Value arg(c), ret;
+          if (!callback(*ctx, m_callback, 1, &arg, ret)) {
+            error = true;
+            return -1;
+          }
+          if (ret.is_number()) {
+            return ret.n();
+          } else {
+            return ret.to_boolean() ? 1 : 0;
+          }
+        },
+        *buf
+      );
+      if (error) return;
+      output(buf);
     }
 
   } else {

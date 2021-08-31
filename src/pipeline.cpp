@@ -50,6 +50,12 @@ Pipeline::~Pipeline() {
   s_all_pipelines.erase(this);
 }
 
+void Pipeline::bind() {
+  for (const auto &f : m_filters) {
+    f->bind();
+  }
+}
+
 void Pipeline::append(Filter *filter) {
   filter->m_pipeline = this;
   m_filters.emplace_back(filter);

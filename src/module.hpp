@@ -42,11 +42,13 @@ public:
   static void reset_script(const std::string &path);
 
   bool load(const std::string &path);
-  void start();
+  void bind_exports();
+  void bind_imports();
+  void make_pipelines();
+  void bind_pipelines();
 
   auto new_context_data(pjs::Object *prototype = nullptr) -> pjs::Object* {
     auto obj = new ContextDataBase(m_filename);
-    if (prototype) obj->argv(prototype->as<ContextDataBase>()->argv());
     m_context_class->init(obj, prototype);
     return obj;
   }
@@ -70,9 +72,11 @@ private:
   std::string m_path;
   std::string m_source;
   std::unique_ptr<pjs::Expr> m_script;
+  std::unique_ptr<pjs::Expr::Imports> m_imports;
   pjs::Ref<pjs::Str> m_filename;
   pjs::Ref<Configuration> m_configuration;
   pjs::Ref<pjs::Class> m_context_class;
+  std::list<pjs::Ref<Pipeline>> m_pipelines;
   std::unordered_map<pjs::Ref<pjs::Str>, pjs::Ref<Pipeline>> m_named_pipelines;
 
   static std::map<std::string, std::string> s_overriden_scripts;

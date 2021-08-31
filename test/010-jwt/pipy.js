@@ -46,14 +46,14 @@ pipy({
   .connect('127.0.0.1:8080')
 
 .pipeline('ban')
-  .decodeHttpRequest()
+  .decodeHTTPRequest()
   .replaceMessage(
     () => new Message({ status: 401 }, _result)
   )
-  .encodeHttpResponse()
+  .encodeHTTPResponse()
 
 .pipeline('verify')
-  .decodeHttpRequest()
+  .decodeHTTPRequest()
   .onMessageStart(
     evt => (
       ((
@@ -104,11 +104,11 @@ pipy({
       },
     })
   )
-  .encodeHttpRequest()
+  .encodeHTTPRequest()
   .connect(
     () => _url.host
   )
-  .decodeHttpResponse()
+  .decodeHTTPResponse()
   .onMessage(
     msg => (
       _g.keystores[_i] = JSON.decode(msg.body)?.keys || [],
@@ -119,24 +119,24 @@ pipy({
 
 // Mock backend service on port 8080
 .listen(8080)
-  .decodeHttpRequest()
+  .decodeHTTPRequest()
   .replaceMessage(
     new Message('Hello!\n')
   )
-  .encodeHttpResponse()
+  .encodeHTTPResponse()
 
 // Mock key store service on port 6081
 .listen(6081)
-  .decodeHttpRequest()
+  .decodeHTTPRequest()
   .replaceMessage(
     new Message(os.readFile('./keys-1.json'))
   )
-  .encodeHttpResponse()
+  .encodeHTTPResponse()
 
 // Mock key store service on port 6082
 .listen(6082)
-  .decodeHttpRequest()
+  .decodeHTTPRequest()
   .replaceMessage(
     new Message(os.readFile('./keys-2.json'))
   )
-  .encodeHttpResponse()
+  .encodeHTTPResponse()

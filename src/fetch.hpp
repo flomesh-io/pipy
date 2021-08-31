@@ -116,6 +116,8 @@ private:
 
   pjs::Ref<pjs::Str> m_host;
   pjs::Ref<Pipeline> m_pipeline;
+  pjs::Ref<Pipeline> m_pipeline_request;
+  pjs::Ref<Pipeline> m_pipeline_connect;
   pjs::Ref<Session> m_session;
   std::list<Request> m_request_queue;
   Request* m_current_request = nullptr;
