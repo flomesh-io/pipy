@@ -46,7 +46,11 @@ template<> void ClassDef<XML>::init() {
   method("parse", [](Context &ctx, Object *obj, Value &ret) {
     Str *str;
     if (!ctx.arguments(1, &str)) return;
-    ret.set(XML::parse(str->str()));
+    if (auto node = XML::parse(str->str())) {
+      ret.set(node);
+    } else {
+      ret = Value::null;
+    }
   });
 
   method("stringify", [](Context &ctx, Object *obj, Value &ret) {
@@ -59,16 +63,24 @@ template<> void ClassDef<XML>::init() {
   method("decode", [](Context &ctx, Object *obj, Value &ret) {
     pipy::Data *data;
     if (!ctx.arguments(1, &data)) return;
-    ret.set(XML::decode(*data));
+    if (auto node = XML::decode(*data)) {
+      ret.set(node);
+    } else {
+      ret = Value::null;
+    }
   });
 
   method("encode", [](Context &ctx, Object *obj, Value &ret) {
     XML::Node *doc;
     int space = 0;
     if (!ctx.arguments(1, &doc, &space)) return;
-    auto *data = pipy::Data::make();
-    XML::encode(doc, space, *data);
-    ret.set(data);
+    if (!doc) {
+      ret = Value::null;
+    } else {
+      auto *data = pipy::Data::make();
+      XML::encode(doc, space, *data);
+      ret.set(data);
+    }
   });
 }
 
