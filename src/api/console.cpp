@@ -46,13 +46,16 @@ template<> void ClassDef<Console>::init() {
     }
 
     const auto &s = ss.str();
-
-    size_t i = 0;
-    while (i < s.length()) {
-      auto j = i;
-      while (j < s.length() && s[j] != '\n') j++;
-      Log::info("[pjs] %s", s.substr(i, j - i).c_str());
-      i = j + 1;
+    if (s.empty()) {
+      Log::info("[pjs]");
+    } else {
+      size_t i = 0;
+      while (i < s.length()) {
+        auto j = i;
+        while (j < s.length() && s[j] != '\n') j++;
+        Log::info("[pjs] %s", s.substr(i, j - i).c_str());
+        i = j + 1;
+      }
     }
   });
 
