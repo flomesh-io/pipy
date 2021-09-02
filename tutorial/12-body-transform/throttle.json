@@ -1,0 +1,7 @@
+{
+  "services": {
+    "service-1": {
+      "rateLimit": 1000
+    }
+  }
+}
