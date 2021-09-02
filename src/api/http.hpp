@@ -88,7 +88,6 @@ public:
   enum class Field {
     status,
     statusText,
-    bodiless,
   };
 
   auto status() -> int {
@@ -103,15 +102,8 @@ public:
     return ret.is_string() ? ret.s() : pjs::Str::empty.get();
   }
 
-  bool bodiless() {
-    pjs::Value ret;
-    pjs::get<ResponseHead>(this, ResponseHead::Field::bodiless, ret);
-    return ret.to_string();
-  }
-
   void status(int n) { pjs::set<ResponseHead>(this, ResponseHead::Field::status, n); }
   void status_text(pjs::Str *s) { pjs::set<ResponseHead>(this, ResponseHead::Field::statusText, s); }
-  void bodiless(bool b) { pjs::set<ResponseHead>(this, ResponseHead::Field::bodiless, b); }
 };
 
 //

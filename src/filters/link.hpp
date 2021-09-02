@@ -43,10 +43,14 @@ class Session;
 
 class Link : public Filter {
 public:
-  typedef std::pair<pjs::Ref<pjs::Str>, pjs::Ref<pjs::Function>> Route;
+  struct Route {
+    Pipeline* pipeline = nullptr;
+    pjs::Ref<pjs::Str> name;
+    pjs::Ref<pjs::Function> condition;
+  };
 
   Link();
-  Link(const std::list<Route> &routes);
+  Link(std::list<Route> &&routes);
 
 private:
   Link(const Link &r);
@@ -55,6 +59,7 @@ private:
   virtual auto help() -> std::list<std::string> override;
   virtual void dump(std::ostream &out) override;
   virtual auto draw(std::list<std::string> &links, bool &fork) -> std::string override;
+  virtual void bind() override;
   virtual auto clone() -> Filter* override;
   virtual void reset() override;
   virtual void process(Context *ctx, Event *inp) override;

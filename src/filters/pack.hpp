@@ -59,7 +59,6 @@ private:
   int m_message_ends = 0;
   double m_timeout = 0;
   double m_vacancy = 0.5;
-  pjs::Ref<pjs::Object> m_mctx;
   pjs::Ref<pjs::Object> m_head;
   pjs::Ref<Data> m_buffer;
   std::unique_ptr<Timer> m_timer;

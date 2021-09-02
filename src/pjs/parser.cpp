@@ -901,6 +901,23 @@ Expr* ExpressionParser::expression(bool no_comma) {
         operands.push(std::unique_ptr<Expr>(locate(e, l)));
       }
 
+    // When the last operator is dot-like
+    } else if (
+      last_operator == Token::OPR(".") ||
+      last_operator == Token::OPR("?.")
+    ) {
+      auto t = peek();
+      std::string str;
+      if (t.is_string() && t.s()[0] != '"' && t.s()[0] != '\'') {
+        read();
+        operands.push(std::unique_ptr<Expr>(locate(identifier(t.s()))));
+      } else if (t.is_operator() && Tokenizer::is_identifier_name(t, str)) {
+        read();
+        operands.push(std::unique_ptr<Expr>(locate(identifier(str))));
+      } else {
+        return error(UnexpectedToken);
+      }
+
     // Parse the operand within the current nesting level
     } else {
 
@@ -1294,6 +1311,7 @@ Expr* ExpressionParser::operand() {
         v = expression(true);
         if (!v) return nullptr;
       } else if (Tokenizer::is_identifier_name(t, key)) {
+        read();
         k = locate(string(key));
       } else {
         return error(UnexpectedToken);

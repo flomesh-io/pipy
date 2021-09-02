@@ -21,24 +21,24 @@ pipy({
 
 // Mock service on port 8080
 .listen(8080)
-  .decodeHttpRequest()
+  .decodeHTTPRequest()
   .replaceMessage(
     new Message('Hello from service 8080')
   )
-  .encodeHttpResponse()
+  .encodeHTTPResponse()
 
 // Mock service on port 8081
 .listen(8081)
-  .decodeHttpRequest()
+  .decodeHTTPRequest()
   .replaceMessage(
     new Message('Hello from service 8081')
   )
-  .encodeHttpResponse({ status: 300 })
+  .encodeHTTPResponse({ status: 300 })
 
 // Mock service on port 8082
 .listen(8082)
-  .decodeHttpRequest()
+  .decodeHTTPRequest()
   .replaceMessage(
     new Message('Hello from service 8082')
   )
-  .encodeHttpResponse({ status: 500 })
+  .encodeHTTPResponse({ status: 500 })

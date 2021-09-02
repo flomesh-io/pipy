@@ -89,11 +89,15 @@ public:
 protected:
   MuxBase();
   MuxBase(const MuxBase &r);
+  MuxBase(Pipeline *pipeline, const pjs::Value &channel);
   MuxBase(pjs::Str *target, const pjs::Value &channel);
+
+  auto target() const -> pjs::Str* { return m_target; }
 
   virtual auto new_connection() -> Connection* = 0;
 
 private:
+  virtual void bind() override;
   virtual void reset() override;
   virtual void process(Context *ctx, Event *inp) override;
 
@@ -119,6 +123,7 @@ private:
   };
 
   std::shared_ptr<ConnectionManager> m_connection_manager;
+  Pipeline* m_pipeline = nullptr;
   pjs::Ref<pjs::Str> m_target;
   pjs::Value m_channel;
   Connection* m_connection = nullptr;
@@ -142,6 +147,7 @@ private:
   virtual auto help() -> std::list<std::string> override;
   virtual void dump(std::ostream &out) override;
   virtual auto draw(std::list<std::string> &links, bool &fork) -> std::string override;
+  virtual void bind() override;
   virtual auto clone() -> Filter* override;
   virtual void reset() override;
   virtual void process(Context *ctx, Event *inp) override;
@@ -163,7 +169,7 @@ private:
       , m_name(name)
       , m_buffer_limit(buffer_limit) {}
 
-    void input(Channel *channel, Context *ctx, pjs::Object *mctx, pjs::Object *head, Data *body);
+    void input(Channel *channel, Context *ctx, pjs::Object *head, Data *body);
 
   private:
     int m_share_count = 1;
@@ -213,9 +219,9 @@ private:
   };
 
   std::shared_ptr<SessionPool> m_session_pool;
+  Pipeline* m_pipeline = nullptr;
   pjs::Ref<pjs::Str> m_target;
   pjs::Ref<pjs::Function> m_selector;
-  pjs::Ref<pjs::Object> m_mctx;
   pjs::Ref<pjs::Object> m_head;
   pjs::Ref<Data> m_body;
   pjs::Ref<SharedSession> m_session;

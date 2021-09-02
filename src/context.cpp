@@ -73,7 +73,6 @@ using namespace pipy;
 
 template<> void ClassDef<ContextDataBase>::init() {
   accessor("__filename", [](Object *obj, Value &ret) { ret.set(obj->as<ContextDataBase>()->filename()); });
-  accessor("__argv", [](Object *obj, Value &ret) { ret.set(obj->as<ContextDataBase>()->argv()); });
   accessor("__inbound", [](Object *obj, Value &ret) { ret.set(obj->as<ContextDataBase>()->inbound()); });
 }
 

@@ -1325,6 +1325,7 @@ class Context {
 public:
   struct Location {
     std::string name;
+    int file = 0;
     int line = 0;
     int column = 0;
   };
@@ -1401,7 +1402,7 @@ public:
   void error_argument_count(int n);
   void error_argument_count(int min, int max);
   void error_argument_type(int i, const char *type);
-  void backtrace(int line, int column);
+  void backtrace(int module, int line, int column);
   void backtrace(const std::string &name);
 
 private:

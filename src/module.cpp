@@ -52,6 +52,7 @@ void Module::reset_script(const std::string &path) {
 Module::Module(Worker *worker, int index)
   : m_worker(worker)
   , m_index(index)
+  , m_imports(new pjs::Expr::Imports)
 {
 }
 
@@ -83,7 +84,7 @@ bool Module::load(const std::string &path) {
   }
 
   pjs::Ref<Context> ctx = m_worker->new_loading_context();
-  expr->resolve(*ctx, m_index);
+  expr->resolve(*ctx, m_index, m_imports.get());
 
   pjs::Value result;
   if (!expr->eval(*ctx, result)) {
@@ -130,8 +131,22 @@ bool Module::load(const std::string &path) {
   return true;
 }
 
-void Module::start() {
+void Module::bind_exports() {
+  m_configuration->bind_exports(m_worker, this);
+}
+
+void Module::bind_imports() {
+  m_configuration->bind_imports(m_worker, this, m_imports.get());
+}
+
+void Module::make_pipelines() {
   m_configuration->apply(this);
+}
+
+void Module::bind_pipelines() {
+  for (const auto &p : m_pipelines) {
+    p->bind();
+  }
 }
 
 } // namespace pipy

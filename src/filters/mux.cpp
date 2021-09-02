@@ -43,8 +43,16 @@ MuxBase::MuxBase()
 
 MuxBase::MuxBase(const MuxBase &r)
   : m_connection_manager(r.m_connection_manager)
+  , m_pipeline(r.m_pipeline)
   , m_target(r.m_target)
   , m_channel(r.m_channel)
+{
+}
+
+MuxBase::MuxBase(Pipeline *pipeline, const pjs::Value &channel)
+  : m_connection_manager(std::make_shared<ConnectionManager>(this))
+  , m_pipeline(pipeline)
+  , m_channel(channel)
 {
 }
 
@@ -53,6 +61,12 @@ MuxBase::MuxBase(pjs::Str *target, const pjs::Value &channel)
   , m_target(target)
   , m_channel(channel)
 {
+}
+
+void MuxBase::bind() {
+  if (!m_pipeline) {
+    m_pipeline = pipeline(m_target);
+  }
 }
 
 void MuxBase::reset() {
@@ -71,20 +85,11 @@ void MuxBase::process(Context *ctx, Event *inp) {
   if (m_session_end) return;
 
   if (!m_connection) {
-    auto mod = pipeline()->module();
-    auto pipeline = mod->find_named_pipeline(m_target);
-    if (!pipeline) {
-      Log::error("[mux] unknown pipeline: %s", m_target->c_str());
-      abort();
-      return;
-    }
-
     pjs::Value key;
     if (!eval(*ctx, m_channel, key)) return;
-
     m_connection = m_connection_manager->get(key);
-    m_connection->m_pipeline = pipeline;
-    m_connection->m_context = mod->worker()->new_runtime_context(ctx);
+    m_connection->m_pipeline = m_pipeline;
+    m_connection->m_context = new_context(ctx);
   }
 
   if (auto start = inp->as<MessageStart>()) {
@@ -136,7 +141,9 @@ auto MuxBase::ConnectionManager::get(const pjs::Value &key) -> Connection* {
 
 void MuxBase::ConnectionManager::free(Connection *connection) {
   if (connection->m_key.is_undefined()) {
-    connection->close();
+    connection->reset();
+    connection->m_free_time = utils::now() - 10*1000;
+    m_free_connections.insert(connection);
   } else if (!--connection->m_share_count) {
     connection->m_free_time = utils::now();
     m_free_connections.insert(connection);
@@ -195,6 +202,7 @@ Mux::Mux(pjs::Str *target, pjs::Function *selector)
 
 Mux::Mux(const Mux &r)
   : m_session_pool(r.m_session_pool)
+  , m_pipeline(r.m_pipeline)
   , m_target(r.m_target)
   , m_selector(r.m_selector)
 {
@@ -222,6 +230,12 @@ auto Mux::draw(std::list<std::string> &links, bool &fork) -> std::string {
   return "mux";
 }
 
+void Mux::bind() {
+  if (!m_pipeline) {
+    m_pipeline = pipeline(m_target);
+  }
+}
+
 auto Mux::clone() -> Filter* {
   return new Mux(*this);
 }
@@ -233,7 +247,6 @@ void Mux::reset() {
   }
   m_session_pool->free(m_session);
   m_session = nullptr;
-  m_mctx = nullptr;
   m_head = nullptr;
   m_body = nullptr;
   m_session_end = false;
@@ -243,26 +256,18 @@ void Mux::process(Context *ctx, Event *inp) {
   if (m_session_end) return;
 
   if (!m_session) {
-    auto mod = pipeline()->module();
-    auto pipeline = mod->find_named_pipeline(m_target);
-    if (!pipeline) {
-      Log::error("[mux] unknown pipeline: %s", m_target->c_str());
-      abort();
-      return;
-    }
     if (m_selector) {
       pjs::Value ret;
       if (!callback(*ctx, m_selector, 0, nullptr, ret)) return;
       auto s = ret.to_string();
-      m_session = m_session_pool->alloc(pipeline, s);
+      m_session = m_session_pool->alloc(m_pipeline, s);
       s->release();
     } else {
-      m_session = m_session_pool->alloc(pipeline, pjs::Str::empty);
+      m_session = m_session_pool->alloc(m_pipeline, pjs::Str::empty);
     }
   }
 
   if (auto e = inp->as<MessageStart>()) {
-    m_mctx = e->context();
     m_head = e->head();
     m_body = Data::make();
 
@@ -280,8 +285,7 @@ void Mux::process(Context *ctx, Event *inp) {
         output(inp);
       };
       m_queue.push(channel);
-      m_session->input(channel, ctx, m_mctx, m_head, m_body);
-      m_mctx = nullptr;
+      m_session->input(channel, ctx, m_head, m_body);
       m_head = nullptr;
       m_body = nullptr;
     }
@@ -289,7 +293,6 @@ void Mux::process(Context *ctx, Event *inp) {
   } else if (inp->is<SessionEnd>()) {
     m_session_pool->free(m_session);
     m_session = nullptr;
-    m_mctx = nullptr;
     m_head = nullptr;
     m_body = nullptr;
     m_session_end = true;
@@ -321,7 +324,7 @@ void Mux::SessionPool::clean() {
   }
 }
 
-void Mux::SharedSession::input(Channel *channel, Context *ctx, pjs::Object *mctx, pjs::Object *head, Data *body) {
+void Mux::SharedSession::input(Channel *channel, Context *ctx, pjs::Object *head, Data *body) {
   if (!m_session || m_session->done()) {
     m_session = nullptr;
     m_session = Session::make(ctx, m_pipeline);
@@ -353,7 +356,7 @@ void Mux::SharedSession::input(Channel *channel, Context *ctx, pjs::Object *mctx
   }
 
   m_queue.push(std::unique_ptr<Channel>(channel));
-  m_session->input(MessageStart::make(mctx, head));
+  m_session->input(MessageStart::make(head));
   if (body) m_session->input(body);
   m_session->input(MessageEnd::make());
 }

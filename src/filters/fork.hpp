@@ -39,7 +39,7 @@ class Session;
 class Fork : public Filter {
 public:
   Fork();
-  Fork(pjs::Str *target, pjs::Object *session_data);
+  Fork(pjs::Str *target, pjs::Object *initializers);
 
 private:
   Fork(const Fork &r);
@@ -48,13 +48,15 @@ private:
   virtual auto help() -> std::list<std::string> override;
   virtual void dump(std::ostream &out) override;
   virtual auto draw(std::list<std::string> &links, bool &fork) -> std::string override;
+  virtual void bind() override;
   virtual auto clone() -> Filter* override;
   virtual void reset() override;
   virtual void process(Context *ctx, Event *inp) override;
 
 private:
+  Pipeline* m_pipeline = nullptr;
   pjs::Ref<pjs::Str> m_target;
-  pjs::Ref<pjs::Object> m_session_data;
+  pjs::Ref<pjs::Object> m_initializers;
   pjs::Ref<pjs::Array> m_sessions;
   bool m_session_end = false;
 };

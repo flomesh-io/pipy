@@ -30,14 +30,18 @@
 
 namespace pipy {
 
+class GuiService;
+
 class Gui {
 public:
   Gui();
+  ~Gui();
 
   void open(int port);
 
 private:
   Tarball m_www_files;
+  GuiService* m_service;
 };
 
 } // namespace pipy

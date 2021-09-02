@@ -152,7 +152,11 @@ template<> void ClassDef<pipy::Data>::init() {
       ctx.error("unknown encoding");
       return;
     }
-    ret.set(obj->as<pipy::Data>()->to_string(enc));
+    try {
+      ret.set(obj->as<pipy::Data>()->to_string(enc));
+    } catch (std::runtime_error &err) {
+      ret = pjs::Value::undefined;
+    }
   });
 }
 

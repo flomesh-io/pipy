@@ -58,6 +58,7 @@
 #include "filters/replace-start.hpp"
 #include "filters/socks.hpp"
 #include "filters/socks4.hpp"
+#include "filters/split.hpp"
 #include "filters/tap.hpp"
 #include "filters/tls.hpp"
 #include "filters/use.hpp"
@@ -70,26 +71,47 @@ namespace pipy {
 
 bool Configuration::s_reuse_port = false;
 
-Configuration::Configuration(pjs::Object *context_prototype) {
-  std::list<pjs::Field*> fields;
-  if (context_prototype) {
-    context_prototype->iterate_all([&](pjs::Str *key, pjs::Value &val) {
-      fields.push_back(
-        pjs::Variable::make(
-          key->str(), val,
-          pjs::Field::Enumerable | pjs::Field::Writable
-        )
-      );
-    });
+Configuration::Configuration(pjs::Object *context_prototype)
+  : m_context_prototype(context_prototype)
+{
+  if (!m_context_prototype) {
+    m_context_prototype = pjs::Object::make();
   }
+}
 
-  auto cls = pjs::Class::make(
-    "ContextData",
-    pjs::class_of<ContextDataBase>(),
-    fields
+void Configuration::add_export(pjs::Str *ns, pjs::Object *variables) {
+  if (ns->str().empty()) throw std::runtime_error("namespace cannot be empty");
+  if (!variables) throw std::runtime_error("variable list cannot be null");
+  variables->iterate_all(
+    [&](pjs::Str *k, pjs::Value &v) {
+      if (k->str().empty()) throw std::runtime_error("variable name cannot be empty");
+      m_exports.emplace_back();
+      auto &imp = m_exports.back();
+      imp.ns = ns;
+      imp.name = k;
+      imp.value = v;
+    }
   );
+}
 
-  m_context_class = cls;
+void Configuration::add_import(pjs::Object *variables) {
+  if (!variables) throw std::runtime_error("variable list cannot be null");
+  variables->iterate_all(
+    [&](pjs::Str *k, pjs::Value &v) {
+      if (k->str().empty()) throw std::runtime_error("variable name cannot be empty");
+      if (v.is_string()) {
+        if (v.s()->str().empty()) throw std::runtime_error("namespace cannot be empty");
+        m_imports.emplace_back();
+        auto &imp = m_imports.back();
+        imp.ns = v.s();
+        imp.name = k;
+        imp.original_name = k;
+      } else {
+        std::string msg("namespace expected for import: ");
+        throw std::runtime_error(msg + k->str());
+      }
+    }
+  );
 }
 
 void Configuration::listen(int port, pjs::Object *options) {
@@ -166,8 +188,8 @@ void Configuration::decode_dubbo() {
   append_filter(new dubbo::Decoder());
 }
 
-void Configuration::decode_http_request(pjs::Object *options) {
-  append_filter(new http::RequestDecoder(options));
+void Configuration::decode_http_request() {
+  append_filter(new http::RequestDecoder());
 }
 
 void Configuration::decode_http_response(pjs::Object *options) {
@@ -202,8 +224,8 @@ void Configuration::encode_dubbo(pjs::Object *message_obj) {
   append_filter(new dubbo::Encoder(message_obj));
 }
 
-void Configuration::encode_http_request(pjs::Object *request_obj) {
-  append_filter(new http::RequestEncoder(request_obj));
+void Configuration::encode_http_request() {
+  append_filter(new http::RequestEncoder());
 }
 
 void Configuration::encode_http_response(pjs::Object *response_obj) {
@@ -214,16 +236,19 @@ void Configuration::exec(const pjs::Value &command) {
   append_filter(new Exec(command));
 }
 
-void Configuration::fork(pjs::Str *target, pjs::Object *session_data) {
-  append_filter(new Fork(target, session_data));
+void Configuration::fork(pjs::Str *target, pjs::Object *initializers) {
+  append_filter(new Fork(target, initializers));
 }
 
 void Configuration::link(size_t count, pjs::Str **targets, pjs::Function **conditions) {
   std::list<Link::Route> routes;
   for (size_t i = 0; i < count; i++) {
-    routes.emplace_back(targets[i], conditions[i]);
+    routes.emplace_back();
+    auto &r = routes.back();
+    r.name = targets[i];
+    r.condition = conditions[i];
   }
-  append_filter(new Link(routes));
+  append_filter(new Link(std::move(routes)));
 }
 
 void Configuration::merge(pjs::Str *target, pjs::Function *selector) {
@@ -286,19 +311,69 @@ void Configuration::replace_start(const pjs::Value &replacement) {
   append_filter(new ReplaceStart(replacement));
 }
 
+void Configuration::serve_http(pjs::Object *handler) {
+  append_filter(new http::Server(handler));
+}
+
+void Configuration::split(pjs::Function *callback) {
+  append_filter(new Split(callback));
+}
+
 void Configuration::tap(const pjs::Value &quota, const pjs::Value &account) {
   append_filter(new Tap(quota, account));
 }
 
-void Configuration::use(Module *module, pjs::Str *pipeline, pjs::Object *argv) {
-  append_filter(new Use(module, pipeline, argv));
+void Configuration::use(Module *module, pjs::Str *pipeline) {
+  append_filter(new Use(module, pipeline));
 }
 
 void Configuration::wait(pjs::Function *condition) {
   append_filter(new Wait(condition));
 }
 
+void Configuration::bind_exports(Worker *worker, Module *module) {
+  for (const auto &exp : m_exports) {
+    if (m_context_prototype->has(exp.name)) {
+      std::string msg("duplicated variable name ");
+      msg += exp.name->str();
+      throw std::runtime_error(msg);
+    }
+    m_context_prototype->set(exp.name, exp.value);
+    worker->add_export(exp.ns, exp.name, module);
+  }
+}
+
+void Configuration::bind_imports(Worker *worker, Module *module, pjs::Expr::Imports *imports) {
+  for (const auto &imp : m_imports) {
+    auto m = worker->get_export(imp.ns, imp.original_name);
+    if (!m) {
+      std::string msg("cannot import variable ");
+      msg += imp.name->str();
+      msg += " in ";
+      msg += module->path();
+      throw std::runtime_error(msg);
+    }
+    imports->add(imp.name, m->index(), imp.original_name);
+  }
+}
+
 void Configuration::apply(Module *mod) {
+  std::list<pjs::Field*> fields;
+  m_context_prototype->iterate_all([&](pjs::Str *key, pjs::Value &val) {
+    fields.push_back(
+      pjs::Variable::make(
+        key->str(), val,
+        pjs::Field::Enumerable | pjs::Field::Writable
+      )
+    );
+  });
+
+  m_context_class = pjs::Class::make(
+    "ContextData",
+    pjs::class_of<ContextDataBase>(),
+    fields
+  );
+
   mod->m_context_class = m_context_class;
 
   auto make_pipeline = [&](
@@ -311,6 +386,7 @@ void Configuration::apply(Module *mod) {
     for (auto &f : filters) {
       pipeline->append(f.release());
     }
+    mod->m_pipelines.push_back(pipeline);
     return pipeline;
   };
 
@@ -389,6 +465,31 @@ namespace pjs {
 using namespace pipy;
 
 template<> void ClassDef<Configuration>::init() {
+
+  // Configuration.export
+  method("export", [](Context &ctx, Object *thiz, Value &result) {
+    pjs::Str *ns;
+    pjs::Object *variables;
+    if (!ctx.arguments(2, &ns, &variables)) return;
+    try {
+      thiz->as<Configuration>()->add_export(ns, variables);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // Configuration.import
+  method("import", [](Context &ctx, Object *thiz, Value &result) {
+    pjs::Object *variables;
+    if (!ctx.arguments(1, &variables)) return;
+    try {
+      thiz->as<Configuration>()->add_import(variables);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
 
   // Configuration.listen
   method("listen", [](Context &ctx, Object *thiz, Value &result) {
@@ -519,20 +620,18 @@ template<> void ClassDef<Configuration>::init() {
     }
   });
 
-  // Configuration.decodeHttpRequest
-  method("decodeHttpRequest", [](Context &ctx, Object *thiz, Value &result) {
-    pjs::Object *options = nullptr;
-    if (!ctx.arguments(0, &options)) return;
+  // Configuration.decodeHTTPRequest
+  method("decodeHTTPRequest", [](Context &ctx, Object *thiz, Value &result) {
     try {
-      thiz->as<Configuration>()->decode_http_request(options);
+      thiz->as<Configuration>()->decode_http_request();
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
     }
   });
 
-  // Configuration.decodeHttpResponse
-  method("decodeHttpResponse", [](Context &ctx, Object *thiz, Value &result) {
+  // Configuration.decodeHTTPResponse
+  method("decodeHTTPResponse", [](Context &ctx, Object *thiz, Value &result) {
     pjs::Object *options = nullptr;
     if (!ctx.arguments(0, &options)) return;
     try {
@@ -601,24 +700,22 @@ template<> void ClassDef<Configuration>::init() {
     }
   });
 
-  // Configuration.encodeHttpRequest
-  method("encodeHttpRequest", [](Context &ctx, Object *thiz, Value &result) {
-    Object *request_obj = nullptr;
-    if (!ctx.arguments(0, &request_obj)) return;
+  // Configuration.encodeHTTPRequest
+  method("encodeHTTPRequest", [](Context &ctx, Object *thiz, Value &result) {
     try {
-      thiz->as<Configuration>()->encode_http_request(request_obj);
+      thiz->as<Configuration>()->encode_http_request();
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
     }
   });
 
-  // Configuration.encodeHttpResponse
-  method("encodeHttpResponse", [](Context &ctx, Object *thiz, Value &result) {
-    Object *response_obj = nullptr;
-    if (!ctx.arguments(0, &response_obj)) return;
+  // Configuration.encodeHTTPResponse
+  method("encodeHTTPResponse", [](Context &ctx, Object *thiz, Value &result) {
+    Object *options = nullptr;
+    if (!ctx.arguments(0, &options)) return;
     try {
-      thiz->as<Configuration>()->encode_http_response(response_obj);
+      thiz->as<Configuration>()->encode_http_response(options);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -640,10 +737,10 @@ template<> void ClassDef<Configuration>::init() {
   // Configuration.fork
   method("fork", [](Context &ctx, Object *thiz, Value &result) {
     pjs::Str *target;
-    pjs::Object *session_data = nullptr;
-    if (!ctx.arguments(1, &target, &session_data)) return;
+    pjs::Object *initializers = nullptr;
+    if (!ctx.arguments(1, &target, &initializers)) return;
     try {
-      thiz->as<Configuration>()->fork(target, session_data);
+      thiz->as<Configuration>()->fork(target, initializers);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1062,6 +1159,30 @@ template<> void ClassDef<Configuration>::init() {
     }
   });
 
+  // Configuration.serveHTTP
+  method("serveHTTP", [](Context &ctx, Object *thiz, Value &result) {
+    Object *handler;
+    if (!ctx.arguments(1, &handler)) return;
+    try {
+      thiz->as<Configuration>()->serve_http(handler);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // Configuration.split
+  method("split", [](Context &ctx, Object *thiz, Value &result) {
+    Function *callback;
+    if (!ctx.arguments(1, &callback)) return;
+    try {
+      thiz->as<Configuration>()->split(callback);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
   // Configuration.tap
   method("tap", [](Context &ctx, Object *thiz, Value &result) {
     Value quota, account;
@@ -1078,20 +1199,7 @@ template<> void ClassDef<Configuration>::init() {
   method("use", [](Context &ctx, Object *thiz, Value &result) {
     std::string module;
     Str *pipeline;
-    Object* argv = nullptr;
     if (!ctx.arguments(2, &module, &pipeline)) return;
-    if (ctx.argc() == 3) {
-      auto &arg3 = ctx.arg(2);
-      if (arg3.is_array() || arg3.is_function()) {
-        argv = arg3.o();
-      }
-    } else if (ctx.argc() > 2) {
-      auto a = Array::make(ctx.argc() - 2);
-      for (int i = 2; i < ctx.argc(); i++) {
-        a->set(i - 2, ctx.arg(i));
-      }
-      argv = a;
-    }
     auto path = utils::path_normalize(module);
     auto root = static_cast<pipy::Context*>(ctx.root());
     auto worker = root->worker();
@@ -1103,7 +1211,7 @@ template<> void ClassDef<Configuration>::init() {
       return;
     }
     try {
-      thiz->as<Configuration>()->use(mod, pipeline, argv);
+      thiz->as<Configuration>()->use(mod, pipeline);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

@@ -39,13 +39,19 @@ Demux::Demux()
 {
 }
 
+Demux::Demux(Pipeline *pipeline)
+  : m_pipeline(pipeline)
+{
+}
+
 Demux::Demux(pjs::Str *target)
   : m_target(target)
 {
 }
 
 Demux::Demux(const Demux &r)
-  : Demux(r.m_target)
+  : m_pipeline(r.m_pipeline)
+  , m_target(r.m_target)
 {
 }
 
@@ -71,6 +77,12 @@ auto Demux::draw(std::list<std::string> &links, bool &fork) -> std::string {
   return "demux";
 }
 
+void Demux::bind() {
+  if (!m_pipeline) {
+    m_pipeline = pipeline(m_target);
+  }
+}
+
 auto Demux::clone() -> Filter* {
   return new Demux(*this);
 }
@@ -88,16 +100,9 @@ void Demux::process(Context *ctx, Event *inp) {
   if (m_session_end) return;
 
   if (inp->is<MessageStart>()) {
-    auto mod = pipeline()->module();
-    auto p = mod->find_named_pipeline(m_target);
-    if (!p) {
-      Log::error("[demux] unknown pipeline: %s", m_target->c_str());
-      abort();
-      return;
-    }
     auto channel = new Channel;
-    auto context = mod->worker()->new_runtime_context(ctx);
-    auto session = Session::make(context, p);
+    auto context = new_context(ctx);
+    auto session = Session::make(context, m_pipeline);
     session->on_output([=](Event *inp) {
       if (channel->output_end) return;
       if (inp->is<SessionEnd>()) {

@@ -142,14 +142,11 @@ public:
     : m_filename(filename) {}
 
   auto filename() const -> pjs::Str* { return m_filename; }
-  auto argv() const -> pjs::Array* { return m_argv; }
-  void argv(pjs::Array *argv) { m_argv = argv; }
   auto inbound() const -> Inbound* { return m_context->inbound(); }
 
 protected:
   Context* m_context;
   pjs::Ref<pjs::Str> m_filename;
-  pjs::Ref<pjs::Array> m_argv;
 
   friend class Context;
 };

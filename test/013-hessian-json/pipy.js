@@ -1,7 +1,7 @@
 pipy()
 
 .listen(6080)
-  .decodeHttpRequest()
+  .decodeHTTPRequest()
   .replaceMessageBody(
     body => (
       Hessian.encode(JSON.decode(body))
@@ -15,7 +15,7 @@ pipy()
       JSON.encode(Hessian.decode(body), null, 2)
     )
   )
-  .encodeHttpResponse()
+  .encodeHTTPResponse()
 
 // Mock TCP echo server
 .listen(20880)

@@ -19,7 +19,7 @@ pipy({
 
 // Extract request info
 .pipeline('in')
-  .decodeHttpRequest()
+  .decodeHTTPRequest()
   .onMessageStart(
     () => (
       _timestamp = Date.now(),
@@ -29,7 +29,7 @@ pipy({
 
 // Extract response info
 .pipeline('out')
-  .decodeHttpResponse()
+  .decodeHTTPResponse()
   .onMessageStart(
     e => (
       ((status, latency, i) => (
@@ -44,7 +44,7 @@ pipy({
 
 // Expose as Prometheus metrics
 .listen(9090)
-  .decodeHttpRequest()
+  .decodeHTTPRequest()
   .replaceMessage(
     () => (
       (sum => new Message(
@@ -59,12 +59,12 @@ pipy({
       ))(0)
     )
   )
-  .encodeHttpResponse()
+  .encodeHTTPResponse()
 
 // Mock service on port 8080
 .listen(8080)
-  .decodeHttpRequest()
+  .decodeHTTPRequest()
   .replaceMessage(
     new Message('Hello!\n')
   )
-  .encodeHttpResponse()
+  .encodeHTTPResponse()

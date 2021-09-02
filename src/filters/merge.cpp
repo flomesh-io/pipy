@@ -49,7 +49,8 @@ Merge::Merge(pjs::Str *target, pjs::Function *selector)
 }
 
 Merge::Merge(const Merge &r)
-  : m_session_pool(r.m_session_pool)
+  : m_pipeline(r.m_pipeline)
+  , m_session_pool(r.m_session_pool)
   , m_target(r.m_target)
   , m_selector(r.m_selector)
 {
@@ -77,6 +78,12 @@ auto Merge::draw(std::list<std::string> &links, bool &fork) -> std::string {
   return "merge";
 }
 
+void Merge::bind() {
+  if (!m_pipeline) {
+    m_pipeline = pipeline(m_target);
+  }
+}
+
 auto Merge::clone() -> Filter* {
   return new Merge(*this);
 }
@@ -84,7 +91,6 @@ auto Merge::clone() -> Filter* {
 void Merge::reset() {
   m_session_pool->free(m_session);
   m_session = nullptr;
-  m_mctx = nullptr;
   m_head = nullptr;
   m_body = nullptr;
   m_session_end = false;
@@ -94,26 +100,18 @@ void Merge::process(Context *ctx, Event *inp) {
   if (m_session_end) return;
 
   if (!m_session) {
-    auto mod = pipeline()->module();
-    auto pipeline = mod->find_named_pipeline(m_target);
-    if (!pipeline) {
-      Log::error("[merge] unknown pipeline: %s", m_target->c_str());
-      abort();
-      return;
-    }
     if (m_selector) {
       pjs::Value ret;
       if (!callback(*ctx, m_selector, 0, nullptr, ret)) return;
       auto s = ret.to_string();
-      m_session = m_session_pool->alloc(pipeline, s);
+      m_session = m_session_pool->alloc(m_pipeline, s);
       s->release();
     } else {
-      m_session = m_session_pool->alloc(pipeline, pjs::Str::empty);
+      m_session = m_session_pool->alloc(m_pipeline, pjs::Str::empty);
     }
   }
 
   if (auto e = inp->as<MessageStart>()) {
-    m_mctx = e->context();
     m_head = e->head();
     m_body = Data::make();
 
@@ -122,8 +120,7 @@ void Merge::process(Context *ctx, Event *inp) {
 
   } else if (inp->is<MessageEnd>()) {
     if (m_body) {
-      m_session->input(ctx, m_mctx, m_head, m_body);
-      m_mctx = nullptr;
+      m_session->input(ctx, m_head, m_body);
       m_head = nullptr;
       m_body = nullptr;
     }
@@ -134,7 +131,6 @@ void Merge::process(Context *ctx, Event *inp) {
   if (inp->is<SessionEnd>()) {
     m_session_pool->free(m_session);
     m_session = nullptr;
-    m_mctx = nullptr;
     m_head = nullptr;
     m_body = nullptr;
     m_session_end = true;
@@ -166,13 +162,13 @@ void Merge::SessionPool::clean() {
   }
 }
 
-void Merge::SharedSession::input(Context *ctx, pjs::Object *mctx, pjs::Object *head, Data *body) {
+void Merge::SharedSession::input(Context *ctx, pjs::Object *head, Data *body) {
   if (!m_session || m_session->done()) {
     m_session = nullptr;
     m_session = Session::make(ctx, m_pipeline);
   }
 
-  m_session->input(MessageStart::make(mctx, head));
+  m_session->input(MessageStart::make(head));
   if (body) m_session->input(body);
   m_session->input(MessageEnd::make());
 }

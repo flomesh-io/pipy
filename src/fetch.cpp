@@ -29,6 +29,7 @@
 #include "session.hpp"
 #include "message.hpp"
 #include "filters/connect.hpp"
+#include "filters/demux.hpp"
 #include "filters/http.hpp"
 
 namespace pipy {
@@ -53,10 +54,14 @@ void Fetch::Receiver::process(Context *ctx, Event *inp) {
 Fetch::Fetch(pjs::Str *host)
   : m_host(host)
 {
+  m_pipeline_connect = Pipeline::make(nullptr, Pipeline::NAMED, "Fetch Connection");
+  m_pipeline_connect->append(new Connect(m_host.get(), nullptr));
+
+  m_pipeline_request = Pipeline::make(nullptr, Pipeline::NAMED, "Fetch Request");
+  m_pipeline_request->append(new http::Mux(m_pipeline_connect, pjs::Value::undefined));
+
   m_pipeline = Pipeline::make(nullptr, Pipeline::NAMED, "Fetch");
-  m_pipeline->append(new http::RequestEncoder());
-  m_pipeline->append(new Connect(m_host.get(), nullptr));
-  m_pipeline->append(new http::ResponseDecoder([this]() -> bool { return is_bodiless_response(); }));
+  m_pipeline->append(new Demux(m_pipeline_request));
   m_pipeline->append(new Receiver(this));
 }
 

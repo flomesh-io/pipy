@@ -39,6 +39,7 @@ namespace pipy {
 class Filter;
 class Graph;
 class Module;
+class Worker;
 
 //
 // Configuration
@@ -46,7 +47,22 @@ class Module;
 
 class Configuration : public pjs::ObjectTemplate<Configuration> {
 public:
+  struct Export {
+    pjs::Ref<pjs::Str> ns;
+    pjs::Ref<pjs::Str> name;
+    pjs::Value value;
+  };
+
+  struct Import {
+    pjs::Ref<pjs::Str> ns;
+    pjs::Ref<pjs::Str> name;
+    pjs::Ref<pjs::Str> original_name;
+  };
+
   static void set_reuse_port(bool b) { s_reuse_port = b; }
+
+  void add_export(pjs::Str *ns, pjs::Object *variables);
+  void add_import(pjs::Object *variables);
 
   void listen(int port, pjs::Object *options);
   void task();
@@ -58,7 +74,7 @@ public:
   void connect(const pjs::Value &target, pjs::Object *options);
   void connect_tls(pjs::Str *target, pjs::Object *options);
   void decode_dubbo();
-  void decode_http_request(pjs::Object *options);
+  void decode_http_request();
   void decode_http_response(pjs::Object *options);
   void decompress_http(pjs::Function *enable);
   void decompress_message(const pjs::Value &algorithm);
@@ -67,10 +83,10 @@ public:
   void dummy();
   void dump(const pjs::Value &tag);
   void encode_dubbo(pjs::Object *message_obj);
-  void encode_http_request(pjs::Object *request_obj);
-  void encode_http_response(pjs::Object *response_obj);
+  void encode_http_request();
+  void encode_http_response(pjs::Object *options);
   void exec(const pjs::Value &command);
-  void fork(pjs::Str *target, pjs::Object *session_data);
+  void fork(pjs::Str *target, pjs::Object *initializers);
   void link(size_t count, pjs::Str **targets, pjs::Function **conditions);
   void merge(pjs::Str *target, pjs::Function *selector);
   void mux(pjs::Str *target, pjs::Function *selector);
@@ -87,10 +103,15 @@ public:
   void replace_event(Event::Type type, const pjs::Value &replacement);
   void replace_message(const pjs::Value &replacement, int size_limit);
   void replace_start(const pjs::Value &replacement);
+  void serve_http(pjs::Object *handler);
+  void split(pjs::Function *callback);
   void tap(const pjs::Value &quota, const pjs::Value &account);
-  void use(Module *module, pjs::Str *pipeline, pjs::Object *argv);
+  void use(Module *module, pjs::Str *pipeline);
   void wait(pjs::Function *condition);
 
+  void bind_pipelines();
+  void bind_exports(Worker *worker, Module *module);
+  void bind_imports(Worker *worker, Module *module, pjs::Expr::Imports *imports);
   void apply(Module *module);
   void draw(Graph &g);
 
@@ -116,7 +137,10 @@ private:
     std::list<std::unique_ptr<Filter>> filters;
   };
 
+  pjs::Ref<pjs::Object> m_context_prototype;
   pjs::Ref<pjs::Class> m_context_class;
+  std::list<Export> m_exports;
+  std::list<Import> m_imports;
   std::list<ListenConfig> m_listens;
   std::list<TaskConfig> m_tasks;
   std::list<NamedPipelineConfig> m_named_pipelines;

@@ -52,7 +52,7 @@ static Data::Producer s_dp_gui("GUI");
 // GuiService
 //
 
-class GuiService : public Filter {
+class GuiService {
 public:
   GuiService(Tarball &www_files)
     : m_www_files(www_files)
@@ -61,6 +61,7 @@ public:
       auto head = http::ResponseHead::make();
       auto headers = pjs::Object::make();
       headers->ht_set("content-type", content_type);
+      head->headers(headers);
       return head;
     };
 
@@ -82,42 +83,6 @@ public:
   }
 
 private:
-  ~GuiService() {}
-
-  virtual void dump(std::ostream &out) override {}
-
-  virtual auto clone() -> Filter* override {
-    return new GuiService(m_www_files);
-  }
-
-  virtual void reset() override {
-  }
-
-  virtual void process(Context *ctx, Event *inp) override {
-    if (auto e = inp->as<MessageStart>()) {
-      m_head = e->head();
-      m_body = Data::make();
-      return;
-
-    } else if (auto data = inp->as<Data>()) {
-      if (m_body) {
-        m_body->push(*data);
-        return;
-      }
-
-    } else if (inp->is<MessageEnd>()) {
-      if (m_body) {
-        pjs::Ref<Message> req = Message::make(m_head, m_body);
-        output(process(req));
-        m_head = nullptr;
-        m_body = nullptr;
-        return;
-      }
-    }
-
-    output(inp);
-  }
-
   Tarball& m_www_files;
   std::map<std::string, pjs::Ref<http::File>> m_www_file_cache;
   pjs::Ref<pjs::Object> m_head;
@@ -130,7 +95,8 @@ private:
   pjs::Ref<Message> m_response_not_found;
   pjs::Ref<Message> m_response_method_not_allowed;
 
-  auto process(Message *req) -> Message* {
+public:
+  auto handle(Message *req) -> Message* {
     auto &method = req->head()->as<http::RequestHead>()->method()->str();
     auto &path = req->head()->as<http::RequestHead>()->path()->str();
 
@@ -260,6 +226,8 @@ private:
       }
     }
   }
+
+private:
 
   //
   // Output directory tree as JSON
@@ -549,14 +517,23 @@ Gui::Gui()
   : m_www_files(nullptr, 0)
 #endif
 {
+  m_service = new GuiService(m_www_files);
+}
+
+Gui::~Gui() {
+  delete m_service;
 }
 
 void Gui::open(int port) {
   Log::info("[gui] Starting GUI service...");
   auto pipeline = Pipeline::make(nullptr, Pipeline::LISTEN, "GUI");
-  pipeline->append(new http::RequestDecoder());
-  pipeline->append(new GuiService(m_www_files));
-  pipeline->append(new http::ResponseEncoder());
+  pipeline->append(
+    new http::Server(
+      [this](Context*, Message *msg) {
+        return m_service->handle(msg);
+      }
+    )
+  );
   auto listener = Listener::make("0.0.0.0", port);
   listener->open(pipeline);
 }

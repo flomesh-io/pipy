@@ -1,8 +1,8 @@
 pipy()
 
 .listen(6080)
-  .decodeHttpRequest()
+  .decodeHTTPRequest()
   .replaceMessage(
     new Message('Hello!\n')
   )
-  .encodeHttpResponse()
+  .encodeHTTPResponse()

@@ -179,6 +179,29 @@ private:
   bool m_done = false;
 };
 
+//
+// Utf8Decoder
+//
+
+class Utf8Decoder {
+public:
+  static size_t max_output_size(size_t input_size) {
+    return input_size * 2;
+  }
+
+  Utf8Decoder(const std::function<void(int)> &output)
+    : m_output(output) {}
+
+  bool input(char c);
+  bool end();
+
+private:
+  const std::function<void(int)> m_output;
+  uint32_t m_codepoint = 0;
+  int m_shift = 0;
+  bool m_done = false;
+};
+
 } // namespace utils
 } // namespace pipy
 

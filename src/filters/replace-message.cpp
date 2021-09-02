@@ -70,7 +70,6 @@ auto ReplaceMessage::clone() -> Filter* {
 }
 
 void ReplaceMessage::reset() {
-  m_mctx = nullptr;
   m_head = nullptr;
   m_body = nullptr;
   m_discarded_size = 0;
@@ -78,7 +77,6 @@ void ReplaceMessage::reset() {
 
 void ReplaceMessage::process(Context *ctx, Event *inp) {
   if (auto e = inp->as<MessageStart>()) {
-    m_mctx = e->context();
     m_head = e->head();
     m_body = Data::make();
     return;
@@ -106,21 +104,20 @@ void ReplaceMessage::process(Context *ctx, Event *inp) {
 
   } else if (inp->is<MessageEnd>()) {
     if (m_body) {
-      if (m_discarded_size > 0) {
+      if (m_discarded_size > 0 && m_size_limit > 0) {
         Log::error(
           "[replaceMessage] %d bytes were discarded due to buffer size limit of %d",
           m_discarded_size, m_size_limit
         );
       }
       if (m_replacement.is_function()) {
-        pjs::Value arg(Message::make(m_mctx, m_head, m_body)), result;
+        pjs::Value arg(Message::make(m_head, m_body)), result;
         if (callback(*ctx, m_replacement.f(), 1, &arg, result)) {
-          output(result, m_mctx);
+          output(result);
         }
       } else {
-        output(m_replacement, m_mctx);
+        output(m_replacement);
       }
-      m_mctx = nullptr;
       m_head = nullptr;
       m_body = nullptr;
       m_discarded_size = 0;

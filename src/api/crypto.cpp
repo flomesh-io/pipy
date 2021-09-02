@@ -144,6 +144,7 @@ static auto get_cipher_iv(const EVP_CIPHER *cipher, pjs::Object *options, uint8_
 //
 
 PublicKey::PublicKey(Data *data, pjs::Object *options) {
+  if (!data) throw std::runtime_error("data is null");
   auto buf = data->to_bytes();
   m_pkey = read_pem(&buf[0], buf.size());
   set_pkey_options(m_pkey, options);
@@ -171,6 +172,7 @@ auto PublicKey::read_pem(const void *data, size_t size) -> EVP_PKEY* {
 //
 
 PrivateKey::PrivateKey(Data *data, pjs::Object *options) {
+  if (!data) throw std::runtime_error("data is null");
   auto buf = data->to_bytes();
   m_pkey = read_pem(&buf[0], buf.size());
   set_pkey_options(m_pkey, options);
@@ -790,6 +792,10 @@ bool JWT::verify(pjs::Str *key) {
 
 bool JWT::verify(JWK *key) {
   if (!key || !key->is_valid()) return false;
+  return verify(key->pkey());
+}
+
+bool JWT::verify(PrivateKey *key) {
   return verify(key->pkey());
 }
 
@@ -1524,9 +1530,11 @@ template<> void ClassDef<JWT>::init() {
     pipy::Data *data = nullptr;
     Str *str = nullptr;
     JWK *jwk = nullptr;
+    PrivateKey *pkey = nullptr;
     if (ctx.try_arguments(1, &data) ||
         ctx.try_arguments(1, &str) ||
-        ctx.try_arguments(1, &jwk)
+        ctx.try_arguments(1, &jwk) ||
+        ctx.try_arguments(1, &pkey)
     ) {
       try {
         if (data) {
@@ -1535,12 +1543,14 @@ template<> void ClassDef<JWT>::init() {
           ret.set(obj->as<JWT>()->verify(str));
         } else if (jwk) {
           ret.set(obj->as<JWT>()->verify(jwk));
+        } else if (pkey) {
+          ret.set(obj->as<JWT>()->verify(pkey));
         }
       } catch (std::runtime_error &err) {
         ctx.error(err);
       }
     } else {
-      ctx.error_argument_type(0, "a Data object or a string");
+      ctx.error_argument_type(0, "a Data object or a string or a private key object");
     }
   });
 }

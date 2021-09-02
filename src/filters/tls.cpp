@@ -400,7 +400,8 @@ Client::Client(pjs::Str *target, pjs::Object *options)
 }
 
 Client::Client(const Client &r)
-  : m_target(r.m_target)
+  : m_pipeline(r.m_pipeline)
+  , m_target(r.m_target)
   , m_certificate(r.m_certificate)
   , m_sni(r.m_sni)
   , m_tls_context(r.m_tls_context)
@@ -428,6 +429,12 @@ auto Client::draw(std::list<std::string> &links, bool &fork) -> std::string {
   return "connectTLS";
 }
 
+void Client::bind() {
+  if (!m_pipeline) {
+    m_pipeline = pipeline(m_target);
+  }
+}
+
 auto Client::clone() -> Filter* {
   return new Client(*this);
 }
@@ -441,33 +448,25 @@ void Client::process(Context *ctx, Event *inp) {
   if (m_session_end) return;
 
   if (!m_session) {
-    auto root = static_cast<Context*>(ctx->root());
-    auto mod = pipeline()->module();
-    if (auto pipeline = mod->find_named_pipeline(m_target)) {
-      m_session = new TLSSession(
-        m_tls_context.get(),
-        false,
-        m_certificate,
-        Session::make(ctx, pipeline),
-        out()
-      );
-      if (!m_sni.is_undefined()) {
-        pjs::Value sni;
-        if (!eval(*ctx, m_sni, sni)) return;
-        if (!sni.is_undefined()) {
-          if (sni.is_string()) {
-            m_session->set_sni(sni.s()->c_str());
-          } else {
-            Log::error("[tls] sni callback did not return a string");
-          }
+    m_session = new TLSSession(
+      m_tls_context.get(),
+      false,
+      m_certificate,
+      Session::make(ctx, m_pipeline),
+      out()
+    );
+    if (!m_sni.is_undefined()) {
+      pjs::Value sni;
+      if (!eval(*ctx, m_sni, sni)) return;
+      if (!sni.is_undefined()) {
+        if (sni.is_string()) {
+          m_session->set_sni(sni.s()->c_str());
+        } else {
+          Log::error("[tls] sni callback did not return a string");
         }
       }
-      m_session->start_handshake();
-    } else {
-      Log::error("[tls] unknown pipeline: %s", m_target->c_str());
-      m_session_end = true;
-      return;
     }
+    m_session->start_handshake();
   }
 
   if (auto *data = inp->as<Data>()) {
@@ -516,7 +515,8 @@ Server::Server(pjs::Str *target, pjs::Object *options)
 }
 
 Server::Server(const Server &r)
-  : m_target(r.m_target)
+  : m_pipeline(r.m_pipeline)
+  , m_target(r.m_target)
   , m_certificate(r.m_certificate)
   , m_tls_context(r.m_tls_context)
 {
@@ -543,6 +543,12 @@ auto Server::draw(std::list<std::string> &links, bool &fork) -> std::string {
   return "acceptTLS";
 }
 
+void Server::bind() {
+  if (!m_pipeline) {
+    m_pipeline = pipeline(m_target);
+  }
+}
+
 auto Server::clone() -> Filter* {
   return new Server(*this);
 }
@@ -556,21 +562,13 @@ void Server::process(Context *ctx, Event *inp) {
   if (m_session_end) return;
 
   if (!m_session) {
-    auto root = static_cast<Context*>(ctx->root());
-    auto mod = pipeline()->module();
-    if (auto pipeline = mod->find_named_pipeline(m_target)) {
-      m_session = new TLSSession(
-        m_tls_context.get(),
-        true,
-        m_certificate,
-        Session::make(ctx, pipeline),
-        out()
-      );
-    } else {
-      Log::error("[tls] unknown pipeline: %s", m_target->c_str());
-      m_session_end = true;
-      return;
-    }
+    m_session = new TLSSession(
+      m_tls_context.get(),
+      true,
+      m_certificate,
+      Session::make(ctx, m_pipeline),
+      out()
+    );
   }
 
   if (auto *data = inp->as<Data>()) {

@@ -22,7 +22,7 @@ pipy({
 
 // Find route for host + path
 .pipeline('routing')
-  .decodeHttpRequest()
+  .decodeHTTPRequest()
   .onMessageStart(
     evt => _target = _router.find(
       evt.head.headers.host,
@@ -38,24 +38,24 @@ pipy({
 
 // Not found
 .pipeline('404')
-  .decodeHttpRequest()
+  .decodeHTTPRequest()
   .replaceMessage(
     new Message({ status: 404 }, 'Not found\n')
   )
-  .encodeHttpResponse()
+  .encodeHTTPResponse()
 
 // Mock service on port 8080
 .listen(8080)
-  .decodeHttpRequest()
+  .decodeHTTPRequest()
   .replaceMessage(
     new Message('Hello from service 8080\n')
   )
-  .encodeHttpResponse()
+  .encodeHTTPResponse()
 
 // Mock service on port 8081
 .listen(8081)
-  .decodeHttpRequest()
+  .decodeHTTPRequest()
   .replaceMessage(
     new Message('Hello from service 8081\n')
   )
-  .encodeHttpResponse()
+  .encodeHTTPResponse()
