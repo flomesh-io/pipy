@@ -1,0 +1,8 @@
+{
+  "services": {
+    "service-1": {
+      "white": [],
+      "black": []
+    }
+  }
+}

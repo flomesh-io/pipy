@@ -1,0 +1,10 @@
+{
+  "services": {
+    "service-1": {
+      "jsonToXml": true
+    },
+    "service-2": {
+      "xmlToJson": true
+    }
+  }
+}

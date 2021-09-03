@@ -31,8 +31,8 @@ BUILD_RPM=false
 TEST_ONLY=false
 TEST_CASE=all
 
-IMAGE_TAG=latest
-DOCKERFILE=Dockerfile
+IMAGE_TAG=${IMAGE_TAG:-latest}
+DOCKERFILE=${DOCKERFILE:-Dockerfile}
 
 ##### End Default environment variables #########
 
@@ -164,10 +164,6 @@ if ! $TEST_ONLY ; then
   build
 fi
 
-if ! $TEST_ONLY && $BUILD_CONTAINER; then
-  sudo docker build --rm -t pipy:$IMAGE_TAG -f $DOCKERFILE $PIPY_DIR
-fi
-
 # Build RPM from container
 if ! $TEST_ONLY && $BUILD_RPM; then
   cd $PIPY_DIR
@@ -205,9 +201,24 @@ if ! $TEST_ONLY && $BUILD_RPM; then
     --build-arg COMMIT_ID=$COMMIT_ID \
     --build-arg COMMIT_DATE="$COMMIT_DATE" \
     -f $DOCKERFILE .
-  sudo docker run -it --rm -v $PIPY_DIR/rpm:/data pipy-rpm:$RELEASE_VERSION cp /rpm/pipy-${RELEASE_VERSION}.el7.x86_64.rpm /data
+  sudo docker run -it --rm -v $PIPY_DIR/rpm:/data pipy-rpm:$RELEASE_VERSION cp /rpm/pipy-oss-${RELEASE_VERSION}.el7.x86_64.rpm /data
   git checkout -- $PIPY_DIR/rpm/pipy.spec
   rm -f $PIPY_DIR/rpm/pipy.tar.gz
+fi
+
+if ! $TEST_ONLY && $BUILD_CONTAINER; then
+  if [ "x"$RELEASE_VERSION != "x" ]; then
+    IMAGE_TAG=$RELEASE_VERSION
+    sudo docker build --rm -t pipy-oss:$IMAGE_TAG \
+    --build-arg VERSION=$VERSION \
+    --build-arg REVISION=$REVISION \
+    --build-arg COMMIT_ID=$COMMIT_ID \
+    --build-arg COMMIT_DATE="$COMMIT_DATE" \
+    -f $DOCKERFILE $PIPY_DIR
+
+  else
+    sudo docker build --rm -t pipy-oss:$IMAGE_TAG -f $DOCKERFILE $PIPY_DIR
+  fi
 fi
 
 #if [ ! $BUILD_ONLY ]; then
