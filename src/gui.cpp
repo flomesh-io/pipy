@@ -347,6 +347,8 @@ private:
       CONFIG_METHOD,
     };
 
+    static const std::set<std::string> s_linking_filters;
+
     class ConfigValue : public pjs::Pooled<ConfigValue, pjs::Expr::Reducer::Value> {
     public:
       ConfigValue(ConfigValueType t) : m_t(t) {}
@@ -437,7 +439,7 @@ private:
             }
             m_p->filters.emplace_back(std::move(f));
 
-          } else if (m == "fork" || m == "mux" || m == "demux" || m == "proxySOCKS4") {
+          } else if (m == "fork" || s_linking_filters.count(m) > 0) {
             Graph::Filter f;
             f.name = m;
             f.fork = m == "fork";
@@ -504,6 +506,12 @@ private:
 
     return error;
   }
+};
+
+const std::set<std::string> GuiService::ConfigReducer::s_linking_filters{
+  "mux", "demux", "muxHTTP", "demuxHTTP",
+  "acceptTLS", "connectTLS",
+  "proxySOCKS4", "proxySOCKS5",
 };
 
 //
