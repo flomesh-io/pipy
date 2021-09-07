@@ -28,10 +28,54 @@
 #include <sys/stat.h>
 #include <cmath>
 #include <chrono>
+#include <random>
 
 namespace pipy {
 
 namespace utils {
+
+static int get_dec_uint8(const char **ptr) {
+  auto *s = *ptr;
+  if (*s == '0') {
+    *ptr = s + 1;
+    return 0;
+  }
+  int n = 0;
+  for (int i = 0; i < 3; i++, s++) {
+    auto c = *s;
+    if (c < '0' || c > '9') break;
+    n = (n * 10) + (c - '0');
+  }
+  *ptr = s;
+  return n < 256 ? n : -1;
+}
+
+static int get_hex_uint16(const char **ptr) {
+  auto *s = *ptr;
+  int n = 0;
+  for (int i = 0; i < 4; i++, s++) {
+    auto c = *s;
+    if ('0' <= c && c <= '9') n = (n << 4) | (c - '0'); else
+    if ('a' <= c && c <= 'f') n = (n << 4) | (c - 'a' + 10); else
+    if ('A' <= c && c <= 'F') n = (n << 4) | (c - 'A' + 10); else
+    if (!i) return -1; else break;
+  }
+  *ptr = s;
+  return n;
+}
+
+static int get_port_number(const char *str) {
+  const char *p = str;
+  int n = 0;
+  for (int i = 0; *p && i < 5; i++) {
+    auto c = *p++;
+    if (c < '0' || c > '9') return -1;
+    n = (n * 10) + (c - '0');
+  }
+  if (*p) return -1;
+  if (n < 1 || n > 65535) return -1;
+  return n;
+}
 
 auto to_string(double n) -> std::string {
   if (std::isnan(n)) return "NaN";
@@ -47,46 +91,106 @@ auto now() -> double {
   return double(ms);
 }
 
-auto get_param(const std::map<std::string, std::string> &params, const char *name, const char *value) -> std::string {
-  auto it = params.find(name);
-  if (it == params.end()) {
-    if (value) {
-      return value;
-    } else {
-      std::string msg("missing parameter ");
-      throw std::runtime_error(msg + name);
-    }
+bool get_host_port(const std::string &str, std::string &host, int &port) {
+  if (str.length() > 0 && str[0] == '[') {
+    auto p = str.find_last_of(']');
+    if (p == std::string::npos) return false;
+    if (p + 1 >= str.length() || str[p + 1] != ':') return false;
+    host = str.substr(1, p - 1);
+    port = get_port_number(&str[p + 2]);
+    uint16_t ip[8];
+    return (port > 0 && get_ip_v6(host, ip));
+  } else {
+    auto p = str.find_last_of(':');
+    if (p == std::string::npos) return false;
+    host = str.substr(0, p);
+    port = get_port_number(&str[p + 1]);
+    return (port > 0);
   }
-  return it->second;
 }
 
-bool get_host_port(const std::string &str, std::string &host, int &port) {
-  auto p = str.find_last_of(':');
-  if (p == std::string::npos) return false;
-  auto s1 = str.substr(0 , p);
-  auto s2 = str.substr(p + 1);
-  if (s2.length() > 5) return false;
-  for (auto c : s2) if (c < '0' || c > '9') return false;
-  auto n = std::atoi(s2.c_str());
-  if (n < 1 || n > 65535) return false;
-  host = s1;
-  port = n;
+bool get_ip_v4(const std::string &str, uint8_t ip[]) {
+  const char *p = str.c_str();
+  for (int i = 0; i < 4; i++, p++) {
+    auto n = get_dec_uint8(&p);
+    if (n < 0 ||
+      (i <= 2 && *p != '.') ||
+      (i == 3 && *p != '\0')
+    ) {
+      return false;
+    }
+    ip[i] = n;
+  }
   return true;
 }
 
-bool get_ip_port(const std::string &str, std::string &ip, int &port) {
-  std::string host;
-  int n = 0;
-  if (!get_host_port(str, host, n)) return false;
-  if (host.empty()) host = "0.0.0.0";
-  int a, b, c, d;
-  if (std::sscanf(host.c_str(), "%d.%d.%d.%d", &a, &b, &c, &d) != 4) return false;
-  if (a < 0 || a > 255) return false;
-  if (b < 0 || b > 255) return false;
-  if (c < 0 || c > 255) return false;
-  if (d < 0 || d > 255) return false;
-  ip = host;
-  port = n;
+bool get_ip_v6(const std::string &str, uint16_t ip[]) {
+  const char *p = str.c_str();
+  uint16_t head[8]; int head_len = 0;
+  uint16_t tail[8]; int tail_len = 0;
+
+  if (*p == '\0') return false;
+
+  if (*p == ':') {
+    p++; if (*p != ':') return false;
+    p++;
+  } else {
+    for (int i = 0; i < 8; i++, p++) {
+      if (*p == ':') { p++; break; }
+      auto n = get_hex_uint16(&p);
+      if (n < 0) return false;
+      head[head_len++] = n;
+      if (*p == '\0') break;
+      if (*p != ':') return false;
+    }
+  }
+
+  if (*p) {
+    for (int i = 0; i < 8; i++, p++) {
+      if (*p == ':') return false;
+      auto n = get_hex_uint16(&p);
+      if (n < 0) return false;
+      tail[tail_len++] = n;
+      if (*p == '\0') break;
+      if (*p != ':') return false;
+    }
+  }
+
+  auto zero_len = 8 - head_len - tail_len;
+  if (zero_len < 0) return false;
+  if (zero_len == 0 && head_len > 0 && tail_len > 0) return false;
+
+  for (int i = 0; i < head_len; i++) ip[i] = head[i];
+  for (int i = 0; i < zero_len; i++) ip[i+head_len] = 0;
+  for (int i = 0; i < tail_len; i++) ip[i+head_len+zero_len] = tail[i];
+
+  return true;
+}
+
+bool get_cidr(const std::string &str, uint8_t ip[], int &mask) {
+  const char *p = str.c_str();
+  for (int i = 0; i < 4; i++) {
+    if (i > 0) p++;
+    auto n = get_dec_uint8(&p);
+    if (n < 0 ||
+      (i <= 2 && *p != '.') ||
+      (i == 3 && *p != '/' && *p != '\0')
+    ) {
+      return false;
+    }
+    ip[i] = n;
+  }
+
+  int m;
+  if (*p == '/') {
+    p++;
+    m = get_dec_uint8(&p);
+    if (m < 0 || m > 32 || *p != '\0') return false;
+  } else {
+    m = 32;
+  }
+
+  mask = m;
   return true;
 }
 
@@ -118,6 +222,54 @@ auto get_seconds(const std::string &str) -> double {
     case 's': n *= 1;
   }
   return n;
+}
+
+void gen_uuid_v4(std::string &str) {
+  static std::random_device rd;
+  static std::mt19937_64 rn1, rn2;
+  static bool is_initialized = false;
+
+  if (!is_initialized) {
+    union {
+      uint64_t u64;
+      uint32_t u32[2];
+    } s1, s2;
+    s1.u32[0] = rd();
+    s1.u32[1] = rd();
+    s2.u32[0] = rd();
+    s2.u32[1] = rd();
+    rn1.seed(s1.u64);
+    rn2.seed(s2.u64);
+    is_initialized = true;
+  }
+
+  union {
+    uint64_t u64[2];
+    uint8_t u8[16];
+  } bits;
+
+  bits.u64[0] = rn1();
+  bits.u64[1] = rn2();
+
+  static const char *format = "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx";
+  static const char *hex_x = "0123456789abcdef";
+  static const char *hex_y = hex_x + 8;
+
+  str.resize(36);
+
+  for (int i = 0, p = 0; i < 36; i++) {
+    auto c = format[i];
+    switch (c) {
+      case 'x': str[i] = hex_x[0xf & (bits.u8[p>>1] >> ((p&1)*4))]; p++; break;
+      case 'y': str[i] = hex_y[0x3 & (bits.u8[p>>1] >> ((p&1)*4))]; p++; break;
+      case '-': str[i] = c; break;
+      default : str[i] = c; p++; break;
+    }
+  }
+}
+
+bool starts_with(const std::string &str, const std::string &prefix) {
+  return !strncmp(str.c_str(), prefix.c_str(), prefix.length());
 }
 
 auto trim(const std::string &str) -> std::string {

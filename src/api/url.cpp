@@ -103,12 +103,22 @@ URL::URL(pjs::Str *url, pjs::Str *base) {
   }
 
   std::string hostname, port;
-  i = host.find(':');
-  if (i != std::string::npos) {
-    hostname = host.substr(0, i);
-    port = host.substr(i + 1);
+  if (host[0] == '[') {
+    i = host.find(']');
+    if (i != std::string::npos && host[i+1] == ':') {
+      hostname = host.substr(0, i + 1);
+      port = host.substr(i + 2);
+    } else {
+      hostname = host;
+    }
   } else {
-    hostname = host;
+    i = host.find(':');
+    if (i != std::string::npos) {
+      hostname = host.substr(0, i);
+      port = host.substr(i + 1);
+    } else {
+      hostname = host;
+    }
   }
 
   std::string hash;
@@ -131,8 +141,15 @@ URL::URL(pjs::Str *url, pjs::Str *base) {
   // TODO: Make pathname in canonical form
 
   if (protocol.empty()) protocol = "http:";
-  if (port.empty()) port = "80";
   if (path.empty()) { path = pathname = "/"; }
+  if (port.empty()) {
+    if (protocol == "ftp:") port = "21";
+    else if (protocol == "gopher:") port = "70";
+    else if (protocol == "http:") port = "80";
+    else if (protocol == "https:") port = "443";
+    else if (protocol == "ws:") port = "80";
+    else if (protocol == "wss:") port = "443";
+  }
 
   auto origin = protocol + "//";
   auto href = origin;

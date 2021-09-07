@@ -616,6 +616,7 @@ int main(int argc, char *argv[]) {
       [&](bool ok) {
         if (!ok) {
           ret_val = -1;
+          Net::stop();
           return;
         }
 
@@ -652,14 +653,15 @@ int main(int argc, char *argv[]) {
           gui.open(opts.gui_port);
         }
 
-        signal(SIGTSTP, on_sig_tstp);
-        signal(SIGHUP, on_sig_hup);
-        signal(SIGINT, on_sig_int);
-
-        start_checking_signals();
         start_checking_updates();
       }
     );
+
+    signal(SIGTSTP, on_sig_tstp);
+    signal(SIGHUP, on_sig_hup);
+    signal(SIGINT, on_sig_int);
+
+    start_checking_signals();
 
     Net::run();
     std::cout << "Done." << std::endl;

@@ -62,7 +62,7 @@ void Outbound::send(const pjs::Ref<Data> &data) {
       if (!m_overflowed) {
         if (m_buffer_limit > 0 && m_buffer.size() >= m_buffer_limit) {
           Log::error(
-            "Outbound: %p to upstream %s:%d buffer overflow, size = %d",
+            "Outbound: %p to host = %s port = %d buffer overflow, size = %d",
             this, m_host.c_str(), m_port, m_buffer.size());
           m_overflowed = true;
         }
@@ -114,7 +114,7 @@ void Outbound::connect(double delay) {
   auto on_connected = [=](const std::error_code &ec) {
     if (ec) {
       Log::error(
-        "Outbound: %p, cannot connect to %s:%d, %s",
+        "Outbound: %p, cannot connect to host = %s port = %d, %s",
         this, m_host.c_str(), m_port, ec.message().c_str());
       if (should_reconnect()) {
         reconnect();
@@ -156,7 +156,7 @@ void Outbound::connect(double delay) {
       tcp::resolver::query(m_host, std::to_string(m_port)),
       on_resolved);
     if (m_retries > 0) {
-      Log::warn("Outbound: %p, retry connection to upstream %s:%d... (times = %d)",
+      Log::warn("Outbound: %p, retry connection to host = %s port = %d... (times = %d)",
         this, m_host.c_str(), m_port, m_retries
       );
     }
@@ -205,15 +205,15 @@ void Outbound::receive() {
       if (ec == asio::error::eof || ec == asio::error::operation_aborted) {
         Log::debug(
           ec == asio::error::eof
-            ? "Outbound: %p, connection closed by upstream %s:%d"
-            : "Outbound: %p, closed connection to upstream %s:%d",
+            ? "Outbound: %p, connection closed by host = %s port = %d"
+            : "Outbound: %p, closed connection to host = %s port = %d",
           this, m_host.c_str(), m_port);
         pjs::Ref<SessionEnd> evt(SessionEnd::make(SessionEnd::NO_ERROR));
         if (output(evt)) return;
       } else {
         auto msg = ec.message();
         Log::warn(
-          "Outbound: %p, error reading from upstream %s:%d, %s",
+          "Outbound: %p, error reading from host = %s port = %d, %s",
           this, m_host.c_str(), m_port, msg.c_str());
         pjs::Ref<SessionEnd> evt(SessionEnd::make(SessionEnd::READ_ERROR));
         if (output(evt)) return;
@@ -222,7 +222,7 @@ void Outbound::receive() {
       m_reading_ended = true;
       free();
 
-    } else {
+    } else if (!m_writing_ended) {
       receive();
     }
   };
@@ -257,7 +257,7 @@ void Outbound::pump() {
     if (ec) {
       auto msg = ec.message();
       Log::warn(
-        "Outbound: %p, error writing to upstream %s:%d, %s",
+        "Outbound: %p, error writing to host = %s port = %d, %s",
         this, m_host.c_str(), m_port, msg.c_str());
       m_buffer.clear();
       m_writing_ended = true;
@@ -268,7 +268,7 @@ void Outbound::pump() {
 
     if (m_overflowed && m_buffer.size() == 0) {
       Log::error(
-        "Outbound: %p, %d bytes sending to upstream %s:%d were discared due to overflow",
+        "Outbound: %p, %d bytes sending to host = %s port = %d were discared due to overflow",
         this, m_discarded_data_size, m_host.c_str(), m_port
       );
       m_writing_ended = true;
@@ -295,9 +295,9 @@ void Outbound::close() {
   std::error_code ec;
   m_socket.close(ec);
   if (ec) {
-    Log::error("Outbound: %p, error closing socket to %s:%d, %s", this, m_host.c_str(), m_port, ec.message().c_str());
+    Log::error("Outbound: %p, error closing socket to host = %s port = %d, %s", this, m_host.c_str(), m_port, ec.message().c_str());
   } else {
-    Log::debug("Outbound: %p, connection closed to %s:%d", this, m_host.c_str(), m_port);
+    Log::debug("Outbound: %p, connection closed to host = %s port = %d", this, m_host.c_str(), m_port);
   }
 }
 

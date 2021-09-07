@@ -134,7 +134,7 @@ void Configuration::listen(int port, pjs::Object *options) {
   }
 
   m_listens.push_back({
-    "0.0.0.0",
+    "::",
     port,
     reuse_port,
     max_connections,

@@ -126,7 +126,7 @@ void CodebaseFS::update(const std::function<void(bool)> &on_complete) {
 
 CodebaseHTTP::CodebaseHTTP(const std::string &url)
   : m_url(URL::make(pjs::Value(url).s()))
-  , m_fetch(m_url->host())
+  , m_fetch(m_url->hostname()->str() + ':' + m_url->port()->str())
 {
   auto path = m_url->pathname()->str();
   auto i = path.find_last_of('/');

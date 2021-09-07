@@ -82,10 +82,8 @@ void Listener::set_max_connections(int n) {
 }
 
 void Listener::start() {
-  tcp::resolver resolver(Net::service());
-  tcp::resolver::query query(m_ip, std::to_string(m_port));
-  tcp::endpoint endpoint = *resolver.resolve(query);
-
+  auto addr = asio::ip::address::from_string(m_ip);
+  tcp::endpoint endpoint(addr, m_port);
   m_acceptor.open(endpoint.protocol());
   m_acceptor.set_option(asio::socket_base::reuse_address(true));
 
@@ -111,7 +109,7 @@ void Listener::start() {
     accept();
   }
 
-  Log::info("[listener] Listening on %s:%d", m_ip.c_str(), m_port);
+  Log::info("[listener] Listening on port %d at %s", m_port, m_ip.c_str());
 }
 
 void Listener::close(Inbound *inbound) {
