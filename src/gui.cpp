@@ -439,10 +439,10 @@ private:
             }
             m_p->filters.emplace_back(std::move(f));
 
-          } else if (m == "fork" || s_linking_filters.count(m) > 0) {
+          } else if (m == "fork" || m == "merge" || s_linking_filters.count(m) > 0) {
             Graph::Filter f;
             f.name = m;
-            f.fork = m == "fork";
+            f.fork = (m == "fork" || m == "merge");
             if (argc > 0 && cv(argv[0])->t() == STRING) {
               f.links.push_back(cv(argv[0])->s());
             }
