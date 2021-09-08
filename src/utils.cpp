@@ -27,6 +27,7 @@
 
 #include <sys/stat.h>
 #include <cmath>
+#include <cstring>
 #include <chrono>
 #include <random>
 
@@ -269,7 +270,7 @@ void gen_uuid_v4(std::string &str) {
 }
 
 bool starts_with(const std::string &str, const std::string &prefix) {
-  return !strncmp(str.c_str(), prefix.c_str(), prefix.length());
+  return !std::strncmp(str.c_str(), prefix.c_str(), prefix.length());
 }
 
 auto trim(const std::string &str) -> std::string {
