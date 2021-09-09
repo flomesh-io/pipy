@@ -25,10 +25,10 @@ Pipy 采用了模块化、链式的处理架构，用顺序执行的模块来对
 
 ## 图形界面
 
-这次迭代我们引入了web编辑器。启动pipy时使用--gui-port=6060来开启该功能，如：
+这次迭代我们引入了web编辑器。启动pipy时使用--dev-port=6060来开启该功能，如：
 
 ~~~~
-$pipy test --gui-port=6060
+$pipy test --dev-port=6060
 ~~~~
 
 启动pipy后，用浏览器访问 http://localhost:6060/ 就可以看到pipy控制台。控制台采用类似vscode的布局和操作体验。具体的使用可以参考[pipy console基本使用文档](docs/pipy-console-intro_zh.md)。
@@ -102,7 +102,7 @@ $ pipy test/001-echo/pipy.js
 
 或者使用pipy console:
 ```command
-$ pipy test/ --gui-port=6060
+$ pipy test/ --dev-port=6060
 ```
 然后使用浏览器访问 http://localhost:6060/ 就可以了。
 

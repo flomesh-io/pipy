@@ -24,6 +24,9 @@
  */
 
 #include "graph.hpp"
+#include "pipeline.hpp"
+#include "filter.hpp"
+#include "pjs/pjs.hpp"
 #include "utils.hpp"
 
 #include <functional>
@@ -31,6 +34,234 @@
 #include <memory>
 
 namespace pipy {
+
+//
+// Create graph from a set of pipelines
+//
+
+void Graph::from_pipelines(Graph &g, const std::set<pipy::Pipeline*> &pipelines) {
+  for (auto *pipeline : pipelines) {
+    Graph::Pipeline p;
+    p.name = pipeline->name();
+    for (auto &f : pipeline->filters()) {
+      Graph::Filter gf;
+      gf.name = f->draw(gf.links, gf.fork);
+      p.filters.emplace_back(std::move(gf));
+    }
+    switch (pipeline->type()) {
+      case pipy::Pipeline::NAMED:
+        g.add_named_pipeline(std::move(p));
+        break;
+      case pipy::Pipeline::LISTEN:
+      case pipy::Pipeline::TASK:
+        g.add_root_pipeline(std::move(p));
+        break;
+    }
+  }
+}
+
+//
+// Create graph from source code
+//
+
+class ConfigReducer : public pjs::Expr::Reducer {
+public:
+  ConfigReducer(Graph &g) : m_g(g) {}
+
+  void flush() {
+    if (m_p) {
+      if (m_pt == Pipeline::NAMED) {
+        m_g.add_named_pipeline(std::move(*m_p));
+      } else {
+        m_g.add_root_pipeline(std::move(*m_p));
+      }
+      delete m_p;
+      m_p = nullptr;
+    }
+  }
+
+private:
+  Graph& m_g;
+  Graph::Pipeline* m_p = nullptr;
+  Pipeline::Type m_pt;
+  int m_named_count = 0;
+  int m_listen_count = 0;
+  int m_task_count = 0;
+
+  enum ConfigValueType {
+    UNDEFINED,
+    BOOLEAN,
+    NUMBER,
+    STRING,
+    CONFIG_MAKER,
+    CONFIG_OBJECT,
+    CONFIG_METHOD,
+  };
+
+  static const std::set<std::string> s_linking_filters;
+
+  class ConfigValue : public pjs::Pooled<ConfigValue, pjs::Expr::Reducer::Value> {
+  public:
+    ConfigValue(ConfigValueType t) : m_t(t) {}
+    ConfigValue(ConfigValueType t, const std::string &s) : m_t(t), m_s(s) {}
+    ConfigValue(bool b) : m_t(BOOLEAN), m_b(b) {}
+    ConfigValue(double n) : m_t(NUMBER), m_n(n) {}
+    ConfigValue(const std::string &s) : m_t(STRING), m_s(s) {}
+
+    auto t() const -> ConfigValueType { return m_t; }
+    auto b() const -> bool { return m_b; }
+    auto n() const -> double { return m_n; }
+    auto s() const -> const std::string& { return m_s; }
+
+  private:
+    ConfigValueType m_t;
+    bool m_b = false;
+    double m_n = 0;
+    std::string m_s;
+  };
+
+  static auto cv(Value *v) -> ConfigValue* {
+    return static_cast<ConfigValue*>(v);
+  }
+
+  virtual void free(Value *val) override {
+    delete cv(val);
+  }
+
+  virtual Value* undefined() override {
+    return new ConfigValue(UNDEFINED);
+  }
+
+  virtual Value* boolean(bool b) override {
+    return new ConfigValue(b);
+  }
+
+  virtual Value* number(double n) override {
+    return new ConfigValue(n);
+  }
+
+  virtual Value* string(const std::string &s) override {
+    return new ConfigValue(s);
+  }
+
+  virtual Value* get(const std::string &name) override {
+    if (name == "pipy") return new ConfigValue(CONFIG_MAKER);
+    return undefined();
+  }
+
+  virtual Value* call(Value *fn, Value **argv, int argc) override {
+    Value *ret = nullptr;
+    if (cv(fn)->t() == CONFIG_MAKER) {
+      ret = new ConfigValue(CONFIG_OBJECT);
+    } else if (cv(fn)->t() == CONFIG_METHOD) {
+      const auto &m = cv(fn)->s();
+      if (m == "pipeline") {
+        flush();
+        m_pt = Pipeline::NAMED;
+        m_p = new Graph::Pipeline;
+        m_p->name = argc > 0 && cv(argv[0])->t() == STRING
+          ? cv(argv[0])->s()
+          : std::string("Pipeline #") + std::to_string(++m_named_count);
+
+      } else if (m == "listen") {
+        flush();
+        m_pt = Pipeline::LISTEN;
+        m_p = new Graph::Pipeline;
+        m_p->name = argc > 0 && cv(argv[0])->t() == NUMBER
+          ? std::string("Listen 0.0.0.0:") + std::to_string(int(cv(argv[0])->n()))
+          : std::string("Listen #") + std::to_string(++m_listen_count);
+
+      } else if (m == "task") {
+        flush();
+        m_pt = Pipeline::TASK;
+        m_p = new Graph::Pipeline;
+        m_p->name = argc > 0 && cv(argv[0])->t() == STRING
+          ? std::string("Task every ") + cv(argv[0])->s()
+          : std::string("Task #") + std::to_string(++m_task_count);
+
+      } else if (m_p) {
+        if (m == "link") {
+          Graph::Filter f;
+          f.name = m;
+          for (int i = 0; i < argc; i += 2) {
+            if (cv(argv[i])->t() == STRING) {
+              f.links.push_back(cv(argv[i])->s());
+            }
+          }
+          m_p->filters.emplace_back(std::move(f));
+
+        } else if (m == "fork" || m == "merge" || s_linking_filters.count(m) > 0) {
+          Graph::Filter f;
+          f.name = m;
+          f.fork = (m == "fork" || m == "merge");
+          if (argc > 0 && cv(argv[0])->t() == STRING) {
+            f.links.push_back(cv(argv[0])->s());
+          }
+          m_p->filters.emplace_back(std::move(f));
+
+        } else if (m == "use") {
+          std::string arg1, arg2;
+          if (argc > 0 && cv(argv[0])->t() == STRING) arg1 = cv(argv[0])->s();
+          if (argc > 1 && cv(argv[1])->t() == STRING) arg2 = cv(argv[1])->s();
+          Graph::Filter f;
+          f.name = m;
+          f.name += ' ';
+          f.name += arg1;
+          f.name += " [";
+          f.name += arg2;
+          f.name += ']';
+          m_p->filters.emplace_back(std::move(f));
+
+        } else {
+          Graph::Filter f;
+          f.name = m;
+          m_p->filters.emplace_back(std::move(f));
+        }
+      }
+      ret = new ConfigValue(CONFIG_OBJECT);
+
+    } else {
+      ret = undefined();
+    }
+    delete fn;
+    for (int i = 0; i < argc; i++) free(argv[i]);
+    return ret;
+  }
+
+  virtual Value* get(Value *obj, Value *key) override {
+    Value *ret = nullptr;
+    if (cv(obj)->t() == CONFIG_OBJECT && cv(key)->t() == STRING) ret = new ConfigValue(CONFIG_METHOD, cv(key)->s());
+    else ret = undefined();
+    delete obj;
+    delete key;
+    return ret;
+  }
+};
+
+const std::set<std::string> ConfigReducer::s_linking_filters{
+  "mux", "demux", "muxHTTP", "demuxHTTP",
+  "acceptTLS", "connectTLS",
+  "proxySOCKS4", "proxySOCKS5",
+};
+
+bool Graph::from_script(Graph &g, const std::string &script, std::string &error) {
+  error.clear();
+  int error_line, error_column;
+  std::unique_ptr<pjs::Expr> ast(
+    pjs::Parser::parse(script, error, error_line, error_column)
+  );
+
+  if (!error.empty()) return false;
+
+  ConfigReducer r(g);
+  delete ast->reduce(r);
+  r.flush();
+  return true;
+}
+
+//
+// Graph
+//
 
 auto Graph::to_text(std::string &error) -> std::vector<std::string> {
   std::vector<std::string> lines;

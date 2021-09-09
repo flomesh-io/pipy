@@ -100,7 +100,7 @@ Alternatively, while developing and debugging, one can start Pipy in web UI mode
 specifying any specific script file but only a working directory:
 
 ```
-$ pipy test/ --gui-port=6060
+$ pipy test/ --dev-port=6060
 ```
 
 ## Run in Docker

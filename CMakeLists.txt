@@ -41,6 +41,8 @@ add_executable(pipy
   src/api/url.cpp
   src/api/xml.cpp
   src/codebase.cpp
+  src/codebase-service.cpp
+  src/codebase-store.cpp
   src/compress.cpp
   src/context.cpp
   src/data.cpp
@@ -78,7 +80,6 @@ add_executable(pipy
   src/filters/wait.cpp
   src/fstream.cpp
   src/graph.cpp
-  src/gui.cpp
   src/inbound.cpp
   src/listener.cpp
   src/logging.cpp
@@ -94,6 +95,7 @@ add_executable(pipy
   src/pjs/parser.cpp
   src/pjs/types.cpp
   src/session.cpp
+  src/store.cpp
   src/tar.cpp
   src/task.cpp
   src/utils.cpp

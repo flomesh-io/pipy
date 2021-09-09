@@ -27,7 +27,7 @@
 
 #include "api/configuration.hpp"
 #include "codebase.hpp"
-#include "gui.hpp"
+#include "codebase-service.hpp"
 #include "listener.hpp"
 #include "module.hpp"
 #include "net.hpp"
@@ -142,6 +142,11 @@ static void show_version() {
   std::cout << "Commit Date : " << PIPY_COMMIT_DATE << std::endl;
   std::cout << "Host        : " << PIPY_HOST << std::endl;
   std::cout << "OpenSSL     : " << OPENSSL_VERSION_TEXT << std::endl;
+#ifdef PIPY_USE_GUI
+  std::cout << "Builtin GUI : " << "Yes" << std::endl;
+#else
+  std::cout << "Builtin GUI : " << "No" << std::endl;
+#endif
 }
 
 //
@@ -610,7 +615,9 @@ int main(int argc, char *argv[]) {
       chdir(codebase->base().c_str());
     }
 
-    Gui gui;
+    Store *store = nullptr;
+    CodebaseStore *cb_store = nullptr;
+    CodebaseService *cb_service = nullptr;
 
     Codebase::current()->update(
       [&](bool ok) {
@@ -621,9 +628,10 @@ int main(int argc, char *argv[]) {
         }
 
         const auto &entry = Codebase::current()->entry();
-        if (entry.empty() && !opts.gui_port) {
+        if (entry.empty() && !opts.dev_port && !opts.repo_port) {
           std::cerr << "No script file specified" << std::endl;
           ret_val = -1;
+          Net::stop();
           return;
         }
 
@@ -649,8 +657,16 @@ int main(int argc, char *argv[]) {
           }
         }
 
-        if (opts.gui_port && !opts.verify) {
-          gui.open(opts.gui_port);
+        if (!opts.verify) {
+          if (opts.repo_port) {
+            store = Store::open_memory();
+            cb_store = new CodebaseStore(store);
+            cb_service = new CodebaseService(cb_store);
+            cb_service->open(opts.repo_port);
+          } else if (opts.dev_port) {
+            cb_service = new CodebaseService(nullptr);
+            cb_service->open(opts.dev_port);
+          }
         }
 
         start_checking_updates();
@@ -664,6 +680,11 @@ int main(int argc, char *argv[]) {
     start_checking_signals();
 
     Net::run();
+
+    delete cb_service;
+    delete cb_store;
+    if (store) store->close();
+
     std::cout << "Done." << std::endl;
 
   } catch (std::runtime_error &e) {
