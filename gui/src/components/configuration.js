@@ -78,7 +78,7 @@ function Configuration() {
         if (!config) {
           globalState.showWaiting('Loading configuration...');
           try {
-            const res = await fetch('/api/config');
+            const res = await fetch('/api/v1/config');
             if (res.status === 200) {
               setConfig(await res.json());
             }
@@ -94,7 +94,7 @@ function Configuration() {
   // const loadConfig = async () => {
   //   globalState.showWaiting('Loading configuration...');
   //   try {
-  //     const res = await fetch('/api/config');
+  //     const res = await fetch('/api/v1/config');
   //     if (res.status === 200) {
   //       setConfig(await res.json());
   //     }

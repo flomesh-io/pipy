@@ -137,7 +137,7 @@ class File {
     let graphUpdatingTimeout = null;
 
     const loadGraph = async () => {
-      const res = await fetch('/api/graph', {
+      const res = await fetch('/api/v1/graph', {
         method: 'POST',
         headers: {
           'content-type': 'text/plain',
@@ -242,7 +242,7 @@ function Editor() {
       const file = store.currentFile;
       globalState.showWaiting('Saving...');
       try {
-        const res = await fetch('/api/files' + file.name, {
+        const res = await fetch('/api/v1/files' + file.name, {
           method: 'POST',
           headers: {
             'content-type': 'text/plain',
@@ -318,7 +318,7 @@ function Editor() {
         (async () => {
           globalState.showWaiting('Loading working directory...');
           try {
-            const res = await fetch('/api/files');
+            const res = await fetch('/api/v1/files');
             if (res.status === 200) {
               const tree = await res.json();
               store.fileTree = tree;
@@ -370,7 +370,7 @@ function Editor() {
 
     if (filename in allFiles) {
       const monaco = await import('monaco-editor');
-      const res = await fetch('/api/files' + filename);
+      const res = await fetch('/api/v1/files' + filename);
       if (res.status === 200) {
         const content = await res.text();
         const type = (
@@ -394,7 +394,7 @@ function Editor() {
     setShowConsole(true);
     globalState.showWaiting('Starting program...');
     try {
-      const res = await fetch('/api/program', {
+      const res = await fetch('/api/v1/program', {
         method: 'POST',
         body: filename,
       });
@@ -431,7 +431,7 @@ function Editor() {
     setShowAddFile(false);
     globalState.showWaiting('Saving...');
     try {
-      const res = await fetch('/api/files' + filename, {
+      const res = await fetch('/api/v1/files' + filename, {
         method: 'POST',
         headers: {
           'content-type': 'text/plain',
@@ -459,7 +459,7 @@ function Editor() {
     setShowDeleteFile(false);
     globalState.showWaiting('Deleting...');
     try {
-      const res = await fetch('/api/files' + filename, {
+      const res = await fetch('/api/v1/files' + filename, {
         method: 'DELETE',
       });
       if (res.status === 204) {
@@ -492,7 +492,7 @@ function Editor() {
   const handleStop = async () => {
     globalState.showWaiting('Stopping program...');
     try {
-      const res = await fetch('/api/program', {
+      const res = await fetch('/api/v1/program', {
         method: 'DELETE',
       });
       if (res.status === 204) {

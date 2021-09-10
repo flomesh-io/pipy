@@ -61,7 +61,7 @@ function Index() {
   React.useEffect(
     () => {
       (async () => {
-        const res = await fetch('/api/program');
+        const res = await fetch('/api/v1/program');
         if (res.status === 200) {
           setRunningProgram(await res.text());
         }
@@ -78,7 +78,7 @@ function Index() {
       const node = document.createTextNode('');
       const poll = async () => {
         try {
-          const res = await fetch('/api/log', {
+          const res = await fetch('/api/v1/log', {
             headers: {
               'x-log-size': size,
             },
