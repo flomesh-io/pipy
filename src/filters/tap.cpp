@@ -165,6 +165,9 @@ void Tap::Account::queue(Channel *channel) {
 
 void Tap::Account::clear(Channel *channel) {
   m_queue.remove(channel);
+  if (m_paused_channels.erase(channel)) {
+    channel->resume();
+  }
 }
 
 void Tap::Account::pump() {
