@@ -634,7 +634,7 @@ function Editor({ root }) {
             <ToolbarTextButton
               startIcon={<BaseIcon/>}
               disabled={queryCodebase.isRunning || !queryCodebase.data?.base}
-              onClick={() => navigate(`/repo${queryCodebase.data.base}`)}
+              onClick={() => navigate(`/repo${queryCodebase.data.base}/`)}
             >
               Base
             </ToolbarTextButton>
@@ -930,7 +930,7 @@ function DerivativesButton({ root, derived }) {
 
   const handleSelectItem = path => {
     setAnchorEl(null);
-    navigate(`/repo${path}`);
+    navigate(`/repo${path}/`);
   }
 
   return (
@@ -971,7 +971,7 @@ function DerivativesButton({ root, derived }) {
       <DialogNewCodebase
         open={openDialogNew}
         base={root}
-        onSuccess={path => navigate(`/repo${path}`)}
+        onSuccess={path => navigate(`/repo${path}/`)}
         onClose={() => setOpenDialogNew(false)}
       />
     </React.Fragment>

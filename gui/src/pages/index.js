@@ -7,7 +7,6 @@ import { useQuery } from 'react-query';
 // Material-UI components
 import Box from '@material-ui/core/Box';
 import Button from '@material-ui/core/Button';
-import Grid from '@material-ui/core/Grid';
 import List from '@material-ui/core/List';
 import ListItem from '@material-ui/core/ListItem';
 import ListItemIcon from '@material-ui/core/ListItemIcon';
@@ -15,13 +14,14 @@ import ListItemText from '@material-ui/core/ListItemText';
 import OutlinedInput from '@material-ui/core/OutlinedInput';
 
 // Components
+import Codebase from '../components/codebase';
 import DialogNewCodebase from '../components/dialog-new-codebase';
+import Loading from '../components/loading';
 
 // Icons
 import AddCircleIcon from '@material-ui/icons/AddCircle';
 import ChevronRightIcon from '@material-ui/icons/ChevronRight';
 import CodebaseIcon from '@material-ui/icons/CodeSharp';
-import LocalHostIcon from '@material-ui/icons/DesktopWindowsSharp';
 import SearchIcon from '@material-ui/icons/SearchSharp';
 
 // Logo
@@ -56,73 +56,74 @@ function Index() {
 
   const [openDialogNewCodebase, setOpenDialogNewCodebase] = React.useState(false);
 
-  const queryCodebaseList = useQuery('codebases', async () => {
-    const res = await fetch('/api/v1/repo');
-    if (res.status !== 200) {
-      const msg = await res.text();
-      throw new Error(`Error: ${msg}, status = ${res.status}`);
+  const queryCodebaseList = useQuery(
+    'codebases',
+    async () => {
+      const res = await fetch('/api/v1/repo');
+      if (res.status !== 200) {
+        console.log('ERROR', res.status)
+        const msg = await res.text();
+        throw new Error(`Error: ${msg}, status = ${res.status}`);
+      }
+      const lines = await res.text();
+      const paths = lines.split('\n').filter(l => Boolean(l)).sort();
+      return paths;
+    },
+    {
+      retry: false,
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
     }
-    const lines = await res.text();
-    const paths = lines.split('\n').filter(l => Boolean(l)).sort();
-    return paths;
-  });
+  );
+
+  if (queryCodebaseList.isLoading) {
+    return (
+      <div className={classes.root}>
+        <Loading/>
+      </div>
+    );
+  }
+
+  if (!queryCodebaseList.isSuccess) {
+    return <Codebase root="/"/>;
+  }
 
   return (
     <div className={classes.root}>
       <img src={PipyLogo} alt='PipyLogo' className={classes.logo}/>
-      <Box p={2}>
-        <Grid container wrap="nowrap" justifyContent="center" spacing={2}>
-          {queryCodebaseList.isSuccess && (
-            <Grid item>
-              <Button
-                variant="text"
-                startIcon={<AddCircleIcon/>}
-                onClick={() => setOpenDialogNewCodebase(true)}
-              >
-                New Codebase
-              </Button>
-              <DialogNewCodebase
-                open={openDialogNewCodebase}
-                onSuccess={path => navigate(`/repo${path}`)}
-                onClose={() => setOpenDialogNewCodebase(false)}
-              />
-            </Grid>
-          )}
-          <Grid item>
-            <Button
-              variant="text"
-              startIcon={<LocalHostIcon/>}
-              endIcon={<ChevronRightIcon/>}
-              onClick={() => navigate('/home')}
-            >
-              Local Host
-            </Button>
-          </Grid>
-        </Grid>
+      <Box pb={2}>
+        <Button
+          variant="text"
+          startIcon={<AddCircleIcon/>}
+          onClick={() => setOpenDialogNewCodebase(true)}
+        >
+          New Codebase
+        </Button>
       </Box>
-      {queryCodebaseList.isSuccess && (
-        <React.Fragment>
-          <OutlinedInput
-            startAdornment={<SearchIcon/>}
-            placeholder="Search..."
-            margin="dense"
-          />
-          <Box p={2} className={classes.list}>
-            <List dense>
-              {queryCodebaseList.data.map(
-                path => <CodebaseItem key={path} path={path}/>
-              )}
-            </List>
-          </Box>
-        </React.Fragment>
-      )}
+      <DialogNewCodebase
+        open={openDialogNewCodebase}
+        onSuccess={path => navigate(`/repo${path}/`)}
+        onClose={() => setOpenDialogNewCodebase(false)}
+      />
+      <OutlinedInput
+        startAdornment={<SearchIcon/>}
+        placeholder="Search..."
+        margin="dense"
+      />
+      <Box p={2} className={classes.list}>
+        <List dense>
+          {queryCodebaseList.data.map(
+            path => <CodebaseItem key={path} path={path}/>
+          )}
+        </List>
+      </Box>
     </div>
   );
 }
 
 function CodebaseItem({ path }) {
   return (
-    <ListItem button onClick={() => navigate(`/repo${path}`)}>
+    <ListItem button onClick={() => navigate(`/repo${path}/`)}>
       <ListItemIcon><CodebaseIcon/></ListItemIcon>
       <ListItemText primary={path}/>
       <ChevronRightIcon/>

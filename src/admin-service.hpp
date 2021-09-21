@@ -92,7 +92,6 @@ private:
   Message* response(const Data &text);
   Message* response(const std::string &text);
   Message* response(const std::set<std::string> &list);
-  // Message* response(const pjs::Ref<pjs::Object> &json);
   Message* response(int status_code, const std::string &message);
 
   auto codebase_of(const std::string &path) -> CodebaseStore::Codebase*;

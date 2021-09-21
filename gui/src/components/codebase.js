@@ -69,6 +69,10 @@ const codebaseStates = {};
 //
 
 function Codebase({ root }) {
+  if (root !== '/' && root.endsWith('/')) {
+    root = root.substring(0, root.length - 1);
+  }
+
   const classes = useStyles();
 
   const states = codebaseStates[root] || (
@@ -92,6 +96,7 @@ function Codebase({ root }) {
         <div className={classes.home}>
           <img
             src={PipyLogo}
+            alt="Home"
             className={classes.logo}
             onClick={() => navigate('/')}
           />

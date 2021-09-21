@@ -300,10 +300,6 @@ void CodebaseStore::generate_files(
   const std::string &version,
   const std::map<std::string, std::string> &files
 ) {
-  std::string base;
-  auto i = codebase_path.find_last_of('/');
-  if (i != std::string::npos) base = codebase_path.substr(i);
-
   std::set<std::string> old_keys;
   m_store->keys(KEY_file_tree(codebase_path), old_keys);
 
@@ -341,17 +337,16 @@ void CodebaseStore::generate_files(
     batch->erase(key);
   }
 
-  std::string manifest(base + main_file_path);
+  std::string manifest(main_file_path);
   for (const auto &i : files) {
     auto path = i.first;
     if (path == main_file_path) continue;
     manifest += '\n';
-    manifest += base;
     manifest += path;
   }
 
   Data buf;
-  auto key = KEY_file_tree(codebase_path);
+  auto key = KEY_file_tree(codebase_path) + '/';
   std::string manifest_id;
 
   if (m_store->get(key, buf)) {

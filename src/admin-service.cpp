@@ -305,12 +305,15 @@ Message* AdminService::repo_GET(const std::string &path) {
 }
 
 Message* AdminService::repo_POST(const std::string &path, Data *data) {
-  if (auto codebase = m_store->find_codebase(path)) {
-    Status status;
-    if (!status.from_json(*data)) return response(400, "Invalid JSON");
-    auto &instances = m_instance_statuses[codebase->id()];
-    instances[status.uuid] = std::move(status);
-    return m_response_created;
+  if (path.back() == '/') {
+    auto name = path.substr(0, path.length() - 1);
+    if (auto codebase = m_store->find_codebase(name)) {
+      Status status;
+      if (!status.from_json(*data)) return response(400, "Invalid JSON");
+      auto &instances = m_instance_statuses[codebase->id()];
+      instances[status.uuid] = std::move(status);
+      return m_response_created;
+    }
   }
   return m_response_method_not_allowed;
 }
@@ -326,26 +329,9 @@ Message* AdminService::api_v1_repo_GET(const std::string &path) {
 
   // Get codebase file
   } else if (auto codebase = codebase_of(path, filename)) {
-    // if (filename == "/status") {
-    //   auto &instances = m_instance_statuses[codebase->id()];
-    //   std::stringstream ss;
-    //   ss << "{\"instances\":{";
-    //   bool first = true;
-    //   for (const auto &i : instances) {
-    //     if (first) first = false; else ss << ',';
-    //     ss << '"' << utils::escape(i.first) << "\":";
-    //     i.second.to_json(ss);
-    //   }
-    //   ss << "}}";
-    //   return Message::make(
-    //     m_response_head_json,
-    //     Data::make(ss.str(), &s_dp)
-    //   );
-    // } else {
-      Data buf;
-      if (!codebase->get_file(filename, buf)) return m_response_not_found;
-      return response(buf);
-    // }
+    Data buf;
+    if (!codebase->get_file(filename, buf)) return m_response_not_found;
+    return response(buf);
 
   // Get codebase info
   } else if (auto codebase = m_store->find_codebase(path)) {
@@ -400,33 +386,6 @@ Message* AdminService::api_v1_repo_GET(const std::string &path) {
       m_response_head_json,
       Data::make(ss.str(), &s_dp)
     );
-
-    // auto json = pjs::Object::make();
-    // auto json_files = pjs::Array::make();
-    // auto json_edit_files = pjs::Array::make();
-    // auto json_base_files = pjs::Array::make();
-    // json->set("version", info.version);
-    // json->set("path", info.path);
-    // json->set("main", info.main);
-    // json->set("files", json_files);
-    // json->set("editFiles", json_edit_files);
-    // json->set("baseFiles", json_base_files);
-    // for (const auto &path : files) json_files->push(path);
-    // for (const auto &path : edit) json_edit_files->push(path);
-    // for (const auto &path : base_files) json_base_files->push(path);
-    // if (!info.base.empty()) {
-    //   if (auto base = m_store->codebase(info.base)) {
-    //     CodebaseStore::Codebase::Info info;
-    //     base->get_info(info);
-    //     json->set("base", info.path);
-    //   }
-    // }
-    // if (!derived.empty()) {
-    //   auto list = pjs::Array::make();
-    //   json->set("derived", list);
-    //   for (const auto &path : derived) list->push(path);
-    // }
-    // return response(json);
 
   // Not found
   } else {
@@ -708,15 +667,6 @@ Message* AdminService::response(const Data &text) {
 Message* AdminService::response(const std::string &text) {
   return response(Data(text, &s_dp));
 }
-
-// Message* AdminService::response(const pjs::Ref<pjs::Object> &json) {
-//   Data buf;
-//   JSON::encode(json.get(), nullptr, 0, buf);
-//   return Message::make(
-//     m_response_head_json,
-//     Data::make(buf)
-//   );
-// }
 
 Message* AdminService::response(int status_code, const std::string &message) {
   return Message::make(
