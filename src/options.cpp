@@ -40,8 +40,7 @@ void Options::show_help() {
   std::cout << "  --log-level=<debug|info|warn|error>  Set the level of log output" << std::endl;
   std::cout << "  --verify                             Verify configuration only" << std::endl;
   std::cout << "  --reuse-port                         Enable kernel load balancing for all listening ports" << std::endl;
-  std::cout << "  --dev-port=<port>                    Enable development service on the specified port" << std::endl;
-  std::cout << "  --repo-port=<port>                   Enable repository service on the specified port" << std::endl;
+  std::cout << "  --admin-port=<port>                  Enable administration service on the specified port" << std::endl;
   std::cout << std::endl;
 }
 
@@ -79,10 +78,8 @@ Options::Options(int argc, char *argv[]) {
         verify = true;
       } else if (k == "--reuse-port") {
         reuse_port = true;
-      } else if (k == "--dev-port") {
-        dev_port = std::atoi(v.c_str());
-      } else if (k == "--repo-port") {
-        repo_port = std::atoi(v.c_str());
+      } else if (k == "--admin-port") {
+        admin_port = std::atoi(v.c_str());
       } else {
         std::string msg("unknown option: ");
         throw std::runtime_error(msg + k);
@@ -90,9 +87,7 @@ Options::Options(int argc, char *argv[]) {
     }
   }
 
-  if (dev_port < 0) throw std::runtime_error("invalid --dev-port");
-  if (repo_port < 0) throw std::runtime_error("invalid --repo-port");
-  if (repo_port && dev_port) throw std::runtime_error("options --dev-port and --repo-port are mutually exclusive");
+  if (admin_port < 0) throw std::runtime_error("invalid --admin-port");
 }
 
 } // namespace pipy

@@ -69,8 +69,6 @@
 
 namespace pipy {
 
-bool Configuration::s_reuse_port = false;
-
 Configuration::Configuration(pjs::Object *context_prototype)
   : m_context_prototype(context_prototype)
 {
@@ -116,16 +114,10 @@ void Configuration::add_import(pjs::Object *variables) {
 
 void Configuration::listen(int port, pjs::Object *options) {
   int max_connections = -1;
-  bool reuse_port = s_reuse_port;
 
   if (options) {
-    pjs::Value reuse, max_conn;
-    options->get("reusePort", reuse);
+    pjs::Value max_conn;
     options->get("maxConnections", max_conn);
-
-    if (!reuse.is_undefined()) {
-      reuse_port = reuse.to_boolean();
-    }
 
     if (!max_conn.is_undefined()) {
       if (!max_conn.is_number()) throw std::runtime_error("option.maxConnections expects a number");
@@ -136,7 +128,6 @@ void Configuration::listen(int port, pjs::Object *options) {
   m_listens.push_back({
     "::",
     port,
-    reuse_port,
     max_connections,
   });
 
@@ -400,10 +391,11 @@ void Configuration::apply(Module *mod) {
     auto name = i.ip + ':' + std::to_string(i.port);
     auto p = make_pipeline(Pipeline::LISTEN, name, i.filters);
     auto listener = Listener::get(i.port);
-    if (!listener) listener = Listener::make(i.ip, i.port);
-    listener->set_reuse_port(i.reuse_port);
-    listener->set_max_connections(i.max_connections);
-    listener->open(p);
+    if (listener->reserved()) {
+      std::string msg("Port reserved: ");
+      throw std::runtime_error(msg + std::to_string(i.port));
+    }
+    mod->worker()->add_listener(listener, p, i.max_connections);
   }
 
   for (auto &i : m_tasks) {

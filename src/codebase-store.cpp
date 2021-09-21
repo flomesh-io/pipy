@@ -283,6 +283,16 @@ void CodebaseStore::list_files(
   }
 }
 
+void CodebaseStore::list_derived(const std::string &codebase_id, std::set<std::string> &ids) {
+  auto base_key = KEY_codebase_derived(codebase_id, "");
+  std::set<std::string> keys;
+  m_store->keys(base_key, keys);
+  for (const auto &key : keys) {
+    auto id = key.substr(base_key.length());
+    ids.insert(id);
+  }
+}
+
 void CodebaseStore::generate_files(
   Store::Batch *batch,
   const std::string &codebase_path,
@@ -290,6 +300,10 @@ void CodebaseStore::generate_files(
   const std::string &version,
   const std::map<std::string, std::string> &files
 ) {
+  std::string base;
+  auto i = codebase_path.find_last_of('/');
+  if (i != std::string::npos) base = codebase_path.substr(i);
+
   std::set<std::string> old_keys;
   m_store->keys(KEY_file_tree(codebase_path), old_keys);
 
@@ -327,16 +341,17 @@ void CodebaseStore::generate_files(
     batch->erase(key);
   }
 
-  std::string manifest(main_file_path);
+  std::string manifest(base + main_file_path);
   for (const auto &i : files) {
     auto path = i.first;
     if (path == main_file_path) continue;
     manifest += '\n';
+    manifest += base;
     manifest += path;
   }
 
   Data buf;
-  auto key = KEY_file_tree(codebase_path + "/index.txt");
+  auto key = KEY_file_tree(codebase_path);
   std::string manifest_id;
 
   if (m_store->get(key, buf)) {
@@ -390,7 +405,7 @@ bool CodebaseStore::Codebase::get_file(const std::string &path, std::string &id)
     m_code_store->load_codebase(base_id, info);
     base_id = info["base"];
     if (base_id.empty()) break;
-    if (store->get(KEY_codebase_file(base_id, path), buf)) id = base_id;
+    if (store->get(KEY_codebase_file(base_id, path), buf)) id = buf.to_string();
   }
 
   return !id.empty();
@@ -415,6 +430,24 @@ void CodebaseStore::Codebase::set_file(const std::string &path, const Data &data
     batch->commit();
   } else {
     store->set(KEY_file(buf.to_string()), data);
+  }
+}
+
+void CodebaseStore::Codebase::set_main(const std::string &path) {
+  std::map<std::string, std::string> rec;
+  m_code_store->load_codebase(m_id, rec);
+  rec["main"] = path;
+  m_code_store->m_store->set(KEY_codebase(m_id), Data(make_record(rec), &s_dp));
+}
+
+void CodebaseStore::Codebase::list_derived(std::set<std::string> &paths) {
+  std::set<std::string> ids;
+  m_code_store->list_derived(m_id, ids);
+  for (const auto &id : ids) {
+    std::map<std::string, std::string> rec;
+    m_code_store->load_codebase(id, rec);
+    auto path = rec["path"];
+    if (!path.empty()) paths.insert(path);
   }
 }
 
@@ -444,6 +477,36 @@ void CodebaseStore::Codebase::list_edit(std::set<std::string> &paths) {
   for (const auto &key : keys) paths.insert(key.substr(base_key.length()));
 }
 
+void CodebaseStore::Codebase::reset_file(const std::string &path) {
+  auto store = m_code_store->m_store;
+  auto key = KEY_codebase_edit(m_id, path);
+  Data buf;
+  if (store->get(key, buf)) {
+    auto file_id = buf.to_string();
+    auto *batch = store->batch();
+    batch->erase(file_id);
+    batch->erase(key);
+    batch->commit();
+  }
+}
+
+void CodebaseStore::Codebase::erase_file(const std::string &path) {
+  auto store = m_code_store->m_store;
+  auto key1 = KEY_codebase_file(m_id, path);
+  auto key2 = KEY_codebase_edit(m_id, path);
+  Data buf;
+  auto *batch = store->batch();
+  if (store->get(key1, buf)) {
+    batch->erase(buf.to_string());
+    batch->erase(key1);
+  }
+  if (store->get(key2, buf)) {
+    batch->erase(buf.to_string());
+    batch->erase(key2);
+  }
+  batch->commit();
+}
+
 void CodebaseStore::Codebase::commit(int version) {
   std::map<std::string, std::string> info;
   std::map<std::string, std::string> files;
@@ -453,7 +516,8 @@ void CodebaseStore::Codebase::commit(int version) {
   std::set<std::string> edit;
   list_edit(edit);
 
-  info["version"] = std::to_string(version);
+  auto version_str = std::to_string(version);
+  info["version"] = version_str;
 
   auto store = m_code_store->m_store;
   auto batch = store->batch();
@@ -476,7 +540,7 @@ void CodebaseStore::Codebase::commit(int version) {
     batch,
     info["path"],
     info["main"],
-    info["version"],
+    version_str,
     files
   );
 
@@ -484,6 +548,46 @@ void CodebaseStore::Codebase::commit(int version) {
     KEY_codebase(m_id),
     Data(make_record(info), &s_dp)
   );
+
+  std::function<
+    void(
+      const std::string &id,
+      const std::string &version,
+      const std::map<std::string, std::string> &base
+    )
+  > upgrade_derived;
+
+  bool has_any_upgrades = false;
+
+  upgrade_derived = [&](
+    const std::string &id,
+    const std::string &version,
+    const std::map<std::string, std::string> &base
+  ) {
+    std::set<std::string> derived;
+    m_code_store->list_derived(id, derived);
+    for (const auto &derived_id : derived) {
+      std::map<std::string, std::string> info;
+      std::map<std::string, std::string> files(base);
+      m_code_store->load_codebase(derived_id, info);
+      m_code_store->list_files(derived_id, files);
+      std::string derived_version = info["version"];
+      std::string derived_key = KEY_codebase_derived(id, derived_id);
+      Data buf;
+      store->get(derived_key, buf);
+      if (buf.to_string() != version) {
+        derived_version = std::to_string(std::atoi(derived_version.c_str()) + 1);
+        info["version"] = derived_version;
+        m_code_store->generate_files(batch, info["path"], info["main"], derived_version, files);
+        batch->set(KEY_codebase(derived_id), Data(make_record(info), &s_dp));
+        batch->set(derived_key, Data(version, &s_dp));
+        has_any_upgrades = true;
+      }
+      upgrade_derived(derived_id, derived_version, files);
+    }
+  };
+
+  upgrade_derived(m_id, version_str, files);
 
   return batch->commit();
 }

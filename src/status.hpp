@@ -23,36 +23,35 @@
  *  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef OPTIONS_HPP
-#define OPTIONS_HPP
+#ifndef STATUS_HPP
+#define STATUS_HPP
 
-#include "logging.hpp"
-
+#include <list>
+#include <ostream>
 #include <string>
 
 namespace pipy {
 
-//
-// Options
-//
+class Data;
 
-class Options {
-public:
-  static void show_help();
+struct Status {
+  struct Module {
+    std::string filename;
+    std::string graph;
+  };
 
-  Options(int argc, char *argv[]);
+  double timestamp = 0;
+  std::string uuid;
+  std::string version;
+  std::list<Module> modules;
 
-  std::string filename;
-  bool        version = false;
-  bool        help = false;
-  bool        help_filters = false;
-  bool        list_filters = false;
-  bool        verify = false;
-  bool        reuse_port = false;
-  int         admin_port = 0;
-  Log::Level  log_level = Log::ERROR;
+  static Status local;
+
+  void update_modules();
+  bool from_json(const Data &data);
+  void to_json(std::ostream &out) const;
 };
 
 } // namespace pipy
 
-#endif // OPTIONS_HPP
+#endif // STATUS_HPP

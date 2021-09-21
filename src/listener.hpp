@@ -42,14 +42,22 @@ class Pipeline;
 
 class Listener {
 public:
-  static auto make(const std::string &ip, int port) -> Listener* {
-    return new Listener(ip, port);
-  }
+  static void set_reuse_port(bool reuse);
 
   static auto get(int port) -> Listener* {
     auto i = s_all_listeners.find(port);
-    if (i == s_all_listeners.end()) return nullptr;
-    return i->second;
+    if (i != s_all_listeners.end()) return i->second;
+    return new Listener(port);
+  }
+
+  static auto all() -> const std::map<int, Listener*>& {
+    return s_all_listeners;
+  }
+
+  static bool is_open(int port) {
+    auto i = s_all_listeners.find(port);
+    if (i == s_all_listeners.end()) return false;
+    return i->second->m_pipeline;
   }
 
   static void for_each(const std::function<void(Listener*)> &cb) {
@@ -58,22 +66,16 @@ public:
     }
   }
 
-  static void close_all() {
-    for (auto &i : s_all_listeners) {
-      i.second->close();
-    }
-  }
-
   auto ip() const -> const std::string& { return m_ip; }
   auto port() const -> int { return m_port; }
+  bool reserved() const { return m_reserved; }
   auto pipeline() const -> Pipeline* { return m_pipeline; }
-  void open(Pipeline *pipeline);
-  void close();
+  void pipeline(Pipeline *pipeline);
+
+  void set_reserved(bool reserved);
+  void set_max_connections(int n);
 
   auto peak_connections() const -> int { return m_peak_connections; }
-
-  void set_reuse_port(bool reuse);
-  void set_max_connections(int n);
 
   void for_each_inbound(const std::function<void(Inbound*)> &cb) {
     for (auto p = m_inbounds.head(); p; p = p->next()) {
@@ -82,7 +84,7 @@ public:
   }
 
 private:
-  Listener(const std::string &ip, int port);
+  Listener(int port);
   ~Listener();
 
   void start();
@@ -90,22 +92,24 @@ private:
   void pause();
   void resume();
   void close(Inbound *inbound);
+  void close();
 
   std::string m_ip;
   int m_port;
   int m_max_connections = -1;
   int m_peak_connections = 0;
-  bool m_reuse_port = false;
-  bool m_open = false;
+  bool m_reserved = false;
   bool m_paused = false;
   asio::ip::tcp::acceptor m_acceptor;
   pjs::Ref<Pipeline> m_pipeline;
   List<Inbound> m_inbounds;
 
+  static bool s_reuse_port;
   static std::list<asio::steady_timer*> s_timer_pool;
   static std::map<int, Listener*> s_all_listeners;
 
   friend class Inbound;
+  friend class pjs::RefCount<Listener>;
 };
 
 } // namespace pipy

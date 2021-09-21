@@ -3,6 +3,7 @@ import React from 'react';
 import { makeStyles } from '@material-ui/core/styles';
 
 // Material-UI components
+import Button from '@material-ui/core/Button';
 import Grid from '@material-ui/core/Grid';
 import IconButton from '@material-ui/core/IconButton';
 
@@ -20,7 +21,7 @@ const useStyles = makeStyles(theme => ({
     flexGrow: 0,
     flexShrink: 0,
   },
-  filling: {
+  stretch: {
     flexGrow: 1,
   }
 }));
@@ -44,12 +45,21 @@ export function ToolbarButton({ disabled, onClick, children }) {
   return (
     <Grid item>
       <IconButton
-        size="small"
         disabled={disabled}
         onClick={onClick}
       >
         {children}
       </IconButton>
+    </Grid>
+  );
+}
+
+export function ToolbarTextButton({ children, ...props }) {
+  return (
+    <Grid item>
+      <Button {...props}>
+        {children}
+      </Button>
     </Grid>
   );
 }
@@ -61,10 +71,10 @@ export function ToolbarGap() {
   );
 }
 
-export function ToolbarFilling() {
+export function ToolbarStretch() {
   const classes = useStyles();
   return (
-    <Grid item className={classes.filling}/>
+    <Grid item className={classes.stretch}/>
   );
 }
 

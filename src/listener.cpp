@@ -33,10 +33,16 @@ namespace pipy {
 
 using tcp = asio::ip::tcp;
 
+bool Listener::s_reuse_port = false;
+
 std::map<int, Listener*> Listener::s_all_listeners;
 
-Listener::Listener(const std::string &ip, int port)
-  : m_ip(ip)
+void Listener::set_reuse_port(bool reuse) {
+  s_reuse_port = reuse;
+}
+
+Listener::Listener(int port)
+  : m_ip("::")
   , m_port(port)
   , m_acceptor(Net::service())
 {
@@ -50,29 +56,36 @@ Listener::~Listener() {
   }
 }
 
-void Listener::open(Pipeline *pipeline) {
-  if (m_open) {
+void Listener::pipeline(Pipeline *pipeline) {
+  if (m_pipeline.get() != pipeline) {
+    if (pipeline) {
+      if (!m_pipeline) {
+        try {
+          start();
+        } catch (std::runtime_error &err) {
+          m_acceptor.close();
+          throw err;
+        }
+      }
+    } else if (m_pipeline) {
+      close();
+    }
     m_pipeline = pipeline;
-  } else {
-    m_pipeline = pipeline;
-    m_open = true;
-    start();
   }
 }
 
 void Listener::close() {
   m_acceptor.close();
-  m_pipeline = nullptr;
-  m_open = false;
+  Log::info("[listener] Stopped listening on port %d at %s", m_port, m_ip.c_str());
 }
 
-void Listener::set_reuse_port(bool reuse) {
-  m_reuse_port = reuse;
+void Listener::set_reserved(bool reserved) {
+  m_reserved = reserved;
 }
 
 void Listener::set_max_connections(int n) {
   m_max_connections = n;
-  if (m_open) {
+  if (m_pipeline) {
     if (n >= 0 && m_inbounds.size() >= n) {
       pause();
     } else {
@@ -94,7 +107,7 @@ void Listener::start() {
   setsockopt(sock, SOL_IP, IP_TRANSPARENT, &enabled, sizeof(enabled));
 #endif
 
-  if (m_reuse_port) {
+  if (s_reuse_port) {
 #ifdef __FreeBSD__
     setsockopt(sock, SOL_SOCKET, SO_REUSEPORT_LB, &enabled, sizeof(enabled));
 #else
@@ -124,8 +137,8 @@ void Listener::accept() {
   inbound->accept(
     this, m_acceptor,
     [=](const std::error_code &ec) {
-      m_inbounds.push(inbound);
-      if (ec != asio::error::operation_aborted) {
+      if (!ec) {
+        m_inbounds.push(inbound);
         m_peak_connections = std::max(m_peak_connections, int(m_inbounds.size()));
         if (m_max_connections > 0 && m_inbounds.size() >= m_max_connections) {
           pause();

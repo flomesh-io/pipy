@@ -59,8 +59,6 @@ public:
     pjs::Ref<pjs::Str> original_name;
   };
 
-  static void set_reuse_port(bool b) { s_reuse_port = b; }
-
   void add_export(pjs::Str *ns, pjs::Object *variables);
   void add_import(pjs::Object *variables);
 
@@ -121,7 +119,6 @@ private:
   struct ListenConfig {
     std::string ip;
     int port;
-    bool reuse_port;
     int max_connections;
     std::list<std::unique_ptr<Filter>> filters;
   };
@@ -147,8 +144,6 @@ private:
   std::list<std::unique_ptr<Filter>> *m_current_filters = nullptr;
 
   void append_filter(Filter *filter);
-
-  static bool s_reuse_port;
 
   friend class pjs::ObjectTemplate<Configuration>;
 };

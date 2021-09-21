@@ -151,9 +151,11 @@ void Outbound::connect(double delay) {
   };
 
   auto resolve = [=]() {
+    auto host = m_host;
+    if (host == "localhost") host = "127.0.0.1";
     m_start_time = utils::now();
     m_resolver.async_resolve(
-      tcp::resolver::query(m_host, std::to_string(m_port)),
+      tcp::resolver::query(host, std::to_string(m_port)),
       on_resolved);
     if (m_retries > 0) {
       Log::warn("Outbound: %p, retry connection to host = %s port = %d... (times = %d)",

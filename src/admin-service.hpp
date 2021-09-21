@@ -23,13 +23,14 @@
  *  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef CODEBASE_SERVICE_HPP
-#define CODEBASE_SERVICE_HPP
+#ifndef ADMIN_SERVICE_HPP
+#define ADMIN_SERVICE_HPP
 
 #include "api/http.hpp"
 #include "message.hpp"
-#include "codebase-store.hpp"
 #include "tar.hpp"
+#include "codebase-store.hpp"
+#include "status.hpp"
 
 #include <map>
 #include <set>
@@ -37,17 +38,22 @@
 namespace pipy {
 
 //
-// CodebaseService
+// AdminService
 //
 
-class CodebaseService {
+class AdminService {
 public:
-  CodebaseService(CodebaseStore *store);
+  AdminService(CodebaseStore *store);
 
   void open(int port);
+  void close();
 
 private:
+  int m_port;
   CodebaseStore* m_store;
+  std::string m_current_codebase;
+  std::string m_current_program;
+  std::map<std::string, std::map<std::string, Status>> m_instance_statuses;
 
   Tarball m_www_files;
   std::map<std::string, pjs::Ref<http::File>> m_www_file_cache;
@@ -56,6 +62,7 @@ private:
   pjs::Ref<http::ResponseHead> m_response_head_json;
   pjs::Ref<Message> m_response_ok;
   pjs::Ref<Message> m_response_created;
+  pjs::Ref<Message> m_response_deleted;
   pjs::Ref<Message> m_response_not_found;
   pjs::Ref<Message> m_response_method_not_allowed;
 
@@ -63,6 +70,7 @@ private:
 
   Message* repo_HEAD(const std::string &path);
   Message* repo_GET(const std::string &path);
+  Message* repo_POST(const std::string &path, Data *data);
 
   Message* api_v1_repo_GET(const std::string &path);
   Message* api_v1_repo_POST(const std::string &path, Data *data);
@@ -75,7 +83,7 @@ private:
   Message* api_v1_program_POST(Data *data);
   Message* api_v1_program_DELETE();
 
-  Message* api_v1_config_GET();
+  Message* api_v1_status_GET();
 
   Message* api_v1_graph_POST(Data *data);
 
@@ -84,12 +92,11 @@ private:
   Message* response(const Data &text);
   Message* response(const std::string &text);
   Message* response(const std::set<std::string> &list);
-  Message* response(const pjs::Ref<pjs::Object> &json);
+  // Message* response(const pjs::Ref<pjs::Object> &json);
   Message* response(int status_code, const std::string &message);
 
   auto codebase_of(const std::string &path) -> CodebaseStore::Codebase*;
-
-  static void file_tree_to_json(const std::string &path, std::string &json);
+  auto codebase_of(const std::string &path, std::string &filename) -> CodebaseStore::Codebase*;
 
   static auto response_head(
     int status,
@@ -99,4 +106,4 @@ private:
 
 } // namespace pipy
 
-#endif // CODEBASE_SERVICE_HPP
+#endif // ADMIN_SERVICE_HPP

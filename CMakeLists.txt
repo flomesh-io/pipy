@@ -28,6 +28,7 @@ include_directories(
 )
 
 add_executable(pipy
+  src/admin-service.cpp
   src/api/algo.cpp
   src/api/configuration.cpp
   src/api/console.cpp
@@ -41,7 +42,6 @@ add_executable(pipy
   src/api/url.cpp
   src/api/xml.cpp
   src/codebase.cpp
-  src/codebase-service.cpp
   src/codebase-store.cpp
   src/compress.cpp
   src/context.cpp
@@ -95,6 +95,7 @@ add_executable(pipy
   src/pjs/parser.cpp
   src/pjs/types.cpp
   src/session.cpp
+  src/status.cpp
   src/store.cpp
   src/tar.cpp
   src/task.cpp

@@ -96,8 +96,8 @@ void MemoryStore::close() {
 
 void MemoryStore::dump(std::ostream &out) {
   for (const auto &i : m_records) {
-    out << "<< " << i.first;
-    out << " >>" << i.second.to_string();
+    out << '[' << i.first << "]:" << std::endl;
+    out << i.second.to_string() << std::endl;
     out << std::endl;
   }
 }

@@ -25,6 +25,7 @@
 
 #include "worker.hpp"
 #include "module.hpp"
+#include "listener.hpp"
 #include "task.hpp"
 #include "event.hpp"
 #include "message.hpp"
@@ -45,8 +46,6 @@
 
 #include <array>
 #include <stdexcept>
-
-extern void main_trigger_reload();
 
 //
 // Global
@@ -174,17 +173,14 @@ template<> void ClassDef<Global>::init() {
 namespace pipy {
 
 Worker* Worker::s_current = nullptr;
-std::set<Worker*> Worker::s_all_workers;
 
 Worker::Worker()
   : m_global_object(Global::make())
 {
-  s_all_workers.insert(this);
 }
 
 Worker::~Worker() {
   if (s_current == this) s_current = nullptr;
-  s_all_workers.erase(this);
 }
 
 auto Worker::get_module(pjs::Str *filename) -> Module* {
@@ -210,6 +206,16 @@ auto Worker::load_module(const std::string &path) -> Module* {
   if (!m_root) m_root = mod;
   if (!mod->load(path)) return nullptr;
   return mod;
+}
+
+void Worker::add_listener(Listener *listener, Pipeline *pipeline, int max_connections) {
+  auto &p = m_listeners[listener];
+  p.pipeline = pipeline;
+  p.max_connections = max_connections;
+}
+
+void Worker::add_task(Task *task) {
+  m_tasks.insert(task);
 }
 
 void Worker::add_export(pjs::Str *ns, pjs::Str *name, Module *module) {
@@ -264,6 +270,45 @@ bool Worker::start() {
     return false;
   }
 
+  // Open new ports
+  std::set<Listener*> new_open;
+  try {
+    for (const auto &i : m_listeners) {
+      auto l = i.first;
+      if (!Listener::is_open(l->port())) {
+        l->pipeline(i.second.pipeline);
+        l->set_max_connections(i.second.max_connections);
+        new_open.insert(l);
+      }
+    }
+  } catch (std::runtime_error &err) {
+    for (auto *l : new_open) {
+      l->pipeline(nullptr);
+    }
+    Log::error("%s", err.what());
+    return false;
+  }
+
+  // Update existing ports
+  for (const auto &i : m_listeners) {
+    auto l = i.first;
+    if (Listener::is_open(l->port())) {
+      l->pipeline(i.second.pipeline);
+      l->set_max_connections(i.second.max_connections);
+    }
+  }
+
+  // Close old ports
+  for (const auto &i : Listener::all()) {
+    auto l = i.second;
+    if (!l->reserved()) {
+      if (m_listeners.find(l) == m_listeners.end()) {
+        l->pipeline(nullptr);
+      }
+    }
+  }
+
+  // Start tasks
   for (auto *task : m_tasks) {
     if (!task->start()) {
       return false;
@@ -277,7 +322,8 @@ void Worker::stop() {
   for (auto *task : m_tasks) {
     task->stop();
   }
-  m_tasks.clear();
+
+  delete this;
 }
 
 } // namespace pipy

@@ -44,7 +44,7 @@ public:
 
   static auto stringify(
     const pjs::Value &val,
-    std::function<bool(pjs::Object*, const pjs::Value&, pjs::Value&)> &replacer,
+    const std::function<bool(pjs::Object*, const pjs::Value&, pjs::Value&)> &replacer,
     int space
   ) -> std::string;
 

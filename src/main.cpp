@@ -25,14 +25,15 @@
 
 #include "version.h"
 
+#include "admin-service.hpp"
 #include "api/configuration.hpp"
 #include "codebase.hpp"
-#include "codebase-service.hpp"
 #include "listener.hpp"
 #include "module.hpp"
 #include "net.hpp"
 #include "options.hpp"
 #include "outbound.hpp"
+#include "status.hpp"
 #include "task.hpp"
 #include "utils.hpp"
 #include "worker.hpp"
@@ -80,6 +81,8 @@
 #include "filters/wait.hpp"
 
 using namespace pipy;
+
+AdminService *s_admin = nullptr;
 
 //
 // List of all filters
@@ -488,7 +491,7 @@ static void start_checking_signals() {
       Log::info("Stopped.");
     } else if (s_need_shutdown) {
       Log::info("Received SIGINT, shutting down...");
-      Listener::close_all();
+      if (s_admin) s_admin->close();
       if (auto worker = Worker::current()) worker->stop();
       int n = 0;
       Pipeline::for_each(
@@ -506,30 +509,26 @@ static void start_checking_signals() {
       s_need_reload = false;
       auto current_worker = Worker::current();
       if (!current_worker) {
-        Log::error("No script running");
+        Log::error("No program running");
+      } else if (auto codebase = Codebase::current()) {
+        auto &entry = codebase->entry();
+        if (entry.empty()) {
+          Log::error("Script has no entry point");
+          return;
+        }
+        auto current_worker = Worker::current();
+        auto worker = Worker::make();
+        if (worker->load_module(entry) && worker->start()) {
+          current_worker->stop();
+          Status::local.version = codebase->version();
+          Status::local.update_modules();
+          Log::info("Script reloaded");
+        } else {
+          worker->stop();
+          Log::error("Failed reloading script");
+        }
       } else {
-        auto codebase = Codebase::current();
-        codebase->update([](bool ok) {
-          if (!ok) {
-            Log::error("Failed updating script");
-            return;
-          }
-          auto codebase = Codebase::current();
-          auto &entry = codebase->entry();
-          if (entry.empty()) {
-            Log::error("Script has no entry point");
-            return;
-          }
-          auto current_worker = Worker::current();
-          auto worker = Worker::make();
-          if (worker->load_module(entry) && worker->start()) {
-            current_worker->stop();
-            Log::info("Script reloaded");
-          } else {
-            worker->stop();
-            Log::error("Failed reloading script");
-          }
-        });
+        Log::error("No codebase");
       }
     }
     timer.schedule(0.2, poll);
@@ -546,9 +545,11 @@ static void start_checking_updates() {
   static std::function<void()> poll;
   poll = [&]() {
     if (!s_need_shutdown) {
-      Codebase::current()->check(
-        [&](bool updated) {
-          if (updated) {
+      Status::local.timestamp = utils::now();
+      Codebase::current()->sync(
+        Status::local,
+        [&](bool ok) {
+          if (ok) {
             s_need_reload = true;
           }
         }
@@ -564,6 +565,9 @@ static void start_checking_updates() {
 //
 
 int main(int argc, char *argv[]) {
+  utils::gen_uuid_v4(Status::local.uuid);
+  Status::local.timestamp = utils::now();
+
   SSL_load_error_strings();
   SSL_library_init();
   OpenSSL_add_all_algorithms();
@@ -600,42 +604,60 @@ int main(int argc, char *argv[]) {
     }
 
     Log::set_level(opts.log_level);
+    Listener::set_reuse_port(opts.reuse_port);
 
-    Configuration::set_reuse_port(opts.reuse_port);
+    bool is_repo = false;
+    bool is_remote = false;
 
-    if (!std::strncmp(opts.filename.c_str(), "http://", 7)) {
-      auto codebase = new CodebaseHTTP(opts.filename);
-      codebase->set_current();
+    if (opts.filename.empty()) {
+      is_repo = true;
+
+    } else if (utils::starts_with(opts.filename, "http://")) {
+      is_remote = true;
 
     } else {
+      struct stat st;
       char full_path[PATH_MAX];
       realpath(opts.filename.c_str(), full_path);
-      auto codebase = new CodebaseFS(full_path);
-      codebase->set_current();
-      chdir(codebase->base().c_str());
+      opts.filename = full_path;
+
+      if (stat(full_path, &st)) {
+        std::string msg("file or directory does not exist: ");
+        throw std::runtime_error(msg + full_path);
+      }
+
+      is_repo = S_ISDIR(st.st_mode);
     }
 
     Store *store = nullptr;
-    CodebaseStore *cb_store = nullptr;
-    CodebaseService *cb_service = nullptr;
+    CodebaseStore *repo = nullptr;
 
-    Codebase::current()->update(
-      [&](bool ok) {
-        if (!ok) {
-          ret_val = -1;
-          Net::stop();
-          return;
-        }
+    // Start as codebase repo service
+    if (is_repo) {
+      auto port = opts.admin_port;
+      if (!port) port = 6060; // default repo port
+      store = Store::open_memory();
+      repo = new CodebaseStore(store);
+      s_admin = new AdminService(repo);
+      s_admin->open(port);
 
-        const auto &entry = Codebase::current()->entry();
-        if (entry.empty() && !opts.dev_port && !opts.repo_port) {
-          std::cerr << "No script file specified" << std::endl;
-          ret_val = -1;
-          Net::stop();
-          return;
-        }
+    // Start as a fixed codebase
+    } else {
+      auto codebase = (is_remote ?
+        Codebase::from_http(opts.filename) :
+        Codebase::from_fs(opts.filename)
+      );
+      codebase->set_current();
+      codebase->sync(
+        Status::local,
+        [&](bool ok) {
+          if (!ok) {
+            ret_val = -1;
+            Net::stop();
+            return;
+          }
 
-        if (!entry.empty()) {
+          auto &entry = Codebase::current()->entry();
           auto worker = Worker::make();
           auto mod = worker->load_module(entry);
 
@@ -655,23 +677,19 @@ int main(int argc, char *argv[]) {
             Net::stop();
             return;
           }
-        }
 
-        if (!opts.verify) {
-          if (opts.repo_port) {
-            store = Store::open_memory();
-            cb_store = new CodebaseStore(store);
-            cb_service = new CodebaseService(cb_store);
-            cb_service->open(opts.repo_port);
-          } else if (opts.dev_port) {
-            cb_service = new CodebaseService(nullptr);
-            cb_service->open(opts.dev_port);
+          Status::local.version = Codebase::current()->version();
+          Status::local.update_modules();
+
+          if (opts.admin_port) {
+            s_admin = new AdminService(nullptr);
+            s_admin->open(opts.admin_port);
           }
-        }
 
-        start_checking_updates();
-      }
-    );
+          start_checking_updates();
+        }
+      );
+    }
 
     signal(SIGTSTP, on_sig_tstp);
     signal(SIGHUP, on_sig_hup);
@@ -681,8 +699,8 @@ int main(int argc, char *argv[]) {
 
     Net::run();
 
-    delete cb_service;
-    delete cb_store;
+    delete s_admin;
+    delete repo;
     if (store) store->close();
 
     std::cout << "Done." << std::endl;

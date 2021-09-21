@@ -26,7 +26,6 @@
 #ifndef CODEBASE_STORE_HPP
 #define CODEBASE_STORE_HPP
 
-#include "codebase.hpp"
 #include "store.hpp"
 #include "pjs/pjs.hpp"
 
@@ -59,8 +58,12 @@ public:
     bool get_file(const std::string &path, std::string &id);
     bool get_file(const std::string &path, Data &data);
     void set_file(const std::string &path, const Data &data);
+    void set_main(const std::string &path);
+    void list_derived(std::set<std::string> &names);
     void list_files(bool recursive, std::set<std::string> &paths);
     void list_edit(std::set<std::string> &paths);
+    void reset_file(const std::string &path);
+    void erase_file(const std::string &path);
     void commit(int version);
     void reset();
 
@@ -97,6 +100,11 @@ private:
   void list_files(
     const std::string &codebase_id,
     std::map<std::string, std::string> &files
+  );
+
+  void list_derived(
+    const std::string &codebase_id,
+    std::set<std::string> &ids
   );
 
   void generate_files(
