@@ -5,7 +5,11 @@ option(PIPY_GUI "include builtin GUI" OFF)
 
 add_subdirectory(deps/yajl-2.1.0)
 
+option(BUILD_tools "build the xmlwf tool for expat library" OFF)
+option(BUILD_examples "build the examples for expat library" OFF)
+option(BUILD_tests "build the tests for expat library" OFF)
 option(BUILD_shared "build a shared expat library" OFF)
+option(BUILD_doc "build man page for xmlwf" OFF)
 add_subdirectory(deps/libexpat-R_2_2_6/expat)
 
 add_subdirectory(deps/openssl-1.1.1g)
