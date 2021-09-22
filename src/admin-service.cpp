@@ -300,8 +300,12 @@ Message* AdminService::repo_GET(const std::string &path) {
   auto prefix = path;
   if (prefix.empty() || prefix.back() != '/') prefix += '/';
   m_store->list_codebases(prefix, list);
-  if (list.empty()) return m_response_not_found;
-  return response(list);
+  std::stringstream ss;
+  for (const auto &i : list) ss << i << "/\n";
+  return Message::make(
+    m_response_head_text,
+    Data::make(ss.str(), &s_dp)
+  );
 }
 
 Message* AdminService::repo_POST(const std::string &path, Data *data) {
