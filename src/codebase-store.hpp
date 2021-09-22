@@ -99,6 +99,7 @@ private:
 
   void list_files(
     const std::string &codebase_id,
+    bool recursive,
     std::map<std::string, std::string> &files
   );
 

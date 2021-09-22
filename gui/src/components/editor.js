@@ -236,6 +236,7 @@ function Editor({ root }) {
     [root]
   );
 
+  const [isInitialized, setInitialized] = React.useState(false);
   const [isReadOnly, setReadOnly] = React.useState(true);
   const [isSelected, setSelected] = React.useState(false);
   const [isSaved, setSaved] = React.useState(states.currentFile?.saved());
@@ -274,9 +275,9 @@ function Editor({ root }) {
         throw new Error(`Error: ${msg}, status = ${res.status}`);
       }
       const info = await res.json();
+      if (!isLocalHost) info.baseFiles?.forEach?.(path => add(path, 'base'));
       info.files?.forEach?.(path => add(path, 'file'));
       if (!isLocalHost) {
-        info.baseFiles?.forEach?.(path => add(path, 'base'));
         info.editFiles?.forEach?.(path => add(path, 'edit'));
         states.isEdited = info.editFiles?.length > 0;
       }
@@ -482,7 +483,7 @@ function Editor({ root }) {
         window.addEventListener('resize', resize);
         editorRef.current = editor;
         layoutUpdaterRef.current = resize;
-        selectFile(states.treeSelected);
+        setInitialized(true);
       });
       return () => {
         window.removeEventListener('resize', resize);
@@ -490,7 +491,17 @@ function Editor({ root }) {
         editorRef.current = null;
       }
     },
-    [selectFile, states.treeSelected]
+    []
+  );
+
+  // Select file at initialization
+  React.useEffect(
+    () => {
+      if (isInitialized) {
+        selectFile(states.treeSelected);
+      }
+    },
+    [isInitialized, selectFile, states.treeSelected]
   );
 
   // Handle Ctrl+S/Cmd+S
