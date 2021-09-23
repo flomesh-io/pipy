@@ -261,8 +261,7 @@ void CodebaseStore::list_files(
     m_store->keys(base_key, keys);
     for (const auto &k : keys) {
       auto path = k.substr(base_key.length());
-      auto i = files.find(path);
-      if (i != files.end()) continue;
+      if (recursive && files.count(path)) continue;
       Data buf;
       if (m_store->get(k, buf)) {
         files[path] = buf.to_string();
