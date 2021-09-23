@@ -74,10 +74,12 @@ private:
 
   Message* api_v1_repo_GET(const std::string &path);
   Message* api_v1_repo_POST(const std::string &path, Data *data);
+  Message* api_v1_repo_PATCH(const std::string &path, Data *data);
   Message* api_v1_repo_DELETE(const std::string &path);
 
   Message* api_v1_files_GET(const std::string &path);
   Message* api_v1_files_POST(const std::string &path, Data *data);
+  Message* api_v1_files_DELETE(const std::string &path);
 
   Message* api_v1_program_GET();
   Message* api_v1_program_POST(Data *data);

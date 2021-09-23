@@ -168,6 +168,8 @@ auto AdminService::handle(Message *req) -> Message* {
           return api_v1_repo_GET(path);
         } else if (method == "POST") {
           return api_v1_repo_POST(path, body);
+        } else if (method == "PATCH") {
+          return api_v1_repo_PATCH(path, body);
         } else if (method == "DELETE") {
           return api_v1_repo_DELETE(path);
         } else {
@@ -194,6 +196,8 @@ auto AdminService::handle(Message *req) -> Message* {
         return api_v1_files_GET(path);
       } else if (method == "POST") {
         return api_v1_files_POST(path, body);
+      } else if (method == "DELETE") {
+        return api_v1_files_DELETE(path);
       } else {
         return m_response_method_not_allowed;
       }
@@ -300,6 +304,7 @@ Message* AdminService::repo_GET(const std::string &path) {
   auto prefix = path;
   if (prefix.empty() || prefix.back() != '/') prefix += '/';
   m_store->list_codebases(prefix, list);
+  if (list.empty()) return m_response_not_found;
   std::stringstream ss;
   for (const auto &i : list) ss << i << "/\n";
   return Message::make(
@@ -340,10 +345,11 @@ Message* AdminService::api_v1_repo_GET(const std::string &path) {
   // Get codebase info
   } else if (auto codebase = m_store->find_codebase(path)) {
     CodebaseStore::Codebase::Info info;
-    std::set<std::string> derived, edit, files, base_files;
+    std::set<std::string> derived, edit, erased, files, base_files;
     codebase->get_info(info);
     codebase->list_derived(derived);
     codebase->list_edit(edit);
+    codebase->list_erased(erased);
     codebase->list_files(false, files);
     if (auto base = m_store->codebase(info.base)) {
       base->list_files(true, base_files);
@@ -365,6 +371,7 @@ Message* AdminService::api_v1_repo_GET(const std::string &path) {
     ss << ",\"main\":\"" << utils::escape(info.main) << '"';
     ss << ",\"files\":"; to_array(files);
     ss << ",\"editFiles\":"; to_array(edit);
+    ss << ",\"erasedFiles\":"; to_array(erased);
     ss << ",\"baseFiles\":"; to_array(base_files);
     ss << ",\"derived\":"; to_array(derived);
 
@@ -406,9 +413,6 @@ Message* AdminService::api_v1_repo_POST(const std::string &path, Data *data) {
 
   // Create codebase file
   if (auto codebase = codebase_of(path, filename)) {
-    if (filename == "/status") {
-      return response(400, "Reserved filename");
-    }
     codebase->set_file(filename, *data);
     return m_response_created;
   }
@@ -458,6 +462,26 @@ Message* AdminService::api_v1_repo_POST(const std::string &path, Data *data) {
   }
 }
 
+Message* AdminService::api_v1_repo_PATCH(const std::string &path, Data *data) {  
+  if (path.empty() || path.back() == '/') {
+    return response(400, "Invalid codebase or filename");
+  }
+
+  std::string filename;
+
+  // Create codebase file
+  if (auto codebase = codebase_of(path, filename)) {
+    if (data->size() > 0) {
+      codebase->set_file(filename, *data);
+    } else {
+      codebase->reset_file(filename);
+    }
+    return m_response_created;
+  }
+
+  return m_response_not_found;
+}
+
 Message* AdminService::api_v1_repo_DELETE(const std::string &path) {
   if (path.empty() || path.back() == '/') {
     return response(400, "Invalid codebase or filename");
@@ -467,14 +491,11 @@ Message* AdminService::api_v1_repo_DELETE(const std::string &path) {
 
   // Delete codebase file
   if (auto codebase = codebase_of(path, filename)) {
-    if (filename == "/status") {
-      return m_response_deleted;
-    }
     codebase->erase_file(filename);
     return m_response_deleted;
   }
 
-  return m_response_deleted;
+  return m_response_not_found;
 }
 
 Message* AdminService::api_v1_files_GET(const std::string &path) {
@@ -539,6 +560,13 @@ Message* AdminService::api_v1_files_POST(const std::string &path, Data *data) {
     codebase->set(path, data);
     return m_response_created;
   }
+}
+
+Message* AdminService::api_v1_files_DELETE(const std::string &path) {
+  auto codebase = Codebase::current();
+  if (!codebase) return m_response_not_found;
+  codebase->set(path, nullptr);
+  return m_response_deleted;
 }
 
 Message* AdminService::api_v1_program_GET() {

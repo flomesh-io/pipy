@@ -62,8 +62,9 @@ public:
     void list_derived(std::set<std::string> &names);
     void list_files(bool recursive, std::set<std::string> &paths);
     void list_edit(std::set<std::string> &paths);
-    void reset_file(const std::string &path);
+    void list_erased(std::set<std::string> &paths);
     void erase_file(const std::string &path);
+    void reset_file(const std::string &path);
     void commit(int version);
     void reset();
 

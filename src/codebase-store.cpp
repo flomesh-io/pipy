@@ -58,6 +58,9 @@ static Data::Producer s_dp("Codebase Store");
 // codebases/[id]/edit/[path]
 //   [file id]
 //
+// codebases/[id]/erased/[path]
+//   [file id]
+//
 // codebases/[id]/derived/[derived codebase id]
 //   [version]
 //
@@ -89,6 +92,11 @@ static std::string KEY_codebase_file(const std::string &id, const std::string &p
 
 static std::string KEY_codebase_edit(const std::string &id, const std::string &path) {
   static std::string prefix("/edit/");
+  return KEY_codebase(id) + prefix + path;
+}
+
+static std::string KEY_codebase_erased(const std::string &id, const std::string &path) {
+  static std::string prefix("/erased/");
   return KEY_codebase(id) + prefix + path;
 }
 
@@ -377,8 +385,10 @@ bool CodebaseStore::Codebase::get_file(const std::string &path, std::string &id)
   auto store = m_code_store->m_store;
   id.clear();
 
-  if (id.empty()) if (store->get(KEY_codebase_edit(m_id, path), buf)) id = buf.to_string();
-  if (id.empty()) if (store->get(KEY_codebase_file(m_id, path), buf)) id = buf.to_string();
+  if (!store->get(KEY_codebase_erased(m_id, path), buf)) {
+    if (id.empty()) if (store->get(KEY_codebase_edit(m_id, path), buf)) id = buf.to_string();
+    if (id.empty()) if (store->get(KEY_codebase_file(m_id, path), buf)) id = buf.to_string();
+  }
 
   auto base_id = m_id;
   while (id.empty()) {
@@ -402,16 +412,17 @@ void CodebaseStore::Codebase::set_file(const std::string &path, const Data &data
   Data buf;
   auto key = KEY_codebase_edit(m_id, path);
   auto store = m_code_store->m_store;
+  auto batch = store->batch();
   if (!store->get(key, buf)) {
     std::string file_id;
     utils::gen_uuid_v4(file_id);
-    auto batch = store->batch();
     batch->set(KEY_file(file_id), data);
     batch->set(key, Data(file_id, &s_dp));
-    batch->commit();
   } else {
-    store->set(KEY_file(buf.to_string()), data);
+    batch->set(KEY_file(buf.to_string()), data);
   }
+  batch->erase(KEY_codebase_erased(m_id, path));
+  batch->commit();
 }
 
 void CodebaseStore::Codebase::set_main(const std::string &path) {
@@ -458,44 +469,56 @@ void CodebaseStore::Codebase::list_edit(std::set<std::string> &paths) {
   for (const auto &key : keys) paths.insert(key.substr(base_key.length()));
 }
 
-void CodebaseStore::Codebase::reset_file(const std::string &path) {
+void CodebaseStore::Codebase::list_erased(std::set<std::string> &paths) {
   auto store = m_code_store->m_store;
-  auto key = KEY_codebase_edit(m_id, path);
-  Data buf;
-  if (store->get(key, buf)) {
-    auto file_id = buf.to_string();
-    auto *batch = store->batch();
-    batch->erase(file_id);
-    batch->erase(key);
-    batch->commit();
-  }
+  auto base_key = KEY_codebase_erased(m_id, "");
+  std::set<std::string> keys;
+  store->keys(base_key, keys);
+  for (const auto &key : keys) paths.insert(key.substr(base_key.length()));
 }
 
 void CodebaseStore::Codebase::erase_file(const std::string &path) {
-  auto store = m_code_store->m_store;
-  auto key1 = KEY_codebase_file(m_id, path);
-  auto key2 = KEY_codebase_edit(m_id, path);
   Data buf;
+  auto store = m_code_store->m_store;
+  auto key = KEY_codebase_edit(m_id, path);
   auto *batch = store->batch();
-  if (store->get(key1, buf)) {
-    batch->erase(buf.to_string());
-    batch->erase(key1);
+  if (store->get(key, buf)) {
+    auto file_id = buf.to_string();
+    batch->erase(KEY_file(file_id));
   }
-  if (store->get(key2, buf)) {
-    batch->erase(buf.to_string());
-    batch->erase(key2);
+  batch->erase(key);
+  key = KEY_codebase_file(m_id, path);
+  if (store->get(key, buf)) {
+    batch->set(KEY_codebase_erased(m_id, path), buf);
   }
   batch->commit();
 }
 
+void CodebaseStore::Codebase::reset_file(const std::string &path) {
+  Data buf;
+  auto store = m_code_store->m_store;
+  auto key = KEY_codebase_edit(m_id, path);
+  auto *batch = store->batch();
+  if (store->get(key, buf)) {
+    auto file_id = buf.to_string();
+    batch->erase(KEY_file(file_id));
+  }
+  batch->erase(key);
+  batch->erase(KEY_codebase_erased(m_id, path));
+  batch->commit();
+}
+
 void CodebaseStore::Codebase::commit(int version) {
+  Data buf;
+
   std::map<std::string, std::string> info;
   std::map<std::string, std::string> files;
   m_code_store->load_codebase(m_id, info);
   m_code_store->list_files(m_id, false, files);
 
-  std::set<std::string> edit;
+  std::set<std::string> edit, erased;
   list_edit(edit);
+  list_erased(erased);
 
   auto version_str = std::to_string(version);
   info["version"] = version_str;
@@ -504,17 +527,30 @@ void CodebaseStore::Codebase::commit(int version) {
   auto batch = store->batch();
 
   for (const auto &path : edit) {
-    std::string id;
-    if (!get_file(path, id)) continue;
-    auto i = files.find(path);
-    if (i == files.end()) {
-      files[path] = id;
-    } else {
-      batch->erase(KEY_file(i->second));
-      i->second = id;
+    auto key = KEY_codebase_edit(m_id, path);
+    if (store->get(key, buf)) {
+      auto id = buf.to_string();
+      auto i = files.find(path);
+      if (i == files.end()) {
+        files[path] = id;
+      } else {
+        batch->erase(KEY_file(i->second));
+        i->second = id;
+      }
+      batch->set(KEY_codebase_file(m_id, path), buf);
+      batch->erase(key);
     }
-    batch->set(KEY_codebase_file(m_id, path), Data(id, &s_dp));
-    batch->erase(KEY_codebase_edit(m_id, path));
+  }
+
+  for (const auto &path : erased) {
+    auto key = KEY_codebase_erased(m_id, path);
+    if (store->get(key, buf)) {
+      auto id = buf.to_string();
+      batch->erase(KEY_file(id));
+      batch->erase(KEY_codebase_file(m_id, path));
+      batch->erase(key);
+      files.erase(path);
+    }
   }
 
   auto base_id = info["base"];

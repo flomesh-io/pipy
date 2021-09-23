@@ -42,6 +42,7 @@ import ConsoleIcon from '@material-ui/icons/CallToAction';
 import DeleteFileIcon from '@material-ui/icons/DeleteSharp';
 import DerivativeIcon from '@material-ui/icons/SubdirectoryArrowRightSharp';
 import FlagIcon from '@material-ui/icons/FlagSharp';
+import ResetIcon from '@material-ui/icons/RotateLeft';
 import RestartIcon from '@material-ui/icons/ReplaySharp';
 import SaveFileIcon from '@material-ui/icons/SaveSharp';
 import StartIcon from '@material-ui/icons/PlayArrowSharp';
@@ -94,6 +95,10 @@ const useStyles = makeStyles(theme => ({
   },
   inheritedFile: {
     opacity: '50%',
+  },
+  erasedFile: {
+    color: '#f33',
+    textDecorationLine: 'line-through',
   },
 }));
 
@@ -180,7 +185,11 @@ function FileItem({ path, tree, main }) {
             {tree === 'edit' && '*'}
           </Typography>
         }
-        className={tree === "base" ? classes.inheritedFile : null}
+        className={
+          tree === "base" ? classes.inheritedFile :
+          tree === "erased" ? classes.erasedFile :
+          null
+        }
       />
     );
   } else {
@@ -226,9 +235,10 @@ function Editor({ root }) {
           treeSelected: '',
           files: {},
           folders: {},
+          changedFiles: {},
           main: '',
           currentFile: null,
-          isEdited: false,
+          isChanged: false,
           isConsoleOpen: true,
         }
       )
@@ -246,6 +256,7 @@ function Editor({ root }) {
   const [working, setWorking] = React.useState('');
   const [openConsole, setOpenConsole] = React.useState(states.isConsoleOpen);
   const [openDialogNewFile, setOpenDialogNewFile] = React.useState(false);
+  const [openDialogResetFile, setOpenDialogResetFile] = React.useState(false);
   const [openDialogDeleteFile, setOpenDialogDeleteFile] = React.useState(false);
 
   const queryClient = useQueryClient();
@@ -256,7 +267,9 @@ function Editor({ root }) {
       const tree = {};
       const folders = {};
       const files = {};
+      const changedFiles = {};
       const add = (path, type) => {
+        if (type === 'edit' || type === 'erased') changedFiles[path] = true;
         const segs = path.split('/').filter(s => Boolean(s));
         const name = segs.pop();
         let k = '';
@@ -279,11 +292,13 @@ function Editor({ root }) {
       info.files?.forEach?.(path => add(path, 'file'));
       if (!isLocalHost) {
         info.editFiles?.forEach?.(path => add(path, 'edit'));
-        states.isEdited = info.editFiles?.length > 0;
+        info.erasedFiles?.forEach?.(path => add(path, 'erased'));
+        states.isChanged = (info.editFiles?.length > 0 || info.erasedFiles?.length > 0);
       }
       states.tree = tree;
       states.folders = folders;
       states.files = files;
+      states.changedFiles = changedFiles;
       states.main = info.main;
       if (info.readOnly) {
         editorRef.current?.updateOptions?.({ readOnly: true });
@@ -361,10 +376,10 @@ function Editor({ root }) {
           setSelected(true);
           setSaved(file.saved());
           updateLayout();
+          return;
         }
-      } else {
-        setSelected(false);
       }
+      setSelected(false);
     },
     [root, states, isReadOnly, isLocalHost]
   );
@@ -563,6 +578,10 @@ function Editor({ root }) {
     changeMain(treeSelected);
   }
 
+  const handleClickReset = () => {
+    setOpenDialogResetFile(true);
+  }
+
   const handleClickCommit = () => {
     commitChanges();
   }
@@ -632,16 +651,20 @@ function Editor({ root }) {
           <SaveFileIcon fontSize="small"/>
         </ToolbarButton>
         {!isLocalHost && (
-          <ToolbarButton
-            disabled={!states.isEdited}
-            onClick={handleClickCommit}
-          >
-            <UploadIcon fontSize="small"/>
-          </ToolbarButton>
-        )}
-        <ToolbarGap/>
-        {!isLocalHost && (
           <React.Fragment>
+            <ToolbarButton
+              disabled={!states.changedFiles[treeSelected]}
+              onClick={handleClickReset}
+            >
+              <ResetIcon fontSize="small"/>
+            </ToolbarButton>
+            <ToolbarButton
+              disabled={!states.isChanged}
+              onClick={handleClickCommit}
+            >
+              <UploadIcon fontSize="small"/>
+            </ToolbarButton>
+            <ToolbarGap/>
             <ToolbarTextButton
               startIcon={<BaseIcon/>}
               disabled={queryCodebase.isRunning || !queryCodebase.data?.base}
@@ -778,12 +801,21 @@ function Editor({ root }) {
         onClose={() => setOpenDialogNewFile(false)}
       />
 
+      {/* File Resetting Dialog*/}
+      <DialogResetFile
+        open={openDialogResetFile}
+        root={root}
+        filename={treeSelected}
+        onSuccess={filename => selectFile(filename)}
+        onClose={() => setOpenDialogResetFile(false)}
+      />
+
       {/* File Deletion Dialog */}
       <DialogDeleteFile
         open={openDialogDeleteFile}
         root={root}
         filename={treeSelected}
-        onSuccess={filename => selectFile('')}
+        onSuccess={() => selectFile('')}
         onClose={() => setOpenDialogDeleteFile(false)}
       />
 
@@ -876,6 +908,51 @@ function DialogNewFile({ open, root, files, folders, filename, onSuccess, onClos
         </Button>
       </DialogActions>
       <Working open={working} text="Saving..."/>
+    </Dialog>
+  );
+}
+
+function DialogResetFile({ open, root, filename, onSuccess, onClose }) {
+  const queryClient = useQueryClient();
+
+  const [working, setWorking] = React.useState(false);
+
+  const handleClickDiscard = async () => {
+    setWorking(true);
+    try {
+      const res = await fetch(
+        '/api/v1/repo' + root + filename,
+        {
+          method: 'PATCH',
+        }
+      );
+      if (res.status === 201) {
+        queryClient.invalidateQueries(`files:${root}`);
+        onSuccess();
+        onClose();
+      }
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} fullWidth onClose={onClose}>
+      <DialogTitle>Reset File</DialogTitle>
+      <DialogContent>
+        <Typography>
+          Discard changes on file '{filename}'?
+        </Typography>
+      </DialogContent>
+      <DialogActions>
+        <Button color="secondary" onClick={handleClickDiscard}>
+          Discard
+        </Button>
+        <Button onClick={onClose}>
+          Cancel
+        </Button>
+      </DialogActions>
+      <Working open={working} text="Resetting..."/>
     </Dialog>
   );
 }

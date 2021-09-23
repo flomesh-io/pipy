@@ -126,11 +126,30 @@ auto CodebaseFromFS::get(const std::string &path) -> Data* {
 }
 
 void CodebaseFromFS::set(const std::string &path, Data *data) {
-  auto full_path = utils::path_join(m_base, path);
-  std::ofstream fs(full_path, std::ios::out | std::ios::trunc);
-  if (!fs.is_open()) return;
-  for (const auto &c : data->chunks()) {
-    fs.write(std::get<0>(c), std::get<1>(c));
+  if (data) {
+    auto segs = utils::split(path, '/');
+    if (segs.size() > 1) {
+      auto path = m_base;
+      segs.pop_back();
+      for (const auto &s : segs) {
+        path = utils::path_join(path, s);
+        struct stat st;
+        if (stat(path.c_str(), &st)) {
+          mkdir(path.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+        } else if (!S_ISDIR(st.st_mode)) {
+          return;
+        }
+      }
+    }
+    auto full_path = utils::path_join(m_base, path);
+    std::ofstream fs(full_path, std::ios::out | std::ios::trunc);
+    if (!fs.is_open()) return;
+    for (const auto &c : data->chunks()) {
+      fs.write(std::get<0>(c), std::get<1>(c));
+    }
+  } else {
+    auto full_path = utils::path_join(m_base, path);
+    unlink(full_path.c_str());
   }
 }
 
@@ -162,9 +181,7 @@ public:
     return i->second;
   }
 
-  virtual void set(const std::string &path, Data *data) override {
-    m_files[path] = Data::make(*data);
-  }
+  virtual void set(const std::string &path, Data *data) override {}
 
   virtual void sync(const Status &status, const std::function<void(bool)> &on_update) override {}
 
