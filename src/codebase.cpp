@@ -24,13 +24,14 @@
  */
 
 #include "codebase.hpp"
+#include "codebase-store.hpp"
 #include "context.hpp"
 #include "pipeline.hpp"
 #include "session.hpp"
+#include "status.hpp"
 #include "api/http.hpp"
 #include "api/url.hpp"
-#include "filters/connect.hpp"
-#include "filters/http.hpp"
+#include "fetch.hpp"
 #include "utils.hpp"
 #include "logging.hpp"
 
@@ -39,32 +40,59 @@
 
 namespace pipy {
 
+static Data::Producer s_dp("Codebase");
 static const pjs::Ref<pjs::Str> s_etag(pjs::Str::make("etag"));
 static const pjs::Ref<pjs::Str> s_date(pjs::Str::make("last-modified"));
 
 Codebase* Codebase::s_current = nullptr;
 
 //
-// CodebaseFS
+// CodebaseFromFS
 //
 
-CodebaseFS::CodebaseFS(const std::string &path) {
-  struct stat st;
-  if (stat(path.c_str(), &st)) {
-    std::string msg("file or directory does not exist: ");
-    throw std::runtime_error(msg + path);
+class CodebaseFromFS : public Codebase {
+public:
+  CodebaseFromFS(const std::string &path);
+
+  virtual auto version() const -> const std::string& override { return m_version; }
+  virtual bool writable() const override { return true; }
+  virtual auto entry() const -> const std::string& override { return m_entry; }
+  virtual void entry(const std::string &path) override { m_entry = path; }
+  virtual auto list(const std::string &path) -> std::list<std::string> override;
+  virtual auto get(const std::string &path) -> Data* override;
+  virtual void set(const std::string &path, Data *data) override;
+  virtual void sync(const Status &status, const std::function<void(bool)> &on_update) override;
+
+private:
+  virtual void activate() override {
+    chdir(m_base.c_str());
   }
 
-  if (S_ISDIR(st.st_mode)) {
-    m_base = path;
-  } else {
-    auto i = path.find_last_of("/\\");
-    m_base = path.substr(0, i);
-    m_entry = path.substr(i);
+  std::string m_version;
+  std::string m_base;
+  std::string m_entry;
+};
+
+CodebaseFromFS::CodebaseFromFS(const std::string &path) {
+  char full_path[PATH_MAX];
+  realpath(path.c_str(), full_path);
+
+  struct stat st;
+  if (stat(full_path, &st)) {
+    std::string msg("file or directory does not exist: ");
+    throw std::runtime_error(full_path);
+  }
+
+  m_base = full_path;
+
+  if (!S_ISDIR(st.st_mode)) {
+    auto i = m_base.find_last_of("/\\");
+    m_entry = m_base.substr(i);
+    m_base = m_base.substr(0, i);
   }
 }
 
-auto CodebaseFS::list(const std::string &path) -> std::list<std::string> {
+auto CodebaseFromFS::list(const std::string &path) -> std::list<std::string> {
   std::list<std::string> list;
   auto full_path = utils::path_join(m_base, path);
   if (DIR *dir = opendir(full_path.c_str())) {
@@ -82,9 +110,7 @@ auto CodebaseFS::list(const std::string &path) -> std::list<std::string> {
   return list;
 }
 
-auto CodebaseFS::get(const std::string &path) -> Data* {
-  static Data::Producer s_dp("CodebaseFS");
-
+auto CodebaseFromFS::get(const std::string &path) -> Data* {
   auto full_path = utils::path_join(m_base, path);
   std::ifstream fs(full_path, std::ios::in);
   if (!fs.is_open()) return nullptr;
@@ -99,50 +125,96 @@ auto CodebaseFS::get(const std::string &path) -> Data* {
   return data;
 }
 
-void CodebaseFS::set(const std::string &path, Data *data) {
-  auto full_path = utils::path_join(m_base, path);
-  std::ofstream fs(full_path, std::ios::out | std::ios::trunc);
-  if (!fs.is_open()) return;
-  for (const auto &c : data->chunks()) {
-    fs.write(std::get<0>(c), std::get<1>(c));
-  }
-}
-
-void CodebaseFS::check(const std::function<void(bool)> &on_complete) {
-  m_timer.schedule(0, [=]() {
-    on_complete(false);
-  });
-}
-
-void CodebaseFS::update(const std::function<void(bool)> &on_complete) {
-  m_timer.schedule(0, [=]() {
-    on_complete(true);
-  });
-}
-
-//
-// CodebaseHTTP
-//
-
-CodebaseHTTP::CodebaseHTTP(const std::string &url)
-  : m_url(URL::make(pjs::Value(url).s()))
-  , m_fetch(m_url->host())
-{
-  auto path = m_url->pathname()->str();
-  auto i = path.find_last_of('/');
-  if (i == std::string::npos) {
-    m_base = '/';
-    m_root = path;
+void CodebaseFromFS::set(const std::string &path, Data *data) {
+  if (data) {
+    auto segs = utils::split(path, '/');
+    if (segs.size() > 1) {
+      auto path = m_base;
+      segs.pop_back();
+      for (const auto &s : segs) {
+        path = utils::path_join(path, s);
+        struct stat st;
+        if (stat(path.c_str(), &st)) {
+          mkdir(path.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+        } else if (!S_ISDIR(st.st_mode)) {
+          return;
+        }
+      }
+    }
+    auto full_path = utils::path_join(m_base, path);
+    std::ofstream fs(full_path, std::ios::out | std::ios::trunc);
+    if (!fs.is_open()) return;
+    for (const auto &c : data->chunks()) {
+      fs.write(std::get<0>(c), std::get<1>(c));
+    }
   } else {
-    m_base = path.substr(0, i);
-    m_root = path.substr(i);
+    auto full_path = utils::path_join(m_base, path);
+    unlink(full_path.c_str());
   }
 }
 
-CodebaseHTTP::~CodebaseHTTP() {
+void CodebaseFromFS::sync(const Status &status, const std::function<void(bool)> &on_update) {
+  if (m_version.empty()) {
+    m_version = "1";
+    on_update(true);
+  }
 }
 
-auto CodebaseHTTP::list(const std::string &path) -> std::list<std::string> {
+//
+// CodebsaeFromStore
+//
+
+class CodebsaeFromStore : public Codebase {
+public:
+  CodebsaeFromStore(CodebaseStore *store, const std::string &name);
+
+  virtual auto version() const -> const std::string& override { return m_version; }
+  virtual bool writable() const override { return false; }
+  virtual auto entry() const -> const std::string& override { return m_entry; }
+  virtual void entry(const std::string &path) override {}
+
+  virtual auto list(const std::string &path) -> std::list<std::string> override;
+
+  virtual auto get(const std::string &path) -> pipy::Data* override {
+    auto i = m_files.find(path);
+    if (i == m_files.end()) return nullptr;
+    return i->second;
+  }
+
+  virtual void set(const std::string &path, Data *data) override {}
+
+  virtual void sync(const Status &status, const std::function<void(bool)> &on_update) override {}
+
+private:
+  std::string m_version;
+  std::string m_entry;
+  std::map<std::string, pjs::Ref<pipy::Data>> m_files;
+};
+
+CodebsaeFromStore::CodebsaeFromStore(CodebaseStore *store, const std::string &name) {
+  auto codebase = store->find_codebase(name);
+  if (!codebase) {
+    std::string msg("Codebase not found: ");
+    throw std::runtime_error(msg + name);
+  }
+
+  CodebaseStore::Codebase::Info info;
+  codebase->get_info(info);
+  m_version = std::to_string(info.version);
+  m_entry = info.main;
+
+  std::set<std::string> paths;
+  codebase->list_files(true, paths);
+  codebase->list_edit(paths);
+
+  for (const auto &path : paths) {
+    Data buf;
+    codebase->get_file(path, buf);
+    m_files[path] = Data::make(buf);
+  }
+}
+
+auto CodebsaeFromStore::list(const std::string &path) -> std::list<std::string> {
   std::set<std::string> names;
   auto n = path.length();
   for (const auto &i : m_files) {
@@ -162,48 +234,147 @@ auto CodebaseHTTP::list(const std::string &path) -> std::list<std::string> {
   return list;
 }
 
-void CodebaseHTTP::check(const std::function<void(bool)> &on_complete) {
+//
+// CodebaseFromHTTP
+//
+
+class CodebaseFromHTTP : public Codebase {
+public:
+  CodebaseFromHTTP(const std::string &url);
+  ~CodebaseFromHTTP();
+
+private:
+  virtual auto version() const -> const std::string& override { return m_etag; }
+  virtual bool writable() const override { return false; }
+  virtual auto entry() const -> const std::string& override { return m_entry; }
+  virtual void entry(const std::string &path) override {}
+
+  virtual auto list(const std::string &path) -> std::list<std::string> override;
+
+  virtual auto get(const std::string &path) -> pipy::Data* override {
+    auto i = m_files.find(path);
+    if (i == m_files.end()) return nullptr;
+    return i->second;
+  }
+
+  virtual void set(const std::string &path, Data *data) override {}
+
+  virtual void sync(const Status &status, const std::function<void(bool)> &on_update) override;
+
+  pjs::Ref<URL> m_url;
+  Fetch m_fetch;
+  bool m_downloaded = false;
+  std::string m_etag;
+  std::string m_date;
+  std::string m_base;
+  std::string m_root;
+  std::string m_entry;
+  std::map<std::string, pjs::Ref<pipy::Data>> m_files;
+  std::map<std::string, pjs::Ref<pipy::Data>> m_dl_temp;
+  std::list<std::string> m_dl_list;
+  pjs::Ref<pjs::Object> m_request_header_post_status;
+
+  void download(const std::function<void(bool)> &on_update);
+  void download_next(const std::function<void(bool)> &on_update);
+};
+
+CodebaseFromHTTP::CodebaseFromHTTP(const std::string &url)
+  : m_url(URL::make(pjs::Value(url).s()))
+  , m_fetch(m_url->hostname()->str() + ':' + m_url->port()->str())
+{
+  auto path = m_url->pathname()->str();
+  auto i = path.find_last_of('/');
+  if (i == std::string::npos) {
+    m_base = '/';
+    m_root = path;
+  } else {
+    m_base = path.substr(0, i);
+    m_root = path.substr(i);
+  }
+
+  auto headers = pjs::Object::make();
+  headers->set("content-type", "application/json");
+  m_request_header_post_status = headers;
+}
+
+CodebaseFromHTTP::~CodebaseFromHTTP() {
+}
+
+auto CodebaseFromHTTP::list(const std::string &path) -> std::list<std::string> {
+  std::set<std::string> names;
+  auto n = path.length();
+  for (const auto &i : m_files) {
+    const auto &name = i.first;
+    if (name.length() > path.length() &&
+        name[n] == '/' && !std::strncmp(name.c_str(), path.c_str(), n)) {
+      auto i = name.find('/', n + 1);
+      if (i == std::string::npos) {
+        names.insert(name.substr(n + 1));
+      } else {
+        names.insert(name.substr(n + 1, i - n));
+      }
+    }
+  }
+  std::list<std::string> list;
+  for (const auto &name : names) list.push_back(name);
+  return list;
+}
+
+void CodebaseFromHTTP::sync(const Status &status, const std::function<void(bool)> &on_update) {
   if (m_fetch.busy()) return;
 
+  std::stringstream ss;
+  status.to_json(ss);
+
+  // Post status
   m_fetch(
-    Fetch::HEAD,
+    Fetch::POST,
     m_url->path(),
-    nullptr,
-    nullptr,
+    m_request_header_post_status,
+    Data::make(ss.str(), &s_dp),
     [=](http::ResponseHead *head, Data *body) {
-      if (head->status() != 200) {
-        Log::error(
-          "[codebase] HEAD %s -> %d %s",
-          m_url->href()->c_str(),
-          head->status(),
-          head->status_text()->c_str()
-        );
-        m_fetch.close();
-        on_complete(false);
-        return;
-      }
 
-      pjs::Value etag, date;
-      head->headers()->get(s_etag, etag);
-      head->headers()->get(s_date, date);
+      // Check updates
+      m_fetch(
+        Fetch::HEAD,
+        m_url->path(),
+        nullptr,
+        nullptr,
+        [=](http::ResponseHead *head, Data *body) {
+          if (head->status() != 200) {
+            Log::error(
+              "[codebase] HEAD %s -> %d %s",
+              m_url->href()->c_str(),
+              head->status(),
+              head->status_text()->c_str()
+            );
+            m_fetch.close();
+            on_update(false);
+            return;
+          }
 
-      std::string etag_str;
-      std::string date_str;
-      if (etag.is_string()) etag_str = etag.s()->str();
-      if (date.is_string()) date_str = date.s()->str();
+          pjs::Value etag, date;
+          head->headers()->get(s_etag, etag);
+          head->headers()->get(s_date, date);
 
-      m_fetch.close();
-      on_complete(
-        etag_str != m_etag ||
-        date_str != m_date
+          std::string etag_str;
+          std::string date_str;
+          if (etag.is_string()) etag_str = etag.s()->str();
+          if (date.is_string()) date_str = date.s()->str();
+
+          if (!m_downloaded || etag_str != m_etag || date_str != m_date) {
+            download(on_update);
+          } else {
+            m_fetch.close();
+          }
+        }
       );
+
     }
   );
 }
 
-void CodebaseHTTP::update(const std::function<void(bool)> &on_complete) {
-  if (m_fetch.busy()) return;
-
+void CodebaseFromHTTP::download(const std::function<void(bool)> &on_update) {
   m_fetch(
     Fetch::GET,
     m_url->path(),
@@ -218,7 +389,7 @@ void CodebaseHTTP::update(const std::function<void(bool)> &on_complete) {
           head->status_text()->c_str()
         );
         m_fetch.close();
-        on_complete(false);
+        on_update(false);
         return;
 
       } else {
@@ -249,23 +420,25 @@ void CodebaseHTTP::update(const std::function<void(bool)> &on_complete) {
           if (!path.empty()) m_dl_list.push_back(path);
         }
         m_entry = m_dl_list.front();
-        download_next(on_complete);
+        download_next(on_update);
       } else {
         m_files.clear();
         m_files[m_root] = body;
         m_fetch.close();
         m_entry = m_root;
-        on_complete(true);
+        m_downloaded = true;
+        on_update(true);
       }
     }
   );
 }
 
-void CodebaseHTTP::download_next(const std::function<void(bool)> &on_complete) {
+void CodebaseFromHTTP::download_next(const std::function<void(bool)> &on_update) {
   if (m_dl_list.empty()) {
     m_files = std::move(m_dl_temp);
     m_fetch.close();
-    on_complete(true);
+    m_downloaded = true;
+    on_update(true);
     return;
   }
 
@@ -286,7 +459,7 @@ void CodebaseHTTP::download_next(const std::function<void(bool)> &on_complete) {
           head->status_text()->c_str()
         );
         m_fetch.close();
-        on_complete(false);
+        on_update(false);
         return;
 
       } else {
@@ -298,9 +471,25 @@ void CodebaseHTTP::download_next(const std::function<void(bool)> &on_complete) {
       }
 
       m_dl_temp[name] = body;
-      download_next(on_complete);
+      download_next(on_update);
     }
   );
+}
+
+//
+// Codebase
+//
+
+Codebase* Codebase::from_fs(const std::string &path) {
+  return new CodebaseFromFS(path);
+}
+
+Codebase* Codebase::from_store(CodebaseStore *store, const std::string &name) {
+  return new CodebsaeFromStore(store, name);
+}
+
+Codebase* Codebase::from_http(const std::string &url) {
+  return new CodebaseFromHTTP(url);
 }
 
 } // namespace pipy

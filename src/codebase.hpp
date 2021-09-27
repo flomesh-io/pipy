@@ -23,24 +23,18 @@
  *  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef UPDATER_HPP
-#define UPDATER_HPP
+#ifndef CODEBASE_HPP
+#define CODEBASE_HPP
 
 #include "pjs/pjs.hpp"
-#include "timer.hpp"
-#include "fetch.hpp"
 
 #include <functional>
-#include <list>
-#include <map>
 
 namespace pipy {
 
-class CodebaseReceiver;
+class CodebaseStore;
 class Data;
-class Pipeline;
-class Session;
-class URL;
+class Status;
 
 //
 // Codebase
@@ -50,85 +44,35 @@ class Codebase {
 public:
   static auto current() -> Codebase* { return s_current; }
 
+  static Codebase* from_fs(const std::string &path);
+  static Codebase* from_store(CodebaseStore *store, const std::string &name);
+  static Codebase* from_http(const std::string &url);
+
   void set_current() {
+    if (s_current) s_current->deactivate();
+    activate();
     s_current = this;
   }
 
   virtual ~Codebase() {}
 
+  virtual auto version() const -> const std::string& = 0;
+  virtual bool writable() const = 0;
   virtual auto entry() const -> const std::string& = 0;
+  virtual void entry(const std::string &path) = 0;
   virtual auto list(const std::string &path) -> std::list<std::string> = 0;
   virtual auto get(const std::string &path) -> Data* = 0;
   virtual void set(const std::string &path, Data *data) = 0;
-  virtual void check(const std::function<void(bool)> &on_complete) = 0;
-  virtual void update(const std::function<void(bool)> &on_complete) = 0;
+  virtual void sync(const Status &status, const std::function<void(bool)> &on_update) = 0;
+
+protected:
+  virtual void activate() {};
+  virtual void deactivate() {};
 
 private:
   static Codebase* s_current;
 };
 
-//
-// CodebaseFS
-//
-
-class CodebaseFS : public Codebase {
-public:
-  CodebaseFS(const std::string &path);
-
-  auto base() const -> const std::string& { return m_base; }
-
-  virtual auto entry() const -> const std::string& override { return m_entry; }
-  virtual auto list(const std::string &path) -> std::list<std::string> override;
-  virtual auto get(const std::string &path) -> Data* override;
-  virtual void set(const std::string &path, Data *data) override;
-  virtual void check(const std::function<void(bool)> &on_complete) override;
-  virtual void update(const std::function<void(bool)> &on_complete) override;
-
-private:
-  std::string m_base;
-  std::string m_entry;
-  Timer m_timer;
-};
-
-//
-// CodebaseHTTP
-//
-
-class CodebaseHTTP : public Codebase {
-public:
-  CodebaseHTTP(const std::string &url);
-  ~CodebaseHTTP();
-
-  virtual auto entry() const -> const std::string& override { return m_entry; }
-
-  virtual auto list(const std::string &path) -> std::list<std::string> override;
-
-  virtual auto get(const std::string &path) -> pipy::Data* override {
-    auto i = m_files.find(path);
-    if (i == m_files.end()) return nullptr;
-    return i->second;
-  }
-
-  virtual void set(const std::string &path, Data *data) override {}
-
-  virtual void check(const std::function<void(bool)> &on_complete) override;
-  virtual void update(const std::function<void(bool)> &on_complete) override;
-
-private:
-  pjs::Ref<URL> m_url;
-  Fetch m_fetch;
-  std::string m_etag;
-  std::string m_date;
-  std::string m_base;
-  std::string m_root;
-  std::string m_entry;
-  std::map<std::string, pjs::Ref<pipy::Data>> m_files;
-  std::map<std::string, pjs::Ref<pipy::Data>> m_dl_temp;
-  std::list<std::string> m_dl_list;
-
-  void download_next(const std::function<void(bool)> &on_complete);
-};
-
 } // namespace pipy
 
-#endif // UPDATER_HPP
+#endif // CODEBASE_HPP

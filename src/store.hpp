@@ -23,27 +23,38 @@
  *  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef GUI_HPP
-#define GUI_HPP
+#ifndef STORE_HPP
+#define STORE_HPP
 
-#include "tar.hpp"
+#include "data.hpp"
+
+#include <set>
+#include <ostream>
 
 namespace pipy {
 
-class GuiService;
-
-class Gui {
+class Store {
 public:
-  Gui();
-  ~Gui();
+  static Store* open_memory();
+  static Store* open_level_db(const std::string &path);
 
-  void open(int port);
+  class Batch {
+  public:
+    virtual void set(const std::string &key, const Data &data) = 0;
+    virtual void erase(const std::string &key) = 0;
+    virtual void commit() = 0;
+    virtual void cancel() = 0;
+  };
 
-private:
-  Tarball m_www_files;
-  GuiService* m_service;
+  virtual void keys(const std::string &base_key, std::set<std::string> &keys) = 0;
+  virtual bool get(const std::string &key, Data &data) = 0;
+  virtual void set(const std::string &key, const Data &data) = 0;
+  virtual void erase(const std::string &key) = 0;
+  virtual auto batch() -> Batch* = 0;
+  virtual void close() = 0;
+  virtual void dump(std::ostream &out) = 0;
 };
 
 } // namespace pipy
 
-#endif // GUI_HPP
+#endif // STORE_HPP

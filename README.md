@@ -89,18 +89,17 @@ $ pipy --help-filters
 ## Run on CLI
 
 To start a Pipy proxy, run `pipy` with a PipyJS script file, for example, the script
-in `test/001-echo/` if you need a simple echo server that responds with the same message
+in `tutorial/01-hello/hello.js` if you need a simple echo server that responds with the same message
 body as in every incoming request:
 
 ```
-$ pipy test/001-echo/pipy.js
+$ pipy tutorial/01-hello/hello.js
 ```
 
-Alternatively, while developing and debugging, one can start Pipy in web UI mode without
-specifying any specific script file but only a working directory:
+Alternatively, while developing and debugging, one can start Pipy with a builtin web UI:
 
 ```
-$ pipy test/ --gui-port=6060
+$ pipy tutorial/01-hello/hello.js --admin-port=6060
 ```
 
 ## Run in Docker

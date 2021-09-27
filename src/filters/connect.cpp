@@ -140,7 +140,7 @@ void Connect::process(Context *ctx, Event *inp) {
         m_outbound = outbound;
       } else {
         m_session_end = true;
-        Log::warn("[connect] invalid target: %s", s->c_str());
+        Log::error("[connect] invalid target: %s", s->c_str());
       }
       s->release();
     }

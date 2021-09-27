@@ -22,8 +22,6 @@ COPY pipy.spec /pipy.spec
 
 RUN yum install -y -q make unzip rpm-build rpmdevtools git chrpath expat-devel zlib-devel \
         && rpmdev-setuptree \
-        && curl -sL https://rpm.nodesource.com/setup_12.x | bash - \
-        && yum install -y -q nodejs \
         && mv /rpmmacros ~/.rpmmacros \
         && yum install -y centos-release-scl epel-release \
         && yum install -y llvm-toolset-7 cmake3 

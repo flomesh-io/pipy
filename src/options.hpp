@@ -49,7 +49,7 @@ public:
   bool        list_filters = false;
   bool        verify = false;
   bool        reuse_port = false;
-  int         gui_port = 0;
+  int         admin_port = 0;
   Log::Level  log_level = Log::ERROR;
 };
 

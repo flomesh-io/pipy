@@ -1,10 +1,9 @@
 import React from 'react';
-import GlobalState from '../global-state';
 
 import { makeStyles } from '@material-ui/core/styles';
 
 // Components
-import Toolbar, { ToolbarButton, ToolbarFilling } from './toolbar';
+import Toolbar, { ToolbarButton, ToolbarGap, ToolbarStretch } from './toolbar';
 
 // Icons
 import ClearIcon from '@material-ui/icons/DeleteSweep';
@@ -32,14 +31,19 @@ const useStyles = makeStyles(theme => ({
   },
 }));
 
+const Context = React.createContext({
+  textNode: null,
+  clearLog: () => {},
+});
+
 function Console({ onClose }) {
   const classes = useStyles();
-  const globalState = React.useContext(GlobalState);
+  const context = React.useContext(Context);
   const consoleEl = React.useRef();
 
   React.useEffect(
     () => {
-      const node = globalState.logTextNode;
+      const node = context.textNode;
       if (node) {
         const container = consoleEl.current;
         container.appendChild(node);
@@ -47,11 +51,11 @@ function Console({ onClose }) {
         return () => container.removeChild(node);
       }
     },
-    [globalState.logTextNode]
+    [context.textNode]
   );
 
   const handleClickClear = () => {
-    globalState.clearLog();
+    context.clearLog();
   }
 
   const handleClickClose = () => {
@@ -63,15 +67,16 @@ function Console({ onClose }) {
 
       {/* Toolbar */}
       <Toolbar>
+        <ToolbarStretch/>
         <ToolbarButton onClick={handleClickClear}>
           <ClearIcon fontSize="small"/>
         </ToolbarButton>
-        <ToolbarFilling/>
         {onClose && (
           <ToolbarButton onClick={handleClickClose}>
             <CloseIcon fontSize="small"/>
           </ToolbarButton>
         )}
+        <ToolbarGap/>
       </Toolbar>
 
       {/* Log View */}
@@ -81,5 +86,7 @@ function Console({ onClose }) {
     </div>
   );
 }
+
+Console.Context = Context;
 
 export default Console;

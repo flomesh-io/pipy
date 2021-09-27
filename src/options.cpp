@@ -40,9 +40,7 @@ void Options::show_help() {
   std::cout << "  --log-level=<debug|info|warn|error>  Set the level of log output" << std::endl;
   std::cout << "  --verify                             Verify configuration only" << std::endl;
   std::cout << "  --reuse-port                         Enable kernel load balancing for all listening ports" << std::endl;
-#ifdef PIPY_USE_GUI
-  std::cout << "  --gui-port=<port>                    Enable web GUI on the specified port" << std::endl;
-#endif
+  std::cout << "  --admin-port=<port>                  Enable administration service on the specified port" << std::endl;
   std::cout << std::endl;
 }
 
@@ -80,16 +78,16 @@ Options::Options(int argc, char *argv[]) {
         verify = true;
       } else if (k == "--reuse-port") {
         reuse_port = true;
-#ifdef PIPY_USE_GUI
-      } else if (k == "--gui-port") {
-        gui_port = std::atoi(v.c_str());
-#endif
+      } else if (k == "--admin-port") {
+        admin_port = std::atoi(v.c_str());
       } else {
         std::string msg("unknown option: ");
         throw std::runtime_error(msg + k);
       }
     }
   }
+
+  if (admin_port < 0) throw std::runtime_error("invalid --admin-port");
 }
 
 } // namespace pipy

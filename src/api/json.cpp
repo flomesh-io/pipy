@@ -198,7 +198,7 @@ bool JSON::parse(const std::string &str, pjs::Value &val) {
 
 auto JSON::stringify(
   const pjs::Value &val,
-  std::function<bool(pjs::Object*, const pjs::Value&, pjs::Value&)> &replacer,
+  const std::function<bool(pjs::Object*, const pjs::Value&, pjs::Value&)> &replacer,
   int space
 ) -> std::string {
   Data data;
@@ -213,7 +213,7 @@ bool JSON::decode(const Data &data, pjs::Value &val) {
 
 bool JSON::encode(
   const pjs::Value &val,
-  std::function<bool(pjs::Object*, const pjs::Value&, pjs::Value&)> &replacer,
+  const std::function<bool(pjs::Object*, const pjs::Value&, pjs::Value&)> &replacer,
   int space,
   Data &data
 ) {

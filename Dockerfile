@@ -7,19 +7,25 @@ ENV  pkg_bindir              ${pkg_prefix}/bin
 ENV  CXX       		     clang++
 ENV  CC			     clang
 
-ENV NODE_VERSION   12.22.1-r0
+ARG VERSION
+ENV VERSION=${VERSION}
+
+ARG REVISION
+ENV REVISION=${REVISION}
+
+ARG COMMIT_ID
+ENV CI_COMMIT_SHA=${COMMIT_ID}
+
+ARG COMMIT_DATE
+ENV CI_COMMIT_DATE=${COMMIT_DATE}
 
 COPY . /pipy
 
-RUN apk add --no-cache --virtual .build-deps openssh-client git cmake clang alpine-sdk linux-headers nodejs=${NODE_VERSION} npm=${NODE_VERSION} autoconf automake libtool tiff jpeg zlib zlib-dev pkgconf nasm file musl-dev
+RUN apk add --no-cache --virtual .build-deps openssh-client git cmake clang alpine-sdk linux-headers autoconf automake libtool tiff jpeg zlib zlib-dev pkgconf nasm file musl-dev
 
 RUN rm -fr pipy/build \
         && mkdir pipy/build \
-        && cd pipy/gui \
-        && npm install \
-        && npm run build \
-        && cd ../build \
-        && cmake -DPIPY_GUI=ON -DCMAKE_BUILD_TYPE=Release .. \
+        && cmake -DCMAKE_BUILD_TYPE=Release .. \
         && make -j$(getconf _NPROCESSORS_ONLN) \
         && mkdir ${pkg_confdir} \
         && cp /pipy/bin/pipy ${pkg_bindir} \

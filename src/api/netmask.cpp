@@ -24,24 +24,9 @@
  */
 
 #include "netmask.hpp"
+#include "utils.hpp"
 
 namespace pipy {
-
-static auto get_uint8(const char **ptr) -> int {
-  auto *s = *ptr;
-  if (*s == '0') {
-    *ptr = s + 1;
-    return 0;
-  }
-  int n = 0;
-  for (int i = 0; i < 3; i++, s++) {
-    auto c = *s;
-    if (c < '0' || c > '9') break;
-    n = (n * 10) + (c - '0');
-  }
-  *ptr = s;
-  return n < 256 ? n : -1;
-}
 
 static inline auto get_ip4(const uint8_t ip[4]) -> uint32_t {
   return (
@@ -82,30 +67,9 @@ static inline auto mask_of(int bits) -> uint32_t {
 //
 
 Netmask::Netmask(pjs::Str *cidr) : m_cidr(cidr) {
-  const auto &str = cidr->str();
-  const char *ptr = str.c_str();
-
   uint8_t ip[4];
-  for (int i = 0; i < 4; i++) {
-    if (i > 0) ptr++;
-    auto n = get_uint8(&ptr);
-    if (n < 0 ||
-      (i <= 2 && *ptr != '.') ||
-      (i == 3 && *ptr != '/' && *ptr != '\0')
-    ) {
-      throw std::runtime_error("invalid CIDR notation");
-    }
-    ip[i] = n;
-  }
-
-  if (*ptr == '/') {
-    ptr++;
-    m_bitmask = get_uint8(&ptr);
-    if (m_bitmask < 0 || m_bitmask > 32 || *ptr != '\0') {
-      throw std::runtime_error("invalid CIDR notation");
-    }
-  } else {
-    m_bitmask = 32;
+  if (!utils::get_cidr(cidr->str(), ip, m_bitmask)) {
+    throw std::runtime_error("invalid CIDR notation");
   }
 
   m_ip4_mask = mask_of(m_bitmask) << (32 - m_bitmask);
@@ -147,18 +111,9 @@ auto Netmask::last() -> pjs::Str* {
 
 bool Netmask::contains(pjs::Str *addr) {
   uint8_t ip[4];
-  const char *ptr = addr->c_str();
-  for (int i = 0; i < 4; i++, ptr++) {
-    auto n = get_uint8(&ptr);
-    if (n < 0 ||
-      (i <= 2 && *ptr != '.') ||
-      (i == 3 && *ptr != '\0')
-    ) {
-      return false;
-    }
-    ip[i] = n;
+  if (!utils::get_ip_v4(addr->str(), ip)) {
+    return false;
   }
-
   return (get_ip4(ip) & m_ip4_mask) == m_ip4_base;
 }
 

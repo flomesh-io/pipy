@@ -5,7 +5,11 @@ option(PIPY_GUI "include builtin GUI" OFF)
 
 add_subdirectory(deps/yajl-2.1.0)
 
+option(BUILD_tools "build the xmlwf tool for expat library" OFF)
+option(BUILD_examples "build the examples for expat library" OFF)
+option(BUILD_tests "build the tests for expat library" OFF)
 option(BUILD_shared "build a shared expat library" OFF)
+option(BUILD_doc "build man page for xmlwf" OFF)
 add_subdirectory(deps/libexpat-R_2_2_6/expat)
 
 add_subdirectory(deps/openssl-1.1.1g)
@@ -28,6 +32,7 @@ include_directories(
 )
 
 add_executable(pipy
+  src/admin-service.cpp
   src/api/algo.cpp
   src/api/configuration.cpp
   src/api/console.cpp
@@ -41,6 +46,7 @@ add_executable(pipy
   src/api/url.cpp
   src/api/xml.cpp
   src/codebase.cpp
+  src/codebase-store.cpp
   src/compress.cpp
   src/context.cpp
   src/data.cpp
@@ -78,7 +84,6 @@ add_executable(pipy
   src/filters/wait.cpp
   src/fstream.cpp
   src/graph.cpp
-  src/gui.cpp
   src/inbound.cpp
   src/listener.cpp
   src/logging.cpp
@@ -94,6 +99,8 @@ add_executable(pipy
   src/pjs/parser.cpp
   src/pjs/types.cpp
   src/session.cpp
+  src/status.cpp
+  src/store.cpp
   src/tar.cpp
   src/task.cpp
   src/utils.cpp

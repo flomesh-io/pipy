@@ -1,7 +1,8 @@
 import React from 'react';
-import GlobalState from '../global-state';
 
 import { makeStyles } from '@material-ui/core/styles';
+import { navigate } from 'gatsby';
+import { useQueryClient, useQuery } from 'react-query';
 
 // Material-UI components
 import Button from '@material-ui/core/Button';
@@ -9,6 +10,12 @@ import Dialog from '@material-ui/core/Dialog';
 import DialogActions from '@material-ui/core/DialogActions';
 import DialogContent from '@material-ui/core/DialogContent';
 import DialogTitle from '@material-ui/core/DialogTitle';
+import Divider from '@material-ui/core/Divider';
+import List from '@material-ui/core/List';
+import ListItem from '@material-ui/core/ListItem';
+import ListItemIcon from '@material-ui/core/ListItemIcon';
+import ListItemText from '@material-ui/core/ListItemText';
+import Popover from '@material-ui/core/Popover';
 import TextField from '@material-ui/core/TextField';
 import TreeView from '@material-ui/lab/TreeView';
 import TreeItem from '@material-ui/lab/TreeItem';
@@ -16,22 +23,31 @@ import Typography from '@material-ui/core/Typography';
 
 // Components
 import Console from './console';
+import DialogNewCodebase from './dialog-new-codebase';
 import Flowchart from './flowchart';
 import Pane from 'react-split-pane/lib/Pane';
+import Loading from './loading';
 import Nothing from './nothing';
 import SplitPane from 'react-split-pane';
-import Toolbar, { ToolbarButton, ToolbarGap } from './toolbar';
+import Toolbar, { ToolbarButton, ToolbarTextButton, ToolbarGap, ToolbarStretch } from './toolbar';
+import Working from './working';
 
 // Icons
-import ArrowRightIcon from '@material-ui/icons/ExpandMore';
-import ArrowDownIcon from '@material-ui/icons/ChevronRight';
 import AddFileIcon from '@material-ui/icons/AddSharp';
+import ArrowRightIcon from '@material-ui/icons/ChevronRight';
+import ArrowDownIcon from '@material-ui/icons/ExpandMore';
+import BaseIcon from '@material-ui/icons/VerticalAlignTopSharp';
+import CodebaseIcon from '@material-ui/icons/CodeSharp';
 import ConsoleIcon from '@material-ui/icons/CallToAction';
 import DeleteFileIcon from '@material-ui/icons/DeleteSharp';
+import DerivativeIcon from '@material-ui/icons/SubdirectoryArrowRightSharp';
+import FlagIcon from '@material-ui/icons/FlagSharp';
+import ResetIcon from '@material-ui/icons/RotateLeft';
 import RestartIcon from '@material-ui/icons/ReplaySharp';
 import SaveFileIcon from '@material-ui/icons/SaveSharp';
 import StartIcon from '@material-ui/icons/PlayArrowSharp';
 import StopIcon from '@material-ui/icons/StopSharp';
+import UploadIcon from '@material-ui/icons/CloudUploadSharp';
 
 // CSS styles
 const useStyles = makeStyles(theme => ({
@@ -73,9 +89,16 @@ const useStyles = makeStyles(theme => ({
     height: '100%',
     backgroundColor: '#202020',
   },
-  runningProgram: {
-    fontWeight: 'bold',
-    color: '#0e0',
+  folder: {
+    opacity: '65%',
+    fontStyle: 'italic',
+  },
+  inheritedFile: {
+    opacity: '50%',
+  },
+  erasedFile: {
+    color: '#f33',
+    textDecorationLine: 'line-through',
   },
 }));
 
@@ -89,40 +112,7 @@ const splitterPos = [
   [1, 1],
 ];
 
-const store = {
-  fileTree: null,
-  treeExpanded: [],
-  treeSelected: '',
-  currentFile: null,
-  isConsoleOpen: true,
-};
-
-let allFolders = null;
-let allFiles = null;
-
-function loadFileTree(tree) {
-  allFolders = {};
-  allFiles = {};
-  const visit = (path, content) => {
-    if (typeof content === 'string') {
-      allFiles[path] = null;
-    } else {
-      allFolders[path] = true;
-      for (const key in content) {
-        visit(path + '/' + key, content[key]);
-      }
-    }
-  }
-  allFolders['/'] = tree;
-  for (const key in tree) visit('/' + key, tree[key]);
-}
-
-function getSubTree(tree, path) {
-  while (path[0] === '/') path = path.substring(1);
-  const segs = path.split('/');
-  while (segs.length > 1) tree = tree[segs.shift()];
-  return tree;
-}
+const codebaseStates = {};
 
 //
 // File data
@@ -137,7 +127,7 @@ class File {
     let graphUpdatingTimeout = null;
 
     const loadGraph = async () => {
-      const res = await fetch('/api/graph', {
+      const res = await fetch('/api/v1/graph', {
         method: 'POST',
         headers: {
           'content-type': 'text/plain',
@@ -180,39 +170,47 @@ class File {
 // File item
 //
 
-function FileItem({ path, content, runningProgram }) {
+function FileItem({ path, tree, main }) {
   const classes = useStyles();
   const name = path.substring(path.lastIndexOf('/') + 1);
-  if (typeof content === 'string') {
+  if (typeof tree === 'string') {
     return (
       <TreeItem
         key={path}
         nodeId={path}
+        endIcon={path === main && <FlagIcon fontSize="small" color="primary"/>}
         label={
-          <Typography
-            noWrap
-            className={runningProgram === path ? classes.runningProgram : null}
-          >
+          <Typography noWrap>
             {name}
+            {tree === 'edit' && '*'}
           </Typography>
+        }
+        className={
+          tree === "base" ? classes.inheritedFile :
+          tree === "erased" ? classes.erasedFile :
+          null
         }
       />
     );
   } else {
-    const keys = Object.keys(content);
+    const keys = Object.keys(tree);
     keys.sort();
     return (
       <TreeItem
         key={path}
         nodeId={path}
-        label={<Typography noWrap>{name}</Typography>}
+        label={
+          <Typography noWrap className={classes.folder}>
+            {name}
+          </Typography>
+        }
       >
         {keys.map(key => (
           <FileItem
             key={key}
             path={path + '/' + key}
-            content={content[key]}
-            runningProgram={runningProgram}
+            tree={tree[key]}
+            main={main}
           />
         ))}
       </TreeItem>
@@ -220,45 +218,268 @@ function FileItem({ path, content, runningProgram }) {
   }
 }
 
-function Editor() {
+function Editor({ root }) {
   const classes = useStyles();
-  const globalState = React.useContext(GlobalState);
 
   const editorDiv = React.useRef();
   const editorRef = React.useRef();
   const layoutUpdaterRef = React.useRef();
+  const consoleContext = React.useContext(Console.Context);
 
-  const [ fileTree, setFileTree ] = React.useState(store.fileTree);
-  const [ currentGraph, setCurrentGraph ] = React.useState(store.currentFile?.graph);
-  const [ isSaved, setSaved ] = React.useState(store.currentFile?.saved());
-  const [ treeExpanded, setTreeExpanded ] = React.useState(store.treeExpanded);
-  const [ treeSelected, setTreeSelected ] = React.useState(store.treeSelected);
-  const [ showConsole, setShowConsole ] = React.useState(store.isConsoleOpen);
-  const [ showAddFile, setShowAddFile ] = React.useState(false);
-  const [ showDeleteFile, setShowDeleteFile ] = React.useState(false);
+  const states = React.useMemo(
+    () => (
+      codebaseStates[root] || (
+        codebaseStates[root] = {
+          tree: null,
+          treeExpanded: [],
+          treeSelected: '',
+          files: {},
+          folders: {},
+          changedFiles: {},
+          main: '',
+          currentFile: null,
+          isChanged: false,
+          isConsoleOpen: true,
+        }
+      )
+    ),
+    [root]
+  );
+
+  const [isInitialized, setInitialized] = React.useState(false);
+  const [isReadOnly, setReadOnly] = React.useState(true);
+  const [isSelected, setSelected] = React.useState(false);
+  const [isSaved, setSaved] = React.useState(states.currentFile?.saved());
+  const [treeExpanded, setTreeExpanded] = React.useState(states.treeExpanded);
+  const [treeSelected, setTreeSelected] = React.useState(states.treeSelected);
+  const [currentGraph, setCurrentGraph] = React.useState(states.currentFile?.graph);
+  const [working, setWorking] = React.useState('');
+  const [openConsole, setOpenConsole] = React.useState(states.isConsoleOpen);
+  const [openDialogNewFile, setOpenDialogNewFile] = React.useState(false);
+  const [openDialogResetFile, setOpenDialogResetFile] = React.useState(false);
+  const [openDialogDeleteFile, setOpenDialogDeleteFile] = React.useState(false);
+
+  const queryClient = useQueryClient();
+
+  const queryCodebase = useQuery(
+    `files:${root}`,
+    async () => {
+      const tree = {};
+      const folders = {};
+      const files = {};
+      const changedFiles = {};
+      const add = (path, type) => {
+        if (type === 'edit' || type === 'erased') changedFiles[path] = true;
+        const segs = path.split('/').filter(s => Boolean(s));
+        const name = segs.pop();
+        let k = '';
+        let p = tree;
+        for (const s of segs) {
+          k += '/' + s;
+          folders[k] = true;
+          p = p[s] || (p[s] = {});
+        }
+        files[k + '/' + name] = null;
+        p[name] = type;
+      };
+      const res = await fetch(isLocalHost ? '/api/v1/files' : `/api/v1/repo${root}`);
+      if (res.status !== 200) {
+        const msg = await res.text();
+        throw new Error(`Error: ${msg}, status = ${res.status}`);
+      }
+      const info = await res.json();
+      if (!isLocalHost) info.baseFiles?.forEach?.(path => add(path, 'base'));
+      info.files?.forEach?.(path => add(path, 'file'));
+      if (!isLocalHost) {
+        info.editFiles?.forEach?.(path => add(path, 'edit'));
+        info.erasedFiles?.forEach?.(path => add(path, 'erased'));
+        states.isChanged = (info.editFiles?.length > 0 || info.erasedFiles?.length > 0);
+      }
+      states.tree = tree;
+      states.folders = folders;
+      states.files = files;
+      states.changedFiles = changedFiles;
+      states.main = info.main;
+      if (info.readOnly) {
+        editorRef.current?.updateOptions?.({ readOnly: true });
+        setReadOnly(true);
+      } else {
+        editorRef.current?.updateOptions?.({ readOnly: false });
+        setReadOnly(false);
+      }
+      return {
+        files: Object.keys(states.files),
+        base: info.base,
+        derived: info.derived,
+      };
+    }
+  );
+
+  const queryProgram = useQuery(
+    'program',
+    async () => {
+      const res = await fetch('/api/v1/program');
+      if (res.status === 200) return await res.text();
+    }
+  );
+
+  const isLocalHost = (root === '/');
+  const isRunning = (isLocalHost ? Boolean(queryProgram.data) : queryProgram.data === root);
+
+  const updateLayout = () => {
+    layoutUpdaterRef.current?.();
+  }
+
+  const selectFile = React.useCallback(
+    async filename => {
+      states.treeSelected = filename;
+      setTreeSelected(filename);
+
+      editorRef.current.updateOptions({ readOnly: isReadOnly });
+
+      if (states.currentFile) {
+        states.currentFile.onDidChangeContent = null;
+        states.currentFile.onDidChangeGraph = null;
+      }
+
+      const file = states.files[filename];
+      if (file) {
+        states.currentFile = file;
+        file.onDidChangeContent = () => setSaved(file.saved());
+        file.onDidChangeGraph = () => setCurrentGraph(file.graph);
+        editorRef.current.setModel(file.model);
+        setSelected(true);
+        setCurrentGraph(file.graph);
+        setSaved(file.saved());
+        updateLayout();
+        return;
+      }
+
+      if (filename in states.files) {
+        const monaco = await import('monaco-editor');
+        const res = await fetch(
+          isLocalHost ? '/api/v1/files' + filename : '/api/v1/repo' + root + filename
+        );
+        if (res.status === 200) {
+          const content = await res.text();
+          const type = (
+            filename.endsWith('.js') ? 'javascript' :
+            filename.endsWith('.json') ? 'json' : 'text'
+          );
+          const model = monaco.editor.createModel(content, type);
+          const file = new File(filename, model);
+          states.files[filename] = file;
+          states.currentFile = file;
+          file.onDidChangeContent = () => setSaved(file.saved());
+          file.onDidChangeGraph = () => setCurrentGraph(file.graph);
+          editorRef.current.setModel(model);
+          setSelected(true);
+          setSaved(file.saved());
+          updateLayout();
+          return;
+        }
+      }
+      setSelected(false);
+    },
+    [root, states, isReadOnly, isLocalHost]
+  );
 
   const saveFile = React.useCallback(
     async () => {
-      const file = store.currentFile;
-      globalState.showWaiting('Saving...');
+      const file = states.currentFile;
+      setWorking('Saving...');
       try {
-        const res = await fetch('/api/files' + file.name, {
-          method: 'POST',
-          headers: {
-            'content-type': 'text/plain',
-          },
-          body: file.model.getValue(),
-        });
+        const res = await fetch(
+          isLocalHost ? '/api/v1/files' + file.name : '/api/v1/repo' + root + file.name,
+          {
+            method: 'POST',
+            headers: {
+              'content-type': 'text/plain',
+            },
+            body: file.model.getValue(),
+          }
+        );
         if (res.status === 201) {
           file.save();
-          if (file === store.currentFile) setSaved(file.saved());
+          if (file === states.currentFile) setSaved(file.saved());
+          queryClient.invalidateQueries(`files:${root}`);
         }
       } finally {
-        globalState.showWaiting(null);
+        setWorking('');
       }
     },
-    [globalState]
+    [root, states, isLocalHost, queryClient]
   );
+
+  const changeMain = async filename => {
+    setWorking('Saving...');
+    try {
+      const res = await fetch(
+        isLocalHost ? '/api/v1/files' : '/api/v1/repo' + root,
+        {
+          method: 'POST',
+          body: JSON.stringify({ main: filename }),
+        }
+      );
+      if (res.status === 201) {
+        queryClient.invalidateQueries(`files:${root}`);
+      }
+    } finally {
+      setWorking('');
+    }
+  }
+
+  const commitChanges = async () => {
+    setWorking('Uploading...');
+    try {
+      const uri = '/api/v1/repo' + root;
+      const res = await fetch(uri);
+      const info = await res.json();
+      if (res.status === 200) {
+        const ver = (info.version|0) + 1;
+        const res = await fetch(uri, {
+          method: 'POST',
+          body: JSON.stringify({ version: ver }),
+        });
+        if (res.status === 201) {
+          queryClient.invalidateQueries(`files:${root}`);
+        }
+      }
+    } finally {
+      setWorking('');
+    }
+  }
+
+  const startProgram = async filename => {
+    consoleContext.clearLog();
+    setOpenConsole(true);
+    setWorking('Starting program...');
+    try {
+      const res = await fetch('/api/v1/program', {
+        method: 'POST',
+        body: filename,
+      });
+      if (res.status === 201) {
+        queryClient.invalidateQueries('program');
+      }
+    } finally {
+      setWorking('');
+    }
+  }
+
+  const stopProgram = async () => {
+    setWorking('Stopping program...');
+    try {
+      const res = await fetch('/api/v1/program', {
+        method: 'DELETE',
+      });
+      if (res.status === 204) {
+        queryClient.invalidateQueries('program');
+      }
+    } finally {
+      setWorking('');
+    }
+  }
 
   // Create Monaco editor
   React.useEffect(
@@ -277,7 +498,7 @@ function Editor() {
         window.addEventListener('resize', resize);
         editorRef.current = editor;
         layoutUpdaterRef.current = resize;
-        if (store.treeSelected) selectFile(store.treeSelected);
+        setInitialized(true);
       });
       return () => {
         window.removeEventListener('resize', resize);
@@ -286,6 +507,16 @@ function Editor() {
       }
     },
     []
+  );
+
+  // Select file at initialization
+  React.useEffect(
+    () => {
+      if (isInitialized) {
+        selectFile(states.treeSelected);
+      }
+    },
+    [isInitialized, selectFile, states.treeSelected]
   );
 
   // Handle Ctrl+S/Cmd+S
@@ -311,99 +542,15 @@ function Editor() {
     [saveFile]
   );
 
-  // Fetch file list
-  React.useEffect(
-    () => {
-      if (!store.fileTree) {
-        (async () => {
-          globalState.showWaiting('Loading working directory...');
-          try {
-            const res = await fetch('/api/files');
-            if (res.status === 200) {
-              const tree = await res.json();
-              store.fileTree = tree;
-              loadFileTree(tree);
-              setFileTree(tree);
-            }
-          } finally {
-            globalState.showWaiting(null);
-          }
-        })();
-      }
-    },
-    [globalState]
-  );
-
   // Update layout when open/close console
   React.useEffect(
     () => updateLayout(),
-    [showConsole]
+    [openConsole]
   );
-  const updateLayout = () => {
-    layoutUpdaterRef.current?.();
-  }
 
   const changeSplitter = (i, pos) => {
     splitterPos[i] = pos;
     updateLayout();
-  }
-
-  const selectFile = async filename => {
-    store.treeSelected = filename;
-    setTreeSelected(filename);
-
-    if (store.currentFile) {
-      store.currentFile.onDidChangeContent = null;
-      store.currentFile.onDidChangeGraph = null;
-    }
-
-    const file = allFiles[filename];
-    if (file) {
-      store.currentFile = file;
-      file.onDidChangeContent = () => setSaved(file.saved());
-      file.onDidChangeGraph = () => setCurrentGraph(file.graph);
-      editorRef.current.setModel(file.model);
-      setCurrentGraph(file.graph);
-      setSaved(file.saved());
-      return;
-    }
-
-    if (filename in allFiles) {
-      const monaco = await import('monaco-editor');
-      const res = await fetch('/api/files' + filename);
-      if (res.status === 200) {
-        const content = await res.text();
-        const type = (
-          filename.endsWith('.js') ? 'javascript' :
-          filename.endsWith('.json') ? 'json' : 'text'
-        );
-        const model = monaco.editor.createModel(content, type);
-        const file = new File(filename, model);
-        allFiles[filename] = file;
-        store.currentFile = file;
-        file.onDidChangeContent = () => setSaved(file.saved());
-        file.onDidChangeGraph = () => setCurrentGraph(file.graph);
-        editorRef.current.setModel(model);
-        setSaved(file.saved());
-      }
-    }
-  }
-
-  const startProgram = async (filename) => {
-    globalState.clearLog();
-    setShowConsole(true);
-    globalState.showWaiting('Starting program...');
-    try {
-      const res = await fetch('/api/program', {
-        method: 'POST',
-        body: filename,
-      });
-      if (res.status === 201) {
-        globalState.setRunningProgram(filename);
-      }
-    } finally {
-      globalState.showWaiting(null);
-    }
   }
 
   const handleSelectFile = (filename) => {
@@ -411,12 +558,12 @@ function Editor() {
   }
 
   const handleExpandFolder = (nodes) => {
-    store.treeExpanded = nodes;
+    states.treeExpanded = nodes;
     setTreeExpanded(nodes);
   }
 
-  const handleClickAddFile = () => {
-    setShowAddFile(true);
+  const handleClickNewFile = () => {
+    setOpenDialogNewFile(true);
   }
 
   const handleClickSaveFile = () => {
@@ -424,142 +571,141 @@ function Editor() {
   }
 
   const handleClickDeleteFile = () => {
-    setShowDeleteFile(true);
+    setOpenDialogDeleteFile(true);
   }
 
-  const handleAddFile = async (filename) => {
-    setShowAddFile(false);
-    globalState.showWaiting('Saving...');
-    try {
-      const res = await fetch('/api/files' + filename, {
-        method: 'POST',
-        headers: {
-          'content-type': 'text/plain',
-        },
-        body: '',
-      });
-      if (res.status === 201) {
-        const p = filename.lastIndexOf('/');
-        const base = filename.substring(0,p);
-        const name = filename.substring(p+1);
-        const newTree = { ...fileTree };
-        const subTree = getSubTree(newTree, base);
-        subTree[name] = '';
-        allFiles[filename] = null;
-        store.fileTree = newTree;
-        setFileTree(newTree);
-        await selectFile(filename);
-      }
-    } finally {
-      globalState.showWaiting(null);
-    }
+  const handleClickSetMain = () => {
+    changeMain(treeSelected);
   }
 
-  const handleDeleteFile = async filename => {
-    setShowDeleteFile(false);
-    globalState.showWaiting('Deleting...');
-    try {
-      const res = await fetch('/api/files' + filename, {
-        method: 'DELETE',
-      });
-      if (res.status === 204) {
-        const p = filename.lastIndexOf('/');
-        const base = filename.substring(0,p);
-        const name = filename.substring(p+1);
-        const newTree = { ...fileTree };
-        const subTree = getSubTree(newTree, base);
-        delete subTree[name];
-        delete allFiles[filename];
-        store.currentFile.model.dispose();
-        store.currentFile = null;
-        store.fileTree = newTree;
-        setFileTree(newTree);
-        selectFile('');
-      }
-    } finally {
-      globalState.showWaiting(null);
-    }
+  const handleClickReset = () => {
+    setOpenDialogResetFile(true);
+  }
+
+  const handleClickCommit = () => {
+    commitChanges();
   }
 
   const handleStart = async () => {
-    startProgram(store.currentFile.name);
+    consoleContext.clearLog();
+    startProgram(root);
   }
 
   const handleRestart = async () => {
-    startProgram(globalState.runningProgram);
+    consoleContext.clearLog();
+    startProgram(root);
   }
 
   const handleStop = async () => {
-    globalState.showWaiting('Stopping program...');
-    try {
-      const res = await fetch('/api/program', {
-        method: 'DELETE',
-      });
-      if (res.status === 204) {
-        globalState.setRunningProgram('');
-      }
-    } finally {
-      globalState.showWaiting(null);
-    }
+    stopProgram();
   }
 
-  const handleShowConsole = show => {
-    store.isConsoleOpen = show;
-    setShowConsole(show);
+  const handleOpenConsole = open => {
+    states.isConsoleOpen = open;
+    setOpenConsole(open);
   }
 
   if (typeof window === 'undefined') return null;
 
   return (
     <div className={classes.root}>
+      <Working
+        open={Boolean(working)}
+        text={working}
+      />
 
       {/* Toolbar */}
       <Toolbar>
         <ToolbarButton
-          onClick={handleClickAddFile}
+          disabled={isReadOnly}
+          onClick={handleClickNewFile}
         >
           <AddFileIcon fontSize="small"/>
         </ToolbarButton>
         <ToolbarButton
-          disabled={!treeSelected || treeSelected in allFolders}
+          disabled={
+            isReadOnly ||
+            treeSelected === '' ||
+            treeSelected === states.main ||
+            treeSelected in states.folders
+          }
+          onClick={handleClickSetMain}
+        >
+          <FlagIcon fontSize="small"/>
+        </ToolbarButton>
+        <ToolbarButton
+          disabled={
+            isReadOnly || 
+            treeSelected === '' ||
+            treeSelected in states.folders
+          }
           onClick={handleClickDeleteFile}
         >
           <DeleteFileIcon fontSize="small"/>
         </ToolbarButton>
         <ToolbarGap/>
         <ToolbarButton
-          disabled={!store.currentFile || isSaved}
+          disabled={!states.currentFile || isSaved}
           onClick={handleClickSaveFile}
         >
           <SaveFileIcon fontSize="small"/>
         </ToolbarButton>
+        {!isLocalHost && (
+          <React.Fragment>
+            <ToolbarButton
+              disabled={!states.changedFiles[treeSelected]}
+              onClick={handleClickReset}
+            >
+              <ResetIcon fontSize="small"/>
+            </ToolbarButton>
+            <ToolbarButton
+              disabled={!states.isChanged}
+              onClick={handleClickCommit}
+            >
+              <UploadIcon fontSize="small"/>
+            </ToolbarButton>
+            <ToolbarGap/>
+            <ToolbarTextButton
+              startIcon={<BaseIcon/>}
+              disabled={queryCodebase.isRunning || !queryCodebase.data?.base}
+              onClick={() => navigate(`/repo${queryCodebase.data.base}/`)}
+            >
+              Base
+            </ToolbarTextButton>
+            <ToolbarGap/>
+            <DerivativesButton
+              root={root}
+              derived={queryCodebase.data?.derived || []}
+            />
+            <ToolbarGap/>
+          </React.Fragment>
+        )}
+        <ToolbarStretch/>
         <ToolbarButton
-          disabled={
-            !store.currentFile ||
-             store.currentFile.name === globalState.runningProgram ||
-            !store.currentFile.name.endsWith('.js')}
+          disabled={isRunning}
           onClick={handleStart}
         >
           <StartIcon fontSize="small"/>
         </ToolbarButton>
         <ToolbarButton
-          disabled={!globalState.runningProgram}
+          disabled={!isRunning}
           onClick={handleStop}
         >
           <StopIcon fontSize="small"/>
         </ToolbarButton>
         <ToolbarButton
-          disabled={!globalState.runningProgram}
+          disabled={!isRunning}
           onClick={handleRestart}
         >
           <RestartIcon fontSize="small"/>
         </ToolbarButton>
         <ToolbarGap/>
         <ToolbarButton
-          onClick={() => handleShowConsole(!showConsole)}
+          onClick={() => handleOpenConsole(!openConsole)}
         >
           <ConsoleIcon fontSize="small"/>
         </ToolbarButton>
+        <ToolbarGap/>
       </Toolbar>
 
       {/* Main View */}
@@ -568,28 +714,36 @@ function Editor() {
 
           {/* File List */}
           <Pane className={classes.fileListPane} initialSize={splitterPos[0][0]}>
-            <TreeView
-              defaultCollapseIcon={<ArrowRightIcon/>}
-              defaultExpandIcon={<ArrowDownIcon/>}
-              defaultExpanded={[ '/' ]}
-              expanded={treeExpanded}
-              selected={treeSelected}
-              onNodeToggle={(_, list) => handleExpandFolder(list)}
-              onNodeSelect={(_, node) => handleSelectFile(node)}
-            >
-              {fileTree && (
-                Object.keys(fileTree).sort().map(
-                  filename => (
-                    <FileItem
-                      key={filename}
-                      path={'/' + filename}
-                      content={fileTree[filename]}
-                      runningProgram={globalState.runningProgram}
-                    />
-                  )
-                )
-              )}
-            </TreeView>
+            {queryCodebase.isLoading ? (
+              <Loading/>
+            ) : (
+              queryCodebase.data?.files?.length > 0 ? (
+                <TreeView
+                  defaultCollapseIcon={<ArrowDownIcon/>}
+                  defaultExpandIcon={<ArrowRightIcon/>}
+                  defaultExpanded={[ '/' ]}
+                  expanded={treeExpanded}
+                  selected={treeSelected}
+                  onNodeToggle={(_, list) => handleExpandFolder(list)}
+                  onNodeSelect={(_, node) => handleSelectFile(node)}
+                >
+                  {states.tree && (
+                    Object.keys(states.tree).sort().map(
+                      filename => (
+                        <FileItem
+                          key={filename}
+                          path={'/' + filename}
+                          tree={states.tree[filename]}
+                          main={states.main}
+                        />
+                      )
+                    )
+                  )}
+                </TreeView>
+              ) : (
+                <Nothing text="No files"/>
+              )
+            )}
           </Pane>
 
           <SplitPane
@@ -600,8 +754,13 @@ function Editor() {
             <SplitPane split="vertical" initialSize={splitterPos[1][0]} onChange={pos => changeSplitter(2, pos)}>
 
               {/* Editor */}
-              <Pane initialSize={splitterPos[2][0]}>
-                <div ref={editorDiv} className={classes.codePane}/>
+              <Pane className={classes.codePane} initialSize={splitterPos[2][0]}>
+                <div
+                  ref={editorDiv}
+                  className={classes.codePane}
+                  style={{ display: isSelected ? 'block' : 'none' }}
+                />
+                {!isSelected && <Nothing text="No file selected"/>}
               </Pane>
 
               {/* Flowchart */}
@@ -621,9 +780,9 @@ function Editor() {
             </SplitPane>
 
             {/* Console */}
-            {showConsole && (
+            {openConsole && (
               <Pane className={classes.consolePane} initialSize={splitterPos[1][1]}>
-                <Console onClose={() => handleShowConsole(false)}/>
+                <Console onClose={() => handleOpenConsole(false)}/>
               </Pane>
             )}
 
@@ -632,104 +791,199 @@ function Editor() {
       </div>
 
       {/* New File Dialog */}
-      <DialogAddFile
-        show={showAddFile}
-        currentFilename={treeSelected}
-        onClose={() => setShowAddFile(false)}
-        onAddFile={handleAddFile}
+      <DialogNewFile
+        open={openDialogNewFile}
+        root={root}
+        files={states.files}
+        folders={states.folders}
+        filename={treeSelected}
+        onSuccess={filename => selectFile(filename)}
+        onClose={() => setOpenDialogNewFile(false)}
+      />
+
+      {/* File Resetting Dialog*/}
+      <DialogResetFile
+        open={openDialogResetFile}
+        root={root}
+        filename={treeSelected}
+        onSuccess={filename => selectFile(filename)}
+        onClose={() => setOpenDialogResetFile(false)}
       />
 
       {/* File Deletion Dialog */}
       <DialogDeleteFile
-        show={showDeleteFile}
+        open={openDialogDeleteFile}
+        root={root}
         filename={treeSelected}
-        onClose={() => setShowDeleteFile(false)}
-        onDeleteFile={handleDeleteFile}
+        onSuccess={() => selectFile('')}
+        onClose={() => setOpenDialogDeleteFile(false)}
       />
 
     </div>
   );
 }
 
-function DialogAddFile({ show, currentFilename, onClose, onAddFile }) {
-  const [ inputFilename, setInputFilename ] = React.useState('');
-  const [ showError, setShowError ] = React.useState(false);
-  const [ errorInfo, setErrorInfo ] = React.useState('');
+function DialogNewFile({ open, root, files, folders, filename, onSuccess, onClose }) {
+  const queryClient = useQueryClient();
 
-  React.useEffect(() => {
-    if (show) {
-      setInputFilename('');
-      setShowError(false);
-      setErrorInfo('');
-    }
-  }, [show]);
+  const [name, setName] = React.useState('');
+  const [working, setWorking] = React.useState(false);
+  const [error, setError] = React.useState('');
 
-  const getFullInputFilename = filename => {
-    let base = (
-      currentFilename in allFolders ? (
-        currentFilename
-      ) : (
-        currentFilename.substring(0, currentFilename.lastIndexOf('/'))
-      )
-    );
-    if (!base.endsWith('/')) base += '/';
-    return base + filename;
-  };
+  React.useEffect(
+    () => {
+      if (open) {
+        let basePath;
+        if (filename in folders) {
+          basePath = filename;
+        } else {
+          basePath = filename.substring(0, filename.lastIndexOf('/'));
+        }
+        setName(basePath + '/');
+        setError('');
+      }
+    },
+    [open, filename, folders]
+  );
 
-  const handleChangeFilename = evt => {
-    const value = evt.target.value;
-    setInputFilename(value);
-    if (!value) {
-      setShowError(false);
-      setErrorInfo('');
+  const handleChangeName = evt => {
+    let name = evt.target.value;
+    if (!name || !name.startsWith('/')) name = '/' + name;
+    setName(name);
+    if (name.endsWith('/')) {
+      setError('');
+    } else if (name in files || name in folders) {
+      setError('Filename already exists');
     } else {
-      const filename = getFullInputFilename(value);
-      if (filename in allFiles || filename in allFolders) {
-        setShowError(true);
-        setErrorInfo('Filename already exists');
-      } else {
-        setShowError(false);
-        setErrorInfo('');
-      }  
+      setError('');
     }
   }
 
-  const handleClickOK = () => {
-    onAddFile(getFullInputFilename(inputFilename));
+  const handleClickOK = async () => {
+    setWorking(true);
+    try {
+      const isLocalHost = (root === '/');
+      const res = await fetch(
+        isLocalHost ? '/api/v1/files' + name : '/api/v1/repo' + root + name,
+        {
+          method: 'POST',
+          headers: {
+            'content-type': 'text/plain',
+          },
+          body: '',
+        }
+      );
+      if (res.status === 201) {
+        queryClient.invalidateQueries(`files:${root}`);
+        onSuccess(name);
+        onClose();
+      }
+    } finally {
+      setWorking(false);
+    }
   }
 
   return (
-    <Dialog open={show} fullWidth onClose={onClose}>
+    <Dialog open={open} fullWidth onClose={onClose}>
       <DialogTitle>Add File</DialogTitle>
       <DialogContent>
         <TextField
           label="Filename"
-          value={inputFilename}
-          error={showError}
-          helperText={errorInfo}
+          value={name}
+          error={Boolean(error)}
+          helperText={error}
           fullWidth
-          onChange={handleChangeFilename}
+          onChange={handleChangeName}
         />
       </DialogContent>
       <DialogActions>
-        <Button disabled={!inputFilename || showError} onClick={handleClickOK}>
+        <Button
+          disabled={!name || name.endsWith('/') || Boolean(error)}
+          onClick={handleClickOK}
+        >
           Create
         </Button>
         <Button onClick={() => onClose()}>
           Cancel
         </Button>
       </DialogActions>
+      <Working open={working} text="Saving..."/>
     </Dialog>
   );
 }
 
-function DialogDeleteFile({ show, filename, onClose, onDeleteFile }) {
-  const handleClickDelete = () => {
-    onDeleteFile(filename);
+function DialogResetFile({ open, root, filename, onSuccess, onClose }) {
+  const queryClient = useQueryClient();
+
+  const [working, setWorking] = React.useState(false);
+
+  const handleClickDiscard = async () => {
+    setWorking(true);
+    try {
+      const res = await fetch(
+        '/api/v1/repo' + root + filename,
+        {
+          method: 'PATCH',
+        }
+      );
+      if (res.status === 201) {
+        queryClient.invalidateQueries(`files:${root}`);
+        onSuccess();
+        onClose();
+      }
+    } finally {
+      setWorking(false);
+    }
   }
 
   return (
-    <Dialog open={show} fullWidth onClose={onClose}>
+    <Dialog open={open} fullWidth onClose={onClose}>
+      <DialogTitle>Reset File</DialogTitle>
+      <DialogContent>
+        <Typography>
+          Discard changes on file '{filename}'?
+        </Typography>
+      </DialogContent>
+      <DialogActions>
+        <Button color="secondary" onClick={handleClickDiscard}>
+          Discard
+        </Button>
+        <Button onClick={onClose}>
+          Cancel
+        </Button>
+      </DialogActions>
+      <Working open={working} text="Resetting..."/>
+    </Dialog>
+  );
+}
+
+function DialogDeleteFile({ open, root, filename, onSuccess, onClose }) {
+  const queryClient = useQueryClient();
+
+  const [working, setWorking] = React.useState(false);
+
+  const handleClickDelete = async () => {
+    setWorking(true);
+    try {
+      const isLocalHost = (root === '/');
+      const res = await fetch(
+        isLocalHost ? '/api/v1/files' + filename : '/api/v1/repo' + root + filename,
+        {
+          method: 'DELETE',
+        }
+      );
+      if (res.status === 204) {
+        queryClient.invalidateQueries(`files:${root}`);
+        onSuccess();
+        onClose();
+      }
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} fullWidth onClose={onClose}>
       <DialogTitle>Delete File</DialogTitle>
       <DialogContent>
         <Typography>
@@ -744,7 +998,71 @@ function DialogDeleteFile({ show, filename, onClose, onDeleteFile }) {
           Cancel
         </Button>
       </DialogActions>
+      <Working open={working} text="Deleting..."/>
     </Dialog>
+  );
+}
+
+function DerivativesButton({ root, derived }) {
+  const [anchorEl, setAnchorEl] = React.useState(null);
+  const [openDialogNew, setOpenDialogNew] = React.useState(false);
+
+  const handleClickDropDown = event => {
+    setAnchorEl(event.currentTarget);
+  }
+
+  const handleClickNew = () => {
+    setAnchorEl(null);
+    setOpenDialogNew(true);
+  }
+
+  const handleSelectItem = path => {
+    setAnchorEl(null);
+    navigate(`/repo${path}/`);
+  }
+
+  return (
+    <React.Fragment>
+      <ToolbarTextButton
+        startIcon={<DerivativeIcon/>}
+        endIcon={<ArrowDownIcon/>}
+        onClick={handleClickDropDown}
+      >
+        Derivatives
+      </ToolbarTextButton>
+      <Popover
+        open={Boolean(anchorEl)}
+        anchorEl={anchorEl}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+        onClose={() => setAnchorEl(null)}
+      >
+        <List dense>
+          <ListItem button onClick={handleClickNew}>
+            <ListItemIcon><AddFileIcon/></ListItemIcon>
+            <ListItemText>Derive new codebase...</ListItemText>
+          </ListItem>
+        </List>
+        {derived.length > 0 && <Divider/>}
+        {derived.length > 0 && (
+          <List dense>
+            {derived.map(
+              path => (
+                <ListItem button onClick={() => handleSelectItem(path)}>
+                  <ListItemIcon><CodebaseIcon/></ListItemIcon>
+                  <ListItemText primary={path}/>
+                </ListItem>
+              )
+            )}
+          </List>
+        )}
+      </Popover>
+      <DialogNewCodebase
+        open={openDialogNew}
+        base={root}
+        onSuccess={path => navigate(`/repo${path}/`)}
+        onClose={() => setOpenDialogNew(false)}
+      />
+    </React.Fragment>
   );
 }
 

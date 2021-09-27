@@ -28,12 +28,14 @@
 
 #include <list>
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
 
 namespace pipy {
 
 class Filter;
+class Pipeline;
 
 //
 // Graph
@@ -54,6 +56,9 @@ public:
     std::list<Filter> filters;
     bool root = false;
   };
+
+  static void from_pipelines(Graph &g, const std::set<pipy::Pipeline*> &pipelines);
+  static bool from_script(Graph &g, const std::string &script, std::string &error);
 
   void add_root_pipeline(Pipeline &&p) {
     m_root_pipelines[p.name] = std::move(p);

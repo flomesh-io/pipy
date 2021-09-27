@@ -31,6 +31,9 @@
 #include "worker.hpp"
 #include "task.hpp"
 
+#include <map>
+#include <set>
+
 namespace pipy {
 
 class Configuration;
@@ -77,7 +80,7 @@ private:
   pjs::Ref<Configuration> m_configuration;
   pjs::Ref<pjs::Class> m_context_class;
   std::list<pjs::Ref<Pipeline>> m_pipelines;
-  std::unordered_map<pjs::Ref<pjs::Str>, pjs::Ref<Pipeline>> m_named_pipelines;
+  std::map<pjs::Ref<pjs::Str>, pjs::Ref<Pipeline>> m_named_pipelines;
 
   static std::map<std::string, std::string> s_overriden_scripts;
 
