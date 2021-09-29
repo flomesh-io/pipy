@@ -7,11 +7,10 @@ import { useQuery } from 'react-query';
 // Material-UI components
 import Box from '@material-ui/core/Box';
 import Button from '@material-ui/core/Button';
-import List from '@material-ui/core/List';
-import ListItem from '@material-ui/core/ListItem';
-import ListItemIcon from '@material-ui/core/ListItemIcon';
-import ListItemText from '@material-ui/core/ListItemText';
 import OutlinedInput from '@material-ui/core/OutlinedInput';
+import TreeView from '@material-ui/lab/TreeView';
+import TreeItem from '@material-ui/lab/TreeItem';
+import Typography from '@material-ui/core/Typography';
 
 // Components
 import Codebase from '../components/codebase';
@@ -20,8 +19,9 @@ import Loading from '../components/loading';
 
 // Icons
 import AddCircleIcon from '@material-ui/icons/AddCircle';
-import ChevronRightIcon from '@material-ui/icons/ChevronRight';
-import CodebaseIcon from '@material-ui/icons/CodeSharp';
+import ArrowRightIcon from '@material-ui/icons/AddBox';
+import ArrowDownIcon from '@material-ui/icons/IndeterminateCheckBox';
+import CodebaseIcon from '@material-ui/icons/ListAlt';
 import SearchIcon from '@material-ui/icons/SearchSharp';
 
 // Logo
@@ -45,7 +45,12 @@ const useStyles = makeStyles(theme => ({
   list: {
     minWidth: '350px',
   },
+  basePath: {
+    color: '#888',
+  },
 }));
+
+let storedTreeExpanded = [];
 
 //
 // Landing page
@@ -55,6 +60,7 @@ function Index() {
   const classes = useStyles();
 
   const [openDialogNewCodebase, setOpenDialogNewCodebase] = React.useState(false);
+  const [treeExpanded, setTreeExpanded] = React.useState(storedTreeExpanded);
 
   const queryCodebaseList = useQuery(
     'codebases',
@@ -76,6 +82,11 @@ function Index() {
     }
   );
 
+  const handleExpandFolder = list => {
+    setTreeExpanded(list);
+    storedTreeExpanded = list;
+  };
+
   if (queryCodebaseList.isLoading) {
     return (
       <div className={classes.root}>
@@ -86,6 +97,24 @@ function Index() {
 
   if (!queryCodebaseList.isSuccess) {
     return <Codebase root="/"/>;
+  }
+
+  const tree = {};
+  const populateTree = path => {
+    const segs = path.split('/').filter(s => Boolean(s));
+    const name = segs.pop();
+    let parent = tree;
+    for (const seg of segs) {
+      parent = parent[seg] || (parent[seg] = {});
+    }
+    parent[name] = path;
+  }
+
+  if (queryCodebaseList.data) {
+    queryCodebaseList.data.forEach(
+      path => populateTree(path)
+    );
+    console.log(tree);
   }
 
   return (
@@ -111,24 +140,73 @@ function Index() {
         margin="dense"
       />
       <Box p={2} className={classes.list}>
-        <List dense>
-          {queryCodebaseList.data.map(
-            path => <CodebaseItem key={path} path={path}/>
+        <TreeView
+          disableSelection
+          defaultEndIcon={<CodebaseIcon/>}
+          defaultCollapseIcon={<ArrowDownIcon/>}
+          defaultExpandIcon={<ArrowRightIcon/>}
+          defaultExpanded={['/']}
+          expanded={treeExpanded}
+          onNodeToggle={(_, list) => handleExpandFolder(list)}
+          onNodeSelect={() => {}}
+        >
+          {Object.keys(tree).sort().map(
+            name => (
+              <CodebaseItem
+                key={name}
+                path={'/' + name}
+                tree={tree[name]}
+              />
+            )
           )}
-        </List>
+        </TreeView>
       </Box>
     </div>
   );
 }
 
-function CodebaseItem({ path }) {
-  return (
-    <ListItem button onClick={() => navigate(`/repo${path}/`)}>
-      <ListItemIcon><CodebaseIcon/></ListItemIcon>
-      <ListItemText primary={path}/>
-      <ChevronRightIcon/>
-    </ListItem>
-  );
+function CodebaseItem({ path, tree }) {
+  const classes = useStyles();
+  const i = path.lastIndexOf('/');
+  const base = path.substring(0,i+1);
+  const name = path.substring(i+1);
+  if (typeof tree === 'string') {
+    return (
+      <TreeItem
+        key={path}
+        nodeId={path}
+        label={
+          <Typography noWrap>
+            <span className={classes.basePath}>{base}</span>
+            <span>{name}</span>
+          </Typography>
+        }
+        onClick={() => navigate(`/repo${path}/`)}
+      />
+    );
+  } else {
+    const keys = Object.keys(tree).sort();
+    return (
+      <TreeItem
+        key={path}
+        nodeId={path}
+        label={
+          <Typography noWrap>
+            <span className={classes.basePath}>{base}</span>
+            <span>{name}/</span>
+          </Typography>
+        }
+      >
+        {keys.map(key => (
+          <CodebaseItem
+            key={key}
+            path={path + '/' + key}
+            tree={tree[key]}
+          />
+        ))}
+      </TreeItem>
+    );
+  }
 }
 
 export default Index;

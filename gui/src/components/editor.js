@@ -214,7 +214,7 @@ function FileItem({ path, tree, main }) {
           />
         ))}
       </TreeItem>
-    )
+    );
   }
 }
 
