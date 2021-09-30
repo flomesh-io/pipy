@@ -26,7 +26,7 @@
 #ifndef COMPRESS_HPP
 #define COMPRESS_HPP
 
-#include "event.hpp"
+#include <functional>
 
 namespace pipy {
 
@@ -38,7 +38,7 @@ class Data;
 
 class Decompressor {
 public:
-  static Decompressor* inflate(const Event::Receiver &out);
+  static Decompressor* inflate(const std::function<void(Data*)> &out);
 
   virtual bool process(const Data *data) = 0;
   virtual bool end() = 0;

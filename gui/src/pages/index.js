@@ -42,8 +42,8 @@ const useStyles = makeStyles(theme => ({
     left: 'calc(50% - 80px)',
     top: theme.spacing(1),
   },
-  list: {
-    minWidth: '350px',
+  listItem: {
+    paddingRight: theme.spacing(2),
   },
   basePath: {
     color: '#888',
@@ -139,7 +139,7 @@ function Index() {
         placeholder="Search..."
         margin="dense"
       />
-      <Box p={2} className={classes.list}>
+      <Box p={2}>
         <TreeView
           disableSelection
           defaultEndIcon={<CodebaseIcon/>}
@@ -176,7 +176,7 @@ function CodebaseItem({ path, tree }) {
         key={path}
         nodeId={path}
         label={
-          <Typography noWrap>
+          <Typography noWrap className={classes.listItem}>
             <span className={classes.basePath}>{base}</span>
             <span>{name}</span>
           </Typography>
@@ -191,7 +191,7 @@ function CodebaseItem({ path, tree }) {
         key={path}
         nodeId={path}
         label={
-          <Typography noWrap>
+          <Typography noWrap className={classes.listItem}>
             <span className={classes.basePath}>{base}</span>
             <span>{name}/</span>
           </Typography>

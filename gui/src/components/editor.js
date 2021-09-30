@@ -721,7 +721,7 @@ function Editor({ root }) {
                 <TreeView
                   defaultCollapseIcon={<ArrowDownIcon/>}
                   defaultExpandIcon={<ArrowRightIcon/>}
-                  defaultExpanded={[ '/' ]}
+                  defaultExpanded={['/']}
                   expanded={treeExpanded}
                   selected={treeSelected}
                   onNodeToggle={(_, list) => handleExpandFolder(list)}

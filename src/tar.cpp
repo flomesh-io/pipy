@@ -128,6 +128,12 @@ Tarball::Tarball(const char *data, size_t size) {
   }
 }
 
+void Tarball::list(std::set<std::string> &paths) {
+  for (const auto &i : m_files) {
+    paths.insert(i.first);
+  }
+}
+
 auto Tarball::get(const std::string &path, size_t &size) -> const char* {
   auto i = m_files.find(path);
   if (i == m_files.end()) return nullptr;
