@@ -23,7 +23,9 @@ Pipy is a tiny, high performance, highly stable, programmable proxy.
 %build
 rm -fr pipy/build
 %{__mkdir} pipy/build
-cd pipy/build
+cd pipy/gui
+npm install
+cd ../build
 CXX=clang++ CC=clang cmake3 -DCMAKE_BUILD_TYPE=Release ..
 make -j$(getconf _NPROCESSORS_ONLN)
 
@@ -44,8 +46,6 @@ getent passwd pipy >/dev/null || useradd -r -g pipy -G pipy -d /etc/pipy -s /sbi
 mkdir -p %{buildroot}%{prefix}/bin
 mkdir -p %{buildroot}/etc/pipy
 cp pipy/bin/pipy %{buildroot}%{prefix}/bin
-cp -r pipy/test	%{buildroot}/etc/pipy/
-cp -r pipy/tutorial %{buildroot}/etc/pipy/
 cp -r pipy/etc/* %{buildroot}/etc/
 chrpath --delete %{buildroot}%{prefix}/bin/pipy
 

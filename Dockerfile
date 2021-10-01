@@ -19,17 +19,21 @@ ENV CI_COMMIT_SHA=${COMMIT_ID}
 ARG COMMIT_DATE
 ENV CI_COMMIT_DATE=${COMMIT_DATE}
 
+ENV NODE_VER=12.22.6-r0
+
 COPY . /pipy
 
-RUN apk add --no-cache --virtual .build-deps openssh-client git cmake clang alpine-sdk linux-headers autoconf automake libtool tiff jpeg zlib zlib-dev pkgconf nasm file musl-dev
+RUN apk add --no-cache --virtual .build-deps openssh-client cmake clang alpine-sdk linux-headers autoconf automake libtool tiff jpeg zlib zlib-dev pkgconf nasm file musl-dev nodejs=${NODE_VER} npm=${NODE_VER} 
 
 RUN rm -fr pipy/build \
         && mkdir pipy/build \
+        && cd pipy/gui \
+        && npm install \
+        && cd ../build \
         && cmake -DCMAKE_BUILD_TYPE=Release .. \
         && make -j$(getconf _NPROCESSORS_ONLN) \
         && mkdir ${pkg_confdir} \
         && cp /pipy/bin/pipy ${pkg_bindir} \
-        && cp -r /pipy/test ${pkg_confdir} \
 	&& apk del .build-deps
 
 
