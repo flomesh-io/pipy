@@ -122,14 +122,27 @@ if(PIPY_GUI)
   add_custom_command(
     OUTPUT ${CMAKE_BINARY_DIR}/deps/gui.tar.h
     COMMAND node
-    ARGS pack.js ${CMAKE_BINARY_DIR}/deps/gui.tar.h
+    ARGS pack-gui.js ${CMAKE_BINARY_DIR}/deps/gui.tar.h
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/gui
-    DEPENDS gui/pack.js ${CMAKE_SOURCE_DIR}/gui/public/index.html
+    DEPENDS gui/pack-gui.js ${CMAKE_SOURCE_DIR}/gui/public/index.html
   )
 
-  add_custom_target(GenGui DEPENDS ${CMAKE_BINARY_DIR}/deps/gui.tar.h)
-  add_dependencies(pipy GenGui)
+  add_custom_target(PackGui DEPENDS ${CMAKE_BINARY_DIR}/deps/gui.tar.h)
+  add_dependencies(pipy PackGui)
 
 endif()
+
+file(GLOB_RECURSE TUTORIAL_FILES LIST_DIRECTORIES false ${CMAKE_SOURCE_DIR}/tutorial/*)
+
+add_custom_command(
+  OUTPUT ${CMAKE_BINARY_DIR}/deps/tutorial.tar.gz.h
+  COMMAND node
+  ARGS pack-tutorial.js ${CMAKE_BINARY_DIR}/deps/tutorial.tar.gz.h
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/gui
+  DEPENDS gui/pack-tutorial.js ${TUTORIAL_FILES}
+)
+
+add_custom_target(PackTutorial DEPENDS ${CMAKE_BINARY_DIR}/deps/tutorial.tar.gz.h)
+add_dependencies(pipy PackTutorial)
 
 target_link_libraries(pipy z yajl_s expat crypto ssl -pthread)

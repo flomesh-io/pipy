@@ -26,8 +26,9 @@
 #ifndef TAR_HPP
 #define TAR_HPP
 
-#include <string>
 #include <map>
+#include <set>
+#include <string>
 
 namespace pipy {
 
@@ -35,6 +36,7 @@ class Tarball {
 public:
   Tarball(const char *data, size_t size);
 
+  void list(std::set<std::string> &paths);
   auto get(const std::string &path, size_t &size) -> const char*;
 
 private:

@@ -24,10 +24,16 @@
  */
 
 #include "codebase-store.hpp"
+#include "compress.hpp"
+#include "tar.hpp"
 #include "utils.hpp"
+
+#include "tutorial.tar.gz.h"
 
 #include <iostream>
 #include <sstream>
+#include <set>
+#include <map>
 
 namespace pipy {
 
@@ -135,6 +141,57 @@ static void read_record(const std::string &str, std::map<std::string, std::strin
 CodebaseStore::CodebaseStore(Store *store)
   : m_store(store)
 {
+  Data input(s_tutorial_tar_gz, sizeof(s_tutorial_tar_gz), &s_dp), output;
+  auto decompressor = Decompressor::inflate(
+    [&](Data *data) {
+      output.push(*data);
+    }
+  );
+  decompressor->process(&input);
+  decompressor->end();
+
+  auto len = output.size();
+  char buf[output.size()];
+  output.to_bytes((uint8_t *)buf);
+
+  Tarball tarball(buf, len);
+  std::set<std::string> filenames;
+  tarball.list(filenames);
+
+  std::map<std::string, std::set<std::string>> codebases;
+  for (const auto &filename : filenames) {
+    auto i = filename.find('/', 1);
+    if (i != std::string::npos) {
+      auto codebase_name = filename.substr(0, i);
+      auto &codebase = codebases[codebase_name];
+      codebase.insert(filename.substr(i));
+    }
+  }
+
+  std::string base_path("/tutorial");
+  Codebase *base = nullptr;
+  for (const auto &i : codebases) {
+    auto path = base_path + i.first;
+    auto codebase = find_codebase(path);
+    if (!codebase) {
+      codebase = make_codebase(path, 0, base);
+      if (!base) {
+        codebase->erase_file("/main.js");
+        codebase->set_main("/hello.js");
+      }
+      for (const auto &name : i.second) {
+        size_t size;
+        if (auto data = tarball.get(i.first + name, size)) {
+          codebase->set_file(name, Data(data, &s_dp));
+          if (name == "/proxy.js") {
+            codebase->set_main(name);
+          }
+        }
+      }
+      codebase->commit(1);
+    }
+    base = codebase;
+  }
 }
 
 CodebaseStore::~CodebaseStore() {

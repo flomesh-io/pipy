@@ -38,7 +38,7 @@ namespace pipy {
 
 class Inflate : public pjs::Pooled<Inflate>, public Decompressor {
 public:
-  Inflate(const Event::Receiver &out)
+  Inflate(const std::function<void(Data*)> &out)
     : m_out(out)
   {
     m_zs.zalloc = Z_NULL;
@@ -50,7 +50,7 @@ public:
   }
 
 private:
-  const Event::Receiver& m_out;
+  const std::function<void(Data*)>& m_out;
   z_stream m_zs;
   bool m_done = false;
 
@@ -96,7 +96,7 @@ private:
 // Decompressor
 //
 
-Decompressor* Decompressor::inflate(const Event::Receiver &out) {
+Decompressor* Decompressor::inflate(const std::function<void(Data*)> &out) {
   return new Inflate(out);
 }
 
