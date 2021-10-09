@@ -120,6 +120,7 @@ pipy({
     'connection',
     () => _targetCache.get(_target)
   )
+  .use(config.plugins, 'response')
 
 .pipeline('connection')
   .connect(

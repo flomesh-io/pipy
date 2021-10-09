@@ -1,5 +1,8 @@
 {
   "listen": 8000,
+  "plugins": [
+    "transform.js"
+  ],
   "services": {
     "service-1": {
       "targets": [

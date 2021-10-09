@@ -23,7 +23,7 @@ dirnames.forEach(dirname => {
   for (const name of filenames) {
     let content = fs.readFileSync(path.join(dirpath, name), 'utf8');
     for (let i = codebases.length - 1; i >= 0; i--) {
-      if (codebases[i][name] === content) {
+      if (codebases[i].files[name] === content) {
         content = null;
         break;
       }

@@ -28,6 +28,8 @@
 
 #include "filter.hpp"
 
+#include <list>
+
 namespace pipy {
 
 class Module;
@@ -40,7 +42,8 @@ class Session;
 class Use : public Filter {
 public:
   Use();
-  Use(Module *module, pjs::Str *pipeline_name);
+  Use(Module *module, pjs::Str *pipeline_name, pjs::Function *when = nullptr);
+  Use(const std::list<Module*> &modules, pjs::Str *pipeline_name, pjs::Function *when = nullptr);
 
 private:
   Use(const Use &r);
@@ -53,11 +56,35 @@ private:
   virtual void reset() override;
   virtual void process(Context *ctx, Event *inp) override;
 
-  Module* m_module = nullptr;
-  Pipeline* m_pipeline = nullptr;
+  class Stage {
+  public:
+    Stage(const Stage &r)
+      : m_pipeline(r.m_pipeline) {}
+
+    Stage(Pipeline *pipeline)
+      : m_pipeline(pipeline) {}
+
+    void reset() { m_session = nullptr; m_bypass = false; }
+    void use(Context *context, Event *inp);
+
+  private:
+    Use* m_use;
+    Stage* m_next;
+    Pipeline* m_pipeline;
+    pjs::Ref<Session> m_session;
+    bool m_bypass = false;
+
+    friend class Use;
+  };
+
+  std::list<Module*> m_modules;
+  std::list<Stage> m_stages;
   pjs::Ref<pjs::Str> m_pipeline_name;
-  pjs::Ref<Session> m_session;
+  pjs::Ref<pjs::Function> m_when;
+  bool m_multiple = false;
   bool m_session_end = false;
+
+  friend class Stage;
 };
 
 } // namespace pipy

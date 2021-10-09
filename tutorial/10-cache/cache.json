@@ -1,0 +1,9 @@
+{
+  "services": {
+    "service-2": [
+      ".js",
+      ".json"
+    ]
+  },
+  "timeout": 10000
+}

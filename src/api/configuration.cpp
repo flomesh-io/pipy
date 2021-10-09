@@ -314,8 +314,12 @@ void Configuration::tap(const pjs::Value &quota, const pjs::Value &account) {
   append_filter(new Tap(quota, account));
 }
 
-void Configuration::use(Module *module, pjs::Str *pipeline) {
-  append_filter(new Use(module, pipeline));
+void Configuration::use(Module *module, pjs::Str *pipeline, pjs::Function *when) {
+  append_filter(new Use(module, pipeline, when));
+}
+
+void Configuration::use(const std::list<Module*> modules, pjs::Str *pipeline, pjs::Function *when) {
+  append_filter(new Use(modules, pipeline, when));
 }
 
 void Configuration::wait(pjs::Function *condition) {
@@ -1190,23 +1194,52 @@ template<> void ClassDef<Configuration>::init() {
   // Configuration.use
   method("use", [](Context &ctx, Object *thiz, Value &result) {
     std::string module;
+    pjs::Array *modules;
     Str *pipeline;
-    if (!ctx.arguments(2, &module, &pipeline)) return;
-    auto path = utils::path_normalize(module);
+    Function *when = nullptr;
     auto root = static_cast<pipy::Context*>(ctx.root());
     auto worker = root->worker();
-    auto mod = worker->load_module(path);
-    if (!mod) {
-      std::string msg("[pjs] Cannot load module: ");
-      msg += module;
-      ctx.error(msg);
-      return;
-    }
-    try {
-      thiz->as<Configuration>()->use(mod, pipeline);
-      result.set(thiz);
-    } catch (std::runtime_error &err) {
-      ctx.error(err);
+    if (ctx.try_arguments(2, &modules, &pipeline, &when)) {
+      std::list<Module*> mods;
+      modules->iterate_while(
+        [&](pjs::Value &v, int) {
+          auto s = v.to_string();
+          auto path = utils::path_normalize(s->str());
+          s->release();
+          auto mod = worker->load_module(path);
+          if (!mod) {
+            std::string msg("[pjs] Cannot load module: ");
+            msg += module;
+            ctx.error(msg);
+            return false;
+          }
+          mods.push_back(mod);
+          return true;
+        }
+      );
+      if (mods.size() == modules->length()) {
+        try {
+          thiz->as<Configuration>()->use(mods, pipeline, when);
+          result.set(thiz);
+        } catch (std::runtime_error &err) {
+          ctx.error(err);
+        }
+      }
+    } else if (ctx.arguments(2, &module, &pipeline, &when)) {
+      auto path = utils::path_normalize(module);
+      auto mod = worker->load_module(path);
+      if (!mod) {
+        std::string msg("[pjs] Cannot load module: ");
+        msg += module;
+        ctx.error(msg);
+        return;
+      }
+      try {
+        thiz->as<Configuration>()->use(mod, pipeline, when);
+        result.set(thiz);
+      } catch (std::runtime_error &err) {
+        ctx.error(err);
+      }
     }
   });
 

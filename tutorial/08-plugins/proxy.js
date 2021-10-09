@@ -85,16 +85,13 @@ pipy({
       )
     )
   )
-  .link('bypass', () => __turnDown, 'jwt')
+  .use(['jwt.js'], 'request', () => !__turnDown)
   .link(
     'bypass', () => __turnDown,
     'load-balance', () => Boolean(__serviceID),
     '404'
   )
   .fork('log-response')
-
-.pipeline('jwt')
-  .use('jwt.js', 'verify')
 
 .pipeline('load-balance')
   .handleMessageStart(
