@@ -35,6 +35,7 @@
 #include "utils.hpp"
 #include "logging.hpp"
 
+#include <sys/stat.h>
 #include <dirent.h>
 #include <fstream>
 
@@ -112,6 +113,12 @@ auto CodebaseFromFS::list(const std::string &path) -> std::list<std::string> {
 
 auto CodebaseFromFS::get(const std::string &path) -> Data* {
   auto full_path = utils::path_join(m_base, path);
+
+  struct stat st;
+  if (stat(full_path.c_str(), &st) || !S_ISREG(st.st_mode)) {
+    return nullptr;
+  }
+
   std::ifstream fs(full_path, std::ios::in);
   if (!fs.is_open()) return nullptr;
 

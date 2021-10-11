@@ -29,9 +29,6 @@
 #include "tar.hpp"
 #include "utils.hpp"
 
-#include <sys/stat.h>
-#include <fstream>
-
 #define ZLIB_CONST
 #include <zlib.h>
 
@@ -80,14 +77,7 @@ auto File::from(Tarball *tarball, const std::string &path) -> File* {
 }
 
 File::File(const std::string &path) {
-  auto filename = path;
-
-  struct stat st;
-  if (!stat(path.c_str(), &st) && S_ISDIR(st.st_mode)) {
-    filename += "/index.html";
-  }
-
-  load(filename, [](const std::string &filename) -> Data* {
+  load(path, [](const std::string &filename) -> Data* {
     return Codebase::current()->get(filename);
   });
 
@@ -109,17 +99,25 @@ File::File(Tarball *tarball, const std::string &path) {
 }
 
 void File::load(const std::string &filename, std::function<Data*(const std::string&)> get_file) {
-  pjs::Ref<Data> raw = get_file(filename);
-  pjs::Ref<Data> gz = get_file(filename + ".gz");
-  pjs::Ref<Data> br = get_file(filename + ".br");
+  auto path = filename;
+  pjs::Ref<Data> raw = get_file(path);
+  pjs::Ref<Data> gz = get_file(path + ".gz");
+  pjs::Ref<Data> br = get_file(path + ".br");
 
   if (!raw && !gz && !br) {
-    std::string msg("file not found: ");
-    throw std::runtime_error(msg + filename);
+    if (path.back() != '/') path += '/';
+    path += "index.html";
+    raw = get_file(path);
+    gz = get_file(path + ".gz");
+    br = get_file(path + ".br");
+    if (!raw && !gz && !br) {
+      std::string msg("file not found: ");
+      throw std::runtime_error(msg + filename);
+    }
   }
 
-  auto p = filename.find_last_of('/');
-  std::string name = (p == std::string::npos ? filename : filename.substr(p + 1));
+  auto p = path.find_last_of('/');
+  std::string name = (p == std::string::npos ? path : path.substr(p + 1));
   std::string ext;
   p = name.find_last_of('.');
   if (p != std::string::npos) ext = name.substr(p+1);
