@@ -1,0 +1,8 @@
+{
+  "listen": 8000,
+  "listenTLS": 8443,
+  "plugins": [
+    "router.js",
+    "balancer.js"
+  ]
+}

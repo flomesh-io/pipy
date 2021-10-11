@@ -1,0 +1,8 @@
+{
+  "listen": 8000,
+  "plugins": [
+    "logger.js",
+    "router.js",
+    "balancer.js"
+  ]
+}

@@ -8,9 +8,9 @@ pipy({
 })
 
 .listen(8000)
-  .demuxHTTP('routing')
+  .demuxHTTP('request')
 
-.pipeline('routing')
+.pipeline('request')
   .handleMessageStart(
     msg => (
       _target = _router.find(

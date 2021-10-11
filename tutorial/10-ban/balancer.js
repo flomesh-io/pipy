@@ -1,8 +1,18 @@
+(config =>
+
 pipy({
-  _router: new algo.URLRouter({
-    '/*'   : new algo.RoundRobinLoadBalancer(['127.0.0.1:8080']),
-    '/hi/*': new algo.RoundRobinLoadBalancer(['127.0.0.1:8081', '127.0.0.1:8082']),
-  }),
+  _services: (
+    Object.fromEntries(
+      Object.entries(config.services).map(
+        ([k, v]) => [
+          k,
+          {
+            balancer: new algo.RoundRobinLoadBalancer(v.targets),
+          }
+        ]
+      )
+    )
+  ),
 
   _g: {
     connectionID: 0,
@@ -12,13 +22,17 @@ pipy({
     () => ++_g.connectionID
   ),
 
-  _balancer: null,
   _balancerCache: null,
   _target: '',
   _targetCache: null,
 })
 
-.listen(8000)
+.import({
+  __turnDown: 'proxy',
+  __serviceID: 'router',
+})
+
+.pipeline('connect')
   .handleSessionStart(
     () => (
       _balancerCache = new algo.Cache(
@@ -39,25 +53,19 @@ pipy({
       _targetCache.clear()
     )
   )
-  .demuxHTTP('request')
 
 .pipeline('request')
-  .handleMessageStart(
-    msg => (
-      _balancer = _router.find(
-        msg.head.headers.host,
-        msg.head.path,
-      )
-    )
-  )
   .link(
-    'load-balance', () => Boolean(_balancer),
-    '404'
+    'load-balance', () => Boolean(_services[__serviceID]),
+    'bypass'
   )
 
 .pipeline('load-balance')
   .handleMessageStart(
-    () => _target = _balancerCache.get(_balancer)
+    () => (
+      _target = _balancerCache.get(_services[__serviceID].balancer),
+      __turnDown = true
+    )
   )
   .link(
     'forward', () => Boolean(_target),
@@ -75,12 +83,11 @@ pipy({
     () => _target
   )
 
-.pipeline('404')
-  .replaceMessage(
-    new Message({ status: 404 }, 'No route')
-  )
-
 .pipeline('no-target')
   .replaceMessage(
     new Message({ status: 404 }, 'No target')
   )
+
+.pipeline('bypass')
+
+)(JSON.decode(pipy.load('balancer.json')))

@@ -1,7 +1,21 @@
 pipy({
+  _services: {
+    'service-1': {
+      balancer: new algo.RoundRobinLoadBalancer(['127.0.0.1:8080']),
+    },
+    'service-2': {
+      balancer: new algo.RoundRobinLoadBalancer(['127.0.0.1:8081', '127.0.0.1:8082']),
+    },
+  },
+
   _router: new algo.URLRouter({
-    '/*'   : new algo.RoundRobinLoadBalancer(['127.0.0.1:8080']),
-    '/hi/*': new algo.RoundRobinLoadBalancer(['127.0.0.1:8081', '127.0.0.1:8082']),
+    '/*': {
+      service: 'service-1',
+    },
+    '/hi/*': {
+      service: 'service-2',
+      rewrite: [new RegExp('^/hi'), '/hello'],
+    },
   }),
 
   _g: {
@@ -12,7 +26,8 @@ pipy({
     () => ++_g.connectionID
   ),
 
-  _balancer: null,
+  _route: null,
+  _service: null,
   _balancerCache: null,
   _target: '',
   _targetCache: null,
@@ -44,20 +59,29 @@ pipy({
 .pipeline('request')
   .handleMessageStart(
     msg => (
-      _balancer = _router.find(
+      _route = _router.find(
         msg.head.headers.host,
         msg.head.path,
+      ),
+      _route && (
+        _route.rewrite && (
+          msg.head.path = msg.head.path.replace(
+            _route.rewrite[0],
+            _route.rewrite[1],
+          )
+        ),
+        _service = _services[_route.service]
       )
     )
   )
   .link(
-    'load-balance', () => Boolean(_balancer),
+    'load-balance', () => Boolean(_service),
     '404'
   )
 
 .pipeline('load-balance')
   .handleMessageStart(
-    () => _target = _balancerCache.get(_balancer)
+    () => _target = _balancerCache.get(_service.balancer)
   )
   .link(
     'forward', () => Boolean(_target),
