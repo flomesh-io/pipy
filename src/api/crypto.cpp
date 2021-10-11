@@ -221,6 +221,63 @@ auto Certificate::read_pem(const void *data, size_t size) -> X509* {
 }
 
 //
+// CertificateChain
+//
+
+CertificateChain::CertificateChain(Data *data) {
+  auto len = data->size();
+  char str[len + 1];
+  data->to_bytes((uint8_t*)str);
+  str[len] = 0;
+  load_chain(str);
+}
+
+CertificateChain::CertificateChain(pjs::Str *data) {
+  load_chain(data->c_str());
+}
+
+CertificateChain::~CertificateChain() {
+  for (auto *x509 : m_x509s) {
+    X509_free(x509);
+  }
+}
+
+void CertificateChain::load_chain(const char *str) {
+  auto next_line = [](const char *p) -> const char* {
+    p = std::strchr(p, '\n');
+    if (p) p++;
+    return p;
+  };
+
+  const char *line = str;
+  while (line) {
+    if (!strncmp(line, "-----BEGIN CERTIFICATE-----", 27)) {
+      auto start = line;
+      line = next_line(line);
+      while (line && strncmp(line, "-----END CERTIFICATE-----", 25)) {
+        line = next_line(line);
+      }
+      if (line) {
+        line = next_line(line);
+        auto end = line;
+        auto x509 = read_pem(start, end - start);
+        m_x509s.push_back(x509);
+      }
+    } else {
+      line = next_line(line);
+    }
+  }
+}
+
+auto CertificateChain::read_pem(const void *data, size_t size) -> X509* {
+  auto bio = BIO_new_mem_buf(data, size);
+  auto x509 = PEM_read_bio_X509(bio, nullptr, nullptr, nullptr);
+  BIO_free(bio);
+  if (!x509) throw_error();
+  return x509;
+}
+
+//
 // Cipher
 //
 
@@ -1040,6 +1097,34 @@ template<> void ClassDef<Constructor<Certificate>>::init() {
 }
 
 //
+// CertificateChain
+//
+
+template<> void ClassDef<CertificateChain>::init() {
+  ctor([](Context &ctx) -> Object* {
+    Str *data_str;
+    pipy::Data *data;
+    try {
+      if (ctx.try_arguments(1, &data_str)) {
+        return CertificateChain::make(data_str);
+      } else if (ctx.arguments(1, &data)) {
+        return CertificateChain::make(data);
+      } else {
+        return nullptr;
+      }
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+      return nullptr;
+    }
+  });
+}
+
+template<> void ClassDef<Constructor<CertificateChain>>::init() {
+  super<Function>();
+  ctor();
+}
+
+//
 // Cipher
 //
 
@@ -1569,6 +1654,7 @@ template<> void ClassDef<Crypto>::init() {
   variable("PublicKey", class_of<Constructor<PublicKey>>());
   variable("PrivateKey", class_of<Constructor<PrivateKey>>());
   variable("Certificate", class_of<Constructor<Certificate>>());
+  variable("CertificateChain", class_of<Constructor<CertificateChain>>());
   variable("Cipher", class_of<Constructor<Cipher>>());
   variable("Decipher", class_of<Constructor<Decipher>>());
   variable("Hash", class_of<Constructor<Hash>>());
