@@ -392,6 +392,7 @@ void Configuration::apply(Module *mod) {
   }
 
   for (auto &i : m_listens) {
+    if (!i.port) continue;
     auto name = i.ip + ':' + std::to_string(i.port);
     auto p = make_pipeline(Pipeline::LISTEN, name, i.filters);
     auto listener = Listener::get(i.port);

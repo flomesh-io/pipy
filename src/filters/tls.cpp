@@ -493,10 +493,12 @@ Server::Server(pjs::Str *target, pjs::Object *options)
     options->get("certificate", certificate);
     options->get("trusted", trusted);
 
-    if (!certificate.is_object()) {
-      throw std::runtime_error("options.certificate expects an object or a function");
+    if (!certificate.is_undefined()) {
+      if (!certificate.is_object()) {
+        throw std::runtime_error("options.certificate expects an object or a function");
+      }
+      m_certificate = certificate.o();
     }
-    m_certificate = certificate.o();
 
     if (!trusted.is_undefined()) {
       if (!trusted.is_array()) {
