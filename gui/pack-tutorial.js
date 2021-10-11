@@ -15,11 +15,25 @@ const {
 const dirnames = fs.readdirSync(TUTORIAL_PATH).sort();
 const codebases = [];
 
+function listFilenames(dirpath, base, filenames) {
+  const names = fs.readdirSync(dirpath);
+  for (const name of names) {
+    const abspath = path.join(dirpath, name);
+    const st = fs.statSync(abspath);
+    if (st.isFile()) {
+      filenames.push(base + name);
+    } else if (st.isDirectory()) {
+      listFilenames(abspath, base + name + '/', filenames);
+    }
+  }
+}
+
 dirnames.forEach(dirname => {
   console.log(`Codebase ${dirname}:`);
   const dirpath = path.join(TUTORIAL_PATH, dirname);
-  const filenames = fs.readdirSync(dirpath);
+  const filenames = [];
   const files = {};
+  listFilenames(dirpath, '', filenames)
   for (const name of filenames) {
     let content = fs.readFileSync(path.join(dirpath, name), 'utf8');
     for (let i = codebases.length - 1; i >= 0; i--) {

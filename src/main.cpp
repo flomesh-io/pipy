@@ -145,10 +145,17 @@ static void show_version() {
   std::cout << "Commit Date : " << PIPY_COMMIT_DATE << std::endl;
   std::cout << "Host        : " << PIPY_HOST << std::endl;
   std::cout << "OpenSSL     : " << OPENSSL_VERSION_TEXT << std::endl;
+
 #ifdef PIPY_USE_GUI
   std::cout << "Builtin GUI : " << "Yes" << std::endl;
 #else
   std::cout << "Builtin GUI : " << "No" << std::endl;
+#endif
+
+#ifdef PIPY_USE_TUTORIAL
+  std::cout << "Tutorial    : " << "Yes" << std::endl;
+#else
+  std::cout << "Tutorial    : " << "No" << std::endl;
 #endif
 }
 

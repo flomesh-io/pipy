@@ -1,7 +1,8 @@
 cmake_minimum_required (VERSION 2.8)
 project(pipy)
 
-option(PIPY_GUI "include builtin GUI" OFF)
+option(PIPY_GUI "include builtin GUI" ON)
+option(PIPY_TUTORIAL "include builtin tutorial scripts" ON)
 
 add_subdirectory(deps/yajl-2.1.0)
 
@@ -129,20 +130,23 @@ if(PIPY_GUI)
 
   add_custom_target(PackGui DEPENDS ${CMAKE_BINARY_DIR}/deps/gui.tar.h)
   add_dependencies(pipy PackGui)
-
 endif()
 
-file(GLOB_RECURSE TUTORIAL_FILES LIST_DIRECTORIES false ${CMAKE_SOURCE_DIR}/tutorial/*)
+if (PIPY_TUTORIAL)
+  add_definitions(-DPIPY_USE_TUTORIAL)
 
-add_custom_command(
-  OUTPUT ${CMAKE_BINARY_DIR}/deps/tutorial.tar.gz.h
-  COMMAND node
-  ARGS pack-tutorial.js ${CMAKE_BINARY_DIR}/deps/tutorial.tar.gz.h
-  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/gui
-  DEPENDS gui/pack-tutorial.js ${TUTORIAL_FILES}
-)
+  file(GLOB_RECURSE TUTORIAL_FILES LIST_DIRECTORIES false ${CMAKE_SOURCE_DIR}/tutorial/*)
 
-add_custom_target(PackTutorial DEPENDS ${CMAKE_BINARY_DIR}/deps/tutorial.tar.gz.h)
-add_dependencies(pipy PackTutorial)
+  add_custom_command(
+    OUTPUT ${CMAKE_BINARY_DIR}/deps/tutorial.tar.gz.h
+    COMMAND node
+    ARGS pack-tutorial.js ${CMAKE_BINARY_DIR}/deps/tutorial.tar.gz.h
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/gui
+    DEPENDS gui/pack-tutorial.js ${TUTORIAL_FILES}
+  )
+
+  add_custom_target(PackTutorial DEPENDS ${CMAKE_BINARY_DIR}/deps/tutorial.tar.gz.h)
+  add_dependencies(pipy PackTutorial)
+endif()
 
 target_link_libraries(pipy z yajl_s expat crypto ssl -pthread)
