@@ -98,28 +98,13 @@ pipy({
       )
     )
   )
-  .link('bypass', () => __turnDown, 'ban')
-  .link('bypass', () => __turnDown, 'throttle')
-  .link('bypass', () => __turnDown, 'jwt')
-  .link('bypass', () => __turnDown, 'transform')
+  .use(config.plugins, 'request', () => !__turnDown)
   .link(
     'bypass', () => __turnDown,
     'load-balance', () => Boolean(__serviceID),
     '404'
   )
   .fork('log-response')
-
-.pipeline('ban')
-  .use('ban.js', 'check')
-
-.pipeline('throttle')
-  .use('throttle.js', 'input')
-
-.pipeline('jwt')
-  .use('jwt.js', 'verify')
-
-.pipeline('transform')
-  .use('transform.js', 'input')
 
 .pipeline('load-balance')
   .handleMessageStart(
@@ -135,6 +120,7 @@ pipy({
     'connection',
     () => _targetCache.get(_target)
   )
+  .use(config.plugins, 'response')
 
 .pipeline('connection')
   .connect(

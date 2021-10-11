@@ -1,5 +1,8 @@
 {
   "listen": 8000,
+  "plugins": [
+    "ban.js"
+  ],
   "services": {
     "service-1": {
       "targets": [

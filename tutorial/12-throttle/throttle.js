@@ -9,7 +9,7 @@ pipy({
   __serviceID: 'proxy',
 })
 
-.pipeline('input')
+.pipeline('request')
   .handleSessionStart(
     () => _rateLimit = _services[__serviceID]?.rateLimit
   )

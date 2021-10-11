@@ -98,20 +98,13 @@ pipy({
       )
     )
   )
-  .link('bypass', () => __turnDown, 'ban')
-  .link('bypass', () => __turnDown, 'jwt')
+  .use(config.plugins, 'request', () => !__turnDown)
   .link(
     'bypass', () => __turnDown,
     'load-balance', () => Boolean(__serviceID),
     '404'
   )
   .fork('log-response')
-
-.pipeline('ban')
-  .use('ban.js', 'check')
-
-.pipeline('jwt')
-  .use('jwt.js', 'verify')
 
 .pipeline('load-balance')
   .handleMessageStart(
@@ -127,6 +120,7 @@ pipy({
     'connection',
     () => _targetCache.get(_target)
   )
+  .use(config.plugins, 'response')
 
 .pipeline('connection')
   .connect(

@@ -54,7 +54,7 @@ pipy({
   __serviceID: 'proxy',
 })
 
-.pipeline('input')
+.pipeline('request')
   .handleSessionStart(
     () => _service = _services[__serviceID]
   )

@@ -1,7 +1,7 @@
 {
   "listen": 8000,
   "plugins": [
-    "jwt.js"
+    "throttle.js"
   ],
   "services": {
     "service-1": {

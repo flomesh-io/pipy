@@ -39,7 +39,7 @@ pipy({
   __serviceID: 'proxy',
 })
 
-.pipeline('check')
+.pipeline('request')
   .handleSessionStart(
     () => (
       _service = _services[__serviceID],

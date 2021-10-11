@@ -16,7 +16,7 @@ pipy({
   __serviceID: 'proxy',
 })
 
-.pipeline('verify')
+.pipeline('request')
   .replaceMessage(
     msg => (
       ((
