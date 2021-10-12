@@ -47,7 +47,7 @@ pipy({
 .pipeline('response')
   .handleMessage(
     msg => (
-      _useCache && msg.head.status < 400 && (
+      _useCache && (msg.head.status || 200) < 400 && (
         _cache[_cachedKey] = {
           time: Date.now(),
           message: msg,
