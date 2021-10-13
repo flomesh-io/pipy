@@ -26,7 +26,7 @@ rm -fr pipy/build
 cd pipy/gui
 npm install
 cd ../build
-CXX=clang++ CC=clang cmake3 -DCMAKE_BUILD_TYPE=Release ..
+CXX=clang++ CC=clang cmake3 -DPIPY_GUI=OFF -DPIPY_TUTORIAL=ON -DCMAKE_BUILD_TYPE=Release ..
 make -j$(getconf _NPROCESSORS_ONLN)
 
 %preun

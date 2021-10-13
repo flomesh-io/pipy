@@ -136,11 +136,10 @@ function build() {
   export CXX=clang++
   cd ${PIPY_DIR}/gui
   npm install
-  npm run build
   mkdir ${PIPY_DIR}/build 2>&1 > /dev/null || true
   rm -fr ${PIPY_DIR}/build/*
   cd ${PIPY_DIR}/build
-  $CMAKE -DPIPY_GUI=ON -DCMAKE_BUILD_TYPE=Release $PIPY_DIR
+  $CMAKE -DPIPY_GUI=OFF -DPIPY_TUTORIAL=ON -DCMAKE_BUILD_TYPE=Release $PIPY_DIR
   make -j${__NPROC}
   if [ $? -eq 0 ];then 
     echo "pipy now is in ${PIPY_DIR}/bin"
