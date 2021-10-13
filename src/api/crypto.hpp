@@ -103,6 +103,29 @@ private:
 };
 
 //
+// CertificateChain
+//
+
+class CertificateChain : public pjs::ObjectTemplate<CertificateChain> {
+public:
+  auto size() const -> int { return m_x509s.size(); }
+  auto x509(int i) const -> X509* { return m_x509s[i]; }
+
+private:
+  CertificateChain(Data *data);
+  CertificateChain(pjs::Str *data);
+  ~CertificateChain();
+
+  std::vector<X509*> m_x509s;
+
+  void load_chain(const char *str);
+
+  static auto read_pem(const void *data, size_t size) -> X509*;
+
+  friend class pjs::ObjectTemplate<CertificateChain>;
+};
+
+//
 // Cipher
 //
 

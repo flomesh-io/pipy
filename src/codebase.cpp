@@ -35,6 +35,7 @@
 #include "utils.hpp"
 #include "logging.hpp"
 
+#include <sys/stat.h>
 #include <dirent.h>
 #include <fstream>
 
@@ -112,6 +113,12 @@ auto CodebaseFromFS::list(const std::string &path) -> std::list<std::string> {
 
 auto CodebaseFromFS::get(const std::string &path) -> Data* {
   auto full_path = utils::path_join(m_base, path);
+
+  struct stat st;
+  if (stat(full_path.c_str(), &st) || !S_ISREG(st.st_mode)) {
+    return nullptr;
+  }
+
   std::ifstream fs(full_path, std::ios::in);
   if (!fs.is_open()) return nullptr;
 
@@ -172,17 +179,9 @@ public:
   virtual bool writable() const override { return false; }
   virtual auto entry() const -> const std::string& override { return m_entry; }
   virtual void entry(const std::string &path) override {}
-
   virtual auto list(const std::string &path) -> std::list<std::string> override;
-
-  virtual auto get(const std::string &path) -> pipy::Data* override {
-    auto i = m_files.find(path);
-    if (i == m_files.end()) return nullptr;
-    return i->second;
-  }
-
+  virtual auto get(const std::string &path) -> pipy::Data* override;
   virtual void set(const std::string &path, Data *data) override {}
-
   virtual void sync(const Status &status, const std::function<void(bool)> &on_update) override {}
 
 private:
@@ -234,6 +233,14 @@ auto CodebsaeFromStore::list(const std::string &path) -> std::list<std::string> 
   return list;
 }
 
+auto CodebsaeFromStore::get(const std::string &path) -> pipy::Data* {
+  auto k = path;
+  if (k.front() != '/') k.insert(k.begin(), '/');
+  auto i = m_files.find(k);
+  if (i == m_files.end()) return nullptr;
+  return i->second;
+}
+
 //
 // CodebaseFromHTTP
 //
@@ -248,17 +255,9 @@ private:
   virtual bool writable() const override { return false; }
   virtual auto entry() const -> const std::string& override { return m_entry; }
   virtual void entry(const std::string &path) override {}
-
   virtual auto list(const std::string &path) -> std::list<std::string> override;
-
-  virtual auto get(const std::string &path) -> pipy::Data* override {
-    auto i = m_files.find(path);
-    if (i == m_files.end()) return nullptr;
-    return i->second;
-  }
-
+  virtual auto get(const std::string &path) -> pipy::Data* override;
   virtual void set(const std::string &path, Data *data) override {}
-
   virtual void sync(const Status &status, const std::function<void(bool)> &on_update) override;
 
   pjs::Ref<URL> m_url;
@@ -318,6 +317,14 @@ auto CodebaseFromHTTP::list(const std::string &path) -> std::list<std::string> {
   std::list<std::string> list;
   for (const auto &name : names) list.push_back(name);
   return list;
+}
+
+auto CodebaseFromHTTP::get(const std::string &path) -> pipy::Data* {
+  auto k = path;
+  if (k.front() != '/') k.insert(k.begin(), '/');
+  auto i = m_files.find(k);
+  if (i == m_files.end()) return nullptr;
+  return i->second;
 }
 
 void CodebaseFromHTTP::sync(const Status &status, const std::function<void(bool)> &on_update) {

@@ -39,9 +39,9 @@ pipy({
       _targetCache.clear()
     )
   )
-  .demuxHTTP('routing')
+  .demuxHTTP('request')
 
-.pipeline('routing')
+.pipeline('request')
   .handleMessageStart(
     msg => (
       _balancer = _router.find(

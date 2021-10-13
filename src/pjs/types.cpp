@@ -798,10 +798,20 @@ template<> void ClassDef<Array>::init() {
   });
 
   // "reduceRight",
-  // "reverse",
+
+  method("reverse", [](Context &ctx, Object *obj, Value &ret) {
+    ret.set(obj->as<Array>()->reverse());
+  });
 
   method("shift", [](Context &ctx, Object *obj, Value &ret) {
     obj->as<Array>()->shift(ret);
+  });
+
+  method("slice", [](Context &ctx, Object *obj, Value &ret) {
+    int start = 0;
+    int end = obj->as<Array>()->length();
+    if (!ctx.arguments(0, &start, &end)) return;
+    ret.set(obj->as<Array>()->slice(start, end));
   });
 
   method("some", [](Context &ctx, Object *obj, Value &ret) {
@@ -997,6 +1007,20 @@ void Array::reduce(std::function<bool(Value&, Value&, int)> callback, Value &ini
   });
 }
 
+auto Array::reverse() -> Array* {
+  for (int i = 0; i < m_size; i++) {
+    int j = m_size - i - 1;
+    if (i != j) {
+      Value a, b;
+      get(i, a);
+      get(j, b);
+      set(i, b);
+      set(j, a);
+    }
+  }
+  return this;
+}
+
 void Array::shift(Value &result) {
   if (m_size > 0) {
     get(0, result);
@@ -1010,6 +1034,22 @@ void Array::shift(Value &result) {
   } else {
     result = Value::undefined;
   }
+}
+
+auto Array::slice(int start, int end) -> Array* {
+  if (start < 0) start = m_size - start;
+  if (end < 0) end = m_size - end;
+  if (start < 0) start = 0;
+  if (end > m_size) end = m_size;
+  int n = end - start;
+  if (n <= 0) return Array::make();
+  auto a = Array::make(n);
+  for (int i = 0; i < n; i++) {
+    Value v;
+    get(start + i, v);
+    a->set(i, v);
+  }
+  return a;
 }
 
 void Array::sort() {

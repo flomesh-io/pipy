@@ -1956,7 +1956,9 @@ public:
   void push(const Value &v) { set(m_size, v); }
   void reduce(std::function<bool(Value&, Value&, int)> callback, Value &result);
   void reduce(std::function<bool(Value&, Value&, int)> callback, Value &initial, Value &result);
+  auto reverse() -> Array*;
   void shift(Value &result);
+  auto slice(int start, int end) -> Array*;
   void sort();
   void sort(const std::function<bool(const Value&, const Value&)> &comparator);
 

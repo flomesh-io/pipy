@@ -28,7 +28,9 @@
 #include "tar.hpp"
 #include "utils.hpp"
 
+#ifdef PIPY_USE_TUTORIAL
 #include "tutorial.tar.gz.h"
+#endif
 
 #include <iostream>
 #include <sstream>
@@ -141,6 +143,7 @@ static void read_record(const std::string &str, std::map<std::string, std::strin
 CodebaseStore::CodebaseStore(Store *store)
   : m_store(store)
 {
+#ifdef PIPY_USE_TUTORIAL
   Data input(s_tutorial_tar_gz, sizeof(s_tutorial_tar_gz), &s_dp), output;
   auto decompressor = Decompressor::inflate(
     [&](Data *data) {
@@ -192,6 +195,7 @@ CodebaseStore::CodebaseStore(Store *store)
     }
     base = codebase;
   }
+#endif // PIPY_USE_TUTORIAL
 }
 
 CodebaseStore::~CodebaseStore() {

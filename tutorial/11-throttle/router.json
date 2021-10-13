@@ -1,0 +1,14 @@
+{
+  "routes": {
+    "/*": {
+      "service": "service-1"
+    },
+    "/hi/*": {
+      "service": "service-2",
+      "rewrite": [
+        "^/hi",
+        "/hello"
+      ]
+    }
+  }
+}

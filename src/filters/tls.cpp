@@ -189,24 +189,40 @@ void TLSSession::use_certificate(pjs::Str *sni) {
     (*certificate.f())(ctx, 1, &arg, certificate);
     if (!ctx.ok()) return;
   }
+
   if (!certificate.is_object()) {
     Log::error("[tls] certificate callback did not return an object");
     return;
   }
+
   if (certificate.is_null()) return;
+
   pjs::Value cert, key;
   certificate.o()->get("cert", cert);
   certificate.o()->get("key", key);
-  if (!cert.is<crypto::Certificate>()) {
-    Log::error("[tls] certificate.cert requires a Certificate object");
-    return;
-  }
+
   if (!key.is<crypto::PrivateKey>()) {
     Log::error("[tls] certificate.key requires a PrivateKey object");
     return;
   }
-  SSL_use_certificate(m_ssl, cert.as<crypto::Certificate>()->x509());
+
   SSL_use_PrivateKey(m_ssl, key.as<crypto::PrivateKey>()->pkey());
+
+  if (cert.is<crypto::Certificate>()) {
+    SSL_use_certificate(m_ssl, cert.as<crypto::Certificate>()->x509());
+  } else if (cert.is<crypto::CertificateChain>()) {
+    auto chain = cert.as<crypto::CertificateChain>();
+    if (chain->size() < 1) {
+      Log::error("[tls] empty certificate chain");
+    } else {
+      SSL_use_certificate(m_ssl, chain->x509(0));
+      for (int i = 1; i < chain->size(); i++) {
+        SSL_add1_chain_cert(m_ssl, chain->x509(i));
+      }
+    }
+  } else {
+    Log::error("[tls] certificate.cert requires a Certificate or a CertificateChain object");
+  }
 }
 
 bool TLSSession::do_handshake() {
@@ -493,10 +509,12 @@ Server::Server(pjs::Str *target, pjs::Object *options)
     options->get("certificate", certificate);
     options->get("trusted", trusted);
 
-    if (!certificate.is_object()) {
-      throw std::runtime_error("options.certificate expects an object or a function");
+    if (!certificate.is_undefined()) {
+      if (!certificate.is_object()) {
+        throw std::runtime_error("options.certificate expects an object or a function");
+      }
+      m_certificate = certificate.o();
     }
-    m_certificate = certificate.o();
 
     if (!trusted.is_undefined()) {
       if (!trusted.is_array()) {
