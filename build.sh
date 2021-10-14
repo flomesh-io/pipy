@@ -139,6 +139,7 @@ function build() {
   export CXX=clang++
   cd ${PIPY_DIR}/gui
   npm install
+  npm run build
   mkdir ${PIPY_DIR}/build 2>&1 > /dev/null || true
   rm -fr ${PIPY_DIR}/build/*
   cd ${PIPY_DIR}/build

@@ -29,8 +29,9 @@ RUN rm -fr pipy/build \
         && mkdir pipy/build \
         && cd pipy/gui \
         && npm install \
+	&& npm run build \
         && cd ../build \
-        && cmake -DPIPY_GUI=OFF -DPIPY_TUTORIAL=ON -DCMAKE_BUILD_TYPE=Release \
+        && cmake -DPIPY_GUI=OFF -DPIPY_TUTORIAL=ON -DCMAKE_BUILD_TYPE=Release .. \
         && make -j$(getconf _NPROCESSORS_ONLN) \
         && mkdir ${pkg_confdir} \
         && cp /pipy/bin/pipy ${pkg_bindir} \
