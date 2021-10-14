@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 ##### Default environment variables #########
-PIPY_CONF=pipy.cfg
+PIPY_CONF=pipy.js
 
 if [[ "$OSTYPE" == "linux-gnu"* ]]; then
   PIPY_DIR=$(dirname $(readlink -e $(basename $0)))
@@ -33,6 +33,9 @@ TEST_CASE=all
 
 IMAGE_TAG=${IMAGE_TAG:-latest}
 DOCKERFILE=${DOCKERFILE:-Dockerfile}
+
+PIPY_GUI=${PIPY_GUI:-OFF}
+PIPY_TUTORIAL=${PIPY_TUTORIAL:-ON}
 
 ##### End Default environment variables #########
 
@@ -140,7 +143,7 @@ function build() {
   mkdir ${PIPY_DIR}/build 2>&1 > /dev/null || true
   rm -fr ${PIPY_DIR}/build/*
   cd ${PIPY_DIR}/build
-  $CMAKE -DPIPY_GUI=ON -DCMAKE_BUILD_TYPE=Release $PIPY_DIR
+  $CMAKE -DPIPY_GUI=${PIPY_GUI} -DPIPY_TUTORIAL=${PIPY_TUTORIAL} -DCMAKE_BUILD_TYPE=Release $PIPY_DIR
   make -j${__NPROC}
   if [ $? -eq 0 ];then 
     echo "pipy now is in ${PIPY_DIR}/bin"
