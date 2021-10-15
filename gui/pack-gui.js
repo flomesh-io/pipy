@@ -4,7 +4,7 @@ const zlib = require('zlib');
 const tar = require('tar-stream');
 const pack = tar.pack();
 
-const PUBLIC_PATH = path.join(__dirname, 'public');
+const PUBLIC_PATH = path.join(__dirname, '../public');
 const OUTPUT_PATH = path.normalize(process.argv[2]);
 
 const {

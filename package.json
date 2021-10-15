@@ -1,12 +1,18 @@
 {
-  "name": "pipy-gui",
+  "name": "pipy",
   "private": true,
   "dependencies": {
     "@material-ui/core": "^4.11.3",
     "@material-ui/icons": "^4.11.2",
     "@material-ui/lab": "^4.0.0-alpha.57",
+    "@mdx-js/mdx": "^1.6.22",
+    "@mdx-js/react": "^1.6.22",
     "gatsby": "^3.2.1",
     "gatsby-plugin-material-ui": "^3.0.0",
+    "gatsby-plugin-mdx": "^2.14.0",
+    "gatsby-source-filesystem": "^3.14.0",
+    "gatsby-transformer-documentationjs": "^5.14.0",
+    "github-slugger": "^1.4.0",
     "monaco-editor": "^0.23.0",
     "monaco-editor-webpack-plugin": "^3.0.1",
     "prop-types": "^15.7.2",
@@ -16,12 +22,11 @@
     "react-query": "^3.23.2",
     "react-spaces": "^0.2.0",
     "react-split-pane": "^2.0.3",
-    "react-timeago": "^6.2.1"
+    "react-timeago": "^6.2.1",
+    "remark-slug": "^6.0.0"
   },
   "devDependencies": {
     "get-stream": "^5.2.0",
-    "koa": "^2.13.1",
-    "koa-bodyparser": "^4.3.0",
     "tar-stream": "^2.2.0"
   },
   "scripts": {

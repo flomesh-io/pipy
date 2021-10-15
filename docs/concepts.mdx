@@ -1,0 +1,99 @@
+---
+title: "Concepts"
+---
+
+# Stream
+
+Pipy is a "_stream processor_", which means that it takes in _streams_ and then spits
+out _streams_. But unlike what people usually think _streams_ are, Pipy streams are
+made of **events** instead of individual data bytes. There are four types of events:
+
+* Data
+* MessageStart
+* MessageEnd
+* StreamEnd
+
+Streams coming in from network are composed of only data bytes. They come in chunks.
+Each chunk is represented as a **Data** event within Pipy.
+
+What Pipy does is process the events in the input streams, some transformed, some
+discarded, new events being inserted also. Those newly generated events inside of Pipy
+also include the types of events other than **Data**, namely **MessageStart**, **MessageEnd**
+and **StreamEnd**. These non-data events work as "_markers_" giving the raw byte streams
+higher-level semantics that our business logic relies on.
+
+Eventually, all these processed event streams will be sent back to network as raw data
+bytes. At this point, all other events except **Data** are discared.
+
+# Filter and pipeline
+
+The best way to understand how Pipy works is think of
+[_Unix pipelines_](https://en.wikipedia.org/wiki/Pipeline_(Unix)).
+
+Incoming streams are processed via a chain of **filters** inside of Pipy. Each filter
+works sort of like a tiny Unix process, reading from its input (stdin) and writing to
+its output (stdout), with the output of one filter connected to the input of the next.
+The only thing that's changed from Unix pipelines is that we are dealing with streams
+of **events**, not discrete **bytes**.
+
+A chain of filters is called a **pipeline**. There are 3 types of pipelines categorized
+by their input sources:
+
+## Port pipeline
+
+A **port pipeline** reads in **Data** events from a network port, processes them, and then
+writes the result back out the same port, hence the most commonly used "_request and response model_".
+
+For instance, when Pipy works as an HTTP server, the input to a port pipline is HTTP requests
+from the clients. The output from the pipeline would be HTTP responses sent back.
+
+## Timer pipeline
+
+A **timer pipeline** gets a pair of **MessageStart** and **MessageEnd** events as its input
+periodically. Whatever it outputs after all the processing in the filters are simply discarded.
+This type of pipeline is useful where [_cron job_](https://en.wikipedia.org/wiki/Cron)-like tasks
+are required.
+
+## Sub-pipeline
+
+A **sub-pipeline** can be fed a stream from a **joint filter** in another pipeline.
+The most basic joint filter, among a couple of others, is **link**. It takes in events from
+its predecessor in pipeline, sends them to a sub-pipeline for processing, reads back the
+output from that sub-pipeline, and then pumps them down to the next filter.
+
+The best way to look at _sub-pipelines_ and _joint filters_ is think of them as _callees_
+and _callers_ of a sub-routine calling process in procedural programming. The input to the
+joint filter is the sub-routine's parameters, the output from the joint filter is its
+return value.
+
+Unlike sub-pipelines, the other types of pipelines, namely **port pipelines** and **timer pipelines**,
+cannot be "_called_" from a joint filter. In other words, they cannot be started from
+internal but external. We call these pipelines **root pipelines**.
+
+# Context
+
+A **context** is a set of variables attached to a pipeline. Every pipeline gets the same set
+of variables across a Pipy instance. In other words, contexts are of the same _shape_. When
+you start a Pipy instance, the first thing you do is define the _shape_ of the context, meaning
+that what variables are in it and their initial values.
+
+Every root pipeline "_clones_" the "_initial context_" you define at the start. When a
+sub-pipeline is started, it either _shares_ or _clones_ its parent's context, depending
+what the joint filter you use. For instance, a _link_ filter shares its parent's context
+while a _demux_ filter clones it.
+
+To the scripts residing on a pipeline, these **context variables** are their **global varaibles**,
+which means that these variables are always accessible to scripts from anywhere as long as
+they live in the same script file.
+
+This might seem odd to a seasoned programmer because _global variables_ usually means they
+are globally unique. You have only one set of these variables, whereas in Pipy we can have
+many sets of them (aka contexts) depending on how many root pipelines are open for incoming
+network connections and how many sub-pipelines clone their parents' contexts.
+It is a crucial feature for PipyJS to have multiple sets of global variables because a network
+proxy needs to handle a large amount of connections in parallel, each having its own state that
+is not visible to others.
+
+If you are familiar with multi-thread programming concepts, you can also think of **contexts**
+as [_TLS (thread-local storage)_](https://en.wikipedia.org/wiki/Thread-local_storage), where
+global variables have different values across different threads.
