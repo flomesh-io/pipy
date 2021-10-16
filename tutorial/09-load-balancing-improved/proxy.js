@@ -7,6 +7,7 @@ pipy()
 })
 
 .listen(config.listen)
+  .use(config.plugins, 'session')
   .demuxHTTP('request')
 
 .pipeline('request')

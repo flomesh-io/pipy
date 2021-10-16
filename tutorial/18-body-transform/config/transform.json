@@ -1,0 +1,7 @@
+{
+  "services": {
+    "service-echo": {
+      "jsonToXml": true
+    }
+  }
+}
