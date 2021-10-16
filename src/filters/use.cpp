@@ -48,10 +48,26 @@ Use::Use(Module *module, pjs::Str *pipeline_name, pjs::Function *when)
   m_modules.push_back(module);
 }
 
-Use::Use(const std::list<Module*> &modules, pjs::Str *pipeline_name, pjs::Function *when)
-  : m_multiple(true)
+Use::Use(
+  const std::list<Module*> &modules,
+  pjs::Str *pipeline_name,
+  pjs::Function *when
+) : m_multiple(true)
   , m_modules(modules)
   , m_pipeline_name(pipeline_name)
+  , m_when(when)
+{
+}
+
+Use::Use(
+  const std::list<Module*> &modules,
+  pjs::Str *pipeline_name,
+  pjs::Str *pipeline_name_down,
+  pjs::Function *when
+) : m_multiple(true)
+  , m_modules(modules)
+  , m_pipeline_name(pipeline_name)
+  , m_pipeline_name_down(pipeline_name_down)
   , m_when(when)
 {
 }
@@ -60,6 +76,7 @@ Use::Use(const Use &r)
   : m_stages(r.m_stages)
   , m_multiple(r.m_multiple)
   , m_pipeline_name(r.m_pipeline_name)
+  , m_pipeline_name_down(r.m_pipeline_name_down)
   , m_when(r.m_when)
 {
   Stage *next = nullptr;
@@ -67,6 +84,17 @@ Use::Use(const Use &r)
     i->m_use = this;
     i->m_next = next;
     next = &*i;
+  }
+  if (m_pipeline_name_down) {
+    Stage *prev = nullptr;
+    for (auto i = m_stages.begin(); i != m_stages.end(); i++) {
+      i->m_prev = prev;
+      prev = &*i;
+    }
+  } else {
+    for (auto &s : m_stages) {
+      s.m_prev = nullptr;
+    }
   }
 }
 
@@ -76,10 +104,11 @@ Use::~Use()
 
 auto Use::help() -> std::list<std::string> {
   return {
-    "use(modules, pipeline[, when])",
+    "use(modules, pipeline[, pipelineDown[, when]])",
     "Sends events to pipelines in different modules",
     "modules = <string|array> Filenames of the modules",
     "pipeline = <string> Name of the pipeline",
+    "pipelineDown = <string> Name of the pipeline to process turned down streams",
     "when = <function> Callback function that returns false to bypass",
   };
 }
@@ -109,7 +138,11 @@ void Use::bind() {
       msg += m_pipeline_name->str();
       throw std::runtime_error(msg);
     }
-    if (p) m_stages.emplace_back(p);
+    Pipeline *pd = nullptr;
+    if (m_pipeline_name_down) {
+      pd = mod->find_named_pipeline(m_pipeline_name_down);
+    }
+    if (p || pd) m_stages.emplace_back(p, pd);
   }
 }
 
@@ -138,15 +171,14 @@ void Use::process(Context *ctx, Event *inp) {
 }
 
 void Use::Stage::use(Context *context, Event *inp) {
-  if (!m_session && !m_bypass) {
-    auto &when = m_use->m_when;
-    if (when) {
+  if (!m_session && m_pipeline && !m_turned_down) {
+    if (auto &when = m_use->m_when) {
       pjs::Value ret;
       if (!m_use->callback(*context, when, 0, nullptr, ret)) return;
-      if (!ret.to_boolean()) m_bypass = true;
+      if (!ret.to_boolean()) m_turned_down = true;
     }
 
-    if (!m_bypass) {
+    if (!m_turned_down) {
       m_session = Session::make(context, m_pipeline);
       if (m_next) {
         auto next = m_next;
@@ -155,14 +187,57 @@ void Use::Stage::use(Context *context, Event *inp) {
             next->use(context, inp);
           }
         );
+      } else if (m_prev) {
+        m_session->on_output(
+          [=](Event *inp) {
+            use_down(context, inp);
+          }
+        );
       } else {
         m_session->on_output(m_use->out());
       }
     }
   }
 
-  if (m_session) {
-    m_session->input(inp);
+  if (m_turned_down) {
+    if (m_prev) {
+      m_prev->use_down(context, inp);
+    } else {
+      m_use->output(inp);
+    }
+
+  } else {
+    if (m_session) {
+      m_session->input(inp);
+    } else if (m_next) {
+      m_next->use(context, inp);
+    } else if (m_prev) {
+      m_prev->use_down(context, inp);
+    } else {
+      m_use->output(inp);
+    }
+  }
+}
+
+void Use::Stage::use_down(Context *context, Event *inp) {
+  if (!m_session_down && m_pipeline_down) {
+    m_session_down = Session::make(context, m_pipeline_down);
+    if (m_prev) {
+      auto prev = m_prev;
+      m_session_down->on_output(
+        [=](Event *inp) {
+          prev->use_down(context, inp);
+        }
+      );
+    } else {
+      m_session_down->on_output(m_use->out());
+    }
+  }
+
+  if (m_session_down) {
+    m_session_down->input(inp);
+  } else if (m_prev) {
+    m_prev->use_down(context, inp);
   } else {
     m_use->output(inp);
   }
