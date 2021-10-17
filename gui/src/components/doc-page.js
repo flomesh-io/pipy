@@ -9,6 +9,7 @@ import { MDXRenderer } from 'gatsby-plugin-mdx';
 import Button from '@material-ui/core/Button';
 import Collapse from '@material-ui/core/Collapse';
 import IconButton from '@material-ui/core/IconButton';
+import Highlight, { defaultProps } from 'prism-react-renderer'
 import List from '@material-ui/core/List';
 import ListItem from '@material-ui/core/ListItem';
 import ListItemText from '@material-ui/core/ListItemText';
@@ -23,6 +24,7 @@ import ExternalLinkIcon from '@material-ui/icons/OpenInNewSharp';
 import LangIcon from '@material-ui/icons/PublicSharp';
 
 import PipyLogo from '../images/pipy.svg';
+import HighlightTheme from 'prism-react-renderer/themes/vsDark';
 
 const FONT_TITLE = 'rockwell,palatino,serif';
 const FONT_TOC = 'verdana';
@@ -185,17 +187,24 @@ const useStyles = makeStyles(theme => ({
   },
 
   codeBox: {
-    padding: theme.spacing(2),
-    color: theme.palette.text.code,
-    backgroundColor: theme.palette.text.codeBox,
+    fontFamily: FONT_CODE,
+    fontSize: '100%',
+    paddingTop: theme.spacing(2),
+    paddingLeft: theme.spacing(2),
+    paddingRight: theme.spacing(2),
+    paddingBottom: 0,
     borderLeftStyle: 'solid',
     borderLeftWidth: '3px',
     borderLeftColor: theme.palette.primary.main,
   },
 
-  codeText: {
-    fontFamily: FONT_CODE,
-    fontSize: '100%',
+  codeAdded: {
+    backgroundColor: '#1e3e1e',
+  },
+
+  codeDeleted: {
+    backgroundColor: '#3e1e1e',
+    textDecorationLine: 'line-through',
   },
 
   inlineCode: {
@@ -205,7 +214,7 @@ const useStyles = makeStyles(theme => ({
     paddingRight: theme.spacing(0.5),
     paddingTop: '3px',
     paddingBottom: '3px',
-    backgroundColor: theme.palette.text.codeBox,
+    backgroundColor: '#1e1e1e',
   },
 
   memberName: {
@@ -349,15 +358,39 @@ const DocLink = ({ children, href }) => {
   }
 }
 
-const SourceCode = ({ children }) => {
+const SourceCode = ({ children, className }) => {
   const classes = useStyles();
+  const language = className === 'language-js' ? 'javascript' : undefined;
   return (
-    <div className={classes.codeBox}>
-      <code className={classes.codeText}>
-        {children}
-      </code>
-    </div>
-  )
+    <Highlight {...defaultProps} code={children} language={language} theme={HighlightTheme}>
+      {({ style, tokens, getLineProps, getTokenProps }) => (
+        <pre className={classes.codeBox} style={{ ...style }}>
+          {tokens.map((line, i) => {
+            const props = getLineProps({ line, key: i });
+            if (line[0]?.content === '') {
+              switch (line[1]?.content) {
+                case '+':
+                  props.className = classes.codeAdded;
+                  line[1].content = ' ';
+                  break;
+                case '-':
+                  props.className = classes.codeDeleted;
+                  line[1].content = ' ';
+                  break;
+              }
+            }
+            return (
+              <div key={i} {...props}>
+                {line.map((token, key) => (
+                  <span key={key} {...getTokenProps({ token, key })} />
+                ))}
+              </div>
+            );
+          })}
+        </pre>
+      )}
+    </Highlight>
+  );
 }
 
 const InstanceMethods = () => {
@@ -418,6 +451,7 @@ const components = {
   h2: makeStyledTag('h2'),
   h3: makeStyledTag('h3'),
   h4: makeStyledTag('h4'),
+  li: makeStyledTag('li', 'p'),
   p: makeStyledTag('p'),
   a: DocLink,
   code: SourceCode,

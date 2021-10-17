@@ -9,3 +9,10 @@ pipy()
   .serveHTTP(
     msg => new Message(msg.body)
   )
+
+.listen(8082)
+  .serveHTTP(
+    msg => new Message(
+      `You are requesting ${msg.head.path} from ${__inbound.remoteAddress}\n`
+    )
+  )
