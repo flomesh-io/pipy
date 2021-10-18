@@ -1,0 +1,329 @@
+---
+title: "Part 4: Routing"
+---
+
+One of the most basic tasks a proxy is able to do is "_routing_".
+In HTTP, routing is usually based on the "_Host_" header and the
+requested _URI_ in a request. In other words, proxy should be able
+to map things like "_abc.com/api/v1/login_" to a specific _target host_
+that handles the request.
+
+# URLRouter
+
+Pipy provides class [_URLRouter_](/reference/classes/algo/URLRouter) for
+fast mapping from a URL to a value of any type. In our case, we would like
+to map it to a _string value_ containing the target address and port.
+
+To define such a router, we `new` a _URLRouter_ object, giving it our
+routing table:
+
+``` js
+new algo.URLRouter({
+  '/hi/*': 'localhost:8080',
+  '/echo': 'localhost:8081',
+  '/ip/*': 'localhost:8082',
+})
+```
+
+# Custom global variables
+
+We need this router to be accessible throughout our script, so we should
+put it in a _global variable_.
+
+We've seen the _builtin_ global variable `__inbound` in [Part 2](/tutorial/02-echo/#code-dissection-1).
+This time, we are defining a _custom_ global variable named `_router`. This is done through
+the parameter given to [_pipy()_](/reference/functions/pipy) at the beginning of
+our script. We'll again add upon what we've done from last time.
+
+``` js
+- pipy()
++ pipy({
++   _router: new algo.URLRouter({
++     '/hi/*': 'localhost:8080',
++     '/echo': 'localhost:8081',
++     '/ip/*': 'localhost:8082',
++   }),
++ })
+
+  .listen(8000)
+    .demuxHTTP('forward')
+```
+
+> Custom variables can have any names as long as they are valid JavaScript identifiers.
+> But as a convention, we suggest that all global variables are prefixed by a single underline,
+> so that they are easily distinguishable from variables used in function parameters.
+
+In addition to a globally accessible _URLRouter_ object, we need a second global variable to
+keep the found target from the routing table. We name it `_target` and give it an initial
+value of emptry string.
+
+``` js
+  pipy({
+    _router: new algo.URLRouter({
+      '/hi/*': 'localhost:8080',
+      '/echo': 'localhost:8081',
+      '/ip/*': 'localhost:8082',
+    }),
+
++   _target: '',
+  })
+```
+
+# Routing
+
+Now we have all the variables we need, next thing we do is call
+[_URLRouter.find()_](/reference/classes/algo/URLRouter/find) to work out the value of
+`_target` based on what's in the request. We can do this in a _handleMessageStart_ filter
+between _demuxHTTP_ and _muxHTTP_. Because _demuxHTTP_ and _muxHTTP_ are not in the same
+pipeline, so we insert a new sub-pipeline in-between connecting them two. The new sub-pipeline
+is named "_request_".
+
+``` js
+  .listen(8000)
+-   .demuxHTTP('forward')
++   .demuxHTTP('request')
+
++ .pipeline('request')
++   .handleMessageStart(
++     msg => (
++       _target = _router.find(
++         msg.head.headers.host,
++         msg.head.path,
++       )
++     )
++   )
++   .link('forward')
+
+  .pipeline('forward')
+    .muxHTTP('connection')
+```
+
+Note how we use a _link_ filter at the end of pipeline "_request_" to link to
+pipeline "_forward_", which we'll talk more about later.
+
+> The inserted pipeline "_request_" doesn't have to be located between the _port pipeline_
+> and pipeline "_forward_" in source code. It can be appended to the end of script and work just fine.
+> Pipelines link to each other by refering the target pipeline's name from a
+> [_joint filter_](#joint-filters) in the source pipeline. The order of definitions is irrelevant.
+
+## Filter: connect
+
+Now we have worked out variable `_target`, but we are still connecting to a fixed
+target "_localhost:8080_". We should change that to `_target`, right?
+
+``` js
+  .pipeline('connection')
+-   .connect('localhost:8080')
++   .connect(_target) // WRONG!!!
+```
+
+If you run this code however, you will get an error:
+
+```
+[error] [pjs] Line 35:  .connect(_target)
+[error] [pjs]                    ^
+[error] [pjs] Error: unresolved identifier
+[error] [pjs] Backtrace:
+[error]     In (root) at line 35 column 12
+```
+
+This is because, a custom global variable is always attached to some pipeline.
+Therefore, they are only alive when there is a live pipeline
+(See [Context](/concepts#context) in _Concepts_ for more about _global variables_).
+If there's no incoming connections, then no pipelines, so those variables do not exist yet.
+
+How do we get around this? The same way as in [Part 2](/tutorial/02-echo/) where
+we made a filter parameter dynamic: just turn it into a **function** that returns
+a dynamic value at runtime.
+
+``` js
+  .pipeline('connection')
+-   .connect(_target) // WRONG!!!
++   .connect(
++     () => _target
++   )
+```
+
+Now function `() => _target` will be evaluated only when a "_connection_" pipeline is
+alive and has inputs. At that point, `_target` must exist so you can use it safely.
+
+# Dynamic pipeline selection
+
+But wait, what if a target cannot be found? In that case, `_target` would be `undefined`,
+so we won't be able to pass on the message. It would be great if we can direct that
+request to a different pipeline other than "_forward_" and respond in that pipeline
+with a "_404 Not Found_". That's exactly what _link_ filter was designed to do:
+**link to a pipeline that is selected out of a few**.
+
+## Filter: link
+
+At definition, [_link()_](/reference/classes/Configuration/link) accepts one or more
+pairs of parameters. In each pair, the name of a target pipeline comes first, followed
+by a callback function that decides if this sub-pipeline should be chosen. The last
+pair can have its callback function omitted, in case that it is the last default choice.
+
+That gives _link_ a few different possible usages:
+
+``` js
+// unconditionally link to 'target1'
+.link('target1')
+
+// link to 'target1' when _found is truthy
+.link('target1', () => _found)
+
+// link to 'target1' when _found is truthy, otherwise 'target2'
+.link('target1', () => _found, 'target2')
+
+// link to 'target1' when _found is 1, 'target2' when _found is 2, otherwise 'target3'
+.link('target1', () => _found === 1,
+      'target2', () => _found === 2,
+      'target3')
+```
+
+With that, we put in another sub-pipeline named "_404_". We hook it up with the
+_link_ filter first, and define it later.
+
+``` js
+  .pipeline('request')
+    .handleMessageStart(
+      msg => (
+        _target = _router.find(
+          msg.head.headers.host,
+          msg.head.path,
+        )
+      )
+    )
+-   .link('forward')
++   .link(
++     'forward', () => Boolean(_target),
++     '404'
++   )
+```
+
+> The condition callback function for "_forward_" could be as simple as
+> just `() => _target` because _link_ takes a truthy return value as "_yes_"
+> and falsy as "_no_". But we still explicitly coerce `_target` here into
+> a boolean value just for clarity.
+
+## Filter: replaceMessage
+
+The last piece to the puzzle is the "_infamous 404 page_". We will handle
+that in a new sub-pipeline named "_404_" as said before.
+
+Can we do it the same way as in [Part 1](/tutorial/01-hello/) with a
+_serveHTTP_? The answer is no, unfortunately. _serveHTTP_ expects its
+input to be a raw byte stream so it can do its job: "_deframing_"
+HTTP messages out of it. This job has already been done in the
+_demuxHTTP_ filter sitting in our port pipeline. You can't deframe
+a byte stream twice.
+
+Since the stream fed to our new "_404_" pipeline has already been
+transformed from a "_byte stream_" to a "_message stream_", we could
+simply "_replace_" whatever message comes in with a fixed "_404_" response
+message.
+
+``` js
+  .pipeline('forward')
+    .muxHTTP('connection')
+
+  .pipeline('connection')
+    .connect(
+      () => _target
+    )
+
++ .pipeline('404')
++   .replaceMessage(
++     new Message({ status: 404 }, 'No route')
++   )
+```
+
+Note that after a request is replaced with a "_404_" response message, it
+reaches to the end of pipeline "_404_". You might wonder where it goes next.
+How does it eventually reach the client?
+
+## Joint filters
+
+Pipy pipelines are one-way. Data stream into its first filter, out
+of its last filter. For a _port pipeline_, requests from a client are its
+input while its output are the responses back to the client.
+
+When it "_links_" to a sub-pipeilne, it doesn't mean to concatenate the
+port pipeline with a sub-pipeline one after another, but rather "_insert_"
+that sub-pipeline inside the port pipeline. The insertion is done with one
+of many **joint filters**, such as _link_, _demuxHTTP_ and _muxHTTP_ that
+we've seen before.
+
+That being said, when a request goes down the "_404_" route, its entire
+traveling path would be like this:
+
+```
+     requests
+       ┌────────────────┐         ┌─────────────┐
+       │                │         │             │
+       │         ┌──────▼──────┐  │  ┌──────────▼───────────┐
+       │         │  Port 8000  │  │  │  Pipeline "request"  │
+       │         │             │  │  │                      │
+       │         │             │  │  │ ┌──────────────────┐ │
+  ┌────┴───┐     │ ┌─────────┐ │  │  │ │handleMessageStart│ │  ┌───────────┐
+  │        │     │ │         ├─┼──┘  │ └────────┬─────────┘ │  │           │
+  │ Client │     │ │demuxHTTP│ │     │          │           │  │  ┌────────▼─────────┐
+  │        │     │ │         ◄─┼──┐  │          │           │  │  │  Pipeline "404"  │
+  └────▲───┘     │ └─────────┘ │  │  │ ┌────────▼─────────┐ │  │  │                  │
+       │         │             │  │  │ │                  ├─┼──┘  │ ┌──────────────┐ │
+       │         │             │  │  │ │       link       │ │     │ │replaceMessage│ │
+       │         │             │  │  │ │                  ◄─┼──┐  │ └──────────────┘ │
+       │         │             │  │  │ └──────────────────┘ │  │  │                  │
+       │         │             │  │  │                      │  │  └────────┬─────────┘
+       │         └──────┬──────┘  │  └──────────┬───────────┘  │           │
+       │                │         │             │              └───────────┘
+       └────────────────┘         └─────────────┘
+     responses
+```
+
+A better way to picture this "_pipeline insertion_" would be think of a sub-pipeline
+wedged into a _joint filter_'s place, replacing that filter completely.
+
+For more about pipeilnes and filters, see [Filter and pipeline](/concepts/#filter-and-pipeline)
+in _Concepts_.
+
+# Test in action
+
+Now run this program and do some tests.
+
+``` sh
+$ curl localhost:8000/hi
+Hi, there!
+$ curl localhost:8000/ip
+You are requesting /ip from ::ffff:127.0.0.1
+$ curl localhost:8000/echo -d 'hello'
+hello
+```
+
+Works like a charm!
+
+# Summary
+
+In this part of tutorial, you've learned how to implement a simple routing proxy.
+You've also learned about defining and using custom global variables, as well as
+some more filters: _link_, _handleMessageStart_ and _replaceMessage_.
+
+## Takeaways
+
+1. Use [_algo.URLRouter_](/reference/classes/algo/URLRouter) to map a URL-like string
+   to a value of any type according to a routing table, based on which a simple routing
+   proxy can be implemented.
+
+2. By using a _link_ filter, a sub-pipeline can be selectively "_inserted_" into the
+   pipeline that _link_ resides in. It has an analogy to _if_ or _switch_ statements
+   in programming languages, where a control flow can have conditional branches.
+
+3. Use _replaceMessage_ to turn an input request message into an output response message,
+   if the sub-pipeline is behind a _demuxHTTP_ filter. Combining _demuxHTTP_ and
+   _replaceMessage_ would be an equivalent to _serveHTTP_ in some ways.
+
+## What's next?
+
+Starting from this point of our tutorial, the code logic of our proxy is getting
+more and more lenthy and complicated. Adding more features on top of that within
+only one script file would be a bad idea. We need some sort of "_modularity_" in
+place so that we can go further. So next, we'll look into building a "_plugin system_".

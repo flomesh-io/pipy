@@ -22,6 +22,7 @@ import ExpandLessIcon from '@material-ui/icons/ExpandLess';
 import ExpandMoreIcon from '@material-ui/icons/ExpandMore';
 import ExternalLinkIcon from '@material-ui/icons/OpenInNewSharp';
 import LangIcon from '@material-ui/icons/PublicSharp';
+import TipIcon from '@material-ui/icons/EmojiObjectsSharp';
 
 import PipyLogo from '../images/pipy.svg';
 import HighlightTheme from 'prism-react-renderer/themes/vsDark';
@@ -155,6 +156,7 @@ const useStyles = makeStyles(theme => ({
 
   main: {
     flexGrow: 1,
+    paddingBottom: theme.spacing(5),
   },
 
   title: {
@@ -168,6 +170,32 @@ const useStyles = makeStyles(theme => ({
   h4: { fontFamily: FONT_TITLE, fontSize: '1.1rem', fontWeight: 'lighter' },
 
   p: {
+    fontFamily: FONT_TEXT,
+    fontSize: '1.0rem',
+    lineHeight: '1.8rem',
+  },
+
+  tip: {
+    display: 'flex',
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    padding: theme.spacing(2),
+    margin: 0,
+    backgroundColor: '#3e3e3e',
+    borderLeftStyle: 'solid',
+    borderLeftWidth: '3px',
+    borderLeftColor: '#fff',
+  },
+
+  tipIcon: {
+    flexGrow: 0,
+    color: theme.palette.primary.main,
+    paddingTop: theme.spacing(2),
+    paddingRight: theme.spacing(2),
+  },
+
+  tipText: {
+    flexGrow: 1,
     fontFamily: FONT_TEXT,
     fontSize: '1.0rem',
     lineHeight: '1.8rem',
@@ -342,7 +370,13 @@ const DocContext = React.createContext();
 const DocLink = ({ children, href }) => {
   const classes = useStyles();
   const { lang } = React.useContext(DocContext);
-  if (href.startsWith('/')) {
+  if (href.startsWith('#')) {
+    return (
+      <Link to={href} className={classes.link}>
+        {children}
+      </Link>
+    );
+  } else if (href.startsWith('/')) {
     return (
       <Link to={`/docs/${lang}${href}`} className={classes.link}>
         {children}
@@ -358,6 +392,16 @@ const DocLink = ({ children, href }) => {
   }
 }
 
+const Tip = ({ children }) => {
+  const classes = useStyles();
+  return (
+    <blockquote className={classes.tip}>
+      <div className={classes.tipIcon}><TipIcon fontSize="large"/></div>
+      <div className={classes.tipText}>{children}</div>
+    </blockquote>
+  )
+}
+
 const SourceCode = ({ children, className }) => {
   const classes = useStyles();
   const language = className === 'language-js' ? 'javascript' : undefined;
@@ -367,17 +411,17 @@ const SourceCode = ({ children, className }) => {
         <pre className={classes.codeBox} style={{ ...style }}>
           {tokens.map((line, i) => {
             const props = getLineProps({ line, key: i });
-            if (line[0]?.content === '') {
-              switch (line[1]?.content) {
-                case '+':
-                  props.className = classes.codeAdded;
-                  line[1].content = ' ';
-                  break;
-                case '-':
-                  props.className = classes.codeDeleted;
-                  line[1].content = ' ';
-                  break;
-              }
+            let head = line[0];
+            if (head?.content === '') head = line[1];
+            switch (head?.content) {
+              case '+':
+                props.className = classes.codeAdded;
+                line.content = ' ';
+                break;
+              case '-':
+                props.className = classes.codeDeleted;
+                line.content = ' ';
+                break;
             }
             return (
               <div key={i} {...props}>
@@ -454,6 +498,7 @@ const components = {
   li: makeStyledTag('li', 'p'),
   p: makeStyledTag('p'),
   a: DocLink,
+  blockquote: Tip,
   code: SourceCode,
   inlineCode: makeStyledTag('span', 'inlineCode'),
 
@@ -575,6 +620,8 @@ const DocPage = ({ data }) => {
     }
   }
 
+  const slugger = new Slugger;
+
   return (
     <DocContext.Provider value={{ jsdoc: data.documentationJs, lang, path }}>
       <div className={classes.root}>
@@ -634,7 +681,7 @@ const DocPage = ({ data }) => {
                 ({ value, depth }) => (
                   <Link
                     key={value}
-                    to={'#' + Slugger.slug(value)}
+                    to={'#' + slugger.slug(value)}
                     className={classes.tocListItem}
                   >
                     <Typography component="li" style={{ marginInlineStart: depth * 10 }}>

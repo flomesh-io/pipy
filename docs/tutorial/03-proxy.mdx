@@ -2,6 +2,8 @@
 title: "Part 3: Proxy"
 ---
 
+import FlagIcon from '@material-ui/icons/FlagSharp'
+
 We have used Pipy as a server for handling requests. Now we will be using it
 the way it is mostly used for: a network proxy.
 
@@ -10,12 +12,12 @@ the way it is mostly used for: a network proxy.
 Click the Pipy icon at top-left to go back to the Web UI homepage. Create
 a new codebase named `/proxy` in the same way you've done in
 [Part 1](/tutorial/01-hello#create-a-pipy-program).
-Add a new file `/proxy.js` in the codebase and make it the entrance.
 
-Don't bother with the `/hello` program we've already made. Just leave it there.
-We will be using it as our upstream server for testing a while later.
+> Don't bother with the `/hello` program we've already made. Just leave it there.
+> We will be using it as our upstream server for testing a while later.
 
-The script for `/proxy.js` will be like:
+Add a new file `/proxy.js` to the new codebase and make it the entrance
+with <FlagIcon/> button. The script for `/proxy.js` will be like:
 
 ``` js
 pipy()
@@ -60,7 +62,7 @@ protocol works (like HTTP) compared to a level 4 protocol (like TCP).
 Simply put it, on level 4 you see "_streams_" while on level 7 you see discrete
 "_messages_" combined into streams.
 
-## demuxHTTP
+## Filter: demuxHTTP
 
 A _port pipeline_ swallows incoming data as a sequence of
 [_Data_](/reference/classes/Data) events, each holding a small chunk of
@@ -82,7 +84,7 @@ That means one port pipeline handling one incoming connection will be forked
 at **demuxHTTP** into many sub-pipelines so that each message can be handled
 separately.
 
-## muxHTTP
+## Filter: muxHTTP
 
 In the proxy sample we are trying to do here, we need to pass all messages to
 an upstream server. Before an HTTP message can be sent over network, it has
@@ -92,8 +94,8 @@ to many outgoing connections.
 
 That is where **muxHTTP** comes in handy. It combines all input messages into
 one TCP stream and pumps it into the same pipeline. And that final pipeline
-will establish a TCP connection to the upstream server in its **connect** filter
-and transfer data back and forth.
+will establish a single TCP connection to the upstream server in its **connect**
+filter and transfer data back and forth.
 
 ## Pipeline topology
 
@@ -159,8 +161,8 @@ our proxy program. Now we need to start a second one for the test server.
 pipy http://localhost:6060/repo/hello/
 ```
 
-Now a new Pipy instance should be up and running. Curl it as eariler and
-see if you'd get the correct answer.
+Now a new Pipy instance should be up and running. Retry the test we did earlier
+and see if you'd get the correct answer.
 
 ```
 HTTP/1.1 200 OK
