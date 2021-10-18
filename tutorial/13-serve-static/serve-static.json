@@ -1,7 +1,0 @@
-{
-  "services": {
-    "service-1": {
-      "root": "www"
-    }
-  }
-}

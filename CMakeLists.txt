@@ -125,7 +125,7 @@ if(PIPY_GUI)
     COMMAND node
     ARGS pack-gui.js ${CMAKE_BINARY_DIR}/deps/gui.tar.h
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/gui
-    DEPENDS gui/pack-gui.js ${CMAKE_SOURCE_DIR}/gui/public/index.html
+    DEPENDS gui/pack-gui.js ${CMAKE_SOURCE_DIR}/public/index.html
   )
 
   add_custom_target(PackGui DEPENDS ${CMAKE_BINARY_DIR}/deps/gui.tar.h)

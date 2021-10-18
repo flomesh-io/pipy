@@ -1,8 +1,0 @@
-{
-  "listen": 8000,
-  "plugins": [
-    "router.js",
-    "throttle.js",
-    "balancer.js"
-  ]
-}

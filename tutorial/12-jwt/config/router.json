@@ -1,0 +1,7 @@
+{
+  "routes": {
+    "/hi/*": { "service": "service-hi" },
+    "/echo": { "service": "service-echo" },
+    "/ip/*": { "service": "service-tell-ip", "rewrite": ["^/ip/?", "/"] }
+  }
+}

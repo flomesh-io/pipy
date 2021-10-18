@@ -1,0 +1,9 @@
+{
+  "listen": 8000,
+  "plugins": [
+    "plugins/router.js",
+    "plugins/transform.js",
+    "plugins/balancer.js",
+    "plugins/default.js"
+  ]
+}

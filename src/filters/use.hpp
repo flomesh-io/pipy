@@ -42,8 +42,25 @@ class Session;
 class Use : public Filter {
 public:
   Use();
-  Use(Module *module, pjs::Str *pipeline_name, pjs::Function *when = nullptr);
-  Use(const std::list<Module*> &modules, pjs::Str *pipeline_name, pjs::Function *when = nullptr);
+
+  Use(
+    Module *module,
+    pjs::Str *pipeline_name,
+    pjs::Function *when = nullptr
+  );
+
+  Use(
+    const std::list<Module*> &modules,
+    pjs::Str *pipeline_name,
+    pjs::Function *when = nullptr
+  );
+
+  Use(
+    const std::list<Module*> &modules,
+    pjs::Str *pipeline_name,
+    pjs::Str *pipeline_name_down,
+    pjs::Function *when = nullptr
+  );
 
 private:
   Use(const Use &r);
@@ -59,20 +76,31 @@ private:
   class Stage {
   public:
     Stage(const Stage &r)
-      : m_pipeline(r.m_pipeline) {}
+      : m_pipeline(r.m_pipeline)
+      , m_pipeline_down(r.m_pipeline_down) {}
 
-    Stage(Pipeline *pipeline)
-      : m_pipeline(pipeline) {}
+    Stage(Pipeline *pipeline, Pipeline *pipeline_down)
+      : m_pipeline(pipeline)
+      , m_pipeline_down(pipeline_down) {}
 
-    void reset() { m_session = nullptr; m_bypass = false; }
+    void reset() {
+      m_session = nullptr;
+      m_session_down = nullptr;
+      m_turned_down = false;
+    }
+
     void use(Context *context, Event *inp);
+    void use_down(Context *context, Event *inp);
 
   private:
     Use* m_use;
+    Stage* m_prev;
     Stage* m_next;
     Pipeline* m_pipeline;
+    Pipeline* m_pipeline_down;
     pjs::Ref<Session> m_session;
-    bool m_bypass = false;
+    pjs::Ref<Session> m_session_down;
+    bool m_turned_down = false;
 
     friend class Use;
   };
@@ -80,6 +108,7 @@ private:
   std::list<Module*> m_modules;
   std::list<Stage> m_stages;
   pjs::Ref<pjs::Str> m_pipeline_name;
+  pjs::Ref<pjs::Str> m_pipeline_name_down;
   pjs::Ref<pjs::Function> m_when;
   bool m_multiple = false;
   bool m_session_end = false;

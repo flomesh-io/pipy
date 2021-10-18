@@ -7,6 +7,7 @@ import { useQuery } from 'react-query';
 // Material-UI components
 import Box from '@material-ui/core/Box';
 import Button from '@material-ui/core/Button';
+import Grid from '@material-ui/core/Grid';
 import OutlinedInput from '@material-ui/core/OutlinedInput';
 import TreeView from '@material-ui/lab/TreeView';
 import TreeItem from '@material-ui/lab/TreeItem';
@@ -22,6 +23,7 @@ import AddCircleIcon from '@material-ui/icons/AddCircle';
 import ArrowRightIcon from '@material-ui/icons/AddBox';
 import ArrowDownIcon from '@material-ui/icons/IndeterminateCheckBox';
 import CodebaseIcon from '@material-ui/icons/ListAlt';
+import HelpIcon from '@material-ui/icons/HelpSharp';
 import SearchIcon from '@material-ui/icons/SearchSharp';
 
 // Logo
@@ -121,13 +123,26 @@ function Index() {
     <div className={classes.root}>
       <img src={PipyLogo} alt='PipyLogo' className={classes.logo}/>
       <Box pb={2}>
-        <Button
-          variant="text"
-          startIcon={<AddCircleIcon/>}
-          onClick={() => setOpenDialogNewCodebase(true)}
-        >
-          New Codebase
-        </Button>
+        <Grid container spacing={3}>
+          <Grid item>
+            <Button
+              variant="text"
+              startIcon={<AddCircleIcon/>}
+              onClick={() => setOpenDialogNewCodebase(true)}
+            >
+              New Codebase
+            </Button>
+          </Grid>
+          <Grid item>
+            <Button
+              variant="text"
+              startIcon={<HelpIcon/>}
+              onClick={() => navigate('/docs')}
+            >
+              Documentation
+            </Button>
+          </Grid>
+        </Grid>
       </Box>
       <DialogNewCodebase
         open={openDialogNewCodebase}

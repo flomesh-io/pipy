@@ -106,6 +106,7 @@ public:
   void tap(const pjs::Value &quota, const pjs::Value &account);
   void use(Module *module, pjs::Str *pipeline, pjs::Function *when);
   void use(const std::list<Module*> modules, pjs::Str *pipeline, pjs::Function *when);
+  void use(const std::list<Module*> modules, pjs::Str *pipeline, pjs::Str *pipeline_down, pjs::Function *when);
   void wait(pjs::Function *condition);
 
   void bind_pipelines();

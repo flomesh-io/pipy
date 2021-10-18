@@ -322,6 +322,10 @@ void Configuration::use(const std::list<Module*> modules, pjs::Str *pipeline, pj
   append_filter(new Use(modules, pipeline, when));
 }
 
+void Configuration::use(const std::list<Module*> modules, pjs::Str *pipeline, pjs::Str *pipeline_down, pjs::Function *when) {
+  append_filter(new Use(modules, pipeline, pipeline_down, when));
+}
+
 void Configuration::wait(pjs::Function *condition) {
   append_filter(new Wait(condition));
 }
@@ -1197,10 +1201,14 @@ template<> void ClassDef<Configuration>::init() {
     std::string module;
     pjs::Array *modules;
     Str *pipeline;
+    Str *pipeline_down = nullptr;
     Function *when = nullptr;
     auto root = static_cast<pipy::Context*>(ctx.root());
     auto worker = root->worker();
-    if (ctx.try_arguments(2, &modules, &pipeline, &when)) {
+    if (
+      ctx.try_arguments(3, &modules, &pipeline, &pipeline_down, &when) ||
+      ctx.try_arguments(2, &modules, &pipeline, &when)
+    ) {
       std::list<Module*> mods;
       modules->iterate_while(
         [&](pjs::Value &v, int) {
@@ -1220,7 +1228,7 @@ template<> void ClassDef<Configuration>::init() {
       );
       if (mods.size() == modules->length()) {
         try {
-          thiz->as<Configuration>()->use(mods, pipeline, when);
+          thiz->as<Configuration>()->use(mods, pipeline, pipeline_down, when);
           result.set(thiz);
         } catch (std::runtime_error &err) {
           ctx.error(err);

@@ -1,0 +1,7 @@
+{
+  "services": {
+    "service-tell-ip": {
+      "root": "www"
+    }
+  }
+}

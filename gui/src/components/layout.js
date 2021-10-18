@@ -12,6 +12,11 @@ const theme = createTheme({
     primary: {
       main: '#ff0',
     },
+    text: {
+      link: '#88f',
+      code: '#fff',
+      codeBox: '#110',
+    },
   },
   overrides: {
     MuiButton: {
