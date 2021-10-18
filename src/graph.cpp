@@ -420,15 +420,19 @@ auto Graph::build_tree(const Pipeline &pipeline, std::string &error) -> Node* {
             new Node(link_node, Node::PIPELINE, msg);
             continue;
           }
-          auto i = m_named_pipelines.find(l);
-          if (i == m_named_pipelines.end()) {
-            auto msg = std::string("pipeline not found: ") + l;
-            if (error.empty()) error = msg;
-            new Node(link_node, Node::PIPELINE, msg);
-            continue;
+          if (l.empty()) {
+            new Node(link_node, Node::PIPELINE, "[empty]");
+          } else {
+            auto i = m_named_pipelines.find(l);
+            if (i == m_named_pipelines.end()) {
+              auto msg = std::string("pipeline not found: ") + l;
+              if (error.empty()) error = msg;
+              new Node(link_node, Node::PIPELINE, msg);
+              continue;
+            }
+            auto node = new Node(link_node, Node::PIPELINE, l);
+            build(i->second, node);
           }
-          auto node = new Node(link_node, Node::PIPELINE, l);
-          build(i->second, node);
         }
       }
     }

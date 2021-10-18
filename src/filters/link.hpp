@@ -67,6 +67,7 @@ private:
   std::shared_ptr<std::list<Route>> m_routes;
   pjs::Ref<Session> m_session;
   EventBuffer m_buffer;
+  bool m_chosen = false;
   bool m_session_end = false;
 };
 

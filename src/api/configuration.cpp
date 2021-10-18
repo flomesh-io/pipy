@@ -854,11 +854,14 @@ template<> void ClassDef<Configuration>::init() {
     for (int i = 0; i < n; i++) {
       int a = (i << 1);
       int b = (i << 1) + 1;
-      if (!ctx.arg(a).is_string()) {
+      if (ctx.arg(a).is_null()) {
+        targets[i] = nullptr;
+      } else if (ctx.arg(a).is_string()) {
+        targets[i] = ctx.arg(a).s();
+      } else {
         ctx.error_argument_type(a, "a string");
         return;
       }
-      targets[i] = ctx.arg(a).s();
       if (b >= ctx.argc()) {
         conditions[i] = nullptr;
       } else if (!ctx.arg(b).is_function()) {

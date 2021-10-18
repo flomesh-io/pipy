@@ -69,7 +69,11 @@ void Link::dump(std::ostream &out) {
 
 auto Link::draw(std::list<std::string> &links, bool &fork) -> std::string {
   for (const auto &r : *m_routes) {
-    links.push_back(r.name->str());
+    if (r.name) {
+      links.push_back(r.name->str());
+    } else {
+      links.push_back("");
+    }
   }
   fork = false;
   return "link";
@@ -78,7 +82,7 @@ auto Link::draw(std::list<std::string> &links, bool &fork) -> std::string {
 void Link::bind() {
   auto mod = pipeline()->module();
   for (auto &r : *m_routes) {
-    if (!r.pipeline) {
+    if (!r.pipeline && r.name) {
       r.pipeline = pipeline(r.name);
     }
   }
@@ -91,35 +95,39 @@ auto Link::clone() -> Filter* {
 void Link::reset() {
   m_session = nullptr;
   m_buffer.clear();
+  m_chosen = false;
   m_session_end = false;
 }
 
 void Link::process(Context *ctx, Event *inp) {
   if (m_session_end) return;
 
-  if (!m_session) {
+  if (!m_chosen) {
     for (const auto &r : *m_routes) {
-      bool chosen = true;
       if (r.condition) {
         pjs::Value ret;
         if (!callback(*ctx, r.condition, 0, nullptr, ret)) return;
-        chosen = ret.to_boolean();
+        m_chosen = ret.to_boolean();
       }
-      if (chosen) {
-        auto root = static_cast<Context*>(ctx->root());
-        auto session = Session::make(root, r.pipeline);
-        session->on_output(out());
-        m_session = session;
-        m_buffer.flush([=](Event *inp) { session->input(inp); });
+      if (m_chosen) {
+        if (r.pipeline) {
+          auto root = static_cast<Context*>(ctx->root());
+          auto session = Session::make(root, r.pipeline);
+          session->on_output(out());
+          m_session = session;
+          m_buffer.flush([=](Event *inp) { session->input(inp); });
+        }
         break;
       }
     }
   }
 
-  if (m_session) {
+  if (!m_chosen) {
+    m_buffer.push(inp);
+  } if (m_session) {
     m_session->input(inp);
   } else {
-    m_buffer.push(inp);
+    output(inp);
   }
 
   if (inp->is<SessionEnd>()) m_session_end = true;
