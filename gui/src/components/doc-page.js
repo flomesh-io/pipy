@@ -416,11 +416,11 @@ const SourceCode = ({ children, className }) => {
             switch (head?.content) {
               case '+':
                 props.className = classes.codeAdded;
-                line.content = ' ';
+                head.content = ' ';
                 break;
               case '-':
                 props.className = classes.codeDeleted;
-                line.content = ' ';
+                head.content = ' ';
                 break;
             }
             return (

@@ -1,0 +1,278 @@
+---
+title: "Part 5: Plugins"
+---
+
+import PlusIcon from '@material-ui/icons/AddSharp'
+
+Now that we have a working proxy with basic routing and 404 responses.
+However, we find ourself throwing more and more pipelines into the source file
+and it's growing rapidly as we add more features to it. So before we
+move on to the next proxy feature, we better do some refactoring to the
+code stucture so every newly added feature in the future can be in its own file,
+only optionally hooked up into the system, aka "_plugins_".
+
+# Router plugin
+
+The main feature of our proxy right now is _routing_. Code for routing makes
+up most of the content in `/proxy.js`. So we can base on that to form the
+code for our first plugin "_router_".
+
+1. Click <PlusIcon/> button and input `/plugins/router.js` for the new file's name.
+   Click **Create**.
+
+> No need to create a folder before adding a new file. Just put in the
+> full pathname including folder names and they will be created automatically.
+
+2. Copy the entire content from `/proxy.js` to `/plugins/router.js`.
+
+Inside `/plugins/router.js`, the routing logic only kicks in at pipeline "_request_",
+right after _demuxHTTP()_. So we can remove _demuxHTTP()_ with its whole pipeline out of here,
+leaving it to the _main script_ `/proxy.js` and linking from there to
+"_request_" pipeline here in a while.
+
+``` js
+- .listen(8000)
+-   .demuxHTTP('request')
+
+  .pipeline('request')
+    .handleMessageStart(
+      msg => (
+        _target = _router.find(
+          msg.head.headers.host,
+          msg.head.path,
+        )
+      )
+    )
+    .link(
+      'forward', () => Boolean(_target),
+      '404'
+    )
+```
+
+The "404" logic can also be in a stand-alone plugin, where it acts as the
+"_default_" handler when a request has no other handlers in all other plugins.
+So we just delete this "404" pipeline right now and redo it in a separate plugin later.
+
+``` js
+  .pipeline('connection')
+    .connect(
+      () => _target
+    )
+
+- .pipeline('404')
+-   .replaceMessage(
+-     new Message({ status: 404 }, 'No route')
+-   )
+```
+
+Since we have no pipeline "_404_" here any more, we should change the
+reference to it in _link()_ accordingly.
+
+``` js
+    .link(
+      'forward', () => Boolean(_target),
+-     '404'
++      null
+    )
+```
+
+Changing a pipeline name in _link()_ to `null` means linking to nothing.
+In this case, everything coming along to _link()_ will just go down without
+any changes (only when `_target` is falsy), as if _link()_ wasn't there.
+
+# Default plugin
+
+Now let's create the "_default_" plugin mentioned above.
+
+Create a file named `/plugins/default.js` and write down its code:
+
+``` js
+pipy()
+
+.pipeline('request')
+  .replaceMessage(
+    new Message({ status: 404 }, 'No handler')
+  )
+```
+
+As you can see, this one is easy. It has only one sub-pipeline, also named "_request_".
+It does exactly the same thing as our good old "_404_" pipeline, only changing
+the message from "_No route_" to "_No handler_".
+
+# Chain of plugins
+
+Now we go back to the main script `/proxy.js`. Since we've moved almost all code
+to the plugins, we're left with only _demuxHTTP()_ and an empty "_request_" pipeline.
+
+``` js
+pipy()
+
+.listen(8000)
+  .demuxHTTP('request')
+
+.pipeline('request')
+```
+
+In this empty "_request_" pipeline, we chain the other two "_request_" pipelines together
+from the plugins. We do this with [_use()_](/reference/classes/Configuration/use),
+giving it the filenames where the pipelines reside, as well as the name under which
+pipelines can be found.
+
+``` js
+  .pipeline('request')
++   .use(
++     [
++       'plugins/router.js',
++       'plugins/default.js',
++     ],
++     'request',
++     'response',
++   )
+```
+
+You may notice that besides "_request_", we provided a second pipeline name "_response_".
+This is the name of pipelines we'll run streams through after all "_request_" pipelines,
+but in reversed order in the plugin list.
+
+Here's what the "_plugin chain_" made by _use()_ looks like:
+
+```
+               ┌──────────────┐     ┌──────────────┐
+      │        │  router.js   │     │  default.js  │
+      │        │              │     │              │
+      │        │ ┌──────────┐ │     │ ┌──────────┐ │
+  ┌───▼───┐    │ │          │ │     │ │          │ │
+  │       ├────┼─► request  ├─┼─────┼─► request  │ │
+  │       │    │ │          │ │     │ │          │ │
+  │       │    │ └──────────┘ │     │ └────┬─────┘ │
+  │ use() │    │              │     │      │       │
+  │       │    │              │     │      │       │
+  │       │    │ ┌──────────┐ │     │ ┌────▼─────┐ │
+  │       │    │ │          │ │     │ │          │ │
+  │       ◄────┼─┤ response ◄─┼─────┼─┤ response │ │
+  └───┬───┘    │ │          │ │     │ │          │ │
+      │        │ └──────────┘ │     │ └──────────┘ │
+      │        │              │     │              │
+      ▼        └──────────────┘     └──────────────┘
+```
+
+We haven't defined "_response_" pipelines in the plugins yet. No worries.
+If a pipeline name is not found in a plugin, the chain will simply skip over it.
+
+# Turn down a request
+
+Now we have our plugins chained together. There's a problem though.
+Every incoming request goes through the same `router.js` and `default.js`,
+even when it's already been proxied out to the upstream server in `router.js`
+and come back as a response. After `default.js`, they are all
+"_replaced_" by a "_404 No handler_".
+
+We solve this problem by using a custom global variable that indicates
+whether a request is handled or not. When a request has been proxied in `router.js`,
+the variable is set to `true`, telling _use()_ to stop going further up the chain
+but go down it. We name the variable `__turnDown`.
+
+We give the variable to _use()_ in its last construction parameter.
+Remember that this is a dynamic value, we should wrap it in a function.
+
+``` js
+  .pipeline('request')
+    .use(
+      [
+        'plugins/router.js',
+        'plugins/default.js',
+      ],
+      'request',
+      'response',
++     () => __turnDown,
+    )
+```
+
+## Export and import
+
+Next, we define the global variable. We can't define it the way we used to though,
+because that way it'll only be visible in `proxy.js` but not in `router.js`.
+
+We define it with [_export()_](/reference/classes/Configuration/export) in `proxy.js`
+so that it can be "_imported_" from other files. It has an initial value of `false`.
+
+``` js
+  pipy()
+
++ .export('proxy', {
++   __turnDown: false,
++ })
+```
+
+The first construction parameter to _export()_ is the _namespace_ where
+other files import from. It can be any arbitrary name.
+Here we use "_proxy_" because it's meaningful.
+
+Next, we import this variable from `router.js` and set it to `true`
+when a route is found.
+
+``` js
++ .import({
++   __turnDown: 'proxy',
++ })
+
+  .pipeline('request')
+    .handleMessageStart(
+      msg => (
+        _target = _router.find(
+          msg.head.headers.host,
+          msg.head.path,
+-       )
++       ),
++       _target && (__turnDown = true)
+      )
+    )
+    .link(
+      'forward', () => Boolean(_target),
+      null
+    )
+```
+
+Mind that the namespace should match what's in `proxy.js`
+where `__turnDown` is exported, which is "_proxy_".
+
+# Test in action
+
+We haven't added any new features this time.
+It should work just like last time.
+
+``` sh
+$ curl localhost:8000/hi
+Hi, there!
+$ curl localhost:8000/ip
+You are requesting /ip from ::ffff:127.0.0.1
+$ curl localhost:8000/echo -d 'hello'
+hello
+$ curl localhost:8000/bad/path
+No handler
+```
+
+# Summary
+
+In this part of tutorial, you've learned how different features
+can be isolated in different plugins. This has made a solid foundation
+for the further expansion of our proxy's feature set.
+
+## Takeaways
+
+1. Use [_use()_](/reference/classes/Configuration/use) to link to pipelines
+   defined in other files and form a _plugin chain_. It is the key to
+   an extendable plugin architecture.
+
+2. Global variables defined with [_pipy()_](/reference/functions/pipy)
+   are visible only within its definition file. To shared global variables
+   across different files, use [_export()_](/reference/classes/Configuration/export)
+   and [_import()_](/reference/classes/Configuration/import).
+
+## What's next?
+
+We now have a fully functioning routing proxy with a sleek plugin system,
+but it's still not good enought. We have lots of parameters all over the code,
+such as the port we listen on and the routing table. It would be more nice and tidy to
+have all these parameters in a separate "_configuration_" file.
+That's what we are going to do next.

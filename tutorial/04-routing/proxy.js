@@ -26,10 +26,7 @@ pipy({
   )
 
 .pipeline('forward')
-  .muxHTTP(
-    'connection',
-    () => _target
-  )
+  .muxHTTP('connection')
 
 .pipeline('connection')
   .connect(

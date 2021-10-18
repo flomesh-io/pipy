@@ -21,20 +21,15 @@ pipy({
   )
   .link(
     'forward', () => Boolean(_target),
-    'bypass'
+    null
   )
 
 .pipeline('forward')
-  .muxHTTP(
-    'connection',
-    () => _target
-  )
+  .muxHTTP('connection')
 
 .pipeline('connection')
   .connect(
     () => _target
   )
-
-.pipeline('bypass')
 
 )(JSON.decode(pipy.load('config/router.json')))
