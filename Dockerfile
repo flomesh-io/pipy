@@ -31,7 +31,10 @@ RUN rm -fr pipy/build \
         && npm install \
 	&& npm run build \
         && cd build \
-        && cmake -DPIPY_GUI=OFF -DPIPY_TUTORIAL=ON -DCMAKE_BUILD_TYPE=Release .. \
+	&& export CI_COMMIT_SHA \
+        && export CI_COMMIT_TAG=${VERSION}-${REVISION} \
+        && export CI_COMMIT_DATE \
+        && cmake -DPIPY_GUI=ON -DPIPY_TUTORIAL=ON -DCMAKE_BUILD_TYPE=Release .. \
         && make -j$(getconf _NPROCESSORS_ONLN) \
         && mkdir ${pkg_confdir} \
         && cp /pipy/bin/pipy ${pkg_bindir} \
@@ -43,7 +46,6 @@ COPY --from=builder /pipy/bin/pipy /usr/local/bin/pipy
 COPY --from=builder /etc/pipy /etc/pipy
 RUN apk add --no-cache ca-certificates libstdc++ libcap su-exec tar curl busybox-extras iptables tzdata socat logrotate
 RUN adduser -Su 1340 pipy \
-    && setcap cap\_net\_admin=eip /usr/local/bin/pipy \
     && chmod -R g=u /usr/local/bin/pipy /etc/pipy \
     && chown -R pipy:0 /usr/local/bin/pipy /etc/pipy 
 
