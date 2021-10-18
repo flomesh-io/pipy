@@ -34,7 +34,7 @@ TEST_CASE=all
 IMAGE_TAG=${IMAGE_TAG:-latest}
 DOCKERFILE=${DOCKERFILE:-Dockerfile}
 
-PIPY_GUI=${PIPY_GUI:-OFF}
+PIPY_GUI=${PIPY_GUI:-ON}
 PIPY_TUTORIAL=${PIPY_TUTORIAL:-ON}
 
 ##### End Default environment variables #########
@@ -137,7 +137,7 @@ function build() {
   git pull origin $BRANCH
   export CC=clang
   export CXX=clang++
-  cd ${PIPY_DIR}/gui
+  cd ${PIPY_DIR}
   npm install
   npm run build
   mkdir ${PIPY_DIR}/build 2>&1 > /dev/null || true
@@ -210,6 +210,7 @@ if ! $TEST_ONLY && $BUILD_RPM; then
 fi
 
 if ! $TEST_ONLY && $BUILD_CONTAINER; then
+  cd $PIPY_DIR
   if [ "x"$RELEASE_VERSION != "x" ]; then
     IMAGE_TAG=$RELEASE_VERSION
     sudo docker build --rm -t pipy-oss:$IMAGE_TAG \
@@ -217,10 +218,10 @@ if ! $TEST_ONLY && $BUILD_CONTAINER; then
     --build-arg REVISION=$REVISION \
     --build-arg COMMIT_ID=$COMMIT_ID \
     --build-arg COMMIT_DATE="$COMMIT_DATE" \
-    -f $DOCKERFILE $PIPY_DIR
+    -f $DOCKERFILE .
 
   else
-    sudo docker build --rm -t pipy-oss:$IMAGE_TAG -f $DOCKERFILE $PIPY_DIR
+    sudo docker build --rm -t pipy-oss:$IMAGE_TAG -f $DOCKERFILE .
   fi
 fi
 
