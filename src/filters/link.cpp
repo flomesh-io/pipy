@@ -103,11 +103,18 @@ void Link::process(Context *ctx, Event *inp) {
   if (m_session_end) return;
 
   if (!m_chosen) {
+    if (auto data = inp->as<Data>()) {
+      if (data->empty()) {
+        return;
+      }
+    }
     for (const auto &r : *m_routes) {
       if (r.condition) {
         pjs::Value ret;
         if (!callback(*ctx, r.condition, 0, nullptr, ret)) return;
         m_chosen = ret.to_boolean();
+      } else {
+        m_chosen = true;
       }
       if (m_chosen) {
         if (r.pipeline) {

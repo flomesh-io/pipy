@@ -82,22 +82,24 @@ void ReplaceMessage::process(Context *ctx, Event *inp) {
     return;
 
   } else if (auto data = inp->as<Data>()) {
-    if (m_body && data->size() > 0) {
-      if (m_size_limit >= 0) {
-        auto room = m_size_limit - m_body->size();
-        if (room >= data->size()) {
-          m_body->push(*data);
-        } else if (room > 0) {
-          Data buf(*data);
-          auto discard = buf.size() - room;
-          buf.pop(discard);
-          m_body->push(buf);
-          m_discarded_size += discard;
+    if (m_body) {
+      if (data->size() > 0) {
+        if (m_size_limit >= 0) {
+          auto room = m_size_limit - m_body->size();
+          if (room >= data->size()) {
+            m_body->push(*data);
+          } else if (room > 0) {
+            Data buf(*data);
+            auto discard = buf.size() - room;
+            buf.pop(discard);
+            m_body->push(buf);
+            m_discarded_size += discard;
+          } else {
+            m_discarded_size += data->size();
+          }
         } else {
-          m_discarded_size += data->size();
+          m_body->push(*data);
         }
-      } else {
-        m_body->push(*data);
       }
       return;
     }
