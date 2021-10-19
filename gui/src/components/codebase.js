@@ -68,7 +68,7 @@ const codebaseStates = {};
 // Codebase interface
 //
 
-function Codebase({ root }) {
+function Codebase({ root, dts }) {
   if (root !== '/' && root.endsWith('/')) {
     root = root.substring(0, root.length - 1);
   }
@@ -116,7 +116,7 @@ function Codebase({ root }) {
 
       {/* Tab Page */}
       <div className={classes.main}>
-        {tab === 'editor' && <Editor root={root}/>}
+        {tab === 'editor' && <Editor root={root} dts={dts}/>}
         {tab === 'status' && <Status root={root}/>}
         {tab === 'console' && <Console/>}
       </div>

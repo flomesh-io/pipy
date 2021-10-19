@@ -4,6 +4,8 @@
  * See: https://www.gatsbyjs.com/docs/node-apis/
  */
 
+const fs = require('fs');
+const ts = require('typescript');
 const MonacoWebpackPlugin = require('monaco-editor-webpack-plugin');
 
 exports.onCreateWebpackConfig = ({
@@ -14,6 +16,46 @@ exports.onCreateWebpackConfig = ({
       new MonacoWebpackPlugin(),
     ],
   });
+}
+
+exports.sourceNodes = ({ actions, createNodeId, createContentDigest }) => {
+  const { createNode } = actions;
+
+  const options = {
+    allowJs: true,
+    declaration: true,
+    emitDeclarationOnly: true,
+  };
+
+  const functions = fs.readdirSync('docs/reference/functions').filter(s => s.endsWith('.js'));
+  const classes = fs.readdirSync('docs/reference/classes').filter(s => s.endsWith('.js'));
+  const filenames = [].concat(
+    functions.map(s => `docs/reference/functions/${s}`),
+    classes.map(s => `docs/reference/classes/${s}`),
+  );
+
+  const allFiles = {};
+  const host = ts.createCompilerHost(options);
+  host.writeFile = (filename, content) => allFiles[filename] = content;
+
+  const program = ts.createProgram(filenames, options, host);
+  program.emit();
+
+  for (const filename in allFiles) {
+    const content = allFiles[filename];
+    createNode({
+      id: createNodeId(filename),
+      filename,
+      parent: null,
+      children: [],
+      internal: {
+        type: 'DTS',
+        mediaType: 'text/plain',
+        content,
+        contentDigest: createContentDigest(content),
+      },
+    });
+  }
 }
 
 const LANGS = ['en', 'zh'];

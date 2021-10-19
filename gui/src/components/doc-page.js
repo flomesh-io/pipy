@@ -452,7 +452,7 @@ const InstanceMethods = () => {
             {m.name}()
           </Link>
           <p className={classes.description}>
-            {m.description.internal.content}
+            {m.description?.internal?.content || '[No description]'}
           </p>
         </React.Fragment>
       )

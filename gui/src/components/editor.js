@@ -218,7 +218,7 @@ function FileItem({ path, tree, main }) {
   }
 }
 
-function Editor({ root }) {
+function Editor({ root, dts }) {
   const classes = useStyles();
 
   const editorDiv = React.useRef();
@@ -381,7 +381,7 @@ function Editor({ root }) {
       }
       setSelected(false);
     },
-    [root, states, isReadOnly, isLocalHost]
+    [root, dts, states, isReadOnly, isLocalHost]
   );
 
   const saveFile = React.useCallback(
@@ -492,12 +492,16 @@ function Editor({ root }) {
             theme: 'vs-dark',
             tabSize: 2,
             detectIndentation: false,
+            'semanticHighlighting.enabled': true,
           }
         );
         resize = () => editor.layout();
         window.addEventListener('resize', resize);
         editorRef.current = editor;
         layoutUpdaterRef.current = resize;
+        for (const name in dts) {
+          monaco.languages.typescript.javascriptDefaults.addExtraLib(dts[name], name);
+        }
         setInitialized(true);
       });
       return () => {
@@ -1047,7 +1051,7 @@ function DerivativesButton({ root, derived }) {
           <List dense>
             {derived.map(
               path => (
-                <ListItem button onClick={() => handleSelectItem(path)}>
+                <ListItem key={path} button onClick={() => handleSelectItem(path)}>
                   <ListItemIcon><CodebaseIcon/></ListItemIcon>
                   <ListItemText primary={path}/>
                 </ListItem>
