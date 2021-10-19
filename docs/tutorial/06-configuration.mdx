@@ -1,0 +1,152 @@
+---
+title: "Part 6: Configuration"
+---
+
+In this part of the tutorial, we will further optimize our codebase
+by isolating code and data. The data part will be put into separate
+JSON files as configuration files.
+
+# Prepare JSON files
+
+First, we create a JSON file for each JavaScript file that is configurable.
+In each of these JSON files, we put in the data that the corresponding
+JavaScript code needs as its configuration. We keep all these JSON files
+under the same directory `/config/`.
+
+For `/proxy.js`, we create `/config/proxy.json`:
+
+``` js
+{
+  "listen": 8000,
+  "plugins": [
+    "plugins/router.js",
+    "plugins/default.js"
+  ]
+}
+```
+
+For `/plugins/router.js`, we create `/config/router.json`:
+
+``` js
+{
+  "routes": {
+    "/hi/*": "localhost:8080",
+    "/echo": "localhost:8081",
+    "/ip/*": "localhost:8082"
+  }
+}
+```
+
+For `/plugins/default.js`, something could also be turned configurable,
+such as the message to return when a request isn't handled.
+But we'll just skip it in this tutorial for simplicity.
+
+# Read data from JSON
+
+Next, we change `/proxy.js` to get its configuration from `/config/proxy.json`:
+
+1. Wrap the entire code inside a function that takes only one input parameter `config`:
+
+``` js
++ (config =>
+
+  pipy()
+
+  .export('proxy', {
+    __turnDown: false,
+  })
+
+  .listen(8000)
+    .demuxHTTP('request')
+
+  .pipeline('request')
+    .use(
+      [
+        'plugins/router.js',
+        'plugins/default.js',
+      ],
+      'request',
+      'response',
+      () => !__turnDown
+    )
+
++ )
+```
+
+2. Call that function with the JSON object decoded from `/config/proxy.json`:
+
+``` js
+  (config =>
+
+  // ...
+
+  )
++ (JSON.decode(pipy.load('config/proxy.json')))
+```
+
+> We use [_JSON.decode()_](/reference/classes/JSON/decode) instead of the standard
+> [_JSON.parse()_](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/JSON/parse)
+> because _JSON.decode()_ works with binary data whereas _JSON.parse()_ only works with strings.
+
+3. Replace the listening port and the plugin list to what's in the input parameter `config`:
+
+``` js
+- .listen(8000)
++ .listen(config.listen)
+    .demuxHTTP('request')
+
+  .pipeline('request')
+    .use(
+-     [
+-       'plugins/router.js',
+-       'plugins/default.js',
+-     ],
++     config.plugins,
+      'request',
+      'response',
+      () => !__turnDown
+    )
+```
+
+For `/plugins/router.js`, we do the same. Wrap the entire plugin
+in a function, call it with the JSON data, and then change the routing table
+to what's in the JSON.
+
+``` js
++ (config =>
+
+  pipy({
+-   _router: new algo.URLRouter({
+-     '/hi/*': 'localhost:8080',
+-     '/echo': 'localhost:8081',
+-     '/ip/*': 'localhost:8082',
+-   }),
++   _router: new algo.URLRouter(config.routes),
+    _target: '',
+  })
+
+  // ...
+
++ )(JSON.decode(pipy.load('config/router.json')))
+```
+
+# Test in action
+
+Again, we didn't make any change to the functionality.
+It can be tested the same way as last time: [Test in action](/tutorial/05-plugins#test-in-action).
+
+# Summary
+
+In this part of tutorial, you've learned how to separate code and data,
+which is a better way of organizing your script when it has a lot of configurable data.
+
+## Takeaways
+
+1. Separating code and data is a good practice in code organizing and makes your code easier to configure.
+2. Use [_pipy.load()_](/reference/functions/pipy.load) to read files as binary data.
+3. Use [_JSON.decode()_](/reference/classes/JSON/decode) to decode JSON from binary data.
+
+## What's next?
+
+Now we've built a solid foundation for our proxy. It has a plugin system, and can be configured by JSON.
+Moving forward, we'll continue expanding its functionalities by adding more plugins to it.

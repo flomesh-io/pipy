@@ -68,7 +68,7 @@ return value.
 
 Unlike sub-pipelines, the other types of pipelines, namely **port pipelines** and **timer pipelines**,
 cannot be "_called_" from a joint filter. In other words, they cannot be started from
-internal but external. We call these pipelines **root pipelines**.
+internal but only external. We call these pipelines **root pipelines**.
 
 # Context
 
@@ -78,11 +78,11 @@ you start a Pipy instance, the first thing you do is define the _shape_ of the c
 that what variables are in it and their initial values.
 
 Every root pipeline "_clones_" the "_initial context_" you define at the start. When a
-sub-pipeline is started, it either _shares_ or _clones_ its parent's context, depending
-what the joint filter you use. For instance, a _link_ filter shares its parent's context
+sub-pipeline is started, it either _shares_ or _clones_ its parent's context, depending on
+which joint filter you use. For instance, a _link_ filter shares its parent's context
 while a _demux_ filter clones it.
 
-To the scripts residing on a pipeline, these **context variables** are their **global varaibles**,
+To the scripts embedded in a pipeline, these **context variables** are their **global varaibles**,
 which means that these variables are always accessible to scripts from anywhere as long as
 they live in the same script file.
 
@@ -91,8 +91,8 @@ are globally unique. You have only one set of these variables, whereas in Pipy w
 many sets of them (aka contexts) depending on how many root pipelines are open for incoming
 network connections and how many sub-pipelines clone their parents' contexts.
 It is a crucial feature for PipyJS to have multiple sets of global variables because a network
-proxy needs to handle a large amount of connections in parallel, each having its own state that
-is not visible to others.
+proxy needs to handle a large amount of connections in parallel. Each should have its own state
+that is not visible to others.
 
 If you are familiar with multi-thread programming concepts, you can also think of **contexts**
 as [_TLS (thread-local storage)_](https://en.wikipedia.org/wiki/Thread-local_storage), where
