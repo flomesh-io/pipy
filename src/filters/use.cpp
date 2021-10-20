@@ -104,12 +104,12 @@ Use::~Use()
 
 auto Use::help() -> std::list<std::string> {
   return {
-    "use(modules, pipeline[, pipelineDown[, when]])",
+    "use(modules, pipeline[, pipelineDown[, turnDown]])",
     "Sends events to pipelines in different modules",
     "modules = <string|array> Filenames of the modules",
     "pipeline = <string> Name of the pipeline",
     "pipelineDown = <string> Name of the pipeline to process turned down streams",
-    "when = <function> Callback function that returns false to bypass",
+    "turnDown = <function> Callback function that returns true to turn down",
   };
 }
 
@@ -175,7 +175,7 @@ void Use::Stage::use(Context *context, Event *inp) {
     if (auto &when = m_use->m_when) {
       pjs::Value ret;
       if (!m_use->callback(*context, when, 0, nullptr, ret)) return;
-      if (!ret.to_boolean()) m_turned_down = true;
+      if (ret.to_boolean()) m_turned_down = true;
     }
 
     if (!m_turned_down) {
