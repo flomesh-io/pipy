@@ -159,6 +159,7 @@ void Configuration::task(const std::string &interval) {
 }
 
 void Configuration::pipeline(const std::string &name) {
+  if (name.empty()) throw std::runtime_error("pipeline name cannot be empty");
   m_named_pipelines.push_back({ name });
   m_current_filters = &m_named_pipelines.back().filters;
 }
@@ -854,9 +855,7 @@ template<> void ClassDef<Configuration>::init() {
     for (int i = 0; i < n; i++) {
       int a = (i << 1);
       int b = (i << 1) + 1;
-      if (ctx.arg(a).is_null()) {
-        targets[i] = nullptr;
-      } else if (ctx.arg(a).is_string()) {
+      if (ctx.arg(a).is_string()) {
         targets[i] = ctx.arg(a).s();
       } else {
         ctx.error_argument_type(a, "a string");

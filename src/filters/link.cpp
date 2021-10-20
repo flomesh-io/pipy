@@ -69,11 +69,7 @@ void Link::dump(std::ostream &out) {
 
 auto Link::draw(std::list<std::string> &links, bool &fork) -> std::string {
   for (const auto &r : *m_routes) {
-    if (r.name) {
-      links.push_back(r.name->str());
-    } else {
-      links.push_back("");
-    }
+    links.push_back(r.name->str());
   }
   fork = false;
   return "link";
@@ -82,7 +78,7 @@ auto Link::draw(std::list<std::string> &links, bool &fork) -> std::string {
 void Link::bind() {
   auto mod = pipeline()->module();
   for (auto &r : *m_routes) {
-    if (!r.pipeline && r.name) {
+    if (!r.pipeline && r.name->length() > 0) {
       r.pipeline = pipeline(r.name);
     }
   }

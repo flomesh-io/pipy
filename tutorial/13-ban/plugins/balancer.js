@@ -62,7 +62,7 @@ pipy({
   )
   .link(
     'forward', () => Boolean(_target),
-    null
+    ''
   )
 
 .pipeline('forward')

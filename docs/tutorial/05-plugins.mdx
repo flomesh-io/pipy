@@ -72,11 +72,11 @@ reference to it in _link()_ accordingly.
     .link(
       'forward', () => Boolean(_target),
 -     '404'
-+      null
++      ''
     )
 ```
 
-Changing a pipeline name in _link()_ to `null` means linking to nothing.
+Changing a pipeline name in _link()_ to empty means linking to nothing.
 In this case, everything coming along to _link()_ will just go down without
 any changes (only when `_target` is falsy), as if _link()_ wasn't there.
 
@@ -229,7 +229,7 @@ when a route is found.
     )
     .link(
       'forward', () => Boolean(_target),
-      null
+      ''
     )
 ```
 
