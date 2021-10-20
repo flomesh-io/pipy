@@ -53,9 +53,6 @@ public:
     // Expr::Reducer::Value
     class Value { public: virtual ~Value() {} };
 
-    // Visit tree node
-    virtual void visit(Expr *e) {}
-
     // Primitives
     virtual Value* type(Value *x) { return dummy(x); }
     virtual Value* undefined() { return nullptr; }
@@ -435,6 +432,7 @@ public:
 
   virtual bool eval(Context &ctx, Value &result) override;
   virtual void resolve(Context &ctx, int l, Imports *imports) override;
+  virtual auto reduce(Reducer &r) -> Reducer::Value* override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:

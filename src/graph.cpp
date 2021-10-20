@@ -93,6 +93,7 @@ private:
     BOOLEAN,
     NUMBER,
     STRING,
+    FUNCTION,
     CONFIG_MAKER,
     CONFIG_OBJECT,
     CONFIG_METHOD,
@@ -107,17 +108,20 @@ private:
     ConfigValue(bool b) : m_t(BOOLEAN), m_b(b) {}
     ConfigValue(double n) : m_t(NUMBER), m_n(n) {}
     ConfigValue(const std::string &s) : m_t(STRING), m_s(s) {}
+    ConfigValue(pjs::Expr *f) : m_t(FUNCTION), m_f(f) {}
 
     auto t() const -> ConfigValueType { return m_t; }
     auto b() const -> bool { return m_b; }
     auto n() const -> double { return m_n; }
     auto s() const -> const std::string& { return m_s; }
+    auto f() const -> pjs::Expr* { return m_f; }
 
   private:
     ConfigValueType m_t;
     bool m_b = false;
     double m_n = 0;
     std::string m_s;
+    pjs::Expr* m_f;
   };
 
   static auto cv(Value *v) -> ConfigValue* {
@@ -144,6 +148,10 @@ private:
     return new ConfigValue(s);
   }
 
+  virtual Value* function(pjs::Expr *expr) override {
+    return new ConfigValue(expr);
+  }
+
   virtual Value* get(const std::string &name) override {
     if (name == "pipy") return new ConfigValue(CONFIG_MAKER);
     return undefined();
@@ -151,7 +159,9 @@ private:
 
   virtual Value* call(Value *fn, Value **argv, int argc) override {
     Value *ret = nullptr;
-    if (cv(fn)->t() == CONFIG_MAKER) {
+    if (cv(fn)->t() == FUNCTION) {
+      return cv(fn)->f()->reduce(*this);
+    } if (cv(fn)->t() == CONFIG_MAKER) {
       ret = new ConfigValue(CONFIG_OBJECT);
     } else if (cv(fn)->t() == CONFIG_METHOD) {
       const auto &m = cv(fn)->s();

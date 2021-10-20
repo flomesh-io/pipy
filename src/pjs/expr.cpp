@@ -454,6 +454,10 @@ void FunctionLiteral::resolve(Context &ctx, int l, Imports *imports) {
   m_output->resolve(fctx, l, imports);
 }
 
+auto FunctionLiteral::reduce(Reducer &r) -> Reducer::Value* {
+  return r.function(m_output.get());
+}
+
 void FunctionLiteral::dump(std::ostream &out, const std::string &indent) {
   out << indent << "function " << std::endl;
   for (const auto &p : m_inputs) {
