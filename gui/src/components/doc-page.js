@@ -226,6 +226,10 @@ const useStyles = makeStyles(theme => ({
     borderLeftColor: theme.palette.primary.main,
   },
 
+  codeSame: {
+    opacity: '70%',
+  },
+
   codeAdded: {
     backgroundColor: '#1e3e1e',
   },
@@ -405,24 +409,30 @@ const Tip = ({ children }) => {
 const SourceCode = ({ children, className }) => {
   const classes = useStyles();
   const language = className === 'language-js' ? 'javascript' : undefined;
+  const lines = children.split('\n');
+
+  let isDiff = true;
+  const colors = lines.map(
+    line => {
+      if (line.trim() === '') return;
+      if (line.startsWith('  ')) return classes.codeSame;
+      if (line.startsWith('+ ')) return classes.codeAdded;
+      if (line.startsWith('- ')) return classes.codeDeleted;
+      isDiff = false;
+    }
+  );
+
+  if (isDiff) {
+    children = lines.map(l => l.substring(2)).join('\n');
+  }
+
   return (
     <Highlight {...defaultProps} code={children} language={language} theme={HighlightTheme}>
       {({ style, tokens, getLineProps, getTokenProps }) => (
         <pre className={classes.codeBox} style={{ ...style }}>
           {tokens.map((line, i) => {
             const props = getLineProps({ line, key: i });
-            let head = line[0];
-            if (head?.content === '') head = line[1];
-            switch (head?.content) {
-              case '+':
-                props.className = classes.codeAdded;
-                head.content = ' ';
-                break;
-              case '-':
-                props.className = classes.codeDeleted;
-                head.content = ' ';
-                break;
-            }
+            if (isDiff) props.className = colors[i];
             return (
               <div key={i} {...props}>
                 {line.map((token, key) => (
