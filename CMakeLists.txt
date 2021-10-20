@@ -15,6 +15,11 @@ add_subdirectory(deps/libexpat-R_2_2_6/expat)
 
 add_subdirectory(deps/openssl-1.1.1g)
 
+option(LEVELDB_BUILD_TESTS "Build LevelDB's unit tests" OFF)
+option(LEVELDB_BUILD_BENCHMARKS "Build LevelDB's benchmarks" OFF)
+option(LEVELDB_INSTALL "Install LevelDB's header and library" OFF)
+add_subdirectory(deps/leveldb-1.23)
+
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_SOURCE_DIR}/bin)
 set(CMAKE_CXX_FLAGS -std=c++11)
 
@@ -30,6 +35,7 @@ include_directories(
   "${CMAKE_BINARY_DIR}/deps/yajl-2.1.0/yajl-2.1.0/include"
   "${CMAKE_BINARY_DIR}/deps/libexpat-R_2_2_6/expat/lib"
   "${CMAKE_SOURCE_DIR}/deps/libexpat-R_2_2_6/expat/lib"
+  "${CMAKE_SOURCE_DIR}/deps/leveldb-1.23/include"
 )
 
 add_executable(pipy
@@ -149,4 +155,4 @@ if (PIPY_TUTORIAL)
   add_dependencies(pipy PackTutorial)
 endif()
 
-target_link_libraries(pipy z yajl_s expat crypto ssl -pthread)
+target_link_libraries(pipy z yajl_s expat crypto ssl leveldb -pthread)

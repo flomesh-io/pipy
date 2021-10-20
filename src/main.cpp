@@ -643,7 +643,9 @@ int main(int argc, char *argv[]) {
     if (is_repo) {
       auto port = opts.admin_port;
       if (!port) port = 6060; // default repo port
-      store = Store::open_memory();
+      store = opts.filename.empty()
+        ? Store::open_memory()
+        : Store::open_level_db(opts.filename);
       repo = new CodebaseStore(store);
       s_admin = new AdminService(repo);
       s_admin->open(port);
