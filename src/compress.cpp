@@ -50,7 +50,7 @@ public:
   }
 
 private:
-  const std::function<void(Data*)>& m_out;
+  const std::function<void(Data*)> m_out;
   z_stream m_zs;
   bool m_done = false;
 
