@@ -15,5 +15,5 @@ pipy()
     ],
     'request',
     'response',
-    () => !__turnDown
+    () => __turnDown
   )

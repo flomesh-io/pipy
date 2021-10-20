@@ -5,17 +5,12 @@ pipy({
     Object.fromEntries(
       Object.entries(config.services).map(
         ([k, v]) => [
-          k,
-          {
-            ...v,
-            balancer: new algo.RoundRobinLoadBalancer(v.targets),
-          }
+          k, new algo.RoundRobinLoadBalancer(v)
         ]
       )
     )
   ),
 
-  _balancer: null,
   _target: '',
 })
 
@@ -27,24 +22,13 @@ pipy({
 .pipeline('request')
   .handleMessageStart(
     () => (
-      _balancer = _services[__serviceID]?.balancer,
-      _balancer && (__turnDown = true)
-    )
-  )
-  .link(
-    'load-balance', () => Boolean(_balancer),
-    'bypass'
-  )
-
-.pipeline('load-balance')
-  .handleMessageStart(
-    () => (
-      _target = _balancer.select()
+      _target = _services[__serviceID]?.select?.(),
+      _target && (__turnDown = true)
     )
   )
   .link(
     'forward', () => Boolean(_target),
-    'no-target'
+    null
   )
 
 .pipeline('forward')
@@ -57,12 +41,5 @@ pipy({
   .connect(
     () => _target
   )
-
-.pipeline('no-target')
-  .replaceMessage(
-    new Message({ status: 404 }, 'No target')
-  )
-
-.pipeline('bypass')
 
 )(JSON.decode(pipy.load('config/balancer.json')))

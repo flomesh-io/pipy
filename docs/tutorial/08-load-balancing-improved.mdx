@@ -1,0 +1,118 @@
+---
+title: "Part 8: LB Improved"
+---
+
+# Problem
+
+# Cache
+
+## Initialization
+
+``` js
+  pipy({
+    _services: (
+      Object.fromEntries(
+        Object.entries(config.services).map(
+          ([k, v]) => [
+            k, new algo.RoundRobinLoadBalancer(v)
+          ]
+        )
+      )
+    ),
+
++   _balancer: null,
++   _balancerCache: null,
+    _target: '',
+  })
+
+  .import({
+    __turnDown: 'proxy',
+    __serviceID: 'router',
+  })
+```
+
+``` js
+  .import({
+    __turnDown: 'proxy',
+    __serviceID: 'router',
+  })
+
++ .pipeline('session')
++   .handleSessionStart(
++     () => (
++       _balancerCache = new algo.Cache(
++         // k is a balancer, v is a target
++         (k  ) => k.select(),
++         (k,v) => k.deselect(v),
++       )
++     )
++   )
+```
+
+## Cache it
+
+``` js
+  .pipeline('request')
+    .handleMessageStart(
+      () => (
+-       _target = _services[__serviceID]?.select?.(),
++       _balancer = _services[__serviceID],
++       _balancer && (_target = _balancerCache.get(_balancer)),
+        _target && (__turnDown = true)
+      )
+    )
+    .link(
+      'forward', () => Boolean(_target),
+      null
+    )
+```
+
+## Cleanup
+
+``` js
+  .pipeline('session')
+    .handleSessionStart(
+      () => (
+        _balancerCache = new algo.Cache(
+          // k is a balancer, v is a target
+          (k  ) => k.select(),
+          (k,v) => k.deselect(v),
+        )
+      )
+    )
++   .handleSessionEnd(
++     () => (
++       _balancerCache.clear()
++     )
++   )
+```
+
+# Hook up to main script
+
+``` js
+  pipy()
+
+  .export('proxy', {
+    __turnDown: false,
+  })
+
+  .listen(config.listen)
++   .use(config.plugins, 'session')
+    .demuxHTTP('request')
+
+  .pipeline('request')
+    .use(
+      config.plugins,
+      'request',
+      'response',
+      () => __turnDown
+    )
+```
+
+# Test in action
+
+# Summary
+
+## Takeaways
+
+## What's next?

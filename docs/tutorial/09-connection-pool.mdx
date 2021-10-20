@@ -1,0 +1,115 @@
+---
+title: "Part 9: Connection Pool"
+---
+
+# Problem
+
+# ResourcePool
+
+``` js
+  pipy({
+    _services: (
+      Object.fromEntries(
+        Object.entries(config.services).map(
+          ([k, v]) => [
+            k, new algo.RoundRobinLoadBalancer(v)
+          ]
+        )
+      )
+    ),
+
+    _balancer: null,
+    _balancerCache: null,
+    _target: '',
+
++   _g: {
++     connectionID: 0,
++   },
+
++   _connectionPool: new algo.ResourcePool(
++     () => ++_g.connectionID
++   ),
+  })
+```
+
+# Cache
+
+``` js
+  pipy({
+    _services: (
+      Object.fromEntries(
+        Object.entries(config.services).map(
+          ([k, v]) => [
+            k, new algo.RoundRobinLoadBalancer(v)
+          ]
+        )
+      )
+    ),
+
+    _balancer: null,
+    _balancerCache: null,
+    _target: '',
++   _targetCache: null,
+
+    _g: {
+      connectionID: 0,
+    },
+
+    _connectionPool: new algo.ResourcePool(
+      () => ++_g.connectionID
+    ),
+  })
+
+  .import({
+    __turnDown: 'proxy',
+    __serviceID: 'router',
+  })
+
+  .pipeline('session')
+    .handleSessionStart(
+      () => (
++       _targetCache = new algo.Cache(
++         // k is a target, v is a connection ID
++         (k  ) => _connectionPool.allocate(k),
++         (k,v) => _connectionPool.free(v),
++       ),
+        _balancerCache = new algo.Cache(
+          // k is a balancer, v is a target
+          (k  ) => k.select(),
+          (k,v) => k.deselect(v),
+        )
+      )
+    )
+    .handleSessionEnd(
+      () => (
++       _targetCache.clear(),
+        _balancerCache.clear()
+      )
+    )
+```
+
+# Allocate
+
+``` js
+  .pipeline('forward')
+    .muxHTTP(
+      'connection',
+-     () => _target
++     () => _targetCache.get(_target)
+    )
+
+  .pipeline('connection')
+    .connect(
+      () => _target
+    )
+```
+
+# Test in action
+
+# Summary
+
+## Takeaways
+
+## What's next?
+
+To be continued...

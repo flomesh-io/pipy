@@ -7,7 +7,6 @@ pipy()
 })
 
 .listen(config.listen)
-  .use(config.plugins, 'session')
   .demuxHTTP('request')
 
 .pipeline('request')
@@ -15,7 +14,7 @@ pipy()
     config.plugins,
     'request',
     'response',
-    () => !__turnDown
+    () => __turnDown
   )
 
 )(JSON.decode(pipy.load('config/proxy.json')))

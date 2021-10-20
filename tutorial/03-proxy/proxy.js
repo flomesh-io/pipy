@@ -4,7 +4,7 @@ pipy()
   .demuxHTTP('forward')
 
 .pipeline('forward')
-  .muxHTTP('connection')
+  .muxHTTP('connection', '')
 
 .pipeline('connection')
   .connect('localhost:8080')

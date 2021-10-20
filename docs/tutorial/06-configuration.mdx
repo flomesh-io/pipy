@@ -67,7 +67,7 @@ Next, we change `/proxy.js` to get its configuration from `/config/proxy.json`:
       ],
       'request',
       'response',
-      () => !__turnDown
+      () => __turnDown
     )
 
 + )
@@ -104,7 +104,7 @@ Next, we change `/proxy.js` to get its configuration from `/config/proxy.json`:
 +     config.plugins,
       'request',
       'response',
-      () => !__turnDown
+      () => __turnDown
     )
 ```
 

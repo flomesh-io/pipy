@@ -1,7 +1,7 @@
 {
   "services": {
-    "service-hi"      : { "targets": ["127.0.0.1:8080", "127.0.0.1:8082"] },
-    "service-echo"    : { "targets": ["127.0.0.1:8081"] },
-    "service-tell-ip" : { "targets": ["127.0.0.1:8082"] }
+    "service-hi"      : ["127.0.0.1:8080", "127.0.0.1:8082"],
+    "service-echo"    : ["127.0.0.1:8081"],
+    "service-tell-ip" : ["127.0.0.1:8082"]
   }
 }

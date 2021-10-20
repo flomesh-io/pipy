@@ -1,0 +1,306 @@
+---
+title: "Part 7: Loading Balancing"
+---
+
+Now we have a pluggable, configurable proxy framework. We even made our
+first plugin "_router_". Starting from now, we'll continue to make more plugins
+covering other common proxy features. The first one is "_load balancing_".
+
+# RoundRobinLoadBalancer
+
+Pipy provides a number of builtin classes to make things easier for building a load balancing proxy.
+These classes implemented a few assorted load balancing algorithms, all to be used in the same way.
+In this tutorial, we'll be using [_algo.RoundRobinLoadBalancer_](/reference/classes/algo/RoundRobinLoadBalancer),
+which implements the most commonly used "_round-robin_" algorithm.
+
+To construct a _RoundRobinLoadBalancer_ object, you need a list of targets with their weights:
+
+``` js
+new algo.RoundRobinLoadBalancer({
+  'localhost:8080': 50,
+  'localhost:8081': 25,
+  'localhost:8082': 25,
+})
+```
+
+Or, if you prefer workload to be distributed evenly, you can simply give it an array of targets,
+ignoring the weights:
+
+``` js
+new algo.RoundRobinLoadBalancer([
+  'localhost:8080',
+  'localhost:8081',
+  'localhost:8082',
+])
+```
+
+With that _RoundRobinLoadBalancer_, each time you call its
+[_select()_](/reference/classes/algo/RoundRobinLoadBalancer/select) method, it will
+give you one of the targets, in a round-robin fashion.
+
+# Take apart router.js
+
+Once we get a selected target, we are supposed to pass the current request to it,
+but wait..., we've already done that in the "_forward_" pipeline in `/plugins/router.js`, haven't we?
+
+This observation tells us that the functionality of the "_router_" plugin
+could've been divided in two parts:
+
+1. Map a request to a "_service_" backed by a bunch of target servers.
+2. Select one of those targets and pass the request to it.
+
+The second part should go to a new "_balancer_" plugin while the first stays in the "_router_".
+In addition to that, the _router_ should be able to tell the _balancer_ which service to go.
+We've already seen how the variable `__turnDown` is shared between `/proxy.js` and `/plugins/router.js`
+in [Part 4](/tutorial/05-plugins#export-and-import). It's just the same thing here too.
+
+## Create balancer.js
+
+We work out the balancer first, starting from its configuration.
+Create a file named `/config/balancer.json` and fill in it with a service-to-targets map:
+
+``` js
+{
+  "services": {
+    "service-hi"      : ["127.0.0.1:8080", "127.0.0.1:8082"],
+    "service-echo"    : ["127.0.0.1:8081"],
+    "service-tell-ip" : ["127.0.0.1:8082"]
+  }
+}
+```
+
+As you can see, we defined 3 services under names "_service-hi_", "_service-echo_" and "_service-tell-ip_".
+The first has two targets and the others have only one.
+
+Next, create the plugin's script file:
+
+1. Create a file named `/plugins/balancer.js` and copy the entire `/plugins/router.js` to it.
+3. Delete the _URLRouter_ and the _find_ call, keeping the rest.
+4. Point the configuration filename to `/config/balancer.json`.
+
+``` js
+  (config =>
+
+  pipy({
+-   _router: new algo.URLRouter(config.routes),
+    _target: '',
+  })
+
+  .import({
+    __turnDown: 'proxy',
+  })
+
+  .pipeline('request')
+    .handleMessageStart(
+      msg => (
+-       _target = _router.find(
+-         msg.head.headers.host,
+-         msg.head.path,
+-       ),
+        _target && (__turnDown = true)
+      )
+    )
+    .link(
+      'forward', () => Boolean(_target),
+      null
+    )
+
+  .pipeline('forward')
+    .muxHTTP(
+      'connection',
+      () => _target
+    )
+
+  .pipeline('connection')
+    .connect(
+      () => _target
+    )
+
+- )(JSON.decode(pipy.load('config/router.json')))
++ )(JSON.decode(pipy.load('config/balancer.json')))
+```
+
+We've chucked the old _URLRouter_, now we need some new _RoundRobinLoadBalancers_ in place.
+These balancers come from the JSON configuration, one for each service, mapping from the service names.
+We can convert the target lists in JSON to _RoundRobinLoadBalancers_ by using
+[_Array.prototype.map_](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Array/map),
+combined with
+[_Object.entries_](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object/entries)
+and [_Object.fromEntries_](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object/fromEntries):
+
+``` js
+  pipy({
++   _services: (
++     Object.fromEntries(
++       Object.entries(config.services).map(
++         ([k, v]) => [
++           k, new algo.RoundRobinLoadBalancer(v),
++         ]
++       )
++     )
++   ),
+    _target: '',
+  })
+```
+
+> In JavaScript, array elements can be easily transformed by using
+> [_Array.prototype.map_](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Array/map).
+> For objects though, we have to convert them first to an array of `[key, value]`s, transform it by `map()`,
+> and then convert it back to an object.
+> ``` js
+> Object.fromEntries(
+>   Object.entries(inputObject).map(
+>     ([k, v]) => [
+>       transformKey(k),
+>       transformValue(v),
+>     ]
+>   )
+> )
+> ```
+> This technique is super handy while dealing with configuration data in JSON.
+
+Lastly, the meat of the balancer is to select a target. Supposedly the router has
+found the service name and put it in an _exported_ variable called `__serviceID`
+under namespace "_router_". Here in the balancer, we _import_ that variable and
+select a target for that service.
+
+``` js
+  .import({
+    __turnDown: 'proxy',
++   __serviceID: 'router',
+  })
+
+  .pipeline('request')
+    .handleMessageStart(
+      msg => (
++       _target = _services[__serviceID]?.select?.(),
+        _target && (__turnDown = true)
+      )
+    )
+    .link(
+      'forward', () => Boolean(_target),
+      null
+    )
+```
+
+That's all we need for the balancer. But before we move on to the router,
+don't forget to "_plug_" it into the system by adding it to `/config/proxy.json`:
+
+``` js
+  {
+    "listen": 8000,
+    "plugins": [
+      "plugins/router.js",
++     "plugins/balancer.js",
+      "plugins/default.js"
+    ]
+  }
+```
+
+## Trim router.js
+
+For the router, we again start from its configuration `/config/router.json`.
+Since we already have service-to-target mapping in the balancer, here we change
+the routing table to URL-to-service mapping only.
+
+``` js
+{
+  "routes": {
+    "/hi/*": "service-hi",
+    "/echo": "service-echo",
+    "/ip/*": "service-tell-ip"
+  }
+}
+```
+
+For `/plugins/router.js`, we've moved pipelines "_forward_" and "_connection_"
+to the new balancer plugin. Here we can simply delete them, together with the _link()_
+that links to them.
+
+``` js
+  (config =>
+
+  pipy({
+    _router: new algo.URLRouter(config.routes),
+    _target: '',
+  })
+
+  .import({
+    __turnDown: 'proxy',
+  })
+
+  .pipeline('request')
+    .handleMessageStart(
+      msg => (
+        _target = _router.find(
+          msg.head.headers.host,
+          msg.head.path,
+        ),
+        _target && (__turnDown = true)
+      )
+    )
+-   .link(
+-     'forward', () => Boolean(_target),
+-     null
+-   )
+
+- .pipeline('forward')
+-   .muxHTTP('connection')
+
+- .pipeline('connection')
+-   .connect(
+-     () => _target
+-   )
+
+  )(JSON.decode(pipy.load('config/router.json')))
+```
+
+Since our new router only needs to map a request to its service,
+leaving the decision to the balancer after as to what target or if the request
+should be passed on or turned down, we can safely delete variables
+`_target` and `__turnDown`:
+
+``` js
+  pipy({
+    _router: new algo.URLRouter(config.routes),
+-   _target: '',
+  })
+
+- .import({
+-   __turnDown: 'proxy',
+- })
+
+  .pipeline('request')
+    .handleMessageStart(
+      msg => (
+-       _target = _router.find(
+-         msg.head.headers.host,
+-         msg.head.path,
+-       ),
+-       _target && (__turnDown = true)
+      )
+    )
+```
+
+Lastly, we add in a new variable `__serviceID` for the found service name.
+Don't forget that the balancer relies on it, so it needs to be exported.
+
+``` js
+  pipy({
+    _router: new algo.URLRouter(config.routes),
+  })
+
++ .export('router', {
++   __serviceID: '',
++ })
+
+  .pipeline('request')
+    .handleMessageStart(
+      msg => (
++       __serviceID = _router.find(
++         msg.head.headers.host,
++         msg.head.path,
++       )
+      )
+    )
+```

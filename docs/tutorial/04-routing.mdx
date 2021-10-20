@@ -95,7 +95,7 @@ is named "_request_".
 +   .link('forward')
 
   .pipeline('forward')
-    .muxHTTP('connection')
+    .muxHTTP('connection', '')
 ```
 
 Note how we use a _link_ filter at the end of pipeline "_request_" to link to
@@ -224,7 +224,7 @@ message.
 
 ``` js
   .pipeline('forward')
-    .muxHTTP('connection')
+    .muxHTTP('connection', '')
 
   .pipeline('connection')
     .connect(
@@ -285,6 +285,22 @@ wedged into a _joint filter_'s place, replacing that filter completely.
 
 For more about pipeilnes and filters, see [Filter and pipeline](/concepts/#filter-and-pipeline)
 in _Concepts_.
+
+# Connection Sharing Problem
+
+``` js
+  .pipeline('forward')
+-   .muxHTTP('connection', '')
++   .muxHTTP(
++     'connection',
++     () => _target
++   )
+
+  .pipeline('connection')
+    .connect(
+      () => _target
+    )
+```
 
 # Test in action
 
