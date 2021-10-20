@@ -97,13 +97,10 @@ auto CodebaseFromFS::list(const std::string &path) -> std::list<std::string> {
   std::list<std::string> list;
   auto full_path = utils::path_join(m_base, path);
   if (DIR *dir = opendir(full_path.c_str())) {
-    struct dirent entry;
-    struct dirent *result;
-    while (!readdir_r(dir, &entry, &result)) {
-      if (!result) break;
-      if (entry.d_name[0] == '.') continue;
-      std::string name(entry.d_name);
-      if (entry.d_type == DT_DIR) name += '/';
+    while (auto *entry = readdir(dir)) {
+      if (entry->d_name[0] == '.') continue;
+      std::string name(entry->d_name);
+      if (entry->d_type == DT_DIR) name += '/';
       list.push_back(name);
     }
     closedir(dir);
