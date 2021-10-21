@@ -4,7 +4,7 @@ title: "Part 7: Loading Balancing"
 
 Now we have a pluggable, configurable proxy framework. We even made our
 first plugin "_router_". Starting from now, we'll continue to make more plugins
-covering other common proxy features. The first one is "_load balancing_".
+covering other common proxy features. The first one would be "_load balancing_".
 
 # RoundRobinLoadBalancer
 
@@ -145,7 +145,7 @@ and [_Object.fromEntries_](https://developer.mozilla.org/docs/Web/JavaScript/Ref
 
 > In JavaScript, array elements can be easily transformed by using
 > [_Array.prototype.map_](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Array/map).
-> For objects though, we have to convert them first to an array of `[key, value]`s, transform it by `map()`,
+> For objects though, we have to convert them first to an array of `[key, value]` pairs, transform them by `map()`,
 > and then convert it back to an object.
 > ``` js
 > Object.fromEntries(
@@ -200,7 +200,7 @@ don't forget to "_plug_" it into the system by adding it to `/config/proxy.json`
 ## Trim router.js
 
 For the router, we again start from its configuration `/config/router.json`.
-Since we already have service-to-target mapping in the balancer, here we change
+Since we already have service-to-targets mapping in the balancer, here we change
 the routing table to URL-to-service mapping only.
 
 ``` js
@@ -304,3 +304,43 @@ Don't forget that the balancer relies on it, so it needs to be exported.
       )
     )
 ```
+
+That's all what it takes.
+
+# Test in action
+
+Now let's do some test.
+
+```
+$ curl localhost:8000/hi
+Hi, there!
+$ curl localhost:8000/hi
+You are requesting /hi from ::ffff:127.0.0.1
+$ curl localhost:8000/hi
+Hi, there!
+$ curl localhost:8000/hi
+You are requesting /hi from ::ffff:127.0.0.1
+```
+
+You can see that each time you visit the same "_service-hi_" service,
+it is directed to a different target, responding with a different message.
+
+# Summary
+
+In this part of tutorial, you've learned to write a round-robin load-balancer.
+You've also learned a good trick to transform a JSON object in a one-liner.
+
+## Takeaways
+
+1. Use [_algo.RoundRobinLoadBalancer_](/reference/classes/algo/RoundRobinLoadBalancer)
+   (and with a few others similiar to it) to automatically select a target out of a group,
+   with respect to their weights.
+
+2. Combine [_Array.prototype.map_](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Array/map)
+   with [_Object.entries_](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object/entries)
+   and [_Object.fromEntries_](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object/fromEntries),
+   keys and values in a JSON object can be easily transformed.
+
+## What's next?
+
+Our simple load-balancer is working, but it is not optimal yet. In the next part we'll see why.

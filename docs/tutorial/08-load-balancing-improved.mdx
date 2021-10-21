@@ -4,9 +4,82 @@ title: "Part 8: LB Improved"
 
 # Problem
 
+In the [last part](/tutorial/07-load-balancing) of the tutorial,
+we've made a working load-balancer, but it has some issues.
+Let's try sending two consecutive requests in one connection:
+
+```
+$ curl localhost:8000/hi localhost:8000/hi
+Hi, there!
+You are requesting /hi from ::ffff:127.0.0.1
+```
+
+It's not a wrong behaviour for a load-balancer but surely not optimal.
+Usually we'd like requests coming from the same connection go to the same target as well.
+
 # Cache
 
+The logic behind this "_request from the same connection go to the same target_" rule
+can be done with a simple "_cache_". Instead of always calling to
+[_RoundRobinLoadBalancer.prototype.select()_](/reference/classes/algo/RoundRobinLoadBalancer/select)
+for every request in a connection, we:
+
+1. Find in a cache to see if a target has already been picked by a balancer.
+2. If found, we use the once picked target or,
+3. If not found, we call `select()` to pick one and keep it in the cache for use next time.
+
+We make such a cache by using [_algo.Cache_](/reference/classes/Cache),
+providing two callbacks:
+
+1. Callback when a missing entry is to be filled.
+2. Callback when an entry is to be erased.
+
+In our case, we call to `RoundRobinLoadBalancer` in those callbacks:
+
+``` js
+new algo.Cache(
+  // k is a balancer, v is a target
+  (k  ) => k.select(),
+  (k,v) => k.deselect(v),
+)
+```
+
+Note that we are using the _RoundRobinLoadBalancer_ objects as keys.
+
+> Call to [_RoundRobinLoadBalancer.prototype.deselect()_](/reference/classes/algo/RoundRobinLoadBalancer/deselect)
+> is not a must, but in case of some other types of load balancing algorithms
+> like [_LeastWorkLoadBalancer_](/reference/classes/algo/LeastWorkLoadBalancer),
+> it is required so that workloads can be tracked.
+
 ## Initialization
+
+The balancer-to-target cache should be created once for each incoming connection,
+so we initialize it at the very beginning of an HTTP session.
+We don't have that point yet in plugins, so we insert it into the main script `/proxy.js`,
+right after _listen()_ where a stream comes in, and chain into all "_session_" sub-pipelines
+in plugins by using _use()_.
+
+``` js
+  pipy()
+
+  .export('proxy', {
+    __turnDown: false,
+  })
+
+  .listen(config.listen)
++   .use(config.plugins, 'session')
+    .demuxHTTP('request')
+
+  .pipeline('request')
+    .use(
+      config.plugins,
+      'request',
+      'response',
+      () => __turnDown
+    )
+```
+
+Now we can do the initialization in a new "_session_" sub-pipeline in `/plugins/balancer.js`:
 
 ``` js
   pipy({
@@ -29,13 +102,6 @@ title: "Part 8: LB Improved"
     __turnDown: 'proxy',
     __serviceID: 'router',
   })
-```
-
-``` js
-  .import({
-    __turnDown: 'proxy',
-    __serviceID: 'router',
-  })
 
 + .pipeline('session')
 +   .handleSessionStart(
@@ -49,7 +115,13 @@ title: "Part 8: LB Improved"
 +   )
 ```
 
+We also defined a variable called `_balancer` for use next.
+
 ## Cache it
+
+Now instead of calling _RoundRobinLoadBalancer.select()_ directly,
+we call [_algo.Cache.prototype.get()_](/reference/classes/algo/Cache/get)
+that wraps up the call to _RoundRobinLoadBalancer.select()_.
 
 ``` js
   .pipeline('request')
@@ -69,6 +141,8 @@ title: "Part 8: LB Improved"
 
 ## Cleanup
 
+Lastly, when the incoming connection closes, we clear up the cache.
+
 ``` js
   .pipeline('session')
     .handleSessionStart(
@@ -87,32 +161,38 @@ title: "Part 8: LB Improved"
 +   )
 ```
 
-# Hook up to main script
+# Test in action
 
-``` js
-  pipy()
+Now if you do the same test at the beginning of this part, you'll see:
 
-  .export('proxy', {
-    __turnDown: false,
-  })
-
-  .listen(config.listen)
-+   .use(config.plugins, 'session')
-    .demuxHTTP('request')
-
-  .pipeline('request')
-    .use(
-      config.plugins,
-      'request',
-      'response',
-      () => __turnDown
-    )
+```
+$ curl localhost:8000/hi localhost:8000/hi
+Hi, there!
+Hi, there!
+$ curl localhost:8000/hi localhost:8000/hi
+You are requesting /hi from ::ffff:127.0.0.1
+You are requesting /hi from ::ffff:127.0.0.1
 ```
 
-# Test in action
+For every _curl_ connection, the two requests get to the same target.
+Only between different connections, the targets are rotating.
 
 # Summary
 
+In this part of tutorial, you've learned how to stay on the same target,
+in a specific connection, for requests that go to the same service.
+This is a common optimization for a load balancing proxy.
+
 ## Takeaways
 
+1. Use [_algo.Cache_](/reference/classes/Cache) to remember what targets
+   have been allocated for services so we can go back to the same targets in
+   the same connection.
+
+2. Connection-wide initialization should be done at the beginning of _listen()_,
+   before streams are divided into messages by filters like _demuxHTTP()_.
+
 ## What's next?
+
+There is one more optimization we can do to our load-balancer: connection pool.
+That's what we'll be talking about next.
