@@ -32,18 +32,20 @@ namespace pipy {
 
 class Session;
 
+namespace socks {
+
 //
-// ProxySOCKS
+// Server
 //
 
-class ProxySOCKS : public Filter {
+class Server : public Filter {
 public:
-  ProxySOCKS();
-  ProxySOCKS(pjs::Str *target, pjs::Function *on_connect);
+  Server();
+  Server(pjs::Str *target, pjs::Function *on_connect);
 
 private:
-  ProxySOCKS(const ProxySOCKS &r);
-  ~ProxySOCKS();
+  Server(const Server &r);
+  ~Server();
 
   virtual auto help() -> std::list<std::string> override;
   virtual void dump(std::ostream &out) override;
@@ -88,6 +90,7 @@ private:
   bool m_session_end = false;
 };
 
+} // namespace socks
 } // namespace pipy
 
 #endif // SOCKS_HPP

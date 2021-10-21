@@ -251,7 +251,7 @@ private:
 const std::set<std::string> ConfigReducer::s_linking_filters{
   "mux", "demux", "muxHTTP", "demuxHTTP",
   "acceptTLS", "connectTLS",
-  "proxySOCKS4", "proxySOCKS5",
+  "acceptSOCKS",
 };
 
 bool Graph::from_script(Graph &g, const std::string &script, std::string &error) {

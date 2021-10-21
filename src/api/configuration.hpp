@@ -68,6 +68,7 @@ public:
   void task(const std::string &interval);
   void pipeline(const std::string &name);
 
+  void accept_socks(pjs::Str *target, pjs::Function *on_connect);
   void accept_tls(pjs::Str *target, pjs::Object *options);
   void connect(const pjs::Value &target, pjs::Object *options);
   void connect_tls(pjs::Str *target, pjs::Object *options);
@@ -95,8 +96,6 @@ public:
   void on_start(pjs::Function *callback);
   void pack(int batch_size, pjs::Object *options);
   void print();
-  void proxy_socks(pjs::Str *target, pjs::Function *on_connect);
-  void proxy_socks4(pjs::Str *target, pjs::Function *on_connect);
   void replace_body(const pjs::Value &replacement, int size_limit);
   void replace_event(Event::Type type, const pjs::Value &replacement);
   void replace_message(const pjs::Value &replacement, int size_limit);

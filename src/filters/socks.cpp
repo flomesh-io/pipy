@@ -30,69 +30,70 @@
 #include "logging.hpp"
 
 namespace pipy {
+namespace socks {
 
 //
-// ProxySOCKS
+// Server
 //
 
-ProxySOCKS::ProxySOCKS()
+Server::Server()
 {
 }
 
-ProxySOCKS::ProxySOCKS(pjs::Str *target, pjs::Function *on_connect)
+Server::Server(pjs::Str *target, pjs::Function *on_connect)
   : m_target(target)
   , m_on_connect(on_connect)
 {
 }
 
-ProxySOCKS::ProxySOCKS(const ProxySOCKS &r)
+Server::Server(const Server &r)
   : m_pipeline(r.m_pipeline)
   , m_target(r.m_target)
   , m_on_connect(r.m_on_connect)
 {
 }
 
-ProxySOCKS::~ProxySOCKS()
+Server::~Server()
 {
 }
 
-auto ProxySOCKS::help() -> std::list<std::string> {
+auto Server::help() -> std::list<std::string> {
   return {
-    "proxySOCKS(target, onConnect)",
-    "Proxies a SOCKS connection to a different pipeline",
+    "acceptSOCKS(target, onConnect)",
+    "Accepts a SOCKS connection",
     "target = <string> Name of the pipeline that receives SOCKS connections",
     "onConnect = <function> Callback function that receives address, port, user and returns whether the connection is accepted",
   };
 }
 
-void ProxySOCKS::dump(std::ostream &out) {
-  out << "proxySOCKS";
+void Server::dump(std::ostream &out) {
+  out << "acceptSOCKS";
 }
 
-auto ProxySOCKS::draw(std::list<std::string> &links, bool &fork) -> std::string {
+auto Server::draw(std::list<std::string> &links, bool &fork) -> std::string {
   links.push_back(m_target->str());
   fork = false;
-  return "proxySOCKS";
+  return "acceptSOCKS";
 }
 
-void ProxySOCKS::bind() {
+void Server::bind() {
   if (!m_pipeline) {
     m_pipeline = pipeline(m_target);
   }
 }
 
-auto ProxySOCKS::clone() -> Filter* {
-  return new ProxySOCKS(*this);
+auto Server::clone() -> Filter* {
+  return new Server(*this);
 }
 
-void ProxySOCKS::reset() {
+void Server::reset() {
   m_session = nullptr;
   m_state = READ_VERSION;
   m_session_end = false;
 }
 
-void ProxySOCKS::process(Context *ctx, Event *inp) {
-  static Data::Producer s_dp("proxySOCKS");
+void Server::process(Context *ctx, Event *inp) {
+  static Data::Producer s_dp("acceptSOCKS");
 
   if (m_session_end) return;
 
@@ -327,4 +328,5 @@ void ProxySOCKS::process(Context *ctx, Event *inp) {
   }
 }
 
+} // namespace socks
 } // namespace pipy

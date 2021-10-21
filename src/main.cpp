@@ -73,7 +73,6 @@
 #include "filters/replace-message.hpp"
 #include "filters/replace-start.hpp"
 #include "filters/socks.hpp"
-#include "filters/socks4.hpp"
 #include "filters/split.hpp"
 #include "filters/tap.hpp"
 #include "filters/tls.hpp"
@@ -89,6 +88,7 @@ AdminService *s_admin = nullptr;
 //
 
 static std::list<Filter*> s_filters {
+  new socks::Server,
   new tls::Server,
   new Connect,
   new tls::Client,
@@ -119,8 +119,6 @@ static std::list<Filter*> s_filters {
   new OnMessage,
   new Pack,
   new Print,
-  new ProxySOCKS,
-  new ProxySOCKS4,
   new ReplaceStart,
   new ReplaceEvent(Event::Type::Data),
   new ReplaceEvent(Event::Type::MessageStart),
