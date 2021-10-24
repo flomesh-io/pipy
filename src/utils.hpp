@@ -51,6 +51,8 @@ auto split(const std::string &str, char sep) -> std::list<std::string>;
 auto lower(const std::string &str) -> std::string;
 auto escape(const std::string &str) -> std::string;
 auto unescape(const std::string &str) -> std::string;
+auto decode_uri(const std::string &str) -> std::string;
+auto encode_uri(const std::string &str) -> std::string;
 auto encode_hex(char *out, const void *inp, int len) -> int;
 auto decode_hex(void *out, const char *inp, int len) -> int;
 auto encode_base64(char *out, const void *inp, int len) -> int;
@@ -69,6 +71,8 @@ public:
   HexEncoder(const std::function<void(char)> &output)
     : m_output(output) {}
 
+  static auto h2c(char h) -> char;
+
   void input(uint8_t b);
 
 private:
@@ -83,6 +87,8 @@ class HexDecoder {
 public:
   HexDecoder(const std::function<void(int)> &output)
     : m_output(output) {}
+
+  static auto c2h(char c) -> char;
 
   bool input(char c);
 

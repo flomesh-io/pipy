@@ -30,6 +30,8 @@
 
 namespace pipy {
 
+class URLSearchParams;
+
 //
 // URL
 //
@@ -49,6 +51,7 @@ public:
   auto protocol() const -> pjs::Str* { return m_protocol; }
   auto query() const -> pjs::Str* { return m_query; }
   auto search() const -> pjs::Str* { return m_search; }
+  auto searchParams() const -> URLSearchParams* { return m_search_params; }
   auto username() const -> pjs::Str* { return m_username; }
 
 private:
@@ -68,9 +71,33 @@ private:
   pjs::Ref<pjs::Str> m_protocol;
   pjs::Ref<pjs::Str> m_query;
   pjs::Ref<pjs::Str> m_search;
+  pjs::Ref<URLSearchParams> m_search_params;
   pjs::Ref<pjs::Str> m_username;
 
   friend class pjs::ObjectTemplate<URL>;
+};
+
+//
+// URLSearchParams
+//
+
+class URLSearchParams : public pjs::ObjectTemplate<URLSearchParams> {
+public:
+  auto getAll(pjs::Str *name) -> pjs::Array*;
+  auto get(pjs::Str *name) -> pjs::Str*;
+  void set(pjs::Str *name, const pjs::Value &value);
+
+private:
+  URLSearchParams(pjs::Str *search);
+  URLSearchParams(pjs::Object *search);
+
+  virtual auto to_string() const -> std::string override;
+
+  void append(const std::string &name, const std::string &value);
+
+  pjs::Ref<pjs::Object> m_params;
+
+  friend class pjs::ObjectTemplate<URLSearchParams>;
 };
 
 } // namespace pipy

@@ -341,6 +341,45 @@ auto unescape(const std::string &str) -> std::string {
   return str2;
 }
 
+auto decode_uri(const std::string &str) -> std::string {
+  std::string out;
+  for (size_t i = 0; i < str.size(); i++) {
+    auto ch = str[i];
+    if (ch == '%') {
+      if (i + 2 >= str.size()) break;
+      auto h = HexDecoder::c2h(str[i+1]);
+      auto l = HexDecoder::c2h(str[i+2]);
+      out += char((h << 4) | l);
+      i += 2;
+    } else {
+      out += ch;
+    }
+  }
+  return out;
+}
+
+auto encode_uri(const std::string &str) -> std::string {
+  std::string out;
+  for (size_t i = 0; i < str.size(); i++) {
+    auto ch = str[i];
+    if (('0' <= ch && ch <= '9')||
+        ('a' <= ch && ch <= 'z')||
+        ('A' <= ch && ch <= 'Z')||
+        ('-' == ch)||
+        ('_' == ch)||
+        ('.' == ch)||
+        ('~' == ch))
+    {
+      out += ch;
+    } else {
+      out += '%';
+      out += std::toupper(HexEncoder::h2c((ch >> 4) & 0x0f));
+      out += std::toupper(HexEncoder::h2c((ch >> 0) & 0x0f));
+    }
+  }
+  return out;
+}
+
 auto encode_hex(char *out, const void *inp, int len) -> int {
   int n = 0;
   HexEncoder encoder(
@@ -477,20 +516,29 @@ static char s_hex_tab[] = {
   "0123456789abcdef"
 };
 
+auto HexEncoder::h2c(char c) -> char {
+  return s_hex_tab[c & 15];
+}
+
 void HexEncoder::input(uint8_t b) {
-  m_output(s_hex_tab[(b >> 4) & 15]);
-  m_output(s_hex_tab[(b >> 0) & 15]);
+  m_output(h2c(b >> 4));
+  m_output(h2c(b >> 0));
 }
 
 //
 // HexDecoder
 //
 
+auto HexDecoder::c2h(char c) -> char {
+  if ('0' <= c && c <= '9') return c - '0';
+  if ('a' <= c && c <= 'f') return c - 'a' + 10;
+  if ('A' <= c && c <= 'F') return c - 'A' + 10;
+  return -1;
+}
+
 bool HexDecoder::input(char c) {
-  if ('0' <= c && c <= '9') c = c - '0'; else
-  if ('a' <= c && c <= 'f') c = c - 'a' + 10; else
-  if ('A' <= c && c <= 'F') c = c - 'A' + 10; else
-  return false;
+  c = c2h(c);
+  if (c < 0) return false;
   m_byte = (m_byte << 4) | c;
   if (++m_shift == 2) {
     m_output(m_byte);

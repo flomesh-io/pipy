@@ -24,6 +24,9 @@
  */
 
 #include "url.hpp"
+#include "utils.hpp"
+
+#include <sstream>
 
 namespace pipy {
 
@@ -172,6 +175,142 @@ URL::URL(pjs::Str *url, pjs::Str *base) {
   m_query    = pjs::Str::make(query    );
   m_search   = pjs::Str::make(search   );
   m_username = pjs::Str::make(username );
+
+  m_search_params = URLSearchParams::make(m_search);
+}
+
+//
+// URLSearchParams
+//
+
+URLSearchParams::URLSearchParams(pjs::Str *search) {
+  m_params = pjs::Object::make();
+  auto str = search->str();
+  int i = 0;
+  if (str[0] == '?') i++;
+  while (i < str.length()) {
+    int j = i;
+    while (j < str.length() && str[j] != '&') j++;
+    if (j > i) {
+      int k = i;
+      while (k < j && str[k] != '=') k++;
+      if (k < j) {
+        append(
+          utils::decode_uri(str.substr(i, k - i)),
+          utils::decode_uri(str.substr(k + 1, j - k - 1))
+        );
+      } else {
+        append(
+          utils::decode_uri(str.substr(i, j - i)),
+          std::string()
+        );
+      }
+    }
+    i = j + 1;
+  }
+}
+
+URLSearchParams::URLSearchParams(pjs::Object *search) {
+  m_params = pjs::Object::make();
+  search->iterate_all(
+    [this](pjs::Str *k, pjs::Value &v) {
+      set(k, v);
+    }
+  );
+}
+
+auto URLSearchParams::getAll(pjs::Str *name) -> pjs::Array* {
+  pjs::Value v;
+  m_params->get(name, v);
+  if (v.is_string()) {
+    auto *arr = pjs::Array::make(1);
+    arr->set(0, v);
+    return arr;
+  } else if (v.is_array()) {
+    return v.as<pjs::Array>()->map(
+      [](pjs::Value &val, int, pjs::Value &ret) {
+        ret = val;
+        return true;
+      }
+    );
+  } else {
+    return pjs::Array::make();
+  }
+}
+
+auto URLSearchParams::get(pjs::Str *name) -> pjs::Str* {
+  pjs::Value v;
+  m_params->get(name, v);
+  if (v.is_string()) {
+    return v.s();
+  } else if (v.is_array()) {
+    v.as<pjs::Array>()->get(0, v);
+    if (v.is_string()) {
+      return v.s();
+    }
+  }
+  return nullptr;
+}
+
+void URLSearchParams::set(pjs::Str *name, const pjs::Value &value) {
+  if (value.is_undefined() || value.is_null()) {
+    m_params->ht_delete(name);
+  } if (value.is_array()) {
+    m_params->set(name, value.as<pjs::Array>()->map(
+      [](pjs::Value &val, int, pjs::Value &ret) {
+        auto s = val.to_string();
+        ret.set(s);
+        s->release();
+        return true;
+      }
+    ));
+  } else {
+    auto s = value.to_string();
+    m_params->set(name, s);
+    s->release();
+  }
+}
+
+auto URLSearchParams::to_string() const -> std::string {
+  std::stringstream ss;
+  bool first = true;
+  m_params->iterate_all(
+    [&](pjs::Str *k, pjs::Value &v) {
+      if (v.is_string()) {
+        if (first) first = false; else ss << '&';
+        ss << utils::encode_uri(k->str());
+        ss << '=';
+        ss << utils::encode_uri(v.s()->str());
+      } else if (v.is_array()) {
+        v.as<pjs::Array>()->iterate_all(
+          [&](pjs::Value &v, int) {
+            if (first) first = false; else ss << '&';
+            ss << utils::encode_uri(k->str());
+            ss << '=';
+            ss << utils::encode_uri(v.s()->str());
+          }
+        );
+      }
+    }
+  );
+  return ss.str();
+}
+
+void URLSearchParams::append(const std::string &name, const std::string &value) {
+  pjs::Ref<pjs::Str> k(pjs::Str::make(name));
+  pjs::Ref<pjs::Str> v(pjs::Str::make(value));
+  pjs::Value old;
+  m_params->get(k, old);
+  if (old.is_array()) {
+    old.as<pjs::Array>()->push(v.get());
+  } else if (old.is_string()) {
+    auto arr = pjs::Array::make(2);
+    arr->set(0, old);
+    arr->set(1, v.get());
+    m_params->set(k, arr);
+  } else {
+    m_params->set(k, v.get());
+  }
 }
 
 } // namespace pipy
@@ -204,10 +343,58 @@ template<> void ClassDef<URL>::init() {
   accessor("protocol",      [](Object *obj, Value &ret) { ret.set(obj->as<URL>()->protocol()); });
   accessor("query",         [](Object *obj, Value &ret) { ret.set(obj->as<URL>()->query()); });
   accessor("search",        [](Object *obj, Value &ret) { ret.set(obj->as<URL>()->search()); });
+  accessor("searchParams",  [](Object *obj, Value &ret) { ret.set(obj->as<URL>()->searchParams()); });
   accessor("username",      [](Object *obj, Value &ret) { ret.set(obj->as<URL>()->username()); });
 }
 
 template<> void ClassDef<Constructor<URL>>::init() {
+  super<Function>();
+  ctor();
+}
+
+//
+// URLSearchParams
+//
+
+template<> void ClassDef<URLSearchParams>::init() {
+  ctor([](Context &ctx) -> Object* {
+    Str *search;
+    Object *params;
+    if (ctx.try_arguments(1, &search)) {
+      return URLSearchParams::make(search);
+    } else if (ctx.try_arguments(1, &params)) {
+      return URLSearchParams::make(params);
+    } else {
+      ctx.error_argument_type(0, "a string or an object");
+      return nullptr;
+    }
+  });
+
+  method("getAll", [](Context &ctx, Object *obj, Value &ret) {
+    Str *name;
+    if (!ctx.arguments(1, &name)) return;
+    ret.set(obj->as<URLSearchParams>()->getAll(name));
+  });
+
+  method("get", [](Context &ctx, Object *obj, Value &ret) {
+    Str *name;
+    if (!ctx.arguments(1, &name)) return;
+    if (auto *s = obj->as<URLSearchParams>()->get(name)) {
+      ret.set(s);
+    } else {
+      ret = Value::null;
+    }
+  });
+
+  method("set", [](Context &ctx, Object *obj, Value &ret) {
+    Str *name;
+    Value value;
+    if (!ctx.arguments(1, &name, &value)) return;
+    obj->as<URLSearchParams>()->set(name, value);
+  });
+}
+
+template<> void ClassDef<Constructor<URLSearchParams>>::init() {
   super<Function>();
   ctor();
 }

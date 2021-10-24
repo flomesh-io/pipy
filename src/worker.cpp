@@ -105,6 +105,9 @@ template<> void ClassDef<Global>::init() {
   // URL
   variable("URL", class_of<Constructor<URL>>());
 
+  // URLSearchParams
+  variable("URLSearchParams", class_of<Constructor<URLSearchParams>>());
+
   // Netmask
   variable("Netmask", class_of<Constructor<Netmask>>());
 
