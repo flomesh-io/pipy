@@ -13,7 +13,7 @@ Pipy 采用了模块化、链式的处理架构，用顺序执行的模块来对
 
 ## 兼容性
 
-兼容性是 Pipy 的设计重点之一，它可以支持多种操作系统平台与 CPU 架构，目前开发团队已经完成了在下列平台和架构上的[测试](doc-fix/test)：
+兼容性是 Pipy 的设计重点之一，它可以支持多种操作系统平台与 CPU 架构，目前开发团队已经完成了在下列平台和架构上的测试：
 
 * Alpine 3
 * CentOS 7
@@ -25,13 +25,14 @@ Pipy 采用了模块化、链式的处理架构，用顺序执行的模块来对
 
 ## 图形界面
 
-这次迭代我们引入了web编辑器。启动pipy时使用--dev-port=6060来开启该功能，如：
+Pipy 内置了可视化 web 开发环境（需要在编译时开启），包含了编辑器和图形化的辅助设计工具，用于简化脚本的开发和调试。
 
-~~~~
-$pipy test --dev-port=6060
-~~~~
+``` shell
+#默认使用 6060 端口
+$ pipy tutorial/01-hello/hello.js --admin-port=6060
+```
 
-启动pipy后，用浏览器访问 http://localhost:6060/ 就可以看到pipy控制台。控制台采用类似vscode的布局和操作体验。具体的使用可以参考[pipy console基本使用文档](docs/pipy-console-intro_zh.md)。
+启动pipy后，用浏览器访问 http://localhost:6060/ 就可以看到pipy控制台。控制台采用类似vscode的布局和操作体验。具体的使用可以参考[pipy console基本使用文档](https://flomesh-io.github.io/pipy/operating/dev-console.html)。
 
 pipy console的设计目的包括如下两个：
 * 流量编辑人员可以快速的编辑pipy js(PJS)脚本，进行调试；同时pipy console以图形化方式展示流量处理逻辑，可以帮助使用者在复杂逻辑情况下快速理解处理逻辑
@@ -85,7 +86,7 @@ $ yum -y install http://repo.flomesh.cn/pipy/pipy-latest.el7_pl.x86_64.rpm
 $ pipy --help
 ```
 
-### 模块列表及参数
+### 过滤器列表及参数
 
 ```command
 $ pipy --list-modules
@@ -102,7 +103,7 @@ $ pipy test/001-echo/pipy.js
 
 或者使用pipy console:
 ```command
-$ pipy test/ --dev-port=6060
+$ pipy test/001-echo/pipy.js --admin-port=6060
 ```
 然后使用浏览器访问 http://localhost:6060/ 就可以了。
 
@@ -127,7 +128,7 @@ $ docker run -it --rm -e PIPY_CONFIG_FILE=/etc/pipy/test/001-echo/pipy.js flomes
 ```
 
 ```command
-docker run -it --rm -e PIPY_CONFIG_FILE=/etc/pipy/test/011-serve-static/pipy.js -e PIPY_SPAWN=1 -p 8000:6000 flomesh/pipy-pjs:latest
+$ docker run -it --rm -e PIPY_CONFIG_FILE=/etc/pipy/test/001-echo/pipy.js -e PIPY_SPAWN=1 -p 8000:6000 flomesh/pipy-pjs:latest
 ```
 
 ## 在 Kubernetes 上运行 Pipy
@@ -148,27 +149,10 @@ $ kubectl apply -f config/samples/sidecar/007-deployment-pipy.yaml
 
 文档在保存在 [`docs`](docs) 目录：
 
-* [概述](docs/overview_zh.md)
-* [基础教程](docs/tutor_zh.md)
-    * [000-启动与web控制台的使用](docs/pipy-console-intro_zh.md)
-    * [001-连通性测试](docs/tutor-001-echo_zh.md)
-    * [002-基本输出](docs/tutor-002-hello_zh.md)
-    * [003-输出动态内容](docs/tutor-003-hello-ip_zh.md)
-    * [004-HTTP反向代理](docs/tutor-004-http-proxy_zh.md)
-    * [005-负载均衡](docs/tutor-005-load-balancing_zh.md)
-    * [006-指标统计与输出](docs/tutor-006-metrics_zh.md)
-    * [007-日志与数据采集](docs/tutor-007-logging_zh.md)
-    * [008-限流限速](docs/tutor-008-throttle_zh.md)
-    * [009-TLS](docs/tutor-009-tls_zh.md)
-    * [010-JWT](docs/tutor-010-jwt_zh.md)
-    * [011]
-    * [012-xml转换为json](docs/tutor-012-xml2json_zh.md)
-    * [013-hessian转换为json](docs/tutor-013-hessian2json_zh.md)
-    * [014-执行命令](docs/tutor-014-exec_zh.md)
-    * [015-静态web服务器](docs/tutor-015-http-static-server_zh.md)
-    * [016-sock4代理](docs/tutor-016-socks4-proxy_zh.md)
-* [使用场景示例](docs/scenarios_zh.md)
-* [配置](docs/configuration_zh.md)
+* [概述](./docs/overview.mdx)
+* [概念](./docs/concepts.mdx)
+* [快速开始](./docs/quick-start.mdx)
+* [教程](https://flomesh-io.github.io/pipy/tutorials/)
 * [版权](COPYRIGHT)
 * [授权](LICENCE)
 

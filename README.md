@@ -112,11 +112,11 @@ The Pipy Docker image can be configured with a few environment variables:
   of instantces subtracted by 1. For example, you use `PIPY_SPAWN=3` for 4 instances.
 
 ```
-docker run -it --rm -e PIPY_CONFIG_FILE=/etc/pipy/test/001-echo/pipy.cfg flomesh/pipy-pjs:latest
+$ docker run -it --rm -e PIPY_CONFIG_FILE=/etc/pipy/test/001-echo/pipy.js flomesh/pipy-pjs:latest
 ```
 
 ```
-docker run -it --rm -e PIPY_CONFIG_FILE=/etc/pipy/test/011-serve-static/pipy.cfg -e PIPY_SPAWN=1 -p 8000:6000 flomesh/pipy-pjs:latest
+$ docker run -it --rm -e PIPY_CONFIG_FILE=/etc/pipy/test/001-echo/pipy.js -e PIPY_SPAWN=1 -p 8000:6000 flomesh/pipy-pjs:latest
 ```
 
 ## Run on Kubernetes
@@ -137,13 +137,36 @@ kubectl apply -f config/samples/sidecar/007-deployment-pipy.yaml
 
 You can find Pipy documentation under `docs/`.
 
-* [Overview](https://github.com/flomesh-io/pipy/blob/main/docs/overview.md)
-* [Configuration](https://github.com/flomesh-io/pipy/blob/main/docs/configuration.md)
+* [Overview](./docs/overview.mdx)
+* [Concept](./docs/concepts.mdx)
+* [Quick start](./docs/quick-start.mdx)
+* Tutorials
+    * [01 Hello world](./docs/tutorial/01-hello.mdx)
+    * [02 Echo](./docs/tutorial/02-echo.mdx)
+    * [03 Proxy](./docs/tutorial/03-proxy.mdx)
+    * [04 Routing](./docs/tutorial/04-routing.mdx)
+    * [05 Plugins](./docs/tutorial/05-plugins.mdx)
+    * [06 Configuration](./docs/tutorial/06-configuration.mdx)
+    * [07 Load balancing](./docs/tutorial/07-load-balancing.mdx)
+    * [08 Load balancing improved](./docs/tutorial/08-load-balancing-improved.mdx)
+    * [09 Connection pool](./docs/tutorial/09-connection-pool.mdx)
+<!--* [10 Path rewriting](./docs/tutorial/10-path-rewriting.mdx)
+    * [11 Logging](./docs/tutorial/11-logging.mdx)
+    * [12 JWT](./docs/tutorial/12-jwt.mdx)
+    * [13 Ban](./docs/tutorial/13-ban.mdx)
+    * [14 Throttle](./docs/tutorial/14-throttle.mdx)
+    * [15 Cache](./docs/tutorial/15-cache.mdx)
+    * [16 Serve static](./docs/tutorial/16-serve-static.mdx)
+    * [17 Body transform](./docs/tutorial/17-body-transform.mdx)
+    * [18 TLS](./docs/tutorial/18-tls.mdx)-->
+* [Copyright](COPYRIGHT)
+* [Licence](LICENCE)
+
 
 # Copyright & License
 
-Please refer to [COPYRIGHT](https://github.com/flomesh-io/pipy/blob/main/COPYRIGHT)
-and [LICENCE](https://github.com/flomesh-io/pipy/blob/main/LICENCE).
+Please refer to [COPYRIGHT](./COPYRIGHT)
+and [LICENCE](./LICENCE).
 
 # Contact
 
@@ -155,4 +178,4 @@ and [LICENCE](https://github.com/flomesh-io/pipy/blob/main/LICENCE).
 
 # Translations
 
-## [中文版](https://github.com/flomesh-io/pipy/blob/main/README_zh.md)
+## [中文版](./README_zh.md)
