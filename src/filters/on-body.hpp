@@ -37,18 +37,16 @@ namespace pipy {
 
 class OnBody : public Filter {
 public:
-  OnBody();
   OnBody(pjs::Function *callback, int size_limit = -1);
 
 private:
   OnBody(const OnBody &r);
   ~OnBody();
 
-  virtual auto help() -> std::list<std::string> override;
-  virtual void dump(std::ostream &out) override;
   virtual auto clone() -> Filter* override;
   virtual void reset() override;
-  virtual void process(Context *ctx, Event *inp) override;
+  virtual void process(Event *evt) override;
+  virtual void dump(std::ostream &out) override;
 
   pjs::Ref<Data> m_body;
   pjs::Ref<pjs::Function> m_callback;

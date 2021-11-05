@@ -27,7 +27,6 @@
 #define DUBBO_HPP
 
 #include "filter.hpp"
-#include "buffer.hpp"
 #include "data.hpp"
 
 namespace pipy {
@@ -45,11 +44,10 @@ private:
   Decoder(const Decoder &r);
   ~Decoder();
 
-  virtual auto help() -> std::list<std::string> override;
-  virtual void dump(std::ostream &out) override;
   virtual auto clone() -> Filter* override;
   virtual void reset() override;
-  virtual void process(Context *ctx, Event *inp) override;
+  virtual void process(Event *evt) override;
+  virtual void dump(std::ostream &out) override;
 
 private:
   enum State {
@@ -59,7 +57,8 @@ private:
 
   State m_state;
   int m_size;
-  ByteBuf<16> m_head;
+  int m_head_size;
+  uint8_t m_head[16];
   pjs::Ref<pjs::Object> m_head_object;
 
   std::string m_var_request_id;
@@ -67,7 +66,7 @@ private:
   std::string m_var_2_way_bit;
   std::string m_var_event_bit;
   std::string m_var_status;
-  bool m_session_end = false;
+  bool m_stream_end = false;
 };
 
 //
@@ -83,11 +82,10 @@ private:
   Encoder(const Encoder &r);
   ~Encoder();
 
-  virtual auto help() -> std::list<std::string> override;
-  virtual void dump(std::ostream &out) override;
   virtual auto clone() -> Filter* override;
   virtual void reset() override;
-  virtual void process(Context *ctx, Event *inp) override;
+  virtual void process(Event *evt) override;
+  virtual void dump(std::ostream &out) override;
 
 private:
   pjs::Ref<Data> m_buffer;
@@ -99,7 +97,6 @@ private:
   pjs::PropertyCache m_prop_is_two_way;
   pjs::PropertyCache m_prop_is_event;
   long long m_auto_id = 0;
-  bool m_session_end = false;
 
   static long long get_header(
     const Context &ctx,

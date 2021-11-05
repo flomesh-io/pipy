@@ -27,51 +27,74 @@
 #define FILTER_HPP
 
 #include "event.hpp"
+#include "list.hpp"
 
-#include <list>
+#include <memory>
 #include <ostream>
+#include <string>
+#include <vector>
 
 namespace pipy {
 
 class Context;
+class Module;
+class PipelineDef;
 class Pipeline;
-class ReusableSession;
 
 //
 // Filter
 //
 
-class Filter {
+class Filter :
+  public EventFunction,
+  public List<Filter>::Item
+{
 public:
   virtual ~Filter() {}
-  virtual auto help() -> std::list<std::string> { return std::list<std::string>(); }
-  virtual void dump(std::ostream &out) = 0;
-  virtual auto draw(std::list<std::string> &links, bool &fork) -> std::string;
-  virtual void bind() {}
-  virtual auto clone() -> Filter* = 0;
-  virtual void reset() = 0;
-  virtual void process(Context *ctx, Event *inp) = 0;
 
-  auto pipeline() const -> Pipeline* { return m_pipeline; }
+  auto module() const -> Module*;
+  auto context() const -> Context*;
+
+  void add_sub_pipeline(PipelineDef *def);
+  void add_sub_pipeline(pjs::Str *name);
+  auto num_sub_pipelines() const -> int { return m_subs->size(); }
+  auto get_sub_pipeline_name(int i) -> const std::string&;
+
+  auto sub_pipeline(int i, bool clone_context) -> Pipeline*;
+
+  virtual void bind();
+  virtual auto clone() -> Filter* = 0;
+  virtual void chain();
+  virtual void reset();
+  virtual void process(Event *evt) = 0;
+  virtual void dump(std::ostream &out) = 0;
 
 protected:
-  auto pipeline(pjs::Str *name) -> Pipeline*;
-  auto new_context(Context *base = nullptr) -> Context*;
-  auto out() const -> const Event::Receiver& { return m_output; }
-  void output(Event *inp) { m_output(inp); }
+  Filter();
+  Filter(const Filter &r);
+
+  using EventFunction::output;
+
   bool output(const pjs::Value &evt);
-  bool eval(Context &ctx, pjs::Value &param, pjs::Value &result);
-  bool callback(Context &ctx, pjs::Function *func, int argc, pjs::Value argv[], pjs::Value &result);
-  void abort();
+  bool eval(pjs::Value &param, pjs::Value &result);
+  bool callback(pjs::Function *func, int argc, pjs::Value argv[], pjs::Value &result);
 
 private:
-  Pipeline* m_pipeline = nullptr;
-  Filter* m_next = nullptr;
-  ReusableSession* m_reusable_session = nullptr;
-  Event::Receiver m_output;
+  struct Sub {
+    pjs::Ref<pjs::Str> name;
+    pjs::Ref<PipelineDef> def;
+  };
 
-  friend class ReusableSession;
+  std::shared_ptr<std::vector<Sub>> m_subs;
+
+  PipelineDef* m_pipeline_def = nullptr;
+  Pipeline* m_pipeline = nullptr;
+  bool m_stream_end = false;
+
+  virtual void on_event(Event *evt) override;
+
   friend class Pipeline;
+  friend class PipelineDef;
 };
 
 } // namespace pipy

@@ -31,6 +31,21 @@ namespace pipy {
 template<class T>
 class List {
 public:
+  List()
+    : m_size(0)
+    , m_head(nullptr)
+    , m_tail(nullptr) {}
+
+  List(List &&r)
+    : m_size(r.m_size)
+    , m_head(r.m_head)
+    , m_tail(r.m_tail)
+  {
+    r.m_size = 0;
+    r.m_head = nullptr;
+    r.m_tail = nullptr;
+  }
+
   class Item {
   public:
     auto back() const -> T* { return static_cast<T*>(m_back); }
@@ -67,9 +82,9 @@ public:
   }
 
 private:
-  Item* m_head = nullptr;
-  Item* m_tail = nullptr;
-  size_t m_size = 0;
+  size_t m_size;
+  Item* m_head;
+  Item* m_tail;
 };
 
 } // namespace pipy

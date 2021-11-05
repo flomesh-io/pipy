@@ -27,11 +27,6 @@
 
 namespace pipy {
 
-OnEvent::OnEvent(Event::Type type)
-  : m_type(type)
-{
-}
-
 OnEvent::OnEvent(Event::Type type, pjs::Function *callback)
   : m_type(type)
   , m_callback(callback)
@@ -39,7 +34,8 @@ OnEvent::OnEvent(Event::Type type, pjs::Function *callback)
 }
 
 OnEvent::OnEvent(const OnEvent &r)
-  : m_type(r.m_type)
+  : Filter(r)
+  , m_type(r.m_type)
   , m_callback(r.m_callback)
 {
 }
@@ -48,42 +44,12 @@ OnEvent::~OnEvent()
 {
 }
 
-auto OnEvent::help() -> std::list<std::string> {
-  switch (m_type) {
-    case Event::Type::Data:
-      return {
-        "handleData(callback)",
-        "Handles a Data event",
-        "callback = <function> Callback function that receives a Data event",
-      };
-    case Event::Type::MessageStart:
-      return {
-        "handleMessageStart(callback)",
-        "Handles a MessageStart event",
-        "callback = <function> Callback function that receives a MessageStart event",
-      };
-    case Event::Type::MessageEnd:
-      return {
-        "handleMessageEnd(callback)",
-        "Handles a MessageEnd event",
-        "callback = <function> Callback function that receives a MessageEnd event",
-      };
-    case Event::Type::SessionEnd:
-      return {
-        "handleSessionEnd(callback)",
-        "Handles a SessionEnd event",
-        "callback = <function> Callback function that receives a SessionEnd event",
-      };
-    default: return std::list<std::string>();
-  }
-}
-
 void OnEvent::dump(std::ostream &out) {
   switch (m_type) {
     case Event::Type::Data: out << "handleData"; break;
     case Event::Type::MessageStart: out << "handleMessageStart"; break;
     case Event::Type::MessageEnd: out << "handleMessageEnd"; break;
-    case Event::Type::SessionEnd: out << "handleSessionEnd"; break;
+    case Event::Type::StreamEnd: out << "handleStreamEnd"; break;
     default: break;
   }
 }
@@ -92,16 +58,13 @@ auto OnEvent::clone() -> Filter* {
   return new OnEvent(*this);
 }
 
-void OnEvent::reset() {
-}
-
-void OnEvent::process(Context *ctx, Event *inp) {
-  if (inp->type() == m_type) {
-    pjs::Value arg(inp), result;
-    if (!callback(*ctx, m_callback, 1, &arg, result)) return;
+void OnEvent::process(Event *evt) {
+  if (evt->type() == m_type) {
+    pjs::Value arg(evt), result;
+    if (!callback(m_callback, 1, &arg, result)) return;
   }
 
-  output(inp);
+  output(evt);
 }
 
 } // namespace pipy

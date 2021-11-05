@@ -27,12 +27,54 @@
 #define DEMUX_HPP
 
 #include "filter.hpp"
-#include "buffer.hpp"
-#include "session.hpp"
-
-#include <queue>
+#include "data.hpp"
+#include "list.hpp"
+#include "pipeline.hpp"
 
 namespace pipy {
+
+//
+// DemuxFunction
+//
+
+class DemuxFunction : public EventFunction {
+public:
+  void reset();
+
+protected:
+  virtual void on_event(Event *evt) override;
+  virtual auto sub_pipeline() -> Pipeline* = 0;
+
+private:
+  class Stream :
+    public pjs::Pooled<Stream>,
+    public List<Stream>::Item,
+    public EventTarget
+  {
+  public:
+    Stream(DemuxFunction *demux, MessageStart *start);
+
+    void data(Data *data);
+    void end(MessageEnd *end);
+    bool input_end() const { return m_input_end; }
+
+  private:
+    DemuxFunction* m_demux;
+    pjs::Ref<Pipeline> m_pipeline;
+    pjs::Ref<MessageStart> m_start;
+    Data m_buffer;
+    bool m_input_end = false;
+    bool m_output_end = false;
+
+    virtual void on_event(Event *evt) override;
+
+    void flush();
+  };
+
+  List<Stream> m_streams;
+
+  friend class Stream;
+};
 
 //
 // Demux
@@ -41,35 +83,24 @@ namespace pipy {
 class Demux : public Filter {
 public:
   Demux();
-  Demux(Pipeline *pipeline);
-  Demux(pjs::Str *target);
 
 private:
   Demux(const Demux &r);
   ~Demux();
 
-  virtual auto help() -> std::list<std::string> override;
-  virtual void dump(std::ostream &out) override;
-  virtual auto draw(std::list<std::string> &links, bool &fork) -> std::string override;
-  virtual void bind() override;
   virtual auto clone() -> Filter* override;
+  virtual void chain() override;
   virtual void reset() override;
-  virtual void process(Context *ctx, Event *inp) override;
+  virtual void process(Event *evt) override;
+  virtual void dump(std::ostream &out) override;
 
-  struct Channel : public pjs::Pooled<Channel> {
-    pjs::Ref<Session> session;
-    EventBuffer buffer;
-    bool input_end = false;
-    bool output_end = false;
-    ~Channel() { session->on_output(nullptr); }
+  struct DemuxInternal : public DemuxFunction {
+    DemuxInternal(Demux *d) : demux(d) {}
+    Demux* demux;
+    virtual auto sub_pipeline() -> Pipeline* override;
   };
 
-  Pipeline* m_pipeline = nullptr;
-  pjs::Ref<pjs::Str> m_target;
-  std::queue<Channel*> m_queue;
-  bool m_session_end = false;
-
-  bool flush();
+  DemuxInternal m_ef_demux;
 };
 
 } // namespace pipy

@@ -40,7 +40,7 @@ public:
 
   ~Timer() { cancel(); }
 
-  void schedule(double timeout, std::function<void(void)> handler) {
+  void schedule(double timeout, const std::function<void(void)> &handler) {
     m_timer.expires_after(std::chrono::milliseconds((long long)(timeout * 1000)));
     m_timer.async_wait(
       [=](const asio::error_code &ec) {

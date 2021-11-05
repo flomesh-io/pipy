@@ -26,7 +26,6 @@
 #include "inbound.hpp"
 #include "listener.hpp"
 #include "pipeline.hpp"
-#include "session.hpp"
 #include "module.hpp"
 #include "worker.hpp"
 #include "constants.hpp"
@@ -47,8 +46,8 @@ Inbound::Inbound(Listener *listener)
 }
 
 Inbound::~Inbound() {
-  if (m_session) {
-    auto *ctx = m_session->context();
+  if (m_pipeline) {
+    auto *ctx = m_pipeline->context();
     ctx->m_inbound = nullptr;
   }
   m_listener->close(this);
@@ -69,7 +68,7 @@ void Inbound::accept(
       if (ec) {
         if (ec != asio::error::operation_aborted) {
           Log::warn(
-            "Inbound: %p, error accepting from downstream %s, %s",
+            "[inbound  %p] error accepting from downstream %s, %s",
             this, m_remote_addr.c_str(), ec.message().c_str());
         }
         release();
@@ -79,10 +78,10 @@ void Inbound::accept(
         m_local_port = local.port();
 
         Log::debug(
-          "Inbound: %p, connection accepted from downstream %s",
+          "[inbound  %p] connection accepted from downstream %s",
           this, m_remote_addr.c_str());
 
-        start(listener->pipeline());
+        start(listener->pipeline_def());
       }
     }
   );
@@ -133,22 +132,24 @@ void Inbound::end() {
   }
 }
 
-void Inbound::start(Pipeline *pipeline) {
-  auto mod = pipeline->module();
+void Inbound::on_event(Event *evt) {
+  if (auto data = evt->as<Data>()) {
+    send(data);
+  } else if (evt->is<MessageEnd>()) {
+    flush();
+  } else if (evt->is<StreamEnd>()) {
+    end();
+  }
+}
+
+void Inbound::start(PipelineDef *pipeline_def) {
+  auto mod = pipeline_def->module();
   auto ctx = mod
     ? mod->worker()->new_runtime_context()
     : new pipy::Context();
   ctx->m_inbound = this;
-  m_session = Session::make(ctx, pipeline);
-  m_session->on_output([=](const pjs::Ref<Event> &obj) {
-    if (auto data = obj->as<Data>()) {
-      send(data);
-    } else if (obj->is<MessageEnd>()) {
-      flush();
-    } else if (obj->is<SessionEnd>()) {
-      end();
-    }
-  });
+  m_pipeline = Pipeline::make(pipeline_def, ctx);
+  m_pipeline->chain(EventTarget::input());
   receive();
 }
 
@@ -158,24 +159,26 @@ void Inbound::receive() {
   pjs::Ref<Data> buffer(Data::make(RECEIVE_BUFFER_SIZE, &s_data_producer));
 
   auto on_received = [=](const std::error_code &ec, std::size_t n) {
+    Pipeline::AutoReleasePool arp;
     if (n > 0) {
       buffer->pop(buffer->size() - n);
-      m_session->input(buffer);
-      m_session->input(Data::flush());
+      auto inp = m_pipeline->input();
+      inp->input(buffer);
+      inp->input(Data::flush());
     }
 
     if (ec) {
       if (ec == asio::error::eof || ec == asio::error::operation_aborted) {
         Log::debug(
-          "Inbound: %p, connection closed by downstream %s",
+          "[inbound  %p] connection closed by downstream %s",
           this, m_remote_addr.c_str());
-        m_session->input(SessionEnd::make(SessionEnd::NO_ERROR));
+        m_pipeline->input()->input(StreamEnd::make(StreamEnd::NO_ERROR));
       } else {
         auto msg = ec.message();
         Log::warn(
-          "Inbound: %p, error reading from downstream %s, %s",
+          "[inbound  %p] error reading from downstream %s, %s",
           this, m_remote_addr.c_str(), msg.c_str());
-        m_session->input(SessionEnd::make(SessionEnd::READ_ERROR));
+        m_pipeline->input()->input(StreamEnd::make(StreamEnd::READ_ERROR));
       }
 
       m_reading_ended = true;
@@ -204,7 +207,7 @@ void Inbound::pump() {
     if (ec) {
       auto msg = ec.message();
       Log::warn(
-        "Inbound: %p, error writing to downstream %s, %s",
+        "[inbound  %p] error writing to downstream %s, %s",
         this, m_remote_addr.c_str(), msg.c_str());
       m_buffer.clear();
       m_writing_ended = true;
@@ -232,15 +235,15 @@ void Inbound::close() {
   std::error_code ec;
   m_socket.close(ec);
   if (ec) {
-    Log::error("Inbound: %p, error closing socket to %s, %s", this, m_remote_addr.c_str(), ec.message().c_str());
+    Log::error("[inbound  %p] error closing socket to %s, %s", this, m_remote_addr.c_str(), ec.message().c_str());
   } else {
-    Log::debug("Inbound: %p, connection closed to %s", this, m_remote_addr.c_str());
+    Log::debug("[inbound  %p] connection closed to %s", this, m_remote_addr.c_str());
   }
 }
 
 void Inbound::free() {
   if (!m_pumping && m_reading_ended && m_writing_ended) {
-    m_session = nullptr;
+    m_pipeline = nullptr;
     release();
   }
 }

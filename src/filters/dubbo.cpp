@@ -57,13 +57,6 @@ Decoder::~Decoder()
 {
 }
 
-auto Decoder::help() -> std::list<std::string> {
-  return {
-    "decodeDubbo()",
-    "Deframes a Dubbo message",
-  };
-}
-
 void Decoder::dump(std::ostream &out) {
   out << "decodeDubbo";
 }
@@ -73,17 +66,18 @@ auto Decoder::clone() -> Filter* {
 }
 
 void Decoder::reset() {
+  Filter::reset();
   m_state = FRAME_HEAD;
   m_size = 0;
-  m_head.clear();
-  m_session_end = false;
+  m_head_size = 0;
+  m_stream_end = false;
 }
 
-void Decoder::process(Context *ctx, Event *inp) {
-  if (m_session_end) return;
+void Decoder::process(Event *evt) {
+  if (m_stream_end) return;
 
   // Data
-  if (auto data = inp->as<Data>()) {
+  if (auto data = evt->as<Data>()) {
     while (!data->empty()) {
       pjs::Ref<Data> read(Data::make());
       auto old_state = m_state;
@@ -96,8 +90,8 @@ void Decoder::process(Context *ctx, Event *inp) {
 
         // Read frame header.
         case FRAME_HEAD:
-          m_head.push(c);
-          if (m_head.length() == 16) {
+          m_head[m_head_size++] = c;
+          if (m_head_size == 16) {
             if ((unsigned char)m_head[0] != 0xda ||
                 (unsigned char)m_head[1] != 0xbb
             ) {
@@ -136,7 +130,7 @@ void Decoder::process(Context *ctx, Event *inp) {
         case FRAME_DATA:
           if (!--m_size) {
             m_state = FRAME_HEAD;
-            m_head.clear();
+            m_head_size = 0;
           }
           break;
         }
@@ -155,15 +149,14 @@ void Decoder::process(Context *ctx, Event *inp) {
         if (m_size == 0) {
           output(MessageEnd::make());
           m_state = FRAME_HEAD;
-          m_head.clear();
+          m_head_size = 0;
         }
       }
     }
 
-  // End of session
-  } else if (inp->is<SessionEnd>()) {
-    m_session_end = true;
-    output(inp);
+  // End of stream
+  } else if (evt->is<StreamEnd>()) {
+    output(evt);
   }
 }
 
@@ -194,14 +187,6 @@ Encoder::~Encoder()
 {
 }
 
-auto Encoder::help() -> std::list<std::string> {
-  return {
-    "encodeDubbo([head])",
-    "Frames a Dubbo message",
-    "head = <object|function> Message head including id, status, isRequest, isTwoWay, isEvent",
-  };
-}
-
 void Encoder::dump(std::ostream &out) {
   out << "encodeDubbo";
 }
@@ -211,28 +196,27 @@ auto Encoder::clone() -> Filter* {
 }
 
 void Encoder::reset() {
+  Filter::reset();
   m_buffer = nullptr;
   m_auto_id = 0;
-  m_session_end = false;
 }
 
-void Encoder::process(Context *ctx, Event *inp) {
+void Encoder::process(Event *evt) {
   static Data::Producer s_dp("encodeDubbo");
 
-  if (m_session_end) return;
-
-  if (auto start = inp->as<MessageStart>()) {
+  if (auto start = evt->as<MessageStart>()) {
     m_message_start = start;
     m_buffer = Data::make();
 
-  } else if (inp->is<MessageEnd>()) {
+  } else if (evt->is<MessageEnd>()) {
     if (!m_message_start) return;
 
     pjs::Value head_obj(m_head), head;
-    if (!eval(*ctx, head_obj, head)) return;
+    if (!eval(head_obj, head)) return;
     if (!head.is_object() || head.is_null()) head.set(m_message_start->head());
 
     pjs::Object *obj = head.is_object() ? head.o() : nullptr;
+    auto ctx = context();
     auto R = get_header(*ctx, obj, m_prop_id, m_auto_id++);
     auto S = get_header(*ctx, obj, m_prop_status, 0);
     char F = get_header(*ctx, obj, m_prop_is_request, 1) ? 0x82 : 0x02;
@@ -264,16 +248,15 @@ void Encoder::process(Context *ctx, Event *inp) {
     output(m_message_start);
     output(s_dp.make(header, sizeof(header)));
     output(m_buffer);
-    output(inp);
+    output(evt);
 
     m_buffer = nullptr;
 
-  } else if (auto data = inp->as<Data>()) {
+  } else if (auto data = evt->as<Data>()) {
     if (m_buffer) m_buffer->push(*data);
 
-  } else if (inp->is<SessionEnd>()) {
-    m_session_end = true;
-    output(inp);
+  } else if (evt->is<StreamEnd>()) {
+    output(evt);
   }
 }
 

@@ -24,7 +24,7 @@
  */
 
 #include "wait.hpp"
-#include "session.hpp"
+#include "pipeline.hpp"
 #include "logging.hpp"
 
 namespace pipy {
@@ -33,30 +33,19 @@ namespace pipy {
 // Wait
 //
 
-Wait::Wait()
-{
-}
-
 Wait::Wait(pjs::Function *condition)
   : m_condition(condition)
 {
 }
 
 Wait::Wait(const Wait &r)
-  : Wait(r.m_condition)
+  : Filter(r)
+  , m_condition(r.m_condition)
 {
 }
 
 Wait::~Wait()
 {
-}
-
-auto Wait::help() -> std::list<std::string> {
-  return {
-    "wait(condition)",
-    "Buffers up events until a condition is fulfilled",
-    "condition = <function> Callback function that returns whether the condition is fulfilled",
-  };
 }
 
 void Wait::dump(std::ostream &out) {
@@ -68,43 +57,47 @@ auto Wait::clone() -> Filter* {
 }
 
 void Wait::reset() {
+  Filter::reset();
   Waiter::cancel();
   m_buffer.clear();
   m_fulfilled = false;
-  m_session_end = false;
 }
 
-void Wait::process(Context *ctx, Event *inp) {
-  if (m_session_end) return;
+void Wait::process(Event *evt) {
 
   if (m_fulfilled) {
-    output(inp);
+    output(evt);
+
   } else {
     pjs::Value ret;
-    if (!callback(*ctx, m_condition, 0, nullptr, ret)) return;
+    if (!callback(m_condition, 0, nullptr, ret)) return;
     if (ret.to_boolean()) {
       Waiter::cancel();
       m_fulfilled = true;
-      m_buffer.flush(out());
-      output(inp);
+      m_buffer.flush(
+        [this](Event *evt) {
+          output(evt);
+        }
+      );
+      output(evt);
     } else {
-      Waiter::wait(ctx->group());
-      m_buffer.push(inp);
+      Waiter::wait(context()->group());
+      m_buffer.push(evt);
     }
-  }
-
-  if (inp->is<SessionEnd>()) {
-    m_session_end = true;
   }
 }
 
 void Wait::on_notify(Context *ctx) {
   pjs::Value ret;
-  if (!callback(*ctx, m_condition, 0, nullptr, ret)) return;
+  if (!callback(m_condition, 0, nullptr, ret)) return;
   if (ret.to_boolean()) {
     Waiter::cancel();
     m_fulfilled = true;
-    m_buffer.flush(out());
+    m_buffer.flush(
+      [this](Event *evt) {
+        output(evt);
+      }
+    );
   }
 }
 

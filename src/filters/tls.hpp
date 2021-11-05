@@ -35,9 +35,9 @@
 
 namespace pipy {
 
-class Session;
-
 namespace tls {
+
+class TLSFilter;
 
 //
 // TLSContext
@@ -62,39 +62,51 @@ private:
 // TLSSession
 //
 
-class TLSSession : public pjs::Pooled<TLSSession, pjs::RefCount<TLSSession>> {
+class TLSSession :
+  public pjs::Pooled<TLSSession>,
+  public EventFunction
+{
 public:
   static void init();
   static auto get(SSL *ssl) -> TLSSession*;
 
   TLSSession(
     TLSContext *ctx,
+    Pipeline *pipeline,
     bool is_server,
-    pjs::Object *certificate,
-    Session *session,
-    const Event::Receiver &output
+    pjs::Object *certificate
   );
 
   ~TLSSession();
 
   void set_sni(const char *name);
   void start_handshake();
-  void input(Data *data);
-
-  void on_server_name();
 
 private:
+  struct PeerReceiver : public EventTarget {
+    TLSSession* session;
+    PeerReceiver(TLSSession *s) : session(s) {}
+    virtual void on_event(Event *evt) {
+      session->on_receive_peer(evt);
+    }
+  };
+
+  PeerReceiver m_peer_receiver;
   SSL* m_ssl;
   BIO* m_rbio;
   BIO* m_wbio;
   Data m_buffer_send;
   Data m_buffer_receive;
-  pjs::Ref<Session> m_session;
+  pjs::Ref<Pipeline> m_pipeline;
   pjs::Ref<pjs::Object> m_certificate;
   pjs::Ref<pjs::Object> m_ca;
-  Event::Receiver m_output;
   bool m_is_server;
   bool m_closed = false;
+
+  virtual void on_event(Event *evt) override;
+
+  void on_receive_peer(Event *evt);
+  void on_server_name();
 
   void use_certificate(pjs::Str *sni);
   bool do_handshake();
@@ -102,9 +114,12 @@ private:
   auto pump_receive() -> int;
   void pump_write();
   void pump_read();
-  void close(SessionEnd *end = nullptr);
+  void close(StreamEnd *end = nullptr);
 
   static int s_user_data_index;
+
+  friend class pjs::RefCount<TLSSession>;
+  friend class TLSContext;
 };
 
 //
@@ -113,29 +128,22 @@ private:
 
 class Client : public Filter {
 public:
-  Client();
-  Client(pjs::Str *target, pjs::Object *options);
+  Client(pjs::Object *options);
 
 private:
   Client(const Client &r);
   ~Client();
 
-  virtual auto help() -> std::list<std::string> override;
-  virtual void dump(std::ostream &out) override;
-  virtual auto draw(std::list<std::string> &links, bool &fork) -> std::string override;
-  virtual void bind() override;
   virtual auto clone() -> Filter* override;
   virtual void reset() override;
-  virtual void process(Context *ctx, Event *inp) override;
+  virtual void process(Event *evt) override;
+  virtual void dump(std::ostream &out) override;
 
 private:
-  Pipeline* m_pipeline = nullptr;
-  pjs::Ref<pjs::Str> m_target;
-  pjs::Ref<pjs::Object> m_certificate;
-  pjs::Ref<TLSSession> m_session;
-  pjs::Value m_sni;
   std::shared_ptr<TLSContext> m_tls_context;
-  bool m_session_end = false;
+  pjs::Ref<pjs::Object> m_certificate;
+  TLSSession* m_session = nullptr;
+  pjs::Value m_sni;
 };
 
 //
@@ -144,28 +152,21 @@ private:
 
 class Server : public Filter {
 public:
-  Server();
-  Server(pjs::Str *target, pjs::Object *options);
+  Server(pjs::Object *options);
 
 private:
   Server(const Server &r);
   ~Server();
 
-  virtual auto help() -> std::list<std::string> override;
-  virtual void dump(std::ostream &out) override;
-  virtual auto draw(std::list<std::string> &links, bool &fork) -> std::string override;
-  virtual void bind() override;
   virtual auto clone() -> Filter* override;
   virtual void reset() override;
-  virtual void process(Context *ctx, Event *inp) override;
+  virtual void process(Event *evt) override;
+  virtual void dump(std::ostream &out) override;
 
 private:
-  Pipeline* m_pipeline = nullptr;
-  pjs::Ref<pjs::Str> m_target;
-  pjs::Ref<pjs::Object> m_certificate;
-  pjs::Ref<TLSSession> m_session;
   std::shared_ptr<TLSContext> m_tls_context;
-  bool m_session_end = false;
+  pjs::Ref<pjs::Object> m_certificate;
+  TLSSession* m_session = nullptr;
 };
 
 } // namespace tls

@@ -11,7 +11,7 @@ pipy()
   .link('tls-offloaded')
 
 .listen(config.listenTLS)
-  .handleSessionStart(
+  .handleStreamStart(
     () => __isTLS = true
   )
   .acceptTLS('tls-offloaded', {

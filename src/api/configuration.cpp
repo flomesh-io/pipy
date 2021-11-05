@@ -58,7 +58,7 @@
 #include "filters/replace-start.hpp"
 #include "filters/socks.hpp"
 #include "filters/split.hpp"
-#include "filters/tap.hpp"
+#include "filters/throttle.hpp"
 #include "filters/tls.hpp"
 #include "filters/use.hpp"
 #include "filters/wait.hpp"
@@ -164,11 +164,15 @@ void Configuration::pipeline(const std::string &name) {
 }
 
 void Configuration::accept_socks(pjs::Str *target, pjs::Function *on_connect) {
-  append_filter(new socks::Server(target, on_connect));
+  auto *filter = new socks::Server(on_connect);
+  filter->add_sub_pipeline(target);
+  append_filter(filter);
 }
 
 void Configuration::accept_tls(pjs::Str *target, pjs::Object *options) {
-  append_filter(new tls::Server(target, options));
+  auto *filter = new tls::Server(options);
+  filter->add_sub_pipeline(target);
+  append_filter(filter);
 }
 
 void Configuration::connect(const pjs::Value &target, pjs::Object *options) {
@@ -176,7 +180,9 @@ void Configuration::connect(const pjs::Value &target, pjs::Object *options) {
 }
 
 void Configuration::connect_tls(pjs::Str *target, pjs::Object *options) {
-  append_filter(new tls::Client(target, options));
+  auto *filter = new tls::Client(options);
+  filter->add_sub_pipeline(target);
+  append_filter(filter);
 }
 
 void Configuration::decode_dubbo() {
@@ -200,11 +206,15 @@ void Configuration::decompress_message(const pjs::Value &algorithm) {
 }
 
 void Configuration::demux(pjs::Str *target) {
-  append_filter(new Demux(target));
+  auto *filter = new Demux();
+  filter->add_sub_pipeline(target);
+  append_filter(filter);
 }
 
 void Configuration::demux_http(pjs::Str *target, pjs::Object *options) {
-  append_filter(new http::Demux(target));
+  auto *filter = new http::Demux();
+  filter->add_sub_pipeline(target);
+  append_filter(filter);
 }
 
 void Configuration::dummy() {
@@ -232,30 +242,36 @@ void Configuration::exec(const pjs::Value &command) {
 }
 
 void Configuration::fork(pjs::Str *target, pjs::Object *initializers) {
-  append_filter(new Fork(target, initializers));
+  auto *filter = new Fork(initializers);
+  filter->add_sub_pipeline(target);
+  append_filter(filter);
 }
 
 void Configuration::link(size_t count, pjs::Str **targets, pjs::Function **conditions) {
-  std::list<Link::Route> routes;
+  auto *filter = new Link();
   for (size_t i = 0; i < count; i++) {
-    routes.emplace_back();
-    auto &r = routes.back();
-    r.name = targets[i];
-    r.condition = conditions[i];
+    filter->add_sub_pipeline(targets[i]);
+    filter->add_condition(conditions[i]);
   }
-  append_filter(new Link(std::move(routes)));
+  append_filter(filter);
 }
 
-void Configuration::merge(pjs::Str *target, pjs::Function *selector) {
-  append_filter(new Merge(target, selector));
+void Configuration::merge(pjs::Str *target, const pjs::Value &key) {
+  auto *filter = new Merge(key);
+  filter->add_sub_pipeline(target);
+  append_filter(filter);
 }
 
-void Configuration::mux(pjs::Str *target, pjs::Function *selector) {
-  append_filter(new Mux(target, selector));
+void Configuration::mux(pjs::Str *target, const pjs::Value &key) {
+  auto *filter = new Mux(key);
+  filter->add_sub_pipeline(target);
+  append_filter(filter);
 }
 
-void Configuration::mux_http(pjs::Str *target, const pjs::Value &channel) {
-  append_filter(new http::Mux(target, channel));
+void Configuration::mux_http(pjs::Str *target, const pjs::Value &key) {
+  auto *filter = new http::Mux(key);
+  filter->add_sub_pipeline(target);
+  append_filter(filter);
 }
 
 void Configuration::on_body(pjs::Function *callback, int size_limit) {
@@ -306,12 +322,16 @@ void Configuration::split(pjs::Function *callback) {
   append_filter(new Split(callback));
 }
 
-void Configuration::tap(const pjs::Value &quota, const pjs::Value &account) {
-  append_filter(new Tap(quota, account));
+void Configuration::throttle_data_rate(const pjs::Value &quota, const pjs::Value &account) {
+  append_filter(new ThrottleDataRate(quota, account));
 }
 
-void Configuration::use(Module *module, pjs::Str *pipeline, pjs::Function *when) {
-  append_filter(new Use(module, pipeline, when));
+void Configuration::throttle_message_rate(const pjs::Value &quota, const pjs::Value &account) {
+  append_filter(new ThrottleMessageRate(quota, account));
+}
+
+void Configuration::use(Module *module, pjs::Str *pipeline) {
+  append_filter(new Use(module, pipeline));
 }
 
 void Configuration::use(const std::list<Module*> modules, pjs::Str *pipeline, pjs::Function *when) {
@@ -372,29 +392,29 @@ void Configuration::apply(Module *mod) {
   mod->m_context_class = m_context_class;
 
   auto make_pipeline = [&](
-    Pipeline::Type type,
+    PipelineDef::Type type,
     const std::string &name,
     std::list<std::unique_ptr<Filter>> &filters
-  ) -> Pipeline*
+  ) -> PipelineDef*
   {
-    auto pipeline = Pipeline::make(mod, type, name);
+    auto pipeline_def = PipelineDef::make(mod, type, name);
     for (auto &f : filters) {
-      pipeline->append(f.release());
+      pipeline_def->append(f.release());
     }
-    mod->m_pipelines.push_back(pipeline);
-    return pipeline;
+    mod->m_pipelines.push_back(pipeline_def);
+    return pipeline_def;
   };
 
   for (auto &i : m_named_pipelines) {
     auto s = pjs::Str::make(i.name);
-    auto p = make_pipeline(Pipeline::NAMED, i.name, i.filters);
+    auto p = make_pipeline(PipelineDef::NAMED, i.name, i.filters);
     mod->m_named_pipelines[s] = p;
   }
 
   for (auto &i : m_listens) {
     if (!i.port) continue;
     auto name = i.ip + ':' + std::to_string(i.port);
-    auto p = make_pipeline(Pipeline::LISTEN, name, i.filters);
+    auto p = make_pipeline(PipelineDef::LISTEN, name, i.filters);
     auto listener = Listener::get(i.port);
     if (listener->reserved()) {
       std::string msg("Port reserved: ");
@@ -404,7 +424,7 @@ void Configuration::apply(Module *mod) {
   }
 
   for (auto &i : m_tasks) {
-    auto p = make_pipeline(Pipeline::TASK, i.name, i.filters);
+    auto p = make_pipeline(PipelineDef::TASK, i.name, i.filters);
     auto t = Task::make(i.interval, p);
     mod->worker()->add_task(t);
   }
@@ -414,7 +434,13 @@ void Configuration::draw(Graph &g) {
   auto add_filters = [](Graph::Pipeline &gp, const std::list<std::unique_ptr<Filter>> &filters) {
     for (const auto &f : filters) {
       Graph::Filter gf;
-      gf.name = f->draw(gf.links, gf.fork);
+      std::stringstream ss;
+      f->dump(ss);
+      gf.name = ss.str();
+      gf.fork = (gf.name == "fork" || gf.name == "merge");
+      for (int i = 0; i < f->num_sub_pipelines(); i++) {
+        gf.links.push_back(f->get_sub_pipeline_name(i));
+      }
       gp.filters.emplace_back(std::move(gf));
     }
   };
@@ -757,8 +783,8 @@ template<> void ClassDef<Configuration>::init() {
     }
   });
 
-  // Configuration.handleSessionStart
-  method("handleSessionStart", [](Context &ctx, Object *thiz, Value &result) {
+  // Configuration.handleStreamStart
+  method("handleStreamStart", [](Context &ctx, Object *thiz, Value &result) {
     Function *callback = nullptr;
     if (!ctx.arguments(1, &callback)) return;
     try {
@@ -843,12 +869,12 @@ template<> void ClassDef<Configuration>::init() {
     }
   });
 
-  // Configuration.handleSessionEnd
-  method("handleSessionEnd", [](Context &ctx, Object *thiz, Value &result) {
+  // Configuration.handleStreamEnd
+  method("handleStreamEnd", [](Context &ctx, Object *thiz, Value &result) {
     Function *callback = nullptr;
     if (!ctx.arguments(1, &callback)) return;
     try {
-      thiz->as<Configuration>()->on_event(Event::SessionEnd, callback);
+      thiz->as<Configuration>()->on_event(Event::StreamEnd, callback);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -925,104 +951,6 @@ template<> void ClassDef<Configuration>::init() {
     }
   });
 
-  // Configuration.onSessionStart
-  method("onSessionStart", [](Context &ctx, Object *thiz, Value &result) {
-    Function *callback = nullptr;
-    if (!ctx.arguments(1, &callback)) return;
-    try {
-      thiz->as<Configuration>()->on_start(callback);
-      result.set(thiz);
-    } catch (std::runtime_error &err) {
-      ctx.error(err);
-    }
-  });
-
-  // Configuration.onData
-  method("onData", [](Context &ctx, Object *thiz, Value &result) {
-    Function *callback = nullptr;
-    if (!ctx.arguments(1, &callback)) return;
-    try {
-      thiz->as<Configuration>()->on_event(Event::Data, callback);
-      result.set(thiz);
-    } catch (std::runtime_error &err) {
-      ctx.error(err);
-    }
-  });
-
-  // Configuration.onMessage
-  method("onMessage", [](Context &ctx, Object *thiz, Value &result) {
-    Function *callback = nullptr;
-    int size_limit = -1;
-    std::string size_limit_str;
-    if (ctx.try_arguments(2, &size_limit_str, &callback)) {
-      size_limit = utils::get_byte_size(size_limit_str);
-    } else if (
-      !ctx.try_arguments(2, &size_limit, &callback) &&
-      !ctx.arguments(1, &callback)
-    ) return;
-    try {
-      thiz->as<Configuration>()->on_message(callback, size_limit);
-      result.set(thiz);
-    } catch (std::runtime_error &err) {
-      ctx.error(err);
-    }
-  });
-
-  // Configuration.onMessageStart
-  method("onMessageStart", [](Context &ctx, Object *thiz, Value &result) {
-    Function *callback = nullptr;
-    if (!ctx.arguments(1, &callback)) return;
-    try {
-      thiz->as<Configuration>()->on_event(Event::MessageStart, callback);
-      result.set(thiz);
-    } catch (std::runtime_error &err) {
-      ctx.error(err);
-    }
-  });
-
-  // Configuration.onMessageBody
-  method("onMessageBody", [](Context &ctx, Object *thiz, Value &result) {
-    Function *callback = nullptr;
-    int size_limit = -1;
-    std::string size_limit_str;
-    if (ctx.try_arguments(2, &size_limit_str, &callback)) {
-      size_limit = utils::get_byte_size(size_limit_str);
-    } else if (
-      !ctx.try_arguments(2, &size_limit, &callback) &&
-      !ctx.arguments(1, &callback)
-    ) return;
-    try {
-      thiz->as<Configuration>()->on_body(callback, size_limit);
-      result.set(thiz);
-    } catch (std::runtime_error &err) {
-      ctx.error(err);
-    }
-  });
-
-  // Configuration.onMessageEnd
-  method("onMessageEnd", [](Context &ctx, Object *thiz, Value &result) {
-    Function *callback = nullptr;
-    if (!ctx.arguments(1, &callback)) return;
-    try {
-      thiz->as<Configuration>()->on_event(Event::MessageEnd, callback);
-      result.set(thiz);
-    } catch (std::runtime_error &err) {
-      ctx.error(err);
-    }
-  });
-
-  // Configuration.onSessionEnd
-  method("onSessionEnd", [](Context &ctx, Object *thiz, Value &result) {
-    Function *callback = nullptr;
-    if (!ctx.arguments(1, &callback)) return;
-    try {
-      thiz->as<Configuration>()->on_event(Event::SessionEnd, callback);
-      result.set(thiz);
-    } catch (std::runtime_error &err) {
-      ctx.error(err);
-    }
-  });
-
   // Configuration.pack
   method("pack", [](Context &ctx, Object *thiz, Value &result) {
     int batch_size = 1;
@@ -1046,8 +974,8 @@ template<> void ClassDef<Configuration>::init() {
     }
   });
 
-  // Configuration.replaceSessionStart
-  method("replaceSessionStart", [](Context &ctx, Object *thiz, Value &result) {
+  // Configuration.replaceStreamStart
+  method("replaceStreamStart", [](Context &ctx, Object *thiz, Value &result) {
     Value replacement;
     if (!ctx.arguments(0, &replacement)) return;
     try {
@@ -1132,12 +1060,12 @@ template<> void ClassDef<Configuration>::init() {
     }
   });
 
-  // Configuration.replaceSessionEnd
-  method("replaceSessionEnd", [](Context &ctx, Object *thiz, Value &result) {
+  // Configuration.replaceStreamEnd
+  method("replaceStreamEnd", [](Context &ctx, Object *thiz, Value &result) {
     Value replacement;
     if (!ctx.arguments(0, &replacement)) return;
     try {
-      thiz->as<Configuration>()->replace_event(Event::SessionEnd, replacement);
+      thiz->as<Configuration>()->replace_event(Event::StreamEnd, replacement);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1168,12 +1096,24 @@ template<> void ClassDef<Configuration>::init() {
     }
   });
 
-  // Configuration.tap
-  method("tap", [](Context &ctx, Object *thiz, Value &result) {
+  // Configuration.throttleDataRate
+  method("throttleDataRate", [](Context &ctx, Object *thiz, Value &result) {
     Value quota, account;
     if (!ctx.arguments(1, &quota, &account)) return;
     try {
-      thiz->as<Configuration>()->tap(quota, account);
+      thiz->as<Configuration>()->throttle_data_rate(quota, account);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // Configuration.throttleMessageRate
+  method("throttleMessageRate", [](Context &ctx, Object *thiz, Value &result) {
+    Value quota, account;
+    if (!ctx.arguments(1, &quota, &account)) return;
+    try {
+      thiz->as<Configuration>()->throttle_message_rate(quota, account);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1218,7 +1158,7 @@ template<> void ClassDef<Configuration>::init() {
           ctx.error(err);
         }
       }
-    } else if (ctx.arguments(2, &module, &pipeline, &when)) {
+    } else if (ctx.arguments(2, &module, &pipeline)) {
       auto path = utils::path_normalize(module);
       auto mod = worker->load_module(path);
       if (!mod) {
@@ -1228,7 +1168,7 @@ template<> void ClassDef<Configuration>::init() {
         return;
       }
       try {
-        thiz->as<Configuration>()->use(mod, pipeline, when);
+        thiz->as<Configuration>()->use(mod, pipeline);
         result.set(thiz);
       } catch (std::runtime_error &err) {
         ctx.error(err);

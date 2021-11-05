@@ -40,11 +40,13 @@ namespace pipy {
 // Data
 //
 
-class Data : public pjs::ObjectTemplate<Data, Event> {
+class Data : public EventTemplate<Data> {
 private:
   struct Chunk;
 
 public:
+  static const Type __TYPE = Event::Data;
+
   enum class Encoding {
     UTF8,
     Hex,
@@ -95,18 +97,6 @@ public:
   };
 
 private:
-  virtual auto type() const -> Type override {
-    return Event::Data;
-  }
-
-  virtual auto name() const -> const char* override {
-    return "Data";
-  }
-
-  virtual auto clone() const -> Event* override {
-    return make(*this);
-  }
-
   struct Chunk : public Pooled<Chunk> {
     char data[DATA_CHUNK_SIZE];
     int retain_count = 0;

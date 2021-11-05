@@ -41,9 +41,13 @@ class Data;
 // Outbound
 //
 
-class Outbound : public pjs::Pooled<Outbound>, public List<Outbound>::Item {
+class Outbound :
+  public pjs::RefCount<Outbound>,
+  public pjs::Pooled<Outbound>,
+  public List<Outbound>::Item
+{
 public:
-  Outbound();
+  Outbound(EventTarget::Input *output);
   ~Outbound();
 
   static void for_each(const std::function<void(Outbound*)> &cb) {
@@ -65,8 +69,6 @@ public:
   void set_retry_count(int n) { m_retry_count = n; }
   void set_retry_delay(double t) { m_retry_delay = t; }
 
-  void on_receive(const Event::Receiver &receiver) { m_receiver = receiver; }
-  void on_delete(const std::function<void()> &callback) { m_on_delete = callback; }
   void connect(const std::string &host, int port);
 
   void send(const pjs::Ref<Data> &data);
@@ -77,8 +79,7 @@ private:
   std::string m_host;
   std::string m_address;
   int m_port;
-  Event::Receiver m_receiver;
-  std::function<void()> m_on_delete;
+  pjs::Ref<EventTarget::Input> m_output;
   asio::ip::tcp::resolver m_resolver;
   asio::ip::tcp::socket m_socket;
   Timer m_timer;
@@ -93,8 +94,6 @@ private:
   bool m_connected = false;
   bool m_overflowed = false;
   bool m_pumping = false;
-  bool m_outputing = false;
-  bool m_freed = false;
   bool m_reading_ended = false;
   bool m_writing_ended = false;
 
@@ -103,7 +102,8 @@ private:
   void cancel_connecting();
   void reconnect();
   void receive();
-  bool output(Event *evt);
+  void output(Event *evt);
+  void output_end(StreamEnd *end);
   void pump();
   void close();
   void free();

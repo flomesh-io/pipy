@@ -27,17 +27,14 @@
 
 namespace pipy {
 
-OnStart::OnStart()
-{
-}
-
 OnStart::OnStart(pjs::Function *callback)
   : m_callback(callback)
 {
 }
 
 OnStart::OnStart(const OnStart &r)
-  : m_callback(r.m_callback)
+  : Filter(r)
+  , m_callback(r.m_callback)
 {
 }
 
@@ -45,16 +42,8 @@ OnStart::~OnStart()
 {
 }
 
-auto OnStart::help() -> std::list<std::string> {
-  return {
-    "handleSessionStart(callback)",
-    "Handles the initial event in a session",
-    "callback = <function> Callback function that receives the initial event",
-  };
-}
-
 void OnStart::dump(std::ostream &out) {
-  out << "handleSessionStart";
+  out << "handleStreamStart";
 }
 
 auto OnStart::clone() -> Filter* {
@@ -62,17 +51,18 @@ auto OnStart::clone() -> Filter* {
 }
 
 void OnStart::reset() {
+  Filter::reset();
   m_started = false;
 }
 
-void OnStart::process(Context *ctx, Event *inp) {
+void OnStart::process(Event *evt) {
   if (!m_started) {
     m_started = true;
-    pjs::Value arg(inp), result;
-    if (!callback(*ctx, m_callback, 1, &arg, result)) return;
+    pjs::Value arg(evt), result;
+    if (!callback(m_callback, 1, &arg, result)) return;
   }
 
-  output(inp);
+  output(evt);
 }
 
 } // namespace pipy

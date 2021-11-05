@@ -84,12 +84,13 @@ add_executable(pipy
   src/filters/replace-start.cpp
   src/filters/socks.cpp
   src/filters/split.cpp
-  src/filters/tap.cpp
+  src/filters/throttle.cpp
   src/filters/tls.cpp
   src/filters/use.cpp
   src/filters/wait.cpp
   src/fstream.cpp
   src/graph.cpp
+  src/help.cpp
   src/inbound.cpp
   src/listener.cpp
   src/logging.cpp
@@ -104,7 +105,6 @@ add_executable(pipy
   src/pjs/expr.cpp
   src/pjs/parser.cpp
   src/pjs/types.cpp
-  src/session.cpp
   src/status.cpp
   src/store.cpp
   src/tar.cpp

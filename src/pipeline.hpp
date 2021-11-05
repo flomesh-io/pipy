@@ -27,6 +27,8 @@
 #define PIPELINE_HPP
 
 #include "pjs/pjs.hpp"
+#include "event.hpp"
+#include "list.hpp"
 
 #include <list>
 #include <memory>
@@ -34,15 +36,20 @@
 
 namespace pipy {
 
+class Context;
 class Module;
 class Filter;
-class ReusableSession;
+class Pipeline;
+class Message;
 
 //
-// Pipeline
+// PipelineDef
 //
 
-class Pipeline : public pjs::RefCount<Pipeline> {
+class PipelineDef :
+  public pjs::RefCount<PipelineDef>,
+  public List<PipelineDef>::Item
+{
 public:
   enum Type {
     NAMED,
@@ -50,12 +57,12 @@ public:
     TASK,
   };
 
-  static auto make(Module *module, Type type, const std::string &name) -> Pipeline* {
-    return new Pipeline(module, type, name);
+  static auto make(Module *module, Type type, const std::string &name) -> PipelineDef* {
+    return new PipelineDef(module, type, name);
   }
 
-  static void for_each(std::function<void(Pipeline*)> callback) {
-    for (const auto p : s_all_pipelines) {
+  static void for_each(std::function<void(PipelineDef*)> callback) {
+    for (auto *p = s_all_pipeline_defs.head(); p; p = p->next()) {
       callback(p);
     }
   }
@@ -65,27 +72,87 @@ public:
   auto name() const -> const std::string& { return m_name; }
   auto allocated() const -> size_t { return m_allocated; }
   auto active() const -> size_t { return m_active; }
-  auto filters() const -> const std::list<std::unique_ptr<Filter>>& { return m_filters; }
-  void append(Filter *filter);
+  auto append(Filter *filter) -> Filter*;
   void bind();
-  auto alloc() -> ReusableSession*;
-  void free(ReusableSession *session);
 
 private:
-  Pipeline(Module *module, Type type, const std::string &name);
-  ~Pipeline();
+  PipelineDef(Module *module, Type type, const std::string &name);
+  ~PipelineDef();
+
+  auto alloc(Context *ctx) -> Pipeline*;
+  void free(Pipeline *pipeline);
 
   Module* m_module;
   Type m_type;
   std::string m_name;
   std::list<std::unique_ptr<Filter>> m_filters;
-  ReusableSession* m_pool = nullptr;
+  Pipeline* m_pool = nullptr;
   size_t m_allocated = 0;
   size_t m_active = 0;
 
-  static std::set<Pipeline*> s_all_pipelines;
+  static List<PipelineDef> s_all_pipeline_defs;
+
+  friend class pjs::RefCount<PipelineDef>;
+  friend class Pipeline;
+  friend class Graph;
+};
+
+//
+// Pipeline
+//
+
+class Pipeline :
+  public pjs::RefCount<Pipeline>,
+  public EventFunction
+{
+public:
+  class AutoReleasePool
+  {
+  public:
+    AutoReleasePool();
+    ~AutoReleasePool();
+
+  private:
+    AutoReleasePool* m_next;
+    Pipeline* m_pipelines = nullptr;
+
+    static AutoReleasePool* s_stack;
+
+    static void add(Pipeline *pipeline);
+
+    friend class Pipeline;
+  };
+
+  static auto make(PipelineDef *def, Context *ctx) -> Pipeline* {
+    return def->alloc(ctx);
+  }
+
+  auto def() const -> PipelineDef* { return m_def; }
+  auto context() const -> Context* { return m_context; }
+
+  virtual void chain(Input *input) override;
+
+private:
+  Pipeline(PipelineDef *def);
+  ~Pipeline();
+
+  virtual void on_event(Event *evt) override;
+
+  void auto_release();
+  void finalize();
+
+  PipelineDef* m_def;
+  Pipeline* m_next_free = nullptr;
+  Pipeline* m_next_auto_release = nullptr;
+  bool m_auto_release = false;
+  List<Filter> m_filters;
+  pjs::Ref<Context> m_context;
+
+  void reset();
 
   friend class pjs::RefCount<Pipeline>;
+  friend class PipelineDef;
+  friend class Filter;
 };
 
 } // namespace pipy

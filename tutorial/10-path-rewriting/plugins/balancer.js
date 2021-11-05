@@ -31,7 +31,7 @@ pipy({
 })
 
 .pipeline('session')
-  .handleSessionStart(
+  .handleStreamStart(
     () => (
       _balancerCache = new algo.Cache(
         // k is a balancer, v is a target
@@ -45,7 +45,7 @@ pipy({
       )
     )
   )
-  .handleSessionEnd(
+  .handleStreamEnd(
     () => (
       _targetCache.clear(),
       _balancerCache.clear()

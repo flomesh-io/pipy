@@ -25,7 +25,7 @@
 
 #include "socks.hpp"
 #include "data.hpp"
-#include "session.hpp"
+#include "pipeline.hpp"
 #include "module.hpp"
 #include "logging.hpp"
 
@@ -36,19 +36,13 @@ namespace socks {
 // Server
 //
 
-Server::Server()
-{
-}
-
-Server::Server(pjs::Str *target, pjs::Function *on_connect)
-  : m_target(target)
-  , m_on_connect(on_connect)
+Server::Server(pjs::Function *on_connect)
+  : m_on_connect(on_connect)
 {
 }
 
 Server::Server(const Server &r)
-  : m_pipeline(r.m_pipeline)
-  , m_target(r.m_target)
+  : Filter(r)
   , m_on_connect(r.m_on_connect)
 {
 }
@@ -57,29 +51,8 @@ Server::~Server()
 {
 }
 
-auto Server::help() -> std::list<std::string> {
-  return {
-    "acceptSOCKS(target, onConnect)",
-    "Accepts a SOCKS connection",
-    "target = <string> Name of the pipeline that receives SOCKS connections",
-    "onConnect = <function> Callback function that receives address, port, user and returns whether the connection is accepted",
-  };
-}
-
 void Server::dump(std::ostream &out) {
   out << "acceptSOCKS";
-}
-
-auto Server::draw(std::list<std::string> &links, bool &fork) -> std::string {
-  links.push_back(m_target->str());
-  fork = false;
-  return "acceptSOCKS";
-}
-
-void Server::bind() {
-  if (!m_pipeline) {
-    m_pipeline = pipeline(m_target);
-  }
 }
 
 auto Server::clone() -> Filter* {
@@ -87,15 +60,13 @@ auto Server::clone() -> Filter* {
 }
 
 void Server::reset() {
-  m_session = nullptr;
+  Filter::reset();
+  m_pipeline = nullptr;
   m_state = READ_VERSION;
-  m_session_end = false;
 }
 
-void Server::process(Context *ctx, Event *inp) {
+void Server::process(Event *evt) {
   static Data::Producer s_dp("acceptSOCKS");
-
-  if (m_session_end) return;
 
   auto reply = [this](const uint8_t *buf, size_t len) {
     output(s_dp.make(buf, len));
@@ -118,10 +89,9 @@ void Server::process(Context *ctx, Event *inp) {
     output(Data::flush());
   };
 
-  auto close = [this](Event *inp) {
-    m_session = nullptr;
-    m_session_end = true;
-    output(inp);
+  auto close = [this](Event *evt) {
+    m_pipeline = nullptr;
+    output(evt);
   };
 
   auto connect = [&](int version) {
@@ -138,12 +108,11 @@ void Server::process(Context *ctx, Event *inp) {
     if (m_id[0]) {
       argv[2].set(pjs::Str::make((char*)m_id));
     }
-    callback(*ctx, m_on_connect, 3, argv, ret);
+    callback(m_on_connect, 3, argv, ret);
     if (ret.to_boolean()) {
-      auto root = static_cast<Context*>(ctx->root());
-      auto session = Session::make(root, m_pipeline);
-      session->on_output(out());
-      m_session = session;
+      auto pipeline = sub_pipeline(0, false);
+      pipeline->chain(output());
+      m_pipeline = pipeline;
       if (version == 4) {
         reply_socks4(0x5a);
       } else {
@@ -156,12 +125,12 @@ void Server::process(Context *ctx, Event *inp) {
     } else {
       reply_socks5(0x02);
     }
-    close(SessionEnd::make());
+    close(StreamEnd::make());
   };
 
-  if (auto *data = inp->as<Data>()) {
-    if (m_session) {
-      m_session->input(inp);
+  if (auto *data = evt->as<Data>()) {
+    if (m_pipeline) {
+      output(data, m_pipeline->input());
 
     } else {
       Data parsed;
@@ -176,7 +145,7 @@ void Server::process(Context *ctx, Event *inp) {
             } else if (c == 5) {
               m_state = READ_SOCKS5_NAUTH;
             } else {
-              close(SessionEnd::make());
+              close(StreamEnd::make());
               return true;
             }
             break;
@@ -188,7 +157,7 @@ void Server::process(Context *ctx, Event *inp) {
               m_read_ptr = 0;
             } else {
               reply_socks4(0x5b);
-              close(SessionEnd::make());
+              close(StreamEnd::make());
               return true;
             }
             break;
@@ -212,7 +181,7 @@ void Server::process(Context *ctx, Event *inp) {
                 m_id[m_read_ptr++] = c;
               } else {
                 reply_socks4(0x5b);
-                close(SessionEnd::make());
+                close(StreamEnd::make());
                 return true;
               }
             } else {
@@ -232,7 +201,7 @@ void Server::process(Context *ctx, Event *inp) {
                 m_domain[m_read_ptr++] = c;
               } else {
                 reply_socks4(0x5b);
-                close(SessionEnd::make());
+                close(StreamEnd::make());
                 return true;
               }
             } else {
@@ -264,7 +233,7 @@ void Server::process(Context *ctx, Event *inp) {
                 (m_read_ptr == 2 && c != 0x00))
             {
               reply_socks5(0x01);
-              close(SessionEnd::make());
+              close(StreamEnd::make());
               return true;
             } else if (++m_read_ptr == 3) {
               m_state = READ_SOCKS5_ADDR_TYPE;
@@ -278,7 +247,7 @@ void Server::process(Context *ctx, Event *inp) {
               m_state = READ_SOCKS5_DOMAIN_LEN;
             } else {
               reply_socks5(0x08);
-              close(SessionEnd::make());
+              close(StreamEnd::make());
               return true;
             }
             break;
@@ -315,16 +284,16 @@ void Server::process(Context *ctx, Event *inp) {
         parsed
       );
 
-      if (m_session && !data->empty()) {
-        m_session->input(data);
+      if (m_pipeline && !data->empty()) {
+        output(data, m_pipeline->input());
       }
     }
 
-  } else if (inp->is<SessionEnd>()) {
-    if (m_session) {
-      m_session->input(inp);
+  } else if (evt->is<StreamEnd>()) {
+    if (m_pipeline) {
+      output(evt, m_pipeline->input());
     }
-    close(inp);
+    close(evt);
   }
 }
 

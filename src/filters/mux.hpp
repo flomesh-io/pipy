@@ -27,11 +27,9 @@
 #define MUX_HPP
 
 #include "filter.hpp"
-#include "session.hpp"
 #include "list.hpp"
 #include "timer.hpp"
 
-#include <queue>
 #include <memory>
 #include <unordered_map>
 #include <unordered_set>
@@ -39,7 +37,7 @@
 namespace pipy {
 
 class Data;
-class Pipeline;
+class PipelineDef;
 
 //
 // MuxBase
@@ -49,184 +47,159 @@ class MuxBase : public Filter {
 public:
 
   //
-  // MuxBase::Connection
+  // MuxBase::Session
   //
 
-  class Connection {
+  class Session : public EventFunction {
   public:
-    class Stream {
+
+    //
+    // MuxBase::Session::Stream
+    //
+
+    class Stream : public EventFunction {
     public:
-      virtual void input(Data *data) = 0;
-      virtual void end() = 0;
       virtual void close() = 0;
     };
 
-    virtual auto stream(MessageStart *start, const Event::Receiver &on_output) -> Stream* = 0;
-    virtual void receive(Event *evt) = 0;
-    virtual void close() = 0;
+    virtual void open(Pipeline *pipeline) = 0;
+    virtual auto stream(MessageStart *start) -> Stream* = 0;
+    virtual void on_demux(Event *evt) = 0;
+    virtual void close();
 
   protected:
-    ~Connection() {
-      if (m_session) {
-        m_session->on_output(nullptr);
-      }
-    }
+    Session() : m_ef_demux(this) {}
 
-    void send(Event *evt);
-    void reset();
+    struct Demux : public EventFunction {
+      Session* session;
+      Demux(Session *s) : session(s) {}
+      virtual void on_event(Event *evt) override {
+        session->on_demux(evt);
+      }
+    };
+
+    Demux m_ef_demux;
 
   private:
-    Pipeline* m_pipeline = nullptr;
-    pjs::Ref<Context> m_context;
-    pjs::Value m_key;
-    pjs::Ref<Session> m_session;
+    pjs::Ref<Pipeline> m_pipeline;
     int m_share_count = 1;
     double m_free_time = 0;
+
+    virtual void on_event(Event *evt) override;
 
     friend class MuxBase;
   };
 
 protected:
   MuxBase();
+  MuxBase(const pjs::Value &key);
   MuxBase(const MuxBase &r);
-  MuxBase(Pipeline *pipeline, const pjs::Value &channel);
-  MuxBase(pjs::Str *target, const pjs::Value &channel);
 
-  auto target() const -> pjs::Str* { return m_target; }
-
-  virtual auto new_connection() -> Connection* = 0;
+  virtual auto new_session() -> Session* = 0;
 
 private:
-  virtual void bind() override;
   virtual void reset() override;
-  virtual void process(Context *ctx, Event *inp) override;
+  virtual void process(Event *evt) override;
 
   //
-  // MuxBase::ConnectionManager
+  // MuxBase::SessionManager
   //
 
-  class ConnectionManager {
+  class SessionManager {
   public:
-    ConnectionManager(MuxBase *mux)
+    SessionManager(MuxBase *mux)
       : m_mux(mux) { recycle(); }
 
-    auto get(const pjs::Value &key) -> Connection*;
-    void free(Connection *connection);
+    auto get(const pjs::Value &key) -> Session*;
+    void free(Session *session);
 
   private:
     MuxBase* m_mux;
-    std::unordered_map<pjs::Value, Connection*> m_connections;
-    std::unordered_set<Connection*> m_free_connections;
+    std::unordered_map<pjs::Value, Session*> m_sessions;
+    std::unordered_set<Session*> m_free_sessions;
     Timer m_recycle_timer;
 
     void recycle();
   };
 
-  std::shared_ptr<ConnectionManager> m_connection_manager;
-  Pipeline* m_pipeline = nullptr;
-  pjs::Ref<pjs::Str> m_target;
-  pjs::Value m_channel;
-  Connection* m_connection = nullptr;
-  Connection::Stream* m_stream = nullptr;
-  bool m_session_end = false;
+  std::shared_ptr<SessionManager> m_session_manager;
+  pjs::Value m_target_key;
+  Session* m_session = nullptr;
+  Session::Stream* m_stream = nullptr;
 };
 
 //
 // Mux
 //
 
-class Mux : public Filter {
+class Mux : public MuxBase {
 public:
   Mux();
-  Mux(pjs::Str *target, pjs::Function *selector);
+  Mux(const pjs::Value &key);
 
-private:
+protected:
   Mux(const Mux &r);
   ~Mux();
 
-  virtual auto help() -> std::list<std::string> override;
-  virtual void dump(std::ostream &out) override;
-  virtual auto draw(std::list<std::string> &links, bool &fork) -> std::string override;
-  virtual void bind() override;
   virtual auto clone() -> Filter* override;
-  virtual void reset() override;
-  virtual void process(Context *ctx, Event *inp) override;
+  virtual void dump(std::ostream &out) override;
 
-private:
-  struct Channel : public pjs::Pooled<Channel> {
-    Event::Receiver on_output;
-  };
+  //
+  // Mux::Session
+  //
 
-  class SessionPool;
-
-  class SharedSession :
-    public List<SharedSession>::Item,
-    public pjs::RefCount<SharedSession>
+  class Session :
+    public pjs::Pooled<Session>,
+    public MuxBase::Session
   {
   public:
-    SharedSession(Pipeline *pipeline, pjs::Str *name, int buffer_limit)
-      : m_pipeline(pipeline)
-      , m_name(name)
-      , m_buffer_limit(buffer_limit) {}
 
-    void input(Channel *channel, Context *ctx, pjs::Object *head, Data *body);
+    //
+    // Mux::Session::Stream
+    //
 
-  private:
-    int m_share_count = 1;
-    int m_free_time;
-    int m_buffer_limit;
-    Pipeline* m_pipeline;
-    pjs::Ref<pjs::Str> m_name;
-    pjs::Ref<Session> m_session;
-    std::queue<std::unique_ptr<Channel>> m_queue;
+    class Stream :
+      public pjs::Pooled<Stream>,
+      public List<Stream>::Item,
+      public MuxBase::Session::Stream
+    {
+    protected:
+      Stream(Session *session, MessageStart *start)
+        : m_session(session)
+        , m_start(start) {}
 
-    friend class SessionPool;
-  };
+      virtual void on_event(Event *evt) override;
+      virtual void close() override;
 
-  class SessionPool {
-  public:
-    auto alloc(Pipeline *pipeline, pjs::Str *name) -> SharedSession* {
-      auto i = m_sessions.find(name);
-      if (i != m_sessions.end()) {
-        auto session = i->second.get();
-        if (!session->m_share_count++) m_free_sessions.remove(session);
-        return session;
-      }
-      auto session = new SharedSession(pipeline, name, m_buffer_limit);
-      m_sessions[name] = session;
-      return session;
-    }
+      auto session() const -> Session* { return m_session; }
 
-    void free(SharedSession *session) {
-      if (session) {
-        if (!--session->m_share_count) {
-          session->m_free_time = 0;
-          m_free_sessions.push(session);
-          start_cleaning();
-        }
-      }
-    }
+    private:
+      Session* m_session;
+      pjs::Ref<MessageStart> m_start;
+      Data m_buffer;
+      bool m_queued = false;
+      bool m_output_end = false;
+
+      friend class Session;
+    };
+
+  protected:
+    virtual void open(Pipeline *pipeline) override;
+    virtual auto stream(MessageStart *start) -> Stream* override;
+    virtual void on_demux(Event *evt) override;
+    virtual void close() override;
 
   private:
-    int m_buffer_limit = 100;
-    std::unordered_map<pjs::Ref<pjs::Str>, pjs::Ref<SharedSession>> m_sessions;
-    List<SharedSession> m_free_sessions;
-    bool m_cleaning_scheduled = false;
-    Timer m_timer;
+    pjs::Ref<Pipeline> m_pipeline;
+    List<Stream> m_streams;
+    bool m_message_started = false;
 
-    void start_cleaning();
-    void clean();
+    friend class Stream;
   };
 
-  std::shared_ptr<SessionPool> m_session_pool;
-  Pipeline* m_pipeline = nullptr;
-  pjs::Ref<pjs::Str> m_target;
-  pjs::Ref<pjs::Function> m_selector;
-  pjs::Ref<pjs::Object> m_head;
-  pjs::Ref<Data> m_body;
-  pjs::Ref<SharedSession> m_session;
-  std::queue<Channel*> m_queue;
-  bool m_session_end = false;
+  virtual auto new_session() -> Session* override {
+    return new Session();
+  }
 };
 
 } // namespace pipy

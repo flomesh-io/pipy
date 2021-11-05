@@ -33,10 +33,6 @@ namespace pipy {
 // OnMessage
 //
 
-OnMessage::OnMessage()
-{
-}
-
 OnMessage::OnMessage(pjs::Function *callback, int size_limit)
   : m_callback(callback)
   , m_size_limit(size_limit)
@@ -44,21 +40,14 @@ OnMessage::OnMessage(pjs::Function *callback, int size_limit)
 }
 
 OnMessage::OnMessage(const OnMessage &r)
-  : OnMessage(r.m_callback, r.m_size_limit)
+  : Filter(r)
+  , m_callback(r.m_callback)
+  , m_size_limit(r.m_size_limit)
 {
 }
 
 OnMessage::~OnMessage()
 {
-}
-
-auto OnMessage::help() -> std::list<std::string> {
-  return {
-    "handleMessage([sizeLimit, ]callback)",
-    "Handles a complete message including the head and the body",
-    "sizeLimit = <number|string> Maximum number of bytes to collect from the message body",
-    "callback = <function> Callback function that receives a complete message",
-  };
 }
 
 void OnMessage::dump(std::ostream &out) {
@@ -70,17 +59,18 @@ auto OnMessage::clone() -> Filter* {
 }
 
 void OnMessage::reset() {
+  Filter::reset();
   m_head = nullptr;
   m_body = nullptr;
   m_discarded_size = 0;
 }
 
-void OnMessage::process(Context *ctx, Event *inp) {
-  if (auto e = inp->as<MessageStart>()) {
+void OnMessage::process(Event *evt) {
+  if (auto e = evt->as<MessageStart>()) {
     m_head = e->head();
     m_body = Data::make();
 
-  } else if (auto *data = inp->as<Data>()) {
+  } else if (auto *data = evt->as<Data>()) {
     if (m_body && data->size() > 0) {
       if (m_size_limit >= 0) {
         auto room = m_size_limit - m_body->size();
@@ -100,7 +90,7 @@ void OnMessage::process(Context *ctx, Event *inp) {
       }
     }
 
-  } else if (inp->is<MessageEnd>()) {
+  } else if (evt->is<MessageEnd>() || evt->is<StreamEnd>()) {
     if (m_body) {
       if (m_discarded_size > 0 && m_size_limit > 0) {
         Log::error(
@@ -109,14 +99,14 @@ void OnMessage::process(Context *ctx, Event *inp) {
         );
       }
       pjs::Value arg(Message::make(m_head, m_body)), result;
-      if (!callback(*ctx, m_callback, 1, &arg, result)) return;
+      if (!callback(m_callback, 1, &arg, result)) return;
       m_head = nullptr;
       m_body = nullptr;
       m_discarded_size = 0;
     }
   }
 
-  output(inp);
+  output(evt);
 }
 
 } // namespace pipy

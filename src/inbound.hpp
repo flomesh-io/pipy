@@ -28,14 +28,15 @@
 
 #include "net.hpp"
 #include "pjs/pjs.hpp"
+#include "event.hpp"
 #include "list.hpp"
 
 namespace pipy {
 
 class Data;
 class Listener;
+class PipelineDef;
 class Pipeline;
-class Session;
 
 //
 // Inbound
@@ -43,6 +44,7 @@ class Session;
 
 class Inbound :
   public pjs::ObjectTemplate<Inbound>,
+  public EventTarget,
   public List<Inbound>::Item
 {
 public:
@@ -72,7 +74,7 @@ public:
   auto local_port() const -> int { return m_local_port; }
   auto buffered() const -> int { return m_buffer.size(); }
 
-  auto session() const -> Session* { return m_session; }
+  auto pipeline() const -> Pipeline* { return m_pipeline; }
   void pause();
   void resume();
   void send(const pjs::Ref<Data> &data);
@@ -91,7 +93,7 @@ private:
 
   Listener* m_listener;
   uint64_t m_id;
-  pjs::Ref<Session> m_session;
+  pjs::Ref<Pipeline> m_pipeline;
   asio::ip::tcp::endpoint m_peer;
   asio::ip::tcp::socket m_socket;
   pjs::Ref<pjs::Str> m_str_remote_addr;
@@ -106,7 +108,9 @@ private:
   bool m_reading_ended = false;
   bool m_writing_ended = false;
 
-  void start(Pipeline *pipeline);
+  virtual void on_event(Event *evt) override;
+
+  void start(PipelineDef *pipeline_def);
   void receive();
   void pump();
   void close();

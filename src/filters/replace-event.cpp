@@ -27,11 +27,6 @@
 
 namespace pipy {
 
-ReplaceEvent::ReplaceEvent(Event::Type type)
-  : m_type(type)
-{
-}
-
 ReplaceEvent::ReplaceEvent(Event::Type type, const pjs::Value &replacement)
   : m_type(type)
   , m_replacement(replacement)
@@ -48,42 +43,12 @@ ReplaceEvent::~ReplaceEvent()
 {
 }
 
-auto ReplaceEvent::help() -> std::list<std::string> {
-  switch (m_type) {
-    case Event::Type::Data:
-      return {
-        "replaceData([replacement])",
-        "Replaces a Data event",
-        "replacement = <object|function> Replacement events or a callback function that returns replacement events",
-      };
-    case Event::Type::MessageStart:
-      return {
-        "replaceMessageStart([replacement])",
-        "Replaces a MessageStart event",
-        "replacement = <object|function> Replacement events or a callback function that returns replacement events",
-      };
-    case Event::Type::MessageEnd:
-      return {
-        "replaceMessageEnd([replacement])",
-        "Replaces a MessageEnd event",
-        "replacement = <object|function> Replacement events or a callback function that returns replacement events",
-      };
-    case Event::Type::SessionEnd:
-      return {
-        "replaceSessionEnd([replacement])",
-        "Replaces a SessionEnd event",
-        "replacement = <object|function> Replacement events or a callback function that returns replacement events",
-      };
-    default: return std::list<std::string>();
-  }
-}
-
 void ReplaceEvent::dump(std::ostream &out) {
   switch (m_type) {
     case Event::Type::Data: out << "replaceData"; break;
     case Event::Type::MessageStart: out << "replaceMessageStart"; break;
     case Event::Type::MessageEnd: out << "replaceMessageEnd"; break;
-    case Event::Type::SessionEnd: out << "replaceSessionEnd"; break;
+    case Event::Type::StreamEnd: out << "replaceStreamEnd"; break;
     default: break;
   }
 }
@@ -92,21 +57,18 @@ auto ReplaceEvent::clone() -> Filter* {
   return new ReplaceEvent(*this);
 }
 
-void ReplaceEvent::reset() {
-}
-
-void ReplaceEvent::process(Context *ctx, Event *inp) {
-  if (inp->type() == m_type) {
+void ReplaceEvent::process(Event *evt) {
+  if (evt->type() == m_type) {
     if (m_replacement.is_function()) {
-      pjs::Value arg(inp), result;
-      if (callback(*ctx, m_replacement.f(), 1, &arg, result)) {
+      pjs::Value arg(evt), result;
+      if (callback(m_replacement.f(), 1, &arg, result)) {
         output(result);
       }
     } else {
       output(m_replacement);
     }
   } else {
-    output(inp);
+    output(evt);
   }
 }
 

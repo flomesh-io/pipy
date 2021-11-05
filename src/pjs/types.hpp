@@ -72,12 +72,16 @@ public:
 
   void release() {
     if (--m_refs <= 0) {
-      delete static_cast<T*>(this);
+      static_cast<T*>(this)->finalize();
     }
   }
 
 protected:
   int m_refs = 0;
+
+  void finalize() {
+    delete static_cast<T*>(this);
+  }
 };
 
 //
@@ -160,6 +164,8 @@ class DefaultPooledBase {};
 template<class T, class Base = DefaultPooledBase>
 class Pooled : public Base {
 public:
+  using Base::Base;
+
   void* operator new(size_t) {
     if (auto p = m_free) {
       m_free = *(void**)p;
@@ -1090,6 +1096,9 @@ public:
   virtual void finalize() override {
     delete static_cast<T*>(this);
   }
+
+protected:
+  using Pooled<T, Base>::Pooled;
 };
 
 inline auto Value::retain(Object *obj) -> Object* { return obj->retain(); }

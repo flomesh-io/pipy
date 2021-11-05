@@ -10,7 +10,7 @@ pipy({
 })
 
 .pipeline('request')
-  .handleSessionStart(
+  .handleStreamStart(
     () => _rateLimit = _services[__serviceID]?.rateLimit
   )
   .link(
@@ -19,7 +19,7 @@ pipy({
   )
 
 .pipeline('throttle')
-  .tap(
+  .throttleMessageRate(
     () => _rateLimit,
     () => __serviceID,
   )

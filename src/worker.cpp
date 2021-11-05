@@ -29,7 +29,7 @@
 #include "task.hpp"
 #include "event.hpp"
 #include "message.hpp"
-#include "session.hpp"
+#include "pipeline.hpp"
 #include "api/algo.hpp"
 #include "api/configuration.hpp"
 #include "api/console.hpp"
@@ -111,9 +111,6 @@ template<> void ClassDef<Global>::init() {
   // Netmask
   variable("Netmask", class_of<Constructor<Netmask>>());
 
-  // Session
-  variable("Session", class_of<Constructor<Session>>());
-
   // Data
   variable("Data", class_of<Constructor<pipy::Data>>());
 
@@ -126,8 +123,8 @@ template<> void ClassDef<Global>::init() {
   // MessageEnd
   variable("MessageEnd", class_of<Constructor<MessageEnd>>());
 
-  // SessionEnd
-  variable("SessionEnd", class_of<Constructor<SessionEnd>>());
+  // StreamEnd
+  variable("StreamEnd", class_of<Constructor<StreamEnd>>());
 
   // http
   variable("http", class_of<http::Http>());
@@ -211,9 +208,9 @@ auto Worker::load_module(const std::string &path) -> Module* {
   return mod;
 }
 
-void Worker::add_listener(Listener *listener, Pipeline *pipeline, int max_connections) {
+void Worker::add_listener(Listener *listener, PipelineDef *pipeline_def, int max_connections) {
   auto &p = m_listeners[listener];
-  p.pipeline = pipeline;
+  p.pipeline_def = pipeline_def;
   p.max_connections = max_connections;
 }
 
@@ -279,14 +276,14 @@ bool Worker::start() {
     for (const auto &i : m_listeners) {
       auto l = i.first;
       if (!Listener::is_open(l->port())) {
-        l->pipeline(i.second.pipeline);
+        l->pipeline_def(i.second.pipeline_def);
         l->set_max_connections(i.second.max_connections);
         new_open.insert(l);
       }
     }
   } catch (std::runtime_error &err) {
     for (auto *l : new_open) {
-      l->pipeline(nullptr);
+      l->pipeline_def(nullptr);
     }
     Log::error("%s", err.what());
     return false;
@@ -296,7 +293,7 @@ bool Worker::start() {
   for (const auto &i : m_listeners) {
     auto l = i.first;
     if (Listener::is_open(l->port())) {
-      l->pipeline(i.second.pipeline);
+      l->pipeline_def(i.second.pipeline_def);
       l->set_max_connections(i.second.max_connections);
     }
   }
@@ -306,7 +303,7 @@ bool Worker::start() {
     auto l = i.second;
     if (!l->reserved()) {
       if (m_listeners.find(l) == m_listeners.end()) {
-        l->pipeline(nullptr);
+        l->pipeline_def(nullptr);
       }
     }
   }

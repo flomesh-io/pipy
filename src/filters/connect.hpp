@@ -26,7 +26,6 @@
 #ifndef CONNECT_HPP
 #define CONNECT_HPP
 
-#include "net.hpp"
 #include "filter.hpp"
 
 namespace pipy {
@@ -39,25 +38,23 @@ class Outbound;
 
 class Connect : public Filter {
 public:
-  Connect();
   Connect(const pjs::Value &target, pjs::Object *options);
 
 private:
   Connect(const Connect &r);
   ~Connect();
 
-  virtual auto help() -> std::list<std::string> override;
-  virtual void dump(std::ostream &out) override;
   virtual auto clone() -> Filter* override;
   virtual void reset() override;
-  virtual void process(Context *ctx, Event *inp) override;
+  virtual void process(Event *evt) override;
+  virtual void dump(std::ostream &out) override;
 
   pjs::Value m_target;
+  pjs::Ref<Outbound> m_outbound;
+  pjs::Ref<Input> m_output;
   size_t m_buffer_limit = 0;
   int m_retry_count = 0;
   double m_retry_delay = 0;
-  Outbound* m_outbound = nullptr;
-  bool m_session_end = false;
 };
 
 } // namespace pipy

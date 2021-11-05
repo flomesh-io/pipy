@@ -27,7 +27,6 @@
 #include "context.hpp"
 #include "module.hpp"
 #include "pipeline.hpp"
-#include "session.hpp"
 #include "listener.hpp"
 #include "logging.hpp"
 
@@ -37,140 +36,69 @@ namespace pipy {
 // Merge
 //
 
-Merge::Merge()
-{
-}
-
-Merge::Merge(pjs::Str *target, pjs::Function *selector)
-  : m_session_pool(std::make_shared<SessionPool>())
-  , m_target(target)
-  , m_selector(selector)
+Merge::Merge(const pjs::Value &key)
+  : MuxBase(key)
 {
 }
 
 Merge::Merge(const Merge &r)
-  : m_pipeline(r.m_pipeline)
-  , m_session_pool(r.m_session_pool)
-  , m_target(r.m_target)
-  , m_selector(r.m_selector)
+  : MuxBase(r)
 {
 }
 
 Merge::~Merge() {
 }
 
-auto Merge::help() -> std::list<std::string> {
-  return {
-    "merge(target[, selector])",
-    "Merges messages from different sessions to a shared pipeline session",
-    "target = <string> Name of the pipeline to send messages to",
-    "selector = <function> Callback function that gives the name of a session for reuse",
-  };
-}
-
 void Merge::dump(std::ostream &out) {
   out << "merge";
-}
-
-auto Merge::draw(std::list<std::string> &links, bool &fork) -> std::string {
-  links.push_back(m_target->str());
-  fork = true;
-  return "merge";
-}
-
-void Merge::bind() {
-  if (!m_pipeline) {
-    m_pipeline = pipeline(m_target);
-  }
 }
 
 auto Merge::clone() -> Filter* {
   return new Merge(*this);
 }
 
-void Merge::reset() {
-  m_session_pool->free(m_session);
-  m_session = nullptr;
-  m_head = nullptr;
-  m_body = nullptr;
-  m_session_end = false;
+//
+// Merge::Session
+//
+
+void Merge::Session::open(Pipeline *pipeline) {
+  pipeline->chain(m_ef_demux.input());
 }
 
-void Merge::process(Context *ctx, Event *inp) {
-  if (m_session_end) return;
+auto Merge::Session::stream(MessageStart *start) -> Stream* {
+  return new Stream(this, start);
+}
 
-  if (!m_session) {
-    if (m_selector) {
-      pjs::Value ret;
-      if (!callback(*ctx, m_selector, 0, nullptr, ret)) return;
-      auto s = ret.to_string();
-      m_session = m_session_pool->alloc(m_pipeline, s);
-      s->release();
-    } else {
-      m_session = m_session_pool->alloc(m_pipeline, pjs::Str::empty);
+void Merge::Session::on_demux(Event *evt) {
+  if (evt->is<StreamEnd>()) {
+    close();
+  }
+}
+
+//
+// Merge::Session::Stream
+//
+
+void Merge::Session::Stream::on_event(Event *evt) {
+  if (auto data = evt->as<Data>()) {
+    if (m_start) {
+      m_buffer.push(*data);
+    }
+
+  } else if (evt->is<MessageEnd>() || evt->is<StreamEnd>()) {
+    if (m_start) {
+      auto out = m_session->input();
+      output(m_start, out);
+      if (!m_buffer.empty()) output(Data::make(m_buffer), out);
+      output(evt, out);
+      m_start = nullptr;
+      m_buffer.clear();
     }
   }
-
-  if (auto e = inp->as<MessageStart>()) {
-    m_head = e->head();
-    m_body = Data::make();
-
-  } else if (auto data = inp->as<Data>()) {
-    if (m_body) m_body->push(*data);
-
-  } else if (inp->is<MessageEnd>()) {
-    if (m_body) {
-      m_session->input(ctx, m_head, m_body);
-      m_head = nullptr;
-      m_body = nullptr;
-    }
-  }
-
-  output(inp);
-
-  if (inp->is<SessionEnd>()) {
-    m_session_pool->free(m_session);
-    m_session = nullptr;
-    m_head = nullptr;
-    m_body = nullptr;
-    m_session_end = true;
-  }
 }
 
-void Merge::SessionPool::start_cleaning() {
-  if (m_cleaning_scheduled) return;
-  m_timer.schedule(1, [this]() {
-    m_cleaning_scheduled = false;
-    clean();
-  });
-  m_cleaning_scheduled = true;
-}
-
-void Merge::SessionPool::clean() {
-  auto p = m_free_sessions.head();
-  while (p) {
-    auto session = p;
-    p = p->next();
-    if (++session->m_free_time >= 10) {
-      m_free_sessions.remove(session);
-      m_sessions.erase(session->m_name);
-    }
-  }
-
-  if (!m_free_sessions.empty()) {
-    start_cleaning();
-  }
-}
-
-void Merge::SharedSession::input(Context *ctx, pjs::Object *head, Data *body) {
-  if (!m_session || m_session->done()) {
-    m_session = nullptr;
-    m_session = Session::make(ctx, m_pipeline);
-  }
-
-  m_session->input(MessageStart::make(head));
-  if (body) m_session->input(body);
-  m_session->input(MessageEnd::make());
+void Merge::Session::Stream::close() {
+  delete this;
 }
 
 } // namespace pipy

@@ -36,18 +36,15 @@ namespace pipy {
 
 class OnEvent : public Filter {
 public:
-  OnEvent(Event::Type type);
   OnEvent(Event::Type type, pjs::Function *callback);
 
 private:
   OnEvent(const OnEvent &r);
   ~OnEvent();
 
-  virtual auto help() -> std::list<std::string> override;
-  virtual void dump(std::ostream &out) override;
   virtual auto clone() -> Filter* override;
-  virtual void reset() override;
-  virtual void process(Context *ctx, Event *inp) override;
+  virtual void process(Event *evt) override;
+  virtual void dump(std::ostream &out) override;
 
   Event::Type m_type;
   pjs::Ref<pjs::Function> m_callback;

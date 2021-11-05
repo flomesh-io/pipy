@@ -37,18 +37,16 @@ namespace pipy {
 
 class OnMessage : public Filter {
 public:
-  OnMessage();
   OnMessage(pjs::Function *callback, int size_limit = -1);
 
 private:
   OnMessage(const OnMessage &r);
   ~OnMessage();
 
-  virtual auto help() -> std::list<std::string> override;
-  virtual void dump(std::ostream &out) override;
   virtual auto clone() -> Filter* override;
   virtual void reset() override;
-  virtual void process(Context *ctx, Event *inp) override;
+  virtual void process(Event *evt) override;
+  virtual void dump(std::ostream &out) override;
 
   pjs::Ref<pjs::Object> m_head;
   pjs::Ref<Data> m_body;

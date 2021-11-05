@@ -25,63 +25,161 @@
 
 #include "pipeline.hpp"
 #include "filter.hpp"
-#include "session.hpp"
+#include "context.hpp"
+#include "message.hpp"
 #include "logging.hpp"
 
 namespace pipy {
 
-std::set<Pipeline*> Pipeline::s_all_pipelines;
+//
+// PipelineDef
+//
 
-Pipeline::Pipeline(Module *module, Type type, const std::string &name)
+List<PipelineDef> PipelineDef::s_all_pipeline_defs;
+
+PipelineDef::PipelineDef(Module *module, Type type, const std::string &name)
   : m_module(module)
   , m_type(type)
   , m_name(name)
 {
-  s_all_pipelines.insert(this);
+  s_all_pipeline_defs.push(this);
 }
 
-Pipeline::~Pipeline() {
+PipelineDef::~PipelineDef() {
   auto *ptr = m_pool;
   while (ptr) {
-    auto *session = ptr;
-    ptr = ptr->m_next;
-    delete session;
+    auto *pipeline = ptr;
+    ptr = ptr->m_next_free;
+    delete pipeline;
   }
-  s_all_pipelines.erase(this);
+  s_all_pipeline_defs.remove(this);
 }
 
-void Pipeline::bind() {
+void PipelineDef::bind() {
   for (const auto &f : m_filters) {
     f->bind();
   }
 }
 
-void Pipeline::append(Filter *filter) {
-  filter->m_pipeline = this;
+auto PipelineDef::append(Filter *filter) -> Filter* {
   m_filters.emplace_back(filter);
+  filter->m_pipeline_def = this;
+  return filter;
 }
 
-auto Pipeline::alloc() -> ReusableSession* {
+auto PipelineDef::alloc(Context *ctx) -> Pipeline* {
   retain();
-  ReusableSession *session = nullptr;
+  Pipeline *pipeline = nullptr;
   if (m_pool) {
-    session = m_pool;
-    m_pool = session->m_next;
+    pipeline = m_pool;
+    m_pool = pipeline->m_next_free;
   } else {
-    session = new ReusableSession(this);
+    pipeline = new Pipeline(this);
     m_allocated++;
   }
+  pipeline->m_context = ctx;
   m_active++;
-  Log::debug("Session: %p, allocated, pipeline: %s", session, m_name.c_str());
-  return session;
+  Log::debug("[pipeline %p] ++ name = %s, context = %llu", pipeline, m_name.c_str(), ctx->id());
+  return pipeline;
 }
 
-void Pipeline::free(ReusableSession *session) {
-  session->m_next = m_pool;
-  m_pool = session;
+void PipelineDef::free(Pipeline *pipeline) {
+  pipeline->m_next_free = m_pool;
+  m_pool = pipeline;
   m_active--;
-  Log::debug("Session: %p, freed, pipeline: %s", session, m_name.c_str());
+  Log::debug("[pipeline %p] -- name = %s", pipeline, m_name.c_str());
   release();
+}
+
+//
+// Pipeline
+//
+
+Pipeline::Pipeline(PipelineDef *def)
+  : m_def(def)
+{
+  const auto &filters = def->m_filters;
+  for (const auto &f : filters) {
+    auto filter = f->clone();
+    filter->m_pipeline_def = def;
+    filter->m_pipeline = this;
+    m_filters.push(filter);
+  }
+  for (auto f = m_filters.head(); f; f = f->next()) {
+    f->chain();
+    f->reset();
+  }
+}
+
+Pipeline::~Pipeline() {
+  auto p = m_filters.head();
+  while (p) {
+    auto f = p;
+    p = p->next();
+    delete f;
+  }
+}
+
+void Pipeline::chain(Input *input) {
+  EventFunction::chain(input);
+  if (auto f = m_filters.tail()) {
+    f->chain();
+  }
+}
+
+void Pipeline::on_event(Event *evt) {
+  if (auto f = m_filters.head()) {
+    output(evt, f->input());
+  } else {
+    output(evt);
+  }
+}
+
+void Pipeline::auto_release() {
+  if (!m_auto_release) {
+    retain();
+    AutoReleasePool::add(this);
+    m_auto_release = true;
+  }
+}
+
+void Pipeline::finalize() {
+  reset();
+  m_def->free(this);
+}
+
+void Pipeline::reset() {
+  chain(nullptr);
+  for (auto f = m_filters.head(); f; f = f->next()) {
+    f->reset();
+  }
+  m_context = nullptr;
+}
+
+//
+// Pipeline::AutoReleasePool
+//
+
+Pipeline::AutoReleasePool* Pipeline::AutoReleasePool::s_stack = nullptr;
+
+Pipeline::AutoReleasePool::AutoReleasePool() {
+  m_next = s_stack;
+  s_stack = this;
+}
+
+Pipeline::AutoReleasePool::~AutoReleasePool() {
+  for (
+    auto *p = m_pipelines;
+    p; p = p->m_next_auto_release
+  ) {
+    p->release();
+  }
+  s_stack = m_next;
+}
+
+void Pipeline::AutoReleasePool::add(Pipeline *pipeline) {
+  pipeline->m_next_auto_release = s_stack->m_pipelines;
+  s_stack->m_pipelines = pipeline;
 }
 
 } // namespace pipy

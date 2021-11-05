@@ -32,30 +32,19 @@ namespace pipy {
 // Split
 //
 
-Split::Split()
-{
-}
-
 Split::Split(pjs::Function *callback)
   : m_callback(callback)
 {
 }
 
 Split::Split(const Split &r)
-  : m_callback(r.m_callback)
+  : Filter(r)
+  , m_callback(r.m_callback)
 {
 }
 
 Split::~Split()
 {
-}
-
-auto Split::help() -> std::list<std::string> {
-  return {
-    "split(callback)",
-    "Splits data chunks into smaller chunks",
-    "callback = <function> A callback function that receives each byte as input and decides where to split"
-  };
 }
 
 void Split::dump(std::ostream &out) {
@@ -66,19 +55,16 @@ auto Split::clone() -> Filter* {
   return new Split(*this);
 }
 
-void Split::reset()
-{
-}
+void Split::process(Event *evt) {
 
-void Split::process(Context *ctx, Event *inp) {
-  if (auto data = inp->as<Data>()) {
+  if (auto data = evt->as<Data>()) {
     while (!data->empty()) {
       pjs::Ref<Data> buf(Data::make());
       bool error = false;
       data->shift(
         [&](int c) -> int {
           pjs::Value arg(c), ret;
-          if (!callback(*ctx, m_callback, 1, &arg, ret)) {
+          if (!callback(m_callback, 1, &arg, ret)) {
             error = true;
             return -1;
           }
@@ -95,7 +81,7 @@ void Split::process(Context *ctx, Event *inp) {
     }
 
   } else {
-    output(inp);
+    output(evt);
   }
 }
 

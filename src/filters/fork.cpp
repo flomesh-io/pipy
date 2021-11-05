@@ -24,10 +24,9 @@
  */
 
 #include "fork.hpp"
-#include "context.hpp"
 #include "module.hpp"
 #include "pipeline.hpp"
-#include "session.hpp"
+#include "context.hpp"
 #include "logging.hpp"
 
 namespace pipy {
@@ -40,15 +39,13 @@ Fork::Fork()
 {
 }
 
-Fork::Fork(pjs::Str *target, pjs::Object *initializers)
-  : m_target(target)
-  , m_initializers(initializers)
+Fork::Fork(pjs::Object *initializers)
+  : m_initializers(initializers)
 {
 }
 
 Fork::Fork(const Fork &r)
-  : m_pipeline(r.m_pipeline)
-  , m_target(r.m_target)
+  : Filter(r)
   , m_initializers(r.m_initializers)
 {
 }
@@ -56,29 +53,8 @@ Fork::Fork(const Fork &r)
 Fork::~Fork() {
 }
 
-auto Fork::help() -> std::list<std::string> {
-  return {
-    "fork(target[, initializers])",
-    "Sends copies of events to other pipeline sessions",
-    "target = <string> Name of the pipeline to send event copies to",
-    "initializers = <array|function> Functions to initialize each session",
-  };
-}
-
 void Fork::dump(std::ostream &out) {
   out << "fork";
-}
-
-auto Fork::draw(std::list<std::string> &links, bool &fork) -> std::string {
-  links.push_back(m_target->str());
-  fork = true;
-  return "fork";
-}
-
-void Fork::bind() {
-  if (!m_pipeline) {
-    m_pipeline = pipeline(m_target);
-  }
 }
 
 auto Fork::clone() -> Filter* {
@@ -86,61 +62,58 @@ auto Fork::clone() -> Filter* {
 }
 
 void Fork::reset() {
-  m_sessions = nullptr;
-  m_session_end = false;
+  Filter::reset();
+  if (m_pipelines) {
+    m_pipelines->free();
+    m_pipelines = nullptr;
+  }
 }
 
-void Fork::process(Context *ctx, Event *inp) {
-  if (m_session_end) return;
-
-  if (!m_sessions) {
-    auto root = static_cast<Context*>(ctx->root());
-    auto mod = pipeline()->module();
+void Fork::process(Event *evt) {
+  if (!m_pipelines) {
+    auto mod = module();
     pjs::Value ret;
     pjs::Object *initializers = m_initializers.get();
     if (initializers && initializers->is_function()) {
-      if (!callback(*ctx, initializers->as<pjs::Function>(), 0, nullptr, ret)) return;
+      if (!callback(initializers->as<pjs::Function>(), 0, nullptr, ret)) return;
       if (!ret.is_array()) {
         Log::error("[fork] invalid initializer list");
-        abort();
         return;
       }
       initializers = ret.o();
     }
     if (initializers && initializers->is_array()) {
-      m_sessions = initializers->as<pjs::Array>()->map(
-        [&](pjs::Value &v, int, pjs::Value &ret) -> bool {
-          auto context = root;
-          if (v.is_object()) {
-            context = mod->worker()->new_runtime_context(root);
-            pjs::Object::assign(context->data(mod->index()), v.o());
-          }
-          auto session = Session::make(context, m_pipeline);
-          ret.set(session);
-          return true;
+      auto arr = initializers->as<pjs::Array>();
+      m_pipelines = pjs::PooledArray<pjs::Ref<Pipeline>>::make(arr->length());
+      for (int i = 0; i < arr->length(); i++) {
+        pjs::Value v;
+        arr->get(i, v);
+        auto pipeline = sub_pipeline(0, true);
+        if (mod && v.is_object()) {
+          auto context = pipeline->context();
+          pjs::Object::assign(context->data(mod->index()), v.o());
         }
-      );
+        m_pipelines->at(i) = pipeline;
+      }
     } else {
-      auto context = root;
+      m_pipelines = pjs::PooledArray<pjs::Ref<Pipeline>>::make(1);
+      auto pipeline = sub_pipeline(0, initializers ? true : false);
       if (initializers) {
-        context = mod->worker()->new_runtime_context(root);
+        auto context = pipeline->context();
         pjs::Object::assign(context->data(mod->index()), initializers);
       }
-      auto session = Session::make(context, m_pipeline);
-      m_sessions = pjs::Array::make(1);
-      m_sessions->set(0, session);
+      m_pipelines->at(0) = pipeline;
     }
   }
 
-  m_sessions->iterate_all([&](pjs::Value &v, int) {
-    v.as<Session>()->input(inp->clone());
-  });
-
-  output(inp);
-
-  if (inp->is<SessionEnd>()) {
-    m_session_end = true;
+  if (m_pipelines) {
+    for (int i = 0; i < m_pipelines->size(); i++) {
+      auto out = m_pipelines->at(i)->input();
+      output(evt->clone(), out);
+    }
   }
+
+  output(evt);
 }
 
 } // namespace pipy

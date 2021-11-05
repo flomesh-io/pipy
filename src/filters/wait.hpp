@@ -34,32 +34,28 @@
 
 namespace pipy {
 
-class Session;
-
 //
 // Wait
 //
 
 class Wait : public Filter, public ContextGroup::Waiter {
 public:
-  Wait();
   Wait(pjs::Function *condition);
 
 private:
   Wait(const Wait &r);
   ~Wait();
 
-  virtual auto help() -> std::list<std::string> override;
-  virtual void dump(std::ostream &out) override;
   virtual auto clone() -> Filter* override;
   virtual void reset() override;
-  virtual void process(Context *ctx, Event *inp) override;
+  virtual void process(Event *evt) override;
+  virtual void dump(std::ostream &out) override;
+
   virtual void on_notify(Context *ctx) override;
 
   pjs::Ref<pjs::Function> m_condition;
   EventBuffer m_buffer;
   bool m_fulfilled = false;
-  bool m_session_end = false;
 };
 
 } // namespace pipy

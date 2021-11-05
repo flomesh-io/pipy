@@ -31,10 +31,6 @@ namespace pipy {
 // Pack
 //
 
-Pack::Pack()
-{
-}
-
 Pack::Pack(int batch_size, pjs::Object *options)
   : m_batch_size(batch_size)
 {
@@ -63,7 +59,8 @@ Pack::Pack(int batch_size, pjs::Object *options)
 }
 
 Pack::Pack(const Pack &r)
-  : m_batch_size(r.m_batch_size)
+  : Filter(r)
+  , m_batch_size(r.m_batch_size)
   , m_timeout(r.m_timeout)
 {
   if (m_timeout > 0) {
@@ -76,15 +73,6 @@ Pack::~Pack()
 {
 }
 
-auto Pack::help() -> std::list<std::string> {
-  return {
-    "pack([batchSize[, options]])",
-    "Packs data of one or more messages into one message and squeezes out spare room in the data chunks",
-    "batchSize = <int> Number of messages to pack in one. Defaults to 1",
-    "options = <object> Options including timeout, vacancy",
-  };
-}
-
 void Pack::dump(std::ostream &out) {
   out << "pack";
 }
@@ -94,16 +82,14 @@ auto Pack::clone() -> Filter* {
 }
 
 void Pack::reset() {
+  Filter::reset();
   m_timer = nullptr;
   m_message_starts = 0;
   m_message_ends = 0;
-  m_session_end = false;
 }
 
-void Pack::process(Context *ctx, Event *inp) {
+void Pack::process(Event *evt) {
   static Data::Producer s_dp("pack");
-
-  if (m_session_end) return;
 
   if (m_timeout > 0) {
     if (!m_timer) {
@@ -112,21 +98,21 @@ void Pack::process(Context *ctx, Event *inp) {
     }
   }
 
-  if (auto e = inp->as<MessageStart>()) {
+  if (auto start = evt->as<MessageStart>()) {
     if (m_message_starts == 0) {
-      m_head = e->head();
+      m_head = start->head();
       m_buffer = Data::make();
     }
     m_message_starts++;
     return;
 
-  } else if (auto data = inp->as<Data>()) {
+  } else if (auto data = evt->as<Data>()) {
     if (m_buffer) {
       s_dp.pack(m_buffer, data, m_vacancy);
       return;
     }
 
-  } else if (auto *end = inp->as<MessageEnd>()) {
+  } else if (auto *end = evt->as<MessageEnd>()) {
     m_message_ends++;
     if (m_message_starts == m_message_ends && m_message_ends >= m_batch_size) {
       flush(end);
@@ -134,9 +120,8 @@ void Pack::process(Context *ctx, Event *inp) {
       m_last_input_time = std::chrono::steady_clock::now();
     }
 
-  } else if (inp->is<SessionEnd>()) {
-    output(inp);
-    m_session_end = true;
+  } else if (evt->is<StreamEnd>()) {
+    output(evt);
   }
 }
 

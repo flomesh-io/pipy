@@ -35,7 +35,6 @@ class ContextGroup;
 class ContextDataBase;
 class Worker;
 class Inbound;
-class Session;
 
 //
 // Context
@@ -69,7 +68,6 @@ private:
   Inbound* m_inbound = nullptr;
 
   static uint64_t s_context_id;
-  static uint64_t s_context_total;
 
   friend class pjs::RefCount<Context>;
   friend class Worker;

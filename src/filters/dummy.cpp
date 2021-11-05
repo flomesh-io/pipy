@@ -36,7 +36,7 @@ Dummy::Dummy()
 }
 
 Dummy::Dummy(const Dummy &r)
-  : Dummy()
+  : Filter(r)
 {
 }
 
@@ -44,26 +44,15 @@ Dummy::~Dummy()
 {
 }
 
-auto Dummy::help() -> std::list<std::string> {
-  return {
-    "dummy()",
-    "Eats up all events",
-  };
-}
-
 void Dummy::dump(std::ostream &out) {
   out << "dummy";
 }
 
 auto Dummy::clone() -> Filter* {
-  return new Dummy();
+  return new Dummy(*this);
 }
 
-void Dummy::reset()
-{
-}
-
-void Dummy::process(Context *ctx, Event *inp)
+void Dummy::process(Event *evt)
 {
 }
 

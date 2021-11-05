@@ -87,9 +87,9 @@ public:
   void exec(const pjs::Value &command);
   void fork(pjs::Str *target, pjs::Object *initializers);
   void link(size_t count, pjs::Str **targets, pjs::Function **conditions);
-  void merge(pjs::Str *target, pjs::Function *selector);
-  void mux(pjs::Str *target, pjs::Function *selector);
-  void mux_http(pjs::Str *target, const pjs::Value &channel);
+  void merge(pjs::Str *target, const pjs::Value &key);
+  void mux(pjs::Str *target, const pjs::Value &key);
+  void mux_http(pjs::Str *target, const pjs::Value &key);
   void on_body(pjs::Function *callback, int size_limit);
   void on_event(Event::Type type, pjs::Function *callback);
   void on_message(pjs::Function *callback, int size_limit);
@@ -102,8 +102,9 @@ public:
   void replace_start(const pjs::Value &replacement);
   void serve_http(pjs::Object *handler);
   void split(pjs::Function *callback);
-  void tap(const pjs::Value &quota, const pjs::Value &account);
-  void use(Module *module, pjs::Str *pipeline, pjs::Function *when);
+  void throttle_data_rate(const pjs::Value &quota, const pjs::Value &account);
+  void throttle_message_rate(const pjs::Value &quota, const pjs::Value &account);
+  void use(Module *module, pjs::Str *pipeline);
   void use(const std::list<Module*> modules, pjs::Str *pipeline, pjs::Function *when);
   void use(const std::list<Module*> modules, pjs::Str *pipeline, pjs::Str *pipeline_down, pjs::Function *when);
   void wait(pjs::Function *condition);

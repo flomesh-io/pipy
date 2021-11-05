@@ -24,7 +24,7 @@ pipy({
 
 // HTTP inbound
 .listen(6080)
-  .onSessionStart(
+  .handleStreamStart(
     () => _queue = []
   )
   .fork('in')
@@ -34,14 +34,14 @@ pipy({
 // Extract request info
 .pipeline('in')
   .decodeHTTPRequest()
-  .onMessageStart(
+  .handleMessageStart(
     e => (
       _startTime = Date.now(),
       _contentType = e.head.headers['content-type'] || '',
       _contentType = _contentType.split(';')[0]
     )
   )
-  .onMessage(
+  .handleMessage(
     msg => _queue.push({
       startTime: _startTime,
       ...msg.head,
@@ -52,7 +52,7 @@ pipy({
 // Extract response info
 .pipeline('out')
   .decodeHTTPResponse()
-  .onMessageStart(
+  .handleMessageStart(
     e => (
       _responseTime = Date.now(),
       _contentType = e.head.headers['content-type'] || '',
@@ -90,7 +90,7 @@ pipy({
       )
     )
   )
-  .onMessageStart(
+  .handleMessageStart(
     () => (
       _g.buffer = new Data,
       _g.bufferSize = 0,
@@ -111,7 +111,7 @@ pipy({
 // Regularly flush the logging session
 .task('1s')
   .fork('batch')
-  .replaceMessage(() => new SessionEnd)
+  .replaceMessage(() => new StreamEnd)
 
 // Mock logging service on port 8123
 .listen(8123)

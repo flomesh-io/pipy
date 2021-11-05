@@ -32,10 +32,6 @@ namespace pipy {
 // ReplaceBody
 //
 
-ReplaceBody::ReplaceBody()
-{
-}
-
 ReplaceBody::ReplaceBody(const pjs::Value &replacement, int size_limit)
   : m_replacement(replacement)
   , m_size_limit(size_limit)
@@ -43,21 +39,14 @@ ReplaceBody::ReplaceBody(const pjs::Value &replacement, int size_limit)
 }
 
 ReplaceBody::ReplaceBody(const ReplaceBody &r)
-  : ReplaceBody(r.m_replacement, r.m_size_limit)
+  : Filter(r)
+  , m_replacement(r.m_replacement)
+  , m_size_limit(r.m_size_limit)
 {
 }
 
 ReplaceBody::~ReplaceBody()
 {
-}
-
-auto ReplaceBody::help() -> std::list<std::string> {
-  return {
-    "replaceMessageBody([sizeLimit, ]replacement)",
-    "Replaces an entire message body",
-    "sizeLimit = <number|string> Maximum number of bytes to collect from the message body",
-    "callback = <object|function> Replacement events or a callback function that returns replacement events",
-  };
 }
 
 void ReplaceBody::dump(std::ostream &out) {
@@ -69,15 +58,16 @@ auto ReplaceBody::clone() -> Filter* {
 }
 
 void ReplaceBody::reset() {
+  Filter::reset();
   m_body = nullptr;
   m_discarded_size = 0;
 }
 
-void ReplaceBody::process(Context *ctx, Event *inp) {
-  if (inp->is<MessageStart>()) {
+void ReplaceBody::process(Event *evt) {
+  if (evt->is<MessageStart>()) {
     m_body = Data::make();
 
-  } else if (auto data = inp->as<Data>()) {
+  } else if (auto data = evt->as<Data>()) {
     if (m_body && data->size() > 0) {
       if (m_size_limit >= 0) {
         auto room = m_size_limit - m_body->size();
@@ -98,7 +88,7 @@ void ReplaceBody::process(Context *ctx, Event *inp) {
       return;
     }
 
-  } else if (inp->is<MessageEnd>()) {
+  } else if (evt->is<MessageEnd>() || evt->is<StreamEnd>()) {
     if (m_discarded_size > 0 && m_size_limit > 0) {
       Log::error(
         "[replaceBody] %d bytes were discarded due to buffer size limit of %d",
@@ -107,7 +97,7 @@ void ReplaceBody::process(Context *ctx, Event *inp) {
     }
     if (m_replacement.is_function()) {
       pjs::Value arg(m_body), result;
-      if (callback(*ctx, m_replacement.f(), 1, &arg, result)) {
+      if (callback(m_replacement.f(), 1, &arg, result)) {
         output(result);
       }
     } else {
@@ -117,7 +107,7 @@ void ReplaceBody::process(Context *ctx, Event *inp) {
     m_discarded_size = 0;
   }
 
-  output(inp);
+  output(evt);
 }
 
 } // namespace pipy

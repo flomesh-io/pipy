@@ -27,35 +27,36 @@
 #define TASK_HPP
 
 #include "pjs/pjs.hpp"
-#include "session.hpp"
+#include "event.hpp"
+#include "pipeline.hpp"
 #include "timer.hpp"
 
 #include <set>
 
 namespace pipy {
 
-class Pipeline;
+class PipelineDef;
 
-class Task {
+class Task : public EventTarget {
 public:
-  static auto make(const std::string &interval, Pipeline *pipeline) -> Task* {
-    return new Task(interval, pipeline);
+  static auto make(const std::string &interval, PipelineDef *pipeline_def) -> Task* {
+    return new Task(interval, pipeline_def);
   }
 
   auto name() const -> const std::string& { return m_name; }
+  auto pipeline_def() const -> PipelineDef* { return m_pipeline_def; }
   auto pipeline() const -> Pipeline* { return m_pipeline; }
-  auto session() const -> Session* { return m_session; }
   bool active() const;
   bool start();
 
 private:
-  Task(const std::string &interval, Pipeline *pipeline);
+  Task(const std::string &interval, PipelineDef *pipeline_def);
   ~Task();
 
   std::string m_name;
   double m_interval;
+  pjs::Ref<PipelineDef> m_pipeline_def;
   pjs::Ref<Pipeline> m_pipeline;
-  pjs::Ref<Session> m_session;
   bool m_stopped = false;
   Timer m_timer;
 
@@ -63,6 +64,8 @@ private:
   void tick();
   void run();
   void stop();
+
+  virtual void on_event(Event *evt) override;
 
   friend class Worker;
 };

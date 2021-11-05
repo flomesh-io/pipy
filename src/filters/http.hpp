@@ -27,37 +27,24 @@
 #define HTTP_HPP
 
 #include "mux.hpp"
-#include "buffer.hpp"
+#include "demux.hpp"
 #include "data.hpp"
-#include "session.hpp"
+#include "list.hpp"
 #include "api/http.hpp"
 
-#include <queue>
-#include <unordered_map>
-#include <unordered_set>
-
 namespace pipy {
-
 namespace http {
 
 //
 // Decoder
 //
 
-class Decoder {
+class Decoder : public EventFunction {
 public:
-  Decoder(bool is_response, const Event::Receiver &output)
-    : m_output(output)
-    , m_is_response(is_response) {}
+  Decoder(bool is_response)
+    : m_is_response(is_response) {}
 
   void reset();
-
-  void input(
-    const pjs::Ref<Data> &data,
-    const std::function<void(MessageHead*)> &on_message_start = nullptr
-  );
-
-  void end(SessionEnd *end);
 
   bool is_bodiless() const { return m_is_bodiless; }
   bool is_final() const { return m_is_final; }
@@ -79,7 +66,6 @@ private:
     CHUNK_LAST,
   };
 
-  Event::Receiver m_output;
   State m_state = HEAD;
   Data m_head_buffer;
   pjs::Ref<MessageHead> m_head;
@@ -88,18 +74,19 @@ private:
   bool m_is_bodiless = false;
   bool m_is_final = false;
 
-  void output_start(const std::function<void(MessageHead*)> &on_message_start) {
-    if (on_message_start) {
-      on_message_start(m_head);
-    }
-    m_output(MessageStart::make(m_head));
+  virtual void on_event(Event *evt) override;
+
+  void message_start() {
+    output(MessageStart::make(m_head));
   }
 
-  void output_end() {
-    m_output(MessageEnd::make());
+  void message_end() {
+    output(MessageEnd::make());
     m_is_bodiless = false;
     m_is_final = false;
   }
+
+  void stream_end(StreamEnd *end);
 
   bool is_bodiless_response() const {
     return m_is_response && m_is_bodiless;
@@ -110,15 +97,12 @@ private:
 // Encoder
 //
 
-class Encoder {
+class Encoder : public EventFunction {
 public:
-  Encoder(bool is_response, const Event::Receiver &output)
-    : m_output(output)
-    , m_is_response(is_response) {}
+  Encoder(bool is_response)
+    : m_is_response(is_response) {}
 
   void reset();
-
-  void input(const pjs::Ref<Event> &evt);
 
   bool is_bodiless() const { return m_is_bodiless; }
 
@@ -126,7 +110,6 @@ public:
   void set_final(bool b) { m_is_final = b; }
 
 private:
-  Event::Receiver m_output;
   pjs::Ref<MessageStart> m_start;
   pjs::Ref<Data> m_buffer;
   int m_content_length = -1;
@@ -134,6 +117,8 @@ private:
   bool m_is_response;
   bool m_is_bodiless = false;
   bool m_is_final = false;
+
+  virtual void on_event(Event *evt) override;
 
   void output_head();
 
@@ -156,14 +141,13 @@ private:
   RequestDecoder(const RequestDecoder &r);
   ~RequestDecoder();
 
-  virtual auto help() -> std::list<std::string> override;
-  virtual void dump(std::ostream &out) override;
   virtual auto clone() -> Filter* override;
+  virtual void chain() override;
   virtual void reset() override;
-  virtual void process(Context *ctx, Event *inp) override;
+  virtual void process(Event *evt) override;
+  virtual void dump(std::ostream &out) override;
 
-  Decoder m_decoder;
-  bool m_session_end = false;
+  Decoder m_ef_decode;
 };
 
 //
@@ -172,26 +156,31 @@ private:
 
 class ResponseDecoder : public Filter {
 public:
-  ResponseDecoder();
   ResponseDecoder(pjs::Object *options);
-  ResponseDecoder(const std::function<bool()> &bodiless);
 
 private:
   ResponseDecoder(const ResponseDecoder &r);
   ~ResponseDecoder();
 
-  virtual auto help() -> std::list<std::string> override;
-  virtual void dump(std::ostream &out) override;
   virtual auto clone() -> Filter* override;
+  virtual void chain() override;
   virtual void reset() override;
-  virtual void process(Context *ctx, Event *inp) override;
+  virtual void process(Event *evt) override;
+  virtual void dump(std::ostream &out) override;
 
-  Decoder m_decoder;
-  std::function<bool()> m_bodiless_func;
+  struct SetBodiless : public EventFunction {
+    ResponseDecoder* filter;
+    SetBodiless(ResponseDecoder *f) : filter(f) {}
+    virtual void on_event(Event *evt) override {
+      filter->on_set_bodiless(evt);
+    }
+  };
+
+  Decoder m_ef_decode;
+  SetBodiless m_ef_set_bodiless;
   pjs::Value m_bodiless;
-  bool m_session_end = false;
 
-  bool is_bodiless(Context *ctx);
+  void on_set_bodiless(Event *evt);
 };
 
 //
@@ -206,14 +195,13 @@ private:
   RequestEncoder(const RequestEncoder &r);
   ~RequestEncoder();
 
-  virtual auto help() -> std::list<std::string> override;
-  virtual void dump(std::ostream &out) override;
   virtual auto clone() -> Filter* override;
+  virtual void chain() override;
   virtual void reset() override;
-  virtual void process(Context *ctx, Event *inp) override;
+  virtual void process(Event *evt) override;
+  virtual void dump(std::ostream &out) override;
 
-  Encoder m_encoder;
-  bool m_session_end = false;
+  Encoder m_ef_encode;
 };
 
 //
@@ -222,73 +210,146 @@ private:
 
 class ResponseEncoder : public Filter {
 public:
-  ResponseEncoder();
   ResponseEncoder(pjs::Object *options);
 
 private:
   ResponseEncoder(const ResponseEncoder &r);
   ~ResponseEncoder();
 
-  virtual auto help() -> std::list<std::string> override;
-  virtual void dump(std::ostream &out) override;
   virtual auto clone() -> Filter* override;
+  virtual void chain() override;
   virtual void reset() override;
-  virtual void process(Context *ctx, Event *inp) override;
+  virtual void process(Event *evt) override;
+  virtual void dump(std::ostream &out) override;
 
-  Encoder m_encoder;
+  Encoder m_ef_encode;
   pjs::Value m_bodiless;
-  bool m_session_end = false;
+};
+
+//
+// RequestQueue
+//
+
+class RequestQueue {
+protected:
+  RequestQueue()
+    : m_ef_enqueue(this)
+    , m_ef_dequeue(this) {}
+
+  ~RequestQueue() {
+    reset();
+  }
+
+  struct Request :
+    public pjs::Pooled<Request>,
+    public List<Request>::Item
+  {
+    bool is_bodiless;
+    bool is_final;
+  };
+
+  List<Request> m_queue;
+
+  void reset();
+
+  virtual void on_enqueue(Request *req) = 0;
+  virtual void on_dequeue(Request *req) = 0;
+
+  struct Enqueue : public EventFunction {
+    RequestQueue* queue;
+    Enqueue(RequestQueue *q) : queue(q) {}
+    virtual void on_event(Event *evt) override;
+  };
+
+  struct Dequeue : public EventFunction {
+    RequestQueue* queue;
+    Dequeue(RequestQueue *q) : queue(q) {}
+    virtual void on_event(Event *evt) override;
+  };
+
+  Enqueue m_ef_enqueue;
+  Dequeue m_ef_dequeue;
 };
 
 //
 // Demux
 //
 
-class ServerConnection;
-
-class Demux : public Filter {
+class Demux : public Filter, protected RequestQueue {
 public:
   Demux();
-  Demux(Pipeline *pipeline);
-  Demux(pjs::Str *target);
 
 private:
   Demux(const Demux &r);
   ~Demux();
 
-  virtual auto help() -> std::list<std::string> override;
-  virtual void dump(std::ostream &out) override;
-  virtual auto draw(std::list<std::string> &links, bool &fork) -> std::string override;
-  virtual void bind() override;
   virtual auto clone() -> Filter* override;
+  virtual void chain() override;
   virtual void reset() override;
-  virtual void process(Context *ctx, Event *inp) override;
+  virtual void process(Event *evt) override;
+  virtual void dump(std::ostream &out) override;
 
-  Pipeline* m_pipeline = nullptr;
-  pjs::Ref<pjs::Str> m_target;
-  ServerConnection* m_connection = nullptr;
-  bool m_session_end = false;
+  struct DemuxInternal : public DemuxFunction {
+    Demux* filter;
+    DemuxInternal(Demux *f) : filter(f) {}
+    virtual auto sub_pipeline() -> Pipeline* {
+      return filter->sub_pipeline(0, true);
+    }
+  };
+
+  Decoder m_ef_decoder;
+  Encoder m_ef_encoder;
+  DemuxInternal m_ef_demux;
+
+  virtual void on_enqueue(Request *req) override;
+  virtual void on_dequeue(Request *req) override;
 };
 
 //
 // Mux
 //
 
-class Mux : public MuxBase {
+class Mux : public pipy::Mux {
 public:
   Mux();
-  Mux(Pipeline *pipeline, const pjs::Value &channel);
-  Mux(pjs::Str *target, const pjs::Value &channel);
+  Mux(const pjs::Value &key);
 
 private:
   Mux(const Mux &r);
   ~Mux();
 
-  virtual auto help() -> std::list<std::string> override;
-  virtual void dump(std::ostream &out) override;
-  virtual auto draw(std::list<std::string> &links, bool &fork) -> std::string override;
   virtual auto clone() -> Filter* override;
-  virtual auto new_connection() -> Connection* override;
+  virtual void dump(std::ostream &out) override;
+
+  //
+  // Mux::Session
+  //
+
+  class Session :
+    public pjs::Pooled<Session, pipy::Mux::Session>,
+    protected RequestQueue
+  {
+  public:
+    Session()
+      : m_ef_encoder(false)
+      , m_ef_decoder(true) {}
+
+  private:
+    Encoder m_ef_encoder;
+    Decoder m_ef_decoder;
+
+    virtual void open(Pipeline *pipeline) override;
+    virtual void close() override;
+    virtual void on_event(Event *evt) override;
+    virtual void on_enqueue(Request *req) override;
+    virtual void on_dequeue(Request *req) override;
+
+    friend class Stream;
+  };
+
+  virtual auto new_session() -> Session* override {
+    return new Session();
+  }
 };
 
 //
@@ -297,36 +358,40 @@ private:
 
 class Server : public Filter {
 public:
-  Server();
-  Server(const std::function<Message*(Context*, Message*)> &handler);
+  Server(const std::function<Message*(Message*)> &handler);
   Server(pjs::Object *handler);
 
 private:
   Server(const Server &r);
   ~Server();
 
-  virtual auto help() -> std::list<std::string> override;
-  virtual void dump(std::ostream &out) override;
   virtual auto clone() -> Filter* override;
+  virtual void chain() override;
   virtual void reset() override;
-  virtual void process(Context *ctx, Event *inp) override;
+  virtual void process(Event *evt) override;
+  virtual void dump(std::ostream &out) override;
 
-  struct Request {
-    bool is_bodiless;
-    bool is_final;
+  class Handler :
+    public pjs::Pooled<Handler>,
+    public EventFunction
+  {
+    Handler(Server *server)
+      : m_server(server) {}
+
+    Server* m_server;
+    pjs::Ref<MessageStart> m_start;
+    Data m_buffer;
+
+    virtual void on_event(Event *evt) override;
+
+    friend class Server;
   };
 
-  std::function<Message*(Context*, Message*)> m_handler_func;
-  pjs::Ref<pjs::Object> m_handler;
-  Decoder m_decoder;
-  Encoder m_encoder;
-  Context* m_context = nullptr;
-  pjs::Ref<MessageStart> m_head;
-  pjs::Ref<Data> m_body;
-  std::list<Request> m_queue;
-  bool m_session_end = false;
-
-  void request(const pjs::Ref<Event> &evt);
+  std::function<Message*(Message*)> m_handler_func;
+  pjs::Ref<pjs::Object> m_handler_obj;
+  Decoder m_ef_decoder;
+  Encoder m_ef_encoder;
+  Handler m_ef_handler;
 };
 
 } // namespace http

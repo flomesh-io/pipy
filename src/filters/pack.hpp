@@ -41,18 +41,16 @@ namespace pipy {
 
 class Pack : public Filter {
 public:
-  Pack();
   Pack(int batch_size, pjs::Object *options);
 
 private:
   Pack(const Pack &r);
   ~Pack();
 
-  virtual auto help() -> std::list<std::string> override;
-  virtual void dump(std::ostream &out) override;
   virtual auto clone() -> Filter* override;
   virtual void reset() override;
-  virtual void process(Context *ctx, Event *inp) override;
+  virtual void process(Event *evt) override;
+  virtual void dump(std::ostream &out) override;
 
   int m_batch_size;
   int m_message_starts = 0;
@@ -63,7 +61,6 @@ private:
   pjs::Ref<Data> m_buffer;
   std::unique_ptr<Timer> m_timer;
   std::chrono::steady_clock::time_point m_last_input_time;
-  bool m_session_end = false;
 
   void flush(MessageEnd *end);
   void schedule_timeout();

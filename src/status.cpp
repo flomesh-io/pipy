@@ -39,8 +39,8 @@ Status Status::local;
 void Status::update_modules() {
   modules.clear();
 
-  std::map<std::string, std::set<Pipeline*>> all_modules;
-  Pipeline::for_each([&](Pipeline *p) {
+  std::map<std::string, std::set<PipelineDef*>> all_modules;
+  PipelineDef::for_each([&](PipelineDef *p) {
     if (auto mod = p->module()) {
       if (mod->worker() == Worker::current()) {
         auto &set = all_modules[mod->path()];

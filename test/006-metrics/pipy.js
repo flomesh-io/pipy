@@ -20,7 +20,7 @@ pipy({
 // Extract request info
 .pipeline('in')
   .decodeHTTPRequest()
-  .onMessageStart(
+  .handleMessageStart(
     () => (
       _timestamp = Date.now(),
       _metrics.count++
@@ -30,7 +30,7 @@ pipy({
 // Extract response info
 .pipeline('out')
   .decodeHTTPResponse()
-  .onMessageStart(
+  .handleMessageStart(
     e => (
       ((status, latency, i) => (
         status = e.head.status,

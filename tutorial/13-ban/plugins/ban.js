@@ -40,7 +40,7 @@ pipy({
 })
 
 .pipeline('request')
-  .handleSessionStart(
+  .handleStreamStart(
     () => (
       _service = _services[__serviceID],
       __turnDown = Boolean(

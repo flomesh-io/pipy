@@ -23,7 +23,7 @@ pipy({
 // Find route for host + path
 .pipeline('routing')
   .decodeHTTPRequest()
-  .onMessageStart(
+  .handleMessageStart(
     evt => _target = _router.find(
       evt.head.headers.host,
       evt.head.path,

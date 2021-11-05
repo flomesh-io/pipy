@@ -24,7 +24,6 @@
  */
 
 #include "filter.hpp"
-#include "session.hpp"
 #include "pipeline.hpp"
 #include "module.hpp"
 #include "message.hpp"
@@ -34,27 +33,101 @@
 
 namespace pipy {
 
-auto Filter::draw(std::list<std::string> &links, bool &fork) -> std::string {
-  std::stringstream ss;
-  dump(ss);
-  return ss.str();
+Filter::Filter()
+  : m_subs(std::make_shared<std::vector<Sub>>())
+{
 }
 
-auto Filter::pipeline(pjs::Str *name) -> Pipeline* {
-  auto mod = m_pipeline->module();
-  if (auto p = mod->find_named_pipeline(name)) {
-    return p;
+Filter::Filter(const Filter &r)
+  : m_subs(r.m_subs)
+{
+}
+
+auto Filter::module() const -> Module* {
+  if (m_pipeline_def) {
+    return m_pipeline_def->module();
   } else {
-    std::string msg("unknown pipeline: ");
-    msg += name->str();
-    throw std::runtime_error(msg);
+    return nullptr;
   }
 }
 
-auto Filter::new_context(Context *base) -> Context* {
-  auto mod = m_pipeline->module();
-  if (!mod) return new Context();
-  return mod->worker()->new_runtime_context(base);
+auto Filter::context() const -> Context* {
+  if (m_pipeline) {
+    return m_pipeline->context();
+  } else {
+    return nullptr;
+  }
+}
+
+void Filter::add_sub_pipeline(PipelineDef *def) {
+  m_subs->emplace_back();
+  m_subs->back().def = def;
+}
+
+void Filter::add_sub_pipeline(pjs::Str *name) {
+  m_subs->emplace_back();
+  m_subs->back().name = name;
+}
+
+auto Filter::get_sub_pipeline_name(int i) -> const std::string& {
+  static std::string empty;
+  auto &sub = m_subs->at(i);
+  if (sub.name) {
+    return sub.name->str();
+  } else if (sub.def) {
+    return sub.def->name();
+  } else {
+    return empty;
+  }
+}
+
+void Filter::bind() {
+  for (auto &sub : *m_subs) {
+    if (sub.name && sub.name != pjs::Str::empty && !sub.def) {
+      if (auto mod = module()) {
+        if (auto p = mod->find_named_pipeline(sub.name)) {
+          sub.def = p;
+          continue;
+        }
+      }
+      std::string msg("pipeline not found: ");
+      msg += sub.name->str();
+      throw std::runtime_error(msg);
+    }
+  }
+}
+
+void Filter::chain() {
+  if (auto f = next()) {
+    EventFunction::chain(f->EventFunction::input());
+  } else if (auto p = m_pipeline) {
+    EventFunction::chain(p->output());
+  }
+}
+
+void Filter::reset() {
+  m_stream_end = false;
+}
+
+auto Filter::sub_pipeline(int i, bool clone_context) -> Pipeline* {
+  auto def = m_subs->at(i).def.get();
+  if (!def) return nullptr;
+
+  auto ctx = m_pipeline->m_context.get();
+  if (clone_context) {
+    if (auto mod = module()) {
+      ctx = mod->worker()->new_runtime_context(ctx);
+    }
+  }
+
+  return Pipeline::make(def, ctx);
+}
+
+void Filter::on_event(Event *evt) {
+  if (m_stream_end) return;
+  if (evt->is<StreamEnd>()) m_stream_end = true;
+  m_pipeline->auto_release();
+  process(evt);
 }
 
 bool Filter::output(const pjs::Value &evt) {
@@ -98,15 +171,15 @@ bool Filter::output(const pjs::Value &evt) {
   }
 }
 
-bool Filter::eval(Context &ctx, pjs::Value &param, pjs::Value &result) {
+bool Filter::eval(pjs::Value &param, pjs::Value &result) {
   if (param.is_function()) {
+    auto c = m_pipeline->m_context.get();
     auto f = param.as<pjs::Function>();
-    ((*f)(ctx, 0, nullptr, result));
-    if (ctx.ok()) return true;
-    auto mod = m_reusable_session->pipeline()->module();
-    Log::pjs_error(ctx.error(), mod->source());
-    ctx.reset();
-    abort();
+    ((*f)(*c, 0, nullptr, result));
+    if (c->ok()) return true;
+    auto mod = m_pipeline_def->module();
+    Log::pjs_error(c->error(), mod->source());
+    c->reset();
     return false;
   } else {
     result = param;
@@ -114,18 +187,14 @@ bool Filter::eval(Context &ctx, pjs::Value &param, pjs::Value &result) {
   }
 }
 
-bool Filter::callback(Context &ctx, pjs::Function *func, int argc, pjs::Value argv[], pjs::Value &result) {
-  (*func)(ctx, argc, argv, result);
-  if (ctx.ok()) return true;
-  auto mod = m_reusable_session->pipeline()->module();
-  Log::pjs_error(ctx.error(), mod->source());
-  ctx.reset();
-  abort();
+bool Filter::callback(pjs::Function *func, int argc, pjs::Value argv[], pjs::Value &result) {
+  auto c = m_pipeline->m_context.get();
+  (*func)(*c, argc, argv, result);
+  if (c->ok()) return true;
+  auto mod = m_pipeline_def->module();
+  Log::pjs_error(c->error(), mod->source());
+  c->reset();
   return false;
-}
-
-void Filter::abort() {
-  m_reusable_session->abort();
 }
 
 } // namespace pipy

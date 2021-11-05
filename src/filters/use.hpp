@@ -33,7 +33,6 @@
 namespace pipy {
 
 class Module;
-class Session;
 
 //
 // Use
@@ -41,65 +40,65 @@ class Session;
 
 class Use : public Filter {
 public:
-  Use();
-
   Use(
     Module *module,
-    pjs::Str *pipeline_name,
-    pjs::Function *when = nullptr
+    pjs::Str *pipeline_name
   );
 
   Use(
     const std::list<Module*> &modules,
     pjs::Str *pipeline_name,
-    pjs::Function *when = nullptr
+    pjs::Function *turn_down = nullptr
   );
 
   Use(
     const std::list<Module*> &modules,
     pjs::Str *pipeline_name,
     pjs::Str *pipeline_name_down,
-    pjs::Function *when = nullptr
+    pjs::Function *turn_down = nullptr
   );
 
 private:
   Use(const Use &r);
   ~Use();
 
-  virtual auto help() -> std::list<std::string> override;
-  virtual void dump(std::ostream &out) override;
   virtual void bind() override;
   virtual auto clone() -> Filter* override;
   virtual void reset() override;
-  virtual void process(Context *ctx, Event *inp) override;
+  virtual void process(Event *evt) override;
+  virtual void dump(std::ostream &out) override;
 
-  class Stage {
+  class Stage : public EventFunction {
   public:
     Stage(const Stage &r)
-      : m_pipeline(r.m_pipeline)
-      , m_pipeline_down(r.m_pipeline_down) {}
+      : m_pipeline_def(r.m_pipeline_def)
+      , m_pipeline_def_down(r.m_pipeline_def_down) {}
 
-    Stage(Pipeline *pipeline, Pipeline *pipeline_down)
-      : m_pipeline(pipeline)
-      , m_pipeline_down(pipeline_down) {}
+    Stage(PipelineDef *pipeline_def, PipelineDef *pipeline_def_down)
+      : m_pipeline_def(pipeline_def)
+      , m_pipeline_def_down(pipeline_def_down) {}
 
     void reset() {
-      m_session = nullptr;
-      m_session_down = nullptr;
+      close();
+      m_pipeline = nullptr;
+      m_pipeline_down = nullptr;
+      m_chained = false;
       m_turned_down = false;
     }
 
-    void use(Context *context, Event *inp);
-    void use_down(Context *context, Event *inp);
-
   private:
-    Use* m_use;
+    virtual void on_event(Event *evt) override;
+
+    auto input_down() -> EventTarget::Input*;
+
+    Use* m_filter;
     Stage* m_prev;
     Stage* m_next;
-    Pipeline* m_pipeline;
-    Pipeline* m_pipeline_down;
-    pjs::Ref<Session> m_session;
-    pjs::Ref<Session> m_session_down;
+    PipelineDef* m_pipeline_def;
+    PipelineDef* m_pipeline_def_down;
+    pjs::Ref<Pipeline> m_pipeline;
+    pjs::Ref<Pipeline> m_pipeline_down;
+    bool m_chained = false;
     bool m_turned_down = false;
 
     friend class Use;
@@ -109,9 +108,8 @@ private:
   std::list<Stage> m_stages;
   pjs::Ref<pjs::Str> m_pipeline_name;
   pjs::Ref<pjs::Str> m_pipeline_name_down;
-  pjs::Ref<pjs::Function> m_when;
+  pjs::Ref<pjs::Function> m_turn_down;
   bool m_multiple = false;
-  bool m_session_end = false;
 
   friend class Stage;
 };

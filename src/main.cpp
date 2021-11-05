@@ -28,6 +28,7 @@
 #include "admin-service.hpp"
 #include "api/configuration.hpp"
 #include "codebase.hpp"
+#include "filters/tls.hpp"
 #include "listener.hpp"
 #include "module.hpp"
 #include "net.hpp"
@@ -49,89 +50,11 @@
 #include <openssl/opensslv.h>
 #include <openssl/ssl.h>
 
-// All filters
-#include "filters/connect.hpp"
-#include "filters/decompress-message.hpp"
-#include "filters/demux.hpp"
-#include "filters/dubbo.hpp"
-#include "filters/dummy.hpp"
-#include "filters/dump.hpp"
-#include "filters/exec.hpp"
-#include "filters/fork.hpp"
-#include "filters/http.hpp"
-#include "filters/link.hpp"
-#include "filters/merge.hpp"
-#include "filters/mux.hpp"
-#include "filters/on-body.hpp"
-#include "filters/on-event.hpp"
-#include "filters/on-message.hpp"
-#include "filters/on-start.hpp"
-#include "filters/pack.hpp"
-#include "filters/print.hpp"
-#include "filters/replace-body.hpp"
-#include "filters/replace-event.hpp"
-#include "filters/replace-message.hpp"
-#include "filters/replace-start.hpp"
-#include "filters/socks.hpp"
-#include "filters/split.hpp"
-#include "filters/tap.hpp"
-#include "filters/tls.hpp"
-#include "filters/use.hpp"
-#include "filters/wait.hpp"
-
 using namespace pipy;
 
+extern const char FILTERS_HELP[];
+
 AdminService *s_admin = nullptr;
-
-//
-// List of all filters
-//
-
-static std::list<Filter*> s_filters {
-  new socks::Server,
-  new tls::Server,
-  new Connect,
-  new tls::Client,
-  new DecompressHTTP,
-  new DecompressMessage,
-  new Demux,
-  new http::Demux,
-  new dubbo::Decoder,
-  new http::RequestDecoder,
-  new http::ResponseDecoder,
-  new Dummy,
-  new Dump,
-  new dubbo::Encoder,
-  new http::RequestEncoder,
-  new http::ResponseEncoder,
-  new Exec,
-  new Fork,
-  new Link,
-  new Merge,
-  new Mux,
-  new http::Mux,
-  new OnStart,
-  new OnEvent(Event::Type::Data),
-  new OnEvent(Event::Type::MessageStart),
-  new OnEvent(Event::Type::MessageEnd),
-  new OnEvent(Event::Type::SessionEnd),
-  new OnBody,
-  new OnMessage,
-  new Pack,
-  new Print,
-  new ReplaceStart,
-  new ReplaceEvent(Event::Type::Data),
-  new ReplaceEvent(Event::Type::MessageStart),
-  new ReplaceEvent(Event::Type::MessageEnd),
-  new ReplaceEvent(Event::Type::SessionEnd),
-  new ReplaceBody,
-  new ReplaceMessage,
-  new http::Server,
-  new Split,
-  new Tap,
-  new Use,
-  new Wait,
-};
 
 //
 // Show version
@@ -158,16 +81,40 @@ static void show_version() {
 }
 
 //
-// Show list of filters
+// Show help about filters usage
 //
 
+static void get_filters_help(
+  std::map<std::string, std::list<std::string>> &filters
+) {
+  auto lines = utils::split(FILTERS_HELP, '\n');
+  lines.push_back("");
+
+  std::list<std::string> paragraph;
+
+  for (const auto &line : lines) {
+    if (utils::trim(line).empty()) {
+      if (!paragraph.empty()) {
+        auto name = paragraph.front();
+        auto i = name.find('(');
+        if (i != std::string::npos) name = name.substr(0, i);
+        filters[name] = std::move(paragraph);
+      }
+    } else {
+      paragraph.push_back(line);
+    }
+  }
+}
+
 static void list_filters() {
+  std::map<std::string, std::list<std::string>> filters;
+  get_filters_help(filters);
   size_t name_width = 0;
   size_t args_width = 0;
   std::list<std::tuple<std::string, std::string, std::string>> list;
-  for (auto u : s_filters) {
+  for (auto &f : filters) {
     std::string name, args, desc;
-    auto help = u->help();
+    auto help = f.second;
     auto i = help.begin();
     if (i != help.end()) name = *i++;
     if (i != help.end()) desc = *i++;
@@ -195,14 +142,12 @@ static void list_filters() {
   }
 }
 
-//
-// Show help info of filters
-//
-
 static void help_filters() {
-  for (auto p : s_filters) {
+  std::map<std::string, std::list<std::string>> filters;
+  get_filters_help(filters);
+  for (const auto &p : filters) {
     std::string name, desc;
-    auto help = p->help();
+    auto help = p.second;
     auto i = help.begin();
     if (i != help.end()) name = *i++;
     if (i != help.end()) desc = *i++;
@@ -316,10 +261,10 @@ static void show_status() {
 
   chunks.push_back({ "TOTAL", std::to_string(total_chunks * DATA_CHUNK_SIZE / 1024), "n/a" });
 
-  std::multimap<std::string, Pipeline*> stale_pipelines;
-  std::multimap<std::string, Pipeline*> current_pipelines;
+  std::multimap<std::string, PipelineDef*> stale_pipelines;
+  std::multimap<std::string, PipelineDef*> current_pipelines;
 
-  Pipeline::for_each([&](Pipeline *p) {
+  PipelineDef::for_each([&](PipelineDef *p) {
     auto mod = p->module();
     if (!mod) {
       std::string name("[");
@@ -499,13 +444,13 @@ static void start_checking_signals() {
       if (s_admin) s_admin->close();
       if (auto worker = Worker::current()) worker->stop();
       int n = 0;
-      Pipeline::for_each(
-        [&](Pipeline *pipeline) {
-          n += pipeline->active();
+      PipelineDef::for_each(
+        [&](PipelineDef *pipeline_def) {
+          n += pipeline_def->active();
         }
       );
       if (n > 0) {
-        Log::info("Waiting for remaining %d sessions... Press Ctrl-C again to force shutdown", n);
+        Log::info("Waiting for remaining %d pipelines... Press Ctrl-C again to force shutdown", n);
       } else {
         Net::stop();
         Log::info("Stopped.");

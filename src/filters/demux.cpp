@@ -32,26 +32,128 @@
 namespace pipy {
 
 //
+// DemuxFunction
+//
+
+void DemuxFunction::reset() {
+  while (auto stream = m_streams.head()) {
+    m_streams.remove(stream);
+    delete stream;
+  }
+}
+
+void DemuxFunction::on_event(Event *evt) {
+  if (auto *start = evt->as<MessageStart>()) {
+    if (!m_streams.tail() || m_streams.tail()->input_end()) {
+      auto stream = new Stream(this, start);
+      m_streams.push(stream);
+    }
+
+  } else if (auto *data = evt->as<Data>()) {
+    if (auto stream = m_streams.tail()) {
+      stream->data(data);
+    }
+
+  } else if (evt->is<MessageEnd>() || evt->is<StreamEnd>()) {
+    if (auto stream = m_streams.tail()) {
+      stream->end(MessageEnd::make());
+    }
+  }
+}
+
+//
+// DemuxFunction::Stream
+//
+
+DemuxFunction::Stream::Stream(DemuxFunction *demux, MessageStart *start)
+  : m_demux(demux)
+{
+  m_pipeline = demux->sub_pipeline();
+  m_pipeline->chain(EventTarget::input());
+  demux->output(start, m_pipeline->input());
+}
+
+void DemuxFunction::Stream::data(Data *data) {
+  if (!m_input_end) {
+    m_demux->output(data, m_pipeline->input());
+  }
+}
+
+void DemuxFunction::Stream::end(MessageEnd *end) {
+  if (!m_input_end) {
+    m_demux->output(end, m_pipeline->input());
+    m_input_end = true;
+  }
+}
+
+void DemuxFunction::Stream::on_event(Event *evt) {
+  bool is_head = (
+    m_demux->m_streams.head() == this
+  );
+
+  if (auto start = evt->as<MessageStart>()) {
+    if (!m_start) {
+      m_start = start;
+      if (is_head) {
+        m_demux->output(evt);
+      }
+    }
+
+  } else if (auto data = evt->as<Data>()) {
+    if (m_start) {
+      if (is_head) {
+        m_demux->output(evt);
+      } else {
+        m_buffer.push(*data);
+      }
+    }
+
+  } else if (evt->is<MessageEnd>() || evt->is<StreamEnd>()) {
+    if (is_head) {
+      m_demux->m_streams.remove(this);
+      m_demux->output(MessageEnd::make());
+      flush();
+      delete this;
+    } else {
+      if (!m_start) m_start = MessageStart::make();
+      m_output_end = true;
+    }
+  }
+}
+
+void DemuxFunction::Stream::flush() {
+  auto &streams = m_demux->m_streams;
+  while (auto stream = streams.head()) {
+    if (stream->m_start) {
+      m_demux->output(stream->m_start);
+      stream->m_start = nullptr;
+      if (!stream->m_buffer.empty()) {
+        m_demux->output(Data::make(stream->m_buffer));
+        stream->m_buffer.clear();
+      }
+    }
+    if (stream->m_output_end) {
+      streams.remove(stream);
+      m_demux->output(MessageEnd::make());
+      delete stream;
+    } else {
+      break;
+    }
+  }
+}
+
+//
 // Demux
 //
 
 Demux::Demux()
-{
-}
-
-Demux::Demux(Pipeline *pipeline)
-  : m_pipeline(pipeline)
-{
-}
-
-Demux::Demux(pjs::Str *target)
-  : m_target(target)
+  : m_ef_demux(this)
 {
 }
 
 Demux::Demux(const Demux &r)
-  : m_pipeline(r.m_pipeline)
-  , m_target(r.m_target)
+  : Filter(r)
+  , m_ef_demux(this)
 {
 }
 
@@ -59,106 +161,34 @@ Demux::~Demux()
 {
 }
 
-auto Demux::help() -> std::list<std::string> {
-  return {
-    "demux(target)",
-    "Sends messages to a different pipline with each one in its own session and context",
-    "target = <string> Name of the pipeline to send messages to",
-  };
-}
-
 void Demux::dump(std::ostream &out) {
   out << "demux";
-}
-
-auto Demux::draw(std::list<std::string> &links, bool &fork) -> std::string {
-  links.push_back(m_target->str());
-  fork = false;
-  return "demux";
-}
-
-void Demux::bind() {
-  if (!m_pipeline) {
-    m_pipeline = pipeline(m_target);
-  }
 }
 
 auto Demux::clone() -> Filter* {
   return new Demux(*this);
 }
 
+void Demux::chain() {
+  Filter::chain();
+  m_ef_demux.chain(output());
+}
+
 void Demux::reset() {
-  while (!m_queue.empty()) {
-    auto channel = m_queue.front();
-    m_queue.pop();
-    delete channel;
-  }
-  m_session_end = false;
+  Filter::reset();
+  m_ef_demux.reset();
 }
 
-void Demux::process(Context *ctx, Event *inp) {
-  if (m_session_end) return;
-
-  if (inp->is<MessageStart>()) {
-    auto channel = new Channel;
-    auto context = new_context(ctx);
-    auto session = Session::make(context, m_pipeline);
-    session->on_output([=](Event *inp) {
-      if (channel->output_end) return;
-      if (inp->is<SessionEnd>()) {
-        channel->output_end = true;
-      } else {
-        channel->buffer.push(inp);
-        if (inp->is<MessageEnd>()) {
-          channel->output_end = true;
-        }
-      }
-      flush();
-    });
-    channel->session = session;
-    m_queue.push(channel);
-    session->input(inp);
-
-  } else if (inp->is<SessionEnd>()) {
-    m_session_end = true;
-
-  } else if (!m_queue.empty()) {
-    auto channel = m_queue.back();
-    if (!channel->input_end) {
-      channel->session->input(inp);
-      if (inp->is<MessageEnd>()) {
-        channel->input_end = true;
-      }
-    }
-  }
+void Demux::process(Event *evt) {
+  output(evt, m_ef_demux.input());
 }
 
-bool Demux::flush() {
-  bool has_sent = false;
+//
+// Demux::DemuxInternal
+//
 
-  // Flush all completed sessions in the front
-  while (!m_queue.empty()) {
-    auto channel = m_queue.front();
-    if (!channel->output_end) break;
-    m_queue.pop();
-    auto &buffer = channel->buffer;
-    if (!buffer.empty()) {
-      buffer.flush(out());
-      has_sent = true;
-    }
-    delete channel;
-  }
-
-  // Flush the first session in queue
-  if (!m_queue.empty()) {
-    auto channel = m_queue.front();
-    auto &buffer = channel->buffer;
-    if (!buffer.empty()) {
-      buffer.flush(out());
-      has_sent = true;
-    }
-  }
-  return has_sent;
+auto Demux::DemuxInternal::sub_pipeline() -> Pipeline* {
+  return demux->sub_pipeline(0, true);
 }
 
 } // namespace pipy

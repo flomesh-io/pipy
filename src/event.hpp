@@ -28,42 +28,63 @@
 
 #include "pjs/pjs.hpp"
 
-#include <functional>
-#include <memory>
-#include <string>
-
 namespace pipy {
 
+class Pipeline;
+
 //
-// Event base
+// Event
 //
 
 class Event : public pjs::ObjectTemplate<Event> {
 public:
-  typedef std::function<void(Event*)> Receiver;
-
   enum Type {
     Data,
     MessageStart,
     MessageEnd,
-    SessionEnd,
+    StreamEnd,
   };
 
-  virtual ~Event() {}
-  virtual auto type() const -> Type = 0;
-  virtual auto name() const -> const char* = 0;
+  auto type() const -> Type { return m_type; }
+  auto name() const -> const char*;
+
   virtual auto clone() const -> Event* = 0;
 
   template<class T> auto is() const -> bool {
-    return dynamic_cast<const T*>(this) != nullptr;
+    return m_type == T::__TYPE;
   }
 
   template<class T> auto as() const -> const T* {
-    return dynamic_cast<const T*>(this);
+    return is<T>() ? static_cast<const T*>(this) : nullptr;
   }
 
   template<class T> auto as() -> T* {
-    return dynamic_cast<T*>(this);
+    return is<T>() ? static_cast<T*>(this) : nullptr;
+  }
+
+protected:
+  Event(Type type) : m_type(type) {}
+
+  virtual ~Event() {}
+
+private:
+  Type m_type;
+
+  friend class pjs::ObjectTemplate<Event>;
+};
+
+//
+// EventTemplate
+//
+
+template<class T>
+class EventTemplate : public pjs::ObjectTemplate<T, Event> {
+protected:
+  EventTemplate()
+    : pjs::ObjectTemplate<T, Event>(T::__TYPE) {}
+
+  virtual auto clone() const -> Event* override {
+    return T::make(*static_cast<const T*>(this));
   }
 };
 
@@ -71,8 +92,10 @@ public:
 // MessageStart
 //
 
-class MessageStart : public pjs::ObjectTemplate<MessageStart, Event> {
+class MessageStart : public EventTemplate<MessageStart> {
 public:
+  static const Type __TYPE = Event::MessageStart;
+
   auto head() -> pjs::Object* { return m_head; }
 
 private:
@@ -86,10 +109,6 @@ private:
 
   pjs::Ref<pjs::Object> m_head;
 
-  virtual auto type() const -> Type override { return Event::MessageStart; }
-  virtual auto name() const -> const char* override { return "MessageStart"; }
-  virtual auto clone() const -> Event* override { return make(*this); }
-
   friend class pjs::ObjectTemplate<MessageStart, Event>;
 };
 
@@ -97,24 +116,25 @@ private:
 // MessageEnd
 //
 
-struct MessageEnd : public pjs::ObjectTemplate<MessageEnd, Event> {
+struct MessageEnd : public EventTemplate<MessageEnd> {
+public:
+  static const Type __TYPE = Event::MessageEnd;
+
 private:
   MessageEnd() {}
   MessageEnd(const MessageEnd &r) {}
-
-  virtual auto type() const -> Type override { return Event::MessageEnd; }
-  virtual auto name() const -> const char* override { return "MessageEnd"; }
-  virtual auto clone() const -> Event* override { return make(*this); }
 
   friend class pjs::ObjectTemplate<MessageEnd, Event>;
 };
 
 //
-// SessionEnd
+// StreamEnd
 //
 
-class SessionEnd : public pjs::ObjectTemplate<SessionEnd, Event> {
+class StreamEnd : public EventTemplate<StreamEnd> {
 public:
+  static const Type __TYPE = Event::StreamEnd;
+
   enum Error {
     NO_ERROR = 0,
     UNKNOWN_ERROR,
@@ -127,27 +147,123 @@ public:
   };
 
   auto error() const -> Error { return m_error; }
-  auto message() const -> const std::string& { return m_message; }
+  auto message() const -> const char*;
 
 private:
-  SessionEnd(Error error = NO_ERROR) : m_error(error) {}
+  StreamEnd(Error error = NO_ERROR) : m_error(error) {}
 
-  SessionEnd(const std::string &message, Error error = UNKNOWN_ERROR)
-    : m_error(error)
-    , m_message(message) {}
-
-  SessionEnd(const SessionEnd &r)
-    : m_error(r.m_error)
-    , m_message(r.m_message) {}
+  StreamEnd(const StreamEnd &r)
+    : m_error(r.m_error) {}
 
   Error m_error;
-  std::string m_message;
 
-  virtual auto type() const -> Type override { return Event::SessionEnd; }
-  virtual auto name() const -> const char* override { return "SessionEnd"; }
-  virtual auto clone() const -> Event* override { return make(*this); }
+  friend class pjs::ObjectTemplate<StreamEnd, Event>;
+};
 
-  friend class pjs::ObjectTemplate<SessionEnd, Event>;
+//
+// EventTarget
+//
+
+class EventTarget {
+public:
+
+  //
+  // EventTarget::Input
+  //
+
+  class Input :
+    public pjs::RefCount<Input>,
+    public pjs::Pooled<Input>
+  {
+  public:
+    static auto dummy() -> Input*;
+
+    static auto make(Input *input) -> Input* {
+      return new Input(input->m_target);
+    }
+
+    static auto make(EventTarget *target) -> Input* {
+      return new Input(target);
+    }
+
+    void input(Event *evt) {
+      pjs::Ref<Event> ref(evt);
+      if (m_target) {
+        m_target->on_event(evt);
+      }
+    }
+
+    void close() {
+      m_target = nullptr;
+    }
+
+  private:
+    Input(EventTarget *target) : m_target(target) {}
+
+    EventTarget* m_target;
+  };
+
+  auto input() -> Input* {
+    if (!m_input) {
+      m_input = Input::make(this);
+    }
+    return m_input;
+  }
+
+  void close() {
+    if (m_input) {
+      m_input->close();
+      m_input = nullptr;
+    }
+  }
+
+protected:
+  ~EventTarget() {
+    close();
+  }
+
+  virtual void on_event(Event *evt) = 0;
+
+private:
+  pjs::Ref<Input> m_input;
+
+  friend class Input;
+};
+
+//
+// EventFunction
+//
+
+class EventFunction : public EventTarget {
+public:
+  virtual void chain(Input *input) {
+    if (input) {
+      m_output = input;
+    } else {
+      m_output = Input::dummy();
+    }
+  }
+
+protected:
+  EventFunction()
+    : m_output(Input::dummy()) {}
+
+  auto output() -> Input* {
+    return m_output;
+  }
+
+  void output(Event *evt) {
+    m_output->input(evt);
+  }
+
+  void output(Event *evt, EventTarget::Input *input) {
+    if (input) {
+      input->input(evt);
+    }
+  }
+
+private:
+  pjs::Ref<Input> m_output;
 };
 
 } // namespace pipy

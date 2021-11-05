@@ -27,7 +27,6 @@
 #include "context.hpp"
 #include "module.hpp"
 #include "pipeline.hpp"
-#include "session.hpp"
 #include "api/crypto.hpp"
 #include "logging.hpp"
 
@@ -89,14 +88,13 @@ auto TLSSession::get(SSL *ssl) -> TLSSession* {
 
 TLSSession::TLSSession(
   TLSContext *ctx,
+  Pipeline *pipeline,
   bool is_server,
-  pjs::Object *certificate,
-  Session *session,
-  const Event::Receiver &output
+  pjs::Object *certificate
 )
-  : m_session(session)
+  : m_peer_receiver(this)
+  , m_pipeline(pipeline)
   , m_certificate(certificate)
-  , m_output(output)
   , m_is_server(is_server)
 {
   m_ssl = SSL_new(ctx->ctx());
@@ -107,42 +105,14 @@ TLSSession::TLSSession(
 
   SSL_set_bio(m_ssl, m_rbio, m_wbio);
 
+  pipeline->chain(m_peer_receiver.input());
+
   if (is_server) {
     SSL_set_accept_state(m_ssl);
-
-    session->on_output(
-      [this](Event *evt) {
-        if (!m_closed) {
-          if (auto *data = evt->as<Data>()) {
-            m_buffer_send.push(*data);
-            if (!do_handshake()) return;
-            pump_write();
-          } else if (auto end = evt->as<SessionEnd>()) {
-            close(end);
-          }
-        }
-      }
-    );
-
     use_certificate(nullptr);
 
   } else {
     SSL_set_connect_state(m_ssl);
-
-    session->on_output(
-      [this](Event *evt) {
-        if (!m_closed) {
-          if (auto *data = evt->as<Data>()) {
-            m_buffer_receive.push(*data);
-            if (!do_handshake()) return;
-            pump_read();
-          } else if (auto end = evt->as<SessionEnd>()) {
-            close(end);
-          }
-        }
-      }
-    );
-
     if (m_certificate) use_certificate(nullptr);
   }
 }
@@ -159,16 +129,35 @@ void TLSSession::start_handshake() {
   do_handshake();
 }
 
-void TLSSession::input(Data *data) {
-  if (!m_closed) {
+void TLSSession::on_event(Event *evt) {
+  if (m_closed) return;
+
+  if (auto *data = evt->as<Data>()) {
     if (m_is_server) {
       m_buffer_receive.push(*data);
-      if (!do_handshake()) return;
-      pump_read();
+      if (do_handshake()) pump_read();
     } else {
       m_buffer_send.push(*data);
-      if (!do_handshake()) return;
-      pump_write();
+      if (do_handshake()) pump_write();
+    }
+
+  } else if (evt->as<StreamEnd>()) {
+    close();
+  }
+}
+
+void TLSSession::on_receive_peer(Event *evt) {
+  if (!m_closed) {
+    if (auto *data = evt->as<Data>()) {
+      if (m_is_server) {
+        m_buffer_send.push(*data);
+        if (do_handshake()) pump_write();
+      } else {
+        m_buffer_receive.push(*data);
+        if (do_handshake()) pump_read();
+      }
+    } else if (auto end = evt->as<StreamEnd>()) {
+      close(end);
     }
   }
 }
@@ -183,7 +172,7 @@ void TLSSession::on_server_name() {
 void TLSSession::use_certificate(pjs::Str *sni) {
   pjs::Value certificate(m_certificate);
   if (certificate.is_function()) {
-    Context &ctx = *m_session->context();
+    Context &ctx = *m_pipeline->context();
     pjs::Value arg;
     if (sni) arg.set(sni);
     (*certificate.f())(ctx, 1, &arg, certificate);
@@ -241,7 +230,7 @@ bool TLSSession::do_handshake() {
         ERR_error_string(err, str);
         Log::error("[tls] %s", str);
       }
-      close(SessionEnd::make(SessionEnd::UNAUTHORIZED));
+      close(StreamEnd::make(StreamEnd::UNAUTHORIZED));
       return false;
     }
     auto sent = pump_send();
@@ -262,9 +251,9 @@ auto TLSSession::pump_send() -> int {
     if (BIO_read_ex(m_wbio, ptr, len, &n)) {
       data->pop(data->size() - n);
       if (m_is_server) {
-        m_output(data);
+        output(data);
       } else {
-        m_session->input(data);
+        output(data, m_pipeline->input());
       }
       size += n;
     } else {
@@ -273,9 +262,9 @@ auto TLSSession::pump_send() -> int {
   }
   if (size > 0) {
     if (m_is_server) {
-      m_output(Data::flush());
+      output(Data::flush());
     } else {
-      m_session->input(Data::flush());
+      output(Data::flush(), m_pipeline->input());
     }
   }
   return size;
@@ -344,9 +333,9 @@ void TLSSession::pump_read() {
       } else {
         data->pop(data->size() - n);
         if (m_is_server) {
-          m_session->input(data);
+          output(data, m_pipeline->input());
         } else {
-          m_output(data);
+          output(data);
         }
         size += n;
       }
@@ -354,16 +343,16 @@ void TLSSession::pump_read() {
   }
   if (size > 0) {
     if (m_is_server) {
-      m_session->input(Data::flush());
+      output(Data::flush(), m_pipeline->input());
     } else {
-      m_output(Data::flush());
+      output(Data::flush());
     }
   }
 }
 
-void TLSSession::close(SessionEnd *end) {
+void TLSSession::close(StreamEnd *end) {
   if (!m_closed) {
-    m_output(end ? end : SessionEnd::make());
+    output(end ? end : StreamEnd::make());
     m_closed = true;
   }
 }
@@ -372,13 +361,8 @@ void TLSSession::close(SessionEnd *end) {
 // Client
 //
 
-Client::Client()
-{
-}
-
-Client::Client(pjs::Str *target, pjs::Object *options)
-  : m_target(target)
-  , m_tls_context(std::make_shared<TLSContext>())
+Client::Client(pjs::Object *options)
+  : m_tls_context(std::make_shared<TLSContext>())
 {
   if (options) {
     pjs::Value certificate, trusted;
@@ -416,39 +400,18 @@ Client::Client(pjs::Str *target, pjs::Object *options)
 }
 
 Client::Client(const Client &r)
-  : m_pipeline(r.m_pipeline)
-  , m_target(r.m_target)
+  : Filter(r)
+  , m_tls_context(r.m_tls_context)
   , m_certificate(r.m_certificate)
   , m_sni(r.m_sni)
-  , m_tls_context(r.m_tls_context)
 {
 }
 
 Client::~Client() {
 }
 
-auto Client::help() -> std::list<std::string> {
-  return {
-    "connectTLS(target)",
-    "Connects to a pipeline session with TLS ecryption",
-    "target = <string> Name of the pipeline to connect to",
-  };
-}
-
 void Client::dump(std::ostream &out) {
   out << "connectTLS";
-}
-
-auto Client::draw(std::list<std::string> &links, bool &fork) -> std::string {
-  links.push_back(m_target->str());
-  fork = false;
-  return "connectTLS";
-}
-
-void Client::bind() {
-  if (!m_pipeline) {
-    m_pipeline = pipeline(m_target);
-  }
 }
 
 auto Client::clone() -> Filter* {
@@ -456,24 +419,24 @@ auto Client::clone() -> Filter* {
 }
 
 void Client::reset() {
+  Filter::reset();
+  delete m_session;
   m_session = nullptr;
-  m_session_end = false;
 }
 
-void Client::process(Context *ctx, Event *inp) {
-  if (m_session_end) return;
+void Client::process(Event *evt) {
 
   if (!m_session) {
     m_session = new TLSSession(
       m_tls_context.get(),
+      sub_pipeline(0, false),
       false,
-      m_certificate,
-      Session::make(ctx, m_pipeline),
-      out()
+      m_certificate
     );
+    m_session->chain(output());
     if (!m_sni.is_undefined()) {
       pjs::Value sni;
-      if (!eval(*ctx, m_sni, sni)) return;
+      if (!eval(m_sni, sni)) return;
       if (!sni.is_undefined()) {
         if (sni.is_string()) {
           m_session->set_sni(sni.s()->c_str());
@@ -485,24 +448,15 @@ void Client::process(Context *ctx, Event *inp) {
     m_session->start_handshake();
   }
 
-  if (auto *data = inp->as<Data>()) {
-    m_session->input(data);
-  } else if (inp->is<SessionEnd>()) {
-    m_session_end = true;
-  }
+  output(evt, m_session->input());
 }
 
 //
 // Server
 //
 
-Server::Server()
-{
-}
-
-Server::Server(pjs::Str *target, pjs::Object *options)
-  : m_target(target)
-  , m_tls_context(std::make_shared<TLSContext>())
+Server::Server(pjs::Object *options)
+  : m_tls_context(std::make_shared<TLSContext>())
 {
   if (options) {
     pjs::Value certificate, trusted;
@@ -533,38 +487,17 @@ Server::Server(pjs::Str *target, pjs::Object *options)
 }
 
 Server::Server(const Server &r)
-  : m_pipeline(r.m_pipeline)
-  , m_target(r.m_target)
-  , m_certificate(r.m_certificate)
+  : Filter(r)
   , m_tls_context(r.m_tls_context)
+  , m_certificate(r.m_certificate)
 {
 }
 
 Server::~Server() {
 }
 
-auto Server::help() -> std::list<std::string> {
-  return {
-    "acceptTLS(target)",
-    "Accepts and TLS-offloads a TLS-encrypted stream",
-    "target = <string> Name of the pipeline to send TLS-offloaded stream to",
-  };
-}
-
 void Server::dump(std::ostream &out) {
   out << "acceptTLS";
-}
-
-auto Server::draw(std::list<std::string> &links, bool &fork) -> std::string {
-  links.push_back(m_target->str());
-  fork = false;
-  return "acceptTLS";
-}
-
-void Server::bind() {
-  if (!m_pipeline) {
-    m_pipeline = pipeline(m_target);
-  }
 }
 
 auto Server::clone() -> Filter* {
@@ -572,28 +505,24 @@ auto Server::clone() -> Filter* {
 }
 
 void Server::reset() {
+  Filter::reset();
+  delete m_session;
   m_session = nullptr;
-  m_session_end = false;
 }
 
-void Server::process(Context *ctx, Event *inp) {
-  if (m_session_end) return;
+void Server::process(Event *evt) {
 
   if (!m_session) {
     m_session = new TLSSession(
       m_tls_context.get(),
+      sub_pipeline(0, false),
       true,
-      m_certificate,
-      Session::make(ctx, m_pipeline),
-      out()
+      m_certificate
     );
+    m_session->chain(output());
   }
 
-  if (auto *data = inp->as<Data>()) {
-    m_session->input(data);
-  } else if (inp->is<SessionEnd>()) {
-    m_session_end = true;
-  }
+  output(evt, m_session->input());
 }
 
 } // namespace tls

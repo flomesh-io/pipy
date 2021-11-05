@@ -9,10 +9,10 @@ pipy({
 
 // TCP inbound
 .listen(6080)
-  .onSessionStart(
+  .handleStreamStart(
     () => _target = _balancer.select()
   )
-  .onSessionEnd(
+  .handleStreamEnd(
     () => _balancer.deselect?.(_target)
   )
   .connect(

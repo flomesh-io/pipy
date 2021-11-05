@@ -27,7 +27,6 @@
 #include "codebase-store.hpp"
 #include "context.hpp"
 #include "pipeline.hpp"
-#include "session.hpp"
 #include "status.hpp"
 #include "api/http.hpp"
 #include "api/url.hpp"
@@ -37,7 +36,11 @@
 
 #include <sys/stat.h>
 #include <dirent.h>
+#include <unistd.h>
+#include <limits.h>
+
 #include <fstream>
+#include <sstream>
 
 namespace pipy {
 

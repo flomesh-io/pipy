@@ -34,7 +34,7 @@
 
 namespace pipy {
 
-class Pipeline;
+class PipelineDef;
 
 //
 // Listener
@@ -57,7 +57,7 @@ public:
   static bool is_open(int port) {
     auto i = s_all_listeners.find(port);
     if (i == s_all_listeners.end()) return false;
-    return i->second->m_pipeline;
+    return i->second->m_pipeline_def;
   }
 
   static void for_each(const std::function<void(Listener*)> &cb) {
@@ -69,8 +69,8 @@ public:
   auto ip() const -> const std::string& { return m_ip; }
   auto port() const -> int { return m_port; }
   bool reserved() const { return m_reserved; }
-  auto pipeline() const -> Pipeline* { return m_pipeline; }
-  void pipeline(Pipeline *pipeline);
+  auto pipeline_def() const -> PipelineDef* { return m_pipeline_def; }
+  void pipeline_def(PipelineDef *def);
 
   void set_reserved(bool reserved);
   void set_max_connections(int n);
@@ -101,7 +101,7 @@ private:
   bool m_reserved = false;
   bool m_paused = false;
   asio::ip::tcp::acceptor m_acceptor;
-  pjs::Ref<Pipeline> m_pipeline;
+  pjs::Ref<PipelineDef> m_pipeline_def;
   List<Inbound> m_inbounds;
 
   static bool s_reuse_port;

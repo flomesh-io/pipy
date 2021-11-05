@@ -46,7 +46,7 @@ public:
 
   void set_buffer_limit(size_t size) { m_buffer_limit = size; }
 
-  void on_read(const Event::Receiver &reader) { m_reader = reader; }
+  void on_read(EventTarget::Input *input) { m_reader = input; }
   void on_delete(const std::function<void()> &callback) { m_on_delete = callback; }
 
   void write(const pjs::Ref<Data> &data);
@@ -57,7 +57,7 @@ private:
   int m_fd;
   Data::Producer* m_dp;
   asio::posix::stream_descriptor m_stream;
-  Event::Receiver m_reader;
+  pjs::Ref<EventTarget::Input> m_reader;
   std::function<void()> m_on_delete;
   Data m_buffer;
   size_t m_buffer_limit = 0;

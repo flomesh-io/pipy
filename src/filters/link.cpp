@@ -24,11 +24,8 @@
  */
 
 #include "link.hpp"
-#include "context.hpp"
-#include "module.hpp"
+#include "data.hpp"
 #include "pipeline.hpp"
-#include "session.hpp"
-#include "logging.hpp"
 
 namespace pipy {
 
@@ -37,16 +34,13 @@ namespace pipy {
 //
 
 Link::Link()
-{
-}
-
-Link::Link(std::list<Route> &&routes)
-  : m_routes(std::make_shared<std::list<Route>>(std::move(routes)))
+  : m_conditions(std::make_shared<std::vector<Condition>>())
 {
 }
 
 Link::Link(const Link &r)
-  : m_routes(r.m_routes)
+  : Filter(r)
+  , m_conditions(r.m_conditions)
 {
 }
 
@@ -54,34 +48,18 @@ Link::~Link()
 {
 }
 
-auto Link::help() -> std::list<std::string> {
-  return {
-    "link(target[, when[, target2[, when2, ...]]])",
-    "Sends events to a different pipeline",
-    "target = <string> Name of the pipeline to send events to",
-    "when = <function> Callback function that returns true if a target should be chosen",
-  };
-}
-
 void Link::dump(std::ostream &out) {
   out << "link";
 }
 
-auto Link::draw(std::list<std::string> &links, bool &fork) -> std::string {
-  for (const auto &r : *m_routes) {
-    links.push_back(r.name->str());
-  }
-  fork = false;
-  return "link";
+void Link::add_condition(pjs::Function *func) {
+  m_conditions->emplace_back();
+  m_conditions->back().func = func;
 }
 
-void Link::bind() {
-  auto mod = pipeline()->module();
-  for (auto &r : *m_routes) {
-    if (!r.pipeline && r.name->length() > 0) {
-      r.pipeline = pipeline(r.name);
-    }
-  }
+void Link::add_condition(const std::function<bool()> &func) {
+  m_conditions->emplace_back();
+  m_conditions->back().cpp_func = func;
 }
 
 auto Link::clone() -> Filter* {
@@ -89,36 +67,42 @@ auto Link::clone() -> Filter* {
 }
 
 void Link::reset() {
-  m_session = nullptr;
+  Filter::reset();
   m_buffer.clear();
+  m_pipeline = nullptr;
   m_chosen = false;
-  m_session_end = false;
 }
 
-void Link::process(Context *ctx, Event *inp) {
-  if (m_session_end) return;
-
+void Link::process(Event *evt) {
   if (!m_chosen) {
-    if (auto data = inp->as<Data>()) {
+    if (auto data = evt->as<Data>()) {
       if (data->empty()) {
         return;
       }
     }
-    for (const auto &r : *m_routes) {
-      if (r.condition) {
+    const auto &conditions = *m_conditions;
+    for (int i = 0; i < conditions.size(); i++) {
+      const auto &cond = conditions[i];
+      if (cond.func) {
         pjs::Value ret;
-        if (!callback(*ctx, r.condition, 0, nullptr, ret)) return;
+        if (!callback(cond.func, 0, nullptr, ret)) return;
         m_chosen = ret.to_boolean();
+      } else if (cond.cpp_func) {
+        m_chosen = cond.cpp_func();
       } else {
         m_chosen = true;
       }
       if (m_chosen) {
-        if (r.pipeline) {
-          auto root = static_cast<Context*>(ctx->root());
-          auto session = Session::make(root, r.pipeline);
-          session->on_output(out());
-          m_session = session;
-          m_buffer.flush([=](Event *inp) { session->input(inp); });
+        if (auto *pipeline = sub_pipeline(i, false)) {
+          pipeline->chain(output());
+          m_pipeline = pipeline;
+          m_buffer.flush([&](Event *evt) {
+            output(evt, pipeline->input());
+          });
+        } else {
+          m_buffer.flush([&](Event *evt) {
+            output(evt);
+          });
         }
         break;
       }
@@ -126,14 +110,12 @@ void Link::process(Context *ctx, Event *inp) {
   }
 
   if (!m_chosen) {
-    m_buffer.push(inp);
-  } if (m_session) {
-    m_session->input(inp);
+    m_buffer.push(evt);
+  } else if (auto *p = m_pipeline.get()) {
+    output(evt, p->input());
   } else {
-    output(inp);
+    output(evt);
   }
-
-  if (inp->is<SessionEnd>()) m_session_end = true;
 }
 
 } // namespace pipy

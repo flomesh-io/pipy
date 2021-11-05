@@ -27,11 +27,11 @@
 #define DECOMPRESS_MESSAGE_HPP
 
 #include "filter.hpp"
-#include "pjs/pjs.hpp"
 
 namespace pipy {
 
 class Decompressor;
+class Data;
 
 //
 // DecompressMessageBase
@@ -39,15 +39,20 @@ class Decompressor;
 
 class DecompressMessageBase : public Filter {
 protected:
-  virtual auto new_decompressor(Context *ctx, MessageStart *start) -> Decompressor* = 0;
+  DecompressMessageBase();
+  DecompressMessageBase(const DecompressMessageBase &r);
+
+  virtual auto new_decompressor(
+    MessageStart *start,
+    const std::function<void(Data*)> &out
+  ) -> Decompressor* = 0;
 
 private:
   virtual void reset() override;
-  virtual void process(Context *ctx, Event *inp) override;
+  virtual void process(Event *evt) override;
 
   Decompressor* m_decompressor = nullptr;
   bool m_message_started = false;
-  bool m_session_end = false;
 };
 
 //
@@ -56,17 +61,19 @@ private:
 
 class DecompressMessage : public DecompressMessageBase {
 public:
-  DecompressMessage();
   DecompressMessage(const pjs::Value &algorithm);
 
 private:
   DecompressMessage(const DecompressMessage &r);
   ~DecompressMessage();
 
-  virtual auto help() -> std::list<std::string> override;
-  virtual void dump(std::ostream &out) override;
   virtual auto clone() -> Filter* override;
-  virtual auto new_decompressor(Context *ctx, MessageStart *start) -> Decompressor* override;
+  virtual void dump(std::ostream &out) override;
+
+  virtual auto new_decompressor(
+    MessageStart *start,
+    const std::function<void(Data*)> &out
+  ) -> Decompressor* override;
 
   pjs::Value m_algorithm;
 };
@@ -77,17 +84,19 @@ private:
 
 class DecompressHTTP : public DecompressMessageBase {
 public:
-  DecompressHTTP();
   DecompressHTTP(pjs::Function *enable);
 
 private:
   DecompressHTTP(const DecompressHTTP &r);
   ~DecompressHTTP();
 
-  virtual auto help() -> std::list<std::string> override;
-  virtual void dump(std::ostream &out) override;
   virtual auto clone() -> Filter* override;
-  virtual auto new_decompressor(Context *ctx, MessageStart *start) -> Decompressor* override;
+  virtual void dump(std::ostream &out) override;
+
+  virtual auto new_decompressor(
+    MessageStart *start,
+    const std::function<void(Data*)> &out
+  ) -> Decompressor* override;
 
   pjs::Ref<pjs::Function> m_enable;
 };

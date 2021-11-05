@@ -34,19 +34,26 @@ namespace pipy {
 // DecompressMessageBase
 //
 
+DecompressMessageBase::DecompressMessageBase()
+{
+}
+
+DecompressMessageBase::DecompressMessageBase(const DecompressMessageBase &r)
+  : Filter(r)
+{
+}
+
 void DecompressMessageBase::reset() {
+  Filter::reset();
   if (m_decompressor) {
     m_decompressor->end();
     m_decompressor = nullptr;
   }
   m_message_started = false;
-  m_session_end = false;
 }
 
-void DecompressMessageBase::process(Context *ctx, Event *inp) {
-  if (m_session_end) return;
-
-  if (auto *data = inp->as<Data>()) {
+void DecompressMessageBase::process(Event *evt) {
+  if (auto *data = evt->as<Data>()) {
     if (m_message_started) {
       if (m_decompressor) {
         if (!m_decompressor->process(data)) {
@@ -55,39 +62,37 @@ void DecompressMessageBase::process(Context *ctx, Event *inp) {
           m_decompressor = nullptr;
         }
       } else {
-        output(inp);
+        output(evt);
       }
     }
     return;
   }
 
-  if (auto start = inp->as<MessageStart>()) {
+  if (auto start = evt->as<MessageStart>()) {
     if (!m_message_started) {
-      m_decompressor = new_decompressor(ctx, start);
+      m_decompressor = new_decompressor(
+        start,
+        [this](Data *data) {
+          output(data);
+        }
+      );
       m_message_started = true;
     }
 
-  } else if (inp->is<MessageEnd>()) {
+  } else if (evt->is<MessageEnd>()) {
     if (m_decompressor) {
       m_decompressor->end();
       m_decompressor = nullptr;
     }
     m_message_started = false;
-
-  } else if (inp->is<SessionEnd>()) {
-    m_session_end = true;
   }
 
-  output(inp);
+  output(evt);
 }
 
 //
 // DecompressMessage
 //
-
-DecompressMessage::DecompressMessage()
-{
-}
 
 DecompressMessage::DecompressMessage(const pjs::Value &algorithm)
   : m_algorithm(algorithm)
@@ -95,20 +100,13 @@ DecompressMessage::DecompressMessage(const pjs::Value &algorithm)
 }
 
 DecompressMessage::DecompressMessage(const DecompressMessage &r)
-  : DecompressMessage(r.m_algorithm)
+  : DecompressMessageBase(r)
+  , m_algorithm(r.m_algorithm)
 {
 }
 
 DecompressMessage::~DecompressMessage()
 {
-}
-
-auto DecompressMessage::help() -> std::list<std::string> {
-  return {
-    "decompressMessage(algorithm)",
-    "Decompresses message bodies",
-    "algorithm = <string|function> One of the algorithms: inflate, ...",
-  };
 }
 
 void DecompressMessage::dump(std::ostream &out) {
@@ -121,18 +119,21 @@ auto DecompressMessage::clone() -> Filter* {
 
 static const pjs::Ref<pjs::Str> s_inflate(pjs::Str::make("inflate"));
 
-auto DecompressMessage::new_decompressor(Context *ctx, MessageStart *start) -> Decompressor* {
+auto DecompressMessage::new_decompressor(
+  MessageStart *start,
+  const std::function<void(Data*)> &out
+) -> Decompressor* {
   pjs::Value algorithm;
   if (m_algorithm.is_function()) {
     pjs::Value msg(start);
-    if (!callback(*ctx, m_algorithm.f(), 1, &msg, algorithm)) return nullptr;
+    if (!callback(m_algorithm.f(), 1, &msg, algorithm)) return nullptr;
   } else {
     algorithm = m_algorithm;
   }
   if (!algorithm.is_string()) return nullptr;
   auto s = algorithm.s();
   if (s == s_inflate) {
-    return Decompressor::inflate(out());
+    return Decompressor::inflate(out);
   } else {
     Log::error("[decompress] unknown compression algorithm: %s", s->c_str());
     return nullptr;
@@ -143,30 +144,19 @@ auto DecompressMessage::new_decompressor(Context *ctx, MessageStart *start) -> D
 // DecompressHTTP
 //
 
-DecompressHTTP::DecompressHTTP()
-{
-}
-
 DecompressHTTP::DecompressHTTP(pjs::Function *enable)
   : m_enable(enable)
 {
 }
 
 DecompressHTTP::DecompressHTTP(const DecompressHTTP &r)
-  : DecompressHTTP(r.m_enable)
+  : DecompressMessageBase(r)
+  , m_enable(r.m_enable)
 {
 }
 
 DecompressHTTP::~DecompressHTTP()
 {
-}
-
-auto DecompressHTTP::help() -> std::list<std::string> {
-  return {
-    "decompressHTTP([enable])",
-    "Decompresses HTTP message bodies based on Content-Encoding header",
-    "enable = <function> Returns true to decompress or false otherwise",
-  };
 }
 
 void DecompressHTTP::dump(std::ostream &out) {
@@ -181,7 +171,10 @@ static const pjs::Ref<pjs::Str> s_headers(pjs::Str::make("headers"));
 static const pjs::Ref<pjs::Str> s_content_encoding(pjs::Str::make("content-encoding"));
 static const pjs::Ref<pjs::Str> s_gzip(pjs::Str::make("gzip"));
 
-auto DecompressHTTP::new_decompressor(Context *ctx, MessageStart *start) -> Decompressor* {
+auto DecompressHTTP::new_decompressor(
+  MessageStart *start,
+  const std::function<void(Data*)> &out
+) -> Decompressor* {
   auto head = start->head();
   if (!head) return nullptr;
 
@@ -196,13 +189,15 @@ auto DecompressHTTP::new_decompressor(Context *ctx, MessageStart *start) -> Deco
   auto is_enabled = [&]() -> bool {
     if (!m_enable) return true;
     pjs::Value ret, arg(start);
-    if (!callback(*ctx, m_enable, 1, &arg, ret)) return false;
+    if (!callback(m_enable, 1, &arg, ret)) return false;
     return ret.to_boolean();
   };
 
   auto s = content_encoding.s();
   if (s == s_gzip) {
-    if (is_enabled()) return Decompressor::inflate(out());
+    if (is_enabled()) {
+      return Decompressor::inflate(out);
+    }
   }
 
   return nullptr;

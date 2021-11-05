@@ -6,7 +6,7 @@ pipy({
 
 // Inbound
 .listen(6080)
-  .onSessionStart(
+  .handleStreamStart(
     () => (
       _g.session || (
         _g.session = new Session(__filename, 'start'),
@@ -26,7 +26,7 @@ pipy({
 .pipeline('start')
   .exec('../../bin/pipy mock.js')
   .print()
-  .onSessionEnd(
+  .handleStreamEnd(
     () => (
       _g.session = null,
       console.log('Child process exited')

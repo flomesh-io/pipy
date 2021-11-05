@@ -129,7 +129,19 @@ public:
     m_buffer.push_back(e);
   }
 
-  void flush(const Event::Receiver &out) {
+  auto shift() -> Event* {
+    if (m_buffer.empty()) return nullptr;
+    auto e = m_buffer.front();
+    m_buffer.pop_front();
+    return e;
+  }
+
+  void unshift(Event *e) {
+    e->retain();
+    m_buffer.push_front(e);
+  }
+
+  void flush(const std::function<void(Event*)> &out) {
     std::list<Event*> events(std::move(m_buffer));
     for (auto *e : events) {
       out(e);

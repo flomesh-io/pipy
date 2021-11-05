@@ -36,22 +36,18 @@ namespace pipy {
 
 class ReplaceEvent : public Filter {
 public:
-  ReplaceEvent(Event::Type type);
   ReplaceEvent(Event::Type type, const pjs::Value &replacement);
 
 private:
   ReplaceEvent(const ReplaceEvent &r);
   ~ReplaceEvent();
 
-  virtual auto help() -> std::list<std::string> override;
-  virtual void dump(std::ostream &out) override;
   virtual auto clone() -> Filter* override;
-  virtual void reset() override;
-  virtual void process(Context *ctx, Event *inp) override;
+  virtual void process(Event *evt) override;
+  virtual void dump(std::ostream &out) override;
 
   Event::Type m_type;
   pjs::Value m_replacement;
-  bool m_session_end = false;
 };
 
 } // namespace pipy

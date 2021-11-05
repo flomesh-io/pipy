@@ -24,8 +24,8 @@
  */
 
 #include "context.hpp"
+#include "inbound.hpp"
 #include "worker.hpp"
-#include "session.hpp"
 #include "logging.hpp"
 
 namespace pipy {
@@ -35,7 +35,6 @@ namespace pipy {
 //
 
 uint64_t Context::s_context_id = 0;
-uint64_t Context::s_context_total = 0;
 
 Context::Context()
   : Context(nullptr, nullptr, nullptr)
@@ -56,13 +55,13 @@ Context::Context(ContextGroup *group, Worker *worker, pjs::Object *global, Conte
   }
   if (!++s_context_id) s_context_id++;
   m_id = s_context_id;
-  Log::debug("Context: %p, allocated, id = %llu, total = %llu", this, m_id, ++s_context_total);
+  Log::debug("[context  %p] ++ id = %llu", this, m_id);
 }
 
 Context::~Context() {
   m_group->remove(this);
   if (m_data) m_data->free();
-  Log::debug("Context: %p, freed, id = %llu, total = %llu", this, m_id, --s_context_total);
+  Log::debug("[context  %p] -- id = %llu", this, m_id);
 }
 
 } // namespace pipy

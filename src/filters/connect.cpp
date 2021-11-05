@@ -24,19 +24,11 @@
  */
 
 #include "connect.hpp"
-#include "worker.hpp"
-#include "pipeline.hpp"
-#include "session.hpp"
 #include "outbound.hpp"
-#include "context.hpp"
 #include "utils.hpp"
 #include "logging.hpp"
 
 namespace pipy {
-
-Connect::Connect()
-{
-}
 
 Connect::Connect(const pjs::Value &target, pjs::Object *options)
   : m_target(target)
@@ -68,7 +60,8 @@ Connect::Connect(const pjs::Value &target, pjs::Object *options)
 }
 
 Connect::Connect(const Connect &r)
-  : m_target(r.m_target)
+  : Filter(r)
+  , m_target(r.m_target)
   , m_buffer_limit(r.m_buffer_limit)
   , m_retry_count(r.m_retry_count)
   , m_retry_delay(r.m_retry_delay)
@@ -76,15 +69,6 @@ Connect::Connect(const Connect &r)
 }
 
 Connect::~Connect() {
-}
-
-auto Connect::help() -> std::list<std::string> {
-  return {
-    "connect(target[, options])",
-    "Sends data to a remote endpoint and receives data from it",
-    "target = <string|function> Remote endpoint in the form of `<ip>:<port>`",
-    "options = <object> Includes bufferLimit, retryCount, retryDelay",
-  };
 }
 
 void Connect::dump(std::ostream &out) {
@@ -96,60 +80,49 @@ auto Connect::clone() -> Filter* {
 }
 
 void Connect::reset() {
+  Filter::reset();
+  if (m_output) {
+    m_output->close();
+    m_output = nullptr;
+  }
   if (m_outbound) {
-    m_outbound->on_receive(nullptr);
-    m_outbound->on_delete(nullptr);
     m_outbound->end();
     m_outbound = nullptr;
   }
-  m_session_end = false;
 }
 
-void Connect::process(Context *ctx, Event *inp) {
-  if (m_session_end) return;
-
-  if (inp->is<SessionEnd>()) {
+void Connect::process(Event *evt) {
+  if (evt->is<StreamEnd>()) {
     if (m_outbound) {
       m_outbound->end();
+      m_outbound = nullptr;
     }
-    m_session_end = true;
     return;
   }
 
   if (!m_outbound) {
     pjs::Value target;
-    if (eval(*ctx, m_target, target)) {
-      auto s = target.to_string();
-      std::string host; int port;
-      if (utils::get_host_port(s->str(), host, port)) {
-        auto outbound = new Outbound;
-        outbound->set_buffer_limit(m_buffer_limit);
-        outbound->set_retry_count(m_retry_count);
-        outbound->set_retry_delay(m_retry_delay);
-        outbound->on_delete([this]() { m_outbound = nullptr; });
-        outbound->on_receive([=](Event *inp) {
-          auto safe_ctx = ctx;
-          safe_ctx->retain();
-          output(inp);
-          if (safe_ctx->ref_count() > 1) {
-            safe_ctx->group()->notify(safe_ctx);
-          }
-          safe_ctx->release();
-        });
-        outbound->connect(host, port);
-        m_outbound = outbound;
-      } else {
-        m_session_end = true;
-        Log::error("[connect] invalid target: %s", s->c_str());
-      }
-      s->release();
+    if (!eval(m_target, target)) return;
+    auto s = target.to_string();
+    std::string host; int port;
+    if (utils::get_host_port(s->str(), host, port)) {
+      m_output = Input::make(output());
+      auto outbound = new Outbound(m_output);
+      outbound->set_buffer_limit(m_buffer_limit);
+      outbound->set_retry_count(m_retry_count);
+      outbound->set_retry_delay(m_retry_delay);
+      outbound->connect(host, port);
+      m_outbound = outbound;
+    } else {
+      Log::error("[connect] invalid target: %s", s->c_str());
     }
+    s->release();
   }
 
   if (m_outbound) {
-    if (auto *data = inp->as<Data>()) {
+    if (auto *data = evt->as<Data>()) {
       m_outbound->send(data);
-    } else if (inp->is<MessageEnd>()) {
+    } else if (evt->is<MessageEnd>()) {
       m_outbound->flush();
     }
   }

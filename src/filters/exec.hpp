@@ -42,25 +42,34 @@ class FileStream;
 
 class Exec : public Filter {
 public:
-  Exec();
   Exec(const pjs::Value &command);
 
 private:
   Exec(const Exec &r);
   ~Exec();
 
-  virtual auto help() -> std::list<std::string> override;
-  virtual void dump(std::ostream &out) override;
   virtual auto clone() -> Filter* override;
   virtual void reset() override;
-  virtual void process(Context *ctx, Event *inp) override;
+  virtual void process(Event *evt) override;
+  virtual void dump(std::ostream &out) override;
 
 private:
+  struct OutputReader : public EventTarget {
+    Exec *filter;
+    OutputReader(Exec *f) : filter(f) {}
+    virtual void on_event(Event *evt) override {
+      filter->on_output(evt);
+    }
+  };
+
   pjs::Value m_command;
   pid_t m_pid = 0;
   FileStream* m_stdin = nullptr;
   FileStream* m_stdout = nullptr;
-  bool m_session_end = false;
+  OutputReader m_output_reader;
+  bool m_stream_end = false;
+
+  void on_output(Event *evt);
 
   class ChildProcessMonitor {
   public:

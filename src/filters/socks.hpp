@@ -30,8 +30,6 @@
 
 namespace pipy {
 
-class Session;
-
 namespace socks {
 
 //
@@ -40,20 +38,16 @@ namespace socks {
 
 class Server : public Filter {
 public:
-  Server();
-  Server(pjs::Str *target, pjs::Function *on_connect);
+  Server(pjs::Function *on_connect);
 
 private:
   Server(const Server &r);
   ~Server();
 
-  virtual auto help() -> std::list<std::string> override;
-  virtual void dump(std::ostream &out) override;
-  virtual auto draw(std::list<std::string> &links, bool &fork) -> std::string override;
-  virtual void bind() override;
   virtual auto clone() -> Filter* override;
   virtual void reset() override;
-  virtual void process(Context *ctx, Event *inp) override;
+  virtual void process(Event *evt) override;
+  virtual void dump(std::ostream &out) override;
 
   enum State {
     READ_VERSION,
@@ -76,10 +70,10 @@ private:
     READ_SOCKS5_DSTPORT,
   };
 
-  Pipeline* m_pipeline = nullptr;
+  PipelineDef* m_pipeline_def = nullptr;
   pjs::Ref<pjs::Str> m_target;
   pjs::Ref<pjs::Function> m_on_connect;
-  pjs::Ref<Session> m_session;
+  pjs::Ref<Pipeline> m_pipeline;
   State m_state = READ_VERSION;
   uint8_t m_port[2];
   uint8_t m_ip[4];
@@ -87,7 +81,6 @@ private:
   uint8_t m_domain[256];
   int m_read_len = 0;
   int m_read_ptr = 0;
-  bool m_session_end = false;
 };
 
 } // namespace socks

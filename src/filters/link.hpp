@@ -29,13 +29,11 @@
 #include "filter.hpp"
 #include "buffer.hpp"
 
-#include <list>
+#include <vector>
 #include <memory>
 #include <utility>
 
 namespace pipy {
-
-class Session;
 
 //
 // Link
@@ -43,32 +41,29 @@ class Session;
 
 class Link : public Filter {
 public:
-  struct Route {
-    Pipeline* pipeline = nullptr;
-    pjs::Ref<pjs::Str> name;
-    pjs::Ref<pjs::Function> condition;
-  };
-
   Link();
-  Link(std::list<Route> &&routes);
+
+  void add_condition(pjs::Function *func);
+  void add_condition(const std::function<bool()> &func);
 
 private:
   Link(const Link &r);
   ~Link();
 
-  virtual auto help() -> std::list<std::string> override;
-  virtual void dump(std::ostream &out) override;
-  virtual auto draw(std::list<std::string> &links, bool &fork) -> std::string override;
-  virtual void bind() override;
   virtual auto clone() -> Filter* override;
   virtual void reset() override;
-  virtual void process(Context *ctx, Event *inp) override;
+  virtual void process(Event *evt) override;
+  virtual void dump(std::ostream &out) override;
 
-  std::shared_ptr<std::list<Route>> m_routes;
-  pjs::Ref<Session> m_session;
+  struct Condition {
+    pjs::Ref<pjs::Function> func;
+    std::function<bool()> cpp_func;
+  };
+
+  std::shared_ptr<std::vector<Condition>> m_conditions;
+  pjs::Ref<Pipeline> m_pipeline;
   EventBuffer m_buffer;
   bool m_chosen = false;
-  bool m_session_end = false;
 };
 
 } // namespace pipy

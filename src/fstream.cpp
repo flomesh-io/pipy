@@ -26,6 +26,7 @@
 #include "fstream.hpp"
 #include "net.hpp"
 #include "constants.hpp"
+#include "pipeline.hpp"
 #include "logging.hpp"
 
 namespace pipy {
@@ -83,11 +84,13 @@ void FileStream::read() {
   pjs::Ref<Data> buffer(m_dp->make(RECEIVE_BUFFER_SIZE));
 
   auto on_received = [=](const std::error_code &ec, size_t n) {
+    Pipeline::AutoReleasePool arp;
+
     if (n > 0) {
       buffer->pop(buffer->size() - n);
       if (m_reader) {
-        m_reader(buffer);
-        m_reader(Data::flush());
+        m_reader->input(buffer);
+        m_reader->input(Data::flush());
       }
     }
 
@@ -95,8 +98,8 @@ void FileStream::read() {
       if (ec == asio::error::eof) {
         Log::debug("FileStream: %p, end of stream [fd = %d]", this, m_fd);
         if (m_reader) {
-          pjs::Ref<SessionEnd> evt(SessionEnd::make(SessionEnd::NO_ERROR));
-          m_reader(evt);
+          pjs::Ref<StreamEnd> evt(StreamEnd::make(StreamEnd::NO_ERROR));
+          m_reader->input(evt);
         }
       } else if (ec != asio::error::operation_aborted) {
         auto msg = ec.message();
@@ -104,8 +107,8 @@ void FileStream::read() {
           "FileStream: %p, error reading from stream [fd = %d]: %s",
           this, m_fd, msg.c_str());
         if (m_reader) {
-          pjs::Ref<SessionEnd> evt(SessionEnd::make(SessionEnd::READ_ERROR));
-          m_reader(evt);
+          pjs::Ref<StreamEnd> evt(StreamEnd::make(StreamEnd::READ_ERROR));
+          m_reader->input(evt);
         }
       }
       m_reading_ended = true;

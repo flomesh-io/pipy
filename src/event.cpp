@@ -24,6 +24,44 @@
  */
 
 #include "event.hpp"
+#include "pipeline.hpp"
+
+namespace pipy {
+
+//
+// Event
+//
+
+auto Event::name() const -> const char* {
+  switch (m_type) {
+  case Data: return "Data";
+  case MessageStart: return "MessageStart";
+  case MessageEnd: return "MessageEnd";
+  case StreamEnd: return "StreamEnd";
+  }
+  return "???";
+}
+
+auto StreamEnd::message() const -> const char* {
+  switch (m_error) {
+    case NO_ERROR: return "no error";
+    case UNKNOWN_ERROR: return "unknown error";
+    case RUNTIME_ERROR: return "runtime error";
+    case READ_ERROR: return "read error";
+    case CANNOT_RESOLVE: return "cannot resolve";
+    case CONNECTION_REFUSED: return "connection refused";
+    case UNAUTHORIZED: return "unauthorized";
+    case BUFFER_OVERFLOW: return "buffer overflow";
+  }
+  return "???";
+}
+
+auto EventTarget::Input::dummy() -> Input* {
+  static pjs::Ref<Input> dummy(make((EventTarget*)nullptr));
+  return dummy;
+}
+
+} // namespace pipy
 
 namespace pjs {
 
@@ -48,23 +86,23 @@ template<> void ClassDef<MessageEnd>::init() {
   ctor([](Context &ctx) -> Object* { return MessageEnd::make(); });
 }
 
-template<> void EnumDef<SessionEnd::Error>::init() {
-  define(SessionEnd::NO_ERROR           , "");
-  define(SessionEnd::UNKNOWN_ERROR      , "UnknownError");
-  define(SessionEnd::RUNTIME_ERROR      , "RuntimeError");
-  define(SessionEnd::READ_ERROR         , "ReadError");
-  define(SessionEnd::CANNOT_RESOLVE     , "CannotResolve");
-  define(SessionEnd::CONNECTION_REFUSED , "ConnectionRefused");
-  define(SessionEnd::UNAUTHORIZED       , "Unauthorized");
-  define(SessionEnd::BUFFER_OVERFLOW    , "BufferOverflow");
+template<> void EnumDef<StreamEnd::Error>::init() {
+  define(StreamEnd::NO_ERROR           , "");
+  define(StreamEnd::UNKNOWN_ERROR      , "UnknownError");
+  define(StreamEnd::RUNTIME_ERROR      , "RuntimeError");
+  define(StreamEnd::READ_ERROR         , "ReadError");
+  define(StreamEnd::CANNOT_RESOLVE     , "CannotResolve");
+  define(StreamEnd::CONNECTION_REFUSED , "ConnectionRefused");
+  define(StreamEnd::UNAUTHORIZED       , "Unauthorized");
+  define(StreamEnd::BUFFER_OVERFLOW    , "BufferOverflow");
 }
 
-template<> void ClassDef<SessionEnd>::init() {
+template<> void ClassDef<StreamEnd>::init() {
   super<Event>();
-  ctor([](Context &ctx) -> Object* { return SessionEnd::make(); });
+  ctor([](Context &ctx) -> Object* { return StreamEnd::make(); });
 
   accessor("error", [](Object *obj, Value &val) {
-    val.set(EnumDef<SessionEnd::Error>::name(obj->as<SessionEnd>()->error()));
+    val.set(EnumDef<StreamEnd::Error>::name(obj->as<StreamEnd>()->error()));
   });
 }
 
@@ -78,7 +116,7 @@ template<> void ClassDef<Constructor<MessageEnd>>::init() {
   ctor();
 }
 
-template<> void ClassDef<Constructor<SessionEnd>>::init() {
+template<> void ClassDef<Constructor<StreamEnd>>::init() {
   super<Function>();
   ctor();
 }

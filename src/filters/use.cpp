@@ -27,7 +27,6 @@
 #include "context.hpp"
 #include "module.hpp"
 #include "pipeline.hpp"
-#include "session.hpp"
 #include "logging.hpp"
 
 namespace pipy {
@@ -36,14 +35,9 @@ namespace pipy {
 // Use
 //
 
-Use::Use()
-{
-}
-
-Use::Use(Module *module, pjs::Str *pipeline_name, pjs::Function *when)
+Use::Use(Module *module, pjs::Str *pipeline_name)
   : m_multiple(false)
   , m_pipeline_name(pipeline_name)
-  , m_when(when)
 {
   m_modules.push_back(module);
 }
@@ -51,11 +45,11 @@ Use::Use(Module *module, pjs::Str *pipeline_name, pjs::Function *when)
 Use::Use(
   const std::list<Module*> &modules,
   pjs::Str *pipeline_name,
-  pjs::Function *when
+  pjs::Function *turn_down
 ) : m_multiple(true)
   , m_modules(modules)
   , m_pipeline_name(pipeline_name)
-  , m_when(when)
+  , m_turn_down(turn_down)
 {
 }
 
@@ -63,12 +57,12 @@ Use::Use(
   const std::list<Module*> &modules,
   pjs::Str *pipeline_name,
   pjs::Str *pipeline_name_down,
-  pjs::Function *when
+  pjs::Function *turn_down
 ) : m_multiple(true)
   , m_modules(modules)
   , m_pipeline_name(pipeline_name)
   , m_pipeline_name_down(pipeline_name_down)
-  , m_when(when)
+  , m_turn_down(turn_down)
 {
 }
 
@@ -77,11 +71,11 @@ Use::Use(const Use &r)
   , m_multiple(r.m_multiple)
   , m_pipeline_name(r.m_pipeline_name)
   , m_pipeline_name_down(r.m_pipeline_name_down)
-  , m_when(r.m_when)
+  , m_turn_down(r.m_turn_down)
 {
   Stage *next = nullptr;
   for (auto i = m_stages.rbegin(); i != m_stages.rend(); i++) {
-    i->m_use = this;
+    i->m_filter = this;
     i->m_next = next;
     next = &*i;
   }
@@ -102,17 +96,6 @@ Use::~Use()
 {
 }
 
-auto Use::help() -> std::list<std::string> {
-  return {
-    "use(modules, pipeline[, pipelineDown[, turnDown]])",
-    "Sends events to pipelines in different modules",
-    "modules = <string|array> Filenames of the modules",
-    "pipeline = <string> Name of the pipeline",
-    "pipelineDown = <string> Name of the pipeline to process turned down streams",
-    "turnDown = <function> Callback function that returns true to turn down",
-  };
-}
-
 void Use::dump(std::ostream &out) {
   std::string module_name;
   if (m_modules.size() > 0) {
@@ -129,6 +112,7 @@ void Use::dump(std::ostream &out) {
 }
 
 void Use::bind() {
+  Filter::bind();
   for (auto *mod : m_modules) {
     auto p = mod->find_named_pipeline(m_pipeline_name);
     if (!p && !m_multiple) {
@@ -138,7 +122,7 @@ void Use::bind() {
       msg += m_pipeline_name->str();
       throw std::runtime_error(msg);
     }
-    Pipeline *pd = nullptr;
+    PipelineDef *pd = nullptr;
     if (m_pipeline_name_down) {
       pd = mod->find_named_pipeline(m_pipeline_name_down);
     }
@@ -151,95 +135,71 @@ auto Use::clone() -> Filter* {
 }
 
 void Use::reset() {
+  Filter::reset();
   for (auto &s : m_stages) {
     s.reset();
   }
-  m_session_end = false;
 }
 
-void Use::process(Context *ctx, Event *inp) {
-  if (m_session_end) return;
-
+void Use::process(Event *evt) {
   if (m_stages.empty()) {
-    output(inp);
-
+    output(evt);
   } else {
-    m_stages.front().use(ctx, inp);
+    output(evt, m_stages.front().input());
   }
-
-  if (inp->is<SessionEnd>()) m_session_end = true;
 }
 
-void Use::Stage::use(Context *context, Event *inp) {
-  if (!m_session && m_pipeline && !m_turned_down) {
-    if (auto &when = m_use->m_when) {
+void Use::Stage::on_event(Event *evt) {
+  if (!m_chained) {
+    m_chained = true;
+
+    if (auto &when = m_filter->m_turn_down) {
       pjs::Value ret;
-      if (!m_use->callback(*context, when, 0, nullptr, ret)) return;
+      if (!m_filter->callback(when, 0, nullptr, ret)) return;
       if (ret.to_boolean()) m_turned_down = true;
     }
 
-    if (!m_turned_down) {
-      m_session = Session::make(context, m_pipeline);
-      if (m_next) {
-        auto next = m_next;
-        m_session->on_output(
-          [=](Event *inp) {
-            next->use(context, inp);
-          }
-        );
-      } else if (m_prev) {
-        m_session->on_output(
-          [=](Event *inp) {
-            use_down(context, inp);
-          }
-        );
+    if (m_turned_down) {
+      if (m_prev) {
+        chain(m_prev->input_down());
       } else {
-        m_session->on_output(m_use->out());
+        chain(m_filter->output());
       }
-    }
-  }
 
-  if (m_turned_down) {
-    if (m_prev) {
-      m_prev->use_down(context, inp);
-    } else {
-      m_use->output(inp);
-    }
+    } else if (m_pipeline_def) {
+      m_pipeline = Pipeline::make(m_pipeline_def, m_filter->context());
+      chain(m_pipeline->input());
+      if (m_next) {
+        m_pipeline->chain(m_next->input());
+      } else {
+        m_pipeline->chain(input_down());
+      }
 
-  } else {
-    if (m_session) {
-      m_session->input(inp);
     } else if (m_next) {
-      m_next->use(context, inp);
-    } else if (m_prev) {
-      m_prev->use_down(context, inp);
+      chain(m_next->input());
     } else {
-      m_use->output(inp);
+      chain(input_down());
     }
   }
+
+  output(evt);
 }
 
-void Use::Stage::use_down(Context *context, Event *inp) {
-  if (!m_session_down && m_pipeline_down) {
-    m_session_down = Session::make(context, m_pipeline_down);
+auto Use::Stage::input_down() -> EventTarget::Input* {
+  if (m_pipeline_def_down) {
+    auto *p = Pipeline::make(m_pipeline_def_down, m_filter->context());
     if (m_prev) {
-      auto prev = m_prev;
-      m_session_down->on_output(
-        [=](Event *inp) {
-          prev->use_down(context, inp);
-        }
-      );
+      p->chain(m_prev->input_down());
     } else {
-      m_session_down->on_output(m_use->out());
+      p->chain(m_filter->output());
     }
-  }
+    m_pipeline_down = p;
+    return p->input();
 
-  if (m_session_down) {
-    m_session_down->input(inp);
   } else if (m_prev) {
-    m_prev->use_down(context, inp);
+    return m_prev->input_down();
   } else {
-    m_use->output(inp);
+    return m_filter->output();
   }
 }
 

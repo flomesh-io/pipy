@@ -28,15 +28,14 @@
 #include "pipeline.hpp"
 #include "module.hpp"
 #include "worker.hpp"
-#include "session.hpp"
 #include "utils.hpp"
 
 namespace pipy {
 
-Task::Task(const std::string &interval, Pipeline *pipeline)
+Task::Task(const std::string &interval, PipelineDef *pipeline_def)
   : m_name(interval)
   , m_interval(utils::get_seconds(interval))
-  , m_pipeline(pipeline)
+  , m_pipeline_def(pipeline_def)
 {
 }
 
@@ -44,7 +43,7 @@ Task::~Task() {
 }
 
 bool Task::active() const {
-  return m_session && !m_session->done();
+  return m_pipeline;
 }
 
 bool Task::start() {
@@ -86,11 +85,21 @@ void Task::tick() {
 }
 
 void Task::run() {
-  m_session = nullptr;
-  auto ctx = m_pipeline->module()->worker()->new_runtime_context();
-  m_session = Session::make(ctx, m_pipeline);
-  m_session->input(MessageStart::make());
-  m_session->input(MessageEnd::make());
+  m_pipeline = Pipeline::make(
+    m_pipeline_def,
+    m_pipeline_def->module()->worker()->new_runtime_context()
+  );
+  m_pipeline->chain(EventTarget::input());
+  Pipeline::AutoReleasePool arp;
+  auto input = m_pipeline->input();
+  input->input(MessageStart::make());
+  input->input(MessageEnd::make());
+}
+
+void Task::on_event(Event *evt) {
+  if (evt->is<StreamEnd>()) {
+    m_pipeline = nullptr;
+  }
 }
 
 } // namespace pipy

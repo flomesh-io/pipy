@@ -8,7 +8,7 @@ pipy({
 // Inbound file request
 .listen(6080)
   .decodeHTTPRequest()
-  .onMessageStart(
+  .handleMessageStart(
     e => _file = _cache.get(e.head.path)
   )
   .wait(

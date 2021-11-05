@@ -216,10 +216,15 @@ void Decoder::reset() {
   m_is_final = false;
 }
 
-void Decoder::input(
-  const pjs::Ref<Data> &data,
-  const std::function<void(MessageHead*)> &on_message_start
-) {
+void Decoder::on_event(Event *evt) {
+  if (auto e = evt->as<StreamEnd>()) {
+    stream_end(e);
+    return;
+  }
+
+  auto data = evt->as<Data>();
+  if (!data) return;
+
   while (!data->empty()) {
     auto state = m_state;
     pjs::Ref<Data> output(Data::make());
@@ -305,7 +310,7 @@ void Decoder::input(
         break;
       case BODY:
       case CHUNK_BODY:
-        m_output(output);
+        EventFunction::output(output);
         break;
       default: break;
     }
@@ -384,9 +389,9 @@ void Decoder::input(
 
           // Transfer-Encoding and Content-Length
           if (transfer_encoding.is_string() && !strncmp(transfer_encoding.s()->c_str(), "chunked", 7)) {
-            output_start(on_message_start);
+            message_start();
             if (is_bodiless_response()) {
-              output_end();
+              message_end();
               state = HEAD;
             } else {
               state = CHUNK_HEAD;
@@ -396,16 +401,16 @@ void Decoder::input(
               m_body_size = std::atoi(content_length.s()->c_str());
             }
             if (m_body_size > 0) {
-              output_start(on_message_start);
+              message_start();
               if (is_bodiless_response()) {
-                output_end();
+                message_end();
                 state = HEAD;
               } else {
                 state = BODY;
               }
             } else {
-              output_start(on_message_start);
-              output_end();
+              message_start();
+              message_end();
               state = HEAD;
             }
           }
@@ -414,7 +419,7 @@ void Decoder::input(
       }
       case HEAD:
         if (m_state != HEAD) {
-          output_end();
+          message_end();
         }
         break;
       default: break;
@@ -424,24 +429,24 @@ void Decoder::input(
   }
 }
 
-void Decoder::end(SessionEnd *end) {
+void Decoder::stream_end(StreamEnd *end) {
   if (m_is_response && (m_state == HEAD || m_state == HEADER) && end->error()) {
     int status_code = 0;
     pjs::Str *status_text = nullptr;
     switch (end->error()) {
-    case SessionEnd::CANNOT_RESOLVE:
+    case StreamEnd::CANNOT_RESOLVE:
       status_code = 502;
       status_text = s_cannot_resolve;
       break;
-    case SessionEnd::CONNECTION_REFUSED:
+    case StreamEnd::CONNECTION_REFUSED:
       status_code = 502;
       status_text = s_connection_refused;
       break;
-    case SessionEnd::UNAUTHORIZED:
+    case StreamEnd::UNAUTHORIZED:
       status_code = 401;
       status_text = s_unauthorized;
       break;
-    case SessionEnd::READ_ERROR:
+    case StreamEnd::READ_ERROR:
       status_code = 502;
       status_text = s_read_error;
       break;
@@ -455,10 +460,11 @@ void Decoder::end(SessionEnd *end) {
     head->protocol(s_http_1_1);
     head->status(status_code);
     head->status_text(status_text);
-    m_output(MessageStart::make(head));
-    m_output(MessageEnd::make());
+    output(MessageStart::make(head));
+    output(end);
+  } else {
+    output(end);
   }
-  m_output(end);
 }
 
 //
@@ -474,7 +480,7 @@ void Encoder::reset() {
   m_is_final = false;
 }
 
-void Encoder::input(const pjs::Ref<Event> &evt) {
+void Encoder::on_event(Event *evt) {
   if (auto start = evt->as<MessageStart>()) {
     m_start = start;
     m_buffer = nullptr;
@@ -529,9 +535,9 @@ void Encoder::input(const pjs::Ref<Event> &evt) {
         s_dp.push(buf, str);
         buf->push(*data);
         s_dp.push(buf, "\r\n");
-        m_output(buf);
+        output(buf);
       } else {
-        m_output(data);
+        output(data);
       }
     }
 
@@ -540,21 +546,21 @@ void Encoder::input(const pjs::Ref<Event> &evt) {
       if (is_bodiless_response()) {
         output_head();
       } else if (m_chunked) {
-        m_output(s_dp.make("0\r\n\r\n"));
+        output(s_dp.make("0\r\n\r\n"));
       } else if (m_buffer) {
         m_content_length = m_buffer->size();
         output_head();
-        if (!m_buffer->empty()) m_output(m_buffer);
+        if (!m_buffer->empty()) output(m_buffer);
       }
-      m_output(evt);
+      output(evt);
       if (m_is_response && m_is_final) {
-        m_output(SessionEnd::make());
+        output(StreamEnd::make());
       }
     }
     reset();
 
-  } else if (evt->is<SessionEnd>()) {
-    m_output(evt);
+  } else if (evt->is<StreamEnd>()) {
+    output(evt);
   }
 }
 
@@ -677,8 +683,8 @@ void Encoder::output_head() {
 
   s_dp.push(buffer, "\r\n");
 
-  m_output(m_start);
-  m_output(buffer);
+  output(m_start);
+  output(buffer);
 }
 
 //
@@ -686,24 +692,18 @@ void Encoder::output_head() {
 //
 
 RequestDecoder::RequestDecoder()
-  : m_decoder(false, [this](Event *evt) { output(evt); })
+  : m_ef_decode(false)
 {
 }
 
 RequestDecoder::RequestDecoder(const RequestDecoder &r)
-  : RequestDecoder()
+  : Filter(r)
+  , m_ef_decode(false)
 {
 }
 
 RequestDecoder::~RequestDecoder()
 {
-}
-
-auto RequestDecoder::help() -> std::list<std::string> {
-  return {
-    "decodeHTTPRequest()",
-    "Deframes an HTTP request message",
-  };
 }
 
 void RequestDecoder::dump(std::ostream &out) {
@@ -714,22 +714,21 @@ auto RequestDecoder::clone() -> Filter* {
   return new RequestDecoder(*this);
 }
 
-void RequestDecoder::reset() {
-  m_decoder.reset();
-  m_session_end = false;
+void RequestDecoder::chain() {
+  Filter::chain();
+  m_ef_decode.chain(output());
 }
 
-void RequestDecoder::process(Context *ctx, Event *inp) {
-  if (m_session_end) return;
+void RequestDecoder::reset() {
+  Filter::reset();
+  m_ef_decode.reset();
+}
 
-  // Data
-  if (auto data = inp->as<Data>()) {
-    m_decoder.input(data);
-
-  // End of session
-  } else if (inp->is<SessionEnd>()) {
-    m_session_end = true;
-    output(inp);
+void RequestDecoder::process(Event *evt) {
+  if (auto data = evt->as<Data>()) {
+    output(evt, m_ef_decode.input());
+  } else if (evt->is<StreamEnd>()) {
+    output(evt);
   }
 }
 
@@ -737,29 +736,20 @@ void RequestDecoder::process(Context *ctx, Event *inp) {
 // ResponseDecoder
 //
 
-ResponseDecoder::ResponseDecoder()
-  : m_decoder(true, [this](Event *evt) { output(evt); })
-{
-}
-
 ResponseDecoder::ResponseDecoder(pjs::Object *options)
-  : m_decoder(true, [this](Event *evt) { output(evt); })
+  : m_ef_decode(true)
+  , m_ef_set_bodiless(this)
 {
   if (options) {
     options->get("bodiless", m_bodiless);
   }
 }
 
-ResponseDecoder::ResponseDecoder(const std::function<bool()> &bodiless)
-  : m_decoder(true, [this](Event *evt) { output(evt); })
-  , m_bodiless_func(bodiless)
-{
-}
-
 ResponseDecoder::ResponseDecoder(const ResponseDecoder &r)
-  : m_decoder(true, [this](Event *evt) { output(evt); })
+  : Filter(r)
+  , m_ef_decode(true)
+  , m_ef_set_bodiless(this)
   , m_bodiless(r.m_bodiless)
-  , m_bodiless_func(r.m_bodiless_func)
 {
 }
 
@@ -767,88 +757,34 @@ ResponseDecoder::~ResponseDecoder()
 {
 }
 
-auto ResponseDecoder::help() -> std::list<std::string> {
-  return {
-    "decodeHTTPResponse([options])",
-    "Deframes an HTTP response message",
-    "options = <object> Options currently including only bodiless"
-  };
-}
-
 void ResponseDecoder::dump(std::ostream &out) {
   out << "decodeHTTPResponse";
 }
 
+void ResponseDecoder::chain() {
+  Filter::chain();
+  m_ef_decode.chain(m_ef_set_bodiless.input());
+  m_ef_set_bodiless.chain(output());
+}
+
 void ResponseDecoder::reset() {
-  m_decoder.reset();
-  m_session_end = false;
+  Filter::reset();
+  m_ef_decode.reset();
 }
 
 auto ResponseDecoder::clone() -> Filter* {
   return new ResponseDecoder(*this);
 }
 
-void ResponseDecoder::process(Context *ctx, Event *inp) {
-  if (m_session_end) return;
-
-  // Data
-  if (auto data = inp->as<Data>()) {
-    m_decoder.input(
-      data,
-      [=](MessageHead*) {
-        m_decoder.set_bodiless(is_bodiless(ctx));
-      }
-    );
-
-  // End of session
-  } else if (auto end = inp->as<SessionEnd>()) {
-    m_session_end = true;
-
-    if (end->error()) {
-      int status_code = 0;
-      const char *status_text = nullptr;
-      switch (end->error()) {
-        case SessionEnd::CANNOT_RESOLVE:
-          status_code = 503;
-          status_text = "Cannot Resolve";
-          break;
-        case SessionEnd::CONNECTION_REFUSED:
-          status_code = 503;
-          status_text = "Connection Refused";
-          break;
-        case SessionEnd::UNAUTHORIZED:
-          status_code = 401;
-          status_text = "Unauthorized";
-          break;
-        case SessionEnd::READ_ERROR:
-          status_code = 502;
-          status_text = "Read Error";
-          break;
-        default:
-          status_code = 500;
-          status_text = "Internal Server Error";
-          break;
-      }
-      auto head = ResponseHead::make();
-      head->headers(pjs::Object::make());
-      head->protocol(s_http_1_1);
-      head->status(status_code);
-      head->status_text(pjs::Str::make(status_text));
-      output(MessageStart::make(head));
-      output(MessageEnd::make());
-    }
-
-    output(inp);
-  }
+void ResponseDecoder::process(Event *evt) {
+  output(evt, m_ef_decode.input());
 }
 
-bool ResponseDecoder::is_bodiless(Context *ctx) {
-  if (m_bodiless_func) {
-    return m_bodiless_func();
-  } else {
+void ResponseDecoder::on_set_bodiless(Event *evt) {
+  if (evt->is<MessageStart>()) {
     pjs::Value ret;
-    eval(*ctx, m_bodiless, ret);
-    return ret.to_boolean();
+    eval(m_bodiless, ret);
+    m_ef_decode.set_bodiless(ret.to_boolean());
   }
 }
 
@@ -857,24 +793,18 @@ bool ResponseDecoder::is_bodiless(Context *ctx) {
 //
 
 RequestEncoder::RequestEncoder()
-  : m_encoder(false, [this](Event *evt) { output(evt); })
+  : m_ef_encode(false)
 {
 }
 
 RequestEncoder::RequestEncoder(const RequestEncoder &r)
-  : RequestEncoder()
+  : Filter(r)
+  , m_ef_encode(false)
 {
 }
 
 RequestEncoder::~RequestEncoder()
 {
-}
-
-auto RequestEncoder::help() -> std::list<std::string> {
-  return {
-    "encodeHTTPRequest()",
-    "Frames an HTTP request message",
-  };
 }
 
 void RequestEncoder::dump(std::ostream &out) {
@@ -885,21 +815,21 @@ auto RequestEncoder::clone() -> Filter* {
   return new RequestEncoder(*this);
 }
 
-void RequestEncoder::reset() {
-  m_encoder.reset();
-  m_session_end = false;
+void RequestEncoder::chain() {
+  Filter::chain();
+  m_ef_encode.chain(output());
 }
 
-void RequestEncoder::process(Context *ctx, Event *inp) {
-  static Data::Producer s_dp("encodeHTTPRequest");
+void RequestEncoder::reset() {
+  Filter::reset();
+  m_ef_encode.reset();
+}
 
-  if (m_session_end) return;
-
-  if (inp->is<SessionEnd>()) {
-    m_session_end = true;
-    output(inp);
+void RequestEncoder::process(Event *evt) {
+  if (evt->is<StreamEnd>()) {
+    output(evt);
   } else {
-    m_encoder.input(inp);
+    output(evt, m_ef_encode.input());
   }
 }
 
@@ -907,13 +837,8 @@ void RequestEncoder::process(Context *ctx, Event *inp) {
 // ResponseEncoder
 //
 
-ResponseEncoder::ResponseEncoder()
-  : m_encoder(true, [this](Event *evt) { output(evt); })
-{
-}
-
 ResponseEncoder::ResponseEncoder(pjs::Object *options)
-  : m_encoder(true, [this](Event *evt) { output(evt); })
+  : m_ef_encode(true)
 {
   if (options) {
     options->get("bodiless", m_bodiless);
@@ -921,21 +846,14 @@ ResponseEncoder::ResponseEncoder(pjs::Object *options)
 }
 
 ResponseEncoder::ResponseEncoder(const ResponseEncoder &r)
-  : m_encoder(true, [this](Event *evt) { output(evt); })
+  : Filter(r)
+  , m_ef_encode(true)
   , m_bodiless(r.m_bodiless)
 {
 }
 
 ResponseEncoder::~ResponseEncoder()
 {
-}
-
-auto ResponseEncoder::help() -> std::list<std::string> {
-  return {
-    "encodeHTTPResponse([options])",
-    "Frames an HTTP response message",
-    "options = <object> Options currently including only bodiless",
-  };
 }
 
 void ResponseEncoder::dump(std::ostream &out) {
@@ -946,158 +864,76 @@ auto ResponseEncoder::clone() -> Filter* {
   return new ResponseEncoder(*this);
 }
 
+void ResponseEncoder::chain() {
+  Filter::chain();
+  m_ef_encode.chain(output());
+}
+
 void ResponseEncoder::reset() {
-  m_encoder.reset();
-  m_session_end = false;
+  Filter::reset();
+  m_ef_encode.reset();
 }
 
-void ResponseEncoder::process(Context *ctx, Event *inp) {
-  if (m_session_end) return;
-
-  if (inp->is<SessionEnd>()) {
-    m_session_end = true;
-    output(inp);
+void ResponseEncoder::process(Event *evt) {
+  if (evt->is<StreamEnd>()) {
+    output(evt);
   } else {
-    if (inp->is<MessageStart>()) {
+    if (evt->is<MessageStart>()) {
       pjs::Value bodiless;
-      if (!eval(*ctx, m_bodiless, bodiless)) return;
-      m_encoder.set_bodiless(bodiless.to_boolean());
+      if (!eval(m_bodiless, bodiless)) return;
+      m_ef_encode.set_bodiless(bodiless.to_boolean());
     }
-    m_encoder.input(inp);
+    output(evt, m_ef_encode.input());
   }
 }
 
 //
-// ServerConnection
+// RequestQueue
 //
 
-class ServerConnection : public pjs::Pooled<ServerConnection> {
-public:
-  ServerConnection(
-    const std::function<Session*()> &new_session,
-    const Event::Receiver &on_output
-  )
-    : m_new_session(new_session)
-    , m_decoder(false, [this](Event *evt) { feed(evt); })
-    , m_encoder(true, on_output) {}
+void RequestQueue::reset() {
+  while (auto *r = m_queue.head()) {
+    m_queue.remove(r);
+    delete r;
+  }
+}
 
-  ~ServerConnection() {
-    while (!m_queue.empty()) {
-      auto channel = m_queue.front();
-      m_queue.pop();
-      delete channel;
+void RequestQueue::Enqueue::on_event(Event *evt) {
+  if (evt->is<MessageStart>()) {
+    auto *r = new Request;
+    queue->on_enqueue(r);
+    queue->m_queue.push(r);
+  }
+  output(evt);
+}
+
+void RequestQueue::Dequeue::on_event(Event *evt) {
+  if (evt->is<MessageStart>()) {
+    if (auto *r = queue->m_queue.head()) {
+      queue->on_dequeue(r);
+      queue->m_queue.remove(r);
+      delete r;
     }
   }
-
-  void input(Data *data) {
-    m_decoder.input(data);
-  }
-
-private:
-  struct Stream : public pjs::Pooled<Stream> {
-    pjs::Ref<Session> session;
-    EventBuffer buffer;
-    bool input_end = false;
-    bool output_end = false;
-    bool bodiless = false;
-    bool final = false;
-    ~Stream() { session->on_output(nullptr); }
-  };
-
-  std::function<Session*()> m_new_session;
-  Decoder m_decoder;
-  Encoder m_encoder;
-  std::queue<Stream*> m_queue;
-
-  void feed(Event *evt) {
-    if (auto start = evt->as<MessageStart>()) {
-      auto stream = new Stream;
-      auto session = m_new_session();
-      session->on_output([=](Event *inp) {
-        if (stream->output_end) return;
-        if (inp->is<SessionEnd>()) {
-          stream->buffer.push(MessageEnd::make());
-          stream->output_end = true;
-        } else {
-          stream->buffer.push(inp);
-          if (inp->is<MessageEnd>()) {
-            stream->output_end = true;
-          }
-        }
-        pump();
-      });
-      stream->session = session;
-      stream->bodiless = m_decoder.is_bodiless();
-      stream->final = m_decoder.is_final();
-      m_queue.push(stream);
-      session->input(evt);
-
-    } else if (!m_queue.empty()) {
-      auto stream = m_queue.back();
-      if (!stream->input_end) {
-        auto is_end = evt->is<MessageEnd>();
-        stream->session->input(evt); // evt is gone after this
-        if (is_end) {
-          stream->input_end = true;
-        }
-      }
-    }
-  }
-
-  void pump() {
-
-    // Flush all completed streams in the front
-    while (!m_queue.empty()) {
-      auto stream = m_queue.front();
-      if (!stream->output_end) break;
-      m_queue.pop();
-      auto &buffer = stream->buffer;
-      if (!buffer.empty()) {
-        m_encoder.set_bodiless(stream->bodiless);
-        m_encoder.set_final(stream->final);
-        buffer.flush([this](Event *evt) {
-          m_encoder.input(evt);
-        });
-      }
-      delete stream;
-    }
-
-    // Flush the first stream in queue
-    if (!m_queue.empty()) {
-      auto stream = m_queue.front();
-      auto &buffer = stream->buffer;
-      if (!buffer.empty()) {
-        m_encoder.set_bodiless(stream->bodiless);
-        m_encoder.set_final(stream->final);
-        buffer.flush([this](Event *evt) {
-          m_encoder.input(evt);
-        });
-      }
-    }
-  }
-};
+  output(evt);
+}
 
 //
 // Demux
 //
 
 Demux::Demux()
-{
-}
-
-Demux::Demux(Pipeline *pipeline)
-  : m_pipeline(pipeline)
-{
-}
-
-Demux::Demux(pjs::Str *target)
-  : m_target(target)
+  : m_ef_decoder(false)
+  , m_ef_encoder(true)
+  , m_ef_demux(this)
 {
 }
 
 Demux::Demux(const Demux &r)
-  : m_pipeline(r.m_pipeline)
-  , m_target(r.m_target)
+  : Filter(r)
+  , m_ef_decoder(false)
+  , m_ef_encoder(true)
+  , m_ef_demux(this)
 {
 }
 
@@ -1105,202 +941,43 @@ Demux::~Demux()
 {
 }
 
-auto Demux::help() -> std::list<std::string> {
-  return {
-    "demuxHTTP(target)",
-    "Deframes HTTP requests, sends each to a separate pipeline session, and frames their responses",
-    "target = <string> Name of the pipeline to receive deframed requests",
-  };
-}
-
 void Demux::dump(std::ostream &out) {
   out << "demuxHTTP";
-}
-
-auto Demux::draw(std::list<std::string> &links, bool &fork) -> std::string {
-  links.push_back(m_target->str());
-  fork = false;
-  return "demuxHTTP";
-}
-
-void Demux::bind() {
-  if (!m_pipeline) {
-    m_pipeline = pipeline(m_target);
-  }
 }
 
 auto Demux::clone() -> Filter* {
   return new Demux(*this);
 }
 
+void Demux::chain() {
+  Filter::chain();
+  m_ef_decoder.chain(m_ef_enqueue.input());
+  m_ef_enqueue.chain(m_ef_demux.input());
+  m_ef_demux.chain(m_ef_dequeue.input());
+  m_ef_dequeue.chain(m_ef_encoder.input());
+  m_ef_encoder.chain(output());
+}
+
 void Demux::reset() {
-  delete m_connection;
-  m_connection = nullptr;
-  m_session_end = false;
+  Filter::reset();
+  RequestQueue::reset();
+  m_ef_decoder.reset();
+  m_ef_encoder.reset();
 }
 
-void Demux::process(Context *ctx, Event *inp) {
-  if (m_session_end) return;
-
-  if (!m_connection) {
-    auto worker = pipeline()->module()->worker();
-    auto pipeline = m_pipeline;
-    m_connection = new ServerConnection(
-      [=]() { return Session::make(worker->new_runtime_context(ctx), pipeline); },
-      [=](Event *evt) { output(evt); }
-    );
-  }
-
-  if (auto data = inp->as<Data>()) {
-    m_connection->input(data);
-
-  } else if (inp->is<SessionEnd>()) {
-    m_session_end = true;
-  }
+void Demux::process(Event *evt) {
+  output(evt, m_ef_decoder.input());
 }
 
-//
-// ClientConnection
-//
+void Demux::on_enqueue(Request *req) {
+  req->is_bodiless = m_ef_decoder.is_bodiless();
+  req->is_final = m_ef_decoder.is_final();
+}
 
-class ClientConnection : public MuxBase::Connection, public pjs::Pooled<ClientConnection> {
-public:
-  ClientConnection()
-    : m_encoder(false, [this](Event *evt) { send(evt); })
-    , m_decoder(true, [this](Event *evt) { feed(evt); }) {}
-
-private:
-  class Stream : public Connection::Stream, public pjs::Pooled<Stream> {
-  public:
-    Stream(ClientConnection *connection, MessageStart *start, const Event::Receiver &on_output)
-      : m_connection(connection)
-      , m_start(start)
-      , m_buffer(Data::make())
-      , m_output(on_output) {}
-
-  private:
-    virtual void input(Data *data) override {
-      m_buffer->push(*data);
-      m_connection->pump();
-    }
-
-    virtual void end() override {
-      m_end = MessageEnd::make();
-      m_connection->pump();
-    }
-
-    virtual void close() override {
-      if (!m_input_end) end();
-      m_output = nullptr;
-      if (!m_queued) delete this;
-    }
-
-    ClientConnection* m_connection;
-    Event::Receiver m_output;
-    pjs::Ref<MessageStart> m_start;
-    pjs::Ref<MessageEnd> m_end;
-    pjs::Ref<Data> m_buffer;
-    bool m_queued = true;
-    bool m_input_end = false;
-    bool m_output_end = false;
-    bool m_bodiless = false;
-
-    friend class ClientConnection;
-  };
-
-  Encoder m_encoder;
-  Decoder m_decoder;
-  std::list<Stream*> m_queue;
-
-  virtual auto stream(MessageStart *start, const Event::Receiver &on_output) -> Connection::Stream* override {
-    auto s = new Stream(this, start, on_output);
-    m_queue.push_back(s);
-    pump();
-    return s;
-  }
-
-  virtual void receive(Event *evt) override {
-    if (auto data = evt->as<Data>()) {
-      for (auto *stream : m_queue) {
-        if (!stream->m_output_end) {
-          m_decoder.set_bodiless(stream->m_bodiless);
-          break;
-        }
-      }
-      m_decoder.input(data);
-    } else if (auto end = evt->as<SessionEnd>()) {
-      m_decoder.end(end);
-      reset();
-    }
-  }
-
-  virtual void close() override {
-    delete this;
-  }
-
-  void pump() {
-    if (!m_queue.empty()) {
-      auto stream = m_queue.front();
-      if (!stream->m_input_end) {
-        auto &start = stream->m_start;
-        auto &data = stream->m_buffer;
-        auto &end = stream->m_end;
-        if (start) {
-          m_encoder.input(start);
-          stream->m_bodiless = m_encoder.is_bodiless();
-          start = nullptr;
-        }
-        if (!data->empty()) {
-          m_encoder.input(data);
-          data = Data::make();
-        }
-        if (end) {
-          m_encoder.input(end);
-          end = nullptr;
-          stream->m_input_end = true;
-        }
-      }
-      clean();
-    }
-  }
-
-  void feed(const pjs::Ref<Event> &evt) {
-    for (auto *stream : m_queue) {
-      if (!stream->m_output_end) {
-        auto &output = stream->m_output;
-        if (output) output(evt);
-        if (evt->is<MessageEnd>()) {
-          if (m_decoder.is_final()) reset();
-          stream->m_output_end = true;
-          clean();
-          pump();
-        }
-        break;
-      }
-    }
-  }
-
-  void clean() {
-    while (!m_queue.empty()) {
-      auto stream = m_queue.front();
-      if (!stream->m_input_end || !stream->m_output_end) break;
-      m_queue.pop_front();
-      if (stream->m_output) {
-        stream->m_queued = false;
-      } else {
-        delete stream;
-      }
-    }
-  }
-
-  ~ClientConnection() {
-    for (auto *stream : m_queue) {
-      delete stream;
-    }
-  }
-
-  friend class Stream;
-};
+void Demux::on_dequeue(Request *req) {
+  m_ef_encoder.set_bodiless(req->is_bodiless);
+  m_ef_encoder.set_final(req->is_final);
+}
 
 //
 // Mux
@@ -1310,18 +987,13 @@ Mux::Mux()
 {
 }
 
-Mux::Mux(Pipeline *pipeline, const pjs::Value &channel)
-  : MuxBase(pipeline, channel)
-{
-}
-
-Mux::Mux(pjs::Str *target, const pjs::Value &channel)
-  : MuxBase(target, channel)
+Mux::Mux(const pjs::Value &key)
+  : pipy::Mux(key)
 {
 }
 
 Mux::Mux(const Mux &r)
-  : MuxBase(r)
+  : pipy::Mux(r)
 {
 }
 
@@ -1329,75 +1001,75 @@ Mux::~Mux()
 {
 }
 
-auto Mux::help() -> std::list<std::string> {
-  return {
-    "muxHTTP(target[, channel])",
-    "Frames HTTP requests, send to a new or shared pipeline session, and deframes its responses",
-    "target = <string> Name of the pipeline to receive framed requests",
-    "channel = <number|string|function> Key of the shared pipeline session",
-  };
-}
-
 void Mux::dump(std::ostream &out) {
   out << "muxHTTP";
-}
-
-auto Mux::draw(std::list<std::string> &links, bool &fork) -> std::string {
-  links.push_back(target()->str());
-  fork = false;
-  return "muxHTTP";
 }
 
 auto Mux::clone() -> Filter* {
   return new Mux(*this);
 }
 
-auto Mux::new_connection() -> Connection* {
-  return new ClientConnection;
+//
+// Mux::Session
+//
+
+void Mux::Session::open(Pipeline *pipeline) {
+  m_ef_encoder.chain(m_ef_enqueue.input());
+  m_ef_enqueue.chain(pipeline->input());
+  pipeline->chain(m_ef_decoder.input());
+  m_ef_decoder.chain(m_ef_dequeue.input());
+  m_ef_dequeue.chain(m_ef_demux.input());
+}
+
+void Mux::Session::close() {
+  pipy::Mux::Session::close();
+  RequestQueue::reset();
+}
+
+void Mux::Session::on_event(Event *evt) {
+  output(evt, m_ef_encoder.input());
+}
+
+void Mux::Session::on_enqueue(Request *req) {
+  req->is_bodiless = m_ef_encoder.is_bodiless();
+}
+
+void Mux::Session::on_dequeue(Request *req) {
+  m_ef_decoder.set_bodiless(req->is_bodiless);
 }
 
 //
 // Server
 //
 
-Server::Server()
-  : m_decoder(false, [this](Event *evt) { request(evt); })
-  , m_encoder(true, [this](Event *evt) { output(evt); })
-{
-}
-
-Server::Server(const std::function<Message*(Context*, Message*)> &handler)
-  : m_decoder(false, [this](Event *evt) { request(evt); })
-  , m_encoder(true, [this](Event *evt) { output(evt); })
+Server::Server(const std::function<Message*(Message*)> &handler)
+  : m_ef_decoder(false)
+  , m_ef_encoder(true)
+  , m_ef_handler(this)
   , m_handler_func(handler)
 {
 }
 
 Server::Server(pjs::Object *handler)
-  : m_decoder(false, [this](Event *evt) { request(evt); })
-  , m_encoder(true, [this](Event *evt) { output(evt); })
-  , m_handler(handler)
+  : m_ef_decoder(false)
+  , m_ef_encoder(true)
+  , m_ef_handler(this)
+  , m_handler_obj(handler)
 {
 }
 
 Server::Server(const Server &r)
-  : m_decoder(false, [this](Event *evt) { request(evt); })
-  , m_encoder(true, [this](Event *evt) { output(evt); })
+  : Filter(r)
+  , m_ef_decoder(false)
+  , m_ef_encoder(true)
+  , m_ef_handler(this)
   , m_handler_func(r.m_handler_func)
-  , m_handler(r.m_handler)
+  , m_handler_obj(r.m_handler_obj)
 {
 }
 
 Server::~Server()
 {
-}
-
-auto Server::help() -> std::list<std::string> {
-  return {
-    "serveHTTP(handler)",
-    "Serves HTTP requests with a handler function",
-    "handler = <function> Function that returns a response message",
-  };
 }
 
 void Server::dump(std::ostream &out) {
@@ -1408,86 +1080,84 @@ auto Server::clone() -> Filter* {
   return new Server(*this);
 }
 
+void Server::chain() {
+  Filter::chain();
+  m_ef_decoder.chain(m_ef_handler.input());
+  m_ef_handler.chain(m_ef_encoder.input());
+  m_ef_encoder.chain(output());
+}
+
 void Server::reset() {
-  m_decoder.reset();
-  m_encoder.reset();
-  m_context = nullptr;
-  m_head = nullptr;
-  m_body = nullptr;
-  m_queue.clear();
-  m_session_end = false;
+  Filter::reset();
+  m_ef_decoder.reset();
+  m_ef_encoder.reset();
 }
 
-void Server::process(Context *ctx, Event *inp) {
-  if (m_session_end) return;
-
-  if (auto data = inp->as<Data>()) {
-    m_context = ctx;
-    m_decoder.input(data);
-
-  } else if (inp->is<SessionEnd>()) {
-    output(inp);
-    m_session_end = true;
-  }
+void Server::process(Event *evt) {
+  output(evt, m_ef_decoder.input());
 }
 
-void Server::request(const pjs::Ref<Event> &evt) {
+void Server::Handler::on_event(Event *evt) {
   if (auto start = evt->as<MessageStart>()) {
-    m_head = start->head();
-    m_body = Data::make();
-
-    m_queue.push_back({
-      m_decoder.is_bodiless(),
-      m_decoder.is_final(),
-    });
+    if (!m_start) {
+      m_start = start;
+      m_buffer.clear();
+      auto &encoder = m_server->m_ef_encoder;
+      auto &decoder = m_server->m_ef_decoder;
+      encoder.set_bodiless(decoder.is_bodiless());
+      encoder.set_final(decoder.is_final());
+    }
 
   } else if (auto data = evt->as<Data>()) {
-    if (m_body) {
-      m_body->push(*data);
+    if (m_start) {
+      m_buffer.push(*data);
     }
 
   } else if (evt->is<MessageEnd>()) {
-    if (!m_queue.empty()) {
-      auto &req = m_queue.front();
-      m_encoder.set_bodiless(req.is_bodiless);
-      m_encoder.set_final(req.is_final);
-      m_queue.pop_front();
+    if (m_start) {
+      pjs::Ref<Message> msg(
+        Message::make(
+          m_start->head(),
+          Data::make(m_buffer)
+        )
+      );
 
-      pjs::Ref<Message> msg(Message::make(m_head, m_body));
+      m_start = nullptr;
+      m_buffer.clear();
 
-      if (m_handler_func) {
-        msg = m_handler_func(m_context, msg);
-      } else if (m_handler && m_handler->is_function()) {
-        pjs::Value arg(msg), ret;
-        if (!callback(*m_context, m_handler->as<pjs::Function>(), 1, &arg, ret)) return;
-        if (ret.is_object()) {
-          msg = ret.o();
+      if (auto &func = m_server->m_handler_func) {
+        msg = func(msg);
+
+      } else if (auto &handler = m_server->m_handler_obj) {
+        if (handler->is_instance_of<Message>()) {
+          msg = handler->as<Message>();
+
+        } else if (handler->is_function()) {
+          pjs::Value arg(msg), ret;
+          if (!m_server->callback(handler->as<pjs::Function>(), 1, &arg, ret)) return;
+          if (ret.is_object()) {
+            msg = ret.o();
+          } else {
+            msg = nullptr;
+            if (!ret.is_undefined()) {
+              Log::error("[serveHTTP] handler did not return a valid message");
+            }
+          }
+
         } else {
           msg = nullptr;
-          if (!ret.is_undefined()) {
-            Log::error("[serveHTTP] handler did not return a valid message");
-          }
         }
-      } else if (m_handler && m_handler->is_instance_of<Message>()) {
-        msg = m_handler->as<Message>();
-      } else {
-        msg = nullptr;
       }
 
       if (msg) {
-        pjs::Ref<MessageStart> start(MessageStart::make(msg->head()));
-        m_encoder.input(start);
-        if (auto *body = msg->body()) m_encoder.input(body);
-        m_encoder.input(evt);
+        output(MessageStart::make(msg->head()));
+        if (auto *body = msg->body()) output(body);
+        output(evt);
       } else {
-        pjs::Ref<MessageStart> start(MessageStart::make());
-        m_encoder.input(start);
-        m_encoder.input(evt);
+        output(MessageStart::make());
+        output(evt);
       }
     }
-
-    m_head = nullptr;
-    m_body = nullptr;
   }
 }
 

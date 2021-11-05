@@ -26,7 +26,6 @@
 #include "fetch.hpp"
 #include "context.hpp"
 #include "pipeline.hpp"
-#include "session.hpp"
 #include "message.hpp"
 #include "filters/connect.hpp"
 #include "filters/demux.hpp"
@@ -34,15 +33,24 @@
 
 namespace pipy {
 
-void Fetch::Receiver::process(Context *ctx, Event *inp) {
-  if (auto e = inp->as<MessageStart>()) {
+auto Fetch::Receiver::clone() -> Filter* {
+  return new Receiver(m_fetch);
+}
+
+void Fetch::Receiver::reset() {
+  m_head = nullptr;
+  m_body = nullptr;
+}
+
+void Fetch::Receiver::process(Event *evt) {
+  if (auto e = evt->as<MessageStart>()) {
     m_head = e->head();
     m_body = Data::make();
-  } else if (auto *data = inp->as<Data>()) {
+  } else if (auto *data = evt->as<Data>()) {
     if (m_body && data->size() > 0) {
       m_body->push(*data);
     }
-  } else if (inp->is<MessageEnd>()) {
+  } else if (evt->is<MessageEnd>()) {
     if (m_body) {
       m_fetch->on_response(m_head, m_body);
     }
@@ -51,18 +59,22 @@ void Fetch::Receiver::process(Context *ctx, Event *inp) {
   }
 }
 
+void Fetch::Receiver::dump(std::ostream &out) {
+  out << "Fetch::Receiver";
+}
+
 Fetch::Fetch(pjs::Str *host)
   : m_host(host)
 {
-  m_pipeline_connect = Pipeline::make(nullptr, Pipeline::NAMED, "Fetch Connection");
-  m_pipeline_connect->append(new Connect(m_host.get(), nullptr));
+  m_pipeline_def_connect = PipelineDef::make(nullptr, PipelineDef::NAMED, "Fetch Connection");
+  m_pipeline_def_connect->append(new Connect(m_host.get(), nullptr));
 
-  m_pipeline_request = Pipeline::make(nullptr, Pipeline::NAMED, "Fetch Request");
-  m_pipeline_request->append(new http::Mux(m_pipeline_connect, pjs::Value::undefined));
+  m_pipeline_def_request = PipelineDef::make(nullptr, PipelineDef::NAMED, "Fetch Request");
+  m_pipeline_def_request->append(new http::Mux())->add_sub_pipeline(m_pipeline_def_connect);
 
-  m_pipeline = Pipeline::make(nullptr, Pipeline::NAMED, "Fetch");
-  m_pipeline->append(new Demux(m_pipeline_request));
-  m_pipeline->append(new Receiver(this));
+  m_pipeline_def = PipelineDef::make(nullptr, PipelineDef::NAMED, "Fetch");
+  m_pipeline_def->append(new Demux())->add_sub_pipeline(m_pipeline_def_request);
+  m_pipeline_def->append(new Receiver(this));
 }
 
 Fetch::Fetch(const std::string &host)
@@ -111,19 +123,25 @@ void Fetch::fetch(
 }
 
 void Fetch::close() {
-  m_session = nullptr;
+  m_pipeline = nullptr;
   m_current_request = nullptr;
 }
 
 void Fetch::pump() {
   if (!m_current_request && !m_request_queue.empty()) {
-    if (!m_session) {
+    if (!m_pipeline) {
       auto ctx = new Context();
-      m_session = Session::make(ctx, m_pipeline);
+      m_pipeline = Pipeline::make(m_pipeline_def, ctx);
     }
 
     m_current_request = &m_request_queue.front();
-    m_session->input(m_current_request->message);
+    auto msg = m_current_request->message;
+
+    Pipeline::AutoReleasePool arp;
+    auto inp = m_pipeline->input();
+    inp->input(MessageStart::make(msg->head()));
+    if (auto *body = msg->body()) inp->input(body);
+    inp->input(MessageEnd::make());
   }
 }
 

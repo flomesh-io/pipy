@@ -36,18 +36,16 @@ namespace pipy {
 
 class ReplaceStart : public Filter {
 public:
-  ReplaceStart();
   ReplaceStart(const pjs::Value &replacement);
 
 private:
   ReplaceStart(const ReplaceStart &r);
   ~ReplaceStart();
 
-  virtual auto help() -> std::list<std::string> override;
-  virtual void dump(std::ostream &out) override;
   virtual auto clone() -> Filter* override;
   virtual void reset() override;
-  virtual void process(Context *ctx, Event *inp) override;
+  virtual void process(Event *evt) override;
+  virtual void dump(std::ostream &out) override;
 
   pjs::Value m_replacement;
   bool m_started = false;

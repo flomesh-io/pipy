@@ -43,19 +43,12 @@ Dump::Dump(const pjs::Value &tag)
 }
 
 Dump::Dump(const Dump &r)
-  : Dump(r.m_tag)
+  : Filter(r)
+  , m_tag(r.m_tag)
 {
 }
 
 Dump::~Dump() {
-}
-
-auto Dump::help() -> std::list<std::string> {
-  return {
-    "dump([tag])",
-    "Outputs events to the standard output",
-    "tag = <string|function> Tag that is printed alongside of the events",
-  };
 }
 
 void Dump::dump(std::ostream &out) {
@@ -66,19 +59,15 @@ auto Dump::clone() -> Filter* {
   return new Dump(*this);
 }
 
-void Dump::reset()
-{
-}
-
-void Dump::process(Context *ctx, Event *inp) {
+void Dump::process(Event *evt) {
   static char s_hex[] = { "0123456789ABCDEF" };
 
   std::ostream *s = &std::cout;
   auto &o = *s;
 
   pjs::Value tag;
-  if (!eval(*ctx, m_tag, tag)) {
-    output(inp);
+  if (!eval(m_tag, tag)) {
+    output(evt);
     return;
   }
 
@@ -88,7 +77,7 @@ void Dump::process(Context *ctx, Event *inp) {
   std::strftime(time_str, sizeof(time_str), "%F %T", std::localtime(&t));
 
   std::stringstream ss;
-  ss << time_str << " [dump] [context=" << ctx->id() << "] ";
+  ss << time_str << " [dump] [context=" << context()->id() << "] ";
 
   if (m_tag.to_boolean()) {
     auto s = tag.to_string();
@@ -96,13 +85,13 @@ void Dump::process(Context *ctx, Event *inp) {
     s->release();
   }
 
-  ss << inp->name();
+  ss << evt->name();
 
-  if (auto e = inp->as<SessionEnd>()) {
-    ss << " [" << e->error() << "] " << e->message();
+  if (auto end = evt->as<StreamEnd>()) {
+    ss << " [" << end->error() << "] " << end->message();
     Log::print(ss.str());
 
-  } else if (auto data = inp->as<Data>()) {
+  } else if (auto data = evt->as<Data>()) {
     ss << " [size=" << data->size() << "]";
     Log::print(ss.str());
     if (!data->empty()) {
@@ -140,7 +129,7 @@ void Dump::process(Context *ctx, Event *inp) {
     Log::print(ss.str());
   }
 
-  output(inp);
+  output(evt);
 }
 
 } // namespace pipy

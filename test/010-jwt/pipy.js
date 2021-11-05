@@ -54,7 +54,7 @@ pipy({
 
 .pipeline('verify')
   .decodeHTTPRequest()
-  .onMessageStart(
+  .handleMessageStart(
     evt => (
       ((
         token,
@@ -67,7 +67,7 @@ pipy({
   )
 
 .task('30s')
-  .onSessionStart(
+  .handleStreamStart(
     () => (
       console.log('Updating keys...'),
       _g.keystores = _JWKS_ENDPOINTS.map(
@@ -87,12 +87,12 @@ pipy({
   .replaceMessage(
     () => (
       console.log('Keys updated'),
-      new SessionEnd
+      new StreamEnd
     )
   )
 
 .pipeline('get-keys')
-  .onMessageStart(
+  .handleMessageStart(
     () => console.log(`Getting keys from ${_url.href}...`)
   )
   .replaceMessage(
@@ -109,7 +109,7 @@ pipy({
     () => _url.host
   )
   .decodeHTTPResponse()
-  .onMessage(
+  .handleMessage(
     msg => (
       _g.keystores[_i] = JSON.decode(msg.body)?.keys || [],
       _g.keystores[_i].forEach(k => k.jwk = new crypto.JWK(k)),

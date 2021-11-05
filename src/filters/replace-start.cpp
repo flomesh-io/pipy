@@ -27,10 +27,6 @@
 
 namespace pipy {
 
-ReplaceStart::ReplaceStart()
-{
-}
-
 ReplaceStart::ReplaceStart(const pjs::Value &replacement)
   : m_replacement(replacement)
 {
@@ -45,16 +41,8 @@ ReplaceStart::~ReplaceStart()
 {
 }
 
-auto ReplaceStart::help() -> std::list<std::string> {
-  return {
-    "replaceSessionStart(callback)",
-    "Replaces the initial event in a session",
-    "callback = <object|function> Replacement events or a callback function that returns replacement events",
-  };
-}
-
 void ReplaceStart::dump(std::ostream &out) {
-  out << "replaceSessionStart";
+  out << "replaceStreamStart";
 }
 
 auto ReplaceStart::clone() -> Filter* {
@@ -62,15 +50,16 @@ auto ReplaceStart::clone() -> Filter* {
 }
 
 void ReplaceStart::reset() {
+  Filter::reset();
   m_started = false;
 }
 
-void ReplaceStart::process(Context *ctx, Event *inp) {
+void ReplaceStart::process(Event *evt) {
   if (!m_started) {
     m_started = true;
     if (m_replacement.is_function()) {
-      pjs::Value arg(inp), result;
-      if (callback(*ctx, m_replacement.f(), 1, &arg, result)) {
+      pjs::Value arg(evt), result;
+      if (callback(m_replacement.f(), 1, &arg, result)) {
         output(result);
       }
     } else {
@@ -78,7 +67,7 @@ void ReplaceStart::process(Context *ctx, Event *inp) {
     }
 
   } else {
-    output(inp);
+    output(evt);
   }
 }
 

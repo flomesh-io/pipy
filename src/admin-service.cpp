@@ -85,23 +85,23 @@ AdminService::AdminService(CodebaseStore *store)
 
 void AdminService::open(int port) {
   Log::info("[codebase] Starting codebase service...");
-  auto pipeline = Pipeline::make(nullptr, Pipeline::LISTEN, "Codebase Service");
-  pipeline->append(
+  auto pipeline_def = PipelineDef::make(nullptr, PipelineDef::LISTEN, "Codebase Service");
+  pipeline_def->append(
     new http::Server(
-      [this](Context*, Message *msg) {
+      [this](Message *msg) {
         return handle(msg);
       }
     )
   );
   auto listener = Listener::get(port);
   listener->set_reserved(true);
-  listener->pipeline(pipeline);
+  listener->pipeline_def(pipeline_def);
   m_port = port;
 }
 
 void AdminService::close() {
   auto listener = Listener::get(m_port);
-  listener->pipeline(nullptr);
+  listener->pipeline_def(nullptr);
 }
 
 auto AdminService::handle(Message *req) -> Message* {
@@ -626,7 +626,7 @@ Message* AdminService::api_v1_program_DELETE() {
     worker->stop();
     for (const auto &i : Listener::all()) {
       auto l = i.second;
-      if (!l->reserved()) l->pipeline(nullptr);
+      if (!l->reserved()) l->pipeline_def(nullptr);
     }
     Status::local.update_modules();
   }

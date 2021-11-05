@@ -38,8 +38,8 @@ namespace pipy {
 
 class Data;
 class Message;
-class Pipeline;
-class Session;
+class PipelineDef;
+class Pipeilne;
 
 //
 // Fetch
@@ -96,18 +96,10 @@ private:
     Receiver(Fetch *fetch) : m_fetch(fetch) {}
 
   private:
-    virtual void dump(std::ostream &out) override {}
-
-    virtual auto clone() -> Filter* override {
-      return new Receiver(m_fetch);
-    }
-
-    virtual void reset() override {
-      m_head = nullptr;
-      m_body = nullptr;
-    }
-
-    virtual void process(Context *ctx, Event *inp) override;
+    virtual auto clone() -> Filter* override;
+    virtual void reset() override;
+    virtual void process(Event *evt) override;
+    virtual void dump(std::ostream &out) override;
 
     Fetch* m_fetch;
     pjs::Ref<http::ResponseHead> m_head;
@@ -116,11 +108,12 @@ private:
 
   pjs::Ref<pjs::Str> m_host;
   pjs::Ref<Pipeline> m_pipeline;
-  pjs::Ref<Pipeline> m_pipeline_request;
-  pjs::Ref<Pipeline> m_pipeline_connect;
-  pjs::Ref<Session> m_session;
   std::list<Request> m_request_queue;
   Request* m_current_request = nullptr;
+
+  pjs::Ref<PipelineDef> m_pipeline_def;
+  pjs::Ref<PipelineDef> m_pipeline_def_request;
+  pjs::Ref<PipelineDef> m_pipeline_def_connect;
 
   void fetch(
     Method method,

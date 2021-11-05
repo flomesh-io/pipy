@@ -37,7 +37,7 @@
 namespace pipy {
 
 class Configuration;
-class Pipeline;
+class PipelineDef;
 
 class Module {
 public:
@@ -61,7 +61,7 @@ public:
   auto path() const -> const std::string& { return m_path; }
   auto source() const -> const std::string& { return m_source; }
 
-  auto find_named_pipeline(pjs::Str *name) -> Pipeline* {
+  auto find_named_pipeline(pjs::Str *name) -> PipelineDef* {
     auto i = m_named_pipelines.find(name);
     if (i == m_named_pipelines.end()) return nullptr;
     return i->second;
@@ -79,8 +79,8 @@ private:
   pjs::Ref<pjs::Str> m_filename;
   pjs::Ref<Configuration> m_configuration;
   pjs::Ref<pjs::Class> m_context_class;
-  std::list<pjs::Ref<Pipeline>> m_pipelines;
-  std::map<pjs::Ref<pjs::Str>, pjs::Ref<Pipeline>> m_named_pipelines;
+  std::list<pjs::Ref<PipelineDef>> m_pipelines;
+  std::map<pjs::Ref<pjs::Str>, pjs::Ref<PipelineDef>> m_named_pipelines;
 
   static std::map<std::string, std::string> s_overriden_scripts;
 

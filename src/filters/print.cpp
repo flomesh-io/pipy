@@ -35,18 +35,11 @@ Print::Print() {
 }
 
 Print::Print(const Print &r)
-  : Print()
+  : Filter(r)
 {
 }
 
 Print::~Print() {
-}
-
-auto Print::help() -> std::list<std::string> {
-  return {
-    "print()",
-    "Outputs raw data to the standard output",
-  };
 }
 
 void Print::dump(std::ostream &out) {
@@ -57,11 +50,8 @@ auto Print::clone() -> Filter* {
   return new Print(*this);
 }
 
-void Print::reset() {
-}
-
-void Print::process(Context *ctx, Event *inp) {
-  if (auto *data = inp->as<Data>()) {
+void Print::process(Event *evt) {
+  if (auto *data = evt->as<Data>()) {
     for (auto chunk : data->chunks()) {
       auto data = std::get<0>(chunk);
       auto size = std::get<1>(chunk);
@@ -78,13 +68,15 @@ void Print::process(Context *ctx, Event *inp) {
         }
       }
     }
-  } else if (inp->is<MessageEnd>() || inp->is<SessionEnd>()) {
+
+  } else if (evt->is<MessageEnd>() || evt->is<StreamEnd>()) {
     if (!m_line.empty()) {
       Log::print(m_line);
       m_line.clear();
     }
   }
-  output(inp);
+
+  output(evt);
 }
 
 } // namespace pipy

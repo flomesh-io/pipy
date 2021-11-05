@@ -56,10 +56,10 @@ Listener::~Listener() {
   }
 }
 
-void Listener::pipeline(Pipeline *pipeline) {
-  if (m_pipeline.get() != pipeline) {
-    if (pipeline) {
-      if (!m_pipeline) {
+void Listener::pipeline_def(PipelineDef *pipeline_def) {
+  if (m_pipeline_def.get() != pipeline_def) {
+    if (pipeline_def) {
+      if (!m_pipeline_def) {
         try {
           start();
         } catch (std::runtime_error &err) {
@@ -67,10 +67,10 @@ void Listener::pipeline(Pipeline *pipeline) {
           throw err;
         }
       }
-    } else if (m_pipeline) {
+    } else if (m_pipeline_def) {
       close();
     }
-    m_pipeline = pipeline;
+    m_pipeline_def = pipeline_def;
   }
 }
 
@@ -85,7 +85,7 @@ void Listener::set_reserved(bool reserved) {
 
 void Listener::set_max_connections(int n) {
   m_max_connections = n;
-  if (m_pipeline) {
+  if (m_pipeline_def) {
     if (n >= 0 && m_inbounds.size() >= n) {
       pause();
     } else {

@@ -40,30 +40,20 @@ namespace pipy {
 // Exec
 //
 
-Exec::Exec()
-{
-}
-
 Exec::Exec(const pjs::Value &command)
   : m_command(command)
+  , m_output_reader(this)
 {
 }
 
 Exec::Exec(const Exec &r)
-  : Exec(r.m_command)
+  : m_command(r.m_command)
+  , m_output_reader(this)
 {
 }
 
 Exec::~Exec()
 {
-}
-
-auto Exec::help() -> std::list<std::string> {
-  return {
-    "exec(command)",
-    "Spawns a child process and connects to its input/output",
-    "command = <string|array|function> Command line to execute",
-  };
 }
 
 void Exec::dump(std::ostream &out) {
@@ -75,6 +65,7 @@ auto Exec::clone() -> Filter* {
 }
 
 void Exec::reset() {
+  Filter::reset();
   if (m_pid > 0) {
     child_process_monitor()->on_exit(m_pid, nullptr);
     kill(m_pid, SIGTERM);
@@ -91,25 +82,25 @@ void Exec::reset() {
     m_stdout->end();
     m_stdout = nullptr;
   }
-  m_session_end = false;
+  m_stream_end = false;
 }
 
-void Exec::process(Context *ctx, Event *inp) {
+void Exec::process(Event *evt) {
   static Data::Producer s_dp("exec");
 
-  if (m_session_end) return;
+  if (m_stream_end) return;
 
-  if (inp->is<SessionEnd>()) {
+  if (evt->is<StreamEnd>()) {
     if (m_stdin) {
       m_stdin->end();
     }
-    m_session_end = true;
+    m_stream_end = true;
     return;
   }
 
   if (!m_pid) {
     pjs::Value ret;
-    if (!eval(*ctx, m_command, ret)) return;
+    if (!eval(m_command, ret)) return;
 
     std::list<std::string> args;
     if (ret.is_array()) {
@@ -146,12 +137,7 @@ void Exec::process(Context *ctx, Event *inp) {
 
     m_stdout = new FileStream(out[0], &s_dp);
     m_stdout->on_delete([this]() { m_stdout = nullptr; });
-    m_stdout->on_read(
-      [=](Event *inp) {
-        output(inp);
-        ctx->group()->notify(ctx);
-      }
-    );
+    m_stdout->on_read(m_output_reader.input());
 
     m_pid = fork();
     if (m_pid == 0) {
@@ -171,8 +157,8 @@ void Exec::process(Context *ctx, Event *inp) {
       child_process_monitor()->on_exit(
         m_pid,
         [=]() {
-          output(SessionEnd::make());
-          ctx->group()->notify(ctx);
+          output(StreamEnd::make());
+          context()->group()->notify(context());
         }
       );
     }
@@ -181,12 +167,17 @@ void Exec::process(Context *ctx, Event *inp) {
   }
 
   if (m_pid > 0 && m_stdin) {
-    if (auto data = inp->as<Data>()) {
+    if (auto data = evt->as<Data>()) {
       m_stdin->write(data);
-    } else if (inp->is<MessageEnd>()) {
+    } else if (evt->is<MessageEnd>()) {
       m_stdin->flush();
     }
   }
+}
+
+void Exec::on_output(Event *evt) {
+  output(evt);
+  context()->group()->notify(context());
 }
 
 auto Exec::child_process_monitor() -> ChildProcessMonitor* {

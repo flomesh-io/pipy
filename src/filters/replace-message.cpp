@@ -33,10 +33,6 @@ namespace pipy {
 // ReplaceMessage
 //
 
-ReplaceMessage::ReplaceMessage()
-{
-}
-
 ReplaceMessage::ReplaceMessage(const pjs::Value &replacement, int size_limit)
   : m_replacement(replacement)
   , m_size_limit(size_limit)
@@ -52,15 +48,6 @@ ReplaceMessage::~ReplaceMessage()
 {
 }
 
-auto ReplaceMessage::help() -> std::list<std::string> {
-  return {
-    "replaceMessage([sizeLimit, ]replacement)",
-    "Replaces a complete message including the head and the body",
-    "sizeLimit = <number|string> Maximum number of bytes to collect from the message body",
-    "callback = <object|function> Replacement events or a callback function that returns replacement events",
-  };
-}
-
 void ReplaceMessage::dump(std::ostream &out) {
   out << "replaceMessage";
 }
@@ -70,18 +57,19 @@ auto ReplaceMessage::clone() -> Filter* {
 }
 
 void ReplaceMessage::reset() {
+  Filter::reset();
   m_head = nullptr;
   m_body = nullptr;
   m_discarded_size = 0;
 }
 
-void ReplaceMessage::process(Context *ctx, Event *inp) {
-  if (auto e = inp->as<MessageStart>()) {
+void ReplaceMessage::process(Event *evt) {
+  if (auto e = evt->as<MessageStart>()) {
     m_head = e->head();
     m_body = Data::make();
     return;
 
-  } else if (auto data = inp->as<Data>()) {
+  } else if (auto data = evt->as<Data>()) {
     if (m_body) {
       if (data->size() > 0) {
         if (m_size_limit >= 0) {
@@ -104,7 +92,7 @@ void ReplaceMessage::process(Context *ctx, Event *inp) {
       return;
     }
 
-  } else if (inp->is<MessageEnd>()) {
+  } else if (evt->is<MessageEnd>() || evt->is<StreamEnd>()) {
     if (m_body) {
       if (m_discarded_size > 0 && m_size_limit > 0) {
         Log::error(
@@ -114,7 +102,7 @@ void ReplaceMessage::process(Context *ctx, Event *inp) {
       }
       if (m_replacement.is_function()) {
         pjs::Value arg(Message::make(m_head, m_body)), result;
-        if (callback(*ctx, m_replacement.f(), 1, &arg, result)) {
+        if (callback(m_replacement.f(), 1, &arg, result)) {
           output(result);
         }
       } else {
@@ -127,7 +115,7 @@ void ReplaceMessage::process(Context *ctx, Event *inp) {
     }
   }
 
-  output(inp);
+  output(evt);
 }
 
 } // namespace pipy
