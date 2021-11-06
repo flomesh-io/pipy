@@ -66,7 +66,7 @@ title: "Part 9: Connection Pool"
   })
 
   .pipeline('session')
-    .handleSessionStart(
+    .handleStreamStart(
       () => (
 +       _targetCache = new algo.Cache(
 +         // k is a target, v is a connection ID
@@ -80,7 +80,7 @@ title: "Part 9: Connection Pool"
         )
       )
     )
-    .handleSessionEnd(
+    .handleStreamEnd(
       () => (
 +       _targetCache.clear(),
         _balancerCache.clear()

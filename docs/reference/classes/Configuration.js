@@ -161,16 +161,16 @@ class Configuration {
   handleMessageStart(handler) {}
 
   /**
-   * @param {(evt: SessionEnd) => void} handler
+   * @param {(evt: StreamEnd) => void} handler
    * @returns {Configuration} The same Configuration object.
    */
-  handleSessionEnd(handler) {}
+  handleStreamEnd(handler) {}
 
   /**
    * @param {(evt: MessageStart|MessageEnd|Data) => void} handler
    * @returns {Configuration} The same Configuration object.
    */
-  handleSessionStart(handler) {}
+  handleStreamStart(handler) {}
 
   /**
    * @returns {Configuration} The same Configuration object.
@@ -221,16 +221,16 @@ class Configuration {
   replaceMessageStart(handler) {}
 
   /**
-   * @param {(evt: SessionEnd) => Event|Message|Event[]|Message[]} [handler]
+   * @param {(evt: StreamEnd) => Event|Message|Event[]|Message[]} [handler]
    * @returns {Configuration} The same Configuration object.
    */
-  replaceSessionEnd(handler) {}
+  replaceStreamEnd(handler) {}
 
   /**
    * @param {(evt: MessageStart|MessageEnd|Data) => Event|Message|Event[]|Message[]} [handler]
    * @returns {Configuration} The same Configuration object.
    */
-  replaceSessionStart(handler) {}
+  replaceStreamStart(handler) {}
 
   /**
    * Handles HTTP requests in a stream.

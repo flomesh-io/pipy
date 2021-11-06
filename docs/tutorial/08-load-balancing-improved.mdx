@@ -104,7 +104,7 @@ Now we can do the initialization in a new "_session_" sub-pipeline in `/plugins/
   })
 
 + .pipeline('session')
-+   .handleSessionStart(
++   .handleStreamStart(
 +     () => (
 +       _balancerCache = new algo.Cache(
 +         // k is a balancer, v is a target
@@ -145,7 +145,7 @@ Lastly, when the incoming connection closes, we clear up the cache.
 
 ``` js
   .pipeline('session')
-    .handleSessionStart(
+    .handleStreamStart(
       () => (
         _balancerCache = new algo.Cache(
           // k is a balancer, v is a target
@@ -154,7 +154,7 @@ Lastly, when the incoming connection closes, we clear up the cache.
         )
       )
     )
-+   .handleSessionEnd(
++   .handleStreamEnd(
 +     () => (
 +       _balancerCache.clear()
 +     )

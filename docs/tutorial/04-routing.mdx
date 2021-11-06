@@ -145,7 +145,7 @@ a dynamic value at runtime.
 ```
 
 Now function `() => _target` will be evaluated only when a "_connection_" pipeline is
-alive and has inputs. At that point, `_target` must exist so you can use it safely.
+alive and has inputs. At that point, `_target` is assured to exist so you can use it safely.
 
 # Dynamic pipeline selection
 
@@ -157,7 +157,7 @@ with a "_404 Not Found_". That's exactly what _link_ filter was designed to do:
 
 ## Filter: link
 
-At definition, [_link()_](/reference/classes/Configuration/link) accepts one or more
+When called, [_link()_](/reference/classes/Configuration/link) accepts one or more
 pairs of parameters. In each pair, the name of a target pipeline comes first, followed
 by a callback function that decides if this sub-pipeline should be chosen. The last
 pair can have its callback function omitted, in case that it is the last default choice.
@@ -287,6 +287,41 @@ For more about pipeilnes and filters, see [Filter and pipeline](/concepts/#filte
 in _Concepts_.
 
 # Connection Sharing Problem
+
+Now if you test the code, you'll find that the routing doesn't always work.
+It feels kind of "_sticky_":
+
+``` sh
+$ curl localhost:8000/hi
+Hi, there!
+$ curl localhost:8000/ip
+Hi, there!
+
+# Try again after 10 seconds...
+
+$ curl localhost:8000/ip
+You are requesting /ip from ::ffff:127.0.0.1
+$ curl localhost:8000/hi
+You are requesting /hi from ::ffff:127.0.0.1
+```
+
+This is because the connection to an upstream is established by the _connect_ filter
+in a "_connection_" sub-pipeline, and this pipeline is created from the _muxHTTP_ filter,
+who does it only once and shares the same pipeline among all requests,
+effectively forwarding all requests via the same upstream connection.
+
+Even when each request has a different `_target` value to it, the variable is only used once
+as the connection is established. After that, the value of `_target` is no longer relevant,
+until after 10-second idle period, the "_connection_" sub-pipeline is closed and a new one
+is created, the _connect_ filter will then take on the new `_target` value and connect to
+the correct target host.
+
+To use different "_connection_" sub-pipelines for requests to different targets, we need to
+give _muxHTTP_ different values in its second parameter for different targets.
+The easiest way to do that is simply give it the value of `_target`.
+_muxHTTP_ will create a new sub-pipeline each time it sees a different value in the second parameter.
+When you give it the current value of `_target`, upstream connections will only be shared
+between requests going to the same target host.
 
 ``` js
   .pipeline('forward')
