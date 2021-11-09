@@ -271,6 +271,26 @@ void URLSearchParams::set(pjs::Str *name, const pjs::Value &value) {
   }
 }
 
+auto URLSearchParams::toObject() -> pjs::Object* {
+  auto obj = pjs::Object::make();
+  m_params->iterate_all(
+    [&](pjs::Str *k, pjs::Value &v) {
+      if (v.is_string()) {
+        obj->set(k, v);
+      } else if (v.is_array()) {
+        auto a = v.as<pjs::Array>();
+        obj->set(k, a->map(
+          [](pjs::Value &v, int, pjs::Value &v2) {
+            v2 = v;
+            return true;
+          }
+        ));
+      }
+    }
+  );
+  return obj;
+}
+
 auto URLSearchParams::to_string() const -> std::string {
   std::stringstream ss;
   bool first = true;
@@ -391,6 +411,10 @@ template<> void ClassDef<URLSearchParams>::init() {
     Value value;
     if (!ctx.arguments(1, &name, &value)) return;
     obj->as<URLSearchParams>()->set(name, value);
+  });
+
+  method("toObject", [](Context &ctx, Object *obj, Value &ret) {
+    ret.set(obj->as<URLSearchParams>()->toObject());
   });
 }
 

@@ -86,6 +86,7 @@ public:
   auto getAll(pjs::Str *name) -> pjs::Array*;
   auto get(pjs::Str *name) -> pjs::Str*;
   void set(pjs::Str *name, const pjs::Value &value);
+  auto toObject() -> pjs::Object*;
 
 private:
   URLSearchParams(pjs::Str *search);
