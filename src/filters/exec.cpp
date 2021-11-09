@@ -42,13 +42,11 @@ namespace pipy {
 
 Exec::Exec(const pjs::Value &command)
   : m_command(command)
-  , m_output_reader(this)
 {
 }
 
 Exec::Exec(const Exec &r)
   : m_command(r.m_command)
-  , m_output_reader(this)
 {
 }
 
@@ -66,37 +64,21 @@ auto Exec::clone() -> Filter* {
 
 void Exec::reset() {
   Filter::reset();
-  if (m_pid > 0) {
-    child_process_monitor()->on_exit(m_pid, nullptr);
-    kill(m_pid, SIGTERM);
-  }
+  if (m_output) m_output->close();
+  if (m_pid > 0) kill(m_pid, SIGTERM);
   m_pid = 0;
   if (m_stdin) {
-    m_stdin->on_delete(nullptr);
-    m_stdin->end();
+    m_stdin->close();
     m_stdin = nullptr;
   }
   if (m_stdout) {
-    m_stdout->on_delete(nullptr);
-    m_stdout->on_read(nullptr);
-    m_stdout->end();
+    m_stdout->close();
     m_stdout = nullptr;
   }
-  m_stream_end = false;
 }
 
 void Exec::process(Event *evt) {
   static Data::Producer s_dp("exec");
-
-  if (m_stream_end) return;
-
-  if (evt->is<StreamEnd>()) {
-    if (m_stdin) {
-      m_stdin->end();
-    }
-    m_stream_end = true;
-    return;
-  }
 
   if (!m_pid) {
     pjs::Value ret;
@@ -132,14 +114,13 @@ void Exec::process(Event *evt) {
     pipe(in);
     pipe(out);
 
-    m_stdin = new FileStream(in[1], &s_dp);
-    m_stdin->on_delete([this]() { m_stdin = nullptr; });
-
-    m_stdout = new FileStream(out[0], &s_dp);
-    m_stdout->on_delete([this]() { m_stdout = nullptr; });
-    m_stdout->on_read(m_output_reader.input());
+    m_output = EventTarget::Input::make(output());
+    m_stdin = FileStream::make(in[1], &s_dp);
+    m_stdout = FileStream::make(out[0], &s_dp);
+    m_stdout->chain(m_output);
 
     m_pid = fork();
+
     if (m_pid == 0) {
       dup2(in[0], 0);
       dup2(out[1], 1);
@@ -154,30 +135,15 @@ void Exec::process(Event *evt) {
     } else if (m_pid < 0) {
       Log::error("[exec] unable to fork");
     } else {
-      child_process_monitor()->on_exit(
-        m_pid,
-        [=]() {
-          output(StreamEnd::make());
-          context()->group()->notify(context());
-        }
-      );
+      child_process_monitor()->monitor(m_pid, m_output);
     }
 
     for (i = 0; i < argc; i++) free(argv[i]);
   }
 
   if (m_pid > 0 && m_stdin) {
-    if (auto data = evt->as<Data>()) {
-      m_stdin->write(data);
-    } else if (evt->is<MessageEnd>()) {
-      m_stdin->flush();
-    }
+    m_stdin->input()->input(evt);
   }
-}
-
-void Exec::on_output(Event *evt) {
-  output(evt);
-  context()->group()->notify(context());
 }
 
 auto Exec::child_process_monitor() -> ChildProcessMonitor* {
@@ -194,11 +160,10 @@ void Exec::ChildProcessMonitor::check() {
   auto pid = waitpid(0, &status, WNOHANG);
   if (pid > 0 && (WIFEXITED(status) || WIFSIGNALED(status))) {
     Log::debug("[exec] child process exited [pid = %d]", pid);
-    auto i = m_on_exit.find(pid);
-    if (i != m_on_exit.end()) {
-      auto f = i->second;
-      m_on_exit.erase(i);
-      if (f) f();
+    auto i = m_processes.find(pid);
+    if (i != m_processes.end()) {
+      i->second->input(StreamEnd::make());
+      m_processes.erase(i);
     }
   }
   schedule();

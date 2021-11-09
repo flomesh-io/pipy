@@ -37,39 +37,40 @@ class Data;
 // FileStream
 //
 
-class FileStream : public pjs::Pooled<FileStream> {
+class FileStream :
+  public pjs::RefCount<FileStream>,
+  public pjs::Pooled<FileStream>,
+  public EventFunction
+{
 public:
-  FileStream(int fd, Data::Producer *dp);
-  ~FileStream();
+  static auto make(int fd, Data::Producer *dp) -> FileStream* {
+    return new FileStream(fd, dp);
+  }
 
   auto fd() const -> int { return m_fd; }
-
   void set_buffer_limit(size_t size) { m_buffer_limit = size; }
-
-  void on_read(EventTarget::Input *input) { m_reader = input; }
-  void on_delete(const std::function<void()> &callback) { m_on_delete = callback; }
-
-  void write(const pjs::Ref<Data> &data);
-  void flush();
-  void end();
+  void close();
 
 private:
+  FileStream(int fd, Data::Producer *dp);
+
+  virtual void on_event(Event *evt) override;
+
   int m_fd;
   Data::Producer* m_dp;
   asio::posix::stream_descriptor m_stream;
-  pjs::Ref<EventTarget::Input> m_reader;
-  std::function<void()> m_on_delete;
   Data m_buffer;
   size_t m_buffer_limit = 0;
   bool m_overflowed = false;
   bool m_pumping = false;
-  bool m_reading_ended = false;
-  bool m_writing_ended = false;
+  bool m_ended = false;
 
   void read();
+  void write(Data *data);
+  void end();
   void pump();
-  void close();
-  void free();
+
+  friend class pjs::RefCount<FileStream>;
 };
 
 } // namespace pipy

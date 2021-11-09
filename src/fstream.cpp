@@ -38,45 +38,24 @@ FileStream::FileStream(int fd, Data::Producer *dp)
   read();
 }
 
-FileStream::~FileStream() {
-  if (m_on_delete) {
-    m_on_delete();
+void FileStream::close() {
+  std::error_code ec;
+  m_stream.close(ec);
+
+  if (ec) {
+    Log::error("FileStream: %p, error closing stream [fd = %d], %s", this, m_fd, ec.message().c_str());
+  } else {
+    Log::debug("FileStream: %p, stream closed [fd = %d]", this, m_fd);
   }
 }
 
-void FileStream::write(const pjs::Ref<Data> &data) {
-  if (!m_writing_ended) {
-    if (data->size() > 0) {
-      if (!m_overflowed) {
-        if (m_buffer_limit > 0 && m_buffer.size() >= m_buffer_limit) {
-          Log::error(
-            "FileStream: %p, buffer overflow, size = %d, fd = %d",
-            this, m_fd, m_buffer.size());
-          m_overflowed = true;
-        }
-      }
-      if (!m_overflowed) {
-        m_buffer.push(*data);
-        if (m_buffer.size() >= SEND_BUFFER_FLUSH_SIZE) pump();
-      }
-    } else {
-      pump();
-    }
-  }
-}
-
-void FileStream::flush() {
-  if (!m_writing_ended) {
+void FileStream::on_event(Event *evt) {
+  if (auto data = evt->as<Data>()) {
+    write(data);
+  } else if (evt->is<MessageEnd>()) {
     pump();
-  }
-}
-
-void FileStream::end() {
-  if (!m_writing_ended) {
-    m_writing_ended = true;
-    pump();
-    close();
-    free();
+  } else if (evt->is<StreamEnd>()) {
+    end();
   }
 }
 
@@ -88,40 +67,68 @@ void FileStream::read() {
 
     if (n > 0) {
       buffer->pop(buffer->size() - n);
-      if (m_reader) {
-        m_reader->input(buffer);
-        m_reader->input(Data::flush());
-      }
+      output(buffer);
+      output(Data::flush());
     }
 
     if (ec) {
       if (ec == asio::error::eof) {
         Log::debug("FileStream: %p, end of stream [fd = %d]", this, m_fd);
-        if (m_reader) {
-          pjs::Ref<StreamEnd> evt(StreamEnd::make(StreamEnd::NO_ERROR));
-          m_reader->input(evt);
-        }
+        output(StreamEnd::make(StreamEnd::NO_ERROR));
       } else if (ec != asio::error::operation_aborted) {
         auto msg = ec.message();
         Log::warn(
           "FileStream: %p, error reading from stream [fd = %d]: %s",
           this, m_fd, msg.c_str());
-        if (m_reader) {
-          pjs::Ref<StreamEnd> evt(StreamEnd::make(StreamEnd::READ_ERROR));
-          m_reader->input(evt);
-        }
+        output(StreamEnd::make(StreamEnd::READ_ERROR));
       }
-      m_reading_ended = true;
-      free();
 
     } else {
       read();
     }
+
+    release();
   };
 
   m_stream.async_read_some(
     DataChunks(buffer->chunks()),
     on_received);
+
+  retain();
+}
+
+void FileStream::write(Data *data) {
+  if (!m_ended) {
+    if (data->empty()) {
+      pump();
+      return;
+    }
+
+    if (!m_overflowed) {
+      if (m_buffer_limit > 0 && m_buffer.size() >= m_buffer_limit) {
+        Log::error(
+          "FileStream: %p, buffer overflow, size = %d, fd = %d",
+          this, m_fd, m_buffer.size());
+        m_overflowed = true;
+      }
+    }
+
+    if (!m_overflowed) {
+      m_buffer.push(*data);
+      if (m_buffer.size() >= SEND_BUFFER_FLUSH_SIZE) pump();
+    }
+  }
+}
+
+void FileStream::end() {
+  if (!m_ended) {
+    m_ended = true;
+    if (m_buffer.empty()) {
+      close();
+    } else {
+      pump();
+    }
+  }
 }
 
 void FileStream::pump() {
@@ -138,7 +145,6 @@ void FileStream::pump() {
         "FileStream: %p, error writing to stream [fd = %d], %s",
         this, m_fd, msg.c_str());
       m_buffer.clear();
-      m_writing_ended = true;
 
     } else {
       pump();
@@ -148,10 +154,9 @@ void FileStream::pump() {
       m_overflowed = false;
     }
 
-    if (m_writing_ended) {
-      close();
-      free();
-    }
+    if (m_ended) close();
+
+    release();
   };
 
   m_stream.async_write_some(
@@ -159,26 +164,9 @@ void FileStream::pump() {
     on_sent
   );
 
+  retain();
+
   m_pumping = true;
-}
-
-void FileStream::close() {
-  if (m_pumping) return;
-
-  std::error_code ec;
-  m_stream.close(ec);
-
-  if (ec) {
-    Log::error("FileStream: %p, error closing stream [fd = %d], %s", this, m_fd, ec.message().c_str());
-  } else {
-    Log::debug("FileStream: %p, stream closed [fd = %d]", this, m_fd);
-  }
-}
-
-void FileStream::free() {
-  if (!m_pumping && m_reading_ended && m_writing_ended) {
-    delete this;
-  }
 }
 
 } // namespace pipy

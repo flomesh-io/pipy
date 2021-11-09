@@ -54,22 +54,11 @@ private:
   virtual void dump(std::ostream &out) override;
 
 private:
-  struct OutputReader : public EventTarget {
-    Exec *filter;
-    OutputReader(Exec *f) : filter(f) {}
-    virtual void on_event(Event *evt) override {
-      filter->on_output(evt);
-    }
-  };
-
   pjs::Value m_command;
   pid_t m_pid = 0;
-  FileStream* m_stdin = nullptr;
-  FileStream* m_stdout = nullptr;
-  OutputReader m_output_reader;
-  bool m_stream_end = false;
-
-  void on_output(Event *evt);
+  pjs::Ref<FileStream> m_stdin;
+  pjs::Ref<FileStream> m_stdout;
+  pjs::Ref<EventTarget::Input> m_output;
 
   class ChildProcessMonitor {
   public:
@@ -77,14 +66,14 @@ private:
       schedule();
     }
 
-    void on_exit(int pid, std::function<void()> callback) {
-      m_on_exit[pid] = callback;
+    void monitor(int pid, EventTarget::Input *output) {
+      m_processes[pid] = output;
     }
 
   private:
     void schedule();
     void check();
-    std::map<int, std::function<void()>> m_on_exit;
+    std::map<int, pjs::Ref<EventTarget::Input>> m_processes;
     Timer m_timer;
   };
 
