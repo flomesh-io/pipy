@@ -97,13 +97,10 @@ template<> void ClassDef<pipy::Data>::init() {
   super<Event>();
 
   ctor([](Context &ctx) -> Object* {
-    int size = 0;
     Str *str, *encoding = nullptr;
     pipy::Data *data;
     try {
-      if (ctx.try_arguments(0, &size)) {
-        return s_script_data_producer.make(size, 0);
-      } else if (ctx.try_arguments(1, &str, &encoding)) {
+      if (ctx.try_arguments(1, &str, &encoding)) {
         auto enc = EnumDef<pipy::Data::Encoding>::value(encoding, pipy::Data::Encoding::UTF8);
         if (int(enc) < 0) {
           ctx.error("unknown encoding");

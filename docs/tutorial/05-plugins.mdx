@@ -114,7 +114,7 @@ pipy()
 ```
 
 In this empty "_request_" pipeline, we chain the other two "_request_" pipelines together
-from the plugins. We do this with [_use()_](/reference/classes/Configuration/use),
+from the plugins. We do this with [_use()_](/reference/Configuration/use),
 giving it the filenames where the pipelines reside, as well as the name under which
 pipelines can be found.
 
@@ -193,7 +193,7 @@ Remember that this is a dynamic value, we should wrap it in a function.
 Next, we define the global variable. We can't define it the way we used to though,
 because that way it'll only be visible in `proxy.js` but not in `router.js`.
 
-We define it with [_export()_](/reference/classes/Configuration/export) in `proxy.js`
+We define it with [_export()_](/reference/Configuration/export) in `proxy.js`
 so that it can be "_imported_" from other files. It has an initial value of `false`.
 
 ``` js
@@ -260,14 +260,14 @@ for the further expansion of our proxy's feature set.
 
 ## Takeaways
 
-1. Use [_use()_](/reference/classes/Configuration/use) to link to pipelines
+1. Use [_use()_](/reference/Configuration/use) to link to pipelines
    defined in other files and form a _plugin chain_. It is the key to
    an extendable plugin architecture.
 
-2. Global variables defined with [_pipy()_](/reference/functions/pipy)
+2. Global variables defined with [_pipy()_](/reference/pipy)
    are visible only within its definition file. To shared global variables
-   across different files, use [_export()_](/reference/classes/Configuration/export)
-   and [_import()_](/reference/classes/Configuration/import).
+   across different files, use [_export()_](/reference/Configuration/export)
+   and [_import()_](/reference/Configuration/import).
 
 ## What's next?
 

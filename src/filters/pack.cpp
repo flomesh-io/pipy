@@ -50,10 +50,10 @@ Pack::Pack(int batch_size, pjs::Object *options)
     if (val.is_number()) {
       m_vacancy = val.n();
       if (m_vacancy < 0 || m_vacancy > 1) {
-        throw std::runtime_error("options.m_vacancy expects a number between 0 and 1");
+        throw std::runtime_error("options.vacancy expects a number between 0 and 1");
       }
     } else if (!val.is_undefined()) {
-      throw std::runtime_error("options.m_vacancy expects a number");
+      throw std::runtime_error("options.vacancy expects a number");
     }
   }
 }

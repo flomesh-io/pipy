@@ -1,0 +1,10 @@
+/**
+ *
+ */
+class MessageEnd {
+
+  /**
+   *
+   */
+  constructor() {}
+}

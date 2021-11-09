@@ -33,21 +33,12 @@ const FONT_TEXT = 'arial,sans-serif';
 const FONT_CODE = 'menlo,monaco,"Courier New",monospace';
 
 const useStyles = makeStyles(theme => ({
-  root: {
+  head: {
     position: 'absolute',
     top: 0,
-    bottom: 0,
     left: 0,
     right: 0,
-    display: 'flex',
-    flexDirection: 'column',
-    flexWrap: 'nowrap',
-    alignItems: 'stretch',
-    overflow: 'hidden',
-  },
-
-  head: {
-    minHeight: theme.TOOLBAR_HEIGHT,
+    height: theme.TOOLBAR_HEIGHT,
     display: 'flex',
     flexDirection: 'row',
     flexWrap: 'nowrap',
@@ -84,19 +75,21 @@ const useStyles = makeStyles(theme => ({
     },
   },
 
-  body: {
-    display: 'flex',
-    paddingTop: theme.spacing(2),
-    flexDirection: 'row',
-    flexWrap: 'nowrap',
-    alignItems: 'flex-start',
-    overflowX: 'hidden',
-    overflowY: 'scroll',
-  },
-
   nav: {
-    minWidth: '300px',
-    padding: theme.spacing(1),
+    position: 'absolute',
+    top: theme.TOOLBAR_HEIGHT,
+    bottom: 0,
+    width: '300px',
+    padding: theme.spacing(2),
+    overflowY: 'scroll',
+    scrollbarWidth: 'thin',
+    '&::-webkit-scrollbar': {
+      width: '8px',
+      backgroundColor: '#303030',
+    },
+    '&::-webkit-scrollbar-thumb': {
+      backgroundColor: '#383838',
+    },
   },
 
   navTitle: {
@@ -107,6 +100,10 @@ const useStyles = makeStyles(theme => ({
   },
 
   navItem: {
+    height: '26px',
+  },
+
+  navItemText: {
     color: theme.palette.text.secondary,
     cursor: 'pointer',
     '&:hover': {
@@ -114,12 +111,22 @@ const useStyles = makeStyles(theme => ({
     },
   },
 
-  navItemCurrent: {
+  navItemTextParent: {
     color: theme.palette.text.primary,
     cursor: 'pointer',
     '&:hover': {
       textDecorationLine: 'underline',
     },
+    fontWeight: 'bold',
+  },
+
+  navItemTextCurrent: {
+    color: theme.palette.primary.main,
+    cursor: 'pointer',
+    '&:hover': {
+      textDecorationLine: 'underline',
+    },
+    fontWeight: 'bold',
   },
 
   navGroup: {
@@ -127,8 +134,12 @@ const useStyles = makeStyles(theme => ({
   },
 
   toc: {
-    minWidth: '300px',
-    padding: theme.spacing(1),
+    position: 'absolute',
+    top: theme.TOOLBAR_HEIGHT,
+    bottom: 0,
+    width: '300px',
+    right: 0,
+    padding: theme.spacing(2),
   },
 
   tocTitle: {
@@ -155,8 +166,20 @@ const useStyles = makeStyles(theme => ({
   },
 
   main: {
-    flexGrow: 1,
-    paddingBottom: theme.spacing(5),
+    position: 'absolute',
+    top: theme.TOOLBAR_HEIGHT,
+    bottom: 0,
+    left: '300px',
+    right: '300px',
+    padding: theme.spacing(2),
+    overflowY: 'scroll',
+    '&::-webkit-scrollbar': {
+      width: '8px',
+      backgroundColor: '#303030',
+    },
+    '&::-webkit-scrollbar-thumb': {
+      backgroundColor: '#383838',
+    },
   },
 
   title: {
@@ -293,7 +316,6 @@ const LANGNAMES = {
 export const query = graphql`
   query(
     $id: String
-    $kind: String
     $name: String
     $parent: String
   ) {
@@ -308,13 +330,22 @@ export const query = graphql`
       }
     }
     documentationJs(
-      kind: {eq: $kind}
       name: {eq: $name}
       memberof: {eq: $parent}
     ) {
       name
+      memberof
       members {
         instance {
+          name
+          kind
+          description {
+            internal {
+              content
+            }
+          }
+        }
+        static {
           name
           kind
           description {
@@ -392,7 +423,7 @@ const DocLink = ({ children, href }) => {
         {children}
         {<ExternalLinkIcon fontSize="small" className={classes.externalLinkIcon}/>}
       </a>
-    )
+    );
   }
 }
 
@@ -447,9 +478,101 @@ const SourceCode = ({ children, className }) => {
   );
 }
 
-const InstanceMethods = () => {
+const Classes = () => {
   const classes = useStyles();
-  const { jsdoc, lang } = React.useContext(DocContext);
+  let { jsdoc, lang, path } = React.useContext(DocContext);
+  if (path.endsWith('/')) path = path.substring(0, path.length - 1);
+  const members = jsdoc.members.static.filter(m => m.kind === 'class');
+  return (
+    members.map(
+      m => (
+        <React.Fragment>
+          <Link
+            className={classes.memberName}
+            to={`/docs/${lang}/${path}/${m.name}`}
+          >
+            {m.name}
+          </Link>
+          <p className={classes.description}>
+            {m.description?.internal?.content || '[No description]'}
+          </p>
+        </React.Fragment>
+      )
+    )
+  );
+}
+
+const Constructor = () => {
+  const classes = useStyles();
+  let { jsdoc, lang, path } = React.useContext(DocContext);
+  if (path.endsWith('/')) path = path.substring(0, path.length - 1);
+  return (
+    <React.Fragment>
+      <Link
+        className={classes.memberName}
+        to={`/docs/${lang}/${path}/constructor`}
+      >
+        new {jsdoc.memberof ? jsdoc.memberof + '.' : ''}{jsdoc.name}()
+      </Link>
+      <p className={classes.description}>
+        Create an instance of {jsdoc.name}.
+      </p>
+    </React.Fragment>
+  );
+}
+
+const Properties = () => {
+  const classes = useStyles();
+  let { jsdoc, lang, path } = React.useContext(DocContext);
+  if (path.endsWith('/')) path = path.substring(0, path.length - 1);
+  const members = jsdoc.members.instance.filter(m => m.kind === 'member');
+  return (
+    members.map(
+      m => (
+        <React.Fragment>
+          <Link
+            className={classes.memberName}
+            to={`/docs/${lang}/${path}/${m.name}`}
+          >
+            {m.name}
+          </Link>
+          <p className={classes.description}>
+            {m.description?.internal?.content || '[No description]'}
+          </p>
+        </React.Fragment>
+      )
+    )
+  );
+}
+
+const StaticProperties = () => {
+  const classes = useStyles();
+  let { jsdoc, lang, path } = React.useContext(DocContext);
+  if (path.endsWith('/')) path = path.substring(0, path.length - 1);
+  const members = jsdoc.members.static.filter(m => m.kind === 'member');
+  return (
+    members.map(
+      m => (
+        <React.Fragment>
+          <Link
+            className={classes.memberName}
+            to={`/docs/${lang}/${path}/${m.name}`}
+          >
+            {m.name}
+          </Link>
+          <p className={classes.description}>
+            {m.description?.internal?.content || '[No description]'}
+          </p>
+        </React.Fragment>
+      )
+    )
+  );
+}
+
+const Methods = () => {
+  const classes = useStyles();
+  let { jsdoc, lang, path } = React.useContext(DocContext);
+  if (path.endsWith('/')) path = path.substring(0, path.length - 1);
   const members = jsdoc.members.instance.filter(m => m.kind === 'function');
   return (
     members.map(
@@ -457,7 +580,7 @@ const InstanceMethods = () => {
         <React.Fragment>
           <Link
             className={classes.memberName}
-            to={`/docs/${lang}/reference/classes/${jsdoc.name}/${m.name}`}
+            to={`/docs/${lang}/${path}/${m.name}`}
           >
             {m.name}()
           </Link>
@@ -470,7 +593,31 @@ const InstanceMethods = () => {
   );
 }
 
-const FunctionParameters = () => {
+const StaticMethods = () => {
+  const classes = useStyles();
+  let { jsdoc, lang, path } = React.useContext(DocContext);
+  if (path.endsWith('/')) path = path.substring(0, path.length - 1);
+  const members = jsdoc.members.static.filter(m => m.kind === 'function');
+  return (
+    members.map(
+      m => (
+        <React.Fragment>
+          <Link
+            className={classes.memberName}
+            to={`/docs/${lang}/${path}/${m.name}`}
+          >
+            {m.name}()
+          </Link>
+          <p className={classes.description}>
+            {m.description?.internal?.content || '[No description]'}
+          </p>
+        </React.Fragment>
+      )
+    )
+  );
+}
+
+const Parameters = () => {
   const classes = useStyles();
   const { jsdoc } = React.useContext(DocContext);
   const params = jsdoc.params;
@@ -482,7 +629,7 @@ const FunctionParameters = () => {
             <span className={classes.parameterName}>{p.name}</span>
           </h6>
           <p className={classes.description}>
-            {p.description.internal.content}
+            {p.description?.internal?.content || '[No description]'}
           </p>
         </React.Fragment>
       )
@@ -490,12 +637,12 @@ const FunctionParameters = () => {
   );
 }
 
-const FunctionReturns = () => {
+const ReturnValue = () => {
   const classes = useStyles();
   const { jsdoc } = React.useContext(DocContext);
   return (
     <p className={classes.description}>
-      {jsdoc.returns[0].description.internal.content}
+      {jsdoc.returns[0].description.internal.content || '[No description]'}
     </p>
   );
 }
@@ -512,20 +659,29 @@ const components = {
   code: SourceCode,
   inlineCode: makeStyledTag('span', 'inlineCode'),
 
-  InstanceMethods,
-  FunctionParameters,
-  FunctionReturns,
+  Classes,
+  Constructor,
+  Properties,
+  Methods,
+  StaticProperties,
+  StaticMethods,
+  Parameters,
+  ReturnValue,
 };
 
-const DocNavItem = ({ label, path }) => {
-  const { lang } = React.useContext(DocContext);
+const DocNavItem = ({ label, path, uri }) => {
   const classes = useStyles();
   const loc = useLocation();
-  const uri = `/docs/${lang}/${path}`;
+  const { lang } = React.useContext(DocContext);
+  if (!uri) uri = `/docs/${lang}/${path}`;
+  let textClass = classes.navItemText;
+  if (loc.pathname === uri) textClass = classes.navItemTextCurrent;
+  else if (loc.pathname.startsWith(uri + '/')) textClass = classes.navItemTextParent;
   return (
-    <ListItem key={path}>
+    <ListItem key={path} className={classes.navItem}>
       <ListItemText
-        className={loc.pathname === uri ? classes.navItemCurrent : classes.navItem}
+        disableTypography
+        className={textClass}
         primary={label}
         onClick={() => navigate(uri)}
       />
@@ -535,18 +691,30 @@ const DocNavItem = ({ label, path }) => {
 
 const docNavGroupExpandState = {};
 
-const DocNavGroup = ({ label, path, children }) => {
+const DocNavGroup = ({ label, path, uri, children }) => {
   const classes = useStyles();
-  const [open, setOpen] = React.useState(Boolean(docNavGroupExpandState[path]));
+  const loc = useLocation();
+  const { lang } = React.useContext(DocContext);
+  const baseUri = uri || `/docs/${lang}/${path}`;
+  let textClass = classes.navItemText, expand = false;
+  if (loc.pathname === uri) {
+    textClass = classes.navItemTextCurrent;
+  } else if (loc.pathname.startsWith(baseUri + '/')) {
+    textClass = classes.navItemTextParent;
+    expand = true;
+  }
+  const [open, setOpen] = React.useState(Boolean(docNavGroupExpandState[path] || expand));
   const handleClickExpand = () => {
+    if (uri) navigate(uri);
     setOpen(!open);
     docNavGroupExpandState[path] = !open;
   }
   return (
     <React.Fragment>
-      <ListItem key={path}>
+      <ListItem key={path} className={classes.navItem}>
         <ListItemText
-          className={classes.navItem}
+          disableTypography
+          className={textClass}
           primary={label}
           onClick={handleClickExpand}
         />
@@ -567,9 +735,17 @@ const DocNavList = ({ nodes, prefix }) => {
   const pages = nodes.filter(
     ({ fields: { path }, frontmatter: { api } }) => {
       if (!path.startsWith(prefix)) return false;
-      if (api && api.endsWith('()')) {
-        const head = api[0];
-        if (head.toUpperCase() === head) return false;
+      if (api) {
+        const i = api.lastIndexOf('.');
+        if (i >= 0) {
+          const head = api[i + 1];
+          if (head.toLowerCase() === head) {
+            let name = api.substring(0, i);
+            let j = name.lastIndexOf('.');
+            if (j >= 0) name = name.substring(j + 1);
+            if (name[0] === name[0].toUpperCase()) return false; // skip members
+          }
+        }
       }
       return true;
     }
@@ -582,8 +758,15 @@ const DocNavList = ({ nodes, prefix }) => {
       const segs = path.split('/');
       const name = segs.pop();
       let t = tree;
-      for (const s of segs) if (s) t = t[s] || (t[s] = {});
-      t[name] = i;
+      for (const s of segs) {
+        if (s) {
+          const c = t.children || (t.children = {});
+          t = c[s] || (c[s] = {});
+        }
+      }
+      const c = t.children || (t.children = {});
+      t = c[name] || (c[name] = {});
+      t.id = i;
     }
   );
 
@@ -591,20 +774,28 @@ const DocNavList = ({ nodes, prefix }) => {
 }
 
 const DocNavTree = ({ prefix, pages, tree }) => {
+  const { lang } = React.useContext(DocContext);
+  const children = tree.children;
   return (
-    Object.keys(tree).sort().map(
+    Object.keys(children).sort().map(
       k => {
-        const v = tree[k];
-        if (typeof v === 'number') {
-          const { fields: { path }, frontmatter: { title }} = pages[v];
-          return <DocNavItem key={path} label={title} path={path}/>
-        } else {
+        const v = children[k];
+        let path, uri, label = k;
+        if (typeof v.id === 'number') {
+          const page = pages[v.id];
+          label = page.frontmatter.title;
+          path = page.fields.path;
+          uri = `/docs/${lang}/${path}`;
+        }
+        if (v.children) {
           const path = `${prefix}/${k}`;
           return (
-            <DocNavGroup key={path} path={path} label={k}>
+            <DocNavGroup key={path} label={label} path={path} uri={uri}>
               <DocNavTree prefix={path} pages={pages} tree={v}/>
             </DocNavGroup>
           );
+        } else {
+          return <DocNavItem key={path} label={label} path={path} uri={uri}/>
         }
       }
     )
@@ -634,75 +825,66 @@ const DocPage = ({ data }) => {
 
   return (
     <DocContext.Provider value={{ jsdoc: data.documentationJs, lang, path }}>
-      <div className={classes.root}>
-        <div className={classes.head}>
-          <div className={classes.home}>
-            <img
-              src={PipyLogo}
-              alt="Home"
-              className={classes.logo}
-              onClick={() => navigate('/')}
-            />
-          </div>
-          <div className={classes.tools}>
-            <LangSelect/>
-          </div>
+      <div className={classes.head}>
+        <div className={classes.home}>
+          <img
+            src={PipyLogo}
+            alt="Home"
+            className={classes.logo}
+            onClick={() => navigate('/')}
+          />
         </div>
-        <div className={classes.body}>
-          <div className={classes.nav}>
-            <div className={classes.logoBox}>
-              <Typography component="h1" className={classes.navTitle}>
-                Documentation
-              </Typography>
-            </div>
-            <List dense>
-              <DocNavItem label="Overview" path="overview"/>
-              <DocNavItem label="Quick Start" path="quick-start"/>
-              <DocNavItem label="Concepts" path="concepts"/>
-              <DocNavGroup label="Tutorial" path="tutorial">
-                <DocNavList nodes={data.allMdx.nodes} prefix="tutorial"/>
-              </DocNavGroup>
-              <DocNavGroup label="Reference" path="reference">
-                <DocNavGroup label="Functions" path="reference/functions">
-                  <DocNavList nodes={data.allMdx.nodes} prefix="reference/functions"/>
-                </DocNavGroup>
-                <DocNavGroup label="Classes" path="reference/classes">
-                  <DocNavList nodes={data.allMdx.nodes} prefix="reference/classes"/>
-                </DocNavGroup>
-              </DocNavGroup>
-            </List>
-          </div>
-          <div className={classes.main}>
-            <Typography component="h1" className={classes.title}>
-              {data.mdx.frontmatter.title}
-            </Typography>
-            <MDXProvider components={components}>
-              <MDXRenderer headings={data.mdx.headings}>
-                {data.mdx.body}
-              </MDXRenderer>
-            </MDXProvider>
-          </div>
-          <div className={classes.toc}>
-            <Typography component="h1" className={classes.tocTitle}>
-              Table of Contents
-            </Typography>
-            <ul className={classes.tocList}>
-              {data.mdx.headings.map(
-                ({ value, depth }) => (
-                  <Link
-                    key={value}
-                    to={'#' + slugger.slug(value)}
-                    className={classes.tocListItem}
-                  >
-                    <Typography component="li" style={{ marginInlineStart: depth * 10 }}>
-                      {value}
-                    </Typography>
-                  </Link>
-                )
-              )}
-            </ul>
-          </div>
+        <div className={classes.tools}>
+          <LangSelect/>
         </div>
+      </div>
+      <div className={classes.nav}>
+        <div className={classes.logoBox}>
+          <Typography component="h1" className={classes.navTitle}>
+            Documentation
+          </Typography>
+        </div>
+        <List dense>
+          <DocNavItem label="Overview" path="overview"/>
+          <DocNavItem label="Quick Start" path="quick-start"/>
+          <DocNavItem label="Concepts" path="concepts"/>
+          <DocNavGroup label="Tutorial" path="tutorial">
+            <DocNavList nodes={data.allMdx.nodes} prefix="tutorial"/>
+          </DocNavGroup>
+          <DocNavGroup label="Reference" path="reference">
+            <DocNavList nodes={data.allMdx.nodes} prefix="reference"/>
+          </DocNavGroup>
+        </List>
+      </div>
+      <div className={classes.main}>
+        <Typography component="h1" className={classes.title}>
+          {data.mdx.frontmatter.title}
+        </Typography>
+        <MDXProvider components={components}>
+          <MDXRenderer headings={data.mdx.headings}>
+            {data.mdx.body}
+          </MDXRenderer>
+        </MDXProvider>
+      </div>
+      <div className={classes.toc}>
+        <Typography component="h1" className={classes.tocTitle}>
+          Table of Contents
+        </Typography>
+        <ul className={classes.tocList}>
+          {data.mdx.headings.map(
+            ({ value, depth }) => (
+              <Link
+                key={value}
+                to={'#' + slugger.slug(value)}
+                className={classes.tocListItem}
+              >
+                <Typography component="li" style={{ marginInlineStart: depth * 10 }}>
+                  {value}
+                </Typography>
+              </Link>
+            )
+          )}
+        </ul>
       </div>
     </DocContext.Provider>
   );

@@ -65,11 +65,11 @@ Simply put it, on level 4 you see "_streams_" while on level 7 you see discrete
 ## Filter: demuxHTTP
 
 A _port pipeline_ swallows incoming data as a sequence of
-[_Data_](/reference/classes/Data) events, each holding a small chunk of
+[_Data_](/reference/Data) events, each holding a small chunk of
 the TCP stream. What **demuxHTTP** does is "_divide_" the TCP stream
 into separate HTTP messages and then wraps each of them between
-[_MessageStart_](/reference/classes/MessageStart) and
-[_MessageEnd_](/reference/classes/MessageEnd) events for further processing.
+[_MessageStart_](/reference/MessageStart) and
+[_MessageEnd_](/reference/MessageEnd) events for further processing.
 
 Each of those messages extracted from a TCP stream should to be handled
 in an independent pipeline different than **demuxHTTP**'s pipeline that works

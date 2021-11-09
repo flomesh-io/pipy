@@ -84,7 +84,7 @@ Next, we change `/proxy.js` to get its configuration from `/config/proxy.json`:
 + (JSON.decode(pipy.load('config/proxy.json')))
 ```
 
-> We use [_JSON.decode()_](/reference/classes/JSON/decode) instead of the standard
+> We use [_JSON.decode()_](/reference/JSON/decode) instead of the standard
 > [_JSON.parse()_](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/JSON/parse)
 > because _JSON.decode()_ works with binary data whereas _JSON.parse()_ only works with strings.
 
@@ -143,8 +143,8 @@ which is a better way of organizing your script when it has a lot of configurabl
 ## Takeaways
 
 1. Separating code and data is a good practice in code organizing and makes your code easier to configure.
-2. Use [_pipy.load()_](/reference/functions/pipy.load) to read files as binary data.
-3. Use [_JSON.decode()_](/reference/classes/JSON/decode) to decode JSON from binary data.
+2. Use [_pipy.load()_](/reference/pipy.load) to read files as binary data.
+3. Use [_JSON.decode()_](/reference/JSON/decode) to decode JSON from binary data.
 
 ## What's next?
 

@@ -10,7 +10,7 @@ covering other common proxy features. The first one would be "_load balancing_".
 
 Pipy provides a number of builtin classes to make things easier for building a load balancing proxy.
 These classes implemented a few assorted load balancing algorithms, all to be used in the same way.
-In this tutorial, we'll be using [_algo.RoundRobinLoadBalancer_](/reference/classes/algo/RoundRobinLoadBalancer),
+In this tutorial, we'll be using [_algo.RoundRobinLoadBalancer_](/reference/algo/RoundRobinLoadBalancer),
 which implements the most commonly used "_round-robin_" algorithm.
 
 To construct a _RoundRobinLoadBalancer_ object, you need a list of targets with their weights:
@@ -35,7 +35,7 @@ new algo.RoundRobinLoadBalancer([
 ```
 
 With that _RoundRobinLoadBalancer_, each time you call its
-[_select()_](/reference/classes/algo/RoundRobinLoadBalancer/select) method, it will
+[_select()_](/reference/algo/RoundRobinLoadBalancer/select) method, it will
 give you one of the targets, in a round-robin fashion.
 
 # Take apart router.js
@@ -332,7 +332,7 @@ You've also learned a good trick to transform a JSON object in a one-liner.
 
 ## Takeaways
 
-1. Use [_algo.RoundRobinLoadBalancer_](/reference/classes/algo/RoundRobinLoadBalancer)
+1. Use [_algo.RoundRobinLoadBalancer_](/reference/algo/RoundRobinLoadBalancer)
    (and with a few others similiar to it) to automatically select a target out of a group,
    with respect to their weights.
 

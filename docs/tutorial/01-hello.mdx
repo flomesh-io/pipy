@@ -63,12 +63,12 @@ pipy()
 
 Take a bit of time examining the code. Here's what's going on:
 
-1. At the very first line, the builtin global function [_pipy()_](/reference/functions/pipy)
-   is called. It returns a [_Configuration_](/reference/classes/Configuration)
+1. At the very first line, the builtin global function [_pipy()_](/reference/pipy)
+   is called. It returns a [_Configuration_](/reference/Configuration)
    object which we'll be using later on to define _pipelines_ and _filters_ we need.
 
 2. At line 3, we define a _port pipeline_ that listens on port 8080 by calling method
-   [_listen_()](/reference/classes/Configuration/listen) of the _Configuration_ object
+   [_listen_()](/reference/Configuration/listen) of the _Configuration_ object
    returned from _pipy()_ earlier. Method _listen()_ itself returns the same _Configuration_
    object, so we can continually call other methods on it to define more pipelines and
    filters. That's exactly what we are going to do next.
@@ -139,8 +139,8 @@ while you created and ran a simple Pipy program.
 ## Takeaways
 
 * A Pipy program is made of definitions for _pipelines_ and _filters_. It always
-  starts off with a call to [_pipy()_](/reference/functions/pipy), which gives us
-  a [Configuration](/reference/classes/Configuration) object, which we call various
+  starts off with a call to [_pipy()_](/reference/pipy), which gives us
+  a [Configuration](/reference/Configuration) object, which we call various
   methods on to define our pipelines and filters.
 
 * A _port pipeline_ gets input from reading a network port and writes back whatever

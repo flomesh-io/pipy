@@ -10,7 +10,7 @@ that handles the request.
 
 # URLRouter
 
-Pipy provides class [_URLRouter_](/reference/classes/algo/URLRouter) for
+Pipy provides class [_URLRouter_](/reference/algo/URLRouter) for
 fast mapping from a URL to a value of any type. In our case, we would like
 to map it to a _string value_ containing the target address and port.
 
@@ -32,7 +32,7 @@ put it in a _global variable_.
 
 We've seen the _builtin_ global variable `__inbound` in [Part 2](/tutorial/02-echo/#code-dissection-1).
 This time, we are defining a _custom_ global variable named `_router`. This is done through
-the parameter given to [_pipy()_](/reference/functions/pipy) at the beginning of
+the parameter given to [_pipy()_](/reference/pipy) at the beginning of
 our script. We'll again add upon what we've done from last time.
 
 ``` js
@@ -72,7 +72,7 @@ value of emptry string.
 # Routing
 
 Now we have all the variables we need, next thing we do is call
-[_URLRouter.find()_](/reference/classes/algo/URLRouter/find) to work out the value of
+[_URLRouter.find()_](/reference/algo/URLRouter/find) to work out the value of
 `_target` based on what's in the request. We can do this in a _handleMessageStart_ filter
 between _demuxHTTP_ and _muxHTTP_. Because _demuxHTTP_ and _muxHTTP_ are not in the same
 pipeline, so we insert a new sub-pipeline in-between connecting them two. The new sub-pipeline
@@ -157,7 +157,7 @@ with a "_404 Not Found_". That's exactly what _link_ filter was designed to do:
 
 ## Filter: link
 
-When called, [_link()_](/reference/classes/Configuration/link) accepts one or more
+When called, [_link()_](/reference/Configuration/link) accepts one or more
 pairs of parameters. In each pair, the name of a target pipeline comes first, followed
 by a callback function that decides if this sub-pipeline should be chosen. The last
 pair can have its callback function omitted, in case that it is the last default choice.
@@ -362,7 +362,7 @@ some more filters: _link_, _handleMessageStart_ and _replaceMessage_.
 
 ## Takeaways
 
-1. Use [_algo.URLRouter_](/reference/classes/algo/URLRouter) to map a URL-like string
+1. Use [_algo.URLRouter_](/reference/algo/URLRouter) to map a URL-like string
    to a value of any type according to a routing table, based on which a simple routing
    proxy can be implemented.
 

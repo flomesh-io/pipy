@@ -499,9 +499,20 @@ function Editor({ root, dts }) {
         window.addEventListener('resize', resize);
         editorRef.current = editor;
         layoutUpdaterRef.current = resize;
-        for (const name in dts) {
-          monaco.languages.typescript.javascriptDefaults.addExtraLib(dts[name], name);
-        }
+        const languageDefaults = monaco.languages.typescript.javascriptDefaults;
+        languageDefaults.setCompilerOptions(
+          Object.assign(
+            languageDefaults.getCompilerOptions(),
+            {
+              lib: ['lib.es5.d.ts'],
+            }
+          )
+        );
+        languageDefaults.setExtraLibs(
+          Object.values(dts).map(
+            content => ({ content })
+          )
+        );
         setInitialized(true);
       });
       return () => {

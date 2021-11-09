@@ -25,21 +25,26 @@ exports.sourceNodes = ({ actions, createNodeId, createContentDigest }) => {
     allowJs: true,
     declaration: true,
     emitDeclarationOnly: true,
+    lib: 'ES6',
   };
 
-  const functions = fs.readdirSync('docs/reference/functions').filter(s => s.endsWith('.js'));
-  const classes = fs.readdirSync('docs/reference/classes').filter(s => s.endsWith('.js'));
-  const filenames = [].concat(
-    functions.map(s => `docs/reference/functions/${s}`),
-    classes.map(s => `docs/reference/classes/${s}`),
-  );
+  const filenames = fs
+    .readdirSync('docs/reference')
+    .filter(s => s.endsWith('.js'))
+    .map(s => `docs/reference/${s}`);
 
   const allFiles = {};
   const host = ts.createCompilerHost(options);
   host.writeFile = (filename, content) => allFiles[filename] = content;
 
+  console.log('===== JSDoc files =====');
+  filenames.forEach((s, i) => console.log(i + 1, s));
+
   const program = ts.createProgram(filenames, options, host);
   program.emit();
+
+  console.log('===== DTS files =====');
+  Object.keys(allFiles).forEach((s, i) => console.log(i + 1, s));
 
   for (const filename in allFiles) {
     const content = allFiles[filename];
@@ -79,6 +84,10 @@ exports.onCreateNode = ({ node, actions }) => {
           lang = ext;
           path = path.substring(0, i);
         }
+      }
+
+      if (path.endsWith('()')) {
+        path = path.substring(0, path.length - 2);
       }
 
       createNodeField({
@@ -135,8 +144,8 @@ exports.createPages = async ({ graphql, actions }) => {
       const node = group[lang] || group['en'];
       if (node) {
         const { id, frontmatter } = node;
-
         const { api } = frontmatter;
+
         let kind, name, parent;
         if (api) {
           if (api.endsWith('()')) {
@@ -146,12 +155,23 @@ exports.createPages = async ({ graphql, actions }) => {
             kind = 'class';
             name = api;
           }
-          const i = api.indexOf('.');
+          const i = name.lastIndexOf('.');
           if (i >= 0) {
             parent = name.substring(0, i);
             name = name.substring(i + 1);
           }
-        }  
+          if (kind === 'function' && name === 'constructor') {
+            kind = 'class';
+            name = parent;
+            const i = name.lastIndexOf('.');
+            if (i >= 0) {
+              parent = name.substring(0, i);
+              name = name.substring(i + 1);
+            } else {
+              parent = undefined;
+            }
+          }
+        }
 
         createPage({
           path: `/docs/${lang}/${path}`,
