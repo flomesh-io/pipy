@@ -64,9 +64,8 @@ private:
       public pjs::Pooled<Stream>,
       public MuxBase::Session::Stream
     {
-      Stream(Session *session, MessageStart *start)
-        : m_session(session)
-        , m_start(start) {}
+      Stream(Session *session)
+        : m_session(session) {}
 
       virtual void on_event(Event *evt) override;
       virtual void close() override;
@@ -78,14 +77,13 @@ private:
       friend class Session;
     };
 
-    virtual void open(Pipeline *pipeline) override;
-    virtual auto stream(MessageStart *start) -> Stream* override;
+    virtual auto stream() -> Stream* override;
     virtual void on_demux(Event *evt) override;
 
     friend class Stream;
   };
 
-  virtual auto new_session() -> Session* override {
+  virtual auto on_new_session() -> Session* override {
     return new Session();
   }
 };

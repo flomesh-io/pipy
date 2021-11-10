@@ -72,13 +72,15 @@ void MuxBase::process(Event *evt) {
       }
 
       if (!m_session->m_pipeline) {
-        auto pipeline = sub_pipeline(0, true);
-        m_session->m_pipeline = pipeline;
-        m_session->open(pipeline);
+        auto p = sub_pipeline(0, true);
+        m_session->m_pipeline = p;
+        m_session->open(p);
       }
 
-      m_stream = m_session->stream(start);
-      m_stream->chain(output());
+      auto s = m_session->stream();
+      s->chain(output());
+      output(start, s->input());
+      m_stream = s;
     }
 
   } else if (auto data = evt->as<Data>()) {
@@ -86,7 +88,14 @@ void MuxBase::process(Event *evt) {
       output(evt, m_stream->input());
     }
 
-  } else if (evt->is<MessageEnd>() || evt->is<StreamEnd>()) {
+  } else if (evt->is<MessageEnd>()) {
+    if (m_stream) {
+      output(evt, m_stream->input());
+      m_stream->close();
+      m_stream = nullptr;
+    }
+
+  } else if (evt->is<StreamEnd>()) {
     if (m_stream) {
       output(MessageEnd::make(), m_stream->input());
       m_stream->close();
@@ -96,17 +105,31 @@ void MuxBase::process(Event *evt) {
 }
 
 //
+// MuxBase::Demux
+//
+
+void MuxBase::Demux::on_event(Event *evt) {
+  static_cast<MuxBase::Session*>(this)->on_demux(evt);
+}
+
+//
 // MuxBase::Session
 //
 
-void MuxBase::Session::on_event(Event *evt) {
+void MuxBase::Session::input(Event *evt) {
   if (m_pipeline) {
-    auto inp = m_pipeline->input();
-    output(evt, inp);
+    if (auto inp = m_pipeline->input()) {
+      inp->input(evt);
+    }
   }
 }
 
+void MuxBase::Session::open(Pipeline *pipeline) {
+  pipeline->chain(Demux::input());
+}
+
 void MuxBase::Session::close() {
+  Pipeline::auto_release(m_pipeline);
   m_pipeline = nullptr;
 }
 
@@ -124,7 +147,7 @@ auto MuxBase::SessionManager::get(const pjs::Value &key) -> Session* {
     session->m_share_count++;
     return session;
   }
-  auto session = m_mux->new_session();
+  auto session = m_mux->on_new_session();
   m_sessions[key] = session;
   return session;
 }
@@ -185,65 +208,54 @@ auto Mux::clone() -> Filter* {
 // Mux::Session
 //
 
-void Mux::Session::open(Pipeline *pipeline) {
-  pipeline->chain(m_ef_demux.input());
-}
-
-auto Mux::Session::stream(MessageStart *start) -> Stream* {
-  return new Stream(this, start);
+auto Mux::Session::stream() -> Stream* {
+  return new Stream(this);
 }
 
 void Mux::Session::on_demux(Event *evt) {
 
   if (evt->is<MessageStart>()) {
-    while (auto stream = m_streams.head()) {
-      if (!stream->m_output_end) break;
-      m_streams.remove(stream);
-      delete stream;
-    }
     if (auto stream = m_streams.head()) {
-      if (!m_message_started) {
-        output(evt, stream->output());
-        m_message_started = true;
+      if (!stream->m_started) {
+        stream->output()->input(evt);
+        stream->m_started = true;
       }
     }
 
   } else if (evt->is<Data>()) {
     if (auto stream = m_streams.head()) {
-      if (m_message_started) {
-        output(evt, stream->output());
+      if (stream->m_started) {
+        stream->output()->input(evt);
       }
     }
 
   } else if (evt->is<MessageEnd>()) {
     if (auto stream = m_streams.head()) {
-      if (m_message_started) {
-        output(evt, stream->output());
-        stream->m_output_end = true;
-        m_message_started = false;
+      if (stream->m_started) {
+        stream->output()->input(evt);
+        m_streams.remove(stream);
+        delete stream;
       }
     }
 
-  } else if (evt->is<StreamEnd>()) {
-    MuxBase::Session::close();
-    m_message_started = false;
-    List<Stream> streams(std::move(m_streams));
-    while (auto s = streams.head()) {
-      streams.remove(s);
-      if (!s->m_output_end) {
-        output(evt, s->output());
-      }
-      delete s;
-    }
+  } else if (auto end = evt->as<StreamEnd>()) {
+    close(end);
   }
 }
 
 void Mux::Session::close() {
+  close(StreamEnd::make());
+}
+
+void Mux::Session::close(StreamEnd *end) {
+  pjs::Ref<StreamEnd> ref(end);
   MuxBase::Session::close();
-  m_message_started = false;
-  while (auto stream = m_streams.head()) {
-    m_streams.remove(stream);
-    delete stream;
+  List<Stream> streams(std::move(m_streams));
+  while (auto s = streams.head()) {
+    streams.remove(s);
+    if (!s->m_started) s->output()->input(MessageStart::make());
+    s->output()->input(end);
+    delete s;
   }
 }
 
@@ -252,21 +264,26 @@ void Mux::Session::close() {
 //
 
 void Mux::Session::Stream::on_event(Event *evt) {
-  if (auto data = evt->as<Data>()) {
-    if (!m_queued) {
+  if (auto start = evt->as<MessageStart>()) {
+    if (!m_start) {
+      m_start = start;
+    }
+
+  } else if (auto data = evt->as<Data>()) {
+    if (m_start && !m_queued) {
       m_buffer.push(*data);
     }
 
   } else if (evt->is<MessageEnd>() || evt->is<StreamEnd>()) {
     if (!m_queued) {
-      auto out = m_session->input();
       m_session->m_streams.push(this);
       m_queued = true;
-      output(m_start, out);
-      if (!m_buffer.empty()) output(Data::make(m_buffer), out);
-      output(evt, out);
-      m_start = nullptr;
-      m_buffer.clear();
+      m_session->input(m_start);
+      if (!m_buffer.empty()) {
+        m_session->input(Data::make(m_buffer));
+        m_buffer.clear();
+      }
+      m_session->input(MessageEnd::make());
     }
   }
 }

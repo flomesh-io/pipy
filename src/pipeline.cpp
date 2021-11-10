@@ -138,8 +138,8 @@ void Pipeline::on_event(Event *evt) {
 void Pipeline::auto_release() {
   if (!m_auto_release) {
     retain();
-    AutoReleasePool::add(this);
     m_auto_release = true;
+    AutoReleasePool::add(this);
   }
 }
 
@@ -154,6 +154,7 @@ void Pipeline::reset() {
     f->reset();
   }
   m_context = nullptr;
+  m_auto_release = false;
 }
 
 //
@@ -178,8 +179,12 @@ Pipeline::AutoReleasePool::~AutoReleasePool() {
 }
 
 void Pipeline::AutoReleasePool::add(Pipeline *pipeline) {
-  pipeline->m_next_auto_release = s_stack->m_pipelines;
-  s_stack->m_pipelines = pipeline;
+  if (s_stack) {
+    pipeline->m_next_auto_release = s_stack->m_pipelines;
+    s_stack->m_pipelines = pipeline;
+  } else {
+    pipeline->release();
+  }
 }
 
 } // namespace pipy

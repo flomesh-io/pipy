@@ -44,19 +44,33 @@ void DemuxFunction::reset() {
 
 void DemuxFunction::on_event(Event *evt) {
   if (auto *start = evt->as<MessageStart>()) {
-    if (!m_streams.tail() || m_streams.tail()->input_end()) {
+    if (!m_streams.tail() || m_streams.tail()->m_input_end) {
       auto stream = new Stream(this, start);
       m_streams.push(stream);
+      output(start, stream->m_pipeline->input());
     }
 
   } else if (auto *data = evt->as<Data>()) {
     if (auto stream = m_streams.tail()) {
-      stream->data(data);
+      if (!stream->m_input_end) {
+        output(data, stream->m_pipeline->input());
+      }
     }
 
-  } else if (evt->is<MessageEnd>() || evt->is<StreamEnd>()) {
+  } else if (evt->is<MessageEnd>()) {
     if (auto stream = m_streams.tail()) {
-      stream->end(MessageEnd::make());
+      if (!stream->m_input_end) {
+        output(evt, stream->m_pipeline->input());
+        stream->m_input_end = true;
+      }
+    }
+
+  } else if (evt->is<StreamEnd>()) {
+    if (auto stream = m_streams.tail()) {
+      if (!stream->m_input_end) {
+        output(MessageEnd::make(), stream->m_pipeline->input());
+        stream->m_input_end = true;
+      }
     }
   }
 }
@@ -68,28 +82,21 @@ void DemuxFunction::on_event(Event *evt) {
 DemuxFunction::Stream::Stream(DemuxFunction *demux, MessageStart *start)
   : m_demux(demux)
 {
-  m_pipeline = demux->sub_pipeline();
-  m_pipeline->chain(EventTarget::input());
-  demux->output(start, m_pipeline->input());
+  auto p = demux->on_new_sub_pipeline();
+  p->chain(EventTarget::input());
+  m_pipeline = p;
 }
 
-void DemuxFunction::Stream::data(Data *data) {
-  if (!m_input_end) {
-    m_demux->output(data, m_pipeline->input());
-  }
-}
-
-void DemuxFunction::Stream::end(MessageEnd *end) {
-  if (!m_input_end) {
-    m_demux->output(end, m_pipeline->input());
-    m_input_end = true;
-  }
+DemuxFunction::Stream::~Stream() {
+  Pipeline::auto_release(m_pipeline);
 }
 
 void DemuxFunction::Stream::on_event(Event *evt) {
   bool is_head = (
     m_demux->m_streams.head() == this
   );
+
+  if (m_output_end) return;
 
   if (auto start = evt->as<MessageStart>()) {
     if (!m_start) {
@@ -108,33 +115,40 @@ void DemuxFunction::Stream::on_event(Event *evt) {
       }
     }
 
-  } else if (evt->is<MessageEnd>() || evt->is<StreamEnd>()) {
+  } else if (evt->is<MessageEnd>()) {
+    if (m_start) {
+      if (is_head) {
+        m_demux->m_streams.remove(this);
+        m_demux->output(evt);
+        m_demux->flush();
+        delete this;
+      } else {
+        m_output_end = true;
+      }
+    }
+
+  } else if (evt->is<StreamEnd>()) {
     if (is_head) {
       m_demux->m_streams.remove(this);
+      if (!m_start) m_demux->output(MessageStart::make());
       m_demux->output(MessageEnd::make());
-      flush();
+      m_demux->flush();
       delete this;
-    } else {
-      if (!m_start) m_start = MessageStart::make();
-      m_output_end = true;
     }
+    m_output_end = true;
   }
 }
 
-void DemuxFunction::Stream::flush() {
-  auto &streams = m_demux->m_streams;
+void DemuxFunction::flush() {
+  auto &streams = m_streams;
   while (auto stream = streams.head()) {
     if (stream->m_start) {
-      m_demux->output(stream->m_start);
-      stream->m_start = nullptr;
-      if (!stream->m_buffer.empty()) {
-        m_demux->output(Data::make(stream->m_buffer));
-        stream->m_buffer.clear();
-      }
+      output(stream->m_start);
+      if (!stream->m_buffer.empty()) output(Data::make(stream->m_buffer));
     }
     if (stream->m_output_end) {
       streams.remove(stream);
-      m_demux->output(MessageEnd::make());
+      output(MessageEnd::make());
       delete stream;
     } else {
       break;
@@ -147,13 +161,11 @@ void DemuxFunction::Stream::flush() {
 //
 
 Demux::Demux()
-  : m_ef_demux(this)
 {
 }
 
 Demux::Demux(const Demux &r)
   : Filter(r)
-  , m_ef_demux(this)
 {
 }
 
@@ -171,24 +183,20 @@ auto Demux::clone() -> Filter* {
 
 void Demux::chain() {
   Filter::chain();
-  m_ef_demux.chain(output());
+  DemuxFunction::chain(Filter::output());
 }
 
 void Demux::reset() {
   Filter::reset();
-  m_ef_demux.reset();
+  DemuxFunction::reset();
 }
 
 void Demux::process(Event *evt) {
-  output(evt, m_ef_demux.input());
+  Filter::output(evt, DemuxFunction::input());
 }
 
-//
-// Demux::DemuxInternal
-//
-
-auto Demux::DemuxInternal::sub_pipeline() -> Pipeline* {
-  return demux->sub_pipeline(0, true);
+auto Demux::on_new_sub_pipeline() -> Pipeline* {
+  return sub_pipeline(0, true);
 }
 
 } // namespace pipy

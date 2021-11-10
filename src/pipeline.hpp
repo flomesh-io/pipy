@@ -127,6 +127,10 @@ public:
     return def->alloc(ctx);
   }
 
+  static void auto_release(Pipeline *pipeline) {
+    if (pipeline) pipeline->auto_release();
+  }
+
   auto def() const -> PipelineDef* { return m_def; }
   auto context() const -> Context* { return m_context; }
 

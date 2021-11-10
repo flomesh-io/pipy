@@ -219,6 +219,7 @@ void Decoder::reset() {
 void Decoder::on_event(Event *evt) {
   if (auto e = evt->as<StreamEnd>()) {
     stream_end(e);
+    reset();
     return;
   }
 
@@ -888,6 +889,39 @@ void ResponseEncoder::process(Event *evt) {
 }
 
 //
+// RequestEnqueue
+//
+
+void RequestEnqueue::on_event(Event *evt) {
+  if (evt->is<MessageStart>()) {
+    auto *q = static_cast<RequestQueue*>(this);
+    auto *r = new RequestQueue::Request;
+    q->on_enqueue(r);
+    q->m_queue.push(r);
+  }
+  output(evt);
+}
+
+//
+// RequestDequeue
+//
+
+void RequestDequeue::on_event(Event *evt) {
+  if (evt->is<MessageStart>()) {
+    auto *q = static_cast<RequestQueue*>(this);
+    if (auto *r = q->m_queue.head()) {
+      q->on_dequeue(r);
+      q->m_queue.remove(r);
+      delete r;
+    }
+  } else if (evt->is<StreamEnd>()) {
+    auto *q = static_cast<RequestQueue*>(this);
+    q->reset();
+  }
+  output(evt);
+}
+
+//
 // RequestQueue
 //
 
@@ -898,26 +932,6 @@ void RequestQueue::reset() {
   }
 }
 
-void RequestQueue::Enqueue::on_event(Event *evt) {
-  if (evt->is<MessageStart>()) {
-    auto *r = new Request;
-    queue->on_enqueue(r);
-    queue->m_queue.push(r);
-  }
-  output(evt);
-}
-
-void RequestQueue::Dequeue::on_event(Event *evt) {
-  if (evt->is<MessageStart>()) {
-    if (auto *r = queue->m_queue.head()) {
-      queue->on_dequeue(r);
-      queue->m_queue.remove(r);
-      delete r;
-    }
-  }
-  output(evt);
-}
-
 //
 // Demux
 //
@@ -925,7 +939,6 @@ void RequestQueue::Dequeue::on_event(Event *evt) {
 Demux::Demux()
   : m_ef_decoder(false)
   , m_ef_encoder(true)
-  , m_ef_demux(this)
 {
 }
 
@@ -933,7 +946,6 @@ Demux::Demux(const Demux &r)
   : Filter(r)
   , m_ef_decoder(false)
   , m_ef_encoder(true)
-  , m_ef_demux(this)
 {
 }
 
@@ -951,11 +963,11 @@ auto Demux::clone() -> Filter* {
 
 void Demux::chain() {
   Filter::chain();
-  m_ef_decoder.chain(m_ef_enqueue.input());
-  m_ef_enqueue.chain(m_ef_demux.input());
-  m_ef_demux.chain(m_ef_dequeue.input());
-  m_ef_dequeue.chain(m_ef_encoder.input());
-  m_ef_encoder.chain(output());
+  m_ef_decoder.chain(RequestEnqueue::input());
+  RequestEnqueue::chain(DemuxFunction::input());
+  DemuxFunction::chain(RequestDequeue::input());
+  RequestDequeue::chain(m_ef_encoder.input());
+  m_ef_encoder.chain(Filter::output());
 }
 
 void Demux::reset() {
@@ -966,7 +978,11 @@ void Demux::reset() {
 }
 
 void Demux::process(Event *evt) {
-  output(evt, m_ef_decoder.input());
+  Filter::output(evt, m_ef_decoder.input());
+}
+
+auto Demux::on_new_sub_pipeline() -> Pipeline* {
+  return sub_pipeline(0, true);
 }
 
 void Demux::on_enqueue(Request *req) {
@@ -1014,20 +1030,15 @@ auto Mux::clone() -> Filter* {
 //
 
 void Mux::Session::open(Pipeline *pipeline) {
-  m_ef_encoder.chain(m_ef_enqueue.input());
-  m_ef_enqueue.chain(pipeline->input());
+  m_ef_encoder.chain(RequestEnqueue::input());
+  RequestEnqueue::chain(pipeline->input());
   pipeline->chain(m_ef_decoder.input());
-  m_ef_decoder.chain(m_ef_dequeue.input());
-  m_ef_dequeue.chain(m_ef_demux.input());
+  m_ef_decoder.chain(RequestDequeue::input());
+  RequestDequeue::chain(Demux::input());
 }
 
-void Mux::Session::close() {
-  pipy::Mux::Session::close();
-  RequestQueue::reset();
-}
-
-void Mux::Session::on_event(Event *evt) {
-  output(evt, m_ef_encoder.input());
+void Mux::Session::input(Event *evt) {
+  m_ef_encoder.input()->input(evt);
 }
 
 void Mux::Session::on_enqueue(Request *req) {
@@ -1036,6 +1047,11 @@ void Mux::Session::on_enqueue(Request *req) {
 
 void Mux::Session::on_dequeue(Request *req) {
   m_ef_decoder.set_bodiless(req->is_bodiless);
+}
+
+void Mux::Session::close() {
+  pipy::Mux::Session::close();
+  RequestQueue::reset();
 }
 
 //

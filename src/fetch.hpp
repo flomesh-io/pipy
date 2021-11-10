@@ -112,7 +112,6 @@ private:
   Request* m_current_request = nullptr;
 
   pjs::Ref<PipelineDef> m_pipeline_def;
-  pjs::Ref<PipelineDef> m_pipeline_def_request;
   pjs::Ref<PipelineDef> m_pipeline_def_connect;
 
   void fetch(

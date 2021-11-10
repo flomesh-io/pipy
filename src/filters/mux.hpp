@@ -44,13 +44,21 @@ class PipelineDef;
 //
 
 class MuxBase : public Filter {
-public:
+protected:
+
+  //
+  // MuxBase::Demux
+  //
+
+  struct Demux : public EventFunction {
+    virtual void on_event(Event *evt) override;
+  };
 
   //
   // MuxBase::Session
   //
 
-  class Session : public EventFunction {
+  class Session : protected Demux {
   public:
 
     //
@@ -62,30 +70,16 @@ public:
       virtual void close() = 0;
     };
 
-    virtual void open(Pipeline *pipeline) = 0;
-    virtual auto stream(MessageStart *start) -> Stream* = 0;
+    virtual void open(Pipeline *pipeline);
+    virtual auto stream() -> Stream* = 0;
+    virtual void input(Event *evt);
     virtual void on_demux(Event *evt) = 0;
     virtual void close();
-
-  protected:
-    Session() : m_ef_demux(this) {}
-
-    struct Demux : public EventFunction {
-      Session* session;
-      Demux(Session *s) : session(s) {}
-      virtual void on_event(Event *evt) override {
-        session->on_demux(evt);
-      }
-    };
-
-    Demux m_ef_demux;
 
   private:
     pjs::Ref<Pipeline> m_pipeline;
     int m_share_count = 1;
     double m_free_time = 0;
-
-    virtual void on_event(Event *evt) override;
 
     friend class MuxBase;
   };
@@ -95,7 +89,7 @@ protected:
   MuxBase(const pjs::Value &key);
   MuxBase(const MuxBase &r);
 
-  virtual auto new_session() -> Session* = 0;
+  virtual auto on_new_session() -> Session* = 0;
 
 private:
   virtual void reset() override;
@@ -164,9 +158,8 @@ protected:
       public MuxBase::Session::Stream
     {
     protected:
-      Stream(Session *session, MessageStart *start)
-        : m_session(session)
-        , m_start(start) {}
+      Stream(Session *session)
+        : m_session(session) {}
 
       virtual void on_event(Event *evt) override;
       virtual void close() override;
@@ -177,27 +170,27 @@ protected:
       Session* m_session;
       pjs::Ref<MessageStart> m_start;
       Data m_buffer;
+      bool m_started = false;
       bool m_queued = false;
-      bool m_output_end = false;
+      bool m_ended = false;
 
       friend class Session;
     };
 
   protected:
-    virtual void open(Pipeline *pipeline) override;
-    virtual auto stream(MessageStart *start) -> Stream* override;
+    virtual auto stream() -> Stream* override;
     virtual void on_demux(Event *evt) override;
     virtual void close() override;
 
   private:
-    pjs::Ref<Pipeline> m_pipeline;
     List<Stream> m_streams;
-    bool m_message_started = false;
+
+    void close(StreamEnd *end);
 
     friend class Stream;
   };
 
-  virtual auto new_session() -> Session* override {
+  virtual auto on_new_session() -> Session* override {
     return new Session();
   }
 };

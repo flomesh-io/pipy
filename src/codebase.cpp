@@ -275,6 +275,7 @@ private:
 
   void download(const std::function<void(bool)> &on_update);
   void download_next(const std::function<void(bool)> &on_update);
+  void response_error(const char *method, const char *path, http::ResponseHead *head);
 };
 
 CodebaseFromHTTP::CodebaseFromHTTP(const std::string &url)
@@ -348,14 +349,8 @@ void CodebaseFromHTTP::sync(const Status &status, const std::function<void(bool)
         nullptr,
         nullptr,
         [=](http::ResponseHead *head, Data *body) {
-          if (head->status() != 200) {
-            Log::error(
-              "[codebase] HEAD %s -> %d %s",
-              m_url->href()->c_str(),
-              head->status(),
-              head->status_text()->c_str()
-            );
-            m_fetch.close();
+          if (!head || head->status() != 200) {
+            response_error("HEAD", m_url->href()->c_str(), head);
             on_update(false);
             return;
           }
@@ -388,14 +383,8 @@ void CodebaseFromHTTP::download(const std::function<void(bool)> &on_update) {
     nullptr,
     nullptr,
     [=](http::ResponseHead *head, Data *body) {
-      if (head->status() != 200) {
-        Log::error(
-          "[codebase] GET %s -> %d %s",
-          m_url->href()->c_str(),
-          head->status(),
-          head->status_text()->c_str()
-        );
-        m_fetch.close();
+      if (!head || head->status() != 200) {
+        response_error("GET", m_url->href()->c_str(), head);
         on_update(false);
         return;
 
@@ -458,14 +447,8 @@ void CodebaseFromHTTP::download_next(const std::function<void(bool)> &on_update)
     nullptr,
     nullptr,
     [=](http::ResponseHead *head, Data *body) {
-      if (head->status() != 200) {
-        Log::error(
-          "[codebase] GET %s -> %d %s",
-          path.c_str(),
-          head->status(),
-          head->status_text()->c_str()
-        );
-        m_fetch.close();
+      if (!head || head->status() != 200) {
+        response_error("GET", path.c_str(), head);
         on_update(false);
         return;
 
@@ -481,6 +464,16 @@ void CodebaseFromHTTP::download_next(const std::function<void(bool)> &on_update)
       download_next(on_update);
     }
   );
+}
+
+void CodebaseFromHTTP::response_error(const char *method, const char *path, http::ResponseHead *head) {
+  Log::error(
+    "[codebase] %s %s -> %d %s",
+    method, path,
+    head->status(),
+    head->status_text()->c_str()
+  );
+  m_fetch.close();
 }
 
 //

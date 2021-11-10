@@ -78,13 +78,7 @@ private:
       : m_pipeline_def(pipeline_def)
       , m_pipeline_def_down(pipeline_def_down) {}
 
-    void reset() {
-      close();
-      m_pipeline = nullptr;
-      m_pipeline_down = nullptr;
-      m_chained = false;
-      m_turned_down = false;
-    }
+    void reset();
 
   private:
     virtual void on_event(Event *evt) override;

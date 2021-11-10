@@ -43,7 +43,7 @@ public:
 
 protected:
   virtual void on_event(Event *evt) override;
-  virtual auto sub_pipeline() -> Pipeline* = 0;
+  virtual auto on_new_sub_pipeline() -> Pipeline* = 0;
 
 private:
   class Stream :
@@ -51,14 +51,12 @@ private:
     public List<Stream>::Item,
     public EventTarget
   {
-  public:
     Stream(DemuxFunction *demux, MessageStart *start);
+    ~Stream();
 
     void data(Data *data);
     void end(MessageEnd *end);
-    bool input_end() const { return m_input_end; }
 
-  private:
     DemuxFunction* m_demux;
     pjs::Ref<Pipeline> m_pipeline;
     pjs::Ref<MessageStart> m_start;
@@ -68,10 +66,12 @@ private:
 
     virtual void on_event(Event *evt) override;
 
-    void flush();
+    friend class DemuxFunction;
   };
 
   List<Stream> m_streams;
+
+  void flush();
 
   friend class Stream;
 };
@@ -80,7 +80,7 @@ private:
 // Demux
 //
 
-class Demux : public Filter {
+class Demux : public Filter, public DemuxFunction {
 public:
   Demux();
 
@@ -94,13 +94,7 @@ private:
   virtual void process(Event *evt) override;
   virtual void dump(std::ostream &out) override;
 
-  struct DemuxInternal : public DemuxFunction {
-    DemuxInternal(Demux *d) : demux(d) {}
-    Demux* demux;
-    virtual auto sub_pipeline() -> Pipeline* override;
-  };
-
-  DemuxInternal m_ef_demux;
+  virtual auto on_new_sub_pipeline() -> Pipeline* override;
 };
 
 } // namespace pipy

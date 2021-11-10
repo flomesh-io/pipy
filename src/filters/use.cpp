@@ -149,6 +149,20 @@ void Use::process(Event *evt) {
   }
 }
 
+//
+// Use::Stage
+//
+
+void Use::Stage::reset() {
+  close();
+  Pipeline::auto_release(m_pipeline);
+  Pipeline::auto_release(m_pipeline_down);
+  m_pipeline = nullptr;
+  m_pipeline_down = nullptr;
+  m_chained = false;
+  m_turned_down = false;
+}
+
 void Use::Stage::on_event(Event *evt) {
   if (!m_chained) {
     m_chained = true;

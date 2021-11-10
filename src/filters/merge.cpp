@@ -61,12 +61,8 @@ auto Merge::clone() -> Filter* {
 // Merge::Session
 //
 
-void Merge::Session::open(Pipeline *pipeline) {
-  pipeline->chain(m_ef_demux.input());
-}
-
-auto Merge::Session::stream(MessageStart *start) -> Stream* {
-  return new Stream(this, start);
+auto Merge::Session::stream() -> Stream* {
+  return new Stream(this);
 }
 
 void Merge::Session::on_demux(Event *evt) {
@@ -80,19 +76,24 @@ void Merge::Session::on_demux(Event *evt) {
 //
 
 void Merge::Session::Stream::on_event(Event *evt) {
-  if (auto data = evt->as<Data>()) {
+  if (auto start = evt->as<MessageStart>()) {
+    if (!m_start) {
+      m_start = start;
+    }
+
+  } else if (auto data = evt->as<Data>()) {
     if (m_start) {
       m_buffer.push(*data);
     }
 
   } else if (evt->is<MessageEnd>() || evt->is<StreamEnd>()) {
     if (m_start) {
-      auto out = m_session->input();
-      output(m_start, out);
-      if (!m_buffer.empty()) output(Data::make(m_buffer), out);
-      output(evt, out);
-      m_start = nullptr;
-      m_buffer.clear();
+      m_session->input(m_start);
+      if (!m_buffer.empty()) {
+        m_session->input(Data::make(m_buffer));
+        m_buffer.clear();
+      }
+      m_session->input(MessageEnd::make());
     }
   }
 }

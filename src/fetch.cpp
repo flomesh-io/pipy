@@ -38,6 +38,7 @@ auto Fetch::Receiver::clone() -> Filter* {
 }
 
 void Fetch::Receiver::reset() {
+  Filter::reset();
   m_head = nullptr;
   m_body = nullptr;
 }
@@ -50,7 +51,7 @@ void Fetch::Receiver::process(Event *evt) {
     if (m_body && data->size() > 0) {
       m_body->push(*data);
     }
-  } else if (evt->is<MessageEnd>()) {
+  } else if (evt->is<MessageEnd>() || evt->is<StreamEnd>()) {
     if (m_body) {
       m_fetch->on_response(m_head, m_body);
     }
@@ -69,11 +70,8 @@ Fetch::Fetch(pjs::Str *host)
   m_pipeline_def_connect = PipelineDef::make(nullptr, PipelineDef::NAMED, "Fetch Connection");
   m_pipeline_def_connect->append(new Connect(m_host.get(), nullptr));
 
-  m_pipeline_def_request = PipelineDef::make(nullptr, PipelineDef::NAMED, "Fetch Request");
-  m_pipeline_def_request->append(new http::Mux())->add_sub_pipeline(m_pipeline_def_connect);
-
   m_pipeline_def = PipelineDef::make(nullptr, PipelineDef::NAMED, "Fetch");
-  m_pipeline_def->append(new Demux())->add_sub_pipeline(m_pipeline_def_request);
+  m_pipeline_def->append(new http::Mux())->add_sub_pipeline(m_pipeline_def_connect);
   m_pipeline_def->append(new Receiver(this));
 }
 
@@ -125,14 +123,13 @@ void Fetch::fetch(
 void Fetch::close() {
   m_pipeline = nullptr;
   m_current_request = nullptr;
+  m_request_queue.clear();
 }
 
 void Fetch::pump() {
   if (!m_current_request && !m_request_queue.empty()) {
-    if (!m_pipeline) {
-      auto ctx = new Context();
-      m_pipeline = Pipeline::make(m_pipeline_def, ctx);
-    }
+    auto ctx = new Context();
+    m_pipeline = Pipeline::make(m_pipeline_def, ctx);
 
     m_current_request = &m_request_queue.front();
     auto msg = m_current_request->message;

@@ -227,19 +227,30 @@ private:
 };
 
 //
+// RequestEnqueue
+//
+
+struct RequestEnqueue : public EventFunction {
+  virtual void on_event(Event *evt) override;
+};
+
+//
+// RequestDequeue
+//
+
+struct RequestDequeue : public EventFunction {
+  virtual void on_event(Event *evt) override;
+};
+
+//
 // RequestQueue
 //
 
-class RequestQueue {
+class RequestQueue :
+  protected RequestEnqueue,
+  protected RequestDequeue
+{
 protected:
-  RequestQueue()
-    : m_ef_enqueue(this)
-    , m_ef_dequeue(this) {}
-
-  ~RequestQueue() {
-    reset();
-  }
-
   struct Request :
     public pjs::Pooled<Request>,
     public List<Request>::Item
@@ -267,15 +278,19 @@ protected:
     virtual void on_event(Event *evt) override;
   };
 
-  Enqueue m_ef_enqueue;
-  Dequeue m_ef_dequeue;
+  friend class RequestEnqueue;
+  friend class RequestDequeue;
 };
 
 //
 // Demux
 //
 
-class Demux : public Filter, protected RequestQueue {
+class Demux :
+  public Filter,
+  public DemuxFunction,
+  protected RequestQueue
+{
 public:
   Demux();
 
@@ -289,18 +304,10 @@ private:
   virtual void process(Event *evt) override;
   virtual void dump(std::ostream &out) override;
 
-  struct DemuxInternal : public DemuxFunction {
-    Demux* filter;
-    DemuxInternal(Demux *f) : filter(f) {}
-    virtual auto sub_pipeline() -> Pipeline* {
-      return filter->sub_pipeline(0, true);
-    }
-  };
-
   Decoder m_ef_decoder;
   Encoder m_ef_encoder;
-  DemuxInternal m_ef_demux;
 
+  virtual auto on_new_sub_pipeline() -> Pipeline* override;
   virtual void on_enqueue(Request *req) override;
   virtual void on_dequeue(Request *req) override;
 };
@@ -339,15 +346,15 @@ private:
     Decoder m_ef_decoder;
 
     virtual void open(Pipeline *pipeline) override;
-    virtual void close() override;
-    virtual void on_event(Event *evt) override;
+    virtual void input(Event *evt) override;
     virtual void on_enqueue(Request *req) override;
     virtual void on_dequeue(Request *req) override;
+    virtual void close() override;
 
     friend class Stream;
   };
 
-  virtual auto new_session() -> Session* override {
+  virtual auto on_new_session() -> Session* override {
     return new Session();
   }
 };

@@ -238,10 +238,7 @@ void Outbound::output(Event *evt) {
 
 void Outbound::output_end(StreamEnd *end) {
   pjs::Ref<StreamEnd> evt(end);
-  do {
-    m_buffer.clear();
-    output(evt);
-  } while (!m_buffer.empty());
+  output(evt);
 }
 
 void Outbound::pump() {
