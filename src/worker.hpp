@@ -53,8 +53,14 @@ public:
     return s_current;
   }
 
+  static void restart();
+  static void exit(int exit_code);
+  static bool exited();
+  static auto exit_code() -> int;
+
   auto root() const -> Module* { return m_root; }
   auto global_object() const -> pjs::Object* { return m_global_object; }
+  bool handling_signal(int sig);
   auto get_module(pjs::Str *filename) -> Module*;
   auto find_module(const std::string &path) -> Module*;
   auto load_module(const std::string &path) -> Module*;

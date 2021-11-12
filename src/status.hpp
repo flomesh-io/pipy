@@ -50,6 +50,8 @@ struct Status {
   void update_modules();
   bool from_json(const Data &data);
   void to_json(std::ostream &out) const;
+
+  static void dump_memory();
 };
 
 } // namespace pipy

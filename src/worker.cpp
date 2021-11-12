@@ -30,6 +30,8 @@
 #include "event.hpp"
 #include "message.hpp"
 #include "pipeline.hpp"
+#include "codebase.hpp"
+#include "status.hpp"
 #include "api/algo.hpp"
 #include "api/configuration.hpp"
 #include "api/console.hpp"
@@ -174,6 +176,91 @@ namespace pipy {
 
 Worker* Worker::s_current = nullptr;
 
+void Worker::restart() {
+  auto current_worker = current();
+  if (!current_worker) {
+    Log::error("[restart] No program running");
+    return;
+  }
+
+  auto codebase = Codebase::current();
+  if (!codebase) {
+    Log::error("[restart] No codebase");
+    return;
+  }
+
+  auto &entry = codebase->entry();
+  if (entry.empty()) {
+    Log::error("[restart] Codebase has no entry point");
+    return;
+  }
+
+  Log::info("[restart] Reloading codebase...");
+
+  auto worker = make();
+  if (worker->load_module(entry) && worker->start()) {
+    current_worker->stop();
+    Status::local.version = codebase->version();
+    Status::local.update_modules();
+    Log::info("[restart] Codebase reloaded");
+  } else {
+    worker->stop();
+    Log::error("[restart] Failed reloading codebase");
+  }
+}
+
+static bool s_has_exited = false;
+static int s_exit_code = 0;
+
+void Worker::exit(int exit_code) {
+  static Timer s_timer;
+  static bool has_stopped = false;
+
+  if (has_stopped) return;
+
+  if (s_has_exited) {
+    Log::info("[shutdown] Forcing to shut down...");
+    Net::stop();
+    Log::info("[shutdown] Stopped.");
+    has_stopped = true;
+    return;
+  }
+
+  s_has_exited = true;
+  s_exit_code = exit_code;
+
+  Log::info("[shutdown] Shutting down...");
+  if (auto worker = current()) worker->stop();
+
+  static std::function<void()> check;
+  check = []() {
+    int n = 0;
+    PipelineDef::for_each(
+      [&](PipelineDef *def) {
+        n += def->active();
+      }
+    );
+    if (n > 0) {
+      Log::info("[shutdown] Waiting for remaining %d pipelines...", n);
+      s_timer.schedule(1, check);
+    } else {
+      Net::stop();
+      Log::info("Stopped.");
+      has_stopped = true;
+    }
+  };
+
+  check();
+}
+
+bool Worker::exited() {
+  return s_has_exited;
+}
+
+auto Worker::exit_code() -> int {
+  return s_exit_code;
+}
+
 Worker::Worker()
   : m_global_object(Global::make())
 {
@@ -181,6 +268,15 @@ Worker::Worker()
 
 Worker::~Worker() {
   if (s_current == this) s_current = nullptr;
+}
+
+bool Worker::handling_signal(int signal) {
+  for (auto task : m_tasks) {
+    if (task->type() == Task::SIGNAL && task->signal() == signal) {
+      return true;
+    }
+  }
+  return false;
 }
 
 auto Worker::get_module(pjs::Str *filename) -> Module* {
@@ -310,9 +406,7 @@ bool Worker::start() {
 
   // Start tasks
   for (auto *task : m_tasks) {
-    if (!task->start()) {
-      return false;
-    }
+    task->start();
   }
 
   return true;
@@ -320,9 +414,8 @@ bool Worker::start() {
 
 void Worker::stop() {
   for (auto *task : m_tasks) {
-    task->stop();
+    delete task;
   }
-
   delete this;
 }
 

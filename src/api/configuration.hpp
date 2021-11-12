@@ -63,9 +63,7 @@ public:
   void add_import(pjs::Object *variables);
 
   void listen(int port, pjs::Object *options);
-  void task();
-  void task(double interval);
-  void task(const std::string &interval);
+  void task(const std::string &when);
   void pipeline(const std::string &name);
 
   void accept_socks(pjs::Str *target, pjs::Function *on_connect);
@@ -127,7 +125,7 @@ private:
 
   struct TaskConfig {
     std::string name;
-    std::string interval;
+    std::string when;
     std::list<std::unique_ptr<Filter>> filters;
   };
 

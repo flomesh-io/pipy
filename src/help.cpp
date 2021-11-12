@@ -35,15 +35,15 @@ Sends copies of events to other pipelines
 target = <string> Name of the pipeline to send event copies to
 initializers = <array|function> Functions to initialize each pipeline
 
-mux(target[, key])
-Runs messages from different pipelines through a shared pipeline
-target = <string> Name of the pipeline to send messages to
-key = <string|function> Callback function that gives the ID of the shared pipeline
-
-merge(target[, key])
+merge(target, key)
 Merges messages from different pipelines to a shared pipeline
 target = <string> Name of the pipeline to send messages to
 key = <function> Callback function that gives the ID of the shared pipeline
+
+mux(target, key)
+Runs messages from different pipelines through a shared pipeline
+target = <string> Name of the pipeline to send messages to
+key = <string|function> Callback function that gives the ID of the shared pipeline
 
 demux(target)
 Sends messages to a different pipline with each one in its own pipeline and context
@@ -67,7 +67,7 @@ demuxHTTP(target)
 Deframes HTTP requests, sends each to a separate pipeline, and frames their responses
 target = <string> Name of the pipeline to receive deframed requests
 
-muxHTTP(target[, key])
+muxHTTP(target, key)
 Frames HTTP requests, send to a new or shared pipeline, and deframes its responses
 target = <string> Name of the pipeline to receive framed requests
 key = <number|string|function> Key of the shared pipeline

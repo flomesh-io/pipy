@@ -30,74 +30,124 @@
 #include "worker.hpp"
 #include "utils.hpp"
 
+#include <signal.h>
+
+std::map<std::string, int> s_signal_names = {
+  { "SIGHUP"    , SIGHUP    },
+  { "SIGINT"    , SIGINT    },
+  { "SIGQUIT"   , SIGQUIT   },
+  { "SIGILL"    , SIGILL    },
+  { "SIGTRAP"   , SIGTRAP   },
+  { "SIGABRT"   , SIGABRT   },
+  { "SIGFPE"    , SIGFPE    },
+  { "SIGKILL"   , SIGKILL   },
+  { "SIGBUS"    , SIGBUS    },
+  { "SIGSEGV"   , SIGSEGV   },
+  { "SIGSYS"    , SIGSYS    },
+  { "SIGPIPE"   , SIGPIPE   },
+  { "SIGALRM"   , SIGALRM   },
+  { "SIGTERM"   , SIGTERM   },
+  { "SIGURG"    , SIGURG    },
+  { "SIGSTOP"   , SIGSTOP   },
+  { "SIGTSTP"   , SIGTSTP   },
+  { "SIGCONT"   , SIGCONT   },
+  { "SIGCHLD"   , SIGCHLD   },
+  { "SIGTTIN"   , SIGTTIN   },
+  { "SIGTTOU"   , SIGTTOU   },
+  { "SIGIO"     , SIGIO     },
+  { "SIGXCPU"   , SIGXCPU   },
+  { "SIGXFSZ"   , SIGXFSZ   },
+  { "SIGVTALRM" , SIGVTALRM },
+  { "SIGPROF"   , SIGPROF   },
+  { "SIGWINCH"  , SIGWINCH  },
+};
+
 namespace pipy {
 
-Task::Task(const std::string &interval, PipelineDef *pipeline_def)
-  : m_name(interval)
-  , m_interval(utils::get_seconds(interval))
+Task::Task(const std::string &when, PipelineDef *pipeline_def)
+  : m_when(when)
   , m_pipeline_def(pipeline_def)
+  , m_signal_set(Net::service())
 {
+  if (!when.empty()) {
+    if (std::isdigit(when[0])) {
+      m_type = CRON;
+      m_interval = utils::get_seconds(when);
+      if (m_interval < 0.01 || m_interval > 24 * 60 * 60) {
+        std::string msg("task interval out of range: ");
+        throw std::runtime_error(msg + when);
+      }
+    } else {
+      auto i = s_signal_names.find(when);
+      if (i == s_signal_names.end()) {
+        std::string msg("invalid signal name: ");
+        throw std::runtime_error(msg + when);
+      }
+      m_type = SIGNAL;
+      m_signal = i->second;
+      m_signal_set.add(i->second);
+    }
+  }
 }
 
 Task::~Task() {
+  Pipeline::auto_release(m_pipeline);
 }
 
 bool Task::active() const {
   return m_pipeline;
 }
 
-bool Task::start() {
-  if (m_name.empty()) {
+void Task::start() {
+  switch (m_type) {
+  case ONE_SHOT:
     run();
-    return true;
-  } else {
+    break;
+  case CRON:
     schedule(0);
-    return true;
+    break;
+  case SIGNAL:
+    wait();
+    break;
   }
-}
-
-void Task::stop() {
-  m_stopped = true;
-  m_timer.cancel();
-  schedule(0);
 }
 
 void Task::schedule(double interval) {
   m_timer.schedule(
     interval,
     [this]() {
-      tick();
+      run();
+      schedule(m_interval);
     }
   );
 }
 
-void Task::tick() {
-  if (m_stopped) {
-    if (active()) {
-      schedule(1);
-    } else {
-      delete this;
+void Task::wait() {
+  m_signal_set.async_wait(
+    [this](const std::error_code &ec, int) {
+      if (!ec) run();
+      wait();
     }
-  } else {
-    if (!active()) run();
-    schedule(m_interval);
-  }
+  );
 }
 
 void Task::run() {
-  m_pipeline = Pipeline::make(
-    m_pipeline_def,
-    m_pipeline_def->module()->worker()->new_runtime_context()
-  );
-  m_pipeline->chain(EventTarget::input());
-  Pipeline::AutoReleasePool arp;
-  auto input = m_pipeline->input();
-  input->input(MessageStart::make());
-  input->input(MessageEnd::make());
+  if (!active()) {
+    m_pipeline = Pipeline::make(
+      m_pipeline_def,
+      m_pipeline_def->module()->worker()->new_runtime_context()
+    );
+    m_pipeline->chain(EventTarget::input());
+    Pipeline::AutoReleasePool arp;
+    auto input = m_pipeline->input();
+    input->input(MessageStart::make());
+    input->input(MessageEnd::make());
+  }
 }
 
 void Task::on_event(Event *evt) {
   if (evt->is<StreamEnd>()) {
+    Pipeline::auto_release(m_pipeline);
     m_pipeline = nullptr;
   }
 }

@@ -169,21 +169,21 @@ class Configuration {
 
   /**
    * @param {string} target
-   * @param {any | () => any} [key]
+   * @param {any | () => any} key
    * @returns {Configuration} The same Configuration object.
    */
   merge(target, key) {}
 
   /**
    * @param {string} target
-   * @param {any | () => any} [key]
+   * @param {any | () => any} key
    * @returns {Configuration} The same Configuration object.
    */
   mux(target, key) {}
 
   /**
    * @param {string} target
-   * @param {any | () => any} [key]
+   * @param {any | () => any} key
    * @returns {Configuration} The same Configuration object.
    */
   muxHTTP(target, key) {}

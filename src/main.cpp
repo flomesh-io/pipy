@@ -26,16 +26,13 @@
 #include "version.h"
 
 #include "admin-service.hpp"
-#include "api/configuration.hpp"
 #include "codebase.hpp"
 #include "filters/tls.hpp"
 #include "listener.hpp"
-#include "module.hpp"
 #include "net.hpp"
 #include "options.hpp"
-#include "outbound.hpp"
 #include "status.hpp"
-#include "task.hpp"
+#include "timer.hpp"
 #include "utils.hpp"
 #include "worker.hpp"
 
@@ -184,309 +181,6 @@ static void help_filters() {
 }
 
 //
-// Show current status
-//
-
-template<class T>
-void print_table(const T &header, const std::list<T> &rows) {
-  int n = header.size();
-  int max_width[header.size()];
-
-  for (int i = 0; i < n; i++) {
-    max_width[i] = header[i].length();
-  }
-
-  for (const auto &row : rows) {
-    for (int i = 0; i < n; i++) {
-      if (row[i].length() > max_width[i]) {
-        max_width[i] = row[i].length();
-      }
-    }
-  }
-
-  int total_width = 0;
-  for (int i = 0; i < n; i++) {
-    std::string padding(max_width[i] - header[i].length(), ' ');
-    std::cout << header[i] << padding << "  ";
-    total_width += max_width[i] + 2;
-  }
-
-  std::cout << std::endl;
-  std::cout << std::string(total_width, '-');
-  std::cout << std::endl;
-
-  for (const auto &row : rows) {
-    for (int i = 0; i < n; i++) {
-      std::string padding(max_width[i] - row[i].length(), ' ');
-      std::cout << row[i] << padding << "  ";
-    }
-    std::cout << std::endl;
-  }
-}
-
-static void show_status() {
-  std::string indentation("  ");
-  std::list<std::array<std::string, 2>> objects;
-  std::list<std::array<std::string, 3>> chunks;
-  std::list<std::array<std::string, 3>> pipelines;
-  std::list<std::array<std::string, 3>> inbounds;
-  std::list<std::array<std::string, 6>> outbounds;
-
-  int total_allocated = 0;
-  int total_active = 0;
-  int total_chunks = 0;
-  int total_instances = 0;
-  int total_inbound_connections = 0;
-  int total_inbound_buffered = 0;
-
-  auto current_worker = Worker::current();
-
-  for (const auto &i : pjs::Class::all()) {
-    if (auto n = i.second->object_count()) {
-      objects.push_back({ indentation + i.first, std::to_string(n) });
-      total_instances += n;
-    }
-  }
-
-  objects.push_back({ "TOTAL", std::to_string(total_instances) });
-
-  Data::Producer::for_each([&](Data::Producer *producer) {
-    chunks.push_back({
-      producer->name(),
-      std::to_string(producer->current() * DATA_CHUNK_SIZE / 1024),
-      std::to_string(producer->peak() * DATA_CHUNK_SIZE / 1024),
-    });
-    total_chunks += producer->current();
-  });
-
-  chunks.push_back({ "TOTAL", std::to_string(total_chunks * DATA_CHUNK_SIZE / 1024), "n/a" });
-
-  std::multimap<std::string, PipelineDef*> stale_pipelines;
-  std::multimap<std::string, PipelineDef*> current_pipelines;
-
-  PipelineDef::for_each([&](PipelineDef *p) {
-    auto mod = p->module();
-    if (!mod) {
-      std::string name("[");
-      name += p->name();
-      name += ']';
-      current_pipelines.insert({ name, p });
-    } else {
-      std::string name(mod->path());
-      name += " [";
-      name += p->name();
-      name += ']';
-      if (mod->worker() == current_worker) {
-        current_pipelines.insert({ name, p });
-      } else if (p->active() > 0) {
-        name = std::string("[STALE] ") + name;
-        stale_pipelines.insert({ name, p });
-      }
-    }
-  });
-
-  for (const auto &i : current_pipelines) {
-    auto p = i.second;
-    pipelines.push_back({
-      indentation + i.first,
-      std::to_string(p->allocated()),
-      std::to_string(p->active()),
-    });
-    total_allocated += p->allocated();
-    total_active += p->active();
-  }
-
-  for (const auto &i : stale_pipelines) {
-    auto p = i.second;
-    pipelines.push_back({
-      indentation + i.first,
-      std::to_string(p->allocated()),
-      std::to_string(p->active()),
-    });
-    total_allocated += p->allocated();
-    total_active += p->active();
-  }
-
-  pipelines.push_back({
-    "TOTAL",
-    std::to_string(total_allocated),
-    std::to_string(total_active),
-  });
-
-  Listener::for_each([&](Listener *listener) {
-    int count = 0;
-    int buffered = 0;
-    listener->for_each_inbound([&](Inbound *inbound) {
-      count++;
-      buffered += inbound->buffered();
-    });
-    char count_peak[100];
-    sprintf(count_peak, "%d/%d", count, listener->peak_connections());
-    inbounds.push_back({
-      std::to_string(listener->port()),
-      std::string(count_peak),
-      std::to_string(buffered/1024),
-    });
-    total_inbound_connections += count;
-    total_inbound_buffered += buffered;
-  });
-
-  inbounds.push_back({
-    "TOTAL",
-    std::to_string(total_inbound_connections),
-    std::to_string(total_inbound_buffered),
-  });
-
-  struct OutboundSum {
-    int connections = 0;
-    int buffered = 0;
-    int overflowed = 0;
-    double max_connection_time = 0;
-    double avg_connection_time = 0;
-  };
-
-  std::map<std::string, OutboundSum> outbound_sums;
-  Outbound::for_each([&](Outbound *outbound) {
-    char key[1000];
-    std::sprintf(key, "%s:%d", outbound->host().c_str(), outbound->port());
-    auto conn_time = outbound->connection_time() / (outbound->retries() + 1);
-    auto &sum = outbound_sums[key];
-    sum.connections++;
-    sum.buffered += outbound->buffered();
-    sum.overflowed += outbound->overflowed();
-    sum.max_connection_time = std::max(sum.max_connection_time, conn_time);
-    sum.avg_connection_time += conn_time;
-  });
-
-  for (const auto &p : outbound_sums) {
-    const auto &sum = p.second;
-    outbounds.push_back({
-      p.first,
-      std::to_string(sum.connections),
-      std::to_string(sum.buffered/1024),
-      std::to_string(sum.overflowed),
-      std::to_string(int(sum.max_connection_time)),
-      std::to_string(int(sum.avg_connection_time / sum.connections)),
-    });
-  }
-
-  std::cout << std::endl;
-  print_table({ "CLASS", "#INSTANCES" }, objects );
-  std::cout << std::endl;
-  print_table({ "DATA", "CURRENT(KB)", "PEAK(KB)" }, chunks );
-  std::cout << std::endl;
-  print_table({ "PIPELINE", "#ALLOCATED", "#ACTIVE" }, pipelines);
-  std::cout << std::endl;
-  print_table({ "INBOUND", "#CONNECTIONS", "BUFFERED(KB)" }, inbounds);
-  std::cout << std::endl;
-  print_table({ "OUTBOUND", "#CONNECTIONS", "BUFFERED(KB)", "#OVERFLOWED", "MAX_CONN_TIME", "AVG_CONN_TIME" }, outbounds);
-  std::cout << std::endl;
-}
-
-//
-// Handle SIGTSTP
-//
-
-static bool s_need_dump = false;
-
-static void on_sig_tstp(int) {
-  s_need_dump = true;
-}
-
-//
-// Handle SIGHUP
-//
-
-static bool s_need_reload = false;
-
-static void on_sig_hup(int) {
-  s_need_reload = true;
-}
-
-void main_trigger_reload() {
-  s_need_reload = true;
-}
-
-//
-// Handle SIGINT
-//
-
-static bool s_need_shutdown = false;
-static bool s_force_shutdown = false;
-
-static void on_sig_int(int) {
-  if (s_need_shutdown) {
-    s_force_shutdown = true;
-  } else {
-    s_need_shutdown = true;
-  }
-}
-
-//
-// Periodically check signals
-//
-
-static void start_checking_signals() {
-  static Timer timer;
-  static std::function<void()> poll;
-  poll = [&]() {
-    if (s_need_dump) {
-      Log::info("Received SIGTSTP, dumping...");
-      show_status();
-      s_need_dump = false;
-    }
-    if (s_force_shutdown) {
-      Log::info("Forcing to shut down...");
-      Net::stop();
-      Log::info("Stopped.");
-    } else if (s_need_shutdown) {
-      Log::info("Received SIGINT, shutting down...");
-      if (s_admin) s_admin->close();
-      if (auto worker = Worker::current()) worker->stop();
-      int n = 0;
-      PipelineDef::for_each(
-        [&](PipelineDef *pipeline_def) {
-          n += pipeline_def->active();
-        }
-      );
-      if (n > 0) {
-        Log::info("Waiting for remaining %d pipelines... Press Ctrl-C again to force shutdown", n);
-      } else {
-        Net::stop();
-        Log::info("Stopped.");
-      }
-    } else if (s_need_reload) {
-      s_need_reload = false;
-      auto current_worker = Worker::current();
-      if (!current_worker) {
-        Log::error("No program running");
-      } else if (auto codebase = Codebase::current()) {
-        auto &entry = codebase->entry();
-        if (entry.empty()) {
-          Log::error("Script has no entry point");
-          return;
-        }
-        auto current_worker = Worker::current();
-        auto worker = Worker::make();
-        if (worker->load_module(entry) && worker->start()) {
-          current_worker->stop();
-          Status::local.version = codebase->version();
-          Status::local.update_modules();
-          Log::info("Script reloaded");
-        } else {
-          worker->stop();
-          Log::error("Failed reloading script");
-        }
-      } else {
-        Log::error("No codebase");
-      }
-    }
-    timer.schedule(0.2, poll);
-  };
-  poll();
-}
-
-//
 // Periodically check codebase updates
 //
 
@@ -494,13 +188,13 @@ static void start_checking_updates() {
   static Timer timer;
   static std::function<void()> poll;
   poll = [&]() {
-    if (!s_need_shutdown) {
+    if (!Worker::exited()) {
       Status::local.timestamp = utils::now();
       Codebase::current()->sync(
         Status::local,
         [&](bool ok) {
           if (ok) {
-            s_need_reload = true;
+            Worker::restart();
           }
         }
       );
@@ -508,6 +202,44 @@ static void start_checking_updates() {
     timer.schedule(5, poll);
   };
   poll();
+}
+
+//
+// Handle signals
+//
+
+static void handle_signal(int sig) {
+  if (auto worker = Worker::current()) {
+    if (worker->handling_signal(sig)) {
+      return;
+    }
+  }
+
+  switch (sig) {
+    case SIGINT:
+      if (s_admin) s_admin->close();
+      Worker::exit(-1);
+      break;
+    case SIGHUP:
+      Worker::restart();
+      break;
+    case SIGTSTP:
+      Status::dump_memory();
+      break;
+  }
+}
+
+//
+// Wait for signals
+//
+
+static void wait_for_signals(asio::signal_set &signals) {
+  signals.async_wait(
+    [&](const std::error_code &ec, int sig) {
+      if (!ec) handle_signal(sig);
+      wait_for_signals(signals);
+    }
+  );
 }
 
 //
@@ -523,8 +255,6 @@ int main(int argc, char *argv[]) {
   OpenSSL_add_all_algorithms();
 
   tls::TLSSession::init();
-
-  int ret_val = 0;
 
   try {
     Options opts(argc, argv);
@@ -604,8 +334,7 @@ int main(int argc, char *argv[]) {
         Status::local,
         [&](bool ok) {
           if (!ok) {
-            ret_val = -1;
-            Net::stop();
+            Worker::exit(-1);
             return;
           }
 
@@ -614,19 +343,17 @@ int main(int argc, char *argv[]) {
           auto mod = worker->load_module(entry);
 
           if (!mod) {
-            ret_val = -1;
-            Net::stop();
+            Worker::exit(-1);
             return;
           }
 
           if (opts.verify) {
-            Net::stop();
+            Worker::exit(0);
             return;
           }
 
           if (!worker->start()) {
-            ret_val = -1;
-            Net::stop();
+            Worker::exit(-1);
             return;
           }
 
@@ -643,11 +370,11 @@ int main(int argc, char *argv[]) {
       );
     }
 
-    signal(SIGTSTP, on_sig_tstp);
-    signal(SIGHUP, on_sig_hup);
-    signal(SIGINT, on_sig_int);
-
-    start_checking_signals();
+    asio::signal_set signals(Net::service());
+    signals.add(SIGINT);
+    signals.add(SIGHUP);
+    signals.add(SIGTSTP);
+    wait_for_signals(signals);
 
     Net::run();
 
@@ -662,5 +389,5 @@ int main(int argc, char *argv[]) {
     return -1;
   }
 
-  return ret_val;
+  return Worker::exit_code();
 }

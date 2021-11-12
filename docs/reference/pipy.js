@@ -14,3 +14,8 @@ function pipy(globals) {}
  * @memberof pipy
  */
 pipy.load = function(filename) {}
+
+/**
+ * @param {number} [exitCode]
+ */
+pipy.exit = function(exitCode) {}

@@ -97,7 +97,13 @@ template<> void ClassDef<Pipy>::init() {
   });
 
   method("restart", [](Context&, Object*, Value&) {
-    main_trigger_reload();
+    Worker::restart();
+  });
+
+  method("exit", [](Context &ctx, Object*, Value&) {
+    int exit_code = 0;
+    if (!ctx.arguments(0, &exit_code)) return;
+    Worker::exit(exit_code);
   });
 }
 

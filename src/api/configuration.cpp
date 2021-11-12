@@ -133,27 +133,10 @@ void Configuration::listen(int port, pjs::Object *options) {
   m_current_filters = &m_listens.back().filters;
 }
 
-void Configuration::task() {
+void Configuration::task(const std::string &when) {
   std::string name("Task #");
   name += std::to_string(m_tasks.size() + 1);
-  m_tasks.push_back({ name, "" });
-  m_current_filters = &m_tasks.back().filters;
-}
-
-void Configuration::task(double interval) {
-  if (interval < 0.01 || interval > 24 * 60 * 60) throw std::runtime_error("time interval out of range");
-  std::string name("Task #");
-  name += std::to_string(m_tasks.size() + 1);
-  m_tasks.push_back({ name, utils::to_string(interval) + 's' });
-  m_current_filters = &m_tasks.back().filters;
-}
-
-void Configuration::task(const std::string &interval) {
-  auto t = utils::get_seconds(interval);
-  if (t < 0.01 || t > 24 * 60 * 60) throw std::runtime_error("time interval out of range");
-  std::string name("Task #");
-  name += std::to_string(m_tasks.size() + 1);
-  m_tasks.push_back({ name, interval });
+  m_tasks.push_back({ name, when });
   m_current_filters = &m_tasks.back().filters;
 }
 
@@ -425,7 +408,7 @@ void Configuration::apply(Module *mod) {
 
   for (auto &i : m_tasks) {
     auto p = make_pipeline(PipelineDef::TASK, i.name, i.filters);
-    auto t = Task::make(i.interval, p);
+    auto t = Task::make(i.when, p);
     mod->worker()->add_task(t);
   }
 }
@@ -465,8 +448,8 @@ void Configuration::draw(Graph &g) {
   for (const auto &i : m_tasks) {
     Graph::Pipeline p;
     p.name = i.name;
-    p.name += " (every ";
-    p.name += i.interval;
+    p.name += " (";
+    p.name += i.when;
     p.name += ')';
     add_filters(p, i.filters);
     g.add_root_pipeline(std::move(p));
@@ -546,19 +529,10 @@ template<> void ClassDef<Configuration>::init() {
 
   // Configuration.task
   method("task", [](Context &ctx, Object *thiz, Value &result) {
-    double interval;
-    std::string interval_str;
+    std::string when;
     try {
-      if (ctx.argc() == 0) {
-        thiz->as<Configuration>()->task();
-      } else if (ctx.try_arguments(1, &interval)) {
-        thiz->as<Configuration>()->task(interval);
-      } else if (ctx.try_arguments(1, &interval_str)) {
-        thiz->as<Configuration>()->task(interval_str);
-      } else {
-        ctx.error_argument_type(0, "a number or a string");
-        return;
-      }
+      if (!ctx.arguments(0, &when)) return;
+      thiz->as<Configuration>()->task(when);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -915,10 +889,10 @@ template<> void ClassDef<Configuration>::init() {
   // Configuration.merge
   method("merge", [](Context &ctx, Object *thiz, Value &result) {
     pjs::Str *target;
-    pjs::Function *selector = nullptr;
-    if (!ctx.arguments(1, &target, &selector)) return;
+    pjs::Value key;
+    if (!ctx.arguments(2, &target, &key)) return;
     try {
-      thiz->as<Configuration>()->merge(target, selector);
+      thiz->as<Configuration>()->merge(target, key);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -928,10 +902,10 @@ template<> void ClassDef<Configuration>::init() {
   // Configuration.mux
   method("mux", [](Context &ctx, Object *thiz, Value &result) {
     pjs::Str *target;
-    pjs::Function *selector = nullptr;
-    if (!ctx.arguments(1, &target, &selector)) return;
+    pjs::Value key;
+    if (!ctx.arguments(2, &target, &key)) return;
     try {
-      thiz->as<Configuration>()->mux(target, selector);
+      thiz->as<Configuration>()->mux(target, key);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -941,10 +915,10 @@ template<> void ClassDef<Configuration>::init() {
   // Configuration.muxHTTP
   method("muxHTTP", [](Context &ctx, Object *thiz, Value &result) {
     pjs::Str *target;
-    pjs::Value channel;
-    if (!ctx.arguments(1, &target, &channel)) return;
+    pjs::Value key;
+    if (!ctx.arguments(2, &target, &key)) return;
     try {
-      thiz->as<Configuration>()->mux_http(target, channel);
+      thiz->as<Configuration>()->mux_http(target, key);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

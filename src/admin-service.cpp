@@ -100,8 +100,9 @@ void AdminService::open(int port) {
 }
 
 void AdminService::close() {
-  auto listener = Listener::get(m_port);
-  listener->pipeline_def(nullptr);
+  if (auto listener = Listener::get(m_port)) {
+    listener->pipeline_def(nullptr);
+  }
 }
 
 auto AdminService::handle(Message *req) -> Message* {

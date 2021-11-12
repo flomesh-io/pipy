@@ -29,6 +29,7 @@
 #include "pjs/pjs.hpp"
 #include "event.hpp"
 #include "pipeline.hpp"
+#include "net.hpp"
 #include "timer.hpp"
 
 #include <set>
@@ -39,31 +40,42 @@ class PipelineDef;
 
 class Task : public EventTarget {
 public:
-  static auto make(const std::string &interval, PipelineDef *pipeline_def) -> Task* {
-    return new Task(interval, pipeline_def);
+  static auto make(const std::string &when, PipelineDef *pipeline_def) -> Task* {
+    return new Task(when, pipeline_def);
   }
 
-  auto name() const -> const std::string& { return m_name; }
+  enum Type {
+    ONE_SHOT,
+    CRON,
+    SIGNAL,
+  };
+
+  auto when() const -> const std::string& { return m_when; }
+  auto type() const -> Type { return m_type; }
+  auto interval() const -> int { return m_interval; }
+  auto signal() const -> int { return m_signal; }
   auto pipeline_def() const -> PipelineDef* { return m_pipeline_def; }
   auto pipeline() const -> Pipeline* { return m_pipeline; }
   bool active() const;
-  bool start();
+  void start();
 
 private:
-  Task(const std::string &interval, PipelineDef *pipeline_def);
+  Task(const std::string &when, PipelineDef *pipeline_def);
   ~Task();
 
-  std::string m_name;
-  double m_interval;
+  std::string m_when;
+  Type m_type = ONE_SHOT;
+  double m_interval = 0;
+  int m_signal = 0;
+  Timer m_timer;
+  asio::signal_set m_signal_set;
   pjs::Ref<PipelineDef> m_pipeline_def;
   pjs::Ref<Pipeline> m_pipeline;
-  bool m_stopped = false;
-  Timer m_timer;
 
   void schedule(double interval);
+  void wait();
   void tick();
   void run();
-  void stop();
 
   virtual void on_event(Event *evt) override;
 
