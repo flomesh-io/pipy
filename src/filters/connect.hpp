@@ -27,10 +27,9 @@
 #define CONNECT_HPP
 
 #include "filter.hpp"
+#include "outbound.hpp"
 
 namespace pipy {
-
-class Outbound;
 
 //
 // Connect
@@ -39,6 +38,7 @@ class Outbound;
 class Connect : public Filter {
 public:
   Connect(const pjs::Value &target, pjs::Object *options);
+  Connect(const pjs::Value &target, const Outbound::Options &options);
 
 private:
   Connect(const Connect &r);
@@ -52,9 +52,7 @@ private:
   pjs::Value m_target;
   pjs::Ref<Outbound> m_outbound;
   pjs::Ref<Input> m_output;
-  size_t m_buffer_limit = 0;
-  int m_retry_count = 0;
-  double m_retry_delay = 0;
+  Outbound::Options m_options;
 };
 
 } // namespace pipy

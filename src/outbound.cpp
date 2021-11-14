@@ -35,10 +35,11 @@ using tcp = asio::ip::tcp;
 
 List<Outbound> Outbound::s_all_outbounds;
 
-Outbound::Outbound(EventTarget::Input *output)
+Outbound::Outbound(EventTarget::Input *output, const Options &options)
   : m_resolver(Net::service())
   , m_socket(Net::service())
   , m_output(output)
+  , m_options(options)
 {
   Log::debug("[outbound %p] ++", this);
   s_all_outbounds.push(this);
@@ -52,15 +53,14 @@ Outbound::~Outbound() {
 void Outbound::connect(const std::string &host, int port) {
   m_host = host;
   m_port = port;
-  retain();
-  connect(0);
+  start(0);
 }
 
 void Outbound::send(const pjs::Ref<Data> &data) {
-  if (!m_writing_ended) {
+  if (!m_ended) {
     if (data->size() > 0) {
       if (!m_overflowed) {
-        if (m_buffer_limit > 0 && m_buffer.size() >= m_buffer_limit) {
+        if (m_options.buffer_limit > 0 && m_buffer.size() >= m_options.buffer_limit) {
           Log::error(
             "Outbound: %p to host = %s port = %d buffer overflow, size = %d",
             this, m_host.c_str(), m_port, m_buffer.size());
@@ -80,227 +80,276 @@ void Outbound::send(const pjs::Ref<Data> &data) {
 }
 
 void Outbound::flush() {
-  if (!m_writing_ended) {
+  if (!m_ended) {
     pump();
   }
 }
 
 void Outbound::end() {
-  if (!m_writing_ended) {
-    m_writing_ended = true;
-    pump();
-    close();
-    free();
+  if (!m_ended) {
+    if (m_connected) {
+      pump();
+      m_socket.shutdown(tcp::socket::shutdown_send);
+    }
+    m_ended = true;
   }
 }
 
-void Outbound::connect(double delay) {
-
-  auto start_pipeline = [=]() {
-    Log::debug("[outbound %p] connected to upstream %s", this, m_host.c_str());
-    m_connection_time += utils::now() - m_start_time;
-    m_connected = true;
-    m_address = m_socket.remote_endpoint().address().to_string();
-    if (m_writing_ended && m_buffer.empty()) {
-      m_reading_ended = true;
-      close();
-      free();
-    } else {
-      pump();
-      receive();
-    }
-  };
-
-  auto on_connected = [=](const std::error_code &ec) {
-    if (ec) {
-      Log::error(
-        "[outbound %p] cannot connect to host = %s port = %d, %s",
-        this, m_host.c_str(), m_port, ec.message().c_str());
-      if (should_reconnect()) {
-        reconnect();
-      } else {
-        Pipeline::AutoReleasePool arp;
-        output_end(StreamEnd::make(StreamEnd::CONNECTION_REFUSED));
-        cancel_connecting();
-      }
-      return;
-    }
-
-    start_pipeline();
-  };
-
-  auto on_resolved = [=](
-    const std::error_code &ec,
-    tcp::resolver::results_type result
-  ) {
-    if (ec) {
-      Pipeline::AutoReleasePool arp;
-      Log::error(
-        "[outbound %p] failed to resolve hostname %s, %s",
-        this, m_host.c_str(), ec.message().c_str());
-      output_end(StreamEnd::make(StreamEnd::CANNOT_RESOLVE));
-      cancel_connecting();
-      return;
-    }
-
-    m_socket.async_connect(*result, on_connected);
-  };
-
-  auto resolve = [=]() {
-    auto host = m_host;
-    if (host == "localhost") host = "127.0.0.1";
-    m_start_time = utils::now();
-    m_resolver.async_resolve(
-      tcp::resolver::query(host, std::to_string(m_port)),
-      on_resolved);
-    if (m_retries > 0) {
-      Log::warn("[outbound %p] retry connection to host = %s port = %d... (times = %d)",
-        this, m_host.c_str(), m_port, m_retries
-      );
-    }
-  };
-
+void Outbound::start(double delay) {
   if (delay > 0) {
-    m_timer.schedule(delay, resolve);
+    m_retry_timer.schedule(
+      delay,
+      [this]() { resolve(); }
+    );
   } else {
     resolve();
   }
 }
 
-bool Outbound::should_reconnect() {
-  if (m_retry_count >= 0 && m_retries >= m_retry_count) {
-    return false;
-  } else {
-    return true;
+void Outbound::resolve() {
+  auto host = m_host;
+  if (host == "localhost") host = "127.0.0.1";
+
+  m_resolver.async_resolve(
+    tcp::resolver::query(host, std::to_string(m_port)),
+    [this](
+      const std::error_code &ec,
+      tcp::resolver::results_type results
+    ) {
+      if (ec != asio::error::operation_aborted) {
+        if (ec) {
+          Log::error(
+            "[outbound %p] cannot resolve hostname %s, %s",
+            this, m_host.c_str(), ec.message().c_str()
+          );
+          restart(StreamEnd::CANNOT_RESOLVE);
+
+        } else {
+          auto &result = *results;
+          const auto &target = result.endpoint();
+          const auto &addr = target.address();
+          m_address = addr.is_v6() ? addr.to_v6().to_string() : addr.to_v4().to_string();
+          connect(target);
+        }
+      }
+
+      release();
+    }
+  );
+
+  if (m_options.connect_timeout > 0) {
+    m_connect_timer.schedule(
+      m_options.connect_timeout,
+      [this]() {
+        m_resolver.cancel();
+        m_socket.cancel();
+        restart(StreamEnd::CONNECTION_TIMEOUT);
+      }
+    );
   }
+
+  m_start_time = utils::now();
+
+  if (m_retries > 0) {
+    Log::warn("[outbound %p] retry connecting to %s [%s]:%d... (retries = %d)",
+      this, m_host.c_str(), m_address.c_str(), m_port, m_retries
+    );
+  }
+
+  retain();
 }
 
-void Outbound::cancel_connecting() {
-  m_reading_ended = true;
-  free();
+void Outbound::connect(const asio::ip::tcp::endpoint &target) {
+  m_socket.async_connect(
+    target,
+    [=](const std::error_code &ec) {
+      if (ec != asio::error::operation_aborted) {
+        if (m_options.connect_timeout > 0) {
+          m_connect_timer.cancel();
+        }
+
+        if (ec) {
+          Log::error(
+            "[outbound %p] cannot connect to %s [%s]:%d, %s",
+            this, m_host.c_str(), m_address.c_str(), m_port, ec.message().c_str()
+          );
+          restart(StreamEnd::CONNECTION_REFUSED);
+
+        } else {
+          Log::debug(
+            "[outbound %p] connected to %s [%s]:%d",
+            this, m_host.c_str(), m_address.c_str(), m_port
+          );
+          m_connection_time += utils::now() - m_start_time;
+          m_connected = true;
+          if (m_ended && m_buffer.empty()) {
+            close(StreamEnd::NO_ERROR);
+          } else {
+            receive();
+            pump();
+          }
+        }
+      }
+
+      release();
+    }
+  );
+
+  retain();
 }
 
-void Outbound::reconnect() {
-  std::error_code ec;
-  m_socket.close(ec);
-  m_retries++;
-  connect(m_retry_delay);
+void Outbound::restart(StreamEnd::Error err) {
+  if (m_options.retry_count >= 0 && m_retries >= m_options.retry_count) {
+    Pipeline::AutoReleasePool arp;
+    output(StreamEnd::make(err));
+  } else {
+    m_retries++;
+    std::error_code ec;
+    m_socket.close(ec);
+    start(m_options.retry_delay);
+  }
 }
 
 void Outbound::receive() {
   static Data::Producer s_data_producer("Outbound");
-
   pjs::Ref<Data> buffer(Data::make(RECEIVE_BUFFER_SIZE, &s_data_producer));
-
-  auto on_received = [=](const std::error_code &ec, size_t n) {
-    Pipeline::AutoReleasePool arp;
-
-    if (n > 0) {
-      buffer->pop(buffer->size() - n);
-      output(buffer);
-      output(Data::flush());
-    }
-
-    if (ec) {
-      if (ec == asio::error::eof || ec == asio::error::operation_aborted) {
-        Log::debug(
-          ec == asio::error::eof
-            ? "[outbound %p] connection closed by host = %s port = %d"
-            : "[outbound %p] closed connection to host = %s port = %d",
-          this, m_host.c_str(), m_port);
-        output_end(StreamEnd::make());
-      } else {
-        auto msg = ec.message();
-        Log::warn(
-          "[outbound %p] error reading from host = %s port = %d, %s",
-          this, m_host.c_str(), m_port, msg.c_str());
-        output_end(StreamEnd::make(StreamEnd::READ_ERROR));
-      }
-
-      m_reading_ended = true;
-      free();
-
-    } else if (!m_writing_ended) {
-      receive();
-    }
-  };
 
   m_socket.async_read_some(
     DataChunks(buffer->chunks()),
-    on_received);
-}
+    [=](const std::error_code &ec, size_t n) {
+      if (ec != asio::error::operation_aborted) {
+        if (m_options.read_timeout > 0){
+          m_read_timer.cancel();
+        }
 
-void Outbound::output(Event *evt) {
+        if (n > 0) {
+          Pipeline::AutoReleasePool arp;
+          buffer->pop(buffer->size() - n);
+          output(buffer);
+          output(Data::flush());
+        }
+
+        if (ec) {
+          if (ec == asio::error::eof) {
+            Log::debug(
+              "[outbound %p] connection closed by %s [%s]:%d",
+              this, m_host.c_str(), m_address.c_str(), m_port
+            );
+            close(StreamEnd::NO_ERROR);
+          } else {
+            Log::warn(
+              "[outbound %p] error reading from host = %s port = %d, %s",
+              this, m_host.c_str(), m_port, ec.message().c_str()
+            );
+            close(StreamEnd::READ_ERROR);
+          }
+
+        } else {
+          receive();
+        }
+      }
+
+      release();
+    }
+  );
+
+  if (m_options.read_timeout > 0) {
+    m_read_timer.schedule(
+      m_options.read_timeout,
+      [this]() {
+        close(StreamEnd::READ_TIMEOUT);
+      }
+    );
+  }
+
   retain();
-  m_output->input(evt);
-  release();
-}
-
-void Outbound::output_end(StreamEnd *end) {
-  pjs::Ref<StreamEnd> evt(end);
-  output(evt);
 }
 
 void Outbound::pump() {
-  if (!m_connected) return;
-  if (m_pumping) return;
-  if (m_buffer.empty()) return;
-
-  auto on_sent = [=](const std::error_code &ec, std::size_t n) {
-    m_buffer.shift(n);
-    m_pumping = false;
-
-    if (ec) {
-      auto msg = ec.message();
-      Log::warn(
-        "[outbound %p] error writing to host = %s port = %d, %s",
-        this, m_host.c_str(), m_port, msg.c_str());
-      m_buffer.clear();
-      m_writing_ended = true;
-
-    } else {
-      pump();
-    }
-
-    if (m_overflowed && m_buffer.size() == 0) {
-      Log::error(
-        "[outbound %p] %d bytes sending to host = %s port = %d were discared due to overflow",
-        this, m_discarded_data_size, m_host.c_str(), m_port
-      );
-      m_writing_ended = true;
-    }
-
-    if (m_writing_ended) {
-      close();
-      free();
-    }
-  };
+  if (m_pumping || !m_connected) return;
 
   m_socket.async_write_some(
     DataChunks(m_buffer.chunks()),
-    on_sent
+    [=](const std::error_code &ec, std::size_t n) {
+      if (ec != asio::error::operation_aborted) {
+        if (m_options.write_timeout > 0) {
+          m_write_timer.cancel();
+        }
+
+        m_buffer.shift(n);
+        m_pumping = false;
+
+        if (ec) {
+          Log::warn(
+            "[outbound %p] error writing to %s [%s]:%d, %s",
+            this, m_host.c_str(), m_address.c_str(), m_port, ec.message().c_str()
+          );
+          close(StreamEnd::WRITE_ERROR);
+
+        } else if (m_overflowed && m_buffer.size() == 0) {
+          Log::error(
+            "[outbound %p] data to %s [%s]:%d overflowed by %d bytes",
+            this, m_host.c_str(), m_address.c_str(), m_port, m_discarded_data_size
+          );
+          close(StreamEnd::BUFFER_OVERFLOW);
+
+        } else if (m_ended && m_buffer.size() == 0) {
+          close(StreamEnd::NO_ERROR);
+
+        } else {
+          pump();
+        }
+      }
+
+      release();
+    }
   );
 
+  if (m_options.write_timeout > 0) {
+    m_write_timer.schedule(
+      m_options.write_timeout,
+      [this]() {
+        close(StreamEnd::WRITE_TIMEOUT);
+      }
+    );
+  }
+
   m_pumping = true;
+
+  retain();
 }
 
-void Outbound::close() {
+void Outbound::output(Event *evt) {
+  m_output->input(evt);
+}
+
+void Outbound::close(StreamEnd::Error err) {
   if (!m_connected) return;
-  if (m_pumping) return;
+
+  m_buffer.clear();
+  m_discarded_data_size = 0;
+  m_overflowed = false;
+  m_ended = false;
+  m_retries = 0;
+  m_connected = false;
 
   std::error_code ec;
   m_socket.close(ec);
-  if (ec) {
-    Log::error("[outbound %p] error closing socket to host = %s port = %d, %s", this, m_host.c_str(), m_port, ec.message().c_str());
-  } else {
-    Log::debug("[outbound %p] connection closed to host = %s port = %d", this, m_host.c_str(), m_port);
-  }
-}
 
-void Outbound::free() {
-  if (!m_pumping && m_reading_ended && m_writing_ended) {
-    release();
+  if (ec) {
+    Log::error(
+      "[outbound %p] error closing socket to %s [%s]:%d, %s",
+      this, m_host.c_str(), m_address.c_str(), m_port, ec.message().c_str()
+    );
+  } else {
+    Log::debug(
+      "[outbound %p] connection closed to %s [%s]:%d",
+      this, m_host.c_str(), m_address.c_str(), m_port
+    );
   }
+
+  Pipeline::AutoReleasePool arp;
+  output(StreamEnd::make(err));
 }
 
 } // namespace pipy

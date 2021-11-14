@@ -29,6 +29,7 @@
 #include "pjs/pjs.hpp"
 #include "api/http.hpp"
 #include "filter.hpp"
+#include "outbound.hpp"
 
 #include <functional>
 #include <string>
@@ -56,8 +57,8 @@ public:
     DELETE,
   };
 
-  Fetch(pjs::Str *host);
-  Fetch(const std::string &host);
+  Fetch(pjs::Str *host, const Outbound::Options &options);
+  Fetch(const std::string &host, const Outbound::Options &options);
 
   bool busy() const {
     return m_current_request;

@@ -64,19 +64,19 @@ void Fetch::Receiver::dump(std::ostream &out) {
   out << "Fetch::Receiver";
 }
 
-Fetch::Fetch(pjs::Str *host)
+Fetch::Fetch(pjs::Str *host, const Outbound::Options &options)
   : m_host(host)
 {
   m_pipeline_def_connect = PipelineDef::make(nullptr, PipelineDef::NAMED, "Fetch Connection");
-  m_pipeline_def_connect->append(new Connect(m_host.get(), nullptr));
+  m_pipeline_def_connect->append(new Connect(m_host.get(), options));
 
   m_pipeline_def = PipelineDef::make(nullptr, PipelineDef::NAMED, "Fetch");
   m_pipeline_def->append(new http::Mux())->add_sub_pipeline(m_pipeline_def_connect);
   m_pipeline_def->append(new Receiver(this));
 }
 
-Fetch::Fetch(const std::string &host)
-  : Fetch(pjs::Str::make(host))
+Fetch::Fetch(const std::string &host, const Outbound::Options &options)
+  : Fetch(pjs::Str::make(host), options)
 {
 }
 

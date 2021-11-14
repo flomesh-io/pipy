@@ -48,8 +48,12 @@ auto StreamEnd::message() const -> const char* {
     case UNKNOWN_ERROR: return "unknown error";
     case RUNTIME_ERROR: return "runtime error";
     case READ_ERROR: return "read error";
+    case WRITE_ERROR: return "write error";
     case CANNOT_RESOLVE: return "cannot resolve";
     case CONNECTION_REFUSED: return "connection refused";
+    case CONNECTION_TIMEOUT: return "connection timeout";
+    case READ_TIMEOUT: return "read timeout";
+    case WRITE_TIMEOUT: return "write timeout";
     case UNAUTHORIZED: return "unauthorized";
     case BUFFER_OVERFLOW: return "buffer overflow";
   }

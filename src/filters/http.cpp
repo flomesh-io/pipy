@@ -58,6 +58,8 @@ static const pjs::Ref<pjs::Str> s_cannot_resolve(pjs::Str::make("Cannot Resolve"
 static const pjs::Ref<pjs::Str> s_connection_refused(pjs::Str::make("Connection Refused"));
 static const pjs::Ref<pjs::Str> s_unauthorized(pjs::Str::make("Unauthorized"));
 static const pjs::Ref<pjs::Str> s_read_error(pjs::Str::make("Read Error"));
+static const pjs::Ref<pjs::Str> s_write_error(pjs::Str::make("Write Error"));
+static const pjs::Ref<pjs::Str> s_gateway_timeout(pjs::Str::make("Gateway Timeout"));
 
 // HTTP status code as in:
 // https://www.iana.org/assignments/http-status-codes/http-status-codes.txt
@@ -450,6 +452,16 @@ void Decoder::stream_end(StreamEnd *end) {
     case StreamEnd::READ_ERROR:
       status_code = 502;
       status_text = s_read_error;
+      break;
+    case StreamEnd::WRITE_ERROR:
+      status_code = 502;
+      status_text = s_write_error;
+      break;
+    case StreamEnd::CONNECTION_TIMEOUT:
+    case StreamEnd::READ_TIMEOUT:
+    case StreamEnd::WRITE_TIMEOUT:
+      status_code = 504;
+      status_text = s_gateway_timeout;
       break;
     default:
       status_code = 502;

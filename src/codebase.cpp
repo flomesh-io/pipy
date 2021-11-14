@@ -261,7 +261,7 @@ private:
   virtual void sync(const Status &status, const std::function<void(bool)> &on_update) override;
 
   pjs::Ref<URL> m_url;
-  Fetch m_fetch;
+  Fetch* m_fetch;
   bool m_downloaded = false;
   std::string m_etag;
   std::string m_date;
@@ -280,8 +280,14 @@ private:
 
 CodebaseFromHTTP::CodebaseFromHTTP(const std::string &url)
   : m_url(URL::make(pjs::Value(url).s()))
-  , m_fetch(m_url->hostname()->str() + ':' + m_url->port()->str())
 {
+  Outbound::Options options;
+  options.retry_count = -1;
+  options.retry_delay = 1;
+
+  auto host = m_url->hostname()->str() + ':' + m_url->port()->str();
+  m_fetch = new Fetch(host, options);
+
   auto path = m_url->pathname()->str();
   auto i = path.find_last_of('/');
   if (i == std::string::npos) {
@@ -298,6 +304,7 @@ CodebaseFromHTTP::CodebaseFromHTTP(const std::string &url)
 }
 
 CodebaseFromHTTP::~CodebaseFromHTTP() {
+  delete m_fetch;
 }
 
 auto CodebaseFromHTTP::list(const std::string &path) -> std::list<std::string> {
@@ -329,13 +336,13 @@ auto CodebaseFromHTTP::get(const std::string &path) -> pipy::Data* {
 }
 
 void CodebaseFromHTTP::sync(const Status &status, const std::function<void(bool)> &on_update) {
-  if (m_fetch.busy()) return;
+  if (m_fetch->busy()) return;
 
   std::stringstream ss;
   status.to_json(ss);
 
   // Post status
-  m_fetch(
+  (*m_fetch)(
     Fetch::POST,
     m_url->path(),
     m_request_header_post_status,
@@ -343,7 +350,7 @@ void CodebaseFromHTTP::sync(const Status &status, const std::function<void(bool)
     [=](http::ResponseHead *head, Data *body) {
 
       // Check updates
-      m_fetch(
+      (*m_fetch)(
         Fetch::HEAD,
         m_url->path(),
         nullptr,
@@ -367,7 +374,7 @@ void CodebaseFromHTTP::sync(const Status &status, const std::function<void(bool)
           if (!m_downloaded || etag_str != m_etag || date_str != m_date) {
             download(on_update);
           } else {
-            m_fetch.close();
+            m_fetch->close();
           }
         }
       );
@@ -377,7 +384,7 @@ void CodebaseFromHTTP::sync(const Status &status, const std::function<void(bool)
 }
 
 void CodebaseFromHTTP::download(const std::function<void(bool)> &on_update) {
-  m_fetch(
+  (*m_fetch)(
     Fetch::GET,
     m_url->path(),
     nullptr,
@@ -420,7 +427,7 @@ void CodebaseFromHTTP::download(const std::function<void(bool)> &on_update) {
       } else {
         m_files.clear();
         m_files[m_root] = body;
-        m_fetch.close();
+        m_fetch->close();
         m_entry = m_root;
         m_downloaded = true;
         on_update(true);
@@ -432,7 +439,7 @@ void CodebaseFromHTTP::download(const std::function<void(bool)> &on_update) {
 void CodebaseFromHTTP::download_next(const std::function<void(bool)> &on_update) {
   if (m_dl_list.empty()) {
     m_files = std::move(m_dl_temp);
-    m_fetch.close();
+    m_fetch->close();
     m_downloaded = true;
     on_update(true);
     return;
@@ -441,7 +448,7 @@ void CodebaseFromHTTP::download_next(const std::function<void(bool)> &on_update)
   auto name = m_dl_list.front();
   auto path = m_base + name;
   m_dl_list.pop_front();
-  m_fetch(
+  (*m_fetch)(
     Fetch::GET,
     pjs::Value(path).s(),
     nullptr,
@@ -473,7 +480,7 @@ void CodebaseFromHTTP::response_error(const char *method, const char *path, http
     head->status(),
     head->status_text()->c_str()
   );
-  m_fetch.close();
+  m_fetch->close();
 }
 
 //

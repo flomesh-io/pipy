@@ -35,36 +35,68 @@ Connect::Connect(const pjs::Value &target, pjs::Object *options)
 {
   if (options) {
     pjs::Value buffer_limit, retry_count, retry_delay;
+    pjs::Value connect_timeout, read_timeout, write_timeout;
     options->get("bufferLimit", buffer_limit);
     options->get("retryCount", retry_count);
     options->get("retryDelay", retry_delay);
+    options->get("connectTimeout", connect_timeout);
+    options->get("readTimeout", read_timeout);
+    options->get("writeTimeout", write_timeout);
 
     if (!buffer_limit.is_undefined()) {
       if (buffer_limit.is_string()) {
-        m_buffer_limit = utils::get_byte_size(buffer_limit.s()->str());
+        m_options.buffer_limit = utils::get_byte_size(buffer_limit.s()->str());
       } else {
-        m_buffer_limit = buffer_limit.to_number();
+        m_options.buffer_limit = buffer_limit.to_number();
       }
     }
 
-    if (!retry_count.is_undefined()) m_retry_count = retry_count.to_number();
+    if (!retry_count.is_undefined()) m_options.retry_count = retry_count.to_number();
 
     if (!retry_delay.is_undefined()) {
       if (retry_delay.is_string()) {
-        m_retry_delay = utils::get_seconds(retry_delay.s()->str());
+        m_options.retry_delay = utils::get_seconds(retry_delay.s()->str());
       } else {
-        m_retry_delay = retry_delay.to_number();
+        m_options.retry_delay = retry_delay.to_number();
+      }
+    }
+
+    if (!connect_timeout.is_undefined()) {
+      if (connect_timeout.is_string()) {
+        m_options.connect_timeout = utils::get_seconds(connect_timeout.s()->str());
+      } else {
+        m_options.connect_timeout = connect_timeout.to_number();
+      }
+    }
+
+    if (!read_timeout.is_undefined()) {
+      if (read_timeout.is_string()) {
+        m_options.read_timeout = utils::get_seconds(read_timeout.s()->str());
+      } else {
+        m_options.read_timeout = read_timeout.to_number();
+      }
+    }
+
+    if (!write_timeout.is_undefined()) {
+      if (write_timeout.is_string()) {
+        m_options.write_timeout = utils::get_seconds(write_timeout.s()->str());
+      } else {
+        m_options.write_timeout = write_timeout.to_number();
       }
     }
   }
 }
 
+Connect::Connect(const pjs::Value &target, const Outbound::Options &options)
+  : m_target(target)
+  , m_options(options)
+{
+}
+
 Connect::Connect(const Connect &r)
   : Filter(r)
   , m_target(r.m_target)
-  , m_buffer_limit(r.m_buffer_limit)
-  , m_retry_count(r.m_retry_count)
-  , m_retry_delay(r.m_retry_delay)
+  , m_options(r.m_options)
 {
 }
 
@@ -107,10 +139,7 @@ void Connect::process(Event *evt) {
     std::string host; int port;
     if (utils::get_host_port(s->str(), host, port)) {
       m_output = Input::make(output());
-      auto outbound = new Outbound(m_output);
-      outbound->set_buffer_limit(m_buffer_limit);
-      outbound->set_retry_count(m_retry_count);
-      outbound->set_retry_delay(m_retry_delay);
+      auto outbound = new Outbound(m_output, m_options);
       outbound->connect(host, port);
       m_outbound = outbound;
     } else {

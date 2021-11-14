@@ -47,7 +47,16 @@ class Outbound :
   public List<Outbound>::Item
 {
 public:
-  Outbound(EventTarget::Input *output);
+  struct Options {
+    size_t buffer_limit = 0;
+    int    retry_count = 0;
+    double retry_delay = 0;
+    double connect_timeout = 0;
+    double read_timeout = 0;
+    double write_timeout = 0;
+  };
+
+  Outbound(EventTarget::Input *output, const Options &options);
   ~Outbound();
 
   static void for_each(const std::function<void(Outbound*)> &cb) {
@@ -57,56 +66,50 @@ public:
   }
 
   auto host() const -> const std::string& { return m_host; }
-  auto address() const -> const std::string& { return m_address; }
   auto port() const -> int { return m_port; }
+  auto address() const -> const std::string& { return m_address; }
   bool connected() const { return m_connected; }
-  bool overflowed() const { return m_overflowed; }
-  auto retries() const -> int { return m_retries; }
   auto buffered() const -> int { return m_buffer.size(); }
+  bool overflowed() const { return m_overflowed; }
+  bool ended() const { return m_ended; }
+  auto retries() const -> int { return m_retries; }
   auto connection_time() const -> double { return m_connection_time; }
 
-  void set_buffer_limit(size_t size) { m_buffer_limit = size; }
-  void set_retry_count(int n) { m_retry_count = n; }
-  void set_retry_delay(double t) { m_retry_delay = t; }
-
   void connect(const std::string &host, int port);
-
   void send(const pjs::Ref<Data> &data);
   void flush();
   void end();
 
 private:
+  int m_port;
   std::string m_host;
   std::string m_address;
-  int m_port;
   pjs::Ref<EventTarget::Input> m_output;
   asio::ip::tcp::resolver m_resolver;
   asio::ip::tcp::socket m_socket;
-  Timer m_timer;
-  int m_retry_count = 0;
-  double m_retry_delay = 0;
+  Options m_options;
   int m_retries = 0;
   double m_start_time = 0;
   double m_connection_time = 0;
+  Timer m_connect_timer;
+  Timer m_retry_timer;
+  Timer m_read_timer;
+  Timer m_write_timer;
   Data m_buffer;
-  size_t m_buffer_limit = 0;
   size_t m_discarded_data_size = 0;
   bool m_connected = false;
   bool m_overflowed = false;
   bool m_pumping = false;
-  bool m_reading_ended = false;
-  bool m_writing_ended = false;
+  bool m_ended = false;
 
-  void connect(double delay);
-  bool should_reconnect();
-  void cancel_connecting();
-  void reconnect();
+  void start(double delay);
+  void resolve();
+  void connect(const asio::ip::tcp::endpoint &target);
+  void restart(StreamEnd::Error err);
   void receive();
-  void output(Event *evt);
-  void output_end(StreamEnd *end);
   void pump();
-  void close();
-  void free();
+  void output(Event *evt);
+  void close(StreamEnd::Error err);
 
   static List<Outbound> s_all_outbounds;
 };
