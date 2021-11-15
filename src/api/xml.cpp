@@ -197,9 +197,6 @@ private:
   }
 
   static void xml_char_data(void *userdata, const XML_Char *str, int len) {
-    int spaces = 0;
-    while (spaces < len && std::isspace(str[spaces])) spaces++;
-    if (spaces == len) return;
     auto *parser = static_cast<XMLParser*>(userdata);
     parser->char_data(str, len);
   }
@@ -227,7 +224,9 @@ auto XML::decode(const Data &data) -> Node* {
 
 bool XML::encode(Node *doc, int space, Data &data) {
   static Data::Producer s_dp("XML");
-  static std::string s_head("<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
+  static std::string s_escaped_chars("<>&");
+  static std::string s_cdata_start("<![CDATA[");
+  static std::string s_cdata_end("]]>");
 
   auto children = doc->children();
   if (!children || children->length() != 1) return false;
@@ -238,6 +237,29 @@ bool XML::encode(Node *doc, int space, Data &data) {
 
   if (space < 0) space = 0;
   if (space > 10) space = 10;
+
+  auto write_text = [&](pjs::Value &v) {
+    auto *s = v.to_string();
+    auto &str = s->str();
+    if (str.find_first_of(s_escaped_chars) == std::string::npos) {
+      s_dp.push(&data, str);
+    } else {
+      size_t i = 0;
+      while (i < str.length()) {
+        size_t j = str.find(s_cdata_end, i);
+        if (j == std::string::npos) {
+          j = str.length();
+        } else {
+          j += 2;
+        }
+        s_dp.push(&data, s_cdata_start);
+        s_dp.push(&data, &str[i], j - i);
+        s_dp.push(&data, s_cdata_end);
+        i = j;
+      }
+    }
+    s->release();
+  };
 
   std::function<void(XML::Node *node, int)> write;
 
@@ -269,10 +291,8 @@ bool XML::encode(Node *doc, int space, Data &data) {
         pjs::Value front;
         children->get(0, front);
         if (!front.is_instance_of<XML::Node>()) {
-          auto *s = front.to_string();
           s_dp.push(&data, '>');
-          s_dp.push(&data, s->str());
-          s->release();
+          write_text(front);
           is_closed = true;
           is_text = true;
         }
@@ -288,9 +308,7 @@ bool XML::encode(Node *doc, int space, Data &data) {
             write(v.as<XML::Node>(), l + 1);
           } else {
             if (space) s_dp.push(&data, padding);
-            auto *s = v.to_string();
-            s_dp.push(&data, s->str());
-            s->release();
+            write_text(v);
             if (space) s_dp.push(&data, '\n');
           }
         });
@@ -309,8 +327,6 @@ bool XML::encode(Node *doc, int space, Data &data) {
     }
   };
 
-  s_dp.push(&data, s_head);
-  if (space) s_dp.push(&data, '\n');
   write(root.as<XML::Node>(), 0);
   return true;
 }

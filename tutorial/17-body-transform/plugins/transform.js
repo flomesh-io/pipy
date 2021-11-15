@@ -27,21 +27,20 @@ pipy({
     node ? (
       ((
         children,
-        first,
         previous,
         obj, k, v,
       ) => (
         obj = {},
         node.children.forEach(node => (
-          children = node.children,
-          first = children[0],
-          k = node.name,
-          v = children.length != 1 || first instanceof XML.Node ? _xml2obj(node) : (first || ''),
-          previous = obj[k],
-          previous instanceof Array ? (
-            previous.push(v)
-          ) : (
-            obj[k] = previous ? [previous, v] : v
+          (children = node.children) && (
+            k = node.name,
+            v = children.every(i => typeof i === 'string') ? children.join('') : _xml2obj(node),
+            previous = obj[k],
+            previous instanceof Array ? (
+              previous.push(v)
+            ) : (
+              obj[k] = previous ? [previous, v] : v
+            )
           )
         )),
         obj
