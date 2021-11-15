@@ -27,8 +27,8 @@
 #define API_CONFIGURATION_HPP
 
 #include "net.hpp"
-#include "pjs/pjs.hpp"
 #include "event.hpp"
+#include "listener.hpp"
 
 #include <list>
 #include <map>
@@ -119,7 +119,7 @@ private:
   struct ListenConfig {
     std::string ip;
     int port;
-    int max_connections;
+    Listener::Options options;
     std::list<std::unique_ptr<Filter>> filters;
   };
 

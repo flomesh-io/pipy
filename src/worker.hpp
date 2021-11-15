@@ -26,8 +26,8 @@
 #ifndef WORKER_HPP
 #define WORKER_HPP
 
-#include "pjs/pjs.hpp"
 #include "context.hpp"
+#include "listener.hpp"
 
 #include <set>
 #include <vector>
@@ -35,7 +35,6 @@
 namespace pipy {
 
 class Module;
-class Listener;
 class PipelineDef;
 class Task;
 
@@ -64,7 +63,7 @@ public:
   auto get_module(pjs::Str *filename) -> Module*;
   auto find_module(const std::string &path) -> Module*;
   auto load_module(const std::string &path) -> Module*;
-  void add_listener(Listener *listener, PipelineDef *pipeline_def, int max_connections);
+  void add_listener(Listener *listener, PipelineDef *pipeline_def, const Listener::Options &options);
   void add_task(Task *task);
   void add_export(pjs::Str *ns, pjs::Str *name, Module *module);
   auto get_export(pjs::Str *ns, pjs::Str *name) -> Module*;
@@ -82,7 +81,7 @@ private:
 
   struct ListeningPipeline {
     pjs::Ref<PipelineDef> pipeline_def;
-    int max_connections;
+    Listener::Options options;
   };
 
   Module* m_root = nullptr;

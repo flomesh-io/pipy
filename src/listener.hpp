@@ -42,6 +42,11 @@ class PipelineDef;
 
 class Listener {
 public:
+  struct Options : public Inbound::Options {
+    int max_connections = -1;
+    bool reserved = false;
+  };
+
   static void set_reuse_port(bool reuse);
 
   static auto get(int port) -> Listener* {
@@ -68,14 +73,12 @@ public:
 
   auto ip() const -> const std::string& { return m_ip; }
   auto port() const -> int { return m_port; }
-  bool reserved() const { return m_reserved; }
+  bool reserved() const { return m_options.reserved; }
   auto pipeline_def() const -> PipelineDef* { return m_pipeline_def; }
   void pipeline_def(PipelineDef *def);
-
-  void set_reserved(bool reserved);
-  void set_max_connections(int n);
-
   auto peak_connections() const -> int { return m_peak_connections; }
+
+  void set_options(const Options &options);
 
   void for_each_inbound(const std::function<void(Inbound*)> &cb) {
     for (auto p = m_inbounds.head(); p; p = p->next()) {
@@ -91,14 +94,14 @@ private:
   void accept();
   void pause();
   void resume();
+  void open(Inbound *inbound);
   void close(Inbound *inbound);
   void close();
 
   std::string m_ip;
   int m_port;
-  int m_max_connections = -1;
   int m_peak_connections = 0;
-  bool m_reserved = false;
+  Options m_options;
   bool m_paused = false;
   asio::ip::tcp::acceptor m_acceptor;
   pjs::Ref<PipelineDef> m_pipeline_def;

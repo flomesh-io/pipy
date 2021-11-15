@@ -37,54 +37,69 @@ using tcp = asio::ip::tcp;
 
 uint64_t Inbound::s_inbound_id = 0;
 
-Inbound::Inbound(Listener *listener)
+Inbound::Inbound(Listener *listener, const Options &options)
   : m_listener(listener)
   , m_socket(Net::service())
+  , m_options(options)
 {
   if (!++s_inbound_id) s_inbound_id++;
   m_id = s_inbound_id;
 }
 
 Inbound::~Inbound() {
-  if (m_pipeline) {
-    auto *ctx = m_pipeline->context();
-    ctx->m_inbound = nullptr;
+  if (Pipeline *p = m_pipeline) {
+    p->context()->m_inbound = nullptr;
+    m_listener->close(this);
   }
-  m_listener->close(this);
 }
 
-void Inbound::accept(
-  Listener *listener,
-  asio::ip::tcp::acceptor &acceptor,
-  std::function<void(const std::error_code&)> on_result
-) {
-  retain();
+auto Inbound::remote_address() -> pjs::Str* {
+  if (!m_str_remote_addr) {
+    m_str_remote_addr = pjs::Str::make(m_remote_addr);
+  }
+  return m_str_remote_addr;
+}
+
+auto Inbound::local_address() -> pjs::Str* {
+  if (!m_str_local_addr) {
+    m_str_local_addr = pjs::Str::make(m_local_addr);
+  }
+  return m_str_local_addr;
+}
+
+void Inbound::accept(asio::ip::tcp::acceptor &acceptor) {
   acceptor.async_accept(
     m_socket, m_peer,
-    [=](const std::error_code &ec) {
-      m_remote_addr = m_peer.address().to_string();
-      m_remote_port = m_peer.port();
-      on_result(ec);
-      if (ec) {
-        if (ec != asio::error::operation_aborted) {
-          Log::warn(
-            "[inbound  %p] error accepting from downstream %s, %s",
-            this, m_remote_addr.c_str(), ec.message().c_str());
+    [this](const std::error_code &ec) {
+      if (ec != asio::error::operation_aborted) {
+        const auto &ep = m_socket.local_endpoint();
+        m_local_addr = ep.address().to_string();
+        m_local_port = ep.port();
+        m_remote_addr = m_peer.address().to_string();
+        m_remote_port = m_peer.port();
+
+        if (ec) {
+          if (Log::is_enabled(Log::ERROR)) {
+            char desc[200];
+            describe(desc);
+            Log::error("%s error accepting connection: %s", desc, ec.message().c_str());
+          }
+
+        } else {
+          if (Log::is_enabled(Log::DEBUG)) {
+            char desc[200];
+            describe(desc);
+            Log::debug("%s connection accepted", desc);
+          }
+          start();
         }
-        release();
-      } else {
-        const auto &local = m_socket.local_endpoint();
-        m_local_addr = local.address().to_string();
-        m_local_port = local.port();
-
-        Log::debug(
-          "[inbound  %p] connection accepted from downstream %s",
-          this, m_remote_addr.c_str());
-
-        start(listener->pipeline_def());
       }
+
+      release();
     }
   );
+
+  retain();
 }
 
 void Inbound::pause() {
@@ -101,151 +116,196 @@ void Inbound::resume() {
     case PAUSED:
       m_receiving_state = RECEIVING;
       receive();
+      release();
       break;
     default: break;
   }
 }
 
-void Inbound::send(const pjs::Ref<Data> &data) {
-  if (!m_writing_ended) {
-    if (data->size() > 0) {
-      m_buffer.push(*data);
-      if (m_buffer.size() >= SEND_BUFFER_FLUSH_SIZE) pump();
-    } else {
+void Inbound::on_event(Event *evt) {
+  if (!m_ended) {
+    if (auto data = evt->as<Data>()) {
+      if (data->size() > 0) {
+        m_buffer.push(*data);
+        if (m_buffer.size() >= SEND_BUFFER_FLUSH_SIZE) pump();
+      } else {
+        pump();
+      }
+
+    } else if (evt->is<MessageEnd>()) {
       pump();
+
+    } else if (evt->is<StreamEnd>()) {
+      m_ended = true;
+      if (m_buffer.empty()) {
+        close(StreamEnd::NO_ERROR);
+      } else {
+        pump();
+      }
     }
   }
 }
 
-void Inbound::flush() {
-  if (!m_writing_ended) {
-    pump();
-  }
-}
-
-void Inbound::end() {
-  if (!m_writing_ended) {
-    m_writing_ended = true;
-    pump();
-    close();
-    free();
-  }
-}
-
-void Inbound::on_event(Event *evt) {
-  if (auto data = evt->as<Data>()) {
-    send(data);
-  } else if (evt->is<MessageEnd>()) {
-    flush();
-  } else if (evt->is<StreamEnd>()) {
-    end();
-  }
-}
-
-void Inbound::start(PipelineDef *pipeline_def) {
-  auto mod = pipeline_def->module();
+void Inbound::start() {
+  auto def = m_listener->pipeline_def();
+  auto mod = def->module();
   auto ctx = mod
     ? mod->worker()->new_runtime_context()
     : new pipy::Context();
   ctx->m_inbound = this;
-  m_pipeline = Pipeline::make(pipeline_def, ctx);
-  m_pipeline->chain(EventTarget::input());
+  auto p = Pipeline::make(def, ctx);
+  p->chain(EventTarget::input());
+  m_pipeline = p;
+  m_output = p->input();
+  m_listener->open(this);
   receive();
 }
 
 void Inbound::receive() {
   static Data::Producer s_data_producer("Inbound");
-
   pjs::Ref<Data> buffer(Data::make(RECEIVE_BUFFER_SIZE, &s_data_producer));
-
-  auto on_received = [=](const std::error_code &ec, std::size_t n) {
-    Pipeline::AutoReleasePool arp;
-    if (n > 0) {
-      buffer->pop(buffer->size() - n);
-      auto inp = m_pipeline->input();
-      inp->input(buffer);
-      inp->input(Data::flush());
-    }
-
-    if (ec) {
-      if (ec == asio::error::eof || ec == asio::error::operation_aborted) {
-        Log::debug(
-          "[inbound  %p] connection closed by downstream %s",
-          this, m_remote_addr.c_str());
-        m_pipeline->input()->input(StreamEnd::make(StreamEnd::NO_ERROR));
-      } else {
-        auto msg = ec.message();
-        Log::warn(
-          "[inbound  %p] error reading from downstream %s, %s",
-          this, m_remote_addr.c_str(), msg.c_str());
-        m_pipeline->input()->input(StreamEnd::make(StreamEnd::READ_ERROR));
-      }
-
-      m_reading_ended = true;
-      m_writing_ended = true;
-      free();
-
-    } else {
-      if (m_receiving_state == PAUSING) m_receiving_state = PAUSED;
-      if (m_receiving_state == RECEIVING) receive();
-    }
-  };
 
   m_socket.async_read_some(
     DataChunks(buffer->chunks()),
-    on_received);
+    [=](const std::error_code &ec, std::size_t n) {
+      if (ec != asio::error::operation_aborted) {
+        if (m_options.read_timeout > 0){
+          m_read_timer.cancel();
+        }
+
+        if (n > 0) {
+          Pipeline::AutoReleasePool arp;
+          buffer->pop(buffer->size() - n);
+          output(buffer);
+          output(Data::flush());
+        }
+
+        if (ec) {
+          if (ec == asio::error::eof) {
+            if (Log::is_enabled(Log::DEBUG)) {
+              char desc[200];
+              describe(desc);
+              Log::debug("%s closed by peer", desc);
+            }
+            close(StreamEnd::NO_ERROR);
+          } else {
+            if (Log::is_enabled(Log::WARN)) {
+              char desc[200];
+              describe(desc);
+              Log::warn("%s error reading from peer: %s", desc, ec.message().c_str());
+            }
+            close(StreamEnd::READ_ERROR);
+          }
+
+        } else if (m_receiving_state == PAUSING) {
+          m_receiving_state = PAUSED;
+          retain();
+
+        } else if (m_receiving_state == RECEIVING) {
+          receive();
+        }
+      }
+
+      release();
+    }
+  );
+
+  if (m_options.read_timeout > 0) {
+    m_read_timer.schedule(
+      m_options.read_timeout,
+      [this]() {
+        close(StreamEnd::READ_TIMEOUT);
+      }
+    );
+  }
+
+  retain();
 }
 
 void Inbound::pump() {
   if (m_pumping) return;
   if (m_buffer.empty()) return;
 
-  auto on_sent = [=](const std::error_code &ec, std::size_t n) {
-    m_buffer.shift(n);
-    m_pumping = false;
-
-    if (ec) {
-      auto msg = ec.message();
-      Log::warn(
-        "[inbound  %p] error writing to downstream %s, %s",
-        this, m_remote_addr.c_str(), msg.c_str());
-      m_buffer.clear();
-      m_writing_ended = true;
-
-    } else {
-      pump();
-    }
-
-    if (m_writing_ended) {
-      close();
-      free();
-    }
-  };
-
   m_socket.async_write_some(
     DataChunks(m_buffer.chunks()),
-    on_sent);
+    [=](const std::error_code &ec, std::size_t n) {
+      if (ec != asio::error::operation_aborted) {
+        if (m_options.write_timeout > 0) {
+          m_write_timer.cancel();
+        }
+
+        m_buffer.shift(n);
+        m_pumping = false;
+
+        if (ec) {
+          if (Log::is_enabled(Log::WARN)) {
+            char desc[200];
+            describe(desc);
+            Log::warn("%s error writing to peer: %s", desc, ec.message().c_str());
+          }
+          close(StreamEnd::WRITE_ERROR);
+
+        } else if (m_ended && m_buffer.empty()) {
+          close(StreamEnd::NO_ERROR);
+
+        } else {
+          pump();
+        }
+      }
+
+      release();
+    }
+  );
+
+  if (m_options.write_timeout > 0) {
+    m_write_timer.schedule(
+      m_options.write_timeout,
+      [this]() {
+        close(StreamEnd::WRITE_TIMEOUT);
+      }
+    );
+  }
 
   m_pumping = true;
+
+  retain();
 }
 
-void Inbound::close() {
-  if (m_pumping) return;
+void Inbound::output(Event *evt) {
+  m_output->input(evt);
+}
 
+void Inbound::close(StreamEnd::Error err) {
   std::error_code ec;
   m_socket.close(ec);
+
   if (ec) {
-    Log::error("[inbound  %p] error closing socket to %s, %s", this, m_remote_addr.c_str(), ec.message().c_str());
+    if (Log::is_enabled(Log::ERROR)) {
+      char desc[200];
+      describe(desc);
+      Log::error("%s error closing socket: %s", desc, ec.message().c_str());
+    }
   } else {
-    Log::debug("[inbound  %p] connection closed to %s", this, m_remote_addr.c_str());
+    if (Log::is_enabled(Log::DEBUG)) {
+      char desc[200];
+      describe(desc);
+      Log::debug("%s connection closed to peer", desc);
+    }
   }
+
+  Pipeline::AutoReleasePool arp;
+  output(StreamEnd::make(err));
 }
 
-void Inbound::free() {
-  if (!m_pumping && m_reading_ended && m_writing_ended) {
-    m_pipeline = nullptr;
-    release();
-  }
+void Inbound::describe(char *buf) {
+  std::sprintf(
+    buf, "[inbound  %p] [%s]:%d -> [%s]:%d",
+    this,
+    m_remote_addr.c_str(),
+    m_remote_port,
+    m_local_addr.c_str(),
+    m_local_port
+  );
 }
 
 } // namespace pipy

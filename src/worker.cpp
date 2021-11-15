@@ -304,10 +304,10 @@ auto Worker::load_module(const std::string &path) -> Module* {
   return mod;
 }
 
-void Worker::add_listener(Listener *listener, PipelineDef *pipeline_def, int max_connections) {
+void Worker::add_listener(Listener *listener, PipelineDef *pipeline_def, const Listener::Options &options) {
   auto &p = m_listeners[listener];
   p.pipeline_def = pipeline_def;
-  p.max_connections = max_connections;
+  p.options = options;
 }
 
 void Worker::add_task(Task *task) {
@@ -373,7 +373,7 @@ bool Worker::start() {
       auto l = i.first;
       if (!Listener::is_open(l->port())) {
         l->pipeline_def(i.second.pipeline_def);
-        l->set_max_connections(i.second.max_connections);
+        l->set_options(i.second.options);
         new_open.insert(l);
       }
     }
@@ -390,7 +390,7 @@ bool Worker::start() {
     auto l = i.first;
     if (Listener::is_open(l->port())) {
       l->pipeline_def(i.second.pipeline_def);
-      l->set_max_connections(i.second.max_connections);
+      l->set_options(i.second.options);
     }
   }
 

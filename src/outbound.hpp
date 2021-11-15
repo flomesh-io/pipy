@@ -67,7 +67,6 @@ public:
 
   auto host() const -> const std::string& { return m_host; }
   auto port() const -> int { return m_port; }
-  auto address() const -> const std::string& { return m_address; }
   bool connected() const { return m_connected; }
   auto buffered() const -> int { return m_buffer.size(); }
   bool overflowed() const { return m_overflowed; }
@@ -81,9 +80,11 @@ public:
   void end();
 
 private:
-  int m_port;
   std::string m_host;
-  std::string m_address;
+  int m_port;
+  std::string m_remote_addr;
+  std::string m_local_addr;
+  int m_local_port;
   pjs::Ref<EventTarget::Input> m_output;
   asio::ip::tcp::resolver m_resolver;
   asio::ip::tcp::socket m_socket;
@@ -110,6 +111,7 @@ private:
   void pump();
   void output(Event *evt);
   void close(StreamEnd::Error err);
+  void describe(char *desc);
 
   static List<Outbound> s_all_outbounds;
 };

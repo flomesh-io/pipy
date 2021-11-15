@@ -47,7 +47,7 @@ static void write_history(const std::string &line) {
 }
 
 static void log(Log::Level level, const char *fmt, va_list ap) {
-  if (level >= s_log_level) {
+  if (Log::is_enabled(level)) {
     char time[100];
     char msg[1000];
     char line[1100];
@@ -68,6 +68,10 @@ static void log(Log::Level level, const char *fmt, va_list ap) {
 
 void Log::set_level(Level level) {
   s_log_level = level;
+}
+
+bool Log::is_enabled(Level level) {
+  return (level >= s_log_level);
 }
 
 void Log::print(const std::string &line) {

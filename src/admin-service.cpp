@@ -93,8 +93,10 @@ void AdminService::open(int port) {
       }
     )
   );
+  Listener::Options options;
+  options.reserved = true;
   auto listener = Listener::get(port);
-  listener->set_reserved(true);
+  listener->set_options(options);
   listener->pipeline_def(pipeline_def);
   m_port = port;
 }

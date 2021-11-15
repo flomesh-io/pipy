@@ -79,13 +79,10 @@ void Listener::close() {
   Log::info("[listener] Stopped listening on port %d at %s", m_port, m_ip.c_str());
 }
 
-void Listener::set_reserved(bool reserved) {
-  m_reserved = reserved;
-}
-
-void Listener::set_max_connections(int n) {
-  m_max_connections = n;
+void Listener::set_options(const Options &options) {
+  m_options = options;
   if (m_pipeline_def) {
+    int n = m_options.max_connections;
     if (n >= 0 && m_inbounds.size() >= n) {
       pause();
     } else {
@@ -118,36 +115,16 @@ void Listener::start() {
   m_acceptor.bind(endpoint);
   m_acceptor.listen(asio::socket_base::max_connections);
 
-  if (m_max_connections < 0 || m_inbounds.size() < m_max_connections) {
+  if (m_options.max_connections < 0 || m_inbounds.size() < m_options.max_connections) {
     accept();
   }
 
   Log::info("[listener] Listening on port %d at %s", m_port, m_ip.c_str());
 }
 
-void Listener::close(Inbound *inbound) {
-  m_inbounds.remove(inbound);
-  if (m_max_connections < 0 || m_inbounds.size() < m_max_connections) {
-    resume();
-  }
-}
-
 void Listener::accept() {
-  auto inbound = Inbound::make(this);
-  inbound->accept(
-    this, m_acceptor,
-    [=](const std::error_code &ec) {
-      if (!ec) {
-        m_inbounds.push(inbound);
-        m_peak_connections = std::max(m_peak_connections, int(m_inbounds.size()));
-        if (m_max_connections > 0 && m_inbounds.size() >= m_max_connections) {
-          pause();
-        } else {
-          accept();
-        }
-      }
-    }
-  );
+  auto inbound = Inbound::make(this, m_options);
+  inbound->accept(m_acceptor);
 }
 
 void Listener::pause() {
@@ -161,6 +138,25 @@ void Listener::resume() {
   if (m_paused) {
     accept();
     m_paused = false;
+  }
+}
+
+void Listener::open(Inbound *inbound) {
+  m_inbounds.push(inbound);
+  m_peak_connections = std::max(m_peak_connections, int(m_inbounds.size()));
+  int n = m_options.max_connections;
+  if (n > 0 && m_inbounds.size() >= n) {
+    pause();
+  } else {
+    accept();
+  }
+}
+
+void Listener::close(Inbound *inbound) {
+  m_inbounds.remove(inbound);
+  int n = m_options.max_connections;
+  if (n < 0 || m_inbounds.size() < n) {
+    resume();
   }
 }
 

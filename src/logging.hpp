@@ -44,6 +44,7 @@ public:
   };
 
   static void set_level(Level level);
+  static bool is_enabled(Level level);
 
   static void print(const std::string &line);
   static void print(const char *fmt, ...);

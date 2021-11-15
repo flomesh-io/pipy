@@ -27,13 +27,12 @@
 #define INBOUND_HPP
 
 #include "net.hpp"
-#include "pjs/pjs.hpp"
 #include "event.hpp"
+#include "timer.hpp"
 #include "list.hpp"
 
 namespace pipy {
 
-class Data;
 class Listener;
 class PipelineDef;
 class Pipeline;
@@ -48,41 +47,25 @@ class Inbound :
   public List<Inbound>::Item
 {
 public:
-  void accept(
-    Listener* listener,
-    asio::ip::tcp::acceptor &acceptor,
-    std::function<void(const std::error_code&)> on_result
-  );
+  struct Options {
+    double read_timeout = 0;
+    double write_timeout = 0;
+  };
 
   auto id() const -> uint64_t { return m_id; }
-
-  auto remote_address() -> pjs::Str* {
-    if (!m_str_remote_addr) {
-      m_str_remote_addr = pjs::Str::make(m_remote_addr);
-    }
-    return m_str_remote_addr;
-  }
-
-  auto local_address() -> pjs::Str* {
-    if (!m_str_local_addr) {
-      m_str_local_addr = pjs::Str::make(m_local_addr);
-    }
-    return m_str_local_addr;
-  }
-
+  auto pipeline() const -> Pipeline* { return m_pipeline; }
+  auto remote_address() -> pjs::Str*;
+  auto local_address() -> pjs::Str*;
   auto remote_port() const -> int { return m_remote_port; }
   auto local_port() const -> int { return m_local_port; }
   auto buffered() const -> int { return m_buffer.size(); }
 
-  auto pipeline() const -> Pipeline* { return m_pipeline; }
+  void accept(asio::ip::tcp::acceptor &acceptor);
   void pause();
   void resume();
-  void send(const pjs::Ref<Data> &data);
-  void flush();
-  void end();
 
 private:
-  Inbound(Listener *listener);
+  Inbound(Listener *listener, const Options &options);
   ~Inbound();
 
   enum ReceivingState {
@@ -91,9 +74,13 @@ private:
     PAUSED,
   };
 
-  Listener* m_listener;
   uint64_t m_id;
+  Listener* m_listener;
+  Options m_options;
+  Timer m_read_timer;
+  Timer m_write_timer;
   pjs::Ref<Pipeline> m_pipeline;
+  pjs::Ref<EventTarget::Input> m_output;
   asio::ip::tcp::endpoint m_peer;
   asio::ip::tcp::socket m_socket;
   pjs::Ref<pjs::Str> m_str_remote_addr;
@@ -105,15 +92,16 @@ private:
   Data m_buffer;
   ReceivingState m_receiving_state = RECEIVING;
   bool m_pumping = false;
-  bool m_reading_ended = false;
-  bool m_writing_ended = false;
+  bool m_ended = false;
 
   virtual void on_event(Event *evt) override;
 
-  void start(PipelineDef *pipeline_def);
+  void start();
   void receive();
   void pump();
-  void close();
+  void output(Event *evt);
+  void close(StreamEnd::Error err);
+  void describe(char *desc);
   void free();
 
   static uint64_t s_inbound_id;

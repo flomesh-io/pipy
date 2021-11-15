@@ -118,17 +118,17 @@ void Outbound::resolve() {
     ) {
       if (ec != asio::error::operation_aborted) {
         if (ec) {
-          Log::error(
-            "[outbound %p] cannot resolve hostname %s, %s",
-            this, m_host.c_str(), ec.message().c_str()
-          );
+          if (Log::is_enabled(Log::ERROR)) {
+            char desc[200];
+            describe(desc);
+            Log::error("%s cannot resolve hostname: %s", desc, ec.message().c_str());
+          }
           restart(StreamEnd::CANNOT_RESOLVE);
 
         } else {
           auto &result = *results;
           const auto &target = result.endpoint();
-          const auto &addr = target.address();
-          m_address = addr.is_v6() ? addr.to_v6().to_string() : addr.to_v4().to_string();
+          m_remote_addr = target.address().to_string();
           connect(target);
         }
       }
@@ -151,9 +151,11 @@ void Outbound::resolve() {
   m_start_time = utils::now();
 
   if (m_retries > 0) {
-    Log::warn("[outbound %p] retry connecting to %s [%s]:%d... (retries = %d)",
-      this, m_host.c_str(), m_address.c_str(), m_port, m_retries
-    );
+    if (Log::is_enabled(Log::WARN)) {
+      char desc[200];
+      describe(desc);
+      Log::warn("%s retry connecting... (retries = %d)", desc, m_retries);
+    }
   }
 
   retain();
@@ -169,17 +171,22 @@ void Outbound::connect(const asio::ip::tcp::endpoint &target) {
         }
 
         if (ec) {
-          Log::error(
-            "[outbound %p] cannot connect to %s [%s]:%d, %s",
-            this, m_host.c_str(), m_address.c_str(), m_port, ec.message().c_str()
-          );
+          if (Log::is_enabled(Log::ERROR)) {
+            char desc[200];
+            describe(desc);
+            Log::error("%s cannot connect: %s", desc, ec.message().c_str());
+          }
           restart(StreamEnd::CONNECTION_REFUSED);
 
         } else {
-          Log::debug(
-            "[outbound %p] connected to %s [%s]:%d",
-            this, m_host.c_str(), m_address.c_str(), m_port
-          );
+          if (Log::is_enabled(Log::DEBUG)) {
+            char desc[200];
+            describe(desc);
+            Log::debug("%s connected", desc);
+          }
+          const auto &ep = m_socket.local_endpoint();
+          m_local_addr = ep.address().to_string();
+          m_local_port = ep.port();
           m_connection_time += utils::now() - m_start_time;
           m_connected = true;
           if (m_ended && m_buffer.empty()) {
@@ -231,16 +238,18 @@ void Outbound::receive() {
 
         if (ec) {
           if (ec == asio::error::eof) {
-            Log::debug(
-              "[outbound %p] connection closed by %s [%s]:%d",
-              this, m_host.c_str(), m_address.c_str(), m_port
-            );
+            if (Log::is_enabled(Log::DEBUG)) {
+              char desc[200];
+              describe(desc);
+              Log::debug("%s connection closed by peer", desc);
+            }
             close(StreamEnd::NO_ERROR);
           } else {
-            Log::warn(
-              "[outbound %p] error reading from host = %s port = %d, %s",
-              this, m_host.c_str(), m_port, ec.message().c_str()
-            );
+            if (Log::is_enabled(Log::WARN)) {
+              char desc[200];
+              describe(desc);
+              Log::warn("%s error reading from peer: %s", desc, ec.message().c_str());
+            }
             close(StreamEnd::READ_ERROR);
           }
 
@@ -267,6 +276,7 @@ void Outbound::receive() {
 
 void Outbound::pump() {
   if (m_pumping || !m_connected) return;
+  if (m_buffer.empty()) return;
 
   m_socket.async_write_some(
     DataChunks(m_buffer.chunks()),
@@ -280,20 +290,22 @@ void Outbound::pump() {
         m_pumping = false;
 
         if (ec) {
-          Log::warn(
-            "[outbound %p] error writing to %s [%s]:%d, %s",
-            this, m_host.c_str(), m_address.c_str(), m_port, ec.message().c_str()
-          );
+          if (Log::is_enabled(Log::WARN)) {
+            char desc[200];
+            describe(desc);
+            Log::warn("%s error writing to peer: %s", desc, ec.message().c_str());
+          }
           close(StreamEnd::WRITE_ERROR);
 
-        } else if (m_overflowed && m_buffer.size() == 0) {
-          Log::error(
-            "[outbound %p] data to %s [%s]:%d overflowed by %d bytes",
-            this, m_host.c_str(), m_address.c_str(), m_port, m_discarded_data_size
-          );
+        } else if (m_overflowed && m_buffer.empty()) {
+          if (Log::is_enabled(Log::ERROR)) {
+            char desc[200];
+            describe(desc);
+            Log::error("%s overflowed by %d bytes", desc, m_discarded_data_size);
+          }
           close(StreamEnd::BUFFER_OVERFLOW);
 
-        } else if (m_ended && m_buffer.size() == 0) {
+        } else if (m_ended && m_buffer.empty()) {
           close(StreamEnd::NO_ERROR);
 
         } else {
@@ -337,19 +349,33 @@ void Outbound::close(StreamEnd::Error err) {
   m_socket.close(ec);
 
   if (ec) {
-    Log::error(
-      "[outbound %p] error closing socket to %s [%s]:%d, %s",
-      this, m_host.c_str(), m_address.c_str(), m_port, ec.message().c_str()
-    );
+    if (Log::is_enabled(Log::ERROR)) {
+      char desc[200];
+      describe(desc);
+      Log::error("%s error closing socket: %s", desc, ec.message().c_str());
+    }
   } else {
-    Log::debug(
-      "[outbound %p] connection closed to %s [%s]:%d",
-      this, m_host.c_str(), m_address.c_str(), m_port
-    );
+    if (Log::is_enabled(Log::DEBUG)) {
+      char desc[200];
+      describe(desc);
+      Log::debug("%s connection closed to peer", desc);
+    }
   }
 
   Pipeline::AutoReleasePool arp;
   output(StreamEnd::make(err));
+}
+
+void Outbound::describe(char *desc) {
+  sprintf(
+    desc, "[outbound %p] [%s]:%d -> [%s]:%d (%s)",
+    this,
+    m_local_addr.c_str(),
+    m_local_port,
+    m_remote_addr.c_str(),
+    m_port,
+    m_host.c_str()
+  );
 }
 
 } // namespace pipy

@@ -114,22 +114,37 @@ void Configuration::add_import(pjs::Object *variables) {
 void Configuration::listen(int port, pjs::Object *options) {
   int max_connections = -1;
 
+  Listener::Options opt;
+
   if (options) {
-    pjs::Value max_conn;
+    pjs::Value max_conn, read_timeout, write_timeout;
     options->get("maxConnections", max_conn);
+    options->get("readTimeout", read_timeout);
+    options->get("writeTimeout", write_timeout);
 
     if (!max_conn.is_undefined()) {
       if (!max_conn.is_number()) throw std::runtime_error("option.maxConnections expects a number");
       max_connections = max_conn.n();
     }
+
+    if (!read_timeout.is_undefined()) {
+      if (read_timeout.is_string()) {
+        opt.read_timeout = utils::get_seconds(read_timeout.s()->str());
+      } else {
+        opt.read_timeout = read_timeout.to_number();
+      }
+    }
+
+    if (!write_timeout.is_undefined()) {
+      if (write_timeout.is_string()) {
+        opt.write_timeout = utils::get_seconds(write_timeout.s()->str());
+      } else {
+        opt.write_timeout = write_timeout.to_number();
+      }
+    }
   }
 
-  m_listens.push_back({
-    "::",
-    port,
-    max_connections,
-  });
-
+  m_listens.push_back({ "::", port, opt });
   m_current_filters = &m_listens.back().filters;
 }
 
@@ -403,7 +418,7 @@ void Configuration::apply(Module *mod) {
       std::string msg("Port reserved: ");
       throw std::runtime_error(msg + std::to_string(i.port));
     }
-    mod->worker()->add_listener(listener, p, i.max_connections);
+    mod->worker()->add_listener(listener, p, i.options);
   }
 
   for (auto &i : m_tasks) {
