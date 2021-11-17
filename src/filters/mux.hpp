@@ -99,7 +99,7 @@ private:
   // MuxBase::SessionManager
   //
 
-  class SessionManager {
+  class SessionManager : public pjs::RefCount<SessionManager> {
   public:
     SessionManager(MuxBase *mux)
       : m_mux(mux) { recycle(); }
@@ -112,11 +112,13 @@ private:
     std::unordered_map<pjs::Value, Session*> m_sessions;
     std::unordered_set<Session*> m_free_sessions;
     Timer m_recycle_timer;
+    bool m_retained_for_free_sessions = false;
 
+    void retain_for_free_sessions();
     void recycle();
   };
 
-  std::shared_ptr<SessionManager> m_session_manager;
+  pjs::Ref<SessionManager> m_session_manager;
   pjs::Value m_target_key;
   Session* m_session = nullptr;
   Session::Stream* m_stream = nullptr;

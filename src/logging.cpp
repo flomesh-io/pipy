@@ -56,10 +56,10 @@ static void log(Log::Level level, const char *fmt, va_list ap) {
     std::strftime(time, sizeof(time), "%F %T", std::localtime(&t));
     std::vsnprintf(msg, sizeof(msg), fmt, ap);
     switch (level) {
-      case Log::DEBUG: sprintf(line, "%s [debug] %s"  , time, msg); break;
-      case Log::WARN : sprintf(line, "%s [warning] %s", time, msg); break;
-      case Log::ERROR: sprintf(line, "%s [error] %s"  , time, msg); break;
-      case Log::INFO : sprintf(line, "%s [info] %s"   , time, msg); break;
+      case Log::DEBUG: sprintf(line, "%s [DBG] %s", time, msg); break;
+      case Log::WARN : sprintf(line, "%s [WRN] %s", time, msg); break;
+      case Log::ERROR: sprintf(line, "%s [ERR] %s", time, msg); break;
+      case Log::INFO : sprintf(line, "%s [INF] %s", time, msg); break;
     }
     std::cout << line << std::endl;
     write_history(line);

@@ -39,12 +39,13 @@ namespace pipy {
 class Configuration;
 class PipelineDef;
 
-class Module {
+class Module : public pjs::RefCount<Module> {
 public:
   static void set_script(const std::string &path, const std::string &script);
   static void reset_script(const std::string &path);
 
   bool load(const std::string &path);
+  void unload();
   void bind_exports();
   void bind_imports();
   void make_pipelines();
@@ -69,9 +70,10 @@ public:
 
 private:
   Module(Worker *worker, int index);
+  ~Module();
 
-  Worker* m_worker;
   int m_index;
+  pjs::Ref<Worker> m_worker;
   std::string m_path;
   std::string m_source;
   std::unique_ptr<pjs::Expr> m_script;
@@ -80,10 +82,9 @@ private:
   pjs::Ref<Configuration> m_configuration;
   pjs::Ref<pjs::Class> m_context_class;
   std::list<pjs::Ref<PipelineDef>> m_pipelines;
-  std::map<pjs::Ref<pjs::Str>, pjs::Ref<PipelineDef>> m_named_pipelines;
+  std::map<pjs::Ref<pjs::Str>, PipelineDef*> m_named_pipelines;
 
-  static std::map<std::string, std::string> s_overriden_scripts;
-
+  friend class pjs::RefCount<Module>;
   friend class Configuration;
   friend class Worker;
 };

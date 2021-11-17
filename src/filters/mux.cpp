@@ -33,12 +33,12 @@ namespace pipy {
 //
 
 MuxBase::MuxBase()
-  : m_session_manager(std::make_shared<SessionManager>(this))
+  : m_session_manager(new SessionManager(this))
 {
 }
 
 MuxBase::MuxBase(const pjs::Value &key)
-  : m_session_manager(std::make_shared<SessionManager>(this))
+  : m_session_manager(new SessionManager(this))
   , m_target_key(key)
 {
 }
@@ -53,6 +53,7 @@ MuxBase::MuxBase(const MuxBase &r)
 void MuxBase::reset() {
   Filter::reset();
   if (m_stream) {
+    m_stream->chain(nullptr);
     m_stream->close();
     m_stream = nullptr;
   }
@@ -143,6 +144,7 @@ auto MuxBase::SessionManager::get(const pjs::Value &key) -> Session* {
     auto session = i->second;
     if (!session->m_share_count) {
       m_free_sessions.erase(session);
+      retain_for_free_sessions();
     }
     session->m_share_count++;
     return session;
@@ -156,6 +158,21 @@ void MuxBase::SessionManager::free(Session *session) {
   if (!--session->m_share_count) {
     session->m_free_time = utils::now();
     m_free_sessions.insert(session);
+    retain_for_free_sessions();
+  }
+}
+
+void MuxBase::SessionManager::retain_for_free_sessions() {
+  if (m_retained_for_free_sessions) {
+    if (m_free_sessions.empty()) {
+      release();
+      m_retained_for_free_sessions = false;
+    }
+  } else {
+    if (!m_free_sessions.empty()) {
+      retain();
+      m_retained_for_free_sessions = true;
+    }
   }
 }
 
@@ -173,6 +190,8 @@ void MuxBase::SessionManager::recycle() {
   }
 
   m_recycle_timer.schedule(1, [this]() { recycle(); });
+
+  retain_for_free_sessions();
 }
 
 //

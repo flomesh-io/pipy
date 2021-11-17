@@ -174,10 +174,10 @@ template<> void ClassDef<Global>::init() {
 
 namespace pipy {
 
-Worker* Worker::s_current = nullptr;
+pjs::Ref<Worker> Worker::s_current;
 
 void Worker::restart() {
-  auto current_worker = current();
+  pjs::Ref<Worker> current_worker = current();
   if (!current_worker) {
     Log::error("[restart] No program running");
     return;
@@ -197,7 +197,7 @@ void Worker::restart() {
 
   Log::info("[restart] Reloading codebase...");
 
-  auto worker = make();
+  pjs::Ref<Worker> worker = make();
   if (worker->load_module(entry) && worker->start()) {
     current_worker->stop();
     Status::local.version = codebase->version();
@@ -264,10 +264,11 @@ auto Worker::exit_code() -> int {
 Worker::Worker()
   : m_global_object(Global::make())
 {
+  Log::error("[worker   %p] ++", this);
 }
 
 Worker::~Worker() {
-  if (s_current == this) s_current = nullptr;
+  Log::error("[worker   %p] --", this);
 }
 
 bool Worker::handling_signal(int signal) {
@@ -277,12 +278,6 @@ bool Worker::handling_signal(int signal) {
     }
   }
   return false;
-}
-
-auto Worker::get_module(pjs::Str *filename) -> Module* {
-  auto i = m_module_name_map.find(filename);
-  if (i == m_module_name_map.end()) return nullptr;
-  return i->second;
 }
 
 auto Worker::find_module(const std::string &path) -> Module* {
@@ -297,7 +292,6 @@ auto Worker::load_module(const std::string &path) -> Module* {
   auto l = m_modules.size();
   auto mod = new Module(this, l);
   m_module_map[path] = mod;
-  m_module_name_map[pjs::Str::make(path)] = mod;
   m_modules.push_back(mod);
   if (!m_root) m_root = mod;
   if (!mod->load(path)) return nullptr;
@@ -360,7 +354,6 @@ bool Worker::start() {
     for (auto i : m_modules) i->bind_imports();
     for (auto i : m_modules) i->make_pipelines();
     for (auto i : m_modules) i->bind_pipelines();
-    s_current = this;
   } catch (std::runtime_error &err) {
     Log::error("%s", err.what());
     return false;
@@ -409,14 +402,14 @@ bool Worker::start() {
     task->start();
   }
 
+  s_current = this;
   return true;
 }
 
 void Worker::stop() {
-  for (auto *task : m_tasks) {
-    delete task;
-  }
-  delete this;
+  for (auto *task : m_tasks) delete task;
+  for (auto *mod : m_modules) mod->unload();
+  if (s_current == this) s_current = nullptr;
 }
 
 } // namespace pipy

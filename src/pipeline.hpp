@@ -82,10 +82,10 @@ private:
   auto alloc(Context *ctx) -> Pipeline*;
   void free(Pipeline *pipeline);
 
-  Module* m_module;
   Type m_type;
   std::string m_name;
   std::list<std::unique_ptr<Filter>> m_filters;
+  pjs::Ref<Module> m_module;
   Pipeline* m_pool = nullptr;
   size_t m_allocated = 0;
   size_t m_active = 0;

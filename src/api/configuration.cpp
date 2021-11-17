@@ -409,6 +409,8 @@ void Configuration::apply(Module *mod) {
     mod->m_named_pipelines[s] = p;
   }
 
+  Worker *worker = mod->worker();
+
   for (auto &i : m_listens) {
     if (!i.port) continue;
     auto name = i.ip + ':' + std::to_string(i.port);
@@ -418,13 +420,13 @@ void Configuration::apply(Module *mod) {
       std::string msg("Port reserved: ");
       throw std::runtime_error(msg + std::to_string(i.port));
     }
-    mod->worker()->add_listener(listener, p, i.options);
+    worker->add_listener(listener, p, i.options);
   }
 
   for (auto &i : m_tasks) {
     auto p = make_pipeline(PipelineDef::TASK, i.name, i.filters);
     auto t = Task::make(i.when, p);
-    mod->worker()->add_task(t);
+    worker->add_task(t);
   }
 }
 

@@ -37,37 +37,25 @@
 
 namespace pipy {
 
-std::map<std::string, std::string> Module::s_overriden_scripts;
-
-void Module::set_script(const std::string &path, const std::string &script) {
-  auto key = utils::path_normalize(path);
-  s_overriden_scripts[key] = script;
-}
-
-void Module::reset_script(const std::string &path) {
-  auto key = utils::path_normalize(path);
-  s_overriden_scripts.erase(key);
-}
-
 Module::Module(Worker *worker, int index)
   : m_worker(worker)
   , m_index(index)
   , m_imports(new pjs::Expr::Imports)
 {
+  Log::debug("[module   %p] ++ index = %d", this, index);
+}
+
+Module::~Module() {
+  Log::debug("[module   %p] -- index = %d", this, m_index);
 }
 
 bool Module::load(const std::string &path) {
-  auto i = s_overriden_scripts.find(path);
-  if (i != s_overriden_scripts.end()) {
-    m_source = i->second;
-  } else {
-    auto data = Codebase::current()->get(path);
-    if (!data) {
-      Log::error("[pjs] Cannot open script at %s", path.c_str());
-      return false;
-    }
-    m_source = data->to_string();
+  auto data = Codebase::current()->get(path);
+  if (!data) {
+    Log::error("[pjs] Cannot open script at %s", path.c_str());
+    return false;
   }
+  m_source = data->to_string();
 
   std::string error;
   int error_line, error_column;
@@ -129,6 +117,11 @@ bool Module::load(const std::string &path) {
   m_configuration = config;
 
   return true;
+}
+
+void Module::unload() {
+  m_named_pipelines.clear();
+  m_pipelines.clear();
 }
 
 void Module::bind_exports() {

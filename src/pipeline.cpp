@@ -27,6 +27,7 @@
 #include "filter.hpp"
 #include "context.hpp"
 #include "message.hpp"
+#include "module.hpp"
 #include "logging.hpp"
 
 namespace pipy {
@@ -43,9 +44,11 @@ PipelineDef::PipelineDef(Module *module, Type type, const std::string &name)
   , m_name(name)
 {
   s_all_pipeline_defs.push(this);
+  Log::debug("[pipe-def %p] ++ name = %s", this, name.c_str());
 }
 
 PipelineDef::~PipelineDef() {
+  Log::debug("[pipe-def %p] -- name = %s", this, m_name.c_str());
   auto *ptr = m_pool;
   while (ptr) {
     auto *pipeline = ptr;

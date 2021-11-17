@@ -88,8 +88,8 @@ private:
     Use* m_filter;
     Stage* m_prev;
     Stage* m_next;
-    PipelineDef* m_pipeline_def;
-    PipelineDef* m_pipeline_def_down;
+    pjs::Ref<PipelineDef> m_pipeline_def;
+    pjs::Ref<PipelineDef> m_pipeline_def_down;
     pjs::Ref<Pipeline> m_pipeline;
     pjs::Ref<Pipeline> m_pipeline_down;
     bool m_chained = false;

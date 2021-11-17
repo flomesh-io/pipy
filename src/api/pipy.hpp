@@ -32,21 +32,6 @@ namespace pipy {
 
 class Pipy : public pjs::FunctionTemplate<Pipy> {
 public:
-  class Script : public pjs::ObjectTemplate<Script> {
-  public:
-    static void set(const std::string &path, const std::string &content);
-    static void reset(const std::string &path);
-  };
-
-  class Store : public pjs::ObjectTemplate<Store> {
-  public:
-    static void set(const std::string &key, const std::string &value);
-    static bool get(const std::string &key, std::string &value);
-
-  private:
-    static std::map<std::string, std::string> s_values;
-  };
-
   void operator()(pjs::Context &ctx, pjs::Object *obj, pjs::Value &ret);
 };
 

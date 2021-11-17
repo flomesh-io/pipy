@@ -42,7 +42,7 @@ class Task;
 // Worker
 //
 
-class Worker {
+class Worker : public pjs::RefCount<Worker> {
 public:
   static auto make() -> Worker* {
     return new Worker();
@@ -60,7 +60,6 @@ public:
   auto root() const -> Module* { return m_root; }
   auto global_object() const -> pjs::Object* { return m_global_object; }
   bool handling_signal(int sig);
-  auto get_module(pjs::Str *filename) -> Module*;
   auto find_module(const std::string &path) -> Module*;
   auto load_module(const std::string &path) -> Module*;
   void add_listener(Listener *listener, PipelineDef *pipeline_def, const Listener::Options &options);
@@ -80,20 +79,21 @@ private:
   typedef std::map<pjs::Ref<pjs::Str>, Module*> Namespace;
 
   struct ListeningPipeline {
-    pjs::Ref<PipelineDef> pipeline_def;
+    PipelineDef* pipeline_def;
     Listener::Options options;
   };
 
   Module* m_root = nullptr;
   pjs::Ref<pjs::Object> m_global_object;
-  std::map<std::string, Module*> m_module_map;
-  std::map<pjs::Ref<pjs::Str>, Module*> m_module_name_map;
   std::vector<Module*> m_modules;
+  std::map<std::string, Module*> m_module_map;
   std::map<Listener*, ListeningPipeline> m_listeners;
   std::set<Task*> m_tasks;
   std::map<pjs::Ref<pjs::Str>, Namespace> m_namespaces;
 
-  static Worker* s_current;
+  static pjs::Ref<Worker> s_current;
+
+  friend class pjs::RefCount<Worker>;
 };
 
 } // namespace pipy
