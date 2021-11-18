@@ -139,9 +139,25 @@ void MuxBase::Session::close() {
 //
 
 auto MuxBase::SessionManager::get(const pjs::Value &key) -> Session* {
-  auto i = m_sessions.find(key);
-  if (i != m_sessions.end()) {
-    auto session = i->second;
+  Session *session = nullptr;
+  if (key.is_object() && key.o()) {
+    pjs::WeakRef<pjs::Object> o(key.o());
+    auto i = m_weak_sessions.find(o);
+    if (i != m_weak_sessions.end()) {
+      session = i->second;
+      if (!i->first.ptr()) {
+        session->close();
+        session = nullptr;
+        m_weak_sessions.erase(i);
+      }
+    }
+  } else {
+    auto i = m_sessions.find(key);
+    if (i != m_sessions.end()) {
+      session = i->second;
+    }
+  }
+  if (session) {
     if (!session->m_share_count) {
       m_free_sessions.erase(session);
       retain_for_free_sessions();
@@ -149,8 +165,12 @@ auto MuxBase::SessionManager::get(const pjs::Value &key) -> Session* {
     session->m_share_count++;
     return session;
   }
-  auto session = m_mux->on_new_session();
-  m_sessions[key] = session;
+  session = m_mux->on_new_session();
+  if (key.is_object() && key.o()) {
+    m_weak_sessions[key.o()] = session;
+  } else {
+    m_sessions[key] = session;
+  }
   return session;
 }
 
@@ -185,7 +205,6 @@ void MuxBase::SessionManager::recycle() {
     if (now - session->m_free_time >= 10*1000) {
       m_free_sessions.erase(j);
       session->close();
-      session->m_pipeline = nullptr;
     }
   }
 

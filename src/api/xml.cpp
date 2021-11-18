@@ -128,7 +128,8 @@ public:
   ~XMLParser() {
     while (!m_stack.empty()) {
       auto node = m_stack.top();
-      node->retain()->release();
+      node->retain();
+      node->release();
       m_stack.pop();
     }
     XML_ParserFree(m_parser);

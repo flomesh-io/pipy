@@ -28,13 +28,13 @@
 
 #include "pjs/pjs.hpp"
 #include "list.hpp"
+#include "inbound.hpp"
 
 namespace pipy {
 
 class ContextGroup;
 class ContextDataBase;
 class Worker;
-class Inbound;
 
 //
 // Context
@@ -65,7 +65,7 @@ private:
   ContextGroup* m_group;
   Worker* m_worker;
   ContextData* m_data;
-  Inbound* m_inbound = nullptr;
+  pjs::WeakRef<Inbound> m_inbound;
 
   static uint64_t s_context_id;
 

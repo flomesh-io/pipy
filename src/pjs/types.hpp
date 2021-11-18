@@ -57,13 +57,89 @@ class Value;
 template<class T> Class* class_of();
 
 //
+// Pooled
+//
+
+class DefaultPooledBase {};
+
+template<class T, class Base = DefaultPooledBase>
+class Pooled : public Base {
+public:
+  using Base::Base;
+
+  void* operator new(size_t) {
+    if (auto p = m_free) {
+      m_free = *(void**)p;
+      return p;
+    } else {
+      return new char[std::max(sizeof(T), sizeof(void*))];
+    }
+  }
+
+  void operator delete(void *p) {
+    *(void**)p = m_free;
+    m_free = p;
+  }
+
+private:
+  static void* m_free;
+};
+
+template<class T, class Base>
+void* Pooled<T, Base>::m_free = nullptr;
+
+//
 // RefCount
 //
 
 template<class T>
 class RefCount {
 public:
+
+  //
+  // RefCount::WeakPtr
+  //
+
+  class WeakPtr : public Pooled<WeakPtr> {
+  public:
+    T* ptr() const {
+      return static_cast<T*>(m_ptr);
+    }
+
+    T* init_ptr() const {
+      return static_cast<T*>(m_init_ptr);
+    }
+
+    void retain() {
+      m_refs++;
+    }
+
+    void release() {
+      if (!--m_refs) {
+        delete this;
+      }
+    }
+
+  private:
+    WeakPtr(RefCount<T> *ptr)
+      : m_init_ptr(ptr)
+      , m_ptr(ptr) {}
+
+    RefCount<T>* m_init_ptr;
+    RefCount<T>* m_ptr;
+    int m_refs = 1;
+
+    friend class RefCount<T>;
+  };
+
   int ref_count() const { return m_refs; }
+
+  WeakPtr* weak_ptr() {
+    if (!m_weak_ptr) {
+      m_weak_ptr = new WeakPtr(this);
+    }
+    return m_weak_ptr;
+  }
 
   T* retain() {
     m_refs++;
@@ -77,7 +153,15 @@ public:
   }
 
 protected:
+  ~RefCount() {
+    if (m_weak_ptr) {
+      m_weak_ptr->m_ptr = nullptr;
+      m_weak_ptr->release();
+    }
+  }
+
   int m_refs = 0;
+  WeakPtr* m_weak_ptr = nullptr;
 
   void finalize() {
     delete static_cast<T*>(this);
@@ -125,6 +209,27 @@ private:
   void reset() { if (m_p) m_p->release(); }
 };
 
+//
+// WeakRef
+//
+
+template<class T>
+class WeakRef {
+public:
+  WeakRef() {}
+  WeakRef(T *p) : m_weak_ptr(p ? p->weak_ptr() : nullptr) {}
+  WeakRef(const WeakRef &r) : m_weak_ptr(r.m_weak_ptr) {}
+
+  T* ptr() const { return m_weak_ptr ? static_cast<T*>(m_weak_ptr->ptr()) : nullptr; }
+  T* init_ptr() const { return m_weak_ptr ? static_cast<T*>(m_weak_ptr->init_ptr()) : nullptr; }
+  T* operator->() const { return ptr(); }
+  T& operator*() const { return *ptr(); }
+  operator T*() const { return ptr(); }
+
+private:
+  Ref<class T::WeakPtr> m_weak_ptr;
+};
+
 } // namespace pjs
 
 namespace std {
@@ -151,41 +256,31 @@ struct hash<pjs::Ref<T>> {
   }
 };
 
+template<class T>
+struct equal_to<pjs::WeakRef<T>> {
+  bool operator()(const pjs::WeakRef<T> &a, const pjs::WeakRef<T> &b) const {
+    return a.init_ptr() == b.init_ptr();
+  }
+};
+
+template<class T>
+struct less<pjs::WeakRef<T>> {
+  bool operator()(const pjs::WeakRef<T> &a, const pjs::WeakRef<T> &b) const {
+    return a.init_ptr() < b.init_ptr();
+  }
+};
+
+template<class T>
+struct hash<pjs::WeakRef<T>> {
+  size_t operator()(const pjs::WeakRef<T> &k) const {
+    hash<void*> h;
+    return h(k.init_ptr());
+  }
+};
+
 } // namespace std
 
 namespace pjs {
-
-//
-// Pooled
-//
-
-class DefaultPooledBase {};
-
-template<class T, class Base = DefaultPooledBase>
-class Pooled : public Base {
-public:
-  using Base::Base;
-
-  void* operator new(size_t) {
-    if (auto p = m_free) {
-      m_free = *(void**)p;
-      return p;
-    } else {
-      return new char[std::max(sizeof(T), sizeof(void*))];
-    }
-  }
-
-  void operator delete(void *p) {
-    *(void**)p = m_free;
-    m_free = p;
-  }
-
-private:
-  static void* m_free;
-};
-
-template<class T, class Base>
-void* Pooled<T, Base>::m_free = nullptr;
 
 //
 // PooledArray
@@ -996,7 +1091,7 @@ typedef PooledArray<Value> Data;
 // Object
 //
 
-class Object : public Pooled<Object> {
+class Object : public Pooled<Object>, public RefCount<Object> {
 public:
   enum class Field {};
 
@@ -1005,9 +1100,6 @@ public:
     class_of<Object>()->init(obj);
     return obj;
   }
-
-  auto retain() -> Object* { m_refs++; return this; }
-  void release() { if (--m_refs <= 0) finalize(); }
 
   auto type() const -> Class* { return m_class; }
   auto data() const -> Data* { return m_data; }
@@ -1078,8 +1170,8 @@ private:
   Class* m_class = nullptr;
   Data* m_data = nullptr;
   Ref<OrderedHash<Ref<Str>, Value>> m_hash;
-  int m_refs = 0;
 
+  friend class RefCount<Object>;
   friend class Class;
 };
 
@@ -1101,7 +1193,7 @@ protected:
   using Pooled<T, Base>::Pooled;
 };
 
-inline auto Value::retain(Object *obj) -> Object* { return obj->retain(); }
+inline auto Value::retain(Object *obj) -> Object* { obj->retain(); return obj; }
 inline void Value::release(Object *obj) { obj->release(); }
 inline auto Value::type_of(Object *obj) -> Class* { return obj->type(); }
 inline void Value::value_of(Object *obj, Value &out) { obj->value_of(out); }

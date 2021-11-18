@@ -47,8 +47,7 @@ Inbound::Inbound(Listener *listener, const Options &options)
 }
 
 Inbound::~Inbound() {
-  if (Pipeline *p = m_pipeline) {
-    p->context()->m_inbound = nullptr;
+  if (m_pipeline) {
     m_listener->close(this);
   }
 }

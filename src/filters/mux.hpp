@@ -111,6 +111,7 @@ private:
   private:
     MuxBase* m_mux;
     std::unordered_map<pjs::Value, Session*> m_sessions;
+    std::unordered_map<pjs::WeakRef<pjs::Object>, Session*> m_weak_sessions;
     std::unordered_set<Session*> m_free_sessions;
     Timer m_recycle_timer;
     bool m_retained_for_free_sessions = false;
