@@ -311,6 +311,8 @@ int main(int argc, char *argv[]) {
 
     Store *store = nullptr;
     CodebaseStore *repo = nullptr;
+    std::function<void()> load, fail;
+    Timer retry_timer;
 
     // Start as codebase repo service
     if (is_repo) {
@@ -329,45 +331,59 @@ int main(int argc, char *argv[]) {
         Codebase::from_http(opts.filename) :
         Codebase::from_fs(opts.filename)
       );
+
       codebase->set_current();
-      codebase->sync(
-        Status::local,
-        [&](bool ok) {
-          if (!ok) {
-            Worker::exit(-1);
-            return;
+
+      load = [&]() {
+        codebase->sync(
+          Status::local,
+          [&](bool ok) {
+            if (!ok) {
+              fail();
+              return;
+            }
+
+            auto &entry = Codebase::current()->entry();
+            auto worker = Worker::make();
+            auto mod = worker->load_module(entry);
+
+            if (!mod) {
+              fail();
+              return;
+            }
+
+            if (opts.verify) {
+              Worker::exit(0);
+              return;
+            }
+
+            if (!worker->start()) {
+              fail();
+              return;
+            }
+
+            Status::local.version = Codebase::current()->version();
+            Status::local.update_modules();
+
+            if (opts.admin_port) {
+              s_admin = new AdminService(nullptr);
+              s_admin->open(opts.admin_port);
+            }
+
+            start_checking_updates();
           }
+        );
+      };
 
-          auto &entry = Codebase::current()->entry();
-          auto worker = Worker::make();
-          auto mod = worker->load_module(entry);
-
-          if (!mod) {
-            Worker::exit(-1);
-            return;
-          }
-
-          if (opts.verify) {
-            Worker::exit(0);
-            return;
-          }
-
-          if (!worker->start()) {
-            Worker::exit(-1);
-            return;
-          }
-
-          Status::local.version = Codebase::current()->version();
-          Status::local.update_modules();
-
-          if (opts.admin_port) {
-            s_admin = new AdminService(nullptr);
-            s_admin->open(opts.admin_port);
-          }
-
-          start_checking_updates();
+      fail = [&]() {
+        if (is_remote) {
+          retry_timer.schedule(5, load);
+        } else {
+          Worker::exit(-1);
         }
-      );
+      };
+
+      load();
     }
 
     asio::signal_set signals(Net::service());

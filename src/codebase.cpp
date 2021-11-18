@@ -282,9 +282,6 @@ CodebaseFromHTTP::CodebaseFromHTTP(const std::string &url)
   : m_url(URL::make(pjs::Value(url).s()))
 {
   Outbound::Options options;
-  options.retry_count = -1;
-  options.retry_delay = 1;
-
   auto host = m_url->hostname()->str() + ':' + m_url->port()->str();
   m_fetch = new Fetch(host, options);
 
