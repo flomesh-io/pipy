@@ -120,8 +120,10 @@ bool Module::load(const std::string &path) {
 }
 
 void Module::unload() {
+  retain();
   m_named_pipelines.clear();
   m_pipelines.clear();
+  release();
 }
 
 void Module::bind_exports() {

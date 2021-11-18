@@ -50,7 +50,7 @@ static void log(Log::Level level, const char *fmt, va_list ap) {
   if (Log::is_enabled(level)) {
     char time[100];
     char msg[1000];
-    char line[1100];
+    char line[1200];
     std::time_t t;
     std::time(&t);
     std::strftime(time, sizeof(time), "%F %T", std::localtime(&t));
