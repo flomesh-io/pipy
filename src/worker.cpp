@@ -264,11 +264,11 @@ auto Worker::exit_code() -> int {
 Worker::Worker()
   : m_global_object(Global::make())
 {
-  Log::error("[worker   %p] ++", this);
+  Log::debug("[worker   %p] ++", this);
 }
 
 Worker::~Worker() {
-  Log::error("[worker   %p] --", this);
+  Log::debug("[worker   %p] --", this);
 }
 
 bool Worker::handling_signal(int signal) {

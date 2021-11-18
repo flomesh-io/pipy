@@ -89,11 +89,12 @@ protected:
   MuxBase(const pjs::Value &key);
   MuxBase(const MuxBase &r);
 
+  virtual void reset() override;
+  virtual void process(Event *evt) override;
+
   virtual auto on_new_session() -> Session* = 0;
 
 private:
-  virtual void reset() override;
-  virtual void process(Event *evt) override;
 
   //
   // MuxBase::SessionManager

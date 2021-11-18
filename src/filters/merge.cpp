@@ -57,6 +57,11 @@ auto Merge::clone() -> Filter* {
   return new Merge(*this);
 }
 
+void Merge::process(Event *evt) {
+  MuxBase::process(evt->clone());
+  output(evt);
+}
+
 //
 // Merge::Session
 //
