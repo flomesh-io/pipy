@@ -311,6 +311,8 @@ int main(int argc, char *argv[]) {
 
     Store *store = nullptr;
     CodebaseStore *repo = nullptr;
+    Codebase *codebase = nullptr;
+
     std::function<void()> load, fail;
     Timer retry_timer;
 
@@ -327,7 +329,7 @@ int main(int argc, char *argv[]) {
 
     // Start as a fixed codebase
     } else {
-      auto codebase = (is_remote ?
+      codebase = (is_remote ?
         Codebase::from_http(opts.filename) :
         Codebase::from_fs(opts.filename)
       );

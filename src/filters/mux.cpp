@@ -270,8 +270,8 @@ void Mux::Session::on_demux(Event *evt) {
   } else if (evt->is<MessageEnd>()) {
     if (auto stream = m_streams.head()) {
       if (stream->m_started) {
-        stream->output()->input(evt);
         m_streams.remove(stream);
+        stream->output()->input(evt);
         delete stream;
       }
     }
