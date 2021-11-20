@@ -41,7 +41,6 @@ bool get_host_port(const std::string &str, std::string &ip, int &port);
 bool get_ip_v4(const std::string &str, uint8_t ip[]);
 bool get_ip_v6(const std::string &str, uint16_t ip[]);
 bool get_cidr(const std::string &str, uint8_t ip[], int &mask);
-auto get_file_time(const std::string &filename) -> uint64_t;
 auto get_byte_size(const std::string &str) -> size_t;
 auto get_seconds(const std::string &str) -> double;
 void gen_uuid_v4(std::string &str);

@@ -71,8 +71,8 @@ public:
   auto pkey() const -> EVP_PKEY* { return m_pkey; }
 
 private:
-  PrivateKey(Data *data, pjs::Object *options);
-  PrivateKey(pjs::Str *data, pjs::Object *options);
+  PrivateKey(Data *data, pjs::Object *options = nullptr);
+  PrivateKey(pjs::Str *data, pjs::Object *options = nullptr);
   ~PrivateKey();
 
   EVP_PKEY* m_pkey = nullptr;

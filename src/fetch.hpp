@@ -28,6 +28,7 @@
 
 #include "pjs/pjs.hpp"
 #include "api/http.hpp"
+#include "api/crypto.hpp"
 #include "filter.hpp"
 #include "outbound.hpp"
 
@@ -57,8 +58,15 @@ public:
     DELETE,
   };
 
-  Fetch(pjs::Str *host, const Outbound::Options &options);
-  Fetch(const std::string &host, const Outbound::Options &options);
+  struct Options : public Outbound::Options {
+    bool tls = false;
+    pjs::Ref<crypto::Certificate> cert;
+    pjs::Ref<crypto::PrivateKey> key;
+    pjs::Ref<pjs::Array> trusted;
+  };
+
+  Fetch(pjs::Str *host, const Options &options);
+  Fetch(const std::string &host, const Options &options);
 
   bool busy() const {
     return m_current_request;
@@ -114,6 +122,7 @@ private:
 
   pjs::Ref<PipelineDef> m_pipeline_def;
   pjs::Ref<PipelineDef> m_pipeline_def_connect;
+  pjs::Ref<PipelineDef> m_pipeline_def_tls;
 
   void fetch(
     Method method,

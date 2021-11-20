@@ -23,50 +23,24 @@
  *  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef OPTIONS_HPP
-#define OPTIONS_HPP
-
-#include "api/crypto.hpp"
-#include "logging.hpp"
+#ifndef FS_HPP
+#define FS_HPP
 
 #include <list>
 #include <string>
+#include <vector>
 
 namespace pipy {
+namespace fs {
 
-//
-// Options
-//
+auto abs_path(const std::string &filename) -> std::string;
+bool exists(const std::string &filename);
+bool is_dir(const std::string &filename);
+bool is_file(const std::string &filename);
+bool read_dir(const std::string &filename, std::list<std::string> &list);
+bool read_file(const std::string &filename, std::vector<uint8_t> &data);
 
-class Options {
-public:
-  static void show_help();
-
-  Options(int argc, char *argv[]);
-
-  std::string filename;
-  bool        version = false;
-  bool        help = false;
-  bool        help_filters = false;
-  bool        list_filters = false;
-  bool        verify = false;
-  bool        reuse_port = false;
-  int         admin_port = 0;
-  Log::Level  log_level = Log::ERROR;
-
-  pjs::Ref<crypto::Certificate> admin_tls_cert;
-  pjs::Ref<crypto::PrivateKey>  admin_tls_key;
-  pjs::Ref<pjs::Array>          admin_tls_trusted;
-  pjs::Ref<crypto::Certificate> tls_cert;
-  pjs::Ref<crypto::PrivateKey>  tls_key;
-  pjs::Ref<pjs::Array>          tls_trusted;
-
-private:
-  auto load_private_key(const std::string &filename) -> crypto::PrivateKey*;
-  auto load_certificate(const std::string &filename) -> crypto::Certificate*;
-  auto load_certificate_list(const std::string &filename) -> pjs::Array*;
-};
-
+} // namespace fs
 } // namespace pipy
 
-#endif // OPTIONS_HPP
+#endif // FS_HPP

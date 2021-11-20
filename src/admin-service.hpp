@@ -27,6 +27,7 @@
 #define ADMIN_SERVICE_HPP
 
 #include "api/http.hpp"
+#include "api/crypto.hpp"
 #include "message.hpp"
 #include "tar.hpp"
 #include "codebase-store.hpp"
@@ -43,9 +44,15 @@ namespace pipy {
 
 class AdminService {
 public:
+  struct Options {
+    pjs::Ref<crypto::Certificate> cert;
+    pjs::Ref<crypto::PrivateKey> key;
+    pjs::Ref<pjs::Array> trusted;
+  };
+
   AdminService(CodebaseStore *store);
 
-  void open(int port);
+  void open(int port, const Options &options);
   void close();
 
 private:

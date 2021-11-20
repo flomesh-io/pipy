@@ -25,13 +25,16 @@
 
 #include "admin-service.hpp"
 #include "codebase.hpp"
+#include "api/crypto.hpp"
 #include "api/json.hpp"
 #include "filters/http.hpp"
+#include "filters/tls.hpp"
 #include "listener.hpp"
 #include "worker.hpp"
 #include "module.hpp"
 #include "status.hpp"
 #include "graph.hpp"
+#include "fs.hpp"
 #include "logging.hpp"
 
 #ifdef PIPY_USE_GUI
@@ -83,20 +86,38 @@ AdminService::AdminService(CodebaseStore *store)
   }
 }
 
-void AdminService::open(int port) {
+void AdminService::open(int port, const Options &options) {
   Log::info("[codebase] Starting codebase service...");
-  auto pipeline_def = PipelineDef::make(nullptr, PipelineDef::LISTEN, "Codebase Service");
-  pipeline_def->append(
+
+  PipelineDef *pipeline_def = PipelineDef::make(nullptr, PipelineDef::LISTEN, "Codebase Service");
+  PipelineDef *pipeline_def_tls_offloaded = nullptr;
+
+  if (!options.cert || !options.key) {
+    pipeline_def_tls_offloaded = pipeline_def;
+
+  } else {
+    auto opts = pjs::Object::make();
+    auto certificate = pjs::Object::make();
+    certificate->set("cert", options.cert.get());
+    certificate->set("key", options.key.get());
+    opts->set("certificate", certificate);
+    opts->set("trusted", options.trusted.get());
+    pipeline_def_tls_offloaded = PipelineDef::make(nullptr, PipelineDef::NAMED, "Codebase Service TLS-Offloaded");
+    pipeline_def->append(new tls::Server(opts))->add_sub_pipeline(pipeline_def_tls_offloaded);
+  }
+
+  pipeline_def_tls_offloaded->append(
     new http::Server(
       [this](Message *msg) {
         return handle(msg);
       }
     )
   );
-  Listener::Options options;
-  options.reserved = true;
+
+  Listener::Options opts;
+  opts.reserved = true;
   auto listener = Listener::get(port);
-  listener->set_options(options);
+  listener->set_options(opts);
   listener->pipeline_def(pipeline_def);
   m_port = port;
 }

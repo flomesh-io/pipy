@@ -27,6 +27,7 @@
 #define CODEBASE_HPP
 
 #include "pjs/pjs.hpp"
+#include "fetch.hpp"
 
 #include <functional>
 
@@ -46,7 +47,7 @@ public:
 
   static Codebase* from_fs(const std::string &path);
   static Codebase* from_store(CodebaseStore *store, const std::string &name);
-  static Codebase* from_http(const std::string &url);
+  static Codebase* from_http(const std::string &url, const Fetch::Options &options);
 
   void set_current() {
     if (s_current) s_current->deactivate();

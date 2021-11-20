@@ -31,6 +31,7 @@
 #include "listener.hpp"
 #include "net.hpp"
 #include "options.hpp"
+#include "fs.hpp"
 #include "status.hpp"
 #include "timer.hpp"
 #include "utils.hpp"
@@ -286,8 +287,14 @@ int main(int argc, char *argv[]) {
     Log::set_level(opts.log_level);
     Listener::set_reuse_port(opts.reuse_port);
 
+    AdminService::Options admin_options;
+    admin_options.cert = opts.admin_tls_cert;
+    admin_options.key = opts.admin_tls_key;
+    admin_options.trusted = opts.admin_tls_trusted;
+
     bool is_repo = false;
     bool is_remote = false;
+    bool is_tls = false;
 
     if (opts.filename.empty()) {
       is_repo = true;
@@ -295,18 +302,18 @@ int main(int argc, char *argv[]) {
     } else if (utils::starts_with(opts.filename, "http://")) {
       is_remote = true;
 
-    } else {
-      struct stat st;
-      char full_path[PATH_MAX];
-      realpath(opts.filename.c_str(), full_path);
-      opts.filename = full_path;
+    } else if (utils::starts_with(opts.filename, "https://")) {
+      is_remote = true;
+      is_tls = true;
 
-      if (stat(full_path, &st)) {
+    } else {
+      auto full_path = fs::abs_path(opts.filename);
+      opts.filename = full_path;
+      if (!fs::exists(full_path)) {
         std::string msg("file or directory does not exist: ");
         throw std::runtime_error(msg + full_path);
       }
-
-      is_repo = S_ISDIR(st.st_mode);
+      is_repo = fs::is_dir(full_path);
     }
 
     Store *store = nullptr;
@@ -325,14 +332,20 @@ int main(int argc, char *argv[]) {
         : Store::open_level_db(opts.filename);
       repo = new CodebaseStore(store);
       s_admin = new AdminService(repo);
-      s_admin->open(port);
+      s_admin->open(port, admin_options);
 
     // Start as a fixed codebase
     } else {
-      codebase = (is_remote ?
-        Codebase::from_http(opts.filename) :
-        Codebase::from_fs(opts.filename)
-      );
+      if (is_remote) {
+        Fetch::Options options;
+        options.tls = is_tls;
+        options.cert = opts.tls_cert;
+        options.key = opts.tls_key;
+        options.trusted = opts.tls_trusted;
+        codebase = Codebase::from_http(opts.filename, options);
+      } else {
+        codebase = Codebase::from_fs(opts.filename);
+      }
 
       codebase->set_current();
 
@@ -369,7 +382,7 @@ int main(int argc, char *argv[]) {
 
             if (opts.admin_port) {
               s_admin = new AdminService(nullptr);
-              s_admin->open(opts.admin_port);
+              s_admin->open(opts.admin_port, admin_options);
             }
 
             start_checking_updates();

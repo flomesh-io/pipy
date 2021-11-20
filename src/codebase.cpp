@@ -31,6 +31,7 @@
 #include "api/http.hpp"
 #include "api/url.hpp"
 #include "fetch.hpp"
+#include "fs.hpp"
 #include "utils.hpp"
 #include "logging.hpp"
 
@@ -78,18 +79,16 @@ private:
 };
 
 CodebaseFromFS::CodebaseFromFS(const std::string &path) {
-  char full_path[PATH_MAX];
-  realpath(path.c_str(), full_path);
+  auto full_path = fs::abs_path(path);
 
-  struct stat st;
-  if (stat(full_path, &st)) {
+  if (!fs::exists(full_path)) {
     std::string msg("file or directory does not exist: ");
-    throw std::runtime_error(full_path);
+    throw std::runtime_error(msg + full_path);
   }
 
   m_base = full_path;
 
-  if (!S_ISDIR(st.st_mode)) {
+  if (!fs::is_dir(full_path)) {
     auto i = m_base.find_last_of("/\\");
     m_entry = m_base.substr(i);
     m_base = m_base.substr(0, i);
@@ -99,37 +98,15 @@ CodebaseFromFS::CodebaseFromFS(const std::string &path) {
 auto CodebaseFromFS::list(const std::string &path) -> std::list<std::string> {
   std::list<std::string> list;
   auto full_path = utils::path_join(m_base, path);
-  if (DIR *dir = opendir(full_path.c_str())) {
-    while (auto *entry = readdir(dir)) {
-      if (entry->d_name[0] == '.') continue;
-      std::string name(entry->d_name);
-      if (entry->d_type == DT_DIR) name += '/';
-      list.push_back(name);
-    }
-    closedir(dir);
-  }
+  fs::read_dir(full_path, list);
   return list;
 }
 
 auto CodebaseFromFS::get(const std::string &path) -> Data* {
+  std::vector<uint8_t> data;
   auto full_path = utils::path_join(m_base, path);
-
-  struct stat st;
-  if (stat(full_path.c_str(), &st) || !S_ISREG(st.st_mode)) {
-    return nullptr;
-  }
-
-  std::ifstream fs(full_path, std::ios::in);
-  if (!fs.is_open()) return nullptr;
-
-  auto data = Data::make();
-  char buf[DATA_CHUNK_SIZE];
-  while (!fs.eof()) {
-    fs.read(buf, sizeof(buf));
-    s_dp.push(data, buf, fs.gcount());
-  }
-
-  return data;
+  if (!fs::read_file(full_path, data)) return nullptr;
+  return s_dp.make(&data[0], data.size());
 }
 
 void CodebaseFromFS::set(const std::string &path, Data *data) {
@@ -247,8 +224,7 @@ auto CodebsaeFromStore::get(const std::string &path) -> pipy::Data* {
 
 class CodebaseFromHTTP : public Codebase {
 public:
-  CodebaseFromHTTP(const std::string &url);
-  ~CodebaseFromHTTP();
+  CodebaseFromHTTP(const std::string &url, const Fetch::Options &options);
 
 private:
   virtual auto version() const -> const std::string& override { return m_etag; }
@@ -261,7 +237,7 @@ private:
   virtual void sync(const Status &status, const std::function<void(bool)> &on_update) override;
 
   pjs::Ref<URL> m_url;
-  Fetch* m_fetch;
+  Fetch m_fetch;
   bool m_downloaded = false;
   std::string m_etag;
   std::string m_date;
@@ -278,13 +254,10 @@ private:
   void response_error(const char *method, const char *path, http::ResponseHead *head);
 };
 
-CodebaseFromHTTP::CodebaseFromHTTP(const std::string &url)
+CodebaseFromHTTP::CodebaseFromHTTP(const std::string &url, const Fetch::Options &options)
   : m_url(URL::make(pjs::Value(url).s()))
+  , m_fetch(m_url->hostname()->str() + ':' + m_url->port()->str(), options)
 {
-  Outbound::Options options;
-  auto host = m_url->hostname()->str() + ':' + m_url->port()->str();
-  m_fetch = new Fetch(host, options);
-
   auto path = m_url->pathname()->str();
   auto i = path.find_last_of('/');
   if (i == std::string::npos) {
@@ -298,10 +271,6 @@ CodebaseFromHTTP::CodebaseFromHTTP(const std::string &url)
   auto headers = pjs::Object::make();
   headers->set("content-type", "application/json");
   m_request_header_post_status = headers;
-}
-
-CodebaseFromHTTP::~CodebaseFromHTTP() {
-  delete m_fetch;
 }
 
 auto CodebaseFromHTTP::list(const std::string &path) -> std::list<std::string> {
@@ -333,13 +302,13 @@ auto CodebaseFromHTTP::get(const std::string &path) -> pipy::Data* {
 }
 
 void CodebaseFromHTTP::sync(const Status &status, const std::function<void(bool)> &on_update) {
-  if (m_fetch->busy()) return;
+  if (m_fetch.busy()) return;
 
   std::stringstream ss;
   status.to_json(ss);
 
   // Post status
-  (*m_fetch)(
+  m_fetch(
     Fetch::POST,
     m_url->path(),
     m_request_header_post_status,
@@ -347,7 +316,7 @@ void CodebaseFromHTTP::sync(const Status &status, const std::function<void(bool)
     [=](http::ResponseHead *head, Data *body) {
 
       // Check updates
-      (*m_fetch)(
+      m_fetch(
         Fetch::HEAD,
         m_url->path(),
         nullptr,
@@ -371,7 +340,7 @@ void CodebaseFromHTTP::sync(const Status &status, const std::function<void(bool)
           if (!m_downloaded || etag_str != m_etag || date_str != m_date) {
             download(on_update);
           } else {
-            m_fetch->close();
+            m_fetch.close();
           }
         }
       );
@@ -381,7 +350,7 @@ void CodebaseFromHTTP::sync(const Status &status, const std::function<void(bool)
 }
 
 void CodebaseFromHTTP::download(const std::function<void(bool)> &on_update) {
-  (*m_fetch)(
+  m_fetch(
     Fetch::GET,
     m_url->path(),
     nullptr,
@@ -424,7 +393,7 @@ void CodebaseFromHTTP::download(const std::function<void(bool)> &on_update) {
       } else {
         m_files.clear();
         m_files[m_root] = body;
-        m_fetch->close();
+        m_fetch.close();
         m_entry = m_root;
         m_downloaded = true;
         on_update(true);
@@ -436,7 +405,7 @@ void CodebaseFromHTTP::download(const std::function<void(bool)> &on_update) {
 void CodebaseFromHTTP::download_next(const std::function<void(bool)> &on_update) {
   if (m_dl_list.empty()) {
     m_files = std::move(m_dl_temp);
-    m_fetch->close();
+    m_fetch.close();
     m_downloaded = true;
     on_update(true);
     return;
@@ -445,7 +414,7 @@ void CodebaseFromHTTP::download_next(const std::function<void(bool)> &on_update)
   auto name = m_dl_list.front();
   auto path = m_base + name;
   m_dl_list.pop_front();
-  (*m_fetch)(
+  m_fetch(
     Fetch::GET,
     pjs::Value(path).s(),
     nullptr,
@@ -474,10 +443,10 @@ void CodebaseFromHTTP::response_error(const char *method, const char *path, http
   Log::error(
     "[codebase] %s %s -> %d %s",
     method, path,
-    head->status(),
-    head->status_text()->c_str()
+    head ? head->status() : 0,
+    head ? head->status_text()->c_str() : "Empty"
   );
-  m_fetch->close();
+  m_fetch.close();
 }
 
 //
@@ -492,8 +461,8 @@ Codebase* Codebase::from_store(CodebaseStore *store, const std::string &name) {
   return new CodebsaeFromStore(store, name);
 }
 
-Codebase* Codebase::from_http(const std::string &url) {
-  return new CodebaseFromHTTP(url);
+Codebase* Codebase::from_http(const std::string &url, const Fetch::Options &options) {
+  return new CodebaseFromHTTP(url, options);
 }
 
 } // namespace pipy

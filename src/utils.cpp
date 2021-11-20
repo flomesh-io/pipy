@@ -25,14 +25,12 @@
 
 #include "utils.hpp"
 
-#include <sys/stat.h>
 #include <cmath>
 #include <cstring>
 #include <chrono>
 #include <random>
 
 namespace pipy {
-
 namespace utils {
 
 static int get_dec_uint8(const char **ptr) {
@@ -193,12 +191,6 @@ bool get_cidr(const std::string &str, uint8_t ip[], int &mask) {
 
   mask = m;
   return true;
-}
-
-auto get_file_time(const std::string &filename) -> uint64_t {
-  struct stat st;
-  if (stat(filename.c_str(), &st)) return 0;
-  return (uint64_t)st.st_mtime * 1000;
 }
 
 auto get_byte_size(const std::string &str) -> size_t {
@@ -748,5 +740,4 @@ bool Utf8Decoder::end() {
 }
 
 } // namespace utils
-
 } // namespace pipy

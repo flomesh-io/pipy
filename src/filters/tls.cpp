@@ -353,8 +353,8 @@ void TLSSession::pump_read() {
 
 void TLSSession::close(StreamEnd *end) {
   if (!m_closed) {
-    output(end ? end : StreamEnd::make());
     m_closed = true;
+    output(end ? end : StreamEnd::make());
   }
 }
 
@@ -371,14 +371,14 @@ Client::Client(pjs::Object *options)
     options->get("trusted", trusted);
     options->get("sni", m_sni);
 
-    if (!certificate.is_undefined()) {
+    if (!certificate.is_nullish()) {
       if (!certificate.is_object()) {
         throw std::runtime_error("options.certificate expects an object or a function");
       }
       m_certificate = certificate.o();
     }
 
-    if (!trusted.is_undefined()) {
+    if (!trusted.is_nullish()) {
       if (!trusted.is_array()) {
         throw std::runtime_error("options.trusted expects an array");
       }
@@ -392,7 +392,7 @@ Client::Client(pjs::Object *options)
       });
     }
 
-    if (!m_sni.is_undefined()) {
+    if (!m_sni.is_nullish()) {
       if (!m_sni.is_string() && !m_sni.is_function()) {
         throw std::runtime_error("options.sni expects a string or a function");
       }
@@ -464,14 +464,14 @@ Server::Server(pjs::Object *options)
     options->get("certificate", certificate);
     options->get("trusted", trusted);
 
-    if (!certificate.is_undefined()) {
+    if (!certificate.is_nullish()) {
       if (!certificate.is_object()) {
         throw std::runtime_error("options.certificate expects an object or a function");
       }
       m_certificate = certificate.o();
     }
 
-    if (!trusted.is_undefined()) {
+    if (!trusted.is_nullish()) {
       if (!trusted.is_array()) {
         throw std::runtime_error("options.trusted expects an array");
       }

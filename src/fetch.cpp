@@ -30,6 +30,7 @@
 #include "filters/connect.hpp"
 #include "filters/demux.hpp"
 #include "filters/http.hpp"
+#include "filters/tls.hpp"
 
 namespace pipy {
 
@@ -64,18 +65,34 @@ void Fetch::Receiver::dump(std::ostream &out) {
   out << "Fetch::Receiver";
 }
 
-Fetch::Fetch(pjs::Str *host, const Outbound::Options &options)
+Fetch::Fetch(pjs::Str *host, const Options &options)
   : m_host(host)
 {
   m_pipeline_def_connect = PipelineDef::make(nullptr, PipelineDef::NAMED, "Fetch Connection");
   m_pipeline_def_connect->append(new Connect(m_host.get(), options));
 
+  auto def_connect = m_pipeline_def_connect.get();
+
+  if (options.tls) {
+    auto opts = pjs::Object::make();
+    opts->set("trusted", options.trusted.get());
+    if (options.cert) {
+      auto certificate = pjs::Object::make();
+      certificate->set("cert", options.cert.get());
+      certificate->set("key", options.key.get());
+      opts->set("certificate", certificate);
+    }
+    m_pipeline_def_tls = PipelineDef::make(nullptr, PipelineDef::NAMED, "Fetch TLS");
+    m_pipeline_def_tls->append(new tls::Client(opts))->add_sub_pipeline(m_pipeline_def_connect);
+    def_connect = m_pipeline_def_tls;
+  }
+
   m_pipeline_def = PipelineDef::make(nullptr, PipelineDef::NAMED, "Fetch");
-  m_pipeline_def->append(new http::Mux())->add_sub_pipeline(m_pipeline_def_connect);
+  m_pipeline_def->append(new http::Mux())->add_sub_pipeline(def_connect);
   m_pipeline_def->append(new Receiver(this));
 }
 
-Fetch::Fetch(const std::string &host, const Outbound::Options &options)
+Fetch::Fetch(const std::string &host, const Options &options)
   : Fetch(pjs::Str::make(host), options)
 {
 }

@@ -24,10 +24,15 @@
  */
 
 #include "options.hpp"
+#include "fs.hpp"
+#include "data.hpp"
+#include "utils.hpp"
 
 #include <iostream>
 
 namespace pipy {
+
+static Data::Producer s_dp("Command Line Options");
 
 void Options::show_help() {
   std::cout << "Usage: pipy [options] <script filename>" << std::endl;
@@ -41,6 +46,12 @@ void Options::show_help() {
   std::cout << "  --verify                             Verify configuration only" << std::endl;
   std::cout << "  --reuse-port                         Enable kernel load balancing for all listening ports" << std::endl;
   std::cout << "  --admin-port=<port>                  Enable administration service on the specified port" << std::endl;
+  std::cout << "  --admin-tls-cert=<filename>          Administration service certificate" << std::endl;
+  std::cout << "  --admin-tls-key=<filename>           Administration service private key" << std::endl;
+  std::cout << "  --admin-tls-trusted=<filename>       Client certificate(s) trusted by administration service" << std::endl;
+  std::cout << "  --tls-cert=<filename>                Client certificate in communication to administration service" << std::endl;
+  std::cout << "  --tls-key=<filename>                 Client private key in communication to administration service" << std::endl;
+  std::cout << "  --tls-trusted=<filename>             Administration service certificate(s) trusted by client" << std::endl;
   std::cout << std::endl;
 }
 
@@ -80,6 +91,18 @@ Options::Options(int argc, char *argv[]) {
         reuse_port = true;
       } else if (k == "--admin-port") {
         admin_port = std::atoi(v.c_str());
+      } else if (k == "--admin-tls-cert") {
+        admin_tls_cert = load_certificate(v);
+      } else if (k == "--admin-tls-key") {
+        admin_tls_key = load_private_key(v);
+      } else if (k == "--admin-tls-trusted") {
+        admin_tls_trusted = load_certificate_list(v);
+      } else if (k == "--tls-cert") {
+        tls_cert = load_certificate(v);
+      } else if (k == "--tls-key") {
+        tls_key = load_private_key(v);
+      } else if (k == "--tls-trusted") {
+        tls_trusted = load_certificate_list(v);
       } else {
         std::string msg("unknown option: ");
         throw std::runtime_error(msg + k);
@@ -87,7 +110,67 @@ Options::Options(int argc, char *argv[]) {
     }
   }
 
-  if (admin_port < 0) throw std::runtime_error("invalid --admin-port");
+  if (admin_port < 0) {
+    throw std::runtime_error("invalid --admin-port");
+  }
+
+  if (bool(admin_tls_cert) != bool(admin_tls_key)) {
+    throw std::runtime_error("--admin-tls-cert and --admin-tls-key must be used in conjuction");
+  }
+
+  if (admin_tls_trusted && !admin_tls_cert) {
+    throw std::runtime_error("--admin-tls-cert and --admin-tls-key are required for --admin-tls-trusted");
+  }
+
+  if (bool(tls_cert) != bool(tls_key)) {
+    throw std::runtime_error("--tls-cert and --tls-key must be used in conjuction");
+  }
+}
+
+auto Options::load_private_key(const std::string &filename) -> crypto::PrivateKey* {
+  std::vector<uint8_t> buf;
+  if (!fs::read_file(filename, buf)) {
+    std::string msg("cannot open file: ");
+    throw std::runtime_error(msg + filename);
+  }
+  pjs::Ref<Data> data = s_dp.make(&buf[0], buf.size());
+  return crypto::PrivateKey::make(data);
+}
+
+auto Options::load_certificate(const std::string &filename) -> crypto::Certificate* {
+  std::vector<uint8_t> buf;
+  if (!fs::read_file(filename, buf)) {
+    std::string msg("cannot open file: ");
+    throw std::runtime_error(msg + filename);
+  }
+  pjs::Ref<Data> data = s_dp.make(&buf[0], buf.size());
+  return crypto::Certificate::make(data);
+}
+
+auto Options::load_certificate_list(const std::string &filename) -> pjs::Array* {
+  auto a = pjs::Array::make();
+
+  if (fs::is_file(filename)) {
+    a->set(0, load_certificate(filename));
+
+  } else if (fs::is_dir(filename)) {
+    std::list<std::string> names;
+    if (!fs::read_dir(filename, names)) {
+      std::string msg("cannot read directory: ");
+      throw std::runtime_error(msg + filename);
+    }
+    int i = 0;
+    for (const auto &name : names) {
+      a->set(i++, load_certificate(
+        utils::path_join(filename, name)
+      ));
+    }
+  } else {
+    std::string msg("file or directory not found: ");
+    throw std::runtime_error(msg + filename);
+  }
+
+  return a;
 }
 
 } // namespace pipy
