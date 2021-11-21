@@ -29,6 +29,7 @@
 #include <dirent.h>
 #include <unistd.h>
 #include <fstream>
+#include <limits.h>
 
 namespace pipy {
 namespace fs {
