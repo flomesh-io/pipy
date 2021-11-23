@@ -39,6 +39,7 @@ include_directories(
 )
 
 add_executable(pipy
+  src/admin-proxy.cpp
   src/admin-service.cpp
   src/api/algo.cpp
   src/api/configuration.cpp

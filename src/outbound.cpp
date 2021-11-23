@@ -89,7 +89,8 @@ void Outbound::end() {
   if (!m_ended) {
     if (m_connected) {
       pump();
-      m_socket.shutdown(tcp::socket::shutdown_send);
+      std::error_code ec;
+      m_socket.shutdown(tcp::socket::shutdown_send, ec);
     }
     m_ended = true;
   }

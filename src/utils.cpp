@@ -90,6 +90,12 @@ auto now() -> double {
   return double(ms);
 }
 
+bool is_host_port(const std::string &str) {
+  std::string host;
+  int port;
+  return get_host_port(str, host, port);
+}
+
 bool get_host_port(const std::string &str, std::string &host, int &port) {
   if (str.length() > 0 && str[0] == '[') {
     auto p = str.find_last_of(']');

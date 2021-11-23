@@ -35,7 +35,7 @@ namespace pipy {
 static Data::Producer s_dp("Command Line Options");
 
 void Options::show_help() {
-  std::cout << "Usage: pipy [options] <script filename>" << std::endl;
+  std::cout << "Usage: pipy [options] [<filename or URL>]" << std::endl;
   std::cout << std::endl;
   std::cout << "Options:" << std::endl;
   std::cout << "  -h, -help, --help                    Show help information" << std::endl;

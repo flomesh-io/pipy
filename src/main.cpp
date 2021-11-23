@@ -26,6 +26,7 @@
 #include "version.h"
 
 #include "admin-service.hpp"
+#include "admin-proxy.hpp"
 #include "codebase.hpp"
 #include "filters/tls.hpp"
 #include "listener.hpp"
@@ -37,9 +38,7 @@
 #include "utils.hpp"
 #include "worker.hpp"
 
-#include <limits.h>
 #include <signal.h>
-#include <stdlib.h>
 
 #include <list>
 #include <string>
@@ -53,6 +52,7 @@ using namespace pipy;
 extern const char FILTERS_HELP[];
 
 AdminService *s_admin = nullptr;
+AdminProxy *s_admin_proxy = nullptr;
 
 //
 // Show version
@@ -292,7 +292,11 @@ int main(int argc, char *argv[]) {
     admin_options.key = opts.admin_tls_key;
     admin_options.trusted = opts.admin_tls_trusted;
 
+    auto admin_port = opts.admin_port;
+    if (!admin_port) admin_port = 6060; // default repo port
+
     bool is_repo = false;
+    bool is_repo_proxy = false;
     bool is_remote = false;
     bool is_tls = false;
 
@@ -306,6 +310,9 @@ int main(int argc, char *argv[]) {
       is_remote = true;
       is_tls = true;
 
+    } else if (utils::is_host_port(opts.filename)) {
+      is_repo_proxy = true;
+
     } else {
       auto full_path = fs::abs_path(opts.filename);
       opts.filename = full_path;
@@ -314,6 +321,19 @@ int main(int argc, char *argv[]) {
         throw std::runtime_error(msg + full_path);
       }
       is_repo = fs::is_dir(full_path);
+    }
+
+    if (is_remote) {
+      auto i = opts.filename.find('/');
+      auto target = opts.filename.substr(i+2);
+      if (!target.empty() && target.back() == '/') {
+        target.resize(target.size() - 1);
+      }
+      if (utils::is_host_port(target)) {
+        opts.filename = target;
+        is_remote = false;
+        is_repo_proxy = true;
+      }
     }
 
     Store *store = nullptr;
@@ -325,14 +345,25 @@ int main(int argc, char *argv[]) {
 
     // Start as codebase repo service
     if (is_repo) {
-      auto port = opts.admin_port;
-      if (!port) port = 6060; // default repo port
       store = opts.filename.empty()
         ? Store::open_memory()
         : Store::open_level_db(opts.filename);
       repo = new CodebaseStore(store);
       s_admin = new AdminService(repo);
-      s_admin->open(port, admin_options);
+      s_admin->open(admin_port, admin_options);
+
+    // Start as codebase repo proxy
+    } else if (is_repo_proxy) {
+      AdminProxy::Options options;
+      options.cert = opts.admin_tls_cert;
+      options.key = opts.admin_tls_key;
+      options.trusted = opts.admin_tls_trusted;
+      options.fetch_options.tls = is_tls;
+      options.fetch_options.cert = opts.tls_cert;
+      options.fetch_options.key = opts.tls_key;
+      options.fetch_options.trusted = opts.tls_trusted;
+      s_admin_proxy = new AdminProxy(opts.filename);
+      s_admin_proxy->open(admin_port, options);
 
     // Start as a fixed codebase
     } else {
@@ -410,7 +441,9 @@ int main(int argc, char *argv[]) {
     Net::run();
 
     delete s_admin;
+    delete s_admin_proxy;
     delete repo;
+
     if (store) store->close();
 
     std::cout << "Done." << std::endl;

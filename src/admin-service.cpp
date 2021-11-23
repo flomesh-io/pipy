@@ -25,7 +25,6 @@
 
 #include "admin-service.hpp"
 #include "codebase.hpp"
-#include "api/crypto.hpp"
 #include "api/json.hpp"
 #include "filters/http.hpp"
 #include "filters/tls.hpp"
@@ -87,13 +86,13 @@ AdminService::AdminService(CodebaseStore *store)
 }
 
 void AdminService::open(int port, const Options &options) {
-  Log::info("[codebase] Starting codebase service...");
+  Log::info("[admin] Starting admin service...");
 
-  PipelineDef *pipeline_def = PipelineDef::make(nullptr, PipelineDef::LISTEN, "Codebase Service");
-  PipelineDef *pipeline_def_tls_offloaded = nullptr;
+  PipelineDef *pipeline_def = PipelineDef::make(nullptr, PipelineDef::LISTEN, "Admin Service");
+  PipelineDef *pipeline_def_inbound = nullptr;
 
   if (!options.cert || !options.key) {
-    pipeline_def_tls_offloaded = pipeline_def;
+    pipeline_def_inbound = pipeline_def;
 
   } else {
     auto opts = pjs::Object::make();
@@ -102,11 +101,11 @@ void AdminService::open(int port, const Options &options) {
     certificate->set("key", options.key.get());
     opts->set("certificate", certificate);
     opts->set("trusted", options.trusted.get());
-    pipeline_def_tls_offloaded = PipelineDef::make(nullptr, PipelineDef::NAMED, "Codebase Service TLS-Offloaded");
-    pipeline_def->append(new tls::Server(opts))->add_sub_pipeline(pipeline_def_tls_offloaded);
+    pipeline_def_inbound = PipelineDef::make(nullptr, PipelineDef::NAMED, "Admin Service TLS-Offloaded");
+    pipeline_def->append(new tls::Server(opts))->add_sub_pipeline(pipeline_def_inbound);
   }
 
-  pipeline_def_tls_offloaded->append(
+  pipeline_def_inbound->append(
     new http::Server(
       [this](Message *msg) {
         return handle(msg);
