@@ -69,6 +69,7 @@ public:
   void accept_socks(pjs::Str *target, pjs::Function *on_connect);
   void accept_tls(pjs::Str *target, pjs::Object *options);
   void connect(const pjs::Value &target, pjs::Object *options);
+  void connect_socks(pjs::Str *target, const pjs::Value &address);
   void connect_tls(pjs::Str *target, pjs::Object *options);
   void decode_dubbo();
   void decode_http_request();

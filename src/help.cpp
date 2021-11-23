@@ -106,6 +106,11 @@ wait(condition)
 Buffers up events until a condition is fulfilled
 condition = <function> Callback function that returns whether the condition is fulfilled
 
+connectSOCKS(target, address)
+Connects to a pipeline in SOCKS5
+target = <string> Name of the pipeline
+address = <string|function> Target address in host:port format
+
 acceptSOCKS(target, onConnect)
 Accepts a SOCKS connection
 target = <string> Name of the pipeline that receives SOCKS connections

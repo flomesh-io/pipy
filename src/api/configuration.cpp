@@ -177,6 +177,12 @@ void Configuration::connect(const pjs::Value &target, pjs::Object *options) {
   append_filter(new Connect(target, options));
 }
 
+void Configuration::connect_socks(pjs::Str *target, const pjs::Value &address) {
+  auto *filter = new socks::Client(address);
+  filter->add_sub_pipeline(target);
+  append_filter(filter);
+}
+
 void Configuration::connect_tls(pjs::Str *target, pjs::Object *options) {
   auto *filter = new tls::Client(options);
   filter->add_sub_pipeline(target);
@@ -593,6 +599,19 @@ template<> void ClassDef<Configuration>::init() {
     if (!ctx.arguments(1, &target, &options)) return;
     try {
       thiz->as<Configuration>()->connect(target, options);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // Configuration.connectSOCKS
+  method("connectSOCKS", [](Context &ctx, Object *thiz, Value &result) {
+    Str *target;
+    Value address;
+    if (!ctx.arguments(2, &target, &address)) return;
+    try {
+      thiz->as<Configuration>()->connect_socks(target, address);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

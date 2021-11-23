@@ -27,6 +27,7 @@
 #define SOCKS_HPP
 
 #include "filter.hpp"
+#include "data.hpp"
 
 namespace pipy {
 
@@ -70,7 +71,6 @@ private:
     READ_SOCKS5_DSTPORT,
   };
 
-  PipelineDef* m_pipeline_def = nullptr;
   pjs::Ref<pjs::Str> m_target;
   pjs::Ref<pjs::Function> m_on_connect;
   pjs::Ref<Pipeline> m_pipeline;
@@ -81,6 +81,59 @@ private:
   uint8_t m_domain[256];
   int m_read_len = 0;
   int m_read_ptr = 0;
+};
+
+//
+// ClientReceiver
+//
+
+class ClientReceiver : public EventTarget {
+  virtual void on_event(Event *evt) override;
+};
+
+//
+// Client
+//
+
+class Client : public Filter, public ClientReceiver {
+public:
+  Client(const pjs::Value &target);
+
+private:
+  Client(const Client &r);
+  ~Client();
+
+  virtual auto clone() -> Filter* override;
+  virtual void reset() override;
+  virtual void process(Event *evt) override;
+  virtual void dump(std::ostream &out) override;
+
+  void on_receive(Event *evt);
+  void send(Data *data);
+  void send(const uint8_t *buf, size_t len);
+  void connect();
+  void close(StreamEnd::Error err);
+
+  enum State {
+    STATE_INIT,
+    STATE_READ_AUTH,
+    STATE_READ_CONN_HEAD,
+    STATE_READ_CONN_ADDR,
+    STATE_READ_CONN_ADDR_IPV4,
+    STATE_READ_CONN_ADDR_IPV6,
+    STATE_READ_CONN_ADDR_DOMAIN,
+    STATE_CONNECTED,
+    STATE_CLOSED,
+  };
+
+  pjs::Value m_target;
+  pjs::Ref<Pipeline> m_pipeline;
+  State m_state = STATE_INIT;
+  Data m_buffer;
+  uint8_t m_read_buffer[3];
+  int m_read_size = 0;
+
+  friend class ClientReceiver;
 };
 
 } // namespace socks

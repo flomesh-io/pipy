@@ -129,6 +129,16 @@ bool get_ip_v4(const std::string &str, uint8_t ip[]) {
   return true;
 }
 
+bool get_ip_v6(const std::string &str, uint8_t ip[]) {
+  uint16_t buf[8];
+  if (!get_ip_v6(str, buf)) return false;
+  for (int i = 0; i < 8; i++) {
+    ip[i*2+0] = buf[i] >> 8;
+    ip[i*2+1] = buf[i];
+  }
+  return true;
+}
+
 bool get_ip_v6(const std::string &str, uint16_t ip[]) {
   const char *p = str.c_str();
   uint16_t head[8]; int head_len = 0;

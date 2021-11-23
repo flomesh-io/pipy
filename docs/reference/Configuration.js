@@ -63,6 +63,13 @@ class Configuration {
 
   /**
    * @param {string} target
+   * @param {string | () => string} address
+   * @returns {Configuration} The same Configuration object.
+   */
+   connectSOCKS(target, address) {}
+
+  /**
+   * @param {string} target
    * @param {Object} [options]
    * @param {Certificate|() => Certificate} [options.certificate]
    * @param {Certificate[]} [options.trusted]
