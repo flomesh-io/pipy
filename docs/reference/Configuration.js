@@ -170,23 +170,29 @@ class Configuration {
   /**
    * @param {string} target
    * @param {any | () => any} key
+   * @param {Object} [options]
+   * @param {number} [options.maxIdle]
    * @returns {Configuration} The same Configuration object.
    */
-  merge(target, key) {}
+  merge(target, key, options) {}
 
   /**
    * @param {string} target
    * @param {any | () => any} key
+   * @param {Object} [options]
+   * @param {number} [options.maxIdle]
    * @returns {Configuration} The same Configuration object.
    */
-  mux(target, key) {}
+  mux(target, key, options) {}
 
   /**
    * @param {string} target
    * @param {any | () => any} key
+   * @param {Object} [options]
+   * @param {number} [options.maxIdle]
    * @returns {Configuration} The same Configuration object.
    */
-  muxHTTP(target, key) {}
+  muxHTTP(target, key, options) {}
 
   /**
    * @param {(evt: Data) => void} handler

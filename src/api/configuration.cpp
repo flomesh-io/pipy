@@ -254,20 +254,20 @@ void Configuration::link(size_t count, pjs::Str **targets, pjs::Function **condi
   append_filter(filter);
 }
 
-void Configuration::merge(pjs::Str *target, const pjs::Value &key) {
-  auto *filter = new Merge(key);
+void Configuration::merge(pjs::Str *target, const pjs::Value &key, pjs::Object *options) {
+  auto *filter = new Merge(key, options);
   filter->add_sub_pipeline(target);
   append_filter(filter);
 }
 
-void Configuration::mux(pjs::Str *target, const pjs::Value &key) {
-  auto *filter = new Mux(key);
+void Configuration::mux(pjs::Str *target, const pjs::Value &key, pjs::Object *options) {
+  auto *filter = new Mux(key, options);
   filter->add_sub_pipeline(target);
   append_filter(filter);
 }
 
-void Configuration::mux_http(pjs::Str *target, const pjs::Value &key) {
-  auto *filter = new http::Mux(key);
+void Configuration::mux_http(pjs::Str *target, const pjs::Value &key, pjs::Object *options) {
+  auto *filter = new http::Mux(key, options);
   filter->add_sub_pipeline(target);
   append_filter(filter);
 }
@@ -907,9 +907,10 @@ template<> void ClassDef<Configuration>::init() {
   method("merge", [](Context &ctx, Object *thiz, Value &result) {
     pjs::Str *target;
     pjs::Value key;
-    if (!ctx.arguments(2, &target, &key)) return;
+    pjs::Object *options = nullptr;
+    if (!ctx.arguments(2, &target, &key, &options)) return;
     try {
-      thiz->as<Configuration>()->merge(target, key);
+      thiz->as<Configuration>()->merge(target, key, options);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -920,9 +921,10 @@ template<> void ClassDef<Configuration>::init() {
   method("mux", [](Context &ctx, Object *thiz, Value &result) {
     pjs::Str *target;
     pjs::Value key;
-    if (!ctx.arguments(2, &target, &key)) return;
+    pjs::Object *options = nullptr;
+    if (!ctx.arguments(2, &target, &key, &options)) return;
     try {
-      thiz->as<Configuration>()->mux(target, key);
+      thiz->as<Configuration>()->mux(target, key, options);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -933,9 +935,10 @@ template<> void ClassDef<Configuration>::init() {
   method("muxHTTP", [](Context &ctx, Object *thiz, Value &result) {
     pjs::Str *target;
     pjs::Value key;
-    if (!ctx.arguments(2, &target, &key)) return;
+    pjs::Object *options = nullptr;
+    if (!ctx.arguments(2, &target, &key, &options)) return;
     try {
-      thiz->as<Configuration>()->mux_http(target, key);
+      thiz->as<Configuration>()->mux_http(target, key, options);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

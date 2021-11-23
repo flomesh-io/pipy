@@ -58,7 +58,7 @@ protected:
   // MuxBase::Session
   //
 
-  class Session : protected Demux {
+  class Session : protected Demux, public List<Session>::Item {
   public:
 
     //
@@ -86,7 +86,7 @@ protected:
 
 protected:
   MuxBase();
-  MuxBase(const pjs::Value &key);
+  MuxBase(const pjs::Value &key, pjs::Object *options);
   MuxBase(const MuxBase &r);
 
   virtual void reset() override;
@@ -102,20 +102,28 @@ private:
 
   class SessionManager : public pjs::RefCount<SessionManager> {
   public:
+    struct Options {
+      int max_idle = 10;
+    };
+
     SessionManager(MuxBase *mux)
       : m_mux(mux) { recycle(); }
 
+    void set_options(const Options &options) { m_options = options; }
     auto get(const pjs::Value &key) -> Session*;
+    void open(Session *session, Pipeline *pipeline);
     void free(Session *session);
 
   private:
     MuxBase* m_mux;
     std::unordered_map<pjs::Value, Session*> m_sessions;
     std::unordered_map<pjs::WeakRef<pjs::Object>, Session*> m_weak_sessions;
-    std::unordered_set<Session*> m_free_sessions;
+    List<Session> m_free_sessions;
+    Options m_options;
     Timer m_recycle_timer;
     bool m_retained_for_free_sessions = false;
 
+    void close(Session *session);
     void retain_for_free_sessions();
     void recycle();
   };
@@ -133,7 +141,7 @@ private:
 class Mux : public MuxBase {
 public:
   Mux();
-  Mux(const pjs::Value &key);
+  Mux(const pjs::Value &key, pjs::Object *options);
 
 protected:
   Mux(const Mux &r);

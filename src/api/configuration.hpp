@@ -85,9 +85,9 @@ public:
   void exec(const pjs::Value &command);
   void fork(pjs::Str *target, pjs::Object *initializers);
   void link(size_t count, pjs::Str **targets, pjs::Function **conditions);
-  void merge(pjs::Str *target, const pjs::Value &key);
-  void mux(pjs::Str *target, const pjs::Value &key);
-  void mux_http(pjs::Str *target, const pjs::Value &key);
+  void merge(pjs::Str *target, const pjs::Value &key, pjs::Object *options);
+  void mux(pjs::Str *target, const pjs::Value &key, pjs::Object *options);
+  void mux_http(pjs::Str *target, const pjs::Value &key, pjs::Object *options);
   void on_body(pjs::Function *callback, int size_limit);
   void on_event(Event::Type type, pjs::Function *callback);
   void on_message(pjs::Function *callback, int size_limit);

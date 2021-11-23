@@ -319,7 +319,7 @@ private:
 class Mux : public pipy::Mux {
 public:
   Mux();
-  Mux(const pjs::Value &key);
+  Mux(const pjs::Value &key, pjs::Object *options);
 
 private:
   Mux(const Mux &r);

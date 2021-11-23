@@ -37,10 +37,23 @@ MuxBase::MuxBase()
 {
 }
 
-MuxBase::MuxBase(const pjs::Value &key)
+MuxBase::MuxBase(const pjs::Value &key, pjs::Object *options)
   : m_session_manager(new SessionManager(this))
   , m_target_key(key)
 {
+  if (options) {
+    SessionManager::Options opts;
+
+    pjs::Value max_idle;
+    options->get("maxIdle", max_idle);
+
+    if (!max_idle.is_undefined()) {
+      if (!max_idle.is_number()) throw std::runtime_error("option.maxIdle expects a number");
+      opts.max_idle = max_idle.n();
+    }
+
+    m_session_manager->set_options(opts);
+  }
 }
 
 MuxBase::MuxBase(const MuxBase &r)
@@ -74,8 +87,7 @@ void MuxBase::process(Event *evt) {
 
       if (!m_session->m_pipeline) {
         auto p = sub_pipeline(0, true);
-        m_session->m_pipeline = p;
-        m_session->open(p);
+        m_session_manager->open(m_session, p);
       }
 
       auto s = m_session->stream();
@@ -146,7 +158,7 @@ auto MuxBase::SessionManager::get(const pjs::Value &key) -> Session* {
     if (i != m_weak_sessions.end()) {
       session = i->second;
       if (!i->first.ptr()) {
-        session->close();
+        close(session);
         session = nullptr;
         m_weak_sessions.erase(i);
       }
@@ -159,7 +171,7 @@ auto MuxBase::SessionManager::get(const pjs::Value &key) -> Session* {
   }
   if (session) {
     if (!session->m_share_count) {
-      m_free_sessions.erase(session);
+      m_free_sessions.remove(session);
       retain_for_free_sessions();
     }
     session->m_share_count++;
@@ -177,9 +189,18 @@ auto MuxBase::SessionManager::get(const pjs::Value &key) -> Session* {
 void MuxBase::SessionManager::free(Session *session) {
   if (!--session->m_share_count) {
     session->m_free_time = utils::now();
-    m_free_sessions.insert(session);
+    m_free_sessions.push(session);
     retain_for_free_sessions();
   }
+}
+
+void MuxBase::SessionManager::open(Session *session, Pipeline *pipeline) {
+  session->m_pipeline = pipeline;
+  session->open(pipeline);
+}
+
+void MuxBase::SessionManager::close(Session *session) {
+  session->close();
 }
 
 void MuxBase::SessionManager::retain_for_free_sessions() {
@@ -198,13 +219,12 @@ void MuxBase::SessionManager::retain_for_free_sessions() {
 
 void MuxBase::SessionManager::recycle() {
   auto now = utils::now();
-  auto i = m_free_sessions.begin();
-  while (i != m_free_sessions.end()) {
-    auto j = i++;
-    auto session = *j;
-    if (now - session->m_free_time >= 10*1000) {
-      m_free_sessions.erase(j);
-      session->close();
+  auto s = m_free_sessions.head();
+  while (s) {
+    auto session = s; s = s->next();
+    if (now - session->m_free_time >= m_options.max_idle * 1000) {
+      m_free_sessions.remove(session);
+      close(session);
     }
   }
 
@@ -221,8 +241,8 @@ Mux::Mux()
 {
 }
 
-Mux::Mux(const pjs::Value &key)
-  : MuxBase(key)
+Mux::Mux(const pjs::Value &key, pjs::Object *options)
+  : MuxBase(key, options)
 {
 }
 

@@ -1015,8 +1015,8 @@ Mux::Mux()
 {
 }
 
-Mux::Mux(const pjs::Value &key)
-  : pipy::Mux(key)
+Mux::Mux(const pjs::Value &key, pjs::Object *options)
+  : pipy::Mux(key, options)
 {
 }
 
