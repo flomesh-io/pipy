@@ -112,8 +112,6 @@ void Configuration::add_import(pjs::Object *variables) {
 }
 
 void Configuration::listen(int port, pjs::Object *options) {
-  int max_connections = -1;
-
   Listener::Options opt;
 
   if (options) {
@@ -124,7 +122,7 @@ void Configuration::listen(int port, pjs::Object *options) {
 
     if (!max_conn.is_undefined()) {
       if (!max_conn.is_number()) throw std::runtime_error("option.maxConnections expects a number");
-      max_connections = max_conn.n();
+      opt.max_connections = max_conn.n();
     }
 
     if (!read_timeout.is_undefined()) {
