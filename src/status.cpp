@@ -34,6 +34,12 @@
 #include "api/json.hpp"
 #include "utils.hpp"
 
+#include <algorithm>
+#include <map>
+#include <set>
+#include <string>
+#include <unordered_map>
+
 namespace pipy {
 
 Status Status::local;
@@ -284,10 +290,11 @@ void Status::dump_memory() {
     double avg_connection_time = 0;
   };
 
-  std::map<std::string, OutboundSum> outbound_sums;
+  OutboundSum outbound_total;
+  std::unordered_map<std::string, OutboundSum> outbound_sums;
   Outbound::for_each([&](Outbound *outbound) {
     char key[1000];
-    std::sprintf(key, "%s:%d", outbound->host().c_str(), outbound->port());
+    std::sprintf(key, "[%s]:%d", outbound->host().c_str(), outbound->port());
     auto conn_time = outbound->connection_time() / (outbound->retries() + 1);
     auto &sum = outbound_sums[key];
     sum.connections++;
@@ -295,12 +302,34 @@ void Status::dump_memory() {
     sum.overflowed += outbound->overflowed();
     sum.max_connection_time = std::max(sum.max_connection_time, conn_time);
     sum.avg_connection_time += conn_time;
+    outbound_total.connections++;
+    outbound_total.buffered += outbound->buffered();
+    outbound_total.overflowed += outbound->overflowed();
+    outbound_total.max_connection_time = std::max(outbound_total.max_connection_time, conn_time);
+    outbound_total.avg_connection_time += conn_time;
   });
 
-  for (const auto &p : outbound_sums) {
-    const auto &sum = p.second;
+  int i = 0;
+  std::vector<const std::pair<const std::string, OutboundSum> *> ranks(outbound_sums.size());
+  for (const auto &p : outbound_sums) ranks[i++] = &p;
+
+  std::sort(
+    ranks.begin(), ranks.end(),
+    [](
+      const std::pair<const std::string, OutboundSum> *a,
+      const std::pair<const std::string, OutboundSum> *b)
+    {
+      return a->second.connections > b->second.connections;
+    }
+  );
+
+  const int max_outbounds = 10;
+
+  for (int i = 0; i < max_outbounds && i < ranks.size(); i++) {
+    const auto name = ranks[i]->first;
+    const auto &sum = ranks[i]->second;
     outbounds.push_back({
-      p.first,
+      name,
       std::to_string(sum.connections),
       std::to_string(sum.buffered/1024),
       std::to_string(sum.overflowed),
@@ -308,6 +337,21 @@ void Status::dump_memory() {
       std::to_string(int(sum.avg_connection_time / sum.connections)),
     });
   }
+
+  if (ranks.size() > max_outbounds) {
+    char str[100];
+    std::sprintf(str, "  (%d more...)", int(ranks.size() - max_outbounds));
+    outbounds.push_back({ str, "", "", "", "", "" });
+  }
+
+  outbounds.push_back({
+    "TOTAL",
+    std::to_string(outbound_total.connections),
+    std::to_string(outbound_total.buffered/1024),
+    std::to_string(outbound_total.overflowed),
+    std::to_string(int(outbound_total.max_connection_time)),
+    std::to_string(int(outbound_total.avg_connection_time / outbound_total.connections)),
+  });
 
   std::cout << std::endl;
   print_table({ "CLASS", "#INSTANCES" }, objects );
