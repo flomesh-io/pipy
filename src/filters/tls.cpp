@@ -526,5 +526,103 @@ void Server::process(Event *evt) {
   output(evt, m_session->input());
 }
 
+//
+// OnClientHello
+//
+
+OnClientHello::OnClientHello(pjs::Function *callback)
+  : m_callback(callback)
+{
+}
+
+OnClientHello::OnClientHello(const OnClientHello &r)
+  : Filter(r)
+  , m_callback(r.m_callback)
+{
+}
+
+OnClientHello::~OnClientHello()
+{
+}
+
+void OnClientHello::dump(std::ostream &out) {
+  out << "handleTLSClientHello";
+}
+
+auto OnClientHello::clone() -> Filter* {
+  return new OnClientHello(*this);
+}
+
+void OnClientHello::reset() {
+  Filter::reset();
+  m_state = STATE_READ;
+  m_read_length = 0;
+}
+
+void OnClientHello::process(Event *evt) {
+  if (m_state == STATE_READ) {
+    if (auto data = evt->as<Data>()) {
+      auto &buf = m_read_buffer;
+      data->scan(
+        [&](int c) {
+          buf[m_read_length++] = c;
+          switch (m_read_length) {
+          case 1:
+            if (buf[0] != 22) {
+              m_state = STATE_FAIL;
+              return false;
+            }
+            break;
+          case 2:
+            if (buf[1] != 3) {
+              m_state = STATE_FAIL;
+              return false;
+            }
+            break;
+          case 3:
+            if (buf[2] > 4) {
+              m_state = STATE_FAIL;
+              return false;
+            }
+            break;
+          case 6:
+            if (buf[5] != 1) {
+              m_state = STATE_FAIL;
+              return false;
+            }
+            break;
+          case 9:
+            if (
+              (((uint32_t)buf[6] << 16) + ((uint32_t)buf[7] << 8) + buf[8]) >
+              (((uint16_t)buf[3] << 8) + buf[4]) + 4
+            ) {
+              m_state = STATE_FAIL;
+              return false;
+            }
+            break;
+          case 11:
+            m_state = STATE_DONE;
+            return false;
+          }
+          return true;
+        }
+      );
+      if (m_state == STATE_DONE) {
+        pjs::Value args[2], ret;
+        args[0].set(buf[9]);
+        args[0].set(buf[10]);
+        callback(m_callback, 2, args, ret);
+      } else if (m_state == STATE_FAIL) {
+        pjs::Value args[2], ret;
+        args[0].set(0);
+        args[1].set(0);
+        callback(m_callback, 2, args, ret);
+      }
+    }
+  }
+
+  output(evt);
+}
+
 } // namespace tls
 } // namespace pipy

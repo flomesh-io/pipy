@@ -93,6 +93,7 @@ public:
   void on_event(Event::Type type, pjs::Function *callback);
   void on_message(pjs::Function *callback, int size_limit);
   void on_start(pjs::Function *callback);
+  void on_tls_client_hello(pjs::Function *callback);
   void pack(int batch_size, pjs::Object *options);
   void print();
   void replace_body(const pjs::Value &replacement, int size_limit);

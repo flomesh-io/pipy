@@ -139,7 +139,6 @@ private:
   virtual void process(Event *evt) override;
   virtual void dump(std::ostream &out) override;
 
-private:
   std::shared_ptr<TLSContext> m_tls_context;
   pjs::Ref<pjs::Object> m_certificate;
   TLSSession* m_session = nullptr;
@@ -163,10 +162,38 @@ private:
   virtual void process(Event *evt) override;
   virtual void dump(std::ostream &out) override;
 
-private:
   std::shared_ptr<TLSContext> m_tls_context;
   pjs::Ref<pjs::Object> m_certificate;
   TLSSession* m_session = nullptr;
+};
+
+//
+// OnClientHello
+//
+
+class OnClientHello : public Filter {
+public:
+  OnClientHello(pjs::Function *callback);
+
+private:
+  OnClientHello(const OnClientHello &r);
+  ~OnClientHello();
+
+  virtual auto clone() -> Filter* override;
+  virtual void reset() override;
+  virtual void process(Event *evt) override;
+  virtual void dump(std::ostream &out) override;
+
+  enum State {
+    STATE_READ,
+    STATE_DONE,
+    STATE_FAIL,
+  };
+
+  pjs::Ref<pjs::Function> m_callback;
+  State m_state = STATE_READ;
+  uint8_t m_read_buffer[11];
+  size_t m_read_length = 0;
 };
 
 } // namespace tls

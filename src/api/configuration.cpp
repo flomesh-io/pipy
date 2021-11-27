@@ -292,6 +292,10 @@ void Configuration::on_start(pjs::Function *callback) {
   append_filter(new OnStart(callback));
 }
 
+void Configuration::on_tls_client_hello(pjs::Function *callback) {
+  append_filter(new tls::OnClientHello(callback));
+}
+
 void Configuration::pack(int batch_size, pjs::Object *options) {
   append_filter(new Pack(batch_size, options));
 }
@@ -797,6 +801,18 @@ template<> void ClassDef<Configuration>::init() {
     if (!ctx.arguments(1, &callback)) return;
     try {
       thiz->as<Configuration>()->on_start(callback);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // Configuration.handleTLSClientHello
+  method("handleTLSClientHello", [](Context &ctx, Object *thiz, Value &result) {
+    Function *callback = nullptr;
+    if (!ctx.arguments(1, &callback)) return;
+    try {
+      thiz->as<Configuration>()->on_tls_client_hello(callback);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

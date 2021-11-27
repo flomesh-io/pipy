@@ -247,6 +247,12 @@ class Configuration {
   handleStreamStart(handler) {}
 
   /**
+   * @param {(versionMajor: number, versionMinor: number) => void} handler
+   * @returns {Configuration} The same Configuration object.
+   */
+  handleTLSClientHello(handler) {}
+
+   /**
    * @param {number} [batchSize = 1]
    * @param {Object} [options]
    * @param {number|string} [options.timeout]
