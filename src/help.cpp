@@ -130,12 +130,8 @@ batchSize = <int> Number of messages to pack in one. Defaults to 1
 options = <object> Options including timeout, vacancy
 
 split(callback)
-Splits data chunks into smaller chunks
-callback = <function> A callback function that receives each byte as input and decides where to split
-
-split(callback)
-Splits data chunks into smaller chunks
-callback = <function> A callback function that receives each byte as input and decides where to split
+Splits data chunks into smaller chunks and inserts events in between
+callback = <function> A callback function that receives each byte as input and decides where to insert splitting events
 
 throttleDataRate(quota[, account])
 Throttles data rate

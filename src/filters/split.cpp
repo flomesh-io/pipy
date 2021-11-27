@@ -60,27 +60,29 @@ void Split::process(Event *evt) {
   if (auto data = evt->as<Data>()) {
     while (!data->empty()) {
       pjs::Ref<Data> buf(Data::make());
+      pjs::Ref<pjs::Object> splitter;
       bool error = false;
-      data->shift(
-        [&](int c) -> int {
+      data->shift_to(
+        [&](int c) {
           pjs::Value arg(c), ret;
           if (!callback(m_callback, 1, &arg, ret)) {
             error = true;
-            return -1;
+            return true;
           }
-          if (ret.is_number()) {
-            return ret.n();
-          } else {
-            return ret.to_boolean() ? 1 : 0;
+          if (ret.is_object()) {
+            splitter = ret.o();
+            return true;
           }
+          return false;
         },
         *buf
       );
       if (error) return;
       output(buf);
+      if (splitter) output(splitter.get());
     }
 
-  } else {
+  } else if (evt->is<StreamEnd>()) {
     output(evt);
   }
 }
