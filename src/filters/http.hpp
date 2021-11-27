@@ -48,8 +48,11 @@ public:
 
   bool is_bodiless() const { return m_is_bodiless; }
   bool is_final() const { return m_is_final; }
+  bool is_connect() const { return m_is_connect; }
+  bool is_tunnel() const { return m_is_tunnel; }
 
   void set_bodiless(bool b) { m_is_bodiless = b; }
+  void set_connect(bool b) { m_is_connect = b; }
 
 private:
   const static int MAX_HEADER_SIZE = 0x1000;
@@ -73,6 +76,8 @@ private:
   bool m_is_response;
   bool m_is_bodiless = false;
   bool m_is_final = false;
+  bool m_is_connect = false;
+  bool m_is_tunnel = false;
 
   virtual void on_event(Event *evt) override;
 
@@ -108,6 +113,7 @@ public:
 
   void set_bodiless(bool b) { m_is_bodiless = b; }
   void set_final(bool b) { m_is_final = b; }
+  void set_tunnel(bool b) { m_is_tunnel = b; }
 
 private:
   pjs::Ref<MessageStart> m_start;
@@ -117,6 +123,7 @@ private:
   bool m_is_response;
   bool m_is_bodiless = false;
   bool m_is_final = false;
+  bool m_is_tunnel = false;
 
   virtual void on_event(Event *evt) override;
 

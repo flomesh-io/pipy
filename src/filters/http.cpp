@@ -41,6 +41,7 @@ namespace http {
 static const pjs::Ref<pjs::Str> s_protocol(pjs::Str::make("protocol"));
 static const pjs::Ref<pjs::Str> s_method(pjs::Str::make("method"));
 static const pjs::Ref<pjs::Str> s_head(pjs::Str::make("HEAD"));
+static const pjs::Ref<pjs::Str> s_connect(pjs::Str::make("CONNECT"));
 static const pjs::Ref<pjs::Str> s_path(pjs::Str::make("path"));
 static const pjs::Ref<pjs::Str> s_status(pjs::Str::make("status"));
 static const pjs::Ref<pjs::Str> s_status_text(pjs::Str::make("statusText"));
@@ -348,6 +349,7 @@ void Decoder::on_event(Event *evt) {
           req->protocol(pjs::Str::make(segs[2]));
           m_head = req;
           m_is_bodiless = (method == s_head);
+          m_is_connect = (method == s_connect);
         }
         m_head->headers(pjs::Object::make());
         state = HEADER;

@@ -53,6 +53,7 @@ Outbound::~Outbound() {
 void Outbound::connect(const std::string &host, int port) {
   m_host = host;
   m_port = port;
+  m_connecting = true;
   start(0);
 }
 
@@ -96,11 +97,35 @@ void Outbound::end() {
   }
 }
 
+void Outbound::reset() {
+  asio::error_code ec;
+
+  if (m_connecting) {
+    m_connecting = false;
+    m_connect_timer.cancel();
+    m_resolver.cancel();
+    m_socket.cancel(ec);
+  } else if (m_connected) {
+    m_read_timer.cancel();
+    m_write_timer.cancel();
+  }
+
+  m_discarded_data_size = 0;
+  m_overflowed = false;
+  m_ended = false;
+  m_retries = 0;
+  m_connected = false;
+  m_buffer.clear();
+  m_socket.close(ec);
+}
+
 void Outbound::start(double delay) {
   if (delay > 0) {
     m_retry_timer.schedule(
       delay,
-      [this]() { resolve(); }
+      [this]() {
+        resolve();
+      }
     );
   } else {
     resolve();
@@ -166,11 +191,11 @@ void Outbound::connect(const asio::ip::tcp::endpoint &target) {
   m_socket.async_connect(
     target,
     [=](const std::error_code &ec) {
-      if (ec != asio::error::operation_aborted) {
-        if (m_options.connect_timeout > 0) {
-          m_connect_timer.cancel();
-        }
+      if (m_options.connect_timeout > 0) {
+        m_connect_timer.cancel();
+      }
 
+      if (ec != asio::error::operation_aborted) {
         if (ec) {
           if (Log::is_enabled(Log::ERROR)) {
             char desc[200];
@@ -208,6 +233,7 @@ void Outbound::connect(const asio::ip::tcp::endpoint &target) {
 
 void Outbound::restart(StreamEnd::Error err) {
   if (m_options.retry_count >= 0 && m_retries >= m_options.retry_count) {
+    m_connecting = false;
     Pipeline::AutoReleasePool arp;
     output(StreamEnd::make(err));
   } else {
@@ -225,11 +251,11 @@ void Outbound::receive() {
   m_socket.async_read_some(
     DataChunks(buffer->chunks()),
     [=](const std::error_code &ec, size_t n) {
-      if (ec != asio::error::operation_aborted) {
-        if (m_options.read_timeout > 0){
-          m_read_timer.cancel();
-        }
+      if (m_options.read_timeout > 0){
+        m_read_timer.cancel();
+      }
 
+      if (ec != asio::error::operation_aborted) {
         if (n > 0) {
           Pipeline::AutoReleasePool arp;
           buffer->pop(buffer->size() - n);
@@ -282,13 +308,14 @@ void Outbound::pump() {
   m_socket.async_write_some(
     DataChunks(m_buffer.chunks()),
     [=](const std::error_code &ec, std::size_t n) {
-      if (ec != asio::error::operation_aborted) {
-        if (m_options.write_timeout > 0) {
-          m_write_timer.cancel();
-        }
+      m_pumping = false;
 
+      if (m_options.write_timeout > 0) {
+        m_write_timer.cancel();
+      }
+
+      if (ec != asio::error::operation_aborted) {
         m_buffer.shift(n);
-        m_pumping = false;
 
         if (ec) {
           if (Log::is_enabled(Log::WARN)) {

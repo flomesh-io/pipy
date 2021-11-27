@@ -30,9 +30,7 @@
 #include "list.hpp"
 #include "timer.hpp"
 
-#include <memory>
 #include <unordered_map>
-#include <unordered_set>
 
 namespace pipy {
 
@@ -121,10 +119,10 @@ private:
     List<Session> m_free_sessions;
     Options m_options;
     Timer m_recycle_timer;
+    bool m_recycling = false;
     bool m_retained_for_free_sessions = false;
 
     void close(Session *session);
-    void retain_for_free_sessions();
     void recycle();
   };
 

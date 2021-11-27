@@ -111,6 +111,7 @@ add_executable(pipy
   src/store.cpp
   src/tar.cpp
   src/task.cpp
+  src/timer.cpp
   src/utils.cpp
   src/worker.cpp
 )

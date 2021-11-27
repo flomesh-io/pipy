@@ -152,7 +152,12 @@ auto Exec::child_process_monitor() -> ChildProcessMonitor* {
 }
 
 void Exec::ChildProcessMonitor::schedule() {
-  m_timer.schedule(1, [this]() { check(); });
+  m_timer.schedule(
+    1.0,
+    [this]() {
+      check();
+    }
+  );
 }
 
 void Exec::ChildProcessMonitor::check() {

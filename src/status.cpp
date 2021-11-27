@@ -350,7 +350,7 @@ void Status::dump_memory() {
     std::to_string(outbound_total.buffered/1024),
     std::to_string(outbound_total.overflowed),
     std::to_string(int(outbound_total.max_connection_time)),
-    std::to_string(int(outbound_total.avg_connection_time / outbound_total.connections)),
+    std::to_string(int(outbound_total.connections ? outbound_total.avg_connection_time / outbound_total.connections : 0)),
   });
 
   std::cout << std::endl;

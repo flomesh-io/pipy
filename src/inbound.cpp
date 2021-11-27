@@ -42,11 +42,13 @@ Inbound::Inbound(Listener *listener, const Options &options)
   , m_socket(Net::service())
   , m_options(options)
 {
+  Log::debug("[inbound  %p] ++", this);
   if (!++s_inbound_id) s_inbound_id++;
   m_id = s_inbound_id;
 }
 
 Inbound::~Inbound() {
+  Log::debug("[inbound  %p] --", this);
   if (m_pipeline) {
     m_listener->close(this);
   }
@@ -71,12 +73,6 @@ void Inbound::accept(asio::ip::tcp::acceptor &acceptor) {
     m_socket, m_peer,
     [this](const std::error_code &ec) {
       if (ec != asio::error::operation_aborted) {
-        const auto &ep = m_socket.local_endpoint();
-        m_local_addr = ep.address().to_string();
-        m_local_port = ep.port();
-        m_remote_addr = m_peer.address().to_string();
-        m_remote_port = m_peer.port();
-
         if (ec) {
           if (Log::is_enabled(Log::ERROR)) {
             char desc[200];
@@ -90,6 +86,11 @@ void Inbound::accept(asio::ip::tcp::acceptor &acceptor) {
             describe(desc);
             Log::debug("%s connection accepted", desc);
           }
+          const auto &ep = m_socket.local_endpoint();
+          m_local_addr = ep.address().to_string();
+          m_local_port = ep.port();
+          m_remote_addr = m_peer.address().to_string();
+          m_remote_port = m_peer.port();
           start();
         }
       }
@@ -167,11 +168,11 @@ void Inbound::receive() {
   m_socket.async_read_some(
     DataChunks(buffer->chunks()),
     [=](const std::error_code &ec, std::size_t n) {
-      if (ec != asio::error::operation_aborted) {
-        if (m_options.read_timeout > 0){
-          m_read_timer.cancel();
-        }
+      if (m_options.read_timeout > 0){
+        m_read_timer.cancel();
+      }
 
+      if (ec != asio::error::operation_aborted) {
         if (n > 0) {
           Pipeline::AutoReleasePool arp;
           buffer->pop(buffer->size() - n);
@@ -228,13 +229,14 @@ void Inbound::pump() {
   m_socket.async_write_some(
     DataChunks(m_buffer.chunks()),
     [=](const std::error_code &ec, std::size_t n) {
-      if (ec != asio::error::operation_aborted) {
-        if (m_options.write_timeout > 0) {
-          m_write_timer.cancel();
-        }
+      m_pumping = false;
 
+      if (m_options.write_timeout > 0) {
+        m_write_timer.cancel();
+      }
+
+      if (ec != asio::error::operation_aborted) {
         m_buffer.shift(n);
-        m_pumping = false;
 
         if (ec) {
           if (Log::is_enabled(Log::WARN)) {

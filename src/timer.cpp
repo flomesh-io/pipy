@@ -23,47 +23,39 @@
  *  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef TIMER_HPP
-#define TIMER_HPP
-
-#include "net.hpp"
+#include "timer.hpp"
 
 namespace pipy {
 
-//
-// Timer
-//
+void Timer::schedule(double timeout, const std::function<void()> &handler) {
+  cancel();
+  pjs::Ref<Handler> h = new Handler(handler);
+  m_handler = h;
+  m_timer.expires_after(std::chrono::milliseconds((long long)(timeout * 1000)));
+  m_timer.async_wait(
+    [=](const asio::error_code &ec) {
+      h->trigger(ec);
+    }
+  );
+}
 
-class Timer {
-public:
-  Timer() : m_timer(Net::service()) {}
+void Timer::cancel() {
+  if (m_handler) {
+    asio::error_code ec;
+    m_timer.cancel(ec);
+    m_handler->cancel();
+    m_handler = nullptr;
+  }
+}
 
-  ~Timer() { cancel(); }
+void Timer::Handler::trigger(const asio::error_code &ec) {
+  if (!m_canceled && ec != asio::error::operation_aborted) {
+    m_handler();
+  }
+}
 
-  void schedule(double timeout, const std::function<void()> &handler);
-  void cancel();
-
-private:
-  class Handler :
-    public pjs::RefCount<Handler>,
-    public pjs::Pooled<Handler>
-  {
-  public:
-    Handler(const std::function<void()> &handler)
-      : m_handler(handler) {}
-
-    void trigger(const asio::error_code &ec);
-    void cancel();
-
-  private:
-    std::function<void()> m_handler;
-    bool m_canceled = false;
-  };
-
-  asio::steady_timer m_timer;
-  pjs::Ref<Handler> m_handler;
-};
+void Timer::Handler::cancel() {
+  m_canceled = true;
+}
 
 } // namespace pipy
-
-#endif // TIMER_HPP

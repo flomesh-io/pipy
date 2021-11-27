@@ -139,7 +139,9 @@ void Pack::schedule_timeout() {
   auto precision = std::min(m_timeout, 1.0);
   m_timer->schedule(
     precision,
-    [this]() { check_timeout(); }
+    [this]() {
+      check_timeout();
+    }
   );
 }
 

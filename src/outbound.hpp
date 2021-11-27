@@ -78,6 +78,7 @@ public:
   void send(const pjs::Ref<Data> &data);
   void flush();
   void end();
+  void reset();
 
 private:
   std::string m_host;
@@ -98,6 +99,7 @@ private:
   Timer m_write_timer;
   Data m_buffer;
   size_t m_discarded_data_size = 0;
+  bool m_connecting = false;
   bool m_connected = false;
   bool m_overflowed = false;
   bool m_pumping = false;

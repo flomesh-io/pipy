@@ -188,7 +188,7 @@ static void help_filters() {
 static void start_checking_updates() {
   static Timer timer;
   static std::function<void()> poll;
-  poll = [&]() {
+  poll = []() {
     if (!Worker::exited()) {
       Status::local.timestamp = utils::now();
       Codebase::current()->sync(

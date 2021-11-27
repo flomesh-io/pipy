@@ -118,7 +118,7 @@ void Connect::reset() {
     m_output = nullptr;
   }
   if (m_outbound) {
-    m_outbound->end();
+    m_outbound->reset();
     m_outbound = nullptr;
   }
 }
@@ -127,7 +127,6 @@ void Connect::process(Event *evt) {
   if (evt->is<StreamEnd>()) {
     if (m_outbound) {
       m_outbound->end();
-      m_outbound = nullptr;
     }
     return;
   }

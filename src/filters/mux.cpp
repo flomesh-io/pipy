@@ -92,8 +92,8 @@ void MuxBase::process(Event *evt) {
 
       auto s = m_session->stream();
       s->chain(output());
-      output(start, s->input());
       m_stream = s;
+      output(start, s->input());
     }
 
   } else if (auto data = evt->as<Data>()) {
@@ -103,16 +103,16 @@ void MuxBase::process(Event *evt) {
 
   } else if (evt->is<MessageEnd>()) {
     if (m_stream) {
-      output(evt, m_stream->input());
-      m_stream->close();
+      auto inp = m_stream->input();
       m_stream = nullptr;
+      output(evt, inp);
     }
 
   } else if (evt->is<StreamEnd>()) {
     if (m_stream) {
-      output(MessageEnd::make(), m_stream->input());
-      m_stream->close();
+      auto inp = m_stream->input();
       m_stream = nullptr;
+      output(MessageEnd::make(), inp);
     }
   }
 }
@@ -172,7 +172,6 @@ auto MuxBase::SessionManager::get(const pjs::Value &key) -> Session* {
   if (session) {
     if (!session->m_share_count) {
       m_free_sessions.remove(session);
-      retain_for_free_sessions();
     }
     session->m_share_count++;
     return session;
@@ -190,7 +189,7 @@ void MuxBase::SessionManager::free(Session *session) {
   if (!--session->m_share_count) {
     session->m_free_time = utils::now();
     m_free_sessions.push(session);
-    retain_for_free_sessions();
+    recycle();
   }
 }
 
@@ -203,34 +202,30 @@ void MuxBase::SessionManager::close(Session *session) {
   session->close();
 }
 
-void MuxBase::SessionManager::retain_for_free_sessions() {
-  if (m_retained_for_free_sessions) {
-    if (m_free_sessions.empty()) {
-      release();
-      m_retained_for_free_sessions = false;
-    }
-  } else {
-    if (!m_free_sessions.empty()) {
-      retain();
-      m_retained_for_free_sessions = true;
-    }
-  }
-}
-
 void MuxBase::SessionManager::recycle() {
-  auto now = utils::now();
-  auto s = m_free_sessions.head();
-  while (s) {
-    auto session = s; s = s->next();
-    if (now - session->m_free_time >= m_options.max_idle * 1000) {
-      m_free_sessions.remove(session);
-      close(session);
+  if (m_recycling) return;
+  if (m_free_sessions.empty()) return;
+
+  m_recycle_timer.schedule(
+    1.0,
+    [this]() {
+      m_recycling = false;
+      auto now = utils::now();
+      auto s = m_free_sessions.head();
+      while (s) {
+        auto session = s; s = s->next();
+        if (now - session->m_free_time >= m_options.max_idle * 1000) {
+          m_free_sessions.remove(session);
+          close(session);
+        }
+      }
+      recycle();
+      release();
     }
-  }
+  );
 
-  m_recycle_timer.schedule(1, [this]() { recycle(); });
-
-  retain_for_free_sessions();
+  retain();
+  m_recycling = true;
 }
 
 //
