@@ -408,6 +408,15 @@ public:
     push(&ch, 1, producer);
   }
 
+  void scan(const std::function<bool(int)> &f) {
+    for (auto view = m_head; view; view = view->next) {
+      auto data = view->chunk->data;
+      auto size = view->length;
+      auto head = view->offset;
+      for (int i = 0; i < size; ++i) if (!f(data[head + i])) return;
+    }
+  }
+
   void pop(int n) {
     while (auto view = m_tail) {
       if (n <= 0) break;
@@ -464,64 +473,80 @@ public:
     }
   }
 
-  void shift(std::function<int(int)> f, Data &out) {
+  void shift(const std::function<int(int)> &f, Data &out) {
     while (auto view = m_head) {
       auto data = view->chunk->data;
       auto size = view->length;
       auto head = view->offset;
       auto n = 0;
+      auto br = false;
       for (; n < size; ++n) {
-        auto ret = f(data[head + n]);
-        if (ret > 0) { ++n; break; }
-        if (ret < 0) break;
+        if (auto ret = f(data[head + n])) {
+          br = true;
+          if (ret > 0) n++;
+          break;
+        }
       }
       if (n == size) {
         out.push_view(shift_view());
       } else {
         out.push_view(view->shift(n));
         m_size -= n;
-        break;
       }
+      if (br) break;
     }
   }
 
-  void shift_while(std::function<bool(int)> f, Data &out) {
+  void shift_while(const std::function<bool(int)> &f, Data &out) {
     while (auto view = m_head) {
       auto data = view->chunk->data;
       auto size = view->length;
       auto head = view->offset;
       auto n = 0;
-      while (n < size && f(data[head + n])) ++n;
+      auto br = false;
+      for (; n < size; n++) {
+        if (f(data[head + n])) {
+          br = true;
+          break;
+        }
+      }
       if (n == size) {
         out.push_view(shift_view());
       } else {
         out.push_view(view->shift(n));
         m_size -= n;
-        break;
       }
+      if (br) break;
     }
   }
 
-  void shift_to(std::function<bool(int)> f, Data &out) {
+  void shift_to(const std::function<bool(int)> &f, Data &out) {
     while (auto view = m_head) {
       auto data = view->chunk->data;
       auto size = view->length;
       auto head = view->offset;
       auto n = 0;
-      for (; n < size; ++n) if (f(data[head + n])) { ++n; break; }
+      auto br = false;
+      for (; n < size; n++) {
+        if (f(data[head + n])) {
+          br = true;
+          n++;
+          break;
+        }
+      }
       if (n == size) {
         out.push_view(shift_view());
       } else {
         out.push_view(view->shift(n));
         m_size -= n;
-        break;
       }
+      if (br) break;
     }
   }
 
   void pack(const Data &data, Producer *producer, double vacancy = 0.5);
 
-  void to_chunks(std::function<void(const uint8_t*, int)> cb) {
+  void to_chunks(const std::function<void(const uint8_t*, int)> &cb) {
     for (auto view = m_head; view; view = view->next) {
       cb((uint8_t*)view->chunk->data + view->offset, view->length);
     }

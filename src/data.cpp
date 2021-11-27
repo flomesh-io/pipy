@@ -91,7 +91,7 @@ template<> void EnumDef<pipy::Data::Encoding>::init() {
   define(pipy::Data::Encoding::Base64Url, "base64url");
 }
 
-static pipy::Data::Producer s_script_data_producer("Script");
+static pipy::Data::Producer s_dp("Script");
 
 template<> void ClassDef<pipy::Data>::init() {
   super<Event>();
@@ -100,13 +100,15 @@ template<> void ClassDef<pipy::Data>::init() {
     Str *str, *encoding = nullptr;
     pipy::Data *data;
     try {
-      if (ctx.try_arguments(1, &str, &encoding)) {
+      if (ctx.argc() == 0) {
+        return pipy::Data::make();
+      } else if (ctx.try_arguments(1, &str, &encoding)) {
         auto enc = EnumDef<pipy::Data::Encoding>::value(encoding, pipy::Data::Encoding::UTF8);
         if (int(enc) < 0) {
           ctx.error("unknown encoding");
           return nullptr;
         }
-        return s_script_data_producer.make(str->str(), enc);
+        return s_dp.make(str->str(), enc);
       } else if (ctx.try_arguments(1, &data, &encoding) && data) {
         return pipy::Data::make(*data);
       }
@@ -127,10 +129,21 @@ template<> void ClassDef<pipy::Data>::init() {
     if (ctx.try_arguments(1, &data) && data) {
       obj->as<pipy::Data>()->push(*data->as<pipy::Data>());
     } else if (ctx.try_arguments(1, &str)) {
-      s_script_data_producer.push(obj->as<pipy::Data>(), str->str());
+      s_dp.push(obj->as<pipy::Data>(), str->str());
     } else {
       ctx.error_argument_type(0, "a Data or a string");
     }
+  });
+
+  method("pushUInt32BE", [](Context &ctx, Object *obj, Value &ret) {
+    int n; if (!ctx.arguments(1, &n)) return;
+    uint8_t buf[4];
+    buf[0] = (uint32_t)n >> 24;
+    buf[1] = (uint32_t)n >> 16;
+    buf[2] = (uint32_t)n >> 8;
+    buf[3] = (uint32_t)n >> 0;
+    s_dp.push(obj->as<pipy::Data>(), buf, 4);
+    ret.set(obj);
   });
 
   method("shift", [](Context &ctx, Object *obj, Value &ret) {
@@ -139,6 +152,19 @@ template<> void ClassDef<pipy::Data>::init() {
     auto *out = pipy::Data::make();
     obj->as<pipy::Data>()->shift(count, *out);
     ret.set(out);
+  });
+
+  method("shiftUInt32BE", [](Context &ctx, Object *obj, Value &ret) {
+    pipy::Data buf;
+    obj->as<pipy::Data>()->shift(4, buf);
+    uint32_t n = 0;
+    buf.scan(
+      [&](int ub) {
+        n = (n << 8) + ub;
+        return true;
+      }
+    );
+    ret.set(n);
   });
 
   method("toString", [](Context &ctx, Object *obj, Value &ret) {
@@ -160,6 +186,27 @@ template<> void ClassDef<pipy::Data>::init() {
 template<> void ClassDef<Constructor<pipy::Data>>::init() {
   super<Function>();
   ctor();
+
+  method("from", [](Context &ctx, Object *obj, Value &ret) {
+    Str *str, *encoding = nullptr;
+    pipy::Data *data;
+    try {
+      if (ctx.try_arguments(1, &str, &encoding)) {
+        auto enc = EnumDef<pipy::Data::Encoding>::value(encoding, pipy::Data::Encoding::UTF8);
+        if (int(enc) < 0) {
+          ctx.error("unknown encoding");
+          return;
+        }
+        ret.set(s_dp.make(str->str(), enc));
+      } else if (ctx.try_arguments(1, &data, &encoding) && data) {
+        ret.set(pipy::Data::make(*data));
+      } else {
+        ctx.error_argument_type(0, "a number or a string or a Data object");
+      }
+    } catch (std::runtime_error &err) {
+      ret = Value::null;
+    }
+  });
 }
 
 } // namespace pjs

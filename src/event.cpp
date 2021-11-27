@@ -50,6 +50,7 @@ auto StreamEnd::message() const -> const char* {
     case READ_ERROR: return "read error";
     case WRITE_ERROR: return "write error";
     case CANNOT_RESOLVE: return "cannot resolve";
+    case CONNECTION_RESET: return "connection reset";
     case CONNECTION_REFUSED: return "connection refused";
     case CONNECTION_TIMEOUT: return "connection timeout";
     case READ_TIMEOUT: return "read timeout";
@@ -95,8 +96,13 @@ template<> void EnumDef<StreamEnd::Error>::init() {
   define(StreamEnd::UNKNOWN_ERROR      , "UnknownError");
   define(StreamEnd::RUNTIME_ERROR      , "RuntimeError");
   define(StreamEnd::READ_ERROR         , "ReadError");
+  define(StreamEnd::WRITE_ERROR        , "WriteError");
   define(StreamEnd::CANNOT_RESOLVE     , "CannotResolve");
+  define(StreamEnd::CONNECTION_RESET   , "ConnectionReset");
   define(StreamEnd::CONNECTION_REFUSED , "ConnectionRefused");
+  define(StreamEnd::CONNECTION_TIMEOUT , "ConnectionTimeout");
+  define(StreamEnd::READ_TIMEOUT       , "ReadTimeout");
+  define(StreamEnd::WRITE_TIMEOUT      , "WriteTimeout");
   define(StreamEnd::UNAUTHORIZED       , "Unauthorized");
   define(StreamEnd::BUFFER_OVERFLOW    , "BufferOverflow");
 }

@@ -195,6 +195,10 @@ handleStreamStart(callback)
 Handles the initial event in a pipeline
 callback = <function> Callback function that receives the initial event
 
+handleTLSClientHello(callback)
+Handles the ClientHello message in a TLS handshake
+callback = <function> Callback function that receives the ClientHello message
+
 replaceMessageBody([sizeLimit, ]replacement)
 Replaces an entire message body
 sizeLimit = <number|string> Maximum number of bytes to collect from the message body
