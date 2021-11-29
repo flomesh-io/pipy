@@ -1,0 +1,217 @@
+---
+title: 05 插件
+---
+
+至此我们的代理已经可以完成基本的代理和 404 响应处理。不知道有没有没发现源码里加入的管道越来越多，并且随着更多功能的加入管道数量增长迅速。因此在加入更多功能之前，最好对代码进行重构保证每个功能的代码可以在独立的文件中维护，并且可以有选择地加入到系统中，也就是“插件”。
+
+## 路由器插件
+
+目前我们这个“代理”的主要功能就是 *路由*。路由相关的代码占 `/proxy.js` 的大部分，我们便基于它来组织第一个插件“路由器”插件的代码。
+
+1. 点击 + 按钮，并输入 `/plugins/router.js` 为插件文件名，然后点击创建。
+    
+    > 只要输入包含了目录名的完整路径即可，目录会自动创建。不需要在添加文件前创建好目录。
+2. 将 `proxy.js` 里的内容复制到新创建的文件中。
+
+在 `/plugins/router.js` 中，管道“request”中路由的逻辑在 *demuxHTTP* 后调用。那就可以将 *demuxHTTP* 的整个管道移除，只在*主脚本* `/proxy.js`保留这个端口管道，之后从那连接到“request” 管道。
+
+*注意下面代码中注释掉内容就是要删除的内容。*
+
+```js
+- .listen(8000)
+-  .demuxHTTP('request')
+
+  .pipeline('request')
+    .handleMessageStart(
+      msg => (
+        _target = _router.find(
+          msg.head.headers.host,
+          msg.head.path,
+        )
+      )
+    )
+    .link(
+      'forward', () => Boolean(_target),
+      '404'
+    )
+```
+“404” 逻辑也可以成为一个独立的插件，当请求在其他插件中没有可用的处理器时，这个会作为“默认”处理器来使用。因此只需要删掉 “404” 管道，稍后放入另一个插件中。
+
+```js
+  .pipeline('connection')
+    .connect(
+      () => _target
+    )
+
+- .pipeline('404')
+-   .replaceMessage(
+-     new Message({ status: 404 }, 'No route')
+-   )
+```
+然后再调整下 *link()* 的内容：
+
+```js
+  .link(
+    'forward', () => Boolean(_target),
+-   '404'
+     ''
+  )
+```
+为 *link()* 指定一个空的管道名意味着进入 *link()* 的输入不会做任何改动（当 `_target` 为虚值时 ），就像 *link()* 不存在一样。
+
+## 默认的插件
+
+现在我就可以创建上面提到的“默认”插件了。
+
+创建一个名为 `/plugins/default.js` 的文件，并填入如下代码：
+```js
+pipy()
+
+.pipeline('request')
+  .replaceMessage(
+    new Message({ status: 404 }, 'No handler')
+  )
+```
+内容很简单，只有一个同样名为 "_request_" 的子管道。完成与之前 “404”管道同样的工作，只有在找不到路由处理器时将消息替换成 “*No route*”。
+
+## 插件链
+
+现在我们再次回到*主脚本* `/proxy.js`。我们已经迁移走了大部分的代码，只剩下 *dumuxHTTP()* 和 一个空的 “*request*”管道。
+
+```js
+pipy()
+
+.listen(8000)
+  .demuxHTTP('request')
+
+.pipeline('request')
+```
+在空的“*request*”管道中，我们将两个新创建的插件连接进来。这次我们使用 [use()](/reference/Configuration/use) 过滤器，并提供文件名以及其中的管道名。
+
+```js
+  .pipeline('request')
++   .use(
++     [
++       'plugins/router.js',
++       'plugins/default.js',
++     ],
++     'request',
++     'response',
++   )
+```
+你应该注意到在“*request*”后面我们加上了 “*response*”。在使用“*request*”管道处理完流之后，会接着使用“response”处理，只是顺序与插件列表中的顺序正好相反。
+
+使用 *use()* 引用的“插件链”看起来是这样的：
+
+```
+             ┌──────────────┐     ┌──────────────┐
+    │        │  router.js   │     │  default.js  │
+    │        │              │     │              │
+    │        │ ┌──────────┐ │     │ ┌──────────┐ │
+┌───▼───┐    │ │          │ │     │ │          │ │
+│       ├────┼─► request  ├─┼─────┼─► request  │ │
+│       │    │ │          │ │     │ │          │ │
+│       │    │ └──────────┘ │     │ └────┬─────┘ │
+│ use() │    │              │     │      │       │
+│       │    │              │     │      │       │
+│       │    │ ┌──────────┐ │     │ ┌────▼─────┐ │
+│       │    │ │          │ │     │ │          │ │
+│       ◄────┼─┤ response ◄─┼─────┼─┤ response │ │
+└───┬───┘    │ │          │ │     │ │          │ │
+    │        │ └──────────┘ │     │ └──────────┘ │
+    │        │              │     │              │
+    ▼        └──────────────┘     └──────────────┘
+```
+
+当然目前我们还没有定义“*response*”管道的插件。这里不用担心，如果找不到管道会直接跳过。
+
+## 拒绝请求
+
+现在我们已经把插件链接到一起了。不过还有个问题，每个进来的请求都会经过 `router.js` 和 `default.js` 即使在 `router.js` 中路由了上游服务并拿到响应消息。但是经过 `default.js` 处理后所有的消息又被替换成 “*404 No handler*”。
+
+我们可以通过引入一个自定义的自定义全局变量来解决这个问题，这个变量会表明请求是否已经被处理过。当请求在 `/router.js` 中已经被代理过，变量会设置为 `true` 通知 *use()* 停止在链中继续处理。我们将变量命名为 `__turnDown`。
+
+我们为 *use()* 的加上最后一个构造参数。记住这是个动态的值，需要使用函数进行包装。
+
+```js
+  .pipeline('request')
+    .use(
+      [
+        'plugins/router.js',
+        'plugins/default.js',
+      ],
+      'request',
+      'response',
++     () => __turnDown,
+    )
+```
+
+### 暴露和引用
+
+我们并不能用过去的方式来定义全局变量，否则只能在 `proxy.js` 中使用，在 `router.js` 中不可见。
+
+因此我们使用 [export()](/reference/Configuration/export) 函数定义变量用于在其他的文件中“引用”。初始值为 `false`。
+
+```js
+  pipy()
+
++ .export('proxy', {
++   __turnDown: false,
++ })
+```
+
+*export()* 的第一个构造参数是*命名空间（namespace）*，其他文件可以引用这个命名空间的变量。名字没有固定的要求。在这里我们使用“proxy”作为名字。
+
+下一步就是在 `router.js` 中引入这个变量，并在路由匹配之后将其设置为 `true`。
+
+```shell
++ .import({
++   __turnDown: 'proxy',
++ })
+
+  .pipeline('request')
+    .handleMessageStart(
+      msg => (
+        _target = _router.find(
+          msg.head.headers.host,
+          msg.head.path,
+-       )
++       ),
++       _target && (__turnDown = true)
++     )
+    )
+    .link(
+      'forward', () => Boolean(_target),
+      ''
+    )
+```
+
+注意命名空间要与 `proxy.js` 中定义 `__turnDown` 暴露的命名空间 `proxy` 一致。
+
+## 测试
+
+这次我们只是做了插件支持的重构并没有引入任何新的功能。测试方式和结果应该与上次是一样：
+
+```shell
+$ curl localhost:8000/hi
+Hi, there!
+$ curl localhost:8000/ip
+You are requesting /ip from ::ffff:127.0.0.1
+$ curl localhost:8000/echo -d 'hello'
+hello
+$ curl localhost:8000/bad/path
+No handler
+```
+
+## 总结
+
+在这篇教程中，我们学习如何将不同的功能隔离在不同的插件之中。这也为进一步扩展代理的功能提供了坚实的基础。
+
+### 收益
+
+1. 使用 [`use()`](/reference/Configuration/use) 将多个文件中的管道连接到一个 *插件链* 中。这个是可扩展插件架构的关键。
+2. [`pipy()`](/reference/pipy) 中定义全局变量只能在其定义的文件中可见。需要使用 [*export()*](/reference/Configuration/export) 和 [*import()*](/reference/Configuration/import) 来多个文件中共享变量。
+
+### 接下来
+
+现在我们已经有了一个支持插件系统的全功能路由的代理，但仍然不够。在整个脚本中有着大量可配置的参数，比如监听的端口和路由表。如果可以把这些分离到独立的“配置”文件中，会更好更简洁。这就是我们接下来要做的。

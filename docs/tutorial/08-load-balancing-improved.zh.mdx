@@ -1,0 +1,175 @@
+---
+title: 08 负载均衡进阶
+---
+
+## 问题
+
+在[上一个](/tutorial/07-load-balancing)教程中，我们实现了一个可用的负载均衡器，但是还有些许不足。让我们试着用同一个连接发送两个请求：
+
+```sh
+$ curl localhost:8000/hi localhost:8000/hi
+Hi, there!
+You are requesting /hi from ::ffff:127.0.0.1
+```
+
+结果看起来并没有问题，但就是不够完美。通常我们希望来自同一个连接的请求，可以被转发到同一个目标。
+
+## 缓存
+
+“同一个连接的请求去往同一个目标” 规则的逻辑可以使用简单的“缓存”来实现。与其每个请求都调用 [_RoundRobinLoadBalancer.prototype.select()_](/reference/algo/RoundRobinLoadBalancer/select)，而应该：
+
+1. 检查 cache 中该均衡器（在路由选择中我们拿到了可以处理该请求的负载均衡器）是否已选择了目标服务器
+2. 如果找到，使用已选择的目标服务器
+3. 如果没找到，则调用 `select()` 选择并保存在缓存中待下次使用。
+
+缓存的实现使用 [algo.Cache](/reference/algo/Cache)，构造时需要提供两个回调函数：
+
+1. 找不到缓存项，也就是缓存未命中时调用的回调函数，函数返回缓存项。
+2. 缓存项被清理时调用的调回函数。
+
+这里，两个回调函数中都调用 `RoundRobinLoadBalancer` 的方法：
+
+```js
+new algo.Cache(
+  // k is a balancer, v is a target
+  (k  ) => k.select(),
+  (k,v) => k.deselect(v),
+)
+```
+
+注意，我们使用 *RoundRobinLoadBalancer* 作为缓存的键。
+
+> 这里 [RoundRobinLoadBalancer.deselect()](/reference/algo/RoundRobinLoadBalancer/deselect) 不是必须的，但是使用其他算法的均衡器实现时会用到。比如 [LeastWorkLoadBalancer](/reference/algo/LeastWorkLoadBalancer)，需要对负载进行跟踪。
+
+### 初始化
+
+均衡器-目标服务器的缓存应该每个连接过来的时候创建，也就是说每个连入的连接都对应一个这样的缓存，我们在 HTTP 会话最开始的时候初始化缓存。这个点不在任何插件中，而是在主脚本 `/proxy.js` 中，就在 *listen()* 之后，使用 *use()* 接入到所有插件的 “*session*” 子管道中。
+
+```js
+  pipy()
+
+  .export('proxy', {
+    __turnDown: false,
+  })
+
+  .listen(config.listen)
++   .use(config.plugins, 'session')
+    .demuxHTTP('request')
+
+  .pipeline('request')
+    .use(
+      config.plugins,
+      'request',
+      'response',
+      () => __turnDown
+    )
+```
+
+接下来，就可以在 `/plugins/balancer.js` 的 “stream” 子管道中初始化了：
+
+```js
+  pipy({
+    _services: (
+      Object.fromEntries(
+        Object.entries(config.services).map(
+          ([k, v]) => [
+            k, new algo.RoundRobinLoadBalancer(v)
+          ]
+        )
+      )
+    ),
+
++   _balancer: null,
++   _balancerCache: null,
+    _target: '',
+  })
+
+  .import({
+    __turnDown: 'proxy',
+    __serviceID: 'router',
+  })
+
++ .pipeline('session')
++   .handleStreamStart(
++     () => (
++       _balancerCache = new algo.Cache(
++         // k is a balancer, v is a target
++         (k  ) => k.select(),
++         (k,v) => k.deselect(v),
++       )
++     )
++   )
+```
+
+这里我们同时定义了 `_balancer`，后面会用到。
+
+### 缓存
+
+现在我们不是直接调用 *RoundRobinLoadBalancer.select()*，而是调用 [_algo.Cache.prototype.get()_](/reference/algo/Cache/get) 来间接调用 *RoundRobinLoadBalancer.select()*。
+
+```js
+  .pipeline('request')
+    .handleMessageStart(
+      () => (
+-       _target = _services[__serviceID]?.select?.(),
++       _balancer = _services[__serviceID],
++       _balancer && (_target = _balancerCache.get(_balancer)),
+        _target && (__turnDown = true)
+      )
+    )
+    .link(
+      'forward', () => Boolean(_target),
+      ''
+    )
+```
+
+### 清理
+
+最后，当连接关闭时，要清理缓存：
+
+```js
+  .pipeline('session')
+    .handleStreamStart(
+      () => (
+        _balancerCache = new algo.Cache(
+          // k is a balancer, v is a target
+          (k  ) => k.select(),
+          (k,v) => k.deselect(v),
+        )
+      )
+    )
++   .handleStreamEnd(
++     () => (
++       _balancerCache.clear()
++     )
++   )
+```
+
+## 测试
+
+使用本教程开头同样的方法进行测试：
+
+```sh
+$ curl localhost:8000/hi localhost:8000/hi
+Hi, there!
+Hi, there!
+
+$ curl localhost:8000/hi localhost:8000/hi
+You are requesting /hi from ::ffff:127.0.0.1
+You are requesting /hi from ::ffff:127.0.0.1
+```
+
+现在每个 `curl` 连接，两个并发的请求拿到同样的响应，也就是转发到了同一个目标服务器。不同的连接之间，目标服务是轮训的方式选择。
+
+## 总结
+
+这节，我们学到了如何保证同一个连接的请求去到同一个上游目标服务器。这是对负载均衡代理的常见优化。
+
+### 收益
+
+1. 使用 [algo.Cache](/reference/algo/Cache) 保证来自同一个连接对同一个目标服务的访问请求，都会转发到同一个目标服务器。
+2. 连接维度的数据初始化应该紧跟在 *linsten()* 之后，在类似 *demuxHTTP()* 的过滤器将流分割成消息之前。
+
+### 接下来
+
+对负载均衡器的下一个优化点就是连接池，将在下一个教程中完成。

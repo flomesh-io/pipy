@@ -1,0 +1,115 @@
+---
+title: 01 Hello
+---
+
+Ahoy, world!
+
+作为程序员的我们都沉迷于“Hello World”，这里也不免俗。
+
+## 启动 Pipy
+
+从命令行启动 Pipy 实例：
+
+```shell
+pipy
+```
+
+启动之后将会看到如下内容：
+
+```
+[info] [codebase] Starting codebase service...
+[info] [listener] Listening on port 6060 at ::
+```
+
+此时在浏览器中打开 [http://localhost:6060](http://localhost:6060)，就可以看到 Pipy 内置的管理界面。这里不做过多介绍，可以跳转文档 [Pipy Repo](https://flomesh-io.github.io/operating/repo/) 获取更多管理界面的使用说明。
+
+## 创建 Pipy 程序
+
+让我们开始创建第一个 Pipy 程序：
+
+1. 在界面上点击 **New Codebase**，并在弹出窗口输入 `/hello` 作为代码库名称，最后点击 **Create** 完成创建。此时会自动跳转到代码库的编辑界面。
+2. 点击上面工具栏中的 **+** 按钮来创建新文件。弹出窗口中输入 `/hello.js`并点击 **Create**。
+3. 在左侧文件列表中选中刚创建的文件，然后点击上面工具栏中的旗帜图标，将该文件设置为程序的入口脚本。
+4. 接着在 `hello.js` 中输入下面的内容：
+    
+```js
+pipy()
+
+.listen(8080)
++  .serveHTTP(
+-    new Message('Hi, there!\n')
+  )
+```
+5. 点击工具栏中的保存按钮保存修改。    
+
+## 代码剖析
+
+在运行之前花点时间来看下代码：
+
+1. 第 1 行中调用内置的函数 [_pipy()_](/reference/pipy) 将返回一个 [`Configuration`](/reference/Configuration) 对象。后面我们使用这个对象来定义 *管道（pipeline）* 和 *过滤器（filter）*。
+2. 在第 3 行中我们通过调用前面创建的 `Configuration` 对象的 `listen()` 方法，定义一个监听在 `8080` 端口的*端口管道（port pipeline）*。这个函数会返回该 `Configuration` 对象，因此后面可以继续调用它的其他方法来定义更多的*管道*和*过滤器*。
+3. 在第 4 行，我们为了 2 中创建的管道添加 [`serveHTTP`](/reference/classes/Configuration/serveHTTP) 过滤器。过滤器使用 [`Message`](/reference/classes/Message) 作为构造参数，并在响应中输出同样类型的消息。
+
+整个脚本中，我们定义了包含一个过滤器的管道。如下图：
+
+```
+                      Pipeline
+          ┌───────────────────────────────┐
+pipeline  │   filter             filter   │    pipeline
+input  ┌──┴─┐ input  ┌─────────┐ output ┌─┴──┐ output
+   ┌──►│8080├───────►│serveHTTP├───────►│8080├───┐
+   │   └──┬─┘        └─────────┘        └─┬──┘   │
+   │      │                               │      │
+   │      └───────────────────────────────┘      │
+   │                                             │
+   │    request     ┌───────────┐    response    │
+   └────────────────┤  Client   │◄───────────────┘
+                    └───────────┘
+```
+
+## 测试
+
+此时点击工具栏右侧的运行按钮▶️，弹出的控制台窗口会显示：
+
+```
+[info] [config]
+[info] [config] Module /hello.js
+[info] [config] ================
+[info] [config]
+[info] [config]  [Listen on :::8080]
+[info] [config]  ----->|
+[info] [config]        |
+[info] [config]       serveHTTP
+[info] [config]        |
+[info] [config]  <-----|
+[info] [config]  
+[info] [listener] Listening on port 8080 at ::
+```
+
+此时在命令行中可以输入：
+
+```sh
+curl localhost:8080
+```
+
+将看到：
+
+```
+Hi, there!
+```
+
+Cool，符合预期。
+
+## 总结
+
+在第一个教程中，我们了解了 Pipy 程序的组成，并熟悉了管理界面的使用。
+
+### 收益
+
+* Pipy 程序由一系列的*管道*和*过滤器*的定义组成。从 [_pipy()_](/reference/pipy) 的调用开始，通过调用其返回 [`Configuration`](/reference/Configuration) 对象的多个方法来定义管道和过滤器。
+* *端口管道*从网络端口读取的内容作为输入，然后将其最后一个过滤器输出的内容回写到同一个端口。
+* *serveHTTP* 过滤器将 HTTP 消息作为输入，然后输出 HTTP 消息作为响应。
+
+### 接下来
+
+现在你已经可以写一个简单的 *“Hello world”* 服务器，但是总是输出同样的内容并没什么用。接下来我们试试针对不同的请求返回不一样的响应。

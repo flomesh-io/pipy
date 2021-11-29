@@ -1,0 +1,298 @@
+---
+title: 04 路由
+---
+
+作为一个网络代理，“*路由*” 是最基础的功能之一。在 HTTP 代理中，通常使用请求头的 “*Host*” 和 “*URI*”进行路由的决策。换句话，代理应当可以将类似 “*abc.com/api/v1/login*”映射到可以处理该请求的目标主机。
+
+## URLRouter
+
+Pipy 提供了类 [URLRouter](/reference/algo/URLRouter)，用于快速将 URL 映射成任何类型的值。在这个场景中，我们应该将其映射成包含目标地址和端口的*字符值*。
+
+可以通过 `new` 一个 *URLRouter* 对象并填入路由表来定义路由器：
+
+```js
+new algo.URLRouter({
+  '/hi/*': 'localhost:8080',
+  '/echo': 'localhost:8081',
+  '/ip/*': 'localhost:8082',
+})
+```
+
+## 自定义全局变量
+
+我们需要这个路由器变量是整个脚本可访问的，就需要将其放入*全局变量*中。
+
+在[之前的教程中](/tutorial/02-echo/#代码剖析)我们已经认识了*内置*全局变量 `__inbound`。这次我们定义一个名为 `_router` 的*自定义全局变量*。通过在 `pipy()` 函数的参数来实现。重新修改下上次的代码：
+
+``` js
+- pipy()
++ pipy({
++   _router: new algo.URLRouter({
++     '/hi/*': 'localhost:8080',
++     '/echo': 'localhost:8081',
++     '/ip/*': 'localhost:8082',
++   }),
++ })
+
+  .listen(8000)
+    .demuxHTTP('forward')
+```
+
+> 自定义变量的命名与 Javascript 的标识符一致。但是按照惯例，建议为全局变量添加单下划线前缀（比如这里用的 `_router`），这样方便与函数参数进行区分。
+
+有了全局可访问的 *URLRouter* 对象之后，我们需要第二个全局变量来保存路由决策的结果，就是目标主机的信息。因此添加一个初始值为空字符串的变量 `_target`。
+
+``` js
+  pipy({
+    _router: new algo.URLRouter({
+      '/hi/*': 'localhost:8080',
+      '/echo': 'localhost:8081',
+      '/ip/*': 'localhost:8082',
+    }),
+
++  _target: '',
+  })
+```
+
+## 路由
+
+此时我们已经有了所有需要的变量，下一步就是调用  [*URLRouter.find()*](/reference/algo/URLRouter/find) 根据请求计算出 `_target` 的值。我们可以 *demuxHTTP* 和 *muxHTTP* 之间使用 *handleMessageStart* 过滤器中完成这一步。由于 *demuxHTTP* 和 *muxHTTP* 位于不同的管道中，因此需要在其二者间插入一个新的子管道来连接他们。新的子管道名为 “*request*”。
+
+```js
+  .listen(8000)
+-   .demuxHTTP('forward')
++   .demuxHTTP('request')
+
++ .pipeline('request')
++   .handleMessageStart(
++     msg => (
++       _target = _router.find(
++         msg.head.headers.host,
++         msg.head.path,
++       )
++     )
++   )
++   .link('forward')
+
+  .pipeline('forward')
+    .muxHTTP('connection', '')
+```
+
+注意稍后我们再解释如何使用 “*request*”管道最后的 *link* 过滤器来连接到 “*forward*。”
+
+> 新加入的 “*request*”管道在代码中并不需要位于 *端口管道* 和“*forward*”管道之间。即使将其放在脚本的末尾同样可以工作。管道之前彼此通过在源管道的[连接过滤器（Joint filter）](#连接过滤器)（可以理解成关节）引用目标管道的名字实现连接。因此定义的顺序不重要。
+
+### connect 过滤器
+
+此时我们已经获得了变量 `_target` 的值，但代码中我们扔连接到 “*localhost:8080*”。那是不是改成 `_target` 就可以了？
+
+```js
+  .pipeline('connection')
+-   .connect('localhost:8080')
++   .connect(_target) // WRONG!!!
+```
+
+运行下代码，你会看到：
+
+```
+[error] [pjs] Line 35:  .connect(_target)
+[error] [pjs]                    ^
+[error] [pjs] Error: unresolved identifier
+[error] [pjs] Backtrace:
+[error]     In (root) at line 35 column 12
+```
+
+这是因为自定义全局变量总是绑定到某个管道上。因此，其只存在于工作的管道中（参考概念中的 [上下文](/concepts#context) 了解更多*全局变量*的信息）。假如没有入站的连接，就没有管道，也就不会有这些变量存在。
+
+那怎么解决这个问题。在 [教程 02](/tutorial/02-echo/) 里我们曾为过滤器添加了动态参数：将其放入函数中作为函数的返回值即可：
+
+```js
+  .pipeline('connection')
+-   .connect(_target) // WRONG!!!
++   .connect(
++     () => _target
++   )
+```
+
+当 “*connection*” 管道工作并有消息输入时， `() => _target` 就会被执行。此时，`_target` 肯定是存在的并可以安全使用。
+
+## 动态管道选择
+
+等等，如果找不到目标主机怎么办？这时 `_target` 的值是 `undefinded`，因此并不能转发消息。假如能把消息定向到另一个管道并且那个管道能输出 “*404 NOT Found*”就最好了。在 *link* 过滤器设计之初就考虑到了：**从多个管道中选择管道**。
+
+### link 过滤器
+
+使用时，[link()](/reference/Configuration/link) 可以接受一对或多对参数：每对参数中第一项是目标管道的名字，紧跟着一个可以决定是否选择该管道的条件回调函数。最有一对参数可以省略回调函数，表示为默认选项。
+
+这为 *link* 带来了几种不同的可能用法：
+
+```js
+// 无条件连接到 'target1'
+.link('target1')
+
+// _found 为 true 时连接到 'target1'。这里注意 Javascript 里 true 的多种表现形式
+.link('target1', () => _found)
+
+// _found 为 true 时连接到 'target1'，否则连接到 'target2'
+.link('target1', () => _found, 'target2')
+
+// _found 值为 1 时连接到 'target1'，为 2 时连接到 'target2'，否则连接到 'target3'
+.link('target1', () => _found === 1,
+      'target2', () => _found === 2,
+      'target3')
+```
+
+有了条件判断，我们就可以添加一个名为 “*404*” 的子管道。这里我们先把它加入到 *link* 中，后面再做定义。
+
+```js
+  .pipeline('request')
+    .handleMessageStart(
+      msg => (
+        _target = _router.find(
+          msg.head.headers.host,
+          msg.head.path,
+        )
+      )
+    )
+-   .link('forward')
++   .link(
++     'forward', () => Boolean(_target),
++     '404'
++   )
+```
+
+> “*forward*”的条件回调函数可以简写成 `() => _target`，因为 *link* 将真值当做 “*yes*”，而虚值当做 “*no*”。但这里为了清楚起见，我们扔将 `_target` 强转成布尔值。
+
+### replaceMessage 过滤器
+
+拼图的最后一块就是那个“*臭名昭著的 404 页面*”了。我们将使用新的名为 “*404*”的子管道来处理。
+
+那我们是否可以像[教程 01](/tutorial/01-hello/)里那样使用“*serveHTTP*”过滤器实现呢？当然不行。*serveHTTP*”过滤器的输入是原始字节流，所以它才能从其中解帧 HTTP 消息。解帧的工作已经在端口管道的 *demuxHTTP* 过滤器中完成。无法对字节流进行两次解帧。
+
+因此 “404”管道的输入是已经从 “字节流”转换来的 “消息流”，只需简单的将所有输入的消息都 “*替换*”成固定的 “404”响应即可。
+
+```js
+  .pipeline('forward')
+    .muxHTTP('connection', '')
+
+  .pipeline('connection')
+    .connect(
+      () => _target
+    )
+
++ .pipeline('404')
++   .replaceMessage(
++     new Message({ status: 404 }, 'No route')
++   )
+```
+
+注意，一旦消息替换成 “*404*” 响应之后，就完成了“404”管道的处理。你肯定好奇后续会去到哪里，最终如何回到客户端？
+
+### 连接过滤器
+
+Pipy 管道是单向的，数据流从第一个过滤器进入，从最后一个过滤器输出。比如 *端口管道*，来自客户端的请求就是其输入，返回给客户端的响应便是其输出。
+
+当它“*连接*”到子管道时，并不是把端口管道与其他子管道首尾连接起来，而是将子管道“*插入*”到端口管道内部。插入由连接过滤器完成，比如我们用过的 *link*、`demuxHTTP` 和 `muxHTTP`。
+
+这就是说一旦请求进入到 “*404*” 路由，整个流程就会像这样：
+
+```
+   requests
+     ┌────────────────┐         ┌─────────────┐
+     │                │         │             │
+     │         ┌──────▼──────┐  │  ┌──────────▼───────────┐
+     │         │  Port 8000  │  │  │  Pipeline "request"  │
+     │         │             │  │  │                      │
+     │         │             │  │  │ ┌──────────────────┐ │
+┌────┴───┐     │ ┌─────────┐ │  │  │ │handleMessageStart│ │  ┌───────────┐
+│        │     │ │         ├─┼──┘  │ └────────┬─────────┘ │  │           │
+│ Client │     │ │demuxHTTP│ │     │          │           │  │  ┌────────▼─────────┐
+│        │     │ │         ◄─┼──┐  │          │           │  │  │  Pipeline "404"  │
+└────▲───┘     │ └─────────┘ │  │  │ ┌────────▼─────────┐ │  │  │                  │
+     │         │             │  │  │ │                  ├─┼──┘  │ ┌──────────────┐ │
+     │         │             │  │  │ │       link       │ │     │ │replaceMessage│ │
+     │         │             │  │  │ │                  ◄─┼──┐  │ └──────────────┘ │
+     │         │             │  │  │ └──────────────────┘ │  │  │                  │
+     │         │             │  │  │                      │  │  └────────┬─────────┘
+     │         └──────┬──────┘  │  └──────────┬───────────┘  │           │
+     │                │         │             │              └───────────┘
+     └────────────────┘         └─────────────┘
+   responses
+```
+
+描述 “*管道*” 插入的最佳方式就是将其想象成子管道楔入到 “*连接过滤器*”的位置，并将其替换掉。
+
+更多管道和过滤器相关的内容，可以参考*概念*中的[过滤器和管道](/concepts/#filter-and-pipeline)。
+
+## 连接共享的问题
+
+这里有个隐藏的坑，就是假如一次请求 `localhost:8000/hi` 和 `localhost:8000/echo`，返回的结果都一样：`Hi, there!`。为什么会这样？
+
+```shell
+$ curl localhost:8000/hi
+Hi, there!
+$ curl localhost:8000/ip
+Hi, there!
+
+# Try again after 10 seconds...
+
+$ curl localhost:8000/ip
+You are requesting /ip from ::ffff:127.0.0.1
+$ curl localhost:8000/hi
+You are requesting /hi from ::ffff:127.0.0.1
+```
+
+*muxHTTP* 过滤器接收两个参数：第一个是要连接的子管道；第二个参数是“通道”，类型可以是数字、字符串或者函数。
+
+“*muxHTTP*”过滤器内有一个连接（连接到子管道的连接，并非网络连接）管理器，每次尝试获取连接时都会通过一个“键（key）”来获取。“键”相同则连接到同一个子管道，反之则每次都会使用独立的子管道。这个场景中 “*muxHTTP*”连接到子管道 *connection*，而子管道 *connection* 会建立到远程主机的 TCP 连接。如果每次都连接到同一个子管道，则意味着使用同一个 TCP 连接与远程主机通信，实现连接的共享（这里还有个小坑，稍后会提到）。
+
+此时你可能会想到第二个参数“通道”就与这个“键”有关。可以说“通道”的值或者返回值（类型为函数时）就是“键”。
+
+如果使用 `.muxHTTP('connection', '')`，“通道”为空字符串，则针对每个请求都会使用同一个的*connection*子管道处理，使用子管道初始化时所创建的 TCP 连接，这就导致了路由计算结果与 TCP 连接远端主机不一致；假如使用 `undefined` 作为第二个参数，每个请求都会使用一个新初始化的子管道处理请求，每次都会创建新的 TCP 连接，而创建新的 TCP 连接是非常“昂贵”的。
+
+假如转发每个远程主机的请求是使用同一个连接，那就需要“键”也就是“通道”与远程主机一一对应。这里很容易就想到变量 `_target` 的值就是远程主机的访问地址。有了前车之鉴，很容易就能想到用 `() => _target`，而不是直接用 “_target”了。
+
+```js
+  .pipeline('forward')
+-   .muxHTTP('connection', '')
++   .muxHTTP(
++     'connection',
++     () => _target
++   )
+
+  .pipeline('connection')
+    .connect(
+      () => _target
+    )
+```
+
+## 测试
+
+运行程序并测试：
+
+```sh
+$ curl localhost:8000/hi
+Hi, there!
+$ curl localhost:8000/ip
+You are requesting /ip from ::ffff:127.0.0.1
+$ curl localhost:8000/echo -d 'hello'
+hello
+$ curl localhost:8000/bad/path
+No route
+```
+
+奇迹般有效！
+
+## 总结
+
+本次教程，你应该学会如何实现一个简单的路由代理，同时也了解了如何定义和使用自定义全局变量，此外还有更多的过滤器：*demuxHTTP*、*muxHTTP*、*link*、*connect*、*handleMessageStart* 和 *replaceMessage*。
+
+### 收获
+
+1. 根据路由表，使用 [algo.URLRouter](/reference/algo/URLRouter) 将类 URL 的字符串映射成任意类型的值，基于要实现的路由代理。
+2. 通过使用 *link* 过滤器， 子通道可以有选择的“插入”到 *link* 过滤器所属的管道中。有点类似变成语言中的 `if` 或者 `switch` 语句，控制流可以有条件分支。
+3. 假如子管道位于 *demuxHTTP* 过滤器之后，使用 *replaceMessage* 过滤器将输入的请求消息变成输出的响应消息。将 *demuxHTTP* 与 *replaceMessage* 组合使用，可以实现 *serveHTTP* 的效果。
+
+### 接下来
+
+从本次教程开始，代理的代码逻辑会越来越长且复杂。继续在该脚本中添加更多功能并不是个好注意。我们需要 “*模块化*”才能更进一步。因此，下一个教程我们将尝试构建一个“插件化系统”。

@@ -1,0 +1,124 @@
+---
+title: 10 路径重写
+---
+
+## 问题
+
+假如现在发送请求到 `localhost:8000/ip/a`，会看到如下响应：
+
+```shell
+curl localhost:8000/ip/a
+You are requesting /ip/a from ::ffff:127.0.0.1
+
+curl localhost:8000/ip
+You are requesting /ip from ::ffff:127.0.0.1
+```
+
+而期望的结果应该是：
+
+```
+You are requesting /a from ::ffff:127.0.0.1
+```
+
+因为路由表中 `/ip/*` 中的前缀 `/ip` 更多时候表示的是 **监听在 8082 端口的 ip 服务**。
+
+这时就需要将路径 `/ip/a` 重写为 `/a`，这也是网关代理的常见功能之一路径重写的功能。
+
+## RegExp
+
+简单的实现就是将 `/ip/` 替换成 `/`，Javascrip 中 String 的 *replace(searchFor, replaceWith)* 方法第一个参数可以是字符串也可以是正则表达式。
+
+```js
+new RegExp('^/ip/?')
+```
+
+## 扩展路由配置
+
+通过对路由表中的服务进行抽象，封装成对象以增加 *rewrite* 字段：
+
+```json
+{
+  "routes": {
+    "/hi/*": { "service": "service-hi" },
+    "/echo": { "service": "service-echo" },
+    "/ip/*": { "service": "service-tell-ip", "rewrite": ["^/ip/?", "/"] }
+  }
+}
+```
+
+同样要对全局变量 *_router* 的初始化进行调整，对需要重写的服务将 *rewrite* 数组的第一个值转换成 `RegExp` 对象。同时加入新的全局变量 *_route* 来接收路由决策的返回值。
+
+```js
+pipy({
+  _router: new algo.URLRouter(
+    Object.fromEntries(
+      Object.entries(config.routes).map(
+        ([k, v]) => [
+          k,
+          {
+            ...v,
+            rewrite: v.rewrite ? [
+              new RegExp(v.rewrite[0]),
+              v.rewrite[1],
+            ] : undefined,
+          }
+        ]
+      )
+    )
+  ),
+
+  _route: null,
+})
+```
+
+> 这里使用了 `...` 展开语法，将服务对象展开并重新复制 `rewrite` 字段。虽然服务无对象的字段较少，可以使用枚举的方式。但是使用展开语法，可以更方便后期对服务对象继续扩展。
+
+## 路径重写
+
+此时 `_router.find()` 的结果使我们重新封装好的服务对象，从该对象中获取 `__serviceID` 的值，以及对请求的 *path* 进行重写。
+
+```js
+.pipeline('request')
+  .handleMessageStart(
+    msg => (
+      _route = _router.find(
+        msg.head.headers.host,
+        msg.head.path,
+      ),
+      _route && (
+        __serviceID = _route.service,
+        _route.rewrite && (
+          msg.head.path = msg.head.path.replace(
+            _route.rewrite[0],
+            _route.rewrite[1],
+          )
+        )
+      )
+    )
+  )
+```
+
+## 测试
+
+使用本教程开始的测试方式重新测试：
+
+```shell
+curl localhost:8000/ip/a
+You are requesting /a from ::ffff:127.0.0.1
+
+curl localhost:8000/ip
+You are requesting / from ::ffff:127.0.0.1
+```
+
+## 总结
+
+这一次我们使用 JavaScript 的正则表达式和字符串操作实现了网关中常见的路径重写的功能。
+
+### 收益
+
+* 在字符串替换时，使用正则表达式类型 `RegExp`。
+* 使用展开语法而不是枚举的方式创建字面量对象，可以方便后面继续对对象进行扩展。
+
+### 接下来
+
+我们继续为代理增加新的能力：访问日志，同时会引入更多的过滤器的使用。
