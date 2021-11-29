@@ -1,0 +1,134 @@
+---
+title: 06 配置
+---
+
+在这篇教程中，我们会通过分离逻辑与配置来进一步优化代码库。配置的部分会放到独立的 JSON 格式的配置文件中。
+
+## 准备 JSON 文件
+
+首先，我们为每个可配置的脚本文件各准备一个JSON 文件。在 JSON 文件中，我们加入 JavaScript 代码所需的配置作为其配置。所有的 JSON 文件都放在同一个 `/config` 目录中。
+
+比如为 `/proxy.js`， 创建一个 `/config/proxy.json` 文件：
+
+```json
+{
+  "listen": 8000,
+  "plugins": [
+    "plugins/router.js",
+    "plugins/default.js"
+  ]
+}
+```
+为 `/plugins/router.js`创建 `/config/router.json`：
+```json
+{
+  "routes": {
+    "/hi/*": "localhost:8080",
+    "/echo": "localhost:8081",
+    "/ip/*": "localhost:8082"
+  }
+}
+```
+而 `/plugins/default.js`，有些内容也可以变成可配置的。比如说无法处理请求的时候返回的消息。但是为了保持教程的简洁，我们跳过这个。
+
+## 从 JSON 中读取数据
+
+下一步我们调整 `/proxy.js` 来支持从 `/config/proxy.json` 中获取配置：
+
+1. 将所有的代码封装在一个函数中，这个函数只接收一个 `config` 入参：
+
+```js
++ (config =>
+
+  pipy()
+
+  .export('proxy', {
+    __turnDown: false,
+  })
+
+  .listen(8000)
+    .demuxHTTP('request')
+
+  .pipeline('request')
+    .use(
+      [
+        'plugins/router.js',
+        'plugins/default.js',
+      ],
+      'request',
+      'response',
+      () => __turnDown
+    )
+
++ )
+```
+
+2. 使用从 `/config/proxy.json` 中解码的 JSON 对象来调用该函数：
+
+```js
+  (config =>
+
+  // ...
+
+  )
++ (JSON.decode(pipy.load('config/proxy.json')))
+```
+
+> 这里我们并没有使用标准的 [JSON.parse()](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/JSON/parse)，而是使用 [JSON.decode](/reference/JSON/decode)，因为前者只能处理字符串而后者可以处理二进制数据。
+
+3. 使用 `config` 中的数据替换监听的端口以及插件列表：
+
+```js
+- .listen(8000)
++ .listen(config.listen)
+    .demuxHTTP('request')
+
+  .pipeline('request')
+    .use(
+-     [
+-     'plugins/router.js',
+-     'plugins/default.js',
+-     ],
++     config.plugins,
+      'request',
+      'response',
+      () => __turnDown
+    )
+```
+以同样的方式处理 `/plugins/router.js`，将所有的代码封装到函数中，然后使用 JSON 数据来调用。最后使用 JSON 中的路由表。
+
+```js
++ (config =>
+
+  pipy({
+-   _router: new algo.URLRouter({
+-     '/hi/*': 'localhost:8080',
+-     '/echo': 'localhost:8081',
+-     '/ip/*': 'localhost:8082',
+-   }),
++   _router: new algo.URLRouter(config.routes),
+    _target: '',
+  })
+
+  // ...
+
++ )(JSON.decode(pipy.load('config/router.json')))
+```
+
+## 测试
+
+这次我们还是没有增加任何功能。可以继续用[上次的方式](/tutorial/05-plugins#test-in-action)进行测试。
+
+## 总结
+
+在这次教程中，我们介绍了了如何将逻辑代码与配置数据分离，可以更优雅地组织那些有很多配置项的代码。
+
+### 收益
+
+1. 代码组织的最佳实践之一就是代码与数据的分离和提供代码的可配置性。
+2. 使用 [`pipy.load()`](/reference/pipy.load) 从文件中读取二进制数据。
+3. 使用 [`JSON.decode()`](/reference/JSON/decode) 从二进制数据中解码 JSON 对象。
+
+### 接下来
+
+到目前我们为代理打下了坚实的基础：插件系统和使用 JSON 配置。接下来我们会通过添加更多插件的方式来扩展代理的功能。

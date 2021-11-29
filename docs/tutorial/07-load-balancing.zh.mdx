@@ -1,0 +1,302 @@
+---
+title: 07 负载均衡
+---
+
+到现在我们已经有了一个可插拔的、可配置的代理框架。甚至我们还编写了第一个插件“*路由器*”。从这一篇开始，我们会继续增加支持更多代理功能的插件，首当其冲的就是“*负载均衡*”。
+
+## RoundRobinLoadBalancer
+
+Pipy 提供各种内置类让实现负载均衡代理更容易。这些类实现了各种的负载均衡算法，提供了同样的使用方式。在本节中我们将使用的 [algo.RoundRobinLoadBalancer](/reference/algo/RoundRobinLoadBalancer) 实现了常见了“轮询（round-robin）”算法。
+
+构建 *RoundRobinLoadBalancer* 对象，需要提供一个带有权重的目标列表：
+
+```js
+new algo.RoundRobinLoadBalancer({
+  'localhost:8080': 50,
+  'localhost:8081': 25,
+  'localhost:8082': 25,
+})
+```
+
+或者，如果你想让负载均匀分布，提供一个简单的目标列表集合，不必提供权重：
+
+```js
+new algo.RoundRobinLoadBalancer([
+  'localhost:8080',
+  'localhost:8081',
+  'localhost:8082',
+])
+```
+
+有了 *RoundRobinLoadBalancer*，每次调用其 [select()](/reference/algo/RoundRobinLoadBalancer/select) 方法都会以轮询的方式返回其中的一个目标。
+
+## 拆解  router.js
+
+一旦获取了目标主机，我们应该将请求转发过去。但是，我们不是已经在 `/plugins/router.js` 中的 “*forward*” 管道中实现了么？
+
+再回顾下 “*路由*” 插件，其实可以再分成两部分：
+
+* 将请求映射到拥有一堆目标服务器的“服务”
+* 从众多目标中选择一个，并将请求发送过去
+
+第二部分其实可以做在 “*均衡器*” 插件中，而第一部分继续放在“*路由*”插件中。除此以外 “路由器” 还应通知 “均衡器” 插件要使用的服务。前面我们已见到 [05 插件](/tutorial/05-plugins#export-and-import) 中在 `/proxy.js` 和 `plugins/router.js` 之间共享的变量 `_turnDown`。这里也使用同样的方式。
+
+### 创建 balancer.js
+
+我们从均衡器的配置开始。创建 `/config/balancer.json`，创建从服务到目标服务器的映射：
+
+```json
+{
+  "services": {
+    "service-hi"      : ["127.0.0.1:8080", "127.0.0.1:8082"],
+    "service-echo"    : ["127.0.0.1:8081"],
+    "service-tell-ip" : ["127.0.0.1:8082"]
+  }
+}
+```
+
+如你所见，我们定义了 3 个服务，分别是 `service-hi`、`service-echo` 和 `service-tell-ip`。其中第一个有两个目标服务器，另外两个都只有一个。
+
+接下来就是插件的脚本文件：
+1. 创建 `/plugins/balancer.js` 并将 `/plugins/router.js` 内容全部复制过去。
+2. 删除 *URLRouter* 以及 *find* 方法调用，留下其他部分。
+3. 配置文件改成 `/config/balancer.json`。
+
+*注释的代码为删除的代码*
+
+```js
+  (config =>
+
+  pipy({
+-   _router: new algo.URLRouter(config.routes),
+    _target: '',
+  })
+
+  .import({
+    __turnDown: 'proxy',
+  })
+
+  .pipeline('request')
+    .handleMessageStart(
+      msg => (
+-       _target = _router.find(
+-         msg.head.headers.host,
+-         msg.head.path,
+-       ),
+        _target && (__turnDown = true)
+      )
+    )
+    .link(
+      'forward', () => Boolean(_target),
+      ''
+    )
+
+  .pipeline('forward')
+    .muxHTTP(
+      'connection',
+      () => _target
+    )
+
+  .pipeline('connection')
+    .connect(
+      () => _target
+    )
+
+- )(JSON.decode(pipy.load('config/router.json')))
+  )(JSON.decode(pipy.load('config/balancer.json')))
+```
+
+我们使用一组 *RoundRobinLoadBalancer* 替换原来的 *URLRouter*，均衡器内容从配置文件中获取，每个服务对应一个负载均衡器。借助 [_Array.prototype.map_](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Array/map) 以及 [_Object.entries_](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object/entries)
+ 和 [_Object.fromEntries_](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object/fromEntries) 将 JSON 中的目标列表转换成 `RoundRobinLoadBalancer`：
+
+```js
+  pipy({
+-   _services: (
+-     Object.fromEntries(
+-       Object.entries(config.services).map(
+-         ([k, v]) => [
+-           k, new algo.RoundRobinLoadBalancer(v),
+-         ]
+-       )
+-     )
+-   ),
+    _target: '',
+  })
+```
+
+> 在 Javascript 中，任何数组元素都可以使用 [_Array.prototype.map_](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Array/map) 进行转换。比如说对象，可以先转换成 `[key, value]` 数组，再使用 `map()` 变换最后在转换成对象。
+
+```js
+Object.fromEntries(
+  Object.entries(inputObject).map(
+    ([k, v]) => [
+      transformKey(k),
+      transformValue(v),
+    ]
+  )
+)
+```
+
+> 对于操作 JSON 文件中配置数据非常方便。
+
+最终均衡器的核心还是选择一个目标。假设路由器已经找到了处理请求的服务名，并通过 `__serviceID` 暴露在 *router* 命名空间下。因此在均衡器插件中，我们引入这个变量并根据它来确定服务并选择一个目标。
+
+```js
+  .import({
+    __turnDown: 'proxy',
++   __serviceID: 'router',
+  })
+
+  .pipeline('request')
+    .handleMessageStart(
+      msg => (
++       _target = _services[__serviceID]?.select?.(),
+        _target && (__turnDown = true)
+      )
+    )
+    .link(
+      'forward', () => Boolean(_target),
+      ''
+    )
+```
+
+这就是均衡器的全部内容了，在回到路由器插件之前，不要忘记在入口脚本中引入插件。我们在主脚本的配置文件中 `/config/proxy.json` 添加：
+
+```json
+  {
+    "listen": 8000,
+    "plugins": [
+      "plugins/router.js",
++     "plugins/balancer.js",
+      "plugins/default.js"
+    ]
+  }
+```
+
+### 裁剪 router.js
+
+对于路由器插件，还是从配置文件 `/config/router.json.` 入手。由于已经将服务映射到目标服务器了，那这里我们调整只需将其映射到服务：
+
+```json
+{
+  "routes": {
+    "/hi/*": "service-hi",
+    "/echo": "service-echo",
+    "/ip/*": "service-tell-ip"
+  }
+}
+```
+
+对脚本文件 `/plugins/router.js`，*forward* 和 *connection* 管道已经迁移到了均衡器插件中了，这里直接删除即可，同样删除用于连接它们的 *link()* 部分：
+
+```js
+  (config =>
+
+  pipy({
+    _router: new algo.URLRouter(config.routes),
+    _target: '',
+  })
+
+  .import({
+    __turnDown: 'proxy',
+  })
+
+  .pipeline('request')
+    .handleMessageStart(
+      msg => (
+        _target = _router.find(
+          msg.head.headers.host,
+          msg.head.path,
+        ),
+        _target && (__turnDown = true)
+      )
+    )
+- .link(
+-   'forward', () => Boolean(_target),
+-   ''
+- )
+
+- .pipeline('forward')
+-   .muxHTTP('connection')
+
+- .pipeline('connection')
+-   .connect(
+-     () => _target
+-   )
+
+  )(JSON.decode(pipy.load('config/router.json')))
+```
+
+现在路由器只需要将请求映射到服务即可，剩下的由均衡器来完成目标的选择及请求的转发，或者拒绝请求。可以删除 `_target` 和 `__turnDown` 变量了：
+
+```js
+  pipy({
+    _router: new algo.URLRouter(config.routes),
+- _target: '',
+  })
+
+- .import({
+- __turnDown: 'proxy',
+- })
+
+  .pipeline('request')
+    .handleMessageStart(
+      msg => (
+-       _target = _router.find(
+-         msg.head.headers.host,
+-         msg.head.path,
+-       ),
+-       _target && (__turnDown = true)
+      )
+    )
+```
+
+最后，我们添加新的变量 `__serviceID` 用于保存匹配请求的服务名。由于均衡器会依赖这个变量，所以通过 `export()` 暴露出来：
+
+```js
+  pipy({
+    _router: new algo.URLRouter(config.routes),
+  })
+
+- .export('router', {
+-   __serviceID: '',
+- })
+
+  .pipeline('request')
+    .handleMessageStart(
+      msg => (
+-       __serviceID = _router.find(
+-         msg.head.headers.host,
+-         msg.head.path,
+-       )
+      )
+    )
+```
+
+## 测试
+
+```shell
+$ curl localhost:8000/hi
+Hi, there!
+$ curl localhost:8000/hi
+You are requesting /hi from ::ffff:127.0.0.1
+$ curl localhost:8000/hi
+Hi, there!
+$ curl localhost:8000/hi
+You are requesting /hi from ::ffff:127.0.0.1
+```
+
+因为 `service-hi` 配置了多个目标服务器，每次响应的内容不一样。
+
+## 总结
+
+这次我们学习了如果写一个轮训的负载均衡器，同时学会了只用一行代码转换 JSON 对象的技巧。
+
+### 收益
+
+1. 使用 [_algo.RoundRobinLoadBalancer_](/reference/algo/RoundRobinLoadBalancer)（还有其他类型的均衡器）自动从一组目标服务器中选择，并结合各自的权重。
+2. 结合 [_Array.prototype.map_](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Array/map)、[_Object.entries_](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object/entries) 以及 [_Object.fromEntries_](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object/fromEntries) 轻松完成 JSON 对象键和值的转换。
+
+### 接下来
+
+简单的负载均衡器可以工作，但是还不够完美。下一篇将说明原因，以及如何优化。

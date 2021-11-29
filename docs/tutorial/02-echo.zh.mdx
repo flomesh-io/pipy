@@ -1,0 +1,122 @@
+---
+title: 02 回显
+---
+
+看到了这里应该已经实现了简单 Pipy 服务返回 *“Hello world”*。在这篇教程中，将学习如何返回动态内容。
+
+## 回显服务器
+
+首先，让监听在 `8081` 端口的服务返回请求里的内容：
+
+```js
+  pipy()
+
+  .listen(8080)
+    .serveHTTP(
+      new Message('Hi, there!\n')
+    )
+
++ .listen(8081)
++   .serveHTTP(
++     msg => new Message(msg.body)
++   )
+```
+
+这里我们没有创建一个新的 Pipy 程序，而是扩展之前代码添加了一个新的*端口管道*。
+
+新的管道监听 `8081` 端口并包含同样的 `serveHTTP` 过滤器。只是这次用来构造 `serveHTTP` 过滤器是一个函数，不是 [*Message*](/reference/Message) 对象。
+
+这个函数就是动态内容的“秘密成分”。
+
+### 代码剖析
+
+在第 1 个管道中，`new Message()` 只会在 Pipy 启动的时候执行一次，随后不管请求多少次都返回同一个 `Message` 对象。因此，Pipy 响应的内容不变。
+
+在第 2 个管道中，`msg => new Message()` 同样只会在 Pipy 启动的时候执行一次，但与第一个不同，这里执行的结果是个函数，而不是 *Message* 对象。 在运行时，为每个请求都执行一次来返回一个新的 *Message* 对象。
+
+该函数有一个输入变量 `msg`，这个来自对 HTTP 请求的封装而成的 [*Message*](/reference/Message) 对象。在响应中同样要返回一个 *Message* 对象。这里简单的将请求体中的内容放在了新的 *Message* 对象中，这样就足以实现简单的 “回显服务器”。
+
+### 测试
+
+测试前记得保存变更。如果此时 Pipy 扔在运行上个版本的代码，这里你可以：
+
+* 点击工具栏中的停止按钮 ◻️，并点击运行按钮 ▶️ 运行新的代码。
+* 或者点击重新加载按钮 ↺ 直接使用新的版本重启程序
+
+这次还是使用 `curl` 命令来测试：
+
+```sh
+curl localhost:8081 -d 'hello'
+```
+
+可以看到：
+
+```
+hello
+```
+
+## 回显更多内容
+
+这里有点像“鹦鹉学舌”。现在我们在请求内容的基础上添加更多的内容：
+
+```js
+  pipy()
+
+  .listen(8080)
+    .serveHTTP(
+      new Message('Hi, there!\n')
+    )
+
+  .listen(8081)
+    .serveHTTP(
+      msg => new Message(msg.body)
+    )
+
++ .listen(8082)
++   .serveHTTP(
++     msg => new Message(
++       `You are requesting ${msg.head.path} from ${__inbound.remoteAddress}\n`
++     )
++   )
+```
+
+同样在前面版本的基础上进行扩展。这次新的管道监听在 `8082` 端口，使用了同样的过滤器但不同的函数作为构造参数。
+
+### 代码剖析
+
+这次使用 Javascript 的[模板字符串](https://developer.mozilla.org/zh-CN/docs/Web/JavaScript/Reference/Template_literals) 来动态组装返回的内容。模板中包含了 2 个动态的部分：
+* `msg.head.path` 这是请求的 URI
+* `__inbound.remoteAddress` 是客户端的 ip 地址
+
+变量 `__inbound` 是一个内置的全局对象，包含了入站连接的地址和端口信息。虽然是一个全局变量，但是在处理不同连接的并发管道间，其值是不同的。
+
+对于那些习惯于在整个程序中具有共享状态的全局变量的人来说，这可能是违反直觉的。有关更深入的解释，请参阅[概念中的上下文](/concepts#context)。
+
+### 测试
+
+命令行中执行：
+
+```sh
+curl localhost:8082/hello
+```
+
+会看到：
+
+```sh
+You are requesting /hello from ::1
+```
+
+`::1` 是 *localhost* 的 IPv6 格式。
+
+## 总结
+
+在这个教程中，可以了解到如何在 Pipy 程序的响应中返回动态内容。同样，也体验了 Pipy 中*变量* 的工作方式。
+
+### 收获
+
+1. 过滤器的构造参数，只有在 Pipy 启动的时候执行一次，运行时只有*“静态”*值。要想实现“动态”，需要提供可以输出动态值的函数。
+2. 全局变量在并发的管道中的状态是隔离的。内置变量之一的 `__inbound` 包含了当前入站连接的地址和端口信息。
+
+### 接下来
+
+如你所见 Pipy 非常适合快速启动临时服务器，但这并不是 Pipy 的主要用途。我们主要将 Pipye 作为网络代理使用。这也是我们接下来要研究的内容。
