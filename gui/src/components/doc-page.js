@@ -32,6 +32,10 @@ const FONT_TOC = 'verdana';
 const FONT_TEXT = 'arial,sans-serif';
 const FONT_CODE = 'menlo,monaco,"Courier New",monospace';
 
+const FONT_ZH_TITLE = 'simhei,stheiti';
+const FONT_ZH_TOC = 'heiti';
+const FONT_ZH_TEXT = 'arial,sans-serif';
+
 const useStyles = makeStyles(theme => ({
   head: {
     position: 'absolute',
@@ -187,10 +191,21 @@ const useStyles = makeStyles(theme => ({
     fontSize: '3rem',
   },
 
+  title_zh: {
+    fontFamily: FONT_ZH_TITLE,
+    fontSize: '3rem',
+    fontWeight: 'bolder',
+  },
+
   h1: { fontFamily: FONT_TITLE, fontSize: '2.0rem' },
   h2: { fontFamily: FONT_TITLE, fontSize: '1.5rem', fontWeight: 'lighter' },
   h3: { fontFamily: FONT_TITLE, fontSize: '1.3rem', fontWeight: 'lighter' },
   h4: { fontFamily: FONT_TITLE, fontSize: '1.1rem', fontWeight: 'lighter' },
+
+  h1_zh: { fontFamily: FONT_ZH_TITLE, fontSize: '2.0rem' },
+  h2_zh: { fontFamily: FONT_ZH_TITLE, fontSize: '1.5rem', fontWeight: 'bolder' },
+  h3_zh: { fontFamily: FONT_ZH_TITLE, fontSize: '1.3rem', fontWeight: 'bolder' },
+  h4_zh: { fontFamily: FONT_ZH_TITLE, fontSize: '1.1rem', fontWeight: 'bolder' },
 
   p: {
     fontFamily: FONT_TEXT,
@@ -377,6 +392,7 @@ export const query = graphql`
       nodes {
         fields {
           path
+          lang
         }
         frontmatter {
           title
@@ -391,9 +407,11 @@ const makeStyledTag = (tag, style) => {
   style = style || tag;
   return ({ children, ...props }) => {
     const classes = useStyles();
+    const { lang } = React.useContext(DocContext);
     const Tag = tag;
+    const className = classes[`${style}_${lang}`] || classes[style]
     return (
-      <Tag {...props} className={classes[style]}>
+      <Tag {...props} className={className}>
         {children}
       </Tag>
     );
@@ -732,9 +750,10 @@ const DocNavGroup = ({ label, path, uri, children }) => {
 }
 
 const DocNavList = ({ nodes, prefix }) => {
+  const { lang } = React.useContext(DocContext);
   const pages = nodes.filter(
-    ({ fields: { path }, frontmatter: { api } }) => {
-      if (!path.startsWith(prefix)) return false;
+    ({ fields, frontmatter: { api } }) => {
+      if (!fields.path.startsWith(prefix)) return false;
       if (api) {
         const i = api.lastIndexOf('.');
         if (i >= 0) {
@@ -746,6 +765,8 @@ const DocNavList = ({ nodes, prefix }) => {
             if (name[0] === name[0].toUpperCase()) return false; // skip members
           }
         }
+      } else if (fields.lang !== lang) {
+        return false;
       }
       return true;
     }
@@ -857,7 +878,7 @@ const DocPage = ({ data }) => {
         </List>
       </div>
       <div className={classes.main}>
-        <Typography component="h1" className={classes.title}>
+        <Typography component="h1" className={classes[`title_${lang}`] || classes.title}>
           {data.mdx.frontmatter.title}
         </Typography>
         <MDXProvider components={components}>
