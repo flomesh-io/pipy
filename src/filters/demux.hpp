@@ -34,44 +34,53 @@
 namespace pipy {
 
 //
-// DemuxFunction
+// QueueDemuxer
 //
 
-class DemuxFunction : public EventFunction {
+class QueueDemuxer : public EventFunction {
 public:
   void reset();
+  void isolate();
 
 protected:
-  virtual void on_event(Event *evt) override;
   virtual auto on_new_sub_pipeline() -> Pipeline* = 0;
 
 private:
+  class Stream;
+
+  List<Stream> m_streams;
+  bool m_isolated = false;
+
+  void on_event(Event *evt) override;
+  void flush();
+
+  //
+  // QueueDemuxer::Stream
+  //
+
   class Stream :
     public pjs::Pooled<Stream>,
     public List<Stream>::Item,
     public EventTarget
   {
-    Stream(DemuxFunction *demux, MessageStart *start);
+    Stream(QueueDemuxer *demux);
     ~Stream();
 
     void data(Data *data);
     void end(MessageEnd *end);
 
-    DemuxFunction* m_demux;
+    QueueDemuxer* m_demuxer;
     pjs::Ref<Pipeline> m_pipeline;
     pjs::Ref<MessageStart> m_start;
     Data m_buffer;
     bool m_input_end = false;
     bool m_output_end = false;
+    bool m_isolated = false;
 
     virtual void on_event(Event *evt) override;
 
-    friend class DemuxFunction;
+    friend class QueueDemuxer;
   };
-
-  List<Stream> m_streams;
-
-  void flush();
 
   friend class Stream;
 };
@@ -80,7 +89,7 @@ private:
 // Demux
 //
 
-class Demux : public Filter, public DemuxFunction {
+class Demux : public Filter, public QueueDemuxer {
 public:
   Demux();
 

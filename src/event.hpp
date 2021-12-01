@@ -168,6 +168,10 @@ private:
 //
 // EventTarget
 //
+//      input()      +-------------+
+// --- on_event() -->| EventTarget |
+//                   +-------------+
+//
 
 class EventTarget {
 public:
@@ -227,7 +231,7 @@ protected:
     close();
   }
 
-  virtual void on_event(Event *evt) = 0;
+  virtual void on_event(Event *evt) {}
 
 private:
   pjs::Ref<Input> m_input;
@@ -237,6 +241,12 @@ private:
 
 //
 // EventFunction
+//
+//      input()      +---------------+
+// --- on_input() -->|               |
+//                   | EventFunction |
+// <--- output() ----|               |
+//                   +---------------+
 //
 
 class EventFunction : public EventTarget {
@@ -252,6 +262,9 @@ public:
 protected:
   EventFunction()
     : m_output(Input::dummy()) {}
+
+  virtual void on_input(Event *evt) {}
+  virtual void on_event(Event *evt) override { on_input(evt); }
 
   auto output() -> Input* {
     return m_output;
@@ -269,6 +282,114 @@ protected:
 
 private:
   pjs::Ref<Input> m_output;
+};
+
+//
+// EventSource
+//
+// +-------------+
+// |             |----- output() --->
+// | EventSource |
+// |             |<--- on_intake() --
+// +-------------+      intake()
+//
+
+class EventSource : protected EventTarget {
+public:
+  auto intake() -> Input* {
+    return EventTarget::input();
+  }
+
+  void chain(Input *input) {
+    if (input) {
+      m_output = input;
+    } else {
+      m_output = Input::dummy();
+    }
+  }
+
+  void close() {
+    EventTarget::close();
+  }
+
+protected:
+  EventSource()
+    : m_output(Input::dummy()) {}
+
+  virtual void on_intake(Event *evt) {}
+  virtual void on_event(Event *evt) override { on_intake(evt); }
+
+  auto output() -> Input* {
+    return m_output;
+  }
+
+  void output(Event *evt) {
+    m_output->input(evt);
+  }
+
+  void output(Event *evt, EventTarget::Input *input) {
+    if (input) {
+      input->input(evt);
+    }
+  }
+
+private:
+  pjs::Ref<Input> m_output;
+};
+
+//
+// EventProxy
+//
+//      input()      +------------+
+// --- on_input() -->|            |----- forward() --->
+//                   | EventProxy |
+// <--- output() ----|            |<--- on_intake() ---
+//                   +------------+      intake()
+//
+
+class EventProxy : protected EventFunction, protected EventSource {
+public:
+  auto input() -> Input* {
+    return EventFunction::input();
+  }
+
+  virtual void chain(Input *input) override {
+    EventFunction::chain(input);
+  }
+
+  void chain_forward(Input *input) {
+    EventSource::chain(input);
+  }
+
+  void close() {
+    EventFunction::close();
+    EventSource::close();
+  }
+
+protected:
+  auto forward() -> Input* {
+    return EventSource::output();
+  }
+
+  void forward(Event *evt) {
+    EventSource::output(evt);
+  }
+
+  void forward(Event *evt, EventTarget::Input *input) {
+    EventSource::output(evt, input);
+  }
+
+  auto output() -> Input* {
+    return EventFunction::output();
+  }
+
+  void output(Event *evt) {
+    EventFunction::output(evt);
+  }
+
+  void output(Event *evt, EventTarget::Input *input) {
+    EventFunction::output(evt, input);
+  }
 };
 
 } // namespace pipy

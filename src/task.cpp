@@ -90,8 +90,8 @@ Task::Task(const std::string &when, PipelineDef *pipeline_def)
   }
 }
 
-Task::~Task() {
-  Pipeline::auto_release(m_pipeline);
+Task::~Task()
+{
 }
 
 bool Task::active() const {
@@ -147,7 +147,6 @@ void Task::run() {
 
 void Task::on_event(Event *evt) {
   if (evt->is<StreamEnd>()) {
-    Pipeline::auto_release(m_pipeline);
     m_pipeline = nullptr;
   }
 }

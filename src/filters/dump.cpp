@@ -92,7 +92,11 @@ void Dump::process(Event *evt) {
     Log::print(ss.str());
 
   } else if (auto data = evt->as<Data>()) {
-    ss << " [size=" << data->size() << "]";
+    if (data->empty()) {
+      ss << " Flush";
+    } else {
+      ss << " [size=" << data->size() << "]";
+    }
     Log::print(ss.str());
     if (!data->empty()) {
       std::string hex, txt;

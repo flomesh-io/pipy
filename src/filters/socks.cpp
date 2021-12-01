@@ -61,7 +61,6 @@ auto Server::clone() -> Filter* {
 
 void Server::reset() {
   Filter::reset();
-  Pipeline::auto_release(m_pipeline);
   m_pipeline = nullptr;
   m_state = READ_VERSION;
 }

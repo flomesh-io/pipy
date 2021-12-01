@@ -46,10 +46,10 @@ public:
 
   void reset();
 
-  bool is_bodiless() const { return m_is_bodiless; }
   bool is_final() const { return m_is_final; }
+  bool is_bodiless() const { return m_is_bodiless; }
   bool is_connect() const { return m_is_connect; }
-  bool is_tunnel() const { return m_is_tunnel; }
+  bool is_websocket() const { return m_is_websocket; }
 
   void set_bodiless(bool b) { m_is_bodiless = b; }
   void set_connect(bool b) { m_is_connect = b; }
@@ -70,27 +70,21 @@ private:
   };
 
   State m_state = HEAD;
+  Data m_buffer;
   Data m_head_buffer;
   pjs::Ref<MessageHead> m_head;
   int m_body_size = 0;
   bool m_is_response;
-  bool m_is_bodiless = false;
   bool m_is_final = false;
+  bool m_is_bodiless = false;
   bool m_is_connect = false;
+  bool m_is_websocket = false;
   bool m_is_tunnel = false;
 
   virtual void on_event(Event *evt) override;
 
-  void message_start() {
-    output(MessageStart::make(m_head));
-  }
-
-  void message_end() {
-    output(MessageEnd::make());
-    m_is_bodiless = false;
-    m_is_final = false;
-  }
-
+  void message_start();
+  void message_end();
   void stream_end(StreamEnd *end);
 
   bool is_bodiless_response() const {
@@ -110,10 +104,12 @@ public:
   void reset();
 
   bool is_bodiless() const { return m_is_bodiless; }
+  bool is_connect() const { return m_is_connect; }
+  bool is_websocket() const { return m_is_websocket; }
 
-  void set_bodiless(bool b) { m_is_bodiless = b; }
   void set_final(bool b) { m_is_final = b; }
-  void set_tunnel(bool b) { m_is_tunnel = b; }
+  void set_bodiless(bool b) { m_is_bodiless = b; }
+  void set_connect(bool b) { m_is_connect = b; }
 
 private:
   pjs::Ref<MessageStart> m_start;
@@ -121,8 +117,10 @@ private:
   int m_content_length = -1;
   bool m_chunked = false;
   bool m_is_response;
-  bool m_is_bodiless = false;
   bool m_is_final = false;
+  bool m_is_bodiless = false;
+  bool m_is_connect = false;
+  bool m_is_websocket = false;
   bool m_is_tunnel = false;
 
   virtual void on_event(Event *evt) override;
@@ -234,59 +232,28 @@ private:
 };
 
 //
-// RequestEnqueue
-//
-
-struct RequestEnqueue : public EventFunction {
-  virtual void on_event(Event *evt) override;
-};
-
-//
-// RequestDequeue
-//
-
-struct RequestDequeue : public EventFunction {
-  virtual void on_event(Event *evt) override;
-};
-
-//
 // RequestQueue
 //
 
-class RequestQueue :
-  protected RequestEnqueue,
-  protected RequestDequeue
-{
+class RequestQueue : protected EventProxy {
 protected:
   struct Request :
     public pjs::Pooled<Request>,
     public List<Request>::Item
   {
-    bool is_bodiless;
     bool is_final;
+    bool is_bodiless;
+    bool is_connect;
   };
 
   List<Request> m_queue;
 
   void reset();
 
+  virtual void on_input(Event *evt) override;
+  virtual void on_intake(Event *evt) override;
   virtual void on_enqueue(Request *req) = 0;
   virtual void on_dequeue(Request *req) = 0;
-
-  struct Enqueue : public EventFunction {
-    RequestQueue* queue;
-    Enqueue(RequestQueue *q) : queue(q) {}
-    virtual void on_event(Event *evt) override;
-  };
-
-  struct Dequeue : public EventFunction {
-    RequestQueue* queue;
-    Dequeue(RequestQueue *q) : queue(q) {}
-    virtual void on_event(Event *evt) override;
-  };
-
-  friend class RequestEnqueue;
-  friend class RequestDequeue;
 };
 
 //
@@ -295,7 +262,7 @@ protected:
 
 class Demux :
   public Filter,
-  public DemuxFunction,
+  public QueueDemuxer,
   protected RequestQueue
 {
 public:
@@ -334,36 +301,33 @@ private:
 
   virtual auto clone() -> Filter* override;
   virtual void dump(std::ostream &out) override;
+  virtual auto on_new_session() -> MuxBase::Session* override;
 
   //
   // Mux::Session
   //
 
   class Session :
-    public pjs::Pooled<Session, pipy::Mux::Session>,
+    public pjs::Pooled<Session, MuxBase::Session>,
+    public QueueMuxer,
     protected RequestQueue
   {
-  public:
     Session()
       : m_ef_encoder(false)
       , m_ef_decoder(true) {}
 
-  private:
+    virtual void open() override;
+    virtual auto open_stream() -> EventFunction* override;
+    virtual void close_stream(EventFunction *stream) override;
+    virtual void close() override;
+    virtual void on_enqueue(Request *req) override;
+    virtual void on_dequeue(Request *req) override;
+
     Encoder m_ef_encoder;
     Decoder m_ef_decoder;
 
-    virtual void open(Pipeline *pipeline) override;
-    virtual void input(Event *evt) override;
-    virtual void on_enqueue(Request *req) override;
-    virtual void on_dequeue(Request *req) override;
-    virtual void close() override;
-
-    friend class Stream;
+    friend class Mux;
   };
-
-  virtual auto on_new_session() -> Session* override {
-    return new Session();
-  }
 };
 
 //

@@ -69,7 +69,6 @@ auto Link::clone() -> Filter* {
 void Link::reset() {
   Filter::reset();
   m_buffer.clear();
-  Pipeline::auto_release(m_pipeline);
   m_pipeline = nullptr;
   m_chosen = false;
 }

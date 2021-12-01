@@ -176,6 +176,7 @@ Pipeline::AutoReleasePool::~AutoReleasePool() {
     auto *p = m_pipelines;
     p; p = p->m_next_auto_release
   ) {
+    p->m_auto_release = false;
     p->release();
   }
   s_stack = m_next;

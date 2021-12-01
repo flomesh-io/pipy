@@ -54,6 +54,8 @@ static const pjs::Ref<pjs::Str> s_close(pjs::Str::make("close"));
 static const pjs::Ref<pjs::Str> s_transfer_encoding(pjs::Str::make("transfer-encoding"));
 static const pjs::Ref<pjs::Str> s_content_length(pjs::Str::make("content-length"));
 static const pjs::Ref<pjs::Str> s_content_encoding(pjs::Str::make("content-encoding"));
+static const pjs::Ref<pjs::Str> s_upgrade(pjs::Str::make("upgrade"));
+static const pjs::Ref<pjs::Str> s_websocket(pjs::Str::make("websocket"));
 static const pjs::Ref<pjs::Str> s_bad_gateway(pjs::Str::make("Bad Gateway"));
 static const pjs::Ref<pjs::Str> s_cannot_resolve(pjs::Str::make("Cannot Resolve"));
 static const pjs::Ref<pjs::Str> s_connection_refused(pjs::Str::make("Connection Refused"));
@@ -217,12 +219,19 @@ void Decoder::reset() {
   m_body_size = 0;
   m_is_bodiless = false;
   m_is_final = false;
+  m_is_connect = false;
+  m_is_tunnel = false;
 }
 
 void Decoder::on_event(Event *evt) {
   if (auto e = evt->as<StreamEnd>()) {
     stream_end(e);
     reset();
+    return;
+  }
+
+  if (m_is_tunnel) {
+    output(evt);
     return;
   }
 
@@ -368,7 +377,12 @@ void Decoder::on_event(Event *evt) {
             if (auto q = std::strpbrk(p, "\r\n")) {
               std::string value(p, q - p);
               for (auto &c : name) c = std::tolower(c);
-              m_head->headers()->set(name, value);
+              pjs::Ref<pjs::Str> key(pjs::Str::make(name));
+              pjs::Ref<pjs::Str> val(pjs::Str::make(value));
+              m_head->headers()->set(key, val.get());
+              if (key == s_upgrade && val == s_websocket) {
+                m_is_websocket = true;
+              }
             }
           }
           state = HEADER;
@@ -434,6 +448,36 @@ void Decoder::on_event(Event *evt) {
   }
 }
 
+void Decoder::message_start() {
+  output(MessageStart::make(m_head));
+}
+
+void Decoder::message_end() {
+  if (m_is_response) {
+    if (m_is_connect) {
+      auto head = m_head->as<ResponseHead>();
+      auto status = head->status();
+      if (200 <= status && status < 300) {
+        m_is_tunnel = true;
+      }
+    }
+
+  } else if (m_is_connect) {
+    m_is_tunnel = true;
+  }
+
+  if (m_is_websocket) {
+    m_is_tunnel = true;
+  }
+
+  output(MessageEnd::make());
+
+  m_is_final = false;
+  m_is_bodiless = false;
+  m_is_connect = false;
+  m_is_websocket = false;
+}
+
 void Decoder::stream_end(StreamEnd *end) {
   if (m_is_response && (m_state == HEAD || m_state == HEADER) && end->error()) {
     int status_code = 0;
@@ -491,11 +535,19 @@ Data::Producer Encoder::s_dp("HTTP Encoder");
 void Encoder::reset() {
   m_start = nullptr;
   m_buffer = nullptr;
-  m_is_bodiless = false;
   m_is_final = false;
+  m_is_bodiless = false;
+  m_is_connect = false;
+  m_is_websocket = false;
+  m_is_tunnel = false;
 }
 
 void Encoder::on_event(Event *evt) {
+  if (m_is_tunnel) {
+    output(evt);
+    return;
+  }
+
   if (auto start = evt->as<MessageStart>()) {
     m_start = start;
     m_buffer = nullptr;
@@ -506,8 +558,12 @@ void Encoder::on_event(Event *evt) {
       pjs::Value method, headers, transfer_encoding, content_length;
       if (!m_is_response) {
         head->get(s_method, method);
-        if (method.is_string() && method.s() == s_head) {
-          m_is_bodiless = true;
+        if (method.is_string()) {
+          if (method.s() == s_head) {
+            m_is_bodiless = true;
+          } else if (method.s() == s_connect) {
+            m_is_connect = true;
+          }
         }
       }
       head->get(s_headers, headers);
@@ -572,7 +628,38 @@ void Encoder::on_event(Event *evt) {
         output(StreamEnd::make());
       }
     }
-    reset();
+
+    auto head = m_start->head();
+    if (m_is_response) {
+      if (m_is_connect) {
+        pjs::Value status;
+        if (auto head = m_start->head()) {
+          head->get(s_status, status);
+        } else {
+          status.set(200);
+        }
+        if (status.is_number()) {
+          auto n = status.n();
+          if (200 <= n && n < 300) {
+            m_is_tunnel = true;
+          }
+        }
+      }
+
+    } else if (m_is_connect) {
+      m_is_tunnel = true;
+    }
+
+    if (m_is_websocket) {
+      m_is_tunnel = true;
+    }
+
+    m_start = nullptr;
+    m_buffer = nullptr;
+    m_is_final = false;
+    m_is_bodiless = false;
+    m_is_connect = false;
+    m_is_websocket = false;
 
   } else if (evt->is<StreamEnd>()) {
     output(evt);
@@ -676,6 +763,11 @@ void Encoder::output_head() {
         auto s = v.to_string();
         s_dp.push(buffer, s->str());
         s_dp.push(buffer, "\r\n");
+        if (k == s_upgrade && s == s_websocket) {
+          m_is_websocket = true;
+          static std::string str("connection: upgrade\r\n");
+          s_dp.push(buffer, str);
+        }
         s->release();
       }
     );
@@ -688,12 +780,14 @@ void Encoder::output_head() {
     s_dp.push(buffer, str);
   }
 
-  if (m_is_final) {
-    static std::string str("connection: close\r\n");
-    s_dp.push(buffer, str);
-  } else {
-    static std::string str("connection: keep-alive\r\n");
-    s_dp.push(buffer, str);
+  if (!m_is_websocket) {
+    if (m_is_final) {
+      static std::string str("connection: close\r\n");
+      s_dp.push(buffer, str);
+    } else {
+      static std::string str("connection: keep-alive\r\n");
+      s_dp.push(buffer, str);
+    }
   }
 
   s_dp.push(buffer, "\r\n");
@@ -903,39 +997,6 @@ void ResponseEncoder::process(Event *evt) {
 }
 
 //
-// RequestEnqueue
-//
-
-void RequestEnqueue::on_event(Event *evt) {
-  if (evt->is<MessageStart>()) {
-    auto *q = static_cast<RequestQueue*>(this);
-    auto *r = new RequestQueue::Request;
-    q->on_enqueue(r);
-    q->m_queue.push(r);
-  }
-  output(evt);
-}
-
-//
-// RequestDequeue
-//
-
-void RequestDequeue::on_event(Event *evt) {
-  if (evt->is<MessageStart>()) {
-    auto *q = static_cast<RequestQueue*>(this);
-    if (auto *r = q->m_queue.head()) {
-      q->on_dequeue(r);
-      q->m_queue.remove(r);
-      delete r;
-    }
-  } else if (evt->is<StreamEnd>()) {
-    auto *q = static_cast<RequestQueue*>(this);
-    q->reset();
-  }
-  output(evt);
-}
-
-//
 // RequestQueue
 //
 
@@ -944,6 +1005,28 @@ void RequestQueue::reset() {
     m_queue.remove(r);
     delete r;
   }
+}
+
+void RequestQueue::on_input(Event *evt) {
+  if (evt->is<MessageStart>()) {
+    auto *r = new RequestQueue::Request;
+    on_enqueue(r);
+    m_queue.push(r);
+  }
+  forward(evt);
+}
+
+void RequestQueue::on_intake(Event *evt) {
+  if (evt->is<MessageStart>()) {
+    if (auto *r = m_queue.head()) {
+      on_dequeue(r);
+      m_queue.remove(r);
+      delete r;
+    }
+  } else if (evt->is<StreamEnd>()) {
+    reset();
+  }
+  output(evt);
 }
 
 //
@@ -977,16 +1060,17 @@ auto Demux::clone() -> Filter* {
 
 void Demux::chain() {
   Filter::chain();
-  m_ef_decoder.chain(RequestEnqueue::input());
-  RequestEnqueue::chain(DemuxFunction::input());
-  DemuxFunction::chain(RequestDequeue::input());
-  RequestDequeue::chain(m_ef_encoder.input());
+  m_ef_decoder.chain(RequestQueue::input());
+  RequestQueue::chain_forward(QueueDemuxer::input());
+  QueueDemuxer::chain(RequestQueue::intake());
+  RequestQueue::chain(m_ef_encoder.input());
   m_ef_encoder.chain(Filter::output());
 }
 
 void Demux::reset() {
   Filter::reset();
   RequestQueue::reset();
+  QueueDemuxer::reset();
   m_ef_decoder.reset();
   m_ef_encoder.reset();
 }
@@ -1000,13 +1084,18 @@ auto Demux::on_new_sub_pipeline() -> Pipeline* {
 }
 
 void Demux::on_enqueue(Request *req) {
-  req->is_bodiless = m_ef_decoder.is_bodiless();
   req->is_final = m_ef_decoder.is_final();
+  req->is_bodiless = m_ef_decoder.is_bodiless();
+  req->is_connect = m_ef_decoder.is_connect();
+  if (m_ef_decoder.is_connect() || m_ef_decoder.is_websocket()) {
+    isolate();
+  }
 }
 
 void Demux::on_dequeue(Request *req) {
-  m_ef_encoder.set_bodiless(req->is_bodiless);
   m_ef_encoder.set_final(req->is_final);
+  m_ef_encoder.set_bodiless(req->is_bodiless);
+  m_ef_encoder.set_connect(req->is_connect);
 }
 
 //
@@ -1039,33 +1128,48 @@ auto Mux::clone() -> Filter* {
   return new Mux(*this);
 }
 
+auto Mux::on_new_session() -> MuxBase::Session* {
+  return new Session();
+}
+
 //
 // Mux::Session
 //
 
-void Mux::Session::open(Pipeline *pipeline) {
-  m_ef_encoder.chain(RequestEnqueue::input());
-  RequestEnqueue::chain(pipeline->input());
-  pipeline->chain(m_ef_decoder.input());
-  m_ef_decoder.chain(RequestDequeue::input());
-  RequestDequeue::chain(Demux::input());
+void Mux::Session::open() {
+  QueueMuxer::chain(m_ef_encoder.input());
+  m_ef_encoder.chain(RequestQueue::input());
+  RequestQueue::chain_forward(MuxBase::Session::input());
+  MuxBase::Session::chain(m_ef_decoder.input());
+  m_ef_decoder.chain(RequestQueue::intake());
+  RequestQueue::chain(QueueMuxer::intake());
 }
 
-void Mux::Session::input(Event *evt) {
-  m_ef_encoder.input()->input(evt);
+auto Mux::Session::open_stream() -> EventFunction* {
+  return QueueMuxer::open();
+}
+
+void Mux::Session::close_stream(EventFunction *stream) {
+  return QueueMuxer::close(stream);
+}
+
+void Mux::Session::close() {
+  QueueMuxer::reset();
+  RequestQueue::reset();
 }
 
 void Mux::Session::on_enqueue(Request *req) {
   req->is_bodiless = m_ef_encoder.is_bodiless();
+  req->is_connect = m_ef_encoder.is_connect();
+  if (m_ef_encoder.is_connect() || m_ef_encoder.is_websocket()) {
+    MuxBase::Session::isolate();
+    QueueMuxer::isolate();
+  }
 }
 
 void Mux::Session::on_dequeue(Request *req) {
   m_ef_decoder.set_bodiless(req->is_bodiless);
-}
-
-void Mux::Session::close() {
-  pipy::Mux::Session::close();
-  RequestQueue::reset();
+  m_ef_decoder.set_connect(req->is_connect);
 }
 
 //

@@ -24,10 +24,7 @@
  */
 
 #include "merge.hpp"
-#include "context.hpp"
-#include "module.hpp"
 #include "pipeline.hpp"
-#include "listener.hpp"
 #include "logging.hpp"
 
 namespace pipy {
@@ -62,25 +59,27 @@ void Merge::process(Event *evt) {
   output(evt);
 }
 
+auto Merge::on_new_session() -> MuxBase::Session* {
+  return new Session();
+}
+
 //
 // Merge::Session
 //
 
-auto Merge::Session::stream() -> Stream* {
+auto Merge::Session::open_stream() -> EventFunction* {
   return new Stream(this);
 }
 
-void Merge::Session::on_demux(Event *evt) {
-  if (evt->is<StreamEnd>()) {
-    close();
-  }
+void Merge::Session::close_stream(EventFunction *stream) {
+  delete static_cast<Stream*>(stream);
 }
 
 //
-// Merge::Session::Stream
+// Merge::Stream
 //
 
-void Merge::Session::Stream::on_event(Event *evt) {
+void Merge::Stream::on_event(Event *evt) {
   if (auto start = evt->as<MessageStart>()) {
     if (!m_start) {
       m_start = start;
@@ -93,18 +92,15 @@ void Merge::Session::Stream::on_event(Event *evt) {
 
   } else if (evt->is<MessageEnd>() || evt->is<StreamEnd>()) {
     if (m_start) {
-      m_session->input(m_start);
+      auto inp = m_session->input();
+      inp->input(m_start);
       if (!m_buffer.empty()) {
-        m_session->input(Data::make(m_buffer));
+        inp->input(Data::make(m_buffer));
         m_buffer.clear();
       }
-      m_session->input(MessageEnd::make());
+      inp->input(MessageEnd::make());
     }
   }
-}
-
-void Merge::Session::Stream::close() {
-  delete this;
 }
 
 } // namespace pipy

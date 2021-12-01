@@ -155,8 +155,6 @@ void Use::process(Event *evt) {
 
 void Use::Stage::reset() {
   close();
-  Pipeline::auto_release(m_pipeline);
-  Pipeline::auto_release(m_pipeline_down);
   m_pipeline = nullptr;
   m_pipeline_down = nullptr;
   m_chained = false;

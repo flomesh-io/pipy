@@ -64,9 +64,6 @@ auto Fork::clone() -> Filter* {
 void Fork::reset() {
   Filter::reset();
   if (m_pipelines) {
-    for (size_t i = 0, n = m_pipelines->size(); i < n; i++) {
-      Pipeline::auto_release(m_pipelines->at(i));
-    }
     m_pipelines->free();
     m_pipelines = nullptr;
   }

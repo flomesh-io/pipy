@@ -45,48 +45,40 @@ private:
   virtual auto clone() -> Filter* override;
   virtual void dump(std::ostream &out) override;
   virtual void process(Event *evt) override;
+  virtual auto on_new_session() -> MuxBase::Session* override;
 
-private:
+  class Session;
+
+  //
+  // Merge::Stream
+  //
+
+  class Stream :
+    public pjs::Pooled<Stream>,
+    public EventFunction
+  {
+    Stream(Session *session)
+      : m_session(session) {}
+
+    virtual void on_event(Event *evt) override;
+
+    Session* m_session;
+    pjs::Ref<MessageStart> m_start;
+    Data m_buffer;
+
+    friend class Session;
+  };
 
   //
   // Merge::Session
   //
 
-  class Session :
-    public pjs::Pooled<Session>,
-    public MuxBase::Session
-  {
-
-    //
-    // Merge::Session::Stream
-    //
-
-    class Stream :
-      public pjs::Pooled<Stream>,
-      public MuxBase::Session::Stream
-    {
-      Stream(Session *session)
-        : m_session(session) {}
-
-      virtual void on_event(Event *evt) override;
-      virtual void close() override;
-
-      Session* m_session;
-      pjs::Ref<MessageStart> m_start;
-      Data m_buffer;
-
-      friend class Session;
-    };
-
-    virtual auto stream() -> Stream* override;
-    virtual void on_demux(Event *evt) override;
+  class Session : public pjs::Pooled<Session, MuxBase::Session> {
+    virtual auto open_stream() -> EventFunction* override;
+    virtual void close_stream(EventFunction *stream) override;
 
     friend class Stream;
   };
-
-  virtual auto on_new_session() -> Session* override {
-    return new Session();
-  }
 };
 
 } // namespace pipy

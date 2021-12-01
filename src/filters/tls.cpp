@@ -118,7 +118,6 @@ TLSSession::TLSSession(
 }
 
 TLSSession::~TLSSession() {
-  Pipeline::auto_release(m_pipeline);
   SSL_free(m_ssl);
 }
 

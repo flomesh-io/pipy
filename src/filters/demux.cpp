@@ -32,20 +32,37 @@
 namespace pipy {
 
 //
-// DemuxFunction
+// QueueDemuxer
 //
 
-void DemuxFunction::reset() {
+void QueueDemuxer::reset() {
   while (auto stream = m_streams.head()) {
     m_streams.remove(stream);
     delete stream;
   }
+  m_isolated = false;
 }
 
-void DemuxFunction::on_event(Event *evt) {
+void QueueDemuxer::isolate() {
+  auto stream = m_streams.tail();
+  if (!stream) {
+    stream = new Stream(this);
+    m_streams.push(stream);
+  }
+  stream->m_isolated = true;
+  m_isolated = true;
+}
+
+void QueueDemuxer::on_event(Event *evt) {
+  if (m_isolated) {
+    auto stream = m_streams.tail();
+    output(evt, stream->m_pipeline->input());
+    return;
+  }
+
   if (auto *start = evt->as<MessageStart>()) {
     if (!m_streams.tail() || m_streams.tail()->m_input_end) {
-      auto stream = new Stream(this, start);
+      auto stream = new Stream(this);
       m_streams.push(stream);
       output(start, stream->m_pipeline->input());
     }
@@ -75,71 +92,7 @@ void DemuxFunction::on_event(Event *evt) {
   }
 }
 
-//
-// DemuxFunction::Stream
-//
-
-DemuxFunction::Stream::Stream(DemuxFunction *demux, MessageStart *start)
-  : m_demux(demux)
-{
-  auto p = demux->on_new_sub_pipeline();
-  p->chain(EventTarget::input());
-  m_pipeline = p;
-}
-
-DemuxFunction::Stream::~Stream() {
-  Pipeline::auto_release(m_pipeline);
-}
-
-void DemuxFunction::Stream::on_event(Event *evt) {
-  bool is_head = (
-    m_demux->m_streams.head() == this
-  );
-
-  if (m_output_end) return;
-
-  if (auto start = evt->as<MessageStart>()) {
-    if (!m_start) {
-      m_start = start;
-      if (is_head) {
-        m_demux->output(evt);
-      }
-    }
-
-  } else if (auto data = evt->as<Data>()) {
-    if (m_start) {
-      if (is_head) {
-        m_demux->output(evt);
-      } else {
-        m_buffer.push(*data);
-      }
-    }
-
-  } else if (evt->is<MessageEnd>()) {
-    if (m_start) {
-      if (is_head) {
-        m_demux->m_streams.remove(this);
-        m_demux->output(evt);
-        m_demux->flush();
-        delete this;
-      } else {
-        m_output_end = true;
-      }
-    }
-
-  } else if (evt->is<StreamEnd>()) {
-    if (is_head) {
-      m_demux->m_streams.remove(this);
-      if (!m_start) m_demux->output(MessageStart::make());
-      m_demux->output(MessageEnd::make());
-      m_demux->flush();
-      delete this;
-    }
-    m_output_end = true;
-  }
-}
-
-void DemuxFunction::flush() {
+void QueueDemuxer::flush() {
   auto &streams = m_streams;
   while (auto stream = streams.head()) {
     if (stream->m_start) {
@@ -152,6 +105,78 @@ void DemuxFunction::flush() {
       delete stream;
     } else {
       break;
+    }
+  }
+}
+
+//
+// QueueDemuxer::Stream
+//
+
+QueueDemuxer::Stream::Stream(QueueDemuxer *demuxer)
+  : m_demuxer(demuxer)
+{
+  auto p = demuxer->on_new_sub_pipeline();
+  p->chain(EventTarget::input());
+  m_pipeline = p;
+}
+
+QueueDemuxer::Stream::~Stream()
+{
+}
+
+void QueueDemuxer::Stream::on_event(Event *evt) {
+  auto demuxer = m_demuxer;
+
+  if (m_isolated) {
+    demuxer->output(evt);
+    return;
+  }
+
+  bool is_head = (
+    demuxer->m_streams.head() == this
+  );
+
+  if (m_output_end) return;
+
+  if (auto start = evt->as<MessageStart>()) {
+    if (!m_start) {
+      m_start = start;
+      if (is_head) {
+        demuxer->output(evt);
+      }
+    }
+
+  } else if (auto data = evt->as<Data>()) {
+    if (m_start) {
+      if (is_head) {
+        demuxer->output(evt);
+      } else {
+        m_buffer.push(*data);
+      }
+    }
+
+  } else if (evt->is<MessageEnd>()) {
+    if (m_start) {
+      if (is_head) {
+        demuxer->m_streams.remove(this);
+        demuxer->output(evt);
+        demuxer->flush();
+        delete this;
+      } else {
+        m_output_end = true;
+      }
+    }
+
+  } else if (evt->is<StreamEnd>()) {
+    if (is_head) {
+      demuxer->m_streams.remove(this);
+      if (!m_start) demuxer->output(MessageStart::make());
+      demuxer->output(MessageEnd::make());
+      demuxer->flush();
+      delete this;
+    } else {
+      m_output_end = true;
     }
   }
 }
@@ -183,16 +208,16 @@ auto Demux::clone() -> Filter* {
 
 void Demux::chain() {
   Filter::chain();
-  DemuxFunction::chain(Filter::output());
+  QueueDemuxer::chain(Filter::output());
 }
 
 void Demux::reset() {
   Filter::reset();
-  DemuxFunction::reset();
+  QueueDemuxer::reset();
 }
 
 void Demux::process(Event *evt) {
-  Filter::output(evt, DemuxFunction::input());
+  Filter::output(evt, QueueDemuxer::input());
 }
 
 auto Demux::on_new_sub_pipeline() -> Pipeline* {
