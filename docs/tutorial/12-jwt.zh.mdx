@@ -1,0 +1,214 @@
+---
+title: 12 JWT
+---
+
+## 问题
+
+服务系统离不开用户认证，一个复杂的业务系统通常还会用到单点登录，避免要求用户重复登录多次。通常有两种方案：
+
+* 一种是将 session 数据持久化，每次都向持久层请求数据。即使加上了缓存，也存在中心化单点失败的风险。
+* 第二种是不做持久化，将数据保存保存在客户端，每次请求发回服务端进行校验。
+
+JWT 就是后者的一个代表，这次的教程将为代理提供 JWT 的校验功能：支持 *service-hi* 服务的两种密钥加密的 token 校验。
+
+## JWT
+
+这里简单说下 JWT，更多 JTW 的信息请参考 [JWT Introduction](https://jwt.io/introduction)。
+
+JWT 长成下面这样，是一个完整的字符串，没有换行。包含了由 `.` 分隔成的三部分：`Header.Payload.Signature`。每一部分都使用 `Base64URL` 计算法转成字符串。
+
+- Header 包含了签名算法和 Token 类型
+- Payload 是实际要传递的数据
+- Signature 是使用**密钥**对前面两部分的签名，防篡改
+
+以下面的 token 为例，header 和 payload 的部分可以通过 base64 解码出来：
+
+**Header:**
+
+```json
+{
+  "alg": "RS256", //算法类型
+  "typ": "JWT" //Token 类型
+}
+```
+
+**Payload:**
+
+```json
+{}
+```
+
+**JWT Token: **
+```
+eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.e30.ed7nE07I17v9v1ThCRtyDVxuVtH7pUhi50jnP7f3BgKVVtKhK6YXL-XfxCSa4LoFgU9YSK4nBkiteRRme0ku3Jk3IfnZTbZS-9pZBZZum-qxpiVQHBKwYxk0oqgpRpg0GPxggmpQKPB98u8QMTz0lbGX8HswPX1acRdqzM-1eatoXu7iG0dTxzDJF2hG9mVGquesixm10_r1QwaKk7lklgnMwTjDDXioEEd8QBxK3jU2ZceB6aA1xSyeX0S-d6BgWgkOVQndDdeBIUIwWhEAEA4C88QWP-9DwXqJ7q0OVl4-D6t0BadHkTqqAQyL9R7UYNbsL-PK3ijgAbAgBmjwCQ
+```
+
+## 配置
+
+*hi* 服务需要提供两种密钥的 token 验证，这里通过配置提供。对于请求使用何种密钥，可以在 token 的 *header* 部分增加一个自定义的字段 *kid* 来标识该请求要使用的密钥。因此配置 `jwt.json` 如下：
+
+```json
+{
+  "keys": {
+    "key-1": {
+      "pem": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDZ2hv4Bw9vb3F3\nGK77I/wLG79GWWLWFZYmBeYA0xuqJce9bEc0DIPO6UG3REO2A4WpPdoJp4ehf/eU\nyNxThxrDC4UtY9qRXoqUnehs90eR1OBaNxUc806wsozlPNsr1juO/Tyr/krJXKaK\nkNnjNHCmKoo4nsHcJPXkiepUtF18hdMZ0LPZ00qtc8cCVGgSqCbZ18DSQjQ2xMqX\nmNo8BwzWpB55/cZYUofRbEl82SlygVJj68UlfxEdS38gTYY6RWwm8qzvyJ36V4Tn\n/vZ3RDcXFnt/PMIWkXU7UaucOnRbAkJ8x886a58n3rzLpKKt+S0CNcMZoLH21B/l\n8UvuVOo3AgMBAAECggEAHDbnKWvXVWzfCqLWmBh0flx6ci+Fy/P2wszqbs/omimT\ndsEicFIbSL3QBjQf+t+g53w8aW9aSGcs7FxJS24eNVr1cB1UbkBgKAL9hQ36UHT8\nFjhiZ8yhM+ROuCp2DkrhjXwsZ/AixR/Wl+/5BY1B9ltgacMx7gOWxHcSM3nlTl4/\nfeyd/ONSEsTtGZBINJ5a0SAE4orpIvjFhKKOKNDRyokAk3GezsEYn8VilmoAb4eP\ndvIwKEEs2Y0h6dvxTPq9OqD6RyaQuCK1SLg+/VIBPExFpd5Z0sbbLfYrz2Mh1sMQ\nVCflSOEoroYo0c23zuDmKXbqKyzZdX1vWdvTKUV+MQKBgQDu0hNbANskAkZy2ldi\nfMWajOQ/RQK7v0wxclosF4Omxmxy5jcotH7QLAerl2uA+PqSI10Uru/aAUNclvjJ\nUXsmHYUIWaTw5HkUzLTpx5zYEw7vzTbj9Nc3Sp24hJuOpMTgr6eZGZMFflptjwX1\nmjsWjuIz3+M1WmvRIZnqTdxI0QKBgQDpheSMeP+U8vCRlYQS54xvkrFnPp/1rYbu\nEOtU/btsmPkMSNXav+JvOpp1RpBIQC5DrDeC6XZN53y1INpuVSv9BDWSXY/48utz\nH/aZKw/d3O5HD2p6eLX+4ST6ppwe565qwed9pDAnvoid/3PaukY2WYQ4TewYpItE\n1IW3w2NEhwKBgFlDzFhHiaF7+DkVw3Pcjz+lSescMFlct24EABBa+apsoDySMCvW\ny0+kJXnNrzEV3xKghTol6SDjN/pzs6oL+qvUfNUSLMSdoWRU34pCQi3BcePQIKQz\n7/2Ktkkxx7MZgz04aryfAoUbJVGuE9wpOczEu2gIVzSqB4KzvIQHdj8BAoGBAOM9\ntb+0ZxFsrwkcc99pj1FrcFLFsCcEa47yy+5y0pXE7mUz41bw7snKP0/sEK8eNWcJ\nCSPNR6BbqREhHS3Ml/eoxvDdNyLMUK5A5lj6fIArY3um1rjDCmcydCetRbMVRLcC\nZd/vjCTA1nTZhsXMClMNHQslWKBKTnP2UwEVk121AoGAVgO+RxWkqpT8/ZNNrKX9\nFNbayvFds/m7idSCsjsUdkfGaESxDbhhmEegML303380uVNCPgu/FIv6InjOpLic\n/C/7VVjDms9yiKAURy9uTdd8W9xoVTFSgc9R518+uuDBQQAiANCZ3f7ay4Z258Ql\ndazAwre7S+ekO7jva0HcIgA=\n-----END PRIVATE KEY-----"
+    },
+    "key-2": {
+      "pem": "-----BEGIN PRIVATE KEY-----\nMIHuAgEAMBAGByqGSM49AgEGBSuBBAAjBIHWMIHTAgEBBEIBuja8nYkTIYdVt/fF\nQV8o+l+mfE2GqURd/9689G/ljfrbxYVcBWh5+GdUWTtS2l+pCDmhlVB71AVAadg5\nJdGxHTehgYkDgYYABAEFqVluj1vGvvbtR2vZ8ZmgZutO02AWC3XxPhPbw0fVQIyC\nqEhL2LKNueT6lCYz0YkVUh8BfidAkMgGJFalPNRXQwHRRdCjLZut/o2fuD8HW1vi\nUa14jdiDVBGJ8V99/sb7ftno7YDZukZJ6BUlFejh3BjVUyM9SRK047xEP8SfFcz3\nqQ==\n-----END PRIVATE KEY-----"
+    }
+  },
+  "services": {
+    "service-hi": {
+      "keys": [
+        "key-1",
+        "key-2"
+      ]
+    }
+  }
+}
+```
+
+> 这里为了方便使用 [JWT Web Tool](https://dinochiesa.github.io/jwt/) 来生成密钥，后面测试时还要用其生成的 JWT token。
+
+## `crypto` 包
+
+Pipy 的 [crypto](/reference/crypto) 包中包含了与安全相关的类。其中就有我们今天要用到的 [`PrivateKey`](/reference/crypto/PrivateKey) 和 [`JWT`](/reference/crypto/JWT)。前者与私钥相关，后者则用于 JWT 的校验。
+
+### PrivateKey 类型
+
+`PrivateKey` 的构造很简单，只需要传入 PEM 类型密钥内容即可。
+
+将配置的内容转换成全局变量：
+
+```javascript
+pipy({
+  _keys: (
+    Object.fromEntries(
+      Object.entries(config.keys).map(
+        ([k, v]) => [
+          k,
+          new crypto.PrivateKey(v.pem)
+        ]
+      )
+    )
+  ),
+  _services: (
+    Object.fromEntries(
+      Object.entries(config.services).map(
+        ([k, v]) => [
+          k,
+          {
+            keys: v.keys ? Object.fromEntries(v.keys.map(k => [k, true])) : undefined,
+          }
+        ]
+      )
+    )
+  ),  
+})
+```
+
+要从路由决策中获取服务名，以及 token 校验失败情况下跳出请求流程。需要引入对应的模块变量：
+
+```javascript
+.import({
+  __turnDown: 'proxy',
+  __serviceID: 'router',
+})
+```
+
+接下来就是 token 的校验了。
+
+### JWT 类型
+
+继续在 *request* 子管道中进程处理，决定放行请求还是返回错误信息。请求放行的条件是：
+
+* 所请求的服务无需校验 token，也就是没有指定密钥
+* 请求的 token 校验成功
+
+其他情况，则会返回对应的错误信息：
+
+* 请求未携带 token，或者 token 解码出错。无法解出 header、payload 和 signature
+* token header 中未指定要使用的密钥
+* token header 中指定的密钥不存在
+* token 签名验证失败
+
+`JWT` 类型用于多 token 的校验，使用 token 作为构造函数。JWT token 按照 RFC 的约定，是从请求头的 *authorization* 中获取。
+
+```javascript
+new crypto.JWT(TOKEN_HERE)
+```
+
+其 `verify()` 方法，可以使用指定的密钥对 token 进行校验。
+
+```javascript
+.pipeline('request')
+  .replaceMessage(
+    msg => (
+      ((
+        service,
+        header,
+        jwt,
+        kid,
+        key,
+      ) => (
+        service = _services[__serviceID],
+        service?.keys ? (
+          header = msg.head.headers.authorization || '',
+          header.startsWith('Bearer ') && (header = header.substring(7)),
+          jwt = new crypto.JWT(header),
+          jwt.isValid ? (
+            kid = jwt.header?.kid,
+            key = _keys[kid],
+            key ? (
+              service.keys[kid] ? (
+                jwt.verify(key) ? (
+                  msg
+                ) : (
+                  __turnDown = true,
+                  new Message({ status: 401 }, 'Invalid signature')
+                )
+              ) : (
+                __turnDown = true,
+                new Message({ status: 403 }, 'Access denied')
+              )
+            ) : (
+              __turnDown = true,
+              new Message({ status: 401 }, 'Invalid key')
+            )
+          ) : (
+            __turnDown = true,
+            new Message({ status: 401 }, 'Invalid token')
+          )
+        ) : msg
+      ))()
+    )
+  )
+```
+
+> 这里使用匿名函数来为逻辑提供局部变量；当然也可以将这些变量前移到 *replaceMessage* 回调函数的参数列表中，但未来回调函数的参数增加时，这里的逻辑就会出问题了。所以还是建议使用匿名函数的方式引入局部变量。
+
+## 测试
+
+```shell
+curl localhost:8000/hi \
+-H'Authorization: Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6ImtleS0xIn0.e30.cU6DwIKdXRiPFO9mKDqq-2zkgsJHs2V4ykxJBFdKNS1qCIguoaoIpIPFvhKIk-VrTwGP9VHCrPi5btM0Krt2QLnMLopxrWqiQiVO4752lk0fW6epvLkxSmsUMllT-ncc64yOHU4xOjHyjBllhysePkfi6mwIAWYOJFKUwDh1CDMGeLeXYtwlj867_qzqNAotIUtH5vsgV8yndom4IwR2BRb3b9Y0SdgnslQ7tE2cA-n-uobdipbW4FH79tfTdrgC4qcmJ2IPYG-zSV6palhJdezzUpEfSxIa41LSj4oSX0uLEQikOQtX5Wz2zDRsrFGsqhQO50siRA7XxobAaeaShQ'
+Hi, there!
+
+
+curl localhost:8000/hi \
+-H'Authorization: Bearer eyJhbGciOiJFUzUxMiIsInR5cCI6IkpXVCIsImtpZCI6ImtleS0yIn0.e30.ATb5ZW2aY1nGjfBYdFuhIhh556es31iHZswgRSBYwSTV1t2bGhv7Hj3Arj7ZlFHR355dvQnHq_0ablnwMEbwxNruAWjr7CEUO8_mdtG6MBUbpMZB48VbIJidTf0RWvfQZpKrAQ6Peux1q97_Ynxkr0flbVzvUnu-O2yjD8763RY-wvun'
+You are requesting /hi from ::ffff:127.0.0.1
+```
+
+## 总结
+
+在本次教程中，我们为代理增加了 JWT 校验功能来提升安全性。可以将服务中的校验逻辑前移到代理，实现统一的管控。
+
+### 收益
+
+* `crypto` 包中 `PrivateKey` 和 `JWT` 的使用
+* 使用匿名函数为代码块声明局部变量
+
+### 接下来
+
+安全策略的种类很多，下一节中我们将尝试实现黑白名单的功能。
