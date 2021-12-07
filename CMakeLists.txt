@@ -70,6 +70,7 @@ add_executable(pipy
   src/filters/exec.cpp
   src/filters/fork.cpp
   src/filters/http.cpp
+  src/filters/http2.cpp
   src/filters/link.cpp
   src/filters/merge.cpp
   src/filters/mux.cpp

@@ -174,6 +174,11 @@ private:
 public:
   static auto flush() -> Data*;
 
+  static bool is_flush(const Event *evt) {
+    auto data = evt->as<Data>();
+    return data && data->empty();
+  }
+
   class Chunks {
     friend class Data;
     View* m_head;
@@ -452,6 +457,28 @@ public:
         n -= view->length;
         delete shift_view();
       } else {
+        delete view->shift(n);
+        m_size -= n;
+        break;
+      }
+    }
+  }
+
+  void shift(int n, void *out) {
+    auto i = 0;
+    auto buf = static_cast<uint8_t*>(out);
+    while (auto view = m_head) {
+      if (n <= 0) break;
+      auto p = view->chunk->data + view->offset;
+      auto l = view->length;
+      if (l <= n) {
+        std::memcpy(buf + i, p, l);
+        i += l;
+        n -= l;
+        delete shift_view();
+      } else {
+        std::memcpy(buf + i, p, n);
+        i += n;
         delete view->shift(n);
         m_size -= n;
         break;

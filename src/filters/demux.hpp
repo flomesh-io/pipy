@@ -61,7 +61,7 @@ private:
   class Stream :
     public pjs::Pooled<Stream>,
     public List<Stream>::Item,
-    public EventTarget
+    public EventSource
   {
     Stream(QueueDemuxer *demux);
     ~Stream();

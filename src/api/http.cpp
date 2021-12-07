@@ -271,6 +271,7 @@ template<> void ClassDef<RequestHead>::init() {
   super<MessageHead>();
   ctor();
   variable("method", RequestHead::Field::method);
+  variable("scheme", RequestHead::Field::scheme);
   variable("path", RequestHead::Field::path);
 }
 

@@ -88,7 +88,7 @@ void MuxBase::process(Event *evt) {
 
     if (!session->m_pipeline) {
       auto p = sub_pipeline(0, true);
-      p->chain(session->intake());
+      p->chain(session->reply());
       session->m_pipeline = p;
       session->chain_forward(p->input());
       session->open();
@@ -125,7 +125,7 @@ void MuxBase::Session::on_input(Event *evt) {
   forward(evt);
 }
 
-void MuxBase::Session::on_intake(Event *evt) {
+void MuxBase::Session::on_reply(Event *evt) {
   if (evt->is<StreamEnd>()) {
     if (auto p = m_pipeline.get()) {
       Pipeline::auto_release(p);
@@ -378,7 +378,7 @@ auto Mux::on_new_session() -> MuxBase::Session* {
 
 void Mux::Session::open() {
   QueueMuxer::chain(MuxBase::Session::input());
-  MuxBase::Session::chain(QueueMuxer::intake());
+  MuxBase::Session::chain(QueueMuxer::reply());
 }
 
 auto Mux::Session::open_stream() -> EventFunction* {

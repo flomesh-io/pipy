@@ -56,6 +56,7 @@ static const pjs::Ref<pjs::Str> s_content_length(pjs::Str::make("content-length"
 static const pjs::Ref<pjs::Str> s_content_encoding(pjs::Str::make("content-encoding"));
 static const pjs::Ref<pjs::Str> s_upgrade(pjs::Str::make("upgrade"));
 static const pjs::Ref<pjs::Str> s_websocket(pjs::Str::make("websocket"));
+static const pjs::Ref<pjs::Str> s_h2c(pjs::Str::make("h2c"));
 static const pjs::Ref<pjs::Str> s_bad_gateway(pjs::Str::make("Bad Gateway"));
 static const pjs::Ref<pjs::Str> s_cannot_resolve(pjs::Str::make("Cannot Resolve"));
 static const pjs::Ref<pjs::Str> s_connection_refused(pjs::Str::make("Connection Refused"));
@@ -63,6 +64,9 @@ static const pjs::Ref<pjs::Str> s_unauthorized(pjs::Str::make("Unauthorized"));
 static const pjs::Ref<pjs::Str> s_read_error(pjs::Str::make("Read Error"));
 static const pjs::Ref<pjs::Str> s_write_error(pjs::Str::make("Write Error"));
 static const pjs::Ref<pjs::Str> s_gateway_timeout(pjs::Str::make("Gateway Timeout"));
+static const pjs::Ref<pjs::Str> s_http2_preface_method(pjs::Str::make("PRI"));
+static const pjs::Ref<pjs::Str> s_http2_preface_path(pjs::Str::make("*"));
+static const pjs::Ref<pjs::Str> s_http2_preface_protocol(pjs::Str::make("HTTP/2.0"));
 
 // HTTP status code as in:
 // https://www.iana.org/assignments/http-status-codes/http-status-codes.txt
@@ -217,13 +221,20 @@ void Decoder::reset() {
   m_head_buffer.clear();
   m_head = nullptr;
   m_body_size = 0;
-  m_is_bodiless = false;
   m_is_final = false;
+  m_is_bodiless = false;
   m_is_connect = false;
+  m_is_upgrade_websocket = false;
+  m_is_upgrade_http2 = false;
   m_is_tunnel = false;
 }
 
 void Decoder::on_event(Event *evt) {
+  if (m_state == HTTP2_PASS) {
+    EventFunction::output(evt);
+    return;
+  }
+
   if (auto e = evt->as<StreamEnd>()) {
     stream_end(e);
     reset();
@@ -307,6 +318,16 @@ void Decoder::on_event(Event *evt) {
         case HEAD_EOL:
         case HEADER_EOL:
           return false;
+
+        case HTTP2_PREFACE:
+          if (!--m_body_size) {
+            state = HTTP2_PASS;
+            return true;
+          }
+          return false;
+
+        case HTTP2_PASS:
+          return false;
         }
       },
       *output
@@ -353,12 +374,24 @@ void Decoder::on_event(Event *evt) {
         } else {
           auto req = RequestHead::make();
           auto method = pjs::Str::make(segs[0]);
-          req->method(method);
-          req->path(pjs::Str::make(segs[1]));
-          req->protocol(pjs::Str::make(segs[2]));
-          m_head = req;
-          m_is_bodiless = (method == s_head);
-          m_is_connect = (method == s_connect);
+          auto path = pjs::Str::make(segs[1]);
+          auto protocol = pjs::Str::make(segs[2]);
+          if (
+            (s_http2_preface_method == method) &&
+            (s_http2_preface_path == path) &&
+            (s_http2_preface_protocol == protocol)
+          ) {
+            m_body_size = 8;
+            state = HTTP2_PREFACE;
+            break;
+          } else {
+            req->method(method);
+            req->path(path);
+            req->protocol(protocol);
+            m_head = req;
+            m_is_bodiless = (method == s_head);
+            m_is_connect = (method == s_connect);
+          }
         }
         m_head->headers(pjs::Object::make());
         state = HEADER;
@@ -380,8 +413,12 @@ void Decoder::on_event(Event *evt) {
               pjs::Ref<pjs::Str> key(pjs::Str::make(name));
               pjs::Ref<pjs::Str> val(pjs::Str::make(value));
               m_head->headers()->set(key, val.get());
-              if (key == s_upgrade && val == s_websocket) {
-                m_is_websocket = true;
+              if (key == s_upgrade) {
+                if (val == s_websocket) {
+                  m_is_upgrade_websocket = true;
+                } else if (val == s_h2c) {
+                  m_is_upgrade_http2 = true;
+                }
               }
             }
           }
@@ -441,6 +478,11 @@ void Decoder::on_event(Event *evt) {
           message_end();
         }
         break;
+      case HTTP2_PASS: {
+        on_http2_pass();
+        EventFunction::output(Data::make(std::move(*data)));
+        break;
+      }
       default: break;
     }
 
@@ -466,7 +508,7 @@ void Decoder::message_end() {
     m_is_tunnel = true;
   }
 
-  if (m_is_websocket) {
+  if (m_is_upgrade_websocket) {
     m_is_tunnel = true;
   }
 
@@ -475,7 +517,8 @@ void Decoder::message_end() {
   m_is_final = false;
   m_is_bodiless = false;
   m_is_connect = false;
-  m_is_websocket = false;
+  m_is_upgrade_websocket = false;
+  m_is_upgrade_http2 = false;
 }
 
 void Decoder::stream_end(StreamEnd *end) {
@@ -538,7 +581,8 @@ void Encoder::reset() {
   m_is_final = false;
   m_is_bodiless = false;
   m_is_connect = false;
-  m_is_websocket = false;
+  m_is_upgrade_websocket = false;
+  m_is_upgrade_http2 = false;
   m_is_tunnel = false;
 }
 
@@ -650,7 +694,7 @@ void Encoder::on_event(Event *evt) {
       m_is_tunnel = true;
     }
 
-    if (m_is_websocket) {
+    if (m_is_upgrade_websocket) {
       m_is_tunnel = true;
     }
 
@@ -659,7 +703,8 @@ void Encoder::on_event(Event *evt) {
     m_is_final = false;
     m_is_bodiless = false;
     m_is_connect = false;
-    m_is_websocket = false;
+    m_is_upgrade_websocket = false;
+    m_is_upgrade_http2 = false;
 
   } else if (evt->is<StreamEnd>()) {
     output(evt);
@@ -763,10 +808,15 @@ void Encoder::output_head() {
         auto s = v.to_string();
         s_dp.push(buffer, s->str());
         s_dp.push(buffer, "\r\n");
-        if (k == s_upgrade && s == s_websocket) {
-          m_is_websocket = true;
+        if (k == s_upgrade) {
           static std::string str("connection: upgrade\r\n");
-          s_dp.push(buffer, str);
+          if (s == s_websocket) {
+            m_is_upgrade_websocket = true;
+            s_dp.push(buffer, str);
+          } else if (s == s_h2c) {
+            m_is_upgrade_http2 = true;
+            s_dp.push(buffer, str);
+          }
         }
         s->release();
       }
@@ -780,7 +830,7 @@ void Encoder::output_head() {
     s_dp.push(buffer, str);
   }
 
-  if (!m_is_websocket) {
+  if (!m_is_upgrade_websocket && !m_is_upgrade_http2) {
     if (m_is_final) {
       static std::string str("connection: close\r\n");
       s_dp.push(buffer, str);
@@ -1005,6 +1055,7 @@ void RequestQueue::reset() {
     m_queue.remove(r);
     delete r;
   }
+  m_started = false;
 }
 
 void RequestQueue::on_input(Event *evt) {
@@ -1013,10 +1064,11 @@ void RequestQueue::on_input(Event *evt) {
     on_enqueue(r);
     m_queue.push(r);
   }
+
   forward(evt);
 }
 
-void RequestQueue::on_intake(Event *evt) {
+void RequestQueue::on_reply(Event *evt) {
   if (evt->is<MessageStart>()) {
     if (auto *r = m_queue.head()) {
       on_dequeue(r);
@@ -1026,6 +1078,7 @@ void RequestQueue::on_intake(Event *evt) {
   } else if (evt->is<StreamEnd>()) {
     reset();
   }
+
   output(evt);
 }
 
@@ -1034,15 +1087,15 @@ void RequestQueue::on_intake(Event *evt) {
 //
 
 Demux::Demux()
-  : m_ef_decoder(false)
-  , m_ef_encoder(true)
+  : Decoder(false)
+  , Encoder(true)
 {
 }
 
 Demux::Demux(const Demux &r)
   : Filter(r)
-  , m_ef_decoder(false)
-  , m_ef_encoder(true)
+  , Decoder(false)
+  , Encoder(true)
 {
 }
 
@@ -1060,23 +1113,29 @@ auto Demux::clone() -> Filter* {
 
 void Demux::chain() {
   Filter::chain();
-  m_ef_decoder.chain(RequestQueue::input());
+  Decoder::chain(RequestQueue::input());
   RequestQueue::chain_forward(QueueDemuxer::input());
-  QueueDemuxer::chain(RequestQueue::intake());
-  RequestQueue::chain(m_ef_encoder.input());
-  m_ef_encoder.chain(Filter::output());
+  QueueDemuxer::chain(RequestQueue::reply());
+  RequestQueue::chain(Encoder::input());
+  Encoder::chain(Filter::output());
 }
 
 void Demux::reset() {
   Filter::reset();
   RequestQueue::reset();
   QueueDemuxer::reset();
-  m_ef_decoder.reset();
-  m_ef_encoder.reset();
+  Decoder::reset();
+  Encoder::reset();
+  if (m_http2_demuxer) {
+    Decoder::chain(RequestQueue::input());
+    RequestQueue::chain_forward(QueueDemuxer::input());
+    delete m_http2_demuxer;
+    m_http2_demuxer = nullptr;
+  }
 }
 
 void Demux::process(Event *evt) {
-  Filter::output(evt, m_ef_decoder.input());
+  Filter::output(evt, Decoder::input());
 }
 
 auto Demux::on_new_sub_pipeline() -> Pipeline* {
@@ -1084,18 +1143,43 @@ auto Demux::on_new_sub_pipeline() -> Pipeline* {
 }
 
 void Demux::on_enqueue(Request *req) {
-  req->is_final = m_ef_decoder.is_final();
-  req->is_bodiless = m_ef_decoder.is_bodiless();
-  req->is_connect = m_ef_decoder.is_connect();
-  if (m_ef_decoder.is_connect() || m_ef_decoder.is_websocket()) {
+  req->is_final = Decoder::is_final();
+  req->is_bodiless = Decoder::is_bodiless();
+  req->is_connect = Decoder::is_connect();
+  if (Decoder::is_connect() || Decoder::is_upgrade_websocket()) {
     isolate();
+  } else if (Decoder::is_upgrade_http2()) {
+    auto head = ResponseHead::make();
+    auto headers = pjs::Object::make();
+    head->status(101);
+    head->headers(headers);
+    headers->set(s_connection, s_upgrade.get());
+    headers->set(s_upgrade, s_h2c.get());
+    auto inp = Encoder::input();
+    inp->input(MessageStart::make(head));
+    inp->input(MessageEnd::make());
+    upgrade_http2();
+    RequestQueue::chain_forward(m_http2_demuxer->initial_stream());
   }
 }
 
 void Demux::on_dequeue(Request *req) {
-  m_ef_encoder.set_final(req->is_final);
-  m_ef_encoder.set_bodiless(req->is_bodiless);
-  m_ef_encoder.set_connect(req->is_connect);
+  Encoder::set_final(req->is_final);
+  Encoder::set_bodiless(req->is_bodiless);
+  Encoder::set_connect(req->is_connect);
+}
+
+void Demux::on_http2_pass() {
+  upgrade_http2();
+  Decoder::chain(m_http2_demuxer->input());
+}
+
+
+void Demux::upgrade_http2() {
+  if (!m_http2_demuxer) {
+    m_http2_demuxer = new HTTP2Demuxer(this);
+    m_http2_demuxer->chain(Filter::output());
+  }
 }
 
 //
@@ -1141,8 +1225,8 @@ void Mux::Session::open() {
   m_ef_encoder.chain(RequestQueue::input());
   RequestQueue::chain_forward(MuxBase::Session::input());
   MuxBase::Session::chain(m_ef_decoder.input());
-  m_ef_decoder.chain(RequestQueue::intake());
-  RequestQueue::chain(QueueMuxer::intake());
+  m_ef_decoder.chain(RequestQueue::reply());
+  RequestQueue::chain(QueueMuxer::reply());
 }
 
 auto Mux::Session::open_stream() -> EventFunction* {
@@ -1161,7 +1245,7 @@ void Mux::Session::close() {
 void Mux::Session::on_enqueue(Request *req) {
   req->is_bodiless = m_ef_encoder.is_bodiless();
   req->is_connect = m_ef_encoder.is_connect();
-  if (m_ef_encoder.is_connect() || m_ef_encoder.is_websocket()) {
+  if (m_ef_encoder.is_connect() || m_ef_encoder.is_upgrade_websocket()) {
     MuxBase::Session::isolate();
     QueueMuxer::isolate();
   }

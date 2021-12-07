@@ -64,12 +64,19 @@ class RequestHead : public pjs::ObjectTemplate<RequestHead, MessageHead> {
 public:
   enum class Field {
     method,
+    scheme,
     path,
   };
 
   auto method() -> pjs::Str* {
     pjs::Value ret;
     pjs::get<RequestHead>(this, RequestHead::Field::method, ret);
+    return ret.is_string() ? ret.s() : pjs::Str::empty.get();
+  }
+
+  auto scheme() -> pjs::Str* {
+    pjs::Value ret;
+    pjs::get<RequestHead>(this, RequestHead::Field::scheme, ret);
     return ret.is_string() ? ret.s() : pjs::Str::empty.get();
   }
 
@@ -80,6 +87,7 @@ public:
   }
 
   void method(pjs::Str *s) { pjs::set<RequestHead>(this, RequestHead::Field::method, s); }
+  void scheme(pjs::Str *s) { pjs::set<RequestHead>(this, RequestHead::Field::scheme, s); }
   void path(pjs::Str *s) { pjs::set<RequestHead>(this, RequestHead::Field::path, s); }
 };
 

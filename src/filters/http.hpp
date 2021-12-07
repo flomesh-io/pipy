@@ -31,6 +31,7 @@
 #include "data.hpp"
 #include "list.hpp"
 #include "api/http.hpp"
+#include "http2.hpp"
 
 namespace pipy {
 namespace http {
@@ -49,10 +50,13 @@ public:
   bool is_final() const { return m_is_final; }
   bool is_bodiless() const { return m_is_bodiless; }
   bool is_connect() const { return m_is_connect; }
-  bool is_websocket() const { return m_is_websocket; }
+  bool is_upgrade_websocket() const { return m_is_upgrade_websocket; }
+  bool is_upgrade_http2() const { return m_is_upgrade_http2; }
 
   void set_bodiless(bool b) { m_is_bodiless = b; }
   void set_connect(bool b) { m_is_connect = b; }
+
+  virtual void on_http2_pass() {}
 
 private:
   const static int MAX_HEADER_SIZE = 0x1000;
@@ -67,6 +71,8 @@ private:
     CHUNK_BODY,
     CHUNK_TAIL,
     CHUNK_LAST,
+    HTTP2_PREFACE,
+    HTTP2_PASS,
   };
 
   State m_state = HEAD;
@@ -78,7 +84,8 @@ private:
   bool m_is_final = false;
   bool m_is_bodiless = false;
   bool m_is_connect = false;
-  bool m_is_websocket = false;
+  bool m_is_upgrade_websocket = false;
+  bool m_is_upgrade_http2 = false;
   bool m_is_tunnel = false;
 
   virtual void on_event(Event *evt) override;
@@ -105,7 +112,7 @@ public:
 
   bool is_bodiless() const { return m_is_bodiless; }
   bool is_connect() const { return m_is_connect; }
-  bool is_websocket() const { return m_is_websocket; }
+  bool is_upgrade_websocket() const { return m_is_upgrade_websocket; }
 
   void set_final(bool b) { m_is_final = b; }
   void set_bodiless(bool b) { m_is_bodiless = b; }
@@ -120,7 +127,8 @@ private:
   bool m_is_final = false;
   bool m_is_bodiless = false;
   bool m_is_connect = false;
-  bool m_is_websocket = false;
+  bool m_is_upgrade_websocket = false;
+  bool m_is_upgrade_http2 = false;
   bool m_is_tunnel = false;
 
   virtual void on_event(Event *evt) override;
@@ -247,13 +255,33 @@ protected:
   };
 
   List<Request> m_queue;
+  bool m_started = false;
 
   void reset();
 
   virtual void on_input(Event *evt) override;
-  virtual void on_intake(Event *evt) override;
+  virtual void on_reply(Event *evt) override;
   virtual void on_enqueue(Request *req) = 0;
   virtual void on_dequeue(Request *req) = 0;
+};
+
+//
+// HTTP2Demuxer
+//
+
+class HTTP2Demuxer :
+  public pjs::Pooled<HTTP2Demuxer>,
+  public http2::Demuxer
+{
+public:
+  HTTP2Demuxer(Filter *filter) : m_filter(filter) {}
+
+  auto on_new_sub_pipeline() -> Pipeline* override {
+    return m_filter->sub_pipeline(0, true);
+  }
+
+private:
+  Filter* m_filter;
 };
 
 //
@@ -263,7 +291,9 @@ protected:
 class Demux :
   public Filter,
   public QueueDemuxer,
-  protected RequestQueue
+  protected RequestQueue,
+  protected Decoder,
+  protected Encoder
 {
 public:
   Demux();
@@ -278,12 +308,14 @@ private:
   virtual void process(Event *evt) override;
   virtual void dump(std::ostream &out) override;
 
-  Decoder m_ef_decoder;
-  Encoder m_ef_encoder;
+  http2::Demuxer *m_http2_demuxer = nullptr;
 
   virtual auto on_new_sub_pipeline() -> Pipeline* override;
   virtual void on_enqueue(Request *req) override;
   virtual void on_dequeue(Request *req) override;
+  virtual void on_http2_pass() override;
+
+  void upgrade_http2();
 };
 
 //

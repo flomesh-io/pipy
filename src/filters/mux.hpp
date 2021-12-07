@@ -95,7 +95,7 @@ protected:
     double m_free_time = 0;
 
     virtual void on_input(Event *evt) override;
-    virtual void on_intake(Event *evt) override;
+    virtual void on_reply(Event *evt) override;
 
     friend class pjs::RefCount<Session>;
     friend class MuxBase;

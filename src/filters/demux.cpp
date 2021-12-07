@@ -56,7 +56,7 @@ void QueueDemuxer::isolate() {
 void QueueDemuxer::on_event(Event *evt) {
   if (m_isolated) {
     auto stream = m_streams.tail();
-    output(evt, stream->m_pipeline->input());
+    stream->output(evt);
     return;
   }
 
@@ -64,29 +64,29 @@ void QueueDemuxer::on_event(Event *evt) {
     if (!m_streams.tail() || m_streams.tail()->m_input_end) {
       auto stream = new Stream(this);
       m_streams.push(stream);
-      output(start, stream->m_pipeline->input());
+      stream->output(start);
     }
 
   } else if (auto *data = evt->as<Data>()) {
     if (auto stream = m_streams.tail()) {
       if (!stream->m_input_end) {
-        output(data, stream->m_pipeline->input());
+        stream->output(data);
       }
     }
 
   } else if (evt->is<MessageEnd>()) {
     if (auto stream = m_streams.tail()) {
       if (!stream->m_input_end) {
-        output(evt, stream->m_pipeline->input());
         stream->m_input_end = true;
+        stream->output(evt);
       }
     }
 
   } else if (evt->is<StreamEnd>()) {
     if (auto stream = m_streams.tail()) {
       if (!stream->m_input_end) {
-        output(MessageEnd::make(), stream->m_pipeline->input());
         stream->m_input_end = true;
+        stream->output(MessageEnd::make());
       }
     }
   }
@@ -117,7 +117,8 @@ QueueDemuxer::Stream::Stream(QueueDemuxer *demuxer)
   : m_demuxer(demuxer)
 {
   auto p = demuxer->on_new_sub_pipeline();
-  p->chain(EventTarget::input());
+  EventSource::chain(p->input());
+  p->chain(EventSource::reply());
   m_pipeline = p;
 }
 

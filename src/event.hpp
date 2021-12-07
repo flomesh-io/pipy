@@ -288,15 +288,15 @@ private:
 // EventSource
 //
 // +-------------+
-// |             |----- output() --->
+// |             |---- output() --->
 // | EventSource |
-// |             |<--- on_intake() --
-// +-------------+      intake()
+// |             |<-- on_reply() ---
+// +-------------+      reply()
 //
 
 class EventSource : protected EventTarget {
 public:
-  auto intake() -> Input* {
+  auto reply() -> Input* {
     return EventTarget::input();
   }
 
@@ -316,8 +316,8 @@ protected:
   EventSource()
     : m_output(Input::dummy()) {}
 
-  virtual void on_intake(Event *evt) {}
-  virtual void on_event(Event *evt) override { on_intake(evt); }
+  virtual void on_reply(Event *evt) {}
+  virtual void on_event(Event *evt) override { on_reply(evt); }
 
   auto output() -> Input* {
     return m_output;
@@ -341,10 +341,10 @@ private:
 // EventProxy
 //
 //      input()      +------------+
-// --- on_input() -->|            |----- forward() --->
+// --- on_input() -->|            |--- forward() --->
 //                   | EventProxy |
-// <--- output() ----|            |<--- on_intake() ---
-//                   +------------+      intake()
+// <--- output() ----|            |<-- on_reply() ---
+//                   +------------+     reply()
 //
 
 class EventProxy : protected EventFunction, protected EventSource {
