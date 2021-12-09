@@ -129,6 +129,11 @@ private:
 class FrameEncoder {
 protected:
   void frame(Frame &frm, EventTarget::Input *out);
+  void RST_STREAM(int id, ErrorCode err, EventTarget::Input *out);
+  void GOAWAY(int id, ErrorCode err, EventTarget::Input *out);
+
+private:
+  void header(uint8_t *buf, int id, uint8_t type, uint8_t flags, size_t size);
 };
 
 //
@@ -292,12 +297,16 @@ protected:
     HeaderEncoder &header_encoder
   );
 
+  auto id() const -> int { return m_id; }
+
   void on_frame(Frame &frm);
   void on_event(Event *evt);
 
   virtual void frame(Frame &frm) = 0;
   virtual void event(Event *evt) = 0;
   virtual void flush() = 0;
+  virtual void stream_error(ErrorCode err) = 0;
+  virtual void connection_error(ErrorCode err) = 0;
 
 private:
   int m_id;
@@ -311,8 +320,6 @@ private:
   bool parse_padding(Frame &frm);
   bool parse_priority(Frame &frm);
   void parse_headers(Frame &frm);
-  void stream_error(ErrorCode err);
-  void connection_error(ErrorCode err);
 };
 
 //
@@ -339,7 +346,12 @@ private:
   std::map<int, Stream*> m_streams;
   HeaderDecoder m_header_decoder;
   HeaderEncoder m_header_encoder;
+  int m_last_received_stream_id = 0;
   bool m_has_sent_preface = false;
+  bool m_has_gone_away = false;
+
+  void stream_error(uint32_t id, ErrorCode err);
+  void connection_error(ErrorCode err);
 
   // client -> session
   void on_event(Event *evt) override;
@@ -377,6 +389,10 @@ private:
     void frame(Frame &frm) override { m_demuxer->frame(frm); }
     void flush() override { m_demuxer->flush(); }
 
+    // errors
+    void stream_error(ErrorCode err) override { m_demuxer->stream_error(id(), err); }
+    void connection_error(ErrorCode err) override { m_demuxer->connection_error(err); }
+
     friend class Demuxer;
     friend class InitialStream;
   };
@@ -410,18 +426,24 @@ class Muxer :
 public:
   void open(EventFunction *session);
   auto stream() -> EventFunction*;
+  void close(EventFunction *stream);
   void close();
 
 private:
   class Stream;
 
   std::map<int, Stream*> m_streams;
-  int m_local_stream_id = 0;
   HeaderDecoder m_header_decoder;
   HeaderEncoder m_header_encoder;
+  int m_last_sent_stream_id = -1;
+  bool m_has_sent_preface = false;
+  bool m_has_gone_away = false;
+
+  void stream_error(uint32_t id, ErrorCode err);
+  void connection_error(ErrorCode err);
 
   // session -> server
-  void frame(Frame &frm) { FrameEncoder::frame(frm, EventSource::output()); }
+  void frame(Frame &frm);
   void flush() { EventSource::output(Data::flush()); }
 
   // session <- server
@@ -454,6 +476,10 @@ private:
 
     // client <- stream
     void event(Event *evt) override { EventFunction::output(evt); }
+
+    // errors
+    void stream_error(ErrorCode err) override { m_muxer->stream_error(id(), err); }
+    void connection_error(ErrorCode err) override { m_muxer->connection_error(err); }
 
     friend class Muxer;
   };

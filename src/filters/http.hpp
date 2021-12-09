@@ -56,6 +56,7 @@ public:
   void set_bodiless(bool b) { m_is_bodiless = b; }
   void set_connect(bool b) { m_is_connect = b; }
 
+protected:
   virtual void on_http2_pass() {}
 
 private:
@@ -113,6 +114,7 @@ public:
   bool is_bodiless() const { return m_is_bodiless; }
   bool is_connect() const { return m_is_connect; }
   bool is_upgrade_websocket() const { return m_is_upgrade_websocket; }
+  bool is_upgrade_http2() const { return m_is_upgrade_http2; }
 
   void set_final(bool b) { m_is_final = b; }
   void set_bodiless(bool b) { m_is_bodiless = b; }
@@ -319,6 +321,16 @@ private:
 };
 
 //
+// HTTP2Muxer
+//
+
+class HTTP2Muxer :
+  public pjs::Pooled<HTTP2Muxer>,
+  public http2::Muxer
+{
+};
+
+//
 // Mux
 //
 
@@ -331,6 +343,8 @@ private:
   Mux(const Mux &r);
   ~Mux();
 
+  int m_version = 1;
+
   virtual auto clone() -> Filter* override;
   virtual void dump(std::ostream &out) override;
   virtual auto on_new_session() -> MuxBase::Session* override;
@@ -342,11 +356,14 @@ private:
   class Session :
     public pjs::Pooled<Session, MuxBase::Session>,
     public QueueMuxer,
-    protected RequestQueue
+    protected RequestQueue,
+    protected Encoder,
+    protected Decoder
   {
-    Session()
-      : m_ef_encoder(false)
-      , m_ef_decoder(true) {}
+    Session(int version)
+      : Encoder(false)
+      , Decoder(true)
+      , m_version(version) {}
 
     virtual void open() override;
     virtual auto open_stream() -> EventFunction* override;
@@ -355,8 +372,10 @@ private:
     virtual void on_enqueue(Request *req) override;
     virtual void on_dequeue(Request *req) override;
 
-    Encoder m_ef_encoder;
-    Decoder m_ef_decoder;
+    int m_version;
+    HTTP2Muxer* m_http2_muxer = nullptr;
+
+    void upgrade_http2();
 
     friend class Mux;
   };

@@ -1174,7 +1174,6 @@ void Demux::on_http2_pass() {
   Decoder::chain(m_http2_demuxer->input());
 }
 
-
 void Demux::upgrade_http2() {
   if (!m_http2_demuxer) {
     m_http2_demuxer = new HTTP2Demuxer(this);
@@ -1193,6 +1192,21 @@ Mux::Mux()
 Mux::Mux(const pjs::Value &key, pjs::Object *options)
   : pipy::Mux(key, options)
 {
+  if (options) {
+    pjs::Value version;
+    options->get("version", version);
+    if (!version.is_undefined()) {
+      if (version.is_number()) {
+        m_version = version.n();
+        if (m_version != 1 && m_version != 2) {
+          std::string msg("invalid HTTP version: ");
+          throw std::runtime_error(msg + std::to_string(m_version));
+        }
+      } else {
+        throw std::runtime_error("options.version requires a number");
+      }
+    }
+  }
 }
 
 Mux::Mux(const Mux &r)
@@ -1213,7 +1227,7 @@ auto Mux::clone() -> Filter* {
 }
 
 auto Mux::on_new_session() -> MuxBase::Session* {
-  return new Session();
+  return new Session(m_version);
 }
 
 //
@@ -1221,39 +1235,66 @@ auto Mux::on_new_session() -> MuxBase::Session* {
 //
 
 void Mux::Session::open() {
-  QueueMuxer::chain(m_ef_encoder.input());
-  m_ef_encoder.chain(RequestQueue::input());
-  RequestQueue::chain_forward(MuxBase::Session::input());
-  MuxBase::Session::chain(m_ef_decoder.input());
-  m_ef_decoder.chain(RequestQueue::reply());
-  RequestQueue::chain(QueueMuxer::reply());
+  switch (m_version) {
+  case 1:
+    QueueMuxer::chain(Encoder::input());
+    Encoder::chain(RequestQueue::input());
+    RequestQueue::chain_forward(MuxBase::Session::input());
+    MuxBase::Session::chain(Decoder::input());
+    Decoder::chain(RequestQueue::reply());
+    RequestQueue::chain(QueueMuxer::reply());
+    break;
+  case 2:
+    upgrade_http2();
+    break;
+  }
 }
 
 auto Mux::Session::open_stream() -> EventFunction* {
-  return QueueMuxer::open();
+  if (m_http2_muxer) {
+    return m_http2_muxer->stream();
+  } else {
+    return QueueMuxer::open();
+  }
 }
 
 void Mux::Session::close_stream(EventFunction *stream) {
-  return QueueMuxer::close(stream);
+  if (m_http2_muxer) {
+    return m_http2_muxer->close(stream);
+  } else {
+    QueueMuxer::close(stream);
+  }
 }
 
 void Mux::Session::close() {
   QueueMuxer::reset();
   RequestQueue::reset();
+  if (m_http2_muxer) {
+    m_http2_muxer->close();
+    delete m_http2_muxer;
+    m_http2_muxer = nullptr;
+  }
 }
 
 void Mux::Session::on_enqueue(Request *req) {
-  req->is_bodiless = m_ef_encoder.is_bodiless();
-  req->is_connect = m_ef_encoder.is_connect();
-  if (m_ef_encoder.is_connect() || m_ef_encoder.is_upgrade_websocket()) {
+  req->is_bodiless = Encoder::is_bodiless();
+  req->is_connect = Encoder::is_connect();
+  if (Encoder::is_connect() || Encoder::is_upgrade_websocket()) {
     MuxBase::Session::isolate();
     QueueMuxer::isolate();
   }
 }
 
 void Mux::Session::on_dequeue(Request *req) {
-  m_ef_decoder.set_bodiless(req->is_bodiless);
-  m_ef_decoder.set_connect(req->is_connect);
+  Decoder::set_bodiless(req->is_bodiless);
+  Decoder::set_connect(req->is_connect);
+}
+
+void Mux::Session::upgrade_http2() {
+  if (!m_http2_muxer) {
+    m_http2_muxer = new HTTP2Muxer();
+    m_http2_muxer->open(static_cast<MuxBase::Session*>(this));
+  }
 }
 
 //

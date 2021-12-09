@@ -39,9 +39,9 @@ static const pjs::Ref<pjs::Str> s_colon_method(pjs::Str::make(":method"));
 static const pjs::Ref<pjs::Str> s_colon_path(pjs::Str::make(":path"));
 static const pjs::Ref<pjs::Str> s_colon_status(pjs::Str::make(":status"));
 static const pjs::Ref<pjs::Str> s_colon_authority(pjs::Str::make(":authority"));
-static const pjs::Ref<pjs::Str> s_host(pjs::Str::make("host"));
-static const pjs::Ref<pjs::Str> s_protocol(pjs::Str::make("protocol"));
 static const pjs::Ref<pjs::Str> s_method(pjs::Str::make("method"));
+static const pjs::Ref<pjs::Str> s_scheme(pjs::Str::make("scheme"));
+static const pjs::Ref<pjs::Str> s_host(pjs::Str::make("host"));
 static const pjs::Ref<pjs::Str> s_path(pjs::Str::make("path"));
 static const pjs::Ref<pjs::Str> s_status(pjs::Str::make("status"));
 static const pjs::Ref<pjs::Str> s_headers(pjs::Str::make("headers"));
@@ -437,6 +437,12 @@ void FrameDecoder::deframe(Data *data) {
       buf
     );
 
+    if (state == STATE_PAYLOAD && !m_payload_size) {
+      buf.clear();
+      m_state = STATE_PAYLOAD;
+      state = STATE_HEADER;
+    }
+
     if (m_state == STATE_PAYLOAD) {
       m_frame.payload.push(buf);
     }
@@ -458,23 +464,51 @@ void FrameDecoder::deframe(Data *data) {
 void FrameEncoder::frame(Frame &frm, EventTarget::Input *out) {
   auto data = Data::make();
   uint8_t head[9];
-  auto id = frm.stream_id;
-  auto size = frm.payload.size();
-  head[0] = 0xff & (size >> 16);
-  head[1] = 0xff & (size >> 8);
-  head[2] = 0xff & (size >> 0);
-  head[3] = frm.type;
-  head[4] = frm.flags;
-  head[5] = 0x7f & (id >> 24);
-  head[6] = 0xff & (id >> 16);
-  head[7] = 0xff & (id >> 8);
-  head[8] = 0xff & (id >> 0);
+  header(head, frm.stream_id, frm.type, frm.flags, frm.payload.size());
   s_dp.push(data, head, sizeof(head));
   data->push(frm.payload);
   out->input(data);
-  if (frm.type == Frame::DATA && (frm.flags & Frame::BIT_END_STREAM)) {
+  if (frm.type == Frame::DATA && frm.is_END_STREAM()) {
     out->input(Data::flush());
   }
+}
+
+void FrameEncoder::RST_STREAM(int id, ErrorCode err, EventTarget::Input *out) {
+  uint8_t buf[9 + 4];
+  header(buf, id, Frame::RST_STREAM, 0, 4);
+  buf[9+0] = 0xff & (err >> 24);
+  buf[9+1] = 0xff & (err >> 16);
+  buf[9+2] = 0xff & (err >>  8);
+  buf[9+3] = 0xff & (err >>  0);
+  out->input(s_dp.make(buf, sizeof(buf)));
+  out->input(Data::flush());
+}
+
+void FrameEncoder::GOAWAY(int id, ErrorCode err, EventTarget::Input *out) {
+  uint8_t buf[9 + 8];
+  header(buf, 0, Frame::GOAWAY, 0, 8);
+  buf[9+0] = 0xff & (id  >> 24);
+  buf[9+1] = 0xff & (id  >> 16);
+  buf[9+2] = 0xff & (id  >>  8);
+  buf[9+3] = 0xff & (id  >>  0);
+  buf[9+4] = 0xff & (err >> 24);
+  buf[9+5] = 0xff & (err >> 16);
+  buf[9+6] = 0xff & (err >>  8);
+  buf[9+7] = 0xff & (err >>  0);
+  out->input(s_dp.make(buf, sizeof(buf)));
+  out->input(Data::flush());
+}
+
+void FrameEncoder::header(uint8_t *buf, int id, uint8_t type, uint8_t flags, size_t size) {
+  buf[0] = 0xff & (size >> 16);
+  buf[1] = 0xff & (size >> 8);
+  buf[2] = 0xff & (size >> 0);
+  buf[3] = type;
+  buf[4] = flags;
+  buf[5] = 0x7f & (id >> 24);
+  buf[6] = 0xff & (id >> 16);
+  buf[7] = 0xff & (id >> 8);
+  buf[8] = 0xff & (id >> 0);
 }
 
 //
@@ -678,7 +712,7 @@ void HeaderDecoder::add_field(pjs::Str *name, pjs::Str *value) {
       req->path(value);
     }
     return;
-  } else if (name == s_status) {
+  } else if (name == s_colon_status) {
     if (auto res = m_head->as<http::ResponseHead>()) {
       res->status(std::atoi(value->c_str()));
     }
@@ -774,7 +808,7 @@ void HeaderEncoder::encode(bool is_response, pjs::Object *head, Data &data) {
   } else {
     pjs::Value scheme, method, path;
     if (head) {
-      head->get(s_protocol, scheme);
+      head->get(s_scheme, scheme);
       head->get(s_method, method);
       head->get(s_path, path);
     }
@@ -887,15 +921,15 @@ StreamBase::StreamBase(
 void StreamBase::on_frame(Frame &frm) {
   switch (frm.type) {
     case Frame::DATA: {
-      if (m_id == 0) {
-        connection_error(PROTOCOL_ERROR);
-        break;
-      }
       if (m_state == OPEN || m_state == HALF_CLOSED_LOCAL) {
         if (frm.is_PADDED() && !parse_padding(frm)) break;
         event(new Data(frm.payload));
         if (frm.is_END_STREAM()) {
-          m_state = CLOSED;
+          if (m_state == OPEN) {
+            m_state = HALF_CLOSED_REMOTE;
+          } else if (m_state == HALF_CLOSED_LOCAL) {
+            stream_error(NO_ERROR);
+          }
           event(MessageEnd::make());
         }
       } else {
@@ -905,19 +939,11 @@ void StreamBase::on_frame(Frame &frm) {
     }
 
     case Frame::HEADERS: {
-      if (m_id == 0) {
-        connection_error(PROTOCOL_ERROR);
-        break;
-      }
-      if (m_state == IDLE || m_state == RESERVED_REMOTE) {
-        if (frm.is_PADDED() && !parse_padding(frm)) break;
-        if (frm.is_PRIORITY() && !parse_priority(frm)) break;
-        if (frm.is_END_STREAM()) m_end_stream = true;
-        m_header_decoder.start(!m_is_server_side);
-        parse_headers(frm);
-      } else {
-        connection_error(PROTOCOL_ERROR);
-      }
+      if (frm.is_PADDED() && !parse_padding(frm)) break;
+      if (frm.is_PRIORITY() && !parse_priority(frm)) break;
+      if (frm.is_END_STREAM()) m_end_stream = true;
+      m_header_decoder.start(!m_is_server_side);
+      parse_headers(frm);
       break;
     }
 
@@ -936,33 +962,13 @@ void StreamBase::on_frame(Frame &frm) {
       } else if (frm.payload.size() != 4) {
         connection_error(FRAME_SIZE_ERROR);
       } else {
-        m_state = CLOSED;
+        stream_error(NO_ERROR);
       }
-      break;
-    }
-
-    case Frame::SETTINGS: {
-      connection_error(PROTOCOL_ERROR);
       break;
     }
 
     case Frame::PUSH_PROMISE: {
-      connection_error(PROTOCOL_ERROR);
-      break;
-    }
-
-    case Frame::PING: {
-      if (m_id) {
-        connection_error(PROTOCOL_ERROR);
-      } else if (!frm.is_ACK()) {
-        frm.flags |= Frame::BIT_ACK;
-        frame(frm);
-      }
-      break;
-    }
-
-    case Frame::GOAWAY: {
-      connection_error(PROTOCOL_ERROR);
+      // TODO
       break;
     }
 
@@ -995,6 +1001,11 @@ void StreamBase::on_event(Event *evt) {
       buf.shift(len, frm.payload);
       frame(frm);
     }
+    if (m_state == IDLE) {
+      m_state = OPEN;
+    } else if (m_state == RESERVED_LOCAL) {
+      m_state = HALF_CLOSED_REMOTE;
+    }
   } else if (auto data = evt->as<Data>()) {
     if (data->empty()) {
       flush();
@@ -1012,7 +1023,11 @@ void StreamBase::on_event(Event *evt) {
     frm.type = Frame::DATA;
     frm.flags = Frame::BIT_END_STREAM;
     frame(frm);
-    stream_error(NO_ERROR);
+    if (m_state == OPEN) {
+      m_state = HALF_CLOSED_LOCAL;
+    } else if (m_state == HALF_CLOSED_REMOTE) {
+      stream_error(NO_ERROR);
+    }
   }
 }
 
@@ -1043,30 +1058,21 @@ void StreamBase::parse_headers(Frame &frm) {
     return;
   }
   if (frm.is_END_HEADERS()) {
-    m_state = (m_state == IDLE ? OPEN : HALF_CLOSED_LOCAL);
+    if (m_state == IDLE) {
+      m_state = OPEN;
+    } else if (m_state == RESERVED_REMOTE) {
+      m_state = HALF_CLOSED_LOCAL;
+    }
     event(MessageStart::make(m_header_decoder.head()));
     if (m_end_stream) {
-      m_state = HALF_CLOSED_LOCAL;
+      if (m_state == OPEN) {
+        m_state = HALF_CLOSED_REMOTE;
+      } else if (m_state == HALF_CLOSED_LOCAL) {
+        stream_error(NO_ERROR);
+      }
       event(MessageEnd::make());
     }
   }
-}
-
-void StreamBase::stream_error(ErrorCode err) {
-  uint8_t buf[4];
-  buf[0] = 0xff & (err >> 24);
-  buf[1] = 0xff & (err >> 16);
-  buf[2] = 0xff & (err >>  8);
-  buf[3] = 0xff & (err >>  0);
-  Frame frm;
-  frm.stream_id = m_id;
-  frm.type = Frame::RST_STREAM;
-  frm.flags = 0;
-  s_dp.push(&frm.payload, buf, sizeof(buf));
-  frame(frm);
-}
-
-void StreamBase::connection_error(ErrorCode err) {
 }
 
 //
@@ -1088,9 +1094,31 @@ auto Demuxer::initial_stream() -> Input* {
   return m_initial_stream.input();
 }
 
+void Demuxer::stream_error(uint32_t id, ErrorCode err) {
+  auto i = m_streams.find(id);
+  if (i != m_streams.end()) {
+    delete i->second;
+    m_streams.erase(i);
+  }
+  FrameEncoder::RST_STREAM(id, err, EventFunction::output());
+}
+
+void Demuxer::connection_error(ErrorCode err) {
+  for (const auto &p : m_streams) {
+    delete p.second;
+  }
+  m_streams.clear();
+  m_has_gone_away = true;
+  FrameEncoder::GOAWAY(m_last_received_stream_id, err, EventFunction::output());
+  EventFunction::output()->input(StreamEnd::make());
+}
+
 void Demuxer::on_event(Event *evt) {
+  if (m_has_gone_away) return;
+
   if (auto data = evt->as<Data>()) {
     FrameDecoder::deframe(data);
+
   } else if (evt->is<StreamEnd>()) {
     std::map<int, Stream*> streams(std::move(m_streams));
     for (auto &p : streams) {
@@ -1103,18 +1131,42 @@ void Demuxer::on_event(Event *evt) {
 
 void Demuxer::on_deframe(Frame &frm) {
   if (auto id = frm.stream_id) {
-    Stream *stream = nullptr;
-    auto i = m_streams.find(id);
-    if (i == m_streams.end()) {
-      stream = new Stream(this, id);
-      m_streams[id] = stream;
+    if (frm.type == Frame::RST_STREAM) {
+      auto i = m_streams.find(id);
+      if (i != m_streams.end()) {
+        delete i->second;
+        m_streams.erase(i);
+      }
+    } else if (
+      frm.type == Frame::SETTINGS ||
+      frm.type == Frame::PING ||
+      frm.type == Frame::GOAWAY
+    ) {
+      connection_error(PROTOCOL_ERROR);
     } else {
-      stream = i->second;
+      Stream *stream = nullptr;
+      auto i = m_streams.find(id);
+      if (i == m_streams.end()) {
+        if (id <= m_last_received_stream_id) {
+          // closed stream, ignore
+          return;
+        }
+        if ((id & 1) == 0) {
+          connection_error(PROTOCOL_ERROR);
+          return;
+        }
+        stream = new Stream(this, id);
+        m_streams[id] = stream;
+        m_last_received_stream_id = id;
+      } else {
+        stream = i->second;
+      }
+      stream->on_frame(frm);
     }
-    stream->on_frame(frm);
   } else {
     switch (frm.type) {
       case Frame::SETTINGS: {
+        // TODO
         if (!frm.is_ACK()) {
           Frame frm;
           frm.stream_id = 0;
@@ -1124,13 +1176,25 @@ void Demuxer::on_deframe(Frame &frm) {
         }
         break;
       }
+      case Frame::PING: {
+        if (frm.payload.size() != 8) {
+          connection_error(FRAME_SIZE_ERROR);
+        } else if (!frm.is_ACK()) {
+          frm.flags |= Frame::BIT_ACK;
+          frame(frm);
+        }
+        break;
+      }
       case Frame::GOAWAY: {
+        connection_error(NO_ERROR);
         break;
       }
       case Frame::WINDOW_UPDATE: {
+        // TODO
         break;
       }
       default: {
+        connection_error(PROTOCOL_ERROR);
         break;
       }
     }
@@ -1138,6 +1202,7 @@ void Demuxer::on_deframe(Frame &frm) {
 }
 
 void Demuxer::on_deframe_error() {
+  connection_error(PROTOCOL_ERROR);
 }
 
 void Demuxer::frame(Frame &frm) {
@@ -1176,40 +1241,112 @@ void Muxer::open(EventFunction *session) {
 }
 
 auto Muxer::stream() -> EventFunction* {
-  auto id = (m_local_stream_id += 2);
+  auto id = (m_last_sent_stream_id += 2);
   auto stream = new Stream(this, id);
   m_streams[id] = stream;
   return stream;
 }
 
+void Muxer::close(EventFunction *stream) {
+  auto *s = static_cast<Stream*>(stream);
+  stream_error(s->id(), NO_ERROR);
+  delete s;
+}
+
 void Muxer::close() {
+  connection_error(NO_ERROR);
+}
+
+void Muxer::stream_error(uint32_t id, ErrorCode err) {
+  auto i = m_streams.find(id);
+  if (i != m_streams.end()) {
+    m_streams.erase(i);
+  }
+  FrameEncoder::RST_STREAM(id, err, EventSource::output());
+}
+
+void Muxer::connection_error(ErrorCode err) {
+  m_streams.clear();
+  m_has_gone_away = true;
+  FrameEncoder::GOAWAY(0, err, EventSource::output());
+  EventSource::output()->input(StreamEnd::make());
+}
+
+void Muxer::frame(Frame &frm) {
+  if (m_has_gone_away) return;
+  if (!m_has_sent_preface) {
+    m_has_sent_preface = true;
+    static Data s_preface("PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n", &s_dp);
+    EventSource::output(Data::make(s_preface));
+  }
+  FrameEncoder::frame(frm, EventSource::output());
 }
 
 void Muxer::on_event(Event *evt) {
   if (auto data = evt->as<Data>()) {
     deframe(data);
   } else if (evt->is<StreamEnd>()) {
-
+    std::map<int, Stream*> streams(std::move(m_streams));
+    for (const auto &p : streams) {
+      auto s = p.second;
+      s->event(evt->clone());
+    }
   }
 }
 
 void Muxer::on_deframe(Frame &frm) {
   if (auto id = frm.stream_id) {
-    auto i = m_streams.find(id);
-    if (i == m_streams.end()) return;
-    i->second->on_frame(frm);
+    if (frm.type == Frame::RST_STREAM) {
+      auto i = m_streams.find(id);
+      if (i != m_streams.end()) {
+        m_streams.erase(i);
+      }
+    } else if (
+      frm.type == Frame::SETTINGS ||
+      frm.type == Frame::PING ||
+      frm.type == Frame::GOAWAY
+    ) {
+      connection_error(PROTOCOL_ERROR);
+    } else {
+      auto i = m_streams.find(id);
+      if (i == m_streams.end()) {
+        connection_error(PROTOCOL_ERROR);
+        return;
+      }
+      i->second->on_frame(frm);
+    }
   } else {
     switch (frm.type) {
       case Frame::SETTINGS: {
+        // TODO
+        if (!frm.is_ACK()) {
+          Frame frm;
+          frm.stream_id = 0;
+          frm.type = Frame::SETTINGS;
+          frm.flags = Frame::BIT_ACK;
+          frame(frm);
+        }
+        break;
+      }
+      case Frame::PING: {
+        if (frm.payload.size() != 8) {
+          connection_error(FRAME_SIZE_ERROR);
+        } else if (!frm.is_ACK()) {
+          frm.flags |= Frame::BIT_ACK;
+          frame(frm);
+        }
         break;
       }
       case Frame::GOAWAY: {
+        connection_error(NO_ERROR);
         break;
       }
       case Frame::WINDOW_UPDATE: {
+        // TODO
         break;
       }
       default: {
+        connection_error(PROTOCOL_ERROR);
         break;
       }
     }
