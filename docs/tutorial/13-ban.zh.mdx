@@ -1,0 +1,120 @@
+---
+title: 13 黑白名单
+---
+
+## 问题
+
+在安全方面，另一个常用的防护功能是黑白名单，用来限制请求的调用来源 IP。黑名单用来拒绝来自某些 IP 的请求；白名单则是只允许来自某些 IP 的请求。
+
+这篇我们就为代理增加黑白名单的功能。
+
+## 配置
+
+黑白名单的配置 `config/ban.json` 同样是服务级别的，我们为 `service-hi` 增加配置：
+
+```json
+{
+  "services": {
+    "service-hi": {
+      "white": [],
+      "black": [
+        "127.0.0.1",
+        "::1",
+        "::ffff:127.0.0.1"
+      ]
+    }
+  }
+}
+```
+
+> Pipy 支持 ipv6，我们在本地测试的时候，所以加入了 *loopback* 的 ipv6 地址。
+
+## 代码剖析
+
+IP 地址以数组类型存在于配置文件中，数组类型不利于查找。因此在配置引入过程中，我们将其作为 map 的 key。
+
+```javascript
+pipy({
+  _services: Object.fromEntries(
+    Object.entries(config.services).map(
+      ([k,v]) => [
+        k,
+        {
+          white: v.white?.length > 0 ? (
+            Object.fromEntries(
+              v.white.map(
+                ip => [ip, true]
+              )
+            )
+          ) : null,
+          black: v.black?.length > 0 ? (
+            Object.fromEntries(
+              v.black.map(
+                ip => [ip, true]
+              )
+            )
+          ) : null,
+        }
+      ]
+    )
+  ),
+
+  _service: null,
+})
+```
+
+服务级的黑白名单处理，需要获取路由决策的服务名；拒绝访问时，会直接返回错误的响应。
+
+```javascript
+.import({
+  __turnDown: 'proxy',
+  __serviceID: 'router',
+})
+```
+
+接下来就是请求的处理了。
+
+对于进来的请求，从 `__inbound.remoteAddress` 获取对端的 IP 地址。如果服务配置了白名单，则只使用白名单的检查；否则检查 IP 是否在黑名单中。拒绝的请求，会直接（`__turnDown=true`）返回错误响应。
+
+```javascript
+.pipeline('request')
+  .handleStreamStart(
+    () => (
+      _service = _services[__serviceID],
+      __turnDown = Boolean(
+        _service && (
+          _service.white ? (
+            !_service.white[__inbound.remoteAddress]
+          ) : (
+            _service.black?.[__inbound.remoteAddress]
+          )
+        )
+      )
+    )
+  )
+  .link(
+    'deny', () => __turnDown,
+    'bypass'
+  )
+
+.pipeline('deny')
+  .replaceMessage(
+    new Message({ status: 403 }, 'Access denied')
+  )
+
+.pipeline('bypass')  
+```
+
+最后，别忘记引入新的插件。
+
+## 总结
+
+黑白名单作为代理的一种防护功能，实现起来对于 Pipy 还是很容易的。
+
+### 收益
+
+* 通过对比请求连接的对端 IP 地址和配置中的 IP 地址，判断是否拒绝请求。如果借助 [`Netmask.contains()`](/reference/Netmask/contains)，更可以实现对 *IP 段* 的限制。
+
+### 接下来
+
+下一篇，我们会添加另一个保护功能：限流。
