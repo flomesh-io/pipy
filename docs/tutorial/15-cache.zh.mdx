@@ -1,0 +1,137 @@
+---
+title: 15 缓存
+---
+
+## 问题
+
+上一次我们通过限流的能力来达到对上游保护的目的，但这种对体验不够友好，流量达到阈值时后续的请求都在等待。在后端开发时，我们经常使用缓存来加速对数据库的读写，对代理来说也同样适用。针对静态的内容或者变更频率低的响应，可以通过在代理层缓存响应的方式，在不影响体验的情况下来降低对上游和网络的压力。
+
+这次就为代理增加缓存的功能。
+
+## 配置
+
+这次我们对 *service-hi* 服务的静态内容进行缓存，并未缓存设置超时时间。
+
+```json
+//cache.json
+{
+  "services": {
+    "service-hi": [
+      ".js",
+      ".json"
+    ]
+  },
+  "timeout": 10000
+}
+```
+
+这里的超时时间是个全局的配置，当然，也可以针对服务做定制的配置。
+
+> 这次选择 *service-hi* 服务还另有目的，后面解释。
+
+## 代码剖析
+
+首先我们需要几个全局变量：
+
+1. *_cache* 用于存储响应，map 类型。
+2. *_cachedKey* 响应放入到缓存中对应的 key。这次我们使用拼接 *host* 和 *path* 作为 key，可以为上游的所有节点缓存响应。
+3. *_cachedResponse* 从缓存中匹配到的响应。
+4. *_useCache* 是否使用缓存。
+
+同样还要引入两个模块变量。
+
+```javascript
+pipy({
+  _cache: {},
+  _cachedKey: '',
+  _cachedResponse: null,
+  _useCache: false,
+})
+
+.import({
+  __turnDown: 'proxy',
+  __serviceID: 'router',
+})
+```
+
+接下来就是请求的处理了？我们先缓存这里就要用上久违的 *response* 子管道了。
+
+缓存的时候除了要判断响应的状态码（只缓存成功的响应：2xx 和 3xx），记得要记录缓存的时间。
+
+```javascript
+.pipeline('response')
+  .handleMessage(
+    msg => (
+      _useCache && (msg.head.status || 200) < 400 && (
+        _cache[_cachedKey] = {
+          time: Date.now(),
+          message: msg,
+        }
+      )
+    )
+  )
+```
+
+接收到请求后先从请求头中取出缓存的 key，然后检查请求是否使用缓存。假如使用缓存，从缓存中通过 key 取出响应。注意，这里还要判断缓存是否过期。
+
+最终通过是否存在缓存的响应来判断，是继续路由请求还是返回缓存的响应。
+
+```javascript
+.pipeline('request')
+  .handleMessageStart(
+    msg => (
+      ((
+        host, path
+      ) => (
+        host = msg.head.headers.host,
+        path = msg.head.path,
+        _useCache = config.services[__serviceID]?.some?.(
+          ext => path.endsWith(ext)
+        ),
+        _useCache && (
+          _cachedKey = host + path,
+          _cachedResponse = _cache[_cachedKey],
+          _cachedResponse?.time < Date.now() - config.timeout && (
+            _cachedResponse = _cache[_cacheKey] = null
+          ),
+          _cachedResponse && (__turnDown = true)
+        )
+      ))()
+    )
+  )
+  .link(
+    'cache', () => Boolean(_cachedResponse),
+    'bypass'
+  )
+
+.pipeline('cache')
+  .replaceMessage(
+    () => _cachedResponse.message
+  )
+
+.pipeline('bypass')
+```
+
+最后还是启用插件，为了避免触发限流，直接去掉限流插件的引入。
+
+## 测试
+
+*service-hi* 的上游有两个实例，返回不同的内容。我们请求地址 `localhost:8000/hi/a.json`，10 秒内的响应内容都会与第一个请求的响应内容一致。10 秒之后的响应才会变成另外一个实例的响应。
+
+```shell
+curl localhost:8000/hi/a.json
+Hi, there!
+curl localhost:8000/hi/a.json
+Hi, there!
+#wait > 10s
+curl localhost:8000/hi/a.json
+You are requesting /hi/a.json from ::ffff:127.0.0.1
+```
+
+## 总结
+
+这次并没有引入任何新的过滤器，轻松使用少量的代码为代理实现了缓存的功能。正如前面所说，我们可以根据需求为服务定制缓存的配置，比如每个服务甚至每个 path 的过期时间可以做到不同。
+
+### 接下来
+
+这次我们针对 `/hi/a.json` 这个静态内容设置了缓存，实际上并没有这个文件。下次，我们就使用 Pipy 实现一个静态服务器。

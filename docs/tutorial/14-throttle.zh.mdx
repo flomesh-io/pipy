@@ -1,0 +1,105 @@
+---
+title: 14 限流
+---
+
+## 问题
+
+在某些的场景下，为保证有限资源情况下服务可以正常的运行，要控制请求在可控的范围内，保证服务的高可用。这就是访问控制的另一个手段：限流。通常的做法是限制请求的速率以及数据的大小。
+
+今天我们就为代理增加限流的功能。
+
+## 过滤器
+
+可以用来做限流的过滤器有两个 [`throttleMessageRate`](/reference/Configuration/throttleMessageRate) 和 [`throttleDataRate`](/reference/Configuration/throttleDataRate)，前者每秒的最大请求数，后者每秒最大的字节数。二者的参数一样：
+* *quota*：配额，类型可以是：Number、String 或者函数。
+* *account*：配额的统计单元/粒度，类型可以是：String 或者函数。比如服务名、请求路径、某个请求头或者更复杂的组合。
+
+## 配置
+
+这次同样还是为 `service-hi` 增加限流的设置，统计的粒度为整个服务：
+
+```javascript
+//throtlle.json
+{
+  "services": {
+    "service-hi": {
+      "rateLimit": 1000
+    }
+  }
+}
+```
+
+## 代码剖析
+
+配置的格式原本就是 map 的类型，因此这里直接引入即可；通过 `router` 模块确认服务名，需要引入其模块变量。
+
+```javascript
+pipy({
+  _services: config.services,
+  _rateLimit: undefined,
+})
+
+.import({
+  __serviceID: 'router',
+})
+```
+
+接下来就是处理请求了，如果未设置限流的服务，可以直接绕过检查：
+
+```javascript
+.pipeline('request')
+  .handleStreamStart(
+    () => _rateLimit = _services[__serviceID]?.rateLimit
+  )
+  .link(
+    'throttle', () => Boolean(_rateLimit),
+    'bypass'
+  )
+```
+
+前面提到我们设置了服务请求数的最大配额，所以 *account* 直接使用服务名：
+
+```javascript
+.pipeline('throttle')
+  .throttleMessageRate(
+    () => _rateLimit,
+    () => __serviceID,
+  )
+
+.pipeline('bypass')
+```
+
+对了最后不要忘记调整模块的引入，引入限流的模块并去掉黑白名单的模块，否则我们就无法从本地访问了。
+
+## 测试
+
+使用 *wrk* 工具模拟请求：
+
+```shell
+wrk -c10 -t10 -d 30s http://localhost:8000/hi
+Running 30s test @ http://localhost:8000/hi
+  10 threads and 10 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency   214.40ms  288.77ms 931.19ms   79.06%
+    Req/Sec   327.77    356.74     1.00k    77.05%
+  30000 requests in 30.08s, 2.60MB read
+Requests/sec:    997.35
+Transfer/sec:     88.63KB
+```
+
+注意：测试持续的时间越长，结果与配置更接近。因为上游的处理耗时是很短的，比如我本地可以达到 16000/s，测试时间短的话差异会比较大。
+
+## 总结
+
+这次只是限流的一个简单实现，为服务设置了最大的容量。实际场景中，服务的每个路径间的容量也是会有差异的，比如有的直接读内存，有的需要调用其他服务，有的需要读写数据库。都可以根据实际需要灵活地进行配置，可繁可简。
+
+### 收益
+
+* 限流的两个过滤器 `throttleMessageRate` 和 `throttleDataRate` 的使用。
+* 限流统计的粒度，可以通过过滤器的 *account* 参数灵活处理。
+
+### 接下来
+
+使用限流可以控制对上游的压力，其实还有更常见的方式就是缓存。将某些响应由代理缓存，在一定时间内都从缓存中直接获取响应，由此可以减轻对网络和上游服务的压力。
+
+下一次，我们将为代理加上缓存的能力。
