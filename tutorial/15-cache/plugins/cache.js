@@ -27,7 +27,7 @@ pipy({
           _cachedKey = host + path,
           _cachedResponse = _cache[_cachedKey],
           _cachedResponse?.time < Date.now() - config.timeout && (
-            _cachedResponse = null
+            _cachedResponse = _cache[_cachedKey] = null
           ),
           _cachedResponse && (__turnDown = true)
         )
