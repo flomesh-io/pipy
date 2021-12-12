@@ -84,16 +84,12 @@ private:
 };
 
 //
-// ClientReceiver
+// Client
 //
 
 class ClientReceiver : public EventTarget {
   virtual void on_event(Event *evt) override;
 };
-
-//
-// Client
-//
 
 class Client : public Filter, public ClientReceiver {
 public:

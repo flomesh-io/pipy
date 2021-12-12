@@ -26,11 +26,11 @@
 #ifndef HTTP2_HPP
 #define HTTP2_HPP
 
+#include "api/http.hpp"
 #include "data.hpp"
 #include "pipeline.hpp"
-#include "mux.hpp"
 #include "list.hpp"
-#include "api/http.hpp"
+#include "mux.hpp"
 
 #include <map>
 #include <vector>
@@ -145,8 +145,9 @@ public:
   HeaderDecoder();
 
   void start(bool is_response);
+  bool started() const { return m_head; }
   bool decode(Data &data);
-  auto head() -> pjs::Object* { return m_head; }
+  void end(pjs::Ref<http::MessageHead> &head);
 
 private:
   static const int TABLE_SIZE = 256;
@@ -305,6 +306,7 @@ protected:
   virtual void frame(Frame &frm) = 0;
   virtual void event(Event *evt) = 0;
   virtual void flush() = 0;
+  virtual void close() = 0;
   virtual void stream_error(ErrorCode err) = 0;
   virtual void connection_error(ErrorCode err) = 0;
 
@@ -312,6 +314,7 @@ private:
   int m_id;
   bool m_is_server_side;
   bool m_is_reserved = false;
+  bool m_is_tunnel = false;
   bool m_end_stream = false;
   State m_state = IDLE;
   HeaderDecoder& m_header_decoder;
@@ -320,6 +323,7 @@ private:
   bool parse_padding(Frame &frm);
   bool parse_priority(Frame &frm);
   void parse_headers(Frame &frm);
+  void stream_end();
 };
 
 //
@@ -350,7 +354,8 @@ private:
   bool m_has_sent_preface = false;
   bool m_has_gone_away = false;
 
-  void stream_error(uint32_t id, ErrorCode err);
+  void stream_close(int id);
+  void stream_error(int id, ErrorCode err);
   void connection_error(ErrorCode err);
 
   // client -> session
@@ -389,6 +394,9 @@ private:
     void frame(Frame &frm) override { m_demuxer->frame(frm); }
     void flush() override { m_demuxer->flush(); }
 
+    // close
+    void close() override { m_demuxer->stream_close(id()); }
+
     // errors
     void stream_error(ErrorCode err) override { m_demuxer->stream_error(id(), err); }
     void connection_error(ErrorCode err) override { m_demuxer->connection_error(err); }
@@ -410,8 +418,6 @@ private:
   };
 
   InitialStream m_initial_stream;
-
-  friend class Stream;
 };
 
 //
@@ -439,7 +445,8 @@ private:
   bool m_has_sent_preface = false;
   bool m_has_gone_away = false;
 
-  void stream_error(uint32_t id, ErrorCode err);
+  void stream_close(int id);
+  void stream_error(int id, ErrorCode err);
   void connection_error(ErrorCode err);
 
   // session -> server
@@ -477,14 +484,15 @@ private:
     // client <- stream
     void event(Event *evt) override { EventFunction::output(evt); }
 
+    // close
+    void close() override { m_muxer->stream_close(id()); }
+
     // errors
     void stream_error(ErrorCode err) override { m_muxer->stream_error(id(), err); }
     void connection_error(ErrorCode err) override { m_muxer->connection_error(err); }
 
     friend class Muxer;
   };
-
-  friend class Stream;
 };
 
 } // namespace http2

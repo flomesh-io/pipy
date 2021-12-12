@@ -140,8 +140,6 @@ void Pipeline::on_event(Event *evt) {
 
 void Pipeline::auto_release() {
   if (!m_auto_release) {
-    retain();
-    m_auto_release = true;
     AutoReleasePool::add(this);
   }
 }
@@ -173,6 +171,7 @@ Pipeline::AutoReleasePool::AutoReleasePool() {
 }
 
 Pipeline::AutoReleasePool::~AutoReleasePool() {
+  m_cleaning_up = true;
   for (
     auto *p = m_pipelines;
     p; p = p->m_next_auto_release
@@ -184,7 +183,15 @@ Pipeline::AutoReleasePool::~AutoReleasePool() {
 }
 
 void Pipeline::AutoReleasePool::add(Pipeline *pipeline) {
+  pipeline->retain();
   if (s_stack) {
+    if (s_stack->m_cleaning_up) {
+      Log::error(
+        "[pipeline %p] auto-release recursion, name = %s",
+        pipeline, pipeline->def()->name().c_str()
+      );
+    }
+    pipeline->m_auto_release = true;
     pipeline->m_next_auto_release = s_stack->m_pipelines;
     s_stack->m_pipelines = pipeline;
   } else {

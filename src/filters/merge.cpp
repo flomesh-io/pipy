@@ -92,7 +92,7 @@ void Merge::Stream::on_event(Event *evt) {
 
   } else if (evt->is<MessageEnd>() || evt->is<StreamEnd>()) {
     if (m_start) {
-      auto inp = m_session->input();
+      auto inp = m_output.get();
       inp->input(m_start);
       if (!m_buffer.empty()) {
         inp->input(Data::make(m_buffer));

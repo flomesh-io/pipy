@@ -298,18 +298,14 @@ void Server::process(Event *evt) {
 }
 
 //
-// ClientReceiver
-//
-
-void ClientReceiver::on_event(Event *evt) {
-  static_cast<Client*>(this)->on_receive(evt);
-}
-
-//
 // Client
 //
 
 static Data::Producer s_dp("connectSOCKS");
+
+void ClientReceiver::on_event(Event *evt) {
+  static_cast<Client*>(this)->on_receive(evt);
+}
 
 Client::Client(const pjs::Value &target)
   : m_target(target)

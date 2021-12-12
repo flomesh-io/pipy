@@ -180,36 +180,21 @@ public:
   // EventTarget::Input
   //
 
-  class Input :
-    public pjs::RefCount<Input>,
-    public pjs::Pooled<Input>
-  {
+  class Input : public pjs::RefCount<Input> {
   public:
     static auto dummy() -> Input*;
+    static auto make(Input *input) -> Input*;
 
-    static auto make(Input *input) -> Input* {
-      return new Input(input->m_target);
-    }
+    virtual void input(Event *evt) = 0;
+    virtual void close() = 0;
 
-    static auto make(EventTarget *target) -> Input* {
-      return new Input(target);
-    }
+  protected:
+    virtual ~Input() {}
 
-    void input(Event *evt) {
-      pjs::Ref<Event> ref(evt);
-      if (m_target) {
-        m_target->on_event(evt);
-      }
-    }
+    static auto make(EventTarget *target) -> Input*;
 
-    void close() {
-      m_target = nullptr;
-    }
-
-  private:
-    Input(EventTarget *target) : m_target(target) {}
-
-    EventTarget* m_target;
+    friend class pjs::RefCount<Input>;
+    friend class EventTarget;
   };
 
   auto input() -> Input* {
@@ -235,6 +220,66 @@ protected:
 
 private:
   pjs::Ref<Input> m_input;
+
+  //
+  // EventTarget::TargetInput
+  //
+
+  class TargetInput : public pjs::Pooled<TargetInput>, public Input {
+  public:
+    TargetInput(EventTarget *target)
+      : m_target(target) {}
+
+  private:
+    EventTarget* m_target;
+
+    virtual void input(Event *evt) override {
+      pjs::Ref<Event> ref(evt);
+      if (m_target) {
+        m_target->on_event(evt);
+      }
+    }
+
+    virtual void close() override {
+      m_target = nullptr;
+    }
+  };
+
+  //
+  // EventTarget::InputInput
+  //
+
+  class InputInput : public pjs::Pooled<InputInput>, public Input {
+  public:
+    InputInput(Input *input)
+      : m_input(input) {}
+
+  private:
+    pjs::Ref<Input> m_input;
+
+    virtual void input(Event *evt) override {
+      pjs::Ref<Event> ref(evt);
+      if (m_input) {
+        m_input->input(evt);
+      }
+    }
+
+    virtual void close() override {
+      m_input = nullptr;
+    }
+  };
+
+  //
+  // EventTarget::DummyInput
+  //
+
+  class DummyInput : public Input {
+    virtual void input(Event *evt) override {
+      pjs::Ref<Event> ref(evt);
+    }
+
+    virtual void close() override {}
+  };
 
   friend class Input;
 };

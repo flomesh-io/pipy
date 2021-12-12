@@ -45,7 +45,6 @@ class PipelineDef;
 class MuxBase : public Filter {
 protected:
   class Session;
-  class SessionManager;
 
   MuxBase();
   MuxBase(const pjs::Value &session_key, pjs::Object *options);
@@ -56,6 +55,8 @@ protected:
   virtual auto on_new_session() -> Session* = 0;
 
 private:
+  class SessionManager;
+
   pjs::Ref<SessionManager> m_session_manager;
   pjs::Ref<Session> m_session;
   pjs::Value m_session_key;
@@ -73,13 +74,12 @@ protected:
     public List<Session>::Item,
     public EventProxy
   {
-  public:
+  protected:
     virtual void open();
     virtual auto open_stream() -> EventFunction* = 0;
     virtual void close_stream(EventFunction *stream) = 0;
     virtual void close();
 
-  protected:
     Session() {}
     virtual ~Session() {}
 
@@ -87,6 +87,11 @@ protected:
     void isolate();
 
   private:
+    void start(Pipeline *pipeline);
+    bool started() const { return m_pipeline; }
+    void end();
+    void free();
+
     SessionManager* m_manager = nullptr;
     pjs::Value m_key;
     pjs::WeakRef<pjs::Object> m_weak_key;
@@ -101,12 +106,13 @@ protected:
     friend class MuxBase;
   };
 
+private:
+
   //
   // MuxBase::SessionManager
   //
 
   class SessionManager : public pjs::RefCount<SessionManager> {
-  public:
     struct Options {
       int max_idle = 10;
     };
@@ -118,7 +124,6 @@ protected:
     auto get(const pjs::Value &key) -> Session*;
     void free(Session *session);
 
-  private:
     MuxBase* m_mux;
     std::unordered_map<pjs::Value, pjs::Ref<Session>> m_sessions;
     std::unordered_map<pjs::WeakRef<pjs::Object>, pjs::Ref<Session>> m_weak_sessions;
@@ -128,10 +133,9 @@ protected:
     bool m_recycling = false;
 
     void erase(Session *session);
-    void close(Session *session);
     void recycle();
 
-    friend class Session;
+    friend class MuxBase;
   };
 };
 

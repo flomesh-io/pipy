@@ -61,9 +61,21 @@ auto StreamEnd::message() const -> const char* {
   return "???";
 }
 
+//
+// EventTarget::Input
+//
+
 auto EventTarget::Input::dummy() -> Input* {
-  static pjs::Ref<Input> dummy(make((EventTarget*)nullptr));
+  static pjs::Ref<Input> dummy(new DummyInput());
   return dummy;
+}
+
+auto EventTarget::Input::make(Input *input) -> Input* {
+  return new InputInput(input);
+}
+
+auto EventTarget::Input::make(EventTarget *target) -> Input* {
+  return new TargetInput(target);
 }
 
 } // namespace pipy

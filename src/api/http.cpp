@@ -272,6 +272,7 @@ template<> void ClassDef<RequestHead>::init() {
   ctor();
   variable("method", RequestHead::Field::method);
   variable("scheme", RequestHead::Field::scheme);
+  variable("authority", RequestHead::Field::authority);
   variable("path", RequestHead::Field::path);
 }
 

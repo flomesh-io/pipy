@@ -423,6 +423,59 @@ private:
   Handler m_ef_handler;
 };
 
+//
+// TunnelServer
+//
+
+class TunnelServer : public Filter {
+public:
+  TunnelServer(pjs::Function *handler);
+
+private:
+  TunnelServer(const TunnelServer &r);
+  ~TunnelServer();
+
+  virtual auto clone() -> Filter* override;
+  virtual void reset() override;
+  virtual void process(Event *evt) override;
+  virtual void dump(std::ostream &out) override;
+
+  pjs::Ref<pjs::Function> m_handler;
+  pjs::Ref<Pipeline> m_pipeline;
+  pjs::Ref<MessageStart> m_start;
+  Data m_buffer;
+};
+
+//
+// TunnelClient
+//
+
+class TunnelClientReceiver : public EventTarget {
+  virtual void on_event(Event *evt) override;
+};
+
+class TunnelClient : public Filter, public TunnelClientReceiver {
+public:
+  TunnelClient(const pjs::Value &target);
+
+private:
+  TunnelClient(const TunnelClient &r);
+  ~TunnelClient();
+
+  virtual auto clone() -> Filter* override;
+  virtual void reset() override;
+  virtual void process(Event *evt) override;
+  virtual void dump(std::ostream &out) override;
+
+  void on_receive(Event *evt);
+
+  pjs::Value m_target;
+  pjs::Ref<Pipeline> m_pipeline;
+  bool m_is_tunneling = false;
+
+  friend class TunnelClientReceiver;
+};
+
 } // namespace http
 } // namespace pipy
 

@@ -159,6 +159,12 @@ void Configuration::pipeline(const std::string &name) {
   m_current_filters = &m_named_pipelines.back().filters;
 }
 
+void Configuration::accept_http_tunnel(pjs::Str *target, pjs::Function *handler) {
+  auto *filter = new http::TunnelServer(handler);
+  filter->add_sub_pipeline(target);
+  append_filter(filter);
+}
+
 void Configuration::accept_socks(pjs::Str *target, pjs::Function *on_connect) {
   auto *filter = new socks::Server(on_connect);
   filter->add_sub_pipeline(target);
@@ -173,6 +179,12 @@ void Configuration::accept_tls(pjs::Str *target, pjs::Object *options) {
 
 void Configuration::connect(const pjs::Value &target, pjs::Object *options) {
   append_filter(new Connect(target, options));
+}
+
+void Configuration::connect_http_tunnel(pjs::Str *target, const pjs::Value &address) {
+  auto *filter = new http::TunnelClient(address);
+  filter->add_sub_pipeline(target);
+  append_filter(filter);
 }
 
 void Configuration::connect_socks(pjs::Str *target, const pjs::Value &address) {
@@ -564,6 +576,19 @@ template<> void ClassDef<Configuration>::init() {
     }
   });
 
+  // Configuration.acceptHTTPTunnel
+  method("acceptHTTPTunnel", [](Context &ctx, Object *thiz, Value &result) {
+    Str *target;
+    Function *handler;
+    if (!ctx.arguments(2, &target, &handler)) return;
+    try {
+      thiz->as<Configuration>()->accept_http_tunnel(target, handler);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
   // Configuration.acceptSOCKS
   method("acceptSOCKS", [](Context &ctx, Object *thiz, Value &result) {
     Str *target;
@@ -601,6 +626,19 @@ template<> void ClassDef<Configuration>::init() {
     if (!ctx.arguments(1, &target, &options)) return;
     try {
       thiz->as<Configuration>()->connect(target, options);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // Configuration.connectHTTPTunnel
+  method("connectHTTPTunnel", [](Context &ctx, Object *thiz, Value &result) {
+    Str *target;
+    Value address;
+    if (!ctx.arguments(2, &target, &address)) return;
+    try {
+      thiz->as<Configuration>()->connect_http_tunnel(target, address);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

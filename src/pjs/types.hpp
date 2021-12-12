@@ -64,6 +64,9 @@ class DefaultPooledBase {};
 
 template<class T, class Base = DefaultPooledBase>
 class Pooled : public Base {
+private:
+  enum { INVALIDATE_FREE_SPACE = 0 }; // for debugging only
+
 public:
   using Base::Base;
 
@@ -79,6 +82,12 @@ public:
   void operator delete(void *p) {
     *(void**)p = m_free;
     m_free = p;
+    if (INVALIDATE_FREE_SPACE) {
+      std::memset(
+        (uint8_t *)p + sizeof(void*),
+        0xfe, sizeof(T) - sizeof(void*)
+      );
+    }
   }
 
 private:

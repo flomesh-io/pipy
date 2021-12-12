@@ -115,6 +115,7 @@ public:
   private:
     AutoReleasePool* m_next;
     Pipeline* m_pipelines = nullptr;
+    bool m_cleaning_up = false;
 
     static AutoReleasePool* s_stack;
 

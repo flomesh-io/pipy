@@ -65,6 +65,7 @@ public:
   enum class Field {
     method,
     scheme,
+    authority,
     path,
   };
 
@@ -80,6 +81,12 @@ public:
     return ret.is_string() ? ret.s() : pjs::Str::empty.get();
   }
 
+  auto authority() -> pjs::Str* {
+    pjs::Value ret;
+    pjs::get<RequestHead>(this, RequestHead::Field::authority, ret);
+    return ret.is_string() ? ret.s() : pjs::Str::empty.get();
+  }
+
   auto path() -> pjs::Str* {
     pjs::Value ret;
     pjs::get<RequestHead>(this, RequestHead::Field::path, ret);
@@ -88,6 +95,7 @@ public:
 
   void method(pjs::Str *s) { pjs::set<RequestHead>(this, RequestHead::Field::method, s); }
   void scheme(pjs::Str *s) { pjs::set<RequestHead>(this, RequestHead::Field::scheme, s); }
+  void authority(pjs::Str *s) { pjs::set<RequestHead>(this, RequestHead::Field::authority, s); }
   void path(pjs::Str *s) { pjs::set<RequestHead>(this, RequestHead::Field::path, s); }
 };
 

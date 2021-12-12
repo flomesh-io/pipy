@@ -47,7 +47,16 @@ private:
   virtual void process(Event *evt) override;
   virtual auto on_new_session() -> MuxBase::Session* override;
 
-  class Session;
+  //
+  // Merge::Session
+  //
+
+  class Session : public pjs::Pooled<Session, MuxBase::Session> {
+    virtual auto open_stream() -> EventFunction* override;
+    virtual void close_stream(EventFunction *stream) override;
+
+    friend class Stream;
+  };
 
   //
   // Merge::Stream
@@ -58,26 +67,15 @@ private:
     public EventFunction
   {
     Stream(Session *session)
-      : m_session(session) {}
+      : m_output(session->input()) {}
 
     virtual void on_event(Event *evt) override;
 
-    Session* m_session;
+    pjs::Ref<Input> m_output;
     pjs::Ref<MessageStart> m_start;
     Data m_buffer;
 
     friend class Session;
-  };
-
-  //
-  // Merge::Session
-  //
-
-  class Session : public pjs::Pooled<Session, MuxBase::Session> {
-    virtual auto open_stream() -> EventFunction* override;
-    virtual void close_stream(EventFunction *stream) override;
-
-    friend class Stream;
   };
 };
 

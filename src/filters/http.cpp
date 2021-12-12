@@ -40,8 +40,8 @@ namespace http {
 
 static const pjs::Ref<pjs::Str> s_protocol(pjs::Str::make("protocol"));
 static const pjs::Ref<pjs::Str> s_method(pjs::Str::make("method"));
-static const pjs::Ref<pjs::Str> s_head(pjs::Str::make("HEAD"));
-static const pjs::Ref<pjs::Str> s_connect(pjs::Str::make("CONNECT"));
+static const pjs::Ref<pjs::Str> s_HEAD(pjs::Str::make("HEAD"));
+static const pjs::Ref<pjs::Str> s_CONNECT(pjs::Str::make("CONNECT"));
 static const pjs::Ref<pjs::Str> s_path(pjs::Str::make("path"));
 static const pjs::Ref<pjs::Str> s_status(pjs::Str::make("status"));
 static const pjs::Ref<pjs::Str> s_status_text(pjs::Str::make("statusText"));
@@ -389,8 +389,8 @@ void Decoder::on_event(Event *evt) {
             req->path(path);
             req->protocol(protocol);
             m_head = req;
-            m_is_bodiless = (method == s_head);
-            m_is_connect = (method == s_connect);
+            m_is_bodiless = (method == s_HEAD);
+            m_is_connect = (method == s_CONNECT);
           }
         }
         m_head->headers(pjs::Object::make());
@@ -603,9 +603,9 @@ void Encoder::on_event(Event *evt) {
       if (!m_is_response) {
         head->get(s_method, method);
         if (method.is_string()) {
-          if (method.s() == s_head) {
+          if (method.s() == s_HEAD) {
             m_is_bodiless = true;
-          } else if (method.s() == s_connect) {
+          } else if (method.s() == s_CONNECT) {
             m_is_connect = true;
           }
         }
@@ -1374,7 +1374,7 @@ void Server::Handler::on_event(Event *evt) {
 
   } else if (evt->is<MessageEnd>()) {
     if (m_start) {
-      pjs::Ref<Message> msg(
+      pjs::Ref<Message> res, req(
         Message::make(
           m_start->head(),
           Data::make(m_buffer)
@@ -1385,38 +1385,206 @@ void Server::Handler::on_event(Event *evt) {
       m_buffer.clear();
 
       if (auto &func = m_server->m_handler_func) {
-        msg = func(msg);
+        res = func(req);
 
       } else if (auto &handler = m_server->m_handler_obj) {
         if (handler->is_instance_of<Message>()) {
-          msg = handler->as<Message>();
+          res = handler->as<Message>();
 
         } else if (handler->is_function()) {
-          pjs::Value arg(msg), ret;
+          pjs::Value arg(req), ret;
           if (!m_server->callback(handler->as<pjs::Function>(), 1, &arg, ret)) return;
           if (ret.is_object()) {
-            msg = ret.o();
-          } else {
-            msg = nullptr;
-            if (!ret.is_undefined()) {
-              Log::error("[serveHTTP] handler did not return a valid message");
+            if (auto obj = ret.o()) {
+              if (obj->is_instance_of<Message>()) {
+                res = obj->as<Message>();
+              }
             }
           }
-
-        } else {
-          msg = nullptr;
         }
       }
 
-      if (msg) {
-        output(MessageStart::make(msg->head()));
-        if (auto *body = msg->body()) output(body);
+      if (res) {
+        output(MessageStart::make(res->head()));
+        if (auto *body = res->body()) output(body);
         output(evt);
       } else {
+        Log::error("[serveHTTP] handler did not return a valid message");
         output(MessageStart::make());
         output(evt);
       }
     }
+  }
+}
+
+//
+// TunnelServer
+//
+
+TunnelServer::TunnelServer(pjs::Function *handler)
+  : m_handler(handler)
+{
+}
+
+TunnelServer::TunnelServer(const TunnelServer &r)
+  : Filter(r)
+  , m_handler(r.m_handler)
+{
+}
+
+TunnelServer::~TunnelServer()
+{
+}
+
+void TunnelServer::dump(std::ostream &out) {
+  out << "acceptHTTPTunnel";
+}
+
+auto TunnelServer::clone() -> Filter* {
+  return new TunnelServer(*this);
+}
+
+void TunnelServer::reset() {
+  Filter::reset();
+  m_pipeline = nullptr;
+  m_start = nullptr;
+  m_buffer.clear();
+}
+
+void TunnelServer::process(Event *evt) {
+  if (!m_pipeline) {
+    if (auto start = evt->as<MessageStart>()) {
+      if (!m_start) {
+        m_start = start;
+      }
+    } else if (auto data = evt->as<Data>()) {
+      if (m_start) {
+        m_buffer.push(*data);
+      }
+    } else if (evt->is<MessageEnd>()) {
+      if (m_start) {
+        pjs::Ref<Message> res, req(
+          Message::make(
+            m_start->head(),
+            Data::make(m_buffer)
+          )
+        );
+
+        m_start = nullptr;
+        m_buffer.clear();
+
+        bool is_connect = false;
+        pjs::Value method;
+        req->head()->get(s_method, method);
+        if (method.is_string() && method.s() == s_CONNECT) is_connect = true;
+
+        pjs::Value arg(req), ret;
+        if (!callback(m_handler, 1, &arg, ret)) return;
+        if (ret.is_object()) {
+          if (auto obj = ret.o()) {
+            if (obj->is_instance_of<Message>()) {
+              res = obj->as<Message>();
+            }
+          }
+        }
+
+        if (!res) {
+          Log::error("[acceptHTTPTunnel] handler did not return a valid message");
+          return;
+        }
+
+        if (is_connect) {
+          if (auto head = res->head()) {
+            pjs::Value status;
+            head->get(s_status, status);
+            if (status.is_number() && 200 <= status.n() && status.n() < 300) {
+              m_pipeline = sub_pipeline(0, true);
+              m_pipeline->chain(output());
+            }
+          }
+        }
+
+        output(MessageStart::make(res->head()));
+        if (auto *body = res->body()) output(body);
+        output(evt);
+        return;
+      }
+    }
+  }
+
+  if (m_pipeline) {
+    m_pipeline->input()->input(evt);
+  }
+}
+
+//
+// TunnelClient
+//
+
+void TunnelClientReceiver::on_event(Event *evt) {
+  static_cast<TunnelClient*>(this)->on_receive(evt);
+}
+
+TunnelClient::TunnelClient(const pjs::Value &target)
+  : m_target(target)
+{
+}
+
+TunnelClient::TunnelClient(const TunnelClient &r)
+  : Filter(r)
+  , m_target(r.m_target)
+{
+}
+
+TunnelClient::~TunnelClient()
+{
+}
+
+void TunnelClient::dump(std::ostream &out) {
+  out << "connectHTTPTunnel";
+}
+
+auto TunnelClient::clone() -> Filter* {
+  return new TunnelClient(*this);
+}
+
+void TunnelClient::reset() {
+  Filter::reset();
+  TunnelClientReceiver::close();
+  m_pipeline = nullptr;
+  m_is_tunneling = false;
+}
+
+void TunnelClient::process(Event *evt) {
+  if (!m_pipeline) {
+    pjs::Value target;
+    if (!eval(m_target, target)) return;
+    auto s = target.to_string();
+    if (!utils::is_host_port(s->str())) {
+      s->release();
+      Log::error("[connectHTTPTunnel] invalid target: %s", s->c_str());
+      return;
+    }
+    auto head = http::RequestHead::make();
+    head->method(s_CONNECT);
+    head->path(s);
+    head->authority(s);
+    s->release();
+    m_pipeline = sub_pipeline(0, true);
+    m_pipeline->chain(TunnelClientReceiver::input());
+    auto inp = m_pipeline->input();
+    inp->input(MessageStart::make(head));
+    inp->input(MessageEnd::make());
+  }
+
+  m_pipeline->input()->input(evt);
+}
+
+void TunnelClient::on_receive(Event *evt) {
+  if (m_is_tunneling) {
+    output(evt);
+  } else if (auto start = evt->as<MessageStart>()) {
+    m_is_tunneling = true;
   }
 }
 
