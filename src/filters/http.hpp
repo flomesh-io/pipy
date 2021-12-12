@@ -116,14 +116,16 @@ public:
   bool is_upgrade_websocket() const { return m_is_upgrade_websocket; }
   bool is_upgrade_http2() const { return m_is_upgrade_http2; }
 
+  void set_buffer_size(int size) { m_buffer_size = size; }
   void set_final(bool b) { m_is_final = b; }
   void set_bodiless(bool b) { m_is_bodiless = b; }
   void set_connect(bool b) { m_is_connect = b; }
 
 private:
   pjs::Ref<MessageStart> m_start;
-  pjs::Ref<Data> m_buffer;
-  int m_content_length = -1;
+  Data m_buffer;
+  int m_buffer_size = DATA_CHUNK_SIZE;
+  int m_content_length = 0;
   bool m_chunked = false;
   bool m_is_response;
   bool m_is_final = false;
@@ -136,6 +138,8 @@ private:
   virtual void on_event(Event *evt) override;
 
   void output_head();
+  void output_chunk(const Data &data);
+  void output_end(Event *evt);
 
   bool is_bodiless_response() const {
     return m_is_response && m_is_bodiless;
@@ -204,7 +208,7 @@ private:
 
 class RequestEncoder : public Filter {
 public:
-  RequestEncoder();
+  RequestEncoder(pjs::Object *options);
 
 private:
   RequestEncoder(const RequestEncoder &r);
@@ -217,6 +221,7 @@ private:
   virtual void dump(std::ostream &out) override;
 
   Encoder m_ef_encode;
+  int m_buffer_size = DATA_CHUNK_SIZE;
 };
 
 //
@@ -238,7 +243,9 @@ private:
   virtual void dump(std::ostream &out) override;
 
   Encoder m_ef_encode;
+  pjs::Value m_final;
   pjs::Value m_bodiless;
+  int m_buffer_size = DATA_CHUNK_SIZE;
 };
 
 //
@@ -298,7 +305,7 @@ class Demux :
   protected Encoder
 {
 public:
-  Demux();
+  Demux(pjs::Object *options);
 
 private:
   Demux(const Demux &r);
@@ -310,6 +317,7 @@ private:
   virtual void process(Event *evt) override;
   virtual void dump(std::ostream &out) override;
 
+  int m_buffer_size = DATA_CHUNK_SIZE;
   http2::Demuxer *m_http2_demuxer = nullptr;
 
   virtual auto on_new_sub_pipeline() -> Pipeline* override;
@@ -344,6 +352,7 @@ private:
   ~Mux();
 
   int m_version = 1;
+  int m_buffer_size = DATA_CHUNK_SIZE;
 
   virtual auto clone() -> Filter* override;
   virtual void dump(std::ostream &out) override;
@@ -360,10 +369,11 @@ private:
     protected Encoder,
     protected Decoder
   {
-    Session(int version)
+    Session(int version, int buffer_size)
       : Encoder(false)
       , Decoder(true)
-      , m_version(version) {}
+      , m_version(version)
+      , m_buffer_size(buffer_size) {}
 
     virtual void open() override;
     virtual auto open_stream() -> EventFunction* override;
@@ -373,6 +383,7 @@ private:
     virtual void on_dequeue(Request *req) override;
 
     int m_version;
+    int m_buffer_size;
     HTTP2Muxer* m_http2_muxer = nullptr;
 
     void upgrade_http2();

@@ -157,7 +157,7 @@ void AdminProxy::open(int port, const Options &options) {
     pipeline_def_connect = pd;
   }
 
-  pipeline_def_inbound->append(new http::Demux())->add_sub_pipeline(pipeline_def_request);
+  pipeline_def_inbound->append(new http::Demux(nullptr))->add_sub_pipeline(pipeline_def_request);
   pipeline_def_request->append(new AdminProxyHandler(this))->add_sub_pipeline(pipeline_def_forward);
   pipeline_def_forward->append(new http::Mux(pjs::Str::empty.get(), nullptr))->add_sub_pipeline(pipeline_def_connect);
 

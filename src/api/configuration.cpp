@@ -226,7 +226,7 @@ void Configuration::demux(pjs::Str *target) {
 }
 
 void Configuration::demux_http(pjs::Str *target, pjs::Object *options) {
-  auto *filter = new http::Demux();
+  auto *filter = new http::Demux(options);
   filter->add_sub_pipeline(target);
   append_filter(filter);
 }
@@ -243,8 +243,8 @@ void Configuration::encode_dubbo(pjs::Object *message_obj) {
   append_filter(new dubbo::Encoder(message_obj));
 }
 
-void Configuration::encode_http_request() {
-  append_filter(new http::RequestEncoder());
+void Configuration::encode_http_request(pjs::Object *options) {
+  append_filter(new http::RequestEncoder(options));
 }
 
 void Configuration::encode_http_response(pjs::Object *response_obj) {
@@ -788,8 +788,10 @@ template<> void ClassDef<Configuration>::init() {
 
   // Configuration.encodeHTTPRequest
   method("encodeHTTPRequest", [](Context &ctx, Object *thiz, Value &result) {
+    Object *options = nullptr;
+    if (!ctx.arguments(0, &options)) return;
     try {
-      thiz->as<Configuration>()->encode_http_request();
+      thiz->as<Configuration>()->encode_http_request(options);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

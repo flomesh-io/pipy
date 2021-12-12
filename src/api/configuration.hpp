@@ -83,7 +83,7 @@ public:
   void dummy();
   void dump(const pjs::Value &tag);
   void encode_dubbo(pjs::Object *message_obj);
-  void encode_http_request();
+  void encode_http_request(pjs::Object *options);
   void encode_http_response(pjs::Object *options);
   void exec(const pjs::Value &command);
   void fork(pjs::Str *target, pjs::Object *initializers);

@@ -434,7 +434,6 @@ void Decoder::on_event(Event *evt) {
           headers->get(s_connection, connection);
           headers->get(s_transfer_encoding, transfer_encoding);
           headers->get(s_content_length, content_length);
-          if (!is_bodiless_response()) headers->ht_delete(s_content_length);
 
           // Connection and Keep-Alive
           if (connection.is_string()) {
@@ -486,6 +485,10 @@ void Decoder::on_event(Event *evt) {
       default: break;
     }
 
+    if (m_is_tunnel) {
+      EventFunction::output(Data::make(std::move(*data)));
+    }
+
     m_state = state;
   }
 }
@@ -495,20 +498,7 @@ void Decoder::message_start() {
 }
 
 void Decoder::message_end() {
-  if (m_is_response) {
-    if (m_is_connect) {
-      auto head = m_head->as<ResponseHead>();
-      auto status = head->status();
-      if (200 <= status && status < 300) {
-        m_is_tunnel = true;
-      }
-    }
-
-  } else if (m_is_connect) {
-    m_is_tunnel = true;
-  }
-
-  if (m_is_upgrade_websocket) {
+  if (m_is_connect || m_is_upgrade_websocket) {
     m_is_tunnel = true;
   }
 
@@ -576,8 +566,8 @@ void Decoder::stream_end(StreamEnd *end) {
 Data::Producer Encoder::s_dp("HTTP Encoder");
 
 void Encoder::reset() {
+  m_buffer.clear();
   m_start = nullptr;
-  m_buffer = nullptr;
   m_is_final = false;
   m_is_bodiless = false;
   m_is_connect = false;
@@ -594,13 +584,13 @@ void Encoder::on_event(Event *evt) {
 
   if (auto start = evt->as<MessageStart>()) {
     m_start = start;
-    m_buffer = nullptr;
-    m_content_length = -1;
+    m_content_length = 0;
     m_chunked = false;
+    m_buffer.clear();
 
     if (auto head = start->head()) {
-      pjs::Value method, headers, transfer_encoding, content_length;
       if (!m_is_response) {
+        pjs::Value method;
         head->get(s_method, method);
         if (method.is_string()) {
           if (method.s() == s_HEAD) {
@@ -610,96 +600,40 @@ void Encoder::on_event(Event *evt) {
           }
         }
       }
-      head->get(s_headers, headers);
-      if (headers.is_object()) {
-        headers.o()->get(s_transfer_encoding, transfer_encoding);
-        if (transfer_encoding.is_string()) {
-          if (!std::strncmp(transfer_encoding.s()->c_str(), "chunked", 7)) {
-            m_chunked = true;
-          }
-        }
-        if (!m_chunked) {
-          headers.o()->get(s_content_length, content_length);
-          if (content_length.is_string()) {
-            m_content_length = std::atoi(content_length.s()->c_str());
-          } else if (content_length.is_number()) {
-            m_content_length = content_length.n();
-          }
-        }
-      }
-    }
-
-    if (is_bodiless_response()) {
-      m_content_length = 0;
-    } else if (m_chunked || m_content_length >= 0) {
-      output_head();
-    } else {
-      m_buffer = Data::make();
     }
 
   } else if (auto data = evt->as<Data>()) {
     if (m_start) {
       if (is_bodiless_response()) {
         m_content_length += data->size();
-      } else if (m_buffer) {
-        m_buffer->push(*data);
-      } else if (m_chunked && !data->empty()) {
-        auto buf = Data::make();
-        char str[100];
-        std::sprintf(str, "%X\r\n", data->size());
-        s_dp.push(buf, str);
-        buf->push(*data);
-        s_dp.push(buf, "\r\n");
-        output(buf);
+      } else if (m_chunked) {
+        if (!data->empty()) output_chunk(*data);
       } else {
-        output(data);
+        m_buffer.push(*data);
+        m_content_length += data->size();
+        if (m_buffer.size() > m_buffer_size) {
+          m_chunked = true;
+          output_head();
+          output_chunk(m_buffer);
+          m_buffer.clear();
+        }
       }
     }
 
   } else if (evt->is<MessageEnd>()) {
     if (m_start) {
-      if (is_bodiless_response()) {
-        output_head();
-      } else if (m_chunked) {
-        output(s_dp.make("0\r\n\r\n"));
-      } else if (m_buffer) {
-        m_content_length = m_buffer->size();
-        output_head();
-        if (!m_buffer->empty()) output(m_buffer);
-      }
-      output(evt);
+      output_end(evt);
       if (m_is_response && m_is_final) {
         output(StreamEnd::make());
       }
     }
 
-    auto head = m_start->head();
-    if (m_is_response) {
-      if (m_is_connect) {
-        pjs::Value status;
-        if (auto head = m_start->head()) {
-          head->get(s_status, status);
-        } else {
-          status.set(200);
-        }
-        if (status.is_number()) {
-          auto n = status.n();
-          if (200 <= n && n < 300) {
-            m_is_tunnel = true;
-          }
-        }
-      }
-
-    } else if (m_is_connect) {
+    if (m_is_connect || m_is_upgrade_websocket) {
       m_is_tunnel = true;
     }
 
-    if (m_is_upgrade_websocket) {
-      m_is_tunnel = true;
-    }
-
+    m_buffer.clear();
     m_start = nullptr;
-    m_buffer = nullptr;
     m_is_final = false;
     m_is_bodiless = false;
     m_is_connect = false;
@@ -708,6 +642,8 @@ void Encoder::on_event(Event *evt) {
 
   } else if (evt->is<StreamEnd>()) {
     output(evt);
+    m_buffer.clear();
+    m_start = nullptr;
   }
 }
 
@@ -792,19 +728,18 @@ void Encoder::output_head() {
   if (headers.is_object()) {
     headers.o()->iterate_all(
       [&](pjs::Str *k, pjs::Value &v) {
-        if (k == s_connection || k == s_keep_alive) return;
-        if (k == s_content_length && m_chunked) return;
-        s_dp.push(buffer, k->str());
-        s_dp.push(buffer, ": ");
+        if (k == s_connection) return;
+        if (k == s_keep_alive) return;
+        if (k == s_transfer_encoding) return;
         if (k == s_content_length) {
-          content_length_written = true;
-          if (!is_bodiless_response()) {
-            char str[100];
-            std::sprintf(str, "%d\r\n", m_content_length);
-            s_dp.push(buffer, str);
+          if (is_bodiless_response()) {
+            content_length_written = true;
+          } else {
             return;
           }
         }
+        s_dp.push(buffer, k->str());
+        s_dp.push(buffer, ": ");
         auto s = v.to_string();
         s_dp.push(buffer, s->str());
         s_dp.push(buffer, "\r\n");
@@ -823,7 +758,10 @@ void Encoder::output_head() {
     );
   }
 
-  if (!content_length_written && !m_chunked && (m_content_length > 0 || m_is_response)) {
+  if (m_chunked) {
+    static std::string str("transfer-encoding: chunked\r\n");
+    s_dp.push(buffer, str);
+  } else if (!content_length_written) {
     char str[100];
     std::sprintf(str, ": %d\r\n", m_content_length);
     s_dp.push(buffer, s_content_length->str());
@@ -844,6 +782,30 @@ void Encoder::output_head() {
 
   output(m_start);
   output(buffer);
+}
+
+void Encoder::output_chunk(const Data &data) {
+  auto buf = Data::make();
+  char str[100];
+  std::sprintf(str, "%X\r\n", data.size());
+  s_dp.push(buf, str);
+  buf->push(data);
+  s_dp.push(buf, "\r\n");
+  output(buf);
+}
+
+void Encoder::output_end(Event *evt) {
+  if (is_bodiless_response()) {
+    output_head();
+  } else if (m_chunked) {
+    output(s_dp.make("0\r\n\r\n"));
+  } else {
+    output_head();
+    if (!m_buffer.empty()) {
+      output(Data::make(std::move(m_buffer)));
+    }
+  }
+  output(evt);
 }
 
 //
@@ -951,14 +913,29 @@ void ResponseDecoder::on_set_bodiless(Event *evt) {
 // RequestEncoder
 //
 
-RequestEncoder::RequestEncoder()
+RequestEncoder::RequestEncoder(pjs::Object *options)
   : m_ef_encode(false)
 {
+  if (options) {
+    pjs::Value buffer_size;
+    options->get("bufferSize", buffer_size);
+
+    if (!buffer_size.is_undefined()) {
+      if (buffer_size.is_number()) {
+        m_buffer_size = buffer_size.n();
+      } else if (buffer_size.is_string()) {
+        m_buffer_size = utils::get_byte_size(buffer_size.s()->str());
+      } else {
+        throw std::runtime_error("options.bufferSize requires a number or a string");
+      }
+    }
+  }
 }
 
 RequestEncoder::RequestEncoder(const RequestEncoder &r)
   : Filter(r)
   , m_ef_encode(false)
+  , m_buffer_size(r.m_buffer_size)
 {
 }
 
@@ -977,6 +954,7 @@ auto RequestEncoder::clone() -> Filter* {
 void RequestEncoder::chain() {
   Filter::chain();
   m_ef_encode.chain(output());
+  m_ef_encode.set_buffer_size(m_buffer_size);
 }
 
 void RequestEncoder::reset() {
@@ -1000,14 +978,29 @@ ResponseEncoder::ResponseEncoder(pjs::Object *options)
   : m_ef_encode(true)
 {
   if (options) {
+    pjs::Value buffer_size;
+    options->get("final", m_final);
     options->get("bodiless", m_bodiless);
+    options->get("bufferSize", buffer_size);
+
+    if (!buffer_size.is_undefined()) {
+      if (buffer_size.is_number()) {
+        m_buffer_size = buffer_size.n();
+      } else if (buffer_size.is_string()) {
+        m_buffer_size = utils::get_byte_size(buffer_size.s()->str());
+      } else {
+        throw std::runtime_error("options.bufferSize requires a number or a string");
+      }
+    }
   }
 }
 
 ResponseEncoder::ResponseEncoder(const ResponseEncoder &r)
   : Filter(r)
   , m_ef_encode(true)
+  , m_final(r.m_final)
   , m_bodiless(r.m_bodiless)
+  , m_buffer_size(r.m_buffer_size)
 {
 }
 
@@ -1026,6 +1019,7 @@ auto ResponseEncoder::clone() -> Filter* {
 void ResponseEncoder::chain() {
   Filter::chain();
   m_ef_encode.chain(output());
+  m_ef_encode.set_buffer_size(m_buffer_size);
 }
 
 void ResponseEncoder::reset() {
@@ -1038,8 +1032,10 @@ void ResponseEncoder::process(Event *evt) {
     output(evt);
   } else {
     if (evt->is<MessageStart>()) {
-      pjs::Value bodiless;
+      pjs::Value final, bodiless;
+      if (!eval(m_final, final)) return;
       if (!eval(m_bodiless, bodiless)) return;
+      m_ef_encode.set_final(final.to_boolean());
       m_ef_encode.set_bodiless(bodiless.to_boolean());
     }
     output(evt, m_ef_encode.input());
@@ -1086,16 +1082,32 @@ void RequestQueue::on_reply(Event *evt) {
 // Demux
 //
 
-Demux::Demux()
+Demux::Demux(pjs::Object *options)
   : Decoder(false)
   , Encoder(true)
 {
+  if (options) {
+    pjs::Value buffer_size;
+
+    options->get("bufferSize", buffer_size);
+
+    if (!buffer_size.is_undefined()) {
+      if (buffer_size.is_number()) {
+        m_buffer_size = buffer_size.n();
+      } else if (buffer_size.is_string()) {
+        m_buffer_size = utils::get_byte_size(buffer_size.s()->str());
+      } else {
+        throw std::runtime_error("options.bufferSize requires a number or a string");
+      }
+    }
+  }
 }
 
 Demux::Demux(const Demux &r)
   : Filter(r)
   , Decoder(false)
   , Encoder(true)
+  , m_buffer_size(r.m_buffer_size)
 {
 }
 
@@ -1118,6 +1130,7 @@ void Demux::chain() {
   QueueDemuxer::chain(RequestQueue::reply());
   RequestQueue::chain(Encoder::input());
   Encoder::chain(Filter::output());
+  Encoder::set_buffer_size(m_buffer_size);
 }
 
 void Demux::reset() {
@@ -1193,8 +1206,11 @@ Mux::Mux(const pjs::Value &key, pjs::Object *options)
   : pipy::Mux(key, options)
 {
   if (options) {
-    pjs::Value version;
+    pjs::Value version, buffer_size;
+
     options->get("version", version);
+    options->get("bufferSize", buffer_size);
+
     if (!version.is_undefined()) {
       if (version.is_number()) {
         m_version = version.n();
@@ -1206,11 +1222,23 @@ Mux::Mux(const pjs::Value &key, pjs::Object *options)
         throw std::runtime_error("options.version requires a number");
       }
     }
+
+    if (!buffer_size.is_undefined()) {
+      if (buffer_size.is_number()) {
+        m_buffer_size = buffer_size.n();
+      } else if (buffer_size.is_string()) {
+        m_buffer_size = utils::get_byte_size(buffer_size.s()->str());
+      } else {
+        throw std::runtime_error("options.bufferSize requires a number or a string");
+      }
+    }
   }
 }
 
 Mux::Mux(const Mux &r)
   : pipy::Mux(r)
+  , m_version(r.m_version)
+  , m_buffer_size(r.m_buffer_size)
 {
 }
 
@@ -1227,7 +1255,7 @@ auto Mux::clone() -> Filter* {
 }
 
 auto Mux::on_new_session() -> MuxBase::Session* {
-  return new Session(m_version);
+  return new Session(m_version, m_buffer_size);
 }
 
 //
@@ -1248,6 +1276,7 @@ void Mux::Session::open() {
     upgrade_http2();
     break;
   }
+  Encoder::set_buffer_size(m_buffer_size);
 }
 
 auto Mux::Session::open_stream() -> EventFunction* {
