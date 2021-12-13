@@ -1,0 +1,146 @@
+---
+title: 16 静态资源服务
+---
+
+## 问题
+
+Pipy 除了可以代理上游的服务，还可以提供静态资源服务。使用这个功能，可以方便的搭建服务，比如响应静态页面、文件共享等等。
+
+这次我们就来为服务增加一个静态文件页面。
+
+## 配置
+
+对于静态资源，会有一个 *根目录*。这个目录中的文件与请求 URI 的 path 一一对应，即 path 就是文件相对于 *根目录* 的相对路径。比如我们请求 `/a/b.html`，则静态文件则位于 `ROOT/a/b.html`。
+
+静态资源配置同样也是服务级别的，比如下面的配置，*www* 目录就是 *service-tell-ip* 服务的静态资源目录。
+
+```javascript
+{
+  "services": {
+    "service-tell-ip": {
+      "root": "www"
+    }
+  }
+}
+```
+
+因此我们在创建一个名为 *www* 的目录，并添加一个简单的文件 *index.html*：
+
+```html
+<!DOCTYPE html>
+<body>
+  <head>
+    <title>Test</title>
+  </head>
+  <body>
+    <p>Hello!</p>
+  </body>
+</body>
+```
+
+接下来就是在请求时定位文件，并返回文件内容了。
+
+## 代码剖析
+
+首先是定义全局变量：
+
+* `_root`：服务的静态资源目录
+* `_file`：与请求对应的静态资源
+
+```javascript
+pipy({
+  _root: '',
+  _file: null,
+})
+
+.import({
+  __turnDown: 'proxy',
+  __serviceID: 'router',
+})
+```
+
+### `http.File` 类型
+
+[`File`](/reference/http/File) 类，用于加载静态资源：
+
+* 静态方法 `from()` 可以从参数指定路径加载文件，假如路径是 `/`，则文件名默认为 `/index.html`。定位文件时会同时查找 *FILE*、*FILE.gz*、*FILE.br*，若三种文件都不存在，则会继续查找 *FILE/index.html*、*FILE/index.html.gz*、*FILE/index.html.br*。如若还是找不到文件，则返回 `null`。
+* `toMessage()` 使用参数指定的编码对静态资源的内容进行编码。
+
+```javascript
+.pipeline('request')
+  .handleMessageStart(
+    msg => (
+      _root = config.services[__serviceID]?.root,
+      _root && (
+        _file = http.File.from(_root + msg.head.path)
+      )
+    )
+  )
+  .link(
+    'serve', () => Boolean(_file),
+    'bypass'
+  )
+```
+
+确定请求对应的静态内容之后，通过对全局变量 `_file` 判断是响应静态内容，还是将请求发送到上游进行处理。
+
+```javascript
+.pipeline('serve')
+  .replaceMessage(
+    msg => (
+      __turnDown = true,
+      _file.toMessage(msg.head.headers['accept-encoding'])
+    )
+  )
+
+.pipeline('bypass')
+```
+
+最后记得引入新的插件：
+
+```json
+//config/proxy.json
+{
+  "listen": 8000,
+  "plugins": [
+    "plugins/router.js",
+    "plugins/serve-static.js",
+    "plugins/balancer.js",
+    "plugins/default.js"
+  ]
+}
+```
+
+## 测试
+
+还记得我们在 [06 路径重写](/tutorial/10-path-rewriting) 中，对 *service-tell-ip* 服务做了路径重写：`/ip` 重写为 `/`。
+
+```shell
+#返回静态内容
+curl localhost:8000/ip/
+<!DOCTYPE html>
+<body>
+  <head>
+    <title>Test</title>
+  </head>
+  <body>
+    <p>Hello!</p>
+  </body>
+</body>
+#找不到静态内容，使用上游服务进行处理。
+curl localhost:8000/ip/a
+You are requesting /a from ::ffff:127.0.0.1
+```
+
+## 总结
+
+从测试的结果不难看出，这里其实实现了动态和静态的自动处理，优先使用静态内容响应请求，找不到再代理后上游服务。结合 Pipy Repo，可以轻松实现对静态内容的管理，做到静态与动态的实时转换。
+
+### 收益
+
+* 使用 `http.File.from()` 加载静态内容，支持 *gzip*、*br* 的压缩文件
+* 使用 `File.toMessage()` 在发送响应前对静态内容进行编码。
+
+### 接下来
+
+下一次，我们就为代理增加数据格式的转换。
