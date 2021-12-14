@@ -1,0 +1,117 @@
+---
+title: 18 TLS
+---
+
+## 问题
+
+TLS 是一种广泛采用的安全协议，目的是促进网络通信的私密性和数据安全性。主要对应用与服务器之间的通信进行加密，与前面应用层的安全防护有本质的区别。
+
+TLS 的支持也是代理的基础功能之一，今天我们就为代理增加 TLS 的支持。
+
+## TLS 卸载
+
+上游的服务可能并不会支持 TLS 加密传输，因此我们要在代理这一层完成 TLS 卸载。
+
+[`acceptTLS`](/reference/Configuration/acceptTLS) 过滤器用于接受 TLS 加密的数据流，并进行 TLS 卸载。其接受两个参数 `acceptTLS(target, options)`：
+
+* `target` 目标子管道，卸载后的数据流将会发送到该子管道进行后续的处理。
+* `options` 扩展选项，比如指定要使用的证书和密钥（后面详细说明）。
+
+TLS 的卸载要在所有的管道处理之前完成，因此处理需要在端口管道中进行处理。
+
+在开始之前，我们先创建证书和秘钥，并添加到 codebase 的 secret 目录中：
+
+```shell
+openssl req -x509 -newkey rsa:4096 -keyout server-key.pem -out server-cert.pem -sha256 -days 365 -nodes -subj '/CN=localhost'
+```
+
+## 代码剖析
+
+修改 *proxy.js*，添加新的端口监听管道。在 `acceptTLS` 过滤器中指定 `tls-offloaded` 子管道对卸载后的流量进行处理，并同时引入上面创建的证书和密钥。
+
+在 `tls-offloaded` 子管道中，使用原端口管道同样的处理方式。
+
+> 这里我们引入了新的模块变量 `__isTLS`，方便在其他模块中对当前连接进行判断和记录，比如日志模块中记录当前请求是否是 TLS 加密。
+
+```javascript
+  (config =>
+
+  pipy()
+
+  .export('proxy', {
+    __turnDown: false,
++   __isTLS: false,
+  })
+
+  .listen(config.listen)
+    .use(config.plugins, 'session')  
+    .demuxHTTP('request')
+
++ .listen(config.listenTLS)
++   .handleStreamStart(
++     () => __isTLS = true
++   )
++   .acceptTLS('tls-offloaded', {
++     certificate: config.listenTLS ? {
++       cert: new crypto.CertificateChain(pipy.load('secret/server-cert.pem')),
++       key: new crypto.PrivateKey(pipy.load('secret/server-key.pem')),
++     } : undefined,
++   })
+
++ .pipeline('tls-offloaded')
++   .use(config.plugins, 'session')
++   .demuxHTTP('request')
+
+  .pipeline('request')
+    .use(
+      config.plugins,
+      'request',
+      'response',
+      () => __turnDown
+    )
+
+  )(JSON.decode(pipy.load('config/proxy.json')))
+```
+
+在过滤器 `acceptTLS` 中除了指定子管道以外，还通过 `options` 选项在指定 TLS 要使用的证书和秘钥（*certificate*）。[`CertificateChain`](/reference/crypto/CertificateChain) 用于创建证书对象，[`PrivateKey`](/reference/crypto/PrivateKey) 用于创建私钥。
+
+> 这里我们仅实现了对服务端的单向认证，通过 `options` 的另一个字段 *trusted* 可以实现对客户端的验证。
+
+调整原端口管道，也连接到新的子管道上。
+
+```javascript
+  .listen(config.listen)
+-   .use(config.plugins, 'session')  
+-   .demuxHTTP('request')
++   .link('tls-offloaded')
+```
+
+## 测试
+
+测试 *8000* 端口的监听，以及使用 *https* 访问 *8443* 端口。
+
+```shell
+curl http://localhost:8000/hi
+You are requesting / from ::ffff:127.0.0.1
+
+curl https://localhost:8443/hi
+curl: (60) SSL certificate problem: self signed certificate
+More details here: https://curl.se/docs/sslcerts.html
+
+curl failed to verify the legitimacy of the server and therefore could not
+establish a secure connection to it. To learn more about this situation and
+how to fix it, please visit the web page mentioned above.
+
+curl --cacert server-cert.pem https://localhost:8443/hi
+Hi, there!
+```
+
+## 总结
+
+本节我们仅实现了对服务端的单向认证，在实际的场景中也会用到双向 TLS，可以通过 *options* 的 *trusted* 实现。有兴趣的你不妨试一试？
+
+### 收益
+
+* 使用 *acceptTLS* 过滤器接受 TLS 的数据流以及进行 TLS 卸载。
+* 除了单项认证，同样可以支持 mTLS。
+

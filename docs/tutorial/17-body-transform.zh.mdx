@@ -4,6 +4,192 @@ title: 17 数据格式转换
 
 ## 问题
 
-JSON 被广泛应用于 Web 开发，作为应用端与服务端交互的数据格式。在 JSON 之前，有很多交互使用 XML 格式。可能一些遗留遗留系统还在使用 XML 格式，甚至短期还要继续保留。这种系统假如要继续对应用端提供服务，免不了需要二次开发。假如我们的代理可以完成转换的操作，就可以方便遗留系统的快速接入。
+如今 JSON 被广泛应用于 Web 开发，作为应用端与服务端交互的数据格式。但 20 多年前 SOAP 服务是企业的主要内容，也是网络服务的首选标准。这也导致很多企业内部留下了部分的遗留系统。
+而现代依赖 JSON 处理请求的应用程序要访问遗留系统就成为了问题。这种系统假如要继续对应用端提供服务，免不了需要二次开发。假如我们的代理可以完成转换的操作，就可以方便遗留系统的快速接入，实现 0 代码的升级。
 
 对，这次我们就为代理扩展数据格式转换的能力。
+
+## 配置
+
+首先是为服务设置服务转换的类型：
+
+* *jsonToXML*：需要将请求的 JSON 格式数据转换为 XML 格式
+* *xmlToJson*：需要将请求的 XML 格式数据转换为 JSON 格式
+
+这里我们选择 *service-echo* 服务，因为这个服务可以将请求的内容原封不动的返回。我们的插件将会把 JSON 格式的请求内容转换成 XML 代理给上游的服务。
+
+```json
+{
+  "services": {
+    "service-echo": {
+      "jsonToXml": true
+    }
+  }
+}
+```
+
+## 数据格式转换
+
+如果大家看过前面的教程，我们用的比较多的数据格式是 JSON，通过 [`JSON`](/reference/JSON) 类对数据进行编解码。其提供了几个常用方法：`parse`、`stringify`、`encode` 和 `decode`。
+
+处理 XML 格式的数据，也同样提供了 [`XML`](/reference/XML) 类，提供了与 *JSON* 相同的方法。
+
+XML 与 JSON 格式的互相转换，会使用 JavaScript Object 作为中间类型，即 XML <=> Object <=> JSON。
+
+JSON 与 Object 的转换很简单，使用 `decode` 和 `encode` 即可。而 XML 是一个完整的标记语言，因此转换会稍微复杂一些，其 `decode` 和 `encode` 方法是用来将数据与 [`XML.Node`](/reference/XML/Node) 对象进行转换。
+
+```xml
+<root>
+  <msg>Hi, there!</msg>
+</root>
+```
+
+比如上面的示例展示了我们今天的目标数据格式，实际上真正的数据是 `msg: Hi, there!`，其他部分可以理解为数据的外层框架。
+
+## 代码剖析
+
+除了配置相关的两个全局变量外，我们将用于 XML 转换的两个函数 `_obj2xml` 和 `_xml2obj` 提升为全局变量，二者类型都是函数。这里我们先将二者设置为 `null`，后面再补全。
+
+```javascript
+pipy({
+  _services: config.services,
+  _service: null,
+  _obj2xml: null,
+  _xml2obj: null,
+})
+
+.import({
+  __serviceID: 'router',
+})
+```
+
+接下来就是请求的处理了，先获取服务的配置。再根据配置，选择子管道进行处理。
+
+```javascript
+.pipeline('request')
+  .handleStreamStart(
+    () => _service = _services[__serviceID]
+  )
+  .link(
+    'json2xml', () => Boolean(_service?.jsonToXml),
+    'xml2json', () => Boolean(_service?.xmlToJson),
+    'bypass'
+  )
+```
+
+### JSON 转换为 XML
+
+*json2xml* 子管道中，我们使用 `replaceMessageBody` 过滤器对消息体进行替换：
+
+```javascript
+.pipeline('json2xml')
+  .replaceMessageBody(
+    data => (
+      XML.encode(
+        new XML.Node(
+          '', null, [
+            new XML.Node(
+              'root', null,
+              _obj2xml(JSON.decode(data))
+            )
+          ]
+        ),
+        2,
+      )
+    )
+  )
+```
+[`XML.Node`](/reference/XML/Node) 是 XML 节点的类型，我们使用这个类进行节点的创建。我们一次创建了主节点和 `root` 节点，然后使用 `_obj2xml` 函数将消息体转换为节点数组作为 `root` 节点的子节点。因此函数 `_obj2xml` 的返回值是节点数组：
+
+```javascript
+_obj2xml: node => (
+  typeof node === 'object' ? (
+    Object.entries(node).flatMap(
+      ([k, v]) => (
+        v instanceof Array && (
+          v.map(e => new XML.Node(k, null, _obj2xml(e)))
+        ) ||
+        v instanceof Object && (
+          new XML.Node(k, null, _obj2xml(v))
+        ) || (
+          new XML.Node(k, null, [v])
+        )
+      )
+    )
+  ) : [
+    new XML.Node('body', null, [''])
+  ]
+)
+```
+
+### XML 转换为 JSON
+
+*xml2json* 子管道中，使用 `_xml2obj` 函数对 `XML.Node` 转换成 JavaScript 对象。
+
+```javascript
+.pipeline('xml2json')
+  .replaceMessageBody(
+    data => (
+      JSON.encode(
+        _xml2obj(XML.decode(data))
+      )
+    )
+  )
+```
+
+`_xml2obj` 中，将节点的名字作为 JavaScript 对象的字段，对节点的子节点同样使用递归的方式进行处理。该函数的返回值是个对象：
+
+```javascript
+_xml2obj: node => (
+  node ? (
+    ((
+      children,
+      previous,
+      obj, k, v,
+    ) => (
+      obj = {},
+      node.children.forEach(node => (
+        (children = node.children) && (
+          k = node.name,
+          v = children.every(i => typeof i === 'string') ? children.join('') : _xml2obj(node),
+          previous = obj[k],
+          previous instanceof Array ? (
+            previous.push(v)
+          ) : (
+            obj[k] = previous ? [previous, v] : v
+          )
+        )
+      )),
+      obj
+    ))()
+  ) : {}
+)
+```
+
+当然最后别忘记 `bypass` 子管道：
+
+```javascript
+.pipeline('bypass')
+```
+
+## 测试
+
+```shell
+curl -X POST http://localhost:8000/echo -d '{"msg": "Hi, there!"}'
+<root>
+  <msg>Hi, there!</msg>
+</root>
+```
+
+## 总结
+
+在代理层面完成数据格式转换之后，就可以方便使用不同格式的应用之间进行互通。本次教程只是对请求数据进行了简单的格式转换，实际上响应的内容大多时候也需要再从 XML 转换成 JSON。
+
+### 收益
+
+* 全局变量除了可以定义变量以外，也可以定义函数，对通用逻辑进行封装。
+* 使用 *XML* 类 和 *Node* 类对 XML 类型数据进行处理。
+
+### 接下来
+
+前面介绍的安全提升多是从应用层面进行保障，下一节我们将从网络层面提升安全性保障。
