@@ -1,0 +1,31 @@
+server:
+  listen: 8080
+  endpoints:
+    GET /hello:
+      text: Hello, world!
+    GET /bulky:
+      text: $
+      repeat: 10000
+
+client:
+  requests:
+    hello:
+      method: GET
+      path: /hello
+    bulky:
+      method: GET
+      path: /bulky
+  threads:
+    - target: localhost:8000
+      concurrency: 10
+      minRequests: 5
+      maxRequests: 5
+      requests:
+        - hello
+        - bulky
+    - target: localhost:8000
+      concurrency: 5
+      minIdle: 0
+      maxIdle: 3000
+      requests:
+        - bulky
