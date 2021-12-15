@@ -72,11 +72,13 @@ export default async function(config, basePath) {
         const { path, ...options } = req;
         try {
           const res = await client(path, options);
-          stats.totalRequests++;
           stats.totalTransfer += res.rawBody.length;
-          if (res.status >= 400) stats.totalErrors++;
+          if (res.statusCode < 400) {
+            stats.totalRequests++;
+          } else {
+            stats.totalErrors++;
+          }
         } catch (err) {
-          stats.totalRequests++;
           stats.totalErrors++;
         }
         const idle = Math.floor(Math.random() * (maxIdle - minIdle)) + minIdle;
@@ -128,14 +130,18 @@ export default async function(config, basePath) {
 
   log('Client started');
 
+  let time = Date.now();
   setInterval(
     () => {
+      const now = Date.now();
+      const t = (now - time) / 1000;
       log(
         'Requests', chalk.green(padding(stats.totalRequests, 8)),
         'Errors'  , chalk.red(padding(stats.totalErrors, 8)),
-        'Transfer', chalk.magenta(padding(prettyBytes(stats.totalTransfer) + '/s', 8)),
+        'Transfer', chalk.magenta(padding(prettyBytes(Math.floor(stats.totalTransfer/t)) + '/s', 8)),
       );
       stats.totalTransfer = 0;
+      time = now;
     },
     1000
   );
