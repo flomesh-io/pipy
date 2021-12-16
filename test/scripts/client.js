@@ -3,6 +3,7 @@ import chalk from 'chalk';
 import prettyBytes from 'pretty-bytes';
 import fs from 'fs';
 import http from 'http';
+import https from 'https';
 import { join } from 'path';
 
 const log = console.log;
@@ -55,16 +56,39 @@ export default async function(config, basePath) {
   }
 
   async function session(target, requests, count, minIdle, maxIdle) {
-    const agent = new http.Agent({
-      keepAlive: true,
-    });
+    let agent, client;
 
-    const client = got.extend({
-      prefixUrl: `http://${target}`,
-      agent: {
-        http: agent,
-      },
-    });
+    if (target.startsWith('https://')) {
+      agent = new https.Agent({
+        keepAlive: true,
+      });
+
+      client = got.extend({
+        prefixUrl: target,
+        decompress: false,
+        agent: {
+          https: agent,
+        },
+        https: {
+          rejectUnauthorized: false,
+        },
+      });
+
+    } else {
+      agent = new http.Agent();
+
+      if (!target.startsWith('http://')) {
+        target = 'http://' + target;
+      }
+
+      client = got.extend({
+        prefixUrl: target,
+        decompress: false,
+        agent: {
+          http: agent,
+        },
+      });
+    }
 
     let n = 0;
     while (n < count) {

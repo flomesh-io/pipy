@@ -31,7 +31,7 @@ async function start(testcase, options) {
   if (client) await startClient(config.client, basePath, options.target);
 }
 
-const options = program
+program
   .argument('<testcase>')
   .option('-p, --pipy', 'Run the Pipy codebase under testing')
   .option('-c, --client', 'Run the test client')
