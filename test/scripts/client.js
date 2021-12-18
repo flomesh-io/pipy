@@ -13,25 +13,26 @@ function padding(text, width) {
   text = text.toString();
   const n = text.length;
   if (n >= width) return text;
-  return text + spaces.substr(0, width - n);
+  return text + spaces.substring(0, width - n);
 }
 
 export default async function(config, basePath) {
   const stats = {
     totalRequests: 0,
     totalTransfer: 0,
-    totalErrors: 0,
+    totalStatusErrors: 0,
+    totalVerifyErrors: 0,
   };
 
   const allRequests = {};
 
   for (const k in config.requests) {
-    let {
-      method,
-      path,
-      headers,
-      body,
-    } = config.requests[k];
+    const { handler, ...options } = config.requests[k];
+    let { method, path, body } = options;
+
+    if (path.startsWith('/')) {
+      path = path.substring(1);
+    }
 
     if (method === 'POST') {
       const { file, text, repeat } = body;
@@ -44,15 +45,19 @@ export default async function(config, basePath) {
       }
     }
 
-    if (path.startsWith('/')) {
-      path = path.substring(1);
+    options.path = path;
+    options.body = body;
+
+    if (handler) {
+      const mod = await import(`./handlers/${handler}`);
+      allRequests[k] = {
+        request: mod.request(options),
+        verify: mod.verify(options),
+      };
+
+    } else {
+      allRequests[k] = options;
     }
-
-    const req = { method, path };
-    if (headers) req.headers = headers;
-    if (body) req.body = body;
-
-    allRequests[k] = req;
   }
 
   async function session(target, requests, count, minIdle, maxIdle) {
@@ -92,18 +97,28 @@ export default async function(config, basePath) {
 
     let n = 0;
     while (n < count) {
-      for (const req of requests) {
-        const { path, ...options } = req;
+      for (let req of requests) {
+        let verify;
+        if (req.request && req.verify) {
+          verify = req.verify;
+          req = req.request();
+        }
+
+        let { path, ...options } = req;
         try {
           const res = await client(path, options);
           stats.totalTransfer += res.rawBody.length;
           if (res.statusCode < 400) {
             stats.totalRequests++;
           } else {
-            stats.totalErrors++;
+            stats.totalStatusErrors++;
+          }
+          if (verify) {
+            const ok = verify(req, res);
+            if (!ok) stats.totalVerifyErrors++;
           }
         } catch (err) {
-          stats.totalErrors++;
+          stats.totalStatusErrors++;
         }
         const idle = Math.floor(Math.random() * (maxIdle - minIdle)) + minIdle;
         if (idle > 0) await new Promise(resolve => setTimeout(resolve, idle));
@@ -116,11 +131,11 @@ export default async function(config, basePath) {
 
   async function thread(target, requests, options) {
     for (;;) {
-      const min = options.minRequests || 1;
-      const max = options.maxRequests || 1;
+      const min = (options.minRequests|0) || 1;
+      const max = (options.maxRequests|0) || 1;
       const count = Math.floor(Math.random() * (max - min)) + min;
-      const minIdle = options.minIdle || 0;
-      const maxIdle = options.maxIdle || 0;
+      const minIdle = (options.minIdle|0) || 0;
+      const maxIdle = (options.maxIdle|0) || 0;
       await session(target, requests, count, minIdle, maxIdle);
     }
   }
@@ -129,7 +144,7 @@ export default async function(config, basePath) {
 
   const threads = config.threads.map(
     ({ target, concurrency, requests, ...options }, i) => {
-      concurrency = concurrency || 1;
+      concurrency = (concurrency|0) || 1;
       log(`  Thread group #${i}:`,
         'Threads'     , chalk.magenta(padding(concurrency, 8)),
         'Pattern size', chalk.magenta(padding(requests.length, 8)),
@@ -160,9 +175,10 @@ export default async function(config, basePath) {
       const now = Date.now();
       const t = (now - time) / 1000;
       log(
-        'Requests', chalk.green(padding(stats.totalRequests, 8)),
-        'Errors'  , chalk.red(padding(stats.totalErrors, 8)),
-        'Transfer', chalk.magenta(padding(prettyBytes(Math.floor(stats.totalTransfer/t)) + '/s', 8)),
+        'Requests'      , chalk.green(padding(stats.totalRequests, 8)),
+        'Status Errors' , chalk.red(padding(stats.totalStatusErrors, 8)),
+        'Verify Errors' , chalk.red(padding(stats.totalVerifyErrors, 8)),
+        'Transfer'      , chalk.magenta(padding(prettyBytes(Math.floor(stats.totalTransfer/t)) + '/s', 8)),
       );
       stats.totalTransfer = 0;
       time = now;

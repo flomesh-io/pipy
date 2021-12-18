@@ -1,5 +1,9 @@
+env:
+  SERVER_LISTEN: 8080
+  CLIENT_TARGET: localhost:8000
+
 server:
-  listen: 8080
+  listen: ${SERVER_LISTEN}
   endpoints:
     GET /hello:
       text: Hello, world!
@@ -16,14 +20,14 @@ client:
       method: GET
       path: /bulky
   threads:
-    - target: localhost:8000
+    - target: ${CLIENT_TARGET}
       concurrency: 10
       minRequests: 5
       maxRequests: 5
       requests:
         - hello
         - bulky
-    - target: localhost:8000
+    - target: ${CLIENT_TARGET}
       concurrency: 5
       minIdle: 0
       maxIdle: 3000
