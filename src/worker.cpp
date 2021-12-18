@@ -336,9 +336,11 @@ auto Worker::new_loading_context() -> Context* {
 auto Worker::new_runtime_context(Context *base) -> Context* {
   auto data = ContextData::make(m_modules.size());
   for (size_t i = 0; i < m_modules.size(); i++) {
-    pjs::Object *proto = nullptr;
-    if (base) proto = base->m_data->at(i);
-    data->at(i) = m_modules[i]->new_context_data(proto);
+    if (auto mod = m_modules[i]) {
+      pjs::Object *proto = nullptr;
+      if (base) proto = base->m_data->at(i);
+      data->at(i) = mod->new_context_data(proto);
+    }
   }
   auto ctx = new Context(
     base ? base->group() : nullptr,
@@ -408,8 +410,14 @@ bool Worker::start() {
 
 void Worker::stop() {
   for (auto *task : m_tasks) delete task;
-  for (auto *mod : m_modules) mod->unload();
+  for (auto *mod : m_modules) if (mod) mod->unload();
   if (s_current == this) s_current = nullptr;
+}
+
+void Worker::remove_module(int i) {
+  auto mod = m_modules[i];
+  m_modules[i] = nullptr;
+  m_module_map.erase(mod->path());
 }
 
 } // namespace pipy

@@ -50,7 +50,9 @@ Context::Context(ContextGroup *group, Worker *worker, pjs::Object *global, Conte
   m_group->add(this);
   if (data) {
     for (size_t i = 0, n = data->size(); i < n; i++) {
-      data->at(i)->as<ContextDataBase>()->m_context = this;
+      if (auto l = data->at(i)) {
+        l->as<ContextDataBase>()->m_context = this;
+      }
     }
   }
   if (!++s_context_id) s_context_id++;

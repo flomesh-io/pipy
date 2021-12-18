@@ -47,6 +47,7 @@ Module::Module(Worker *worker, int index)
 
 Module::~Module() {
   Log::debug("[module   %p] -- index = %d", this, m_index);
+  m_worker->remove_module(m_index);
 }
 
 bool Module::load(const std::string &path) {

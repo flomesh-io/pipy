@@ -91,9 +91,12 @@ private:
   std::set<Task*> m_tasks;
   std::map<pjs::Ref<pjs::Str>, Namespace> m_namespaces;
 
+  void remove_module(int i);
+
   static pjs::Ref<Worker> s_current;
 
   friend class pjs::RefCount<Worker>;
+  friend class Module;
 };
 
 } // namespace pipy
