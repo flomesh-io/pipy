@@ -122,6 +122,9 @@ bool Module::load(const std::string &path) {
 
 void Module::unload() {
   retain();
+  for (const auto &p : m_pipelines) {
+    p->shutdown();
+  }
   m_named_pipelines.clear();
   m_pipelines.clear();
   release();

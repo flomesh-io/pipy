@@ -622,9 +622,10 @@ void Encoder::on_event(Event *evt) {
 
   } else if (evt->is<MessageEnd>()) {
     if (m_start) {
-      output_end(evt);
       if (m_is_response && m_is_final) {
-        output(StreamEnd::make());
+        output_end(StreamEnd::make());
+      } else {
+        output_end(evt);
       }
     }
 
@@ -1054,6 +1055,12 @@ void RequestQueue::reset() {
   m_started = false;
 }
 
+void RequestQueue::shutdown() {
+  if (!m_queue.empty()) {
+    m_queue.tail()->is_final = true;
+  }
+}
+
 void RequestQueue::on_input(Event *evt) {
   if (evt->is<MessageStart>()) {
     auto *r = new RequestQueue::Request;
@@ -1149,6 +1156,18 @@ void Demux::reset() {
 
 void Demux::process(Event *evt) {
   Filter::output(evt, Decoder::input());
+}
+
+void Demux::shutdown() {
+  Filter::shutdown();
+  if (RequestQueue::empty()) {
+    Filter::output(StreamEnd::make());
+  } else {
+    RequestQueue::shutdown();
+  }
+  if (m_http2_demuxer) {
+    m_http2_demuxer->shutdown();
+  }
 }
 
 auto Demux::on_new_sub_pipeline() -> Pipeline* {
@@ -1379,10 +1398,16 @@ void Server::reset() {
   Filter::reset();
   m_ef_decoder.reset();
   m_ef_encoder.reset();
+  m_ef_handler.m_shutdown = false;
 }
 
 void Server::process(Event *evt) {
   output(evt, m_ef_decoder.input());
+}
+
+void Server::shutdown() {
+  Filter::shutdown();
+  m_ef_handler.m_shutdown = true;
 }
 
 void Server::Handler::on_event(Event *evt) {
@@ -1393,7 +1418,7 @@ void Server::Handler::on_event(Event *evt) {
       auto &encoder = m_server->m_ef_encoder;
       auto &decoder = m_server->m_ef_decoder;
       encoder.set_bodiless(decoder.is_bodiless());
-      encoder.set_final(decoder.is_final());
+      encoder.set_final(m_shutdown || decoder.is_final());
     }
 
   } else if (auto data = evt->as<Data>()) {

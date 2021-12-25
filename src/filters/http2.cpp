@@ -1158,6 +1158,10 @@ auto Demuxer::initial_stream() -> Input* {
   return m_initial_stream.input();
 }
 
+void Demuxer::shutdown() {
+  // TODO
+}
+
 void Demuxer::stream_close(int id) {
   auto i = m_streams.find(id);
   if (i != m_streams.end()) {

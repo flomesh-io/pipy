@@ -109,6 +109,10 @@ void Filter::reset() {
   m_stream_end = false;
 }
 
+void Filter::shutdown()
+{
+}
+
 auto Filter::sub_pipeline(int i, bool clone_context) -> Pipeline* {
   auto def = m_subs->at(i).def.get();
   if (!def) return nullptr;

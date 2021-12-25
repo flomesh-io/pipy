@@ -64,6 +64,14 @@ void PipelineDef::bind() {
   }
 }
 
+void PipelineDef::shutdown() {
+  auto *p = m_pipelines.head();
+  while (p) {
+    p->shutdown();
+    p = p->next();
+  }
+}
+
 auto PipelineDef::append(Filter *filter) -> Filter* {
   m_filters.emplace_back(filter);
   filter->m_pipeline_def = this;
@@ -81,15 +89,15 @@ auto PipelineDef::alloc(Context *ctx) -> Pipeline* {
     m_allocated++;
   }
   pipeline->m_context = ctx;
-  m_active++;
+  m_pipelines.push(pipeline);
   Log::debug("[pipeline %p] ++ name = %s, context = %llu", pipeline, m_name.c_str(), ctx->id());
   return pipeline;
 }
 
 void PipelineDef::free(Pipeline *pipeline) {
+  m_pipelines.remove(pipeline);
   pipeline->m_next_free = m_pool;
   m_pool = pipeline;
-  m_active--;
   Log::debug("[pipeline %p] -- name = %s", pipeline, m_name.c_str());
   release();
 }
@@ -147,6 +155,12 @@ void Pipeline::auto_release() {
 void Pipeline::finalize() {
   reset();
   m_def->free(this);
+}
+
+void Pipeline::shutdown() {
+  for (auto f = m_filters.head(); f; f = f->next()) {
+    f->shutdown();
+  }
 }
 
 void Pipeline::reset() {

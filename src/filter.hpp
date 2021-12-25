@@ -67,6 +67,7 @@ public:
   virtual void chain();
   virtual void reset();
   virtual void process(Event *evt) = 0;
+  virtual void shutdown();
   virtual void dump(std::ostream &out) = 0;
 
 protected:

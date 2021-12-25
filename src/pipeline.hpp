@@ -71,9 +71,10 @@ public:
   auto type() const -> Type { return m_type; }
   auto name() const -> const std::string& { return m_name; }
   auto allocated() const -> size_t { return m_allocated; }
-  auto active() const -> size_t { return m_active; }
+  auto active() const -> size_t { return m_pipelines.size(); }
   auto append(Filter *filter) -> Filter*;
   void bind();
+  void shutdown();
 
 private:
   PipelineDef(Module *module, Type type, const std::string &name);
@@ -87,8 +88,8 @@ private:
   std::list<std::unique_ptr<Filter>> m_filters;
   pjs::Ref<Module> m_module;
   Pipeline* m_pool = nullptr;
+  List<Pipeline> m_pipelines;
   size_t m_allocated = 0;
-  size_t m_active = 0;
 
   static List<PipelineDef> s_all_pipeline_defs;
 
@@ -103,6 +104,7 @@ private:
 
 class Pipeline :
   public pjs::RefCount<Pipeline>,
+  public List<Pipeline>::Item,
   public EventFunction
 {
 public:
@@ -153,6 +155,7 @@ private:
   List<Filter> m_filters;
   pjs::Ref<Context> m_context;
 
+  void shutdown();
   void reset();
 
   friend class pjs::RefCount<Pipeline>;

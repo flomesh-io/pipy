@@ -266,7 +266,9 @@ protected:
   List<Request> m_queue;
   bool m_started = false;
 
+  bool empty() const { return m_queue.empty(); }
   void reset();
+  void shutdown();
 
   virtual void on_input(Event *evt) override;
   virtual void on_reply(Event *evt) override;
@@ -315,6 +317,7 @@ private:
   virtual void chain() override;
   virtual void reset() override;
   virtual void process(Event *evt) override;
+  virtual void shutdown() override;
   virtual void dump(std::ostream &out) override;
 
   int m_buffer_size = DATA_CHUNK_SIZE;
@@ -409,6 +412,7 @@ private:
   virtual void chain() override;
   virtual void reset() override;
   virtual void process(Event *evt) override;
+  virtual void shutdown() override;
   virtual void dump(std::ostream &out) override;
 
   class Handler :
@@ -421,6 +425,7 @@ private:
     Server* m_server;
     pjs::Ref<MessageStart> m_start;
     Data m_buffer;
+    bool m_shutdown = false;
 
     virtual void on_event(Event *evt) override;
 

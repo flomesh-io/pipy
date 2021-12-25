@@ -339,6 +339,7 @@ public:
   virtual ~Demuxer();
 
   auto initial_stream() -> Input*;
+  void shutdown();
 
 protected:
   virtual auto on_new_sub_pipeline() -> Pipeline* = 0;
