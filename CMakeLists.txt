@@ -48,6 +48,7 @@ add_executable(pipy
   src/api/hessian.cpp
   src/api/http.cpp
   src/api/json.cpp
+  src/api/mqtt.cpp
   src/api/netmask.cpp
   src/api/os.cpp
   src/api/pipy.cpp
@@ -73,6 +74,7 @@ add_executable(pipy
   src/filters/http2.cpp
   src/filters/link.cpp
   src/filters/merge.cpp
+  src/filters/mqtt.cpp
   src/filters/mux.cpp
   src/filters/on-body.cpp
   src/filters/on-event.cpp

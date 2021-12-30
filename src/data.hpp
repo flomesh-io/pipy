@@ -43,6 +43,7 @@ namespace pipy {
 class Data : public EventTemplate<Data> {
 private:
   struct Chunk;
+  struct View;
 
 public:
   static const Type __TYPE = Event::Data;
@@ -94,6 +95,48 @@ public:
     static List<Producer> s_all_producers;
 
     friend struct Chunk;
+  };
+
+  class Reader {
+  public:
+    Reader(const Data &data)
+      : m_view(data.m_head) {}
+
+    int get() {
+      auto v = m_view;
+      if (!v) return -1;
+      uint8_t c = v->chunk->data[v->offset + m_offset];
+      if (++m_offset >= v->length) {
+        m_view = v->next;
+        m_offset = 0;
+      }
+      return c;
+    }
+
+    int read(int n, Data &out) {
+      int i = 0;
+      while (i < n) {
+        auto v = m_view;
+        if (!v) break;
+        auto a = v->length - m_offset;
+        auto b = n - i;
+        if (a <= b) {
+          out.push_view(new View(v->chunk, m_offset, a));
+          i += a;
+          m_view = v->next;
+          m_offset = 0;
+        } else {
+          out.push_view(new View(v->chunk, m_offset, b));
+          i += b;
+          m_offset += b;
+        }
+      }
+      return i;
+    }
+
+  private:
+    View* m_view;
+    int m_offset = 0;
   };
 
 private:

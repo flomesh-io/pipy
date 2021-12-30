@@ -45,6 +45,7 @@
 #include "filters/http.hpp"
 #include "filters/link.hpp"
 #include "filters/merge.hpp"
+#include "filters/mqtt.hpp"
 #include "filters/mux.hpp"
 #include "filters/on-body.hpp"
 #include "filters/on-event.hpp"
@@ -211,6 +212,10 @@ void Configuration::decode_http_response(pjs::Object *options) {
   append_filter(new http::ResponseDecoder(options));
 }
 
+void Configuration::decode_mqtt() {
+  append_filter(new mqtt::Decoder());
+}
+
 void Configuration::decompress_http(pjs::Function *enable) {
   append_filter(new DecompressHTTP(enable));
 }
@@ -249,6 +254,10 @@ void Configuration::encode_http_request(pjs::Object *options) {
 
 void Configuration::encode_http_response(pjs::Object *response_obj) {
   append_filter(new http::ResponseEncoder(response_obj));
+}
+
+void Configuration::encode_mqtt() {
+  append_filter(new mqtt::Encoder());
 }
 
 void Configuration::exec(const pjs::Value &command) {
@@ -728,6 +737,16 @@ template<> void ClassDef<Configuration>::init() {
     }
   });
 
+  // Configuration.decodeMQTT
+  method("decodeMQTT", [](Context &ctx, Object *thiz, Value &result) {
+    try {
+      thiz->as<Configuration>()->decode_mqtt();
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
   // Configuration.decompressHTTP
   method("decompressHTTP", [](Context &ctx, Object *thiz, Value &result) {
     pjs::Function *enable = nullptr;
@@ -804,6 +823,16 @@ template<> void ClassDef<Configuration>::init() {
     if (!ctx.arguments(0, &options)) return;
     try {
       thiz->as<Configuration>()->encode_http_response(options);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // Configuration.encodeMQTT
+  method("encodeMQTT", [](Context &ctx, Object *thiz, Value &result) {
+    try {
+      thiz->as<Configuration>()->encode_mqtt();
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

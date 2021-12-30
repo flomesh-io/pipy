@@ -23,8 +23,8 @@
  *  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef FILTER_HTTP_HPP
-#define FILTER_HTTP_HPP
+#ifndef API_HTTP_HPP
+#define API_HTTP_HPP
 
 #include "pjs/pjs.hpp"
 #include "message.hpp"
@@ -165,4 +165,4 @@ class Http : public pjs::ObjectTemplate<Http>
 } // namespace http
 } // namespace pipy
 
-#endif // FILTER_HTTP_HPP
+#endif // API_HTTP_HPP

@@ -553,6 +553,22 @@ private:
 };
 
 //
+// ConstStr
+//
+
+class ConstStr {
+public:
+  ConstStr(const char *str)
+    : m_str(Str::make(str)) {}
+
+  Str* get() const { return m_str.get(); }
+  operator Str*() const { return get(); }
+
+private:
+  Ref<Str> m_str;
+};
+
+//
 // Field
 //
 
@@ -1803,6 +1819,41 @@ public:
   bool del(Object *obj) { return del(obj, m_const_key); }
   void get(Object *obj, Value &val) { return get(obj, m_const_key, val); }
   void set(Object *obj, const Value &val) { return set(obj, m_const_key, val); }
+
+  bool get(Object *obj, bool &b) {
+    Value v; get(obj, v);
+    if (v.is_undefined()) return false;
+    b = v.to_boolean();
+    return true;
+  }
+
+  bool get(Object *obj, double &n) {
+    Value v; get(obj, v);
+    if (!v.is_number()) return false;
+    n = v.n();
+    return true;
+  }
+
+  bool get(Object *obj, int &n) {
+    Value v; get(obj, v);
+    if (!v.is_number()) return false;
+    n = (int)v.n();
+    return true;
+  }
+
+  bool get(Object *obj, Str* &s) {
+    Value v; get(obj, v);
+    if (!v.is_string()) return false;
+    s = v.s();
+    return true;
+  }
+
+  bool get(Object *obj, Object* &o) {
+    Value v; get(obj, v);
+    if (!v.is_object()) return false;
+    o = v.o();
+    return true;
+  }
 
   bool has(Object *obj, Str *key) {
     auto i = find(obj->type(), key);

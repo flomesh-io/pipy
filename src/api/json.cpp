@@ -217,6 +217,8 @@ bool JSON::encode(
   int space,
   Data &data
 ) {
+  // TODO: Handle recursions
+
   static Data::Producer s_dp("JSON");
 
   static std::string s_null("null");

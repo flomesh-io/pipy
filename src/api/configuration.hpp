@@ -76,6 +76,7 @@ public:
   void decode_dubbo();
   void decode_http_request();
   void decode_http_response(pjs::Object *options);
+  void decode_mqtt();
   void decompress_http(pjs::Function *enable);
   void decompress_message(const pjs::Value &algorithm);
   void demux(pjs::Str *target);
@@ -85,6 +86,7 @@ public:
   void encode_dubbo(pjs::Object *message_obj);
   void encode_http_request(pjs::Object *options);
   void encode_http_response(pjs::Object *options);
+  void encode_mqtt();
   void exec(const pjs::Value &command);
   void fork(pjs::Str *target, pjs::Object *initializers);
   void link(size_t count, pjs::Str **targets, pjs::Function **conditions);

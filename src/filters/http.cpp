@@ -253,6 +253,7 @@ void Decoder::on_event(Event *evt) {
     auto state = m_state;
     pjs::Ref<Data> output(Data::make());
 
+    // byte scan
     data->shift_to(
       [&](int c) -> bool {
         switch (state) {
@@ -333,6 +334,7 @@ void Decoder::on_event(Event *evt) {
       *output
     );
 
+    // old state
     switch (m_state) {
       case HEAD:
       case HEADER:
@@ -349,6 +351,7 @@ void Decoder::on_event(Event *evt) {
       default: break;
     }
 
+    // new state
     switch (state) {
       case HEAD_EOL: {
         auto len = m_head_buffer.size();
