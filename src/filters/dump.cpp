@@ -110,7 +110,7 @@ void Dump::process(Event *evt) {
           hex += s_hex[ch >> 4];
           hex += s_hex[ch & 15];
           hex += ' ';
-          txt += ch < 0x20 || ch == 0x7f ? '?' : ch;
+          txt += ch < 0x20 || ch >= 0x7f ? '?' : ch;
           if (txt.length() == 16) {
             Log::print(hex + " | " + txt);
             hex.clear();

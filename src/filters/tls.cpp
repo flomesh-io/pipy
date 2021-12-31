@@ -33,7 +33,10 @@
 namespace pipy {
 namespace tls {
 
-static Data::Producer s_dp_tls("TLS");
+static pjs::ConstStr STR_serverNames("serverNames");
+static pjs::ConstStr STR_protocolNames("protocolNames");
+
+static Data::Producer s_dp("TLS");
 
 static void throw_error() {
   char str[1000];
@@ -244,7 +247,7 @@ auto TLSSession::pump_send() -> int {
   int size = 0;
   for (;;) {
     size_t n;
-    pjs::Ref<Data> data = s_dp_tls.make(DATA_CHUNK_SIZE);
+    pjs::Ref<Data> data = s_dp.make(DATA_CHUNK_SIZE);
     auto chunk = data->chunks().begin();
     auto ptr = std::get<0>(*chunk);
     auto len = std::get<1>(*chunk);
@@ -322,7 +325,7 @@ void TLSSession::pump_read() {
     if (status == SSL_ERROR_WANT_READ && !received) break;
     for (;;) {
       size_t n;
-      pjs::Ref<Data> data = s_dp_tls.make(DATA_CHUNK_SIZE);
+      pjs::Ref<Data> data = s_dp.make(DATA_CHUNK_SIZE);
       auto chunk = data->chunks().begin();
       auto buf = std::get<0>(*chunk);
       auto len = std::get<1>(*chunk);
@@ -526,6 +529,128 @@ void Server::process(Event *evt) {
 }
 
 //
+// ClientHelloParser
+//
+
+class ClientHelloParser {
+public:
+  ClientHelloParser(pjs::Object *message, const Data &data)
+    : m_message(message)
+    , m_reader(data) {}
+
+  bool parse() {
+    uint8_t ver_major, ver_minor, random[32];
+    if (!read(ver_major)) return false;
+    if (!read(ver_minor)) return false;
+    if (!read(random, sizeof(random))) return false;
+
+    // legacy session id
+    uint8_t len;
+    if (!read(len)) return false;
+    if (!skip(len)) return false;
+
+    // cipher suites
+    uint16_t len2;
+    if (!read(len2)) return false;
+    if (!skip(len2)) return false;
+
+    // legacy compression methods
+    if (!read(len)) return false;
+    if (!skip(len)) return false;
+
+    // extensions
+    if (!read(len2)) return false;
+    for (auto end_all = pos() + len2; pos() < end_all; ) {
+      uint16_t type, size;
+      if (!read(type)) break;
+      if (!read(size)) return false;
+      auto end = pos() + size;
+      switch (type) {
+        case 0: { // server name indication
+          pjs::Array *names = pjs::Array::make();
+          m_message->set(STR_serverNames, names);
+          uint16_t size;
+          if (!read(size)) return false;
+          for (auto end = pos() + size; pos() < end; ) {
+            uint8_t type;
+            if (!read(type) || type != 0) return false;
+            if (!read(size)) return false;
+            uint8_t buf[size];
+            if (!read(buf, size)) return false;
+            names->push(pjs::Str::make((const char *)buf, size));
+          }
+          break;
+        }
+        case 16: { // application-layer protocol negotiation
+          pjs::Array *names = pjs::Array::make();
+          m_message->set(STR_protocolNames, names);
+          uint16_t size;
+          if (!read(size)) return false;
+          for (auto end = pos() + size; pos() < end; ) {
+            uint8_t len;
+            if (!read(len)) return false;
+            uint8_t buf[len];
+            if (!read(buf, len)) return false;
+            names->push(pjs::Str::make((const char *)buf, len));
+          }
+          break;
+        }
+        default: {
+          skip(size);
+          break;
+        }
+        if (pos() > end) return false;
+      }
+    }
+
+    return true;
+  }
+
+private:
+  pjs::Object* m_message;
+  Data::Reader m_reader;
+  int m_position = 0;
+
+  int pos() const {
+    return m_position;
+  }
+
+  auto read() -> int {
+    auto c = m_reader.get();
+    if (c >= 0) m_position++;
+    return c;
+  }
+
+  bool read(uint8_t *buf, int size) {
+    for (int i = 0; i < size; i++) {
+      if (!read(buf[i])) return false;
+    }
+    return true;
+  }
+
+  bool read(uint8_t &n) {
+    int c = read();
+    if (c < 0) return false;
+    n = c;
+    return true;
+  }
+
+  bool read(uint16_t &n) {
+    auto msb = read(); if (msb < 0) return false;
+    auto lsb = read(); if (lsb < 0) return false;
+    n = ((msb & 0xff) << 8) | (lsb & 0xff);
+    return true;
+  }
+
+  bool skip(int size) {
+    for (int i = 0; i < size; i++) {
+      if (read() < 0) return false;
+    }
+    return true;
+  }
+};
+
+//
 // OnClientHello
 //
 
@@ -554,68 +679,104 @@ auto OnClientHello::clone() -> Filter* {
 
 void OnClientHello::reset() {
   Filter::reset();
-  m_state = STATE_READ;
-  m_read_length = 0;
+  m_rec_state = READ_TYPE;
+  m_hsk_state = READ_TYPE;
+  m_message.clear();
 }
 
 void OnClientHello::process(Event *evt) {
-  if (m_state == STATE_READ) {
+  if (m_hsk_state != DONE) {
     if (auto data = evt->as<Data>()) {
-      auto &buf = m_read_buffer;
-      data->scan(
-        [&](int c) {
-          buf[m_read_length++] = c;
-          switch (m_read_length) {
-          case 1:
-            if (buf[0] != 22) {
-              m_state = STATE_FAIL;
-              return false;
+      while (!data->empty()) {
+        auto rec_state = m_rec_state;
+        auto hsk_state = m_hsk_state;
+        pjs::Ref<Data> output(Data::make());
+
+        // byte scan
+        data->shift_to(
+          [&](int c) -> bool {
+            switch (rec_state) {
+              case READ_TYPE:
+                if (c != 22) {
+                  hsk_state = DONE;
+                  return true;
+                }
+                rec_state = READ_SIZE;
+                m_rec_read_size = 4;
+                m_rec_data_size = 0;
+                break;
+              case READ_SIZE:
+                m_rec_data_size = uint16_t(m_rec_data_size << 8) | uint8_t(c);
+                if (!--m_rec_read_size) {
+                  if (!m_rec_data_size) {
+                    hsk_state = DONE;
+                    return true;
+                  }
+                  rec_state = READ_DATA;
+                  if (hsk_state == READ_DATA) return true;
+                }
+                break;
+              case READ_DATA:
+                switch (hsk_state) {
+                  case READ_TYPE:
+                    if (c != 1) {
+                      hsk_state = DONE;
+                      return true;
+                    }
+                    hsk_state = READ_SIZE;
+                    m_hsk_read_size = 3;
+                    m_hsk_data_size = 0;
+                    break;
+                  case READ_SIZE:
+                    m_hsk_data_size = (m_hsk_data_size << 8) | uint8_t(c);
+                    if (!--m_hsk_read_size) {
+                      if (!m_hsk_data_size) {
+                        hsk_state = DONE;
+                        return true;
+                      }
+                      hsk_state = READ_DATA;
+                      return true;
+                    }
+                    break;
+                  case READ_DATA:
+                    if (!--m_hsk_data_size) {
+                      hsk_state = DONE;
+                      return true;
+                    }
+                    break;
+                  default: break;
+                }
+                if (!--m_rec_data_size) {
+                  rec_state = READ_TYPE;
+                  if (hsk_state == READ_DATA) return true;
+                }
+                break;
+              default: break;
             }
-            break;
-          case 2:
-            if (buf[1] != 3) {
-              m_state = STATE_FAIL;
-              return false;
-            }
-            break;
-          case 3:
-            if (buf[2] > 4) {
-              m_state = STATE_FAIL;
-              return false;
-            }
-            break;
-          case 6:
-            if (buf[5] != 1) {
-              m_state = STATE_FAIL;
-              return false;
-            }
-            break;
-          case 9:
-            if (
-              (((uint32_t)buf[6] << 16) + ((uint32_t)buf[7] << 8) + buf[8]) >
-              (((uint16_t)buf[3] << 8) + buf[4]) + 4
-            ) {
-              m_state = STATE_FAIL;
-              return false;
-            }
-            break;
-          case 11:
-            m_state = STATE_DONE;
             return false;
-          }
-          return true;
+          },
+          *output
+        );
+
+        // old state
+        if (m_hsk_state == READ_DATA) {
+          m_message.push(*output);
         }
-      );
-      if (m_state == STATE_DONE) {
-        pjs::Value args[2], ret;
-        args[0].set(buf[9]);
-        args[0].set(buf[10]);
-        callback(m_callback, 2, args, ret);
-      } else if (m_state == STATE_FAIL) {
-        pjs::Value args[2], ret;
-        args[0].set(0);
-        args[1].set(0);
-        callback(m_callback, 2, args, ret);
+
+        // new state
+        if (hsk_state == DONE) {
+          pjs::Value msg(pjs::Object::make());
+          ClientHelloParser parser(msg.o(), m_message);
+          m_message.clear();
+          if (parser.parse()) {
+            pjs::Value ret;
+            callback(m_callback, 1, &msg, ret);
+          }
+          break;
+        }
+
+        m_rec_state = rec_state;
+        m_hsk_state = hsk_state;
       }
     }
   }

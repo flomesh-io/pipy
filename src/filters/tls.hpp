@@ -185,15 +185,20 @@ private:
   virtual void dump(std::ostream &out) override;
 
   enum State {
-    STATE_READ,
-    STATE_DONE,
-    STATE_FAIL,
+    READ_TYPE,
+    READ_SIZE,
+    READ_DATA,
+    DONE,
   };
 
   pjs::Ref<pjs::Function> m_callback;
-  State m_state = STATE_READ;
-  uint8_t m_read_buffer[11];
-  size_t m_read_length = 0;
+  State m_rec_state = READ_TYPE;
+  State m_hsk_state = READ_TYPE;
+  uint8_t m_rec_read_size;
+  uint8_t m_hsk_read_size;
+  uint16_t m_rec_data_size;
+  uint32_t m_hsk_data_size;
+  Data m_message;
 };
 
 } // namespace tls
