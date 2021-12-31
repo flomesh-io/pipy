@@ -37,6 +37,7 @@
 #include "filters/connect.hpp"
 #include "filters/decompress-message.hpp"
 #include "filters/demux.hpp"
+#include "filters/detect-protocol.hpp"
 #include "filters/dubbo.hpp"
 #include "filters/dummy.hpp"
 #include "filters/dump.hpp"
@@ -234,6 +235,10 @@ void Configuration::demux_http(pjs::Str *target, pjs::Object *options) {
   auto *filter = new http::Demux(options);
   filter->add_sub_pipeline(target);
   append_filter(filter);
+}
+
+void Configuration::detect_protocol(pjs::Function *callback) {
+  append_filter(new ProtocolDetector(callback));
 }
 
 void Configuration::dummy() {
@@ -765,6 +770,18 @@ template<> void ClassDef<Configuration>::init() {
     if (!ctx.arguments(1, &algorithm)) return;
     try {
       thiz->as<Configuration>()->decompress_message(algorithm);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // Configuration.detectProtocol
+  method("detectProtocol", [](Context &ctx, Object *thiz, Value &result) {
+    pjs::Function *callback;
+    if (!ctx.arguments(1, &callback)) return;
+    try {
+      thiz->as<Configuration>()->detect_protocol(callback);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

@@ -79,6 +79,7 @@ public:
   void decode_mqtt();
   void decompress_http(pjs::Function *enable);
   void decompress_message(const pjs::Value &algorithm);
+  void detect_protocol(pjs::Function *callback);
   void demux(pjs::Str *target);
   void demux_http(pjs::Str *target, pjs::Object *options);
   void dummy();

@@ -65,6 +65,7 @@ add_executable(pipy
   src/filters/connect.cpp
   src/filters/decompress-message.cpp
   src/filters/demux.cpp
+  src/filters/detect-protocol.cpp
   src/filters/dubbo.cpp
   src/filters/dummy.cpp
   src/filters/dump.cpp
