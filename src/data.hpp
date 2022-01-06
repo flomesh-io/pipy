@@ -691,7 +691,7 @@ public:
       }
       case Encoding::Base64Url: {
         std::string str;
-        utils::Base64Encoder encoder([&](char c) { str += c; });
+        utils::Base64UrlEncoder encoder([&](char c) { str += c; });
         for (const auto &c : chunks()) {
           auto ptr = std::get<0>(c);
           auto len = std::get<1>(c);

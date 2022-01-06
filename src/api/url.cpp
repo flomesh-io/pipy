@@ -255,7 +255,7 @@ auto URLSearchParams::get(pjs::Str *name) -> pjs::Str* {
 void URLSearchParams::set(pjs::Str *name, const pjs::Value &value) {
   if (value.is_undefined() || value.is_null()) {
     m_params->ht_delete(name);
-  } if (value.is_array()) {
+  } else if (value.is_array()) {
     m_params->set(name, value.as<pjs::Array>()->map(
       [](pjs::Value &val, int, pjs::Value &ret) {
         auto s = val.to_string();

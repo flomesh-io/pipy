@@ -599,8 +599,8 @@ public:
           skip(size);
           break;
         }
-        if (pos() > end) return false;
       }
+      if (pos() > end) return false;
     }
 
     return true;

@@ -217,9 +217,10 @@ template<> void ClassDef<Constructor<Object>>::init() {
     Object *obj = val.to_object();
     ret.set(obj);
     for (int i = 1; i < ctx.argc(); i++) {
-      auto obj2 = ctx.arg(i).to_object();
-      Object::assign(obj, obj2);
-      obj2->release();
+      if (auto obj2 = ctx.arg(i).to_object()) {
+        Object::assign(obj, obj2);
+        obj2->release();
+      }
     }
   });
 
