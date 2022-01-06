@@ -1,4 +1,4 @@
-cmake_minimum_required (VERSION 2.8)
+cmake_minimum_required (VERSION 3.1.0)
 project(pipy)
 
 option(PIPY_GUI "include builtin GUI" ON)
@@ -13,7 +13,7 @@ option(BUILD_shared "build a shared expat library" OFF)
 option(BUILD_doc "build man page for xmlwf" OFF)
 add_subdirectory(deps/libexpat-R_2_2_6/expat)
 
-add_subdirectory(deps/openssl-1.1.1g)
+add_subdirectory(deps/openssl-1.1.1m)
 
 option(LEVELDB_BUILD_TESTS "Build LevelDB's unit tests" OFF)
 option(LEVELDB_BUILD_BENCHMARKS "Build LevelDB's benchmarks" OFF)
