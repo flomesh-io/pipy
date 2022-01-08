@@ -60,6 +60,7 @@ void ThrottleBase::reset() {
     m_stalled = false;
   }
   m_current_account = nullptr;
+  m_buffer.clear();
 }
 
 void ThrottleBase::process(Event *evt) {

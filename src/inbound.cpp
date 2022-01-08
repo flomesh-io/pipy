@@ -278,6 +278,7 @@ void Inbound::output(Event *evt) {
 
 void Inbound::close(StreamEnd::Error err) {
   std::error_code ec;
+  m_socket.shutdown(tcp::socket::shutdown_both, ec);
   m_socket.close(ec);
 
   if (ec) {

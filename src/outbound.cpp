@@ -116,6 +116,7 @@ void Outbound::reset() {
   m_retries = 0;
   m_connected = false;
   m_buffer.clear();
+  m_socket.shutdown(tcp::socket::shutdown_both, ec);
   m_socket.close(ec);
 }
 
@@ -239,6 +240,7 @@ void Outbound::restart(StreamEnd::Error err) {
   } else {
     m_retries++;
     std::error_code ec;
+    m_socket.shutdown(tcp::socket::shutdown_both, ec);
     m_socket.close(ec);
     start(m_options.retry_delay);
   }
@@ -374,6 +376,7 @@ void Outbound::close(StreamEnd::Error err) {
   m_connected = false;
 
   std::error_code ec;
+  m_socket.shutdown(tcp::socket::shutdown_both, ec);
   m_socket.close(ec);
 
   if (ec) {
