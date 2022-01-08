@@ -963,9 +963,9 @@ public:
         switch (v.type()) {
           case Value::Type::Empty: return 0;
           case Value::Type::Undefined: return 0;
-          case Value::Type::Boolean: return b() ? 1 : 0;
-          case Value::Type::Number: return n();
-          case Value::Type::String: return s()->parse_float();
+          case Value::Type::Boolean: return v.b() ? 1 : 0;
+          case Value::Type::Number: return v.n();
+          case Value::Type::String: return v.s()->parse_float();
           case Value::Type::Object: return v.o() ? std::numeric_limits<double>::quiet_NaN() : 0;
         }
       }

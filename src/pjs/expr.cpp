@@ -1333,22 +1333,31 @@ bool Equality::eval(Context &ctx, Value &result) {
   Value a, b;
   if (!m_a->eval(ctx, a)) return false;
   if (!m_b->eval(ctx, b)) return false;
-  if (a.is_object() && b.is_object()) {
-    return a.o() == b.o();
-  } else if (a.is_number() || b.is_number()) {
+  if (a.type() == b.type()) {
+    switch (a.type()) {
+      case Value::Type::Empty: result.set(true); break;
+      case Value::Type::Undefined: result.set(true); break;
+      case Value::Type::Boolean: result.set(a.b() == b.b()); break;
+      case Value::Type::Number: result.set(a.n() == b.n()); break;
+      case Value::Type::String: result.set(a.s() == b.s()); break;
+      case Value::Type::Object: result.set(a.o() == b.o()); break;
+    }
+  } else if (a.is_object() && b.is_object()) {
+    result.set(a.o() == b.o());
+  } else if (a.is_nullish() && b.is_nullish()) {
+    result.set(true);
+  } else if (a.is_nullish() || b.is_nullish()) {
+    result.set(false);
+  } else if (a.is_boolean() || a.is_number() || b.is_boolean() || b.is_number()) {
     auto na = a.to_number();
     auto nb = b.to_number();
     result.set(na == nb);
-  } else if (a.is_string() || b.is_string()) {
+  } else {
     auto sa = a.to_string();
     auto sb = b.to_string();
     result.set(sa == sb);
     sa->release();
     sb->release();
-  } else {
-    auto na = a.to_number();
-    auto nb = b.to_number();
-    result.set(na == nb);
   }
   return true;
 }
@@ -1372,22 +1381,31 @@ bool Inequality::eval(Context &ctx, Value &result) {
   Value a, b;
   if (!m_a->eval(ctx, a)) return false;
   if (!m_b->eval(ctx, b)) return false;
-  if (a.is_object() && b.is_object()) {
-    return a.o() != b.o();
-  } else if (a.is_number() || b.is_number()) {
+  if (a.type() == b.type()) {
+    switch (a.type()) {
+      case Value::Type::Empty: result.set(false); break;
+      case Value::Type::Undefined: result.set(false); break;
+      case Value::Type::Boolean: result.set(a.b() != b.b()); break;
+      case Value::Type::Number: result.set(a.n() != b.n()); break;
+      case Value::Type::String: result.set(a.s() != b.s()); break;
+      case Value::Type::Object: result.set(a.o() != b.o()); break;
+    }
+  } else if (a.is_object() && b.is_object()) {
+    result.set(a.o() != b.o());
+  } else if (a.is_nullish() && b.is_nullish()) {
+    result.set(false);
+  } else if (a.is_nullish() || b.is_nullish()) {
+    result.set(true);
+  } else if (a.is_boolean() || a.is_number() || b.is_boolean() || b.is_number()) {
     auto na = a.to_number();
     auto nb = b.to_number();
     result.set(na != nb);
-  } else if (a.is_string() || b.is_string()) {
+  } else {
     auto sa = a.to_string();
     auto sb = b.to_string();
     result.set(sa != sb);
     sa->release();
     sb->release();
-  } else {
-    auto na = a.to_number();
-    auto nb = b.to_number();
-    result.set(na != nb);
   }
   return true;
 }
