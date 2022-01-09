@@ -24,9 +24,32 @@
  */
 
 #include "console.hpp"
+#include "json.hpp"
 #include "logging.hpp"
 
 #include <sstream>
+
+namespace pipy {
+
+void Console::log(const pjs::Value *values, int count) {
+  std::stringstream ss;
+  for (int i = 0; i < count; i++) {
+    if (i > 0) ss << ' ';
+    auto &v = values[i];
+    auto s = v.to_string();
+    ss << s->str();
+    s->release();
+    if (v.is_object()) {
+      if (auto *o = v.o()) {
+        ss << ':';
+        ss << JSON::stringify(v, nullptr, 0);
+      }
+    }
+  }
+  Log::print(Log::INFO, ss.str());
+}
+
+} // namespace pipy
 
 namespace pjs {
 
@@ -37,26 +60,7 @@ template<> void ClassDef<Console>::init() {
 
   // console.log
   method("log", [](Context &ctx, Object *, Value &result) {
-    std::stringstream ss;
-    for (int i = 0; i < ctx.argc(); i++) {
-      if (i > 0) ss << ' ';
-      auto str = ctx.arg(i).to_string();
-      ss << str->c_str();
-      str->release();
-    }
-
-    const auto &s = ss.str();
-    if (s.empty()) {
-      Log::info("[pjs]");
-    } else {
-      size_t i = 0;
-      while (i < s.length()) {
-        auto j = i;
-        while (j < s.length() && s[j] != '\n') j++;
-        Log::info("[pjs] %s", s.substr(i, j - i).c_str());
-        i = j + 1;
-      }
-    }
+    Console::log(&ctx.arg(0), ctx.argc());
   });
 
 }

@@ -30,8 +30,9 @@
 
 namespace pipy {
 
-class Console : public pjs::ObjectTemplate<Console>
-{
+class Console : public pjs::ObjectTemplate<Console> {
+public:
+  static void log(const pjs::Value *values, int count);
 };
 
 } // namespace pipy

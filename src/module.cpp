@@ -28,6 +28,7 @@
 #include "worker.hpp"
 #include "pipeline.hpp"
 #include "api/configuration.hpp"
+#include "api/console.hpp"
 #include "graph.hpp"
 #include "utils.hpp"
 #include "logging.hpp"
@@ -83,10 +84,8 @@ bool Module::load(const std::string &path) {
   }
 
   if (!result.is_class(pjs::class_of<Configuration>())) {
-    auto *s = result.to_string();
-    Log::error("[pjs] Script returned %s", s->c_str());
-    Log::error("[pjs] Script did not return a Configuration object");
-    s->release();
+    Log::error("[pjs] Script was not evaluated to Configuration:");
+    Console::log(&result, 1);
     return false;
   }
 

@@ -29,6 +29,7 @@
 #include <cstdio>
 #include <ctime>
 #include <deque>
+#include <sstream>
 
 namespace pipy {
 
@@ -46,23 +47,42 @@ static void write_history(const std::string &line) {
   if (s_log_history.size() > 1000) s_log_history.pop_front();
 }
 
-static void log(Log::Level level, const char *fmt, va_list ap) {
+static const char *s_levels[] = {
+  " [DBG] ", // DEBUG
+  " [WRN] ", // WARN
+  " [ERR] ", // ERROR
+  " [INF] ", // INFO
+};
+
+static void log(Log::Level level, const char *str) {
   if (Log::is_enabled(level)) {
     char time[100];
-    char msg[1000];
-    char line[1200];
     std::time_t t;
     std::time(&t);
     std::strftime(time, sizeof(time), "%F %T", std::localtime(&t));
+    const char *type = s_levels[level];
+    const char *p = str;
+    auto &so = std::cout;
+    do {
+      std::stringstream ss;
+      so << time << type;
+      ss << time << type;
+      while (*p && *p != '\n') {
+        auto c = *p++;
+        so << c;
+        ss << c;
+      }
+      write_history(ss.str());
+      so << std::endl;
+    } while (*p);
+  }
+}
+
+static void logf(Log::Level level, const char *fmt, va_list ap) {
+  if (Log::is_enabled(level)) {
+    char msg[1000];
     std::vsnprintf(msg, sizeof(msg), fmt, ap);
-    switch (level) {
-      case Log::DEBUG: sprintf(line, "%s [DBG] %s", time, msg); break;
-      case Log::WARN : sprintf(line, "%s [WRN] %s", time, msg); break;
-      case Log::ERROR: sprintf(line, "%s [ERR] %s", time, msg); break;
-      case Log::INFO : sprintf(line, "%s [INF] %s", time, msg); break;
-    }
-    std::cout << line << std::endl;
-    write_history(line);
+    log(level, msg);
   }
 }
 
@@ -79,6 +99,14 @@ void Log::print(const std::string &line) {
   write_history(line);
 }
 
+void Log::print(Level level, const char *msg) {
+  log(level, msg);
+}
+
+void Log::print(Level level, const std::string &msg) {
+  log(level, msg.c_str());
+}
+
 void Log::print(const char *fmt, ...) {
   va_list ap;
   va_start(ap, fmt);
@@ -92,28 +120,28 @@ void Log::print(const char *fmt, ...) {
 void Log::debug(const char *fmt, ...) {
   va_list ap;
   va_start(ap, fmt);
-  log(Log::DEBUG, fmt, ap);
+  logf(Log::DEBUG, fmt, ap);
   va_end(ap);
 }
 
 void Log::info(const char *fmt, ...) {
   va_list ap;
   va_start(ap, fmt);
-  log(Log::INFO, fmt, ap);
+  logf(Log::INFO, fmt, ap);
   va_end(ap);
 }
 
 void Log::warn(const char *fmt, ...) {
   va_list ap;
   va_start(ap, fmt);
-  log(Log::WARN, fmt, ap);
+  logf(Log::WARN, fmt, ap);
   va_end(ap);
 }
 
 void Log::error(const char *fmt, ...) {
   va_list ap;
   va_start(ap, fmt);
-  log(Log::ERROR, fmt, ap);
+  logf(Log::ERROR, fmt, ap);
   va_end(ap);
 }
 

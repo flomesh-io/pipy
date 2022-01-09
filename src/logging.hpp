@@ -48,6 +48,8 @@ public:
 
   static void print(const std::string &line);
   static void print(const char *fmt, ...);
+  static void print(Level level, const char *msg);
+  static void print(Level level, const std::string &msg);
   static void debug(const char *fmt, ...);
   static void info(const char *fmt, ...);
   static void warn(const char *fmt, ...);

@@ -71,13 +71,13 @@ void Dump::process(Event *evt) {
     return;
   }
 
-  char time_str[100];
-  std::time_t t;
-  std::time(&t);
-  std::strftime(time_str, sizeof(time_str), "%F %T", std::localtime(&t));
+  // char time_str[100];
+  // std::time_t t;
+  // std::time(&t);
+  // std::strftime(time_str, sizeof(time_str), "%F %T", std::localtime(&t));
 
   std::stringstream ss;
-  ss << time_str << " [dump] [context=" << context()->id() << "] ";
+  ss << "[dump] [context=" << context()->id() << "] ";
 
   if (m_tag.to_boolean()) {
     auto s = tag.to_string();
@@ -89,7 +89,7 @@ void Dump::process(Event *evt) {
 
   if (auto end = evt->as<StreamEnd>()) {
     ss << " [" << end->error() << "] " << end->message();
-    Log::print(ss.str());
+    Log::print(Log::INFO, ss.str());
 
   } else if (auto data = evt->as<Data>()) {
     if (data->empty()) {
@@ -97,7 +97,7 @@ void Dump::process(Event *evt) {
     } else {
       ss << " [size=" << data->size() << "]";
     }
-    Log::print(ss.str());
+    Log::print(Log::INFO, ss.str());
     if (!data->empty()) {
       std::string hex, txt;
       std::string hline(16*3+4+16, '-');
@@ -130,7 +130,7 @@ void Dump::process(Event *evt) {
     }
 
   } else {
-    Log::print(ss.str());
+    Log::print(Log::INFO, ss.str());
   }
 
   output(evt);
