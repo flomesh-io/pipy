@@ -2125,7 +2125,7 @@ public:
 
 private:
   Array(size_t size = 0)
-    : m_data(Data::make(std::max(2, 1 << power(std::max(0, int(size))))))
+    : m_data(Data::make(std::max(1, 1 << power(size))))
     , m_size(size) {}
 
   ~Array() {
@@ -2137,7 +2137,7 @@ private:
   int m_size;
 
   static auto power(size_t size) -> size_t {
-    return sizeof(unsigned int) * 8 - __builtin_clz(size - 1);
+    return size == 0 ? 1 : sizeof(unsigned int) * 8 - __builtin_clz(size);
   }
 
   friend class ObjectTemplate<Array>;
