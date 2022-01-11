@@ -64,7 +64,7 @@ private:
 
 class TLSSession :
   public pjs::Pooled<TLSSession>,
-  public EventFunction
+  public EventProxy
 {
 public:
   static void init();
@@ -83,15 +83,6 @@ public:
   void start_handshake();
 
 private:
-  struct PeerReceiver : public EventTarget {
-    TLSSession* session;
-    PeerReceiver(TLSSession *s) : session(s) {}
-    virtual void on_event(Event *evt) {
-      session->on_receive_peer(evt);
-    }
-  };
-
-  PeerReceiver m_peer_receiver;
   SSL* m_ssl;
   BIO* m_rbio;
   BIO* m_wbio;
@@ -103,7 +94,8 @@ private:
   bool m_is_server;
   bool m_closed = false;
 
-  virtual void on_event(Event *evt) override;
+  virtual void on_input(Event *evt) override;
+  virtual void on_reply(Event *evt) override;
 
   void on_receive_peer(Event *evt);
   void on_server_name();
@@ -112,9 +104,9 @@ private:
   bool do_handshake();
   auto pump_send() -> int;
   auto pump_receive() -> int;
-  void pump_write();
   void pump_read();
-  void close(StreamEnd *end = nullptr);
+  void pump_write();
+  void close(StreamEnd::Error err = StreamEnd::NO_ERROR);
 
   static int s_user_data_index;
 

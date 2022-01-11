@@ -77,6 +77,20 @@ auto TLSContext::on_server_name(SSL *ssl, int*, void *thiz) -> int {
 //
 // TLSSession
 //
+// Server-side:
+//                +------+-----+
+// --- receive -->| rbio |     |--- read -->
+//                |------| SSL |
+// <-- send ------| wbio |     |<-- write --
+//                +------+-----+
+//
+// Client-side:
+//                +-----+------+
+// --- write ---->|     | wbio |--- send ----->
+//                | SSL |------|
+// <-- read ------|     | rbio |<-- receive ---
+//                +-----+------+
+//
 
 int TLSSession::s_user_data_index = 0;
 
@@ -95,8 +109,7 @@ TLSSession::TLSSession(
   bool is_server,
   pjs::Object *certificate
 )
-  : m_peer_receiver(this)
-  , m_pipeline(pipeline)
+  : m_pipeline(pipeline)
   , m_certificate(certificate)
   , m_is_server(is_server)
 {
@@ -108,7 +121,8 @@ TLSSession::TLSSession(
 
   SSL_set_bio(m_ssl, m_rbio, m_wbio);
 
-  pipeline->chain(m_peer_receiver.input());
+  chain_forward(pipeline->input());
+  pipeline->chain(reply());
 
   if (is_server) {
     SSL_set_accept_state(m_ssl);
@@ -121,6 +135,7 @@ TLSSession::TLSSession(
 }
 
 TLSSession::~TLSSession() {
+  close();
   SSL_free(m_ssl);
 }
 
@@ -132,26 +147,30 @@ void TLSSession::start_handshake() {
   do_handshake();
 }
 
-void TLSSession::on_event(Event *evt) {
+void TLSSession::on_input(Event *evt) {
   if (m_closed) return;
 
   if (auto *data = evt->as<Data>()) {
-    if (m_is_server) {
-      m_buffer_receive.push(*data);
-      if (do_handshake()) pump_read();
-    } else {
-      m_buffer_send.push(*data);
-      if (do_handshake()) pump_write();
+    if (!data->empty()) {
+      if (m_is_server) {
+        m_buffer_receive.push(*data);
+        if (do_handshake()) pump_read();
+      } else {
+        m_buffer_send.push(*data);
+        if (do_handshake()) pump_write();
+      }
     }
 
-  } else if (evt->as<StreamEnd>()) {
-    close();
+  } else if (auto end = evt->as<StreamEnd>()) {
+    close(end->error());
   }
 }
 
-void TLSSession::on_receive_peer(Event *evt) {
-  if (!m_closed) {
-    if (auto *data = evt->as<Data>()) {
+void TLSSession::on_reply(Event *evt) {
+  if (m_closed) return;
+
+  if (auto *data = evt->as<Data>()) {
+    if (!data->empty()) {
       if (m_is_server) {
         m_buffer_send.push(*data);
         if (do_handshake()) pump_write();
@@ -159,9 +178,10 @@ void TLSSession::on_receive_peer(Event *evt) {
         m_buffer_receive.push(*data);
         if (do_handshake()) pump_read();
       }
-    } else if (auto end = evt->as<StreamEnd>()) {
-      close(end);
     }
+
+  } else if (auto end = evt->as<StreamEnd>()) {
+    close(end->error());
   }
 }
 
@@ -219,26 +239,34 @@ void TLSSession::use_certificate(pjs::Str *sni) {
 
 bool TLSSession::do_handshake() {
   while (!SSL_is_init_finished(m_ssl)) {
-    auto ret = SSL_do_handshake(m_ssl);
+    pump_receive();
+    int ret = SSL_do_handshake(m_ssl);
     if (ret == 1) {
-      pump_send();
       pump_write();
       return true;
     }
+    if (!ret) {
+      close();
+      return false;
+    }
+    bool blocked = false;
     auto status = SSL_get_error(m_ssl, ret);
-    if (status != SSL_ERROR_WANT_READ && status != SSL_ERROR_WANT_WRITE) {
-      Log::error("[tls] Handshake failed (error = %d)", status);
+    if (status == SSL_ERROR_WANT_READ) {
+      if (m_buffer_receive.empty()) {
+        blocked = true;
+      }
+    } else if (status != SSL_ERROR_WANT_WRITE) {
+      Log::warn("[tls] Handshake failed (error = %d)", status);
       while (auto err = ERR_get_error()) {
         char str[256];
         ERR_error_string(err, str);
-        Log::error("[tls] %s", str);
+        Log::warn("[tls] %s", str);
       }
-      close(StreamEnd::make(StreamEnd::UNAUTHORIZED));
+      close(StreamEnd::UNAUTHORIZED);
       return false;
     }
-    auto sent = pump_send();
-    auto received = pump_receive();
-    if (!received && !sent) return false;
+    pump_send();
+    if (blocked) return false;
   }
   return true;
 }
@@ -246,7 +274,7 @@ bool TLSSession::do_handshake() {
 auto TLSSession::pump_send() -> int {
   int size = 0;
   for (;;) {
-    size_t n;
+    size_t n = 0;
     pjs::Ref<Data> data = s_dp.make(DATA_CHUNK_SIZE);
     auto chunk = data->chunks().begin();
     auto ptr = std::get<0>(*chunk);
@@ -256,7 +284,7 @@ auto TLSSession::pump_send() -> int {
       if (m_is_server) {
         output(data);
       } else {
-        output(data, m_pipeline->input());
+        forward(data);
       }
       size += n;
     } else {
@@ -267,7 +295,7 @@ auto TLSSession::pump_send() -> int {
     if (m_is_server) {
       output(Data::flush());
     } else {
-      output(Data::flush(), m_pipeline->input());
+      forward(Data::flush());
     }
   }
   return size;
@@ -278,85 +306,94 @@ auto TLSSession::pump_receive() -> int {
   for (const auto &c : m_buffer_receive.chunks()) {
     auto ptr = std::get<0>(c);
     auto len = std::get<1>(c);
-    size_t n;
+    size_t n = 0;
     if (!BIO_write_ex(m_rbio, ptr, len, &n)) break;
     size += n;
+    if (n < len) break;
   }
   m_buffer_receive.shift(size);
   return size;
 }
 
-void TLSSession::pump_write() {
-  int status = SSL_ERROR_NONE;
-  while (m_buffer_send.size() > 0 && (
-    status == SSL_ERROR_NONE ||
-    status == SSL_ERROR_WANT_READ ||
-    status == SSL_ERROR_WANT_WRITE
-  )) {
-    int size = 0;
-    for (const auto &c : m_buffer_send.chunks()) {
-      size_t n;
-      auto ptr = std::get<0>(c);
-      auto len = std::get<1>(c);
-      auto ret = SSL_write_ex(m_ssl, ptr, len, &n);
-      if (!ret) {
-        status = SSL_get_error(m_ssl, ret);
-        break;
-      }
-      size += n;
-    }
-    m_buffer_send.shift(size);
-    pump_send();
-    auto received = pump_receive();
-    if (status == SSL_ERROR_WANT_READ && !received) break;
-  }
-}
-
 void TLSSession::pump_read() {
   int size = 0;
-  int status = SSL_ERROR_NONE;
-  while (m_buffer_receive.size() > 0 && (
-    status == SSL_ERROR_NONE ||
-    status == SSL_ERROR_WANT_READ ||
-    status == SSL_ERROR_WANT_WRITE
-  )) {
-    pump_send();
-    auto received = pump_receive();
-    if (status == SSL_ERROR_WANT_READ && !received) break;
+  do {
     for (;;) {
-      size_t n;
+      size_t n = 0;
       pjs::Ref<Data> data = s_dp.make(DATA_CHUNK_SIZE);
       auto chunk = data->chunks().begin();
       auto buf = std::get<0>(*chunk);
       auto len = std::get<1>(*chunk);
       auto ret = SSL_read_ex(m_ssl, buf, len, &n);
-      if (!ret) {
-        status = SSL_get_error(m_ssl, ret);
-        break;
+      if (ret <= 0) {
+        int status = SSL_get_error(m_ssl, ret);
+        if (status == SSL_ERROR_ZERO_RETURN) {
+          close();
+          return;
+        } else if (status == SSL_ERROR_WANT_READ || status == SSL_ERROR_WANT_WRITE) {
+          break;
+        } else {
+          close(StreamEnd::READ_ERROR);
+          return;
+        }
       } else {
         data->pop(data->size() - n);
         if (m_is_server) {
-          output(data, m_pipeline->input());
+          forward(data);
         } else {
           output(data);
         }
         size += n;
       }
     }
-  }
+    pump_send();
+  } while (pump_receive());
+
   if (size > 0) {
     if (m_is_server) {
-      output(Data::flush(), m_pipeline->input());
+      forward(Data::flush());
     } else {
       output(Data::flush());
     }
   }
 }
 
-void TLSSession::close(StreamEnd *end) {
+void TLSSession::pump_write() {
+  while (!m_buffer_send.empty()) {
+    int size = 0;
+    for (const auto &c : m_buffer_send.chunks()) {
+      size_t n = 0;
+      auto ptr = std::get<0>(c);
+      auto len = std::get<1>(c);
+      auto ret = SSL_write_ex(m_ssl, ptr, len, &n);
+      if (ret < 0) {
+        int status = SSL_get_error(m_ssl, ret);
+        if (status == SSL_ERROR_ZERO_RETURN) {
+          close();
+          return;
+        } else if (status == SSL_ERROR_WANT_READ) {
+          if (!pump_receive()) return;
+          break;
+        } else if (status == SSL_ERROR_WANT_WRITE) {
+          break;
+        } else {
+          close(StreamEnd::WRITE_ERROR);
+          return;
+        }
+      }
+      size += n;
+      if (n < len) break;
+    }
+    m_buffer_send.shift(size);
+    pump_send();
+  }
+}
+
+void TLSSession::close(StreamEnd::Error err) {
   if (!m_closed) {
     m_closed = true;
-    output(end ? end : StreamEnd::make());
+    output(StreamEnd::make(err));
+    forward(StreamEnd::make(err));
   }
 }
 
