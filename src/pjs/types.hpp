@@ -2137,7 +2137,7 @@ private:
   int m_size;
 
   static auto power(size_t size) -> size_t {
-    return size == 0 ? 1 : sizeof(unsigned int) * 8 - __builtin_clz(size);
+    return size <= 1 ? 1 : sizeof(unsigned int) * 8 - __builtin_clz(size - 1);
   }
 
   friend class ObjectTemplate<Array>;
