@@ -465,6 +465,12 @@ void Client::reset() {
 }
 
 void Client::process(Event *evt) {
+  if (evt->is<StreamEnd>()) {
+    if (m_session) {
+      output(evt, m_session->input());
+    }
+    return;
+  }
 
   if (!m_session) {
     m_session = new TLSSession(

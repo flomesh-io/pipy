@@ -216,11 +216,16 @@ void Outbound::connect(const asio::ip::tcp::endpoint &target) {
           m_local_port = ep.port();
           m_connection_time += utils::now() - m_start_time;
           m_connected = true;
-          if (m_ended && m_buffer.empty()) {
-            close(StreamEnd::NO_ERROR);
+          if (!m_connecting) {
+            close(StreamEnd::CONNECTION_CANCELED);
           } else {
-            receive();
-            pump();
+            m_connecting = false;
+            if (m_ended && m_buffer.empty()) {
+              close(StreamEnd::NO_ERROR);
+            } else {
+              receive();
+              pump();
+            }
           }
         }
       }
