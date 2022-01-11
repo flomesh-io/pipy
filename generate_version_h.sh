@@ -5,7 +5,7 @@ if [ -n "$CI_COMMIT_SHA" ]; then
   COMMIT="$CI_COMMIT_SHA"
   COMMIT_DATE="$CI_COMMIT_DATE"
 else
-  VERSION="0.0.0"
+  VERSION=`git describe --abbrev=0 --tags`
   COMMIT=`git log -1 --format=%H`
   COMMIT_DATE=`git log -1 --format=%cD`
 fi
