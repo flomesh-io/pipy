@@ -97,11 +97,19 @@ template<> void ClassDef<pipy::Data>::init() {
   super<Event>();
 
   ctor([](Context &ctx) -> Object* {
+    Array *arr;
     Str *str, *encoding = nullptr;
     pipy::Data *data;
     try {
       if (ctx.argc() == 0) {
         return pipy::Data::make();
+      } else if (ctx.try_arguments(1, &arr)) {
+        auto data = pipy::Data::make();
+        for (int i = 0, n = arr->length(); i < n; i++) {
+          Value v; arr->get(i, v);
+          s_dp.push(data, uint8_t(v.to_number()));
+        }
+        return data;
       } else if (ctx.try_arguments(1, &str, &encoding)) {
         auto enc = EnumDef<pipy::Data::Encoding>::value(encoding, pipy::Data::Encoding::UTF8);
         if (int(enc) < 0) {
@@ -112,7 +120,7 @@ template<> void ClassDef<pipy::Data>::init() {
       } else if (ctx.try_arguments(1, &data, &encoding) && data) {
         return pipy::Data::make(*data);
       }
-      ctx.error_argument_type(0, "a number or a string or a Data object");
+      ctx.error_argument_type(0, "a number, string, Array or Data");
       return nullptr;
     } catch (std::runtime_error &err) {
       ctx.error(err);
