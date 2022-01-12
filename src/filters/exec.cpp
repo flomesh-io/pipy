@@ -64,8 +64,10 @@ auto Exec::clone() -> Filter* {
 
 void Exec::reset() {
   Filter::reset();
-  if (m_output) m_output->close();
-  if (m_pid > 0) kill(m_pid, SIGTERM);
+  if (m_pid > 0) {
+    child_process_monitor()->remove(m_pid);
+    kill(m_pid, SIGTERM);
+  }
   m_pid = 0;
   if (m_stdin) {
     m_stdin->close();
@@ -114,10 +116,9 @@ void Exec::process(Event *evt) {
     pipe(in);
     pipe(out);
 
-    m_output = EventTarget::Input::make(output());
     m_stdin = FileStream::make(in[1], &s_dp);
     m_stdout = FileStream::make(out[0], &s_dp);
-    m_stdout->chain(m_output);
+    m_stdout->chain(output());
 
     m_pid = fork();
 
@@ -135,7 +136,7 @@ void Exec::process(Event *evt) {
     } else if (m_pid < 0) {
       Log::error("[exec] unable to fork");
     } else {
-      child_process_monitor()->monitor(m_pid, m_output);
+      child_process_monitor()->monitor(m_pid, this);
     }
 
     for (i = 0; i < argc; i++) free(argv[i]);
@@ -167,8 +168,11 @@ void Exec::ChildProcessMonitor::check() {
     Log::debug("[exec] child process exited [pid = %d]", pid);
     auto i = m_processes.find(pid);
     if (i != m_processes.end()) {
-      i->second->input(StreamEnd::make());
+      auto exec = i->second;
+      auto ctx = exec->context();
       m_processes.erase(i);
+      exec->output(StreamEnd::make());
+      ctx->group()->notify(ctx);
     }
   }
   schedule();

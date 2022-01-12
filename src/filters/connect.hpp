@@ -32,10 +32,18 @@
 namespace pipy {
 
 //
+// ConnectReceiver
+//
+
+class ConnectReceiver : public EventTarget {
+  virtual void on_event(Event *evt) override;
+};
+
+//
 // Connect
 //
 
-class Connect : public Filter {
+class Connect : public Filter, public ConnectReceiver {
 public:
   Connect(const pjs::Value &target, pjs::Object *options);
   Connect(const pjs::Value &target, const Outbound::Options &options);
@@ -51,8 +59,9 @@ private:
 
   pjs::Value m_target;
   pjs::Ref<Outbound> m_outbound;
-  pjs::Ref<Input> m_output;
   Outbound::Options m_options;
+
+  friend class ConnectReceiver;
 };
 
 } // namespace pipy

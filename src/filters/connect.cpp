@@ -24,6 +24,7 @@
  */
 
 #include "connect.hpp"
+#include "context.hpp"
 #include "outbound.hpp"
 #include "utils.hpp"
 #include "logging.hpp"
@@ -113,10 +114,7 @@ auto Connect::clone() -> Filter* {
 
 void Connect::reset() {
   Filter::reset();
-  if (m_output) {
-    m_output->close();
-    m_output = nullptr;
-  }
+  ConnectReceiver::close();
   if (m_outbound) {
     m_outbound->reset();
     m_outbound = nullptr;
@@ -137,8 +135,7 @@ void Connect::process(Event *evt) {
     auto s = target.to_string();
     std::string host; int port;
     if (utils::get_host_port(s->str(), host, port)) {
-      m_output = Input::make(output());
-      auto outbound = new Outbound(m_output, m_options);
+      auto outbound = new Outbound(ConnectReceiver::input(), m_options);
       outbound->connect(host, port);
       m_outbound = outbound;
     } else {
@@ -154,6 +151,17 @@ void Connect::process(Event *evt) {
       m_outbound->flush();
     }
   }
+}
+
+//
+// ConnectReceiver
+//
+
+void ConnectReceiver::on_event(Event *evt) {
+  auto *conn = static_cast<Connect*>(this);
+  auto *ctx = conn->context();
+  conn->output(evt);
+  ctx->group()->notify(ctx);
 }
 
 } // namespace pipy

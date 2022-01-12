@@ -192,6 +192,7 @@ private:
     SetBodiless(ResponseDecoder *f) : filter(f) {}
     virtual void on_event(Event *evt) override {
       filter->on_set_bodiless(evt);
+      output(evt);
     }
   };
 

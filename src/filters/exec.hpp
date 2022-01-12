@@ -58,7 +58,8 @@ private:
   pid_t m_pid = 0;
   pjs::Ref<FileStream> m_stdin;
   pjs::Ref<FileStream> m_stdout;
-  pjs::Ref<EventTarget::Input> m_output;
+
+  void on_process_exit();
 
   class ChildProcessMonitor {
   public:
@@ -66,14 +67,18 @@ private:
       schedule();
     }
 
-    void monitor(int pid, EventTarget::Input *output) {
-      m_processes[pid] = output;
+    void monitor(int pid, Exec *exec) {
+      m_processes[pid] = exec;
+    }
+
+    void remove(int pid) {
+      m_processes.erase(pid);
     }
 
   private:
     void schedule();
     void check();
-    std::map<int, pjs::Ref<EventTarget::Input>> m_processes;
+    std::map<int, Exec*> m_processes;
     Timer m_timer;
   };
 
