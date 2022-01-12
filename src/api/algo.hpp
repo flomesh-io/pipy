@@ -43,6 +43,7 @@ class Cache : public pjs::ObjectTemplate<Cache> {
 public:
   bool get(pjs::Context &ctx, const pjs::Value &key, pjs::Value &value);
   void set(pjs::Context &ctx, const pjs::Value &key, const pjs::Value &value);
+  bool find(const pjs::Value &key, pjs::Value &value);
   bool remove(pjs::Context &ctx, const pjs::Value &key);
   bool clear(pjs::Context &ctx);
 
@@ -112,15 +113,15 @@ private:
 class HashingLoadBalancer : public pjs::ObjectTemplate<HashingLoadBalancer> {
 public:
   void add(pjs::Str *target);
-  auto select(const pjs::Value &tag) -> pjs::Str*;
+  auto select(const pjs::Value &key) -> pjs::Str*;
   void deselect(pjs::Str *target) {}
 
 private:
-  HashingLoadBalancer();
-  HashingLoadBalancer(pjs::Array *targets);
+  HashingLoadBalancer(pjs::Array *targets, Cache *unhealthy = nullptr);
   ~HashingLoadBalancer();
 
   std::vector<pjs::Ref<pjs::Str>> m_targets;
+  pjs::Ref<Cache> m_unhealthy;
 
   friend class pjs::ObjectTemplate<HashingLoadBalancer>;
 };
@@ -132,12 +133,11 @@ private:
 class RoundRobinLoadBalancer : public pjs::ObjectTemplate<RoundRobinLoadBalancer> {
 public:
   void set(pjs::Str *target, int weight);
-  auto select(const pjs::Value &tag = pjs::Value::undefined) -> pjs::Str*;
+  auto select() -> pjs::Str*;
   void deselect(pjs::Str *target) {}
 
 private:
-  RoundRobinLoadBalancer();
-  RoundRobinLoadBalancer(pjs::Object *targets);
+  RoundRobinLoadBalancer(pjs::Object *targets, Cache *unhealthy = nullptr);
   ~RoundRobinLoadBalancer();
 
   struct Target {
@@ -147,7 +147,7 @@ private:
   };
 
   std::map<pjs::Ref<pjs::Str>, Target> m_targets;
-  std::unordered_map<pjs::Value, pjs::Ref<pjs::Str>> m_cache;
+  pjs::Ref<Cache> m_unhealthy;
   int m_total_weight = 0;
   int m_total_hits = 0;
 
@@ -161,12 +161,11 @@ private:
 class LeastWorkLoadBalancer : public pjs::ObjectTemplate<LeastWorkLoadBalancer> {
 public:
   void set(pjs::Str *target, double weight);
-  auto select(const pjs::Value &tag = pjs::Value::undefined) -> pjs::Str*;
+  auto select() -> pjs::Str*;
   void deselect(pjs::Str *target);
 
 private:
-  LeastWorkLoadBalancer();
-  LeastWorkLoadBalancer(pjs::Object *targets);
+  LeastWorkLoadBalancer(pjs::Object *targets, Cache *unhealthy = nullptr);
   ~LeastWorkLoadBalancer();
 
   struct Target {
@@ -176,7 +175,7 @@ private:
   };
 
   std::map<pjs::Ref<pjs::Str>, Target> m_targets;
-  std::unordered_map<pjs::Value, pjs::Ref<pjs::Str>> m_cache;
+  pjs::Ref<Cache> m_unhealthy;
 
   friend class pjs::ObjectTemplate<LeastWorkLoadBalancer>;
 };

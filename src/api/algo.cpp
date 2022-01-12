@@ -99,6 +99,14 @@ void Cache::set(pjs::Context &ctx, const pjs::Value &key, const pjs::Value &valu
   }
 }
 
+bool Cache::find(const pjs::Value &key, pjs::Value &value) {
+  Entry entry;
+  bool found = m_cache->use(key, entry);
+  if (!found) return false;
+  value = entry.value;
+  return true;
+}
+
 bool Cache::remove(pjs::Context &ctx, const pjs::Value &key) {
   if (m_free) {
     Entry entry;
@@ -273,20 +281,19 @@ void URLRouter::dump(Node *node, int level) {
 // HashingLoadBalancer
 //
 
-HashingLoadBalancer::HashingLoadBalancer()
+HashingLoadBalancer::HashingLoadBalancer(pjs::Array *targets, Cache *unhealthy)
+  : m_targets(targets ? targets->length() : 0)
+  , m_unhealthy(unhealthy)
 {
-}
-
-HashingLoadBalancer::HashingLoadBalancer(pjs::Array *targets)
-  : m_targets(targets->length())
-{
-  targets->iterate_all(
-    [this](pjs::Value &v, int i) {
-      auto s = v.to_string();
-      m_targets[i] = s;
-      s->release();
-    }
-  );
+  if (targets) {
+    targets->iterate_all(
+      [this](pjs::Value &v, int i) {
+        auto s = v.to_string();
+        m_targets[i] = s;
+        s->release();
+      }
+    );
+  }
 }
 
 HashingLoadBalancer::~HashingLoadBalancer()
@@ -297,23 +304,26 @@ void HashingLoadBalancer::add(pjs::Str *target) {
   m_targets.push_back(target);
 }
 
-auto HashingLoadBalancer::select(const pjs::Value &tag) -> pjs::Str* {
+auto HashingLoadBalancer::select(const pjs::Value &key) -> pjs::Str* {
   if (m_targets.empty()) return nullptr;
   std::hash<pjs::Value> hash;
-  auto h = hash(tag);
-  return m_targets[h % m_targets.size()];
+  auto h = hash(key);
+  auto s = m_targets[h % m_targets.size()].get();
+  if (s && m_unhealthy) {
+    pjs::Value v;
+    if (m_unhealthy->find(s, v) && v.to_boolean()) {
+      return nullptr;
+    }
+  }
+  return s;
 }
 
 //
 // RoundRobinLoadBalancer
 //
 
-RoundRobinLoadBalancer::RoundRobinLoadBalancer()
-{
-}
-
-RoundRobinLoadBalancer::RoundRobinLoadBalancer(pjs::Object *targets)
-  : RoundRobinLoadBalancer()
+RoundRobinLoadBalancer::RoundRobinLoadBalancer(pjs::Object *targets, Cache *unhealthy)
+  : m_unhealthy(unhealthy)
 {
   if (targets) {
     if (targets->is_array()) {
@@ -371,21 +381,24 @@ void RoundRobinLoadBalancer::set(pjs::Str *target, int weight) {
   }
 }
 
-auto RoundRobinLoadBalancer::select(const pjs::Value &tag) -> pjs::Str* {
-  if (!tag.is_undefined()) {
-    auto i = m_cache.find(tag);
-    if (i != m_cache.end()) return i->second;
-  }
-
+auto RoundRobinLoadBalancer::select() -> pjs::Str* {
   double min = 0;
   std::map<pjs::Ref<pjs::Str>, Target>::value_type *p = nullptr;
+  int total_weight = 0;
+
   for (auto &i : m_targets) {
     auto &t = i.second;
-    if (t.weight > 0) {
-      if (!p || t.usage < min) {
-        min = t.usage;
-        p = &i;
+    if (t.weight <= 0) continue;
+    if (m_unhealthy) {
+      pjs::Value v;
+      if (m_unhealthy->find(i.first.get(), v) && v.to_boolean()) {
+        continue;
       }
+    }
+    total_weight += t.weight;
+    if (!p || t.usage < min) {
+      min = t.usage;
+      p = &i;
     }
   }
 
@@ -396,17 +409,13 @@ auto RoundRobinLoadBalancer::select(const pjs::Value &tag) -> pjs::Str* {
   t.usage = double(t.hits) / t.weight;
 
   m_total_hits++;
-  if (m_total_hits == m_total_weight) {
+  if (m_total_hits >= total_weight) {
     for (auto &i : m_targets) {
       auto &t = i.second;
       t.hits = 0;
       t.usage = 0;
     }
     m_total_hits = 0;
-  }
-
-  if (!tag.is_undefined()) {
-    m_cache[tag] = p->first;
   }
 
   return p->first;
@@ -416,12 +425,8 @@ auto RoundRobinLoadBalancer::select(const pjs::Value &tag) -> pjs::Str* {
 // LeastWorkLoadBalancer
 //
 
-LeastWorkLoadBalancer::LeastWorkLoadBalancer()
-{
-}
-
-LeastWorkLoadBalancer::LeastWorkLoadBalancer(pjs::Object *targets)
-  : LeastWorkLoadBalancer()
+LeastWorkLoadBalancer::LeastWorkLoadBalancer(pjs::Object *targets, Cache *unhealthy)
+  : m_unhealthy(unhealthy)
 {
   if (targets) {
     if (targets->is_array()) {
@@ -462,21 +467,21 @@ void LeastWorkLoadBalancer::set(pjs::Str *target, double weight) {
   }
 }
 
-auto LeastWorkLoadBalancer::select(const pjs::Value &tag) -> pjs::Str* {
-  if (!tag.is_undefined()) {
-    auto i = m_cache.find(tag);
-    if (i != m_cache.end()) return i->second;
-  }
-
+auto LeastWorkLoadBalancer::select() -> pjs::Str* {
   double min = 0;
   std::map<pjs::Ref<pjs::Str>, Target>::value_type *p = nullptr;
   for (auto &i : m_targets) {
     auto &t = i.second;
-    if (t.weight > 0) {
-      if (!p || t.usage < min) {
-        min = t.usage;
-        p = &i;
+    if (t.weight <= 0) continue;
+    if (m_unhealthy) {
+      pjs::Value v;
+      if (m_unhealthy->find(i.first.get(), v) && v.to_boolean()) {
+        continue;
       }
+    }
+    if (!p || t.usage < min) {
+      min = t.usage;
+      p = &i;
     }
   }
 
@@ -485,10 +490,6 @@ auto LeastWorkLoadBalancer::select(const pjs::Value &tag) -> pjs::Str* {
   auto &t = p->second;
   t.hits++;
   t.usage = double(t.hits) / t.weight;
-
-  if (!tag.is_undefined()) {
-    m_cache[tag] = p->first;
-  }
 
   return p->first;
 }
@@ -731,8 +732,9 @@ template<> void ClassDef<Constructor<URLRouter>>::init() {
 template<> void ClassDef<HashingLoadBalancer>::init() {
   ctor([](Context &ctx) -> Object* {
     Array *targets = nullptr;
-    if (!ctx.arguments(0, &targets)) return nullptr;
-    return HashingLoadBalancer::make(targets);
+    Cache *unhealthy = nullptr;
+    if (!ctx.arguments(0, &targets, &unhealthy)) return nullptr;
+    return HashingLoadBalancer::make(targets, unhealthy);
   });
 
   method("add", [](Context &ctx, Object *obj, Value &ret) {
@@ -768,8 +770,9 @@ template<> void ClassDef<Constructor<HashingLoadBalancer>>::init() {
 template<> void ClassDef<RoundRobinLoadBalancer>::init() {
   ctor([](Context &ctx) -> Object* {
     Object *targets = nullptr;
-    if (!ctx.arguments(0, &targets)) return nullptr;
-    return RoundRobinLoadBalancer::make(targets);
+    Cache *unhealthy = nullptr;
+    if (!ctx.arguments(0, &targets, &unhealthy)) return nullptr;
+    return RoundRobinLoadBalancer::make(targets, unhealthy);
   });
 
   method("set", [](Context &ctx, Object *obj, Value &ret) {
@@ -780,9 +783,7 @@ template<> void ClassDef<RoundRobinLoadBalancer>::init() {
   });
 
   method("select", [](Context &ctx, Object *obj, Value &ret) {
-    Value tag;
-    if (!ctx.arguments(0, &tag)) return;
-    if (auto target = obj->as<RoundRobinLoadBalancer>()->select(tag)) {
+    if (auto target = obj->as<RoundRobinLoadBalancer>()->select()) {
       ret.set(target);
     }
   });
@@ -806,8 +807,9 @@ template<> void ClassDef<Constructor<RoundRobinLoadBalancer>>::init() {
 template<> void ClassDef<LeastWorkLoadBalancer>::init() {
   ctor([](Context &ctx) -> Object* {
     Object *targets = nullptr;
-    if (!ctx.arguments(0, &targets)) return nullptr;
-    return LeastWorkLoadBalancer::make(targets);
+    Cache *unhealthy = nullptr;
+    if (!ctx.arguments(0, &targets, &unhealthy)) return nullptr;
+    return LeastWorkLoadBalancer::make(targets, unhealthy);
   });
 
   method("set", [](Context &ctx, Object *obj, Value &ret) {
@@ -818,9 +820,7 @@ template<> void ClassDef<LeastWorkLoadBalancer>::init() {
   });
 
   method("select", [](Context &ctx, Object *obj, Value &ret) {
-    Value tag;
-    if (!ctx.arguments(0, &tag)) return;
-    if (auto target = obj->as<LeastWorkLoadBalancer>()->select(tag)) {
+    if (auto target = obj->as<LeastWorkLoadBalancer>()->select()) {
       ret.set(target);
     }
   });
