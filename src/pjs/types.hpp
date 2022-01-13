@@ -997,6 +997,9 @@ public:
     return nullptr;
   }
 
+  static bool is_identical(const Value &a, const Value &b);
+  static bool is_equal(const Value &a, const Value &b);
+
 private:
   union {
     bool b;
@@ -2076,7 +2079,7 @@ public:
       m_data->free();
       m_data = data;
       new_values[i] = v;
-    } else {
+    } else if (i >= 0) {
       m_data->at(i) = v;
     }
     m_size = std::max(m_size, i + 1);
@@ -2103,6 +2106,23 @@ public:
     });
   }
 
+  int iterate_backward_while(std::function<bool(Value&, int)> callback) {
+    auto values = m_data->elements();
+    for (int i = std::min((int)m_data->size(), m_size) - 1; i >= 0; i--) {
+      auto &v = values[i];
+      if (!v.is_empty() && !callback(v, i)) return i;
+    }
+    return -1;
+  }
+
+  void iterate_backward_all(std::function<void(Value&, int)> callback) {
+    iterate_backward_while([&](Value &v, int i) -> bool {
+      callback(v, i);
+      return true;
+    });
+  }
+
+  void copyWithin(int target, int start, int end);
   void fill(const Value &v, int start);
   void fill(const Value &v, int start, int end);
   auto filter(std::function<bool(Value&, int)> callback) -> Array*;
@@ -2111,17 +2131,23 @@ public:
   auto flat(int depth = 1) -> Array*;
   auto flatMap(std::function<bool(Value&, int, Value&)> callback) -> Array*;
   void forEach(std::function<bool(Value&, int)> callback);
+  auto indexOf(const Value &value, int start = 0) -> int;
   auto join(Str *separator = nullptr) -> Str*;
+  auto lastIndexOf(const Value &value, int start = -1) -> int;
   auto map(std::function<bool(Value&, int, Value&)> callback) -> Array*;
   void pop(Value &result);
   void push(const Value &v) { set(m_size, v); }
   void reduce(std::function<bool(Value&, Value&, int)> callback, Value &result);
   void reduce(std::function<bool(Value&, Value&, int)> callback, Value &initial, Value &result);
+  void reduceRight(std::function<bool(Value&, Value&, int)> callback, Value &result);
+  void reduceRight(std::function<bool(Value&, Value&, int)> callback, Value &initial, Value &result);
   auto reverse() -> Array*;
   void shift(Value &result);
   auto slice(int start, int end) -> Array*;
   void sort();
   void sort(const std::function<bool(const Value&, const Value&)> &comparator);
+  auto splice(int start, int delete_count, const Value *values, int count) -> Array*;
+  void unshift(const Value *values, int count);
 
 private:
   Array(size_t size = 0)

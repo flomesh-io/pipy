@@ -84,6 +84,52 @@ const Value Value::empty((Value*)nullptr);
 const Value Value::undefined;
 const Value Value::null((Object*)nullptr);
 
+bool Value::is_identical(const Value &a, const Value &b) {
+  if (a.type() != b.type()) {
+    return false;
+  } else {
+    switch (a.type()) {
+      case Value::Type::Empty: return true;
+      case Value::Type::Undefined: return true;
+      case Value::Type::Boolean: return a.b() == b.b();
+      case Value::Type::Number: return a.n() == b.n();
+      case Value::Type::String: return a.s() == b.s();
+      case Value::Type::Object: return a.o() == b.o();
+    }
+  }
+  return true;
+}
+
+bool Value::is_equal(const Value &a, const Value &b) {
+  if (a.type() == b.type()) {
+    switch (a.type()) {
+      case Value::Type::Empty: return true;
+      case Value::Type::Undefined: return true;
+      case Value::Type::Boolean: return a.b() == b.b();
+      case Value::Type::Number: return a.n() == b.n();
+      case Value::Type::String: return a.s() == b.s();
+      case Value::Type::Object: return a.o() == b.o();
+    }
+  } else if (a.is_object() && b.is_object()) {
+    return a.o() == b.o();
+  } else if (a.is_nullish() && b.is_nullish()) {
+    return true;
+  } else if (a.is_nullish() || b.is_nullish()) {
+    return false;
+  } else if (a.is_boolean() || a.is_number() || b.is_boolean() || b.is_number()) {
+    auto na = a.to_number();
+    auto nb = b.to_number();
+    return na == nb;
+  } else {
+    auto sa = a.to_string();
+    auto sb = b.to_string();
+    auto ret = (sa == sb);
+    sa->release();
+    sb->release();
+    return ret;
+  }
+}
+
 //
 // Context
 //
@@ -216,11 +262,14 @@ template<> void ClassDef<Constructor<Object>>::init() {
     if (!ctx.arguments(1, &val)) return;
     Object *obj = val.to_object();
     ret.set(obj);
-    for (int i = 1; i < ctx.argc(); i++) {
-      if (auto obj2 = ctx.arg(i).to_object()) {
-        Object::assign(obj, obj2);
-        obj2->release();
+    if (obj) {
+      for (int i = 1; i < ctx.argc(); i++) {
+        if (auto obj2 = ctx.arg(i).to_object()) {
+          Object::assign(obj, obj2);
+          obj2->release();
+        }
       }
+      obj->release();
     }
   });
 
@@ -619,9 +668,51 @@ template<> void ClassDef<Array>::init() {
     [](Object *obj, const Value &val) { obj->as<Array>()->length(val.to_number()); }
   );
 
-  // "concat",
-  // "copyWithin",
-  // "entries",
+  method("concat", [](Context &ctx, Object *obj, Value &ret) {
+    auto a = obj->as<Array>();
+    int size = a->length(), p = size, n = ctx.argc();
+    Array *arrays[n];
+    for (int i = 0; i < n; i++) {
+      const auto &arg = ctx.arg(i);
+      if (arg.is_array()) {
+        auto a = arg.as<Array>();
+        arrays[i] = a;
+        size += a->length();
+      } else {
+        arrays[i] = nullptr;
+        size++;
+      }
+    }
+    auto all = Array::make(size);
+    a->iterate_all(
+      [&](Value &v, int i) {
+        all->set(i, v);
+      }
+    );
+    for (int i = 0; i < n; i++) {
+      if (auto a = arrays[i]) {
+        a->iterate_all(
+          [&](Value &v, int i) {
+            all->set(p + i, v);
+          }
+        );
+        p += a->length();
+      } else {
+        all->set(p++, ctx.arg(i));
+      }
+    }
+    ret.set(all);
+  });
+
+  method("copyWithin", [](Context &ctx, Object *obj, Value &ret) {
+    auto a = obj->as<Array>();
+    int target;
+    int start = 0;
+    int end = a->length();
+    if (!ctx.arguments(1, &target, &start, &end)) return;
+    a->copyWithin(target, start, end);
+    ret.set(a);
+  });
 
   method("every", [](Context &ctx, Object *obj, Value &ret) {
     Function *callback;
@@ -657,7 +748,6 @@ template<> void ClassDef<Array>::init() {
     }
   });
 
-  // "filter",
   method("filter", [](Context &ctx, Object *obj, Value &ret) {
     Function *callback;
     if (!ctx.arguments(1, &callback)) return;
@@ -735,9 +825,19 @@ template<> void ClassDef<Array>::init() {
     });
   });
 
-  // "includes",
-  // "indexOf",
-  // "join",
+  method("includes", [](Context &ctx, Object *obj, Value &ret) {
+    Value value;
+    int start = 0;
+    if (!ctx.arguments(1, &value, &start)) return;
+    ret.set(obj->as<Array>()->indexOf(value, start) >= 0);
+  });
+
+  method("indexOf", [](Context &ctx, Object *obj, Value &ret) {
+    Value value;
+    int start = 0;
+    if (!ctx.arguments(1, &value, &start)) return;
+    ret.set(obj->as<Array>()->indexOf(value, start));
+  });
 
   method("join", [](Context &ctx, Object *obj, Value &ret) {
     Str *separator = nullptr;
@@ -745,9 +845,12 @@ template<> void ClassDef<Array>::init() {
     ret.set(obj->as<Array>()->join(separator));
   });
 
-  // "keys",
-  // "lastIndexOf",
-  // "map",
+  method("lastIndexOf", [](Context &ctx, Object *obj, Value &ret) {
+    Value value;
+    int start = 0;
+    if (!ctx.arguments(1, &value, &start)) return;
+    ret.set(obj->as<Array>()->lastIndexOf(value, start));
+  });
 
   method("map", [](Context &ctx, Object *obj, Value &ret) {
     Function *f;
@@ -798,7 +901,31 @@ template<> void ClassDef<Array>::init() {
     }
   });
 
-  // "reduceRight",
+  method("reduceRight", [](Context &ctx, Object *obj, Value &ret) {
+    Function *callback;
+    Value initial, argv[4];
+    if (ctx.argc() > 1) {
+      if (!ctx.arguments(2, &callback, &initial)) return;
+      obj->as<Array>()->reduceRight([&](Value &ret, Value &v, int i) -> bool {
+        argv[0] = ret;
+        argv[1] = v;
+        argv[2].set(i);
+        argv[3].set(obj);
+        (*callback)(ctx, 4, argv, ret);
+        return ctx.ok();
+      }, initial, ret);
+    } else {
+      if (!ctx.arguments(1, &callback)) return;
+      obj->as<Array>()->reduceRight([&](Value &ret, Value &v, int i) -> bool {
+        argv[0] = ret;
+        argv[1] = v;
+        argv[2].set(i);
+        argv[3].set(obj);
+        (*callback)(ctx, 4, argv, ret);
+        return ctx.ok();
+      }, ret);
+    }
+  });
 
   method("reverse", [](Context &ctx, Object *obj, Value &ret) {
     ret.set(obj->as<Array>()->reverse());
@@ -861,14 +988,53 @@ template<> void ClassDef<Array>::init() {
     ret.set(obj);
   });
 
-  // "splice",
-  // "unshift",
-  // "values",
+  method("splice", [](Context &ctx, Object *obj, Value &ret) {
+    auto a = obj->as<Array>();
+    int start, delete_count = a->length();
+    if (!ctx.arguments(1, &start, &delete_count)) return;
+    int n = ctx.argc() - 2;
+    if (n > 0) {
+      ret.set(a->splice(start, delete_count, &ctx.arg(2), n));
+    } else {
+      ret.set(a->splice(start, delete_count, nullptr, 0));
+    }
+  });
+
+  method("unshift", [](Context &ctx, Object *obj, Value &ret) {
+    auto a = obj->as<Array>();
+    a->unshift(&ctx.arg(0), ctx.argc());
+    ret.set(int(a->length()));
+  });
 }
 
 template<> void ClassDef<Constructor<Array>>::init() {
   super<Function>();
   ctor();
+}
+
+void Array::copyWithin(int target, int start, int end) {
+  auto n = length();
+  if (target < 0) target = n + target;
+  if (target < 0) target = 0;
+  if (start < 0) start = n + start;
+  if (start < 0) start = 0;
+  if (end < 0) end = n + end;
+  if (end < 0) end = 0;
+  if (target >= n || start >= n || target == start) return;
+  Value v;
+  auto off = target - start;
+  if (end + off > n) end = n - off;
+  if (target < start) {
+    for (int i = start; i < end; i++) {
+      get(i, v);
+      if (!v.is_empty()) set(i + off, v);
+    }
+  } else {
+    for (int i = end - 1; i >= start; i--) {
+      get(i, v);
+      if (!v.is_empty()) set(i + off, v);
+    }
+  }
 }
 
 void Array::fill(const Value &v, int start) {
@@ -952,6 +1118,18 @@ void Array::forEach(std::function<bool(Value&, int)> callback) {
   iterate_while(callback);
 }
 
+auto Array::indexOf(const Value &value, int start) -> int {
+  auto n = std::min(m_size, (int)m_data->size());
+  if (start < 0) start = m_size + start;
+  if (start < 0) start = 0;
+  auto values = m_data->elements();
+  for (int i = start; i < n; i++) {
+    const auto &v = values[i];
+    if (!v.is_empty() && Value::is_identical(v, value)) return i;
+  }
+  return -1;
+}
+
 auto Array::join(Str *separator) -> Str* {
   std::string str;
   bool first = true;
@@ -964,6 +1142,18 @@ auto Array::join(Str *separator) -> Str* {
     s->release();
   });
   return Str::make(str);
+}
+
+auto Array::lastIndexOf(const Value &value, int start) -> int {
+  auto n = std::min(m_size, (int)m_data->size()) - 1;
+  if (start < 0) start = m_size + start;
+  if (start > n) start = n;
+  auto values = m_data->elements();
+  for (int i = start; i >= 0; i--) {
+    const auto &v = values[i];
+    if (!v.is_empty() && Value::is_identical(v, value)) return i;
+  }
+  return -1;
 }
 
 auto Array::map(std::function<bool(Value&, int, Value&)> callback) -> Array* {
@@ -1004,6 +1194,26 @@ void Array::reduce(std::function<bool(Value&, Value&, int)> callback, Value &res
 void Array::reduce(std::function<bool(Value&, Value&, int)> callback, Value &initial, Value &result) {
   result = initial;
   iterate_while([&](Value &v, int i) -> bool {
+    return callback(result, v, i);
+  });
+}
+
+void Array::reduceRight(std::function<bool(Value&, Value&, int)> callback, Value &result) {
+  bool first = true;
+  iterate_backward_while([&](Value &v, int i) -> bool {
+    if (first) {
+      result = v;
+      first = false;
+      return true;
+    } else {
+      return callback(result, v, i);
+    }
+  });
+}
+
+void Array::reduceRight(std::function<bool(Value&, Value&, int)> callback, Value &initial, Value &result) {
+  result = initial;
+  iterate_backward_while([&](Value &v, int i) -> bool {
     return callback(result, v, i);
   });
 }
@@ -1076,6 +1286,83 @@ void Array::sort(const std::function<bool(const Value&, const Value&)> &comparat
     m_data->elements() + size,
     comparator
   );
+}
+
+auto Array::splice(int start, int delete_count, const Value *values, int count) -> Array* {
+  if (start < 0) start = m_size + start;
+  if (start < 0) start = 0;
+  if (start + delete_count > m_size) delete_count = m_size - start;
+  if (delete_count < 0) delete_count = 0;
+
+  Value *old_values = m_data->elements();
+  Value *new_values = old_values;
+
+  auto ret = Array::make(delete_count);
+  for (int i = 0; i < delete_count; i++) {
+    auto &v = old_values[start + i];
+    if (!v.is_empty()) ret->set(i, v);
+  }
+
+  if (delete_count != count) {
+    int n = std::min(m_size, (int)m_data->size());
+    if (delete_count > count) {
+      auto max = n - delete_count;
+      for (int i = start; i < max; i++) {
+        new_values[i + count] = std::move(old_values[i + delete_count]);
+      }
+    } else {
+      Data *new_data = nullptr;
+      n += count - delete_count;
+      if (n > m_data->size()) {
+        auto new_size = 1 << power(n);
+        if (new_size > MAX_SIZE) return ret; // TODO: report error
+        new_data = Data::make(new_size);
+        new_values = new_data->elements();
+      }
+      auto max = n - count;
+      for (int i = max - 1; i >= start; i--) {
+        new_values[i + count] = std::move(old_values[i + delete_count]);
+      }
+      if (new_data) {
+        m_data->free();
+        m_data = new_data;
+      }
+    }
+  }
+
+  for (int i = 0; i < count; i++) {
+    new_values[start + i] = values[i];
+  }
+
+  m_size += count;
+  m_size -= delete_count;
+  return ret;
+}
+
+void Array::unshift(const Value *values, int count) {
+  if (count > 0) {
+    int n = std::min(m_size, (int)m_data->size()) + count;
+    Value *old_values = m_data->elements();
+    Value *new_values = old_values;
+    Data *new_data = nullptr;
+    if (n > m_data->size()) {
+      auto new_size = 1 << power(n);
+      if (new_size > MAX_SIZE) return; // TODO: report error
+      new_data = Data::make(new_size);
+      new_values = new_data->elements();
+    }
+    for (int i = n - 1; i >= count; i--) {
+      new_values[i] = std::move(old_values[i - count]);
+    }
+    for (int i = 0; i < count; i++) {
+      new_values[i] = values[i];
+    }
+    if (new_data) {
+      m_data->free();
+      m_data = new_data;
+    }
+    m_size += count;
+  }
 }
 
 //
