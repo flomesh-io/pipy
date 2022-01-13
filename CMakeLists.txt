@@ -1,4 +1,4 @@
-cmake_minimum_required (VERSION 3.1.0)
+cmake_minimum_required (VERSION 3.10)
 project(pipy)
 
 option(PIPY_GUI "include builtin GUI" ON)
@@ -21,7 +21,20 @@ option(LEVELDB_INSTALL "Install LevelDB's header and library" OFF)
 add_subdirectory(deps/leveldb-1.23)
 
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_SOURCE_DIR}/bin)
-set(CMAKE_CXX_FLAGS -std=c++11)
+
+set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake" ${CMAKE_MODULE_PATH})
+
+include(c++-standards)
+include(compiler-options)
+include(link-time-optimization)
+include(sanitizers)
+
+# Require C++ 11
+cxx_11()
+
+# enable LTO/IPO for all targets. Doesn't work with GCC.
+link_time_optimization()
+
 
 add_definitions(
   -D_GNU_SOURCE
