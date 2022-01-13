@@ -231,6 +231,7 @@ void MuxBase::SessionManager::recycle() {
       while (s) {
         auto session = s; s = s->next();
         if (now - session->m_free_time >= m_options.max_idle * 1000) {
+          session->input()->input(StreamEnd::make());
           session->end();
         }
       }
