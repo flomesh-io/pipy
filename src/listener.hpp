@@ -31,6 +31,7 @@
 
 #include <functional>
 #include <string>
+#include <list>
 
 namespace pipy {
 
@@ -49,30 +50,29 @@ public:
 
   static void set_reuse_port(bool reuse);
 
-  static auto get(int port) -> Listener* {
-    auto i = s_all_listeners.find(port);
-    if (i != s_all_listeners.end()) return i->second;
-    return new Listener(port);
-  }
-
-  static auto all() -> const std::map<int, Listener*>& {
+  static auto all() -> const std::list<Listener*>& {
     return s_all_listeners;
   }
 
-  static bool is_open(int port) {
-    auto i = s_all_listeners.find(port);
-    if (i == s_all_listeners.end()) return false;
-    return i->second->m_pipeline_def;
+  static auto get(const std::string &ip, int port) -> Listener* {
+    if (auto *l = find(ip, port)) return l;
+    return new Listener(ip, port);
+  }
+
+  static bool is_open(const std::string &ip, int port) {
+    if (auto *l = find(ip, port)) return l->m_pipeline_def;
+    return false;
   }
 
   static void for_each(const std::function<void(Listener*)> &cb) {
     for (const auto &p : s_all_listeners) {
-      cb(p.second);
+      cb(p);
     }
   }
 
   auto ip() const -> const std::string& { return m_ip; }
   auto port() const -> int { return m_port; }
+  bool open() const { return m_pipeline_def; }
   bool reserved() const { return m_options.reserved; }
   auto pipeline_def() const -> PipelineDef* { return m_pipeline_def; }
   void pipeline_def(PipelineDef *def);
@@ -87,7 +87,7 @@ public:
   }
 
 private:
-  Listener(int port);
+  Listener(const std::string &ip, int port);
   ~Listener();
 
   void start();
@@ -103,13 +103,16 @@ private:
   int m_peak_connections = 0;
   Options m_options;
   bool m_paused = false;
+  asio::ip::address m_address;
   asio::ip::tcp::acceptor m_acceptor;
   pjs::Ref<PipelineDef> m_pipeline_def;
   List<Inbound> m_inbounds;
 
   static bool s_reuse_port;
   static std::list<asio::steady_timer*> s_timer_pool;
-  static std::map<int, Listener*> s_all_listeners;
+  static std::list<Listener*> s_all_listeners;
+
+  static auto find(const std::string &ip, int port) -> Listener*;
 
   friend class Inbound;
   friend class pjs::RefCount<Listener>;

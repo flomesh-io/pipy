@@ -63,6 +63,7 @@ public:
   void add_import(pjs::Object *variables);
 
   void listen(int port, pjs::Object *options);
+  void listen(const std::string &port, pjs::Object *options);
   void task(const std::string &when);
   void pipeline(const std::string &name);
 
@@ -150,6 +151,7 @@ private:
   std::list<NamedPipelineConfig> m_named_pipelines;
   std::list<std::unique_ptr<Filter>> *m_current_filters = nullptr;
 
+  void get_listen_options(pjs::Object *obj, Listener::Options &opt);
   void append_filter(Filter *filter);
 
   friend class pjs::ObjectTemplate<Configuration>;

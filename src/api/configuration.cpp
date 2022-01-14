@@ -115,36 +115,28 @@ void Configuration::add_import(pjs::Object *variables) {
 
 void Configuration::listen(int port, pjs::Object *options) {
   Listener::Options opt;
+  if (options) get_listen_options(options, opt);
+  m_listens.push_back({ "::", port, opt });
+  m_current_filters = &m_listens.back().filters;
+}
 
-  if (options) {
-    pjs::Value max_conn, read_timeout, write_timeout;
-    options->get("maxConnections", max_conn);
-    options->get("readTimeout", read_timeout);
-    options->get("writeTimeout", write_timeout);
-
-    if (!max_conn.is_undefined()) {
-      if (!max_conn.is_number()) throw std::runtime_error("option.maxConnections expects a number");
-      opt.max_connections = max_conn.n();
-    }
-
-    if (!read_timeout.is_undefined()) {
-      if (read_timeout.is_string()) {
-        opt.read_timeout = utils::get_seconds(read_timeout.s()->str());
-      } else {
-        opt.read_timeout = read_timeout.to_number();
-      }
-    }
-
-    if (!write_timeout.is_undefined()) {
-      if (write_timeout.is_string()) {
-        opt.write_timeout = utils::get_seconds(write_timeout.s()->str());
-      } else {
-        opt.write_timeout = write_timeout.to_number();
-      }
-    }
+void Configuration::listen(const std::string &port, pjs::Object *options) {
+  std::string addr;
+  int port_num;
+  if (!utils::get_host_port(port, addr, port_num)) {
+    std::string msg("invalid 'ip:port' form: ");
+    throw std::runtime_error(msg + port);
   }
 
-  m_listens.push_back({ "::", port, opt });
+  uint8_t ip[16];
+  if (!utils::get_ip_v4(addr, ip) && !utils::get_ip_v6(addr, ip)) {
+    std::string msg("invalid IP address: ");
+    throw std::runtime_error(msg + addr);
+  }
+
+  Listener::Options opt;
+  if (options) get_listen_options(options, opt);
+  m_listens.push_back({ addr, port_num, opt });
   m_current_filters = &m_listens.back().filters;
 }
 
@@ -447,9 +439,9 @@ void Configuration::apply(Module *mod) {
 
   for (auto &i : m_listens) {
     if (!i.port) continue;
-    auto name = i.ip + ':' + std::to_string(i.port);
+    auto name = std::to_string(i.port) + '@' + i.ip;
     auto p = make_pipeline(PipelineDef::LISTEN, name, i.filters);
-    auto listener = Listener::get(i.port);
+    auto listener = Listener::get(i.ip, i.port);
     if (listener->reserved()) {
       std::string msg("Port reserved: ");
       throw std::runtime_error(msg + std::to_string(i.port));
@@ -489,9 +481,9 @@ void Configuration::draw(Graph &g) {
   for (const auto &i : m_listens) {
     Graph::Pipeline p;
     p.name = "Listen on ";
-    p.name += i.ip;
-    p.name += ':';
     p.name += std::to_string(i.port);
+    p.name += " at ";
+    p.name += i.ip;
     add_filters(p, i.filters);
     g.add_root_pipeline(std::move(p));
   }
@@ -504,6 +496,34 @@ void Configuration::draw(Graph &g) {
     p.name += ')';
     add_filters(p, i.filters);
     g.add_root_pipeline(std::move(p));
+  }
+}
+
+void Configuration::get_listen_options(pjs::Object *obj, Listener::Options &opt) {
+  pjs::Value max_conn, read_timeout, write_timeout;
+  obj->get("maxConnections", max_conn);
+  obj->get("readTimeout", read_timeout);
+  obj->get("writeTimeout", write_timeout);
+
+  if (!max_conn.is_undefined()) {
+    if (!max_conn.is_number()) throw std::runtime_error("option.maxConnections expects a number");
+    opt.max_connections = max_conn.n();
+  }
+
+  if (!read_timeout.is_undefined()) {
+    if (read_timeout.is_string()) {
+      opt.read_timeout = utils::get_seconds(read_timeout.s()->str());
+    } else {
+      opt.read_timeout = read_timeout.to_number();
+    }
+  }
+
+  if (!write_timeout.is_undefined()) {
+    if (write_timeout.is_string()) {
+      opt.write_timeout = utils::get_seconds(write_timeout.s()->str());
+    } else {
+      opt.write_timeout = write_timeout.to_number();
+    }
   }
 }
 
@@ -553,14 +573,16 @@ template<> void ClassDef<Configuration>::init() {
     int port;
     Str *port_str;
     pjs::Object *options = nullptr;
-    if (ctx.try_arguments(1, &port_str, &options)) {
-      port = std::atoi(port_str->c_str());
-    } else if (!ctx.arguments(1, &port, &options)) {
-      return;
-    }
     try {
-      thiz->as<Configuration>()->listen(port, options);
-      result.set(thiz);
+      if (ctx.try_arguments(1, &port_str, &options)) {
+        thiz->as<Configuration>()->listen(port_str->str(), options);
+        result.set(thiz);
+      } else if (ctx.try_arguments(1, &port, &options)) {
+        thiz->as<Configuration>()->listen(port, options);
+        result.set(thiz);
+      } else {
+        ctx.error_argument_type(0, "a number of string");
+      }
     } catch (std::runtime_error &err) {
       ctx.error(err);
     }

@@ -35,25 +35,24 @@ using tcp = asio::ip::tcp;
 
 bool Listener::s_reuse_port = false;
 
-std::map<int, Listener*> Listener::s_all_listeners;
+std::list<Listener*> Listener::s_all_listeners;
 
 void Listener::set_reuse_port(bool reuse) {
   s_reuse_port = reuse;
 }
 
-Listener::Listener(int port)
-  : m_ip("::")
+Listener::Listener(const std::string &ip, int port)
+  : m_ip(ip)
   , m_port(port)
   , m_acceptor(Net::service())
 {
-  s_all_listeners[port] = this;
+  m_address = asio::ip::make_address(m_ip);
+  m_ip = m_address.to_string();
+  s_all_listeners.push_back(this);
 }
 
 Listener::~Listener() {
-  auto i = s_all_listeners.find(m_port);
-  if (i != s_all_listeners.end() && i->second == this) {
-    s_all_listeners.erase(i);
-  }
+  s_all_listeners.remove(this);
 }
 
 void Listener::pipeline_def(PipelineDef *pipeline_def) {
@@ -92,34 +91,44 @@ void Listener::set_options(const Options &options) {
 }
 
 void Listener::start() {
-  auto addr = asio::ip::address::from_string(m_ip);
-  tcp::endpoint endpoint(addr, m_port);
-  m_acceptor.open(endpoint.protocol());
-  m_acceptor.set_option(asio::socket_base::reuse_address(true));
+  try {
+    tcp::endpoint endpoint(m_address, m_port);
+    m_acceptor.open(endpoint.protocol());
+    m_acceptor.set_option(asio::socket_base::reuse_address(true));
 
-  auto sock = m_acceptor.native_handle();
-  int enabled = 1;
+    auto sock = m_acceptor.native_handle();
+    int enabled = 1;
 
 #ifdef __linux__
-  setsockopt(sock, SOL_IP, IP_TRANSPARENT, &enabled, sizeof(enabled));
+    setsockopt(sock, SOL_IP, IP_TRANSPARENT, &enabled, sizeof(enabled));
 #endif
 
-  if (s_reuse_port) {
+    if (s_reuse_port) {
 #ifdef __FreeBSD__
-    setsockopt(sock, SOL_SOCKET, SO_REUSEPORT_LB, &enabled, sizeof(enabled));
+      setsockopt(sock, SOL_SOCKET, SO_REUSEPORT_LB, &enabled, sizeof(enabled));
 #else
-    setsockopt(sock, SOL_SOCKET, SO_REUSEPORT, &enabled, sizeof(enabled));
+      setsockopt(sock, SOL_SOCKET, SO_REUSEPORT, &enabled, sizeof(enabled));
 #endif
+    }
+
+    m_acceptor.bind(endpoint);
+    m_acceptor.listen(asio::socket_base::max_connections);
+
+    if (m_options.max_connections < 0 || m_inbounds.size() < m_options.max_connections) {
+      accept();
+    }
+
+    Log::info("[listener] Listening on port %d at %s", m_port, m_ip.c_str());
+
+  } catch (std::runtime_error &err) {
+    char msg[200];
+    std::snprintf(
+      msg, sizeof(msg),
+      "[listener] Cannot start listening on port %d at %s: ",
+      m_port, m_ip.c_str()
+    );
+    throw std::runtime_error(std::string(msg) + err.what());
   }
-
-  m_acceptor.bind(endpoint);
-  m_acceptor.listen(asio::socket_base::max_connections);
-
-  if (m_options.max_connections < 0 || m_inbounds.size() < m_options.max_connections) {
-    accept();
-  }
-
-  Log::info("[listener] Listening on port %d at %s", m_port, m_ip.c_str());
 }
 
 void Listener::accept() {
@@ -158,6 +167,16 @@ void Listener::close(Inbound *inbound) {
   if (n < 0 || m_inbounds.size() < n) {
     resume();
   }
+}
+
+auto Listener::find(const std::string &ip, int port) -> Listener* {
+  auto addr = asio::ip::make_address(ip);
+  for (auto *l : s_all_listeners) {
+    if (l->m_port == port && l->m_address == addr) {
+      return l;
+    }
+  }
+  return nullptr;
 }
 
 } // namespace pipy

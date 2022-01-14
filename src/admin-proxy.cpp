@@ -163,14 +163,14 @@ void AdminProxy::open(int port, const Options &options) {
 
   Listener::Options opts;
   opts.reserved = true;
-  auto listener = Listener::get(port);
+  auto listener = Listener::get("::", port);
   listener->set_options(opts);
   listener->pipeline_def(pipeline_def);
   m_port = port;
 }
 
 void AdminProxy::close() {
-  if (auto listener = Listener::get(m_port)) {
+  if (auto listener = Listener::get("::", m_port)) {
     listener->pipeline_def(nullptr);
   }
 }
