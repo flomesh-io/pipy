@@ -115,14 +115,14 @@ void AdminService::open(int port, const Options &options) {
 
   Listener::Options opts;
   opts.reserved = true;
-  auto listener = Listener::get(port);
+  auto listener = Listener::get("::", port);
   listener->set_options(opts);
   listener->pipeline_def(pipeline_def);
   m_port = port;
 }
 
 void AdminService::close() {
-  if (auto listener = Listener::get(m_port)) {
+  if (auto listener = Listener::get("::", m_port)) {
     listener->pipeline_def(nullptr);
   }
 }
@@ -647,10 +647,13 @@ Message* AdminService::api_v1_program_POST(Data *data) {
 Message* AdminService::api_v1_program_DELETE() {
   if (auto worker = Worker::current()) {
     worker->stop();
-    for (const auto &i : Listener::all()) {
-      auto l = i.second;
-      if (!l->reserved()) l->pipeline_def(nullptr);
-    }
+    Listener::for_each(
+      [](Listener *l) {
+        if (!l->reserved()) {
+          l->pipeline_def(nullptr);
+        }
+      }
+    );
     Status::local.update_modules();
   }
   m_current_program.clear();

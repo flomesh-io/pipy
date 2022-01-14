@@ -366,7 +366,7 @@ bool Worker::start() {
   try {
     for (const auto &i : m_listeners) {
       auto l = i.first;
-      if (!Listener::is_open(l->port())) {
+      if (!l->open()) {
         l->pipeline_def(i.second.pipeline_def);
         l->set_options(i.second.options);
         new_open.insert(l);
@@ -383,21 +383,21 @@ bool Worker::start() {
   // Update existing ports
   for (const auto &i : m_listeners) {
     auto l = i.first;
-    if (Listener::is_open(l->port())) {
+    if (!new_open.count(l)) {
       l->pipeline_def(i.second.pipeline_def);
       l->set_options(i.second.options);
     }
   }
 
   // Close old ports
-  for (const auto &i : Listener::all()) {
-    auto l = i.second;
-    if (!l->reserved()) {
+  Listener::for_each(
+    [&](Listener *l) {
+      if (l->reserved()) return;
       if (m_listeners.find(l) == m_listeners.end()) {
         l->pipeline_def(nullptr);
       }
     }
-  }
+  );
 
   // Start tasks
   for (auto *task : m_tasks) {
