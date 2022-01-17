@@ -321,11 +321,12 @@ const useStyles = makeStyles(theme => ({
   },
 }));
 
-const LANGS = ['en', 'zh'];
+const LANGS = ['en', 'zh', 'jp'];
 
 const LANGNAMES = {
   'en': 'English',
   'zh': '中文',
+  'jp': '日本語',
 };
 
 export const query = graphql`

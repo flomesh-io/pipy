@@ -63,7 +63,7 @@ exports.sourceNodes = ({ actions, createNodeId, createContentDigest }) => {
   }
 }
 
-const LANGS = ['en', 'zh'];
+const LANGS = ['en', 'zh', 'jp'];
 const HOME = 'overview';
 
 exports.onCreateNode = ({ node, actions }) => {
