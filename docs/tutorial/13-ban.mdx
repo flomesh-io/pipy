@@ -1,0 +1,120 @@
+---
+title: "Part 13: Ban (Black & Whitelist)"
+---
+
+## Problem
+
+In cybersecurity, another common defense feature is the granting or restricting access to particular services via defining a customized whitelist or blacklist. Whitelisting allows only requests from certain IP address and its inverse blacklisting is used to reject requests from certain IP addresses.
+
+In this tutorial we are going to implement this feature by defining our whitelist and blacklist in separate configuration file. Having such configurations stored in separate file make it convenient to update and maintain.
+
+## Configuration
+
+Banlist configurations in file `config/ban.json` are configured to work at service level. In this tutorial we will be configuring banlist for `service-hi` and you are free to make it applicable to your service of choice.
+
+```json
+{
+  "services": {
+    "service-hi": {
+      "white": [],
+      "black": [
+        "127.0.0.1",
+        "::1",
+        "::ffff:127.0.0.1"
+      ]
+    }
+  }
+}
+```
+
+> Pipy supports IPv6, for testing purposes we have added local *loopback* IPv6 address.
+
+## Code dissection
+
+The IP address exists in the configuration file as an array type, which is not easy to find. Therefore, during configuration import, we use it as the key of the map.
+
+```javascript
+pipy({
+  _services: Object.fromEntries(
+    Object.entries(config.services).map(
+      ([k,v]) => [
+        k,
+        {
+          white: v.white?.length > 0 ? (
+            Object.fromEntries(
+              v.white.map(
+                ip => [ip, true]
+              )
+            )
+          ) : null,
+          black: v.black?.length > 0 ? (
+            Object.fromEntries(
+              v.black.map(
+                ip => [ip, true]
+              )
+            )
+          ) : null,
+        }
+      ]
+    )
+  ),
+
+  _service: null,
+})
+```
+
+Applying blacklisting and whitelisting to service level, we need to obtain the service name from the router; validate if service require application of banlist, when an access is denied, we should return the error response. We are going to import variables defined in other plugins, `__turnDown` from `proxy` plugin and `__serviceID` from `router` plugin.
+
+```javascript
+.import({
+  __turnDown: 'proxy',
+  __serviceID: 'router',
+})
+```
+
+Now we need to implement our logic.
+
+For incoming request, we will retrieve the IP address of remote host via `__inbound.remoteAddress`. If requested service has configured whitelist, we will check against whitelist and if service has configured blacklist, then we will check if IP is in banlist and we will toggle `__turnDown=true` to return error.
+
+```javascript
+.pipeline('request')
+  .handleStreamStart(
+    () => (
+      _service = _services[__serviceID],
+      __turnDown = Boolean(
+        _service && (
+          _service.white ? (
+            !_service.white[__inbound.remoteAddress]
+          ) : (
+            _service.black?.[__inbound.remoteAddress]
+          )
+        )
+      )
+    )
+  )
+  .link(
+    'deny', () => __turnDown,
+    'bypass'
+  )
+
+.pipeline('deny')
+  .replaceMessage(
+    new Message({ status: 403 }, 'Access denied')
+  )
+
+.pipeline('bypass')  
+```
+
+In end, don't forget to `use` our plugin to proxy script.
+
+## Summary
+
+Banlist cybersecurity feature is part of proxy service and as we have demonstrated its really very simple and easy to implement in Pipy.
+
+### Takeaways
+
+* Determine whether to reject the request by comparing the peer IP address with the configured IP address. If we need much broader control where we would like to block the range of IP addresses, then we can make use of [`Netmask.contains ()`](/reference/Netmask/contains).
+
+### What's next?
+
+In next tutorial we will add another important feature of proxy by adding *throttling* support to limit the network traffic.

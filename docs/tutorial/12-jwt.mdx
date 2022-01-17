@@ -1,0 +1,215 @@
+---
+title: "Part 12: JWT"
+---
+
+## Problem
+
+Autentication is a critical part of services and almost each service implements some kind of authentication mechanism. A complex system usually implement or uses single sign-on (SSO) or something similar to avoid users of its systems going through authentication process repeatedly. Generally there are two kind of authentication options:
+
+* Stateful authention a.k.a. session based authentication: Where user session data is persisted to some persistence layer and on each invocation of request, persistent data is requested from persistence layer. Though this is kind of normal and mostly used mechanism, but it comes with a risk of single point of failure.
+* Stateless authentication a.k.a cookie based authentication, where no data is stored on server side, but client request contains the authentication data.
+
+JWT is an example of the latter, and in this tutorial we will add JWT verification to our proxy for service *service-hi* : i.e. token verification with two key encryption functions 
+
+## JWT
+
+We will give you a very simple brief of JWT, to get better understanding of what JWT is, its purpose and benefits it bring, please refer to official site for [JWT Introduction](https://jwt.io/introduction).
+
+JSON Web Token (JWT) in its compact form consists of three parts separated by `.` and typically looks like `Header.Payload.Signature`, and each part is `Base64URL` encoded.
+
+- Header typically consists of two parts: the type of the token, which is JWT, and the signing algorithm being used, such as HMAC SHA256 or RSA
+- Payload contains the claims. Claims are statements about an entity (typically, the user) and additional data.
+- Signature contains the tamper-proof, signed part via **secret** of previous two parts (header, payload)
+
+For below example, the header and payload can be decoded using Base64:
+
+**Header:**
+ Consists of two parts, signing algorithm like HMAC SHA256 or RSA and token type which is JWT
+
+```json
+{
+  "alg": "RS256", //algorithm
+  "typ": "JWT" //Token type
+}
+```
+
+**Payload:**
+
+```json
+{}
+```
+
+**JWT Token: **
+```
+eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.e30.ed7nE07I17v9v1ThCRtyDVxuVtH7pUhi50jnP7f3BgKVVtKhK6YXL-XfxCSa4LoFgU9YSK4nBkiteRRme0ku3Jk3IfnZTbZS-9pZBZZum-qxpiVQHBKwYxk0oqgpRpg0GPxggmpQKPB98u8QMTz0lbGX8HswPX1acRdqzM-1eatoXu7iG0dTxzDJF2hG9mVGquesixm10_r1QwaKk7lklgnMwTjDDXioEEd8QBxK3jU2ZceB6aA1xSyeX0S-d6BgWgkOVQndDdeBIUIwWhEAEA4C88QWP-9DwXqJ7q0OVl4-D6t0BadHkTqqAQyL9R7UYNbsL-PK3ijgAbAgBmjwCQ
+```
+
+## Settings
+
+*hi* service requires token authentication of both keys, which is provided by configuration. For which key to use in the request, you can add a custom field *kid* in the *header* section of the token to identify which key to use in the request. Configure our tutorial `jwt.json` configuration as below:
+
+```json
+{
+  "keys": {
+    "key-1": {
+      "pem": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDZ2hv4Bw9vb3F3\nGK77I/wLG79GWWLWFZYmBeYA0xuqJce9bEc0DIPO6UG3REO2A4WpPdoJp4ehf/eU\nyNxThxrDC4UtY9qRXoqUnehs90eR1OBaNxUc806wsozlPNsr1juO/Tyr/krJXKaK\nkNnjNHCmKoo4nsHcJPXkiepUtF18hdMZ0LPZ00qtc8cCVGgSqCbZ18DSQjQ2xMqX\nmNo8BwzWpB55/cZYUofRbEl82SlygVJj68UlfxEdS38gTYY6RWwm8qzvyJ36V4Tn\n/vZ3RDcXFnt/PMIWkXU7UaucOnRbAkJ8x886a58n3rzLpKKt+S0CNcMZoLH21B/l\n8UvuVOo3AgMBAAECggEAHDbnKWvXVWzfCqLWmBh0flx6ci+Fy/P2wszqbs/omimT\ndsEicFIbSL3QBjQf+t+g53w8aW9aSGcs7FxJS24eNVr1cB1UbkBgKAL9hQ36UHT8\nFjhiZ8yhM+ROuCp2DkrhjXwsZ/AixR/Wl+/5BY1B9ltgacMx7gOWxHcSM3nlTl4/\nfeyd/ONSEsTtGZBINJ5a0SAE4orpIvjFhKKOKNDRyokAk3GezsEYn8VilmoAb4eP\ndvIwKEEs2Y0h6dvxTPq9OqD6RyaQuCK1SLg+/VIBPExFpd5Z0sbbLfYrz2Mh1sMQ\nVCflSOEoroYo0c23zuDmKXbqKyzZdX1vWdvTKUV+MQKBgQDu0hNbANskAkZy2ldi\nfMWajOQ/RQK7v0wxclosF4Omxmxy5jcotH7QLAerl2uA+PqSI10Uru/aAUNclvjJ\nUXsmHYUIWaTw5HkUzLTpx5zYEw7vzTbj9Nc3Sp24hJuOpMTgr6eZGZMFflptjwX1\nmjsWjuIz3+M1WmvRIZnqTdxI0QKBgQDpheSMeP+U8vCRlYQS54xvkrFnPp/1rYbu\nEOtU/btsmPkMSNXav+JvOpp1RpBIQC5DrDeC6XZN53y1INpuVSv9BDWSXY/48utz\nH/aZKw/d3O5HD2p6eLX+4ST6ppwe565qwed9pDAnvoid/3PaukY2WYQ4TewYpItE\n1IW3w2NEhwKBgFlDzFhHiaF7+DkVw3Pcjz+lSescMFlct24EABBa+apsoDySMCvW\ny0+kJXnNrzEV3xKghTol6SDjN/pzs6oL+qvUfNUSLMSdoWRU34pCQi3BcePQIKQz\n7/2Ktkkxx7MZgz04aryfAoUbJVGuE9wpOczEu2gIVzSqB4KzvIQHdj8BAoGBAOM9\ntb+0ZxFsrwkcc99pj1FrcFLFsCcEa47yy+5y0pXE7mUz41bw7snKP0/sEK8eNWcJ\nCSPNR6BbqREhHS3Ml/eoxvDdNyLMUK5A5lj6fIArY3um1rjDCmcydCetRbMVRLcC\nZd/vjCTA1nTZhsXMClMNHQslWKBKTnP2UwEVk121AoGAVgO+RxWkqpT8/ZNNrKX9\nFNbayvFds/m7idSCsjsUdkfGaESxDbhhmEegML303380uVNCPgu/FIv6InjOpLic\n/C/7VVjDms9yiKAURy9uTdd8W9xoVTFSgc9R518+uuDBQQAiANCZ3f7ay4Z258Ql\ndazAwre7S+ekO7jva0HcIgA=\n-----END PRIVATE KEY-----"
+    },
+    "key-2": {
+      "pem": "-----BEGIN PRIVATE KEY-----\nMIHuAgEAMBAGByqGSM49AgEGBSuBBAAjBIHWMIHTAgEBBEIBuja8nYkTIYdVt/fF\nQV8o+l+mfE2GqURd/9689G/ljfrbxYVcBWh5+GdUWTtS2l+pCDmhlVB71AVAadg5\nJdGxHTehgYkDgYYABAEFqVluj1vGvvbtR2vZ8ZmgZutO02AWC3XxPhPbw0fVQIyC\nqEhL2LKNueT6lCYz0YkVUh8BfidAkMgGJFalPNRXQwHRRdCjLZut/o2fuD8HW1vi\nUa14jdiDVBGJ8V99/sb7ftno7YDZukZJ6BUlFejh3BjVUyM9SRK047xEP8SfFcz3\nqQ==\n-----END PRIVATE KEY-----"
+    }
+  },
+  "services": {
+    "service-hi": {
+      "keys": [
+        "key-1",
+        "key-2"
+      ]
+    }
+  }
+}
+```
+
+> For convenience, we are using [JWT Web Tool](https://dinochiesa.github.io/jwt/) to generate keys, out test below will also use JWT token generated by same tool.
+
+## `crypto` package
+
+Pipy's [crypto](/reference/crypto) package contains security related classes。We will be using few of them in this tutorial like [`PrivateKey`](/reference/crypto/PrivateKey) and [`JWT`](/reference/crypto/JWT). The former is related to handle private key, while the latter is used for JWT verification.
+
+### PrivateKey 
+
+`PrivateKey` construction of the PEM key is very simple, just need to pass in the PEM key content.
+
+Let's convert configured contents to global variables:
+
+```javascript
+pipy({
+  _keys: (
+    Object.fromEntries(
+      Object.entries(config.keys).map(
+        ([k, v]) => [
+          k,
+          new crypto.PrivateKey(v.pem)
+        ]
+      )
+    )
+  ),
+  _services: (
+    Object.fromEntries(
+      Object.entries(config.services).map(
+        ([k, v]) => [
+          k,
+          {
+            keys: v.keys ? Object.fromEntries(v.keys.map(k => [k, true])) : undefined,
+          }
+        ]
+      )
+    )
+  ),  
+})
+```
+
+We will need to add some variables which can be used to store the service name retrieved from our router and a flag to indicate if we need to jump out when token verfification fails.
+
+```javascript
+.import({
+  __turnDown: 'proxy',
+  __serviceID: 'router',
+})
+```
+
+Now we need to implement token verification process:
+
+### JWT
+
+We will use *request* sub-pipeline to decide whether to permit the request (if verification succeeds) or return an error message. Conditions for permissions are below:
+
+* Requested service requires no verification, i.e. we haven't configured any JWT verification key for this service 
+* Requested token is validated successfully.
+
+In other cases, the corresponding error message is returned:
+
+* Request doesn't carry JWT token, or contained token can't be decoded or contained token isn't valid JWT token
+* token header doesn't contain the key
+* token header provided key doesn't exists
+* token signature verification failure
+
+`JWT` class is used to verify multiple tokens, using tokens as its constructor. Per RFC convention, JWT token is retrieved from *authorization* header of the request.
+
+```javascript
+new crypto.JWT(TOKEN_HERE)
+```
+
+`verify()` method, verifies the token using specified key.
+
+```javascript
+.pipeline('request')
+  .replaceMessage(
+    msg => (
+      ((
+        service,
+        header,
+        jwt,
+        kid,
+        key,
+      ) => (
+        service = _services[__serviceID],
+        service?.keys ? (
+          header = msg.head.headers.authorization || '',
+          header.startsWith('Bearer ') && (header = header.substring(7)),
+          jwt = new crypto.JWT(header),
+          jwt.isValid ? (
+            kid = jwt.header?.kid,
+            key = _keys[kid],
+            key ? (
+              service.keys[kid] ? (
+                jwt.verify(key) ? (
+                  msg
+                ) : (
+                  __turnDown = true,
+                  new Message({ status: 401 }, 'Invalid signature')
+                )
+              ) : (
+                __turnDown = true,
+                new Message({ status: 403 }, 'Access denied')
+              )
+            ) : (
+              __turnDown = true,
+              new Message({ status: 401 }, 'Invalid key')
+            )
+          ) : (
+            __turnDown = true,
+            new Message({ status: 401 }, 'Invalid token')
+          )
+        ) : msg
+      ))()
+    )
+  )
+```
+
+> We have used Anonymous function to provide local variables to the logic for the clear separation of concern; You could have these variables defined in the arguments list of the *replaceMessage* callback, but that logic might get broken, or we might shadow some variables if future version of this callback's introduced more arguments. Therefore, it is recommended to use anonymous functions to introduce local variables.
+
+## Test in action
+
+```shell
+curl localhost:8000/hi \
+-H'Authorization: Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6ImtleS0xIn0.e30.cU6DwIKdXRiPFO9mKDqq-2zkgsJHs2V4ykxJBFdKNS1qCIguoaoIpIPFvhKIk-VrTwGP9VHCrPi5btM0Krt2QLnMLopxrWqiQiVO4752lk0fW6epvLkxSmsUMllT-ncc64yOHU4xOjHyjBllhysePkfi6mwIAWYOJFKUwDh1CDMGeLeXYtwlj867_qzqNAotIUtH5vsgV8yndom4IwR2BRb3b9Y0SdgnslQ7tE2cA-n-uobdipbW4FH79tfTdrgC4qcmJ2IPYG-zSV6palhJdezzUpEfSxIa41LSj4oSX0uLEQikOQtX5Wz2zDRsrFGsqhQO50siRA7XxobAaeaShQ'
+Hi, there!
+
+
+curl localhost:8000/hi \
+-H'Authorization: Bearer eyJhbGciOiJFUzUxMiIsInR5cCI6IkpXVCIsImtpZCI6ImtleS0yIn0.e30.ATb5ZW2aY1nGjfBYdFuhIhh556es31iHZswgRSBYwSTV1t2bGhv7Hj3Arj7ZlFHR355dvQnHq_0ablnwMEbwxNruAWjr7CEUO8_mdtG6MBUbpMZB48VbIJidTf0RWvfQZpKrAQ6Peux1q97_Ynxkr0flbVzvUnu-O2yjD8763RY-wvun'
+You are requesting /hi from ::ffff:127.0.0.1
+```
+
+## Summary
+
+In this tutorial, we added JWT validation to our proxy service to improve security. The verification logic in the service can be moved forward to the proxy to achieve unified management and control.
+
+### Takeaways
+
+* Usage of `crypto` package `PrivateKey` and `JWT` classes.
+* Introduce local variables using Anonymous function.
+
+### What's next?
+
+There are many types of security policies, and in the next section we will try to implement blacklists and whitelists.
