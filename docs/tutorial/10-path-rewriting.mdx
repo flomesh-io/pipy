@@ -1,0 +1,123 @@
+---
+title: "Part 10: Path rewriting"
+---
+
+## Problem
+
+Suppose you want to redirect traffic based on url and you configure a Pipy proxy route to say `"/ip/*"` and have it route to some target. Assume target is running a simple service which just return the path and client IP. Sending a request as is to `localhost:8000/ip/a`，you will receive response like this:
+
+```shell
+curl localhost:8000/ip/a
+You are requesting /ip/a from ::ffff:127.0.0.1
+
+curl localhost:8000/ip
+You are requesting /ip from ::ffff:127.0.0.1
+```
+
+But what we expect or our desired outcome is:
+
+```
+You are requesting /a from ::ffff:127.0.0.1
+```
+
+Because prefix `/ip` in the pattern `/ip/*` represents ip service listening on configured port and we are expecting that all requests starting with `/ip/` should be redirected to specific target for handling. Or there maybe cases where you want to forward request to different path.
+So we need a functionality to have Pipy help us do the **rewriting** of path received, and path rewriting is one of the important characteristics of any proxy.
+
+## RegExp
+
+Suppose we want path starting with `/ip/` should be replaced with `/`. *replace(searchFor, replaceWith)* function of JavaScript `String` can take its first argument either as a string or a `regex` pattern.
+
+```js
+new RegExp('^/ip/?')
+```
+
+## Extended Routing Configuration
+
+Add *rewrite* fields by abstracting services from routing tables and encapsulating them as objects
+
+```json
+{
+  "routes": {
+    "/hi/*": { "service": "service-hi" },
+    "/echo": { "service": "service-echo" },
+    "/ip/*": { "service": "service-tell-ip", "rewrite": ["^/ip/?", "/"] }
+  }
+}
+```
+
+Also adjust initialization of the global variable *_router* by converting the first value of the *rewrite* array into a `RegExp` object for the service you need to rewrite. Add a new global variable *_route* to receive the return value of the routing decision.
+
+```js
+pipy({
+  _router: new algo.URLRouter(
+    Object.fromEntries(
+      Object.entries(config.routes).map(
+        ([k, v]) => [
+          k,
+          {
+            ...v,
+            rewrite: v.rewrite ? [
+              new RegExp(v.rewrite[0]),
+              v.rewrite[1],
+            ] : undefined,
+          }
+        ]
+      )
+    )
+  ),
+
+  _route: null,
+})
+```
+
+> We are using Javsacript **spread operator** `...` here to expand in place the service object and re-copying `rewrite` field. 
+
+## Rewriting Path
+
+We can use `__router.find()` to find the requested route by passing in the host and path header information, once we get hold of valid `_route` result, we can retrieve the linked service into ``__serviceID` variable and perform path rewrite for objects where we have configured `rewrite` field and update the *path* field of request header with rewritten path.
+
+```js
+.pipeline('request')
+  .handleMessageStart(
+    msg => (
+      _route = _router.find(
+        msg.head.headers.host,
+        msg.head.path,
+      ),
+      _route && (
+        __serviceID = _route.service,
+        _route.rewrite && (
+          msg.head.path = msg.head.path.replace(
+            _route.rewrite[0],
+            _route.rewrite[1],
+          )
+        )
+      )
+    )
+  )
+```
+
+## Test in action
+
+Let's use the same test we used in the start of this tutorial:
+
+```shell
+curl localhost:8000/ip/a
+You are requesting /a from ::ffff:127.0.0.1
+
+curl localhost:8000/ip
+You are requesting / from ::ffff:127.0.0.1
+```
+
+## Summary
+
+In this tutorial we have used JavaScript regular expressions and string manipulation to implement the common gateway path rewriting functionality.
+
+### Takeaways
+
+* Pipy class `RegExp` is used for regular expressions search and/or subtitution..
+* Using spread operator `...` instead of enumeration to create literal objects makes it easier to extend the objects later.
+
+### What's next?
+
+We continue to add new capabilities to our proxy **access logging**, and will introduce and expand our knowledge of using Pipy other **filters**.
