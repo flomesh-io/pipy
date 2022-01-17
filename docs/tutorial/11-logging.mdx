@@ -204,7 +204,6 @@ Its similar to *muxHTTP* filter in a way, it will combine multiple streams into 
 
 ### pack filter
 
-*log-send* 子管道会接收父管道发来的消息写入缓冲区，缓冲区有设置大小；假如设置了超时时间，还会启动一个定时器，也就是缓冲区的刷新间隔。
 *log-send* sub-pipeline will receive messages from its parent pipeline and buffer them. Buffer has configuration options like buffer size, timeout settings. Buffer will get flushed to defined target (mock service in our case here) which ever condition is met first. 
 
 ```javascript
