@@ -26,7 +26,7 @@ You are requesting /a from ::ffff:127.0.0.1
 
 ## RegExp
 
-简单的实现就是将 `/ip/` 替换成 `/`，Javascrip 中 String 的 *replace(searchFor, replaceWith)* 方法第一个参数可以是字符串也可以是正则表达式。
+简单的实现就是将 `/ip/` 替换成 `/`，JavaScript 中 String 的 *replace(searchFor, replaceWith)* 方法第一个参数可以是字符串也可以是正则表达式。
 
 ```js
 new RegExp('^/ip/?')
@@ -114,7 +114,7 @@ You are requesting / from ::ffff:127.0.0.1
 
 这一次我们使用 JavaScript 的正则表达式和字符串操作实现了网关中常见的路径重写的功能。
 
-### 收益
+### 收获
 
 * 在字符串替换时，使用正则表达式类型 `RegExp`。
 * 使用展开语法而不是枚举的方式创建字面量对象，可以方便后面继续对对象进行扩展。

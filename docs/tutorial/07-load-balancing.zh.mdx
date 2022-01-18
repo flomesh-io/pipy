@@ -124,7 +124,7 @@ new algo.RoundRobinLoadBalancer([
   })
 ```
 
-> 在 Javascript 中，任何数组元素都可以使用 [_Array.prototype.map_](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Array/map) 进行转换。比如说对象，可以先转换成 `[key, value]` 数组，再使用 `map()` 变换最后在转换成对象。
+> 在 JavaScript 中，任何数组元素都可以使用 [_Array.prototype.map_](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Array/map) 进行转换。比如说对象，可以先转换成 `[key, value]` 数组，再使用 `map()` 变换最后在转换成对象。
 
 ```js
 Object.fromEntries(
@@ -290,9 +290,9 @@ You are requesting /hi from ::ffff:127.0.0.1
 
 ## 总结
 
-这次我们学习了如果写一个轮训的负载均衡器，同时学会了只用一行代码转换 JSON 对象的技巧。
+这次我们学习了如何写一个轮询的负载均衡器，同时学会了只用一行代码转换 JSON 对象的技巧。
 
-### 收益
+### 收获
 
 1. 使用 [_algo.RoundRobinLoadBalancer_](/reference/algo/RoundRobinLoadBalancer)（还有其他类型的均衡器）自动从一组目标服务器中选择，并结合各自的权重。
 2. 结合 [_Array.prototype.map_](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Array/map)、[_Object.entries_](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object/entries) 以及 [_Object.fromEntries_](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object/fromEntries) 轻松完成 JSON 对象键和值的转换。
