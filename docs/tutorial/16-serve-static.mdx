@@ -1,0 +1,146 @@
+---
+title: "Part 16: Serve Static"
+---
+
+## Problem
+
+So far we have been using Pipy to implement proxy service which were handling the load and delegating the processing to its configured endpoints, but that's not all of what can be achieved by Pipy. Pipy can be used to design and develop a static file service which can serve the static contents like static HTML pages, files etc.
+
+In this tutorial we are going to implement HTTP static server which will server the static HTML documents.
+
+## Configuration
+
+For static resources, we will configure a *root folder* where all static contents will be stored and we will be serving contents only from root this folder. For requests like `/a/b.html` it will be converted to relative path like `ROOT/a/b.html`.
+
+Static resources configuration is configured at service level, for example in below configuration root folder *www* is configured as the root folder for static contents of service *service-tell-ip*.
+
+```javascript
+{
+  "services": {
+    "service-tell-ip": {
+      "root": "www"
+    }
+  }
+}
+```
+
+So we will create our *www* folder and add a simple static file named *index.html*:
+
+```html
+<!DOCTYPE html>
+<body>
+  <head>
+    <title>Test</title>
+  </head>
+  <body>
+    <p>Hello!</p>
+  </body>
+</body>
+```
+
+The next step is to locate the file on request and return its contents.
+
+## Code dissection
+
+First we will declare our global variables:
+
+* `_root`: Service root folder of resources
+* `_file`: is the resource requested 
+
+```javascript
+pipy({
+  _root: '',
+  _file: null,
+})
+
+.import({
+  __turnDown: 'proxy',
+  __serviceID: 'router',
+})
+```
+
+### `http.File` class
+
+Pipy [`File`](/reference/http/File) class is used to load static resources:
+
+* Static method `from()` loads file from the path, if path ends with `/` then filename defaults to `/index.html`. This method will search for *FILE*, *FILE.gz*, *FILE.br* and if none is found, this will continue searching for *FILE/index.html*, *FILE/index.html.gz*, *FILE/index.html.br*. `null` will be returned if all search fails.  
+* `toMessage()` Encodes the content of a static resource using the encoding specified by the parameter.
+
+```javascript
+.pipeline('request')
+  .handleMessageStart(
+    msg => (
+      _root = config.services[__serviceID]?.root,
+      _root && (
+        _file = http.File.from(_root + msg.head.path)
+      )
+    )
+  )
+  .link(
+    'serve', () => Boolean(_file),
+    'bypass'
+  )
+```
+
+Once the static content corresponding to the request is determined, the global variable '_file' determines whether to respond to the static content or send the request to upstream for processing.
+
+```javascript
+.pipeline('serve')
+  .replaceMessage(
+    msg => (
+      __turnDown = true,
+      _file.toMessage(msg.head.headers['accept-encoding'])
+    )
+  )
+
+.pipeline('bypass')
+```
+
+Make sure you use this module.
+
+```json
+//config/proxy.json
+{
+  "listen": 8000,
+  "plugins": [
+    "plugins/router.js",
+    "plugins/serve-static.js",
+    "plugins/balancer.js",
+    "plugins/default.js"
+  ]
+}
+```
+
+## Test in action
+
+Do you still remember tutorial [Part 10: Path rewriting](/tutorial/10-path-rewriting) where we configured to rewrite path `/ip` to `/`, so we will use same for our test here.
+
+```shell
+# Return static contents
+curl localhost:8000/ip/
+<!DOCTYPE html>
+<body>
+  <head>
+    <title>Test</title>
+  </head>
+  <body>
+    <p>Hello!</p>
+  </body>
+</body>
+#When requested file is not found, request will be forward to endpoint for processing.
+curl localhost:8000/ip/a
+You are requesting /a from ::ffff:127.0.0.1
+```
+
+## Summary
+
+From our test it can be seen that we have successfully implemented static content serving functionality for contents which exists in our configured folder and when Pipy is unable to find the contents, it will forward the request to configured upstream. Using **Pipy Repo** we can easily implement a dynamic proxy which can serve both static as well as dynamic contents.
+
+### Takeaways
+
+* `http.File.from()` provides supports for reading static resources like files. It also supports compressions formats like *gzip* and *br*
+* `File.toMessage()` provides supports for encoding the contents of files based on requested encoding.
+
+### What's next?
+
+In next tutorial we will implement data transformation functionality to our proxy service.

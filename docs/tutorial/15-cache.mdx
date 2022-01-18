@@ -1,0 +1,137 @@
+---
+title: "Part 15: Cache"
+---
+
+## Problem
+
+In previous tutorial we implemented the rate limiting functionality to protect upstream service, but this was not user friendly experience as subsequent requests were put on hold when traffic reached configured threshold. In back-end development, we often use caching to speed up reads and writes to databases, and this applies to proxies as well. For static content or low change frequency responses, responses can be cached at the proxy layer to reduce stress on the upstream and network without impacting the user experience.
+
+In this tutorial we are going to add **caching** functionality to our proxy server.
+
+## Configuration
+
+In this tutorial we will add non-expiry caching of static contents for our *service-hi* target service.
+
+```json
+//cache.json
+{
+  "services": {
+    "service-hi": [
+      ".js",
+      ".json"
+    ]
+  },
+  "timeout": 10000
+}
+```
+
+Here `timeout` is configured as **global variable** applicable to all, if desired we can have it configured for particular service(s).
+
+> We have selected *service-hi* for some particular reasons, which will be explained shortly.
+
+## Code dissection
+
+First we need to define few global variables:
+
+1. *_cache* is map type, used to store responses.
+2. *_cachedKey* The corresponding key that the response is put into the cache. This time we will use the concatenation of *host* and *path* as key to cache responses for all upstream nodes.
+3. *_cachedResponse* Cached response retrieved from cache.
+4. *_useCache* Flag to mark, if caching should be used or not.
+
+We also need to import variables from modules.
+
+```javascript
+pipy({
+  _cache: {},
+  _cachedKey: '',
+  _cachedResponse: null,
+  _useCache: false,
+})
+
+.import({
+  __turnDown: 'proxy',
+  __serviceID: 'router',
+})
+```
+
+Should we jump into request processing? Let's first add caching to our *response* sub-pipeline.
+
+In addition to determining the status code of the response (we will be caching only successful responses i.e responses which return status code of  2xx and 3XX), we will also keep track of the cache time.
+
+```javascript
+.pipeline('response')
+  .handleMessage(
+    msg => (
+      _useCache && (msg.head.status || 200) < 400 && (
+        _cache[_cachedKey] = {
+          time: Date.now(),
+          message: msg,
+        }
+      )
+    )
+  )
+```
+
+After receiving the request, the cached key is retrieved from the request header, and then the request is checked to see if the cache is used. If caching is enabled, the response is fetched from the cache by key. Note that you also need to determine whether the cache is expired.
+
+Finally, We are going to check if response is available in our local cache and make decision if we should continue with the request (in absence of cache) or return the cached response directly to client without hitting our target service.
+
+```javascript
+.pipeline('request')
+  .handleMessageStart(
+    msg => (
+      ((
+        host, path
+      ) => (
+        host = msg.head.headers.host,
+        path = msg.head.path,
+        _useCache = config.services[__serviceID]?.some?.(
+          ext => path.endsWith(ext)
+        ),
+        _useCache && (
+          _cachedKey = host + path,
+          _cachedResponse = _cache[_cachedKey],
+          _cachedResponse?.time < Date.now() - config.timeout && (
+            _cachedResponse = _cache[_cacheKey] = null
+          ),
+          _cachedResponse && (__turnDown = true)
+        )
+      ))()
+    )
+  )
+  .link(
+    'cache', () => Boolean(_cachedResponse),
+    'bypass'
+  )
+
+.pipeline('cache')
+  .replaceMessage(
+    () => _cachedResponse.message
+  )
+
+.pipeline('bypass')
+```
+
+Enable this module and to avoid any testing issues, better to remove the rate limiting functionality.
+
+## Test in action
+
+*service-hi* is configured with two target endpoints, each returning different response. When we request `localhost:8000/hi/a.json`, in first 10 seconds we will receive response which is returned from first target. After expiry period of 10 seconds, response contents will be changed to that of its second endpoint, as our cache has expired and Pipy will forward the request to second endpoint and cache that response.
+
+```shell
+curl localhost:8000/hi/a.json
+Hi, there!
+curl localhost:8000/hi/a.json
+Hi, there!
+#wait > 10s
+curl localhost:8000/hi/a.json
+You are requesting /hi/a.json from ::ffff:127.0.0.1
+```
+
+## Summary
+
+In this tutorial we didn't introduced new filters and we implemented the caching functionality with minimal code. As we have stated previously, caching functionality can be customized for different services and we can go further deeper into configuring cache at individual service or path level with different expiry period.
+
+### What's next?
+
+This tutorial we implemented the caching for path `/hi/a.json` for which there is no such file exists. In next tutorial we will implement an HTTP static file server by using Pipy built-in functionality.

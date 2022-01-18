@@ -155,9 +155,9 @@ You can find Pipy documentation under `docs/`.
     * [12 JWT](./docs/tutorial/12-jwt.mdx)
     * [13 Ban](./docs/tutorial/13-ban.mdx)
     * [14 Throttle](./docs/tutorial/14-throttle.mdx)
-<!--* [15 Cache](./docs/tutorial/15-cache.mdx)
+    * [15 Cache](./docs/tutorial/15-cache.mdx)
     * [16 Serve static](./docs/tutorial/16-serve-static.mdx)
-    * [17 Body transform](./docs/tutorial/17-body-transform.mdx)
+<!--* [17 Body transform](./docs/tutorial/17-body-transform.mdx)
     * [18 TLS](./docs/tutorial/18-tls.mdx)-->
 * [Copyright](COPYRIGHT)
 * [Licence](LICENCE)
