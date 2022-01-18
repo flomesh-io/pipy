@@ -551,7 +551,7 @@ public:
     double i; std::modf(n, &i);
     char str[100]; int len;
     if (std::modf(n, &i) == 0) {
-      len = std::snprintf(str, sizeof(str), "%lld", int64_t(i));
+      len = std::snprintf(str, sizeof(str), "%lld", (long long)i);
     } else {
       len = std::snprintf(str, sizeof(str), "%f", n);
     }
