@@ -503,6 +503,8 @@ private:
 
 class Str : public Pooled<Str, RefCount<Str>> {
 public:
+  enum { MAX_SIZE = 0xffff };
+
   static const Ref<Str> empty;
   static const Ref<Str> nan;
   static const Ref<Str> pos_inf;
@@ -513,40 +515,86 @@ public:
   static const Ref<Str> bool_false;
 
   static auto make(const std::string &str) -> Str* {
+    if (str.length() > MAX_SIZE) {
+      auto s = str.substr(0, MAX_SIZE);
+      const auto i = ht().find(s);
+      if (i != ht().end()) return i->second;
+      return new Str(std::move(s));
+    } else {
+      const auto i = ht().find(str);
+      if (i != ht().end()) return i->second;
+      return new Str(str);
+    }
+  }
+
+  static auto make(std::string &&str) -> Str* {
+    if (str.length() > MAX_SIZE) str.resize(MAX_SIZE);
     const auto i = ht().find(str);
     if (i != ht().end()) return i->second;
-    return new Str(str);
+    return new Str(std::move(str));
   }
 
   static auto make(const char *str, size_t len) -> Str* {
-    return make(std::string(str, len));
+    std::string s(str, std::min(size_t(MAX_SIZE), len));
+    return make(std::move(s));
   }
+
+  static auto make(const char *str) -> Str* {
+    return make(str, std::strlen(str));
+  }
+
+  static auto make(const uint32_t *codes, size_t len) -> Str*;
 
   static auto make(double n) -> Str* {
     if (std::isnan(n)) return nan;
     if (std::isinf(n)) return n > 0 ? pos_inf : neg_inf;
     double i; std::modf(n, &i);
-    if (std::modf(n, &i) == 0) return make(std::to_string(int64_t(i)));
-    return make(std::to_string(n));
+    char str[100]; int len;
+    if (std::modf(n, &i) == 0) {
+      len = std::snprintf(str, sizeof(str), "%lld", int64_t(i));
+    } else {
+      len = std::snprintf(str, sizeof(str), "%f", n);
+    }
+    return make(str, len);
   }
 
-  auto length() const -> size_t { return m_str.length(); }
+  auto length() const -> int { return m_length; }
+  auto size() const -> size_t { return m_str.length(); }
   auto str() const -> const std::string& { return m_str; }
   auto c_str() const -> const char* { return m_str.c_str(); }
   auto parse_int() const -> double;
   auto parse_float() const -> double;
+  auto pos_to_chr(int i) -> int;
+  auto chr_to_pos(int i) -> int;
+  auto chr_at(int i) -> int;
+  auto substring(int start, int end) -> std::string;
 
 private:
+  enum { CHUNK_SIZE = 32 };
+
   std::string m_str;
+  std::vector<uint16_t> m_chunks;
+  int m_length;
 
   Str(const std::string &str) : m_str(str) {
+    make_chunks();
     ht()[str] = this;
+  }
+
+  Str(std::string &&str) : m_str(std::move(str)) {
+    make_chunks();
+    ht()[m_str] = this;
   }
 
   ~Str() {
     ht().erase(m_str);
   }
 
+  void make_chunks();
+  auto get_code(int i) -> int;
+
+  static bool is_mult(char c) { return (c & 0xc0) == 0xc0; }
+  static bool is_half(char c) { return (c & 0xc0) == 0x80; }
   static auto ht() -> std::unordered_map<std::string, Str*>&;
 
   friend class RefCount<Str>;
@@ -944,7 +992,7 @@ public:
       case Value::Type::Undefined: return false;
       case Value::Type::Boolean: return b();
       case Value::Type::Number: return n() != 0 && !std::isnan(n());
-      case Value::Type::String: return s()->length() > 0;
+      case Value::Type::String: return s()->size() > 0;
       case Value::Type::Object: return o() ? true : false;
     }
     return false;
@@ -1998,23 +2046,43 @@ public:
   virtual void value_of(Value &out) override;
   virtual auto to_string() const -> std::string override;
 
+  auto str() const -> Str* { return m_s; }
   auto length() -> int { return m_s->length(); }
 
-  bool ends_with(Str *search, int length = -1);
+  auto charAt(int i) -> Str*;
+  auto charCodeAt(int i) -> int;
+  bool endsWith(Str *search);
+  bool endsWith(Str *search, int length);
+  bool includes(Str *search, int position = 0);
+  auto indexOf(Str *search, int position = 0) -> int;
+  auto lastIndexOf(Str *search, int position) -> int;
+  auto lastIndexOf(Str *search) -> int;
+  auto padEnd(int length, Str *padding) -> Str*;
+  auto padStart(int length, Str *padding) -> Str*;
+  auto repeat(int count) -> Str*;
   auto replace(Str *pattern, Str *replacement, bool all = false) -> Str*;
   auto replace(RegExp *pattern, Str *replacement) -> Str*;
-  auto split(Str *separator = nullptr, int limit = -1) -> Array*;
-  bool starts_with(Str *search, int position = 0);
+  auto search(RegExp *pattern) -> int;
+  auto slice(int start) -> Str*;
+  auto slice(int start, int end) -> Str*;
+  auto split(Str *separator = nullptr) -> Array*;
+  auto split(Str *separator, int limit) -> Array*;
+  bool startsWith(Str *search, int position = 0);
   auto substring(int start) -> Str*;
   auto substring(int start, int end) -> Str*;
-  auto to_lower_case() -> Str*;
-  auto to_upper_case() -> Str*;
+  auto toLowerCase() -> Str*;
+  auto toUpperCase() -> Str*;
+  auto trim() -> Str*;
+  auto trimEnd() -> Str*;
+  auto trimStart() -> Str*;
 
 private:
   String(Str *s) : m_s(s) {}
   String(const std::string &str) : m_s(Str::make(str)) {}
 
   Ref<Str> m_s;
+
+  static auto fill(char *buf, size_t size, Str *str, int len) -> size_t;
 
   friend class ObjectTemplate<String>;
 };
@@ -2198,6 +2266,29 @@ private:
   static auto chars_to_flags(Str *chars, bool &global) -> std::regex::flag_type;
 
   friend class ObjectTemplate<RegExp>;
+};
+
+//
+// Utf8Decoder
+//
+
+class Utf8Decoder {
+public:
+  static size_t max_output_size(size_t input_size) {
+    return input_size * 2;
+  }
+
+  Utf8Decoder(const std::function<void(int)> &output)
+    : m_output(output) {}
+
+  bool input(char c);
+  bool end();
+
+private:
+  const std::function<void(int)> m_output;
+  uint32_t m_codepoint = 0;
+  int m_shift = 0;
+  bool m_done = false;
 };
 
 } // namespace pjs

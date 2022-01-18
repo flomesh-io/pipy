@@ -898,7 +898,7 @@ void HeaderEncoder::encode_int(Data &data, uint8_t prefix, int prefix_len, uint3
 }
 
 void HeaderEncoder::encode_str(Data &data, pjs::Str *s) {
-  encode_int(data, 0, 1, s->length());
+  encode_int(data, 0, 1, s->size());
   s_dp.push(&data, s->str());
 }
 

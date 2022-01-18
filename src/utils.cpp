@@ -730,30 +730,5 @@ bool Base64UrlDecoder::flush() {
   }
 }
 
-//
-// Utf8Decoder
-//
-
-bool Utf8Decoder::input(char c) {
-  if (!m_shift) {
-    if (c & 0x80) {
-      if ((c & 0xe0) == 0xc0) { m_codepoint = c & 0x1f; m_shift = 1; } else
-      if ((c & 0xf0) == 0xe0) { m_codepoint = c & 0x0f; m_shift = 2; } else
-      if ((c & 0xf8) == 0xf0) { m_codepoint = c & 0x07; m_shift = 3; } else return false;
-    } else {
-      m_output(c);
-    }
-  } else {
-    if ((c & 0xc0) != 0x80) return false;
-    m_codepoint = (m_codepoint << 6) | (c & 0x3f);
-    if (!--m_shift) m_output(m_codepoint);
-  }
-  return true;
-}
-
-bool Utf8Decoder::end() {
-  return !m_shift;
-}
-
 } // namespace utils
 } // namespace pipy

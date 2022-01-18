@@ -72,6 +72,7 @@ static void log(Log::Level level, const char *str) {
         so << c;
         ss << c;
       }
+      if (*p) p++;
       write_history(ss.str());
       so << std::endl;
     } while (*p);

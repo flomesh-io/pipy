@@ -43,6 +43,36 @@ const Ref<Str> Str::null(Str::make("null"));
 const Ref<Str> Str::bool_true(Str::make("true"));
 const Ref<Str> Str::bool_false(Str::make("false"));
 
+static char s_str_buf[Str::MAX_SIZE];
+
+auto Str::make(const uint32_t *codes, size_t len) -> Str* {
+  auto &buf = s_str_buf;
+  int p = 0;
+  for (size_t i = 0; i < len; i++) {
+    auto c = codes[i];
+    if (c <= 0x7f) {
+      if (p + 1 > sizeof(buf)) break;
+      buf[p++] = c;
+    } else if (c <= 0x7ff) {
+      if (p + 2 > sizeof(buf)) break;
+      buf[p++] = 0xc0 | (0x1f & (c >> 6));
+      buf[p++] = 0x80 | (0x3f & (c >> 0));
+    } else if (c <= 0xffff) {
+      if (p + 3 > sizeof(buf)) break;
+      buf[p++] = 0xe0 | (0x0f & (c >> 12));
+      buf[p++] = 0x80 | (0x3f & (c >>  6));
+      buf[p++] = 0x80 | (0x3f & (c >>  0));
+    } else {
+      if (p + 4 > sizeof(buf)) break;
+      buf[p++] = 0xf0 | (0x07 & (c >> 18));
+      buf[p++] = 0x80 | (0x3f & (c >> 12));
+      buf[p++] = 0x80 | (0x3f & (c >>  6));
+      buf[p++] = 0x80 | (0x3f & (c >>  0));
+    }
+  }
+  return make(buf, p);
+}
+
 auto Str::ht() -> std::unordered_map<std::string, Str*>& {
   static std::unordered_map<std::string, Str*> s_ht;
   return s_ht;
@@ -73,6 +103,142 @@ auto Str::parse_float() const -> double {
     return std::atof(p);
   } else {
     return NAN;
+  }
+}
+
+auto Str::pos_to_chr(int i) -> int {
+  int p = 0, n = 0;
+  if (i >= size()) return m_length;
+  if (i < 0) i = 0;
+  if (!m_chunks.empty() && i >= m_chunks[0]) {
+    int a = 0, b = m_chunks.size();
+    while (a + 1 < b) {
+      int m = (a + b) >> 1;
+      int p = m_chunks[m];
+      if (i > p) {
+        a = m;
+      } else if (i < p) {
+        b = m;
+      } else {
+        return CHUNK_SIZE * (m + 1);
+      }
+    }
+    p = m_chunks[a];
+    n = CHUNK_SIZE * (a + 1);
+    if (a + 1 < m_chunks.size()) {
+      auto q = m_chunks[a + 1];
+      if (q - p == CHUNK_SIZE) {
+        return n + (i - p);
+      }
+    }
+  }
+  while (p < i) {
+    auto c = m_str[p];
+    if (c & 0x80) {
+      if ((c & 0xe0) == 0xc0) p += 2; else
+      if ((c & 0xf0) == 0xe0) p += 3; else
+      if ((c & 0xf8) == 0xf0) p += 4; else
+      break;
+    } else {
+      p++;
+    }
+    n++;
+  }
+  if (p > i) n--;
+  return n;
+}
+
+auto Str::chr_to_pos(int i) -> int {
+  int chk = i / CHUNK_SIZE;
+  int off = i % CHUNK_SIZE;
+  int min, max;
+  if (chk <= 0) {
+    min = 0;
+    max = m_chunks.empty() ? size() : m_chunks[0];
+  } else if (chk - 1 >= m_chunks.size()) {
+    min = max = size();
+  } else {
+    min = m_chunks[chk - 1];
+    max = chk >= m_chunks.size() ? size() : m_chunks[chk];
+  }
+  if (!off) return min;
+  if (chk < m_chunks.size() && max - min == CHUNK_SIZE) {
+    return std::min(max, min + off);
+  }
+  auto p = min;
+  for (int n = off; n > 0 && p < max; n--) {
+    auto c = m_str[p];
+    if (c & 0x80) {
+      if ((c & 0xe0) == 0xc0) p += 2; else
+      if ((c & 0xf0) == 0xe0) p += 3; else
+      if ((c & 0xf8) == 0xf0) p += 4; else
+      break;
+    } else {
+      p++;
+    }
+  }
+  return p;
+}
+
+auto Str::chr_at(int i) -> int {
+  auto p = chr_to_pos(i);
+  if (p >= size()) return -1;
+  return get_code(p);
+}
+
+auto Str::substring(int start, int end) -> std::string {
+  auto a = chr_to_pos(start);
+  auto b = chr_to_pos(end);
+  auto head = m_str[a];
+  auto tail = m_str[b];
+  return m_str.substr(a, b - a);
+}
+
+void Str::make_chunks() {
+  int n = 0, p = 0, i = 0;
+  Utf8Decoder decoder(
+    [&](int cp) {
+      if (n > 0) {
+        if (n % CHUNK_SIZE == 0) {
+          m_chunks.push_back(p);
+        }
+      }
+      n++;
+    }
+  );
+  for (const auto c : m_str) {
+    if (!(c & 0x80) || (c & 0x40)) p = i;
+    if (!decoder.input(c)) break;
+    i++;
+  }
+  m_length = n;
+}
+
+auto Str::get_code(int i) -> int {
+  auto c = m_str[i];
+  auto n = size();
+  if (c & 0x80) {
+    if ((c & 0xe0) == 0xc0 && i + 1 < n) {
+      return
+        ((c          & 0x1f) << 6)|
+        ((m_str[i+1] & 0x3f) << 0);
+    }
+    if ((c & 0xf0) == 0xe0 && i + 2 < n) {
+      return
+        ((c          & 0x0f) << 12)|
+        ((m_str[i+1] & 0x3f) <<  6)|
+        ((m_str[i+2] & 0x3f) <<  0);
+    }
+    if ((c & 0xf8) == 0xf0 && i + 3 < n) {
+      return
+        ((c          & 0x07) << 18)|
+        ((m_str[i+1] & 0x3f) << 12)|
+        ((m_str[i+2] & 0x3f) <<  6)|
+        ((m_str[i+3] & 0x3f) <<  0);
+    }
+    return -1;
+  } else {
+    return c;
   }
 }
 
@@ -431,11 +597,102 @@ template<> void ClassDef<String>::init() {
 
   accessor("length", [](Object *obj, Value &ret) { ret.set(obj->as<String>()->length()); });
 
+  method("charAt", [](Context &ctx, Object *obj, Value &ret) {
+    int i = 0;
+    if (!ctx.arguments(0, &i)) return;
+    ret.set(obj->as<String>()->charAt(i));
+  });
+
+  method("charCodeAt", [](Context &ctx, Object *obj, Value &ret) {
+    int i = 0;
+    if (!ctx.arguments(0, &i)) return;
+    auto n = obj->as<String>()->charCodeAt(i);
+    if (n >= 0) ret.set(n); else ret.set(NAN);
+  });
+
+  method("codePointAt", [](Context &ctx, Object *obj, Value &ret) {
+    int i = 0;
+    if (!ctx.arguments(0, &i)) return;
+    auto n = obj->as<String>()->charCodeAt(i);
+    if (n >= 0) ret.set(n); else ret.set(NAN);
+  });
+
+  method("concat", [](Context &ctx, Object *obj, Value &ret) {
+    auto s = obj->as<String>()->str();
+    int size = s->size(), p = size, n = ctx.argc();
+    Str *strs[n];
+    for (int i = 0; i < n; i++) {
+      auto s = ctx.arg(i).to_string();
+      strs[i] = s;
+      size += s->size();
+    }
+    if (size > Str::MAX_SIZE) size = Str::MAX_SIZE;
+    char buf[size];
+    std::memcpy(buf, s->c_str(), s->size());
+    for (int i = 0; i < n; i++) {
+      auto s = strs[i];
+      auto n = std::min(s->size(), size_t(size - p));
+      if (n > 0) {
+        std::memcpy(buf + p, s->c_str(), n);
+        p += n;
+      }
+      s->release();
+    }
+    ret.set(Str::make(buf, size));
+  });
+
   method("endsWith", [](Context &ctx, Object *obj, Value &ret) {
     Str *search;
     int length = -1;
     if (!ctx.arguments(1, &search, &length)) return;
-    ret.set(obj->as<String>()->ends_with(search, length));
+    ret.set(obj->as<String>()->endsWith(search, length));
+  });
+
+  method("includes", [](Context &ctx, Object *obj, Value &ret) {
+    Str *search;
+    int position = 0;
+    if (!ctx.arguments(1, &search, &position)) return;
+    ret.set(obj->as<String>()->includes(search, position));
+  });
+
+  method("indexOf", [](Context &ctx, Object *obj, Value &ret) {
+    Str *search;
+    int position = 0;
+    if (!ctx.arguments(1, &search, &position)) return;
+    ret.set(obj->as<String>()->indexOf(search, position));
+  });
+
+  method("lastIndexOf", [](Context &ctx, Object *obj, Value &ret) {
+    Str *search;
+    int position = obj->as<String>()->str()->length();
+    if (!ctx.arguments(1, &search, &position)) return;
+    ret.set(obj->as<String>()->lastIndexOf(search, position));
+  });
+
+  method("match", [](Context &ctx, Object *obj, Value &ret) {
+    RegExp *pattern;
+    if (!ctx.arguments(1, &pattern)) return;
+    ret.set(pattern->exec(obj->as<String>()->str()));
+  });
+
+  method("padEnd", [](Context &ctx, Object *obj, Value &ret) {
+    int length;
+    Str *padding = nullptr;
+    if (!ctx.arguments(1, &length, &padding)) return;
+    ret.set(obj->as<String>()->padEnd(length, padding));
+  });
+
+  method("padStart", [](Context &ctx, Object *obj, Value &ret) {
+    int length;
+    Str *padding = nullptr;
+    if (!ctx.arguments(1, &length, &padding)) return;
+    ret.set(obj->as<String>()->padStart(length, padding));
+  });
+
+  method("repeat", [](Context &ctx, Object *obj, Value &ret) {
+    int count;
+    if (!ctx.arguments(1, &count)) return;
+    ret.set(obj->as<String>()->repeat(count));
   });
 
   method("replace", [](Context &ctx, Object *obj, Value &ret) {
@@ -454,9 +711,22 @@ template<> void ClassDef<String>::init() {
     ret.set(obj->as<String>()->replace(pattern, replacement, true));
   });
 
+  method("search", [](Context &ctx, Object *obj, Value &ret) {
+    RegExp *pattern;
+    if (!ctx.arguments(1, &pattern)) return;
+    ret.set(obj->as<String>()->search(pattern));
+  });
+
+  method("slice", [](Context &ctx, Object *obj, Value &ret) {
+    int start;
+    int end = obj->as<String>()->str()->length();
+    if (!ctx.arguments(1, &start, &end)) return;
+    ret.set(obj->as<String>()->slice(start, end));
+  });
+
   method("split", [](Context &ctx, Object *obj, Value &ret) {
     Str *separator = nullptr;
-    int limit = -1;
+    int limit = Array::MAX_SIZE;
     if (!ctx.arguments(0, &separator, &limit)) return;
     ret.set(obj->as<String>()->split(separator, limit));
   });
@@ -465,32 +735,58 @@ template<> void ClassDef<String>::init() {
     Str *search;
     int position = 0;
     if (!ctx.arguments(1, &search, &position)) return;
-    ret.set(obj->as<String>()->starts_with(search, position));
+    ret.set(obj->as<String>()->startsWith(search, position));
   });
 
   method("substring", [](Context &ctx, Object *obj, Value &ret) {
-    int start, end;
-    if (ctx.try_arguments(2, &start, &end)) {
-      ret.set(obj->as<String>()->substring(start, end));
-    } else if (ctx.try_arguments(1, &start)) {
-      ret.set(obj->as<String>()->substring(start));
-    } else {
-      ctx.error_argument_type(0, "a number");
-    }
+    int start;
+    int end = obj->as<String>()->str()->length();
+    if (!ctx.arguments(1, &start, &end)) return;
+    ret.set(obj->as<String>()->substring(start, end));
   });
 
   method("toLowerCase", [](Context &ctx, Object *obj, Value &ret) {
-    ret.set(obj->as<String>()->to_lower_case());
+    ret.set(obj->as<String>()->toLowerCase());
   });
 
   method("toUpperCase", [](Context &ctx, Object *obj, Value &ret) {
-    ret.set(obj->as<String>()->to_upper_case());
+    ret.set(obj->as<String>()->toUpperCase());
+  });
+
+  method("trim", [](Context &ctx, Object *obj, Value &ret) {
+    ret.set(obj->as<String>()->trim());
+  });
+
+  method("trimEnd", [](Context &ctx, Object *obj, Value &ret) {
+    ret.set(obj->as<String>()->trimEnd());
+  });
+
+  method("trimStart", [](Context &ctx, Object *obj, Value &ret) {
+    ret.set(obj->as<String>()->trimStart());
   });
 }
 
 template<> void ClassDef<Constructor<String>>::init() {
   super<Function>();
   ctor();
+
+  method("fromCharCode", [](Context &ctx, Object*, Value &ret) {
+    auto n = ctx.argc();
+    uint32_t codes[n];
+    for (int i = 0; i < n; i++) {
+      codes[i] = std::max(0, int(ctx.arg(i).to_number()));
+    }
+    ret.set(Str::make(codes, n));
+  });
+
+  method("fromCodePoint", [](Context &ctx, Object*, Value &ret) {
+    auto n = ctx.argc();
+    uint32_t codes[n];
+    for (int i = 0; i < n; i++) {
+      codes[i] = std::max(0, int(ctx.arg(i).to_number()));
+    }
+    ret.set(Str::make(codes, n));
+  });
 }
 
 void String::value_of(Value &out) {
@@ -501,13 +797,92 @@ auto String::to_string() const -> std::string {
   return m_s->str();
 }
 
-bool String::ends_with(Str *search, int length) {
-  if (length < 0) length = m_s->length();
-  int len = search->length();
-  if (len == 0) return true;
-  if (len > length) return false;
-  // TODO: code point based positions
-  return std::strncmp(m_s->c_str() + (length - len), search->c_str(), len) == 0;
+auto String::charAt(int i) -> Str* {
+  auto c = m_s->chr_at(i);
+  if (i < 0) return Str::empty;
+  uint32_t code = c;
+  return Str::make(&code, 1);
+}
+
+auto String::charCodeAt(int i) -> int {
+  return m_s->chr_at(i);
+}
+
+bool String::endsWith(Str *search) {
+  return endsWith(search, m_s->length());
+}
+
+bool String::endsWith(Str *search, int length) {
+  if (length < 0) length = 0;
+  if (length > m_s->length()) length = m_s->length();
+  int tail = m_s->chr_to_pos(length);
+  int size = search->size();
+  if (size == 0) return true;
+  if (size > tail) return false;
+  return std::strncmp(m_s->c_str() + (tail - size), search->c_str(), size) == 0;
+}
+
+bool String::includes(Str *search, int position) {
+  if (!search->size()) return true;
+  if (position >= m_s->length()) return false;
+  if (position < 0) position = 0;
+  auto p = m_s->str().find(search->str(), m_s->chr_to_pos(position));
+  return p != std::string::npos;
+}
+
+auto String::indexOf(Str *search, int position) -> int {
+  if (!search->size()) return std::max(0, std::min(m_s->length(), position));
+  if (position >= m_s->length()) return -1;
+  if (position < 0) position = 0;
+  auto p = m_s->str().find(search->str(), m_s->chr_to_pos(position));
+  if (p == std::string::npos) return -1;
+  return m_s->pos_to_chr(p);
+}
+
+auto String::lastIndexOf(Str *search, int position) -> int {
+  if (!search->size()) return std::max(0, std::min(m_s->length(), position));
+  if (position >= m_s->length()) return -1;
+  if (position < 0) position = 0;
+  auto p = m_s->str().rfind(search->str(), m_s->chr_to_pos(position));
+  if (p == std::string::npos) return -1;
+  return m_s->pos_to_chr(p);
+}
+
+auto String::lastIndexOf(Str *search) -> int {
+  return lastIndexOf(search, m_s->length());
+}
+
+auto String::padEnd(int length, Str *padding) -> Str* {
+  if (m_s->length() >= length) return m_s;
+  auto &buf = s_str_buf;
+  std::memcpy(buf, m_s->c_str(), m_s->size());
+  auto n = fill(
+    buf + m_s->size(),
+    sizeof(buf) - m_s->size(),
+    padding,
+    length - m_s->length()
+  );
+  return Str::make(buf, n + m_s->size());
+}
+
+auto String::padStart(int length, Str *padding) -> Str* {
+  if (m_s->length() >= length) return m_s;
+  auto &buf = s_str_buf;
+  auto n = fill(
+    buf,
+    sizeof(buf) - m_s->size(),
+    padding,
+    length - m_s->length()
+  );
+  std::memcpy(buf + n, m_s->c_str(), m_s->size());
+  return Str::make(buf, n + m_s->size());
+}
+
+auto String::repeat(int count) -> Str* {
+  if (count <= 0) return Str::empty;
+  auto &buf = s_str_buf;
+  auto size = fill(buf, sizeof(buf), m_s, m_s->length() * count);
+  return Str::make(buf, size);
 }
 
 auto String::replace(Str *pattern, Str *replacement, bool all) -> Str* {
@@ -554,72 +929,172 @@ auto String::replace(RegExp *pattern, Str *replacement) -> Str* {
   auto &s = m_s->str();
   auto &fmt = replacement->str();
   auto &re = pattern->regex();
-  return Str::make(std::regex_replace(s, re, fmt));
+  return Str::make(std::move(std::regex_replace(s, re, fmt)));
+}
+
+auto String::search(RegExp *pattern) -> int {
+  std::smatch sm;
+  std::regex_search(m_s->str(), sm, pattern->regex());
+  if (sm.empty()) return -1;
+  auto p = sm.position(0);
+  return m_s->pos_to_chr(p);
+}
+
+auto String::slice(int start) -> Str* {
+  return slice(start, m_s->length());
+}
+
+auto String::slice(int start, int end) -> Str* {
+  if (start < 0) start = m_s->length() + start;
+  if (start < 0) start = 0;
+  if (start >= m_s->length()) return Str::empty;
+  if (end < 0) end = m_s->length() + end;
+  if (end <= start) return Str::empty;
+  if (end > m_s->length()) end = m_s->length();
+  return Str::make(std::move(m_s->substring(start, end)));
+}
+
+auto String::split(Str *separator) -> Array* {
+  return split(separator, Array::MAX_SIZE);
 }
 
 auto String::split(Str *separator, int limit) -> Array* {
-  auto arr = Array::make();
-  if (!limit) return arr;
-  if (!separator) {
-    arr->push(m_s.get());
+  if (limit < 0) limit = 0;
+  if (limit > Array::MAX_SIZE) limit = Array::MAX_SIZE;
+  if (separator == Str::empty) {
+    const char *s = m_s->c_str();
+    int m = m_s->size();
+    int n = m_s->length(), i = 0;
+    if (n > limit) n = limit;
+    auto arr = Array::make(n);
+    if (!limit) return arr;
+    Utf8Decoder decoder(
+      [&](int c) {
+        uint32_t code = c;
+        arr->set(i++, Str::make(&code, 1));
+      }
+    );
+    for (int i = 0, p = 0; i < n && p < m; p++) {
+      decoder.input(s[p]);
+    }
     return arr;
   } else {
-    const auto &str = m_s->str();
-    const auto &sep = separator->str();
-    size_t a = 0, i = 0;
-    while (i < str.length()) {
-      if (!std::strncmp(&str[i], sep.c_str(), sep.length())) {
-        arr->push(str.substr(a, i - a));
-        if (limit > 0 && arr->length() >= limit) return arr;
-        i += sep.length();
-        a = i;
-      } else {
-        i += 1;
+    auto arr = Array::make();
+    if (!limit) return arr;
+    if (!separator) {
+      arr->push(m_s.get());
+      return arr;
+    } else {
+      const auto &str = m_s->str();
+      const auto &sep = separator->str();
+      size_t a = 0, i = 0;
+      while (i < str.length()) {
+        auto p = str.find(sep, i);
+        if (p != std::string::npos) {
+          arr->push(Str::make(&str[a], p - a));
+          if (arr->length() >= limit) return arr;
+          i = p + sep.length();
+          a = i;
+        } else {
+          i = str.length();
+        }
       }
+      arr->push(Str::make(&str[a], i - a));
+      return arr;
     }
-    arr->push(str.substr(a, i - a));
-    return arr;
   }
 }
 
-bool String::starts_with(Str *search, int position) {
-  int len = search->length();
-  if (len == 0) return true;
-  int max_len = m_s->length() - position;
-  if (max_len < len) return false;
-  // TODO: code point based positions
-  return std::strncmp(m_s->c_str() + position, search->c_str(), len) == 0;
+bool String::startsWith(Str *search, int position) {
+  int size = search->size();
+  if (size == 0) return true;
+  if (size > m_s->size()) return false;
+  if (position < 0) position = 0;
+  if (position > m_s->length()) return false;
+  int head = m_s->chr_to_pos(position);
+  if (head + size > m_s->size()) return false;
+  return std::strncmp(m_s->c_str() + head, search->c_str(), size) == 0;
 }
 
 auto String::substring(int start) -> Str* {
-  int max_len = m_s->length();
-  if (start >= max_len) return Str::empty;
+  int len = m_s->length();
+  if (start >= len) return Str::empty;
   if (start < 0) start = 0;
-  return Str::make(m_s->str().substr(start, max_len - start));
+  return Str::make(m_s->substring(start, len));
 }
 
 auto String::substring(int start, int end) -> Str* {
-  int max_len = m_s->length();
+  int len = m_s->size();
   if (start < 0) start = 0;
-  if (end > max_len) end = max_len;
-  if (end <= start) return Str::empty;
-  return Str::make(m_s->str().substr(start, end - start));
+  if (start > len) start = len;
+  if (end < 0) end = 0;
+  if (end > len) end = len;
+  if (start == end) return Str::empty;
+  if (start < end) {
+    return Str::make(std::move(m_s->substring(start, end)));
+  } else {
+    return Str::make(std::move(m_s->substring(end, start)));
+  }
 }
 
-auto String::to_lower_case() -> Str* {
+auto String::toLowerCase() -> Str* {
   auto s = m_s->str();
   for (auto &c : s) {
     c = std::tolower(c);
   }
-  return Str::make(s);
+  return Str::make(std::move(s));
 }
 
-auto String::to_upper_case() -> Str* {
+auto String::toUpperCase() -> Str* {
   auto s = m_s->str();
   for (auto &c : s) {
     c = std::toupper(c);
   }
-  return Str::make(s);
+  return Str::make(std::move(s));
+}
+
+auto String::trim() -> Str* {
+  const char *s = m_s->c_str();
+  int a = 0, b = m_s->size() - 1;
+  while (a <= b && s[a] <= 0x20) a++;
+  while (b >= 0 && s[b] <= 0x20) b--;
+  if (a > b) return Str::empty;
+  return Str::make(s + a, b - a + 1);
+}
+
+auto String::trimEnd() -> Str* {
+  const char *s = m_s->c_str();
+  int a = m_s->size() - 1;
+  while (a >= 0 && s[a] <= 0x20) a--;
+  if (a <= 0) return Str::empty;
+  return Str::make(s, a + 1);
+}
+
+auto String::trimStart() -> Str* {
+  const char *s = m_s->c_str();
+  int a = 0, n = m_s->size();
+  while (a < n && s[a] <= 0x20) a++;
+  if (a >= n) return Str::empty;
+  return Str::make(s + a, n - a);
+}
+
+auto String::fill(char *buf, size_t size, Str *str, int n) -> size_t {
+  auto l = str->length();
+  auto s = str->size();
+  size_t p = 0;
+  while (p + s <= size) {
+    if (n >= l) {
+      std::memcpy(buf + p, str->c_str(), s);
+      n -= l;
+      p += s;
+    } else {
+      s = str->chr_to_pos(n);
+      std::memcpy(buf + p, str->c_str(), s);
+      p += s;
+      break;
+    }
+  }
+  return p;
 }
 
 //
@@ -1426,11 +1901,12 @@ auto RegExp::exec(Str *str) -> Array* {
   auto result = Array::make(match.size());
   for (size_t i = 0; i < match.size(); i++) {
     auto &sm = match[i];
-    result->set(i, sm.str());
+    result->set(i, Str::make(std::move(sm.str())));
   }
 
   if (m_global) {
-    m_last_index = match[0].second - str->str().begin();
+    auto p = match[0].second - str->str().begin();
+    m_last_index = str->pos_to_chr(p);
   }
 
   return result;
@@ -1457,6 +1933,33 @@ auto RegExp::chars_to_flags(Str *chars, bool &global) -> std::regex::flag_type {
   }
 
   return flags;
+}
+
+//
+// Utf8Decoder
+//
+
+bool Utf8Decoder::input(char c) {
+  if (!m_shift) {
+    if (c & 0x80) {
+      if ((c & 0xe0) == 0xc0) { m_codepoint = c & 0x1f; m_shift = 1; } else
+      if ((c & 0xf0) == 0xe0) { m_codepoint = c & 0x0f; m_shift = 2; } else
+      if ((c & 0xf8) == 0xf0) { m_codepoint = c & 0x07; m_shift = 3; } else return false;
+    } else {
+      m_output(c);
+    }
+  } else {
+    if ((c & 0xc0) != 0x80) {
+      return false;
+    }
+    m_codepoint = (m_codepoint << 6) | (c & 0x3f);
+    if (!--m_shift) m_output(m_codepoint);
+  }
+  return true;
+}
+
+bool Utf8Decoder::end() {
+  return !m_shift;
 }
 
 } // namespace pjs

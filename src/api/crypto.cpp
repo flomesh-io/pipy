@@ -104,9 +104,9 @@ static auto get_cipher_key(const EVP_CIPHER *cipher, pjs::Object *options, uint8
     return data->size();
   } else if (val.is_string()) {
     auto *str = val.s();
-    if (str->length() > EVP_MAX_KEY_LENGTH) throw std::runtime_error("options.key is too long");
-    std::memcpy(key, str->c_str(), str->length());
-    return str->length();
+    if (str->size() > EVP_MAX_KEY_LENGTH) throw std::runtime_error("options.key is too long");
+    std::memcpy(key, str->c_str(), str->size());
+    return str->size();
   } else {
     throw std::runtime_error("options.key requires a Data object or a string");
   }
@@ -126,11 +126,11 @@ static auto get_cipher_iv(const EVP_CIPHER *cipher, pjs::Object *options, uint8_
     return iv_size;
   } else if (val.is_string()) {
     auto *str = val.s();
-    if (str->length() != iv_size) {
+    if (str->size() != iv_size) {
       std::string msg("options.iv length should be ");
       throw std::runtime_error(msg + std::to_string(iv_size));
     }
-    std::memcpy(iv, str->c_str(), str->length());
+    std::memcpy(iv, str->c_str(), str->size());
     return iv_size;
   } else if (iv_size > 0) {
     throw std::runtime_error("options.iv requires a Data object or a string");
@@ -151,7 +151,7 @@ PublicKey::PublicKey(Data *data, pjs::Object *options) {
 }
 
 PublicKey::PublicKey(pjs::Str *data, pjs::Object *options) {
-  m_pkey = read_pem(data->c_str(), data->length());
+  m_pkey = read_pem(data->c_str(), data->size());
   set_pkey_options(m_pkey, options);
 }
 
@@ -179,7 +179,7 @@ PrivateKey::PrivateKey(Data *data, pjs::Object *options) {
 }
 
 PrivateKey::PrivateKey(pjs::Str *data, pjs::Object *options) {
-  m_pkey = read_pem(data->c_str(), data->length());
+  m_pkey = read_pem(data->c_str(), data->size());
   set_pkey_options(m_pkey, options);
 }
 
@@ -205,7 +205,7 @@ Certificate::Certificate(Data *data) {
 }
 
 Certificate::Certificate(pjs::Str *data) {
-  m_x509 = read_pem(data->c_str(), data->length());
+  m_x509 = read_pem(data->c_str(), data->size());
 }
 
 Certificate::~Certificate() {
@@ -333,7 +333,7 @@ auto Cipher::update(pjs::Str *str) -> Data* {
   auto out = Data::make();
   auto block_size = EVP_CIPHER_CTX_block_size(m_ctx);
   uint8_t buf[DATA_CHUNK_SIZE + block_size];
-  for (size_t i = 0, l = str->length(); i < l; i += DATA_CHUNK_SIZE) {
+  for (size_t i = 0, l = str->size(); i < l; i += DATA_CHUNK_SIZE) {
     int n = 0;
     if (!EVP_EncryptUpdate(
       m_ctx, buf, &n,
@@ -400,7 +400,7 @@ auto Decipher::update(pjs::Str *str) -> Data* {
   auto out = Data::make();
   auto block_size = EVP_CIPHER_CTX_block_size(m_ctx);
   uint8_t buf[DATA_CHUNK_SIZE + block_size];
-  for (size_t i = 0, l = str->length(); i < l; i += DATA_CHUNK_SIZE) {
+  for (size_t i = 0, l = str->size(); i < l; i += DATA_CHUNK_SIZE) {
     int n = 0;
     if (!EVP_DecryptUpdate(
       m_ctx, buf, &n,
@@ -475,7 +475,7 @@ void Hash::update(Data *data) {
 void Hash::update(pjs::Str *str, Data::Encoding enc) {
   switch (enc) {
     case Data::Encoding::UTF8:
-      EVP_DigestUpdate(m_ctx, (unsigned char *)str->c_str(), str->length());
+      EVP_DigestUpdate(m_ctx, (unsigned char *)str->c_str(), str->size());
       break;
     default: {
       Data data(str->str(), enc, &s_dp_hash);
@@ -530,7 +530,7 @@ Hmac::Hmac(Hash::Algorithm algorithm, Data *key) {
 
 Hmac::Hmac(Hash::Algorithm algorithm, pjs::Str *key) {
   m_ctx = HMAC_CTX_new();
-  HMAC_Init_ex(m_ctx, key->c_str(), key->length(), Hash::digest(algorithm), nullptr);
+  HMAC_Init_ex(m_ctx, key->c_str(), key->size(), Hash::digest(algorithm), nullptr);
 }
 
 Hmac::~Hmac() {
@@ -548,7 +548,7 @@ void Hmac::update(Data *data) {
 void Hmac::update(pjs::Str *str, Data::Encoding enc) {
   switch (enc) {
     case Data::Encoding::UTF8:
-      HMAC_Update(m_ctx, (unsigned char *)str->c_str(), str->length());
+      HMAC_Update(m_ctx, (unsigned char *)str->c_str(), str->size());
       break;
     default: {
       Data data(str->str(), enc, &s_dp_hmac);
@@ -617,7 +617,7 @@ void Sign::update(Data *data) {
 void Sign::update(pjs::Str *str, Data::Encoding enc) {
   switch (enc) {
     case Data::Encoding::UTF8:
-      if (!EVP_DigestUpdate(m_ctx, (unsigned char *)str->c_str(), str->length())) throw_error();
+      if (!EVP_DigestUpdate(m_ctx, (unsigned char *)str->c_str(), str->size())) throw_error();
       break;
     default: {
       Data data(str->str(), enc, &s_dp_sign);
@@ -680,7 +680,7 @@ void Verify::update(Data *data) {
 void Verify::update(pjs::Str *str, Data::Encoding enc) {
   switch (enc) {
     case Data::Encoding::UTF8:
-      if (!EVP_DigestUpdate(m_ctx, (unsigned char *)str->c_str(), str->length())) throw_error();
+      if (!EVP_DigestUpdate(m_ctx, (unsigned char *)str->c_str(), str->size())) throw_error();
       break;
     default: {
       Data data(str->str(), enc, &s_dp_verify);
@@ -844,7 +844,7 @@ bool JWT::verify(Data *key) {
 }
 
 bool JWT::verify(pjs::Str *key) {
-  return verify(key->c_str(), key->length());
+  return verify(key->c_str(), key->size());
 }
 
 bool JWT::verify(JWK *key) {

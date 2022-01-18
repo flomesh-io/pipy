@@ -656,7 +656,7 @@ public:
   auto to_string(Encoding encoding) const -> std::string {
     switch (encoding) {
       case Encoding::UTF8: {
-        utils::Utf8Decoder decoder([](int) {});
+        pjs::Utf8Decoder decoder([](int) {});
         for (const auto &c : chunks()) {
           auto ptr = std::get<0>(c);
           auto len = std::get<1>(c);

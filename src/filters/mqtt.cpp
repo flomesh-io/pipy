@@ -758,7 +758,7 @@ private:
   }
 
   void push(pjs::Str *s) {
-    push(uint16_t(s->length()));
+    push(uint16_t(s->size()));
     s_dp.push(&m_buffer, s->str());
   }
 

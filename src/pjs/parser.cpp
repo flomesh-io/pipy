@@ -606,6 +606,7 @@ private:
       int c = m_out[p];
       if (0xd800 <= c && c <= 0xdbff) {
         c = ((c & 0x3ff) << 10) | (m_out[++p] & 0x3ff);
+        c += 0x10000;
       }
       if (i + 6 > sizeof(buf)) {
         s += std::string(buf, i);
@@ -656,8 +657,8 @@ private:
     size_t i = 0;
     if (c >= 0x10000) {
       c -= 0x10000;
-      s[i++] = 0xd800 + (0x400 & (c >> 10));
-      s[i++] = 0xdc00 + (0x400 & (c >>  0));
+      s[i++] = 0xd800 + (0x3ff & (c >> 10));
+      s[i++] = 0xdc00 + (0x3ff & (c >>  0));
     } else {
       s[i++] = c;
     }

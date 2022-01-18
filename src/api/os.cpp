@@ -100,7 +100,7 @@ template<> void ClassDef<OS>::init() {
       return;
     }
     if (str) {
-      fs.write(str->c_str(), str->length());
+      fs.write(str->c_str(), str->size());
     } else if (data) {
       for (const auto &c : data->chunks()) {
         fs.write(std::get<0>(c), std::get<1>(c));
