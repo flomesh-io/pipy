@@ -24,6 +24,29 @@ set(EXECUTABLE_OUTPUT_PATH ${CMAKE_SOURCE_DIR}/bin)
 
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake" ${CMAKE_MODULE_PATH})
 
+# Default build type is Debug
+if( NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES )
+   set( CMAKE_BUILD_TYPE "Debug" )
+endif()
+
+# Ignore COMPILE_DEFINITIONS_<Config> properties
+cmake_policy( SET CMP0043 NEW )
+
+# Link libraries by full path even in implicit directories.
+cmake_policy( SET CMP0060 NEW )
+
+# ``INTERPROCEDURAL_OPTIMIZATION`` is enforced when enabled.
+cmake_policy( SET CMP0069 NEW )
+
+# Use ccache if available
+find_program( CCACHE_PROGRAM ccache )
+mark_as_advanced( FORCE CCACHE_PROGRAM )
+
+if( CCACHE_PROGRAM )
+   set_property( GLOBAL PROPERTY RULE_LAUNCH_COMPILE "${CCACHE_PROGRAM}" )
+endif()
+
+
 include(c++-standards)
 include(compiler-options)
 include(link-time-optimization)

@@ -1,0 +1,106 @@
+---
+title: "Part 14: Throttling"
+---
+
+## Problem
+
+Rate limiting refers to preventing the frequency of an operation from exceeding some constraint. In large-scale systems, rate limiting is commonly used to protect underlying services and resources. Rate limiting is generally put in place as a defensive measure for services. Shared services need to protect themselves from excessive use—whether intended or unintended—to maintain service availability. Even highly scalable systems should have limits on consumption at some level. For the system to perform well, clients must also be designed with rate limiting in mind to reduce the chances of **cascading failure**. Rate limiting on both the client side and the server side is crucial for maximizing throughput and minimizing end-to-end latency across large distributed systems.
+
+In this tutorial we are going to implement rate limiting functionanlity for our proxy service.
+
+## Filters
+
+Pipy built-in filters [`throttleMessageRate`](/reference/Configuration/throttleMessageRate) and [`throttleDataRate`](/reference/Configuration/throttleDataRate) are used to implement rate limiting, where former is used for maximum number of requests per second and latter is used for maximum number of bytes per second. Both accept a similar set of parameters:
+
+* *quota*: describe the quota and type can be Number, String, or function.
+* *account*: Quota unit/granularity level. The type can be String or function. Such as a service name, request path, a request header, or some more complex combination.
+
+## Configuration
+
+In this tutorial, we are going to implement rate limiting for `service-hi` and limits are going to work at service level:
+
+```javascript
+//throtlle.json
+{
+  "services": {
+    "service-hi": {
+      "rateLimit": 1000
+    }
+  }
+}
+```
+
+## Code dissection
+
+Since we have defined our configuration in JSON map object, so we can directly import it here; to retrieve the service name from `router` module, we need to import its exported variable `__serviceID`.
+
+```javascript
+pipy({
+  _services: config.services,
+  _rateLimit: undefined,
+})
+
+.import({
+  __serviceID: 'router',
+})
+```
+
+The next step is to process the request. If the rate limiting is not configured for requested service, we will bypass the request:
+
+```javascript
+.pipeline('request')
+  .handleStreamStart(
+    () => _rateLimit = _services[__serviceID]?.rateLimit
+  )
+  .link(
+    'throttle', () => Boolean(_rateLimit),
+    'bypass'
+  )
+```
+
+As mentioned earlier, we set a maximum quota for the number of service requests, so *account* uses the service name directly:
+
+```javascript
+.pipeline('throttle')
+  .throttleMessageRate(
+    () => _rateLimit,
+    () => __serviceID,
+  )
+
+.pipeline('bypass')
+```
+
+And don't forget to adjust plugin `use` part of the code, make sure you remove banlist plugin, or else our this rate limiting service will not work properly.
+
+## Test in action
+
+We will use *wrk* tool to simulate concurrent requests:
+
+```shell
+wrk -c10 -t10 -d 30s http://localhost:8000/hi
+Running 30s test @ http://localhost:8000/hi
+  10 threads and 10 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency   214.40ms  288.77ms 931.19ms   79.06%
+    Req/Sec   327.77    356.74     1.00k    77.05%
+  30000 requests in 30.08s, 2.60MB read
+Requests/sec:    997.35
+Transfer/sec:     88.63KB
+```
+
+Note: The longer the test lasts, the closer the results are to the configuration. Because the upstream processing time is very short, for example, On my laptop, I can reach 16000/s locally. If the test time is short, the difference will be relatively large.
+
+## Summary
+
+This is just a very simple implementation of rate limiting where we achieved that by setting maximum capacity for the service. Your mileage may very and in some scenarios, the capacity of each path of a service may vary, for example, some services directly read from memory, some need to call other services, and some need to read and write database. So actual implementations can be implemented based on your either simple or complex requirements.
+
+### Takeaways
+
+* The usage of the two filters `throttleMessageRate` and `throttleDataRate` for throttling.
+* The granularity of current limiting functionality can be flexibly handled by the *account* parameter of the filter.
+
+### What's next?
+
+Using current limiting can control the pressure on the upstream, in fact, there is a more common way is to cache. Some responses are cached by the proxy, and the responses are directly obtained from the cache within a certain period of time, thereby reducing the pressure on the network and upstream services.
+
+In next tutorial, we will add caching capability to our proxy server.
