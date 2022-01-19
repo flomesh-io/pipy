@@ -14,7 +14,7 @@ Pipy 除了可以代理上游的服务，还可以提供静态资源服务。使
 
 静态资源配置同样也是服务级别的，比如下面的配置，*www* 目录就是 *service-tell-ip* 服务的静态资源目录。
 
-```javascript
+```js
 {
   "services": {
     "service-tell-ip": {
@@ -47,7 +47,7 @@ Pipy 除了可以代理上游的服务，还可以提供静态资源服务。使
 * `_root`：服务的静态资源目录
 * `_file`：与请求对应的静态资源
 
-```javascript
+```js
 pipy({
   _root: '',
   _file: null,
@@ -66,7 +66,7 @@ pipy({
 * 静态方法 `from()` 可以从参数指定路径加载文件，假如路径是 `/`，则文件名默认为 `/index.html`。定位文件时会同时查找 *FILE*、*FILE.gz*、*FILE.br*，若三种文件都不存在，则会继续查找 *FILE/index.html*、*FILE/index.html.gz*、*FILE/index.html.br*。如若还是找不到文件，则返回 `null`。
 * `toMessage()` 使用参数指定的编码对静态资源的内容进行编码。
 
-```javascript
+```js
 .pipeline('request')
   .handleMessageStart(
     msg => (
@@ -84,7 +84,7 @@ pipy({
 
 确定请求对应的静态内容之后，通过对全局变量 `_file` 判断是响应静态内容，还是将请求发送到上游进行处理。
 
-```javascript
+```js
 .pipeline('serve')
   .replaceMessage(
     msg => (
@@ -98,7 +98,7 @@ pipy({
 
 最后记得引入新的插件：
 
-```json
+```js
 //config/proxy.json
 {
   "listen": 8000,

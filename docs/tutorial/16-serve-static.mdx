@@ -14,7 +14,7 @@ For static resources, we will configure a *root folder* where all static content
 
 Static resources configuration is configured at service level, for example in below configuration root folder *www* is configured as the root folder for static contents of service *service-tell-ip*.
 
-```javascript
+```js
 {
   "services": {
     "service-tell-ip": {
@@ -47,7 +47,7 @@ First we will declare our global variables:
 * `_root`: Service root folder of resources
 * `_file`: is the resource requested 
 
-```javascript
+```js
 pipy({
   _root: '',
   _file: null,
@@ -66,7 +66,7 @@ Pipy [`File`](/reference/http/File) class is used to load static resources:
 * Static method `from()` loads file from the path, if path ends with `/` then filename defaults to `/index.html`. This method will search for *FILE*, *FILE.gz*, *FILE.br* and if none is found, this will continue searching for *FILE/index.html*, *FILE/index.html.gz*, *FILE/index.html.br*. `null` will be returned if all search fails.  
 * `toMessage()` Encodes the content of a static resource using the encoding specified by the parameter.
 
-```javascript
+```js
 .pipeline('request')
   .handleMessageStart(
     msg => (
@@ -84,7 +84,7 @@ Pipy [`File`](/reference/http/File) class is used to load static resources:
 
 Once the static content corresponding to the request is determined, the global variable '_file' determines whether to respond to the static content or send the request to upstream for processing.
 
-```javascript
+```js
 .pipeline('serve')
   .replaceMessage(
     msg => (
@@ -98,7 +98,7 @@ Once the static content corresponding to the request is determined, the global v
 
 Make sure you use this module.
 
-```json
+```js
 //config/proxy.json
 {
   "listen": 8000,

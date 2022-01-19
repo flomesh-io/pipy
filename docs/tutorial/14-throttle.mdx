@@ -19,7 +19,7 @@ Pipy built-in filters [`throttleMessageRate`](/reference/Configuration/throttleM
 
 In this tutorial, we are going to implement rate limiting for `service-hi` and limits are going to work at service level:
 
-```javascript
+```js
 //throtlle.json
 {
   "services": {
@@ -34,7 +34,7 @@ In this tutorial, we are going to implement rate limiting for `service-hi` and l
 
 Since we have defined our configuration in JSON map object, so we can directly import it here; to retrieve the service name from `router` module, we need to import its exported variable `__serviceID`.
 
-```javascript
+```js
 pipy({
   _services: config.services,
   _rateLimit: undefined,
@@ -47,7 +47,7 @@ pipy({
 
 The next step is to process the request. If the rate limiting is not configured for requested service, we will bypass the request:
 
-```javascript
+```js
 .pipeline('request')
   .handleStreamStart(
     () => _rateLimit = _services[__serviceID]?.rateLimit
@@ -60,7 +60,7 @@ The next step is to process the request. If the rate limiting is not configured 
 
 As mentioned earlier, we set a maximum quota for the number of service requests, so *account* uses the service name directly:
 
-```javascript
+```js
 .pipeline('throttle')
   .throttleMessageRate(
     () => _rateLimit,

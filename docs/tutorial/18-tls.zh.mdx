@@ -33,7 +33,7 @@ openssl req -x509 -newkey rsa:4096 -keyout server-key.pem -out server-cert.pem -
 
 > 这里我们引入了新的模块变量 `__isTLS`，方便在其他模块中对当前连接进行判断和记录，比如日志模块中记录当前请求是否是 TLS 加密。
 
-```javascript
+```js
   (config =>
 
   pipy()
@@ -79,7 +79,7 @@ openssl req -x509 -newkey rsa:4096 -keyout server-key.pem -out server-cert.pem -
 
 调整原端口管道，也连接到新的子管道上。
 
-```javascript
+```js
   .listen(config.listen)
 -   .use(config.plugins, 'session')  
 -   .demuxHTTP('request')

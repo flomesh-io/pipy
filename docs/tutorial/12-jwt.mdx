@@ -81,7 +81,7 @@ Pipy's [crypto](/reference/crypto) package contains security related classes。W
 
 Let's convert configured contents to global variables:
 
-```javascript
+```js
 pipy({
   _keys: (
     Object.fromEntries(
@@ -110,7 +110,7 @@ pipy({
 
 We will need to add some variables which can be used to store the service name retrieved from our router and a flag to indicate if we need to jump out when token verfification fails.
 
-```javascript
+```js
 .import({
   __turnDown: 'proxy',
   __serviceID: 'router',
@@ -135,13 +135,13 @@ In other cases, the corresponding error message is returned:
 
 `JWT` class is used to verify multiple tokens, using tokens as its constructor. Per RFC convention, JWT token is retrieved from *authorization* header of the request.
 
-```javascript
+```js
 new crypto.JWT(TOKEN_HERE)
 ```
 
 `verify()` method, verifies the token using specified key.
 
-```javascript
+```js
 .pipeline('request')
   .replaceMessage(
     msg => (

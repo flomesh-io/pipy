@@ -80,7 +80,7 @@ Pipy 的 [crypto](/reference/crypto) 包中包含了与安全相关的类。其�
 
 将配置的内容转换成全局变量：
 
-```javascript
+```js
 pipy({
   _keys: (
     Object.fromEntries(
@@ -109,7 +109,7 @@ pipy({
 
 要从路由决策中获取服务名，以及 token 校验失败情况下跳出请求流程。需要引入对应的模块变量：
 
-```javascript
+```js
 .import({
   __turnDown: 'proxy',
   __serviceID: 'router',
@@ -134,13 +134,13 @@ pipy({
 
 `JWT` 类型用于多 token 的校验，使用 token 作为构造函数。JWT token 按照 RFC 的约定，是从请求头的 *authorization* 中获取。
 
-```javascript
+```js
 new crypto.JWT(TOKEN_HERE)
 ```
 
 其 `verify()` 方法，可以使用指定的密钥对 token 进行校验。
 
-```javascript
+```js
 .pipeline('request')
   .replaceMessage(
     msg => (
