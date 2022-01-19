@@ -2,16 +2,32 @@
 title: "Overview"
 ---
 
-Pipy is a cloud-native high-performance network traffic processor. Written
-in C++, built on top of Asio asynchronous I/O library, Pipy is extremely
-lightweight and fast, making it one of the best choices for service mesh sidecars.
+**Pipy** is an open-source, lightweight, high-performance, modular, programmable, cloud-native network stream processor that is ideal for a variety of use-cases ranging from (but not limited to) edge routers, load balancers & proxy solutions, API gateways, static HTTP servers, service mesh sidecars, and other applications. 
 
-With builtin JavaScript support, thanks to QuickJS, Pipy is highly
-customizable and also predictable in performance with no garbage collection
-overhead seen in other scriptable counterparts.
+As it turns out, each of those words has a pretty specific meaning of its own, so let’s take a look.
 
-At its core, Pipy has a modular design with many small reusable modules
-that can be chained together to make a pipeline, through which network data
-flow and get processed on the way. The way Pipy is designed makes it versatile
-enough for not only sidecars but also other use cases involving intermediate
-message processing between network nodes.
+### Lightweight
+The compiled pipy executable is approximately 6MB in size and requires a very small memory footprint to run.
+
+### High-performance
+Pipy is written in C++ and built on top of the **Asio** asynchronous I/O library.
+
+### Modular
+Pipy has a modular design at its core, with many small reusable modules (**filters**) that can be linked together to form a pipeline through which network data flows and is processed.
+
+### Stream processor
+Pipy operates on network streams in an event-driven fashion where it consumes the input stream, performs user-provided transformations, and outputs stream. Pipy stream abstracts out data bytes into events. Refer to [Concepts](concepts) for more details.
+
+### Programmable
+Pipy comes with built-in **JavaScript** support via its custom-developed component **PipyJS** (part of the Pipy code base), making it highly customizable and predictable in performance, with no garbage collection overhead as seen in its other scriptable counterparts. Refer to [Concepts](concepts) for more details.
+
+## Compatibility
+
+Pipy is designed for high compatibility across different operating systems and CPU architectures. Pipy has been fully tested on these platforms:
+
+* CentOS 7
+* Ubuntu 18/20
+* FreeBSD 12/13
+* macOS Intel & Apple silicons
+
+CentOS7/REHL7 or FreeBSD are recommended in production environments.

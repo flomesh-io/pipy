@@ -1,0 +1,117 @@
+---
+title: "Part 18: TLS"
+---
+
+## Problem
+
+Transport Layer Security (TLS) is one of the most important and widely used security protocols is a cryptographic protocol that provides end-to-end security of data sent between applications over the Internet. It is mostly familiar to users through its use in secure web browsing, and in particular the padlock icon that appears in web browsers when a secure session is established. However, it can and indeed should also be used for other applications such as e-mail, file transfers, video/audioconferencing, instant messaging and voice-over-IP, as well as Internet services such as DNS and NTP.
+
+TLS support is one of key feature of any proxy service and in today tutorial we are going to add TLS support to our proxy service.
+
+## TLS offloading
+
+Offloading TLS at proxy level bring several benefits like improved performance, better utilization of backend services, intelligent routing, certificate management, and security patches etc for its backend services which doesn't need to handle cpu expensive tasks of TLS processing, get their own SSL certificates, apply vulnerability patches etc.
+
+[`acceptTLS`](/reference/Configuration/acceptTLS) filter accepts TLS encrypted traffic and performs offloading. It accepts two arguments `acceptTLS(target, options)`:
+
+* `target` target sub-pipeline, which would be forwarded offloaded request for further processing,
+* `options` extended options like use specific certificate, key (explained in later parts of this tutorial).
+
+TLS offloading need to happen before processing of sub-pipelines start, so it need to be done at port pipeline.
+
+Before we start, we need to create our self-signed certificate and key. We will add it to our codebase under `secret` folder for retrieval from our code:
+
+```sh
+openssl req -x509 -newkey rsa:4096 -keyout server-key.pem -out server-cert.pem -sha256 -days 365 -nodes -subj '/CN=localhost'
+```
+
+## Code dissection
+
+Modify *proxy.js* script, add new `listen` pipeline to listen on new port, add filter `acceptTLS` and configure it to forward request after offloading to `tls-offloaded` sub-pipeline. Also load certificate and key which we generated above and stored into our Pipy repo codebase.
+
+In `tls-offloaded` sub-pipeline, use the same processing which we used to handle normal HTTP requests.
+
+> Here we have added a new module variable `__isTLS` to record whether the connection request is TLS encrypted and this variable can be used by other modules like to `log` module for logging purposes.
+
+```js
+  (config =>
+
+  pipy()
+
+  .export('proxy', {
+    __turnDown: false,
++   __isTLS: false,
+  })
+
+  .listen(config.listen)
+    .use(config.plugins, 'session')  
+    .demuxHTTP('request')
+
++ .listen(config.listenTLS)
++   .handleStreamStart(
++     () => __isTLS = true
++   )
++   .acceptTLS('tls-offloaded', {
++     certificate: config.listenTLS ? {
++       cert: new crypto.CertificateChain(pipy.load('secret/server-cert.pem')),
++       key: new crypto.PrivateKey(pipy.load('secret/server-key.pem')),
++     } : undefined,
++   })
+
++ .pipeline('tls-offloaded')
++   .use(config.plugins, 'session')
++   .demuxHTTP('request')
+
+  .pipeline('request')
+    .use(
+      config.plugins,
+      'request',
+      'response',
+      () => __turnDown
+    )
+
+  )(JSON.decode(pipy.load('config/proxy.json')))
+```
+
+In `acceptTLS` filter we have defined the target sub-pipeline, and pass an object containing the certificate and key data via its `options` param. [`CertificateChain`](/reference/crypto/CertificateChain) class is used to handle certificate object, and [`PrivateKey`](/reference/crypto/PrivateKey) class is used to handle private key.
+
+> Here we have only implemented one-way authentication for the server. We can perform client side authentication by adding *trusted* field to our `options` object.
+
+Modify the original port pipeline to connect it to the new sub-pipeline.
+
+```js
+  .listen(config.listen)
+-   .use(config.plugins, 'session')  
+-   .demuxHTTP('request')
++   .link('tls-offloaded')
+```
+
+## Test in action
+
+Let test HTTP port *8000* and *HTTPS* port *8443*
+
+```sh
+curl http://localhost:8000/hi
+You are requesting / from ::ffff:127.0.0.1
+
+curl https://localhost:8443/hi
+curl: (60) SSL certificate problem: self signed certificate
+More details here: https://curl.se/docs/sslcerts.html
+
+curl failed to verify the legitimacy of the server and therefore could not
+establish a secure connection to it. To learn more about this situation and
+how to fix it, please visit the web page mentioned above.
+
+curl --cacert server-cert.pem https://localhost:8443/hi
+Hi, there!
+```
+
+## Summary
+
+In this tutorial, we implemented one-way authentication and as stated above two-way authentication can be achieved by *trusted* field of *options* object and is leave as an exercise for interested learners.
+
+### Takeaways
+
+* Use *acceptTLS* filter to accept TLS connections and offload it.
+* Pipy supports both one-way and mTLS (Mutual Transport Layer Security).
+
