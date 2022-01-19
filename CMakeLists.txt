@@ -3,6 +3,7 @@ project(pipy)
 
 option(PIPY_GUI "include builtin GUI" ON)
 option(PIPY_TUTORIAL "include builtin tutorial scripts" ON)
+option(PIPY_SOIL_FREED_SPACE "invalidate freed space for debugging" OFF)
 
 add_subdirectory(deps/yajl-2.1.0)
 
@@ -25,27 +26,26 @@ set(EXECUTABLE_OUTPUT_PATH ${CMAKE_SOURCE_DIR}/bin)
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake" ${CMAKE_MODULE_PATH})
 
 # Default build type is Debug
-if( NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES )
-   set( CMAKE_BUILD_TYPE "Debug" )
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+  set(CMAKE_BUILD_TYPE "Debug")
 endif()
 
 # Ignore COMPILE_DEFINITIONS_<Config> properties
-cmake_policy( SET CMP0043 NEW )
+cmake_policy(SET CMP0043 NEW)
 
 # Link libraries by full path even in implicit directories.
-cmake_policy( SET CMP0060 NEW )
+cmake_policy(SET CMP0060 NEW)
 
 # ``INTERPROCEDURAL_OPTIMIZATION`` is enforced when enabled.
-cmake_policy( SET CMP0069 NEW )
+cmake_policy(SET CMP0069 NEW)
 
 # Use ccache if available
-find_program( CCACHE_PROGRAM ccache )
-mark_as_advanced( FORCE CCACHE_PROGRAM )
+find_program(CCACHE_PROGRAM ccache)
+mark_as_advanced(FORCE CCACHE_PROGRAM)
 
-if( CCACHE_PROGRAM )
-   set_property( GLOBAL PROPERTY RULE_LAUNCH_COMPILE "${CCACHE_PROGRAM}" )
+if(CCACHE_PROGRAM)
+   set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "${CCACHE_PROGRAM}")
 endif()
-
 
 include(c++-standards)
 include(compiler-options)
@@ -56,8 +56,9 @@ include(sanitizers)
 cxx_11()
 
 # enable LTO/IPO for all targets. Doesn't work with GCC.
-link_time_optimization()
-
+if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
+  link_time_optimization()
+endif()
 
 add_definitions(
   -D_GNU_SOURCE
@@ -180,7 +181,7 @@ if(PIPY_GUI)
   add_dependencies(pipy PackGui)
 endif()
 
-if (PIPY_TUTORIAL)
+if(PIPY_TUTORIAL)
   add_definitions(-DPIPY_USE_TUTORIAL)
 
   file(GLOB_RECURSE TUTORIAL_FILES LIST_DIRECTORIES false ${CMAKE_SOURCE_DIR}/tutorial/*)
@@ -195,6 +196,10 @@ if (PIPY_TUTORIAL)
 
   add_custom_target(PackTutorial DEPENDS ${CMAKE_BINARY_DIR}/deps/tutorial.tar.gz.h)
   add_dependencies(pipy PackTutorial)
+endif()
+
+if(PIPY_SOIL_FREED_SPACE)
+  add_definitions(-DPIPY_SOIL_FREED_SPACE)
 endif()
 
 target_link_libraries(pipy z yajl_s expat crypto ssl leveldb -pthread)
