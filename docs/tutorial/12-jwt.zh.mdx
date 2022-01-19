@@ -25,7 +25,7 @@ JWT 长成下面这样，是一个完整的字符串，没有换行。包含了�
 
 **Header:**
 
-```json
+```js
 {
   "alg": "RS256", //算法类型
   "typ": "JWT" //Token 类型
@@ -34,7 +34,7 @@ JWT 长成下面这样，是一个完整的字符串，没有换行。包含了�
 
 **Payload:**
 
-```json
+```js
 {}
 ```
 
@@ -47,7 +47,7 @@ eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.e30.ed7nE07I17v9v1ThCRtyDVxuVtH7pUhi50jnP7f
 
 *hi* 服务需要提供两种密钥的 token 验证，这里通过配置提供。对于请求使用何种密钥，可以在 token 的 *header* 部分增加一个自定义的字段 *kid* 来标识该请求要使用的密钥。因此配置 `jwt.json` 如下：
 
-```json
+```js
 {
   "keys": {
     "key-1": {

@@ -13,7 +13,7 @@ JWT is an example of the latter, and in this tutorial we will add JWT verificati
 
 ## JWT
 
-We will give you a very simple brief of JWT, to get better understanding of what JWT is, its purpose and benefits it bring, please refer to official site for [JWT Introduction](https://jwt.io/introduction).
+We will give you a very simple brief of JWT, to get better understanding of what JWT is, its purpose and benefits it brings, please refer to the official site for [JWT Introduction](https://jwt.io/introduction).
 
 JSON Web Token (JWT) in its compact form consists of three parts separated by `.` and typically looks like `Header.Payload.Signature`, and each part is `Base64URL` encoded.
 
@@ -26,7 +26,7 @@ For below example, the header and payload can be decoded using Base64:
 **Header:**
  Consists of two parts, signing algorithm like HMAC SHA256 or RSA and token type which is JWT
 
-```json
+```js
 {
   "alg": "RS256", //algorithm
   "typ": "JWT" //Token type
@@ -35,7 +35,7 @@ For below example, the header and payload can be decoded using Base64:
 
 **Payload:**
 
-```json
+```js
 {}
 ```
 
@@ -48,7 +48,7 @@ eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.e30.ed7nE07I17v9v1ThCRtyDVxuVtH7pUhi50jnP7f
 
 *hi* service requires token authentication of both keys, which is provided by configuration. For which key to use in the request, you can add a custom field *kid* in the *header* section of the token to identify which key to use in the request. Configure our tutorial `jwt.json` configuration as below:
 
-```json
+```js
 {
   "keys": {
     "key-1": {

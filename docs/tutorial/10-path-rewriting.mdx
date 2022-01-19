@@ -4,7 +4,7 @@ title: "Part 10: Path rewriting"
 
 ## Problem
 
-Suppose you want to redirect traffic based on url and you configure a Pipy proxy route to say `"/ip/*"` and have it route to some target. Assume target is running a simple service which just return the path and client IP. Sending a request as is to `localhost:8000/ip/a`，you will receive response like this:
+Suppose you want to redirect traffic based on the URL and you configure a Pipy proxy route to say `"/ip/*"` and have it route to some target. Assume target is running a simple service which just return the path and client IP. Sending a request as is to `localhost:8000/ip/a`，you will receive response like this:
 
 ```shell
 curl localhost:8000/ip/a
