@@ -261,11 +261,11 @@ if(BUILD_SHARED_LIBS)
   )
 endif(BUILD_SHARED_LIBS)
 
-if(HAVE_CLANG_THREAD_SAFETY)
-  target_compile_options(leveldb
-    PUBLIC
-      -Werror -Wthread-safety)
-endif(HAVE_CLANG_THREAD_SAFETY)
+# if(HAVE_CLANG_THREAD_SAFETY)
+#  target_compile_options(leveldb
+#    PUBLIC
+#      -Werror -Wthread-safety)
+# endif(HAVE_CLANG_THREAD_SAFETY)
 
 if(HAVE_CRC32C)
   target_link_libraries(leveldb crc32c)
