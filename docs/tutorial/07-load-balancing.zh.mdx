@@ -45,7 +45,7 @@ new algo.RoundRobinLoadBalancer([
 
 我们从均衡器的配置开始。创建 `/config/balancer.json`，创建从服务到目标服务器的映射：
 
-```json
+```js
 {
   "services": {
     "service-hi"      : ["127.0.0.1:8080", "127.0.0.1:8082"],
@@ -162,7 +162,7 @@ Object.fromEntries(
 
 这就是均衡器的全部内容了，在回到路由器插件之前，不要忘记在入口脚本中引入插件。我们在主脚本的配置文件中 `/config/proxy.json` 添加：
 
-```json
+```js
   {
     "listen": 8000,
     "plugins": [
@@ -177,7 +177,7 @@ Object.fromEntries(
 
 对于路由器插件，还是从配置文件 `/config/router.json.` 入手。由于已经将服务映射到目标服务器了，那这里我们调整只需将其映射到服务：
 
-```json
+```js
 {
   "routes": {
     "/hi/*": "service-hi",

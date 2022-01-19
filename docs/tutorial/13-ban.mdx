@@ -12,7 +12,7 @@ In this tutorial we are going to implement this feature by defining our whitelis
 
 Banlist configurations in file `config/ban.json` are configured to work at service level. In this tutorial we will be configuring banlist for `service-hi` and you are free to make it applicable to your service of choice.
 
-```json
+```js
 {
   "services": {
     "service-hi": {
@@ -33,7 +33,7 @@ Banlist configurations in file `config/ban.json` are configured to work at servi
 
 The IP address exists in the configuration file as an array type, which is not easy to find. Therefore, during configuration import, we use it as the key of the map.
 
-```javascript
+```js
 pipy({
   _services: Object.fromEntries(
     Object.entries(config.services).map(
@@ -65,7 +65,7 @@ pipy({
 
 Applying blacklisting and whitelisting to service level, we need to obtain the service name from the router; validate if service require application of banlist, when an access is denied, we should return the error response. We are going to import variables defined in other plugins, `__turnDown` from `proxy` plugin and `__serviceID` from `router` plugin.
 
-```javascript
+```js
 .import({
   __turnDown: 'proxy',
   __serviceID: 'router',
@@ -76,7 +76,7 @@ Now we need to implement our logic.
 
 For incoming request, we will retrieve the IP address of remote host via `__inbound.remoteAddress`. If requested service has configured whitelist, we will check against whitelist and if service has configured blacklist, then we will check if IP is in banlist and we will toggle `__turnDown=true` to return error.
 
-```javascript
+```js
 .pipeline('request')
   .handleStreamStart(
     () => (

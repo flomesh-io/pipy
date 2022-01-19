@@ -18,7 +18,7 @@ title: 14 限流
 
 这次同样还是为 `service-hi` 增加限流的设置，统计的粒度为整个服务：
 
-```javascript
+```js
 //throtlle.json
 {
   "services": {
@@ -33,7 +33,7 @@ title: 14 限流
 
 配置的格式原本就是 map 的类型，因此这里直接引入即可；通过 `router` 模块确认服务名，需要引入其模块变量。
 
-```javascript
+```js
 pipy({
   _services: config.services,
   _rateLimit: undefined,
@@ -46,7 +46,7 @@ pipy({
 
 接下来就是处理请求了，如果未设置限流的服务，可以直接绕过检查：
 
-```javascript
+```js
 .pipeline('request')
   .handleStreamStart(
     () => _rateLimit = _services[__serviceID]?.rateLimit
@@ -59,7 +59,7 @@ pipy({
 
 前面提到我们设置了服务请求数的最大配额，所以 *account* 直接使用服务名：
 
-```javascript
+```js
 .pipeline('throttle')
   .throttleMessageRate(
     () => _rateLimit,

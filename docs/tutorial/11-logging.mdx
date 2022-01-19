@@ -46,7 +46,7 @@ Execution sequence of each plugin is:
 
 Let's add our plugin (logger.js) to our configuration. We will be adding code to our this plugin shortly:
 
-```json
+```js
 {
   "listen": 8000,
   "plugins": [
@@ -60,7 +60,7 @@ Let's add our plugin (logger.js) to our configuration. We will be adding code to
 
 Like with other plugins, our logger plugin will have its own configuration file. For this tutorial purpose, we will store the URL of host which will receive and store the log information. For testing purposes, we will mock this service but your use-case might vary, and you might already have logging stacks setup. So adjust this configuration specific to your usecase.
 
-```json
+```js
 {
   "logURL": "http://127.0.0.1:8123/log"
 }
@@ -75,7 +75,7 @@ Let's write the code of our logger plugin.
 
 We certainly do not want to report the collected request and response information separately (which makes it difficult to store and query the data), but we would like to aggregate the logging information, do some statistical operations. This appraoch will require us to record the request information before forwarding it to host for processing, combine this with response received from target host, so we need some mechanism to store such information. This is where *Global Variables* come into play, if you get scared after hearing *Global Variable* then that means you haven't yet read our previous tutorials and especially the *Context* section of [Concepts](/ tutorial/concepts) where we explained that *Global Variables* are context specific and don't work like what you have learned in procedural style programming languages.
 
-```javascript
+```js
 pipy({
   _logURL: new URL(config.logURL),
   _request: null,
@@ -94,7 +94,7 @@ Here we also export (expose) module variables to make it easier to extend the lo
 
 Let's first write the skeleton:
 
-```javascript
+```js
 //...
 .pipeline('request')
 .pipeline('response')
@@ -110,7 +110,7 @@ These are the two sub-pipelines used as plug-ins. Log recording is an auxiliary 
 
 Usage of *fork* is very simple, we just need to provide the target sub-pipeline:
 
-```javascript
+```js
 //...
 .pipeline('request')
   .fork('log-request')
@@ -129,7 +129,7 @@ Usage of *fork* is very simple, we just need to provide the target sub-pipeline:
 
 First we will record the received request:
 
-```javascript
+```js
 .pipeline('log-request')
   .handleMessageStart(
     () => _requestTime = Date.now()
@@ -152,7 +152,7 @@ After receiving the complete message, log the complete request via the `handleMe
 
 Next, we need to record the response retrieved from target host：
 
-```javascript
+```js
 .pipeline('log-response')
   .handleMessageStart(
     () => _responseTime = Date.now()
@@ -206,7 +206,7 @@ Its similar to *muxHTTP* filter in a way, it will combine multiple streams into 
 
 *log-send* sub-pipeline will receive messages from its parent pipeline and buffer them. Buffer has configuration options like buffer size, timeout settings. Buffer will get flushed to defined target (mock service in our case here) which ever condition is met first. 
 
-```javascript
+```js
 .pipeline('log-send')
   .pack(
     1000,
@@ -237,7 +237,7 @@ Its similar to *muxHTTP* filter in a way, it will combine multiple streams into 
 
 Before starting our test, we need to instantiate our mock logger service. So let's use just Pipy to write a simple service, which will log to console what is being sent to it.
 
-```javascript
+```js
 // mock.js
 pipy()
 

@@ -47,7 +47,7 @@ title: 11 Logging
 
 写插件前，先引入插件（logger.js）吧：
 
-```json
+```js
 {
   "listen": 8000,
   "plugins": [
@@ -61,7 +61,7 @@ title: 11 Logging
 
 同样也需要对应的配置文件，用来配置日志上报的“位置”。为了方便测试，后面测试时我们会 mock 一个服务。
 
-```json
+```js
 {
   "logURL": "http://127.0.0.1:8123/log"
 }
@@ -75,7 +75,7 @@ title: 11 Logging
 
 我们肯定不想将采集到的请求和响应信息分开上报（这对数据的存储和查询带来难度），而是需要先将数据聚合并做部分的统计操作。这就需要在发送请求前将请求的信息记录下来，收到响应之后将二者的信息封装起来。这里就需要借助全局变量了：
 
-```javascript
+```js
 pipy({
   _logURL: new URL(config.logURL),
   _request: null,
@@ -94,7 +94,7 @@ pipy({
 
 先写“骨架”：
 
-```javascript
+```js
 //...
 .pipeline('request')
 .pipeline('response')
@@ -110,7 +110,7 @@ pipy({
 
 *fork* 的使用很简单，只需要指定子管道的名字即可：
 
-```javascript
+```js
 //...
 .pipeline('request')
   .fork('log-request')
@@ -129,7 +129,7 @@ pipy({
 
 首先是请求的记录
 
-```javascript
+```js
 .pipeline('log-request')
   .handleMessageStart(
     () => _requestTime = Date.now()
@@ -152,7 +152,7 @@ pipy({
 
 接下来是响应的记录：
 
-```javascript
+```js
 .pipeline('log-response')
   .handleMessageStart(
     () => _responseTime = Date.now()
@@ -208,7 +208,7 @@ pipy({
 
 二者有任一达到设定值，缓冲区就会被刷新，数据被发送到指定的目标（这里我们用的 mock 服务）。
 
-```javascript
+```js
 .pipeline('log-send')
   .pack(
     1000,
@@ -239,7 +239,7 @@ pipy({
 
 正式测试之前需要 mock 一下日志收集服务。
 
-```javascript
+```js
 // mock.js
 pipy()
 

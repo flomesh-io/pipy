@@ -12,7 +12,7 @@ In this tutorial we are going to add **caching** functionality to our proxy serv
 
 In this tutorial we will add non-expiry caching of static contents for our *service-hi* target service.
 
-```json
+```js
 //cache.json
 {
   "services": {
@@ -40,7 +40,7 @@ First we need to define few global variables:
 
 We also need to import variables from modules.
 
-```javascript
+```js
 pipy({
   _cache: {},
   _cachedKey: '',
@@ -58,7 +58,7 @@ Should we jump into request processing? Let's first add caching to our *response
 
 In addition to determining the status code of the response (we will be caching only successful responses i.e responses which return status code of  2xx and 3XX), we will also keep track of the cache time.
 
-```javascript
+```js
 .pipeline('response')
   .handleMessage(
     msg => (
@@ -76,7 +76,7 @@ After receiving the request, the cached key is retrieved from the request header
 
 Finally, We are going to check if response is available in our local cache and make decision if we should continue with the request (in absence of cache) or return the cached response directly to client without hitting our target service.
 
-```javascript
+```js
 .pipeline('request')
   .handleMessageStart(
     msg => (

@@ -12,7 +12,7 @@ title: 13 黑白名单
 
 黑白名单的配置 `config/ban.json` 同样是服务级别的，我们为 `service-hi` 增加配置：
 
-```json
+```js
 {
   "services": {
     "service-hi": {
@@ -33,7 +33,7 @@ title: 13 黑白名单
 
 IP 地址以数组类型存在于配置文件中，数组类型不利于查找。因此在配置引入过程中，我们将其作为 map 的 key。
 
-```javascript
+```js
 pipy({
   _services: Object.fromEntries(
     Object.entries(config.services).map(
@@ -65,7 +65,7 @@ pipy({
 
 服务级的黑白名单处理，需要获取路由决策的服务名；拒绝访问时，会直接返回错误的响应。
 
-```javascript
+```js
 .import({
   __turnDown: 'proxy',
   __serviceID: 'router',
@@ -76,7 +76,7 @@ pipy({
 
 对于进来的请求，从 `__inbound.remoteAddress` 获取对端的 IP 地址。如果服务配置了白名单，则只使用白名单的检查；否则检查 IP 是否在黑名单中。拒绝的请求，会直接（`__turnDown=true`）返回错误响应。
 
-```javascript
+```js
 .pipeline('request')
   .handleStreamStart(
     () => (

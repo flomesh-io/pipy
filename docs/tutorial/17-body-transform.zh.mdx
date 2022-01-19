@@ -18,7 +18,7 @@ title: 17 数据格式转换
 
 这里我们选择 *service-echo* 服务，因为这个服务可以将请求的内容原封不动的返回。我们的插件将会把 JSON 格式的请求内容转换成 XML 代理给上游的服务。
 
-```json
+```js
 {
   "services": {
     "service-echo": {
@@ -50,7 +50,7 @@ JSON 与 Object 的转换很简单，使用 `decode` 和 `encode` 即可。而 X
 
 除了配置相关的两个全局变量外，我们将用于 XML 转换的两个函数 `_obj2xml` 和 `_xml2obj` 提升为全局变量，二者类型都是函数。这里我们先将二者设置为 `null`，后面再补全。
 
-```javascript
+```js
 pipy({
   _services: config.services,
   _service: null,
@@ -65,7 +65,7 @@ pipy({
 
 接下来就是请求的处理了，先获取服务的配置。再根据配置，选择子管道进行处理。
 
-```javascript
+```js
 .pipeline('request')
   .handleStreamStart(
     () => _service = _services[__serviceID]
@@ -81,7 +81,7 @@ pipy({
 
 *json2xml* 子管道中，我们使用 `replaceMessageBody` 过滤器对消息体进行替换：
 
-```javascript
+```js
 .pipeline('json2xml')
   .replaceMessageBody(
     data => (
@@ -101,7 +101,7 @@ pipy({
 ```
 [`XML.Node`](/reference/XML/Node) 是 XML 节点的类型，我们使用这个类进行节点的创建。我们一次创建了主节点和 `root` 节点，然后使用 `_obj2xml` 函数将消息体转换为节点数组作为 `root` 节点的子节点。因此函数 `_obj2xml` 的返回值是节点数组：
 
-```javascript
+```js
 _obj2xml: node => (
   typeof node === 'object' ? (
     Object.entries(node).flatMap(
@@ -126,7 +126,7 @@ _obj2xml: node => (
 
 *xml2json* 子管道中，使用 `_xml2obj` 函数对 `XML.Node` 转换成 JavaScript 对象。
 
-```javascript
+```js
 .pipeline('xml2json')
   .replaceMessageBody(
     data => (
@@ -139,7 +139,7 @@ _obj2xml: node => (
 
 `_xml2obj` 中，将节点的名字作为 JavaScript 对象的字段，对节点的子节点同样使用递归的方式进行处理。该函数的返回值是个对象：
 
-```javascript
+```js
 _xml2obj: node => (
   node ? (
     ((
@@ -168,7 +168,7 @@ _xml2obj: node => (
 
 当然最后别忘记 `bypass` 子管道：
 
-```javascript
+```js
 .pipeline('bypass')
 ```
 

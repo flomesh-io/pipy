@@ -12,7 +12,7 @@ title: 15 缓存
 
 这次我们对 *service-hi* 服务的静态内容进行缓存，并未缓存设置超时时间。
 
-```json
+```js
 //cache.json
 {
   "services": {
@@ -40,7 +40,7 @@ title: 15 缓存
 
 同样还要引入两个模块变量。
 
-```javascript
+```js
 pipy({
   _cache: {},
   _cachedKey: '',
@@ -58,7 +58,7 @@ pipy({
 
 缓存的时候除了要判断响应的状态码（只缓存成功的响应：2xx 和 3xx），记得要记录缓存的时间。
 
-```javascript
+```js
 .pipeline('response')
   .handleMessage(
     msg => (
@@ -76,7 +76,7 @@ pipy({
 
 最终通过是否存在缓存的响应来判断，是继续路由请求还是返回缓存的响应。
 
-```javascript
+```js
 .pipeline('request')
   .handleMessageStart(
     msg => (
