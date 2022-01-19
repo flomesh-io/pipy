@@ -1,0 +1,196 @@
+---
+title: "Part 17: Data Transformation"
+---
+
+## Problem
+
+In today technology world, JSON has become the defacto standard for web development, format of choice for API communication, and service to service communication. But in the past ( 20 years or so) SOAP was the enterprise standard for service to service communication, network services and still in used by legacy systems.
+Modern applications of today that mostly rely on JSON to communicate with other services have problems integrating with legacy systems or they require extra effort in development and costs time, and money to implement interoperability capabilities. Wouldn't it be nice if we can have some middle layer which can perform the transformation of formats without endpoints being aware of the fact that they are communicating with systems in different format or who speaks different languages which they don't understand?
+
+And this is the intention of this tutorial, in this tutorial we are going to implement a functionality of transformation of JSON to XML and vice versa.
+
+## Configuration
+
+Let's add the configurations settings for our service which require transformation for formats:
+
+* *jsonToXML*: Require request JSON format transformed into XML format
+* *xmlToJson*: Require request XML format transformed into JSON format
+
+In this tutorial we will be adding this functionality to *service-echo*, as this service simply returns backs its contents. So we are going to configure our plugin to transform JSON format into XML before forwarding to this service, and then we can see the returned XML 
+
+```js
+{
+  "services": {
+    "service-echo": {
+      "jsonToXml": true
+    }
+  }
+}
+```
+
+## Data Transformation
+
+If you have been following through tutorials you should have seen that we have been mostly using JSON for communication with endpoints, and using Pipy built-in [`JSON`](/reference/JSON) class for JSON handling. `JSON` class provides methods like `parse`, `stringify`, `encode` and `decode`.
+
+To process XML, Pipy also comes with built-in [`XML`](/reference/XML) class which provides the methods similar to that of `JSON` class.
+
+Transformation of XML to JSON and back, we will be using JavaScript Object as an intermediary object, so our transformation flow will look like XML <=> Object <=> JSON.
+
+Transformation from JSON to Object is very simple, which can be achieved by invoking the `decode` or `encode` method of `JSON` class. But XML is a markup language and transformation requires extra logic as `XML` class `decode` and `encode` methods operates at [`XML.Node`](/reference/XML/Node) object.
+
+```xml
+<root>
+  <msg>Hi, there!</msg>
+</root>
+```
+
+Above snippet represents a sample in XML format which will be used in our today tutorial. In above snippet, majority of the noise is required by XML markup language, while the actual data of interest is `msg: Hi, there!`.
+
+## Code dissection
+
+Other than two global variables, we are going to add JavaScript functions which will be invoked during transformation. `_obj2xml` and `_xml2obj` and function objects, so we are going to initialize them with `null` as we will be adding our logic to them in later section.
+
+```js
+pipy({
+  _services: config.services,
+  _service: null,
+  _obj2xml: null,
+  _xml2obj: null,
+})
+
+.import({
+  __serviceID: 'router',
+})
+```
+
+Next, we need to implement request handling logic, we will be retrieving the requested service configuration and then act accordingly to its configuration.
+
+```js
+.pipeline('request')
+  .handleStreamStart(
+    () => _service = _services[__serviceID]
+  )
+  .link(
+    'json2xml', () => Boolean(_service?.jsonToXml),
+    'xml2json', () => Boolean(_service?.xmlToJson),
+    'bypass'
+  )
+```
+
+### Transform JSON into XML
+
+in *json2xml* sub-pipeline, we will use `replaceMessageBody` filter to change the message contents:
+
+```javascript
+.pipeline('json2xml')
+  .replaceMessageBody(
+    data => (
+      XML.encode(
+        new XML.Node(
+          '', null, [
+            new XML.Node(
+              'root', null,
+              _obj2xml(JSON.decode(data))
+            )
+          ]
+        ),
+        2,
+      )
+    )
+  )
+```
+
+[`XML.Node`](/reference/XML/Node) class represents a node in XML and is used to create a node. We are constructing a `root` node and having `_obj2xml` function to convert request body into child nodes. So the return type of `_obj2xml` function is an Array of `XML.Node` nodes:
+
+```js
+_obj2xml: node => (
+  typeof node === 'object' ? (
+    Object.entries(node).flatMap(
+      ([k, v]) => (
+        v instanceof Array && (
+          v.map(e => new XML.Node(k, null, _obj2xml(e)))
+        ) ||
+        v instanceof Object && (
+          new XML.Node(k, null, _obj2xml(v))
+        ) || (
+          new XML.Node(k, null, [v])
+        )
+      )
+    )
+  ) : [
+    new XML.Node('body', null, [''])
+  ]
+)
+```
+
+### Transform XML into JSON
+
+*xml2json* sub-pipeline uses `_xml2obj` JavaScript function to convert `XML.Node` into JavaScript Object.
+
+```js
+.pipeline('xml2json')
+  .replaceMessageBody(
+    data => (
+      JSON.encode(
+        _xml2obj(XML.decode(data))
+      )
+    )
+  )
+```
+
+`_xml2obj` converts the node name into object field and recursively call itself on child nodes. Return value of this function is JavaScript object:
+
+```js
+_xml2obj: node => (
+  node ? (
+    ((
+      children,
+      previous,
+      obj, k, v,
+    ) => (
+      obj = {},
+      node.children.forEach(node => (
+        (children = node.children) && (
+          k = node.name,
+          v = children.every(i => typeof i === 'string') ? children.join('') : _xml2obj(node),
+          previous = obj[k],
+          previous instanceof Array ? (
+            previous.push(v)
+          ) : (
+            obj[k] = previous ? [previous, v] : v
+          )
+        )
+      )),
+      obj
+    ))()
+  ) : {}
+)
+```
+
+And don't forget to add `bypass` sub-piple as below:
+
+```js
+.pipeline('bypass')
+```
+
+## Test in action
+
+```sh
+curl -X POST http://localhost:8000/echo -d '{"msg": "Hi, there!"}'
+<root>
+  <msg>Hi, there!</msg>
+</root>
+```
+
+## Summary
+
+When the data format conversion is done at the proxy level, it becomes easy for applications using different formats to communicate with each other. This tutorial does a simple format conversion of the request data, and give you a start to implement conversions for your own specific needs.
+
+### Takeaways
+
+* Global variables aren't limited to primitive types, but can also be used to define JavaScript functions encapsulating the logic.
+* Use *XML* and *Node* class to work with XML data.
+
+### What's next?
+
+In the next tutorial, we will improve the security of services at the network level by utilizing the Transport Layer Security (TLS).
