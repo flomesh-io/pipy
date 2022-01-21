@@ -389,7 +389,7 @@ Message* AdminService::api_v1_repo_GET(const std::string &path) {
       ss << ']';
     };
 
-    ss << "{\"version\":\"" << info.version << '"';
+    ss << "{\"version\":" << info.version;
     ss << ",\"path\":\"" << utils::escape(info.path) << '"';
     ss << ",\"main\":\"" << utils::escape(info.main) << '"';
     ss << ",\"files\":"; to_array(files);
