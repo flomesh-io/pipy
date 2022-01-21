@@ -86,7 +86,7 @@ private:
   SSL* m_ssl;
   BIO* m_rbio;
   BIO* m_wbio;
-  Data m_buffer_send;
+  Data m_buffer_write;
   Data m_buffer_receive;
   pjs::Ref<Pipeline> m_pipeline;
   pjs::Ref<pjs::Object> m_certificate;
@@ -102,7 +102,7 @@ private:
 
   void use_certificate(pjs::Str *sni);
   bool do_handshake();
-  auto pump_send() -> int;
+  auto pump_send(bool flush = false) -> int;
   auto pump_receive() -> int;
   void pump_read();
   void pump_write();
