@@ -56,17 +56,21 @@ static const char *s_levels[] = {
 
 static void log(Log::Level level, const char *str) {
   if (Log::is_enabled(level)) {
-    char time[100];
-    std::time_t t;
-    std::time(&t);
+    char time[100], ms[10];
+    auto now = std::chrono::system_clock::now().time_since_epoch();
+    auto cnt = std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
+    auto sec = cnt / 1000;
+    auto msec = int(cnt % 1000);
+    std::time_t t = sec;
     std::strftime(time, sizeof(time), "%F %T", std::localtime(&t));
+    std::snprintf(ms, sizeof(ms), ".%03d", msec);
     const char *type = s_levels[level];
     const char *p = str;
     auto &so = std::cout;
     do {
       std::stringstream ss;
-      so << time << type;
-      ss << time << type;
+      so << time << ms << type;
+      ss << time << ms << type;
       while (*p && *p != '\n') {
         auto c = *p++;
         so << c;

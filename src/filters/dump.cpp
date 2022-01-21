@@ -71,11 +71,6 @@ void Dump::process(Event *evt) {
     return;
   }
 
-  // char time_str[100];
-  // std::time_t t;
-  // std::time(&t);
-  // std::strftime(time_str, sizeof(time_str), "%F %T", std::localtime(&t));
-
   std::stringstream ss;
   ss << "[dump] [context=" << context()->id() << "] ";
 
@@ -88,7 +83,9 @@ void Dump::process(Event *evt) {
   ss << evt->name();
 
   if (auto end = evt->as<StreamEnd>()) {
-    ss << " [" << end->error() << "] " << end->message();
+    if (end->error() != StreamEnd::NO_ERROR) {
+      ss << " [" << end->error() << "] " << end->message();
+    }
     Log::print(Log::INFO, ss.str());
 
   } else if (auto data = evt->as<Data>()) {
