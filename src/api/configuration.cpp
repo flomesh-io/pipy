@@ -116,7 +116,7 @@ void Configuration::add_import(pjs::Object *variables) {
 void Configuration::listen(int port, pjs::Object *options) {
   Listener::Options opt;
   if (options) get_listen_options(options, opt);
-  m_listens.push_back({ "::", port, opt });
+  m_listens.push_back({ "0.0.0.0", port, opt });
   m_current_filters = &m_listens.back().filters;
 }
 
