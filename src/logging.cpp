@@ -25,6 +25,7 @@
 
 #include "logging.hpp"
 
+#include <chrono>
 #include <cstdarg>
 #include <cstdio>
 #include <ctime>
