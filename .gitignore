@@ -73,6 +73,6 @@ yarn-error.log
 .vscode/
 
 # Build outputs
-bin/
-build/
-public/
+/bin/
+/build/
+/public/
