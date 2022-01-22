@@ -28,6 +28,7 @@
 
 #include "types.hpp"
 
+#include <ctime>
 #include <functional>
 
 namespace pjs {
@@ -47,8 +48,53 @@ class Date : public ObjectTemplate<Date> {
 public:
   static auto now() -> double;
 
+  auto getDate() -> int { return m_tm.tm_mday; }
+  auto getDay() -> int { return m_tm.tm_wday; }
+  auto getFullYear() -> int { return m_tm.tm_year + 1900; }
+  auto getHours() -> int { return m_tm.tm_hour; }
+  auto getMilliseconds() -> int { return m_msec; }
+  auto getMinutes() -> int { return m_tm.tm_min; }
+  auto getMonth() -> int { return m_tm.tm_mon; }
+  auto getSeconds() -> int { return m_tm.tm_sec; }
+  auto getTime() -> double;
+
+  auto setDate(int value) -> double;
+  auto setFullYear(int value) -> double;
+  auto setFullYear(int y, int m) -> double;
+  auto setFullYear(int y, int m, int d) -> double;
+  auto setHours(int value) -> double;
+  auto setHours(int h, int m) -> double;
+  auto setHours(int h, int m, int s) -> double;
+  auto setHours(int h, int m, int s, int ms) -> double;
+  auto setMilliseconds(int value) -> double;
+  auto setMinutes(int value) -> double;
+  auto setMinutes(int m, int s) -> double;
+  auto setMinutes(int m, int s, int ms) -> double;
+  auto setMonth(int value) -> double;
+  auto setMonth(int m, int d) -> double;
+  auto setSeconds(int value) -> double;
+  auto setSeconds(int s, int ms) -> double;
+  auto setTime(double value) -> double;
+
+  auto toDateString() -> std::string;
+  auto toTimeString() -> std::string;
+  auto toISOString() -> std::string;
+  auto toUTCString() -> std::string;
+
+  virtual void value_of(Value &out) override;
+  virtual auto to_string() const -> std::string override;
+  virtual auto dump() -> Object* override;
+
 private:
-  Date() {}
+  Date();
+  Date(const Date *date);
+  Date(double value);
+  Date(int year, int mon, int day = 1, int hour = 0, int min = 0, int sec = 0, int ms = 0);
+
+  std::tm m_tm;
+  int m_msec;
+
+  auto normalize() -> double;
 
   friend class ObjectTemplate<Date>;
 };

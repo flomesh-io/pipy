@@ -474,6 +474,10 @@ auto Object::to_string() const -> std::string {
   return s;
 }
 
+auto Object::dump() -> Object* {
+  return this;
+}
+
 auto Object::entries(Object *obj) -> Array* {
   if (!obj) return nullptr;
   auto *a = Array::make(obj->ht_size());

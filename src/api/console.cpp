@@ -41,8 +41,10 @@ void Console::log(const pjs::Value *values, int count) {
     s->release();
     if (v.is_object()) {
       if (auto *o = v.o()) {
-        ss << ':';
-        ss << JSON::stringify(v, nullptr, 0);
+        if (auto *obj = o->dump()) {
+          ss << ':';
+          ss << JSON::stringify(obj, nullptr, 0);
+        }
       }
     }
   }

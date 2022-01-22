@@ -980,6 +980,7 @@ public:
   void set(double n) { release(); m_t = Type::Number; m_v.n = n; }
   void set(const char *s) { release(); m_t = Type::String; m_v.s = Str::make(s)->retain(); }
   void set(const std::string &s) { release(); m_t = Type::String; m_v.s = Str::make(s)->retain(); }
+  void set(std::string &&s) { release(); m_t = Type::String; m_v.s = Str::make(std::move(s))->retain(); }
   void set(Str *s) { s->retain(); release(); m_t = Type::String; m_v.s = s; }
   void set(Object *o) { if (o) retain(o); release(); m_t = Type::Object; m_v.o = o; }
 
@@ -1219,6 +1220,7 @@ public:
 
   virtual void value_of(Value &out);
   virtual auto to_string() const -> std::string;
+  virtual auto dump() -> Object*;
 
   static auto assign(Object *obj, Object *obj2) -> Object* {
     if (!obj) return nullptr;
