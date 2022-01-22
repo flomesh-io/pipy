@@ -14,7 +14,6 @@ option(BUILD_shared "build a shared expat library" OFF)
 option(BUILD_doc "build man page for xmlwf" OFF)
 add_subdirectory(deps/libexpat-R_2_2_6/expat)
 
-add_subdirectory(deps/openssl-1.1.1m)
 
 option(LEVELDB_BUILD_TESTS "Build LevelDB's unit tests" OFF)
 option(LEVELDB_BUILD_BENCHMARKS "Build LevelDB's benchmarks" OFF)
@@ -73,6 +72,7 @@ include_directories(
   "${CMAKE_BINARY_DIR}/deps/libexpat-R_2_2_6/expat/lib"
   "${CMAKE_SOURCE_DIR}/deps/libexpat-R_2_2_6/expat/lib"
   "${CMAKE_SOURCE_DIR}/deps/leveldb-1.23/include"
+  "${CMAKE_SOURCE_DIR}/deps/openssl-1.1.1m/include"
 )
 
 add_executable(pipy
@@ -164,7 +164,30 @@ add_custom_command(
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 
 add_custom_target(GenVer DEPENDS ${CMAKE_BINARY_DIR}/deps/version.h)
-add_dependencies(pipy yajl_s expat crypto ssl GenVer)
+add_dependencies(pipy yajl_s expat GenVer)
+
+set(OPENSSL_SRC_DIR ${CMAKE_SOURCE_DIR}/deps/openssl-1.1.1m)
+set(OPENSSL_BIN_DIR ${CMAKE_BINARY_DIR}/deps)
+
+add_custom_command(
+  OUTPUT ${OPENSSL_BIN_DIR}/libssl.a
+  WORKING_DIRECTORY ${OPENSSL_SRC_DIR}
+  COMMAND ./config no-shared zlib
+  COMMAND make
+  COMMAND cp libssl.a libcrypto.a ${OPENSSL_BIN_DIR}
+  )
+
+add_custom_command(
+  TARGET pipy POST_BUILD
+  WORKING_DIRECTORY ${OPENSSL_SRC_DIR}
+  COMMAND make clean
+  COMMAND rm -f Makefile configdata.pm
+  COMMENT "Running OpenSSL cleanup"
+)
+
+add_custom_target(openssldir DEPENDS ${OPENSSL_BIN_DIR}/libssl.a)
+add_dependencies(pipy openssldir)
+
 
 if(PIPY_GUI)
   add_definitions(-DPIPY_USE_GUI)
@@ -202,4 +225,4 @@ if(PIPY_SOIL_FREED_SPACE)
   add_definitions(-DPIPY_SOIL_FREED_SPACE)
 endif()
 
-target_link_libraries(pipy z yajl_s expat crypto ssl leveldb -pthread)
+target_link_libraries(pipy z yajl_s expat ${OPENSSL_BIN_DIR}/libcrypto.a ${OPENSSL_BIN_DIR}/libssl.a leveldb -pthread)
