@@ -1,14 +1,14 @@
 {
   "services": {
-    "service-hi"      : {
+    "service-hi": {
       "targets": ["127.0.0.1:8080", "127.0.0.1:8082"],
       "alg": "RoundRobinLoadBalancer",
       "sticky": true
     },
-    "service-echo"    : {
+    "service-echo": {
       "targets": ["127.0.0.1:8081"]
     },
-    "service-tell-ip" : {
+    "service-tell-ip": {
       "targets": ["127.0.0.1:8082"]
     }
   }

@@ -164,18 +164,18 @@ add_custom_command(
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 
 add_custom_target(GenVer DEPENDS ${CMAKE_BINARY_DIR}/deps/version.h)
-add_dependencies(pipy yajl_s expat GenVer)
 
 set(OPENSSL_SRC_DIR ${CMAKE_SOURCE_DIR}/deps/openssl-1.1.1m)
 set(OPENSSL_BIN_DIR ${CMAKE_BINARY_DIR}/deps)
 
 add_custom_command(
-  OUTPUT ${OPENSSL_BIN_DIR}/libssl.a
+  OUTPUT ${OPENSSL_BIN_DIR}/libcrypto.a ${OPENSSL_BIN_DIR}/libssl.a
   WORKING_DIRECTORY ${OPENSSL_SRC_DIR}
   COMMAND ./config no-shared zlib
   COMMAND make
   COMMAND cp libssl.a libcrypto.a ${OPENSSL_BIN_DIR}
-  )
+  COMMENT "Building OpenSSL"
+)
 
 add_custom_command(
   TARGET pipy POST_BUILD
@@ -185,9 +185,9 @@ add_custom_command(
   COMMENT "Running OpenSSL cleanup"
 )
 
-add_custom_target(openssldir DEPENDS ${OPENSSL_BIN_DIR}/libssl.a)
-add_dependencies(pipy openssldir)
+add_custom_target(OpenSSL DEPENDS ${OPENSSL_BIN_DIR}/libcrypto.a ${OPENSSL_BIN_DIR}/libssl.a)
 
+add_dependencies(pipy yajl_s expat OpenSSL GenVer)
 
 if(PIPY_GUI)
   add_definitions(-DPIPY_USE_GUI)
