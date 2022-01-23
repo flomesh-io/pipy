@@ -27,12 +27,9 @@
 #include "filters/connect.hpp"
 #include "filters/http.hpp"
 #include "filters/tls.hpp"
+#include "gui-tarball.hpp"
 #include "listener.hpp"
 #include "logging.hpp"
-
-#ifdef PIPY_USE_GUI
-#include "gui.tar.h"
-#endif
 
 namespace pipy {
 
@@ -108,11 +105,7 @@ private:
 
 AdminProxy::AdminProxy(const std::string &target)
   : m_target(target)
-#ifdef PIPY_USE_GUI
-  , m_www_files((const char *)s_gui_tar, sizeof(s_gui_tar))
-#else
-  , m_www_files(nullptr, 0)
-#endif
+  , m_www_files(GuiTarball::data(), GuiTarball::size())
 {
   m_response_not_found = response(404);
   m_response_method_not_allowed = response(405);

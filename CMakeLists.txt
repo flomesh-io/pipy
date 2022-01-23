@@ -146,6 +146,7 @@ add_executable(pipy
   src/fs.cpp
   src/fstream.cpp
   src/graph.cpp
+  src/gui-tarball.cpp
   src/help.cpp
   src/inbound.cpp
   src/listener.cpp
