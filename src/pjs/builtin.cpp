@@ -27,10 +27,380 @@
 
 #include <chrono>
 #include <cmath>
+#include <cstdlib>
+#include <limits>
+#include <math.h>
 #include <sstream>
 #include <stack>
 
 namespace pjs {
+
+//
+// Math
+//
+
+double Math::abs(double x) {
+  return std::abs(x);
+}
+
+double Math::acos(double x) {
+  return std::acos(x);
+}
+
+double Math::acosh(double x) {
+  return std::acosh(x);
+}
+
+double Math::asin(double x) {
+  return std::asin(x);
+}
+
+double Math::asinh(double x) {
+  return std::asinh(x);
+}
+
+double Math::atan(double x) {
+  return std::atan(x);
+}
+
+double Math::atanh(double x) {
+  return std::atanh(x);
+}
+
+double Math::atan2(double y, double x) {
+  return std::atan2(y, x);
+}
+
+double Math::cbrt(double x) {
+  return std::cbrt(x);
+}
+
+double Math::ceil(double x) {
+  return std::ceil(x);
+}
+
+double Math::cos(double x) {
+  return std::cos(x);
+}
+
+double Math::cosh(double x) {
+  return std::cosh(x);
+}
+
+double Math::exp(double x) {
+  return std::exp(x);
+}
+
+double Math::expm1(double x) {
+  return std::expm1(x);
+}
+
+double Math::floor(double x) {
+  return std::floor(x);
+}
+
+double Math::fround(double x) {
+  return float(x);
+}
+
+double Math::hypot(const double *v, int n) {
+  if (n == 0) return 0;
+  if (n == 1) return v[0];
+  if (n == 2) return std::hypot(v[0], v[1]);
+  double sum = 0;
+  for (int i = 0; i < n; i++) sum += v[0] * v[0];
+  return std::sqrt(sum);
+}
+
+double Math::log(double x) {
+  return std::log(x);
+}
+
+double Math::log1p(double x) {
+  return std::log1p(x);
+}
+
+double Math::log10(double x) {
+  return std::log10(x);
+}
+
+double Math::log2(double x) {
+  return std::log2(x);
+}
+
+double Math::max(const double *v, int n) {
+  double m = -std::numeric_limits<double>::infinity();
+  for (int i = 0; i < n; i++) m = std::max(m, v[i]);
+  return m;
+}
+
+double Math::min(const double *v, int n) {
+  double m = std::numeric_limits<double>::infinity();
+  for (int i = 0; i < n; i++) m = std::min(m, v[i]);
+  return m;
+}
+
+double Math::pow(double x, double y) {
+  return std::pow(x, y);
+}
+
+double Math::random() {
+  return double(std::rand()) / (double(RAND_MAX) + 1);
+}
+
+double Math::round(double x) {
+  return std::round(x);
+}
+
+double Math::sign(double x) {
+  return std::copysign(std::fpclassify(x) == FP_ZERO ? 0 : 1, x);
+}
+
+double Math::sin(double x) {
+  return std::sin(x);
+}
+
+double Math::sqrt(double x) {
+  return std::sqrt(x);
+}
+
+double Math::tan(double x) {
+  return std::tan(x);
+}
+
+double Math::tanh(double x) {
+  return std::tanh(x);
+}
+
+double Math::trunc(double x) {
+  return std::trunc(x);
+}
+
+int Math::clz32(int x) {
+  return __builtin_clz(x);
+}
+
+int Math::imul(int x, int y) {
+  return x * y;
+}
+
+template<> void ClassDef<Math>::init() {
+  ctor();
+
+  variable("E", M_E);
+  variable("LN10", M_LN10);
+  variable("LN2", M_LN2);
+  variable("LOG10E", M_LOG10E);
+  variable("LOG2E", M_LOG2E);
+  variable("PI", M_PI);
+  variable("SQRT1_2", M_SQRT1_2);
+  variable("SQRT2", M_SQRT2);
+
+  method("abs", [](Context &ctx, Object *obj, Value &ret) {
+    Value x;
+    if (!ctx.arguments(1, &x)) return;
+    ret.set(Math::abs(x.to_number()));
+  });
+
+  method("acos", [](Context &ctx, Object *obj, Value &ret) {
+    Value x;
+    if (!ctx.arguments(1, &x)) return;
+    ret.set(Math::acos(x.to_number()));
+  });
+
+  method("acosh", [](Context &ctx, Object *obj, Value &ret) {
+    Value x;
+    if (!ctx.arguments(1, &x)) return;
+    ret.set(Math::acosh(x.to_number()));
+  });
+
+  method("asin", [](Context &ctx, Object *obj, Value &ret) {
+    Value x;
+    if (!ctx.arguments(1, &x)) return;
+    ret.set(Math::asin(x.to_number()));
+  });
+
+  method("asinh", [](Context &ctx, Object *obj, Value &ret) {
+    Value x;
+    if (!ctx.arguments(1, &x)) return;
+    ret.set(Math::asinh(x.to_number()));
+  });
+
+  method("atan", [](Context &ctx, Object *obj, Value &ret) {
+    Value x;
+    if (!ctx.arguments(1, &x)) return;
+    ret.set(Math::atan(x.to_number()));
+  });
+
+  method("atanh", [](Context &ctx, Object *obj, Value &ret) {
+    Value x;
+    if (!ctx.arguments(1, &x)) return;
+    ret.set(Math::atanh(x.to_number()));
+  });
+
+  method("atan2", [](Context &ctx, Object *obj, Value &ret) {
+    Value y, x;
+    if (!ctx.arguments(2, &y, &x)) return;
+    ret.set(Math::atan2(y.to_number(), x.to_number()));
+  });
+
+  method("cbrt", [](Context &ctx, Object *obj, Value &ret) {
+    Value x;
+    if (!ctx.arguments(1, &x)) return;
+    ret.set(Math::cbrt(x.to_number()));
+  });
+
+  method("ceil", [](Context &ctx, Object *obj, Value &ret) {
+    Value x;
+    if (!ctx.arguments(1, &x)) return;
+    ret.set(Math::ceil(x.to_number()));
+  });
+
+  method("cos", [](Context &ctx, Object *obj, Value &ret) {
+    Value x;
+    if (!ctx.arguments(1, &x)) return;
+    ret.set(Math::cos(x.to_number()));
+  });
+
+  method("cosh", [](Context &ctx, Object *obj, Value &ret) {
+    Value x;
+    if (!ctx.arguments(1, &x)) return;
+    ret.set(Math::cosh(x.to_number()));
+  });
+
+  method("exp", [](Context &ctx, Object *obj, Value &ret) {
+    Value x;
+    if (!ctx.arguments(1, &x)) return;
+    ret.set(Math::exp(x.to_number()));
+  });
+
+  method("expm1", [](Context &ctx, Object *obj, Value &ret) {
+    Value x;
+    if (!ctx.arguments(1, &x)) return;
+    ret.set(Math::expm1(x.to_number()));
+  });
+
+  method("floor", [](Context &ctx, Object *obj, Value &ret) {
+    Value x;
+    if (!ctx.arguments(1, &x)) return;
+    ret.set(Math::floor(x.to_number()));
+  });
+
+  method("fround", [](Context &ctx, Object *obj, Value &ret) {
+    Value x;
+    if (!ctx.arguments(1, &x)) return;
+    ret.set(Math::fround(x.to_number()));
+  });
+
+  method("hypot", [](Context &ctx, Object *obj, Value &ret) {
+    int n = ctx.argc();
+    double v[n];
+    for (int i = 0; i < n; i++) v[i] = ctx.arg(i).to_number();
+    ret.set(Math::hypot(v, n));
+  });
+
+  method("log", [](Context &ctx, Object *obj, Value &ret) {
+    Value x;
+    if (!ctx.arguments(1, &x)) return;
+    ret.set(Math::log(x.to_number()));
+  });
+
+  method("log1p", [](Context &ctx, Object *obj, Value &ret) {
+    Value x;
+    if (!ctx.arguments(1, &x)) return;
+    ret.set(Math::log1p(x.to_number()));
+  });
+
+  method("log10", [](Context &ctx, Object *obj, Value &ret) {
+    Value x;
+    if (!ctx.arguments(1, &x)) return;
+    ret.set(Math::log10(x.to_number()));
+  });
+
+  method("log2", [](Context &ctx, Object *obj, Value &ret) {
+    Value x;
+    if (!ctx.arguments(1, &x)) return;
+    ret.set(Math::log2(x.to_number()));
+  });
+
+  method("max", [](Context &ctx, Object *obj, Value &ret) {
+    int n = ctx.argc();
+    double v[n];
+    for (int i = 0; i < n; i++) v[i] = ctx.arg(i).to_number();
+    ret.set(Math::max(v, n));
+  });
+
+  method("min", [](Context &ctx, Object *obj, Value &ret) {
+    int n = ctx.argc();
+    double v[n];
+    for (int i = 0; i < n; i++) v[i] = ctx.arg(i).to_number();
+    ret.set(Math::min(v, n));
+  });
+
+  method("pow", [](Context &ctx, Object *obj, Value &ret) {
+    Value x, y;
+    if (!ctx.arguments(2, &x, &y)) return;
+    ret.set(Math::pow(x.to_number(), y.to_number()));
+  });
+
+  method("random", [](Context &ctx, Object *obj, Value &ret) {
+    ret.set(Math::random());
+  });
+
+  method("round", [](Context &ctx, Object *obj, Value &ret) {
+    Value x;
+    if (!ctx.arguments(1, &x)) return;
+    ret.set(Math::round(x.to_number()));
+  });
+
+  method("sign", [](Context &ctx, Object *obj, Value &ret) {
+    Value x;
+    if (!ctx.arguments(1, &x)) return;
+    ret.set(Math::sign(x.to_number()));
+  });
+
+  method("sin", [](Context &ctx, Object *obj, Value &ret) {
+    Value x;
+    if (!ctx.arguments(1, &x)) return;
+    ret.set(Math::sin(x.to_number()));
+  });
+
+  method("sqrt", [](Context &ctx, Object *obj, Value &ret) {
+    Value x;
+    if (!ctx.arguments(1, &x)) return;
+    ret.set(Math::sqrt(x.to_number()));
+  });
+
+  method("tan", [](Context &ctx, Object *obj, Value &ret) {
+    Value x;
+    if (!ctx.arguments(1, &x)) return;
+    ret.set(Math::tan(x.to_number()));
+  });
+
+  method("tanh", [](Context &ctx, Object *obj, Value &ret) {
+    Value x;
+    if (!ctx.arguments(1, &x)) return;
+    ret.set(Math::tanh(x.to_number()));
+  });
+
+  method("trunc", [](Context &ctx, Object *obj, Value &ret) {
+    Value x;
+    if (!ctx.arguments(1, &x)) return;
+    ret.set(Math::trunc(x.to_number()));
+  });
+
+  method("clz32", [](Context &ctx, Object *obj, Value &ret) {
+    Value x;
+    if (!ctx.arguments(1, &x)) return;
+    ret.set(Math::clz32(x.to_number()));
+  });
+
+  method("imul", [](Context &ctx, Object *obj, Value &ret) {
+    Value x, y;
+    if (!ctx.arguments(2, &x, &y)) return;
+    ret.set(Math::imul(x.to_number(), y.to_number()));
+  });
+}
 
 //
 // Date

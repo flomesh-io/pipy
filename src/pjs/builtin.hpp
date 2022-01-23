@@ -38,6 +38,42 @@ namespace pjs {
 //
 
 class Math : public ObjectTemplate<Math> {
+public:
+  static double abs(double x);
+  static double acos(double x);
+  static double acosh(double x);
+  static double asin(double x);
+  static double asinh(double x);
+  static double atan(double x);
+  static double atanh(double x);
+  static double atan2(double y, double x);
+  static double cbrt(double x);
+  static double ceil(double x);
+  static double cos(double x);
+  static double cosh(double x);
+  static double exp(double x);
+  static double expm1(double x);
+  static double floor(double x);
+  static double fround(double x);
+  static double hypot(const double *v, int n);
+  static double log(double x);
+  static double log1p(double x);
+  static double log10(double x);
+  static double log2(double x);
+  static double max(const double *v, int n);
+  static double min(const double *v, int n);
+  static double pow(double x, double y);
+  static double random();
+  static double round(double x);
+  static double sign(double x);
+  static double sin(double x);
+  static double sqrt(double x);
+  static double tan(double x);
+  static double tanh(double x);
+  static double trunc(double x);
+
+  static int clz32(int x);
+  static int imul(int x, int y);
 };
 
 //

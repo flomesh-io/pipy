@@ -73,6 +73,14 @@ auto Str::make(const uint32_t *codes, size_t len) -> Str* {
   return make(buf, p);
 }
 
+auto Str::make(double n) -> Str* {
+  if (std::isnan(n)) return nan;
+  if (std::isinf(n)) return std::signbit(n) ? neg_inf : pos_inf;
+  char str[100];
+  auto len = Number::to_string(str, sizeof(str), n);
+  return make(str, len);
+}
+
 auto Str::ht() -> std::unordered_map<std::string, Str*>& {
   static std::unordered_map<std::string, Str*> s_ht;
   return s_ht;
@@ -560,9 +568,48 @@ template<> void ClassDef<Number>::init() {
     return Number::make(ctx.argc() > 0 ? ctx.arg(0).to_number() : 0);
   });
 
-  // "toExponential",
-  // "toFixed",
-  // "toPrecision",
+  method("toExponential", [](Context &ctx, Object *obj, Value &ret) {
+    auto n = obj->as<Number>()->value();
+    Value digits;
+    if (!ctx.arguments(0, &digits)) return;
+    if (digits.is_undefined()) {
+      char str[100];
+      auto len = Number::to_exponential(str, sizeof(str), n);
+      ret.set(Str::make(str, len));
+    } else if (digits.is_number()) {
+      char str[100];
+      auto len = Number::to_exponential(str, sizeof(str), n, digits.n());
+      ret.set(Str::make(str, len));
+    } else {
+      ctx.error_argument_type(0, "a number");
+    }
+  });
+
+  method("toFixed", [](Context &ctx, Object *obj, Value &ret) {
+    auto n = obj->as<Number>()->value();
+    int digits = 0;
+    if (!ctx.arguments(0, &digits)) return;
+    char str[100];
+    auto len = Number::to_fixed(str, sizeof(str), n, digits);
+    ret.set(Str::make(str, len));
+  });
+
+  method("toPrecision", [](Context &ctx, Object *obj, Value &ret) {
+    auto n = obj->as<Number>()->value();
+    Value digits;
+    if (!ctx.arguments(0, &digits)) return;
+    if (digits.is_undefined()) {
+      char str[100];
+      auto len = Number::to_string(str, sizeof(str), n);
+      ret.set(Str::make(str, len));
+    } else if (digits.is_number()) {
+      char str[100];
+      auto len = Number::to_precision(str, sizeof(str), n, digits.n());
+      ret.set(Str::make(str, len));
+    } else {
+      ctx.error_argument_type(0, "a number");
+    }
+  });
 }
 
 template<> void ClassDef<Constructor<Number>>::init() {
@@ -584,10 +631,90 @@ void Number::value_of(Value &out) {
 
 auto Number::to_string() const -> std::string {
   if (std::isnan(m_n)) return Str::nan->str();
-  if (std::isinf(m_n)) return m_n > 0 ? Str::pos_inf->str() : Str::neg_inf->str();
-  double i;
-  if (std::modf(m_n, &i) == 0) return std::to_string(int64_t(i));
-  return std::to_string(m_n);
+  if (std::isinf(m_n)) return std::signbit(m_n) ? Str::neg_inf->str() : Str::pos_inf->str();
+  char str[100];
+  auto len = to_string(str, sizeof(str), m_n);
+  return std::string(str, len);
+}
+
+static size_t special_number_to_string(char *str, size_t len, double n) {
+  if (std::isnan(n)) {
+    std::strcpy(str, Str::nan->c_str());
+    return Str::nan->size();
+  }
+  if (std::isinf(n)) {
+    if (std::signbit(n)) {
+      std::strcpy(str, Str::neg_inf->c_str());
+      return Str::neg_inf->size();
+    } else {
+      std::strcpy(str, Str::pos_inf->c_str());
+      return Str::pos_inf->size();
+    }
+  }
+  return 0;
+}
+
+static size_t integral_number_to_string(char *str, size_t len, double n) {
+  double i; std::modf(n, &i);
+  if (std::modf(n, &i) == 0) {
+    return std::snprintf(str, len, "%lld", (long long)i);
+  } else {
+    return 0;
+  }
+}
+
+size_t Number::to_string(char *str, size_t len, double n) {
+  if (auto l = special_number_to_string(str, len, n)) return l;
+  if (auto l = integral_number_to_string(str, len, n)) return l;
+  auto max = std::numeric_limits<double>::digits10 + 1;
+  len = std::snprintf(str, len, "%.*f", max, n);
+  while (len > 1 && str[len-1] == '0') len--;
+  return len;
+}
+
+size_t Number::to_precision(char *str, size_t len, double n, int precision) {
+  if (auto l = special_number_to_string(str, len, n)) return l;
+  if (auto l = integral_number_to_string(str, len, n)) return l;
+  auto max = std::numeric_limits<double>::digits10 + 1;
+  if (precision < 0) precision = 0;
+  if (precision > max) precision = max;
+  return std::snprintf(str, len, "%.*g", precision, n);
+}
+
+size_t Number::to_fixed(char *str, size_t len, double n, int digits) {
+  if (auto l = special_number_to_string(str, len, n)) return l;
+  if (auto l = integral_number_to_string(str, len, n)) return l;
+  auto max = std::numeric_limits<double>::digits10 + 1;
+  if (digits < 0) digits = 0;
+  if (digits > max) digits = max;
+  return std::snprintf(str, len, "%.*f", digits, n);
+}
+
+size_t Number::to_exponential(char *str, size_t len, double n) {
+  if (auto l = special_number_to_string(str, len, n)) return l;
+  if (auto l = integral_number_to_string(str, len, n)) return l;
+  auto max = std::numeric_limits<double>::digits10 + 1;
+  len = std::snprintf(str, len, "%.*e", max, n);
+  auto p = len;
+  do p--; while (p > 0 && str[p] != 'e');
+  if (p > 0) {
+    auto i = p - 1;
+    while (i > 0 && str[i-1] == '0') i--;
+    if (i > 0) {
+      std::memmove(str + i, str + p, len - p);
+      len -= p - i;
+    }
+  }
+  return len;
+}
+
+size_t Number::to_exponential(char *str, size_t len, double n, int digits) {
+  if (auto l = special_number_to_string(str, len, n)) return l;
+  if (auto l = integral_number_to_string(str, len, n)) return l;
+  auto max = std::numeric_limits<double>::digits10 + 1;
+  if (digits < 0) digits = 0;
+  if (digits > max) digits = max;
+  return std::snprintf(str, len, "%.*e", digits, n);
 }
 
 //

@@ -83,6 +83,9 @@ template<> void ClassDef<Global>::init() {
   // Array
   variable("Array", class_of<Constructor<Array>>());
 
+  // Math
+  variable("Math", class_of<Math>());
+
   // Date
   variable("Date", class_of<Constructor<Date>>());
 

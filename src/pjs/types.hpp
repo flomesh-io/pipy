@@ -541,19 +541,7 @@ public:
   }
 
   static auto make(const uint32_t *codes, size_t len) -> Str*;
-
-  static auto make(double n) -> Str* {
-    if (std::isnan(n)) return nan;
-    if (std::isinf(n)) return n > 0 ? pos_inf : neg_inf;
-    double i; std::modf(n, &i);
-    char str[100]; int len;
-    if (std::modf(n, &i) == 0) {
-      len = std::snprintf(str, sizeof(str), "%lld", (long long)i);
-    } else {
-      len = std::snprintf(str, sizeof(str), "%f", n);
-    }
-    return make(str, len);
-  }
+  static auto make(double n) -> Str*;
 
   auto length() const -> int { return m_length; }
   auto size() const -> size_t { return m_str.length(); }
@@ -2010,6 +1998,12 @@ public:
 class Number : public ObjectTemplate<Number> {
 public:
   auto value() const -> double { return m_n; }
+
+  static size_t to_string(char *str, size_t len, double n);
+  static size_t to_precision(char *str, size_t len, double n, int precision);
+  static size_t to_fixed(char *str, size_t len, double n, int digits);
+  static size_t to_exponential(char *str, size_t len, double n);
+  static size_t to_exponential(char *str, size_t len, double n, int digits);
 
   virtual void value_of(Value &out) override;
   virtual auto to_string() const -> std::string override;
