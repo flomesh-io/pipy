@@ -216,4 +216,4 @@ if(PIPY_SOIL_FREED_SPACE)
   add_definitions(-DPIPY_SOIL_FREED_SPACE)
 endif()
 
-target_link_libraries(pipy z yajl_s expat ${OPENSSL_OUT_DIR}/libcrypto.a ${OPENSSL_OUT_DIR}/libssl.a leveldb -pthread)
+target_link_libraries(pipy z yajl_s expat ${OPENSSL_OUT_DIR}/libssl.a ${OPENSSL_OUT_DIR}/libcrypto.a leveldb -pthread -ldl)
