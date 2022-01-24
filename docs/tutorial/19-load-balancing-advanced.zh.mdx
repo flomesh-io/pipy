@@ -1,0 +1,200 @@
+---
+title: 19 负载均衡高级功能
+---
+
+## 问题
+
+在 [负载均衡进阶](https://mp.weixin.qq.com/s/tHZLm0ksJsxNLI5gjLveTA) 一篇中，我们利用缓存解决了同一连接的多个请求被均衡到不同上游的问题。这种只能保证连接不断开的情况下，使用同一个上游处理多个请求。实际的场景中，某些情况下我们需要这样一种机制，识别客户端与上游交互中的关联性。即使是连接断开、重连，仍可以继续继续维护这种关联性，也就是常说的负载均衡的会话保持机制。因为有些上游是“有状态”的，比如保留了客户端的登录状态、本地缓存等等。
+
+还有在过往教程中我们一直使用轮询的负载均衡算法，这种算法要求上游的实例都是同样的规格（比如硬件配置）才能真正达到负载均衡。但实际情况下，可能会遇到实例间的硬件、负载不同，导致响应的处理快慢也不同。继续使用轮询的方式便达不到均衡的效果，这就需要针对不同的上游服务可以灵活的使用不同的负载均衡算法。
+
+上面两种情况都是负载均衡的高级功能，也就是这篇要带领大家实现的。
+
+## 配置
+
+首先更新下负载均衡的配置，为服务加上会话保持 `sticky`以及负载均衡算法 `alg` 的配置。原来的目标示例列表，成为服务的另一个属性 `targets`。
+
+负载均衡算法这里，为了使用方便我们直接使用算法的类型作为值，支持 `RoundRobinLoadBalancer`、`LeastWorkLoadBalancer` 和 `HashingLoadBalancer` 三种。
+
+```js
+{
+  "services": {
+    "service-hi": {
+      "targets": ["127.0.0.1:8080", "127.0.0.1:8082"],
+      "alg": "RoundRobinLoadBalancer",
+      "sticky": true
+    },
+    "service-echo": {
+      "targets": ["127.0.0.1:8081"]
+    },
+    "service-tell-ip": {
+      "targets": ["127.0.0.1:8082"]
+    }
+  }
+}
+```
+
+## 实现
+
+有了配置之后，接下来看如何实现可配置的负载均衡和会话保持。
+
+### 可配置的负载均衡
+
+过去我们使用轮询算法时，是直接创建均衡器：
+
+```js
+new algo.RoundRobinLoadBalancer(service.targets)
+```
+
+现在需要根据服务的配置，选择对应的算法创建均衡器（如果没有指定，默认使用轮询算法）：
+
+```js
+new algo[service.alg ? service.alg : 'RoundRobinLoadBalancer'](service.targets)
+```
+
+### 会话保持
+
+这里同样使用缓存的功能，假如服务开启了会话保持，优先使用缓存中为请求从缓存中选取目标上游，如果未命中，则继续使用负载均衡器选择一个并缓存。
+
+首选初始化配置时，会开启会话保持的创建缓存：
+
+```js
+  pipy({
+    _services: (
+      Object.fromEntries(
+        Object.entries(config.services).map(
+-        ([k, v]) => [
+-          k, new algo.RoundRobinLoadBalancer(v)
+-        ]            
++        ([k, v]) => (
++          ((balancer => (
++            balancer = new algo[v.alg ? v.alg : 'RoundRobinLoadBalancer'](v.targets),          
++            [k, {
++              balancer,
++              cache: v.sticky && new algo.Cache(
++                () => balancer.select()
++              )
++            }]
++            ))()
++          )
++        )
+        )
+      )
+    ),
+-  _balancer: null,
+-  _balancerCache: null,
++  _service: null,
++  _serviceCache: null,
+    _target: '',
+    _targetCache: null,
+
+    _g: {
+      connectionID: 0,
+    },
+
+    _connectionPool: new algo.ResourcePool(
+      () => ++_g.connectionID
+    ),
+
++  _selectKey: null,
++  _select: (service, key) => (
++    service.cache && key ? (
++      service.cache.get(key)
++    ) : (
++      service.balancer.select()
++    )
++  ),
+  })
+```
+
+由于缓存是服务维度的，为了避免歧义我们将原来的变量名做了调整，从 `_balancer`、`_balancerCache` 改成 `_service`、`_serviceCache`。
+
+这里还引入了新的变量 `_selectKey` 和 方法变量 `_select`。前者就是会话保持缓存（`service.cache`）的键；后者是缓存 `_serviceCache`（原 `_balancerCache`）加载缓存项的实现方法。
+
+```js
+  .pipeline('session')
+    .handleStreamStart(
+      () => (
+-       _balancerCache = new algo.Cache(
++       _serviceCache = new algo.Cache(
+-         // k is a balancer, v is a target
++         // k is a service, v is a target
+-         (k  ) => k.select(),
++         (k  ) => _select(k, _selectKey),
+          (k,v) => k.balancer.deselect(v),
+        ),
+        _targetCache = new algo.Cache(
+          // k is a target, v is a connection ID
+          (k  ) => _connectionPool.allocate(k),
+          (k,v) => _connectionPool.free(v),
+        )
+      )
+    )
+    .handleStreamEnd(
+      () => (
+        _targetCache.clear(),
+-       _balancerCache.clear(),
++       _serviceCache.clear()
+      )
+    )
+```
+
+#### 缓存的键
+
+引入新的变量 `_selectKey` 是会话保持的核心，定义了会话保持的条件。会话保持大体分为两种：
+
+* 四层会话保持：支持基于源 IP 地址，即来自同一 IP 地址的访问转发到同一个上游。
+* 七层会话保持：支持基于 HTTP header，如 cookie、authorization 等相同的访问都被转发到同一个上游。
+
+这里我们使用基于七层中的 authorization 请求头实现会话保持，也就是将其值作为 `_selectKey` 的值。
+
+很简单，只需在 `handleMessageStart` 时取出请求头 `authorization` 的值赋给 `_selectKey`。
+
+```js
+  .pipeline('request')
+    .handleMessageStart(
+      (msg) => (
++       _selectKey = msg.head?.headers?.['user-agent'],
+        _service = _services[__serviceID],
+        _service && (_target = _serviceCache.get(_service)),
+        _target && (__turnDown = true)
+      )
+    )
+```
+
+## 测试
+
+### 会话保持
+
+首先不携带 authorization 头进行访问，收到不同结果：
+
+```shell
+curl localhost:8000/hi
+Hi, there!
+curl localhost:8000/hi
+You are requesting /hi from 127.0.0.1
+```
+
+加上 authorization 头之后返回相同的结果，说明会话保持生效了。
+
+```shell
+curl localhost:8000/hi -H 'Authorization: xxxx'
+Hi, there!
+curl localhost:8000/hi -H 'Authorization: xxxx'
+Hi, there!
+```
+
+### 负载均衡算法
+
+我们将配置中的算法改成 `LeastWorkLoadBalancer`，并多次请求都返回相同的结果，而不会返回轮询的结果。
+
+```shell
+curl localhost:8000/hi
+Hi, there!
+curl localhost:8000/hi
+Hi, there!
+```
+
+## 总结
+
+这次我们实现了负载均衡的高级功能，解决了使用场景下会话保持、可配置负载均衡算法的需求。网络负载均衡的我们已经实现了很多，将来会继续为大家带来更多高级功能的分享。
