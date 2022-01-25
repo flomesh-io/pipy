@@ -49,8 +49,6 @@
 
 using namespace pipy;
 
-extern const char FILTERS_HELP[];
-
 AdminService *s_admin = nullptr;
 AdminProxy *s_admin_proxy = nullptr;
 
@@ -76,109 +74,6 @@ static void show_version() {
 #else
   std::cout << "Tutorial    : " << "No" << std::endl;
 #endif
-}
-
-//
-// Show help about filters usage
-//
-
-static void get_filters_help(
-  std::map<std::string, std::list<std::string>> &filters
-) {
-  auto lines = utils::split(FILTERS_HELP, '\n');
-  lines.push_back("");
-
-  std::list<std::string> paragraph;
-
-  for (const auto &line : lines) {
-    if (utils::trim(line).empty()) {
-      if (!paragraph.empty()) {
-        auto name = paragraph.front();
-        auto i = name.find('(');
-        if (i != std::string::npos) name = name.substr(0, i);
-        filters[name] = std::move(paragraph);
-      }
-    } else {
-      paragraph.push_back(line);
-    }
-  }
-}
-
-static void list_filters() {
-  std::map<std::string, std::list<std::string>> filters;
-  get_filters_help(filters);
-  size_t name_width = 0;
-  size_t args_width = 0;
-  std::list<std::tuple<std::string, std::string, std::string>> list;
-  for (auto &f : filters) {
-    std::string name, args, desc;
-    auto help = f.second;
-    auto i = help.begin();
-    if (i != help.end()) name = *i++;
-    if (i != help.end()) desc = *i++;
-    auto p = name.find('(');
-    if (p != std::string::npos) {
-      args = name.substr(p);
-      name = name.substr(0, p);
-    }
-    name_width = std::max(name_width, name.length());
-    args_width = std::max(args_width, args.length());
-    list.push_back({ name, args, desc });
-  }
-  for (const auto &t : list) {
-    const auto &name = std::get<0>(t);
-    const auto &args = std::get<1>(t);
-    const auto &desc = std::get<2>(t);
-    std::cout << name;
-    std::cout << std::string(name_width - name.length() + 1, ' ');
-    std::cout << args;
-    if (desc.length() > 0) {
-      std::cout << std::string(args_width - args.length() + 3, ' ');
-      std::cout << desc;
-    }
-    std::cout << std::endl;
-  }
-}
-
-static void help_filters() {
-  std::map<std::string, std::list<std::string>> filters;
-  get_filters_help(filters);
-  for (const auto &p : filters) {
-    std::string name, desc;
-    auto help = p.second;
-    auto i = help.begin();
-    if (i != help.end()) name = *i++;
-    if (i != help.end()) desc = *i++;
-    if (!name.empty()) {
-      std::cout << name << std::endl;
-      std::cout << std::string(name.length(), '=') << std::endl;
-      std::cout << std::endl;
-      std::cout << "  " << desc << std::endl;
-      std::cout << std::endl;
-      if (i != help.end()) {
-        std::list<std::pair<std::string, std::string>> lines;
-        for (; i != help.end(); ++i) {
-          auto n = i->find('=');
-          if (n == std::string::npos) {
-            lines.push_back({ utils::trim(*i), "" });
-          } else {
-            lines.push_back({
-              utils::trim(i->substr(0,n)),
-              utils::trim(i->substr(n+1)),
-            });
-          }
-        }
-        size_t max_width = 0;
-        for (const auto &p : lines) max_width = std::max(max_width, p.first.length());
-        for (const auto &p : lines) {
-          std::cout << "  " << p.first;
-          std::cout << std::string(max_width - p.first.length(), ' ');
-          std::cout << " - " << p.second << std::endl;
-        }
-        std::cout << std::endl << std::endl;
-      }
-    }
-  }
 }
 
 //
@@ -267,20 +162,6 @@ int main(int argc, char *argv[]) {
 
     if (opts.help) {
       Options::show_help();
-      return 0;
-    }
-
-    if (opts.help_filters) {
-      std::cout << std::endl;
-      help_filters();
-      std::cout << std::endl;
-      return 0;
-    }
-
-    if (opts.list_filters) {
-      std::cout << std::endl;
-      list_filters();
-      std::cout << std::endl;
       return 0;
     }
 

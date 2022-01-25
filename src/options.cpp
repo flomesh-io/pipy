@@ -40,8 +40,6 @@ void Options::show_help() {
   std::cout << "Options:" << std::endl;
   std::cout << "  -h, -help, --help                    Show help information" << std::endl;
   std::cout << "  -v, -version, --version              Show version information" << std::endl;
-  std::cout << "  --list-filters                       List all filters" << std::endl;
-  std::cout << "  --help-filters                       Show detailed usage information for all filters" << std::endl;
   std::cout << "  --log-level=<debug|info|warn|error>  Set the level of log output" << std::endl;
   std::cout << "  --verify                             Verify configuration only" << std::endl;
   std::cout << "  --reuse-port                         Enable kernel load balancing for all listening ports" << std::endl;
@@ -72,10 +70,6 @@ Options::Options(int argc, char *argv[]) {
         version = true;
       } else if (k == "-h" || k == "-help" || k == "--help") {
         help = true;
-      } else if (k == "--help-filters") {
-        help_filters = true;
-      } else if (k == "--list-filters") {
-        list_filters = true;
       } else if (k == "--log-level") {
         if (v == "debug") log_level = Log::DEBUG;
         else if (v == "warn") log_level = Log::WARN;
