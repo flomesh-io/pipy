@@ -29,7 +29,7 @@ import HighlightTheme from 'prism-react-renderer/themes/vsDark';
 
 const FONT_TITLE = 'rockwell,palatino,serif';
 const FONT_TOC = 'verdana';
-const FONT_TEXT = 'arial,sans-serif';
+const FONT_TEXT = 'graphik,verdana,arial,sans-serif';
 const FONT_CODE = 'menlo,monaco,"Courier New",monospace';
 
 const FONT_ZH_TITLE = 'simhei,stheiti';
@@ -188,29 +188,31 @@ const useStyles = makeStyles(theme => ({
 
   title: {
     fontFamily: FONT_TITLE,
-    fontSize: '3rem',
+    fontSize: '2.6rem',
   },
 
   title_zh: {
     fontFamily: FONT_ZH_TITLE,
-    fontSize: '3rem',
+    fontSize: '2.6rem',
     fontWeight: 'bolder',
   },
 
-  h1: { fontFamily: FONT_TITLE, fontSize: '2.0rem' },
-  h2: { fontFamily: FONT_TITLE, fontSize: '1.5rem', fontWeight: 'lighter' },
-  h3: { fontFamily: FONT_TITLE, fontSize: '1.3rem', fontWeight: 'lighter' },
-  h4: { fontFamily: FONT_TITLE, fontSize: '1.1rem', fontWeight: 'lighter' },
+  h1: { fontFamily: FONT_TEXT, fontSize: '1.8rem', color: '#eee', fontWeight: 500 },
+  h2: { fontFamily: FONT_TEXT, fontSize: '1.5rem', color: '#eee', fontWeight: 500 },
+  h3: { fontFamily: FONT_TEXT, fontSize: '1.3rem', color: '#eee', fontWeight: 500 },
+  h4: { fontFamily: FONT_TEXT, fontSize: '1.1rem', color: '#eee', fontWeight: 500 },
 
-  h1_zh: { fontFamily: FONT_ZH_TITLE, fontSize: '2.0rem' },
-  h2_zh: { fontFamily: FONT_ZH_TITLE, fontSize: '1.5rem', fontWeight: 'bolder' },
-  h3_zh: { fontFamily: FONT_ZH_TITLE, fontSize: '1.3rem', fontWeight: 'bolder' },
-  h4_zh: { fontFamily: FONT_ZH_TITLE, fontSize: '1.1rem', fontWeight: 'bolder' },
+  h1_zh: { fontFamily: FONT_ZH_TITLE, fontSize: '2.0rem', color: '#eee' },
+  h2_zh: { fontFamily: FONT_ZH_TITLE, fontSize: '1.5rem', color: '#eee', fontWeight: 'bolder' },
+  h3_zh: { fontFamily: FONT_ZH_TITLE, fontSize: '1.3rem', color: '#eee', fontWeight: 'bolder' },
+  h4_zh: { fontFamily: FONT_ZH_TITLE, fontSize: '1.1rem', color: '#eee', fontWeight: 'bolder' },
 
   p: {
     fontFamily: FONT_TEXT,
-    fontSize: '1.0rem',
-    lineHeight: '1.8rem',
+    fontSize: '16px',
+    lineHeight: '26px',
+    textAlign: 'justify',
+    color: '#bbb',
   },
 
   tip: {
@@ -312,8 +314,11 @@ const useStyles = makeStyles(theme => ({
 
   description: {
     paddingInlineStart: theme.spacing(3),
+    paddingBottom: theme.spacing(1.2),
     fontFamily: FONT_TEXT,
-    fontSize: '1.0rem',
+    fontSize: '16px',
+    lineHeight: '26px',
+    color: '#bbb',
   },
 
   selected: {

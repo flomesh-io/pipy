@@ -5,8 +5,143 @@ api: Configuration
 
 # Description
 
-Created with global function [`pipy()`](/reference/pipy).
+_Configuration_ is what a PipyJS module is supposed to return after being evaluated. It helps user describe variables, pipelines and filters included in a module, as well as how a module interacts with other modules via variables and sub-pipelines.
 
-# Methods
+The only way to get a new _Configuration_ is by calling the global function [`pipy()`](/reference/pipy), which is, in most cases, the first function you would call at the beginning of PipyJS script.
+
+``` js
+pipy() // this returns a new Configuration object
+```
+
+With that _Configuration_ returned from `pipy()`, you call an assortment of methods on it. Each method returns the same _Configuration_, by which more method calls can be made in a continuous chain.
+
+``` js
+pipy().listen(8080) // this returns the same Configuration object as before
+      .print()      // again, the same Configuration
+      .dummy()      // again, the same Configuration
+```
+
+## Methods
+
+There are 3 types of methods to the _Configuration_ class: methods to export/import variables, methods to define pipelines, and methods to add filters to a pipeline.
+
+### Methods for importing/exporting variables
+
+Use [`export()`](/reference/Configuration/export) to define global variables that are visible to other modules. Use [`import()`](/reference/Configuration/export) to import global variables defined and exported from other modules.
+
+### Methods for defining pipelines
+
+Use [`listen()`](/reference/Configuration/listen) to create a root pipeline that listens on a specified TCP port. Use [`task()`](/reference/Configuration/task) to create a root pipeline that gets a message regularly for periodic tasks. Use [`pipeline()`](/reference/Configuration/pipeline) to create a sub-pipeline by a given name.
+
+All three methods will change the _current pipeline_ of the _Configuration_, after which one or more filters can be appended to the newly created pipeline by using the methods we will discuss later.
+
+### Methods for adding filters
+
+The rest of the methods are for appending filters to the _current pipeline_ (i.e. the last pipeline created with one of the methods said in the previous section). Each method adds a different type of filter to the current pipeline.
+
+## Filters
+
+Filters can be categorized into 7 types according to their functionalities.
+
+### Transportation
+
+* [`acceptSOCKS()`](/reference/Configuration/acceptSOCKS)
+* [`acceptTLS()`](/reference/Configuration/acceptTLS)
+* [`connect()`](/reference/Configuration/connect)
+* [`connectSOCKS()`](/reference/Configuration/connectTLS)
+* [`connectTLS()`](/reference/Configuration/connectTLS)
+
+These filters are transport layer clients and servers speaking a specific protocol. Among these filters, the most often used one is [`connect()`](/reference/Configuration/connect), which establishes an outbound TCP connection to a remote host and transfers _Data_ events back and forth.
+
+### Codecs
+
+* [`decodeDubbo()`](/reference/Configuration/decodeDubbo)
+* [`decodeHTTPRequest()`](/reference/Configuration/decodeHTTPRequest)
+* [`decodeHTTPResponse()`](/reference/Configuration/decodeHTTPResponse)
+* [`decodeMQTT()`](/reference/Configuration/decodeMQTT)
+* [`encodeDubbo()`](/reference/Configuration/decodeDubbo)
+* [`encodeHTTPRequest()`](/reference/Configuration/decodeHTTPRequest)
+* [`encodeHTTPResponse()`](/reference/Configuration/decodeHTTPResponse)
+* [`encodeMQTT()`](/reference/Configuration/encodeMQTT)
+
+These filters translate streams between the _raw byte form_ and the _message form_. A decoder takes in _Data_ events and outputs _MessageStart/MessageEnd_ event pairs (with unchanged message bodies as _Data_ events in between). An encoder takes in _MessageStart/MessageEnd_ event pairs (again, with message bodies as _Data_ events in between), and outputs raw bytes in _Data_ events.
+
+### Muxers and demuxers
+
+* [`demux()`](/reference/Configuration/demux)
+* [`demuxHTTP()`](/reference/Configuration/demuxHTTP)
+* [`merge()`](/reference/Configuration/merge)
+* [`mux()`](/reference/Configuration/mux)
+* [`muxHTTP()`](/reference/Configuration/muxHTTP)
+* [`serveHTTP()`](/reference/Configuration/serveHTTP)
+
+These filters split messages from one stream into multiple streams, or the opposite, combine messages from multiple streams into one stream. Some have integrated codecs, such as [`demuxHTTP()`](/reference/Configuration/demux) and [`muxHTTP()`](/referenceConfiguration/muxHTTP). In this case, the demuxers have raw byte input and message output, while the muxers have message input and raw byte output.
+
+### Connectors
+
+* [`fork()`](/reference/Configuration/link)
+* [`link()`](/reference/Configuration/link)
+* [`use()`](/reference/Configuration/use)
+
+These filters pass events in a stream from one pipeline to another. Unlike _muxers and demuxers_, they only change where streams are going without changing their content.
+
+### Buffering
+
+* [`pack()`](/reference/Configuration/pack)
+* [`throttleDataRate()`](/reference/Configuration/throttleDataRate)
+* [`throttleMessageRate()`](/reference/Configuration/throttleMessageRate)
+* [`wait()`](/reference/Configuration/wait)
+
+These filters delay a stream until some conditions are met. In other words, they control the passage of events in a stream.
+
+### Observers
+
+* [`detectProtocol()`](/reference/Configuration/detectProtocol)
+* [`dump()`](/reference/Configuration/dump)
+* [`handleData()`](/reference/Configuration/handleData)
+* [`handleMessage()`](/reference/Configuration/handleMessage)
+* [`handleMessageBody()`](/reference/Configuration/handleMessageBody)
+* [`handleStreamEnd()`](/reference/Configuration/handleStreamEnd)
+* [`handleStreamStart()`](/reference/Configuration/handleStreamStart)
+* [`handleTLSClientHello()`](/reference/Configuration/handleTLSClientHello)
+* [`print()`](/reference/Configuration/print)
+
+These filters trigger some user-defined script when they see a specific type of events in a stream. They don't change anything in the stream. They simply pass down all events as is.
+
+### Transformers
+
+* [`decompressHTTP()`](/reference/Configuration/decompressHTTP)
+* [`decompressMessage()`](/reference/Configuration/decompressMessage)
+* [`exec()`](/reference/Configuration/exec)
+* [`replaceData()`](/reference/Configuration/handleData)
+* [`replaceMessage()`](/reference/Configuration/handleMessage)
+* [`replaceMessageBody()`](/reference/Configuration/handleMessageBody)
+* [`replaceStreamEnd()`](/reference/Configuration/handleStreamEnd)
+* [`replaceStreamStart()`](/reference/Configuration/handleStreamStart)
+* [`split()`](/reference/Configuration/split)
+
+These filters transform input events into new output events. Many of them call user-defined script with input events as the input to the user function and output whatever events the user function outputs. Among these filters, [`exec()`](/reference/Configuration/exec) is special in that, it feeds _Data_ events to an external process's standard input and reads back _Data_ events from its standard output.
+
+## How it works
+
+When Pipy launches, it starts off by evaluating script from the _main module_ first, which should resolve to a _Configuration_ object holding descriptions about pipelines and filters in the main module. From there, it goes on finding and loading other modules that are "_used_" by the main module, which resolve to more _Configurations_, their pipelines and filters. This process goes on and on until all modules that are directly or indirectly linked from the main module are found and loaded, at which point Pipy will then build up all pipelines and filters described in those _Configurations_, hook them up, and get up and running.
+
+# Example
+
+Here's an example of how we configure a simple _HTTP hello service_ and a _TCP transparent proxy_ inside one single PipyJS module.
+
+``` js
+pipy() // Returns a new Configuration
+
+.listen(8080) // Defines a pipeline listening on port 8080
+  .serveHTTP( // Appends a serveHTTP filter to that pipeline
+    () => new Message('Hello!\n')
+  )
+
+.listen(8000) // Defines a second pipeline listening on port 8000
+  .connect('localhost:8080') // Appends a connect filter to that pipeline
+```
+
+# Method Reference
 
 <Methods/>

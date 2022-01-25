@@ -6,7 +6,9 @@ api: Configuration.handleTLSClientHello()
 # Syntax
 
 ``` js
-pipy().pipeline('example').handleTLSClientHello((versionMajor, versionMinor) => onClientHello())
+pipy().pipeline('example').handleTLSClientHello(
+  ({ serverNames, protocolNames }) => onClientHello()
+)
 ```
 
 ## Parameters

@@ -4,6 +4,11 @@
 class Configuration {
 
   /**
+   * @typedef {{ key: PrivateKey, cert: Certificate|CertificateChain }} OptionCert
+   * @typedef {{ serverNames: string[], protocolNames: string[] }} ClientHello
+   */
+
+  /**
    * Defines global variables that can be imported by other modules.
    *
    * @param {string} ns Namespace where the variables are imported from.
@@ -60,7 +65,6 @@ class Configuration {
   /**
    * Appends a TLS server to the current pipeline.
    *
-   * @typedef {{ key: PrivateKey, cert: Certificate|CertificateChain }} OptionCert
    * @param {string} target Name of the sub-pipeline to receive decoded TLS streams.
    * @param {Object} [options] Options including certificate and trusted.
    * @param {OptionCert | () => OptionCert} [options.certificate] Server certificate and private key.
@@ -88,7 +92,7 @@ class Configuration {
    * @param {string | () => string} address Host to connection in form os 'host:port'.
    * @returns {Configuration} The same Configuration object.
    */
-   connectSOCKS(target, address) {}
+  connectSOCKS(target, address) {}
 
   /**
    * Appends a TLS client to the current pipeline.
@@ -126,6 +130,13 @@ class Configuration {
   decodeHTTPResponse(options) {}
 
   /**
+   * Appends an MQTT decoder to the current pipeline.
+   *
+   * @returns {Configuration} The same Configuration object.
+   */
+  decodeMQTT() {}
+
+  /**
    * Appends an HTTP message decompressor to the current pipeline.
    *
    * @param {() => boolean} [enable] Callback function that decides if a message should be decompressed.
@@ -159,6 +170,15 @@ class Configuration {
    * @returns {Configuration} The same Configuration object.
    */
   demuxHTTP(target, options) {}
+
+  /**
+   * Appends a filter to the current pipeline that calls back script
+   * with a detected protocol name.
+   *
+   * @param {(protocol) => void} handler Callback function that receives the protocol name.
+   * @returns {Configuration} The same Configuration object.
+   */
+  detectProtocol(handler) {}
 
   /**
    * Appends a dummy filter to the current pipeline.
@@ -208,6 +228,13 @@ class Configuration {
    * @returns {Configuration} The same Configuration object.
    */
   encodeHTTPResponse(options) {}
+
+  /**
+   * Appends an MQTT encoder to the current pipeline.
+   *
+   * @returns {Configuration} The same Configuration object.
+   */
+  encodeMQTT() {}
 
   /**
    * Appends a filter to the current pipeline that spawns an external process and
@@ -277,7 +304,7 @@ class Configuration {
   muxHTTP(target, key, options) {}
 
   /**
-   * Appends a filter to the current pipeline that callbacks script
+   * Appends a filter to the current pipeline that calls back script
    * for every Data event.
    *
    * @param {(evt: Data) => void} handler Callback function invoked for Data events.
@@ -286,7 +313,7 @@ class Configuration {
   handleData(handler, sizeLimit) {}
 
   /**
-   * Appends a filter to the current pipeline that callbacks script
+   * Appends a filter to the current pipeline that calls back script
    * for every whole message.
    * 
    * @param {(msg: Message) => void} handler Callback function invoked for whole messages.
@@ -295,7 +322,7 @@ class Configuration {
   handleMessage(handler, sizeLimit) {}
 
   /**
-   * Appends a filter to the current pipeline that callbacks script
+   * Appends a filter to the current pipeline that calls back script
    * for every whole message body.
    *
    * @param {(evt: Data) => void} handler Callback function invoked for whole message bodies.
@@ -304,7 +331,7 @@ class Configuration {
   handleMessageBody(handler, sizeLimit) {}
 
   /**
-   * Appends a filter to the current pipeline that callbacks script
+   * Appends a filter to the current pipeline that calls back script
    * for every MessageEnd event.
    *
    * @param {(evt: MessageEnd) => void} handler Callback function invoked for MessageEnd event.
@@ -313,7 +340,7 @@ class Configuration {
   handleMessageEnd(handler) {}
 
   /**
-   * Appends a filter to the current pipeline that callbacks script
+   * Appends a filter to the current pipeline that calls back script
    * for every MessageStart event.
    *
    * @param {(evt: MessageStart) => void} handler Callback function invoked for MessageStart events.
@@ -322,7 +349,7 @@ class Configuration {
   handleMessageStart(handler) {}
 
   /**
-   * Appends a filter to the current pipeline that callbacks script
+   * Appends a filter to the current pipeline that calls back script
    * for every StreamEnd event.
    *
    * @param {(evt: StreamEnd) => void} handler Callback function invoked for StreamStart events.
@@ -331,7 +358,7 @@ class Configuration {
   handleStreamEnd(handler) {}
 
   /**
-   * Appends a filter to the current pipeline that callbacks script
+   * Appends a filter to the current pipeline that calls back script
    * for the first event in a stream.
    *
    * @param {(evt: MessageStart|MessageEnd|Data) => void} handler Callback function invoked for the first event.
@@ -340,10 +367,10 @@ class Configuration {
   handleStreamStart(handler) {}
 
   /**
-   * Appends a filter to the current pipeline that callbacks script
-   * for the ClientHello message in a TLS stream.
+   * Appends a filter to the current pipeline that calls back script
+   * for the ClientHello message in TLS handshake.
    *
-   * @param {(versionMajor: number, versionMinor: number) => void} handler Callback function invoked for the first event.
+   * @param {(msg: ClientHello) => void} handler Callback function invoked for the ClientHello message.
    * @returns {Configuration} The same Configuration object.
    */
   handleTLSClientHello(handler) {}
