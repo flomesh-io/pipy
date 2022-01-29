@@ -34,6 +34,7 @@
 #include "logging.hpp"
 
 #include <queue>
+#include <limits>
 
 namespace pipy {
 namespace http {
@@ -50,6 +51,7 @@ static const pjs::Ref<pjs::Str> s_http_1_0(pjs::Str::make("HTTP/1.0"));
 static const pjs::Ref<pjs::Str> s_http_1_1(pjs::Str::make("HTTP/1.1"));
 static const pjs::Ref<pjs::Str> s_connection(pjs::Str::make("connection"));
 static const pjs::Ref<pjs::Str> s_keep_alive(pjs::Str::make("keep-alive"));
+static const pjs::Ref<pjs::Str> s_set_cookie(pjs::Str::make("set-cookie"));
 static const pjs::Ref<pjs::Str> s_close(pjs::Str::make("close"));
 static const pjs::Ref<pjs::Str> s_transfer_encoding(pjs::Str::make("transfer-encoding"));
 static const pjs::Ref<pjs::Str> s_content_length(pjs::Str::make("content-length"));
@@ -415,12 +417,28 @@ void Decoder::on_event(Event *evt) {
               for (auto &c : name) c = std::tolower(c);
               pjs::Ref<pjs::Str> key(pjs::Str::make(name));
               pjs::Ref<pjs::Str> val(pjs::Str::make(value));
-              m_head->headers()->set(key, val.get());
-              if (key == s_upgrade) {
-                if (val == s_websocket) {
-                  m_is_upgrade_websocket = true;
-                } else if (val == s_h2c) {
-                  m_is_upgrade_http2 = true;
+              auto headers = m_head->headers();
+              if (key == s_set_cookie) {
+                pjs::Value old;
+                headers->get(key, old);
+                if (old.is_array()) {
+                  old.as<pjs::Array>()->push(val.get());
+                } else if (old.is_string()) {
+                  auto a = pjs::Array::make(2);
+                  a->set(0, old.s());
+                  a->set(1, val.get());
+                  headers->set(key, a);
+                } else {
+                  headers->set(key, val.get());
+                }
+              } else {
+                headers->set(key, val.get());
+                if (key == s_upgrade) {
+                  if (val == s_websocket) {
+                    m_is_upgrade_websocket = true;
+                  } else if (val == s_h2c) {
+                    m_is_upgrade_http2 = true;
+                  }
                 }
               }
             }
@@ -457,6 +475,8 @@ void Decoder::on_event(Event *evt) {
           } else {
             if (content_length.is_string()) {
               m_body_size = std::atoi(content_length.s()->c_str());
+            } else if (m_is_response && !m_is_bodiless) {
+              m_body_size = std::numeric_limits<int>::max();
             }
             if (m_body_size > 0) {
               message_start();
@@ -742,22 +762,35 @@ void Encoder::output_head() {
             return;
           }
         }
-        s_dp.push(buffer, k->str());
-        s_dp.push(buffer, ": ");
-        auto s = v.to_string();
-        s_dp.push(buffer, s->str());
-        s_dp.push(buffer, "\r\n");
-        if (k == s_upgrade) {
-          static std::string str("connection: upgrade\r\n");
-          if (s == s_websocket) {
-            m_is_upgrade_websocket = true;
-            s_dp.push(buffer, str);
-          } else if (s == s_h2c) {
-            m_is_upgrade_http2 = true;
-            s_dp.push(buffer, str);
+        if (k == s_set_cookie && v.is_array()) {
+          v.as<pjs::Array>()->iterate_all(
+            [&](pjs::Value &v, int) {
+              auto s = v.to_string();
+              s_dp.push(buffer, k->str());
+              s_dp.push(buffer, ": ");
+              s_dp.push(buffer, s->str());
+              s_dp.push(buffer, "\r\n");
+              s->release();
+            }
+          );
+        } else {
+          s_dp.push(buffer, k->str());
+          s_dp.push(buffer, ": ");
+          auto s = v.to_string();
+          s_dp.push(buffer, s->str());
+          s_dp.push(buffer, "\r\n");
+          if (k == s_upgrade) {
+            static std::string str("connection: upgrade\r\n");
+            if (s == s_websocket) {
+              m_is_upgrade_websocket = true;
+              s_dp.push(buffer, str);
+            } else if (s == s_h2c) {
+              m_is_upgrade_http2 = true;
+              s_dp.push(buffer, str);
+            }
           }
+          s->release();
         }
-        s->release();
       }
     );
   }
