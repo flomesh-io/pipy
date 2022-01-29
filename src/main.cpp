@@ -166,6 +166,7 @@ int main(int argc, char *argv[]) {
     }
 
     Log::set_level(opts.log_level);
+    Status::register_metrics();
     Listener::set_reuse_port(opts.reuse_port);
 
     AdminService::Options admin_options;

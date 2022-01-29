@@ -217,15 +217,16 @@ private:
 class Percentile : public pjs::ObjectTemplate<Percentile> {
 public:
   void reset();
-  void score(double score);
+  void observe(double sample);
   auto calculate(int percentage) -> double;
+  void dump(const std::function<void(double, double)> &cb);
 
 private:
-  Percentile(pjs::Array *scores);
+  Percentile(pjs::Array *buckets);
 
-  std::vector<double> m_scores;
+  std::vector<double> m_counts;
   std::vector<size_t> m_buckets;
-  size_t m_score_count;
+  size_t m_sample_count;
 
   friend class pjs::ObjectTemplate<Percentile>;
 };

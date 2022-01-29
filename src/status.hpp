@@ -51,6 +51,7 @@ struct Status {
   bool from_json(const Data &data);
   void to_json(std::ostream &out) const;
 
+  static void register_metrics();
   static void dump_memory();
 };
 

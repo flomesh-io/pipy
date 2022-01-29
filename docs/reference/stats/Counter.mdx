@@ -1,0 +1,39 @@
+---
+title: "Counter"
+api: stats.Counter
+---
+
+# Description
+
+_Counter_ is one of a few types of metrics supported by the _stats_ system, and it is the simplest one, which is just a monotonic increasing number. Once you've created one, it becomes visible to the _stats_ system, and its current value can be queried via admin port under the endpoint `GET /metrics` in [_Prometheus exposition formats_](https://prometheus.io/docs/instrumenting/exposition_formats/).
+
+You create a _Counter_ by a name, optionally providing label names if it has sub-metrics.
+
+``` js
+pipy({
+  _counter: new stats.Counter('http_requests', ['method', 'status'])
+})
+```
+
+> Metric names starting with `pipy_` are reserved for internal use.
+
+After that, you increase the metric value by [`increase()`](/reference/stats/Counter/increase).
+
+``` js
+_counter.increase()
+```
+
+You can also access a sub-metric by giving values to the labels. The label values must be given in the order they appear in the construction.
+
+``` js
+_counter.withLabels('GET').increase()
+_counter.withLabels('GET', 200).increase()
+```
+
+# Constructor
+
+<Constructor/>
+
+# Methods
+
+<Methods/>

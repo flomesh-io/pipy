@@ -578,17 +578,17 @@ void ResourcePool::free_tenant(const pjs::Value &tenant) {
 // Percentile
 //
 
-Percentile::Percentile(pjs::Array *scores)
-  : m_scores(scores->length())
-  , m_buckets(scores->length())
+Percentile::Percentile(pjs::Array *buckets)
+  : m_counts(buckets->length())
+  , m_buckets(buckets->length())
 {
   double last = std::numeric_limits<double>::min();
-  scores->iterate_all(
+  buckets->iterate_all(
     [&](pjs::Value &v, int i) {
-      auto score = v.to_number();
-      if (score <= last) throw std::runtime_error("scores are not in ascending order");
-      m_scores[i] = score;
-      last = score;
+      auto limit = v.to_number();
+      if (limit <= last) throw std::runtime_error("buckets are not in ascending order");
+      m_buckets[i] = limit;
+      last = limit;
     }
   );
 
@@ -596,15 +596,15 @@ Percentile::Percentile(pjs::Array *scores)
 }
 
 void Percentile::reset() {
-  for (auto &n : m_buckets) n = 0;
-  m_score_count = 0;
+  for (auto &n : m_counts) n = 0;
+  m_sample_count = 0;
 }
 
-void Percentile::score(double score) {
-  for (size_t i = 0, n = m_scores.size(); i < n; i++) {
-    if (score <= m_scores[i]) {
-      m_buckets[i]++;
-      m_score_count++;
+void Percentile::observe(double sample) {
+  for (size_t i = 0, n = m_counts.size(); i < n; i++) {
+    if (sample <= m_buckets[i]) {
+      m_counts[i]++;
+      m_sample_count++;
       break;
     }
   }
@@ -612,15 +612,23 @@ void Percentile::score(double score) {
 
 auto Percentile::calculate(int percentage) -> double {
   if (percentage <= 0) return 0;
-  size_t total = m_score_count * percentage / 100;
+  size_t total = m_sample_count * percentage / 100;
   size_t count = 0;
   for (size_t i = 0, n = m_buckets.size(); i < n; i++) {
     count += m_buckets[i];
     if (count >= total) {
-      return m_scores[i];
+      return m_buckets[i];
     }
   }
   return std::numeric_limits<double>::infinity();
+}
+
+void Percentile::dump(const std::function<void(double, double)> &cb) {
+  size_t sum = 0;
+  for (size_t i = 0; i < m_buckets.size(); i++) {
+    sum += m_counts[i];
+    cb(m_buckets[i], sum);
+  }
 }
 
 } // namespace algo
@@ -878,14 +886,10 @@ template<> void ClassDef<Constructor<ResourcePool>>::init() {
 
 template<> void ClassDef<Percentile>::init() {
   ctor([](Context &ctx) -> Object* {
-    Array *scores;
-    if (!ctx.arguments(1, &scores)) return nullptr;
-    if (!scores) {
-      ctx.error_argument_type(0, "an array");
-      return nullptr;
-    }
+    Array *buckets;
+    if (!ctx.check(0, buckets)) return nullptr;
     try {
-      return Percentile::make(scores);
+      return Percentile::make(buckets);
     } catch (std::runtime_error &err) {
       ctx.error(err);
       return nullptr;
@@ -896,10 +900,10 @@ template<> void ClassDef<Percentile>::init() {
     obj->as<Percentile>()->reset();
   });
 
-  method("score", [](Context &ctx, Object *obj, Value &ret) {
-    double score;
-    if (!ctx.arguments(1, &score)) return;
-    obj->as<Percentile>()->score(score);
+  method("observe", [](Context &ctx, Object *obj, Value &ret) {
+    double sample;
+    if (!ctx.arguments(1, &sample)) return;
+    obj->as<Percentile>()->observe(sample);
   });
 
   method("calculate", [](Context &ctx, Object *obj, Value &ret) {

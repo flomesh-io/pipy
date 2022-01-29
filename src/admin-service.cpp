@@ -26,6 +26,7 @@
 #include "admin-service.hpp"
 #include "codebase.hpp"
 #include "api/json.hpp"
+#include "api/stats.hpp"
 #include "filters/http.hpp"
 #include "filters/tls.hpp"
 #include "gui-tarball.hpp"
@@ -133,6 +134,15 @@ auto AdminService::handle(Message *req) -> Message* {
   auto path = head->path()->str();
 
   try {
+
+    // GET /metrics
+    if (path == "/metrics") {
+      if (method == "GET") {
+        return metrics_GET();
+      } else {
+        return m_response_method_not_allowed;
+      }
+    }
 
     if (m_store) {
       if (path == "/api/v1/dump-store") {
@@ -287,6 +297,13 @@ auto AdminService::handle(Message *req) -> Message* {
   } catch (std::runtime_error &err) {
     return response(500, err.what());
   }
+}
+
+Message* AdminService::metrics_GET() {
+  Data buf;
+  stats::Metric::collect_all();
+  stats::Metric::to_prometheus(buf);
+  return response(buf);
 }
 
 Message* AdminService::repo_HEAD(const std::string &path) {

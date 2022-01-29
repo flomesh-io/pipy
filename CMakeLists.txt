@@ -102,6 +102,7 @@ add_executable(pipy
   src/api/netmask.cpp
   src/api/os.cpp
   src/api/pipy.cpp
+  src/api/stats.cpp
   src/api/url.cpp
   src/api/xml.cpp
   src/codebase.cpp

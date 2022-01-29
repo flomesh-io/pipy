@@ -59,6 +59,7 @@ public:
 
   auto worker() const -> Worker* { return m_worker; }
   auto index() const -> int { return m_index; }
+  auto name() const -> pjs::Str* { return m_name; }
   auto path() const -> const std::string& { return m_path; }
   auto source() const -> const std::string& { return m_source; }
 
@@ -74,6 +75,7 @@ private:
 
   int m_index;
   pjs::Ref<Worker> m_worker;
+  pjs::Ref<pjs::Str> m_name;
   std::string m_path;
   std::string m_source;
   std::unique_ptr<pjs::Expr> m_script;

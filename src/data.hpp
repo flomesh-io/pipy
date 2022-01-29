@@ -63,11 +63,11 @@ public:
       }
     }
 
-    Producer(const std::string &name) : m_name(name) {
+    Producer(const std::string &name) : m_name(pjs::Str::make(name)) {
       s_all_producers.push(this);
     }
 
-    auto name() const -> const std::string& { return m_name; }
+    auto name() const -> pjs::Str* { return m_name; }
     auto peak() const -> int { return m_peak; }
     auto current() const -> int { return m_current; }
 
@@ -85,7 +85,7 @@ public:
     void pack(Data *data, Data *appendant, double vacancy = 0.5) { data->pack(*appendant, this, vacancy); }
 
   private:
-    std::string m_name;
+    pjs::Ref<pjs::Str> m_name;
     int m_peak = 0;
     int m_current = 0;
 

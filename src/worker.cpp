@@ -42,6 +42,7 @@
 #include "api/netmask.hpp"
 #include "api/os.hpp"
 #include "api/pipy.hpp"
+#include "api/stats.hpp"
 #include "api/url.hpp"
 #include "api/xml.hpp"
 #include "logging.hpp"
@@ -130,6 +131,9 @@ template<> void ClassDef<Global>::init() {
 
   // StreamEnd
   variable("StreamEnd", class_of<Constructor<StreamEnd>>());
+
+  // stats
+  variable("stats", class_of<stats::Stats>());
 
   // http
   variable("http", class_of<http::Http>());

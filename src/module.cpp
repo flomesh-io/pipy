@@ -113,6 +113,7 @@ bool Module::load(const std::string &path) {
   }
 
   m_path = path;
+  m_name = pjs::Str::make(path);
   m_filename = pjs::Str::make(path);
   m_configuration = config;
 

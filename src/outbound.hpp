@@ -65,6 +65,7 @@ public:
     }
   }
 
+  auto address() -> pjs::Str*;
   auto host() const -> const std::string& { return m_host; }
   auto port() const -> int { return m_port; }
   bool connected() const { return m_connected; }
@@ -83,6 +84,7 @@ public:
 private:
   std::string m_host;
   int m_port;
+  pjs::Ref<pjs::Str> m_address;
   std::string m_remote_addr;
   std::string m_local_addr;
   int m_local_port;

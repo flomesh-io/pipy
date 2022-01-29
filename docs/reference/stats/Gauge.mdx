@@ -1,0 +1,38 @@
+---
+title: "Gauge"
+api: stats.Gauge
+---
+
+# Description
+
+_Gauge_ is one of a few types of metrics supported by the _stats_ system. It reflects a fluctuating value that is usually sampled at a regular frequency. Once you've created one, it becomes visible to the _stats_ system, and its current value can be queried via admin port under the endpoint `GET /metrics` in [_Prometheus exposition formats_](https://prometheus.io/docs/instrumenting/exposition_formats/).
+
+You create a _Gauge_ by a name, optionally providing label names if it has sub-metrics.
+
+``` js
+pipy({
+  _gauge: new stats.Gauge('concurrency', ['peer'])
+})
+```
+
+> Metric names starting with `pipy_` are reserved for internal use.
+
+After that, you change the metric value by [`set()`](/reference/stats/Gauge/set).
+
+``` js
+_gauge.set(100)
+```
+
+You can also access a sub-metric by giving values to the labels. The label values must be given in the order they appear in the construction.
+
+``` js
+_gauge.withLabels('127.0.0.1').set(3)
+```
+
+# Constructor
+
+<Constructor/>
+
+# Methods
+
+<Methods/>

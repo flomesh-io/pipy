@@ -50,6 +50,17 @@ Outbound::~Outbound() {
   s_all_outbounds.remove(this);
 }
 
+auto Outbound::address() -> pjs::Str* {
+  if (!m_address) {
+    std::string s("[");
+    s += m_host;
+    s += "]:";
+    s += std::to_string(m_port);
+    m_address = pjs::Str::make(std::move(s));
+  }
+  return m_address;
+}
+
 void Outbound::connect(const std::string &host, int port) {
   m_host = host;
   m_port = port;

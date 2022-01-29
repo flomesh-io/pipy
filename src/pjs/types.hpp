@@ -619,8 +619,7 @@ public:
     Configurable = 1<<2,
   };
 
-  auto key() const -> Str* { return m_key; }
-  auto name() const -> const std::string& { return m_key->str(); }
+  auto name() const -> Str* { return m_name; }
   auto type() const -> Type { return m_type; }
   bool is_variable() const { return m_type == Variable; }
   bool is_accessor() const { return m_type == Accessor; }
@@ -632,14 +631,14 @@ public:
 
 protected:
   Field(const std::string &name, Type type, int options = 0, int id = -1)
-    : m_key(Str::make(name))
+    : m_name(Str::make(name))
     , m_type(type)
     , m_options(options)
     , m_id(id) {}
 
   virtual ~Field() {}
 
-  Ref<Str> m_key;
+  Ref<Str> m_name;
   Type m_type;
   int m_options;
   int m_id;
@@ -664,7 +663,7 @@ public:
     return i == m_class_map.end() ? nullptr : i->second;
   }
 
-  auto name() const -> const std::string& { return m_name; }
+  auto name() const -> pjs::Str* { return m_name; }
   void set_ctor(const std::function<Object*(Context&)> &ctor) { m_ctor = ctor; }
   void set_geti(const std::function<void(Object*, int, Value&)> &geti) { m_geti = geti; }
   void set_seti(const std::function<void(Object*, int, const Value&)> &seti) { m_seti = seti; }
@@ -717,7 +716,7 @@ private:
   ~Class();
 
   Class* m_super = nullptr;
-  std::string m_name;
+  pjs::Ref<pjs::Str> m_name;
   std::function<Object*(Context&)> m_ctor;
   std::function<void(Object*, int, Value&)> m_geti;
   std::function<void(Object*, int, const Value&)> m_seti;
@@ -1405,7 +1404,7 @@ inline void Object::iterate_all(std::function<void(Str*, Value&)> callback) {
   for (size_t i = 0, n = m_class->field_count(); i < n; i++) {
     auto f = m_class->field(i);
     if (f->is_enumerable()) {
-      callback(f->key(), m_data->at(i));
+      callback(f->name(), m_data->at(i));
     }
   }
   if (m_hash) {
@@ -1420,7 +1419,7 @@ inline bool Object::iterate_while(std::function<bool(Str*, Value&)> callback) {
   for (size_t i = 0, n = m_class->field_count(); i < n; i++) {
     auto f = m_class->field(i);
     if (f->is_enumerable()) {
-      if (!callback(f->key(), m_data->at(i))) {
+      if (!callback(f->name(), m_data->at(i))) {
         return false;
       }
     }
@@ -1548,16 +1547,6 @@ public:
     }
   }
 
-  template<typename... Args>
-  bool arguments(int n, Args... argv) {
-    return get_args(true, n, 0, argv...);
-  }
-
-  template<typename... Args>
-  bool try_arguments(int n, Args... argv) {
-    return get_args(false, n, 0, argv...);
-  }
-
   void reset();
   bool ok() const { return !m_has_error; }
   auto error() const -> Error& { return *m_error; }
@@ -1568,6 +1557,142 @@ public:
   void error_argument_type(int i, const char *type);
   void backtrace(int module, int line, int column);
   void backtrace(const std::string &name);
+
+  bool check(int i, bool &v) {
+    auto &a = arg(i);
+    if (!a.is_boolean()) {
+      error_argument_type(i, "a boolean");
+      return false;
+    }
+    v = a.b();
+    return true;
+  }
+
+  bool check(int i, bool &v, bool def) {
+    auto &a = arg(i);
+    if (i >= argc() || a.is_undefined()) {
+      v = def;
+      return true;
+    }
+    if (!a.is_boolean()) {
+      error_argument_type(i, "a boolean");
+      return false;
+    }
+    v = a.b();
+    return true;
+  }
+
+  bool check(int i, int &v) {
+    auto &a = arg(i);
+    if (!a.is_number()) {
+      error_argument_type(i, "a number");
+      return false;
+    }
+    v = a.n();
+    return true;
+  }
+
+  bool check(int i, int &v, int def) {
+    auto &a = arg(i);
+    if (i >= argc() || a.is_undefined()) {
+      v = def;
+      return true;
+    }
+    if (!a.is_number()) {
+      error_argument_type(i, "a number");
+      return false;
+    }
+    v = a.n();
+    return true;
+  }
+
+  bool check(int i, double &v) {
+    auto &a = arg(i);
+    if (!a.is_number()) {
+      error_argument_type(i, "a number");
+      return false;
+    }
+    v = a.n();
+    return true;
+  }
+
+  bool check(int i, double &v, double def) {
+    auto &a = arg(i);
+    if (i >= argc() || a.is_undefined()) {
+      v = def;
+      return true;
+    }
+    if (!a.is_number()) {
+      error_argument_type(i, "a number");
+      return false;
+    }
+    v = a.n();
+    return true;
+  }
+
+  bool check(int i, pjs::Str* &v) {
+    auto &a = arg(i);
+    if (!a.is_string()) {
+      error_argument_type(i, "a string");
+      return false;
+    }
+    v = a.s();
+    return true;
+  }
+
+  bool check(int i, pjs::Str* &v, pjs::Str* def) {
+    auto &a = arg(i);
+    if (i >= argc() || a.is_undefined()) {
+      v = def;
+      return true;
+    }
+    if (!a.is_string()) {
+      error_argument_type(i, "a string");
+      return false;
+    }
+    v = a.s();
+    return true;
+  }
+
+  template<class T>
+  bool check(int i, T* &v) {
+    auto &a = arg(i);
+    if (a.is_null() || !a.is_object() || !a.is_instance_of<T>()) {
+      std::string type("an instance of ");
+      type += class_of<T>()->name()->str();
+      error_argument_type(i, type.c_str());
+      return false;
+    }
+    v = a.as<T>();
+    return true;
+  }
+
+  template<class T>
+  bool check(int i, T* &v, T *def) {
+    auto &a = arg(i);
+    if (i >= argc() || a.is_nullish()) {
+      v = def;
+      return true;
+    }
+    if (!a.is_object() || !a.is_instance_of<T>()) {
+      std::string type("an instance of ");
+      type += class_of<T>()->name()->str();
+      error_argument_type(i, type.c_str());
+      return false;
+    }
+    v = a.as<T>();
+    return true;
+  }
+
+  template<typename... Args>
+  bool arguments(int n, Args... argv) {
+    return get_args(true, n, 0, argv...);
+  }
+
+  template<typename... Args>
+  bool try_arguments(int n, Args... argv) {
+    return get_args(false, n, 0, argv...);
+  }
 
 private:
   Context* m_root;
@@ -1679,7 +1804,7 @@ private:
     if (!arg(i).is_null() && !arg(i).is_instance_of<T>()) {
       if (set_error) {
         std::string type("an instance of ");
-        type += class_of<T>()->name();
+        type += class_of<T>()->name()->str();
         error_argument_type(i, type.c_str());
       }
       return false;
@@ -1719,7 +1844,7 @@ public:
     retv = Value::undefined;
     m_invoke(fctx, thiz, retv);
     callee_scope->clear();
-    if (!fctx.ok()) fctx.backtrace(name());
+    if (!fctx.ok()) fctx.backtrace(name()->str());
   }
 
   auto construct(Context &ctx, int argc, Value argv[]) -> Object* {
@@ -1730,7 +1855,7 @@ public:
     Context fctx(ctx); // No need for a scope since JS ctors are not supported yet
     fctx.init(argc, argv);
     auto *obj = m_constructor_class->construct(fctx);
-    if (!fctx.ok()) fctx.backtrace(name());
+    if (!fctx.ok()) fctx.backtrace(name()->str());
     return obj;
   }
 
@@ -1808,7 +1933,7 @@ protected:
   FunctionTemplate() {
     auto c = class_of<T>();
     Function::m_method = Method::make(
-      c->name(), 0, 0, nullptr,
+      c->name()->str(), 0, 0, nullptr,
       [this](Context &ctx, Object *obj, Value &ret) {
         (*static_cast<T*>(this))(ctx, obj, ret);
       }
@@ -1831,7 +1956,7 @@ protected:
   ConstructorTemplate() {
     auto c = class_of<T>();
     Function::m_method = Method::make(
-      c->name(), 0, 0, nullptr,
+      c->name()->str(), 0, 0, nullptr,
       [this](Context &ctx, Object *obj, Value &ret) {
         (*static_cast<Constructor<T>*>(this))(ctx, obj, ret);
       }, c);

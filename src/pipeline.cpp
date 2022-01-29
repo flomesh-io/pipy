@@ -41,14 +41,14 @@ List<PipelineDef> PipelineDef::s_all_pipeline_defs;
 PipelineDef::PipelineDef(Module *module, Type type, const std::string &name)
   : m_module(module)
   , m_type(type)
-  , m_name(name)
+  , m_name(pjs::Str::make(name))
 {
   s_all_pipeline_defs.push(this);
-  Log::debug("[pipe-def %p] ++ name = %s", this, name.c_str());
+  Log::debug("[pipe-def %p] ++ name = %s", this, m_name->c_str());
 }
 
 PipelineDef::~PipelineDef() {
-  Log::debug("[pipe-def %p] -- name = %s", this, m_name.c_str());
+  Log::debug("[pipe-def %p] -- name = %s", this, m_name->c_str());
   auto *ptr = m_pool;
   while (ptr) {
     auto *pipeline = ptr;
@@ -90,7 +90,7 @@ auto PipelineDef::alloc(Context *ctx) -> Pipeline* {
   }
   pipeline->m_context = ctx;
   m_pipelines.push(pipeline);
-  Log::debug("[pipeline %p] ++ name = %s, context = %llu", pipeline, m_name.c_str(), ctx->id());
+  Log::debug("[pipeline %p] ++ name = %s, context = %llu", pipeline, m_name->c_str(), ctx->id());
   return pipeline;
 }
 
@@ -98,7 +98,7 @@ void PipelineDef::free(Pipeline *pipeline) {
   m_pipelines.remove(pipeline);
   pipeline->m_next_free = m_pool;
   m_pool = pipeline;
-  Log::debug("[pipeline %p] -- name = %s", pipeline, m_name.c_str());
+  Log::debug("[pipeline %p] -- name = %s", pipeline, m_name->c_str());
   release();
 }
 
@@ -202,7 +202,7 @@ void Pipeline::AutoReleasePool::add(Pipeline *pipeline) {
     if (s_stack->m_cleaning_up) {
       Log::error(
         "[pipeline %p] auto-release recursion, name = %s",
-        pipeline, pipeline->def()->name().c_str()
+        pipeline, pipeline->def()->name()->c_str()
       );
     }
     pipeline->m_auto_release = true;

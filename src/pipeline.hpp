@@ -69,7 +69,7 @@ public:
 
   auto module() const -> Module* { return m_module; }
   auto type() const -> Type { return m_type; }
-  auto name() const -> const std::string& { return m_name; }
+  auto name() const -> pjs::Str* { return m_name; }
   auto allocated() const -> size_t { return m_allocated; }
   auto active() const -> size_t { return m_pipelines.size(); }
   auto append(Filter *filter) -> Filter*;
@@ -84,7 +84,7 @@ private:
   void free(Pipeline *pipeline);
 
   Type m_type;
-  std::string m_name;
+  pjs::Ref<pjs::Str> m_name;
   std::list<std::unique_ptr<Filter>> m_filters;
   pjs::Ref<Module> m_module;
   Pipeline* m_pool = nullptr;

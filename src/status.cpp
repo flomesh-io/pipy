@@ -32,6 +32,7 @@
 #include "outbound.hpp"
 #include "pjs/pjs.hpp"
 #include "api/json.hpp"
+#include "api/stats.hpp"
 #include "utils.hpp"
 
 #include <algorithm>
@@ -169,6 +170,118 @@ static void print_table(const T &header, const std::list<T> &rows) {
   }
 }
 
+void Status::register_metrics() {
+  pjs::Ref<pjs::Array> label_names = pjs::Array::make();
+
+  label_names->length(1);
+  label_names->set(0, "type");
+
+  stats::Gauge::make(
+    pjs::Str::make("pipy_obj_cnt"),
+    label_names,
+    [](stats::Gauge *gauge) {
+      double total = 0;
+      for (const auto &i : pjs::Class::all()) {
+        if (auto n = i.second->object_count()) {
+          pjs::Str *name = i.second->name();
+          auto metric = gauge->with_labels(&name, 1);
+          metric->set(n);
+          total += n;
+        }
+      }
+      gauge->set(total);
+    }
+  );
+
+  label_names->length(1);
+  label_names->set(0, "type");
+
+  stats::Gauge::make(
+    pjs::Str::make("pipy_chk_size"),
+    label_names,
+    [](stats::Gauge *gauge) {
+      double total = 0;
+      Data::Producer::for_each([&](Data::Producer *producer) {
+        pjs::Str *name = producer->name();
+        auto metric = gauge->with_labels(&name, 1);
+        auto size = producer->current() * DATA_CHUNK_SIZE;
+        metric->set(size);
+        total += size;
+      });
+      gauge->set(total);
+    }
+  );
+
+  label_names->length(2);
+  label_names->set(0, "module");
+  label_names->set(1, "name");
+
+  stats::Gauge::make(
+    pjs::Str::make("pipy_ppl_cnt"),
+    label_names,
+    [](stats::Gauge *gauge) {
+      double total = 0;
+      PipelineDef::for_each([&](PipelineDef *p) {
+        auto mod = p->module();
+        pjs::Str *labels[2];
+        labels[0] = mod ? mod->name() : pjs::Str::empty.get();
+        labels[1] = p->name();
+        auto metric = gauge->with_labels(labels, 2);
+        auto n = p->active();
+        metric->set(n);
+        total += n;
+      });
+      gauge->set(total);
+    }
+  );
+
+  label_names->length(2);
+  label_names->set(0, "listen");
+  label_names->set(1, "peer");
+
+  stats::Gauge::make(
+    pjs::Str::make("pipy_inb_cnt"),
+    label_names,
+    [=](stats::Gauge *gauge) {
+      int total = 0;
+      Listener::for_each([&](Listener *listener) {
+        auto k = listener->pipeline_def()->name();
+        auto l = gauge->with_labels(&k, 1);
+        auto n = 0;
+        l->clear();
+        listener->for_each_inbound([&](Inbound *inbound) {
+          auto k = inbound->remote_address();
+          auto m = l->with_labels(&k, 1);
+          m->increase();
+          n++;
+        });
+        l->set(n);
+        total += n;
+      });
+      gauge->set(total);
+    }
+  );
+
+  label_names->length(1);
+  label_names->set(0, "peer");
+
+  stats::Gauge::make(
+    pjs::Str::make("pipy_out_cnt"),
+    label_names,
+    [=](stats::Gauge *gauge) {
+      int total = 0;
+      gauge->clear();
+      Outbound::for_each([&](Outbound *outbound) {
+        auto k = outbound->address();
+        auto cnt = gauge->with_labels(&k, 1);
+        cnt->increase();
+        total++;
+      });
+      gauge->set(total);
+    }
+  );
+}
+
 void Status::dump_memory() {
   std::string indentation("  ");
   std::list<std::array<std::string, 2>> objects;
@@ -197,7 +310,7 @@ void Status::dump_memory() {
 
   Data::Producer::for_each([&](Data::Producer *producer) {
     chunks.push_back({
-      producer->name(),
+      producer->name()->str(),
       std::to_string(producer->current() * DATA_CHUNK_SIZE / 1024),
       std::to_string(producer->peak() * DATA_CHUNK_SIZE / 1024),
     });
@@ -213,13 +326,13 @@ void Status::dump_memory() {
     auto mod = p->module();
     if (!mod) {
       std::string name("[");
-      name += p->name();
+      name += p->name()->str();
       name += ']';
       current_pipelines.insert({ name, p });
     } else {
       std::string name(mod->path());
       name += " [";
-      name += p->name();
+      name += p->name()->str();
       name += ']';
       if (mod->worker() == current_worker) {
         current_pipelines.insert({ name, p });

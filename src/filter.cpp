@@ -75,7 +75,7 @@ auto Filter::get_sub_pipeline_name(int i) -> const std::string& {
   if (sub.name) {
     return sub.name->str();
   } else if (sub.def) {
-    return sub.def->name();
+    return sub.def->name()->str();
   } else {
     return empty;
   }

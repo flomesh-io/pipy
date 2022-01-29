@@ -75,6 +75,8 @@ private:
 
   auto handle(Message *req) -> Message*;
 
+  Message* metrics_GET();
+
   Message* repo_HEAD(const std::string &path);
   Message* repo_GET(const std::string &path);
   Message* repo_POST(const std::string &path, Data *data);

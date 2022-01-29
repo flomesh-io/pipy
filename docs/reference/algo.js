@@ -166,9 +166,9 @@ class ResourcePool {
 class Percentile {
 
   /**
-   * @param {number[]} scores 
+   * @param {number[]} buckets 
    */
-  constructor(scores) {}
+  constructor(buckets) {}
 
   /**
    *
@@ -176,9 +176,9 @@ class Percentile {
   reset() {}
 
   /**
-   * @param {number} score 
+   * @param {number} sample 
    */
-  score(score) {}
+  observe(sample) {}
 
   /**
    * @param {number} percentage

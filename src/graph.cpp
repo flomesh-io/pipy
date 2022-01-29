@@ -42,7 +42,7 @@ namespace pipy {
 void Graph::from_pipelines(Graph &g, const std::set<PipelineDef*> &pipelines) {
   for (auto *pipeline : pipelines) {
     Graph::Pipeline p;
-    p.name = pipeline->name();
+    p.name = pipeline->name()->str();
     for (auto &f : pipeline->m_filters) {
       Graph::Filter gf;
       std::stringstream ss;

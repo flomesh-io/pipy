@@ -382,14 +382,14 @@ Class::Class(
   Class *super,
   const std::list<Field*> &fields)
   : m_super(super)
-  , m_name(name)
+  , m_name(pjs::Str::make(name))
 {
   if (super) {
     m_field_map = super->m_field_map;
     m_fields = super->m_fields;
   }
   for (const auto f : fields) {
-    auto k = f->key();
+    auto k = f->name();
     auto p = m_field_map.find(k);
     if (p != m_field_map.end()) {
       m_fields[p->second] = f;
@@ -410,7 +410,7 @@ Class::Class(
 }
 
 Class::~Class() {
-  m_class_map.erase(m_name);
+  m_class_map.erase(m_name->str());
   for (auto &p : m_field_map) {
     p.first->release();
   }
@@ -478,7 +478,7 @@ void Object::value_of(Value &out) {
 
 auto Object::to_string() const -> std::string {
   char s[256];
-  std::sprintf(s, "[object %s]", m_class->name().c_str());
+  std::sprintf(s, "[object %s]", m_class->name()->c_str());
   return s;
 }
 
@@ -1238,7 +1238,7 @@ template<> void ClassDef<Function>::init()
 
 auto Function::to_string() const -> std::string {
   char s[256];
-  std::sprintf(s, "[Function: %s]", m_method->name().c_str());
+  std::sprintf(s, "[Function: %s]", m_method->name()->c_str());
   return s;
 }
 
