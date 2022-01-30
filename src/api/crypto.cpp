@@ -852,7 +852,7 @@ bool JWT::verify(JWK *key) {
   return verify(key->pkey());
 }
 
-bool JWT::verify(PrivateKey *key) {
+bool JWT::verify(PublicKey *key) {
   return verify(key->pkey());
 }
 
@@ -1615,7 +1615,7 @@ template<> void ClassDef<JWT>::init() {
     pipy::Data *data = nullptr;
     Str *str = nullptr;
     JWK *jwk = nullptr;
-    PrivateKey *pkey = nullptr;
+    PublicKey *pkey = nullptr;
     if (ctx.try_arguments(1, &data) ||
         ctx.try_arguments(1, &str) ||
         ctx.try_arguments(1, &jwk) ||
