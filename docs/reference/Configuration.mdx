@@ -5,7 +5,7 @@ api: Configuration
 
 # Description
 
-_Configuration_ is what a PipyJS module is supposed to return after being evaluated. It helps user describe variables, pipelines and filters included in a module, as well as how a module interacts with other modules via variables and sub-pipelines.
+_Configuration_ helps user configure variables, pipelines and filters included in a module, as well as how a module interacts with other modules via variables and sub-pipelines. It is what all PipyJS modules are supposed to return after being evaluated.
 
 The only way to get a new _Configuration_ is by calling the global function [`pipy()`](/reference/pipy), which is, in most cases, the first function you would call at the beginning of PipyJS script.
 
@@ -79,7 +79,7 @@ These filters split messages from one stream into multiple streams, or the oppos
 
 ### Connectors
 
-* [`fork()`](/reference/Configuration/link)
+* [`fork()`](/reference/Configuration/fork)
 * [`link()`](/reference/Configuration/link)
 * [`use()`](/reference/Configuration/use)
 

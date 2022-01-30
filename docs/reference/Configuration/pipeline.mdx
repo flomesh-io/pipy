@@ -3,6 +3,14 @@ title: "Configuration.pipeline()"
 api: Configuration.pipeline()
 ---
 
+# Description
+
+Creates a sub-pipeline layout under a specified name.
+
+Sub-pipelines are pipelines that can be created from other pipelines during the processing of a stream. They are refered to by names. Sub-pipeline names are unique within a module, but can be duplicated among different modules. Therefore, to refer to a sub-pipeline inside the current module, only the name is necessary, but to refer to a sub-pipeline in a different module (as using [`Configuration.use()`](/reference/Configuration/use)), the module's filename is also required.
+
+After calling this method on a _Configuration_, the newly created pipeline layout would become current. Any _filter-creating_ methods called after this point would append filters to that pipeline, until another _pipeline-creating_ method is called.
+
 # Syntax
 
 ``` js
@@ -16,3 +24,20 @@ pipy().pipeline(name)
 ## Return value
 
 <ReturnValue/>
+
+# Example
+
+``` js
+pipy()
+
+// Start listening on 8080
+.listen(8080)
+  .fork('send-and-forget') // Clone the TCP stream to a new 'send-and-forget' sub-pipeline
+  .serveHTTP(
+    new Message('Hello!') // Respond with a hello
+  )
+
+// Defines a sub-pipeline layout named 'send-and-forget'
+.pipeline('send-and-forget')
+  .connect('localhost:8000') // Send the stream to a remote host
+```

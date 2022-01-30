@@ -3,6 +3,16 @@ title: "Configuration.task()"
 api: Configuration.task()
 ---
 
+# Description
+
+Creates a pipeline layout that executes a periodic job.
+
+The pipeline defined with this method will receive a _MessageStart/MessageEnd_ event pair regularly. The interval between two recurrences is specified as a string in its argument, with one of the time unit suffixes: `s` for seconds, `m` for minutes, `h` for hours, `d` for days. If an interval is not given, the job will be done only once at startup.
+
+Once started, the pipeline should eventually output a _StreamEnd_ event to indicate the completion of the job. The next recurrence of the job will not happen until the current one is finished.
+
+After calling this method on a _Configuration_, the newly created pipeline layout would become current. Any _filter-creating_ methods called after this point would append filters to that pipeline, until another _pipeline-creating_ method is called.
+
 # Syntax
 
 ``` js
@@ -17,3 +27,23 @@ pipy().task(interval)
 ## Return value
 
 <ReturnValue/>
+
+# Example
+
+``` js
+pipy({
+  _g: { counter: 0 },
+})
+
+// Start a job every 5 seconds
+.task('5s')
+  .handleStreamStart(
+    // Print 'Hello!' at the beginning of the job
+    () => console.log(`Hello! Counter is ${++_g.counter}`)
+  )
+  .replaceMessage(
+    // Indicate end of the job by outputting a StreamEnd event
+    new StreamEnd
+  )
+
+```

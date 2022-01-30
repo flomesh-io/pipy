@@ -3,6 +3,16 @@ title: "Configuration.import()"
 api: Configuration.import()
 ---
 
+# Description
+
+In PipyJS, global variables can be defined in two ways. One way is by [`pipy()`](/reference/pipy), where the variables are only visible to script in the same file. The other way is by using [`Configuration.export()`](/reference/Configuration/export), where the variables are not only visible to the file where they are defined, but also to other files where they are _imported_ with `Configuration.import()`.
+
+The module that imports a variable from another module doesn't need to know what file that variable is defined in. Instead, it refers to its name and its _namespace_ under which the variable is defined. The one and only argument to `Configuration.import()` is an object of key-value pairs, where keys are the variable names and values are the namespaces where each variable can be found.
+
+After a variable is imported to a module, it can be used just like a global variable that would have been defined in the current file by [`pipy()`](/reference/pipy). Any changes to that variable are also visible to the original file that _exports_ it, as well as other modules that have _imported_ it.
+
+> As a convention, exported variables are suggested to have two underscores as its prefix, such as `__targetFound`.
+
 # Syntax
 
 ``` js
@@ -16,3 +26,15 @@ pipy().import({ ...variables })
 ## Return value
 
 <ReturnValue/>
+
+# Example
+
+``` js
+pipy()
+
+.import({
+  // global variables defined in other modules under namespace 'routing-stuff'
+  __service: 'routing-stuff',
+  __target: 'routing-stuff',
+})
+```

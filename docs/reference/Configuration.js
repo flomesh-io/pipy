@@ -23,12 +23,12 @@ class Configuration {
    * @param {Object.<string, string>} variables Variable names and their namespaces.
    * @returns {Configuration} The same Configuration object.
    */
-  import(variabls) {}
+  import(variables) {}
 
   /**
-   * Starts a pipeline listening on a TCP port.
+   * Creates a pipeline layout to handle incoming TCP connections on a specified port.
    *
-   * @param {number|string} port Port or [ip]:port pair to listen on.
+   * @param {number|string} port Port or ip+port to listen on.
    * @param {Object} [options] Options including maxConnections, readTimeout and writeTimeout.
    * @param {number} [options.maxConnections] Maximum number of concurrent connections.
    * @param {number|string} [options.readTimeout] Read timeout in seconds.
@@ -38,15 +38,15 @@ class Configuration {
   listen(port) {}
 
   /**
-   * Starts a pipeline that executes a cron task.
+   * Creates a pipeline layout that executes a periodic job.
    *
-   * @param {number|string} [interval] Interval between recurrences in seconds.
+   * @param {string} [interval] Interval between recurrences with a time unit suffix.
    * @returns {Configuration} The same Configuration object.
    */
   task(interval) {}
 
   /**
-   * Starts a sub-pipeline by a given name.
+   * Creates a sub-pipeline layout under a specified name.
    *
    * @param {string} name The name of the sub-pipeline.
    * @returns {Configuration} The same Configuration object.

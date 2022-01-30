@@ -3,10 +3,35 @@ title: "Configuration.listen()"
 api: Configuration.listen()
 ---
 
+# Description
+
+Creates a pipeline layout to handle incoming TCP connections on a specified port.
+
+Ports can be specified with just numbers when binding to `0.0.0.0`, or strings in form of `<IP>:<port>` when binding to arbitrary IP addresses. Note that, to bind to an IPv6 address, surround the address within a pair of brackets so that the colon before the port number can be identified correctly, e.g. `[::]:8080`.
+
+After calling this method on a _Configuration_, the newly created pipeline layout would become current. Any _filter-creating_ methods called after this point would append filters to that pipeline, until another _pipeline-creating_ method is called.
+
+## Options
+
+There are a few options that a listening port supports.
+
+### Option: maxConnections
+
+Limit the maximum number of concurrent connections. Defaults to no limit.
+
+### Option: readTimeout
+
+Timeout duration for reading, in seconds. Can be a string with one of the time unit suffixes such as `s`, `m` or `h`. Defaults to no timeout (waiting forever).
+
+### Option: readTimeout
+
+Timeout duration for writing, in seconds. Can be a string with one of the time unit suffixes such as `s`, `m` or `h`. Defaults to no timeout (waiting forever).
+
 # Syntax
 
 ``` js
 pipy().listen(port)
+pipy().listen(port, { ...options })
 ```
 
 ## Parameters
@@ -16,3 +41,13 @@ pipy().listen(port)
 ## Return value
 
 <ReturnValue/>
+
+# Example
+
+``` js
+pipy()
+
+.listen(8080) // Start listening on port 8080
+  .dump()     // Add filter, dump to stdout whatever is received from the port
+  .dummy()    // Add filter, do not send anything back to the client
+```
