@@ -4,6 +4,7 @@ project(pipy)
 option(PIPY_GUI "include builtin GUI" ON)
 option(PIPY_TUTORIAL "include builtin tutorial scripts" ON)
 option(PIPY_SOIL_FREED_SPACE "invalidate freed space for debugging" OFF)
+option(PIPY_OPENSSL "external libopenssl location" "")
 
 add_subdirectory(deps/yajl-2.1.0)
 
@@ -58,18 +59,24 @@ if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
   link_time_optimization()
 endif()
 
-set(OPENSSL_SRC_DIR ${CMAKE_SOURCE_DIR}/deps/openssl-1.1.1m)
-set(OPENSSL_OUT_DIR ${OPENSSL_SRC_DIR}/build)
+if(PIPY_OPENSSL)
+  set(OPENSSL_INC_DIR ${PIPY_OPENSSL}/include)
+  set(OPENSSL_LIB_DIR ${PIPY_OPENSSL}/lib)
+else()
+  set(OPENSSL_SRC_DIR ${CMAKE_SOURCE_DIR}/deps/openssl-1.1.1m)
+  set(OPENSSL_LIB_DIR ${OPENSSL_SRC_DIR}/build)
+  set(OPENSSL_INC_DIR ${OPENSSL_SRC_DIR}/include ${OPENSSL_LIB_DIR}/include)
 
-add_custom_command(
-  OUTPUT ${OPENSSL_OUT_DIR}/libcrypto.a ${OPENSSL_OUT_DIR}/libssl.a
-  WORKING_DIRECTORY ${OPENSSL_SRC_DIR}
-  COMMAND mkdir -p build
-  COMMAND cd build && ../config no-shared zlib && make
-  COMMENT "Building OpenSSL"
-)
+  add_custom_command(
+    OUTPUT ${OPENSSL_LIB_DIR}/libcrypto.a ${OPENSSL_LIB_DIR}/libssl.a
+    WORKING_DIRECTORY ${OPENSSL_SRC_DIR}
+    COMMAND mkdir -p build
+    COMMAND cd build && ../config no-shared zlib && make
+    COMMENT "Building OpenSSL"
+  )
+endif()
 
-add_custom_target(OpenSSL DEPENDS ${OPENSSL_OUT_DIR}/libcrypto.a ${OPENSSL_OUT_DIR}/libssl.a)
+add_custom_target(OpenSSL DEPENDS ${OPENSSL_LIB_DIR}/libcrypto.a ${OPENSSL_LIB_DIR}/libssl.a)
 
 add_definitions(
   -D_GNU_SOURCE
@@ -84,8 +91,7 @@ include_directories(
   "${CMAKE_BINARY_DIR}/deps/libexpat-R_2_2_6/expat/lib"
   "${CMAKE_SOURCE_DIR}/deps/libexpat-R_2_2_6/expat/lib"
   "${CMAKE_SOURCE_DIR}/deps/leveldb-1.23/include"
-  "${CMAKE_SOURCE_DIR}/deps/openssl-1.1.1m/include"
-  "${OPENSSL_OUT_DIR}/include"
+  "${OPENSSL_INC_DIR}"
 )
 
 add_executable(pipy
@@ -217,4 +223,4 @@ if(PIPY_SOIL_FREED_SPACE)
   add_definitions(-DPIPY_SOIL_FREED_SPACE)
 endif()
 
-target_link_libraries(pipy z yajl_s expat ${OPENSSL_OUT_DIR}/libssl.a ${OPENSSL_OUT_DIR}/libcrypto.a leveldb -pthread -ldl)
+target_link_libraries(pipy z yajl_s expat ${OPENSSL_LIB_DIR}/libssl.a ${OPENSSL_LIB_DIR}/libcrypto.a leveldb -pthread -ldl)
