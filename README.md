@@ -1,3 +1,5 @@
+![Pipy Logo](/gui/src/images/pipy-300.png)
+
 # Pipy
 
 Pipy is a high performance programmable network proxy. Written in C++, Pipy is extremely
