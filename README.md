@@ -81,13 +81,6 @@ yum -y install http://repo.flomesh.cn/pipy/pipy-latest.el7_pl.x86_64.rpm
 $ pipy --help
 ```
 
-## List Builtin Filters and Their Parameters
-
-```
-$ pipy --list-filters
-$ pipy --help-filters
-```
-
 ## Run on CLI
 
 To start a Pipy proxy, run `pipy` with a PipyJS script file, for example, the script
