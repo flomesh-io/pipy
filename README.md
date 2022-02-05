@@ -159,6 +159,9 @@ You can find Pipy documentation under `docs/`.
     * [16 Serve static](./docs/tutorial/16-serve-static.mdx)
     * [17 Data transformation](./docs/tutorial/17-body-transform.mdx)
     * [18 TLS](./docs/tutorial/18-tls.mdx)
+* Learnings & Articles
+  * [Katacoda](https://katacoda.com/flomesh-io) - Katacoda scenarios
+  * [InfoQ article](https://www.infoq.com/articles/network-proxy-stream-processor-pipy/) - Brief Introduction
 * [Copyright](COPYRIGHT)
 * [Licence](LICENCE)
 
