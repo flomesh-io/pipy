@@ -1,0 +1,139 @@
+---
+title: "6：コンフィグレーション（設定）"
+---
+
+このパートでは、コードとデータを分離することで、さらにcodebaseの最適化を進めます。データ部分は、コンフィグレーションファイルとして別のJSONファイルにまとめられます。
+
+# JSONファイルを用意する
+
+始めに、設定できるJavaScriptファイルごとにJSONファイルを作成します。それぞれのJSONファイルには、対応するJavaScriptコードが設定として必要とするデータを入れておきます。これらのJSONファイルは、すべて同じ`/config/`ディレクトリに配置します。
+
+まず、`/proxy.js`用に`/config/proxy.json`を作成します。
+
+``` js
+{
+  "listen": 8000,
+  "plugins": [
+    "plugins/router.js",
+    "plugins/default.js"
+  ]
+}
+```
+
+次に、`/plugins/router.js`用として`/config/router.json`を作成します。
+
+``` js
+{
+  "routes": {
+    "/hi/*": "localhost:8080",
+    "/echo": "localhost:8081",
+    "/ip/*": "localhost:8082"
+  }
+}
+```
+
+`/plugins/default.js`用には、リクエストが処理されなかったときに返すメッセージなどを設定できるようにすることもできます。しかし、このチュートリアルでは、簡単にするために省略します。
+
+# JSONからデータを読み取る
+
+次に、`/config/proxy.json`から設定を取得するために、`/proxy.js`を修正します。
+
+1.	コード全体を、たった1つの入力パラメータ、`config`だけを受け取る関数としてまとめます。 
+
+``` js
++ (config =>
+
+  pipy()
+
+  .export('proxy', {
+    __turnDown: false,
+  })
+
+  .listen(8000)
+    .demuxHTTP('request')
+
+  .pipeline('request')
+    .use(
+      [
+        'plugins/router.js',
+        'plugins/default.js',
+      ],
+      'request',
+      'response',
+      () => __turnDown
+    )
+
++ )
+```
+
+2.	`/config/proxy.json`から、デコードしたJSONオブジェクトを使って、その関数をコールします。
+
+``` js
+  (config =>
+
+  // ...
+
+  )
++ (JSON.decode(pipy.load('config/proxy.json')))
+```
+
+> ここで、標準の[_JSON.parse()_](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/JSON/parse)ではなく、[_JSON.decode()_](/reference/JSON/decode)を使っているのは、 _JSON.decode()_ がバイナリデータを処理するのに対し、 _JSON.parse()_ は文字列のみ処理するからです。
+
+3.	リスニングポートとプラグインリストを、入力パラメータ`config`にあるものに置き換えます。
+
+``` js
+- .listen(8000)
++ .listen(config.listen)
+    .demuxHTTP('request')
+
+  .pipeline('request')
+    .use(
+-     [
+-       'plugins/router.js',
+-       'plugins/default.js',
+-     ],
++     config.plugins,
+      'request',
+      'response',
+      () => __turnDown
+    )
+```
+
+`/plugins/router.js`についても同じことを行います。プラグイン全体を関数で囲み、これをJSONデータを使ってコールし、ルーティングテーブルをJSONの中にあるものに変更します。.
+
+``` js
++ (config =>
+
+  pipy({
+-   _router: new algo.URLRouter({
+-     '/hi/*': 'localhost:8080',
+-     '/echo': 'localhost:8081',
+-     '/ip/*': 'localhost:8082',
+-   }),
++   _router: new algo.URLRouter(config.routes),
+    _target: '',
+  })
+
+  // ...
+
++ )(JSON.decode(pipy.load('config/router.json')))
+```
+
+# テストしてみる
+
+今回も機能的には何も変更していません。前回と同じようにテストできます。実際にテストしてみてください[Test in action](/tutorial/05-plugins#test-in-action)。
+
+# まとめ
+
+このパートでは、コードとデータを分離する方法を解説しました。これは、設定できるデータが多い場合にスクリプトを整理する方法です。
+
+## 要点
+
+1.	コードとデータを分けるということは、コードを整理する上でも良い慣習であり、コードの設定が容易になります。
+2.	[_pipy.load()_](/reference/pipy.load)を使用してファイルをバイナリデータとして読み取ります。
+3.	[_JSON.decode()_](/reference/JSON/decode)を使って、バイナリデータからJSONをデコードします。
+
+## 次のパートの内容
+
+これで、プロキシの基礎がしっかりとできあがりました。このプロキシはプラグインシステムを備えており、JSONで設定することができます。今後は、これにプラグインを追加して機能を拡張していきます。
+
