@@ -1,0 +1,303 @@
+---
+title: "7：ローディングバランシング"
+---
+
+これで、プラグインが可能で、設定可能なプロキシ・フレームワークが完成しました。最初のプラグインとして「_router_」も作りました。ここからは、他の一般的なプロキシ機能を網羅するプラグインを作っていきます。最初のプラグインは「_load balancing_」です。
+
+# ラウンドロビン方式のロードバランサー
+
+Pipyでは、ロードバランシングプロキシの構築を容易にするために、いくつかのビルトインクラスを提供しています。これらのクラスには、若干数に分類されるロードバランシングのアルゴリズムが実装されており、すべて同じ使い方をします。このチュートリアルでは、最も一般的に使われている「ラウンドロビン」アルゴリズムを実装した[_algo.RoundRobinLoadBalancer_](/reference/algo/RoundRobinLoadBalancer)を使用します。
+
+_RoundRobinLoadBalancer_ オブジェクトを構築するには、ターゲットのリストとそれらのウェイト付けが必要です。
+
+``` js
+new algo.RoundRobinLoadBalancer({
+  'localhost:8080': 50,
+  'localhost:8081': 25,
+  'localhost:8082': 25,
+})
+```
+
+また、ワークロードを均等に分散させたい場合は、ウェイトなしの単純なターゲットの配列にできます。
+
+``` js
+new algo.RoundRobinLoadBalancer([
+  'localhost:8080',
+  'localhost:8081',
+  'localhost:8082',
+])
+```
+
+この _RoundRobinLoadBalancer_ では、[_select()_](/reference/algo/RoundRobinLoadBalancer/select)メソッドをコールするたびに、ラウンドロビン方式で選ばれたターゲットを一つ与えてくれます。
+
+# router.jsを分解する
+
+選ばれたターゲットを取得したら、現在のリクエストをそのターゲットに渡すことになります。でもちょっと待って、それは`/plugins/router.js`の「_forward_」パイプラインで既にやりましたよね。つまり、「_router_」プラグインの機能は2つのパートに分解できたということです。
+
+1.	数多くのターゲットサーバーが背後にある「_service_」にリクエストをマッピングする。
+2.	そこから1つターゲットを選択してリクエストを渡す。
+
+2の部分は新しい「_balancer_」プラグインに行き、1の部分は「_router_」に残るようにします。それに加えて、 _router_ は _balancer_ に対し、どのサービスに行くべきかを教えられるようにしないといけません。パート5で、変数`__turnDown`が`/proxy.js`と`/plugins/router.js`の間で共有されることは既に見てきました。ここでもそれと同じです。
+
+## balancer.jsを作る
+
+最初にbalancerに取り組みます。まずは設定からです。`/config/balancer.json`というファイルを作成し、service-to-targetsマップを記入します。:
+
+``` js
+{
+  "services": {
+    "service-hi"      : ["127.0.0.1:8080", "127.0.0.1:8082"],
+    "service-echo"    : ["127.0.0.1:8081"],
+    "service-tell-ip" : ["127.0.0.1:8082"]
+  }
+}
+```
+
+見ての通り、「_service-hi_」、「_service-echo_」、「_service-tell-ip_」という名前で3つのサービスを定義しました。最初のサービスには2つのターゲットがあり、他のサービスには1つだけです。
+
+次はプラグインのスクリプトファイルを作ります。
+
+1.	`/plugins/balancer.js`という名前のファイルを作り、`/plugins/router.js`の内容をすべてコピーします。
+2.	_URLRouter_ と _find_ コールを削除し、他は残します。
+3.	構成ファイルの名前が`/config/balancer.json`を指すようにします。
+
+``` js
+  (config =>
+
+  pipy({
+-   _router: new algo.URLRouter(config.routes),
+    _target: '',
+  })
+
+  .import({
+    __turnDown: 'proxy',
+  })
+
+  .pipeline('request')
+    .handleMessageStart(
+      msg => (
+-       _target = _router.find(
+-         msg.head.headers.host,
+-         msg.head.path,
+-       ),
+        _target && (__turnDown = true)
+      )
+    )
+    .link(
+      'forward', () => Boolean(_target),
+      ''
+    )
+
+  .pipeline('forward')
+    .muxHTTP(
+      'connection',
+      () => _target
+    )
+
+  .pipeline('connection')
+    .connect(
+      () => _target
+    )
+
+- )(JSON.decode(pipy.load('config/router.json')))
++ )(JSON.decode(pipy.load('config/balancer.json')))
+```
+
+古い _URLRouter_ を捨てたので、新しい _RoundRobinLoadBalancers_ が必要になります。これらのバランサーはJSONの設定から得られ、各サービスに一つずつ、サービス名からマッピングされます。JSONのターゲットリストを _RoundRobinLoadBalancer_ に変換するには、[_Object.entries_](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object/entries)と[_Object.fromEntries_](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object/fromEntries)を組み合わせた[_Array.prototype.map_](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Array/map)を使用します。
+
+``` js
+  pipy({
++   _services: (
++     Object.fromEntries(
++       Object.entries(config.services).map(
++         ([k, v]) => [
++           k, new algo.RoundRobinLoadBalancer(v),
++         ]
++       )
++     )
++   ),
+    _target: '',
+  })
+```
+
+> JavaScriptでは、配列要素は[_Array.prototype.map_](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Array/map).を使って簡単に変換することができます。しかし、オブジェクトの場合は、まず`[key, value]`のペアの配列に変換し、それを`map()`で変換してから、再びオブジェクトに変換する必要があります。
+
+``` js
+Object.fromEntries(
+  Object.entries(inputObject).map(
+    ([k, v]) => [
+      transformKey(k),
+      transformValue(v),
+    ]
+  )
+)
+```
+
+このテクニックは、JSONの設定データを扱う場合にとても便利です。
+
+最後に、balancerの肝となるのがターゲットの選択です。Routerでは、サービス名を見つけて、ネームスペース「_router_」の下の _exported_ された `__serviceID` という変数に入れるとします。よってこのbalancerでは、その変数を _import_ して、そのサービスのターゲットを選択するようにします。
+
+``` js
+  .import({
+    __turnDown: 'proxy',
++   __serviceID: 'router',
+  })
+
+  .pipeline('request')
+    .handleMessageStart(
+      msg => (
++       _target = _services[__serviceID]?.select?.(),
+        _target && (__turnDown = true)
+      )
+    )
+    .link(
+      'forward', () => Boolean(_target),
+      ''
+    )
+```
+
+ここまでがbalancerに必要なもののすべてです。但し、routerに移る前に、`/config/proxy.json`で、システムに「_plug_」することを忘れないでください。
+
+``` js
+  {
+    "listen": 8000,
+    "plugins": [
+      "plugins/router.js",
++     "plugins/balancer.js",
+      "plugins/default.js"
+    ]
+  }
+```
+
+## router.jsを整える
+
+routerについては、再び設定ファイル`/config/router.json`から始めます。balancerではすでにサービスとターゲットのマッピングが行われているので、ここではルーティングテーブルをURLとサービスのマッピングのみに変更します。
+
+``` js
+{
+  "routes": {
+    "/hi/*": "service-hi",
+    "/echo": "service-echo",
+    "/ip/*": "service-tell-ip"
+  }
+}
+```
+
+続いて`/plugins/router.js`ですが、パイプラインの「_forward_」と「_connection_」は、新しいbalancerプラグインに移動しました。ここでは、これらのパイプラインと、それらにリンクしている _link()_ を単純に削除できます。
+
+``` js
+  (config =>
+
+  pipy({
+    _router: new algo.URLRouter(config.routes),
+    _target: '',
+  })
+
+  .import({
+    __turnDown: 'proxy',
+  })
+
+  .pipeline('request')
+    .handleMessageStart(
+      msg => (
+        _target = _router.find(
+          msg.head.headers.host,
+          msg.head.path,
+        ),
+        _target && (__turnDown = true)
+      )
+    )
+-   .link(
+-     'forward', () => Boolean(_target),
+-     ''
+-   )
+
+- .pipeline('forward')
+-   .muxHTTP('connection')
+
+- .pipeline('connection')
+-   .connect(
+-     () => _target
+-   )
+
+  )(JSON.decode(pipy.load('config/router.json')))
+```
+
+この新しいrouterでは、リクエストをそのサービスにマッピングするだけで、どのターゲットにするか、あるいはリクエストを渡すか止めるかについては、balancerに判断を任せますから、変数`_target`と`__turnDown`を削除して問題ありません。
+
+``` js
+  pipy({
+    _router: new algo.URLRouter(config.routes),
+-   _target: '',
+  })
+
+- .import({
+-   __turnDown: 'proxy',
+- })
+
+  .pipeline('request')
+    .handleMessageStart(
+      msg => (
+-       _target = _router.find(
+-         msg.head.headers.host,
+-         msg.head.path,
+-       ),
+-       _target && (__turnDown = true)
+      )
+    )
+```
+
+最後に、見つかったサービス名を入れる新しい変数`__serviceID`を追加します。balancerはこの変数に依存しているので、exportすることを忘れないでください。
+
+``` js
+  pipy({
+    _router: new algo.URLRouter(config.routes),
+  })
+
++ .export('router', {
++   __serviceID: '',
++ })
+
+  .pipeline('request')
+    .handleMessageStart(
+      msg => (
++       __serviceID = _router.find(
++         msg.head.headers.host,
++         msg.head.path,
++       )
+      )
+    )
+```
+
+これですべて完了です。
+
+# テストしてみる
+
+では、テストをしてみましょう。
+
+``` sh
+$ curl localhost:8000/hi
+Hi, there!
+$ curl localhost:8000/hi
+You are requesting /hi from ::ffff:127.0.0.1
+$ curl localhost:8000/hi
+Hi, there!
+$ curl localhost:8000/hi
+You are requesting /hi from ::ffff:127.0.0.1
+```
+
+同じサービス「service-hi」にアクセスするたびに、異なるターゲットに向かい、異なるメッセージでレスポンスしているのがわかります。
+
+#まとめ
+
+このパートでは、ラウンドロビン方式のロードバランサーの書き方を解説しました。また、JSONオブジェクトを一発で変換する使える技も見てきました。
+
+## 要点
+
+1.	[_algo.RoundRobinLoadBalancer_](/reference/algo/RoundRobinLoadBalancer)（他にもいくつか似たようなものがあります）は、グループの中から、ウェイトに応じてターゲットを自動的に選択する場合に使用します。.
+2.	[_Array.prototype.map_](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Array/map)と[_Object.entries_](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object/entries)や[_Object.fromEntries_](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object/fromEntries)を組み合わせることで、JSONオブジェクトのキーと値を簡単に変換することができます。
+
+## 次のパートの内容
+
+簡単なロードバランサーは動きました。しかし、まだ最適ではありません。次のパートでは、その理由を解説します。
+
