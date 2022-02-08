@@ -13,7 +13,7 @@ Regardless of the kind of issue, please make sure to look for similar existing i
 If you open a question, remember to close the issue once you are satisfied with the answer and you think
 there's no more room for discussion. We'll anyway close the issue after some days.
 
-If something is missing from the Pipy it might be that it's not yet implemented or that it was purposely left out. If in doubt, just ask.
+If something is missing from Pipy it might be that it's not yet implemented or that it was purposely left out. If in doubt, just ask.
 
 ### What's needed right now
 
@@ -37,7 +37,7 @@ Pull-request only labels, used to signal that a pull request `needs-review` by a
 
 #### Topic
 
-Topic encompasses the broad aspect of the Pipy that the issue refers to: could be performance, the compiler, the type system, PipyJS, JavaScript API, and quite a large etc.
+Topic encompasses the broad aspect of Pipy that the issue refers to: could be performance, PipyJS, JavaScript API, and quite a large etc.
 
 #### Status
 
@@ -45,7 +45,7 @@ Status labels attempt to capture the lifecycle of an issue:
 
 * A detailed proposal on a feature is marked as `draft`, while a more general argument is usually labelled as `discussion` until a consensus is achieved.
 
-* An issue is `accepted` when it describes a feature or bugfix that a core team member has agreed to have added to the Pipy codebase, so as soon as a design is discussed (if needed), it's safe to start working on a pull request.
+* An issue is `accepted` when it describes a feature or bugfix that a core team member has agreed to have added to Pipy codebase, so as soon as a design is discussed (if needed), it's safe to start working on a pull request.
 
 * Bug reports are marked as `needs-more-info`, where the author is requested to provide the info required; note that the issue may be closed after some time if it is not supplied.
 
@@ -64,7 +64,6 @@ Pipy reference is available at https://github.com/flomesh-io/pipy/tree/main/docs
 1. Fork it ( https://github.com/flomesh-io/pipy/fork )
 2. Clone it
 
-
 Make sure that your changes follow the recommended **Coding Style**.
 
 Then push your changes and create a pull request.
@@ -81,9 +80,7 @@ should change, be it a bugfix, a new feature or some ground work to support a ne
 a new isolated class that is later used in the same pull request.
 
 Review history should be preserved in a pull request. If you need to push a change to an open pull request (for example
-because specs broke and required a fix, or for applying a review suggestion) these changes should be added as individual
-fixup commits. Please do not amend previous commits and force push to the PR branch. This makes reviews much harder
-because reference to previous state is hidden.
+applying a review suggestion) these changes should be added as individual fixup commits. Please do not amend previous commits and force push to the PR branch. This makes reviews much harder because reference to previous state is hidden.
 
 If changes introduced to `main` branch result in conflicts, it should be merged with a merge commit (`git fetch upstream/main; git merge upstream/main`).
 
@@ -92,29 +89,7 @@ If changes introduced to `main` branch result in conflicts, it should be merged 
 1. Describe reasons and result of the change in the pull request comment.
 2. Do not force push to a pull request. The development history should be easily traceable.
 3. Any change to a public API requires appropriate documentation: params (and particularly interesting combinations of them if the method is complex), results, interesting, self-contained examples.
-4. Any change to behaviour needs to be reflected and validated with specs.
-5. Any change affecting the compiler or performance-critical features in the standard library
-   should be checked with benchmarks how it affects performance.
 
-### Approval Process
-
-1. To be accepted, a pull request requires recent approvals from at least two core team members; if the author is a core team
-   member, this counts as one approval. Approvals only count when based on the current code version (except for minor changes like fixing a typo).
-2. When the required approvals are given and CI is satisfied, a core team member can add the pull request to the
-   current development milestone. This signals that it is scheduled to be merged soon and gives another chance for final reviews.
-3. The wait time in this state depends on the gravity of the change and the activity of the previous discussion,
-   but it should at least be a full business day after the milestone was added.
-4. Before merging, make sure the pull request is properly labeled and its title appropriately describes the change.
-4. Finally, the pull request can be merged. Use squash merge to not pollute the version history of the main branch with
-   details of the pull request process. For non-trivial changes, the merge commit should contain a short description.
-
-This process is a guideline and not a strict rule so there might be occasional exceptions within reason.
-Urgent infrastructure fixes for example can be expected to skip the line.
-
-### For maintainers with push access
-
-1. Do not directly commit to the `main` branch. Always create a feature branch and pull request.
-2. Feature branches should typically be created in your fork. The main repo should only contain essential branches.
 
 ## Code of Conduct
 
