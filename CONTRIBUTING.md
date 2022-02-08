@@ -13,7 +13,7 @@ Regardless of the kind of issue, please make sure to look for similar existing i
 If you open a question, remember to close the issue once you are satisfied with the answer and you think
 there's no more room for discussion. We'll anyway close the issue after some days.
 
-If something is missing from the language it might be that it's not yet implemented or that it was purposely left out. If in doubt, just ask.
+If something is missing from the Pipy it might be that it's not yet implemented or that it was purposely left out. If in doubt, just ask.
 
 ### What's needed right now
 
@@ -25,7 +25,7 @@ These are the most important general topics in need right now, so if you are int
 
 ### Labels
 
-Issue tracker labels are sorted by category: community, kind, pr, status and topic.
+Issue tracker labels are sorted by category: kind, pr, status and topic.
 
 #### Kind
 
@@ -37,7 +37,7 @@ Pull-request only labels, used to signal that a pull request `needs-review` by a
 
 #### Topic
 
-Topic encompasses the broad aspect of the language that the issue refers to: could be performance, the compiler, the type system, the code formatter, concurrency, and quite a large etc.
+Topic encompasses the broad aspect of the Pipy that the issue refers to: could be performance, the compiler, the type system, PipyJS, JavaScript API, and quite a large etc.
 
 #### Status
 
@@ -45,7 +45,7 @@ Status labels attempt to capture the lifecycle of an issue:
 
 * A detailed proposal on a feature is marked as `draft`, while a more general argument is usually labelled as `discussion` until a consensus is achieved.
 
-* An issue is `accepted` when it describes a feature or bugfix that a core team member has agreed to have added to the language, so as soon as a design is discussed (if needed), it's safe to start working on a pull request.
+* An issue is `accepted` when it describes a feature or bugfix that a core team member has agreed to have added to the Pipy codebase, so as soon as a design is discussed (if needed), it's safe to start working on a pull request.
 
 * Bug reports are marked as `needs-more-info`, where the author is requested to provide the info required; note that the issue may be closed after some time if it is not supplied.
 
