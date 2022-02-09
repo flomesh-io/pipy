@@ -4,13 +4,13 @@ Pipy 是面向云、边缘和 IoT 的可编程网络代理。使用 C++ 开发�
 
 ## Pipy 的特点
 
-### 功能全面
+### 灵活多变
 
 虽然 Pipy 主要用作高性能的反向代理，但 Pipy 的真正能力是提供了一系列可插拔的组件，又称过滤器，同时对组合的方式没有限制。如何使用 Pipy 完全取决于需求。Pipy 已经被用于协议转换、流量录制、消息加签/验签、无服务器的功能启动、健康检查等等。
 
 ### 快
 
-Pipy 使用 C++ 开发。使用了异步网络；分配的资源被池化并可复用；内部尽可能地使用指针传递数据，最大限度降低内存带宽的压力。不管怎么看都很快。
+Pipy 使用 C++ 开发。使用了异步网络；分配的资源被池化并可复用；内部尽可能地使用指针传递数据，最大限度降低内存带宽的压力。在各方面都极快。
 
 ### 小
 
@@ -18,7 +18,7 @@ Pipy 使用 C++ 开发。使用了异步网络；分配的资源被池化并可�
 
 ### 可编程
 
-Pipy 是一个运行 PipyJS（标准 JavaScript 的定制版本） 的脚本引擎。通过这个使用最广泛的编程语言，Pipy 提供了相比 YAML 或其他语言更强大的表现力。
+Pipy 是一个运行 PipyJS（标准 JavaScript 的定制版本） 的脚本引擎。通过这个使用最广泛的编程语言，Pipy 提供了相比 YAML 或类似格式更强大的表现力。
 
 ### 开放
 
@@ -82,7 +82,6 @@ $ bin/pipy
     * [16 静态资源服务](./docs/tutorial/16-serve-static.zh.mdx)
     * [17 数据格式转换](./docs/tutorial/17-body-transform.zh.mdx)
     * [18 TLS](./docs/tutorial/18-tls.zh.mdx)
-    * [19 负载均衡高级功能](./docs/tutorial/19-load-balancing-advanced.zh.mdx)
 * 学习和文章
   * [Katacoda](https://katacoda.com/flomesh-io) - Katacoda 场景
   * [InfoQ 文章](https://www.infoq.com/articles/network-proxy-stream-processor-pipy/) - 简要介绍
