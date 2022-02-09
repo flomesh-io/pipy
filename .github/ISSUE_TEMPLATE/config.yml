@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+contact_links:
+  - name: "Security issues"
+    url: mailto:security@flomesh.io
+    about: "For security issues, please email to security@flomesh.io
+  - name: "Legal issues"
+    url: mailto:legal@flomesh.io
+    about: "For legal issues, please email to legal@flomesh.io"
+  - name: "Commercial topics"
+    url: mailto:sales@flomesh.io
+    about: "For commercial, sales and marketing topics, please email to sales@flomesh.io"
+  - name: "Other topics"
+    url: mailto:pipy@flomesh.io
+    about: "For other topics not suitable for the public, please email to pipy@flomesh.io"
