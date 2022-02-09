@@ -1,136 +1,66 @@
-![Pipy Logo](/gui/src/images/pipy-300.png)
+![Pipy Logo](./gui/src/images/pipy-300.png)
 
 # Pipy
 
-Pipy is a high performance programmable network proxy. Written in C++, Pipy is extremely
-lightweight and fast, making it an ideal solution to service mesh proxies.
+Pipy is a cloud-native programmable network proxy. Written in C++, Pipy is extremely lightweight and fast. It's also programmable by using PipyJS, a tailored version of the standard JavaScript language.
 
-With the builtin JavaScript support, thanks to PipyJS, Pipy is highly
-customizable as well as predictable in performance since PipyJS opts for reference
-counting memory management and thus has no uneven garbage collection
-overhead we constantly see in other similar systems.
+## Why Pipy?
 
-At its core, Pipy is of a modular design provided with a range of fundamental
-filters that can be chained up to make a pipeline, where network data is pumped
-in and get processed. The way Pipy is designed makes it extremely versatile
-even outside of a service mesh environment. Due to its scriptable nature, it also
-benefits any sorts of situations involving intermediate message processing between
-network nodes where Pipy can be used as a forward/backward proxy, a load balancer,
-an API gateway, a static HTTP server, a node in a CDN, a health checker, a serverless
-function trigger, or however you want to combine all those features by just a few lines
-of script.
+### Versatile
 
-# Compatibility
+Although Pipy is mostly used as a high-performance reverse proxy, the true power of Pipy relies on providing you a range of pluggable building blocks, aka. filters, without imposing any restrictions on how you combine them. It's entirely up to you as to how you want to use Pipy. We've seen people using Pipy as a protocol converter, traffic recorder, message signer/verifier, serverless function starter, health checker and more.
 
-Pipy is designed for high compatibility across different operating systems and
-CPU architectures. Pipy has been fully tested on these platforms:
+### Fast
 
-* CentOS 7
-* Ubuntu 18/20
-* FreeBSD 12/13
-* macOS Big Sur
+Pipy is written in C++. It leverages asynchronous networking. Allocated resources are pooled and reused. Data is transferred internally by pointers whenever possible, minimizing the pressure on memory bandwidth. It is fast in every way.
 
-CentOS7/REHL7 or FreeBSD are recommended in production environments.
+### Tiny
 
-# How to Build
+A build of Pipy worker-mode instance gives you an executable merely under 8MB with zero external dependencies. You'll experience the fastest download and startup times with Pipy.
 
-## Build from Scratch
+### Programmable
 
-Before building, the following prerequisites are required to be installed first:
+At the core, Pipy is a script engine running PipyJS, a tailored version of ECMA standard JavaScript. By speaking the planet's most widely used programming language, Pipy gives you unparalleled expressiveness over what you have in YAML or the like.
+
+### Open
+
+Pipy is more open than open source. It doesn’t try to hide every detail in the black box, so you always know what you are doing. But never fear. It doesn’t require a rocket scientist to figure out how the different parts work together. In fact, you’ll have more fun as you have full control over everything.
+
+## Quick Start
+
+### Build
+
+The following prerequisites are required before building:
 
 * Clang 5.0+
 * CMake 3.0+
-* Node.js v12+ (only required if the builtin web UI is enabled)
 * zlib
+* Node.js v12+ (if the builtin _Admin UI_ is enabled)
 
-With the above all installed, run the build script to start building:
+Run the build script to start building:
 
 ```
 ./build.sh
 ```
 
-The final executable product will be located under `bin/`. Type `bin/pipy -h` for help information.
+The final product will be left at `bin/pipy`.
 
-## Build a Docker Image
+### Run
 
-To build a Docker image, run the following commands:
-
-```
-cd pipy
-sudo docker build --squash --rm -t pipy .
-```
-
-> Note: For a smaller image, you might want to use `--squash` option. It is an experimental feature, so
-you need to add `{ "experimental": true }` to `/etc/docker/daemon.json` and restart Docker daemon
-before using it.
->
-> For more information about Docker's `--squash` option, please refer to
-[Docker Documentation](https://docs.docker.com/engine/reference/commandline/image_build/)
-
-# Quick Start
-
-## Install with RPM
+Run `bin/pipy` with zero command line options, Pipy will start in repo-mode listening on default port 6060.
 
 ```
-yum -y install http://repo.flomesh.cn/pipy/pipy-latest.el7_pl.x86_64.rpm
+$ bin/pipy
+
+[INF] [admin] Starting admin service...
+[INF] [listener] Listening on port 6060 at ::
 ```
 
-## Show Command Line Options
+Open the browser of your choice, point it to `http://localhost:6060`. You will now see the _Admin UI_ where you can start exploring the documentation and playing around with the tutorial codebases.
 
-```
-$ pipy --help
-```
+## Documentation
 
-## Run on CLI
-
-To start a Pipy proxy, run `pipy` with a PipyJS script file, for example, the script
-in `tutorial/01-hello/hello.js` if you need a simple echo server that responds with the same message
-body as in every incoming request:
-
-```
-$ pipy tutorial/01-hello/hello.js
-```
-
-Alternatively, while developing and debugging, one can start Pipy with a builtin web UI:
-
-```
-$ pipy tutorial/01-hello/hello.js --admin-port=6060
-```
-
-## Run in Docker
-
-The Pipy Docker image can be configured with a few environment variables:
-
-* `PIPY_CONFIG_FILE=</path/to/config-file>` for the location of Pipy configuration file
-
-* `PIPY_SPAWN=n` for the number of Pipy instances you want to start, where `n` is the number
-  of instantces subtracted by 1. For example, you use `PIPY_SPAWN=3` for 4 instances.
-
-```
-$ docker run -it --rm -e PIPY_CONFIG_FILE=/etc/pipy/test/001-echo/pipy.js flomesh/pipy-pjs:latest
-```
-
-```
-$ docker run -it --rm -e PIPY_CONFIG_FILE=/etc/pipy/test/001-echo/pipy.js -e PIPY_SPAWN=1 -p 8000:6000 flomesh/pipy-pjs:latest
-```
-
-## Run on Kubernetes
-
-You can run Pipy on Kubernetes by using [pipy-operator](https://github.com/flomesh-io/pipy-operator):
-
-```
-git clone https://github.com/flomesh-io/pipy-operator
-cd pipy-operator
-kubectl apply -f etc/cert-manager-v1.1.0.yaml
-kubectl apply -f artifact/pipy-operator.yaml
-kubectl apply -f config/samples/standalone/001-echo.yaml
-kubectl apply -f config/samples/ingress/001-routing.yaml
-kubectl apply -f config/samples/sidecar/007-deployment-pipy.yaml
-```
-
-# Documentation
-
-You can find Pipy documentation under `docs/`.
+You can find the Pipy documentation under `docs/`.
 
 * [Overview](./docs/overview.mdx)
 * [Concept](./docs/concepts.mdx)
@@ -160,13 +90,32 @@ You can find Pipy documentation under `docs/`.
 * [Copyright](COPYRIGHT)
 * [Licence](LICENCE)
 
+## Compatibility
 
-# Copyright & License
+Pipy is being constantly tested on these platforms:
 
-Please refer to [COPYRIGHT](./COPYRIGHT)
-and [LICENCE](./LICENCE).
+* RHEL/CentOS
+* Fedora
+* Ubuntu
+* Debian
+* macOS
+* FreeBSD
+* OpenBSD
+* OpenEuler
+* Deepin
+* Kylin
 
-# Contact
+Pipy can run on the following architectures:
+
+* X86/64
+* ARM64
+* LoongArch
+
+## Copyright & License
+
+Please refer to [COPYRIGHT](https://github.com/flomesh-io/pipy/blob/main/COPYRIGHT) and [LICENCE](https://github.com/flomesh-io/pipy/blob/main/LICENCE).
+
+## Contact
 
 * For security issues, please email to security@flomesh.io
 * For legal issues, please email to legal@flomesh.io
@@ -174,6 +123,6 @@ and [LICENCE](./LICENCE).
 * For other topics not suitable for the public, please email to pipy@flomesh.io
 * For public discussions, please go to GitHub issues: https://github.com/flomesh-io/pipy/issues
 
-# Translations
+## Translations
 
-## [中文版](./README_zh.md)
+### [中文](./README_zh.md)
