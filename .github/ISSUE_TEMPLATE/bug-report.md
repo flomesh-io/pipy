@@ -13,5 +13,6 @@ Make sure to review these points before submitting issues - thank you!
 - Write code in the issue itself.
 - Reduce code, if possible, to the minimum size that reproduces the bug.
 - If all of the above is impossible due to a large project, create a branch that reproduces the bug and point us to it.
+- Provide details about the environment like how you are running Pipy, upstream services, client software etc. The more the details, the better it will help us understand and diagnose the problem.
 - Include `pipy` version (`pipy -v`) and OS. If possible, try to see if the bug still reproduces on master.
 

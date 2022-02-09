@@ -6,7 +6,7 @@ labels: status:discussion
 
 ## Discussion
 
-- What aspect of the Pipy would you like to see improved?
+- What aspect of Pipy would you like to see improved?
 - What are the reasons?
 - Include practical examples to illustrate your points.
 - Optionally add one (or more) proposals to improve the current situation.
