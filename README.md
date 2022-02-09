@@ -2,7 +2,7 @@
 
 # Pipy
 
-Pipy is a cloud-native programmable network proxy. Written in C++, Pipy is extremely lightweight and fast. It's also programmable by using PipyJS, a tailored version of the standard JavaScript language.
+Pipy is a programmable network proxy for the cloud, edge and IoT. Written in C++, Pipy is extremely lightweight and fast. It's also programmable by using PipyJS, a tailored version of the standard JavaScript language.
 
 ## Why Pipy?
 
@@ -110,6 +110,7 @@ Pipy can run on the following architectures:
 * X86/64
 * ARM64
 * LoongArch
+* Hygon
 
 ## Copyright & License
 
