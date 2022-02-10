@@ -475,8 +475,11 @@ void Decoder::on_event(Event *evt) {
           } else {
             if (content_length.is_string()) {
               m_body_size = std::atoi(content_length.s()->c_str());
-            } else if (m_is_response && !m_is_bodiless) {
-              m_body_size = std::numeric_limits<int>::max();
+            } else if (m_is_response && !m_is_bodiless && !m_is_connect && !m_is_upgrade_websocket) {
+              auto status = m_head->as<ResponseHead>()->status();
+              if (status >= 200 && status != 204 && status != 304) {
+                m_body_size = std::numeric_limits<int>::max();
+              }
             }
             if (m_body_size > 0) {
               message_start();
