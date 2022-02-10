@@ -28,6 +28,7 @@
 
 #include <cassert>
 #include <cmath>
+#include <cstring>
 #include <cxxabi.h>
 #include <functional>
 #include <limits>

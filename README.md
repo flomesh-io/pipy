@@ -16,7 +16,7 @@ Pipy is written in C++. It leverages asynchronous networking. Allocated resource
 
 ### Tiny
 
-A build of Pipy worker-mode instance gives you an executable merely under 8MB with zero external dependencies. You'll experience the fastest download and startup times with Pipy.
+A build of Pipy worker-mode instance gives you an executable merely around 10MB with zero external dependencies. You'll experience the fastest download and startup times with Pipy.
 
 ### Programmable
 
@@ -33,8 +33,7 @@ Pipy is more open than open source. It doesn’t try to hide every detail in the
 The following prerequisites are required before building:
 
 * Clang 5.0+
-* CMake 3.0+
-* zlib
+* CMake 3.10+
 * Node.js v12+ (if the builtin _Admin UI_ is enabled)
 
 Run the build script to start building:
@@ -102,6 +101,7 @@ Pipy is being constantly tested on these platforms:
 * FreeBSD
 * OpenBSD
 * OpenEuler
+* OpenWrt
 * Deepin
 * Kylin
 

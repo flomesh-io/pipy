@@ -5,6 +5,7 @@ option(PIPY_GUI "include builtin GUI" ON)
 option(PIPY_TUTORIAL "include builtin tutorial scripts" ON)
 option(PIPY_SOIL_FREED_SPACE "invalidate freed space for debugging" OFF)
 option(PIPY_OPENSSL "external libopenssl location" "")
+option(PIPY_STATIC "statically link to libc" OFF)
 
 add_subdirectory(deps/yajl-2.1.0)
 
@@ -59,6 +60,20 @@ if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
   link_time_optimization()
 endif()
 
+set(ZLIB_SRC_DIR ${CMAKE_SOURCE_DIR}/deps/zlib-1.2.11)
+set(ZLIB_INC_DIR ${ZLIB_SRC_DIR})
+set(ZLIB_LIB_DIR ${ZLIB_SRC_DIR}/build)
+
+add_custom_command(
+  OUTPUT ${ZLIB_LIB_DIR}/libz.a
+  WORKING_DIRECTORY ${ZLIB_SRC_DIR}
+  COMMAND mkdir -p build
+  COMMAND cd build && ../configure && make
+  COMMENT "Building zlib"
+)
+
+add_custom_target(zlib DEPENDS ${ZLIB_LIB_DIR}/libz.a)
+
 if(PIPY_OPENSSL)
   set(OPENSSL_INC_DIR ${PIPY_OPENSSL}/include)
   set(OPENSSL_LIB_DIR ${PIPY_OPENSSL}/lib)
@@ -71,7 +86,7 @@ else()
     OUTPUT ${OPENSSL_LIB_DIR}/libcrypto.a ${OPENSSL_LIB_DIR}/libssl.a
     WORKING_DIRECTORY ${OPENSSL_SRC_DIR}
     COMMAND mkdir -p build
-    COMMAND cd build && ../config no-shared zlib && make
+    COMMAND cd build && ../config no-shared && make
     COMMENT "Building OpenSSL"
   )
 endif()
@@ -91,6 +106,7 @@ include_directories(
   "${CMAKE_BINARY_DIR}/deps/libexpat-R_2_2_6/expat/lib"
   "${CMAKE_SOURCE_DIR}/deps/libexpat-R_2_2_6/expat/lib"
   "${CMAKE_SOURCE_DIR}/deps/leveldb-1.23/include"
+  "${ZLIB_INC_DIR}"
   "${OPENSSL_INC_DIR}"
 )
 
@@ -185,7 +201,7 @@ add_custom_command(
 
 add_custom_target(GenVer DEPENDS ${CMAKE_BINARY_DIR}/deps/version.h)
 
-add_dependencies(pipy yajl_s expat OpenSSL GenVer)
+add_dependencies(pipy yajl_s expat zlib OpenSSL GenVer)
 
 if(PIPY_GUI)
   add_definitions(-DPIPY_USE_GUI)
@@ -223,4 +239,18 @@ if(PIPY_SOIL_FREED_SPACE)
   add_definitions(-DPIPY_SOIL_FREED_SPACE)
 endif()
 
-target_link_libraries(pipy z yajl_s expat ${OPENSSL_LIB_DIR}/libssl.a ${OPENSSL_LIB_DIR}/libcrypto.a leveldb -pthread -ldl)
+if(PIPY_STATIC)
+  target_link_options(pipy PRIVATE -static)
+endif()
+
+target_link_libraries(
+  pipy
+  yajl_s
+  expat
+  ${ZLIB_LIB_DIR}/libz.a
+  ${OPENSSL_LIB_DIR}/libssl.a
+  ${OPENSSL_LIB_DIR}/libcrypto.a
+  leveldb
+  -pthread
+  -ldl
+)
