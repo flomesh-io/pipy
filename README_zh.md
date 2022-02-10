@@ -1,160 +1,118 @@
 # Pipy
 
-Pipy 是一个轻量级、高性能、高稳定、可编程的网络代理。Pipy 核心框架使用 C++ 开发，网络 IO 采用 ASIO 库。
-Pipy 的可执行文件仅有 10M 左右，运行期的内存占用 10M 左右，因此 Pipy 非常适合做 Sidecar proxy。
+Pipy 是面向云、边缘和 IoT 的可编程网络代理。使用 C++ 开发，因此 Pipy 非常轻量和快速。还可以使用标准 JavaScript 定制版的 PipyJS 进行编程。
 
-~~Pipy 内置了 [QuickJS](https://github.com/bellard/quickjs) 作为脚本扩展，使得Pipy 可以用 JS 脚本根据特定需求快速定制逻辑与功能。QuickJS 的“确定性垃圾回收”机制，进一步保证了 Pipy 的可靠性与确定性，避免了很多脚本类语言因 GC 导致的不确定性问题。~~
+## Pipy 的特点
 
-这次迭代，我们使用自开发的JS引擎替代了之前的QuickJS。自研的JS引擎更加适合描述对流量处理的规则，在多数场景下，语义更简单直接；并且自开发的JS引擎对很多操作进行了优化，具有更好的性能。
+### 灵活多变
 
-Pipy 采用了模块化、链式的处理架构，用顺序执行的模块来对网络数据块进行处理。这种简单的架构使得 Pipy 底层简单可靠，同时具备了动态编排流量的能力，兼顾了简单和灵活。通过使用 `REUSE_PORT` 的机制（主流 Linux 和 BSD
-版本都支持该功能），Pipy 可以以多进程模式运行，使得 Pipy 不仅适用于 Sidecar 模式，也适用与于大规模的流量处理场景。
-在实践中，Pipy 独立部署的时候用作“软负载”，可以在低延迟的情况下，实现媲美硬件的负载均衡吞吐能力，同时具有灵活的扩展性。
+虽然 Pipy 主要用作高性能的反向代理，但 Pipy 的真正能力是提供了一系列可插拔的组件，又称过滤器，同时对组合的方式没有限制。如何使用 Pipy 完全取决于需求。Pipy 已经被用于协议转换、流量录制、消息加签/验签、无服务器的功能启动、健康检查等等。
 
-## 兼容性
+### 快
 
-兼容性是 Pipy 的设计重点之一，它可以支持多种操作系统平台与 CPU 架构，目前开发团队已经完成了在下列平台和架构上的测试：
+Pipy 使用 C++ 开发。使用了异步网络；分配的资源被池化并可复用；内部尽可能地使用指针传递数据，最大限度降低内存带宽的压力。在各方面都极快。
 
-* Alpine 3
-* CentOS 7
-* FreeBSD 12/13
-* macOS M1/x86（不支持 `REUSE_PORT`）
-* Ubuntu 18/20
+### 小
 
-生产环境推荐使用 CentOS 7（及同类品）或者 FreeBSD。
+用于启动工作节点的二进制文件不足 8MB，并且没有任何外部依赖。使用 Pipy 可以体验到最快速的下载和启动。
 
-## 图形界面
+### 可编程
 
-Pipy 内置了可视化 web 开发环境（需要在编译时开启），包含了编辑器和图形化的辅助设计工具，用于简化脚本的开发和调试。
+Pipy 是一个运行 PipyJS（标准 JavaScript 的定制版本） 的脚本引擎。通过这个使用最广泛的编程语言，Pipy 提供了相比 YAML 或类似格式更强大的表现力。
 
-``` shell
-#默认使用 6060 端口
-$ pipy tutorial/01-hello/hello.js --admin-port=6060
-```
+### 开放
 
-启动pipy后，用浏览器访问 http://localhost:6060/ 就可以看到pipy控制台。控制台采用类似vscode的布局和操作体验。具体的使用可以参考[pipy console基本使用文档](https://flomesh-io.github.io/pipy/operating/dev-console.html)。
+Pipy 比开源更加开放。你将对所有细节都了如指掌，Pipy 不会有任何隐藏。不过无需担心，使用 Pipy 并不需要了解这些细节。但了解之后，会更加有趣。
 
-pipy console的设计目的包括如下两个：
-* 流量编辑人员可以快速的编辑pipy js(PJS)脚本，进行调试；同时pipy console以图形化方式展示流量处理逻辑，可以帮助使用者在复杂逻辑情况下快速理解处理逻辑
-* 在云端的开发测试环境中，用户可以不用登陆服务器就完成PJS脚本的调试，如加入打印语句等。对比ssh到服务器，或者attach到k8s容器内，pipy console更加易于使用
+## 快速开始
 
-需要注意的是：pipy console不适合生产环境，不要在不信任的环境里开启pipy console功能，会有安全问题。
+### 构建
 
-## 构建
-
-### 从源码构建
-
-构建 Pipy 需要满足如下版本依赖：
+构建需要满足以下条件：
 
 * Clang 5.0+
 * CMake 3.0+
+* zlib
+* Node.js v12+ (如果要开启内置的*管理界面*)
 
-满足 clang 和 cmake 版本后，直接运行如下编译命令：
+执行构建脚本：
 
-```command
-$ ./build.sh
+```
+./build.sh
 ```
 
-Pipy 编译生成的单一可执行文件会输出到 `bin/pipy` 目录，可以运行 `bin/pipy -h` 获取更多信息。
+可以在 `bin/pipy` 目录中找到二进制文件。
 
-### 构建 Docker 镜像
+### 运行
 
-使用如下命令构建 Docker 镜像：
+不指定任何参数运行 `bin/pipy` 命令，Pipy 会运行在代码库模式并监听默认端口 6060。
 
-```command
-$ cd pipy
-$ sudo docker build --rm -t pipy .
+```
+$ bin/pipy
+
+[INF] [admin] Starting admin service...
+[INF] [listener] Listening on port 6060 at ::
 ```
 
-> 注：可以使用 `--squash` 的参数来构建更小的镜像。参考文档：[Docker Documentation](https://docs.docker.com/engine/reference/commandline/image_build/)
-
-## 快速上手
-
-### 下载运行
-
-Github的Release页面提供了多种平台的可执行文件，下载对应的可执行文件后就可以运行了。pipy只有一个可执行文件，采用single binary方式打包，所有的依赖都在这个可执行文件中，包括pipy console。因此，直接下载是最便捷的体验pipy的方法。
-
-### x86 环境中使用 rpm 安装
-
-```command
-$ yum -y install http://repo.flomesh.cn/pipy/pipy-latest.el7_pl.x86_64.rpm
-```
-
-### 命令行参数
-
-```command
-$ pipy --help
-```
-
-### 过滤器列表及参数
-
-```command
-$ pipy --list-modules
-$ pipy --help-modules
-```
-
-### 命令行运行
-
-以演示案例 `test/001-echo` 为例，可以用这个方式运行（其中的 `--watch-config-file` 参数用于在配置文件变化时自动重新加载配置）：
-
-```command
-$ pipy test/001-echo/pipy.js
-```
-
-或者使用pipy console:
-```command
-$ pipy test/001-echo/pipy.js --admin-port=6060
-```
-然后使用浏览器访问 http://localhost:6060/ 就可以了。
-
-在 Linux 或者 BSD 系统上，可以通过如下命令启动两个（或者多个）Pipy 监听同一个端口，内核会自动的在多个进程间负载均衡流量，这种方式极大地提高了吞吐能力。这种进程间 Share nothing 的结构降低了多进程/多线程的复杂度，使得 Pipy 能够在不引入新的复杂度和不确定性的情况下，具备了多进程横向扩展吞吐能力的能力：
-
-```command
-$ pipy test/001-echo/pipy.js --reuse-port &
-$ pipy test/001-echo/pipy.js --reuse-port &
-...
-```
-
-## 使用 Docker 运行 Pipy
-
-Pipy 的 Docker 镜像识别如下的环境变量：
-
-* `PIPY_CONFIG_FILE=</path/to/config-file>` 定义了 Pipy 配置文件的位置
-
-* `PIPY_SPAWN=n` 定义了同时运行的 Pipy 进程数量；注意 `n` 是目标进程数减一。也就是说，如果希望运行两个 Pipy 进程，那么 `PIPY_SPAWN=1` 就可以。
-
-```command
-$ docker run -it --rm -e PIPY_CONFIG_FILE=/etc/pipy/test/001-echo/pipy.js flomesh/pipy-pjs:latest
-```
-
-```command
-$ docker run -it --rm -e PIPY_CONFIG_FILE=/etc/pipy/test/001-echo/pipy.js -e PIPY_SPAWN=1 -p 8000:6000 flomesh/pipy-pjs:latest
-```
-
-## 在 Kubernetes 上运行 Pipy
-
-我们在 [pipy-operator](https://github.com/flomesh-io/pipy-operator) 项目中提供了用于 Kubernetes 环境中的 CRD 和 Operator 示例代码。读者可以参考这些代码来实现自己的 CRD/Operator。
-
-```command
-$ git clone https://github.com/flomesh-io/pipy-operator
-$ cd pipy-operator
-$ kubectl apply -f etc/cert-manager-v1.1.0.yaml
-$ kubectl apply -f artifact/pipy-operator.yaml
-$ kubectl apply -f config/samples/standalone/001-echo.yaml
-$ kubectl apply -f config/samples/ingress/001-routing.yaml
-$ kubectl apply -f config/samples/sidecar/007-deployment-pipy.yaml
-```
+在浏览器中访问地址 `http://localhost:6060` 可以打开内置的*管理界面*。在*管理界面*可以浏览文档和使用教程代码库。
 
 ## 文档
 
-文档在保存在 [`docs`](docs) 目录：
+在 `docs/` 可以浏览 Pipy 的文档：
 
-* [概述](./docs/overview.mdx)
-* [概念](./docs/concepts.mdx)
-* [快速开始](./docs/quick-start.mdx)
-* [教程](https://flomesh-io.github.io/pipy/tutorials/)
+* [概述](./docs/overview.zh.mdx)
+* [概念](./docs/concepts.zh.mdx)
+* [快速开始](./docs/quick-start.zh.mdx)
+* 教程
+    * [01 Hello world](./docs/tutorial/01-hello.zh.mdx)
+    * [02 回显](./docs/tutorial/02-echo.zh.mdx)
+    * [03 代理](./docs/tutorial/03-proxy.zh.mdx)
+    * [04 路由](./docs/tutorial/04-routing.zh.mdx)
+    * [05 插件](./docs/tutorial/05-plugins.zh.mdx)
+    * [06 配置](./docs/tutorial/06-configuration.zh.mdx)
+    * [07 负载均衡](./docs/tutorial/07-load-balancing.zh.mdx)
+    * [08 负载均衡进阶](./docs/tutorial/08-load-balancing-improved.zh.mdx)
+    * [09 连接池](./docs/tutorial/09-connection-pool.zh.mdx)
+    * [10 路径重写](./docs/tutorial/10-path-rewriting.zh.mdx)
+    * [11 Logging](./docs/tutorial/11-logging.zh.mdx)
+    * [12 JWT](./docs/tutorial/12-jwt.zh.mdx)
+    * [13 黑白名单](./docs/tutorial/13-ban.zh.mdx)
+    * [14 限流](./docs/tutorial/14-throttle.zh.mdx)
+    * [15 缓存](./docs/tutorial/15-cache.zh.mdx)
+    * [16 静态资源服务](./docs/tutorial/16-serve-static.zh.mdx)
+    * [17 数据格式转换](./docs/tutorial/17-body-transform.zh.mdx)
+    * [18 TLS](./docs/tutorial/18-tls.zh.mdx)
+* 学习和文章
+  * [Katacoda](https://katacoda.com/flomesh-io) - Katacoda 场景
+  * [InfoQ 文章](https://www.infoq.com/articles/network-proxy-stream-processor-pipy/) - 简要介绍
 * [版权](COPYRIGHT)
-* [授权](LICENCE)
+* [许可](LICENCE)
+
+## 兼容性
+
+Pipy 已经通过如下平台的测试：
+
+* RHEL/CentOS
+* Fedora
+* Ubuntu
+* Debian
+* macOS
+* FreeBSD
+* OpenBSD
+* OpenEuler
+* Deepin
+* Kylin
+
+Pipy 可以在以下架构上运行：
+
+* X86/64
+* ARM64
+* LoongArch
+* Hygon
+
+## 版权许可
+
+参考 [版权](https://github.com/flomesh-io/pipy/blob/main/COPYRIGHT) 和 [许可](https://github.com/flomesh-io/pipy/blob/main/LICENCE)
 
 ## 联系方式
 
