@@ -2,32 +2,42 @@
 title: "Overview"
 ---
 
-**Pipy** is an open-source, lightweight, high-performance, modular, programmable, cloud-native network stream processor that is ideal for a variety of use-cases ranging from (but not limited to) edge routers, load balancers & proxy solutions, API gateways, static HTTP servers, service mesh sidecars, and other applications. 
+**Pipy** is a programmable network proxy for the cloud, edge and IoT.
 
-As it turns out, each of those words has a pretty specific meaning of its own, so let’s take a look.
+Written in C++, Pipy is extremely lightweight and fast. It's also programmable by using PipyJS, a tailored version of the standard JavaScript language.
 
-### Lightweight
-The compiled pipy executable is approximately 6MB in size and requires a very small memory footprint to run.
+## Why Pipy?
 
-### High-performance
-Pipy is written in C++ and built on top of the **Asio** asynchronous I/O library.
+### Versatile
 
-### Modular
-Pipy has a modular design at its core, with many small reusable modules (**filters**) that can be linked together to form a pipeline through which network data flows and is processed.
+Although Pipy is mostly used as a high-performance reverse proxy, the true power of Pipy relies on providing you a range of pluggable building blocks, aka. filters, without imposing any restrictions on how you combine them. It's entirely up to you as to how you want to use Pipy. We've seen people using Pipy as a protocol converter, traffic recorder, message signer/verifier, serverless function starter, health checker and more.
 
-### Stream processor
-Pipy operates on network streams in an event-driven fashion where it consumes the input stream, performs user-provided transformations, and outputs stream. Pipy stream abstracts out data bytes into events. Refer to [Concepts](concepts) for more details.
+### Fast
+
+Pipy is written in C++. It leverages asynchronous networking. Allocated resources are pooled and reused. Data is transferred internally by pointers whenever possible, minimizing the pressure on memory bandwidth. It's fast in every way.
+
+### Tiny
+
+A build of Pipy in worker mode gives you an executable merely around 10MB with zero external dependencies. You'll experience the fastest download and startup times with Pipy.
 
 ### Programmable
-Pipy comes with built-in **JavaScript** support via its custom-developed component **PipyJS** (part of the Pipy code base), making it highly customizable and predictable in performance, with no garbage collection overhead as seen in its other scriptable counterparts. Refer to [Concepts](concepts) for more details.
 
-## Compatibility
+At the core, Pipy is a script engine running PipyJS, a tailored version of ECMA standard JavaScript. By speaking the planet's most widely used programming language, Pipy gives you unparalleled expressiveness over what you have in YAML or the like.
 
-Pipy is designed for high compatibility across different operating systems and CPU architectures. Pipy has been fully tested on these platforms:
+### Open
 
-* CentOS 7
-* Ubuntu 18/20
-* FreeBSD 12/13
-* macOS Intel & Apple silicons
+Pipy is more open than open source. It doesn’t try to hide every detail in the black box, so you always know what you are doing. But never fear. It doesn’t require a rocket scientist to figure out how the different parts work together. In fact, you’ll have more fun as you have full control over everything.
 
-CentOS7/REHL7 or FreeBSD are recommended in production environments.
+## Where to Start?
+
+### Quick Start
+
+If you are new to Pipy, head over to [Quick Start](/quick-start) for a first glance about how you start using it.
+
+### Concepts
+
+After you get your feet wet, reading through [Concepts](/concepts) will build a strong foundation for you in understanding a few key concepts that you would frequently come across while you read through the rest of the documentation.
+
+### Tutorial
+
+Now that you have the whole picture in mind, follow the steps in [Tutorial](/tutorial/01-hello) and enjoy your journey. It's going to be fun!

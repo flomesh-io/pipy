@@ -12,7 +12,7 @@ Although Pipy is mostly used as a high-performance reverse proxy, the true power
 
 ### Fast
 
-Pipy is written in C++. It leverages asynchronous networking. Allocated resources are pooled and reused. Data is transferred internally by pointers whenever possible, minimizing the pressure on memory bandwidth. It is fast in every way.
+Pipy is written in C++. It leverages asynchronous networking. Allocated resources are pooled and reused. Data is transferred internally by pointers whenever possible, minimizing the pressure on memory bandwidth. It's fast in every way.
 
 ### Tiny
 
