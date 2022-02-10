@@ -4,6 +4,7 @@ project(pipy)
 option(PIPY_GUI "include builtin GUI" ON)
 option(PIPY_TUTORIAL "include builtin tutorial scripts" ON)
 option(PIPY_SOIL_FREED_SPACE "invalidate freed space for debugging" OFF)
+option(PIPY_ZLIB "external zlib location" "")
 option(PIPY_OPENSSL "external libopenssl location" "")
 option(PIPY_STATIC "statically link to libc" OFF)
 
@@ -64,13 +65,18 @@ set(ZLIB_SRC_DIR ${CMAKE_SOURCE_DIR}/deps/zlib-1.2.11)
 set(ZLIB_INC_DIR ${ZLIB_SRC_DIR})
 set(ZLIB_LIB_DIR ${ZLIB_SRC_DIR}/build)
 
-add_custom_command(
-  OUTPUT ${ZLIB_LIB_DIR}/libz.a
-  WORKING_DIRECTORY ${ZLIB_SRC_DIR}
-  COMMAND mkdir -p build
-  COMMAND cd build && ../configure && make
-  COMMENT "Building zlib"
-)
+if (PIPY_ZLIB)
+  set(ZLIB_INC_DIR ${PIPY_ZLIB}/include)
+  set(ZLIB_LIB_DIR ${PIPY_ZLIB}/lib)
+else()
+  add_custom_command(
+    OUTPUT ${ZLIB_LIB_DIR}/libz.a
+    WORKING_DIRECTORY ${ZLIB_SRC_DIR}
+    COMMAND mkdir -p build
+    COMMAND cd build && ../configure && make
+    COMMENT "Building zlib"
+  )
+endif()
 
 add_custom_target(zlib DEPENDS ${ZLIB_LIB_DIR}/libz.a)
 
