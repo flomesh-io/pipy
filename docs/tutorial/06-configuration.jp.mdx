@@ -77,7 +77,7 @@ title: "6：コンフィグレーション（設定）"
 + (JSON.decode(pipy.load('config/proxy.json')))
 ```
 
-> ここで、標準の[_JSON.parse()_](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/JSON/parse)ではなく、[_JSON.decode()_](/reference/JSON/decode)を使っているのは、 _JSON.decode()_ がバイナリデータを処理するのに対し、 _JSON.parse()_ は文字列のみ処理するからです。
+> ここで、標準の[_JSON.parse()_](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/JSON/parse)ではなく、[_JSON.decode()_](/reference/api/JSON/decode)を使っているのは、 _JSON.decode()_ がバイナリデータを処理するのに対し、 _JSON.parse()_ は文字列のみ処理するからです。
 
 3.	リスニングポートとプラグインリストを、入力パラメータ`config`にあるものに置き換えます。
 
@@ -130,8 +130,8 @@ title: "6：コンフィグレーション（設定）"
 ## 要点
 
 1.	コードとデータを分けるということは、コードを整理する上でも良い慣習であり、コードの設定が容易になります。
-2.	[_pipy.load()_](/reference/pipy.load)を使用してファイルをバイナリデータとして読み取ります。
-3.	[_JSON.decode()_](/reference/JSON/decode)を使って、バイナリデータからJSONをデコードします。
+2.	[_pipy.load()_](/reference/api/pipy.load)を使用してファイルをバイナリデータとして読み取ります。
+3.	[_JSON.decode()_](/reference/api/JSON/decode)を使って、バイナリデータからJSONをデコードします。
 
 ## 次のパートの内容
 

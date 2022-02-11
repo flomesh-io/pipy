@@ -10,7 +10,7 @@ title: 14 限流
 
 ## 过滤器
 
-可以用来做限流的过滤器有两个 [`throttleMessageRate`](/reference/Configuration/throttleMessageRate) 和 [`throttleDataRate`](/reference/Configuration/throttleDataRate)，前者限制每秒的最大请求数，后者限制每秒最大的字节数。二者的参数一样：
+可以用来做限流的过滤器有两个 [`throttleMessageRate`](/reference/api/Configuration/throttleMessageRate) 和 [`throttleDataRate`](/reference/api/Configuration/throttleDataRate)，前者限制每秒的最大请求数，后者限制每秒最大的字节数。二者的参数一样：
 * *quota*：配额，类型可以是：Number、String 或者函数。
 * *account*：配额的统计单元/粒度，类型可以是：String 或者函数。比如服务名、请求路径、某个请求头或者更复杂的组合。
 

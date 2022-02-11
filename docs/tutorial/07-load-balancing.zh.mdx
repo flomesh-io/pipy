@@ -6,7 +6,7 @@ title: 07 负载均衡
 
 ## RoundRobinLoadBalancer
 
-Pipy 提供各种内置类让实现负载均衡代理更容易。这些类实现了各种的负载均衡算法，提供了同样的使用方式。在本节中我们将使用的 [algo.RoundRobinLoadBalancer](/reference/algo/RoundRobinLoadBalancer) 实现了常见了“轮询（round-robin）”算法。
+Pipy 提供各种内置类让实现负载均衡代理更容易。这些类实现了各种的负载均衡算法，提供了同样的使用方式。在本节中我们将使用的 [algo.RoundRobinLoadBalancer](/reference/api/algo/RoundRobinLoadBalancer) 实现了常见了“轮询（round-robin）”算法。
 
 构建 *RoundRobinLoadBalancer* 对象，需要提供一个带有权重的目标列表：
 
@@ -28,7 +28,7 @@ new algo.RoundRobinLoadBalancer([
 ])
 ```
 
-有了 *RoundRobinLoadBalancer*，每次调用其 [select()](/reference/algo/RoundRobinLoadBalancer/select) 方法都会以轮询的方式返回其中的一个目标。
+有了 *RoundRobinLoadBalancer*，每次调用其 [select()](/reference/api/algo/RoundRobinLoadBalancer/select) 方法都会以轮询的方式返回其中的一个目标。
 
 ## 拆解  router.js
 
@@ -294,7 +294,7 @@ You are requesting /hi from ::ffff:127.0.0.1
 
 ### 收获
 
-1. 使用 [_algo.RoundRobinLoadBalancer_](/reference/algo/RoundRobinLoadBalancer)（还有其他类型的均衡器）自动从一组目标服务器中选择，并结合各自的权重。
+1. 使用 [_algo.RoundRobinLoadBalancer_](/reference/api/algo/RoundRobinLoadBalancer)（还有其他类型的均衡器）自动从一组目标服务器中选择，并结合各自的权重。
 2. 结合 [_Array.prototype.map_](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Array/map)、[_Object.entries_](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object/entries) 以及 [_Object.fromEntries_](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object/fromEntries) 轻松完成 JSON 对象键和值的转换。
 
 ### 接下来

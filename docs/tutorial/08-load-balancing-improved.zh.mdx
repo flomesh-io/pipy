@@ -16,13 +16,13 @@ You are requesting /hi from ::ffff:127.0.0.1
 
 ## 缓存
 
-“同一个连接的请求去往同一个目标” 规则的逻辑可以使用简单的“缓存”来实现。与其每个请求都调用 [_RoundRobinLoadBalancer.prototype.select()_](/reference/algo/RoundRobinLoadBalancer/select)，而应该：
+“同一个连接的请求去往同一个目标” 规则的逻辑可以使用简单的“缓存”来实现。与其每个请求都调用 [_RoundRobinLoadBalancer.prototype.select()_](/reference/api/algo/RoundRobinLoadBalancer/select)，而应该：
 
 1. 检查 cache 中该均衡器（在路由选择中我们拿到了可以处理该请求的负载均衡器）是否已选择了目标服务器；
 2. 如果找到，使用已选择的目标服务器；
 3. 如果没找到，则调用 `select()` 选择并保存在缓存中待下次使用。
 
-缓存的实现使用 [algo.Cache](/reference/algo/Cache)，构造时需要提供两个回调函数：
+缓存的实现使用 [algo.Cache](/reference/api/algo/Cache)，构造时需要提供两个回调函数：
 
 1. 找不到缓存项，也就是缓存未命中时调用的回调函数，函数返回缓存项。
 2. 缓存项被清理时调用的回调函数。
@@ -39,7 +39,7 @@ new algo.Cache(
 
 注意，我们使用 *RoundRobinLoadBalancer* 作为缓存的键。
 
-> 这里 [RoundRobinLoadBalancer.deselect()](/reference/algo/RoundRobinLoadBalancer/deselect) 不是必须的，但是使用其他算法的均衡器实现时会用到。比如 [LeastWorkLoadBalancer](/reference/algo/LeastWorkLoadBalancer)，需要对负载进行跟踪。
+> 这里 [RoundRobinLoadBalancer.deselect()](/reference/api/algo/RoundRobinLoadBalancer/deselect) 不是必须的，但是使用其他算法的均衡器实现时会用到。比如 [LeastWorkLoadBalancer](/reference/api/algo/LeastWorkLoadBalancer)，需要对负载进行跟踪。
 
 ### 初始化
 
@@ -105,7 +105,7 @@ new algo.Cache(
 
 ### 缓存
 
-现在我们不是直接调用 *RoundRobinLoadBalancer.select()*，而是调用 [_algo.Cache.prototype.get()_](/reference/algo/Cache/get) 来间接调用 *RoundRobinLoadBalancer.select()*。
+现在我们不是直接调用 *RoundRobinLoadBalancer.select()*，而是调用 [_algo.Cache.prototype.get()_](/reference/api/algo/Cache/get) 来间接调用 *RoundRobinLoadBalancer.select()*。
 
 ```js
   .pipeline('request')
@@ -167,7 +167,7 @@ You are requesting /hi from ::ffff:127.0.0.1
 
 ### 收获
 
-1. 使用 [algo.Cache](/reference/algo/Cache) 保证来自同一个连接对同一个目标服务的访问请求，都会转发到同一个目标服务器。
+1. 使用 [algo.Cache](/reference/api/algo/Cache) 保证来自同一个连接对同一个目标服务的访问请求，都会转发到同一个目标服务器。
 2. 连接维度的数据初始化应该紧跟在 *listen()* 之后，在类似 *demuxHTTP()* 的过滤器将流分割成消息之前。
 
 ### 接下来

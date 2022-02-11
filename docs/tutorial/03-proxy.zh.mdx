@@ -41,7 +41,7 @@ pipy()
 
 ### demuxHTTP 过滤器
 
-*端口管道*以 [Data](/reference/Data) 事件序列的方式接收进入的输入，每个 **Data** 事件携带小块的 TCP 流。**demuxHTTP** 将 TCP 流分隔成独立的 HTTP 消息，然后将它们封装成 [*MessageStart*](/reference/MessageStart) 和 [*MessageEnd*](/reference/MessageEnd) 事件做进一步的处理。
+*端口管道*以 [Data](/reference/api/Data) 事件序列的方式接收进入的输入，每个 **Data** 事件携带小块的 TCP 流。**demuxHTTP** 将 TCP 流分隔成独立的 HTTP 消息，然后将它们封装成 [*MessageStart*](/reference/api/MessageStart) 和 [*MessageEnd*](/reference/api/MessageEnd) 事件做进一步的处理。
 
 每个从 TCP 流中提取的消息都应该在独立的管道中处理，而不是工作在 TCP 层之上的 **demuxHTTP** 管道。在某些简单的场景下，在接受流的管道中处理并没有什么问题；但是你终归会因为在消息间混合状态而遇到逻辑错误。
 

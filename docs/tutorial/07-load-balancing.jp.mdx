@@ -6,7 +6,7 @@ title: "7：ローディングバランシング"
 
 # ラウンドロビン方式のロードバランサー
 
-Pipyでは、ロードバランシングプロキシの構築を容易にするために、いくつかのビルトインクラスを提供しています。これらのクラスには、若干数に分類されるロードバランシングのアルゴリズムが実装されており、すべて同じ使い方をします。このチュートリアルでは、最も一般的に使われている「ラウンドロビン」アルゴリズムを実装した[_algo.RoundRobinLoadBalancer_](/reference/algo/RoundRobinLoadBalancer)を使用します。
+Pipyでは、ロードバランシングプロキシの構築を容易にするために、いくつかのビルトインクラスを提供しています。これらのクラスには、若干数に分類されるロードバランシングのアルゴリズムが実装されており、すべて同じ使い方をします。このチュートリアルでは、最も一般的に使われている「ラウンドロビン」アルゴリズムを実装した[_algo.RoundRobinLoadBalancer_](/reference/api/algo/RoundRobinLoadBalancer)を使用します。
 
 _RoundRobinLoadBalancer_ オブジェクトを構築するには、ターゲットのリストとそれらのウェイト付けが必要です。
 
@@ -28,7 +28,7 @@ new algo.RoundRobinLoadBalancer([
 ])
 ```
 
-この _RoundRobinLoadBalancer_ では、[_select()_](/reference/algo/RoundRobinLoadBalancer/select)メソッドをコールするたびに、ラウンドロビン方式で選ばれたターゲットを一つ与えてくれます。
+この _RoundRobinLoadBalancer_ では、[_select()_](/reference/api/algo/RoundRobinLoadBalancer/select)メソッドをコールするたびに、ラウンドロビン方式で選ばれたターゲットを一つ与えてくれます。
 
 # router.jsを分解する
 
@@ -294,7 +294,7 @@ You are requesting /hi from ::ffff:127.0.0.1
 
 ## 要点
 
-1.	[_algo.RoundRobinLoadBalancer_](/reference/algo/RoundRobinLoadBalancer)（他にもいくつか似たようなものがあります）は、グループの中から、ウェイトに応じてターゲットを自動的に選択する場合に使用します。.
+1.	[_algo.RoundRobinLoadBalancer_](/reference/api/algo/RoundRobinLoadBalancer)（他にもいくつか似たようなものがあります）は、グループの中から、ウェイトに応じてターゲットを自動的に選択する場合に使用します。.
 2.	[_Array.prototype.map_](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Array/map)と[_Object.entries_](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object/entries)や[_Object.fromEntries_](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object/fromEntries)を組み合わせることで、JSONオブジェクトのキーと値を簡単に変換することができます。
 
 ## 次のパートの内容

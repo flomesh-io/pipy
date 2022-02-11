@@ -30,13 +30,13 @@ In this tutorial we will be adding this functionality to *service-echo*, as this
 
 ## Data Transformation
 
-If you have been following through tutorials you should have seen that we have been mostly using JSON for communication with endpoints, and using Pipy built-in [`JSON`](/reference/JSON) class for JSON handling. `JSON` class provides methods like `parse`, `stringify`, `encode` and `decode`.
+If you have been following through tutorials you should have seen that we have been mostly using JSON for communication with endpoints, and using Pipy built-in [`JSON`](/reference/api/JSON) class for JSON handling. `JSON` class provides methods like `parse`, `stringify`, `encode` and `decode`.
 
-To process XML, Pipy also comes with built-in [`XML`](/reference/XML) class which provides the methods similar to that of `JSON` class.
+To process XML, Pipy also comes with built-in [`XML`](/reference/api/XML) class which provides the methods similar to that of `JSON` class.
 
 Transformation of XML to JSON and back, we will be using JavaScript Object as an intermediary object, so our transformation flow will look like XML <=> Object <=> JSON.
 
-Transformation from JSON to Object is very simple, which can be achieved by invoking the `decode` or `encode` method of `JSON` class. But XML is a markup language and transformation requires extra logic as `XML` class `decode` and `encode` methods operates at [`XML.Node`](/reference/XML/Node) object.
+Transformation from JSON to Object is very simple, which can be achieved by invoking the `decode` or `encode` method of `JSON` class. But XML is a markup language and transformation requires extra logic as `XML` class `decode` and `encode` methods operates at [`XML.Node`](/reference/api/XML/Node) object.
 
 ```xml
 <root>
@@ -100,7 +100,7 @@ in *json2xml* sub-pipeline, we will use `replaceMessageBody` filter to change th
   )
 ```
 
-[`XML.Node`](/reference/XML/Node) class represents a node in XML and is used to create a node. We are constructing a `root` node and having `_obj2xml` function to convert request body into child nodes. So the return type of `_obj2xml` function is an Array of `XML.Node` nodes:
+[`XML.Node`](/reference/api/XML/Node) class represents a node in XML and is used to create a node. We are constructing a `root` node and having `_obj2xml` function to convert request body into child nodes. So the return type of `_obj2xml` function is an Array of `XML.Node` nodes:
 
 ```js
 _obj2xml: node => (

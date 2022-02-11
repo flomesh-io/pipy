@@ -30,13 +30,13 @@ title: 17 数据格式转换
 
 ## 数据格式转换
 
-如果大家看过前面的教程，我们用的比较多的数据格式是 JSON，通过 [`JSON`](/reference/JSON) 类对数据进行编解码。其提供了几个常用方法：`parse`、`stringify`、`encode` 和 `decode`。
+如果大家看过前面的教程，我们用的比较多的数据格式是 JSON，通过 [`JSON`](/reference/api/JSON) 类对数据进行编解码。其提供了几个常用方法：`parse`、`stringify`、`encode` 和 `decode`。
 
-处理 XML 格式的数据，也同样提供了 [`XML`](/reference/XML) 类，提供了与 *JSON* 相同的方法。
+处理 XML 格式的数据，也同样提供了 [`XML`](/reference/api/XML) 类，提供了与 *JSON* 相同的方法。
 
 XML 与 JSON 格式的互相转换，会使用 JavaScript Object 作为中间类型，即 XML <=> Object <=> JSON。
 
-JSON 与 Object 的转换很简单，使用 `decode` 和 `encode` 即可。而 XML 是一个完整的标记语言，因此转换会稍微复杂一些，其 `decode` 和 `encode` 方法是用来将数据与 [`XML.Node`](/reference/XML/Node) 对象进行转换。
+JSON 与 Object 的转换很简单，使用 `decode` 和 `encode` 即可。而 XML 是一个完整的标记语言，因此转换会稍微复杂一些，其 `decode` 和 `encode` 方法是用来将数据与 [`XML.Node`](/reference/api/XML/Node) 对象进行转换。
 
 ```xml
 <root>
@@ -99,7 +99,7 @@ pipy({
     )
   )
 ```
-[`XML.Node`](/reference/XML/Node) 是 XML 节点的类型，我们使用这个类进行节点的创建。我们一次创建了主节点和 `root` 节点，然后使用 `_obj2xml` 函数将消息体转换为节点数组作为 `root` 节点的子节点。因此函数 `_obj2xml` 的返回值是节点数组：
+[`XML.Node`](/reference/api/XML/Node) 是 XML 节点的类型，我们使用这个类进行节点的创建。我们一次创建了主节点和 `root` 节点，然后使用 `_obj2xml` 函数将消息体转换为节点数组作为 `root` 节点的子节点。因此函数 `_obj2xml` 的返回值是节点数组：
 
 ```js
 _obj2xml: node => (

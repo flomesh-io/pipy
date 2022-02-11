@@ -16,13 +16,13 @@ You are requesting /hi from ::ffff:127.0.0.1
 
 # Cache
 
-この「_同じ接続からのリクエストは同じターゲットに向かう_」というルールに従うロジックは、単純な「_cache_」で実現できます。接続内のすべてのリクエストに対して、常に[_RoundRobinLoadBalancer.prototype.select()_](/reference/algo/RoundRobinLoadBalancer/select)をコールするのではなく、次のようにします。
+この「_同じ接続からのリクエストは同じターゲットに向かう_」というルールに従うロジックは、単純な「_cache_」で実現できます。接続内のすべてのリクエストに対して、常に[_RoundRobinLoadBalancer.prototype.select()_](/reference/api/algo/RoundRobinLoadBalancer/select)をコールするのではなく、次のようにします。
 
 1.	キャッシュを検索して、バランサーがすでにターゲットを選択しているかどうかを見る
 2.	見つかった場合、すでに選択されたターゲットを使う
 3.	見つからなかった場合、`select()`をコールして1つ選択し、次の使用のためにキャッシュに保持する
 
-このキャッシュは[_algo.Cache_](/reference/algo/Cache)を使って作ります。これには2つのコールバックがあります。
+このキャッシュは[_algo.Cache_](/reference/api/algo/Cache)を使って作ります。これには2つのコールバックがあります。
 
 1.	不足しているエントリーが埋められたときのコールバック
 2.	エントリーが消去されたときのコールバック
@@ -39,7 +39,7 @@ new algo.Cache(
 
 ここで、 _RoundRobinLoadBalancer_ オブジェクトをキーに使っていることに注意してください。
 
-> [_RoundRobinLoadBalancer.prototype.deselect()_](/reference/algo/RoundRobinLoadBalancer/deselect)のコールは必ずしも必要ではありませんが、[_LeastWorkLoadBalancer_](/reference/algo/LeastWorkLoadBalancer)のような他のタイプのロードバランスアルゴリズムの場合、ワークロードを追跡できるようにするために必要になります。 
+> [_RoundRobinLoadBalancer.prototype.deselect()_](/reference/api/algo/RoundRobinLoadBalancer/deselect)のコールは必ずしも必要ではありませんが、[_LeastWorkLoadBalancer_](/reference/api/algo/LeastWorkLoadBalancer)のような他のタイプのロードバランスアルゴリズムの場合、ワークロードを追跡できるようにするために必要になります。 
 
 ## 初期化
 
@@ -105,7 +105,7 @@ new algo.Cache(
 
 ## キャッシュする
 
-ここでは、 _RoundRobinLoadBalancer.select()_ を直接コールするのではなく、 _RoundRobinLoadBalancer.select()_ へのコールをラップする[_algo.Cache.prototype.get()_](/reference/algo/Cache/get)をコールします。
+ここでは、 _RoundRobinLoadBalancer.select()_ を直接コールするのではなく、 _RoundRobinLoadBalancer.select()_ へのコールをラップする[_algo.Cache.prototype.get()_](/reference/api/algo/Cache/get)をコールします。
 
 ``` js
   .pipeline('request')
@@ -166,7 +166,7 @@ _curl_ で接続するたびに、2つのリクエストは同じターゲット
 
 ## 要点
 
-1.	[_algo.Cache_](/reference/algo/Cache)を使用すると、サービスに割り当てられたターゲットを記憶し、同じ接続に対して同じターゲットに戻ることができます。
+1.	[_algo.Cache_](/reference/api/algo/Cache)を使用すると、サービスに割り当てられたターゲットを記憶し、同じ接続に対して同じターゲットに戻ることができます。
 2.	接続全体の初期化は、ストリームが _demuxHTTP()_ のようなフィルタでメッセージに分割される前に、 _listen()_ の最初で行われるようにします。
 
 ## 次のパートの内容

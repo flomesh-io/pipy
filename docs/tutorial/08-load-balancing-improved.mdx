@@ -21,14 +21,14 @@ Usually we'd like requests coming from the same connection go to the same target
 
 The logic behind this "_request from the same connection go to the same target_" rule
 can be done with a simple "_cache_". Instead of always calling to
-[_RoundRobinLoadBalancer.prototype.select()_](/reference/algo/RoundRobinLoadBalancer/select)
+[_RoundRobinLoadBalancer.prototype.select()_](/reference/api/algo/RoundRobinLoadBalancer/select)
 for every request in a connection, we:
 
 1. Find in a cache to see if a target has already been picked by a balancer.
 2. If found, we use the once picked target or,
 3. If not found, we call `select()` to pick one and keep it in the cache for use next time.
 
-We make such a cache by using [_algo.Cache_](/reference/algo/Cache),
+We make such a cache by using [_algo.Cache_](/reference/api/algo/Cache),
 providing two callbacks:
 
 1. Callback when a missing entry is to be filled.
@@ -46,9 +46,9 @@ new algo.Cache(
 
 Note that we are using the _RoundRobinLoadBalancer_ objects as keys.
 
-> Call to [_RoundRobinLoadBalancer.prototype.deselect()_](/reference/algo/RoundRobinLoadBalancer/deselect)
+> Call to [_RoundRobinLoadBalancer.prototype.deselect()_](/reference/api/algo/RoundRobinLoadBalancer/deselect)
 > is not a must, but in case of some other types of load balancing algorithms
-> like [_LeastWorkLoadBalancer_](/reference/algo/LeastWorkLoadBalancer),
+> like [_LeastWorkLoadBalancer_](/reference/api/algo/LeastWorkLoadBalancer),
 > it is required so that workloads can be tracked.
 
 ## Initialization
@@ -120,7 +120,7 @@ We also defined a variable called `_balancer` for use next.
 ## Cache it
 
 Now instead of calling _RoundRobinLoadBalancer.select()_ directly,
-we call [_algo.Cache.prototype.get()_](/reference/algo/Cache/get)
+we call [_algo.Cache.prototype.get()_](/reference/api/algo/Cache/get)
 that wraps up the call to _RoundRobinLoadBalancer.select()_.
 
 ``` js
@@ -185,7 +185,7 @@ This is a common optimization for a load balancing proxy.
 
 ## Takeaways
 
-1. Use [_algo.Cache_](/reference/algo/Cache) to remember what targets
+1. Use [_algo.Cache_](/reference/api/algo/Cache) to remember what targets
    have been allocated for services so we can go back to the same targets in
    the same connection.
 

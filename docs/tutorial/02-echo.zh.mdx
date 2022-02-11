@@ -24,7 +24,7 @@ title: 02 回显
 
 这里我们没有创建一个新的 Pipy 程序，而是扩展之前代码添加了一个新的*端口管道*。
 
-新的管道监听 `8081` 端口并包含同样的 `serveHTTP` 过滤器。只是这次用来构造 `serveHTTP` 过滤器是一个函数，不是 [*Message*](/reference/Message) 对象。
+新的管道监听 `8081` 端口并包含同样的 `serveHTTP` 过滤器。只是这次用来构造 `serveHTTP` 过滤器是一个函数，不是 [*Message*](/reference/api/Message) 对象。
 
 这个函数就是动态内容的“秘密成分”。
 
@@ -34,7 +34,7 @@ title: 02 回显
 
 在第 2 个管道中，`msg => new Message()` 同样只会在 Pipy 启动的时候执行一次，但与第一个不同，这里执行的结果是个函数，而不是 *Message* 对象。 在运行时，为每个请求都执行一次来返回一个新的 *Message* 对象。
 
-该函数有一个输入变量 `msg`，这个来自对 HTTP 请求的封装而成的 [*Message*](/reference/Message) 对象。在响应中同样要返回一个 *Message* 对象。这里简单的将请求体中的内容放在了新的 *Message* 对象中，这样就足以实现简单的 “回显服务器”。
+该函数有一个输入变量 `msg`，这个来自对 HTTP 请求的封装而成的 [*Message*](/reference/api/Message) 对象。在响应中同样要返回一个 *Message* 对象。这里简单的将请求体中的内容放在了新的 *Message* 对象中，这样就足以实现简单的 “回显服务器”。
 
 ### 测试
 

@@ -86,7 +86,7 @@ pipy()
 
 .pipeline('request')
 ```
-在空的“*request*”管道中，我们将两个新创建的插件连接进来。这次我们使用 [use()](/reference/Configuration/use) 过滤器，并提供文件名以及其中的管道名。
+在空的“*request*”管道中，我们将两个新创建的插件连接进来。这次我们使用 [use()](/reference/api/Configuration/use) 过滤器，并提供文件名以及其中的管道名。
 
 ```js
   .pipeline('request')
@@ -150,7 +150,7 @@ pipy()
 
 我们并不能用过去的方式来定义全局变量，否则只能在 `proxy.js` 中使用，在 `router.js` 中不可见。
 
-因此我们使用 [export()](/reference/Configuration/export) 函数定义变量用于在其他的文件中“引用”。初始值为 `false`。
+因此我们使用 [export()](/reference/api/Configuration/export) 函数定义变量用于在其他的文件中“引用”。初始值为 `false`。
 
 ```js
   pipy()
@@ -209,8 +209,8 @@ No handler
 
 ### 收获
 
-1. 使用 [`use()`](/reference/Configuration/use) 将多个文件中的管道连接到一个 *插件链* 中。这个是可扩展插件架构的关键。
-2. [`pipy()`](/reference/pipy) 中定义全局变量只能在其定义的文件中可见。需要使用 [*export()*](/reference/Configuration/export) 和 [*import()*](/reference/Configuration/import) 来多个文件中共享变量。
+1. 使用 [`use()`](/reference/api/Configuration/use) 将多个文件中的管道连接到一个 *插件链* 中。这个是可扩展插件架构的关键。
+2. [`pipy()`](/reference/api/pipy) 中定义全局变量只能在其定义的文件中可见。需要使用 [*export()*](/reference/api/Configuration/export) 和 [*import()*](/reference/api/Configuration/import) 来多个文件中共享变量。
 
 ### 接下来
 

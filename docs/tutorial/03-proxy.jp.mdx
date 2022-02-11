@@ -44,7 +44,7 @@ pipy()
 
 ## フィルター：demuxHTTP
 
-ポートパイプラインは着信するデータを[_Data_](/reference/Data)イベントとしてすべて受け入れ、それぞれがTCPストリ―ムの小さな塊を保持します。**demuxHTTP**がすることは、TCPストリームを個々のHTTPメッセージに「分割」すること、そしてその後の処理ために[_MessageStart_](/reference/MessageStart)イベントと[_MessageEnd_](/reference/MessageEnd)イベントとの間でそれらをラップすることです。
+ポートパイプラインは着信するデータを[_Data_](/reference/api/Data)イベントとしてすべて受け入れ、それぞれがTCPストリ―ムの小さな塊を保持します。**demuxHTTP**がすることは、TCPストリームを個々のHTTPメッセージに「分割」すること、そしてその後の処理ために[_MessageStart_](/reference/api/MessageStart)イベントと[_MessageEnd_](/reference/api/MessageEnd)イベントとの間でそれらをラップすることです。
 
 TCPストリームから抽出されたメッセージのそれぞれは、TCPレイヤーで動作する**demuxHTTP**のパイプラインとは別の、独立したパイプラインで処理されるようにすべきです。極端に単純化されたユースケースなら、送信側のストリームを流入させて、すべてのメッセージを同じパイプラインで処理することができるかもしれません。しかしほとんどのケースでは、メッセージ間で状態が混在し、誤ったロジックに陥ることになります。
 

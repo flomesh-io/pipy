@@ -1,0 +1,309 @@
+---
+title: "Language"
+---
+
+# Keywords
+
+PipyJS has no control flow or OOP constructs, so it does NOT have the following keywords from the standard JavaScript:
+
+## Control flow related keywords
+
+PipyJS does NOT have the following control flow related keywords:
+
+`break` `case` `catch` `continue` `debugger` `default` `do` `else` `finally` `function` `for` `if` `return` `switch` `throw` `try` `while` `with` `yield`
+
+> Although PipyJS doesn't have the keyword `function`, you can define functions by using the arrow operator `=>`. For example:
+> ``` js
+> (x, y) => Math.sqrt(x * x + y * y)
+> ```
+
+## OOP related keywords
+
+PipyJS does NOT have the following OOP related keywords:
+
+`class` `import` `export` `extends` `static` `super`
+
+# Data types
+
+PipyJS uses the same type system as ECMAScript only without BigInt and Symbol:
+
+* There are 4 primitive types:
+
+  - Undefined. The unique value `undefined` when a variable is not initialized yet.
+  - Boolean. `true` and `false`.
+  - Number. A 64-bit double precision floating number, such as `123`, `0xabc`, `3.1415926`, `1e6`.
+  - String. A sequence of Unicode characters.
+
+* plus _Object_, which represents structural data. It can be:
+
+  - Null object, represented by a unique value `null`.
+  - A user defined _plain old data_, such as `{ x: 1.2, y: 300 }`
+  - A builtin object, such as _Array_ or _RegExp_.
+  - A function, such as `(a, b) => a * a + b * b`.
+
+Besides the lack of _BigInt_ and _Symbol_, there are some other differences from ECMAScript as well:
+
+- Strings are stored internally in UTF-8, and accessible to scripts in terms of UTF-32. That means `"😀".length` is 2 in standard JavaScript, while in PipyJS, it's 1.
+
+- PipyJS is JavaScript without OOP, so user-defined classes or constructors are not supported. There's also no prototype system to define user classes by inheritance.
+
+# Operators
+
+PipyJS supports all standard JavaScript operators. Here's a quick recap. For more details, please refer to [Expressions and operators](https://developer.mozilla.org/docs/Web/JavaScript/Guide/Expressions_and_Operators) on MDN.
+
+## Assignment operators
+
+| Operator | Name |
+|:---------|:-----|
+| = | Assignment |
+| += | Addition assignment |
+| -= | Subtraction assignment |
+| *= | Multiplication assignment |
+| /= | Division assignment |
+| %= | Remainder assignment |
+| **= | Exponentiation assignment |
+| <<= | Left shift assignment |
+| >>= | Right shift assignment |
+| >>>= | Unsigned right shift assignment |
+| &= | Bitwise AND assignment |
+| ^= | Bitwise XOR assignment |
+| \|= | Bitwise OR assignment |
+| &&= | Logical AND assignment |
+| \|\|= | Logical OR assignment |
+| ??= | Logical nullish assignment |
+
+## Comparison operators
+
+| Operator | Name |
+|:---------|:-----|
+| == | Equal |
+| != | Not equal |
+| === | Strict equal |
+| !== | Strict not equal |
+| > | Greater than |
+| >= | Greater than or equal |
+| < | Less than |
+| <= | Less than or equal |
+
+## Arithmetic operators
+
+| Operator | Name |
+|:---------|:-----|
+| + | Addition or unary plus |
+| - | Subtraction or unary negation |
+| * | Multiplication |
+| / | Division |
+| % | Remainder |
+| ++ | Increment |
+| -- | Decrement |
+| ** | Exponentiation |
+
+## Bitwise operators
+
+| Operator | Name |
+|:---------|:-----|
+| & | Bitwise AND |
+| \| | Bitwise OR |
+| ^ | Bitwise XOR |
+| ~ | Bitwise NOT |
+| << | Left shift |
+| >> | Right shift |
+| >>> | Unsigned right shift |
+
+## Logical operators
+
+| Operator | Name |
+|:---------|:-----|
+| && | Logical AND |
+| \|\| | Logical OR |
+| ! | Logical NOT |
+
+## String operators
+
+| Operator | Name |
+|:---------|:-----|
+| + | String concatenation |
+| += | String concatenation assignment |
+
+## Relational operators
+
+### `a in b`
+
+Returns true if `b` has property `a`.
+
+### `a instanceof b`
+
+Returns true if `a` is of type `b`.
+
+## Conditional (ternary) operator
+
+The conditional operator returns one of two values based on a condition.
+
+``` js
+condition ? value1 : value2
+```
+
+If `condition` is true, `value1` is returned. Otherwise, `value2` is returnd.
+
+## Unary operators
+
+### `delete`
+
+Erases an object's property.
+
+### `typeof`
+
+Retreives a value's type.
+
+### `void`
+
+Always returns `undefined` after evaluating its operand.
+
+## Comma operator
+
+The comma operator `,` evaluates both of its operands and returns the value of the second one. It's particularly useful in PipyJS since PipyJS does not support statements but only expressions. When a sequence of actions need to be taken, we can put them together with the comma operator.
+
+``` js
+doActionA(),
+doActionB(),
+doActionC()
+```
+
+That expression is equivalent to the following statements in standard JavaScript:
+
+``` js
+doActionA();
+doActionB();
+return doActionC();
+```
+
+# Variables
+
+PipyJS doesn't support statements, so there's no way to declare variables with the `var` or `let` keywords. But that doesn't mean we can't have variables. We will have them in the "_functional_" way.
+
+## Global variables
+
+Global variables in PipyJS are also called "_context variables_". Refer to [Context](/concepts#context) for a deep dive into the concepts of _context_ and _context variables_.
+
+We define global variables in PipyJS by using the builtin function [pipy()](/reference/api/pipy), which is always the very first function you are going to call at the beginning of your script.
+
+``` js
+pipy({
+  _myGlobalVariable: undefined
+})
+```
+
+> For convention, we always start **global variable names** with an underscore, though it is not enforced by the language itself.
+
+Global variables are scoped within a single file or [_module_](/concepts#module), and can be shared between different modules by using [export()](/reference/api/Configuration/export) and [import()](/reference/api/Configuration/import).
+
+``` js
+// file A
+pipy().export('namespace-1', {
+  __myGlobalVariable: undefined
+})
+
+// file B
+pipy().import({
+  __myGlobalVariable: 'namespace-1'
+})
+```
+
+> For convention, we always start **exported global variable names** with double underscores, though it is not enforced by the language itself.
+
+## Local variables
+
+In PipyJS, we use function arguments nested inside a function scope for local variables.
+
+``` js
+void ((
+  x, y, z, // declare local variables as function arguments
+) => (
+  x = 0,
+  y = 0,
+  z = 0 // initialize and use the variables in the function body
+))() // Don't miss the () to invoke the function right away!
+```
+
+> If the above expression is supposed to be evaluated to some return value that will be used afterwards, you should remove the operator `void` at the beginning.
+
+# Control flow
+
+As said above, PipyJS doesn't support control flow related keywords from the standard JavaScript. But we can still have branches and loops, again, in the "_functional_" way.
+
+## Branch
+
+We can use the logical operator `&&` for simple branches.
+
+``` js
+res.status === 200 && (_result = 'OK', console.log('Success.'))
+
+// That's equivalent to:
+if (res.status === 200) {
+  _result = 'OK';
+  console.log('Success.');
+}
+```
+
+We can combine logical operators `&&` and `||` for multiple-choice branches.
+
+``` js
+(res.status === 200) && (
+  _result = 'OK'
+) ||
+(res.status === 404) && (
+  _result = 'Not found'
+) || (
+  _result = ''
+)
+
+// That's equivalent to:
+if (res.status === 200) {
+  _result = 'OK';
+} else if (res.status === 404) {
+  _result = 'Not found';
+} else {
+  _result = '';
+}
+```
+
+## Loop
+
+You can scan an array with [Array.forEach()](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Array/forEach) for a simple range-loop.
+
+``` js
+new Array(100).fill(0).forEach(
+  (_, i) => (
+    console.log(i)
+  )
+)
+
+// That's equivalent to:
+for (let i = 0; i < 100; i++) {
+  console.log(i);
+}
+```
+
+Or, for a generic conditional loop, you can use the builtin function [repeat()](/reference/api/repeat).
+
+``` js
+void ((
+  n, i
+) => (
+  n = i = 1,
+  repeat(
+    () => (
+      n *= i,
+      i += 1,
+      i <= 10
+    )
+  )
+))()
+
+// That's equivalent to:
+let n = 1, i = 1;
+while (i <= 10) {
+  n *= i;
+  i += 1;
+}
+```

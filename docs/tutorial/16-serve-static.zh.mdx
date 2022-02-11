@@ -61,7 +61,7 @@ pipy({
 
 ### `http.File` 类型
 
-[`File`](/reference/http/File) 类，用于加载静态资源：
+[`File`](/reference/api/http/File) 类，用于加载静态资源：
 
 * 静态方法 `from()` 可以从参数指定路径加载文件，假如路径是 `/`，则文件名默认为 `/index.html`。定位文件时会同时查找 *FILE*、*FILE.gz*、*FILE.br*，若三种文件都不存在，则会继续查找 *FILE/index.html*、*FILE/index.html.gz*、*FILE/index.html.br*。如若还是找不到文件，则返回 `null`。
 * `toMessage()` 使用参数指定的编码对静态资源的内容进行编码。

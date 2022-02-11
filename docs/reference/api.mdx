@@ -1,0 +1,75 @@
+---
+title: "API"
+---
+
+Pipy provides a rich API designed for network proxy use cases.
+
+# Configuration
+
+[Configuration](/reference/api/Configuration) is the core API for configuring pipeline layouts. Every Pipy module is supposed to be a PipyJS expression that evaluates to a _Configuration_ object.
+
+Use the builtin global function [pipy()](/reference/api/pipy) to create a new _Configuration_ object.
+
+# Events
+
+* [Data](/reference/api/Data)
+* [MessageStart](/reference/api/MessageStart)
+* [MessageEnd](/reference/api/MessageEnd)
+* [StreamEnd](/reference/api/StreamEnd)
+
+# Data formats
+
+* [JSON](/reference/api/JSON)
+* [XML](/reference/api/XML)
+* [Hessian](/reference/api/Hessian)
+
+# Algorithms
+
+* [algo.Cache](/reference/api/algo/Cache)
+* [algo.HashingLoadBalancer](/reference/api/algo/HashingLoadBalancer)
+* [algo.LeastWorkLoadBalancer](/reference/api/algo/LeastWorkLoadBalancer)
+* [algo.Percentile](/reference/api/algo/Percentile)
+* [algo.ResourcePool](/reference/api/algo/ResourcePool)
+* [algo.RoundRobinLoadBalancer](/reference/api/algo/RoundRobinLoadBalancer)
+* [algo.URLRouter](/reference/api/algo/URLRouter)
+
+# Cryptography
+
+* [crypto.Certificate](/reference/api/crypto/Certificate)
+* [crypto.CertificateChain](/reference/api/crypto/CertificateChain)
+* [crypto.Cipher](/reference/api/crypto/Cipher)
+* [crypto.Decipher](/reference/api/crypto/Decipher)
+* [crypto.Hash](/reference/api/crypto/Hash)
+* [crypto.Hmac](/reference/api/crypto/Hmac)
+* [crypto.JWK](/reference/api/crypto/JWK)
+* [crypto.JWT](/reference/api/crypto/JWT)
+* [crypto.PrivateKey](/reference/api/crypto/PrivateKey)
+* [crypto.PublicKey](/reference/api/crypto/PublicKey)
+* [crypto.Sign](/reference/api/crypto/Sign)
+* [crypto.Verify](/reference/api/crypto/Verify)
+
+# HTTP
+
+* [http.File](/reference/api/http/File)
+
+# Metrics
+
+* [stats.Counter](/reference/api/stats/Counter)
+* [stats.Gauge](/reference/api/stats/Gauge)
+* [stats.Histogram](/reference/api/stats/Histogram)
+
+# OS
+
+* [os.env](/reference/api/os/env)
+* [os.readFile()](/reference/api/os/readFile)
+* [os.writeFile()](/reference/api/os/writeFile)
+* [os.stat()](/reference/api/os/writeFile)
+* [os.Stat](/reference/api/os/Stat)
+
+# Utilities
+
+* [console.log()](/reference/api/console/log)
+* [repeat()](/reference/api/repeat)
+* [Netmask](/reference/api/Netmask)
+* [URL](/reference/api/URL)
+* [URLSearchParams](/reference/api/URLSearchParams)

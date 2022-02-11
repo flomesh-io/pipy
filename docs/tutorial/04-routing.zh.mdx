@@ -6,7 +6,7 @@ title: 04 路由
 
 ## URLRouter
 
-Pipy 提供了类 [URLRouter](/reference/algo/URLRouter)，用于快速将 URL 映射成任何类型的值。在这个场景中，我们应该将其映射成包含目标地址和端口的*字符值*。
+Pipy 提供了类 [URLRouter](/reference/api/algo/URLRouter)，用于快速将 URL 映射成任何类型的值。在这个场景中，我们应该将其映射成包含目标地址和端口的*字符值*。
 
 可以通过 `new` 一个 *URLRouter* 对象并填入路由表来定义路由器：
 
@@ -56,7 +56,7 @@ new algo.URLRouter({
 
 ## 路由
 
-此时我们已经有了所有需要的变量，下一步就是调用  [*URLRouter.find()*](/reference/algo/URLRouter/find) 根据请求计算出 `_target` 的值。我们可以 *demuxHTTP* 和 *muxHTTP* 之间使用 *handleMessageStart* 过滤器中完成这一步。由于 *demuxHTTP* 和 *muxHTTP* 位于不同的管道中，因此需要在其二者间插入一个新的子管道来连接他们。新的子管道名为 “*request*”。
+此时我们已经有了所有需要的变量，下一步就是调用  [*URLRouter.find()*](/reference/api/algo/URLRouter/find) 根据请求计算出 `_target` 的值。我们可以 *demuxHTTP* 和 *muxHTTP* 之间使用 *handleMessageStart* 过滤器中完成这一步。由于 *demuxHTTP* 和 *muxHTTP* 位于不同的管道中，因此需要在其二者间插入一个新的子管道来连接他们。新的子管道名为 “*request*”。
 
 ```js
   .listen(8000)
@@ -122,7 +122,7 @@ new algo.URLRouter({
 
 ### link 过滤器
 
-使用时，[link()](/reference/Configuration/link) 可以接受一对或多对参数：每对参数中第一项是目标管道的名字，紧跟着一个可以决定是否选择该管道的条件回调函数。只有一对参数可以省略回调函数，表示为默认选项。
+使用时，[link()](/reference/api/Configuration/link) 可以接受一对或多对参数：每对参数中第一项是目标管道的名字，紧跟着一个可以决定是否选择该管道的条件回调函数。只有一对参数可以省略回调函数，表示为默认选项。
 
 这为 *link* 带来了几种不同的可能用法：
 
@@ -289,7 +289,7 @@ No route
 
 ### 收获
 
-1. 根据路由表，使用 [algo.URLRouter](/reference/algo/URLRouter) 将类 URL 的字符串映射成任意类型的值，基于要实现的路由代理。
+1. 根据路由表，使用 [algo.URLRouter](/reference/api/algo/URLRouter) 将类 URL 的字符串映射成任意类型的值，基于要实现的路由代理。
 2. 通过使用 *link* 过滤器， 子通道可以有选择的“插入”到 *link* 过滤器所属的管道中。有点类似变成语言中的 `if` 或者 `switch` 语句，控制流可以有条件分支。
 3. 假如子管道位于 *demuxHTTP* 过滤器之后，使用 *replaceMessage* 过滤器将输入的请求消息变成输出的响应消息。将 *demuxHTTP* 与 *replaceMessage* 组合使用，可以实现 *serveHTTP* 的效果。
 

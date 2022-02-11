@@ -93,7 +93,7 @@ pipy()
 .pipeline('request')
 ```
 
-この空の「_request_」パイプラインでは、プラグインから他の2つの「_request_」パイプラインにチェーンを張っています。これを行うために、[_use()_](/reference/Configuration/use)を使ってパイプラインが存在するファイル名と、パイプラインがある場所の名前を与えます。
+この空の「_request_」パイプラインでは、プラグインから他の2つの「_request_」パイプラインにチェーンを張っています。これを行うために、[_use()_](/reference/api/Configuration/use)を使ってパイプラインが存在するファイル名と、パイプラインがある場所の名前を与えます。
 
 ``` js
   .pipeline('request')
@@ -156,7 +156,7 @@ _use()_ で作られた「_プラグインチェーン_」は次のようにな�
 
 ## エクスポートとインポート
 
-次に、グローバル変数を定義します。ただし、今までやってきたように定義することができません。それは、変数が`proxy.js`でのみ利用可能で、`router.js`にはその変数がないからです。そこで、他のファイルから「_import_」できるように、`proxy.js`の[_export()_](/reference/Configuration/export)で定義します。初期値は`false`です。
+次に、グローバル変数を定義します。ただし、今までやってきたように定義することができません。それは、変数が`proxy.js`でのみ利用可能で、`router.js`にはその変数がないからです。そこで、他のファイルから「_import_」できるように、`proxy.js`の[_export()_](/reference/api/Configuration/export)で定義します。初期値は`false`です。
 
 ``` js
   pipy()
@@ -215,9 +215,9 @@ No handler
 
 ## 要点
 
-1.	[_use()_](/reference/Configuration/use)を使用して、他のファイルで定義されているパイプラインにリンクし、プラグインチェーンを作ります。これは、拡張性のあるプラグインアーキテクチャの鍵になります。
+1.	[_use()_](/reference/api/Configuration/use)を使用して、他のファイルで定義されているパイプラインにリンクし、プラグインチェーンを作ります。これは、拡張性のあるプラグインアーキテクチャの鍵になります。
 
-2.	[_pipy()_](/reference/pipy)で定義されたグローバル変数は、その定義ファイル内でのみ利用することができます。異なるファイル間でグローバル変数を共有するには、[_export()_](/reference/Configuration/export)と[_import()_](/reference/Configuration/import)を使用します。
+2.	[_pipy()_](/reference/api/pipy)で定義されたグローバル変数は、その定義ファイル内でのみ利用することができます。異なるファイル間でグローバル変数を共有するには、[_export()_](/reference/api/Configuration/export)と[_import()_](/reference/api/Configuration/import)を使用します。
 
 ## 次のパートの内容
 
