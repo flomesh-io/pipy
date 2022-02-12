@@ -19,9 +19,9 @@ Eventually, all events left in the stream after the processing are sent back ove
 
 # Filter and pipeline
 
-A good way to understand how Pipy works is by analogy with [_Unix pipelines_](https://en.wikipedia.org/wiki/Pipeline_(Unix)).
+A good way to understand how Pipy works is by analogy with [_Unix pipelines_](https://en.wikipedia.org/wiki/Pipeline_(Unix)). The only thing different from Unix pipelines is we are handling streams of **events** here, not bytes.
 
-Incoming streams are processed via a chain of **filters** inside of Pipy. Each filter works somewhat like a tiny Unix process that keeps reading from its input (stdin) and writing to its output (stdout), with the output of one filter connected to the input of the next. The only thing different from Unix pipelines is we are handling streams of **events** here, not bytes.
+Incoming streams are processed via a chain of **filters** inside of Pipy. Each filter works somewhat like a tiny Unix process that keeps reading from its input (stdin) and writing to its output (stdout), with the output of one filter connected to the input of the next. 
 
 A chain of filters is called a **pipeline**. There are 4 types of pipelines categorized
 by their input sources:
