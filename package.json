@@ -10,6 +10,7 @@
     "gatsby": "^3.2.1",
     "gatsby-plugin-material-ui": "^3.0.0",
     "gatsby-plugin-mdx": "^2.14.0",
+    "gatsby-plugin-web-font-loader": "^1.0.4",
     "gatsby-source-filesystem": "^3.14.0",
     "gatsby-transformer-documentationjs": "^5.14.0",
     "github-slugger": "^1.4.0",

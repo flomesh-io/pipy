@@ -27,9 +27,9 @@ import TipIcon from '@material-ui/icons/EmojiObjectsSharp';
 import PipyLogo from '../images/pipy.svg';
 import HighlightTheme from 'prism-react-renderer/themes/vsDark';
 
-const FONT_TITLE = 'rockwell,palatino,serif';
-const FONT_TOC = 'verdana';
-const FONT_TEXT = 'graphik,verdana,arial,sans-serif';
+const FONT_TITLE = '"Titillium Web",serif';
+const FONT_TOC = '"Titillium Web",verdana';
+const FONT_TEXT = '"Titillium Web",graphik,verdana,arial,sans-serif';
 const FONT_CODE = 'menlo,monaco,"Courier New",monospace';
 
 const FONT_ZH_TITLE = 'simhei,stheiti';

@@ -18,6 +18,9 @@ const theme = createTheme({
       codeBox: '#110',
     },
   },
+  typography: {
+    fontFamily: '"Titillium Web",Verdana,sans-serif',
+  },
   overrides: {
     MuiButton: {
       root: {

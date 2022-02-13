@@ -68,7 +68,7 @@ Take a bit of time examining the code. Here's what's going on:
    object which we'll be using later on to configure _pipeline layouts_ we need.
 
 2. At line 3, we define a _port pipeline_ that listens on port 8080 by calling method
-   [_listen_()](/reference/api/Configuration/listen) of the _Configuration_ object
+   [_listen()_](/reference/api/Configuration/listen) of the _Configuration_ object
    returned from _pipy()_ earlier. Method _listen()_ itself returns the same _Configuration_
    object, so we can continually call other methods on it to define more pipelines and
    filters. That's exactly what we are going to do next.
