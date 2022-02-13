@@ -32,10 +32,6 @@ const FONT_TOC = '"Titillium Web",verdana';
 const FONT_TEXT = '"Titillium Web",graphik,verdana,arial,sans-serif';
 const FONT_CODE = 'menlo,monaco,"Courier New",monospace';
 
-const FONT_ZH_TITLE = 'simhei,stheiti';
-const FONT_ZH_TOC = 'heiti';
-const FONT_ZH_TEXT = 'arial,sans-serif';
-
 const useStyles = makeStyles(theme => ({
   head: {
     position: 'absolute',
@@ -191,21 +187,10 @@ const useStyles = makeStyles(theme => ({
     fontSize: '2.6rem',
   },
 
-  title_zh: {
-    fontFamily: FONT_ZH_TITLE,
-    fontSize: '2.6rem',
-    fontWeight: 'bolder',
-  },
-
   h1: { fontFamily: FONT_TEXT, fontSize: '1.8rem', color: '#eee', fontWeight: 500 },
   h2: { fontFamily: FONT_TEXT, fontSize: '1.5rem', color: '#eee', fontWeight: 500 },
   h3: { fontFamily: FONT_TEXT, fontSize: '1.3rem', color: '#eee', fontWeight: 500 },
   h4: { fontFamily: FONT_TEXT, fontSize: '1.1rem', color: '#eee', fontWeight: 500 },
-
-  h1_zh: { fontFamily: FONT_ZH_TITLE, fontSize: '2.0rem', color: '#eee' },
-  h2_zh: { fontFamily: FONT_ZH_TITLE, fontSize: '1.5rem', color: '#eee', fontWeight: 'bolder' },
-  h3_zh: { fontFamily: FONT_ZH_TITLE, fontSize: '1.3rem', color: '#eee', fontWeight: 'bolder' },
-  h4_zh: { fontFamily: FONT_ZH_TITLE, fontSize: '1.1rem', color: '#eee', fontWeight: 'bolder' },
 
   p: {
     fontFamily: FONT_TEXT,
@@ -415,7 +400,7 @@ const makeStyledTag = (tag, style) => {
     const classes = useStyles();
     const { lang } = React.useContext(DocContext);
     const Tag = tag;
-    const className = classes[`${style}_${lang}`] || classes[style]
+    const className = classes[style]
     return (
       <Tag {...props} className={className}>
         {children}
