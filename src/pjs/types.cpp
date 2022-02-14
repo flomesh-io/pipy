@@ -1348,7 +1348,7 @@ template<> void ClassDef<Array>::init() {
     if (ctx.try_arguments(3, &v, &start, &end)) {
       obj->as<Array>()->fill(v, start, end);
       ret.set(obj);
-    } else if (ctx.arguments(1, &v, &start)) {
+    } else if (ctx.arguments(0, &v, &start)) {
       obj->as<Array>()->fill(v, start);
       ret.set(obj);
     }
