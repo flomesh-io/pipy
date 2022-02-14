@@ -5,19 +5,24 @@ api: Configuration.task()
 
 # Description
 
-Creates a pipeline layout that executes a periodic job.
+Creates a pipeline layout that executes a periodic job or responds to a specified signal.
 
-The pipeline defined with this method will receive a _MessageStart/MessageEnd_ event pair regularly. The interval between two recurrences is specified as a string in its argument, with one of the time unit suffixes: `s` for seconds, `m` for minutes, `h` for hours, `d` for days. If an interval is not given, the job will be done only once at startup.
+When used without an argument, the job will be started only once at startup.
 
-Once started, the pipeline should eventually output a _StreamEnd_ event to indicate the completion of the job. The next recurrence of the job will not happen until the current one is finished.
+When used with a number or a time-unit-suffixed string, the job will be created periodically. Valid time unit suffixes include: `s` for seconds, `m` for minutes, `h` for hours, `d` for days.
 
-After calling this method on a _Configuration_, the newly created pipeline layout would become current. Any _filter-creating_ methods called after this point would append filters to that pipeline, until another _pipeline-creating_ method is called.
+When used with a signal name such as "_SIGINT_" or "_SIGHUP_", the job will be created when the signal is received by the Pipy process.
+
+At creation, each pipeline created for a job will receive a pair of _MessageStart_ and _MessageEnd_ events as its one and only input. The pipeline should eventually output a _StreamEnd_ event to indicate the completion of the job. The next recurrence of the job, if any, will not happen until the current one is completed.
+
+After calling this method on a _Configuration_, the newly created pipeline layout would become current. Any _filter-creating_ methods called after this point would append filters to that layout, until another _pipeline-layout-creating_ method is called.
 
 # Syntax
 
 ``` js
 pipy().task()
 pipy().task(interval)
+pipy().task(signal)
 ```
 
 ## Parameters
@@ -35,6 +40,12 @@ pipy({
   _g: { counter: 0 },
 })
 
+// Start a job at startup
+.task()
+  .handleStreamStart(
+    () => console.log('Started.')
+  )
+
 // Start a job every 5 seconds
 .task('5s')
   .handleStreamStart(
@@ -46,4 +57,14 @@ pipy({
     new StreamEnd
   )
 
+// Start a job when SIGINT is received
+.task('SIGINT')
+  .handleStreamStart(
+    // Gracefully shut down, which is also the default behaviour for SIGINT
+    () => pipy.exit()
+  )
+  .replaceMessage(
+    // Indicate end of the job by outputting a StreamEnd event
+    new StreamEnd
+  )
 ```

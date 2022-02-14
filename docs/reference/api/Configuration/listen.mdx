@@ -9,7 +9,7 @@ Creates a pipeline layout to handle incoming TCP connections on a specified port
 
 Ports can be specified with just numbers when binding to `0.0.0.0`, or strings in form of `<IP>:<port>` when binding to arbitrary IP addresses. Note that, to bind to an IPv6 address, surround the address within a pair of brackets so that the colon before the port number can be identified correctly, e.g. `[::]:8080`.
 
-After calling this method on a _Configuration_, the newly created pipeline layout would become current. Any _filter-creating_ methods called after this point would append filters to that pipeline, until another _pipeline-creating_ method is called.
+After calling this method on a _Configuration_, the newly created pipeline layout would become current. Any _filter-creating_ methods called after this point would append filters to that layout, until another _pipeline-layout-creating_ method is called.
 
 ## Options
 

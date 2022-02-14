@@ -7,9 +7,9 @@ api: Configuration.pipeline()
 
 Creates a sub-pipeline layout under a specified name.
 
-Sub-pipelines are pipelines that can be created from other pipelines during the processing of a stream. They are refered to by names. Sub-pipeline names are unique within a module, but can be duplicated among different modules. Therefore, to refer to a sub-pipeline inside the current module, only the name is necessary, but to refer to a sub-pipeline in a different module (as using [`Configuration.use()`](/reference/api/Configuration/use)), the module's filename is also required.
+Sub-pipelines are pipelines that can be created from other pipelines during the processing of a stream. They are created by referring to their names. Pipeline layout names are unique within a module, but can be duplicated across different modules. Therefore, to refer to a pipeline layout inside the current module, only its name is necessary, but to refer to a pipeline layout in a different module (as in the case of [`Configuration.use()`](/reference/api/Configuration/use)), the module's filename is also needed.
 
-After calling this method on a _Configuration_, the newly created pipeline layout would become current. Any _filter-creating_ methods called after this point would append filters to that pipeline, until another _pipeline-creating_ method is called.
+After calling this method on a _Configuration_, the newly created pipeline layout would become current. Any _filter-creating_ methods called after this point would append filters to that layout, until another _pipeline-layout-creating_ method is called.
 
 # Syntax
 

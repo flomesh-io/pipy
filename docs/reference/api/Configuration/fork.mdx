@@ -3,14 +3,52 @@ title: "Configuration.fork()"
 api: Configuration.fork()
 ---
 
+# Description
+
+Appends a _fork_ filter to the current pipeline layout.
+
+A _fork_ filter creates one or more sub-pipelines, each receiving a clone of all events from the filter's input. The fork filter's output is exactly the same as its input. All output from the created sub-pipelines are discarded.
+
+The layout based on which sub-pipelines are created is given by the first argument when you call `fork()`. The second argument is optional. It decides how many sub-pipelines are created, and what their [_contexts_](/concepts#context) are.
+
+## Create a single sub-pipeline
+
+When you call `fork()` without a second argument, only one sub-pipeline will be created. It shares the same context as the fork filter's pipeline, aka. the _main pipeline_. That is, all states in the main pipeline is visible to the sub-pipeline, and all changes to the states in the sub-pipeline will be reflected in the main pipeline as well.
+
+## Create multiple sub-pipelines
+
+When you call `fork()` with a second argument, it is supposed to be an array, or a function that returns an array. The length of the array is the number of sub-pipelines to create. The elements of the array are context variable initial values for every sub-pipeline. Each sub-pipeline gets its own new context cloned from the main pipeline (the fork filter's pipeline), with some or all variables initialized with the values given in the corresponding array element.
+
+``` js
+pipy({
+  _index: 0,
+})
+
+.pipeline('main')
+  // Create 10 sub-pipelines based on 'sub' layout
+  // They'll have number 1 to 10 for their _index values
+  .fork(
+    'sub',
+    new Array(10).fill().map(
+      (_, i) => ({
+        _index: i + 1,
+      })
+    )
+  )
+
+.pipeline('sub')
+  // Dump all events with tag _index
+  .dump(
+    () => _index
+  )
+```
+
 # Syntax
 
 ``` js
-pipy().pipeline('example').fork(target)
-pipy().pipeline('example').fork(target, { ...initialValues })
-pipy().pipeline('example').fork(target, [ ...initialValueObjects ])
-pipy().pipeline('example').fork(target, () => { ...initialValues })
-pipy().pipeline('example').fork(target, () => [ ...initialValueObjects ])
+pipy().pipeline('example').fork(layout)
+pipy().pipeline('example').fork(layout, [ ...initialValueObjects ])
+pipy().pipeline('example').fork(layout, () => [ ...initialValueObjects ])
 ```
 
 ## Parameters
@@ -20,3 +58,27 @@ pipy().pipeline('example').fork(target, () => [ ...initialValueObjects ])
 ## Return value
 
 <ReturnValue/>
+
+# Example
+
+``` js
+pipy()
+
+.listen(8000)
+  // Clone all data to a sub-pipeline
+  .fork('mirror')
+  // Respond with 'Hello!' to all requests
+  .serveHTTP(
+    new Message('Hello!')
+  )
+
+.pipeline('mirror')
+  // Send the cloned data to localhost:8008
+  .connect('localhost:8008')
+```
+
+# See Also
+
+* [Configuration](/reference/api/Configuration)
+* [Configuration.link()](/reference/api/Configuration/link)
+* [Configuration.use()](/reference/api/Configuration/fork)

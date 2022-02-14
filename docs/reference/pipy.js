@@ -16,6 +16,8 @@ function pipy(globals) {}
 pipy.load = function(filename) {}
 
 /**
- * @param {number} [exitCode]
+ * Gracefully shuts down Pipy.
+ *
+ * @param {number} [exitCode] Exit code of the Pipy process. Defaults to zero.
  */
 pipy.exit = function(exitCode) {}

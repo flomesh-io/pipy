@@ -196,7 +196,6 @@ const useStyles = makeStyles(theme => ({
     fontFamily: FONT_TEXT,
     fontSize: '16px',
     lineHeight: '26px',
-    textAlign: 'justify',
     color: '#bbb',
   },
 

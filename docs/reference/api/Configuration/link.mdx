@@ -3,15 +3,87 @@ title: "Configuration.link()"
 api: Configuration.link()
 ---
 
+# Description
+
+Appends a _link_ filter to the current pipeline layout.
+
+A _link_ filter creates a new sub-pipeline and pumps all events through it, as if the new sub-pipeline has taken the place of the link filter.
+
+The link filter can be used in a few different scenarios: reuse a shared sub-pipeline layout, select a sub-pipeline layout out of a few based on some conditions, or back up all events until a condition is met.
+
+## Reuse a shared sub-pipeline layout
+
+The most simple way to use _link_ is give it a single pipeline layout's name. All events it receives as input will be fed into a new sub-pipeline created based on that pipeline layout, and all events coming out of that sub-pipeline will be the output of the _link_ filter too.
+
+This is similar to sub-routine invocation in procedural programming, where the sub-pipeline is the function being invoked, and the input and output of the filter are the function's parameters and return value.
+
+``` js
+pipy()
+
+.pipeline('main')
+  .link('sub') // creates and invokes a sub-pipeline
+
+.pipeline('sub')
+  .dump()
+```
+
+## Select one of many sub-pipeline layouts
+
+The _link_ filter can be given more than one pipeline layout names, each corresponding to a condition. As the first event arrives at the _link_ filter, it evaluates each condition in order to find the first one met, and creates a sub-pipeline based on that layout.
+
+> Once a pipeline layout is selected, it won't change throughout the whole lifetime of the stream, even if the conditions may change afterwards.
+
+If no conditions are met, the last pipeline layout without a set condition is selected.
+
+> You can use an empty name to tell _link_ to create a "_bypass_" sub-pipeline, which simply passes through all events without any changes.
+
+``` js
+pipy({
+  _condition: '',
+})
+
+.pipeline('main')
+  .link(
+    'sub1', () => _condition === 'cond1',
+    'sub2', () => _condition === 'cond2',
+    'default'
+  )
+
+.pipeline('sub1')
+  .dump()
+
+.pipeline('sub2')
+  .dump()
+
+.pipeline('default')
+  .dump()
+```
+
+## Back up events for a condition
+
+If all pipeline layout options have conditions but none of them are met, the _link_ filter will block the stream until a condition is met. This can be used to buffer up events while waiting for a certain situation.
+
+``` js
+pipy({
+  _targetDetected: false,
+})
+
+.pipeline('main')
+  .link('go-on', () => _targetDetected)
+
+.pipeline('go-on')
+  .dump()
+```
+
 # Syntax
 
 ``` js
-pipy().pipeline('example').link(target)
-pipy().pipeline('example').link(target, condition, defaultTarget)
+pipy().pipeline('example').link(layout)
+pipy().pipeline('example').link(layout, condition, defaultLayout)
 pipy().pipeline('example').link(
-  target1, condition1,
-  target2, condition2,
-  defaultTarget
+  layout1, condition1,
+  layout2, condition2,
+  defaultLayout
 )
 ```
 
@@ -22,3 +94,52 @@ pipy().pipeline('example').link(
 ## Return value
 
 <ReturnValue/>
+
+# Example
+
+``` js
+pipy({
+  _method: '',
+})
+
+.listen(8080)
+  // Create stand-alone sub-pipelines, each fed with a request
+  .demuxHTTP('req')
+
+.pipeline('req')
+  // Extract the request method into variable _method
+  .handleMessageStart(
+    req => _method = req.head.method
+  )
+  // Select between 'do-get' and 'do-put' based on the value of _method,
+  // or select 'no-support' if _method isn't 'GET' or 'PUT'
+  .link(
+    'do-get', _method === 'GET',
+    'do-put', _method === 'PUT',
+    'no-support'
+  )
+
+.pipeline('do-get')
+  // Replace the request with a response
+  .replaceMessage(
+    new Message('It is a GET')
+  )
+
+.pipeline('do-put')
+  // Replace the request with a response
+  .replaceMessage(
+    new Message('It is a PUT')
+  )
+
+.pipeline('no-support')
+  // Replace the request with a response
+  .replaceMessage(
+    new Message({ status: 405 }) // Method not allowed
+  )
+```
+
+# See also
+
+* [Configuration](/reference/api/Configuration)
+* [Configuration.fork()](/reference/api/Configuration/fork)
+* [Configuration.use()](/reference/api/Configuration/fork)
