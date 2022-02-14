@@ -774,7 +774,7 @@ template<> void ClassDef<String>::init() {
 
   method("endsWith", [](Context &ctx, Object *obj, Value &ret) {
     Str *search;
-    int length = -1;
+    int length = obj->as<String>()->length();
     if (!ctx.arguments(1, &search, &length)) return;
     ret.set(obj->as<String>()->endsWith(search, length));
   });
