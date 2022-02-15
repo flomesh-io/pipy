@@ -144,7 +144,6 @@ static auto get_cipher_iv(const EVP_CIPHER *cipher, pjs::Object *options, uint8_
 //
 
 PublicKey::PublicKey(Data *data, pjs::Object *options) {
-  if (!data) throw std::runtime_error("data is null");
   auto buf = data->to_bytes();
   m_pkey = read_pem(&buf[0], buf.size());
   set_pkey_options(m_pkey, options);
@@ -172,7 +171,6 @@ auto PublicKey::read_pem(const void *data, size_t size) -> EVP_PKEY* {
 //
 
 PrivateKey::PrivateKey(Data *data, pjs::Object *options) {
-  if (!data) throw std::runtime_error("data is null");
   auto buf = data->to_bytes();
   m_pkey = read_pem(&buf[0], buf.size());
   set_pkey_options(m_pkey, options);
@@ -1017,14 +1015,15 @@ template<> void EnumDef<AliasType>::init() {
 template<> void ClassDef<PublicKey>::init() {
   ctor([](Context &ctx) -> Object* {
     Str *data_str;
-    pipy::Data *data;
+    pipy::Data *data = nullptr;
     Object *options = nullptr;
     try {
       if (ctx.try_arguments(1, &data_str, &options)) {
         return PublicKey::make(data_str, options);
-      } else if (ctx.arguments(1, &data, &options)) {
+      } else if (ctx.arguments(1, &data, &options) && data) {
         return PublicKey::make(data, options);
       } else {
+        ctx.error_argument_type(0, "a string or a Data object");
         return nullptr;
       }
     } catch (std::runtime_error &err) {
@@ -1046,14 +1045,15 @@ template<> void ClassDef<Constructor<PublicKey>>::init() {
 template<> void ClassDef<PrivateKey>::init() {
   ctor([](Context &ctx) -> Object* {
     Str *data_str;
-    pipy::Data *data;
+    pipy::Data *data = nullptr;
     Object *options = nullptr;
     try {
       if (ctx.try_arguments(1, &data_str, &options)) {
         return PrivateKey::make(data_str, options);
-      } else if (ctx.arguments(1, &data, &options)) {
+      } else if (ctx.arguments(1, &data, &options) && data) {
         return PrivateKey::make(data, options);
       } else {
+        ctx.error_argument_type(0, "a string or a Data object");
         return nullptr;
       }
     } catch (std::runtime_error &err) {
@@ -1075,13 +1075,14 @@ template<> void ClassDef<Constructor<PrivateKey>>::init() {
 template<> void ClassDef<Certificate>::init() {
   ctor([](Context &ctx) -> Object* {
     Str *data_str;
-    pipy::Data *data;
+    pipy::Data *data = nullptr;
     try {
       if (ctx.try_arguments(1, &data_str)) {
         return Certificate::make(data_str);
-      } else if (ctx.arguments(1, &data)) {
+      } else if (ctx.try_arguments(1, &data) && data) {
         return Certificate::make(data);
       } else {
+        ctx.error_argument_type(0, "a string or a Data object");
         return nullptr;
       }
     } catch (std::runtime_error &err) {
@@ -1103,13 +1104,14 @@ template<> void ClassDef<Constructor<Certificate>>::init() {
 template<> void ClassDef<CertificateChain>::init() {
   ctor([](Context &ctx) -> Object* {
     Str *data_str;
-    pipy::Data *data;
+    pipy::Data *data = nullptr;
     try {
       if (ctx.try_arguments(1, &data_str)) {
         return CertificateChain::make(data_str);
-      } else if (ctx.arguments(1, &data)) {
+      } else if (ctx.try_arguments(1, &data) && data) {
         return CertificateChain::make(data);
       } else {
+        ctx.error_argument_type(0, "a string or a Data object");
         return nullptr;
       }
     } catch (std::runtime_error &err) {
@@ -1161,11 +1163,11 @@ template<> void ClassDef<Cipher>::init() {
 
   method("update", [](Context &ctx, Object *obj, Value &ret) {
     Str *str;
-    pipy::Data *data;
+    pipy::Data *data = nullptr;
     try {
       if (ctx.try_arguments(1, &str)) {
         ret.set(obj->as<Cipher>()->update(str));
-      } else if (ctx.try_arguments(1, &data)) {
+      } else if (ctx.try_arguments(1, &data) && data) {
         ret.set(obj->as<Cipher>()->update(data));
       } else {
         ctx.error_argument_type(0, "a Data object or a string");
@@ -1221,7 +1223,7 @@ template<> void ClassDef<Decipher>::init() {
     try {
       if (ctx.try_arguments(1, &str)) {
         ret.set(obj->as<Decipher>()->update(str));
-      } else if (ctx.try_arguments(1, &data)) {
+      } else if (ctx.try_arguments(1, &data) && data) {
         ret.set(obj->as<Decipher>()->update(data));
       } else {
         ctx.error_argument_type(0, "a Data object or a string");
@@ -1287,10 +1289,10 @@ template<> void ClassDef<Hash>::init() {
   });
 
   method("update", [](Context &ctx, Object *obj, Value &ret) {
-    Object *data;
+    pipy::Data *data = nullptr;
     Str *str, *encoding_name = nullptr;
-    if (ctx.try_arguments(1, &data) && data && data->is<pipy::Data>()) {
-      obj->as<Hash>()->update(data->as<pipy::Data>());
+    if (ctx.try_arguments(1, &data) && data) {
+      obj->as<Hash>()->update(data);
     } else if (ctx.try_arguments(1, &str, &encoding_name)) {
       auto encoding = EnumDef<pipy::Data::Encoding>::value(encoding_name, pipy::Data::Encoding::UTF8);
       if (int(encoding) < 0) {
@@ -1353,9 +1355,9 @@ template<> void ClassDef<Hmac>::init() {
   });
 
   method("update", [](Context &ctx, Object *obj, Value &ret) {
-    pipy::Data *data;
+    pipy::Data *data = nullptr;
     Str *str, *encoding_name = nullptr;
-    if (ctx.try_arguments(1, &data)) {
+    if (ctx.try_arguments(1, &data) && data) {
       obj->as<Hmac>()->update(data);
     } else if (ctx.try_arguments(1, &str, &encoding_name)) {
       auto encoding = EnumDef<pipy::Data::Encoding>::value(encoding_name, pipy::Data::Encoding::UTF8);
@@ -1413,10 +1415,10 @@ template<> void ClassDef<Sign>::init() {
   });
 
   method("update", [](Context &ctx, Object *obj, Value &ret) {
-    pipy::Data *data;
+    pipy::Data *data = nullptr;
     Str *str, *encoding_name = nullptr;
     try {
-      if (ctx.try_arguments(1, &data)) {
+      if (ctx.try_arguments(1, &data) && data) {
         obj->as<Sign>()->update(data);
       } else if (ctx.try_arguments(1, &str, &encoding_name)) {
         auto encoding = EnumDef<pipy::Data::Encoding>::value(encoding_name, pipy::Data::Encoding::UTF8);
@@ -1495,10 +1497,10 @@ template<> void ClassDef<Verify>::init() {
   });
 
   method("update", [](Context &ctx, Object *obj, Value &ret) {
-    pipy::Data *data;
+    pipy::Data *data = nullptr;
     Str *str, *encoding_name = nullptr;
     try {
-      if (ctx.try_arguments(1, &data)) {
+      if (ctx.try_arguments(1, &data) && data) {
         obj->as<Verify>()->update(data);
       } else if (ctx.try_arguments(1, &str, &encoding_name)) {
         auto encoding = EnumDef<pipy::Data::Encoding>::value(encoding_name, pipy::Data::Encoding::UTF8);
@@ -1563,11 +1565,7 @@ template<> void ClassDef<Constructor<Verify>>::init() {
 template<> void ClassDef<JWK>::init() {
   ctor([](Context &ctx) -> Object* {
     Object *json;
-    if (!ctx.arguments(1, &json)) return nullptr;
-    if (!json) {
-      ctx.error_argument_type(0, "a non-null object");
-      return nullptr;
-    }
+    if (!ctx.check<Object>(0, json)) return nullptr;
     try {
       return JWK::make(json);
     } catch (std::runtime_error &err) {
@@ -1616,7 +1614,7 @@ template<> void ClassDef<JWT>::init() {
     Str *str = nullptr;
     JWK *jwk = nullptr;
     PublicKey *pkey = nullptr;
-    if (ctx.try_arguments(1, &data) ||
+    if ((ctx.try_arguments(1, &data) && data) ||
         ctx.try_arguments(1, &str) ||
         ctx.try_arguments(1, &jwk) ||
         ctx.try_arguments(1, &pkey)
