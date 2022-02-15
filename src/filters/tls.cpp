@@ -49,8 +49,9 @@ static void throw_error() {
 // TLSContext
 //
 
-TLSContext::TLSContext() {
-  m_ctx = SSL_CTX_new(SSLv23_method());
+TLSContext::TLSContext(bool is_server) {
+  m_ctx = SSL_CTX_new(is_server ? TLS_server_method() : TLS_client_method());
+
   if (!m_ctx) throw_error();
 
   m_verify_store = X509_STORE_new();
@@ -244,7 +245,7 @@ bool TLSSession::do_handshake() {
     pump_receive();
     int ret = SSL_do_handshake(m_ssl);
     if (ret == 1) {
-      pump_send(true);
+      pump_send();
       pump_write();
       return true;
     }
@@ -268,13 +269,13 @@ bool TLSSession::do_handshake() {
       close(StreamEnd::UNAUTHORIZED);
       return false;
     }
-    pump_send(true);
+    pump_send();
     if (blocked) return false;
   }
   return true;
 }
 
-auto TLSSession::pump_send(bool flush) -> int {
+auto TLSSession::pump_send() -> int {
   int size = 0;
   for (;;) {
     size_t n = 0;
@@ -294,7 +295,7 @@ auto TLSSession::pump_send(bool flush) -> int {
       break;
     }
   }
-  if (flush && size > 0) {
+  if (size > 0) {
     if (m_is_server) {
       output(Data::flush());
     } else {
@@ -392,7 +393,7 @@ void TLSSession::close(StreamEnd::Error err) {
 //
 
 Client::Client(pjs::Object *options)
-  : m_tls_context(std::make_shared<TLSContext>())
+  : m_tls_context(std::make_shared<TLSContext>(false))
 {
   if (options) {
     pjs::Value certificate, trusted;
@@ -492,7 +493,7 @@ void Client::process(Event *evt) {
 //
 
 Server::Server(pjs::Object *options)
-  : m_tls_context(std::make_shared<TLSContext>())
+  : m_tls_context(std::make_shared<TLSContext>(true))
 {
   if (options) {
     pjs::Value certificate, trusted;

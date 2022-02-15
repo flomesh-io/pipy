@@ -45,7 +45,7 @@ class TLSFilter;
 
 class TLSContext {
 public:
-  TLSContext();
+  TLSContext(bool is_server);
   ~TLSContext();
 
   auto ctx() const -> SSL_CTX* { return m_ctx; }
@@ -102,7 +102,7 @@ private:
 
   void use_certificate(pjs::Str *sni);
   bool do_handshake();
-  auto pump_send(bool flush = false) -> int;
+  auto pump_send() -> int;
   auto pump_receive() -> int;
   void pump_read();
   void pump_write();
