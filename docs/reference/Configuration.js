@@ -1,4 +1,9 @@
 /**
+ * @callback BooleanCB
+ * @return {boolean}
+ */
+
+/**
  * Utility class for building Pipy pipelines.
  */
 class Configuration {
@@ -490,16 +495,16 @@ class Configuration {
   throttleMessageRate(limit, account) {}
 
   /**
-   * Appends a filter to the current pipeline layout that pumps events through
-   * sub-pipelines in a module chain.
+   * Appends a use filter to the current pipeline layout.
+   * A use filter pumps events through a sub-pipeline in a different module, or a series of sub-pipelines in a module chain.
    *
-   * @param {string|string[]} modules One or more module filenames.
-   * @param {string} pipeline Name of the sub-pipelines to receive events in each module on the chain.
-   * @param {string} [pipelineDown] Name of the sub-pipelines to process returning events in each module.
-   * @param {() => bool} [turnDown] Callback function that decides where the chaining should stop and go back.
+   * @param {string|string[]} filenames One or more module filenames.
+   * @param {string} layout Name of the pipeline layout to process input events in all modules.
+   * @param {string} [layoutDown] Name of the pipeline layout to process output events in all modules.
+   * @param {BooleanCB} [turnDown] Callback function that decides where the chaining should turn back.
    * @returns {Configuration} The same Configuration object.
    */
-  use(modules, pipeline, pipelineDown, turnDown) {}
+  use(filenames, layout, layoutDown, turnDown) {}
 
   /**
    * Appends a filter to the current pipeline layout that blocks all events

@@ -3,15 +3,93 @@ title: "Configuration.use()"
 api: Configuration.use()
 ---
 
+# Description
+
+Appends a _use_ filter to the current pipeline layout.
+
+A _use_ filter pumps events through a sub-pipeline in a different module, or a series of sub-pipelines in a module chain. You can use it in multiple ways as being discussed down below.
+
+## Run a pipeline from another module
+
+The most simple way to use _use_ filter is link to a sub-pipeline created from a pipeline layout configured in a different module than the current. To do that, you only need to give it 2 parameters: the filename of the module and the name of a pipeline layout in that module.
+
+``` js
+// main.js
+pipy()
+  .listen(8080)
+    .use('hello.js', 'http-input')
+
+// hello.js
+pipy()
+  .pipeline('http-input')
+    .serveHTTP(
+      new Message('Hello!')
+    )
+```
+
+## Run a pipeline chain
+
+The _use_ filter can also be used to run a "_pipeline chain_". What pipelines are included in the chain can be configured by an array of module filenames. This is the key mechanism to the _plugin system_ in Pipy.
+
+> _Plugin_ is NOT a core concept in Pipy, _module_ is. A _plugin system_ should be considered a best practice using Pipy, which is usually carried out with help of the _use_ filter. See [Tutorial Step 5: Plugins](/tutorial/05-plugins) for more details.
+
+You need to provide 2 parameters when using it this way: an array of module filenames and a pipeline layout name. The pipeline layout name will be shared by all modules in the module array. The _use_ filter will find all pipeline layouts under the same name in every module from the module array, create sub-pipelines based on those pipeline layouts, connect all these sub-pipelines in the same order as the modules appear in the array, and pump events through this chain of pipelines.
+
+``` js
+pipy()
+  .pipeline('call-plugins')
+    .use(
+      [
+        'plugins/plugin-A.js',
+        'plugins/plugin-B.js',
+        'plugins/plugin-C.js', // go through 3 modules
+      ],
+      'http-input' // call up the pipeline named 'http-input' in each module
+    )
+```
+
+## Run a 2-way pipeline chain
+
+You can provide an optional 3rd parameter for a pipeline layout name, based on which an extra pipeline chain can be created to handle output events from the first chain described in the previous section. We call this second chain the "_down path_", and the first chain the "_up path_".
+
+Since we have only one module array, the down path goes through the same modules as the up path, only in the reversed order. 
+
+So for example, if the module array is [A, B, C], then the up path would be A > B > C, the down path would be C > B > A, and the entire pipeline chain with both up and down paths combined would be A > B > C > C > B > A. Note that A, B and C here refer to the _modules_ where pipeline layouts are searched for. Two different layout names are used for up and down paths, which are given in the 2nd and 3rd parameters respectively.
+
+``` js
+pipy()
+  .pipeline('call-plugins')
+    .use(
+      [
+        'plugins/plugin-A.js',
+        'plugins/plugin-B.js',
+        'plugins/plugin-C.js', // go a round-trip through 3 modules
+      ],
+      'http-input', // pipeline layout for the up path
+      'http-output', // pipeline layout for the down path
+    )
+```
+
+> If a pipeline layout under the given names cannot be found in a module, it would simply be ignored as if the module was not in the array. That means, a module can optionally have the pipeline only for the up path or the down path or for both.
+
+## Run with early termination
+
+In addition to the 3rd parameter specifying a pipeline layout name for the down path, you can also use a 4th parameter with a callback function that dynamically decides where the module chain should "_turn back_" for each individual input stream. This callback function gets called before each time the stream moves on to the next module. When it returns `true`, all modules after this point will be skipped and the stream will turn to the down path, which only includes the modules before the turning point.
+
+For example, if the module array is [A, B, C], and the callback returns `true` before it's about to move from B to C, then the entire pipeline chain would become A(up) > B(up) > B(down) > A(down).
+
+> The dicision for the turning point at each module transition is only done once for each stream. It happens when a module is about to receive the first event in that stream. Once the dicision is made, it won't change any more for that stream. This behaviour is similar to the [`Configuration.link()`](/reference/api/Configuration/link) filter.
+
 # Syntax
 
 ``` js
-pipy().pipeline('example').use(filename, pipelineName)
-pipy().pipeline('example').use(filename, pipilineName, downPipelineName)
+pipy().pipeline('example').use(filename, layout)
+pipy().pipeline('example').use([...filenames], layout)
+pipy().pipeline('example').use([...filenames], layout, layoutDown)
 pipy().pipeline('example').use(
-  filename,
-  pipilineName,
-  downPipelineName,
+  [...filenames],
+  layout,
+  layoutDown,
   () => shouldTurnDown()
 )
 ```
@@ -23,3 +101,37 @@ pipy().pipeline('example').use(
 ## Return value
 
 <ReturnValue/>
+
+# Example
+
+``` js
+(config =>
+
+pipy()
+
+// Export a control variable __turnDown for the plugins
+.export('main', {
+  __turnDown: false,
+})
+
+// Extract HTTP request messages from port 8080
+.listen(8080)
+  .demuxHTTP('call-plugins')
+
+// Call into the plugin chain
+.pipeline('call-plugins')
+  .use(
+    config.plugins,  // Module array is from config.json
+    'http-input',    // Pipeline layout to handle requests
+    'http-output',   // Pipeline layout to handle responses
+    () => __turnDown // Turn back if any plugin has set __turnDown to true
+  )
+
+)(JSON.decode(pipy.load('config.json'))) // Load plugin list from config.json
+```
+
+# See also
+
+* [Configuration](/reference/api/Configuration)
+* [Configuration.link()](/reference/api/Configuration/link)
+* [Configuration.fork()](/reference/api/Configuration/fork)
