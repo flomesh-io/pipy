@@ -1,0 +1,41 @@
+---
+title: "Quick Start"
+---
+
+For learning, development, or debugging purposes it's recommended to proceed with the local installation (either build from sources or download pre-built release for your specific OS) of Pipy as it comes with admin web console along with documentation and tutorials.
+
+Once installed locally, running `pipy` without any arguments starts the admin console on port `6060` and it can be configured to listen on the different port via `--admin-port=` argument.
+
+### Run via CLI
+
+To start a Pipy proxy, run `pipy` with a PipyJS script file, for example, the script
+in `tutorial/01-hello/hello.js` if you need a simple echo server that responds with the same message
+body as in every incoming request:
+
+```sh
+$ pipy tutorial/01-hello/hello.js
+```
+
+Alternatively, while developing and debugging, one can start Pipy with a builtin web UI:
+
+```sh
+$ pipy tutorial/01-hello/hello.js --admin-port=6060
+```
+
+### Run via Docker
+
+Annother approach is running with Docker. Note: this image has no builtin admin console.
+
+```sh
+docker run --rm -v $PWD/tutorial:/tutorial -p 8080:8080 flomesh/pipy-pjs:latest pipy /tutorial/01-hello/hello.js
+```
+
+### Show Command-Line Options
+
+```sh
+$ pipy --help
+```
+
+### List Builtin Filters and Their Parameters
+Open the browser of your choice, point it to http://localhost:6060. You will now see the Admin UI where you can start exploring the documentation and playing around with the tutorial codebases. 
+You'll find builtin filters and help information in `http://localhost:6060/docs/en/reference/Configuration`.

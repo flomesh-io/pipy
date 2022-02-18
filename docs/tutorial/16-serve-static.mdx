@@ -61,7 +61,7 @@ pipy({
 
 ### `http.File` class
 
-Pipy [`File`](/reference/api/http/File) class is used to load static resources:
+Pipy [File](/reference/api/http/File) class is used to load static resources:
 
 * Static method `from()` loads file from the path, if path ends with `/` then filename defaults to `/index.html`. This method will search for *FILE*, *FILE.gz*, *FILE.br* and if none is found, this will continue searching for *FILE/index.html*, *FILE/index.html.gz*, *FILE/index.html.br*. `null` will be returned if all search fails.  
 * `toMessage()` Encodes the content of a static resource using the encoding specified by the parameter.

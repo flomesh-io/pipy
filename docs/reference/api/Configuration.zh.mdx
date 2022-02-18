@@ -45,82 +45,82 @@ pipy().listen(8080) // 返回与之前相同配置对象
 
 ### 传输
 
-  * [`acceptSOCKS()`](/reference/api/Configuration/acceptSOCKS)
-  * [`acceptTLS()`](/reference/api/Configuration/acceptTLS)
-  * [`connect()`](/reference/api/Configuration/connect)
-  * [`connectSOCKS()`](/reference/api/Configuration/connectTLS)
-  * [`connectTLS()`](/reference/api/Configuration/connectTLS)
+  * [acceptSOCKS()](/reference/api/Configuration/acceptSOCKS)
+  * [acceptTLS()](/reference/api/Configuration/acceptTLS)
+  * [connect()](/reference/api/Configuration/connect)
+  * [connectSOCKS()](/reference/api/Configuration/connectTLS)
+  * [connectTLS()](/reference/api/Configuration/connectTLS)
 
-  这些过滤器是运行特定协议的客户端和服务端传输层。其中最常用的是 [`connect()`](/reference/api/Configuration/connect)，它与远程主机建立出站 TCP 连接并来回传输 *Data* 事件。
+  这些过滤器是运行特定协议的客户端和服务端传输层。其中最常用的是 [connect()](/reference/api/Configuration/connect)，它与远程主机建立出站 TCP 连接并来回传输 *Data* 事件。
 
 ### 编解码器
 
-  * [`decodeDubbo()`](/reference/api/Configuration/decodeDubbo)
-  * [`decodeHTTPRequest()`](/reference/api/Configuration/decodeHTTPRequest)
-  * [`decodeHTTPResponse()`](/reference/api/Configuration/decodeHTTPResponse)
-  * [`decodeMQTT()`](/reference/api/Configuration/decodeMQTT)
-  * [`encodeDubbo()`](/reference/api/Configuration/decodeDubbo)
-  * [`encodeHTTPRequest()`](/reference/api/Configuration/decodeHTTPRequest)
-  * [`encodeHTTPResponse()`](/reference/api/Configuration/decodeHTTPResponse)
-  * [`encodeMQTT()`](/reference/api/Configuration/encodeMQTT)
+  * [decodeDubbo()](/reference/api/Configuration/decodeDubbo)
+  * [decodeHTTPRequest()](/reference/api/Configuration/decodeHTTPRequest)
+  * [decodeHTTPResponse()](/reference/api/Configuration/decodeHTTPResponse)
+  * [decodeMQTT()](/reference/api/Configuration/decodeMQTT)
+  * [encodeDubbo()](/reference/api/Configuration/decodeDubbo)
+  * [encodeHTTPRequest()](/reference/api/Configuration/decodeHTTPRequest)
+  * [encodeHTTPResponse()](/reference/api/Configuration/decodeHTTPResponse)
+  * [encodeMQTT()](/reference/api/Configuration/encodeMQTT)
 
 这些过滤器负责将流在*原始字节格式*和*消息格式*间进行转换。解码器接收 *Data* 事件，并输出 *MessageStart/MessageEnd* 事件对（中间有不变的作为消息主体的 *Data* 事件）。编码器接收 *MessageStart/MessageEnd* 事件对（同样，其间也有作为消息主体的 *Data* 事件），并在 *Data* 事件中输出原始字节。
 
 ### 多路复用和分路
 
-* [`demux()`](/reference/api/Configuration/demux)
-* [`demuxHTTP()`](/reference/api/Configuration/demuxHTTP)
-* [`merge()`](/reference/api/Configuration/merge)
-* [`mux()`](/reference/api/Configuration/mux)
-* [`muxHTTP()`](/reference/api/Configuration/muxHTTP)
-* [`serveHTTP()`](/reference/api/Configuration/serveHTTP)
+* [demux()](/reference/api/Configuration/demux)
+* [demuxHTTP()](/reference/api/Configuration/demuxHTTP)
+* [merge()](/reference/api/Configuration/merge)
+* [mux()](/reference/api/Configuration/mux)
+* [muxHTTP()](/reference/api/Configuration/muxHTTP)
+* [serveHTTP()](/reference/api/Configuration/serveHTTP)
 
-这些过滤器将一个流拆分成多个流，或者将多个流合并成一个流。其中一些集成了编解码器，比如 [`demuxHTTP()`](/reference/api/Configuration/demuxHTTP) 和 [`muxHTTP()`](/reference/api/Configuration/muxHTTP)。这种情况下，分路输入原始字节输出消息，而多路复用输入消息输出原始字节。
+这些过滤器将一个流拆分成多个流，或者将多个流合并成一个流。其中一些集成了编解码器，比如 [demuxHTTP()](/reference/api/Configuration/demuxHTTP) 和 [muxHTTP()](/reference/api/Configuration/muxHTTP)。这种情况下，分路输入原始字节输出消息，而多路复用输入消息输出原始字节。
 
 ### 连接器
 
-* [`fork()`](/reference/api/Configuration/link)
-* [`link()`](/reference/api/Configuration/link)
-* [`use()`](/reference/api/Configuration/use)
+* [fork()](/reference/api/Configuration/link)
+* [link()](/reference/api/Configuration/link)
+* [use()](/reference/api/Configuration/use)
 
 这些过滤器将流从一个管道传递到另一个管道。与*多路复用和分路*不同，它们只修改流传输的方向，而不修改流本身的内容。
 
 ### 缓冲
 
-* [`pack()`](/reference/api/Configuration/pack)
-* [`throttleDataRate()`](/reference/api/Configuration/throttleDataRate)
-* [`throttleMessageRate()`](/reference/api/Configuration/throttleMessageRate)
-* [`wait()`](/reference/api/Configuration/wait)
+* [pack()](/reference/api/Configuration/pack)
+* [throttleDataRate()](/reference/api/Configuration/throttleDataRate)
+* [throttleMessageRate()](/reference/api/Configuration/throttleMessageRate)
+* [wait()](/reference/api/Configuration/wait)
 
 这些过滤器会延迟对流的处理，直到满足某些条件。换句话说，它们控制着流中事件的通行。
 
 ### 观察者
 
-* [`detectProtocol()`](/reference/api/Configuration/detectProtocol)
-* [`dump()`](/reference/api/Configuration/dump)
-* [`handleData()`](/reference/api/Configuration/handleData)
-* [`handleMessage()`](/reference/api/Configuration/handleMessage)
-* [`handleMessageBody()`](/reference/api/Configuration/handleMessageBody)
-* [`handleStreamEnd()`](/reference/api/Configuration/handleStreamEnd)
-* [`handleStreamStart()`](/reference/api/Configuration/handleStreamStart)
-* [`handleTLSClientHello()`](/reference/api/Configuration/handleTLSClientHello)
-* [`print()`](/reference/api/Configuration/print)
+* [detectProtocol()](/reference/api/Configuration/detectProtocol)
+* [dump()](/reference/api/Configuration/dump)
+* [handleData()](/reference/api/Configuration/handleData)
+* [handleMessage()](/reference/api/Configuration/handleMessage)
+* [handleMessageBody()](/reference/api/Configuration/handleMessageBody)
+* [handleStreamEnd()](/reference/api/Configuration/handleStreamEnd)
+* [handleStreamStart()](/reference/api/Configuration/handleStreamStart)
+* [handleTLSClientHello()](/reference/api/Configuration/handleTLSClientHello)
+* [print()](/reference/api/Configuration/print)
 
 当流中有特定类型的事件时，过滤器会触发用户定义的脚本。它们不修改流的内容，只按原样向下传递事件。
 
 ### 转换器
 
-* [`decompressHTTP()`](/reference/api/Configuration/decompressHTTP)
-* [`decompressMessage()`](/reference/api/Configuration/decompressMessage)
-* [`exec()`](/reference/api/Configuration/exec)
-* [`replaceData()`](/reference/api/Configuration/handleData)
-* [`replaceMessage()`](/reference/api/Configuration/handleMessage)
-* [`replaceMessageBody()`](/reference/api/Configuration/handleMessageBody)
-* [`replaceStreamEnd()`](/reference/api/Configuration/handleStreamEnd)
-* [`replaceStreamStart()`](/reference/api/Configuration/handleStreamStart)
-* [`split()`](/reference/api/Configuration/split)
+* [decompressHTTP()](/reference/api/Configuration/decompressHTTP)
+* [decompressMessage()](/reference/api/Configuration/decompressMessage)
+* [exec()](/reference/api/Configuration/exec)
+* [replaceData()](/reference/api/Configuration/handleData)
+* [replaceMessage()](/reference/api/Configuration/handleMessage)
+* [replaceMessageBody()](/reference/api/Configuration/handleMessageBody)
+* [replaceStreamEnd()](/reference/api/Configuration/handleStreamEnd)
+* [replaceStreamStart()](/reference/api/Configuration/handleStreamStart)
+* [split()](/reference/api/Configuration/split)
 
-这些过滤器将输入事件转换为新的输出事件。其中许多过滤器会调用用户定义的脚本，并将输入事件作为用户函数的参数；函数的所有输出会作为过滤器的输出。其中，[`exec()`](/reference/api/Configuration/exec) 会特殊一些，它将 *Data* 事件传递到外部进程的标准输入并读取进程的标准输出作为 *Data* 事件。
+这些过滤器将输入事件转换为新的输出事件。其中许多过滤器会调用用户定义的脚本，并将输入事件作为用户函数的参数；函数的所有输出会作为过滤器的输出。其中，[exec()](/reference/api/Configuration/exec) 会特殊一些，它将 *Data* 事件传递到外部进程的标准输入并读取进程的标准输出作为 *Data* 事件。
 
 ## 工作原理
 

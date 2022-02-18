@@ -7,9 +7,9 @@ api: Configuration.export()
 
 Defines global variables accessible to other modules.
 
-In PipyJS, global variables can be defined in two ways. One way is by [`pipy()`](/reference/api/pipy), where the variables are only visible to script in the same file. The other way is by using `Configuration.export()`, where the variables are not only visible to the file where they are defined from, but also to other files where they are _imported_ with [`Configuration.import()`](/reference/api/Configuration/import).
+In PipyJS, global variables can be defined in two ways. One way is by [pipy()](/reference/api/pipy), where the variables are only visible to script in the same file. The other way is by using `Configuration.export()`, where the variables are not only visible to the file where they are defined from, but also to other files where they are _imported_ with [Configuration.import()](/reference/api/Configuration/import).
 
-Exported variables must be under a _namespace_, which is refered to while being imported in other modules. Since exporting a variable also defines it like with [`pipy()`](/reference/api/pipy), you also give it an initial value.
+Exported variables must be under a _namespace_, which is refered to while being imported in other modules. Since exporting a variable also defines it like with [pipy()](/reference/api/pipy), you also give it an initial value.
 
 Every call to `Configuration.export()` exports multiple variables to one namespace, with pairs of variable names and initial values given in an object as the second argument to the method. You can call `Configuration.export()` more than once to export to multiple namespaces.
 

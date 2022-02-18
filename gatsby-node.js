@@ -64,7 +64,7 @@ exports.sourceNodes = ({ actions, createNodeId, createContentDigest }) => {
 }
 
 const LANGS = ['en', 'zh', 'jp'];
-const HOME = 'overview';
+const HOME = 'intro/overview';
 
 exports.onCreateNode = ({ node, actions }) => {
   const { createNodeField } = actions;
@@ -84,10 +84,6 @@ exports.onCreateNode = ({ node, actions }) => {
           lang = ext;
           path = path.substring(0, i);
         }
-      }
-
-      if (path.endsWith('()')) {
-        path = path.substring(0, path.length - 2);
       }
 
       createNodeField({
@@ -130,7 +126,7 @@ exports.createPages = async ({ graphql, actions }) => {
   const pages = {};
 
   result.data.allMdx.nodes.forEach(node => {
-    const { path, lang } = node.fields;
+    const { path, lang } = node.fields || {};
     if (path && lang) {
       const group = pages[path] || (pages[path] = {});
       group[lang] = node;

@@ -1,0 +1,39 @@
+---
+title: "快速入门"
+---
+
+用于学习、开发和调试，建议进行本地安装（从源码构建，或者直接下载对应平台构建好的版本）Pipy，因为其内置了管理 web 控制台以及文档和教程。
+
+本地安装后，不加任何参数直接运行命令 `pipy` 可以启动监听在 `6060` 端口的管理控制台，也可以通过参数 `--admin-port=` 指定其他端口。
+
+### 通过 CLI 运行
+
+要启动 Pipy 代理，请使用 PipyJS 脚本文件运行 `pipy`，例如，如果需要一个简单的每次请求都返回同样结果的回声服务，可以使用脚本 `tutorial/01-hello/hello.js`：
+
+```sh
+$ pipy tutorial/01-hello/hello.js
+```
+
+或者，在开发和调试时，可以启动 Pipy 并打开 web 界面：
+
+```sh
+$ pipy tutorial/01-hello/hello.js --admin-port=6060
+```
+
+### 通过 Docker 运行
+
+另一种方式是通过 Docker 来运行 Pipy。注意：这个镜像并没有内置的管理控制台。
+
+```sh
+docker run --rm -v $PWD/tutorial:/tutorial -p 8080:8080 flomesh/pipy-pjs:latest pipy /tutorial/01-hello/hello.js
+```
+
+### 查看命令行选项
+
+```sh
+$ pipy --help
+```
+
+### 查看内置过滤器和参数
+
+在任一浏览器中打开 http://localhost:6060 可以看到管理界面，从管理界面可以浏览 Pipy 的文档并使用教程的代码库。在 `http://localhost:6060/docs/en/reference/Configuration` 可以找到内置的过滤器以及帮助信息。

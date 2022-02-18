@@ -12,7 +12,7 @@ TLS 的支持也是代理的基础功能之一，今天我们就为代理增加 
 
 上游的服务可能并不会支持 TLS 加密传输，因此我们要在代理这一层完成 TLS 卸载。
 
-[`acceptTLS`](/reference/api/Configuration/acceptTLS) 过滤器用于接受 TLS 加密的数据流，并进行 TLS 卸载。其接受两个参数 `acceptTLS(target, options)`：
+[acceptTLS](/reference/api/Configuration/acceptTLS) 过滤器用于接受 TLS 加密的数据流，并进行 TLS 卸载。其接受两个参数 `acceptTLS(target, options)`：
 
 * `target` 目标子管道，卸载后的数据流将会发送到该子管道进行后续的处理。
 * `options` 扩展选项，比如指定要使用的证书和密钥（后面详细说明）。
@@ -73,7 +73,7 @@ openssl req -x509 -newkey rsa:4096 -keyout server-key.pem -out server-cert.pem -
   )(JSON.decode(pipy.load('config/proxy.json')))
 ```
 
-在过滤器 `acceptTLS` 中除了指定子管道以外，还通过 `options` 选项在指定 TLS 要使用的证书和秘钥（*certificate*）。[`CertificateChain`](/reference/api/crypto/CertificateChain) 用于创建证书对象，[`PrivateKey`](/reference/api/crypto/PrivateKey) 用于创建私钥。
+在过滤器 `acceptTLS` 中除了指定子管道以外，还通过 `options` 选项在指定 TLS 要使用的证书和秘钥（*certificate*）。[CertificateChain](/reference/api/crypto/CertificateChain) 用于创建证书对象，[PrivateKey](/reference/api/crypto/PrivateKey) 用于创建私钥。
 
 > 这里我们仅实现了对服务端的单向认证，通过 `options` 的另一个字段 *trusted* 可以实现对客户端的验证。
 

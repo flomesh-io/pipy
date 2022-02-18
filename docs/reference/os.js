@@ -1,7 +1,7 @@
 /**
  * @memberof os
  */
-class Stat {
+class Stats {
 
   /**
    * @type {number}
@@ -123,7 +123,7 @@ class Stat {
  */
 var os = {
 
-  Stat,
+  Stats,
 
   /**
    * @kind member
@@ -134,7 +134,7 @@ var os = {
 
   /**
    * @param {string} filename
-   * @returns {Stat}
+   * @returns {Stats}
    */
   stat: function(filename) {},
 

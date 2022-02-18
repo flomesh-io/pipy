@@ -256,8 +256,13 @@ void CertificateChain::load_chain(const char *str) {
         line = next_line(line);
       }
       if (line) {
-        line = next_line(line);
-        auto end = line;
+        auto end = next_line(line);
+        if (!end) {
+          end = line + std::strlen(line);
+          line = nullptr;
+        } else {
+          line = end;
+        }
         auto x509 = read_pem(start, end - start);
         m_x509s.push_back(x509);
       }

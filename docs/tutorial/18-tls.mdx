@@ -12,7 +12,7 @@ TLS support is one of key feature of any proxy service and in today tutorial we 
 
 Offloading TLS at proxy level bring several benefits like improved performance, better utilization of backend services, intelligent routing, certificate management, and security patches etc for its backend services which doesn't need to handle cpu expensive tasks of TLS processing, get their own SSL certificates, apply vulnerability patches etc.
 
-[`acceptTLS`](/reference/api/Configuration/acceptTLS) filter accepts TLS encrypted traffic and performs offloading. It accepts two arguments `acceptTLS(target, options)`:
+[acceptTLS](/reference/api/Configuration/acceptTLS) filter accepts TLS encrypted traffic and performs offloading. It accepts two arguments `acceptTLS(target, options)`:
 
 * `target` target sub-pipeline, which would be forwarded offloaded request for further processing,
 * `options` extended options like use specific certificate, key (explained in later parts of this tutorial).
@@ -73,7 +73,7 @@ In `tls-offloaded` sub-pipeline, use the same processing which we used to handle
   )(JSON.decode(pipy.load('config/proxy.json')))
 ```
 
-In `acceptTLS` filter we have defined the target sub-pipeline, and pass an object containing the certificate and key data via its `options` param. [`CertificateChain`](/reference/api/crypto/CertificateChain) class is used to handle certificate object, and [`PrivateKey`](/reference/api/crypto/PrivateKey) class is used to handle private key.
+In `acceptTLS` filter we have defined the target sub-pipeline, and pass an object containing the certificate and key data via its `options` param. [CertificateChain](/reference/api/crypto/CertificateChain) class is used to handle certificate object, and [PrivateKey](/reference/api/crypto/PrivateKey) class is used to handle private key.
 
 > Here we have only implemented one-way authentication for the server. We can perform client side authentication by adding *trusted* field to our `options` object.
 

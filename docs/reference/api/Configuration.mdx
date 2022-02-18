@@ -7,7 +7,7 @@ api: Configuration
 
 _Configuration_ helps user configure variables, pipelines and filters included in a module, as well as how a module interacts with other modules via variables and sub-pipelines. It is what all PipyJS modules are supposed to return after being evaluated.
 
-The only way to get a new _Configuration_ is by calling the global function [`pipy()`](/reference/api/pipy), which is, in most cases, the first function you would call at the beginning of PipyJS script.
+The only way to get a new _Configuration_ is by calling the global function [pipy()](/reference/api/pipy), which is, in most cases, the first function you would call at the beginning of PipyJS script.
 
 ``` js
 pipy() // this returns a new Configuration object
@@ -27,11 +27,11 @@ There are 3 types of methods to the _Configuration_ class: methods to export/imp
 
 ### Methods for importing/exporting variables
 
-Use [`export()`](/reference/api/Configuration/export) to define global variables that are visible to other modules. Use [`import()`](/reference/api/Configuration/import) to import global variables defined and exported from other modules.
+Use [export()](/reference/api/Configuration/export) to define global variables that are visible to other modules. Use [import()](/reference/api/Configuration/import) to import global variables defined and exported from other modules.
 
 ### Methods for defining pipelines
 
-Use [`listen()`](/reference/api/Configuration/listen) to create a root pipeline that listens on a specified TCP port. Use [`task()`](/reference/api/Configuration/task) to create a root pipeline that gets a message regularly for periodic tasks. Use [`pipeline()`](/reference/api/Configuration/pipeline) to create a sub-pipeline by a given name.
+Use [listen()](/reference/api/Configuration/listen) to create a root pipeline that listens on a specified TCP port. Use [task()](/reference/api/Configuration/task) to create a root pipeline that gets a message regularly for periodic tasks. Use [pipeline()](/reference/api/Configuration/pipeline) to create a sub-pipeline by a given name.
 
 All three methods will change the _current pipeline_ of the _Configuration_, after which one or more filters can be appended to the newly created pipeline by using the methods we will discuss later.
 
@@ -45,82 +45,82 @@ Filters can be categorized into 7 types according to their functionalities.
 
 ### Transportation
 
-* [`acceptSOCKS()`](/reference/api/Configuration/acceptSOCKS)
-* [`acceptTLS()`](/reference/api/Configuration/acceptTLS)
-* [`connect()`](/reference/api/Configuration/connect)
-* [`connectSOCKS()`](/reference/api/Configuration/connectTLS)
-* [`connectTLS()`](/reference/api/Configuration/connectTLS)
+* [acceptSOCKS()](/reference/api/Configuration/acceptSOCKS)
+* [acceptTLS()](/reference/api/Configuration/acceptTLS)
+* [connect()](/reference/api/Configuration/connect)
+* [connectSOCKS()](/reference/api/Configuration/connectTLS)
+* [connectTLS()](/reference/api/Configuration/connectTLS)
 
-These filters are transport layer clients and servers speaking a specific protocol. Among these filters, the most often used one is [`connect()`](/reference/api/Configuration/connect), which establishes an outbound TCP connection to a remote host and transfers _Data_ events back and forth.
+These filters are transport layer clients and servers speaking a specific protocol. Among these filters, the most often used one is [connect()](/reference/api/Configuration/connect), which establishes an outbound TCP connection to a remote host and transfers _Data_ events back and forth.
 
 ### Codecs
 
-* [`decodeDubbo()`](/reference/api/Configuration/decodeDubbo)
-* [`decodeHTTPRequest()`](/reference/api/Configuration/decodeHTTPRequest)
-* [`decodeHTTPResponse()`](/reference/api/Configuration/decodeHTTPResponse)
-* [`decodeMQTT()`](/reference/api/Configuration/decodeMQTT)
-* [`encodeDubbo()`](/reference/api/Configuration/decodeDubbo)
-* [`encodeHTTPRequest()`](/reference/api/Configuration/decodeHTTPRequest)
-* [`encodeHTTPResponse()`](/reference/api/Configuration/decodeHTTPResponse)
-* [`encodeMQTT()`](/reference/api/Configuration/encodeMQTT)
+* [decodeDubbo()](/reference/api/Configuration/decodeDubbo)
+* [decodeHTTPRequest()](/reference/api/Configuration/decodeHTTPRequest)
+* [decodeHTTPResponse()](/reference/api/Configuration/decodeHTTPResponse)
+* [decodeMQTT()](/reference/api/Configuration/decodeMQTT)
+* [encodeDubbo()](/reference/api/Configuration/decodeDubbo)
+* [encodeHTTPRequest()](/reference/api/Configuration/decodeHTTPRequest)
+* [encodeHTTPResponse()](/reference/api/Configuration/decodeHTTPResponse)
+* [encodeMQTT()](/reference/api/Configuration/encodeMQTT)
 
 These filters translate streams between the _raw byte form_ and the _message form_. A decoder takes in _Data_ events and outputs _MessageStart/MessageEnd_ event pairs (with unchanged message bodies as _Data_ events in between). An encoder takes in _MessageStart/MessageEnd_ event pairs (again, with message bodies as _Data_ events in between), and outputs raw bytes in _Data_ events.
 
 ### Muxers and demuxers
 
-* [`demux()`](/reference/api/Configuration/demux)
-* [`demuxHTTP()`](/reference/api/Configuration/demuxHTTP)
-* [`merge()`](/reference/api/Configuration/merge)
-* [`mux()`](/reference/api/Configuration/mux)
-* [`muxHTTP()`](/reference/api/Configuration/muxHTTP)
-* [`serveHTTP()`](/reference/api/Configuration/serveHTTP)
+* [demux()](/reference/api/Configuration/demux)
+* [demuxHTTP()](/reference/api/Configuration/demuxHTTP)
+* [merge()](/reference/api/Configuration/merge)
+* [mux()](/reference/api/Configuration/mux)
+* [muxHTTP()](/reference/api/Configuration/muxHTTP)
+* [serveHTTP()](/reference/api/Configuration/serveHTTP)
 
-These filters split messages from one stream into multiple streams, or the opposite, combine messages from multiple streams into one stream. Some have integrated codecs, such as [`demuxHTTP()`](/reference/api/Configuration/demux) and [`muxHTTP()`](/referenceConfiguration/muxHTTP). In this case, the demuxers have raw byte input and message output, while the muxers have message input and raw byte output.
+These filters split messages from one stream into multiple streams, or the opposite, combine messages from multiple streams into one stream. Some have integrated codecs, such as [demuxHTTP()](/reference/api/Configuration/demux) and [muxHTTP()](/referenceConfiguration/muxHTTP). In this case, the demuxers have raw byte input and message output, while the muxers have message input and raw byte output.
 
 ### Connectors
 
-* [`fork()`](/reference/api/Configuration/fork)
-* [`link()`](/reference/api/Configuration/link)
-* [`use()`](/reference/api/Configuration/use)
+* [fork()](/reference/api/Configuration/fork)
+* [link()](/reference/api/Configuration/link)
+* [use()](/reference/api/Configuration/use)
 
 These filters pass events in a stream from one pipeline to another. Unlike _muxers and demuxers_, they only change where streams are going without changing their content.
 
 ### Buffering
 
-* [`pack()`](/reference/api/Configuration/pack)
-* [`throttleDataRate()`](/reference/api/Configuration/throttleDataRate)
-* [`throttleMessageRate()`](/reference/api/Configuration/throttleMessageRate)
-* [`wait()`](/reference/api/Configuration/wait)
+* [pack()](/reference/api/Configuration/pack)
+* [throttleDataRate()](/reference/api/Configuration/throttleDataRate)
+* [throttleMessageRate()](/reference/api/Configuration/throttleMessageRate)
+* [wait()](/reference/api/Configuration/wait)
 
 These filters delay a stream until some conditions are met. In other words, they control the passage of events in a stream.
 
 ### Observers
 
-* [`detectProtocol()`](/reference/api/Configuration/detectProtocol)
-* [`dump()`](/reference/api/Configuration/dump)
-* [`handleData()`](/reference/api/Configuration/handleData)
-* [`handleMessage()`](/reference/api/Configuration/handleMessage)
-* [`handleMessageBody()`](/reference/api/Configuration/handleMessageBody)
-* [`handleStreamEnd()`](/reference/api/Configuration/handleStreamEnd)
-* [`handleStreamStart()`](/reference/api/Configuration/handleStreamStart)
-* [`handleTLSClientHello()`](/reference/api/Configuration/handleTLSClientHello)
-* [`print()`](/reference/api/Configuration/print)
+* [detectProtocol()](/reference/api/Configuration/detectProtocol)
+* [dump()](/reference/api/Configuration/dump)
+* [handleData()](/reference/api/Configuration/handleData)
+* [handleMessage()](/reference/api/Configuration/handleMessage)
+* [handleMessageBody()](/reference/api/Configuration/handleMessageBody)
+* [handleStreamEnd()](/reference/api/Configuration/handleStreamEnd)
+* [handleStreamStart()](/reference/api/Configuration/handleStreamStart)
+* [handleTLSClientHello()](/reference/api/Configuration/handleTLSClientHello)
+* [print()](/reference/api/Configuration/print)
 
 These filters trigger some user-defined script when they see a specific type of events in a stream. They don't change anything in the stream. They simply pass down all events as is.
 
 ### Transformers
 
-* [`decompressHTTP()`](/reference/api/Configuration/decompressHTTP)
-* [`decompressMessage()`](/reference/api/Configuration/decompressMessage)
-* [`exec()`](/reference/api/Configuration/exec)
-* [`replaceData()`](/reference/api/Configuration/handleData)
-* [`replaceMessage()`](/reference/api/Configuration/handleMessage)
-* [`replaceMessageBody()`](/reference/api/Configuration/handleMessageBody)
-* [`replaceStreamEnd()`](/reference/api/Configuration/handleStreamEnd)
-* [`replaceStreamStart()`](/reference/api/Configuration/handleStreamStart)
-* [`split()`](/reference/api/Configuration/split)
+* [decompressHTTP()](/reference/api/Configuration/decompressHTTP)
+* [decompressMessage()](/reference/api/Configuration/decompressMessage)
+* [exec()](/reference/api/Configuration/exec)
+* [replaceData()](/reference/api/Configuration/handleData)
+* [replaceMessage()](/reference/api/Configuration/handleMessage)
+* [replaceMessageBody()](/reference/api/Configuration/handleMessageBody)
+* [replaceStreamEnd()](/reference/api/Configuration/handleStreamEnd)
+* [replaceStreamStart()](/reference/api/Configuration/handleStreamStart)
+* [split()](/reference/api/Configuration/split)
 
-These filters transform input events into new output events. Many of them call user-defined script with input events as the input to the user function and output whatever events the user function outputs. Among these filters, [`exec()`](/reference/api/Configuration/exec) is special in that, it feeds _Data_ events to an external process's standard input and reads back _Data_ events from its standard output.
+These filters transform input events into new output events. Many of them call user-defined script with input events as the input to the user function and output whatever events the user function outputs. Among these filters, [exec()](/reference/api/Configuration/exec) is special in that, it feeds _Data_ events to an external process's standard input and reads back _Data_ events from its standard output.
 
 ## How it works
 

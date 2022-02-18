@@ -1,0 +1,43 @@
+---
+title: "构建和安装"
+---
+
+### 从源码构建
+
+在构建之前，需要确保构建环境满足如下条件：
+
+* Clang 5.0+
+* CMake 3.0+
+* Node.js v12+ (只有在开启内置 web 界面时需要)
+* zlib
+
+上述所有都安装之后，克隆 Pipy 仓库并在根目录中执行构建脚本开始构建：
+
+```sh
+$ git clone https://github.com/flomesh-io/pipy.git
+$ cd pipy
+$ ./build.sh
+```
+
+构建出来的可执行文件位于 `bin/` 目录。执行 `bin/pipy -h` 查看帮助信息。
+
+### 构建 Docker 镜像
+
+运行如下命令构建 Docker 镜像：
+
+```sh
+$ cd pipy
+$ docker build --squash --rm -t pipy .·
+```
+
+> **注意：** 添加 `--squash` 选项可以获得更小的镜像。这是一个实验性功能，需要在 `/etc/docker/daemon.json` 中添加 `{ "experimental": true }` 并重启 Docker daemon 开启。
+> 
+> 有关 Docker `--squash` 选项的更多信息，请参考 [Docker 文档](https://docs.docker.com/engine/reference/commandline/image_build/)。
+
+### 通过 RPM 安装
+
+在基于 Linux 的系统中，可以从发布的 rpm 软件包进行安装。例如，要在 RHEL7 上安装 Pipy，可以执行：
+
+```sh
+$ yum -y install http://repo.flomesh.cn/pipy/pipy-latest.el7_pl.x86_64.rpm
+```
