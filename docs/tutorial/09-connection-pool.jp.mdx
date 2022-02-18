@@ -1,0 +1,166 @@
+---
+title: "9：コネクションプール"
+---
+
+# 問題点
+
+[4：ルーティング](/tutorial/04-routing)のチュートリアルで、 *muxHTTP*  には接続管理機能があり、接続をキー/値のペアとして保存し、この値が接続を表すことを説明しました。ここでこの接続は実際にターゲットのパイプラインを参照し、そこで使用する *connect* フィルターが接続のアップストリームを保持します。これまでのチュートリアルでは、ターゲットとするサーバーのアドレスをキーとして使用し、それを使って同じアップストリーム接続を経由して全リクエストを同じターゲットホストに転送しました。つまり、アップストリームひとつにつき接続はひとつしかないということです。Pipyの *muxHTTP* はHTTP1多重化に対応していますが、リクエストのシーケンシャルな送信と、同じダウンストリーム接続を行き来するレスポンスにより、性能に問題が生じることは避けられません。
+
+そこで簡単なテストを行います。Pipyはインメモリーダンプのような機能をビルトインしてサポートしています。この機能は *SIGTSTP* 信号を該当するPipyプロセスに送ってアクティベートでき、ロードしたクラスやインスタンスの数、パイプの数などの情報を印刷して読める形の情報にします。
+
+テストには *wrk* ツールを使用します。では5種類の同時接続を `wrk -t 1 -c 5 -d 2s --latency http://localhost:8000/ip` で送ってみましょう。*wrk* が返ってきたら、 *ctrl+z* を押して *SIGTSTP* 信号をpipyインスタンスに送ります。
+
+パイプライン列には *connection* パイプラインの総インスタンス数とアクティブなインスタンス数が共に1であると表示されます。つまりPipyは接続をひとつだけ使用しているということです。
+
+```
+PIPELINE                             #ALLOCATED  #ACTIVE
+----------------------------------------------------------
+  /plugins/balancer.js [connection]  1           1
+```
+
+このチュートリアルではリソースプーリングを実装して接続を管理します。これは面白いですよ。それでは始めましょう。
+
+# リソースプール
+
+Pipyの `algo.ResourcePool` はリソースプーリング機能を提供します。これはコンストラクターのパラメーターとして関数（すなわちリソースジェネレーター）を使用します。リソースプールに自由に使えるリソースがない場合、ここで渡した関数/ジェネレーターを呼び出し、新しいリソースを割り当てます。
+
+`ResourcePool` にはpublicメソッドが2つあります。
+
+* `allocate(pool)`：リソースプールで指定したパラメーター `pool` からリソースを返します。
+* `free(resource)`：どのリソースを解放するかを指定するpool. `resource` パラメーターにリソースを返して、リソースを解放します。
+
+``` js
+  pipy({
+    _services: (
+      Object.fromEntries(
+        Object.entries(config.services).map(
+          ([k, v]) => [
+            k, new algo.RoundRobinLoadBalancer(v)
+          ]
+        )
+      )
+    ),
+
+    _balancer: null,
+    _balancerCache: null,
+    _target: '',
+
++   _g: {
++     connectionID: 0,
++   },
+
++   _connectionPool: new algo.ResourcePool(
++     () => ++_g.connectionID
++   ),
+  })
+```
+
+ここで新たに2つの変数 `_g` と `_connectionPool` を導入しています。勘のいい読者は、なぜインクリメントする変数を `_g` の中に設定しているのか、疑問に思うでしょう。
+
+`pipy()` への引数はPipyインスタンス全体の「ルートコンテキスト」で、パイプラインコネクターをサブパイプラインに接続した時に、ルートコンテキストから新たなコンテキストをコピーして、`use` や `link` コネクターのような新しいコンテキストでグローバル変数を操作します。一方 `merge` コネクターは元のコンテキストでグローバル変数を操作しますが、これは後程説明します。
+
+`connectionID` をデフォルト値 *0* のグローバル変数として宣言していた場合、前述のとおり `use` とそれに類似したジョイントフィルターはコンテキストをコピーしてそのコピー上で操作するので、ジョイントフィルター上で行った変更はローカルコピー上でのみ有効であり、グローバルスコープでは見えません。その変数をオブジェクト内にラップして、実際に参照を渡します。
+
+> これは値渡し、参照渡しとして知られています。
+
+最初のテストに戻ると、リソースプールを確保したらプールには5つのダウンストリーム接続（1、2、3、4、5）用に5つのリソースがありました（アップストリームのターゲットサーバーはひとつだけなので、プールはひとつだけです）。ダウンストリーム接続は、プールからリソースをフェッチする際にこの5つのリソースのどれかを獲得します。しかし[以前の記事](/tutorial/08-load-balancing-Improved)でそうしたように、同じアップストリーム接続を一貫して使用したいですよね。そうすると同じダウンストリーム接続からのリクエストを、同じアップストリームデスティネーションサーバーにルーティングできます。
+
+この課題を解決するには `Caching` を使用します。ではキャッシング機能を実装してみましょう。
+
+#キャッシュ
+
+``` js
+  pipy({
+    _services: (
+      Object.fromEntries(
+        Object.entries(config.services).map(
+          ([k, v]) => [
+            k, new algo.RoundRobinLoadBalancer(v)
+          ]
+        )
+      )
+    ),
+
+    _balancer: null,
+    _balancerCache: null,
+    _target: '',
++   _targetCache: null,
+
+    _g: {
+      connectionID: 0,
+    },
+
+    _connectionPool: new algo.ResourcePool(
+      () => ++_g.connectionID
+    ),
+  })
+
+  .import({
+    __turnDown: 'proxy',
+    __serviceID: 'router',
+  })
+
+  .pipeline('session')
+    .handleStreamStart(
+      () => (
++       _targetCache = new algo.Cache(
++         // k is a target, v is a connection ID
++         (k  ) => _connectionPool.allocate(k),
++         (k,v) => _connectionPool.free(v),
++       ),
+        _balancerCache = new algo.Cache(
+          // k is a balancer, v is a target
+          (k  ) => k.select(),
+          (k,v) => k.deselect(v),
+        )
+      )
+    )
+    .handleStreamEnd(
+      () => (
++       _targetCache.clear(),
+        _balancerCache.clear()
+      )
+    )
+```
+
+ここで新しいキャッシュ変数 `_targetCache` を導入しています。その初期化は `algo.Cache` コンストラクターで、 `allocator` と `deallocator` ロジックに渡して行っています。 `allocator` ロジックはリソースをリクエストした時に呼び出され、ダウンストリーム接続が（*StreamEnd*）イベントで切断された時、外部の `deallocator` ロジックが呼び出されて、リソースプールにリソースを返します。
+
+また *muxHTTP* フィルターを次のように更新する必要があります。
+
+``` js
+  .pipeline('forward')
+    .muxHTTP(
+      'connection',
+-     () => _target
++     () => _targetCache.get(_target)
+    )
+
+  .pipeline('connection')
+    .connect(
+      () => _target
+    )
+```
+
+# テストしてみる
+
+*Connection* パイプラインに割り当てたインスタンスの総数とアクティブなインスタンス数は共に5で、これはダウンストリーム接続の総数に一致します。
+
+```
+PIPELINE                                  #ALLOCATED  #ACTIVE
+---------------------------------------------------------------
+  /plugins/balancer.js [connection]       5           5
+```
+
+# まとめ
+
+このチュートリアルでは、 `ResourcePool` を `muxHTTP` フィルターと組み合わせて接続プーリングを実装する方法を学びました。新たに追加したコードの行数はわずかですが、この記事はグローバル変数と *muxHTTP* の理解を深めるために十分長いものです。
+
+## 要点
+
+1.	`ResourcePool` を使ってリソースプーリング機能を実装します。
+2.	ダウンストリーム間で共有する必要がある変数はオブジェクトとして渡します (または参照渡しとします)。
+
+## 次のパートの内容
+
+標準のルーティングには柔軟な経路の処理も必要となります。例えばルーティングテーブルの `/ip` はアップストリームのサービスには存在しません。この問題を解決するために、リダイレクトを実装してみましょう。
+

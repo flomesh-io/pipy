@@ -4,7 +4,7 @@ title: "Part 12: JWT"
 
 ## Problem
 
-Autentication is a critical part of services and almost each service implements some kind of authentication mechanism. A complex system usually implement or uses single sign-on (SSO) or something similar to avoid users of its systems going through authentication process repeatedly. Generally there are two kind of authentication options:
+Authentication is a critical part of services and almost each service implements some kind of authentication mechanism. A complex system usually implement or uses single sign-on (SSO) or something similar to avoid users of its systems going through authentication process repeatedly. Generally there are two kind of authentication options:
 
 * Stateful authention a.k.a. session based authentication: Where user session data is persisted to some persistence layer and on each invocation of request, persistent data is requested from persistence layer. Though this is kind of normal and mostly used mechanism, but it comes with a risk of single point of failure.
 * Stateless authentication a.k.a cookie based authentication, where no data is stored on server side, but client request contains the authentication data.
