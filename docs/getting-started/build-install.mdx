@@ -1,0 +1,47 @@
+---
+title: 'Build and Install'
+---
+
+### Build from Sources
+
+Before building, the following prerequisites are required to be installed on your machine where you will be building Pipy:
+
+* Clang 5.0+
+* CMake 3.0+
+* Node.js v12+ (only required if the builtin web UI is enabled)
+* zlib
+
+With the above, all installed, Pipy repository cloned, run the build script from Pipy root directory to start building:
+
+```sh
+$ git clone https://github.com/flomesh-io/pipy.git
+$ cd pipy
+$ ./build.sh
+```
+
+The final executable product will be located under `bin/`. Type `bin/pipy -h` for help information.
+
+### Build a Docker Image
+
+To build a Docker image, run the following commands:
+
+```sh
+$ cd pipy
+$ docker build --squash --rm -t pipy .
+```
+
+> **Note:** For a smaller image, you might want to use `--squash` option. It is an experimental feature, so
+you need to add `{ "experimental": true }` to `/etc/docker/daemon.json` and restart Docker daemon
+before using it.
+>
+> For more information about Docker's `--squash` option, please refer to
+[Docker Documentation](https://docs.docker.com/engine/reference/commandline/image_build/)
+
+
+### Install with RPM
+
+On Linux based system, you can install from the released rpm package. For example, to install pipy on RHEL7 you can invoke
+
+```sh
+$ yum -y install http://repo.flomesh.cn/pipy/pipy-latest.el7_pl.x86_64.rpm
+```

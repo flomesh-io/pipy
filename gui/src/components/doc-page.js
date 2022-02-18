@@ -27,10 +27,10 @@ import TipIcon from '@material-ui/icons/EmojiObjectsSharp';
 import PipyLogo from '../images/pipy.svg';
 import HighlightTheme from 'prism-react-renderer/themes/vsDark';
 
-const FONT_TITLE = '"Titillium Web",serif';
-const FONT_TOC = '"Titillium Web",verdana';
-const FONT_TEXT = '"Titillium Web",graphik,verdana,arial,sans-serif';
-const FONT_CODE = 'menlo,monaco,"Courier New",monospace';
+const FONT_TITLE = '"Titillium Web", sans-serif';
+const FONT_TOC = '"Titillium Web", verdana, sans-serif';
+const FONT_TEXT = '"Titillium Web", graphik, verdana, arial, sans-serif';
+const FONT_CODE = 'menlo, monaco, "Courier New", monospace';
 
 const useStyles = makeStyles(theme => ({
   head: {
@@ -397,9 +397,8 @@ const makeStyledTag = (tag, style) => {
   style = style || tag;
   return ({ children, ...props }) => {
     const classes = useStyles();
-    const { lang } = React.useContext(DocContext);
     const Tag = tag;
-    const className = classes[style]
+    const className = classes[style];
     return (
       <Tag {...props} className={className}>
         {children}
@@ -677,10 +676,15 @@ const components = {
   ReturnValue,
 };
 
-const DocNavItem = ({ label, path, uri }) => {
+const DocNavItem = ({ nodes, label, path, uri }) => {
   const classes = useStyles();
   const loc = useLocation();
   const { lang } = React.useContext(DocContext);
+  if (!label && nodes) {
+    let node = nodes.find(node => node?.fields?.path === path && node?.fields?.lang === lang);
+    if (!node) node = nodes.find(node => node?.fields?.path === path);
+    if (node) label = node.frontmatter.title;
+  }
   if (!uri) uri = `/docs/${lang}/${path}`;
   let textClass = classes.navItemText;
   if (loc.pathname === uri) textClass = classes.navItemTextCurrent;
@@ -833,6 +837,7 @@ const DocPage = ({ data }) => {
   }
 
   const slugger = new Slugger;
+  const nodes = data.allMdx.nodes;
 
   return (
     <DocContext.Provider value={{ jsdoc: data.documentationJs, lang, path }}>
@@ -856,14 +861,20 @@ const DocPage = ({ data }) => {
           </Typography>
         </div>
         <List dense>
-          <DocNavItem label="Overview" path="overview"/>
-          <DocNavItem label="Quick Start" path="quick-start"/>
-          <DocNavItem label="Concepts" path="concepts"/>
+          <DocNavGroup label="Introduction" path="intro">
+            <DocNavItem nodes={nodes} path="intro/overview"/>
+            <DocNavItem nodes={nodes} path="intro/concepts"/>
+          </DocNavGroup>
+          <DocNavGroup label="Getting Started" path="getting-started">
+            <DocNavItem nodes={nodes} path="getting-started/build-install"/>
+            <DocNavItem nodes={nodes} path="getting-started/quick-start"/>
+            <DocNavItem nodes={nodes} path="getting-started/getting-help"/>
+          </DocNavGroup>
           <DocNavGroup label="Tutorial" path="tutorial">
-            <DocNavList nodes={data.allMdx.nodes} prefix="tutorial"/>
+            <DocNavList nodes={nodes} prefix="tutorial"/>
           </DocNavGroup>
           <DocNavGroup label="Reference" path="reference">
-            <DocNavList nodes={data.allMdx.nodes} prefix="reference"/>
+            <DocNavList nodes={nodes} prefix="reference"/>
           </DocNavGroup>
         </List>
       </div>

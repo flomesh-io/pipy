@@ -183,7 +183,7 @@ PipyJS doesn't support statements, so there's no way to declare variables with t
 
 ## Global variables
 
-Global variables in PipyJS are also called "_context variables_". Refer to [Context](/concepts#context) for a deep dive into the concepts of _context_ and _context variables_.
+Global variables in PipyJS are also called "_context variables_". Refer to [Context](/intro/concepts#context) for a deep dive into the concepts of _context_ and _context variables_.
 
 We define global variables in PipyJS by using the builtin function [pipy()](/reference/api/pipy), which is always the very first function you are going to call at the beginning of your script.
 
@@ -195,7 +195,7 @@ pipy({
 
 > For convention, we always start **global variable names** with an underscore, though it is not enforced by the language itself.
 
-Global variables are scoped within a single file or [_module_](/concepts#module), and can be shared between different modules by using [export()](/reference/api/Configuration/export) and [import()](/reference/api/Configuration/import).
+Global variables are scoped within a single file or [_module_](/intro/concepts#module), and can be shared between different modules by using [export()](/reference/api/Configuration/export) and [import()](/reference/api/Configuration/import).
 
 ``` js
 // file A

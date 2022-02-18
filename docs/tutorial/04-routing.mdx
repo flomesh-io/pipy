@@ -129,7 +129,7 @@ If you run this code however, you will get an error:
 
 This is because, a custom global variable is always attached to some pipeline.
 Therefore, they are only alive when there is a live pipeline
-(See [Context](/concepts#context) in _Concepts_ for more about _global variables_).
+(See [Context](/intro/concepts#context) in _Concepts_ for more about _global variables_).
 If there's no incoming connections, then no pipelines, so those variables do not exist yet.
 
 How do we get around this? The same way as in [Part 2](/tutorial/02-echo/) where
@@ -283,7 +283,7 @@ traveling path would be like this:
 A better way to picture this "_pipeline insertion_" would be think of a sub-pipeline
 wedged into a _joint filter_'s place, replacing that filter completely.
 
-For more about pipeilnes and filters, see [Filter and pipeline](/concepts/#filter-and-pipeline)
+For more about pipeilnes and filters, see [Filter and pipeline](/intro/concepts/#filter-and-pipeline)
 in _Concepts_.
 
 # Connection Sharing Problem
