@@ -10,7 +10,7 @@ In this tutorial we are going to implement rate limiting functionanlity for our 
 
 ## Filters
 
-Pipy built-in filters [`throttleMessageRate`](/reference/api/Configuration/throttleMessageRate) and [`throttleDataRate`](/reference/api/Configuration/throttleDataRate) are used to implement rate limiting, where former is used for maximum number of requests per second and latter is used for maximum number of bytes per second. Both accept a similar set of parameters:
+Pipy built-in filters [throttleMessageRate](/reference/api/Configuration/throttleMessageRate) and [throttleDataRate](/reference/api/Configuration/throttleDataRate) are used to implement rate limiting, where former is used for maximum number of requests per second and latter is used for maximum number of bytes per second. Both accept a similar set of parameters:
 
 * *quota*: describe the quota and type can be Number, String, or function.
 * *account*: Quota unit/granularity level. The type can be String or function. Such as a service name, request path, a request header, or some more complex combination.

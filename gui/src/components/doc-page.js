@@ -134,12 +134,21 @@ const useStyles = makeStyles(theme => ({
   },
 
   toc: {
-    position: 'absolute',
+    position: 'fixed',
     top: theme.TOOLBAR_HEIGHT,
-    bottom: 0,
-    width: '300px',
-    right: 0,
+    width: '280px',
+    right: '20px',
     padding: theme.spacing(2),
+    borderLeft: '3px solid #505050',
+    maxHeight: 'calc(100% - 100px)',
+    overflow: 'auto',
+    '&::-webkit-scrollbar': {
+      width: '5px',
+      backgroundColor: '#303030',
+    },
+    '&::-webkit-scrollbar-thumb': {
+      backgroundColor: '#383838',
+    },
   },
 
   tocTitle: {
@@ -170,9 +179,9 @@ const useStyles = makeStyles(theme => ({
     top: theme.TOOLBAR_HEIGHT,
     bottom: 0,
     left: '300px',
-    right: '300px',
+    right: 0,
     padding: theme.spacing(2),
-    overflowY: 'scroll',
+    overflowY: 'auto',
     '&::-webkit-scrollbar': {
       width: '8px',
       backgroundColor: '#303030',
@@ -180,6 +189,11 @@ const useStyles = makeStyles(theme => ({
     '&::-webkit-scrollbar-thumb': {
       backgroundColor: '#383838',
     },
+  },
+
+  doc: {
+    position: 'relative',
+    paddingRight: '300px',
   },
 
   title: {
@@ -209,6 +223,7 @@ const useStyles = makeStyles(theme => ({
     borderLeftStyle: 'solid',
     borderLeftWidth: '3px',
     borderLeftColor: '#fff',
+    borderRadius: '3px',
   },
 
   tipIcon: {
@@ -247,7 +262,8 @@ const useStyles = makeStyles(theme => ({
     paddingBottom: 0,
     borderLeftStyle: 'solid',
     borderLeftWidth: '3px',
-    borderLeftColor: theme.palette.primary.main,
+    borderLeftColor: '#ccf',
+    borderRadius: '3px',
   },
 
   codeSame: {
@@ -265,21 +281,22 @@ const useStyles = makeStyles(theme => ({
 
   inlineCode: {
     fontFamily: FONT_CODE,
-    fontSize: '1.0rem',
+    fontSize: '0.9rem',
     paddingLeft: theme.spacing(0.5),
     paddingRight: theme.spacing(0.5),
     paddingTop: '3px',
     paddingBottom: '3px',
-    backgroundColor: '#1e1e1e',
+    color: 'black',
+    backgroundColor: '#ccf',
+    borderRadius: '3px',
   },
 
   memberName: {
     fontFamily: FONT_CODE,
-    fontSize: '1.0rem',
+    fontSize: '0.9rem',
     fontWeight: 'bold',
     color: theme.palette.text.link,
     padding: theme.spacing(0.8),
-    backgroundColor: theme.palette.text.codeBox,
     textDecorationLine: 'underline',
     textUnderlinePosition: 'under',
     '&:hover': {
@@ -289,11 +306,10 @@ const useStyles = makeStyles(theme => ({
 
   parameterName: {
     fontFamily: FONT_CODE,
-    fontSize: '1.0rem',
+    fontSize: '0.9rem',
     fontWeight: 'bold',
     color: theme.palette.text.primary,
     padding: theme.spacing(0.8),
-    backgroundColor: theme.palette.text.codeBox,
   },
 
   description: {
@@ -879,14 +895,16 @@ const DocPage = ({ data }) => {
         </List>
       </div>
       <div className={classes.main}>
-        <Typography component="h1" className={classes[`title_${lang}`] || classes.title}>
-          {data.mdx.frontmatter.title}
-        </Typography>
-        <MDXProvider components={components}>
-          <MDXRenderer headings={data.mdx.headings}>
-            {data.mdx.body}
-          </MDXRenderer>
-        </MDXProvider>
+        <div className={classes.doc}>
+          <Typography component="h1" className={classes[`title_${lang}`] || classes.title}>
+            {data.mdx.frontmatter.title}
+          </Typography>
+          <MDXProvider components={components}>
+            <MDXRenderer headings={data.mdx.headings}>
+              {data.mdx.body}
+            </MDXRenderer>
+          </MDXProvider>
+        </div>
       </div>
       <div className={classes.toc}>
         <Typography component="h1" className={classes.tocTitle}>

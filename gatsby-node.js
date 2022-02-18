@@ -86,10 +86,6 @@ exports.onCreateNode = ({ node, actions }) => {
         }
       }
 
-      if (path.endsWith('_f')) {
-        path = path.substring(0, path.length - 2);
-      }
-
       createNodeField({
         node,
         name: 'path',

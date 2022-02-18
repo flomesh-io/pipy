@@ -10,10 +10,10 @@ const theme = createTheme({
   palette: {
     type: 'dark',
     primary: {
-      main: '#ff0',
+      main: '#00adef',
     },
     text: {
-      link: '#88f',
+      link: '#80adff',
       code: '#fff',
       codeBox: '#110',
     },

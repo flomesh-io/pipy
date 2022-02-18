@@ -78,7 +78,7 @@ In addition to the 3rd parameter specifying a pipeline layout name for the down 
 
 For example, if the module array is [A, B, C], and the callback returns `true` before it's about to move from B to C, then the entire pipeline chain would become A(up) > B(up) > B(down) > A(down).
 
-> The dicision for the turning point at each module transition is only done once for each stream. It happens when a module is about to receive the first event in that stream. Once the dicision is made, it won't change any more for that stream. This behaviour is similar to the [`Configuration.link()`](/reference/api/Configuration/link) filter.
+> The dicision for the turning point at each module transition is only done once for each stream. It happens when a module is about to receive the first event in that stream. Once the dicision is made, it won't change any more for that stream. This behaviour is similar to the [Configuration.link()](/reference/api/Configuration/link) filter.
 
 # Syntax
 
