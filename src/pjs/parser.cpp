@@ -418,7 +418,12 @@ auto Tokenizer::parse(Location &loc) -> Token {
       count();
       while (!eof()) {
         auto c = std::tolower(get());
-        if (std::isdigit(c) || c=='.' || c=='e' || c=='x' || c=='o' || c=='b') {
+        if ((c=='.' || std::isdigit(c)) ||
+            (c=='x' || c=='X') ||
+            (c=='o' || c=='O') ||
+            ('a' <= c && c <= 'f') ||
+            ('A' <= c && c <= 'F')
+        ) {
           count();
           s += char(c);
           if (c == 'e') {
@@ -433,7 +438,22 @@ auto Tokenizer::parse(Location &loc) -> Token {
         if (std::isspace(c) || is_operator_char(c)) break;
         return Token::err;
       }
-      return Token(std::stod(s)); // TODO: Handle 0oXXX and 0bXXX
+      if (s[0] == '0' && (s[1] == 'b' || s[1] == 'B' || s[1] == 'o' || s[1] == 'O')) {
+        uint64_t n = 0;
+        int pow = (s[1] == 'b' || s[1] == 'B' ? 1 : 3);
+        int base = 1 << pow;
+        for (size_t i = 2; i < s.length(); i++) {
+          int c = s[i] - '0';
+          if (c < 0 || c >= base) return Token::err;
+          n = (n << pow) + c;
+        }
+        return Token(double(n));
+      } else {
+        char *endp = nullptr;
+        auto n = std::strtod(s.c_str(), &endp);
+        if (endp - s.c_str() < s.length()) return Token::err;
+        return Token(n);
+      }
 
     // Identifier
     } else {

@@ -243,13 +243,12 @@ bool JSON::encode(
       s_dp.push(&data, v.b() ? s_true : s_false);
     } else if (v.is_number()) {
       auto n = v.n();
-      double i;
       if (std::isnan(n) || std::isinf(n)) {
         s_dp.push(&data, s_null);
-      } else if (std::modf(n, &i) == 0) {
-        s_dp.push(&data, std::to_string(int64_t(i)));
       } else {
-        s_dp.push(&data, std::to_string(n));
+        char buf[100];
+        auto l = pjs::Number::to_string(buf, sizeof(buf), n);
+        s_dp.push(&data, buf, l);
       }
     } else if (v.is_string()) {
       s_dp.push(&data, '"');
