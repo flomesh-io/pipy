@@ -11,7 +11,7 @@ move on to the next proxy feature, we better do some refactoring to the
 code stucture so every newly added feature in the future can be in its own file,
 only optionally hooked up into the system, aka "_plugins_".
 
-# Router plugin
+## Router plugin
 
 The main feature of our proxy right now is _routing_. Code for routing makes
 up most of the content in `/proxy.js`. So we can base on that to form the
@@ -80,7 +80,7 @@ Changing a pipeline name in _link()_ to empty means linking to nothing.
 In this case, everything coming along to _link()_ will just go down without
 any changes (only when `_target` is falsy), as if _link()_ wasn't there.
 
-# Default plugin
+## Default plugin
 
 Now let's create the "_default_" plugin mentioned above.
 
@@ -99,7 +99,7 @@ As you can see, this one is easy. It has only one sub-pipeline, also named "_req
 It does exactly the same thing as our good old "_404_" pipeline, only changing
 the message from "_No route_" to "_No handler_".
 
-# Chain of plugins
+## Chain of plugins
 
 Now we go back to the main script `/proxy.js`. Since we've moved almost all code
 to the plugins, we're left with only _demuxHTTP()_ and an empty "_request_" pipeline.
@@ -159,7 +159,7 @@ Here's what the "_plugin chain_" made by _use()_ looks like:
 We haven't defined "_response_" pipelines in the plugins yet. No worries.
 If a pipeline name is not found in a plugin, the chain will simply skip over it.
 
-# Turn down a request
+## Turn down a request
 
 Now we have our plugins chained together. There's a problem though.
 Every incoming request goes through the same `router.js` and `default.js`,
@@ -188,7 +188,7 @@ Remember that this is a dynamic value, we should wrap it in a function.
     )
 ```
 
-## Export and import
+### Export and import
 
 Next, we define the global variable. We can't define it the way we used to though,
 because that way it'll only be visible in `proxy.js` but not in `router.js`.
@@ -236,7 +236,7 @@ when a route is found.
 Mind that the namespace should match what's in `proxy.js`
 where `__turnDown` is exported, which is "_proxy_".
 
-# Test in action
+## Test in action
 
 We haven't added any new features this time.
 It should work just like last time.
@@ -252,13 +252,13 @@ $ curl localhost:8000/bad/path
 No handler
 ```
 
-# Summary
+## Summary
 
 In this part of tutorial, you've learned how different features
 can be isolated in different plugins. This has made a solid foundation
 for the further expansion of our proxy's feature set.
 
-## Takeaways
+### Takeaways
 
 1. Use [_use()_](/reference/api/Configuration/use) to link to pipelines
    defined in other files and form a _plugin chain_. It is the key to
@@ -269,7 +269,7 @@ for the further expansion of our proxy's feature set.
    across different files, use [_export()_](/reference/api/Configuration/export)
    and [_import()_](/reference/api/Configuration/import).
 
-## What's next?
+### What's next?
 
 We now have a fully functioning routing proxy with a sleek plugin system,
 but it's still not good enough. We have lots of parameters all over the code,

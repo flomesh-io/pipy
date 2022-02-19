@@ -2,7 +2,7 @@
 title: "Part 9: Connection Pool"
 ---
 
-# Problem
+## Problem
 
 In [Part 4: Routing](/tutorial/04-routing) tutorial we showed that *muxHTTP* has a connection management feature, where a connection is stored as a key / value pair and the value represents the connection. The connection here actually refers to the target pipeline, and the *connect* filter used in the target pipeline keeps the connection upstream. In previous tutorials, we used the target server address as the key, that made all all the requests going to same target host via same upstream connection. This means that there is only one connection per upstream. Pipy's *muxHTTP* provides HTTP1 multiplexing support, but sequential sending of requests and responses to and from the same downstream connection inevitably leads to performance issues.
 
@@ -21,7 +21,7 @@ PIPELINE                             #ALLOCATED  #ACTIVE
 
 In this tutorial we are going to implement resource pooling to manage connections. So let's jump into the fun part.
 
-# ResourcePool
+## ResourcePool
 
 Pipy `algo.ResourcePool` provides resource pooling functionality, where it takes a function (a.k.a resource generator) as a constructor parameter. When there are no free resources in the resource pool, this passed function/generator is called to allocate new resources.
 
@@ -68,7 +68,7 @@ Going back to the initial test, once you have the resource pool, there will be f
 
 We can use `Caching` to solve our problem, so let's implement the caching functionality:
 
-# Cache
+## Cache
 
 ``` js
   pipy({
@@ -142,7 +142,7 @@ We also need to update *muxHTTP* filter as below:
     )
 ```
 
-# Test in action
+## Test in action
 
 The total allocated and active instances of the *Connection* pipeline are both 5, which corresponds to the total number of downstream connections.
 
@@ -152,15 +152,15 @@ PIPELINE                                  #ALLOCATED  #ACTIVE
   /plugins/balancer.js [connection]       5           5
 ```
 
-# Summary
+## Summary
 
 In this tutorial we learned how to use the `ResourcePool` in conjunction with the *muxHTTP* filter to implement connection pooling. The number of new lines of code added is small, but the length of this article is to deepen the understanding of global variables and *muxHTTP*.
 
-## Takeaways
+### Takeaways
 
 1. Use `ResourcePool` to implement resource pooling functionality.
 2. Variables that need to be shared across downstreams need to be passed as an object (or pass by reference).
 
-## What's next?
+### What's next?
 
 Standard routing also requires flexible path handling. For example, `/ip` in the routing table does not exist in the upstream service. Let's implement redirection to solve this problem.

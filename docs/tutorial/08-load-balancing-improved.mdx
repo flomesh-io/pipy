@@ -2,7 +2,7 @@
 title: "Part 8: LB Improved"
 ---
 
-# Problem
+## Problem
 
 In the [last part](/tutorial/07-load-balancing) of the tutorial,
 we've made a working load-balancer, but it has some issues.
@@ -17,7 +17,7 @@ You are requesting /hi from ::ffff:127.0.0.1
 It's not a wrong behaviour for a load-balancer but surely not optimal.
 Usually we'd like requests coming from the same connection go to the same target as well.
 
-# Cache
+## Cache
 
 The logic behind this "_request from the same connection go to the same target_" rule
 can be done with a simple "_cache_". Instead of always calling to
@@ -51,7 +51,7 @@ Note that we are using the _RoundRobinLoadBalancer_ objects as keys.
 > like [_LeastWorkLoadBalancer_](/reference/api/algo/LeastWorkLoadBalancer),
 > it is required so that workloads can be tracked.
 
-## Initialization
+### Initialization
 
 The balancer-to-target cache should be created once for each incoming connection,
 so we initialize it at the very beginning of an HTTP session.
@@ -117,7 +117,7 @@ Now we can do the initialization in a new "_session_" sub-pipeline in `/plugins/
 
 We also defined a variable called `_balancer` for use next.
 
-## Cache it
+### Cache it
 
 Now instead of calling _RoundRobinLoadBalancer.select()_ directly,
 we call [_algo.Cache.prototype.get()_](/reference/api/algo/Cache/get)
@@ -139,7 +139,7 @@ that wraps up the call to _RoundRobinLoadBalancer.select()_.
     )
 ```
 
-## Cleanup
+### Cleanup
 
 Lastly, when the incoming connection is closed, we clear up the cache.
 
@@ -161,7 +161,7 @@ Lastly, when the incoming connection is closed, we clear up the cache.
 +   )
 ```
 
-# Test in action
+## Test in action
 
 Now if you do the same test at the beginning of this part, you'll see:
 
@@ -177,13 +177,13 @@ You are requesting /hi from ::ffff:127.0.0.1
 For every _curl_ connection, the two requests get to the same target.
 Only between different connections, the targets are rotating.
 
-# Summary
+## Summary
 
 In this part of tutorial, you've learned how to stay on the same target,
 in a specific connection, for requests that go to the same service.
 This is a common optimization for a load balancing proxy.
 
-## Takeaways
+### Takeaways
 
 1. Use [_algo.Cache_](/reference/api/algo/Cache) to remember what targets
    have been allocated for services so we can go back to the same targets in
@@ -192,7 +192,7 @@ This is a common optimization for a load balancing proxy.
 2. Connection-wide initialization should be done at the beginning of _listen()_,
    before streams are divided into messages by filters like _demuxHTTP()_.
 
-## What's next?
+### What's next?
 
 There is one more optimization we can do to our load-balancer: connection pool.
 That's what we'll be talking about next.

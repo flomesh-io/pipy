@@ -6,7 +6,7 @@ In this part of the tutorial, we will further optimize our codebase
 by isolating code and data. The data part will be put into separate
 JSON files as configuration files.
 
-# Prepare JSON files
+## Prepare JSON files
 
 First, we create a JSON file for each JavaScript file that is configurable.
 In each of these JSON files, we put in the data that the corresponding
@@ -41,7 +41,7 @@ For `/plugins/default.js`, something could also be turned configurable,
 such as the message to return when a request isn't handled.
 But we'll just skip it in this tutorial for simplicity.
 
-# Read data from JSON
+## Read data from JSON
 
 Next, we change `/proxy.js` to get its configuration from `/config/proxy.json`:
 
@@ -130,23 +130,23 @@ to what's in the JSON.
 + )(JSON.decode(pipy.load('config/router.json')))
 ```
 
-# Test in action
+## Test in action
 
 Again, we didn't make any change to the functionality.
 It can be tested the same way as last time: [Test in action](/tutorial/05-plugins#test-in-action).
 
-# Summary
+## Summary
 
 In this part of tutorial, you've learned how to separate code and data,
 which is a better way of organizing your script when it has a lot of configurable data.
 
-## Takeaways
+### Takeaways
 
 1. Separating code and data is a good practice in code organizing and makes your code easier to configure.
 2. Use [_pipy.load()_](/reference/api/pipy.load) to read files as binary data.
 3. Use [_JSON.decode()_](/reference/api/JSON/decode) to decode JSON from binary data.
 
-## What's next?
+### What's next?
 
 Now we've built a solid foundation for our proxy. It has a plugin system, and can be configured by JSON.
 Moving forward, we'll continue expanding its functionalities by adding more plugins to it.

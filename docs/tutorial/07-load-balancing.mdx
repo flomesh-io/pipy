@@ -6,7 +6,7 @@ Now we have a pluggable, configurable proxy framework. We even made our
 first plugin "_router_". Starting from now, we'll continue to make more plugins
 covering other common proxy features. The first one would be "_load balancing_".
 
-# RoundRobinLoadBalancer
+## RoundRobinLoadBalancer
 
 Pipy provides a number of builtin classes to make things easier for building a load balancing proxy.
 These classes implemented a few assorted load balancing algorithms, all to be used in the same way.
@@ -38,7 +38,7 @@ With that _RoundRobinLoadBalancer_, each time you call its
 [_select()_](/reference/api/algo/RoundRobinLoadBalancer/select) method, it will
 give you one of the targets, in a round-robin fashion.
 
-# Take apart router.js
+## Take apart router.js
 
 Once we get a selected target, we are supposed to pass the current request to it,
 but wait..., we've already done that in the "_forward_" pipeline in `/plugins/router.js`, haven't we?
@@ -54,7 +54,7 @@ In addition to that, the _router_ should be able to tell the _balancer_ which se
 We've already seen how the variable `__turnDown` is shared between `/proxy.js` and `/plugins/router.js`
 in [Part 4](/tutorial/05-plugins#export-and-import). It's just the same thing here too.
 
-## Create balancer.js
+### Create balancer.js
 
 We work out the balancer first, starting from its configuration.
 Create a file named `/config/balancer.json` and fill in it with a service-to-targets map:
@@ -197,7 +197,7 @@ don't forget to "_plug_" it into the system by adding it to `/config/proxy.json`
   }
 ```
 
-## Trim router.js
+### Trim router.js
 
 For the router, we again start from its configuration `/config/router.json`.
 Since we already have service-to-targets mapping in the balancer, here we change
@@ -307,7 +307,7 @@ Don't forget that the balancer relies on it, so it needs to be exported.
 
 That's all what it takes.
 
-# Test in action
+## Test in action
 
 Now let's do some test.
 
@@ -325,12 +325,12 @@ You are requesting /hi from ::ffff:127.0.0.1
 You can see that each time you visit the same "_service-hi_" service,
 it is directed to a different target, responding with a different message.
 
-# Summary
+## Summary
 
 In this part of tutorial, you've learned to write a round-robin load-balancer.
 You've also learned a good trick to transform a JSON object in a one-liner.
 
-## Takeaways
+### Takeaways
 
 1. Use [_algo.RoundRobinLoadBalancer_](/reference/api/algo/RoundRobinLoadBalancer)
    (and with a few others similiar to it) to automatically select a target out of a group,
@@ -341,6 +341,6 @@ You've also learned a good trick to transform a JSON object in a one-liner.
    and [_Object.fromEntries_](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object/fromEntries),
    keys and values in a JSON object can be easily transformed.
 
-## What's next?
+### What's next?
 
 Our simple load-balancer is working, but it is not optimal yet. In the next part we'll see why.
