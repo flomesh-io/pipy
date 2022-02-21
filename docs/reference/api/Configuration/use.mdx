@@ -3,15 +3,25 @@ title: "Configuration.use()"
 api: Configuration.use()
 ---
 
-# Description
+## Description
 
-Appends a _use_ filter to the current pipeline layout.
+Appends a **use** filter to the current pipeline layout.
 
-A _use_ filter pumps events through a sub-pipeline in a different module, or a series of sub-pipelines in a module chain. You can use it in multiple ways as being discussed down below.
+A **use** filter and its sub-pipelines's input and output can be any events.
 
-## Run a pipeline from another module
+|          |           |       |           |             |           |       |           |             |
+|---------:|:---------:|:-----:|:---------:|:-----------:|:---------:|:-----:|:---------:|:-----------:|
+|          | **Event** |       | **Event** |             | **Event** |       | **Event** |             |
+| _Input_  | →         |       | →         |             | →         |       | →         |             |
+|          |           | `use` |           | `module #1` |           | `...` |           | `module #N` |
+| _Output_ | ←         |       | ←         |             | ←         |       | ←         |             |
+|          | **Event** |       | **Event** |             | **Event** |       | **Event** |             |
 
-The most simple way to use _use_ filter is link to a sub-pipeline created from a pipeline layout configured in a different module than the current. To do that, you only need to give it 2 parameters: the filename of the module and the name of a pipeline layout in that module.
+A **use** filter pumps events through a sub-pipeline in a different module, or a series of sub-pipelines in a module chain. You can use it in multiple ways as being discussed down below.
+
+### Run a pipeline from another module
+
+The most simple way to use **use** filter is link to a sub-pipeline created from a pipeline layout configured in a different module than the current. To do that, you only need to give it 2 parameters: the filename of the module and the name of a pipeline layout in that module.
 
 ``` js
 // main.js
@@ -27,13 +37,13 @@ pipy()
     )
 ```
 
-## Run a pipeline chain
+### Run a pipeline chain
 
-The _use_ filter can also be used to run a "_pipeline chain_". What pipelines are included in the chain can be configured by an array of module filenames. This is the key mechanism to the _plugin system_ in Pipy.
+The **use** filter can also be used to run a "_pipeline chain_". What pipelines are included in the chain can be configured by an array of module filenames. This is the key mechanism to the _plugin system_ in Pipy.
 
-> _Plugin_ is NOT a core concept in Pipy, _module_ is. A _plugin system_ should be considered a best practice using Pipy, which is usually carried out with help of the _use_ filter. See [Tutorial Step 5: Plugins](/tutorial/05-plugins) for more details.
+> _Plugin_ is NOT a core concept in Pipy, _module_ is. A _plugin system_ should be considered a best practice using Pipy, which is usually carried out with help of the **use** filter. See [Tutorial Step 5: Plugins](/tutorial/05-plugins) for more details.
 
-You need to provide 2 parameters when using it this way: an array of module filenames and a pipeline layout name. The pipeline layout name will be shared by all modules in the module array. The _use_ filter will find all pipeline layouts under the same name in every module from the module array, create sub-pipelines based on those pipeline layouts, connect all these sub-pipelines in the same order as the modules appear in the array, and pump events through this chain of pipelines.
+You need to provide 2 parameters when using it this way: an array of module filenames and a pipeline layout name. The pipeline layout name will be shared by all modules in the module array. The **use** filter will find all pipeline layouts under the same name in every module from the module array, create sub-pipelines based on those pipeline layouts, connect all these sub-pipelines in the same order as the modules appear in the array, and pump events through this chain of pipelines.
 
 ``` js
 pipy()
@@ -48,7 +58,7 @@ pipy()
     )
 ```
 
-## Run a 2-way pipeline chain
+### Run a 2-way pipeline chain
 
 You can provide an optional 3rd parameter for a pipeline layout name, based on which an extra pipeline chain can be created to handle output events from the first chain described in the previous section. We call this second chain the "_down path_", and the first chain the "_up path_".
 
@@ -72,7 +82,7 @@ pipy()
 
 > If a pipeline layout under the given names cannot be found in a module, it would simply be ignored as if the module was not in the array. That means, a module can optionally have the pipeline only for the up path or the down path or for both.
 
-## Run with early termination
+### Run with early termination
 
 In addition to the 3rd parameter specifying a pipeline layout name for the down path, you can also use a 4th parameter with a callback function that dynamically decides where the module chain should "_turn back_" for each individual input stream. This callback function gets called before each time the stream moves on to the next module. When it returns `true`, all modules after this point will be skipped and the stream will turn to the down path, which only includes the modules before the turning point.
 
@@ -80,7 +90,7 @@ For example, if the module array is [A, B, C], and the callback returns `true` b
 
 > The dicision for the turning point at each module transition is only done once for each stream. It happens when a module is about to receive the first event in that stream. Once the dicision is made, it won't change any more for that stream. This behaviour is similar to the [Configuration.link()](/reference/api/Configuration/link) filter.
 
-# Syntax
+## Syntax
 
 ``` js
 pipy().pipeline('example').use(filename, layout)
@@ -94,15 +104,15 @@ pipy().pipeline('example').use(
 )
 ```
 
-## Parameters
+### Parameters
 
 <Parameters/>
 
-## Return value
+### Return value
 
 <ReturnValue/>
 
-# Example
+## Example
 
 ``` js
 (config =>
@@ -130,8 +140,8 @@ pipy()
 )(JSON.decode(pipy.load('config.json'))) // Load plugin list from config.json
 ```
 
-# See also
+## See also
 
 * [Configuration](/reference/api/Configuration)
-* [Configuration.link()](/reference/api/Configuration/link)
-* [Configuration.fork()](/reference/api/Configuration/fork)
+* [link()](/reference/api/Configuration/link)
+* [fork()](/reference/api/Configuration/fork)

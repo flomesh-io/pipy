@@ -3,16 +3,47 @@ title: "Configuration.serveHTTP()"
 api: Configuration.serveHTTP()
 ---
 
-# Syntax
+## Description
+
+Appends a **serveHTTP** filter to the current pipeline layout.
+
+A **serveHTTP** filter de-multiplexes and decodes HTTP requests from its input [Data](/reference/api/Data) stream, calls a user-defined script handler for each request to get a response and encodes and multiplexes those HTTP responses into a single output _Data_ stream. Its input and output are _Data_ (usually TCP streams).
+
+|             |          |
+|:-----------:|:--------:|
+| _Input_     |          |
+| ↓           | **Data** |
+| `serveHTTP` |          |
+| ↓           | **Data** |
+| _Output_    |          |
+
+## Syntax
 
 ``` js
-pipy().pipeline('example').serveHTTP(request => response(request))
+pipy()
+  .pipeline('example')
+    .serveHTTP(response)
+
+pipy()
+  .pipeline('example')
+    .serveHTTP(
+      request => getResponse(request)
+    )
 ```
 
-## Parameters
+### Parameters
 
 <Parameters/>
 
-## Return value
+### Return value
 
 <ReturnValue/>
+
+## See Also
+
+* [Configuration](/reference/api/Configuration)
+* [demux()](/reference/api/Configuration/demux)
+* [demuxHTTP()](/reference/api/Configuration/demuxHTTP)
+* [merge()](/reference/api/Configuration/merge)
+* [mux()](/reference/api/Configuration/mux)
+* [muxHTTP()](/reference/api/Configuration/muxHTTP)

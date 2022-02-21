@@ -201,16 +201,27 @@ const useStyles = makeStyles(theme => ({
     fontSize: '2.6rem',
   },
 
-  h1: { fontFamily: FONT_TEXT, fontSize: '1.8rem', color: '#eee', fontWeight: 500 },
-  h2: { fontFamily: FONT_TEXT, fontSize: '1.5rem', color: '#eee', fontWeight: 500 },
-  h3: { fontFamily: FONT_TEXT, fontSize: '1.3rem', color: '#eee', fontWeight: 500 },
-  h4: { fontFamily: FONT_TEXT, fontSize: '1.1rem', color: '#eee', fontWeight: 500 },
+  h1: { fontFamily: FONT_TEXT, fontSize: '1.8rem', color: '#eec', fontWeight: 500 },
+  h2: { fontFamily: FONT_TEXT, fontSize: '1.5rem', color: '#eec', fontWeight: 500 },
+  h3: { fontFamily: FONT_TEXT, fontSize: '1.3rem', color: '#eec', fontWeight: 500 },
+  h4: { fontFamily: FONT_TEXT, fontSize: '1.1rem', color: '#eec', fontWeight: 500 },
+  h5: { fontFamily: FONT_TEXT, fontSize: '1.0rem', color: '#eec', fontWeight: 500 },
 
   p: {
     fontFamily: FONT_TEXT,
     fontSize: '16px',
     lineHeight: '26px',
     color: '#bbb',
+  },
+
+  strong: {
+    fontWeight: 900,
+    color: 'white',
+  },
+
+  table: {
+    marginLeft: 'auto',
+    marginRight: 'auto',
   },
 
   tip: {
@@ -675,9 +686,12 @@ const components = {
   h2: makeStyledTag('h2'),
   h3: makeStyledTag('h3'),
   h4: makeStyledTag('h4'),
+  h5: makeStyledTag('h5'),
   li: makeStyledTag('li', 'p'),
   p: makeStyledTag('p'),
   a: DocLink,
+  strong: makeStyledTag('strong'),
+  table: makeStyledTag('table'),
   blockquote: Tip,
   code: SourceCode,
   inlineCode: makeStyledTag('span', 'inlineCode'),

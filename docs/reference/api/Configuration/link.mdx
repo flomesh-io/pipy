@@ -3,17 +3,27 @@ title: "Configuration.link()"
 api: Configuration.link()
 ---
 
-# Description
+## Description
 
-Appends a _link_ filter to the current pipeline layout.
+Appends a **link** filter to the current pipeline layout.
 
-A _link_ filter creates a new sub-pipeline and pumps all events through it, as if the new sub-pipeline has taken the place of the link filter.
+A **link** filter and its sub-pipeline's input and output can be any events.
+
+|          |           |        |           |                |
+|---------:|:---------:|:------:|:---------:|:--------------:|
+|          | **Event** |        | **Event** |                |
+| _Input_  | →         |        | →         |                |
+|          |           | `link` |           | `sub-pipeline` |
+| _Output_ | ←         |        | ←         |                |
+|          | **Event** |        | **Event** |                |
+
+A **link** filter creates a new sub-pipeline and pumps all events through it, as if the new sub-pipeline has taken the place of the link filter.
 
 The link filter can be used in a few different scenarios: reuse a shared sub-pipeline layout, select a sub-pipeline layout out of a few based on some conditions, or back up all events until a condition is met.
 
-## Reuse a shared sub-pipeline layout
+### Reuse a shared sub-pipeline layout
 
-The most simple way to use _link_ is give it a single pipeline layout's name. All events it receives as input will be fed into a new sub-pipeline created based on that pipeline layout, and all events coming out of that sub-pipeline will be the output of the _link_ filter too.
+The most simple way to use **link** is give it a single pipeline layout's name. All events it receives as input will be fed into a new sub-pipeline created based on that pipeline layout, and all events coming out of that sub-pipeline will be the output of the **link** filter too.
 
 This is similar to sub-routine invocation in procedural programming, where the sub-pipeline is the function being invoked, and the input and output of the filter are the function's parameters and return value.
 
@@ -27,15 +37,15 @@ pipy()
   .dump()
 ```
 
-## Select one of many sub-pipeline layouts
+### Select one of many sub-pipeline layouts
 
-The _link_ filter can be given more than one pipeline layout names, each corresponding to a condition. As the first event arrives at the _link_ filter, it evaluates each condition in order to find the first one met, and creates a sub-pipeline based on that layout.
+The **link** filter can be given more than one pipeline layout names, each corresponding to a condition. As the first event arrives at the **link** filter, it evaluates each condition in order to find the first one met, and creates a sub-pipeline based on that layout.
 
 > Once a pipeline layout is selected, it won't change throughout the whole lifetime of the stream, even if the conditions may change afterwards.
 
 If no conditions are met, the last pipeline layout without a set condition is selected.
 
-> You can use an empty name to tell _link_ to create a "_bypass_" sub-pipeline, which simply passes through all events without any changes.
+> You can use an empty name to tell **link** to create a "_bypass_" sub-pipeline, which simply passes through all events without any changes.
 
 ``` js
 pipy({
@@ -59,9 +69,9 @@ pipy({
   .dump()
 ```
 
-## Back up events for a condition
+### Back up events for a condition
 
-If all pipeline layout options have conditions but none of them are met, the _link_ filter will block the stream until a condition is met. This can be used to buffer up events while waiting for a certain situation.
+If all pipeline layout options have conditions but none of them are met, the **link** filter will block the stream until a condition is met. This can be used to buffer up events while waiting for a certain situation.
 
 ``` js
 pipy({
@@ -75,7 +85,7 @@ pipy({
   .dump()
 ```
 
-# Syntax
+## Syntax
 
 ``` js
 pipy().pipeline('example').link(layout)
@@ -87,15 +97,15 @@ pipy().pipeline('example').link(
 )
 ```
 
-## Parameters
+### Parameters
 
 <Parameters/>
 
-## Return value
+### Return value
 
 <ReturnValue/>
 
-# Example
+## Example
 
 ``` js
 pipy({
@@ -138,8 +148,8 @@ pipy({
   )
 ```
 
-# See also
+## See also
 
 * [Configuration](/reference/api/Configuration)
-* [Configuration.fork()](/reference/api/Configuration/fork)
-* [Configuration.use()](/reference/api/Configuration/use)
+* [fork()](/reference/api/Configuration/fork)
+* [use()](/reference/api/Configuration/use)

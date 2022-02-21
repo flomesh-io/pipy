@@ -3,16 +3,96 @@ title: "Configuration.demuxHTTP()"
 api: Configuration.demuxHTTP()
 ---
 
-# Syntax
+## Description
+
+Appends a **demuxHTTP** filter to the current pipeline layout.
+
+A **demuxHTTP** filter **de-multiplexes** and decodes HTTP requests from its input [Data](/reference/api/Data) stream, distribute them to many sub-pipelines and encodes and multiplexes their HTTP responses into a single output _Data_ stream. Its input and output are _Data_ (usually TCP streams). Its sub-pipelines's input and output are HTTP [Messages](/reference/api/Message).
+
+|          |          |             |             |                |
+|---------:|:--------:|:-----------:|:-----------:|:--------------:|
+|          | **Data** |             | **Message** |                |
+| _Input_  | →        |             | →           |                |
+|          |          | `demuxHTTP` |             | `sub-pipeline` |
+| _Output_ | ←        |             | ←           |                |
+|          | **Data** |             | **Message** |                |
+
+A **demuxHTTP** filter works like this:
+
+- At the input to a **demuxHTTP** filter, HTTP requests are **de-multiplexed** and decoded from the _Data_ stream (usually a TCP stream)
+- For each request, a dedicated sub-pipeline is created, whose input will be the decoded request _Message_
+- At the output from the **demuxHTTP** filter, response _Messages_ coming out of all sub-pipelines are encoded and multiplexed into one single _Data_ stream (usually a TCP stream)
+
+One **demuxHTTP** filter can have more than one sub-pipelines, each of which handles one HTTP request.
+
+|                 |    |             |    |                   |
+|----------------:|:--:|:-----------:|:--:|:------------------|
+|                 |    |             | ←→ | `sub-pipeline #1` |
+| `main pipeline` | ←→ | `demuxHTTP` | ←→ | `sub-pipeline #2` |
+|                 |    |             | ←→ | `sub-pipeline #N` |
+
+Compare this to [muxHTTP()](/reference/api/Configuration/muxHTTP).
+
+### HTTP versions
+
+The decoder can detect the version of HTTP protocol used by the input stream and automatically switch to HTTP/2 if requested.
+
+#### Multiplexing in HTTP/1.1
+
+In HTTP/1.1, multiplexing is done by [HTTP pipelining](https://en.wikipedia.org/wiki/HTTP_pipelining). A message queue is used internally inside **demuxHTTP** so that output responses from the filter will always come in the same order as the input requests, even when the sub-pipelines output their responses out of order, in which case an early-arrived response will stay in the queue waiting for its turn to come out.
+
+#### Multiplexing in HTTP/2
+
+In HTTP/2, multiplexing is inherently supported by the protocol itself. With HTTP/2, every _virtual stream_ in the HTTP/2 transport stream runs in a dedicated sub-pipeline. There is no shared queue to wait as in HTTP/1.1, so a delayed response from one sub-pipeline won't affect other sub-pipelines.
+
+### Response buffering
+
+When encoding an HTTP/1.x response, the [Content-Length](https://developer.mozilla.org/docs/Web/HTTP/Headers/Content-Length) header needs to come before the body, so **demuxHTTP** has to buffer the entire body until it sees a _MessageEnd_ event, only by then can the filter output a value for _Content-Length_ header, followed by the previously buffered body.
+
+The buffering is limited to 4KB by default. When the buffered data is over 4KB, the encoder will opt for [chunked encoding](https://developer.mozilla.org/docs/Web/HTTP/Headers/Transfer-Encoding#chunked_encoding), where a _Content-Length_ header is no longer needed. You can change this limit by the option _bufferSize_ in the _options_ parameter.
+
+## Syntax
 
 ``` js
-pipy().pipeline('example').demuxHTTP(target)
+pipy()
+  .pipeline('example')
+    .demuxHTTP(layout)
+
+pipy()
+  .pipeline('example')
+    .demuxHTTP(layout, {
+      bufferSize,
+    })
 ```
 
-## Parameters
+### Parameters
 
 <Parameters/>
 
-## Return value
+### Return value
 
 <ReturnValue/>
+
+## Example
+
+``` js
+pipy()
+
+.listen(8000)                // Accept TCP connection on port 8000
+  .demuxHTTP('request')      // De-multiplex and decode HTTP requests
+
+.pipeline('request')         // Accept an individual HTTP request
+  .muxHTTP('connection', '') // Encode and multiplex the request into a shared TCP stream
+
+.pipeline('connection')      // Accept a TCP stream
+  .connect('localhost:8080') // Send out to localhost:8080
+```
+
+## See Also
+
+* [Configuration](/reference/api/Configuration)
+* [demux()](/reference/api/Configuration/demux)
+* [merge()](/reference/api/Configuration/merge)
+* [mux()](/reference/api/Configuration/mux)
+* [muxHTTP()](/reference/api/Configuration/muxHTTP)
+* [serveHTTP()](/reference/api/Configuration/serveHTTP)

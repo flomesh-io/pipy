@@ -3,16 +3,118 @@ title: "Configuration.muxHTTP()"
 api: Configuration.muxHTTP()
 ---
 
-# Syntax
+## Description
+
+Appends a **muxHTTP** filter to the current pipeline layout.
+
+A **muxHTTP** filter encodes and **multiplexes** HTTP requests into a shared sub-pipeline and de-multiplexes and decodes HTTP responses out of it. Its input and output are HTTP [Messages](/reference/api/Message). Its sub-pipelines's input and output are [Data](/reference/api/Data) (usually TCP streams).
+
+|          |             |           |          |                |
+|---------:|:-----------:|:---------:|:--------:|:--------------:|
+|          | **Message** |           | **Data** |                |
+| _Input_  | →           |           | →        |                |
+|          |             | `muxHTTP` |          | `sub-pipeline` |
+| _Output_ | ←           |           | ←        |                |
+|          | **Message** |           | **Data** |                |
+
+A **muxHTTP** filter works like this:
+
+- At the input to a **muxHTTP** filter, HTTP requests are encoded into _Data_ and sent to a sub-pipeline that is shared by a group of **muxHTTP** filters
+- At the input to the shared sub-pipeline, all streams from the group of **muxHTTP** filters are **multiplexed** into one single _Data_ stream (usually a TCP stream)
+- At the output from the shared sub-pipeline, the _Data_ stream (usually a TCP stream) is de-multiplexed and sent back to their original **muxHTTP** filters as responses
+- At the output from the **muxHTTP** filter, HTTP responses are decoded into _Messages_
+
+A group of **muxHTTP** filters can have one shared sub-pipeline, in which many HTTP requests and responses are multiplexed.
+
+|                    |    |           |    |                |
+|-------------------:|:--:|:---------:|:--:|:---------------|
+| `main pipeline #1` | ←→ | `muxHTTP` |    |                |
+| `main pipeline #2` | ←→ | `muxHTTP` | ←→ | `sub-pipeline` |
+| `main pipeline #N` | ←→ | `muxHTTP` |    |                |
+
+Compare this to [demuxHTTP()](/reference/api/Configuration/demuxHTTP).
+
+### Stream Grouping
+
+You can control the grouping of **muxHTTP** filters by using the _group_ parameter. It can be a value of any type or a function that returns a dynamic value of any type. Filters in the same _group_ will share the same sub-pipeline.
+
+> Grouping only happens among filters coming from the same place in the same pipeline layout. Two filters from different pipeline layouts or different places in the same pipeline layout will never share the same sub-pipeline, even when given the same _group_ parameter.
+
+### Sub-pipeline lifecycle
+
+Since the sub-pipeline is shared by multiple streams coming from a group of **muxHTTP** filters, it won't be closed until the last stream ends in the group. After all streams in the group are closed, the sub-pipeline will wait for 10 seconds to ensure no more new streams are coming. You can change this waiting time by the _idleTime_ option in the _options_ parameter.
+
+> When the _group_ parameter is an object, it will be a _weak ref_ as the key in a [WeakMap](https://developer.mozilla.org/docs/Web/JavaScript/Guide/Keyed_collections#weakmap_object). When the object is dead, so is the sub-pipeline, regardless of the _idleTime_ option. The stream in that dead sub-pipeline could be closed earlier or later than the idle time, but it will never be reused again.
+
+### HTTP versions
+
+You can select between HTTP/1.1 and HTTP/2 by using the option _version_ in the _options_ parameter. Default value is 1 for using HTTP/1.1 only.
+
+#### Multiplexing in HTTP/1.1
+
+In HTTP/1.1, multiplexing is done by [HTTP pipelining](https://en.wikipedia.org/wiki/HTTP_pipelining). A message queue is used internally by each group of **muxHTTP** filters sharing the same sub-pipeline, so that each filter can pick the right response for its request from the sub-pipeline's output.
+
+#### Multiplexing in HTTP/2
+
+In HTTP/2, multiplexing is inherently supported by the protocol itself. With HTTP/2, every **muxHTTP** filter runs a dedicated _virtual stream_ in an HTTP/2 transport stream. There is no shared queue to wait as in HTTP/1.1, so responses to the requests can arrive out of order without having to wait for each other.
+
+### Response buffering
+
+When encoding an HTTP/1.x request, the [Content-Length](https://developer.mozilla.org/docs/Web/HTTP/Headers/Content-Length) header needs to come before the body, so **muxHTTP** has to buffer the entire body until it sees a _MessageEnd_ event, only by then can the filter output a value for _Content-Length_ header, followed by the previously buffered body.
+
+The buffering is limited to 4KB by default. When the buffered data is over 4KB, the encoder will opt for [chunked encoding](https://developer.mozilla.org/docs/Web/HTTP/Headers/Transfer-Encoding#chunked_encoding), where a _Content-Length_ header is no longer needed. You can change this limit by the option _bufferSize_ in the _options_ parameter.
+
+## Syntax
 
 ``` js
-pipy().pipeline('example').muxHTTP(target, key)
+pipy()
+  .pipeline('example')
+    .muxHTTP(layout, group)
+
+pipy()
+  .pipeline('example')
+    .muxHTTP(layout, () => whichGroup())
+
+pipy()
+  .pipeline('example')
+    .muxHTTP(
+      layout,
+      group,
+      {
+        bufferSize,
+        maxIdle,
+      }
+    )
 ```
 
-## Parameters
+### Parameters
 
 <Parameters/>
 
-## Return value
+### Return value
 
 <ReturnValue/>
+
+## Example
+
+``` js
+pipy()
+
+.listen(8000)                // Accept TCP connection on port 8000
+  .demuxHTTP('request')      // De-multiplex and decode HTTP requests
+
+.pipeline('request')         // Accept an individual HTTP request
+  .muxHTTP('connection', '') // Encode and multiplex the request into a shared TCP stream
+
+.pipeline('connection')      // Accept a TCP stream
+  .connect('localhost:8080') // Send out to localhost:8080
+```
+
+## See Also
+
+* [Configuration](/reference/api/Configuration)
+* [demux()](/reference/api/Configuration/demux)
+* [demuxHTTP()](/reference/api/Configuration/demuxHTTP)
+* [merge()](/reference/api/Configuration/merge)
+* [mux()](/reference/api/Configuration/mux)
+* [serveHTTP()](/reference/api/Configuration/serveHTTP)

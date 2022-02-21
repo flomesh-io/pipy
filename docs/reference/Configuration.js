@@ -1,10 +1,16 @@
 /**
  * @callback BooleanCB
  * @return {boolean}
+ * 
+ * @callback MessageHandler
+ * @param {Message} request
+ * @return {Message}
  */
 
 /**
- * Utility class for building Pipy pipelines.
+ * Configuration helps user configure variables, pipeline layouts in a module,
+ * as well as how a module interacts with other modules via variables and sub-pipelines.
+ * All PipyJS modules are expected to return a Configuration object after being evaluated.
  */
 class Configuration {
 
@@ -158,23 +164,29 @@ class Configuration {
   decompressMessage(algorithm) {}
 
   /**
-   * Appends a generic message demuxer to the current pipeline layout that
-   * pumps each individual message through a separate sub-pipeline.
+   * Appends a demux filter to the current pipeline layout.
    *
-   * @param {string} target Name of the sub-pipelines to pump messages through.
+   * A demux filter creates a dedicated sub-pipeline for each message from the input stream,
+   * collects output messages from those sub-pipelines and queues them up into the output stream.
+   *
+   * @param {string} layout Name of the pipeline layout based on which sub-pipelines are created to handle input Messages.
    * @returns {Configuration} The same Configuration object.
    */
-  demux(target) {}
+  demux(layout) {}
 
   /**
-   * Appends an HTTP demuxer to the current pipeline layout that
-   * decodes HTTP messages from a multiplexed Data stream and
-   * pumps each of them through a separate sub-pipeline.
+   * Appends a demuxHTTP filter to the current pipeline layout.
    *
-   * @param {string} target Name of the sub-pipelines to pump messages through.
+   * A demuxHTTP filter de-multiplexes and decodes HTTP requests from its input Data stream,
+   * distribute them to many sub-pipelines and encodes and multiplexes their HTTP responses into a single output Data stream.
+   * Its input and output are Data (usually TCP streams). Its sub-pipelines's input and output are HTTP Messages.
+   *
+   * @param {string} layout Name of the pipeline layout based on which sub-pipelines are created to handle HTTP requests.
+   * @param {Object} [options] Options including bufferSize.
+   * @param {number|string} [options.bufferSize] Response bodies larger than this would be transfered in chunks.
    * @returns {Configuration} The same Configuration object.
    */
-  demuxHTTP(target, options) {}
+  demuxHTTP(layout, options) {}
 
   /**
    * Appends a filter to the current pipeline layout that calls back script
@@ -252,6 +264,7 @@ class Configuration {
 
   /**
    * Appends a fork filter to the current pipeline layout.
+   *
    * A fork filter creates one or more sub-pipelines, each receiving a clone of all events from the filter's input.
    *
    * @param {string} layout Name of the pipeline layout based on which sub-pipelines are created.
@@ -262,6 +275,7 @@ class Configuration {
 
   /**
    * Appends a link filter to the current pipeline layout.
+   *
    * A link filter creates a new sub-pipeline and pumps all events through it,
    * as if the new sub-pipeline has taken the place of the link filter.
    *
@@ -273,41 +287,48 @@ class Configuration {
   link(layout, condition, defaultLayout) {}
 
   /**
-   * Appends a filter to the current pipeline layout that
-   * clones and queues up all messages to a shared sub-pipeline.
+   * Appends a merge filter to the current pipeline layout.
    *
-   * @param {string} target Name of the sub-pipeline that receive clones of messages.
-   * @param {any | () => any} key ID by which a sub-pipeline is specified to share.
+   * A merge filter queues up input Messages into a shared sub-pipeline.
+   * Its input and output are Messages. Its sub-pipelines's input is also Messages while their output is simply discarded.
+   *
+   * @param {string} layout Name of the pipeline layout based on which shared sub-pipelines are created.
+   * @param {*} group ID of the group of filters that share the same sub-pipeline.
    * @param {Object} [options] Options including maxIdle.
    * @param {number} [options.maxIdle] Time to wait before an idle shared sub-pipeline is closed.
    * @returns {Configuration} The same Configuration object.
    */
-  merge(target, key, options) {}
+  merge(target, group, options) {}
 
   /**
-   * Appends a generic message muxer to the current pipeline layout that
-   * pumps all messages through a shared sub-pipeline.
+   * Appends a mux filter to the current pipeline layout.
    *
-   * @param {string} target Name of the sub-pipeline where messages are pumped through.
-   * @param {any | () => any} key ID by which a sub-pipeline is specified to share.
+   * A mux filter multiplexes input Messages into a shared sub-pipeline and de-multiplexes output Messages out of it.
+   * Its input and output are _Messages_. Its sub-pipelines's input and output are also _Messages_.
+   *
+   * @param {string} layout Name of the pipeline layout based on which shared sub-pipelines are created.
+   * @param {*} group ID of the group of filters that share the same sub-pipeline.
    * @param {Object} [options] Options including maxIdle.
-   * @param {number} [options.maxIdle] Time to wait before an idle shared sub-pipeline is closed.
+   * @param {number} [options.maxIdle] Time to wait before an unused sub-pipeline is destroyed.
    * @returns {Configuration} The same Configuration object.
    */
-  mux(target, key, options) {}
+  mux(layout, group, options) {}
 
   /**
-   * Appends an HTTP muxer to the current pipeline layout that
-   * encodes HTTP messages into a multiplexed Data stream and
-   * pumps it through a shared sub-pipeline.
+   * Appends a muxHTTP filter to the current pipeline layout.
    *
-   * @param {string} target Name of the sub-pipeline where messages are pumped through.
-   * @param {any | () => any} key ID by which a sub-pipeline is specified to share.
-   * @param {Object} [options] Options including maxIdle.
-   * @param {number} [options.maxIdle] Time to wait before an idle shared sub-pipeline is closed.
+   * A muxHTTP filter encodes and multiplexes HTTP requests into a shared sub-pipeline and de-multiplexes and decodes HTTP responses out of it.
+   * Its input and output are HTTP Messages. Its sub-pipelines's input and output are Data (usually TCP streams).
+   *
+   * @param {string} layout Name of the pipeline layout based on which shared sub-pipelines are created.
+   * @param {*} group ID of the group of filters that share the same sub-pipeline.
+   * @param {Object} [options] Options including bufferSize, maxIdle, version.
+   * @param {number|string} [options.bufferSize] Request bodies larger than this would be transfered in chunks.
+   * @param {number|string} [options.maxIdle] Time to wait before an unused sub-pipeline is closed.
+   * @param {number|string} [options.version] HTTP protocol version to use. Can be 1 for HTTP/1.1 or 2 for HTTP/2.
    * @returns {Configuration} The same Configuration object.
    */
-  muxHTTP(target, key, options) {}
+  muxHTTP(layout, group, options) {}
 
   /**
    * Appends a filter to the current pipeline layout that calls back script
@@ -459,9 +480,14 @@ class Configuration {
   replaceStreamStart(handler) {}
 
   /**
-   * Appends an HTTP server to the current pipeline layout.
+   * Appends a serveHTTP filter to the current pipeline layout.
    *
-   * @param {(msg : Message) => Message} handler Callback function that receives a request and returns a response.
+   * A serveHTTP filter de-multiplexes and decodes HTTP requests from its input Data stream,
+   * calls a user-defined script handler for each request to get a response
+   * and encodes and multiplexes those HTTP responses into a single output Data stream.
+   * Its input and output are Data (usually TCP streams).
+   *
+   * @param {Message | MessageHandler} handler A response message or a callback function that receives a request and returns a response message.
    * @returns {Configuration} The same Configuration object.
    */
   serveHTTP(handler) {}
@@ -495,8 +521,9 @@ class Configuration {
   throttleMessageRate(limit, account) {}
 
   /**
-   * Appends a use filter to the current pipeline layout.
-   * A use filter pumps events through a sub-pipeline in a different module, or a series of sub-pipelines in a module chain.
+   * Appends a ***use*** filter to the current pipeline layout.
+   *
+   * A ***use*** filter pumps events through a sub-pipeline in a different module, or a series of sub-pipelines in a module chain.
    *
    * @param {string|string[]} filenames One or more module filenames.
    * @param {string} layout Name of the pipeline layout to process input events in all modules.

@@ -3,16 +3,57 @@ title: "Configuration.demux()"
 api: Configuration.demux()
 ---
 
-# Syntax
+## Description
+
+Appends a **demux** filter to the current pipeline layout.
+
+A **demux** filter **de-multiplexes** [Messages](/reference/api/Message) from its input stream, distribute them to many sub-pipelines and multiplexes their output _Messages_ into a single output _Message_ stream. Its input and output are _Messages_. Its sub-pipelines's input and output are also _Messages_.
+
+|          |             |         |             |                |
+|---------:|:-----------:|:-------:|:-----------:|:--------------:|
+|          | **Message** |         | **Message** |                |
+| _Input_  | →           |         | →           |                |
+|          |             | `demux` |             | `sub-pipeline` |
+| _Output_ | ←           |         | ←           |                |
+|          | **Message** |         | **Message** |                |
+
+A **demux** filter works like this:
+
+- At the input to a **demux** filter, _Messages_ are separated and queued up
+- For each input _Message_, a dedicated sub-pipeline is created, whose input will be that _Message_
+- At the output from the **demux** filter, output _Messages_ coming out of all sub-pipelines are queued and sent out in the same order as the input _Messages_
+
+One **demux** filter can have more than one sub-pipelines, each of which handles one _Message_.
+
+|                 |    |         |    |                   |
+|----------------:|:--:|:-------:|:--:|:------------------|
+|                 |    |         | ←→ | `sub-pipeline #1` |
+| `main pipeline` | ←→ | `demux` | ←→ | `sub-pipeline #2` |
+|                 |    |         | ←→ | `sub-pipeline #N` |
+
+Compare this to [mux()](/reference/api/Configuration/mux).
+
+## Syntax
 
 ``` js
-pipy().pipeline('example').demux(target)
+pipy()
+  .pipeline('example')
+    .demux(layout)
 ```
 
-## Parameters
+### Parameters
 
 <Parameters/>
 
-## Return value
+### Return value
 
 <ReturnValue/>
+
+## See Also
+
+* [Configuration](/reference/api/Configuration)
+* [demuxHTTP()](/reference/api/Configuration/demuxHTTP)
+* [merge()](/reference/api/Configuration/merge)
+* [mux()](/reference/api/Configuration/mux)
+* [muxHTTP()](/reference/api/Configuration/muxHTTP)
+* [serveHTTP()](/reference/api/Configuration/serveHTTP)

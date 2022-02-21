@@ -3,9 +3,9 @@ title: "Configuration"
 api: Configuration
 ---
 
-# Description
+## Description
 
-_Configuration_ helps user configure variables, pipelines and filters included in a module, as well as how a module interacts with other modules via variables and sub-pipelines. It is what all PipyJS modules are supposed to return after being evaluated.
+_Configuration_ helps user configure variables, pipeline layouts in a module, as well as how a module interacts with other modules via variables and sub-pipelines. All PipyJS modules are expected to return a _Configuration_ object after being evaluated.
 
 The only way to get a new _Configuration_ is by calling the global function [pipy()](/reference/api/pipy), which is, in most cases, the first function you would call at the beginning of PipyJS script.
 
@@ -21,29 +21,29 @@ pipy().listen(8080) // this returns the same Configuration object as before
       .dummy()      // again, the same Configuration
 ```
 
-## Methods
+### Methods
 
-There are 3 types of methods to the _Configuration_ class: methods to export/import variables, methods to define pipelines, and methods to add filters to a pipeline.
+There are 3 types of methods to the _Configuration_ class: methods to export/import variables, methods to create pipeline layouts, and methods to add filters to a pipeline layout.
 
-### Methods for importing/exporting variables
+#### Methods for importing/exporting variables
 
 Use [export()](/reference/api/Configuration/export) to define global variables that are visible to other modules. Use [import()](/reference/api/Configuration/import) to import global variables defined and exported from other modules.
 
-### Methods for defining pipelines
+#### Methods for creating pipeline layout
 
-Use [listen()](/reference/api/Configuration/listen) to create a root pipeline that listens on a specified TCP port. Use [task()](/reference/api/Configuration/task) to create a root pipeline that gets a message regularly for periodic tasks. Use [pipeline()](/reference/api/Configuration/pipeline) to create a sub-pipeline by a given name.
+Use [listen()](/reference/api/Configuration/listen) to create a pipeline layout that generates a root pipeline for every incoming connection on a specified TCP port. Use [task()](/reference/api/Configuration/task) to create a pipeline layout that generates root pipelines regularly for periodic tasks. Use [pipeline()](/reference/api/Configuration/pipeline) to create a pipeline layout for sub-pipelines.
 
-All three methods will change the _current pipeline_ of the _Configuration_, after which one or more filters can be appended to the newly created pipeline by using the methods we will discuss later.
+All three methods will change the _current pipeline layout_ of the _Configuration_, after which one or more filters can be appended to the newly created pipeline layout by using the methods we will discuss later.
 
-### Methods for adding filters
+#### Methods for adding filters
 
-The rest of the methods are for appending filters to the _current pipeline_ (i.e. the last pipeline created with one of the methods said in the previous section). Each method adds a different type of filter to the current pipeline.
+The rest of the methods are for appending filters to the _current pipeline layout_ (i.e. the last pipeline layout created with one of the methods said in the previous section). Each method adds a different type of filter to the current pipeline layout.
 
-## Filters
+### Filters
 
 Filters can be categorized into 7 types according to their functionalities.
 
-### Transportation
+#### Transportation
 
 * [acceptSOCKS()](/reference/api/Configuration/acceptSOCKS)
 * [acceptTLS()](/reference/api/Configuration/acceptTLS)
@@ -53,7 +53,7 @@ Filters can be categorized into 7 types according to their functionalities.
 
 These filters are transport layer clients and servers speaking a specific protocol. Among these filters, the most often used one is [connect()](/reference/api/Configuration/connect), which establishes an outbound TCP connection to a remote host and transfers _Data_ events back and forth.
 
-### Codecs
+#### Codecs
 
 * [decodeDubbo()](/reference/api/Configuration/decodeDubbo)
 * [decodeHTTPRequest()](/reference/api/Configuration/decodeHTTPRequest)
@@ -66,7 +66,7 @@ These filters are transport layer clients and servers speaking a specific protoc
 
 These filters translate streams between the _raw byte form_ and the _message form_. A decoder takes in _Data_ events and outputs _MessageStart/MessageEnd_ event pairs (with unchanged message bodies as _Data_ events in between). An encoder takes in _MessageStart/MessageEnd_ event pairs (again, with message bodies as _Data_ events in between), and outputs raw bytes in _Data_ events.
 
-### Muxers and demuxers
+#### Muxers and demuxers
 
 * [demux()](/reference/api/Configuration/demux)
 * [demuxHTTP()](/reference/api/Configuration/demuxHTTP)
@@ -77,7 +77,7 @@ These filters translate streams between the _raw byte form_ and the _message for
 
 These filters split messages from one stream into multiple streams, or the opposite, combine messages from multiple streams into one stream. Some have integrated codecs, such as [demuxHTTP()](/reference/api/Configuration/demux) and [muxHTTP()](/referenceConfiguration/muxHTTP). In this case, the demuxers have raw byte input and message output, while the muxers have message input and raw byte output.
 
-### Connectors
+#### Connectors
 
 * [fork()](/reference/api/Configuration/fork)
 * [link()](/reference/api/Configuration/link)
@@ -85,7 +85,7 @@ These filters split messages from one stream into multiple streams, or the oppos
 
 These filters pass events in a stream from one pipeline to another. Unlike _muxers and demuxers_, they only change where streams are going without changing their content.
 
-### Buffering
+#### Buffering
 
 * [pack()](/reference/api/Configuration/pack)
 * [throttleDataRate()](/reference/api/Configuration/throttleDataRate)
@@ -94,7 +94,7 @@ These filters pass events in a stream from one pipeline to another. Unlike _muxe
 
 These filters delay a stream until some conditions are met. In other words, they control the passage of events in a stream.
 
-### Observers
+#### Observers
 
 * [detectProtocol()](/reference/api/Configuration/detectProtocol)
 * [dump()](/reference/api/Configuration/dump)
@@ -108,7 +108,7 @@ These filters delay a stream until some conditions are met. In other words, they
 
 These filters trigger some user-defined script when they see a specific type of events in a stream. They don't change anything in the stream. They simply pass down all events as is.
 
-### Transformers
+#### Transformers
 
 * [decompressHTTP()](/reference/api/Configuration/decompressHTTP)
 * [decompressMessage()](/reference/api/Configuration/decompressMessage)
@@ -122,26 +122,26 @@ These filters trigger some user-defined script when they see a specific type of 
 
 These filters transform input events into new output events. Many of them call user-defined script with input events as the input to the user function and output whatever events the user function outputs. Among these filters, [exec()](/reference/api/Configuration/exec) is special in that, it feeds _Data_ events to an external process's standard input and reads back _Data_ events from its standard output.
 
-## How it works
+### How it works
 
 When Pipy launches, it starts off by evaluating script from the _main module_ first, which should resolve to a _Configuration_ object holding descriptions about pipelines and filters in the main module. From there, it goes on finding and loading other modules that are "_used_" by the main module, which resolve to more _Configurations_, their pipelines and filters. This process goes on and on until all modules that are directly or indirectly linked from the main module are found and loaded, at which point Pipy will then build up all pipelines and filters described in those _Configurations_, hook them up, and get up and running.
 
-# Example
+## Example
 
 Here's an example of how we configure a simple _HTTP hello service_ and a _TCP transparent proxy_ inside one single PipyJS module.
 
 ``` js
 pipy() // Returns a new Configuration
 
-.listen(8080) // Defines a pipeline listening on port 8080
-  .serveHTTP( // Appends a serveHTTP filter to that pipeline
+.listen(8080) // Creates a pipeline layout listening on port 8080
+  .serveHTTP( // Appends a serveHTTP filter to that pipeline layout
     () => new Message('Hello!\n')
   )
 
-.listen(8000) // Defines a second pipeline listening on port 8000
-  .connect('localhost:8080') // Appends a connect filter to that pipeline
+.listen(8000) // Creates a second pipeline layout listening on port 8000
+  .connect('localhost:8080') // Appends a connect filter to that pipeline layout
 ```
 
-# Method Reference
+## Method Reference
 
 <Methods/>
