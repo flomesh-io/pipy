@@ -1,0 +1,123 @@
+---
+title: "10：パスの書き換え"
+---
+
+## 問題点
+
+URLを基にトラフィックをリダイレクトしたい場合、Pipyプロキシルートをいわゆる `"/ip/*"` に設定し、ターゲットに向かわせるようにします。ここでターゲットはパスとクライアントIPだけを返すシンプルなサービスを行っていると仮定します。ここでリクエストを `localhost:8000/ip/a` に送信すると、次のようなレスポンスが返ってきます。
+
+```shell
+curl localhost:8000/ip/a
+You are requesting /ip/a from ::ffff:127.0.0.1
+
+curl localhost:8000/ip
+You are requesting /ip from ::ffff:127.0.0.1
+```
+
+しかし期待していたのは、あるいは欲しかった出力はこうです。
+
+```
+You are requesting /a from ::ffff:127.0.0.1
+```
+
+パターン `/ip/*` のプレフィックス `/ip` は設定したポートでリスニングしている ip サービスを表しているので、 `/ip/` で始まる全リクエストは特定のターゲットにリダイレクトされて処理されることを期待しています。あるいは別のパスへリクエストをフォーワードしたい場合もあるでしょう。
+
+よって、受け取ったパスを **書き直す** ために役立つ機能をPipyに持たせる必要があります。パスの書き直しはプロキシの重要な特性のひとつです。
+
+## RegExp
+
+`/ip/` で始まるパスを `/` で始まるように置き換えたいとします。JavaScript の `String` の *replace(searchFor, replaceWith)* 関数は、第一引数に文字列か `regrex` パターンを取ります。
+
+``` js
+new RegExp('^/ip/?')
+```
+
+## 拡張ルーティング設定
+
+ルーティングテーブルからサービスを抽出し、それをオブジェクトとしてカプセル化して *rewrite* フィールドに追加します。
+
+``` js
+{
+  "routes": {
+    "/hi/*": { "service": "service-hi" },
+    "/echo": { "service": "service-echo" },
+    "/ip/*": { "service": "service-tell-ip", "rewrite": ["^/ip/?", "/"] }
+  }
+}
+```
+
+またグローバル変数 *_router* の初期化の調整は、 *rewite* アレイの最初の値を、書き直す必要があるサービスの `RegExp` オブジェクトに変換して行います。新たにグローバル変数 *_route* を追加し、ルーティング決定の戻り値を受け取ります。
+
+``` js
+pipy({
+  _router: new algo.URLRouter(
+    Object.fromEntries(
+      Object.entries(config.routes).map(
+        ([k, v]) => [
+          k,
+          {
+            ...v,
+            rewrite: v.rewrite ? [
+              new RegExp(v.rewrite[0]),
+              v.rewrite[1],
+            ] : undefined,
+          }
+        ]
+      )
+    )
+  ),
+
+  _route: null,
+})
+```
+
+> ここではJavsacriptの **スプレッド演算子** `...` を使用し、 サービスオプジェクトを適切に拡張して `rewrite` フィールドに再コピーします。 
+
+## パスの書き換え
+
+`__router.find()` を使ってホストに渡すとリクエストしたルートとパスヘッダー情報が分かります。有効な `_route` 結果を得たら、リンクしたサービスを取り出して `__serviceID` 変数に代入し、 `rewite` フィールドを設定したオブジェクトのパスを書き換え、リクエストヘッダーの *path* フィールドを書き換えたパスに更新します。
+
+``` js
+.pipeline('request')
+  .handleMessageStart(
+    msg => (
+      _route = _router.find(
+        msg.head.headers.host,
+        msg.head.path,
+      ),
+      _route && (
+        __serviceID = _route.service,
+        _route.rewrite && (
+          msg.head.path = msg.head.path.replace(
+            _route.rewrite[0],
+            _route.rewrite[1],
+          )
+        )
+      )
+    )
+  )
+```
+
+## テストしてみる
+
+このチュートリアルの最初に使ったものと同じテストをしてみましょう。
+
+``` shell
+curl localhost:8000/ip/a
+You are requesting /a from ::ffff:127.0.0.1
+
+curl localhost:8000/ip
+You are requesting / from ::ffff:127.0.0.1
+```
+
+## まとめ
+
+このチュートリアルではJavaScript正規表現と文字列操作を使用して、コモンゲートウェイパスの書き換え機能を実装しています。
+
+### 要点
+* Pipy のクラス `RegExp` は正規表現の検索や代入に使用します。
+* スプレッド演算子 `...` を列挙型の代わりに使用してリテラルオブジェクトを作成しておくと、後でオブジェクトの拡張が簡単にできます。
+
+### 次のパートの内容
+
+プロキシ **アクセスロギング** に新機能を追加し続けます。またPipyを他の **フィルター** に使用する知識を紹介し、拡張していきます。

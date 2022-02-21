@@ -8,7 +8,7 @@ requested _URI_ in a request. In other words, proxy should be able
 to map things like "_abc.com/api/v1/login_" to a specific _target host_
 that handles the request.
 
-# URLRouter
+## URLRouter
 
 Pipy provides class [_URLRouter_](/reference/api/algo/URLRouter) for
 fast mapping from a URL to a value of any type. In our case, we would like
@@ -25,7 +25,7 @@ new algo.URLRouter({
 })
 ```
 
-# Custom global variables
+## Custom global variables
 
 We need this router to be accessible throughout our script, so we should
 put it in a _global variable_.
@@ -69,7 +69,7 @@ value of emptry string.
   })
 ```
 
-# Routing
+## Routing
 
 Now we have all the variables we need, next thing we do is call
 [_URLRouter.find()_](/reference/api/algo/URLRouter/find) to work out the value of
@@ -106,7 +106,7 @@ pipeline "_forward_", which we'll talk more about later.
 > Pipelines link to each other by refering the target pipeline's name from a
 > [_joint filter_](#joint-filters) in the source pipeline. The order of definitions is irrelevant.
 
-## Filter: connect
+### Filter: connect
 
 Now we have worked out variable `_target`, but we are still connecting to a fixed
 target "_localhost:8080_". We should change that to `_target`, right?
@@ -147,7 +147,7 @@ a dynamic value at runtime.
 Now function `() => _target` will be evaluated only when a "_connection_" pipeline is
 alive and has inputs. At that point, `_target` is assured to exist so you can use it safely.
 
-# Dynamic pipeline selection
+## Dynamic pipeline selection
 
 But wait, what if a target cannot be found? In that case, `_target` would be `undefined`,
 so we won't be able to pass on the message. It would be great if we can direct that
@@ -155,7 +155,7 @@ request to a different pipeline other than "_forward_" and respond in that pipel
 with a "_404 Not Found_". That's exactly what _link_ filter was designed to do:
 **link to a pipeline that is selected out of a few**.
 
-## Filter: link
+### Filter: link
 
 When called, [_link()_](/reference/api/Configuration/link) accepts one or more
 pairs of parameters. In each pair, the name of a target pipeline comes first, followed
@@ -205,7 +205,7 @@ _link_ filter first, and define it later.
 > and falsy as "_no_". But we still explicitly coerce `_target` here into
 > a boolean value just for clarity.
 
-## Filter: replaceMessage
+### Filter: replaceMessage
 
 The last piece to the puzzle is the "_infamous 404 page_". We will handle
 that in a new sub-pipeline named "_404_" as said before.
@@ -241,7 +241,7 @@ Note that after a request is replaced with a "_404_" response message, it
 reaches to the end of pipeline "_404_". You might wonder where it goes next.
 How does it eventually reach the client?
 
-## Joint filters
+### Joint filters
 
 Pipy pipelines are one-way. Data stream into its first filter, out
 of its last filter. For a _port pipeline_, requests from a client are its
@@ -286,7 +286,7 @@ wedged into a _joint filter_'s place, replacing that filter completely.
 For more about pipeilnes and filters, see [Filter and pipeline](/intro/concepts/#filter-and-pipeline)
 in _Concepts_.
 
-# Connection Sharing Problem
+## Connection Sharing Problem
 
 Now if you test the code, you'll find that the routing doesn't always work.
 It feels kind of "_sticky_":
@@ -297,7 +297,7 @@ Hi, there!
 $ curl localhost:8000/ip
 Hi, there!
 
-# Try again after 10 seconds...
+## Try again after 10 seconds...
 
 $ curl localhost:8000/ip
 You are requesting /ip from ::ffff:127.0.0.1
@@ -337,7 +337,7 @@ between requests going to the same target host.
     )
 ```
 
-# Test in action
+## Test in action
 
 Now run this program and do some tests.
 
@@ -354,13 +354,13 @@ No route
 
 Works like a charm!
 
-# Summary
+## Summary
 
 In this part of tutorial, you've learned how to implement a simple routing proxy.
 You've also learned about defining and using custom global variables, as well as
 some more filters: _link_, _handleMessageStart_ and _replaceMessage_.
 
-## Takeaways
+### Takeaways
 
 1. Use [_algo.URLRouter_](/reference/api/algo/URLRouter) to map a URL-like string
    to a value of any type according to a routing table, based on which a simple routing
@@ -374,7 +374,7 @@ some more filters: _link_, _handleMessageStart_ and _replaceMessage_.
    if the sub-pipeline is behind a _demuxHTTP_ filter. Combining _demuxHTTP_ and
    _replaceMessage_ would be an equivalent to _serveHTTP_ in some ways.
 
-## What's next?
+### What's next?
 
 Starting from this point of our tutorial, the code logic of our proxy is getting
 more and more lenthy and complicated. Adding more features on top of that within

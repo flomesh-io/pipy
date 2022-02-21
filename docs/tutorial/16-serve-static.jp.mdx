@@ -1,0 +1,145 @@
+---
+title: "16：静的な対応"
+---
+
+## 問題点
+
+今まではPipyを使ってプロキシサービスを実装し、負荷に対応して、処理を設定したエンドポイントに委託していましたが、Pipyで実現できることはそれだけではありません。Pipyは静的ファイルサービスの設計開発に使用でき、静的HTMLページやファイルなどの静的コンテンツの処理ができるのです。
+
+このチュートリアルでは、静的なHTMLドキュメントを処理するHTTP静的サーバーを実装します。
+
+## 設定
+
+静的リソースとして *root folder* を設定して静的コンテンツはすべてここに保存し、このフォルダのルートからのみコンテンツを扱うことにします。`/a/b.html` のようなリクエストは、`ROOT/a/b.html` のような相対パスに変換します。
+
+静的リソース設定はサービスレベルで設定します。例えば下の設定例では、ルートフォルダ *www* をサービス *service-tell-ip* の静的コンテンツ用ルートフォルダとして設定しています。
+
+``` js
+{
+  "services": {
+    "service-tell-ip": {
+      "root": "www"
+    }
+  }
+}
+```
+
+ここで *www* フォルダを作成して *index.html* という名のシンプルな静的ファイルを追加します。
+
+``` html
+<!DOCTYPE html>
+<body>
+  <head>
+    <title>Test</title>
+  </head>
+  <body>
+    <p>Hello!</p>
+  </body>
+</body>
+```
+
+次のステップではリクエストに応じてファイルの場所を見つけ、そのコンテンツを返します。
+
+## コードの説明
+
+まずグローバル変数を宣言します。
+* `_root`：リソースのサービスルートフォルダ
+* `_file`：リクエストしたリソース
+
+``` js
+pipy({
+  _root: '',
+  _file: null,
+})
+
+.import({
+  __turnDown: 'proxy',
+  __serviceID: 'router',
+})
+```
+
+### `http.File` クラス
+
+Pipy [File](/reference/api/http/File)クラスは静的リソースのロードに使用します。
+
+* 静的メソッド `from()` は、パスの最後が `/` で次のファイル名がデフォルトの `/index.html` であればパスからファイルをロードします。このメソッドは *FILE* 、*FILE.gz* 、 *FILE.br* を検索し、見つからなければ続けて *FILE/index.html* 、*FILE/index.html.gz* 、*FILE/index.html.br* を検索します。それでも見つからなければ *null* を返します。
+* `toMessage()` はパラメーターで指定したエンコーディングを使って、静的リソースのコンテンツをエンコードします。
+
+``` js
+.pipeline('request')
+  .handleMessageStart(
+    msg => (
+      _root = config.services[__serviceID]?.root,
+      _root && (
+        _file = http.File.from(_root + msg.head.path)
+      )
+    )
+  )
+  .link(
+    'serve', () => Boolean(_file),
+    'bypass'
+  )
+```
+
+リクエストに合致する静的コンテンツが判別出来たら、グローバル変数 `_file` で静的コンテンツにレスポンスするか、またはアップストリームに処理のリクエストを送信するかを決定します。
+
+``` js
+.pipeline('serve')
+  .replaceMessage(
+    msg => (
+      __turnDown = true,
+      _file.toMessage(msg.head.headers['accept-encoding'])
+    )
+  )
+
+.pipeline('bypass')
+```
+
+このモジュールを使用していることを確認します。
+
+``` js
+//config/proxy.json
+{
+  "listen": 8000,
+  "plugins": [
+    "plugins/router.js",
+    "plugins/serve-static.js",
+    "plugins/balancer.js",
+    "plugins/default.js"
+  ]
+}
+```
+
+## テストしてみる
+
+今でもチュートリアルの[パート 10：パスの書き換え](/tutorial/10-path-rewriting)を覚えていますか。その時はパス `/ip` を `/` に書き換えるように設定しました。今回のテストでもそうします。
+
+``` shell
+# Return static contents
+curl localhost:8000/ip/
+<!DOCTYPE html>
+<body>
+  <head>
+    <title>Test</title>
+  </head>
+  <body>
+    <p>Hello!</p>
+  </body>
+</body>
+#When requested file is not found, request will be forward to endpoint for processing.
+curl localhost:8000/ip/a
+You are requesting /a from ::ffff:127.0.0.1
+```
+
+## まとめ
+
+テストの結果、静的コンテンツを処理する機能を問題なく実装できたことが分かります。この機能は設定したフォルダに存在するコンテンツのためのもので、Pipyがコンテンツを見つけられない時には、リクエストを設定したアップストリームにフォーワードします。 **Pipy Repo** を使用すれば簡単に動的プロキシを実装でき、静的コンテンツだけでなく動的コンテンツにも対応できるようになります。
+
+### 要点
+
+* `http.File.from()` はファイルのような静的リソースの読み出しをサポートします。また *gzip* や *br* のような圧縮フォーマットにも対応しています。
+* `File.toMessage()` はリクエストしたエンコーディングに基づく、ファイル内容のエンコードをサポートしています。
+
+### 次のパートの内容
+
+次のチュートリアルでは、プロキシサービスへのデータ変換機能を実装します。

@@ -1,0 +1,212 @@
+---
+title: "12：JWT"
+---
+
+## 問題点
+
+認証はサービスの極めて重要な部分で、ほとんどのサービスでは何らかの認証メカニズムを実装しています。複雑なシステムでは通常シングルサインオン（SSO）やそれに似たものを実装または使用して、そのシステムのユーザーが何度も認証プロセスを実行することを避けています。一般的に認証オプションには次の2種類があります。
+
+* ステートフルな認証、別名セッションベースの認証。ユーザーのセッションデータはある種のパーシステンス層に存続し、リクエストが起動されるたびに、存続しているデータがパーシステンス層からリクエストされます。これはまったく普通で、最も良く使用されているメカニズムですが、単一障害点のリスクをはらんでいます。
+* ステートレスな認証、別名クッキーベースの認証。サービス側にはデータは保存されませんが、クライアントのリクエストに認証データが含まれます。
+
+JWTは後者の例で、このチュートリアルではサービス *service-hi* のプロキシにJWT検証を追加します。すなわち、2種類のキーの暗号化関数を用いてトークンを検証します。
+
+## JWT
+
+ここではJWTについての簡単な要約のみを説明します。JWTとはどういうものか、その目的と利点などを理解するための詳細情報は、JWTの公式サイト[JWT Introduction](https://jwt.io/introduction)を参照してください。
+
+JSON Web Token、略してJWTは `.` で分割される3部分で成り立っていて、通常は `Header.Payload.Signature` のような形式で、各部分は `Base64URL` でエンコードされています。
+
+- ヘッダーは通常、2つの部分で構成されています。トークンの種類、すなわちJWTと、使用しているサイニングアルゴリズム、例えばHMAC SHA256やRSAなどです。
+- ペイロードにはクレームが含まれています。クレームとはエンティティ（通常はユーザー）と追加データに関する声明のことです。
+- シグネチャーは耐タンパー性がある署名部分を含んでいて、前の2部分（ヘッダー、ペイロード）の **秘密** の部分から作成します。
+
+下の例ではヘッダーとペイロードはBase64でデコードできます。
+
+**ヘッダー：** 2つの部分で構成されます。HMAC SHA256やRSAのようなサイニングアルゴリズムと、トークンのタイプすなわちJWTです。
+
+``` js
+{
+  "alg": "RS256", //algorithm
+  "typ": "JWT" //Token type
+}
+```
+
+**ペイロード：**
+
+```js
+{}
+```
+
+**JWT Token: **
+```
+eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.e30.ed7nE07I17v9v1ThCRtyDVxuVtH7pUhi50jnP7f3BgKVVtKhK6YXL-XfxCSa4LoFgU9YSK4nBkiteRRme0ku3Jk3IfnZTbZS-9pZBZZum-qxpiVQHBKwYxk0oqgpRpg0GPxggmpQKPB98u8QMTz0lbGX8HswPX1acRdqzM-1eatoXu7iG0dTxzDJF2hG9mVGquesixm10_r1QwaKk7lklgnMwTjDDXioEEd8QBxK3jU2ZceB6aA1xSyeX0S-d6BgWgkOVQndDdeBIUIwWhEAEA4C88QWP-9DwXqJ7q0OVl4-D6t0BadHkTqqAQyL9R7UYNbsL-PK3ijgAbAgBmjwCQ
+```
+
+## 設定
+
+*hi* サービスには両方のキーのトークン認証が必要になりますが、これはconfigurationで供給します。リクエストにどちらのキーを使用するかについては、トークンの *header* セクションにカスタムフィールド *kid* を追加して、リクエストに使用するキーを指定します。このチュートリアルの `jwt.json` の設定は次のようになります。
+
+``` js
+{
+  "keys": {
+    "key-1": {
+      "pem": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDZ2hv4Bw9vb3F3\nGK77I/wLG79GWWLWFZYmBeYA0xuqJce9bEc0DIPO6UG3REO2A4WpPdoJp4ehf/eU\nyNxThxrDC4UtY9qRXoqUnehs90eR1OBaNxUc806wsozlPNsr1juO/Tyr/krJXKaK\nkNnjNHCmKoo4nsHcJPXkiepUtF18hdMZ0LPZ00qtc8cCVGgSqCbZ18DSQjQ2xMqX\nmNo8BwzWpB55/cZYUofRbEl82SlygVJj68UlfxEdS38gTYY6RWwm8qzvyJ36V4Tn\n/vZ3RDcXFnt/PMIWkXU7UaucOnRbAkJ8x886a58n3rzLpKKt+S0CNcMZoLH21B/l\n8UvuVOo3AgMBAAECggEAHDbnKWvXVWzfCqLWmBh0flx6ci+Fy/P2wszqbs/omimT\ndsEicFIbSL3QBjQf+t+g53w8aW9aSGcs7FxJS24eNVr1cB1UbkBgKAL9hQ36UHT8\nFjhiZ8yhM+ROuCp2DkrhjXwsZ/AixR/Wl+/5BY1B9ltgacMx7gOWxHcSM3nlTl4/\nfeyd/ONSEsTtGZBINJ5a0SAE4orpIvjFhKKOKNDRyokAk3GezsEYn8VilmoAb4eP\ndvIwKEEs2Y0h6dvxTPq9OqD6RyaQuCK1SLg+/VIBPExFpd5Z0sbbLfYrz2Mh1sMQ\nVCflSOEoroYo0c23zuDmKXbqKyzZdX1vWdvTKUV+MQKBgQDu0hNbANskAkZy2ldi\nfMWajOQ/RQK7v0wxclosF4Omxmxy5jcotH7QLAerl2uA+PqSI10Uru/aAUNclvjJ\nUXsmHYUIWaTw5HkUzLTpx5zYEw7vzTbj9Nc3Sp24hJuOpMTgr6eZGZMFflptjwX1\nmjsWjuIz3+M1WmvRIZnqTdxI0QKBgQDpheSMeP+U8vCRlYQS54xvkrFnPp/1rYbu\nEOtU/btsmPkMSNXav+JvOpp1RpBIQC5DrDeC6XZN53y1INpuVSv9BDWSXY/48utz\nH/aZKw/d3O5HD2p6eLX+4ST6ppwe565qwed9pDAnvoid/3PaukY2WYQ4TewYpItE\n1IW3w2NEhwKBgFlDzFhHiaF7+DkVw3Pcjz+lSescMFlct24EABBa+apsoDySMCvW\ny0+kJXnNrzEV3xKghTol6SDjN/pzs6oL+qvUfNUSLMSdoWRU34pCQi3BcePQIKQz\n7/2Ktkkxx7MZgz04aryfAoUbJVGuE9wpOczEu2gIVzSqB4KzvIQHdj8BAoGBAOM9\ntb+0ZxFsrwkcc99pj1FrcFLFsCcEa47yy+5y0pXE7mUz41bw7snKP0/sEK8eNWcJ\nCSPNR6BbqREhHS3Ml/eoxvDdNyLMUK5A5lj6fIArY3um1rjDCmcydCetRbMVRLcC\nZd/vjCTA1nTZhsXMClMNHQslWKBKTnP2UwEVk121AoGAVgO+RxWkqpT8/ZNNrKX9\nFNbayvFds/m7idSCsjsUdkfGaESxDbhhmEegML303380uVNCPgu/FIv6InjOpLic\n/C/7VVjDms9yiKAURy9uTdd8W9xoVTFSgc9R518+uuDBQQAiANCZ3f7ay4Z258Ql\ndazAwre7S+ekO7jva0HcIgA=\n-----END PRIVATE KEY-----"
+    },
+    "key-2": {
+      "pem": "-----BEGIN PRIVATE KEY-----\nMIHuAgEAMBAGByqGSM49AgEGBSuBBAAjBIHWMIHTAgEBBEIBuja8nYkTIYdVt/fF\nQV8o+l+mfE2GqURd/9689G/ljfrbxYVcBWh5+GdUWTtS2l+pCDmhlVB71AVAadg5\nJdGxHTehgYkDgYYABAEFqVluj1vGvvbtR2vZ8ZmgZutO02AWC3XxPhPbw0fVQIyC\nqEhL2LKNueT6lCYz0YkVUh8BfidAkMgGJFalPNRXQwHRRdCjLZut/o2fuD8HW1vi\nUa14jdiDVBGJ8V99/sb7ftno7YDZukZJ6BUlFejh3BjVUyM9SRK047xEP8SfFcz3\nqQ==\n-----END PRIVATE KEY-----"
+    }
+  },
+  "services": {
+    "service-hi": {
+      "keys": [
+        "key-1",
+        "key-2"
+      ]
+    }
+```
+
+> 便宜上、[JWT Web Tool](https://dinochiesa.github.io/jwt/)を使用してキーを生成します。以下の出力テストでもこのツールで生成したJWTトークンを使用します。
+
+## `crypto` パッケージ
+
+Pipyの[crypto](/reference/api/crypto)パッケージにはセキュリティ関連のクラスが含まれています。このチュートリアルではそこから[PrivateKey](/reference/api/crypto/PrivateKey)や[JWT](/reference/api/crypto/JWT)などいくつかを使用します。前者は秘密キーの取り扱い時に、後者は JWT 検証に使用します。
+
+### PrivateKey（秘密キー）
+
+PEM キーの `PrivateKey` の生成は非常にシンプルで、PEMキーのコンテンツに渡すだけです。
+
+設定したコンテンツをグローバル変数に変換してみましょう。
+
+``` js
+pipy({
+  _keys: (
+    Object.fromEntries(
+      Object.entries(config.keys).map(
+        ([k, v]) => [
+          k,
+          new crypto.PrivateKey(v.pem)
+        ]
+      )
+    )
+  ),
+  _services: (
+    Object.fromEntries(
+      Object.entries(config.services).map(
+        ([k, v]) => [
+          k,
+          {
+            keys: v.keys ? Object.fromEntries(v.keys.map(k => [k, true])) : undefined,
+          }
+        ]
+      )
+    )
+  ),  
+})
+```
+
+ルーターから取得したサービス名と、トークンを検証して不合格だった場合にジャンプする必要性を示すフラグを保存するために使用できる変数を、いくつか追加する必要があります。
+
+``` js
+.import({
+  __turnDown: 'proxy',
+  __serviceID: 'router',
+})
+```
+
+ここでトークンの検証プロセスを実装する必要があります。
+
+### JWT
+
+*request* サブパイプラインを使って、（検証に合格した場合）リクエストを許可するか、エラーメッセージを返すかを決定します。許可の条件を以下に挙げます。
+
+* リクエストしたサービスに検証の必要がない、つまりそのサービスにJWT検証用のキーを設定していない場合。
+* リクエストしたトークンが検証に合格した場合。
+
+それ以外の場合には該当するエラーメッセージを返します。
+
+* リクエストにJWTトークンが含まれていない、または含まれているがデコードできない、あるいは有効なJWTトークンでない場合。
+* トークンのヘッダーにキーが含まれていない場合。
+* トークンのヘッダーが供給するキーが存在しない場合。
+* トークンのシグネチャーの検証が不合格だった場合。
+
+トークンを `JWT` クラスのコンストラクターとして使用し、複数のトークンを検証します。RFC変換によって、JWTトークンはリクエストの *authorization* ヘッダーから取得できます。
+
+``` js
+new crypto.JWT(TOKEN_HERE)
+```
+
+`verify()` メソッドは指定したキーを使ってトークンを検証します。
+
+``` js
+.pipeline('request')
+  .replaceMessage(
+    msg => (
+      ((
+        service,
+        header,
+        jwt,
+        kid,
+        key,
+      ) => (
+        service = _services[__serviceID],
+        service?.keys ? (
+          header = msg.head.headers.authorization || '',
+          header.startsWith('Bearer ') && (header = header.substring(7)),
+          jwt = new crypto.JWT(header),
+          jwt.isValid ? (
+            kid = jwt.header?.kid,
+            key = _keys[kid],
+            key ? (
+              service.keys[kid] ? (
+                jwt.verify(key) ? (
+                  msg
+                ) : (
+                  __turnDown = true,
+                  new Message({ status: 401 }, 'Invalid signature')
+                )
+              ) : (
+                __turnDown = true,
+                new Message({ status: 403 }, 'Access denied')
+              )
+            ) : (
+              __turnDown = true,
+              new Message({ status: 401 }, 'Invalid key')
+            )
+          ) : (
+            __turnDown = true,
+            new Message({ status: 401 }, 'Invalid token')
+          )
+        ) : msg
+      ))()
+    )
+  )
+```
+
+> 匿名関数を使ってローカル変数をロジックに供給し、懸念事項を明確に分離しました。この変数は *replaceMessage* コールバックの引数リストで定義できましたが、ロジックが壊れているかもしれず、またはこのコールバックの将来のバージョンがより多くの引数を導入した場合に一部の変数をシャドーイングするかもしれません。よって匿名関数を使ってローカル変数を導入することを推奨します。
+
+テストしてみる
+
+``` shell
+curl localhost:8000/hi \
+-H'Authorization: Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6ImtleS0xIn0.e30.cU6DwIKdXRiPFO9mKDqq-2zkgsJHs2V4ykxJBFdKNS1qCIguoaoIpIPFvhKIk-VrTwGP9VHCrPi5btM0Krt2QLnMLopxrWqiQiVO4752lk0fW6epvLkxSmsUMllT-ncc64yOHU4xOjHyjBllhysePkfi6mwIAWYOJFKUwDh1CDMGeLeXYtwlj867_qzqNAotIUtH5vsgV8yndom4IwR2BRb3b9Y0SdgnslQ7tE2cA-n-uobdipbW4FH79tfTdrgC4qcmJ2IPYG-zSV6palhJdezzUpEfSxIa41LSj4oSX0uLEQikOQtX5Wz2zDRsrFGsqhQO50siRA7XxobAaeaShQ'
+Hi, there!
+
+
+curl localhost:8000/hi \
+-H'Authorization: Bearer eyJhbGciOiJFUzUxMiIsInR5cCI6IkpXVCIsImtpZCI6ImtleS0yIn0.e30.ATb5ZW2aY1nGjfBYdFuhIhh556es31iHZswgRSBYwSTV1t2bGhv7Hj3Arj7ZlFHR355dvQnHq_0ablnwMEbwxNruAWjr7CEUO8_mdtG6MBUbpMZB48VbIJidTf0RWvfQZpKrAQ6Peux1q97_Ynxkr0flbVzvUnu-O2yjD8763RY-wvun'
+You are requesting /hi from ::ffff:127.0.0.1
+```
+
+## まとめ
+
+このチュートリアルではJWT検証をプロキシサービスに追加してセキュリティを改善しました。サービスの検証ロジックはプロキシにフォーワードして、管理と制御を統一することもできます。
+
+### 要点
+
+* `crypto` パッケージ、`PrivateKey`、`JWT`クラスの使用方法。
+* 匿名関数を用いたローカル変数の導入。
+
+### 次のパートの内容
+
+セキュリティポリシーには多くの種類があります。次のセクションではブラックリストとホワイトリストを実装してみることにします。

@@ -7,7 +7,7 @@ import FlagIcon from '@material-ui/icons/FlagSharp'
 We have used Pipy as a server for handling requests. Now we will be using it
 the way it is mostly used for: a network proxy.
 
-# Create a proxy program
+## Create a proxy program
 
 Click the Pipy icon at top-left to go back to the Web UI homepage. Create
 a new codebase named `/proxy` in the same way you've done in
@@ -32,7 +32,7 @@ pipy()
   .connect('localhost:8080')
 ```
 
-# Code dissection
+## Code dissection
 
 Besides one _port pipeline_, this time we also defined two _sub-pipelines_,
 namely "_forward_" and "_connection_".
@@ -53,7 +53,7 @@ namely "_forward_" and "_connection_".
    specified in its construction parameter ("_localhost:8080_") and outputs
    everything it receives from that host.
 
-# Mux and demux
+## Mux and demux
 
 You may ask why we would bother defining 3 pipelines instead of just one like
 in "_Hello World_" we have done earlier. This has to do with how a level 7
@@ -62,7 +62,7 @@ protocol works (like HTTP) compared to a level 4 protocol (like TCP).
 Simply put it, on level 4 you see "_streams_" while on level 7 you see discrete
 "_messages_" combined into streams.
 
-## Filter: demuxHTTP
+### Filter: demuxHTTP
 
 A _port pipeline_ swallows incoming data as a sequence of
 [_Data_](/reference/api/Data) events, each holding a small chunk of
@@ -84,7 +84,7 @@ That means one port pipeline handling one incoming connection will be forked
 at **demuxHTTP** into many sub-pipelines so that each message can be handled
 separately.
 
-## Filter: muxHTTP
+### Filter: muxHTTP
 
 In the proxy sample we are trying to do here, we need to pass all messages to
 an upstream server. Before an HTTP message can be sent over network, it has
@@ -97,7 +97,7 @@ one TCP stream and pumps it into the same pipeline. And that final pipeline
 will establish a single TCP connection to the upstream server in its **connect**
 filter and transfer data back and forth.
 
-## Pipeline topology
+### Pipeline topology
 
 Let's say we have one incoming connection running 2 requests on it, to handle it
 all correctly we need up to 4 inter-connected pipelines:
@@ -126,7 +126,7 @@ all correctly we need up to 4 inter-connected pipelines:
                 listening on 8080      "forward" x 2        "connection"
 ```
 
-# Test in action
+## Test in action
 
 Now start the proxy program and `curl` it:
 
@@ -144,7 +144,7 @@ connection: keep-alive
 
 That's because we don't have an upstream server yet to pass requests to.
 
-## Start a second Pipy instance
+### Start a second Pipy instance
 
 We have only one running Pipy instance now, which is already running
 our proxy program. Now we need to start a second one for the test server.
@@ -172,13 +172,13 @@ connection: keep-alive
 Hi, there!
 ```
 
-# Summary
+## Summary
 
 In this part of tutorial, you've learned how Pipy can work as a network proxy.
 You've also seen why we need _sub-pipelines_ and why they can be more than
 the number of incoming connections.
 
-## Takeaways
+### Takeaways
 
 1. Port pipelines receives data in TCP layer. To handle individual HTTP messages,
    we need filters like **serveHTTP** or **demuxHTTP** to extract messages
@@ -193,7 +193,7 @@ the number of incoming connections.
 
 4. Use **connect** to establish outgoing TCP connections to remote hosts.
 
-## What's next?
+### What's next?
 
 Our first try for a network proxy is over-simplified. It really does nothing
 more than mapping one IP/port to another. For a proxy to be any useful, we need

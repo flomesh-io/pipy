@@ -1,0 +1,120 @@
+---
+title: "13：ブラックリストとホワイトリスト"
+---
+
+## 問題点
+
+サイバーセキュリティにおいては、カスタマイズしたホワイトリストやブラックリストを定義して、特定のサービスへのアクセスを許可したり制限したりするという、もうひとつの一般的な防御機能があります。ホワイトリストは特定のIPアドレスからのリクエストのみを許可し、逆にブラックリストは特定のIPアドレスからのリクエストを拒否するために使用します。
+
+このチュートリアルではホワイトリストとブラックリストを別々の設定ファイルで定義して、この機能を実装します。この設定を別々のファイルに保存すると、更新やメンテナンスが容易になります。
+
+## 設定
+
+ファイル `config/ban.json` にある禁止リストの設定は、サービスレベルで作動するように構成します。このチュートリアルでは `service-hi` の禁止リストを設定して、選択したサービスに適用するようにします。
+
+``` js
+{
+  "services": {
+    "service-hi": {
+      "white": [],
+      "black": [
+        "127.0.0.1",
+        "::1",
+        "::ffff:127.0.0.1"
+      ]
+    }
+  }
+}
+```
+
+> PipyはIPv6をサポートしていて、テスト用にローカル *ループバック* IPv6アドレスを追加しています。
+
+## コードの説明
+
+IPアドレスは設定ファイル内にアレイタイプとして存在していて、簡単には見つかりません。よって設定のインポート中にそれをマップのキーとして使用します。
+
+``` js
+pipy({
+  _services: Object.fromEntries(
+    Object.entries(config.services).map(
+      ([k,v]) => [
+        k,
+        {
+          white: v.white?.length > 0 ? (
+            Object.fromEntries(
+              v.white.map(
+                ip => [ip, true]
+              )
+            )
+          ) : null,
+          black: v.black?.length > 0 ? (
+            Object.fromEntries(
+              v.black.map(
+                ip => [ip, true]
+              )
+            )
+          ) : null,
+        }
+      ]
+    )
+  ),
+
+  _service: null,
+})
+```
+
+サービスレベルにブラックリストとホワイトリストを適用させるには、ルーターからサービス名を取得して、そのサービスに禁止リストの適用が必要か検証する必要があり、アクセスが拒否されたら、エラー応答を返さなければなりません。他のプラグインで定義した変数である、`proxy` プラグインの `__turnDown` と `router` プラグインの `__serviceID` をインポートします。
+
+``` js
+.import({
+  __turnDown: 'proxy',
+  __serviceID: 'router',
+})
+```
+
+それではロジックを実装します。
+
+リクエストを受け取る場合、 `__inbound.remoteAddress` からリモートホストのIPアドレスを取得します。リクエストしたサービスがホワイトリストを設定していたらそれをチェックし、ブラックリストを設定していたらIPが禁止リストにあるかをチェックし、あった場合は `__turnDown=true` に切り替えてエラーを返します。
+
+``` js
+.pipeline('request')
+  .handleStreamStart(
+    () => (
+      _service = _services[__serviceID],
+      __turnDown = Boolean(
+        _service && (
+          _service.white ? (
+            !_service.white[__inbound.remoteAddress]
+          ) : (
+            _service.black?.[__inbound.remoteAddress]
+          )
+        )
+      )
+    )
+  )
+  .link(
+    'deny', () => __turnDown,
+    'bypass'
+  )
+
+.pipeline('deny')
+  .replaceMessage(
+    new Message({ status: 403 }, 'Access denied')
+  )
+
+.pipeline('bypass')  
+```
+
+最後に、プラグインをプロキシスクリプトに `use` ことを忘れないでください。
+
+## まとめ
+
+サイバーセキュリティの禁止リスト機能はプロキシサービスの一部で、例示した通り非常にシンプルで、簡単にPipyに実装できます。
+
+### 要点
+
+* リクエストを拒絶するかどうかは、接続先のIPアドレスと設定したIPアドレスを比較して判断します。ある範囲のIPアドレスをブロックするために大幅な制御が必要な場合は、[Netmask.contains ()](/reference/api/Netmask/contains) を活用できます。
+
+### 次のパートの内容
+
+次のチュートリアルでは、ネットワークのトラフィックを制限するために *スロットリング* サポートを追加して、プロキシにもうひとつ重要な機能を実装します。

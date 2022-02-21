@@ -4,7 +4,7 @@ title: "7：ローディングバランシング"
 
 これで、プラグインが可能で、設定可能なプロキシ・フレームワークが完成しました。最初のプラグインとして「_router_」も作りました。ここからは、他の一般的なプロキシ機能を網羅するプラグインを作っていきます。最初のプラグインは「_load balancing_」です。
 
-# ラウンドロビン方式のロードバランサー
+## ラウンドロビン方式のロードバランサー
 
 Pipyでは、ロードバランシングプロキシの構築を容易にするために、いくつかのビルトインクラスを提供しています。これらのクラスには、若干数に分類されるロードバランシングのアルゴリズムが実装されており、すべて同じ使い方をします。このチュートリアルでは、最も一般的に使われている「ラウンドロビン」アルゴリズムを実装した[_algo.RoundRobinLoadBalancer_](/reference/api/algo/RoundRobinLoadBalancer)を使用します。
 
@@ -30,7 +30,7 @@ new algo.RoundRobinLoadBalancer([
 
 この _RoundRobinLoadBalancer_ では、[_select()_](/reference/api/algo/RoundRobinLoadBalancer/select)メソッドをコールするたびに、ラウンドロビン方式で選ばれたターゲットを一つ与えてくれます。
 
-# router.jsを分解する
+## router.jsを分解する
 
 選ばれたターゲットを取得したら、現在のリクエストをそのターゲットに渡すことになります。でもちょっと待って、それは`/plugins/router.js`の「_forward_」パイプラインで既にやりましたよね。つまり、「_router_」プラグインの機能は2つのパートに分解できたということです。
 
@@ -39,7 +39,7 @@ new algo.RoundRobinLoadBalancer([
 
 2の部分は新しい「_balancer_」プラグインに行き、1の部分は「_router_」に残るようにします。それに加えて、 _router_ は _balancer_ に対し、どのサービスに行くべきかを教えられるようにしないといけません。パート5で、変数`__turnDown`が`/proxy.js`と`/plugins/router.js`の間で共有されることは既に見てきました。ここでもそれと同じです。
 
-## balancer.jsを作る
+### balancer.jsを作る
 
 最初にbalancerに取り組みます。まずは設定からです。`/config/balancer.json`というファイルを作成し、service-to-targetsマップを記入します。:
 
@@ -169,7 +169,7 @@ Object.fromEntries(
   }
 ```
 
-## router.jsを整える
+### router.jsを整える
 
 routerについては、再び設定ファイル`/config/router.json`から始めます。balancerではすでにサービスとターゲットのマッピングが行われているので、ここではルーティングテーブルをURLとサービスのマッピングのみに変更します。
 
@@ -271,7 +271,7 @@ routerについては、再び設定ファイル`/config/router.json`から始�
 
 これですべて完了です。
 
-# テストしてみる
+## テストしてみる
 
 では、テストをしてみましょう。
 
@@ -288,16 +288,16 @@ You are requesting /hi from ::ffff:127.0.0.1
 
 同じサービス「service-hi」にアクセスするたびに、異なるターゲットに向かい、異なるメッセージでレスポンスしているのがわかります。
 
-#まとめ
+## まとめ
 
 このパートでは、ラウンドロビン方式のロードバランサーの書き方を解説しました。また、JSONオブジェクトを一発で変換する使える技も見てきました。
 
-## 要点
+### 要点
 
 1.	[_algo.RoundRobinLoadBalancer_](/reference/api/algo/RoundRobinLoadBalancer)（他にもいくつか似たようなものがあります）は、グループの中から、ウェイトに応じてターゲットを自動的に選択する場合に使用します。.
 2.	[_Array.prototype.map_](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Array/map)と[_Object.entries_](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object/entries)や[_Object.fromEntries_](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object/fromEntries)を組み合わせることで、JSONオブジェクトのキーと値を簡単に変換することができます。
 
-## 次のパートの内容
+### 次のパートの内容
 
 簡単なロードバランサーは動きました。しかし、まだ最適ではありません。次のパートでは、その理由を解説します。
 
