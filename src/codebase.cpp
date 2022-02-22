@@ -105,6 +105,7 @@ auto CodebaseFromFS::list(const std::string &path) -> std::list<std::string> {
 auto CodebaseFromFS::get(const std::string &path) -> Data* {
   std::vector<uint8_t> data;
   auto full_path = utils::path_join(m_base, path);
+  if (!fs::is_file(full_path)) return nullptr;
   if (!fs::read_file(full_path, data)) return nullptr;
   return s_dp.make(&data[0], data.size());
 }
