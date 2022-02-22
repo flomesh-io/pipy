@@ -59,9 +59,9 @@ $ bin/pipy
 
 在 `docs/` 可以浏览 Pipy 的文档：
 
-* [概述](./docs/overview.zh.mdx)
-* [概念](./docs/concepts.zh.mdx)
-* [快速开始](./docs/quick-start.zh.mdx)
+* [概述](./docs/intro/overview.zh.mdx)
+* [概念](./docs/intro/concepts.zh.mdx)
+* [快速开始](./docs/getting-started/quick-start.zh.mdx)
 * 教程
     * [01 Hello world](./docs/tutorial/01-hello.zh.mdx)
     * [02 回显](./docs/tutorial/02-echo.zh.mdx)

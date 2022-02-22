@@ -61,9 +61,9 @@ Open the browser of your choice, point it to `http://localhost:6060`. You will n
 
 You can find the Pipy documentation under `docs/`.
 
-* [Overview](./docs/overview.mdx)
-* [Concept](./docs/concepts.mdx)
-* [Quick start](./docs/quick-start.mdx)
+* [Overview](./docs/intro/overview.mdx)
+* [Concept](./docs/intro/concepts.mdx)
+* [Quick start](./docs/getting-started/quick-start.mdx)
 * Tutorials
     * [01 Hello world](./docs/tutorial/01-hello.mdx)
     * [02 Echo](./docs/tutorial/02-echo.mdx)
