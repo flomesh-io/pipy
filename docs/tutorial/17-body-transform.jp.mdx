@@ -1,0 +1,198 @@
+---
+title: "17：データ変換"
+---
+
+## 問題点
+
+昨今の技術の世界ではJSONがウェブ開発、API通信に選択するフォーマット、サービス間通信のデファクトスタンダードになっています。 しかし20年ほど前にはSOAPがサービス間通信、ネットワークサービスの企業標準でしたし、今もレガシーシステムで使用されています。
+
+今日の最新のアプリケーションはほとんどがJSONに依存して他のサービスと通信していますが、レガシーシステムとの統合には問題があり、また相互運用機能を実装するには開発に余計な労力が必要となり、時間がかかります。なんらかの中間層があって、エンドポイントでは別のフォーマットのシステムと通信している、あるいは知らない言語を話す人と話していることを意識せずともフォ―マットの変換ができるといいと思いませんか？
+
+それがこのチュートリアルの意図です。このチュートリアルではJSONをXMLに、またその逆に変換する機能を実装します。
+
+## 設定
+
+フォーマットの変換を必要とするサービス用に、コンフィグレーション設定を追加します。
+
+* *jsonToXML*：JSONフォーマットをXMLに変換するために必要なリクエストです。
+* *xmlToJson*：XMLフォーマットをJSONに変換するために必要なリクエストです。
+
+このチュートリアルではこの機能を *service-echo* に追加します。このサービスは単にそのコンテンツを返します。よってこのサービスにフォーワードする前にJSONフォーマットをXMLに変換するプラグインを設定し、次に返って来たXMLを見てみましょう。
+
+```js
+{
+  "services": {
+    "service-echo": {
+      "jsonToXml": true
+    }
+  }
+}
+```
+
+## データ変換
+
+今までのチュートリアルを通して学習していて、エンドポイントとの通信にはほとんどJSONを使用し、JSONの処理にはPipyのビルトイン[JSON](/reference/api/JSON)クラスを使用していたことに気付いたはずです。`JSON` クラスは `parse` 、`stringify` 、`encode` 、`decode` のようなメソッドを提供します。
+
+XMLを処理するために、Pipyはビルトイン[XML](/reference/api/XML)クラスも装備していて、`JSON` クラスとよく似たメソッドを提供しています。
+
+XMLからJSONへの変換やその逆の変換には、中間オブジェクトとしてJavaScript Objectを使用するので、変換フローはXML <=> Object <=> JSONのように見えます。
+
+JSONからオブジェクトへの変換は非常にシンプルで、`JSON` クラスの `decode` または `encode` メソッドを呼び出して行います。しかしXMLはマークアップ言語であり、変換には `XML` クラスの `decode` と `encode` メソッドを[XML.Node](/reference/api/XML/Node)オブジェクトで操作する追加ロジックが必要となります。
+
+```xml
+<root>
+  <msg>Hi, there!</msg>
+</root>
+```
+
+上記のスニペットは今回のチュートリアルで使用するXMLフォーマットのサンプルを表しています。このスニペットでは、XMLマークアップ言語特有のタグが色々付いていますが、実際に重要なデータは `msg: Hi, there!` です。
+
+## コードの説明
+
+2つのグローバル変数以外に、変換中に呼び出すJavaScript関数を追加します。`_obj2xml` と `_xml2obj` と関数オブジェクトで、これらを `null` で初期化し、後のセクションでロジックを追加します。
+
+```js
+pipy({
+  _services: config.services,
+  _service: null,
+  _obj2xml: null,
+  _xml2obj: null,
+})
+
+.import({
+  __serviceID: 'router',
+})
+```
+
+次にリクエスト処理ロジックを実装します。リクエストしたサービス設定を取得して、それからその設定に従って作動させます。
+
+```js
+.pipeline('request')
+  .handleStreamStart(
+    () => _service = _services[__serviceID]
+  )
+  .link(
+    'json2xml', () => Boolean(_service?.jsonToXml),
+    'xml2json', () => Boolean(_service?.xmlToJson),
+    'bypass'
+  )
+```
+
+### JSONをXMLに変換
+
+*json2xml* サブパイプラインでは、`replaceMessageBody` フィルターを使ってメッセージの内容を変更します。
+
+```js
+.pipeline('json2xml')
+  .replaceMessageBody(
+    data => (
+      XML.encode(
+        new XML.Node(
+          '', null, [
+            new XML.Node(
+              'root', null,
+              _obj2xml(JSON.decode(data))
+            )
+          ]
+        ),
+        2,
+      )
+    )
+  )
+```
+
+[XML.Node](/reference/api/XML/Node)クラスはXMLでのノードを表し、ノードの作成に使用します。`root` ノードを構築して `_obj2xml` 関数でリクエストの本体を子ノードに変換します。ですから `_obj2xml` 関数が返すタイプは `XML.Node` ノードのアレイです。
+
+```js
+_obj2xml: node => (
+  typeof node === 'object' ? (
+    Object.entries(node).flatMap(
+      ([k, v]) => (
+        v instanceof Array && (
+          v.map(e => new XML.Node(k, null, _obj2xml(e)))
+        ) ||
+        v instanceof Object && (
+          new XML.Node(k, null, _obj2xml(v))
+        ) || (
+          new XML.Node(k, null, [v])
+        )
+      )
+    )
+  ) : [
+    new XML.Node('body', null, [''])
+  ]
+)
+```
+
+### XMLをJSONに変換
+
+*xml2json* サブパイプラインは `_xml2obj` JavaScript関数を使用して `XML.Node` をJavaScriptオブジェクトに変換します。
+
+```js
+.pipeline('xml2json')
+  .replaceMessageBody(
+    data => (
+      JSON.encode(
+        _xml2obj(XML.decode(data))
+      )
+    )
+  )
+```
+
+`_xml2obj` はノード名をオブジェクトフィールドに変換し、再帰的に子ノードに自身を呼び出します。この関数の戻り値はJavaScriptオブジェクトです。
+
+```js
+_xml2obj: node => (
+  node ? (
+    ((
+      children,
+      previous,
+      obj, k, v,
+    ) => (
+      obj = {},
+      node.children.forEach(node => (
+        (children = node.children) && (
+          k = node.name,
+          v = children.every(i => typeof i === 'string') ? children.join('') : _xml2obj(node),
+          previous = obj[k],
+          previous instanceof Array ? (
+            previous.push(v)
+          ) : (
+            obj[k] = previous ? [previous, v] : v
+          )
+        )
+      )),
+      obj
+    ))()
+  ) : {}
+)
+```
+
+また以下のように `bypass` サブパイプラインを追加することを忘れないでください。
+
+```js
+.pipeline('bypass')
+```
+
+## テストしてみる
+
+```sh
+curl -X POST http://localhost:8000/echo -d '{"msg": "Hi, there!"}'
+<root>
+  <msg>Hi, there!</msg>
+</root>
+```
+
+## まとめ
+
+プロキシレベルでデータフォーマットの変換ができたら、アプリケーションが異なるフォーマットを使ってお互いに、簡単に通信できます。このチュートリアルではリクエストデータのシンプルなフォーマット変換を行いますが、皆さん自身の特定のニーズにあった変換を実装するきっかけとなります。
+
+### 要点
+
+* グローバル変数はプリミティブ型に制限されていませんが、ロジックをカプセル化するJavaScript関数の定義にも使用することができます。
+* *XML* と *Node* クラスを使ってXMLデータを処理します。
+
+### 次のパートの内容
+
+次のチュートリアルでは、トランスポートレイヤーセキュリティ（TLS）を活用してネットワークレベルでサービスのセキュリティを強化します。
+
