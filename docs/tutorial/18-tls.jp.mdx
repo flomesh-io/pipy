@@ -1,0 +1,117 @@
+---
+title: "18：TLS"
+---
+
+## 問題点
+
+トランスポートレイヤーセキュリティ（TLS）は最も重要で幅広く使用されているセキュリティプロトコルのひとつで、暗号化したプロトコルによりインターネット経由でアプリケーション間を行き来するデータにエンドツーエンドのセキュリティを提供しています。ユーザーが最もよく目にするのは安全なウェブのブラウジング時の、特に安全なセッションを確立した際にウェブブラウザに現れる南京錠のアイコンでしょう。しかしそれだけではなく他のアプリケーション、例えばメール、ファイル転送、ビデオ会議、音声会議、インスタントメッセージ、ボイスオーバーIP、さらにはDNSやNTPなどのインターネットサービスにも使用でき、また大いに使用すべきです。
+
+TLSのサポートはプロキシサービスの重要な機能のひとつで、今回のチュートリアルではプロキシサービスにTLSサポート機能を追加します。
+
+## TLSオフロード
+
+プロキシレベルでTLSをオフロードする利点としては、例えば性能の向上、バックエンドサービスのより有効な活用、インテリジェントルーティング、証明書管理、セキュリティパッチなどいくつもあり、TLS処理のために貴重なCPU資源を消費する必要のない、自身のSSL証明書を取得し、脆弱性パッチを適用する、バックエンドサービスのためのものです。
+
+[acceptTLS](/reference/api/Configuration/acceptTLS)フィルターはTLSの暗号化トラフィックを受け取り、オフロードを実行します。この関数は2つの引数 `acceptTLS(target, options)` を受け取ります。
+
+* `target` はターゲットのサブパイプラインで、さらに処理するためにオフロードしたリクエストをこれにフォーワードします。
+* `options` は特定の証明書、キー（このチュートリアルで後ほど説明します）を使用する拡張オプションです。
+
+TLSオフロードはサブパイプラインの処理を始める前に実施する必要があるため、ポートのパイプラインで実施します。
+
+まず最初に、自己署名証明書とキーを作成する必要があります。コードから取得できるように、`secret` フォルダー下のコードベースに追加します。
+
+```sh
+openssl req -x509 -newkey rsa:4096 -keyout server-key.pem -out server-cert.pem -sha256 -days 365 -nodes -subj '/CN=localhost'
+```
+
+## コードの説明
+
+*proxy.js* スクリプトを改造して、新たに `listen` パイプラインを追加して新しいポートをリッスンし、フィルター `acceptTLS` を追加・設定して `tls-offloaded` サブパイプラインにオフロード後リクエストをフォーワードします。また上で生成した証明書とキーをロードし、PipyのRepoコードベースに保存します。
+
+`tls-offloaded` サブパイプラインでは、通常のHTTPリクエストに行ったものと同じ処理を行います。
+
+> ここで新しいモジュール変数 `__isTLS` を追加して、接続リクエストがTLS暗号化されているかどうかを記録します。この変数は、ロギング用の `log` モジュールのような他のモジュールでも使用できます。
+
+```js
+  (config =>
+
+  pipy()
+
+  .export('proxy', {
+    __turnDown: false,
++   __isTLS: false,
+  })
+
+  .listen(config.listen)
+    .use(config.plugins, 'session')  
+    .demuxHTTP('request')
+
++ .listen(config.listenTLS)
++   .handleStreamStart(
++     () => __isTLS = true
++   )
++   .acceptTLS('tls-offloaded', {
++     certificate: config.listenTLS ? {
++       cert: new crypto.CertificateChain(pipy.load('secret/server-cert.pem')),
++       key: new crypto.PrivateKey(pipy.load('secret/server-key.pem')),
++     } : undefined,
++   })
+
++ .pipeline('tls-offloaded')
++   .use(config.plugins, 'session')
++   .demuxHTTP('request')
+
+  .pipeline('request')
+    .use(
+      config.plugins,
+      'request',
+      'response',
+      () => __turnDown
+    )
+
+  )(JSON.decode(pipy.load('config/proxy.json')))
+```
+
+`acceptTLS` フィルターではターゲットのサブパイプラインを定義していて、証明書とキーのデータを含むオブジェクトを `options` パラメーター経由で渡します。[CertificateChain](/reference/api/crypto/CertificateChain)クラスを使って証明書オブジェクトを処理し、[PrivateKey](/reference/api/crypto/PrivateKey)クラスで秘密キーを処理します。
+
+> ここでサーバーには片方向認証しか実装していません。クライアント側でも認証を行うには *trusted* フィールドを `options` オブジェクトに追加します。
+
+元のポートパイプラインを改造して、それを新しいサブパイプラインに接続します。
+
+```js
+  .listen(config.listen)
+-   .use(config.plugins, 'session')  
+-   .demuxHTTP('request')
++   .link('tls-offloaded')
+```
+
+## テストしてみる
+
+*HTTP* ポート *8000* と *HTTPS* ポート *8443* をテストしてみましょう。
+
+```sh
+curl http://localhost:8000/hi
+You are requesting / from ::ffff:127.0.0.1
+
+curl https://localhost:8443/hi
+curl: (60) SSL certificate problem: self signed certificate
+More details here: https://curl.se/docs/sslcerts.html
+
+curl failed to verify the legitimacy of the server and therefore could not
+establish a secure connection to it. To learn more about this situation and
+how to fix it, please visit the web page mentioned above.
+
+curl --cacert server-cert.pem https://localhost:8443/hi
+Hi, there!
+```
+
+## まとめ
+
+今回のチュートリアルでは片方向認証を実装していますが、前述のとおり *options* オブジェクトの *trusted* フィールドで双方向認証も実現できます。興味のある学習者用に演習の課題としておきます。
+
+### 要点
+
+* *acceptTLS* フィルターを使ってTLS接続を受け取り、それをオフロードします。
+* Pipyは片方向とmTLS（相互トランスポートレイヤーセキュリティ）の両方をサポートしています。
+

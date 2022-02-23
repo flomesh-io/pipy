@@ -1,0 +1,45 @@
+---
+title: "ビルドとインストール"
+---
+
+### ソースからビルドする
+
+ビルドする前に、Pipyをビルドするマシンにインストールするためには、以下の前提条件が必要になります。
+
+* Clang 5.0+
+* CMake 3.0+
+* Node.js v12+（ビルトインのウェブUIを有効化している場合のみ必要）
+* zlib
+
+これをすべてインストールしていれば、Pipyのレジストリのクローンを作成し、Pipyのルートディレクトリからビルドスクリプトを実行して、ビルドを開始します。
+
+```sh
+$ git clone https://github.com/flomesh-io/pipy.git
+$ cd pipy
+$ ./build.sh
+```
+
+最終的な実行可能ファイルは `bin/` の下にあります。ヘルプ情報を見たい場合は `bin/pipy -h` と入力します。
+
+### Dockerイメージをビルドする
+
+Dockerイメージをビルドするには、次のコマンドを実行します。
+
+```sh
+$ cd pipy
+$ docker build --squash --rm -t pipy .
+```
+
+> **注記：** 比較的小さなイメージには `--squash` オプションを使いたいかもしれません。これは実験的な機能なので、使用する前に `/etc/docker/daemon.json` に `{ "experimental": true }` を追加し、Dockerデーモンを再起動する必要があります。
+>
+> Dockerの `--squash` オプションの詳細情報については、以下を参照してください。
+[Docker Documentation](https://docs.docker.com/engine/reference/commandline/image_build/)
+
+
+### RPMでインストールする
+
+Linuxベースのシステムでは、リリースされているRPMパッケージからインストールできます。例えばPipyをRHEL7にインストールするには、以下を使います。
+
+```sh
+$ yum -y install http://repo.flomesh.cn/pipy/pipy-latest.el7_pl.x86_64.rpm
+```
