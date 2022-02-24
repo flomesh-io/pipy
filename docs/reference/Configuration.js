@@ -1,7 +1,10 @@
 /**
  * @callback BooleanCB
  * @return {boolean}
- * 
+ *
+ * @callback StringCB
+ * @return {string}
+ *
  * @callback MessageHandler
  * @param {Message} request
  * @return {Message}
@@ -65,57 +68,85 @@ class Configuration {
   pipeline(name) {}
 
   /**
-   * Appends a SOCKS server to the current pipeline layout.
+   * Appends an acceptHTTPTunnel filter to the current pipeline layout.
    *
-   * @param {string} target Name of the sub-pipeline to receive decoded SOCKS streams.
-   * @param {(address: string, port: number) => boolean} onConnect Callback function when a client tries to connect.
+   * @param {string} layout Name of the pipeline layout based on which sub-pipelines are created.
+   * @param {*} handler Callback function that receives an HTTP request and returns an HTTP response.
    * @returns {Configuration} The same Configuration object.
    */
-  acceptSOCKS(target, onConnect) {}
+  acceptHTTPTunnel(layout, handler) {}
 
   /**
-   * Appends a TLS server to the current pipeline layout.
+   * @callback SOCKSSessionHandler
+   * @param {string} host
+   * @param {number} port
+   * @param {string} id
+   * @return {boolean}
+   */
+ 
+  /**
+   * Appends an acceptSOCKS filter to the current pipeline layout.
    *
-   * @param {string} target Name of the sub-pipeline to receive decoded TLS streams.
+   * @param {string} layout Name of the pipeline layout based on which a sub-pipeline is created for each SOCKS session.
+   * @param {SOCKSSessionHandler} handler Callback function while a client tries to connect via SOCKS.
+   * @returns {Configuration} The same Configuration object.
+   */
+  acceptSOCKS(layout, handler) {}
+
+  /**
+   * Appends an acceptTLS filter to the current pipeline layout.
+   *
+   * @param {string} layout Name of the pipeline layout based on which a sub-pipeline is created for each TLS session.
    * @param {Object} [options] Options including certificate and trusted.
    * @param {OptionCert | () => OptionCert} [options.certificate] Server certificate and private key.
    * @param {Certificate[]} [options.trusted] List of trusted client certifcates.
    * @returns {Configuration} The same Configuration object.
    */
-  acceptTLS(target, options) {}
+  acceptTLS(layout, options) {}
 
   /**
-   * Appends a TCP client to the current pipeline layout.
+   * Appends a connect filter to the current pipeline layout.
    *
-   * @param {string | () => string} target Host to connection in form of 'host:port'.
-   * @param {Object} [options] Options including bufferLimit, retryCount, retryDelay.
+   * @param {string | StringCB} target Target address to connect to.
+   * @param {Object} [options] Options including bufferLimit, retryCount, retryDelay, connectTimeout, readTimeout and writeTimeout.
    * @param {number|string} [options.bufferLimit] Maximum outbound data size that would be buffered when sending is too slow.
    * @param {number} [options.retryCount] Maximum number of retries when connection is unsuccessful.
    * @param {number|string} [options.retryDelay] Interval between retries in seconds.
+   * @param {number|string} [options.connectTimeout] Timeout while connecting.
+   * @param {number|string} [options.readTimeout] Timeout while reading.
+   * @param {number|string} [options.writeTimeout] Timeout while writing.
    * @returns {Configuration} The same Configuration object.
    */
   connect(target, options) {}
 
   /**
-   * Appends a SOCKS client to the current pipeline layout.
+   * Appends a connectHTTPTunnel filter to the current pipeline layout.
    *
-   * @param {string} target Name of the sub-pipeline to receive encoded SOCKS streams.
-   * @param {string | () => string} address Host to connection in form os 'host:port'.
-   * @returns {Configuration} The same Configuration object.
+   * @param {string} layout Name of the pipeline layout based on which a sub-pipeline is created for the tunnel.
+   * @param {string | StringCB} target Target endpoint to connect to, in form of "host:port".
    */
-  connectSOCKS(target, address) {}
+  connectHTTPTunnel(layout, target) {}
 
   /**
-   * Appends a TLS client to the current pipeline layout.
+   * Appends a connectSOCKS filter to the current pipeline layout.
    *
-   * @param {string} target Name of the sub-pipeline to receive encoded TLS streams.
+   * @param {string} layout Name of the pipeline layout based on which a sub-pipeline is created for the SOCKS session.
+   * @param {string | StrinbCB} destination Destination to connection to, in form of "host:port".
+   * @returns {Configuration} The same Configuration object.
+   */
+  connectSOCKS(layout, destination) {}
+
+  /**
+   * Appends a connectTLS filter to the current pipeline layout.
+   *
+   * @param {string} layout Name of the pipeline layout based on which a sub-pipeline is created for the TLS session.
    * @param {Object} [options] Options including certificate, trusted and sni.
    * @param {OptionCert | () => OptionCert} [options.certificate] Client certificate and private key.
    * @param {Certificate[]} [options.trusted] List of trusted server certificate.
    * @param {string | () => string} [options.sni] Host name for SNI.
    * @returns {Configuration} The same Configuration object.
    */
-  connectTLS(target, options) {}
+  connectTLS(layout, options) {}
 
   /**
    * Appends a Dubbo decoder to the current pipeline layout.

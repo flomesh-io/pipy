@@ -3,19 +3,74 @@ title: "Configuration.acceptSOCKS()"
 api: Configuration.acceptSOCKS()
 ---
 
-# Syntax
+## Description
+
+Appends an **acceptSOCKS** filter to the current pipeline layout.
+
+An **acceptSOCKS** filter implements [SOCKS](https://en.wikipedia.org/wiki/SOCKS) protocol on the server side. Its input and output are [Data](/reference/api/Data) streams (usually TCP streams). Its sub-pipeline's input and output are also _Data_ streams.
+
+|          |          |               |          |                |
+|---------:|:--------:|:-------------:|:--------:|:--------------:|
+|          | **Data** |               | **Data** |                |
+| _Input_  | →        |               | →        |                |
+|          |          | `acceptSOCKS` |          | `sub-pipeline` |
+| _Output_ | ←        |               | ←        |                |
+|          | **Data** |               | **Data** |                |
+
+An **acceptSOCKS** filter decodes the connection request from its input stream, and calls back to a user function with the connection parameters including:
+
+- _host_ - Destination address, could be an IPv4 address or a domain name
+- _port_ - Destination port number
+- _id_ - Username if any
+
+If the callback returns `true`, the request will be accepted, and a sub-pipeline will be created based on the pipeline layout given by _layout_ parameter. All subsequently received _Data_ from the client is pumped into it. Output _Data_ from the sub-pipeline is sent back to the client.
+
+If the callback returns `false`, the request will be rejected, and no sub-pipelines will be created.
+
+## Syntax
 
 ``` js
-pipy().pipeline('example').acceptSOCKS(
-  target,
-  (host, name) => shouldConnect(host, name)
-)
+pipy()
+  .pipeline('example')
+    .acceptSOCKS(
+      layout,
+      (host, port, id) => shouldAcceptSession(host, port, id)
+    )
 ```
 
-## Parameters
+### Parameters
 
 <Parameters/>
 
-## Return value
+### Return value
 
 <ReturnValue/>
+
+## Example
+
+``` js
+pipy({
+  _host: '',
+  _port: 0,
+})
+
+.listen(1080)
+  .acceptSOCKS(
+    'connection',
+    (host, port) => (
+      _host = host,
+      _port = port,
+      true // return true to accept the session
+    )
+  )
+
+.pipeline('connection')
+  .connect(
+    () => `${_host}:${_port}`
+  )
+```
+
+## See Also
+
+* [Configuration](/reference/api/Configuration)
+* [connectSOCKS()](/reference/api/Configuration/connectSOCKS)

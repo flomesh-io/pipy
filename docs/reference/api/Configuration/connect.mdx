@@ -3,19 +3,106 @@ title: "Configuration.connect()"
 api: Configuration.connect()
 ---
 
-# Syntax
+## Description
 
-``` js
-pipy().pipeline('example').connect(target)
-pipy().pipeline('example').connect(target, { ...options })
-pipy().pipeline('example').connect(() => target)
-pipy().pipeline('example').connect(() => target, { ...options })
+Appends a **connect** filter to the current pipeline layout.
+
+A **connect** filter establishes a TCP connection to a remote host. Its input and output are both TCP streams represented as [Data](/reference/api/Data) streams.
+
+|           |          |
+|:---------:|:--------:|
+| _Input_   |          |
+| ↓         | **Data** |
+| `connect` |          |
+| ↓         | **Data** |
+| _Output_  |          |
+
+A **connect** filter works like this:
+
+- It establishes a TCP connection to a remote host specified in the _target_ parameter
+- The input _Data_ stream to the filter will be send to that host after the connection is established
+- The _Data_ stream received from that host will be sent out via the filter's output
+
+### Target address
+
+The target address to connect to is given by the _target_ parameter. It can be a string in form of `"host:port"` or a function that returns that string, where _host_ can be an IP address or a domain name and _port_ must be a valid port number.
+
+> When using an IPv6 address, wrap it inside a pair of brackets. For example, `"[::1]:8080"`.
+
+### Outbound data buffer
+
+No limit is set to how fast input _Data_ can come into a **connect** filter, but the outgoing TCP connection does have a limit depending on the network condition. When outgoing is too slow and incoming is too fast, _Data_ will be backed up in the filter's internal buffer.
+
+By default, the buffer can grow unlimitedly. You can set a limit to how much data is allowed to stay in memory by option _bufferLimit_ in the _options_ parameter. It can be a number in bytes or a string with a unit suffix such as `'k'`, `'m'`, `'g'` and `'t'`.
+
+When data in the buffer goes over that limit, the overflowed data will be discarded and you will see an error message in the standard error output from Pipy like this:
+
+```
+Outbound: xxx to host = xxx port = nnn buffer overflow, size = nnn
 ```
 
-## Parameters
+### Other options
+
+There are other options you can use in the _options_ parameter:
+
+- _retryCount_ - How many times it should retry connection after a failure or -1 for the infinite. Defaults to 0.
+- _retryDelay_ - How long it should wait between connection retries. Defaults to 0.
+- _connectTimeout_ - Timeout while connecting. Defaults to no timeout.
+- _readTimeout_ - Timeout while reading. Defaults to no timeout.
+- _writeTimeout_ - Timeout while writing. Defaults to no timeout.
+
+All options related to time can be either a number in seconds or a string with a unit suffix such as `'s'`, `'m'`, `'h'`, `'d'`.
+
+## Syntax
+
+``` js
+pipy()
+  .pipeline('example')
+    .connect(target)
+
+pipy()
+  .pipeline('example')
+    .connect(
+      () => getTarget()
+    )
+
+pipy()
+  .pipeline('example')
+    .connect(
+      () => getTarget(),
+      {
+        bufferLimit,
+        retryCount,
+        retryDelay,
+        connectTimeout,
+        readTimeout,
+        writeTimeout,
+      }
+    )
+```
+
+### Parameters
 
 <Parameters/>
 
-## Return value
+### Return value
 
 <ReturnValue/>
+
+## Example
+
+``` js
+pipy()
+
+.listen(8000)        // Accept connections via port 8000
+  .dump('>>>')       // Dump all outgoing data
+  .connect(
+    'localhost:8080' // Connect to localhost:8080
+  )
+  .dump('<<<')       // Dump all received data
+```
+
+## See Also
+
+* [Configuration](/reference/api/Configuration)
+* [connectTLS()](/reference/api/Configuration/connectTLS)

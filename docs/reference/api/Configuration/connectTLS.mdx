@@ -3,17 +3,101 @@ title: "Configuration.connectTLS()"
 api: Configuration.connectTLS()
 ---
 
-# Syntax
+## Description
+
+Appends a **connectTLS** filter to the current pipeline layout.
+
+A **connectTLS** filter implements [TLS](https://en.wikipedia.org/wiki/Transport_Layer_Security) protocol on the client side. Its input and output are [Data](/reference/api/Data) streams. Its sub-pipeline's input and output are also _Data_ streams (usually TCP streams).
+
+|          |          |              |          |                |
+|---------:|:--------:|:------------:|:--------:|:--------------:|
+|          | **Data** |              | **Data** |                |
+| _Input_  | →        |              | →        |                |
+|          |          | `connectTLS` |          | `sub-pipeline` |
+| _Output_ | ←        |              | ←        |                |
+|          | **Data** |              | **Data** |                |
+
+A **connectTLS** filter works like this:
+
+- First, it initiates and carries out a TLS handshake with the server via a newly created sub-pipeline
+- After the handshake is done, it goes on reading and encrypting the _Data_ stream from the filter's input and pumping the encrypted _Data_ stream to the sub-pipeline
+- Output from that sub-pipeline is supposed to be the encrypted _Data_ stream received from the server and will be decrypted and sent out via the filter's output
+
+### SNI
+
+As the client side in a TLS communication, you can specify the [SNI](https://en.wikipedia.org/wiki/Server_Name_Indication) server name by option _sni_ in the _options_ parameter. It can be a string or a function that returns a string.
+
+### Mutual TLS
+
+To enable mTLS, give an array of [crypto.Certificate](/reference/api/crypto/Certificate) objects to the _trusted_ option in the _options_ parameter. Only servers holding a certificate presented in that list are allowed in the handshake process.
+
+The _certificate_ option in the _options_ parameter is also required on the client side if mutual TLS is being used. It can be an object with the following properties, or a function that returns that object:
+
+- _cert_ - a [crypto.Certificate](/reference/api/crypto/Certificate) or [crypto.CertificateChain](/reference/api/crypto/CertificateChain)
+- _key_ - a [crypto.PrivateKey](/reference/api/crypto/PrivateKey)
+
+## Syntax
 
 ``` js
-pipy().pipeline('example').connectTLS(target)
-pipy().pipeline('example').connectTLS(target, { ...options })
+pipy()
+  .pipeline('example')
+    .connectTLS(layout)
+
+pipy()
+  .pipeline('example')
+    .connectTLS(
+      layout,
+      {
+        certificate: {
+          cert, // crypto.Certificate or crypto.CertificateChain
+          key,  // crypto.PrivateKey
+        },
+        trusted: [
+          ...trustedCerts // array of crypto.Certificate
+        ],
+        sni: () => getServerName(),
+      }
+    )
 ```
 
-## Parameters
+### Parameters
 
 <Parameters/>
 
-## Return value
+### Return value
 
 <ReturnValue/>
+
+## Example
+
+``` js
+pipy()
+
+// Start a one-shot task
+.task()
+  // Throw together a simple HTTP request: GET /hello
+  .replaceMessage(
+    new Message(
+      {
+        method: 'GET',
+        path: '/hello',
+        headers: {
+          host: 'example.com:443',
+        },
+      }
+    )
+  )
+  .connectTLS('outbound-connection')
+  .print() // Print out the response as plain text
+
+.pipeline('outbound-connection')
+  .connect('example.com:443') // Connect to the target with TCP
+```
+
+## See Also
+
+* [Configuration](/reference/api/Configuration)
+* [acceptTLS()](/reference/api/Configuration/acceptTLS)
+* [crypto.Certificate](/reference/api/crypto/Certificate)
+* [crypto.CertificateChain](/reference/api/crypto/CertificateChain)
+* [crypto.PrivateKey](/reference/api/crypto/PrivateKey)

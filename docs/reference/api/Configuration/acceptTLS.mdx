@@ -3,16 +3,103 @@ title: "Configuration.acceptTLS()"
 api: Configuration.acceptTLS()
 ---
 
-# Syntax
+## Description
+
+Appends an **acceptTLS** filter to the current pipeline layout.
+
+An **acceptTLS** filter implements [TLS](https://en.wikipedia.org/wiki/Transport_Layer_Security) protocol on the server side. Its input and output are [Data](/reference/api/Data) streams (usually TCP streams). Its sub-pipeline's input and output are also _Data_ streams.
+
+|          |          |             |          |                |
+|---------:|:--------:|:-----------:|:--------:|:--------------:|
+|          | **Data** |             | **Data** |                |
+| _Input_  | →        |             | →        |                |
+|          |          | `acceptTLS` |          | `sub-pipeline` |
+| _Output_ | ←        |             | ←        |                |
+|          | **Data** |             | **Data** |                |
+
+An **acceptTLS** filter works like this:
+
+- First, it handles a TLS handshake by reading handshake messages from the client via its input and sending messages back to the client via its output
+- After the handshake is done, it goes on reading and decrypting the _Data_ stream from the filter's input and pumping the decrypted _Data_ stream to a newly created sub-pipeline
+- Output from that sub-pipeline will be encrypted and sent back to the client via the filter's output
+
+### Certificate and private key
+
+The _certificate_ option in the _options_ parameter is required for this filter. It can be an object with two properties:
+
+- _cert_ - a [crypto.Certificate](/reference/api/crypto/Certificate) or [crypto.CertificateChain](/reference/api/crypto/CertificateChain)
+- _key_ - a [crypto.PrivateKey](/reference/api/crypto/PrivateKey)
+
+It can also be a function that returns the above object. In this case, the function will have a _serverName_ parameter as its input, by which you get to provide different certificates for different [SNI](https://en.wikipedia.org/wiki/Server_Name_Indication) names.
+
+### Mutual TLS
+
+To enable mTLS, give an array of [crypto.Certificate](/reference/api/crypto/Certificate) objects to the _trusted_ option in the _options_ parameter. Only clients holding a certificate presented in that list are allowed in the handshake process.
+
+## Syntax
 
 ``` js
-pipy().pipeline('example').acceptTLS(target, { ...options })
+pipy()
+  .pipeline('example')
+    .acceptTLS(
+      layout,
+      {
+        certificate: {
+          cert, // crypto.Certificate or crypto.CertificateChain
+          key,  // crypto.PrivateKey
+        },
+        trusted: [
+          ...trustedCerts // array of crypto.Certificate
+        ],
+      }
+    )
+
+pipy()
+  .pipeline('example')
+    .acceptTLS(
+      layout,
+      {
+        // whatCert should return { cert, key } as above
+        certificate: serverName => whatCert(serverName),
+      }
+    )
 ```
 
-## Parameters
+### Parameters
 
 <Parameters/>
 
-## Return value
+### Return value
 
 <ReturnValue/>
+
+## Example
+
+``` js
+pipy()
+
+.listen(8443)
+  .acceptTLS(
+    'tls-offloaded',
+    {
+      certificate: {
+        // Suppose we have server-cert.pem and server-key.pem in 'secret' folder
+        cert: new crypto.Certificate(pipy.load('secret/server-cert.pem')),
+        key: new crypto.Certificate(pipy.load('secret/server-key.pem')),
+      }
+    }
+  )
+
+.pipeline('tls-offload')
+  .serveHTTP(
+    new Message('Hello, TLS!\n')
+  )
+```
+
+## See Also
+
+* [Configuration](/reference/api/Configuration)
+* [connectTLS()](/reference/api/Configuration/connectTLS)
+* [crypto.Certificate](/reference/api/crypto/Certificate)
+* [crypto.CertificateChain](/reference/api/crypto/CertificateChain)
+* [crypto.PrivateKey](/reference/api/crypto/PrivateKey)
