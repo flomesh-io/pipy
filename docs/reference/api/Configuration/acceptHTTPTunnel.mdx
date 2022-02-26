@@ -1,0 +1,71 @@
+---
+title: "Configuration.acceptHTTPTunnel()"
+api: Configuration.acceptHTTPTunnel()
+---
+
+## Description
+
+Appends an **acceptHTTPTunnel** filter to the current pipeline layout.
+
+An **acceptHTTPTunnel** filter implements [HTTP tunnel](https://en.wikipedia.org/wiki/HTTP_tunnel) on the server side. Its input and output are [Messages](/reference/api/Message) at the beginning and switch to [Data](/reference/api/Data) after the tunnel is established. Its sub-pipeline's input and output are _Data_ streams.
+
+|          |             |               |          |                |
+|---------:|:-----------:|:-------------:|:--------:|:--------------:|
+|          | **Message** |               |          |                |
+|          | **+ Data**  |               | **Data** |                |
+| _Input_  | →           |               | →        |                |
+|          |             | `acceptSOCKS` |          | `sub-pipeline` |
+| _Output_ | ←           |               | ←        |                |
+|          | **Message** |               | **Data** |                |
+|          | **+ Data**  |               |          |                |
+
+An **acceptHTTPTunnel** filter calls back a user handler for each input _Message_ (expected to be an HTTP request) and outputs the _Message_ returned as response. When the request is a [CONNECT](https://developer.mozilla.org/docs/Web/HTTP/Methods/CONNECT) request, a sub-pipeline will be created to establish an _HTTP tunnel_ and _Data_ streams after that initial request and response are sent back and forth between the **acceptHTTPTunnel** filter and the sub-pipeline.
+
+## Syntax
+
+``` js
+pipy()
+  .pipeline('example')
+    .acceptHTTPTunnel(
+      layout,
+      request => getResponse(request)
+    )
+```
+
+### Parameters
+
+<Parameters/>
+
+### Return value
+
+<ReturnValue/>
+
+## Example
+
+``` js
+pipy({
+  _target: '',
+})
+
+.listen(8080)
+  .demuxHTTP('req')
+
+.pipeline('req')
+  .acceptHTTPTunnel(
+    'tunnel',
+    msg => (
+      _target = msg.head.path, // Extracts the target from the URI
+      new Message('OK')
+    )
+  )
+
+.pipeline('tunnel')
+  .connect(
+    () => _target
+  )
+```
+
+## See Also
+
+* [Configuration](/reference/api/Configuration)
+* [connectHTTPTunnel()](/reference/api/Configuration/connectHTTPTunnel)

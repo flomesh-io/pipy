@@ -124,6 +124,7 @@ class Configuration {
    *
    * @param {string} layout Name of the pipeline layout based on which a sub-pipeline is created for the tunnel.
    * @param {string | StringCB} target Target endpoint to connect to, in form of "host:port".
+   * @returns {Configuration} The same Configuration object.
    */
   connectHTTPTunnel(layout, target) {}
 

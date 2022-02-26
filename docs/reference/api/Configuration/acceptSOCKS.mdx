@@ -17,7 +17,7 @@ An **acceptSOCKS** filter implements [SOCKS](https://en.wikipedia.org/wiki/SOCKS
 | _Output_ | ←        |               | ←        |                |
 |          | **Data** |               | **Data** |                |
 
-An **acceptSOCKS** filter decodes the connection request from its input stream, and calls back to a user function with the connection parameters including:
+An **acceptSOCKS** filter decodes the connection request from its input stream, and calls back a user function with the connection parameters including:
 
 - _host_ - Destination address, could be an IPv4 address or a domain name
 - _port_ - Destination port number
