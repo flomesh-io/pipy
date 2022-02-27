@@ -575,7 +575,7 @@ public:
       auto n = 0;
       auto br = false;
       for (; n < size; n++) {
-        if (f(data[head + n])) {
+        if (!f(data[head + n])) {
           br = true;
           break;
         }
