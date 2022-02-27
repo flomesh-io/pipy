@@ -172,6 +172,8 @@ private:
 
   virtual void dump(const std::function<void(pjs::Str*, pjs::Str*, double)> &out) override;
 
+  pjs::Ref<Histogram> m_root;
+  pjs::Ref<pjs::Array> m_buckets;
   pjs::Ref<algo::Percentile> m_percentile;
   std::vector<pjs::Ref<pjs::Str>> m_labels;
 

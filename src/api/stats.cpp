@@ -250,6 +250,7 @@ void Gauge::decrease(double n) {
 Histogram::Histogram(pjs::Str *name, pjs::Array *buckets, pjs::Array *label_names)
   : MetricTemplate<Histogram>(name, label_names)
 {
+  m_buckets = buckets;
   m_percentile = algo::Percentile::make(buckets);
   m_labels.resize(buckets->length());
   int i = 0;
@@ -263,6 +264,10 @@ Histogram::Histogram(pjs::Str *name, pjs::Array *buckets, pjs::Array *label_name
 Histogram::Histogram(Metric *parent, pjs::Str **labels)
   : MetricTemplate<Histogram>(parent, labels)
 {
+  auto root = static_cast<Histogram*>(parent);
+  if (auto *r = root->m_root.get()) root = r;
+  m_root = root;
+  m_percentile = algo::Percentile::make(root->m_buckets);
 }
 
 void Histogram::zero() {
@@ -279,7 +284,8 @@ void Histogram::dump(const std::function<void(pjs::Str*, pjs::Str*, double)> &ou
   int i = 0;
   m_percentile->dump(
     [&](double, double count) {
-      out(pjs::Str::empty, m_labels[i++], count);
+      const auto &labels = m_root ? m_root->m_labels : m_labels;
+      out(pjs::Str::empty, labels[i++], count);
     }
   );
 }
