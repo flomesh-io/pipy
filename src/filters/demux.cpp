@@ -41,6 +41,7 @@ void QueueDemuxer::reset() {
     delete stream;
   }
   m_isolated = false;
+  m_shutdown = false;
 }
 
 void QueueDemuxer::isolate() {
@@ -51,6 +52,14 @@ void QueueDemuxer::isolate() {
   }
   stream->m_isolated = true;
   m_isolated = true;
+}
+
+void QueueDemuxer::shutdown() {
+  if (m_streams.empty()) {
+    output(StreamEnd::make());
+  } else {
+    m_shutdown = true;
+  }
 }
 
 void QueueDemuxer::on_event(Event *evt) {
@@ -103,6 +112,9 @@ void QueueDemuxer::flush() {
       streams.remove(stream);
       output(MessageEnd::make());
       delete stream;
+      if (m_shutdown && streams.empty()) {
+        output(StreamEnd::make());
+      }
     } else {
       break;
     }
@@ -219,6 +231,11 @@ void Demux::reset() {
 
 void Demux::process(Event *evt) {
   Filter::output(evt, QueueDemuxer::input());
+}
+
+void Demux::shutdown() {
+  Filter::shutdown();
+  QueueDemuxer::shutdown();
 }
 
 auto Demux::on_new_sub_pipeline() -> Pipeline* {

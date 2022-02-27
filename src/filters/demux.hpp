@@ -41,6 +41,7 @@ class QueueDemuxer : public EventFunction {
 public:
   void reset();
   void isolate();
+  void shutdown();
 
 protected:
   virtual auto on_new_sub_pipeline() -> Pipeline* = 0;
@@ -50,6 +51,7 @@ private:
 
   List<Stream> m_streams;
   bool m_isolated = false;
+  bool m_shutdown = false;
 
   void on_event(Event *evt) override;
   void flush();
@@ -101,6 +103,7 @@ private:
   virtual void chain() override;
   virtual void reset() override;
   virtual void process(Event *evt) override;
+  virtual void shutdown() override;
   virtual void dump(std::ostream &out) override;
 
   virtual auto on_new_sub_pipeline() -> Pipeline* override;
