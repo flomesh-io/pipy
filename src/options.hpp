@@ -51,6 +51,7 @@ public:
   bool        reuse_port = false;
   int         admin_port = 0;
   Log::Level  log_level = Log::ERROR;
+  std::string openssl_engine;
 
   pjs::Ref<crypto::Certificate> admin_tls_cert;
   pjs::Ref<crypto::PrivateKey>  admin_tls_key;

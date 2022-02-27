@@ -27,6 +27,7 @@
 
 #include "admin-service.hpp"
 #include "admin-proxy.hpp"
+#include "api/crypto.hpp"
 #include "codebase.hpp"
 #include "filters/tls.hpp"
 #include "listener.hpp"
@@ -45,7 +46,6 @@
 #include <tuple>
 
 #include <openssl/opensslv.h>
-#include <openssl/ssl.h>
 
 using namespace pipy;
 
@@ -146,12 +146,6 @@ int main(int argc, char *argv[]) {
   utils::gen_uuid_v4(Status::local.uuid);
   Status::local.timestamp = utils::now();
 
-  SSL_load_error_strings();
-  SSL_library_init();
-  OpenSSL_add_all_algorithms();
-
-  tls::TLSSession::init();
-
   try {
     Options opts(argc, argv);
 
@@ -168,6 +162,8 @@ int main(int argc, char *argv[]) {
     Log::set_level(opts.log_level);
     Status::register_metrics();
     Listener::set_reuse_port(opts.reuse_port);
+    crypto::Crypto::init(opts.openssl_engine);
+    tls::TLSSession::init();
 
     AdminService::Options admin_options;
     admin_options.cert = opts.admin_tls_cert;
@@ -327,6 +323,8 @@ int main(int argc, char *argv[]) {
     delete repo;
 
     if (store) store->close();
+
+    crypto::Crypto::free();
 
     std::cout << "Done." << std::endl;
 

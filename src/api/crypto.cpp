@@ -29,6 +29,7 @@
 
 #include <openssl/bio.h>
 #include <openssl/bn.h>
+#include <openssl/engine.h>
 #include <openssl/err.h>
 #include <openssl/evp.h>
 #include <openssl/hmac.h>
@@ -52,6 +53,44 @@ static void throw_error() {
   auto err = ERR_get_error();
   ERR_error_string(err, str);
   throw std::runtime_error(str);
+}
+
+//
+// Crypto
+//
+
+static ENGINE* s_openssl_engine = nullptr;
+
+auto Crypto::get_openssl_engine() -> ENGINE* {
+  return s_openssl_engine;
+}
+
+void Crypto::init(const std::string &engine_id) {
+  if (!engine_id.empty()) {
+    ENGINE_load_builtin_engines();
+
+    s_openssl_engine = ENGINE_by_id(engine_id.c_str());
+    if (!s_openssl_engine) {
+      std::string msg("cannot find OpenSSL engine: ");
+      throw std::runtime_error(msg + engine_id);
+    }
+
+    if (!ENGINE_init(s_openssl_engine)) {
+      std::string msg("cannot initialize OpenSSL engine: ");
+      throw std::runtime_error(msg + engine_id);
+    }
+
+    ENGINE_set_default_ciphers(s_openssl_engine);
+  }
+
+  OpenSSL_add_all_algorithms();
+}
+
+void Crypto::free() {
+  if (s_openssl_engine) {
+    ENGINE_finish(s_openssl_engine);
+    ENGINE_free(s_openssl_engine);
+  }
 }
 
 //
@@ -144,13 +183,21 @@ static auto get_cipher_iv(const EVP_CIPHER *cipher, pjs::Object *options, uint8_
 //
 
 PublicKey::PublicKey(Data *data, pjs::Object *options) {
-  auto buf = data->to_bytes();
-  m_pkey = read_pem(&buf[0], buf.size());
+  if (s_openssl_engine) {
+    m_pkey = load_by_engine(data->to_string());
+  } else {
+    auto buf = data->to_bytes();
+    m_pkey = read_pem(&buf[0], buf.size());
+  }
   set_pkey_options(m_pkey, options);
 }
 
 PublicKey::PublicKey(pjs::Str *data, pjs::Object *options) {
-  m_pkey = read_pem(data->c_str(), data->size());
+  if (s_openssl_engine) {
+    m_pkey = load_by_engine(data->str());
+  } else {
+    m_pkey = read_pem(data->c_str(), data->size());
+  }
   set_pkey_options(m_pkey, options);
 }
 
@@ -166,18 +213,36 @@ auto PublicKey::read_pem(const void *data, size_t size) -> EVP_PKEY* {
   return pkey;
 }
 
+auto PublicKey::load_by_engine(const std::string &id) -> EVP_PKEY* {
+  auto pkey = ENGINE_load_public_key(s_openssl_engine, id.c_str(), nullptr, nullptr);
+  if (!pkey) {
+    std::string msg("cannot load public key from OpenSSL engine: ");
+    throw std::runtime_error(msg + id);
+  }
+  EVP_PKEY_set1_engine(pkey, s_openssl_engine);
+  return pkey;
+}
+
 //
 // PrivateKey
 //
 
 PrivateKey::PrivateKey(Data *data, pjs::Object *options) {
-  auto buf = data->to_bytes();
-  m_pkey = read_pem(&buf[0], buf.size());
+  if (s_openssl_engine) {
+    m_pkey = load_by_engine(data->to_string());
+  } else {
+    auto buf = data->to_bytes();
+    m_pkey = read_pem(&buf[0], buf.size());
+  }
   set_pkey_options(m_pkey, options);
 }
 
 PrivateKey::PrivateKey(pjs::Str *data, pjs::Object *options) {
-  m_pkey = read_pem(data->c_str(), data->size());
+  if (s_openssl_engine) {
+    m_pkey = load_by_engine(data->str());
+  } else {
+    m_pkey = read_pem(data->c_str(), data->size());
+  }
   set_pkey_options(m_pkey, options);
 }
 
@@ -190,6 +255,16 @@ auto PrivateKey::read_pem(const void *data, size_t size) -> EVP_PKEY* {
   auto pkey = PEM_read_bio_PrivateKey(bio, nullptr, nullptr, nullptr);
   BIO_free(bio);
   if (!pkey) throw_error();
+  return pkey;
+}
+
+auto PrivateKey::load_by_engine(const std::string &id) -> EVP_PKEY* {
+  auto pkey = ENGINE_load_private_key(s_openssl_engine, id.c_str(), nullptr, nullptr);
+  if (!pkey) {
+    std::string msg("cannot load private key from OpenSSL engine: ");
+    throw std::runtime_error(msg + id);
+  }
+  EVP_PKEY_set1_engine(pkey, s_openssl_engine);
   return pkey;
 }
 
@@ -284,23 +359,20 @@ auto CertificateChain::read_pem(const void *data, size_t size) -> X509* {
 // Cipher
 //
 
-auto Cipher::cipher(Algorithm algorithm) -> const EVP_CIPHER* {
-  switch (algorithm) {
-    case Algorithm::sm4_cbc    : return EVP_sm4_cbc();
-    case Algorithm::sm4_ecb    : return EVP_sm4_ecb();
-    case Algorithm::sm4_cfb    : return EVP_sm4_cfb();
-    case Algorithm::sm4_cfb128 : return EVP_sm4_cfb128();
-    case Algorithm::sm4_ofb    : return EVP_sm4_ofb();
-    case Algorithm::sm4_ctr    : return EVP_sm4_ctr();
+auto Cipher::cipher(const std::string &algorithm) -> const EVP_CIPHER* {
+  auto cipher = EVP_get_cipherbyname(algorithm.c_str());
+  if (!cipher) {
+    std::string msg("Unknown cipher: ");
+    throw std::runtime_error(msg + algorithm);
   }
-  return nullptr;
+  return cipher;
 }
 
-Cipher::Cipher(Algorithm algorithm, pjs::Object *options) {
+Cipher::Cipher(const std::string &algorithm, pjs::Object *options) {
   uint8_t key[EVP_MAX_KEY_LENGTH];
   uint8_t iv[EVP_MAX_IV_LENGTH];
 
-  auto *cipher = Cipher::cipher(algorithm);
+  auto cipher = Cipher::cipher(algorithm);
 
   get_cipher_key(cipher, options, key);
   get_cipher_iv(cipher, options, iv);
@@ -363,11 +435,11 @@ auto Cipher::final() -> Data* {
 // Decipher
 //
 
-Decipher::Decipher(Cipher::Algorithm algorithm, pjs::Object *options) {
+Decipher::Decipher(const std::string &algorithm, pjs::Object *options) {
   uint8_t key[EVP_MAX_KEY_LENGTH];
   uint8_t iv[EVP_MAX_IV_LENGTH];
 
-  auto *cipher = Cipher::cipher(algorithm);
+  auto cipher = Cipher::cipher(algorithm);
 
   get_cipher_key(cipher, options, key);
   get_cipher_iv(cipher, options, iv);
@@ -430,35 +502,16 @@ auto Decipher::final() -> Data* {
 // Hash
 //
 
-auto Hash::digest(Algorithm algorithm) -> const EVP_MD* {
-  switch (algorithm) {
-    case Algorithm::md4        : return EVP_md4       ();
-    case Algorithm::md5        : return EVP_md5       ();
-    case Algorithm::md5_sha1   : return EVP_md5_sha1  ();
-    case Algorithm::blake2b512 : return EVP_blake2b512();
-    case Algorithm::blake2s256 : return EVP_blake2s256();
-    case Algorithm::sha1       : return EVP_sha1      ();
-    case Algorithm::sha224     : return EVP_sha224    ();
-    case Algorithm::sha256     : return EVP_sha256    ();
-    case Algorithm::sha384     : return EVP_sha384    ();
-    case Algorithm::sha512     : return EVP_sha512    ();
-    case Algorithm::sha512_224 : return EVP_sha512_224();
-    case Algorithm::sha512_256 : return EVP_sha512_256();
-    case Algorithm::sha3_224   : return EVP_sha3_224  ();
-    case Algorithm::sha3_256   : return EVP_sha3_256  ();
-    case Algorithm::sha3_384   : return EVP_sha3_384  ();
-    case Algorithm::sha3_512   : return EVP_sha3_512  ();
-    case Algorithm::shake128   : return EVP_shake128  ();
-    case Algorithm::shake256   : return EVP_shake256  ();
-    case Algorithm::mdc2       : return EVP_mdc2      ();
-    case Algorithm::ripemd160  : return EVP_ripemd160 ();
-    case Algorithm::whirlpool  : return EVP_whirlpool ();
-    case Algorithm::sm3        : return EVP_sm3       ();
+auto Hash::digest(const std::string &algorithm) -> const EVP_MD* {
+  auto md = EVP_get_digestbyname(algorithm.c_str());
+  if (!md) {
+    std::string msg("Unknown algorithm: ");
+    throw std::runtime_error(msg + algorithm);
   }
-  return nullptr;
+  return md;
 }
 
-Hash::Hash(Algorithm algorithm) {
+Hash::Hash(const std::string &algorithm) {
   m_ctx = EVP_MD_CTX_new();
   EVP_DigestInit_ex(m_ctx, digest(algorithm), nullptr);
 }
@@ -525,13 +578,13 @@ auto Hash::digest(Data::Encoding enc) -> pjs::Str* {
 // Hmac
 //
 
-Hmac::Hmac(Hash::Algorithm algorithm, Data *key) {
+Hmac::Hmac(const std::string &algorithm, Data *key) {
   m_ctx = HMAC_CTX_new();
   auto buf = key->to_bytes();
   HMAC_Init_ex(m_ctx, &buf[0], buf.size(), Hash::digest(algorithm), nullptr);
 }
 
-Hmac::Hmac(Hash::Algorithm algorithm, pjs::Str *key) {
+Hmac::Hmac(const std::string &algorithm, pjs::Str *key) {
   m_ctx = HMAC_CTX_new();
   HMAC_Init_ex(m_ctx, key->c_str(), key->size(), Hash::digest(algorithm), nullptr);
 }
@@ -598,7 +651,7 @@ auto Hmac::digest(Data::Encoding enc) -> pjs::Str* {
 // Sign
 //
 
-Sign::Sign(Hash::Algorithm algorithm) {
+Sign::Sign(const std::string &algorithm) {
   m_md = Hash::digest(algorithm);
   m_ctx = EVP_MD_CTX_new();
   if (!m_ctx) throw_error();
@@ -661,7 +714,7 @@ auto Sign::sign(PrivateKey *key, Data::Encoding enc, Object *options) -> pjs::St
 // Verify
 //
 
-Verify::Verify(Hash::Algorithm algorithm) {
+Verify::Verify(const std::string &algorithm) {
   m_md = Hash::digest(algorithm);
   m_ctx = EVP_MD_CTX_new();
   if (!m_ctx) throw_error();
@@ -1135,31 +1188,17 @@ template<> void ClassDef<Constructor<CertificateChain>>::init() {
 // Cipher
 //
 
-template<> void EnumDef<Cipher::Algorithm>::init() {
-  define(Cipher::Algorithm::sm4_cbc, "sm4-cbc");
-  define(Cipher::Algorithm::sm4_ecb, "sm4-ecb");
-  define(Cipher::Algorithm::sm4_cfb, "sm4-cfb");
-  define(Cipher::Algorithm::sm4_cfb128, "sm4-cfb128");
-  define(Cipher::Algorithm::sm4_ofb, "sm4-ofb");
-  define(Cipher::Algorithm::sm4_ctr, "sm4-ctr");
-}
-
 template<> void ClassDef<Cipher>::init() {
   ctor([](Context &ctx) -> Object* {
-    Str *algorithm_name;
+    Str *algorithm;
     Object *options;
-    if (!ctx.arguments(2, &algorithm_name, &options)) return nullptr;
+    if (!ctx.arguments(2, &algorithm, &options)) return nullptr;
     if (!options) {
       ctx.error("options cannot be null");
       return nullptr;
     }
-    auto algorithm = EnumDef<Cipher::Algorithm>::value(algorithm_name);
-    if (int(algorithm) < 0) {
-      ctx.error("unknown cipher");
-      return nullptr;
-    }
     try {
-      return Cipher::make(algorithm, options);
+      return Cipher::make(algorithm->str(), options);
     } catch (std::runtime_error &err) {
       ctx.error(err);
       return nullptr;
@@ -1202,20 +1241,15 @@ template<> void ClassDef<Constructor<Cipher>>::init() {
 
 template<> void ClassDef<Decipher>::init() {
   ctor([](Context &ctx) -> Object* {
-    Str *algorithm_name;
+    Str *algorithm;
     Object *options;
-    if (!ctx.arguments(2, &algorithm_name, &options)) return nullptr;
+    if (!ctx.arguments(2, &algorithm, &options)) return nullptr;
     if (!options) {
       ctx.error("options cannot be null");
       return nullptr;
     }
-    auto algorithm = EnumDef<Cipher::Algorithm>::value(algorithm_name);
-    if (int(algorithm) < 0) {
-      ctx.error("unknown cipher");
-      return nullptr;
-    }
     try {
-      return Decipher::make(algorithm, options);
+      return Decipher::make(algorithm->str(), options);
     } catch (std::runtime_error &err) {
       ctx.error(err);
       return nullptr;
@@ -1256,41 +1290,11 @@ template<> void ClassDef<Constructor<Decipher>>::init() {
 // Hash
 //
 
-template<> void EnumDef<Hash::Algorithm>::init() {
-  define(Hash::Algorithm::md4       , "md4");
-  define(Hash::Algorithm::md5       , "md5");
-  define(Hash::Algorithm::md5_sha1  , "md5-sha1");
-  define(Hash::Algorithm::blake2b512, "blake2b512");
-  define(Hash::Algorithm::blake2s256, "blake2s256");
-  define(Hash::Algorithm::sha1      , "sha1");
-  define(Hash::Algorithm::sha224    , "sha224");
-  define(Hash::Algorithm::sha256    , "sha256");
-  define(Hash::Algorithm::sha384    , "sha384");
-  define(Hash::Algorithm::sha512    , "sha512");
-  define(Hash::Algorithm::sha512_224, "sha512-224");
-  define(Hash::Algorithm::sha512_256, "sha512-256");
-  define(Hash::Algorithm::sha3_224  , "sha3-224");
-  define(Hash::Algorithm::sha3_256  , "sha3-256");
-  define(Hash::Algorithm::sha3_384  , "sha3-384");
-  define(Hash::Algorithm::sha3_512  , "sha3-512");
-  define(Hash::Algorithm::shake128  , "shake128");
-  define(Hash::Algorithm::shake256  , "shake256");
-  define(Hash::Algorithm::mdc2      , "mdc2");
-  define(Hash::Algorithm::ripemd160 , "ripemd160");
-  define(Hash::Algorithm::whirlpool , "whirlpool");
-  define(Hash::Algorithm::sm3       , "sm3");
-}
-
 template<> void ClassDef<Hash>::init() {
   ctor([](Context &ctx) -> Object* {
-    Str *algorithm_name;
-    if (!ctx.arguments(1, &algorithm_name)) return nullptr;
-    auto algorithm = EnumDef<Hash::Algorithm>::value(algorithm_name);
-    if (int(algorithm) < 0) {
-      ctx.error("unknown message digest");
-      return nullptr;
-    }
-    return Hash::make(algorithm);
+    Str *algorithm;
+    if (!ctx.arguments(1, &algorithm)) return nullptr;
+    return Hash::make(algorithm->str());
   });
 
   method("update", [](Context &ctx, Object *obj, Value &ret) {
@@ -1338,20 +1342,15 @@ template<> void ClassDef<Constructor<Hash>>::init() {
 
 template<> void ClassDef<Hmac>::init() {
   ctor([](Context &ctx) -> Object* {
-    Str *algorithm_name, *key_str = nullptr;
+    Str *algorithm, *key_str = nullptr;
     pipy::Data *key = nullptr;
-    if (ctx.try_arguments(2, &algorithm_name, &key) ||
-        ctx.try_arguments(2, &algorithm_name, &key_str))
+    if (ctx.try_arguments(2, &algorithm, &key) ||
+        ctx.try_arguments(2, &algorithm, &key_str))
     {
-      auto algorithm = EnumDef<Hash::Algorithm>::value(algorithm_name);
-      if (int(algorithm) < 0) {
-        ctx.error("unknown message digest");
-        return nullptr;
-      }
       if (key) {
-        return Hmac::make(algorithm, key);
+        return Hmac::make(algorithm->str(), key);
       } else if (key_str) {
-        return Hmac::make(algorithm, key_str);
+        return Hmac::make(algorithm->str(), key_str);
       } else {
         ctx.error_argument_type(1, "a Data object or a string");
       }
@@ -1404,15 +1403,10 @@ template<> void ClassDef<Constructor<Hmac>>::init() {
 
 template<> void ClassDef<Sign>::init() {
   ctor([](Context &ctx) -> Object* {
-    Str *algorithm_name;
-    if (!ctx.arguments(1, &algorithm_name)) return nullptr;
-    auto algorithm = EnumDef<Hash::Algorithm>::value(algorithm_name);
-    if (int(algorithm) < 0) {
-      ctx.error("unknown message digest");
-      return nullptr;
-    }
+    Str *algorithm;
+    if (!ctx.arguments(1, &algorithm)) return nullptr;
     try {
-      return Sign::make(algorithm);
+      return Sign::make(algorithm->str());
     } catch (std::runtime_error &err) {
       ctx.error(err);
       return nullptr;
@@ -1486,15 +1480,10 @@ template<> void ClassDef<Constructor<Sign>>::init() {
 
 template<> void ClassDef<Verify>::init() {
   ctor([](Context &ctx) -> Object* {
-    Str *algorithm_name;
-    if (!ctx.arguments(1, &algorithm_name)) return nullptr;
-    auto algorithm = EnumDef<Hash::Algorithm>::value(algorithm_name);
-    if (int(algorithm) < 0) {
-      ctx.error("unknown message digest");
-      return nullptr;
-    }
+    Str *algorithm;
+    if (!ctx.arguments(1, &algorithm)) return nullptr;
     try {
-      return Verify::make(algorithm);
+      return Verify::make(algorithm->str());
     } catch (std::runtime_error &err) {
       ctx.error(err);
       return nullptr;

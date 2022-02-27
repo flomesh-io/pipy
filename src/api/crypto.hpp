@@ -58,6 +58,7 @@ private:
   EVP_PKEY* m_pkey = nullptr;
 
   static auto read_pem(const void *data, size_t size) -> EVP_PKEY*;
+  static auto load_by_engine(const std::string &id) -> EVP_PKEY*;
 
   friend class pjs::ObjectTemplate<PublicKey>;
 };
@@ -78,6 +79,7 @@ private:
   EVP_PKEY* m_pkey = nullptr;
 
   static auto read_pem(const void *data, size_t size) -> EVP_PKEY*;
+  static auto load_by_engine(const std::string &id) -> EVP_PKEY*;
 
   friend class pjs::ObjectTemplate<PrivateKey>;
 };
@@ -131,23 +133,14 @@ private:
 
 class Cipher : public pjs::ObjectTemplate<Cipher> {
 public:
-  enum class Algorithm {
-    sm4_cbc,
-    sm4_ecb,
-    sm4_cfb,
-    sm4_cfb128,
-    sm4_ofb,
-    sm4_ctr,
-  };
-
-  static auto cipher(Algorithm algorithm) -> const EVP_CIPHER*;
+  static auto cipher(const std::string &algorithm) -> const EVP_CIPHER*;
 
   auto update(Data *data) -> Data*;
   auto update(pjs::Str *str) -> Data*;
   auto final() -> Data*;
 
 private:
-  Cipher(Algorithm algorithm, pjs::Object *options);
+  Cipher(const std::string &algorithm, pjs::Object *options);
   ~Cipher();
 
   EVP_CIPHER_CTX* m_ctx = nullptr;
@@ -166,7 +159,7 @@ public:
   auto final() -> Data*;
 
 private:
-  Decipher(Cipher::Algorithm algorithm, pjs::Object *options);
+  Decipher(const std::string &algorithm, pjs::Object *options);
   ~Decipher();
 
   EVP_CIPHER_CTX* m_ctx = nullptr;
@@ -180,32 +173,7 @@ private:
 
 class Hash : public pjs::ObjectTemplate<Hash> {
 public:
-  enum class Algorithm {
-    md4,
-    md5,
-    md5_sha1,
-    blake2b512,
-    blake2s256,
-    sha1,
-    sha224,
-    sha256,
-    sha384,
-    sha512,
-    sha512_224,
-    sha512_256,
-    sha3_224,
-    sha3_256,
-    sha3_384,
-    sha3_512,
-    shake128,
-    shake256,
-    mdc2,
-    ripemd160,
-    whirlpool,
-    sm3,
-  };
-
-  static auto digest(Algorithm algorithm) -> const EVP_MD*;
+  static auto digest(const std::string &algorithm) -> const EVP_MD*;
 
   void update(Data *data);
   void update(pjs::Str *str, Data::Encoding enc);
@@ -213,7 +181,7 @@ public:
   auto digest(Data::Encoding enc) -> pjs::Str*;
 
 private:
-  Hash(Algorithm algorithm);
+  Hash(const std::string &algorithm);
   ~Hash();
 
   EVP_MD_CTX* m_ctx = nullptr;
@@ -233,8 +201,8 @@ public:
   auto digest(Data::Encoding enc) -> pjs::Str*;
 
 private:
-  Hmac(Hash::Algorithm algorithm, Data *key);
-  Hmac(Hash::Algorithm algorithm, pjs::Str *key);
+  Hmac(const std::string &algorithm, Data *key);
+  Hmac(const std::string &algorithm, pjs::Str *key);
   ~Hmac();
 
   HMAC_CTX* m_ctx = nullptr;
@@ -254,7 +222,7 @@ public:
   auto sign(PrivateKey *key, Data::Encoding enc, Object *options = nullptr) -> pjs::Str*;
 
 private:
-  Sign(Hash::Algorithm algorithm);
+  Sign(const std::string &algorithm);
   ~Sign();
 
   const EVP_MD* m_md = nullptr;
@@ -275,7 +243,7 @@ public:
   bool verify(PublicKey *key, pjs::Str *signature, Data::Encoding enc, Object *options = nullptr);
 
 private:
-  Verify(Hash::Algorithm algorithm);
+  Verify(const std::string &algorithm);
   ~Verify();
 
   const EVP_MD* m_md = nullptr;
@@ -354,8 +322,11 @@ private:
 // Crypto
 //
 
-class Crypto : public pjs::ObjectTemplate<Crypto>
-{
+class Crypto : public pjs::ObjectTemplate<Crypto> {
+public:
+  static auto get_openssl_engine() -> ENGINE*;
+  static void init(const std::string &engine_id);
+  static void free();
 };
 
 } // namespace crypto

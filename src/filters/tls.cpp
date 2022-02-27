@@ -96,6 +96,9 @@ auto TLSContext::on_server_name(SSL *ssl, int*, void *thiz) -> int {
 int TLSSession::s_user_data_index = 0;
 
 void TLSSession::init() {
+  SSL_load_error_strings();
+  SSL_library_init();
+
   s_user_data_index = SSL_get_ex_new_index(0, nullptr, nullptr, nullptr, nullptr);
 }
 
