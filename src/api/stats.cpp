@@ -280,11 +280,23 @@ void Histogram::observe(double n) {
   m_percentile->observe(n);
 }
 
-void Histogram::dump(const std::function<void(pjs::Str*, pjs::Str*, double)> &out) {
+void Histogram::value_of(pjs::Value &out) {
+  const auto &labels = m_root ? m_root->m_labels : m_labels;
+  auto *a = pjs::Array::make(labels.size());
   int i = 0;
   m_percentile->dump(
     [&](double, double count) {
-      const auto &labels = m_root ? m_root->m_labels : m_labels;
+      a->set(i++, count);
+    }
+  );
+  out.set(a);
+}
+
+void Histogram::dump(const std::function<void(pjs::Str*, pjs::Str*, double)> &out) {
+  const auto &labels = m_root ? m_root->m_labels : m_labels;
+  int i = 0;
+  m_percentile->dump(
+    [&](double, double count) {
       out(pjs::Str::empty, labels[i++], count);
     }
   );

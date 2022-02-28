@@ -112,10 +112,15 @@ class Counter : public MetricTemplate<Counter> {
 public:
   void zero();
   void increase(double n = 1);
+  auto value() const -> double { return m_value; }
 
 private:
   Counter(pjs::Str *name, pjs::Array *label_names);
   Counter(Metric *parent, pjs::Str **labels);
+
+  virtual void value_of(pjs::Value &out) override {
+    out.set(m_value);
+  }
 
   virtual void dump(const std::function<void(pjs::Str*, pjs::Str*, double)> &out) override {
     out(nullptr, nullptr, m_value);
@@ -136,10 +141,15 @@ public:
   void set(double n);
   void increase(double n = 1);
   void decrease(double n = 1);
+  auto value() const -> double { return m_value; }
 
 private:
   Gauge(pjs::Str *name, pjs::Array *label_names, const std::function<void(Gauge*)> &on_collect = nullptr);
   Gauge(Metric *parent, pjs::Str **labels);
+
+  virtual void value_of(pjs::Value &out) override {
+    out.set(m_value);
+  }
 
   virtual void dump(const std::function<void(pjs::Str*, pjs::Str*, double)> &out) override {
     out(nullptr, 0, m_value);
@@ -170,6 +180,7 @@ private:
   Histogram(pjs::Str *name, pjs::Array *buckets, pjs::Array *label_names);
   Histogram(Metric *parent, pjs::Str **labels);
 
+  virtual void value_of(pjs::Value &out) override;
   virtual void dump(const std::function<void(pjs::Str*, pjs::Str*, double)> &out) override;
 
   pjs::Ref<Histogram> m_root;
