@@ -3,12 +3,43 @@ title: "Configuration.decodeMQTT()"
 api: Configuration.decodeMQTT()
 ---
 
-# Syntax
+## Description
+
+Appends a **decodeMQTT** filter to the current pipeline layout.
+
+A **decodeMQTT** filter decodes [MQTT](https://mqtt.org/) packets in its input [Data](/reference/api/Data) and outputs [Messages](/reference/api/Message) after decoding. Its input is a _Data_ stream and its output is a _Message_ stream.
+
+|              |             |
+|:------------:|:-----------:|
+| _Input_      |             |
+| ↓            | **Data**    |
+| `decodeMQTT` |             |
+| ↓            | **Message** |
+| _Output_     |             |
+
+The _Messages_ after decoding will have these contents:
+
+* _head_
+  - _type_ - Type of the packet such as _"SUBSCRIBE"_ and _"PUBLISH"_
+  - _qos_ - PUBLISH Quality of Service
+  - _dup_ - Duplicate delivery of a PUBLISH packet
+  - _retain_ - PUBLISH retained message flag
+  - Other properties defined in the [specification](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901027)
+* _body_ - Payload of a PUBLISH packet
+
+## Syntax
 
 ``` js
-pipy().pipeline('example').decodeMQTT()
+pipy()
+  .pipeline('example')
+    .decodeMQTT()
 ```
 
-## Return value
+### Return value
 
 <ReturnValue/>
+
+## See Also
+
+* [Configuration](/reference/api/Configuration)
+* [encodeMQTT()](/reference/api/Configuration/encodeMQTT)

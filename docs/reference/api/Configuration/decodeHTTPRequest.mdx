@@ -3,12 +3,49 @@ title: "Configuration.decodeHTTPRequest()"
 api: Configuration.decodeHTTPRequest()
 ---
 
-# Syntax
+## Description
+
+Appends a **decodeHTTPRequest** filter to the current pipeline layout.
+
+A **decodeHTTPRequest** filter decodes HTTP/1.x requests in its input [Data](/reference/api/Data) and outputs [Messages](/reference/api/Message) after decoding. Its input is a _Data_ stream and its output is a _Message_ stream.
+
+|                     |             |
+|:-------------------:|:-----------:|
+| _Input_             |             |
+| ↓                   | **Data**    |
+| `decodeHTTPRequest` |             |
+| ↓                   | **Message** |
+| _Output_            |             |
+
+The _Messages_ after decoding will have these contents:
+
+* _head_
+  - _protocol_ - Can be _"HTTP/1.0"_ or _"HTTP/1.1"_
+  - _method_ - HTTP method such as _"GET"_ and _"POST"_
+  - _path_ - Requested URI
+  - _headers_ - Header fields
+* _body_ - Message body
+
+Header names are all converted to lowercase. So _"Host"_ would be _"host"_ and _"Content-Type"_ would be _"content-type"_.
+
+This filter only supports HTTP/1.x. For compatibility with HTTP/2, check out [demuxHTTP()](/reference/api/Configuration/demuxHTTP).
+
+## Syntax
 
 ``` js
-pipy().pipeline('example').decodeHTTPRequest()
+pipy()
+  .pipeline('example')
+    .decodeHTTPRequest()
 ```
 
-## Return value
+### Return value
 
 <ReturnValue/>
+
+## See Also
+
+* [Configuration](/reference/api/Configuration)
+* [decodeHTTPResponse()](/reference/api/Configuration/decodeHTTPResponse)
+* [encodeHTTPRequest()](/reference/api/Configuration/encodeHTTPRequest)
+* [encodeHTTPResponse()](/reference/api/Configuration/encodeHTTPResponse)
+* [demuxHTTP()](/reference/api/Configuration/demuxHTTP)

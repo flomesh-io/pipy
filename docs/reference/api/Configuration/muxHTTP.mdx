@@ -58,7 +58,7 @@ In HTTP/1.1, multiplexing is done by [HTTP pipelining](https://en.wikipedia.org/
 
 In HTTP/2, multiplexing is inherently supported by the protocol itself. With HTTP/2, every **muxHTTP** filter runs a dedicated _virtual stream_ in an HTTP/2 transport stream. There is no shared queue to wait as in HTTP/1.1, so responses to the requests can arrive out of order without having to wait for each other.
 
-### Response buffering
+### Chunked transfer
 
 When encoding an HTTP/1.x request, the [Content-Length](https://developer.mozilla.org/docs/Web/HTTP/Headers/Content-Length) header needs to come before the body, so **muxHTTP** has to buffer the entire body until it sees a _MessageEnd_ event, only by then can the filter output a value for _Content-Length_ header, followed by the previously buffered body.
 

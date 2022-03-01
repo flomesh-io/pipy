@@ -3,12 +3,63 @@ title: "Configuration.encodeHTTPRequest()"
 api: Configuration.encodeHTTPRequest()
 ---
 
-# Syntax
+## Description
+
+Appends an **encodeHTTPRequest** filter to the current pipeline layout.
+
+An **encodeHTTPRequest** filter encodes its input [Messages](/reference/api/Message) into HTTP/1.x requests and outputs encoded [Data](/reference/api/Data). Its input is a _Message_ stream and its output is a _Data_ stream.
+
+|                     |             |
+|:-------------------:|:-----------:|
+| _Input_             |             |
+| ↓                   | **Message** |
+| `encodeHTTPRequest` |             |
+| ↓                   | **Data**    |
+| _Output_            |             |
+
+The input _Messages_ can have these contents:
+
+* _head_
+  - _protocol_ - Can be _"HTTP/1.0"_ or _"HTTP/1.1"_ (Defaults to _"HTTP/1.1"_)
+  - _method_ - HTTP method such as _"GET"_ and _"POST"_ (Defaults to _"GET"_)
+  - _path_ - Requested URI (Defaults to _"/"_)
+  - _headers_ - Header fields
+* _body_ - Message body
+
+If any fields are missing in [Message.head](/reference/api/Message/head), their default values will be taken.
+
+This filter only supports HTTP/1.x. For compatibility with HTTP/2, check out [muxHTTP()](/reference/api/Configuration/muxHTTP).
+
+### Chunked transfer
+
+When encoding a request, the [Content-Length](https://developer.mozilla.org/docs/Web/HTTP/Headers/Content-Length) header needs to come before the body, so **encodeHTTPRequest** has to buffer the entire body until it sees a _MessageEnd_ event, only by then can the filter output a value for _Content-Length_ header, followed by the previously buffered body.
+
+The buffering is limited to 4KB by default. When the buffered data is over 4KB, the encoder will opt for [chunked encoding](https://developer.mozilla.org/docs/Web/HTTP/Headers/Transfer-Encoding#chunked_encoding), where a _Content-Length_ header is no longer needed. You can change this limit by the option _bufferSize_ in the _options_ parameter.
+
+## Syntax
 
 ``` js
-pipy().pipeline('example').encodeHTTPRequest()
+pipy()
+  .pipeline('example')
+    .encodeHTTPRequest()
+
+pipy()
+  .pipeline('example')
+    .encodeHTTPRequest(
+      {
+        bufferSize,
+      }
+    )
 ```
 
-## Return value
+### Return value
 
 <ReturnValue/>
+
+## See Also
+
+* [Configuration](/reference/api/Configuration)
+* [encodeHTTPResponse()](/reference/api/Configuration/encodeHTTPResponse)
+* [decodeHTTPRequest()](/reference/api/Configuration/decodeHTTPRequest)
+* [decodeHTTPResponse()](/reference/api/Configuration/decodeHTTPResponse)
+* [muxHTTP()](/reference/api/Configuration/muxHTTP)

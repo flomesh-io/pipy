@@ -3,12 +3,71 @@ title: "Configuration.decodeDubbo()"
 api: Configuration.decodeDubbo()
 ---
 
-# Syntax
+## Description
+
+Appends a **decodeDubbo** filter to the current pipeline layout.
+
+A **decodeDubbo** filter decodes [Dubbo](https://dubbo.apache.org/) messages in its input [Data](/reference/api/Data) and outputs [Messages](/reference/api/Message) after decoding. Its input is a _Data_ stream and its output is a _Message_ stream.
+
+|               |             |
+|:-------------:|:-----------:|
+| _Input_       |             |
+| ↓             | **Data**    |
+| `decodeDubbo` |             |
+| ↓             | **Message** |
+| _Output_      |             |
+
+The _Messages_ after decoding will have these contents:
+
+* _head_
+  - _id_ - Request ID as a string
+  - _status_ - Status code
+  - _isRequest_ - Is it a request?
+  - _isTwoWay_ - Is it 2-way?
+  - _isEvent_ - Is it an event?
+* _body_ - Binary data in the body
+
+The body data is a [Data](/reference/api/Data) object left without being decoded. To decode it, use [Hessian.decode()](/reference/api/Hessian/decode).
+
+## Syntax
 
 ``` js
-pipy().pipeline('example').dump()
+pipy()
+  .pipeline('example')
+    .decodeDubbo()
 ```
 
-## Return value
+### Return value
 
 <ReturnValue/>
+
+## Example
+
+``` js
+pipy()
+
+.listen(20880)
+  .decodeDubbo()
+  .demux('req')
+  .encodeDubbo({
+    isRequest: false,
+  })
+
+.pipeline('req')
+  .replaceMessageBody(
+    data => (
+      JSON.encode(
+        Hessian.decode(data)
+      )
+    )
+  )
+  .muxHTTP('conn', () => __inbound)
+
+.pipeline('conn')
+  .connect('localhost:8080')
+```
+
+## See Also
+
+* [Configuration](/reference/api/Configuration)
+* [encodeDubbo()](/reference/api/Configuration/encodeDubbo)

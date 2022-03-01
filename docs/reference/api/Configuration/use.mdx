@@ -7,7 +7,7 @@ api: Configuration.use()
 
 Appends a **use** filter to the current pipeline layout.
 
-A **use** filter and its sub-pipelines's input and output can be any events.
+A **use** filter pumps events through a sub-pipeline in a different module, or a series of sub-pipelines in a module chain. The filter and its sub-pipelines's input and output can be any types of events.
 
 |          |           |       |           |             |           |       |           |             |
 |---------:|:---------:|:-----:|:---------:|:-----------:|:---------:|:-----:|:---------:|:-----------:|
@@ -17,7 +17,7 @@ A **use** filter and its sub-pipelines's input and output can be any events.
 | _Output_ | ←         |       | ←         |             | ←         |       | ←         |             |
 |          | **Event** |       | **Event** |             | **Event** |       | **Event** |             |
 
-A **use** filter pumps events through a sub-pipeline in a different module, or a series of sub-pipelines in a module chain. You can use it in multiple ways as being discussed down below.
+You can use a **use** filter in multiple ways as being discussed down below.
 
 ### Run a pipeline from another module
 

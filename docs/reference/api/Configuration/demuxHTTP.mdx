@@ -45,7 +45,7 @@ In HTTP/1.1, multiplexing is done by [HTTP pipelining](https://en.wikipedia.org/
 
 In HTTP/2, multiplexing is inherently supported by the protocol itself. With HTTP/2, every _virtual stream_ in the HTTP/2 transport stream runs in a dedicated sub-pipeline. There is no shared queue to wait as in HTTP/1.1, so a delayed response from one sub-pipeline won't affect other sub-pipelines.
 
-### Response buffering
+### Chunked transfer
 
 When encoding an HTTP/1.x response, the [Content-Length](https://developer.mozilla.org/docs/Web/HTTP/Headers/Content-Length) header needs to come before the body, so **demuxHTTP** has to buffer the entire body until it sees a _MessageEnd_ event, only by then can the filter output a value for _Content-Length_ header, followed by the previously buffered body.
 
