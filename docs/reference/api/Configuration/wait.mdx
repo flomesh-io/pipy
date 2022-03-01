@@ -3,16 +3,42 @@ title: "Configuration.wait()"
 api: Configuration.wait()
 ---
 
-# Syntax
+## Description
+
+Appends a **wait** filter to the current pipeline layout.
+
+A **wait** filter blocks all input events up until a condition is met. Its input and output can be any types of events.
+
+|          |           |
+|:--------:|:---------:|
+| _Input_  |           |
+| ↓        | **Event** |
+| `wait`   |           |
+| ↓        | **Event** |
+| _Output_ |           |
+
+The condition to wait is given by the _condition_ parameter. It should be a function that returns a truthy value when the condition is met. The function will be called every time a relevant asynchronous event happens, such as having received a response from the upstream, etc.
+
+This filter passes everything down unaltered. It doesn't change anything in the event stream. It only delays them.
+
+## Syntax
 
 ``` js
-pipy().pipeline('example').wait(() => shouldContinue())
+pipy()
+  .pipeline('example')
+    .wait(
+      () => shouldContinue()
+    )
 ```
 
-## Parameters
+### Parameters
 
 <Parameters/>
 
-## Return value
+### Return value
 
 <ReturnValue/>
+
+## See Also
+
+* [Configuration](/reference/api/Configuration)

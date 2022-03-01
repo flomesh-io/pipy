@@ -3,17 +3,47 @@ title: "Configuration.throttleMessageRate()"
 api: Configuration.throttleMessageRate()
 ---
 
-# Syntax
+## Description
+
+Appends a **throttleMessageRate** filter to the current pipeline layout.
+
+A **throttleMessageRate** filter sets a limit to how many [Messages](/reference/api/Message) can pass in every second. Its input and output can be any types of events, but the limit only take effect when they have [MessageStart](/reference/api/Message) events.
+
+|                       |           |
+|:---------------------:|:---------:|
+| _Input_               |           |
+| ↓                     | **Event** |
+| `throttleMessageRate` |           |
+| ↓                     | **Event** |
+| _Output_              |           |
+
+The rate limit is set by the _quota_ parameter, which is the number of _Messages_ allowed to pass every second, or a function that returns that number. When the limit is reached in a second, all events afterwards will be blocked until quota is recovered the next second.
+
+Quota can be deducted per account by giving an account ID in the _account_ parameter. It can be a value of any type, or a function that returns a dynamic value.
+
+This filter passes everything down unaltered. It doesn't change anything in the event stream. It only delays them.
+
+## Syntax
 
 ``` js
-pipy().pipeline('example').throttleMessageRate(limit)
-pipy().pipeline('example').throttleMessageRate(limit, account)
+pipy()
+  .pipeline('example')
+    .throttleMessageRate(quota)
+
+pipy()
+  .pipeline('example')
+    .throttleMessageRate(quota, account)
 ```
 
-## Parameters
+### Parameters
 
 <Parameters/>
 
-## Return value
+### Return value
 
 <ReturnValue/>
+
+## See Also
+
+* [Configuration](/reference/api/Configuration)
+* [throttleDataRate()](/reference/api/Configuration/throttleDataRate)

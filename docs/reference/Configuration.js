@@ -1,9 +1,18 @@
 /**
+ * @callback AnyCB
+ * @return {*}
+ *
  * @callback BooleanCB
  * @return {boolean}
  *
+ * @callback NumberCB
+ * @return {number}
+ *
  * @callback StringCB
  * @return {string}
+ *
+ * @callback NumberStringCB
+ * @return {number|string}
  *
  * @callback MessageHandler
  * @param {Message} request
@@ -500,7 +509,10 @@ class Configuration {
   handleTLSClientHello(handler) {}
 
   /**
-   * Appends a filter to the current pipeline layout that combines multiple messages into one.
+   * Appends a pack filter to the current pipeline layout.
+   *
+   * A pack filter concatenates Data from multiple input Message bodies into one and outputs the combined Messages.
+   * Its input and output are both Message streams.
    *
    * @param {number} [batchSize = 1] Maximum number of messages to combine into one.
    * @param {Object} [options] Options including timeout and vacancy.
@@ -598,24 +610,28 @@ class Configuration {
   split(handler) {}
 
   /**
-   * Appends a filter to the current pipeline layout that only allows a certain
-   * amount of data to go through every second.
+   * Appends a throttleDataRate filter to the current pipeline layout.
    *
-   * @param {number | string | (() => number|string)} quota Amount of data in bytes that are allowed through every second.
-   * @param {any | () => any} [account] Name of the account that the quota is entitled to.
+   * A throttleDataRate filter sets a limit to how many bytes of Data can pass in every second.
+   * Its input and output can be any types of events, but the limit only takes effect when they have Data events.
+   *
+   * @param {number|string|NumberStringCB} quota Amount of data in bytes that are allowed through every second.
+   * @param {*|AnyCB} [account] Name of the account that the quota is entitled to.
    * @returns {Configuration} The same Configuration object.
    */
-  throttleDataRate(limit, account) {}
+  throttleDataRate(quota, account) {}
 
   /**
-   * Appends a filter to the current pipeline layout that only allows a certain
-   * number of messages to go through every second.
+   * Appends a throttleMessageRate filter to the current pipeline layout.
    *
-   * @param {number | () => number)} quota Number of messages allowed through every second.
-   * @param {any | () => any} [account] Name of the account that the quota is entitled to.
+   * A throttleMessageRate filter sets a limit to how many Messages can pass in every second.
+   * Its input and output can be any types of events, but the limit only take effect when they have MessageStart events.
+   *
+   * @param {number|string|NumberStringCB} quota Number of messages allowed through every second.
+   * @param {*|AnyCB} [account] Name of the account that the quota is entitled to.
    * @returns {Configuration} The same Configuration object.
    */
-  throttleMessageRate(limit, account) {}
+  throttleMessageRate(quota, account) {}
 
   /**
    * Appends a use filter to the current pipeline layout.
@@ -633,10 +649,12 @@ class Configuration {
   use(filenames, layout, layoutDown, turnDown) {}
 
   /**
-   * Appends a filter to the current pipeline layout that blocks all events
-   * up until a certain condition is met.
+   * Appends a wait filter to the current pipeline layout.
    *
-   * @param {() => bool} [condition] Callback function that returns true to unblock events.
+   * A wait filter blocks all input events up until a condition is met.
+   * Its input and output can be any types of events.
+   *
+   * @param {BooleanCB} [condition] Callback function that returns true to unblock events.
    * @returns {Configuration} The same Configuration object.
    */
   wait(condition) {}
