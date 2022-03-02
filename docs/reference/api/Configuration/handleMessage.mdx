@@ -3,16 +3,50 @@ title: "Configuration.handleMessage()"
 api: Configuration.handleMessage()
 ---
 
-# Syntax
+## Description
+
+Appends a **handleMessage** filter to the current pipeline layout.
+
+A **handleMessage** filter calls a user function every time it sees a complete [Message](/reference/api/Message) in the input stream. Its input and output can be any kinds of events.
+
+|                 |           |
+|:---------------:|:---------:|
+| _Input_         |           |
+| ↓               | **Event** |
+| `handleMessage` |           |
+| ↓               | **Event** |
+| _Output_        |           |
+
+The user function that gets called will have a [Message](/reference/api/Message) object as parameter.
+
+> A _Message_ object is not just one event, but a convenient container for a series of events that form a complete message, that is, starting with a [MessageStart](/reference/api/MessageStart) event, followed by one or more [Data](/reference/api/Data) events and ended by a [MessageEnd](/reference/api/MessageEnd) event.
+
+This filter passes every input event down to its output. It doesn't change how many or what events there are. However, since events are all just objects being passed around by reference, if you alter the event object itself, the change will be visible on the output, even when the references to the events are still identical between the input and the output.
+
+## Syntax
 
 ``` js
-pipy().pipeline('example').handleMessage(message => onMessage(message))
+pipy()
+  .pipeline('example')
+    .handleMessage(
+      message => onMessage(message)
+    )
 ```
 
-## Parameters
+### Parameters
 
 <Parameters/>
 
-## Return value
+### Return value
 
 <ReturnValue/>
+
+## See Also
+
+* [Configuration](/reference/api/Configuration)
+* [handleData()](/reference/api/Configuration/handleData)
+* [handleStreamStart()](/reference/api/Configuration/handleStreamStart)
+* [handleStreamEnd()](/reference/api/Configuration/handleStreamEnd)
+* [handleMessageStart()](/reference/api/Configuration/handleMessageStart)
+* [handleMessageBody()](/reference/api/Configuration/handleMessageBody)
+* [handleMessageEnd()](/reference/api/Configuration/handleMessageEnd)

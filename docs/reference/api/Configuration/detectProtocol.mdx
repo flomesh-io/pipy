@@ -3,18 +3,43 @@ title: "Configuration.detectProtocol()"
 api: Configuration.detectProtocol()
 ---
 
-# Syntax
+## Description
+
+Appends a **detectProtocol** filter to the current pipeline layout.
+
+A **detectProtocol** filter calls a user function to tell whether the input stream is [TLS](https://en.wikipedia.org/wiki/Transport_Layer_Security) or not. Its input and output can be any kinds of events.
+
+|                  |           |
+|:----------------:|:---------:|
+| _Input_          |           |
+| ↓                | **Event** |
+| `detectProtocol` |           |
+| ↓                | **Event** |
+| _Output_         |           |
+
+The user function that gets called will have a string as parameter, which is _"TLS"_ if a TLS stream is detected or empty string ("") if the stream is confirmed to be non-TLS. All input events will be blocked up until the detection is concluded (either TLS or non-TLS) and the user function is called.
+
+This filter passes everything down unaltered. It doesn't change anything in the event stream.
+
+## Syntax
 
 ``` js
-pipy().pipeline('example').detectProtocol(
-  (protocolName) => onProtocolDetected()
-)
+pipy()
+  .pipeline('example')
+    .detectProtocol(
+      (protocolName) => onProtocolDetected()
+    )
 ```
 
-## Parameters
+### Parameters
 
 <Parameters/>
 
-## Return value
+### Return value
 
 <ReturnValue/>
+
+## See Also
+
+* [Configuration](/reference/api/Configuration)
+* [handleTLSClientHello()](/reference/api/Configuration/handleTLSClientHello)

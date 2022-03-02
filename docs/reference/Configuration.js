@@ -14,9 +14,44 @@
  * @callback NumberStringCB
  * @return {number|string}
  *
- * @callback MessageHandler
+ * @callback RequestHandler
  * @param {Message} request
  * @return {Message}
+ *
+ * @callback StreamStartHandler
+ * @param {Event} request
+ *
+ * @callback StreamEndHandler
+ * @param {StreamEnd} request
+ *
+ * @callback DataHandler
+ * @param {Data} request
+ *
+ * @callback MessageHandler
+ * @param {Message} request
+ *
+ * @callback MessageEndHandler
+ * @param {MessageEnd} request
+ *
+ * @callback StreamStartReplacer
+ * @param {Event} request
+ * @return {Event|Event[]|Message|Message[]}
+ *
+ * @callback StreamEndReplacer
+ * @param {StreamEnd} request
+ * @return {Event|Event[]|Message|Message[]}
+ *
+ * @callback DataReplacer
+ * @param {Data} request
+ * @return {Event|Event[]|Message|Message[]}
+ *
+ * @callback MessageReplacer
+ * @param {Message} request
+ * @return {Event|Event[]|Message|Message[]}
+ *
+ * @callback MessageEndReplacer
+ * @param {MessageEnd} request
+ * @return {Event|Event[]|Message|Message[]}
  */
 
 /**
@@ -273,10 +308,17 @@ class Configuration {
   demuxHTTP(layout, options) {}
 
   /**
-   * Appends a filter to the current pipeline layout that calls back script
-   * with a detected protocol name.
+   * @callback ProtocolDetectionHandler
+   * @param {string} protocolName
+   */
+
+  /**
+   * Appends a detectProtocol filter to the current pipeline layout.
    *
-   * @param {(protocol) => void} handler Callback function that receives the protocol name.
+   * A detectProtocol filter calls a user function to tell whether the input stream is TLS or not.
+   * Its input and output can be any kinds of events.
+   *
+   * @param {ProtocolDetectionHandler} handler Callback function that receives the protocol name.
    * @returns {Configuration} The same Configuration object.
    */
   detectProtocol(handler) {}
@@ -289,10 +331,12 @@ class Configuration {
   dummy() {}
 
   /**
-   * Appends a filter to the current pipeline layout that
-   * dumps all passing events to the standard output.
+   * Appends a dump filter to the current pipeline layout.
    *
-   * @param {string | () => string} tag Tag to print prior to the dumped messages.
+   * A dump filter prints out all events in the input stream to the standard output.
+   * Its input and output can be any kinds of events.
+   *
+   * @param {*|AnyCB} tag Tag to print prior to the dumped out events.
    * @returns {Configuration} The same Configuration object.
    */
   dump(tag) {}
@@ -437,73 +481,96 @@ class Configuration {
   muxHTTP(layout, group, options) {}
 
   /**
-   * Appends a filter to the current pipeline layout that calls back script
-   * for every Data event.
+   * Appends a handleData filter to the current pipeline layout.
    *
-   * @param {(evt: Data) => void} handler Callback function invoked for Data events.
+   * A handleData filter calls a user function every time it sees a Data event in the input stream.
+   * Its input and output can be any kinds of events.
+   *
+   * @param {DataHandler} handler Callback function invoked for Data events.
    * @returns {Configuration} The same Configuration object.
    */
-  handleData(handler, sizeLimit) {}
+  handleData(handler) {}
 
   /**
-   * Appends a filter to the current pipeline layout that calls back script
-   * for every whole message.
+   * Appends a handleMessage filter to the current pipeline layout.
+   *
+   * A handleMessage filter calls a user function every time it sees a complete Message in the input stream.
+   * Its input and output can be any kinds of events.
    * 
-   * @param {(msg: Message) => void} handler Callback function invoked for whole messages.
+   * @param {MessageHandler} handler Callback function invoked for whole messages.
    * @returns {Configuration} The same Configuration object.
    */
-  handleMessage(handler, sizeLimit) {}
+  handleMessage(handler) {}
 
   /**
-   * Appends a filter to the current pipeline layout that calls back script
-   * for every whole message body.
+   * Appends a handleMessageBody filter to the current pipeline layout.
    *
-   * @param {(evt: Data) => void} handler Callback function invoked for whole message bodies.
+   * A handleMessageBody filter calls a user function every time it sees a complete message body in the input stream.
+   * Its input and output can be any kinds of events.
+   *
+   * @param {DataHandler} handler Callback function invoked for whole message bodies.
    * @returns {Configuration} The same Configuration object.
    */
-  handleMessageBody(handler, sizeLimit) {}
+  handleMessageBody(handler) {}
 
   /**
-   * Appends a filter to the current pipeline layout that calls back script
-   * for every MessageEnd event.
+   * Appends a handleMessageEnd filter to the current pipeline layout.
    *
-   * @param {(evt: MessageEnd) => void} handler Callback function invoked for MessageEnd event.
+   * A handleMessageEnd filter calls a user function every time it sees a MessageEnd event in the input stream.
+   * Its input and output can be any kinds of events.
+   *
+   * @param {MessageEndHandler} handler Callback function invoked for MessageEnd event.
    * @returns {Configuration} The same Configuration object.
    */
   handleMessageEnd(handler) {}
 
   /**
-   * Appends a filter to the current pipeline layout that calls back script
-   * for every MessageStart event.
+   * Appends a handleMessageStart filter to the current pipeline layout.
    *
-   * @param {(evt: MessageStart) => void} handler Callback function invoked for MessageStart events.
+   * A handleMessageStart filter calls a user function every time it sees a MessageStart event in the input stream.
+   * Its input and output can be any kinds of events.
+   *
+   * @param {EventHandler} handler Callback function invoked for MessageStart events.
    * @returns {Configuration} The same Configuration object.
    */
   handleMessageStart(handler) {}
 
   /**
-   * Appends a filter to the current pipeline layout that calls back script
-   * for every StreamEnd event.
+   * Appends a handleStreamEnd filter to the current pipeline layout.
    *
-   * @param {(evt: StreamEnd) => void} handler Callback function invoked for StreamStart events.
+   * A handleStreamEnd filter calls a user function every time it sees a StreamEnd event in the input stream.
+   * Its input and output can be any kinds of events.
+   *
+   * @param {StreamEndHandler} handler Callback function invoked for StreamStart events.
    * @returns {Configuration} The same Configuration object.
    */
   handleStreamEnd(handler) {}
 
   /**
-   * Appends a filter to the current pipeline layout that calls back script
-   * for the first event in a stream.
+   * Appends a handleStreamStart filter to the current pipeline layout.
    *
-   * @param {(evt: MessageStart|MessageEnd|Data) => void} handler Callback function invoked for the first event.
+   * A handleStreamStart filter calls a user function when it sees the first event in an input stream.
+   * Its input and output can be any kinds of events.
+   *
+   * @param {EventHandler} handler Callback function invoked for the first event.
    * @returns {Configuration} The same Configuration object.
    */
   handleStreamStart(handler) {}
 
   /**
-   * Appends a filter to the current pipeline layout that calls back script
-   * for the ClientHello message in TLS handshake.
+   * @callback TLSClientHelloHandler
+   * @param {Object} message
+   * @param {string[]} message.serverNames
+   * @param {string[]} message.protocolNames
+   */
+
+  /**
+   * Appends a handleTLSClientHello filter to the current pipeline layout.
    *
-   * @param {(msg: ClientHello) => void} handler Callback function invoked for the ClientHello message.
+   * A handleTLSClientHello filter calls a user function when it sees a TLS client hello message at the beginning of an input stream.
+   * Its input and output can be any kinds of events.
+   *
+   * @param {TLSClientHelloHandler} handler Callback function invoked for the ClientHello message.
    * @returns {Configuration} The same Configuration object.
    */
   handleTLSClientHello(handler) {}
@@ -596,7 +663,7 @@ class Configuration {
    * encodes and multiplexes those HTTP responses into a single output Data stream.
    * Its input and output are Data (usually TCP streams).
    *
-   * @param {Message | MessageHandler} handler A response message or a callback function that receives a request and returns a response message.
+   * @param {Message | RequestHandler} handler A response message or a callback function that receives a request and returns a response message.
    * @returns {Configuration} The same Configuration object.
    */
   serveHTTP(handler) {}

@@ -121,6 +121,7 @@ pipy().listen(8080) // 返回与之前相同配置对象
 * [replaceStreamEnd()](/reference/api/Configuration/handleStreamEnd)
 * [replaceStreamStart()](/reference/api/Configuration/handleStreamStart)
 * [split()](/reference/api/Configuration/split)
+* [dummy()](/reference/api/Configuration/dummy)
 
 这些过滤器将输入事件转换为新的输出事件。其中许多过滤器会调用用户定义的脚本，并将输入事件作为用户函数的参数；函数的所有输出会作为过滤器的输出。其中，[exec()](/reference/api/Configuration/exec) 会特殊一些，它将 *Data* 事件传递到外部进程的标准输入并读取进程的标准输出作为 *Data* 事件。
 

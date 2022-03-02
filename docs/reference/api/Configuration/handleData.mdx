@@ -3,16 +3,48 @@ title: "Configuration.handleData()"
 api: Configuration.handleData()
 ---
 
-# Syntax
+## Description
+
+Appends a **handleData** filter to the current pipeline layout.
+
+A **handleData** filter calls a user function every time it sees a [Data](/reference/api/Data) event in the input stream. Its input and output can be any kinds of events.
+
+|              |           |
+|:------------:|:---------:|
+| _Input_      |           |
+| ↓            | **Event** |
+| `handleData` |           |
+| ↓            | **Event** |
+| _Output_     |           |
+
+The user function that gets called will have a [Data](/reference/api/Data) object as parameter.
+
+This filter passes every input event down to its output. It doesn't change how many or what events there are. However, since events are all just objects being passed around by reference, if you alter the event object itself, the change will be visible on the output, even when the references to the events are still identical between the input and the output.
+
+## Syntax
 
 ``` js
-pipy().pipeline('example').handleData(data => onData(data))
+pipy()
+  .pipeline('example')
+    .handleData(
+      data => onData(data)
+    )
 ```
 
-## Parameters
+### Parameters
 
 <Parameters/>
 
-## Return value
+### Return value
 
 <ReturnValue/>
+
+## See Also
+
+* [Configuration](/reference/api/Configuration)
+* [handleStreamStart()](/reference/api/Configuration/handleStreamStart)
+* [handleStreamEnd()](/reference/api/Configuration/handleStreamEnd)
+* [handleMessageStart()](/reference/api/Configuration/handleMessageStart)
+* [handleMessageBody()](/reference/api/Configuration/handleMessageBody)
+* [handleMessageEnd()](/reference/api/Configuration/handleMessageEnd)
+* [handleMessage()](/reference/api/Configuration/handleMessage)

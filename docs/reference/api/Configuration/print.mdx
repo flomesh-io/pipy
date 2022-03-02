@@ -3,12 +3,41 @@ title: "Configuration.print()"
 api: Configuration.print()
 ---
 
-# Syntax
+## Description
+
+Appends a **print** filter to the current pipeline layout.
+
+A **print** filter outputs all [Data](/reference/api/Data) in the input stream to the standard output. Its input and output can be any kinds of events.
+
+|          |           |
+|:--------:|:---------:|
+| _Input_  |           |
+| ↓        | **Event** |
+| `print`  |           |
+| ↓        | **Event** |
+| _Output_ |           |
+
+This filter is different from [dump()](/reference/api/Configuration/dump) in that:
+
+- It only prints out _Data_ events
+- It dumps out _Data_ object without formatting, so if the _Data_ is not text, it could mess up your terminal
+
+This filter passes everything down unaltered. It doesn't change anything in the event stream.
+
+## Syntax
 
 ``` js
-pipy().pipeline('example').print()
+pipy()
+  .pipeline('example')
+    .print()
 ```
 
-## Return value
+### Return value
 
 <ReturnValue/>
+
+## See Also
+
+* [Configuration](/reference/api/Configuration)
+* [dump()](/reference/api/Configuration/dump)
+* [console.log()](/reference/api/console/log)

@@ -3,16 +3,50 @@ title: "Configuration.handleMessageBody()"
 api: Configuration.handleMessageBody()
 ---
 
-# Syntax
+## Description
+
+Appends a **handleMessageBody** filter to the current pipeline layout.
+
+A **handleMessageBody** filter calls a user function every time it sees a complete message body in the input stream. Its input and output can be any kinds of events.
+
+|                     |           |
+|:-------------------:|:---------:|
+| _Input_             |           |
+| ↓                   | **Event** |
+| `handleMessageBody` |           |
+| ↓                   | **Event** |
+| _Output_            |           |
+
+The user function that gets called will have a [Data](/reference/api/Data) object as parameter.
+
+This filter only calls the user function once for each message in the input stream. If the message's body is composed of multiple _Data_ objects, **handleMessageBody** will wait until all _Data_ objects composing the whole message are collected and call the user function with a combined _Data_ object.
+
+This filter passes everything down unaltered. It doesn't change anything in the event stream.
+
+## Syntax
 
 ``` js
-pipy().pipeline('example').handleMessageBody(data => onMessageBody(data))
+pipy()
+  .pipeline('example')
+    .handleMessageBody(
+      data => onMessageBody(data)
+    )
 ```
 
-## Parameters
+### Parameters
 
 <Parameters/>
 
-## Return value
+### Return value
 
 <ReturnValue/>
+
+## See Also
+
+* [Configuration](/reference/api/Configuration)
+* [handleData()](/reference/api/Configuration/handleData)
+* [handleStreamStart()](/reference/api/Configuration/handleStreamStart)
+* [handleStreamEnd()](/reference/api/Configuration/handleStreamEnd)
+* [handleMessageStart()](/reference/api/Configuration/handleMessageStart)
+* [handleMessageEnd()](/reference/api/Configuration/handleMessageEnd)
+* [handleMessage()](/reference/api/Configuration/handleMessage)
