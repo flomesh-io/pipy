@@ -3,16 +3,58 @@ title: "Configuration.exec()"
 api: Configuration.exec()
 ---
 
-# Syntax
+## Description
+
+Appends an **exec** filter to the current pipeline layout.
+
+An **exec** filter starts an external process, feeds the input [Data](/reference/api/Data) to the process's standard input and outputs the _Data_ coming out of the process's standard output. Its input and output are both _Data_ events.
+
+|          |          |
+|:--------:|:--------:|
+| _Input_  |          |
+| ↓        | **Data** |
+| `exec`   |          |
+| ↓        | **Data** |
+| _Output_ |          |
+
+The external process is started from a shell command given by the _command_ parameter when the first event hits the filter's input. The command can be a string or a function that returns a dynamic string.
+
+Only _Data_ events on the filter's input are fed into the process's standard input as a byte stream. All other events are discarded. On the output of the filter, the process's standard output can be received as _Data_ events. When the process exits, a [StreamEnd](/reference/api/StreamEnd) event will be received.
+
+When the filter is destroyed with its pipeline, the process (if any) will be killed accordingly.
+
+## Syntax
 
 ``` js
-pipy().pipeline('example').exec(command)
+pipy()
+  .pipeline('example')
+    .exec(command)
+
+pipy()
+  .pipeline('example')
+    .exec(
+      () => whatCommand()
+    )
 ```
 
-## Parameters
+### Parameters
 
 <Parameters/>
 
-## Return value
+### Return value
 
 <ReturnValue/>
+
+## Example
+
+``` js
+pipy()
+
+.task()
+  .exec('ls -l') // Execute shell command: `ls -l`
+  .print()       // Print out the standard output from that command
+```
+
+## See Also
+
+* [Configuration](/reference/api/Configuration)

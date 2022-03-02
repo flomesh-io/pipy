@@ -3,7 +3,7 @@ title: "Configuration.listen()"
 api: Configuration.listen()
 ---
 
-# Description
+## Description
 
 Creates a pipeline layout to handle incoming TCP connections on a specified port.
 
@@ -11,38 +11,38 @@ Ports can be specified with just numbers when binding to `0.0.0.0`, or strings i
 
 After calling this method on a _Configuration_, the newly created pipeline layout would become current. Any _filter-creating_ methods called after this point would append filters to that layout, until another _pipeline-layout-creating_ method is called.
 
-## Options
+### Options
 
 There are a few options that a listening port supports.
 
-### Option: maxConnections
+#### Option: maxConnections
 
 Limit the maximum number of concurrent connections. Defaults to no limit.
 
-### Option: readTimeout
+#### Option: readTimeout
 
 Timeout duration for reading, in seconds. Can be a string with one of the time unit suffixes such as `s`, `m` or `h`. Defaults to no timeout (waiting forever).
 
-### Option: readTimeout
+#### Option: readTimeout
 
 Timeout duration for writing, in seconds. Can be a string with one of the time unit suffixes such as `s`, `m` or `h`. Defaults to no timeout (waiting forever).
 
-# Syntax
+## Syntax
 
 ``` js
 pipy().listen(port)
 pipy().listen(port, { ...options })
 ```
 
-## Parameters
+### Parameters
 
 <Parameters/>
 
-## Return value
+### Return value
 
 <ReturnValue/>
 
-# Example
+## Example
 
 ``` js
 pipy()
@@ -51,3 +51,9 @@ pipy()
   .dump()     // Add filter, dump to stdout whatever is received from the port
   .dummy()    // Add filter, do not send anything back to the client
 ```
+
+## See Also
+
+* [Configuration](/reference/api/Configuration)
+* [task()](/reference/api/Configuration/task)
+* [pipeline()](/reference/api/Configuration/pipeline)

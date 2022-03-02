@@ -3,7 +3,7 @@ title: "Configuration.task()"
 api: Configuration.task()
 ---
 
-# Description
+## Description
 
 Creates a pipeline layout that executes a periodic job or responds to a specified signal.
 
@@ -17,7 +17,7 @@ At creation, each pipeline created for a job will receive a pair of _MessageStar
 
 After calling this method on a _Configuration_, the newly created pipeline layout would become current. Any _filter-creating_ methods called after this point would append filters to that layout, until another _pipeline-layout-creating_ method is called.
 
-# Syntax
+## Syntax
 
 ``` js
 pipy().task()
@@ -25,15 +25,15 @@ pipy().task(interval)
 pipy().task(signal)
 ```
 
-## Parameters
+### Parameters
 
 <Parameters/>
 
-## Return value
+### Return value
 
 <ReturnValue/>
 
-# Example
+## Example
 
 ``` js
 pipy({
@@ -68,3 +68,9 @@ pipy({
     new StreamEnd
   )
 ```
+
+## See Also
+
+* [Configuration](/reference/api/Configuration)
+* [listen()](/reference/api/Configuration/listen)
+* [pipeline()](/reference/api/Configuration/pipeline)

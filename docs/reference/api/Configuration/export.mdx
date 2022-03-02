@@ -3,7 +3,7 @@ title: "Configuration.export()"
 api: Configuration.export()
 ---
 
-# Description
+## Description
 
 Defines global variables accessible to other modules.
 
@@ -15,21 +15,21 @@ Every call to `Configuration.export()` exports multiple variables to one namespa
 
 > As a convention, exported variables are suggested to have two underscores as its prefix, such as `__targetFound`.
 
-# Syntax
+## Syntax
 
 ``` js
 pipy().export(namespace, { ...variables })
 ```
 
-## Parameters
+### Parameters
 
 <Parameters/>
 
-## Return value
+### Return value
 
 <ReturnValue/>
 
-# Example
+## Example
 
 ``` js
 pipy({
@@ -45,3 +45,9 @@ pipy({
   }
 )
 ```
+
+## See Also
+
+* [Configuration](/reference/api/Configuration)
+* [import()](/reference/api/Configuration/import)
+* [pipy()](/reference/api/pipy)

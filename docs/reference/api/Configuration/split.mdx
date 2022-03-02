@@ -3,16 +3,46 @@ title: "Configuration.split()"
 api: Configuration.split()
 ---
 
-# Syntax
+## Description
+
+> This filter is experimental
+
+Appends a **split** filter to the current pipeline layout.
+
+A **split** filter cuts [Data](/reference/api/Data) objects in pieces and inserts new events in between. Its input is a _Data_ stream. Its output is a stream of _Data_ plus other inserted events.
+
+|          |           |
+|:--------:|:---------:|
+| _Input_  |           |
+| ↓        | **Data**  |
+| `split`  |           |
+| ↓        | **Event** |
+| _Output_ |           |
+
+This filter calls the provided user function once for every byte in the _Data_ objects. Depending on what it returns, the filter will:
+
+- Insert new events after the current byte if an event, a [Messages](/reference/api/Message), or an array of events or _Messages_ are returned
+- Split up the _Data_ after the current byte if _null_ is returned
+- Do nothing if _undefined_ is returned
+
+## Syntax
 
 ``` js
-pipy().pipeline('example').split(ubyte => shouldSplit(ubyte))
+pipy()
+  .pipeline('example')
+    .split(
+      ubyte => whatToInsert(ubyte)
+    )
 ```
 
-## Parameters
+### Parameters
 
 <Parameters/>
 
-## Return value
+### Return value
 
 <ReturnValue/>
+
+## See Also
+
+* [Configuration](/reference/api/Configuration)

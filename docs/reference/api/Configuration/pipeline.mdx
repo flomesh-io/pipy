@@ -3,7 +3,7 @@ title: "Configuration.pipeline()"
 api: Configuration.pipeline()
 ---
 
-# Description
+## Description
 
 Creates a sub-pipeline layout under a specified name.
 
@@ -11,21 +11,21 @@ Sub-pipelines are pipelines that can be created from other pipelines during the 
 
 After calling this method on a _Configuration_, the newly created pipeline layout would become current. Any _filter-creating_ methods called after this point would append filters to that layout, until another _pipeline-layout-creating_ method is called.
 
-# Syntax
+## Syntax
 
 ``` js
 pipy().pipeline(name)
 ```
 
-## Parameters
+### Parameters
 
 <Parameters/>
 
-## Return value
+### Return value
 
 <ReturnValue/>
 
-# Example
+## Example
 
 ``` js
 pipy()
@@ -41,3 +41,9 @@ pipy()
 .pipeline('send-and-forget')
   .connect('localhost:8000') // Send the stream to a remote host
 ```
+
+## See Also
+
+* [Configuration](/reference/api/Configuration)
+* [listen()](/reference/api/Configuration/listen)
+* [task()](/reference/api/Configuration/task)

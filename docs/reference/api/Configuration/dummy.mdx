@@ -3,12 +3,30 @@ title: "Configuration.dummy()"
 api: Configuration.dummy()
 ---
 
-# Syntax
+## Description
+
+Appends a **dummy** filter to the current pipeline layout.
+
+A **dummy** filter does nothing to its input and outputs nothing either.
+
+|          |           |
+|:--------:|:---------:|
+| _Input_  |           |
+| ↓        | **Event** |
+| `dmuuy`  |           |
+
+## Syntax
 
 ``` js
-pipy().pipeline('example').dummy()
+pipy()
+  .pipeline('example')
+    .dummy()
 ```
 
-## Return value
+### Return value
 
 <ReturnValue/>
+
+## See Also
+
+* [Configuration](/reference/api/Configuration)

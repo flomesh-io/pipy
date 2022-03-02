@@ -3,17 +3,47 @@ title: "Configuration.decompressHTTP()"
 api: Configuration.decompressHTTP()
 ---
 
-# Syntax
+## Description
+
+Appends a **decompressHTTP** filter to the current pipeline layout.
+
+A **decompressHTTP** filter decompresses the bodies of HTTP [Messages](/reference/api/Message). Its input and output are both _Messages_.
+
+|                  |             |
+|:----------------:|:-----------:|
+| _Input_          |             |
+| ↓                | **Message** |
+| `decompressHTTP` |             |
+| ↓                | **Message** |
+| _Output_         |             |
+
+This filter checks _head.headers['content-encoding']_ of the input [MessageStart](/reference/api/MessageStart) event. If its value is _"gzip"_, the message body will be decompressed in the output.
+
+You can also dynamically enable or disable the compression by giving a function to the _enable_ parameter. Decompression will only happen when the function returns truthy.
+
+## Syntax
 
 ``` js
-pipy().pipeline('example').decompressHTTP()
-pipy().pipeline('example').decompressHTTP(() => isEnabled())
+pipy()
+  .pipeline('example')
+    .decompressHTTP()
+
+pipy()
+  .pipeline('example')
+    .decompressHTTP(
+      () => isEnabled()
+    )
 ```
 
-## Parameters
+### Parameters
 
 <Parameters/>
 
-## Return value
+### Return value
 
 <ReturnValue/>
+
+## See Also
+
+* [Configuration](/reference/api/Configuration)
+* [decompressMessage()](/reference/api/Configuration/decompressMessage)

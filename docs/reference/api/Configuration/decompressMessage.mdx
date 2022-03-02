@@ -3,17 +3,47 @@ title: "Configuration.decompressMessage()"
 api: Configuration.decompressMessage()
 ---
 
-# Syntax
+## Description
+
+Appends a **decompressMessage** filter to the current pipeline layout.
+
+A **decompressMessage** filter decompresses the bodies of [Messages](/reference/api/Message). Its input and output are both _Messages_.
+
+|                     |             |
+|:-------------------:|:-----------:|
+| _Input_             |             |
+| ↓                   | **Message** |
+| `decompressMessage` |             |
+| ↓                   | **Message** |
+| _Output_            |             |
+
+The algorithm used for decompression is specified by the _algorithm_ parameter. The only algorithm currently supported is _"inflate"_.
+
+You can also give a function to _algorithm_ that dynamically returns the algorithm to use. When it returns nullish (_null_ or _undefined_), no decompression will be done.
+
+## Syntax
 
 ``` js
-pipy().pipeline('example').decompressMessage(algorithm)
-pipy().pipeline('example').decompressMessage(() => algorithm)
+pipy()
+  .pipeline('example')
+    .decompressMessage(algorithm)
+
+pipy()
+  .pipeline('example')
+    .decompressMessage(
+      () => whatAlgorithm()
+    )
 ```
 
-## Parameters
+### Parameters
 
 <Parameters/>
 
-## Return value
+### Return value
 
 <ReturnValue/>
+
+## See Also
+
+* [Configuration](/reference/api/Configuration)
+* [decompressHTTP()](/reference/api/Configuration/decompressHTTP)

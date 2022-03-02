@@ -3,7 +3,7 @@ title: "Configuration.import()"
 api: Configuration.import()
 ---
 
-# Description
+## Description
 
 Imports global variables defined and exported from other modules.
 
@@ -15,21 +15,21 @@ After a variable is imported to a module, it can be used just like a global vari
 
 > As a convention, exported variables are suggested to have two underscores as its prefix, such as `__targetFound`.
 
-# Syntax
+## Syntax
 
 ``` js
 pipy().import({ ...variables })
 ```
 
-## Parameters
+### Parameters
 
 <Parameters/>
 
-## Return value
+### Return value
 
 <ReturnValue/>
 
-# Example
+## Example
 
 ``` js
 pipy()
@@ -40,3 +40,9 @@ pipy()
   __target: 'routing-stuff',
 })
 ```
+
+## See Also
+
+* [Configuration](/reference/api/Configuration)
+* [export()](/reference/api/Configuration/export)
+* [pipy()](/reference/api/pipy)

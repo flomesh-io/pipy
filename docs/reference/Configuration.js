@@ -30,6 +30,9 @@
  * @callback MessageHandler
  * @param {Message} request
  *
+ * @callback MessageStartHandler
+ * @param {MessageStart} request
+ *
  * @callback MessageEndHandler
  * @param {MessageEnd} request
  *
@@ -47,6 +50,10 @@
  *
  * @callback MessageReplacer
  * @param {Message} request
+ * @return {Event|Event[]|Message|Message[]}
+ *
+ * @callback MessageStartReplacer
+ * @param {MessageStart} request
  * @return {Event|Event[]|Message|Message[]}
  *
  * @callback MessageEndReplacer
@@ -263,17 +270,23 @@ class Configuration {
   decodeMQTT() {}
 
   /**
-   * Appends an HTTP message decompressor to the current pipeline layout.
+   * Appends a decompressHTTP filter to the current pipeline layout.
    *
-   * @param {() => boolean} [enable] Callback function that decides if a message should be decompressed.
+   * A decompressHTTP filter decompresses the bodies of HTTP Messages.
+   * Its input and output are both Messages.
+   *
+   * @param {BooleanCB} [enable] Callback function that decides if a message should be decompressed.
    * @returns {Configuration} The same Configuration object.
    */
   decompressHTTP(enable) {}
 
   /**
-   * Appends a generic message decompressor to the current pipeline layout.
+   * Appends a decompressMessage filter to the current pipeline layout.
    *
-   * @param {string | () => string} algorithm Decompression algorithm to use.
+   * A decompressMessage filter decompresses the bodies of Messages.
+   * Its input and output are both Messages.
+   *
+   * @param {StringCB} algorithm Decompression algorithm to use.
    * @returns {Configuration} The same Configuration object.
    */
   decompressMessage(algorithm) {}
@@ -325,6 +338,8 @@ class Configuration {
 
   /**
    * Appends a dummy filter to the current pipeline layout.
+   *
+   * A dummy filter does nothing to its input and outputs nothing either.
    *
    * @returns {Configuration} The same Configuration object.
    */
@@ -394,10 +409,13 @@ class Configuration {
   encodeMQTT() {}
 
   /**
-   * Appends a filter to the current pipeline layout that spawns an external process and
-   * pumps the Data stream through its standard input/output.
+   * Appends an exec filter to the current pipeline layout.
    *
-   * @param {string | () => string} command Shell command to execute.
+   * An exec filter starts an external process, feeds the input Data to the process's standard input and
+   * outputs the Data coming out of the process's standard output.
+   * Its input and output are both Data events.
+   *
+   * @param {string|StringCB} command Shell command to execute.
    * @returns {Configuration} The same Configuration object.
    */
   exec(command) {}
@@ -530,7 +548,7 @@ class Configuration {
    * A handleMessageStart filter calls a user function every time it sees a MessageStart event in the input stream.
    * Its input and output can be any kinds of events.
    *
-   * @param {EventHandler} handler Callback function invoked for MessageStart events.
+   * @param {MessageStartHandler} handler Callback function invoked for MessageStart events.
    * @returns {Configuration} The same Configuration object.
    */
   handleMessageStart(handler) {}
@@ -590,67 +608,88 @@ class Configuration {
   pack(batchSize, options) {}
 
   /**
-   * Appends a filter to the current pipeline layout that outputs Data events to
-   * the standard output.
+   * Appends a print filter to the current pipeline layout.
+   *
+   * A print filter outputs all Data in the input stream to the standard output.
+   * Its input and output can be any kinds of events.
    *
    * @returns {Configuration} The same Configuration object.
    */
   print() {}
 
   /**
-   * Appends a filter to the current pipeline layout that changes Data events into other events.
+   * Appends a replaceData filter to the current pipeline layout.
    *
-   * @param {(evt: Data) => Event|Message|Event[]|Message[]} [handler] Callback function that returns events after replacement.
+   * A replaceData filter calls a user function to get a replacement for every Data event in the input stream.
+   * Its input and output can be any kinds of events.
+   *
+   * @param {DataReplacer} [handler] Callback function that returns a replacement to the input.
    * @returns {Configuration} The same Configuration object.
    */
-  replaceData(handler, sizeLimit) {}
+  replaceData(handler) {}
 
   /**
-   * Appends a filter to the current pipeline layout that changes whole messages into other events.
+   * Appends a replaceMessage filter to the current pipeline layout.
    *
-   * @param {(msg: Message) => Event|Message|Event[]|Message[]} [handler] Callback function that returns replacement to the input.
-   * @param {number|string} [sizeLimit]
+   * A replaceMessage filter calls a user function to get a replacement for every Message in the input stream.
+   * Its input and output can be any kinds of events.
+   *
+   * @param {MessageReplacer} [handler] Callback function that returns a replacement to the input.
    * @returns {Configuration} The same Configuration object.
    */
-  replaceMessage(handler,sizeLimit) {}
+  replaceMessage(handler) {}
 
   /**
-   * Appends a filter to the current pipeline layout that changes whole bodies into other events.
+   * Appends a replaceMessageBody filter to the current pipeline layout.
    *
-   * @param {(evt: Data) => Event|Message|Event[]|Message[]} [handler] Callback function that returns replacement to the input.
-   * @param {number|string} [sizeLimit]
+   * A replaceMessageBody filter calls a user function to get a replacement for every complete message body in the input stream.
+   * Its input and output can be any kinds of events.
+   *
+   * @param {DataReplacer} [handler] Callback function that returns a replacement to the input.
    * @returns {Configuration} The same Configuration object.
    */
-  replaceMessageBody(handler, sizeLimit) {}
+  replaceMessageBody(handler) {}
 
   /**
-   * Appends a filter to the current pipeline layout that changes MessageEnd events into other events.
+   * Appends a replaceMessageEnd filter to the current pipeline layout.
    *
-   * @param {(evt: MessageEnd) => Event|Message|Event[]|Message[]} [handler] Callback function that returns replacement to the input.
+   * A replaceMessageEnd filter calls a user function to get a replacement for every MessageEnd event in the input stream.
+   * Its input and output can be any kinds of events.
+   *
+   * @param {MessageEndReplacer} [handler] Callback function that returns a replacement to the input.
    * @returns {Configuration} The same Configuration object.
    */
   replaceMessageEnd(handler) {}
 
   /**
-   * Appends a filter to the current pipeline layout that changes MessageStart events into other events.
+   * Appends a replaceMessageStart filter to the current pipeline layout.
    *
-   * @param {(evt: MessageStart) => Event|Message|Event[]|Message[]} [handler] Callback function that returns replacement to the input.
+   * A replaceMessageStart filter calls a user function to get a replacement for every MessageStart event in the input stream.
+   * Its input and output can be any kinds of events.
+   *
+   * @param {MessageStartReplacer} [handler] Callback function that returns a replacement to the input.
    * @returns {Configuration} The same Configuration object.
    */
   replaceMessageStart(handler) {}
 
   /**
-   * Appends a filter to the current pipeline layout that changes StreamEnd events into other events.
+   * Appends a replaceStreamEnd filter to the current pipeline layout.
    *
-   * @param {(evt: StreamEnd) => Event|Message|Event[]|Message[]} [handler] Callback function that returns replacement to the input.
+   * A replaceStreamEnd filter calls a user function to get a replacement for every StreamEnd event in the input stream.
+   * Its input and output can be any kinds of events.
+   *
+   * @param {StreamEndHandler} [handler] Callback function that returns a replacement to the input.
    * @returns {Configuration} The same Configuration object.
    */
   replaceStreamEnd(handler) {}
 
   /**
-   * Appends a filter to the current pipeline layout that changes the first event in a stream into other events.
+   * Appends a replaceStreamStart filter to the current pipeline layout.
    *
-   * @param {(evt: MessageStart|MessageEnd|Data) => Event|Message|Event[]|Message[]} [handler] Callback function that returns replacement to the input.
+   * A replaceStreamStart filter calls a user function to get a replacement for the first event in an input stream.
+   * Its input and output can be any kinds of events.
+   *
+   * @param {EventHandler} [handler] Callback function that returns a replacement to the input.
    * @returns {Configuration} The same Configuration object.
    */
   replaceStreamStart(handler) {}
@@ -669,9 +708,18 @@ class Configuration {
   serveHTTP(handler) {}
 
   /**
-   * Appends a filter to the current pipeline layout that cut Data events into smaller ones.
+   * @callback SplitHandler
+   * @param {Number} ubyte
+   * @return {undefined|null|Event|Event[]|Message|Message[]}
+   */
+ 
+  /**
+   * Appends a split filter to the current pipeline layout.
    *
-   * @param {(number) => boolean} handler Callback function that gets called for every byte and decides where to split up.
+   * A split filter cuts Data objects in pieces and inserts new events in between.
+   * Its input is a Data stream. Its output is a stream of Data plus other inserted events.
+   *
+   * @param {SplitHandler} handler Callback function that decides if Data should be split up after the current byte and what events to insert in between.
    * @returns {Configuration} The same Configuration object.
    */
   split(handler) {}

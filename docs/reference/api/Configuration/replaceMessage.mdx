@@ -3,16 +3,50 @@ title: "Configuration.replaceMessage()"
 api: Configuration.replaceMessage()
 ---
 
-# Syntax
+## Description
+
+Appends a **replaceMessage** filter to the current pipeline layout.
+
+A **replaceMessage** filter calls a user function to get a replacement for every [Message](/reference/api/Message) in the input stream. Its input and output can be any kinds of events.
+
+|                  |           |
+|:----------------:|:---------:|
+| _Input_          |           |
+| ↓                | **Event** |
+| `replaceMessage` |           |
+| ↓                | **Event** |
+| _Output_         |           |
+
+The user function will receive as parameter a [Message](/reference/api/Message) object that is removed from the input stream. Whatever the function returns will be inserted into the output stream in place of the removed events. It can be an event or a [Message](/reference/api/Message), or an array of events or _Messages_. If the function returns nothing (_null_ or _undefined_), no events will be inserted in the output.
+
+> A _Message_ object is not just one event, but a convenient container for a series of events that form a complete message, that is, starting with a [MessageStart](/reference/api/MessageStart) event, followed by one or more [Data](/reference/api/Data) events and ended by a [MessageEnd](/reference/api/MessageEnd) event.
+
+You can also use a fixed replacement value instead of a function if the replacement is static.
+
+## Syntax
 
 ``` js
-pipy().pipeline('example').replaceMessage(message => transform(message))
+pipy()
+  .pipeline('example')
+    .replaceMessage(
+      message => transform(message)
+    )
 ```
 
-## Parameters
+### Parameters
 
 <Parameters/>
 
-## Return value
+### Return value
 
 <ReturnValue/>
+
+## See Also
+
+* [Configuration](/reference/api/Configuration)
+* [replaceStreamStart()](/reference/api/Configuration/replaceStreamStart)
+* [replaceStreamEnd()](/reference/api/Configuration/replaceStreamEnd)
+* [replaceMessageStart()](/reference/api/Configuration/replaceMessageStart)
+* [replaceMessageBody()](/reference/api/Configuration/replaceMessageBody)
+* [replaceMessageEnd()](/reference/api/Configuration/replaceMessageEnd)
+* [replaceData()](/reference/api/Configuration/replaceData)
