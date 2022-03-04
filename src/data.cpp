@@ -120,7 +120,7 @@ template<> void ClassDef<pipy::Data>::init() {
       } else if (ctx.try_arguments(1, &data, &encoding) && data) {
         return pipy::Data::make(*data);
       }
-      ctx.error_argument_type(0, "a number, string, Array or Data");
+      ctx.error_argument_type(0, "a string, Array or Data");
       return nullptr;
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -199,18 +199,13 @@ template<> void ClassDef<Constructor<pipy::Data>>::init() {
     Str *str, *encoding = nullptr;
     pipy::Data *data;
     try {
-      if (ctx.try_arguments(1, &str, &encoding)) {
-        auto enc = EnumDef<pipy::Data::Encoding>::value(encoding, pipy::Data::Encoding::UTF8);
-        if (int(enc) < 0) {
-          ctx.error("unknown encoding");
-          return;
-        }
-        ret.set(s_dp.make(str->str(), enc));
-      } else if (ctx.try_arguments(1, &data, &encoding) && data) {
-        ret.set(pipy::Data::make(*data));
-      } else {
-        ctx.error_argument_type(0, "a number or a string or a Data object");
+      if (!ctx.arguments(1, &str, &encoding)) return;
+      auto enc = EnumDef<pipy::Data::Encoding>::value(encoding, pipy::Data::Encoding::UTF8);
+      if (int(enc) < 0) {
+        ctx.error("unknown encoding");
+        return;
       }
+      ret.set(s_dp.make(str->str(), enc));
     } catch (std::runtime_error &err) {
       ret = Value::null;
     }
