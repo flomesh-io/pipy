@@ -3,12 +3,33 @@ title: "Data.toString()"
 api: Data.toString()
 ---
 
-# Syntax
+## Description
+
+Convert the data to a string.
+
+The following options are supported for the _encoding_ parameter:
+
+- "utf8" (default) - Decode the data as UTF-8
+- "hex" - Encode the data as hexidecimal representation
+- "base64" - Encode the data as Base64 format
+- "base64url" - Encode the data as Base64URL format
+
+## Syntax
 
 ``` js
 data.toString()
+data.toString(encoding)
 ```
 
-## Return value
+### Parameters
+
+<Parameters/>
+
+### Return value
 
 <ReturnValue/>
+
+## See Also
+
+* [Data](/reference/api/Data)
+* [Data.from()](/reference/api/Data/from)

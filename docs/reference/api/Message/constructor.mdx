@@ -3,16 +3,31 @@ title: "Message()"
 api: Message.constructor()
 ---
 
-# Syntax
+## Description
+
+Creates an instance of **Message**.
+
+A **Message** can be created with either a _head_ or a _body_, or both of them or none.
+
+The _head_ parameter is an object holding varying content according to the protocol being used. See [For each protocol](/reference/api/MessageStart/head/#for-each-protocol).
+
+The _body_ parameter can be a [Data](/reference/api/Data) or a string. When it is a string, it'll be UTF-8 encoded into _Data_.
+
+## Syntax
 
 ``` js
 new Message()
-new Message(text)
-new Message(data)
-new Message(head, text)
-new Message(head, data)
+new Message(head)
+new Message(body)
+new Message(head, body)
 ```
 
-## Parameters
+### Parameters
 
 <Parameters/>
+
+## See Also
+
+* [Message](/reference/api/Message)
+* [head](/reference/api/Message/head)
+* [body](/reference/api/Message/body)

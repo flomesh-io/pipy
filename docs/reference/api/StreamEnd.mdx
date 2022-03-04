@@ -3,10 +3,31 @@ title: "StreamEnd"
 api: StreamEnd
 ---
 
-# Constructor
+## Description
+
+**StreamEnd** marks the end of an event stream.
+
+The _end of a stream_ can mean a few different things depending on the situation:
+
+- Client shutting down the connection to the server
+- Server shutting down the connection to the client
+- Various network errors that caused a connection to close, such as "target not reachable", "DNS resolving failure", "connection refused", "reading/writing timeout", etc.
+- A runtime script error that caused a pipeline to close
+- The end of a [task](/reference/api/Configuration/task) execution
+
+## Constructor
 
 <Constructor/>
 
-# Properties
+## Properties
 
 <Properties/>
+
+## See Also
+
+* [MessageStart](/reference/api/MessageStart)
+* [Message](/reference/api/Message)
+* [MessageEnd](/reference/api/MessageEnd)
+* [Data](/reference/api/Data)
+* [handleStreamEnd()](/reference/api/Configuration/handleStreamEnd)
+* [replaceStreamEnd()](/reference/api/Configuration/replaceStreamEnd)

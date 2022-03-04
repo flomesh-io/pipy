@@ -1,11 +1,11 @@
 ---
 title: "Data()"
-api: Data.constructor()
+api: Data.from()
 ---
 
 ## Description
 
-Creates an instance of **Data**.
+Creates an instance of **Data** from a string.
 
 The following options are supported for the _encoding_ parameter:
 
@@ -14,23 +14,24 @@ The following options are supported for the _encoding_ parameter:
 - "base64" - Decode the text as Base64 format
 - "base64url" - Decode the text as Base64URL format
 
-When decoding is required but fails, a runtime error is generated to stop the script. This is different from [Data.from()](/reference/api/Data/from) where _null_ is returned to indicate the error.
+When decoding fails, _null_ is returned to indicate the error. This is different from [new Data()](/reference/api/Data/constructor) where a runtime error is generated to stop the script.
 
 ## Syntax
 
 ``` js
-new Data()
-new Data(data)
-new Data(text)
-new Data(text, encoding)
-new Data(byteArray)
+Data.from(text)
+Data.from(text, encoding)
 ```
 
 ### Parameters
 
 <Parameters/>
 
+### Return value
+
+<ReturnValue/>
+
 ## See Also
 
 * [Data](/reference/api/Data)
-* [Data.from()](/reference/api/Data/from)
+* [new Data()](/reference/api/Data/constructor)

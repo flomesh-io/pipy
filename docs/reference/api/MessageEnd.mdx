@@ -3,6 +3,46 @@ title: "MessageEnd"
 api: MessageEnd
 ---
 
-# Constructor
+## Description
+
+**MessageEnd** marks the end of a message in an event stream.
+
+This event only acts as an ending mark to a message. It doesn't carry any other information with it.
+
+## Constructor
 
 <Constructor/>
+
+## Example
+
+> This example could be done more concisely with a [Message](/reference/api/Message) object.
+
+``` js
+pipy()
+
+.listen(8080)
+  .demuxHTTP('req')
+
+.pipeline('req')
+  .replaceMessage([
+    // This can also be done with a single Message object.
+    new MessageStart({
+      status: 200,
+      statusText: 'OK',
+      headers: {
+        'content-type': 'text/plain'
+      }
+    }),
+    new Data('Hello!\n'),
+    new MessageEnd,
+  ])
+```
+
+## See Also
+
+* [MessageStart](/reference/api/MessageStart)
+* [Message](/reference/api/Message)
+* [Data](/reference/api/Data)
+* [StreamEnd](/reference/api/StreamEnd)
+* [handleMessageEnd()](/reference/api/Configuration/handleMessageEnd)
+* [replaceMessageEnd()](/reference/api/Configuration/replaceMessageEnd)

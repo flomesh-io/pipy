@@ -3,13 +3,38 @@ title: "MessageStart()"
 api: MessageStart.constructor()
 ---
 
-# Syntax
+## Description
+
+Creates an instance of **MessageStart**.
+
+An optional parameter can be provided for its [head](/reference/api/MessageStart/head) property.
+
+## Syntax
 
 ``` js
 new MessageStart()
 new MessageStart(head)
 ```
 
-## Parameters
+### Parameters
 
 <Parameters/>
+
+## Example
+
+``` js
+// Create a MessageStart for an HTTP request
+new MessageStart({
+  method: 'POST',
+  path: '/api/v1/order',
+  headers: {
+    'host': 'example.com'
+    'content-type': 'application/json',
+  }
+})
+```
+
+## See Also
+
+* [MessageStart](/reference/api/MessageStart)
+* [head](/reference/api/MessageStart/head)

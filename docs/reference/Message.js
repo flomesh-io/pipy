@@ -1,13 +1,13 @@
 /**
- * Wrapper class combining MessageStart, Data and MessageEnd events.
+ * Message is a container of a series of events that compose a whole message in an event stream.
  */
 class Message {
 
   /**
-   * Constructs a Message with head and body.
+   * Creates an instance of Message.
    *
    * @param {Object} [head] Message head.
-   * @param {Data} body Message body.
+   * @param {string|Data} body Message body.
    */
   constructor(head, body) {}
 

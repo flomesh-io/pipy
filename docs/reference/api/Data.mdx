@@ -3,14 +3,49 @@ title: "Data"
 api: Data
 ---
 
-# Constructor
+## Description
+
+**Data** is an array of read-only octets. It can be read from network as an input event or created by script and sent out over to network.
+
+Once created, you can't alter a byte in it, but you can cut it short or enlarge it by joining to other **Data** objects.
+
+### Conversion from/to strings
+
+To convert from a string, you can [construct](/reference/api/Data/constructor) a **Data** object or call [Data.from()](/reference/api/Data/from) with the string as parameter, plus an optional _encoding_ parameter. The following encodings are supported:
+
+- "utf8" (default)
+- "hex"
+- "base64"
+- "base64url"
+
+To convert to a string, call [toString](/reference/api/Data/toString) with one of the above encodings as the optional _encoding_ parameter.
+
+### Create binary data using script
+
+To make raw binary data from scratch, first, create an array of numbers, each representing a byte, and then [construct](/reference/api/Data/constructor) a **Data** object with the array as parameter.
+
+After a **Data** object is created, you can also call [push()](/reference/api/Data/push) to concatenate it with other **Data** objects.
+
+## Constructor
 
 <Constructor/>
 
-# Properties
+## Static methods
+
+<StaticMethods/>
+
+## Properties
 
 <Properties/>
 
-# Methods
+## Methods
 
 <Methods/>
+
+## See Also
+
+* [MessageStart](/reference/api/MessageEnd)
+* [MessageEnd](/reference/api/MessageEnd)
+* [StreamEnd](/reference/api/StreamEnd)
+* [handleData()](/reference/api/Configuration/handleData)
+* [replaceData()](/reference/api/Configuration/replaceData)

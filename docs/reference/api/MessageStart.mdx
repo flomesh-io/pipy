@@ -3,10 +3,50 @@ title: "MessageStart"
 api: MessageStart
 ---
 
-# Constructor
+## Description
+
+**MessageStart** marks the start of a message in an event stream. It also contains header (or meta) information for that message in its [head](/reference/api/MessageStart/head) property.
+
+> The content of _head_ can vary according to the protocol being used. See [For each protocol](/reference/api/MessageStart/head/#for-each-protocol).
+
+## Constructor
 
 <Constructor/>
 
-# Properties
+## Properties
 
 <Properties/>
+
+## Example
+
+> This example could be done more concisely with a [Message](/reference/api/Message) object.
+
+``` js
+pipy()
+
+.listen(8080)
+  .demuxHTTP('req')
+
+.pipeline('req')
+  .replaceMessage([
+    // This can also be done with a single Message object.
+    new MessageStart({
+      status: 200,
+      statusText: 'OK',
+      headers: {
+        'content-type': 'text/plain'
+      }
+    }),
+    new Data('Hello!\n'),
+    new MessageEnd,
+  ])
+```
+
+## See Also
+
+* [MessageEnd](/reference/api/MessageEnd)
+* [Message](/reference/api/Message)
+* [Data](/reference/api/Data)
+* [StreamEnd](/reference/api/StreamEnd)
+* [handleMessageStart()](/reference/api/Configuration/handleMessageStart)
+* [replaceMessageStart()](/reference/api/Configuration/replaceMessageStart)
