@@ -175,6 +175,12 @@ void Outbound::resolve() {
     }
   );
 
+  if (Log::is_enabled(Log::DEBUG)) {
+    char desc[200];
+    describe(desc);
+    Log::debug("%s resolving hostname...", desc);
+  }
+
   if (m_options.connect_timeout > 0) {
     m_connect_timer.schedule(
       m_options.connect_timeout,
@@ -244,6 +250,12 @@ void Outbound::connect(const asio::ip::tcp::endpoint &target) {
       release();
     }
   );
+
+  if (Log::is_enabled(Log::DEBUG)) {
+    char desc[200];
+    describe(desc);
+    Log::debug("%s connecting...", desc);
+  }
 
   retain();
 }
