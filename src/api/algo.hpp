@@ -41,6 +41,11 @@ namespace algo {
 
 class Cache : public pjs::ObjectTemplate<Cache> {
 public:
+  struct Options {
+    int size = 0;
+    double ttl = 0;
+  };
+
   bool get(pjs::Context &ctx, const pjs::Value &key, pjs::Value &value);
   void set(pjs::Context &ctx, const pjs::Value &key, const pjs::Value &value);
   bool find(const pjs::Value &key, pjs::Value &value);
@@ -48,14 +53,15 @@ public:
   bool clear(pjs::Context &ctx);
 
 private:
-  Cache(int size_limit, pjs::Function *allocate, pjs::Function *free = nullptr);
+  Cache(const Options &options, pjs::Function *allocate, pjs::Function *free = nullptr);
   ~Cache();
 
   struct Entry {
     pjs::Value value;
+    double ttl;
   };
 
-  int m_size_limit;
+  Options m_options;
   pjs::Ref<pjs::Function> m_allocate;
   pjs::Ref<pjs::Function> m_free;
   pjs::Ref<pjs::OrderedHash<pjs::Value, Entry>> m_cache;

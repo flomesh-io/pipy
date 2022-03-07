@@ -1,31 +1,55 @@
 /**
+ * An ephemeral key-value storage that automatically cleans up old entries.
+ *
  * @memberof algo
  */
 class Cache {
 
   /**
-   * @param {(key) => void} add
-   * @param {(key, value) => void} [remove]
+   * @callback CacheAddCB
+   * @param {*} key
+   * @return {*}
+   *
+   * @callback CacheRemoveCB
+   * @param {*} key
+   * @param {*} value
    */
-  constructor(add, remove) {}
 
   /**
-   * @param {*} key
-   * @returns {*}
+   * Creates an instance of Cache.
+   *
+   * @param {CacheAddCB} [add] Callback when a new entry needs to be added.
+   * @param {CacheRemoveCB} [remove] Callback when an entry is about to be erased.
+   * @param {Object} [options] Options including size and ttl.
+   */
+  constructor(add, remove, options) {}
+
+  /**
+   * Looks up in Cache for the entry with the given key.
+   *
+   * @param {*} key Key to look up.
+   * @returns {*} Value corresponding to the key.
    */
   get(key) {}
 
   /**
-   * @param {*} key
-   * @param {*} value
+   * Creates or updates an entry in Cache.
+   *
+   * @param {*} key Key of the entry.
+   * @param {*} value Value of the entry.
    */
   set(key, value) {}
 
   /**
-   * @param {*} key
+   * Deletes an entry in Cache.
+   *
+   * @param {*} key Key of the entry to delete.
    */
   remove(key) {}
 
+  /**
+   * Deletes all entries in Cache.
+   */
   clear() {}
 }
 

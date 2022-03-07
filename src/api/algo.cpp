@@ -43,26 +43,36 @@ auto Algo::hash(const pjs::Value &value) -> size_t {
 // Cache
 //
 
-Cache::Cache(int size_limit, pjs::Function *allocate, pjs::Function *free)
-  : m_size_limit(size_limit)
+Cache::Cache(const Options &options, pjs::Function *allocate, pjs::Function *free)
+  : m_options(options)
   , m_allocate(allocate)
   , m_free(free)
   , m_cache(pjs::OrderedHash<pjs::Value, Entry>::make())
 {
+  m_options.ttl *= 1000;
 }
 
 Cache::~Cache() {
 }
 
 bool Cache::get(pjs::Context &ctx, const pjs::Value &key, pjs::Value &value) {
+  auto now = (m_options.ttl > 0 ? utils::now() : 0);
   Entry entry;
   bool found = m_cache->use(key, entry);
+  if (found) {
+    if (m_options.ttl > 0) {
+      if (now >= entry.ttl) {
+        found = false;
+      }
+    }
+  }
   if (!found) {
     if (!m_allocate) return false;
     pjs::Value arg(key);
     (*m_allocate)(ctx, 1, &arg, value);
     if (!ctx.ok()) return false;
     entry.value = value;
+    entry.ttl = now + m_options.ttl;
     m_cache->set(key, entry);
     return true;
   } else {
@@ -72,11 +82,13 @@ bool Cache::get(pjs::Context &ctx, const pjs::Value &key, pjs::Value &value) {
 }
 
 void Cache::set(pjs::Context &ctx, const pjs::Value &key, const pjs::Value &value) {
+  auto now = (m_options.ttl > 0 ? utils::now() : 0);
   Entry entry;
   entry.value = value;
+  entry.ttl = now + m_options.ttl;
   if (m_cache->set(key, entry)) {
-    if (m_size_limit > 0 && m_cache->size() > m_size_limit) {
-      int n = m_cache->size() - m_size_limit;
+    if (m_options.size > 0 && m_cache->size() > m_options.size) {
+      int n = m_cache->size() - m_options.size;
       pjs::OrderedHash<pjs::Value, Entry>::Iterator it(m_cache);
       if (m_free) {
         pjs::Value argv[2], ret;
@@ -100,9 +112,17 @@ void Cache::set(pjs::Context &ctx, const pjs::Value &key, const pjs::Value &valu
 }
 
 bool Cache::find(const pjs::Value &key, pjs::Value &value) {
+  auto now = (m_options.ttl > 0 ? utils::now() : 0);
   Entry entry;
   bool found = m_cache->use(key, entry);
   if (!found) return false;
+  if (m_options.ttl > 0) {
+    auto now = utils::now();
+    if (now >= entry.ttl) {
+      m_cache->erase(key);
+      return false;
+    }
+  }
   value = entry.value;
   return true;
 }
@@ -112,6 +132,10 @@ bool Cache::remove(pjs::Context &ctx, const pjs::Value &key) {
     Entry entry;
     auto found = m_cache->get(key, entry);
     if (found) {
+      if (m_options.ttl > 0) {
+        auto now = utils::now();
+        if (now >= entry.ttl) found = false;
+      }
       pjs::Value argv[2], ret;
       argv[0] = key;
       argv[1] = entry.value;
@@ -646,13 +670,33 @@ template<> void ClassDef<Cache>::init() {
   ctor([](Context &ctx) -> Object* {
     int size_limit;
     Function *allocate = nullptr, *free = nullptr;
-    if (ctx.try_arguments(0, &allocate, &free)) {
-      return Cache::make(0, allocate, free);
-    } else if (ctx.arguments(1, &size_limit, &allocate, &free)) {
-      return Cache::make(size_limit, allocate, free);
-    } else {
-      return nullptr;
+    Object *options = nullptr;
+    if (!ctx.arguments(0, &allocate, &free, &options)) return nullptr;
+    Cache::Options opts;
+    if (options) {
+      static ConstStr str_size("size"), str_ttl("ttl");
+      pjs::Value size, ttl;
+      options->get(str_size, size);
+      options->get(str_ttl, ttl);
+      if (!size.is_undefined()) {
+        if (!size.is_number()) {
+          ctx.error("options.size expects a number");
+          return nullptr;
+        }
+        opts.size = size.n();
+      }
+      if (!ttl.is_undefined()) {
+        if (ttl.is_number()) {
+          opts.ttl = ttl.n();
+        } else if (ttl.is_string()) {
+          opts.ttl = pipy::utils::get_seconds(ttl.s()->str());
+        } else {
+          ctx.error("options.size expects a number or a string");
+          return nullptr;
+        }
+      }
     }
+    return Cache::make(opts, allocate, free);
   });
 
   method("get", [](Context &ctx, Object *obj, Value &ret) {
