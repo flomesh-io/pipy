@@ -64,6 +64,9 @@ Open the browser of your choice, point it to `http://localhost:6060`. You will n
 * [Overview](https://flomesh.io/docs/intro/overview)
 * [Getting started](https://flomesh.io/docs/getting-started/build-install)
 * [Tutorials](https://flomesh.io/docs/tutorial/01-hello)
+* Reference
+  * [API Reference](https://flomesh.io/docs/reference/api)
+  * [PipyJS Reference](https://flomesh.io/docs/reference/pjs)
 * Learnings & Articles
   * [Katacoda](https://katacoda.com/flomesh-io) - Katacoda scenarios
   * [InfoQ article](https://www.infoq.com/articles/network-proxy-stream-processor-pipy/) - Brief Introduction
