@@ -1,5 +1,7 @@
 ![Pipy Logo](./gui/src/images/pipy-300.png)
 
+[中文](./README_zh.md) | [日本語](./README_jp.md)
+
 # Pipy
 
 Pipy is a programmable network proxy for the cloud, edge and IoT. Written in C++, Pipy is extremely lightweight and fast. It's also programmable by using PipyJS, a tailored version of the standard JavaScript language.
@@ -59,30 +61,9 @@ Open the browser of your choice, point it to `http://localhost:6060`. You will n
 
 ## Documentation
 
-You can find the Pipy documentation under `docs/`.
-
-* [Overview](./docs/intro/overview.mdx)
-* [Concept](./docs/intro/concepts.mdx)
-* [Quick start](./docs/getting-started/quick-start.mdx)
-* Tutorials
-    * [01 Hello world](./docs/tutorial/01-hello.mdx)
-    * [02 Echo](./docs/tutorial/02-echo.mdx)
-    * [03 Proxy](./docs/tutorial/03-proxy.mdx)
-    * [04 Routing](./docs/tutorial/04-routing.mdx)
-    * [05 Plugins](./docs/tutorial/05-plugins.mdx)
-    * [06 Configuration](./docs/tutorial/06-configuration.mdx)
-    * [07 Load balancing](./docs/tutorial/07-load-balancing.mdx)
-    * [08 Load balancing improved](./docs/tutorial/08-load-balancing-improved.mdx)
-    * [09 Connection pool](./docs/tutorial/09-connection-pool.mdx)
-    * [10 Path rewriting](./docs/tutorial/10-path-rewriting.mdx)
-    * [11 Logging](./docs/tutorial/11-logging.mdx)
-    * [12 JWT](./docs/tutorial/12-jwt.mdx)
-    * [13 Ban](./docs/tutorial/13-ban.mdx)
-    * [14 Throttle](./docs/tutorial/14-throttle.mdx)
-    * [15 Cache](./docs/tutorial/15-cache.mdx)
-    * [16 Serve static](./docs/tutorial/16-serve-static.mdx)
-    * [17 Data transformation](./docs/tutorial/17-body-transform.mdx)
-    * [18 TLS](./docs/tutorial/18-tls.mdx)
+* [Overview](https://flomesh.io/docs/intro/overview)
+* [Getting started](https://flomesh.io/docs/getting-started/build-install)
+* [Tutorials](https://flomesh.io/docs/tutorial/01-hello)
 * Learnings & Articles
   * [Katacoda](https://katacoda.com/flomesh-io) - Katacoda scenarios
   * [InfoQ article](https://www.infoq.com/articles/network-proxy-stream-processor-pipy/) - Brief Introduction
@@ -124,6 +105,3 @@ Please refer to [COPYRIGHT](https://github.com/flomesh-io/pipy/blob/main/COPYRIG
 * For other topics not suitable for the public, please email to pipy@flomesh.io
 * For public discussions, please go to GitHub issues: https://github.com/flomesh-io/pipy/issues
 
-## Translations
-
-### [中文](./README_zh.md)

@@ -1,3 +1,7 @@
+![Pipy Logo](./gui/src/images/pipy-300.png)
+
+[English](./README.md) | [日本語](./README_jp.md)
+
 # Pipy
 
 Pipy 是面向云、边缘和 IoT 的可编程网络代理。使用 C++ 开发，因此 Pipy 非常轻量和快速。还可以使用标准 JavaScript 定制版的 PipyJS 进行编程。
@@ -57,30 +61,9 @@ $ bin/pipy
 
 ## 文档
 
-在 `docs/` 可以浏览 Pipy 的文档：
-
-* [概述](./docs/intro/overview.zh.mdx)
-* [概念](./docs/intro/concepts.zh.mdx)
-* [快速开始](./docs/getting-started/quick-start.zh.mdx)
-* 教程
-    * [01 Hello world](./docs/tutorial/01-hello.zh.mdx)
-    * [02 回显](./docs/tutorial/02-echo.zh.mdx)
-    * [03 代理](./docs/tutorial/03-proxy.zh.mdx)
-    * [04 路由](./docs/tutorial/04-routing.zh.mdx)
-    * [05 插件](./docs/tutorial/05-plugins.zh.mdx)
-    * [06 配置](./docs/tutorial/06-configuration.zh.mdx)
-    * [07 负载均衡](./docs/tutorial/07-load-balancing.zh.mdx)
-    * [08 负载均衡进阶](./docs/tutorial/08-load-balancing-improved.zh.mdx)
-    * [09 连接池](./docs/tutorial/09-connection-pool.zh.mdx)
-    * [10 路径重写](./docs/tutorial/10-path-rewriting.zh.mdx)
-    * [11 Logging](./docs/tutorial/11-logging.zh.mdx)
-    * [12 JWT](./docs/tutorial/12-jwt.zh.mdx)
-    * [13 黑白名单](./docs/tutorial/13-ban.zh.mdx)
-    * [14 限流](./docs/tutorial/14-throttle.zh.mdx)
-    * [15 缓存](./docs/tutorial/15-cache.zh.mdx)
-    * [16 静态资源服务](./docs/tutorial/16-serve-static.zh.mdx)
-    * [17 数据格式转换](./docs/tutorial/17-body-transform.zh.mdx)
-    * [18 TLS](./docs/tutorial/18-tls.zh.mdx)
+* [概述](https://flomesh.io/docs/intro/overview)
+* [开始使用](https://flomesh.io/docs/getting-started/build-install)
+* [教程](https://flomesh.io/docs/tutorial/01-hello)
 * 学习和文章
   * [Katacoda](https://katacoda.com/flomesh-io) - Katacoda 场景
   * [InfoQ 文章](https://www.infoq.com/articles/network-proxy-stream-processor-pipy/) - 简要介绍
