@@ -63,6 +63,7 @@ void Data::pack(const Data &data, Producer *producer, double vacancy) {
         length
       );
       tail->length += length;
+      m_size += length;
       if (length < view->length) {
         push_view(
           new View(
