@@ -54,29 +54,32 @@ class Cache {
 }
 
 /**
- * Utility class for URI-based routing.
+ * Path-based routing algorithm using a search tree.
+ *
  * @memberof algo
  */
- class URLRouter {
+class URLRouter {
 
   /**
-   * @param {Object} routes
+   * @param {Object} routes Path-to-value mapping table.
    */
   constructor(routes) {}
 
   /**
-   * @param {string} url
-   * @param {*} value
+   * Adds a path-to-value mapping.
+   *
+   * @param {string} url Path to map.
+   * @param {*} value Value mapped to the path.
    */
   add(url, value) {}
 
   /**
-   * Find an entry that matches the given URI.
+   * Find the value that is mapped to the given path.
    *
-   * @param {string} path Parts of the URI path to find.
-   * @returns {*} The value of the entry if found.
+   * @param {string} path Parts of the path to search for.
+   * @returns {*} The value mapped to the path if found.
    */
-  find(...path) {}
+  find(path) {}
 }
 
 /**
