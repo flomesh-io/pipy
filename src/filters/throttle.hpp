@@ -27,6 +27,7 @@
 #define THROTTLE_HPP
 
 #include "filter.hpp"
+#include "input.hpp"
 #include "buffer.hpp"
 #include "list.hpp"
 #include "timer.hpp"
@@ -88,8 +89,10 @@ private:
   pjs::Value m_quota;
   pjs::Value m_account;
   EventBuffer m_buffer;
-  bool m_stalled = false;
+  pjs::Ref<InputSource::Tap> m_closed_tap;
 
+  void pause();
+  void resume();
   bool flush();
 };
 

@@ -28,6 +28,7 @@
 
 #include "net.hpp"
 #include "event.hpp"
+#include "input.hpp"
 #include "timer.hpp"
 #include "list.hpp"
 
@@ -44,7 +45,8 @@ class Data;
 class Outbound :
   public pjs::RefCount<Outbound>,
   public pjs::Pooled<Outbound>,
-  public List<Outbound>::Item
+  public List<Outbound>::Item,
+  public InputSource
 {
 public:
   struct Options {
@@ -106,6 +108,9 @@ private:
   bool m_overflowed = false;
   bool m_pumping = false;
   bool m_ended = false;
+
+  virtual void on_tap_open() override;
+  virtual void on_tap_close() override;
 
   void start(double delay);
   void resolve();

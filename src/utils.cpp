@@ -221,6 +221,19 @@ auto get_byte_size(const std::string &str) -> size_t {
   return n;
 }
 
+bool get_byte_size(const pjs::Value &val, size_t &out) {
+  if (val.is_undefined()) return true;
+  if (val.is_number()) {
+    out = val.n();
+    return true;
+  }
+  if (val.is_string()) {
+    out = get_byte_size(val.s()->str());
+    return true;
+  }
+  return false;
+}
+
 auto get_seconds(const std::string &str) -> double {
   if (str.empty()) return 0;
   auto n = std::atof(str.c_str());
@@ -231,6 +244,19 @@ auto get_seconds(const std::string &str) -> double {
     case 's': n *= 1;
   }
   return n;
+}
+
+bool get_seconds(const pjs::Value &val, double &out) {
+  if (val.is_undefined()) return true;
+  if (val.is_number()) {
+    out = val.n();
+    return true;
+  }
+  if (val.is_string()) {
+    out = get_seconds(val.s()->str());
+    return true;
+  }
+  return false;
 }
 
 void gen_uuid_v4(std::string &str) {

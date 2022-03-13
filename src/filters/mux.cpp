@@ -25,6 +25,7 @@
 
 #include "mux.hpp"
 #include "pipeline.hpp"
+#include "input.hpp"
 
 namespace pipy {
 
@@ -224,7 +225,7 @@ void MuxBase::SessionManager::recycle() {
   m_recycle_timer.schedule(
     1.0,
     [this]() {
-      Pipeline::AutoReleasePool arp;
+      InputContext ic;
       m_recycling = false;
       auto now = utils::now();
       auto s = m_free_sessions.head();

@@ -36,11 +36,11 @@
 
 namespace pipy {
 
-class Context;
 class Module;
-class Filter;
 class Pipeline;
-class Message;
+class Filter;
+class Context;
+class InputContext;
 
 //
 // PipelineDef
@@ -108,24 +108,6 @@ class Pipeline :
   public EventFunction
 {
 public:
-  class AutoReleasePool
-  {
-  public:
-    AutoReleasePool();
-    ~AutoReleasePool();
-
-  private:
-    AutoReleasePool* m_next;
-    Pipeline* m_pipelines = nullptr;
-    bool m_cleaning_up = false;
-
-    static AutoReleasePool* s_stack;
-
-    static void add(Pipeline *pipeline);
-
-    friend class Pipeline;
-  };
-
   static auto make(PipelineDef *def, Context *ctx) -> Pipeline* {
     return def->alloc(ctx);
   }
@@ -161,6 +143,7 @@ private:
   friend class pjs::RefCount<Pipeline>;
   friend class PipelineDef;
   friend class Filter;
+  friend class InputContext;
 };
 
 } // namespace pipy

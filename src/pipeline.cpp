@@ -26,6 +26,7 @@
 #include "pipeline.hpp"
 #include "filter.hpp"
 #include "context.hpp"
+#include "input.hpp"
 #include "message.hpp"
 #include "module.hpp"
 #include "logging.hpp"
@@ -148,7 +149,7 @@ void Pipeline::on_event(Event *evt) {
 
 void Pipeline::auto_release() {
   if (!m_auto_release) {
-    AutoReleasePool::add(this);
+    InputContext::add(this);
   }
 }
 
@@ -171,46 +172,6 @@ void Pipeline::reset() {
   }
   m_context = nullptr;
   m_auto_release = false;
-}
-
-//
-// Pipeline::AutoReleasePool
-//
-
-Pipeline::AutoReleasePool* Pipeline::AutoReleasePool::s_stack = nullptr;
-
-Pipeline::AutoReleasePool::AutoReleasePool() {
-  m_next = s_stack;
-  s_stack = this;
-}
-
-Pipeline::AutoReleasePool::~AutoReleasePool() {
-  m_cleaning_up = true;
-  for (
-    auto *p = m_pipelines;
-    p; p = p->m_next_auto_release
-  ) {
-    p->m_auto_release = false;
-    p->release();
-  }
-  s_stack = m_next;
-}
-
-void Pipeline::AutoReleasePool::add(Pipeline *pipeline) {
-  pipeline->retain();
-  if (s_stack) {
-    if (s_stack->m_cleaning_up) {
-      Log::error(
-        "[pipeline %p] auto-release recursion, name = %s",
-        pipeline, pipeline->def()->name()->c_str()
-      );
-    }
-    pipeline->m_auto_release = true;
-    pipeline->m_next_auto_release = s_stack->m_pipelines;
-    s_stack->m_pipelines = pipeline;
-  } else {
-    pipeline->release();
-  }
 }
 
 } // namespace pipy

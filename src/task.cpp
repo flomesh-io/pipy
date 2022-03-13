@@ -26,6 +26,7 @@
 #include "task.hpp"
 #include "listener.hpp"
 #include "pipeline.hpp"
+#include "input.hpp"
 #include "module.hpp"
 #include "worker.hpp"
 #include "utils.hpp"
@@ -138,7 +139,7 @@ void Task::run() {
       m_pipeline_def->module()->worker()->new_runtime_context()
     );
     m_pipeline->chain(EventTarget::input());
-    Pipeline::AutoReleasePool arp;
+    InputContext ic;
     auto input = m_pipeline->input();
     input->input(MessageStart::make());
     input->input(MessageEnd::make());

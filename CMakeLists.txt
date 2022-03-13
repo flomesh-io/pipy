@@ -177,6 +177,7 @@ add_executable(pipy
   src/graph.cpp
   src/gui-tarball.cpp
   src/inbound.cpp
+  src/input.cpp
   src/listener.cpp
   src/logging.cpp
   src/main.cpp

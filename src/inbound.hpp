@@ -28,6 +28,7 @@
 
 #include "net.hpp"
 #include "event.hpp"
+#include "input.hpp"
 #include "timer.hpp"
 #include "list.hpp"
 
@@ -44,6 +45,7 @@ class Pipeline;
 class Inbound :
   public pjs::ObjectTemplate<Inbound>,
   public EventTarget,
+  public InputSource,
   public List<Inbound>::Item
 {
 public:
@@ -61,8 +63,6 @@ public:
   auto buffered() const -> int { return m_buffer.size(); }
 
   void accept(asio::ip::tcp::acceptor &acceptor);
-  void pause();
-  void resume();
 
 private:
   Inbound(Listener *listener, const Options &options);
@@ -95,6 +95,8 @@ private:
   bool m_ended = false;
 
   virtual void on_event(Event *evt) override;
+  virtual void on_tap_open() override;
+  virtual void on_tap_close() override;
 
   void start();
   void receive();

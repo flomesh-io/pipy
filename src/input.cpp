@@ -23,60 +23,52 @@
  *  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef FSTREAM_HPP
-#define FSTREAM_HPP
-
-#include "net.hpp"
-#include "event.hpp"
 #include "input.hpp"
+#include "pipeline.hpp"
+#include "logging.hpp"
 
 namespace pipy {
 
-class Data;
-
 //
-// FileStream
+// InputContext
 //
 
-class FileStream :
-  public pjs::RefCount<FileStream>,
-  public pjs::Pooled<FileStream>,
-  public EventFunction,
-  public InputSource
+InputContext* InputContext::s_stack = nullptr;
+
+InputContext::InputContext(InputSource *source)
+  : m_tap(source ? source->tap() : new InputSource::Tap())
 {
-public:
-  static auto make(int fd, Data::Producer *dp) -> FileStream* {
-    return new FileStream(fd, dp);
+  m_next = s_stack;
+  s_stack = this;
+}
+
+InputContext::~InputContext() {
+  m_cleaning_up = true;
+  for (
+    auto *p = m_pipelines;
+    p; p = p->m_next_auto_release
+  ) {
+    p->m_auto_release = false;
+    p->release();
   }
+  s_stack = m_next;
+}
 
-  auto fd() const -> int { return m_fd; }
-  void set_buffer_limit(size_t size) { m_buffer_limit = size; }
-  void close();
-
-private:
-  FileStream(int fd, Data::Producer *dp);
-
-  virtual void on_event(Event *evt) override;
-  virtual void on_tap_open() override;
-  virtual void on_tap_close() override;
-
-  int m_fd;
-  Data::Producer* m_dp;
-  asio::posix::stream_descriptor m_stream;
-  Data m_buffer;
-  size_t m_buffer_limit = 0;
-  bool m_overflowed = false;
-  bool m_pumping = false;
-  bool m_ended = false;
-
-  void read();
-  void write(Data *data);
-  void end();
-  void pump();
-
-  friend class pjs::RefCount<FileStream>;
-};
+void InputContext::add(Pipeline *pipeline) {
+  pipeline->retain();
+  if (s_stack) {
+    if (s_stack->m_cleaning_up) {
+      Log::error(
+        "[pipeline %p] auto-release recursion, name = %s",
+        pipeline, pipeline->def()->name()->c_str()
+      );
+    }
+    pipeline->m_auto_release = true;
+    pipeline->m_next_auto_release = s_stack->m_pipelines;
+    s_stack->m_pipelines = pipeline;
+  } else {
+    pipeline->release();
+  }
+}
 
 } // namespace pipy
-
-#endif // FSTREAM_HPP

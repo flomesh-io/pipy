@@ -55,9 +55,9 @@ ThrottleBase::~ThrottleBase()
 
 void ThrottleBase::reset() {
   Filter::reset();
-  if (m_stalled) {
+  if (m_closed_tap) {
     m_current_account->dequeue(this);
-    m_stalled = false;
+    resume();
   }
   m_current_account = nullptr;
   m_buffer.clear();
@@ -79,15 +79,28 @@ void ThrottleBase::process(Event *evt) {
     m_current_account = m_account_manager->get(account, quota_supply);
   }
 
-  if (m_stalled) {
+  if (m_closed_tap) {
     m_buffer.push(evt);
 
   } else if (auto stalled = consume(evt, m_current_account->m_quota)) {
-    if (!m_stalled) {
-      m_stalled = true;
-      m_current_account->enqueue(this);
-    }
+    pause();
     m_buffer.push(stalled);
+  }
+}
+
+void ThrottleBase::pause() {
+  if (!m_closed_tap) {
+    m_closed_tap = InputContext::tap();
+    m_closed_tap->close();
+    m_current_account->enqueue(this);
+  }
+}
+
+void ThrottleBase::resume() {
+  if (m_closed_tap) {
+    m_current_account->dequeue(this);
+    m_closed_tap->open();
+    m_closed_tap = nullptr;
   }
 }
 
@@ -101,10 +114,7 @@ bool ThrottleBase::flush() {
       evt->release();
     }
   }
-  if (m_stalled) {
-    m_current_account->dequeue(this);
-    m_stalled = false;
-  }
+  resume();
   return true;
 }
 
@@ -162,7 +172,7 @@ auto ThrottleBase::AccountManager::get(const pjs::Value &key, double quota) -> A
 }
 
 void ThrottleBase::AccountManager::supply() {
-  Pipeline::AutoReleasePool arp;
+  InputContext ic;
   for (const auto &p : m_accounts) {
     p.second->supply();
   }

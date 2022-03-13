@@ -131,6 +131,12 @@ void Outbound::reset() {
   m_socket.close(ec);
 }
 
+void Outbound::on_tap_open() {
+}
+
+void Outbound::on_tap_close() {
+}
+
 void Outbound::start(double delay) {
   if (delay > 0) {
     m_retry_timer.schedule(
@@ -263,7 +269,7 @@ void Outbound::connect(const asio::ip::tcp::endpoint &target) {
 void Outbound::restart(StreamEnd::Error err) {
   if (m_options.retry_count >= 0 && m_retries >= m_options.retry_count) {
     m_connecting = false;
-    Pipeline::AutoReleasePool arp;
+    InputContext ic(this);
     output(StreamEnd::make(err));
   } else {
     m_retries++;
@@ -287,7 +293,7 @@ void Outbound::receive() {
 
       if (ec != asio::error::operation_aborted) {
         if (n > 0) {
-          Pipeline::AutoReleasePool arp;
+          InputContext ic(this);
           buffer->pop(buffer->size() - n);
           output(buffer);
           output(Data::flush());
@@ -421,7 +427,7 @@ void Outbound::close(StreamEnd::Error err) {
     }
   }
 
-  Pipeline::AutoReleasePool arp;
+  InputContext ic(this);
   output(StreamEnd::make(err));
 }
 

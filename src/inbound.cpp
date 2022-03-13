@@ -102,13 +102,7 @@ void Inbound::accept(asio::ip::tcp::acceptor &acceptor) {
   retain();
 }
 
-void Inbound::pause() {
-  if (m_receiving_state == RECEIVING) {
-    m_receiving_state = PAUSING;
-  }
-}
-
-void Inbound::resume() {
+void Inbound::on_tap_open() {
   switch (m_receiving_state) {
     case PAUSING:
       m_receiving_state = RECEIVING;
@@ -119,6 +113,12 @@ void Inbound::resume() {
       release();
       break;
     default: break;
+  }
+}
+
+void Inbound::on_tap_close() {
+  if (m_receiving_state == RECEIVING) {
+    m_receiving_state = PAUSING;
   }
 }
 
@@ -174,7 +174,7 @@ void Inbound::receive() {
 
       if (ec != asio::error::operation_aborted) {
         if (n > 0) {
-          Pipeline::AutoReleasePool arp;
+          InputContext ic(this);
           buffer->pop(buffer->size() - n);
           output(buffer);
           output(Data::flush());
@@ -295,7 +295,7 @@ void Inbound::close(StreamEnd::Error err) {
     }
   }
 
-  Pipeline::AutoReleasePool arp;
+  InputContext ic(this);
   output(StreamEnd::make(err));
 }
 

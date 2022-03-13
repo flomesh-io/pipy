@@ -59,11 +59,17 @@ void FileStream::on_event(Event *evt) {
   }
 }
 
+void FileStream::on_tap_open() {
+}
+
+void FileStream::on_tap_close() {
+}
+
 void FileStream::read() {
   pjs::Ref<Data> buffer(m_dp->make(RECEIVE_BUFFER_SIZE));
 
   auto on_received = [=](const std::error_code &ec, size_t n) {
-    Pipeline::AutoReleasePool arp;
+    InputContext ic(this);
 
     if (n > 0) {
       buffer->pop(buffer->size() - n);

@@ -25,6 +25,7 @@
 
 #include "fetch.hpp"
 #include "context.hpp"
+#include "input.hpp"
 #include "pipeline.hpp"
 #include "message.hpp"
 #include "filters/connect.hpp"
@@ -151,7 +152,7 @@ void Fetch::pump() {
     m_current_request = &m_request_queue.front();
     auto msg = m_current_request->message;
 
-    Pipeline::AutoReleasePool arp;
+    InputContext ic;
     auto inp = m_pipeline->input();
     inp->input(MessageStart::make(msg->head()));
     if (auto *body = msg->body()) inp->input(body);
