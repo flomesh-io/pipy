@@ -279,11 +279,12 @@ private:
 
   bool read(int &n) {
     n = 0;
-    int c;
+    int c, s = 0;
     do {
       c = read();
       if (c < 0) return false;
-      n = (n << 7) || (c & 0x7f);
+      n |= (c & 0x7f) << s;
+      s += 7;
     } while (c & 0x80);
     return true;
   }
@@ -437,6 +438,7 @@ private:
     pjs::Str *client_id;
     if (!read(client_id)) return false;
     m_packet->set(STR_clientID, client_id);
+    m_packet->set(STR_cleanStart, bool(flags & 0x02));
 
     if (flags & 0x04) {
       pjs::Object *will = pjs::Object::make();
@@ -511,10 +513,79 @@ private:
 };
 
 //
+// DataBuilder
+//
+
+class DataBuilder {
+public:
+  auto buffer() const -> const Data& {
+    return m_buffer;
+  }
+
+  void push(const Data &data) {
+    m_buffer.push(data);
+  }
+
+  void push(uint8_t c) {
+    s_dp.push(&m_buffer, c);
+  }
+
+  void push(uint16_t n) {
+    push(uint8_t((n >> 8) & 0xff));
+    push(uint8_t((n >> 0) & 0xff));
+  }
+
+  void push(uint32_t n) {
+    push(uint8_t((n >> 24) & 0xff));
+    push(uint8_t((n >> 16) & 0xff));
+    push(uint8_t((n >>  8) & 0xff));
+    push(uint8_t((n >>  0) & 0xff));
+  }
+
+  void push(int n) {
+    uint8_t buf[4];
+    int len = make_var_int(n, buf);
+    s_dp.push(&m_buffer, buf, len);
+  }
+
+  void push(pjs::Str *s) {
+    push(uint16_t(s->size()));
+    s_dp.push(&m_buffer, s->str());
+  }
+
+  void push(Data *data) {
+    if (data) {
+      push(uint16_t(data->size()));
+      push(*data);
+    } else {
+      push(uint16_t(0));
+    }
+  }
+
+protected:
+  Data m_buffer;
+
+  static int make_var_int(int n, uint8_t buf[4]) {
+    int i = 0;
+    do {
+      uint8_t b = n & 0x7f;
+      n >>= 7;
+      if (n && i < 3) b |= 0x80;
+      buf[i++] = b;
+    } while (n && i < 4);
+    return i;
+  }
+
+  static Data::Producer s_dp;
+};
+
+Data::Producer DataBuilder::s_dp("MQTT Encoder");
+
+//
 // PacketBuilder
 //
 
-class PacketBuilder {
+class PacketBuilder : private DataBuilder {
 public:
   PacketBuilder(int protocol_level, pjs::Object *packet, Data &out)
     : m_protocol_level(protocol_level)
@@ -568,6 +639,7 @@ public:
     if (retain) flags |= 0x01;
     push(get(m_packet, STR_topicName, pjs::Str::empty));
     if (qos > 0) push(get(m_packet, STR_packetIdentifier, uint16_t(0)));
+    push_properties();
     push(payload);
     frame(PacketType::PUBLISH, flags);
   }
@@ -685,7 +757,6 @@ private:
   int m_protocol_level;
   pjs::Object* m_packet;
   Data& m_out;
-  Data m_buffer;
 
   bool get(pjs::Object *obj, pjs::Str *k, bool def) {
     pjs::Value v; obj->get(k, v);
@@ -731,88 +802,49 @@ private:
     return v.is_object() ? v.o() : nullptr;
   }
 
-  void push(const Data &data) {
-    m_buffer.push(data);
-  }
-
-  void push(uint8_t c) {
-    s_dp.push(&m_buffer, c);
-  }
-
-  void push(uint16_t n) {
-    push(uint8_t((n >> 8) & 0xff));
-    push(uint8_t((n >> 0) & 0xff));
-  }
-
-  void push(uint32_t n) {
-    push(uint8_t((n >> 24) & 0xff));
-    push(uint8_t((n >> 16) & 0xff));
-    push(uint8_t((n >>  8) & 0xff));
-    push(uint8_t((n >>  0) & 0xff));
-  }
-
-  void push(int n) {
-    uint8_t buf[4];
-    int len = make_var_int(n, buf);
-    s_dp.push(&m_buffer, buf, len);
-  }
-
-  void push(pjs::Str *s) {
-    push(uint16_t(s->size()));
-    s_dp.push(&m_buffer, s->str());
-  }
-
-  void push(Data *data) {
-    if (data) {
-      push(uint16_t(data->size()));
-      push(*data);
-    } else {
-      push(uint16_t(0));
-    }
-  }
-
   void push_properties() {
     if (m_protocol_level >= 5) {
+      DataBuilder db;
       pjs::Value v; m_packet->get(STR_properties, v);
       if (v.is_object() && v.o()) {
         v.o()->iterate_all(
-          [this](pjs::Str *k, pjs::Value &v) {
+          [&](pjs::Str *k, pjs::Value &v) {
             if (auto *p = s_property_map.by_name(k)) {
-              push(p->id);
+              db.push(p->id);
               switch (p->type) {
                 case PropertyMap::Property::INT: {
                   int n = v.to_number();
-                  push(n);
+                  db.push(n);
                   break;
                 }
                 case PropertyMap::Property::INT8: {
                   uint8_t n = v.to_number();
-                  push(n);
+                  db.push(n);
                   break;
                 }
                 case PropertyMap::Property::INT16: {
                   uint16_t n = v.to_number();
-                  push(n);
+                  db.push(n);
                   break;
                 }
                 case PropertyMap::Property::INT32: {
                   uint32_t n = v.to_number();
-                  push(n);
+                  db.push(n);
                   break;
                 }
                 case PropertyMap::Property::STR: {
                   auto s = v.to_string();
-                  push(s);
+                  db.push(s);
                   s->release();
                   break;
                 }
                 case PropertyMap::Property::BIN: {
                   if (v.is_instance_of<Data>()) {
                     auto data = v.as<Data>();
-                    push(uint16_t(data->size()));
-                    push(*data);
+                    db.push(uint16_t(data->size()));
+                    db.push(*data);
                   } else {
-                    push(uint16_t(0));
+                    db.push(uint16_t(0));
                   }
                   break;
                 }
@@ -821,14 +853,16 @@ private:
             } else {
               int id = 38; // user property
               auto s = v.to_string();
-              push(id);
-              push(k);
-              push(s);
+              db.push(id);
+              db.push(k);
+              db.push(s);
               s->release();
             }
           }
         );
       }
+      push(int(db.buffer().size()));
+      push(db.buffer());
     }
   }
 
@@ -856,24 +890,7 @@ private:
     s_dp.push(&m_out, buf, len);
     m_out.push(m_buffer);
   }
-
-  static int make_var_int(int n, uint8_t buf[4]) {
-    int i = 0;
-    for (int p = 21; p >= 0; p -= 7) {
-      uint8_t b = (n >> p) & 0x7f;
-      if (p == 0) {
-        buf[i++] = b;
-      } else if (b) {
-        buf[i++] = b | 0x80;
-      }
-    }
-    return i;
-  }
-
-  static Data::Producer s_dp;
 };
-
-Data::Producer PacketBuilder::s_dp("MQTT Encoder");
 
 //
 // Decoder
@@ -904,6 +921,7 @@ void Decoder::reset() {
   Filter::reset();
   m_protocol_level = 0;
   m_state = FIXED_HEADER;
+  m_buffer.clear();
 }
 
 void Decoder::process(Event *evt) {
@@ -922,10 +940,12 @@ void Decoder::process(Event *evt) {
           case FIXED_HEADER:
             m_fixed_header = c;
             m_remaining_length = 0;
+            m_remaining_length_shift = 0;
             state = REMAINING_LENGTH;
             return false;
           case REMAINING_LENGTH:
-            m_remaining_length = (m_remaining_length << 7) | (c & 0x7f);
+            m_remaining_length |= (c & 0x7f) << m_remaining_length_shift;
+            m_remaining_length_shift += 7;
             if (c & 0x80) return false;
             if (!m_remaining_length) {
               auto type = PacketType(m_fixed_header >> 4);
@@ -937,6 +957,7 @@ void Decoder::process(Event *evt) {
               state = FIXED_HEADER;
               return false;
             } else {
+              m_buffer.clear();
               state = REMAINING_DATA;
               return true;
             }

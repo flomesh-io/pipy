@@ -60,8 +60,9 @@ private:
   State m_state;
   uint8_t m_fixed_header;
   uint32_t m_remaining_length;
-  Data m_buffer;
+  int m_remaining_length_shift;
   int m_protocol_level;
+  Data m_buffer;
 
   void message();
 };
