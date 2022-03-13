@@ -39,7 +39,11 @@ namespace mqtt {
 
 class Decoder : public Filter {
 public:
-  Decoder();
+  struct Options {
+    pjs::Value protocol_level;
+  };
+
+  Decoder(const Options &options);
 
 private:
   Decoder(const Decoder &r);
@@ -57,6 +61,7 @@ private:
     ERROR,
   };
 
+  Options m_options;
   State m_state;
   uint8_t m_fixed_header;
   uint32_t m_remaining_length;

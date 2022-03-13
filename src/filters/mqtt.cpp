@@ -896,12 +896,14 @@ private:
 // Decoder
 //
 
-Decoder::Decoder()
+Decoder::Decoder(const Options &options)
+  : m_options(options)
 {
 }
 
 Decoder::Decoder(const Decoder &r)
-  : Decoder()
+  : Filter(r)
+  , m_options(r.m_options)
 {
 }
 
@@ -993,6 +995,23 @@ void Decoder::message() {
   head->dup(m_fixed_header & 0x08);
   head->retained(m_fixed_header & 1);
 
+  if (!m_protocol_level) {
+    pjs::Value protocol_level;
+    if (!eval(m_options.protocol_level, protocol_level)) return;
+    if (!protocol_level.is_undefined()) {
+      if (protocol_level.is_number()) {
+        int n = protocol_level.n();
+        if (n == 4 || n == 5) {
+          m_protocol_level = protocol_level.n();
+        } else {
+          Log::error("[decodeMQTT] options.protocolLevel expects to be 4 or 5");
+        }
+      } else {
+        Log::error("[decodeMQTT] options.protocolLevel expects a number or a function returning a number");
+      }
+    }
+  }
+
   PacketParser parser(type, m_protocol_level, head, m_buffer);
   parser.decode();
   output(MessageStart::make(head));
@@ -1023,7 +1042,11 @@ Encoder::Encoder()
 }
 
 Encoder::Encoder(const Encoder &r)
-  : Encoder()
+  : Filter(r)
+  , m_prop_type("type")
+  , m_prop_qos("qos")
+  , m_prop_dup("dup")
+  , m_prop_retain("retain")
 {
 }
 

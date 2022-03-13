@@ -205,8 +205,18 @@ void Configuration::decode_http_response(pjs::Object *options) {
   append_filter(new http::ResponseDecoder(options));
 }
 
-void Configuration::decode_mqtt() {
-  append_filter(new mqtt::Decoder());
+void Configuration::decode_mqtt(pjs::Object *options) {
+  mqtt::Decoder::Options opts;
+  if (options) {
+    options->get("protocolLevel", opts.protocol_level);
+    if (!opts.protocol_level.is_undefined() &&
+        !opts.protocol_level.is_number() &&
+        !opts.protocol_level.is_function()
+    ) {
+      throw std::runtime_error("options.protocolLevel expects a number or a function");
+    }
+  }
+  append_filter(new mqtt::Decoder(opts));
 }
 
 void Configuration::decompress_http(pjs::Function *enable) {
@@ -721,8 +731,8 @@ template<> void ClassDef<Configuration>::init() {
 
   // Configuration.demuxHTTP
   method("demuxHTTP", [](Context &ctx, Object *thiz, Value &result) {
-    pjs::Str *target;
-    pjs::Object *options = nullptr;
+    Str *target;
+    Object *options = nullptr;
     if (!ctx.arguments(1, &target, &options)) return;
     try {
       thiz->as<Configuration>()->demux_http(target, options);
@@ -754,7 +764,7 @@ template<> void ClassDef<Configuration>::init() {
 
   // Configuration.decodeHTTPResponse
   method("decodeHTTPResponse", [](Context &ctx, Object *thiz, Value &result) {
-    pjs::Object *options = nullptr;
+    Object *options = nullptr;
     if (!ctx.arguments(0, &options)) return;
     try {
       thiz->as<Configuration>()->decode_http_response(options);
@@ -766,8 +776,10 @@ template<> void ClassDef<Configuration>::init() {
 
   // Configuration.decodeMQTT
   method("decodeMQTT", [](Context &ctx, Object *thiz, Value &result) {
+    Object *options = nullptr;
+    if (!ctx.arguments(0, &options)) return;
     try {
-      thiz->as<Configuration>()->decode_mqtt();
+      thiz->as<Configuration>()->decode_mqtt(options);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -776,7 +788,7 @@ template<> void ClassDef<Configuration>::init() {
 
   // Configuration.decompressHTTP
   method("decompressHTTP", [](Context &ctx, Object *thiz, Value &result) {
-    pjs::Function *enable = nullptr;
+    Function *enable = nullptr;
     if (!ctx.arguments(0, &enable)) return;
     try {
       thiz->as<Configuration>()->decompress_http(enable);
@@ -800,7 +812,7 @@ template<> void ClassDef<Configuration>::init() {
 
   // Configuration.detectProtocol
   method("detectProtocol", [](Context &ctx, Object *thiz, Value &result) {
-    pjs::Function *callback;
+    Function *callback;
     if (!ctx.arguments(1, &callback)) return;
     try {
       thiz->as<Configuration>()->detect_protocol(callback);
@@ -880,7 +892,7 @@ template<> void ClassDef<Configuration>::init() {
 
   // Configuration.exec
   method("exec", [](Context &ctx, Object *thiz, Value &result) {
-    pjs::Value command;
+    Value command;
     if (!ctx.arguments(1, &command)) return;
     try {
       thiz->as<Configuration>()->exec(command);
@@ -892,8 +904,8 @@ template<> void ClassDef<Configuration>::init() {
 
   // Configuration.fork
   method("fork", [](Context &ctx, Object *thiz, Value &result) {
-    pjs::Str *target;
-    pjs::Object *initializers = nullptr;
+    Str *target;
+    Object *initializers = nullptr;
     if (!ctx.arguments(1, &target, &initializers)) return;
     try {
       thiz->as<Configuration>()->fork(target, initializers);
@@ -1016,8 +1028,8 @@ template<> void ClassDef<Configuration>::init() {
   // Configuration.link
   method("link", [](Context &ctx, Object *thiz, Value &result) {
     int n = (ctx.argc() + 1) >> 1;
-    pjs::Str *targets[n];
-    pjs::Function *conditions[n];
+    Str *targets[n];
+    Function *conditions[n];
     for (int i = 0; i < n; i++) {
       int a = (i << 1);
       int b = (i << 1) + 1;
@@ -1046,9 +1058,9 @@ template<> void ClassDef<Configuration>::init() {
 
   // Configuration.merge
   method("merge", [](Context &ctx, Object *thiz, Value &result) {
-    pjs::Str *target;
-    pjs::Value key;
-    pjs::Object *options = nullptr;
+    Str *target;
+    Value key;
+    Object *options = nullptr;
     if (!ctx.arguments(2, &target, &key, &options)) return;
     try {
       thiz->as<Configuration>()->merge(target, key, options);
@@ -1060,9 +1072,9 @@ template<> void ClassDef<Configuration>::init() {
 
   // Configuration.mux
   method("mux", [](Context &ctx, Object *thiz, Value &result) {
-    pjs::Str *target;
-    pjs::Value key;
-    pjs::Object *options = nullptr;
+    Str *target;
+    Value key;
+    Object *options = nullptr;
     if (!ctx.arguments(2, &target, &key, &options)) return;
     try {
       thiz->as<Configuration>()->mux(target, key, options);
@@ -1074,9 +1086,9 @@ template<> void ClassDef<Configuration>::init() {
 
   // Configuration.muxHTTP
   method("muxHTTP", [](Context &ctx, Object *thiz, Value &result) {
-    pjs::Str *target;
-    pjs::Value key;
-    pjs::Object *options = nullptr;
+    Str *target;
+    Value key;
+    Object *options = nullptr;
     if (!ctx.arguments(2, &target, &key, &options)) return;
     try {
       thiz->as<Configuration>()->mux_http(target, key, options);
@@ -1258,7 +1270,7 @@ template<> void ClassDef<Configuration>::init() {
   // Configuration.use
   method("use", [](Context &ctx, Object *thiz, Value &result) {
     std::string module;
-    pjs::Array *modules;
+    Array *modules;
     Str *pipeline;
     Str *pipeline_down = nullptr;
     Function *when = nullptr;

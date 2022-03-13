@@ -77,7 +77,7 @@ public:
   void decode_dubbo();
   void decode_http_request();
   void decode_http_response(pjs::Object *options);
-  void decode_mqtt();
+  void decode_mqtt(pjs::Object *options);
   void decompress_http(pjs::Function *enable);
   void decompress_message(const pjs::Value &algorithm);
   void detect_protocol(pjs::Function *callback);

@@ -254,7 +254,7 @@ class Configuration {
    * Its input is a Data stream and its output is a Message stream.
    *
    * @param {Object} [options] Options including bodiless.
-   * @param {boolean | () => boolean} [options.bodiless] Callback function that returns true for decoding a response without a body.
+   * @param {boolean|BooleanCB} [options.bodiless] Callback function that returns true for decoding a response without a body.
    * @returns {Configuration} The same Configuration object.
    */
   decodeHTTPResponse(options) {}
@@ -265,9 +265,11 @@ class Configuration {
    * A decodeMQTT filter decodes MQTT packets in its input Data and outputs Messages after decoding.
    * Its input is a Data stream and its output is a Message stream.
    *
+   * @param {Object} [options] Options including protocolLevel.
+   * @param {number|NumberCB} [options.protocolLevel] Callback function that returns the protocol level being used.
    * @returns {Configuration} The same Configuration object.
    */
-  decodeMQTT() {}
+  decodeMQTT(options) {}
 
   /**
    * Appends a decompressHTTP filter to the current pipeline layout.

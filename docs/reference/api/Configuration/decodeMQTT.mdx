@@ -27,13 +27,34 @@ The _Messages_ after decoding will have these contents:
   - Other properties defined in the [specification](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901027)
 * _body_ - Payload of a PUBLISH packet
 
+### Protocol level
+
+By default, the decoder works in protocol level 4 (MQTT v3.1.1). When decoding MQTT packets sending to the broker, the first packet would be a CONNECT packet, which includes the _protocol level_ being used. The decoder can then switch to the correct protocol level.
+
+However, when decoding packets returning from the broker, there's no such information in the packets themselves, so you need to provide the correct protocol level by option _protocolLevel_ in the _options_ parameter. It can be a number, or a function that returns a number.
+
+The following protocol levels are supported:
+
+* When protocolLevel is 4, works in MQTT v3.1.1
+* When protocolLevel is 5, works in MQTT v5.0
+
 ## Syntax
 
 ``` js
 pipy()
   .pipeline('example')
     .decodeMQTT()
+
+pipy()
+  .pipeline('example')
+    .decodeMQTT({
+      protocolLevel
+    })
 ```
+
+### Parameters
+
+<Parameters/>
 
 ### Return value
 
