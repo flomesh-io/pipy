@@ -54,7 +54,7 @@ Eventually, all events left in the stream after the processing are sent back ove
   <SvgStreamOutput/>
 </div>
 
-# Filter and pipeline
+## Filter and pipeline
 
 A good way to understand how Pipy works is by analogy with [_Unix pipelines_](https://en.wikipedia.org/wiki/Pipeline_(Unix)). The only thing different from Unix pipelines is we are handling streams of **events** here, not bytes.
 
@@ -67,19 +67,19 @@ Incoming streams are processed via a chain of **filters** inside of Pipy. Each f
 A chain of filters is called a **pipeline**. There are 4 types of pipelines categorized
 by their input sources:
 
-## Port pipeline
+### Port pipeline
 
 A **port pipeline** is created when there is an incoming TCP connection. It reads **Data** events from the connection, processes them, and then writes the result back to the client. This resembles the "_request and response_" communication model as in HTTP, where the input to the pipeline is the request and the output from the pipeline is the response. It's safe to consider every incoming connection to Pipy has a _port pipeline_ related to it, handling the communication happening in that connection.
 
-## Timer pipeline
+### Timer pipeline
 
 A **timer pipeline** is one that is created periodically and gets a pair of **MessageStart** and **MessageEnd** events as its only input. Whatever it outputs is simply discarded after all the processing in the filters. This type of pipeline can be used to carry out [_cron job_](https://en.wikipedia.org/wiki/Cron)-like tasks.
 
-## Signal pipeline
+### Signal pipeline
 
 A **signal pipeline** is created when a signal is sent to the Pipy process. It gets a pair of **MessageStart** and **MessageEnd** events as its only input. Whatever it outputs is simply discarded after all the processing in the filters. This type of pipeline is useful when certain tasks need to be performed when a signal is received.
 
-## Sub-pipeline
+### Sub-pipeline
 
 A **sub-pipeline** is a pipeline that can be started from other pipelines by using a **joint filter**. The most basic joint filter, among a couple of others, is **link**. It receives events from its predecessor in the main pipeline, sends them to a sub-pipeline for processing, and then pumps down to its succeeding filter in the main pipeline whatever that sub-pipeline outputs.
 
@@ -91,7 +91,7 @@ One way to look at _joint filters_ and _sub-pipelines_ is analogize them to _cal
 
 Unlike sub-pipelines, the other types of pipelines, namely **port pipelines**, **timer pipelines** and **singal pipelines**, cannot be "_called_" internally from a joint filter. They can only be started externally by an incoming connection, a timer or a signal. We call these pipelines **root pipelines**.
 
-# Module
+## Module
 
 A **module** is a PipyJS source file containing scripts that configure a set of **pipeline layouts**.
 
@@ -99,7 +99,7 @@ A **pipeline layout** tells Pipy what filters a pipeline has and in what order. 
 
 Since "_modules_" and "_files_" have a one-on-one relationship, we use the 2 terms interchangeably.
 
-# Context
+## Context
 
 A **context** is a set of variables attached to a pipeline, used by scripts to maintain the current state of the pipeline.
 
