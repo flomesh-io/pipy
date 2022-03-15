@@ -26,6 +26,7 @@
 #include "mux.hpp"
 #include "pipeline.hpp"
 #include "input.hpp"
+#include "utils.hpp"
 
 namespace pipy {
 
@@ -47,10 +48,8 @@ MuxBase::MuxBase(const pjs::Value &session_key, pjs::Object *options)
 
     pjs::Value max_idle;
     options->get("maxIdle", max_idle);
-
-    if (!max_idle.is_undefined()) {
-      if (!max_idle.is_number()) throw std::runtime_error("option.maxIdle expects a number");
-      opts.max_idle = max_idle.n();
+    if (!utils::get_seconds(max_idle, opts.max_idle)) {
+      throw std::runtime_error("option.maxIdle expects a number or a string");
     }
 
     m_session_manager->set_options(opts);

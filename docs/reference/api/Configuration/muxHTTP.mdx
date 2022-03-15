@@ -42,7 +42,7 @@ You can control the grouping of **muxHTTP** filters by using the _group_ paramet
 
 ### Sub-pipeline lifecycle
 
-Since the sub-pipeline is shared by multiple streams coming from a group of **muxHTTP** filters, it won't be closed until the last stream ends in the group. After all streams in the group are closed, the sub-pipeline will wait for 10 seconds to ensure no more new streams are coming. You can change this waiting time by the _idleTime_ option in the _options_ parameter.
+Since the sub-pipeline is shared by multiple streams coming from a group of **muxHTTP** filters, it won't be closed until the last stream ends in the group. After all streams in the group are closed, the sub-pipeline will wait for 10 seconds to ensure no more new streams are coming. You can change this waiting time by the _maxIdle_ option in the _options_ parameter. It can be either a number in seconds or a string with a unit suffix such as `'s'`, `'m'`, `'h'`, `'d'`.
 
 > When the _group_ parameter is an object, it will be a _weak ref_ as the key in a [WeakMap](https://developer.mozilla.org/docs/Web/JavaScript/Guide/Keyed_collections#weakmap_object). When the object is dead, so is the sub-pipeline, regardless of the _idleTime_ option. The stream in that dead sub-pipeline could be closed earlier or later than the idle time, but it will never be reused again.
 

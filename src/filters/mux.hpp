@@ -114,7 +114,7 @@ private:
 
   class SessionManager : public pjs::RefCount<SessionManager> {
     struct Options {
-      int max_idle = 10;
+      double max_idle = 10;
     };
 
     SessionManager(MuxBase *mux)

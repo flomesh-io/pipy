@@ -464,7 +464,7 @@ class Configuration {
    * @param {number} [options.maxIdle] Time to wait before an idle shared sub-pipeline is closed.
    * @returns {Configuration} The same Configuration object.
    */
-  merge(target, group, options) {}
+  merge(layout, group, options) {}
 
   /**
    * Appends a mux filter to the current pipeline layout.
