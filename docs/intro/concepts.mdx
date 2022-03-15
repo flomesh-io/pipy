@@ -2,9 +2,34 @@
 title: "Concepts"
 ---
 
-# Stream
+import SvgStreams from './streams.svg';
+import SvgStreamInput from './stream-input.svg';
+import SvgStreamOutput from './stream-output.svg';
+import SvgStreamTransform from './stream-transform.svg';
+import SvgPipelineFilters from './pipeline-filters.svg';
+import SvgSubPipeline from './sub-pipeline.svg';
+import SvgModulePipelineContext from './module-pipeline-context.svg';
 
-Pipy is a proxy that works like a "_stream processor_", which means that it takes in _streams_, processes them, and then spits them out as _streams_ too. But unlike what people usually think _streams_ are, Pipy streams are made of **events** instead of bytes. There are four types of events:
+## Stream
+
+Pipy is a proxy that works like a "_stream processor_", which means that it takes in _streams_, processes them, and then spits them out as _streams_ too.
+
+### Inbound and outbound
+
+Streams coming from a client (or downstream) are called _inbound streams_. Streams going to a server (or upstream) are called _outbound streams_.
+
+<div style="text-align: center">
+  <SvgStreams/>
+</div>
+
+Both inbound side and outbound side have input and output streams:
+
+* On the inbound side, input streams go from the client to Pipy and output streams go from Pipy back to the client.
+* On the outbound side, output streams go from Pipy to the server and input streams go from the server back to Pipy.
+
+### Events
+
+Unlike what people usually think _streams_ are, Pipy streams are made of **events** instead of bytes. There are four types of events:
 
 * Data
 * MessageStart
@@ -13,15 +38,31 @@ Pipy is a proxy that works like a "_stream processor_", which means that it take
 
 A stream coming along from network is a series of **Data** events, each holding a chunk of bytes received from the incoming TCP connection.
 
+<div style="text-align: center">
+  <SvgStreamInput/>
+</div>
+
 What Pipy does is process the events in the input stream. Some are transformed, some are discarded, and new events could be inserted too. The new events generated while the stream passes through Pipy also include other types of events than **Data**, namely **MessageStart**, **MessageEnd** and **StreamEnd**. These non-data events are used as "_markers_", giving the original raw bytes a higher-level meaning needed by your business logic.
 
+<div style="text-align: center">
+  <SvgStreamTransform/>
+</div>
+
 Eventually, all events left in the stream after the processing are sent back over network to the client. At this point, all other events except **Data** are discared.
+
+<div style="text-align: center">
+  <SvgStreamOutput/>
+</div>
 
 # Filter and pipeline
 
 A good way to understand how Pipy works is by analogy with [_Unix pipelines_](https://en.wikipedia.org/wiki/Pipeline_(Unix)). The only thing different from Unix pipelines is we are handling streams of **events** here, not bytes.
 
 Incoming streams are processed via a chain of **filters** inside of Pipy. Each filter works somewhat like a tiny Unix process that keeps reading from its input (stdin) and writing to its output (stdout), with the output of one filter connected to the input of the next. 
+
+<div style="text-align: center">
+  <SvgPipelineFilters/>
+</div>
 
 A chain of filters is called a **pipeline**. There are 4 types of pipelines categorized
 by their input sources:
@@ -42,6 +83,10 @@ A **signal pipeline** is created when a signal is sent to the Pipy process. It g
 
 A **sub-pipeline** is a pipeline that can be started from other pipelines by using a **joint filter**. The most basic joint filter, among a couple of others, is **link**. It receives events from its predecessor in the main pipeline, sends them to a sub-pipeline for processing, and then pumps down to its succeeding filter in the main pipeline whatever that sub-pipeline outputs.
 
+<div style="text-align: center">
+  <SvgSubPipeline/>
+</div>
+
 One way to look at _joint filters_ and _sub-pipelines_ is analogize them to _callers_ and _callees_ in a sub-routine calling process in procedural programming. The input to the joint filter is the sub-routine's parameters, and the output is the return value.
 
 Unlike sub-pipelines, the other types of pipelines, namely **port pipelines**, **timer pipelines** and **singal pipelines**, cannot be "_called_" internally from a joint filter. They can only be started externally by an incoming connection, a timer or a signal. We call these pipelines **root pipelines**.
@@ -61,6 +106,10 @@ A **context** is a set of variables attached to a pipeline, used by scripts to m
 Every pipeline uses the same set of variables across a Pipy module. In other words, contexts are of the same "_shape_" among all pipelines in a module, but different modules can have different context shapes. When you start a Pipy module, the first thing is define the _shape_ of the context, meaning what variables it is going to use and their initial values.
 
 Although all pipelines from the same module have exactly the same set of context variables, each pipeline can have its own variable values that are isolated from others, or each pipeline can have its own "_state_", so to speak.
+
+<div style="text-align: center">
+  <SvgModulePipelineContext/>
+</div>
 
 To the scripts of a module, these context variables are used like **global varaibles**, which means that they are always accessible to the scripts from anywhere in the same file.
 

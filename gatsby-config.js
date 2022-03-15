@@ -24,6 +24,14 @@ module.exports = {
       },
     },
     {
+      resolve: `gatsby-plugin-react-svg`,
+      options: {
+        rule: {
+          include: /docs/,
+        },
+      },
+    },
+    {
       resolve: `gatsby-source-filesystem`,
       options: {
         name: `doc`,
