@@ -7,6 +7,7 @@ import FlagIcon from '@material-ui/icons/FlagSharp'
 import SaveIcon from '@material-ui/icons/SaveSharp'
 import PlayIcon from '@material-ui/icons/PlayArrowSharp'
 import StopIcon from '@material-ui/icons/StopSharp'
+import SvgHelloPipeline from './hello-pipeline.svg';
 
 **Ahoy, world!**
 
@@ -81,20 +82,9 @@ Take a bit of time examining the code. Here's what's going on:
 All in all the script we have written defined one _pipeline_ containing one _filter_.
 To picture it all would be like this:
 
-```
-                        Pipeline
-            ┌───────────────────────────────┐
-  pipeline  │   filter             filter   │    pipeline
-  input  ┌──┴─┐ input  ┌─────────┐ output ┌─┴──┐ output
-     ┌──►│8080├───────►│serveHTTP├───────►│8080├───┐
-     │   └──┬─┘        └─────────┘        └─┬──┘   │
-     │      │                               │      │
-     │      └───────────────────────────────┘      │
-     │                                             │
-     │    request     ┌───────────┐    response    │
-     └────────────────┤  Client   │◄───────────────┘
-                      └───────────┘
-```
+<div style="text-align: center">
+  <SvgHelloPipeline/>
+</div>
 
 ## Test in action
 

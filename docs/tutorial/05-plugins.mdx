@@ -3,6 +3,7 @@ title: "Part 5: Plugins"
 ---
 
 import PlusIcon from '@material-ui/icons/AddSharp'
+import SvgPluginPipelines from './plugin-pipelines.svg';
 
 Now that we have a working proxy with basic routing and 404 responses.
 However, we find ourself throwing more and more pipelines into the source file
@@ -136,25 +137,9 @@ but in reversed order in the plugin list.
 
 Here's what the "_plugin chain_" made by _use()_ looks like:
 
-```
-               ┌──────────────┐     ┌──────────────┐
-      │        │  router.js   │     │  default.js  │
-      │        │              │     │              │
-      │        │ ┌──────────┐ │     │ ┌──────────┐ │
-  ┌───▼───┐    │ │          │ │     │ │          │ │
-  │       ├────┼─► request  ├─┼─────┼─► request  │ │
-  │       │    │ │          │ │     │ │          │ │
-  │       │    │ └──────────┘ │     │ └────┬─────┘ │
-  │ use() │    │              │     │      │       │
-  │       │    │              │     │      │       │
-  │       │    │ ┌──────────┐ │     │ ┌────▼─────┐ │
-  │       │    │ │          │ │     │ │          │ │
-  │       ◄────┼─┤ response ◄─┼─────┼─┤ response │ │
-  └───┬───┘    │ │          │ │     │ │          │ │
-      │        │ └──────────┘ │     │ └──────────┘ │
-      │        │              │     │              │
-      ▼        └──────────────┘     └──────────────┘
-```
+<div style="text-align: center">
+  <SvgPluginPipelines/>
+</div>
 
 We haven't defined "_response_" pipelines in the plugins yet. No worries.
 If a pipeline name is not found in a plugin, the chain will simply skip over it.

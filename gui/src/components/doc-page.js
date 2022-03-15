@@ -275,6 +275,7 @@ const useStyles = makeStyles(theme => ({
     borderLeftWidth: '3px',
     borderLeftColor: '#ccf',
     borderRadius: '3px',
+    overflow: 'auto',
   },
 
   codeSame: {

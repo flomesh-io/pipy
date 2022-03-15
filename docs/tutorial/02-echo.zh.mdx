@@ -2,6 +2,10 @@
 title: 02 回显
 ---
 
+import PlayIcon from '@material-ui/icons/PlayArrowSharp'
+import RestartIcon from '@material-ui/icons/ReplaySharp'
+import StopIcon from '@material-ui/icons/StopSharp'
+
 看到了这里应该已经实现了简单 Pipy 服务返回 *“Hello world”*。在这篇教程中，将学习如何返回动态内容。
 
 ## 回显服务器
@@ -40,8 +44,8 @@ title: 02 回显
 
 测试前记得保存变更。如果此时 Pipy 扔在运行上个版本的代码，这里你可以：
 
-* 点击工具栏中的停止按钮 ◻️，并点击运行按钮 ▶️ 运行新的代码。
-* 或者点击重新加载按钮 ↺ 直接使用新的版本重启程序
+* 点击工具栏中的 <StopIcon/> 按钮，并点击 <PlayIcon/> 按钮运行新的代码。
+* 或者点击 <RestartIcon/> 按钮直接使用新的版本重启程序。
 
 这次还是使用 `curl` 命令来测试：
 

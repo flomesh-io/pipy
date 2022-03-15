@@ -3,6 +3,7 @@ title: "Part 3: Proxy"
 ---
 
 import FlagIcon from '@material-ui/icons/FlagSharp'
+import SvgProxyPipelines from './proxy-pipelines.svg';
 
 We have used Pipy as a server for handling requests. Now we will be using it
 the way it is mostly used for: a network proxy.
@@ -102,29 +103,9 @@ filter and transfer data back and forth.
 Let's say we have one incoming connection running 2 requests on it, to handle it
 all correctly we need up to 4 inter-connected pipelines:
 
-```
-                ┌───────────────┐     ┌─────────────┐      ┌─────────────┐
-                │               │     │             │      │             │
-    requests    │  ┌─────────┐  │     │  ┌───────┐  │      │             │
-      ┌────────►│  │         ├──┼─────┼─►│       ├──┼─────►│             │
-      │         │  │         │  │     │  │muxHTTP│  │      │             │
-      │         │  │         │◄─┼─────┼──┤       │◄─┼──────┤             │
-      │         │  │         │  │     │  └───────┘  │      │             │
-  ┌───┴──┐      │  │         │  │     │             │      │  ┌───────┐  │     ┌──────┐
-  │      │      │  │         │  │     └─────────────┘      │  │       ├──┼────►│      │
-  │Client│      │  │demuxHTTP│  │                          │  │connect│  │     │Server│
-  │      │      │  │         │  │     ┌─────────────┐      │  │       │◄─┼─────┤      │
-  └──────┘      │  │         │  │     │             │      │  └───────┘  │     └──────┘
-      ▲         │  │         │  │     │  ┌───────┐  │      │             │
-      │         │  │         ├──┼─────┼─►│       ├──┼─────►│             │
-      │         │  │         │  │     │  │muxHTTP│  │      │             │
-      └─────────┤  │         │◄─┼─────┼──┤       │◄─┼──────┤             │
-    responses   │  └─────────┘  │     │  └───────┘  │      │             │
-                │               │     │             │      │             │
-                └───────────────┘     └─────────────┘      └─────────────┘
-                  port pipeline        sub-pipeline         sub-pipeline
-                listening on 8080      "forward" x 2        "connection"
-```
+<div style="text-align: center">
+  <SvgProxyPipelines/>
+</div>
 
 ## Test in action
 

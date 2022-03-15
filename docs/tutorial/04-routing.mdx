@@ -2,6 +2,8 @@
 title: "Part 4: Routing"
 ---
 
+import SvgRoutingPipelines from './routing-pipelines.svg';
+
 One of the most basic tasks a proxy is able to do is "_routing_".
 In HTTP, routing is usually based on the "_Host_" header and the
 requested _URI_ in a request. In other words, proxy should be able
@@ -256,29 +258,9 @@ we've seen before.
 That being said, when a request goes down the "_404_" route, its entire
 traveling path would be like this:
 
-```
-     requests
-       ┌────────────────┐         ┌─────────────┐
-       │                │         │             │
-       │         ┌──────▼──────┐  │  ┌──────────▼───────────┐
-       │         │  Port 8000  │  │  │  Pipeline "request"  │
-       │         │             │  │  │                      │
-       │         │             │  │  │ ┌──────────────────┐ │
-  ┌────┴───┐     │ ┌─────────┐ │  │  │ │handleMessageStart│ │  ┌───────────┐
-  │        │     │ │         ├─┼──┘  │ └────────┬─────────┘ │  │           │
-  │ Client │     │ │demuxHTTP│ │     │          │           │  │  ┌────────▼─────────┐
-  │        │     │ │         ◄─┼──┐  │          │           │  │  │  Pipeline "404"  │
-  └────▲───┘     │ └─────────┘ │  │  │ ┌────────▼─────────┐ │  │  │                  │
-       │         │             │  │  │ │                  ├─┼──┘  │ ┌──────────────┐ │
-       │         │             │  │  │ │       link       │ │     │ │replaceMessage│ │
-       │         │             │  │  │ │                  ◄─┼──┐  │ └──────────────┘ │
-       │         │             │  │  │ └──────────────────┘ │  │  │                  │
-       │         │             │  │  │                      │  │  └────────┬─────────┘
-       │         └──────┬──────┘  │  └──────────┬───────────┘  │           │
-       │                │         │             │              └───────────┘
-       └────────────────┘         └─────────────┘
-     responses
-```
+<div style="text-align: center">
+  <SvgRoutingPipelines/>
+</div>
 
 A better way to picture this "_pipeline insertion_" would be think of a sub-pipeline
 wedged into a _joint filter_'s place, replacing that filter completely.

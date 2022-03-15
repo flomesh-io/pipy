@@ -2,6 +2,13 @@
 title: 01 Hello
 ---
 
+import PlusIcon from '@material-ui/icons/AddSharp'
+import FlagIcon from '@material-ui/icons/FlagSharp'
+import SaveIcon from '@material-ui/icons/SaveSharp'
+import PlayIcon from '@material-ui/icons/PlayArrowSharp'
+import StopIcon from '@material-ui/icons/StopSharp'
+import SvgHelloPipeline from './hello-pipeline.svg';
+
 Ahoy, world!
 
 作为程序员的我们都沉迷于“Hello World”，这里也不免俗。
@@ -28,8 +35,8 @@ pipy
 让我们开始创建第一个 Pipy 程序：
 
 1. 在界面上点击 **New Codebase**，并在弹出窗口输入 `/hello` 作为代码库名称，最后点击 **Create** 完成创建。此时会自动跳转到代码库的编辑界面。
-2. 点击上面工具栏中的 **+** 按钮来创建新文件。弹出窗口中输入 `/hello.js`并点击 **Create**。
-3. 在左侧文件列表中选中刚创建的文件，然后点击上面工具栏中的旗帜图标，将该文件设置为程序的入口脚本。
+2. 点击上面工具栏中的 <PlusIcon/> 按钮来创建新文件。弹出窗口中输入 `/hello.js`并点击 **Create**。
+3. 在左侧文件列表中选中刚创建的文件，然后点击上面工具栏中的 <FlagIcon/> 按钮，将该文件设置为程序的入口脚本。
 4. 接着在 `hello.js` 中输入下面的内容：
     
 ```js
@@ -40,7 +47,7 @@ pipy()
 -    new Message('Hi, there!\n')
   )
 ```
-5. 点击工具栏中的保存按钮保存修改。    
+5. 点击工具栏中的 <SaveIcon/> 按钮保存修改。    
 
 ## 代码剖析
 
@@ -52,24 +59,13 @@ pipy()
 
 整个脚本中，我们定义了包含一个过滤器的管道。如下图：
 
-```
-                      Pipeline
-          ┌───────────────────────────────┐
-pipeline  │   filter             filter   │    pipeline
-input  ┌──┴─┐ input  ┌─────────┐ output ┌─┴──┐ output
-   ┌──►│8080├───────►│serveHTTP├───────►│8080├───┐
-   │   └──┬─┘        └─────────┘        └─┬──┘   │
-   │      │                               │      │
-   │      └───────────────────────────────┘      │
-   │                                             │
-   │    request     ┌───────────┐    response    │
-   └────────────────┤  Client   │◄───────────────┘
-                    └───────────┘
-```
+<div style="text-align: center">
+  <SvgHelloPipeline/>
+</div>
 
 ## 测试
 
-此时点击工具栏右侧的运行按钮▶️，弹出的控制台窗口会显示：
+此时点击工具栏右侧的 <PlayIcon/> 按钮，弹出的控制台窗口会显示：
 
 ```
 [info] [config]

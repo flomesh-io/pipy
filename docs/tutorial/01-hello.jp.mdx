@@ -7,6 +7,7 @@ import FlagIcon from '@material-ui/icons/FlagSharp'
 import SaveIcon from '@material-ui/icons/SaveSharp' 
 import PlayIcon from '@material-ui/icons/PlayArrowSharp' 
 import StopIcon from '@material-ui/icons/StopSharp'
+import SvgHelloPipeline from './hello-pipeline.svg';
 
 **Ahoy, world!**
 
@@ -64,20 +65,9 @@ pipy()
 
 ここで作成したすべてのスクリプトでは、1つのフィルターを持つ1つのパイプラインを定義しました。 それを図に表すと次のようになります。
 
-```
-                        Pipeline
-            ┌───────────────────────────────┐
-  pipeline  │   filter             filter   │    pipeline
-  input  ┌──┴─┐ input  ┌─────────┐ output ┌─┴──┐ output
-     ┌──►│8080├───────►│serveHTTP├───────►│8080├───┐
-     │   └──┬─┘        └─────────┘        └─┬──┘   │
-     │      │                               │      │
-     │      └───────────────────────────────┘      │
-     │                                             │
-     │    request     ┌───────────┐    response    │
-     └────────────────┤  Client   │◄───────────────┘
-                      └───────────┘
-```
+<div style="text-align: center">
+  <SvgHelloPipeline/>
+</div>
 
 ## テストしてみる
 
