@@ -45,13 +45,5 @@ module.exports = {
       },
     },
     `gatsby-transformer-documentationjs`,
-    {
-      resolve: 'gatsby-plugin-web-font-loader',
-      options: {
-        google: {
-          families: ['Titillium Web']
-        }
-      }
-    },
   ],
 }

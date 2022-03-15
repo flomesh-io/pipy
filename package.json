@@ -2,6 +2,7 @@
   "name": "pipy",
   "private": true,
   "dependencies": {
+    "@fontsource/titillium-web": "^4.5.3",
     "@material-ui/core": "^4.11.3",
     "@material-ui/icons": "^4.11.2",
     "@material-ui/lab": "^4.0.0-alpha.57",
@@ -11,7 +12,6 @@
     "gatsby-plugin-material-ui": "^3.0.0",
     "gatsby-plugin-mdx": "^2.14.0",
     "gatsby-plugin-react-svg": "^3.1.0",
-    "gatsby-plugin-web-font-loader": "^1.0.4",
     "gatsby-source-filesystem": "^3.14.0",
     "gatsby-transformer-documentationjs": "^5.14.0",
     "github-slugger": "^1.4.0",

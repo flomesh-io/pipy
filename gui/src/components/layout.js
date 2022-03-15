@@ -6,6 +6,8 @@ import { QueryClient, QueryClientProvider } from 'react-query';
 import CssBaseline from '@material-ui/core/CssBaseline';
 import Console from './console';
 
+import '@fontsource/titillium-web';
+
 const theme = createTheme({
   palette: {
     type: 'dark',
