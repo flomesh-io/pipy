@@ -34,8 +34,8 @@ namespace pipy {
 // ThrottleBase
 //
 
-ThrottleBase::ThrottleBase(const pjs::Value &quota, const pjs::Value &account)
-  : m_account_manager(std::make_shared<AccountManager>())
+ThrottleBase::ThrottleBase(const pjs::Value &quota, const pjs::Value &account, bool auto_supply)
+  : m_account_manager(std::make_shared<AccountManager>(auto_supply))
   , m_quota(quota)
   , m_account(account)
 {
@@ -59,12 +59,15 @@ void ThrottleBase::reset() {
     m_current_account->dequeue(this);
     resume();
   }
+  m_evaluated = false;
   m_current_account = nullptr;
   m_buffer.clear();
 }
 
 void ThrottleBase::process(Event *evt) {
-  if (!m_current_account) {
+  if (Data::is_flush(evt)) return;
+
+  if (!m_evaluated) {
     pjs::Value account, quota;
     if (!eval(m_account, account)) return;
     if (!eval(m_quota, quota)) return;
@@ -76,10 +79,16 @@ void ThrottleBase::process(Event *evt) {
     } else {
       Log::error("[throttle] invalid quota");
     }
-    m_current_account = m_account_manager->get(account, quota_supply);
+    if (quota_supply > 0) {
+      m_current_account = m_account_manager->get(account, quota_supply);
+    }
+    m_evaluated = true;
   }
 
-  if (m_closed_tap) {
+  if (!m_current_account) {
+    output(evt);
+
+  } else if (m_closed_tap) {
     m_buffer.push(evt);
 
   } else if (auto stalled = consume(evt, m_current_account->m_quota)) {
@@ -130,10 +139,8 @@ void ThrottleBase::Account::dequeue(ThrottleBase *filter) {
   m_queue.remove(filter);
 }
 
-void ThrottleBase::Account::supply() {
-  if (m_quota < 1 || m_quota < m_quota_supply) {
-    m_quota += m_quota_supply;
-  }
+void ThrottleBase::Account::supply(double quota) {
+  m_quota += quota;
   if (m_quota >= 1) {
     auto *f = m_queue.head();
     while (f) {
@@ -144,12 +151,20 @@ void ThrottleBase::Account::supply() {
   }
 }
 
+void ThrottleBase::Account::supply() {
+  if (m_quota < 1 || m_quota < m_quota_supply) {
+    supply(m_quota_supply);
+  }
+}
+
 //
 // ThrottleBase::AccountManager
 //
 
-ThrottleBase::AccountManager::AccountManager() {
-  supply();
+ThrottleBase::AccountManager::AccountManager(bool auto_supply) {
+  if (auto_supply) {
+    supply();
+  }
 }
 
 ThrottleBase::AccountManager::~AccountManager() {
@@ -163,6 +178,7 @@ auto ThrottleBase::AccountManager::get(const pjs::Value &key, double quota) -> A
   auto i = m_accounts.find(key);
   if (i == m_accounts.end()) {
     account = new Account();
+    account->m_quota = quota;
     m_accounts[key] = account;
   } else {
     account = i->second;
@@ -187,6 +203,16 @@ void ThrottleBase::AccountManager::supply() {
 //
 // ThrottleMessageRate
 //
+
+ThrottleMessageRate::ThrottleMessageRate(const pjs::Value &quota, const pjs::Value &account)
+  : ThrottleBase(quota, account, true)
+{
+}
+
+ThrottleMessageRate::ThrottleMessageRate(const ThrottleMessageRate &r)
+  : ThrottleBase(r)
+{
+}
 
 void ThrottleMessageRate::dump(std::ostream &out) {
   out << "throttleMessageRate";
@@ -215,6 +241,16 @@ auto ThrottleMessageRate::consume(Event *evt, double &quota) -> Event* {
 // ThrottleDataRate
 //
 
+ThrottleDataRate::ThrottleDataRate(const pjs::Value &quota, const pjs::Value &account)
+  : ThrottleBase(quota, account, true)
+{
+}
+
+ThrottleDataRate::ThrottleDataRate(const ThrottleDataRate &r)
+  : ThrottleBase(r)
+{
+}
+
 void ThrottleDataRate::dump(std::ostream &out) {
   out << "throttleDataRate";
 }
@@ -241,6 +277,55 @@ auto ThrottleDataRate::consume(Event *evt, double &quota) -> Event* {
     output(evt);
     return nullptr;
   }
+}
+
+//
+// ThrottleConcurrency
+//
+
+ThrottleConcurrency::ThrottleConcurrency(const ThrottleConcurrency &r)
+  : ThrottleBase(r)
+{
+}
+
+ThrottleConcurrency::ThrottleConcurrency(const pjs::Value &quota, const pjs::Value &account)
+  : ThrottleBase(quota, account, false)
+{
+}
+
+void ThrottleConcurrency::dump(std::ostream &out) {
+  out << "throttleConcurrency";
+}
+
+auto ThrottleConcurrency::clone() -> Filter* {
+  return new ThrottleConcurrency(*this);
+}
+
+void ThrottleConcurrency::reset() {
+  if (m_active) {
+    if (m_current_account) {
+      m_current_account->supply(1);
+    }
+    m_active = false;
+  }
+  ThrottleBase::reset();
+}
+
+auto ThrottleConcurrency::consume(Event *evt, double &quota) -> Event* {
+  if (m_active) {
+    output(evt);
+    return nullptr;
+  }
+
+  if (quota < 1) {
+    return evt;
+  }
+
+  quota -= 1;
+  m_active = true;
+
+  output(evt);
+  return nullptr;
 }
 
 } // namespace pipy

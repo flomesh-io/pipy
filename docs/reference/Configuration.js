@@ -727,6 +727,18 @@ class Configuration {
   split(handler) {}
 
   /**
+   * Appends a throttleConcurrency filter to the current pipeline layout.
+   *
+   * A throttleConcurrency filter sets a limit to how many concurrent streams can go through its place in the pipeline layout.
+   * Its input and output can be any types of events.
+   *
+   * @param {number|string|NumberStringCB} quota Number of concurrent streams that are allowed through.
+   * @param {*|AnyCB} [account] Name of the account that the quota is entitled to.
+   * @returns {Configuration} The same Configuration object.
+   */
+   throttleConcurrency(quota, account) {}
+
+  /**
    * Appends a throttleDataRate filter to the current pipeline layout.
    *
    * A throttleDataRate filter sets a limit to how many bytes of Data can pass in every second.

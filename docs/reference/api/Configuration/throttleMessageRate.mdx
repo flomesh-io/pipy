@@ -17,11 +17,11 @@ A **throttleMessageRate** filter sets a limit to how many [Messages](/reference/
 | ↓                     | **Event** |
 | _Output_              |           |
 
-The rate limit is set by the _quota_ parameter, which is the number of _Messages_ allowed to pass every second, or a function that returns that number. When the limit is reached in a second, all events afterwards will be blocked until quota is recovered the next second.
+The rate limit is set by the _quota_ parameter, which is the number of _Messages_ allowed to pass every second, or a function that returns that number. When the limit is reached in a second, all events afterwards will be blocked until quota is recovered the next second. When the limit is zero or less, no limit is set.
 
-Quota can be deducted per account by giving an account ID in the _account_ parameter. It can be a value of any type, or a function that returns a dynamic value.
+Quota can be counted per account by giving an account ID in the _account_ parameter. It can be a value of any type, or a function that returns a dynamic value.
 
-This filter passes everything down unaltered. It doesn't change anything in the event stream. It only delays them.
+This filter passes down everything unaltered. It doesn't change anything in the event stream. It only delays them.
 
 ## Syntax
 
@@ -46,4 +46,5 @@ pipy()
 ## See Also
 
 * [Configuration](/reference/api/Configuration)
+* [throttleConcurrency()](/reference/api/Configuration/throttleConcurrency)
 * [throttleDataRate()](/reference/api/Configuration/throttleDataRate)

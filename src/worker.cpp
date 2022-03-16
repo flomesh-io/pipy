@@ -374,8 +374,8 @@ bool Worker::start() {
     for (const auto &i : m_listeners) {
       auto l = i.first;
       if (!l->open()) {
-        l->pipeline_def(i.second.pipeline_def);
         l->set_options(i.second.options);
+        l->pipeline_def(i.second.pipeline_def);
         new_open.insert(l);
       }
     }
@@ -391,8 +391,8 @@ bool Worker::start() {
   for (const auto &i : m_listeners) {
     auto l = i.first;
     if (!new_open.count(l)) {
-      l->pipeline_def(i.second.pipeline_def);
       l->set_options(i.second.options);
+      l->pipeline_def(i.second.pipeline_def);
     }
   }
 

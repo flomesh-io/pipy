@@ -356,6 +356,10 @@ void Configuration::split(pjs::Function *callback) {
   append_filter(new Split(callback));
 }
 
+void Configuration::throttle_concurrency(const pjs::Value &quota, const pjs::Value &account) {
+  append_filter(new ThrottleConcurrency(quota, account));
+}
+
 void Configuration::throttle_data_rate(const pjs::Value &quota, const pjs::Value &account) {
   append_filter(new ThrottleDataRate(quota, account));
 }
@@ -1237,6 +1241,18 @@ template<> void ClassDef<Configuration>::init() {
     if (!ctx.arguments(1, &callback)) return;
     try {
       thiz->as<Configuration>()->split(callback);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // Configuration.throttleConcurrency
+  method("throttleConcurrency", [](Context &ctx, Object *thiz, Value &result) {
+    Value quota, account;
+    if (!ctx.arguments(1, &quota, &account)) return;
+    try {
+      thiz->as<Configuration>()->throttle_concurrency(quota, account);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

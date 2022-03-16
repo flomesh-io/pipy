@@ -43,7 +43,7 @@ namespace pipy {
 
 class ThrottleBase : public Filter, public List<ThrottleBase>::Item {
 public:
-  ThrottleBase(const pjs::Value &quota, const pjs::Value &account);
+  ThrottleBase(const pjs::Value &quota, const pjs::Value &account, bool auto_supply);
 
 protected:
   ThrottleBase(const ThrottleBase &r);
@@ -53,15 +53,15 @@ protected:
   virtual void process(Event *evt) override;
   virtual auto consume(Event *evt, double &quota) -> Event* = 0;
 
-private:
   class Account : public pjs::Pooled<Account> {
   public:
     void enqueue(ThrottleBase *filter);
     void dequeue(ThrottleBase *filter);
+    void supply(double quota);
 
   private:
     List<ThrottleBase> m_queue;
-    double m_quota = 0;
+    double m_quota;
     double m_quota_supply;
 
     void supply();
@@ -70,9 +70,13 @@ private:
     friend class ThrottleBase;
   };
 
+  bool m_evaluated = false;
+  Account* m_current_account = nullptr;
+
+private:
   class AccountManager {
   public:
-    AccountManager();
+    AccountManager(bool auto_supply);
     ~AccountManager();
 
     auto get(const pjs::Value &key, double quota) -> Account*;
@@ -85,7 +89,6 @@ private:
   };
 
   std::shared_ptr<AccountManager> m_account_manager;
-  Account* m_current_account = nullptr;
   pjs::Value m_quota;
   pjs::Value m_account;
   EventBuffer m_buffer;
@@ -102,9 +105,11 @@ private:
 
 class ThrottleMessageRate : public ThrottleBase {
 public:
-  using ThrottleBase::ThrottleBase;
+  ThrottleMessageRate(const pjs::Value &quota, const pjs::Value &account);
 
 protected:
+  ThrottleMessageRate(const ThrottleMessageRate &r);
+
   virtual auto clone() -> Filter* override;
   virtual auto consume(Event *evt, double &quota) -> Event* override;
   virtual void dump(std::ostream &out) override;
@@ -116,12 +121,34 @@ protected:
 
 class ThrottleDataRate : public ThrottleBase {
 public:
-  using ThrottleBase::ThrottleBase;
+  ThrottleDataRate(const pjs::Value &quota, const pjs::Value &account);
 
 protected:
+  ThrottleDataRate(const ThrottleDataRate &r);
+
   virtual auto clone() -> Filter* override;
   virtual auto consume(Event *evt, double &quota) -> Event* override;
   virtual void dump(std::ostream &out) override;
+};
+
+//
+// ThrottleConcurrency
+//
+
+class ThrottleConcurrency : public ThrottleBase {
+public:
+  ThrottleConcurrency(const pjs::Value &quota, const pjs::Value &account);
+
+protected:
+  ThrottleConcurrency(const ThrottleConcurrency &r);
+
+  virtual auto clone() -> Filter* override;
+  virtual void reset() override;
+  virtual auto consume(Event *evt, double &quota) -> Event* override;
+  virtual void dump(std::ostream &out) override;
+
+private:
+  bool m_active = false;
 };
 
 } // namespace pipy

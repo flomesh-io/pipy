@@ -1,0 +1,50 @@
+---
+title: "Configuration.throttleConcurrency()"
+api: Configuration.throttleConcurrency()
+---
+
+## Description
+
+Appends a **throttleConcurrency** filter to the current pipeline layout.
+
+A **throttleConcurrency** filter sets a limit to how many concurrent streams can go through its place in the pipeline layout. Its input and output can be any types of events.
+
+|                       |           |
+|:---------------------:|:---------:|
+| _Input_               |           |
+| ↓                     | **Event** |
+| `throttleConcurrency` |           |
+| ↓                     | **Event** |
+| _Output_              |           |
+
+The maximum number of concurrent streams is set by the _quota_ parameter. It can be a number, or a string with a unit suffix such as `'k'`, `'m'`, `'g'` or `'t'`. It can also be a function that returns that value. When the limit is reached, all streams coming afterwards to this point in the pipeline layout will be blocked until quota is regained by some streams ending. When the limit is zero or less, no limit is set.
+
+Quota can be counted per account by giving an account ID in the _account_ parameter. It can be a value of any type, or a function that returns a dynamic value.
+
+This filter passes down everything unaltered. It doesn't change anything in the event stream. It only delays them.
+
+## Syntax
+
+``` js
+pipy()
+  .pipeline('example')
+    .throttleDataRate(quota)
+
+pipy()
+  .pipeline('example')
+    .throttleDataRate(quota, account)
+```
+
+### Parameters
+
+<Parameters/>
+
+### Return value
+
+<ReturnValue/>
+
+## See Also
+
+* [Configuration](/reference/api/Configuration)
+* [throttleDataRate()](/reference/api/Configuration/throttleDataRate)
+* [throttleMessageRate()](/reference/api/Configuration/throttleMessageRate)
