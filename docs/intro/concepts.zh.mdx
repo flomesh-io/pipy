@@ -2,18 +2,51 @@
 title: 概念
 ---
 
-# 流
+import SvgStreams from './streams.svg';
+import SvgStreamInput from './stream-input.svg';
+import SvgStreamOutput from './stream-output.svg';
+import SvgStreamTransform from './stream-transform.svg';
+import SvgPipelineFilters from './pipeline-filters.svg';
+import SvgSubPipeline from './sub-pipeline.svg';
+import SvgModulePipelineContext from './module-pipeline-context.svg';
 
-Pipy 是一个 “_流处理器_”，它将 *流* 作为输入和输出。但与人们通常认为的 _流_ 不同，Pipy 中的流是由 **事件（events）** 而不是单个数据字节组成。有四种类型的事件：
+## 流
 
-* `Data`
-* `MessageStart`
-* `MessageEnd`
-* `StreamEnd`
+Pipy 是一个代理，它就像“*流处理器*”一样接收*流*、处理然后将其作为*流*输出。
+
+### 入站和出站
+
+来自客户端（或者下游）的流称为*入站流*；发往服务器（或者上游）的流称为*出站流*。
+
+<div style="text-align: center">
+  <SvgStreams/>
+</div>
+
+入站和出站以流作为输入和输出：
+
+* 在入站一侧，输入流是从客户端流向 Pipy，而输出流则是从 Pipy 发回客户端。
+* 在出站一侧，输出流是从 Pipy 发往服务器，而输入流是从服务器发回 Pipy。
+
+### 事件
+
+与大家通常认为的*流*不同，Pipy 中的流是由**事件**组成，而非字节。事件的类型有四种：
+
+* Data
+* MessageStart
+* MessageEnd
+* StreamEnd
 
 来自网络的流由一系列的 **Data** 事件组成，每个事件包含了从 TCP 连接接收的一块字节。
 
+<div style="text-align: center">
+  <SvgStreamInput/>
+</div>
+
 Pipy 处理输入流中的事件：有些被转换，有些被丢弃，也有些新的事件加入。Pipy 内部那些新生成的事件还包含了除 **Data** 以外的类型： **MessageStart**、**MessageEnd** 和 **StreamEnd**。这些非数据事件作为 “_标记（markers）_” 使用，为承载业务逻辑的原始字节流提供更高级的语义。
+
+<div style="text-align: center">
+  <SvgStreamTransform/>
+</div>
 
 最终，经过处理后所有留在流中的事件通过网络被发回客户端。此时，除 **Data** 以外的所有其他事件都被丢弃。
 
