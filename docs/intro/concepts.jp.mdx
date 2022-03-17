@@ -2,9 +2,34 @@
 title: "概念"
 ---
 
-# ストリーム
+import SvgStreams from './streams.svg';
+import SvgStreamInput from './stream-input.svg';
+import SvgStreamOutput from './stream-output.svg';
+import SvgStreamTransform from './stream-transform.svg';
+import SvgPipelineFilters from './pipeline-filters.svg';
+import SvgSubPipeline from './sub-pipeline.svg';
+import SvgModulePipelineContext from './module-pipeline-context.svg';
 
-Pipyは、"_stream processor_"ストリームプロセッサのように動作するプロキシです。つまり、_stream_ストリームを取り込んで処理し、それを_stream_ストリームとして吐き出します。しかし、一般に思われている_stream_ストリームとは異なり、Pipyのストリームは、バイトではなく**event**イベントで構成されています。イベントには4つの種類があります。
+## ストリーム(Stream)
+
+Pipyは「_stream processor_」のように動作するプロキシで、_stream_を取り込んで処理し、それをまた_stream_として吐き出すというものです。
+
+### Inbound と Outbound
+
+クライアント（または下流）から来るストリームは、_inbound streams_ と呼ばれます。サーバーに向かうストリーム(またはアップストリーム)を_outbound streams_と呼びます。
+
+<div style="text-align: center">
+  <SvgStreams/>
+</div>
+
+Inbound側、Outbound側ともに、入力と出力のストリームがあります：
+
+* Inbound側では、入力ストリームがクライアントからPipyへ、出力ストリームがPipyらクライアントへ戻る。
+* Outbound側では、出力ストリームがPipyからサーバーへ、入力ストリームがサーバーからPipyへ戻ってきます。
+
+### イベント情報(Events)
+
+Pipyのストリームは、一般に考えられている _stream_ とは異なり、バイトではなく、**events**で構成されています。イベントには4つのタイプがあります：
 
 * Data
 * MessageStart
@@ -13,39 +38,59 @@ Pipyは、"_stream processor_"ストリームプロセッサのように動作�
 
 ネットワークから来るストリームは一連の**Data**データイベントであり、各イベントは着信TCP接続から受信したバイトの塊を保持します。
 
+<div style="text-align: center">
+  <SvgStreamInput/>
+</div>
+
 Pipyが行うのは、入力ストリームのイベントを処理することです。あるものは変換され、あるものは破棄され、新しいイベントも挿入されます。ストリームがPipyを通過する際に生成される新しいイベントには、**MessageStart**、**MessageEnd**、**StreamEnd**のような**Data**データ以外の種類のイベントもあります。これらデータ以外のイベントは"_markers_"マーカーとして使用され、元のローバイトに、ビジネスロジックで必要とされる、より高度なレベルの意味を与えます。
+
+<div style="text-align: center">
+  <SvgStreamTransform/>
+</div>
 
 最終的には、処理後にストリームに残ったすべてのイベントがネットワーク経由でクライアントに送り返されます。この時点で、**Data**データ以外のイベントはすべて破棄されます。
 
-# フィルターとパイプライン
+<div style="text-align: center">
+  <SvgStreamOutput/>
+</div>
+
+## フィルターとパイプライン
 
 Pipyの仕組みを理解するには、[_Unix pipelines_](https://en.wikipedia.org/wiki/Pipeline_(Unix)) と同様に考えるとよいでしょう。
 
 入力されたストリームは、Pipyの中の**filters**フィルターのチェーンを介して処理されます。各フィルターは、標準入力(stdin)からの読み込みと標準出力（stdout）への書き込みを繰り返す、とても小さいUnixのプロセスのように動作し、あるフィルターの出力は次のフィルターの入力に接続されます。Unixのパイプラインと唯一異なる点は、ここではバイトではなく**events**イベントのストリームを扱っていることです。
 
+<div style="text-align: center">
+  <SvgPipelineFilters/>
+</div>
+
 フィルターのチェーンを**pipeline**パイプラインと呼びます。パイプラインには、入力ソースによって3つの種類があります。
 
-## ポートパイプライン
+### ポートパイプライン
 
 **port pipeline**ポートパイプラインは、着信TCP接続があるときに作成されます。ポートパイプラインは、接続から**Data**データイベントを読み取って処理し、その結果をクライアントに書き戻します。これは、HTTPの"_request and response_"リクエストとレスポンスの通信モデルに似ており、パイプラインへの入力がリクエストで、パイプラインからの出力がレスポンスとなります。Pipyに接続されるすべての着信接続には、それに関連する_port pipeline_ポートパイプラインがあり、その接続で発生する通信を処理していると考えればよいでしょう。
 
-## タイマーパイプライン
+### タイマーパイプライン
 
 **timer pipeline**タイマーパイプラインは周期的に作成され、**MessageStart**イベントと**MessageEnd**イベントのペアのみを入力とするパイプラインです。出力されたものはすべて、フィルターでのすべての処理後に単純に破棄されます。この種類のパイプラインは、[_cron job_](https://en.wikipedia.org/wiki/Cron)のようなタスクを実行するために使用できます。
 
-## シグナルパイプライン
+### シグナルパイプライン
 
 **signal pipeline**シグナルパイプラインは、シグナルがPipyプロセスに送信されるときに作成されます。**MessageStart**イベントと**MessageEnd**イベントのペアのみを入力とします。出力されたものはすべて、フィルターでのすべての処理後に単純に破棄されます。この種類のパイプラインは、シグナルの受信時に特定のタスクを実行する必要がある場合に有用です。
 
-## サブパイプライン
+### サブパイプライン
 
 **sub-pipeline**サブパイプラインとは、他のパイプラインから**joint filter**ジョイントフィルターを使用して起動できるパイプラインのことです。いくつかある中で最も基本的なジョイントフィルターは**link**リンクです。リンクは、メインパイプラインの先行処理からイベントを受け取り、それをサブパイプラインに送って処理させ、そのサブパイプラインが出力するものすべてをメインパイプラインの後続のフィルターに送り込みます。
+
+<div style="text-align: center">
+  <SvgSubPipeline/>
+</div>
 
 _joint filter_ジョイントフィルターと_sub-pipelines_サブパイプラインを考えるときは、手続き型プログラミングでのサブルーチン呼び出し処理の_callers_と_callees_に例えて考えてもよいでしょう。ジョイントフィルターへの入力はサブルーチンのパラメータであり、出力は戻り値です。
 
 他の種類のパイプライン、即ち**port pipelines**ポートパイプライン、**timer pipelines**タイマーパイプライン、**signal pipelines**シグナルパイプラインは、サブパイプラインのように内部のジョイントフィルターから"_called_"呼び出すことができません。これらは、外部からの着信接続、タイマー、シグナルによってのみ開始されます。これらのパイプラインを**root pipeline**ルートパイプラインと呼びます。
 
-# モジュール
+## モジュール
 
 **module**モジュールは、一連の**pipeline layouts**パイプラインレイアウトを設定したスクリプトを持つPipyJSソースファイルです。
 
@@ -53,13 +98,17 @@ _joint filter_ジョイントフィルターと_sub-pipelines_サブパイプラ
 
 "_modules_"モジュールと"_files_"ファイルは１対１の関係にあるため、これらの用語を同じ意味で使います。
 
-# コンテキスト
+## コンテキスト
 
 **context**コンテキストは、パイプラインに付属する一連の変数で、パイプラインのその時の状態をメンテナンスするスクリプトが使います。
 
 ひとつのPipyモジュール内のすべてのパイプラインは同じ変数セットを使います。言い換えると、コンテキストとは、ひとつのモジュール内のすべてのパイプラインの同じ"_shape_"成形と言えます。異なるモジュールでは異なるコンテキストの成形を持つことができます。Pipyモジュールを開始する時、最初にすることはコンテキストの_shape_成形を定義すること、つまり、どんな変数が使われ、その初期値は何かを定義することです。
 
 同じモジュールから来る全てのパイプラインは、まったく同じコンテキスト変数のセットを持ちますが、各パイプラインは他のパイプラインから独立した、固有の変数の値を持つことができ、いわば、各パイプラインは固有の"_state_"ステートを持つことができます。
+
+<div style="text-align: center">
+  <SvgModulePipelineContext/>
+</div>
 
 モジュールのスクリプトにとっては、これらのコンテキスト変数は**global variables**グローバル変数のように使われます。これらは同じファイル内でスクリプトがどこからでも常にアクセスできる変数です。
 
