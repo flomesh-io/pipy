@@ -12,7 +12,7 @@ import SvgModulePipelineContext from './module-pipeline-context.svg';
 
 ## Stream
 
-Pipy is a proxy that works like a "_stream processor_", which means that it takes in _streams_, processes them, and then spits them out as _streams_ too.
+Pipy is a proxy that works like a "_stream processor_", which means that it takes in _streams_, processes _streams_, and spits out _streams_.
 
 ### Inbound and outbound
 
@@ -48,7 +48,7 @@ What Pipy does is process the events in the input stream. Some are transformed, 
   <SvgStreamTransform/>
 </div>
 
-Eventually, all events left in the stream after the processing are sent back over network to the client. At this point, all other events except **Data** are discared.
+Eventually, all events left in the stream after the processing are sent back to network. At this point, all other events except **Data** are discared.
 
 <div style="text-align: center">
   <SvgStreamOutput/>
@@ -101,7 +101,7 @@ Since "_modules_" and "_files_" have a one-on-one relationship, we use the 2 ter
 
 ## Context
 
-A **context** is a set of variables attached to a pipeline, used by scripts to maintain the current state of the pipeline.
+A **context** is a set of variables attached to a pipeline, used by scripts to maintain the current state of a pipeline.
 
 Every pipeline uses the same set of variables across a Pipy module. In other words, contexts are of the same "_shape_" among all pipelines in a module, but different modules can have different context shapes. When you start a Pipy module, the first thing is define the _shape_ of the context, meaning what variables it is going to use and their initial values.
 
