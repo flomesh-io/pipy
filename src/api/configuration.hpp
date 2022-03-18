@@ -109,6 +109,7 @@ public:
   void replace_start(const pjs::Value &replacement);
   void serve_http(pjs::Object *handler);
   void split(pjs::Function *callback);
+  void tee(const pjs::Value &filename, pjs::Object *options);
   void throttle_concurrency(const pjs::Value &quota, const pjs::Value &account);
   void throttle_data_rate(const pjs::Value &quota, const pjs::Value &account);
   void throttle_message_rate(const pjs::Value &quota, const pjs::Value &account);

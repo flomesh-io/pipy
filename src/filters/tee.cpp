@@ -23,47 +23,70 @@
  *  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef TIMER_HPP
-#define TIMER_HPP
-
-#include "net.hpp"
+#include "tee.hpp"
+#include "logging.hpp"
 
 namespace pipy {
 
-//
-// Timer
-//
+Tee::Tee(const pjs::Value &filename, const Options &options)
+  : m_filename(filename)
+  , m_options(options)
+{
+}
 
-class Timer {
-public:
-  Timer() : m_timer(Net::context()) {}
+Tee::Tee(const Tee &r)
+  : Filter(r)
+  , m_filename(r.m_filename)
+  , m_options(r.m_options)
+{
+}
 
-  ~Timer() { cancel(); }
+Tee::~Tee() {
+}
 
-  void schedule(double timeout, const std::function<void()> &handler);
-  void cancel();
+void Tee::dump(std::ostream &out) {
+  out << "tee";
+}
 
-private:
-  class Handler :
-    public pjs::RefCount<Handler>,
-    public pjs::Pooled<Handler>
-  {
-  public:
-    Handler(const std::function<void()> &handler)
-      : m_handler(handler) {}
+auto Tee::clone() -> Filter* {
+  return new Tee(*this);
+}
 
-    void trigger(const asio::error_code &ec);
-    void cancel();
+void Tee::reset() {
+  Filter::reset();
+  if (m_file) {
+    m_file->close();
+    m_file = nullptr;
+  }
+  m_resolved_filename = nullptr;
+}
 
-  private:
-    std::function<void()> m_handler;
-    bool m_canceled = false;
-  };
+void Tee::process(Event *evt) {
+  if (auto *data = evt->as<Data>()) {
+    if (!data->empty()) {
+      if (!m_resolved_filename) {
+        pjs::Value filename;
+        if (!eval(m_filename, filename)) return;
+        auto *s = filename.to_string();
+        m_resolved_filename = s;
+        s->release();
+        m_file = File::make(m_resolved_filename->str());
+        m_file->open_write();
+      }
+    }
 
-  asio::steady_timer m_timer;
-  pjs::Ref<Handler> m_handler;
-};
+    if (m_file) {
+      m_file->write(*data);
+    }
+
+  } else if (evt->is<StreamEnd>()) {
+    if (m_file) {
+      m_file->close();
+      m_file = nullptr;
+    }
+  }
+
+  output(evt);
+}
 
 } // namespace pipy
-
-#endif // TIMER_HPP

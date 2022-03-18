@@ -140,6 +140,7 @@ add_executable(pipy
   src/data.cpp
   src/event.cpp
   src/fetch.cpp
+  src/file.cpp
   src/filter.cpp
   src/filters/connect.cpp
   src/filters/decompress-message.cpp
@@ -168,6 +169,7 @@ add_executable(pipy
   src/filters/replace-start.cpp
   src/filters/socks.cpp
   src/filters/split.cpp
+  src/filters/tee.cpp
   src/filters/throttle.cpp
   src/filters/tls.cpp
   src/filters/use.cpp

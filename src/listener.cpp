@@ -44,7 +44,7 @@ void Listener::set_reuse_port(bool reuse) {
 Listener::Listener(const std::string &ip, int port)
   : m_ip(ip)
   , m_port(port)
-  , m_acceptor(Net::service())
+  , m_acceptor(Net::context())
 {
   m_address = asio::ip::make_address(m_ip);
   m_ip = m_address.to_string();

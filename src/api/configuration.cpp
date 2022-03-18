@@ -60,6 +60,7 @@
 #include "filters/replace-start.hpp"
 #include "filters/socks.hpp"
 #include "filters/split.hpp"
+#include "filters/tee.hpp"
 #include "filters/throttle.hpp"
 #include "filters/tls.hpp"
 #include "filters/use.hpp"
@@ -360,6 +361,18 @@ void Configuration::serve_http(pjs::Object *handler) {
 
 void Configuration::split(pjs::Function *callback) {
   append_filter(new Split(callback));
+}
+
+void Configuration::tee(const pjs::Value &filename, pjs::Object *options) {
+  Tee::Options opts;
+  if (options) {
+    pjs::Value threshold, throttle;
+    options->get("threshold", threshold);
+    options->get("throttle", throttle);
+    if (!utils::get_byte_size(threshold, opts.threshold)) throw std::runtime_error("options.threshold expects a number or a string");
+    if (!utils::get_byte_size(throttle, opts.throttle)) throw std::runtime_error("options.throttle expects a number or a string");
+  }
+  append_filter(new Tee(filename, opts));
 }
 
 void Configuration::throttle_concurrency(const pjs::Value &quota, const pjs::Value &account) {
@@ -1283,6 +1296,19 @@ template<> void ClassDef<Configuration>::init() {
     if (!ctx.arguments(1, &quota, &account)) return;
     try {
       thiz->as<Configuration>()->throttle_data_rate(quota, account);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // Configuration.tee
+  method("tee", [](Context &ctx, Object *thiz, Value &result) {
+    Value filename;
+    Object *options = nullptr;
+    if (!ctx.arguments(1, &filename, &options)) return;
+    try {
+      thiz->as<Configuration>()->tee(filename, options);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

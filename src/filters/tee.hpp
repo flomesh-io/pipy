@@ -23,47 +23,47 @@
  *  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef TIMER_HPP
-#define TIMER_HPP
+#ifndef TEE_HPP
+#define TEE_HPP
 
-#include "net.hpp"
+#include "filter.hpp"
+#include "file.hpp"
+#include "data.hpp"
+#include "fstream.hpp"
 
 namespace pipy {
 
 //
-// Timer
+// Tee
 //
 
-class Timer {
+class Tee : public Filter {
 public:
-  Timer() : m_timer(Net::context()) {}
-
-  ~Timer() { cancel(); }
-
-  void schedule(double timeout, const std::function<void()> &handler);
-  void cancel();
-
-private:
-  class Handler :
-    public pjs::RefCount<Handler>,
-    public pjs::Pooled<Handler>
-  {
-  public:
-    Handler(const std::function<void()> &handler)
-      : m_handler(handler) {}
-
-    void trigger(const asio::error_code &ec);
-    void cancel();
-
-  private:
-    std::function<void()> m_handler;
-    bool m_canceled = false;
+  struct Options {
+    size_t threshold = 0;
+    size_t throttle = 0;
   };
 
-  asio::steady_timer m_timer;
-  pjs::Ref<Handler> m_handler;
+  Tee(const pjs::Value &filename, const Options &options);
+
+private:
+  Tee(const Tee &r);
+  ~Tee();
+
+  virtual auto clone() -> Filter* override;
+  virtual void reset() override;
+  virtual void process(Event *evt) override;
+  virtual void dump(std::ostream &out) override;
+
+  pjs::Value m_filename;
+  Options m_options;
+  pjs::Ref<pjs::Str> m_resolved_filename;
+  pjs::Ref<File> m_file;
+
+  void open();
+  void close();
 };
 
 } // namespace pipy
 
-#endif // TIMER_HPP
+#endif // TEE_HPP

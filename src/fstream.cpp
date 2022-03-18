@@ -32,7 +32,16 @@
 namespace pipy {
 
 FileStream::FileStream(int fd, Data::Producer *dp)
-  : m_stream(Net::service(), fd)
+  : m_stream(Net::context(), fd)
+  , m_f(nullptr)
+  , m_dp(dp)
+{
+  read();
+}
+
+FileStream::FileStream(FILE *f, Data::Producer *dp)
+  : m_stream(Net::context(), fileno(f))
+  , m_f(f)
   , m_dp(dp)
 {
   read();
@@ -46,6 +55,11 @@ void FileStream::close() {
     Log::error("FileStream: %p, error closing stream [fd = %d], %s", this, m_fd, ec.message().c_str());
   } else {
     Log::debug("FileStream: %p, stream closed [fd = %d]", this, m_fd);
+  }
+
+  if (m_f) {
+    fclose(m_f);
+    m_f = nullptr;
   }
 }
 

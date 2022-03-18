@@ -40,15 +40,16 @@ namespace pipy {
 
 class Net {
 public:
-  static auto service() -> asio::io_service& {
-    return s_io_service;
+  static auto context() -> asio::io_context& {
+    return s_io_context;
   }
 
   static void run();
   static void stop();
+  static void post(const std::function<void()> &cb);
 
 private:
-  static asio::io_service s_io_service;
+  static asio::io_context s_io_context;
 };
 
 //

@@ -68,7 +68,7 @@ namespace pipy {
 Task::Task(const std::string &when, PipelineDef *pipeline_def)
   : m_when(when)
   , m_pipeline_def(pipeline_def)
-  , m_signal_set(Net::service())
+  , m_signal_set(Net::context())
 {
   if (!when.empty()) {
     if (std::isdigit(when[0])) {

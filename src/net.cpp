@@ -27,14 +27,18 @@
 
 namespace pipy {
 
-asio::io_service Net::s_io_service;
+asio::io_context Net::s_io_context;
 
 void Net::run() {
-  s_io_service.run();
+  s_io_context.run();
 }
 
 void Net::stop() {
-  s_io_service.stop();
+  s_io_context.stop();
+}
+
+void Net::post(const std::function<void()> &cb) {
+  asio::post(s_io_context, cb);
 }
 
 } // namespace pipy

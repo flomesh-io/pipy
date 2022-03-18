@@ -29,11 +29,12 @@
 #include "admin-proxy.hpp"
 #include "api/crypto.hpp"
 #include "codebase.hpp"
+#include "file.hpp"
+#include "fs.hpp"
 #include "filters/tls.hpp"
 #include "listener.hpp"
 #include "net.hpp"
 #include "options.hpp"
-#include "fs.hpp"
 #include "status.hpp"
 #include "timer.hpp"
 #include "utils.hpp"
@@ -164,6 +165,7 @@ int main(int argc, char *argv[]) {
     Listener::set_reuse_port(opts.reuse_port);
     crypto::Crypto::init(opts.openssl_engine);
     tls::TLSSession::init();
+    File::start_bg_thread();
 
     AdminService::Options admin_options;
     admin_options.cert = opts.admin_tls_cert;
@@ -310,13 +312,15 @@ int main(int argc, char *argv[]) {
       load();
     }
 
-    asio::signal_set signals(Net::service());
+    asio::signal_set signals(Net::context());
     signals.add(SIGINT);
     signals.add(SIGHUP);
     signals.add(SIGTSTP);
     wait_for_signals(signals);
 
     Net::run();
+
+    File::stop_bg_thread();
 
     delete s_admin;
     delete s_admin_proxy;

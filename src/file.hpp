@@ -23,68 +23,53 @@
  *  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef FSTREAM_HPP
-#define FSTREAM_HPP
+#ifndef FILE_HPP
+#define FILE_HPP
 
-#include "net.hpp"
-#include "event.hpp"
-#include "input.hpp"
+#include "data.hpp"
+#include "fstream.hpp"
 
+#include <fstream>
 #include <stdio.h>
 
 namespace pipy {
 
-class Data;
-
 //
-// FileStream
+// File
 //
 
-class FileStream :
-  public pjs::RefCount<FileStream>,
-  public pjs::Pooled<FileStream>,
-  public EventFunction,
-  public InputSource
+class File :
+  public pjs::RefCount<File>,
+  public pjs::Pooled<File>
 {
 public:
-  static auto make(int fd, Data::Producer *dp) -> FileStream* {
-    return new FileStream(fd, dp);
+  static void start_bg_thread();
+  static void stop_bg_thread();
+
+  static auto make(const std::string &path) -> File* {
+    return new File(path);
   }
 
-  static auto make(FILE *f, Data::Producer *dp) -> FileStream* {
-    return new FileStream(f, dp);
-  }
-
-  auto fd() const -> int { return m_fd; }
-  void set_buffer_limit(size_t size) { m_buffer_limit = size; }
+  void open_read(int seek, const std::function<void(FileStream*)> &cb);
+  void open_write();
+  void write(const Data &data);
   void close();
 
 private:
-  FileStream(int fd, Data::Producer *dp);
-  FileStream(FILE *f, Data::Producer *dp);
+  File(const std::string &path)
+    : m_path(path) {}
 
-  virtual void on_event(Event *evt) override;
-  virtual void on_tap_open() override;
-  virtual void on_tap_close() override;
+  ~File() {}
 
-  int m_fd;
-  FILE* m_f;
-  Data::Producer* m_dp;
-  asio::posix::stream_descriptor m_stream;
+  std::string m_path;
+  FILE* m_f = nullptr;
   Data m_buffer;
-  size_t m_buffer_limit = 0;
-  bool m_overflowed = false;
-  bool m_pumping = false;
-  bool m_ended = false;
+  pjs::Ref<FileStream> m_stream;
+  bool m_closed = false;
 
-  void read();
-  void write(Data *data);
-  void end();
-  void pump();
-
-  friend class pjs::RefCount<FileStream>;
+  friend class pjs::RefCount<File>;
 };
 
 } // namespace pipy
 
-#endif // FSTREAM_HPP
+#endif // FILE_HPP
