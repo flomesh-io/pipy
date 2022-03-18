@@ -85,6 +85,8 @@ private:
 
     virtual void on_event(Event *evt) override;
 
+    void flush();
+
     friend class QueueDemuxer;
   };
 

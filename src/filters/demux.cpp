@@ -103,39 +103,20 @@ void QueueDemuxer::on_event(Event *evt) {
 
 void QueueDemuxer::flush() {
   auto &streams = m_streams;
-  if (m_ordered) {
-    while (auto stream = streams.head()) {
-      if (stream->m_start) {
-        output(stream->m_start);
-        if (!stream->m_buffer.empty()) output(Data::make(stream->m_buffer));
-      }
-      if (stream->m_output_end) {
-        streams.remove(stream);
-        output(MessageEnd::make());
-        delete stream;
-        if (m_shutdown && streams.empty()) {
-          output(StreamEnd::make());
-        }
-      } else {
-        break;
-      }
+  while (auto stream = streams.head()) {
+    if (stream->m_start) {
+      output(stream->m_start);
+      if (!stream->m_buffer.empty()) output(Data::make(stream->m_buffer));
     }
-
-  } else {
-    auto p = streams.head();
-    while (p) {
-      auto stream = p;
-      p = p->next();
-      if (stream->m_output_end) {
-        streams.remove(stream);
-        output(stream->m_start);
-        if (!stream->m_buffer.empty()) output(Data::make(stream->m_buffer));
-        output(MessageEnd::make());
-        delete stream;
-        if (m_shutdown && streams.empty()) {
-          output(StreamEnd::make());
-        }
+    if (stream->m_output_end) {
+      streams.remove(stream);
+      output(MessageEnd::make());
+      delete stream;
+      if (m_shutdown && streams.empty()) {
+        output(StreamEnd::make());
       }
+    } else {
+      break;
     }
   }
 }
@@ -197,7 +178,11 @@ void QueueDemuxer::Stream::on_event(Event *evt) {
         demuxer->flush();
         delete this;
       } else {
-        m_output_end = true;
+        if (demuxer->m_ordered) {
+          m_output_end = true;
+        } else {
+          flush();
+        }
       }
     }
 
@@ -209,8 +194,25 @@ void QueueDemuxer::Stream::on_event(Event *evt) {
       demuxer->flush();
       delete this;
     } else {
-      m_output_end = true;
+      if (demuxer->m_ordered) {
+        m_output_end = true;
+      } else {
+        flush();
+      }
     }
+  }
+}
+
+void Demux::Stream::flush() {
+  auto demuxer = m_demuxer;
+  auto &streams = demuxer->m_streams;
+  streams.remove(this);
+  demuxer->output(m_start);
+  if (!m_buffer.empty()) demuxer->output(Data::make(m_buffer));
+  demuxer->output(MessageEnd::make());
+  delete this;
+  if (demuxer->m_shutdown && streams.empty()) {
+    demuxer->output(StreamEnd::make());
   }
 }
 
