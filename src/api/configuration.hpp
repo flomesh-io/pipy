@@ -82,6 +82,7 @@ public:
   void decompress_message(const pjs::Value &algorithm);
   void detect_protocol(pjs::Function *callback);
   void demux(pjs::Str *target);
+  void demux_queue(pjs::Str *target);
   void demux_http(pjs::Str *target, pjs::Object *options);
   void dummy();
   void dump(const pjs::Value &tag);
@@ -93,7 +94,7 @@ public:
   void fork(pjs::Str *target, pjs::Object *initializers);
   void link(size_t count, pjs::Str **targets, pjs::Function **conditions);
   void merge(pjs::Str *target, const pjs::Value &key, pjs::Object *options);
-  void mux(pjs::Str *target, const pjs::Value &key, pjs::Object *options);
+  void mux_queue(pjs::Str *target, const pjs::Value &key, pjs::Object *options);
   void mux_http(pjs::Str *target, const pjs::Value &key, pjs::Object *options);
   void on_body(pjs::Function *callback, int size_limit);
   void on_event(Event::Type type, pjs::Function *callback);

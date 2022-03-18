@@ -19,9 +19,9 @@ A **demux** filter **de-multiplexes** [Messages](/reference/api/Message) from it
 
 A **demux** filter works like this:
 
-- At the input to a **demux** filter, _Messages_ are separated and queued up
+- At the input to a **demux** filter, _Messages_ are separated
 - For each input _Message_, a dedicated sub-pipeline is created, whose input will be that _Message_
-- At the output from the **demux** filter, output _Messages_ coming out of all sub-pipelines are queued and sent out in the same order as the input _Messages_
+- At the output from the **demux** filter, output _Messages_ coming out of all sub-pipelines are combined in the same order as they come out of their sub-pipelines (compare to [demuxQueue()](/reference/api/Configuration/demuxQueue))
 
 One **demux** filter can have more than one sub-pipelines, each of which handles one _Message_.
 
@@ -30,8 +30,6 @@ One **demux** filter can have more than one sub-pipelines, each of which handles
 |                 |    |         | ←→ | `sub-pipeline #1` |
 | `main pipeline` | ←→ | `demux` | ←→ | `sub-pipeline #2` |
 |                 |    |         | ←→ | `sub-pipeline #N` |
-
-Compare this to [mux()](/reference/api/Configuration/mux).
 
 ## Syntax
 
@@ -52,8 +50,9 @@ pipy()
 ## See Also
 
 * [Configuration](/reference/api/Configuration)
+* [demuxQueue()](/reference/api/Configuration/demuxQueue)
 * [demuxHTTP()](/reference/api/Configuration/demuxHTTP)
 * [merge()](/reference/api/Configuration/merge)
-* [mux()](/reference/api/Configuration/mux)
+* [muxQueue()](/reference/api/Configuration/muxQueue)
 * [muxHTTP()](/reference/api/Configuration/muxHTTP)
 * [serveHTTP()](/reference/api/Configuration/serveHTTP)

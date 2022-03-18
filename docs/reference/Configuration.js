@@ -307,6 +307,20 @@ class Configuration {
   demux(layout) {}
 
   /**
+   * Appends a demuxQueue filter to the current pipeline layout.
+   *
+   * A demuxQueue filter de-multiplexes Messages from its input stream,
+   * distribute them to many sub-pipelines and
+   * multiplexes their output Messages into a single Message stream
+   * where the Messages come in the same order as the input.
+   * Its input and output are Messages. Its sub-pipelines's input and output are also Messages.
+   *
+   * @param {string} layout Name of the pipeline layout based on which sub-pipelines are created to handle input Messages.
+   * @returns {Configuration} The same Configuration object.
+   */
+  demuxQueue(layout) {}
+
+  /**
    * Appends a demuxHTTP filter to the current pipeline layout.
    *
    * A demuxHTTP filter de-multiplexes and decodes HTTP requests from its input Data stream,
@@ -467,9 +481,9 @@ class Configuration {
   merge(layout, group, options) {}
 
   /**
-   * Appends a mux filter to the current pipeline layout.
+   * Appends a muxQueue filter to the current pipeline layout.
    *
-   * A mux filter multiplexes input Messages into a shared sub-pipeline and
+   * A muxQueue filter multiplexes input Messages into a shared sub-pipeline and
    * de-multiplexes output Messages out of it.
    * Its input and output are _Messages_.
    * Its sub-pipelines's input and output are also _Messages_.
@@ -480,7 +494,7 @@ class Configuration {
    * @param {number} [options.maxIdle] Time to wait before an unused sub-pipeline is destroyed.
    * @returns {Configuration} The same Configuration object.
    */
-  mux(layout, group, options) {}
+  muxQueue(layout, group, options) {}
 
   /**
    * Appends a muxHTTP filter to the current pipeline layout.

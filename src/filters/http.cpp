@@ -1131,6 +1131,7 @@ void RequestQueue::on_reply(Event *evt) {
 Demux::Demux(pjs::Object *options)
   : Decoder(false)
   , Encoder(true)
+  , QueueDemuxer(true)
 {
   if (options) {
     pjs::Value buffer_size;
@@ -1153,6 +1154,7 @@ Demux::Demux(const Demux &r)
   : Filter(r)
   , Decoder(false)
   , Encoder(true)
+  , QueueDemuxer(true)
   , m_buffer_size(r.m_buffer_size)
 {
 }

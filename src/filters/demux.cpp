@@ -103,20 +103,39 @@ void QueueDemuxer::on_event(Event *evt) {
 
 void QueueDemuxer::flush() {
   auto &streams = m_streams;
-  while (auto stream = streams.head()) {
-    if (stream->m_start) {
-      output(stream->m_start);
-      if (!stream->m_buffer.empty()) output(Data::make(stream->m_buffer));
-    }
-    if (stream->m_output_end) {
-      streams.remove(stream);
-      output(MessageEnd::make());
-      delete stream;
-      if (m_shutdown && streams.empty()) {
-        output(StreamEnd::make());
+  if (m_ordered) {
+    while (auto stream = streams.head()) {
+      if (stream->m_start) {
+        output(stream->m_start);
+        if (!stream->m_buffer.empty()) output(Data::make(stream->m_buffer));
       }
-    } else {
-      break;
+      if (stream->m_output_end) {
+        streams.remove(stream);
+        output(MessageEnd::make());
+        delete stream;
+        if (m_shutdown && streams.empty()) {
+          output(StreamEnd::make());
+        }
+      } else {
+        break;
+      }
+    }
+
+  } else {
+    auto p = streams.head();
+    while (p) {
+      auto stream = p;
+      p = p->next();
+      if (stream->m_output_end) {
+        streams.remove(stream);
+        output(stream->m_start);
+        if (!stream->m_buffer.empty()) output(Data::make(stream->m_buffer));
+        output(MessageEnd::make());
+        delete stream;
+        if (m_shutdown && streams.empty()) {
+          output(StreamEnd::make());
+        }
+      }
     }
   }
 }
@@ -147,6 +166,7 @@ void QueueDemuxer::Stream::on_event(Event *evt) {
   }
 
   bool is_head = (
+    demuxer->m_ordered &&
     demuxer->m_streams.head() == this
   );
 
@@ -199,11 +219,13 @@ void QueueDemuxer::Stream::on_event(Event *evt) {
 //
 
 Demux::Demux()
+  : QueueDemuxer(false)
 {
 }
 
 Demux::Demux(const Demux &r)
   : Filter(r)
+  , QueueDemuxer(false)
 {
 }
 
@@ -239,6 +261,56 @@ void Demux::shutdown() {
 }
 
 auto Demux::on_new_sub_pipeline() -> Pipeline* {
+  return sub_pipeline(0, true);
+}
+
+//
+// DemuxQueue
+//
+
+DemuxQueue::DemuxQueue()
+  : QueueDemuxer(true)
+{
+}
+
+DemuxQueue::DemuxQueue(const DemuxQueue &r)
+  : Filter(r)
+  , QueueDemuxer(true)
+{
+}
+
+DemuxQueue::~DemuxQueue()
+{
+}
+
+void DemuxQueue::dump(std::ostream &out) {
+  out << "demuxQueue";
+}
+
+auto DemuxQueue::clone() -> Filter* {
+  return new DemuxQueue(*this);
+}
+
+void DemuxQueue::chain() {
+  Filter::chain();
+  QueueDemuxer::chain(Filter::output());
+}
+
+void DemuxQueue::reset() {
+  Filter::reset();
+  QueueDemuxer::reset();
+}
+
+void DemuxQueue::process(Event *evt) {
+  Filter::output(evt, QueueDemuxer::input());
+}
+
+void DemuxQueue::shutdown() {
+  Filter::shutdown();
+  QueueDemuxer::shutdown();
+}
+
+auto DemuxQueue::on_new_sub_pipeline() -> Pipeline* {
   return sub_pipeline(0, true);
 }
 

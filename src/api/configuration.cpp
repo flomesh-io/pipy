@@ -233,6 +233,12 @@ void Configuration::demux(pjs::Str *target) {
   append_filter(filter);
 }
 
+void Configuration::demux_queue(pjs::Str *target) {
+  auto *filter = new DemuxQueue();
+  filter->add_sub_pipeline(target);
+  append_filter(filter);
+}
+
 void Configuration::demux_http(pjs::Str *target, pjs::Object *options) {
   auto *filter = new http::Demux(options);
   filter->add_sub_pipeline(target);
@@ -292,7 +298,7 @@ void Configuration::merge(pjs::Str *target, const pjs::Value &key, pjs::Object *
   append_filter(filter);
 }
 
-void Configuration::mux(pjs::Str *target, const pjs::Value &key, pjs::Object *options) {
+void Configuration::mux_queue(pjs::Str *target, const pjs::Value &key, pjs::Object *options) {
   auto *filter = new Mux(key, options);
   filter->add_sub_pipeline(target);
   append_filter(filter);
@@ -733,6 +739,18 @@ template<> void ClassDef<Configuration>::init() {
     }
   });
 
+  // Configuration.demuxQueue
+  method("demuxQueue", [](Context &ctx, Object *thiz, Value &result) {
+    Str *target;
+    if (!ctx.arguments(1, &target)) return;
+    try {
+      thiz->as<Configuration>()->demux_queue(target);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
   // Configuration.demuxHTTP
   method("demuxHTTP", [](Context &ctx, Object *thiz, Value &result) {
     Str *target;
@@ -1074,14 +1092,14 @@ template<> void ClassDef<Configuration>::init() {
     }
   });
 
-  // Configuration.mux
-  method("mux", [](Context &ctx, Object *thiz, Value &result) {
+  // Configuration.muxQueue
+  method("muxQueue", [](Context &ctx, Object *thiz, Value &result) {
     Str *target;
     Value key;
     Object *options = nullptr;
     if (!ctx.arguments(2, &target, &key, &options)) return;
     try {
-      thiz->as<Configuration>()->mux(target, key, options);
+      thiz->as<Configuration>()->mux_queue(target, key, options);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

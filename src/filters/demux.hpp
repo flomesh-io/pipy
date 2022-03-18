@@ -44,12 +44,16 @@ public:
   void shutdown();
 
 protected:
+  QueueDemuxer(bool ordered)
+    : m_ordered(ordered) {}
+
   virtual auto on_new_sub_pipeline() -> Pipeline* = 0;
 
 private:
   class Stream;
 
   List<Stream> m_streams;
+  bool m_ordered;
   bool m_isolated = false;
   bool m_shutdown = false;
 
@@ -98,6 +102,29 @@ public:
 private:
   Demux(const Demux &r);
   ~Demux();
+
+  virtual auto clone() -> Filter* override;
+  virtual void chain() override;
+  virtual void reset() override;
+  virtual void process(Event *evt) override;
+  virtual void shutdown() override;
+  virtual void dump(std::ostream &out) override;
+
+  virtual auto on_new_sub_pipeline() -> Pipeline* override;
+};
+
+
+//
+// DemuxQueue
+//
+
+class DemuxQueue : public Filter, public QueueDemuxer {
+public:
+  DemuxQueue();
+
+private:
+  DemuxQueue(const DemuxQueue &r);
+  ~DemuxQueue();
 
   virtual auto clone() -> Filter* override;
   virtual void chain() override;

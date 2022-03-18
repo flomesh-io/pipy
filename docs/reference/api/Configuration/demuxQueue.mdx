@@ -1,0 +1,60 @@
+---
+title: "Configuration.demuxQueue()"
+api: Configuration.demuxQueue()
+---
+
+## Description
+
+Appends a **demuxQueue** filter to the current pipeline layout.
+
+A **demuxQueue** filter **de-multiplexes** [Messages](/reference/api/Message) from its input stream, distribute them to many sub-pipelines and multiplexes their output _Messages_ into a single _Message_ stream where the _Messages_ come in the same order as the input. Its input and output are _Messages_. Its sub-pipelines's input and output are also _Messages_.
+
+|          |             |              |             |                |
+|---------:|:-----------:|:------------:|:-----------:|:--------------:|
+|          | **Message** |              | **Message** |                |
+| _Input_  | →           |              | →           |                |
+|          |             | `demuxQueue` |             | `sub-pipeline` |
+| _Output_ | ←           |              | ←           |                |
+|          | **Message** |              | **Message** |                |
+
+A **demuxQueue** filter works like this:
+
+- At the input to a **demuxQueue** filter, _Messages_ are separated and queued up
+- For each input _Message_, a dedicated sub-pipeline is created, whose input will be that _Message_
+- At the output from the **demuxQueue** filter, output _Messages_ coming out of all sub-pipelines are queued and sent out in the same order as the input _Messages_ (compare to [demux()](/reference/api/Configuration/demux))
+
+One **demuxQueue** filter can have more than one sub-pipelines, each of which handles one _Message_.
+
+|                 |    |              |    |                   |
+|----------------:|:--:|:------------:|:--:|:------------------|
+|                 |    |              | ←→ | `sub-pipeline #1` |
+| `main pipeline` | ←→ | `demuxQueue` | ←→ | `sub-pipeline #2` |
+|                 |    |              | ←→ | `sub-pipeline #N` |
+
+Compare this to [muxQueue()](/reference/api/Configuration/muxQueue).
+
+## Syntax
+
+``` js
+pipy()
+  .pipeline('example')
+    .demuxQueue(layout)
+```
+
+### Parameters
+
+<Parameters/>
+
+### Return value
+
+<ReturnValue/>
+
+## See Also
+
+* [Configuration](/reference/api/Configuration)
+* [demux()](/reference/api/Configuration/demux)
+* [demuxHTTP()](/reference/api/Configuration/demuxHTTP)
+* [merge()](/reference/api/Configuration/merge)
+* [muxQueue()](/reference/api/Configuration/muxQueue)
+* [muxHTTP()](/reference/api/Configuration/muxHTTP)
+* [serveHTTP()](/reference/api/Configuration/serveHTTP)
