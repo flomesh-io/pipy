@@ -646,8 +646,10 @@ public:
 
   void PUBACK() {
     push(get(m_packet, STR_packetIdentifier, uint16_t(0)));
-    push(get(m_packet, STR_reasonCode, '\x00'));
-    push_properties();
+    if (m_protocol_level >= 5) {
+      push(get(m_packet, STR_reasonCode, '\x00'));
+      push_properties();
+    }
     frame(PacketType::PUBACK, 0);
   }
 
