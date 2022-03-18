@@ -55,10 +55,7 @@ ThrottleBase::~ThrottleBase()
 
 void ThrottleBase::reset() {
   Filter::reset();
-  if (m_closed_tap) {
-    m_current_account->dequeue(this);
-    resume();
-  }
+  resume();
   m_evaluated = false;
   m_current_account = nullptr;
   m_buffer.clear();
