@@ -83,6 +83,7 @@ private:
 
   private:
     std::unordered_map<pjs::Value, Account*> m_accounts;
+    std::unordered_map<pjs::WeakRef<pjs::Object>, Account*> m_weak_accounts;
     Timer m_timer;
 
     void supply();

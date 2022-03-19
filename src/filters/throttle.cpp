@@ -171,15 +171,35 @@ ThrottleBase::AccountManager::~AccountManager() {
 }
 
 auto ThrottleBase::AccountManager::get(const pjs::Value &key, double quota) -> Account* {
-  Account* account;
-  auto i = m_accounts.find(key);
-  if (i == m_accounts.end()) {
+  bool is_weak = (key.is_object() && key.o());
+  Account* account = nullptr;
+
+  if (is_weak) {
+    pjs::WeakRef<pjs::Object> o(key.o());
+    auto i = m_weak_accounts.find(o);
+    if (i != m_weak_accounts.end()) {
+      account = i->second;
+      if (!i->first.ptr()) {
+        account = nullptr;
+      }
+    }
+  } else {
+    auto i = m_accounts.find(key);
+    if (i != m_accounts.end()) {
+      account = i->second;
+    }
+  }
+
+  if (!account) {
     account = new Account();
     account->m_quota = quota;
-    m_accounts[key] = account;
-  } else {
-    account = i->second;
+    if (is_weak) {
+      m_weak_accounts[key.o()] = account;
+    } else {
+      m_accounts[key] = account;
+    }
   }
+
   account->m_quota_supply = quota;
   return account;
 }

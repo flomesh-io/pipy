@@ -158,8 +158,10 @@ void MuxBase::Session::on_reply(Event *evt) {
 //
 
 auto MuxBase::SessionManager::get(const pjs::Value &key) -> Session* {
+  bool is_weak = (key.is_object() && key.o());
   Session *session = nullptr;
-  if (key.is_object() && key.o()) {
+
+  if (is_weak) {
     pjs::WeakRef<pjs::Object> o(key.o());
     auto i = m_weak_sessions.find(o);
     if (i != m_weak_sessions.end()) {
@@ -187,7 +189,7 @@ auto MuxBase::SessionManager::get(const pjs::Value &key) -> Session* {
   session = m_mux->on_new_session();
   session->m_manager = this;
 
-  if (key.is_object() && key.o()) {
+  if (is_weak) {
     session->m_weak_key = key.o();
     m_weak_sessions[key.o()] = session;
   } else {
