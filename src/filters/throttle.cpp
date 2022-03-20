@@ -206,9 +206,8 @@ auto ThrottleBase::AccountManager::get(const pjs::Value &key, double quota) -> A
 
 void ThrottleBase::AccountManager::supply() {
   InputContext ic;
-  for (const auto &p : m_accounts) {
-    p.second->supply();
-  }
+  for (const auto &p : m_accounts) p.second->supply();
+  for (const auto &p : m_weak_accounts) p.second->supply();
   m_timer.schedule(
     1.0,
     [this]() {
