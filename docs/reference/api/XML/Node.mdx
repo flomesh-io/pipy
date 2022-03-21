@@ -3,10 +3,57 @@ title: "Node"
 api: XML.Node
 ---
 
-# Constructor
+## Description
+
+Represents a node in an XML document.
+
+### Node tree & text nodes
+
+A tree of XML node is represented by using the _children_ property of _Node_. It is an array so that the order of child nodes can be deterministic. Each element in the _children_ property can be a _Node_ object or a string. When it is a string, it represents a text node holding the text of that string.
+
+For example, the following XML structure:
+
+``` xml
+<order>
+  <sku>
+    <id>300688</id>
+    <title>Pipy: from Zero to Hero</title>
+    <category>Computer &amp; Technology</category>
+  </sku>
+  <amount>1</amount>
+</order>
+```
+
+can be represented as:
+
+``` js
+new XML.Node(
+  'order', null,
+  [
+    new XML.Node(
+      'sku', null,
+      [
+        new XML.Node('id', null, ['300688']),
+        new XML.Node('title', null, ['Pipy: from Zero to Hero']),
+        new XML.Node('category', null, ['Computer & Technology']),
+      ]
+    ),
+    new XML.Node('amount', null, ['1']),
+  ]
+)
+```
+
+## Constructor
 
 <Constructor/>
 
-# Properties
+## Properties
 
 <Properties/>
+
+## See Also
+
+* [XML.decode()](/reference/api/XML/decode)
+* [XML.encode()](/reference/api/XML/encode)
+* [XML.parse()](/reference/api/XML/parse)
+* [XML.stringify()](/reference/api/XML/stringify)
