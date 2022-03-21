@@ -542,6 +542,12 @@ auto path_normalize(const std::string &path) -> std::string {
   return output;
 }
 
+auto path_dirname(const std::string &path) -> std::string {
+  auto i = path.rfind('/');
+  if (i == std::string::npos) return "";
+  return path.substr(0, i);
+}
+
 //
 // HexEncoder
 //

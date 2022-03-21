@@ -25,7 +25,9 @@
 
 #include "file.hpp"
 #include "fstream.hpp"
+#include "fs.hpp"
 #include "net.hpp"
+#include "utils.hpp"
 #include "logging.hpp"
 
 #include <chrono>
@@ -57,7 +59,15 @@ void File::open_write() {
   asio::post(
     *s_thread_pool,
     [=]() {
-      if (auto f = fopen(path.c_str(), "wb")) {
+      auto dirname = utils::path_dirname(path);
+      if (!dirname.empty() && !mkdir_p(dirname)) {
+        Net::post(
+          [=]() {
+            Log::error("[file] cannot create directory: %s", dirname.c_str());
+            release();
+          }
+        );
+      } else if (auto f = fopen(path.c_str(), "wb")) {
         Net::post(
           [=]() {
             m_f = f;
@@ -101,6 +111,13 @@ void File::close() {
     m_f = nullptr;
   }
   m_closed = true;
+}
+
+bool File::mkdir_p(const std::string &path) {
+  if (fs::is_dir(path)) return true;
+  auto dirname = utils::path_dirname(path);
+  if (!mkdir_p(dirname)) return false;
+  return fs::make_dir(path);
 }
 
 } // namespace pipy

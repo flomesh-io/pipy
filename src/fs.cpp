@@ -58,6 +58,10 @@ bool is_file(const std::string &filename) {
   return S_ISREG(st.st_mode);
 }
 
+bool make_dir(const std::string &filename) {
+  return mkdir(filename.c_str(), S_IRWXU | S_IRWXG | S_IRWXO) == 0;
+}
+
 bool read_dir(const std::string &filename, std::list<std::string> &list) {
   if (DIR *dir = opendir(filename.c_str())) {
     while (auto *entry = readdir(dir)) {

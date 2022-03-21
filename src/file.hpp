@@ -67,6 +67,8 @@ private:
   pjs::Ref<FileStream> m_stream;
   bool m_closed = false;
 
+  bool mkdir_p(const std::string &path);
+
   friend class pjs::RefCount<File>;
 };
 

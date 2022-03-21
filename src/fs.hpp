@@ -37,6 +37,7 @@ auto abs_path(const std::string &filename) -> std::string;
 bool exists(const std::string &filename);
 bool is_dir(const std::string &filename);
 bool is_file(const std::string &filename);
+bool make_dir(const std::string &filename);
 bool read_dir(const std::string &filename, std::list<std::string> &list);
 bool read_file(const std::string &filename, std::vector<uint8_t> &data);
 
