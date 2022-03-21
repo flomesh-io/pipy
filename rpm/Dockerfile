@@ -20,19 +20,19 @@ COPY rpmmacros /rpmmacros
 COPY pipy.tar.gz /pipy.tar.gz
 COPY pipy.spec /pipy.spec
 
-RUN yum install -y -q make unzip rpm-build rpmdevtools chrpath expat-devel zlib-devel \
+RUN yum install -y -q gcc make unzip rpm-build rpmdevtools chrpath expat-devel zlib-devel \
         && rpmdev-setuptree \
         && mv /rpmmacros ~/.rpmmacros \
         && curl -sL https://rpm.nodesource.com/setup_12.x | bash - \
 	&& yum install -y -q nodejs \
         && yum install -y centos-release-scl epel-release \
-        && yum install -y llvm-toolset-7 cmake3 
+        && yum install -y llvm-toolset-7 cmake3
 
 RUN mv /pipy.tar.gz ~/rpmbuild/SOURCES \
 	&& mv /pipy.spec ~/rpmbuild/SPECS \
 	&& export CI_COMMIT_SHA \
 	&& export CI_COMMIT_TAG=${VERSION}-${REVISION} \
-        && export CI_COMMIT_DATE \
+  && export CI_COMMIT_DATE \
 	&& spectool -g -R ~/rpmbuild/SPECS/pipy.spec \
 	&& PATH="/opt/rh/llvm-toolset-7/root/usr/bin:/opt/rh/llvm-toolset-7/root/usr/sbin${PATH:+:${PATH}}" \
 	&& rpmbuild -ba ~/rpmbuild/SPECS/pipy.spec \
