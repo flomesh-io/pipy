@@ -1,8 +1,8 @@
-Name:		pipy-oss
+Name:		pipy-pjs
 Version: 	%{getenv:VERSION}
 Release: 	%{getenv:REVISION}%{?dist}
 
-Summary: 	A brand new proxy powered by Flomesh
+Summary: 	Pipy is a programmable network proxy for the cloud, edge and IoT.
 
 License: 	NEU License
 Source0: 	pipy.tar.gz
@@ -24,10 +24,12 @@ Pipy is a tiny, high performance, highly stable, programmable proxy.
 rm -fr pipy/build
 %{__mkdir} pipy/build
 cd pipy
-npm install
-npm run build
+if [ $PIPY_GUI == "ON" ] ; then
+  npm install
+  npm run build
+fi
 cd build
-CXX=clang++ CC=clang cmake3 -DPIPY_GUI=ON -DPIPY_TUTORIAL=ON -DCMAKE_BUILD_TYPE=Release ..
+CXX=clang++ CC=clang cmake3 -DPIPY_GUI=${PIPY_GUI} -DPIPY_STATIC=${PIPY_STATIC} -DPIPY_TUTORIAL=${PIPY_GUI} -DCMAKE_BUILD_TYPE=Release ..
 make -j$(getconf _NPROCESSORS_ONLN)
 
 %preun
