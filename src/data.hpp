@@ -97,6 +97,64 @@ public:
     friend struct Chunk;
   };
 
+  class Builder {
+  public:
+    Builder(Data &data, Producer *producer)
+      : m_data(data)
+      , m_producer(producer)
+      , m_chunk(new Chunk(producer)) {}
+
+    ~Builder() {
+      delete m_chunk;
+    }
+
+    void flush() {
+      if (m_ptr > 0) {
+        m_data.push_view(new View(m_chunk, 0, m_ptr));
+        m_chunk = new Chunk(m_producer);
+        m_ptr = 0;
+      }
+    }
+
+    void push(char c) {
+      m_chunk->data[m_ptr++] = c;
+      if (m_ptr >= sizeof(m_chunk->data)) {
+        flush();
+      }
+    }
+
+    void push(const char *s, int n) {
+      auto &p = m_ptr;
+      while (n > 0) {
+        int l = sizeof(m_chunk->data) - p;
+        if (l > n) l = n;
+        std::memcpy(m_chunk->data + p, s, l);
+        s += l;
+        p += l;
+        n -= l;
+        if (p >= sizeof(m_chunk->data)) {
+          m_data.push_view(new View(m_chunk, 0, p));
+          m_chunk = new Chunk(m_producer);
+          p = 0;
+        }
+      }
+    }
+
+    void push(const char *s) {
+      push(s, std::strlen(s));
+    }
+
+    void push(const std::string &s) {
+      push(s.c_str(), s.length());
+    }
+
+  private:
+    Data& m_data;
+    Producer* m_producer;
+    Chunk* m_chunk;
+    int m_ptr = 0;
+  };
+
   class Reader {
   public:
     Reader(const Data &data)

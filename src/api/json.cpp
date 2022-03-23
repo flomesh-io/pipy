@@ -233,88 +233,114 @@ bool JSON::encode(
     return false;
   }
 
+  Data::Builder b(data, &s_dp);
   pjs::Object* objs[100];
   int obj_level = 0;
 
+  auto push_indent = [&](int n) {
+    for (int i = 0; i < n; i++) {
+      b.push(' ');
+    }
+  };
+
   write = [&](pjs::Value &v, int l) -> bool {
     if (v.is_undefined() || v.is_null()) {
-      s_dp.push(&data, s_null);
+      b.push(s_null);
     } else if (v.is_boolean()) {
-      s_dp.push(&data, v.b() ? s_true : s_false);
+      b.push(v.b() ? s_true : s_false);
     } else if (v.is_number()) {
       auto n = v.n();
       if (std::isnan(n) || std::isinf(n)) {
-        s_dp.push(&data, s_null);
+        b.push(s_null);
       } else {
         char buf[100];
         auto l = pjs::Number::to_string(buf, sizeof(buf), n);
-        s_dp.push(&data, buf, l);
+        b.push(buf, l);
       }
     } else if (v.is_string()) {
-      s_dp.push(&data, '"');
-      s_dp.push(&data, utils::escape(v.s()->str()));
-      s_dp.push(&data, '"');
+      b.push('"');
+      utils::escape(
+        v.s()->str(),
+        [&](char c) { b.push(c); }
+      );
+      b.push('"');
     } else if (v.is_object()) {
       if (obj_level == sizeof(objs) / sizeof(objs[0])) {
-        s_dp.push(&data, s_null);
+        b.push(s_null);
         return true;
       }
       auto o = v.o();
       for (int i = 0; i < obj_level; i++) {
         if (objs[i] == o) {
-          s_dp.push(&data, s_null);
+          b.push(s_null);
           return true;
         }
       }
       objs[obj_level++] = o;
       if (o->is_array()) {
-        std::string indent(space * l + space, ' ');
         bool first = true;
-        s_dp.push(&data, space ? "[\n" : "[");
+        b.push('[');
+        if (space) b.push('\n');
         auto a = v.as<pjs::Array>();
         auto n = a->iterate_while([&](pjs::Value &v, int i) -> bool {
           pjs::Value v2(v);
           if (replacer && !replacer(a, i, v2)) return false;
           if (v2.is_undefined() || v2.is_function()) v2 = pjs::Value::null;
-          if (first) first = false; else s_dp.push(&data, space ? ",\n" : ",");
-          if (space) s_dp.push(&data, indent);
-          write(v2, l + 1);
-          return true;
+          if (first) {
+            first = false;
+          } else {
+            b.push(',');
+            if (space) b.push('\n');
+          }
+          if (space) push_indent(space * l + space);
+          return write(v2, l + 1);
         });
         if (n < a->length()) return false;
         if (space) {
-          s_dp.push(&data, '\n');
-          s_dp.push(&data, std::string(space * l, ' '));
+          b.push('\n');
+          push_indent(space * l);
         }
-        s_dp.push(&data, ']');
+        b.push(']');
       } else {
-        std::string indent(space * l + space, ' ');
         bool first = true;
-        s_dp.push(&data, space ? "{\n" : "{");
+        b.push('{');
+        if (space) b.push('\n');
         auto done = o->iterate_while([&](pjs::Str *k, pjs::Value &v) {
           pjs::Value v2(v);
           if (replacer && !replacer(o, k, v2)) return false;
           if (v2.is_undefined() || v2.is_function()) return true;
-          if (first) first = false; else s_dp.push(&data, space ? ",\n" : ",");
-          if (space) s_dp.push(&data, indent);
-          s_dp.push(&data, '"');
-          s_dp.push(&data, utils::escape(k->str()));
-          s_dp.push(&data, space ? "\": " : "\":");
+          if (first) {
+            first = false;
+          } else {
+            b.push(',');
+            if (space) b.push('\n');
+          }
+          if (space) push_indent(space * l + space);
+          b.push('"');
+          utils::escape(
+            k->str(),
+            [&](char c) { b.push(c); }
+          );
+          b.push('"');
+          b.push(':');
+          if (space) b.push(' ');
           return write(v2, l + 1);
         });
         if (!done) return false;
         if (space) {
-          s_dp.push(&data, '\n');
-          s_dp.push(&data, std::string(space * l, ' '));
+          b.push('\n');
+          push_indent(space * l);
         }
-        s_dp.push(&data, '}');
+        b.push('}');
       }
       obj_level--;
     }
     return true;
   };
 
-  return write(v, 0);
+  auto ret = write(v, 0);
+  b.flush();
+  return ret;
 }
 
 } // namespace pipy

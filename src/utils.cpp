@@ -333,45 +333,53 @@ auto lower(const std::string &str) -> std::string {
   return lstr;
 }
 
-auto escape(const std::string &str) -> std::string {
-  std::string str2;
+void escape(const std::string &str, const std::function<void(char)> &out) {
   for (auto c : str) {
     switch (c) {
-      case '"' : str2 += "\\\""; break;
-      case '\\': str2 += "\\\\"; break;
-      case '\a': str2 += "\\a"; break;
-      case '\b': str2 += "\\b"; break;
-      case '\f': str2 += "\\f"; break;
-      case '\n': str2 += "\\n"; break;
-      case '\r': str2 += "\\r"; break;
-      case '\t': str2 += "\\t"; break;
-      case '\v': str2 += "\\v"; break;
-      default: str2 += c; break;
+      case '"' : out('\\'); out('"'); break;
+      case '\\': out('\\'); out('\\'); break;
+      case '\a': out('\\'); out('a'); break;
+      case '\b': out('\\'); out('b'); break;
+      case '\f': out('\\'); out('f'); break;
+      case '\n': out('\\'); out('n'); break;
+      case '\r': out('\\'); out('r'); break;
+      case '\t': out('\\'); out('t'); break;
+      case '\v': out('\\'); out('v'); break;
+      default: out(c); break;
     }
   }
+}
+
+auto escape(const std::string &str) -> std::string {
+  std::string str2;
+  escape(str, [&](char c) { str2 += c; });
   return str2;
+}
+
+void unescape(const std::string &str, const std::function<void(char)> &out) {
+  for (size_t i = 0; i < str.size(); i++) {
+    auto c = str[i];
+    if (c == '\\') {
+      c = str[++i];
+      if (!c) break;
+      switch (c) {
+        case 'a': c = '\a'; break;
+        case 'b': c = '\b'; break;
+        case 'f': c = '\f'; break;
+        case 'n': c = '\n'; break;
+        case 'r': c = '\r'; break;
+        case 't': c = '\t'; break;
+        case 'v': c = '\v'; break;
+        case '0': c = '\0'; break;
+      }
+    }
+    out(c);
+  }
 }
 
 auto unescape(const std::string &str) -> std::string {
   std::string str2;
-  for (size_t i = 0; i < str.size(); i++) {
-    auto ch = str[i];
-    if (ch == '\\') {
-      ch = str[++i];
-      if (!ch) break;
-      switch (ch) {
-        case 'a': ch = '\a'; break;
-        case 'b': ch = '\b'; break;
-        case 'f': ch = '\f'; break;
-        case 'n': ch = '\n'; break;
-        case 'r': ch = '\r'; break;
-        case 't': ch = '\t'; break;
-        case 'v': ch = '\v'; break;
-        case '0': ch = '\0'; break;
-      }
-    }
-    str2 += ch;
-  }
+  unescape(str, [&](char c) { str2 += c; });
   return str2;
 }
 
