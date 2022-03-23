@@ -6,6 +6,23 @@ For learning, development, or debugging purposes it's recommended to proceed wit
 
 Once installed locally, running `pipy` without any arguments starts the admin console on port `6060` and it can be configured to listen on the different port via `--admin-port=` argument.
 
+To easily install Pipy on macOS, WSL you can use Homebrew.
+
+```sh
+$ brew update
+$ brew tap flomesh-io/pipy
+$ brew install pipy
+```
+
+### Upgrade
+
+When a new Pipy version is released you can upgrade your system using:
+
+```sh
+$ brew update
+$ brew upgrade pipy
+```
+
 ### Run via CLI
 
 To start a Pipy proxy, run `pipy` with a PipyJS script file, for example, the script
