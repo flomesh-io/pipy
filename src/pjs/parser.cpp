@@ -1357,7 +1357,7 @@ Expr* ExpressionParser::operand() {
       t = peek();
       if (t.id() == Token::OPR(",")) read();
     }
-    return locate(object(std::move(list)), l);
+    return locate(object(list), l);
   }
 
   if (t.id() == Token::OPR("[")) {

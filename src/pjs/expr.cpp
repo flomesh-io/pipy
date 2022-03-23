@@ -234,18 +234,36 @@ void StringLiteral::dump(std::ostream &out, const std::string &indent) {
 // ObjectLiteral
 //
 
+ObjectLiteral::ObjectLiteral(std::list<std::pair<std::unique_ptr<Expr>, std::unique_ptr<Expr>>> &entries) {
+  std::list<Field*> fields;
+  for (auto &e : entries) {
+    Entry ent({
+      -1,
+      std::move(e.first),
+      std::move(e.second),
+    });
+    if (auto *s = dynamic_cast<StringLiteral*>(ent.key.get())) {
+      auto *f = Variable::make(s->s()->str(), Field::Enumerable | Field::Writable);
+      ent.index = fields.size();
+      fields.push_back(f);
+    }
+    m_entries.emplace_back(std::move(ent));
+  }
+  m_class = Class::make("Literal", class_of<Object>(), fields);
+}
+
 bool ObjectLiteral::is_left_value() const {
-  for (const auto &p : m_list) {
-    if (!dynamic_cast<StringLiteral*>(p.first.get())) return false;
-    if (!p.second->is_left_value()) return false;
+  for (const auto &e : m_entries) {
+    if (!dynamic_cast<StringLiteral*>(e.key.get())) return false;
+    if (!e.value->is_left_value()) return false;
   }
   return true;
 }
 
 bool ObjectLiteral::is_argument() const {
-  for (const auto &p : m_list) {
-    if (!dynamic_cast<StringLiteral*>(p.first.get())) return false;
-    if (!p.second->is_argument()) return false;
+  for (const auto &e : m_entries) {
+    if (!dynamic_cast<StringLiteral*>(e.key.get())) return false;
+    if (!e.value->is_argument()) return false;
   }
   return true;
 }
@@ -256,19 +274,19 @@ void ObjectLiteral::to_arguments(std::vector<Ref<Str>> &args, std::vector<Ref<St
 }
 
 void ObjectLiteral::unpack(std::vector<Ref<Str>> &args, std::vector<Ref<Str>> &vars) const {
-  for (const auto &p : m_list) {
-    p.second->unpack(args, vars);
+  for (const auto &e : m_entries) {
+    e.value->unpack(args, vars);
   }
 }
 
 bool ObjectLiteral::unpack(Context &ctx, Value &arg, int &var) {
   auto obj = arg.to_object();
   if (!obj) return error(ctx, "cannot destructure null");
-  for (const auto &p : m_list) {
-    if (auto *key = dynamic_cast<StringLiteral*>(p.first.get())) {
+  for (const auto &e : m_entries) {
+    if (auto *key = dynamic_cast<StringLiteral*>(e.key.get())) {
       Value val;
       obj->get(key->s(), val);
-      if (!p.second->unpack(ctx, val, var)) {
+      if (!e.value->unpack(ctx, val, var)) {
         obj->release();
         return false;
       }
@@ -278,12 +296,16 @@ bool ObjectLiteral::unpack(Context &ctx, Value &arg, int &var) {
 }
 
 bool ObjectLiteral::eval(Context &ctx, Value &result) {
-  auto obj = Object::make();
+  auto obj = Object::make(m_class);
+  auto base = class_of<Object>()->field_count();
+  auto data = obj->data();
   result.set(obj);
-  for (const auto &p : m_list) {
-    auto k = p.first.get();
-    auto v = p.second.get();
-    if (!k) {
+  for (const auto &e : m_entries) {
+    auto k = e.key.get();
+    auto v = e.value.get();
+    if (e.index >= 0) {
+      if (!v->eval(ctx, data->at(base + e.index))) return false;
+    } else if (!k) {
       Value val; if (!v->eval(ctx, val)) return false;
       if (val.is_object()) {
         if (val.o()) Object::assign(obj, val.o());
@@ -302,9 +324,9 @@ bool ObjectLiteral::eval(Context &ctx, Value &result) {
 }
 
 void ObjectLiteral::resolve(Context &ctx, int l, Imports *imports) {
-  for (const auto &p : m_list) {
-    auto k = p.first.get();
-    auto v = p.second.get();
+  for (const auto &e : m_entries) {
+    auto k = e.key.get();
+    auto v = e.value.get();
     if (k) k->resolve(ctx, l, imports);
     if (v) v->resolve(ctx, l, imports);
   }
@@ -313,13 +335,13 @@ void ObjectLiteral::resolve(Context &ctx, int l, Imports *imports) {
 void ObjectLiteral::dump(std::ostream &out, const std::string &indent) {
   out << indent << "object" << std::endl;
   auto indent_str = indent + "  ";
-  for (const auto &p : m_list) {
-    if (p.first) {
-      p.first->dump(out, indent_str);
+  for (const auto &e : m_entries) {
+    if (e.key) {
+      e.key->dump(out, indent_str);
     } else {
       out << indent_str << "..." << std::endl;
     }
-    p.second->dump(out, indent_str);
+    e.value->dump(out, indent_str);
   }
 }
 

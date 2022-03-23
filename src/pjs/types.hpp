@@ -1163,6 +1163,12 @@ public:
     return obj;
   }
 
+  static auto make(Class *c) -> Object* {
+    auto obj = new Object();
+    c->init(obj);
+    return obj;
+  }
+
   auto type() const -> Class* { return m_class; }
   auto data() const -> Data* { return m_data; }
 

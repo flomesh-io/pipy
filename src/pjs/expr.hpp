@@ -349,8 +349,7 @@ private:
 
 class ObjectLiteral : public Expr {
 public:
-  ObjectLiteral(std::list<std::pair<std::unique_ptr<Expr>, std::unique_ptr<Expr>>> &&list)
-    : m_list(std::move(list)) {}
+  ObjectLiteral(std::list<std::pair<std::unique_ptr<Expr>, std::unique_ptr<Expr>>> &entries);
 
   virtual bool is_left_value() const override;
   virtual bool is_argument() const override;
@@ -362,7 +361,14 @@ public:
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
-  std::list<std::pair<std::unique_ptr<Expr>, std::unique_ptr<Expr>>> m_list;
+  struct Entry {
+    int index;
+    std::unique_ptr<Expr> key;
+    std::unique_ptr<Expr> value;
+  };
+
+  std::list<Entry> m_entries;
+  Ref<Class> m_class;
 };
 
 //
@@ -1554,7 +1560,7 @@ inline Expr* null() { return new expr::Null; }
 inline Expr* boolean(bool b) { return new expr::BooleanLiteral(b); }
 inline Expr* number(double n) { return new expr::NumberLiteral(n); }
 inline Expr* string(const std::string &s) { return new expr::StringLiteral(s); }
-inline Expr* object(std::list<std::pair<std::unique_ptr<Expr>, std::unique_ptr<Expr>>> &&list) { return new expr::ObjectLiteral(std::move(list)); }
+inline Expr* object(std::list<std::pair<std::unique_ptr<Expr>, std::unique_ptr<Expr>>> &list) { return new expr::ObjectLiteral(list); }
 inline Expr* expand(Expr *x) { return new expr::ArrayExpansion(x); }
 inline Expr* array(std::list<std::unique_ptr<Expr>> &&list) { return new expr::ArrayLiteral(std::move(list)); }
 inline Expr* function(Expr *input, Expr *output) { return new expr::FunctionLiteral(input, output); }
