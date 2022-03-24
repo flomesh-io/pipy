@@ -232,6 +232,18 @@ int main(int argc, char *argv[]) {
       s_admin = new AdminService(repo);
       s_admin->open(admin_port, admin_options);
 
+#ifdef PIPY_USE_GUI
+      std::cout << std::endl;
+      std::cout << "=============================================" << std::endl;
+      std::cout << std::endl;
+      std::cout << "  You can now view Pipy GUI in the browser:" << std::endl;
+      std::cout << std::endl;
+      std::cout << "    http://localhost:" << admin_port << '/' << std::endl;
+      std::cout << std::endl;
+      std::cout << "=============================================" << std::endl;
+      std::cout << std::endl;
+#endif
+
     // Start as codebase repo proxy
     } else if (is_repo_proxy) {
       AdminProxy::Options options;
