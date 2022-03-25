@@ -5,6 +5,7 @@ PIPY_CONF=pipy.js
 
 if [[ "$OSTYPE" == "linux-gnu"* ]]; then
   PIPY_DIR=$(dirname $(readlink -e $(basename $0)))
+  OS_NAME=generic_linux
 elif [[ "$OSTYPE" == "darwin"* ]]; then
   cd `dirname $0`
   TARGET_FILE=`basename $0`
@@ -17,6 +18,7 @@ elif [[ "$OSTYPE" == "darwin"* ]]; then
   PHYS_DIR=$(pwd -P)
   RESULT=$PHYS_DIR/$TARGET_FILE
   PIPY_DIR=$(dirname $RESULT)
+  OS_NAME=darwin
 fi
 
 # Number of processors to build.
@@ -26,16 +28,20 @@ __NPROC=${NPROC:-$(getconf _NPROCESSORS_ONLN)}
 BUILD_CONTAINER=false
 BUILD_RPM=false
 BUILD_BINARY=true
+PACKAGE_OUTPUTS=false
 
-IMAGE_TAG=${IMAGE_TAG:-latest}
 DOCKERFILE=${DOCKERFILE:-Dockerfile}
+IMAGE=${IMAGE:-flomesh/pipy-pjs}
+
+PKG_NAME=${PKG_NAME:-pipy-pjs}
 
 PIPY_STATIC=OFF
 PIPY_GUI=${PIPY_GUI:-OFF}
 
+OS_ARCH=$(uname -m)
 ##### End Default environment variables #########
 
-SHORT_OPTS="crsgt:nh"
+SHORT_OPTS="crsgt:nhp"
 
 function usage() {
     echo "Usage: $0 [-h|-c|-r|-s|-g|-n|-t <version-revision>]" 1>&2
@@ -46,6 +52,7 @@ function usage() {
     echo "       -s                     Build static binary pipy executable object"
     echo "       -g                     Build pipy with GUI, default with no GUI"
     echo "       -n                     Build pipy binary, default yes"
+    echo "       -p                     Package build outputs"
     echo ""
     exit 1
 }
@@ -80,6 +87,10 @@ while true ; do
       BUILD_BINARY=false
       shift
       ;;
+    -p)
+      PACKAGE_OUTPUTS=true
+      shift
+      ;;
     -h)
         usage
         ;;
@@ -95,6 +106,30 @@ done
 
 shift $((OPTIND-1))
 [ $# -ne 0 ] && usage
+
+# define release
+if [ -z "$RELEASE_VERSION" ]
+then
+    RELEASE_VERSION=`git name-rev --tags --name-only $(git rev-parse HEAD)`
+    if [ $RELEASE_VERSION = 'undefined' ]
+    then
+        RELEASE_VERSION=nightly-$(date +%Y%m%d%H%M)
+    fi
+elif [ $RELEASE_VERSION == "latest" ]; then
+  git checkout main
+  git pull origin main
+elif [[ $RELEASE_VERSION != "nightly"* ]]; then
+  git checkout $RELEASE_VERSION
+  if [ $? -ne 0 ]; then
+    echo "Cannot find tag $RELEASE_VERSION"
+    exit -1
+  fi
+fi
+
+export COMMIT_ID=$(git log -1 --format=%H)
+export COMMIT_DATE=$(git log -1 --format=%cD)
+export VERSION=$(echo $RELEASE_VERSION | cut -d\- -f 1)
+export REVISION=$(echo $RELEASE_VERSION | cut -d\- -f 2)
 
 function version_compare() {
   if [ "$(printf '%s\n' "$1" "$2" | sort -V | head -n1)" = "$1" ]; then
@@ -124,9 +159,7 @@ function __build_deps_check() {
 function build() {
   __build_deps_check
   cd ${PIPY_DIR}
-  BRANCH=`git rev-parse --abbrev-ref HEAD`
-  git fetch
-  git pull origin $BRANCH
+
   export CC=clang
   export CXX=clang++
   cd ${PIPY_DIR}
@@ -147,28 +180,18 @@ function build() {
 
 if $BUILD_BINARY; then
   build
+  if $PACKAGE_OUTPUTS; then
+    mkdir -p ${PIPY_DIR}/buildroot/usr/local/bin
+    cp -a ${PIPY_DIR}/bin/pipy ${PIPY_DIR}/buildroot/usr/local/bin/pipy
+    tar zcv -f ${PKG_NAME}-${RELEASE_VERSION}-${OS_NAME}-${OS_ARCH}.tar.gz -C ${PIPY_DIR}/buildroot .
+    rm -rf ${PIPY_DIR}/buildroot
+  fi
 fi
 
 # Build RPM from container
 if $BUILD_RPM; then
   cd $PIPY_DIR
-  RELEASE_VERSION=${RELEASE_VERSION:-latest}
-  if [ $RELEASE_VERSION == "latest" ]; then
-    git checkout main
-    git pull origin main
-  else
-    git checkout $RELEASE_VERSION
-  fi
-  if [ $? -ne 0 ]; then
-    echo "Cannot find tag $RELEASE_VERSION"
-    exit -1
-  fi
 
-  COMMIT_ID=$(git log -1 --format=%H)
-  COMMIT_DATE=$(git log -1 --format=%cD)
-  VERSION=$(echo $RELEASE_VERSION | cut -d\- -f 1)
-  REVISION=$(echo $RELEASE_VERSION | cut -d\- -f 2)
- 
   __CHANGELOG=`mktemp`
   git log --format="* %cd %aN%n- (%h) %s%d%n" --date=local | sed -r 's/[0-9]+:[0-9]+:[0-9]+ //' > $__CHANGELOG
   cat $__CHANGELOG
@@ -191,21 +214,27 @@ if $BUILD_RPM; then
     --build-arg REVISION=$REVISION \
     --build-arg COMMIT_ID=$COMMIT_ID \
     --build-arg COMMIT_DATE="$COMMIT_DATE" \
+    --build-arg PIPY_GUI="$PIPY_GUI" \
+    --build-arg PIPY_STATIC="$PIPY_STATIC" \
     -f $DOCKERFILE .
-  sudo docker run -it --rm -v $PIPY_DIR/rpm:/data pipy-pjs-rpmbuild:$RELEASE_VERSION cp /rpm/*.rpm /data
+
+  sudo docker run --rm -v $PIPY_DIR/rpm:/data pipy-pjs-rpmbuild:$RELEASE_VERSION bash -c "cp /rpm/*.rpm /data"
   git checkout -- $PIPY_DIR/rpm/pipy.spec
   rm -f $PIPY_DIR/rpm/pipy.tar.gz
 fi
 
 if $BUILD_CONTAINER; then
   cd $PIPY_DIR
-  if [ "x"$RELEASE_VERSION != "x" ]; then
+  if [[ "$RELEASE_VERSION" != "nightly"* ]]; then
     IMAGE_TAG=$RELEASE_VERSION
-    COMMIT_ID=$(git log -1 --format=%H)
-    COMMIT_DATE=$(git log -1 --format=%cD)
-    VERSION=$(echo $RELEASE_VERSION | cut -d\- -f 1)
-    REVISION=$(echo $RELEASE_VERSION | cut -d\- -f 2)
-    sudo docker build --rm -t pipy-pjs:$IMAGE_TAG \
+  else
+    IMAGE_TAG=${RELEASE_VERSION##nightly-}
+    IMAGE=${IMAGE}-nightly
+  fi
+
+  echo "Build image ${IMAGE}:$IMAGE_TAG"
+  sudo docker build --rm -t ${IMAGE}:$IMAGE_TAG \
+    --network=host \
     --build-arg VERSION=$VERSION \
     --build-arg REVISION=$REVISION \
     --build-arg COMMIT_ID=$COMMIT_ID \
@@ -213,10 +242,8 @@ if $BUILD_CONTAINER; then
     --build-arg PIPY_GUI="$PIPY_GUI" \
     --build-arg PIPY_STATIC="$PIPY_STATIC" \
     -f $DOCKERFILE .
-  else
-    sudo docker build --rm -t pipy-pjs:$IMAGE_TAG \
-    --build-arg PIPY_GUI="$PIPY_GUI" \
-    --build-arg PIPY_STATIC="$PIPY_STATIC" \
-    -f $DOCKERFILE .
+
+  if $PACKAGE_OUTPUTS; then
+    docker save ${IMAGE}:$IMAGE_TAG | gzip > ${IMAGE##flomesh/}-${IMAGE_TAG}-alpine-${OS_ARCH}.tar.gz
   fi
 fi
