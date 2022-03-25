@@ -59,6 +59,7 @@ void Graph::from_pipelines(Graph &g, const std::set<PipelineDef*> &pipelines) {
         g.add_named_pipeline(std::move(p));
         break;
       case PipelineDef::LISTEN:
+      case PipelineDef::READ:
       case PipelineDef::TASK:
         g.add_root_pipeline(std::move(p));
         break;
