@@ -36,6 +36,7 @@ namespace pipy {
 
 class Module;
 class PipelineDef;
+class Reader;
 class Task;
 
 //
@@ -63,6 +64,7 @@ public:
   auto find_module(const std::string &path) -> Module*;
   auto load_module(const std::string &path) -> Module*;
   void add_listener(Listener *listener, PipelineDef *pipeline_def, const Listener::Options &options);
+  void add_reader(Reader *reader);
   void add_task(Task *task);
   void add_export(pjs::Str *ns, pjs::Str *name, Module *module);
   auto get_export(pjs::Str *ns, pjs::Str *name) -> Module*;
@@ -88,6 +90,7 @@ private:
   std::vector<Module*> m_modules;
   std::map<std::string, Module*> m_module_map;
   std::map<Listener*, ListeningPipeline> m_listeners;
+  std::set<Reader*> m_readers;
   std::set<Task*> m_tasks;
   std::map<pjs::Ref<pjs::Str>, Namespace> m_namespaces;
 

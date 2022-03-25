@@ -23,57 +23,68 @@
  *  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef FILE_HPP
-#define FILE_HPP
+#ifndef READER_HPP
+#define READER_HPP
 
-#include "data.hpp"
-#include "fstream.hpp"
+#include "pjs/pjs.hpp"
+#include "list.hpp"
+#include "event.hpp"
 
-#include <fstream>
-#include <stdio.h>
+#include <string>
 
 namespace pipy {
 
+class File;
+class FileStream;
+class PipelineDef;
+
 //
-// File
+// Reader
 //
 
-class File :
-  public pjs::RefCount<File>,
-  public pjs::Pooled<File>
-{
+class Reader {
 public:
-  static void start_bg_thread();
-  static void stop_bg_thread();
-
-  static auto make(const std::string &path) -> File* {
-    return new File(path);
+  static auto make(const std::string &pathname, PipelineDef *def) -> Reader* {
+    return new Reader(pathname, def);
   }
 
-  void open_read(const std::function<void(FileStream*)> &cb);
-  void open_read(int seek, const std::function<void(FileStream*)> &cb);
-  void open_write();
-  void write(const Data &data);
-  void close();
+  void start();
 
 private:
-  File(const std::string &path)
-    : m_path(path) {}
+  Reader(const std::string &pathname, PipelineDef *def);
+  ~Reader();
 
-  ~File() {}
+  //
+  // Reader::FileReader
+  //
 
-  std::string m_path;
-  FILE* m_f = nullptr;
-  Data m_buffer;
-  pjs::Ref<FileStream> m_stream;
-  bool m_writing = false;
-  bool m_closed = false;
+  class FileReader :
+    public pjs::RefCount<FileReader>,
+    public pjs::Pooled<FileReader>,
+    public List<FileReader>::Item,
+    public EventTarget
+  {
+  public:
+    FileReader(Reader *reader, const std::string &pathname);
 
-  bool mkdir_p(const std::string &path);
+    void start();
 
-  friend class pjs::RefCount<File>;
+  private:
+    virtual void on_event(Event *evt) override;
+
+    Reader* m_reader;
+    pjs::Ref<File> m_file;
+    pjs::Ref<FileStream> m_stream;
+    pjs::Ref<Pipeline> m_pipeline;
+  };
+
+  std::string m_pathname;
+  pjs::Ref<PipelineDef> m_pipeline_def;
+  List<FileReader> m_readers;
+
+  friend class Worker;
 };
 
 } // namespace pipy
 
-#endif // FILE_HPP
+#endif // READER_HPP

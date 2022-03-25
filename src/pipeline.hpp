@@ -54,6 +54,7 @@ public:
   enum Type {
     NAMED,
     LISTEN,
+    READ,
     TASK,
   };
 

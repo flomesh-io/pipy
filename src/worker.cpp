@@ -26,6 +26,7 @@
 #include "worker.hpp"
 #include "module.hpp"
 #include "listener.hpp"
+#include "reader.hpp"
 #include "task.hpp"
 #include "event.hpp"
 #include "message.hpp"
@@ -311,6 +312,10 @@ void Worker::add_listener(Listener *listener, PipelineDef *pipeline_def, const L
   p.options = options;
 }
 
+void Worker::add_reader(Reader *reader) {
+  m_readers.insert(reader);
+}
+
 void Worker::add_task(Task *task) {
   m_tasks.insert(task);
 }
@@ -406,6 +411,11 @@ bool Worker::start() {
     }
   );
 
+  // Start readers
+  for (auto *reader : m_readers) {
+    reader->start();
+  }
+
   // Start tasks
   for (auto *task : m_tasks) {
     task->start();
@@ -416,6 +426,7 @@ bool Worker::start() {
 }
 
 void Worker::stop() {
+  for (auto *reader : m_readers) delete reader;
   for (auto *task : m_tasks) delete task;
   for (auto *mod : m_modules) if (mod) mod->unload();
   if (s_current == this) s_current = nullptr;

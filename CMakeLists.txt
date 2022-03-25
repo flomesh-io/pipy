@@ -193,6 +193,7 @@ add_executable(pipy
   src/pjs/expr.cpp
   src/pjs/parser.cpp
   src/pjs/types.cpp
+  src/reader.cpp
   src/status.cpp
   src/store.cpp
   src/tar.cpp

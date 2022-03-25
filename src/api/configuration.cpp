@@ -27,6 +27,7 @@
 #include "pipeline.hpp"
 #include "module.hpp"
 #include "listener.hpp"
+#include "reader.hpp"
 #include "task.hpp"
 #include "context.hpp"
 #include "worker.hpp"
@@ -139,6 +140,11 @@ void Configuration::listen(const std::string &port, pjs::Object *options) {
   if (options) get_listen_options(options, opt);
   m_listens.push_back({ addr, port_num, opt });
   m_current_filters = &m_listens.back().filters;
+}
+
+void Configuration::read(const std::string &pathname) {
+  m_readers.push_back({ pathname });
+  m_current_filters = &m_readers.back().filters;
 }
 
 void Configuration::task(const std::string &when) {
@@ -482,6 +488,12 @@ void Configuration::apply(Module *mod) {
     worker->add_listener(listener, p, i.options);
   }
 
+  for (auto &i : m_readers) {
+    auto p = make_pipeline(PipelineDef::READ, i.pathname, i.filters);
+    auto r = Reader::make(i.pathname, p);
+    worker->add_reader(r);
+  }
+
   for (auto &i : m_tasks) {
     auto p = make_pipeline(PipelineDef::TASK, i.name, i.filters);
     auto t = Task::make(i.when, p);
@@ -517,6 +529,14 @@ void Configuration::draw(Graph &g) {
     p.name += std::to_string(i.port);
     p.name += " at ";
     p.name += i.ip;
+    add_filters(p, i.filters);
+    g.add_root_pipeline(std::move(p));
+  }
+
+  for (const auto &i : m_readers) {
+    Graph::Pipeline p;
+    p.name = "Read ";
+    p.name += i.pathname;
     add_filters(p, i.filters);
     g.add_root_pipeline(std::move(p));
   }
@@ -627,6 +647,18 @@ template<> void ClassDef<Configuration>::init() {
     if (!ctx.arguments(1, &name)) return;
     try {
       thiz->as<Configuration>()->pipeline(name);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // Configuration.read
+  method("read", [](Context &ctx, Object *thiz, Value &result) {
+    std::string pathname;
+    try {
+      if (!ctx.arguments(1, &pathname)) return;
+      thiz->as<Configuration>()->read(pathname);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

@@ -64,6 +64,7 @@ public:
 
   void listen(int port, pjs::Object *options);
   void listen(const std::string &port, pjs::Object *options);
+  void read(const std::string &pathname);
   void task(const std::string &when);
   void pipeline(const std::string &name);
 
@@ -134,6 +135,11 @@ private:
     std::list<std::unique_ptr<Filter>> filters;
   };
 
+  struct ReaderConfig {
+    std::string pathname;
+    std::list<std::unique_ptr<Filter>> filters;
+  };
+
   struct TaskConfig {
     std::string name;
     std::string when;
@@ -150,6 +156,7 @@ private:
   std::list<Export> m_exports;
   std::list<Import> m_imports;
   std::list<ListenConfig> m_listens;
+  std::list<ReaderConfig> m_readers;
   std::list<TaskConfig> m_tasks;
   std::list<NamedPipelineConfig> m_named_pipelines;
   std::list<std::unique_ptr<Filter>> *m_current_filters = nullptr;
