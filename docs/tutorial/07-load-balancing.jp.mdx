@@ -37,7 +37,7 @@ new algo.RoundRobinLoadBalancer([
 1.	数多くのターゲットサーバーが背後にある「_service_」にリクエストをマッピングする。
 2.	そこから1つターゲットを選択してリクエストを渡す。
 
-2の部分は新しい「_balancer_」プラグインに行き、1の部分は「_router_」に残るようにします。それに加えて、 _router_ は _balancer_ に対し、どのサービスに行くべきかを教えられるようにしないといけません。パート5で、変数`__turnDown`が`/proxy.js`と`/plugins/router.js`の間で共有されることは既に見てきました。ここでもそれと同じです。
+2の部分は新しい「_balancer_」プラグインに行き、1の部分は「_router_」に残るようにします。それに加えて、 _router_ は _balancer_ に対し、どのサービスに行くべきかを教えられるようにしないといけません。[パート5](/tutorial/05-plugins#エクスポートとインポート)で、変数`__turnDown`が`/proxy.js`と`/plugins/router.js`の間で共有されることは既に見てきました。ここでもそれと同じです。
 
 ### balancer.jsを作る
 
