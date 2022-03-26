@@ -54,7 +54,7 @@ pipy()
 在运行之前花点时间来看下代码：
 
 1. 第 1 行中调用内置的函数 [_pipy()_](/reference/api/pipy) 将返回一个 [Configuration](/reference/api/Configuration) 对象。后面我们使用这个对象来定义 *管道（pipeline）* 和 *过滤器（filter）*。
-2. 在第 3 行中我们通过调用前面创建的 `Configuration` 对象的 `listen()` 方法，定义一个监听在 `8080` 端口的*端口管道（port pipeline）*。这个函数会返回该 `Configuration` 对象，因此后面可以继续调用它的其他方法来定义更多的*管道*和*过滤器*。
+2. 在第 3 行中我们通过调用前面创建的 `Configuration` 对象的 [_listen()_](/reference/api/Configuration/listen) 方法，定义一个监听在 `8080` 端口的*端口管道（port pipeline）*。这个函数会返回该 `Configuration` 对象，因此后面可以继续调用它的其他方法来定义更多的*管道*和*过滤器*。
 3. 在第 4 行，我们为了 2 中创建的管道添加 [serveHTTP](/reference/api/classes/Configuration/serveHTTP) 过滤器。过滤器使用 [Message](/reference/api/classes/Message) 作为构造参数，并在响应中输出同样类型的消息。
 
 整个脚本中，我们定义了包含一个过滤器的管道。如下图：
