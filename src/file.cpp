@@ -101,7 +101,7 @@ void File::open_write() {
             release();
           }
         );
-      } else if (auto f = fopen(path.c_str(), "wb")) {
+      } else if (auto f = (path == "-" ? stdout : fopen(path.c_str(), "wb"))) {
         Net::post(
           [=]() {
             m_f = f;

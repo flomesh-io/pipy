@@ -67,7 +67,7 @@ static void log(Log::Level level, const char *str) {
     std::snprintf(ms, sizeof(ms), ".%03d", msec);
     const char *type = s_levels[level];
     const char *p = str;
-    auto &so = std::cout;
+    auto &so = std::cerr;
     do {
       std::stringstream ss;
       so << time << ms << type;
