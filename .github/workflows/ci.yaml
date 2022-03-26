@@ -27,7 +27,7 @@ jobs:
         run: |
           pwd
           ls -l
-          CI_COMMIT_DATE=$(date +%Y%m%d%H%M%S)
+          CI_COMMIT_DATE=$(date +%Y%m%d%H%M)
           echo "CI_COMMIT_DATE=${CI_COMMIT_DATE}" >> $GITHUB_ENV
           git fetch --tags
           RELEASE_VERSION=`git name-rev --tags --name-only $(git rev-parse HEAD)`
