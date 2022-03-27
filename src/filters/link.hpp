@@ -27,7 +27,6 @@
 #define LINK_HPP
 
 #include "filter.hpp"
-#include "buffer.hpp"
 
 #include <vector>
 #include <memory>

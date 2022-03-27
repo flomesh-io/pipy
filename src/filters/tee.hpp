@@ -39,12 +39,7 @@ namespace pipy {
 
 class Tee : public Filter {
 public:
-  struct Options {
-    size_t threshold = 0;
-    size_t throttle = 0;
-  };
-
-  Tee(const pjs::Value &filename, const Options &options);
+  Tee(const pjs::Value &filename);
 
 private:
   Tee(const Tee &r);
@@ -56,7 +51,6 @@ private:
   virtual void dump(std::ostream &out) override;
 
   pjs::Value m_filename;
-  Options m_options;
   pjs::Ref<pjs::Str> m_resolved_filename;
   pjs::Ref<File> m_file;
 

@@ -23,68 +23,90 @@
  *  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include "tee.hpp"
+#include "buffer.hpp"
 #include "logging.hpp"
 
 namespace pipy {
 
-Tee::Tee(const pjs::Value &filename)
+Buffer::Buffer(const pjs::Value &filename, const Options &options)
   : m_filename(filename)
+  , m_options(options)
 {
 }
 
-Tee::Tee(const Tee &r)
+Buffer::Buffer(const Buffer &r)
   : Filter(r)
   , m_filename(r.m_filename)
+  , m_options(r.m_options)
 {
 }
 
-Tee::~Tee() {
+Buffer::~Buffer() {
 }
 
-void Tee::dump(std::ostream &out) {
-  out << "tee";
+void Buffer::dump(std::ostream &out) {
+  out << "buffer";
 }
 
-auto Tee::clone() -> Filter* {
-  return new Tee(*this);
+auto Buffer::clone() -> Filter* {
+  return new Buffer(*this);
 }
 
-void Tee::reset() {
+void Buffer::reset() {
   Filter::reset();
-  if (m_file) {
-    m_file->close();
-    m_file = nullptr;
+  if (m_file_w) {
+    m_file_w->close();
+    m_file_w = nullptr;
+  }
+  if (m_file_r) {
+    m_file_r->close();
+    m_file_r = nullptr;
   }
   m_resolved_filename = nullptr;
 }
 
-void Tee::process(Event *evt) {
+void Buffer::process(Event *evt) {
   if (auto *data = evt->as<Data>()) {
     if (!data->empty()) {
-      if (!m_resolved_filename) {
-        pjs::Value filename;
-        if (!eval(m_filename, filename)) return;
-        auto *s = filename.to_string();
-        m_resolved_filename = s;
-        s->release();
-        m_file = File::make(m_resolved_filename->str());
-        m_file->open_write();
+      if (m_buffer.size() < m_options.threshold) {
+        m_buffer.push(*data);
+        output(evt);
+      } else {
+        if (!m_resolved_filename) {
+          pjs::Value filename;
+          if (!eval(m_filename, filename)) return;
+          auto *s = filename.to_string();
+          m_resolved_filename = s;
+          s->release();
+          m_file_w = File::make(m_resolved_filename->str());
+          m_file_w->open_write();
+          if (!m_buffer.empty()) {
+            m_file_w->write(m_buffer);
+          }
+        }
+        if (m_file_w) {
+          m_file_w->write(*data);
+        }
       }
     }
 
-    if (m_file) {
-      m_file->write(*data);
-    }
-
   } else if (evt->is<StreamEnd>()) {
-    if (m_file) {
-      m_file->close();
-      m_file = nullptr;
+    if (m_file_w) {
+      m_file_w->close();
+      m_file_w = nullptr;
+    }
+    if (!m_file_r) {
+      m_file_r = File::make(m_resolved_filename->str());
+      m_file_r->open_read(
+        m_buffer.size(),
+        [this](FileStream *fs) {
+          if (fs) {
+            fs->chain(output());
+          }
+        }
+      );
     }
   }
-
-  output(evt);
 }
 
 } // namespace pipy

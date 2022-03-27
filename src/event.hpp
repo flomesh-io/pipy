@@ -438,6 +438,52 @@ protected:
   }
 };
 
+//
+// EventBuffer
+//
+
+class EventBuffer {
+public:
+  bool empty() const {
+    return m_buffer.empty();
+  }
+
+  void push(Event *e) {
+    e->retain();
+    m_buffer.push_back(e);
+  }
+
+  auto shift() -> Event* {
+    if (m_buffer.empty()) return nullptr;
+    auto e = m_buffer.front();
+    m_buffer.pop_front();
+    return e;
+  }
+
+  void unshift(Event *e) {
+    e->retain();
+    m_buffer.push_front(e);
+  }
+
+  void flush(const std::function<void(Event*)> &out) {
+    std::list<Event*> events(std::move(m_buffer));
+    for (auto *e : events) {
+      out(e);
+      e->release();
+    }
+  }
+
+  void clear() {
+    for (auto *e : m_buffer) {
+      e->release();
+    }
+    m_buffer.clear();
+  }
+
+private:
+  std::list<Event*> m_buffer;
+};
+
 } // namespace pipy
 
 #endif // EVENT_HPP

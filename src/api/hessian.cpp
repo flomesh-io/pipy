@@ -25,7 +25,6 @@
 
 #include "hessian.hpp"
 #include "data.hpp"
-#include "buffer.hpp"
 
 #include <cstdio>
 #include <stack>
@@ -64,6 +63,46 @@ template<> void ClassDef<Hessian>::init() {
 } // namespace pjs
 
 namespace pipy {
+
+//
+// ByteBuf
+//
+
+template<int N>
+class ByteBuf {
+  char m_buf[N+1];
+  int  m_len = 0;
+
+public:
+  void clear() {
+    m_len = 0;
+  }
+
+  bool empty() const {
+    return m_len == 0;
+  }
+
+  int length() const { 
+    return m_len;
+  }
+
+  char operator[](int i) const {
+    return m_buf[i];
+  }
+
+  auto str() const -> std::string {
+    return std::string(m_buf, m_len);
+  }
+
+  auto c_str() -> const char* {
+    m_buf[m_len] = 0;
+    return m_buf;
+  }
+
+  void push(char c) {
+    if (m_len < N) m_buf[m_len++] = c;
+  }
+};
 
 //
 // HessianParser

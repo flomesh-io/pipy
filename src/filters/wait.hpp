@@ -27,7 +27,6 @@
 #define WAIT_HPP
 
 #include "filter.hpp"
-#include "buffer.hpp"
 #include "context.hpp"
 
 #include <vector>

@@ -28,7 +28,6 @@
 
 #include "filter.hpp"
 #include "input.hpp"
-#include "buffer.hpp"
 #include "list.hpp"
 #include "timer.hpp"
 

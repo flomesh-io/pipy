@@ -35,6 +35,7 @@
 #include "utils.hpp"
 
 // all filters
+#include "filters/buffer.hpp"
 #include "filters/connect.hpp"
 #include "filters/decompress-message.hpp"
 #include "filters/demux.hpp"
@@ -176,6 +177,16 @@ void Configuration::accept_tls(pjs::Str *target, pjs::Object *options) {
   auto *filter = new tls::Server(options);
   filter->add_sub_pipeline(target);
   append_filter(filter);
+}
+
+void Configuration::buffer(const pjs::Value &filename, pjs::Object *options) {
+  Buffer::Options opts;
+  if (options) {
+    pjs::Value threshold;
+    options->get("threshold", threshold);
+    if (!utils::get_byte_size(threshold, opts.threshold)) throw std::runtime_error("options.threshold expects a number or a string");
+  }
+  append_filter(new Buffer(filename, opts));
 }
 
 void Configuration::connect(const pjs::Value &target, pjs::Object *options) {
@@ -369,16 +380,8 @@ void Configuration::split(pjs::Function *callback) {
   append_filter(new Split(callback));
 }
 
-void Configuration::tee(const pjs::Value &filename, pjs::Object *options) {
-  Tee::Options opts;
-  if (options) {
-    pjs::Value threshold, throttle;
-    options->get("threshold", threshold);
-    options->get("throttle", throttle);
-    if (!utils::get_byte_size(threshold, opts.threshold)) throw std::runtime_error("options.threshold expects a number or a string");
-    if (!utils::get_byte_size(throttle, opts.throttle)) throw std::runtime_error("options.throttle expects a number or a string");
-  }
-  append_filter(new Tee(filename, opts));
+void Configuration::tee(const pjs::Value &filename) {
+  append_filter(new Tee(filename));
 }
 
 void Configuration::throttle_concurrency(const pjs::Value &quota, const pjs::Value &account) {
@@ -714,6 +717,19 @@ template<> void ClassDef<Configuration>::init() {
     }
     try {
       thiz->as<Configuration>()->accept_tls(target, options);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // Configuration.buffer
+  method("buffer", [](Context &ctx, Object *thiz, Value &result) {
+    Value filename;
+    Object *options = nullptr;
+    if (!ctx.arguments(1, &filename, &options)) return;
+    try {
+      thiz->as<Configuration>()->buffer(filename, options);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1337,10 +1353,9 @@ template<> void ClassDef<Configuration>::init() {
   // Configuration.tee
   method("tee", [](Context &ctx, Object *thiz, Value &result) {
     Value filename;
-    Object *options = nullptr;
-    if (!ctx.arguments(1, &filename, &options)) return;
+    if (!ctx.arguments(1, &filename)) return;
     try {
-      thiz->as<Configuration>()->tee(filename, options);
+      thiz->as<Configuration>()->tee(filename);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

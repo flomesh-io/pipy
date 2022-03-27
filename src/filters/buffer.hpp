@@ -23,68 +23,48 @@
  *  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include "tee.hpp"
-#include "logging.hpp"
+#ifndef BUFFER_HPP
+#define BUFFER_HPP
+
+#include "filter.hpp"
+#include "file.hpp"
+#include "data.hpp"
+#include "fstream.hpp"
 
 namespace pipy {
 
-Tee::Tee(const pjs::Value &filename)
-  : m_filename(filename)
-{
-}
+//
+// Buffer
+//
 
-Tee::Tee(const Tee &r)
-  : Filter(r)
-  , m_filename(r.m_filename)
-{
-}
+class Buffer : public Filter {
+public:
+  struct Options {
+    size_t threshold = 0;
+  };
 
-Tee::~Tee() {
-}
+  Buffer(const pjs::Value &filename, const Options &options);
 
-void Tee::dump(std::ostream &out) {
-  out << "tee";
-}
+private:
+  Buffer(const Buffer &r);
+  ~Buffer();
 
-auto Tee::clone() -> Filter* {
-  return new Tee(*this);
-}
+  virtual auto clone() -> Filter* override;
+  virtual void reset() override;
+  virtual void process(Event *evt) override;
+  virtual void dump(std::ostream &out) override;
 
-void Tee::reset() {
-  Filter::reset();
-  if (m_file) {
-    m_file->close();
-    m_file = nullptr;
-  }
-  m_resolved_filename = nullptr;
-}
+  pjs::Value m_filename;
+  Options m_options;
+  pjs::Ref<pjs::Str> m_resolved_filename;
+  pjs::Ref<File> m_file_w;
+  pjs::Ref<File> m_file_r;
+  Data m_buffer;
 
-void Tee::process(Event *evt) {
-  if (auto *data = evt->as<Data>()) {
-    if (!data->empty()) {
-      if (!m_resolved_filename) {
-        pjs::Value filename;
-        if (!eval(m_filename, filename)) return;
-        auto *s = filename.to_string();
-        m_resolved_filename = s;
-        s->release();
-        m_file = File::make(m_resolved_filename->str());
-        m_file->open_write();
-      }
-    }
-
-    if (m_file) {
-      m_file->write(*data);
-    }
-
-  } else if (evt->is<StreamEnd>()) {
-    if (m_file) {
-      m_file->close();
-      m_file = nullptr;
-    }
-  }
-
-  output(evt);
-}
+  void open();
+  void close();
+};
 
 } // namespace pipy
+
+#endif // BUFFER_HPP

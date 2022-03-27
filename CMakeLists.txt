@@ -142,6 +142,7 @@ add_executable(pipy
   src/fetch.cpp
   src/file.cpp
   src/filter.cpp
+  src/filters/buffer.cpp
   src/filters/connect.cpp
   src/filters/decompress-message.cpp
   src/filters/demux.cpp
