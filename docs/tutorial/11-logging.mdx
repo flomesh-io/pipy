@@ -73,7 +73,7 @@ Let's write the code of our logger plugin.
 
 ### Global Variables
 
-We certainly do not want to report the collected request and response information separately (which makes it difficult to store and query the data), but we would like to aggregate the logging information, do some statistical operations. This appraoch will require us to record the request information before forwarding it to host for processing, combine this with response received from target host, so we need some mechanism to store such information. This is where *Global Variables* come into play, if you get scared after hearing *Global Variable* then that means you haven't yet read our previous tutorials and especially the *Context* section of [Concepts](/ tutorial/concepts) where we explained that *Global Variables* are context specific and don't work like what you have learned in procedural style programming languages.
+We certainly do not want to report the collected request and response information separately (which makes it difficult to store and query the data), but we would like to aggregate the logging information, do some statistical operations. This appraoch will require us to record the request information before forwarding it to host for processing, combine this with response received from target host, so we need some mechanism to store such information. This is where *Global Variables* come into play, if you get scared after hearing *Global Variable* then that means you haven't yet read our previous tutorials and especially the *Context* section of [Concepts](/intro/concepts) where we explained that *Global Variables* are context specific and don't work like what you have learned in procedural style programming languages.
 
 ```js
 pipy({
@@ -106,7 +106,7 @@ These are the two sub-pipelines used as plug-ins. Log recording is an auxiliary 
 
 ### fork filter
 
-*fork* filter is one of the [Joint Filters](/tutorial/04-routing/Joint filters). It process the current context and message in a sub-pipeline, but instead of using the output of the sub-pipeline as its output, it takes its input as its output. It can be understood that only the context is affected, not the message of the current pipeline.
+*fork* filter is one of the [Joint Filters](/tutorial/04-routing#joint-filters). It process the current context and message in a sub-pipeline, but instead of using the output of the sub-pipeline as its output, it takes its input as its output. It can be understood that only the context is affected, not the message of the current pipeline.
 
 Usage of *fork* is very simple, we just need to provide the target sub-pipeline:
 
@@ -196,11 +196,11 @@ Now we have the `Message` object which contains our required logging information
 
 *merge* filter is used when connecting to the *log-send* channel.
 
-*merge* filter is one of the [Joint Filters](/tutorial/04-routing/Joint filters) and its way of working is similar to that of [Filter: muxHTTP](/tutorial/03-proxy/Filter: muxHTTP) and *fork* filter.
+*merge* filter is one of the [Joint Filters](/tutorial/04-routing#joint-filters) and its way of working is similar to that of [Filter: muxHTTP](/tutorial/03-proxy#filter-muxhttp) and *fork* filter.
 
 Its similar to *muxHTTP* filter in a way, it will combine multiple streams into one and send to **shared** channel, and where it differs is that *merge* filter won't use the output of sub-pipeline as its output, similar to *fork* filter.
 
-*merge* filter usage is similar to that of *muxHTTP*, where in addition to target sub-pipeline we also need to provide a key. For more details on why to use key, refer to [Part 4: Routing: Connection Sharing Problem](/tutorial/04-routing/Connection Sharing Problem).
+*merge* filter usage is similar to that of *muxHTTP*, where in addition to target sub-pipeline we also need to provide a key. For more details on why to use key, refer to [Part 4: Routing: Connection Sharing Problem](/tutorial/04-routing#connection-sharing-problem).
 
 ### pack filter
 

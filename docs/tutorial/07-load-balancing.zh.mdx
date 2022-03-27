@@ -39,7 +39,7 @@ new algo.RoundRobinLoadBalancer([
 * 将请求映射到拥有一堆目标服务器的“服务”
 * 从众多目标中选择一个，并将请求发送过去
 
-第二部分其实可以做在 “*均衡器*” 插件中，而第一部分继续放在“*路由*”插件中。除此以外 “路由器” 还应通知 “均衡器” 插件要使用的服务。前面我们已见到 [05 插件](/tutorial/05-plugins#export-and-import) 中在 `/proxy.js` 和 `plugins/router.js` 之间共享的变量 `_turnDown`。这里也使用同样的方式。
+第二部分其实可以做在 “*均衡器*” 插件中，而第一部分继续放在“*路由*”插件中。除此以外 “路由器” 还应通知 “均衡器” 插件要使用的服务。前面我们已见到 [05 插件](/tutorial/05-plugins#暴露和引用) 中在 `/proxy.js` 和 `plugins/router.js` 之间共享的变量 `_turnDown`。这里也使用同样的方式。
 
 ### 创建 balancer.js
 
