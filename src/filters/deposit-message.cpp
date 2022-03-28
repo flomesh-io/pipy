@@ -23,36 +23,45 @@
  *  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include "buffer.hpp"
+#include "deposit-message.hpp"
 #include "logging.hpp"
 
 namespace pipy {
 
-Buffer::Buffer(const pjs::Value &filename, const Options &options)
+void DepositMessageReceiver::on_event(Event *evt) {
+  auto *filter = static_cast<DepositMessage*>(this);
+  if (evt->is<StreamEnd>()) {
+    filter->end();
+  } else {
+    filter->output(evt);
+  }
+}
+
+DepositMessage::DepositMessage(const pjs::Value &filename, const Options &options)
   : m_filename(filename)
   , m_options(options)
 {
 }
 
-Buffer::Buffer(const Buffer &r)
+DepositMessage::DepositMessage(const DepositMessage &r)
   : Filter(r)
   , m_filename(r.m_filename)
   , m_options(r.m_options)
 {
 }
 
-Buffer::~Buffer() {
+DepositMessage::~DepositMessage() {
 }
 
-void Buffer::dump(std::ostream &out) {
-  out << "buffer";
+void DepositMessage::dump(std::ostream &out) {
+  out << "depositMessage";
 }
 
-auto Buffer::clone() -> Filter* {
-  return new Buffer(*this);
+auto DepositMessage::clone() -> Filter* {
+  return new DepositMessage(*this);
 }
 
-void Buffer::reset() {
+void DepositMessage::reset() {
   Filter::reset();
   if (m_file_w) {
     m_file_w->close();
@@ -63,11 +72,20 @@ void Buffer::reset() {
     m_file_r = nullptr;
   }
   m_resolved_filename = nullptr;
+  m_started = false;
+  m_end = nullptr;
+  m_buffer.clear();
 }
 
-void Buffer::process(Event *evt) {
-  if (auto *data = evt->as<Data>()) {
-    if (!data->empty()) {
+void DepositMessage::process(Event *evt) {
+  if (evt->is<MessageStart>()) {
+    if (!m_started) {
+      output(evt);
+      m_started = true;
+    }
+
+  } else if (auto *data = evt->as<Data>()) {
+    if (m_started && !data->empty()) {
       if (m_buffer.size() < m_options.threshold) {
         m_buffer.push(*data);
         output(evt);
@@ -90,22 +108,34 @@ void Buffer::process(Event *evt) {
       }
     }
 
-  } else if (evt->is<StreamEnd>()) {
-    if (m_file_w) {
-      m_file_w->close();
-      m_file_w = nullptr;
-    }
-    if (!m_file_r) {
-      m_file_r = File::make(m_resolved_filename->str());
-      m_file_r->open_read(
-        m_buffer.size(),
-        [this](FileStream *fs) {
-          if (fs) {
-            fs->chain(output());
+  } else if (evt->is<MessageEnd>() || evt->is<StreamEnd>()) {
+    if (m_started) {
+      if (m_file_w) {
+        m_file_w->close();
+        m_file_w = nullptr;
+        m_file_r = File::make(m_resolved_filename->str());
+        m_file_r->open_read(
+          m_buffer.size(),
+          [this](FileStream *fs) {
+            if (fs) {
+              fs->chain(DepositMessageReceiver::input());
+            }
           }
-        }
-      );
+        );
+        m_end = evt;
+
+      } else {
+        output(evt);
+      }
     }
+  }
+}
+
+void DepositMessage::end() {
+  if (m_end) {
+    output(m_end);
+  } else {
+    output(MessageEnd::make());
   }
 }
 

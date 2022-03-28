@@ -23,8 +23,8 @@
  *  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef BUFFER_HPP
-#define BUFFER_HPP
+#ifndef DEPOSIT_MESSAGE_HPP
+#define DEPOSIT_MESSAGE_HPP
 
 #include "filter.hpp"
 #include "file.hpp"
@@ -34,20 +34,28 @@
 namespace pipy {
 
 //
-// Buffer
+// DepositMessageReceiver
 //
 
-class Buffer : public Filter {
+class DepositMessageReceiver : public EventTarget {
+  virtual void on_event(Event *evt) override;
+};
+
+//
+// DepositMessage
+//
+
+class DepositMessage : public Filter, public DepositMessageReceiver {
 public:
   struct Options {
     size_t threshold = 0;
   };
 
-  Buffer(const pjs::Value &filename, const Options &options);
+  DepositMessage(const pjs::Value &filename, const Options &options);
 
 private:
-  Buffer(const Buffer &r);
-  ~Buffer();
+  DepositMessage(const DepositMessage &r);
+  ~DepositMessage();
 
   virtual auto clone() -> Filter* override;
   virtual void reset() override;
@@ -59,12 +67,17 @@ private:
   pjs::Ref<pjs::Str> m_resolved_filename;
   pjs::Ref<File> m_file_w;
   pjs::Ref<File> m_file_r;
+  pjs::Ref<Event> m_end;
   Data m_buffer;
+  bool m_started = false;
 
   void open();
   void close();
+  void end();
+
+  friend class DepositMessageReceiver;
 };
 
 } // namespace pipy
 
-#endif // BUFFER_HPP
+#endif // DEPOSIT_MESSAGE_HPP

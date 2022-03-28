@@ -67,12 +67,19 @@ private:
   virtual void on_tap_open() override;
   virtual void on_tap_close() override;
 
+  enum ReceivingState {
+    RECEIVING,
+    PAUSING,
+    PAUSED,
+  };
+
   int m_fd;
   FILE* m_f;
   Data::Producer* m_dp;
   asio::posix::stream_descriptor m_stream;
   Data m_buffer;
   size_t m_buffer_limit = 0;
+  ReceivingState m_receiving_state = RECEIVING;
   bool m_overflowed = false;
   bool m_pumping = false;
   bool m_ended = false;

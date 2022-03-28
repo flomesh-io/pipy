@@ -35,10 +35,10 @@
 #include "utils.hpp"
 
 // all filters
-#include "filters/buffer.hpp"
 #include "filters/connect.hpp"
 #include "filters/decompress-message.hpp"
 #include "filters/demux.hpp"
+#include "filters/deposit-message.hpp"
 #include "filters/detect-protocol.hpp"
 #include "filters/dubbo.hpp"
 #include "filters/dummy.hpp"
@@ -179,16 +179,6 @@ void Configuration::accept_tls(pjs::Str *target, pjs::Object *options) {
   append_filter(filter);
 }
 
-void Configuration::buffer(const pjs::Value &filename, pjs::Object *options) {
-  Buffer::Options opts;
-  if (options) {
-    pjs::Value threshold;
-    options->get("threshold", threshold);
-    if (!utils::get_byte_size(threshold, opts.threshold)) throw std::runtime_error("options.threshold expects a number or a string");
-  }
-  append_filter(new Buffer(filename, opts));
-}
-
 void Configuration::connect(const pjs::Value &target, pjs::Object *options) {
   append_filter(new Connect(target, options));
 }
@@ -261,6 +251,18 @@ void Configuration::demux_http(pjs::Str *target, pjs::Object *options) {
   auto *filter = new http::Demux(options);
   filter->add_sub_pipeline(target);
   append_filter(filter);
+}
+
+void Configuration::deposit_message(const pjs::Value &filename, pjs::Object *options) {
+  DepositMessage::Options opts;
+  if (options) {
+    pjs::Value threshold;
+    options->get("threshold", threshold);
+    if (!utils::get_byte_size(threshold, opts.threshold)) {
+      throw std::runtime_error("options.threshold expects a number or a string");
+    }
+  }
+  append_filter(new DepositMessage(filename, opts));
 }
 
 void Configuration::detect_protocol(pjs::Function *callback) {
@@ -723,19 +725,6 @@ template<> void ClassDef<Configuration>::init() {
     }
   });
 
-  // Configuration.buffer
-  method("buffer", [](Context &ctx, Object *thiz, Value &result) {
-    Value filename;
-    Object *options = nullptr;
-    if (!ctx.arguments(1, &filename, &options)) return;
-    try {
-      thiz->as<Configuration>()->buffer(filename, options);
-      result.set(thiz);
-    } catch (std::runtime_error &err) {
-      ctx.error(err);
-    }
-  });
-
   // Configuration.connect
   method("connect", [](Context &ctx, Object *thiz, Value &result) {
     Value target;
@@ -887,6 +876,19 @@ template<> void ClassDef<Configuration>::init() {
     if (!ctx.arguments(1, &algorithm)) return;
     try {
       thiz->as<Configuration>()->decompress_message(algorithm);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // Configuration.depositMessage
+  method("depositMessage", [](Context &ctx, Object *thiz, Value &result) {
+    Value filename;
+    Object *options = nullptr;
+    if (!ctx.arguments(1, &filename, &options)) return;
+    try {
+      thiz->as<Configuration>()->deposit_message(filename, options);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

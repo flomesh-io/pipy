@@ -164,12 +164,6 @@ ThrottleBase::AccountManager::AccountManager(bool auto_supply) {
   }
 }
 
-ThrottleBase::AccountManager::~AccountManager() {
-  for (const auto &p : m_accounts) {
-    delete p.second;
-  }
-}
-
 auto ThrottleBase::AccountManager::get(const pjs::Value &key, double quota) -> Account* {
   bool is_weak = (key.is_object() && key.o());
   Account* account = nullptr;
@@ -320,7 +314,14 @@ auto ThrottleConcurrency::clone() -> Filter* {
 void ThrottleConcurrency::reset() {
   if (m_active) {
     if (m_current_account) {
-      m_current_account->supply(1);
+      auto account = m_current_account.get();
+      account->retain();
+      Net::post(
+        [=]() {
+          account->supply(1);
+          account->release();
+        }
+      );
     }
     m_active = false;
   }
