@@ -255,86 +255,84 @@ void Decoder::on_event(Event *evt) {
     auto state = m_state;
     pjs::Ref<Data> output(Data::make());
 
-    // byte scan
-    data->shift_to(
-      [&](int c) -> bool {
-        switch (state) {
-        case HEAD:
-          if (c == '\n') {
-            state = HEAD_EOL;
-            return true;
-          }
-          return false;
+    // fast scan over the body
+    if (state == BODY || state == CHUNK_BODY) {
+      auto n = std::min(m_body_size, data->size());
+      data->shift(n, *output);
+      if (0 == (m_body_size -= n)) state = (state == BODY ? HEAD : CHUNK_TAIL);
 
-        case HEADER:
-          if (c == '\n') {
-            state = HEADER_EOL;
-            return true;
-          }
-          return false;
-
-        case BODY:
-          m_body_size--;
-          if (m_body_size == 0) {
-            state = HEAD;
-            return true;
-          }
-          return false;
-
-        case CHUNK_HEAD:
-          if (c == '\n') {
-            if (m_body_size > 0) {
-              state = CHUNK_BODY;
+    // byte scan the head
+    } else {
+      data->shift_to(
+        [&](int c) -> bool {
+          switch (state) {
+          case HEAD:
+            if (c == '\n') {
+              state = HEAD_EOL;
               return true;
-            } else {
-              state = CHUNK_LAST;
-              return false;
             }
-          }
-          else if ('0' <= c && c <= '9') m_body_size = (m_body_size << 4) + (c - '0');
-          else if ('a' <= c && c <= 'f') m_body_size = (m_body_size << 4) + (c - 'a') + 10;
-          else if ('A' <= c && c <= 'F') m_body_size = (m_body_size << 4) + (c - 'A') + 10;
-          return false;
+            return false;
 
-        case CHUNK_BODY:
-          m_body_size--;
-          if (m_body_size == 0) {
-            state = CHUNK_TAIL;
+          case HEADER:
+            if (c == '\n') {
+              state = HEADER_EOL;
+              return true;
+            }
+            return false;
+
+          case CHUNK_HEAD:
+            if (c == '\n') {
+              if (m_body_size > 0) {
+                state = CHUNK_BODY;
+                return true;
+              } else {
+                state = CHUNK_LAST;
+                return false;
+              }
+            }
+            else if ('0' <= c && c <= '9') m_body_size = (m_body_size << 4) + (c - '0');
+            else if ('a' <= c && c <= 'f') m_body_size = (m_body_size << 4) + (c - 'a') + 10;
+            else if ('A' <= c && c <= 'F') m_body_size = (m_body_size << 4) + (c - 'A') + 10;
+            return false;
+
+          case CHUNK_TAIL:
+            if (c == '\n') {
+              state = CHUNK_HEAD;
+              m_body_size = 0;
+            }
+            return false;
+
+          case CHUNK_LAST:
+            if (c == '\n') {
+              state = HEAD;
+              return true;
+            }
+            return false;
+
+          case HEAD_EOL:
+          case HEADER_EOL:
+            return false;
+
+          case HTTP2_PREFACE:
+            if (!--m_body_size) {
+              state = HTTP2_PASS;
+              return true;
+            }
+            return false;
+
+          case HTTP2_PASS:
+            return false;
+
+          default:
+            // case BODY:
+            // case CHUNK_BODY:
+            // handle in the 'fast scan'
             return true;
           }
-          return false;
-
-        case CHUNK_TAIL:
-          if (c == '\n') {
-            state = CHUNK_HEAD;
-            m_body_size = 0;
-          }
-          return false;
-
-        case CHUNK_LAST:
-          if (c == '\n') {
-            state = HEAD;
-            return true;
-          }
-          return false;
-
-        case HEAD_EOL:
-        case HEADER_EOL:
-          return false;
-
-        case HTTP2_PREFACE:
-          if (!--m_body_size) {
-            state = HTTP2_PASS;
-            return true;
-          }
-          return false;
-
-        case HTTP2_PASS:
-          return false;
-        }
-      },
-      *output
-    );
+        },
+        *output
+      );
+    }
 
     // old state
     switch (m_state) {
