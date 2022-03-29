@@ -55,6 +55,7 @@ public:
   void open_write();
   void write(const Data &data);
   void close();
+  void unlink();
 
 private:
   File(const std::string &path)

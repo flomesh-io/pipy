@@ -137,6 +137,9 @@ void DepositMessage::end() {
   } else {
     output(MessageEnd::make());
   }
+  if (!m_options.keep) {
+    m_file_r->unlink();
+  }
 }
 
 } // namespace pipy

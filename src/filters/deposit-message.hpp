@@ -49,6 +49,7 @@ class DepositMessage : public Filter, public DepositMessageReceiver {
 public:
   struct Options {
     size_t threshold = 0;
+    bool keep = false;
   };
 
   DepositMessage(const pjs::Value &filename, const Options &options);

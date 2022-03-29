@@ -256,11 +256,12 @@ void Configuration::demux_http(pjs::Str *target, pjs::Object *options) {
 void Configuration::deposit_message(const pjs::Value &filename, pjs::Object *options) {
   DepositMessage::Options opts;
   if (options) {
-    pjs::Value threshold;
+    pjs::Value threshold, keep;
     options->get("threshold", threshold);
-    if (!utils::get_byte_size(threshold, opts.threshold)) {
-      throw std::runtime_error("options.threshold expects a number or a string");
-    }
+    options->get("keep", keep);
+    if (!utils::get_byte_size(threshold, opts.threshold)) throw std::runtime_error("options.threshold expects a number or a string");
+    if (!keep.is_boolean()) throw std::runtime_error("options.keep expects a boolean");
+    opts.keep = keep.b();
   }
   append_filter(new DepositMessage(filename, opts));
 }

@@ -40,6 +40,7 @@ bool is_file(const std::string &filename);
 bool make_dir(const std::string &filename);
 bool read_dir(const std::string &filename, std::list<std::string> &list);
 bool read_file(const std::string &filename, std::vector<uint8_t> &data);
+bool unlink(const std::string &filename);
 
 } // namespace fs
 } // namespace pipy
