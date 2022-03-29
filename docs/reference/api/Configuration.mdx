@@ -31,7 +31,7 @@ Use [export()](/reference/api/Configuration/export) to define global variables t
 
 #### Methods for creating pipeline layout
 
-Use [listen()](/reference/api/Configuration/listen) to create a pipeline layout that generates a root pipeline for every incoming connection on a specified TCP port. Use [task()](/reference/api/Configuration/task) to create a pipeline layout that generates root pipelines regularly for periodic tasks. Use [pipeline()](/reference/api/Configuration/pipeline) to create a pipeline layout for sub-pipelines.
+Use [listen()](/reference/api/Configuration/listen) to create a pipeline layout that generates a root pipeline for every incoming connection on a specified TCP port. Use [read()](/reference/api/Configuration/read) to create a pipeline layout that reads and processes data from a file. Use [task()](/reference/api/Configuration/task) to create a pipeline layout that generates root pipelines for received process signals or periodic tasks. Use [pipeline()](/reference/api/Configuration/pipeline) to create a pipeline layout for sub-pipelines.
 
 All three methods will change the _current pipeline layout_ of the _Configuration_, after which one or more filters can be appended to the newly created pipeline layout by using the methods we will discuss later.
 
@@ -90,6 +90,7 @@ These filters pass events in a stream from one pipeline to another. Unlike _muxe
 
 #### Buffering
 
+* [depositMessage()](/reference/api/Configuration/depositMessage)
 * [pack()](/reference/api/Configuration/pack)
 * [throttleConcurrency()](/reference/api/Configuration/throttleConcurrency)
 * [throttleDataRate()](/reference/api/Configuration/throttleDataRate)
@@ -109,8 +110,9 @@ These filters delay a stream until some conditions are met. In other words, they
 * [handleStreamStart()](/reference/api/Configuration/handleStreamStart)
 * [handleTLSClientHello()](/reference/api/Configuration/handleTLSClientHello)
 * [print()](/reference/api/Configuration/print)
+* [tee()](/reference/api/Configuration/tee)
 
-These filters trigger some user-defined script when they see a specific type of events in a stream. They don't change anything in the stream. They simply pass down all events as is.
+These filters don't change anything in the stream. They simply pass down all events as is. Some of them trigger user-defined script when they see a specific type of events in a stream.
 
 #### Transformers
 

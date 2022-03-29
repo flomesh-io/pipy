@@ -3,11 +3,11 @@ title: "Configuration"
 api: Configuration
 ---
 
-# 描述
+## 描述
 
 *Configuration* 帮助用户配置模块中的变量、管道和过滤器，以及模块间如何通过变量和子管道进行交互。一个有效的 PipyJS 模块在求值之后应该返回一个 *Configuration*。
 
-获取新 *Configuration* 的唯一途径是调用全局函数 `pipy()`，大多数情况下，这也是 PipyJS 脚本的第一个函数。
+获取新 *Configuration* 的唯一途径是调用全局函数 [pipy()](/reference/api/pipy)，大多数情况下，这也是 PipyJS 脚本的第一个函数。
 
 ```js
 pipy() // 返回一个新的 Configuration 对象
@@ -21,54 +21,54 @@ pipy().listen(8080) // 返回与之前相同配置对象
       .dummy()      // 再次，相同的配置对象
 ```
 
-## 方法
+### 方法
 
 *Configuration* 类的方法按功能分有三种：导出/导入变量、定义管道和向管道添加过滤器。
 
-### 导入/导出变量
+#### 导入/导出变量
 
-使用 `export()·` 定义对其他模块可见的全局变量。使用 `import()` 导入其他模块定义和导出的全局变量。
+使用 [export()](/reference/api/Configuration/export) 定义对其他模块可见的全局变量。使用 [import()](/reference/api/Configuration/import) 导入其他模块定义和导出的全局变量。
 
-### 定义管道
+#### 定义管道布局
 
-`listen()` 可以创建一个监听指定 TCP 端口的根管道；`task()` 可以为定时任务创建一个定期接收消息的根管道；`pipeline()` 以给定名称创建子管道。
+[listen()](/reference/api/Configuration/listen) 用于创建一个监听指定 TCP 端口的起始管道布局；[read()](/reference/api/Configuration/read) 用于创建一个从文件读取和处理数据的起始管道布局；[task()](/reference/api/Configuration/task) 用于创建一个处理进程信号或者定时任务的起始管道布局；[pipeline()](/reference/api/Configuration/pipeline) 以给定名称创建子管道布局。
 
 所有的方法都会更改 *Configuration* 的*当前管道*，之后就可以使用接下来要讨论的方法为新建的管道添加过滤器。
 
-### 添加过滤器
+#### 添加过滤器
 
 剩下的方法是为*当前*管道（也就是前面部分最后创建的管道）添加过滤器。每个方法都会为*当前*管道添加不同类型的过滤器。
 
-## 过滤器
+### 过滤器
 
 过滤器根据功能不同，可以划分为 7 类。
 
-### 传输
+#### 传输
 
-  * [acceptHTTPTunnel()](/reference/api/Configuration/acceptHTTPTunnel)
-  * [acceptSOCKS()](/reference/api/Configuration/acceptSOCKS)
-  * [acceptTLS()](/reference/api/Configuration/acceptTLS)
-  * [connect()](/reference/api/Configuration/connect)
-  * [connectHTTPTunnel()](/reference/api/Configuration/connectHTTPTunnel)
-  * [connectSOCKS()](/reference/api/Configuration/connectTLS)
-  * [connectTLS()](/reference/api/Configuration/connectTLS)
+* [acceptHTTPTunnel()](/reference/api/Configuration/acceptHTTPTunnel)
+* [acceptSOCKS()](/reference/api/Configuration/acceptSOCKS)
+* [acceptTLS()](/reference/api/Configuration/acceptTLS)
+* [connect()](/reference/api/Configuration/connect)
+* [connectHTTPTunnel()](/reference/api/Configuration/connectHTTPTunnel)
+* [connectSOCKS()](/reference/api/Configuration/connectTLS)
+* [connectTLS()](/reference/api/Configuration/connectTLS)
 
-  这些过滤器是运行特定协议的客户端和服务端传输层。其中最常用的是 [connect()](/reference/api/Configuration/connect)，它与远程主机建立出站 TCP 连接并来回传输 *Data* 事件。
+这些过滤器是运行特定协议的客户端和服务端传输层。其中最常用的是 [connect()](/reference/api/Configuration/connect)，它与远程主机建立出站 TCP 连接并来回传输 *Data* 事件。
 
-### 编解码器
+#### 编解码器
 
-  * [decodeDubbo()](/reference/api/Configuration/decodeDubbo)
-  * [decodeHTTPRequest()](/reference/api/Configuration/decodeHTTPRequest)
-  * [decodeHTTPResponse()](/reference/api/Configuration/decodeHTTPResponse)
-  * [decodeMQTT()](/reference/api/Configuration/decodeMQTT)
-  * [encodeDubbo()](/reference/api/Configuration/decodeDubbo)
-  * [encodeHTTPRequest()](/reference/api/Configuration/decodeHTTPRequest)
-  * [encodeHTTPResponse()](/reference/api/Configuration/decodeHTTPResponse)
-  * [encodeMQTT()](/reference/api/Configuration/encodeMQTT)
+* [decodeDubbo()](/reference/api/Configuration/decodeDubbo)
+* [decodeHTTPRequest()](/reference/api/Configuration/decodeHTTPRequest)
+* [decodeHTTPResponse()](/reference/api/Configuration/decodeHTTPResponse)
+* [decodeMQTT()](/reference/api/Configuration/decodeMQTT)
+* [encodeDubbo()](/reference/api/Configuration/decodeDubbo)
+* [encodeHTTPRequest()](/reference/api/Configuration/decodeHTTPRequest)
+* [encodeHTTPResponse()](/reference/api/Configuration/decodeHTTPResponse)
+* [encodeMQTT()](/reference/api/Configuration/encodeMQTT)
 
 这些过滤器负责将流在*原始字节格式*和*消息格式*间进行转换。解码器接收 *Data* 事件，并输出 *MessageStart/MessageEnd* 事件对（中间有不变的作为消息主体的 *Data* 事件）。编码器接收 *MessageStart/MessageEnd* 事件对（同样，其间也有作为消息主体的 *Data* 事件），并在 *Data* 事件中输出原始字节。
 
-### 多路复用和分路
+#### 多路复用和分路
 
 * [demux()](/reference/api/Configuration/demux)
 * [demuxQueue()](/reference/api/Configuration/demuxQueue)
@@ -80,7 +80,7 @@ pipy().listen(8080) // 返回与之前相同配置对象
 
 这些过滤器将一个流拆分成多个流，或者将多个流合并成一个流。其中一些集成了编解码器，比如 [demuxHTTP()](/reference/api/Configuration/demuxHTTP) 和 [muxHTTP()](/reference/api/Configuration/muxHTTP)。这种情况下，分路输入原始字节输出消息，而多路复用输入消息输出原始字节。
 
-### 连接器
+#### 连接器
 
 * [fork()](/reference/api/Configuration/link)
 * [link()](/reference/api/Configuration/link)
@@ -88,8 +88,9 @@ pipy().listen(8080) // 返回与之前相同配置对象
 
 这些过滤器将流从一个管道传递到另一个管道。与*多路复用和分路*不同，它们只修改流传输的方向，而不修改流本身的内容。
 
-### 缓冲
+#### 缓冲
 
+* [depositMessage()](/reference/api/Configuration/depositMessage)
 * [pack()](/reference/api/Configuration/pack)
 * [throttleConcurrency()](/reference/api/Configuration/throttleConcurrency)
 * [throttleDataRate()](/reference/api/Configuration/throttleDataRate)
@@ -98,7 +99,7 @@ pipy().listen(8080) // 返回与之前相同配置对象
 
 这些过滤器会延迟对流的处理，直到满足某些条件。换句话说，它们控制着流中事件的通行。
 
-### 观察者
+#### 观察者
 
 * [detectProtocol()](/reference/api/Configuration/detectProtocol)
 * [dump()](/reference/api/Configuration/dump)
@@ -109,10 +110,11 @@ pipy().listen(8080) // 返回与之前相同配置对象
 * [handleStreamStart()](/reference/api/Configuration/handleStreamStart)
 * [handleTLSClientHello()](/reference/api/Configuration/handleTLSClientHello)
 * [print()](/reference/api/Configuration/print)
+* [tee()](/reference/api/Configuration/tee)
 
-当流中有特定类型的事件时，过滤器会触发用户定义的脚本。它们不修改流的内容，只按原样向下传递事件。
+这些过滤器不修改流的内容，只按原样向下传递事件。其中一些过滤器在发现特定类型的事件时会触发用户定义的脚本。
 
-### 转换器
+#### 转换器
 
 * [decompressHTTP()](/reference/api/Configuration/decompressHTTP)
 * [decompressMessage()](/reference/api/Configuration/decompressMessage)
@@ -127,11 +129,11 @@ pipy().listen(8080) // 返回与之前相同配置对象
 
 这些过滤器将输入事件转换为新的输出事件。其中许多过滤器会调用用户定义的脚本，并将输入事件作为用户函数的参数；函数的所有输出会作为过滤器的输出。其中，[exec()](/reference/api/Configuration/exec) 会特殊一些，它将 *Data* 事件传递到外部进程的标准输入并读取进程的标准输出作为 *Data* 事件。
 
-## 工作原理
+### 工作原理
 
 Pipy 启动时首先从*主模块*的脚本开始求值，该脚本应解析为包含了主模块中定义的管道和过滤器描述的 *Configuration* 对象。从那里 Pipy 会查询并加载其他被主模块*使用的*模块，这些模块被解析为更多的 *Configuration*、管道以及过滤器。这个过程直到所有主模块直接或间接链接的模块被找到并加载，届时 Pipy 将构建、连接那些 *Configuration* 中的所有管道和过滤器，然后启动运行。
 
-# 示例
+## 示例
 
 下面是我们如何在一个 PipyJS 模块内配置简单的 *HTTP hello 服务*以及 *TCP 代理*。
 
@@ -147,6 +149,6 @@ pipy() // 返回新的 Configuration
   .connect('localhost:8080') // 追加 connect 过滤器到这个管道
 ```
 
-# 方法参考
+## 方法参考
 
 <Methods/>

@@ -1,0 +1,67 @@
+---
+title: "Configuration.depositMessage()"
+api: Configuration.depositMessage()
+---
+
+## Description
+
+Appends a **depositMessage** filter to the current pipeline layout.
+
+A **depositMessage** filter buffers a whole message body in a temporary file. Its input and output are all messages.
+
+|                  |             |
+|:----------------:|:-----------:|
+| _Input_          |             |
+| ↓                | **Message** |
+| `depositMessage` |             |
+| ↓                | **Message** |
+| _Output_         |             |
+
+The pathname of the output file is specified in the first parameter. It can be a string or a function that returns a string.
+
+This filter passes down messages unaltered. It doesn't change anything in a message. It only writes the message body in a temporary file and do an asynchronous read afterwards. This is useful when combined with throttling filters (such as [throttleConcurrency()](/reference/api/Configuration/throttleConcurrency)) to control data flow for large messages.
+
+### Option: threshold
+
+You can set a minimum message size for the writing to kick in by the option _threshold_ in the _options_ parameter. It can be a number in bytes, or a string ending with one of the size unit suffixes, such as `"k"`, `"m"` and `"g"`. Before the message body size has reached the threshold, events are simply passed through without delay. The default threshold is zero.
+
+### Option: keep
+
+By default, the temporary file will be deleted after the whole message has passed completely. You can set the option _keep_ to _true_ to have the file remained.
+
+## Syntax
+
+``` js
+pipy()
+  .pipeline('example')
+    .depositMessage(filename)
+
+pipy()
+  .pipeline('example')
+    .depositMessage(
+      () => getFilename()
+    )
+
+pipy()
+  .pipeline('example')
+    .depositMessage(
+      () => getFilename(),
+      {
+        threshold,
+        keep,
+      }
+    )
+```
+
+### Parameters
+
+<Parameters/>
+
+### Return value
+
+<ReturnValue/>
+
+## See Also
+
+* [Configuration](/reference/api/Configuration)
+* [throttleConcurrency()](/reference/api/Configuration/throttleConcurrency)
