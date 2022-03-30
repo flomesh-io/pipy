@@ -27,6 +27,10 @@ Timeout duration for reading, in seconds. Can be a string with one of the time u
 
 Timeout duration for writing, in seconds. Can be a string with one of the time unit suffixes such as `s`, `m` or `h`. Defaults to no timeout (waiting forever).
 
+#### Option: transparent
+
+Set to _true_ to enable [transparent proxy](https://en.wikipedia.org/wiki/Proxy_server#Transparent_proxy) mode, where the original destination address and port can be found through `__inbound.destinationAddress` and `__inbound.destinationPort` properties. This is only available on Linux by using NAT or TPROXY.
+
 ## Syntax
 
 ``` js

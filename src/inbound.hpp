@@ -52,14 +52,17 @@ public:
   struct Options {
     double read_timeout = 0;
     double write_timeout = 0;
+    bool transparent = false;
   };
 
   auto id() const -> uint64_t { return m_id; }
   auto pipeline() const -> Pipeline* { return m_pipeline; }
   auto remote_address() -> pjs::Str*;
   auto local_address() -> pjs::Str*;
-  auto remote_port() const -> int { return m_remote_port; }
-  auto local_port() const -> int { return m_local_port; }
+  auto ori_dst_address() -> pjs::Str*;
+  auto remote_port() -> int { address(); return m_remote_port; }
+  auto local_port() -> int { address(); return m_local_port; }
+  auto ori_dst_port() -> int { address(); return m_ori_dst_port; }
   auto buffered() const -> int { return m_buffer.size(); }
 
   void accept(asio::ip::tcp::acceptor &acceptor);
@@ -85,12 +88,16 @@ private:
   asio::ip::tcp::socket m_socket;
   pjs::Ref<pjs::Str> m_str_remote_addr;
   pjs::Ref<pjs::Str> m_str_local_addr;
+  pjs::Ref<pjs::Str> m_str_ori_dst_addr;
   std::string m_remote_addr;
   std::string m_local_addr;
+  std::string m_ori_dst_addr;
   int m_remote_port = 0;
   int m_local_port = 0;
+  int m_ori_dst_port = 0;
   Data m_buffer;
   ReceivingState m_receiving_state = RECEIVING;
+  bool m_addressed = false;
   bool m_pumping = false;
   bool m_ended = false;
 
@@ -103,6 +110,7 @@ private:
   void pump();
   void output(Event *evt);
   void close(StreamEnd::Error err);
+  void address();
   void describe(char *desc);
   void free();
 

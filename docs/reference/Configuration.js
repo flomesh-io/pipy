@@ -94,10 +94,11 @@ class Configuration {
    * Creates a pipeline layout to handle incoming TCP connections on a specified port.
    *
    * @param {number|string} port Port or ip+port to listen on.
-   * @param {Object} [options] Options including maxConnections, readTimeout and writeTimeout.
+   * @param {Object} [options] Options including maxConnections, readTimeout, writeTimeout and transparent.
    * @param {number} [options.maxConnections] Maximum number of concurrent connections.
    * @param {number|string} [options.readTimeout] Read timeout in seconds.
    * @param {number|string} [options.writeTimeout] Write timeout in seconds.
+   * @param {number|string} [options.transparent] Enable destinationAddress and destinationPort properties.
    * @returns {Configuration} The same Configuration object.
    */
   listen(port) {}

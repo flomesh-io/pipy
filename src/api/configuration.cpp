@@ -33,6 +33,7 @@
 #include "worker.hpp"
 #include "graph.hpp"
 #include "utils.hpp"
+#include "logging.hpp"
 
 // all filters
 #include "filters/connect.hpp"
@@ -491,6 +492,11 @@ void Configuration::apply(Module *mod) {
       std::string msg("Port reserved: ");
       throw std::runtime_error(msg + std::to_string(i.port));
     }
+#ifndef __linux__
+    if (i.options.transparent) {
+      Log::error("Trying to listen on %d in transparent mode, which is not supported on this platform", i.port);
+    }
+#endif
     worker->add_listener(listener, p, i.options);
   }
 
@@ -559,13 +565,14 @@ void Configuration::draw(Graph &g) {
 }
 
 void Configuration::get_listen_options(pjs::Object *obj, Listener::Options &opt) {
-  pjs::Value max_conn, read_timeout, write_timeout;
+  pjs::Value max_conn, read_timeout, write_timeout, transparent;
   obj->get("maxConnections", max_conn);
   obj->get("readTimeout", read_timeout);
   obj->get("writeTimeout", write_timeout);
+  obj->get("transparent", transparent);
 
   if (!max_conn.is_undefined()) {
-    if (!max_conn.is_number()) throw std::runtime_error("option.maxConnections expects a number");
+    if (!max_conn.is_number()) throw std::runtime_error("options.maxConnections expects a number");
     opt.max_connections = max_conn.n();
   }
 
@@ -583,6 +590,11 @@ void Configuration::get_listen_options(pjs::Object *obj, Listener::Options &opt)
     } else {
       opt.write_timeout = write_timeout.to_number();
     }
+  }
+
+  if (!transparent.is_undefined()) {
+    if (!transparent.is_boolean()) throw std::runtime_error("options.transparent expects a boolean");
+    opt.transparent = transparent.b();
   }
 }
 

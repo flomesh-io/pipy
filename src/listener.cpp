@@ -97,13 +97,16 @@ void Listener::start() {
     m_acceptor.set_option(asio::socket_base::reuse_address(true));
 
     auto sock = m_acceptor.native_handle();
-    int enabled = 1;
 
 #ifdef __linux__
-    setsockopt(sock, SOL_IP, IP_TRANSPARENT, &enabled, sizeof(enabled));
+    if (m_options.transparent) {
+      int enabled = 1;
+      setsockopt(sock, SOL_IP, IP_TRANSPARENT, &enabled, sizeof(enabled));
+    }
 #endif
 
     if (s_reuse_port) {
+      int enabled = 1;
 #ifdef __FreeBSD__
       setsockopt(sock, SOL_SOCKET, SO_REUSEPORT_LB, &enabled, sizeof(enabled));
 #else
