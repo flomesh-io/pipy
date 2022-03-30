@@ -150,6 +150,24 @@ void File::close() {
   m_closed = true;
 }
 
+void File::unlink() {
+  retain();
+  asio::post(
+    *s_thread_pool,
+    [this]() {
+      auto succ = fs::unlink(m_path);
+      Net::post(
+        [=]() {
+          if (!succ) {
+            Log::error("[file] cannot delete file: %s", m_path.c_str());
+          }
+          release();
+        }
+      );
+    }
+  );
+}
+
 bool File::mkdir_p(const std::string &path) {
   if (fs::is_dir(path)) return true;
   auto dirname = utils::path_dirname(path);

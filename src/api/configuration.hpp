@@ -71,7 +71,6 @@ public:
   void accept_http_tunnel(pjs::Str *target, pjs::Function *handler);
   void accept_socks(pjs::Str *target, pjs::Function *on_connect);
   void accept_tls(pjs::Str *target, pjs::Object *options);
-  void buffer(const pjs::Value &filename, pjs::Object *options);
   void connect(const pjs::Value &target, pjs::Object *options);
   void connect_http_tunnel(pjs::Str *target, const pjs::Value &address);
   void connect_socks(pjs::Str *target, const pjs::Value &address);
@@ -82,6 +81,7 @@ public:
   void decode_mqtt(pjs::Object *options);
   void decompress_http(pjs::Function *enable);
   void decompress_message(const pjs::Value &algorithm);
+  void deposit_message(const pjs::Value &filename, pjs::Object *options);
   void detect_protocol(pjs::Function *callback);
   void demux(pjs::Str *target);
   void demux_queue(pjs::Str *target);

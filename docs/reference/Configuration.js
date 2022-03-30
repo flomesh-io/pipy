@@ -337,6 +337,19 @@ class Configuration {
   demuxHTTP(layout, options) {}
 
   /**
+   * Appends a depositMessage filter to the current pipeline layout.
+   *
+   * A depositMessage filter buffers a whole message body in a temporary file. Its input and output are all messages.
+   *
+   * @param {string|StringCB} filename Pathname of the temporary file.
+   * @param {Object} [options] Options including threshold and keep.
+   * @param {number|string} [options.threshold] Message body size threshold where message starts to write to the temporary file.
+   * @param {boolean} [options.keep] Whether the temporary file should be kept after a message passes through.
+   * @returns {Configuration} The same Configuration object.
+   */
+  depositMessage(filename, options) {}
+
+  /**
    * @callback ProtocolDetectionHandler
    * @param {string} protocolName
    */
@@ -634,6 +647,14 @@ class Configuration {
   print() {}
 
   /**
+   * Creates a pipeline layout to read and process Data from a file.
+   *
+   * @param {string} filename Pathname of the input file.
+   * @returns {Configuration} The same Configuration object.
+   */
+  read(filename) {}
+
+  /**
    * Appends a replaceData filter to the current pipeline layout.
    *
    * A replaceData filter calls a user function to get a replacement for every Data event in the input stream.
@@ -741,6 +762,17 @@ class Configuration {
   split(handler) {}
 
   /**
+   * Appends a tee filter to the current pipeline layout.
+   *
+   * A tee filter writes Data to a file while passing all events through.
+   * Its input and output can be any kinds of events.
+   *
+   * @param {string|StringCB} filename Pathname of the output file.
+   * @returns {Configuration} The same Configuration object.
+   */
+  tee(filename) {}
+
+  /**
    * Appends a throttleConcurrency filter to the current pipeline layout.
    *
    * A throttleConcurrency filter sets a limit to how many concurrent streams can go through its place in the pipeline layout.
@@ -750,7 +782,7 @@ class Configuration {
    * @param {*|AnyCB} [account] Name of the account that the quota is entitled to.
    * @returns {Configuration} The same Configuration object.
    */
-   throttleConcurrency(quota, account) {}
+  throttleConcurrency(quota, account) {}
 
   /**
    * Appends a throttleDataRate filter to the current pipeline layout.

@@ -103,5 +103,9 @@ bool read_file(const std::string &filename, std::vector<uint8_t> &data) {
   return true;
 }
 
+bool unlink(const std::string &filename) {
+  return ::unlink(filename.c_str()) == 0;
+}
+
 } // namespace fs
 } // namespace pipy

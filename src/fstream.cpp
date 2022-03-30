@@ -66,6 +66,11 @@ void FileStream::close() {
   std::error_code ec;
   m_stream.close(ec);
 
+  if (m_receiving_state == PAUSED) {
+    m_receiving_state = RECEIVING;
+    release();
+  }
+
   if (ec) {
     Log::error("FileStream: %p, error closing stream [fd = %d], %s", this, m_fd, ec.message().c_str());
   } else {
@@ -89,9 +94,23 @@ void FileStream::on_event(Event *evt) {
 }
 
 void FileStream::on_tap_open() {
+  switch (m_receiving_state) {
+    case PAUSING:
+      m_receiving_state = RECEIVING;
+      break;
+    case PAUSED:
+      m_receiving_state = RECEIVING;
+      read();
+      release();
+      break;
+    default: break;
+  }
 }
 
 void FileStream::on_tap_close() {
+  if (m_receiving_state == RECEIVING) {
+    m_receiving_state = PAUSING;
+  }
 }
 
 void FileStream::read() {
@@ -118,7 +137,11 @@ void FileStream::read() {
         output(StreamEnd::make(StreamEnd::READ_ERROR));
       }
 
-    } else {
+    } else if (m_receiving_state == PAUSING) {
+      m_receiving_state = PAUSED;
+      retain();
+
+    } else if (m_receiving_state == RECEIVING) {
       read();
     }
 
@@ -127,7 +150,8 @@ void FileStream::read() {
 
   m_stream.async_read_some(
     DataChunks(buffer->chunks()),
-    on_received);
+    on_received
+  );
 
   retain();
 }

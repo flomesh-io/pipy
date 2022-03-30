@@ -1,0 +1,42 @@
+---
+title: "Configuration.read()"
+api: Configuration.read()
+---
+
+## Description
+
+Creates a pipeline layout to read and process Data from a file.
+
+The pathname of the file to read is specified in the first parameter. It can be `"-"` for reading from the standard input.
+
+After calling this method on a _Configuration_, the newly created pipeline layout would become current. Any _filter-creating_ methods called after this point would append filters to that layout, until another _pipeline-layout-creating_ method is called.
+
+## Syntax
+
+``` js
+pipy().read(filename)
+```
+
+### Parameters
+
+<Parameters/>
+
+### Return value
+
+<ReturnValue/>
+
+## Example
+
+``` js
+pipy()
+
+.read('/path/to/input.txt') // Open and read from file /path/to/input.txt
+  .dump() // Add filter, dump to stdout whatever is in the file
+```
+
+## See Also
+
+* [Configuration](/reference/api/Configuration)
+* [listen()](/reference/api/Configuration/listen)
+* [task()](/reference/api/Configuration/task)
+* [pipeline()](/reference/api/Configuration/pipeline)

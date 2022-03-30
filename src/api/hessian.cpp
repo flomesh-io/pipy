@@ -82,7 +82,7 @@ public:
     return m_len == 0;
   }
 
-  int length() const { 
+  int length() const {
     return m_len;
   }
 

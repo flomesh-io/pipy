@@ -52,7 +52,10 @@ protected:
   virtual void process(Event *evt) override;
   virtual auto consume(Event *evt, double &quota) -> Event* = 0;
 
-  class Account : public pjs::Pooled<Account> {
+  class Account :
+    public pjs::RefCount<Account>,
+    public pjs::Pooled<Account>
+  {
   public:
     void enqueue(ThrottleBase *filter);
     void dequeue(ThrottleBase *filter);
@@ -70,19 +73,18 @@ protected:
   };
 
   bool m_evaluated = false;
-  Account* m_current_account = nullptr;
+  pjs::Ref<Account> m_current_account;
 
 private:
   class AccountManager {
   public:
     AccountManager(bool auto_supply);
-    ~AccountManager();
 
     auto get(const pjs::Value &key, double quota) -> Account*;
 
   private:
-    std::unordered_map<pjs::Value, Account*> m_accounts;
-    std::unordered_map<pjs::WeakRef<pjs::Object>, Account*> m_weak_accounts;
+    std::unordered_map<pjs::Value, pjs::Ref<Account>> m_accounts;
+    std::unordered_map<pjs::WeakRef<pjs::Object>, pjs::Ref<Account>> m_weak_accounts;
     Timer m_timer;
 
     void supply();
