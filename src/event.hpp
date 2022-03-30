@@ -136,7 +136,7 @@ public:
   static const Type __TYPE = Event::StreamEnd;
 
   enum Error {
-    NO_ERROR = 0,
+    _NO_ERROR = 0,
     UNKNOWN_ERROR,
     RUNTIME_ERROR,
     READ_ERROR,
@@ -156,7 +156,7 @@ public:
   auto message() const -> const char*;
 
 private:
-  StreamEnd(Error error = NO_ERROR) : m_error(error) {}
+  StreamEnd(Error error = _NO_ERROR) : m_error(error) {}
 
   StreamEnd(const StreamEnd &r)
     : m_error(r.m_error) {}

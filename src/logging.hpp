@@ -39,7 +39,7 @@ public:
   enum Level {
     DEBUG,
     WARN,
-    ERROR,
+    _ERROR,
     INFO,
   };
 

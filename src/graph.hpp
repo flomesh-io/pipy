@@ -75,7 +75,7 @@ private:
   class Node {
   public:
     enum Type {
-      ERROR,
+      _ERROR,
       ROOT,
       PIPELINE,
       FILTER,

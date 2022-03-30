@@ -366,7 +366,7 @@ void Graph::to_json(std::string &error, std::ostream &out) {
     out << utils::escape(node->name());
     out << "\",\"t\":\"";
     switch (node->type()) {
-      case Node::ERROR: out << "error"; break;
+      case Node::_ERROR: out << "error"; break;
       case Node::ROOT: out << "root"; break;
       case Node::PIPELINE: out << "pipeline"; break;
       case Node::FILTER: out << "filter"; break;

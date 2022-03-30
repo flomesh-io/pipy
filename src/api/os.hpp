@@ -28,6 +28,22 @@
 
 #include "pjs/pjs.hpp"
 
+#ifndef S_ISLNK
+# ifdef S_IFLNK
+#   define S_ISLNK(m) (((m) & S_IFMT) == S_IFLNK)
+# else
+#   define S_ISLNK(m) 0
+# endif
+#endif
+
+#ifndef S_ISSOCK
+# ifdef S_IFSOCK
+#   define S_ISSOCK(m) (((m) & S_IFMT) == S_IFSOCK)
+# else
+#   define S_ISSOCK(m) 0
+# endif
+#endif
+
 namespace pipy {
 
 class OS : public pjs::ObjectTemplate<OS> {

@@ -55,7 +55,7 @@ public:
     PUT,
     POST,
     PATCH,
-    DELETE,
+    _DELETE,
   };
 
   struct Options : public Outbound::Options {

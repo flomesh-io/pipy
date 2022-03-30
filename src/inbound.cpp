@@ -74,7 +74,7 @@ void Inbound::accept(asio::ip::tcp::acceptor &acceptor) {
     [this](const std::error_code &ec) {
       if (ec != asio::error::operation_aborted) {
         if (ec) {
-          if (Log::is_enabled(Log::ERROR)) {
+          if (Log::is_enabled(Log::_ERROR)) {
             char desc[200];
             describe(desc);
             Log::error("%s error accepting connection: %s", desc, ec.message().c_str());
@@ -138,7 +138,7 @@ void Inbound::on_event(Event *evt) {
     } else if (evt->is<StreamEnd>()) {
       m_ended = true;
       if (m_buffer.empty()) {
-        close(StreamEnd::NO_ERROR);
+        close(StreamEnd::_NO_ERROR);
       } else {
         pump();
       }
@@ -187,7 +187,7 @@ void Inbound::receive() {
               describe(desc);
               Log::debug("%s closed by peer", desc);
             }
-            close(StreamEnd::NO_ERROR);
+            close(StreamEnd::_NO_ERROR);
           } else {
             if (Log::is_enabled(Log::WARN)) {
               char desc[200];
@@ -247,7 +247,7 @@ void Inbound::pump() {
           close(StreamEnd::WRITE_ERROR);
 
         } else if (m_ended && m_buffer.empty()) {
-          close(StreamEnd::NO_ERROR);
+          close(StreamEnd::_NO_ERROR);
 
         } else {
           pump();
@@ -282,7 +282,7 @@ void Inbound::close(StreamEnd::Error err) {
   m_socket.close(ec);
 
   if (ec) {
-    if (Log::is_enabled(Log::ERROR)) {
+    if (Log::is_enabled(Log::_ERROR)) {
       char desc[200];
       describe(desc);
       Log::error("%s error closing socket: %s", desc, ec.message().c_str());

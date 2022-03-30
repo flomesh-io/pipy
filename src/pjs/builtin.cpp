@@ -540,7 +540,11 @@ auto Date::setSeconds(int s, int ms) -> double {
 auto Date::setTime(double value) -> double {
   auto sec = std::floor(value / 1000);
   auto t = std::time_t(sec);
+#ifdef _WIN32
+   localtime_s(&m_tm,&t);
+#else
   localtime_r(&t, &m_tm);
+#endif
   m_msec = value - sec * 1000;
   return value;
 }
@@ -588,7 +592,11 @@ auto Date::dump() -> Object* {
 
 auto Date::normalize() -> double {
   auto t = std::mktime(&m_tm);
+#ifdef _WIN32
+   localtime_s(&m_tm,&t);
+#else
   localtime_r(&t, &m_tm);
+#endif
   return double(t) * 1000 + m_msec;
 }
 

@@ -117,12 +117,21 @@ static void handle_signal(int sig) {
       if (s_admin) s_admin->close();
       Worker::exit(-1);
       break;
+#ifdef _WIN32
+    case SIGBREAK:
+      Worker::restart();
+      break;
+    case SIGTERM:
+      Status::dump_memory();
+      break;    
+#else
     case SIGHUP:
       Worker::restart();
       break;
     case SIGTSTP:
       Status::dump_memory();
       break;
+#endif
   }
 }
 
@@ -326,8 +335,13 @@ int main(int argc, char *argv[]) {
 
     asio::signal_set signals(Net::context());
     signals.add(SIGINT);
+#ifdef _WIN32
+    signals.add(SIGTERM);
+    signals.add(SIGBREAK);
+#else
     signals.add(SIGHUP);
     signals.add(SIGTSTP);
+#endif
     wait_for_signals(signals);
 
     Net::run();

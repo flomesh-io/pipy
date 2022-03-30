@@ -32,7 +32,12 @@
 
 #include <stdlib.h>
 #include <string.h>
+#if defined(WIN32) || defined(_WIN32) || defined(__WIN32) && !defined(__CYGWIN__)
+#define WINDOWS
+#include "win/sys_wait.h"
+#else
 #include <sys/wait.h>
+#endif 
 
 namespace pipy {
 
@@ -66,7 +71,9 @@ void Exec::reset() {
   Filter::reset();
   if (m_pid > 0) {
     child_process_monitor()->remove(m_pid);
+#ifndef WINDOWS
     kill(m_pid, SIGTERM);
+#endif
   }
   m_pid = 0;
   if (m_stdin) {
@@ -81,7 +88,9 @@ void Exec::reset() {
 
 void Exec::process(Event *evt) {
   static Data::Producer s_dp("exec");
-
+#ifdef WINDOWS
+  return;
+#else
   if (!m_pid) {
     pjs::Value ret;
     if (!eval(m_command, ret)) return;
@@ -145,6 +154,7 @@ void Exec::process(Event *evt) {
   if (m_pid > 0 && m_stdin) {
     m_stdin->input()->input(evt);
   }
+#endif
 }
 
 auto Exec::child_process_monitor() -> ChildProcessMonitor* {

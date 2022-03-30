@@ -28,11 +28,20 @@
 #include "constants.hpp"
 #include "pipeline.hpp"
 #include "logging.hpp"
+#if defined(WIN32) || defined(_WIN32) || defined(__WIN32) && !defined(__CYGWIN__)
+#include <io.h>
+#endif
 
 namespace pipy {
 
 FileStream::FileStream(int fd, Data::Producer *dp)
-  : m_stream(Net::context(), fd)
+  : m_stream(Net::context(), 
+#if defined(BOOST_POSIX_API)
+  fd
+#else  
+  (HANDLE)_get_osfhandle(fd)
+#endif
+)
   , m_f(nullptr)
   , m_dp(dp)
 {
@@ -40,7 +49,13 @@ FileStream::FileStream(int fd, Data::Producer *dp)
 }
 
 FileStream::FileStream(FILE *f, Data::Producer *dp)
-  : m_stream(Net::context(), fileno(f))
+  : m_stream(Net::context(), 
+#if defined(BOOST_POSIX_API)
+  fileno(f)
+#else  
+  (HANDLE)_get_osfhandle(fileno(f))
+#endif  
+)
   , m_f(f)
   , m_dp(dp)
 {
@@ -94,7 +109,7 @@ void FileStream::read() {
     if (ec) {
       if (ec == asio::error::eof) {
         Log::debug("FileStream: %p, end of stream [fd = %d]", this, m_fd);
-        output(StreamEnd::make(StreamEnd::NO_ERROR));
+        output(StreamEnd::make(StreamEnd::_NO_ERROR));
       } else if (ec != asio::error::operation_aborted) {
         auto msg = ec.message();
         Log::warn(

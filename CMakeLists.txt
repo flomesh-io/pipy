@@ -4,7 +4,6 @@ project(pipy)
 option(PIPY_GUI "include builtin GUI" ON)
 option(PIPY_TUTORIAL "include builtin tutorial scripts" ON)
 option(PIPY_SOIL_FREED_SPACE "invalidate freed space for debugging" OFF)
-option(PIPY_ZLIB "external zlib location" "")
 option(PIPY_OPENSSL "external libopenssl location" "")
 option(PIPY_STATIC "statically link to libc" OFF)
 
@@ -21,6 +20,19 @@ option(LEVELDB_BUILD_TESTS "Build LevelDB's unit tests" OFF)
 option(LEVELDB_BUILD_BENCHMARKS "Build LevelDB's benchmarks" OFF)
 option(LEVELDB_INSTALL "Install LevelDB's header and library" OFF)
 add_subdirectory(deps/leveldb-1.23)
+
+add_subdirectory(deps/zlib-1.2.11)
+set(ZLIB_INC_DIR "${CMAKE_SOURCE_DIR}/deps/zlib-1.2.11" "${CMAKE_BINARY_DIR}/deps/zlib-1.2.11")
+if (PIPY_STATIC)
+  set(ZLIB_LIB zlibstatic)
+else()
+  set(ZLIB_LIB zlib)
+endif(PIPY_STATIC)
+
+if (WIN32)
+  add_compile_options(-m64)
+  set(WIN32_LIBS "-lcrypt32 -lwsock32 -lws2_32")
+endif(WIN32)
 
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_SOURCE_DIR}/bin)
 
@@ -61,25 +73,6 @@ if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
   link_time_optimization()
 endif()
 
-set(ZLIB_SRC_DIR ${CMAKE_SOURCE_DIR}/deps/zlib-1.2.11)
-set(ZLIB_INC_DIR ${ZLIB_SRC_DIR})
-set(ZLIB_LIB_DIR ${ZLIB_SRC_DIR}/build)
-
-if (PIPY_ZLIB)
-  set(ZLIB_INC_DIR ${PIPY_ZLIB}/include)
-  set(ZLIB_LIB_DIR ${PIPY_ZLIB}/lib)
-else()
-  add_custom_command(
-    OUTPUT ${ZLIB_LIB_DIR}/libz.a
-    WORKING_DIRECTORY ${ZLIB_SRC_DIR}
-    COMMAND mkdir -p build
-    COMMAND cd build && ../configure && make
-    COMMENT "Building zlib"
-  )
-endif()
-
-add_custom_target(zlib DEPENDS ${ZLIB_LIB_DIR}/libz.a)
-
 if(PIPY_OPENSSL)
   set(OPENSSL_INC_DIR ${PIPY_OPENSSL}/include)
   set(OPENSSL_LIB_DIR ${PIPY_OPENSSL}/lib)
@@ -88,20 +81,30 @@ else()
   set(OPENSSL_LIB_DIR ${OPENSSL_SRC_DIR}/build)
   set(OPENSSL_INC_DIR ${OPENSSL_SRC_DIR}/include ${OPENSSL_LIB_DIR}/include)
 
-  add_custom_command(
-    OUTPUT ${OPENSSL_LIB_DIR}/libcrypto.a ${OPENSSL_LIB_DIR}/libssl.a
-    WORKING_DIRECTORY ${OPENSSL_SRC_DIR}
-    COMMAND mkdir -p build
-    COMMAND cd build && ../config no-shared && make
-    COMMENT "Building OpenSSL"
-  )
+  if (WIN32)
+    add_custom_command(
+      OUTPUT ${OPENSSL_LIB_DIR}/libcrypto.a ${OPENSSL_LIB_DIR}/libssl.a
+      WORKING_DIRECTORY ${OPENSSL_SRC_DIR}
+      COMMAND mkdir -p build
+      COMMAND cd build && ../Configure no-shared --cross-compile-prefix=x86_64-w64-mingw32- mingw64 && make
+      COMMENT "Building OpenSSL for Windows"
+    )
+  else(WIN32)
+    add_custom_command(
+      OUTPUT ${OPENSSL_LIB_DIR}/libcrypto.a ${OPENSSL_LIB_DIR}/libssl.a
+      WORKING_DIRECTORY ${OPENSSL_SRC_DIR}
+      COMMAND mkdir -p build
+      COMMAND cd build && ../config no-shared && make
+      COMMENT "Building OpenSSL"
+    )
+  endif(WIN32)
 endif()
 
 add_custom_target(OpenSSL DEPENDS ${OPENSSL_LIB_DIR}/libcrypto.a ${OPENSSL_LIB_DIR}/libssl.a)
 
 add_definitions(
   -D_GNU_SOURCE
-  -DPIPY_HOST="${CMAKE_HOST_SYSTEM} ${CMAKE_HOST_SYSTEM_PROCESSOR}"
+  -DPIPY_HOST="${CMAKE_SYSTEM} ${CMAKE_SYSTEM_PROCESSOR}"
 )
 
 include_directories(
@@ -212,7 +215,7 @@ add_custom_command(
 
 add_custom_target(GenVer DEPENDS ${CMAKE_BINARY_DIR}/deps/version.h)
 
-add_dependencies(pipy yajl_s expat zlib OpenSSL GenVer)
+add_dependencies(pipy yajl_s expat ${ZLIB_LIB} OpenSSL GenVer)
 
 if(PIPY_GUI)
   add_definitions(-DPIPY_USE_GUI)
@@ -258,10 +261,11 @@ target_link_libraries(
   pipy
   yajl_s
   expat
-  ${ZLIB_LIB_DIR}/libz.a
+  ${ZLIB_LIB}
   ${OPENSSL_LIB_DIR}/libssl.a
   ${OPENSSL_LIB_DIR}/libcrypto.a
   leveldb
   -pthread
-  -ldl
+  ${CMAKE_DL_LIBS}
+  ${WIN32_LIBS}
 )

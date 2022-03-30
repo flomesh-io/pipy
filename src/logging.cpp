@@ -38,7 +38,7 @@ namespace pipy {
 // Logging
 //
 
-static Log::Level s_log_level = Log::ERROR;
+static Log::Level s_log_level = Log::_ERROR;
 static std::deque<std::string> s_log_history;
 static size_t s_log_history_size = 0;
 
@@ -51,7 +51,7 @@ static void write_history(const std::string &line) {
 static const char *s_levels[] = {
   " [DBG] ", // DEBUG
   " [WRN] ", // WARN
-  " [ERR] ", // ERROR
+  " [ERR] ", // _ERROR
   " [INF] ", // INFO
 };
 
@@ -147,7 +147,7 @@ void Log::warn(const char *fmt, ...) {
 void Log::error(const char *fmt, ...) {
   va_list ap;
   va_start(ap, fmt);
-  logf(Log::ERROR, fmt, ap);
+  logf(Log::_ERROR, fmt, ap);
   va_end(ap);
 }
 

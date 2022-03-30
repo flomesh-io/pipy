@@ -126,7 +126,7 @@ void Fetch::fetch(
     case PUT: head->method(s_PUT); break;
     case POST: head->method(s_POST); break;
     case PATCH: head->method(s_PATCH); break;
-    case DELETE: head->method(s_DELETE); break;
+    case _DELETE: head->method(s_DELETE); break;
   }
 
   m_request_queue.emplace_back();

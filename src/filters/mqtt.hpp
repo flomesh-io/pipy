@@ -58,7 +58,7 @@ private:
     FIXED_HEADER,
     REMAINING_LENGTH,
     REMAINING_DATA,
-    ERROR,
+    _ERROR,
   };
 
   Options m_options;

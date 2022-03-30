@@ -283,6 +283,7 @@ bool Value::is_equal(const Value &a, const Value &b) {
       case Value::Type::Number: return a.n() == b.n();
       case Value::Type::String: return a.s() == b.s();
       case Value::Type::Object: return a.o() == b.o();
+      default: return true;
     }
   } else if (a.is_object() && b.is_object()) {
     return a.o() == b.o();

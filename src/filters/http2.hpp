@@ -43,7 +43,7 @@ namespace http2 {
 //
 
 enum ErrorCode {
-  NO_ERROR            = 0x0,
+  _NO_ERROR            = 0x0,
   PROTOCOL_ERROR      = 0x1,
   INTERNAL_ERROR      = 0x2,
   FLOW_CONTROL_ERROR  = 0x3,
@@ -153,7 +153,7 @@ private:
   static const int TABLE_SIZE = 256;
 
   enum State {
-    ERROR,
+    _ERROR,
 
     INDEX_PREFIX,
     INDEX_OCTETS,
