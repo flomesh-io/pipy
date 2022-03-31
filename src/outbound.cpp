@@ -295,6 +295,12 @@ void Outbound::receive() {
         if (n > 0) {
           InputContext ic(this);
           buffer->pop(buffer->size() - n);
+          if (auto more = m_socket.available()) {
+            Data buf(more, &s_data_producer);
+            auto n = m_socket.read_some(DataChunks(buf.chunks()));
+            if (n < more) buf.pop(more - n);
+            buffer->push(buf);
+          }
           output(buffer);
           output(Data::flush());
         }
