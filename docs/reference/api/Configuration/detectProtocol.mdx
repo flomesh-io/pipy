@@ -7,7 +7,7 @@ api: Configuration.detectProtocol()
 
 Appends a **detectProtocol** filter to the current pipeline layout.
 
-A **detectProtocol** filter calls a user function to tell whether the input stream is [TLS](https://en.wikipedia.org/wiki/Transport_Layer_Security) or not. Its input and output can be any kinds of events.
+A **detectProtocol** filter calls a user function to tell what protocol the input stream is. Its input and output can be any kinds of events.
 
 |                  |           |
 |:----------------:|:---------:|
@@ -17,7 +17,11 @@ A **detectProtocol** filter calls a user function to tell whether the input stre
 | ↓                | **Event** |
 | _Output_         |           |
 
-The user function that gets called will have a string as parameter, which is _"TLS"_ if a TLS stream is detected or empty string ("") if the stream is confirmed to be non-TLS. All input events will be blocked up until the detection is concluded (either TLS or non-TLS) and the user function is called.
+The user function that gets called will have a string as parameter, which can be:
+
+* _"TLS"_ if a [TLS](https://en.wikipedia.org/wiki/Transport_Layer_Security) stream is detected
+* _"HTTP"_ if a plain HTTP/1.0 or HTTP/1.1 stream is detected
+* _""_ (empty string) if the stream is concluded to be none of the above protocols
 
 This filter passes everything down unaltered. It doesn't change anything in the event stream.
 

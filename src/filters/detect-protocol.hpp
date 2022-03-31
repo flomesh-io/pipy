@@ -37,11 +37,11 @@ public:
   class Detector {
   public:
     virtual ~Detector() {};
-    virtual auto feed(int c) -> pjs::Str* = 0;
+    virtual auto feed(const char *data, size_t size) -> pjs::Str* = 0;
   };
 
 private:
-  enum { MAX_DETECTORS = 1 };
+  enum { MAX_DETECTORS = 3 };
 
   ProtocolDetector(const ProtocolDetector &r);
   ~ProtocolDetector();

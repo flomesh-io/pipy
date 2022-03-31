@@ -358,7 +358,7 @@ class Configuration {
   /**
    * Appends a detectProtocol filter to the current pipeline layout.
    *
-   * A detectProtocol filter calls a user function to tell whether the input stream is TLS or not.
+   * A detectProtocol filter calls a user function to tell what protocol the input stream is.
    * Its input and output can be any kinds of events.
    *
    * @param {ProtocolDetectionHandler} handler Callback function that receives the protocol name.
