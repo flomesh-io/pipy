@@ -31,9 +31,9 @@ BUILD_BINARY=true
 PACKAGE_OUTPUTS=false
 
 DOCKERFILE=${DOCKERFILE:-Dockerfile}
-IMAGE=${IMAGE:-flomesh/pipy-pjs}
+IMAGE=${IMAGE:-flomesh/pipy}
 
-PKG_NAME=${PKG_NAME:-pipy-pjs}
+PKG_NAME=${PKG_NAME:-pipy}
 
 PIPY_STATIC=OFF
 PIPY_GUI=${PIPY_GUI:-OFF}
@@ -213,7 +213,7 @@ if $BUILD_RPM; then
   cat $__CHANGELOG >> pipy.spec
   rm -f $__CHANGELOG
 
-  sudo docker build -t pipy-pjs-rpmbuild:$RELEASE_VERSION \
+  sudo docker build -t pipy-rpmbuild:$RELEASE_VERSION \
     --build-arg VERSION=$VERSION \
     --build-arg REVISION=$REVISION \
     --build-arg COMMIT_ID=$COMMIT_ID \
@@ -222,7 +222,7 @@ if $BUILD_RPM; then
     --build-arg PIPY_STATIC="$PIPY_STATIC" \
     -f $DOCKERFILE .
 
-  sudo docker run --rm -v $PIPY_DIR/rpm:/data pipy-pjs-rpmbuild:$RELEASE_VERSION bash -c "cp /rpm/*.rpm /data"
+  sudo docker run --rm -v $PIPY_DIR/rpm:/data pipy-rpmbuild:$RELEASE_VERSION bash -c "cp /rpm/*.rpm /data"
   git checkout -- $PIPY_DIR/rpm/pipy.spec
   rm -f $PIPY_DIR/rpm/pipy.tar.gz
 fi
