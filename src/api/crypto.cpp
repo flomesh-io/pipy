@@ -391,7 +391,7 @@ auto Cipher::update(Data *data) -> Data* {
   auto out = Data::make();
   auto block_size = EVP_CIPHER_CTX_block_size(m_ctx);
   uint8_t buf[DATA_CHUNK_SIZE + block_size];
-  for (const auto &c : data->chunks()) {
+  for (const auto c : data->chunks()) {
     auto ptr = std::get<0>(c);
     auto len = std::get<1>(c);
     int n = 0;
@@ -458,7 +458,7 @@ auto Decipher::update(Data *data) -> Data* {
   auto out = Data::make();
   auto block_size = EVP_CIPHER_CTX_block_size(m_ctx);
   uint8_t buf[DATA_CHUNK_SIZE + block_size];
-  for (const auto &c : data->chunks()) {
+  for (const auto c : data->chunks()) {
     auto ptr = std::get<0>(c);
     auto len = std::get<1>(c);
     int n = 0;
@@ -521,7 +521,7 @@ Hash::~Hash() {
 }
 
 void Hash::update(Data *data) {
-  for (const auto &c : data->chunks()) {
+  for (const auto c : data->chunks()) {
     auto ptr = std::get<0>(c);
     auto len = std::get<1>(c);
     EVP_DigestUpdate(m_ctx, (unsigned char *)ptr, len);
@@ -594,7 +594,7 @@ Hmac::~Hmac() {
 }
 
 void Hmac::update(Data *data) {
-  for (const auto &c : data->chunks()) {
+  for (const auto c : data->chunks()) {
     auto ptr = std::get<0>(c);
     auto len = std::get<1>(c);
     HMAC_Update(m_ctx, (unsigned char *)ptr, len);
@@ -663,7 +663,7 @@ Sign::~Sign() {
 }
 
 void Sign::update(Data *data) {
-  for (const auto &c : data->chunks()) {
+  for (const auto c : data->chunks()) {
     auto ptr = std::get<0>(c);
     auto len = std::get<1>(c);
     if (!EVP_DigestUpdate(m_ctx, (unsigned char *)ptr, len)) throw_error();
@@ -726,7 +726,7 @@ Verify::~Verify() {
 }
 
 void Verify::update(Data *data) {
-  for (const auto &c : data->chunks()) {
+  for (const auto c : data->chunks()) {
     auto ptr = std::get<0>(c);
     auto len = std::get<1>(c);
     if (!EVP_DigestUpdate(m_ctx, (unsigned char *)ptr, len)) throw_error();

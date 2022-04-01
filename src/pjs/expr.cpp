@@ -459,7 +459,6 @@ void FunctionLiteral::resolve(Context &ctx, int l, Imports *imports) {
     name, argc, nvar, &m_variables[0],
     [this](Context &ctx, Object*, Value &result) {
       if (m_need_unpack) {
-        auto scope = ctx.scope();
         int v = m_argc;
         int i = 0;
         for (const auto &arg : m_inputs) {

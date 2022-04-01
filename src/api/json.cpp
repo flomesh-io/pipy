@@ -123,7 +123,7 @@ public:
   }
 
   bool parse(const Data &data, pjs::Value &val) {
-    for (const auto &c : data.chunks()) {
+    for (const auto c : data.chunks()) {
       auto ret = yajl_parse(m_parser, (const unsigned char*)std::get<0>(c), std::get<1>(c));
       if (ret != yajl_status_ok) return false;
     }

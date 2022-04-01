@@ -198,7 +198,6 @@ template<> void ClassDef<Constructor<pipy::Data>>::init() {
 
   method("from", [](Context &ctx, Object *obj, Value &ret) {
     Str *str, *encoding = nullptr;
-    pipy::Data *data;
     try {
       if (!ctx.arguments(1, &str, &encoding)) return;
       auto enc = EnumDef<pipy::Data::Encoding>::value(encoding, pipy::Data::Encoding::UTF8);

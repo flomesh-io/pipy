@@ -98,12 +98,12 @@ private:
     friend class Use;
   };
 
+  bool m_multiple = false;
   std::list<Module*> m_modules;
   std::list<Stage> m_stages;
   pjs::Ref<pjs::Str> m_pipeline_name;
   pjs::Ref<pjs::Str> m_pipeline_name_down;
   pjs::Ref<pjs::Function> m_turn_down;
-  bool m_multiple = false;
 
   friend class Stage;
 };

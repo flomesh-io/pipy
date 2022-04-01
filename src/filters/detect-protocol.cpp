@@ -195,7 +195,7 @@ void ProtocolDetector::dump(std::ostream &out) {
 void ProtocolDetector::process(Event *evt) {
   if (!m_result) {
     if (auto data = evt->as<Data>()) {
-      for (const auto &c : data->chunks()) {
+      for (const auto c : data->chunks()) {
         auto data = std::get<0>(c);
         auto size = std::get<1>(c);
         for (int i = 0; i < m_num_detectors; i++) {

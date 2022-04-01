@@ -197,8 +197,6 @@ auto Str::chr_at(int i) -> int {
 auto Str::substring(int start, int end) -> std::string {
   auto a = chr_to_pos(start);
   auto b = chr_to_pos(end);
-  auto head = m_str[a];
-  auto tail = m_str[b];
   return m_str.substr(a, b - a);
 }
 
@@ -1060,7 +1058,7 @@ auto String::replace(RegExp *pattern, Str *replacement) -> Str* {
   auto &s = m_s->str();
   auto &fmt = replacement->str();
   auto &re = pattern->regex();
-  return Str::make(std::move(std::regex_replace(s, re, fmt)));
+  return Str::make(std::regex_replace(s, re, fmt));
 }
 
 auto String::search(RegExp *pattern) -> int {
@@ -1082,7 +1080,7 @@ auto String::slice(int start, int end) -> Str* {
   if (end < 0) end = m_s->length() + end;
   if (end <= start) return Str::empty;
   if (end > m_s->length()) end = m_s->length();
-  return Str::make(std::move(m_s->substring(start, end)));
+  return Str::make(m_s->substring(start, end));
 }
 
 auto String::split(Str *separator) -> Array* {
@@ -1162,9 +1160,9 @@ auto String::substring(int start, int end) -> Str* {
   if (end > len) end = len;
   if (start == end) return Str::empty;
   if (start < end) {
-    return Str::make(std::move(m_s->substring(start, end)));
+    return Str::make(m_s->substring(start, end));
   } else {
-    return Str::make(std::move(m_s->substring(end, start)));
+    return Str::make(m_s->substring(end, start));
   }
 }
 
@@ -2032,7 +2030,7 @@ auto RegExp::exec(Str *str) -> Array* {
   auto result = Array::make(match.size());
   for (size_t i = 0; i < match.size(); i++) {
     auto &sm = match[i];
-    result->set(i, Str::make(std::move(sm.str())));
+    result->set(i, Str::make(sm.str()));
   }
 
   if (m_global) {

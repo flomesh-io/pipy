@@ -112,7 +112,6 @@ void Cache::set(pjs::Context &ctx, const pjs::Value &key, const pjs::Value &valu
 }
 
 bool Cache::find(const pjs::Value &key, pjs::Value &value) {
-  auto now = (m_options.ttl > 0 ? utils::now() : 0);
   Entry entry;
   bool found = m_cache->use(key, entry);
   if (!found) return false;
@@ -668,7 +667,6 @@ using namespace pipy::algo;
 
 template<> void ClassDef<Cache>::init() {
   ctor([](Context &ctx) -> Object* {
-    int size_limit;
     Function *allocate = nullptr, *free = nullptr;
     Object *options = nullptr;
     if (!ctx.arguments(0, &allocate, &free, &options)) return nullptr;

@@ -739,19 +739,19 @@ template<> void ClassDef<Date>::init() {
   });
 
   method("toDateString", [](Context &ctx, Object *obj, Value &ret) {
-    ret.set(std::move(obj->as<Date>()->toDateString()));
+    ret.set(obj->as<Date>()->toDateString());
   });
 
   method("toTimeString", [](Context &ctx, Object *obj, Value &ret) {
-    ret.set(std::move(obj->as<Date>()->toTimeString()));
+    ret.set(obj->as<Date>()->toTimeString());
   });
 
   method("toISOString", [](Context &ctx, Object *obj, Value &ret) {
-    ret.set(std::move(obj->as<Date>()->toISOString()));
+    ret.set(obj->as<Date>()->toISOString());
   });
 
   method("toUTCString", [](Context &ctx, Object *obj, Value &ret) {
-    ret.set(std::move(obj->as<Date>()->toUTCString()));
+    ret.set(obj->as<Date>()->toUTCString());
   });
 }
 

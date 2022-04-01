@@ -313,7 +313,6 @@ protected:
 private:
   int m_id;
   bool m_is_server_side;
-  bool m_is_reserved = false;
   bool m_is_tunnel = false;
   bool m_end_stream = false;
   State m_state = IDLE;
@@ -410,7 +409,8 @@ private:
   // Demuxer::InitialStream
   //
 
-  struct InitialStream : public EventTarget {
+  class InitialStream : public EventTarget {
+  public:
     Stream* stream = nullptr;
     friend class Demuxer;
     virtual void on_event(Event *evt) override {

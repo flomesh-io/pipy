@@ -73,10 +73,10 @@ private:
     PAUSED,
   };
 
+  asio::posix::stream_descriptor m_stream;
   int m_fd;
   FILE* m_f;
   Data::Producer* m_dp;
-  asio::posix::stream_descriptor m_stream;
   Data m_buffer;
   size_t m_buffer_limit = 0;
   ReceivingState m_receiving_state = RECEIVING;

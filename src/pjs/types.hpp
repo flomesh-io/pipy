@@ -918,7 +918,7 @@ public:
   Value() : m_t(Type::Undefined) {}
   Value(const Value *v) { if (v) assign(*v); else m_t = Type::Empty; }
   Value(const Value &v) { assign(v); }
-  Value(Value &&v) : m_t(v.m_t), m_v(v.m_v) { v.m_t = Type::Empty; }
+  Value(Value &&v) : m_v(v.m_v), m_t(v.m_t) { v.m_t = Type::Empty; }
   Value(bool b) : m_t(Type::Boolean) { m_v.b = b; }
   Value(int n) : m_t(Type::Number) { m_v.n = n; }
   Value(unsigned int n) : m_t(Type::Number) { m_v.n = n; }
@@ -1875,8 +1875,8 @@ private:
   ) : Field(name, Field::Method)
     , m_argc(argc)
     , m_nvar(nvar)
-    , m_variables(variables)
     , m_invoke(invoke)
+    , m_variables(variables)
     , m_constructor_class(constructor_class) {}
 
   int m_argc;
@@ -2413,7 +2413,6 @@ private:
   const std::function<void(int)> m_output;
   uint32_t m_codepoint = 0;
   int m_shift = 0;
-  bool m_done = false;
 };
 
 } // namespace pjs

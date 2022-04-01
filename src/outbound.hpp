@@ -90,9 +90,9 @@ private:
   std::string m_remote_addr;
   std::string m_local_addr;
   int m_local_port;
-  pjs::Ref<EventTarget::Input> m_output;
   asio::ip::tcp::resolver m_resolver;
   asio::ip::tcp::socket m_socket;
+  pjs::Ref<EventTarget::Input> m_output;
   Options m_options;
   int m_retries = 0;
   double m_start_time = 0;

@@ -129,7 +129,7 @@ void CodebaseFromFS::set(const std::string &path, Data *data) {
     auto full_path = utils::path_join(m_base, path);
     std::ofstream fs(full_path, std::ios::out | std::ios::trunc);
     if (!fs.is_open()) return;
-    for (const auto &c : data->chunks()) {
+    for (const auto c : data->chunks()) {
       fs.write(std::get<0>(c), std::get<1>(c));
     }
   } else {

@@ -104,6 +104,8 @@ add_definitions(
   -DPIPY_HOST="${CMAKE_HOST_SYSTEM} ${CMAKE_HOST_SYSTEM_PROCESSOR}"
 )
 
+add_compile_options(-Wall -Wno-overloaded-virtual -Wno-delete-non-abstract-non-virtual-dtor)
+
 include_directories(
   "${CMAKE_SOURCE_DIR}/src"
   "${CMAKE_SOURCE_DIR}/deps/asio-1.12.2/include"

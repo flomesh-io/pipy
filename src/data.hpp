@@ -715,7 +715,7 @@ public:
     switch (encoding) {
       case Encoding::UTF8: {
         pjs::Utf8Decoder decoder([](int) {});
-        for (const auto &c : chunks()) {
+        for (const auto c : chunks()) {
           auto ptr = std::get<0>(c);
           auto len = std::get<1>(c);
           for (int i = 0; i < len; i++) {
@@ -729,7 +729,7 @@ public:
       case Encoding::Hex: {
         std::string str;
         utils::HexEncoder encoder([&](char c) { str += c; });
-        for (const auto &c : chunks()) {
+        for (const auto c : chunks()) {
           auto ptr = std::get<0>(c);
           auto len = std::get<1>(c);
           for (int i = 0; i < len; i++) encoder.input(ptr[i]);
@@ -739,7 +739,7 @@ public:
       case Encoding::Base64: {
         std::string str;
         utils::Base64Encoder encoder([&](char c) { str += c; });
-        for (const auto &c : chunks()) {
+        for (const auto c : chunks()) {
           auto ptr = std::get<0>(c);
           auto len = std::get<1>(c);
           for (int i = 0; i < len; i++) encoder.input(ptr[i]);
@@ -750,7 +750,7 @@ public:
       case Encoding::Base64Url: {
         std::string str;
         utils::Base64UrlEncoder encoder([&](char c) { str += c; });
-        for (const auto &c : chunks()) {
+        for (const auto c : chunks()) {
           auto ptr = std::get<0>(c);
           auto len = std::get<1>(c);
           for (int i = 0; i < len; i++) encoder.input(ptr[i]);

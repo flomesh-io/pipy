@@ -141,7 +141,6 @@ auto File::to_message(pjs::Str *accept_encoding) -> pipy::Message* {
   bool has_gzip = false;
   bool has_deflate = false;
   bool has_br = false;
-  size_t i = 0;
   for (size_t i = 0; i < s.length(); i++) {
     while (i < s.length() && std::isblank(s[i])) i++;
     if (i < s.length()) {
@@ -220,7 +219,7 @@ bool File::decompress() {
     zs.avail_in = 0;
     inflateInit2(&zs, 16 + MAX_WBITS);
     bool done = false;
-    for (const auto &chk : m_data_gz->chunks()) {
+    for (const auto chk : m_data_gz->chunks()) {
       zs.next_in = (const unsigned char *)std::get<0>(chk);
       zs.avail_in = std::get<1>(chk);
       do {

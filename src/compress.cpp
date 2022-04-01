@@ -64,7 +64,7 @@ private:
     if (m_done) return true;
     unsigned char buf[DATA_CHUNK_SIZE];
     pjs::Ref<Data> output_data(Data::make());
-    for (const auto &chk : data->chunks()) {
+    for (const auto chk : data->chunks()) {
       m_zs.next_in = (const unsigned char *)std::get<0>(chk);
       m_zs.avail_in = std::get<1>(chk);
       do {

@@ -34,7 +34,8 @@ namespace pipy {
 
 class Data;
 
-struct Status {
+class Status {
+public:
   struct Module {
     std::string filename;
     std::string graph;

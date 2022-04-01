@@ -1122,7 +1122,6 @@ Expr* ExpressionParser::expression(bool no_comma) {
               return error(UnexpectedToken);
             }
             auto c = operands.top().release();
-            auto l = locations.top();
             operands.pop();
             operators.pop();
             locations.pop();

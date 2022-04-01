@@ -43,8 +43,8 @@ uint64_t Inbound::s_inbound_id = 0;
 
 Inbound::Inbound(Listener *listener, const Options &options)
   : m_listener(listener)
-  , m_socket(Net::context())
   , m_options(options)
+  , m_socket(Net::context())
 {
   Log::debug("[inbound  %p] ++", this);
   if (!++s_inbound_id) s_inbound_id++;

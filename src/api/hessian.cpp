@@ -760,7 +760,7 @@ private:
 
 void Hessian::decode(const Data &data, pjs::Value &val) {
   HessianParser parser(val);
-  for (const auto &c : data.chunks()) {
+  for (const auto c : data.chunks()) {
     if (!parser.parse(std::get<0>(c), std::get<1>(c))) {
       throw std::runtime_error(parser.error());
     }

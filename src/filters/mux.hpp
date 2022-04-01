@@ -181,7 +181,6 @@ private:
     Data m_buffer;
     bool m_started = false;
     bool m_queued = false;
-    bool m_ended = false;
     bool m_isolated = false;
 
     friend class QueueMuxer;

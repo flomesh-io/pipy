@@ -67,8 +67,8 @@ Use::Use(
 }
 
 Use::Use(const Use &r)
-  : m_stages(r.m_stages)
-  , m_multiple(r.m_multiple)
+  : m_multiple(r.m_multiple)
+  , m_stages(r.m_stages)
   , m_pipeline_name(r.m_pipeline_name)
   , m_pipeline_name_down(r.m_pipeline_name_down)
   , m_turn_down(r.m_turn_down)

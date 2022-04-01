@@ -40,9 +40,9 @@ namespace pipy {
 List<PipelineDef> PipelineDef::s_all_pipeline_defs;
 
 PipelineDef::PipelineDef(Module *module, Type type, const std::string &name)
-  : m_module(module)
-  , m_type(type)
+  : m_type(type)
   , m_name(pjs::Str::make(name))
+  , m_module(module)
 {
   s_all_pipeline_defs.push(this);
   Log::debug("[pipe-def %p] ++ name = %s", this, m_name->c_str());

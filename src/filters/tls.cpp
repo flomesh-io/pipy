@@ -310,7 +310,7 @@ auto TLSSession::pump_send() -> int {
 
 auto TLSSession::pump_receive() -> int {
   int size = 0;
-  for (const auto &c : m_buffer_receive.chunks()) {
+  for (const auto c : m_buffer_receive.chunks()) {
     auto ptr = std::get<0>(c);
     auto len = std::get<1>(c);
     size_t n = 0;
@@ -358,7 +358,7 @@ void TLSSession::pump_read() {
 void TLSSession::pump_write() {
   while (!m_buffer_write.empty()) {
     int size = 0;
-    for (const auto &c : m_buffer_write.chunks()) {
+    for (const auto c : m_buffer_write.chunks()) {
       size_t n = 0;
       auto ptr = std::get<0>(c);
       auto len = std::get<1>(c);

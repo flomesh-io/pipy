@@ -143,7 +143,7 @@ public:
   }
 
   auto parse(const Data &data) -> XML::Node* {
-    for (const auto &c : data.chunks()) {
+    for (const auto c : data.chunks()) {
       if (!XML_Parse(m_parser, std::get<0>(c), std::get<1>(c), false)) {
         return nullptr;
       }

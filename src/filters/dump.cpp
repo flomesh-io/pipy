@@ -62,9 +62,6 @@ auto Dump::clone() -> Filter* {
 void Dump::process(Event *evt) {
   static char s_hex[] = { "0123456789ABCDEF" };
 
-  std::ostream *s = &std::cout;
-  auto &o = *s;
-
   pjs::Value tag;
   if (!eval(m_tag, tag)) {
     output(evt);

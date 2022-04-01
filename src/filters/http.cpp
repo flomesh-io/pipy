@@ -1127,9 +1127,9 @@ void RequestQueue::on_reply(Event *evt) {
 //
 
 Demux::Demux(pjs::Object *options)
-  : Decoder(false)
+  : QueueDemuxer(true)
+  , Decoder(false)
   , Encoder(true)
-  , QueueDemuxer(true)
 {
   if (options) {
     pjs::Value buffer_size;
@@ -1150,9 +1150,9 @@ Demux::Demux(pjs::Object *options)
 
 Demux::Demux(const Demux &r)
   : Filter(r)
+  , QueueDemuxer(true)
   , Decoder(false)
   , Encoder(true)
-  , QueueDemuxer(true)
   , m_buffer_size(r.m_buffer_size)
 {
 }
@@ -1389,28 +1389,28 @@ void Mux::Session::upgrade_http2() {
 //
 
 Server::Server(const std::function<Message*(Message*)> &handler)
-  : m_ef_decoder(false)
+  : m_handler_func(handler)
+  , m_ef_decoder(false)
   , m_ef_encoder(true)
   , m_ef_handler(this)
-  , m_handler_func(handler)
 {
 }
 
 Server::Server(pjs::Object *handler)
-  : m_ef_decoder(false)
+  : m_handler_obj(handler)
+  , m_ef_decoder(false)
   , m_ef_encoder(true)
   , m_ef_handler(this)
-  , m_handler_obj(handler)
 {
 }
 
 Server::Server(const Server &r)
   : Filter(r)
+  , m_handler_func(r.m_handler_func)
+  , m_handler_obj(r.m_handler_obj)
   , m_ef_decoder(false)
   , m_ef_encoder(true)
   , m_ef_handler(this)
-  , m_handler_func(r.m_handler_func)
-  , m_handler_obj(r.m_handler_obj)
 {
 }
 
