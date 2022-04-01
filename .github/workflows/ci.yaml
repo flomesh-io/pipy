@@ -5,8 +5,8 @@ on:
   push:
 
 env:
-  IMAGE: flomesh/pipy-pjs
-  PKG_NAME: pipy-pjs
+  IMAGE: flomesh/pipy
+  PKG_NAME: pipy
 
 defaults:
   run:
