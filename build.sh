@@ -248,6 +248,11 @@ if $BUILD_CONTAINER; then
     -f $DOCKERFILE .
 
   if $PACKAGE_OUTPUTS; then
+    docker inspect ${IMAGE}:$IMAGE_TAG > /dev/null 2>&1
+    if [ $? -ne 0 ]; then
+      echo "Build image ${IMAGE}:$IMAGE_TAG failed"
+      exit -1
+    fi
     docker save ${IMAGE}:$IMAGE_TAG | gzip > ${IMAGE##flomesh/}-${IMAGE_TAG}-alpine-${OS_ARCH}.tar.gz
   fi
 fi
