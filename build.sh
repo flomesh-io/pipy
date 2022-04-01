@@ -131,6 +131,10 @@ export COMMIT_DATE=$(git log -1 --format=%cD)
 export VERSION=$(echo $RELEASE_VERSION | cut -d\- -f 1)
 export REVISION=$(echo $RELEASE_VERSION | cut -d\- -f 2)
 
+export CI_COMMIT_TAG=$RELEASE_VERSION
+export CI_COMMIT_SHA=$COMMIT_ID
+export CI_COMMIT_DATE=$COMMIT_DATE
+
 function version_compare() {
   if [ "$(printf '%s\n' "$1" "$2" | sort -V | head -n1)" = "$1" ]; then
     true
