@@ -59,9 +59,23 @@ async function start(testcase, options) {
     server = true;
   }
 
-  if (pipy) await startCodebase(testcase, basePath);
+  let repo, worker;
+
+  if (pipy) ({ repo, worker } = await startCodebase(testcase, basePath));
   if (server) await startServer(config.server, basePath);
   if (client) await startClient(config.client, basePath, options.target);
+
+  if (client && config.client?.duration) {
+    setTimeout(
+      () => {
+        if (worker) worker.kill();
+        if (repo) repo.kill();
+        console.log('Done.');
+        process.exit();
+      },
+      config.client.duration * 1000
+    );
+  }
 }
 
 program

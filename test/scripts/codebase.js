@@ -10,7 +10,7 @@ const pipyBinPath = join(dirname(new URL(import.meta.url).pathname), '../../bin/
 function startProcess(cmd, args, onStdout) {
   const proc = spawn(cmd, args);
   const lineBuffer = [];
-  proc.stdout.on('data', data => {
+  proc.stderr.on('data', data => {
     let i = 0, n = data.length;
     while (i < n) {
       let j = i;
@@ -24,24 +24,34 @@ function startProcess(cmd, args, onStdout) {
       i = j + 1;
     }
   });
+  return proc;
 }
 
 async function startRepo(codebaseName, basePath) {
   log('Starting repo...');
-  await new Promise(
-    resolve => {
-      startProcess(
-        pipyBinPath, [],
-        line => {
-          log(chalk.bgGreen('repo >>>'), line);
-          if (line.indexOf('Listening on port') >= 0) {
-            resolve();
-          }
-        }
-      );
+
+  let started = false;
+  const proc = startProcess(
+    pipyBinPath, [],
+    line => {
+      log(chalk.bgGreen('repo >>>'), line);
+      if (line.indexOf('Listening on port') >= 0) {
+        started = true;
+      }
     }
   );
-  log('Repo started');
+
+  for (let i = 0; i < 10 && !started; i++) {
+    await new Promise(
+      resolve => setTimeout(resolve, 1000)
+    );
+  }
+
+  if (started) {
+    log('Repo started');
+  } else {
+    log('Failed starting repo');
+  }
 
   const codebasePath = join('api/v1/repo', codebaseName);
 
@@ -50,9 +60,13 @@ async function startRepo(codebaseName, basePath) {
   });
 
   log('Creating codebase: ', codebaseName);
-  await client.post(codebasePath, {
-    json: {}
-  });
+  try {
+    await client.post(codebasePath, {
+      json: {}
+    });
+  } catch (e) {
+    log('Failed creating codebase');
+  }
 
   async function uploadDir(dirName) {
     const dirPath = join(basePath, dirName);
@@ -71,35 +85,56 @@ async function startRepo(codebaseName, basePath) {
     }
   }
 
-  await uploadDir('/');
+  try {
+    await uploadDir('/');
+  } catch (e) {
+    log('Failed uploading codebase');
+  }
 
   log('Publishing codebase...');
-  await client.post(codebasePath, {
-    json: { version: 2 }
-  });
+  try {
+    await client.post(codebasePath, {
+      json: { version: 2 }
+    });
+  } catch (e) {
+    log('Failed publishing codebase');
+  }
+
+  return proc;
 }
 
 async function startWorker(url) {
   log('  Starting worker...');
-  await new Promise(
-    resolve => {
-      startProcess(
-        pipyBinPath, [url],
-        line => {
-          log(chalk.bgGreen('worker >>>'), line);
-          if (line.indexOf('Listening on port') >= 0) {
-            resolve();
-          }
-        }
-      );
+  let started = false;
+  const proc = startProcess(
+    pipyBinPath, [url],
+    line => {
+      log(chalk.bgGreen('worker >>>'), line);
+      if (line.indexOf('Listening on port') >= 0) {
+        started = true;
+      }
     }
   );
-  log('Worker started');
+
+  for (let i = 0; i < 10 && !started; i++) {
+    await new Promise(
+      resolve => setTimeout(resolve, 1000)
+    );
+  }
+
+  if (started) {
+    log('Worker started');
+  } else {
+    log('Failed starting worker');
+  }
+
+  return proc;
 }
 
 export default async function(name, basePath) {
   log('Starting codebase', chalk.magenta(name), '...');
-  await startRepo(`test/${name}`, basePath);
-  await startWorker(`http://localhost:6060/repo/test/${name}/`);
+  const repo = await startRepo(`test/${name}`, basePath);
+  const worker = await startWorker(`http://localhost:6060/repo/test/${name}/`);
   log('Codebase', chalk.magenta(name), 'started');
+  return { repo, worker };
 }

@@ -170,11 +170,15 @@ export default async function(config, basePath) {
   log('Client started');
 
   let time = Date.now();
+  let tick = 0;
   setInterval(
     () => {
+      tick++;
       const now = Date.now();
       const t = (now - time) / 1000;
       log(
+        chalk.bgCyan('report >>>'),
+        chalk.cyan(padding(tick + 's', 8)),
         'Requests'      , chalk.green(padding(stats.totalRequests, 8)),
         'Status Errors' , chalk.red(padding(stats.totalStatusErrors, 8)),
         'Verify Errors' , chalk.red(padding(stats.totalVerifyErrors, 8)),
