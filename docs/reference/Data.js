@@ -1,4 +1,9 @@
 /**
+ * @callback BooleanCB
+ * @returns {boolean}
+ */
+
+/**
  * Data is an array of read-only octets.
  * It can be read from network as an input event or created by script and sent out over to network.
  */
@@ -37,6 +42,22 @@ class Data {
   shift(size) {}
 
   /**
+   * Removes bytes from the beginning up to a byte that meets a given condition.
+   *
+   * @param {BooleanCB} scanner Callback function that receives each byte and decides the last byte to remove.
+   * @returns {Data} Removed data.
+   */
+  shiftTo(scanner) {}
+
+  /**
+   * Removes bytes coming before a certain byte that meets a given condition.
+   *
+   * @param {BooleanCB} scanner Callback function that receives each byte and decides the last byte to remove.
+   * @returns {Data} Removed data.
+   */
+  shiftWhile(scanner) {}
+
+   /**
    * Convert the data to a string.
    *
    * @param {string} [encoding] Encoding to use in conversion.

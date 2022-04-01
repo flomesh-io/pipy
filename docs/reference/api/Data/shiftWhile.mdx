@@ -1,0 +1,30 @@
+---
+title: "Data.shiftWhile()"
+api: Data.shiftWhile()
+---
+
+## Description
+
+Removes bytes coming before a certain byte that meets a given condition.
+
+The _scanner_ parameter will be called once for each byte in _Data_. It returns falsy to indicate the last byte to NOT shift out. Compare to [shiftTo()](/reference/api/Data/shiftTo).
+
+## Syntax
+
+``` js
+data.shiftWhile(byte => shouldShiftOut(byte))
+```
+
+### Parameters
+
+<Parameters/>
+
+### Return value
+
+<ReturnValue/>
+
+## See Also
+
+* [Data](/reference/api/Data)
+* [shift()](/reference/api/Data/shift)
+* [shiftTo()](/reference/api/Data/shiftTo)

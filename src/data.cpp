@@ -144,17 +144,6 @@ template<> void ClassDef<pipy::Data>::init() {
     }
   });
 
-  method("pushUInt32BE", [](Context &ctx, Object *obj, Value &ret) {
-    int n; if (!ctx.arguments(1, &n)) return;
-    uint8_t buf[4];
-    buf[0] = (uint32_t)n >> 24;
-    buf[1] = (uint32_t)n >> 16;
-    buf[2] = (uint32_t)n >> 8;
-    buf[3] = (uint32_t)n >> 0;
-    s_dp.push(obj->as<pipy::Data>(), buf, 4);
-    ret.set(obj);
-  });
-
   method("shift", [](Context &ctx, Object *obj, Value &ret) {
     int count;
     if (!ctx.arguments(1, &count)) return;
@@ -163,17 +152,36 @@ template<> void ClassDef<pipy::Data>::init() {
     ret.set(out);
   });
 
-  method("shiftUInt32BE", [](Context &ctx, Object *obj, Value &ret) {
-    pipy::Data buf;
-    obj->as<pipy::Data>()->shift(4, buf);
-    uint32_t n = 0;
-    buf.scan(
-      [&](int ub) {
-        n = (n << 8) + ub;
-        return true;
-      }
+  method("shiftTo", [](Context &ctx, Object *obj, Value &ret) {
+    pjs::Function *scanner;
+    if (!ctx.arguments(1, &scanner)) return;
+    auto *out = pipy::Data::make();
+    obj->as<pipy::Data>()->shift_to(
+      [&](int c) {
+        pjs::Value arg(c), ret;
+        (*scanner)(ctx, 1, &arg, ret);
+        if (!ctx.ok()) return true;
+        return ret.to_boolean();
+      },
+      *out
     );
-    ret.set(n);
+    ret.set(out);
+  });
+
+  method("shiftWhile", [](Context &ctx, Object *obj, Value &ret) {
+    pjs::Function *scanner;
+    if (!ctx.arguments(1, &scanner)) return;
+    auto *out = pipy::Data::make();
+    obj->as<pipy::Data>()->shift_while(
+      [&](int c) {
+        pjs::Value arg(c), ret;
+        (*scanner)(ctx, 1, &arg, ret);
+        if (!ctx.ok()) return false;
+        return ret.to_boolean();
+      },
+      *out
+    );
+    ret.set(out);
   });
 
   method("toString", [](Context &ctx, Object *obj, Value &ret) {
