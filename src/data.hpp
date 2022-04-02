@@ -701,12 +701,16 @@ public:
   }
 
   virtual auto to_string() const -> std::string override {
-    std::string str(m_size, 0);
-    int i = 0;
-    for (auto view = m_head; view; view = view->next) {
+    auto size = m_size;
+    if (size > pjs::Str::max_size()) size = pjs::Str::max_size();
+    std::string str(size, 0);
+    int i = 0, n = size;
+    for (auto view = m_head; n > 0 && view; view = view->next) {
       auto length = view->length;
+      if (length > n) length = n;
       str.replace(i, length, view->chunk->data + view->offset, length);
       i += length;
+      n -= length;
     }
     return str;
   }

@@ -43,10 +43,27 @@ const Ref<Str> Str::null(Str::make("null"));
 const Ref<Str> Str::bool_true(Str::make("true"));
 const Ref<Str> Str::bool_false(Str::make("false"));
 
-static char s_str_buf[Str::MAX_SIZE];
+size_t Str::s_max_size = 256 * 0x400 * 0x400;
+
+static char s_shared_str_tmp_buf[0x10000];
+
+auto Str::make_tmp_buf(size_t size) -> char* {
+  if (size < sizeof(s_shared_str_tmp_buf)) {
+    return s_shared_str_tmp_buf;
+  } else {
+    return new char[size];
+  }
+}
+
+void Str::free_tmp_buf(char *buf) {
+  if (buf != s_shared_str_tmp_buf) {
+    delete [] buf;
+  }
+}
 
 auto Str::make(const uint32_t *codes, size_t len) -> Str* {
-  auto &buf = s_str_buf;
+  if (len > s_max_size) len = s_max_size;
+  auto buf = make_tmp_buf(len);
   int p = 0;
   for (size_t i = 0; i < len; i++) {
     auto c = codes[i];
@@ -70,7 +87,9 @@ auto Str::make(const uint32_t *codes, size_t len) -> Str* {
       buf[p++] = 0x80 | (0x3f & (c >>  0));
     }
   }
-  return make(buf, p);
+  auto *s = make(buf, p);
+  free_tmp_buf(buf);
+  return s;
 }
 
 auto Str::make(double n) -> Str* {
@@ -755,8 +774,8 @@ template<> void ClassDef<String>::init() {
       strs[i] = s;
       size += s->size();
     }
-    if (size > Str::MAX_SIZE) size = Str::MAX_SIZE;
-    char buf[size];
+    if (size > Str::max_size()) size = Str::max_size();
+    auto buf = Str::make_tmp_buf(size);
     std::memcpy(buf, s->c_str(), s->size());
     for (int i = 0; i < n; i++) {
       auto s = strs[i];
@@ -768,6 +787,7 @@ template<> void ClassDef<String>::init() {
       s->release();
     }
     ret.set(Str::make(buf, size));
+    Str::free_tmp_buf(buf);
   });
 
   method("endsWith", [](Context &ctx, Object *obj, Value &ret) {
@@ -983,7 +1003,7 @@ auto String::lastIndexOf(Str *search) -> int {
 
 auto String::padEnd(int length, Str *padding) -> Str* {
   if (m_s->length() >= length) return m_s;
-  auto &buf = s_str_buf;
+  auto &buf = s_shared_str_tmp_buf;
   std::memcpy(buf, m_s->c_str(), m_s->size());
   auto n = fill(
     buf + m_s->size(),
@@ -996,7 +1016,7 @@ auto String::padEnd(int length, Str *padding) -> Str* {
 
 auto String::padStart(int length, Str *padding) -> Str* {
   if (m_s->length() >= length) return m_s;
-  auto &buf = s_str_buf;
+  auto &buf = s_shared_str_tmp_buf;
   auto n = fill(
     buf,
     sizeof(buf) - m_s->size(),
@@ -1009,7 +1029,7 @@ auto String::padStart(int length, Str *padding) -> Str* {
 
 auto String::repeat(int count) -> Str* {
   if (count <= 0) return Str::empty;
-  auto &buf = s_str_buf;
+  auto &buf = s_shared_str_tmp_buf;
   auto size = fill(buf, sizeof(buf), m_s, m_s->length() * count);
   return Str::make(buf, size);
 }

@@ -501,8 +501,6 @@ private:
 
 class Str : public Pooled<Str, RefCount<Str>> {
 public:
-  enum { MAX_SIZE = 0xffff };
-
   static const Ref<Str> empty;
   static const Ref<Str> nan;
   static const Ref<Str> pos_inf;
@@ -512,9 +510,13 @@ public:
   static const Ref<Str> bool_true;
   static const Ref<Str> bool_false;
 
+  static auto max_size() -> size_t {
+    return s_max_size;
+  }
+
   static auto make(const std::string &str) -> Str* {
-    if (str.length() > MAX_SIZE) {
-      auto s = str.substr(0, MAX_SIZE);
+    if (str.length() > s_max_size) {
+      auto s = str.substr(0, s_max_size);
       const auto i = ht().find(s);
       if (i != ht().end()) return i->second;
       return new Str(std::move(s));
@@ -526,14 +528,14 @@ public:
   }
 
   static auto make(std::string &&str) -> Str* {
-    if (str.length() > MAX_SIZE) str.resize(MAX_SIZE);
+    if (str.length() > s_max_size) str.resize(s_max_size);
     const auto i = ht().find(str);
     if (i != ht().end()) return i->second;
     return new Str(std::move(str));
   }
 
   static auto make(const char *str, size_t len) -> Str* {
-    std::string s(str, std::min(size_t(MAX_SIZE), len));
+    std::string s(str, std::min(s_max_size, len));
     return make(std::move(s));
   }
 
@@ -543,6 +545,9 @@ public:
 
   static auto make(const uint32_t *codes, size_t len) -> Str*;
   static auto make(double n) -> Str*;
+
+  static auto make_tmp_buf(size_t size) -> char*;
+  static void free_tmp_buf(char *buf);
 
   auto length() const -> int { return m_length; }
   auto size() const -> size_t { return m_str.length(); }
@@ -559,7 +564,7 @@ private:
   enum { CHUNK_SIZE = 32 };
 
   std::string m_str;
-  std::vector<uint16_t> m_chunks;
+  std::vector<uint32_t> m_chunks;
   int m_length;
 
   Str(const std::string &str) : m_str(str) {
@@ -582,6 +587,8 @@ private:
   static bool is_mult(char c) { return (c & 0xc0) == 0xc0; }
   static bool is_half(char c) { return (c & 0xc0) == 0x80; }
   static auto ht() -> std::unordered_map<std::string, Str*>&;
+
+  static size_t s_max_size;
 
   friend class RefCount<Str>;
 };
