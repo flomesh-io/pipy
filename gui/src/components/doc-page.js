@@ -787,7 +787,6 @@ const DocNavList = ({ nodes, prefix }) => {
             let name = api.substring(0, i);
             let j = name.lastIndexOf('.');
             if (j >= 0) name = name.substring(j + 1);
-            if (name[0] === name[0].toUpperCase()) return false; // skip members
           }
         }
       } else if (fields.lang !== lang) {
@@ -832,6 +831,8 @@ const DocNavTree = ({ prefix, pages, tree }) => {
           label = page.frontmatter.title;
           path = page.fields.path;
           uri = `/docs/${lang}/${path}`;
+          const i = label.lastIndexOf('.');
+          if (i >= 0) label = label.substring(i + 1);
         }
         if (v.children) {
           const path = `${prefix}/${k}`;
