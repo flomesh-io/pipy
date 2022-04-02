@@ -139,12 +139,12 @@ public:
         break;
       }
     }
-    return m_state != _ERROR;
+    return m_state != ERROR;
   }
 
 private:
   enum State {
-    _ERROR,
+    ERROR,
     CODE,
     HEAD,
     DATA,
@@ -750,7 +750,7 @@ private:
 
   void error(const char *msg) {
     m_error = msg;
-    m_state = _ERROR;
+    m_state = ERROR;
   }
 };
 

@@ -28,6 +28,10 @@
 
 #include "pjs/pjs.hpp"
 
+#ifdef WIN32
+#undef ERROR
+#endif 
+
 namespace pipy {
 
 //
@@ -39,7 +43,7 @@ public:
   enum Level {
     DEBUG,
     WARN,
-    _ERROR,
+    ERROR,
     INFO,
   };
 

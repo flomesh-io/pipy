@@ -933,7 +933,7 @@ void Decoder::process(Event *evt) {
   auto data = evt->as<Data>();
   if (!data) return;
 
-  while (!data->empty() && m_state != _ERROR) {
+  while (!data->empty() && m_state != ERROR) {
     auto state = m_state;
     pjs::Ref<Data> output(Data::make());
 
@@ -954,7 +954,7 @@ void Decoder::process(Event *evt) {
             if (!m_remaining_length) {
               auto type = PacketType(m_fixed_header >> 4);
               if (type != PacketType::PINGREQ && type != PacketType::PINGRESP) {
-                state = _ERROR;
+                state = ERROR;
                 return true;
               }
               message();

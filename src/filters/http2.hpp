@@ -35,6 +35,12 @@
 #include <map>
 #include <vector>
 
+#ifdef WIN32
+#undef ERROR
+#undef NO_ERROR
+#undef s_host
+#endif 
+
 namespace pipy {
 namespace http2 {
 
@@ -43,7 +49,7 @@ namespace http2 {
 //
 
 enum ErrorCode {
-  _NO_ERROR            = 0x0,
+  NO_ERROR            = 0x0,
   PROTOCOL_ERROR      = 0x1,
   INTERNAL_ERROR      = 0x2,
   FLOW_CONTROL_ERROR  = 0x3,
@@ -153,7 +159,7 @@ private:
   static const int TABLE_SIZE = 256;
 
   enum State {
-    _ERROR,
+    ERROR,
 
     INDEX_PREFIX,
     INDEX_OCTETS,

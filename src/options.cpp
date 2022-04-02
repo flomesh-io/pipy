@@ -74,7 +74,7 @@ Options::Options(int argc, char *argv[]) {
       } else if (k == "--log-level") {
         if (v == "debug") log_level = Log::DEBUG;
         else if (v == "warn") log_level = Log::WARN;
-        else if (v == "error") log_level = Log::_ERROR;
+        else if (v == "error") log_level = Log::ERROR;
         else if (v == "info") log_level = Log::INFO;
         else {
           std::string msg("unknown log level: ");

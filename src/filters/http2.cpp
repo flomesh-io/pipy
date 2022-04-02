@@ -42,7 +42,7 @@ static const pjs::Ref<pjs::Str> s_colon_authority(pjs::Str::make(":authority"));
 static const pjs::Ref<pjs::Str> s_method(pjs::Str::make("method"));
 static const pjs::Ref<pjs::Str> s_scheme(pjs::Str::make("scheme"));
 static const pjs::Ref<pjs::Str> s_authority(pjs::Str::make("authority"));
-static const pjs::Ref<pjs::Str> s_host_(pjs::Str::make("host"));
+static const pjs::Ref<pjs::Str> s_host(pjs::Str::make("host"));
 static const pjs::Ref<pjs::Str> s_path(pjs::Str::make("path"));
 static const pjs::Ref<pjs::Str> s_status(pjs::Str::make("status"));
 static const pjs::Ref<pjs::Str> s_headers(pjs::Str::make("headers"));
@@ -542,7 +542,7 @@ bool HeaderDecoder::decode(Data &data) {
   data.scan(
     [this](int c) -> bool {
       switch (m_state) {
-        case _ERROR: return false;
+        case ERROR: return false;
 
         case INDEX_PREFIX: {
           index_prefix(c);
@@ -596,7 +596,7 @@ bool HeaderDecoder::decode(Data &data) {
       return true;
     }
   );
-  return m_state != _ERROR;
+  return m_state != ERROR;
 }
 
 void HeaderDecoder::end(pjs::Ref<http::MessageHead> &head) {
@@ -658,7 +658,7 @@ void HeaderDecoder::index_end() {
       add_field(entry->name, entry->value);
       m_state = INDEX_PREFIX;
     } else {
-      m_state = _ERROR;
+      m_state = ERROR;
     }
   } else if ((p & 0xe0) == 0x20) {
     // TODO: resize dynamic table
@@ -668,7 +668,7 @@ void HeaderDecoder::index_end() {
       m_name = entry->name;
       m_state = VALUE_PREFIX;
     } else {
-      m_state = _ERROR;
+      m_state = ERROR;
     }
   } else {
     m_state = NAME_PREFIX;
@@ -713,8 +713,8 @@ void HeaderDecoder::add_field(pjs::Str *name, pjs::Str *value) {
       auto req = m_head->as<http::RequestHead>();
       pjs::Value v;
       auto headers = m_head->headers();
-      headers->get(s_host_, v);
-      if (v.is_undefined()) headers->set(s_host_, value);
+      headers->get(s_host, v);
+      if (v.is_undefined()) headers->set(s_host, value);
       req->authority(value);
     }
   } else if (name == s_colon_path) {
@@ -850,7 +850,7 @@ void HeaderEncoder::encode(bool is_response, pjs::Object *head, Data &data) {
     if (auto obj = headers.o()) {
       obj->iterate_all(
         [&](pjs::Str *k, pjs::Value &v) {
-          if (k == s_host_) {
+          if (k == s_host) {
             if (has_authority) return;
             k = s_colon_authority;
           }
@@ -1252,7 +1252,7 @@ void Demuxer::on_deframe(Frame &frm) {
         break;
       }
       case Frame::GOAWAY: {
-        connection_error(_NO_ERROR);
+        connection_error(NO_ERROR);
         break;
       }
       case Frame::WINDOW_UPDATE: {
@@ -1320,7 +1320,7 @@ void Muxer::close(EventFunction *stream) {
 }
 
 void Muxer::close() {
-  connection_error(_NO_ERROR);
+  connection_error(NO_ERROR);
 }
 
 void Muxer::stream_close(int id) {
@@ -1402,7 +1402,7 @@ void Muxer::on_deframe(Frame &frm) {
         break;
       }
       case Frame::GOAWAY: {
-        connection_error(_NO_ERROR);
+        connection_error(NO_ERROR);
         break;
       }
       case Frame::WINDOW_UPDATE: {

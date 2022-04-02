@@ -32,6 +32,10 @@
 #include <ctime>
 #include <sstream>
 
+#ifdef WIN32
+#undef NO_ERROR
+#endif 
+
 namespace pipy {
 
 Dump::Dump() {
@@ -83,7 +87,7 @@ void Dump::process(Event *evt) {
   ss << evt->name();
 
   if (auto end = evt->as<StreamEnd>()) {
-    if (end->error() != StreamEnd::_NO_ERROR) {
+    if (end->error() != StreamEnd::NO_ERROR) {
       ss << " [" << end->error() << "] " << end->message();
     }
     Log::print(Log::INFO, ss.str());

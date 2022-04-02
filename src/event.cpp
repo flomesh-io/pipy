@@ -44,7 +44,7 @@ auto Event::name() const -> const char* {
 
 auto StreamEnd::message() const -> const char* {
   switch (m_error) {
-    case _NO_ERROR: return "no error";
+    case NO_ERROR: return "no error";
     case UNKNOWN_ERROR: return "unknown error";
     case RUNTIME_ERROR: return "runtime error";
     case READ_ERROR: return "read error";
@@ -105,7 +105,7 @@ template<> void ClassDef<MessageEnd>::init() {
 }
 
 template<> void EnumDef<StreamEnd::Error>::init() {
-  define(StreamEnd::_NO_ERROR           , "");
+  define(StreamEnd::NO_ERROR           , "");
   define(StreamEnd::UNKNOWN_ERROR      , "UnknownError");
   define(StreamEnd::RUNTIME_ERROR      , "RuntimeError");
   define(StreamEnd::READ_ERROR         , "ReadError");

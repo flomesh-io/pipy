@@ -36,6 +36,10 @@
 #include <string>
 #include <list>
 
+#ifdef WINDOWS
+#undef DELETE
+#endif 
+
 namespace pipy {
 
 class Data;
@@ -55,7 +59,7 @@ public:
     PUT,
     POST,
     PATCH,
-    _DELETE,
+    DELETE,
   };
 
   struct Options : public Outbound::Options {

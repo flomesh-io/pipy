@@ -32,6 +32,10 @@
 #include <string>
 #include <vector>
 
+#ifdef WIN32
+#undef ERROR
+#endif 
+
 namespace pipy {
 
 class Filter;
@@ -75,7 +79,7 @@ private:
   class Node {
   public:
     enum Type {
-      _ERROR,
+      ERROR,
       ROOT,
       PIPELINE,
       FILTER,

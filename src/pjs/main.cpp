@@ -94,7 +94,7 @@ static void test_parser(const char *script) {
     expr->dump(std::cout, "");
     delete expr;
   } else {
-    std::cerr << "_ERROR at line " << error_line << " column " << error_column << ": " << error << std::endl;
+    std::cerr << "ERROR at line " << error_line << " column " << error_column << ": " << error << std::endl;
   }
 }
 

@@ -29,6 +29,7 @@
 #include "pipeline.hpp"
 #include "logging.hpp"
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32) && !defined(__CYGWIN__)
+#undef NO_ERROR
 #include <io.h>
 #endif
 
@@ -128,7 +129,7 @@ void FileStream::read() {
     if (ec) {
       if (ec == asio::error::eof) {
         Log::debug("FileStream: %p, end of stream [fd = %d]", this, m_fd);
-        output(StreamEnd::make(StreamEnd::_NO_ERROR));
+        output(StreamEnd::make(StreamEnd::NO_ERROR));
       } else if (ec != asio::error::operation_aborted) {
         auto msg = ec.message();
         Log::warn(

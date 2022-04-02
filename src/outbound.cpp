@@ -29,6 +29,10 @@
 #include "utils.hpp"
 #include "logging.hpp"
 
+#ifdef WIN32
+#undef NO_ERROR
+#endif 
+
 namespace pipy {
 
 using tcp = asio::ip::tcp;
@@ -162,7 +166,7 @@ void Outbound::resolve() {
     ) {
       if (ec != asio::error::operation_aborted) {
         if (ec) {
-          if (Log::is_enabled(Log::_ERROR)) {
+          if (Log::is_enabled(Log::ERROR)) {
             char desc[200];
             describe(desc);
             Log::error("%s cannot resolve hostname: %s", desc, ec.message().c_str());
@@ -221,7 +225,7 @@ void Outbound::connect(const asio::ip::tcp::endpoint &target) {
 
       if (ec != asio::error::operation_aborted) {
         if (ec) {
-          if (Log::is_enabled(Log::_ERROR)) {
+          if (Log::is_enabled(Log::ERROR)) {
             char desc[200];
             describe(desc);
             Log::error("%s cannot connect: %s", desc, ec.message().c_str());
@@ -244,7 +248,7 @@ void Outbound::connect(const asio::ip::tcp::endpoint &target) {
           } else {
             m_connecting = false;
             if (m_ended && m_buffer.empty()) {
-              close(StreamEnd::_NO_ERROR);
+              close(StreamEnd::NO_ERROR);
             } else {
               receive();
               pump();
@@ -295,6 +299,12 @@ void Outbound::receive() {
         if (n > 0) {
           InputContext ic(this);
           buffer->pop(buffer->size() - n);
+          if (auto more = m_socket.available()) {
+            Data buf(more, &s_data_producer);
+            auto n = m_socket.read_some(DataChunks(buf.chunks()));
+            if (n < more) buf.pop(more - n);
+            buffer->push(buf);
+          }
           output(buffer);
           output(Data::flush());
         }
@@ -306,7 +316,7 @@ void Outbound::receive() {
               describe(desc);
               Log::debug("%s connection closed by peer", desc);
             }
-            close(StreamEnd::_NO_ERROR);
+            close(StreamEnd::NO_ERROR);
           } else {
             if (Log::is_enabled(Log::WARN)) {
               char desc[200];
@@ -362,7 +372,7 @@ void Outbound::pump() {
           close(StreamEnd::WRITE_ERROR);
 
         } else if (m_overflowed && m_buffer.empty()) {
-          if (Log::is_enabled(Log::_ERROR)) {
+          if (Log::is_enabled(Log::ERROR)) {
             char desc[200];
             describe(desc);
             Log::error("%s overflowed by %d bytes", desc, m_discarded_data_size);
@@ -370,7 +380,7 @@ void Outbound::pump() {
           close(StreamEnd::BUFFER_OVERFLOW);
 
         } else if (m_ended && m_buffer.empty()) {
-          close(StreamEnd::_NO_ERROR);
+          close(StreamEnd::NO_ERROR);
 
         } else {
           pump();
@@ -414,7 +424,7 @@ void Outbound::close(StreamEnd::Error err) {
   m_socket.close(ec);
 
   if (ec) {
-    if (Log::is_enabled(Log::_ERROR)) {
+    if (Log::is_enabled(Log::ERROR)) {
       char desc[200];
       describe(desc);
       Log::error("%s error closing socket: %s", desc, ec.message().c_str());
