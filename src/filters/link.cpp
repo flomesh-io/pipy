@@ -75,11 +75,6 @@ void Link::reset() {
 
 void Link::process(Event *evt) {
   if (!m_chosen) {
-    if (auto data = evt->as<Data>()) {
-      if (data->empty()) {
-        return;
-      }
-    }
     const auto &conditions = *m_conditions;
     for (int i = 0; i < conditions.size(); i++) {
       const auto &cond = conditions[i];

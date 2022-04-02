@@ -167,6 +167,8 @@ void Inbound::start() {
   m_pipeline = p;
   m_output = p->input();
   m_listener->open(this);
+  InputContext ic(this);
+  p->input()->input(Data::flush());
   receive();
 }
 

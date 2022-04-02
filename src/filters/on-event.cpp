@@ -61,14 +61,10 @@ auto OnEvent::clone() -> Filter* {
 
 void OnEvent::process(Event *evt) {
   if (evt->type() == m_type) {
-    if (auto data = evt->as<Data>()) {
-      if (data->empty()) {
-        output(evt);
-        return;
-      }
+    if (!Data::is_flush(evt)) {
+      pjs::Value arg(evt), result;
+      if (!callback(m_callback, 1, &arg, result)) return;
     }
-    pjs::Value arg(evt), result;
-    if (!callback(m_callback, 1, &arg, result)) return;
   }
 
   output(evt);
