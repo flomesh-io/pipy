@@ -33,14 +33,16 @@ namespace pipy {
 // Wait
 //
 
-Wait::Wait(pjs::Function *condition)
+Wait::Wait(pjs::Function *condition, const Options &options)
   : m_condition(condition)
+  , m_options(options)
 {
 }
 
 Wait::Wait(const Wait &r)
   : Filter(r)
   , m_condition(r.m_condition)
+  , m_options(r.m_options)
 {
 }
 
@@ -59,12 +61,12 @@ auto Wait::clone() -> Filter* {
 void Wait::reset() {
   Filter::reset();
   Waiter::cancel();
+  m_timer.cancel();
   m_buffer.clear();
   m_fulfilled = false;
 }
 
 void Wait::process(Event *evt) {
-
   if (m_fulfilled) {
     output(evt);
 
@@ -72,15 +74,15 @@ void Wait::process(Event *evt) {
     pjs::Value ret;
     if (!callback(m_condition, 0, nullptr, ret)) return;
     if (ret.to_boolean()) {
-      Waiter::cancel();
-      m_fulfilled = true;
-      m_buffer.flush(
-        [this](Event *evt) {
-          output(evt);
-        }
-      );
+      fulfill();
       output(evt);
     } else {
+      if (m_buffer.empty() && m_options.timeout > 0) {
+        m_timer.schedule(
+          m_options.timeout,
+          [=]() { fulfill(); }
+        );
+      }
       Waiter::wait(context()->group());
       m_buffer.push(evt);
     }
@@ -91,7 +93,14 @@ void Wait::on_notify(Context *ctx) {
   pjs::Value ret;
   if (!callback(m_condition, 0, nullptr, ret)) return;
   if (ret.to_boolean()) {
+    fulfill();
+  }
+}
+
+void Wait::fulfill() {
+  if (!m_fulfilled) {
     Waiter::cancel();
+    m_timer.cancel();
     m_fulfilled = true;
     m_buffer.flush(
       [this](Event *evt) {

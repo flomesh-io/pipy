@@ -28,6 +28,7 @@
 
 #include "filter.hpp"
 #include "context.hpp"
+#include "timer.hpp"
 
 #include <vector>
 
@@ -39,7 +40,11 @@ namespace pipy {
 
 class Wait : public Filter, public ContextGroup::Waiter {
 public:
-  Wait(pjs::Function *condition);
+  struct Options {
+    double timeout = 0;
+  };
+
+  Wait(pjs::Function *condition, const Options &options);
 
 private:
   Wait(const Wait &r);
@@ -53,8 +58,12 @@ private:
   virtual void on_notify(Context *ctx) override;
 
   pjs::Ref<pjs::Function> m_condition;
+  Options m_options;
   EventBuffer m_buffer;
+  Timer m_timer;
   bool m_fulfilled = false;
+
+  void fulfill();
 };
 
 } // namespace pipy

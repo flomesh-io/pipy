@@ -19,6 +19,8 @@ A **wait** filter blocks all input events up until a condition is met. Its input
 
 The condition to wait is given by the _condition_ parameter. It should be a function that returns a truthy value when the condition is met. The function will be called every time a relevant asynchronous event happens, such as having received a response from the upstream, etc.
 
+You can optionally set the maximum waiting time with _timeout_ option in the _options_ parameter. It can be a number in seconds or a string with one of the time unit suffixes including `s`, `m`, `h` and `d`.
+
 This filter passes everything down unaltered. It doesn't change anything in the event stream. It only delays them.
 
 ## Syntax
@@ -28,6 +30,15 @@ pipy()
   .pipeline('example')
     .wait(
       () => shouldContinue()
+    )
+
+pipy()
+  .pipeline('example')
+    .wait(
+      () => shouldContinue(),
+      {
+        timeout,
+      }
     )
 ```
 

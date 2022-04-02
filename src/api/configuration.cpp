@@ -412,8 +412,14 @@ void Configuration::use(const std::list<Module*> modules, pjs::Str *pipeline, pj
   append_filter(new Use(modules, pipeline, pipeline_down, when));
 }
 
-void Configuration::wait(pjs::Function *condition) {
-  append_filter(new Wait(condition));
+void Configuration::wait(pjs::Function *condition, pjs::Object *options) {
+  Wait::Options opts;
+  if (options) {
+    pjs::Value timeout;
+    options->get("timeout", timeout);
+    if (!utils::get_seconds(timeout, opts.timeout)) throw std::runtime_error("options.timeout expects a number or a string");
+  }
+  append_filter(new Wait(condition, opts));
 }
 
 void Configuration::bind_exports(Worker *worker, Module *module) {
@@ -1448,9 +1454,10 @@ template<> void ClassDef<Configuration>::init() {
   // Configuration.wait
   method("wait", [](Context &ctx, Object *thiz, Value &result) {
     Function *condition;
-    if (!ctx.arguments(1, &condition)) return;
+    Object *options = nullptr;
+    if (!ctx.arguments(1, &condition, &options)) return;
     try {
-      thiz->as<Configuration>()->wait(condition);
+      thiz->as<Configuration>()->wait(condition, options);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

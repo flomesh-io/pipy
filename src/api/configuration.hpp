@@ -118,7 +118,7 @@ public:
   void use(Module *module, pjs::Str *pipeline);
   void use(const std::list<Module*> modules, pjs::Str *pipeline, pjs::Function *when);
   void use(const std::list<Module*> modules, pjs::Str *pipeline, pjs::Str *pipeline_down, pjs::Function *when);
-  void wait(pjs::Function *condition);
+  void wait(pjs::Function *condition, pjs::Object *options);
 
   void bind_pipelines();
   void bind_exports(Worker *worker, Module *module);
