@@ -61,24 +61,14 @@ if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
   link_time_optimization()
 endif()
 
-set(ZLIB_SRC_DIR ${CMAKE_SOURCE_DIR}/deps/zlib-1.2.11)
-set(ZLIB_INC_DIR ${ZLIB_SRC_DIR})
-set(ZLIB_LIB_DIR ${ZLIB_SRC_DIR}/build)
-
 if (PIPY_ZLIB)
   set(ZLIB_INC_DIR ${PIPY_ZLIB}/include)
-  set(ZLIB_LIB_DIR ${PIPY_ZLIB}/lib)
+  set(ZLIB_LIB ${PIPY_ZLIB}/lib/libz.a)
 else()
-  add_custom_command(
-    OUTPUT ${ZLIB_LIB_DIR}/libz.a
-    WORKING_DIRECTORY ${ZLIB_SRC_DIR}
-    COMMAND mkdir -p build
-    COMMAND cd build && ../configure && make
-    COMMENT "Building zlib"
-  )
+  add_subdirectory(deps/zlib-1.2.11)
+  set(ZLIB_INC_DIR "${CMAKE_SOURCE_DIR}/deps/zlib-1.2.11" "${CMAKE_BINARY_DIR}/deps/zlib-1.2.11")
+  set(ZLIB_LIB zlibstatic)
 endif()
-
-add_custom_target(zlib DEPENDS ${ZLIB_LIB_DIR}/libz.a)
 
 if(PIPY_OPENSSL)
   set(OPENSSL_INC_DIR ${PIPY_OPENSSL}/include)
@@ -214,7 +204,7 @@ add_custom_command(
 
 add_custom_target(GenVer DEPENDS ${CMAKE_BINARY_DIR}/deps/version.h)
 
-add_dependencies(pipy yajl_s expat zlib OpenSSL GenVer)
+add_dependencies(pipy yajl_s expat ${ZLIB_LIB} OpenSSL GenVer)
 
 if(PIPY_GUI)
   add_definitions(-DPIPY_USE_GUI)
@@ -260,7 +250,7 @@ target_link_libraries(
   pipy
   yajl_s
   expat
-  ${ZLIB_LIB_DIR}/libz.a
+  ${ZLIB_LIB}
   ${OPENSSL_LIB_DIR}/libssl.a
   ${OPENSSL_LIB_DIR}/libcrypto.a
   leveldb
