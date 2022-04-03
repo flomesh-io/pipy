@@ -30,14 +30,11 @@
 #include "worker.hpp"
 #include "constants.hpp"
 #include "logging.hpp"
+#include "platform.hpp"
 
 #ifdef __linux__
 #include <linux/netfilter_ipv4.h>
 #endif
-
-#ifdef WIN32
-#undef NO_ERROR
-#endif 
 
 namespace pipy {
 

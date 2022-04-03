@@ -31,14 +31,11 @@
 #include "api/crypto.hpp"
 #include "filter.hpp"
 #include "outbound.hpp"
+#include "platform.hpp"
 
 #include <functional>
 #include <string>
 #include <list>
-
-#ifdef WINDOWS
-#undef DELETE
-#endif 
 
 namespace pipy {
 

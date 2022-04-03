@@ -28,10 +28,7 @@
 #include "pipeline.hpp"
 #include "utils.hpp"
 #include "logging.hpp"
-
-#ifdef WIN32
-#undef NO_ERROR
-#endif 
+#include "platform.hpp"
 
 namespace pipy {
 

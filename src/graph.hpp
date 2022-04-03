@@ -26,15 +26,13 @@
 #ifndef GRAPH_HPP
 #define GRAPH_HPP
 
+#include "platform.hpp"
+
 #include <list>
 #include <map>
 #include <set>
 #include <string>
 #include <vector>
-
-#ifdef WIN32
-#undef ERROR
-#endif 
 
 namespace pipy {
 

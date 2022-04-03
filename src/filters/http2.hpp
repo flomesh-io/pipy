@@ -31,15 +31,10 @@
 #include "pipeline.hpp"
 #include "list.hpp"
 #include "mux.hpp"
+#include "platform.hpp"
 
 #include <map>
 #include <vector>
-
-#ifdef WIN32
-#undef ERROR
-#undef NO_ERROR
-#undef s_host
-#endif 
 
 namespace pipy {
 namespace http2 {

@@ -125,7 +125,7 @@ template<> void ClassDef<OS>::init() {
       s->gid = st.st_gid;
       s->rdev = st.st_rdev;
       s->size = st.st_size;
-    # ifdef WINDOWS
+    # if defined(WIN32) || defined(_WIN32) || defined(__WIN32)
       s->blksize = 4096; // a suitable default used on most modern SSDs/HDDs
       s->blocks = 512; // In some implementations it is 512 bytes.
     # else

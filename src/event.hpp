@@ -26,11 +26,8 @@
 #ifndef EVENT_HPP
 #define EVENT_HPP
 
+#include "platform.hpp"
 #include "pjs/pjs.hpp"
-
-#ifdef WIN32
-#undef NO_ERROR
-#endif 
 
 namespace pipy {
 

@@ -27,14 +27,11 @@
 #include "context.hpp"
 #include "data.hpp"
 #include "logging.hpp"
+#include "platform.hpp"
 
 #include <iostream>
 #include <ctime>
 #include <sstream>
-
-#ifdef WIN32
-#undef NO_ERROR
-#endif 
 
 namespace pipy {
 

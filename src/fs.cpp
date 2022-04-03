@@ -24,17 +24,13 @@
  */
 
 #include "fs.hpp"
+#include "platform.hpp"
 
 #include <sys/stat.h>
 #include <limits.h>
 #include <dirent.h>
 #include <unistd.h>
 #include <fstream>
-
-#if defined(WIN32) || defined(_WIN32) || defined(__WIN32) && !defined(__CYGWIN__)
-#define WINDOWS
-# define realpath(N,R) _fullpath((R),(N), _MAX_PATH)
-#endif
 
 namespace pipy {
 namespace fs {

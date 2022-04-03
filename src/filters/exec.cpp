@@ -29,11 +29,12 @@
 #include "listener.hpp"
 #include "utils.hpp"
 #include "logging.hpp"
+#include "platform.hpp"
 
 #include <stdlib.h>
 #include <string.h>
-#if defined(WIN32) || defined(_WIN32) || defined(__WIN32) && !defined(__CYGWIN__)
-#define WINDOWS
+
+#ifdef WINDOWS
 #include "win/sys_wait.h"
 #else
 #include <sys/wait.h>

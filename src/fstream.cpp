@@ -28,8 +28,9 @@
 #include "constants.hpp"
 #include "pipeline.hpp"
 #include "logging.hpp"
-#if defined(WIN32) || defined(_WIN32) || defined(__WIN32) && !defined(__CYGWIN__)
-#undef NO_ERROR
+#include "platform.hpp"
+
+#ifdef WINDOWS
 #include <io.h>
 #endif
 
