@@ -441,6 +441,37 @@ private:
 };
 
 //
+// Client
+//
+
+class ClientReceiver : public EventTarget {
+  virtual void on_event(Event *evt) override;
+};
+
+class Client : public Filter, public ClientReceiver {
+public:
+  Client();
+
+private:
+  Client(const Client &r);
+  ~Client();
+
+  virtual auto clone() -> Filter* override;
+  virtual void reset() override;
+  virtual void process(Event *evt) override;
+  virtual void dump(std::ostream &out) override;
+
+  void on_receive(Event *evt);
+
+  pjs::Ref<Pipeline> m_pipeline;
+  Encoder m_ef_encoder;
+  Decoder m_ef_decoder;
+  bool m_request_end = false;
+
+  friend class ClientReceiver;
+};
+
+//
 // TunnelServer
 //
 

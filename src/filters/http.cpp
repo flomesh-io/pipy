@@ -1511,6 +1511,84 @@ void Server::Handler::on_event(Event *evt) {
 }
 
 //
+// Client
+//
+
+void ClientReceiver::on_event(Event *evt) {
+  static_cast<Client*>(this)->on_receive(evt);
+}
+
+Client::Client()
+  : m_ef_encoder(false)
+  , m_ef_decoder(true)
+{
+}
+
+Client::Client(const Client &r)
+  : Filter(r)
+  , m_ef_encoder(false)
+  , m_ef_decoder(true)
+{
+}
+
+Client::~Client() {
+}
+
+void Client::dump(std::ostream &out) {
+  out << "sendHTTP";
+}
+
+auto Client::clone() -> Filter* {
+  return new Client(*this);
+}
+
+void Client::reset() {
+  Filter::reset();
+  m_ef_encoder.reset();
+  m_ef_decoder.reset();
+  m_pipeline = nullptr;
+  m_request_end = false;
+}
+
+void Client::process(Event *evt) {
+  if (evt->is<MessageStart>()) {
+    if (!m_pipeline) {
+      m_pipeline = sub_pipeline(0, false);
+      m_pipeline->chain(m_ef_decoder.input());
+      m_ef_decoder.chain(ClientReceiver::input());
+      m_ef_encoder.chain(m_pipeline->input());
+      m_ef_encoder.set_final(true);
+      output(evt, m_ef_encoder.input());
+      m_ef_decoder.set_bodiless(m_ef_encoder.is_bodiless());
+      m_ef_decoder.set_connect(m_ef_encoder.is_connect());
+    }
+  } else if (evt->is<Data>()) {
+    if (m_pipeline && !m_request_end) {
+      output(evt, m_ef_encoder.input());
+    }
+  } else if (evt->is<MessageEnd>()) {
+    if (!m_request_end) {
+      output(evt, m_ef_encoder.input());
+      m_request_end = true;
+    }
+  } else if (evt->is<StreamEnd>()) {
+    if (m_pipeline) {
+      output(evt, m_pipeline->input());
+    }
+  }
+}
+
+void Client::on_receive(Event *evt) {
+  if (evt->is<MessageEnd>()) {
+    if (m_pipeline) {
+      m_pipeline->input()->input(StreamEnd::make());
+      m_pipeline = nullptr;
+    }
+  }
+  output(evt);
+}
+
+//
 // TunnelServer
 //
 

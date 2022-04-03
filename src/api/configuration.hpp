@@ -93,6 +93,7 @@ public:
   void encode_http_response(pjs::Object *options);
   void encode_mqtt();
   void exec(const pjs::Value &command);
+  void fetch_http(pjs::Str *layout);
   void fork(pjs::Str *target, pjs::Object *initializers);
   void link(size_t count, pjs::Str **targets, pjs::Function **conditions);
   void merge(pjs::Str *target, const pjs::Value &key, pjs::Object *options);
