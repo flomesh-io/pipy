@@ -4,6 +4,7 @@ project(pipy)
 option(PIPY_GUI "include builtin GUI" ON)
 option(PIPY_TUTORIAL "include builtin tutorial scripts" ON)
 option(PIPY_SOIL_FREED_SPACE "invalidate freed space for debugging" OFF)
+option(PIPY_ZLIB "external zlib location" "")
 option(PIPY_OPENSSL "external libopenssl location" "")
 option(PIPY_STATIC "statically link to libc" OFF)
 
@@ -21,13 +22,14 @@ option(LEVELDB_BUILD_BENCHMARKS "Build LevelDB's benchmarks" OFF)
 option(LEVELDB_INSTALL "Install LevelDB's header and library" OFF)
 add_subdirectory(deps/leveldb-1.23)
 
-add_subdirectory(deps/zlib-1.2.11)
-set(ZLIB_INC_DIR "${CMAKE_SOURCE_DIR}/deps/zlib-1.2.11" "${CMAKE_BINARY_DIR}/deps/zlib-1.2.11")
-if (PIPY_STATIC)
-  set(ZLIB_LIB zlibstatic)
+if (PIPY_ZLIB)
+  set(ZLIB_INC_DIR ${PIPY_ZLIB}/include)
+  set(ZLIB_LIB ${PIPY_ZLIB}/lib/libz.a)
 else()
-  set(ZLIB_LIB zlib)
-endif(PIPY_STATIC)
+  add_subdirectory(deps/zlib-1.2.11)
+  set(ZLIB_INC_DIR "${CMAKE_SOURCE_DIR}/deps/zlib-1.2.11" "${CMAKE_BINARY_DIR}/deps/zlib-1.2.11")
+  set(ZLIB_LIB zlibstatic)
+endif()
 
 if (WIN32)
   add_compile_options(-m64)
@@ -106,6 +108,8 @@ add_definitions(
   -D_GNU_SOURCE
   -DPIPY_HOST="${CMAKE_SYSTEM} ${CMAKE_SYSTEM_PROCESSOR}"
 )
+
+add_compile_options(-Wall -Wno-overloaded-virtual -Wno-delete-non-abstract-non-virtual-dtor)
 
 include_directories(
   "${CMAKE_SOURCE_DIR}/src"
