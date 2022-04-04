@@ -130,6 +130,7 @@ add_executable(pipy
   src/compress.cpp
   src/context.cpp
   src/data.cpp
+  src/deframer.cpp
   src/event.cpp
   src/fetch.cpp
   src/file.cpp
