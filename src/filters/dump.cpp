@@ -27,6 +27,7 @@
 #include "context.hpp"
 #include "data.hpp"
 #include "logging.hpp"
+#include "platform.hpp"
 
 #include <iostream>
 #include <ctime>

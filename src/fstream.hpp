@@ -76,7 +76,12 @@ private:
   int m_fd;
   FILE* m_f;
   Data::Producer* m_dp;
+  #if defined(BOOST_POSIX_API)
   asio::posix::stream_descriptor m_stream;
+  #else
+  asio::windows::stream_handle m_stream;
+  #endif
+
   Data m_buffer;
   size_t m_buffer_limit = 0;
   ReceivingState m_receiving_state = RECEIVING;

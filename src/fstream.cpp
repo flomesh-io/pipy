@@ -28,11 +28,22 @@
 #include "constants.hpp"
 #include "pipeline.hpp"
 #include "logging.hpp"
+#include "platform.hpp"
+
+#ifdef WINDOWS
+#include <io.h>
+#endif
 
 namespace pipy {
 
 FileStream::FileStream(int fd, Data::Producer *dp)
-  : m_stream(Net::context(), fd)
+  : m_stream(Net::context(), 
+#if defined(BOOST_POSIX_API)
+  fd
+#else  
+  (HANDLE)_get_osfhandle(fd)
+#endif
+)
   , m_f(nullptr)
   , m_dp(dp)
 {
@@ -40,7 +51,13 @@ FileStream::FileStream(int fd, Data::Producer *dp)
 }
 
 FileStream::FileStream(FILE *f, Data::Producer *dp)
-  : m_stream(Net::context(), fileno(f))
+  : m_stream(Net::context(), 
+#if defined(BOOST_POSIX_API)
+  fileno(f)
+#else  
+  (HANDLE)_get_osfhandle(fileno(f))
+#endif  
+)
   , m_f(f)
   , m_dp(dp)
 {

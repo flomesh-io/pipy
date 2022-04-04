@@ -106,6 +106,8 @@ void Listener::start() {
     if (s_reuse_port) {
 #ifdef __FreeBSD__
       setsockopt(sock, SOL_SOCKET, SO_REUSEPORT_LB, &enabled, sizeof(enabled));
+#elif _WIN32
+      setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (char *) &enabled, sizeof(enabled));
 #else
       setsockopt(sock, SOL_SOCKET, SO_REUSEPORT, &enabled, sizeof(enabled));
 #endif

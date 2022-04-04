@@ -31,6 +31,7 @@
 #include "api/crypto.hpp"
 #include "filter.hpp"
 #include "outbound.hpp"
+#include "platform.hpp"
 
 #include <functional>
 #include <string>

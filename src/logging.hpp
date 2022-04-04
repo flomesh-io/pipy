@@ -27,6 +27,7 @@
 #define LOGGING_H
 
 #include "pjs/pjs.hpp"
+#include "platform.hpp"
 
 namespace pipy {
 

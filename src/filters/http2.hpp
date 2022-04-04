@@ -31,6 +31,7 @@
 #include "pipeline.hpp"
 #include "list.hpp"
 #include "mux.hpp"
+#include "platform.hpp"
 
 #include <map>
 #include <vector>

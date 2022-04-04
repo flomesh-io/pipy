@@ -24,6 +24,7 @@
  */
 
 #include "fs.hpp"
+#include "platform.hpp"
 
 #include <sys/stat.h>
 #include <limits.h>
@@ -59,7 +60,11 @@ bool is_file(const std::string &filename) {
 }
 
 bool make_dir(const std::string &filename) {
+# ifdef WINDOWS
+  return mkdir(filename.c_str()) == 0;
+# else
   return mkdir(filename.c_str(), S_IRWXU | S_IRWXG | S_IRWXO) == 0;
+#endif
 }
 
 bool read_dir(const std::string &filename, std::list<std::string> &list) {
@@ -67,7 +72,13 @@ bool read_dir(const std::string &filename, std::list<std::string> &list) {
     while (auto *entry = readdir(dir)) {
       if (entry->d_name[0] == '.') continue;
       std::string name(entry->d_name);
+#ifdef WINDOWS
+  struct stat s;
+  stat(entry->d_name, &s);
+  if(s.st_mode & S_IFDIR) name += '/';
+#else
       if (entry->d_type == DT_DIR) name += '/';
+#endif
       list.push_back(name);
     }
     closedir(dir);

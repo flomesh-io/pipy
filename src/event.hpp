@@ -26,6 +26,7 @@
 #ifndef EVENT_HPP
 #define EVENT_HPP
 
+#include "platform.hpp"
 #include "pjs/pjs.hpp"
 
 namespace pipy {

@@ -29,7 +29,14 @@
 #include <cassert>
 #include <cmath>
 #include <cstring>
+#ifndef _MSC_VER
 #include <cxxabi.h>
+#endif // !WIN32
+
+#ifdef _MSC_VER
+#define __builtin_clz(x) __lzcnt((x))
+#endif
+
 #include <functional>
 #include <limits>
 #include <list>

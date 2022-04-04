@@ -26,6 +26,8 @@
 #ifndef GRAPH_HPP
 #define GRAPH_HPP
 
+#include "platform.hpp"
+
 #include <list>
 #include <map>
 #include <set>

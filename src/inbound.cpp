@@ -30,6 +30,11 @@
 #include "worker.hpp"
 #include "constants.hpp"
 #include "logging.hpp"
+#include "platform.hpp"
+
+#ifdef __linux__
+#include <linux/netfilter_ipv4.h>
+#endif
 
 namespace pipy {
 
@@ -56,6 +61,7 @@ Inbound::~Inbound() {
 
 auto Inbound::remote_address() -> pjs::Str* {
   if (!m_str_remote_addr) {
+    address();
     m_str_remote_addr = pjs::Str::make(m_remote_addr);
   }
   return m_str_remote_addr;
@@ -63,9 +69,18 @@ auto Inbound::remote_address() -> pjs::Str* {
 
 auto Inbound::local_address() -> pjs::Str* {
   if (!m_str_local_addr) {
+    address();
     m_str_local_addr = pjs::Str::make(m_local_addr);
   }
   return m_str_local_addr;
+}
+
+auto Inbound::ori_dst_address() -> pjs::Str* {
+  if (!m_str_ori_dst_addr) {
+    address();
+    m_str_ori_dst_addr = pjs::Str::make(m_ori_dst_addr);
+  }
+  return m_str_ori_dst_addr;
 }
 
 void Inbound::accept(asio::ip::tcp::acceptor &acceptor) {
@@ -86,11 +101,6 @@ void Inbound::accept(asio::ip::tcp::acceptor &acceptor) {
             describe(desc);
             Log::debug("%s connection accepted", desc);
           }
-          const auto &ep = m_socket.local_endpoint();
-          m_local_addr = ep.address().to_string();
-          m_local_port = ep.port();
-          m_remote_addr = m_peer.address().to_string();
-          m_remote_port = m_peer.port();
           start();
         }
       }
@@ -176,6 +186,12 @@ void Inbound::receive() {
         if (n > 0) {
           InputContext ic(this);
           buffer->pop(buffer->size() - n);
+          if (auto more = m_socket.available()) {
+            Data buf(more, &s_data_producer);
+            auto n = m_socket.read_some(DataChunks(buf.chunks()));
+            if (n < more) buf.pop(more - n);
+            buffer->push(buf);
+          }
           output(buffer);
           output(Data::flush());
         }
@@ -299,15 +315,61 @@ void Inbound::close(StreamEnd::Error err) {
   output(StreamEnd::make(err));
 }
 
+void Inbound::address() {
+  if (!m_addressed) {
+    const auto &ep = m_socket.local_endpoint();
+    m_local_addr = ep.address().to_string();
+    m_local_port = ep.port();
+    m_remote_addr = m_peer.address().to_string();
+    m_remote_port = m_peer.port();
+#ifdef __linux__
+    if (m_options.transparent) {
+      struct sockaddr addr;
+      socklen_t len = sizeof(addr);
+      if (!getsockopt(m_socket.native_handle(), SOL_IP, SO_ORIGINAL_DST, &addr, &len)) {
+        char str[100];
+        auto n = std::sprintf(
+          str, "%d.%d.%d.%d",
+          (unsigned char)addr.sa_data[2],
+          (unsigned char)addr.sa_data[3],
+          (unsigned char)addr.sa_data[4],
+          (unsigned char)addr.sa_data[5]
+        );
+        m_ori_dst_addr.assign(str, n);
+        m_ori_dst_port = (
+          ((int)(unsigned char)addr.sa_data[0] << 8) |
+          ((int)(unsigned char)addr.sa_data[1] << 0)
+        );
+      }
+    }
+#endif // __linux__
+    m_addressed = true;
+  }
+}
+
 void Inbound::describe(char *buf) {
-  std::sprintf(
-    buf, "[inbound  %p] [%s]:%d -> [%s]:%d",
-    this,
-    m_remote_addr.c_str(),
-    m_remote_port,
-    m_local_addr.c_str(),
-    m_local_port
-  );
+  address();
+  if (m_options.transparent) {
+    std::sprintf(
+      buf, "[inbound  %p] [%s]:%d -> [%s]:%d -> [%s]:%d",
+      this,
+      m_remote_addr.c_str(),
+      m_remote_port,
+      m_local_addr.c_str(),
+      m_local_port,
+      m_ori_dst_addr.c_str(),
+      m_ori_dst_port
+    );
+  } else {
+    std::sprintf(
+      buf, "[inbound  %p] [%s]:%d -> [%s]:%d",
+      this,
+      m_remote_addr.c_str(),
+      m_remote_port,
+      m_local_addr.c_str(),
+      m_local_port
+    );
+  }
 }
 
 } // namespace pipy
@@ -317,11 +379,13 @@ namespace pjs {
 using namespace pipy;
 
 template<> void ClassDef<Inbound>::init() {
-  accessor("id"           , [](Object *obj, Value &ret) { ret.set(obj->as<Inbound>()->id()); });
-  accessor("remoteAddress", [](Object *obj, Value &ret) { ret.set(obj->as<Inbound>()->remote_address()); });
-  accessor("remotePort"   , [](Object *obj, Value &ret) { ret.set(obj->as<Inbound>()->remote_port()); });
-  accessor("localAddress" , [](Object *obj, Value &ret) { ret.set(obj->as<Inbound>()->local_address()); });
-  accessor("localPort"    , [](Object *obj, Value &ret) { ret.set(obj->as<Inbound>()->local_port()); });
+  accessor("id"                 , [](Object *obj, Value &ret) { ret.set(obj->as<Inbound>()->id()); });
+  accessor("remoteAddress"      , [](Object *obj, Value &ret) { ret.set(obj->as<Inbound>()->remote_address()); });
+  accessor("remotePort"         , [](Object *obj, Value &ret) { ret.set(obj->as<Inbound>()->remote_port()); });
+  accessor("localAddress"       , [](Object *obj, Value &ret) { ret.set(obj->as<Inbound>()->local_address()); });
+  accessor("localPort"          , [](Object *obj, Value &ret) { ret.set(obj->as<Inbound>()->local_port()); });
+  accessor("destinationAddress" , [](Object *obj, Value &ret) { ret.set(obj->as<Inbound>()->ori_dst_address()); });
+  accessor("destinationPort"    , [](Object *obj, Value &ret) { ret.set(obj->as<Inbound>()->ori_dst_port()); });
 }
 
 } // namespace pjs

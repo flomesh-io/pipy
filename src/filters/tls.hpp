@@ -29,6 +29,7 @@
 #include "filter.hpp"
 #include "data.hpp"
 #include "api/crypto.hpp"
+#include "platform.hpp"
 
 #include <openssl/bio.h>
 #include <openssl/ssl.h>

@@ -120,7 +120,11 @@ void CodebaseFromFS::set(const std::string &path, Data *data) {
         path = utils::path_join(path, s);
         struct stat st;
         if (stat(path.c_str(), &st)) {
+# ifdef WINDOWS
+          mkdir(path.c_str());
+# else
           mkdir(path.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+# endif
         } else if (!S_ISDIR(st.st_mode)) {
           return;
         }
