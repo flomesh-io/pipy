@@ -19,7 +19,9 @@ An **acceptHTTPTunnel** filter implements [HTTP tunnel](https://en.wikipedia.org
 |          | **Message** |               | **Data** |                |
 |          | **+ Data**  |               |          |                |
 
-An **acceptHTTPTunnel** filter calls back a user handler for each input _Message_ (expected to be an HTTP request) and outputs the _Message_ returned as response. When the request is a [CONNECT](https://developer.mozilla.org/docs/Web/HTTP/Methods/CONNECT) request, a sub-pipeline will be created to establish an _HTTP tunnel_ and _Data_ streams after that initial request and response are sent back and forth between the **acceptHTTPTunnel** filter and the sub-pipeline.
+An **acceptHTTPTunnel** filter calls back a user handler for the input _Message_ (expected to be an HTTP request) and outputs the _Message_ returned from the callback as response. When the response status code is 1xx or 2xx, a sub-pipeline will be created to establish an _HTTP tunnel_ and _Data_ events after that initial request and response are sent back and forth between the **acceptHTTPTunnel** filter and the sub-pipeline.
+
+Besides _HTTP tunnel_, this filter can also be used for a tunneling-like protocol upgraded from a regular HTTP session, such as [WebSocket](https://en.wikipedia.org/wiki/WebSocket).
 
 ## Syntax
 

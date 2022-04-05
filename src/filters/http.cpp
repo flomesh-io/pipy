@@ -1644,11 +1644,6 @@ void TunnelServer::process(Event *evt) {
         m_start = nullptr;
         m_buffer.clear();
 
-        bool is_connect = false;
-        pjs::Value method;
-        req->head()->get(s_method, method);
-        if (method.is_string() && method.s() == s_CONNECT) is_connect = true;
-
         pjs::Value arg(req), ret;
         if (!callback(m_handler, 1, &arg, ret)) return;
         if (ret.is_object()) {
@@ -1664,14 +1659,12 @@ void TunnelServer::process(Event *evt) {
           return;
         }
 
-        if (is_connect) {
-          if (auto head = res->head()) {
-            pjs::Value status;
-            head->get(s_status, status);
-            if (status.is_number() && 200 <= status.n() && status.n() < 300) {
-              m_pipeline = sub_pipeline(0, true);
-              m_pipeline->chain(output());
-            }
+        if (auto head = res->head()) {
+          pjs::Value status;
+          head->get(s_status, status);
+          if (status.is_undefined() || (status.is_number() && 100 <= status.n() && status.n() < 300)) {
+            m_pipeline = sub_pipeline(0, true);
+            m_pipeline->chain(output());
           }
         }
 
@@ -1683,7 +1676,7 @@ void TunnelServer::process(Event *evt) {
     }
   }
 
-  if (m_pipeline) {
+  if (m_pipeline && evt->is<Data>()) {
     m_pipeline->input()->input(evt);
   }
 }
