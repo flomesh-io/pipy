@@ -79,6 +79,7 @@ public:
   void decode_http_request();
   void decode_http_response(pjs::Object *options);
   void decode_mqtt(pjs::Object *options);
+  void decode_websocket();
   void decompress_http(pjs::Function *enable);
   void decompress_message(const pjs::Value &algorithm);
   void deposit_message(const pjs::Value &filename, pjs::Object *options);

@@ -68,6 +68,7 @@
 #include "filters/tls.hpp"
 #include "filters/use.hpp"
 #include "filters/wait.hpp"
+#include "filters/websocket.hpp"
 
 #include <stdexcept>
 #include <sstream>
@@ -226,6 +227,10 @@ void Configuration::decode_mqtt(pjs::Object *options) {
     }
   }
   append_filter(new mqtt::Decoder(opts));
+}
+
+void Configuration::decode_websocket() {
+  append_filter(new websocket::Decoder());
 }
 
 void Configuration::decompress_http(pjs::Function *enable) {
@@ -877,6 +882,16 @@ template<> void ClassDef<Configuration>::init() {
     if (!ctx.arguments(0, &options)) return;
     try {
       thiz->as<Configuration>()->decode_mqtt(options);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // Configuration.decodeWebSocket
+  method("decodeWebSocket", [](Context &ctx, Object *thiz, Value &result) {
+    try {
+      thiz->as<Configuration>()->decode_websocket();
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

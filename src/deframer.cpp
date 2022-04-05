@@ -86,6 +86,7 @@ void Deframer::on_input(Event *evt) {
           if (m_read_buffer) {
             m_read_buffer[m_read_pointer++] = c;
             if (m_read_pointer >= m_read_length) {
+              m_read_length = 0;
               state = on_state(state, -1);
             }
           } else {

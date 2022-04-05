@@ -168,6 +168,7 @@ add_executable(pipy
   src/filters/tls.cpp
   src/filters/use.cpp
   src/filters/wait.cpp
+  src/filters/websocket.cpp
   src/fs.cpp
   src/fstream.cpp
   src/graph.cpp
