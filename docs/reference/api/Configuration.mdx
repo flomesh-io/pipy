@@ -61,10 +61,12 @@ These filters are transport layer clients and servers speaking a specific protoc
 * [decodeHTTPRequest()](/reference/api/Configuration/decodeHTTPRequest)
 * [decodeHTTPResponse()](/reference/api/Configuration/decodeHTTPResponse)
 * [decodeMQTT()](/reference/api/Configuration/decodeMQTT)
+* [decodeWebSocket()](/reference/api/Configuration/decodeWebSocket)
 * [encodeDubbo()](/reference/api/Configuration/decodeDubbo)
 * [encodeHTTPRequest()](/reference/api/Configuration/decodeHTTPRequest)
 * [encodeHTTPResponse()](/reference/api/Configuration/decodeHTTPResponse)
 * [encodeMQTT()](/reference/api/Configuration/encodeMQTT)
+* [encodeWebSocket()](/reference/api/Configuration/encodeWebSocket)
 
 These filters translate streams between the _raw byte form_ and the _message form_. A decoder takes in _Data_ events and outputs _MessageStart/MessageEnd_ event pairs (with unchanged message bodies as _Data_ events in between). An encoder takes in _MessageStart/MessageEnd_ event pairs (again, with message bodies as _Data_ events in between), and outputs raw bytes in _Data_ events.
 

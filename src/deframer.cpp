@@ -96,6 +96,7 @@ void Deframer::on_input(Event *evt) {
         },
         output
       );
+      m_state = state;
     }
   }
 }

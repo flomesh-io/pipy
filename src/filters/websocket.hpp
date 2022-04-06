@@ -29,6 +29,8 @@
 #include "filter.hpp"
 #include "deframer.hpp"
 
+#include <random>
+
 namespace pipy {
 namespace websocket {
 
@@ -66,11 +68,13 @@ private:
   uint8_t m_mask[4];
   uint8_t m_mask_pointer;
   bool m_has_mask;
+  bool m_started;
 
   virtual auto on_state(int state, int c) -> int override;
   virtual auto on_pass(const Data &data) -> Data* override;
 
-  void message_start();
+  auto message_start() -> State;
+  void message_end();
 };
 
 //
@@ -91,11 +95,16 @@ private:
   virtual void dump(std::ostream &out) override;
 
 private:
-  pjs::Ref<Data> m_buffer;
-  pjs::Ref<MessageStart> m_message_start;
-  pjs::Ref<pjs::Object> m_head;
+  Data m_buffer;
+  pjs::Ref<MessageStart> m_start;
   pjs::PropertyCache m_prop_opcode;
-  pjs::PropertyCache m_prop_mask;
+  pjs::PropertyCache m_prop_masked;
+  std::minstd_rand m_rand;
+  uint8_t m_opcode;
+  bool m_masked;
+  bool m_continuation;
+
+  void frame(const Data &data, bool final);
 };
 
 } // namespace websocket

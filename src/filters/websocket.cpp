@@ -52,7 +52,7 @@ class MessageHead : public pjs::ObjectTemplate<MessageHead> {
 public:
   enum class Field {
     opcode,
-    mask,
+    masked,
   };
 };
 
@@ -89,6 +89,7 @@ void Decoder::chain() {
 void Decoder::reset() {
   Filter::reset();
   Deframer::reset();
+  m_started = false;
 }
 
 void Decoder::process(Event *evt) {
@@ -115,9 +116,7 @@ auto Decoder::on_state(int state, int c) -> int {
       Deframer::read(4, m_buffer);
       return MASK;
     }
-    message_start();
-    Deframer::pass(c);
-    return PAYLOAD;
+    return message_start();
   case LENGTH_16:
     m_payload_size = (
       ((uint64_t)m_buffer[0] << 8)|
@@ -127,9 +126,7 @@ auto Decoder::on_state(int state, int c) -> int {
       Deframer::read(4, m_buffer);
       return MASK;
     }
-    message_start();
-    Deframer::pass(m_payload_size);
-    return OPCODE;
+    return message_start();
   case LENGTH_64:
     m_payload_size = (
       ((uint64_t)m_buffer[0] << 56)|
@@ -145,16 +142,12 @@ auto Decoder::on_state(int state, int c) -> int {
       Deframer::read(4, m_buffer);
       return MASK;
     }
-    message_start();
-    Deframer::pass(m_payload_size);
-    return OPCODE;
+    return message_start();
   case MASK:
     std::memcpy(m_mask, m_buffer, 4);
-    message_start();
-    Deframer::pass(m_payload_size);
-    return PAYLOAD;
+    return message_start();
   case PAYLOAD:
-    Filter::output(MessageEnd::make());
+    message_end();
     return OPCODE;
   }
   return state;
@@ -179,20 +172,29 @@ auto Decoder::on_pass(const Data &data) -> Data* {
   }
 }
 
-void Decoder::message_start() {
-  auto head = MessageHead::make();
-  pjs::set<MessageHead>(head, MessageHead::Field::opcode, int(m_opcode & 0x0f));
-  if (m_has_mask) {
-    uint32_t mask = (
-      ((uint32_t)m_mask[0] << 24)|
-      ((uint32_t)m_mask[1] << 16)|
-      ((uint32_t)m_mask[2] << 8 )|
-      ((uint32_t)m_mask[3] << 0 )
-    );
-    m_mask_pointer = 0;
-    pjs::set<MessageHead>(head, MessageHead::Field::mask, double(mask));
+auto Decoder::message_start() -> State {
+  if (!m_started) {
+    auto head = MessageHead::make();
+    pjs::set<MessageHead>(head, MessageHead::Field::opcode, int(m_opcode & 0x0f));
+    pjs::set<MessageHead>(head, MessageHead::Field::masked, m_has_mask);
+    Filter::output(MessageStart::make(head));
+    m_started = true;
   }
-  Filter::output(MessageStart::make(head));
+
+  if (m_payload_size > 0) {
+    Deframer::pass(m_payload_size);
+    return PAYLOAD;
+  } else {
+    message_end();
+    return OPCODE;
+  }
+}
+
+void Decoder::message_end() {
+  if (m_opcode & 0x80) {
+    Filter::output(MessageEnd::make());
+    m_started = false;
+  }
 }
 
 //
@@ -201,7 +203,7 @@ void Decoder::message_start() {
 
 Encoder::Encoder()
   : m_prop_opcode("opcode")
-  , m_prop_mask("mask")
+  , m_prop_masked("masked")
 {
 }
 
@@ -224,10 +226,103 @@ auto Encoder::clone() -> Filter* {
 
 void Encoder::reset() {
   Filter::reset();
+  m_buffer.clear();
+  m_start = nullptr;
 }
 
 void Encoder::process(Event *evt) {
+  if (auto start = evt->as<MessageStart>()) {
+    if (!m_start) {
+      m_start = start;
+      auto *head = start->head();
+      int opcode;
+      bool masked;
+      if (!m_prop_opcode.get(head, opcode)) opcode = 1;
+      if (!m_prop_masked.get(head, masked)) masked = false;
+      m_opcode = opcode;
+      m_masked = masked;
+      m_continuation = false;
+      m_buffer.clear();
+    }
+
+  } else if (auto data = evt->as<Data>()) {
+    m_buffer.push(*data);
+    while (m_buffer.size() >= DATA_CHUNK_SIZE) {
+      Data buf;
+      m_buffer.shift(DATA_CHUNK_SIZE, buf);
+      frame(buf, false);
+    }
+
+  } else if (evt->is<MessageEnd>()) {
+    if (m_start) {
+      frame(m_buffer, true);
+      m_buffer.clear();
+      output(evt);
+    }
+
+  } else if (evt->is<StreamEnd>()) {
+    output(evt);
+  }
+}
+
+void Encoder::frame(const Data &data, bool final) {
   static Data::Producer s_dp("encodeWebSocket");
+
+  int p = 0;
+  uint8_t head[12];
+  if (m_continuation) {
+    head[p++] = (final ? 0x80 : 0);
+  } else {
+    head[p++] = (m_opcode & 0x0f) | (final ? 0x80 : 0);
+    m_continuation = true;
+  }
+
+  auto size = data.size();
+  if (size < 126) {
+    head[p++] = size | (m_masked ? 0x80 : 0);
+  } else if (size <= 0xffff) {
+    head[p+0] = 126 | (m_masked ? 0x80 : 0);
+    head[p+1] = size >> 8;
+    head[p+2] = size >> 0;
+    p += 3;
+  } else {
+    head[p+0] = 127 | (m_masked ? 0x80 : 0);
+    head[p+1] = 0;
+    head[p+2] = 0;
+    head[p+3] = 0;
+    head[p+4] = 0;
+    head[p+5] = size >> 24;
+    head[p+6] = size >> 16;
+    head[p+7] = size >> 8;
+    head[p+8] = size >> 0;
+    p += 9;
+  }
+
+  uint8_t mask[4];
+
+  if (m_masked) {
+    *(uint32_t*)mask = m_rand();
+    std::memcpy(head + p, mask, 4);
+    p += 4;
+  }
+
+  Data *out = Data::make();
+  s_dp.push(out, head, p);
+
+  if (m_masked) {
+    uint8_t buf[DATA_CHUNK_SIZE], p = 0;
+    for (const auto c : data.chunks()) {
+      auto ptr = std::get<0>(c);
+      auto len = std::get<1>(c);
+      for (int i = 0; i < len; i++) buf[i] = ptr[i] ^ mask[p++ & 3];
+      s_dp.push(out, buf, len);
+    }
+
+  } else {
+    out->push(data);
+  }
+
+  output(out);
 }
 
 } // namespace websocket
@@ -240,7 +335,7 @@ using namespace pipy::websocket;
 template<> void ClassDef<MessageHead>::init() {
   ctor();
   variable("opcode", MessageHead::Field::opcode);
-  variable("mask", MessageHead::Field::mask);
+  variable("masked", MessageHead::Field::masked);
 }
 
 } // namespace pjs

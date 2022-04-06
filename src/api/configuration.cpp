@@ -300,6 +300,10 @@ void Configuration::encode_mqtt() {
   append_filter(new mqtt::Encoder());
 }
 
+void Configuration::encode_websocket() {
+  append_filter(new websocket::Encoder());
+}
+
 void Configuration::exec(const pjs::Value &command) {
   append_filter(new Exec(command));
 }
@@ -1009,6 +1013,16 @@ template<> void ClassDef<Configuration>::init() {
   method("encodeMQTT", [](Context &ctx, Object *thiz, Value &result) {
     try {
       thiz->as<Configuration>()->encode_mqtt();
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // Configuration.encodeWebSocket
+  method("encodeWebSocket", [](Context &ctx, Object *thiz, Value &result) {
+    try {
+      thiz->as<Configuration>()->encode_websocket();
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

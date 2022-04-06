@@ -261,6 +261,16 @@ class Configuration {
   decodeHTTPResponse(options) {}
 
   /**
+   * Appends a decodeWebSocket filter to the current pipeline layout.
+   *
+   * A decodeWebSocket filter decodes WebSocket messages in its input Data and outputs Messages after decoding.
+   * Its input is a Data stream and its output is a Message stream.
+   *
+   * @returns {Configuration} The same Configuration object.
+   */
+  decodeWebSocket() {}
+
+  /**
    * Appends a decodeMQTT filter to the current pipeline layout.
    *
    * A decodeMQTT filter decodes MQTT packets in its input Data and outputs Messages after decoding.
@@ -437,6 +447,16 @@ class Configuration {
    * @returns {Configuration} The same Configuration object.
    */
   encodeMQTT() {}
+
+  /**
+   * Appends an encodeWebSocket filter to the current pipeline layout.
+   *
+   * An encodeWebSocket filter encodes its input Messages into Dubbo messages and outputs encoded Data.
+   * Its input is a Message stream and its output is a Data stream.
+   *
+   * @returns {Configuration} The same Configuration object.
+   */
+  encodeWebSocket() {}
 
   /**
    * Appends an exec filter to the current pipeline layout.
