@@ -43,6 +43,7 @@ public:
 
 protected:
   virtual auto on_state(int state, int c) -> int = 0;
+  virtual auto on_pass(const Data &data) -> Data*;
 
 private:
   int m_state = 0;

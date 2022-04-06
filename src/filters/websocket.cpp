@@ -149,10 +149,7 @@ auto Decoder::on_state(int state, int c) -> int {
     Deframer::pass(m_payload_size);
     return OPCODE;
   case MASK:
-    m_mask = (
-      ((uint32_t)m_buffer[0] << 8)|
-      ((uint32_t)m_buffer[1] << 0)
-    );
+    std::memcpy(m_mask, m_buffer, 4);
     message_start();
     Deframer::pass(m_payload_size);
     return PAYLOAD;
@@ -163,10 +160,38 @@ auto Decoder::on_state(int state, int c) -> int {
   return state;
 }
 
+auto Decoder::on_pass(const Data &data) -> Data* {
+  static Data::Producer s_dp("decodeWebSocket");
+
+  if (m_has_mask) {
+    uint8_t buf[DATA_CHUNK_SIZE];
+    auto output = Data::make();
+    auto &p = m_mask_pointer;
+    for (const auto c : data.chunks()) {
+      const auto ptr = std::get<0>(c);
+      const auto len = std::get<1>(c);
+      for (auto i = 0; i < len; i++) buf[i] = ptr[i] ^ m_mask[p++ & 3];
+      s_dp.push(output, buf, len);
+    }
+    return output;
+  } else {
+    return Data::make(data);
+  }
+}
+
 void Decoder::message_start() {
   auto head = MessageHead::make();
   pjs::set<MessageHead>(head, MessageHead::Field::opcode, int(m_opcode & 0x0f));
-  if (m_has_mask) pjs::set<MessageHead>(head, MessageHead::Field::mask, m_mask);
+  if (m_has_mask) {
+    uint32_t mask = (
+      ((uint32_t)m_mask[0] << 24)|
+      ((uint32_t)m_mask[1] << 16)|
+      ((uint32_t)m_mask[2] << 8 )|
+      ((uint32_t)m_mask[3] << 0 )
+    );
+    m_mask_pointer = 0;
+    pjs::set<MessageHead>(head, MessageHead::Field::mask, double(mask));
+  }
   Filter::output(MessageStart::make(head));
 }
 

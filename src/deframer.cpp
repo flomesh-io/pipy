@@ -72,7 +72,7 @@ void Deframer::on_input(Event *evt) {
       } else {
         Data buf;
         data->shift(n, buf);
-        output(Data::make(buf));
+        output(on_pass(buf));
       }
       if (0 == (m_read_length -= n)) {
         m_state = on_state(m_state, -1);
@@ -98,6 +98,10 @@ void Deframer::on_input(Event *evt) {
       );
     }
   }
+}
+
+auto Deframer::on_pass(const Data &data) -> Data* {
+  return Data::make(data);
 }
 
 } // namespace pipy

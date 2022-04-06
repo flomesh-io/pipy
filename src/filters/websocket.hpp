@@ -63,10 +63,12 @@ private:
   uint8_t m_opcode;
   uint8_t m_buffer[8];
   uint64_t m_payload_size;
-  uint32_t m_mask;
+  uint8_t m_mask[4];
+  uint8_t m_mask_pointer;
   bool m_has_mask;
 
   virtual auto on_state(int state, int c) -> int override;
+  virtual auto on_pass(const Data &data) -> Data* override;
 
   void message_start();
 };
