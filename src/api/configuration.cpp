@@ -38,6 +38,7 @@
 // all filters
 #include "filters/connect.hpp"
 #include "filters/decompress-message.hpp"
+#include "filters/deframe.hpp"
 #include "filters/demux.hpp"
 #include "filters/deposit-message.hpp"
 #include "filters/detect-protocol.hpp"
@@ -239,6 +240,10 @@ void Configuration::decompress_http(pjs::Function *enable) {
 
 void Configuration::decompress_message(const pjs::Value &algorithm) {
   append_filter(new DecompressMessage(algorithm));
+}
+
+void Configuration::deframe(pjs::Object *states) {
+  append_filter(new Deframe(states));
 }
 
 void Configuration::demux(pjs::Str *target) {
@@ -805,6 +810,18 @@ template<> void ClassDef<Configuration>::init() {
     if (!ctx.arguments(1, &target, &options)) return;
     try {
       thiz->as<Configuration>()->connect_tls(target, options);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // Configuration.deframe
+  method("deframe", [](Context &ctx, Object *thiz, Value &result) {
+    pjs::Object *states;
+    if (!ctx.arguments(1, &states)) return;
+    try {
+      thiz->as<Configuration>()->deframe(states);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

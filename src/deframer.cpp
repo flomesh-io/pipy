@@ -32,6 +32,7 @@ void Deframer::reset(int state) {
   m_read_length = 0;
   m_read_buffer = nullptr;
   m_read_data = nullptr;
+  m_read_array = nullptr;
 }
 
 void Deframer::read(size_t size, void *buffer) {
@@ -39,18 +40,28 @@ void Deframer::read(size_t size, void *buffer) {
   m_read_pointer = 0;
   m_read_buffer = (uint8_t*)buffer;
   m_read_data = nullptr;
+  m_read_array = nullptr;
 }
 
 void Deframer::read(size_t size, Data *data) {
   m_read_length = size;
   m_read_buffer = nullptr;
   m_read_data = data;
+  m_read_array = nullptr;
+}
+
+void Deframer::read(size_t size, pjs::Array *array) {
+  m_read_length = size;
+  m_read_buffer = nullptr;
+  m_read_data = nullptr;
+  m_read_array = array;
 }
 
 void Deframer::pass(size_t size) {
   m_read_length = size;
   m_read_buffer = nullptr;
   m_read_data = nullptr;
+  m_read_array = nullptr;
 }
 
 void Deframer::on_input(Event *evt) {
@@ -63,12 +74,16 @@ void Deframer::on_input(Event *evt) {
   auto data = evt->as<Data>();
   if (!data) return;
 
-  while (!data->empty()) {
+  while (!data->empty() && m_state >= 0) {
     if (m_read_length > 0 && !m_read_buffer) {
       auto n = m_read_length;
-      if (n < data->size()) n = data->size();
+      if (n > data->size()) n = data->size();
       if (m_read_data) {
         data->shift(n, *m_read_data);
+      } else if (m_read_array) {
+        uint8_t buf[n];
+        data->shift(n, buf);
+        for (int i = 0; i < n; i++) m_read_array->push(int(buf[i]));
       } else {
         Data buf;
         data->shift(n, buf);
@@ -92,7 +107,7 @@ void Deframer::on_input(Event *evt) {
           } else {
             state = on_state(state, c);
           }
-          return (m_read_length > 0 && !m_read_buffer);
+          return (m_read_length > 0 && !m_read_buffer) || state < 0;
         },
         output
       );

@@ -82,6 +82,7 @@ public:
   void decode_websocket();
   void decompress_http(pjs::Function *enable);
   void decompress_message(const pjs::Value &algorithm);
+  void deframe(pjs::Object *states);
   void deposit_message(const pjs::Value &filename, pjs::Object *options);
   void detect_protocol(pjs::Function *callback);
   void demux(pjs::Str *target);

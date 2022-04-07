@@ -137,6 +137,7 @@ add_executable(pipy
   src/filter.cpp
   src/filters/connect.cpp
   src/filters/decompress-message.cpp
+  src/filters/deframe.cpp
   src/filters/demux.cpp
   src/filters/deposit-message.cpp
   src/filters/detect-protocol.cpp

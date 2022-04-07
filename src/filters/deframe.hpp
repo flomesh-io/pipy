@@ -23,40 +23,40 @@
  *  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef DEFRAMER_HPP
-#define DEFRAMER_HPP
+#ifndef DEFRAME_HPP
+#define DEFRAME_HPP
 
-#include "data.hpp"
+#include "filter.hpp"
+#include "deframer.hpp"
 
 namespace pipy {
 
 //
-// Deframer
+// Deframe
 //
 
-class Deframer : public EventFunction {
+class Deframe : public Filter, public Deframer {
 public:
-  void reset(int state = 0);
-  void read(size_t size, void *buffer);
-  void read(size_t size, Data *data);
-  void read(size_t size, pjs::Array *array);
-  void pass(size_t size);
-
-protected:
-  virtual auto on_state(int state, int c) -> int = 0;
-  virtual auto on_pass(const Data &data) -> Data*;
+  Deframe(pjs::Object *states);
 
 private:
-  int m_state = 0;
-  size_t m_read_length = 0;
-  size_t m_read_pointer = 0;
-  uint8_t* m_read_buffer = nullptr;
-  pjs::Ref<Data> m_read_data;
-  pjs::Ref<pjs::Array> m_read_array;
+  Deframe(const Deframe &r);
+  ~Deframe();
 
-  virtual void on_input(Event *evt) override;
+  virtual auto clone() -> Filter* override;
+  virtual void chain() override;
+  virtual void reset() override;
+  virtual void process(Event *evt) override;
+  virtual void dump(std::ostream &out) override;
+
+  pjs::Ref<pjs::Object> m_states;
+  pjs::Ref<pjs::Object> m_state_map;
+  pjs::Ref<pjs::Array> m_state_array;
+  pjs::Ref<pjs::Object> m_read_buffer;
+
+  virtual auto on_state(int state, int c) -> int override;
 };
 
 } // namespace pipy
 
-#endif // DEFRAMER_HPP
+#endif // DEFRAME_HPP
