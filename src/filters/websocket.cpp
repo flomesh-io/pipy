@@ -243,6 +243,7 @@ void Encoder::process(Event *evt) {
       m_masked = masked;
       m_continuation = false;
       m_buffer.clear();
+      output(evt);
     }
 
   } else if (auto data = evt->as<Data>()) {

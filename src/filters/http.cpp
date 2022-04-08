@@ -1676,7 +1676,7 @@ void TunnelServer::process(Event *evt) {
     }
   }
 
-  if (m_pipeline && evt->is<Data>()) {
+  if (m_pipeline) {
     m_pipeline->input()->input(evt);
   }
 }
@@ -1689,14 +1689,14 @@ void TunnelClientReceiver::on_event(Event *evt) {
   static_cast<TunnelClient*>(this)->on_receive(evt);
 }
 
-TunnelClient::TunnelClient(const pjs::Value &target)
-  : m_target(target)
+TunnelClient::TunnelClient(const pjs::Value &handshake)
+  : m_handshake(handshake)
 {
 }
 
 TunnelClient::TunnelClient(const TunnelClient &r)
   : Filter(r)
-  , m_target(r.m_target)
+  , m_handshake(r.m_handshake)
 {
 }
 
@@ -1721,27 +1721,24 @@ void TunnelClient::reset() {
 
 void TunnelClient::process(Event *evt) {
   if (!m_pipeline) {
-    pjs::Value target;
-    if (!eval(m_target, target)) return;
-    auto s = target.to_string();
-    if (!utils::is_host_port(s->str())) {
-      s->release();
-      Log::error("[connectHTTPTunnel] invalid target: %s", s->c_str());
+    pjs::Value handshake;
+    if (!eval(m_handshake, handshake)) return;
+    if (!handshake.is<Message>()) {
+      Log::error("[connectHTTPTunnel] invalid handshake request");
       return;
     }
-    auto head = http::RequestHead::make();
-    head->method(s_CONNECT);
-    head->path(s);
-    head->authority(s);
-    s->release();
     m_pipeline = sub_pipeline(0, true);
     m_pipeline->chain(TunnelClientReceiver::input());
     auto inp = m_pipeline->input();
-    inp->input(MessageStart::make(head));
+    auto msg = handshake.as<Message>();
+    inp->input(MessageStart::make(msg->head()));
+    if (auto body = msg->body()) inp->input(body);
     inp->input(MessageEnd::make());
   }
 
-  m_pipeline->input()->input(evt);
+  if (m_pipeline) {
+    m_pipeline->input()->input(evt);
+  }
 }
 
 void TunnelClient::on_receive(Event *evt) {

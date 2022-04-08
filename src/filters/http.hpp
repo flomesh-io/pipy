@@ -504,7 +504,7 @@ class TunnelClientReceiver : public EventTarget {
 
 class TunnelClient : public Filter, public TunnelClientReceiver {
 public:
-  TunnelClient(const pjs::Value &target);
+  TunnelClient(const pjs::Value &handshake);
 
 private:
   TunnelClient(const TunnelClient &r);
@@ -517,7 +517,7 @@ private:
 
   void on_receive(Event *evt);
 
-  pjs::Value m_target;
+  pjs::Value m_handshake;
   pjs::Ref<Pipeline> m_pipeline;
   bool m_is_tunneling = false;
 
