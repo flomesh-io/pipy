@@ -9,13 +9,13 @@ Appends a **compressMessage** filter to the current pipeline layout.
 
 A **compressMessage** filter compresses the bodies of [Messages](/reference/api/Message). Its input and output are both _Messages_.
 
-|                     |             |
-|:-------------------:|:-----------:|
-| _Input_             |             |
-| ↓                   | **Message** |
+|                   |             |
+|:-----------------:|:-----------:|
+| _Input_           |             |
+| ↓                 | **Message** |
 | `compressMessage` |             |
-| ↓                   | **Message** |
-| _Output_            |             |
+| ↓                 | **Message** |
+| _Output_          |             |
 
 The method, compression level used for compression are specified by the _options_ parameter. Currently supported compression methods are _deflate_, _gzip_.
 
@@ -33,9 +33,9 @@ There are options you can use in the _options_ parameter to configure compressio
 pipy()
   .pipeline('example')
     .compressMessage({
-      enabled : true,
-      method : 'gzip',
-      level  : 'default'
+      enabled: true,
+      method: 'gzip',
+      level: 'default'
     })
 ```
 

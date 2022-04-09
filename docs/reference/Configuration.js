@@ -169,6 +169,34 @@ class Configuration {
   acceptTLS(layout, options) {}
 
   /**
+   * Appends a compressMessage filter to the current pipeline layout.
+   *
+   * A compressMessage filter compresses the bodies of Messages.
+   * Its input and output are both Messages.
+   *
+   * @param {Object} [options] Options including enabled, method and level.
+   * @param {boolean} [options.enabled] Whether the message should be compressed.
+   * @param {string} [options.method] Compression algorithm.
+   * @param {level} [options.level] Level of compression.
+   * @returns {Configuration} The same Configuration object.
+   */
+  compressMessage(options) {}
+
+  /**
+   * Appends a compressHTTP filter to the current pipeline layout.
+   *
+   * A compressHTTP filter compresses the bodies of HTTP Messages.
+   * Its input and output are both _Messages_.
+   *
+   * @param {Object} [options] Options including enabled, method and level.
+   * @param {boolean} [options.enabled] Whether the message should be compressed.
+   * @param {string} [options.method] Compression algorithm.
+   * @param {level} [options.level] Level of compression.
+   * @returns {Configuration} The same Configuration object.
+   */
+  compressHTTP(options) {}
+
+  /**
    * Appends a connect filter to the current pipeline layout.
    *
    * A connect filter establishes a TCP connection to a remote host.
