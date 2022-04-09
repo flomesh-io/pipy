@@ -139,7 +139,7 @@ CompressMessageBase::Options CompressMessageBase::Options::parse(pjs::Object *op
   CompressMessageBase::Options opts;
   if (options) {
     pjs::Value enable, method, level;
-    options->get("enable", enable);
+    options->get("enabled", enable);
     if (!enable.is_undefined()) {
       if (!enable.is_boolean()) throw std::runtime_error("options.enable expects a boolean");
       opts.enable = enable.b();

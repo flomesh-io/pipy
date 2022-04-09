@@ -23,7 +23,7 @@ This filter checks _head.headers['content-encoding']_ of the input [MessageStart
 
 There are options you can use in the _options_ parameter to configure compression method, compression level:
 
-- _enable_ - Toggle compression mode. Boolean flag either `true` or `false`. default is _true_.
+- _enabled_ - Toggle compression mode. Boolean flag either `true` or `false`. default is _true_.
 - _method_ - Compression method to use. It need to be one of `deflate`, `gzip`, and `brotli`. default is _gzip_.
 - _level_  - Compression level settings. It need to be one of `default`, `none`, `speed`, `best`. default is _default_.
 
@@ -34,7 +34,7 @@ There are options you can use in the _options_ parameter to configure compressio
 pipy()
   .pipeline('example')
     .compressHTTP({
-      enable : true,
+      enabled : true,
       method : 'gzip',
       level  : 'default'
     })
