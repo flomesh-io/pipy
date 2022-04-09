@@ -157,7 +157,7 @@ CompressMessageBase::Options CompressMessageBase::Options::parse(pjs::Object *op
       if (!level.is_string()) throw std::runtime_error("options.level requires a string");
       auto comp_level = pjs::EnumDef<CompressMessage::CompressionLevel>::value(level.s());
       if (int(comp_level) < 0)
-        throw std::runtime_error("invalid options.level. It need to be one of [default | no | speed | best]");
+        throw std::runtime_error("invalid options.level. It need to be one of [default | none | speed | best]");
       opts.level = comp_level;
     }
   }
@@ -232,7 +232,7 @@ namespace pjs {
   template<>
   void EnumDef<CompressMessageBase::CompressionLevel>::init() {
     define(CompressMessageBase::CompressionLevel::Default, "default");
-    define(CompressMessageBase::CompressionLevel::No, "no");
+    define(CompressMessageBase::CompressionLevel::None, "none");
     define(CompressMessageBase::CompressionLevel::Speed, "speed");
     define(CompressMessageBase::CompressionLevel::Best, "best");
   }

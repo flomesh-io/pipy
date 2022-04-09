@@ -47,7 +47,7 @@ public:
 
     enum class CompressionLevel {
         Default,
-        No,
+        None,
         Speed,
         Best = 10,
     };
