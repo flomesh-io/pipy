@@ -1,0 +1,55 @@
+---
+title: "Configuration.compressHTTP()"
+api: Configuration.compressHTTP()
+---
+
+## Description
+
+Appends a **compressHTTP** filter to the current pipeline layout.
+
+A **compressHTTP** filter compresses the bodies of HTTP [Messages](/reference/api/Message). Its input and output are both _Messages_.
+
+|                  |             |
+|:----------------:|:-----------:|
+| _Input_          |             |
+| ↓                | **Message** |
+| `compressHTTP` |             |
+| ↓                | **Message** |
+| _Output_         |             |
+
+This filter checks _head.headers['content-encoding']_ of the input [MessageStart](/reference/api/MessageStart) event. If its value is not set or its value is not of selected compression method, the message body will be compressed in the output.
+
+### Options
+
+There are options you can use in the _options_ parameter to configure compression method, compression level:
+
+- _enable_ - Toggle compression mode. Boolean flag either `true` or `false`. default is _true_.
+- _method_ - Compression method to use. It need to be one of `deflate`, `gzip`, and `brotli`. default is _gzip_.
+- _level_  - Compression level settings. It need to be one of `default`, `no`, `speed`, `best`. default is _default_.
+
+
+## Syntax
+
+``` js
+pipy()
+  .pipeline('example')
+    .compressHTTP({
+      "enable" : true,
+      "method" : "gzip",
+      "level"  : "default"
+    })
+
+```
+
+### Parameters
+
+<Parameters/>
+
+### Return value
+
+<ReturnValue/>
+
+## See Also
+
+* [Configuration](/reference/api/Configuration)
+* [compressMessage()](/reference/api/Configuration/compressMessage)

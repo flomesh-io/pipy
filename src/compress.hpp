@@ -47,6 +47,23 @@ protected:
   ~Decompressor() {}
 };
 
+//
+// Compressor
+//
+
+class Compressor {
+public:
+
+  static Compressor* deflate(const std::function<void(Data*)> &in, int compression_level);
+  static Compressor* gzip(const std::function<void(Data*)> &in, int compression_level);
+  static Compressor* brotli(const std::function<void(Data*)> &in, int compression_level);
+
+  virtual bool process(const Data *data) = 0;
+  virtual bool end() = 0;
+
+protected:
+  ~Compressor() {}
+};
 } // namespace pipy
 
 #endif // COMPRESS_HPP
