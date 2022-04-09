@@ -37,6 +37,7 @@
 
 // all filters
 #include "filters/connect.hpp"
+#include "filters/compress-message.hpp"
 #include "filters/decompress-message.hpp"
 #include "filters/deframe.hpp"
 #include "filters/demux.hpp"
@@ -180,6 +181,14 @@ void Configuration::accept_tls(pjs::Str *target, pjs::Object *options) {
   auto *filter = new tls::Server(options);
   filter->add_sub_pipeline(target);
   append_filter(filter);
+}
+
+void Configuration::compress_message(pjs::Object *options) {
+  append_filter(new CompressMessage(CompressMessageBase::Options::parse(options)));
+}
+
+void Configuration::compress_http(pjs::Object *options) {
+  append_filter(new CompressHTTP(CompressMessageBase::Options::parse(options)));
 }
 
 void Configuration::connect(const pjs::Value &target, pjs::Object *options) {
@@ -762,6 +771,30 @@ template<> void ClassDef<Configuration>::init() {
     } catch (std::runtime_error &err) {
       ctx.error(err);
     }
+  });
+
+  // Configuration.compressHTTP
+  method("compressHTTP", [](Context &ctx, Object *thiz, Value &result) {
+      Object *options = nullptr;
+      if (!ctx.arguments(0, &options)) return;
+      try {
+        thiz->as<Configuration>()->compress_http(options);
+        result.set(thiz);
+      } catch (std::runtime_error &err) {
+        ctx.error(err);
+      }
+  });
+
+  // Configuration.compressMessage
+  method("compressMessage", [](Context &ctx, Object *thiz, Value &result) {
+      Object *options = nullptr;
+      if (!ctx.arguments(0, &options)) return;
+      try {
+        thiz->as<Configuration>()->compress_message(options);
+        result.set(thiz);
+      } catch (std::runtime_error &err) {
+        ctx.error(err);
+      }
   });
 
   // Configuration.connect

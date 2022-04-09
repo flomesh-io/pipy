@@ -71,6 +71,8 @@ public:
   void accept_http_tunnel(pjs::Str *target, pjs::Function *handler);
   void accept_socks(pjs::Str *target, pjs::Function *on_connect);
   void accept_tls(pjs::Str *target, pjs::Object *options);
+  void compress_http(pjs::Object *options);
+  void compress_message(pjs::Object *options);
   void connect(const pjs::Value &target, pjs::Object *options);
   void connect_http_tunnel(pjs::Str *target, const pjs::Value &address);
   void connect_socks(pjs::Str *target, const pjs::Value &address);

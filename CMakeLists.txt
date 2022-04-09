@@ -135,6 +135,7 @@ add_executable(pipy
   src/fetch.cpp
   src/file.cpp
   src/filter.cpp
+  src/filters/compress-message.cpp
   src/filters/connect.cpp
   src/filters/decompress-message.cpp
   src/filters/deframe.cpp
