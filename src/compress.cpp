@@ -253,7 +253,7 @@ Decompressor* Decompressor::inflate(const std::function<void(Data*)> &out) {
   return new Inflate(out);
 }
 
-Decompressor* Decompressor::brotli_dec(const std::function<void(Data*)> &out) {
+Decompressor* Decompressor::brotli(const std::function<void(Data*)> &out) {
   return new BrotliDecoder(out);
 }
 

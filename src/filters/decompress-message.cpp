@@ -136,7 +136,7 @@ auto DecompressMessage::new_decompressor(
   if (s == s_inflate) {
     return Decompressor::inflate(out);
   } else if (s == s_brotli) {
-    return Decompressor::brotli_dec(out);
+    return Decompressor::brotli(out);
   } else {
     Log::error("[decompress] unknown compression algorithm: %s", s->c_str());
     return nullptr;
@@ -203,7 +203,7 @@ auto DecompressHTTP::new_decompressor(
     if (s == s_gzip) {
       return Decompressor::inflate(out);
     } else if (s == s_br) {
-      return Decompressor::brotli_dec(out);
+      return Decompressor::brotli(out);
     }
   }
 

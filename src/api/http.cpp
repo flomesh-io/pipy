@@ -211,7 +211,7 @@ bool File::decompress() {
     auto func = [this](Data *data) {
       m_data = data;
     };
-    decomp = m_data_gz ? Decompressor::inflate(func) : Decompressor::brotli_dec(func);
+    decomp = m_data_gz ? Decompressor::inflate(func) : Decompressor::brotli(func);
     result = decomp->process(m_data_gz ? m_data_gz : m_data_br);
     decomp->end();
   }
