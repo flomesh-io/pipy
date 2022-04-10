@@ -28,9 +28,7 @@
 #include "context.hpp"
 #include "tar.hpp"
 #include "utils.hpp"
-
-#define ZLIB_CONST
-#include <zlib.h>
+#include "compress.hpp"
 
 namespace pipy {
 namespace http {
@@ -207,43 +205,17 @@ auto File::to_message(pjs::Str *accept_encoding) -> pipy::Message* {
 }
 
 bool File::decompress() {
-  unsigned char buf[DATA_CHUNK_SIZE];
-
-  if (m_data_gz) {
-    m_data = Data::make();
-    z_stream zs;
-    zs.zalloc = Z_NULL;
-    zs.zfree = Z_NULL;
-    zs.opaque = Z_NULL;
-    zs.next_in = Z_NULL;
-    zs.avail_in = 0;
-    inflateInit2(&zs, 16 + MAX_WBITS);
-    bool done = false;
-    for (const auto chk : m_data_gz->chunks()) {
-      zs.next_in = (const unsigned char *)std::get<0>(chk);
-      zs.avail_in = std::get<1>(chk);
-      do {
-        zs.next_out = buf;
-        zs.avail_out = sizeof(buf);
-        auto ret = inflate(&zs, Z_NO_FLUSH);
-        if (auto size = sizeof(buf) - zs.avail_out) {
-          s_dp_http_file.push(m_data, buf, size);
-        }
-        if (ret == Z_STREAM_END) { done = true; break; }
-        if (ret != Z_OK) {
-          inflateEnd(&zs);
-          return false;
-        }
-      } while (zs.avail_out == 0);
-      if (done) break;
-    }
-    inflateEnd(&zs);
-    return true;
-
-  } else if (m_data_br) {
+  Decompressor *decomp;
+  bool result = false;
+  if(m_data_gz || m_data_br) {
+    auto func = [this](Data *data) {
+      m_data = data;
+    };
+    decomp = m_data_gz ? Decompressor::inflate(func) : Decompressor::brotli_dec(func);
+    result = decomp->process(m_data_gz ? m_data_gz : m_data_br);
+    decomp->end();
   }
-
-  return false;
+  return result;
 }
 
 } // namespace http

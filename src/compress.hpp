@@ -39,6 +39,7 @@ class Data;
 class Decompressor {
 public:
   static Decompressor* inflate(const std::function<void(Data*)> &out);
+  static Decompressor* brotli_dec(const std::function<void(Data*)> &out);
 
   virtual bool process(const Data *data) = 0;
   virtual bool end() = 0;

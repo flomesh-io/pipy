@@ -17,7 +17,7 @@ A **decompressHTTP** filter decompresses the bodies of HTTP [Messages](/referenc
 | ↓                | **Message** |
 | _Output_         |             |
 
-This filter checks _head.headers['content-encoding']_ of the input [MessageStart](/reference/api/MessageStart) event. If its value is _"gzip"_, the message body will be decompressed in the output.
+This filter checks _head.headers['content-encoding']_ of the input [MessageStart](/reference/api/MessageStart) event. If its value is either of _"gzip"_ or _"br"_, the message body will be decompressed in the output.
 
 You can also dynamically enable or disable the compression by giving a function to the _enable_ parameter. Decompression will only happen when the function returns truthy.
 

@@ -118,6 +118,7 @@ auto DecompressMessage::clone() -> Filter* {
 }
 
 static const pjs::Ref<pjs::Str> s_inflate(pjs::Str::make("inflate"));
+static const pjs::Ref<pjs::Str> s_brotli(pjs::Str::make("brotli"));
 
 auto DecompressMessage::new_decompressor(
   MessageStart *start,
@@ -134,6 +135,8 @@ auto DecompressMessage::new_decompressor(
   auto s = algorithm.s();
   if (s == s_inflate) {
     return Decompressor::inflate(out);
+  } else if (s == s_brotli) {
+    return Decompressor::brotli_dec(out);
   } else {
     Log::error("[decompress] unknown compression algorithm: %s", s->c_str());
     return nullptr;
@@ -170,6 +173,7 @@ auto DecompressHTTP::clone() -> Filter* {
 static const pjs::Ref<pjs::Str> s_headers(pjs::Str::make("headers"));
 static const pjs::Ref<pjs::Str> s_content_encoding(pjs::Str::make("content-encoding"));
 static const pjs::Ref<pjs::Str> s_gzip(pjs::Str::make("gzip"));
+static const pjs::Ref<pjs::Str> s_br(pjs::Str::make("br"));
 
 auto DecompressHTTP::new_decompressor(
   MessageStart *start,
@@ -194,9 +198,12 @@ auto DecompressHTTP::new_decompressor(
   };
 
   auto s = content_encoding.s();
-  if (s == s_gzip) {
-    if (is_enabled()) {
+  headers.o()->ht_delete(s);
+  if (is_enabled()) {
+    if (s == s_gzip) {
       return Decompressor::inflate(out);
+    } else if (s == s_br) {
+      return Decompressor::brotli_dec(out);
     }
   }
 

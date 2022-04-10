@@ -30,6 +30,8 @@
 #define ZLIB_CONST
 #include <zlib.h>
 
+#include <brotli/decode.h>
+
 namespace pipy {
 
 //
@@ -81,6 +83,83 @@ private:
         }
       } while (m_zs.avail_out == 0);
       if (m_done) break;
+    }
+    m_out(output_data);
+    return true;
+  }
+
+  virtual bool end() override {
+    delete this;
+    return true;
+  }
+};
+
+//
+// BrotliDecoder
+//
+
+class BrotliDecoder : public pjs::Pooled<BrotliDecoder>, public Decompressor {
+public:
+  BrotliDecoder(const std::function<void(Data*)> &out)
+    : m_out(out)
+  {
+    m_ds = BrotliDecoderCreateInstance(NULL, NULL, NULL);
+    if (!m_ds) {
+      throw std::runtime_error("[BrotliDecoder] unable to instantiate.");
+    }
+    BrotliDecoderSetParameter(m_ds, BROTLI_DECODER_PARAM_LARGE_WINDOW, 1u);
+  }
+
+private:
+  const std::function<void(Data*)> m_out;
+  BrotliDecoderState* m_ds;
+  bool m_done = false;
+
+  ~BrotliDecoder() {
+    BrotliDecoderDestroyInstance(m_ds);
+  }
+
+  virtual bool process(const Data *data) override {
+    static Data::Producer s_dp("brotli-dec");
+
+    if (m_done) return true;
+    uint8_t buf[DATA_CHUNK_SIZE];
+    pjs::Ref<Data> output_data(Data::make());
+    const unsigned char *next_in = nullptr;
+    uint8_t *next_out = buf;
+    size_t avail_in = 0, avail_out = DATA_CHUNK_SIZE;
+    BrotliDecoderResult result;
+
+    for (const auto chk : data->chunks()) {
+      next_in = (const unsigned char *)std::get<0>(chk);
+      avail_in = std::get<1>(chk);
+
+      for(;;) {
+        result = BrotliDecoderDecompressStream(m_ds, &avail_in, &next_in, &avail_out, &next_out, 0);
+        switch (result) {
+          case BROTLI_DECODER_RESULT_NEEDS_MORE_OUTPUT:
+            if (auto size = (size_t)(next_out - buf)) {
+              s_dp.push(output_data, buf, size);
+            }
+            avail_out = DATA_CHUNK_SIZE;
+            next_out = buf;
+            break;
+          case BROTLI_DECODER_RESULT_SUCCESS:
+            if (auto size = (size_t)(next_out - buf)) {
+              s_dp.push(output_data, buf, size);
+            }
+            avail_out = 0;
+            if (avail_in != 0) return false;
+            m_done = true;
+            break;
+          case BROTLI_DECODER_RESULT_ERROR:
+            return false;
+          case BROTLI_DECODER_RESULT_NEEDS_MORE_INPUT:
+            break;
+        }
+        if (result == BROTLI_DECODER_RESULT_NEEDS_MORE_INPUT ||
+            result == BROTLI_DECODER_RESULT_SUCCESS) break;
+      }
     }
     m_out(output_data);
     return true;
@@ -174,6 +253,9 @@ Decompressor* Decompressor::inflate(const std::function<void(Data*)> &out) {
   return new Inflate(out);
 }
 
+Decompressor* Decompressor::brotli_dec(const std::function<void(Data*)> &out) {
+  return new BrotliDecoder(out);
+}
 
 //
 // Decompressor

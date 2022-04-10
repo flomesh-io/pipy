@@ -6,6 +6,7 @@ option(PIPY_TUTORIAL "include builtin tutorial scripts" ON)
 option(PIPY_SOIL_FREED_SPACE "invalidate freed space for debugging" OFF)
 option(PIPY_ZLIB "external zlib location" "")
 option(PIPY_OPENSSL "external libopenssl location" "")
+option(PIPY_BROTLI "external brotli location" "")
 option(PIPY_STATIC "statically link to libc" OFF)
 
 add_subdirectory(deps/yajl-2.1.0)
@@ -89,6 +90,15 @@ endif()
 
 add_custom_target(OpenSSL DEPENDS ${OPENSSL_LIB_DIR}/libcrypto.a ${OPENSSL_LIB_DIR}/libssl.a)
 
+if(PIPY_BROTLI)
+  set(BROTLI_INC_DIR ${PIPY_BROTLI}/include)
+  set(BROTLI_LIB ${PIPY_BROTLI}/lib/libbrotlidec-static.a)
+else()
+  add_subdirectory(deps/brotli-1.0.9)
+  set(BROTLI_INC_DIR "${CMAKE_SOURCE_DIR}/deps/brotli-1.0.9/c/include")
+  set(BROTLI_LIB brotlidec-static)
+endif(PIPY_BROTLI)
+
 add_definitions(
   -D_GNU_SOURCE
   -DPIPY_HOST="${CMAKE_HOST_SYSTEM} ${CMAKE_HOST_SYSTEM_PROCESSOR}"
@@ -106,6 +116,7 @@ include_directories(
   "${CMAKE_SOURCE_DIR}/deps/leveldb-1.23/include"
   "${ZLIB_INC_DIR}"
   "${OPENSSL_INC_DIR}"
+  "${BROTLI_INC_DIR}"
 )
 
 add_executable(pipy
@@ -208,7 +219,7 @@ add_custom_command(
 
 add_custom_target(GenVer DEPENDS ${CMAKE_BINARY_DIR}/deps/version.h)
 
-add_dependencies(pipy yajl_s expat ${ZLIB_LIB} OpenSSL GenVer)
+add_dependencies(pipy yajl_s expat ${ZLIB_LIB} OpenSSL ${BROTLI_LIB} GenVer)
 
 if(PIPY_GUI)
   add_definitions(-DPIPY_USE_GUI)
@@ -257,6 +268,7 @@ target_link_libraries(
   ${ZLIB_LIB}
   ${OPENSSL_LIB_DIR}/libssl.a
   ${OPENSSL_LIB_DIR}/libcrypto.a
+  ${BROTLI_LIB}
   leveldb
   -pthread
   -ldl
