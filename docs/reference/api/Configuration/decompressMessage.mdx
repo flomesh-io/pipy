@@ -17,7 +17,7 @@ A **decompressMessage** filter decompresses the bodies of [Messages](/reference/
 | ↓                   | **Message** |
 | _Output_            |             |
 
-The algorithm used for decompression is specified by the _algorithm_ parameter. The only algorithm currently supported is _"inflate"_.
+The algorithm used for decompression is specified by the _algorithm_ parameter. The decompression algorithms currently supported are _"inflate"_ and _"brotli"_.
 
 You can also give a function to _algorithm_ that dynamically returns the algorithm to use. When it returns nullish (_null_ or _undefined_), no decompression will be done.
 
