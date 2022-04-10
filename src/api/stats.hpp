@@ -37,15 +37,15 @@
 namespace pipy {
 namespace stats {
 
+class MetricSet;
+
 //
 // Metric
 //
 
 class Metric : public pjs::ObjectTemplate<Metric> {
 public:
-  static auto get(pjs::Str *name) -> Metric*;
-  static void collect_all();
-  static void to_prometheus(Data &out);
+  static auto local() -> MetricSet&;
 
   auto name() const -> pjs::Str* { return m_name; }
   auto label() const -> pjs::Str* { return m_label; }
@@ -53,7 +53,7 @@ public:
   void clear();
 
 protected:
-  Metric(pjs::Str *name, pjs::Array *label_names);
+  Metric(pjs::Str *name, pjs::Array *label_names, MetricSet *set = nullptr);
   Metric(Metric *parent, pjs::Str **labels);
   virtual ~Metric() {}
 
@@ -76,12 +76,36 @@ private:
   pjs::Ref<pjs::Str> m_label;
   int m_label_index;
   bool m_has_value = false;
+  bool m_has_serialized = false;
   std::shared_ptr<std::vector<pjs::Ref<pjs::Str>>> m_label_names;
   std::unordered_map<pjs::Ref<pjs::Str>, pjs::Ref<Metric>> m_subs;
 
   static std::unordered_map<pjs::Ref<pjs::Str>, pjs::Ref<Metric>> s_all_metrics;
 
   friend class pjs::ObjectTemplate<Metric>;
+  friend class MetricSet;
+};
+
+//
+// MetricSet
+//
+
+class MetricSet {
+public:
+  auto get(pjs::Str *name) -> Metric*;
+  void collect_all();
+  void serialize_init(Data &out);
+  void serialize_update(Data &out);
+  void deserialize(Data &in);
+  void to_prometheus(Data &out);
+
+private:
+  std::vector<pjs::Ref<Metric>> m_metrics;
+  std::unordered_map<pjs::Ref<pjs::Str>, Metric*> m_metric_map;
+
+  void add(Metric *metric);
+
+  friend class Metric;
 };
 
 //
@@ -197,6 +221,24 @@ private:
 
 class Stats : public pjs::ObjectTemplate<Stats>
 {
+};
+
+//
+// MetricClient
+//
+
+class MetricClient {
+public:
+
+private:
+  std::vector<Metric*> m_metrics;
+};
+
+//
+// MetricServer
+//
+
+class MetricServer {
 };
 
 } // namespace stats

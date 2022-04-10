@@ -301,8 +301,8 @@ auto AdminService::handle(Message *req) -> Message* {
 
 Message* AdminService::metrics_GET() {
   Data buf;
-  stats::Metric::collect_all();
-  stats::Metric::to_prometheus(buf);
+  stats::Metric::local().collect_all();
+  stats::Metric::local().to_prometheus(buf);
   return response(buf);
 }
 

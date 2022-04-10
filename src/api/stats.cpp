@@ -34,56 +34,12 @@ static Data::Producer s_dp("Stats");
 // Metric
 //
 
-std::unordered_map<pjs::Ref<pjs::Str>, pjs::Ref<Metric>> Metric::s_all_metrics;
-
-auto Metric::get(pjs::Str *name) -> Metric* {
-  auto i = s_all_metrics.find(name);
-  if (i == s_all_metrics.end()) return nullptr;
-  return i->second;
+auto Metric::local() -> MetricSet& {
+  static MetricSet s_local_metric_set;
+  return s_local_metric_set;
 }
 
-void Metric::collect_all() {
-  for (const auto &i : s_all_metrics) {
-    i.second->collect();
-  }
-}
-
-void Metric::to_prometheus(Data &out) {
-  static std::string le("le");
-  for (const auto &i : s_all_metrics) {
-    auto metric = i.second.get();
-    auto name = metric->name();
-    auto max_dim = metric->m_label_names->size() + 1;
-    pjs::Str *label_names[max_dim];
-    pjs::Str *label_values[max_dim];
-    metric->dump_tree(
-      label_names,
-      label_values,
-      [&](int dim, double x) {
-        s_dp.push(&out, name->str());
-        if (dim > 0) {
-          for (int i = 0; i < dim; i++) {
-            auto label_name = label_names[i];
-            s_dp.push(&out, i ? ',' : '{');
-            s_dp.push(&out, label_name->size() > 0 ? label_name->str() : le);
-            s_dp.push(&out, '=');
-            s_dp.push(&out, '"');
-            s_dp.push(&out, label_values[i]->str());
-            s_dp.push(&out, '"');
-          }
-          s_dp.push(&out, '}');
-        }
-        char buf[100];
-        auto len = pjs::Number::to_string(buf, sizeof(buf), x);
-        s_dp.push(&out, ' ');
-        s_dp.push(&out, buf, len);
-        s_dp.push(&out, '\n');
-      }
-    );
-  }
-}
-
-Metric::Metric(pjs::Str *name, pjs::Array *label_names)
+Metric::Metric(pjs::Str *name, pjs::Array *label_names, MetricSet *set)
   : m_name(name)
   , m_label_index(-1)
   , m_label_names(std::make_shared<std::vector<pjs::Ref<pjs::Str>>>())
@@ -99,7 +55,11 @@ Metric::Metric(pjs::Str *name, pjs::Array *label_names)
     }
   }
 
-  s_all_metrics[name] = this;
+  if (set) {
+    set->add(this);
+  } else {
+    local().add(this);
+  }
 }
 
 Metric::Metric(Metric *parent, pjs::Str **labels)
@@ -180,6 +140,103 @@ void Metric::dump_tree(
       label_names,
       label_values,
       out
+    );
+  }
+}
+
+//
+// MetricSet
+//
+
+void MetricSet::add(Metric *metric) {
+  m_metrics.emplace_back();
+  m_metrics.back() = metric;
+  m_metric_map[metric->name()] = metric;
+}
+
+auto MetricSet::get(pjs::Str *name) -> Metric* {
+  auto i = m_metric_map.find(name);
+  if (i == m_metric_map.end()) return nullptr;
+  return i->second;
+}
+
+void MetricSet::collect_all() {
+  for (const auto &m : m_metrics) {
+    m->collect();
+  }
+}
+
+//
+// [
+//   {
+//     "k": "metric-1",
+//     "v": 123,
+//     "l": ["label-1","label-2"],
+//     "s": [
+//       {
+//         "k": "label-value-1",
+//         "v": 123,
+//         "s": [...]
+//       }
+//     ]
+//   }
+// ]
+//
+
+void MetricSet::serialize_init(Data &out) {
+}
+
+//
+// [
+//   {
+//     "v": 123,
+//     "s": [
+//       {
+//         "v": 123,
+//         "s": [...]
+//       },
+//       123
+//     ]
+//   }
+// ]
+//
+
+void MetricSet::serialize_update(Data &out) {
+}
+
+void MetricSet::deserialize(Data &in) {
+}
+
+void MetricSet::to_prometheus(Data &out) {
+  static std::string le("le");
+  for (const auto &metric : m_metrics) {
+    auto name = metric->name();
+    auto max_dim = metric->m_label_names->size() + 1;
+    pjs::Str *label_names[max_dim];
+    pjs::Str *label_values[max_dim];
+    metric->dump_tree(
+      label_names,
+      label_values,
+      [&](int dim, double x) {
+        s_dp.push(&out, name->str());
+        if (dim > 0) {
+          for (int i = 0; i < dim; i++) {
+            auto label_name = label_names[i];
+            s_dp.push(&out, i ? ',' : '{');
+            s_dp.push(&out, label_name->size() > 0 ? label_name->str() : le);
+            s_dp.push(&out, '=');
+            s_dp.push(&out, '"');
+            s_dp.push(&out, label_values[i]->str());
+            s_dp.push(&out, '"');
+          }
+          s_dp.push(&out, '}');
+        }
+        char buf[100];
+        auto len = pjs::Number::to_string(buf, sizeof(buf), x);
+        s_dp.push(&out, ' ');
+        s_dp.push(&out, buf, len);
+        s_dp.push(&out, '\n');
+      }
     );
   }
 }
