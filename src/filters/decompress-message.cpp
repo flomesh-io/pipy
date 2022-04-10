@@ -198,7 +198,7 @@ auto DecompressHTTP::new_decompressor(
   };
 
   auto s = content_encoding.s();
-  headers.o()->ht_delete(s);
+
   if (is_enabled()) {
     if (s == s_gzip) {
       return Decompressor::inflate(out);
