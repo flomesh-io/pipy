@@ -58,6 +58,7 @@ protected:
   virtual ~Metric() {}
 
   void create_value();
+  void serialize(Data::Builder &db, bool initial);
 
   virtual auto create_new(Metric *parent, pjs::Str **labels) -> Metric* = 0;
   virtual void collect() {}
@@ -78,7 +79,8 @@ private:
   bool m_has_value = false;
   bool m_has_serialized = false;
   std::shared_ptr<std::vector<pjs::Ref<pjs::Str>>> m_label_names;
-  std::unordered_map<pjs::Ref<pjs::Str>, pjs::Ref<Metric>> m_subs;
+  std::vector<pjs::Ref<Metric>> m_subs;
+  std::unordered_map<pjs::Ref<pjs::Str>, Metric*> m_sub_map;
 
   static std::unordered_map<pjs::Ref<pjs::Str>, pjs::Ref<Metric>> s_all_metrics;
 
@@ -94,8 +96,7 @@ class MetricSet {
 public:
   auto get(pjs::Str *name) -> Metric*;
   void collect_all();
-  void serialize_init(Data &out);
-  void serialize_update(Data &out);
+  void serialize(Data &out, bool initial);
   void deserialize(Data &in);
   void to_prometheus(Data &out);
 

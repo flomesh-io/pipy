@@ -68,7 +68,9 @@ Metric::Metric(Metric *parent, pjs::Str **labels)
   , m_label_index(parent->m_label_index + 1)
   , m_label_names(parent->m_label_names)
 {
-  parent->m_subs[m_label] = this;
+  parent->m_subs.emplace_back();
+  parent->m_subs.back() = this;
+  parent->m_sub_map[m_label] = this;
 }
 
 auto Metric::with_labels(pjs::Str *const *labels, int count) -> Metric* {
@@ -95,9 +97,10 @@ auto Metric::with_labels(pjs::Str *const *labels, int count) -> Metric* {
 
 void Metric::clear() {
   for (const auto &i : m_subs) {
-    i.second->clear();
+    i->clear();
   }
   m_subs.clear();
+  m_sub_map.clear();
   m_has_value = false;
 }
 
@@ -105,10 +108,89 @@ void Metric::create_value() {
   m_has_value = true;
 }
 
+//
+// Initial state:
+//   {
+//     "k": "metric-1",
+//     "l": ["label-1","label-2"],
+//     "v": 123,
+//     "s": [
+//       {
+//         "k": "label-value-1",
+//         "v": 123,
+//         "s": [...]
+//       }
+//     ]
+//   }
+//
+// Update state:
+//   {
+//     "v": 123,
+//     "s": [
+//       {
+//         "v": 123,
+//         "s": [...]
+//       },
+//       123
+//     ]
+//   }
+//
+
+void Metric::serialize(Data::Builder &db, bool initial) {
+  static std::string s_k("\"k\":");
+  static std::string s_v("\"v\":");
+  static std::string s_l("\"l\":");
+  static std::string s_s("\"s\":");
+
+  bool keyed = (initial || !m_has_serialized);
+  bool value_only = (!keyed && m_subs.empty());
+
+  if (!value_only) {
+    db.push('{');
+
+    if (keyed) {
+      db.push(s_k);
+      db.push('"');
+      if (m_label_index >= 0) {
+        utils::escape(m_label->str(), [&](char c) { db.push(c); });
+      } else {
+        utils::escape(m_name->str(), [&](char c) { db.push(c); });
+      }
+      db.push('"');
+      db.push(',');
+    }
+
+    db.push(s_v);
+  }
+
+  dump(
+    [&](pjs::Str*, pjs::Str*, double x) {
+      char buf[100];
+      auto len = pjs::Number::to_string(buf, sizeof(buf), x);
+      db.push(buf, len);
+    }
+  );
+
+  if (!m_subs.empty()) {
+    db.push(',');
+    db.push(s_s);
+    db.push('[');
+    bool first = true;
+    for (const auto &i : m_subs) {
+      if (first) first = false; else db.push(',');
+      i->serialize(db, initial);
+    }
+    db.push(']');
+  }
+
+  if (!value_only) db.push('}');
+  m_has_serialized = true;
+}
+
 auto Metric::get_sub(pjs::Str **labels) -> Metric* {
   auto k = labels[m_label_index + 1];
-  auto i = m_subs.find(k);
-  if (i != m_subs.end()) return i->second;
+  auto i = m_sub_map.find(k);
+  if (i != m_sub_map.end()) return i->second;
   return create_new(this, labels);
 }
 
@@ -136,7 +218,7 @@ void Metric::dump_tree(
     );
   }
   for (const auto &i : m_subs) {
-    i.second->dump_tree(
+    i->dump_tree(
       label_names,
       label_values,
       out
@@ -166,42 +248,16 @@ void MetricSet::collect_all() {
   }
 }
 
-//
-// [
-//   {
-//     "k": "metric-1",
-//     "v": 123,
-//     "l": ["label-1","label-2"],
-//     "s": [
-//       {
-//         "k": "label-value-1",
-//         "v": 123,
-//         "s": [...]
-//       }
-//     ]
-//   }
-// ]
-//
-
-void MetricSet::serialize_init(Data &out) {
-}
-
-//
-// [
-//   {
-//     "v": 123,
-//     "s": [
-//       {
-//         "v": 123,
-//         "s": [...]
-//       },
-//       123
-//     ]
-//   }
-// ]
-//
-
-void MetricSet::serialize_update(Data &out) {
+void MetricSet::serialize(Data &out, bool initial) {
+  Data::Builder db(out, &s_dp);
+  db.push('[');
+  bool first = true;
+  for (const auto &metric : m_metrics) {
+    if (first) first = false; else db.push(',');
+    metric->serialize(db, initial);
+  }
+  db.push(']');
+  db.flush();
 }
 
 void MetricSet::deserialize(Data &in) {
@@ -209,6 +265,7 @@ void MetricSet::deserialize(Data &in) {
 
 void MetricSet::to_prometheus(Data &out) {
   static std::string le("le");
+  Data::Builder db(out, &s_dp);
   for (const auto &metric : m_metrics) {
     auto name = metric->name();
     auto max_dim = metric->m_label_names->size() + 1;
@@ -218,27 +275,28 @@ void MetricSet::to_prometheus(Data &out) {
       label_names,
       label_values,
       [&](int dim, double x) {
-        s_dp.push(&out, name->str());
+        db.push(name->str());
         if (dim > 0) {
           for (int i = 0; i < dim; i++) {
             auto label_name = label_names[i];
-            s_dp.push(&out, i ? ',' : '{');
-            s_dp.push(&out, label_name->size() > 0 ? label_name->str() : le);
-            s_dp.push(&out, '=');
-            s_dp.push(&out, '"');
-            s_dp.push(&out, label_values[i]->str());
-            s_dp.push(&out, '"');
+            db.push(i ? ',' : '{');
+            db.push(label_name->size() > 0 ? label_name->str() : le);
+            db.push('=');
+            db.push('"');
+            db.push(label_values[i]->str());
+            db.push('"');
           }
-          s_dp.push(&out, '}');
+          db.push('}');
         }
         char buf[100];
         auto len = pjs::Number::to_string(buf, sizeof(buf), x);
-        s_dp.push(&out, ' ');
-        s_dp.push(&out, buf, len);
-        s_dp.push(&out, '\n');
+        db.push(' ');
+        db.push(buf, len);
+        db.push('\n');
       }
     );
   }
+  db.flush();
 }
 
 //
