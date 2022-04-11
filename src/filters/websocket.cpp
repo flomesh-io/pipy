@@ -145,6 +145,7 @@ auto Decoder::on_state(int state, int c) -> int {
     return message_start();
   case MASK:
     std::memcpy(m_mask, m_buffer, 4);
+    m_mask_pointer = 0;
     return message_start();
   case PAYLOAD:
     message_end();
@@ -258,6 +259,7 @@ void Encoder::process(Event *evt) {
     if (m_start) {
       frame(m_buffer, true);
       m_buffer.clear();
+      m_continuation = false;
       output(evt);
     }
 
