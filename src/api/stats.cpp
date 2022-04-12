@@ -135,12 +135,31 @@ void Metric::create_value() {
 //     ]
 //   }
 //
+// Vector initial:
+//   {
+//     "k": "latency-1",
+//     "v": {
+//       "1": 12345,
+//       "2": 1234,
+//       "4": 123,
+//       "8": 12,
+//       "16": 1,
+//       "32": 0
+//     }
+//   }
+//
+// Vector update:
+//   {
+//     "k": "latency-1",
+//     "v": [12345, 1234, 123, 12, 1, 0]
+//   }
+//
 
 void Metric::serialize(Data::Builder &db, bool initial) {
-  static std::string s_k("\"k\":");
-  static std::string s_v("\"v\":");
-  static std::string s_l("\"l\":");
-  static std::string s_s("\"s\":");
+  static std::string s_k("\"k\":"); // key
+  static std::string s_v("\"v\":"); // value
+  static std::string s_l("\"l\":"); // label
+  static std::string s_s("\"s\":"); // sub
 
   bool keyed = (initial || !m_has_serialized);
   bool value_only = (!keyed && m_subs.empty());
@@ -163,13 +182,30 @@ void Metric::serialize(Data::Builder &db, bool initial) {
     db.push(s_v);
   }
 
+  bool first_dimension = true;
   dump(
-    [&](pjs::Str*, pjs::Str*, double x) {
+    [&](pjs::Str *dim, double x) {
+      if (dim) {
+        if (first_dimension) {
+          db.push(keyed ? '{' : '[');
+          first_dimension = false;
+        } else {
+          db.push(',');
+        }
+        if (keyed) {
+          db.push('"');
+          utils::escape(dim->str(), [&](char c) { db.push(c); });
+          db.push('"');
+          db.push(':');
+        }
+      }
       char buf[100];
       auto len = pjs::Number::to_string(buf, sizeof(buf), x);
       db.push(buf, len);
     }
   );
+
+  if (!first_dimension) db.push(keyed ? '}' : ']');
 
   if (!m_subs.empty()) {
     db.push(',');
@@ -206,10 +242,10 @@ void Metric::dump_tree(
   }
   if (m_has_value) {
     dump(
-      [&](pjs::Str *dim, pjs::Str *comp, double x) {
+      [&](pjs::Str *dim, double x) {
         if (dim) {
-          label_names[i+1] = dim;
-          label_values[i+1] = comp;
+          label_names[i+1] = pjs::Str::empty;
+          label_values[i+1] = dim;
           out(i+2, x);
         } else {
           out(i+1, x);
@@ -407,12 +443,12 @@ void Histogram::value_of(pjs::Value &out) {
   out.set(a);
 }
 
-void Histogram::dump(const std::function<void(pjs::Str*, pjs::Str*, double)> &out) {
+void Histogram::dump(const std::function<void(pjs::Str*, double)> &out) {
   const auto &labels = m_root ? m_root->m_labels : m_labels;
   int i = 0;
   m_percentile->dump(
     [&](double, double count) {
-      out(pjs::Str::empty, labels[i++], count);
+      out(labels[i++], count);
     }
   );
 }

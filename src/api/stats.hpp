@@ -62,7 +62,7 @@ protected:
 
   virtual auto create_new(Metric *parent, pjs::Str **labels) -> Metric* = 0;
   virtual void collect() {}
-  virtual void dump(const std::function<void(pjs::Str*, pjs::Str*, double)> &out) {};
+  virtual void dump(const std::function<void(pjs::Str*, double)> &out) {};
 
 private:
   auto get_sub(pjs::Str **labels) -> Metric*;
@@ -147,8 +147,8 @@ private:
     out.set(m_value);
   }
 
-  virtual void dump(const std::function<void(pjs::Str*, pjs::Str*, double)> &out) override {
-    out(nullptr, nullptr, m_value);
+  virtual void dump(const std::function<void(pjs::Str*, double)> &out) override {
+    out(nullptr, m_value);
   };
 
   double m_value = 0;
@@ -176,8 +176,8 @@ private:
     out.set(m_value);
   }
 
-  virtual void dump(const std::function<void(pjs::Str*, pjs::Str*, double)> &out) override {
-    out(nullptr, 0, m_value);
+  virtual void dump(const std::function<void(pjs::Str*, double)> &out) override {
+    out(nullptr, m_value);
   };
 
   virtual void collect() override {
@@ -206,7 +206,7 @@ private:
   Histogram(Metric *parent, pjs::Str **labels);
 
   virtual void value_of(pjs::Value &out) override;
-  virtual void dump(const std::function<void(pjs::Str*, pjs::Str*, double)> &out) override;
+  virtual void dump(const std::function<void(pjs::Str*, double)> &out) override;
 
   pjs::Ref<Histogram> m_root;
   pjs::Ref<pjs::Array> m_buckets;
