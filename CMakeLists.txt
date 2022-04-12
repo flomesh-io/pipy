@@ -120,6 +120,7 @@ include_directories(
 )
 
 add_executable(pipy
+  src/admin-link.cpp
   src/admin-proxy.cpp
   src/admin-service.cpp
   src/api/algo.cpp

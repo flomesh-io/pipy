@@ -35,6 +35,18 @@ namespace pipy {
 namespace websocket {
 
 //
+// MessageHead
+//
+
+class MessageHead : public pjs::ObjectTemplate<MessageHead> {
+public:
+  enum class Field {
+    opcode,
+    masked,
+  };
+};
+
+//
 // Decoder
 //
 

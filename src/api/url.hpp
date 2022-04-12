@@ -57,6 +57,7 @@ public:
 private:
   URL(pjs::Str *url);
   URL(pjs::Str *url, pjs::Str *base);
+  URL(const std::string &url, const std::string &base = std::string());
 
   pjs::Ref<pjs::Str> m_auth;
   pjs::Ref<pjs::Str> m_hash;

@@ -34,10 +34,15 @@ namespace pipy {
 // URL
 //
 
-URL::URL(pjs::Str *url) : URL(url, nullptr) {
+URL::URL(pjs::Str *url) : URL(url->str())
+{
 }
 
-URL::URL(pjs::Str *url, pjs::Str *base) {
+URL::URL(pjs::Str *url, pjs::Str *base) : URL(url->str(), base->str())
+{
+}
+
+URL::URL(const std::string &url, const std::string &base) {
   auto find_protocol = [](const std::string &url) -> std::string {
     for (int i = 0; i < url.length(); i++) {
       auto c = url[i];
@@ -70,15 +75,15 @@ URL::URL(pjs::Str *url, pjs::Str *base) {
     return i == std::string::npos ? host : host.substr(i);
   };
 
-  auto protocol = find_protocol(url->str());
-  auto host_path = url->str().substr(protocol.length());
+  auto protocol = find_protocol(url);
+  auto host_path = url.substr(protocol.length());
   auto host = find_host(host_path);
   auto path = host_path.substr(host.length());
   host = trim_host(host);
 
-  if (host.empty() && base) {
-    protocol = find_protocol(base->str());
-    host_path = base->str().substr(protocol.length());
+  if (host.empty() && !base.empty()) {
+    protocol = find_protocol(base);
+    host_path = base.substr(protocol.length());
     host = find_host(host_path);
     if (path.empty()) {
       path = host_path.substr(host.length());

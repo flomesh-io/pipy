@@ -48,14 +48,6 @@ namespace websocket {
 // |                     Payload Data continued ...                |
 // +---------------------------------------------------------------+
 
-class MessageHead : public pjs::ObjectTemplate<MessageHead> {
-public:
-  enum class Field {
-    opcode,
-    masked,
-  };
-};
-
 //
 // Decoder
 //
