@@ -29,6 +29,7 @@
 #include "filter.hpp"
 #include "data.hpp"
 #include "message.hpp"
+#include "pipeline.hpp"
 #include "api/url.hpp"
 
 #include <string>
@@ -48,6 +49,7 @@ public:
 
   auto connect() -> int;
   void send(const Data &data);
+  void close();
 
 private:
 

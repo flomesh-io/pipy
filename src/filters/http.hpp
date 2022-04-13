@@ -49,6 +49,7 @@ public:
 
   bool is_final() const { return m_is_final; }
   bool is_bodiless() const { return m_is_bodiless; }
+  bool is_tunnel() const { return m_is_tunnel; }
   bool is_connect() const { return m_is_connect; }
   bool is_upgrade_websocket() const { return m_is_upgrade_websocket; }
   bool is_upgrade_http2() const { return m_is_upgrade_http2; }
@@ -438,6 +439,9 @@ private:
   Decoder m_ef_decoder;
   Encoder m_ef_encoder;
   Handler m_ef_handler;
+  pjs::Ref<Pipeline> m_tunnel;
+
+  void on_tunnel_data(Data *data);
 };
 
 //

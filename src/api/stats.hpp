@@ -96,7 +96,7 @@ class MetricSet {
 public:
   auto get(pjs::Str *name) -> Metric*;
   void collect_all();
-  void serialize(Data &out, bool initial);
+  void serialize(Data &out, const std::string &uuid, bool initial);
   void deserialize(Data &in);
   void to_prometheus(Data &out);
 

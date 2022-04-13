@@ -284,8 +284,17 @@ void MetricSet::collect_all() {
   }
 }
 
-void MetricSet::serialize(Data &out, bool initial) {
+void MetricSet::serialize(Data &out, const std::string &uuid, bool initial) {
+  static std::string s_uuid("\"uuid\":");
+  static std::string s_metrics("\"metrics\":");
   Data::Builder db(out, &s_dp);
+  db.push('{');
+  db.push(s_uuid);
+  db.push('"');
+  db.push(uuid);
+  db.push('"');
+  db.push(',');
+  db.push(s_metrics);
   db.push('[');
   bool first = true;
   for (const auto &metric : m_metrics) {
@@ -293,6 +302,7 @@ void MetricSet::serialize(Data &out, bool initial) {
     metric->serialize(db, initial);
   }
   db.push(']');
+  db.push('}');
   db.flush();
 }
 

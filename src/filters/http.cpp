@@ -1438,6 +1438,7 @@ void Server::reset() {
   m_ef_decoder.reset();
   m_ef_encoder.reset();
   m_ef_handler.m_shutdown = false;
+  m_tunnel = nullptr;
 }
 
 void Server::process(Event *evt) {
@@ -1449,8 +1450,25 @@ void Server::shutdown() {
   m_ef_handler.m_shutdown = true;
 }
 
+void Server::on_tunnel_data(Data *data) {
+  if (!m_tunnel) {
+    if (num_sub_pipelines() > 0) {
+      m_tunnel = sub_pipeline(0, false);
+    }
+  }
+
+  if (m_tunnel) {
+    m_tunnel->input()->input(data);
+  }
+}
+
 void Server::Handler::on_event(Event *evt) {
-  if (auto start = evt->as<MessageStart>()) {
+  if (m_server->m_ef_decoder.is_tunnel()) {
+    if (auto data = evt->as<Data>()) {
+      m_server->on_tunnel_data(data);
+    }
+
+  } else if (auto start = evt->as<MessageStart>()) {
     if (!m_start) {
       m_start = start;
       m_buffer.clear();

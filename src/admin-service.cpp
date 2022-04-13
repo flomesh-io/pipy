@@ -29,6 +29,7 @@
 #include "api/stats.hpp"
 #include "filters/http.hpp"
 #include "filters/tls.hpp"
+#include "filters/websocket.hpp"
 #include "gui-tarball.hpp"
 #include "listener.hpp"
 #include "worker.hpp"
@@ -42,6 +43,10 @@ namespace pipy {
 
 static Data::Producer s_dp("Codebase Service");
 static std::string s_server_name("pipy-repo");
+
+//
+// AdminService
+//
 
 AdminService::AdminService(CodebaseStore *store)
   : m_store(store)
@@ -83,6 +88,7 @@ void AdminService::open(int port, const Options &options) {
   Log::info("[admin] Starting admin service...");
 
   PipelineDef *pipeline_def = PipelineDef::make(nullptr, PipelineDef::LISTEN, "Admin Service");
+  PipelineDef *pipeline_def_ws = PipelineDef::make(nullptr, PipelineDef::NAMED, "Admin Service Link");
   PipelineDef *pipeline_def_inbound = nullptr;
 
   if (!options.cert || !options.key) {
@@ -105,7 +111,11 @@ void AdminService::open(int port, const Options &options) {
         return handle(msg);
       }
     )
-  );
+  )->add_sub_pipeline(pipeline_def_ws);
+
+  pipeline_def_ws->append(new websocket::Decoder());
+  pipeline_def_ws->append(new AdminLinkHandler(this));
+  pipeline_def_ws->append(new websocket::Encoder());
 
   Listener::Options opts;
   opts.reserved = true;
@@ -781,6 +791,45 @@ auto AdminService::response_head(
   head->headers(headers_obj);
   head->status(status);
   return head;
+}
+
+
+void AdminService::on_metrics(const Data &data) {
+}
+
+//
+// AdminService::AdminLinkHandler
+//
+
+auto AdminService::AdminLinkHandler::clone() -> Filter* {
+  return new AdminService::AdminLinkHandler(*this);
+}
+
+void AdminService::AdminLinkHandler::reset() {
+  Filter::reset();
+  m_payload.clear();
+  m_started = false;
+}
+
+void AdminService::AdminLinkHandler::process(Event *evt) {
+  if (evt->is<MessageStart>()) {
+    m_started = true;
+    m_payload.clear();
+  } else if (auto data = evt->as<Data>()) {
+    if (m_started) {
+      m_payload.push(*data);
+    }
+  } else if (evt->is<MessageEnd>()) {
+    if (m_started) {
+      m_service->on_metrics(m_payload);
+      m_payload.clear();
+      m_started = false;
+    }
+  }
+}
+
+void AdminService::AdminLinkHandler::dump(std::ostream &out) {
+  out << "AdminService::AdminLinkHandler";
 }
 
 } // namespace pipy

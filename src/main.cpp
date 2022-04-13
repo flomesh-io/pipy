@@ -25,9 +25,11 @@
 
 #include "version.h"
 
+#include "admin-link.hpp"
 #include "admin-service.hpp"
 #include "admin-proxy.hpp"
 #include "api/crypto.hpp"
+#include "api/stats.hpp"
 #include "codebase.hpp"
 #include "file.hpp"
 #include "fs.hpp"
@@ -52,6 +54,7 @@ using namespace pipy;
 
 AdminService *s_admin = nullptr;
 AdminProxy *s_admin_proxy = nullptr;
+AdminLink *s_admin_link = nullptr;
 
 //
 // Show version
@@ -102,6 +105,30 @@ static void start_checking_updates() {
 }
 
 //
+// Periodically report metrics
+//
+
+static void start_reporting_metrics(const std::string &url) {
+  static Timer timer;
+  static std::function<void()> report;
+  static int connection_id = 0;
+  static auto on_receive = [](const Data &data) {};
+  s_admin_link = new AdminLink(url, on_receive);
+  report = []() {
+    if (!Worker::exited()) {
+      auto conn_id = s_admin_link->connect();
+      Data buf;
+      stats::Metric::local().collect_all();
+      stats::Metric::local().serialize(buf, Status::local.uuid, conn_id != connection_id);
+      s_admin_link->send(buf);
+      connection_id = conn_id;
+    }
+    timer.schedule(5, report);
+  };
+  report();
+}
+
+//
 // Handle signals
 //
 
@@ -114,6 +141,7 @@ static void handle_signal(int sig) {
 
   switch (sig) {
     case SIGINT:
+      if (s_admin_link) s_admin_link->close();
       if (s_admin) s_admin->close();
       Worker::exit(-1);
       break;
@@ -309,6 +337,10 @@ int main(int argc, char *argv[]) {
             }
 
             start_checking_updates();
+
+            if (is_remote) {
+              start_reporting_metrics(opts.filename);
+            }
           }
         );
       };
@@ -334,6 +366,7 @@ int main(int argc, char *argv[]) {
 
     File::stop_bg_thread();
 
+    delete s_admin_link;
     delete s_admin;
     delete s_admin_proxy;
     delete repo;

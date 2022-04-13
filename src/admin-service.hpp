@@ -28,7 +28,9 @@
 
 #include "api/http.hpp"
 #include "api/crypto.hpp"
+#include "filter.hpp"
 #include "message.hpp"
+#include "data.hpp"
 #include "tar.hpp"
 #include "codebase-store.hpp"
 #include "status.hpp"
@@ -56,6 +58,30 @@ public:
   void close();
 
 private:
+
+  //
+  // AdminService::AdminLinkHandler
+  //
+
+  class AdminLinkHandler : public Filter {
+  public:
+    AdminLinkHandler(AdminService *service)
+      : m_service(service) {}
+
+    AdminLinkHandler(const AdminLinkHandler &r)
+      : m_service(r.m_service) {}
+
+  private:
+    virtual auto clone() -> Filter* override;
+    virtual void reset() override;
+    virtual void process(Event *evt) override;
+    virtual void dump(std::ostream &out) override;
+
+    AdminService* m_service;
+    Data m_payload;
+    bool m_started;
+  };
+
   int m_port;
   CodebaseStore* m_store;
   std::string m_current_codebase;
@@ -112,6 +138,8 @@ private:
     int status,
     const std::map<std::string, std::string> &headers
   ) -> http::ResponseHead*;
+
+  void on_metrics(const Data &data);
 };
 
 } // namespace pipy
