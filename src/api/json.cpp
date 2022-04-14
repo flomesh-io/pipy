@@ -116,20 +116,18 @@ namespace pipy {
 
 class JSONVisitor {
 public:
-  JSONVisitor() : m_parser(yajl_alloc(&s_callbacks, nullptr, this)) {}
+  JSONVisitor(JSON::Visitor *visitor) : m_parser(yajl_alloc(&s_callbacks, nullptr, visitor)) {}
   ~JSONVisitor() { yajl_free(m_parser); }
 
-  bool visit(const std::string &str, JSON::Visitor *visitor) {
-    auto parser = yajl_alloc(&s_callbacks, nullptr, visitor);
-    if (yajl_status_ok != yajl_parse(parser, (const unsigned char*)str.c_str(), str.length())) return false;
-    if (yajl_status_ok != yajl_complete_parse(parser)) yajl_free(parser);
+  bool visit(const std::string &str) {
+    if (yajl_status_ok != yajl_parse(m_parser, (const unsigned char*)str.c_str(), str.length())) return false;
+    if (yajl_status_ok != yajl_complete_parse(m_parser)) yajl_free(m_parser);
     return true;
   }
 
-  bool visit(const Data &data, JSON::Visitor *visitor) {
-    auto parser = yajl_alloc(&s_callbacks, nullptr, visitor);
+  bool visit(const Data &data) {
     for (const auto c : data.chunks()) {
-      auto ret = yajl_parse(parser, (const unsigned char*)std::get<0>(c), std::get<1>(c));
+      auto ret = yajl_parse(m_parser, (const unsigned char*)std::get<0>(c), std::get<1>(c));
       if (ret != yajl_status_ok) return false;
     }
     if (yajl_status_ok != yajl_complete_parse(m_parser)) return false;
@@ -173,14 +171,16 @@ yajl_callbacks JSONVisitor::s_callbacks = {
 
 class JSONParser : public JSONVisitor, public JSON::Visitor {
 public:
+  JSONParser() : JSONVisitor(this) {}
+
   bool parse(const std::string &str, pjs::Value &val) {
-    if (!visit(str, this)) return false;
+    if (!visit(str)) return false;
     val = m_root;
     return true;
   }
 
   bool parse(const Data &data, pjs::Value &val) {
-    if (!visit(data, this)) return false;
+    if (!visit(data)) return false;
     val = m_root;
     return true;
   }
@@ -217,13 +217,13 @@ private:
 };
 
 bool JSON::visit(const std::string &str, Visitor *visitor) {
-  JSONVisitor v;
-  return v.visit(str, visitor);
+  JSONVisitor v(visitor);
+  return v.visit(str);
 }
 
 bool JSON::visit(const Data &data, Visitor *visitor) {
-  JSONVisitor v;
-  return v.visit(data, visitor);
+  JSONVisitor v(visitor);
+  return v.visit(data);
 }
 
 bool JSON::parse(const std::string &str, pjs::Value &val) {
