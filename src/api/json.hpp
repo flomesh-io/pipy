@@ -40,6 +40,28 @@ class Data;
 
 class JSON : public pjs::ObjectTemplate<JSON> {
 public:
+
+  //
+  // JSON::Visitor
+  //
+
+  class Visitor {
+  public:
+    virtual void null() {}
+    virtual void boolean(bool b) {}
+    virtual void integer(int64_t i) {}
+    virtual void number(double n) {}
+    virtual void string(const char *s, size_t len) {}
+    virtual void map_start() {}
+    virtual void map_key(const char *s, size_t len) {}
+    virtual void map_end() {}
+    virtual void array_start() {}
+    virtual void array_end() {}
+  };
+
+  static bool visit(const std::string &str, Visitor *visitor);
+  static bool visit(const Data &data, Visitor *visitor);
+
   static bool parse(const std::string &str, pjs::Value &val);
 
   static auto stringify(

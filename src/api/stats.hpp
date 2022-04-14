@@ -28,6 +28,7 @@
 
 #include "pjs/pjs.hpp"
 #include "api/algo.hpp"
+#include "api/json.hpp"
 #include "data.hpp"
 
 #include <memory>
@@ -101,6 +102,24 @@ public:
   void to_prometheus(Data &out);
 
 private:
+
+  //
+  // MetricSet::Deserializer
+  //
+
+  class Deserializer : public JSON::Visitor {
+    virtual void null() override;
+    virtual void boolean(bool b) override;
+    virtual void integer(int64_t i) override;
+    virtual void number(double n) override;
+    virtual void string(const char *s, size_t len) override;
+    virtual void map_start() override;
+    virtual void map_key(const char *s, size_t len) override;
+    virtual void map_end() override;
+    virtual void array_start() override;
+    virtual void array_end() override;
+  };
+
   std::vector<pjs::Ref<Metric>> m_metrics;
   std::unordered_map<pjs::Ref<pjs::Str>, Metric*> m_metric_map;
 

@@ -28,6 +28,7 @@
 
 #include "api/http.hpp"
 #include "api/crypto.hpp"
+#include "api/stats.hpp"
 #include "filter.hpp"
 #include "message.hpp"
 #include "data.hpp"
@@ -82,11 +83,16 @@ private:
     bool m_started;
   };
 
+  struct Instance {
+    Status status;
+    stats::MetricSet metrics;
+  };
+
   int m_port;
   CodebaseStore* m_store;
   std::string m_current_codebase;
   std::string m_current_program;
-  std::map<std::string, std::map<std::string, Status>> m_instance_statuses;
+  std::map<std::string, std::map<std::string, Instance>> m_instances;
 
   Tarball m_www_files;
   std::map<std::string, pjs::Ref<http::File>> m_www_file_cache;

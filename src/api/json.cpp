@@ -110,24 +110,77 @@ template<> void ClassDef<JSON>::init() {
 
 namespace pipy {
 
-class JSONParser {
-public:
-  JSONParser() : m_parser(yajl_alloc(&s_callbacks, nullptr, this)) {}
-  ~JSONParser() { yajl_free(m_parser); }
+//
+// JSONVisitor
+//
 
-  bool parse(const std::string &str, pjs::Value &val) {
-    if (yajl_status_ok != yajl_parse(m_parser, (const unsigned char*)str.c_str(), str.length())) return false;
+class JSONVisitor {
+public:
+  JSONVisitor() : m_parser(yajl_alloc(&s_callbacks, nullptr, this)) {}
+  ~JSONVisitor() { yajl_free(m_parser); }
+
+  bool visit(const std::string &str, JSON::Visitor *visitor) {
+    auto parser = yajl_alloc(&s_callbacks, nullptr, visitor);
+    if (yajl_status_ok != yajl_parse(parser, (const unsigned char*)str.c_str(), str.length())) return false;
+    if (yajl_status_ok != yajl_complete_parse(parser)) yajl_free(parser);
+    return true;
+  }
+
+  bool visit(const Data &data, JSON::Visitor *visitor) {
+    auto parser = yajl_alloc(&s_callbacks, nullptr, visitor);
+    for (const auto c : data.chunks()) {
+      auto ret = yajl_parse(parser, (const unsigned char*)std::get<0>(c), std::get<1>(c));
+      if (ret != yajl_status_ok) return false;
+    }
     if (yajl_status_ok != yajl_complete_parse(m_parser)) return false;
+    return true;
+  }
+
+private:
+  yajl_handle m_parser;
+
+  static yajl_callbacks s_callbacks;
+
+  static int yajl_null(void *ctx) { static_cast<JSON::Visitor*>(ctx)->null(); return 1; }
+  static int yajl_boolean(void *ctx, int val) { static_cast<JSON::Visitor*>(ctx)->boolean(val); return 1; }
+  static int yajl_integer(void *ctx, long long val) { static_cast<JSON::Visitor*>(ctx)->integer(val); return 1; }
+  static int yajl_double(void *ctx, double val) { static_cast<JSON::Visitor*>(ctx)->number(val); return 1; }
+  static int yajl_string(void *ctx, const unsigned char *val, size_t len) { static_cast<JSON::Visitor*>(ctx)->string((const char *)val, len); return 1; }
+  static int yajl_start_map(void *ctx) { static_cast<JSON::Visitor*>(ctx)->map_start(); return 1; }
+  static int yajl_map_key(void *ctx, const unsigned char *key, size_t len) { static_cast<JSON::Visitor*>(ctx)->map_key((const char *)key, len); return 1; }
+  static int yajl_end_map(void *ctx) { static_cast<JSON::Visitor*>(ctx)->map_end(); return 1; }
+  static int yajl_start_array(void *ctx) { static_cast<JSON::Visitor*>(ctx)->array_start(); return 1; }
+  static int yajl_end_array(void *ctx) { static_cast<JSON::Visitor*>(ctx)->array_end(); return 1; }
+};
+
+yajl_callbacks JSONVisitor::s_callbacks = {
+  &JSONVisitor::yajl_null,
+  &JSONVisitor::yajl_boolean,
+  &JSONVisitor::yajl_integer,
+  &JSONVisitor::yajl_double,
+  nullptr,
+  &JSONVisitor::yajl_string,
+  &JSONVisitor::yajl_start_map,
+  &JSONVisitor::yajl_map_key,
+  &JSONVisitor::yajl_end_map,
+  &JSONVisitor::yajl_start_array,
+  &JSONVisitor::yajl_end_array,
+};
+
+//
+// JSONParser
+//
+
+class JSONParser : public JSONVisitor, public JSON::Visitor {
+public:
+  bool parse(const std::string &str, pjs::Value &val) {
+    if (!visit(str, this)) return false;
     val = m_root;
     return true;
   }
 
   bool parse(const Data &data, pjs::Value &val) {
-    for (const auto c : data.chunks()) {
-      auto ret = yajl_parse(m_parser, (const unsigned char*)std::get<0>(c), std::get<1>(c));
-      if (ret != yajl_status_ok) return false;
-    }
-    if (yajl_status_ok != yajl_complete_parse(m_parser)) return false;
+    if (!visit(data, this)) return false;
     val = m_root;
     return true;
   }
@@ -136,7 +189,6 @@ private:
   std::stack<pjs::Value> m_stack;
   pjs::Value m_root;
   pjs::Ref<pjs::Str> m_current_key;
-  yajl_handle m_parser;
 
   void null() { value(pjs::Value::null); }
   void boolean(bool b) { value(b); }
@@ -162,34 +214,17 @@ private:
       }
     }
   }
-
-  static yajl_callbacks s_callbacks;
-
-  static int yajl_null(void *ctx) { static_cast<JSONParser*>(ctx)->null(); return 1; }
-  static int yajl_boolean(void *ctx, int val) { static_cast<JSONParser*>(ctx)->boolean(val); return 1; }
-  static int yajl_integer(void *ctx, long long val) { static_cast<JSONParser*>(ctx)->integer(val); return 1; }
-  static int yajl_double(void *ctx, double val) { static_cast<JSONParser*>(ctx)->number(val); return 1; }
-  static int yajl_string(void *ctx, const unsigned char *val, size_t len) { static_cast<JSONParser*>(ctx)->string((const char *)val, len); return 1; }
-  static int yajl_start_map(void *ctx) { static_cast<JSONParser*>(ctx)->map_start(); return 1; }
-  static int yajl_map_key(void *ctx, const unsigned char *key, size_t len) { static_cast<JSONParser*>(ctx)->map_key((const char *)key, len); return 1; }
-  static int yajl_end_map(void *ctx) { static_cast<JSONParser*>(ctx)->map_end(); return 1; }
-  static int yajl_start_array(void *ctx) { static_cast<JSONParser*>(ctx)->array_start(); return 1; }
-  static int yajl_end_array(void *ctx) { static_cast<JSONParser*>(ctx)->array_end(); return 1; }
 };
 
-yajl_callbacks JSONParser::s_callbacks = {
-  &JSONParser::yajl_null,
-  &JSONParser::yajl_boolean,
-  &JSONParser::yajl_integer,
-  &JSONParser::yajl_double,
-  nullptr,
-  &JSONParser::yajl_string,
-  &JSONParser::yajl_start_map,
-  &JSONParser::yajl_map_key,
-  &JSONParser::yajl_end_map,
-  &JSONParser::yajl_start_array,
-  &JSONParser::yajl_end_array,
-};
+bool JSON::visit(const std::string &str, Visitor *visitor) {
+  JSONVisitor v;
+  return v.visit(str, visitor);
+}
+
+bool JSON::visit(const Data &data, Visitor *visitor) {
+  JSONVisitor v;
+  return v.visit(data, visitor);
+}
 
 bool JSON::parse(const std::string &str, pjs::Value &val) {
   JSONParser parser;

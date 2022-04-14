@@ -362,8 +362,9 @@ Message* AdminService::repo_POST(const std::string &path, Data *data) {
     if (auto codebase = m_store->find_codebase(name)) {
       Status status;
       if (!status.from_json(*data)) return response(400, "Invalid JSON");
-      auto &instances = m_instance_statuses[codebase->id()];
-      instances[status.uuid] = std::move(status);
+      auto &instances = m_instances[codebase->id()];
+      auto &inst = instances[status.uuid];
+      inst.status = std::move(status);
       return m_response_created;
     }
   }
@@ -427,12 +428,12 @@ Message* AdminService::api_v1_repo_GET(const std::string &path) {
     }
 
     ss << ",\"instances\":{";
-    auto &instances = m_instance_statuses[codebase->id()];
+    auto &instances = m_instances[codebase->id()];
     bool first = true;
     for (const auto &i : instances) {
       if (first) first = false; else ss << ',';
       ss << '"' << utils::escape(i.first) << "\":";
-      i.second.to_json(ss);
+      i.second.status.to_json(ss);
     }
     ss << "}}";
 
