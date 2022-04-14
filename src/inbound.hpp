@@ -107,6 +107,7 @@ private:
 
   void start();
   void receive();
+  void wait();
   void pump();
   void output(Event *evt);
   void close(StreamEnd::Error err);

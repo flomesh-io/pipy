@@ -243,12 +243,8 @@ void Outbound::connect(const asio::ip::tcp::endpoint &target) {
             close(StreamEnd::CONNECTION_CANCELED);
           } else {
             m_connecting = false;
-            if (m_ended && m_buffer.empty()) {
-              close(StreamEnd::NO_ERROR);
-            } else {
-              receive();
-              pump();
-            }
+            receive();
+            pump();
           }
         }
       }
@@ -374,9 +370,6 @@ void Outbound::pump() {
             Log::error("%s overflowed by %d bytes", desc, m_discarded_data_size);
           }
           close(StreamEnd::BUFFER_OVERFLOW);
-
-        } else if (m_ended && m_buffer.empty()) {
-          close(StreamEnd::NO_ERROR);
 
         } else {
           pump();

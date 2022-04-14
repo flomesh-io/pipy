@@ -100,6 +100,7 @@ void Inbound::accept(asio::ip::tcp::acceptor &acceptor) {
             describe(desc);
             Log::debug("%s connection accepted", desc);
           }
+          address();
           start();
         }
       }
@@ -202,9 +203,11 @@ void Inbound::receive() {
             if (Log::is_enabled(Log::DEBUG)) {
               char desc[200];
               describe(desc);
-              Log::debug("%s closed by peer", desc);
+              Log::debug("%s EOF from peer", desc);
             }
-            close(StreamEnd::NO_ERROR);
+            InputContext ic(this);
+            output(StreamEnd::make());
+            wait();
           } else {
             if (Log::is_enabled(Log::WARN)) {
               char desc[200];
@@ -235,6 +238,22 @@ void Inbound::receive() {
       }
     );
   }
+
+  retain();
+}
+
+void Inbound::wait() {
+  m_socket.async_wait(
+    tcp::socket::wait_error,
+    [this](const std::error_code &ec) {
+      if (ec != asio::error::operation_aborted) {
+        char desc[200];
+        describe(desc);
+        Log::error("%s wait for peer: %s", desc, ec.message().c_str());
+      }
+      release();
+    }
+  );
 
   retain();
 }
