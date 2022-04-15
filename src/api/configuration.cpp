@@ -600,11 +600,12 @@ void Configuration::draw(Graph &g) {
 }
 
 void Configuration::get_listen_options(pjs::Object *obj, Listener::Options &opt) {
-  pjs::Value max_conn, read_timeout, write_timeout, transparent;
+  pjs::Value max_conn, read_timeout, write_timeout, transparent, close_eof;
   obj->get("maxConnections", max_conn);
   obj->get("readTimeout", read_timeout);
   obj->get("writeTimeout", write_timeout);
   obj->get("transparent", transparent);
+  obj->get("closeEOF", close_eof);
 
   if (!max_conn.is_undefined()) {
     if (!max_conn.is_number()) throw std::runtime_error("options.maxConnections expects a number");
@@ -630,6 +631,11 @@ void Configuration::get_listen_options(pjs::Object *obj, Listener::Options &opt)
   if (!transparent.is_undefined()) {
     if (!transparent.is_boolean()) throw std::runtime_error("options.transparent expects a boolean");
     opt.transparent = transparent.b();
+  }
+
+  if (!close_eof.is_undefined()) {
+    if (!close_eof.is_boolean()) throw std::runtime_error("options.closeEOF expects a boolean");
+    opt.close_eof = close_eof.b();
   }
 }
 

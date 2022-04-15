@@ -53,6 +53,7 @@ public:
     double read_timeout = 0;
     double write_timeout = 0;
     bool transparent = false;
+    bool close_eof = true;
   };
 
   auto id() const -> uint64_t { return m_id; }

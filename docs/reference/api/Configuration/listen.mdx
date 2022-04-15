@@ -23,13 +23,17 @@ Limit the maximum number of concurrent connections. Defaults to no limit.
 
 Timeout duration for reading, in seconds. Can be a string with one of the time unit suffixes such as `s`, `m` or `h`. Defaults to no timeout (waiting forever).
 
-#### Option: readTimeout
+#### Option: writeTimeout
 
 Timeout duration for writing, in seconds. Can be a string with one of the time unit suffixes such as `s`, `m` or `h`. Defaults to no timeout (waiting forever).
 
 #### Option: transparent
 
 Set to _true_ to enable [transparent proxy](https://en.wikipedia.org/wiki/Proxy_server#Transparent_proxy) mode, where the original destination address and port can be found through `__inbound.destinationAddress` and `__inbound.destinationPort` properties. This is only available on Linux by using NAT or TPROXY.
+
+#### Option: closeEOF
+
+Set to _false_ to enable _half-open_ of a TCP connection after receiving _EOF_ from the client. You would also set the _readTimeout_ option as well or the connection could be lingering forever if no _StreamEnd_ events coming out of the pipeline. Default is _true_.
 
 ## Syntax
 

@@ -206,9 +206,13 @@ void Inbound::receive() {
               describe(desc);
               Log::debug("%s EOF from peer", desc);
             }
-            InputContext ic(this);
-            output(StreamEnd::make());
-            wait();
+            if (m_options.close_eof) {
+              close(StreamEnd::NO_ERROR);
+            } else {
+              InputContext ic(this);
+              output(StreamEnd::make());
+              wait();
+            }
           } else {
             if (Log::is_enabled(Log::WARN)) {
               char desc[200];
@@ -247,6 +251,10 @@ void Inbound::wait() {
   m_socket.async_wait(
     tcp::socket::wait_error,
     [this](const std::error_code &ec) {
+      if (m_options.read_timeout > 0){
+        m_read_timer.cancel();
+      }
+
       if (ec != asio::error::operation_aborted) {
         char desc[200];
         describe(desc);
@@ -255,6 +263,15 @@ void Inbound::wait() {
       release();
     }
   );
+
+  if (m_options.read_timeout > 0) {
+    m_read_timer.schedule(
+      m_options.read_timeout,
+      [this]() {
+        close(StreamEnd::READ_TIMEOUT);
+      }
+    );
+  }
 
   retain();
 }
