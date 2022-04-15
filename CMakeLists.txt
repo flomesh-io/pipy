@@ -104,7 +104,13 @@ add_definitions(
   -DPIPY_HOST="${CMAKE_HOST_SYSTEM} ${CMAKE_HOST_SYSTEM_PROCESSOR}"
 )
 
-add_compile_options(-Wall -Wno-overloaded-virtual -Wno-delete-non-abstract-non-virtual-dtor)
+add_compile_options(
+  -Wall
+  -Wno-overloaded-virtual
+  -Wno-delete-non-abstract-non-virtual-dtor
+  -Wno-delete-non-virtual-dtor
+  -Wno-sign-compare
+)
 
 include_directories(
   "${CMAKE_SOURCE_DIR}/src"

@@ -100,7 +100,6 @@ void Inbound::accept(asio::ip::tcp::acceptor &acceptor) {
             describe(desc);
             Log::debug("%s connection accepted", desc);
           }
-          address();
           start();
         }
       }
@@ -188,11 +187,13 @@ void Inbound::receive() {
         if (n > 0) {
           InputContext ic(this);
           buffer->pop(buffer->size() - n);
-          if (auto more = m_socket.available()) {
-            Data buf(more, &s_data_producer);
-            auto n = m_socket.read_some(DataChunks(buf.chunks()));
-            if (n < more) buf.pop(more - n);
-            buffer->push(buf);
+          if (m_socket.is_open()) {
+            if (auto more = m_socket.available()) {
+              Data buf(more, &s_data_producer);
+              auto n = m_socket.read_some(DataChunks(buf.chunks()));
+              if (n < more) buf.pop(more - n);
+              buffer->push(buf);
+            }
           }
           output(buffer);
           output(Data::flush());
@@ -337,13 +338,15 @@ void Inbound::close(StreamEnd::Error err) {
 
 void Inbound::address() {
   if (!m_addressed) {
-    const auto &ep = m_socket.local_endpoint();
-    m_local_addr = ep.address().to_string();
-    m_local_port = ep.port();
+    if (m_socket.is_open()) {
+      const auto &ep = m_socket.local_endpoint();
+      m_local_addr = ep.address().to_string();
+      m_local_port = ep.port();
+    }
     m_remote_addr = m_peer.address().to_string();
     m_remote_port = m_peer.port();
 #ifdef __linux__
-    if (m_options.transparent) {
+    if (m_options.transparent && m_socket.is_open()) {
       struct sockaddr addr;
       socklen_t len = sizeof(addr);
       if (!getsockopt(m_socket.native_handle(), SOL_IP, SO_ORIGINAL_DST, &addr, &len)) {

@@ -290,12 +290,14 @@ void Outbound::receive() {
       if (ec != asio::error::operation_aborted) {
         if (n > 0) {
           InputContext ic(this);
-          buffer->pop(buffer->size() - n);
-          if (auto more = m_socket.available()) {
-            Data buf(more, &s_data_producer);
-            auto n = m_socket.read_some(DataChunks(buf.chunks()));
-            if (n < more) buf.pop(more - n);
-            buffer->push(buf);
+          if (m_socket.is_open()) {
+            buffer->pop(buffer->size() - n);
+            if (auto more = m_socket.available()) {
+              Data buf(more, &s_data_producer);
+              auto n = m_socket.read_some(DataChunks(buf.chunks()));
+              if (n < more) buf.pop(more - n);
+              buffer->push(buf);
+            }
           }
           output(buffer);
           output(Data::flush());
