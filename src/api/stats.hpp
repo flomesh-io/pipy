@@ -32,6 +32,7 @@
 #include "data.hpp"
 
 #include <memory>
+#include <string>
 #include <unordered_map>
 #include <vector>
 
@@ -48,8 +49,11 @@ class Metric : public pjs::ObjectTemplate<Metric> {
 public:
   static auto local() -> MetricSet&;
 
+  auto root() const -> Metric* { return m_root; }
   auto name() const -> pjs::Str* { return m_name; }
   auto label() const -> pjs::Str* { return m_label; }
+  auto shape() const -> const std::string& { return m_root ? m_root->m_shape : m_shape; }
+  auto type() -> const std::string& { return m_root ? m_root->get_type() : get_type(); }
   auto with_labels(pjs::Str *const *labels, int count) -> Metric*;
   void clear();
 
@@ -62,6 +66,7 @@ protected:
   void serialize(Data::Builder &db, bool initial);
 
   virtual auto create_new(Metric *parent, pjs::Str **labels) -> Metric* = 0;
+  virtual auto get_type() -> const std::string& = 0;
   virtual void collect() {}
   virtual void dump(const std::function<void(pjs::Str*, double)> &out) {};
 
@@ -74,6 +79,8 @@ private:
     const std::function<void(int, double)> &out
   );
 
+  Metric* m_root;
+  std::string m_shape;
   pjs::Ref<pjs::Str> m_name;
   pjs::Ref<pjs::Str> m_label;
   int m_label_index;
@@ -108,6 +115,23 @@ private:
   //
 
   class Deserializer : public JSON::Visitor {
+    struct Level : public pjs::Pooled<Level> {
+      enum Name {
+        NONE,
+        KEY,
+        LABEL,
+        TYPE,
+        VALUE,
+        VALUE_I,
+        SUB,
+        SUB_I,
+      };
+
+      Level* parent;
+      int index;
+      Name name;
+    };
+
     virtual void null() override;
     virtual void boolean(bool b) override;
     virtual void integer(int64_t i) override;
@@ -166,6 +190,11 @@ private:
     out.set(m_value);
   }
 
+  virtual auto get_type() -> const std::string& override {
+    static std::string type("Counter");
+    return type;
+  }
+
   virtual void dump(const std::function<void(pjs::Str*, double)> &out) override {
     out(nullptr, m_value);
   };
@@ -193,6 +222,11 @@ private:
 
   virtual void value_of(pjs::Value &out) override {
     out.set(m_value);
+  }
+
+  virtual auto get_type() -> const std::string& override {
+    static std::string type("Gauge");
+    return type;
   }
 
   virtual void dump(const std::function<void(pjs::Str*, double)> &out) override {
@@ -225,12 +259,14 @@ private:
   Histogram(Metric *parent, pjs::Str **labels);
 
   virtual void value_of(pjs::Value &out) override;
+  virtual auto get_type() -> const std::string& override;
   virtual void dump(const std::function<void(pjs::Str*, double)> &out) override;
 
   pjs::Ref<Histogram> m_root;
   pjs::Ref<pjs::Array> m_buckets;
   pjs::Ref<algo::Percentile> m_percentile;
   std::vector<pjs::Ref<pjs::Str>> m_labels;
+  std::string m_type;
 
   friend class pjs::ObjectTemplate<Histogram, Metric>;
 };

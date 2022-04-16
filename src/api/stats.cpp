@@ -40,7 +40,8 @@ auto Metric::local() -> MetricSet& {
 }
 
 Metric::Metric(pjs::Str *name, pjs::Array *label_names, MetricSet *set)
-  : m_name(name)
+  : m_root(nullptr)
+  , m_name(name)
   , m_label_index(-1)
   , m_label_names(std::make_shared<std::vector<pjs::Ref<pjs::Str>>>())
 {
@@ -50,6 +51,8 @@ Metric::Metric(pjs::Str *name, pjs::Array *label_names, MetricSet *set)
     for (auto i = 0; i < n; i++) {
       pjs::Value v; label_names->get(i, v);
       auto *s = v.to_string();
+      if (!m_shape.empty()) m_shape += '/';
+      m_shape += s->str();
       m_label_names->at(i) = s;
       s->release();
     }
@@ -63,7 +66,8 @@ Metric::Metric(pjs::Str *name, pjs::Array *label_names, MetricSet *set)
 }
 
 Metric::Metric(Metric *parent, pjs::Str **labels)
-  : m_name(parent->m_name)
+  : m_root(parent->m_root)
+  , m_name(parent->m_name)
   , m_label(labels[parent->m_label_index + 1])
   , m_label_index(parent->m_label_index + 1)
   , m_label_names(parent->m_label_names)
@@ -112,7 +116,8 @@ void Metric::create_value() {
 // Initial state:
 //   {
 //     "k": "metric-1",
-//     "l": ["label-1","label-2"],
+//     "l": "label-1/label-2",
+//     "t": "Counter",
 //     "v": 123,
 //     "s": [
 //       {
@@ -135,28 +140,17 @@ void Metric::create_value() {
 //     ]
 //   }
 //
-// Vector initial:
+// Vector:
 //   {
 //     "k": "latency-1",
-//     "v": {
-//       "1": 12345,
-//       "2": 1234,
-//       "4": 123,
-//       "8": 12,
-//       "16": 1,
-//       "32": 0
-//     }
-//   }
-//
-// Vector update:
-//   {
-//     "k": "latency-1",
+//     "t": "Histogram[1,2,4,8,16,32]",
 //     "v": [12345, 1234, 123, 12, 1, 0]
 //   }
 //
 
 void Metric::serialize(Data::Builder &db, bool initial) {
   static std::string s_k("\"k\":"); // key
+  static std::string s_t("\"t\":"); // type
   static std::string s_v("\"v\":"); // value
   static std::string s_l("\"l\":"); // label
   static std::string s_s("\"s\":"); // sub
@@ -174,6 +168,16 @@ void Metric::serialize(Data::Builder &db, bool initial) {
         utils::escape(m_label->str(), [&](char c) { db.push(c); });
       } else {
         utils::escape(m_name->str(), [&](char c) { db.push(c); });
+        db.push('"');
+        db.push(',');
+        db.push(s_l);
+        db.push('"');
+        utils::escape(shape(), [&](char c) { db.push(c); });
+        db.push('"');
+        db.push(',');
+        db.push(s_t);
+        db.push('"');
+        utils::escape(type(), [&](char c) { db.push(c); });
       }
       db.push('"');
       db.push(',');
@@ -187,16 +191,10 @@ void Metric::serialize(Data::Builder &db, bool initial) {
     [&](pjs::Str *dim, double x) {
       if (dim) {
         if (first_dimension) {
-          db.push(keyed ? '{' : '[');
+          db.push('[');
           first_dimension = false;
         } else {
           db.push(',');
-        }
-        if (keyed) {
-          db.push('"');
-          utils::escape(dim->str(), [&](char c) { db.push(c); });
-          db.push('"');
-          db.push(':');
         }
       }
       char buf[100];
@@ -205,7 +203,7 @@ void Metric::serialize(Data::Builder &db, bool initial) {
     }
   );
 
-  if (!first_dimension) db.push(keyed ? '}' : ']');
+  if (!first_dimension) db.push(']');
 
   if (!m_subs.empty()) {
     db.push(',');
@@ -346,6 +344,40 @@ void MetricSet::to_prometheus(Data &out) {
 }
 
 //
+// MetricSet::Deserializer
+//
+
+void MetricSet::Deserializer::null() {
+}
+
+void MetricSet::Deserializer::boolean(bool b) {
+}
+
+void MetricSet::Deserializer::integer(int64_t i) {
+}
+
+void MetricSet::Deserializer::number(double n) {
+}
+
+void MetricSet::Deserializer::string(const char *s, size_t len) {
+}
+
+void MetricSet::Deserializer::map_start() {
+}
+
+void MetricSet::Deserializer::map_key(const char *s, size_t len) {
+}
+
+void MetricSet::Deserializer::map_end() {
+}
+
+void MetricSet::Deserializer::array_start() {
+}
+
+void MetricSet::Deserializer::array_end() {
+}
+
+//
 // Counter
 //
 
@@ -451,6 +483,25 @@ void Histogram::value_of(pjs::Value &out) {
     }
   );
   out.set(a);
+}
+
+auto Histogram::get_type() -> const std::string& {
+  if (m_type.empty()) {
+    m_buckets->iterate_all(
+      [this](pjs::Value &v, int) {
+        if (m_type.empty()) {
+          m_type = "Histogram[";
+        } else {
+          m_type += ',';
+        }
+        char str[100];
+        auto len = pjs::Number::to_string(str, sizeof(str), v.to_number());
+        m_type += std::string(str, len);
+      }
+    );
+    m_type += ']';
+  }
+  return m_type;
 }
 
 void Histogram::dump(const std::function<void(pjs::Str*, double)> &out) {
