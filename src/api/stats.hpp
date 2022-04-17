@@ -67,11 +67,14 @@ protected:
 
   virtual auto create_new(Metric *parent, pjs::Str **labels) -> Metric* = 0;
   virtual auto get_type() -> const std::string& = 0;
+  virtual void set_value(int dim, double value) = 0;
   virtual void collect() {}
   virtual void dump(const std::function<void(pjs::Str*, double)> &out) {};
 
 private:
   auto get_sub(pjs::Str **labels) -> Metric*;
+  auto get_sub(int i) -> Metric*;
+  void truncate(int i);
 
   void dump_tree(
     pjs::Str **label_names,
@@ -109,28 +112,52 @@ public:
   void to_prometheus(Data &out);
 
 private:
-
   //
   // MetricSet::Deserializer
   //
 
   class Deserializer : public JSON::Visitor {
+  public:
+    Deserializer(MetricSet *ms, std::string &uuid)
+      : m_metric_set(ms)
+      , m_uuid(uuid) {}
+
+    ~Deserializer();
+
+  private:
     struct Level : public pjs::Pooled<Level> {
-      enum Name {
+      enum class ID {
         NONE,
+        INDEX,
+        UUID,
+        METRICS,
         KEY,
-        LABEL,
+        LABELS,
         TYPE,
         VALUE,
-        VALUE_I,
         SUB,
-        SUB_I,
       };
 
+      Level(ID i) : id(i) {}
+
       Level* parent;
-      int index;
-      Name name;
+      Metric* metric = nullptr;
+      ID id;
+      int index = -1;
+      pjs::Ref<pjs::Str> key;
+      std::string shape;
+      std::string type;
     };
+
+    MetricSet* m_metric_set;
+    std::string& m_uuid;
+    Level* m_current = nullptr;
+    bool m_has_error = false;
+
+    void push(Level *level);
+    void pop();
+    auto open() -> Metric*;
+    void error();
 
     virtual void null() override;
     virtual void boolean(bool b) override;
@@ -147,7 +174,9 @@ private:
   std::vector<pjs::Ref<Metric>> m_metrics;
   std::unordered_map<pjs::Ref<pjs::Str>, Metric*> m_metric_map;
 
+  auto get(int i) -> Metric*;
   void add(Metric *metric);
+  void truncate(int i);
 
   friend class Metric;
 };
@@ -195,6 +224,10 @@ private:
     return type;
   }
 
+  virtual void set_value(int dim, double value) override {
+    m_value = value;
+  }
+
   virtual void dump(const std::function<void(pjs::Str*, double)> &out) override {
     out(nullptr, m_value);
   };
@@ -229,6 +262,10 @@ private:
     return type;
   }
 
+  virtual void set_value(int dim, double value) override {
+    m_value = value;
+  }
+
   virtual void dump(const std::function<void(pjs::Str*, double)> &out) override {
     out(nullptr, m_value);
   };
@@ -260,6 +297,7 @@ private:
 
   virtual void value_of(pjs::Value &out) override;
   virtual auto get_type() -> const std::string& override;
+  virtual void set_value(int dim, double value) override;
   virtual void dump(const std::function<void(pjs::Str*, double)> &out) override;
 
   pjs::Ref<Histogram> m_root;

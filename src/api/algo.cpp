@@ -623,6 +623,15 @@ void Percentile::reset() {
   m_sample_count = 0;
 }
 
+void Percentile::set(int bucket, size_t count) {
+  if (0 <= bucket && bucket < m_counts.size()) {
+    auto &n = m_counts[bucket];
+    if (count > n) m_sample_count += count - n; else
+    if (count < n) m_sample_count -= n - count;
+    n = count;
+  }
+}
+
 void Percentile::observe(double sample) {
   for (size_t i = 0, n = m_counts.size(); i < n; i++) {
     if (sample <= m_buckets[i]) {

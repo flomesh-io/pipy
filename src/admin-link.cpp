@@ -27,7 +27,6 @@
 #include "context.hpp"
 #include "pipeline.hpp"
 #include "filters/connect.hpp"
-#include "filters/dump.hpp"
 #include "filters/http.hpp"
 #include "filters/websocket.hpp"
 
@@ -68,7 +67,6 @@ AdminLink::AdminLink(
 
   m_pipeline_def_connect = PipelineDef::make(nullptr, PipelineDef::NAMED, "AdminLink Connection");
   m_pipeline_def_connect->append(new Connect(pjs::Str::make(host), options));
-  m_pipeline_def_connect->append(new Dump());
 
   m_pipeline_def_tunnel = PipelineDef::make(nullptr, PipelineDef::NAMED, "AdminLink Tunnel");
   m_pipeline_def_tunnel->append(new http::Mux(pjs::Str::empty.get(), nullptr))->add_sub_pipeline(m_pipeline_def_connect);
