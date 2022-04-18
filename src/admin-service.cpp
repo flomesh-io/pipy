@@ -312,7 +312,13 @@ auto AdminService::handle(Message *req) -> Message* {
 Message* AdminService::metrics_GET() {
   Data buf;
   stats::Metric::local().collect_all();
-  stats::Metric::local().to_prometheus(buf);
+  stats::Metric::local().to_prometheus(buf, "");
+  for (const auto &i : m_metric_sets) {
+    std::string inst("_instance=\"");
+    inst += i.first;
+    inst += '"';
+    i.second.to_prometheus(buf, inst);
+  }
   return response(buf);
 }
 
@@ -794,8 +800,13 @@ auto AdminService::response_head(
   return head;
 }
 
-
 void AdminService::on_metrics(const Data &data) {
+  stats::MetricSet::deserialize(
+    data,
+    [this](const std::string &uuid) {
+      return &m_metric_sets[uuid];
+    }
+  );
 }
 
 //

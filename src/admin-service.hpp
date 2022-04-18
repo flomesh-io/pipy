@@ -93,6 +93,7 @@ private:
   std::string m_current_codebase;
   std::string m_current_program;
   std::map<std::string, std::map<std::string, Instance>> m_instances;
+  std::map<std::string, stats::MetricSet> m_metric_sets;
 
   Tarball m_www_files;
   std::map<std::string, pjs::Ref<http::File>> m_www_file_cache;

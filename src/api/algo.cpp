@@ -25,6 +25,7 @@
 
 #include "algo.hpp"
 #include "utils.hpp"
+#include "logging.hpp"
 
 namespace pipy {
 namespace algo {
@@ -609,7 +610,12 @@ Percentile::Percentile(pjs::Array *buckets)
   buckets->iterate_all(
     [&](pjs::Value &v, int i) {
       auto limit = v.to_number();
-      if (limit <= last) throw std::runtime_error("buckets are not in ascending order");
+      if (limit <= last) {
+        Log::warn(
+          "buckets are not in ascending order: changed from %f to %f at #%d",
+          last, limit, i
+        );
+      }
       m_buckets[i] = limit;
       last = limit;
     }

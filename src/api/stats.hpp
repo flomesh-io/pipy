@@ -108,8 +108,12 @@ public:
   auto get(pjs::Str *name) -> Metric*;
   void collect_all();
   void serialize(Data &out, const std::string &uuid, bool initial);
-  void deserialize(Data &in);
-  void to_prometheus(Data &out);
+  void to_prometheus(Data &out, const std::string &inst) const;
+
+  static void deserialize(
+    const Data &in,
+    const std::function<MetricSet*(const std::string&)> &by_uuid
+  );
 
 private:
   //
@@ -118,11 +122,12 @@ private:
 
   class Deserializer : public JSON::Visitor {
   public:
-    Deserializer(MetricSet *ms, std::string &uuid)
-      : m_metric_set(ms)
-      , m_uuid(uuid) {}
+    Deserializer(const std::function<MetricSet*(const std::string&)> &by_uuid)
+      : m_by_uuid(by_uuid) {}
 
     ~Deserializer();
+
+    bool has_error() const { return m_has_error; }
 
   private:
     struct Level : public pjs::Pooled<Level> {
@@ -149,14 +154,14 @@ private:
       std::string type;
     };
 
-    MetricSet* m_metric_set;
-    std::string& m_uuid;
+    std::function<MetricSet*(const std::string&)> m_by_uuid;
+    MetricSet* m_metric_set = nullptr;
     Level* m_current = nullptr;
     bool m_has_error = false;
 
     void push(Level *level);
     void pop();
-    auto open() -> Metric*;
+    auto open(Level *current, Level *list, pjs::Str *key) -> Metric*;
     void error();
 
     virtual void null() override;
@@ -212,7 +217,7 @@ public:
   auto value() const -> double { return m_value; }
 
 private:
-  Counter(pjs::Str *name, pjs::Array *label_names);
+  Counter(pjs::Str *name, pjs::Array *label_names, MetricSet *set = nullptr);
   Counter(Metric *parent, pjs::Str **labels);
 
   virtual void value_of(pjs::Value &out) override {
@@ -226,6 +231,7 @@ private:
 
   virtual void set_value(int dim, double value) override {
     m_value = value;
+    create_value();
   }
 
   virtual void dump(const std::function<void(pjs::Str*, double)> &out) override {
@@ -250,7 +256,7 @@ public:
   auto value() const -> double { return m_value; }
 
 private:
-  Gauge(pjs::Str *name, pjs::Array *label_names, const std::function<void(Gauge*)> &on_collect = nullptr);
+  Gauge(pjs::Str *name, pjs::Array *label_names, const std::function<void(Gauge*)> &on_collect = nullptr, MetricSet *set = nullptr);
   Gauge(Metric *parent, pjs::Str **labels);
 
   virtual void value_of(pjs::Value &out) override {
@@ -264,6 +270,7 @@ private:
 
   virtual void set_value(int dim, double value) override {
     m_value = value;
+    create_value();
   }
 
   virtual void dump(const std::function<void(pjs::Str*, double)> &out) override {
@@ -292,7 +299,7 @@ public:
   void observe(double n);
 
 private:
-  Histogram(pjs::Str *name, pjs::Array *buckets, pjs::Array *label_names);
+  Histogram(pjs::Str *name, pjs::Array *buckets, pjs::Array *label_names, MetricSet *set = nullptr);
   Histogram(Metric *parent, pjs::Str **labels);
 
   virtual void value_of(pjs::Value &out) override;

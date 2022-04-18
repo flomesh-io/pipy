@@ -24,6 +24,8 @@
  */
 
 #include "stats.hpp"
+#include "utils.hpp"
+#include "logging.hpp"
 
 namespace pipy {
 namespace stats {
@@ -340,10 +342,21 @@ void MetricSet::serialize(Data &out, const std::string &uuid, bool initial) {
   db.flush();
 }
 
-void MetricSet::deserialize(Data &in) {
+void MetricSet::deserialize(
+  const Data &in,
+  const std::function<MetricSet*(const std::string &uuid)> &by_uuid
+) {
+  Deserializer des(by_uuid);
+  if (!JSON::visit(in, &des)) {
+    Log::error("[stats] JSON deserialization failed for metrics");
+    return;
+  }
+  if (des.has_error()) {
+    Log::error("[stats] Invalid JSON structure for metrics");
+  }
 }
 
-void MetricSet::to_prometheus(Data &out) {
+void MetricSet::to_prometheus(Data &out, const std::string &inst) const {
   static std::string le("le");
   Data::Builder db(out, &s_dp);
   for (const auto &metric : m_metrics) {
@@ -356,15 +369,22 @@ void MetricSet::to_prometheus(Data &out) {
       label_values,
       [&](int dim, double x) {
         db.push(name->str());
-        if (dim > 0) {
+        if (dim > 0 || !inst.empty()) {
+          bool first = true;
+          if (!inst.empty()) {
+            db.push('{');
+            db.push(inst);
+            first = false;
+          }
           for (int i = 0; i < dim; i++) {
             auto label_name = label_names[i];
-            db.push(i ? ',' : '{');
+            db.push(first ? '{' : ',');
             db.push(label_name->size() > 0 ? label_name->str() : le);
             db.push('=');
             db.push('"');
             db.push(label_values[i]->str());
             db.push('"');
+            first = false;
           }
           db.push('}');
         }
@@ -401,43 +421,78 @@ void MetricSet::Deserializer::pop() {
   }
 }
 
-auto MetricSet::Deserializer::open() -> Metric* {
-  if (auto *level = m_current) {
-    if (level->id == Level::ID::VALUE) level = level->parent;
-    if (level && level->id == Level::ID::INDEX) {
-      auto i = ++level->index;
-      if (auto parent = level->parent) {
-        switch (parent->id) {
-          case Level::ID::METRICS: {
-            auto metric = m_metric_set->get(i);
-            if (metric && (metric->name() != level->key || metric->shape() != level->shape || metric->type() != level->type)) {
-              m_metric_set->truncate(i);
-              metric = nullptr;
+auto MetricSet::Deserializer::open(Level *current, Level *list, pjs::Str *key) -> Metric* {
+  if (list) {
+    if (auto parent = list->parent) {
+      auto i = ++list->index;
+      switch (parent->id) {
+
+        // Root metric
+        case Level::ID::METRICS: {
+          if (m_metric_set) {
+            auto m = m_metric_set->get(i);
+            if (m && key) {
+              if (
+                m->name() != key ||
+                m->shape() != current->shape ||
+                m->type() != current->type
+              ) {
+                m_metric_set->truncate(i);
+                m = nullptr;
+              }
             }
-            if (!metric) {
-              // TODO: create a new metric
+
+            if (!m && key) {
+              static std::string s_histogram("Histogram[");
+
+              auto labels = pjs::Array::make();
+              for (const auto &s : utils::split(current->shape, '/')) {
+                labels->push(s);
+              }
+
+              if (current->type == "Counter") {
+                m = Counter::make(key, labels, m_metric_set);
+              } else if (current->type == "Gauge") {
+                m = Gauge::make(key, labels, nullptr, m_metric_set);
+              } else if (utils::starts_with(current->type, s_histogram)) {
+                auto buckets_str = current->type.substr(s_histogram.length());
+                auto buckets = pjs::Array::make();
+                for (const auto &s : utils::split(buckets_str, ',')) {
+                  auto n = std::atof(s.c_str());
+                  buckets->push(n);
+                }
+                m = Histogram::make(key, buckets, labels, m_metric_set);
+              }
             }
-            m_current->metric = metric;
-            return metric;
+
+            if (m) {
+              current->metric = m;
+              return m;
+            }
           }
-          case Level::ID::SUB: {
-            auto metric = parent->metric->get_sub(i);
-            if (metric && metric->label() != level->key) {
-              parent->metric->truncate(i);
-              metric = nullptr;
-            }
-            if (!metric) {
-              auto *key = parent->key.get();
-              metric = parent->metric->with_labels(&key, 1);
-            }
-            m_current->metric = metric;
-            return metric;
-          }
-          default: error(); return nullptr;
+          break;
         }
+
+        // Sub metric
+        case Level::ID::SUB: {
+          auto p = parent->metric;
+          auto m = p->get_sub(i);
+          if (m && key && m->label() != key) {
+            p->truncate(i);
+            m = nullptr;
+          }
+          if (!m && key) {
+            m = p->with_labels(&key, 1);
+          }
+          current->metric = m;
+          return m;
+        }
+
+        default: break;
       }
     }
   }
+
   error();
   return nullptr;
 }
@@ -460,9 +515,37 @@ void MetricSet::Deserializer::integer(int64_t i) {
 
 void MetricSet::Deserializer::number(double n) {
   if (m_has_error) return;
-  if (auto *metric = open()) {
-    metric->set_value(0, n);
+  if (auto *current = m_current) {
+    auto *list = current;
+    pjs::Str *key = nullptr;
+    if (current->id == Level::ID::VALUE) {
+      list = current->parent;
+      key = current->key.get();
+    }
+
+    if (list && list->id == Level::ID::INDEX) {
+      if (auto parent = list->parent) {
+        switch (parent->id) {
+          case Level::ID::METRICS:
+          case Level::ID::SUB:
+            if (auto m = open(current, list, key)) {
+              m->set_value(0, n);
+              return;
+            }
+            break;
+          case Level::ID::VALUE:
+          case Level::ID::INDEX:
+            if (auto m = parent->metric) {
+              m->set_value(++list->index, n);
+              return;
+            }
+            break;
+          default: break;
+        }
+      }
+    }
   }
+  error();
 }
 
 void MetricSet::Deserializer::string(const char *s, size_t len) {
@@ -470,7 +553,9 @@ void MetricSet::Deserializer::string(const char *s, size_t len) {
   if (auto *level = m_current) {
     switch (level->id) {
       case Level::ID::UUID:
-        m_uuid.assign(s, len);
+        if (!m_metric_set) {
+          m_metric_set = m_by_uuid(std::string(s, len));
+        }
         break;
       case Level::ID::KEY:
         level->key = pjs::Str::make(s, len);
@@ -489,8 +574,9 @@ void MetricSet::Deserializer::string(const char *s, size_t len) {
 }
 
 void MetricSet::Deserializer::map_start() {
-  if (m_has_error) return;
-  push(new Level(Level::ID::NONE));
+  if (!m_has_error) {
+    push(new Level(Level::ID::NONE));
+  }
 }
 
 void MetricSet::Deserializer::map_key(const char *s, size_t len) {
@@ -504,9 +590,21 @@ void MetricSet::Deserializer::map_key(const char *s, size_t len) {
       case 's': m_current->id = Level::ID::SUB; break;
       default: error(); break;
     }
+    if (
+      m_current->id == Level::ID::LABELS ||
+      m_current->id == Level::ID::TYPE
+    ) {
+      auto p1 = m_current->parent;
+      auto p2 = p1 ? p1->parent : nullptr;
+      if (!p1 || p1->id != Level::ID::INDEX ||
+          !p2 || p2->id != Level::ID::METRICS
+      ) {
+        error();
+      }
+    }
   } else if (m_current && !m_current->parent) {
-    if (!std::strcmp(s, "uuid")) m_current->id = Level::ID::UUID;
-    else if (!std::strcmp(s, "metrics")) m_current->id = Level::ID::METRICS;
+    if (!std::strncmp(s, "uuid", len)) m_current->id = Level::ID::UUID;
+    else if (!std::strncmp(s, "metrics", len)) m_current->id = Level::ID::METRICS;
     else error();
   } else {
     error();
@@ -521,6 +619,13 @@ void MetricSet::Deserializer::map_end() {
 
 void MetricSet::Deserializer::array_start() {
   if (m_has_error) return;
+  if (auto *level = m_current) {
+    if (level->id == Level::ID::VALUE) {
+      open(level, level->parent, level->key);
+    } else if (level->id == Level::ID::INDEX) {
+      open(level, level, nullptr);
+    }
+  }
   push(new Level(Level::ID::INDEX));
 }
 
@@ -534,8 +639,8 @@ void MetricSet::Deserializer::array_end() {
 // Counter
 //
 
-Counter::Counter(pjs::Str *name, pjs::Array *label_names)
-  : MetricTemplate<Counter>(name, label_names)
+Counter::Counter(pjs::Str *name, pjs::Array *label_names, MetricSet *set)
+  : MetricTemplate<Counter>(name, label_names, set)
 {
 }
 
@@ -558,8 +663,8 @@ void Counter::increase(double n) {
 // Gauge
 //
 
-Gauge::Gauge(pjs::Str *name, pjs::Array *label_names, const std::function<void(Gauge*)> &on_collect)
-  : MetricTemplate<Gauge>(name, label_names)
+Gauge::Gauge(pjs::Str *name, pjs::Array *label_names, const std::function<void(Gauge*)> &on_collect, MetricSet *set)
+  : MetricTemplate<Gauge>(name, label_names, set)
   , m_on_collect(on_collect)
 {
 }
@@ -593,8 +698,8 @@ void Gauge::decrease(double n) {
 // Histogram
 //
 
-Histogram::Histogram(pjs::Str *name, pjs::Array *buckets, pjs::Array *label_names)
-  : MetricTemplate<Histogram>(name, label_names)
+Histogram::Histogram(pjs::Str *name, pjs::Array *buckets, pjs::Array *label_names, MetricSet *set)
+  : MetricTemplate<Histogram>(name, label_names, set)
 {
   m_buckets = buckets;
   m_percentile = algo::Percentile::make(buckets);
@@ -659,6 +764,7 @@ auto Histogram::get_type() -> const std::string& {
 
 void Histogram::set_value(int dim, double value) {
   m_percentile->set(dim, value);
+  create_value();
 }
 
 void Histogram::dump(const std::function<void(pjs::Str*, double)> &out) {
@@ -791,7 +897,12 @@ template<> void ClassDef<Histogram>::init() {
     if (!ctx.check(0, name)) return nullptr;
     if (!ctx.check(1, buckets)) return nullptr;
     if (!ctx.check(2, labels, labels)) return nullptr;
-    return Histogram::make(name, buckets, labels);
+    try {
+      return Histogram::make(name, buckets, labels);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+      return nullptr;
+    }
   });
 
   method("zero", [](Context &ctx, Object *obj, Value &ret) {
