@@ -99,12 +99,8 @@ void Outbound::flush() {
 
 void Outbound::end() {
   if (!m_ended) {
-    if (m_connected) {
-      pump();
-      std::error_code ec;
-      m_socket.shutdown(tcp::socket::shutdown_send, ec);
-    }
     m_ended = true;
+    pump();
   }
 }
 
@@ -343,7 +339,14 @@ void Outbound::receive() {
 
 void Outbound::pump() {
   if (m_pumping || !m_connected) return;
-  if (m_buffer.empty()) return;
+
+  if (m_buffer.empty()) {
+    if (m_ended) {
+      std::error_code ec;
+      m_socket.shutdown(tcp::socket::shutdown_send, ec);
+    }
+    return;
+  }
 
   m_socket.async_write_some(
     DataChunks(m_buffer.chunks()),
