@@ -188,24 +188,17 @@ void Metric::serialize(Data::Builder &db, bool initial) {
     db.push(s_v);
   }
 
-  bool first_dimension = true;
-  dump(
-    [&](pjs::Str *dim, double x) {
-      if (dim) {
-        if (first_dimension) {
-          db.push('[');
-          first_dimension = false;
-        } else {
-          db.push(',');
-        }
-      }
-      char buf[100];
-      auto len = pjs::Number::to_string(buf, sizeof(buf), x);
-      db.push(buf, len);
-    }
-  );
+  auto dim = get_dim();
+  if (dim > 1) db.push('[');
 
-  if (!first_dimension) db.push(']');
+  for (int i = 0; i < dim; i++) {
+    if (i > 0) db.push(',');
+    char buf[100];
+    auto len = pjs::Number::to_string(buf, sizeof(buf), get_value(i));
+    db.push(buf, len);
+  }
+
+  if (dim > 1) db.push(']');
 
   if (!m_subs.empty()) {
     db.push(',');
@@ -287,7 +280,7 @@ void Metric::dump_tree(
 auto MetricSet::get(pjs::Str *name) -> Metric* {
   auto i = m_metric_map.find(name);
   if (i == m_metric_map.end()) return nullptr;
-  return i->second;
+  return m_metrics[i->second];
 }
 
 auto MetricSet::get(int i) -> Metric* {
@@ -299,18 +292,24 @@ auto MetricSet::get(int i) -> Metric* {
 }
 
 void MetricSet::add(Metric *metric) {
-  m_metrics.emplace_back();
-  m_metrics.back() = metric;
-  m_metric_map[metric->name()] = metric;
+  auto i = m_metric_map.find(metric->name());
+  if (i == m_metric_map.end()) {
+    m_metric_map[metric->name()] = m_metrics.size();
+    m_metrics.emplace_back();
+    m_metrics.back() = metric;
+  } else {
+    m_metrics[i->second] = metric;
+  }
 }
 
 void MetricSet::truncate(int i) {
   if (0 <= i && i < m_metrics.size()) {
+    auto n = i;
     while (i < m_metrics.size()) {
       auto metric = m_metrics[i++].get();
       m_metric_map.erase(metric->name());
     }
-    m_metrics.resize(i);
+    m_metrics.resize(n);
   }
 }
 
@@ -760,6 +759,14 @@ auto Histogram::get_type() -> const std::string& {
     m_type += ']';
   }
   return m_type;
+}
+
+auto Histogram::get_dim() -> int {
+  return m_percentile->size();
+}
+
+auto Histogram::get_value(int dim) -> double {
+  return m_percentile->get(dim);
 }
 
 void Histogram::set_value(int dim, double value) {

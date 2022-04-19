@@ -84,6 +84,7 @@ private:
   };
 
   struct Instance {
+    int index;
     Status status;
     stats::MetricSet metrics;
   };
@@ -92,8 +93,9 @@ private:
   CodebaseStore* m_store;
   std::string m_current_codebase;
   std::string m_current_program;
-  std::map<std::string, std::map<std::string, Instance>> m_instances;
-  std::map<std::string, stats::MetricSet> m_metric_sets;
+  std::vector<Instance*> m_instances;
+  std::map<std::string, int> m_instance_map;
+  std::map<std::string, std::list<int>> m_codebase_instances;
 
   Tarball m_www_files;
   std::map<std::string, pjs::Ref<http::File>> m_www_file_cache;

@@ -151,11 +151,11 @@ function Status({ root }) {
                     >
                       <ListItemIcon className={classes.listIcon}><LocalHostIcon/></ListItemIcon>
                       <ListItemText
-                        primary={id ? 'Remote Instance' : 'Local Host'}
+                        primary={id ? `Remote Instance #${id}` : 'Local Host'}
                         secondary={
                           id && (
                             <div>
-                              <Typography component="p" variant="caption" noWrap>{id}</Typography>
+                              <Typography component="p" variant="caption" noWrap>{instance.uuid}</Typography>
                               {now - instance.timestamp > 10000 ? (
                                 <Typography component="p" variant="caption" noWrap>
                                   {'Inactive since '}

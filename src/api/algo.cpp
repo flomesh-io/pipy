@@ -629,6 +629,14 @@ void Percentile::reset() {
   m_sample_count = 0;
 }
 
+auto Percentile::get(int bucket) -> size_t {
+  if (0 <= bucket && bucket < m_counts.size()) {
+    return m_counts[bucket];
+  } else {
+    return 0;
+  }
+}
+
 void Percentile::set(int bucket, size_t count) {
   if (0 <= bucket && bucket < m_counts.size()) {
     auto &n = m_counts[bucket];

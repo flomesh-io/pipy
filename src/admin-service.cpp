@@ -313,11 +313,11 @@ Message* AdminService::metrics_GET() {
   Data buf;
   stats::Metric::local().collect_all();
   stats::Metric::local().to_prometheus(buf, "");
-  for (const auto &i : m_metric_sets) {
-    std::string inst("_instance=\"");
-    inst += i.first;
-    inst += '"';
-    i.second.to_prometheus(buf, inst);
+  for (const auto inst : m_instances) {
+    std::string inst_label("instance=\"");
+    inst_label += std::to_string(inst->index);
+    inst_label += '"';
+    inst->metrics.to_prometheus(buf, inst_label);
   }
   return response(buf);
 }
@@ -368,9 +368,18 @@ Message* AdminService::repo_POST(const std::string &path, Data *data) {
     if (auto codebase = m_store->find_codebase(name)) {
       Status status;
       if (!status.from_json(*data)) return response(400, "Invalid JSON");
-      auto &instances = m_instances[codebase->id()];
-      auto &inst = instances[status.uuid];
-      inst.status = std::move(status);
+      Instance *inst = nullptr;
+      auto i = m_instance_map.find(status.uuid);
+      if (i == m_instance_map.end()) {
+        inst = new Instance();
+        inst->index = m_instances.size();
+        m_instance_map[status.uuid] = inst->index;
+        m_instances.push_back(inst);
+        m_codebase_instances[codebase->id()].push_back(inst->index);
+      } else {
+        inst = m_instances[i->second];
+      }
+      inst->status = std::move(status);
       return m_response_created;
     }
   }
@@ -434,12 +443,13 @@ Message* AdminService::api_v1_repo_GET(const std::string &path) {
     }
 
     ss << ",\"instances\":{";
-    auto &instances = m_instances[codebase->id()];
+    auto &instances = m_codebase_instances[codebase->id()];
     bool first = true;
-    for (const auto &i : instances) {
+    for (const auto index : instances) {
+      auto *inst = m_instances[index];
       if (first) first = false; else ss << ',';
-      ss << '"' << utils::escape(i.first) << "\":";
-      i.second.status.to_json(ss);
+      ss << '"' << inst->index << "\":";
+      inst->status.to_json(ss);
     }
     ss << "}}";
 
@@ -803,8 +813,13 @@ auto AdminService::response_head(
 void AdminService::on_metrics(const Data &data) {
   stats::MetricSet::deserialize(
     data,
-    [this](const std::string &uuid) {
-      return &m_metric_sets[uuid];
+    [this](const std::string &uuid) -> stats::MetricSet* {
+      auto i = m_instance_map.find(uuid);
+      if (i == m_instance_map.end()) {
+        return nullptr;
+      } else {
+        return &m_instances[i->second]->metrics;
+      }
     }
   );
 }

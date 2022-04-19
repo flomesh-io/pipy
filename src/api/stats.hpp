@@ -67,6 +67,8 @@ protected:
 
   virtual auto create_new(Metric *parent, pjs::Str **labels) -> Metric* = 0;
   virtual auto get_type() -> const std::string& = 0;
+  virtual auto get_dim() -> int { return 1; }
+  virtual auto get_value(int dim) -> double = 0;
   virtual void set_value(int dim, double value) = 0;
   virtual void collect() {}
   virtual void dump(const std::function<void(pjs::Str*, double)> &out) {};
@@ -177,7 +179,7 @@ private:
   };
 
   std::vector<pjs::Ref<Metric>> m_metrics;
-  std::unordered_map<pjs::Ref<pjs::Str>, Metric*> m_metric_map;
+  std::unordered_map<pjs::Ref<pjs::Str>, int> m_metric_map;
 
   auto get(int i) -> Metric*;
   void add(Metric *metric);
@@ -229,6 +231,10 @@ private:
     return type;
   }
 
+  virtual auto get_value(int dim) -> double override {
+    return m_value;
+  }
+
   virtual void set_value(int dim, double value) override {
     m_value = value;
     create_value();
@@ -268,6 +274,10 @@ private:
     return type;
   }
 
+  virtual auto get_value(int dim) -> double override {
+    return m_value;
+  }
+
   virtual void set_value(int dim, double value) override {
     m_value = value;
     create_value();
@@ -304,6 +314,8 @@ private:
 
   virtual void value_of(pjs::Value &out) override;
   virtual auto get_type() -> const std::string& override;
+  virtual auto get_dim() -> int override;
+  virtual auto get_value(int dim) -> double override;
   virtual void set_value(int dim, double value) override;
   virtual void dump(const std::function<void(pjs::Str*, double)> &out) override;
 

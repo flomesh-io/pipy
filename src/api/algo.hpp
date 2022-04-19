@@ -223,6 +223,8 @@ private:
 class Percentile : public pjs::ObjectTemplate<Percentile> {
 public:
   void reset();
+  auto size() const -> size_t { return m_buckets.size(); }
+  auto get(int bucket) -> size_t;
   void set(int bucket, size_t count);
   void observe(double sample);
   auto calculate(int percentage) -> double;
