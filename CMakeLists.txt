@@ -82,8 +82,9 @@ else()
   add_custom_command(
     OUTPUT ${OPENSSL_LIB_DIR}/libcrypto.a ${OPENSSL_LIB_DIR}/libssl.a
     WORKING_DIRECTORY ${OPENSSL_SRC_DIR}
-    COMMAND mkdir -p build
-    COMMAND cd build && ../config no-shared && make
+    COMMAND mkdir -p ${OPENSSL_SRC_DIR}/build
+    COMMAND cd ${OPENSSL_SRC_DIR}/build && ../config no-shared && make
+    VERBATIM
     COMMENT "Building OpenSSL"
   )
 endif()
@@ -94,6 +95,8 @@ if(PIPY_BROTLI)
   set(BROTLI_INC_DIR ${PIPY_BROTLI}/include)
   set(BROTLI_LIB ${PIPY_BROTLI}/lib/libbrotlidec-static.a)
 else()
+  set(BROTLI_BUNDLED_MODE OFF CACHE BOOL "" FORCE)
+  set(BROTLI_DISABLE_TESTS ON CACHE BOOL "" FORCE)
   add_subdirectory(deps/brotli-1.0.9)
   set(BROTLI_INC_DIR "${CMAKE_SOURCE_DIR}/deps/brotli-1.0.9/c/include")
   set(BROTLI_LIB brotlidec-static)
