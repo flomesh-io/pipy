@@ -43,6 +43,7 @@ public:
 
   double timestamp = 0;
   std::string uuid;
+  std::string name;
   std::string version;
   std::list<Module> modules;
 

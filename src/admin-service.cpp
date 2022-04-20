@@ -315,7 +315,11 @@ Message* AdminService::metrics_GET() {
   stats::Metric::local().to_prometheus(buf, "");
   for (const auto inst : m_instances) {
     std::string inst_label("instance=\"");
-    inst_label += std::to_string(inst->index);
+    if (inst->status.name.empty()) {
+      inst_label += std::to_string(inst->index);
+    } else {
+      inst_label += inst->status.name;
+    }
     inst_label += '"';
     inst->metrics.to_prometheus(buf, inst_label);
   }

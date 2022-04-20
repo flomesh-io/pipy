@@ -151,7 +151,7 @@ function Status({ root }) {
                     >
                       <ListItemIcon className={classes.listIcon}><LocalHostIcon/></ListItemIcon>
                       <ListItemText
-                        primary={id ? `Remote Instance #${id}` : 'Local Host'}
+                        primary={id ? `Remote Instance #${id}` + (instance.name ? ': ' + instance.name : '') : 'Local Host'}
                         secondary={
                           id && (
                             <div>

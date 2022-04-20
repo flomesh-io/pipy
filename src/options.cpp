@@ -42,6 +42,8 @@ void Options::show_help() {
   std::cout << "  -v, -version, --version              Show version information" << std::endl;
   std::cout << "  --log-level=<debug|info|warn|error>  Set the level of log output" << std::endl;
   std::cout << "  --verify                             Verify configuration only" << std::endl;
+  std::cout << "  --instance-uuid=<uuid>               Specify a UUID for this worker process" << std::endl;
+  std::cout << "  --instance-name=<name>               Specify a name for this worker process" << std::endl;
   std::cout << "  --reuse-port                         Enable kernel load balancing for all listening ports" << std::endl;
   std::cout << "  --admin-port=<port>                  Enable administration service on the specified port" << std::endl;
   std::cout << "  --admin-tls-cert=<filename>          Administration service certificate" << std::endl;
@@ -82,6 +84,10 @@ Options::Options(int argc, char *argv[]) {
         }
       } else if (k == "--verify") {
         verify = true;
+      } else if (k == "--instance-uuid") {
+        instance_uuid = v;
+      } else if (k == "--instance-name") {
+        instance_name = v;
       } else if (k == "--reuse-port") {
         reuse_port = true;
       } else if (k == "--admin-port") {

@@ -172,9 +172,6 @@ static void wait_for_signals(asio::signal_set &signals) {
 //
 
 int main(int argc, char *argv[]) {
-  utils::gen_uuid_v4(Status::local.uuid);
-  Status::local.timestamp = utils::now();
-
   try {
     Options opts(argc, argv);
 
@@ -186,6 +183,15 @@ int main(int argc, char *argv[]) {
     if (opts.help) {
       Options::show_help();
       return 0;
+    }
+
+    Status::local.timestamp = utils::now();
+    Status::local.name = opts.instance_name;
+
+    if (opts.instance_uuid.empty()) {
+      utils::gen_uuid_v4(Status::local.uuid);
+    } else {
+      Status::local.uuid = opts.instance_uuid;
     }
 
     Log::set_level(opts.log_level);
