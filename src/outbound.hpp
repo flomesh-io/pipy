@@ -56,6 +56,7 @@ public:
     double connect_timeout = 0;
     double read_timeout = 0;
     double write_timeout = 0;
+    double idle_timeout = 60;
   };
 
   Outbound(EventTarget::Input *output, const Options &options);
@@ -101,6 +102,7 @@ private:
   Timer m_retry_timer;
   Timer m_read_timer;
   Timer m_write_timer;
+  Timer m_idle_timer;
   Data m_buffer;
   size_t m_discarded_data_size = 0;
   bool m_connecting = false;
@@ -118,6 +120,7 @@ private:
   void restart(StreamEnd::Error err);
   void receive();
   void pump();
+  void wait();
   void output(Event *evt);
   void close(StreamEnd::Error err);
   void describe(char *desc);

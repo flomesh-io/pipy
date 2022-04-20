@@ -600,10 +600,11 @@ void Configuration::draw(Graph &g) {
 }
 
 void Configuration::get_listen_options(pjs::Object *obj, Listener::Options &opt) {
-  pjs::Value max_conn, read_timeout, write_timeout, transparent, close_eof;
+  pjs::Value max_conn, read_timeout, write_timeout, idle_timeout, transparent, close_eof;
   obj->get("maxConnections", max_conn);
   obj->get("readTimeout", read_timeout);
   obj->get("writeTimeout", write_timeout);
+  obj->get("idleTimeout", idle_timeout);
   obj->get("transparent", transparent);
   obj->get("closeEOF", close_eof);
 
@@ -625,6 +626,14 @@ void Configuration::get_listen_options(pjs::Object *obj, Listener::Options &opt)
       opt.write_timeout = utils::get_seconds(write_timeout.s()->str());
     } else {
       opt.write_timeout = write_timeout.to_number();
+    }
+  }
+
+  if (!idle_timeout.is_undefined()) {
+    if (idle_timeout.is_string()) {
+      opt.idle_timeout = utils::get_seconds(idle_timeout.s()->str());
+    } else {
+      opt.idle_timeout = idle_timeout.to_number();
     }
   }
 

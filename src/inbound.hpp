@@ -52,6 +52,7 @@ public:
   struct Options {
     double read_timeout = 0;
     double write_timeout = 0;
+    double idle_timeout = 60;
     bool transparent = false;
     bool close_eof = true;
   };
@@ -83,6 +84,7 @@ private:
   Options m_options;
   Timer m_read_timer;
   Timer m_write_timer;
+  Timer m_idle_timer;
   pjs::Ref<Pipeline> m_pipeline;
   pjs::Ref<EventTarget::Input> m_output;
   asio::ip::tcp::endpoint m_peer;
@@ -108,8 +110,9 @@ private:
 
   void start();
   void receive();
-  void wait();
+  void linger();
   void pump();
+  void wait();
   void output(Event *evt);
   void close(StreamEnd::Error err);
   void address();

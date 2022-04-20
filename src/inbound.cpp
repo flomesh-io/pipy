@@ -179,7 +179,7 @@ void Inbound::receive() {
   m_socket.async_read_some(
     DataChunks(buffer->chunks()),
     [=](const std::error_code &ec, std::size_t n) {
-      if (m_options.read_timeout > 0){
+      if (m_options.read_timeout > 0) {
         m_read_timer.cancel();
       }
 
@@ -211,7 +211,7 @@ void Inbound::receive() {
             } else {
               InputContext ic(this);
               output(StreamEnd::make());
-              wait();
+              linger();
             }
           } else {
             if (Log::is_enabled(Log::WARN)) {
@@ -225,9 +225,11 @@ void Inbound::receive() {
         } else if (m_receiving_state == PAUSING) {
           m_receiving_state = PAUSED;
           retain();
+          wait();
 
         } else if (m_receiving_state == RECEIVING) {
           receive();
+          wait();
         }
       }
 
@@ -247,31 +249,18 @@ void Inbound::receive() {
   retain();
 }
 
-void Inbound::wait() {
+void Inbound::linger() {
   m_socket.async_wait(
     tcp::socket::wait_error,
     [this](const std::error_code &ec) {
-      if (m_options.read_timeout > 0){
-        m_read_timer.cancel();
-      }
-
       if (ec != asio::error::operation_aborted) {
         char desc[200];
         describe(desc);
-        Log::error("%s wait for peer: %s", desc, ec.message().c_str());
+        Log::error("%s socket error: %s", desc, ec.message().c_str());
       }
       release();
     }
   );
-
-  if (m_options.read_timeout > 0) {
-    m_read_timer.schedule(
-      m_options.read_timeout,
-      [this]() {
-        close(StreamEnd::READ_TIMEOUT);
-      }
-    );
-  }
 
   retain();
 }
@@ -321,9 +310,22 @@ void Inbound::pump() {
     );
   }
 
-  m_pumping = true;
-
+  wait();
   retain();
+
+  m_pumping = true;
+}
+
+void Inbound::wait() {
+  if (m_options.idle_timeout > 0) {
+    m_idle_timer.cancel();
+    m_idle_timer.schedule(
+      m_options.idle_timeout,
+      [this]() {
+        close(StreamEnd::IDLE_TIMEOUT);
+      }
+    );
+  }
 }
 
 void Inbound::output(Event *evt) {
@@ -351,6 +353,11 @@ void Inbound::close(StreamEnd::Error err) {
 
   InputContext ic(this);
   output(StreamEnd::make(err));
+
+  if (m_receiving_state == PAUSED) {
+    m_receiving_state = RECEIVING;
+    release();
+  }
 }
 
 void Inbound::address() {

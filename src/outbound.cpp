@@ -318,6 +318,7 @@ void Outbound::receive() {
 
         } else {
           receive();
+          wait();
         }
       }
 
@@ -394,9 +395,22 @@ void Outbound::pump() {
     );
   }
 
-  m_pumping = true;
-
+  wait();
   retain();
+
+  m_pumping = true;
+}
+
+void Outbound::wait() {
+  if (m_options.idle_timeout > 0) {
+    m_idle_timer.cancel();
+    m_idle_timer.schedule(
+      m_options.idle_timeout,
+      [this]() {
+        close(StreamEnd::IDLE_TIMEOUT);
+      }
+    );
+  }
 }
 
 void Outbound::output(Event *evt) {

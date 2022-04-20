@@ -36,13 +36,14 @@ Connect::Connect(const pjs::Value &target, pjs::Object *options)
 {
   if (options) {
     pjs::Value buffer_limit, retry_count, retry_delay;
-    pjs::Value connect_timeout, read_timeout, write_timeout;
+    pjs::Value connect_timeout, read_timeout, write_timeout, idle_timeout;
     options->get("bufferLimit", buffer_limit);
     options->get("retryCount", retry_count);
     options->get("retryDelay", retry_delay);
     options->get("connectTimeout", connect_timeout);
     options->get("readTimeout", read_timeout);
     options->get("writeTimeout", write_timeout);
+    options->get("idleTimeout", idle_timeout);
 
     if (!buffer_limit.is_undefined()) {
       if (buffer_limit.is_string()) {
@@ -83,6 +84,14 @@ Connect::Connect(const pjs::Value &target, pjs::Object *options)
         m_options.write_timeout = utils::get_seconds(write_timeout.s()->str());
       } else {
         m_options.write_timeout = write_timeout.to_number();
+      }
+    }
+
+    if (!idle_timeout.is_undefined()) {
+      if (idle_timeout.is_string()) {
+        m_options.idle_timeout = utils::get_seconds(idle_timeout.s()->str());
+      } else {
+        m_options.idle_timeout = idle_timeout.to_number();
       }
     }
   }
