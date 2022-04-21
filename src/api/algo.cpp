@@ -669,7 +669,7 @@ auto Percentile::calculate(int percentage) -> double {
   return std::numeric_limits<double>::infinity();
 }
 
-void Percentile::dump(const std::function<void(double, double)> &cb) {
+void Percentile::dump(const std::function<void(double, size_t)> &cb) {
   size_t sum = 0;
   for (size_t i = 0; i < m_buckets.size(); i++) {
     sum += m_counts[i];

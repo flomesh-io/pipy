@@ -35,7 +35,9 @@
 #include "tar.hpp"
 #include "codebase-store.hpp"
 #include "status.hpp"
+#include "timer.hpp"
 
+#include <chrono>
 #include <map>
 #include <set>
 
@@ -54,6 +56,7 @@ public:
   };
 
   AdminService(CodebaseStore *store);
+  ~AdminService();
 
   void open(int port, const Options &options);
   void close();
@@ -96,6 +99,8 @@ private:
   std::vector<Instance*> m_instances;
   std::map<std::string, int> m_instance_map;
   std::map<std::string, std::list<int>> m_codebase_instances;
+  Timer m_metrics_history_timer;
+  std::chrono::time_point<std::chrono::steady_clock> m_metrics_timestamp;
 
   Tarball m_www_files;
   std::map<std::string, pjs::Ref<http::File>> m_www_file_cache;
@@ -130,6 +135,7 @@ private:
   Message* api_v1_program_DELETE();
 
   Message* api_v1_status_GET();
+  Message* api_v1_metrics_GET(const std::string &uuid);
 
   Message* api_v1_graph_POST(Data *data);
 
@@ -149,6 +155,8 @@ private:
   ) -> http::ResponseHead*;
 
   void on_metrics(const Data &data);
+
+  void metrics_history_step();
 };
 
 } // namespace pipy

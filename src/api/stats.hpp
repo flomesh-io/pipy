@@ -47,6 +47,8 @@ class MetricSet;
 
 class Metric : public pjs::ObjectTemplate<Metric> {
 public:
+  enum { MAX_HISTORY = 60 };
+
   static auto local() -> MetricSet&;
 
   auto root() const -> Metric* { return m_root; }
@@ -54,7 +56,11 @@ public:
   auto label() const -> pjs::Str* { return m_label; }
   auto shape() const -> const std::string& { return m_root ? m_root->m_shape : m_shape; }
   auto type() -> const std::string& { return m_root ? m_root->get_type() : get_type(); }
+  auto dimension() -> int { return get_dim(); }
   auto with_labels(pjs::Str *const *labels, int count) -> Metric*;
+  auto history_size() -> size_t { return m_history_end - m_history_start; }
+  void history_step();
+  auto history(int dim, double *values) -> size_t;
   void clear();
 
 protected:
@@ -63,7 +69,7 @@ protected:
   virtual ~Metric() {}
 
   void create_value();
-  void serialize(Data::Builder &db, bool initial);
+  void serialize(Data::Builder &db, bool initial, bool history);
 
   virtual auto create_new(Metric *parent, pjs::Str **labels) -> Metric* = 0;
   virtual auto get_type() -> const std::string& = 0;
@@ -74,6 +80,10 @@ protected:
   virtual void dump(const std::function<void(pjs::Str*, double)> &out) {};
 
 private:
+  struct HistoryValues {
+    double v[MAX_HISTORY];
+  };
+
   auto get_sub(pjs::Str **labels) -> Metric*;
   auto get_sub(int i) -> Metric*;
   void truncate(int i);
@@ -94,6 +104,9 @@ private:
   std::shared_ptr<std::vector<pjs::Ref<pjs::Str>>> m_label_names;
   std::vector<pjs::Ref<Metric>> m_subs;
   std::unordered_map<pjs::Ref<pjs::Str>, Metric*> m_sub_map;
+  std::vector<HistoryValues> m_history;
+  size_t m_history_start = 0;
+  size_t m_history_end = 0;
 
   static std::unordered_map<pjs::Ref<pjs::Str>, pjs::Ref<Metric>> s_all_metrics;
 
@@ -109,7 +122,9 @@ class MetricSet {
 public:
   auto get(pjs::Str *name) -> Metric*;
   void collect_all();
+  void history_step();
   void serialize(Data &out, const std::string &uuid, bool initial);
+  void serialize_history(Data &out, std::chrono::time_point<std::chrono::steady_clock> timestamp);
   void to_prometheus(Data &out, const std::string &inst) const;
 
   static void deserialize(
@@ -334,24 +349,6 @@ private:
 
 class Stats : public pjs::ObjectTemplate<Stats>
 {
-};
-
-//
-// MetricClient
-//
-
-class MetricClient {
-public:
-
-private:
-  std::vector<Metric*> m_metrics;
-};
-
-//
-// MetricServer
-//
-
-class MetricServer {
 };
 
 } // namespace stats

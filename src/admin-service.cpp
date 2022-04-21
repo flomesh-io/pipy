@@ -84,6 +84,12 @@ AdminService::AdminService(CodebaseStore *store)
   }
 }
 
+AdminService::~AdminService() {
+  for (auto *i : m_instances) {
+    delete i;
+  }
+}
+
 void AdminService::open(int port, const Options &options) {
   Log::info("[admin] Starting admin service...");
 
@@ -123,6 +129,8 @@ void AdminService::open(int port, const Options &options) {
   listener->set_options(opts);
   listener->pipeline_def(pipeline_def);
   m_port = port;
+
+  metrics_history_step();
 }
 
 void AdminService::close() {
@@ -135,6 +143,7 @@ auto AdminService::handle(Message *req) -> Message* {
   static std::string prefix_repo("/repo/");
   static std::string prefix_api_v1_repo("/api/v1/repo/");
   static std::string prefix_api_v1_files("/api/v1/files/");
+  static std::string prefix_api_v1_metrics("/api/v1/metrics/");
   static std::string header_accept("accept");
   static std::string text_html("text/html");
 
@@ -149,6 +158,15 @@ auto AdminService::handle(Message *req) -> Message* {
     if (path == "/metrics") {
       if (method == "GET") {
         return metrics_GET();
+      } else {
+        return m_response_method_not_allowed;
+      }
+    }
+
+    // GET /api/v1/metrics
+    if (path == "/api/v1/metrics") {
+      if (method == "GET") {
+        return api_v1_metrics_GET("");
       } else {
         return m_response_method_not_allowed;
       }
@@ -256,6 +274,15 @@ auto AdminService::handle(Message *req) -> Message* {
     if (path == "/api/v1/status") {
       if (method == "GET") {
         return api_v1_status_GET();
+      } else {
+        return m_response_method_not_allowed;
+      }
+    }
+
+    // GET /api/v1/metrics/[uuid]
+    if (utils::starts_with(path, prefix_api_v1_metrics)) {
+      if (method == "GET") {
+        return api_v1_metrics_GET(path.substr(prefix_api_v1_metrics.length()));
       } else {
         return m_response_method_not_allowed;
       }
@@ -710,6 +737,23 @@ Message* AdminService::api_v1_status_GET() {
   );
 }
 
+Message* AdminService::api_v1_metrics_GET(const std::string &uuid) {
+  stats::MetricSet *ms = nullptr;
+  if (uuid.empty()) {
+    ms = &stats::Metric::local();
+  } else {
+    auto i = m_instance_map.find(uuid);
+    if (i != m_instance_map.end()) ms = &m_instances[i->second]->metrics;
+  }
+  if (!ms) return m_response_not_found;
+  Data payload;
+  ms->serialize_history(payload, m_metrics_timestamp);
+  return Message::make(
+    m_response_head_json,
+    Data::make(payload)
+  );
+}
+
 Message* AdminService::api_v1_graph_POST(Data *data) {
   Graph g;
   std::string error;
@@ -825,6 +869,17 @@ void AdminService::on_metrics(const Data &data) {
         return &m_instances[i->second]->metrics;
       }
     }
+  );
+}
+
+void AdminService::metrics_history_step() {
+  m_metrics_timestamp = std::chrono::steady_clock::now();
+  stats::Metric::local().history_step();
+  for (auto *i : m_instances) {
+    i->metrics.history_step();
+  }
+  m_metrics_history_timer.schedule(
+    5, [this]() { metrics_history_step(); }
   );
 }
 

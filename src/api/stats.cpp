@@ -101,6 +101,37 @@ auto Metric::with_labels(pjs::Str *const *labels, int count) -> Metric* {
   return metric;
 }
 
+void Metric::history_step() {
+  auto i = (m_history_end++) % MAX_HISTORY;
+  if (m_history_end - m_history_start > MAX_HISTORY) {
+    m_history_start = m_history_end - MAX_HISTORY;
+  }
+
+  int dim = get_dim();
+  if (m_history.size() < dim) m_history.resize(dim);
+  for (int d = 0; d < dim; d++) {
+    auto v = get_value(d);
+    m_history[d].v[i] = v;
+  }
+
+  for (const auto &sub : m_subs) {
+    sub->history_step();
+  }
+}
+
+auto Metric::history(int dim, double *values) -> size_t {
+  if (0 <= dim && dim < m_history.size()) {
+    const auto &v = m_history[dim].v;
+    size_t n = m_history_end - m_history_start;
+    for (size_t i = 0; i < n; i++) {
+      values[i] = v[(i + m_history_start) % MAX_HISTORY];
+    }
+    return n;
+  } else {
+    return 0;
+  }
+}
+
 void Metric::clear() {
   for (const auto &i : m_subs) {
     i->clear();
@@ -150,7 +181,7 @@ void Metric::create_value() {
 //   }
 //
 
-void Metric::serialize(Data::Builder &db, bool initial) {
+void Metric::serialize(Data::Builder &db, bool initial, bool history) {
   static std::string s_k("\"k\":"); // key
   static std::string s_t("\"t\":"); // type
   static std::string s_v("\"v\":"); // value
@@ -191,11 +222,25 @@ void Metric::serialize(Data::Builder &db, bool initial) {
   auto dim = get_dim();
   if (dim > 1) db.push('[');
 
-  for (int i = 0; i < dim; i++) {
-    if (i > 0) db.push(',');
-    char buf[100];
-    auto len = pjs::Number::to_string(buf, sizeof(buf), get_value(i));
-    db.push(buf, len);
+  for (int d = 0; d < dim; d++) {
+    if (d > 0) db.push(',');
+    if (history) {
+      auto n = history_size();
+      double v[n];
+      n = this->history(d, v);
+      db.push('[');
+      for (size_t i = 0; i < n; i++) {
+        if (i > 0) db.push(',');
+        char buf[100];
+        auto len = pjs::Number::to_string(buf, sizeof(buf), v[i]);
+        db.push(buf, len);
+      }
+      db.push(']');
+    } else {
+      char buf[100];
+      auto len = pjs::Number::to_string(buf, sizeof(buf), get_value(d));
+      db.push(buf, len);
+    }
   }
 
   if (dim > 1) db.push(']');
@@ -207,7 +252,7 @@ void Metric::serialize(Data::Builder &db, bool initial) {
     bool first = true;
     for (const auto &i : m_subs) {
       if (first) first = false; else db.push(',');
-      i->serialize(db, initial);
+      i->serialize(db, initial, history);
     }
     db.push(']');
   }
@@ -319,6 +364,12 @@ void MetricSet::collect_all() {
   }
 }
 
+void MetricSet::history_step() {
+  for (const auto &m : m_metrics) {
+    m->history_step();
+  }
+}
+
 void MetricSet::serialize(Data &out, const std::string &uuid, bool initial) {
   static std::string s_uuid("\"uuid\":");
   static std::string s_metrics("\"metrics\":");
@@ -334,7 +385,28 @@ void MetricSet::serialize(Data &out, const std::string &uuid, bool initial) {
   bool first = true;
   for (const auto &metric : m_metrics) {
     if (first) first = false; else db.push(',');
-    metric->serialize(db, initial);
+    metric->serialize(db, initial, false);
+  }
+  db.push(']');
+  db.push('}');
+  db.flush();
+}
+
+void MetricSet::serialize_history(Data &out, std::chrono::time_point<std::chrono::steady_clock> timestamp) {
+  static std::string s_time("\"time\":");
+  static std::string s_metrics("\"metrics\":");
+  auto time = std::chrono::duration_cast<std::chrono::seconds>(timestamp.time_since_epoch()).count();
+  Data::Builder db(out, &s_dp);
+  db.push('{');
+  db.push(s_time);
+  db.push(std::to_string(time));
+  db.push(',');
+  db.push(s_metrics);
+  db.push('[');
+  bool first = true;
+  for (const auto &metric : m_metrics) {
+    if (first) first = false; else db.push(',');
+    metric->serialize(db, true, true);
   }
   db.push(']');
   db.push('}');
@@ -778,7 +850,7 @@ void Histogram::dump(const std::function<void(pjs::Str*, double)> &out) {
   const auto &labels = m_root ? m_root->m_labels : m_labels;
   int i = 0;
   m_percentile->dump(
-    [&](double, double count) {
+    [&](double, size_t count) {
       out(labels[i++], count);
     }
   );

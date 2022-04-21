@@ -228,7 +228,7 @@ public:
   void set(int bucket, size_t count);
   void observe(double sample);
   auto calculate(int percentage) -> double;
-  void dump(const std::function<void(double, double)> &cb);
+  void dump(const std::function<void(double, size_t)> &cb);
 
 private:
   Percentile(pjs::Array *buckets);
