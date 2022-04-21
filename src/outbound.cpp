@@ -273,6 +273,8 @@ void Outbound::restart(StreamEnd::Error err) {
 }
 
 void Outbound::receive() {
+  if (!m_socket.is_open()) return;
+
   static Data::Producer s_data_producer("Outbound");
   pjs::Ref<Data> buffer(Data::make(RECEIVE_BUFFER_SIZE, &s_data_producer));
 
@@ -307,6 +309,13 @@ void Outbound::receive() {
               Log::debug("%s connection closed by peer", desc);
             }
             close(StreamEnd::NO_ERROR);
+          } else if (ec == asio::error::connection_reset) {
+            if (Log::is_enabled(Log::WARN)) {
+              char desc[200];
+              describe(desc);
+              Log::warn("%s connection reset by peer", desc);
+            }
+            close(StreamEnd::CONNECTION_RESET);
           } else {
             if (Log::is_enabled(Log::WARN)) {
               char desc[200];
@@ -339,6 +348,7 @@ void Outbound::receive() {
 }
 
 void Outbound::pump() {
+  if (!m_socket.is_open()) return;
   if (m_pumping || !m_connected) return;
 
   if (m_buffer.empty()) {
@@ -402,6 +412,7 @@ void Outbound::pump() {
 }
 
 void Outbound::wait() {
+  if (!m_socket.is_open()) return;
   if (m_options.idle_timeout > 0) {
     m_idle_timer.cancel();
     m_idle_timer.schedule(
@@ -427,21 +438,23 @@ void Outbound::close(StreamEnd::Error err) {
   m_retries = 0;
   m_connected = false;
 
-  std::error_code ec;
-  m_socket.shutdown(tcp::socket::shutdown_both, ec);
-  m_socket.close(ec);
+  if (m_socket.is_open()) {
+    std::error_code ec;
+    m_socket.shutdown(tcp::socket::shutdown_both, ec);
+    m_socket.close(ec);
 
-  if (ec) {
-    if (Log::is_enabled(Log::ERROR)) {
-      char desc[200];
-      describe(desc);
-      Log::error("%s error closing socket: %s", desc, ec.message().c_str());
-    }
-  } else {
-    if (Log::is_enabled(Log::DEBUG)) {
-      char desc[200];
-      describe(desc);
-      Log::debug("%s connection closed to peer", desc);
+    if (ec) {
+      if (Log::is_enabled(Log::ERROR)) {
+        char desc[200];
+        describe(desc);
+        Log::error("%s error closing socket: %s", desc, ec.message().c_str());
+      }
+    } else {
+      if (Log::is_enabled(Log::DEBUG)) {
+        char desc[200];
+        describe(desc);
+        Log::debug("%s connection closed to peer", desc);
+      }
     }
   }
 

@@ -144,10 +144,10 @@ void Inbound::on_event(Event *evt) {
     } else if (evt->is<MessageEnd>()) {
       pump();
 
-    } else if (evt->is<StreamEnd>()) {
+    } else if (auto end = evt->as<StreamEnd>()) {
       m_ended = true;
       if (m_buffer.empty()) {
-        close(StreamEnd::NO_ERROR);
+        close(end->error());
       } else {
         pump();
       }
@@ -173,6 +173,8 @@ void Inbound::start() {
 }
 
 void Inbound::receive() {
+  if (!m_socket.is_open()) return;
+
   static Data::Producer s_data_producer("Inbound");
   pjs::Ref<Data> buffer(Data::make(RECEIVE_BUFFER_SIZE, &s_data_producer));
 
@@ -209,10 +211,17 @@ void Inbound::receive() {
             if (m_options.close_eof) {
               close(StreamEnd::NO_ERROR);
             } else {
+              linger();
               InputContext ic(this);
               output(StreamEnd::make());
-              linger();
             }
+          } else if (ec == asio::error::connection_reset) {
+            if (Log::is_enabled(Log::WARN)) {
+              char desc[200];
+              describe(desc);
+              Log::warn("%s connection reset by peer", desc);
+            }
+            close(StreamEnd::CONNECTION_RESET);
           } else {
             if (Log::is_enabled(Log::WARN)) {
               char desc[200];
@@ -250,6 +259,8 @@ void Inbound::receive() {
 }
 
 void Inbound::linger() {
+  if (!m_socket.is_open()) return;
+
   m_socket.async_wait(
     tcp::socket::wait_error,
     [this](const std::error_code &ec) {
@@ -266,6 +277,7 @@ void Inbound::linger() {
 }
 
 void Inbound::pump() {
+  if (!m_socket.is_open()) return;
   if (m_pumping) return;
   if (m_buffer.empty()) return;
 
@@ -317,6 +329,7 @@ void Inbound::pump() {
 }
 
 void Inbound::wait() {
+  if (!m_socket.is_open()) return;
   if (m_options.idle_timeout > 0) {
     m_idle_timer.cancel();
     m_idle_timer.schedule(
@@ -333,21 +346,23 @@ void Inbound::output(Event *evt) {
 }
 
 void Inbound::close(StreamEnd::Error err) {
-  std::error_code ec;
-  m_socket.shutdown(tcp::socket::shutdown_both, ec);
-  m_socket.close(ec);
+  if (m_socket.is_open()) {
+    std::error_code ec;
+    if (err == StreamEnd::NO_ERROR) m_socket.shutdown(tcp::socket::shutdown_both, ec);
+    m_socket.close(ec);
 
-  if (ec) {
-    if (Log::is_enabled(Log::ERROR)) {
-      char desc[200];
-      describe(desc);
-      Log::error("%s error closing socket: %s", desc, ec.message().c_str());
-    }
-  } else {
-    if (Log::is_enabled(Log::DEBUG)) {
-      char desc[200];
-      describe(desc);
-      Log::debug("%s connection closed to peer", desc);
+    if (ec) {
+      if (Log::is_enabled(Log::ERROR)) {
+        char desc[200];
+        describe(desc);
+        Log::error("%s error closing socket: %s", desc, ec.message().c_str());
+      }
+    } else {
+      if (Log::is_enabled(Log::DEBUG)) {
+        char desc[200];
+        describe(desc);
+        Log::debug("%s connection closed to peer", desc);
+      }
     }
   }
 

@@ -125,7 +125,20 @@ template<> void EnumDef<StreamEnd::Error>::init() {
 
 template<> void ClassDef<StreamEnd>::init() {
   super<Event>();
-  ctor([](Context &ctx) -> Object* { return StreamEnd::make(); });
+
+  ctor([](Context &ctx) -> Object* {
+    Str *error = nullptr;
+    if (!ctx.arguments(0, &error)) return nullptr;
+    StreamEnd::Error err = StreamEnd::NO_ERROR;
+    if (error) {
+      err = EnumDef<StreamEnd::Error>::value(error);
+      if (int(err) < 0) {
+        ctx.error("unknown error type");
+        return nullptr;
+      }
+    }
+    return StreamEnd::make(err);
+  });
 
   accessor("error", [](Object *obj, Value &val) {
     val.set(EnumDef<StreamEnd::Error>::name(obj->as<StreamEnd>()->error()));
