@@ -279,7 +279,7 @@ auto AdminService::handle(Message *req) -> Message* {
       }
     }
 
-    // GET /api/v1/metrics/[uuid]
+    // GET /api/v1/metrics/[uuid]/[name]
     if (utils::starts_with(path, prefix_api_v1_metrics)) {
       if (method == "GET") {
         return api_v1_metrics_GET(path.substr(prefix_api_v1_metrics.length()));
@@ -737,8 +737,18 @@ Message* AdminService::api_v1_status_GET() {
   );
 }
 
-Message* AdminService::api_v1_metrics_GET(const std::string &uuid) {
+Message* AdminService::api_v1_metrics_GET(const std::string &path) {
   stats::MetricSet *ms = nullptr;
+  std::string uuid, name;
+  if (!path.empty()) {
+    auto i = path.find('/');
+    if (i == std::string::npos) {
+      name = path;
+    } else {
+      uuid = path.substr(0,i);
+      name = path.substr(i+1);
+    }
+  }
   if (uuid.empty()) {
     ms = &stats::Metric::local();
   } else {
@@ -747,7 +757,7 @@ Message* AdminService::api_v1_metrics_GET(const std::string &uuid) {
   }
   if (!ms) return m_response_not_found;
   Data payload;
-  ms->serialize_history(payload, m_metrics_timestamp);
+  ms->serialize_history(payload, name, m_metrics_timestamp);
   return Message::make(
     m_response_head_json,
     Data::make(payload)

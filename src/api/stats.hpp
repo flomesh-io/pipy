@@ -70,7 +70,7 @@ protected:
   virtual ~Metric() {}
 
   void create_value();
-  void serialize(Data::Builder &db, bool initial, bool history);
+  void serialize(Data::Builder &db, bool initial, bool recursive, bool history);
 
   virtual auto create_new(Metric *parent, pjs::Str **labels) -> Metric* = 0;
   virtual auto get_type() -> const std::string& = 0;
@@ -125,7 +125,7 @@ public:
   void collect_all();
   void history_step();
   void serialize(Data &out, const std::string &uuid, bool initial);
-  void serialize_history(Data &out, std::chrono::time_point<std::chrono::steady_clock> timestamp);
+  void serialize_history(Data &out, const std::string &metric_name, std::chrono::time_point<std::chrono::steady_clock> timestamp);
   void to_prometheus(Data &out, const std::string &inst) const;
 
   static void deserialize(

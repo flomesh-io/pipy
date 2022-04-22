@@ -2,6 +2,7 @@ import React from 'react';
 
 import { makeStyles } from '@material-ui/core/styles';
 import { navigate } from 'gatsby';
+import { InstanceContext } from './instances';
 
 // Material-UI components
 import List from '@material-ui/core/List';
@@ -11,12 +12,14 @@ import ListItemIcon from '@material-ui/core/ListItemIcon';
 // Components
 import Console from './console';
 import Editor from './editor';
+import Metrics from './metrics';
 import Status from './status';
 
 // Icons
 import ConfigurationIcon from '@material-ui/icons/AccountTreeSharp';
 import ConsoleIcon from '@material-ui/icons/DvrSharp';
 import FolderIcon from '@material-ui/icons/FolderSharp';
+import MetricsIcon from '@material-ui/icons/ShowChartSharp';
 
 // Logo
 import PipyLogo from '../images/pipy.svg';
@@ -82,6 +85,7 @@ function Codebase({ root, dts }) {
   );
 
   const [tab, setTab] = React.useState(states.tab);
+  const [currentInstance, setCurrentInstance] = React.useState(null);
 
   const handleClickTab = tab => {
     setTab(tab);
@@ -108,6 +112,9 @@ function Codebase({ root, dts }) {
           <ListItem button key="status" selected={tab === 'status'} onClick={() => handleClickTab('status')}>
             <ListItemIcon><ConfigurationIcon/></ListItemIcon>
           </ListItem>
+          <ListItem button key="metrics" selected={tab === 'metrics'} onClick={() => handleClickTab('metrics')}>
+            <ListItemIcon><MetricsIcon/></ListItemIcon>
+          </ListItem>
           <ListItem button key="console" selected={tab === 'console'} onClick={() => handleClickTab('console')}>
             <ListItemIcon><ConsoleIcon/></ListItemIcon>
           </ListItem>
@@ -115,11 +122,14 @@ function Codebase({ root, dts }) {
       </div>
 
       {/* Tab Page */}
-      <div className={classes.main}>
-        {tab === 'editor' && <Editor root={root} dts={dts}/>}
-        {tab === 'status' && <Status root={root}/>}
-        {tab === 'console' && <Console/>}
-      </div>
+      <InstanceContext.Provider value={{ currentInstance, setCurrentInstance }}>
+        <div className={classes.main}>
+          {tab === 'editor' && <Editor root={root} dts={dts}/>}
+          {tab === 'status' && <Status root={root}/>}
+          {tab === 'metrics' && <Metrics root={root}/>}
+          {tab === 'console' && <Console/>}
+        </div>
+      </InstanceContext.Provider>
 
     </div>
   );

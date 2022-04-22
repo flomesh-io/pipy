@@ -181,7 +181,7 @@ void Metric::create_value() {
 //   }
 //
 
-void Metric::serialize(Data::Builder &db, bool initial, bool history) {
+void Metric::serialize(Data::Builder &db, bool initial, bool recursive, bool history) {
   static std::string s_k("\"k\":"); // key
   static std::string s_t("\"t\":"); // type
   static std::string s_v("\"v\":"); // value
@@ -245,16 +245,18 @@ void Metric::serialize(Data::Builder &db, bool initial, bool history) {
 
   if (dim > 1) db.push(']');
 
-  if (!m_subs.empty()) {
-    db.push(',');
-    db.push(s_s);
-    db.push('[');
-    bool first = true;
-    for (const auto &i : m_subs) {
-      if (first) first = false; else db.push(',');
-      i->serialize(db, initial, history);
+  if (recursive) {
+    if (!m_subs.empty()) {
+      db.push(',');
+      db.push(s_s);
+      db.push('[');
+      bool first = true;
+      for (const auto &i : m_subs) {
+        if (first) first = false; else db.push(',');
+        i->serialize(db, initial, recursive, history);
+      }
+      db.push(']');
     }
-    db.push(']');
   }
 
   if (!value_only) db.push('}');
@@ -385,14 +387,14 @@ void MetricSet::serialize(Data &out, const std::string &uuid, bool initial) {
   bool first = true;
   for (const auto &metric : m_metrics) {
     if (first) first = false; else db.push(',');
-    metric->serialize(db, initial, false);
+    metric->serialize(db, initial, true, false);
   }
   db.push(']');
   db.push('}');
   db.flush();
 }
 
-void MetricSet::serialize_history(Data &out, std::chrono::time_point<std::chrono::steady_clock> timestamp) {
+void MetricSet::serialize_history(Data &out, const std::string &metric_name, std::chrono::time_point<std::chrono::steady_clock> timestamp) {
   static std::string s_time("\"time\":");
   static std::string s_metrics("\"metrics\":");
   auto time = std::chrono::duration_cast<std::chrono::seconds>(timestamp.time_since_epoch()).count();
@@ -403,10 +405,17 @@ void MetricSet::serialize_history(Data &out, std::chrono::time_point<std::chrono
   db.push(',');
   db.push(s_metrics);
   db.push('[');
-  bool first = true;
-  for (const auto &metric : m_metrics) {
-    if (first) first = false; else db.push(',');
-    metric->serialize(db, true, true);
+  if (metric_name.empty()) {
+    bool first = true;
+    for (const auto &metric : m_metrics) {
+      if (first) first = false; else db.push(',');
+      metric->serialize(db, true, false, true);
+    }
+  } else {
+    pjs::Ref<pjs::Str> k(pjs::Str::make(metric_name));
+    if (auto *metric = get(k)) {
+      metric->serialize(db, true, true, true);
+    }
   }
   db.push(']');
   db.push('}');

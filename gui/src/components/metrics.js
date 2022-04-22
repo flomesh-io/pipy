@@ -1,6 +1,7 @@
 import React from 'react';
 
 import { makeStyles } from '@material-ui/core/styles';
+import { useQuery } from 'react-query';
 
 // Material-UI components
 import List from '@material-ui/core/List';
@@ -9,7 +10,6 @@ import ListItemIcon from '@material-ui/core/ListItemIcon';
 import ListItemText from '@material-ui/core/ListItemText';
 
 // Components
-import Flowchart from './flowchart';
 import Instances, { InstanceContext } from './instances';
 import Nothing from './nothing';
 import Pane from 'react-split-pane/lib/Pane';
@@ -18,7 +18,6 @@ import Toolbar from './toolbar';
 
 // Icons
 import ModuleIcon from '@material-ui/icons/DescriptionSharp';
-import PipelineIcon from '@material-ui/icons/InputSharp';
 
 const useStyles = makeStyles(theme => ({
   root: {
@@ -37,13 +36,13 @@ const useStyles = makeStyles(theme => ({
     padding: theme.spacing(1),
     overflow: 'auto',
   },
-  pipelineListPane: {
+  metricListPane: {
     height: '100%',
     backgroundColor: '#252525',
     padding: theme.spacing(1),
     overflow: 'auto',
   },
-  flowchartPane: {
+  metricChartPane: {
     height: '100%',
     backgroundColor: '#202020',
     padding: theme.spacing(1),
@@ -51,9 +50,6 @@ const useStyles = makeStyles(theme => ({
   },
   listIcon: {
     minWidth: 36,
-  },
-  pipelineList: {
-    marginLeft: theme.spacing(3),
   },
 }));
 
@@ -63,20 +59,37 @@ const splitPos = [
   [1, 1],
 ];
 
-function Status({ root }) {
+function Metrics({ root }) {
   const classes = useStyles();
   const instanceContext = React.useContext(InstanceContext);
+  const instance = instanceContext.currentInstance;
+  const uuid = instance?.uuid || '';
 
-  const [currentModule, setCurrentModule] = React.useState('');
-  const [currentPipeline, setCurrentPipeline] = React.useState(0);
+  const [currentMetric, setCurrentMetric] = React.useState('');
 
-  const selectPipeline = (mod, i) => {
-    setCurrentModule(mod);
-    setCurrentPipeline(i);
-  }
+  const queryMetricList = useQuery(
+    `metrics:${root}:${uuid}`,
+    async () => {
+      if (instance?.id) {
+        const res = await fetch(`/api/v1/metrics/${uuid}/`);
+        if (res.status === 200) {
+          const data = await res.json();
+          return data.metrics;
+        }
+      } else {
+        const res = await fetch(`/api/v1/metrics/`);
+        if (res.status === 200) {
+          const data = await res.json();
+          return data.metrics;
+        }
+      }
+      return null;
+    }
+  );
 
-  const moduleMap = instanceContext.currentInstance?.modules || {};
-  const moduleList = Object.entries(moduleMap);
+  console.log(queryMetricList.data);
+
+  const metricList = queryMetricList.data instanceof Array ? queryMetricList.data : [];
 
   return (
     <div className={classes.root}>
@@ -95,31 +108,18 @@ function Status({ root }) {
               <Instances root={root}/>
             </Pane>
 
-            {/* Pipeline List */}
-            <Pane initialSize={splitPos[1][1]} className={classes.pipelineListPane}>
-              {moduleList.length === 0 ? (
-                <Nothing text="No running pipelines"/>
+            {/* Metric List */}
+            <Pane initialSize={splitPos[1][1]} className={classes.metricListPane}>
+              {metricList.length === 0 ? (
+                <Nothing text="No metrics"/>
               ) : (
                 <List dense disablePadding>
-                  {moduleList.map(([name, { graph }]) => (
+                  {metricList.map(({ k: name, v: values }) => (
                     <React.Fragment key={name}>
                       <ListItem disableGutters disabled>
                         <ListItemIcon className={classes.listIcon}><ModuleIcon/></ListItemIcon>
                         <ListItemText primary={name}/>
                       </ListItem>
-                      <List dense disablePadding className={classes.pipelineList}>
-                        {graph.roots.map(i => (
-                          <ListItem
-                            key={i}
-                            button
-                            selected={name === currentModule && i === currentPipeline}
-                            onClick={() => selectPipeline(name, i)}
-                          >
-                            <ListItemIcon className={classes.listIcon}><PipelineIcon/></ListItemIcon>
-                            <ListItemText primary={graph.nodes[i].name}/>
-                          </ListItem>
-                        ))}
-                      </List>
                     </React.Fragment>
                   ))}
                 </List>
@@ -128,17 +128,9 @@ function Status({ root }) {
 
           </SplitPane>
 
-          {/* Flowchart */}
-          <Pane initialSize={splitPos[0][1]} className={classes.flowchartPane}>
-            {moduleList.length === 0 ? (
-              <Nothing text="No running pipelines"/>
-            ) : (
-              (moduleMap[currentModule] && (
-                <Flowchart nodes={moduleMap[currentModule].graph.nodes} root={currentPipeline}/>
-              )) || (
-                <Nothing text="No pipeline selected"/>
-              )
-            )}
+          {/* Metric Chart */}
+          <Pane initialSize={splitPos[0][1]} className={classes.metricChartPane}>
+            <Nothing text="No metric selected"/>
           </Pane>
 
         </SplitPane>
@@ -147,4 +139,4 @@ function Status({ root }) {
   );
 }
 
-export default Status;
+export default Metrics;
