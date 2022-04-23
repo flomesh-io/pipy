@@ -884,6 +884,7 @@ void AdminService::on_metrics(const Data &data) {
 
 void AdminService::metrics_history_step() {
   m_metrics_timestamp = std::chrono::steady_clock::now();
+  stats::Metric::local().collect_all();
   stats::Metric::local().history_step();
   for (auto *i : m_instances) {
     i->metrics.history_step();

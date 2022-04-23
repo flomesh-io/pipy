@@ -6,8 +6,8 @@ import { useQuery } from 'react-query';
 // Material-UI components
 import List from '@material-ui/core/List';
 import ListItem from '@material-ui/core/ListItem';
-import ListItemIcon from '@material-ui/core/ListItemIcon';
 import ListItemText from '@material-ui/core/ListItemText';
+import Typography from '@material-ui/core/Typography';
 
 // Components
 import Instances, { InstanceContext } from './instances';
@@ -15,9 +15,6 @@ import Nothing from './nothing';
 import Pane from 'react-split-pane/lib/Pane';
 import SplitPane from 'react-split-pane';
 import Toolbar from './toolbar';
-
-// Icons
-import ModuleIcon from '@material-ui/icons/DescriptionSharp';
 
 const useStyles = makeStyles(theme => ({
   root: {
@@ -48,8 +45,24 @@ const useStyles = makeStyles(theme => ({
     padding: theme.spacing(1),
     overflow: 'auto',
   },
+  listItem: {
+    width: '100%',
+  },
   listIcon: {
     minWidth: 36,
+  },
+  sparkline: {
+    width: '100%',
+    height: '50px',
+  },
+  pointNumber: {
+    position: 'relative',
+    top: '-38px',
+    height: 0,
+    fontFamily: 'Verdana,Arial',
+    fontSize: '20px',
+    fontWeight: 'bolder',
+    pointerEvents: 'none',
   },
 }));
 
@@ -84,10 +97,11 @@ function Metrics({ root }) {
         }
       }
       return null;
+    },
+    {
+      refetchInterval: 1000,
     }
   );
-
-  console.log(queryMetricList.data);
 
   const metricList = queryMetricList.data instanceof Array ? queryMetricList.data : [];
 
@@ -115,12 +129,11 @@ function Metrics({ root }) {
               ) : (
                 <List dense disablePadding>
                   {metricList.map(({ k: name, v: values }) => (
-                    <React.Fragment key={name}>
-                      <ListItem disableGutters disabled>
-                        <ListItemIcon className={classes.listIcon}><ModuleIcon/></ListItemIcon>
-                        <ListItemText primary={name}/>
-                      </ListItem>
-                    </React.Fragment>
+                    <ListItem key={name} disableGutters button>
+                      <div className={classes.listItem}>
+                        <Sparkline title={name} values={values}/>
+                      </div>
+                    </ListItem>
                   ))}
                 </List>
               )}
@@ -135,6 +148,116 @@ function Metrics({ root }) {
 
         </SplitPane>
       </div>
+    </div>
+  );
+}
+
+function Sparkline({ title, values }) {
+  const classes = useStyles();
+  const canvasEl = React.useRef(null);
+  const numberEl = React.useRef(null);
+  const cursorEl = React.useRef(null);
+  const circleEl = React.useRef(null);
+
+  const resetNumber = () => {
+    const n = values.length;
+    const v = values[n - 1] || 0;
+    numberEl.current.innerText = v;
+    cursorEl.current.setAttribute('stroke', 'none');
+    circleEl.current.setAttribute('stroke', 'none');
+  }
+
+  React.useEffect(
+    resetNumber,
+    [values, numberEl]
+  );
+
+  const line = [];
+  let min = Number.POSITIVE_INFINITY;
+  let max = Number.NEGATIVE_INFINITY;
+
+  for (let i = 1; i <= 60; i++) {
+    const x = 60 - i;
+    const y = -(values[values.length - i] || 0);
+    if (y < min) min = y;
+    if (y > max) max = y;
+    line.push(i > 1 ? `L ${x},${y}` : `M ${x},${y}`);
+  }
+
+  if (max < 0) max = 0;
+  if (max - min < 100) min = max - 100;
+
+  const margin = (max - min) * 0.1;
+  min -= margin;
+  max += margin;
+
+  const handleMouseMove = e => {
+    const rect = canvasEl.current.getBoundingClientRect();
+    const d = rect.x + rect.width - e.pageX;
+    const i = Math.max(0, Math.min(59, (d * 59 / rect.width) | 0));
+    const x = 59 - i;
+    const n = values.length;
+    const v = values[n - 1 - i] || 0;
+    const y = -v;
+    const cursor = cursorEl.current;
+    const circle = circleEl.current;
+    cursor.setAttribute('stroke', 'green');
+    cursor.setAttribute('x1', x);
+    cursor.setAttribute('x2', x);
+    circle.setAttribute('stroke', 'green');
+    circle.setAttribute('x1', x);
+    circle.setAttribute('x2', x);
+    circle.setAttribute('y1', y);
+    circle.setAttribute('y2', y);
+    numberEl.current.innerText = v;
+  }
+
+  const edge = line.join(' ');
+  const area = edge + `L 0,${max-margin} L 59,${max-margin} z`;
+
+  return (
+    <div>
+      <Typography color="textSecondary">{title}</Typography>
+      <svg
+        ref={canvasEl}
+        viewBox={`0 ${min} 60 ${max - min}`}
+        preserveAspectRatio="none"
+        className={classes.sparkline}
+        onMouseMove={handleMouseMove}
+        onMouseLeave={resetNumber}
+      >
+        <path
+          d={area}
+          fill="green"
+          fillOpacity="25%"
+          stroke="none"
+        />
+        <path
+          d={edge}
+          vectorEffect="non-scaling-stroke"
+          fill="none"
+          stroke="green"
+          strokeWidth="2"
+          strokeLinejoin="round"
+        />
+        <line
+          ref={cursorEl}
+          y1={min}
+          y2={max}
+          vectorEffect="non-scaling-stroke"
+          stroke="none"
+          strokeWidth="1"
+          strokeLinejoin="round"
+        />
+        <line
+          ref={circleEl}
+          vectorEffect="non-scaling-stroke"
+          stroke="none"
+          strokeWidth="8"
+          strokeLinecap="round"
+        />
+      </svg>
+      <div ref={numberEl} className={classes.pointNumber}/>
     </div>
   );
 }
