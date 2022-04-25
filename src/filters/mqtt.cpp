@@ -607,7 +607,7 @@ public:
       if (get(will, STR_retain, false)) flags |= 0x20;
     }
     auto username = get(m_packet, STR_username, (pjs::Str*)nullptr);
-    auto password = get(m_packet, STR_password, (pjs::Str*)nullptr);
+    auto password = get(m_packet, STR_password, (Data*)nullptr);
     if (username) flags |= 0x80;
     if (password) flags |= 0x40;
     push(STR_MQTT);
