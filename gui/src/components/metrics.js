@@ -6,7 +6,6 @@ import { useQuery } from 'react-query';
 // Material-UI components
 import List from '@material-ui/core/List';
 import ListItem from '@material-ui/core/ListItem';
-import ListItemText from '@material-ui/core/ListItemText';
 import Typography from '@material-ui/core/Typography';
 
 // Components
@@ -58,9 +57,7 @@ const useStyles = makeStyles(theme => ({
     position: 'relative',
     top: '-38px',
     height: 0,
-    fontFamily: 'Verdana,Arial',
-    fontSize: '20px',
-    fontWeight: 'bolder',
+    ...theme.typography.h6,
     pointerEvents: 'none',
   },
   chart: {
@@ -70,12 +67,32 @@ const useStyles = makeStyles(theme => ({
     backgroundColor: '#1c1c1c',
   },
   chartRowTitle: {
+    color: theme.palette.text.secondary,
   },
   chartRowNumber: {
     width: '100px',
   },
   chartRowSparkline: {
     width: '50%',
+  },
+  chartNumber: {
+    fontSize: 1,
+  },
+  summary: {
+    width: '100%',
+  },
+  summaryHeader: {
+    display: 'flex',
+    flexDirection: 'row',
+  },
+  summaryTitle: {
+    flexGrow: 1,
+    color: theme.palette.text.secondary,
+    ...theme.typography.h6,
+  },
+  summaryNumber: {
+    flexGrow: 0,
+    ...theme.typography.h6,
   },
 }));
 
@@ -84,6 +101,16 @@ const splitPos = [
   ['600px', 100],
   [1, 1],
 ];
+
+function makePath(values) {
+  const line = [];
+  for (let i = 1; i <= 60; i++) {
+    const x = 60 - i;
+    const y = -(values[values.length - i] || 0);
+    line.push(i > 1 ? `L ${x},${y}` : `M ${x},${y}`);
+  }
+  return line.join(' ');
+}
 
 function Metrics({ root }) {
   const classes = useStyles();
@@ -187,7 +214,7 @@ function MetricItem({ title, values }) {
     () => {
       let min = Number.POSITIVE_INFINITY;
       let max = Number.NEGATIVE_INFINITY;
-    
+
       values.forEach(
         v => {
           const y = -(v || 0);
@@ -216,6 +243,7 @@ function MetricItem({ title, values }) {
         min={min}
         max={max}
         height={50}
+        color="#0c0"
         cursorX={cursorX}
         onCursorMove={handleCursorMove}
       />
@@ -253,7 +281,7 @@ function Chart({ path, uuid, title }) {
     }
   );
 
-  const { list, min, max } = React.useMemo(
+  const { root, list, min, max } = React.useMemo(
     () => {
       const root = queryMetric.data?.[0];
       const list = [];
@@ -291,7 +319,7 @@ function Chart({ path, uuid, title }) {
       if (max < 0) max = 0;
       if (max - min < 100) min = max - 100;
 
-      return { list, min, max };
+      return { root, list, min, max };
     },
     [queryMetric.data]
   );
@@ -301,20 +329,229 @@ function Chart({ path, uuid, title }) {
   }
 
   return (
-    <table className={classes.chart}>
-      {list.map(
-        ({ key, values }) => (
-          <ChartRow
-            title={key}
-            values={values}
-            min={min}
-            max={max}
-            cursorX={cursorX}
-            onCursorMove={handleCursorMove}
+    <div>
+      <ChartSummary
+        title={title}
+        metrics={list}
+        cursorX={cursorX}
+        onCursorMove={handleCursorMove}
+      />
+      <table className={classes.chart}>
+        {list.map(
+          ({ key, values }) => (
+            <ChartRow
+              title={key}
+              values={values}
+              min={min}
+              max={max}
+              cursorX={cursorX}
+              onCursorMove={handleCursorMove}
+            />
+          )
+        )}
+      </table>
+    </div>
+  );
+}
+
+function ChartSummary({ title, metrics, cursorX, onCursorMove }) {
+  const classes = useStyles();
+  const canvasEl = React.useRef(null);
+
+  const { sum, min, max, edge, area } = React.useMemo(
+    () => {
+      const sum = [];
+
+      metrics.forEach(
+        ({values}) => (
+          values.forEach(
+            (v, i) => {
+              sum[i] = (sum[i] || 0) + v;
+            }
+          )
+        )
+      );
+
+      let min = Number.POSITIVE_INFINITY;
+      let max = Number.NEGATIVE_INFINITY;
+
+      sum.forEach(
+        v => {
+          const y = -v;
+          if (y < min) min = y;
+          if (y > max) max = y;
+        }
+      )
+
+      if (max < 0) max = 0;
+      if (max - min < 100) min = max - 100;
+
+      const margin = (max - min) * 0.1;
+      min -= margin;
+      max += margin;
+
+      const edge = makePath(sum);
+      const area = edge + `L 0,${max-margin} L 59,${max-margin} z`;
+
+      return { sum, min, max, edge, area };
+    },
+    [metrics]
+  );
+
+  const handleMouseMove = e => {
+    const rect = canvasEl.current.getBoundingClientRect();
+    const d = rect.x + rect.width - e.pageX;
+    const i = Math.max(0, Math.min(59, (d * 59 / rect.width) | 0));
+    const x = 59 - i;
+    onCursorMove(x);
+  }
+
+  const x = cursorX;
+  const i = 59 - x;
+  const n = sum.length;
+  const v = sum[cursorX < 0 ? n-1 : n-1-i] || 0;
+  const y = -v;
+  const k = 15 / (max - min);
+
+  return (
+    <React.Fragment>
+      <div className={classes.summaryHeader}>
+        <div className={classes.summaryTitle}>{title}</div>
+        <div className={classes.summaryNumber}>{v}</div>
+      </div>
+      <svg
+        ref={canvasEl}
+        viewBox="0 0 60 15"
+        className={classes.summary}
+        onMouseMove={handleMouseMove}
+        onMouseLeave={() => onCursorMove(-1)}
+      >
+        <ChartGrid min={min} max={max} scale={k}/>
+        <g transform={`scale(1 ${k}) translate(0 ${-min})`}>
+          <path
+            d={area}
+            fill="green"
+            fillOpacity="15%"
+            stroke="none"
+          />
+          <path
+            d={edge}
+            vectorEffect="non-scaling-stroke"
+            fill="none"
+            stroke="#0f0"
+            strokeOpacity="50%"
+            strokeWidth="2"
+            strokeLinejoin="round"
+          />
+          <line
+            x1={x}
+            x2={x}
+            y1={min}
+            y2={max}
+            vectorEffect="non-scaling-stroke"
+            stroke={cursorX >= 0 ? '#0c0' : 'none'}
+            strokeWidth="1"
+            strokeDasharray="3 2"
+            strokeLinejoin="round"
+          />
+          <line
+            vectorEffect="non-scaling-stroke"
+            x1={x}
+            y1={y}
+            x2={x}
+            y2={y}
+            stroke={cursorX >= 0 ? 'white' : 'none'}
+            strokeWidth="8"
+            strokeLinecap="round"
+          />
+        </g>
+      </svg>
+    </React.Fragment>
+  );
+}
+
+function ChartGrid({ min, max, scale }) {
+  const classes = useStyles();
+
+  const { lines, step } = React.useMemo(
+    () => {
+      const negRange = Math.abs(min);
+      const posRange = Math.abs(max);
+      const range = Math.max(negRange, posRange);
+      const power = Math.floor(Math.log10(range));
+      const step = Math.pow(10, Math.max(1, power));
+      const negSteps = Math.ceil(negRange / step);
+      const posSteps = Math.ceil(posRange / step);
+
+      const lines = new Array(negSteps + posSteps).fill(0).map(
+        (_, i) => (i - negSteps)
+      );
+
+      return { lines, step };
+    },
+    [min, max]
+  );
+
+  return (
+    <React.Fragment>
+      {lines.map(
+        i => {
+          const v = (i * step);
+          const y = (v - min) * scale;
+          return (
+            <React.Fragment>
+              <line
+                vectorEffect="non-scaling-stroke"
+                x1={0}
+                x2={60}
+                y1={y}
+                y2={y}
+                stroke={i === 0 ? '#555' : '#333'}
+                strokeWidth="1"
+              />
+              {(lines.length <= 5 || i%2 === 0) && (
+                <text
+                  y={y}
+                  stroke="none"
+                  fill="#555"
+                  class={classes.chartNumber}
+                >
+                  {-v}
+                </text>
+              )}
+            </React.Fragment>
+          );
+        }
+      )}
+      {new Array(20).fill(0).map(
+        (_, i) => (
+          <line
+            vectorEffect="non-scaling-stroke"
+            x1={(20-i)*3-1}
+            x2={(20-i)*3-1}
+            y1={0}
+            y2={60}
+            stroke={i % 4 === 0 ? '#555' : '#333'}
+            strokeDasharray={i % 4 === 0 ? 'none' : '1 1'}
+            strokeWidth="1"
           />
         )
       )}
-    </table>
+      {new Array(5).fill(0).map(
+        (_, i) => (
+          <text
+            textAnchor="end"
+            x={(5-i)*12-2}
+            y={15}
+            stroke="none"
+            fill="#555"
+            class={classes.chartNumber}
+          >
+            {(-i).toString() + 'm'}
+          </text>
+        )
+      )}
+    </React.Fragment>
   );
 }
 
@@ -337,6 +574,7 @@ function ChartRow({ title, values, min, max, cursorX, onCursorMove }) {
           min={min}
           max={max}
           height={26}
+          color="#ccc"
           cursorX={cursorX}
           onCursorMove={onCursorMove}
         />
@@ -345,13 +583,9 @@ function ChartRow({ title, values, min, max, cursorX, onCursorMove }) {
   );
 }
 
-let counter = 0;
-
-function Sparkline({ values, min, max, height, cursorX, onCursorMove }) {
+function Sparkline({ values, min, max, height, color, cursorX, onCursorMove }) {
   const classes = useStyles();
   const canvasEl = React.useRef(null);
-  const cursorEl = React.useRef(null);
-  const circleEl = React.useRef(null);
 
   const margin = (max - min) * 0.1;
   min -= margin;
@@ -359,21 +593,13 @@ function Sparkline({ values, min, max, height, cursorX, onCursorMove }) {
 
   const { edge, area } = React.useMemo(
     () => {
-      console.log(counter++);
-
-      const line = [];
-      for (let i = 1; i <= 60; i++) {
-        const x = 60 - i;
-        const y = -(values[values.length - i] || 0);
-        line.push(i > 1 ? `L ${x},${y}` : `M ${x},${y}`);
-      }
-      const edge = line.join(' ');
+      const edge = makePath(values);
       const area = edge + `L 0,${max-margin} L 59,${max-margin} z`;
       return { edge, area };
     },
     [values, min, max]
   );
-  
+
   const handleMouseMove = e => {
     const rect = canvasEl.current.getBoundingClientRect();
     const d = rect.x + rect.width - e.pageX;
@@ -400,38 +626,38 @@ function Sparkline({ values, min, max, height, cursorX, onCursorMove }) {
     >
       <path
         d={area}
-        fill="green"
-        fillOpacity="25%"
+        fill={color}
+        fillOpacity="15%"
         stroke="none"
       />
       <path
         d={edge}
         vectorEffect="non-scaling-stroke"
         fill="none"
-        stroke="green"
-        strokeWidth="2"
+        stroke={color}
+        strokeOpacity="80%"
+        strokeWidth="1"
         strokeLinejoin="round"
       />
       <line
-        ref={cursorEl}
         x1={x}
         x2={x}
         y1={min}
         y2={max}
         vectorEffect="non-scaling-stroke"
-        stroke={cursorX >= 0 ? 'green' : 'none'}
+        stroke={cursorX >= 0 ? color : 'none'}
         strokeWidth="1"
+        strokeDasharray="1 1"
         strokeLinejoin="round"
       />
       <line
-        ref={circleEl}
         vectorEffect="non-scaling-stroke"
         x1={x}
         y1={y}
         x2={x}
         y2={y}
         stroke={cursorX >= 0 ? 'white' : 'none'}
-        strokeWidth="5"
+        strokeWidth="4"
         strokeLinecap="round"
       />
     </svg>
