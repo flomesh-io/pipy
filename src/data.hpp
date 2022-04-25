@@ -179,12 +179,12 @@ public:
         auto a = v->length - m_offset;
         auto b = n - i;
         if (a <= b) {
-          out.push_view(new View(v->chunk, m_offset, a));
+          out.push_view(new View(v->chunk, v->offset + m_offset, a));
           i += a;
           m_view = v->next;
           m_offset = 0;
         } else {
-          out.push_view(new View(v->chunk, m_offset, b));
+          out.push_view(new View(v->chunk, v->offset + m_offset, b));
           i += b;
           m_offset += b;
         }
