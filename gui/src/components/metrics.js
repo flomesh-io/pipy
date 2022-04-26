@@ -112,16 +112,63 @@ function makePath(values) {
   return line.join(' ');
 }
 
-function computeRate(values) {
+function formatNumber(n) {
+  if (Math.floor(n) === n) {
+    return n.toString();
+  } else {
+    return n.toFixed(2);
+  }
+}
+
+function computeDelta(values) {
   let v0 = values[0];
   for (let i = 0, n = values.length; i < n; i++) {
     const v = values[i];
-    const r = Math.round((v < v0 ? v : v - v0) / 5 * 1000) / 1000;
-    values[i] = r;
+    const d = v < v0 ? v : v - v0;
+    values[i] = d;
     v0 = v;
   }
   if (values.length > 1) values[0] = values[1];
-  return values;
+}
+
+function computeRate(values) {
+  const factor = 1 / 5;
+  computeDelta(values);
+  for (let i = 0, n = values.length; i < n; i++) {
+    values[i] = values[i] * factor;
+  }
+}
+
+function computeCumulative(values) {
+  const w = values[0].length;
+  const h = values.length;
+  for (let i = 0; i < h; i++) computeDelta(values[i]);
+  for (let t = 0; t < w; t++) {
+    for (let i = 1, n = h - 2; i < n; i++) {
+      values[i][t] += values[i-1][t];
+    }
+  }
+}
+
+function computePercentile(values, buckets, target) {
+  const w = values[0].length;
+  const h = values.length - 2;
+  const v = new Array(w);
+  for (let t = 0; t < w; t++) {
+    const sum = values[h][t];
+    const cnt = sum * target;
+    for (let i = 0; i < h; i++) {
+      const n = values[i][t];
+      if (n >= cnt) {
+        const diff = n - cnt;
+        const limit = buckets[i];
+        const base = buckets[i-1] || 0;
+        v[t] = limit - (limit - base) * diff / n;
+        break;
+      }
+    }
+  }
+  return v;
 }
 
 function Metrics({ root }) {
@@ -162,7 +209,11 @@ function Metrics({ root }) {
       metricList.forEach(
         metric => {
           if (metric.t === 'Counter') {
-            metric.v = computeRate(metric.v);
+            computeRate(metric.v);
+          } else if (metric.t.startsWith('Histogram[')) {
+            const buckets = JSON.parse(metric.t.substring(9));
+            computeCumulative(metric.v);
+            metric.v = computePercentile(metric.v, buckets, 0.9);
           }
         }
       );
@@ -254,7 +305,7 @@ function MetricItem({ title, values, cursorX, onCursorMove }) {
       );
 
       if (max < 0) max = 0;
-      if (max - min < 100) min = max - 100;
+      if (max - min < 10) min = max - 10;
 
       return { min, max };
     },
@@ -278,7 +329,7 @@ function MetricItem({ title, values, cursorX, onCursorMove }) {
         onCursorMove={onCursorMove}
       />
       <div className={classes.pointNumber}>
-        {y}
+        {formatNumber(y || 0)}
       </div>
     </div>
   );
@@ -317,13 +368,27 @@ function Chart({ path, uuid, title }) {
       const list = [];
 
       let sum = null;
+      let type = root?.t;
+      let buckets = null;
+
+      if (type && type.startsWith('Histogram[')) {
+        type = 'Histogram';
+        buckets = JSON.parse(root.t.substring(type.length));
+      }
 
       const traverse = (k, m) => {
         let values = m.v;
-        if (m.t === 'Counter') {
-          values = computeRate(values);
+        switch (type) {
+          case 'Counter':
+            computeRate(values);
+            break;
+          case 'Histogram':
+            computeCumulative(values);
+            values = computePercentile(values, buckets, 0.9);
+            break;
+          default: break;
         }
-        if (k === '') sum = { key: k, values };
+        if (!sum) sum = { key: k, values };
         if (m.s instanceof Array) {
           if (k.length > 0) k += '/';
           m.s.forEach(
@@ -354,7 +419,7 @@ function Chart({ path, uuid, title }) {
       );
 
       if (max < 0) max = 0;
-      if (max - min < 100) min = max - 100;
+      if (max - min < 10) min = max - 10;
 
       return { sum, list, min, max };
     },
@@ -411,7 +476,7 @@ function ChartSummary({ title, metric, cursorX, onCursorMove }) {
       )
 
       if (max < 0) max = 0;
-      if (max - min < 100) min = max - 100;
+      if (max - min < 10) min = max - 10;
 
       const margin = (max - min) * 0.1;
       min -= margin;
@@ -444,7 +509,7 @@ function ChartSummary({ title, metric, cursorX, onCursorMove }) {
     <React.Fragment>
       <div className={classes.summaryHeader}>
         <div className={classes.summaryTitle}>{title}</div>
-        <div className={classes.summaryNumber}>{v}</div>
+        <div className={classes.summaryNumber}>{formatNumber(v || 0)}</div>
       </div>
       <svg
         ref={canvasEl}
@@ -593,7 +658,7 @@ function ChartRow({ title, values, min, max, cursorX, onCursorMove }) {
         <Typography>{title}</Typography>
       </td>
       <td className={classes.chartRowNumber}>
-        <Typography>{y}</Typography>
+        <Typography>{formatNumber(y || 0)}</Typography>
       </td>
       <td className={classes.chartRowSparkline}>
         <Sparkline
@@ -624,7 +689,7 @@ function Sparkline({ values, min, max, height, color, cursorX, onCursorMove }) {
       const area = edge + `L 0,${max-margin} L 59,${max-margin} z`;
       return { edge, area };
     },
-    [values, min, max]
+    [values, max, margin]
   );
 
   const handleMouseMove = e => {

@@ -92,7 +92,7 @@ private:
   void dump_tree(
     pjs::Str **label_names,
     pjs::Str **label_values,
-    const std::function<void(int, double)> &out
+    const std::function<void(int, pjs::Str*, double)> &out
   );
 
   Metric* m_root;
@@ -340,6 +340,8 @@ private:
   pjs::Ref<algo::Percentile> m_percentile;
   std::vector<pjs::Ref<pjs::Str>> m_labels;
   std::string m_type;
+  double m_sum = 0;
+  size_t m_count = 0;
 
   friend class pjs::ObjectTemplate<Histogram, Metric>;
 };

@@ -31,6 +31,8 @@ namespace pipy {
 namespace stats {
 
 static Data::Producer s_dp("Stats");
+static pjs::ConstStr s_str_sum("sum");
+static pjs::ConstStr s_str_count("count");
 
 //
 // Metric
@@ -291,7 +293,7 @@ void Metric::truncate(int i) {
 void Metric::dump_tree(
   pjs::Str **label_names,
   pjs::Str **label_values,
-  const std::function<void(int, double)> &out
+  const std::function<void(int, pjs::Str*, double)> &out
 ) {
   int i = m_label_index;
   if (i >= 0) {
@@ -301,13 +303,7 @@ void Metric::dump_tree(
   if (m_has_value) {
     dump(
       [&](pjs::Str *dim, double x) {
-        if (dim) {
-          label_names[i+1] = pjs::Str::empty;
-          label_values[i+1] = dim;
-          out(i+2, x);
-        } else {
-          out(i+1, x);
-        }
+        out(i+1, dim, x);
       }
     );
   }
@@ -437,7 +433,11 @@ void MetricSet::deserialize(
 }
 
 void MetricSet::to_prometheus(Data &out, const std::string &inst) const {
-  static std::string le("le");
+  static std::string s_le("le=");
+  static std::string s_bucket("_bucket");
+  static std::string s_sum("_sum");
+  static std::string s_count("_count");
+
   Data::Builder db(out, &s_dp);
   for (const auto &metric : m_metrics) {
     auto name = metric->name();
@@ -447,24 +447,40 @@ void MetricSet::to_prometheus(Data &out, const std::string &inst) const {
     metric->dump_tree(
       label_names,
       label_values,
-      [&](int dim, double x) {
+      [&](int depth, pjs::Str *dim, double x) {
         db.push(name->str());
-        if (dim > 0 || !inst.empty()) {
+        bool has_le = false;
+        if (dim == s_str_sum) {
+          db.push(s_sum);
+        } else if (dim == s_str_count) {
+          db.push(s_count);
+        } else if (dim) {
+          db.push(s_bucket);
+          has_le = true;
+        }
+        if (depth > 0 || has_le || !inst.empty()) {
           bool first = true;
           if (!inst.empty()) {
             db.push('{');
             db.push(inst);
             first = false;
           }
-          for (int i = 0; i < dim; i++) {
+          for (int i = 0; i < depth; i++) {
             auto label_name = label_names[i];
             db.push(first ? '{' : ',');
-            db.push(label_name->size() > 0 ? label_name->str() : le);
+            db.push(label_name->str());
             db.push('=');
             db.push('"');
             db.push(label_values[i]->str());
             db.push('"');
             first = false;
+          }
+          if (has_le) {
+            db.push(first ? '{' : ',');
+            db.push(s_le);
+            db.push('"');
+            db.push(dim->str());
+            db.push('"');
           }
           db.push('}');
         }
@@ -804,11 +820,15 @@ Histogram::Histogram(Metric *parent, pjs::Str **labels)
 void Histogram::zero() {
   create_value();
   m_percentile->reset();
+  m_sum = 0;
+  m_count = 0;
 }
 
 void Histogram::observe(double n) {
   create_value();
   m_percentile->observe(n);
+  m_sum += n;
+  m_count++;
 }
 
 void Histogram::value_of(pjs::Value &out) {
@@ -843,15 +863,28 @@ auto Histogram::get_type() -> const std::string& {
 }
 
 auto Histogram::get_dim() -> int {
-  return m_percentile->size();
+  return m_percentile->size() + 2;
 }
 
 auto Histogram::get_value(int dim) -> double {
-  return m_percentile->get(dim);
+  if (0 <= dim && dim < m_percentile->size()) {
+    return m_percentile->get(dim);
+  } else if (dim == m_percentile->size()) {
+    return m_count;
+  } else {
+    return m_sum;
+  }
 }
 
 void Histogram::set_value(int dim, double value) {
-  m_percentile->set(dim, value);
+  if (0 <= dim && dim < m_percentile->size()) {
+    m_percentile->set(dim - 1, value);
+  } else if (dim == m_percentile->size()) {
+    m_count = value;
+  } else {
+    m_sum = value;
+  }
+
   create_value();
 }
 
@@ -863,6 +896,8 @@ void Histogram::dump(const std::function<void(pjs::Str*, double)> &out) {
       out(labels[i++], count);
     }
   );
+  out(s_str_count, m_count);
+  out(s_str_sum, m_sum);
 }
 
 } // namespace stats
