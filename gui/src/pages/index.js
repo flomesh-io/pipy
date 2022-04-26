@@ -1,7 +1,7 @@
 import React from 'react';
 
 import { makeStyles } from '@material-ui/core/styles';
-import { navigate, Link } from 'gatsby';
+import { graphql, navigate, Link } from 'gatsby';
 import { useQuery } from 'react-query';
 
 // Material-UI components
@@ -76,13 +76,26 @@ const useStyles = makeStyles(theme => ({
   },
 }));
 
+export const query = graphql`
+  query {
+    allDts {
+      nodes {
+        filename
+        internal {
+          content
+        }
+      }
+    }
+  }
+`;
+
 let storedTreeExpanded = [];
 
 //
 // Landing page
 //
 
-function Index() {
+function Index({ data }) {
   const classes = useStyles();
 
   const [openDialogNewCodebase, setOpenDialogNewCodebase] = React.useState(false);
@@ -122,7 +135,12 @@ function Index() {
   }
 
   if (!queryCodebaseList.isSuccess) {
-    return <Codebase root="/"/>;
+    const dts = Object.fromEntries(
+      data.allDts.nodes.map(
+        ({ filename, internal }) => [filename, internal.content]
+      )
+    );  
+    return <Codebase root="/" dts={dts}/>;
   }
 
   const tree = {};

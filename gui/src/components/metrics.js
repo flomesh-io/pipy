@@ -112,6 +112,18 @@ function makePath(values) {
   return line.join(' ');
 }
 
+function computeRate(values) {
+  let v0 = values[0];
+  for (let i = 0, n = values.length; i < n; i++) {
+    const v = values[i];
+    const r = Math.round((v < v0 ? v : v - v0) / 5 * 1000) / 1000;
+    values[i] = r;
+    v0 = v;
+  }
+  if (values.length > 1) values[0] = values[1];
+  return values;
+}
+
 function Metrics({ root }) {
   const classes = useStyles();
   const instanceContext = React.useContext(InstanceContext);
@@ -119,6 +131,7 @@ function Metrics({ root }) {
   const uuid = instance?.uuid || '';
 
   const [currentMetric, setCurrentMetric] = React.useState('');
+  const [cursorX, setCursorX] = React.useState(-1);
 
   const queryMetricList = useQuery(
     `metrics:${root}:${uuid}`,
@@ -143,7 +156,24 @@ function Metrics({ root }) {
     }
   );
 
-  const metricList = queryMetricList.data instanceof Array ? queryMetricList.data : [];
+  const metricList = React.useMemo(
+    () => {
+      const metricList = queryMetricList.data instanceof Array ? queryMetricList.data : [];
+      metricList.forEach(
+        metric => {
+          if (metric.t === 'Counter') {
+            metric.v = computeRate(metric.v);
+          }
+        }
+      );
+      return metricList;
+    },
+    [queryMetricList.data]
+  );
+
+  const handleCursorMove = (x) => {
+    setCursorX(x);
+  }
 
   return (
     <div className={classes.root}>
@@ -164,7 +194,7 @@ function Metrics({ root }) {
 
             {/* Metric List */}
             <Pane initialSize={splitPos[1][1]} className={classes.metricListPane}>
-              {metricList.length === 0 ? (
+              {instance === null || metricList.length === 0 ? (
                 <Nothing text="No metrics"/>
               ) : (
                 <List dense disablePadding>
@@ -177,7 +207,12 @@ function Metrics({ root }) {
                       onClick={() => setCurrentMetric(name)}
                     >
                       <div className={classes.listItem}>
-                        <MetricItem title={name} values={values}/>
+                        <MetricItem
+                          title={name}
+                          values={values}
+                          cursorX={cursorX}
+                          onCursorMove={handleCursorMove}
+                        />
                       </div>
                     </ListItem>
                   ))}
@@ -202,13 +237,8 @@ function Metrics({ root }) {
   );
 }
 
-function MetricItem({ title, values }) {
+function MetricItem({ title, values, cursorX, onCursorMove }) {
   const classes = useStyles();
-  const [cursorX, setCursorX] = React.useState(-1);
-
-  const handleCursorMove = (x) => {
-    setCursorX(x);
-  }
 
   const { min, max } = React.useMemo(
     () => {
@@ -219,10 +249,10 @@ function MetricItem({ title, values }) {
         v => {
           const y = -(v || 0);
           if (y < min) min = y;
-          if (y > max) max = y;  
+          if (y > max) max = y;
         }
       );
-    
+
       if (max < 0) max = 0;
       if (max - min < 100) min = max - 100;
 
@@ -245,7 +275,7 @@ function MetricItem({ title, values }) {
         height={50}
         color="#0c0"
         cursorX={cursorX}
-        onCursorMove={handleCursorMove}
+        onCursorMove={onCursorMove}
       />
       <div className={classes.pointNumber}>
         {y}
@@ -281,19 +311,26 @@ function Chart({ path, uuid, title }) {
     }
   );
 
-  const { root, list, min, max } = React.useMemo(
+  const { sum, list, min, max } = React.useMemo(
     () => {
       const root = queryMetric.data?.[0];
       const list = [];
 
+      let sum = null;
+
       const traverse = (k, m) => {
+        let values = m.v;
+        if (m.t === 'Counter') {
+          values = computeRate(values);
+        }
+        if (k === '') sum = { key: k, values };
         if (m.s instanceof Array) {
           if (k.length > 0) k += '/';
           m.s.forEach(
             m => traverse(k + m.k, m)
           );
         } else {
-          list.push({ key: k, values: m.v });
+          list.push({ key: k, values });
         }
       }
 
@@ -319,7 +356,7 @@ function Chart({ path, uuid, title }) {
       if (max < 0) max = 0;
       if (max - min < 100) min = max - 100;
 
-      return { root, list, min, max };
+      return { sum, list, min, max };
     },
     [queryMetric.data]
   );
@@ -332,7 +369,7 @@ function Chart({ path, uuid, title }) {
     <div>
       <ChartSummary
         title={title}
-        metrics={list}
+        metric={sum}
         cursorX={cursorX}
         onCursorMove={handleCursorMove}
       />
@@ -354,23 +391,13 @@ function Chart({ path, uuid, title }) {
   );
 }
 
-function ChartSummary({ title, metrics, cursorX, onCursorMove }) {
+function ChartSummary({ title, metric, cursorX, onCursorMove }) {
   const classes = useStyles();
   const canvasEl = React.useRef(null);
 
   const { sum, min, max, edge, area } = React.useMemo(
     () => {
-      const sum = [];
-
-      metrics.forEach(
-        ({values}) => (
-          values.forEach(
-            (v, i) => {
-              sum[i] = (sum[i] || 0) + v;
-            }
-          )
-        )
-      );
+      const sum = metric ? metric.values : [];
 
       let min = Number.POSITIVE_INFINITY;
       let max = Number.NEGATIVE_INFINITY;
@@ -395,7 +422,7 @@ function ChartSummary({ title, metrics, cursorX, onCursorMove }) {
 
       return { sum, min, max, edge, area };
     },
-    [metrics]
+    [metric]
   );
 
   const handleMouseMove = e => {

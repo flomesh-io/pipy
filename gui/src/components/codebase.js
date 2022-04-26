@@ -86,6 +86,7 @@ function Codebase({ root, dts }) {
 
   const [tab, setTab] = React.useState(states.tab);
   const [currentInstance, setCurrentInstance] = React.useState(null);
+  const [currentInstanceIndex, setCurrentInstanceIndex] = React.useState();
 
   const handleClickTab = tab => {
     setTab(tab);
@@ -122,7 +123,14 @@ function Codebase({ root, dts }) {
       </div>
 
       {/* Tab Page */}
-      <InstanceContext.Provider value={{ currentInstance, setCurrentInstance }}>
+      <InstanceContext.Provider
+        value={{
+          currentInstance,
+          currentInstanceIndex,
+          setCurrentInstance,
+          setCurrentInstanceIndex,
+        }}
+      >
         <div className={classes.main}>
           {tab === 'editor' && <Editor root={root} dts={dts}/>}
           {tab === 'status' && <Status root={root}/>}

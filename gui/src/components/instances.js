@@ -69,8 +69,9 @@ function Instances({ root }) {
 
   const now = Date.now();
 
-  const selectInstance = (inst) => {
-    instanceContext.setCurrentInstance(inst);
+  const selectInstance = (id, instance) => {
+    instanceContext.setCurrentInstanceIndex(id);
+    instanceContext.setCurrentInstance(instance);
   }
 
   return (
@@ -80,8 +81,8 @@ function Instances({ root }) {
           <ListItem
             key={id}
             button
-            selected={instanceContext.currentInstance === instance}
-            onClick={() => selectInstance(instance)}
+            selected={instanceContext.currentInstanceIndex === id}
+            onClick={() => selectInstance(id, instance)}
           >
             <ListItemIcon className={classes.listIcon}><LocalHostIcon/></ListItemIcon>
             <ListItemText
