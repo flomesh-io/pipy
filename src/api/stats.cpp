@@ -31,8 +31,8 @@ namespace pipy {
 namespace stats {
 
 static Data::Producer s_dp("Stats");
-static pjs::ConstStr s_str_sum("sum");
 static pjs::ConstStr s_str_count("count");
+static pjs::ConstStr s_str_sum("sum");
 
 //
 // Metric
@@ -818,17 +818,17 @@ Histogram::Histogram(Metric *parent, pjs::Str **labels)
 }
 
 void Histogram::zero() {
-  create_value();
-  m_percentile->reset();
   m_sum = 0;
   m_count = 0;
+  m_percentile->reset();
+  create_value();
 }
 
 void Histogram::observe(double n) {
-  create_value();
-  m_percentile->observe(n);
   m_sum += n;
   m_count++;
+  m_percentile->observe(n);
+  create_value();
 }
 
 void Histogram::value_of(pjs::Value &out) {
@@ -867,24 +867,26 @@ auto Histogram::get_dim() -> int {
 }
 
 auto Histogram::get_value(int dim) -> double {
-  if (0 <= dim && dim < m_percentile->size()) {
+  int size = m_percentile->size();
+  if (0 <= dim && dim < size) {
     return m_percentile->get(dim);
-  } else if (dim == m_percentile->size()) {
-    return m_count;
-  } else {
-    return m_sum;
   }
+  switch (dim - size) {
+    case 0: return m_count;
+    case 1: return m_sum;
+  }
+  return 0;
 }
 
 void Histogram::set_value(int dim, double value) {
-  if (0 <= dim && dim < m_percentile->size()) {
+  int size = m_percentile->size();
+  if (0 <= dim && dim < size) {
     m_percentile->set(dim - 1, value);
-  } else if (dim == m_percentile->size()) {
-    m_count = value;
-  } else {
-    m_sum = value;
   }
-
+  switch (dim - size) {
+    case 0: m_count = value; break;
+    case 1: m_sum = value; break;
+  }
   create_value();
 }
 

@@ -103,6 +103,7 @@ const splitPos = [
 ];
 
 function makePath(values) {
+  if (!values) return '';
   const line = [];
   for (let i = 1; i <= 60; i++) {
     const x = 60 - i;
@@ -137,6 +138,15 @@ function computeRate(values) {
   for (let i = 0, n = values.length; i < n; i++) {
     values[i] = values[i] * factor;
   }
+}
+
+function computeAverage(sums, counts) {
+  const n = sums.length;
+  const a = new Array(n);
+  for (let i = 0; i < n; i++) {
+    a[i] = sums[i] / counts[i];
+  }
+  return a;
 }
 
 function computeCumulative(values) {
@@ -368,6 +378,9 @@ function Chart({ path, uuid, title }) {
       const list = [];
 
       let sum = null;
+      let avg = null;
+      let p95 = null;
+      let p99 = null;
       let type = root?.t;
       let buckets = null;
 
@@ -384,11 +397,17 @@ function Chart({ path, uuid, title }) {
             break;
           case 'Histogram':
             computeCumulative(values);
+            if (!sum) {
+              const n = values.length;
+              avg = computeAverage(values[n-1], values[n-2]);
+              p95 = computePercentile(values, buckets, 0.95);
+              p99 = computePercentile(values, buckets, 0.99);
+            }
             values = computePercentile(values, buckets, 0.9);
             break;
           default: break;
         }
-        if (!sum) sum = { key: k, values };
+        if (!sum) sum = { key: k, values, avg, p95, p99 };
         if (m.s instanceof Array) {
           if (k.length > 0) k += '/';
           m.s.forEach(
@@ -460,20 +479,23 @@ function ChartSummary({ title, metric, cursorX, onCursorMove }) {
   const classes = useStyles();
   const canvasEl = React.useRef(null);
 
-  const { sum, min, max, edge, area } = React.useMemo(
+  const { sum, min, max, edge, area, avg, p95, p99 } = React.useMemo(
     () => {
       const sum = metric ? metric.values : [];
 
       let min = Number.POSITIVE_INFINITY;
       let max = Number.NEGATIVE_INFINITY;
 
-      sum.forEach(
-        v => {
-          const y = -v;
-          if (y < min) min = y;
-          if (y > max) max = y;
-        }
-      )
+      const visit = v => {
+        const y = -v;
+        if (y < min) min = y;
+        if (y > max) max = y;
+      }
+
+      sum.forEach(visit);
+      metric?.avg?.forEach?.(visit);
+      metric?.p95?.forEach?.(visit);
+      metric?.p99?.forEach?.(visit);
 
       if (max < 0) max = 0;
       if (max - min < 10) min = max - 10;
@@ -484,8 +506,11 @@ function ChartSummary({ title, metric, cursorX, onCursorMove }) {
 
       const edge = makePath(sum);
       const area = edge + `L 0,${max-margin} L 59,${max-margin} z`;
+      const avg = makePath(metric?.avg);
+      const p95 = makePath(metric?.p95);
+      const p99 = makePath(metric?.p99);
 
-      return { sum, min, max, edge, area };
+      return { sum, min, max, edge, area, avg, p95, p99 };
     },
     [metric]
   );
@@ -525,6 +550,36 @@ function ChartSummary({ title, metric, cursorX, onCursorMove }) {
             fill="green"
             fillOpacity="15%"
             stroke="none"
+          />
+          <path
+            d={avg}
+            vectorEffect="non-scaling-stroke"
+            fill="none"
+            stroke="#0f0"
+            strokeOpacity="50%"
+            strokeWidth="1"
+            strokeDasharray="2 2"
+            strokeLinejoin="round"
+          />
+          <path
+            d={p99}
+            vectorEffect="non-scaling-stroke"
+            fill="none"
+            stroke="#08f"
+            strokeOpacity="50%"
+            strokeWidth="1"
+            strokeDasharray="1 1"
+            strokeLinejoin="round"
+          />
+          <path
+            d={p95}
+            vectorEffect="non-scaling-stroke"
+            fill="none"
+            stroke="#f80"
+            strokeOpacity="50%"
+            strokeWidth="1"
+            strokeDasharray="1 1"
+            strokeLinejoin="round"
           />
           <path
             d={edge}

@@ -69,6 +69,7 @@ protected:
   Metric(Metric *parent, pjs::Str **labels);
   virtual ~Metric() {}
 
+  bool has_value() const { return m_has_value; }
   void create_value();
   void serialize(Data::Builder &db, bool initial, bool recursive, bool history);
 
