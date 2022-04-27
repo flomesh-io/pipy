@@ -137,6 +137,7 @@ void AdminService::close() {
   if (auto listener = Listener::get("::", m_port)) {
     listener->pipeline_def(nullptr);
   }
+  m_metrics_history_timer.cancel();
 }
 
 auto AdminService::handle(Message *req) -> Message* {

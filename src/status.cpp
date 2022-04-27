@@ -251,18 +251,20 @@ void Status::register_metrics() {
     [=](stats::Gauge *gauge) {
       int total = 0;
       Listener::for_each([&](Listener *listener) {
-        auto k = listener->pipeline_def()->name();
-        auto l = gauge->with_labels(&k, 1);
-        auto n = 0;
-        l->clear();
-        listener->for_each_inbound([&](Inbound *inbound) {
-          auto k = inbound->remote_address();
-          auto m = l->with_labels(&k, 1);
-          m->increase();
-          n++;
-        });
-        l->set(n);
-        total += n;
+        if (auto *p = listener->pipeline_def()) {
+          auto k = p->name();
+          auto l = gauge->with_labels(&k, 1);
+          auto n = 0;
+          l->clear();
+          listener->for_each_inbound([&](Inbound *inbound) {
+            auto k = inbound->remote_address();
+            auto m = l->with_labels(&k, 1);
+            m->increase();
+            n++;
+          });
+          l->set(n);
+          total += n;
+        }
       });
       gauge->set(total);
     }
