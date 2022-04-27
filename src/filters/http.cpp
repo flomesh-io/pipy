@@ -1765,6 +1765,10 @@ void TunnelClient::on_receive(Event *evt) {
   } else if (auto start = evt->as<MessageStart>()) {
     m_is_tunneling = true;
   }
+  if (evt->is<StreamEnd>()) {
+    m_pipeline = nullptr;
+    m_is_tunneling = false;
+  }
 }
 
 } // namespace http
