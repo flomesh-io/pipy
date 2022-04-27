@@ -1766,6 +1766,7 @@ void TunnelClient::on_receive(Event *evt) {
     m_is_tunneling = true;
   }
   if (evt->is<StreamEnd>()) {
+    Pipeline::auto_release(m_pipeline);
     m_pipeline = nullptr;
     m_is_tunneling = false;
   }
