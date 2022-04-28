@@ -29,6 +29,7 @@
 #include "module.hpp"
 #include "worker.hpp"
 #include "constants.hpp"
+#include "status.hpp"
 #include "logging.hpp"
 
 #ifdef __linux__
@@ -162,11 +163,19 @@ void Inbound::start() {
     ? mod->worker()->new_runtime_context()
     : new pipy::Context();
   ctx->m_inbound = this;
+
   auto p = Pipeline::make(def, ctx);
   p->chain(EventTarget::input());
   m_pipeline = p;
   m_output = p->input();
   m_listener->open(this);
+
+  pjs::Str *labels[2];
+  labels[0] = def->name();
+  labels[1] = remote_address();
+  m_metric_traffic_in = Status::metric_inbound_in->with_labels(labels, 2);
+  m_metric_traffic_out = Status::metric_inbound_out->with_labels(labels, 2);
+
   InputContext ic(this);
   p->input()->input(Data::flush());
   receive();
@@ -197,6 +206,8 @@ void Inbound::receive() {
               buffer->push(buf);
             }
           }
+          m_metric_traffic_in->increase(buffer->size());
+          Status::metric_inbound_in->increase(buffer->size());
           output(buffer);
           output(Data::flush());
         }
@@ -292,6 +303,8 @@ void Inbound::pump() {
 
       if (ec != asio::error::operation_aborted) {
         m_buffer.shift(n);
+        m_metric_traffic_out->increase(n);
+        Status::metric_inbound_out->increase(n);
 
         if (ec) {
           if (Log::is_enabled(Log::WARN)) {

@@ -15,6 +15,19 @@ import Pane from 'react-split-pane/lib/Pane';
 import SplitPane from 'react-split-pane';
 import Toolbar from './toolbar';
 
+const SCROLL_BAR_STYLE = {
+  overflowX: 'hidden',
+  overflowY: 'scroll',
+  scrollbarWidth: 'thin',
+  '&::-webkit-scrollbar': {
+    width: '8px',
+    backgroundColor: '#303030',
+  },
+  '&::-webkit-scrollbar-thumb': {
+    backgroundColor: '#383838',
+  },
+};
+
 const useStyles = makeStyles(theme => ({
   root: {
     width: '100%',
@@ -30,19 +43,19 @@ const useStyles = makeStyles(theme => ({
     height: '100%',
     backgroundColor: '#282828',
     padding: theme.spacing(1),
-    overflow: 'auto',
+    ...SCROLL_BAR_STYLE,
   },
   metricListPane: {
     height: '100%',
     backgroundColor: '#252525',
     padding: theme.spacing(1),
-    overflow: 'auto',
+    ...SCROLL_BAR_STYLE,
   },
   metricChartPane: {
     height: '100%',
     backgroundColor: '#202020',
     padding: theme.spacing(1),
-    overflow: 'auto',
+    ...SCROLL_BAR_STYLE,
   },
   listItem: {
     width: '100%',

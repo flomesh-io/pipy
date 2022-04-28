@@ -31,6 +31,7 @@
 #include "input.hpp"
 #include "timer.hpp"
 #include "list.hpp"
+#include "api/stats.hpp"
 
 namespace pipy {
 
@@ -89,6 +90,8 @@ private:
   pjs::Ref<EventTarget::Input> m_output;
   asio::ip::tcp::endpoint m_peer;
   asio::ip::tcp::socket m_socket;
+  pjs::Ref<stats::Counter> m_metric_traffic_in;
+  pjs::Ref<stats::Counter> m_metric_traffic_out;
   pjs::Ref<pjs::Str> m_str_remote_addr;
   pjs::Ref<pjs::Str> m_str_local_addr;
   pjs::Ref<pjs::Str> m_str_ori_dst_addr;

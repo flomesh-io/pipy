@@ -31,6 +31,7 @@
 #include "input.hpp"
 #include "timer.hpp"
 #include "list.hpp"
+#include "api/stats.hpp"
 
 #include <functional>
 
@@ -87,6 +88,9 @@ public:
 private:
   std::string m_host;
   int m_port;
+  pjs::Ref<stats::Counter> m_metric_traffic_out;
+  pjs::Ref<stats::Counter> m_metric_traffic_in;
+  pjs::Ref<stats::Histogram> m_metric_conn_time;
   pjs::Ref<pjs::Str> m_address;
   std::string m_remote_addr;
   std::string m_local_addr;

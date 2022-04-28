@@ -36,6 +36,7 @@
 #include "utils.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <map>
 #include <set>
 #include <string>
@@ -44,6 +45,11 @@
 namespace pipy {
 
 Status Status::local;
+pjs::Ref<stats::Counter> Status::metric_inbound_in;
+pjs::Ref<stats::Counter> Status::metric_inbound_out;
+pjs::Ref<stats::Counter> Status::metric_outbound_in;
+pjs::Ref<stats::Counter> Status::metric_outbound_out;
+pjs::Ref<stats::Histogram> Status::metric_outbound_conn_time;
 
 void Status::update_modules() {
   modules.clear();
@@ -183,7 +189,7 @@ void Status::register_metrics() {
   label_names->set(0, "type");
 
   stats::Gauge::make(
-    pjs::Str::make("pipy_obj_cnt"),
+    pjs::Str::make("pipy_object_count"),
     label_names,
     [](stats::Gauge *gauge) {
       double total = 0;
@@ -203,7 +209,7 @@ void Status::register_metrics() {
   label_names->set(0, "type");
 
   stats::Gauge::make(
-    pjs::Str::make("pipy_chk_size"),
+    pjs::Str::make("pipy_chunk_size"),
     label_names,
     [](stats::Gauge *gauge) {
       double total = 0;
@@ -223,7 +229,7 @@ void Status::register_metrics() {
   label_names->set(1, "name");
 
   stats::Gauge::make(
-    pjs::Str::make("pipy_ppl_cnt"),
+    pjs::Str::make("pipy_pipeline_count"),
     label_names,
     [](stats::Gauge *gauge) {
       double total = 0;
@@ -246,7 +252,7 @@ void Status::register_metrics() {
   label_names->set(1, "peer");
 
   stats::Gauge::make(
-    pjs::Str::make("pipy_inb_cnt"),
+    pjs::Str::make("pipy_inbound_count"),
     label_names,
     [=](stats::Gauge *gauge) {
       int total = 0;
@@ -270,11 +276,21 @@ void Status::register_metrics() {
     }
   );
 
+  metric_inbound_in = stats::Counter::make(
+    pjs::Str::make("pipy_inbound_in"),
+    label_names
+  );
+
+  metric_inbound_out = stats::Counter::make(
+    pjs::Str::make("pipy_inbound_out"),
+    label_names
+  );
+
   label_names->length(1);
   label_names->set(0, "peer");
 
   stats::Gauge::make(
-    pjs::Str::make("pipy_out_cnt"),
+    pjs::Str::make("pipy_outbound_count"),
     label_names,
     [=](stats::Gauge *gauge) {
       int total = 0;
@@ -287,6 +303,28 @@ void Status::register_metrics() {
       });
       gauge->set(total);
     }
+  );
+
+  metric_outbound_in = stats::Counter::make(
+    pjs::Str::make("pipy_outbound_in"),
+    label_names
+  );
+
+  metric_outbound_out = stats::Counter::make(
+    pjs::Str::make("pipy_outbound_out"),
+    label_names
+  );
+
+  pjs::Ref<pjs::Array> buckets = pjs::Array::make(20);
+  double limit = 1.5;
+  for (int i = 0; i < 20; i++) {
+    buckets->set(i, std::floor(limit));
+    limit *= 1.5;
+  }
+
+  metric_outbound_conn_time = stats::Histogram::make(
+    pjs::Str::make("pipy_outbound_conn_time"),
+    buckets, label_names
   );
 }
 

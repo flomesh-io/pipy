@@ -26,6 +26,8 @@
 #ifndef STATUS_HPP
 #define STATUS_HPP
 
+#include "api/stats.hpp"
+
 #include <list>
 #include <ostream>
 #include <string>
@@ -48,6 +50,11 @@ public:
   std::list<Module> modules;
 
   static Status local;
+  static pjs::Ref<stats::Counter> metric_inbound_in;
+  static pjs::Ref<stats::Counter> metric_inbound_out;
+  static pjs::Ref<stats::Counter> metric_outbound_in;
+  static pjs::Ref<stats::Counter> metric_outbound_out;
+  static pjs::Ref<stats::Histogram> metric_outbound_conn_time;
 
   void update_modules();
   bool from_json(const Data &data);

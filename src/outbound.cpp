@@ -27,6 +27,7 @@
 #include "constants.hpp"
 #include "pipeline.hpp"
 #include "utils.hpp"
+#include "status.hpp"
 #include "logging.hpp"
 
 namespace pipy {
@@ -65,6 +66,12 @@ void Outbound::connect(const std::string &host, int port) {
   m_host = host;
   m_port = port;
   m_connecting = true;
+
+  auto *addr = address();
+  m_metric_traffic_out = Status::metric_outbound_out->with_labels(&addr, 1);
+  m_metric_traffic_in = Status::metric_outbound_in->with_labels(&addr, 1);
+  m_metric_conn_time = Status::metric_outbound_conn_time->with_labels(&addr, 1);
+
   start(0);
 }
 
@@ -233,7 +240,10 @@ void Outbound::connect(const asio::ip::tcp::endpoint &target) {
           const auto &ep = m_socket.local_endpoint();
           m_local_addr = ep.address().to_string();
           m_local_port = ep.port();
-          m_connection_time += utils::now() - m_start_time;
+          auto conn_time = utils::now() - m_start_time;
+          m_connection_time += conn_time;
+          m_metric_conn_time->observe(conn_time);
+          Status::metric_outbound_conn_time->observe(conn_time);
           m_connected = true;
           if (!m_connecting) {
             close(StreamEnd::CONNECTION_CANCELED);
@@ -297,6 +307,8 @@ void Outbound::receive() {
               buffer->push(buf);
             }
           }
+          m_metric_traffic_in->increase(buffer->size());
+          Status::metric_outbound_in->increase(buffer->size());
           output(buffer);
           output(Data::flush());
         }
@@ -370,6 +382,8 @@ void Outbound::pump() {
 
       if (ec != asio::error::operation_aborted) {
         m_buffer.shift(n);
+        m_metric_traffic_out->increase(n);
+        Status::metric_outbound_out->increase(n);
 
         if (ec) {
           if (Log::is_enabled(Log::WARN)) {
