@@ -1242,6 +1242,7 @@ void Demux::on_dequeue(Request *req) {
 
 void Demux::on_http2_pass() {
   upgrade_http2();
+  m_http2_demuxer->start();
   Decoder::chain(m_http2_demuxer->input());
 }
 

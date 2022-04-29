@@ -338,6 +338,7 @@ public:
   virtual ~Demuxer();
 
   auto initial_stream() -> Input*;
+  void start();
   void shutdown();
 
 protected:
@@ -409,16 +410,26 @@ private:
   // Demuxer::InitialStream
   //
 
-  class InitialStream : public EventTarget {
+  class InitialStream :
+    public pjs::Pooled<InitialStream>,
+    public EventTarget
+  {
   public:
-    Stream* stream = nullptr;
-    friend class Demuxer;
-    virtual void on_event(Event *evt) override {
-      if (stream) stream->event(evt);
-    }
+    InitialStream(Demuxer *demuxer)
+      : m_demuxer(demuxer) {}
+
+    void start();
+
+    virtual void on_event(Event *evt) override;
+
+  private:
+    Demuxer* m_demuxer = nullptr;
+    pjs::Ref<MessageStart> m_head;
+    Data m_body;
+    bool m_started = false;
   };
 
-  InitialStream m_initial_stream;
+  InitialStream* m_initial_stream = nullptr;
 };
 
 //

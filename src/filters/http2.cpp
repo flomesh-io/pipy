@@ -1147,15 +1147,22 @@ Demuxer::~Demuxer() {
   for (const auto &p : m_streams) {
     delete p.second;
   }
+  delete m_initial_stream;
 }
 
 auto Demuxer::initial_stream() -> Input* {
-  if (!m_initial_stream.stream) {
-    auto s = new Stream(this, 1);
-    m_streams[1] = s;
-    m_initial_stream.stream = s;
+  if (!m_initial_stream) {
+    m_initial_stream = new InitialStream(this);
   }
-  return m_initial_stream.input();
+  return m_initial_stream->input();
+}
+
+void Demuxer::start() {
+  if (m_initial_stream) {
+    m_initial_stream->start();
+    delete m_initial_stream;
+    m_initial_stream = nullptr;
+  }
 }
 
 void Demuxer::shutdown() {
@@ -1295,6 +1302,36 @@ Demuxer::Stream::Stream(Demuxer *demuxer, int id)
   EventSource::chain(p->input());
   p->chain(EventSource::reply());
   m_pipeline = p;
+}
+
+//
+// Demuxer::InitialStream
+//
+
+void Demuxer::InitialStream::start() {
+  auto *s = new Stream(m_demuxer, 1);
+  m_demuxer->m_streams[1] = s;
+  if (m_head) {
+    s->event(MessageStart::make(m_head));
+    if (!m_body.empty()) s->event(Data::make(m_body));
+    s->event(MessageEnd::make());
+  }
+}
+
+void Demuxer::InitialStream::on_event(Event *evt) {
+  if (auto *start = evt->as<MessageStart>()) {
+    if (!m_started) {
+      m_head = start->head();
+      m_body.clear();
+      m_started = true;
+    }
+  } else if (auto *data = evt->as<Data>()) {
+    if (m_started) {
+      m_body.push(*data);
+    }
+  } else if (evt->is<MessageEnd>()) {
+    m_started = false;
+  }
 }
 
 //
