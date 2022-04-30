@@ -276,6 +276,24 @@ private:
 };
 
 //
+// Settings
+//
+
+struct Settings {
+  enum { MAX_SIZE = 1024 };
+
+  int header_table_size = 0x1000;
+  int initial_window_size = 0xffff;
+  int max_concurrent_streams = -1;
+  int max_frame_size = 0x4000;
+  int max_header_list_size = -1;
+  bool enable_push = true;
+
+  int decode(const uint8_t *data, int size);
+  int encode(uint8_t *data) const;
+};
+
+//
 // StreamBase
 //
 
@@ -351,6 +369,8 @@ private:
   std::map<int, Stream*> m_streams;
   HeaderDecoder m_header_decoder;
   HeaderEncoder m_header_encoder;
+  Settings m_settings;
+  Settings m_peer_settings;
   int m_last_received_stream_id = 0;
   bool m_has_sent_preface = false;
   bool m_has_gone_away = false;
@@ -424,7 +444,7 @@ private:
 
   private:
     Demuxer* m_demuxer = nullptr;
-    pjs::Ref<MessageStart> m_head;
+    pjs::Ref<http::RequestHead> m_head;
     Data m_body;
     bool m_started = false;
   };

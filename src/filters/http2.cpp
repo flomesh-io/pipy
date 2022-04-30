@@ -51,6 +51,7 @@ static const pjs::Ref<pjs::Str> s_GET(pjs::Str::make("GET"));
 static const pjs::Ref<pjs::Str> s_CONNECT(pjs::Str::make("CONNECT"));
 static const pjs::Ref<pjs::Str> s_root_path(pjs::Str::make("/"));
 static const pjs::Ref<pjs::Str> s_200(pjs::Str::make("200"));
+static const pjs::ConstStr s_http2_settings("http2-settings");
 
 static struct {
   const char *name;
@@ -920,6 +921,65 @@ auto HeaderEncoder::StaticTable::find(pjs::Str *name) -> const Entry* {
 }
 
 //
+// Settings
+//
+
+int Settings::decode(const uint8_t *data, int size) {
+  for (int i = 0; i + 6 <= size; i += 6) {
+    uint16_t k = ((uint16_t)data[i+0] <<  8)|((uint16_t)data[i+1] <<  0);
+    uint32_t v = ((uint32_t)data[i+0] << 24)|((uint32_t)data[i+1] << 16)|
+                 ((uint32_t)data[i+2] <<  8)|((uint32_t)data[i+3] <<  0);
+    switch (k) {
+      case 0x1:
+        header_table_size = v;
+        break;
+      case 0x2:
+        if (0xfffffffe & v) return PROTOCOL_ERROR;
+        enable_push = v;
+        break;
+      case 0x3:
+        max_concurrent_streams = v;
+        break;
+      case 0x4:
+        if (v > 0x7fffffff) return FLOW_CONTROL_ERROR;
+        initial_window_size = v;
+        break;
+      case 0x5:
+        if (v < 0x4000 || v > 0xffffff) return PROTOCOL_ERROR;
+        max_frame_size = v;
+        break;
+      case 0x6:
+        max_header_list_size = v;
+        break;
+      default: break;
+    }
+  }
+  return NO_ERROR;
+}
+
+int Settings::encode(uint8_t *data) const {
+  int p = 0;
+  auto write = [&](int k, int v) {
+    data[p+0] = 0xff & (k >>  8);
+    data[p+1] = 0xff & (k >>  0);
+    data[p+2] = 0xff & (v >> 24);
+    data[p+3] = 0xff & (v >> 16);
+    data[p+4] = 0xff & (v >>  8);
+    data[p+5] = 0xff & (v >>  0);
+    p += 6;
+  };
+
+  write(0x1, header_table_size);
+  write(0x2, enable_push ? 1 : 0);
+  if (max_concurrent_streams >= 0) write(0x3, max_concurrent_streams);
+  write(0x4, initial_window_size);
+  write(0x5, max_frame_size);
+  if (max_header_list_size >= 0) write(0x6, max_header_list_size);
+
+  return p;
+}
+
+//
 // StreamBase
 //
 
@@ -1281,10 +1341,13 @@ void Demuxer::on_deframe_error() {
 void Demuxer::frame(Frame &frm) {
   if (!m_has_sent_preface) {
     m_has_sent_preface = true;
+    uint8_t buf[Settings::MAX_SIZE];
+    auto len = m_settings.encode(buf);
     Frame frm;
     frm.stream_id = 0;
     frm.type = Frame::SETTINGS;
     frm.flags = 0;
+    frm.payload.push(buf, len, &s_dp);
     FrameEncoder::frame(frm, output());
   }
   FrameEncoder::frame(frm, output());
@@ -1312,6 +1375,24 @@ void Demuxer::InitialStream::start() {
   auto *s = new Stream(m_demuxer, 1);
   m_demuxer->m_streams[1] = s;
   if (m_head) {
+    if (auto headers = m_head->headers()) {
+      pjs::Value settings;
+      headers->get(s_http2_settings, settings);
+      if (settings.is_string()) {
+        const auto &b64 = settings.s()->str();
+        const auto size = b64.size() / 4 * 3 + 3;
+        if (size < Settings::MAX_SIZE) {
+          uint8_t buf[size];
+          auto len = utils::decode_base64url(buf, b64.c_str(), b64.length());
+          m_demuxer->m_peer_settings.decode(buf, len);
+          Frame frm;
+          frm.stream_id = 0;
+          frm.type = Frame::SETTINGS;
+          frm.flags = Frame::BIT_ACK;
+          m_demuxer->frame(frm);
+        }
+      }
+    }
     s->event(MessageStart::make(m_head));
     if (!m_body.empty()) s->event(Data::make(m_body));
     s->event(MessageEnd::make());
@@ -1321,7 +1402,7 @@ void Demuxer::InitialStream::start() {
 void Demuxer::InitialStream::on_event(Event *evt) {
   if (auto *start = evt->as<MessageStart>()) {
     if (!m_started) {
-      m_head = start->head();
+      m_head = start->head()->as<http::RequestHead>();
       m_body.clear();
       m_started = true;
     }

@@ -674,6 +674,7 @@ void Encoder::on_event(Event *evt) {
 
 void Encoder::output_head() {
   auto buffer = Data::make();
+  bool send_content_length = true;
 
   if (m_is_response) {
     pjs::Value protocol, status, status_text;
@@ -695,6 +696,10 @@ void Encoder::output_head() {
       status_num = status.n();
     } else if (status.is_string()) {
       status_num = std::atoi(status.s()->c_str());
+    }
+
+    if (status_num < 200 || status_num == 204) {
+      send_content_length = false;
     }
 
     char status_str[100];
@@ -796,23 +801,25 @@ void Encoder::output_head() {
     );
   }
 
-  if (m_chunked) {
-    static std::string str("transfer-encoding: chunked\r\n");
-    s_dp.push(buffer, str);
-  } else if (!content_length_written) {
-    char str[100];
-    std::sprintf(str, ": %d\r\n", m_content_length);
-    s_dp.push(buffer, s_content_length->str());
-    s_dp.push(buffer, str);
-  }
+  if (send_content_length) {
+    if (m_chunked) {
+      static std::string str("transfer-encoding: chunked\r\n");
+      s_dp.push(buffer, str);
+    } else if (!content_length_written) {
+      char str[100];
+      std::sprintf(str, ": %d\r\n", m_content_length);
+      s_dp.push(buffer, s_content_length->str());
+      s_dp.push(buffer, str);
+    }
 
-  if (!m_is_upgrade_websocket && !m_is_upgrade_http2) {
-    if (m_is_final) {
-      static std::string str("connection: close\r\n");
-      s_dp.push(buffer, str);
-    } else {
-      static std::string str("connection: keep-alive\r\n");
-      s_dp.push(buffer, str);
+    if (!m_is_upgrade_websocket && !m_is_upgrade_http2) {
+      if (m_is_final) {
+        static std::string str("connection: close\r\n");
+        s_dp.push(buffer, str);
+      } else {
+        static std::string str("connection: keep-alive\r\n");
+        s_dp.push(buffer, str);
+      }
     }
   }
 
