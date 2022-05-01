@@ -95,6 +95,9 @@ struct Frame {
   bool is_END_HEADERS() const { return flags & BIT_END_HEADERS; }
   bool is_PADDED() const { return flags & BIT_PADDED; }
   bool is_PRIORITY() const { return flags & BIT_PRIORITY; }
+
+  auto decode_window_update(int &increment) -> ErrorCode;
+  void encode_window_update(int increment);
 };
 
 //
@@ -289,8 +292,8 @@ struct Settings {
   int max_header_list_size = -1;
   bool enable_push = true;
 
-  int decode(const uint8_t *data, int size);
-  int encode(uint8_t *data) const;
+  auto decode(const uint8_t *data, int size) -> ErrorCode;
+  auto encode(uint8_t *data) const -> int;
 };
 
 //
@@ -318,13 +321,16 @@ protected:
 
   auto id() const -> int { return m_id; }
 
+  bool update_send_window(int delta);
   void on_frame(Frame &frm);
   void on_event(Event *evt);
+  void on_pump() { pump(); }
 
   virtual void frame(Frame &frm) = 0;
   virtual void event(Event *evt) = 0;
   virtual void flush() = 0;
   virtual void close() = 0;
+  virtual auto deduct(int size) -> int = 0;
   virtual void stream_error(ErrorCode err) = 0;
   virtual void connection_error(ErrorCode err) = 0;
 
@@ -333,13 +339,19 @@ private:
   bool m_is_server_side;
   bool m_is_tunnel = false;
   bool m_end_stream = false;
+  bool m_end_pump = false;
   State m_state = IDLE;
   HeaderDecoder& m_header_decoder;
   HeaderEncoder& m_header_encoder;
+  Data m_send_buffer;
+  int m_send_window = 0xffff;
+  int m_recv_window = 0xffff;
 
   bool parse_padding(Frame &frm);
   bool parse_priority(Frame &frm);
   void parse_headers(Frame &frm);
+  bool parse_window_update(Frame &frm);
+  void pump();
   void stream_end();
 };
 
@@ -353,6 +365,7 @@ class Demuxer :
   public FrameEncoder
 {
 public:
+  Demuxer();
   virtual ~Demuxer();
 
   auto initial_stream() -> Input*;
@@ -372,6 +385,8 @@ private:
   Settings m_settings;
   Settings m_peer_settings;
   int m_last_received_stream_id = 0;
+  int m_send_window = 0xffff;
+  int m_recv_window = 0xffff;
   bool m_has_sent_preface = false;
   bool m_has_gone_away = false;
 
@@ -417,6 +432,15 @@ private:
 
     // close
     void close() override { m_demuxer->stream_close(id()); }
+
+    // flow control
+    auto deduct(int size) -> int override {
+      if (size > m_demuxer->m_send_window) {
+        size = m_demuxer->m_send_window;
+      }
+      m_demuxer->m_send_window -= size;
+      return size;
+    }
 
     // errors
     void stream_error(ErrorCode err) override { m_demuxer->stream_error(id(), err); }
@@ -518,6 +542,9 @@ private:
 
     // close
     void close() override { m_muxer->stream_close(id()); }
+
+    // flow control
+    auto deduct(int size) -> int override { return size; }
 
     // errors
     void stream_error(ErrorCode err) override { m_muxer->stream_error(id(), err); }

@@ -388,6 +388,26 @@ static struct {
 };
 
 //
+// Frame
+//
+
+auto Frame::decode_window_update(int &increment) -> ErrorCode {
+  if (payload.size() != 4) return FRAME_SIZE_ERROR;
+  uint8_t buf[4];
+  payload.shift(sizeof(buf), buf);
+  increment = (
+    ((buf[0] & 0x7f) << 24) |
+    ((buf[1] & 0xff) << 16) |
+    ((buf[2] & 0xff) <<  8) |
+    ((buf[3] & 0xff) <<  0)
+  );
+  return NO_ERROR;
+}
+
+void Frame::encode_window_update(int increment) {
+}
+
+//
 // FrameDecoder
 //
 
@@ -924,11 +944,11 @@ auto HeaderEncoder::StaticTable::find(pjs::Str *name) -> const Entry* {
 // Settings
 //
 
-int Settings::decode(const uint8_t *data, int size) {
+auto Settings::decode(const uint8_t *data, int size) -> ErrorCode {
   for (int i = 0; i + 6 <= size; i += 6) {
     uint16_t k = ((uint16_t)data[i+0] <<  8)|((uint16_t)data[i+1] <<  0);
-    uint32_t v = ((uint32_t)data[i+0] << 24)|((uint32_t)data[i+1] << 16)|
-                 ((uint32_t)data[i+2] <<  8)|((uint32_t)data[i+3] <<  0);
+    uint32_t v = ((uint32_t)data[i+2] << 24)|((uint32_t)data[i+3] << 16)|
+                 ((uint32_t)data[i+4] <<  8)|((uint32_t)data[i+5] <<  0);
     switch (k) {
       case 0x1:
         header_table_size = v;
@@ -957,7 +977,7 @@ int Settings::decode(const uint8_t *data, int size) {
   return NO_ERROR;
 }
 
-int Settings::encode(uint8_t *data) const {
+auto Settings::encode(uint8_t *data) const -> int {
   int p = 0;
   auto write = [&](int k, int v) {
     data[p+0] = 0xff & (k >>  8);
@@ -995,6 +1015,19 @@ StreamBase::StreamBase(
   , m_header_decoder(header_decoder)
   , m_header_encoder(header_encoder)
 {
+}
+
+bool StreamBase::update_send_window(int delta) {
+  if (delta > 0 && m_send_window > 0) {
+    auto n = (uint32_t)m_send_window + (uint32_t)delta;
+    if (n > 0x7fffffff) {
+      connection_error(FLOW_CONTROL_ERROR);
+      return false;
+    }
+  }
+  m_send_window += delta;
+  pump();
+  return true;
 }
 
 void StreamBase::on_frame(Frame &frm) {
@@ -1060,7 +1093,13 @@ void StreamBase::on_frame(Frame &frm) {
     }
 
     case Frame::WINDOW_UPDATE: {
-      // TODO
+      auto inc = 0;
+      auto err = frm.decode_window_update(inc);
+      if (err == NO_ERROR) {
+        update_send_window(inc);
+      } else {
+        connection_error(err);
+      }
       break;
     }
 
@@ -1102,29 +1141,25 @@ void StreamBase::on_event(Event *evt) {
   } else if (auto data = evt->as<Data>()) {
     if (data->empty()) {
       flush();
+    } else if (m_is_tunnel) {
+      m_send_buffer.push(*data);
+      pump();
     } else {
-      Frame frm;
-      frm.stream_id = m_id;
-      frm.type = Frame::DATA;
-      frm.flags = 0;
-      frm.payload.push(*data);
-      frame(frm);
-      if (m_is_tunnel) flush();
+      pump();
+      m_send_buffer.push(*data);
     }
 
   } else if (
     (evt->is<MessageEnd>() && !m_is_tunnel) ||
     (evt->is<StreamEnd>()))
   {
-    Frame frm;
-    frm.stream_id = m_id;
-    frm.type = Frame::DATA;
-    frm.flags = Frame::BIT_END_STREAM;
-    frame(frm);
     if (m_state == OPEN) {
       m_state = HALF_CLOSED_LOCAL;
+      m_end_pump = true;
+      pump();
     } else if (m_state == HALF_CLOSED_REMOTE) {
       m_state = CLOSED;
+      m_end_pump = true;
       close();
     }
   }
@@ -1191,6 +1226,25 @@ void StreamBase::parse_headers(Frame &frm) {
   }
 }
 
+void StreamBase::pump() {
+  if (m_end_pump || (!m_send_buffer.empty() && m_send_window > 0)) {
+    int size = m_send_buffer.size();
+    if (size > m_send_window) size = m_send_window;
+    size = deduct(size);
+    if (m_end_pump || size > 0) {
+      Frame frm;
+      frm.stream_id = m_id;
+      frm.type = Frame::DATA;
+      frm.flags = m_end_pump ? Frame::BIT_END_STREAM : 0;
+      if (size > 0) m_send_buffer.shift(size, frm.payload);
+      frame(frm);
+      if (m_is_tunnel) flush();
+      m_end_pump = false;
+    }
+    m_send_window -= size;
+  }
+}
+
 void StreamBase::stream_end() {
   if (m_is_tunnel) {
     event(StreamEnd::make());
@@ -1202,6 +1256,10 @@ void StreamBase::stream_end() {
 //
 // Demuxer
 //
+
+Demuxer::Demuxer() {
+  m_settings.enable_push = false;
+}
 
 Demuxer::~Demuxer() {
   for (const auto &p : m_streams) {
@@ -1299,13 +1357,35 @@ void Demuxer::on_deframe(Frame &frm) {
   } else {
     switch (frm.type) {
       case Frame::SETTINGS: {
-        // TODO
         if (!frm.is_ACK()) {
-          Frame frm;
-          frm.stream_id = 0;
-          frm.type = Frame::SETTINGS;
-          frm.flags = Frame::BIT_ACK;
-          frame(frm);
+          auto len = frm.payload.size();
+          if (len <= Settings::MAX_SIZE) {
+            uint8_t buf[len];
+            frm.payload.to_bytes(buf);
+            auto old_initial_window_size = m_settings.initial_window_size;
+            auto err = m_settings.decode(buf, len);
+            if (err == NO_ERROR) {
+              bool ok = true;
+              if (m_settings.initial_window_size != old_initial_window_size) {
+                auto delta = m_settings.initial_window_size - old_initial_window_size;
+                for (const auto &p : m_streams) {
+                  if (!p.second->update_send_window(delta)) {
+                    ok = false;
+                    break;
+                  }
+                }
+              }
+              if (ok) {
+                Frame frm;
+                frm.stream_id = 0;
+                frm.type = Frame::SETTINGS;
+                frm.flags = Frame::BIT_ACK;
+                frame(frm);
+              }
+            } else {
+              connection_error(err);
+            }
+          }
         }
         break;
       }
@@ -1323,7 +1403,22 @@ void Demuxer::on_deframe(Frame &frm) {
         break;
       }
       case Frame::WINDOW_UPDATE: {
-        // TODO
+        auto inc = 0;
+        auto err = frm.decode_window_update(inc);
+        if (err == NO_ERROR) {
+          auto n = (uint32_t)m_send_window + (uint32_t)inc;
+          if (n > 0x7fffffff) {
+            connection_error(FLOW_CONTROL_ERROR);
+          } else {
+            m_send_window = n;
+            for (auto const &p : m_streams) {
+              p.second->on_pump();
+              if (!m_send_window) break;
+            }
+          }
+        } else {
+          connection_error(err);
+        }
         break;
       }
       default: {
