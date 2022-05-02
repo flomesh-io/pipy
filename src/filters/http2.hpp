@@ -131,9 +131,9 @@ private:
 
 class FrameEncoder {
 protected:
-  void frame(Frame &frm, EventTarget::Input *out);
-  void RST_STREAM(int id, ErrorCode err, EventTarget::Input *out);
-  void GOAWAY(int id, ErrorCode err, EventTarget::Input *out);
+  void frame(Frame &frm, Data &out);
+  void RST_STREAM(int id, ErrorCode err, Data &out);
+  void GOAWAY(int id, ErrorCode err, Data &out);
 
 private:
   void header(uint8_t *buf, int id, uint8_t type, uint8_t flags, size_t size);
@@ -395,11 +395,13 @@ private:
   HeaderEncoder m_header_encoder;
   Settings m_settings;
   Settings m_peer_settings;
+  Data m_output_buffer;
   int m_last_received_stream_id = 0;
   int m_send_window = INITIAL_SEND_WINDOW_SIZE;
   int m_recv_window = INITIAL_RECV_WINDOW_SIZE;
   bool m_has_sent_preface = false;
   bool m_has_gone_away = false;
+  bool m_processing_frames = false;
 
   void stream_close(int id);
   void stream_error(int id, ErrorCode err);
@@ -412,7 +414,7 @@ private:
 
   // client <- session
   void frame(Frame &frm);
-  void flush() { output(Data::flush()); }
+  void flush();
 
   //
   // Demuxer::Stream
@@ -503,6 +505,7 @@ private:
   std::map<int, Stream*> m_streams;
   HeaderDecoder m_header_decoder;
   HeaderEncoder m_header_encoder;
+  Data m_output_buffer;
   int m_last_sent_stream_id = -1;
   bool m_has_sent_preface = false;
   bool m_has_gone_away = false;
@@ -513,7 +516,7 @@ private:
 
   // session -> server
   void frame(Frame &frm);
-  void flush() { EventSource::output(Data::flush()); }
+  void flush();
 
   // session <- server
   void on_event(Event *evt) override;
