@@ -302,6 +302,11 @@ struct Settings {
 
 class StreamBase {
 protected:
+  enum {
+    INITIAL_SEND_WINDOW_SIZE = 0xffff,
+    INITIAL_RECV_WINDOW_SIZE = 0xffff,
+  };
+
   enum State {
     IDLE,
     RESERVED_LOCAL,
@@ -330,7 +335,8 @@ protected:
   virtual void event(Event *evt) = 0;
   virtual void flush() = 0;
   virtual void close() = 0;
-  virtual auto deduct(int size) -> int = 0;
+  virtual auto deduct_send(int size) -> int = 0;
+  virtual bool deduct_recv(int size) = 0;
   virtual void stream_error(ErrorCode err) = 0;
   virtual void connection_error(ErrorCode err) = 0;
 
@@ -344,8 +350,8 @@ private:
   HeaderDecoder& m_header_decoder;
   HeaderEncoder& m_header_encoder;
   Data m_send_buffer;
-  int m_send_window = 0xffff;
-  int m_recv_window = 0xffff;
+  int m_send_window = INITIAL_SEND_WINDOW_SIZE;
+  int m_recv_window = INITIAL_RECV_WINDOW_SIZE;
 
   bool parse_padding(Frame &frm);
   bool parse_priority(Frame &frm);
@@ -365,6 +371,11 @@ class Demuxer :
   public FrameEncoder
 {
 public:
+  enum {
+    INITIAL_SEND_WINDOW_SIZE = 0xffff,
+    INITIAL_RECV_WINDOW_SIZE = 0xffff,
+  };
+
   Demuxer();
   virtual ~Demuxer();
 
@@ -385,8 +396,8 @@ private:
   Settings m_settings;
   Settings m_peer_settings;
   int m_last_received_stream_id = 0;
-  int m_send_window = 0xffff;
-  int m_recv_window = 0xffff;
+  int m_send_window = INITIAL_SEND_WINDOW_SIZE;
+  int m_recv_window = INITIAL_RECV_WINDOW_SIZE;
   bool m_has_sent_preface = false;
   bool m_has_gone_away = false;
 
@@ -434,13 +445,8 @@ private:
     void close() override { m_demuxer->stream_close(id()); }
 
     // flow control
-    auto deduct(int size) -> int override {
-      if (size > m_demuxer->m_send_window) {
-        size = m_demuxer->m_send_window;
-      }
-      m_demuxer->m_send_window -= size;
-      return size;
-    }
+    auto deduct_send(int size) -> int override;
+    bool deduct_recv(int size) override;
 
     // errors
     void stream_error(ErrorCode err) override { m_demuxer->stream_error(id(), err); }
@@ -544,7 +550,8 @@ private:
     void close() override { m_muxer->stream_close(id()); }
 
     // flow control
-    auto deduct(int size) -> int override { return size; }
+    auto deduct_send(int size) -> int override { return size; }
+    bool deduct_recv(int size) override { return true; }
 
     // errors
     void stream_error(ErrorCode err) override { m_muxer->stream_error(id(), err); }

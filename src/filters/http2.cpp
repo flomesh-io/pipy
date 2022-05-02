@@ -405,6 +405,12 @@ auto Frame::decode_window_update(int &increment) -> ErrorCode {
 }
 
 void Frame::encode_window_update(int increment) {
+  uint8_t buf[4];
+  buf[0] = 0x7f & (increment >> 24);
+  buf[1] = 0xff & (increment >> 16);
+  buf[2] = 0xff & (increment >>  8);
+  buf[3] = 0xff & (increment >>  0);
+  payload.push(buf, sizeof(buf), &s_dp);
 }
 
 //
@@ -1037,7 +1043,26 @@ void StreamBase::on_frame(Frame &frm) {
         stream_error(PROTOCOL_ERROR);
       } else if (m_state == OPEN || m_state == HALF_CLOSED_LOCAL) {
         if (frm.is_PADDED() && !parse_padding(frm)) break;
-        if (frm.payload.size()) event(Data::make(frm.payload));
+        if (frm.payload.size()) {
+          auto size = frm.payload.size();
+          if (size > m_recv_window) {
+            connection_error(FLOW_CONTROL_ERROR);
+            break;
+          }
+          if (!deduct_recv(size)) break;
+          m_recv_window -= size;
+          if (m_recv_window <= INITIAL_RECV_WINDOW_SIZE / 2) {
+            Frame frm;
+            frm.stream_id = m_id;
+            frm.type = Frame::WINDOW_UPDATE;
+            frm.flags = 0;
+            frm.encode_window_update(INITIAL_RECV_WINDOW_SIZE - m_recv_window);
+            frame(frm);
+            flush();
+            m_recv_window = INITIAL_RECV_WINDOW_SIZE;
+          }
+          event(Data::make(frm.payload));
+        }
         if (frm.is_END_STREAM()) {
           if (m_state == OPEN) {
             m_state = HALF_CLOSED_REMOTE;
@@ -1230,7 +1255,7 @@ void StreamBase::pump() {
   if (m_end_pump || (!m_send_buffer.empty() && m_send_window > 0)) {
     int size = m_send_buffer.size();
     if (size > m_send_window) size = m_send_window;
-    size = deduct(size);
+    size = deduct_send(size);
     if (m_end_pump || size > 0) {
       Frame frm;
       frm.stream_id = m_id;
@@ -1460,6 +1485,34 @@ Demuxer::Stream::Stream(Demuxer *demuxer, int id)
   EventSource::chain(p->input());
   p->chain(EventSource::reply());
   m_pipeline = p;
+}
+
+auto Demuxer::Stream::deduct_send(int size) -> int {
+  if (size > m_demuxer->m_send_window) {
+    size = m_demuxer->m_send_window;
+  }
+  m_demuxer->m_send_window -= size;
+  return size;
+}
+
+bool Demuxer::Stream::deduct_recv(int size) {
+  auto &win_size = m_demuxer->m_recv_window;
+  if (size > win_size) {
+    connection_error(FLOW_CONTROL_ERROR);
+    return false;
+  }
+  win_size -= size;
+  if (win_size <= INITIAL_RECV_WINDOW_SIZE / 2) {
+    Frame frm;
+    frm.stream_id = 0;
+    frm.type = Frame::WINDOW_UPDATE;
+    frm.flags = 0;
+    frm.encode_window_update(INITIAL_RECV_WINDOW_SIZE - win_size);
+    frame(frm);
+    flush();
+    win_size = INITIAL_RECV_WINDOW_SIZE;
+  }
+  return true;
 }
 
 //
