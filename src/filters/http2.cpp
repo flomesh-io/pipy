@@ -1160,7 +1160,7 @@ void StreamBase::on_event(Event *evt) {
     } else if (m_state == HALF_CLOSED_REMOTE) {
       m_state = CLOSED;
       m_end_pump = true;
-      close();
+      pump();
     }
   }
 }
@@ -1480,11 +1480,6 @@ void Demuxer::InitialStream::start() {
           uint8_t buf[size];
           auto len = utils::decode_base64url(buf, b64.c_str(), b64.length());
           m_demuxer->m_peer_settings.decode(buf, len);
-          Frame frm;
-          frm.stream_id = 0;
-          frm.type = Frame::SETTINGS;
-          frm.flags = Frame::BIT_ACK;
-          m_demuxer->frame(frm);
         }
       }
     }
