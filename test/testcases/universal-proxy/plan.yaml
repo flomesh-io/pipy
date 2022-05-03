@@ -32,16 +32,12 @@ client:
   threads:
     - target: ${CLIENT_TARGET}
       concurrency: 10
-      minRequests: 1
-      maxRequests: 20
+      count: 100
       requests:
         - hello
         - bulky
     - target: ${CLIENT_TARGET}
       concurrency: 10
-      minRequests: 1
-      maxRequests: 5
-      minIdle: 0
-      maxIdle: 3000
+      count: 100
       requests:
         - echo

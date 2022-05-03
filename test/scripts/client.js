@@ -4,6 +4,7 @@ import prettyBytes from 'pretty-bytes';
 import fs from 'fs';
 import http from 'http';
 import https from 'https';
+import http2 from 'http2';
 import { join } from 'path';
 
 const log = console.log;
@@ -14,6 +15,75 @@ function padding(text, width) {
   const n = text.length;
   if (n >= width) return text;
   return text + spaces.substring(0, width - n);
+}
+
+const protocols = {};
+
+protocols.http = function(target) {
+  const agent = new http.Agent();
+
+  const client = got.extend({
+    prefixUrl: 'http://' + target,
+    decompress: false,
+    agent: {
+      http: agent,
+    },
+  });
+
+  const f = ({ path, ...req }) => client(path, req);
+  f.destroy = () => agent.destroy();
+
+  return f;
+}
+
+protocols.https = function(target) {
+  const agent = new https.Agent({
+    keepAlive: true,
+  });
+
+  const client = got.extend({
+    prefixUrl: 'https://' + target,
+    decompress: false,
+    agent: {
+      https: agent,
+    },
+    https: {
+      rejectUnauthorized: false,
+    },
+  });
+
+  const f = ({ path, ...req }) => client(path, req);
+  f.destroy = () => agent.destroy();
+
+  return f;
+}
+
+protocols.http2 = function(target) {
+  const client = http2.connect('http://' + target);
+
+  const f = ({ path, ...req }) => (
+    new Promise(
+      (resolve, reject) => {
+        const body = [];
+        const headers = { ':path': path };
+        const response = {};
+        if (req.headers) Object.assign(headers, req.headers);
+        const r = client.request(headers);
+        r.on('response', headers => Object.assign(response, headers));
+        r.on('data', chunk => body.push(chunk));
+        r.on('end', () => resolve({
+          status: response[':status'],
+          rawBody: Buffer.concat(body),
+        }));
+        r.on('error', err => reject(err));
+        r.end();
+      }
+    )
+  );
+
+  f.destroy = () => client.destroy();
+
+  return f;
 }
 
 export default async function(config, basePath) {
@@ -60,41 +130,7 @@ export default async function(config, basePath) {
     }
   }
 
-  async function session(target, requests, count, minIdle, maxIdle) {
-    let agent, client;
-
-    if (target.startsWith('https://')) {
-      agent = new https.Agent({
-        keepAlive: true,
-      });
-
-      client = got.extend({
-        prefixUrl: target,
-        decompress: false,
-        agent: {
-          https: agent,
-        },
-        https: {
-          rejectUnauthorized: false,
-        },
-      });
-
-    } else {
-      agent = new http.Agent();
-
-      if (!target.startsWith('http://')) {
-        target = 'http://' + target;
-      }
-
-      client = got.extend({
-        prefixUrl: target,
-        decompress: false,
-        agent: {
-          http: agent,
-        },
-      });
-    }
-
+  async function session(client, requests, count) {
     let n = 0;
     while (n < count) {
       for (let req of requests) {
@@ -104,9 +140,8 @@ export default async function(config, basePath) {
           req = req.request();
         }
 
-        let { path, ...options } = req;
         try {
-          const res = await client(path, options);
+          const res = await client(req);
           stats.totalTransfer += res.rawBody.length;
           if (res.statusCode < 400) {
             stats.totalRequests++;
@@ -120,30 +155,23 @@ export default async function(config, basePath) {
         } catch (err) {
           stats.totalStatusErrors++;
         }
-        const idle = Math.floor(Math.random() * (maxIdle - minIdle)) + minIdle;
-        if (idle > 0) await new Promise(resolve => setTimeout(resolve, idle));
         if (++n >= count) break;
       }
     }
 
-    agent.destroy();
+    client.destroy();
   }
 
-  async function thread(target, requests, options) {
+  async function thread(client, requests, options) {
     for (;;) {
-      const min = (options.minRequests|0) || 1;
-      const max = (options.maxRequests|0) || 1;
-      const count = Math.floor(Math.random() * (max - min)) + min;
-      const minIdle = (options.minIdle|0) || 0;
-      const maxIdle = (options.maxIdle|0) || 0;
-      await session(target, requests, count, minIdle, maxIdle);
+      await session(client, requests, options.count);
     }
   }
 
   log('Starting client...');
 
   const threads = config.threads.map(
-    ({ target, concurrency, requests, ...options }, i) => {
+    ({ target, protocol, concurrency, requests, ...options }, i) => {
       concurrency = (concurrency|0) || 1;
       log(`  Thread group #${i}:`,
         'Threads'     , chalk.magenta(padding(concurrency, 8)),
@@ -157,13 +185,21 @@ export default async function(config, basePath) {
           return req;
         }
       );
-      return { target, concurrency, requests, options };
+      return { target, protocol, concurrency, requests, options };
     }
   );
 
-  for (const { target, concurrency, requests, options } of threads) {
+  const createClient = (target, protocol) => {
+    const p = protocols[protocol];
+    if (!p) throw new Error('Unknown protocol: ' + protocol);
+    return p(target);
+  }
+
+  for (const { target, protocol, concurrency, requests, options } of threads) {
+    let client = null;
     for (let i = 0; i < concurrency; i++) {
-      thread(target, requests, options);
+      client = createClient(target, protocol || 'http');
+      thread(client, requests, options);
     }
   }
 

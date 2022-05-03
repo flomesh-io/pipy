@@ -24,14 +24,17 @@ client:
   threads:
     - target: ${CLIENT_TARGET}
       concurrency: 10
-      minRequests: 5
-      maxRequests: 5
+      count: 1000
       requests:
         - hello
         - bulky
     - target: ${CLIENT_TARGET}
       concurrency: 5
-      minIdle: 0
-      maxIdle: 3000
+      count: 50
       requests:
         - bulky
+    - target: ${CLIENT_TARGET}
+      concurrency: 1
+      count: 10
+      requests:
+        - hello
