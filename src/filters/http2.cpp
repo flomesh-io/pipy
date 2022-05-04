@@ -52,6 +52,8 @@ static const pjs::Ref<pjs::Str> s_CONNECT(pjs::Str::make("CONNECT"));
 static const pjs::Ref<pjs::Str> s_root_path(pjs::Str::make("/"));
 static const pjs::Ref<pjs::Str> s_200(pjs::Str::make("200"));
 static const pjs::ConstStr s_http2_settings("http2-settings");
+static const pjs::ConstStr s_connection("connection");
+static const pjs::ConstStr s_keep_alive("keep-alive");
 
 static struct {
   const char *name;
@@ -874,6 +876,8 @@ void HeaderEncoder::encode(bool is_response, pjs::Object *head, Data &data) {
             if (has_authority) return;
             k = s_colon_authority;
           }
+          if (k == s_connection) return;
+          if (k == s_keep_alive) return;
           auto s = v.to_string();
           encode_header_field(data, k, s);
           s->release();
@@ -1008,11 +1012,13 @@ StreamBase::StreamBase(
   int id,
   bool is_server_side,
   HeaderDecoder &header_decoder,
-  HeaderEncoder &header_encoder
+  HeaderEncoder &header_encoder,
+  const Settings &settings
 ) : m_id(id)
   , m_is_server_side(is_server_side)
   , m_header_decoder(header_decoder)
   , m_header_encoder(header_encoder)
+  , m_settings(settings)
 {
 }
 
@@ -1250,13 +1256,22 @@ void StreamBase::pump() {
     if (size > m_send_window) size = m_send_window;
     size = deduct_send(size);
     if (m_end_pump || size > 0) {
-      Frame frm;
-      frm.stream_id = m_id;
-      frm.type = Frame::DATA;
-      frm.flags = m_end_pump ? Frame::BIT_END_STREAM : 0;
-      if (size > 0) m_send_buffer.shift(size, frm.payload);
-      frame(frm);
-      m_end_pump = false;
+      auto remain = size;
+      do {
+        auto n = std::min(remain, m_settings.max_frame_size);
+        remain -= n;
+        Frame frm;
+        frm.stream_id = m_id;
+        frm.type = Frame::DATA;
+        if (n > 0) m_send_buffer.shift(n, frm.payload);
+        if (m_end_pump && m_send_buffer.empty()) {
+          frm.flags = Frame::BIT_END_STREAM;
+          m_end_pump = false;
+        } else {
+          frm.flags = 0;
+        }
+        frame(frm);
+      } while (remain > 0);
     }
     m_send_window -= size;
   }
@@ -1485,7 +1500,7 @@ void Demuxer::flush() {
 //
 
 Demuxer::Stream::Stream(Demuxer *demuxer, int id)
-  : StreamBase(id, true, demuxer->m_header_decoder, demuxer->m_header_encoder)
+  : StreamBase(id, true, demuxer->m_header_decoder, demuxer->m_header_encoder, demuxer->m_peer_settings)
   , m_demuxer(demuxer)
 {
   auto p = demuxer->on_new_sub_pipeline();
@@ -1703,7 +1718,7 @@ void Muxer::on_deframe_error() {
 //
 
 Muxer::Stream::Stream(Muxer *muxer, int id)
-  : StreamBase(id, false, muxer->m_header_decoder, muxer->m_header_encoder)
+  : StreamBase(id, false, muxer->m_header_decoder, muxer->m_header_encoder, muxer->m_peer_settings)
   , m_muxer(muxer)
 {
 }

@@ -34,7 +34,13 @@ protocols.http = function(target) {
     },
   });
 
-  const f = ({ path, ...req }) => client(path, req);
+  const f = ({ path, ...req }) => {
+    if (path.startsWith('/')) {
+      path = path.substring(1);
+    }
+    return client(path, req);
+  }
+
   f.destroy = () => agent.destroy();
 
   return f;
@@ -58,7 +64,13 @@ protocols.https = function(target) {
     },
   });
 
-  const f = ({ path, ...req }) => client(path, req);
+  const f = ({ path, ...req }) => {
+    if (path.startsWith('/')) {
+      path = path.substring(1);
+    }
+    return client(path, req);
+  }
+
   f.destroy = () => agent.destroy();
 
   return f;
@@ -67,9 +79,19 @@ protocols.https = function(target) {
 protocols.http2 = function(target) {
   const client = http2.connect('http://' + target);
 
+  let error = null;
+  client.on('error', err => {
+    error = err;
+    console.log(err);
+  });
+
   const f = ({ method, path, body, ...req }) => (
     new Promise(
       (resolve, reject) => {
+        if (error) {
+          reject(error);
+          return;
+        }
         const buffer = [];
         const headers = {
           ':method': method,
@@ -87,6 +109,7 @@ protocols.http2 = function(target) {
           })
         ));
         r.on('error', err => reject(err));
+        r.on('frameError', () => reject('HTTP/2 Frame Error'));
         r.end(method === 'POST' ? body : undefined);
       }
     )
@@ -109,25 +132,18 @@ export default async function(config, basePath) {
 
   for (const k in config.requests) {
     const { handler, ...options } = config.requests[k];
-    let { method, path, body } = options;
-
-    if (path.startsWith('/')) {
-      path = path.substring(1);
-    }
+    const { method, body } = options;
 
     if (method === 'POST') {
       const { file, text, repeat } = body;
       if (file) {
-        body = fs.readFileSync(join(basePath, file));
+        options.body = fs.readFileSync(join(basePath, file));
       } else if (text) {
-        body = new Array(repeat || 1).fill(text).join('');
+        options.body = new Array(repeat || 1).fill(text).join('');
       } else {
         throw new Error('Invalid request body');
       }
     }
-
-    options.path = path;
-    options.body = body;
 
     if (handler) {
       const mod = await import(`./handlers/${handler}`);

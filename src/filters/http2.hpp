@@ -321,7 +321,8 @@ protected:
     int id,
     bool is_server_side,
     HeaderDecoder &header_decoder,
-    HeaderEncoder &header_encoder
+    HeaderEncoder &header_encoder,
+    const Settings &settings
   );
 
   auto id() const -> int { return m_id; }
@@ -352,6 +353,7 @@ private:
   Data m_send_buffer;
   int m_send_window = INITIAL_SEND_WINDOW_SIZE;
   int m_recv_window = INITIAL_RECV_WINDOW_SIZE;
+  const Settings& m_settings;
 
   bool parse_padding(Frame &frm);
   bool parse_priority(Frame &frm);
@@ -505,6 +507,8 @@ private:
   std::map<int, Stream*> m_streams;
   HeaderDecoder m_header_decoder;
   HeaderEncoder m_header_encoder;
+  Settings m_settings;
+  Settings m_peer_settings;
   Data m_output_buffer;
   int m_last_sent_stream_id = -1;
   bool m_has_sent_preface = false;
