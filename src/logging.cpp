@@ -101,7 +101,7 @@ bool Log::is_enabled(Level level) {
 }
 
 void Log::print(const std::string &line) {
-  std::cout << line << std::endl;
+  std::cerr << line << std::endl;
   write_history(line);
 }
 
@@ -119,7 +119,7 @@ void Log::print(const char *fmt, ...) {
   char line[1000];
   std::vsnprintf(line, sizeof(line), fmt, ap);
   va_end(ap);
-  std::cout << line << std::endl;
+  std::cerr << line << std::endl;
   write_history(line);
 }
 
