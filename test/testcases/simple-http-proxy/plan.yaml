@@ -11,7 +11,8 @@ server:
     GET /bulky:
       text: $
       repeat: 10000
-
+    POST /post:
+      text: OK
 client:
   duration: ${TEST_DURATION}
   requests:
@@ -21,20 +22,29 @@ client:
     bulky:
       method: GET
       path: /bulky
+    post:
+      method: POST
+      path: /post
+      body:
+        text: $
+        repeat: 10000
   threads:
+    - target: ${CLIENT_TARGET}
+      concurrency: 100
+      count: 10000
+      requests:
+        - hello
+        - bulky
+    - target: ${CLIENT_TARGET}
+      concurrency: 5
+      count: 500
+      requests:
+        - hello
+        - bulky
     - target: ${CLIENT_TARGET}
       concurrency: 10
       count: 1000
       requests:
         - hello
         - bulky
-    - target: ${CLIENT_TARGET}
-      concurrency: 5
-      count: 50
-      requests:
-        - bulky
-    - target: ${CLIENT_TARGET}
-      concurrency: 1
-      count: 10
-      requests:
-        - hello
+        - post

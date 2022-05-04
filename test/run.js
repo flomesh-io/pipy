@@ -76,6 +76,14 @@ async function start(testcase, options) {
       config.client.duration * 1000
     );
   }
+
+  process.on('uncaughtException', err => {
+    if (worker) worker.kill();
+    if (repo) repo.kill();
+    console.error('Uncaught exception:', err.message);
+    console.error('  Stack trace:', err.stack);
+    process.exit(-1);
+  });
 }
 
 program

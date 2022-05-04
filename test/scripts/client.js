@@ -20,11 +20,15 @@ function padding(text, width) {
 const protocols = {};
 
 protocols.http = function(target) {
-  const agent = new http.Agent();
+  const agent = new http.Agent({
+    keepAlive: true,
+    scheduling: 'fifo',
+  });
 
   const client = got.extend({
     prefixUrl: 'http://' + target,
     decompress: false,
+    throwHttpErrors: false,
     agent: {
       http: agent,
     },
@@ -39,11 +43,13 @@ protocols.http = function(target) {
 protocols.https = function(target) {
   const agent = new https.Agent({
     keepAlive: true,
+    scheduling: 'fifo',
   });
 
   const client = got.extend({
     prefixUrl: 'https://' + target,
     decompress: false,
+    throwHttpErrors: false,
     agent: {
       https: agent,
     },
@@ -61,22 +67,27 @@ protocols.https = function(target) {
 protocols.http2 = function(target) {
   const client = http2.connect('http://' + target);
 
-  const f = ({ path, ...req }) => (
+  const f = ({ method, path, body, ...req }) => (
     new Promise(
       (resolve, reject) => {
-        const body = [];
-        const headers = { ':path': path };
+        const buffer = [];
+        const headers = {
+          ':method': method,
+          ':path': path,
+        };
         const response = {};
         if (req.headers) Object.assign(headers, req.headers);
         const r = client.request(headers);
         r.on('response', headers => Object.assign(response, headers));
-        r.on('data', chunk => body.push(chunk));
-        r.on('end', () => resolve({
-          status: response[':status'],
-          rawBody: Buffer.concat(body),
-        }));
+        r.on('data', chunk => buffer.push(chunk));
+        r.on('end', () => (
+          resolve({
+            statusCode: response[':status'],
+            rawBody: Buffer.concat(buffer),
+          })
+        ));
         r.on('error', err => reject(err));
-        r.end();
+        r.end(method === 'POST' ? body : undefined);
       }
     )
   );
@@ -140,31 +151,20 @@ export default async function(config, basePath) {
           req = req.request();
         }
 
-        try {
-          const res = await client(req);
-          stats.totalTransfer += res.rawBody.length;
-          if (res.statusCode < 400) {
-            stats.totalRequests++;
-          } else {
-            stats.totalStatusErrors++;
-          }
-          if (verify) {
-            const ok = verify(req, res);
-            if (!ok) stats.totalVerifyErrors++;
-          }
-        } catch (err) {
+        const res = await client(req);
+        stats.totalTransfer += res.rawBody.length;
+        if (res.statusCode < 400) {
+          stats.totalRequests++;
+        } else {
           stats.totalStatusErrors++;
         }
+        if (verify) {
+          const ok = verify(req, res);
+          if (!ok) stats.totalVerifyErrors++;
+        }
+
         if (++n >= count) break;
       }
-    }
-
-    client.destroy();
-  }
-
-  async function thread(client, requests, options) {
-    for (;;) {
-      await session(client, requests, options.count);
     }
   }
 
@@ -196,10 +196,17 @@ export default async function(config, basePath) {
   }
 
   for (const { target, protocol, concurrency, requests, options } of threads) {
-    let client = null;
+    const multiplexedClient = (
+      protocol === 'http2' ? createClient(target, protocol) : null
+    );
     for (let i = 0; i < concurrency; i++) {
-      client = createClient(target, protocol || 'http');
-      thread(client, requests, options);
+      (async () => {
+        for (;;) {
+          const client = multiplexedClient || createClient(target, protocol || 'http');
+          await session(client, requests, options.count);
+          if (!multiplexedClient) client.destroy();
+        }
+      })();
     }
   }
 
