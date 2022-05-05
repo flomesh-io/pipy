@@ -47,4 +47,5 @@ client:
       count: 1000
       requests:
         - hello
+        - bulky
         - post

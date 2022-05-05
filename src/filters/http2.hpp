@@ -345,8 +345,8 @@ private:
   int m_id;
   bool m_is_server_side;
   bool m_is_tunnel = false;
-  bool m_end_stream = false;
-  bool m_end_pump = false;
+  bool m_end_input = false;
+  bool m_end_output = false;
   State m_state = IDLE;
   HeaderDecoder& m_header_decoder;
   HeaderEncoder& m_header_encoder;

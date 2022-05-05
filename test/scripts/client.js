@@ -80,10 +80,7 @@ protocols.http2 = function(target) {
   const client = http2.connect('http://' + target);
 
   let error = null;
-  client.on('error', err => {
-    error = err;
-    console.log(err);
-  });
+  client.on('error', err => error = err);
 
   const f = ({ method, path, body, ...req }) => (
     new Promise(

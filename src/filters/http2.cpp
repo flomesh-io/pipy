@@ -1082,7 +1082,7 @@ void StreamBase::on_frame(Frame &frm) {
     case Frame::HEADERS: {
       if (frm.is_PADDED() && !parse_padding(frm)) break;
       if (frm.is_PRIORITY() && !parse_priority(frm)) break;
-      if (frm.is_END_STREAM()) m_end_stream = true;
+      if (frm.is_END_STREAM()) m_end_input = true;
       m_header_decoder.start(!m_is_server_side);
       parse_headers(frm);
       break;
@@ -1167,7 +1167,7 @@ void StreamBase::on_event(Event *evt) {
     } else if (m_is_tunnel) {
       m_send_buffer.push(*data);
       pump();
-    } else {
+    } else if (!m_end_output) {
       pump();
       m_send_buffer.push(*data);
     }
@@ -1178,11 +1178,11 @@ void StreamBase::on_event(Event *evt) {
   {
     if (m_state == OPEN) {
       m_state = HALF_CLOSED_LOCAL;
-      m_end_pump = true;
+      m_end_output = true;
       pump();
     } else if (m_state == HALF_CLOSED_REMOTE) {
       m_state = CLOSED;
-      m_end_pump = true;
+      m_end_output = true;
       pump();
     }
     flush();
@@ -1237,7 +1237,7 @@ void StreamBase::parse_headers(Frame &frm) {
       event(MessageEnd::make());
     }
 
-    if (m_end_stream) {
+    if (m_end_input) {
       if (m_state == OPEN) {
         m_state = HALF_CLOSED_REMOTE;
         stream_end();
@@ -1251,28 +1251,27 @@ void StreamBase::parse_headers(Frame &frm) {
 }
 
 void StreamBase::pump() {
-  if (m_end_pump || (!m_send_buffer.empty() && m_send_window > 0)) {
-    int size = m_send_buffer.size();
-    if (size > m_send_window) size = m_send_window;
-    size = deduct_send(size);
-    if (m_end_pump || size > 0) {
-      auto remain = size;
-      do {
-        auto n = std::min(remain, m_settings.max_frame_size);
-        remain -= n;
-        Frame frm;
-        frm.stream_id = m_id;
-        frm.type = Frame::DATA;
-        if (n > 0) m_send_buffer.shift(n, frm.payload);
-        if (m_end_pump && m_send_buffer.empty()) {
-          frm.flags = Frame::BIT_END_STREAM;
-          m_end_pump = false;
-        } else {
-          frm.flags = 0;
-        }
-        frame(frm);
-      } while (remain > 0);
-    }
+  bool is_empty_end = (m_end_output && m_send_buffer.empty());
+  int size = m_send_buffer.size();
+  if (size > m_send_window) size = m_send_window;
+  if (size > 0) size = deduct_send(size);
+  if (size > 0 || is_empty_end) {
+    auto remain = size;
+    do {
+      auto n = std::min(remain, m_settings.max_frame_size);
+      remain -= n;
+      Frame frm;
+      frm.stream_id = m_id;
+      frm.type = Frame::DATA;
+      if (n > 0) m_send_buffer.shift(n, frm.payload);
+      if (m_end_output && m_send_buffer.empty()) {
+        frm.flags = Frame::BIT_END_STREAM;
+        m_end_output = false;
+      } else {
+        frm.flags = 0;
+      }
+      frame(frm);
+    } while (remain > 0);
     m_send_window -= size;
   }
 }
