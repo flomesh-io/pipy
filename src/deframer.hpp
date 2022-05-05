@@ -34,9 +34,10 @@ namespace pipy {
 // Deframer
 //
 
-class Deframer : public EventFunction {
+class Deframer {
 public:
   void reset(int state = 0);
+  void deframe(Data &data);
   void read(size_t size, void *buffer);
   void read(size_t size, Data *data);
   void read(size_t size, pjs::Array *array);
@@ -44,7 +45,7 @@ public:
 
 protected:
   virtual auto on_state(int state, int c) -> int = 0;
-  virtual auto on_pass(const Data &data) -> Data*;
+  virtual void on_pass(const Data &data) {}
 
 private:
   int m_state = 0;
@@ -53,8 +54,6 @@ private:
   uint8_t* m_read_buffer = nullptr;
   pjs::Ref<Data> m_read_data;
   pjs::Ref<pjs::Array> m_read_array;
-
-  virtual void on_input(Event *evt) override;
 };
 
 } // namespace pipy

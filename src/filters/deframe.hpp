@@ -44,7 +44,6 @@ private:
   ~Deframe();
 
   virtual auto clone() -> Filter* override;
-  virtual void chain() override;
   virtual void reset() override;
   virtual void process(Event *evt) override;
   virtual void dump(std::ostream &out) override;
@@ -55,6 +54,7 @@ private:
   pjs::Ref<pjs::Object> m_read_buffer;
 
   virtual auto on_state(int state, int c) -> int override;
+  virtual void on_pass(const Data &data) override;
 };
 
 } // namespace pipy

@@ -62,18 +62,18 @@ auto Deframe::clone() -> Filter* {
   return new Deframe(*this);
 }
 
-void Deframe::chain() {
-  Filter::chain();
-  Deframer::chain(Filter::output());
-}
-
 void Deframe::reset() {
   Filter::reset();
   Deframer::reset();
 }
 
 void Deframe::process(Event *evt) {
-  Deframer::input()->input(evt);
+  if (evt->is<StreamEnd>()) {
+    output(evt);
+    Deframer::reset();
+  } else if (auto *data = evt->as<Data>()) {
+    Deframer::deframe(*data);
+  }
 }
 
 auto Deframe::on_state(int state, int c) -> int {
@@ -150,6 +150,10 @@ auto Deframe::on_state(int state, int c) -> int {
     Log::error("[deframe] invalid state returned");
     return -1;
   }
+}
+
+void Deframe::on_pass(const Data &data) {
+  Filter::output(Data::make(data));
 }
 
 } // namespace pipy

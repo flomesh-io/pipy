@@ -30,6 +30,7 @@
 #include "data.hpp"
 #include "pipeline.hpp"
 #include "list.hpp"
+#include "deframer.hpp"
 #include "mux.hpp"
 
 #include <map>
@@ -104,9 +105,10 @@ struct Frame {
 // FrameDecoder
 //
 
-class FrameDecoder {
+class FrameDecoder : public Deframer {
 protected:
-  void reset();
+  FrameDecoder();
+
   void deframe(Data *data);
 
   virtual void on_deframe(Frame &frame) = 0;
@@ -118,11 +120,11 @@ private:
     STATE_PAYLOAD,
   };
 
-  State m_state = STATE_HEADER;
-  uint8_t m_header_buf[9];
-  int m_header_ptr = 0;
-  int m_payload_size = 0;
   Frame m_frame;
+  uint8_t m_header[9];
+  pjs::Ref<Data> m_payload;
+
+  virtual auto on_state(int state, int c) -> int override;
 };
 
 //

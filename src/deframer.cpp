@@ -64,30 +64,21 @@ void Deframer::pass(size_t size) {
   m_read_array = nullptr;
 }
 
-void Deframer::on_input(Event *evt) {
-  if (evt->is<StreamEnd>()) {
-    output(evt);
-    reset();
-    return;
-  }
-
-  auto data = evt->as<Data>();
-  if (!data) return;
-
-  while (!data->empty() && m_state >= 0) {
+void Deframer::deframe(Data &data) {
+  while (!data.empty() && m_state >= 0) {
     if (m_read_length > 0 && !m_read_buffer) {
       auto n = m_read_length;
-      if (n > data->size()) n = data->size();
+      if (n > data.size()) n = data.size();
       if (m_read_data) {
-        data->shift(n, *m_read_data);
+        data.shift(n, *m_read_data);
       } else if (m_read_array) {
         uint8_t buf[n];
-        data->shift(n, buf);
+        data.shift(n, buf);
         for (int i = 0; i < n; i++) m_read_array->push(int(buf[i]));
       } else {
         Data buf;
-        data->shift(n, buf);
-        output(on_pass(buf));
+        data.shift(n, buf);
+        on_pass(buf);
       }
       if (0 == (m_read_length -= n)) {
         m_state = on_state(m_state, -1);
@@ -96,7 +87,7 @@ void Deframer::on_input(Event *evt) {
     } else {
       auto state = m_state;
       Data output;
-      data->shift_to(
+      data.shift_to(
         [&](int c) -> bool {
           if (m_read_buffer) {
             m_read_buffer[m_read_pointer++] = c;
@@ -114,10 +105,6 @@ void Deframer::on_input(Event *evt) {
       m_state = state;
     }
   }
-}
-
-auto Deframer::on_pass(const Data &data) -> Data* {
-  return Data::make(data);
 }
 
 } // namespace pipy

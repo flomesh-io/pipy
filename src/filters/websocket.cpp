@@ -73,11 +73,6 @@ auto Decoder::clone() -> Filter* {
   return new Decoder(*this);
 }
 
-void Decoder::chain() {
-  Filter::chain();
-  Deframer::chain(Filter::output());
-}
-
 void Decoder::reset() {
   Filter::reset();
   Deframer::reset();
@@ -85,7 +80,12 @@ void Decoder::reset() {
 }
 
 void Decoder::process(Event *evt) {
-  Deframer::input()->input(evt);
+  if (evt->is<StreamEnd>()) {
+    output(evt);
+    Deframer::reset();
+  } else if (auto *data = evt->as<Data>()) {
+    Deframer::deframe(*data);
+  }
 }
 
 auto Decoder::on_state(int state, int c) -> int {
@@ -146,7 +146,7 @@ auto Decoder::on_state(int state, int c) -> int {
   return state;
 }
 
-auto Decoder::on_pass(const Data &data) -> Data* {
+void Decoder::on_pass(const Data &data) {
   static Data::Producer s_dp("decodeWebSocket");
 
   if (m_has_mask) {
@@ -159,9 +159,9 @@ auto Decoder::on_pass(const Data &data) -> Data* {
       for (auto i = 0; i < len; i++) buf[i] = ptr[i] ^ m_mask[p++ & 3];
       s_dp.push(output, buf, len);
     }
-    return output;
+    Filter::output(output);
   } else {
-    return Data::make(data);
+    Filter::output(Data::make(data));
   }
 }
 

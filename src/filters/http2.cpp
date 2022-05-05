@@ -419,73 +419,51 @@ void Frame::encode_window_update(int increment) {
 // FrameDecoder
 //
 
-void FrameDecoder::reset() {
-  m_state = STATE_HEADER;
-  m_header_ptr = 0;
-  m_frame.payload.clear();
+FrameDecoder::FrameDecoder()
+  : m_payload(Data::make())
+{
+  Deframer::reset(STATE_HEADER);
+  Deframer::read(sizeof(m_header), m_header);
 }
 
 void FrameDecoder::deframe(Data *data) {
-  while (!data->empty()) {
-    Data buf;
-    auto state = m_state;
+  Deframer::deframe(*data);
+}
 
-    data->shift_to(
-      [&](int c) -> bool {
-        switch (state) {
-          case STATE_HEADER: {
-            m_header_buf[m_header_ptr++] = c;
-            if (m_header_ptr == sizeof(m_header_buf)) {
-              const uint8_t *buf = m_header_buf;
-              m_payload_size = (
-                (uint32_t(buf[0]) << 16) |
-                (uint32_t(buf[1]) <<  8) |
-                (uint32_t(buf[2]) <<  0)
-              );
-              m_frame.type = buf[3];
-              m_frame.flags = buf[4];
-              m_frame.stream_id = (
-                (uint32_t(buf[5]) << 24) |
-                (uint32_t(buf[6]) << 16) |
-                (uint32_t(buf[7]) <<  8) |
-                (uint32_t(buf[8]) <<  0)
-              ) & 0x7fffffff;
-              state = STATE_PAYLOAD;
-              return true;
-            }
-            break;
-          }
-          case STATE_PAYLOAD: {
-            if (!--m_payload_size) {
-              state = STATE_HEADER;
-              return true;
-            }
-            break;
-          }
-        }
-        return false;
-      },
-      buf
-    );
-
-    if (state == STATE_PAYLOAD && !m_payload_size) {
-      buf.clear();
-      m_state = STATE_PAYLOAD;
-      state = STATE_HEADER;
+auto FrameDecoder::on_state(int state, int c) -> int {
+  switch (state) {
+    case STATE_HEADER: {
+      const uint8_t *buf = m_header;
+      auto size = (
+        (uint32_t(buf[0]) << 16) |
+        (uint32_t(buf[1]) <<  8) |
+        (uint32_t(buf[2]) <<  0)
+      );
+      m_frame.type = buf[3];
+      m_frame.flags = buf[4];
+      m_frame.stream_id = (
+        (uint32_t(buf[5]) << 24) |
+        (uint32_t(buf[6]) << 16) |
+        (uint32_t(buf[7]) <<  8) |
+        (uint32_t(buf[8]) <<  0)
+      ) & 0x7fffffff;
+      if (size > 0) {
+        Deframer::read(size, m_payload);
+        return STATE_PAYLOAD;
+      } else {
+        on_deframe(m_frame);
+        read(sizeof(m_header), m_header);
+        return STATE_HEADER;
+      }
     }
-
-    if (m_state == STATE_PAYLOAD) {
-      m_frame.payload.push(buf);
-    }
-
-    if (m_state != STATE_HEADER && state == STATE_HEADER) {
+    case STATE_PAYLOAD: {
+      m_frame.payload = std::move(*m_payload);
       on_deframe(m_frame);
-      m_frame.payload.clear();
-      m_header_ptr = 0;
+      read(sizeof(m_header), m_header);
+      return STATE_HEADER;
     }
-
-    m_state = state;
   }
+  return -1;
 }
 
 //

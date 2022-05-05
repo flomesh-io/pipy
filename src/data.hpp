@@ -442,6 +442,10 @@ public:
 
   auto operator=(Data &&other) -> Data& {
     if (this != &other) {
+      for (auto *p = m_head; p; ) {
+        auto *v = p; p = p->next;
+        delete v;
+      }
       m_head = other.m_head;
       m_tail = other.m_tail;
       m_size = other.m_size;
@@ -465,10 +469,9 @@ public:
   }
 
   void clear() {
-    for (auto view = m_head; view; ) {
-      auto next = view->next;
-      delete view;
-      view = next;
+    for (auto *p = m_head; p; ) {
+      auto *v = p; p = p->next;
+      delete v;
     }
     m_head = m_tail = nullptr;
     m_size = 0;

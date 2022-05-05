@@ -32,6 +32,6 @@ export function response(options) {
 export function verify() {
   return function(req, res) {
     const { path } = req;
-    return (res.rawBody.slice(1, path.length + 1).toString() === path);
+    return (res.rawBody.slice(0, path.length).toString() === path);
   }
 }

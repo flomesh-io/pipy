@@ -59,7 +59,6 @@ private:
   ~Decoder();
 
   virtual auto clone() -> Filter* override;
-  virtual void chain() override;
   virtual void reset() override;
   virtual void process(Event *evt) override;
   virtual void dump(std::ostream &out) override;
@@ -83,7 +82,7 @@ private:
   bool m_started;
 
   virtual auto on_state(int state, int c) -> int override;
-  virtual auto on_pass(const Data &data) -> Data* override;
+  virtual void on_pass(const Data &data) override;
 
   auto message_start() -> State;
   void message_end();
