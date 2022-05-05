@@ -1008,6 +1008,9 @@ auto Settings::encode(uint8_t *data) const -> int {
 
 static const int MAX_HEADER_FRAME_SIZE = 1024;
 
+int StreamBase::m_server_stream_count = 0;
+int StreamBase::m_client_stream_count = 0;
+
 StreamBase::StreamBase(
   int id,
   bool is_server_side,
@@ -1020,6 +1023,19 @@ StreamBase::StreamBase(
   , m_header_encoder(header_encoder)
   , m_settings(settings)
 {
+  if (is_server_side) {
+    m_server_stream_count++;
+  } else {
+    m_client_stream_count++;
+  }
+}
+
+StreamBase::~StreamBase() {
+  if (m_is_server_side) {
+    m_server_stream_count--;
+  } else {
+    m_client_stream_count--;
+  }
 }
 
 bool StreamBase::update_send_window(int delta) {
@@ -1185,8 +1201,13 @@ void StreamBase::on_event(Event *evt) {
       m_end_output = true;
       pump();
     }
-    flush();
+    recycle();
   }
+}
+
+void StreamBase::on_pump() {
+  pump();
+  recycle();
 }
 
 bool StreamBase::parse_padding(Frame &frm) {
@@ -1273,6 +1294,13 @@ void StreamBase::pump() {
       frame(frm);
     } while (remain > 0);
     m_send_window -= size;
+  }
+}
+
+void StreamBase::recycle() {
+  flush();
+  if (m_state == CLOSED && m_send_buffer.empty()) {
+    close();
   }
 }
 
@@ -1449,8 +1477,11 @@ void Demuxer::on_deframe(Frame &frm) {
             connection_error(FLOW_CONTROL_ERROR);
           } else {
             m_send_window = n;
-            for (auto const &p : m_streams) {
-              p.second->on_pump();
+            auto i = m_streams.begin();
+            while (i != m_streams.end()) {
+              auto *s = i->second;
+              i++;
+              s->on_pump();
               if (!m_send_window) break;
             }
           }

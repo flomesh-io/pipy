@@ -43,7 +43,7 @@ client:
         - bulky
     - target: ${CLIENT_TARGET}
       protocol: http2
-      concurrency: 10
+      concurrency: 100
       count: 1000
       requests:
         - hello

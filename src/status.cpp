@@ -33,6 +33,7 @@
 #include "pjs/pjs.hpp"
 #include "api/json.hpp"
 #include "api/stats.hpp"
+#include "filters/http2.hpp"
 #include "utils.hpp"
 
 #include <algorithm>
@@ -183,6 +184,9 @@ static void print_table(const T &header, const std::list<T> &rows) {
 }
 
 void Status::register_metrics() {
+  static pjs::ConstStr s_server("Server");
+  static pjs::ConstStr s_client("Client");
+
   pjs::Ref<pjs::Array> label_names = pjs::Array::make();
 
   label_names->length(1);
@@ -325,6 +329,24 @@ void Status::register_metrics() {
   metric_outbound_conn_time = stats::Histogram::make(
     pjs::Str::make("pipy_outbound_conn_time"),
     buckets, label_names
+  );
+
+  label_names->length(1);
+  label_names->set(0, "type");
+
+  stats::Gauge::make(
+    pjs::Str::make("pipy_http2_stream_count"),
+    label_names,
+    [=](stats::Gauge *gauge) {
+      pjs::Str *server = s_server;
+      pjs::Str *client = s_client;
+      gauge->with_labels(&server, 1)->set(http2::StreamBase::server_stream_count());
+      gauge->with_labels(&client, 1)->set(http2::StreamBase::client_stream_count());
+      gauge->set(
+        http2::StreamBase::server_stream_count() +
+        http2::StreamBase::client_stream_count()
+      );
+    }
   );
 }
 

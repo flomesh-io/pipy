@@ -301,6 +301,10 @@ struct Settings {
 //
 
 class StreamBase {
+public:
+  static auto server_stream_count() -> int { return m_server_stream_count; }
+  static auto client_stream_count() -> int { return m_client_stream_count; }
+
 protected:
   enum {
     INITIAL_SEND_WINDOW_SIZE = 0xffff,
@@ -325,12 +329,14 @@ protected:
     const Settings &settings
   );
 
+  ~StreamBase();
+
   auto id() const -> int { return m_id; }
 
   bool update_send_window(int delta);
   void on_frame(Frame &frm);
   void on_event(Event *evt);
-  void on_pump() { pump(); }
+  void on_pump();
 
   virtual void frame(Frame &frm) = 0;
   virtual void event(Event *evt) = 0;
@@ -360,7 +366,11 @@ private:
   void parse_headers(Frame &frm);
   bool parse_window_update(Frame &frm);
   void pump();
+  void recycle();
   void stream_end();
+
+  static int m_server_stream_count;
+  static int m_client_stream_count;
 };
 
 //
