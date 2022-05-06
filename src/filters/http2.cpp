@@ -447,7 +447,10 @@ auto FrameDecoder::on_state(int state, int c) -> int {
         (uint32_t(buf[7]) <<  8) |
         (uint32_t(buf[8]) <<  0)
       ) & 0x7fffffff;
-      if (size > 0) {
+      if (size > m_max_frame_size) {
+        on_deframe_error(FRAME_SIZE_ERROR);
+        return -1;
+      } else if (size > 0) {
         Deframer::read(size, m_payload);
         return STATE_PAYLOAD;
       } else {
@@ -1472,16 +1475,13 @@ void Demuxer::on_deframe(Frame &frm) {
         }
         break;
       }
-      default: {
-        connection_error(PROTOCOL_ERROR);
-        break;
-      }
+      default: break;
     }
   }
 }
 
-void Demuxer::on_deframe_error() {
-  connection_error(PROTOCOL_ERROR);
+void Demuxer::on_deframe_error(ErrorCode err) {
+  connection_error(err);
 }
 
 void Demuxer::frame(Frame &frm) {
@@ -1713,16 +1713,13 @@ void Muxer::on_deframe(Frame &frm) {
         // TODO
         break;
       }
-      default: {
-        connection_error(PROTOCOL_ERROR);
-        break;
-      }
+      default: break;
     }
   }
 }
 
-void Muxer::on_deframe_error() {
-  connection_error(PROTOCOL_ERROR);
+void Muxer::on_deframe_error(ErrorCode err) {
+  connection_error(err);
 }
 
 //

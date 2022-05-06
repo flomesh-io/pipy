@@ -109,10 +109,11 @@ class FrameDecoder : public Deframer {
 protected:
   FrameDecoder();
 
+  void set_max_frame_size(int n) { m_max_frame_size = n; }
   void deframe(Data *data);
 
   virtual void on_deframe(Frame &frame) = 0;
-  virtual void on_deframe_error() = 0;
+  virtual void on_deframe_error(ErrorCode err) = 0;
 
 private:
   enum State {
@@ -123,6 +124,7 @@ private:
   Frame m_frame;
   uint8_t m_header[9];
   pjs::Ref<Data> m_payload;
+  int m_max_frame_size = 0x4000;
 
   virtual auto on_state(int state, int c) -> int override;
 };
@@ -424,7 +426,7 @@ private:
   // client -> session
   void on_event(Event *evt) override;
   void on_deframe(Frame &frm) override;
-  void on_deframe_error() override;
+  void on_deframe_error(ErrorCode err) override;
 
   // client <- session
   void frame(Frame &frm);
@@ -537,7 +539,7 @@ private:
   // session <- server
   void on_event(Event *evt) override;
   void on_deframe(Frame &frm) override;
-  void on_deframe_error() override;
+  void on_deframe_error(ErrorCode err) override;
 
   //
   // Muxer::Stream
