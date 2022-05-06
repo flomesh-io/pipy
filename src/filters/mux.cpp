@@ -340,7 +340,7 @@ void QueueMuxer::Stream::on_event(Event *evt) {
     }
 
   } else if (evt->is<MessageEnd>() || evt->is<StreamEnd>()) {
-    if (!m_queued) {
+    if (m_start && !m_queued) {
       retain();
       m_queued = true;
       muxer->m_streams.push(this);

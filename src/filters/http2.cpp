@@ -654,8 +654,12 @@ void HeaderDecoder::index_prefix(uint8_t prefix) {
 void HeaderDecoder::index_end() {
   auto p = m_prefix;
   if ((p & 0x80) == 0x80) {
-    if (const auto *entry = get_entry(m_int)) {
-      add_field(entry->name, entry->value);
+    if (!m_int) {
+      m_state = ERROR;
+    } else if (const auto *entry = get_entry(m_int)) {
+      auto v = entry->value;
+      if (!v) v = pjs::Str::empty;
+      add_field(entry->name, v);
       m_state = INDEX_PREFIX;
     } else {
       m_state = ERROR;
