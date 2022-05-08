@@ -42,7 +42,7 @@ public:
     }
   }
 
-  auto get(size_t i) const -> T* {
+  T* get(size_t i) const {
     Node *node = m_root;
     LevelIterator it(i);
     int n, level = it.next(n);
@@ -65,7 +65,7 @@ public:
     return node->leaves[n];
   }
 
-  void set(size_t i, T *v) {
+  T* set(size_t i, T *v) {
     Node *node = m_root;
     LevelIterator it(i);
     int n, level = it.next(n);
@@ -82,7 +82,7 @@ public:
         node = new Node(level);
       }
     } else if (!node || node->level < level) {
-      return;
+      return nullptr;
     }
 
     Node **pp = &m_root; *pp = node;
@@ -94,7 +94,7 @@ public:
       pp = p->branches;
       node = *pp;
       if (!node) {
-        if (!v) return;
+        if (!v) return nullptr;
         node = *pp = new Node(p->level - 1);
         p->count++;
       }
@@ -106,7 +106,7 @@ public:
       pp = p->branches + n;
       node = *pp;
       if (!node) {
-        if (!v) return;
+        if (!v) return nullptr;
         node = *pp = new Node(level - 1);
         p->count++;
       }
@@ -115,9 +115,11 @@ public:
     }
 
     if (v) {
-      if (!node->leaves[n]) node->count++;
+      auto old = node->leaves[n];
       node->leaves[n] = v;
-    } else if (node->leaves[n]) {
+      if (!old) node->count++;
+      return old;
+    } else if (auto old = node->leaves[n]) {
       node->leaves[n] = nullptr;
       while (depth > 0) {
         pp = path[--depth];
@@ -126,6 +128,9 @@ public:
         delete node;
         *pp = nullptr;
       }
+      return old;
+    } else {
+      return nullptr;
     }
   }
 

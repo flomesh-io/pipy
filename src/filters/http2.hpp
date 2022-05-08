@@ -30,6 +30,7 @@
 #include "data.hpp"
 #include "pipeline.hpp"
 #include "list.hpp"
+#include "scarce.hpp"
 #include "deframer.hpp"
 #include "mux.hpp"
 
@@ -406,7 +407,8 @@ private:
   class Stream;
   class InitialStream;
 
-  std::map<int, Stream*> m_streams;
+  List<Stream> m_streams;
+  ScarcePointerArray<Stream> m_stream_map;
   HeaderDecoder m_header_decoder;
   HeaderEncoder m_header_encoder;
   Settings m_settings;
@@ -438,6 +440,7 @@ private:
 
   class Stream :
     public pjs::Pooled<Stream>,
+    public List<Stream>::Item,
     public StreamBase,
     public EventSource
   {

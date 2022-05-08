@@ -1306,8 +1306,11 @@ Demuxer::Demuxer() {
 }
 
 Demuxer::~Demuxer() {
-  for (const auto &p : m_streams) {
-    delete p.second;
+  auto *p = m_streams.head();
+  while (p) {
+    auto *s = p; p = p->next();
+    m_stream_map.set(s->id(), nullptr);
+    delete s;
   }
   delete m_initial_stream;
 }
@@ -1332,10 +1335,10 @@ void Demuxer::shutdown() {
 }
 
 void Demuxer::stream_close(int id) {
-  auto i = m_streams.find(id);
-  if (i != m_streams.end()) {
-    delete i->second;
-    m_streams.erase(i);
+  auto s = m_stream_map.set(id, nullptr);
+  if (s) {
+    m_streams.remove(s);
+    delete s;
   }
 }
 
@@ -1345,10 +1348,12 @@ void Demuxer::stream_error(int id, ErrorCode err) {
 }
 
 void Demuxer::connection_error(ErrorCode err) {
-  for (const auto &p : m_streams) {
-    delete p.second;
+  auto *p = m_streams.head();
+  while (p) {
+    auto *s = p; p = p->next();
+    m_stream_map.set(s->id(), nullptr);
+    delete s;
   }
-  m_streams.clear();
   m_has_gone_away = true;
   FrameEncoder::GOAWAY(m_last_received_stream_id, err, m_output_buffer);
   EventFunction::output()->input(Data::make(m_output_buffer));
@@ -1368,9 +1373,13 @@ void Demuxer::on_event(Event *evt) {
     flush();
 
   } else if (evt->is<StreamEnd>()) {
-    std::map<int, Stream*> streams(std::move(m_streams));
-    for (auto &p : streams) {
-      auto s = p.second;
+    for (auto *s = m_streams.head(); s; s = s->next()) {
+      m_stream_map.set(s->id(), nullptr);
+    }
+    List<Stream> streams(std::move(m_streams));
+    auto *p = streams.head();
+    while (p) {
+      auto *s = p; p = p->next();
       s->event(evt->clone());
       delete s;
     }
@@ -1386,9 +1395,8 @@ void Demuxer::on_deframe(Frame &frm) {
     ) {
       connection_error(PROTOCOL_ERROR);
     } else {
-      Stream *stream = nullptr;
-      auto i = m_streams.find(id);
-      if (i == m_streams.end()) {
+      auto stream = m_stream_map.get(id);
+      if (!stream) {
         if ((id & 1) == 0) {
           connection_error(PROTOCOL_ERROR);
           return;
@@ -1398,10 +1406,9 @@ void Demuxer::on_deframe(Frame &frm) {
           return;
         }
         stream = new Stream(this, id);
-        m_streams[id] = stream;
+        m_streams.push(stream);
+        m_stream_map.set(id, stream);
         m_last_received_stream_id = id;
-      } else {
-        stream = i->second;
       }
       stream->on_frame(frm);
     }
@@ -1419,8 +1426,8 @@ void Demuxer::on_deframe(Frame &frm) {
               bool ok = true;
               if (m_settings.initial_window_size != old_initial_window_size) {
                 auto delta = m_settings.initial_window_size - old_initial_window_size;
-                for (const auto &p : m_streams) {
-                  if (!p.second->update_send_window(delta)) {
+                for (auto s = m_streams.head(); s; s = s->next()) {
+                  if (!s->update_send_window(delta)) {
                     ok = false;
                     break;
                   }
@@ -1462,10 +1469,9 @@ void Demuxer::on_deframe(Frame &frm) {
             connection_error(FLOW_CONTROL_ERROR);
           } else {
             m_send_window = n;
-            auto i = m_streams.begin();
-            while (i != m_streams.end()) {
-              auto *s = i->second;
-              i++;
+            auto p = m_streams.head();
+            while (p) {
+              auto *s = p; p = p->next();
               s->on_pump();
               if (!m_send_window) break;
             }
@@ -1554,7 +1560,8 @@ bool Demuxer::Stream::deduct_recv(int size) {
 
 void Demuxer::InitialStream::start() {
   auto *s = new Stream(m_demuxer, 1);
-  m_demuxer->m_streams[1] = s;
+  m_demuxer->m_streams.push(s);
+  m_demuxer->m_stream_map.set(1, s);
   if (m_head) {
     if (auto headers = m_head->headers()) {
       pjs::Value settings;
