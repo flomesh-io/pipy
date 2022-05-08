@@ -30,100 +30,101 @@
 
 #include <algorithm>
 #include <string>
-#include <functional>
 
 namespace pipy {
 
 template<typename T, int S = 3>
 class ScarcePointerArray {
 public:
-  ScarcePointerArray()
-    : m_root(new Node(0)) {}
-
   ~ScarcePointerArray() {
-    erase(m_root);
+    if (m_root) {
+      erase(m_root);
+    }
   }
 
   auto get(size_t i) const -> T* {
-    T *leaf = nullptr;
     Node *node = m_root;
-    for_each_level(
-      i, [&](int level, int i) {
-        if (level > 0) {
-          if (node->level < level) {
-            if (i > 0) return false;
-          } else {
-            while (node->level > level) {
-              node = node->branches[0];
-              if (!node) return false;
-            }
-            node = node->branches[i];
-          }
-        } else {
-          leaf = node->leaves[i];
-        }
-        return true;
-      }
-    );
-    return leaf;
+    LevelIterator it(i);
+    int n, level = it.next(n);
+
+    if (!node || node->level < level) {
+      return nullptr;
+    }
+
+    while (node->level > level) {
+      node = node->branches[0];
+      if (!node) return nullptr;
+    }
+
+    while (level > 0) {
+      node = node->branches[n];
+      if (!node) return nullptr;
+      level = it.next(n);
+    }
+
+    return node->leaves[n];
   }
 
   void set(size_t i, T *v) {
     Node *node = m_root;
-    Node **pp = &m_root;
-    Node **path[sizeof(int) * 8 / S];
-    int depth = 0;
-    for_each_level(
-      i, [&](int level, int i) {
-        if (node->level < level) {
-          do {
-            auto *p = new Node(node->level + 1);
-            p->branches[0] = node;
-            p->count = 1;
-            node = p;
-          } while (node->level < level);
-        } else {
-          while (node->level > level) {
-            pp = node->branches;
-            auto p = *pp;
-            if (!p) {
-              p = *pp = new Node(node->level - 1);
-              node->count++;
-            }
-            node = p;
-          }
+    LevelIterator it(i);
+    int n, level = it.next(n);
+
+    if (v) {
+      if (node) {
+        while (node->level < level) {
+          auto *p = new Node(node->level + 1);
+          p->branches[0] = node;
+          p->count = 1;
+          node = p;
         }
-        if (level > 0) {
-          path[depth++] = pp;
-          pp = node->branches + i;
-          auto next = *pp;
-          if (!next) {
-            next = *pp = new Node(level - 1);
-            node->count++;
-          }
-          node = next;
-        } else if (v) {
-          if (!node->leaves[i]) node->count++;
-          node->leaves[i] = v;
-        } else if (node->leaves[i]) {
-          node->leaves[i] = nullptr;
-          node->count--;
-        }
-        return true;
+      } else {
+        node = new Node(level);
       }
-    );
-    if (!v) {
+    } else if (!node || node->level < level) {
+      return;
+    }
+
+    Node **pp = &m_root; *pp = node;
+    Node **path[sizeof(int) * 8 / S];
+    int depth = 1; path[0] = pp;
+
+    while (node->level > level) {
+      auto p = node;
+      pp = p->branches;
+      node = *pp;
+      if (!node) {
+        if (!v) return;
+        node = *pp = new Node(p->level - 1);
+        p->count++;
+      }
+      path[depth++] = pp;
+    }
+
+    while (level > 0) {
+      auto p = node;
+      pp = p->branches + n;
+      node = *pp;
+      if (!node) {
+        if (!v) return;
+        node = *pp = new Node(level - 1);
+        p->count++;
+      }
+      path[depth++] = pp;
+      level = it.next(n);
+    }
+
+    if (v) {
+      if (!node->leaves[n]) node->count++;
+      node->leaves[n] = v;
+    } else if (node->leaves[n]) {
+      node->leaves[n] = nullptr;
       while (depth > 0) {
-        auto pp = path[--depth];
-        auto node = *pp;
-        if (!node->count) {
-          delete node;
-          *pp = nullptr;
-          if (depth > 0) {
-            node = *path[depth-1];
-            node->count--;
-          }
-        }
+        pp = path[--depth];
+        node = *pp;
+        if (--node->count) break;
+        delete node;
+        *pp = nullptr;
       }
     }
   }
@@ -145,33 +146,52 @@ private:
     Node(int l) : level(l) {
       std::memset(branches, 0, sizeof(branches));
     }
+
+    static int s_count;
   };
 
-  Node* m_root;
+  //
+  // ScarcePointerArray::LevelIterator
+  //
 
-  void for_each_level(size_t i, const std::function<bool(int, int)> &f) const {
-    auto mask = (1<<S) - 1;
-    auto bits = i ? sizeof(int) * 8 - __builtin_clz(int(i)) : 0;
-    auto segs = std::max(1, int(bits + S - 1) / S);
-    for (
-      int level = segs - 1;
-      level >= 0 && f(level, mask & (i >> (S*level)));
-      level--
-    ) {}
-  }
+  class LevelIterator {
+  public:
+    LevelIterator(size_t i) : m_i(i) {
+      auto bits = i ? sizeof(int) * 8 - __builtin_clz(int(i)) : 0;
+      m_level = std::max(1, int(bits + S - 1) / S);
+    }
+
+    int next(int &i) {
+      auto mask = (1<<S) - 1;
+      auto level = --m_level;
+      i = mask & (m_i >> (S*level));
+      return level;
+    }
+
+  private:
+    size_t m_i;
+    int m_level;
+  };
+
+  Node* m_root = nullptr;
 
   void erase(Node *node) {
     if (node->level > 0) {
+      auto n = node->count;
       auto &branches = node->branches;
-      for (int i = 0; i < (1<<S); i++) {
+      for (int i = 0; n > 0 && i < (1<<S); i++) {
         if (auto *branch = branches[i]) {
           erase(branch);
+          n--;
         }
       }
     }
     delete node;
   }
 };
+
+template<typename T, int S>
+int ScarcePointerArray<T, S>::Node::s_count = 0;
 
 } // namespace pipy
 
