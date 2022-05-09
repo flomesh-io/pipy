@@ -134,8 +134,8 @@ QueueDemuxer::Stream::Stream(QueueDemuxer *demuxer)
   m_pipeline = p;
 }
 
-QueueDemuxer::Stream::~Stream()
-{
+QueueDemuxer::Stream::~Stream() {
+  Pipeline::auto_release(m_pipeline);
 }
 
 void QueueDemuxer::Stream::on_event(Event *evt) {
