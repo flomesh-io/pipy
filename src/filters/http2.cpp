@@ -1335,8 +1335,7 @@ void Demuxer::shutdown() {
 }
 
 void Demuxer::stream_close(int id) {
-  auto s = m_stream_map.set(id, nullptr);
-  if (s) {
+  if (auto s = m_stream_map.set(id, nullptr)) {
     m_streams.remove(s);
     delete s;
   }
@@ -1351,6 +1350,7 @@ void Demuxer::connection_error(ErrorCode err) {
   auto *p = m_streams.head();
   while (p) {
     auto *s = p; p = p->next();
+    m_streams.remove(s);
     m_stream_map.set(s->id(), nullptr);
     delete s;
   }
