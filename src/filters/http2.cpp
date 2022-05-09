@@ -1408,7 +1408,9 @@ void Demuxer::on_deframe(Frame &frm) {
         stream = new Stream(this, id);
         m_streams.push(stream);
         m_stream_map.set(id, stream);
-        m_last_received_stream_id = id;
+        if (frm.type != Frame::PRIORITY) {
+          m_last_received_stream_id = id;
+        }
       }
       stream->on_frame(frm);
     }
