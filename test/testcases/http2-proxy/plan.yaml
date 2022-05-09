@@ -5,6 +5,7 @@ env:
 
 server:
   listen: ${SERVER_LISTEN}
+  protocol: http2
   endpoints:
     GET /hello:
       text: Hello, world!
@@ -30,12 +31,14 @@ client:
         repeat: 10000
   threads:
     - target: ${CLIENT_TARGET}
+      protocol: http2
       concurrency: 100
       count: 10000
       requests:
         - hello
         - bulky
     - target: ${CLIENT_TARGET}
+      protocol: http2
       concurrency: 5
       count: 500
       requests:
