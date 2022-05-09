@@ -13,6 +13,4 @@ pipy()
   )
 
 .pipeline('conn')
-  .dump('>>>')
   .connect('localhost:8080')
-  .dump('<<<')

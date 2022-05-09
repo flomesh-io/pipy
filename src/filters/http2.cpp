@@ -1650,6 +1650,14 @@ void Muxer::frame(Frame &frm) {
     m_has_sent_preface = true;
     static Data s_preface("PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n", &s_dp);
     EventSource::output(Data::make(s_preface));
+    uint8_t buf[Settings::MAX_SIZE];
+    auto len = m_settings.encode(buf);
+    Frame frm;
+    frm.type = Frame::SETTINGS;
+    frm.flags = 0;
+    frm.stream_id = 0;
+    frm.payload.push(buf, len, &s_dp);
+    FrameEncoder::frame(frm, m_output_buffer);
   }
   FrameEncoder::frame(frm, m_output_buffer);
 }
