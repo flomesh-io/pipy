@@ -519,7 +519,6 @@ public:
   };
 
   Muxer();
-  virtual ~Muxer();
 
   void open(EventFunction *session);
   auto stream() -> EventFunction*;
@@ -529,7 +528,8 @@ public:
 private:
   class Stream;
 
-  std::map<int, Stream*> m_streams;
+  List<Stream> m_streams;
+  ScarcePointerArray<Stream> m_stream_map;
   HeaderDecoder m_header_decoder;
   HeaderEncoder m_header_encoder;
   Settings m_settings;
@@ -561,6 +561,7 @@ private:
 
   class Stream :
     public pjs::Pooled<Stream>,
+    public List<Stream>::Item,
     public StreamBase,
     public EventFunction
   {
