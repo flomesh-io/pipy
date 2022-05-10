@@ -1373,14 +1373,12 @@ void Demuxer::on_event(Event *evt) {
     flush();
 
   } else if (evt->is<StreamEnd>()) {
-    for (auto *s = m_streams.head(); s; s = s->next()) {
-      m_stream_map.set(s->id(), nullptr);
-    }
     List<Stream> streams(std::move(m_streams));
     auto *p = streams.head();
     while (p) {
       auto *s = p; p = p->next();
       s->event(evt->clone());
+      m_stream_map.set(s->id(), nullptr);
       delete s;
     }
   }
@@ -1493,6 +1491,7 @@ void Demuxer::on_deframe_error(ErrorCode err) {
 }
 
 void Demuxer::frame(Frame &frm) {
+  if (m_has_gone_away) return;
   if (!m_has_sent_preface) {
     m_has_sent_preface = true;
     uint8_t buf[Settings::MAX_SIZE];
@@ -1530,10 +1529,11 @@ Demuxer::Stream::Stream(Demuxer *demuxer, int id)
 }
 
 auto Demuxer::Stream::deduct_send(int size) -> int {
-  if (size > m_demuxer->m_send_window) {
-    size = m_demuxer->m_send_window;
+  auto &win_size = m_demuxer->m_send_window;
+  if (size > win_size) {
+    size = win_size;
   }
-  m_demuxer->m_send_window -= size;
+  win_size -= size;
   return size;
 }
 
@@ -1604,6 +1604,18 @@ void Demuxer::InitialStream::on_event(Event *evt) {
 // Muxer
 //
 
+Muxer::Muxer() {
+  m_settings.enable_push = false;
+}
+
+Muxer::~Muxer() {
+  auto i = m_streams.begin();
+  while (i != m_streams.end()) {
+    auto *s = i->second; i++;
+    delete s;
+  }
+}
+
 void Muxer::open(EventFunction *session) {
   EventSource::chain(session->input());
   session->chain(EventSource::reply());
@@ -1636,6 +1648,11 @@ void Muxer::stream_error(int id, ErrorCode err) {
 }
 
 void Muxer::connection_error(ErrorCode err) {
+  auto i = m_streams.begin();
+  while (i != m_streams.end()) {
+    auto *s = i->second; i++;
+    delete s;
+  }
   m_streams.clear();
   m_has_gone_away = true;
   FrameEncoder::GOAWAY(0, err, m_output_buffer);
@@ -1663,7 +1680,7 @@ void Muxer::frame(Frame &frm) {
 }
 
 void Muxer::flush() {
-  if (!m_output_buffer.empty()) {
+  if (!m_output_buffer.empty() && !m_processing_frames) {
     EventSource::output(Data::make(m_output_buffer));
     EventSource::output(Data::flush());
     m_output_buffer.clear();
@@ -1671,14 +1688,23 @@ void Muxer::flush() {
 }
 
 void Muxer::on_event(Event *evt) {
+  if (m_has_gone_away) return;
+
   if (auto data = evt->as<Data>()) {
-    deframe(data);
+    if (!data->empty()) {
+      m_processing_frames = true;
+      FrameDecoder::deframe(data);
+      m_processing_frames = false;
+    }
+    flush();
 
   } else if (evt->is<StreamEnd>()) {
     std::map<int, Stream*> streams(std::move(m_streams));
-    for (const auto &p : streams) {
-      auto s = p.second;
+    auto i = streams.begin();
+    while (i != streams.end()) {
+      auto *s = i->second; i++;
       s->event(evt->clone());
+      delete s;
     }
   }
 }
@@ -1703,13 +1729,35 @@ void Muxer::on_deframe(Frame &frm) {
   } else {
     switch (frm.type) {
       case Frame::SETTINGS: {
-        // TODO
         if (!frm.is_ACK()) {
-          Frame frm;
-          frm.stream_id = 0;
-          frm.type = Frame::SETTINGS;
-          frm.flags = Frame::BIT_ACK;
-          frame(frm);
+          auto len = frm.payload.size();
+          if (len <= Settings::MAX_SIZE) {
+            uint8_t buf[len];
+            frm.payload.to_bytes(buf);
+            auto old_initial_window_size = m_settings.initial_window_size;
+            auto err = m_settings.decode(buf, len);
+            if (err == NO_ERROR) {
+              bool ok = true;
+              if (m_settings.initial_window_size != old_initial_window_size) {
+                auto delta = m_settings.initial_window_size - old_initial_window_size;
+                for (auto &i : m_streams) {
+                  if (!i.second->update_send_window(delta)) {
+                    ok = false;
+                    break;
+                  }
+                }
+              }
+              if (ok) {
+                Frame frm;
+                frm.stream_id = 0;
+                frm.type = Frame::SETTINGS;
+                frm.flags = Frame::BIT_ACK;
+                frame(frm);
+              }
+            } else {
+              connection_error(err);
+            }
+          }
         }
         break;
       }
@@ -1727,7 +1775,24 @@ void Muxer::on_deframe(Frame &frm) {
         break;
       }
       case Frame::WINDOW_UPDATE: {
-        // TODO
+        auto inc = 0;
+        auto err = frm.decode_window_update(inc);
+        if (err == NO_ERROR) {
+          auto n = (uint32_t)m_send_window + (uint32_t)inc;
+          if (n > 0x7fffffff) {
+            connection_error(FLOW_CONTROL_ERROR);
+          } else {
+            m_send_window = n;
+            auto i = m_streams.begin();
+            while (i != m_streams.end()) {
+              auto *s = i->second; i++;
+              s->on_pump();
+              if (!m_send_window) break;
+            }
+          }
+        } else {
+          connection_error(err);
+        }
         break;
       }
       default: break;
@@ -1747,6 +1812,34 @@ Muxer::Stream::Stream(Muxer *muxer, int id)
   : StreamBase(id, false, muxer->m_header_decoder, muxer->m_header_encoder, muxer->m_peer_settings)
   , m_muxer(muxer)
 {
+}
+
+auto Muxer::Stream::deduct_send(int size) -> int {
+  auto &win_size = m_muxer->m_send_window;
+  if (size > win_size) {
+    size = win_size;
+  }
+  win_size -= size;
+  return size;
+}
+
+bool Muxer::Stream::deduct_recv(int size) {
+  auto &win_size = m_muxer->m_recv_window;
+  if (size > win_size) {
+    connection_error(FLOW_CONTROL_ERROR);
+    return false;
+  }
+  win_size -= size;
+  if (win_size <= INITIAL_RECV_WINDOW_SIZE / 2) {
+    Frame frm;
+    frm.stream_id = 0;
+    frm.type = Frame::WINDOW_UPDATE;
+    frm.flags = 0;
+    frm.encode_window_update(INITIAL_RECV_WINDOW_SIZE - win_size);
+    frame(frm);
+    win_size = INITIAL_RECV_WINDOW_SIZE;
+  }
+  return true;
 }
 
 } // namespace http2

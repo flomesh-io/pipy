@@ -513,6 +513,14 @@ class Muxer :
   public FrameEncoder
 {
 public:
+  enum {
+    INITIAL_SEND_WINDOW_SIZE = 0xffff,
+    INITIAL_RECV_WINDOW_SIZE = 0xffff,
+  };
+
+  Muxer();
+  virtual ~Muxer();
+
   void open(EventFunction *session);
   auto stream() -> EventFunction*;
   void close(EventFunction *stream);
@@ -528,8 +536,11 @@ private:
   Settings m_peer_settings;
   Data m_output_buffer;
   int m_last_sent_stream_id = -1;
+  int m_send_window = INITIAL_SEND_WINDOW_SIZE;
+  int m_recv_window = INITIAL_RECV_WINDOW_SIZE;
   bool m_has_sent_preface = false;
   bool m_has_gone_away = false;
+  bool m_processing_frames = false;
 
   void stream_close(int id);
   void stream_error(int id, ErrorCode err);
@@ -574,8 +585,8 @@ private:
     void close() override { m_muxer->stream_close(id()); }
 
     // flow control
-    auto deduct_send(int size) -> int override { return size; }
-    bool deduct_recv(int size) override { return true; }
+    auto deduct_send(int size) -> int override;
+    bool deduct_recv(int size) override;
 
     // errors
     void stream_error(ErrorCode err) override { m_muxer->stream_error(id(), err); }
