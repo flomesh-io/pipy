@@ -56,6 +56,7 @@ public:
 
   void set_bodiless(bool b) { m_is_bodiless = b; }
   void set_connect(bool b) { m_is_connect = b; }
+  void set_upgrade_websocket(bool b) { m_is_upgrade_websocket = b; }
 
 protected:
   virtual void on_http2_pass() {}
@@ -116,6 +117,7 @@ public:
   bool is_connect() const { return m_is_connect; }
   bool is_upgrade_websocket() const { return m_is_upgrade_websocket; }
   bool is_upgrade_http2() const { return m_is_upgrade_http2; }
+  bool is_tunnel() const { return m_is_tunnel; }
 
   void set_buffer_size(int size) { m_buffer_size = size; }
   void set_final(bool b) { m_is_final = b; }
@@ -441,6 +443,7 @@ private:
   Handler m_ef_handler;
   pjs::Ref<Pipeline> m_tunnel;
 
+  void start_tunnel();
   void on_tunnel_data(Data *data);
 };
 

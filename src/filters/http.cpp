@@ -1458,20 +1458,22 @@ void Server::shutdown() {
   m_ef_handler.m_shutdown = true;
 }
 
-void Server::on_tunnel_data(Data *data) {
+void Server::start_tunnel() {
   if (!m_tunnel) {
     if (num_sub_pipelines() > 0) {
       m_tunnel = sub_pipeline(0, false);
     }
   }
+}
 
+void Server::on_tunnel_data(Data *data) {
   if (m_tunnel) {
     m_tunnel->input()->input(data);
   }
 }
 
 void Server::Handler::on_event(Event *evt) {
-  if (m_server->m_ef_decoder.is_tunnel()) {
+  if (m_server->m_tunnel) {
     if (auto data = evt->as<Data>()) {
       m_server->on_tunnel_data(data);
     }
@@ -1531,6 +1533,10 @@ void Server::Handler::on_event(Event *evt) {
         Log::error("[serveHTTP] handler did not return a valid message");
         output(MessageStart::make());
         output(evt);
+      }
+
+      if (m_server->m_ef_decoder.is_tunnel()) {
+        m_server->start_tunnel();
       }
     }
   }
@@ -1768,7 +1774,7 @@ void TunnelClient::process(Event *evt) {
 }
 
 void TunnelClient::on_receive(Event *evt) {
-  if (m_is_tunneling) {
+  if (m_is_tunneling || evt->is<StreamEnd>()) {
     output(evt);
   } else if (auto start = evt->as<MessageStart>()) {
     m_is_tunneling = true;
