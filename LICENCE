@@ -6,11 +6,12 @@ Licenses of these open source projects are also included in this file.
 
 * Flomesh Pipy 
 * Boost Asio 1.12.2
-* OpenSSL 1.1.1g
+* OpenSSL 1.1.1o
 * YAJL 2.1.0
 * Expat 2.2.6
 * LevelDB 1.23
 * zlib 1.2.11
+* brotli-1.0.9
 
 ----------------------------------------------------------------
 ----------------------------------------------------------------
