@@ -286,7 +286,7 @@ protected:
 
 class HTTP2Demuxer :
   public pjs::Pooled<HTTP2Demuxer>,
-  public http2::Demuxer
+  public http2::Server
 {
 public:
   HTTP2Demuxer(Filter *filter) : m_filter(filter) {}
@@ -325,7 +325,7 @@ private:
   virtual void dump(std::ostream &out) override;
 
   int m_buffer_size = DATA_CHUNK_SIZE;
-  http2::Demuxer *m_http2_demuxer = nullptr;
+  HTTP2Demuxer *m_http2_demuxer = nullptr;
 
   virtual auto on_new_sub_pipeline() -> Pipeline* override;
   virtual void on_enqueue(Request *req) override;
@@ -341,7 +341,7 @@ private:
 
 class HTTP2Muxer :
   public pjs::Pooled<HTTP2Muxer>,
-  public http2::Muxer
+  public http2::Client
 {
 };
 

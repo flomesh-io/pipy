@@ -1212,7 +1212,7 @@ void Demux::shutdown() {
     RequestQueue::shutdown();
   }
   if (m_http2_demuxer) {
-    m_http2_demuxer->shutdown();
+    m_http2_demuxer->go_away();
   }
 }
 
@@ -1249,8 +1249,8 @@ void Demux::on_dequeue(Request *req) {
 
 void Demux::on_http2_pass() {
   upgrade_http2();
-  m_http2_demuxer->start();
-  Decoder::chain(m_http2_demuxer->input());
+  m_http2_demuxer->open();
+  Decoder::chain(m_http2_demuxer->EventTarget::input());
 }
 
 void Demux::upgrade_http2() {
@@ -1365,7 +1365,7 @@ void Mux::Session::close() {
   QueueMuxer::reset();
   RequestQueue::reset();
   if (m_http2_muxer) {
-    m_http2_muxer->close();
+    m_http2_muxer->go_away();
     delete m_http2_muxer;
     m_http2_muxer = nullptr;
   }

@@ -340,11 +340,11 @@ void Status::register_metrics() {
     [=](stats::Gauge *gauge) {
       pjs::Str *server = s_server;
       pjs::Str *client = s_client;
-      gauge->with_labels(&server, 1)->set(http2::StreamBase::server_stream_count());
-      gauge->with_labels(&client, 1)->set(http2::StreamBase::client_stream_count());
+      gauge->with_labels(&server, 1)->set(http2::Endpoint::server_stream_count());
+      gauge->with_labels(&client, 1)->set(http2::Endpoint::client_stream_count());
       gauge->set(
-        http2::StreamBase::server_stream_count() +
-        http2::StreamBase::client_stream_count()
+        http2::Endpoint::server_stream_count() +
+        http2::Endpoint::client_stream_count()
       );
     }
   );

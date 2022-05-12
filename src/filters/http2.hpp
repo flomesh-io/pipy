@@ -32,7 +32,6 @@
 #include "list.hpp"
 #include "scarce.hpp"
 #include "deframer.hpp"
-#include "mux.hpp"
 
 #include <map>
 #include <vector>
@@ -302,113 +301,39 @@ struct Settings {
 };
 
 //
-// StreamBase
+// Endpoint
 //
 
-class StreamBase {
-public:
-  static auto server_stream_count() -> int { return m_server_stream_count; }
-  static auto client_stream_count() -> int { return m_client_stream_count; }
-
-protected:
-  enum {
-    INITIAL_SEND_WINDOW_SIZE = 0xffff,
-    INITIAL_RECV_WINDOW_SIZE = 0xffff,
-  };
-
-  enum State {
-    IDLE,
-    RESERVED_LOCAL,
-    RESERVED_REMOTE,
-    OPEN,
-    HALF_CLOSED_LOCAL,
-    HALF_CLOSED_REMOTE,
-    CLOSED,
-  };
-
-  StreamBase(
-    int id,
-    bool is_server_side,
-    HeaderDecoder &header_decoder,
-    HeaderEncoder &header_encoder,
-    const Settings &settings
-  );
-
-  ~StreamBase();
-
-  auto id() const -> int { return m_id; }
-
-  bool update_send_window(int delta);
-  void on_frame(Frame &frm);
-  void on_event(Event *evt);
-  void on_pump();
-
-  virtual void frame(Frame &frm) = 0;
-  virtual void event(Event *evt) = 0;
-  virtual void flush() = 0;
-  virtual void close() = 0;
-  virtual auto deduct_send(int size) -> int = 0;
-  virtual bool deduct_recv(int size) = 0;
-  virtual void stream_error(ErrorCode err) = 0;
-  virtual void connection_error(ErrorCode err) = 0;
-
-private:
-  int m_id;
-  bool m_is_server_side;
-  bool m_is_tunnel = false;
-  bool m_end_input = false;
-  bool m_end_output = false;
-  State m_state = IDLE;
-  HeaderDecoder& m_header_decoder;
-  HeaderEncoder& m_header_encoder;
-  Data m_send_buffer;
-  int m_send_window = INITIAL_SEND_WINDOW_SIZE;
-  int m_recv_window = INITIAL_RECV_WINDOW_SIZE;
-  const Settings& m_settings;
-
-  bool parse_padding(Frame &frm);
-  bool parse_priority(Frame &frm);
-  void parse_headers(Frame &frm);
-  bool parse_window_update(Frame &frm);
-  void pump();
-  void recycle();
-  void stream_end();
-
-  static int m_server_stream_count;
-  static int m_client_stream_count;
-};
-
-//
-// Demuxer
-//
-
-class Demuxer :
-  public EventFunction,
+class Endpoint :
   public FrameDecoder,
   public FrameEncoder
 {
 public:
+  static auto server_stream_count() -> int { return m_server_stream_count; }
+  static auto client_stream_count() -> int { return m_client_stream_count; }
+
+private:
+  static int m_server_stream_count;
+  static int m_client_stream_count;
+
+protected:
+  Endpoint(bool is_server_side);
+  virtual ~Endpoint();
+
+  class StreamBase;
+
+  virtual void on_output(Event *evt) = 0;
+  virtual auto on_new_stream(int id) -> StreamBase* = 0;
+  virtual void on_delete_stream(StreamBase *stream) = 0;
+
+protected:
   enum {
     INITIAL_SEND_WINDOW_SIZE = 0xffff,
     INITIAL_RECV_WINDOW_SIZE = 0xffff,
   };
 
-  Demuxer();
-  virtual ~Demuxer();
-
-  auto initial_stream() -> Input*;
-  void start();
-  void shutdown();
-
-protected:
-  virtual auto on_new_sub_pipeline() -> Pipeline* = 0;
-
-private:
-  class Stream;
-  class InitialStream;
-
-  List<Stream> m_streams;
-  ScarcePointerArray<Stream> m_stream_map;
+  List<StreamBase> m_streams;
+  ScarcePointerArray<StreamBase> m_stream_map;
   HeaderDecoder m_header_decoder;
   HeaderEncoder m_header_encoder;
   Settings m_settings;
@@ -417,36 +342,136 @@ private:
   int m_last_received_stream_id = 0;
   int m_send_window = INITIAL_SEND_WINDOW_SIZE;
   int m_recv_window = INITIAL_RECV_WINDOW_SIZE;
+  bool m_is_server_side;
   bool m_has_sent_preface = false;
   bool m_has_gone_away = false;
   bool m_processing_frames = false;
 
+  void upgrade_request(http::RequestHead *head, const Data &body);
+
+  void on_event(Event *evt);
+  void on_deframe(Frame &frm) override;
+  void on_deframe_error(ErrorCode err) override;
+  void frame(Frame &frm);
+  void flush();
+
+  auto stream_open(int id) -> StreamBase*;
   void stream_close(int id);
   void stream_error(int id, ErrorCode err);
   void connection_error(ErrorCode err);
 
-  // client -> session
-  void on_event(Event *evt) override;
-  void on_deframe(Frame &frm) override;
-  void on_deframe_error(ErrorCode err) override;
-
-  // client <- session
-  void frame(Frame &frm);
-  void flush();
+protected:
 
   //
-  // Demuxer::Stream
+  // StreamBase
+  //
+
+  class StreamBase :
+    public List<StreamBase>::Item
+  {
+  protected:
+    enum {
+      INITIAL_SEND_WINDOW_SIZE = 0xffff,
+      INITIAL_RECV_WINDOW_SIZE = 0xffff,
+    };
+
+    enum State {
+      IDLE,
+      RESERVED_LOCAL,
+      RESERVED_REMOTE,
+      OPEN,
+      HALF_CLOSED_LOCAL,
+      HALF_CLOSED_REMOTE,
+      CLOSED,
+    };
+
+    StreamBase(
+      int id,
+      bool is_server_side,
+      HeaderDecoder &header_decoder,
+      HeaderEncoder &header_encoder,
+      const Settings &settings
+    );
+
+    ~StreamBase();
+
+    auto id() const -> int { return m_id; }
+
+    bool update_send_window(int delta);
+    void on_frame(Frame &frm);
+    void on_event(Event *evt);
+    void on_pump();
+
+    virtual void frame(Frame &frm) = 0;
+    virtual void event(Event *evt) = 0;
+    virtual void flush() = 0;
+    virtual void close() = 0;
+    virtual auto deduct_send(int size) -> int = 0;
+    virtual bool deduct_recv(int size) = 0;
+    virtual void stream_error(ErrorCode err) = 0;
+    virtual void connection_error(ErrorCode err) = 0;
+
+  private:
+    int m_id;
+    bool m_is_server_side;
+    bool m_is_tunnel = false;
+    bool m_end_input = false;
+    bool m_end_output = false;
+    State m_state = IDLE;
+    HeaderDecoder& m_header_decoder;
+    HeaderEncoder& m_header_encoder;
+    Data m_send_buffer;
+    int m_send_window = INITIAL_SEND_WINDOW_SIZE;
+    int m_recv_window = INITIAL_RECV_WINDOW_SIZE;
+    const Settings& m_settings;
+
+    bool parse_padding(Frame &frm);
+    bool parse_priority(Frame &frm);
+    void parse_headers(Frame &frm);
+    bool parse_window_update(Frame &frm);
+    void pump();
+    void recycle();
+    void stream_end();
+
+    friend class Endpoint;
+  };
+};
+
+//
+// Server
+//
+
+class Server :
+  public Endpoint,
+  public EventFunction
+{
+public:
+  Server();
+  virtual ~Server();
+
+  auto initial_stream() -> Input*;
+  void open();
+  void go_away();
+
+protected:
+  virtual auto on_new_sub_pipeline() -> Pipeline* = 0;
+
+private:
+  class Stream;
+  class InitialStream;
+
+  //
+  // Server::Stream
   //
 
   class Stream :
     public pjs::Pooled<Stream>,
-    public List<Stream>::Item,
     public StreamBase,
     public EventSource
   {
-    Stream(Demuxer *demuxer, int id);
+    Stream(Server *endpoint, int id);
 
-    Demuxer* m_demuxer;
+    Server* m_endpoint;
     pjs::Ref<Pipeline> m_pipeline;
 
     // session -> stream
@@ -459,26 +484,26 @@ private:
     void on_event(Event *evt) override  { StreamBase::on_event(evt); }
 
     // session <- stream
-    void frame(Frame &frm) override { m_demuxer->frame(frm); }
-    void flush() override { m_demuxer->flush(); }
+    void frame(Frame &frm) override { m_endpoint->frame(frm); }
+    void flush() override { m_endpoint->flush(); }
 
     // close
-    void close() override { m_demuxer->stream_close(id()); }
+    void close() override { m_endpoint->stream_close(id()); }
 
     // flow control
     auto deduct_send(int size) -> int override;
     bool deduct_recv(int size) override;
 
     // errors
-    void stream_error(ErrorCode err) override { m_demuxer->stream_error(id(), err); }
-    void connection_error(ErrorCode err) override { m_demuxer->connection_error(err); }
+    void stream_error(ErrorCode err) override { m_endpoint->stream_error(id(), err); }
+    void connection_error(ErrorCode err) override { m_endpoint->connection_error(err); }
 
-    friend class Demuxer;
+    friend class Server;
     friend class InitialStream;
   };
 
   //
-  // Demuxer::InitialStream
+  // Server::InitialStream
   //
 
   class InitialStream :
@@ -486,95 +511,68 @@ private:
     public EventTarget
   {
   public:
-    InitialStream(Demuxer *demuxer)
-      : m_demuxer(demuxer) {}
+    InitialStream(Server *server)
+      : m_server(server) {}
 
     void start();
 
     virtual void on_event(Event *evt) override;
 
   private:
-    Demuxer* m_demuxer = nullptr;
+    Server* m_server = nullptr;
     pjs::Ref<http::RequestHead> m_head;
     Data m_body;
     bool m_started = false;
   };
 
   InitialStream* m_initial_stream = nullptr;
+
+  virtual void on_event(Event *evt) override { Endpoint::on_event(evt); }
+  virtual void on_output(Event *evt) override { EventFunction::output(evt); }
+  virtual auto on_new_stream(int id) -> StreamBase* override { return new Stream(this, id); }
+  virtual void on_delete_stream(StreamBase *stream) override { delete static_cast<Stream*>(stream); }
 };
 
 //
-// Muxer
+// Client
 //
 
-class Muxer :
-  public EventSource,
-  public FrameDecoder,
-  public FrameEncoder
+class Client :
+  public Endpoint,
+  public EventSource
 {
 public:
-  enum {
-    INITIAL_SEND_WINDOW_SIZE = 0xffff,
-    INITIAL_RECV_WINDOW_SIZE = 0xffff,
-  };
-
-  Muxer();
+  Client();
 
   void open(EventFunction *session);
   auto stream() -> EventFunction*;
   void close(EventFunction *stream);
-  void close();
+  void go_away();
 
 private:
   class Stream;
 
-  List<Stream> m_streams;
-  ScarcePointerArray<Stream> m_stream_map;
-  HeaderDecoder m_header_decoder;
-  HeaderEncoder m_header_encoder;
-  Settings m_settings;
-  Settings m_peer_settings;
-  Data m_output_buffer;
   int m_last_sent_stream_id = -1;
-  int m_send_window = INITIAL_SEND_WINDOW_SIZE;
-  int m_recv_window = INITIAL_RECV_WINDOW_SIZE;
-  bool m_has_sent_preface = false;
-  bool m_has_gone_away = false;
-  bool m_processing_frames = false;
-
-  void stream_close(int id);
-  void stream_error(int id, ErrorCode err);
-  void connection_error(ErrorCode err);
-
-  // session -> server
-  void frame(Frame &frm);
-  void flush();
-
-  // session <- server
-  void on_event(Event *evt) override;
-  void on_deframe(Frame &frm) override;
-  void on_deframe_error(ErrorCode err) override;
 
   //
-  // Muxer::Stream
+  // Client::Stream
   //
 
   class Stream :
     public pjs::Pooled<Stream>,
-    public List<Stream>::Item,
     public StreamBase,
     public EventFunction
   {
-    Stream(Muxer *muxer, int id);
+    Stream(Client *endpoint, int id);
 
-    Muxer* m_muxer;
+    Client* m_endpoint;
 
     // client -> stream
     void on_event(Event *evt) override { StreamBase::on_event(evt); }
 
     // stream -> session
-    void frame(Frame &frm) override { m_muxer->frame(frm); }
-    void flush() override { m_muxer->flush(); }
+    void frame(Frame &frm) override { m_endpoint->frame(frm); }
+    void flush() override { m_endpoint->flush(); }
 
     // stream <- session
     void on_frame(Frame &frm) { StreamBase::on_frame(frm); }
@@ -583,18 +581,23 @@ private:
     void event(Event *evt) override { EventFunction::output(evt); }
 
     // close
-    void close() override { m_muxer->stream_close(id()); }
+    void close() override { m_endpoint->stream_close(id()); }
 
     // flow control
     auto deduct_send(int size) -> int override;
     bool deduct_recv(int size) override;
 
     // errors
-    void stream_error(ErrorCode err) override { m_muxer->stream_error(id(), err); }
-    void connection_error(ErrorCode err) override { m_muxer->connection_error(err); }
+    void stream_error(ErrorCode err) override { m_endpoint->stream_error(id(), err); }
+    void connection_error(ErrorCode err) override { m_endpoint->connection_error(err); }
 
-    friend class Muxer;
+    friend class Client;
   };
+
+  virtual void on_event(Event *evt) override { Endpoint::on_event(evt); }
+  virtual void on_output(Event *evt) override { EventSource::output(evt); }
+  virtual auto on_new_stream(int id) -> StreamBase* override { return new Stream(this, id); }
+  virtual void on_delete_stream(StreamBase *stream) override { /* do not delete it here  */ }
 };
 
 } // namespace http2
