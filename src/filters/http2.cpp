@@ -34,23 +34,23 @@ static Data::Producer s_dp("HTTP2 Codec");
 // HPACK static table
 //
 
-static const pjs::Ref<pjs::Str> s_colon_scheme(pjs::Str::make(":scheme"));
-static const pjs::Ref<pjs::Str> s_colon_method(pjs::Str::make(":method"));
-static const pjs::Ref<pjs::Str> s_colon_path(pjs::Str::make(":path"));
-static const pjs::Ref<pjs::Str> s_colon_status(pjs::Str::make(":status"));
-static const pjs::Ref<pjs::Str> s_colon_authority(pjs::Str::make(":authority"));
-static const pjs::Ref<pjs::Str> s_method(pjs::Str::make("method"));
-static const pjs::Ref<pjs::Str> s_scheme(pjs::Str::make("scheme"));
-static const pjs::Ref<pjs::Str> s_authority(pjs::Str::make("authority"));
-static const pjs::Ref<pjs::Str> s_host(pjs::Str::make("host"));
-static const pjs::Ref<pjs::Str> s_path(pjs::Str::make("path"));
-static const pjs::Ref<pjs::Str> s_status(pjs::Str::make("status"));
-static const pjs::Ref<pjs::Str> s_headers(pjs::Str::make("headers"));
-static const pjs::Ref<pjs::Str> s_http(pjs::Str::make("http"));
-static const pjs::Ref<pjs::Str> s_GET(pjs::Str::make("GET"));
-static const pjs::Ref<pjs::Str> s_CONNECT(pjs::Str::make("CONNECT"));
-static const pjs::Ref<pjs::Str> s_root_path(pjs::Str::make("/"));
-static const pjs::Ref<pjs::Str> s_200(pjs::Str::make("200"));
+static const pjs::ConstStr s_colon_scheme(":scheme");
+static const pjs::ConstStr s_colon_method(":method");
+static const pjs::ConstStr s_colon_path(":path");
+static const pjs::ConstStr s_colon_status(":status");
+static const pjs::ConstStr s_colon_authority(":authority");
+static const pjs::ConstStr s_method("method");
+static const pjs::ConstStr s_scheme("scheme");
+static const pjs::ConstStr s_authority("authority");
+static const pjs::ConstStr s_host("host");
+static const pjs::ConstStr s_path("path");
+static const pjs::ConstStr s_status("status");
+static const pjs::ConstStr s_headers("headers");
+static const pjs::ConstStr s_http("http");
+static const pjs::ConstStr s_GET("GET");
+static const pjs::ConstStr s_CONNECT("CONNECT");
+static const pjs::ConstStr s_root_path("/");
+static const pjs::ConstStr s_200("200");
 static const pjs::ConstStr s_http2_settings("http2-settings");
 static const pjs::ConstStr s_connection("connection");
 static const pjs::ConstStr s_keep_alive("keep-alive");
@@ -1075,7 +1075,6 @@ void Endpoint::on_deframe(Frame &frm) {
           // closed stream, ignore
           return;
         }
-        // stream = new Stream(this, id);
         stream = on_new_stream(id);
         m_streams.push(stream);
         m_stream_map.set(id, stream);
@@ -1232,16 +1231,14 @@ void Endpoint::connection_error(ErrorCode err) {
 static const int MAX_HEADER_FRAME_SIZE = 1024;
 
 Endpoint::StreamBase::StreamBase(
-  int id,
-  bool is_server_side,
-  HeaderDecoder &header_decoder,
-  HeaderEncoder &header_encoder,
-  const Settings &settings
-) : m_id(id)
+  Endpoint *endpoint,
+  int id, bool is_server_side
+) : m_endpoint(endpoint)
+  , m_id(id)
   , m_is_server_side(is_server_side)
-  , m_header_decoder(header_decoder)
-  , m_header_encoder(header_encoder)
-  , m_settings(settings)
+  , m_header_decoder(endpoint->m_header_decoder)
+  , m_header_encoder(endpoint->m_header_encoder)
+  , m_settings(endpoint->m_peer_settings)
 {
   if (is_server_side) {
     m_server_stream_count++;
@@ -1430,6 +1427,34 @@ void Endpoint::StreamBase::on_pump() {
   recycle();
 }
 
+auto Endpoint::StreamBase::deduct_send(int size) -> int {
+  auto &win_size = m_endpoint->m_send_window;
+  if (size > win_size) {
+    size = win_size;
+  }
+  win_size -= size;
+  return size;
+}
+
+bool Endpoint::StreamBase::deduct_recv(int size) {
+  auto &win_size = m_endpoint->m_recv_window;
+  if (size > win_size) {
+    connection_error(FLOW_CONTROL_ERROR);
+    return false;
+  }
+  win_size -= size;
+  if (win_size <= INITIAL_RECV_WINDOW_SIZE / 2) {
+    Frame frm;
+    frm.stream_id = 0;
+    frm.type = Frame::WINDOW_UPDATE;
+    frm.flags = 0;
+    frm.encode_window_update(INITIAL_RECV_WINDOW_SIZE - win_size);
+    frame(frm);
+    win_size = INITIAL_RECV_WINDOW_SIZE;
+  }
+  return true;
+}
+
 bool Endpoint::StreamBase::parse_padding(Frame &frm) {
   uint8_t pad_length = 0;
   frm.payload.shift(1, &pad_length);
@@ -1568,42 +1593,13 @@ void Server::go_away() {
 // Server::Stream
 //
 
-Server::Stream::Stream(Server *endpoint, int id)
-  : StreamBase(id, true, endpoint->m_header_decoder, endpoint->m_header_encoder, endpoint->m_peer_settings)
-  , m_endpoint(endpoint)
+Server::Stream::Stream(Server *server, int id)
+  : StreamBase(server, id, true)
 {
-  auto p = endpoint->on_new_sub_pipeline();
+  auto p = server->on_new_sub_pipeline();
   EventSource::chain(p->input());
   p->chain(EventSource::reply());
   m_pipeline = p;
-}
-
-auto Server::Stream::deduct_send(int size) -> int {
-  auto &win_size = m_endpoint->m_send_window;
-  if (size > win_size) {
-    size = win_size;
-  }
-  win_size -= size;
-  return size;
-}
-
-bool Server::Stream::deduct_recv(int size) {
-  auto &win_size = m_endpoint->m_recv_window;
-  if (size > win_size) {
-    connection_error(FLOW_CONTROL_ERROR);
-    return false;
-  }
-  win_size -= size;
-  if (win_size <= INITIAL_RECV_WINDOW_SIZE / 2) {
-    Frame frm;
-    frm.stream_id = 0;
-    frm.type = Frame::WINDOW_UPDATE;
-    frm.flags = 0;
-    frm.encode_window_update(INITIAL_RECV_WINDOW_SIZE - win_size);
-    frame(frm);
-    win_size = INITIAL_RECV_WINDOW_SIZE;
-  }
-  return true;
 }
 
 //
@@ -1636,10 +1632,8 @@ void Server::InitialStream::on_event(Event *evt) {
 // Client
 //
 
-Client::Client()
-  : Endpoint(false)
+Client::Client() : Endpoint(false)
 {
-  m_settings.enable_push = false;
 }
 
 void Client::open(EventFunction *session) {
@@ -1667,38 +1661,9 @@ void Client::go_away() {
 // Client::Stream
 //
 
-Client::Stream::Stream(Client *endpoint, int id)
-  : StreamBase(id, false, endpoint->m_header_decoder, endpoint->m_header_encoder, endpoint->m_peer_settings)
-  , m_endpoint(endpoint)
+Client::Stream::Stream(Client *client, int id)
+  : StreamBase(client, id, false)
 {
-}
-
-auto Client::Stream::deduct_send(int size) -> int {
-  auto &win_size = m_endpoint->m_send_window;
-  if (size > win_size) {
-    size = win_size;
-  }
-  win_size -= size;
-  return size;
-}
-
-bool Client::Stream::deduct_recv(int size) {
-  auto &win_size = m_endpoint->m_recv_window;
-  if (size > win_size) {
-    connection_error(FLOW_CONTROL_ERROR);
-    return false;
-  }
-  win_size -= size;
-  if (win_size <= INITIAL_RECV_WINDOW_SIZE / 2) {
-    Frame frm;
-    frm.stream_id = 0;
-    frm.type = Frame::WINDOW_UPDATE;
-    frm.flags = 0;
-    frm.encode_window_update(INITIAL_RECV_WINDOW_SIZE - win_size);
-    frame(frm);
-    win_size = INITIAL_RECV_WINDOW_SIZE;
-  }
-  return true;
 }
 
 } // namespace http2

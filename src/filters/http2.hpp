@@ -326,7 +326,7 @@ protected:
   virtual auto on_new_stream(int id) -> StreamBase* = 0;
   virtual void on_delete_stream(StreamBase *stream) = 0;
 
-protected:
+private:
   enum {
     INITIAL_SEND_WINDOW_SIZE = 0xffff,
     INITIAL_RECV_WINDOW_SIZE = 0xffff,
@@ -347,6 +347,7 @@ protected:
   bool m_has_gone_away = false;
   bool m_processing_frames = false;
 
+protected:
   void upgrade_request(http::RequestHead *head, const Data &body);
 
   void on_event(Event *evt);
@@ -359,8 +360,6 @@ protected:
   void stream_close(int id);
   void stream_error(int id, ErrorCode err);
   void connection_error(ErrorCode err);
-
-protected:
 
   //
   // StreamBase
@@ -385,14 +384,7 @@ protected:
       CLOSED,
     };
 
-    StreamBase(
-      int id,
-      bool is_server_side,
-      HeaderDecoder &header_decoder,
-      HeaderEncoder &header_encoder,
-      const Settings &settings
-    );
-
+    StreamBase(Endpoint *endpoint, int id, bool is_server_side);
     ~StreamBase();
 
     auto id() const -> int { return m_id; }
@@ -402,16 +394,18 @@ protected:
     void on_event(Event *evt);
     void on_pump();
 
-    virtual void frame(Frame &frm) = 0;
     virtual void event(Event *evt) = 0;
-    virtual void flush() = 0;
-    virtual void close() = 0;
-    virtual auto deduct_send(int size) -> int = 0;
-    virtual bool deduct_recv(int size) = 0;
-    virtual void stream_error(ErrorCode err) = 0;
-    virtual void connection_error(ErrorCode err) = 0;
+
+    void frame(Frame &frm) { m_endpoint->frame(frm); }
+    void flush() { m_endpoint->flush(); }
+    void close() { m_endpoint->stream_close(id()); }
+    auto deduct_send(int size) -> int;
+    bool deduct_recv(int size);
+    void stream_error(ErrorCode err) { m_endpoint->stream_error(id(), err); }
+    void connection_error(ErrorCode err) { m_endpoint->connection_error(err); }
 
   private:
+    Endpoint* m_endpoint;
     int m_id;
     bool m_is_server_side;
     bool m_is_tunnel = false;
@@ -469,35 +463,10 @@ private:
     public StreamBase,
     public EventSource
   {
-    Stream(Server *endpoint, int id);
-
-    Server* m_endpoint;
+    Stream(Server *server, int id);
     pjs::Ref<Pipeline> m_pipeline;
-
-    // session -> stream
-    void on_frame(Frame &frm) { StreamBase::on_frame(frm); }
-
-    // stream -> server
     void event(Event *evt) override { EventSource::output(evt); }
-
-    // stream <- server
     void on_event(Event *evt) override  { StreamBase::on_event(evt); }
-
-    // session <- stream
-    void frame(Frame &frm) override { m_endpoint->frame(frm); }
-    void flush() override { m_endpoint->flush(); }
-
-    // close
-    void close() override { m_endpoint->stream_close(id()); }
-
-    // flow control
-    auto deduct_send(int size) -> int override;
-    bool deduct_recv(int size) override;
-
-    // errors
-    void stream_error(ErrorCode err) override { m_endpoint->stream_error(id(), err); }
-    void connection_error(ErrorCode err) override { m_endpoint->connection_error(err); }
-
     friend class Server;
     friend class InitialStream;
   };
@@ -563,34 +532,9 @@ private:
     public StreamBase,
     public EventFunction
   {
-    Stream(Client *endpoint, int id);
-
-    Client* m_endpoint;
-
-    // client -> stream
+    Stream(Client *client, int id);
     void on_event(Event *evt) override { StreamBase::on_event(evt); }
-
-    // stream -> session
-    void frame(Frame &frm) override { m_endpoint->frame(frm); }
-    void flush() override { m_endpoint->flush(); }
-
-    // stream <- session
-    void on_frame(Frame &frm) { StreamBase::on_frame(frm); }
-
-    // client <- stream
     void event(Event *evt) override { EventFunction::output(evt); }
-
-    // close
-    void close() override { m_endpoint->stream_close(id()); }
-
-    // flow control
-    auto deduct_send(int size) -> int override;
-    bool deduct_recv(int size) override;
-
-    // errors
-    void stream_error(ErrorCode err) override { m_endpoint->stream_error(id(), err); }
-    void connection_error(ErrorCode err) override { m_endpoint->connection_error(err); }
-
     friend class Client;
   };
 
