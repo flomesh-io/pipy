@@ -382,6 +382,8 @@ private:
       , m_version(version)
       , m_buffer_size(buffer_size) {}
 
+    ~Session();
+
     virtual void open() override;
     virtual auto open_stream() -> EventFunction* override;
     virtual void close_stream(EventFunction *stream) override;

@@ -1328,6 +1328,10 @@ auto Mux::on_new_session() -> MuxBase::Session* {
 // Mux::Session
 //
 
+Mux::Session::~Session() {
+  delete m_http2_muxer;
+}
+
 void Mux::Session::open() {
   switch (m_version) {
   case 1:
@@ -1355,7 +1359,7 @@ auto Mux::Session::open_stream() -> EventFunction* {
 
 void Mux::Session::close_stream(EventFunction *stream) {
   if (m_http2_muxer) {
-    return m_http2_muxer->close(stream);
+    m_http2_muxer->close(stream);
   } else {
     QueueMuxer::close(stream);
   }
@@ -1366,8 +1370,6 @@ void Mux::Session::close() {
   RequestQueue::reset();
   if (m_http2_muxer) {
     m_http2_muxer->go_away();
-    delete m_http2_muxer;
-    m_http2_muxer = nullptr;
   }
 }
 

@@ -385,7 +385,7 @@ protected:
     };
 
     StreamBase(Endpoint *endpoint, int id, bool is_server_side);
-    ~StreamBase();
+    virtual ~StreamBase();
 
     auto id() const -> int { return m_id; }
 
