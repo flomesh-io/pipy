@@ -148,6 +148,7 @@ private:
 
   auto codebase_of(const std::string &path) -> CodebaseStore::Codebase*;
   auto codebase_of(const std::string &path, std::string &filename) -> CodebaseStore::Codebase*;
+  auto get_instance(const std::string &uuid) -> Instance*;
 
   static auto response_head(
     int status,

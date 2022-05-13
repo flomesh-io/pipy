@@ -400,16 +400,9 @@ Message* AdminService::repo_POST(const std::string &path, Data *data) {
     if (auto codebase = m_store->find_codebase(name)) {
       Status status;
       if (!status.from_json(*data)) return response(400, "Invalid JSON");
-      Instance *inst = nullptr;
-      auto i = m_instance_map.find(status.uuid);
-      if (i == m_instance_map.end()) {
-        inst = new Instance();
-        inst->index = m_instances.size();
-        m_instance_map[status.uuid] = inst->index;
-        m_instances.push_back(inst);
+      Instance *inst = get_instance(status.uuid);
+      if (inst->status.uuid.empty()) {
         m_codebase_instances[codebase->id()].push_back(inst->index);
-      } else {
-        inst = m_instances[i->second];
       }
       inst->status = std::move(status);
       return m_response_created;
@@ -856,6 +849,16 @@ auto AdminService::codebase_of(const std::string &path, std::string &filename) -
   return nullptr;
 }
 
+auto AdminService::get_instance(const std::string &uuid) -> Instance* {
+  auto i = m_instance_map.find(uuid);
+  if (i != m_instance_map.end()) return m_instances[i->second];
+  auto *inst = new Instance;
+  inst->index = m_instances.size();
+  m_instances.push_back(inst);
+  m_instance_map[uuid] = inst->index;
+  return inst;
+}
+
 auto AdminService::response_head(
   int status,
   const std::map<std::string, std::string> &headers
@@ -873,12 +876,7 @@ void AdminService::on_metrics(const Data &data) {
   stats::MetricSet::deserialize(
     data,
     [this](const std::string &uuid) -> stats::MetricSet* {
-      auto i = m_instance_map.find(uuid);
-      if (i == m_instance_map.end()) {
-        return nullptr;
-      } else {
-        return &m_instances[i->second]->metrics;
-      }
+      return &get_instance(uuid)->metrics;
     }
   );
 }
