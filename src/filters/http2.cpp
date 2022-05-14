@@ -1064,6 +1064,10 @@ void Endpoint::on_deframe(Frame &frm) {
     } else {
       auto stream = m_stream_map.get(id);
       if (!stream) {
+        if (frm.type == Frame::DATA || frm.type == Frame::WINDOW_UPDATE) {
+          connection_error(PROTOCOL_ERROR);
+          return;
+        }
         if (!m_is_server_side) {
           // don't accept new streams as a client
           return;
@@ -1073,7 +1077,8 @@ void Endpoint::on_deframe(Frame &frm) {
           return;
         }
         if (id <= m_last_received_stream_id) {
-          // closed stream, ignore
+          if (frm.type == Frame::PRIORITY) return; // ignore PRIORITY for closed streams
+          connection_error(STREAM_CLOSED);
           return;
         }
         stream = on_new_stream(id);
@@ -1314,11 +1319,19 @@ void Endpoint::StreamBase::on_frame(Frame &frm) {
     }
 
     case Frame::HEADERS: {
-      if (frm.is_PADDED() && !parse_padding(frm)) break;
-      if (frm.is_PRIORITY() && !parse_priority(frm)) break;
-      if (frm.is_END_STREAM()) m_end_input = true;
-      m_header_decoder.start(!m_is_server_side);
-      parse_headers(frm);
+      if (m_state == IDLE ||
+          m_state == RESERVED_REMOTE ||
+          m_state == OPEN ||
+          m_state == HALF_CLOSED_LOCAL
+      ) {
+        if (frm.is_PADDED() && !parse_padding(frm)) break;
+        if (frm.is_PRIORITY() && !parse_priority(frm)) break;
+        if (frm.is_END_STREAM()) m_end_input = true;
+        m_header_decoder.start(!m_is_server_side);
+        parse_headers(frm);
+      } else {
+        stream_error(STREAM_CLOSED);
+      }
       break;
     }
 
