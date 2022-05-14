@@ -1159,7 +1159,12 @@ void Endpoint::on_deframe(Frame &frm) {
         }
         break;
       }
-      default: break;
+      default: {
+        if (m_header_decoder.started()) {
+          connection_error(PROTOCOL_ERROR);
+        }
+        break;
+      }
     }
   }
 }
@@ -1379,6 +1384,13 @@ void Endpoint::StreamBase::on_frame(Frame &frm) {
       parse_headers(frm);
       break;
     }
+
+    default: {
+      if (m_header_decoder.started()) {
+        connection_error(PROTOCOL_ERROR);
+      }
+      break;
+    }
   }
 }
 
@@ -1489,6 +1501,16 @@ bool Endpoint::StreamBase::parse_priority(Frame &frm) {
   }
   uint8_t buf[5];
   frm.payload.shift(sizeof(buf), buf);
+  auto dependency = 0x7fffffff & (
+    ((uint32_t)buf[0] << 24)|
+    ((uint32_t)buf[1] << 16)|
+    ((uint32_t)buf[2] <<  8)|
+    ((uint32_t)buf[3] <<  0)
+  );
+  if (dependency == m_id) {
+    connection_error(PROTOCOL_ERROR);
+    return false;
+  }
   return true;
 }
 
