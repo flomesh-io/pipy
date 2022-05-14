@@ -462,6 +462,7 @@ auto FrameDecoder::on_state(int state, int c) -> int {
     case STATE_PAYLOAD: {
       m_frame.payload = std::move(*m_payload);
       on_deframe(m_frame);
+      m_frame.payload.clear();
       read(sizeof(m_header), m_header);
       return STATE_HEADER;
     }
@@ -1054,7 +1055,9 @@ void Endpoint::on_event(Event *evt) {
 }
 
 void Endpoint::on_deframe(Frame &frm) {
-  if (auto id = frm.stream_id) {
+  if (m_header_decoder.started() && frm.type != Frame::CONTINUATION) {
+    connection_error(PROTOCOL_ERROR);
+  } else if (auto id = frm.stream_id) {
     if (
       frm.type == Frame::SETTINGS ||
       frm.type == Frame::PING ||
@@ -1082,6 +1085,7 @@ void Endpoint::on_deframe(Frame &frm) {
           return;
         }
         stream = on_new_stream(id);
+        stream->m_send_window = m_peer_settings.initial_window_size;
         m_streams.push(stream);
         m_stream_map.set(id, stream);
         if (frm.type != Frame::PRIORITY) {
@@ -1092,18 +1096,24 @@ void Endpoint::on_deframe(Frame &frm) {
     }
   } else {
     switch (frm.type) {
-      case Frame::SETTINGS: {
-        if (!frm.is_ACK()) {
+      case Frame::SETTINGS:
+        if (frm.is_ACK()) {
+          if (!frm.payload.empty()) {
+            connection_error(FRAME_SIZE_ERROR);
+          }
+        } else {
           auto len = frm.payload.size();
-          if (len <= Settings::MAX_SIZE) {
+          if (len % 6) {
+            connection_error(FRAME_SIZE_ERROR);
+          } else if (len <= Settings::MAX_SIZE) {
             uint8_t buf[len];
             frm.payload.to_bytes(buf);
-            auto old_initial_window_size = m_settings.initial_window_size;
-            auto err = m_settings.decode(buf, len);
+            auto old_initial_window_size = m_peer_settings.initial_window_size;
+            auto err = m_peer_settings.decode(buf, len);
             if (err == NO_ERROR) {
               bool ok = true;
-              if (m_settings.initial_window_size != old_initial_window_size) {
-                auto delta = m_settings.initial_window_size - old_initial_window_size;
+              if (m_peer_settings.initial_window_size != old_initial_window_size) {
+                auto delta = m_peer_settings.initial_window_size - old_initial_window_size;
                 for (auto s = m_streams.head(); s; s = s->next()) {
                   if (!s->update_send_window(delta)) {
                     ok = false;
@@ -1124,8 +1134,7 @@ void Endpoint::on_deframe(Frame &frm) {
           }
         }
         break;
-      }
-      case Frame::PING: {
+      case Frame::PING:
         if (frm.payload.size() != 8) {
           connection_error(FRAME_SIZE_ERROR);
         } else if (!frm.is_ACK()) {
@@ -1133,25 +1142,27 @@ void Endpoint::on_deframe(Frame &frm) {
           frame(frm);
         }
         break;
-      }
-      case Frame::GOAWAY: {
+      case Frame::GOAWAY:
         connection_error(NO_ERROR);
         break;
-      }
       case Frame::WINDOW_UPDATE: {
         auto inc = 0;
         auto err = frm.decode_window_update(inc);
         if (err == NO_ERROR) {
-          auto n = (uint32_t)m_send_window + (uint32_t)inc;
-          if (n > 0x7fffffff) {
-            connection_error(FLOW_CONTROL_ERROR);
+          if (!inc) {
+            connection_error(PROTOCOL_ERROR);
           } else {
-            m_send_window = n;
-            auto p = m_streams.head();
-            while (p) {
-              auto *s = p; p = p->next();
-              s->on_pump();
-              if (!m_send_window) break;
+            auto n = (uint32_t)m_send_window + (uint32_t)inc;
+            if (n > 0x7fffffff) {
+              connection_error(FLOW_CONTROL_ERROR);
+            } else {
+              m_send_window = n;
+              auto p = m_streams.head();
+              while (p) {
+                auto *s = p; p = p->next();
+                s->on_pump();
+                if (!m_send_window) break;
+              }
             }
           }
         } else {
@@ -1159,12 +1170,13 @@ void Endpoint::on_deframe(Frame &frm) {
         }
         break;
       }
-      default: {
-        if (m_header_decoder.started()) {
-          connection_error(PROTOCOL_ERROR);
-        }
+      case Frame::DATA:
+      case Frame::HEADERS:
+      case Frame::PRIORITY:
+      case Frame::RST_STREAM:
+        connection_error(PROTOCOL_ERROR);
         break;
-      }
+      default: break;
     }
   }
 }
@@ -1203,6 +1215,7 @@ void Endpoint::flush() {
 
 auto Endpoint::stream_open(int id) -> StreamBase* {
   auto stream = on_new_stream(id);
+  stream->m_send_window = m_peer_settings.initial_window_size;
   m_streams.push(stream);
   m_stream_map.set(id, stream);
   return stream;
@@ -1267,10 +1280,14 @@ Endpoint::StreamBase::~StreamBase() {
 }
 
 bool Endpoint::StreamBase::update_send_window(int delta) {
+  if (!delta) {
+    stream_error(PROTOCOL_ERROR);
+    return false;
+  }
   if (delta > 0 && m_send_window > 0) {
     auto n = (uint32_t)m_send_window + (uint32_t)delta;
     if (n > 0x7fffffff) {
-      connection_error(FLOW_CONTROL_ERROR);
+      stream_error(FLOW_CONTROL_ERROR);
       return false;
     }
   }
@@ -1282,9 +1299,7 @@ bool Endpoint::StreamBase::update_send_window(int delta) {
 void Endpoint::StreamBase::on_frame(Frame &frm) {
   switch (frm.type) {
     case Frame::DATA: {
-      if (m_header_decoder.started()) {
-        stream_error(PROTOCOL_ERROR);
-      } else if (m_state == OPEN || m_state == HALF_CLOSED_LOCAL) {
+      if (m_state == OPEN || m_state == HALF_CLOSED_LOCAL) {
         if (frm.is_PADDED() && !parse_padding(frm)) break;
         if (frm.payload.size()) {
           auto size = frm.payload.size();
@@ -1341,9 +1356,7 @@ void Endpoint::StreamBase::on_frame(Frame &frm) {
     }
 
     case Frame::PRIORITY: {
-      if (m_header_decoder.started()) {
-        connection_error(PROTOCOL_ERROR);
-      } else if (frm.payload.size() != 5) {
+      if (frm.payload.size() != 5) {
         stream_error(FRAME_SIZE_ERROR);
       } else {
         parse_priority(frm);
@@ -1385,12 +1398,7 @@ void Endpoint::StreamBase::on_frame(Frame &frm) {
       break;
     }
 
-    default: {
-      if (m_header_decoder.started()) {
-        connection_error(PROTOCOL_ERROR);
-      }
-      break;
-    }
+    default: break;
   }
 }
 
