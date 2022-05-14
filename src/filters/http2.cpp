@@ -602,9 +602,14 @@ bool HeaderDecoder::decode(Data &data) {
   return m_state != ERROR;
 }
 
-void HeaderDecoder::end(pjs::Ref<http::MessageHead> &head) {
-  head = m_head;
-  m_head = nullptr;
+bool HeaderDecoder::end(pjs::Ref<http::MessageHead> &head) {
+  if (m_state == INDEX_PREFIX) {
+    head = m_head;
+    m_head = nullptr;
+    return true;
+  } else {
+    return false;
+  }
 }
 
 bool HeaderDecoder::read_int(uint8_t c) {
@@ -1484,7 +1489,10 @@ void Endpoint::StreamBase::parse_headers(Frame &frm) {
 
   if (frm.is_END_HEADERS()) {
     pjs::Ref<http::MessageHead> head;
-    m_header_decoder.end(head);
+    if (!m_header_decoder.end(head)) {
+      connection_error(COMPRESSION_ERROR);
+      return;
+    }
 
     if (m_state == IDLE) {
       m_state = OPEN;

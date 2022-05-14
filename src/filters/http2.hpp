@@ -154,7 +154,7 @@ public:
   void start(bool is_response);
   bool started() const { return m_head; }
   bool decode(Data &data);
-  void end(pjs::Ref<http::MessageHead> &head);
+  bool end(pjs::Ref<http::MessageHead> &head);
 
 private:
   static const int TABLE_SIZE = 256;
