@@ -603,13 +603,9 @@ bool HeaderDecoder::decode(Data &data) {
 }
 
 bool HeaderDecoder::end(pjs::Ref<http::MessageHead> &head) {
-  if (m_state == INDEX_PREFIX) {
-    head = m_head;
-    m_head = nullptr;
-    return true;
-  } else {
-    return false;
-  }
+  head = m_head;
+  m_head = nullptr;
+  return m_state == INDEX_PREFIX;
 }
 
 bool HeaderDecoder::read_int(uint8_t c) {
@@ -1327,7 +1323,9 @@ void Endpoint::StreamBase::on_frame(Frame &frm) {
     }
 
     case Frame::PRIORITY: {
-      if (frm.payload.size() != 5) {
+      if (m_header_decoder.started()) {
+        connection_error(PROTOCOL_ERROR);
+      } else if (frm.payload.size() != 5) {
         stream_error(FRAME_SIZE_ERROR);
       } else {
         parse_priority(frm);
