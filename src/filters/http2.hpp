@@ -409,6 +409,7 @@ protected:
     int m_id;
     bool m_is_server_side;
     bool m_is_tunnel = false;
+    bool m_end_headers = false;
     bool m_end_input = false;
     bool m_end_output = false;
     State m_state = IDLE;

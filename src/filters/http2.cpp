@@ -1174,6 +1174,7 @@ void Endpoint::on_deframe(Frame &frm) {
       case Frame::HEADERS:
       case Frame::PRIORITY:
       case Frame::RST_STREAM:
+      case Frame::CONTINUATION:
         connection_error(PROTOCOL_ERROR);
         break;
       default: break;
@@ -1339,10 +1340,13 @@ void Endpoint::StreamBase::on_frame(Frame &frm) {
     }
 
     case Frame::HEADERS: {
-      if (m_state == IDLE ||
-          m_state == RESERVED_REMOTE ||
-          m_state == OPEN ||
-          m_state == HALF_CLOSED_LOCAL
+      if (m_end_headers && !frm.is_END_STREAM()) {
+        stream_error(PROTOCOL_ERROR);
+      } else if (
+        m_state == IDLE ||
+        m_state == RESERVED_REMOTE ||
+        m_state == OPEN ||
+        m_state == HALF_CLOSED_LOCAL
       ) {
         if (frm.is_PADDED() && !parse_padding(frm)) break;
         if (frm.is_PRIORITY() && !parse_priority(frm)) break;
@@ -1378,7 +1382,11 @@ void Endpoint::StreamBase::on_frame(Frame &frm) {
     }
 
     case Frame::PUSH_PROMISE: {
-      // TODO
+      if (m_is_server_side) {
+        connection_error(PROTOCOL_ERROR);
+      } else {
+        // TODO
+      }
       break;
     }
 
@@ -1541,6 +1549,7 @@ void Endpoint::StreamBase::parse_headers(Frame &frm) {
       m_state = HALF_CLOSED_LOCAL;
     }
 
+    m_end_headers = true;
     event(MessageStart::make(head));
 
     if (m_is_server_side) {
