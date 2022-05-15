@@ -61,6 +61,24 @@ enum ErrorCode {
 };
 
 //
+// Settings
+//
+
+struct Settings {
+  enum { MAX_SIZE = 1024 };
+
+  int header_table_size = 0x1000;
+  int initial_window_size = 0xffff;
+  int max_concurrent_streams = -1;
+  int max_frame_size = 0x4000;
+  int max_header_list_size = -1;
+  bool enable_push = true;
+
+  auto decode(const uint8_t *data, int size) -> ErrorCode;
+  auto encode(uint8_t *data) const -> int;
+};
+
+//
 // Frame
 //
 
@@ -149,7 +167,7 @@ private:
 
 class HeaderDecoder {
 public:
-  HeaderDecoder();
+  HeaderDecoder(const Settings &settings);
 
   void start(bool is_response);
   bool started() const { return m_head; }
@@ -187,6 +205,7 @@ private:
     };
   };
 
+  const Settings& m_settings;
   State m_state;
   bool m_is_response;
   bool m_is_new;
@@ -280,24 +299,6 @@ private:
   };
 
   static StaticTable m_static_table;
-};
-
-//
-// Settings
-//
-
-struct Settings {
-  enum { MAX_SIZE = 1024 };
-
-  int header_table_size = 0x1000;
-  int initial_window_size = 0xffff;
-  int max_concurrent_streams = -1;
-  int max_frame_size = 0x4000;
-  int max_header_list_size = -1;
-  bool enable_push = true;
-
-  auto decode(const uint8_t *data, int size) -> ErrorCode;
-  auto encode(uint8_t *data) const -> int;
 };
 
 //

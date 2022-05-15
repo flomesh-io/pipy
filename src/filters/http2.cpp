@@ -524,7 +524,9 @@ void FrameEncoder::header(uint8_t *buf, int id, uint8_t type, uint8_t flags, siz
 HeaderDecoder::StaticTable HeaderDecoder::s_static_table;
 HeaderDecoder::HuffmanTree HeaderDecoder::s_huffman_tree;
 
-HeaderDecoder::HeaderDecoder() {
+HeaderDecoder::HeaderDecoder(const Settings &settings)
+  : m_settings(settings)
+{
   m_table = pjs::PooledArray<Entry>::make(TABLE_SIZE);
 }
 
@@ -670,8 +672,12 @@ void HeaderDecoder::index_end() {
       m_state = ERROR;
     }
   } else if ((p & 0xe0) == 0x20) {
-    // TODO: resize dynamic table
-    m_state = INDEX_PREFIX;
+    if (m_int > m_settings.header_table_size) {
+      m_state = ERROR;
+    } else {
+      // TODO: resize dynamic table
+      m_state = INDEX_PREFIX;
+    }
   } else if (m_int) {
     if (const auto *entry = get_entry(m_int)) {
       m_name = entry->name;
@@ -997,7 +1003,8 @@ int Endpoint::m_server_stream_count = 0;
 int Endpoint::m_client_stream_count = 0;
 
 Endpoint::Endpoint(bool is_server_side)
-  : m_is_server_side(is_server_side)
+  : m_header_decoder(m_settings)
+  , m_is_server_side(is_server_side)
 {
   m_settings.enable_push = false;
 }
