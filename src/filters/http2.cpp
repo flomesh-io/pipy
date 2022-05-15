@@ -390,6 +390,65 @@ static struct {
 };
 
 //
+// Settings
+//
+
+auto Settings::decode(const uint8_t *data, int size) -> ErrorCode {
+  for (int i = 0; i + 6 <= size; i += 6) {
+    uint16_t k = ((uint16_t)data[i+0] <<  8)|((uint16_t)data[i+1] <<  0);
+    uint32_t v = ((uint32_t)data[i+2] << 24)|((uint32_t)data[i+3] << 16)|
+                 ((uint32_t)data[i+4] <<  8)|((uint32_t)data[i+5] <<  0);
+    switch (k) {
+      case 0x1:
+        header_table_size = v;
+        break;
+      case 0x2:
+        if (0xfffffffe & v) return PROTOCOL_ERROR;
+        enable_push = v;
+        break;
+      case 0x3:
+        max_concurrent_streams = v;
+        break;
+      case 0x4:
+        if (v > 0x7fffffff) return FLOW_CONTROL_ERROR;
+        initial_window_size = v;
+        break;
+      case 0x5:
+        if (v < 0x4000 || v > 0xffffff) return PROTOCOL_ERROR;
+        max_frame_size = v;
+        break;
+      case 0x6:
+        max_header_list_size = v;
+        break;
+      default: break;
+    }
+  }
+  return NO_ERROR;
+}
+
+auto Settings::encode(uint8_t *data) const -> int {
+  int p = 0;
+  auto write = [&](int k, int v) {
+    data[p+0] = 0xff & (k >>  8);
+    data[p+1] = 0xff & (k >>  0);
+    data[p+2] = 0xff & (v >> 24);
+    data[p+3] = 0xff & (v >> 16);
+    data[p+4] = 0xff & (v >>  8);
+    data[p+5] = 0xff & (v >>  0);
+    p += 6;
+  };
+
+  write(0x1, header_table_size);
+  write(0x2, enable_push ? 1 : 0);
+  if (max_concurrent_streams >= 0) write(0x3, max_concurrent_streams);
+  write(0x4, initial_window_size);
+  write(0x5, max_frame_size);
+  if (max_header_list_size >= 0) write(0x6, max_header_list_size);
+
+  return p;
+}
+
+//
 // Frame
 //
 
@@ -542,8 +601,8 @@ void HeaderDecoder::start(bool is_response) {
   m_is_response = is_response;
 }
 
-bool HeaderDecoder::decode(Data &data) {
-  if (!m_head) return false;
+auto HeaderDecoder::decode(Data &data) -> ErrorCode {
+  if (!m_head) return INTERNAL_ERROR;
 
   data.scan(
     [this](int c) -> bool {
@@ -570,7 +629,7 @@ bool HeaderDecoder::decode(Data &data) {
           break;
         }
         case NAME_STRING: {
-          if (read_str(c)) {
+          if (read_str(c, true)) {
             m_name = pjs::Str::make(m_buffer.to_string());
             m_buffer.clear();
             m_state = VALUE_PREFIX;
@@ -589,7 +648,7 @@ bool HeaderDecoder::decode(Data &data) {
           break;
         }
         case VALUE_STRING: {
-          if (read_str(c)) {
+          if (read_str(c, false)) {
             auto value = pjs::Str::make(m_buffer.to_string());
             m_buffer.clear();
             add_field(m_name, value);
@@ -602,7 +661,7 @@ bool HeaderDecoder::decode(Data &data) {
       return true;
     }
   );
-  return m_state != ERROR;
+  return m_state == ERROR ? m_error : NO_ERROR;
 }
 
 bool HeaderDecoder::end(pjs::Ref<http::MessageHead> &head) {
@@ -621,7 +680,7 @@ bool HeaderDecoder::read_int(uint8_t c) {
   }
 }
 
-bool HeaderDecoder::read_str(uint8_t c) {
+bool HeaderDecoder::read_str(uint8_t c, bool lowercase_only) {
   if (m_prefix & 0x80) {
     const auto &tree = s_huffman_tree.get();
     for (int b = 7; b >= 0; b--) {
@@ -631,11 +690,23 @@ bool HeaderDecoder::read_str(uint8_t c) {
       if (!node.left) {
         auto ch = node.right;
         if (ch == 256) break;
+        if (lowercase_only) {
+          if (std::tolower(ch) != ch) {
+            error(PROTOCOL_ERROR);
+            return true;
+          }
+        }
         s_dp.push(&m_buffer, char(ch));
         m_ptr = 0;
       }
     }
   } else {
+    if (lowercase_only) {
+      if (std::tolower(c) != c) {
+        error(PROTOCOL_ERROR);
+        return true;
+      }
+    }
     s_dp.push(&m_buffer, c);
   }
   return !--m_int;
@@ -662,18 +733,18 @@ void HeaderDecoder::index_end() {
   auto p = m_prefix;
   if ((p & 0x80) == 0x80) {
     if (!m_int) {
-      m_state = ERROR;
+      error();
     } else if (const auto *entry = get_entry(m_int)) {
       auto v = entry->value;
       if (!v) v = pjs::Str::empty;
       add_field(entry->name, v);
       m_state = INDEX_PREFIX;
     } else {
-      m_state = ERROR;
+      error();
     }
   } else if ((p & 0xe0) == 0x20) {
     if (m_int > m_settings.header_table_size) {
-      m_state = ERROR;
+      error();
     } else {
       // TODO: resize dynamic table
       m_state = INDEX_PREFIX;
@@ -683,7 +754,7 @@ void HeaderDecoder::index_end() {
       m_name = entry->name;
       m_state = VALUE_PREFIX;
     } else {
-      m_state = ERROR;
+      error();
     }
   } else {
     m_state = NAME_PREFIX;
@@ -773,6 +844,11 @@ void HeaderDecoder::new_entry(pjs::Str *name, pjs::Str *value) {
   ent.value = value;
 }
 
+void HeaderDecoder::error(ErrorCode err) {
+  m_state = ERROR;
+  m_error = err;
+}
+
 //
 // HeaderDecoder::StaticTable
 //
@@ -819,15 +895,16 @@ HeaderDecoder::HuffmanTree::HuffmanTree() {
 HeaderEncoder::StaticTable HeaderEncoder::m_static_table;
 
 void HeaderEncoder::encode(bool is_response, pjs::Object *head, Data &data) {
+  Data::Builder db(data, &s_dp);
   bool has_authority = false;
   if (is_response) {
     pjs::Value status;
     if (head) head->get(s_status, status);
     if (status.is_number()) {
       pjs::Ref<pjs::Str> str(pjs::Str::make(status.n()));
-      encode_header_field(data, s_colon_status, str);
+      encode_header_field(db, s_colon_status, str);
     } else {
-      encode_header_field(data, s_colon_status, s_200);
+      encode_header_field(db, s_colon_status, s_200);
     }
 
   } else {
@@ -839,23 +916,23 @@ void HeaderEncoder::encode(bool is_response, pjs::Object *head, Data &data) {
       head->get(s_path, path);
     }
     if (method.is_string()) {
-      encode_header_field(data, s_colon_method, method.s());
+      encode_header_field(db, s_colon_method, method.s());
     } else {
-      encode_header_field(data, s_colon_method, s_GET);
+      encode_header_field(db, s_colon_method, s_GET);
     }
     if (scheme.is_string()) {
-      encode_header_field(data, s_colon_scheme, scheme.s());
+      encode_header_field(db, s_colon_scheme, scheme.s());
     } else {
-      encode_header_field(data, s_colon_scheme, s_http);
+      encode_header_field(db, s_colon_scheme, s_http);
     }
     if (authority.is_string()) {
-      encode_header_field(data, s_colon_authority, authority.s());
+      encode_header_field(db, s_colon_authority, authority.s());
       has_authority = true;
     }
     if (path.is_string()) {
-      encode_header_field(data, s_colon_path, path.s());
+      encode_header_field(db, s_colon_path, path.s());
     } else {
-      encode_header_field(data, s_colon_path, s_root_path);
+      encode_header_field(db, s_colon_path, s_root_path);
     }
   }
 
@@ -872,51 +949,59 @@ void HeaderEncoder::encode(bool is_response, pjs::Object *head, Data &data) {
           if (k == s_connection) return;
           if (k == s_keep_alive) return;
           auto s = v.to_string();
-          encode_header_field(data, k, s);
+          encode_header_field(db, k, s);
           s->release();
         }
       );
     }
   }
+
+  db.flush();
 }
 
-void HeaderEncoder::encode_header_field(Data &data, pjs::Str *k, pjs::Str *v) {
+void HeaderEncoder::encode_header_field(Data::Builder &db, pjs::Str *k, pjs::Str *v) {
   if (const auto *ent = m_static_table.find(k)) {
     auto i = ent->values.find(v);
     if (i == ent->values.end()) {
-      encode_int(data, 0x00, 4, ent->index);
-      encode_str(data, v);
+      encode_int(db, 0x00, 4, ent->index);
+      encode_str(db, v, false);
     } else {
-      encode_int(data, 0x80, 1, i->second);
+      encode_int(db, 0x80, 1, i->second);
     }
   } else {
-    encode_int(data, 0x00, 4, 0);
-    encode_str(data, k);
-    encode_str(data, v);
+    encode_int(db, 0x00, 4, 0);
+    encode_str(db, k, true);
+    encode_str(db, v, false);
   }
 }
 
-void HeaderEncoder::encode_int(Data &data, uint8_t prefix, int prefix_len, uint32_t n) {
+void HeaderEncoder::encode_int(Data::Builder &db, uint8_t prefix, int prefix_len, uint32_t n) {
   uint8_t mask = (1 << (8 - prefix_len)) - 1;
   if (n < mask) {
-    s_dp.push(&data, prefix | n);
+    db.push(prefix | n);
   } else {
-    s_dp.push(&data, prefix | mask);
+    db.push(prefix | mask);
     n -= mask;
     while (n) {
       if (n >> 7) {
-        s_dp.push(&data, 0x80 | (n & 0x7f));
+        db.push(0x80 | (n & 0x7f));
       } else {
-        s_dp.push(&data, n & 0x7f);
+        db.push(n & 0x7f);
       }
       n >>= 7;
     }
   }
 }
 
-void HeaderEncoder::encode_str(Data &data, pjs::Str *s) {
-  encode_int(data, 0, 1, s->size());
-  s_dp.push(&data, s->str());
+void HeaderEncoder::encode_str(Data::Builder &db, pjs::Str *s, bool lowercase) {
+  encode_int(db, 0, 1, s->size());
+  if (lowercase) {
+    for (auto ch : s->str()) {
+      db.push(std::tolower(ch));
+    }
+  } else {
+    db.push(s->str());
+  }
 }
 
 HeaderEncoder::StaticTable::StaticTable() {
@@ -934,65 +1019,6 @@ auto HeaderEncoder::StaticTable::find(pjs::Str *name) -> const Entry* {
   auto i = m_table.find(name);
   if (i == m_table.end()) return nullptr;
   return &i->second;
-}
-
-//
-// Settings
-//
-
-auto Settings::decode(const uint8_t *data, int size) -> ErrorCode {
-  for (int i = 0; i + 6 <= size; i += 6) {
-    uint16_t k = ((uint16_t)data[i+0] <<  8)|((uint16_t)data[i+1] <<  0);
-    uint32_t v = ((uint32_t)data[i+2] << 24)|((uint32_t)data[i+3] << 16)|
-                 ((uint32_t)data[i+4] <<  8)|((uint32_t)data[i+5] <<  0);
-    switch (k) {
-      case 0x1:
-        header_table_size = v;
-        break;
-      case 0x2:
-        if (0xfffffffe & v) return PROTOCOL_ERROR;
-        enable_push = v;
-        break;
-      case 0x3:
-        max_concurrent_streams = v;
-        break;
-      case 0x4:
-        if (v > 0x7fffffff) return FLOW_CONTROL_ERROR;
-        initial_window_size = v;
-        break;
-      case 0x5:
-        if (v < 0x4000 || v > 0xffffff) return PROTOCOL_ERROR;
-        max_frame_size = v;
-        break;
-      case 0x6:
-        max_header_list_size = v;
-        break;
-      default: break;
-    }
-  }
-  return NO_ERROR;
-}
-
-auto Settings::encode(uint8_t *data) const -> int {
-  int p = 0;
-  auto write = [&](int k, int v) {
-    data[p+0] = 0xff & (k >>  8);
-    data[p+1] = 0xff & (k >>  0);
-    data[p+2] = 0xff & (v >> 24);
-    data[p+3] = 0xff & (v >> 16);
-    data[p+4] = 0xff & (v >>  8);
-    data[p+5] = 0xff & (v >>  0);
-    p += 6;
-  };
-
-  write(0x1, header_table_size);
-  write(0x2, enable_push ? 1 : 0);
-  if (max_concurrent_streams >= 0) write(0x3, max_concurrent_streams);
-  write(0x4, initial_window_size);
-  write(0x5, max_frame_size);
-  if (max_header_list_size >= 0) write(0x6, max_header_list_size);
-
-  return p;
 }
 
 //
@@ -1538,8 +1564,9 @@ bool Endpoint::StreamBase::parse_priority(Frame &frm) {
 }
 
 void Endpoint::StreamBase::parse_headers(Frame &frm) {
-  if (!m_header_decoder.decode(frm.payload)) {
-    connection_error(COMPRESSION_ERROR);
+  auto err = m_header_decoder.decode(frm.payload);
+  if (err != NO_ERROR) {
+    connection_error(err);
     return;
   }
 

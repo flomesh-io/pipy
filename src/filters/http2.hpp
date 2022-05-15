@@ -171,7 +171,7 @@ public:
 
   void start(bool is_response);
   bool started() const { return m_head; }
-  bool decode(Data &data);
+  auto decode(Data &data) -> ErrorCode;
   bool end(pjs::Ref<http::MessageHead> &head);
 
 private:
@@ -207,6 +207,7 @@ private:
 
   const Settings& m_settings;
   State m_state;
+  ErrorCode m_error;
   bool m_is_response;
   bool m_is_new;
   uint8_t m_prefix;
@@ -221,7 +222,7 @@ private:
   size_t m_table_tail = 0;
 
   bool read_int(uint8_t c);
-  bool read_str(uint8_t c);
+  bool read_str(uint8_t c, bool lowercase_only);
   void index_prefix(uint8_t prefix);
   void index_end();
   void name_prefix(uint8_t prefix);
@@ -230,6 +231,8 @@ private:
   void add_field(pjs::Str *name, pjs::Str *value);
   auto get_entry(size_t i) -> const Entry*;
   void new_entry(pjs::Str *name, pjs::Str *value);
+
+  void error(ErrorCode err = COMPRESSION_ERROR);
 
   //
   // HeaderDecoder::StaticTable
@@ -273,13 +276,13 @@ public:
 
 private:
   void encode_header_field(
-    Data &data,
+    Data::Builder &db,
     pjs::Str *k,
     pjs::Str *v
   );
 
-  void encode_int(Data &data, uint8_t prefix, int prefix_len, uint32_t n);
-  void encode_str(Data &data, pjs::Str *s);
+  void encode_int(Data::Builder &db, uint8_t prefix, int prefix_len, uint32_t n);
+  void encode_str(Data::Builder &db, pjs::Str *s, bool lowercase);
 
   struct Entry {
     int index = 0;
