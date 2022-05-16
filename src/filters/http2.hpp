@@ -169,7 +169,7 @@ class HeaderDecoder {
 public:
   HeaderDecoder(const Settings &settings);
 
-  void start(bool is_response);
+  void start(bool is_response, bool is_trailer);
   bool started() const { return m_head; }
   auto decode(Data &data) -> ErrorCode;
   auto end(pjs::Ref<http::MessageHead> &head) -> ErrorCode;
@@ -209,6 +209,7 @@ private:
   State m_state;
   ErrorCode m_error;
   bool m_is_response;
+  bool m_is_trailer;
   bool m_is_new;
   bool m_is_pseudo_end;
   uint8_t m_prefix;

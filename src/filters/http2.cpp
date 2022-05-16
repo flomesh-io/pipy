@@ -594,7 +594,7 @@ HeaderDecoder::HeaderDecoder(const Settings &settings)
   m_table = pjs::PooledArray<Entry>::make(TABLE_SIZE);
 }
 
-void HeaderDecoder::start(bool is_response) {
+void HeaderDecoder::start(bool is_response, bool is_trailer) {
   if (is_response) {
     m_head = http::ResponseHead::make();
   } else {
@@ -604,6 +604,7 @@ void HeaderDecoder::start(bool is_response) {
   m_buffer.clear();
   m_state = INDEX_PREFIX;
   m_is_response = is_response;
+  m_is_trailer = is_trailer;
   m_is_pseudo_end = false;
 }
 
@@ -674,7 +675,7 @@ auto HeaderDecoder::decode(Data &data) -> ErrorCode {
 auto HeaderDecoder::end(pjs::Ref<http::MessageHead> &head) -> ErrorCode {
   head = m_head; m_head = nullptr;
   if (m_state != INDEX_PREFIX) return COMPRESSION_ERROR;
-  if (!m_is_response) {
+  if (!m_is_response && !m_is_trailer) {
     auto req = head->as<http::RequestHead>();
     if (
       req->method() == pjs::Str::empty ||
@@ -803,7 +804,7 @@ void HeaderDecoder::value_prefix(uint8_t prefix) {
 
 bool HeaderDecoder::add_field(pjs::Str *name, pjs::Str *value) {
   if (name->str()[0] == ':') {
-    if (m_is_pseudo_end) {
+    if (m_is_trailer || m_is_pseudo_end) {
       error(PROTOCOL_ERROR);
       return false;
     } else if (m_is_response) {
@@ -1441,7 +1442,7 @@ void Endpoint::StreamBase::on_frame(Frame &frm) {
         if (frm.is_PADDED() && !parse_padding(frm)) break;
         if (frm.is_PRIORITY() && !parse_priority(frm)) break;
         if (frm.is_END_STREAM()) m_end_input = true;
-        m_header_decoder.start(!m_is_server_side);
+        m_header_decoder.start(!m_is_server_side, m_end_headers);
         parse_headers(frm);
       } else {
         stream_error(STREAM_CLOSED);
