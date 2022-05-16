@@ -599,6 +599,7 @@ void HeaderDecoder::start(bool is_response) {
   m_buffer.clear();
   m_state = INDEX_PREFIX;
   m_is_response = is_response;
+  m_is_pseudo_end = false;
 }
 
 auto HeaderDecoder::decode(Data &data) -> ErrorCode {
@@ -651,9 +652,10 @@ auto HeaderDecoder::decode(Data &data) -> ErrorCode {
           if (read_str(c, false)) {
             auto value = pjs::Str::make(m_buffer.to_string());
             m_buffer.clear();
-            add_field(m_name, value);
-            if (m_is_new) new_entry(m_name, value);
-            m_state = INDEX_PREFIX;
+            if (add_field(m_name, value)) {
+              if (m_is_new) new_entry(m_name, value);
+              m_state = INDEX_PREFIX;
+            }
           }
           break;
         }
@@ -737,8 +739,9 @@ void HeaderDecoder::index_end() {
     } else if (const auto *entry = get_entry(m_int)) {
       auto v = entry->value;
       if (!v) v = pjs::Str::empty;
-      add_field(entry->name, v);
-      m_state = INDEX_PREFIX;
+      if (add_field(entry->name, v)) {
+        m_state = INDEX_PREFIX;
+      }
     } else {
       error();
     }
@@ -783,35 +786,50 @@ void HeaderDecoder::value_prefix(uint8_t prefix) {
   }
 }
 
-void HeaderDecoder::add_field(pjs::Str *name, pjs::Str *value) {
-  if (name == s_colon_method) {
-    if (!m_is_response) {
-      auto req = m_head->as<http::RequestHead>();
-      req->method(value);
-    }
-  } else if (name == s_colon_scheme) {
-    if (!m_is_response) {
-      auto req = m_head->as<http::RequestHead>();
-      req->scheme(value);
-    }
-  } else if (name == s_colon_authority) {
-    if (!m_is_response) {
-      auto req = m_head->as<http::RequestHead>();
-      pjs::Value v;
-      auto headers = m_head->headers();
-      headers->get(s_host, v);
-      if (v.is_undefined()) headers->set(s_host, value);
-      req->authority(value);
-    }
-  } else if (name == s_colon_path) {
-    if (!m_is_response) {
-      auto req = m_head->as<http::RequestHead>();
-      req->path(value);
-    }
-  } else if (name == s_colon_status) {
-    if (m_is_response) {
-      auto res = m_head->as<http::ResponseHead>();
-      res->status(std::atoi(value->c_str()));
+bool HeaderDecoder::add_field(pjs::Str *name, pjs::Str *value) {
+  if (name->str()[0] == ':') {
+    if (m_is_pseudo_end) {
+      error(PROTOCOL_ERROR);
+      return false;
+    } else if (m_is_response) {
+      if (name == s_colon_status) {
+        if (m_is_response) {
+          auto res = m_head->as<http::ResponseHead>();
+          res->status(std::atoi(value->c_str()));
+        }
+      } else {
+        error(PROTOCOL_ERROR);
+        return false;
+      }
+    } else {
+      if (name == s_colon_method) {
+        if (!m_is_response) {
+          auto req = m_head->as<http::RequestHead>();
+          req->method(value);
+        }
+      } else if (name == s_colon_scheme) {
+        if (!m_is_response) {
+          auto req = m_head->as<http::RequestHead>();
+          req->scheme(value);
+        }
+      } else if (name == s_colon_authority) {
+        if (!m_is_response) {
+          auto req = m_head->as<http::RequestHead>();
+          pjs::Value v;
+          auto headers = m_head->headers();
+          headers->get(s_host, v);
+          if (v.is_undefined()) headers->set(s_host, value);
+          req->authority(value);
+        }
+      } else if (name == s_colon_path) {
+        if (!m_is_response) {
+          auto req = m_head->as<http::RequestHead>();
+          req->path(value);
+        }
+      } else {
+        error(PROTOCOL_ERROR);
+        return false;
+      }
     }
   } else {
     auto headers = m_head->headers();
@@ -820,7 +838,9 @@ void HeaderDecoder::add_field(pjs::Str *name, pjs::Str *value) {
       m_head->headers(headers);
     }
     headers->set(name, value);
+    m_is_pseudo_end = true;
   }
+  return true;
 }
 
 auto HeaderDecoder::get_entry(size_t i) -> const Entry* {

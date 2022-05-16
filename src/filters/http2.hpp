@@ -210,6 +210,7 @@ private:
   ErrorCode m_error;
   bool m_is_response;
   bool m_is_new;
+  bool m_is_pseudo_end;
   uint8_t m_prefix;
   uint8_t m_exp;
   uint32_t m_int;
@@ -228,7 +229,7 @@ private:
   void name_prefix(uint8_t prefix);
   void value_prefix(uint8_t prefix);
 
-  void add_field(pjs::Str *name, pjs::Str *value);
+  bool add_field(pjs::Str *name, pjs::Str *value);
   auto get_entry(size_t i) -> const Entry*;
   void new_entry(pjs::Str *name, pjs::Str *value);
 
