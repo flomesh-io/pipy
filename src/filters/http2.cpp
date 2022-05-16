@@ -54,6 +54,11 @@ static const pjs::ConstStr s_200("200");
 static const pjs::ConstStr s_http2_settings("http2-settings");
 static const pjs::ConstStr s_connection("connection");
 static const pjs::ConstStr s_keep_alive("keep-alive");
+static const pjs::ConstStr s_proxy_connection("proxy-connection");
+static const pjs::ConstStr s_transfer_encoding("transfer-encoding");
+static const pjs::ConstStr s_upgrade("upgrade");
+static const pjs::ConstStr s_te("te");
+static const pjs::ConstStr s_trailers("trailers");
 
 static struct {
   const char *name;
@@ -832,6 +837,19 @@ bool HeaderDecoder::add_field(pjs::Str *name, pjs::Str *value) {
       }
     }
   } else {
+    if (
+      name == s_connection ||
+      name == s_keep_alive ||
+      name == s_proxy_connection ||
+      name == s_transfer_encoding ||
+      name == s_upgrade
+    ) {
+      error(PROTOCOL_ERROR);
+      return false;
+    } else if (name == s_te && value != s_trailers) {
+      error(PROTOCOL_ERROR);
+      return false;
+    }
     auto headers = m_head->headers();
     if (!headers) {
       headers = pjs::Object::make();
@@ -968,6 +986,10 @@ void HeaderEncoder::encode(bool is_response, pjs::Object *head, Data &data) {
           }
           if (k == s_connection) return;
           if (k == s_keep_alive) return;
+          if (k == s_proxy_connection) return;
+          if (k == s_transfer_encoding) return;
+          if (k == s_upgrade) return;
+          if (k == s_te) return;
           auto s = v.to_string();
           encode_header_field(db, k, s);
           s->release();
