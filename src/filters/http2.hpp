@@ -172,7 +172,7 @@ public:
   void start(bool is_response);
   bool started() const { return m_head; }
   auto decode(Data &data) -> ErrorCode;
-  bool end(pjs::Ref<http::MessageHead> &head);
+  auto end(pjs::Ref<http::MessageHead> &head) -> ErrorCode;
 
 private:
   static const int TABLE_SIZE = 256;

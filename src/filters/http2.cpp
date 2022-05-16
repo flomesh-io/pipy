@@ -671,10 +671,20 @@ auto HeaderDecoder::decode(Data &data) -> ErrorCode {
   return m_state == ERROR ? m_error : NO_ERROR;
 }
 
-bool HeaderDecoder::end(pjs::Ref<http::MessageHead> &head) {
-  head = m_head;
-  m_head = nullptr;
-  return m_state == INDEX_PREFIX;
+auto HeaderDecoder::end(pjs::Ref<http::MessageHead> &head) -> ErrorCode {
+  head = m_head; m_head = nullptr;
+  if (m_state != INDEX_PREFIX) return COMPRESSION_ERROR;
+  if (!m_is_response) {
+    auto req = head->as<http::RequestHead>();
+    if (
+      req->method() == pjs::Str::empty ||
+      req->scheme() == pjs::Str::empty ||
+      req->path() == pjs::Str::empty
+    ) {
+      return PROTOCOL_ERROR;
+    }
+  }
+  return NO_ERROR;
 }
 
 bool HeaderDecoder::read_int(uint8_t c) {
@@ -798,37 +808,42 @@ bool HeaderDecoder::add_field(pjs::Str *name, pjs::Str *value) {
       return false;
     } else if (m_is_response) {
       if (name == s_colon_status) {
-        if (m_is_response) {
-          auto res = m_head->as<http::ResponseHead>();
-          res->status(std::atoi(value->c_str()));
-        }
+        auto res = m_head->as<http::ResponseHead>();
+        res->status(std::atoi(value->c_str()));
       } else {
         error(PROTOCOL_ERROR);
         return false;
       }
     } else {
       if (name == s_colon_method) {
-        if (!m_is_response) {
-          auto req = m_head->as<http::RequestHead>();
+        auto req = m_head->as<http::RequestHead>();
+        if (req->method() != pjs::Str::empty) {
+          error(PROTOCOL_ERROR);
+          return false;
+        } else {
           req->method(value);
         }
       } else if (name == s_colon_scheme) {
-        if (!m_is_response) {
-          auto req = m_head->as<http::RequestHead>();
+        auto req = m_head->as<http::RequestHead>();
+        if (req->scheme() != pjs::Str::empty) {
+          error(PROTOCOL_ERROR);
+          return false;
+        } else {
           req->scheme(value);
         }
       } else if (name == s_colon_authority) {
-        if (!m_is_response) {
-          auto req = m_head->as<http::RequestHead>();
-          pjs::Value v;
-          auto headers = m_head->headers();
-          headers->get(s_host, v);
-          if (v.is_undefined()) headers->set(s_host, value);
-          req->authority(value);
-        }
+        auto req = m_head->as<http::RequestHead>();
+        pjs::Value v;
+        auto headers = m_head->headers();
+        headers->get(s_host, v);
+        if (v.is_undefined()) headers->set(s_host, value);
+        req->authority(value);
       } else if (name == s_colon_path) {
-        if (!m_is_response) {
-          auto req = m_head->as<http::RequestHead>();
+        auto req = m_head->as<http::RequestHead>();
+        if (req->path() != pjs::Str::empty) {
+          error(PROTOCOL_ERROR);
+          return false;
+        } else {
           req->path(value);
         }
       } else {
@@ -1614,7 +1629,8 @@ void Endpoint::StreamBase::parse_headers(Frame &frm) {
 
   if (frm.is_END_HEADERS()) {
     pjs::Ref<http::MessageHead> head;
-    if (!m_header_decoder.end(head)) {
+    auto err = m_header_decoder.end(head);
+    if (err != NO_ERROR) {
       connection_error(COMPRESSION_ERROR);
       return;
     }
