@@ -59,6 +59,7 @@ static const pjs::ConstStr s_transfer_encoding("transfer-encoding");
 static const pjs::ConstStr s_upgrade("upgrade");
 static const pjs::ConstStr s_te("te");
 static const pjs::ConstStr s_trailers("trailers");
+static const pjs::ConstStr s_content_length("content-length");
 
 static struct {
   const char *name;
@@ -606,6 +607,7 @@ void HeaderDecoder::start(bool is_response, bool is_trailer) {
   m_is_response = is_response;
   m_is_trailer = is_trailer;
   m_is_pseudo_end = false;
+  if (!is_trailer) m_content_length = -1;
 }
 
 auto HeaderDecoder::decode(Data &data) -> ErrorCode {
@@ -865,6 +867,9 @@ bool HeaderDecoder::add_field(pjs::Str *name, pjs::Str *value) {
     } else if (name == s_te && value != s_trailers) {
       error(PROTOCOL_ERROR);
       return false;
+    }
+    if (name == s_content_length) {
+      m_content_length = std::atoi(value->c_str());
     }
     auto headers = m_head->headers();
     if (!headers) {
@@ -1411,6 +1416,7 @@ void Endpoint::StreamBase::on_frame(Frame &frm) {
             m_recv_window = INITIAL_RECV_WINDOW_SIZE;
           }
           event(Data::make(frm.payload));
+          m_recv_payload_size += frm.payload.size();
         }
         if (frm.is_END_STREAM()) {
           if (m_state == OPEN) {
@@ -1705,6 +1711,10 @@ void Endpoint::StreamBase::stream_end() {
     event(StreamEnd::make());
   } else {
     event(MessageEnd::make());
+  }
+  auto content_length = m_header_decoder.content_length();
+  if (content_length >= 0 && content_length != m_recv_payload_size) {
+    connection_error(PROTOCOL_ERROR);
   }
 }
 

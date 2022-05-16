@@ -173,6 +173,7 @@ public:
   bool started() const { return m_head; }
   auto decode(Data &data) -> ErrorCode;
   auto end(pjs::Ref<http::MessageHead> &head) -> ErrorCode;
+  auto content_length() const -> int { return m_content_length; }
 
 private:
   static const int TABLE_SIZE = 256;
@@ -219,6 +220,7 @@ private:
   Data m_buffer;
   pjs::Ref<http::MessageHead> m_head;
   pjs::Ref<pjs::Str> m_name;
+  int m_content_length;
   pjs::PooledArray<Entry>* m_table;
   size_t m_table_head = 0;
   size_t m_table_tail = 0;
@@ -424,6 +426,7 @@ protected:
     Data m_send_buffer;
     int m_send_window = INITIAL_SEND_WINDOW_SIZE;
     int m_recv_window = INITIAL_RECV_WINDOW_SIZE;
+    int m_recv_payload_size = 0;
     const Settings& m_settings;
 
     bool parse_padding(Frame &frm);
