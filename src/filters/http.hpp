@@ -53,12 +53,14 @@ public:
   bool is_connect() const { return m_is_connect; }
   bool is_upgrade_websocket() const { return m_is_upgrade_websocket; }
   bool is_upgrade_http2() const { return m_is_upgrade_http2; }
+  bool has_error() const { return m_has_error; }
 
   void set_bodiless(bool b) { m_is_bodiless = b; }
   void set_connect(bool b) { m_is_connect = b; }
   void set_upgrade_websocket(bool b) { m_is_upgrade_websocket = b; }
 
 protected:
+  virtual void on_decode_error() {}
   virtual void on_http2_pass() {}
 
 private:
@@ -90,6 +92,7 @@ private:
   bool m_is_upgrade_websocket = false;
   bool m_is_upgrade_http2 = false;
   bool m_is_tunnel = false;
+  bool m_has_error = false;
 
   virtual void on_event(Event *evt) override;
 
@@ -330,6 +333,7 @@ private:
   virtual auto on_new_sub_pipeline() -> Pipeline* override;
   virtual void on_enqueue(Request *req) override;
   virtual void on_dequeue(Request *req) override;
+  virtual void on_decode_error() override;
   virtual void on_http2_pass() override;
 
   void upgrade_http2();

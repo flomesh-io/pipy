@@ -39,36 +39,36 @@
 namespace pipy {
 namespace http {
 
-static const pjs::Ref<pjs::Str> s_protocol(pjs::Str::make("protocol"));
-static const pjs::Ref<pjs::Str> s_method(pjs::Str::make("method"));
-static const pjs::Ref<pjs::Str> s_HEAD(pjs::Str::make("HEAD"));
-static const pjs::Ref<pjs::Str> s_CONNECT(pjs::Str::make("CONNECT"));
-static const pjs::Ref<pjs::Str> s_path(pjs::Str::make("path"));
-static const pjs::Ref<pjs::Str> s_status(pjs::Str::make("status"));
-static const pjs::Ref<pjs::Str> s_status_text(pjs::Str::make("statusText"));
-static const pjs::Ref<pjs::Str> s_headers(pjs::Str::make("headers"));
-static const pjs::Ref<pjs::Str> s_http_1_0(pjs::Str::make("HTTP/1.0"));
-static const pjs::Ref<pjs::Str> s_http_1_1(pjs::Str::make("HTTP/1.1"));
-static const pjs::Ref<pjs::Str> s_connection(pjs::Str::make("connection"));
-static const pjs::Ref<pjs::Str> s_keep_alive(pjs::Str::make("keep-alive"));
-static const pjs::Ref<pjs::Str> s_set_cookie(pjs::Str::make("set-cookie"));
-static const pjs::Ref<pjs::Str> s_close(pjs::Str::make("close"));
-static const pjs::Ref<pjs::Str> s_transfer_encoding(pjs::Str::make("transfer-encoding"));
-static const pjs::Ref<pjs::Str> s_content_length(pjs::Str::make("content-length"));
-static const pjs::Ref<pjs::Str> s_content_encoding(pjs::Str::make("content-encoding"));
-static const pjs::Ref<pjs::Str> s_upgrade(pjs::Str::make("upgrade"));
-static const pjs::Ref<pjs::Str> s_websocket(pjs::Str::make("websocket"));
-static const pjs::Ref<pjs::Str> s_h2c(pjs::Str::make("h2c"));
-static const pjs::Ref<pjs::Str> s_bad_gateway(pjs::Str::make("Bad Gateway"));
-static const pjs::Ref<pjs::Str> s_cannot_resolve(pjs::Str::make("Cannot Resolve"));
-static const pjs::Ref<pjs::Str> s_connection_refused(pjs::Str::make("Connection Refused"));
-static const pjs::Ref<pjs::Str> s_unauthorized(pjs::Str::make("Unauthorized"));
-static const pjs::Ref<pjs::Str> s_read_error(pjs::Str::make("Read Error"));
-static const pjs::Ref<pjs::Str> s_write_error(pjs::Str::make("Write Error"));
-static const pjs::Ref<pjs::Str> s_gateway_timeout(pjs::Str::make("Gateway Timeout"));
-static const pjs::Ref<pjs::Str> s_http2_preface_method(pjs::Str::make("PRI"));
-static const pjs::Ref<pjs::Str> s_http2_preface_path(pjs::Str::make("*"));
-static const pjs::Ref<pjs::Str> s_http2_preface_protocol(pjs::Str::make("HTTP/2.0"));
+static const pjs::ConstStr s_protocol("protocol");
+static const pjs::ConstStr s_method("method");
+static const pjs::ConstStr s_HEAD("HEAD");
+static const pjs::ConstStr s_CONNECT("CONNECT");
+static const pjs::ConstStr s_path("path");
+static const pjs::ConstStr s_status("status");
+static const pjs::ConstStr s_status_text("statusText");
+static const pjs::ConstStr s_headers("headers");
+static const pjs::ConstStr s_http_1_0("HTTP/1.0");
+static const pjs::ConstStr s_http_1_1("HTTP/1.1");
+static const pjs::ConstStr s_connection("connection");
+static const pjs::ConstStr s_keep_alive("keep-alive");
+static const pjs::ConstStr s_set_cookie("set-cookie");
+static const pjs::ConstStr s_close("close");
+static const pjs::ConstStr s_transfer_encoding("transfer-encoding");
+static const pjs::ConstStr s_content_length("content-length");
+static const pjs::ConstStr s_content_encoding("content-encoding");
+static const pjs::ConstStr s_upgrade("upgrade");
+static const pjs::ConstStr s_websocket("websocket");
+static const pjs::ConstStr s_h2c("h2c");
+static const pjs::ConstStr s_bad_gateway("Bad Gateway");
+static const pjs::ConstStr s_cannot_resolve("Cannot Resolve");
+static const pjs::ConstStr s_connection_refused("Connection Refused");
+static const pjs::ConstStr s_unauthorized("Unauthorized");
+static const pjs::ConstStr s_read_error("Read Error");
+static const pjs::ConstStr s_write_error("Write Error");
+static const pjs::ConstStr s_gateway_timeout("Gateway Timeout");
+static const pjs::ConstStr s_http2_preface_method("PRI");
+static const pjs::ConstStr s_http2_preface_path("*");
+static const pjs::ConstStr s_http2_preface_protocol("HTTP/2.0");
 
 // HTTP status code as in:
 // https://www.iana.org/assignments/http-status-codes/http-status-codes.txt
@@ -229,6 +229,7 @@ void Decoder::reset() {
   m_is_upgrade_websocket = false;
   m_is_upgrade_http2 = false;
   m_is_tunnel = false;
+  m_has_error = false;
 }
 
 void Decoder::on_event(Event *evt) {
@@ -251,7 +252,7 @@ void Decoder::on_event(Event *evt) {
   auto data = evt->as<Data>();
   if (!data) return;
 
-  while (!data->empty()) {
+  while (!m_has_error && !data->empty()) {
     auto state = m_state;
     pjs::Ref<Data> output(Data::make());
 
@@ -386,6 +387,10 @@ void Decoder::on_event(Event *evt) {
           ) {
             m_body_size = 8;
             state = HTTP2_PREFACE;
+            break;
+          } else if (protocol != s_http_1_0 && protocol != s_http_1_1) {
+            m_has_error = true;
+            on_decode_error();
             break;
           } else {
             req->method(method);
@@ -808,7 +813,7 @@ void Encoder::output_head() {
     } else if (!content_length_written) {
       char str[100];
       std::sprintf(str, ": %d\r\n", m_content_length);
-      s_dp.push(buffer, s_content_length->str());
+      s_dp.push(buffer, s_content_length.get()->str());
       s_dp.push(buffer, str);
     }
 
@@ -1247,6 +1252,10 @@ void Demux::on_dequeue(Request *req) {
   Encoder::set_connect(req->is_connect);
 }
 
+void Demux::on_decode_error() {
+  Filter::output(StreamEnd::make());
+}
+
 void Demux::on_http2_pass() {
   upgrade_http2();
   m_http2_demuxer->open();
@@ -1481,7 +1490,9 @@ void Server::Handler::on_event(Event *evt) {
     }
 
   } else if (auto start = evt->as<MessageStart>()) {
-    if (!m_start) {
+    if (m_server->m_ef_decoder.has_error()) {
+      m_server->Filter::output(StreamEnd::make());
+    } else if (!m_start) {
       m_start = start;
       m_buffer.clear();
       auto &encoder = m_server->m_ef_encoder;
