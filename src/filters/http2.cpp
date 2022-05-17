@@ -708,7 +708,8 @@ auto HeaderDecoder::decode(Data &data) -> ErrorCode {
 
 auto HeaderDecoder::end(pjs::Ref<http::MessageHead> &head) -> ErrorCode {
   head = m_head; m_head = nullptr;
-  if (m_state != INDEX_PREFIX) return COMPRESSION_ERROR;
+  if (m_state != INDEX_PREFIX) return COMPRESSION_ERROR; // incomplete header block
+  if ((m_prefix & 0xe0) == 0x20) return COMPRESSION_ERROR; // ended with a table size change
   if (!m_is_response && !m_is_trailer) {
     auto req = head->as<http::RequestHead>();
     if (
@@ -716,6 +717,7 @@ auto HeaderDecoder::end(pjs::Ref<http::MessageHead> &head) -> ErrorCode {
       req->scheme() == pjs::Str::empty ||
       req->path() == pjs::Str::empty
     ) {
+      // missing mandatory request headers
       return PROTOCOL_ERROR;
     }
   }
@@ -811,7 +813,7 @@ void HeaderDecoder::index_end() {
     if (m_int > m_settings.header_table_size) {
       error();
     } else {
-      // TODO: resize dynamic table
+      m_dynamic_table.resize(m_int);
       m_state = INDEX_PREFIX;
     }
   } else if (m_int) {
