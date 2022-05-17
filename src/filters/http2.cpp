@@ -703,28 +703,40 @@ bool HeaderDecoder::read_int(uint8_t c) {
 bool HeaderDecoder::read_str(uint8_t c, bool lowercase_only) {
   if (m_prefix & 0x80) {
     const auto &tree = s_huffman_tree.get();
+    int last_bit = 8;
     for (int b = 7; b >= 0; b--) {
       bool bit = (c >> b) & 1;
       m_ptr = bit ? tree[m_ptr].right : tree[m_ptr].left;
       auto &node = tree[m_ptr];
       if (!node.left) {
         auto ch = node.right;
-        if (ch == 256) break;
+        if (ch == 256) {
+          error(); // EOS is considered an error
+          return false;
+        }
         if (lowercase_only) {
           if (std::tolower(ch) != ch) {
             error(PROTOCOL_ERROR);
-            return true;
+            return false;
           }
         }
         s_dp.push(&m_buffer, char(ch));
         m_ptr = 0;
+        last_bit = b;
+      }
+    }
+    if (m_int == 1) {
+      uint8_t mask = uint8_t(1 << last_bit) - 1;
+      if (mask == 0xff || (c & mask) != mask) {
+        error();
+        return false;
       }
     }
   } else {
     if (lowercase_only) {
       if (std::tolower(c) != c) {
         error(PROTOCOL_ERROR);
-        return true;
+        return false;
       }
     }
     s_dp.push(&m_buffer, c);
