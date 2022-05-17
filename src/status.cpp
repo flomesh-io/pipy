@@ -38,6 +38,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <map>
 #include <set>
 #include <string>
@@ -319,12 +320,13 @@ void Status::register_metrics() {
     label_names
   );
 
-  pjs::Ref<pjs::Array> buckets = pjs::Array::make(20);
+  pjs::Ref<pjs::Array> buckets = pjs::Array::make(21);
   double limit = 1.5;
   for (int i = 0; i < 20; i++) {
     buckets->set(i, std::floor(limit));
     limit *= 1.5;
   }
+  buckets->set(20, std::numeric_limits<double>::infinity());
 
   metric_outbound_conn_time = stats::Histogram::make(
     pjs::Str::make("pipy_outbound_conn_time"),
