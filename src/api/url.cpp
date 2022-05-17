@@ -352,7 +352,7 @@ template<> void ClassDef<URL>::init() {
   ctor([](Context &ctx) -> Object* {
     Str *url, *base = nullptr;
     if (!ctx.arguments(1, &url, &base)) return nullptr;
-    return URL::make(url, base);
+    return base ? URL::make(url, base) : URL::make(url);
   });
 
   accessor("auth",          [](Object *obj, Value &ret) { ret.set(obj->as<URL>()->auth()); });
