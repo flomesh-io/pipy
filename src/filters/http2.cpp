@@ -583,6 +583,39 @@ void FrameEncoder::header(uint8_t *buf, int id, uint8_t type, uint8_t flags, siz
 }
 
 //
+// DynamicTable
+//
+
+auto DynamicTable::get(size_t i) const -> const TableEntry* {
+  auto n = m_head - m_tail;
+  if (i >= n) return nullptr;
+  return m_entries[(m_head - i) % MAX_ENTRY_COUNT];
+}
+
+void DynamicTable::add(pjs::Str *name, pjs::Str *value) {
+  auto i = ++m_head;
+  if (i - m_tail >= MAX_ENTRY_COUNT) {
+    auto entry = m_entries[++m_tail % MAX_ENTRY_COUNT];
+    m_size -= 32 + entry->name->size() + entry->value->size();
+    delete entry;
+  }
+  auto entry = m_entries[i % MAX_ENTRY_COUNT] = new TableEntry;
+  entry->name = name;
+  entry->value = value;
+  m_size += 32 + name->size() + value->size();
+  evict();
+}
+
+void DynamicTable::evict() {
+  while (m_size > m_capacity) {
+    auto i = ++m_tail;
+    auto entry = m_entries[i % MAX_ENTRY_COUNT];
+    m_size -= 32 + entry->name->size() + entry->value->size();
+    delete entry;
+  }
+}
+
+//
 // HeaderDecoder
 //
 
@@ -592,7 +625,6 @@ HeaderDecoder::HuffmanTree HeaderDecoder::s_huffman_tree;
 HeaderDecoder::HeaderDecoder(const Settings &settings)
   : m_settings(settings)
 {
-  m_table = pjs::PooledArray<Entry>::make(TABLE_SIZE);
 }
 
 void HeaderDecoder::start(bool is_response, bool is_trailer) {
@@ -894,25 +926,17 @@ bool HeaderDecoder::add_field(pjs::Str *name, pjs::Str *value) {
   return true;
 }
 
-auto HeaderDecoder::get_entry(size_t i) -> const Entry* {
+auto HeaderDecoder::get_entry(size_t i) const -> const TableEntry* {
   auto &tab = s_static_table.get();
   if (i <= tab.size()) {
     return &tab[i - 1];
   }
   i -= tab.size() + 1;
-  if (i < m_table_tail - m_table_head) {
-    return &m_table->at((m_table_head + i) % TABLE_SIZE);
-  }
-  return nullptr;
+  return m_dynamic_table.get(i);
 }
 
 void HeaderDecoder::new_entry(pjs::Str *name, pjs::Str *value) {
-  if (--m_table_head == m_table_tail) {
-    m_table_tail--;
-  }
-  auto &ent = m_table->at(m_table_head % TABLE_SIZE);
-  ent.name = name;
-  ent.value = value;
+  m_dynamic_table.add(name, value);
 }
 
 void HeaderDecoder::error(ErrorCode err) {

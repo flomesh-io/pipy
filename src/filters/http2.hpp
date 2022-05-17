@@ -65,9 +65,12 @@ enum ErrorCode {
 //
 
 struct Settings {
-  enum { MAX_SIZE = 1024 };
+  enum {
+    MAX_SIZE = 1024,
+    DEFAULT_HEADER_TABLE_SIZE = 0x1000,
+  };
 
-  int header_table_size = 0x1000;
+  int header_table_size = DEFAULT_HEADER_TABLE_SIZE;
   int initial_window_size = 0xffff;
   int max_concurrent_streams = -1;
   int max_frame_size = 0x4000;
@@ -162,6 +165,38 @@ private:
 };
 
 //
+// TableEntry
+//
+
+struct TableEntry : public pjs::Pooled<TableEntry> {
+  pjs::Ref<pjs::Str> name;
+  pjs::Ref<pjs::Str> value;
+};
+
+//
+// DynamicTable
+//
+
+class DynamicTable {
+public:
+  auto capacity() const -> size_t { return m_capacity; }
+  void resize(size_t size) { m_capacity = size; evict(); }
+  auto get(size_t i) const -> const TableEntry*;
+  void add(pjs::Str *name, pjs::Str *value);
+
+private:
+  enum { MAX_ENTRY_COUNT = 128 };
+
+  TableEntry* m_entries[MAX_ENTRY_COUNT];
+  size_t m_capacity = Settings::DEFAULT_HEADER_TABLE_SIZE;
+  size_t m_size = 0;
+  size_t m_head = 0;
+  size_t m_tail = 0;
+
+  void evict();
+};
+
+//
 // HeaderDecoder
 //
 
@@ -193,11 +228,6 @@ private:
     VALUE_STRING,
   };
 
-  struct Entry {
-    pjs::Ref<pjs::Str> name;
-    pjs::Ref<pjs::Str> value;
-  };
-
   struct Huffman {
     uint16_t left = 0;
     union {
@@ -221,9 +251,7 @@ private:
   pjs::Ref<http::MessageHead> m_head;
   pjs::Ref<pjs::Str> m_name;
   int m_content_length;
-  pjs::PooledArray<Entry>* m_table;
-  size_t m_table_head = 0;
-  size_t m_table_tail = 0;
+  DynamicTable m_dynamic_table;
 
   bool read_int(uint8_t c);
   bool read_str(uint8_t c, bool lowercase_only);
@@ -233,7 +261,7 @@ private:
   void value_prefix(uint8_t prefix);
 
   bool add_field(pjs::Str *name, pjs::Str *value);
-  auto get_entry(size_t i) -> const Entry*;
+  auto get_entry(size_t i) const -> const TableEntry*;
   void new_entry(pjs::Str *name, pjs::Str *value);
 
   void error(ErrorCode err = COMPRESSION_ERROR);
@@ -245,9 +273,9 @@ private:
   class StaticTable {
   public:
     StaticTable();
-    auto get() -> const std::vector<Entry>& { return m_table; }
+    auto get() -> const std::vector<TableEntry>& { return m_table; }
   private:
-    std::vector<Entry> m_table;
+    std::vector<TableEntry> m_table;
   };
 
   //
