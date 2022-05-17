@@ -49,6 +49,7 @@
 #include "logging.hpp"
 
 #include <array>
+#include <limits>
 #include <stdexcept>
 
 //
@@ -69,6 +70,12 @@ using namespace pipy;
 
 template<> void ClassDef<Global>::init() {
   ctor();
+
+  // NaN
+  variable("NaN", std::numeric_limits<double>::quiet_NaN());
+
+  // Infinity
+  variable("Infinity", std::numeric_limits<double>::infinity());
 
   // Object
   variable("Object", class_of<Constructor<Object>>());
