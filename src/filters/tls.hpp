@@ -56,6 +56,14 @@ private:
   X509_STORE* m_verify_store;
 
   static auto on_server_name(SSL *ssl, int*, void*) -> int;
+  static auto on_select_alpn(
+    SSL *ssl,
+    const unsigned char **out,
+    unsigned char *outlen,
+    const unsigned char *in,
+    unsigned int inlen,
+    void *arg
+  ) -> int;
 };
 
 //
@@ -74,7 +82,8 @@ public:
     TLSContext *ctx,
     Pipeline *pipeline,
     bool is_server,
-    pjs::Object *certificate
+    pjs::Object *certificate,
+    pjs::Function *alpn
   );
 
   ~TLSSession();
@@ -91,6 +100,7 @@ private:
   pjs::Ref<Pipeline> m_pipeline;
   pjs::Ref<pjs::Object> m_certificate;
   pjs::Ref<pjs::Object> m_ca;
+  pjs::Ref<pjs::Function> m_alpn;
   bool m_is_server;
   bool m_closed = false;
 
@@ -99,6 +109,7 @@ private:
 
   void on_receive_peer(Event *evt);
   void on_server_name();
+  auto on_select_alpn(pjs::Array *names) -> int;
 
   void use_certificate(pjs::Str *sni);
   bool do_handshake();
@@ -156,6 +167,7 @@ private:
 
   std::shared_ptr<TLSContext> m_tls_context;
   pjs::Ref<pjs::Object> m_certificate;
+  pjs::Ref<pjs::Function> m_alpn;
   TLSSession* m_session = nullptr;
 };
 

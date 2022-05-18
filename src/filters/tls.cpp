@@ -59,6 +59,7 @@ TLSContext::TLSContext(bool is_server) {
 
   SSL_CTX_set0_verify_cert_store(m_ctx, m_verify_store);
   SSL_CTX_set_tlsext_servername_callback(m_ctx, on_server_name);
+  SSL_CTX_set_alpn_select_cb(m_ctx, on_select_alpn, this);
 }
 
 TLSContext::~TLSContext() {
@@ -73,6 +74,37 @@ void TLSContext::add_certificate(crypto::Certificate *cert) {
 auto TLSContext::on_server_name(SSL *ssl, int*, void *thiz) -> int {
   TLSSession::get(ssl)->on_server_name();
   return SSL_TLSEXT_ERR_OK;
+}
+
+auto TLSContext::on_select_alpn(
+  SSL *ssl,
+  const unsigned char **out,
+  unsigned char *outlen,
+  const unsigned char *in,
+  unsigned int inlen,
+  void *arg
+) -> int {
+  const unsigned char *names[100];
+  unsigned int p = 0, n = 0;
+  while (p < inlen && n < 100) {
+    auto len = in[p];
+    names[n++] = in + p;
+    p += len + 1;
+  }
+  pjs::Array *name_array = pjs::Array::make(n);
+  for (size_t i = 0; i < n; i++) {
+    auto str = (const char *)names[i] + 1;
+    auto len = *names[i];
+    name_array->set(i, pjs::Str::make(str, len));
+  }
+  auto sel = TLSSession::get(ssl)->on_select_alpn(name_array);
+  if (0 <= sel && sel < n) {
+    *out = names[sel] + 1;
+    *outlen = *names[sel];
+    return SSL_TLSEXT_ERR_OK;
+  } else {
+    return SSL_TLSEXT_ERR_NOACK;
+  }
 }
 
 //
@@ -111,10 +143,12 @@ TLSSession::TLSSession(
   TLSContext *ctx,
   Pipeline *pipeline,
   bool is_server,
-  pjs::Object *certificate
+  pjs::Object *certificate,
+  pjs::Function *alpn
 )
   : m_pipeline(pipeline)
   , m_certificate(certificate)
+  , m_alpn(alpn)
   , m_is_server(is_server)
 {
   m_ssl = SSL_new(ctx->ctx());
@@ -195,6 +229,18 @@ void TLSSession::on_server_name() {
   if (auto name = SSL_get_servername(m_ssl, TLSEXT_NAMETYPE_host_name)) {
     pjs::Ref<pjs::Str> sni(pjs::Str::make(name));
     use_certificate(sni);
+  }
+}
+
+auto TLSSession::on_select_alpn(pjs::Array *names) -> int {
+  if (m_alpn) {
+    Context &ctx = *m_pipeline->context();
+    pjs::Value arg(names), ret;
+    (*m_alpn)(ctx, 1, &arg, ret);
+    if (!ctx.ok()) return -1;
+    return ret.to_number();
+  } else {
+    return 0;
   }
 }
 
@@ -471,7 +517,8 @@ void Client::process(Event *evt) {
       m_tls_context.get(),
       sub_pipeline(0, false),
       false,
-      m_certificate
+      m_certificate,
+      nullptr
     );
     m_session->chain(output());
     if (!m_sni.is_undefined()) {
@@ -499,9 +546,10 @@ Server::Server(pjs::Object *options)
   : m_tls_context(std::make_shared<TLSContext>(true))
 {
   if (options) {
-    pjs::Value certificate, trusted;
+    pjs::Value certificate, trusted, alpn;
     options->get("certificate", certificate);
     options->get("trusted", trusted);
+    options->get("alpn", alpn);
 
     if (!certificate.is_nullish()) {
       if (!certificate.is_object()) {
@@ -523,6 +571,13 @@ Server::Server(pjs::Object *options)
         m_tls_context->add_certificate(v.as<crypto::Certificate>());
       });
     }
+
+    if (!alpn.is_nullish()) {
+      if (!alpn.is_function()) {
+        throw std::runtime_error("options.alpn expects a function");
+      }
+      m_alpn = alpn.f();
+    }
   }
 }
 
@@ -530,6 +585,7 @@ Server::Server(const Server &r)
   : Filter(r)
   , m_tls_context(r.m_tls_context)
   , m_certificate(r.m_certificate)
+  , m_alpn(r.m_alpn)
 {
 }
 
@@ -557,7 +613,8 @@ void Server::process(Event *evt) {
       m_tls_context.get(),
       sub_pipeline(0, false),
       true,
-      m_certificate
+      m_certificate,
+      m_alpn
     );
     m_session->chain(output());
   }

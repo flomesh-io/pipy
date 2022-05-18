@@ -36,6 +36,29 @@ It can also be a function that returns the above object. In this case, the funct
 
 To enable mTLS, give an array of [crypto.Certificate](/reference/api/crypto/Certificate) objects to the _trusted_ option in the _options_ parameter. Only clients holding a certificate presented in that list are allowed in the handshake process.
 
+### ALPN
+
+You can provide a callback function to the _alpn_ option in the _options_ parameter. During TLS handshake, this function gets called with an array of protocol names offered by the client and is expected to return the index of the selected protocol in that array.
+
+For example,
+
+``` js
+pipy()
+  .listen(8443)
+    .acceptTLS(
+      'tls-offloaded',
+      {
+        certificate: {
+          // ...
+        },
+        // Select HTTP/2 if requested, or HTTP/1.1
+        alpn: names => (
+          ((names.indexOf('h2')+1) || (names.indexOf('http/1.1')+1)) - 1
+        )
+      }
+    )
+```
+
 ## Syntax
 
 ``` js
