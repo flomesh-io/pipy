@@ -28,45 +28,39 @@
 namespace pipy {
 
 //
+// Pack::Options
+//
+
+Pack::Options::Options(pjs::Object *options) {
+  if (options) {
+    pjs::Value vacancy, timeout, interval;
+    options->get("vacancy", vacancy);
+    options->get("timeout", timeout);
+    options->get("interval", interval);
+    if (!utils::get_seconds(timeout, this->timeout)) throw std::runtime_error("options.timeout expects a number or a string");
+    if (!utils::get_seconds(interval, this->interval)) throw std::runtime_error("options.interval expects a number or a string");
+    if (!vacancy.is_undefined()) {
+      if (!vacancy.is_number()) throw std::runtime_error("options.vacancy expects a number");
+      this->vacancy = vacancy.n();
+    }
+  }
+}
+
+//
 // Pack
 //
 
-Pack::Pack(int batch_size, pjs::Object *options)
+Pack::Pack(int batch_size, const Options &options)
   : m_batch_size(batch_size)
+  , m_options(options)
 {
-  if (options) {
-    pjs::Value val;
-
-    options->get("timeout", val);
-    if (val.is_number()) {
-      m_timeout = val.n();
-    } else if (val.is_string()) {
-      m_timeout = utils::get_seconds(val.s()->str());
-    } else if (!val.is_undefined()) {
-      throw std::runtime_error("options.timeout expects a number or a string");
-    }
-
-    options->get("vacancy", val);
-    if (val.is_number()) {
-      m_vacancy = val.n();
-      if (m_vacancy < 0 || m_vacancy > 1) {
-        throw std::runtime_error("options.vacancy expects a number between 0 and 1");
-      }
-    } else if (!val.is_undefined()) {
-      throw std::runtime_error("options.vacancy expects a number");
-    }
-  }
 }
 
 Pack::Pack(const Pack &r)
   : Filter(r)
   , m_batch_size(r.m_batch_size)
-  , m_timeout(r.m_timeout)
+  , m_options(r.m_options)
 {
-  if (m_timeout > 0) {
-    m_timer = std::unique_ptr<Timer>(new Timer);
-    schedule_timeout();
-  }
 }
 
 Pack::~Pack()
@@ -83,7 +77,8 @@ auto Pack::clone() -> Filter* {
 
 void Pack::reset() {
   Filter::reset();
-  m_timer = nullptr;
+  m_timer.cancel();
+  m_timer_scheduled = false;
   m_message_starts = 0;
   m_message_ends = 0;
 }
@@ -91,12 +86,7 @@ void Pack::reset() {
 void Pack::process(Event *evt) {
   static Data::Producer s_dp("pack");
 
-  if (m_timeout > 0) {
-    if (!m_timer) {
-      m_timer = std::unique_ptr<Timer>(new Timer);
-      schedule_timeout();
-    }
-  }
+  schedule_timeout();
 
   if (auto start = evt->as<MessageStart>()) {
     if (m_message_starts == 0) {
@@ -104,23 +94,28 @@ void Pack::process(Event *evt) {
       m_buffer = Data::make();
     }
     m_message_starts++;
-    return;
 
   } else if (auto data = evt->as<Data>()) {
     if (m_buffer) {
-      s_dp.pack(m_buffer, data, m_vacancy);
-      return;
+      s_dp.pack(m_buffer, data, m_options.vacancy);
     }
 
   } else if (auto *end = evt->as<MessageEnd>()) {
     m_message_ends++;
-    if (m_message_starts == m_message_ends && m_message_ends >= m_batch_size) {
+    if (m_options.timeout > 0 || m_options.interval > 0) {
+      m_last_input_time = utils::now() / 1000;
+    }
+    if (
+      (m_message_starts == m_message_ends && m_message_ends >= m_batch_size) ||
+      (m_options.interval > 0 && m_last_input_time - m_last_flush_time >= m_options.interval)
+    ) {
       flush(end);
-    } else if (m_timeout > 0) {
-      m_last_input_time = std::chrono::steady_clock::now();
     }
 
   } else if (evt->is<StreamEnd>()) {
+    if (m_message_starts == m_message_ends && m_message_ends > 0) {
+      flush(MessageEnd::make());
+    }
     output(evt);
   }
 }
@@ -133,30 +128,33 @@ void Pack::flush(MessageEnd *end) {
   m_buffer = nullptr;
   m_message_starts = 0;
   m_message_ends = 0;
+  if (m_options.interval > 0) {
+    m_last_flush_time = utils::now() / 1000;
+  }
 }
 
 void Pack::schedule_timeout() {
-  auto precision = std::min(m_timeout, 1.0);
-  m_timer->schedule(
-    precision,
-    [this]() {
-      check_timeout();
-    }
-  );
+  if (!m_timer_scheduled && m_options.timeout > 0) {
+    auto precision = std::min(m_options.timeout, 1.0);
+    m_timer.schedule(
+      precision,
+      [this]() {
+        check_timeout();
+      }
+    );
+    m_timer_scheduled = true;
+  }
 }
 
 void Pack::check_timeout() {
   if (m_message_ends > 0 && m_message_ends == m_message_starts) {
-    auto now = std::chrono::steady_clock::now();
-    if (std::chrono::duration_cast<std::chrono::milliseconds>(now - m_last_input_time).count() >= m_timeout * 1000) {
+    auto now = utils::now() / 1000;
+    if (now - m_last_input_time >= m_options.timeout) {
       flush(MessageEnd::make());
     }
   }
 
-  // m_timer could've been gone after a flush
-  if (m_timer) {
-    schedule_timeout();
-  }
+  schedule_timeout();
 }
 
 } // namespace pipy

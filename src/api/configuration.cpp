@@ -382,7 +382,8 @@ void Configuration::on_tls_client_hello(pjs::Function *callback) {
 }
 
 void Configuration::pack(int batch_size, pjs::Object *options) {
-  append_filter(new Pack(batch_size, options));
+  Pack::Options opt(options);
+  append_filter(new Pack(batch_size, opt));
 }
 
 void Configuration::print() {

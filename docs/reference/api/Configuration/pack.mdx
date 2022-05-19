@@ -19,7 +19,11 @@ A **pack** filter concatenates [Data](/reference/api/Data) from multiple input [
 
 The number of input _Messages_ to combine into one is given by the _batchSize_ parameter, which defaults to 1 if not presented.
 
-You can also let the filter output a combined _Message_ after a certain amount of time even when the input _Messages_ haven't reached to _batchSize_ yet. This is done by the _timeout_ option in the _options_ parameter, which can be a number in seconds, or a string with a time unit suffix such as `'s'`, `'m'`, `'h'` or `'d'`.
+You can set the maximum time interval between two consecutive batches coming out of a **pack** filter by the _interval_ option in the _options_ parameter. When this interval is greater than 0, a combined _Message_, if any, is guaranteed to be produced after every that amount of time, whether the _batchSize_ is reached or not.
+
+You can also let the filter produce a combined _Message_ after a certain amount of time when no _Messages_ are coming through its input. This is done by the _timeout_ option in the _options_ parameter.
+
+Both _interval_ and _timeout_ can be a number in seconds, or a string with a time unit suffix such as `'s'`, `'m'`, `'h'` or `'d'`.
 
 ### Defragmentation
 
@@ -45,8 +49,9 @@ pipy()
     .pack(
       batchSize,
       {
-        timeout,
         vacancy,
+        timeout,
+        interval,
       }
     )
 ```

@@ -41,7 +41,15 @@ namespace pipy {
 
 class Pack : public Filter {
 public:
-  Pack(int batch_size, pjs::Object *options);
+  struct Options {
+    double timeout = 0;
+    double vacancy = 0.5;
+    double interval = 0;
+
+    Options(pjs::Object *options);
+  };
+
+  Pack(int batch_size, const Options &options);
 
 private:
   Pack(const Pack &r);
@@ -55,12 +63,13 @@ private:
   int m_batch_size;
   int m_message_starts = 0;
   int m_message_ends = 0;
-  double m_timeout = 0;
-  double m_vacancy = 0.5;
+  Options m_options;
   pjs::Ref<pjs::Object> m_head;
   pjs::Ref<Data> m_buffer;
-  std::unique_ptr<Timer> m_timer;
-  std::chrono::steady_clock::time_point m_last_input_time;
+  Timer m_timer;
+  bool m_timer_scheduled = false;
+  double m_last_input_time;
+  double m_last_flush_time;
 
   void flush(MessageEnd *end);
   void schedule_timeout();
