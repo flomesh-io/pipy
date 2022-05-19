@@ -222,6 +222,7 @@ function Metrics({ root }) {
       return null;
     },
     {
+      cacheTime: 0,
       refetchInterval: 1000,
     }
   );
