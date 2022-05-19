@@ -75,13 +75,13 @@ Fetch::Fetch(pjs::Str *host, const Options &options)
   auto def_connect = m_pipeline_def_connect.get();
 
   if (options.tls) {
-    auto opts = pjs::Object::make();
-    opts->set("trusted", options.trusted.get());
+    tls::Client::Options opts;
+    opts.trusted = options.trusted;
     if (options.cert) {
       auto certificate = pjs::Object::make();
       certificate->set("cert", options.cert.get());
       certificate->set("key", options.key.get());
-      opts->set("certificate", certificate);
+      opts.certificate = certificate;
     }
     m_pipeline_def_tls = PipelineDef::make(nullptr, PipelineDef::NAMED, "Fetch TLS");
     m_pipeline_def_tls->append(new tls::Client(opts))->add_sub_pipeline(m_pipeline_def_connect);

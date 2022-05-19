@@ -40,6 +40,7 @@
 #include <chrono>
 #include <map>
 #include <set>
+#include <vector>
 
 namespace pipy {
 
@@ -52,7 +53,7 @@ public:
   struct Options {
     pjs::Ref<crypto::Certificate> cert;
     pjs::Ref<crypto::PrivateKey> key;
-    pjs::Ref<pjs::Array> trusted;
+    std::vector<pjs::Ref<crypto::Certificate>> trusted;
   };
 
   AdminService(CodebaseStore *store);

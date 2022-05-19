@@ -97,13 +97,13 @@ Options::Options(int argc, char *argv[]) {
       } else if (k == "--admin-tls-key") {
         admin_tls_key = load_private_key(v);
       } else if (k == "--admin-tls-trusted") {
-        admin_tls_trusted = load_certificate_list(v);
+        load_certificate_list(v, admin_tls_trusted);
       } else if (k == "--tls-cert") {
         tls_cert = load_certificate(v);
       } else if (k == "--tls-key") {
         tls_key = load_private_key(v);
       } else if (k == "--tls-trusted") {
-        tls_trusted = load_certificate_list(v);
+        load_certificate_list(v, tls_trusted);
       } else if (k == "--openssl-engine") {
         openssl_engine = v;
       } else {
@@ -121,7 +121,7 @@ Options::Options(int argc, char *argv[]) {
     throw std::runtime_error("--admin-tls-cert and --admin-tls-key must be used in conjuction");
   }
 
-  if (admin_tls_trusted && !admin_tls_cert) {
+  if (!admin_tls_trusted.empty() && !admin_tls_cert) {
     throw std::runtime_error("--admin-tls-cert and --admin-tls-key are required for --admin-tls-trusted");
   }
 
@@ -150,11 +150,9 @@ auto Options::load_certificate(const std::string &filename) -> crypto::Certifica
   return crypto::Certificate::make(data);
 }
 
-auto Options::load_certificate_list(const std::string &filename) -> pjs::Array* {
-  auto a = pjs::Array::make();
-
+void Options::load_certificate_list(const std::string &filename, std::vector<pjs::Ref<crypto::Certificate>> &list) {
   if (fs::is_file(filename)) {
-    a->set(0, load_certificate(filename));
+    list.push_back(load_certificate(filename));
 
   } else if (fs::is_dir(filename)) {
     std::list<std::string> names;
@@ -162,9 +160,8 @@ auto Options::load_certificate_list(const std::string &filename) -> pjs::Array* 
       std::string msg("cannot read directory: ");
       throw std::runtime_error(msg + filename);
     }
-    int i = 0;
     for (const auto &name : names) {
-      a->set(i++, load_certificate(
+      list.push_back(load_certificate(
         utils::path_join(filename, name)
       ));
     }
@@ -172,8 +169,6 @@ auto Options::load_certificate_list(const std::string &filename) -> pjs::Array* 
     std::string msg("file or directory not found: ");
     throw std::runtime_error(msg + filename);
   }
-
-  return a;
 }
 
 } // namespace pipy

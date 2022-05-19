@@ -33,6 +33,9 @@
 #include <openssl/bio.h>
 #include <openssl/ssl.h>
 
+#include <vector>
+#include <string>
+
 namespace pipy {
 
 namespace tls {
@@ -50,6 +53,7 @@ public:
 
   auto ctx() const -> SSL_CTX* { return m_ctx; }
   void add_certificate(crypto::Certificate *cert);
+  void set_alpn(const std::vector<std::string> &protocols);
 
 private:
   SSL_CTX* m_ctx;
@@ -131,7 +135,17 @@ private:
 
 class Client : public Filter {
 public:
-  Client(pjs::Object *options);
+  struct Options {
+    pjs::Ref<pjs::Object> certificate;
+    std::vector<pjs::Ref<crypto::Certificate>> trusted;
+    std::vector<std::string> alpn;
+    pjs::Value sni;
+
+    Options() {}
+    Options(pjs::Object *options);
+  };
+
+  Client(const Options &options);
 
 private:
   Client(const Client &r);
@@ -143,9 +157,8 @@ private:
   virtual void dump(std::ostream &out) override;
 
   std::shared_ptr<TLSContext> m_tls_context;
-  pjs::Ref<pjs::Object> m_certificate;
+  std::shared_ptr<Options> m_options;
   TLSSession* m_session = nullptr;
-  pjs::Value m_sni;
 };
 
 //
@@ -154,7 +167,16 @@ private:
 
 class Server : public Filter {
 public:
-  Server(pjs::Object *options);
+  struct Options {
+    pjs::Ref<pjs::Object> certificate;
+    std::vector<pjs::Ref<crypto::Certificate>> trusted;
+    pjs::Ref<pjs::Function> alpn;
+
+    Options() {}
+    Options(pjs::Object *options);
+  };
+
+  Server(const Options &options);
 
 private:
   Server(const Server &r);
@@ -166,8 +188,7 @@ private:
   virtual void dump(std::ostream &out) override;
 
   std::shared_ptr<TLSContext> m_tls_context;
-  pjs::Ref<pjs::Object> m_certificate;
-  pjs::Ref<pjs::Function> m_alpn;
+  std::shared_ptr<Options> m_options;
   TLSSession* m_session = nullptr;
 };
 

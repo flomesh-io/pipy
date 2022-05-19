@@ -31,6 +31,7 @@
 
 #include <list>
 #include <string>
+#include <vector>
 
 namespace pipy {
 
@@ -55,17 +56,17 @@ public:
   std::string instance_name;
   std::string openssl_engine;
 
-  pjs::Ref<crypto::Certificate> admin_tls_cert;
-  pjs::Ref<crypto::PrivateKey>  admin_tls_key;
-  pjs::Ref<pjs::Array>          admin_tls_trusted;
-  pjs::Ref<crypto::Certificate> tls_cert;
-  pjs::Ref<crypto::PrivateKey>  tls_key;
-  pjs::Ref<pjs::Array>          tls_trusted;
+  pjs::Ref<crypto::Certificate>               admin_tls_cert;
+  pjs::Ref<crypto::PrivateKey>                admin_tls_key;
+  std::vector<pjs::Ref<crypto::Certificate>>  admin_tls_trusted;
+  pjs::Ref<crypto::Certificate>               tls_cert;
+  pjs::Ref<crypto::PrivateKey>                tls_key;
+  std::vector<pjs::Ref<crypto::Certificate>>  tls_trusted;
 
 private:
   auto load_private_key(const std::string &filename) -> crypto::PrivateKey*;
   auto load_certificate(const std::string &filename) -> crypto::Certificate*;
-  auto load_certificate_list(const std::string &filename) -> pjs::Array*;
+  void load_certificate_list(const std::string &filename, std::vector<pjs::Ref<crypto::Certificate>> &list);
 };
 
 } // namespace pipy

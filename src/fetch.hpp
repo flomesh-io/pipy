@@ -35,6 +35,7 @@
 #include <functional>
 #include <string>
 #include <list>
+#include <vector>
 
 namespace pipy {
 
@@ -62,7 +63,7 @@ public:
     bool tls = false;
     pjs::Ref<crypto::Certificate> cert;
     pjs::Ref<crypto::PrivateKey> key;
-    pjs::Ref<pjs::Array> trusted;
+    std::vector<pjs::Ref<crypto::Certificate>> trusted;
   };
 
   Fetch(pjs::Str *host, const Options &options);

@@ -34,6 +34,7 @@
 #include "tar.hpp"
 
 #include <map>
+#include <vector>
 
 namespace pipy {
 
@@ -49,7 +50,7 @@ public:
     Fetch::Options fetch_options;
     pjs::Ref<crypto::Certificate> cert;
     pjs::Ref<crypto::PrivateKey> key;
-    pjs::Ref<pjs::Array> trusted;
+    std::vector<pjs::Ref<crypto::Certificate>> trusted;
   };
 
   AdminProxy(const std::string &target);

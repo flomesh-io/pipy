@@ -178,7 +178,7 @@ void Configuration::accept_socks(pjs::Str *target, pjs::Function *on_connect) {
 }
 
 void Configuration::accept_tls(pjs::Str *target, pjs::Object *options) {
-  auto *filter = new tls::Server(options);
+  auto *filter = new tls::Server(tls::Server::Options(options));
   filter->add_sub_pipeline(target);
   append_filter(filter);
 }
@@ -208,7 +208,7 @@ void Configuration::connect_socks(pjs::Str *target, const pjs::Value &address) {
 }
 
 void Configuration::connect_tls(pjs::Str *target, pjs::Object *options) {
-  auto *filter = new tls::Client(options);
+  auto *filter = new tls::Client(tls::Client::Options(options));
   filter->add_sub_pipeline(target);
   append_filter(filter);
 }

@@ -27,6 +27,10 @@ A **connectTLS** filter works like this:
 
 As the client side in a TLS communication, you can specify the [SNI](https://en.wikipedia.org/wiki/Server_Name_Indication) server name by option _sni_ in the _options_ parameter. It can be a string or a function that returns a string.
 
+### ALPN
+
+[ALPN](https://en.wikipedia.org/wiki/Application-Layer_Protocol_Negotiation) is supported by specifying protocols the client side prefers in _alpn_ option of the _options_ parameter. It can be a string or an array of strings.
+
 ### Mutual TLS
 
 To enable mTLS, give an array of [crypto.Certificate](/reference/api/crypto/Certificate) objects to the _trusted_ option in the _options_ parameter. Only servers holding a certificate presented in that list are allowed in the handshake process.
@@ -56,6 +60,7 @@ pipy()
           ...trustedCerts // array of crypto.Certificate
         ],
         sni: () => getServerName(),
+        alpn,
       }
     )
 ```

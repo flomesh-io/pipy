@@ -101,12 +101,12 @@ void AdminService::open(int port, const Options &options) {
     pipeline_def_inbound = pipeline_def;
 
   } else {
-    auto opts = pjs::Object::make();
+    tls::Server::Options opts;
     auto certificate = pjs::Object::make();
     certificate->set("cert", options.cert.get());
     certificate->set("key", options.key.get());
-    opts->set("certificate", certificate);
-    opts->set("trusted", options.trusted.get());
+    opts.certificate = certificate;
+    opts.trusted = options.trusted;
     pipeline_def_inbound = PipelineDef::make(nullptr, PipelineDef::NAMED, "Admin Service TLS-Offloaded");
     pipeline_def->append(new tls::Server(opts))->add_sub_pipeline(pipeline_def_inbound);
   }

@@ -124,12 +124,12 @@ void AdminProxy::open(int port, const Options &options) {
     pipeline_def_inbound = pipeline_def;
 
   } else {
-    auto opts = pjs::Object::make();
+    tls::Server::Options opts;
     auto certificate = pjs::Object::make();
     certificate->set("cert", options.cert.get());
     certificate->set("key", options.key.get());
-    opts->set("certificate", certificate);
-    opts->set("trusted", options.trusted.get());
+    opts.certificate = certificate;
+    opts.trusted = options.trusted;
     pipeline_def_inbound = PipelineDef::make(nullptr, PipelineDef::NAMED, "Admin Proxy TLS-Offloaded");
     pipeline_def->append(new tls::Server(opts))->add_sub_pipeline(pipeline_def_inbound);
   }
@@ -137,14 +137,14 @@ void AdminProxy::open(int port, const Options &options) {
   pipeline_def_connect->append(new Connect(m_target, nullptr));
 
   if (options.fetch_options.tls) {
-    auto opts = pjs::Object::make();
+    tls::Client::Options opts;
     if (options.fetch_options.cert) {
       auto certificate = pjs::Object::make();
       certificate->set("cert", options.fetch_options.cert.get());
       certificate->set("key", options.fetch_options.key.get());
-      opts->set("certificate", certificate);
+      opts.certificate = certificate;
     }
-    opts->set("trusted", options.fetch_options.trusted.get());
+    opts.trusted = options.fetch_options.trusted;
     auto pd = PipelineDef::make(nullptr, PipelineDef::NAMED, "Admin Proxy TLS-Encrypted");
     pd->append(new tls::Client(opts))->add_sub_pipeline(pipeline_def_connect);
     pipeline_def_connect = pd;

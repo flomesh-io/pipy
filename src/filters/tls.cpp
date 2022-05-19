@@ -59,7 +59,10 @@ TLSContext::TLSContext(bool is_server) {
 
   SSL_CTX_set0_verify_cert_store(m_ctx, m_verify_store);
   SSL_CTX_set_tlsext_servername_callback(m_ctx, on_server_name);
-  SSL_CTX_set_alpn_select_cb(m_ctx, on_select_alpn, this);
+
+  if (is_server) {
+    SSL_CTX_set_alpn_select_cb(m_ctx, on_select_alpn, this);
+  }
 }
 
 TLSContext::~TLSContext() {
@@ -69,6 +72,19 @@ TLSContext::~TLSContext() {
 void TLSContext::add_certificate(crypto::Certificate *cert) {
   X509_STORE_add_cert(m_verify_store, cert->x509());
   SSL_CTX_set_verify(m_ctx, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, nullptr);
+}
+
+void TLSContext::set_alpn(const std::vector<std::string> &protocols) {
+  std::string proto_list;
+  for (const auto &s : protocols) {
+    if (s.length() == 0 || s.length() > 255) {
+      std::string msg("protocol name is empty or too long for ALPN: ");
+      throw std::runtime_error(msg + s);
+    }
+    proto_list += char(s.length());
+    proto_list += s;
+  }
+  SSL_CTX_set_alpn_protos(m_ctx, (const unsigned char *)proto_list.c_str(), proto_list.size());
 }
 
 auto TLSContext::on_server_name(SSL *ssl, int*, void *thiz) -> int {
@@ -438,52 +454,88 @@ void TLSSession::close(StreamEnd::Error err) {
 }
 
 //
-// Client
+// Client::Options
 //
 
-Client::Client(pjs::Object *options)
-  : m_tls_context(std::make_shared<TLSContext>(false))
-{
+Client::Options::Options(pjs::Object *options) {
   if (options) {
-    pjs::Value certificate, trusted;
+    pjs::Value certificate, trusted, alpn;
     options->get("certificate", certificate);
     options->get("trusted", trusted);
-    options->get("sni", m_sni);
+    options->get("alpn", alpn);
+    options->get("sni", sni);
 
     if (!certificate.is_nullish()) {
       if (!certificate.is_object()) {
         throw std::runtime_error("options.certificate expects an object or a function");
       }
-      m_certificate = certificate.o();
+      this->certificate = certificate.o();
     }
 
     if (!trusted.is_nullish()) {
       if (!trusted.is_array()) {
         throw std::runtime_error("options.trusted expects an array");
       }
-      trusted.as<pjs::Array>()->iterate_all([&](pjs::Value &v, int i) {
+      auto *arr = trusted.as<pjs::Array>();
+      this->trusted.resize(arr->length());
+      arr->iterate_all([&](pjs::Value &v, int i) {
         if (!v.is<crypto::Certificate>()) {
           char msg[100];
-          std::sprintf(msg, "element %d is not a Certificate", i);
+          std::sprintf(msg, "options.trusted[%d] expects a Certificate", i);
           throw std::runtime_error(msg);
         }
-        m_tls_context->add_certificate(v.as<crypto::Certificate>());
+        this->trusted[i] = v.as<crypto::Certificate>();
       });
     }
 
-    if (!m_sni.is_nullish()) {
-      if (!m_sni.is_string() && !m_sni.is_function()) {
+    if (!alpn.is_nullish()) {
+      if (alpn.is_string()) {
+        this->alpn.push_back(alpn.s()->str());
+      } else if (alpn.is_array()) {
+        auto *arr = alpn.as<pjs::Array>();
+        this->alpn.resize(arr->length());
+        arr->iterate_all(
+          [this](pjs::Value &v, int i) {
+            if (!v.is_string()) {
+              char msg[100];
+              std::sprintf(msg, "options.alpn[%d] expects a string", i);
+              throw std::runtime_error(msg);
+            }
+            this->alpn[i] = v.s()->str();
+          }
+        );
+      }
+    }
+
+    if (!sni.is_nullish()) {
+      if (!sni.is_string() && !sni.is_function()) {
         throw std::runtime_error("options.sni expects a string or a function");
       }
     }
   }
 }
 
+//
+// Client
+//
+
+Client::Client(const Options &options)
+  : m_tls_context(std::make_shared<TLSContext>(false))
+  , m_options(std::make_shared<Options>(options))
+{
+  for (const auto &cert : m_options->trusted) {
+    m_tls_context->add_certificate(cert);
+  }
+
+  if (options.alpn.size() > 0) {
+    m_tls_context->set_alpn(options.alpn);
+  }
+}
+
 Client::Client(const Client &r)
   : Filter(r)
   , m_tls_context(r.m_tls_context)
-  , m_certificate(r.m_certificate)
-  , m_sni(r.m_sni)
+  , m_options(r.m_options)
 {
 }
 
@@ -517,13 +569,13 @@ void Client::process(Event *evt) {
       m_tls_context.get(),
       sub_pipeline(0, false),
       false,
-      m_certificate,
+      m_options->certificate,
       nullptr
     );
     m_session->chain(output());
-    if (!m_sni.is_undefined()) {
+    if (!m_options->sni.is_undefined()) {
       pjs::Value sni;
-      if (!eval(m_sni, sni)) return;
+      if (!eval(m_options->sni, sni)) return;
       if (!sni.is_undefined()) {
         if (sni.is_string()) {
           m_session->set_sni(sni.s()->c_str());
@@ -539,12 +591,10 @@ void Client::process(Event *evt) {
 }
 
 //
-// Server
+// Server::Options
 //
 
-Server::Server(pjs::Object *options)
-  : m_tls_context(std::make_shared<TLSContext>(true))
-{
+Server::Options::Options(pjs::Object *options) {
   if (options) {
     pjs::Value certificate, trusted, alpn;
     options->get("certificate", certificate);
@@ -555,20 +605,22 @@ Server::Server(pjs::Object *options)
       if (!certificate.is_object()) {
         throw std::runtime_error("options.certificate expects an object or a function");
       }
-      m_certificate = certificate.o();
+      this->certificate = certificate.o();
     }
 
     if (!trusted.is_nullish()) {
       if (!trusted.is_array()) {
         throw std::runtime_error("options.trusted expects an array");
       }
-      trusted.as<pjs::Array>()->iterate_all([&](pjs::Value &v, int i) {
+      auto *arr = trusted.as<pjs::Array>();
+      this->trusted.resize(arr->length());
+      arr->iterate_all([this](pjs::Value &v, int i) {
         if (!v.is<crypto::Certificate>()) {
           char msg[100];
-          std::sprintf(msg, "element %d is not a Certificate", i);
+          std::sprintf(msg, "options.trusted[%d] expects a Certificate", i);
           throw std::runtime_error(msg);
         }
-        m_tls_context->add_certificate(v.as<crypto::Certificate>());
+        this->trusted[i] = v.as<crypto::Certificate>();
       });
     }
 
@@ -576,16 +628,28 @@ Server::Server(pjs::Object *options)
       if (!alpn.is_function()) {
         throw std::runtime_error("options.alpn expects a function");
       }
-      m_alpn = alpn.f();
+      this->alpn = alpn.f();
     }
+  }
+}
+
+//
+// Server
+//
+
+Server::Server(const Options &options)
+  : m_tls_context(std::make_shared<TLSContext>(true))
+  , m_options(std::make_shared<Options>(options))
+{
+  for (const auto &cert : m_options->trusted) {
+    m_tls_context->add_certificate(cert);
   }
 }
 
 Server::Server(const Server &r)
   : Filter(r)
   , m_tls_context(r.m_tls_context)
-  , m_certificate(r.m_certificate)
-  , m_alpn(r.m_alpn)
+  , m_options(r.m_options)
 {
 }
 
@@ -613,8 +677,8 @@ void Server::process(Event *evt) {
       m_tls_context.get(),
       sub_pipeline(0, false),
       true,
-      m_certificate,
-      m_alpn
+      m_options->certificate,
+      m_options->alpn
     );
     m_session->chain(output());
   }
