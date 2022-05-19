@@ -27,6 +27,8 @@
 #include "utils.hpp"
 #include "logging.hpp"
 
+#include <cmath>
+
 namespace pipy {
 namespace stats {
 
@@ -554,8 +556,16 @@ auto MetricSet::Deserializer::open(Level *current, Level *list, pjs::Str *key) -
                 auto buckets_str = current->type.substr(s_histogram.length());
                 auto buckets = pjs::Array::make();
                 for (const auto &s : utils::split(buckets_str, ',')) {
-                  auto n = std::atof(s.c_str());
-                  buckets->push(n);
+                  if (s == "NaN") {
+                    buckets->push(std::numeric_limits<double>::quiet_NaN());
+                  } else if (s == "Inf") {
+                    buckets->push(std::numeric_limits<double>::infinity());
+                  } else if (s == "-Inf") {
+                    buckets->push(-std::numeric_limits<double>::infinity());
+                  } else {
+                    auto n = std::atof(s.c_str());
+                    buckets->push(n);
+                  }
                 }
                 m = Histogram::make(key, buckets, labels, m_metric_set);
               }
@@ -852,9 +862,16 @@ auto Histogram::get_type() -> const std::string& {
         } else {
           m_type += ',';
         }
-        char str[100];
-        auto len = pjs::Number::to_string(str, sizeof(str), v.to_number());
-        m_type += std::string(str, len);
+        auto n = v.to_number();
+        if (std::isnan(n)) {
+          m_type += "\"NaN\"";
+        } else if (std::isinf(n)) {
+          m_type += n > 0 ? "\"Inf\"" : "\"-Inf\"";
+        } else {
+          char str[100];
+          auto len = pjs::Number::to_string(str, sizeof(str), v.to_number());
+          m_type += std::string(str, len);
+        }
       }
     );
     m_type += ']';

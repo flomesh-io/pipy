@@ -234,7 +234,16 @@ function Metrics({ root }) {
           if (metric.t === 'Counter') {
             computeRate(metric.v);
           } else if (metric.t.startsWith('Histogram[')) {
-            const buckets = JSON.parse(metric.t.substring(9));
+            const buckets = JSON.parse(metric.t.substring(9)).map(
+              v => {
+                switch (v) {
+                  case 'NaN': return NaN;
+                  case 'Inf': return Infinity;
+                  case '-Inf': return -Infinity;
+                  default: return v;
+                }
+              }
+            );
             computeCumulative(metric.v);
             metric.v = computePercentile(metric.v, buckets, 0.9);
           }
