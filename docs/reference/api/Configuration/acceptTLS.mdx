@@ -59,6 +59,24 @@ pipy()
     )
 ```
 
+You can also simply give an array of strings to this option, telling what protocols should be accepted during TLS handshake.
+
+``` js
+pipy()
+  .listen(8443)
+    .acceptTLS(
+      'tls-offloaded',
+      {
+        certificate: {
+          // ...
+        },
+        alpn: ['http/1.1', 'h2']
+      }
+    )
+```
+
+If nothing is provided, or the callback function returns an invalid index, the first protocol requested by the client side would be chosen.
+
 ## Syntax
 
 ``` js

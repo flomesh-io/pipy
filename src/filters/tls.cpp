@@ -74,7 +74,7 @@ void TLSContext::add_certificate(crypto::Certificate *cert) {
   SSL_CTX_set_verify(m_ctx, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, nullptr);
 }
 
-void TLSContext::set_alpn(const std::vector<std::string> &protocols) {
+void TLSContext::set_client_alpn(const std::vector<std::string> &protocols) {
   std::string proto_list;
   for (const auto &s : protocols) {
     if (s.length() == 0 || s.length() > 255) {
@@ -85,6 +85,10 @@ void TLSContext::set_alpn(const std::vector<std::string> &protocols) {
     proto_list += s;
   }
   SSL_CTX_set_alpn_protos(m_ctx, (const unsigned char *)proto_list.c_str(), proto_list.size());
+}
+
+void TLSContext::set_server_alpn(const std::set<pjs::Ref<pjs::Str>> &protocols) {
+  m_server_alpn = protocols;
 }
 
 auto TLSContext::on_server_name(SSL *ssl, int*, void *thiz) -> int {
@@ -107,11 +111,17 @@ auto TLSContext::on_select_alpn(
     names[n++] = in + p;
     p += len + 1;
   }
-  pjs::Array *name_array = pjs::Array::make(n);
+  pjs::Ref<pjs::Array> name_array = pjs::Array::make(n);
   for (size_t i = 0; i < n; i++) {
     auto str = (const char *)names[i] + 1;
     auto len = *names[i];
-    name_array->set(i, pjs::Str::make(str, len));
+    auto s = pjs::Str::make(str, len);
+    name_array->set(i, s);
+    if (static_cast<TLSContext*>(arg)->m_server_alpn.count(s)) {
+      *out = (const unsigned char *)str;
+      *outlen = len;
+      return SSL_TLSEXT_ERR_OK;
+    }
   }
   auto sel = TLSSession::get(ssl)->on_select_alpn(name_array);
   if (0 <= sel && sel < n) {
@@ -528,7 +538,7 @@ Client::Client(const Options &options)
   }
 
   if (options.alpn.size() > 0) {
-    m_tls_context->set_alpn(options.alpn);
+    m_tls_context->set_client_alpn(options.alpn);
   }
 }
 
@@ -625,10 +635,23 @@ Server::Options::Options(pjs::Object *options) {
     }
 
     if (!alpn.is_nullish()) {
-      if (!alpn.is_function()) {
-        throw std::runtime_error("options.alpn expects a function");
+      if (!alpn.is_array() && !alpn.is_function()) {
+        throw std::runtime_error("options.alpn expects an array or a function");
       }
-      this->alpn = alpn.f();
+      if (alpn.is_array()) {
+        alpn.as<pjs::Array>()->iterate_all(
+          [this](pjs::Value &v, int i) {
+            if (!v.is_string()) {
+              char msg[100];
+              std::sprintf(msg, "options.alpn[%d] expects a string", i);
+              throw std::runtime_error(msg);
+            }
+            this->alpn_set.insert(v.s());
+          }
+        );
+      } else {
+        this->alpn = alpn.f();
+      }
     }
   }
 }
@@ -644,6 +667,8 @@ Server::Server(const Options &options)
   for (const auto &cert : m_options->trusted) {
     m_tls_context->add_certificate(cert);
   }
+
+  m_tls_context->set_server_alpn(options.alpn_set);
 }
 
 Server::Server(const Server &r)

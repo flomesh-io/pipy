@@ -35,6 +35,7 @@
 
 #include <vector>
 #include <string>
+#include <set>
 
 namespace pipy {
 
@@ -53,11 +54,13 @@ public:
 
   auto ctx() const -> SSL_CTX* { return m_ctx; }
   void add_certificate(crypto::Certificate *cert);
-  void set_alpn(const std::vector<std::string> &protocols);
+  void set_client_alpn(const std::vector<std::string> &protocols);
+  void set_server_alpn(const std::set<pjs::Ref<pjs::Str>> &protocols);
 
 private:
   SSL_CTX* m_ctx;
   X509_STORE* m_verify_store;
+  std::set<pjs::Ref<pjs::Str>> m_server_alpn;
 
   static auto on_server_name(SSL *ssl, int*, void*) -> int;
   static auto on_select_alpn(
@@ -171,6 +174,7 @@ public:
     pjs::Ref<pjs::Object> certificate;
     std::vector<pjs::Ref<crypto::Certificate>> trusted;
     pjs::Ref<pjs::Function> alpn;
+    std::set<pjs::Ref<pjs::Str>> alpn_set;
 
     Options() {}
     Options(pjs::Object *options);
