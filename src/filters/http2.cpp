@@ -516,6 +516,13 @@ auto FrameDecoder::on_state(int state, int c) -> int {
         on_deframe_error(FRAME_SIZE_ERROR);
         return -1;
       } else if (size > 0) {
+        if (
+          (m_frame.type == Frame::RST_STREAM && size != 4) ||
+          (m_frame.type == Frame::PRIORITY && size != 5)
+        ) {
+          on_deframe_error(FRAME_SIZE_ERROR);
+          return -1;
+        }
         Deframer::read(size, m_payload);
         return STATE_PAYLOAD;
       } else {
@@ -1201,6 +1208,15 @@ void Endpoint::on_deframe(Frame &frm) {
     } else {
       auto stream = m_stream_map.get(id);
       if (!stream) {
+        if (id <= m_last_received_stream_id) {
+          if (
+            frm.type == Frame::PRIORITY ||
+            frm.type == Frame::RST_STREAM ||
+            frm.type == Frame::WINDOW_UPDATE
+          ) return; // ignore PRIORITY for closed streams
+          connection_error(STREAM_CLOSED);
+          return;
+        }
         if (frm.type == Frame::DATA || frm.type == Frame::WINDOW_UPDATE) {
           connection_error(PROTOCOL_ERROR);
           return;
@@ -1211,11 +1227,6 @@ void Endpoint::on_deframe(Frame &frm) {
         }
         if ((id & 1) == 0) {
           connection_error(PROTOCOL_ERROR);
-          return;
-        }
-        if (id <= m_last_received_stream_id) {
-          if (frm.type == Frame::PRIORITY) return; // ignore PRIORITY for closed streams
-          connection_error(STREAM_CLOSED);
           return;
         }
         stream = on_new_stream(id);
@@ -1495,11 +1506,7 @@ void Endpoint::StreamBase::on_frame(Frame &frm) {
     }
 
     case Frame::PRIORITY: {
-      if (frm.payload.size() != 5) {
-        stream_error(FRAME_SIZE_ERROR);
-      } else {
-        parse_priority(frm);
-      }
+      parse_priority(frm);
       break;
     }
 
