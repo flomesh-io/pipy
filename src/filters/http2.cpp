@@ -667,6 +667,10 @@ auto HeaderDecoder::decode(Data &data) -> ErrorCode {
         }
         case NAME_PREFIX: {
           name_prefix(c);
+          if (!m_int) {
+            error();
+            return false;
+          }
           break;
         }
         case NAME_LENGTH: {
@@ -686,6 +690,12 @@ auto HeaderDecoder::decode(Data &data) -> ErrorCode {
         }
         case VALUE_PREFIX: {
           value_prefix(c);
+          if (!m_int) {
+            if (add_field(m_name, pjs::Str::empty)) {
+              if (m_is_new) new_entry(m_name, pjs::Str::empty);
+              m_state = INDEX_PREFIX;
+            }
+          }
           break;
         }
         case VALUE_LENGTH: {
@@ -1046,6 +1056,7 @@ void HeaderEncoder::encode(bool is_response, pjs::Object *head, Data &data) {
     if (auto obj = headers.o()) {
       obj->iterate_all(
         [&](pjs::Str *k, pjs::Value &v) {
+          if (k == pjs::Str::empty) return;
           if (k == s_host) {
             if (has_authority) return;
             k = s_colon_authority;
