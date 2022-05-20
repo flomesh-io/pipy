@@ -47,6 +47,45 @@ jobs:
       release_version: ${{steps.version.outputs.release_version}}
       commit_date: ${{steps.version.outputs.commit_date}}
 
+  x86-pipy-repo:
+    needs: set-release-version
+    name: x86-pipy-repo
+    runs-on: ubuntu-latest
+    if: ${{ ! startsWith(needs.set-release-version.outputs.release_version, 'nightly') }}
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          path: pipy
+
+      - name: Setup buildx
+        uses: docker/setup-buildx-action@v1
+
+      - name: Show envs
+        run: export
+
+      - name: Build image
+        id: build
+        env:
+          IMAGE: flomesh/pipy-repo
+          DOCKER_BUILDKIT: 1
+          RELEASE_VERSION: ${{ needs.set-release-version.outputs.release_version }}
+        run: |
+          ./build.sh -ncgp -t ${RELEASE_VERSION}
+          ls -l
+          echo "::set-output name=artifact_name::$(ls *${RELEASE_VERSION}*.tar.gz)"
+          echo "::set-output name=arch::$(uname -m)"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          if-no-files-found: error
+          path: pipy/${{ steps.build.outputs.artifact_name }}
+          name: ${{ steps.build.outputs.artifact_name }}
+
+    outputs:
+      artifact_name: ${{steps.build.outputs.artifact_name}}
+      arch: ${{steps.build.outputs.arch}}
+
   x86-binary:
     needs: set-release-version
     name: x86-binary
@@ -236,6 +275,7 @@ jobs:
       - x86-binary
       - aarch64-binary
       - x86-alpine-docker
+      - x86-pipy-repo
       - aarch64-alpine-docker
       - x86-rpm
     steps:
@@ -248,11 +288,13 @@ jobs:
           client-payload: |
             {
                 "github": ${{toJSON(github)}},
+                "release_version": "${{needs.set-release-version.outputs.release_version}}",
                 "artifacts": [
                   { "type": "rpm", "arch": "${{needs.x86-rpm.outputs.arch}}", "name": "${{ needs.x86-rpm.outputs.artifact_name }}" },
                   { "type": "binary", "arch": "${{needs.x86-binary.outputs.arch}}", "name": "${{ needs.x86-binary.outputs.artifact_name }}" },
                   { "type": "binary", "arch": "${{needs.aarch64-binary.outputs.arch}}", "name": "${{ needs.aarch64-binary.outputs.artifact_name }}" },
                   { "type": "image", "arch": "${{needs.x86-alpine-docker.outputs.arch}}", "name": "${{ needs.x86-alpine-docker.outputs.artifact_name }}" },
+                  { "type": "image", "arch": "${{needs.x86-pipy-repo.outputs.arch}}", "name": "${{ needs.x86-pipy-repo.outputs.artifact_name }}" },
                   { "type": "image", "arch": "${{needs.aarch64-alpine-docker.outputs.arch}}", "name": "${{ needs.aarch64-alpine-docker.outputs.artifact_name }}" }
                 ]
              }
