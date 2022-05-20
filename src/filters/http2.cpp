@@ -1567,14 +1567,16 @@ void Endpoint::StreamBase::on_event(Event *evt) {
   if (auto start = evt->as<MessageStart>()) {
     Data buf;
     m_header_encoder.encode(m_is_server_side, start->head(), buf);
+    Frame frm;
+    frm.type = Frame::HEADERS;
     while (!buf.empty()) {
       auto len = std::min(buf.size(), MAX_HEADER_FRAME_SIZE);
-      Frame frm;
       frm.stream_id = m_id;
-      frm.type = Frame::HEADERS;
       frm.flags = (len == buf.size() ? Frame::BIT_END_HEADERS : 0);
       buf.shift(len, frm.payload);
       frame(frm);
+      frm.type = Frame::CONTINUATION;
+      frm.payload.clear();
     }
     if (m_state == IDLE) {
       m_state = OPEN;
