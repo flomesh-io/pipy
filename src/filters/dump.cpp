@@ -26,6 +26,7 @@
 #include "dump.hpp"
 #include "context.hpp"
 #include "data.hpp"
+#include "api/json.hpp"
 #include "logging.hpp"
 
 #include <iostream>
@@ -79,7 +80,16 @@ void Dump::process(Event *evt) {
 
   ss << evt->name();
 
-  if (auto end = evt->as<StreamEnd>()) {
+  if (auto start = evt->as<MessageStart>()) {
+    if (auto head = start->head()) {
+      Data buf;
+      JSON::encode(head, nullptr, 0, buf);
+      ss << ' ';
+      buf.scan([&](int c) { ss << char(c); return true; });
+    }
+    Log::print(Log::INFO, ss.str());
+
+  } else if (auto end = evt->as<StreamEnd>()) {
     if (end->error() != StreamEnd::NO_ERROR) {
       ss << " [" << end->error() << "] " << end->message();
     }
