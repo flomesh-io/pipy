@@ -37,6 +37,7 @@ namespace pipy {
 class Message : public pjs::ObjectTemplate<Message> {
 public:
   auto head() const -> pjs::Object* { return m_head; }
+  auto tail() const -> pjs::Object* { return m_tail; }
   auto body() const -> Data* { return m_body; }
 
 private:
@@ -56,9 +57,20 @@ private:
     : m_head(head)
     , m_body(s_dp.make(body)) {}
 
+  Message(pjs::Object *head, Data *body, pjs::Object *tail)
+    : m_head(head)
+    , m_tail(tail)
+    , m_body(body) {}
+
+  Message(pjs::Object *head, const std::string &body, pjs::Object *tail)
+    : m_head(head)
+    , m_tail(tail)
+    , m_body(s_dp.make(body)) {}
+
   ~Message() {}
 
   pjs::Ref<pjs::Object> m_head;
+  pjs::Ref<pjs::Object> m_tail;
   pjs::Ref<Data> m_body;
 
   static Data::Producer s_dp;

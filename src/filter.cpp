@@ -143,7 +143,7 @@ bool Filter::output(const pjs::Value &evt) {
     auto *body = msg->body();
     output(MessageStart::make(msg->head()));
     if (body) output(body);
-    output(MessageEnd::make());
+    output(MessageEnd::make(msg->tail()));
     return true;
   } else if (evt.is_array()) {
     auto *a = evt.as<pjs::Array>();
@@ -156,7 +156,7 @@ bool Filter::output(const pjs::Value &evt) {
         auto *body = msg->body();
         output(MessageStart::make(msg->head()));
         if (body) output(body);
-        output(MessageEnd::make());
+        output(MessageEnd::make(msg->tail()));
         return true;
       } else {
         return v.is_null() || v.is_undefined();

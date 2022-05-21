@@ -120,9 +120,18 @@ struct MessageEnd : public EventTemplate<MessageEnd> {
 public:
   static const Type __TYPE = Event::MessageEnd;
 
+  auto tail() -> pjs::Object* { return m_tail; }
+
 private:
   MessageEnd() {}
-  MessageEnd(const MessageEnd &r) {}
+
+  MessageEnd(pjs::Object *tail)
+    : m_tail(tail) {}
+
+  MessageEnd(const MessageEnd &r)
+    : m_tail(r.m_tail) {}
+
+  pjs::Ref<pjs::Object> m_tail;
 
   friend class pjs::ObjectTemplate<MessageEnd, Event>;
 };

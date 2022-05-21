@@ -1778,7 +1778,7 @@ void TunnelClient::process(Event *evt) {
     auto msg = handshake.as<Message>();
     inp->input(MessageStart::make(msg->head()));
     if (auto body = msg->body()) inp->input(body);
-    inp->input(MessageEnd::make());
+    inp->input(MessageEnd::make(msg->tail()));
   }
 
   if (m_pipeline) {

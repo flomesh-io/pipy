@@ -98,7 +98,9 @@ void OnMessage::process(Event *evt) {
           m_discarded_size, m_size_limit
         );
       }
-      pjs::Value arg(Message::make(m_head, m_body)), result;
+      pjs::Object *tail = nullptr;
+      if (auto *end = evt->as<MessageEnd>()) tail = end->tail();
+      pjs::Value arg(Message::make(m_head, m_body, tail)), result;
       if (!callback(m_callback, 1, &arg, result)) return;
       m_head = nullptr;
       m_body = nullptr;

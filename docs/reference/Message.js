@@ -6,13 +6,14 @@ class Message {
   /**
    * Creates an instance of Message.
    *
-   * @param {Object} [head] Message head.
-   * @param {string|Data} body Message body.
+   * @param {Object} [head] Message meta-info in the head.
+   * @param {string|Data} body Message content.
+   * @param {Object} [tail] Message meta-info in the tail.
    */
-  constructor(head, body) {}
+  constructor(head, body, tail) {}
 
   /**
-   * Message head.
+   * Message meta-info in the head.
    *
    * @type {Object}
    * @readyonly
@@ -20,7 +21,15 @@ class Message {
   head = null;
 
   /**
-   * Message body.
+   * Message meta-info in the tail.
+   *
+   * @type {Object}
+   * @readyonly
+   */
+  tail = null;
+
+  /**
+   * Message content.
    *
    * @type {Data}
    * @readyonly

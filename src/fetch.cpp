@@ -156,7 +156,7 @@ void Fetch::pump() {
     auto inp = m_pipeline->input();
     inp->input(MessageStart::make(msg->head()));
     if (auto *body = msg->body()) inp->input(body);
-    inp->input(MessageEnd::make());
+    inp->input(MessageEnd::make(msg->tail()));
   }
 }
 

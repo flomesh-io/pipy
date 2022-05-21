@@ -52,7 +52,7 @@ template<> void ClassDef<pipy::Message>::init() {
       }
       case 2: {
         Object *head = nullptr;
-        if (!ctx.arguments(1, &head)) return nullptr;
+        if (!ctx.check(0, head)) return nullptr;
         const auto &arg1 = ctx.arg(1);
         if (arg1.is_string()) {
           return pipy::Message::make(head, arg1.s()->str());
@@ -65,14 +65,32 @@ template<> void ClassDef<pipy::Message>::init() {
           return nullptr;
         }
       }
+      case 3: {
+        Object *head = nullptr;
+        Object *tail = nullptr;
+        if (!ctx.check(0, head)) return nullptr;
+        if (!ctx.check(2, tail)) return nullptr;
+        const auto &arg1 = ctx.arg(1);
+        if (arg1.is_string()) {
+          return pipy::Message::make(head, arg1.s()->str(), tail);
+        } else if (arg1.is_instance_of<pipy::Data>()) {
+          return pipy::Message::make(head, arg1.as<pipy::Data>(), tail);
+        } else if (arg1.is_null()) {
+          return pipy::Message::make(head, nullptr, tail);
+        } else {
+          ctx.error_argument_type(1, "a string or a Data object");
+          return nullptr;
+        }
+      }
       default: {
-        ctx.error_argument_count(0, 2);
+        ctx.error_argument_count(0, 3);
         return nullptr;
       }
     }
   });
 
   accessor("head", [](Object *obj, Value &ret) { ret.set(obj->as<pipy::Message>()->head()); });
+  accessor("tail", [](Object *obj, Value &ret) { ret.set(obj->as<pipy::Message>()->tail()); });
   accessor("body", [](Object *obj, Value &ret) { ret.set(obj->as<pipy::Message>()->body()); });
 }
 

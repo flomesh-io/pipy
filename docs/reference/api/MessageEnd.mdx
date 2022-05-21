@@ -5,9 +5,9 @@ api: MessageEnd
 
 ## Description
 
-**MessageEnd** marks the end of a message in an event stream.
+**MessageEnd** marks the end of a message in an event stream. It also contains meta-info for that message in its optional [tail](/reference/api/MessageEnd/tail) property.
 
-This event only acts as an ending mark to a message. It doesn't carry any other information with it.
+> The content of _tail_ can vary according to the protocol being used. See [For each protocol](/reference/api/MessageEnd/tail/#for-each-protocol).
 
 ## Constructor
 
