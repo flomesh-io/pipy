@@ -60,6 +60,21 @@ public:
   void headers(pjs::Object *o) { pjs::set<MessageHead>(this, MessageHead::Field::headers, o); }
 };
 
+class MessageTail : public pjs::ObjectTemplate<MessageTail> {
+public:
+  enum class Field {
+    headers,
+  };
+
+  auto headers() -> Object* {
+    pjs::Value ret;
+    pjs::get<MessageTail>(this, MessageTail::Field::headers, ret);
+    return ret.is_object() ? ret.o() : nullptr;
+  }
+
+  void headers(pjs::Object *o) { pjs::set<MessageTail>(this, MessageTail::Field::headers, o); }
+};
+
 class RequestHead : public pjs::ObjectTemplate<RequestHead, MessageHead> {
 public:
   enum class Field {

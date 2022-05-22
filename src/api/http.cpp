@@ -238,6 +238,10 @@ template<> void ClassDef<MessageHead>::init() {
   variable("headers", MessageHead::Field::headers);
 }
 
+template<> void ClassDef<MessageTail>::init() {
+  variable("headers", MessageTail::Field::headers);
+}
+
 template<> void ClassDef<RequestHead>::init() {
   super<MessageHead>();
   ctor();

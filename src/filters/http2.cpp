@@ -1008,45 +1008,47 @@ HeaderDecoder::HuffmanTree::HuffmanTree() {
 
 HeaderEncoder::StaticTable HeaderEncoder::m_static_table;
 
-void HeaderEncoder::encode(bool is_response, pjs::Object *head, Data &data) {
+void HeaderEncoder::encode(bool is_response, bool is_tail, pjs::Object *head, Data &data) {
   Data::Builder db(data, &s_dp);
   bool has_authority = false;
-  if (is_response) {
-    pjs::Value status;
-    if (head) head->get(s_status, status);
-    if (status.is_number()) {
-      pjs::Ref<pjs::Str> str(pjs::Str::make(status.n()));
-      encode_header_field(db, s_colon_status, str);
-    } else {
-      encode_header_field(db, s_colon_status, s_200);
-    }
+  if (!is_tail) {
+    if (is_response) {
+      pjs::Value status;
+      if (head) head->get(s_status, status);
+      if (status.is_number()) {
+        pjs::Ref<pjs::Str> str(pjs::Str::make(status.n()));
+        encode_header_field(db, s_colon_status, str);
+      } else {
+        encode_header_field(db, s_colon_status, s_200);
+      }
 
-  } else {
-    pjs::Value method, scheme, authority, path;
-    if (head) {
-      head->get(s_method, method);
-      head->get(s_scheme, scheme);
-      head->get(s_authority, authority);
-      head->get(s_path, path);
-    }
-    if (method.is_string()) {
-      encode_header_field(db, s_colon_method, method.s());
     } else {
-      encode_header_field(db, s_colon_method, s_GET);
-    }
-    if (scheme.is_string()) {
-      encode_header_field(db, s_colon_scheme, scheme.s());
-    } else {
-      encode_header_field(db, s_colon_scheme, s_http);
-    }
-    if (authority.is_string()) {
-      encode_header_field(db, s_colon_authority, authority.s());
-      has_authority = true;
-    }
-    if (path.is_string()) {
-      encode_header_field(db, s_colon_path, path.s());
-    } else {
-      encode_header_field(db, s_colon_path, s_root_path);
+      pjs::Value method, scheme, authority, path;
+      if (head) {
+        head->get(s_method, method);
+        head->get(s_scheme, scheme);
+        head->get(s_authority, authority);
+        head->get(s_path, path);
+      }
+      if (method.is_string()) {
+        encode_header_field(db, s_colon_method, method.s());
+      } else {
+        encode_header_field(db, s_colon_method, s_GET);
+      }
+      if (scheme.is_string()) {
+        encode_header_field(db, s_colon_scheme, scheme.s());
+      } else {
+        encode_header_field(db, s_colon_scheme, s_http);
+      }
+      if (authority.is_string()) {
+        encode_header_field(db, s_colon_authority, authority.s());
+        has_authority = true;
+      }
+      if (path.is_string()) {
+        encode_header_field(db, s_colon_path, path.s());
+      } else {
+        encode_header_field(db, s_colon_path, s_root_path);
+      }
     }
   }
 
@@ -1066,7 +1068,6 @@ void HeaderEncoder::encode(bool is_response, pjs::Object *head, Data &data) {
           if (k == s_proxy_connection) return;
           if (k == s_transfer_encoding) return;
           if (k == s_upgrade) return;
-          if (k == s_te) return;
           auto s = v.to_string();
           encode_header_field(db, k, s);
           s->release();
@@ -1481,10 +1482,10 @@ void Endpoint::StreamBase::on_frame(Frame &frm) {
         if (frm.is_END_STREAM()) {
           if (m_state == OPEN) {
             m_state = HALF_CLOSED_REMOTE;
-            stream_end();
+            stream_end(nullptr);
           } else if (m_state == HALF_CLOSED_LOCAL) {
             m_state = CLOSED;
-            stream_end();
+            stream_end(nullptr);
             close();
           }
         } else if (m_is_tunnel) {
@@ -1566,18 +1567,8 @@ void Endpoint::StreamBase::on_frame(Frame &frm) {
 void Endpoint::StreamBase::on_event(Event *evt) {
   if (auto start = evt->as<MessageStart>()) {
     Data buf;
-    m_header_encoder.encode(m_is_server_side, start->head(), buf);
-    Frame frm;
-    frm.type = Frame::HEADERS;
-    while (!buf.empty()) {
-      auto len = std::min(buf.size(), MAX_HEADER_FRAME_SIZE);
-      frm.stream_id = m_id;
-      frm.flags = (len == buf.size() ? Frame::BIT_END_HEADERS : 0);
-      buf.shift(len, frm.payload);
-      frame(frm);
-      frm.type = Frame::CONTINUATION;
-      frm.payload.clear();
-    }
+    m_header_encoder.encode(m_is_server_side, false, start->head(), buf);
+    write_header_block(buf);
     if (m_state == IDLE) {
       m_state = OPEN;
     } else if (m_state == RESERVED_LOCAL) {
@@ -1608,14 +1599,23 @@ void Endpoint::StreamBase::on_event(Event *evt) {
     (evt->is<MessageEnd>() && !m_is_tunnel) ||
     (evt->is<StreamEnd>()))
   {
+    pjs::Object *tail = nullptr;
+    if (auto *end = evt->as<MessageEnd>()) {
+      tail = end->tail();
+    }
     if (m_state == OPEN) {
       m_state = HALF_CLOSED_LOCAL;
       m_end_output = true;
-      pump();
+      pump(tail);
     } else if (m_state == HALF_CLOSED_REMOTE) {
       m_state = CLOSED;
       m_end_output = true;
-      pump();
+      pump(tail);
+    }
+    if (tail) {
+      Data buf;
+      m_header_encoder.encode(m_is_server_side, true, tail, buf);
+      write_header_block(buf);
     }
     recycle();
   }
@@ -1706,8 +1706,16 @@ void Endpoint::StreamBase::parse_headers(Frame &frm) {
       m_state = HALF_CLOSED_LOCAL;
     }
 
-    m_end_headers = true;
-    event(MessageStart::make(head));
+    http::MessageTail *tail = nullptr;
+
+    if (m_header_decoder.is_trailer()) {
+      tail = http::MessageTail::make();
+      tail->headers(head->headers());
+
+    } else {
+      m_end_headers = true;
+      event(MessageStart::make(head));
+    }
 
     if (m_is_server_side) {
       if (head->as<http::RequestHead>()->method() == s_CONNECT) {
@@ -1721,18 +1729,33 @@ void Endpoint::StreamBase::parse_headers(Frame &frm) {
     if (m_end_input) {
       if (m_state == OPEN) {
         m_state = HALF_CLOSED_REMOTE;
-        stream_end();
+        stream_end(tail);
       } else if (m_state == HALF_CLOSED_LOCAL) {
         m_state = CLOSED;
-        stream_end();
+        stream_end(tail);
         close();
       }
     }
   }
 }
 
-void Endpoint::StreamBase::pump() {
-  bool is_empty_end = (m_end_output && m_send_buffer.empty());
+void Endpoint::StreamBase::write_header_block(Data &data) {
+  Frame frm;
+  frm.stream_id = m_id;
+  frm.type = Frame::HEADERS;
+  frm.flags = m_end_output ? Frame::BIT_END_STREAM : 0;
+  while (!data.empty()) {
+    auto len = std::min(data.size(), MAX_HEADER_FRAME_SIZE);
+    if (len == data.size()) frm.flags |= Frame::BIT_END_HEADERS;
+    data.shift(len, frm.payload);
+    frame(frm);
+    frm.type = Frame::CONTINUATION;
+    frm.payload.clear();
+  }
+}
+
+void Endpoint::StreamBase::pump(bool no_end) {
+  bool is_empty_end = (!no_end && m_end_output && m_send_buffer.empty());
   int size = m_send_buffer.size();
   if (size > m_send_window) size = m_send_window;
   if (size > 0) size = deduct_send(size);
@@ -1745,7 +1768,7 @@ void Endpoint::StreamBase::pump() {
       frm.stream_id = m_id;
       frm.type = Frame::DATA;
       if (n > 0) m_send_buffer.shift(n, frm.payload);
-      if (m_end_output && m_send_buffer.empty()) {
+      if (!no_end && m_end_output && m_send_buffer.empty()) {
         frm.flags = Frame::BIT_END_STREAM;
         m_end_output = false;
       } else {
@@ -1764,11 +1787,11 @@ void Endpoint::StreamBase::recycle() {
   }
 }
 
-void Endpoint::StreamBase::stream_end() {
+void Endpoint::StreamBase::stream_end(http::MessageTail *tail) {
   if (m_is_tunnel) {
     event(StreamEnd::make());
   } else {
-    event(MessageEnd::make());
+    event(MessageEnd::make(tail));
   }
   auto content_length = m_header_decoder.content_length();
   if (content_length >= 0 && content_length != m_recv_payload_size) {

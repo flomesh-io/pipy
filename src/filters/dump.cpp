@@ -89,6 +89,15 @@ void Dump::process(Event *evt) {
     }
     Log::print(Log::INFO, ss.str());
 
+  } else if (auto end = evt->as<MessageEnd>()) {
+    if (auto tail = end->tail()) {
+      Data buf;
+      JSON::encode(tail, nullptr, 0, buf);
+      ss << ' ';
+      buf.scan([&](int c) { ss << char(c); return true; });
+    }
+    Log::print(Log::INFO, ss.str());
+
   } else if (auto end = evt->as<StreamEnd>()) {
     if (end->error() != StreamEnd::NO_ERROR) {
       ss << " [" << end->error() << "] " << end->message();

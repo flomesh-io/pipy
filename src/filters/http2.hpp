@@ -209,6 +209,7 @@ public:
   auto decode(Data &data) -> ErrorCode;
   auto end(pjs::Ref<http::MessageHead> &head) -> ErrorCode;
   auto content_length() const -> int { return m_content_length; }
+  bool is_trailer() const { return m_is_trailer; }
 
 private:
   static const int TABLE_SIZE = 256;
@@ -302,6 +303,7 @@ class HeaderEncoder {
 public:
   void encode(
     bool is_response,
+    bool is_tail,
     pjs::Object *head,
     Data &data
   );
@@ -461,9 +463,10 @@ protected:
     bool parse_priority(Frame &frm);
     void parse_headers(Frame &frm);
     bool parse_window_update(Frame &frm);
-    void pump();
+    void write_header_block(Data &data);
+    void pump(bool no_end = false);
     void recycle();
-    void stream_end();
+    void stream_end(http::MessageTail *tail);
 
     friend class Endpoint;
   };
