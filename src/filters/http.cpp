@@ -523,6 +523,11 @@ void Decoder::on_event(Event *evt) {
 }
 
 void Decoder::message_start() {
+  if (m_is_response) {
+    on_decode_response(m_head->as<http::ResponseHead>());
+  } else {
+    on_decode_request(m_head->as<http::RequestHead>());
+  }
   output(MessageStart::make(m_head));
 }
 
@@ -830,6 +835,12 @@ void Encoder::output_head() {
 
   s_dp.push(buffer, "\r\n");
 
+  if (m_is_response) {
+    on_encode_response(m_start->head());
+  } else {
+    on_encode_request(m_start->head());
+  }
+
   output(m_start);
   output(buffer);
 }
@@ -1101,7 +1112,6 @@ void RequestQueue::reset() {
     m_queue.remove(r);
     delete r;
   }
-  m_started = false;
 }
 
 void RequestQueue::shutdown() {
@@ -1110,28 +1120,14 @@ void RequestQueue::shutdown() {
   }
 }
 
-void RequestQueue::on_input(Event *evt) {
-  if (evt->is<MessageStart>()) {
-    auto *r = new RequestQueue::Request;
-    on_enqueue(r);
-    m_queue.push(r);
-  }
-
-  forward(evt);
+void RequestQueue::push(Request *req) {
+  m_queue.push(req);
 }
 
-void RequestQueue::on_reply(Event *evt) {
-  if (evt->is<MessageStart>()) {
-    if (auto *r = m_queue.head()) {
-      on_dequeue(r);
-      m_queue.remove(r);
-      delete r;
-    }
-  } else if (evt->is<StreamEnd>()) {
-    reset();
-  }
-
-  output(evt);
+auto RequestQueue::shift() -> Request* {
+  auto req = m_queue.head();
+  if (req) m_queue.remove(req);
+  return req;
 }
 
 //
@@ -1183,23 +1179,20 @@ auto Demux::clone() -> Filter* {
 
 void Demux::chain() {
   Filter::chain();
-  Decoder::chain(RequestQueue::input());
-  RequestQueue::chain_forward(QueueDemuxer::input());
-  QueueDemuxer::chain(RequestQueue::reply());
-  RequestQueue::chain(Encoder::input());
+  Decoder::chain(QueueDemuxer::input());
+  QueueDemuxer::chain(Encoder::input());
   Encoder::chain(Filter::output());
   Encoder::set_buffer_size(m_buffer_size);
 }
 
 void Demux::reset() {
   Filter::reset();
-  RequestQueue::reset();
   QueueDemuxer::reset();
   Decoder::reset();
   Encoder::reset();
+  m_request_queue.reset();
   if (m_http2_demuxer) {
-    Decoder::chain(RequestQueue::input());
-    RequestQueue::chain_forward(QueueDemuxer::input());
+    Decoder::chain(QueueDemuxer::input());
     delete m_http2_demuxer;
     m_http2_demuxer = nullptr;
   }
@@ -1211,10 +1204,10 @@ void Demux::process(Event *evt) {
 
 void Demux::shutdown() {
   Filter::shutdown();
-  if (RequestQueue::empty()) {
+  if (m_request_queue.empty()) {
     Filter::output(StreamEnd::make());
   } else {
-    RequestQueue::shutdown();
+    m_request_queue.shutdown();
   }
   if (m_http2_demuxer) {
     m_http2_demuxer->go_away();
@@ -1225,10 +1218,12 @@ auto Demux::on_new_sub_pipeline() -> Pipeline* {
   return sub_pipeline(0, true);
 }
 
-void Demux::on_enqueue(Request *req) {
+void Demux::on_decode_request(http::RequestHead *head) {
+  auto req = new RequestQueue::Request;
   req->is_final = Decoder::is_final();
   req->is_bodiless = Decoder::is_bodiless();
   req->is_connect = Decoder::is_connect();
+  m_request_queue.push(req);
   if (Decoder::is_connect() || Decoder::is_upgrade_websocket()) {
     isolate();
   } else if (Decoder::is_upgrade_http2()) {
@@ -1242,14 +1237,17 @@ void Demux::on_enqueue(Request *req) {
     inp->input(MessageStart::make(head));
     inp->input(MessageEnd::make());
     upgrade_http2();
-    RequestQueue::chain_forward(m_http2_demuxer->initial_stream());
+    Decoder::chain(m_http2_demuxer->initial_stream());
   }
 }
 
-void Demux::on_dequeue(Request *req) {
-  Encoder::set_final(req->is_final);
-  Encoder::set_bodiless(req->is_bodiless);
-  Encoder::set_connect(req->is_connect);
+void Demux::on_encode_response(pjs::Object *head) {
+  if (auto req = m_request_queue.shift()) {
+    Encoder::set_final(req->is_final);
+    Encoder::set_bodiless(req->is_bodiless);
+    Encoder::set_connect(req->is_connect);
+    delete req;
+  }
 }
 
 void Demux::on_decode_error() {
@@ -1345,11 +1343,9 @@ void Mux::Session::open() {
   switch (m_version) {
   case 1:
     QueueMuxer::chain(Encoder::input());
-    Encoder::chain(RequestQueue::input());
-    RequestQueue::chain_forward(MuxBase::Session::input());
+    Encoder::chain(MuxBase::Session::input());
     MuxBase::Session::chain(Decoder::input());
-    Decoder::chain(RequestQueue::reply());
-    RequestQueue::chain(QueueMuxer::reply());
+    Decoder::chain(QueueMuxer::reply());
     break;
   case 2:
     upgrade_http2();
@@ -1376,24 +1372,33 @@ void Mux::Session::close_stream(EventFunction *stream) {
 
 void Mux::Session::close() {
   QueueMuxer::reset();
-  RequestQueue::reset();
+  m_request_queue.reset();
   if (m_http2_muxer) {
     m_http2_muxer->go_away();
   }
 }
 
-void Mux::Session::on_enqueue(Request *req) {
+void Mux::Session::on_encode_request(pjs::Object *head) {
+  auto *req = new RequestQueue::Request;
   req->is_bodiless = Encoder::is_bodiless();
   req->is_connect = Encoder::is_connect();
+  m_request_queue.push(req);
   if (Encoder::is_connect() || Encoder::is_upgrade_websocket()) {
     MuxBase::Session::isolate();
     QueueMuxer::isolate();
   }
 }
 
-void Mux::Session::on_dequeue(Request *req) {
-  Decoder::set_bodiless(req->is_bodiless);
-  Decoder::set_connect(req->is_connect);
+void Mux::Session::on_decode_response(http::ResponseHead *head) {
+  if (auto req = m_request_queue.shift()) {
+    Decoder::set_bodiless(req->is_bodiless);
+    Decoder::set_connect(req->is_connect);
+    delete req;
+  }
+}
+
+void Mux::Session::on_decode_error()
+{
 }
 
 void Mux::Session::upgrade_http2() {

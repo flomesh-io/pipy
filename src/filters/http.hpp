@@ -60,6 +60,8 @@ public:
   void set_upgrade_websocket(bool b) { m_is_upgrade_websocket = b; }
 
 protected:
+  virtual void on_decode_request(http::RequestHead *head) {}
+  virtual void on_decode_response(http::ResponseHead *head) {}
   virtual void on_decode_error() {}
   virtual void on_http2_pass() {}
 
@@ -126,6 +128,10 @@ public:
   void set_final(bool b) { m_is_final = b; }
   void set_bodiless(bool b) { m_is_bodiless = b; }
   void set_connect(bool b) { m_is_connect = b; }
+
+protected:
+  virtual void on_encode_request(pjs::Object *head) {}
+  virtual void on_encode_response(pjs::Object *head) {}
 
 private:
   pjs::Ref<MessageStart> m_start;
@@ -259,8 +265,8 @@ private:
 // RequestQueue
 //
 
-class RequestQueue : protected EventProxy {
-protected:
+class RequestQueue {
+public:
   struct Request :
     public pjs::Pooled<Request>,
     public List<Request>::Item
@@ -270,17 +276,14 @@ protected:
     bool is_connect;
   };
 
-  List<Request> m_queue;
-  bool m_started = false;
-
   bool empty() const { return m_queue.empty(); }
   void reset();
   void shutdown();
+  void push(Request *req);
+  auto shift() -> Request*;
 
-  virtual void on_input(Event *evt) override;
-  virtual void on_reply(Event *evt) override;
-  virtual void on_enqueue(Request *req) = 0;
-  virtual void on_dequeue(Request *req) = 0;
+private:
+  List<Request> m_queue;
 };
 
 //
@@ -309,7 +312,6 @@ private:
 class Demux :
   public Filter,
   public QueueDemuxer,
-  protected RequestQueue,
   protected Decoder,
   protected Encoder
 {
@@ -327,13 +329,14 @@ private:
   virtual void shutdown() override;
   virtual void dump(std::ostream &out) override;
 
+  RequestQueue m_request_queue;
   int m_buffer_size = DATA_CHUNK_SIZE;
   HTTP2Demuxer *m_http2_demuxer = nullptr;
 
   virtual auto on_new_sub_pipeline() -> Pipeline* override;
-  virtual void on_enqueue(Request *req) override;
-  virtual void on_dequeue(Request *req) override;
+  virtual void on_decode_request(http::RequestHead *head) override;
   virtual void on_decode_error() override;
+  virtual void on_encode_response(pjs::Object *head) override;
   virtual void on_http2_pass() override;
 
   void upgrade_http2();
@@ -376,7 +379,6 @@ private:
   class Session :
     public pjs::Pooled<Session, MuxBase::Session>,
     public QueueMuxer,
-    protected RequestQueue,
     protected Encoder,
     protected Decoder
   {
@@ -392,11 +394,13 @@ private:
     virtual auto open_stream() -> EventFunction* override;
     virtual void close_stream(EventFunction *stream) override;
     virtual void close() override;
-    virtual void on_enqueue(Request *req) override;
-    virtual void on_dequeue(Request *req) override;
+    virtual void on_encode_request(pjs::Object *head) override;
+    virtual void on_decode_response(http::ResponseHead *head) override;
+    virtual void on_decode_error() override;
 
     int m_version;
     int m_buffer_size;
+    RequestQueue m_request_queue;
     HTTP2Muxer* m_http2_muxer = nullptr;
 
     void upgrade_http2();
