@@ -304,6 +304,7 @@ void gen_uuid_v4(std::string &str) {
 }
 
 bool starts_with(const std::string &str, const std::string &prefix) {
+  if (str.length() < prefix.length()) return false;
   return !std::strncmp(str.c_str(), prefix.c_str(), prefix.length());
 }
 

@@ -47,17 +47,12 @@ public:
 
   void reset();
 
-  bool is_final() const { return m_is_final; }
-  bool is_bodiless() const { return m_is_bodiless; }
-  bool is_tunnel() const { return m_is_tunnel; }
-  bool is_connect() const { return m_is_connect; }
-  bool is_upgrade_websocket() const { return m_is_upgrade_websocket; }
-  bool is_upgrade_http2() const { return m_is_upgrade_http2; }
+  auto header_connection() const -> pjs::Str* { return m_header_connection; }
+  auto header_upgrade() const -> pjs::Str* { return m_header_upgrade; }
   bool has_error() const { return m_has_error; }
 
   void set_bodiless(bool b) { m_is_bodiless = b; }
-  void set_connect(bool b) { m_is_connect = b; }
-  void set_upgrade_websocket(bool b) { m_is_upgrade_websocket = b; }
+  void set_tunnel(bool b) { m_is_tunnel = b; }
 
 protected:
   virtual void on_decode_request(http::RequestHead *head) {}
@@ -86,13 +81,13 @@ private:
   Data m_buffer;
   Data m_head_buffer;
   pjs::Ref<MessageHead> m_head;
+  pjs::Ref<pjs::Str> m_header_transfer_encoding;
+  pjs::Ref<pjs::Str> m_header_content_length;
+  pjs::Ref<pjs::Str> m_header_connection;
+  pjs::Ref<pjs::Str> m_header_upgrade;
   int m_body_size = 0;
   bool m_is_response;
-  bool m_is_final = false;
   bool m_is_bodiless = false;
-  bool m_is_connect = false;
-  bool m_is_upgrade_websocket = false;
-  bool m_is_upgrade_http2 = false;
   bool m_is_tunnel = false;
   bool m_has_error = false;
 
@@ -118,16 +113,15 @@ public:
 
   void reset();
 
-  bool is_bodiless() const { return m_is_bodiless; }
-  bool is_connect() const { return m_is_connect; }
-  bool is_upgrade_websocket() const { return m_is_upgrade_websocket; }
-  bool is_upgrade_http2() const { return m_is_upgrade_http2; }
-  bool is_tunnel() const { return m_is_tunnel; }
+  auto protocol() const -> pjs::Str* { return m_protocol; }
+  auto method() const -> pjs::Str* { return m_method; }
+  auto header_connection() const -> pjs::Str* { return m_header_connection; }
+  auto header_upgrade() const -> pjs::Str* { return m_header_upgrade; }
 
   void set_buffer_size(int size) { m_buffer_size = size; }
   void set_final(bool b) { m_is_final = b; }
   void set_bodiless(bool b) { m_is_bodiless = b; }
-  void set_connect(bool b) { m_is_connect = b; }
+  void set_tunnel(bool b) { m_is_tunnel = b; }
 
 protected:
   virtual void on_encode_request(pjs::Object *head) {}
@@ -135,6 +129,10 @@ protected:
 
 private:
   pjs::Ref<MessageStart> m_start;
+  pjs::Ref<pjs::Str> m_protocol;
+  pjs::Ref<pjs::Str> m_method;
+  pjs::Ref<pjs::Str> m_header_connection;
+  pjs::Ref<pjs::Str> m_header_upgrade;
   Data m_buffer;
   int m_buffer_size = DATA_CHUNK_SIZE;
   int m_content_length = 0;
@@ -142,9 +140,6 @@ private:
   bool m_is_response;
   bool m_is_final = false;
   bool m_is_bodiless = false;
-  bool m_is_connect = false;
-  bool m_is_upgrade_websocket = false;
-  bool m_is_upgrade_http2 = false;
   bool m_is_tunnel = false;
 
   virtual void on_event(Event *evt) override;
@@ -271,9 +266,14 @@ public:
     public pjs::Pooled<Request>,
     public List<Request>::Item
   {
-    bool is_final;
-    bool is_bodiless;
-    bool is_connect;
+    pjs::Ref<pjs::Str> protocol;
+    pjs::Ref<pjs::Str> method;
+    pjs::Ref<pjs::Str> header_connection;
+    pjs::Ref<pjs::Str> header_upgrade;
+    bool is_final() const;
+    bool is_bodiless() const;
+    bool is_switching() const;
+    bool is_http2() const;
   };
 
   bool empty() const { return m_queue.empty(); }
@@ -413,7 +413,11 @@ private:
 // Server
 //
 
-class Server : public Filter {
+class Server :
+  public Filter,
+  protected Decoder,
+  protected Encoder
+{
 public:
   Server(const std::function<Message*(Message*)> &handler);
   Server(pjs::Object *handler);
@@ -428,6 +432,9 @@ private:
   virtual void process(Event *evt) override;
   virtual void shutdown() override;
   virtual void dump(std::ostream &out) override;
+
+  virtual void on_decode_request(http::RequestHead *head) override;
+  virtual void on_encode_response(pjs::Object *head) override;
 
   class Handler :
     public pjs::Pooled<Handler>,
@@ -448,10 +455,10 @@ private:
 
   std::function<Message*(Message*)> m_handler_func;
   pjs::Ref<pjs::Object> m_handler_obj;
-  Decoder m_ef_decoder;
-  Encoder m_ef_encoder;
   Handler m_ef_handler;
+  RequestQueue m_request_queue;
   pjs::Ref<Pipeline> m_tunnel;
+  bool m_switching = false;
 
   void start_tunnel();
   void on_tunnel_data(Data *data);
