@@ -8,6 +8,7 @@ option(PIPY_ZLIB "external zlib location" "")
 option(PIPY_OPENSSL "external libopenssl location" "")
 option(PIPY_BROTLI "external brotli location" "")
 option(PIPY_STATIC "statically link to libc" OFF)
+option(PIPY_LTO "enable LTO" ON)
 
 add_subdirectory(deps/yajl-2.1.0)
 
@@ -51,15 +52,18 @@ endif()
 
 include(c++-standards)
 include(compiler-options)
-include(link-time-optimization)
 include(sanitizers)
 
 # Require C++ 11
 cxx_11()
 
 # enable LTO/IPO for all targets. Doesn't work with GCC.
-if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
+if(PIPY_LTO AND (NOT CMAKE_BUILD_TYPE STREQUAL "Debug"))
+  message("Enabling LTO")
+  include(link-time-optimization)
   link_time_optimization()
+else()
+  message("LTO is disabled")
 endif()
 
 if (PIPY_ZLIB)
