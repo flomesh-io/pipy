@@ -2,3 +2,4 @@
 deps/zlib-*/build/
 deps/openssl-*/build/
 deps/libexpat-*/testdata/
+**/node_modules
