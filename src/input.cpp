@@ -30,6 +30,22 @@
 namespace pipy {
 
 //
+// FlushTarget
+//
+
+void FlushTarget::need_flush() {
+  if (!m_origin) {
+    auto *origin = InputContext::origin();
+    if (m_is_terminating) {
+      origin->m_flush_targets_terminating.push(this);
+    } else {
+      origin->m_flush_targets_pumping.push(this);
+    }
+    m_origin = origin;
+  }
+}
+
+//
 // InputContext
 //
 
@@ -38,11 +54,28 @@ InputContext* InputContext::s_stack = nullptr;
 InputContext::InputContext(InputSource *source)
   : m_tap(source ? source->tap() : new InputSource::Tap())
 {
+  m_origin = s_stack ? s_stack : this;
   m_next = s_stack;
   s_stack = this;
 }
 
 InputContext::~InputContext() {
+
+  // Flush all pumping targets
+  while (auto *target = m_flush_targets_pumping.head()) {
+    m_flush_targets_pumping.remove(target);
+    target->m_origin = nullptr;
+    target->on_flush();
+  }
+
+  // Flush all terminating targets
+  while (auto *target = m_flush_targets_terminating.head()) {
+    m_flush_targets_terminating.remove(target);
+    target->m_origin = nullptr;
+    target->on_flush();
+  }
+
+  // Clean up pipelines
   m_cleaning_up = true;
   for (
     auto *p = m_pipelines;
@@ -51,6 +84,7 @@ InputContext::~InputContext() {
     p->m_auto_release = false;
     p->release();
   }
+
   s_stack = m_next;
 }
 

@@ -47,7 +47,8 @@ class Outbound :
   public pjs::RefCount<Outbound>,
   public pjs::Pooled<Outbound>,
   public List<Outbound>::Item,
-  public InputSource
+  public InputSource,
+  public FlushTarget
 {
 public:
   struct Options {
@@ -64,7 +65,7 @@ public:
   ~Outbound();
 
   static void for_each(const std::function<void(Outbound*)> &cb) {
-    for (auto p = s_all_outbounds.head(); p; p = p->next()) {
+    for (auto p = s_all_outbounds.head(); p; p = p->List<Outbound>::Item::next()) {
       cb(p);
     }
   }
@@ -84,6 +85,8 @@ public:
   void flush();
   void end();
   void reset();
+
+  virtual void on_flush() override { flush(); }
 
 private:
   std::string m_host;

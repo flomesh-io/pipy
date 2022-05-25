@@ -1156,12 +1156,13 @@ Endpoint::Endpoint(bool is_server_side)
 }
 
 Endpoint::~Endpoint() {
-  auto *p = m_streams.head();
-  while (p) {
-    auto *s = p; p = p->next();
-    m_stream_map.set(s->id(), nullptr);
-    delete s;
-  }
+  for_each_stream(
+    [this](StreamBase *s) {
+      m_stream_map.set(s->id(), nullptr);
+      delete s;
+      return true;
+    }
+  );
 }
 
 void Endpoint::upgrade_request(http::RequestHead *head, const Data &body) {
@@ -1184,27 +1185,44 @@ void Endpoint::upgrade_request(http::RequestHead *head, const Data &body) {
   s->event(MessageEnd::make());
 }
 
+bool Endpoint::for_each_stream(const std::function<bool(StreamBase*)> &cb) {
+  if (!for_each_pending_stream(cb)) return false;
+  for (auto *p = m_streams.head(); p; ) {
+    auto *s = p; p = p->next();
+    if (!cb(s)) return false;
+  }
+  return true;
+}
+
+bool Endpoint::for_each_pending_stream(const std::function<bool(StreamBase*)> &cb) {
+  for (auto *p = m_streams_pending.head(); p; ) {
+    auto *s = p; p = p->next();
+    if (!cb(s)) return false;
+  }
+  return true;
+}
+
 void Endpoint::on_event(Event *evt) {
   if (m_has_gone_away) return;
 
   if (auto data = evt->as<Data>()) {
     if (!data->empty()) {
-      m_processing_frames = true;
       FrameDecoder::deframe(data);
-      m_processing_frames = false;
     }
-    flush();
 
-  } else if (evt->is<StreamEnd>()) {
-    List<StreamBase> streams(std::move(m_streams));
-    auto *p = streams.head();
-    while (p) {
-      auto *s = p; p = p->next();
-      s->event(evt->clone());
-      m_stream_map.set(s->id(), nullptr);
-      on_delete_stream(s);
-    }
+  } else if (auto end = evt->as<StreamEnd>()) {
+    end_all(end);
   }
+}
+
+void Endpoint::on_flush() {
+  for_each_pending_stream(
+    [this](StreamBase *s) {
+      s->pump();
+      return m_send_window > 0;
+    }
+  );
+  flush();
 }
 
 void Endpoint::on_deframe(Frame &frm) {
@@ -1271,12 +1289,11 @@ void Endpoint::on_deframe(Frame &frm) {
               bool ok = true;
               if (m_peer_settings.initial_window_size != old_initial_window_size) {
                 auto delta = m_peer_settings.initial_window_size - old_initial_window_size;
-                for (auto s = m_streams.head(); s; s = s->next()) {
-                  if (!s->update_send_window(delta)) {
-                    ok = false;
-                    break;
+                ok = for_each_stream(
+                  [=](StreamBase *s) {
+                    return s->update_send_window(delta);
                   }
-                }
+                );
               }
               if (ok) {
                 Frame frm;
@@ -1314,12 +1331,12 @@ void Endpoint::on_deframe(Frame &frm) {
               connection_error(FLOW_CONTROL_ERROR);
             } else {
               m_send_window = n;
-              auto p = m_streams.head();
-              while (p) {
-                auto *s = p; p = p->next();
-                s->on_pump();
-                if (!m_send_window) break;
-              }
+              for_each_pending_stream(
+                [this](StreamBase *s) {
+                  s->on_pump();
+                  return m_send_window > 0;
+                }
+              );
             }
           }
         } else {
@@ -1361,10 +1378,11 @@ void Endpoint::frame(Frame &frm) {
     FrameEncoder::frame(frm, m_output_buffer);
   }
   FrameEncoder::frame(frm, m_output_buffer);
+  need_flush();
 }
 
 void Endpoint::flush() {
-  if (!m_output_buffer.empty() && !m_processing_frames) {
+  if (!m_output_buffer.empty()) {
     on_output(Data::make(m_output_buffer));
     on_output(Data::flush());
     m_output_buffer.clear();
@@ -1381,6 +1399,7 @@ auto Endpoint::stream_open(int id) -> StreamBase* {
 
 void Endpoint::stream_close(int id) {
   if (auto s = m_stream_map.set(id, nullptr)) {
+    s->set_pending(false);
     m_streams.remove(s);
     on_delete_stream(s);
   }
@@ -1389,21 +1408,34 @@ void Endpoint::stream_close(int id) {
 void Endpoint::stream_error(int id, ErrorCode err) {
   stream_close(id);
   FrameEncoder::RST_STREAM(id, err, m_output_buffer);
+  need_flush();
 }
 
 void Endpoint::connection_error(ErrorCode err) {
-  auto *p = m_streams.head();
-  while (p) {
-    auto *s = p; p = p->next();
-    m_streams.remove(s);
-    m_stream_map.set(s->id(), nullptr);
-    on_delete_stream(s);
-  }
-  m_has_gone_away = true;
+  end_all();
   FrameEncoder::GOAWAY(m_last_received_stream_id, err, m_output_buffer);
   on_output(Data::make(m_output_buffer));
   on_output(StreamEnd::make());
   m_output_buffer.clear();
+}
+
+void Endpoint::end_all(StreamEnd *evt) {
+  m_has_gone_away = true;
+  for_each_pending_stream(
+    [](StreamBase *s) {
+      s->set_pending(false);
+      return true;
+    }
+  );
+  for_each_stream(
+    [=](StreamBase *s) {
+      if (evt) s->event(StreamEnd::make(*evt));
+      m_stream_map.set(s->id(), nullptr);
+      m_streams.remove(s);
+      on_delete_stream(s);
+      return true;
+    }
+  );
 }
 
 //
@@ -1488,8 +1520,6 @@ void Endpoint::StreamBase::on_frame(Frame &frm) {
             stream_end(nullptr);
             close();
           }
-        } else if (m_is_tunnel) {
-          event(Data::flush());
         }
       } else {
         stream_error(STREAM_CLOSED);
@@ -1585,14 +1615,16 @@ void Endpoint::StreamBase::on_event(Event *evt) {
     }
 
   } else if (auto data = evt->as<Data>()) {
-    if (data->empty()) {
+    if (!data->empty()) {
+      if (m_is_tunnel) {
+        m_send_buffer.push(*data);
+        pump();
+      } else if (!m_end_output) {
+        pump();
+        m_send_buffer.push(*data);
+        set_pending(true);
+      }
       flush();
-    } else if (m_is_tunnel) {
-      m_send_buffer.push(*data);
-      pump();
-    } else if (!m_end_output) {
-      pump();
-      m_send_buffer.push(*data);
     }
 
   } else if (
@@ -1754,6 +1786,20 @@ void Endpoint::StreamBase::write_header_block(Data &data) {
   }
 }
 
+void Endpoint::StreamBase::set_pending(bool pending) {
+  if (pending != m_is_pending) {
+    if (pending) {
+      if (m_endpoint->m_has_gone_away) return;
+      m_endpoint->m_streams.remove(this);
+      m_endpoint->m_streams_pending.push(this);
+    } else {
+      m_endpoint->m_streams_pending.remove(this);
+      m_endpoint->m_streams.push(this);
+    }
+    m_is_pending = pending;
+  }
+}
+
 void Endpoint::StreamBase::pump(bool no_end) {
   bool is_empty_end = (!no_end && m_end_output && m_send_buffer.empty());
   int size = m_send_buffer.size();
@@ -1778,10 +1824,10 @@ void Endpoint::StreamBase::pump(bool no_end) {
     } while (remain > 0);
     m_send_window -= size;
   }
+  set_pending(m_send_buffer.empty());
 }
 
 void Endpoint::StreamBase::recycle() {
-  flush();
   if (m_state == CLOSED && m_send_buffer.empty()) {
     close();
   }

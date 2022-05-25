@@ -28,6 +28,7 @@
 
 #include "api/http.hpp"
 #include "data.hpp"
+#include "input.hpp"
 #include "pipeline.hpp"
 #include "list.hpp"
 #include "scarce.hpp"
@@ -344,7 +345,8 @@ private:
 
 class Endpoint :
   public FrameDecoder,
-  public FrameEncoder
+  public FrameEncoder,
+  public FlushTarget
 {
 public:
   static auto server_stream_count() -> int { return m_server_stream_count; }
@@ -371,6 +373,7 @@ private:
   };
 
   List<StreamBase> m_streams;
+  List<StreamBase> m_streams_pending;
   ScarcePointerArray<StreamBase> m_stream_map;
   HeaderDecoder m_header_decoder;
   HeaderEncoder m_header_encoder;
@@ -383,12 +386,14 @@ private:
   bool m_is_server_side;
   bool m_has_sent_preface = false;
   bool m_has_gone_away = false;
-  bool m_processing_frames = false;
 
 protected:
   void upgrade_request(http::RequestHead *head, const Data &body);
+  bool for_each_stream(const std::function<bool(StreamBase*)> &cb);
+  bool for_each_pending_stream(const std::function<bool(StreamBase*)> &cb);
 
   void on_event(Event *evt);
+  void on_flush() override;
   void on_deframe(Frame &frm) override;
   void on_deframe_error(ErrorCode err) override;
   void frame(Frame &frm);
@@ -398,6 +403,7 @@ protected:
   void stream_close(int id);
   void stream_error(int id, ErrorCode err);
   void connection_error(ErrorCode err);
+  void end_all(StreamEnd *evt = nullptr);
 
   //
   // StreamBase
@@ -435,7 +441,7 @@ protected:
     virtual void event(Event *evt) = 0;
 
     void frame(Frame &frm) { m_endpoint->frame(frm); }
-    void flush() { m_endpoint->flush(); }
+    void flush() { m_endpoint->need_flush(); }
     void close() { m_endpoint->stream_close(id()); }
     auto deduct_send(int size) -> int;
     bool deduct_recv(int size);
@@ -447,6 +453,7 @@ protected:
     int m_id;
     bool m_is_server_side;
     bool m_is_tunnel = false;
+    bool m_is_pending = false;
     bool m_end_headers = false;
     bool m_end_input = false;
     bool m_end_output = false;
@@ -464,6 +471,7 @@ protected:
     void parse_headers(Frame &frm);
     bool parse_window_update(Frame &frm);
     void write_header_block(Data &data);
+    void set_pending(bool pending);
     void pump(bool no_end = false);
     void recycle();
     void stream_end(http::MessageTail *tail);

@@ -27,6 +27,7 @@
 #define INPUT_HPP
 
 #include "pjs/pjs.hpp"
+#include "list.hpp"
 
 namespace pipy {
 
@@ -39,6 +40,11 @@ class InputContext;
 
 class InputSource {
 public:
+
+  //
+  // InputSource::Tap
+  //
+
   class Tap :
     public pjs::RefCount<Tap>,
     public pjs::Pooled<Tap>
@@ -94,6 +100,26 @@ private:
 };
 
 //
+// FlushTarget
+//
+
+class FlushTarget : public List<FlushTarget>::Item {
+protected:
+  FlushTarget(bool is_terminating = false)
+    : m_is_terminating(is_terminating) {}
+
+  void need_flush();
+
+private:
+  virtual void on_flush() = 0;
+
+  InputContext* m_origin = nullptr;
+  bool m_is_terminating;
+
+  friend class InputContext;
+};
+
+//
 // InputContext
 //
 
@@ -103,12 +129,19 @@ public:
   InputContext(InputSource *source = nullptr);
   ~InputContext();
 
+  static auto origin() -> InputContext* {
+    return s_stack ? s_stack->m_origin : nullptr;
+  }
+
   static auto tap() -> InputSource::Tap* {
     return s_stack ? s_stack->m_tap.get() : nullptr;
   }
 
 private:
+  InputContext* m_origin;
   InputContext* m_next;
+  List<FlushTarget> m_flush_targets_pumping;
+  List<FlushTarget> m_flush_targets_terminating;
   pjs::Ref<InputSource::Tap> m_tap;
   Pipeline* m_pipelines = nullptr;
   bool m_cleaning_up = false;
@@ -117,6 +150,7 @@ private:
 
   static void add(Pipeline *pipeline);
 
+  friend class FlushTarget;
   friend class Pipeline;
 };
 

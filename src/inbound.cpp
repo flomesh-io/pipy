@@ -55,6 +55,7 @@ Inbound::Inbound(Listener *listener, const Options &options)
 Inbound::~Inbound() {
   Log::debug("[inbound  %p] --", this);
   if (m_pipeline) {
+    Pipeline::auto_release(m_pipeline);
     m_listener->close(this);
   }
 }

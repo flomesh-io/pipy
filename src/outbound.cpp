@@ -37,7 +37,8 @@ using tcp = asio::ip::tcp;
 List<Outbound> Outbound::s_all_outbounds;
 
 Outbound::Outbound(EventTarget::Input *output, const Options &options)
-  : m_resolver(Net::context())
+  : FlushTarget(true)
+  , m_resolver(Net::context())
   , m_socket(Net::context())
   , m_output(output)
   , m_options(options)
