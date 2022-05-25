@@ -272,10 +272,10 @@ jobs:
     name: save log
     runs-on: ubuntu-latest
     needs:
+      - set-release-version
       - x86-binary
       - aarch64-binary
       - x86-alpine-docker
-      - x86-pipy-repo
       - aarch64-alpine-docker
       - x86-rpm
     steps:
@@ -294,7 +294,29 @@ jobs:
                   { "type": "binary", "arch": "${{needs.x86-binary.outputs.arch}}", "name": "${{ needs.x86-binary.outputs.artifact_name }}" },
                   { "type": "binary", "arch": "${{needs.aarch64-binary.outputs.arch}}", "name": "${{ needs.aarch64-binary.outputs.artifact_name }}" },
                   { "type": "image", "arch": "${{needs.x86-alpine-docker.outputs.arch}}", "name": "${{ needs.x86-alpine-docker.outputs.artifact_name }}" },
-                  { "type": "image", "arch": "${{needs.x86-pipy-repo.outputs.arch}}", "name": "${{ needs.x86-pipy-repo.outputs.artifact_name }}" },
                   { "type": "image", "arch": "${{needs.aarch64-alpine-docker.outputs.arch}}", "name": "${{ needs.aarch64-alpine-docker.outputs.artifact_name }}" }
+                ]
+             }
+
+  save-pipy-repo:
+    name: save pipy-repo
+    runs-on: ubuntu-latest
+    needs:
+      - set-release-version
+      - x86-pipy-repo
+      - save-log
+    steps:
+      - name: Save pipy-repo
+        uses: peter-evans/repository-dispatch@v1
+        with:
+          token:  ${{ secrets.REPO_DISPATCH_PAT }}
+          repository: ${{ secrets.REPO_FOR_LOG }}
+          event-type: repo-build
+          client-payload: |
+            {
+                "github": ${{toJSON(github)}},
+                "release_version": "${{needs.set-release-version.outputs.release_version}}",
+                "artifacts": [
+                  { "type": "image", "arch": "${{needs.x86-pipy-repo.outputs.arch}}", "name": "${{ needs.x86-pipy-repo.outputs.artifact_name }}" }
                 ]
              }
