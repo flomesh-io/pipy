@@ -1,4 +1,9 @@
-cmake_minimum_required (VERSION 3.13)
+if(PIPY_STATIC)
+  cmake_minimum_required (VERSION 3.13)
+else()
+  cmake_minimum_required (VERSION 3.10)
+endif()
+
 project(pipy)
 
 option(PIPY_GUI "include builtin GUI" ON)
