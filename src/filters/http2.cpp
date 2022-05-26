@@ -1384,7 +1384,6 @@ void Endpoint::frame(Frame &frm) {
 void Endpoint::flush() {
   if (!m_output_buffer.empty()) {
     on_output(Data::make(m_output_buffer));
-    on_output(Data::flush());
     m_output_buffer.clear();
   }
 }

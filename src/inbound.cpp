@@ -43,7 +43,8 @@ using tcp = asio::ip::tcp;
 uint64_t Inbound::s_inbound_id = 0;
 
 Inbound::Inbound(Listener *listener, const Options &options)
-  : m_listener(listener)
+  : FlushTarget(true)
+  , m_listener(listener)
   , m_options(options)
   , m_socket(Net::context())
 {
@@ -138,13 +139,8 @@ void Inbound::on_event(Event *evt) {
     if (auto data = evt->as<Data>()) {
       if (data->size() > 0) {
         m_buffer.push(*data);
-        if (m_buffer.size() >= SEND_BUFFER_FLUSH_SIZE) pump();
-      } else {
-        pump();
+        need_flush();
       }
-
-    } else if (evt->is<MessageEnd>()) {
-      pump();
 
     } else if (auto end = evt->as<StreamEnd>()) {
       m_ended = true;
@@ -154,6 +150,12 @@ void Inbound::on_event(Event *evt) {
         pump();
       }
     }
+  }
+}
+
+void Inbound::on_flush() {
+  if (!m_ended) {
+    pump();
   }
 }
 
@@ -178,7 +180,7 @@ void Inbound::start() {
   m_metric_traffic_out = Status::metric_inbound_out->with_labels(labels, 2);
 
   InputContext ic(this);
-  p->input()->input(Data::flush());
+  p->input()->input(Data::make());
   receive();
 }
 
@@ -210,7 +212,6 @@ void Inbound::receive() {
           m_metric_traffic_in->increase(buffer->size());
           Status::metric_inbound_in->increase(buffer->size());
           output(buffer);
-          output(Data::flush());
         }
 
         if (ec) {

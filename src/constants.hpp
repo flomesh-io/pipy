@@ -30,7 +30,6 @@ namespace pipy {
 
 const size_t DATA_CHUNK_SIZE = 0x4000;
 const size_t RECEIVE_BUFFER_SIZE = 0x4000;
-const size_t SEND_BUFFER_FLUSH_SIZE = 0x4000;
 
 } // namespace pipy
 

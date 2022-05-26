@@ -89,19 +89,11 @@ void Outbound::send(const pjs::Ref<Data> &data) {
       }
       if (!m_overflowed) {
         m_buffer.push(*data);
-        if (m_buffer.size() >= SEND_BUFFER_FLUSH_SIZE) pump();
+        need_flush();
       } else {
         m_discarded_data_size += data->size();
       }
-    } else {
-      pump();
     }
-  }
-}
-
-void Outbound::flush() {
-  if (!m_ended) {
-    pump();
   }
 }
 
@@ -135,10 +127,18 @@ void Outbound::reset() {
   m_socket.close(ec);
 }
 
-void Outbound::on_tap_open() {
+void Outbound::on_flush() {
+  if (!m_ended) {
+    pump();
+  }
 }
 
-void Outbound::on_tap_close() {
+void Outbound::on_tap_open()
+{
+}
+
+void Outbound::on_tap_close()
+{
 }
 
 void Outbound::start(double delay) {
@@ -311,7 +311,6 @@ void Outbound::receive() {
           m_metric_traffic_in->increase(buffer->size());
           Status::metric_outbound_in->increase(buffer->size());
           output(buffer);
-          output(Data::flush());
         }
 
         if (ec) {

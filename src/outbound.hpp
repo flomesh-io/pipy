@@ -82,11 +82,8 @@ public:
 
   void connect(const std::string &host, int port);
   void send(const pjs::Ref<Data> &data);
-  void flush();
   void end();
   void reset();
-
-  virtual void on_flush() override { flush(); }
 
 private:
   std::string m_host;
@@ -118,6 +115,7 @@ private:
   bool m_pumping = false;
   bool m_ended = false;
 
+  virtual void on_flush() override;
   virtual void on_tap_open() override;
   virtual void on_tap_close() override;
 

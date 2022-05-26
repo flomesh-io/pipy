@@ -32,7 +32,8 @@
 namespace pipy {
 
 FileStream::FileStream(int fd, Data::Producer *dp)
-  : m_stream(Net::context(), fd)
+  : FlushTarget(true)
+  , m_stream(Net::context(), fd)
   , m_f(nullptr)
   , m_dp(dp)
 {
@@ -40,7 +41,8 @@ FileStream::FileStream(int fd, Data::Producer *dp)
 }
 
 FileStream::FileStream(FILE *f, Data::Producer *dp)
-  : m_stream(Net::context(), fileno(f))
+  : FlushTarget(true)
+  , m_stream(Net::context(), fileno(f))
   , m_f(f)
   , m_dp(dp)
 {
@@ -71,11 +73,13 @@ void FileStream::close() {
 void FileStream::on_event(Event *evt) {
   if (auto data = evt->as<Data>()) {
     write(data);
-  } else if (evt->is<MessageEnd>()) {
-    pump();
   } else if (evt->is<StreamEnd>()) {
     end();
   }
+}
+
+void FileStream::on_flush() {
+  pump();
 }
 
 void FileStream::on_tap_open() {
@@ -107,7 +111,6 @@ void FileStream::read() {
     if (n > 0) {
       buffer->pop(buffer->size() - n);
       output(buffer);
-      output(Data::flush());
     }
 
     if (ec) {
@@ -143,23 +146,20 @@ void FileStream::read() {
 
 void FileStream::write(Data *data) {
   if (!m_ended) {
-    if (data->empty()) {
-      pump();
-      return;
-    }
-
-    if (!m_overflowed) {
-      if (m_buffer_limit > 0 && m_buffer.size() >= m_buffer_limit) {
-        Log::error(
-          "FileStream: %p, buffer overflow, size = %d, fd = %d",
-          this, m_fd, m_buffer.size());
-        m_overflowed = true;
+    if (!data->empty()) {
+      if (!m_overflowed) {
+        if (m_buffer_limit > 0 && m_buffer.size() >= m_buffer_limit) {
+          Log::error(
+            "FileStream: %p, buffer overflow, size = %d, fd = %d",
+            this, m_fd, m_buffer.size());
+          m_overflowed = true;
+        }
       }
-    }
 
-    if (!m_overflowed) {
-      m_buffer.push(*data);
-      if (m_buffer.size() >= SEND_BUFFER_FLUSH_SIZE) pump();
+      if (!m_overflowed) {
+        m_buffer.push(*data);
+        need_flush();
+      }
     }
   }
 }

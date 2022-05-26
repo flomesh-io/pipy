@@ -32,11 +32,6 @@ namespace pipy {
 List<Data::Producer> Data::Producer::s_all_producers;
 Data::Producer Data::s_unknown_producer("Unknown");
 
-auto Data::flush() -> Data* {
-  static pjs::Ref<Data> s_flush(Data::make());
-  return s_flush;
-}
-
 void Data::pack(const Data &data, Producer *producer, double vacancy) {
   if (&data == this) return;
   if (!producer) producer = &s_unknown_producer;

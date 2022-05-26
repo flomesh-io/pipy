@@ -60,12 +60,6 @@ auto ReplaceEvent::clone() -> Filter* {
 
 void ReplaceEvent::process(Event *evt) {
   if (evt->type() == m_type) {
-    if (auto data = evt->as<Data>()) {
-      if (data->empty()) {
-        output(evt);
-        return;
-      }
-    }
     if (m_replacement.is_function()) {
       pjs::Value arg(evt), result;
       if (callback(m_replacement.f(), 1, &arg, result)) {

@@ -47,6 +47,7 @@ class Inbound :
   public pjs::ObjectTemplate<Inbound>,
   public EventTarget,
   public InputSource,
+  public FlushTarget,
   public List<Inbound>::Item
 {
 public:
@@ -108,6 +109,7 @@ private:
   bool m_ended = false;
 
   virtual void on_event(Event *evt) override;
+  virtual void on_flush() override;
   virtual void on_tap_open() override;
   virtual void on_tap_close() override;
 

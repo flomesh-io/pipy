@@ -61,16 +61,14 @@ void Tee::reset() {
 
 void Tee::process(Event *evt) {
   if (auto *data = evt->as<Data>()) {
-    if (!data->empty()) {
-      if (!m_resolved_filename) {
-        pjs::Value filename;
-        if (!eval(m_filename, filename)) return;
-        auto *s = filename.to_string();
-        m_resolved_filename = s;
-        s->release();
-        m_file = File::make(m_resolved_filename->str());
-        m_file->open_write();
-      }
+    if (!m_resolved_filename) {
+      pjs::Value filename;
+      if (!eval(m_filename, filename)) return;
+      auto *s = filename.to_string();
+      m_resolved_filename = s;
+      s->release();
+      m_file = File::make(m_resolved_filename->str());
+      m_file->open_write();
     }
 
     if (m_file) {

@@ -273,8 +273,6 @@ private:
   };
 
 public:
-  static auto flush() -> Data*;
-
   static bool is_flush(const Event *evt) {
     auto data = evt->as<Data>();
     return data && data->empty();

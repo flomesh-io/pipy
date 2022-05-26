@@ -81,7 +81,7 @@ public:
   void set_options(const Options &options);
 
   void for_each_inbound(const std::function<void(Inbound*)> &cb) {
-    for (auto p = m_inbounds.head(); p; p = p->next()) {
+    for (auto p = m_inbounds.head(); p; p = p->List<Inbound>::Item::next()) {
       cb(p);
     }
   }

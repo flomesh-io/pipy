@@ -27,6 +27,7 @@
 #include "fstream.hpp"
 #include "fs.hpp"
 #include "net.hpp"
+#include "input.hpp"
 #include "utils.hpp"
 #include "logging.hpp"
 
@@ -108,8 +109,8 @@ void File::open_write() {
             m_writing = true;
             m_stream = FileStream::make(f, &s_dp);
             if (!m_buffer.empty()) {
+              InputContext ic;
               m_stream->input()->input(Data::make(m_buffer));
-              m_stream->input()->input(Data::flush());
               m_buffer.clear();
             }
             if (m_closed) {

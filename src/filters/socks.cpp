@@ -70,14 +70,12 @@ void Server::process(Event *evt) {
 
   auto reply = [this](const uint8_t *buf, size_t len) {
     output(s_dp.make(buf, len));
-    output(Data::flush());
   };
 
   auto reply_socks4 = [this](int rep) {
     uint8_t buf[8] = { 0 };
     buf[1] = rep;
     output(s_dp.make(buf, sizeof(buf)));
-    output(Data::flush());
   };
 
   auto reply_socks5 = [this](int rep) {
@@ -86,7 +84,6 @@ void Server::process(Event *evt) {
     buf[1] = rep;
     buf[3] = 0x01;
     output(s_dp.make(buf, sizeof(buf)));
-    output(Data::flush());
   };
 
   auto close = [this](Event *evt) {
@@ -472,7 +469,6 @@ void Client::on_receive(Event *evt) {
 void Client::send(Data *data) {
   auto inp = m_pipeline->input();
   output(data, inp);
-  output(Data::flush(), inp);
 }
 
 void Client::send(const uint8_t *buf, size_t len) {

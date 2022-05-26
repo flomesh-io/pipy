@@ -370,13 +370,6 @@ auto TLSSession::pump_send() -> int {
       break;
     }
   }
-  if (size > 0) {
-    if (m_is_server) {
-      output(Data::flush());
-    } else {
-      forward(Data::flush());
-    }
-  }
   return size;
 }
 

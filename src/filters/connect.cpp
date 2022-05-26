@@ -156,8 +156,6 @@ void Connect::process(Event *evt) {
   if (m_outbound) {
     if (auto *data = evt->as<Data>()) {
       m_outbound->send(data);
-    } else if (evt->is<MessageEnd>()) {
-      m_outbound->flush();
     }
   }
 }

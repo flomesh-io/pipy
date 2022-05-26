@@ -618,7 +618,7 @@ public:
     push(get(m_packet, STR_clientID, pjs::Str::empty));
     if (will) {
       push(get(will, STR_topic, pjs::Str::empty));
-      push(pjs::Ref<Data>(get(will, STR_payload, Data::flush())).get());
+      push(pjs::Ref<Data>(get(will, STR_payload, Data::make())).get());
     }
     if (username) push(username);
     if (password) push(password);

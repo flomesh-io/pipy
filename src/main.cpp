@@ -34,6 +34,7 @@
 #include "file.hpp"
 #include "fs.hpp"
 #include "filters/tls.hpp"
+#include "input.hpp"
 #include "listener.hpp"
 #include "net.hpp"
 #include "options.hpp"
@@ -89,6 +90,7 @@ static void start_checking_updates() {
   static std::function<void()> poll;
   poll = []() {
     if (!Worker::exited()) {
+      InputContext ic;
       Status::local.timestamp = utils::now();
       Codebase::current()->sync(
         Status::local,
@@ -116,6 +118,7 @@ static void start_reporting_metrics(const std::string &url) {
   s_admin_link = new AdminLink(url, on_receive);
   report = []() {
     if (!Worker::exited()) {
+      InputContext ic;
       auto conn_id = s_admin_link->connect();
       Data buf;
       stats::Metric::local().collect_all();

@@ -44,7 +44,8 @@ class FileStream :
   public pjs::RefCount<FileStream>,
   public pjs::Pooled<FileStream>,
   public EventFunction,
-  public InputSource
+  public InputSource,
+  public FlushTarget
 {
 public:
   static auto make(int fd, Data::Producer *dp) -> FileStream* {
@@ -64,6 +65,7 @@ private:
   FileStream(FILE *f, Data::Producer *dp);
 
   virtual void on_event(Event *evt) override;
+  virtual void on_flush() override;
   virtual void on_tap_open() override;
   virtual void on_tap_close() override;
 
