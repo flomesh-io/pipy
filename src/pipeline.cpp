@@ -147,15 +147,15 @@ void Pipeline::on_event(Event *evt) {
   }
 }
 
+void Pipeline::on_recycle() {
+  reset();
+  m_def->free(this);
+}
+
 void Pipeline::auto_release() {
   if (!m_auto_release) {
     InputContext::add(this);
   }
-}
-
-void Pipeline::finalize() {
-  reset();
-  m_def->free(this);
 }
 
 void Pipeline::shutdown() {

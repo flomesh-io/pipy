@@ -297,7 +297,7 @@ class HTTP2Demuxer :
 public:
   HTTP2Demuxer(Filter *filter) : m_filter(filter) {}
 
-  auto on_new_sub_pipeline() -> Pipeline* override {
+  auto on_new_stream_pipeline() -> PipelineBase* override {
     return m_filter->sub_pipeline(0, true);
   }
 
@@ -329,13 +329,13 @@ private:
   virtual void shutdown() override;
   virtual void dump(std::ostream &out) override;
 
-  RequestQueue m_request_queue;
   int m_buffer_size = DATA_CHUNK_SIZE;
-  HTTP2Demuxer *m_http2_demuxer = nullptr;
+  RequestQueue m_request_queue;
+  HTTP2Demuxer* m_http2_demuxer = nullptr;
 
   virtual auto on_new_sub_pipeline() -> Pipeline* override;
-  virtual void on_decode_request(http::RequestHead *head) override;
   virtual void on_decode_error() override;
+  virtual void on_decode_request(http::RequestHead *head) override;
   virtual void on_encode_response(pjs::Object *head) override;
   virtual void on_http2_pass() override;
 
@@ -433,33 +433,60 @@ private:
   virtual void shutdown() override;
   virtual void dump(std::ostream &out) override;
 
+  virtual void on_decode_error() override;
   virtual void on_decode_request(http::RequestHead *head) override;
   virtual void on_encode_response(pjs::Object *head) override;
+  virtual void on_http2_pass() override;
+
+  //
+  // Server::Handler
+  //
 
   class Handler :
     public pjs::Pooled<Handler>,
-    public EventFunction
+    public PipelineBase
   {
+  public:
     Handler(Server *server)
       : m_server(server) {}
 
+  private:
     Server* m_server;
     pjs::Ref<MessageStart> m_start;
     Data m_buffer;
-    bool m_shutdown = false;
 
     virtual void on_event(Event *evt) override;
+    virtual void on_recycle() override { delete static_cast<Handler*>(this); }
+  };
 
-    friend class Server;
+  //
+  // Server::HTTP2Server
+  //
+
+  class HTTP2Server :
+    public pjs::Pooled<HTTP2Server>,
+    public http2::Server
+  {
+  public:
+    HTTP2Server(http::Server *server) : m_server(server) {}
+
+  private:
+    http::Server* m_server;
+
+    auto on_new_stream_pipeline() -> PipelineBase* override {
+      return new Handler(m_server);
+    }
   };
 
   std::function<Message*(Message*)> m_handler_func;
   pjs::Ref<pjs::Object> m_handler_obj;
-  Handler m_ef_handler;
+  pjs::Ref<Handler> m_handler;
   RequestQueue m_request_queue;
   pjs::Ref<Pipeline> m_tunnel;
+  HTTP2Server* m_http2_server = nullptr;
   bool m_switching = false;
 
+  void upgrade_http2();
   void start_tunnel();
   void on_tunnel_data(Data *data);
 };

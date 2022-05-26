@@ -1185,9 +1185,9 @@ void Demux::chain() {
 
 void Demux::reset() {
   Filter::reset();
-  QueueDemuxer::reset();
   Decoder::reset();
   Encoder::reset();
+  QueueDemuxer::reset();
   m_request_queue.reset();
   if (m_http2_demuxer) {
     Decoder::chain(QueueDemuxer::input());
@@ -1202,18 +1202,21 @@ void Demux::process(Event *evt) {
 
 void Demux::shutdown() {
   Filter::shutdown();
-  if (m_request_queue.empty()) {
+  if (m_http2_demuxer) {
+    m_http2_demuxer->go_away();
+  } else if (m_request_queue.empty()) {
     Filter::output(StreamEnd::make());
   } else {
     m_request_queue.shutdown();
-  }
-  if (m_http2_demuxer) {
-    m_http2_demuxer->go_away();
   }
 }
 
 auto Demux::on_new_sub_pipeline() -> Pipeline* {
   return sub_pipeline(0, true);
+}
+
+void Demux::on_decode_error() {
+  Filter::output(StreamEnd::make());
 }
 
 void Demux::on_decode_request(http::RequestHead *head) {
@@ -1247,10 +1250,6 @@ void Demux::on_encode_response(pjs::Object *head) {
     Encoder::set_tunnel(req->is_switching());
     delete req;
   }
-}
-
-void Demux::on_decode_error() {
-  Filter::output(StreamEnd::make());
 }
 
 void Demux::on_http2_pass() {
@@ -1424,7 +1423,7 @@ Server::Server(const std::function<Message*(Message*)> &handler)
   : Decoder(false)
   , Encoder(true)
   , m_handler_func(handler)
-  , m_ef_handler(this)
+  , m_handler(new Handler(this))
 {
 }
 
@@ -1432,7 +1431,7 @@ Server::Server(pjs::Object *handler)
   : Decoder(false)
   , Encoder(true)
   , m_handler_obj(handler)
-  , m_ef_handler(this)
+  , m_handler(new Handler(this))
 {
 }
 
@@ -1442,7 +1441,7 @@ Server::Server(const Server &r)
   , Encoder(true)
   , m_handler_func(r.m_handler_func)
   , m_handler_obj(r.m_handler_obj)
-  , m_ef_handler(this)
+  , m_handler(new Handler(this))
 {
 }
 
@@ -1460,8 +1459,8 @@ auto Server::clone() -> Filter* {
 
 void Server::chain() {
   Filter::chain();
-  Decoder::chain(m_ef_handler.input());
-  m_ef_handler.chain(Encoder::input());
+  Decoder::chain(m_handler->input());
+  m_handler->chain(Encoder::input());
   Encoder::chain(Filter::output());
 }
 
@@ -1470,9 +1469,13 @@ void Server::reset() {
   Decoder::reset();
   Encoder::reset();
   m_request_queue.reset();
-  m_ef_handler.m_shutdown = false;
   m_tunnel = nullptr;
   m_switching = false;
+  if (m_http2_server) {
+    Decoder::chain(m_handler->input());
+    delete m_http2_server;
+    m_http2_server = nullptr;
+  }
 }
 
 void Server::process(Event *evt) {
@@ -1481,8 +1484,63 @@ void Server::process(Event *evt) {
 
 void Server::shutdown() {
   Filter::shutdown();
-  m_request_queue.shutdown();
-  m_ef_handler.m_shutdown = true;
+  if (m_http2_server) {
+    m_http2_server->go_away();
+  } else if (m_request_queue.empty()) {
+    Filter::output(StreamEnd::make());
+  } else {
+    m_request_queue.shutdown();
+  }
+}
+
+void Server::on_decode_error() {
+  Filter::output(StreamEnd::make());
+}
+
+void Server::on_decode_request(http::RequestHead *head) {
+  auto *req = new RequestQueue::Request;
+  req->protocol = head->protocol();
+  req->method = head->method();
+  req->header_connection = Decoder::header_connection();
+  req->header_upgrade = Decoder::header_upgrade();
+  m_request_queue.push(req);
+  if (req->is_http2()) {
+    auto head = ResponseHead::make();
+    auto headers = pjs::Object::make();
+    head->status(101);
+    head->headers(headers);
+    headers->set(s_connection, s_upgrade.get());
+    headers->set(s_upgrade, s_h2c.get());
+    auto inp = Encoder::input();
+    inp->input(MessageStart::make(head));
+    inp->input(MessageEnd::make());
+    upgrade_http2();
+    Decoder::chain(m_http2_server->initial_stream());
+  }
+}
+
+void Server::on_encode_response(pjs::Object *head) {
+  if (auto *req = m_request_queue.shift()) {
+    Encoder::set_final(req->is_final());
+    Encoder::set_bodiless(req->is_bodiless());
+    if (req->is_switching() && !req->is_http2()) {
+      m_switching = true;
+    }
+    delete req;
+  }
+}
+
+void Server::on_http2_pass() {
+  upgrade_http2();
+  m_http2_server->open();
+  Decoder::chain(m_http2_server->EventTarget::input());
+}
+
+void Server::upgrade_http2() {
+  if (!m_http2_server) {
+    m_http2_server = new HTTP2Server(this);
+    m_http2_server->chain(Filter::output());
+  }
 }
 
 void Server::start_tunnel() {
@@ -1504,29 +1562,9 @@ void Server::on_tunnel_data(Data *data) {
   }
 }
 
-void Server::on_decode_request(http::RequestHead *head) {
-  if (Decoder::has_error()) {
-    Filter::output(StreamEnd::make());
-  } else {
-    auto *req = new RequestQueue::Request;
-    req->protocol = head->protocol();
-    req->method = head->method();
-    req->header_connection = Decoder::header_connection();
-    req->header_upgrade = Decoder::header_upgrade();
-    m_request_queue.push(req);
-  }
-}
-
-void Server::on_encode_response(pjs::Object *head) {
-  if (auto *req = m_request_queue.shift()) {
-    Encoder::set_bodiless(req->is_bodiless());
-    Encoder::set_final(req->is_final());
-    if (req->is_switching() && !req->is_http2()) {
-      m_switching = true;
-    }
-    delete req;
-  }
-}
+//
+// Server::Handler
+//
 
 void Server::Handler::on_event(Event *evt) {
   if (m_server->m_tunnel) {

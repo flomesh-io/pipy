@@ -100,13 +100,30 @@ private:
 };
 
 //
+// PipelineBase
+//
+
+class PipelineBase :
+  public pjs::RefCount<PipelineBase>,
+  public EventFunction
+{
+private:
+  virtual void on_recycle() = 0;
+
+  void finalize() {
+    on_recycle();
+  }
+
+  friend class pjs::RefCount<PipelineBase>;
+};
+
+//
 // Pipeline
 //
 
 class Pipeline :
-  public pjs::RefCount<Pipeline>,
-  public List<Pipeline>::Item,
-  public EventFunction
+  public PipelineBase,
+  public List<Pipeline>::Item
 {
 public:
   static auto make(PipelineDef *def, Context *ctx) -> Pipeline* {
@@ -127,9 +144,9 @@ private:
   ~Pipeline();
 
   virtual void on_event(Event *evt) override;
+  virtual void on_recycle() override;
 
   void auto_release();
-  void finalize();
 
   PipelineDef* m_def;
   Pipeline* m_next_free = nullptr;

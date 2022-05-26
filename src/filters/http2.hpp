@@ -497,7 +497,7 @@ public:
   void go_away();
 
 protected:
-  virtual auto on_new_sub_pipeline() -> Pipeline* = 0;
+  virtual auto on_new_stream_pipeline() -> PipelineBase* = 0;
 
 private:
   class Stream;
@@ -513,7 +513,7 @@ private:
     public EventSource
   {
     Stream(Server *server, int id);
-    pjs::Ref<Pipeline> m_pipeline;
+    pjs::Ref<PipelineBase> m_pipeline;
     void event(Event *evt) override { EventSource::output(evt); }
     void on_event(Event *evt) override  { StreamBase::on_event(evt); }
     friend class Server;

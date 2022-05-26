@@ -135,6 +135,7 @@ void AdminService::open(int port, const Options &options) {
 
 void AdminService::close() {
   if (auto listener = Listener::get("::", m_port)) {
+    listener->pipeline_def()->shutdown();
     listener->pipeline_def(nullptr);
   }
   m_metrics_history_timer.cancel();
