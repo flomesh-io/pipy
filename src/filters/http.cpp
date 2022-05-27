@@ -883,23 +883,32 @@ void RequestDecoder::process(Event *evt) {
 }
 
 //
+// ResponseDecoder::Options
+//
+
+ResponseDecoder::Options::Options(pjs::Object *options) {
+  Value(options, "bodiless")
+    .get(bodiless)
+    .get(bodiless_f)
+    .check_nullable();
+}
+
+//
 // ResponseDecoder
 //
 
-ResponseDecoder::ResponseDecoder(pjs::Object *options)
+ResponseDecoder::ResponseDecoder(const Options &options)
   : m_ef_decode(true)
   , m_ef_set_bodiless(this)
+  , m_options(options)
 {
-  if (options) {
-    options->get("bodiless", m_bodiless);
-  }
 }
 
 ResponseDecoder::ResponseDecoder(const ResponseDecoder &r)
   : Filter(r)
   , m_ef_decode(true)
   , m_ef_set_bodiless(this)
-  , m_bodiless(r.m_bodiless)
+  , m_options(r.m_options)
 {
 }
 
@@ -932,9 +941,14 @@ void ResponseDecoder::process(Event *evt) {
 
 void ResponseDecoder::on_set_bodiless(Event *evt) {
   if (evt->is<MessageStart>()) {
-    pjs::Value ret;
-    eval(m_bodiless, ret);
-    m_ef_decode.set_bodiless(ret.to_boolean());
+    if (m_options.bodiless_f) {
+      pjs::Value ret;
+      if (callback(m_options.bodiless_f, 0, nullptr, ret)) {
+        m_ef_decode.set_bodiless(ret.to_boolean());
+      }
+    } else {
+      m_ef_decode.set_bodiless(m_options.bodiless);
+    }
   }
 }
 
@@ -942,29 +956,26 @@ void ResponseDecoder::on_set_bodiless(Event *evt) {
 // RequestEncoder
 //
 
-RequestEncoder::RequestEncoder(pjs::Object *options)
-  : m_ef_encode(false)
-{
-  if (options) {
-    pjs::Value buffer_size;
-    options->get("bufferSize", buffer_size);
+RequestEncoder::Options::Options(pjs::Object *options) {
+  Value(options, "bufferSize")
+    .get_binary_size(buffer_size)
+    .check_nullable();
+}
 
-    if (!buffer_size.is_undefined()) {
-      if (buffer_size.is_number()) {
-        m_buffer_size = buffer_size.n();
-      } else if (buffer_size.is_string()) {
-        m_buffer_size = utils::get_byte_size(buffer_size.s()->str());
-      } else {
-        throw std::runtime_error("options.bufferSize requires a number or a string");
-      }
-    }
-  }
+//
+// RequestEncoder
+//
+
+RequestEncoder::RequestEncoder(const Options &options)
+  : m_ef_encode(false)
+  , m_options(options)
+{
 }
 
 RequestEncoder::RequestEncoder(const RequestEncoder &r)
   : Filter(r)
   , m_ef_encode(false)
-  , m_buffer_size(r.m_buffer_size)
+  , m_options(r.m_options)
 {
 }
 
@@ -983,7 +994,7 @@ auto RequestEncoder::clone() -> Filter* {
 void RequestEncoder::chain() {
   Filter::chain();
   m_ef_encode.chain(output());
-  m_ef_encode.set_buffer_size(m_buffer_size);
+  m_ef_encode.set_buffer_size(m_options.buffer_size);
 }
 
 void RequestEncoder::reset() {
@@ -1003,33 +1014,34 @@ void RequestEncoder::process(Event *evt) {
 // ResponseEncoder
 //
 
-ResponseEncoder::ResponseEncoder(pjs::Object *options)
-  : m_ef_encode(true)
-{
-  if (options) {
-    pjs::Value buffer_size;
-    options->get("final", m_final);
-    options->get("bodiless", m_bodiless);
-    options->get("bufferSize", buffer_size);
+ResponseEncoder::Options::Options(pjs::Object *options) {
+  Value(options, "final")
+    .get(final)
+    .get(final_f)
+    .check_nullable();
+  Value(options, "bodiless")
+    .get(bodiless)
+    .get(bodiless_f)
+    .check_nullable();
+  Value(options, "bufferSize")
+    .get_binary_size(buffer_size)
+    .check_nullable();
+}
 
-    if (!buffer_size.is_undefined()) {
-      if (buffer_size.is_number()) {
-        m_buffer_size = buffer_size.n();
-      } else if (buffer_size.is_string()) {
-        m_buffer_size = utils::get_byte_size(buffer_size.s()->str());
-      } else {
-        throw std::runtime_error("options.bufferSize requires a number or a string");
-      }
-    }
-  }
+//
+// ResponseEncoder
+//
+
+ResponseEncoder::ResponseEncoder(const Options &options)
+  : m_ef_encode(true)
+  , m_options(options)
+{
 }
 
 ResponseEncoder::ResponseEncoder(const ResponseEncoder &r)
   : Filter(r)
   , m_ef_encode(true)
-  , m_final(r.m_final)
-  , m_bodiless(r.m_bodiless)
-  , m_buffer_size(r.m_buffer_size)
+  , m_options(r.m_options)
 {
 }
 
@@ -1048,7 +1060,7 @@ auto ResponseEncoder::clone() -> Filter* {
 void ResponseEncoder::chain() {
   Filter::chain();
   m_ef_encode.chain(output());
-  m_ef_encode.set_buffer_size(m_buffer_size);
+  m_ef_encode.set_buffer_size(m_options.buffer_size);
 }
 
 void ResponseEncoder::reset() {
@@ -1061,11 +1073,22 @@ void ResponseEncoder::process(Event *evt) {
     output(evt);
   } else {
     if (evt->is<MessageStart>()) {
-      pjs::Value final, bodiless;
-      if (!eval(m_final, final)) return;
-      if (!eval(m_bodiless, bodiless)) return;
-      m_ef_encode.set_final(final.to_boolean());
-      m_ef_encode.set_bodiless(bodiless.to_boolean());
+      if (m_options.final_f) {
+        pjs::Value ret;
+        if (callback(m_options.final_f, 0, nullptr, ret)) {
+          m_ef_encode.set_final(ret.to_boolean());
+        }
+      } else {
+        m_ef_encode.set_final(m_options.final);
+      }
+      if (m_options.bodiless_f) {
+        pjs::Value ret;
+        if (callback(m_options.bodiless_f, 0, nullptr, ret)) {
+          m_ef_encode.set_bodiless(ret.to_boolean());
+        }
+      } else {
+        m_ef_encode.set_bodiless(m_options.bodiless);
+      }
     }
     output(evt, m_ef_encode.input());
   }
@@ -1129,29 +1152,25 @@ bool RequestQueue::Request::is_http2() const {
 }
 
 //
+// Demux::Options
+//
+
+Demux::Options::Options(pjs::Object *options) {
+  Value(options, "bufferSize")
+    .get_binary_size(buffer_size)
+    .check_nullable();
+}
+
+//
 // Demux
 //
 
-Demux::Demux(pjs::Object *options)
+Demux::Demux(const Options &options)
   : QueueDemuxer(true)
   , Decoder(false)
   , Encoder(true)
+  , m_options(options)
 {
-  if (options) {
-    pjs::Value buffer_size;
-
-    options->get("bufferSize", buffer_size);
-
-    if (!buffer_size.is_undefined()) {
-      if (buffer_size.is_number()) {
-        m_buffer_size = buffer_size.n();
-      } else if (buffer_size.is_string()) {
-        m_buffer_size = utils::get_byte_size(buffer_size.s()->str());
-      } else {
-        throw std::runtime_error("options.bufferSize requires a number or a string");
-      }
-    }
-  }
 }
 
 Demux::Demux(const Demux &r)
@@ -1159,7 +1178,7 @@ Demux::Demux(const Demux &r)
   , QueueDemuxer(true)
   , Decoder(false)
   , Encoder(true)
-  , m_buffer_size(r.m_buffer_size)
+  , m_options(r.m_options)
 {
 }
 
@@ -1180,7 +1199,7 @@ void Demux::chain() {
   Decoder::chain(QueueDemuxer::input());
   QueueDemuxer::chain(Encoder::input());
   Encoder::chain(Filter::output());
-  Encoder::set_buffer_size(m_buffer_size);
+  Encoder::set_buffer_size(m_options.buffer_size);
 }
 
 void Demux::reset() {
@@ -1266,6 +1285,22 @@ void Demux::upgrade_http2() {
 }
 
 //
+// Mux::Options
+//
+
+Mux::Options::Options(pjs::Object *options)
+  : pipy::Mux::Options(options)
+{
+  Value(options, "bufferSize")
+    .get_binary_size(buffer_size)
+    .check_nullable();
+  Value(options, "version")
+    .get(version)
+    .get(version_f)
+    .check_nullable();
+}
+
+//
 // Mux
 //
 
@@ -1273,43 +1308,15 @@ Mux::Mux()
 {
 }
 
-Mux::Mux(const pjs::Value &key, pjs::Object *options)
+Mux::Mux(const pjs::Value &key, const Options &options)
   : pipy::Mux(key, options)
+  , m_options(options)
 {
-  if (options) {
-    pjs::Value version, buffer_size;
-
-    options->get("version", version);
-    options->get("bufferSize", buffer_size);
-
-    if (!version.is_undefined()) {
-      if (version.is_number()) {
-        m_version = version.n();
-        if (m_version != 1 && m_version != 2) {
-          std::string msg("invalid HTTP version: ");
-          throw std::runtime_error(msg + std::to_string(m_version));
-        }
-      } else {
-        throw std::runtime_error("options.version requires a number");
-      }
-    }
-
-    if (!buffer_size.is_undefined()) {
-      if (buffer_size.is_number()) {
-        m_buffer_size = buffer_size.n();
-      } else if (buffer_size.is_string()) {
-        m_buffer_size = utils::get_byte_size(buffer_size.s()->str());
-      } else {
-        throw std::runtime_error("options.bufferSize requires a number or a string");
-      }
-    }
-  }
 }
 
 Mux::Mux(const Mux &r)
   : pipy::Mux(r)
-  , m_version(r.m_version)
-  , m_buffer_size(r.m_buffer_size)
+  , m_options(r.m_options)
 {
 }
 
@@ -1326,7 +1333,7 @@ auto Mux::clone() -> Filter* {
 }
 
 auto Mux::on_new_session() -> MuxBase::Session* {
-  return new Session(m_version, m_buffer_size);
+  return new Session(m_options.version, m_options.buffer_size);
 }
 
 //

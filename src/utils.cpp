@@ -29,6 +29,7 @@
 #include <cstring>
 #include <chrono>
 #include <random>
+#include <limits>
 
 namespace pipy {
 namespace utils {
@@ -209,6 +210,26 @@ bool get_cidr(const std::string &str, uint8_t ip[], int &mask) {
   return true;
 }
 
+auto get_size(const std::string &str, int thousand) -> double {
+  if (!str.empty()) {
+    const char *s = str.c_str();
+    char *str_end = nullptr;
+    auto n = std::strtod(s, &str_end);
+    if (!*str_end) return n;
+    switch (std::tolower(*str_end)) {
+      case 't': n *= thousand;
+      case 'g': n *= thousand;
+      case 'm': n *= thousand;
+      case 'k': n *= thousand; return n;
+    }
+  }
+  return std::numeric_limits<double>::quiet_NaN();
+}
+
+auto get_binary_size(const std::string &str) -> double {
+  return get_size(str, 1024);
+}
+
 auto get_byte_size(const std::string &str) -> size_t {
   if (str.empty()) return 0;
   size_t n = std::atoi(str.c_str());
@@ -235,15 +256,19 @@ bool get_byte_size(const pjs::Value &val, size_t &out) {
 }
 
 auto get_seconds(const std::string &str) -> double {
-  if (str.empty()) return 0;
-  auto n = std::atof(str.c_str());
-  switch (std::tolower(str.back())) {
-    case 'd': n *= 24;
-    case 'h': n *= 60;
-    case 'm': n *= 60;
-    case 's': n *= 1;
+  if (!str.empty()) {
+    const char *s = str.c_str();
+    char *str_end = nullptr;
+    auto n = std::strtod(s, &str_end);
+    if (!*str_end) return n;
+    switch (std::tolower(*str_end)) {
+      case 'd': n *= 24;
+      case 'h': n *= 60;
+      case 'm': n *= 60;
+      case 's': n *= 1; return n;
+    }
   }
-  return n;
+  return std::numeric_limits<double>::quiet_NaN();
 }
 
 bool get_seconds(const pjs::Value &val, double &out) {

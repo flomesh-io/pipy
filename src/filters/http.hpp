@@ -32,6 +32,7 @@
 #include "list.hpp"
 #include "api/http.hpp"
 #include "http2.hpp"
+#include "options.hpp"
 
 namespace pipy {
 namespace http {
@@ -182,7 +183,14 @@ private:
 
 class ResponseDecoder : public Filter {
 public:
-  ResponseDecoder(pjs::Object *options);
+  struct Options : public pipy::Options {
+    bool bodiless = false;
+    pjs::Ref<pjs::Function> bodiless_f;
+    Options() {}
+    Options(pjs::Object *options);
+  };
+
+  ResponseDecoder(const Options &options);
 
 private:
   ResponseDecoder(const ResponseDecoder &r);
@@ -205,7 +213,7 @@ private:
 
   Decoder m_ef_decode;
   SetBodiless m_ef_set_bodiless;
-  pjs::Value m_bodiless;
+  Options m_options;
 
   void on_set_bodiless(Event *evt);
 };
@@ -216,7 +224,13 @@ private:
 
 class RequestEncoder : public Filter {
 public:
-  RequestEncoder(pjs::Object *options);
+  struct Options : pipy::Options {
+    size_t buffer_size = DATA_CHUNK_SIZE;
+    Options() {}
+    Options(pjs::Object *options);
+  };
+
+  RequestEncoder(const Options &options);
 
 private:
   RequestEncoder(const RequestEncoder &r);
@@ -229,7 +243,7 @@ private:
   virtual void dump(std::ostream &out) override;
 
   Encoder m_ef_encode;
-  int m_buffer_size = DATA_CHUNK_SIZE;
+  Options m_options;
 };
 
 //
@@ -238,7 +252,17 @@ private:
 
 class ResponseEncoder : public Filter {
 public:
-  ResponseEncoder(pjs::Object *options);
+  struct Options : pipy::Options {
+    bool final;
+    bool bodiless;
+    pjs::Ref<pjs::Function> final_f;
+    pjs::Ref<pjs::Function> bodiless_f;
+    size_t buffer_size = DATA_CHUNK_SIZE;
+    Options() {}
+    Options(pjs::Object *options);
+  };
+
+  ResponseEncoder(const Options &options);
 
 private:
   ResponseEncoder(const ResponseEncoder &r);
@@ -251,9 +275,7 @@ private:
   virtual void dump(std::ostream &out) override;
 
   Encoder m_ef_encode;
-  pjs::Value m_final;
-  pjs::Value m_bodiless;
-  int m_buffer_size = DATA_CHUNK_SIZE;
+  Options m_options;
 };
 
 //
@@ -287,25 +309,6 @@ private:
 };
 
 //
-// HTTP2Demuxer
-//
-
-class HTTP2Demuxer :
-  public pjs::Pooled<HTTP2Demuxer>,
-  public http2::Server
-{
-public:
-  HTTP2Demuxer(Filter *filter) : m_filter(filter) {}
-
-  auto on_new_stream_pipeline() -> PipelineBase* override {
-    return m_filter->sub_pipeline(0, true);
-  }
-
-private:
-  Filter* m_filter;
-};
-
-//
 // Demux
 //
 
@@ -316,7 +319,13 @@ class Demux :
   protected Encoder
 {
 public:
-  Demux(pjs::Object *options);
+  struct Options : public pipy::Options {
+    size_t buffer_size = DATA_CHUNK_SIZE;
+    Options();
+    Options(pjs::Object *options);
+  };
+
+  Demux(const Options &options);
 
 private:
   Demux(const Demux &r);
@@ -329,7 +338,26 @@ private:
   virtual void shutdown() override;
   virtual void dump(std::ostream &out) override;
 
-  int m_buffer_size = DATA_CHUNK_SIZE;
+  //
+  // Muxer::HTTP2Demuxer
+  //
+
+  class HTTP2Demuxer :
+    public pjs::Pooled<HTTP2Demuxer>,
+    public http2::Server
+  {
+  public:
+    HTTP2Demuxer(Filter *filter) : m_filter(filter) {}
+
+    auto on_new_stream_pipeline() -> PipelineBase* override {
+      return m_filter->sub_pipeline(0, true);
+    }
+
+  private:
+    Filter* m_filter;
+  };
+
+  Options m_options;
   RequestQueue m_request_queue;
   HTTP2Demuxer* m_http2_demuxer = nullptr;
 
@@ -358,15 +386,22 @@ class HTTP2Muxer :
 
 class Mux : public pipy::Mux {
 public:
+  struct Options : public pipy::Mux::Options {
+    size_t buffer_size = DATA_CHUNK_SIZE;
+    int version = 1;
+    pjs::Ref<pjs::Function> version_f;
+    Options() {}
+    Options(pjs::Object *options);
+  };
+
   Mux();
-  Mux(const pjs::Value &key, pjs::Object *options);
+  Mux(const pjs::Value &key, const Options &options);
 
 private:
   Mux(const Mux &r);
   ~Mux();
 
-  int m_version = 1;
-  int m_buffer_size = DATA_CHUNK_SIZE;
+  Options m_options;
 
   virtual auto clone() -> Filter* override;
   virtual void dump(std::ostream &out) override;

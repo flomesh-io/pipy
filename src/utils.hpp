@@ -45,6 +45,8 @@ bool get_ip_v4(const std::string &str, uint8_t ip[]);
 bool get_ip_v6(const std::string &str, uint8_t ip[]);
 bool get_ip_v6(const std::string &str, uint16_t ip[]);
 bool get_cidr(const std::string &str, uint8_t ip[], int &mask);
+auto get_size(const std::string &str, int thousand = 1000) -> double;
+auto get_binary_size(const std::string &str) -> double;
 auto get_byte_size(const std::string &str) -> size_t;
 bool get_byte_size(const pjs::Value &val, size_t &out);
 auto get_seconds(const std::string &str) -> double;

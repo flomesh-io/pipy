@@ -31,6 +31,16 @@
 namespace pipy {
 
 //
+// MuxBase::Options
+//
+
+MuxBase::Options::Options(pjs::Object *options) {
+  Value(options, "maxIdle")
+    .get_seconds(max_idle)
+    .check_nullable();
+}
+
+//
 // MuxBase
 //
 
@@ -39,21 +49,13 @@ MuxBase::MuxBase()
 {
 }
 
-MuxBase::MuxBase(const pjs::Value &session_key, pjs::Object *options)
+MuxBase::MuxBase(const pjs::Value &session_key, const Options &options)
   : m_session_manager(new SessionManager(this))
   , m_session_key(session_key)
 {
-  if (options) {
-    SessionManager::Options opts;
-
-    pjs::Value max_idle;
-    options->get("maxIdle", max_idle);
-    if (!utils::get_seconds(max_idle, opts.max_idle)) {
-      throw std::runtime_error("option.maxIdle expects a number or a string");
-    }
-
-    m_session_manager->set_options(opts);
-  }
+  SessionManager::Options opts;
+  opts.max_idle = options.max_idle;
+  m_session_manager->set_options(opts);
 }
 
 MuxBase::MuxBase(const MuxBase &r)
@@ -363,7 +365,7 @@ Mux::Mux()
 {
 }
 
-Mux::Mux(const pjs::Value &key, pjs::Object *options)
+Mux::Mux(const pjs::Value &key, const Options &options)
   : MuxBase(key, options)
 {
 }

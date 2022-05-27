@@ -30,6 +30,7 @@
 #include "event.hpp"
 #include "list.hpp"
 #include "timer.hpp"
+#include "options.hpp"
 
 #include <unordered_map>
 
@@ -43,11 +44,18 @@ class PipelineDef;
 //
 
 class MuxBase : public Filter {
+public:
+  struct Options : public pipy::Options {
+    double max_idle = 10;
+    Options() {}
+    Options(pjs::Object *options);
+  };
+
 protected:
   class Session;
 
   MuxBase();
-  MuxBase(const pjs::Value &session_key, pjs::Object *options);
+  MuxBase(const pjs::Value &session_key, const Options &options);
   MuxBase(const MuxBase &r);
 
   virtual void reset() override;
@@ -196,7 +204,7 @@ private:
 class Mux : public MuxBase {
 public:
   Mux();
-  Mux(const pjs::Value &key, pjs::Object *options);
+  Mux(const pjs::Value &key, const Options &options);
 
 protected:
   Mux(const Mux &r);

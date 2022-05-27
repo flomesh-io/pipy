@@ -214,6 +214,7 @@ add_executable(pipy
   src/message.cpp
   src/module.cpp
   src/net.cpp
+  src/options.cpp
   src/outbound.cpp
   src/pipeline.cpp
   src/pjs/builtin.cpp
