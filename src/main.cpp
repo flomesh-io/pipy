@@ -36,8 +36,8 @@
 #include "filters/tls.hpp"
 #include "input.hpp"
 #include "listener.hpp"
+#include "main-options.hpp"
 #include "net.hpp"
-#include "options.hpp"
 #include "status.hpp"
 #include "timer.hpp"
 #include "utils.hpp"
@@ -176,7 +176,7 @@ static void wait_for_signals(asio::signal_set &signals) {
 
 int main(int argc, char *argv[]) {
   try {
-    Options opts(argc, argv);
+    MainOptions opts(argc, argv);
 
     if (opts.version) {
       show_version();
@@ -184,7 +184,7 @@ int main(int argc, char *argv[]) {
     }
 
     if (opts.help) {
-      Options::show_help();
+      MainOptions::show_help();
       return 0;
     }
 

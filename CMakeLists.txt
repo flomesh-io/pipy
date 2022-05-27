@@ -210,10 +210,10 @@ add_executable(pipy
   src/listener.cpp
   src/logging.cpp
   src/main.cpp
+  src/main-options.cpp
   src/message.cpp
   src/module.cpp
   src/net.cpp
-  src/options.cpp
   src/outbound.cpp
   src/pipeline.cpp
   src/pjs/builtin.cpp

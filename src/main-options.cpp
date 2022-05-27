@@ -23,7 +23,7 @@
  *  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include "options.hpp"
+#include "main-options.hpp"
 #include "fs.hpp"
 #include "data.hpp"
 #include "utils.hpp"
@@ -34,7 +34,7 @@ namespace pipy {
 
 static Data::Producer s_dp("Command Line Options");
 
-void Options::show_help() {
+void MainOptions::show_help() {
   std::cout << "Usage: pipy [options] [<filename or URL>]" << std::endl;
   std::cout << std::endl;
   std::cout << "Options:" << std::endl;
@@ -56,7 +56,7 @@ void Options::show_help() {
   std::cout << std::endl;
 }
 
-Options::Options(int argc, char *argv[]) {
+MainOptions::MainOptions(int argc, char *argv[]) {
   for (int i = 1; i < argc; i++) {
     std::string term(argv[i]);
     if (term[0] != '-') {
@@ -130,7 +130,7 @@ Options::Options(int argc, char *argv[]) {
   }
 }
 
-auto Options::load_private_key(const std::string &filename) -> crypto::PrivateKey* {
+auto MainOptions::load_private_key(const std::string &filename) -> crypto::PrivateKey* {
   std::vector<uint8_t> buf;
   if (!fs::read_file(filename, buf)) {
     std::string msg("cannot open file: ");
@@ -140,7 +140,7 @@ auto Options::load_private_key(const std::string &filename) -> crypto::PrivateKe
   return crypto::PrivateKey::make(data);
 }
 
-auto Options::load_certificate(const std::string &filename) -> crypto::Certificate* {
+auto MainOptions::load_certificate(const std::string &filename) -> crypto::Certificate* {
   std::vector<uint8_t> buf;
   if (!fs::read_file(filename, buf)) {
     std::string msg("cannot open file: ");
@@ -150,7 +150,7 @@ auto Options::load_certificate(const std::string &filename) -> crypto::Certifica
   return crypto::Certificate::make(data);
 }
 
-void Options::load_certificate_list(const std::string &filename, std::vector<pjs::Ref<crypto::Certificate>> &list) {
+void MainOptions::load_certificate_list(const std::string &filename, std::vector<pjs::Ref<crypto::Certificate>> &list) {
   if (fs::is_file(filename)) {
     list.push_back(load_certificate(filename));
 

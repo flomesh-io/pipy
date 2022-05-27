@@ -23,8 +23,8 @@
  *  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef OPTIONS_HPP
-#define OPTIONS_HPP
+#ifndef MAIN_OPTIONS_HPP
+#define MAIN_OPTIONS_HPP
 
 #include "api/crypto.hpp"
 #include "logging.hpp"
@@ -36,14 +36,14 @@
 namespace pipy {
 
 //
-// Options
+// MainOptions
 //
 
-class Options {
+class MainOptions {
 public:
   static void show_help();
 
-  Options(int argc, char *argv[]);
+  MainOptions(int argc, char *argv[]);
 
   std::string filename;
   bool        version = false;
@@ -71,4 +71,4 @@ private:
 
 } // namespace pipy
 
-#endif // OPTIONS_HPP
+#endif // MAIN_OPTIONS_HPP
