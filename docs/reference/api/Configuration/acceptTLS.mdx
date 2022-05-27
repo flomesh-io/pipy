@@ -77,6 +77,10 @@ pipy()
 
 If nothing is provided, or the callback function returns an invalid index, the first protocol requested by the client side would be chosen.
 
+### Handshake callback
+
+A handshake callback function can be given to the _handshake_ option in the _options_ parameter. This function will be called after handshake completes. The protocol that is chosen after protocol negotiation is passed as a string parameter to the callback.
+
 ## Syntax
 
 ``` js
@@ -92,6 +96,8 @@ pipy()
         trusted: [
           ...trustedCerts // array of crypto.Certificate
         ],
+        alpn: [...allowedProtocols],
+        handshake: (chosenProtocol) => onHandshakeComplete(chosenProtocol),
       }
     )
 

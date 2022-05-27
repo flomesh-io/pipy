@@ -90,7 +90,8 @@ public:
     Pipeline *pipeline,
     bool is_server,
     pjs::Object *certificate,
-    pjs::Function *alpn
+    pjs::Function *alpn,
+    pjs::Function *handshake
   );
 
   ~TLSSession();
@@ -108,6 +109,7 @@ private:
   pjs::Ref<pjs::Object> m_certificate;
   pjs::Ref<pjs::Object> m_ca;
   pjs::Ref<pjs::Function> m_alpn;
+  pjs::Ref<pjs::Function> m_handshake;
   bool m_is_server;
   bool m_closed = false;
 
@@ -119,7 +121,8 @@ private:
   auto on_select_alpn(pjs::Array *names) -> int;
 
   void use_certificate(pjs::Str *sni);
-  bool do_handshake();
+  bool handshake_step();
+  void handshake_done();
   auto pump_send() -> int;
   auto pump_receive() -> int;
   void pump_read();
@@ -143,6 +146,7 @@ public:
     std::vector<pjs::Ref<crypto::Certificate>> trusted;
     std::vector<std::string> alpn;
     pjs::Value sni;
+    pjs::Ref<pjs::Function> handshake;
 
     Options() {}
     Options(pjs::Object *options);
@@ -175,6 +179,7 @@ public:
     std::vector<pjs::Ref<crypto::Certificate>> trusted;
     pjs::Ref<pjs::Function> alpn;
     std::set<pjs::Ref<pjs::Str>> alpn_set;
+    pjs::Ref<pjs::Function> handshake;
 
     Options() {}
     Options(pjs::Object *options);

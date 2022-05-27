@@ -170,11 +170,13 @@ TLSSession::TLSSession(
   Pipeline *pipeline,
   bool is_server,
   pjs::Object *certificate,
-  pjs::Function *alpn
+  pjs::Function *alpn,
+  pjs::Function *handshake
 )
   : m_pipeline(pipeline)
   , m_certificate(certificate)
   , m_alpn(alpn)
+  , m_handshake(handshake)
   , m_is_server(is_server)
 {
   m_ssl = SSL_new(ctx->ctx());
@@ -208,7 +210,7 @@ void TLSSession::set_sni(const char *name) {
 }
 
 void TLSSession::start_handshake() {
-  do_handshake();
+  handshake_step();
 }
 
 void TLSSession::on_input(Event *evt) {
@@ -220,10 +222,10 @@ void TLSSession::on_input(Event *evt) {
   } else if (auto *data = evt->as<Data>()) {
     if (m_is_server) {
       m_buffer_receive.push(*data);
-      if (do_handshake()) pump_read();
+      if (handshake_step()) pump_read();
     } else {
       m_buffer_write.push(*data);
-      if (do_handshake()) pump_write();
+      if (handshake_step()) pump_write();
     }
 
   } else if (auto end = evt->as<StreamEnd>()) {
@@ -240,10 +242,10 @@ void TLSSession::on_reply(Event *evt) {
   } else if (auto *data = evt->as<Data>()) {
     if (m_is_server) {
       m_buffer_write.push(*data);
-      if (do_handshake()) pump_write();
+      if (handshake_step()) pump_write();
     } else {
       m_buffer_receive.push(*data);
-      if (do_handshake()) pump_read();
+      if (handshake_step()) pump_read();
     }
 
   } else if (auto end = evt->as<StreamEnd>()) {
@@ -315,11 +317,12 @@ void TLSSession::use_certificate(pjs::Str *sni) {
   }
 }
 
-bool TLSSession::do_handshake() {
+bool TLSSession::handshake_step() {
   while (!SSL_is_init_finished(m_ssl)) {
     pump_receive();
     int ret = SSL_do_handshake(m_ssl);
     if (ret == 1) {
+      handshake_done();
       pump_send();
       pump_write();
       return true;
@@ -348,6 +351,18 @@ bool TLSSession::do_handshake() {
     if (blocked) return false;
   }
   return true;
+}
+
+void TLSSession::handshake_done() {
+  if (m_handshake) {
+    Context &ctx = *m_pipeline->context();
+    pjs::Value arg, ret;
+    const unsigned char *str = nullptr;
+    unsigned int len = 0;
+    SSL_get0_alpn_selected(m_ssl, &str, &len);
+    if (str) arg.set(pjs::Str::make((const char *)str, len));
+    (*m_handshake)(ctx, 1, &arg, ret);
+  }
 }
 
 auto TLSSession::pump_send() -> int {
@@ -462,11 +477,12 @@ void TLSSession::close(StreamEnd::Error err) {
 
 Client::Options::Options(pjs::Object *options) {
   if (options) {
-    pjs::Value certificate, trusted, alpn;
+    pjs::Value certificate, trusted, alpn, handshake;
     options->get("certificate", certificate);
     options->get("trusted", trusted);
     options->get("alpn", alpn);
     options->get("sni", sni);
+    options->get("handshake", handshake);
 
     if (!certificate.is_nullish()) {
       if (!certificate.is_object()) {
@@ -514,6 +530,13 @@ Client::Options::Options(pjs::Object *options) {
       if (!sni.is_string() && !sni.is_function()) {
         throw std::runtime_error("options.sni expects a string or a function");
       }
+    }
+
+    if (!handshake.is_nullish()) {
+      if (!handshake.is_function()) {
+        throw std::runtime_error("options.handshake expects a function");
+      }
+      this->handshake = handshake.f();
     }
   }
 }
@@ -573,7 +596,8 @@ void Client::process(Event *evt) {
       sub_pipeline(0, false),
       false,
       m_options->certificate,
-      nullptr
+      nullptr,
+      m_options->handshake
     );
     m_session->chain(output());
     if (!m_options->sni.is_undefined()) {
@@ -599,10 +623,11 @@ void Client::process(Event *evt) {
 
 Server::Options::Options(pjs::Object *options) {
   if (options) {
-    pjs::Value certificate, trusted, alpn;
+    pjs::Value certificate, trusted, alpn, handshake;
     options->get("certificate", certificate);
     options->get("trusted", trusted);
     options->get("alpn", alpn);
+    options->get("handshake", handshake);
 
     if (!certificate.is_nullish()) {
       if (!certificate.is_object()) {
@@ -645,6 +670,13 @@ Server::Options::Options(pjs::Object *options) {
       } else {
         this->alpn = alpn.f();
       }
+    }
+
+    if (!handshake.is_nullish()) {
+      if (!handshake.is_function()) {
+        throw std::runtime_error("options.handshake expects a function");
+      }
+      this->handshake = handshake.f();
     }
   }
 }
@@ -689,14 +721,14 @@ void Server::reset() {
 }
 
 void Server::process(Event *evt) {
-
   if (!m_session) {
     m_session = new TLSSession(
       m_tls_context.get(),
       sub_pipeline(0, false),
       true,
       m_options->certificate,
-      m_options->alpn
+      m_options->alpn,
+      m_options->handshake
     );
     m_session->chain(output());
   }

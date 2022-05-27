@@ -40,6 +40,10 @@ The _certificate_ option in the _options_ parameter is also required on the clie
 - _cert_ - a [crypto.Certificate](/reference/api/crypto/Certificate) or [crypto.CertificateChain](/reference/api/crypto/CertificateChain)
 - _key_ - a [crypto.PrivateKey](/reference/api/crypto/PrivateKey)
 
+### Handshake callback
+
+A handshake callback function can be given to the _handshake_ option in the _options_ parameter. This function will be called after handshake completes. The protocol that is chosen after protocol negotiation is passed as a string parameter to the callback.
+
 ## Syntax
 
 ``` js
@@ -60,7 +64,8 @@ pipy()
           ...trustedCerts // array of crypto.Certificate
         ],
         sni: () => getServerName(),
-        alpn,
+        alpn: [...requestedProtocols],
+        handshake: (chosenProtocol) => onHandshakeComplete(chosenProtocol),
       }
     )
 ```
