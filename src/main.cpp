@@ -136,6 +136,8 @@ static void start_reporting_metrics(const std::string &url) {
 //
 
 static void handle_signal(int sig) {
+  static bool s_admin_closed = false;
+
   if (auto worker = Worker::current()) {
     if (worker->handling_signal(sig)) {
       return;
@@ -144,8 +146,11 @@ static void handle_signal(int sig) {
 
   switch (sig) {
     case SIGINT:
-      if (s_admin_link) s_admin_link->close();
-      if (s_admin) s_admin->close();
+      if (!s_admin_closed) {
+        if (s_admin_link) s_admin_link->close();
+        if (s_admin) s_admin->close();
+        s_admin_closed = true;
+      }
       Worker::exit(-1);
       break;
     case SIGHUP:
