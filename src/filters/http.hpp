@@ -415,13 +415,15 @@ private:
     public pjs::Pooled<Session, MuxBase::Session>,
     public QueueMuxer,
     protected Encoder,
-    protected Decoder
+    protected Decoder,
+    public ContextGroup::Waiter
   {
-    Session(int version, int buffer_size)
+    Session(int buffer_size, int version, pjs::Function *version_f)
       : Encoder(false)
       , Decoder(true)
+      , m_buffer_size(buffer_size)
       , m_version(version)
-      , m_buffer_size(buffer_size) {}
+      , m_version_f(version_f) {}
 
     ~Session();
 
@@ -432,12 +434,16 @@ private:
     virtual void on_encode_request(pjs::Object *head) override;
     virtual void on_decode_response(http::ResponseHead *head) override;
     virtual void on_decode_error() override;
+    virtual void on_notify(Context *ctx) override;
 
-    int m_version;
     int m_buffer_size;
+    int m_version;
+    int m_version_selected = 0;
+    pjs::Ref<pjs::Function> m_version_f;
     RequestQueue m_request_queue;
     HTTP2Muxer* m_http2_muxer = nullptr;
 
+    void select_protocol();
     void upgrade_http2();
 
     friend class Mux;

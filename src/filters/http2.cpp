@@ -1413,9 +1413,8 @@ void Endpoint::stream_error(int id, ErrorCode err) {
 void Endpoint::connection_error(ErrorCode err) {
   end_all();
   FrameEncoder::GOAWAY(m_last_received_stream_id, err, m_output_buffer);
-  on_output(Data::make(m_output_buffer));
+  on_output(Data::make(std::move(m_output_buffer)));
   on_output(StreamEnd::make());
-  m_output_buffer.clear();
 }
 
 void Endpoint::end_all(StreamEnd *evt) {
@@ -1833,14 +1832,15 @@ void Endpoint::StreamBase::recycle() {
 }
 
 void Endpoint::StreamBase::stream_end(http::MessageTail *tail) {
+  auto content_length = m_header_decoder.content_length();
+  if (content_length >= 0 && content_length != m_recv_payload_size) {
+    connection_error(PROTOCOL_ERROR);
+    return;
+  }
   if (m_is_tunnel) {
     event(StreamEnd::make());
   } else {
     event(MessageEnd::make(tail));
-  }
-  auto content_length = m_header_decoder.content_length();
-  if (content_length >= 0 && content_length != m_recv_payload_size) {
-    connection_error(PROTOCOL_ERROR);
   }
 }
 

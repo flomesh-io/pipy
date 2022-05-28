@@ -48,7 +48,7 @@ Since the sub-pipeline is shared by multiple streams coming from a group of **mu
 
 ### HTTP versions
 
-You can select between HTTP/1.1 and HTTP/2 by using the option _version_ in the _options_ parameter. Default value is 1 for using HTTP/1.1 only.
+You can select between HTTP/1.1 and HTTP/2 by using the option _version_ in the _options_ parameter. It can be 1 for HTTP/1.1, or 2 for HTTP/2. You can also specify a callback function that gets called at session start and returns the desired protocol version. Default value is 1.
 
 #### Multiplexing in HTTP/1.1
 

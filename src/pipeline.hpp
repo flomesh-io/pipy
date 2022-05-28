@@ -28,6 +28,7 @@
 
 #include "pjs/pjs.hpp"
 #include "event.hpp"
+#include "input.hpp"
 #include "list.hpp"
 
 #include <list>
@@ -103,18 +104,8 @@ private:
 // PipelineBase
 //
 
-class PipelineBase :
-  public pjs::RefCount<PipelineBase>,
-  public EventFunction
+class PipelineBase : public AutoReleased, public EventFunction
 {
-private:
-  virtual void on_recycle() = 0;
-
-  void finalize() {
-    on_recycle();
-  }
-
-  friend class pjs::RefCount<PipelineBase>;
 };
 
 //
@@ -130,10 +121,6 @@ public:
     return def->alloc(ctx);
   }
 
-  static void auto_release(Pipeline *pipeline) {
-    if (pipeline) pipeline->auto_release();
-  }
-
   auto def() const -> PipelineDef* { return m_def; }
   auto context() const -> Context* { return m_context; }
 
@@ -146,12 +133,8 @@ private:
   virtual void on_event(Event *evt) override;
   virtual void on_recycle() override;
 
-  void auto_release();
-
   PipelineDef* m_def;
   Pipeline* m_next_free = nullptr;
-  Pipeline* m_next_auto_release = nullptr;
-  bool m_auto_release = false;
   List<Filter> m_filters;
   pjs::Ref<Context> m_context;
 
@@ -161,7 +144,6 @@ private:
   friend class pjs::RefCount<Pipeline>;
   friend class PipelineDef;
   friend class Filter;
-  friend class InputContext;
 };
 
 } // namespace pipy

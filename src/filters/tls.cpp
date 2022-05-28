@@ -369,16 +369,16 @@ auto TLSSession::pump_send() -> int {
   int size = 0;
   for (;;) {
     size_t n = 0;
-    pjs::Ref<Data> data = s_dp.make(DATA_CHUNK_SIZE);
-    auto chunk = data->chunks().begin();
+    Data data(DATA_CHUNK_SIZE, &s_dp);
+    auto chunk = data.chunks().begin();
     auto ptr = std::get<0>(*chunk);
     auto len = std::get<1>(*chunk);
     if (BIO_read_ex(m_wbio, ptr, len, &n)) {
-      data->pop(data->size() - n);
+      data.pop(data.size() - n);
       if (m_is_server) {
-        output(data);
+        output(Data::make(data));
       } else {
-        forward(data);
+        forward(Data::make(data));
       }
       size += n;
     } else {
@@ -406,8 +406,8 @@ void TLSSession::pump_read() {
   for (;;) {
     for (;;) {
       size_t n = 0;
-      pjs::Ref<Data> data = s_dp.make(DATA_CHUNK_SIZE);
-      auto chunk = data->chunks().begin();
+      Data data(DATA_CHUNK_SIZE, &s_dp);
+      auto chunk = data.chunks().begin();
       auto buf = std::get<0>(*chunk);
       auto len = std::get<1>(*chunk);
       auto ret = SSL_read_ex(m_ssl, buf, len, &n);
@@ -423,11 +423,11 @@ void TLSSession::pump_read() {
           return;
         }
       } else {
-        data->pop(data->size() - n);
+        data.pop(data.size() - n);
         if (m_is_server) {
-          forward(data);
+          forward(Data::make(data));
         } else {
-          output(data);
+          output(Data::make(data));
         }
       }
     }

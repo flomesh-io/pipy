@@ -73,6 +73,9 @@ void MuxBase::reset() {
       m_session->close_stream(m_stream);
       m_stream = nullptr;
     }
+    if (m_session->pending()) {
+      m_session->m_waiting_muxers.remove(this);
+    }
     m_session->free();
     m_session = nullptr;
   }
@@ -88,17 +91,38 @@ void MuxBase::process(Event *evt) {
       m_session = session;
     }
 
-    if (!session->started()) {
+    if (!session->m_pipeline) {
       auto p = sub_pipeline(0, true);
-      session->start(p);
+      session->set_pipeline(p);
     }
 
-    auto s = session->open_stream();
-    s->chain(output());
-    m_stream = s;
+    if (session->pending()) {
+      if (m_pending_events.empty()) {
+        session->m_waiting_muxers.push(this);
+      }
+      m_pending_events.push(evt);
+      return;
+    }
+
+    open_stream();
   }
 
   output(evt, m_stream->input());
+}
+
+void MuxBase::open_stream() {
+  auto s = m_session->open_stream();
+  s->chain(output());
+  m_stream = s;
+}
+
+void MuxBase::flush_pending() {
+  open_stream();
+  m_pending_events.flush(
+    [this](Event *evt) {
+      output(evt, m_stream->input());
+    }
+  );
 }
 
 //
@@ -120,14 +144,26 @@ void MuxBase::Session::isolate() {
   }
 }
 
-void MuxBase::Session::start(Pipeline *pipeline) {
+void MuxBase::Session::set_pending(bool pending) {
+  if (pending != m_is_pending) {
+    if (!pending) {
+      while (auto *muxer = m_waiting_muxers.head()) {
+        m_waiting_muxers.remove(muxer);
+        muxer->flush_pending();
+      }
+    }
+    m_is_pending = pending;
+  }
+}
+
+void MuxBase::Session::set_pipeline(Pipeline *pipeline) {
   m_pipeline = pipeline;
   pipeline->chain(reply());
   chain_forward(pipeline->input());
   open();
 }
 
-void MuxBase::Session::end() {
+void MuxBase::Session::free_pipeline() {
   if (auto p = m_pipeline.get()) {
     close();
     Pipeline::auto_release(p);
@@ -140,7 +176,7 @@ void MuxBase::Session::free() {
   if (m_manager) {
     m_manager->free(this);
   } else {
-    end();
+    free_pipeline();
   }
 }
 
@@ -151,7 +187,7 @@ void MuxBase::Session::on_input(Event *evt) {
 void MuxBase::Session::on_reply(Event *evt) {
   output(evt);
   if (evt->is<StreamEnd>()) {
-    end();
+    free_pipeline();
   }
 }
 
@@ -169,7 +205,7 @@ auto MuxBase::SessionManager::get(const pjs::Value &key) -> Session* {
     if (i != m_weak_sessions.end()) {
       session = i->second;
       if (!i->first.ptr()) {
-        session->end();
+        session->free_pipeline();
         session = nullptr;
       }
     }
@@ -211,6 +247,7 @@ void MuxBase::SessionManager::free(Session *session) {
 }
 
 void MuxBase::SessionManager::erase(Session *session) {
+  Session::auto_release(session);
   if (!session->m_share_count) {
     m_free_sessions.remove(session);
   }
@@ -236,7 +273,7 @@ void MuxBase::SessionManager::recycle() {
         auto session = s; s = s->next();
         if (now - session->m_free_time >= m_options.max_idle * 1000) {
           session->input()->input(StreamEnd::make());
-          session->end();
+          session->free_pipeline();
         }
       }
       recycle();

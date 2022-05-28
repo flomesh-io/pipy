@@ -28,6 +28,8 @@
 
 #include "filter.hpp"
 #include "event.hpp"
+#include "input.hpp"
+#include "context.hpp"
 #include "list.hpp"
 #include "timer.hpp"
 #include "options.hpp"
@@ -43,7 +45,10 @@ class PipelineDef;
 // MuxBase
 //
 
-class MuxBase : public Filter {
+class MuxBase :
+  public Filter,
+  public List<MuxBase>::Item
+{
 public:
   struct Options : public pipy::Options {
     double max_idle = 10;
@@ -69,6 +74,10 @@ private:
   pjs::Ref<Session> m_session;
   pjs::Value m_session_key;
   EventFunction* m_stream = nullptr;
+  EventBuffer m_pending_events;
+
+  void open_stream();
+  void flush_pending();
 
 protected:
 
@@ -78,8 +87,8 @@ protected:
 
   class Session :
     public pjs::Pooled<Session>,
-    public pjs::RefCount<Session>,
     public List<Session>::Item,
+    public AutoReleased,
     public EventProxy
   {
   protected:
@@ -91,13 +100,15 @@ protected:
     Session() {}
     virtual ~Session() {}
 
+    auto pipeline() const -> Pipeline* { return m_pipeline; }
     bool isolated() const { return !m_manager; }
     void isolate();
+    bool pending() const { return m_is_pending; }
+    void set_pending(bool pending);
 
   private:
-    void start(Pipeline *pipeline);
-    bool started() const { return m_pipeline; }
-    void end();
+    void set_pipeline(Pipeline *pipeline);
+    void free_pipeline();
     void free();
 
     SessionManager* m_manager = nullptr;
@@ -106,9 +117,12 @@ protected:
     pjs::Ref<Pipeline> m_pipeline;
     int m_share_count = 1;
     double m_free_time = 0;
+    List<MuxBase> m_waiting_muxers;
+    bool m_is_pending = false;
 
     virtual void on_input(Event *evt) override;
     virtual void on_reply(Event *evt) override;
+    virtual void on_recycle() override { delete this; }
 
     friend class pjs::RefCount<Session>;
     friend class MuxBase;

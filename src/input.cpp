@@ -78,7 +78,7 @@ InputContext::~InputContext() {
   // Clean up pipelines
   m_cleaning_up = true;
   for (
-    auto *p = m_pipelines;
+    auto *p = m_auto_released;
     p; p = p->m_next_auto_release
   ) {
     p->m_auto_release = false;
@@ -88,20 +88,17 @@ InputContext::~InputContext() {
   s_stack = m_next;
 }
 
-void InputContext::add(Pipeline *pipeline) {
-  pipeline->retain();
+void InputContext::auto_release(AutoReleased *obj) {
+  obj->retain();
   if (s_stack) {
     if (s_stack->m_cleaning_up) {
-      Log::error(
-        "[pipeline %p] auto-release recursion, name = %s",
-        pipeline, pipeline->def()->name()->c_str()
-      );
+      Log::error("[auto-release] auto-release recursion", obj);
     }
-    pipeline->m_auto_release = true;
-    pipeline->m_next_auto_release = s_stack->m_pipelines;
-    s_stack->m_pipelines = pipeline;
+    obj->m_auto_release = true;
+    obj->m_next_auto_release = s_stack->m_auto_released;
+    s_stack->m_auto_released = obj;
   } else {
-    pipeline->release();
+    obj->release();
   }
 }
 

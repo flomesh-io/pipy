@@ -31,7 +31,7 @@
 
 namespace pipy {
 
-class Pipeline;
+class AutoReleased;
 class InputContext;
 
 //
@@ -143,15 +143,50 @@ private:
   List<FlushTarget> m_flush_targets_pumping;
   List<FlushTarget> m_flush_targets_terminating;
   pjs::Ref<InputSource::Tap> m_tap;
-  Pipeline* m_pipelines = nullptr;
+  AutoReleased* m_auto_released = nullptr;
   bool m_cleaning_up = false;
 
   static InputContext* s_stack;
 
-  static void add(Pipeline *pipeline);
+  static void auto_release(AutoReleased *obj);
 
   friend class FlushTarget;
-  friend class Pipeline;
+  friend class AutoReleased;
+};
+
+//
+// AutoReleased
+//
+
+class AutoReleased : public pjs::RefCount<AutoReleased> {
+public:
+  static void auto_release(AutoReleased *obj) {
+    if (obj) obj->auto_release();
+  }
+
+protected:
+  void reset() {
+    m_auto_release = false;
+  }
+
+private:
+  virtual void on_recycle() = 0;
+
+  AutoReleased* m_next_auto_release = nullptr;
+  bool m_auto_release = false;
+
+  void auto_release() {
+    if (!m_auto_release) {
+      InputContext::auto_release(this);
+    }
+  }
+
+  void finalize() {
+    on_recycle();
+  }
+
+  friend class pjs::RefCount<AutoReleased>;
+  friend class InputContext;
 };
 
 } // namespace pipy

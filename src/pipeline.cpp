@@ -26,7 +26,6 @@
 #include "pipeline.hpp"
 #include "filter.hpp"
 #include "context.hpp"
-#include "input.hpp"
 #include "message.hpp"
 #include "module.hpp"
 #include "logging.hpp"
@@ -152,12 +151,6 @@ void Pipeline::on_recycle() {
   m_def->free(this);
 }
 
-void Pipeline::auto_release() {
-  if (!m_auto_release) {
-    InputContext::add(this);
-  }
-}
-
 void Pipeline::shutdown() {
   for (auto f = m_filters.head(); f; f = f->next()) {
     f->shutdown();
@@ -165,13 +158,13 @@ void Pipeline::shutdown() {
 }
 
 void Pipeline::reset() {
+  PipelineBase::reset();
   EventTarget::close();
   EventFunction::chain(nullptr);
   for (auto f = m_filters.head(); f; f = f->next()) {
     f->reset();
   }
   m_context = nullptr;
-  m_auto_release = false;
 }
 
 } // namespace pipy

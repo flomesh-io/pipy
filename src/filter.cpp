@@ -130,7 +130,7 @@ auto Filter::sub_pipeline(int i, bool clone_context) -> Pipeline* {
 void Filter::on_event(Event *evt) {
   if (m_stream_end) return;
   if (evt->is<StreamEnd>()) m_stream_end = true;
-  m_pipeline->auto_release();
+  Pipeline::auto_release(m_pipeline);
   process(evt);
 }
 

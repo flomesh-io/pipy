@@ -1333,7 +1333,11 @@ auto Mux::clone() -> Filter* {
 }
 
 auto Mux::on_new_session() -> MuxBase::Session* {
-  return new Session(m_options.version, m_options.buffer_size);
+  return new Session(
+    m_options.buffer_size,
+    m_options.version,
+    m_options.version_f
+  );
 }
 
 //
@@ -1345,18 +1349,7 @@ Mux::Session::~Session() {
 }
 
 void Mux::Session::open() {
-  switch (m_version) {
-  case 1:
-    QueueMuxer::chain(Encoder::input());
-    Encoder::chain(MuxBase::Session::input());
-    MuxBase::Session::chain(Decoder::input());
-    Decoder::chain(QueueMuxer::reply());
-    break;
-  case 2:
-    upgrade_http2();
-    break;
-  }
-  Encoder::set_buffer_size(m_buffer_size);
+  select_protocol();
 }
 
 auto Mux::Session::open_stream() -> EventFunction* {
@@ -1413,6 +1406,48 @@ void Mux::Session::on_decode_response(http::ResponseHead *head) {
 
 void Mux::Session::on_decode_error()
 {
+}
+
+void Mux::Session::on_notify(Context *ctx) {
+  select_protocol();
+}
+
+void Mux::Session::select_protocol() {
+  if (m_version_selected) return;
+  if (m_version_f) {
+    auto *ctx = pipeline()->context();
+    pjs::Value ret;
+    (*m_version_f)(*ctx, 0, nullptr, ret);
+    if (!ctx->ok()) return;
+    if (!ret.is_number()) {
+      set_pending(true);
+      ContextGroup::Waiter::wait(ctx->group());
+      MuxBase::Session::input()->input(Data::make());
+      return;
+    }
+    m_version_selected = ret.n();
+  } else {
+    m_version_selected = m_version;
+  }
+
+  switch (m_version_selected) {
+  case 2:
+    upgrade_http2();
+    break;
+  default:
+    if (m_version_selected != 1) {
+      Log::error("[muxHTTP] invalid HTTP version: %d", m_version_selected);
+      m_version_selected = 1;
+    }
+    QueueMuxer::chain(Encoder::input());
+    Encoder::chain(MuxBase::Session::input());
+    MuxBase::Session::chain(Decoder::input());
+    Decoder::chain(QueueMuxer::reply());
+    Encoder::set_buffer_size(m_buffer_size);
+    break;
+  }
+
+  set_pending(false);
 }
 
 void Mux::Session::upgrade_http2() {
@@ -1574,6 +1609,8 @@ void Server::on_tunnel_data(Data *data) {
 //
 
 void Server::Handler::on_event(Event *evt) {
+  Pipeline::auto_release(this);
+
   if (m_server->m_tunnel) {
     if (auto data = evt->as<Data>()) {
       m_server->on_tunnel_data(data);
