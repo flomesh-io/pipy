@@ -40,6 +40,8 @@ You can control the grouping of **muxQueue** filters by using the _group_ parame
 
 > Grouping only happens among filters coming from the same place in the same pipeline layout. Two filters from different pipeline layouts or different places in the same pipeline layout will never share the same sub-pipeline, even when given the same _group_ parameter.
 
+When _group_ is not given, default is the _inbound connection_, which means grouping by downstreams.
+
 ### Sub-pipeline lifecycle
 
 Since the sub-pipeline is shared by multiple streams coming from a group of **muxQueue** filters, it won't be closed until the last stream ends in the group. After all streams in the group are closed, the sub-pipeline will wait for 10 seconds to ensure no more new streams are coming. You can change this waiting time by the _maxIdle_ option in the _options_ parameter. It can be either a number in seconds or a string with a unit suffix such as `'s'`, `'m'`, `'h'`, `'d'`.
@@ -49,6 +51,10 @@ Since the sub-pipeline is shared by multiple streams coming from a group of **mu
 ## Syntax
 
 ``` js
+pipy()
+  .pipeline('example')
+    .muxQueue(layout)
+
 pipy()
   .pipeline('example')
     .muxQueue(layout, group)

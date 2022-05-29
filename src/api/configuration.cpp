@@ -1291,8 +1291,15 @@ template<> void ClassDef<Configuration>::init() {
   method("muxQueue", [](Context &ctx, Object *thiz, Value &result) {
     Str *target;
     Value key;
+    Function *key_f = nullptr;
     Object *options = nullptr;
-    if (!ctx.arguments(2, &target, &key, &options)) return;
+    if (ctx.try_arguments(2, &target, &key_f, &options)) {
+      key.set(key_f);
+    } else if (ctx.try_arguments(2, &target, &options)) {
+      key = Value::undefined;
+    } else if (!ctx.arguments(1, &target, &key, &options)) {
+      return;
+    }
     try {
       thiz->as<Configuration>()->mux_queue(target, key, options);
       result.set(thiz);
@@ -1305,8 +1312,15 @@ template<> void ClassDef<Configuration>::init() {
   method("muxHTTP", [](Context &ctx, Object *thiz, Value &result) {
     Str *target;
     Value key;
+    Function *key_f = nullptr;
     Object *options = nullptr;
-    if (!ctx.arguments(2, &target, &key, &options)) return;
+    if (ctx.try_arguments(2, &target, &key_f, &options)) {
+      key.set(key_f);
+    } else if (ctx.try_arguments(2, &target, &options)) {
+      key = Value::undefined;
+    } else if (!ctx.arguments(1, &target, &key, &options)) {
+      return;
+    }
     try {
       thiz->as<Configuration>()->mux_http(target, key, options);
       result.set(thiz);

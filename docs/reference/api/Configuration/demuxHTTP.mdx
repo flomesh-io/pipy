@@ -82,7 +82,7 @@ pipy()
   .demuxHTTP('request')      // De-multiplex and decode HTTP requests
 
 .pipeline('request')         // Accept an individual HTTP request
-  .muxHTTP('connection', '') // Encode and multiplex the request into a shared TCP stream
+  .muxHTTP('connection')     // Encode and multiplex the request into a shared TCP stream
 
 .pipeline('connection')      // Accept a TCP stream
   .connect('localhost:8080') // Send out to localhost:8080

@@ -84,6 +84,9 @@ void MuxBase::process(Event *evt) {
     if (!session) {
       pjs::Value key;
       if (!eval(m_session_key, key)) return;
+      if (key.is_undefined()) {
+        key.set(context()->inbound());
+      }
       session = m_session_manager->get(key);
       m_session = session;
     }

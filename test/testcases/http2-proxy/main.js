@@ -6,7 +6,6 @@ pipy()
 .pipeline('req')
   .muxHTTP(
     'conn',
-    () => __inbound,
     {
       version: 2,
     }
