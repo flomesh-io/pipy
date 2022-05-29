@@ -74,10 +74,13 @@ private:
   pjs::Ref<Session> m_session;
   pjs::Value m_session_key;
   EventFunction* m_stream = nullptr;
-  EventBuffer m_pending_events;
+  EventBuffer m_waiting_events;
+  bool m_waiting = false;
 
   void open_stream();
-  void flush_pending();
+  void start_waiting();
+  void flush_waiting();
+  void stop_waiting();
 
 protected:
 
@@ -103,13 +106,14 @@ protected:
     auto pipeline() const -> Pipeline* { return m_pipeline; }
     bool isolated() const { return !m_manager; }
     void isolate();
-    bool pending() const { return m_is_pending; }
+    bool is_free() const { return !m_share_count; }
+    bool is_pending() const { return m_is_pending; }
     void set_pending(bool pending);
 
   private:
-    void set_pipeline(Pipeline *pipeline);
-    void free_pipeline();
+    void init(Pipeline *pipeline);
     void free();
+    void reset();
 
     SessionManager* m_manager = nullptr;
     pjs::Value m_key;
@@ -135,14 +139,10 @@ private:
   //
 
   class SessionManager : public pjs::RefCount<SessionManager> {
-    struct Options {
-      double max_idle = 10;
-    };
-
     SessionManager(MuxBase *mux)
       : m_mux(mux) {}
 
-    void set_options(const Options &options) { m_options = options; }
+    void set_max_idle(double max_idle) { m_max_idle = max_idle; }
     auto get(const pjs::Value &key) -> Session*;
     void free(Session *session);
 
@@ -150,7 +150,7 @@ private:
     std::unordered_map<pjs::Value, pjs::Ref<Session>> m_sessions;
     std::unordered_map<pjs::WeakRef<pjs::Object>, pjs::Ref<Session>> m_weak_sessions;
     List<Session> m_free_sessions;
-    Options m_options;
+    double m_max_idle = 10;
     Timer m_recycle_timer;
     bool m_recycling = false;
 
@@ -179,7 +179,7 @@ private:
   List<Stream> m_streams;
   bool m_isolated = false;
 
-  void on_event(Event *evt) override;
+  void on_reply(Event *evt) override;
 
   //
   // QueueMuxer::Stream

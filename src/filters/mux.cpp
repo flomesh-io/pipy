@@ -53,9 +53,7 @@ MuxBase::MuxBase(const pjs::Value &session_key, const Options &options)
   : m_session_manager(new SessionManager(this))
   , m_session_key(session_key)
 {
-  SessionManager::Options opts;
-  opts.max_idle = options.max_idle;
-  m_session_manager->set_options(opts);
+  m_session_manager->set_max_idle(options.max_idle);
 }
 
 MuxBase::MuxBase(const MuxBase &r)
@@ -68,18 +66,16 @@ MuxBase::MuxBase(const MuxBase &r)
 void MuxBase::reset() {
   Filter::reset();
   if (m_session) {
+    stop_waiting();
     if (m_stream) {
       m_stream->chain(nullptr);
       m_session->close_stream(m_stream);
       m_stream = nullptr;
     }
-    if (m_session->pending()) {
-      m_session->m_waiting_muxers.remove(this);
-    }
     m_session->free();
     m_session = nullptr;
   }
-  m_pending_events.clear();
+  m_waiting_events.clear();
 }
 
 void MuxBase::process(Event *evt) {
@@ -94,14 +90,12 @@ void MuxBase::process(Event *evt) {
 
     if (!session->m_pipeline) {
       auto p = sub_pipeline(0, true);
-      session->set_pipeline(p);
+      session->init(p);
     }
 
-    if (session->pending()) {
-      if (m_pending_events.empty()) {
-        session->m_waiting_muxers.push(this);
-      }
-      m_pending_events.push(evt);
+    if (session->is_pending()) {
+      start_waiting();
+      m_waiting_events.push(evt);
       return;
     }
 
@@ -117,17 +111,43 @@ void MuxBase::open_stream() {
   m_stream = s;
 }
 
-void MuxBase::flush_pending() {
+void MuxBase::start_waiting() {
+  if (!m_waiting) {
+    m_session->m_waiting_muxers.push(this);
+    m_waiting = true;
+  }
+}
+
+void MuxBase::flush_waiting() {
   open_stream();
-  m_pending_events.flush(
+  m_waiting_events.flush(
     [this](Event *evt) {
       output(evt, m_stream->input());
     }
   );
+  stop_waiting();
+}
+
+void MuxBase::stop_waiting() {
+  if (m_waiting) {
+    m_session->m_waiting_muxers.remove(this);
+    m_waiting = false;
+  }
 }
 
 //
 // MuxBase::Session
+//
+// Construction:
+//   - When a new session key is requested
+//
+// Destruction:
+//   - When share count is 0 for a time of maxIdle
+//   - When freed by MuxBase after being isolated
+//
+// Session owns streams:
+//   - Session::open_stream(): Creates a new stream
+//   - Session::close_stream(): Destroys an existing stream
 //
 
 void MuxBase::Session::open()
@@ -148,37 +168,37 @@ void MuxBase::Session::isolate() {
 void MuxBase::Session::set_pending(bool pending) {
   if (pending != m_is_pending) {
     if (!pending) {
-      while (auto *muxer = m_waiting_muxers.head()) {
-        m_waiting_muxers.remove(muxer);
-        muxer->flush_pending();
+      for (auto *p = m_waiting_muxers.head(); p; ) {
+        auto *muxer = p; p = p->List<MuxBase>::Item::next();
+        muxer->flush_waiting();
       }
     }
     m_is_pending = pending;
   }
 }
 
-void MuxBase::Session::set_pipeline(Pipeline *pipeline) {
+void MuxBase::Session::init(Pipeline *pipeline) {
   m_pipeline = pipeline;
   pipeline->chain(reply());
   chain_forward(pipeline->input());
   open();
 }
 
-void MuxBase::Session::free_pipeline() {
+void MuxBase::Session::free() {
+  if (m_manager) {
+    m_manager->free(this);
+  } else {
+    reset();
+  }
+}
+
+void MuxBase::Session::reset() {
   if (auto p = m_pipeline.get()) {
     close();
     Pipeline::auto_release(p);
     m_pipeline = nullptr;
   }
   isolate();
-}
-
-void MuxBase::Session::free() {
-  if (m_manager) {
-    m_manager->free(this);
-  } else {
-    free_pipeline();
-  }
 }
 
 void MuxBase::Session::on_input(Event *evt) {
@@ -188,7 +208,7 @@ void MuxBase::Session::on_input(Event *evt) {
 void MuxBase::Session::on_reply(Event *evt) {
   output(evt);
   if (evt->is<StreamEnd>()) {
-    free_pipeline();
+    reset();
   }
 }
 
@@ -206,7 +226,7 @@ auto MuxBase::SessionManager::get(const pjs::Value &key) -> Session* {
     if (i != m_weak_sessions.end()) {
       session = i->second;
       if (!i->first.ptr()) {
-        session->free_pipeline();
+        session->reset();
         session = nullptr;
       }
     }
@@ -218,7 +238,7 @@ auto MuxBase::SessionManager::get(const pjs::Value &key) -> Session* {
   }
 
   if (session) {
-    if (!session->m_share_count) {
+    if (session->is_free()) {
       m_free_sessions.remove(session);
     }
     session->m_share_count++;
@@ -249,7 +269,7 @@ void MuxBase::SessionManager::free(Session *session) {
 
 void MuxBase::SessionManager::erase(Session *session) {
   Session::auto_release(session);
-  if (!session->m_share_count) {
+  if (session->is_free()) {
     m_free_sessions.remove(session);
   }
   if (session->m_weak_key.init_ptr()) {
@@ -272,9 +292,9 @@ void MuxBase::SessionManager::recycle() {
       auto s = m_free_sessions.head();
       while (s) {
         auto session = s; s = s->next();
-        if (now - session->m_free_time >= m_options.max_idle * 1000) {
+        if (now - session->m_free_time >= m_max_idle * 1000) {
           session->input()->input(StreamEnd::make());
-          session->free_pipeline();
+          session->reset();
         }
       }
       recycle();
@@ -313,7 +333,7 @@ void QueueMuxer::isolate() {
   m_isolated = true;
 }
 
-void QueueMuxer::on_event(Event *evt) {
+void QueueMuxer::on_reply(Event *evt) {
   if (m_isolated) {
     if (auto s = m_streams.head()) {
       s->output(evt);
@@ -360,6 +380,13 @@ void QueueMuxer::on_event(Event *evt) {
 //
 // QueueMuxer::Stream
 //
+// Retain:
+//   - Session::open_stream()
+//   - After queued
+// Release:
+//   - Session::close_stream()
+//   - After replied
+//
 
 void QueueMuxer::Stream::on_event(Event *evt) {
   auto muxer = m_muxer;
@@ -381,15 +408,15 @@ void QueueMuxer::Stream::on_event(Event *evt) {
 
   } else if (evt->is<MessageEnd>() || evt->is<StreamEnd>()) {
     if (m_start && !m_queued) {
+      auto *end = evt->as<MessageEnd>();
       retain();
       m_queued = true;
       muxer->m_streams.push(this);
       muxer->output(m_start);
       if (!m_buffer.empty()) {
-        muxer->output(Data::make(m_buffer));
-        m_buffer.clear();
+        muxer->output(Data::make(std::move(m_buffer)));
       }
-      muxer->output(MessageEnd::make());
+      muxer->output(end ? end : MessageEnd::make());
       if (muxer->m_isolated) m_isolated = true;
     }
   }

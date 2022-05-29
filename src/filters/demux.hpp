@@ -78,12 +78,13 @@ private:
     QueueDemuxer* m_demuxer;
     pjs::Ref<Pipeline> m_pipeline;
     pjs::Ref<MessageStart> m_start;
+    pjs::Ref<MessageEnd> m_end;
     Data m_buffer;
     bool m_input_end = false;
     bool m_output_end = false;
     bool m_isolated = false;
 
-    virtual void on_event(Event *evt) override;
+    virtual void on_reply(Event *evt) override;
 
     void flush();
 
