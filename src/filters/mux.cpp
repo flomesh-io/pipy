@@ -79,6 +79,7 @@ void MuxBase::reset() {
     m_session->free();
     m_session = nullptr;
   }
+  m_pending_events.clear();
 }
 
 void MuxBase::process(Event *evt) {
