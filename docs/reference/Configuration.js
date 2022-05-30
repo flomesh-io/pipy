@@ -499,19 +499,6 @@ class Configuration {
   exec(command) {}
 
   /**
-   * Appends a fetchHTTP filter to the current pipeline layout.
-   *
-   * A fetchHTTP filter encodes input messages as HTTP requests in a sub-pipeline and
-   * decodes the HTTP responses out from it.
-   * Its input and output are HTTP Messages.
-   * Its sub-pipelines's input and output are Data (usually TCP streams).
-   *
-   * @param {string} layout Name of the pipeline layout based on which sub-pipelines are created.
-   * @returns {Configuration} The same Configuration object.
-   */
-  fetchHTTP(layout) {}
-
-  /**
    * Appends a fork filter to the current pipeline layout.
    *
    * A fork filter creates one or more sub-pipelines,

@@ -322,12 +322,6 @@ void Configuration::exec(const pjs::Value &command) {
   append_filter(new Exec(command));
 }
 
-void Configuration::fetch_http(pjs::Str *layout) {
-  auto *filter = new http::Client();
-  filter->add_sub_pipeline(layout);
-  append_filter(filter);
-}
-
 void Configuration::fork(pjs::Str *target, pjs::Object *initializers) {
   auto *filter = new Fork(initializers);
   filter->add_sub_pipeline(target);
@@ -1101,18 +1095,6 @@ template<> void ClassDef<Configuration>::init() {
     if (!ctx.arguments(1, &command)) return;
     try {
       thiz->as<Configuration>()->exec(command);
-      result.set(thiz);
-    } catch (std::runtime_error &err) {
-      ctx.error(err);
-    }
-  });
-
-  // Configuration.fetchHTTP
-  method("fetchHTTP", [](Context &ctx, Object *thiz, Value &result) {
-    pjs::Str *layout;
-    if (!ctx.arguments(1, &layout)) return;
-    try {
-      thiz->as<Configuration>()->fetch_http(layout);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
