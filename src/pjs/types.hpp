@@ -109,12 +109,57 @@ public:
 
   class WeakPtr : public Pooled<WeakPtr> {
   public:
+
+    //
+    // RefCount::WeakPtr::Watcher
+    //
+
+    class Watcher {
+    protected:
+      Watcher() : m_ptr(nullptr) {}
+
+      Watcher(WeakPtr *ptr) {
+        watch(ptr);
+      }
+
+      ~Watcher() {
+        if (m_ptr && !m_notified) {
+          if (m_next) m_next->m_prev = m_prev;
+          if (m_prev) m_prev->m_next = m_next;
+          else m_ptr->m_watchers = m_next;
+        }
+      }
+
+      void watch(WeakPtr *ptr) {
+        m_ptr = ptr;
+        m_next = ptr->m_watchers;
+        if (ptr->m_watchers) {
+          ptr->m_watchers->m_prev = this;
+        }
+        ptr->m_watchers = this;
+      }
+
+      auto ptr() const -> WeakPtr* {
+        return m_ptr;
+      }
+
+    private:
+      virtual void on_weak_ptr_gone() = 0;
+
+      WeakPtr* m_ptr;
+      Watcher* m_prev = nullptr;
+      Watcher* m_next = nullptr;
+      bool m_notified = false;
+
+      friend class WeakPtr;
+    };
+
     T* ptr() const {
       return static_cast<T*>(m_ptr);
     }
 
-    T* init_ptr() const {
-      return static_cast<T*>(m_init_ptr);
+    T* original_ptr() const {
+      return static_cast<T*>(m_original_ptr);
     }
 
     void retain() {
@@ -129,12 +174,27 @@ public:
 
   private:
     WeakPtr(RefCount<T> *ptr)
-      : m_init_ptr(ptr)
+      : m_original_ptr(ptr)
       , m_ptr(ptr) {}
 
-    RefCount<T>* m_init_ptr;
+    RefCount<T>* m_original_ptr;
     RefCount<T>* m_ptr;
     int m_refs = 1;
+
+    void free() {
+      m_ptr = nullptr;
+      while (m_watchers) {
+        auto p = m_watchers;
+        auto n = p->m_next;
+        if (n) n->m_prev = nullptr;
+        m_watchers = n;
+        p->m_notified = true;
+        p->on_weak_ptr_gone();
+      }
+    }
+
+  private:
+    Watcher* m_watchers = nullptr;
 
     friend class RefCount<T>;
   };
@@ -162,7 +222,7 @@ public:
 protected:
   ~RefCount() {
     if (m_weak_ptr) {
-      m_weak_ptr->m_ptr = nullptr;
+      m_weak_ptr->free();
       m_weak_ptr->release();
     }
   }
@@ -228,7 +288,7 @@ public:
   WeakRef(const WeakRef &r) : m_weak_ptr(r.m_weak_ptr) {}
 
   T* ptr() const { return m_weak_ptr ? static_cast<T*>(m_weak_ptr->ptr()) : nullptr; }
-  T* init_ptr() const { return m_weak_ptr ? static_cast<T*>(m_weak_ptr->init_ptr()) : nullptr; }
+  T* original_ptr() const { return m_weak_ptr ? static_cast<T*>(m_weak_ptr->original_ptr()) : nullptr; }
   T* operator->() const { return ptr(); }
   T& operator*() const { return *ptr(); }
   operator T*() const { return ptr(); }
@@ -266,14 +326,14 @@ struct hash<pjs::Ref<T>> {
 template<class T>
 struct equal_to<pjs::WeakRef<T>> {
   bool operator()(const pjs::WeakRef<T> &a, const pjs::WeakRef<T> &b) const {
-    return a.init_ptr() == b.init_ptr();
+    return a.original_ptr() == b.original_ptr();
   }
 };
 
 template<class T>
 struct less<pjs::WeakRef<T>> {
   bool operator()(const pjs::WeakRef<T> &a, const pjs::WeakRef<T> &b) const {
-    return a.init_ptr() < b.init_ptr();
+    return a.original_ptr() < b.original_ptr();
   }
 };
 
@@ -281,7 +341,7 @@ template<class T>
 struct hash<pjs::WeakRef<T>> {
   size_t operator()(const pjs::WeakRef<T> &k) const {
     hash<void*> h;
-    return h(k.init_ptr());
+    return h(k.original_ptr());
   }
 };
 

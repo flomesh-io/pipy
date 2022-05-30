@@ -55,6 +55,10 @@ public:
     Base64Url,
   };
 
+  //
+  // Data::Producer
+  //
+
   class Producer : public List<Producer>::Item {
   public:
     static void for_each(const std::function<void(Producer*)> &cb) {
@@ -96,6 +100,10 @@ public:
 
     friend struct Chunk;
   };
+
+  //
+  // Data::Builder
+  //
 
   class Builder {
   public:
@@ -155,6 +163,10 @@ public:
     int m_ptr = 0;
   };
 
+  //
+  // Data::Reader
+  //
+
   class Reader {
   public:
     Reader(const Data &data)
@@ -198,6 +210,11 @@ public:
   };
 
 private:
+
+  //
+  // Data::Chunk
+  //
+
   struct Chunk : public Pooled<Chunk> {
     char data[DATA_CHUNK_SIZE];
     int retain_count = 0;
@@ -212,6 +229,10 @@ private:
   private:
     Producer* m_producer;
   };
+
+  //
+  // Data::View
+  //
 
   struct View : public Pooled<View> {
     View*  prev = nullptr;
@@ -277,6 +298,10 @@ public:
     auto data = evt->as<Data>();
     return data && data->empty();
   }
+
+  //
+  // Data::Chunks
+  //
 
   class Chunks {
     friend class Data;

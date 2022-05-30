@@ -1889,6 +1889,10 @@ Server::Stream::Stream(Server *server, int id)
   m_pipeline = p;
 }
 
+Server::Stream::~Stream() {
+  PipelineBase::auto_release(m_pipeline);
+}
+
 //
 // Server::InitialStream
 //

@@ -193,13 +193,14 @@ void Inbound::receive() {
   m_socket.async_read_some(
     DataChunks(buffer->chunks()),
     [=](const std::error_code &ec, std::size_t n) {
+      InputContext ic(this);
+
       if (m_options.read_timeout > 0) {
         m_read_timer.cancel();
       }
 
       if (ec != asio::error::operation_aborted) {
         if (n > 0) {
-          InputContext ic(this);
           buffer->pop(buffer->size() - n);
           if (m_socket.is_open()) {
             if (auto more = m_socket.available()) {
@@ -225,7 +226,6 @@ void Inbound::receive() {
               close(StreamEnd::NO_ERROR);
             } else {
               linger();
-              InputContext ic(this);
               output(StreamEnd::make());
             }
           } else if (ec == asio::error::connection_reset) {

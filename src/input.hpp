@@ -108,6 +108,8 @@ protected:
   FlushTarget(bool is_terminating = false)
     : m_is_terminating(is_terminating) {}
 
+  ~FlushTarget();
+
   void need_flush();
 
 private:

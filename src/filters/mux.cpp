@@ -76,18 +76,18 @@ void MuxBase::reset() {
     m_session = nullptr;
   }
   m_waiting_events.clear();
+  m_session_key_current = pjs::Value::undefined;
 }
 
 void MuxBase::process(Event *evt) {
   if (!m_stream) {
     auto session = m_session.get();
     if (!session) {
-      pjs::Value key;
-      if (!eval(m_session_key, key)) return;
-      if (key.is_undefined()) {
-        key.set(context()->inbound());
+      if (!eval(m_session_key, m_session_key_current)) return;
+      if (m_session_key_current.is_undefined()) {
+        m_session_key_current.set(context()->inbound());
       }
-      session = m_session_manager->get(key);
+      session = m_session_manager->get(m_session_key_current);
       m_session = session;
     }
 
@@ -253,6 +253,7 @@ auto MuxBase::SessionManager::get(const pjs::Value &key) -> Session* {
 
   if (is_weak) {
     session->m_weak_key = key.o();
+    session->watch(key.o()->weak_ptr());
     m_weak_sessions[key.o()] = session;
   } else {
     session->m_key = key;
@@ -275,7 +276,7 @@ void MuxBase::SessionManager::erase(Session *session) {
   if (session->is_free()) {
     m_free_sessions.remove(session);
   }
-  if (session->m_weak_key.init_ptr()) {
+  if (session->m_weak_key.original_ptr()) {
     m_weak_sessions.erase(session->m_weak_key);
   } else {
     m_sessions.erase(session->m_key);

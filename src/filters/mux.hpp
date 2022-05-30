@@ -73,6 +73,7 @@ private:
   pjs::Ref<SessionManager> m_session_manager;
   pjs::Ref<Session> m_session;
   pjs::Value m_session_key;
+  pjs::Value m_session_key_current;
   EventFunction* m_stream = nullptr;
   EventBuffer m_waiting_events;
   bool m_waiting = false;
@@ -90,6 +91,7 @@ protected:
 
   class Session :
     public pjs::Pooled<Session>,
+    public pjs::Object::WeakPtr::Watcher,
     public List<Session>::Item,
     public AutoReleased,
     public EventProxy
@@ -127,6 +129,7 @@ protected:
     virtual void on_input(Event *evt) override;
     virtual void on_reply(Event *evt) override;
     virtual void on_recycle() override { delete this; }
+    virtual void on_weak_ptr_gone() override { reset(); }
 
     friend class pjs::RefCount<Session>;
     friend class MuxBase;

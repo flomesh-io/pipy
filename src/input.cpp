@@ -33,6 +33,16 @@ namespace pipy {
 // FlushTarget
 //
 
+FlushTarget::~FlushTarget() {
+  if (m_origin) {
+    if (m_is_terminating) {
+      m_origin->m_flush_targets_terminating.remove(this);
+    } else {
+      m_origin->m_flush_targets_pumping.remove(this);
+    }
+  }
+}
+
 void FlushTarget::need_flush() {
   if (!m_origin) {
     auto *origin = InputContext::origin();
@@ -77,28 +87,22 @@ InputContext::~InputContext() {
 
   // Clean up pipelines
   m_cleaning_up = true;
-  for (
-    auto *p = m_auto_released;
-    p; p = p->m_next_auto_release
-  ) {
-    p->m_auto_release = false;
-    p->release();
+  for (auto *p = m_auto_released; p; ) {
+    auto *obj = p; p = p->m_next_auto_release;
+    obj->m_auto_release = false;
+    obj->release();
   }
 
   s_stack = m_next;
 }
 
 void InputContext::auto_release(AutoReleased *obj) {
-  obj->retain();
   if (s_stack) {
-    if (s_stack->m_cleaning_up) {
-      Log::error("[auto-release] auto-release recursion", obj);
-    }
+    if (s_stack->m_cleaning_up) return;
+    obj->retain();
     obj->m_auto_release = true;
     obj->m_next_auto_release = s_stack->m_auto_released;
     s_stack->m_auto_released = obj;
-  } else {
-    obj->release();
   }
 }
 

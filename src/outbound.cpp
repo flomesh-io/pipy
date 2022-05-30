@@ -238,20 +238,20 @@ void Outbound::connect(const asio::ip::tcp::endpoint &target) {
             describe(desc);
             Log::debug("%s connected", desc);
           }
-          const auto &ep = m_socket.local_endpoint();
-          m_local_addr = ep.address().to_string();
-          m_local_port = ep.port();
-          auto conn_time = utils::now() - m_start_time;
-          m_connection_time += conn_time;
-          m_metric_conn_time->observe(conn_time);
-          Status::metric_outbound_conn_time->observe(conn_time);
-          m_connected = true;
-          if (!m_connecting) {
-            close(StreamEnd::CONNECTION_CANCELED);
-          } else {
+          if (m_connecting) {
+            const auto &ep = m_socket.local_endpoint();
+            m_local_addr = ep.address().to_string();
+            m_local_port = ep.port();
+            auto conn_time = utils::now() - m_start_time;
+            m_connection_time += conn_time;
+            m_metric_conn_time->observe(conn_time);
+            Status::metric_outbound_conn_time->observe(conn_time);
+            m_connected = true;
             m_connecting = false;
             receive();
             pump();
+          } else {
+            close(StreamEnd::CONNECTION_CANCELED);
           }
         }
       }
@@ -292,13 +292,14 @@ void Outbound::receive() {
   m_socket.async_read_some(
     DataChunks(buffer->chunks()),
     [=](const std::error_code &ec, size_t n) {
+      InputContext ic(this);
+
       if (m_options.read_timeout > 0){
         m_read_timer.cancel();
       }
 
       if (ec != asio::error::operation_aborted) {
         if (n > 0) {
-          InputContext ic(this);
           if (m_socket.is_open()) {
             buffer->pop(buffer->size() - n);
             if (auto more = m_socket.available()) {

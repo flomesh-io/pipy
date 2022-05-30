@@ -409,9 +409,7 @@ protected:
   // StreamBase
   //
 
-  class StreamBase :
-    public List<StreamBase>::Item
-  {
+  class StreamBase : public List<StreamBase>::Item {
   protected:
     enum {
       INITIAL_SEND_WINDOW_SIZE = 0xffff,
@@ -513,6 +511,7 @@ private:
     public EventSource
   {
     Stream(Server *server, int id);
+    ~Stream();
     pjs::Ref<PipelineBase> m_pipeline;
     void event(Event *evt) override { EventSource::output(evt); }
     void on_event(Event *evt) override  { StreamBase::on_event(evt); }
