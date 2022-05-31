@@ -24,6 +24,7 @@
  */
 
 #include "pack.hpp"
+#include "input.hpp"
 
 namespace pipy {
 
@@ -147,6 +148,7 @@ void Pack::check_timeout() {
   if (m_message_ends > 0 && m_message_ends == m_message_starts) {
     auto now = utils::now() / 1000;
     if (now - m_last_input_time >= m_options.timeout) {
+      InputContext ic;
       flush(MessageEnd::make());
     }
   }
