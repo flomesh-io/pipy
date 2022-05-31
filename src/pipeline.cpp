@@ -33,38 +33,38 @@
 namespace pipy {
 
 //
-// PipelineDef
+// PipelineLayout
 //
 
-List<PipelineDef> PipelineDef::s_all_pipeline_defs;
+List<PipelineLayout> PipelineLayout::s_all_pipeline_layouts;
 
-PipelineDef::PipelineDef(Module *module, Type type, const std::string &name)
+PipelineLayout::PipelineLayout(Module *module, Type type, const std::string &name)
   : m_type(type)
   , m_name(pjs::Str::make(name))
   , m_module(module)
 {
-  s_all_pipeline_defs.push(this);
-  Log::debug("[pipe-def %p] ++ name = %s", this, m_name->c_str());
+  s_all_pipeline_layouts.push(this);
+  Log::debug("[p-layout %p] ++ name = %s", this, m_name->c_str());
 }
 
-PipelineDef::~PipelineDef() {
-  Log::debug("[pipe-def %p] -- name = %s", this, m_name->c_str());
+PipelineLayout::~PipelineLayout() {
+  Log::debug("[p-layout %p] -- name = %s", this, m_name->c_str());
   auto *ptr = m_pool;
   while (ptr) {
     auto *pipeline = ptr;
     ptr = ptr->m_next_free;
     delete pipeline;
   }
-  s_all_pipeline_defs.remove(this);
+  s_all_pipeline_layouts.remove(this);
 }
 
-void PipelineDef::bind() {
+void PipelineLayout::bind() {
   for (const auto &f : m_filters) {
     f->bind();
   }
 }
 
-void PipelineDef::shutdown() {
+void PipelineLayout::shutdown() {
   auto *p = m_pipelines.head();
   while (p) {
     p->shutdown();
@@ -72,13 +72,13 @@ void PipelineDef::shutdown() {
   }
 }
 
-auto PipelineDef::append(Filter *filter) -> Filter* {
+auto PipelineLayout::append(Filter *filter) -> Filter* {
   m_filters.emplace_back(filter);
-  filter->m_pipeline_def = this;
+  filter->m_pipeline_layout = this;
   return filter;
 }
 
-auto PipelineDef::alloc(Context *ctx) -> Pipeline* {
+auto PipelineLayout::alloc(Context *ctx) -> Pipeline* {
   retain();
   Pipeline *pipeline = nullptr;
   if (m_pool) {
@@ -94,7 +94,7 @@ auto PipelineDef::alloc(Context *ctx) -> Pipeline* {
   return pipeline;
 }
 
-void PipelineDef::free(Pipeline *pipeline) {
+void PipelineLayout::free(Pipeline *pipeline) {
   m_pipelines.remove(pipeline);
   pipeline->m_next_free = m_pool;
   m_pool = pipeline;
@@ -106,13 +106,13 @@ void PipelineDef::free(Pipeline *pipeline) {
 // Pipeline
 //
 
-Pipeline::Pipeline(PipelineDef *def)
-  : m_def(def)
+Pipeline::Pipeline(PipelineLayout *layout)
+  : m_layout(layout)
 {
-  const auto &filters = def->m_filters;
+  const auto &filters = layout->m_filters;
   for (const auto &f : filters) {
     auto filter = f->clone();
-    filter->m_pipeline_def = def;
+    filter->m_pipeline_layout = layout;
     filter->m_pipeline = this;
     m_filters.push(filter);
   }
@@ -148,7 +148,7 @@ void Pipeline::on_event(Event *evt) {
 
 void Pipeline::on_recycle() {
   reset();
-  m_def->free(this);
+  m_layout->free(this);
 }
 
 void Pipeline::shutdown() {

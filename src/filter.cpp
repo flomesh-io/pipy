@@ -44,8 +44,8 @@ Filter::Filter(const Filter &r)
 }
 
 auto Filter::module() const -> Module* {
-  if (m_pipeline_def) {
-    return m_pipeline_def->module();
+  if (m_pipeline_layout) {
+    return m_pipeline_layout->module();
   } else {
     return nullptr;
   }
@@ -59,9 +59,9 @@ auto Filter::context() const -> Context* {
   }
 }
 
-void Filter::add_sub_pipeline(PipelineDef *def) {
+void Filter::add_sub_pipeline(PipelineLayout *layout) {
   m_subs->emplace_back();
-  m_subs->back().def = def;
+  m_subs->back().layout = layout;
 }
 
 void Filter::add_sub_pipeline(pjs::Str *name) {
@@ -74,8 +74,8 @@ auto Filter::get_sub_pipeline_name(int i) -> const std::string& {
   auto &sub = m_subs->at(i);
   if (sub.name) {
     return sub.name->str();
-  } else if (sub.def) {
-    return sub.def->name()->str();
+  } else if (sub.layout) {
+    return sub.layout->name()->str();
   } else {
     return empty;
   }
@@ -83,10 +83,10 @@ auto Filter::get_sub_pipeline_name(int i) -> const std::string& {
 
 void Filter::bind() {
   for (auto &sub : *m_subs) {
-    if (sub.name && sub.name != pjs::Str::empty && !sub.def) {
+    if (sub.name && sub.name != pjs::Str::empty && !sub.layout) {
       if (auto mod = module()) {
         if (auto p = mod->find_named_pipeline(sub.name)) {
-          sub.def = p;
+          sub.layout = p;
           continue;
         }
       }
@@ -114,8 +114,8 @@ void Filter::shutdown()
 }
 
 auto Filter::sub_pipeline(int i, bool clone_context) -> Pipeline* {
-  auto def = m_subs->at(i).def.get();
-  if (!def) return nullptr;
+  auto layout = m_subs->at(i).layout.get();
+  if (!layout) return nullptr;
 
   auto ctx = m_pipeline->m_context.get();
   if (clone_context) {
@@ -124,7 +124,7 @@ auto Filter::sub_pipeline(int i, bool clone_context) -> Pipeline* {
     }
   }
 
-  return Pipeline::make(def, ctx);
+  return Pipeline::make(layout, ctx);
 }
 
 void Filter::on_event(Event *evt) {
@@ -179,7 +179,7 @@ bool Filter::callback(pjs::Function *func, int argc, pjs::Value argv[], pjs::Val
   auto c = m_pipeline->m_context.get();
   (*func)(*c, argc, argv, result);
   if (c->ok()) return true;
-  auto mod = m_pipeline_def->module();
+  auto mod = m_pipeline_layout->module();
   Log::pjs_error(c->error(), mod->source());
   c->reset();
   return false;
@@ -191,7 +191,7 @@ bool Filter::eval(pjs::Value &param, pjs::Value &result) {
     auto f = param.as<pjs::Function>();
     (*f)(*c, 0, nullptr, result);
     if (c->ok()) return true;
-    auto mod = m_pipeline_def->module();
+    auto mod = m_pipeline_layout->module();
     Log::pjs_error(c->error(), mod->source());
     c->reset();
     return false;
@@ -206,7 +206,7 @@ bool Filter::eval(pjs::Function *func, pjs::Value &result) {
   auto c = m_pipeline->m_context.get();
   (*func)(*c, 0, nullptr, result);
   if (c->ok()) return true;
-  auto mod = m_pipeline_def->module();
+  auto mod = m_pipeline_layout->module();
   Log::pjs_error(c->error(), mod->source());
   c->reset();
   return false;

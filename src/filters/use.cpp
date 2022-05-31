@@ -122,7 +122,7 @@ void Use::bind() {
       msg += m_pipeline_name->str();
       throw std::runtime_error(msg);
     }
-    PipelineDef *pd = nullptr;
+    PipelineLayout *pd = nullptr;
     if (m_pipeline_name_down) {
       pd = mod->find_named_pipeline(m_pipeline_name_down);
     }
@@ -178,8 +178,8 @@ void Use::Stage::on_event(Event *evt) {
         chain(m_filter->output());
       }
 
-    } else if (m_pipeline_def) {
-      m_pipeline = Pipeline::make(m_pipeline_def, m_filter->context());
+    } else if (m_pipeline_layout) {
+      m_pipeline = Pipeline::make(m_pipeline_layout, m_filter->context());
       chain(m_pipeline->input());
       if (m_next) {
         m_pipeline->chain(m_next->input());
@@ -198,8 +198,8 @@ void Use::Stage::on_event(Event *evt) {
 }
 
 auto Use::Stage::input_down() -> EventTarget::Input* {
-  if (m_pipeline_def_down) {
-    auto *p = Pipeline::make(m_pipeline_def_down, m_filter->context());
+  if (m_pipeline_layout_down) {
+    auto *p = Pipeline::make(m_pipeline_layout_down, m_filter->context());
     if (m_prev) {
       p->chain(m_prev->input_down());
     } else {

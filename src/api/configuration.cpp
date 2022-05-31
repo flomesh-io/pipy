@@ -464,22 +464,22 @@ void Configuration::apply(Module *mod) {
   mod->m_context_class = m_context_class;
 
   auto make_pipeline = [&](
-    PipelineDef::Type type,
+    PipelineLayout::Type type,
     const std::string &name,
     std::list<std::unique_ptr<Filter>> &filters
-  ) -> PipelineDef*
+  ) -> PipelineLayout*
   {
-    auto pipeline_def = PipelineDef::make(mod, type, name);
+    auto layout = PipelineLayout::make(mod, type, name);
     for (auto &f : filters) {
-      pipeline_def->append(f.release());
+      layout->append(f.release());
     }
-    mod->m_pipelines.push_back(pipeline_def);
-    return pipeline_def;
+    mod->m_pipelines.push_back(layout);
+    return layout;
   };
 
   for (auto &i : m_named_pipelines) {
     auto s = pjs::Str::make(i.name);
-    auto p = make_pipeline(PipelineDef::NAMED, i.name, i.filters);
+    auto p = make_pipeline(PipelineLayout::NAMED, i.name, i.filters);
     mod->m_named_pipelines[s] = p;
   }
 
@@ -488,7 +488,7 @@ void Configuration::apply(Module *mod) {
   for (auto &i : m_listens) {
     if (!i.port) continue;
     auto name = std::to_string(i.port) + '@' + i.ip;
-    auto p = make_pipeline(PipelineDef::LISTEN, name, i.filters);
+    auto p = make_pipeline(PipelineLayout::LISTEN, name, i.filters);
     auto listener = Listener::get(i.ip, i.port);
     if (listener->reserved()) {
       std::string msg("Port reserved: ");
@@ -503,13 +503,13 @@ void Configuration::apply(Module *mod) {
   }
 
   for (auto &i : m_readers) {
-    auto p = make_pipeline(PipelineDef::READ, i.pathname, i.filters);
+    auto p = make_pipeline(PipelineLayout::READ, i.pathname, i.filters);
     auto r = Reader::make(i.pathname, p);
     worker->add_reader(r);
   }
 
   for (auto &i : m_tasks) {
-    auto p = make_pipeline(PipelineDef::TASK, i.name, i.filters);
+    auto p = make_pipeline(PipelineLayout::TASK, i.name, i.filters);
     auto t = Task::make(i.when, p);
     worker->add_task(t);
   }

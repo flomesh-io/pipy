@@ -250,9 +250,9 @@ void Worker::exit(int exit_code) {
   static std::function<void()> check;
   check = []() {
     int n = 0;
-    PipelineDef::for_each(
-      [&](PipelineDef *def) {
-        n += def->active();
+    PipelineLayout::for_each(
+      [&](PipelineLayout *layout) {
+        n += layout->active();
       }
     );
     if (n > 0) {
@@ -313,9 +313,9 @@ auto Worker::load_module(const std::string &path) -> Module* {
   return mod;
 }
 
-void Worker::add_listener(Listener *listener, PipelineDef *pipeline_def, const Listener::Options &options) {
+void Worker::add_listener(Listener *listener, PipelineLayout *layout, const Listener::Options &options) {
   auto &p = m_listeners[listener];
-  p.pipeline_def = pipeline_def;
+  p.pipeline_layout = layout;
   p.options = options;
 }
 
@@ -387,13 +387,13 @@ bool Worker::start() {
       auto l = i.first;
       if (!l->open()) {
         l->set_options(i.second.options);
-        l->pipeline_def(i.second.pipeline_def);
+        l->pipeline_layout(i.second.pipeline_layout);
         new_open.insert(l);
       }
     }
   } catch (std::runtime_error &err) {
     for (auto *l : new_open) {
-      l->pipeline_def(nullptr);
+      l->pipeline_layout(nullptr);
     }
     Log::error("%s", err.what());
     return false;
@@ -404,7 +404,7 @@ bool Worker::start() {
     auto l = i.first;
     if (!new_open.count(l)) {
       l->set_options(i.second.options);
-      l->pipeline_def(i.second.pipeline_def);
+      l->pipeline_layout(i.second.pipeline_layout);
     }
   }
 
@@ -413,7 +413,7 @@ bool Worker::start() {
     [&](Listener *l) {
       if (l->reserved()) return;
       if (m_listeners.find(l) == m_listeners.end()) {
-        l->pipeline_def(nullptr);
+        l->pipeline_layout(nullptr);
       }
     }
   );

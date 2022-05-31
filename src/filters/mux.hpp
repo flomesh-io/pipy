@@ -39,7 +39,6 @@
 namespace pipy {
 
 class Data;
-class PipelineDef;
 
 //
 // MuxBase

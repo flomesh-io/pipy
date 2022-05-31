@@ -36,12 +36,12 @@
 
 namespace pipy {
 
-class PipelineDef;
+class PipelineLayout;
 
 class Task : public EventTarget {
 public:
-  static auto make(const std::string &when, PipelineDef *pipeline_def) -> Task* {
-    return new Task(when, pipeline_def);
+  static auto make(const std::string &when, PipelineLayout *layout) -> Task* {
+    return new Task(when, layout);
   }
 
   enum Type {
@@ -54,13 +54,13 @@ public:
   auto type() const -> Type { return m_type; }
   auto interval() const -> int { return m_interval; }
   auto signal() const -> int { return m_signal; }
-  auto pipeline_def() const -> PipelineDef* { return m_pipeline_def; }
+  auto pipeline_layout() const -> PipelineLayout* { return m_pipeline_layout; }
   auto pipeline() const -> Pipeline* { return m_pipeline; }
   bool active() const;
   void start();
 
 private:
-  Task(const std::string &when, PipelineDef *pipeline_def);
+  Task(const std::string &when, PipelineLayout *layout);
   ~Task();
 
   std::string m_when;
@@ -69,7 +69,7 @@ private:
   int m_signal = 0;
   Timer m_timer;
   asio::signal_set m_signal_set;
-  pjs::Ref<PipelineDef> m_pipeline_def;
+  pjs::Ref<PipelineLayout> m_pipeline_layout;
   pjs::Ref<Pipeline> m_pipeline;
 
   void schedule(double interval);

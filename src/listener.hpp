@@ -36,7 +36,7 @@
 
 namespace pipy {
 
-class PipelineDef;
+class PipelineLayout;
 
 //
 // Listener
@@ -63,7 +63,7 @@ public:
   }
 
   static bool is_open(const std::string &ip, int port) {
-    if (auto *l = find(ip, port)) return l->m_pipeline_def;
+    if (auto *l = find(ip, port)) return l->open();
     return false;
   }
 
@@ -75,10 +75,10 @@ public:
 
   auto ip() const -> const std::string& { return m_ip; }
   auto port() const -> int { return m_port; }
-  bool open() const { return m_pipeline_def; }
+  bool open() const { return m_pipeline_layout; }
   bool reserved() const { return m_options.reserved; }
-  auto pipeline_def() const -> PipelineDef* { return m_pipeline_def; }
-  void pipeline_def(PipelineDef *def);
+  auto pipeline_layout() const -> PipelineLayout* { return m_pipeline_layout; }
+  void pipeline_layout(PipelineLayout *layout);
   auto peak_connections() const -> int { return m_peak_connections; }
 
   void set_options(const Options &options);
@@ -108,7 +108,7 @@ private:
   bool m_paused = false;
   asio::ip::address m_address;
   asio::ip::tcp::acceptor m_acceptor;
-  pjs::Ref<PipelineDef> m_pipeline_def;
+  pjs::Ref<PipelineLayout> m_pipeline_layout;
   List<Inbound> m_inbounds;
 
   static bool s_reuse_port;

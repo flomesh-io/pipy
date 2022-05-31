@@ -56,8 +56,8 @@ pjs::Ref<stats::Histogram> Status::metric_outbound_conn_time;
 void Status::update_modules() {
   modules.clear();
 
-  std::map<std::string, std::set<PipelineDef*>> all_modules;
-  PipelineDef::for_each([&](PipelineDef *p) {
+  std::map<std::string, std::set<PipelineLayout*>> all_modules;
+  PipelineLayout::for_each([&](PipelineLayout *p) {
     if (auto mod = p->module()) {
       if (mod->worker() == Worker::current()) {
         auto &set = all_modules[mod->path()];
@@ -238,7 +238,7 @@ void Status::register_metrics() {
     label_names,
     [](stats::Gauge *gauge) {
       double total = 0;
-      PipelineDef::for_each([&](PipelineDef *p) {
+      PipelineLayout::for_each([&](PipelineLayout *p) {
         auto mod = p->module();
         pjs::Str *labels[2];
         labels[0] = mod ? mod->name() : pjs::Str::empty.get();
@@ -262,7 +262,7 @@ void Status::register_metrics() {
     [=](stats::Gauge *gauge) {
       int total = 0;
       Listener::for_each([&](Listener *listener) {
-        if (auto *p = listener->pipeline_def()) {
+        if (auto *p = listener->pipeline_layout()) {
           auto k = p->name();
           auto l = gauge->with_labels(&k, 1);
           auto n = 0;
@@ -389,10 +389,10 @@ void Status::dump_memory() {
 
   chunks.push_back({ "TOTAL", std::to_string(total_chunks * DATA_CHUNK_SIZE / 1024), "n/a" });
 
-  std::multimap<std::string, PipelineDef*> stale_pipelines;
-  std::multimap<std::string, PipelineDef*> current_pipelines;
+  std::multimap<std::string, PipelineLayout*> stale_pipelines;
+  std::multimap<std::string, PipelineLayout*> current_pipelines;
 
-  PipelineDef::for_each([&](PipelineDef *p) {
+  PipelineLayout::for_each([&](PipelineLayout *p) {
     auto mod = p->module();
     if (!mod) {
       std::string name("[");

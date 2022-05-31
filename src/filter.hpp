@@ -38,7 +38,7 @@ namespace pipy {
 
 class Context;
 class Module;
-class PipelineDef;
+class PipelineLayout;
 class Pipeline;
 
 //
@@ -55,7 +55,7 @@ public:
   auto module() const -> Module*;
   auto context() const -> Context*;
 
-  void add_sub_pipeline(PipelineDef *def);
+  void add_sub_pipeline(PipelineLayout *layout);
   void add_sub_pipeline(pjs::Str *name);
   auto num_sub_pipelines() const -> int { return m_subs->size(); }
   auto get_sub_pipeline_name(int i) -> const std::string&;
@@ -84,19 +84,19 @@ protected:
 private:
   struct Sub {
     pjs::Ref<pjs::Str> name;
-    pjs::Ref<PipelineDef> def;
+    pjs::Ref<PipelineLayout> layout;
   };
 
   std::shared_ptr<std::vector<Sub>> m_subs;
 
-  PipelineDef* m_pipeline_def = nullptr;
+  PipelineLayout* m_pipeline_layout = nullptr;
   Pipeline* m_pipeline = nullptr;
   bool m_stream_end = false;
 
   virtual void on_event(Event *evt) override;
 
   friend class Pipeline;
-  friend class PipelineDef;
+  friend class PipelineLayout;
 };
 
 } // namespace pipy

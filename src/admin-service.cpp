@@ -93,12 +93,12 @@ AdminService::~AdminService() {
 void AdminService::open(int port, const Options &options) {
   Log::info("[admin] Starting admin service...");
 
-  PipelineDef *pipeline_def = PipelineDef::make(nullptr, PipelineDef::LISTEN, "Admin Service");
-  PipelineDef *pipeline_def_ws = PipelineDef::make(nullptr, PipelineDef::NAMED, "Admin Service Link");
-  PipelineDef *pipeline_def_inbound = nullptr;
+  PipelineLayout *ppl = PipelineLayout::make(nullptr, PipelineLayout::LISTEN, "Admin Service");
+  PipelineLayout *ppl_ws = PipelineLayout::make(nullptr, PipelineLayout::NAMED, "Admin Service Link");
+  PipelineLayout *ppl_inbound = nullptr;
 
   if (!options.cert || !options.key) {
-    pipeline_def_inbound = pipeline_def;
+    ppl_inbound = ppl;
 
   } else {
     tls::Server::Options opts;
@@ -107,27 +107,27 @@ void AdminService::open(int port, const Options &options) {
     certificate->set("key", options.key.get());
     opts.certificate = certificate;
     opts.trusted = options.trusted;
-    pipeline_def_inbound = PipelineDef::make(nullptr, PipelineDef::NAMED, "Admin Service TLS-Offloaded");
-    pipeline_def->append(new tls::Server(opts))->add_sub_pipeline(pipeline_def_inbound);
+    ppl_inbound = PipelineLayout::make(nullptr, PipelineLayout::NAMED, "Admin Service TLS-Offloaded");
+    ppl->append(new tls::Server(opts))->add_sub_pipeline(ppl_inbound);
   }
 
-  pipeline_def_inbound->append(
+  ppl_inbound->append(
     new http::Server(
       [this](Message *msg) {
         return handle(msg);
       }
     )
-  )->add_sub_pipeline(pipeline_def_ws);
+  )->add_sub_pipeline(ppl_ws);
 
-  pipeline_def_ws->append(new websocket::Decoder());
-  pipeline_def_ws->append(new AdminLinkHandler(this));
-  pipeline_def_ws->append(new websocket::Encoder());
+  ppl_ws->append(new websocket::Decoder());
+  ppl_ws->append(new AdminLinkHandler(this));
+  ppl_ws->append(new websocket::Encoder());
 
   Listener::Options opts;
   opts.reserved = true;
   auto listener = Listener::get("::", port);
   listener->set_options(opts);
-  listener->pipeline_def(pipeline_def);
+  listener->pipeline_layout(ppl);
   m_port = port;
 
   metrics_history_step();
@@ -135,8 +135,8 @@ void AdminService::open(int port, const Options &options) {
 
 void AdminService::close() {
   if (auto listener = Listener::get("::", m_port)) {
-    listener->pipeline_def()->shutdown();
-    listener->pipeline_def(nullptr);
+    listener->pipeline_layout()->shutdown();
+    listener->pipeline_layout(nullptr);
   }
   m_metrics_history_timer.cancel();
 }
@@ -713,7 +713,7 @@ Message* AdminService::api_v1_program_DELETE() {
     Listener::for_each(
       [](Listener *l) {
         if (!l->reserved()) {
-          l->pipeline_def(nullptr);
+          l->pipeline_layout(nullptr);
         }
       }
     );

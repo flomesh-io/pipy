@@ -44,12 +44,12 @@ class Context;
 class InputContext;
 
 //
-// PipelineDef
+// PipelineLayout
 //
 
-class PipelineDef :
-  public pjs::RefCount<PipelineDef>,
-  public List<PipelineDef>::Item
+class PipelineLayout :
+  public pjs::RefCount<PipelineLayout>,
+  public List<PipelineLayout>::Item
 {
 public:
   enum Type {
@@ -59,12 +59,12 @@ public:
     TASK,
   };
 
-  static auto make(Module *module, Type type, const std::string &name) -> PipelineDef* {
-    return new PipelineDef(module, type, name);
+  static auto make(Module *module, Type type, const std::string &name) -> PipelineLayout* {
+    return new PipelineLayout(module, type, name);
   }
 
-  static void for_each(std::function<void(PipelineDef*)> callback) {
-    for (auto *p = s_all_pipeline_defs.head(); p; p = p->next()) {
+  static void for_each(std::function<void(PipelineLayout*)> callback) {
+    for (auto *p = s_all_pipeline_layouts.head(); p; p = p->next()) {
       callback(p);
     }
   }
@@ -79,8 +79,8 @@ public:
   void shutdown();
 
 private:
-  PipelineDef(Module *module, Type type, const std::string &name);
-  ~PipelineDef();
+  PipelineLayout(Module *module, Type type, const std::string &name);
+  ~PipelineLayout();
 
   auto alloc(Context *ctx) -> Pipeline*;
   void free(Pipeline *pipeline);
@@ -93,9 +93,9 @@ private:
   List<Pipeline> m_pipelines;
   size_t m_allocated = 0;
 
-  static List<PipelineDef> s_all_pipeline_defs;
+  static List<PipelineLayout> s_all_pipeline_layouts;
 
-  friend class pjs::RefCount<PipelineDef>;
+  friend class pjs::RefCount<PipelineLayout>;
   friend class Pipeline;
   friend class Graph;
 };
@@ -117,23 +117,23 @@ class Pipeline :
   public List<Pipeline>::Item
 {
 public:
-  static auto make(PipelineDef *def, Context *ctx) -> Pipeline* {
-    return def->alloc(ctx);
+  static auto make(PipelineLayout *layout, Context *ctx) -> Pipeline* {
+    return layout->alloc(ctx);
   }
 
-  auto def() const -> PipelineDef* { return m_def; }
+  auto layout() const -> PipelineLayout* { return m_layout; }
   auto context() const -> Context* { return m_context; }
 
   virtual void chain(Input *input) override;
 
 private:
-  Pipeline(PipelineDef *def);
+  Pipeline(PipelineLayout *layout);
   ~Pipeline();
 
   virtual void on_event(Event *evt) override;
   virtual void on_recycle() override;
 
-  PipelineDef* m_def;
+  PipelineLayout* m_layout;
   Pipeline* m_next_free = nullptr;
   List<Filter> m_filters;
   pjs::Ref<Context> m_context;
@@ -142,7 +142,7 @@ private:
   void reset();
 
   friend class pjs::RefCount<Pipeline>;
-  friend class PipelineDef;
+  friend class PipelineLayout;
   friend class Filter;
 };
 

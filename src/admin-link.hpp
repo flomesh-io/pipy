@@ -75,9 +75,9 @@ private:
   pjs::Ref<URL> m_url;
   std::function<void(const Data&)> m_on_receive;
   pjs::Ref<Pipeline> m_pipeline;
-  pjs::Ref<PipelineDef> m_pipeline_def;
-  pjs::Ref<PipelineDef> m_pipeline_def_tunnel;
-  pjs::Ref<PipelineDef> m_pipeline_def_connect;
+  pjs::Ref<PipelineLayout> m_ppl;
+  pjs::Ref<PipelineLayout> m_ppl_tunnel;
+  pjs::Ref<PipelineLayout> m_ppl_connect;
   pjs::Ref<Message> m_handshake;
   int m_connection_id = 0;
 };

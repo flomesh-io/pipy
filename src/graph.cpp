@@ -39,7 +39,7 @@ namespace pipy {
 // Create graph from a set of pipelines
 //
 
-void Graph::from_pipelines(Graph &g, const std::set<PipelineDef*> &pipelines) {
+void Graph::from_pipelines(Graph &g, const std::set<PipelineLayout*> &pipelines) {
   for (auto *pipeline : pipelines) {
     Graph::Pipeline p;
     p.name = pipeline->name()->str();
@@ -55,12 +55,12 @@ void Graph::from_pipelines(Graph &g, const std::set<PipelineDef*> &pipelines) {
       p.filters.emplace_back(std::move(gf));
     }
     switch (pipeline->type()) {
-      case PipelineDef::NAMED:
+      case PipelineLayout::NAMED:
         g.add_named_pipeline(std::move(p));
         break;
-      case PipelineDef::LISTEN:
-      case PipelineDef::READ:
-      case PipelineDef::TASK:
+      case PipelineLayout::LISTEN:
+      case PipelineLayout::READ:
+      case PipelineLayout::TASK:
         g.add_root_pipeline(std::move(p));
         break;
     }
@@ -77,7 +77,7 @@ public:
 
   void flush() {
     if (m_p) {
-      if (m_pt == PipelineDef::NAMED) {
+      if (m_pt == PipelineLayout::NAMED) {
         m_g.add_named_pipeline(std::move(*m_p));
       } else {
         m_g.add_root_pipeline(std::move(*m_p));
@@ -90,7 +90,7 @@ public:
 private:
   Graph& m_g;
   Graph::Pipeline* m_p = nullptr;
-  PipelineDef::Type m_pt;
+  PipelineLayout::Type m_pt;
   int m_named_count = 0;
   int m_listen_count = 0;
   int m_task_count = 0;
@@ -174,7 +174,7 @@ private:
       const auto &m = cv(fn)->s();
       if (m == "pipeline") {
         flush();
-        m_pt = PipelineDef::NAMED;
+        m_pt = PipelineLayout::NAMED;
         m_p = new Graph::Pipeline;
         m_p->name = argc > 0 && cv(argv[0])->t() == STRING
           ? cv(argv[0])->s()
@@ -182,7 +182,7 @@ private:
 
       } else if (m == "listen") {
         flush();
-        m_pt = PipelineDef::LISTEN;
+        m_pt = PipelineLayout::LISTEN;
         m_p = new Graph::Pipeline;
         m_p->name = argc > 0 && cv(argv[0])->t() == NUMBER
           ? std::string("Listen 0.0.0.0:") + std::to_string(int(cv(argv[0])->n()))
@@ -190,7 +190,7 @@ private:
 
       } else if (m == "task") {
         flush();
-        m_pt = PipelineDef::TASK;
+        m_pt = PipelineLayout::TASK;
         m_p = new Graph::Pipeline;
         m_p->name = argc > 0 && cv(argv[0])->t() == STRING
           ? std::string("Task every ") + cv(argv[0])->s()

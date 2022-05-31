@@ -41,7 +41,7 @@ namespace pipy {
 
 class Data;
 class Message;
-class PipelineDef;
+class PipelineLayout;
 class Pipeilne;
 
 //
@@ -121,9 +121,9 @@ private:
   std::list<Request> m_request_queue;
   Request* m_current_request = nullptr;
 
-  pjs::Ref<PipelineDef> m_pipeline_def;
-  pjs::Ref<PipelineDef> m_pipeline_def_connect;
-  pjs::Ref<PipelineDef> m_pipeline_def_tls;
+  pjs::Ref<PipelineLayout> m_ppl;
+  pjs::Ref<PipelineLayout> m_ppl_connect;
+  pjs::Ref<PipelineLayout> m_ppl_tls;
 
   void fetch(
     Method method,

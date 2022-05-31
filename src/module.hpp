@@ -37,7 +37,7 @@
 namespace pipy {
 
 class Configuration;
-class PipelineDef;
+class PipelineLayout;
 
 class Module : public pjs::RefCount<Module> {
 public:
@@ -63,7 +63,7 @@ public:
   auto path() const -> const std::string& { return m_path; }
   auto source() const -> const std::string& { return m_source; }
 
-  auto find_named_pipeline(pjs::Str *name) -> PipelineDef* {
+  auto find_named_pipeline(pjs::Str *name) -> PipelineLayout* {
     auto i = m_named_pipelines.find(name);
     if (i == m_named_pipelines.end()) return nullptr;
     return i->second;
@@ -83,8 +83,8 @@ private:
   pjs::Ref<pjs::Str> m_filename;
   pjs::Ref<Configuration> m_configuration;
   pjs::Ref<pjs::Class> m_context_class;
-  std::list<pjs::Ref<PipelineDef>> m_pipelines;
-  std::map<pjs::Ref<pjs::Str>, PipelineDef*> m_named_pipelines;
+  std::list<pjs::Ref<PipelineLayout>> m_pipelines;
+  std::map<pjs::Ref<pjs::Str>, PipelineLayout*> m_named_pipelines;
 
   friend class pjs::RefCount<Module>;
   friend class Configuration;

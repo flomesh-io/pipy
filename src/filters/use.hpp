@@ -71,12 +71,12 @@ private:
   class Stage : public EventFunction {
   public:
     Stage(const Stage &r)
-      : m_pipeline_def(r.m_pipeline_def)
-      , m_pipeline_def_down(r.m_pipeline_def_down) {}
+      : m_pipeline_layout(r.m_pipeline_layout)
+      , m_pipeline_layout_down(r.m_pipeline_layout_down) {}
 
-    Stage(PipelineDef *pipeline_def, PipelineDef *pipeline_def_down)
-      : m_pipeline_def(pipeline_def)
-      , m_pipeline_def_down(pipeline_def_down) {}
+    Stage(PipelineLayout *layout, PipelineLayout *layout_down)
+      : m_pipeline_layout(layout)
+      , m_pipeline_layout_down(layout_down) {}
 
     void reset();
 
@@ -88,8 +88,8 @@ private:
     Use* m_filter;
     Stage* m_prev;
     Stage* m_next;
-    pjs::Ref<PipelineDef> m_pipeline_def;
-    pjs::Ref<PipelineDef> m_pipeline_def_down;
+    pjs::Ref<PipelineLayout> m_pipeline_layout;
+    pjs::Ref<PipelineLayout> m_pipeline_layout_down;
     pjs::Ref<Pipeline> m_pipeline;
     pjs::Ref<Pipeline> m_pipeline_down;
     bool m_chained = false;

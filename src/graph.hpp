@@ -35,7 +35,7 @@
 namespace pipy {
 
 class Filter;
-class PipelineDef;
+class PipelineLayout;
 
 //
 // Graph
@@ -57,7 +57,7 @@ public:
     bool root = false;
   };
 
-  static void from_pipelines(Graph &g, const std::set<PipelineDef*> &pipelines);
+  static void from_pipelines(Graph &g, const std::set<PipelineLayout*> &pipelines);
   static bool from_script(Graph &g, const std::string &script, std::string &error);
 
   void add_root_pipeline(Pipeline &&p) {

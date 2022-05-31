@@ -36,7 +36,7 @@ namespace pipy {
 
 class File;
 class FileStream;
-class PipelineDef;
+class PipelineLayout;
 
 //
 // Reader
@@ -44,14 +44,14 @@ class PipelineDef;
 
 class Reader {
 public:
-  static auto make(const std::string &pathname, PipelineDef *def) -> Reader* {
-    return new Reader(pathname, def);
+  static auto make(const std::string &pathname, PipelineLayout *layout) -> Reader* {
+    return new Reader(pathname, layout);
   }
 
   void start();
 
 private:
-  Reader(const std::string &pathname, PipelineDef *def);
+  Reader(const std::string &pathname, PipelineLayout *layout);
   ~Reader();
 
   //
@@ -79,7 +79,7 @@ private:
   };
 
   std::string m_pathname;
-  pjs::Ref<PipelineDef> m_pipeline_def;
+  pjs::Ref<PipelineLayout> m_pipeline_layout;
   List<FileReader> m_readers;
 
   friend class Worker;

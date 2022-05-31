@@ -69,10 +69,10 @@ void Fetch::Receiver::dump(std::ostream &out) {
 Fetch::Fetch(pjs::Str *host, const Options &options)
   : m_host(host)
 {
-  m_pipeline_def_connect = PipelineDef::make(nullptr, PipelineDef::NAMED, "Fetch Connection");
-  m_pipeline_def_connect->append(new Connect(m_host.get(), options));
+  m_ppl_connect = PipelineLayout::make(nullptr, PipelineLayout::NAMED, "Fetch Connection");
+  m_ppl_connect->append(new Connect(m_host.get(), options));
 
-  auto def_connect = m_pipeline_def_connect.get();
+  auto def_connect = m_ppl_connect.get();
 
   if (options.tls) {
     tls::Client::Options opts;
@@ -83,14 +83,14 @@ Fetch::Fetch(pjs::Str *host, const Options &options)
       certificate->set("key", options.key.get());
       opts.certificate = certificate;
     }
-    m_pipeline_def_tls = PipelineDef::make(nullptr, PipelineDef::NAMED, "Fetch TLS");
-    m_pipeline_def_tls->append(new tls::Client(opts))->add_sub_pipeline(m_pipeline_def_connect);
-    def_connect = m_pipeline_def_tls;
+    m_ppl_tls = PipelineLayout::make(nullptr, PipelineLayout::NAMED, "Fetch TLS");
+    m_ppl_tls->append(new tls::Client(opts))->add_sub_pipeline(m_ppl_connect);
+    def_connect = m_ppl_tls;
   }
 
-  m_pipeline_def = PipelineDef::make(nullptr, PipelineDef::NAMED, "Fetch");
-  m_pipeline_def->append(new http::Mux())->add_sub_pipeline(def_connect);
-  m_pipeline_def->append(new Receiver(this));
+  m_ppl = PipelineLayout::make(nullptr, PipelineLayout::NAMED, "Fetch");
+  m_ppl->append(new http::Mux())->add_sub_pipeline(def_connect);
+  m_ppl->append(new Receiver(this));
 }
 
 Fetch::Fetch(const std::string &host, const Options &options)
@@ -147,7 +147,7 @@ void Fetch::close() {
 void Fetch::pump() {
   if (!m_current_request && !m_request_queue.empty()) {
     auto ctx = new Context();
-    m_pipeline = Pipeline::make(m_pipeline_def, ctx);
+    m_pipeline = Pipeline::make(m_ppl, ctx);
 
     m_current_request = &m_request_queue.front();
     auto msg = m_current_request->message;

@@ -35,7 +35,7 @@
 namespace pipy {
 
 class Module;
-class PipelineDef;
+class PipelineLayout;
 class Reader;
 class Task;
 
@@ -63,7 +63,7 @@ public:
   bool handling_signal(int sig);
   auto find_module(const std::string &path) -> Module*;
   auto load_module(const std::string &path) -> Module*;
-  void add_listener(Listener *listener, PipelineDef *pipeline_def, const Listener::Options &options);
+  void add_listener(Listener *listener, PipelineLayout *layout, const Listener::Options &options);
   void add_reader(Reader *reader);
   void add_task(Task *task);
   void add_export(pjs::Str *ns, pjs::Str *name, Module *module);
@@ -81,7 +81,7 @@ private:
   typedef std::map<pjs::Ref<pjs::Str>, Module*> Namespace;
 
   struct ListeningPipeline {
-    PipelineDef* pipeline_def;
+    PipelineLayout* pipeline_layout;
     Listener::Options options;
   };
 

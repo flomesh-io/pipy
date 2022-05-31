@@ -63,23 +63,23 @@ AdminLink::AdminLink(
   headers->set("sec-websocket-key", key_base64);
   headers->set("sec-websocket-version", "13");
 
-  m_pipeline_def_connect = PipelineDef::make(nullptr, PipelineDef::NAMED, "AdminLink Connection");
-  m_pipeline_def_connect->append(new Connect(pjs::Str::make(host), Connect::Options()));
+  m_ppl_connect = PipelineLayout::make(nullptr, PipelineLayout::NAMED, "AdminLink Connection");
+  m_ppl_connect->append(new Connect(pjs::Str::make(host), Connect::Options()));
 
-  m_pipeline_def_tunnel = PipelineDef::make(nullptr, PipelineDef::NAMED, "AdminLink Tunnel");
-  m_pipeline_def_tunnel->append(new http::Mux(pjs::Str::empty.get(), nullptr))->add_sub_pipeline(m_pipeline_def_connect);
+  m_ppl_tunnel = PipelineLayout::make(nullptr, PipelineLayout::NAMED, "AdminLink Tunnel");
+  m_ppl_tunnel->append(new http::Mux(pjs::Str::empty.get(), nullptr))->add_sub_pipeline(m_ppl_connect);
 
-  m_pipeline_def = PipelineDef::make(nullptr, PipelineDef::NAMED, "AdminLink");
-  m_pipeline_def->append(new websocket::Encoder());
-  m_pipeline_def->append(new http::TunnelClient(m_handshake.get()))->add_sub_pipeline(m_pipeline_def_tunnel);
-  m_pipeline_def->append(new websocket::Decoder());
-  m_pipeline_def->append(new Receiver(this));
+  m_ppl = PipelineLayout::make(nullptr, PipelineLayout::NAMED, "AdminLink");
+  m_ppl->append(new websocket::Encoder());
+  m_ppl->append(new http::TunnelClient(m_handshake.get()))->add_sub_pipeline(m_ppl_tunnel);
+  m_ppl->append(new websocket::Decoder());
+  m_ppl->append(new Receiver(this));
 }
 
 auto AdminLink::connect() -> int {
   if (!m_pipeline) {
     auto ctx = new Context();
-    m_pipeline = Pipeline::make(m_pipeline_def, ctx);
+    m_pipeline = Pipeline::make(m_ppl, ctx);
     m_connection_id++;
     if (m_connection_id <= 0) m_connection_id = 1;
   }

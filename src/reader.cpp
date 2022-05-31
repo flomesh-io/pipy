@@ -35,9 +35,9 @@ namespace pipy {
 // Reader
 //
 
-Reader::Reader(const std::string &pathname, PipelineDef *def)
+Reader::Reader(const std::string &pathname, PipelineLayout *layout)
   : m_pathname(pathname)
-  , m_pipeline_def(def)
+  , m_pipeline_layout(layout)
 {
   auto *r = new FileReader(this, pathname);
   r->retain();
@@ -71,12 +71,12 @@ void Reader::FileReader::start() {
   m_file->open_read(
     [this](FileStream *fs) {
       if (fs) {
-        auto def = m_reader->m_pipeline_def.get();
-        auto mod = def->module();
+        auto ppl = m_reader->m_pipeline_layout.get();
+        auto mod = ppl->module();
         auto ctx = mod
           ? mod->worker()->new_runtime_context()
           : new pipy::Context();
-        auto p = Pipeline::make(def, ctx);
+        auto p = Pipeline::make(ppl, ctx);
         fs->chain(EventTarget::input());
         m_pipeline = p;
         m_stream = fs;

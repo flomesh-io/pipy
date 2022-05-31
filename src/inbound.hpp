@@ -36,7 +36,7 @@
 namespace pipy {
 
 class Listener;
-class PipelineDef;
+class PipelineLayout;
 class Pipeline;
 
 //

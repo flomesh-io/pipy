@@ -65,10 +65,10 @@ std::map<std::string, int> s_signal_names = {
 
 namespace pipy {
 
-Task::Task(const std::string &when, PipelineDef *pipeline_def)
+Task::Task(const std::string &when, PipelineLayout *layout)
   : m_when(when)
   , m_signal_set(Net::context())
-  , m_pipeline_def(pipeline_def)
+  , m_pipeline_layout(layout)
 {
   if (!when.empty()) {
     if (std::isdigit(when[0])) {
@@ -135,8 +135,8 @@ void Task::wait() {
 void Task::run() {
   if (!active()) {
     m_pipeline = Pipeline::make(
-      m_pipeline_def,
-      m_pipeline_def->module()->worker()->new_runtime_context()
+      m_pipeline_layout,
+      m_pipeline_layout->module()->worker()->new_runtime_context()
     );
     m_pipeline->chain(EventTarget::input());
     InputContext ic;

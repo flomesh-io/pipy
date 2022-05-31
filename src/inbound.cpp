@@ -160,21 +160,21 @@ void Inbound::on_flush() {
 }
 
 void Inbound::start() {
-  auto def = m_listener->pipeline_def();
-  auto mod = def->module();
+  auto ppl = m_listener->pipeline_layout();
+  auto mod = ppl->module();
   auto ctx = mod
     ? mod->worker()->new_runtime_context()
     : new pipy::Context();
   ctx->m_inbound = this;
 
-  auto p = Pipeline::make(def, ctx);
+  auto p = Pipeline::make(ppl, ctx);
   p->chain(EventTarget::input());
   m_pipeline = p;
   m_output = p->input();
   m_listener->open(this);
 
   pjs::Str *labels[2];
-  labels[0] = def->name();
+  labels[0] = ppl->name();
   labels[1] = remote_address();
   m_metric_traffic_in = Status::metric_inbound_in->with_labels(labels, 2);
   m_metric_traffic_out = Status::metric_inbound_out->with_labels(labels, 2);
