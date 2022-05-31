@@ -40,6 +40,7 @@ void MainOptions::show_help() {
   std::cout << "Options:" << std::endl;
   std::cout << "  -h, -help, --help                    Show help information" << std::endl;
   std::cout << "  -v, -version, --version              Show version information" << std::endl;
+  std::cout << "  -e, -eval, --eval                    Evaluate the given string as script" << std::endl;
   std::cout << "  --log-level=<debug|info|warn|error>  Set the level of log output" << std::endl;
   std::cout << "  --verify                             Verify configuration only" << std::endl;
   std::cout << "  --instance-uuid=<uuid>               Specify a UUID for this worker process" << std::endl;
@@ -73,6 +74,8 @@ MainOptions::MainOptions(int argc, char *argv[]) {
         version = true;
       } else if (k == "-h" || k == "-help" || k == "--help") {
         help = true;
+      } else if (k == "-e" || k == "-eval" || k == "--eval") {
+        eval = true;
       } else if (k == "--log-level") {
         if (v == "debug") log_level = Log::DEBUG;
         else if (v == "warn") log_level = Log::WARN;
@@ -111,6 +114,10 @@ MainOptions::MainOptions(int argc, char *argv[]) {
         throw std::runtime_error(msg + k);
       }
     }
+  }
+
+  if (eval && filename.empty()) {
+    throw std::runtime_error("missing script to evaluate");
   }
 
   if (admin_port < 0) {

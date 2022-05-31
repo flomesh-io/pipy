@@ -217,12 +217,16 @@ int main(int argc, char *argv[]) {
     auto admin_port = opts.admin_port;
     if (!admin_port) admin_port = 6060; // default repo port
 
+    bool is_eval = false;
     bool is_repo = false;
     bool is_repo_proxy = false;
     bool is_remote = false;
     bool is_tls = false;
 
-    if (opts.filename.empty()) {
+    if (opts.eval) {
+      is_eval = true;
+
+    } else if (opts.filename.empty()) {
       is_repo = true;
 
     } else if (utils::starts_with(opts.filename, "http://")) {
@@ -308,6 +312,11 @@ int main(int argc, char *argv[]) {
         options.key = opts.tls_key;
         options.trusted = opts.tls_trusted;
         codebase = Codebase::from_http(opts.filename, options);
+      } else if (is_eval) {
+        codebase = Codebase::from_fs(
+          fs::abs_path("."),
+          opts.filename
+        );
       } else {
         codebase = Codebase::from_fs(opts.filename);
       }

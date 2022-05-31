@@ -58,6 +58,7 @@ Codebase* Codebase::s_current = nullptr;
 class CodebaseFromFS : public Codebase {
 public:
   CodebaseFromFS(const std::string &path);
+  CodebaseFromFS(const std::string &path, const std::string &script);
 
   virtual auto version() const -> const std::string& override { return m_version; }
   virtual bool writable() const override { return true; }
@@ -76,6 +77,7 @@ private:
   std::string m_version;
   std::string m_base;
   std::string m_entry;
+  std::string m_script;
 };
 
 CodebaseFromFS::CodebaseFromFS(const std::string &path) {
@@ -95,6 +97,16 @@ CodebaseFromFS::CodebaseFromFS(const std::string &path) {
   }
 }
 
+CodebaseFromFS::CodebaseFromFS(const std::string &path, const std::string &script) {
+  m_base = fs::abs_path(path);
+  m_script = script;
+
+  if (!fs::exists(m_base)) {
+    std::string msg("file or directory does not exist: ");
+    throw std::runtime_error(msg + m_base);
+  }
+}
+
 auto CodebaseFromFS::list(const std::string &path) -> std::list<std::string> {
   std::list<std::string> list;
   auto full_path = utils::path_join(m_base, path);
@@ -103,11 +115,15 @@ auto CodebaseFromFS::list(const std::string &path) -> std::list<std::string> {
 }
 
 auto CodebaseFromFS::get(const std::string &path) -> Data* {
-  std::vector<uint8_t> data;
-  auto full_path = utils::path_join(m_base, path);
-  if (!fs::is_file(full_path)) return nullptr;
-  if (!fs::read_file(full_path, data)) return nullptr;
-  return s_dp.make(&data[0], data.size());
+  if (path.empty() && !m_script.empty()) {
+    return s_dp.make(m_script);
+  } else {
+    std::vector<uint8_t> data;
+    auto full_path = utils::path_join(m_base, path);
+    if (!fs::is_file(full_path)) return nullptr;
+    if (!fs::read_file(full_path, data)) return nullptr;
+    return s_dp.make(&data[0], data.size());
+  }
 }
 
 void CodebaseFromFS::set(const std::string &path, Data *data) {
@@ -456,6 +472,10 @@ void CodebaseFromHTTP::response_error(const char *method, const char *path, http
 
 Codebase* Codebase::from_fs(const std::string &path) {
   return new CodebaseFromFS(path);
+}
+
+Codebase* Codebase::from_fs(const std::string &path, const std::string &script) {
+  return new CodebaseFromFS(path, script);
 }
 
 Codebase* Codebase::from_store(CodebaseStore *store, const std::string &name) {

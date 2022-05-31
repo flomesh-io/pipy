@@ -48,6 +48,7 @@ public:
   std::string filename;
   bool        version = false;
   bool        help = false;
+  bool        eval = false;
   bool        verify = false;
   bool        reuse_port = false;
   int         admin_port = 0;

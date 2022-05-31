@@ -46,6 +46,7 @@ public:
   static auto current() -> Codebase* { return s_current; }
 
   static Codebase* from_fs(const std::string &path);
+  static Codebase* from_fs(const std::string &path, const std::string &script);
   static Codebase* from_store(CodebaseStore *store, const std::string &name);
   static Codebase* from_http(const std::string &url, const Fetch::Options &options);
 
