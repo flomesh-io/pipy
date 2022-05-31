@@ -29,6 +29,7 @@
 #include "filter.hpp"
 #include "data.hpp"
 #include "timer.hpp"
+#include "options.hpp"
 
 #include <chrono>
 #include <memory>
@@ -41,11 +42,12 @@ namespace pipy {
 
 class Pack : public Filter {
 public:
-  struct Options {
+  struct Options : public pipy::Options {
     double timeout = 0;
     double vacancy = 0.5;
     double interval = 0;
 
+    Options() {}
     Options(pjs::Object *options);
   };
 

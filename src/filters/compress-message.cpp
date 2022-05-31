@@ -31,6 +31,22 @@
 namespace pipy {
 
 //
+// CompressMessageBase::Options
+//
+
+CompressMessageBase::Options::Options(pjs::Object *options) {
+  Value(options, "enable")
+    .get(enable)
+    .check_nullable();
+  Value(options, "method")
+    .get_enum(algo)
+    .check_nullable();
+  Value(options, "level")
+    .get_enum(level)
+    .check_nullable();
+}
+
+//
 // CompressMessageBase
 //
 
@@ -107,8 +123,8 @@ auto CompressMessageBase::new_compressor(
   auto head = start->head();
   if (!head) return nullptr;
 
-  pjs::Ref<pjs::Str> method = m_options.algo == CompressionMethod::deflate ? s_deflate : (
-          m_options.algo == CompressionMethod::gzip ? s_gzip : s_brtoli);
+  pjs::Ref<pjs::Str> method = m_options.algo == CompressionMethod::Deflate ? s_deflate : (
+          m_options.algo == CompressionMethod::Gzip ? s_gzip : s_brtoli);
   pjs::Value headers;
   head->get(s_headers, headers);
   if (!headers.is_object() || !headers.o()) return nullptr;
@@ -120,48 +136,16 @@ auto CompressMessageBase::new_compressor(
   }
 
   switch (m_options.algo) {
-    case CompressionMethod::deflate:
+    case CompressionMethod::Deflate:
       return Compressor::deflate(in, static_cast<int>(m_options.level) - 1);
-    case CompressionMethod::gzip:
+    case CompressionMethod::Gzip:
       return Compressor::gzip(in, static_cast<int>(m_options.level) - 1);
-    case CompressionMethod::brotli:
+    case CompressionMethod::Brotli:
       return Compressor::brotli(in, static_cast<int>(m_options.level) - 1);
     default:
       Log::error("[compress] unknown compression algorithm: %s", m_options.algo);
       return nullptr;
   }
-}
-
-//
-// CompressMessageBase::Options
-
-CompressMessageBase::Options CompressMessageBase::Options::parse(pjs::Object *options) {
-  CompressMessageBase::Options opts;
-  if (options) {
-    pjs::Value enable, method, level;
-    options->get("enabled", enable);
-    if (!enable.is_undefined()) {
-      if (!enable.is_boolean()) throw std::runtime_error("options.enable expects a boolean");
-      opts.enable = enable.b();
-    }
-    options->get("method", method);
-    if (!method.is_undefined()) {
-      if (!method.is_string()) throw std::runtime_error("options.method requires a string");
-      auto algo_type = pjs::EnumDef<CompressMessage::CompressionMethod>::value(method.s());
-      if (int(algo_type) < 0)
-        throw std::runtime_error("invalid options.method. It need to be one of [deflate | gzip | brotli]");
-      opts.algo = algo_type;
-    }
-    options->get("level", level);
-    if (!level.is_undefined()) {
-      if (!level.is_string()) throw std::runtime_error("options.level requires a string");
-      auto comp_level = pjs::EnumDef<CompressMessage::CompressionLevel>::value(level.s());
-      if (int(comp_level) < 0)
-        throw std::runtime_error("invalid options.level. It need to be one of [default | none | speed | best]");
-      opts.level = comp_level;
-    }
-  }
-  return opts;
 }
 
 //
@@ -214,6 +198,7 @@ void CompressHTTP::dump(std::ostream &out) {
 auto CompressHTTP::clone() -> Filter * {
   return new CompressHTTP(*this);
 }
+
 } // namespace pipy
 
 //
@@ -224,9 +209,9 @@ namespace pjs {
 
   template<>
   void EnumDef<CompressMessageBase::CompressionMethod>::init() {
-    define(CompressMessageBase::CompressionMethod::deflate, "deflate");
-    define(CompressMessageBase::CompressionMethod::gzip, "gzip");
-    define(CompressMessageBase::CompressionMethod::brotli, "brotli");
+    define(CompressMessageBase::CompressionMethod::Deflate, "deflate");
+    define(CompressMessageBase::CompressionMethod::Gzip, "gzip");
+    define(CompressMessageBase::CompressionMethod::Brotli, "brotli");
   }
 
   template<>

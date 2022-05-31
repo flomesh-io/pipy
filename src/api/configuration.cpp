@@ -121,8 +121,7 @@ void Configuration::add_import(pjs::Object *variables) {
 }
 
 void Configuration::listen(int port, pjs::Object *options) {
-  Listener::Options opt;
-  if (options) get_listen_options(options, opt);
+  Listener::Options opt(options);
   m_listens.push_back({ "0.0.0.0", port, opt });
   m_current_filters = &m_listens.back().filters;
 }
@@ -141,8 +140,7 @@ void Configuration::listen(const std::string &port, pjs::Object *options) {
     throw std::runtime_error(msg + addr);
   }
 
-  Listener::Options opt;
-  if (options) get_listen_options(options, opt);
+  Listener::Options opt(options);
   m_listens.push_back({ addr, port_num, opt });
   m_current_filters = &m_listens.back().filters;
 }
@@ -178,17 +176,17 @@ void Configuration::accept_socks(pjs::Str *target, pjs::Function *on_connect) {
 }
 
 void Configuration::accept_tls(pjs::Str *target, pjs::Object *options) {
-  auto *filter = new tls::Server(tls::Server::Options(options));
+  auto *filter = new tls::Server(options);
   filter->add_sub_pipeline(target);
   append_filter(filter);
 }
 
 void Configuration::compress_message(pjs::Object *options) {
-  append_filter(new CompressMessage(CompressMessageBase::Options::parse(options)));
+  append_filter(new CompressMessage(options));
 }
 
 void Configuration::compress_http(pjs::Object *options) {
-  append_filter(new CompressHTTP(CompressMessageBase::Options::parse(options)));
+  append_filter(new CompressHTTP(options));
 }
 
 void Configuration::connect(const pjs::Value &target, pjs::Object *options) {
@@ -208,7 +206,7 @@ void Configuration::connect_socks(pjs::Str *target, const pjs::Value &address) {
 }
 
 void Configuration::connect_tls(pjs::Str *target, pjs::Object *options) {
-  auto *filter = new tls::Client(tls::Client::Options(options));
+  auto *filter = new tls::Client(options);
   filter->add_sub_pipeline(target);
   append_filter(filter);
 }
@@ -226,17 +224,7 @@ void Configuration::decode_http_response(pjs::Object *options) {
 }
 
 void Configuration::decode_mqtt(pjs::Object *options) {
-  mqtt::Decoder::Options opts;
-  if (options) {
-    options->get("protocolLevel", opts.protocol_level);
-    if (!opts.protocol_level.is_undefined() &&
-        !opts.protocol_level.is_number() &&
-        !opts.protocol_level.is_function()
-    ) {
-      throw std::runtime_error("options.protocolLevel expects a number or a function");
-    }
-  }
-  append_filter(new mqtt::Decoder(opts));
+  append_filter(new mqtt::Decoder(options));
 }
 
 void Configuration::decode_websocket() {
@@ -274,16 +262,7 @@ void Configuration::demux_http(pjs::Str *target, pjs::Object *options) {
 }
 
 void Configuration::deposit_message(const pjs::Value &filename, pjs::Object *options) {
-  DepositMessage::Options opts;
-  if (options) {
-    pjs::Value threshold, keep;
-    options->get("threshold", threshold);
-    options->get("keep", keep);
-    if (!utils::get_byte_size(threshold, opts.threshold)) throw std::runtime_error("options.threshold expects a number or a string");
-    if (!keep.is_boolean()) throw std::runtime_error("options.keep expects a boolean");
-    opts.keep = keep.b();
-  }
-  append_filter(new DepositMessage(filename, opts));
+  append_filter(new DepositMessage(filename, options));
 }
 
 void Configuration::detect_protocol(pjs::Function *callback) {
@@ -376,8 +355,7 @@ void Configuration::on_tls_client_hello(pjs::Function *callback) {
 }
 
 void Configuration::pack(int batch_size, pjs::Object *options) {
-  Pack::Options opt(options);
-  append_filter(new Pack(batch_size, opt));
+  append_filter(new Pack(batch_size, options));
 }
 
 void Configuration::print() {
@@ -437,13 +415,7 @@ void Configuration::use(const std::list<Module*> modules, pjs::Str *pipeline, pj
 }
 
 void Configuration::wait(pjs::Function *condition, pjs::Object *options) {
-  Wait::Options opts;
-  if (options) {
-    pjs::Value timeout;
-    options->get("timeout", timeout);
-    if (!utils::get_seconds(timeout, opts.timeout)) throw std::runtime_error("options.timeout expects a number or a string");
-  }
-  append_filter(new Wait(condition, opts));
+  append_filter(new Wait(condition, options));
 }
 
 void Configuration::bind_exports(Worker *worker, Module *module) {
@@ -591,55 +563,6 @@ void Configuration::draw(Graph &g) {
     p.name += ')';
     add_filters(p, i.filters);
     g.add_root_pipeline(std::move(p));
-  }
-}
-
-void Configuration::get_listen_options(pjs::Object *obj, Listener::Options &opt) {
-  pjs::Value max_conn, read_timeout, write_timeout, idle_timeout, transparent, close_eof;
-  obj->get("maxConnections", max_conn);
-  obj->get("readTimeout", read_timeout);
-  obj->get("writeTimeout", write_timeout);
-  obj->get("idleTimeout", idle_timeout);
-  obj->get("transparent", transparent);
-  obj->get("closeEOF", close_eof);
-
-  if (!max_conn.is_undefined()) {
-    if (!max_conn.is_number()) throw std::runtime_error("options.maxConnections expects a number");
-    opt.max_connections = max_conn.n();
-  }
-
-  if (!read_timeout.is_undefined()) {
-    if (read_timeout.is_string()) {
-      opt.read_timeout = utils::get_seconds(read_timeout.s()->str());
-    } else {
-      opt.read_timeout = read_timeout.to_number();
-    }
-  }
-
-  if (!write_timeout.is_undefined()) {
-    if (write_timeout.is_string()) {
-      opt.write_timeout = utils::get_seconds(write_timeout.s()->str());
-    } else {
-      opt.write_timeout = write_timeout.to_number();
-    }
-  }
-
-  if (!idle_timeout.is_undefined()) {
-    if (idle_timeout.is_string()) {
-      opt.idle_timeout = utils::get_seconds(idle_timeout.s()->str());
-    } else {
-      opt.idle_timeout = idle_timeout.to_number();
-    }
-  }
-
-  if (!transparent.is_undefined()) {
-    if (!transparent.is_boolean()) throw std::runtime_error("options.transparent expects a boolean");
-    opt.transparent = transparent.b();
-  }
-
-  if (!close_eof.is_undefined()) {
-    if (!close_eof.is_boolean()) throw std::runtime_error("options.closeEOF expects a boolean");
-    opt.close_eof = close_eof.b();
   }
 }
 

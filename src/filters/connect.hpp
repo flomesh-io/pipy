@@ -28,6 +28,7 @@
 
 #include "filter.hpp"
 #include "outbound.hpp"
+#include "options.hpp"
 
 namespace pipy {
 
@@ -45,8 +46,13 @@ class ConnectReceiver : public EventTarget {
 
 class Connect : public Filter, public ConnectReceiver {
 public:
-  Connect(const pjs::Value &target, pjs::Object *options);
-  Connect(const pjs::Value &target, const Outbound::Options &options);
+  struct Options : public pipy::Options, public Outbound::Options {
+    Options() {}
+    Options(const Outbound::Options &options) : Outbound::Options(options) {}
+    Options(pjs::Object *options);
+  };
+
+  Connect(const pjs::Value &target, const Options &options);
 
 private:
   Connect(const Connect &r);

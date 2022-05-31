@@ -167,7 +167,6 @@ private:
   std::list<NamedPipelineConfig> m_named_pipelines;
   std::list<std::unique_ptr<Filter>> *m_current_filters = nullptr;
 
-  void get_listen_options(pjs::Object *obj, Listener::Options &opt);
   void append_filter(Filter *filter);
 
   friend class pjs::ObjectTemplate<Configuration>;

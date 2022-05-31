@@ -175,11 +175,21 @@ bool Filter::output(const pjs::Value &evt) {
   }
 }
 
+bool Filter::callback(pjs::Function *func, int argc, pjs::Value argv[], pjs::Value &result) {
+  auto c = m_pipeline->m_context.get();
+  (*func)(*c, argc, argv, result);
+  if (c->ok()) return true;
+  auto mod = m_pipeline_def->module();
+  Log::pjs_error(c->error(), mod->source());
+  c->reset();
+  return false;
+}
+
 bool Filter::eval(pjs::Value &param, pjs::Value &result) {
   if (param.is_function()) {
     auto c = m_pipeline->m_context.get();
     auto f = param.as<pjs::Function>();
-    ((*f)(*c, 0, nullptr, result));
+    (*f)(*c, 0, nullptr, result);
     if (c->ok()) return true;
     auto mod = m_pipeline_def->module();
     Log::pjs_error(c->error(), mod->source());
@@ -191,9 +201,10 @@ bool Filter::eval(pjs::Value &param, pjs::Value &result) {
   }
 }
 
-bool Filter::callback(pjs::Function *func, int argc, pjs::Value argv[], pjs::Value &result) {
+bool Filter::eval(pjs::Function *func, pjs::Value &result) {
+  if (!func) return true;
   auto c = m_pipeline->m_context.get();
-  (*func)(*c, argc, argv, result);
+  (*func)(*c, 0, nullptr, result);
   if (c->ok()) return true;
   auto mod = m_pipeline_def->module();
   Log::pjs_error(c->error(), mod->source());

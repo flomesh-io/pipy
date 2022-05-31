@@ -29,6 +29,7 @@
 #include "filter.hpp"
 #include "data.hpp"
 #include "api/mqtt.hpp"
+#include "options.hpp"
 
 namespace pipy {
 namespace mqtt {
@@ -39,8 +40,12 @@ namespace mqtt {
 
 class Decoder : public Filter {
 public:
-  struct Options {
-    pjs::Value protocol_level;
+  struct Options : public pipy::Options {
+    int protocol_level;
+    pjs::Ref<pjs::Function> protocol_level_f;
+
+    Options() {}
+    Options(pjs::Object *options);
   };
 
   Decoder(const Options &options);

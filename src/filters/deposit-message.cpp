@@ -28,6 +28,10 @@
 
 namespace pipy {
 
+//
+// DepositMessageReceiver
+//
+
 void DepositMessageReceiver::on_event(Event *evt) {
   auto *filter = static_cast<DepositMessage*>(this);
   if (evt->is<StreamEnd>()) {
@@ -36,6 +40,23 @@ void DepositMessageReceiver::on_event(Event *evt) {
     filter->output(evt);
   }
 }
+
+//
+// DepositMessage::Options
+//
+
+DepositMessage::Options::Options(pjs::Object *options) {
+  Value(options, "threshold")
+    .get_binary_size(threshold)
+    .check_nullable();
+  Value(options, "keep")
+    .get(keep)
+    .check_nullable();
+}
+
+//
+// DepositMessage
+//
 
 DepositMessage::DepositMessage(const pjs::Value &filename, const Options &options)
   : m_filename(filename)

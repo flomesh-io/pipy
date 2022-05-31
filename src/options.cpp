@@ -38,6 +38,14 @@ Options::Value::Value(pjs::Object *options, const char *name)
   }
 }
 
+Options::Value::Value(pjs::Object *options, pjs::Str *name)
+  : m_name(name->c_str())
+{
+  if (options) {
+    options->get(name, m_value);
+  }
+}
+
 Options::Value& Options::Value::get(bool &value) {
   add_type(BOOLEAN);
   if (m_got) return *this;
@@ -88,25 +96,15 @@ Options::Value& Options::Value::get(size_t &value, int thousand) {
 }
 
 Options::Value& Options::Value::get(std::string &value) {
-  add_type(STRING);
-  if (m_got) return *this;
-  if (m_value.is_nullish()) return *this;
-  if (m_value.is_string()) {
-    value = m_value.s()->str();
-    m_got = true;
-    return *this;
+  if (auto *s = get_string()) {
+    value = s->str();
   }
   return *this;
 }
 
 Options::Value& Options::Value::get(pjs::Ref<pjs::Str> &value) {
-  add_type(STRING);
-  if (m_got) return *this;
-  if (m_value.is_nullish()) return *this;
-  if (m_value.is_string()) {
-    value = m_value.s();
-    m_got = true;
-    return *this;
+  if (auto *s = get_string()) {
+    value = s;
   }
   return *this;
 }
@@ -156,8 +154,9 @@ void Options::Value::check() {
     std::string msg("options.");
     msg += m_name;
     msg += " expects ";
+    bool first = true;
     for (size_t i = 0; i < m_type_count; i++) {
-      if (i > 0) msg += " or ";
+      if (first) first = false; else msg += " or ";
       switch (m_types[i]) {
         case BOOLEAN: msg += "a boolean"; break;
         case NUMBER: msg += "a number"; break;
@@ -166,6 +165,11 @@ void Options::Value::check() {
         case STRING: msg += "a string"; break;
         case FUNCTION: msg += "a function"; break;
       }
+    }
+    for (size_t i = 0; i < m_class_count; i++) {
+      if (first) first = false; else msg += " or ";
+      msg += "a ";
+      msg += m_classes[i]->name()->str();
     }
     throw std::runtime_error(msg);
   }
@@ -192,10 +196,51 @@ bool Options::Value::get_number(double &value, int thousand) {
   return false;
 }
 
+auto Options::Value::get_string() -> pjs::Str* {
+  add_type(STRING);
+  if (m_got) return nullptr;
+  if (m_value.is_nullish()) return nullptr;
+  if (m_value.is_string()) {
+    m_got = true;
+    return m_value.s();
+  }
+  return nullptr;
+}
+
+auto Options::Value::get_object(pjs::Class *clazz) -> pjs::Object* {
+  add_class(clazz);
+  if (m_got) return nullptr;
+  if (m_value.is_nullish()) return nullptr;
+  if (m_value.is_instance_of(clazz)) {
+    m_got = true;
+    return m_value.o();
+  }
+  return nullptr;
+}
+
 void Options::Value::add_type(Type type) {
   if (m_type_count < sizeof(m_types) / sizeof(Type)) {
     m_types[m_type_count++] = type;
   }
+}
+
+void Options::Value::add_class(pjs::Class *clazz) {
+  if (m_class_count < sizeof(m_classes) / sizeof(pjs::Class *)) {
+    m_classes[m_class_count++] = clazz;
+  }
+}
+
+void Options::Value::invalid_enum(const std::vector<pjs::Str*> &names) {
+  std::string list;
+  for (const auto &s : names) {
+    if (!list.empty()) list += ", ";
+    list += s->str();
+  }
+  std::string msg("options.");
+  msg += m_name;
+  msg += " expects one of ";
+  msg += list;
+  throw std::runtime_error(msg);
 }
 
 } // namespace pipy

@@ -31,73 +31,39 @@
 
 namespace pipy {
 
-Connect::Connect(const pjs::Value &target, pjs::Object *options)
-  : m_target(target)
-{
-  if (options) {
-    pjs::Value buffer_limit, retry_count, retry_delay;
-    pjs::Value connect_timeout, read_timeout, write_timeout, idle_timeout;
-    options->get("bufferLimit", buffer_limit);
-    options->get("retryCount", retry_count);
-    options->get("retryDelay", retry_delay);
-    options->get("connectTimeout", connect_timeout);
-    options->get("readTimeout", read_timeout);
-    options->get("writeTimeout", write_timeout);
-    options->get("idleTimeout", idle_timeout);
+//
+// Connect::Options
+//
 
-    if (!buffer_limit.is_undefined()) {
-      if (buffer_limit.is_string()) {
-        m_options.buffer_limit = utils::get_byte_size(buffer_limit.s()->str());
-      } else {
-        m_options.buffer_limit = buffer_limit.to_number();
-      }
-    }
-
-    if (!retry_count.is_undefined()) m_options.retry_count = retry_count.to_number();
-
-    if (!retry_delay.is_undefined()) {
-      if (retry_delay.is_string()) {
-        m_options.retry_delay = utils::get_seconds(retry_delay.s()->str());
-      } else {
-        m_options.retry_delay = retry_delay.to_number();
-      }
-    }
-
-    if (!connect_timeout.is_undefined()) {
-      if (connect_timeout.is_string()) {
-        m_options.connect_timeout = utils::get_seconds(connect_timeout.s()->str());
-      } else {
-        m_options.connect_timeout = connect_timeout.to_number();
-      }
-    }
-
-    if (!read_timeout.is_undefined()) {
-      if (read_timeout.is_string()) {
-        m_options.read_timeout = utils::get_seconds(read_timeout.s()->str());
-      } else {
-        m_options.read_timeout = read_timeout.to_number();
-      }
-    }
-
-    if (!write_timeout.is_undefined()) {
-      if (write_timeout.is_string()) {
-        m_options.write_timeout = utils::get_seconds(write_timeout.s()->str());
-      } else {
-        m_options.write_timeout = write_timeout.to_number();
-      }
-    }
-
-    if (!idle_timeout.is_undefined()) {
-      if (idle_timeout.is_string()) {
-        m_options.idle_timeout = utils::get_seconds(idle_timeout.s()->str());
-      } else {
-        m_options.idle_timeout = idle_timeout.to_number();
-      }
-    }
-  }
+Connect::Options::Options(pjs::Object *options) {
+  Value(options, "bufferLimit")
+    .get_binary_size(buffer_limit)
+    .check_nullable();
+  Value(options, "retryCount")
+    .get(retry_count)
+    .check_nullable();
+  Value(options, "retryDelay")
+    .get_seconds(retry_delay)
+    .check_nullable();
+  Value(options, "connectTimeout")
+    .get_seconds(connect_timeout)
+    .check_nullable();
+  Value(options, "readTimeout")
+    .get_seconds(read_timeout)
+    .check_nullable();
+  Value(options, "writeTimeout")
+    .get_seconds(write_timeout)
+    .check_nullable();
+  Value(options, "idleTimeout")
+    .get_seconds(idle_timeout)
+    .check_nullable();
 }
 
-Connect::Connect(const pjs::Value &target, const Outbound::Options &options)
+//
+// Connect
+//
+
+Connect::Connect(const pjs::Value &target, const Options &options)
   : m_target(target)
   , m_options(options)
 {

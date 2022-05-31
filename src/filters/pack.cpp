@@ -32,18 +32,15 @@ namespace pipy {
 //
 
 Pack::Options::Options(pjs::Object *options) {
-  if (options) {
-    pjs::Value vacancy, timeout, interval;
-    options->get("vacancy", vacancy);
-    options->get("timeout", timeout);
-    options->get("interval", interval);
-    if (!utils::get_seconds(timeout, this->timeout)) throw std::runtime_error("options.timeout expects a number or a string");
-    if (!utils::get_seconds(interval, this->interval)) throw std::runtime_error("options.interval expects a number or a string");
-    if (!vacancy.is_undefined()) {
-      if (!vacancy.is_number()) throw std::runtime_error("options.vacancy expects a number");
-      this->vacancy = vacancy.n();
-    }
-  }
+  Value(options, "vacancy")
+    .get(vacancy)
+    .check_nullable();
+  Value(options, "timeout")
+    .get_seconds(timeout)
+    .check_nullable();
+  Value(options, "interval")
+    .get_seconds(interval)
+    .check_nullable();
 }
 
 //

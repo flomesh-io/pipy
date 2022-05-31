@@ -27,6 +27,7 @@
 #define COMPRESS_MESSAGE_HPP
 
 #include "filter.hpp"
+#include "options.hpp"
 
 namespace pipy {
 
@@ -40,25 +41,27 @@ class Data;
 class CompressMessageBase : public Filter {
 public:
     enum class CompressionMethod {
-        deflate,
-        gzip,
-        brotli,
+      Deflate,
+      Gzip,
+      Brotli,
     };
 
     enum class CompressionLevel {
-        Default,
-        None,
-        Speed,
-        Best = 10,
+      Default,
+      None,
+      Speed,
+      Best = 10,
     };
 
-    struct Options {
-        bool enable = true;
-        CompressionMethod algo = CompressionMethod::gzip;
-        CompressionLevel level = CompressionLevel::Default;
+    struct Options : public pipy::Options {
+      bool enable = true;
+      CompressionMethod algo = CompressionMethod::Gzip;
+      CompressionLevel level = CompressionLevel::Default;
 
-        static Options parse(pjs::Object *options);
+      Options() {}
+      Options(pjs::Object *options);
     };
+
 protected:
   CompressMessageBase(const Options &options);
   CompressMessageBase(const CompressMessageBase &r);

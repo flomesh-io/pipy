@@ -30,6 +30,16 @@
 namespace pipy {
 
 //
+// Wait::Options
+//
+
+Wait::Options::Options(pjs::Object *options) {
+  Value(options, "timeout")
+    .get(timeout)
+    .check_nullable();
+}
+
+//
 // Wait
 //
 

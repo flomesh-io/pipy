@@ -27,6 +27,7 @@
 #define ALGO_HPP
 
 #include "pjs/pjs.hpp"
+#include "options.hpp"
 
 #include <map>
 #include <set>
@@ -41,9 +42,12 @@ namespace algo {
 
 class Cache : public pjs::ObjectTemplate<Cache> {
 public:
-  struct Options {
+  struct Options : public pipy::Options {
     int size = 0;
     double ttl = 0;
+
+    Options() {}
+    Options(pjs::Object *options);
   };
 
   bool get(pjs::Context &ctx, const pjs::Value &key, pjs::Value &value);

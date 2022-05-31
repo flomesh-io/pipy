@@ -33,6 +33,35 @@ namespace pipy {
 
 using tcp = asio::ip::tcp;
 
+//
+// Listener::Options
+//
+
+Listener::Options::Options(pjs::Object *options) {
+  Value(options, "maxConnections")
+    .get(max_connections)
+    .check_nullable();
+  Value(options, "readTimeout")
+    .get_seconds(read_timeout)
+    .check_nullable();
+  Value(options, "writeTimeout")
+    .get_seconds(write_timeout)
+    .check_nullable();
+  Value(options, "idleTimeout")
+    .get_seconds(idle_timeout)
+    .check_nullable();
+  Value(options, "transparent")
+    .get(transparent)
+    .check_nullable();
+  Value(options, "closeEOF")
+    .get(close_eof)
+    .check_nullable();
+}
+
+//
+// Listener
+//
+
 bool Listener::s_reuse_port = false;
 
 std::list<Listener*> Listener::s_all_listeners;

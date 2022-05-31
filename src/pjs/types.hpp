@@ -898,6 +898,13 @@ public:
     return value(s);
   }
 
+  static auto all_names() -> std::vector<Str*> {
+    std::vector<Str*> names(m_str_to_val.size());
+    size_t i = 0;
+    for (const auto &p : m_str_to_val) names[i++] = p.first;
+    return names;
+  }
+
 private:
   static void init_if_not_yet() {
     if (m_initialized) return;
@@ -994,7 +1001,7 @@ public:
   Value(const char *s) : m_t(Type::String) { m_v.s = Str::make(s)->retain(); }
   Value(const char *s, size_t n) : m_t(Type::String) { m_v.s = Str::make(s, n)->retain(); }
   Value(const std::string &s) : m_t(Type::String) { m_v.s = Str::make(s)->retain(); }
-  Value(Str *s) : m_t(Type::String) { m_v.s = s; s->retain(); }
+  Value(Str *s) : m_t(s ? Type::String : Type::Undefined) { m_v.s = s; if (s) s->retain(); }
   Value(Object *o) : m_t(Type::Object) { m_v.o = o; if (o) retain(o); }
 
   ~Value() { release(); }

@@ -29,6 +29,7 @@
 #include "filter.hpp"
 #include "data.hpp"
 #include "api/crypto.hpp"
+#include "options.hpp"
 
 #include <openssl/bio.h>
 #include <openssl/ssl.h>
@@ -136,17 +137,28 @@ private:
 };
 
 //
+// Options
+//
+
+struct Options : public pipy::Options {
+  pjs::Ref<pjs::Object> certificate;
+  std::vector<pjs::Ref<crypto::Certificate>> trusted;
+  pjs::Ref<pjs::Function> handshake;
+
+  Options() {}
+  Options(pjs::Object *options);
+};
+
+//
 // Client
 //
 
 class Client : public Filter {
 public:
-  struct Options {
-    pjs::Ref<pjs::Object> certificate;
-    std::vector<pjs::Ref<crypto::Certificate>> trusted;
+  struct Options : public tls::Options {
     std::vector<std::string> alpn;
-    pjs::Value sni;
-    pjs::Ref<pjs::Function> handshake;
+    pjs::Ref<pjs::Str> sni;
+    pjs::Ref<pjs::Function> sni_f;
 
     Options() {}
     Options(pjs::Object *options);
@@ -174,12 +186,9 @@ private:
 
 class Server : public Filter {
 public:
-  struct Options {
-    pjs::Ref<pjs::Object> certificate;
-    std::vector<pjs::Ref<crypto::Certificate>> trusted;
+  struct Options : public tls::Options {
     pjs::Ref<pjs::Function> alpn;
     std::set<pjs::Ref<pjs::Str>> alpn_set;
-    pjs::Ref<pjs::Function> handshake;
 
     Options() {}
     Options(pjs::Object *options);

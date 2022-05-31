@@ -28,6 +28,7 @@
 
 #include "net.hpp"
 #include "inbound.hpp"
+#include "options.hpp"
 
 #include <functional>
 #include <string>
@@ -43,9 +44,11 @@ class PipelineDef;
 
 class Listener {
 public:
-  struct Options : public Inbound::Options {
+  struct Options : public Inbound::Options, public pipy::Options {
     int max_connections = -1;
     bool reserved = false;
+    Options() {}
+    Options(pjs::Object *options);
   };
 
   static void set_reuse_port(bool reuse);

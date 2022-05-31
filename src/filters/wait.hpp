@@ -29,6 +29,7 @@
 #include "filter.hpp"
 #include "context.hpp"
 #include "timer.hpp"
+#include "options.hpp"
 
 #include <vector>
 
@@ -40,8 +41,11 @@ namespace pipy {
 
 class Wait : public Filter, public ContextGroup::Waiter {
 public:
-  struct Options {
+  struct Options : public pipy::Options {
     double timeout = 0;
+
+    Options() {}
+    Options(pjs::Object *options);
   };
 
   Wait(pjs::Function *condition, const Options &options);

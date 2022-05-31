@@ -41,6 +41,20 @@ auto Algo::hash(const pjs::Value &value) -> size_t {
 }
 
 //
+// Cache::Options
+//
+
+Cache::Options::Options(pjs::Object *options) {
+  static pjs::ConstStr str_size("size"), str_ttl("ttl");
+  Value(options, str_size)
+    .get(size)
+    .check_nullable();
+  Value(options, str_ttl)
+    .get_seconds(ttl)
+    .check_nullable();
+}
+
+//
 // Cache
 //
 
@@ -693,31 +707,7 @@ template<> void ClassDef<Cache>::init() {
     Function *allocate = nullptr, *free = nullptr;
     Object *options = nullptr;
     if (!ctx.arguments(0, &allocate, &free, &options)) return nullptr;
-    Cache::Options opts;
-    if (options) {
-      static ConstStr str_size("size"), str_ttl("ttl");
-      pjs::Value size, ttl;
-      options->get(str_size, size);
-      options->get(str_ttl, ttl);
-      if (!size.is_undefined()) {
-        if (!size.is_number()) {
-          ctx.error("options.size expects a number");
-          return nullptr;
-        }
-        opts.size = size.n();
-      }
-      if (!ttl.is_undefined()) {
-        if (ttl.is_number()) {
-          opts.ttl = ttl.n();
-        } else if (ttl.is_string()) {
-          opts.ttl = pipy::utils::get_seconds(ttl.s()->str());
-        } else {
-          ctx.error("options.size expects a number or a string");
-          return nullptr;
-        }
-      }
-    }
-    return Cache::make(opts, allocate, free);
+    return Cache::make(options, allocate, free);
   });
 
   method("get", [](Context &ctx, Object *obj, Value &ret) {

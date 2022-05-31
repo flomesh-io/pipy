@@ -30,6 +30,7 @@
 #include "file.hpp"
 #include "data.hpp"
 #include "fstream.hpp"
+#include "options.hpp"
 
 namespace pipy {
 
@@ -47,9 +48,12 @@ class DepositMessageReceiver : public EventTarget {
 
 class DepositMessage : public Filter, public DepositMessageReceiver {
 public:
-  struct Options {
+  struct Options : public pipy::Options {
     size_t threshold = 0;
     bool keep = false;
+
+    Options() {}
+    Options(pjs::Object *options);
   };
 
   DepositMessage(const pjs::Value &filename, const Options &options);

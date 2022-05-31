@@ -46,6 +46,7 @@ struct Options {
   class Value {
   public:
     Value(pjs::Object *options, const char *name);
+    Value(pjs::Object *options, pjs::Str *name);
 
     Value& get(bool &value);
     Value& get(double &value, int thousand = 1000);
@@ -57,6 +58,32 @@ struct Options {
     Value& get_binary_size(int &value);
     Value& get_binary_size(size_t &value);
     Value& get_seconds(double &value);
+
+    template<class T>
+    Value& get(pjs::Ref<pjs::Object> &value) {
+      if (auto *obj = get_object(pjs::class_of<T>())) {
+        value = obj;
+      }
+      return *this;
+    }
+
+    template<class T>
+    Value& get(pjs::Ref<T> &value) {
+      if (auto *obj = get_object(pjs::class_of<T>())) {
+        value = static_cast<T*>(obj);
+      }
+      return *this;
+    }
+
+    template<class T>
+    Value& get_enum(T &value) {
+      if (auto *s = get_string()) {
+        auto v = pjs::EnumDef<T>::value(s);
+        if (int(v) < 0) invalid_enum(pjs::EnumDef<T>::all_names());
+        value = v;
+      }
+      return *this;
+    }
 
     void check();
     void check_nullable();
@@ -74,11 +101,17 @@ struct Options {
     const char* m_name;
     pjs::Value m_value;
     Type m_types[10];
+    pjs::Class* m_classes[10];
     size_t m_type_count = 0;
+    size_t m_class_count = 0;
     bool m_got = false;
 
     void add_type(Type type);
+    void add_class(pjs::Class *clazz);
     bool get_number(double &value, int thousand);
+    auto get_string() -> pjs::Str*;
+    auto get_object(pjs::Class *clazz) -> pjs::Object*;
+    void invalid_enum(const std::vector<pjs::Str*> &names);
   };
 };
 

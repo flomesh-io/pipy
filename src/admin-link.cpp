@@ -44,8 +44,6 @@ AdminLink::AdminLink(
 ) : m_url(URL::make(url))
   , m_on_receive(on_receive)
 {
-  Outbound::Options options;
-
   auto host = m_url->hostname()->str() + ':' + m_url->port()->str();
 
   uint8_t key[16];
@@ -66,7 +64,7 @@ AdminLink::AdminLink(
   headers->set("sec-websocket-version", "13");
 
   m_pipeline_def_connect = PipelineDef::make(nullptr, PipelineDef::NAMED, "AdminLink Connection");
-  m_pipeline_def_connect->append(new Connect(pjs::Str::make(host), options));
+  m_pipeline_def_connect->append(new Connect(pjs::Str::make(host), Connect::Options()));
 
   m_pipeline_def_tunnel = PipelineDef::make(nullptr, PipelineDef::NAMED, "AdminLink Tunnel");
   m_pipeline_def_tunnel->append(new http::Mux(pjs::Str::empty.get(), nullptr))->add_sub_pipeline(m_pipeline_def_connect);

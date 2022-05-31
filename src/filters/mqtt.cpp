@@ -895,6 +895,17 @@ private:
 };
 
 //
+// Decoder::Options
+//
+
+Decoder::Options::Options(pjs::Object *options) {
+  Value(options, "protocolLevel")
+    .get(protocol_level)
+    .get(protocol_level_f)
+    .check_nullable();
+}
+
+//
 // Decoder
 //
 
@@ -998,8 +1009,8 @@ void Decoder::message() {
   head->retained(m_fixed_header & 1);
 
   if (!m_protocol_level) {
-    pjs::Value protocol_level;
-    if (!eval(m_options.protocol_level, protocol_level)) return;
+    pjs::Value protocol_level(m_options.protocol_level);
+    if (!eval(m_options.protocol_level_f, protocol_level)) return;
     if (!protocol_level.is_undefined()) {
       if (protocol_level.is_number()) {
         int n = protocol_level.n();

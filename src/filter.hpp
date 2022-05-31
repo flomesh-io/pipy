@@ -77,8 +77,9 @@ protected:
   using EventFunction::output;
 
   bool output(const pjs::Value &evt);
-  bool eval(pjs::Value &param, pjs::Value &result);
   bool callback(pjs::Function *func, int argc, pjs::Value argv[], pjs::Value &result);
+  bool eval(pjs::Value &param, pjs::Value &result);
+  bool eval(pjs::Function *func, pjs::Value &result);
 
 private:
   struct Sub {

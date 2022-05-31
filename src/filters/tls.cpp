@@ -472,73 +472,70 @@ void TLSSession::close(StreamEnd::Error err) {
 }
 
 //
+// Options
+//
+
+Options::Options(pjs::Object *options) {
+  Value(options, "certificate")
+    .get(certificate)
+    .check_nullable();
+
+  pjs::Ref<pjs::Array> trusted_array;
+  Value(options, "trusted")
+    .get(trusted_array)
+    .check_nullable();
+
+  if (trusted_array) {
+    trusted.resize(trusted_array->length());
+    trusted_array->iterate_all([this](pjs::Value &v, int i) {
+      if (!v.is<crypto::Certificate>()) {
+        char msg[100];
+        std::sprintf(msg, "options.trusted[%d] expects an object of type crypto.Certificate", i);
+        throw std::runtime_error(msg);
+      }
+      trusted[i] = v.as<crypto::Certificate>();
+    });
+  }
+
+  Value(options, "handshake")
+    .get(handshake)
+    .check_nullable();
+}
+
+//
 // Client::Options
 //
 
-Client::Options::Options(pjs::Object *options) {
-  if (options) {
-    pjs::Value certificate, trusted, alpn, handshake;
-    options->get("certificate", certificate);
-    options->get("trusted", trusted);
-    options->get("alpn", alpn);
-    options->get("sni", sni);
-    options->get("handshake", handshake);
+Client::Options::Options(pjs::Object *options)
+  : tls::Options(options)
+{
+  pjs::Ref<pjs::Str> alpn_string;
+  pjs::Ref<pjs::Array> alpn_array;
+  Value(options, "alpn")
+    .get(alpn_string)
+    .get(alpn_array)
+    .check_nullable();
 
-    if (!certificate.is_nullish()) {
-      if (!certificate.is_object()) {
-        throw std::runtime_error("options.certificate expects an object or a function");
-      }
-      this->certificate = certificate.o();
-    }
-
-    if (!trusted.is_nullish()) {
-      if (!trusted.is_array()) {
-        throw std::runtime_error("options.trusted expects an array");
-      }
-      auto *arr = trusted.as<pjs::Array>();
-      this->trusted.resize(arr->length());
-      arr->iterate_all([&](pjs::Value &v, int i) {
-        if (!v.is<crypto::Certificate>()) {
+  if (alpn_string) {
+    alpn.push_back(alpn_string->str());
+  } else if (alpn_array) {
+    alpn.resize(alpn_array->length());
+    alpn_array->iterate_all(
+      [this](pjs::Value &v, int i) {
+        if (!v.is_string()) {
           char msg[100];
-          std::sprintf(msg, "options.trusted[%d] expects a Certificate", i);
+          std::sprintf(msg, "options.alpn[%d] expects a string", i);
           throw std::runtime_error(msg);
         }
-        this->trusted[i] = v.as<crypto::Certificate>();
-      });
-    }
-
-    if (!alpn.is_nullish()) {
-      if (alpn.is_string()) {
-        this->alpn.push_back(alpn.s()->str());
-      } else if (alpn.is_array()) {
-        auto *arr = alpn.as<pjs::Array>();
-        this->alpn.resize(arr->length());
-        arr->iterate_all(
-          [this](pjs::Value &v, int i) {
-            if (!v.is_string()) {
-              char msg[100];
-              std::sprintf(msg, "options.alpn[%d] expects a string", i);
-              throw std::runtime_error(msg);
-            }
-            this->alpn[i] = v.s()->str();
-          }
-        );
+        alpn[i] = v.s()->str();
       }
-    }
-
-    if (!sni.is_nullish()) {
-      if (!sni.is_string() && !sni.is_function()) {
-        throw std::runtime_error("options.sni expects a string or a function");
-      }
-    }
-
-    if (!handshake.is_nullish()) {
-      if (!handshake.is_function()) {
-        throw std::runtime_error("options.handshake expects a function");
-      }
-      this->handshake = handshake.f();
-    }
+    );
   }
+
+  Value(options, "sni")
+    .get(sni)
+    .get(sni_f)
+    .check_nullable();
 }
 
 //
@@ -600,15 +597,13 @@ void Client::process(Event *evt) {
       m_options->handshake
     );
     m_session->chain(output());
-    if (!m_options->sni.is_undefined()) {
-      pjs::Value sni;
-      if (!eval(m_options->sni, sni)) return;
-      if (!sni.is_undefined()) {
-        if (sni.is_string()) {
-          m_session->set_sni(sni.s()->c_str());
-        } else {
-          Log::error("[tls] sni callback did not return a string");
-        }
+    pjs::Value sni(m_options->sni);
+    if (!eval(m_options->sni_f, sni)) return;
+    if (!sni.is_undefined()) {
+      if (sni.is_string()) {
+        m_session->set_sni(sni.s()->c_str());
+      } else {
+        Log::error("[tls] options.sni did not return a string");
       }
     }
     m_session->start_handshake();
@@ -621,63 +616,26 @@ void Client::process(Event *evt) {
 // Server::Options
 //
 
-Server::Options::Options(pjs::Object *options) {
-  if (options) {
-    pjs::Value certificate, trusted, alpn, handshake;
-    options->get("certificate", certificate);
-    options->get("trusted", trusted);
-    options->get("alpn", alpn);
-    options->get("handshake", handshake);
+Server::Options::Options(pjs::Object *options)
+  : tls::Options(options)
+{
+  pjs::Ref<pjs::Array> alpn_array;
+  Value(options, "alpn")
+    .get(alpn)
+    .get(alpn_array)
+    .check_nullable();
 
-    if (!certificate.is_nullish()) {
-      if (!certificate.is_object()) {
-        throw std::runtime_error("options.certificate expects an object or a function");
-      }
-      this->certificate = certificate.o();
-    }
-
-    if (!trusted.is_nullish()) {
-      if (!trusted.is_array()) {
-        throw std::runtime_error("options.trusted expects an array");
-      }
-      auto *arr = trusted.as<pjs::Array>();
-      this->trusted.resize(arr->length());
-      arr->iterate_all([this](pjs::Value &v, int i) {
-        if (!v.is<crypto::Certificate>()) {
+  if (alpn_array) {
+    alpn_array->iterate_all(
+      [this](pjs::Value &v, int i) {
+        if (!v.is_string()) {
           char msg[100];
-          std::sprintf(msg, "options.trusted[%d] expects a Certificate", i);
+          std::sprintf(msg, "options.alpn[%d] expects a string", i);
           throw std::runtime_error(msg);
         }
-        this->trusted[i] = v.as<crypto::Certificate>();
-      });
-    }
-
-    if (!alpn.is_nullish()) {
-      if (!alpn.is_array() && !alpn.is_function()) {
-        throw std::runtime_error("options.alpn expects an array or a function");
+        alpn_set.insert(v.s());
       }
-      if (alpn.is_array()) {
-        alpn.as<pjs::Array>()->iterate_all(
-          [this](pjs::Value &v, int i) {
-            if (!v.is_string()) {
-              char msg[100];
-              std::sprintf(msg, "options.alpn[%d] expects a string", i);
-              throw std::runtime_error(msg);
-            }
-            this->alpn_set.insert(v.s());
-          }
-        );
-      } else {
-        this->alpn = alpn.f();
-      }
-    }
-
-    if (!handshake.is_nullish()) {
-      if (!handshake.is_function()) {
-        throw std::runtime_error("options.handshake expects a function");
-      }
-      this->handshake = handshake.f();
-    }
+    );
   }
 }
 
