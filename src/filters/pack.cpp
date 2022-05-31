@@ -137,6 +137,7 @@ void Pack::schedule_timeout() {
     m_timer.schedule(
       precision,
       [this]() {
+        m_timer_scheduled = false;
         check_timeout();
       }
     );
