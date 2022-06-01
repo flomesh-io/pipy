@@ -51,7 +51,13 @@ public:
   auto id() const -> uint64_t { return m_id; }
   auto pipeline() const -> Pipeline* { return m_pipeline; }
   auto local_address() -> pjs::Str*;
-  auto local_port() -> int { on_get_address(); return m_local_port; }
+  auto local_port() -> int { address(); return m_local_port; }
+  auto remote_address() -> pjs::Str*;
+  auto remote_port() -> int { address(); return m_remote_port; }
+  auto ori_dst_address() -> pjs::Str*;
+  auto ori_dst_port() -> int { address(); return m_ori_dst_port; }
+
+  virtual auto size_in_buffer() const -> size_t = 0;
 
 protected:
   Inbound();
@@ -64,7 +70,11 @@ protected:
   };
 
   std::string m_local_addr;
+  std::string m_remote_addr;
+  std::string m_ori_dst_addr;
   int m_local_port = 0;
+  int m_remote_port = 0;
+  int m_ori_dst_port = 0;
   ReceivingState m_receiving_state = RECEIVING;
 
   void start(PipelineLayout *layout);
@@ -77,6 +87,8 @@ private:
   uint64_t m_id;
   pjs::Ref<Pipeline> m_pipeline;
   pjs::Ref<pjs::Str> m_str_local_addr;
+  pjs::Ref<pjs::Str> m_str_remote_addr;
+  pjs::Ref<pjs::Str> m_str_ori_dst_addr;
   bool m_addressed = false;
 
   virtual void on_tap_open() override;
@@ -106,12 +118,6 @@ public:
     bool close_eof = true;
   };
 
-  auto remote_address() -> pjs::Str*;
-  auto remote_port() -> int { address(); return m_remote_port; }
-  auto ori_dst_address() -> pjs::Str*;
-  auto ori_dst_port() -> int { address(); return m_ori_dst_port; }
-  auto buffered() const -> int { return m_buffer.size(); }
-
   void accept(asio::ip::tcp::acceptor &acceptor);
 
 private:
@@ -128,16 +134,11 @@ private:
   asio::ip::tcp::socket m_socket;
   pjs::Ref<stats::Counter> m_metric_traffic_in;
   pjs::Ref<stats::Counter> m_metric_traffic_out;
-  pjs::Ref<pjs::Str> m_str_remote_addr;
-  pjs::Ref<pjs::Str> m_str_ori_dst_addr;
-  std::string m_remote_addr;
-  std::string m_ori_dst_addr;
-  int m_remote_port = 0;
-  int m_ori_dst_port = 0;
   Data m_buffer;
   bool m_pumping = false;
   bool m_ended = false;
 
+  virtual auto size_in_buffer() const -> size_t override { return m_buffer.size(); }
   virtual void on_get_address() override;
   virtual void on_inbound_resume() override { receive(); }
   virtual void on_event(Event *evt) override;

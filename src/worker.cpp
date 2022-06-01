@@ -385,7 +385,7 @@ bool Worker::start() {
   try {
     for (const auto &i : m_listeners) {
       auto l = i.first;
-      if (!l->open()) {
+      if (!l->is_open()) {
         l->set_options(i.second.options);
         l->pipeline_layout(i.second.pipeline_layout);
         new_open.insert(l);

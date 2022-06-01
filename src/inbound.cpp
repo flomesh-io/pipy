@@ -67,6 +67,22 @@ auto Inbound::local_address() -> pjs::Str* {
   return m_str_local_addr;
 }
 
+auto Inbound::remote_address() -> pjs::Str* {
+  if (!m_str_remote_addr) {
+    address();
+    m_str_remote_addr = pjs::Str::make(m_remote_addr);
+  }
+  return m_str_remote_addr;
+}
+
+auto Inbound::ori_dst_address() -> pjs::Str* {
+  if (!m_str_ori_dst_addr) {
+    address();
+    m_str_ori_dst_addr = pjs::Str::make(m_ori_dst_addr);
+  }
+  return m_str_ori_dst_addr;
+}
+
 void Inbound::start(PipelineLayout *layout) {
   auto mod = layout->module();
   auto ctx = mod
@@ -117,22 +133,6 @@ InboundTCP::InboundTCP(Listener *listener, const Options &options)
 
 InboundTCP::~InboundTCP() {
   m_listener->close(this);
-}
-
-auto InboundTCP::remote_address() -> pjs::Str* {
-  if (!m_str_remote_addr) {
-    address();
-    m_str_remote_addr = pjs::Str::make(m_remote_addr);
-  }
-  return m_str_remote_addr;
-}
-
-auto InboundTCP::ori_dst_address() -> pjs::Str* {
-  if (!m_str_ori_dst_addr) {
-    address();
-    m_str_ori_dst_addr = pjs::Str::make(m_ori_dst_addr);
-  }
-  return m_str_ori_dst_addr;
 }
 
 void InboundTCP::accept(asio::ip::tcp::acceptor &acceptor) {

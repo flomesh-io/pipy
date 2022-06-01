@@ -267,7 +267,7 @@ void Status::register_metrics() {
           auto l = gauge->with_labels(&k, 1);
           auto n = 0;
           l->clear();
-          listener->for_each_inbound([&](InboundTCP *inbound) {
+          listener->for_each_inbound([&](Inbound *inbound) {
             auto k = inbound->remote_address();
             auto m = l->with_labels(&k, 1);
             m->increase();
@@ -444,9 +444,9 @@ void Status::dump_memory() {
   Listener::for_each([&](Listener *listener) {
     int count = 0;
     int buffered = 0;
-    listener->for_each_inbound([&](InboundTCP *inbound) {
+    listener->for_each_inbound([&](Inbound *inbound) {
       count++;
-      buffered += inbound->buffered();
+      buffered += inbound->size_in_buffer();
     });
     char count_peak[100];
     sprintf(count_peak, "%d/%d", count, listener->peak_connections());

@@ -63,7 +63,7 @@ public:
   }
 
   static bool is_open(const std::string &ip, int port) {
-    if (auto *l = find(ip, port)) return l->open();
+    if (auto *l = find(ip, port)) return l->is_open();
     return false;
   }
 
@@ -75,45 +75,77 @@ public:
 
   auto ip() const -> const std::string& { return m_ip; }
   auto port() const -> int { return m_port; }
-  bool open() const { return m_pipeline_layout; }
+  bool is_open() const { return m_pipeline_layout; }
   bool reserved() const { return m_options.reserved; }
   auto pipeline_layout() const -> PipelineLayout* { return m_pipeline_layout; }
   void pipeline_layout(PipelineLayout *layout);
   auto peak_connections() const -> int { return m_peak_connections; }
 
   void set_options(const Options &options);
-
-  void for_each_inbound(const std::function<void(InboundTCP*)> &cb) {
-    for (auto p = m_inbounds.head(); p; p = p->List<InboundTCP>::Item::next()) {
-      cb(p);
-    }
-  }
+  void for_each_inbound(const std::function<void(Inbound*)> &cb);
 
 private:
   Listener(const std::string &ip, int port);
   ~Listener();
 
+  //
+  // Listener::Acceptor
+  //
+
+  class Acceptor {
+  public:
+    virtual ~Acceptor() {}
+    virtual auto count() -> size_t const = 0;
+    virtual void accept() = 0;
+    virtual void cancel() = 0;
+    virtual void open(Inbound *inbound) = 0;
+    virtual void close(Inbound *inbound) = 0;
+    virtual void close() = 0;
+    virtual void for_each_inbound(const std::function<void(Inbound*)> &cb) = 0;
+  };
+
+  //
+  // Listener::AcceptorTCP
+  //
+
+  class AcceptorTCP : public Acceptor {
+  public:
+    AcceptorTCP(Listener *listener);
+
+    void start(const asio::ip::tcp::endpoint &endpoint);
+
+    virtual auto count() -> size_t const override;
+    virtual void accept() override;
+    virtual void cancel() override;
+    virtual void open(Inbound *inbound) override;
+    virtual void close(Inbound *inbound) override;
+    virtual void close() override;
+    virtual void for_each_inbound(const std::function<void(Inbound*)> &cb) override;
+
+  private:
+    Listener* m_listener;
+    asio::ip::tcp::acceptor m_acceptor;
+    List<InboundTCP> m_inbounds;
+  };
+
   void start();
-  void accept();
   void pause();
   void resume();
   void open(InboundTCP *inbound);
   void close(InboundTCP *inbound);
   void close();
 
+  Options m_options;
   std::string m_ip;
   int m_port;
   int m_peak_connections = 0;
-  Options m_options;
   bool m_paused = false;
   asio::ip::address m_address;
-  asio::ip::tcp::acceptor m_acceptor;
+  Acceptor* m_acceptor = nullptr;
   pjs::Ref<PipelineLayout> m_pipeline_layout;
-  List<InboundTCP> m_inbounds;
 
-  static bool s_reuse_port;
-  static std::list<asio::steady_timer*> s_timer_pool;
   static std::list<Listener*> s_all_listeners;
+  static bool s_reuse_port;
 
   static auto find(const std::string &ip, int port) -> Listener*;
 
