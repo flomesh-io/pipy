@@ -27,16 +27,21 @@
 #define EVENT_HPP
 
 #include "pjs/pjs.hpp"
+#include "list.hpp"
 
 namespace pipy {
 
+class EventBuffer;
 class Pipeline;
 
 //
 // Event
 //
 
-class Event : public pjs::ObjectTemplate<Event> {
+class Event :
+  public pjs::ObjectTemplate<Event>,
+  public List<Event>::Item
+{
 public:
   enum Type {
     Data,
@@ -69,8 +74,10 @@ protected:
 
 private:
   Type m_type;
+  bool m_in_buffer = false;
 
   friend class pjs::ObjectTemplate<Event>;
+  friend class EventBuffer;
 };
 
 //
@@ -455,43 +462,52 @@ protected:
 class EventBuffer {
 public:
   bool empty() const {
-    return m_buffer.empty();
+    return m_events.empty();
   }
 
   void push(Event *e) {
+    if (e->m_in_buffer) e = e->clone();
+    e->m_in_buffer = true;
     e->retain();
-    m_buffer.push_back(e);
+    m_events.push(e);
   }
 
   auto shift() -> Event* {
-    if (m_buffer.empty()) return nullptr;
-    auto e = m_buffer.front();
-    m_buffer.pop_front();
+    if (m_events.empty()) return nullptr;
+    auto e = m_events.head();
+    m_events.remove(e);
+    e->m_in_buffer = false;
     return e;
   }
 
   void unshift(Event *e) {
+    if (e->m_in_buffer) e = e->clone();
+    e->m_in_buffer = true;
     e->retain();
-    m_buffer.push_front(e);
+    m_events.unshift(e);
   }
 
   void flush(const std::function<void(Event*)> &out) {
-    std::list<Event*> events(std::move(m_buffer));
-    for (auto *e : events) {
+    List<Event> events(std::move(m_events));
+    while (auto e = events.head()) {
+      events.remove(e);
+      e->m_in_buffer = false;
       out(e);
       e->release();
     }
   }
 
   void clear() {
-    for (auto *e : m_buffer) {
+    List<Event> events(std::move(m_events));
+    while (auto e = events.head()) {
+      events.remove(e);
+      e->m_in_buffer = false;
       e->release();
     }
-    m_buffer.clear();
   }
 
 private:
-  std::list<Event*> m_buffer;
+  List<Event> m_events;
 };
 
 } // namespace pipy

@@ -74,6 +74,17 @@ public:
     m_size++;
   }
 
+  void unshift(Item *item) {
+    item->m_next = m_head;
+    if (m_head) {
+      m_head->m_back = item;
+      m_head = item;
+    } else {
+      m_head = m_tail = item;
+    }
+    m_size++;
+  }
+
   void remove(Item *item) {
     if (item->m_next) item->m_next->m_back = item->m_back; else m_tail = item->m_back;
     if (item->m_back) item->m_back->m_next = item->m_next; else m_head = item->m_next;
