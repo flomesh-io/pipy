@@ -44,7 +44,7 @@ class PipelineLayout;
 
 class Listener {
 public:
-  struct Options : public Inbound::Options, public pipy::Options {
+  struct Options : public InboundTCP::Options, public pipy::Options {
     int max_connections = -1;
     bool reserved = false;
     Options() {}
@@ -83,8 +83,8 @@ public:
 
   void set_options(const Options &options);
 
-  void for_each_inbound(const std::function<void(Inbound*)> &cb) {
-    for (auto p = m_inbounds.head(); p; p = p->List<Inbound>::Item::next()) {
+  void for_each_inbound(const std::function<void(InboundTCP*)> &cb) {
+    for (auto p = m_inbounds.head(); p; p = p->List<InboundTCP>::Item::next()) {
       cb(p);
     }
   }
@@ -97,8 +97,8 @@ private:
   void accept();
   void pause();
   void resume();
-  void open(Inbound *inbound);
-  void close(Inbound *inbound);
+  void open(InboundTCP *inbound);
+  void close(InboundTCP *inbound);
   void close();
 
   std::string m_ip;
@@ -109,7 +109,7 @@ private:
   asio::ip::address m_address;
   asio::ip::tcp::acceptor m_acceptor;
   pjs::Ref<PipelineLayout> m_pipeline_layout;
-  List<Inbound> m_inbounds;
+  List<InboundTCP> m_inbounds;
 
   static bool s_reuse_port;
   static std::list<asio::steady_timer*> s_timer_pool;
@@ -117,7 +117,7 @@ private:
 
   static auto find(const std::string &ip, int port) -> Listener*;
 
-  friend class Inbound;
+  friend class InboundTCP;
   friend class pjs::RefCount<Listener>;
 };
 

@@ -42,12 +42,11 @@ using tcp = asio::ip::tcp;
 
 uint64_t Inbound::s_inbound_id = 0;
 
-Inbound::Inbound(Listener *listener, const Options &options)
-  : FlushTarget(true)
-  , m_listener(listener)
-  , m_options(options)
-  , m_socket(Net::context())
-{
+//
+// Inbound
+//
+
+Inbound::Inbound() {
   Log::debug("[inbound  %p] ++", this);
   if (!++s_inbound_id) s_inbound_id++;
   m_id = s_inbound_id;
@@ -57,16 +56,7 @@ Inbound::~Inbound() {
   Log::debug("[inbound  %p] --", this);
   if (m_pipeline) {
     Pipeline::auto_release(m_pipeline);
-    m_listener->close(this);
   }
-}
-
-auto Inbound::remote_address() -> pjs::Str* {
-  if (!m_str_remote_addr) {
-    address();
-    m_str_remote_addr = pjs::Str::make(m_remote_addr);
-  }
-  return m_str_remote_addr;
 }
 
 auto Inbound::local_address() -> pjs::Str* {
@@ -77,7 +67,67 @@ auto Inbound::local_address() -> pjs::Str* {
   return m_str_local_addr;
 }
 
-auto Inbound::ori_dst_address() -> pjs::Str* {
+void Inbound::start(PipelineLayout *layout) {
+  auto mod = layout->module();
+  auto ctx = mod
+    ? mod->worker()->new_runtime_context()
+    : new pipy::Context();
+  ctx->m_inbound = this;
+  m_pipeline = Pipeline::make(layout, ctx);
+}
+
+void Inbound::address() {
+  if (!m_addressed) {
+    on_get_address();
+    m_addressed = true;
+  }
+}
+
+void Inbound::on_tap_open() {
+  switch (m_receiving_state) {
+    case PAUSING:
+      m_receiving_state = RECEIVING;
+      break;
+    case PAUSED:
+      m_receiving_state = RECEIVING;
+      on_inbound_resume();
+      release();
+      break;
+    default: break;
+  }
+}
+
+void Inbound::on_tap_close() {
+  if (m_receiving_state == RECEIVING) {
+    m_receiving_state = PAUSING;
+  }
+}
+
+//
+// InboundTCP
+//
+
+InboundTCP::InboundTCP(Listener *listener, const Options &options)
+  : FlushTarget(true)
+  , m_listener(listener)
+  , m_options(options)
+  , m_socket(Net::context())
+{
+}
+
+InboundTCP::~InboundTCP() {
+  m_listener->close(this);
+}
+
+auto InboundTCP::remote_address() -> pjs::Str* {
+  if (!m_str_remote_addr) {
+    address();
+    m_str_remote_addr = pjs::Str::make(m_remote_addr);
+  }
+  return m_str_remote_addr;
+}
+
+auto InboundTCP::ori_dst_address() -> pjs::Str* {
   if (!m_str_ori_dst_addr) {
     address();
     m_str_ori_dst_addr = pjs::Str::make(m_ori_dst_addr);
@@ -85,7 +135,7 @@ auto Inbound::ori_dst_address() -> pjs::Str* {
   return m_str_ori_dst_addr;
 }
 
-void Inbound::accept(asio::ip::tcp::acceptor &acceptor) {
+void InboundTCP::accept(asio::ip::tcp::acceptor &acceptor) {
   acceptor.async_accept(
     m_socket, m_peer,
     [this](const std::error_code &ec) {
@@ -114,27 +164,38 @@ void Inbound::accept(asio::ip::tcp::acceptor &acceptor) {
   retain();
 }
 
-void Inbound::on_tap_open() {
-  switch (m_receiving_state) {
-    case PAUSING:
-      m_receiving_state = RECEIVING;
-      break;
-    case PAUSED:
-      m_receiving_state = RECEIVING;
-      receive();
-      release();
-      break;
-    default: break;
+void InboundTCP::on_get_address() {
+  if (m_socket.is_open()) {
+    const auto &ep = m_socket.local_endpoint();
+    m_local_addr = ep.address().to_string();
+    m_local_port = ep.port();
   }
+  m_remote_addr = m_peer.address().to_string();
+  m_remote_port = m_peer.port();
+#ifdef __linux__
+  if (m_options.transparent && m_socket.is_open()) {
+    struct sockaddr addr;
+    socklen_t len = sizeof(addr);
+    if (!getsockopt(m_socket.native_handle(), SOL_IP, SO_ORIGINAL_DST, &addr, &len)) {
+      char str[100];
+      auto n = std::sprintf(
+        str, "%d.%d.%d.%d",
+        (unsigned char)addr.sa_data[2],
+        (unsigned char)addr.sa_data[3],
+        (unsigned char)addr.sa_data[4],
+        (unsigned char)addr.sa_data[5]
+      );
+      m_ori_dst_addr.assign(str, n);
+      m_ori_dst_port = (
+        ((int)(unsigned char)addr.sa_data[0] << 8) |
+        ((int)(unsigned char)addr.sa_data[1] << 0)
+      );
+    }
+  }
+#endif // __linux__
 }
 
-void Inbound::on_tap_close() {
-  if (m_receiving_state == RECEIVING) {
-    m_receiving_state = PAUSING;
-  }
-}
-
-void Inbound::on_event(Event *evt) {
+void InboundTCP::on_event(Event *evt) {
   if (!m_ended) {
     if (auto data = evt->as<Data>()) {
       if (data->size() > 0) {
@@ -153,28 +214,22 @@ void Inbound::on_event(Event *evt) {
   }
 }
 
-void Inbound::on_flush() {
+void InboundTCP::on_flush() {
   if (!m_ended) {
     pump();
   }
 }
 
-void Inbound::start() {
-  auto ppl = m_listener->pipeline_layout();
-  auto mod = ppl->module();
-  auto ctx = mod
-    ? mod->worker()->new_runtime_context()
-    : new pipy::Context();
-  ctx->m_inbound = this;
+void InboundTCP::start() {
+  Inbound::start(m_listener->pipeline_layout());
 
-  auto p = Pipeline::make(ppl, ctx);
+  auto p = pipeline();
   p->chain(EventTarget::input());
-  m_pipeline = p;
   m_output = p->input();
   m_listener->open(this);
 
   pjs::Str *labels[2];
-  labels[0] = ppl->name();
+  labels[0] = m_listener->pipeline_layout()->name();
   labels[1] = remote_address();
   m_metric_traffic_in = Status::metric_inbound_in->with_labels(labels, 2);
   m_metric_traffic_out = Status::metric_inbound_out->with_labels(labels, 2);
@@ -184,10 +239,10 @@ void Inbound::start() {
   receive();
 }
 
-void Inbound::receive() {
+void InboundTCP::receive() {
   if (!m_socket.is_open()) return;
 
-  static Data::Producer s_data_producer("Inbound");
+  static Data::Producer s_data_producer("InboundTCP");
   pjs::Ref<Data> buffer(Data::make(RECEIVE_BUFFER_SIZE, &s_data_producer));
 
   m_socket.async_read_some(
@@ -271,7 +326,7 @@ void Inbound::receive() {
   retain();
 }
 
-void Inbound::linger() {
+void InboundTCP::linger() {
   if (!m_socket.is_open()) return;
 
   m_socket.async_wait(
@@ -289,7 +344,7 @@ void Inbound::linger() {
   retain();
 }
 
-void Inbound::pump() {
+void InboundTCP::pump() {
   if (!m_socket.is_open()) return;
   if (m_pumping) return;
   if (m_buffer.empty()) return;
@@ -343,7 +398,7 @@ void Inbound::pump() {
   m_pumping = true;
 }
 
-void Inbound::wait() {
+void InboundTCP::wait() {
   if (!m_socket.is_open()) return;
   if (m_options.idle_timeout > 0) {
     m_idle_timer.cancel();
@@ -356,11 +411,11 @@ void Inbound::wait() {
   }
 }
 
-void Inbound::output(Event *evt) {
+void InboundTCP::output(Event *evt) {
   m_output->input(evt);
 }
 
-void Inbound::close(StreamEnd::Error err) {
+void InboundTCP::close(StreamEnd::Error err) {
   if (m_socket.is_open()) {
     std::error_code ec;
     if (err == StreamEnd::NO_ERROR) m_socket.shutdown(tcp::socket::shutdown_both, ec);
@@ -390,41 +445,7 @@ void Inbound::close(StreamEnd::Error err) {
   }
 }
 
-void Inbound::address() {
-  if (!m_addressed) {
-    if (m_socket.is_open()) {
-      const auto &ep = m_socket.local_endpoint();
-      m_local_addr = ep.address().to_string();
-      m_local_port = ep.port();
-    }
-    m_remote_addr = m_peer.address().to_string();
-    m_remote_port = m_peer.port();
-#ifdef __linux__
-    if (m_options.transparent && m_socket.is_open()) {
-      struct sockaddr addr;
-      socklen_t len = sizeof(addr);
-      if (!getsockopt(m_socket.native_handle(), SOL_IP, SO_ORIGINAL_DST, &addr, &len)) {
-        char str[100];
-        auto n = std::sprintf(
-          str, "%d.%d.%d.%d",
-          (unsigned char)addr.sa_data[2],
-          (unsigned char)addr.sa_data[3],
-          (unsigned char)addr.sa_data[4],
-          (unsigned char)addr.sa_data[5]
-        );
-        m_ori_dst_addr.assign(str, n);
-        m_ori_dst_port = (
-          ((int)(unsigned char)addr.sa_data[0] << 8) |
-          ((int)(unsigned char)addr.sa_data[1] << 0)
-        );
-      }
-    }
-#endif // __linux__
-    m_addressed = true;
-  }
-}
-
-void Inbound::describe(char *buf) {
+void InboundTCP::describe(char *buf) {
   address();
   if (m_options.transparent) {
     std::sprintf(
@@ -456,13 +477,16 @@ namespace pjs {
 using namespace pipy;
 
 template<> void ClassDef<Inbound>::init() {
-  accessor("id"                 , [](Object *obj, Value &ret) { ret.set(obj->as<Inbound>()->id()); });
-  accessor("remoteAddress"      , [](Object *obj, Value &ret) { ret.set(obj->as<Inbound>()->remote_address()); });
-  accessor("remotePort"         , [](Object *obj, Value &ret) { ret.set(obj->as<Inbound>()->remote_port()); });
-  accessor("localAddress"       , [](Object *obj, Value &ret) { ret.set(obj->as<Inbound>()->local_address()); });
-  accessor("localPort"          , [](Object *obj, Value &ret) { ret.set(obj->as<Inbound>()->local_port()); });
-  accessor("destinationAddress" , [](Object *obj, Value &ret) { ret.set(obj->as<Inbound>()->ori_dst_address()); });
-  accessor("destinationPort"    , [](Object *obj, Value &ret) { ret.set(obj->as<Inbound>()->ori_dst_port()); });
+  accessor("id"          , [](Object *obj, Value &ret) { ret.set(obj->as<Inbound>()->id()); });
+  accessor("localAddress", [](Object *obj, Value &ret) { ret.set(obj->as<Inbound>()->local_address()); });
+  accessor("localPort"   , [](Object *obj, Value &ret) { ret.set(obj->as<Inbound>()->local_port()); });
+}
+
+template<> void ClassDef<InboundTCP>::init() {
+  accessor("remoteAddress"      , [](Object *obj, Value &ret) { ret.set(obj->as<InboundTCP>()->remote_address()); });
+  accessor("remotePort"         , [](Object *obj, Value &ret) { ret.set(obj->as<InboundTCP>()->remote_port()); });
+  accessor("destinationAddress" , [](Object *obj, Value &ret) { ret.set(obj->as<InboundTCP>()->ori_dst_address()); });
+  accessor("destinationPort"    , [](Object *obj, Value &ret) { ret.set(obj->as<InboundTCP>()->ori_dst_port()); });
 }
 
 } // namespace pjs

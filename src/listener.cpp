@@ -164,7 +164,7 @@ void Listener::start() {
 }
 
 void Listener::accept() {
-  auto inbound = Inbound::make(this, m_options);
+  auto inbound = InboundTCP::make(this, m_options);
   inbound->accept(m_acceptor);
 }
 
@@ -182,7 +182,7 @@ void Listener::resume() {
   }
 }
 
-void Listener::open(Inbound *inbound) {
+void Listener::open(InboundTCP *inbound) {
   m_inbounds.push(inbound);
   m_peak_connections = std::max(m_peak_connections, int(m_inbounds.size()));
   int n = m_options.max_connections;
@@ -193,7 +193,7 @@ void Listener::open(Inbound *inbound) {
   }
 }
 
-void Listener::close(Inbound *inbound) {
+void Listener::close(InboundTCP *inbound) {
   m_inbounds.remove(inbound);
   int n = m_options.max_connections;
   if (n < 0 || m_inbounds.size() < n) {
