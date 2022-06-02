@@ -125,7 +125,7 @@ void AdminService::open(int port, const Options &options) {
 
   Listener::Options opts;
   opts.reserved = true;
-  auto listener = Listener::get("::", port);
+  auto listener = Listener::get("::", port, Listener::Protocol::TCP);
   listener->set_options(opts);
   listener->pipeline_layout(ppl);
   m_port = port;
@@ -134,7 +134,7 @@ void AdminService::open(int port, const Options &options) {
 }
 
 void AdminService::close() {
-  if (auto listener = Listener::get("::", m_port)) {
+  if (auto listener = Listener::get("::", m_port, Listener::Protocol::TCP)) {
     listener->pipeline_layout()->shutdown();
     listener->pipeline_layout(nullptr);
   }

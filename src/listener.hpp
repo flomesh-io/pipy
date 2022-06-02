@@ -45,12 +45,12 @@ class PipelineLayout;
 
 class Listener {
 public:
-  struct Options : public Inbound::Options, public pipy::Options {
-    enum class Protocol {
-      TCP,
-      UDP,
-    };
+  enum class Protocol {
+    TCP,
+    UDP,
+  };
 
+  struct Options : public Inbound::Options, public pipy::Options {
     Protocol protocol = Protocol::TCP;
     size_t max_packet_size = 16 * 1024;
     int max_connections = -1;
@@ -66,13 +66,13 @@ public:
     return s_all_listeners;
   }
 
-  static auto get(const std::string &ip, int port) -> Listener* {
-    if (auto *l = find(ip, port)) return l;
-    return new Listener(ip, port);
+  static auto get(const std::string &ip, int port, Protocol protocol) -> Listener* {
+    if (auto *l = find(port, protocol)) return l;
+    return new Listener(protocol, ip, port);
   }
 
-  static bool is_open(const std::string &ip, int port) {
-    if (auto *l = find(ip, port)) return l->is_open();
+  static bool is_open(int port, Protocol protocol) {
+    if (auto *l = find(port, protocol)) return l->is_open();
     return false;
   }
 
@@ -84,6 +84,7 @@ public:
 
   auto ip() const -> const std::string& { return m_ip; }
   auto port() const -> int { return m_port; }
+  auto protocol() const -> Protocol { return m_protocol; }
   bool is_open() const { return m_pipeline_layout; }
   bool reserved() const { return m_options.reserved; }
   auto pipeline_layout() const -> PipelineLayout* { return m_pipeline_layout; }
@@ -94,7 +95,7 @@ public:
   void for_each_inbound(const std::function<void(Inbound*)> &cb);
 
 private:
-  Listener(const std::string &ip, int port);
+  Listener(Protocol protocol, const std::string &ip, int port);
   ~Listener();
 
   //
@@ -180,6 +181,7 @@ private:
   void set_sock_opts(int sock);
 
   Options m_options;
+  Protocol m_protocol;
   std::string m_ip;
   int m_port;
   int m_peak_connections = 0;
@@ -191,7 +193,7 @@ private:
   static std::list<Listener*> s_all_listeners;
   static bool s_reuse_port;
 
-  static auto find(const std::string &ip, int port) -> Listener*;
+  static auto find(int port, Protocol protocol) -> Listener*;
 
   friend class InboundTCP;
   friend class InboundUDP;

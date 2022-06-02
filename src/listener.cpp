@@ -32,9 +32,9 @@ namespace pjs {
 using namespace pipy;
 
 template<>
-void EnumDef<Listener::Options::Protocol>::init() {
-  define(Listener::Options::Protocol::TCP, "tcp");
-  define(Listener::Options::Protocol::UDP, "udp");
+void EnumDef<Listener::Protocol>::init() {
+  define(Listener::Protocol::TCP, "tcp");
+  define(Listener::Protocol::UDP, "udp");
 }
 
 } // namespace pjs
@@ -82,8 +82,9 @@ void Listener::set_reuse_port(bool reuse) {
   s_reuse_port = reuse;
 }
 
-Listener::Listener(const std::string &ip, int port)
-  : m_ip(ip)
+Listener::Listener(Protocol protocol, const std::string &ip, int port)
+  : m_protocol(protocol)
+  , m_ip(ip)
   , m_port(port)
 {
   m_address = asio::ip::make_address(m_ip);
@@ -119,22 +120,15 @@ void Listener::close() {
 }
 
 void Listener::set_options(const Options &options) {
+  m_options = options;
+  m_options.protocol = m_protocol;
   if (m_acceptor) {
-    if (options.protocol != m_options.protocol) {
-      close();
-      m_options = options;
-      start();
+    int n = m_options.max_connections;
+    if (n >= 0 && m_acceptor->count() >= n) {
+      pause();
     } else {
-      m_options = options;
-      int n = m_options.max_connections;
-      if (n >= 0 && m_acceptor->count() >= n) {
-        pause();
-      } else {
-        resume();
-      }
+      resume();
     }
-  } else {
-    m_options = options;
   }
 }
 
@@ -149,15 +143,15 @@ void Listener::start() {
   describe(desc, sizeof(desc));
 
   try {
-    switch (m_options.protocol) {
-      case Options::Protocol::TCP: {
+    switch (m_protocol) {
+      case Protocol::TCP: {
         asio::ip::tcp::endpoint endpoint(m_address, m_port);
         auto *acceptor = new AcceptorTCP(this);
         m_paused = !acceptor->start(endpoint);
         m_acceptor = acceptor;
         break;
       }
-      case Options::Protocol::UDP: {
+      case Protocol::UDP: {
         asio::ip::udp::endpoint endpoint(m_address, m_port);
         auto *acceptor = new AcceptorUDP(this);
         acceptor->start(endpoint);
@@ -216,9 +210,9 @@ void Listener::close(Inbound *inbound) {
 
 void Listener::describe(char *buf, size_t len) {
   const char *proto = nullptr;
-  switch (m_options.protocol) {
-    case Options::Protocol::TCP: proto = "TCP"; break;
-    case Options::Protocol::UDP: proto = "UDP"; break;
+  switch (m_protocol) {
+    case Protocol::TCP: proto = "TCP"; break;
+    case Protocol::UDP: proto = "UDP"; break;
   }
   std::snprintf(
     buf, len, "%s port %d at %s",
@@ -244,10 +238,9 @@ void Listener::set_sock_opts(int sock) {
   }
 }
 
-auto Listener::find(const std::string &ip, int port) -> Listener* {
-  auto addr = asio::ip::make_address(ip);
+auto Listener::find(int port, Protocol protocol) -> Listener* {
   for (auto *l : s_all_listeners) {
-    if (l->m_port == port && l->m_address == addr) {
+    if (l->port() == port && l->protocol() == protocol) {
       return l;
     }
   }

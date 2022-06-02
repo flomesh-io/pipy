@@ -489,7 +489,7 @@ void Configuration::apply(Module *mod) {
     if (!i.port) continue;
     auto name = std::to_string(i.port) + '@' + i.ip;
     auto p = make_pipeline(PipelineLayout::LISTEN, name, i.filters);
-    auto listener = Listener::get(i.ip, i.port);
+    auto listener = Listener::get(i.ip, i.port, i.options.protocol);
     if (listener->reserved()) {
       std::string msg("Port reserved: ");
       throw std::runtime_error(msg + std::to_string(i.port));
