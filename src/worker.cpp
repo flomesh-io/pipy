@@ -246,6 +246,7 @@ void Worker::exit(int exit_code) {
 
   Log::info("[shutdown] Shutting down...");
   if (auto worker = current()) worker->stop();
+  Listener::for_each([&](Listener *l) { l->pipeline_layout(nullptr); });
 
   static std::function<void()> check;
   check = []() {

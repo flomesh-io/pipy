@@ -99,6 +99,28 @@ void Inbound::address() {
   }
 }
 
+void Inbound::get_original_dest(int sock) {
+#ifdef __linux__
+  struct sockaddr addr;
+  socklen_t len = sizeof(addr);
+  if (!getsockopt(sock, SOL_IP, SO_ORIGINAL_DST, &addr, &len)) {
+    char str[100];
+    auto n = std::sprintf(
+      str, "%d.%d.%d.%d",
+      (unsigned char)addr.sa_data[2],
+      (unsigned char)addr.sa_data[3],
+      (unsigned char)addr.sa_data[4],
+      (unsigned char)addr.sa_data[5]
+    );
+    m_ori_dst_addr.assign(str, n);
+    m_ori_dst_port = (
+      ((int)(unsigned char)addr.sa_data[0] << 8) |
+      ((int)(unsigned char)addr.sa_data[1] << 0)
+    );
+  }
+#endif // __linux__
+}
+
 void Inbound::on_tap_open() {
   switch (m_receiving_state) {
     case PAUSING:
@@ -132,20 +154,25 @@ InboundTCP::InboundTCP(Listener *listener, const Options &options)
 }
 
 InboundTCP::~InboundTCP() {
-  m_listener->close(this);
+  if (m_listener) {
+    m_listener->close(this);
+  }
 }
 
 void InboundTCP::accept(asio::ip::tcp::acceptor &acceptor) {
   acceptor.async_accept(
     m_socket, m_peer,
     [this](const std::error_code &ec) {
-      if (ec != asio::error::operation_aborted) {
+      if (ec == asio::error::operation_aborted) {
+        dangle();
+      } else {
         if (ec) {
           if (Log::is_enabled(Log::ERROR)) {
             char desc[200];
             describe(desc);
             Log::error("%s error accepting connection: %s", desc, ec.message().c_str());
           }
+          dangle();
 
         } else {
           if (Log::is_enabled(Log::DEBUG)) {
@@ -172,27 +199,9 @@ void InboundTCP::on_get_address() {
   }
   m_remote_addr = m_peer.address().to_string();
   m_remote_port = m_peer.port();
-#ifdef __linux__
   if (m_options.transparent && m_socket.is_open()) {
-    struct sockaddr addr;
-    socklen_t len = sizeof(addr);
-    if (!getsockopt(m_socket.native_handle(), SOL_IP, SO_ORIGINAL_DST, &addr, &len)) {
-      char str[100];
-      auto n = std::sprintf(
-        str, "%d.%d.%d.%d",
-        (unsigned char)addr.sa_data[2],
-        (unsigned char)addr.sa_data[3],
-        (unsigned char)addr.sa_data[4],
-        (unsigned char)addr.sa_data[5]
-      );
-      m_ori_dst_addr.assign(str, n);
-      m_ori_dst_port = (
-        ((int)(unsigned char)addr.sa_data[0] << 8) |
-        ((int)(unsigned char)addr.sa_data[1] << 0)
-      );
-    }
+    get_original_dest(m_socket.native_handle());
   }
-#endif // __linux__
 }
 
 void InboundTCP::on_event(Event *evt) {
@@ -470,6 +479,115 @@ void InboundTCP::describe(char *buf) {
   }
 }
 
+//
+// InboundUDP
+//
+
+InboundUDP::InboundUDP(
+  Listener* listener,
+  const Options &options,
+  asio::ip::udp::socket &socket,
+  const asio::ip::udp::endpoint &peer
+) : m_listener(listener)
+  , m_options(options)
+  , m_socket(socket)
+  , m_peer(peer)
+{
+  Inbound::start(m_listener->pipeline_layout());
+
+  auto p = pipeline();
+  p->chain(EventTarget::input());
+  m_output = p->input();
+  listener->open(this);
+}
+
+InboundUDP::~InboundUDP() {
+  if (m_listener) {
+    m_listener->close(this);
+  }
+}
+
+void InboundUDP::start() {
+  retain();
+  wait_idle();
+}
+
+void InboundUDP::receive(Data *data) {
+  wait_idle();
+  InputContext ic;
+  m_output->input(MessageStart::make());
+  m_output->input(data);
+  m_output->input(MessageEnd::make());
+}
+
+void InboundUDP::stop() {
+  m_idle_timer.cancel();
+  release();
+}
+
+auto InboundUDP::size_in_buffer() const -> size_t {
+  return m_buffer.size() + m_sending_size;
+}
+
+void InboundUDP::on_get_address() {
+  if (m_listener) {
+    if (m_socket.is_open()) {
+      const auto &ep = m_socket.local_endpoint();
+      m_local_addr = ep.address().to_string();
+      m_local_port = ep.port();
+    }
+    m_remote_addr = m_peer.address().to_string();
+    m_remote_port = m_peer.port();
+    if (m_options.transparent && m_socket.is_open()) {
+      get_original_dest(m_socket.native_handle());
+    }
+  }
+}
+
+void InboundUDP::on_event(Event *evt) {
+  wait_idle();
+
+  if (evt->is<MessageStart>()) {
+    m_message_started = true;
+    m_buffer.clear();
+
+  } else if (auto *data = evt->as<Data>()) {
+    if (m_message_started) {
+      m_buffer.push(*data);
+    }
+
+  } else if (evt->is<MessageEnd>()) {
+    if (m_message_started) {
+      m_message_started = false;
+      m_sending_size += m_buffer.size();
+
+      pjs::Ref<Data> buffer(Data::make(std::move(m_buffer)));
+
+      if (m_listener) {
+        m_socket.async_send_to(
+          DataChunks(buffer->chunks()),
+          m_peer,
+          [=](const std::error_code &ec, std::size_t n) {
+            m_sending_size -= buffer->size();
+            release();
+          }
+        );
+
+        retain();
+      }
+    }
+  }
+}
+
+void InboundUDP::wait_idle() {
+  if (m_options.idle_timeout > 0) {
+    m_idle_timer.schedule(
+      m_options.idle_timeout,
+      [this]() { stop(); }
+    );
+  }
+}
+
 } // namespace pipy
 
 namespace pjs {
@@ -477,16 +595,21 @@ namespace pjs {
 using namespace pipy;
 
 template<> void ClassDef<Inbound>::init() {
-  accessor("id"          , [](Object *obj, Value &ret) { ret.set(obj->as<Inbound>()->id()); });
-  accessor("localAddress", [](Object *obj, Value &ret) { ret.set(obj->as<Inbound>()->local_address()); });
-  accessor("localPort"   , [](Object *obj, Value &ret) { ret.set(obj->as<Inbound>()->local_port()); });
+  accessor("id"                 , [](Object *obj, Value &ret) { ret.set(obj->as<Inbound>()->id()); });
+  accessor("localAddress"       , [](Object *obj, Value &ret) { ret.set(obj->as<Inbound>()->local_address()); });
+  accessor("localPort"          , [](Object *obj, Value &ret) { ret.set(obj->as<Inbound>()->local_port()); });
+  accessor("remoteAddress"      , [](Object *obj, Value &ret) { ret.set(obj->as<Inbound>()->remote_address()); });
+  accessor("remotePort"         , [](Object *obj, Value &ret) { ret.set(obj->as<Inbound>()->remote_port()); });
+  accessor("destinationAddress" , [](Object *obj, Value &ret) { ret.set(obj->as<Inbound>()->ori_dst_address()); });
+  accessor("destinationPort"    , [](Object *obj, Value &ret) { ret.set(obj->as<Inbound>()->ori_dst_port()); });
 }
 
 template<> void ClassDef<InboundTCP>::init() {
-  accessor("remoteAddress"      , [](Object *obj, Value &ret) { ret.set(obj->as<InboundTCP>()->remote_address()); });
-  accessor("remotePort"         , [](Object *obj, Value &ret) { ret.set(obj->as<InboundTCP>()->remote_port()); });
-  accessor("destinationAddress" , [](Object *obj, Value &ret) { ret.set(obj->as<InboundTCP>()->ori_dst_address()); });
-  accessor("destinationPort"    , [](Object *obj, Value &ret) { ret.set(obj->as<InboundTCP>()->ori_dst_port()); });
+  super<Inbound>();
+}
+
+template<> void ClassDef<InboundUDP>::init() {
+  super<Inbound>();
 }
 
 } // namespace pjs

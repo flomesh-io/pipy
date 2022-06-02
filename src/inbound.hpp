@@ -48,6 +48,14 @@ class Inbound :
   public InputSource
 {
 public:
+  struct Options {
+    double read_timeout = 0;
+    double write_timeout = 0;
+    double idle_timeout = 60;
+    bool transparent = false;
+    bool close_eof = true;
+  };
+
   auto id() const -> uint64_t { return m_id; }
   auto pipeline() const -> Pipeline* { return m_pipeline; }
   auto local_address() -> pjs::Str*;
@@ -56,6 +64,7 @@ public:
   auto remote_port() -> int { address(); return m_remote_port; }
   auto ori_dst_address() -> pjs::Str*;
   auto ori_dst_port() -> int { address(); return m_ori_dst_port; }
+  bool is_receiving() const { return m_receiving_state == RECEIVING; }
 
   virtual auto size_in_buffer() const -> size_t = 0;
 
@@ -79,6 +88,7 @@ protected:
 
   void start(PipelineLayout *layout);
   void address();
+  void get_original_dest(int sock);
 
 private:
   virtual void on_get_address() = 0;
@@ -110,15 +120,8 @@ class InboundTCP :
   public FlushTarget
 {
 public:
-  struct Options {
-    double read_timeout = 0;
-    double write_timeout = 0;
-    double idle_timeout = 60;
-    bool transparent = false;
-    bool close_eof = true;
-  };
-
   void accept(asio::ip::tcp::acceptor &acceptor);
+  void dangle() { m_listener = nullptr; }
 
 private:
   InboundTCP(Listener *listener, const Options &options);
@@ -155,6 +158,53 @@ private:
   void free();
 
   friend class pjs::ObjectTemplate<InboundTCP, Inbound>;
+};
+
+//
+// InboundUDP
+//
+
+class InboundUDP :
+  public pjs::ObjectTemplate<InboundUDP, Inbound>,
+  public List<InboundUDP>::Item,
+  public EventTarget
+{
+public:
+  auto peer() const -> const asio::ip::udp::endpoint& { return m_peer; }
+
+  void start();
+  void receive(Data *data);
+  void dangle() { m_listener = nullptr; }
+  void stop();
+
+private:
+  InboundUDP(
+    Listener* listener,
+    const Options &options,
+    asio::ip::udp::socket &socket,
+    const asio::ip::udp::endpoint &peer
+  );
+
+  ~InboundUDP();
+
+  Listener* m_listener;
+  Options m_options;
+  Timer m_idle_timer;
+  asio::ip::udp::socket& m_socket;
+  asio::ip::udp::endpoint m_peer;
+  pjs::Ref<EventTarget::Input> m_output;
+  Data m_buffer;
+  bool m_message_started = false;
+  size_t m_sending_size = 0;
+
+  virtual auto size_in_buffer() const -> size_t override;
+  virtual void on_get_address() override;
+  virtual void on_inbound_resume() override {}
+  virtual void on_event(Event *evt) override;
+
+  void wait_idle();
+
+  friend class pjs::ObjectTemplate<InboundUDP, Inbound>;
 };
 
 } // namespace pipy
