@@ -89,22 +89,24 @@ void ReplaceBody::process(Event *evt) {
     }
 
   } else if (evt->is<MessageEnd>() || evt->is<StreamEnd>()) {
-    if (m_discarded_size > 0 && m_size_limit > 0) {
-      Log::error(
-        "[replaceBody] %d bytes were discarded due to buffer size limit of %d",
-        m_discarded_size, m_size_limit
-      );
-    }
-    if (m_replacement.is_function()) {
-      pjs::Value arg(m_body), result;
-      if (callback(m_replacement.f(), 1, &arg, result)) {
-        output(result);
+    if (m_body) {
+      if (m_discarded_size > 0 && m_size_limit > 0) {
+        Log::error(
+          "[replaceBody] %d bytes were discarded due to buffer size limit of %d",
+          m_discarded_size, m_size_limit
+        );
       }
-    } else {
-      output(m_replacement);
+      if (m_replacement.is_function()) {
+        pjs::Value arg(m_body), result;
+        if (callback(m_replacement.f(), 1, &arg, result)) {
+          output(result);
+        }
+      } else {
+        output(m_replacement);
+      }
+      m_body = nullptr;
+      m_discarded_size = 0;
     }
-    m_body = nullptr;
-    m_discarded_size = 0;
   }
 
   output(evt);
