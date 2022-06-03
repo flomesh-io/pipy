@@ -483,6 +483,19 @@ void InboundTCP::describe(char *buf) {
 // InboundUDP
 //
 
+auto InboundUDP::get(int port, const std::string &peer) -> InboundUDP* {
+  if (auto *listener = Listener::find(port, Listener::Protocol::UDP)) {
+    if (auto *acceptor = listener->m_acceptor.get()) {
+      std::string ip;
+      int port;
+      if (!utils::get_host_port(peer, ip, port)) return nullptr;
+      asio::ip::udp::endpoint peer(asio::ip::address::from_string(ip), port);
+      return static_cast<Listener::AcceptorUDP*>(acceptor)->inbound(peer, true);
+    }
+  }
+  return nullptr;
+}
+
 InboundUDP::InboundUDP(
   Listener* listener,
   const Options &options,
@@ -602,6 +615,17 @@ template<> void ClassDef<Inbound>::init() {
   accessor("remotePort"         , [](Object *obj, Value &ret) { ret.set(obj->as<Inbound>()->remote_port()); });
   accessor("destinationAddress" , [](Object *obj, Value &ret) { ret.set(obj->as<Inbound>()->ori_dst_address()); });
   accessor("destinationPort"    , [](Object *obj, Value &ret) { ret.set(obj->as<Inbound>()->ori_dst_port()); });
+}
+
+template<> void ClassDef<Constructor<Inbound>>::init() {
+  ctor();
+
+  method("udp", [](Context &ctx, Object *obj, Value &ret) {
+    int port;
+    Str *peer;
+    if (!ctx.arguments(2, &port, &peer)) return;
+    ret.set(InboundUDP::get(port, peer->str()));
+  });
 }
 
 template<> void ClassDef<InboundTCP>::init() {

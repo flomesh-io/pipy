@@ -75,7 +75,7 @@ Listener::Options::Options(pjs::Object *options) {
 // Listener
 //
 
-std::list<Listener*> Listener::s_all_listeners;
+std::map<Listener::Protocol, std::map<int, Listener*>> Listener::s_listeners;
 bool Listener::s_reuse_port = false;
 
 void Listener::set_reuse_port(bool reuse) {
@@ -89,11 +89,11 @@ Listener::Listener(Protocol protocol, const std::string &ip, int port)
 {
   m_address = asio::ip::make_address(m_ip);
   m_ip = m_address.to_string();
-  s_all_listeners.push_back(this);
+  s_listeners[protocol][port] = this;
 }
 
 Listener::~Listener() {
-  s_all_listeners.remove(this);
+  s_listeners[m_protocol].erase(m_port);
 }
 
 void Listener::pipeline_layout(PipelineLayout *layout) {
@@ -239,10 +239,11 @@ void Listener::set_sock_opts(int sock) {
 }
 
 auto Listener::find(int port, Protocol protocol) -> Listener* {
-  for (auto *l : s_all_listeners) {
-    if (l->port() == port && l->protocol() == protocol) {
-      return l;
-    }
+  auto i = s_listeners.find(protocol);
+  if (i != s_listeners.end()) {
+    const auto &m = i->second;
+    auto i = m.find(port);
+    if (i != m.end()) return i->second;
   }
   return nullptr;
 }
@@ -343,6 +344,21 @@ void Listener::AcceptorUDP::start(const asio::ip::udp::endpoint &endpoint) {
   receive();
 }
 
+auto Listener::AcceptorUDP::inbound(const asio::ip::udp::endpoint &peer, bool create) -> InboundUDP* {
+  auto i = m_inbound_map.find(peer);
+  if (i != m_inbound_map.end()) return i->second;
+  if (create) {
+    auto *inbound = InboundUDP::make(
+      m_listener,
+      m_listener->m_options,
+      m_socket, peer
+    );
+    inbound->start();
+    return inbound;
+  }
+  return nullptr;
+}
+
 auto Listener::AcceptorUDP::count() -> size_t const {
   return m_inbounds.size();
 }
@@ -357,24 +373,10 @@ void Listener::AcceptorUDP::receive() {
     [=](const std::error_code &ec, std::size_t n) {
       if (ec != asio::error::operation_aborted) {
         if (!ec) {
-          InboundUDP *inbound = nullptr;
-          auto i = m_inbound_map.find(m_peer);
-          if (i == m_inbound_map.end()) {
-            if (!m_paused) {
-              inbound = InboundUDP::make(
-                m_listener,
-                m_listener->m_options,
-                m_socket,
-                m_peer
-              );
-              inbound->start();
-            }
-          } else {
-            inbound = i->second;
-          }
-          if (inbound && inbound->is_receiving()) {
+          InboundUDP *inb = inbound(m_peer, !m_paused);
+          if (inb && inb->is_receiving()) {
             if (n > 0) buffer->pop(buffer->size() - n);
-            inbound->receive(buffer);
+            inb->receive(buffer);
           }
         } else {
           if (Log::is_enabled(Log::WARN)) {

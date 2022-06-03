@@ -62,10 +62,6 @@ public:
 
   static void set_reuse_port(bool reuse);
 
-  static auto all() -> const std::list<Listener*>& {
-    return s_all_listeners;
-  }
-
   static auto get(const std::string &ip, int port, Protocol protocol) -> Listener* {
     if (auto *l = find(port, protocol)) return l;
     return new Listener(protocol, ip, port);
@@ -77,8 +73,10 @@ public:
   }
 
   static void for_each(const std::function<void(Listener*)> &cb) {
-    for (const auto &p : s_all_listeners) {
-      cb(p);
+    for (const auto &p : s_listeners) {
+      for (const auto &q : p.second) {
+        cb(q.second);
+      }
     }
   }
 
@@ -151,6 +149,7 @@ private:
     virtual ~AcceptorUDP();
 
     void start(const asio::ip::udp::endpoint &endpoint);
+    auto inbound(const asio::ip::udp::endpoint &peer, bool create = false) -> InboundUDP*;
 
     virtual auto count() -> size_t const override;
     virtual void accept() override;
@@ -190,7 +189,8 @@ private:
   pjs::Ref<Acceptor> m_acceptor;
   pjs::Ref<PipelineLayout> m_pipeline_layout;
 
-  static std::list<Listener*> s_all_listeners;
+  // static std::list<Listener*> s_all_listeners;
+  static std::map<Protocol, std::map<int, Listener*>> s_listeners;
   static bool s_reuse_port;
 
   static auto find(int port, Protocol protocol) -> Listener*;

@@ -170,6 +170,8 @@ class InboundUDP :
   public EventTarget
 {
 public:
+  static auto get(int port, const std::string &peer) -> InboundUDP*;
+
   auto peer() const -> const asio::ip::udp::endpoint& { return m_peer; }
 
   void start();

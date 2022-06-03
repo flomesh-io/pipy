@@ -26,6 +26,7 @@
 #include "worker.hpp"
 #include "module.hpp"
 #include "listener.hpp"
+#include "inbound.hpp"
 #include "reader.hpp"
 #include "task.hpp"
 #include "event.hpp"
@@ -139,6 +140,9 @@ template<> void ClassDef<Global>::init() {
 
   // StreamEnd
   variable("StreamEnd", class_of<Constructor<StreamEnd>>());
+
+  // Inbound
+  variable("Inbound", class_of<Constructor<Inbound>>());
 
   // stats
   variable("stats", class_of<stats::Stats>());
