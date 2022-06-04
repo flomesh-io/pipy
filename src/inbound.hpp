@@ -29,6 +29,7 @@
 #include "net.hpp"
 #include "event.hpp"
 #include "input.hpp"
+#include "output.hpp"
 #include "timer.hpp"
 #include "list.hpp"
 #include "api/stats.hpp"
@@ -45,7 +46,9 @@ class Pipeline;
 
 class Inbound :
   public pjs::ObjectTemplate<Inbound>,
-  public InputSource
+  public EventTarget,
+  public InputSource,
+  public Output::WeakPtr::Watcher
 {
 public:
   struct Options {
@@ -57,6 +60,7 @@ public:
   };
 
   auto id() const -> uint64_t { return m_id; }
+  auto output() -> Output*;
   auto pipeline() const -> Pipeline* { return m_pipeline; }
   auto local_address() -> pjs::Str*;
   auto local_port() -> int { address(); return m_local_port; }
@@ -87,6 +91,7 @@ protected:
   ReceivingState m_receiving_state = RECEIVING;
 
   void start(PipelineLayout *layout);
+  void stop();
   void address();
   void get_original_dest(int sock);
 
@@ -95,6 +100,7 @@ private:
   virtual void on_inbound_resume() = 0;
 
   uint64_t m_id;
+  pjs::WeakRef<Output> m_output;
   pjs::Ref<Pipeline> m_pipeline;
   pjs::Ref<pjs::Str> m_str_local_addr;
   pjs::Ref<pjs::Str> m_str_remote_addr;
@@ -103,6 +109,7 @@ private:
 
   virtual void on_tap_open() override;
   virtual void on_tap_close() override;
+  virtual void on_weak_ptr_gone() override;
 
   static uint64_t s_inbound_id;
 
@@ -116,7 +123,6 @@ private:
 class InboundTCP :
   public pjs::ObjectTemplate<InboundTCP, Inbound>,
   public List<InboundTCP>::Item,
-  public EventTarget,
   public FlushTarget
 {
 public:
@@ -132,7 +138,7 @@ private:
   Timer m_read_timer;
   Timer m_write_timer;
   Timer m_idle_timer;
-  pjs::Ref<EventTarget::Input> m_output;
+  pjs::Ref<EventTarget::Input> m_input;
   asio::ip::tcp::endpoint m_peer;
   asio::ip::tcp::socket m_socket;
   pjs::Ref<stats::Counter> m_metric_traffic_in;
@@ -166,8 +172,7 @@ private:
 
 class InboundUDP :
   public pjs::ObjectTemplate<InboundUDP, Inbound>,
-  public List<InboundUDP>::Item,
-  public EventTarget
+  public List<InboundUDP>::Item
 {
 public:
   static auto get(int port, const std::string &peer) -> InboundUDP*;
@@ -194,7 +199,7 @@ private:
   Timer m_idle_timer;
   asio::ip::udp::socket& m_socket;
   asio::ip::udp::endpoint m_peer;
-  pjs::Ref<EventTarget::Input> m_output;
+  pjs::Ref<EventTarget::Input> m_input;
   Data m_buffer;
   bool m_message_started = false;
   size_t m_sending_size = 0;

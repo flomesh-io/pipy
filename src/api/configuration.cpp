@@ -50,6 +50,7 @@
 #include "filters/fork.hpp"
 #include "filters/http.hpp"
 #include "filters/link.hpp"
+#include "filters/link-output.hpp"
 #include "filters/merge.hpp"
 #include "filters/mqtt.hpp"
 #include "filters/mux.hpp"
@@ -352,6 +353,10 @@ void Configuration::on_start(pjs::Function *callback) {
 
 void Configuration::on_tls_client_hello(pjs::Function *callback) {
   append_filter(new tls::OnClientHello(callback));
+}
+
+void Configuration::output(pjs::Function *output_f) {
+  append_filter(new LinkOutput(output_f));
 }
 
 void Configuration::pack(int batch_size, pjs::Object *options) {
@@ -1228,6 +1233,18 @@ template<> void ClassDef<Configuration>::init() {
     }
     try {
       thiz->as<Configuration>()->mux_http(target, key, options);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // Configuration.output
+  method("output", [](Context &ctx, Object *thiz, Value &result) {
+    pjs::Function *output_f = nullptr;
+    if (!ctx.arguments(0, &output_f)) return;
+    try {
+      thiz->as<Configuration>()->output(output_f);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

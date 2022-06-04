@@ -287,6 +287,7 @@ public:
   WeakRef(T *p) : m_weak_ptr(p ? p->weak_ptr() : nullptr) {}
   WeakRef(const WeakRef &r) : m_weak_ptr(r.m_weak_ptr) {}
 
+  auto get() const -> const Ref<class T::WeakPtr>& { return m_weak_ptr; }
   T* ptr() const { return m_weak_ptr ? static_cast<T*>(m_weak_ptr->ptr()) : nullptr; }
   T* original_ptr() const { return m_weak_ptr ? static_cast<T*>(m_weak_ptr->original_ptr()) : nullptr; }
   T* operator->() const { return ptr(); }

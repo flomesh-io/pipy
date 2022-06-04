@@ -328,12 +328,7 @@ Listener::AcceptorUDP::AcceptorUDP(Listener *listener)
 }
 
 Listener::AcceptorUDP::~AcceptorUDP() {
-  for (auto *p = m_inbounds.head(); p; ) {
-    auto *i = p;
-    p = p->List<InboundUDP>::Item::next();
-    i->dangle();
-    i->stop();
-  }
+  close();
 }
 
 void Listener::AcceptorUDP::start(const asio::ip::udp::endpoint &endpoint) {
@@ -353,7 +348,7 @@ auto Listener::AcceptorUDP::inbound(const asio::ip::udp::endpoint &peer, bool cr
       m_listener->m_options,
       m_socket, peer
     );
-    inbound->start();
+    inbound->retain();
     return inbound;
   }
   return nullptr;
@@ -421,6 +416,10 @@ void Listener::AcceptorUDP::close(Inbound *inbound) {
 
 void Listener::AcceptorUDP::close() {
   m_socket.close();
+  for (auto *p = m_inbounds.head(); p; ) {
+    auto *i = p; p = p->List<InboundUDP>::Item::next();
+    i->release();
+  }
 }
 
 void Listener::AcceptorUDP::for_each_inbound(const std::function<void(Inbound*)> &cb) {

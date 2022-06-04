@@ -59,6 +59,14 @@ Inbound::~Inbound() {
   }
 }
 
+auto Inbound::output() -> Output* {
+  if (!m_output) {
+    m_output = Output::make(EventTarget::input());
+    Output::WeakPtr::Watcher::watch(m_output.get());
+  }
+  return m_output.ptr();
+}
+
 auto Inbound::local_address() -> pjs::Str* {
   if (!m_str_local_addr) {
     address();
@@ -84,12 +92,18 @@ auto Inbound::ori_dst_address() -> pjs::Str* {
 }
 
 void Inbound::start(PipelineLayout *layout) {
-  auto mod = layout->module();
-  auto ctx = mod
-    ? mod->worker()->new_runtime_context()
-    : new pipy::Context();
-  ctx->m_inbound = this;
-  m_pipeline = Pipeline::make(layout, ctx);
+  if (!m_pipeline) {
+    auto mod = layout->module();
+    auto ctx = mod
+      ? mod->worker()->new_runtime_context()
+      : new pipy::Context();
+    ctx->m_inbound = this;
+    m_pipeline = Pipeline::make(layout, ctx);
+  }
+}
+
+void Inbound::stop() {
+  m_pipeline = nullptr;
 }
 
 void Inbound::address() {
@@ -139,6 +153,10 @@ void Inbound::on_tap_close() {
   if (m_receiving_state == RECEIVING) {
     m_receiving_state = PAUSING;
   }
+}
+
+void Inbound::on_weak_ptr_gone() {
+  m_output = nullptr;
 }
 
 //
@@ -234,7 +252,7 @@ void InboundTCP::start() {
 
   auto p = pipeline();
   p->chain(EventTarget::input());
-  m_output = p->input();
+  m_input = p->input();
   m_listener->open(this);
 
   pjs::Str *labels[2];
@@ -421,7 +439,7 @@ void InboundTCP::wait() {
 }
 
 void InboundTCP::output(Event *evt) {
-  m_output->input(evt);
+  m_input->input(evt);
 }
 
 void InboundTCP::close(StreamEnd::Error err) {
@@ -489,7 +507,13 @@ auto InboundUDP::get(int port, const std::string &peer) -> InboundUDP* {
       std::string ip;
       int port;
       if (!utils::get_host_port(peer, ip, port)) return nullptr;
-      asio::ip::udp::endpoint peer(asio::ip::address::from_string(ip), port);
+      asio::error_code ec;
+      auto addr = asio::ip::make_address(ip, ec);
+      if (ec) {
+        std::string msg("invalid IP address: ");
+        throw std::runtime_error(msg + ip);
+      }
+      asio::ip::udp::endpoint peer(addr, port);
       return static_cast<Listener::AcceptorUDP*>(acceptor)->inbound(peer, true);
     }
   }
@@ -506,11 +530,6 @@ InboundUDP::InboundUDP(
   , m_socket(socket)
   , m_peer(peer)
 {
-  Inbound::start(m_listener->pipeline_layout());
-
-  auto p = pipeline();
-  p->chain(EventTarget::input());
-  m_output = p->input();
   listener->open(this);
 }
 
@@ -521,21 +540,27 @@ InboundUDP::~InboundUDP() {
 }
 
 void InboundUDP::start() {
-  retain();
-  wait_idle();
+  if (!pipeline()) {
+    Inbound::start(m_listener->pipeline_layout());
+    auto p = pipeline();
+    p->chain(EventTarget::input());
+    m_input = p->input();
+    wait_idle();
+  }
 }
 
 void InboundUDP::receive(Data *data) {
+  start();
   wait_idle();
   InputContext ic;
-  m_output->input(MessageStart::make());
-  m_output->input(data);
-  m_output->input(MessageEnd::make());
+  m_input->input(MessageStart::make());
+  m_input->input(data);
+  m_input->input(MessageEnd::make());
 }
 
 void InboundUDP::stop() {
   m_idle_timer.cancel();
-  release();
+  Inbound::stop();
 }
 
 auto InboundUDP::size_in_buffer() const -> size_t {
@@ -615,6 +640,7 @@ template<> void ClassDef<Inbound>::init() {
   accessor("remotePort"         , [](Object *obj, Value &ret) { ret.set(obj->as<Inbound>()->remote_port()); });
   accessor("destinationAddress" , [](Object *obj, Value &ret) { ret.set(obj->as<Inbound>()->ori_dst_address()); });
   accessor("destinationPort"    , [](Object *obj, Value &ret) { ret.set(obj->as<Inbound>()->ori_dst_port()); });
+  accessor("output"             , [](Object *obj, Value &ret) { ret.set(obj->as<Inbound>()->output()); });
 }
 
 template<> void ClassDef<Constructor<Inbound>>::init() {
