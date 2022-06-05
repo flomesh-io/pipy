@@ -140,9 +140,9 @@ void Pipeline::chain(Input *input) {
 
 void Pipeline::on_event(Event *evt) {
   if (auto f = m_filters.head()) {
-    output(evt, f->input());
+    EventFunction::output(evt, f->input());
   } else {
-    output(evt);
+    EventFunction::output(evt);
   }
 }
 

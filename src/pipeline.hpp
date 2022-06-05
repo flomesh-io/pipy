@@ -29,6 +29,7 @@
 #include "pjs/pjs.hpp"
 #include "event.hpp"
 #include "input.hpp"
+#include "output.hpp"
 #include "list.hpp"
 
 #include <list>
@@ -123,6 +124,8 @@ public:
 
   auto layout() const -> PipelineLayout* { return m_layout; }
   auto context() const -> Context* { return m_context; }
+  auto output() const -> Output* { return m_output; }
+  void output(Output *output) { m_output = output; }
 
   virtual void chain(Input *input) override;
 
@@ -137,6 +140,7 @@ private:
   Pipeline* m_next_free = nullptr;
   List<Filter> m_filters;
   pjs::Ref<Context> m_context;
+  pjs::Ref<Output> m_output;
 
   void shutdown();
   void reset();

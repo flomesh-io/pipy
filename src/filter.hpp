@@ -76,6 +76,7 @@ protected:
 
   using EventFunction::output;
 
+  auto pipeline() const -> Pipeline* { return m_pipeline; }
   bool output(const pjs::Value &evt);
   bool callback(pjs::Function *func, int argc, pjs::Value argv[], pjs::Value &result);
   bool eval(pjs::Value &param, pjs::Value &result);

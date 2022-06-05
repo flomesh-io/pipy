@@ -50,6 +50,7 @@
 #include "filters/fork.hpp"
 #include "filters/http.hpp"
 #include "filters/link.hpp"
+#include "filters/link-input.hpp"
 #include "filters/link-output.hpp"
 #include "filters/merge.hpp"
 #include "filters/mqtt.hpp"
@@ -164,21 +165,21 @@ void Configuration::pipeline(const std::string &name) {
   m_current_filters = &m_named_pipelines.back().filters;
 }
 
-void Configuration::accept_http_tunnel(pjs::Str *target, pjs::Function *handler) {
+void Configuration::accept_http_tunnel(pjs::Str *layout, pjs::Function *handler) {
   auto *filter = new http::TunnelServer(handler);
-  filter->add_sub_pipeline(target);
+  filter->add_sub_pipeline(layout);
   append_filter(filter);
 }
 
-void Configuration::accept_socks(pjs::Str *target, pjs::Function *on_connect) {
+void Configuration::accept_socks(pjs::Str *layout, pjs::Function *on_connect) {
   auto *filter = new socks::Server(on_connect);
-  filter->add_sub_pipeline(target);
+  filter->add_sub_pipeline(layout);
   append_filter(filter);
 }
 
-void Configuration::accept_tls(pjs::Str *target, pjs::Object *options) {
+void Configuration::accept_tls(pjs::Str *layout, pjs::Object *options) {
   auto *filter = new tls::Server(options);
-  filter->add_sub_pipeline(target);
+  filter->add_sub_pipeline(layout);
   append_filter(filter);
 }
 
@@ -194,21 +195,21 @@ void Configuration::connect(const pjs::Value &target, pjs::Object *options) {
   append_filter(new Connect(target, options));
 }
 
-void Configuration::connect_http_tunnel(pjs::Str *target, const pjs::Value &address) {
+void Configuration::connect_http_tunnel(pjs::Str *layout, const pjs::Value &address) {
   auto *filter = new http::TunnelClient(address);
-  filter->add_sub_pipeline(target);
+  filter->add_sub_pipeline(layout);
   append_filter(filter);
 }
 
-void Configuration::connect_socks(pjs::Str *target, const pjs::Value &address) {
+void Configuration::connect_socks(pjs::Str *layout, const pjs::Value &address) {
   auto *filter = new socks::Client(address);
-  filter->add_sub_pipeline(target);
+  filter->add_sub_pipeline(layout);
   append_filter(filter);
 }
 
-void Configuration::connect_tls(pjs::Str *target, pjs::Object *options) {
+void Configuration::connect_tls(pjs::Str *layout, pjs::Object *options) {
   auto *filter = new tls::Client(options);
-  filter->add_sub_pipeline(target);
+  filter->add_sub_pipeline(layout);
   append_filter(filter);
 }
 
@@ -244,21 +245,21 @@ void Configuration::deframe(pjs::Object *states) {
   append_filter(new Deframe(states));
 }
 
-void Configuration::demux(pjs::Str *target) {
+void Configuration::demux(pjs::Str *layout) {
   auto *filter = new Demux();
-  filter->add_sub_pipeline(target);
+  filter->add_sub_pipeline(layout);
   append_filter(filter);
 }
 
-void Configuration::demux_queue(pjs::Str *target) {
+void Configuration::demux_queue(pjs::Str *layout) {
   auto *filter = new DemuxQueue();
-  filter->add_sub_pipeline(target);
+  filter->add_sub_pipeline(layout);
   append_filter(filter);
 }
 
-void Configuration::demux_http(pjs::Str *target, pjs::Object *options) {
+void Configuration::demux_http(pjs::Str *layout, pjs::Object *options) {
   auto *filter = new http::Demux(options);
-  filter->add_sub_pipeline(target);
+  filter->add_sub_pipeline(layout);
   append_filter(filter);
 }
 
@@ -302,36 +303,42 @@ void Configuration::exec(const pjs::Value &command) {
   append_filter(new Exec(command));
 }
 
-void Configuration::fork(pjs::Str *target, pjs::Object *initializers) {
+void Configuration::fork(pjs::Str *layout, pjs::Object *initializers) {
   auto *filter = new Fork(initializers);
-  filter->add_sub_pipeline(target);
+  filter->add_sub_pipeline(layout);
   append_filter(filter);
 }
 
-void Configuration::link(size_t count, pjs::Str **targets, pjs::Function **conditions) {
+void Configuration::input(pjs::Str *layout, pjs::Function *callback) {
+  auto *filter = new LinkInput(callback);
+  filter->add_sub_pipeline(layout);
+  append_filter(filter);
+}
+
+void Configuration::link(size_t count, pjs::Str **layouts, pjs::Function **conditions) {
   auto *filter = new Link();
   for (size_t i = 0; i < count; i++) {
-    filter->add_sub_pipeline(targets[i]);
+    filter->add_sub_pipeline(layouts[i]);
     filter->add_condition(conditions[i]);
   }
   append_filter(filter);
 }
 
-void Configuration::merge(pjs::Str *target, const pjs::Value &key, pjs::Object *options) {
+void Configuration::merge(pjs::Str *layout, const pjs::Value &key, pjs::Object *options) {
   auto *filter = new Merge(key, options);
-  filter->add_sub_pipeline(target);
+  filter->add_sub_pipeline(layout);
   append_filter(filter);
 }
 
-void Configuration::mux_queue(pjs::Str *target, const pjs::Value &key, pjs::Object *options) {
+void Configuration::mux_queue(pjs::Str *layout, const pjs::Value &key, pjs::Object *options) {
   auto *filter = new Mux(key, options);
-  filter->add_sub_pipeline(target);
+  filter->add_sub_pipeline(layout);
   append_filter(filter);
 }
 
-void Configuration::mux_http(pjs::Str *target, const pjs::Value &key, pjs::Object *options) {
+void Configuration::mux_http(pjs::Str *layout, const pjs::Value &key, pjs::Object *options) {
   auto *filter = new http::Mux(key, options);
-  filter->add_sub_pipeline(target);
+  filter->add_sub_pipeline(layout);
   append_filter(filter);
 }
 
@@ -670,11 +677,11 @@ template<> void ClassDef<Configuration>::init() {
 
   // Configuration.acceptHTTPTunnel
   method("acceptHTTPTunnel", [](Context &ctx, Object *thiz, Value &result) {
-    Str *target;
+    Str *layout;
     Function *handler;
-    if (!ctx.arguments(2, &target, &handler)) return;
+    if (!ctx.arguments(2, &layout, &handler)) return;
     try {
-      thiz->as<Configuration>()->accept_http_tunnel(target, handler);
+      thiz->as<Configuration>()->accept_http_tunnel(layout, handler);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -683,11 +690,11 @@ template<> void ClassDef<Configuration>::init() {
 
   // Configuration.acceptSOCKS
   method("acceptSOCKS", [](Context &ctx, Object *thiz, Value &result) {
-    Str *target;
+    Str *layout;
     Function *on_connect;
-    if (!ctx.arguments(2, &target, &on_connect)) return;
+    if (!ctx.arguments(2, &layout, &on_connect)) return;
     try {
-      thiz->as<Configuration>()->accept_socks(target, on_connect);
+      thiz->as<Configuration>()->accept_socks(layout, on_connect);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -696,15 +703,15 @@ template<> void ClassDef<Configuration>::init() {
 
   // Configuration.acceptTLS
   method("acceptTLS", [](Context &ctx, Object *thiz, Value &result) {
-    Str *target;
+    Str *layout;
     Object *options;
-    if (!ctx.arguments(2, &target, &options)) return;
+    if (!ctx.arguments(2, &layout, &options)) return;
     if (!options) {
       ctx.error_argument_type(1, "a non-null object");
       return;
     }
     try {
-      thiz->as<Configuration>()->accept_tls(target, options);
+      thiz->as<Configuration>()->accept_tls(layout, options);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -750,11 +757,11 @@ template<> void ClassDef<Configuration>::init() {
 
   // Configuration.connectHTTPTunnel
   method("connectHTTPTunnel", [](Context &ctx, Object *thiz, Value &result) {
-    Str *target;
+    Str *layout;
     Value address;
-    if (!ctx.arguments(2, &target, &address)) return;
+    if (!ctx.arguments(2, &layout, &address)) return;
     try {
-      thiz->as<Configuration>()->connect_http_tunnel(target, address);
+      thiz->as<Configuration>()->connect_http_tunnel(layout, address);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -763,11 +770,11 @@ template<> void ClassDef<Configuration>::init() {
 
   // Configuration.connectSOCKS
   method("connectSOCKS", [](Context &ctx, Object *thiz, Value &result) {
-    Str *target;
+    Str *layout;
     Value address;
-    if (!ctx.arguments(2, &target, &address)) return;
+    if (!ctx.arguments(2, &layout, &address)) return;
     try {
-      thiz->as<Configuration>()->connect_socks(target, address);
+      thiz->as<Configuration>()->connect_socks(layout, address);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -776,11 +783,11 @@ template<> void ClassDef<Configuration>::init() {
 
   // Configuration.connectTLS
   method("connectTLS", [](Context &ctx, Object *thiz, Value &result) {
-    Str *target;
+    Str *layout;
     Object *options = nullptr;
-    if (!ctx.arguments(1, &target, &options)) return;
+    if (!ctx.arguments(1, &layout, &options)) return;
     try {
-      thiz->as<Configuration>()->connect_tls(target, options);
+      thiz->as<Configuration>()->connect_tls(layout, options);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -801,10 +808,10 @@ template<> void ClassDef<Configuration>::init() {
 
   // Configuration.demux
   method("demux", [](Context &ctx, Object *thiz, Value &result) {
-    Str *target;
-    if (!ctx.arguments(1, &target)) return;
+    Str *layout;
+    if (!ctx.arguments(1, &layout)) return;
     try {
-      thiz->as<Configuration>()->demux(target);
+      thiz->as<Configuration>()->demux(layout);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -813,10 +820,10 @@ template<> void ClassDef<Configuration>::init() {
 
   // Configuration.demuxQueue
   method("demuxQueue", [](Context &ctx, Object *thiz, Value &result) {
-    Str *target;
-    if (!ctx.arguments(1, &target)) return;
+    Str *layout;
+    if (!ctx.arguments(1, &layout)) return;
     try {
-      thiz->as<Configuration>()->demux_queue(target);
+      thiz->as<Configuration>()->demux_queue(layout);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -825,11 +832,11 @@ template<> void ClassDef<Configuration>::init() {
 
   // Configuration.demuxHTTP
   method("demuxHTTP", [](Context &ctx, Object *thiz, Value &result) {
-    Str *target;
+    Str *layout;
     Object *options = nullptr;
-    if (!ctx.arguments(1, &target, &options)) return;
+    if (!ctx.arguments(1, &layout, &options)) return;
     try {
-      thiz->as<Configuration>()->demux_http(target, options);
+      thiz->as<Configuration>()->demux_http(layout, options);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1031,11 +1038,11 @@ template<> void ClassDef<Configuration>::init() {
 
   // Configuration.fork
   method("fork", [](Context &ctx, Object *thiz, Value &result) {
-    Str *target;
+    Str *layout;
     Object *initializers = nullptr;
-    if (!ctx.arguments(1, &target, &initializers)) return;
+    if (!ctx.arguments(1, &layout, &initializers)) return;
     try {
-      thiz->as<Configuration>()->fork(target, initializers);
+      thiz->as<Configuration>()->fork(layout, initializers);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1152,16 +1159,29 @@ template<> void ClassDef<Configuration>::init() {
     }
   });
 
+  // Configuration.input
+  method("input", [](Context &ctx, Object *thiz, Value &result) {
+    pjs::Str *layout;
+    pjs::Function *callback = nullptr;
+    if (!ctx.arguments(1, &layout, &callback)) return;
+    try {
+      thiz->as<Configuration>()->input(layout, callback);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
   // Configuration.link
   method("link", [](Context &ctx, Object *thiz, Value &result) {
     int n = (ctx.argc() + 1) >> 1;
-    Str *targets[n];
+    Str *layouts[n];
     Function *conditions[n];
     for (int i = 0; i < n; i++) {
       int a = (i << 1);
       int b = (i << 1) + 1;
       if (ctx.arg(a).is_string()) {
-        targets[i] = ctx.arg(a).s();
+        layouts[i] = ctx.arg(a).s();
       } else {
         ctx.error_argument_type(a, "a string");
         return;
@@ -1176,7 +1196,7 @@ template<> void ClassDef<Configuration>::init() {
       }
     }
     try {
-      thiz->as<Configuration>()->link(n, targets, conditions);
+      thiz->as<Configuration>()->link(n, layouts, conditions);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1185,12 +1205,12 @@ template<> void ClassDef<Configuration>::init() {
 
   // Configuration.merge
   method("merge", [](Context &ctx, Object *thiz, Value &result) {
-    Str *target;
+    Str *layout;
     Value key;
     Object *options = nullptr;
-    if (!ctx.arguments(2, &target, &key, &options)) return;
+    if (!ctx.arguments(2, &layout, &key, &options)) return;
     try {
-      thiz->as<Configuration>()->merge(target, key, options);
+      thiz->as<Configuration>()->merge(layout, key, options);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1199,19 +1219,19 @@ template<> void ClassDef<Configuration>::init() {
 
   // Configuration.muxQueue
   method("muxQueue", [](Context &ctx, Object *thiz, Value &result) {
-    Str *target;
+    Str *layout;
     Value key;
     Function *key_f = nullptr;
     Object *options = nullptr;
-    if (ctx.try_arguments(2, &target, &key_f, &options)) {
+    if (ctx.try_arguments(2, &layout, &key_f, &options)) {
       key.set(key_f);
-    } else if (ctx.try_arguments(2, &target, &options)) {
+    } else if (ctx.try_arguments(2, &layout, &options)) {
       key = Value::undefined;
-    } else if (!ctx.arguments(1, &target, &key, &options)) {
+    } else if (!ctx.arguments(1, &layout, &key, &options)) {
       return;
     }
     try {
-      thiz->as<Configuration>()->mux_queue(target, key, options);
+      thiz->as<Configuration>()->mux_queue(layout, key, options);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1220,19 +1240,19 @@ template<> void ClassDef<Configuration>::init() {
 
   // Configuration.muxHTTP
   method("muxHTTP", [](Context &ctx, Object *thiz, Value &result) {
-    Str *target;
+    Str *layout;
     Value key;
     Function *key_f = nullptr;
     Object *options = nullptr;
-    if (ctx.try_arguments(2, &target, &key_f, &options)) {
+    if (ctx.try_arguments(2, &layout, &key_f, &options)) {
       key.set(key_f);
-    } else if (ctx.try_arguments(2, &target, &options)) {
+    } else if (ctx.try_arguments(2, &layout, &options)) {
       key = Value::undefined;
-    } else if (!ctx.arguments(1, &target, &key, &options)) {
+    } else if (!ctx.arguments(1, &layout, &key, &options)) {
       return;
     }
     try {
-      thiz->as<Configuration>()->mux_http(target, key, options);
+      thiz->as<Configuration>()->mux_http(layout, key, options);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

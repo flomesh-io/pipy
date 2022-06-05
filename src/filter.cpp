@@ -101,7 +101,7 @@ void Filter::chain() {
   if (auto f = next()) {
     EventFunction::chain(f->EventFunction::input());
   } else if (auto p = m_pipeline) {
-    EventFunction::chain(p->output());
+    EventFunction::chain(p->EventFunction::output());
   }
 }
 

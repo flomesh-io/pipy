@@ -23,7 +23,7 @@
  *  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include "link-output.hpp"
+#include "link-input.hpp"
 #include "pipeline.hpp"
 #include "context.hpp"
 #include "logging.hpp"
@@ -31,71 +31,51 @@
 namespace pipy {
 
 //
-// LinkOutput
+// LinkInput
 //
 
-LinkOutput::LinkOutput(pjs::Function *output_f)
-  : m_output_f(output_f)
+LinkInput::LinkInput(pjs::Function *callback)
+  : m_callback(callback)
 {
 }
 
-LinkOutput::LinkOutput(const LinkOutput &r)
+LinkInput::LinkInput(const LinkInput &r)
   : Filter(r)
-  , m_output_f(r.m_output_f)
+  , m_callback(r.m_callback)
 {
 }
 
-LinkOutput::~LinkOutput()
+LinkInput::~LinkInput()
 {
 }
 
-void LinkOutput::dump(std::ostream &out) {
-  out << "output";
+void LinkInput::dump(std::ostream &out) {
+  out << "input";
 }
 
-auto LinkOutput::clone() -> Filter* {
-  return new LinkOutput(*this);
+auto LinkInput::clone() -> Filter* {
+  return new LinkInput(*this);
 }
 
-void LinkOutput::reset() {
+void LinkInput::reset() {
   Filter::reset();
-  m_buffer.clear();
   m_output = nullptr;
+  m_pipeline = nullptr;
 }
 
-void LinkOutput::process(Event *evt) {
+void LinkInput::process(Event *evt) {
   if (!m_output) {
-    pjs::Value ret(m_output_f);
-    if (m_output_f) {
-      if (!eval(m_output_f, ret)) return;
-    }
-    if (!ret.is_undefined()) {
-      if (ret.is_null()) {
-        if (auto out = pipeline()->output()) {
-          m_output = out;
-        } else if (auto inb = context()->inbound()) {
-          m_output = inb->output();
-        }
-      } else if (ret.is<Output>()) {
-        m_output = ret.as<Output>();
-      } else {
-        Log::error("[output] callback did not return an Output object");
-        return;
-      }
-    }
-    if (m_output) {
-      m_buffer.flush(
-        [this](Event *evt) {
-          m_output->input()->input(evt);
-        }
-      );
+    m_output = Output::make(output());
+    m_pipeline = sub_pipeline(0, false);
+    if (m_pipeline) m_pipeline->output(m_output);
+    if (m_callback) {
+      pjs::Value arg(m_output), ret;
+      callback(m_callback, 1, &arg, ret);
     }
   }
 
-  if (m_output) {
-    m_output->input()->input(evt);
-  } else {
-    m_buffer.push(evt);
+  if (m_pipeline) {
+    m_pipeline->input()->input(evt);
   }
 }
 

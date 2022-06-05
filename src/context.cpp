@@ -74,7 +74,7 @@ using namespace pipy;
 
 template<> void ClassDef<ContextDataBase>::init() {
   accessor("__filename", [](Object *obj, Value &ret) { ret.set(obj->as<ContextDataBase>()->filename()); });
-  accessor("__inbound", [](Object *obj, Value &ret) { ret.set(obj->as<ContextDataBase>()->inbound()); });
+  accessor("__inbound" , [](Object *obj, Value &ret) { ret.set(obj->as<ContextDataBase>()->inbound()); });
 }
 
 } // namespace pjs
