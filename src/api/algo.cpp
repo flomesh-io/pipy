@@ -370,6 +370,7 @@ auto LoadBalancer::next(pjs::Object *session_key, const pjs::Value &target_key) 
 
 void LoadBalancer::close_session(Session *session) {
   if (auto *res = session->resource()) {
+    deselect(res->id());
     auto &target = m_targets[res->id()];
     if (!target) target = new Target;
     target->resources.push(res);
