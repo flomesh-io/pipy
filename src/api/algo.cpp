@@ -24,6 +24,7 @@
  */
 
 #include "algo.hpp"
+#include "context.hpp"
 #include "utils.hpp"
 #include "logging.hpp"
 
@@ -316,6 +317,83 @@ void URLRouter::dump(Node *node, int level) {
 }
 
 //
+// LoadBalancer
+//
+
+LoadBalancer::~LoadBalancer() {
+  for (const auto &i : m_sessions) {
+    close_session(i.second);
+  }
+  for (const auto &i : m_targets) {
+    auto &resources = i.second->resources;
+    while (auto r = resources.head()) {
+      resources.remove(r);
+      r->release();
+    }
+  }
+}
+
+auto LoadBalancer::next(pjs::Object *session_key, const pjs::Value &target_key) -> Resource* {
+  if (!session_key) {
+    auto id = select(target_key);
+    if (!id) return nullptr;
+    return Resource::make(id);
+  }
+
+  auto &session = m_sessions[session_key];
+  if (session) {
+    return session->resource();
+  } else {
+    session = new Session(this, session_key);
+  }
+
+  auto id = select(target_key);
+  if (!id) return nullptr;
+
+  auto &target = m_targets[id];
+  if (!target) {
+    target = new Target;
+  }
+
+  auto &resources = target->resources;
+  auto res = resources.tail();
+  if (!res) {
+    res = Resource::make(id);
+    res->retain();
+  } else {
+    resources.remove(res);
+  }
+
+  session->resource(res);
+  return res;
+}
+
+void LoadBalancer::close_session(Session *session) {
+  if (auto *res = session->resource()) {
+    auto &target = m_targets[res->id()];
+    if (!target) target = new Target;
+    target->resources.push(res);
+  }
+  m_sessions.erase(session->key());
+  delete session;
+}
+
+//
+// LoadBalancer::Session
+//
+
+LoadBalancer::Session::Session(LoadBalancer *lb, pjs::Object *key)
+  : m_lb(lb)
+  , m_key(key)
+{
+  watch(key->weak_ptr());
+}
+
+void LoadBalancer::Session::on_weak_ptr_gone() {
+  m_lb->close_session(this);
+}
+
+//
 // HashingLoadBalancer
 //
 
@@ -419,7 +497,7 @@ void RoundRobinLoadBalancer::set(pjs::Str *target, int weight) {
   }
 }
 
-auto RoundRobinLoadBalancer::select() -> pjs::Str* {
+auto RoundRobinLoadBalancer::select(const pjs::Value &key) -> pjs::Str* {
   double min = 0;
   std::map<pjs::Ref<pjs::Str>, Target>::value_type *p = nullptr;
   int total_weight = 0;
@@ -505,7 +583,7 @@ void LeastWorkLoadBalancer::set(pjs::Str *target, double weight) {
   }
 }
 
-auto LeastWorkLoadBalancer::select() -> pjs::Str* {
+auto LeastWorkLoadBalancer::select(const pjs::Value &key) -> pjs::Str* {
   double min = 0;
   std::map<pjs::Ref<pjs::Str>, Target>::value_type *p = nullptr;
   for (auto &i : m_targets) {
@@ -789,10 +867,48 @@ template<> void ClassDef<Constructor<URLRouter>>::init() {
 }
 
 //
+// LoadBalancer
+//
+
+template<> void ClassDef<LoadBalancer>::init() {
+  method("next", [](Context &ctx, Object *obj, Value &ret) {
+    pjs::Object *session_key = nullptr;
+    pjs::Value target_key;
+    if (!ctx.arguments(0, &session_key, &target_key)) return;
+    if (!session_key) session_key = static_cast<pipy::Context*>(ctx.root())->inbound();
+    ret.set(obj->as<LoadBalancer>()->next(session_key, target_key));
+  });
+
+  method("select", [](Context &ctx, Object *obj, Value &ret) {
+    pjs::Value key;
+    if (!ctx.arguments(0, &key)) return;
+    if (auto target = obj->as<LoadBalancer>()->select(key)) {
+      ret.set(target);
+    }
+  });
+
+  method("deselect", [](Context &ctx, Object *obj, Value &ret) {
+    Str *target = nullptr;
+    if (!ctx.arguments(0, &target)) return;
+    obj->as<LoadBalancer>()->deselect(target);
+  });
+}
+
+//
+// LoadBalancer::Resource
+//
+
+template<> void ClassDef<LoadBalancer::Resource>::init() {
+  accessor("id", [](Object *obj, Value &val) { val.set(obj->as<LoadBalancer::Resource>()->id()); });
+}
+
+//
 // HashingLoadBalancer
 //
 
 template<> void ClassDef<HashingLoadBalancer>::init() {
+  super<LoadBalancer>();
+
   ctor([](Context &ctx) -> Object* {
     Array *targets = nullptr;
     Cache *unhealthy = nullptr;
@@ -804,20 +920,6 @@ template<> void ClassDef<HashingLoadBalancer>::init() {
     Str *target;
     if (!ctx.arguments(1, &target)) return;
     obj->as<HashingLoadBalancer>()->add(target);
-  });
-
-  method("select", [](Context &ctx, Object *obj, Value &ret) {
-    Value tag;
-    if (!ctx.arguments(1, &tag)) return;
-    if (auto target = obj->as<HashingLoadBalancer>()->select(tag)) {
-      ret.set(target);
-    }
-  });
-
-  method("deselect", [](Context &ctx, Object *obj, Value &ret) {
-    Str *target = nullptr;
-    if (!ctx.arguments(0, &target)) return;
-    obj->as<HashingLoadBalancer>()->deselect(target);
   });
 }
 
@@ -831,6 +933,8 @@ template<> void ClassDef<Constructor<HashingLoadBalancer>>::init() {
 //
 
 template<> void ClassDef<RoundRobinLoadBalancer>::init() {
+  super<LoadBalancer>();
+
   ctor([](Context &ctx) -> Object* {
     Object *targets = nullptr;
     Cache *unhealthy = nullptr;
@@ -844,18 +948,6 @@ template<> void ClassDef<RoundRobinLoadBalancer>::init() {
     if (!ctx.arguments(2, &target, &weight)) return;
     obj->as<RoundRobinLoadBalancer>()->set(target, weight);
   });
-
-  method("select", [](Context &ctx, Object *obj, Value &ret) {
-    if (auto target = obj->as<RoundRobinLoadBalancer>()->select()) {
-      ret.set(target);
-    }
-  });
-
-  method("deselect", [](Context &ctx, Object *obj, Value &ret) {
-    Str *target = nullptr;
-    if (!ctx.arguments(0, &target)) return;
-    obj->as<RoundRobinLoadBalancer>()->deselect(target);
-  });
 }
 
 template<> void ClassDef<Constructor<RoundRobinLoadBalancer>>::init() {
@@ -868,6 +960,8 @@ template<> void ClassDef<Constructor<RoundRobinLoadBalancer>>::init() {
 //
 
 template<> void ClassDef<LeastWorkLoadBalancer>::init() {
+  super<LoadBalancer>();
+
   ctor([](Context &ctx) -> Object* {
     Object *targets = nullptr;
     Cache *unhealthy = nullptr;
@@ -880,18 +974,6 @@ template<> void ClassDef<LeastWorkLoadBalancer>::init() {
     int weight;
     if (!ctx.arguments(2, &target, &weight)) return;
     obj->as<LeastWorkLoadBalancer>()->set(target, weight);
-  });
-
-  method("select", [](Context &ctx, Object *obj, Value &ret) {
-    if (auto target = obj->as<LeastWorkLoadBalancer>()->select()) {
-      ret.set(target);
-    }
-  });
-
-  method("deselect", [](Context &ctx, Object *obj, Value &ret) {
-    Str *target = nullptr;
-    if (!ctx.arguments(0, &target)) return;
-    obj->as<LeastWorkLoadBalancer>()->deselect(target);
   });
 }
 

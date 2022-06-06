@@ -27,6 +27,7 @@
 #define ALGO_HPP
 
 #include "pjs/pjs.hpp"
+#include "list.hpp"
 #include "options.hpp"
 
 #include <map>
@@ -74,6 +75,36 @@ private:
 };
 
 //
+// ResourcePool
+//
+
+class ResourcePool : public pjs::ObjectTemplate<ResourcePool> {
+public:
+  void allocate(pjs::Context &ctx, const pjs::Value &pool, const pjs::Value &tenant, pjs::Value &resource);
+  void free(const pjs::Value &resource);
+  void free_tenant(const pjs::Value &tenant);
+
+private:
+  ResourcePool(pjs::Function *allocator)
+    : m_allocator(allocator) {}
+
+  typedef std::list<pjs::Value> Pool;
+  typedef std::map<pjs::Value, pjs::Value> Tenant;
+
+  struct Allocated {
+    pjs::Value pool;
+    pjs::Value tenant;
+  };
+
+  pjs::Ref<pjs::Function> m_allocator;
+  std::map<pjs::Value, Pool> m_pools;
+  std::map<pjs::Value, Allocated> m_allocated;
+  std::map<pjs::Value, Tenant> m_tenants;
+
+  friend class pjs::ObjectTemplate<ResourcePool>;
+};
+
+//
 // URLRouter
 //
 
@@ -117,14 +148,90 @@ private:
 };
 
 //
+// LoadBalancer
+//
+
+class LoadBalancer : public pjs::ObjectTemplate<LoadBalancer> {
+public:
+
+  //
+  // LoadBalancer::Resource
+  //
+
+  class Resource :
+    public pjs::ObjectTemplate<Resource>,
+    public List<Resource>::Item
+  {
+  public:
+    auto id() -> pjs::Str* { return m_id; }
+
+  private:
+    Resource(pjs::Str *id) : m_id(id) {}
+
+    pjs::Ref<pjs::Str> m_id;
+
+    friend class pjs::ObjectTemplate<Resource>;
+  };
+
+  auto next(pjs::Object *session_key, const pjs::Value &target_key = pjs::Value::undefined) -> Resource*;
+
+  virtual auto select(const pjs::Value &key) -> pjs::Str* = 0;
+  virtual void deselect(pjs::Str *id) = 0;
+
+protected:
+  ~LoadBalancer();
+
+private:
+
+  //
+  // LoadBalancer::Session
+  //
+
+  class Session :
+    public pjs::Pooled<Session>,
+    public pjs::Object::WeakPtr::Watcher
+  {
+  public:
+    Session(LoadBalancer *lb, pjs::Object *key);
+
+    auto key() const -> const pjs::WeakRef<pjs::Object>& { return m_key; }
+    auto resource() const -> Resource* { return m_resource; }
+    void resource(Resource *res) { m_resource = res; }
+
+  private:
+    virtual void on_weak_ptr_gone() override;
+
+    LoadBalancer* m_lb;
+    pjs::WeakRef<pjs::Object> m_key;
+    pjs::Ref<Resource> m_resource;
+  };
+
+  //
+  // LoadBalancer::Target
+  //
+
+  struct Target : public pjs::Pooled<Target> {
+    List<Resource> resources;
+  };
+
+  std::map<pjs::WeakRef<pjs::Object>, Session*> m_sessions;
+  std::map<pjs::Ref<pjs::Str>, Target*> m_targets;
+
+  void close_session(Session *session);
+
+  friend class pjs::ObjectTemplate<LoadBalancer>;
+};
+
+//
 // HashingLoadBalancer
 //
 
-class HashingLoadBalancer : public pjs::ObjectTemplate<HashingLoadBalancer> {
+class HashingLoadBalancer : public pjs::ObjectTemplate<HashingLoadBalancer, LoadBalancer> {
 public:
   void add(pjs::Str *target);
-  auto select(const pjs::Value &key) -> pjs::Str*;
-  void deselect(pjs::Str *target) {}
+
+  virtual auto select(const pjs::Value &key) -> pjs::Str* override;
+  virtual void deselect(pjs::Str *target) override {}
 
 private:
   HashingLoadBalancer(pjs::Array *targets, Cache *unhealthy = nullptr);
@@ -133,18 +240,19 @@ private:
   std::vector<pjs::Ref<pjs::Str>> m_targets;
   pjs::Ref<Cache> m_unhealthy;
 
-  friend class pjs::ObjectTemplate<HashingLoadBalancer>;
+  friend class pjs::ObjectTemplate<HashingLoadBalancer, LoadBalancer>;
 };
 
 //
 // RoundRobinLoadBalancer
 //
 
-class RoundRobinLoadBalancer : public pjs::ObjectTemplate<RoundRobinLoadBalancer> {
+class RoundRobinLoadBalancer : public pjs::ObjectTemplate<RoundRobinLoadBalancer, LoadBalancer> {
 public:
   void set(pjs::Str *target, int weight);
-  auto select() -> pjs::Str*;
-  void deselect(pjs::Str *target) {}
+
+  virtual auto select(const pjs::Value &key) -> pjs::Str* override;
+  virtual void deselect(pjs::Str *target) override {}
 
 private:
   RoundRobinLoadBalancer(pjs::Object *targets, Cache *unhealthy = nullptr);
@@ -161,18 +269,19 @@ private:
   int m_total_weight = 0;
   int m_total_hits = 0;
 
-  friend class pjs::ObjectTemplate<RoundRobinLoadBalancer>;
+  friend class pjs::ObjectTemplate<RoundRobinLoadBalancer, LoadBalancer>;
 };
 
 //
 // LeastWorkLoadBalancer
 //
 
-class LeastWorkLoadBalancer : public pjs::ObjectTemplate<LeastWorkLoadBalancer> {
+class LeastWorkLoadBalancer : public pjs::ObjectTemplate<LeastWorkLoadBalancer, LoadBalancer> {
 public:
   void set(pjs::Str *target, double weight);
-  auto select() -> pjs::Str*;
-  void deselect(pjs::Str *target);
+
+  virtual auto select(const pjs::Value &key) -> pjs::Str* override;
+  virtual void deselect(pjs::Str *target) override;
 
 private:
   LeastWorkLoadBalancer(pjs::Object *targets, Cache *unhealthy = nullptr);
@@ -187,37 +296,7 @@ private:
   std::map<pjs::Ref<pjs::Str>, Target> m_targets;
   pjs::Ref<Cache> m_unhealthy;
 
-  friend class pjs::ObjectTemplate<LeastWorkLoadBalancer>;
-};
-
-//
-// ResourcePool
-//
-
-class ResourcePool : public pjs::ObjectTemplate<ResourcePool> {
-public:
-  void allocate(pjs::Context &ctx, const pjs::Value &pool, const pjs::Value &tenant, pjs::Value &resource);
-  void free(const pjs::Value &resource);
-  void free_tenant(const pjs::Value &tenant);
-
-private:
-  ResourcePool(pjs::Function *allocator)
-    : m_allocator(allocator) {}
-
-  typedef std::list<pjs::Value> Pool;
-  typedef std::map<pjs::Value, pjs::Value> Tenant;
-
-  struct Allocated {
-    pjs::Value pool;
-    pjs::Value tenant;
-  };
-
-  pjs::Ref<pjs::Function> m_allocator;
-  std::map<pjs::Value, Pool> m_pools;
-  std::map<pjs::Value, Allocated> m_allocated;
-  std::map<pjs::Value, Tenant> m_tenants;
-
-  friend class pjs::ObjectTemplate<ResourcePool>;
+  friend class pjs::ObjectTemplate<LeastWorkLoadBalancer, LoadBalancer>;
 };
 
 //
