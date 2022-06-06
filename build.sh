@@ -114,28 +114,37 @@ shift $((OPTIND-1))
 [ $# -ne 0 ] && usage
 
 # define release
-if [ -z "$RELEASE_VERSION" ]
+if git rev-parse --is-inside-work-tree > /dev/null 2>&1
 then
-    RELEASE_VERSION=`git name-rev --tags --name-only $(git rev-parse HEAD)`
-    if [ $RELEASE_VERSION = 'undefined' ]
+    if [ -z "$RELEASE_VERSION" ]
     then
-        RELEASE_VERSION=nightly-$(date +%Y%m%d%H%M)
+        RELEASE_VERSION=`git name-rev --tags --name-only $(git rev-parse HEAD)`
+        if [ $RELEASE_VERSION = 'undefined' ]
+        then
+            RELEASE_VERSION=nightly-$(date +%Y%m%d%H%M)
+        fi
+    elif [ $RELEASE_VERSION == "latest" ]; then
+      git checkout main
+      git pull origin main
+    elif [[ $RELEASE_VERSION != "nightly"* ]]; then
+      git checkout $RELEASE_VERSION
+      if [ $? -ne 0 ]; then
+        echo "Cannot find tag $RELEASE_VERSION"
+        exit -1
+      fi
     fi
-elif [ $RELEASE_VERSION == "latest" ]; then
-  git checkout main
-  git pull origin main
-elif [[ $RELEASE_VERSION != "nightly"* ]]; then
-  git checkout $RELEASE_VERSION
-  if [ $? -ne 0 ]; then
-    echo "Cannot find tag $RELEASE_VERSION"
-    exit -1
-  fi
-fi
 
-export COMMIT_ID=$(git log -1 --format=%H)
-export COMMIT_DATE=$(git log -1 --format=%cD)
-export VERSION=$(echo $RELEASE_VERSION | cut -d\- -f 1)
-export REVISION=$(echo $RELEASE_VERSION | cut -d\- -f 2)
+    export COMMIT_ID=$(git log -1 --format=%H)
+    export COMMIT_DATE=$(git log -1 --format=%cD)
+    export VERSION=$(echo $RELEASE_VERSION | cut -d\- -f 1)
+    export REVISION=$(echo $RELEASE_VERSION | cut -d\- -f 2)
+else
+    export RELEASE_VERSION=$(basename ${PIPY_DIR})
+    export COMMIT_ID="N/A"
+    export COMMIT_DATE="N/A"
+    export VERSION=$(basename ${PIPY_DIR})
+    export REVISION=
+fi
 
 export CI_COMMIT_TAG=$RELEASE_VERSION
 export CI_COMMIT_SHA=$COMMIT_ID
