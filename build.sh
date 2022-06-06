@@ -28,6 +28,7 @@ __NPROC=${NPROC:-$(getconf _NPROCESSORS_ONLN)}
 BUILD_CONTAINER=false
 BUILD_RPM=false
 BUILD_BINARY=true
+BUILD_TYPE=Release
 PACKAGE_OUTPUTS=false
 
 DOCKERFILE=${DOCKERFILE:-Dockerfile}
@@ -41,7 +42,7 @@ PIPY_GUI=${PIPY_GUI:-OFF}
 OS_ARCH=$(uname -m)
 ##### End Default environment variables #########
 
-SHORT_OPTS="crsgt:nhp"
+SHORT_OPTS="crsgt:nhpd"
 
 function usage() {
     echo "Usage: $0 [-h|-c|-r|-s|-g|-n|-t <version-revision>]" 1>&2
@@ -53,6 +54,7 @@ function usage() {
     echo "       -g                     Build pipy with GUI, default with no GUI"
     echo "       -n                     Build pipy binary, default yes"
     echo "       -p                     Package build outputs"
+    echo "       -d                     Build with debug options"
     echo ""
     exit 1
 }
@@ -89,6 +91,10 @@ while true ; do
       ;;
     -p)
       PACKAGE_OUTPUTS=true
+      shift
+      ;;
+    -d)
+      BUILD_TYPE="Debug"
       shift
       ;;
     -h)
@@ -174,7 +180,7 @@ function build() {
   mkdir ${PIPY_DIR}/build 2>&1 > /dev/null || true
   rm -fr ${PIPY_DIR}/build/*
   cd ${PIPY_DIR}/build
-  $CMAKE -DPIPY_GUI=${PIPY_GUI} -DPIPY_TUTORIAL=${PIPY_GUI} -DPIPY_STATIC=${PIPY_STATIC} -DCMAKE_BUILD_TYPE=Release $PIPY_DIR
+  $CMAKE -DPIPY_GUI=${PIPY_GUI} -DPIPY_TUTORIAL=${PIPY_GUI} -DPIPY_STATIC=${PIPY_STATIC} -DCMAKE_BUILD_TYPE=${BUILD_TYPE} $PIPY_DIR
   make -j${__NPROC}
   if [ $? -eq 0 ];then 
     echo "pipy now is in ${PIPY_DIR}/bin"
@@ -220,6 +226,7 @@ if $BUILD_RPM; then
     --build-arg COMMIT_DATE="$COMMIT_DATE" \
     --build-arg PIPY_GUI="$PIPY_GUI" \
     --build-arg PIPY_STATIC="$PIPY_STATIC" \
+    --build-arg BUILD_TYPE="$BUILD_TYPE" \
     -f $DOCKERFILE .
 
   sudo docker run --rm -v $PIPY_DIR/rpm:/data pipy-rpmbuild:$RELEASE_VERSION bash -c "cp /rpm/*.rpm /data"
@@ -245,6 +252,7 @@ if $BUILD_CONTAINER; then
     --build-arg COMMIT_DATE="$COMMIT_DATE" \
     --build-arg PIPY_GUI="$PIPY_GUI" \
     --build-arg PIPY_STATIC="$PIPY_STATIC" \
+    --build-arg BUILD_TYPE="$BUILD_TYPE" \
     -f $DOCKERFILE .
 
   if $PACKAGE_OUTPUTS; then

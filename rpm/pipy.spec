@@ -29,7 +29,7 @@ if [ $PIPY_GUI == "ON" ] ; then
   npm run build
 fi
 cd build
-CXX=clang++ CC=clang cmake3 -DPIPY_GUI=${PIPY_GUI} -DPIPY_STATIC=${PIPY_STATIC} -DPIPY_TUTORIAL=${PIPY_GUI} -DCMAKE_BUILD_TYPE=Release ..
+CXX=clang++ CC=clang cmake3 -DPIPY_GUI=${PIPY_GUI} -DPIPY_STATIC=${PIPY_STATIC} -DPIPY_TUTORIAL=${PIPY_GUI} -DCMAKE_BUILD_TYPE=${BUILD_TYPE} ..
 make -j$(getconf _NPROCESSORS_ONLN)
 
 %preun

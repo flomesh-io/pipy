@@ -20,6 +20,9 @@ ENV PIPY_GUI=${PIPY_GUI:-OFF}
 ARG PIPY_STATIC
 ENV PIPY_STATIC=${PIPY_STATIC:-OFF}
 
+ARG BUILD_TYPE
+ENV BUILD_TYPE=${BUILD_TYPE:-Release}
+
 ENV pkg_prefix     /usr/local
 ENV pkg_confdir	   /etc/pipy
 
@@ -28,25 +31,26 @@ COPY pipy.tar.gz /pipy.tar.gz
 COPY pipy.spec /pipy.spec
 
 RUN yum install -y -q gcc make unzip rpm-build rpmdevtools chrpath expat-devel zlib-devel \
-        && rpmdev-setuptree \
-        && mv /rpmmacros ~/.rpmmacros \
-        && curl -sL https://rpm.nodesource.com/setup_14.x | bash - \
-	&& yum install -y -q nodejs \
-        && yum install -y centos-release-scl epel-release \
-        && yum install -y llvm-toolset-7 cmake3
+    && rpmdev-setuptree \
+    && mv /rpmmacros ~/.rpmmacros \
+    && curl -sL https://rpm.nodesource.com/setup_14.x | bash - \
+    && yum install -y -q nodejs \
+    && yum install -y centos-release-scl epel-release \
+    && yum install -y llvm-toolset-7 cmake3
 
 RUN mv /pipy.tar.gz ~/rpmbuild/SOURCES \
-	&& mv /pipy.spec ~/rpmbuild/SPECS \
-	&& export CI_COMMIT_SHA \
-	&& export CI_COMMIT_TAG=${VERSION}-${REVISION} \
-        && export CI_COMMIT_DATE \
-        && export PIPY_GUI \
-        && export PIPY_STATIC \
-	&& spectool -g -R ~/rpmbuild/SPECS/pipy.spec \
-	&& PATH="/opt/rh/llvm-toolset-7/root/usr/bin:/opt/rh/llvm-toolset-7/root/usr/sbin${PATH:+:${PATH}}" \
-	&& rpmbuild -ba ~/rpmbuild/SPECS/pipy.spec \
-        && mkdir /rpm \
-	&& find ~/rpmbuild/RPMS -name pipy*.rpm -exec mv {} /rpm/ \;
+    && mv /pipy.spec ~/rpmbuild/SPECS \
+    && export CI_COMMIT_SHA \
+    && export CI_COMMIT_TAG=${VERSION}-${REVISION} \
+    && export CI_COMMIT_DATE \
+    && export PIPY_GUI \
+    && export PIPY_STATIC \
+    && export BUILD_TYPE \
+    && spectool -g -R ~/rpmbuild/SPECS/pipy.spec \
+    && PATH="/opt/rh/llvm-toolset-7/root/usr/bin:/opt/rh/llvm-toolset-7/root/usr/sbin${PATH:+:${PATH}}" \
+    && rpmbuild -ba ~/rpmbuild/SPECS/pipy.spec \
+    && mkdir /rpm \
+    && find ~/rpmbuild/RPMS -name pipy*.rpm -exec mv {} /rpm/ \;
 
 COPY docker-entrypoint.sh /docker-entrypoint.sh
 
