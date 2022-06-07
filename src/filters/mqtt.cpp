@@ -1095,6 +1095,10 @@ void Encoder::process(Event *evt) {
   } else if (evt->is<MessageEnd>() || evt->is<StreamEnd>()) {
     if (m_start) {
       auto head = m_start->head();
+      if (!head) {
+        Log::error("[encodeMQTT] trying to encode a packet without a head");
+        return;
+      }
       pjs::Str *type_str;
       if (!m_prop_type.get(head, type_str)) {
         m_start = nullptr;
