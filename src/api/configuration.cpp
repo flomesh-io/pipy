@@ -1207,8 +1207,15 @@ template<> void ClassDef<Configuration>::init() {
   method("merge", [](Context &ctx, Object *thiz, Value &result) {
     Str *layout;
     Value key;
+    Function *key_f = nullptr;
     Object *options = nullptr;
-    if (!ctx.arguments(2, &layout, &key, &options)) return;
+    if (ctx.try_arguments(2, &layout, &key_f, &options)) {
+      key.set(key_f);
+    } else if (ctx.try_arguments(2, &layout, &options)) {
+      key = Value::undefined;
+    } else if (!ctx.arguments(1, &layout, &key, &options)) {
+      return;
+    }
     try {
       thiz->as<Configuration>()->merge(layout, key, options);
       result.set(thiz);
