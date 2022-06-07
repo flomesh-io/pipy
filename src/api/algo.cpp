@@ -628,67 +628,26 @@ void LeastWorkLoadBalancer::deselect(pjs::Str *target) {
 // ResourcePool
 //
 
-void ResourcePool::allocate(pjs::Context &ctx, const pjs::Value &pool, const pjs::Value &tenant, pjs::Value &resource) {
-  auto &p = m_pools[pool];
-
-  auto alloc = [&]() -> bool {
-    if (p.empty()) {
-      pjs::Value argv[2];
-      argv[0] = pool;
-      argv[1] = tenant;
-      (*m_allocator)(ctx, 2, argv, resource);
-      if (!ctx.ok()) return false;
-    } else {
-      resource = p.front();
-      p.pop_front();
-    }
-    return true;
-  };
-
-  if (tenant.is_undefined()) {
-    if (!alloc()) return;
-    auto &a = m_allocated[resource];
-    a.pool = pool;
-    a.tenant = pjs::Value::undefined;
-
+void ResourcePool::allocate(pjs::Context &ctx, const pjs::Value &tag, pjs::Value &resource) {
+  auto &p = m_pools[tag];
+  if (p.empty()) {
+    pjs::Value arg(tag);
+    (*m_allocator)(ctx, 1, &arg, resource);
+    if (!ctx.ok()) return;
   } else {
-    auto &t = m_tenants[tenant];
-    resource = t[pool];
-    if (!resource.is_undefined()) return;
-    if (!alloc()) return;
-    t[pool] = resource;
+    resource = p.front();
+    p.pop_front();
   }
 
-  auto &a = m_allocated[resource];
-  a.pool = pool;
-  a.tenant = tenant;
+  m_allocated[resource].tag = tag;
 }
 
 void ResourcePool::free(const pjs::Value &resource) {
   auto i = m_allocated.find(resource);
   if (i == m_allocated.end()) return;
   auto &a = i->second;
-  auto &pool = m_pools[a.pool];
-  if (!a.tenant.is_undefined()) {
-    auto i = m_tenants.find(a.tenant);
-    if (i != m_tenants.end()) {
-      i->second.erase(a.pool);
-      if (i->second.empty()) m_tenants.erase(i);
-    }
-  }
-  pool.push_back(resource);
+  m_pools[a.tag].push_back(resource);
   m_allocated.erase(i);
-}
-
-void ResourcePool::free_tenant(const pjs::Value &tenant) {
-  auto i = m_tenants.find(tenant);
-  if (i == m_tenants.end()) return;
-  for (auto &t : i->second) {
-    auto &p = m_pools[t.first];
-    p.push_back(t.second);
-    m_allocated.erase(t.second);
-  }
-  m_tenants.erase(i);
 }
 
 //
@@ -995,21 +954,15 @@ template<> void ClassDef<ResourcePool>::init() {
   });
 
   method("allocate", [](Context &ctx, Object *obj, Value &ret) {
-    Value pool, tenant;
-    if (!ctx.arguments(0, &pool, &tenant)) return;
-    obj->as<ResourcePool>()->allocate(ctx, pool, tenant, ret);
+    Value tag;
+    if (!ctx.arguments(0, &tag)) return;
+    obj->as<ResourcePool>()->allocate(ctx, tag, ret);
   });
 
   method("free", [](Context &ctx, Object *obj, Value &ret) {
     Value resource;
     if (!ctx.arguments(1, &resource)) return;
     obj->as<ResourcePool>()->free(resource);
-  });
-
-  method("freeTenant", [](Context &ctx, Object *obj, Value &ret) {
-    Value tenant;
-    if (!ctx.arguments(1, &tenant)) return;
-    obj->as<ResourcePool>()->free_tenant(tenant);
   });
 }
 

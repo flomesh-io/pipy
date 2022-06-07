@@ -80,26 +80,22 @@ private:
 
 class ResourcePool : public pjs::ObjectTemplate<ResourcePool> {
 public:
-  void allocate(pjs::Context &ctx, const pjs::Value &pool, const pjs::Value &tenant, pjs::Value &resource);
+  void allocate(pjs::Context &ctx, const pjs::Value &tag, pjs::Value &resource);
   void free(const pjs::Value &resource);
-  void free_tenant(const pjs::Value &tenant);
 
 private:
   ResourcePool(pjs::Function *allocator)
     : m_allocator(allocator) {}
 
   typedef std::list<pjs::Value> Pool;
-  typedef std::map<pjs::Value, pjs::Value> Tenant;
 
   struct Allocated {
-    pjs::Value pool;
-    pjs::Value tenant;
+    pjs::Value tag;
   };
 
   pjs::Ref<pjs::Function> m_allocator;
   std::map<pjs::Value, Pool> m_pools;
   std::map<pjs::Value, Allocated> m_allocated;
-  std::map<pjs::Value, Tenant> m_tenants;
 
   friend class pjs::ObjectTemplate<ResourcePool>;
 };

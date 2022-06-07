@@ -171,20 +171,20 @@ class LeastWorkLoadBalancer {
 class ResourcePool {
 
   /**
-   * @param {(key) => value} allocator
+   * @param {(tag) => value} allocator
    */
   constructor(allocator) {}
 
   /**
-   * @param {*} [key]
+   * @param {*} [tag]
    * @returns {*}
    */
-  allocate(key) {}
+  allocate(tag) {}
 
   /**
-   * @param {*} value
+   * @param {*} resource
    */
-  free(value) {}
+  free(resource) {}
 }
 
 /**
