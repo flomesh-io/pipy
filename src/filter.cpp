@@ -124,7 +124,9 @@ auto Filter::sub_pipeline(int i, bool clone_context) -> Pipeline* {
     }
   }
 
-  return Pipeline::make(layout, ctx);
+  auto *p = Pipeline::make(layout, ctx);
+  p->output(pipeline()->output());
+  return p;
 }
 
 void Filter::on_event(Event *evt) {
