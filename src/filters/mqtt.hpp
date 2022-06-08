@@ -41,7 +41,7 @@ namespace mqtt {
 class Decoder : public Filter {
 public:
   struct Options : public pipy::Options {
-    int protocol_level;
+    int protocol_level = 4;
     pjs::Ref<pjs::Function> protocol_level_f;
 
     Options() {}

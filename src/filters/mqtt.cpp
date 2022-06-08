@@ -1017,7 +1017,7 @@ void Decoder::message() {
         if (n == 4 || n == 5) {
           m_protocol_level = protocol_level.n();
         } else {
-          Log::error("[decodeMQTT] options.protocolLevel expects to be 4 or 5");
+          Log::error("[decodeMQTT] options.protocolLevel expects 4 or 5");
         }
       } else {
         Log::error("[decodeMQTT] options.protocolLevel expects a number or a function returning a number");
