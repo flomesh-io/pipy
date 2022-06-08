@@ -296,9 +296,11 @@ void MuxBase::SessionManager::recycle() {
       auto s = m_free_sessions.head();
       while (s) {
         auto session = s; s = s->next();
-        if (now - session->m_free_time >= m_max_idle * 1000) {
-          session->input()->input(StreamEnd::make());
-          session->reset();
+        if (!session->m_weak_key) {
+          if (now - session->m_free_time >= m_max_idle * 1000) {
+            session->input()->input(StreamEnd::make());
+            session->reset();
+          }
         }
       }
       recycle();
