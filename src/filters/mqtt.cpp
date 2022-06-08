@@ -1135,7 +1135,11 @@ void Decoder::reset() {
 }
 
 void Decoder::process(Event *evt) {
-  Filter::output(evt, DecoderFunction::input());
+  if (evt->is<StreamEnd>()) {
+    Filter::output(evt);
+  } else {
+    Filter::output(evt, DecoderFunction::input());
+  }
 }
 
 auto Decoder::on_get_protocol_level() -> int {
@@ -1192,7 +1196,11 @@ void Encoder::reset() {
 }
 
 void Encoder::process(Event *evt) {
-  Filter::output(evt, EncoderFunction::input());
+  if (evt->is<StreamEnd>()) {
+    Filter::output(evt);
+  } else {
+    Filter::output(evt, EncoderFunction::input());
+  }
 }
 
 void Encoder::on_encode_error(const char *msg) {
