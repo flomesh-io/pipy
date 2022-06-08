@@ -35,10 +35,67 @@ namespace pipy {
 namespace mqtt {
 
 //
+// DecoderFunction
+//
+
+class DecoderFunction : public EventFunction {
+public:
+  void reset();
+
+private:
+  virtual void on_event(Event *evt) override;
+
+  enum State {
+    FIXED_HEADER,
+    REMAINING_LENGTH,
+    REMAINING_DATA,
+    ERROR,
+  };
+
+  State m_state;
+  uint8_t m_fixed_header;
+  uint32_t m_remaining_length;
+  int m_remaining_length_shift;
+  int m_protocol_level;
+  Data m_buffer;
+
+  void message();
+
+  virtual auto on_get_protocol_level() -> int { return 4; }
+};
+
+//
+// EncoderFunction
+//
+
+class EncoderFunction : public EventFunction {
+public:
+  EncoderFunction();
+
+  void reset();
+
+private:
+  virtual void on_event(Event *evt) override;
+
+  pjs::Ref<MessageStart> m_start;
+  Data m_buffer;
+  pjs::PropertyCache m_prop_type;
+  pjs::PropertyCache m_prop_qos;
+  pjs::PropertyCache m_prop_dup;
+  pjs::PropertyCache m_prop_retain;
+  int m_protocol_level;
+
+  virtual void on_encode_error(const char *msg) {}
+};
+
+//
 // Decoder
 //
 
-class Decoder : public Filter {
+class Decoder :
+  public Filter,
+  protected DecoderFunction
+{
 public:
   struct Options : public pipy::Options {
     int protocol_level = 4;
@@ -55,33 +112,24 @@ private:
   ~Decoder();
 
   virtual auto clone() -> Filter* override;
+  virtual void chain() override;
   virtual void reset() override;
   virtual void process(Event *evt) override;
   virtual void dump(std::ostream &out) override;
 
-  enum State {
-    FIXED_HEADER,
-    REMAINING_LENGTH,
-    REMAINING_DATA,
-    ERROR,
-  };
+  virtual auto on_get_protocol_level() -> int override;
 
   Options m_options;
-  State m_state;
-  uint8_t m_fixed_header;
-  uint32_t m_remaining_length;
-  int m_remaining_length_shift;
-  int m_protocol_level;
-  Data m_buffer;
-
-  void message();
 };
 
 //
 // Encoder
 //
 
-class Encoder : public Filter {
+class Encoder :
+  public Filter,
+  protected EncoderFunction
+{
 public:
   Encoder();
 
@@ -90,17 +138,12 @@ private:
   ~Encoder();
 
   virtual auto clone() -> Filter* override;
+  virtual void chain() override;
   virtual void reset() override;
   virtual void process(Event *evt) override;
   virtual void dump(std::ostream &out) override;
 
-  pjs::Ref<MessageStart> m_start;
-  Data m_buffer;
-  pjs::PropertyCache m_prop_type;
-  pjs::PropertyCache m_prop_qos;
-  pjs::PropertyCache m_prop_dup;
-  pjs::PropertyCache m_prop_retain;
-  int m_protocol_level;
+  virtual void on_encode_error(const char *msg) override;
 };
 
 } // namespace mqtt

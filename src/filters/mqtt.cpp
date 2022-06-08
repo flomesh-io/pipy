@@ -895,51 +895,16 @@ private:
 };
 
 //
-// Decoder::Options
+// DecoderFunction
 //
 
-Decoder::Options::Options(pjs::Object *options) {
-  Value(options, "protocolLevel")
-    .get(protocol_level)
-    .get(protocol_level_f)
-    .check_nullable();
-}
-
-//
-// Decoder
-//
-
-Decoder::Decoder(const Options &options)
-  : m_options(options)
-{
-}
-
-Decoder::Decoder(const Decoder &r)
-  : Filter(r)
-  , m_options(r.m_options)
-{
-}
-
-Decoder::~Decoder()
-{
-}
-
-void Decoder::dump(std::ostream &out) {
-  out << "decodeMQTT";
-}
-
-auto Decoder::clone() -> Filter* {
-  return new Decoder(*this);
-}
-
-void Decoder::reset() {
-  Filter::reset();
+void DecoderFunction::reset() {
   m_protocol_level = 0;
   m_state = FIXED_HEADER;
   m_buffer.clear();
 }
 
-void Decoder::process(Event *evt) {
+void DecoderFunction::on_event(Event *evt) {
 
   auto data = evt->as<Data>();
   if (!data) return;
@@ -1000,7 +965,7 @@ void Decoder::process(Event *evt) {
   }
 }
 
-void Decoder::message() {
+void DecoderFunction::message() {
   auto type = PacketType(m_fixed_header >> 4);
   auto head = MessageHead::make();
   head->type(pjs::EnumDef<PacketType>::name(type));
@@ -1008,22 +973,8 @@ void Decoder::message() {
   head->dup(m_fixed_header & 0x08);
   head->retained(m_fixed_header & 1);
 
-  if (!m_protocol_level) {
-    pjs::Value protocol_level(m_options.protocol_level);
-    if (!eval(m_options.protocol_level_f, protocol_level)) return;
-    if (!protocol_level.is_undefined()) {
-      if (protocol_level.is_number()) {
-        int n = protocol_level.n();
-        if (n == 4 || n == 5) {
-          m_protocol_level = protocol_level.n();
-        } else {
-          Log::error("[decodeMQTT] options.protocolLevel expects 4 or 5");
-        }
-      } else {
-        Log::error("[decodeMQTT] options.protocolLevel expects a number or a function returning a number");
-      }
-    }
-  }
+  if (!m_protocol_level) m_protocol_level = on_get_protocol_level();
+  if (!m_protocol_level) return;
 
   PacketParser parser(type, m_protocol_level, head, m_buffer);
   parser.decode();
@@ -1043,10 +994,10 @@ void Decoder::message() {
 }
 
 //
-// Encoder
+// EncoderFunction
 //
 
-Encoder::Encoder()
+EncoderFunction::EncoderFunction()
   : m_prop_type("type")
   , m_prop_qos("qos")
   , m_prop_dup("dup")
@@ -1054,35 +1005,13 @@ Encoder::Encoder()
 {
 }
 
-Encoder::Encoder(const Encoder &r)
-  : Filter(r)
-  , m_prop_type("type")
-  , m_prop_qos("qos")
-  , m_prop_dup("dup")
-  , m_prop_retain("retain")
-{
-}
-
-Encoder::~Encoder()
-{
-}
-
-void Encoder::dump(std::ostream &out) {
-  out << "encodeMQTT";
-}
-
-auto Encoder::clone() -> Filter* {
-  return new Encoder(*this);
-}
-
-void Encoder::reset() {
-  Filter::reset();
+void EncoderFunction::reset() {
   m_protocol_level = 0;
   m_start = nullptr;
   m_buffer.clear();
 }
 
-void Encoder::process(Event *evt) {
+void EncoderFunction::on_event(Event *evt) {
   if (auto start = evt->as<MessageStart>()) {
     m_start = start;
     m_buffer.clear();
@@ -1096,21 +1025,21 @@ void Encoder::process(Event *evt) {
     if (m_start) {
       auto head = m_start->head();
       if (!head) {
-        Log::error("[encodeMQTT] trying to encode a packet without a head");
+        on_encode_error("trying to encode a packet without a head");
         return;
       }
       pjs::Str *type_str;
       if (!m_prop_type.get(head, type_str)) {
         m_start = nullptr;
         m_buffer.clear();
-        Log::error("[encodeMQTT] invalid packet type");
+        on_encode_error("invalid packet type");
         return;
       }
       auto type = pjs::EnumDef<PacketType>::value(type_str);
       if (int(type) < 0) {
         m_start = nullptr;
         m_buffer.clear();
-        Log::error("[encodeMQTT] invalid packet type");
+        on_encode_error("invalid packet type");
         return;
       }
       Data buf;
@@ -1155,6 +1084,119 @@ void Encoder::process(Event *evt) {
       m_buffer.clear();
     }
   }
+}
+
+//
+// Decoder::Options
+//
+
+Decoder::Options::Options(pjs::Object *options) {
+  Value(options, "protocolLevel")
+    .get(protocol_level)
+    .get(protocol_level_f)
+    .check_nullable();
+}
+
+//
+// Decoder
+//
+
+Decoder::Decoder(const Options &options)
+  : m_options(options)
+{
+}
+
+Decoder::Decoder(const Decoder &r)
+  : Filter(r)
+  , m_options(r.m_options)
+{
+}
+
+Decoder::~Decoder()
+{
+}
+
+void Decoder::dump(std::ostream &out) {
+  out << "decodeMQTT";
+}
+
+auto Decoder::clone() -> Filter* {
+  return new Decoder(*this);
+}
+
+void Decoder::chain() {
+  Filter::chain();
+  DecoderFunction::chain(Filter::output());
+}
+
+void Decoder::reset() {
+  Filter::reset();
+  DecoderFunction::reset();
+}
+
+void Decoder::process(Event *evt) {
+  Filter::output(evt, DecoderFunction::input());
+}
+
+auto Decoder::on_get_protocol_level() -> int {
+  pjs::Value protocol_level(m_options.protocol_level);
+  if (!eval(m_options.protocol_level_f, protocol_level)) return 0;
+  if (!protocol_level.is_undefined()) {
+    if (protocol_level.is_number()) {
+      int n = protocol_level.n();
+      if (n == 4 || n == 5) {
+        return protocol_level.n();
+      } else {
+        Log::error("[decodeMQTT] options.protocolLevel expects 4 or 5");
+      }
+    } else {
+      Log::error("[decodeMQTT] options.protocolLevel expects a number or a function returning a number");
+    }
+  }
+  return 0;
+}
+
+//
+// Encoder
+//
+
+Encoder::Encoder()
+{
+}
+
+Encoder::Encoder(const Encoder &r)
+  : Filter(r)
+{
+}
+
+Encoder::~Encoder()
+{
+}
+
+void Encoder::dump(std::ostream &out) {
+  out << "encodeMQTT";
+}
+
+auto Encoder::clone() -> Filter* {
+  return new Encoder(*this);
+}
+
+void Encoder::chain() {
+  Filter::chain();
+  EncoderFunction::chain(Filter::output());
+}
+
+void Encoder::reset() {
+  Filter::reset();
+  EncoderFunction::reset();
+}
+
+void Encoder::process(Event *evt) {
+  Filter::output(evt, EncoderFunction::input());
+}
+
+void Encoder::on_encode_error(const char *msg) {
+  Log::error("[encodeMQTT] %s", msg);
 }
 
 } // namespace mqtt
