@@ -102,6 +102,7 @@ public:
   void input(pjs::Str *layout, pjs::Function *callback);
   void link(size_t count, pjs::Str **targets, pjs::Function **conditions);
   void merge(pjs::Str *layout, const pjs::Value &key, pjs::Object *options);
+  void mux(pjs::Str *layout, const pjs::Value &key, pjs::Object *options);
   void mux_queue(pjs::Str *layout, const pjs::Value &key, pjs::Object *options);
   void mux_http(pjs::Str *layout, const pjs::Value &key, pjs::Object *options);
   void on_body(pjs::Function *callback, int size_limit);

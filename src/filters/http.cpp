@@ -1166,8 +1166,7 @@ Demux::Options::Options(pjs::Object *options) {
 //
 
 Demux::Demux(const Options &options)
-  : QueueDemuxer(true)
-  , Decoder(false)
+  : Decoder(false)
   , Encoder(true)
   , m_options(options)
 {
@@ -1175,7 +1174,6 @@ Demux::Demux(const Options &options)
 
 Demux::Demux(const Demux &r)
   : Filter(r)
-  , QueueDemuxer(true)
   , Decoder(false)
   , Encoder(true)
   , m_options(r.m_options)
@@ -1289,7 +1287,7 @@ void Demux::upgrade_http2() {
 //
 
 Mux::Options::Options(pjs::Object *options)
-  : pipy::Mux::Options(options)
+  : pipy::MuxQueue::Options(options)
 {
   Value(options, "bufferSize")
     .get_binary_size(buffer_size)
@@ -1309,13 +1307,13 @@ Mux::Mux()
 }
 
 Mux::Mux(const pjs::Value &key, const Options &options)
-  : pipy::Mux(key, options)
+  : pipy::MuxQueue(key, options)
   , m_options(options)
 {
 }
 
 Mux::Mux(const Mux &r)
-  : pipy::Mux(r)
+  : pipy::MuxQueue(r)
   , m_options(r.m_options)
 {
 }

@@ -214,24 +214,24 @@ private:
 };
 
 //
-// Mux
+// MuxQueue
 //
 
-class Mux : public MuxBase {
+class MuxQueue : public MuxBase {
 public:
-  Mux();
-  Mux(const pjs::Value &key, const Options &options);
+  MuxQueue();
+  MuxQueue(const pjs::Value &key, const Options &options);
 
 protected:
-  Mux(const Mux &r);
-  ~Mux();
+  MuxQueue(const MuxQueue &r);
+  ~MuxQueue();
 
   virtual auto clone() -> Filter* override;
   virtual void dump(std::ostream &out) override;
   virtual auto on_new_session() -> MuxBase::Session* override;
 
   //
-  // Mux::Session
+  // MuxQueue::Session
   //
 
   class Session :
@@ -243,7 +243,56 @@ protected:
     virtual void close_stream(EventFunction *stream) override;
     virtual void close() override;
 
-    friend class Mux;
+    friend class MuxQueue;
+  };
+};
+
+//
+// Mux
+//
+
+class Mux : public MuxBase {
+public:
+  Mux(const pjs::Value &key, pjs::Object *options);
+
+private:
+  Mux(const Mux &r);
+  ~Mux();
+
+  virtual auto clone() -> Filter* override;
+  virtual void dump(std::ostream &out) override;
+  virtual void process(Event *evt) override;
+  virtual auto on_new_session() -> MuxBase::Session* override;
+
+  //
+  // Mux::Session
+  //
+
+  class Session : public pjs::Pooled<Session, MuxBase::Session> {
+    virtual auto open_stream() -> EventFunction* override;
+    virtual void close_stream(EventFunction *stream) override;
+
+    friend class Stream;
+  };
+
+  //
+  // Mux::Stream
+  //
+
+  class Stream :
+    public pjs::Pooled<Stream>,
+    public EventFunction
+  {
+    Stream(Session *session)
+      : m_output(session->input()) {}
+
+    virtual void on_event(Event *evt) override;
+
+    pjs::Ref<Input> m_output;
+    pjs::Ref<MessageStart> m_start;
+    Data m_buffer;
+
+    friend class Session;
   };
 };
 

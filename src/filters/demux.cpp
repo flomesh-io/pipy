@@ -155,10 +155,7 @@ void QueueDemuxer::Stream::on_reply(Event *evt) {
     return;
   }
 
-  bool is_head = (
-    demuxer->m_ordered &&
-    demuxer->m_streams.head() == this
-  );
+  bool is_head = (demuxer->m_streams.head() == this);
 
   if (m_output_end) return;
 
@@ -187,10 +184,8 @@ void QueueDemuxer::Stream::on_reply(Event *evt) {
         demuxer->output(evt);
         demuxer->flush();
         delete this;
-      } else if (demuxer->m_ordered) {
-        m_output_end = true;
       } else {
-        flush();
+        m_output_end = true;
       }
     }
 
@@ -201,77 +196,10 @@ void QueueDemuxer::Stream::on_reply(Event *evt) {
       demuxer->output(MessageEnd::make());
       demuxer->flush();
       delete this;
-    } else if (demuxer->m_ordered) {
-      m_output_end = true;
     } else {
-      flush();
+      m_output_end = true;
     }
   }
-}
-
-void Demux::Stream::flush() {
-  auto demuxer = m_demuxer;
-  auto &streams = demuxer->m_streams;
-  streams.remove(this);
-  demuxer->output(m_start ? m_start.get() : MessageStart::make());
-  if (!m_buffer.empty()) {
-    demuxer->output(Data::make(std::move(m_buffer)));
-  }
-  demuxer->output(m_end ? m_end.get() : MessageEnd::make());
-  delete this;
-  if (demuxer->m_shutdown && streams.empty()) {
-    demuxer->output(StreamEnd::make());
-  }
-}
-
-//
-// Demux
-//
-
-Demux::Demux()
-  : QueueDemuxer(false)
-{
-}
-
-Demux::Demux(const Demux &r)
-  : Filter(r)
-  , QueueDemuxer(false)
-{
-}
-
-Demux::~Demux()
-{
-}
-
-void Demux::dump(std::ostream &out) {
-  out << "demux";
-}
-
-auto Demux::clone() -> Filter* {
-  return new Demux(*this);
-}
-
-void Demux::chain() {
-  Filter::chain();
-  QueueDemuxer::chain(Filter::output());
-}
-
-void Demux::reset() {
-  Filter::reset();
-  QueueDemuxer::reset();
-}
-
-void Demux::process(Event *evt) {
-  Filter::output(evt, QueueDemuxer::input());
-}
-
-void Demux::shutdown() {
-  Filter::shutdown();
-  QueueDemuxer::shutdown();
-}
-
-auto Demux::on_new_sub_pipeline() -> Pipeline* {
-  return sub_pipeline(0, true);
 }
 
 //
@@ -279,13 +207,11 @@ auto Demux::on_new_sub_pipeline() -> Pipeline* {
 //
 
 DemuxQueue::DemuxQueue()
-  : QueueDemuxer(true)
 {
 }
 
 DemuxQueue::DemuxQueue(const DemuxQueue &r)
   : Filter(r)
-  , QueueDemuxer(true)
 {
 }
 
@@ -322,6 +248,58 @@ void DemuxQueue::shutdown() {
 
 auto DemuxQueue::on_new_sub_pipeline() -> Pipeline* {
   return sub_pipeline(0, true);
+}
+
+//
+// Demux
+//
+
+Demux::Demux()
+{
+}
+
+Demux::Demux(const Demux &r)
+  : Filter(r)
+{
+}
+
+Demux::~Demux()
+{
+}
+
+void Demux::dump(std::ostream &out) {
+  out << "demux";
+}
+
+auto Demux::clone() -> Filter* {
+  return new Demux(*this);
+}
+
+void Demux::reset() {
+  Filter::reset();
+  m_pipeline = nullptr;
+}
+
+void Demux::process(Event *evt) {
+  if (evt->is<MessageStart>()) {
+    if (!m_pipeline) {
+      m_pipeline = sub_pipeline(0, true);
+      m_pipeline->chain(EventSource::reply());
+      m_pipeline->input()->input(evt);
+    }
+
+  } else if (evt->is<Data>()) {
+    if (m_pipeline) {
+      m_pipeline->input()->input(evt);
+    }
+
+  } else if (evt->is<MessageEnd>()) {
+    if (m_pipeline) {
+      m_pipeline->input()->input(evt);
+      Pipeline::auto_release(m_pipeline);
+      m_pipeline = nullptr;
+    }
+  }
 }
 
 } // namespace pipy

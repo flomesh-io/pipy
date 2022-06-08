@@ -330,8 +330,14 @@ void Configuration::merge(pjs::Str *layout, const pjs::Value &key, pjs::Object *
   append_filter(filter);
 }
 
-void Configuration::mux_queue(pjs::Str *layout, const pjs::Value &key, pjs::Object *options) {
+void Configuration::mux(pjs::Str *layout, const pjs::Value &key, pjs::Object *options) {
   auto *filter = new Mux(key, options);
+  filter->add_sub_pipeline(layout);
+  append_filter(filter);
+}
+
+void Configuration::mux_queue(pjs::Str *layout, const pjs::Value &key, pjs::Object *options) {
+  auto *filter = new MuxQueue(key, options);
   filter->add_sub_pipeline(layout);
   append_filter(filter);
 }
@@ -1218,6 +1224,27 @@ template<> void ClassDef<Configuration>::init() {
     }
     try {
       thiz->as<Configuration>()->merge(layout, key, options);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // Configuration.mux
+  method("mux", [](Context &ctx, Object *thiz, Value &result) {
+    Str *layout;
+    Value key;
+    Function *key_f = nullptr;
+    Object *options = nullptr;
+    if (ctx.try_arguments(2, &layout, &key_f, &options)) {
+      key.set(key_f);
+    } else if (ctx.try_arguments(2, &layout, &options)) {
+      key = Value::undefined;
+    } else if (!ctx.arguments(1, &layout, &key, &options)) {
+      return;
+    }
+    try {
+      thiz->as<Configuration>()->mux(layout, key, options);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

@@ -44,8 +44,7 @@ public:
   void shutdown();
 
 protected:
-  QueueDemuxer(bool ordered)
-    : m_ordered(ordered) {}
+  QueueDemuxer() {}
 
   virtual auto on_new_sub_pipeline() -> Pipeline* = 0;
 
@@ -53,7 +52,6 @@ private:
   class Stream;
 
   List<Stream> m_streams;
-  bool m_ordered;
   bool m_isolated = false;
   bool m_shutdown = false;
 
@@ -86,36 +84,11 @@ private:
 
     virtual void on_reply(Event *evt) override;
 
-    void flush();
-
     friend class QueueDemuxer;
   };
 
   friend class Stream;
 };
-
-//
-// Demux
-//
-
-class Demux : public Filter, public QueueDemuxer {
-public:
-  Demux();
-
-private:
-  Demux(const Demux &r);
-  ~Demux();
-
-  virtual auto clone() -> Filter* override;
-  virtual void chain() override;
-  virtual void reset() override;
-  virtual void process(Event *evt) override;
-  virtual void shutdown() override;
-  virtual void dump(std::ostream &out) override;
-
-  virtual auto on_new_sub_pipeline() -> Pipeline* override;
-};
-
 
 //
 // DemuxQueue
@@ -137,6 +110,29 @@ private:
   virtual void dump(std::ostream &out) override;
 
   virtual auto on_new_sub_pipeline() -> Pipeline* override;
+};
+
+//
+// Demux
+//
+
+class Demux :
+  public Filter,
+  public EventSource
+{
+public:
+  Demux();
+
+private:
+  Demux(const Demux &r);
+  ~Demux();
+
+  virtual auto clone() -> Filter* override;
+  virtual void reset() override;
+  virtual void process(Event *evt) override;
+  virtual void dump(std::ostream &out) override;
+
+  pjs::Ref<Pipeline> m_pipeline;
 };
 
 } // namespace pipy

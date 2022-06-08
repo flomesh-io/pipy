@@ -384,9 +384,9 @@ class HTTP2Muxer :
 // Mux
 //
 
-class Mux : public pipy::Mux {
+class Mux : public pipy::MuxQueue {
 public:
-  struct Options : public pipy::Mux::Options {
+  struct Options : public pipy::MuxQueue::Options {
     size_t buffer_size = DATA_CHUNK_SIZE;
     int version = 1;
     pjs::Ref<pjs::Function> version_f;

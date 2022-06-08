@@ -427,14 +427,64 @@ void QueueMuxer::Stream::on_event(Event *evt) {
 }
 
 //
-// Mux
+// MuxQueue
 //
 
-Mux::Mux()
+MuxQueue::MuxQueue()
 {
 }
 
-Mux::Mux(const pjs::Value &key, const Options &options)
+MuxQueue::MuxQueue(const pjs::Value &key, const Options &options)
+  : MuxBase(key, options)
+{
+}
+
+MuxQueue::MuxQueue(const MuxQueue &r)
+  : MuxBase(r)
+{
+}
+
+MuxQueue::~MuxQueue() {
+}
+
+void MuxQueue::dump(std::ostream &out) {
+  out << "muxQueue";
+}
+
+auto MuxQueue::clone() -> Filter* {
+  return new MuxQueue(*this);
+}
+
+auto MuxQueue::on_new_session() -> MuxBase::Session* {
+  return new Session();
+}
+
+//
+// MuxQueue::Session
+//
+
+void MuxQueue::Session::open() {
+  QueueMuxer::chain(MuxBase::Session::input());
+  MuxBase::Session::chain(QueueMuxer::reply());
+}
+
+auto MuxQueue::Session::open_stream() -> EventFunction* {
+  return QueueMuxer::open();
+}
+
+void MuxQueue::Session::close_stream(EventFunction *stream) {
+  return QueueMuxer::close(stream);
+}
+
+void MuxQueue::Session::close() {
+  QueueMuxer::reset();
+}
+
+//
+// Mux
+//
+
+Mux::Mux(const pjs::Value &key, pjs::Object *options)
   : MuxBase(key, options)
 {
 }
@@ -455,6 +505,11 @@ auto Mux::clone() -> Filter* {
   return new Mux(*this);
 }
 
+void Mux::process(Event *evt) {
+  MuxBase::process(evt->clone());
+  output(evt);
+}
+
 auto Mux::on_new_session() -> MuxBase::Session* {
   return new Session();
 }
@@ -463,21 +518,40 @@ auto Mux::on_new_session() -> MuxBase::Session* {
 // Mux::Session
 //
 
-void Mux::Session::open() {
-  QueueMuxer::chain(MuxBase::Session::input());
-  MuxBase::Session::chain(QueueMuxer::reply());
-}
-
 auto Mux::Session::open_stream() -> EventFunction* {
-  return QueueMuxer::open();
+  return new Stream(this);
 }
 
 void Mux::Session::close_stream(EventFunction *stream) {
-  return QueueMuxer::close(stream);
+  delete static_cast<Stream*>(stream);
 }
 
-void Mux::Session::close() {
-  QueueMuxer::reset();
+//
+// Mux::Stream
+//
+
+void Mux::Stream::on_event(Event *evt) {
+  if (auto start = evt->as<MessageStart>()) {
+    if (!m_start) {
+      m_start = start;
+    }
+
+  } else if (auto data = evt->as<Data>()) {
+    if (m_start) {
+      m_buffer.push(*data);
+    }
+
+  } else if (evt->is<MessageEnd>() || evt->is<StreamEnd>()) {
+    if (m_start) {
+      auto inp = m_output.get();
+      inp->input(m_start);
+      if (!m_buffer.empty()) {
+        inp->input(Data::make(m_buffer));
+        m_buffer.clear();
+      }
+      inp->input(MessageEnd::make());
+    }
+  }
 }
 
 } // namespace pipy
