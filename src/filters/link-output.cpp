@@ -93,10 +93,12 @@ void LinkOutput::process(Event *evt) {
   }
 
   if (m_output) {
-    m_output->input()->input(evt);
+    m_output->input()->input(evt->clone());
   } else {
-    m_buffer.push(evt);
+    m_buffer.push(evt->clone());
   }
+
+  output(evt);
 }
 
 } // namespace pipy
