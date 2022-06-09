@@ -77,7 +77,7 @@ new algo.URLRouter({
 +   .link('forward')
 
   .pipeline('forward')
-    .muxHTTP('connection', '')
+    .muxHTTP('connection')
 ```
 
 注意稍后我们再解释如何使用 “*request*”管道最后的 *link* 过滤器来连接到 “*forward*。”
@@ -175,7 +175,7 @@ new algo.URLRouter({
 
 ```js
   .pipeline('forward')
-    .muxHTTP('connection', '')
+    .muxHTTP('connection')
 
   .pipeline('connection')
     .connect(
@@ -230,13 +230,13 @@ You are requesting /hi from ::ffff:127.0.0.1
 
 此时你可能会想到第二个参数“通道”就与这个“键”有关。可以说“通道”的值或者返回值（类型为函数时）就是“键”。
 
-如果使用 `.muxHTTP('connection', '')`，“通道”为空字符串，则针对每个请求都会使用同一个的*connection*子管道处理，使用子管道初始化时所创建的 TCP 连接，这就导致了路由计算结果与 TCP 连接远端主机不一致；假如使用 `undefined` 作为第二个参数，每个请求都会使用一个新初始化的子管道处理请求，每次都会创建新的 TCP 连接，而创建新的 TCP 连接是非常“昂贵”的。
+如果使用 `.muxHTTP('connection', () => '')`，“通道”为空字符串，则针对每个请求都会使用同一个的*connection*子管道处理，使用子管道初始化时所创建的 TCP 连接，这就导致了路由计算结果与 TCP 连接远端主机不一致；假如使用 `undefined` 作为第二个参数，每个请求都会使用一个新初始化的子管道处理请求，每次都会创建新的 TCP 连接，而创建新的 TCP 连接是非常“昂贵”的。
 
 假如转发每个远程主机的请求是使用同一个连接，那就需要“键”也就是“通道”与远程主机一一对应。这里很容易就想到变量 `_target` 的值就是远程主机的访问地址。有了前车之鉴，很容易就能想到用 `() => _target`，而不是直接用 “_target”了。
 
 ```js
   .pipeline('forward')
--   .muxHTTP('connection', '')
+-   .muxHTTP('connection')
 +   .muxHTTP(
 +     'connection',
 +     () => _target

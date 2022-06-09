@@ -67,7 +67,7 @@ AdminLink::AdminLink(
   m_ppl_connect->append(new Connect(pjs::Str::make(host), Connect::Options()));
 
   m_ppl_tunnel = PipelineLayout::make(nullptr, PipelineLayout::NAMED, "AdminLink Tunnel");
-  m_ppl_tunnel->append(new http::Mux(pjs::Str::empty.get(), nullptr))->add_sub_pipeline(m_ppl_connect);
+  m_ppl_tunnel->append(new http::Mux(nullptr, nullptr))->add_sub_pipeline(m_ppl_connect);
 
   m_ppl = PipelineLayout::make(nullptr, PipelineLayout::NAMED, "AdminLink");
   m_ppl->append(new websocket::Encoder());

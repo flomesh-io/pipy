@@ -152,7 +152,7 @@ void AdminProxy::open(int port, const Options &options) {
 
   ppl_inbound->append(new http::Demux(nullptr))->add_sub_pipeline(ppl_request);
   ppl_request->append(new AdminProxyHandler(this))->add_sub_pipeline(ppl_forward);
-  ppl_forward->append(new http::Mux(pjs::Str::empty.get(), nullptr))->add_sub_pipeline(ppl_connect);
+  ppl_forward->append(new http::Mux(nullptr, nullptr))->add_sub_pipeline(ppl_connect);
 
   Listener::Options opts;
   opts.reserved = true;

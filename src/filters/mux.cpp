@@ -49,9 +49,9 @@ MuxBase::MuxBase()
 {
 }
 
-MuxBase::MuxBase(const pjs::Value &session_key, const Options &options)
+MuxBase::MuxBase(pjs::Function *group, const Options &options)
   : m_session_manager(new SessionManager(this))
-  , m_session_key(session_key)
+  , m_group(group)
 {
   m_session_manager->set_max_idle(options.max_idle);
 }
@@ -59,7 +59,7 @@ MuxBase::MuxBase(const pjs::Value &session_key, const Options &options)
 MuxBase::MuxBase(const MuxBase &r)
   : Filter(r)
   , m_session_manager(r.m_session_manager)
-  , m_session_key(r.m_session_key)
+  , m_group(r.m_group)
 {
 }
 
@@ -76,18 +76,18 @@ void MuxBase::reset() {
     m_session = nullptr;
   }
   m_waiting_events.clear();
-  m_session_key_current = pjs::Value::undefined;
+  m_session_key = pjs::Value::undefined;
 }
 
 void MuxBase::process(Event *evt) {
   if (!m_stream) {
     auto session = m_session.get();
     if (!session) {
-      if (!eval(m_session_key, m_session_key_current)) return;
-      if (m_session_key_current.is_undefined()) {
-        m_session_key_current.set(context()->inbound());
+      if (m_group && !eval(m_group, m_session_key)) return;
+      if (m_session_key.is_undefined()) {
+        m_session_key.set(context()->inbound());
       }
-      session = m_session_manager->get(m_session_key_current);
+      session = m_session_manager->get(m_session_key);
       m_session = session;
     }
 
@@ -436,8 +436,8 @@ MuxQueue::MuxQueue()
 {
 }
 
-MuxQueue::MuxQueue(const pjs::Value &key, const Options &options)
-  : MuxBase(key, options)
+MuxQueue::MuxQueue(pjs::Function *group, const Options &options)
+  : MuxBase(group, options)
 {
 }
 
@@ -486,8 +486,8 @@ void MuxQueue::Session::close() {
 // Mux
 //
 
-Mux::Mux(const pjs::Value &key, pjs::Object *options)
-  : MuxBase(key, options)
+Mux::Mux(pjs::Function *group, pjs::Object *options)
+  : MuxBase(group, options)
 {
 }
 

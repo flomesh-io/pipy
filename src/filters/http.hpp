@@ -395,7 +395,7 @@ public:
   };
 
   Mux();
-  Mux(const pjs::Value &key, const Options &options);
+  Mux(pjs::Function *group, const Options &options);
 
 private:
   Mux(const Mux &r);

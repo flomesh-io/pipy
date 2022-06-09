@@ -36,7 +36,7 @@ namespace pipy {
 
 class Merge : public MuxBase {
 public:
-  Merge(const pjs::Value &key, pjs::Object *options);
+  Merge(pjs::Function *group, pjs::Object *options);
 
 private:
   Merge(const Merge &r);

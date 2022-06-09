@@ -83,22 +83,16 @@ namespace pipy {
 // FilterConfigurator
 //
 
-void FilterConfigurator::accept_http_tunnel(pjs::Str *layout, pjs::Function *handler) {
-  auto *filter = new http::TunnelServer(handler);
-  filter->add_sub_pipeline(layout);
-  append_filter(filter);
+void FilterConfigurator::accept_http_tunnel(pjs::Function *handler) {
+  require_sub_pipeline(append_filter(new http::TunnelServer(handler)));
 }
 
-void FilterConfigurator::accept_socks(pjs::Str *layout, pjs::Function *on_connect) {
-  auto *filter = new socks::Server(on_connect);
-  filter->add_sub_pipeline(layout);
-  append_filter(filter);
+void FilterConfigurator::accept_socks(pjs::Function *on_connect) {
+  require_sub_pipeline(append_filter(new socks::Server(on_connect)));
 }
 
-void FilterConfigurator::accept_tls(pjs::Str *layout, pjs::Object *options) {
-  auto *filter = new tls::Server(options);
-  filter->add_sub_pipeline(layout);
-  append_filter(filter);
+void FilterConfigurator::accept_tls(pjs::Object *options) {
+  require_sub_pipeline(append_filter(new tls::Server(options)));
 }
 
 void FilterConfigurator::compress_message(pjs::Object *options) {
@@ -113,22 +107,16 @@ void FilterConfigurator::connect(const pjs::Value &target, pjs::Object *options)
   append_filter(new Connect(target, options));
 }
 
-void FilterConfigurator::connect_http_tunnel(pjs::Str *layout, const pjs::Value &address) {
-  auto *filter = new http::TunnelClient(address);
-  filter->add_sub_pipeline(layout);
-  append_filter(filter);
+void FilterConfigurator::connect_http_tunnel(const pjs::Value &address) {
+  require_sub_pipeline(append_filter(new http::TunnelClient(address)));
 }
 
-void FilterConfigurator::connect_socks(pjs::Str *layout, const pjs::Value &address) {
-  auto *filter = new socks::Client(address);
-  filter->add_sub_pipeline(layout);
-  append_filter(filter);
+void FilterConfigurator::connect_socks(const pjs::Value &address) {
+  require_sub_pipeline(append_filter(new socks::Client(address)));
 }
 
-void FilterConfigurator::connect_tls(pjs::Str *layout, pjs::Object *options) {
-  auto *filter = new tls::Client(options);
-  filter->add_sub_pipeline(layout);
-  append_filter(filter);
+void FilterConfigurator::connect_tls(pjs::Object *options) {
+  require_sub_pipeline(append_filter(new tls::Client(options)));
 }
 
 void FilterConfigurator::decode_dubbo() {
@@ -163,22 +151,16 @@ void FilterConfigurator::deframe(pjs::Object *states) {
   append_filter(new Deframe(states));
 }
 
-void FilterConfigurator::demux(pjs::Str *layout) {
-  auto *filter = new Demux();
-  filter->add_sub_pipeline(layout);
-  append_filter(filter);
+void FilterConfigurator::demux() {
+  require_sub_pipeline(append_filter(new Demux()));
 }
 
-void FilterConfigurator::demux_queue(pjs::Str *layout) {
-  auto *filter = new DemuxQueue();
-  filter->add_sub_pipeline(layout);
-  append_filter(filter);
+void FilterConfigurator::demux_queue() {
+  require_sub_pipeline(append_filter(new DemuxQueue()));
 }
 
-void FilterConfigurator::demux_http(pjs::Str *layout, pjs::Object *options) {
-  auto *filter = new http::Demux(options);
-  filter->add_sub_pipeline(layout);
-  append_filter(filter);
+void FilterConfigurator::demux_http(pjs::Object *options) {
+  require_sub_pipeline(append_filter(new http::Demux(options)));
 }
 
 void FilterConfigurator::deposit_message(const pjs::Value &filename, pjs::Object *options) {
@@ -221,16 +203,8 @@ void FilterConfigurator::exec(const pjs::Value &command) {
   append_filter(new Exec(command));
 }
 
-void FilterConfigurator::fork(pjs::Str *layout, pjs::Object *initializers) {
-  auto *filter = new Fork(initializers);
-  filter->add_sub_pipeline(layout);
-  append_filter(filter);
-}
-
-void FilterConfigurator::input(pjs::Str *layout, pjs::Function *callback) {
-  auto *filter = new LinkInput(callback);
-  filter->add_sub_pipeline(layout);
-  append_filter(filter);
+void FilterConfigurator::fork(pjs::Object *initializers) {
+  require_sub_pipeline(append_filter(new Fork(initializers)));
 }
 
 void FilterConfigurator::input(pjs::Function *callback) {
@@ -246,28 +220,20 @@ void FilterConfigurator::link(size_t count, pjs::Str **layouts, pjs::Function **
   append_filter(filter);
 }
 
-void FilterConfigurator::merge(pjs::Str *layout, const pjs::Value &key, pjs::Object *options) {
-  auto *filter = new Merge(key, options);
-  filter->add_sub_pipeline(layout);
-  append_filter(filter);
+void FilterConfigurator::merge(pjs::Function *group, pjs::Object *options) {
+  require_sub_pipeline(append_filter(new Merge(group, options)));
 }
 
-void FilterConfigurator::mux(pjs::Str *layout, const pjs::Value &key, pjs::Object *options) {
-  auto *filter = new Mux(key, options);
-  filter->add_sub_pipeline(layout);
-  append_filter(filter);
+void FilterConfigurator::mux(pjs::Function *group, pjs::Object *options) {
+  require_sub_pipeline(append_filter(new Mux(group, options)));
 }
 
-void FilterConfigurator::mux_queue(pjs::Str *layout, const pjs::Value &key, pjs::Object *options) {
-  auto *filter = new MuxQueue(key, options);
-  filter->add_sub_pipeline(layout);
-  append_filter(filter);
+void FilterConfigurator::mux_queue(pjs::Function *group, pjs::Object *options) {
+  require_sub_pipeline(append_filter(new MuxQueue(group, options)));
 }
 
-void FilterConfigurator::mux_http(pjs::Str *layout, const pjs::Value &key, pjs::Object *options) {
-  auto *filter = new http::Mux(key, options);
-  filter->add_sub_pipeline(layout);
-  append_filter(filter);
+void FilterConfigurator::mux_http(pjs::Function *group, pjs::Object *options) {
+  require_sub_pipeline(append_filter(new http::Mux(group, options)));
 }
 
 void FilterConfigurator::on_body(pjs::Function *callback, int size_limit) {
@@ -653,11 +619,15 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.acceptHTTPTunnel
   method("acceptHTTPTunnel", [](Context &ctx, Object *thiz, Value &result) {
-    Str *layout;
-    Function *handler;
-    if (!ctx.arguments(2, &layout, &handler)) return;
     try {
-      thiz->as<FilterConfigurator>()->accept_http_tunnel(layout, handler);
+      Str *layout;
+      Function *handler;
+      if (ctx.try_arguments(2, &layout, &handler)) {
+        thiz->as<FilterConfigurator>()->accept_http_tunnel(handler);
+        thiz->as<FilterConfigurator>()->to(layout);
+      } else if (ctx.arguments(1, &handler)) {
+        thiz->as<FilterConfigurator>()->accept_http_tunnel(handler);
+      }
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -666,11 +636,15 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.acceptSOCKS
   method("acceptSOCKS", [](Context &ctx, Object *thiz, Value &result) {
-    Str *layout;
-    Function *on_connect;
-    if (!ctx.arguments(2, &layout, &on_connect)) return;
     try {
-      thiz->as<FilterConfigurator>()->accept_socks(layout, on_connect);
+      Str *layout;
+      Function *on_connect;
+      if (ctx.try_arguments(2, &layout, &on_connect)) {
+        thiz->as<FilterConfigurator>()->accept_socks(on_connect);
+        thiz->as<FilterConfigurator>()->to(layout);
+      } else if (ctx.arguments(1, &on_connect)) {
+        thiz->as<FilterConfigurator>()->accept_socks(on_connect);
+      }
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -679,15 +653,15 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.acceptTLS
   method("acceptTLS", [](Context &ctx, Object *thiz, Value &result) {
-    Str *layout;
-    Object *options;
-    if (!ctx.arguments(2, &layout, &options)) return;
-    if (!options) {
-      ctx.error_argument_type(1, "a non-null object");
-      return;
-    }
     try {
-      thiz->as<FilterConfigurator>()->accept_tls(layout, options);
+      Str *layout;
+      Object *options = nullptr;
+      if (ctx.try_arguments(1, &layout, &options)) {
+        thiz->as<FilterConfigurator>()->accept_tls(options);
+        thiz->as<FilterConfigurator>()->to(layout);
+      } else if (ctx.arguments(0, &options)) {
+        thiz->as<FilterConfigurator>()->accept_tls(options);
+      }
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -733,11 +707,15 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.connectHTTPTunnel
   method("connectHTTPTunnel", [](Context &ctx, Object *thiz, Value &result) {
-    Str *layout;
-    Value address;
-    if (!ctx.arguments(2, &layout, &address)) return;
     try {
-      thiz->as<FilterConfigurator>()->connect_http_tunnel(layout, address);
+      Str *layout;
+      Value address;
+      if (ctx.try_arguments(2, &layout, &address)) {
+        thiz->as<FilterConfigurator>()->connect_http_tunnel(address);
+        thiz->as<FilterConfigurator>()->to(layout);
+      } else if (ctx.arguments(1, &address)) {
+        thiz->as<FilterConfigurator>()->connect_http_tunnel(address);
+      }
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -746,11 +724,15 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.connectSOCKS
   method("connectSOCKS", [](Context &ctx, Object *thiz, Value &result) {
-    Str *layout;
-    Value address;
-    if (!ctx.arguments(2, &layout, &address)) return;
     try {
-      thiz->as<FilterConfigurator>()->connect_socks(layout, address);
+      Str *layout;
+      Value address;
+      if (ctx.try_arguments(2, &layout, &address)) {
+        thiz->as<FilterConfigurator>()->connect_socks(address);
+        thiz->as<FilterConfigurator>()->to(layout);
+      } else if (ctx.arguments(1, &address)) {
+        thiz->as<FilterConfigurator>()->connect_socks(address);
+      }
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -759,11 +741,15 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.connectTLS
   method("connectTLS", [](Context &ctx, Object *thiz, Value &result) {
-    Str *layout;
-    Object *options = nullptr;
-    if (!ctx.arguments(1, &layout, &options)) return;
     try {
-      thiz->as<FilterConfigurator>()->connect_tls(layout, options);
+      Str *layout;
+      Object *options = nullptr;
+      if (ctx.try_arguments(1, &layout, &options)) {
+        thiz->as<FilterConfigurator>()->connect_tls(options);
+        thiz->as<FilterConfigurator>()->to(layout);
+      } else if (ctx.arguments(0, &options)) {
+        thiz->as<FilterConfigurator>()->connect_tls(options);
+      }
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -784,10 +770,11 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.demux
   method("demux", [](Context &ctx, Object *thiz, Value &result) {
-    Str *layout;
-    if (!ctx.arguments(1, &layout)) return;
     try {
-      thiz->as<FilterConfigurator>()->demux(layout);
+      Str *layout = nullptr;
+      if (!ctx.arguments(0, &layout)) return;
+      thiz->as<FilterConfigurator>()->demux();
+      if (layout) thiz->as<FilterConfigurator>()->to(layout);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -796,10 +783,11 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.demuxQueue
   method("demuxQueue", [](Context &ctx, Object *thiz, Value &result) {
-    Str *layout;
-    if (!ctx.arguments(1, &layout)) return;
     try {
-      thiz->as<FilterConfigurator>()->demux_queue(layout);
+      Str *layout = nullptr;
+      if (!ctx.arguments(0, &layout)) return;
+      thiz->as<FilterConfigurator>()->demux_queue();
+      if (layout) thiz->as<FilterConfigurator>()->to(layout);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -808,11 +796,15 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.demuxHTTP
   method("demuxHTTP", [](Context &ctx, Object *thiz, Value &result) {
-    Str *layout;
-    Object *options = nullptr;
-    if (!ctx.arguments(1, &layout, &options)) return;
     try {
-      thiz->as<FilterConfigurator>()->demux_http(layout, options);
+      Str *layout;
+      Object *options = nullptr;
+      if (ctx.try_arguments(1, &layout, &options)) {
+        thiz->as<FilterConfigurator>()->demux_http(options);
+        thiz->as<FilterConfigurator>()->to(layout);
+      } else if (ctx.arguments(0, &options)) {
+        thiz->as<FilterConfigurator>()->demux_http(options);
+      }
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1014,11 +1006,15 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.fork
   method("fork", [](Context &ctx, Object *thiz, Value &result) {
-    Str *layout;
-    Object *initializers = nullptr;
-    if (!ctx.arguments(1, &layout, &initializers)) return;
     try {
-      thiz->as<FilterConfigurator>()->fork(layout, initializers);
+      Str *layout;
+      Object *initializers = nullptr;
+      if (ctx.try_arguments(1, &layout, &initializers)) {
+        thiz->as<FilterConfigurator>()->fork(initializers);
+        thiz->as<FilterConfigurator>()->to(layout);
+      } else if (ctx.arguments(0, &initializers)) {
+        thiz->as<FilterConfigurator>()->fork(initializers);
+      }
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1140,13 +1136,13 @@ template<> void ClassDef<FilterConfigurator>::init() {
     try {
       pjs::Str *layout;
       pjs::Function *callback = nullptr;
-      if (ctx.try_arguments(0, &callback)) {
+      if (ctx.try_arguments(1, &layout, &callback)) {
         thiz->as<FilterConfigurator>()->input(callback);
-        result.set(thiz);
-      } else if (ctx.arguments(1, &layout, &callback)) {
-        thiz->as<FilterConfigurator>()->input(layout, callback);
-        result.set(thiz);
+        thiz->as<FilterConfigurator>()->to(layout);
+      } else if (ctx.arguments(0, &callback)) {
+        thiz->as<FilterConfigurator>()->input(callback);
       }
+      result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
     }
@@ -1185,19 +1181,24 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.merge
   method("merge", [](Context &ctx, Object *thiz, Value &result) {
-    Str *layout;
-    Value key;
-    Function *key_f = nullptr;
-    Object *options = nullptr;
-    if (ctx.try_arguments(2, &layout, &key_f, &options)) {
-      key.set(key_f);
-    } else if (ctx.try_arguments(2, &layout, &options)) {
-      key = Value::undefined;
-    } else if (!ctx.arguments(1, &layout, &key, &options)) {
-      return;
-    }
     try {
-      thiz->as<FilterConfigurator>()->merge(layout, key, options);
+      Str *layout;
+      Function *group = nullptr;
+      Object *options = nullptr;
+      if (
+        ctx.try_arguments(1, &layout, &group, &options) ||
+        ctx.try_arguments(1, &layout, &options)
+      ) {
+        thiz->as<FilterConfigurator>()->merge(group, options);
+        thiz->as<FilterConfigurator>()->to(layout);
+      } else if (
+        ctx.try_arguments(0, &group, &options) ||
+        ctx.try_arguments(0, &options)
+      ) {
+        thiz->as<FilterConfigurator>()->merge(group, options);
+      } else {
+        ctx.error_argument_type(0, "a function");
+      }
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1206,19 +1207,24 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.mux
   method("mux", [](Context &ctx, Object *thiz, Value &result) {
-    Str *layout;
-    Value key;
-    Function *key_f = nullptr;
-    Object *options = nullptr;
-    if (ctx.try_arguments(2, &layout, &key_f, &options)) {
-      key.set(key_f);
-    } else if (ctx.try_arguments(2, &layout, &options)) {
-      key = Value::undefined;
-    } else if (!ctx.arguments(1, &layout, &key, &options)) {
-      return;
-    }
     try {
-      thiz->as<FilterConfigurator>()->mux(layout, key, options);
+      Str *layout;
+      Function *group = nullptr;
+      Object *options = nullptr;
+      if (
+        ctx.try_arguments(1, &layout, &group, &options) ||
+        ctx.try_arguments(1, &layout, &options)
+      ) {
+        thiz->as<FilterConfigurator>()->mux(group, options);
+        thiz->as<FilterConfigurator>()->to(layout);
+      } else if (
+        ctx.try_arguments(0, &group, &options) ||
+        ctx.try_arguments(0, &options)
+      ) {
+        thiz->as<FilterConfigurator>()->mux(group, options);
+      } else {
+        ctx.error_argument_type(0, "a function");
+      }
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1227,19 +1233,24 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.muxQueue
   method("muxQueue", [](Context &ctx, Object *thiz, Value &result) {
-    Str *layout;
-    Value key;
-    Function *key_f = nullptr;
-    Object *options = nullptr;
-    if (ctx.try_arguments(2, &layout, &key_f, &options)) {
-      key.set(key_f);
-    } else if (ctx.try_arguments(2, &layout, &options)) {
-      key = Value::undefined;
-    } else if (!ctx.arguments(1, &layout, &key, &options)) {
-      return;
-    }
     try {
-      thiz->as<FilterConfigurator>()->mux_queue(layout, key, options);
+      Str *layout;
+      Function *group = nullptr;
+      Object *options = nullptr;
+      if (
+        ctx.try_arguments(1, &layout, &group, &options) ||
+        ctx.try_arguments(1, &layout, &options)
+      ) {
+        thiz->as<FilterConfigurator>()->mux_queue(group, options);
+        thiz->as<FilterConfigurator>()->to(layout);
+      } else if (
+        ctx.try_arguments(0, &group, &options) ||
+        ctx.try_arguments(0, &options)
+      ) {
+        thiz->as<FilterConfigurator>()->mux_queue(group, options);
+      } else {
+        ctx.error_argument_type(0, "a function");
+      }
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1248,19 +1259,24 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.muxHTTP
   method("muxHTTP", [](Context &ctx, Object *thiz, Value &result) {
-    Str *layout;
-    Value key;
-    Function *key_f = nullptr;
-    Object *options = nullptr;
-    if (ctx.try_arguments(2, &layout, &key_f, &options)) {
-      key.set(key_f);
-    } else if (ctx.try_arguments(2, &layout, &options)) {
-      key = Value::undefined;
-    } else if (!ctx.arguments(1, &layout, &key, &options)) {
-      return;
-    }
     try {
-      thiz->as<FilterConfigurator>()->mux_http(layout, key, options);
+      Str *layout;
+      Function *group = nullptr;
+      Object *options = nullptr;
+      if (
+        ctx.try_arguments(1, &layout, &group, &options) ||
+        ctx.try_arguments(1, &layout, &options)
+      ) {
+        thiz->as<FilterConfigurator>()->mux_http(group, options);
+        thiz->as<FilterConfigurator>()->to(layout);
+      } else if (
+        ctx.try_arguments(0, &group, &options) ||
+        ctx.try_arguments(0, &options)
+      ) {
+        thiz->as<FilterConfigurator>()->mux_http(group, options);
+      } else {
+        ctx.error_argument_type(0, "a function");
+      }
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

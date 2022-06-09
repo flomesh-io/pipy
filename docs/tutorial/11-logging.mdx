@@ -183,7 +183,7 @@ Next, we need to record the response retrieved from target host：
       )
     )
   )
-  .merge('log-send', '')
+  .merge('log-send', () => '')
 
 .pipeline('log-send')
 ```

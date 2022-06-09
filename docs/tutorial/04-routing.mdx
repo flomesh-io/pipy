@@ -97,7 +97,7 @@ is named "_request_".
 +   .link('forward')
 
   .pipeline('forward')
-    .muxHTTP('connection', '')
+    .muxHTTP('connection')
 ```
 
 Note how we use a _link_ filter at the end of pipeline "_request_" to link to
@@ -226,7 +226,7 @@ message.
 
 ``` js
   .pipeline('forward')
-    .muxHTTP('connection', '')
+    .muxHTTP('connection')
 
   .pipeline('connection')
     .connect(
@@ -307,7 +307,7 @@ between requests going to the same target host.
 
 ``` js
   .pipeline('forward')
--   .muxHTTP('connection', '')
+-   .muxHTTP('connection')
 +   .muxHTTP(
 +     'connection',
 +     () => _target

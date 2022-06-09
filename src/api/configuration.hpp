@@ -48,15 +48,15 @@ class Worker;
 
 class FilterConfigurator : public pjs::ObjectTemplate<FilterConfigurator> {
 public:
-  void accept_http_tunnel(pjs::Str *layout, pjs::Function *handler);
-  void accept_socks(pjs::Str *layout, pjs::Function *on_connect);
-  void accept_tls(pjs::Str *layout, pjs::Object *options);
+  void accept_http_tunnel(pjs::Function *handler);
+  void accept_socks(pjs::Function *on_connect);
+  void accept_tls(pjs::Object *options);
   void compress_http(pjs::Object *options);
   void compress_message(pjs::Object *options);
   void connect(const pjs::Value &target, pjs::Object *options);
-  void connect_http_tunnel(pjs::Str *layout, const pjs::Value &address);
-  void connect_socks(pjs::Str *layout, const pjs::Value &address);
-  void connect_tls(pjs::Str *layout, pjs::Object *options);
+  void connect_http_tunnel(const pjs::Value &address);
+  void connect_socks(const pjs::Value &address);
+  void connect_tls(pjs::Object *options);
   void decode_dubbo();
   void decode_http_request();
   void decode_http_response(pjs::Object *options);
@@ -67,9 +67,9 @@ public:
   void deframe(pjs::Object *states);
   void deposit_message(const pjs::Value &filename, pjs::Object *options);
   void detect_protocol(pjs::Function *callback);
-  void demux(pjs::Str *layout);
-  void demux_queue(pjs::Str *layout);
-  void demux_http(pjs::Str *layout, pjs::Object *options);
+  void demux();
+  void demux_queue();
+  void demux_http(pjs::Object *options);
   void dummy();
   void dump(const pjs::Value &tag);
   void encode_dubbo(pjs::Object *message_obj);
@@ -78,14 +78,13 @@ public:
   void encode_mqtt();
   void encode_websocket();
   void exec(const pjs::Value &command);
-  void fork(pjs::Str *layout, pjs::Object *initializers);
-  void input(pjs::Str *layout, pjs::Function *callback);
+  void fork(pjs::Object *initializers);
   void input(pjs::Function *callback);
   void link(size_t count, pjs::Str **targets, pjs::Function **conditions);
-  void merge(pjs::Str *layout, const pjs::Value &key, pjs::Object *options);
-  void mux(pjs::Str *layout, const pjs::Value &key, pjs::Object *options);
-  void mux_queue(pjs::Str *layout, const pjs::Value &key, pjs::Object *options);
-  void mux_http(pjs::Str *layout, const pjs::Value &key, pjs::Object *options);
+  void merge(pjs::Function *group, pjs::Object *options);
+  void mux(pjs::Function *group, pjs::Object *options);
+  void mux_queue(pjs::Function *group, pjs::Object *options);
+  void mux_http(pjs::Function *group, pjs::Object *options);
   void on_body(pjs::Function *callback, int size_limit);
   void on_event(Event::Type type, pjs::Function *callback);
   void on_message(pjs::Function *callback, int size_limit);

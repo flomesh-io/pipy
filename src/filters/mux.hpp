@@ -59,7 +59,7 @@ protected:
   class Session;
 
   MuxBase();
-  MuxBase(const pjs::Value &session_key, const Options &options);
+  MuxBase(pjs::Function *group, const Options &options);
   MuxBase(const MuxBase &r);
 
   virtual void reset() override;
@@ -71,8 +71,8 @@ private:
 
   pjs::Ref<SessionManager> m_session_manager;
   pjs::Ref<Session> m_session;
+  pjs::Ref<pjs::Function> m_group;
   pjs::Value m_session_key;
-  pjs::Value m_session_key_current;
   EventFunction* m_stream = nullptr;
   EventBuffer m_waiting_events;
   bool m_waiting = false;
@@ -220,7 +220,7 @@ private:
 class MuxQueue : public MuxBase {
 public:
   MuxQueue();
-  MuxQueue(const pjs::Value &key, const Options &options);
+  MuxQueue(pjs::Function *group, const Options &options);
 
 protected:
   MuxQueue(const MuxQueue &r);
@@ -253,7 +253,7 @@ protected:
 
 class Mux : public MuxBase {
 public:
-  Mux(const pjs::Value &key, pjs::Object *options);
+  Mux(pjs::Function *group, pjs::Object *options);
 
 private:
   Mux(const Mux &r);
