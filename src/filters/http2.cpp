@@ -726,7 +726,7 @@ auto HeaderDecoder::decode(Data &data) -> ErrorCode {
 auto HeaderDecoder::end(pjs::Ref<http::MessageHead> &head) -> ErrorCode {
   head = m_head; m_head = nullptr;
   if (m_state != INDEX_PREFIX) return COMPRESSION_ERROR; // incomplete header block
-  if ((m_prefix & 0xe0) == 0x20) return COMPRESSION_ERROR; // ended with a table size change
+  if ((m_entry_prefix & 0xe0) == 0x20) return COMPRESSION_ERROR; // ended with a table size change
   if (!m_is_response && !m_is_trailer) {
     auto req = head->as<http::RequestHead>();
     if (
@@ -801,6 +801,7 @@ void HeaderDecoder::index_prefix(uint8_t prefix) {
   if      ((prefix & 0x80) == 0x80) { mask = 0x7f; }
   else if ((prefix & 0xc0) == 0x40) { mask = 0x3f; is_new = true; }
   else if ((prefix & 0xe0) == 0x20) { mask = 0x1f; }
+  m_entry_prefix = prefix;
   m_prefix = prefix;
   m_is_new = is_new;
   m_int = prefix & mask;

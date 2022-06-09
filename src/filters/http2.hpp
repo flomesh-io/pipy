@@ -245,6 +245,7 @@ private:
   bool m_is_trailer;
   bool m_is_new;
   bool m_is_pseudo_end;
+  uint8_t m_entry_prefix = 0;
   uint8_t m_prefix;
   uint8_t m_exp;
   uint32_t m_int;
