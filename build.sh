@@ -28,6 +28,7 @@ __NPROC=${NPROC:-$(getconf _NPROCESSORS_ONLN)}
 BUILD_CONTAINER=false
 BUILD_RPM=false
 BUILD_BINARY=true
+BUILD_TYPE=Release
 PACKAGE_OUTPUTS=false
 
 DOCKERFILE=${DOCKERFILE:-Dockerfile}
@@ -41,7 +42,7 @@ PIPY_GUI=${PIPY_GUI:-OFF}
 OS_ARCH=$(uname -m)
 ##### End Default environment variables #########
 
-SHORT_OPTS="crsgt:nhp"
+SHORT_OPTS="crsgt:nhpd"
 
 function usage() {
     echo "Usage: $0 [-h|-c|-r|-s|-g|-n|-t <version-revision>]" 1>&2
@@ -53,6 +54,7 @@ function usage() {
     echo "       -g                     Build pipy with GUI, default with no GUI"
     echo "       -n                     Build pipy binary, default yes"
     echo "       -p                     Package build outputs"
+    echo "       -d                     Build with debug options"
     echo ""
     exit 1
 }
@@ -91,6 +93,10 @@ while true ; do
       PACKAGE_OUTPUTS=true
       shift
       ;;
+    -d)
+      BUILD_TYPE="Debug"
+      shift
+      ;;
     -h)
         usage
         ;;
@@ -108,28 +114,37 @@ shift $((OPTIND-1))
 [ $# -ne 0 ] && usage
 
 # define release
-if [ -z "$RELEASE_VERSION" ]
+if git rev-parse --is-inside-work-tree > /dev/null 2>&1
 then
-    RELEASE_VERSION=`git name-rev --tags --name-only $(git rev-parse HEAD)`
-    if [ $RELEASE_VERSION = 'undefined' ]
+    if [ -z "$RELEASE_VERSION" ]
     then
-        RELEASE_VERSION=nightly-$(date +%Y%m%d%H%M)
+        RELEASE_VERSION=`git name-rev --tags --name-only $(git rev-parse HEAD)`
+        if [ $RELEASE_VERSION = 'undefined' ]
+        then
+            RELEASE_VERSION=nightly-$(date +%Y%m%d%H%M)
+        fi
+    elif [ $RELEASE_VERSION == "latest" ]; then
+      git checkout main
+      git pull origin main
+    elif [[ $RELEASE_VERSION != "nightly"* ]]; then
+      git checkout $RELEASE_VERSION
+      if [ $? -ne 0 ]; then
+        echo "Cannot find tag $RELEASE_VERSION"
+        exit -1
+      fi
     fi
-elif [ $RELEASE_VERSION == "latest" ]; then
-  git checkout main
-  git pull origin main
-elif [[ $RELEASE_VERSION != "nightly"* ]]; then
-  git checkout $RELEASE_VERSION
-  if [ $? -ne 0 ]; then
-    echo "Cannot find tag $RELEASE_VERSION"
-    exit -1
-  fi
-fi
 
-export COMMIT_ID=$(git log -1 --format=%H)
-export COMMIT_DATE=$(git log -1 --format=%cD)
-export VERSION=$(echo $RELEASE_VERSION | cut -d\- -f 1)
-export REVISION=$(echo $RELEASE_VERSION | cut -d\- -f 2)
+    export COMMIT_ID=$(git log -1 --format=%H)
+    export COMMIT_DATE=$(git log -1 --format=%cD)
+    export VERSION=$(echo $RELEASE_VERSION | cut -d\- -f 1)
+    export REVISION=$(echo $RELEASE_VERSION | cut -d\- -f 2)
+else
+    export RELEASE_VERSION=$(basename ${PIPY_DIR})
+    export COMMIT_ID="N/A"
+    export COMMIT_DATE="N/A"
+    export VERSION=$(basename ${PIPY_DIR})
+    export REVISION=
+fi
 
 export CI_COMMIT_TAG=$RELEASE_VERSION
 export CI_COMMIT_SHA=$COMMIT_ID
@@ -174,7 +189,7 @@ function build() {
   mkdir ${PIPY_DIR}/build 2>&1 > /dev/null || true
   rm -fr ${PIPY_DIR}/build/*
   cd ${PIPY_DIR}/build
-  $CMAKE -DPIPY_GUI=${PIPY_GUI} -DPIPY_TUTORIAL=${PIPY_GUI} -DPIPY_STATIC=${PIPY_STATIC} -DCMAKE_BUILD_TYPE=Release $PIPY_DIR
+  $CMAKE -DPIPY_GUI=${PIPY_GUI} -DPIPY_TUTORIAL=${PIPY_GUI} -DPIPY_STATIC=${PIPY_STATIC} -DCMAKE_BUILD_TYPE=${BUILD_TYPE} $PIPY_DIR
   make -j${__NPROC}
   if [ $? -eq 0 ];then 
     echo "pipy now is in ${PIPY_DIR}/bin"
@@ -220,6 +235,7 @@ if $BUILD_RPM; then
     --build-arg COMMIT_DATE="$COMMIT_DATE" \
     --build-arg PIPY_GUI="$PIPY_GUI" \
     --build-arg PIPY_STATIC="$PIPY_STATIC" \
+    --build-arg BUILD_TYPE="$BUILD_TYPE" \
     -f $DOCKERFILE .
 
   sudo docker run --rm -v $PIPY_DIR/rpm:/data pipy-rpmbuild:$RELEASE_VERSION bash -c "cp /rpm/*.rpm /data"
@@ -245,6 +261,7 @@ if $BUILD_CONTAINER; then
     --build-arg COMMIT_DATE="$COMMIT_DATE" \
     --build-arg PIPY_GUI="$PIPY_GUI" \
     --build-arg PIPY_STATIC="$PIPY_STATIC" \
+    --build-arg BUILD_TYPE="$BUILD_TYPE" \
     -f $DOCKERFILE .
 
   if $PACKAGE_OUTPUTS; then
