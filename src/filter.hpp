@@ -57,6 +57,7 @@ public:
 
   void add_sub_pipeline(PipelineLayout *layout);
   void add_sub_pipeline(pjs::Str *name);
+  void add_sub_pipeline(int index);
   auto num_sub_pipelines() const -> int { return m_subs->size(); }
   auto get_sub_pipeline_name(int i) -> const std::string&;
 
@@ -84,6 +85,7 @@ protected:
 
 private:
   struct Sub {
+    int index = -1;
     pjs::Ref<pjs::Str> name;
     pjs::Ref<PipelineLayout> layout;
   };

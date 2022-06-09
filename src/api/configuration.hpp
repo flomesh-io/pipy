@@ -36,38 +36,18 @@
 
 namespace pipy {
 
+class Configuration;
 class Filter;
 class Graph;
 class Module;
 class Worker;
 
 //
-// Configuration
+// FilterConfigurator
 //
 
-class Configuration : public pjs::ObjectTemplate<Configuration> {
+class FilterConfigurator : public pjs::ObjectTemplate<FilterConfigurator> {
 public:
-  struct Export {
-    pjs::Ref<pjs::Str> ns;
-    pjs::Ref<pjs::Str> name;
-    pjs::Value value;
-  };
-
-  struct Import {
-    pjs::Ref<pjs::Str> ns;
-    pjs::Ref<pjs::Str> name;
-    pjs::Ref<pjs::Str> original_name;
-  };
-
-  void add_export(pjs::Str *ns, pjs::Object *variables);
-  void add_import(pjs::Object *variables);
-
-  void listen(int port, pjs::Object *options);
-  void listen(const std::string &port, pjs::Object *options);
-  void read(const std::string &pathname);
-  void task(const std::string &when);
-  void pipeline(const std::string &name);
-
   void accept_http_tunnel(pjs::Str *layout, pjs::Function *handler);
   void accept_socks(pjs::Str *layout, pjs::Function *on_connect);
   void accept_tls(pjs::Str *layout, pjs::Object *options);
@@ -100,6 +80,7 @@ public:
   void exec(const pjs::Value &command);
   void fork(pjs::Str *layout, pjs::Object *initializers);
   void input(pjs::Str *layout, pjs::Function *callback);
+  void input(pjs::Function *callback);
   void link(size_t count, pjs::Str **targets, pjs::Function **conditions);
   void merge(pjs::Str *layout, const pjs::Value &key, pjs::Object *options);
   void mux(pjs::Str *layout, const pjs::Value &key, pjs::Object *options);
@@ -127,6 +108,59 @@ public:
   void use(const std::list<Module*> modules, pjs::Str *pipeline, pjs::Function *when);
   void use(const std::list<Module*> modules, pjs::Str *pipeline, pjs::Str *pipeline_down, pjs::Function *when);
   void wait(pjs::Function *condition, pjs::Object *options);
+
+  void to(pjs::Str *layout_name);
+  void to(const std::function<void(FilterConfigurator*)> &cb);
+  void check_integrity();
+
+protected:
+  FilterConfigurator(
+    Configuration *configuration,
+    std::list<std::unique_ptr<Filter>> *filters = nullptr
+  ) : m_configuration(configuration)
+    , m_filters(filters) {}
+
+  void set_filter_list(std::list<std::unique_ptr<Filter>> *filters) {
+    m_filters = filters;
+  }
+
+private:
+  auto append_filter(Filter *filter) -> Filter*;
+  void require_sub_pipeline(Filter *filter);
+
+  Configuration* m_configuration;
+  std::list<std::unique_ptr<Filter>> *m_filters;
+  Filter* m_current_joint_filter = nullptr;
+
+  friend class pjs::ObjectTemplate<FilterConfigurator>;
+};
+
+//
+// Configuration
+//
+
+class Configuration : public pjs::ObjectTemplate<Configuration, FilterConfigurator> {
+public:
+  struct Export {
+    pjs::Ref<pjs::Str> ns;
+    pjs::Ref<pjs::Str> name;
+    pjs::Value value;
+  };
+
+  struct Import {
+    pjs::Ref<pjs::Str> ns;
+    pjs::Ref<pjs::Str> name;
+    pjs::Ref<pjs::Str> original_name;
+  };
+
+  void add_export(pjs::Str *ns, pjs::Object *variables);
+  void add_import(pjs::Object *variables);
+
+  void listen(int port, pjs::Object *options);
+  void listen(const std::string &port, pjs::Object *options);
+  void read(const std::string &pathname);
+  void task(const std::string &when);
+  void pipeline(const std::string &name);
 
   void bind_pipelines();
   void bind_exports(Worker *worker, Module *module);
@@ -160,6 +194,11 @@ private:
     std::list<std::unique_ptr<Filter>> filters;
   };
 
+  struct IndexedPipelineConfig {
+    int index;
+    std::list<std::unique_ptr<Filter>> filters;
+  };
+
   pjs::Ref<pjs::Object> m_context_prototype;
   pjs::Ref<pjs::Class> m_context_class;
   std::list<Export> m_exports;
@@ -168,11 +207,12 @@ private:
   std::list<ReaderConfig> m_readers;
   std::list<TaskConfig> m_tasks;
   std::list<NamedPipelineConfig> m_named_pipelines;
-  std::list<std::unique_ptr<Filter>> *m_current_filters = nullptr;
+  std::map<int, IndexedPipelineConfig> m_indexed_pipelines;
 
-  void append_filter(Filter *filter);
+  auto new_indexed_pipeline(int &index) -> FilterConfigurator*;
 
-  friend class pjs::ObjectTemplate<Configuration>;
+  friend class pjs::ObjectTemplate<Configuration, FilterConfigurator>;
+  friend class FilterConfigurator;
 };
 
 } // namespace pipy

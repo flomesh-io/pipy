@@ -69,6 +69,11 @@ void Filter::add_sub_pipeline(pjs::Str *name) {
   m_subs->back().name = name;
 }
 
+void Filter::add_sub_pipeline(int index) {
+  m_subs->emplace_back();
+  m_subs->back().index = index;
+}
+
 auto Filter::get_sub_pipeline_name(int i) -> const std::string& {
   static std::string empty;
   auto &sub = m_subs->at(i);
