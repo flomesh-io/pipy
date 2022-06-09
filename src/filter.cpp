@@ -86,18 +86,36 @@ auto Filter::get_sub_pipeline_name(int i) -> const std::string& {
   }
 }
 
+auto Filter::get_sub_pipeline_index(int i) -> int {
+  return m_subs->at(i).index;
+}
+
 void Filter::bind() {
   for (auto &sub : *m_subs) {
-    if (sub.name && sub.name != pjs::Str::empty && !sub.layout) {
-      if (auto mod = module()) {
-        if (auto p = mod->find_named_pipeline(sub.name)) {
-          sub.layout = p;
-          continue;
+    if (!sub.layout) {
+      if (sub.name) {
+        if (sub.name != pjs::Str::empty) {
+          if (auto mod = module()) {
+            if (auto p = mod->find_named_pipeline(sub.name)) {
+              sub.layout = p;
+              continue;
+            }
+          }
+          std::string msg("pipeline not found with name: ");
+          msg += sub.name->str();
+          throw std::runtime_error(msg);
         }
+      } else {
+        if (auto mod = module()) {
+          if (auto p = mod->find_indexed_pipeline(sub.index)) {
+            sub.layout = p;
+            continue;
+          }
+        }
+        std::string msg("pipeline not found with index: ");
+        msg += std::to_string(sub.index);
+        throw std::runtime_error(msg);
       }
-      std::string msg("pipeline not found: ");
-      msg += sub.name->str();
-      throw std::runtime_error(msg);
     }
   }
 }

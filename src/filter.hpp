@@ -60,6 +60,7 @@ public:
   void add_sub_pipeline(int index);
   auto num_sub_pipelines() const -> int { return m_subs->size(); }
   auto get_sub_pipeline_name(int i) -> const std::string&;
+  auto get_sub_pipeline_index(int i) -> int;
 
   auto sub_pipeline(int i, bool clone_context) -> Pipeline*;
 

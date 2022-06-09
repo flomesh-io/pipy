@@ -63,11 +63,8 @@ public:
   auto path() const -> const std::string& { return m_path; }
   auto source() const -> const std::string& { return m_source; }
 
-  auto find_named_pipeline(pjs::Str *name) -> PipelineLayout* {
-    auto i = m_named_pipelines.find(name);
-    if (i == m_named_pipelines.end()) return nullptr;
-    return i->second;
-  }
+  auto find_named_pipeline(pjs::Str *name) -> PipelineLayout*;
+  auto find_indexed_pipeline(int index) -> PipelineLayout*;
 
 private:
   Module(Worker *worker, int index);
@@ -85,6 +82,7 @@ private:
   pjs::Ref<pjs::Class> m_context_class;
   std::list<pjs::Ref<PipelineLayout>> m_pipelines;
   std::map<pjs::Ref<pjs::Str>, PipelineLayout*> m_named_pipelines;
+  std::map<int, PipelineLayout*> m_indexed_pipelines;
 
   friend class pjs::RefCount<Module>;
   friend class Configuration;

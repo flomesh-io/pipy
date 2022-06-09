@@ -50,7 +50,10 @@ void Graph::from_pipelines(Graph &g, const std::set<PipelineLayout*> &pipelines)
       gf.name = ss.str();
       gf.fork = (gf.name == "fork" || gf.name == "merge");
       for (int i = 0; i < f->num_sub_pipelines(); i++) {
-        gf.links.push_back(f->get_sub_pipeline_name(i));
+        gf.links.push_back({
+          f->get_sub_pipeline_index(i),
+          f->get_sub_pipeline_name(i),
+        });
       }
       p.filters.emplace_back(std::move(gf));
     }
@@ -91,6 +94,7 @@ private:
   Graph& m_g;
   Graph::Pipeline* m_p = nullptr;
   PipelineLayout::Type m_pt;
+  int m_pipeline_index = 0;
   int m_named_count = 0;
   int m_listen_count = 0;
   int m_task_count = 0;
@@ -176,6 +180,7 @@ private:
         flush();
         m_pt = PipelineLayout::NAMED;
         m_p = new Graph::Pipeline;
+        m_p->index = m_pipeline_index++;
         m_p->name = argc > 0 && cv(argv[0])->t() == STRING
           ? cv(argv[0])->s()
           : std::string("Pipeline #") + std::to_string(++m_named_count);
@@ -184,6 +189,7 @@ private:
         flush();
         m_pt = PipelineLayout::LISTEN;
         m_p = new Graph::Pipeline;
+        m_p->index = m_pipeline_index++;
         m_p->name = argc > 0 && cv(argv[0])->t() == NUMBER
           ? std::string("Listen 0.0.0.0:") + std::to_string(int(cv(argv[0])->n()))
           : std::string("Listen #") + std::to_string(++m_listen_count);
@@ -192,6 +198,7 @@ private:
         flush();
         m_pt = PipelineLayout::TASK;
         m_p = new Graph::Pipeline;
+        m_p->index = m_pipeline_index++;
         m_p->name = argc > 0 && cv(argv[0])->t() == STRING
           ? std::string("Task every ") + cv(argv[0])->s()
           : std::string("Task #") + std::to_string(++m_task_count);
@@ -202,7 +209,7 @@ private:
           f.name = m;
           for (int i = 0; i < argc; i += 2) {
             if (cv(argv[i])->t() == STRING) {
-              f.links.push_back(cv(argv[i])->s());
+              f.links.push_back({ -1, cv(argv[i])->s() });
             }
           }
           m_p->filters.emplace_back(std::move(f));
@@ -212,7 +219,7 @@ private:
           f.name = m;
           f.fork = (m == "fork" || m == "merge");
           if (argc > 0 && cv(argv[0])->t() == STRING) {
-            f.links.push_back(cv(argv[0])->s());
+            f.links.push_back({ -1, cv(argv[0])->s() });
           }
           m_p->filters.emplace_back(std::move(f));
 
@@ -300,13 +307,9 @@ auto Graph::to_text(std::string &error) -> std::vector<std::string> {
     if (!err.empty() && error.empty()) error = err;
   };
 
-  for (const auto &i : m_root_pipelines) {
-    build_one(i.second);
-  }
-
-  for (const auto &i : m_named_pipelines) {
-    if (i.second.root) {
-      build_one(i.second);
+  for (const auto &i : m_pipelines) {
+    if (i.root) {
+      build_one(i);
     }
   }
 
@@ -326,13 +329,9 @@ void Graph::to_json(std::string &error, std::ostream &out) {
     if (!err.empty() && error.empty()) error = err;
   };
 
-  for (const auto &i : m_root_pipelines) {
-    build_one(i.second);
-  }
-
-  for (const auto &i : m_named_pipelines) {
-    if (i.second.root) {
-      build_one(i.second);
+  for (const auto &i : m_pipelines) {
+    if (i.root) {
+      build_one(i);
     }
   }
 
@@ -394,23 +393,31 @@ void Graph::to_json(std::string &error, std::ostream &out) {
 }
 
 void Graph::find_roots() {
-  for (auto &i : m_named_pipelines) {
-    i.second.root = true;
+  for (auto &i : m_pipelines) {
+    i.root = true;
   }
 
   auto find_links = [this](const Pipeline &pipeline) {
     for (auto &f : pipeline.filters) {
       for (auto &l : f.links) {
-        auto i = m_named_pipelines.find(l);
-        if (i != m_named_pipelines.end()) {
-          i->second.root = false;
+        if (l.index >= 0) {
+          auto i = m_indexed_pipelines.find(l.index);
+          if (i != m_indexed_pipelines.end()) {
+            i->second->root = false;
+          }
+        } else {
+          auto i = m_named_pipelines.find(l.name);
+          if (i != m_named_pipelines.end()) {
+            i->second->root = false;
+          }
         }
       }
     }
   };
 
-  for (auto &i : m_root_pipelines) find_links(i.second);
-  for (auto &i : m_named_pipelines) find_links(i.second);
+  for (auto &i : m_pipelines) {
+    find_links(i);
+  }
 }
 
 auto Graph::build_tree(const Pipeline &pipeline, std::string &error) -> Node* {
@@ -426,29 +433,39 @@ auto Graph::build_tree(const Pipeline &pipeline, std::string &error) -> Node* {
         for (const auto &l : f.links) {
           bool recursive = false;
           for (auto p = pipeline_node; p; p = p->parent()) {
-            if (p->type() == Node::PIPELINE && p->name() == l) {
+            if (p->type() == Node::PIPELINE && p->name() == l.name) {
               recursive = true;
               break;
             }
           }
           if (recursive) {
-            auto msg = std::string("recursive pipeline: ") + l;
+            auto msg = std::string("recursive pipeline: ") + l.name;
             if (error.empty()) error = msg;
             new Node(link_node, Node::PIPELINE, msg);
             continue;
           }
-          if (l.empty()) {
-            new Node(link_node, Node::PIPELINE, "[empty]");
-          } else {
-            auto i = m_named_pipelines.find(l);
-            if (i == m_named_pipelines.end()) {
-              auto msg = std::string("pipeline not found: ") + l;
+          if (l.index >= 0) {
+            auto i = m_indexed_pipelines.find(l.index);
+            if (i == m_indexed_pipelines.end()) {
+              auto msg = std::string("pipeline not found: ") + std::to_string(l.index);
               if (error.empty()) error = msg;
               new Node(link_node, Node::PIPELINE, msg);
               continue;
             }
-            auto node = new Node(link_node, Node::PIPELINE, l);
-            build(i->second, node);
+            auto node = new Node(link_node, Node::PIPELINE, "[no name]");
+            build(*i->second, node);
+          } else if (l.name.empty()) {
+            new Node(link_node, Node::PIPELINE, "[empty]");
+          } else {
+            auto i = m_named_pipelines.find(l.name);
+            if (i == m_named_pipelines.end()) {
+              auto msg = std::string("pipeline not found: ") + l.name;
+              if (error.empty()) error = msg;
+              new Node(link_node, Node::PIPELINE, msg);
+              continue;
+            }
+            auto node = new Node(link_node, Node::PIPELINE, l.name);
+            build(*i->second, node);
           }
         }
       }

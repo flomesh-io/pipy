@@ -332,12 +332,12 @@ void FilterConfigurator::to(pjs::Str *layout_name) {
   m_current_joint_filter = nullptr;
 }
 
-void FilterConfigurator::to(const std::function<void(FilterConfigurator*)> &cb) {
+void FilterConfigurator::to(const std::string &name, const std::function<void(FilterConfigurator*)> &cb) {
   if (!m_current_joint_filter) {
     throw std::runtime_error("calling to() without a joint-filter");
   }
   int index = -1;
-  pjs::Ref<FilterConfigurator> fc(m_configuration->new_indexed_pipeline(index));
+  pjs::Ref<FilterConfigurator> fc(m_configuration->new_indexed_pipeline(name, index));
   cb(fc);
   m_current_joint_filter->add_sub_pipeline(index);
   m_current_joint_filter = nullptr;
@@ -415,7 +415,7 @@ void Configuration::add_import(pjs::Object *variables) {
 
 void Configuration::listen(int port, pjs::Object *options) {
   Listener::Options opt(options);
-  m_listens.push_back({ "0.0.0.0", port, opt });
+  m_listens.push_back({ next_pipeline_index(), "0.0.0.0", port, opt });
   FilterConfigurator::set_filter_list(&m_listens.back().filters);
 }
 
@@ -434,25 +434,25 @@ void Configuration::listen(const std::string &port, pjs::Object *options) {
   }
 
   Listener::Options opt(options);
-  m_listens.push_back({ addr, port_num, opt });
+  m_listens.push_back({ next_pipeline_index(), addr, port_num, opt });
   FilterConfigurator::set_filter_list(&m_listens.back().filters);
 }
 
 void Configuration::read(const std::string &pathname) {
-  m_readers.push_back({ pathname });
+  m_readers.push_back({ next_pipeline_index(), pathname });
   FilterConfigurator::set_filter_list(&m_readers.back().filters);
 }
 
 void Configuration::task(const std::string &when) {
   std::string name("Task #");
   name += std::to_string(m_tasks.size() + 1);
-  m_tasks.push_back({ name, when });
+  m_tasks.push_back({ next_pipeline_index(), name, when });
   FilterConfigurator::set_filter_list(&m_tasks.back().filters);
 }
 
 void Configuration::pipeline(const std::string &name) {
   if (name.empty()) throw std::runtime_error("pipeline name cannot be empty");
-  m_named_pipelines.push_back({ name });
+  m_named_pipelines.push_back({ next_pipeline_index(), name });
   FilterConfigurator::set_filter_list(&m_named_pipelines.back().filters);
 }
 
@@ -503,11 +503,11 @@ void Configuration::apply(Module *mod) {
 
   auto make_pipeline = [&](
     PipelineLayout::Type type,
-    const std::string &name,
+    int index, const std::string &name,
     std::list<std::unique_ptr<Filter>> &filters
   ) -> PipelineLayout*
   {
-    auto layout = PipelineLayout::make(mod, type, name);
+    auto layout = PipelineLayout::make(mod, type, index, name);
     for (auto &f : filters) {
       layout->append(f.release());
     }
@@ -517,8 +517,13 @@ void Configuration::apply(Module *mod) {
 
   for (auto &i : m_named_pipelines) {
     auto s = pjs::Str::make(i.name);
-    auto p = make_pipeline(PipelineLayout::NAMED, i.name, i.filters);
+    auto p = make_pipeline(PipelineLayout::NAMED, i.index, i.name, i.filters);
     mod->m_named_pipelines[s] = p;
+  }
+
+  for (auto &i : m_indexed_pipelines) {
+    auto p = make_pipeline(PipelineLayout::NAMED, i.second.index, i.second.name, i.second.filters);
+    mod->m_indexed_pipelines[p->index()] = p;
   }
 
   Worker *worker = mod->worker();
@@ -526,7 +531,7 @@ void Configuration::apply(Module *mod) {
   for (auto &i : m_listens) {
     if (!i.port) continue;
     auto name = std::to_string(i.port) + '@' + i.ip;
-    auto p = make_pipeline(PipelineLayout::LISTEN, name, i.filters);
+    auto p = make_pipeline(PipelineLayout::LISTEN, i.index, name, i.filters);
     auto listener = Listener::get(i.ip, i.port, i.options.protocol);
     if (listener->reserved()) {
       std::string msg("Port reserved: ");
@@ -541,13 +546,13 @@ void Configuration::apply(Module *mod) {
   }
 
   for (auto &i : m_readers) {
-    auto p = make_pipeline(PipelineLayout::READ, i.pathname, i.filters);
+    auto p = make_pipeline(PipelineLayout::READ, i.index, i.pathname, i.filters);
     auto r = Reader::make(i.pathname, p);
     worker->add_reader(r);
   }
 
   for (auto &i : m_tasks) {
-    auto p = make_pipeline(PipelineLayout::TASK, i.name, i.filters);
+    auto p = make_pipeline(PipelineLayout::TASK, i.index, i.name, i.filters);
     auto t = Task::make(i.when, p);
     worker->add_task(t);
   }
@@ -562,7 +567,10 @@ void Configuration::draw(Graph &g) {
       gf.name = ss.str();
       gf.fork = (gf.name == "fork" || gf.name == "merge");
       for (int i = 0; i < f->num_sub_pipelines(); i++) {
-        gf.links.push_back(f->get_sub_pipeline_name(i));
+        gf.links.push_back({
+          f->get_sub_pipeline_index(i),
+          f->get_sub_pipeline_name(i),
+        });
       }
       gp.filters.emplace_back(std::move(gf));
     }
@@ -570,8 +578,17 @@ void Configuration::draw(Graph &g) {
 
   for (const auto &i : m_named_pipelines) {
     Graph::Pipeline p;
+    p.index = i.index;
     p.name = i.name;
     add_filters(p, i.filters);
+    g.add_named_pipeline(std::move(p));
+  }
+
+  for (const auto &i : m_indexed_pipelines) {
+    Graph::Pipeline p;
+    p.index = i.second.index;
+    p.name = i.second.name;
+    add_filters(p, i.second.filters);
     g.add_named_pipeline(std::move(p));
   }
 
@@ -604,9 +621,12 @@ void Configuration::draw(Graph &g) {
   }
 }
 
-auto Configuration::new_indexed_pipeline(int &index) -> FilterConfigurator* {
-  index = m_indexed_pipelines.size();
-  return FilterConfigurator::make(this, &m_indexed_pipelines[index].filters);
+auto Configuration::new_indexed_pipeline(const std::string &name, int &index) -> FilterConfigurator* {
+  index = next_pipeline_index();
+  auto &i = m_indexed_pipelines[index];
+  i.index = index;
+  i.name = name;
+  return FilterConfigurator::make(this, &i.filters);
 }
 
 } // namespace pipy
@@ -1566,6 +1586,7 @@ template<> void ClassDef<FilterConfigurator>::init() {
         thiz->as<FilterConfigurator>()->to(layout_name);
       } else if (ctx.try_arguments(1, &layout_builder)) {
         thiz->as<FilterConfigurator>()->to(
+          layout_builder->to_string(),
           [&](FilterConfigurator *fc) {
             pjs::Value arg(fc), ret;
             (*layout_builder)(ctx, 1, &arg, ret);

@@ -43,15 +43,21 @@ class PipelineLayout;
 
 class Graph {
 public:
+  struct Link {
+    int index;
+    std::string name;
+  };
+
   struct Filter {
     std::string name;
-    std::list<std::string> links;
+    std::list<Link> links;
     bool fork = false;
     int row = 0;
     int column = 0;
   };
 
   struct Pipeline {
+    int index = -1;
     std::string name;
     std::list<Filter> filters;
     bool root = false;
@@ -61,11 +67,17 @@ public:
   static bool from_script(Graph &g, const std::string &script, std::string &error);
 
   void add_root_pipeline(Pipeline &&p) {
-    m_root_pipelines[p.name] = std::move(p);
+    m_pipelines.push_back(std::move(p));
+    auto &ppl = m_pipelines.back();
+    m_indexed_pipelines[ppl.index] = &ppl;
+    m_root_pipelines[ppl.name] = &ppl;
   }
 
   void add_named_pipeline(Pipeline &&p) {
-    m_named_pipelines[p.name] = std::move(p);
+    m_pipelines.push_back(std::move(p));
+    auto &ppl = m_pipelines.back();
+    m_indexed_pipelines[ppl.index] = &ppl;
+    m_named_pipelines[ppl.name] = &ppl;
   }
 
   auto to_text(std::string &error) -> std::vector<std::string>;
@@ -114,8 +126,10 @@ private:
     int m_index = 0;
   };
 
-  std::map<std::string, Pipeline> m_root_pipelines;
-  std::map<std::string, Pipeline> m_named_pipelines;
+  std::list<Pipeline> m_pipelines;
+  std::map<int, Pipeline*> m_indexed_pipelines;
+  std::map<std::string, Pipeline*> m_root_pipelines;
+  std::map<std::string, Pipeline*> m_named_pipelines;
 
   void find_roots();
   auto build_tree(const Pipeline &pipeline, std::string &error) -> Node*;

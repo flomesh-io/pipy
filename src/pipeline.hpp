@@ -61,7 +61,11 @@ public:
   };
 
   static auto make(Module *module, Type type, const std::string &name) -> PipelineLayout* {
-    return new PipelineLayout(module, type, name);
+    return new PipelineLayout(module, type, -1, name);
+  }
+
+  static auto make(Module *module, Type type, int index, const std::string &name) -> PipelineLayout* {
+    return new PipelineLayout(module, type, index, name);
   }
 
   static void for_each(std::function<void(PipelineLayout*)> callback) {
@@ -71,6 +75,7 @@ public:
   }
 
   auto module() const -> Module* { return m_module; }
+  auto index() const -> int { return m_index; }
   auto type() const -> Type { return m_type; }
   auto name() const -> pjs::Str* { return m_name; }
   auto allocated() const -> size_t { return m_allocated; }
@@ -80,13 +85,14 @@ public:
   void shutdown();
 
 private:
-  PipelineLayout(Module *module, Type type, const std::string &name);
+  PipelineLayout(Module *module, Type type, int index, const std::string &name);
   ~PipelineLayout();
 
   auto alloc(Context *ctx) -> Pipeline*;
   void free(Pipeline *pipeline);
 
   Type m_type;
+  int m_index;
   pjs::Ref<pjs::Str> m_name;
   std::list<std::unique_ptr<Filter>> m_filters;
   pjs::Ref<Module> m_module;

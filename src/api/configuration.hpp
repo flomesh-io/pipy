@@ -109,7 +109,7 @@ public:
   void wait(pjs::Function *condition, pjs::Object *options);
 
   void to(pjs::Str *layout_name);
-  void to(const std::function<void(FilterConfigurator*)> &cb);
+  void to(const std::string &name, const std::function<void(FilterConfigurator*)> &cb);
   void check_integrity();
 
 protected:
@@ -171,6 +171,7 @@ private:
   Configuration(pjs::Object *context_prototype);
 
   struct ListenConfig {
+    int index;
     std::string ip;
     int port;
     Listener::Options options;
@@ -178,23 +179,21 @@ private:
   };
 
   struct ReaderConfig {
+    int index;
     std::string pathname;
     std::list<std::unique_ptr<Filter>> filters;
   };
 
   struct TaskConfig {
+    int index;
     std::string name;
     std::string when;
     std::list<std::unique_ptr<Filter>> filters;
   };
 
   struct NamedPipelineConfig {
-    std::string name;
-    std::list<std::unique_ptr<Filter>> filters;
-  };
-
-  struct IndexedPipelineConfig {
     int index;
+    std::string name;
     std::list<std::unique_ptr<Filter>> filters;
   };
 
@@ -206,9 +205,11 @@ private:
   std::list<ReaderConfig> m_readers;
   std::list<TaskConfig> m_tasks;
   std::list<NamedPipelineConfig> m_named_pipelines;
-  std::map<int, IndexedPipelineConfig> m_indexed_pipelines;
+  std::map<int, NamedPipelineConfig> m_indexed_pipelines;
+  int m_current_pipeline_index = 0;
 
-  auto new_indexed_pipeline(int &index) -> FilterConfigurator*;
+  auto next_pipeline_index() -> int { return m_current_pipeline_index++; }
+  auto new_indexed_pipeline(const std::string &name, int &index) -> FilterConfigurator*;
 
   friend class pjs::ObjectTemplate<Configuration, FilterConfigurator>;
   friend class FilterConfigurator;

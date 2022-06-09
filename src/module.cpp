@@ -126,6 +126,7 @@ void Module::unload() {
     p->shutdown();
   }
   m_named_pipelines.clear();
+  m_indexed_pipelines.clear();
   m_pipelines.clear();
   release();
 }
@@ -146,6 +147,18 @@ void Module::bind_pipelines() {
   for (const auto &p : m_pipelines) {
     p->bind();
   }
+}
+
+auto Module::find_named_pipeline(pjs::Str *name) -> PipelineLayout* {
+  auto i = m_named_pipelines.find(name);
+  if (i == m_named_pipelines.end()) return nullptr;
+  return i->second;
+}
+
+auto Module::find_indexed_pipeline(int index) -> PipelineLayout* {
+  auto i = m_indexed_pipelines.find(index);
+  if (i == m_indexed_pipelines.end()) return nullptr;
+  return i->second;
 }
 
 } // namespace pipy
