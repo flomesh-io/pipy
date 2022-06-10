@@ -26,6 +26,8 @@
 #ifndef GRAPH_HPP
 #define GRAPH_HPP
 
+#include "filter.hpp"
+
 #include <list>
 #include <map>
 #include <set>
@@ -33,9 +35,6 @@
 #include <vector>
 
 namespace pipy {
-
-class Filter;
-class PipelineLayout;
 
 //
 // Graph
@@ -48,10 +47,7 @@ public:
     std::string name;
   };
 
-  struct Filter {
-    std::string name;
-    std::list<Link> links;
-    bool fork = false;
+  struct Filter : public pipy::Filter::Dump {
     int row = 0;
     int column = 0;
   };

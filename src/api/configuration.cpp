@@ -572,16 +572,7 @@ void Configuration::draw(Graph &g) {
   auto add_filters = [](Graph::Pipeline &gp, const std::list<std::unique_ptr<Filter>> &filters) {
     for (const auto &f : filters) {
       Graph::Filter gf;
-      std::stringstream ss;
-      f->dump(ss);
-      gf.name = ss.str();
-      gf.fork = (gf.name == "fork" || gf.name == "merge");
-      for (int i = 0; i < f->num_sub_pipelines(); i++) {
-        gf.links.push_back({
-          f->get_sub_pipeline_index(i),
-          f->get_sub_pipeline_name(i),
-        });
-      }
+      f->dump(gf);
       gp.filters.emplace_back(std::move(gf));
     }
   };

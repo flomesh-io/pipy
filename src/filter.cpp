@@ -74,22 +74,6 @@ void Filter::add_sub_pipeline(int index) {
   m_subs->back().index = index;
 }
 
-auto Filter::get_sub_pipeline_name(int i) -> const std::string& {
-  static std::string empty;
-  auto &sub = m_subs->at(i);
-  if (sub.name) {
-    return sub.name->str();
-  } else if (sub.layout) {
-    return sub.layout->name()->str();
-  } else {
-    return empty;
-  }
-}
-
-auto Filter::get_sub_pipeline_index(int i) -> int {
-  return m_subs->at(i).index;
-}
-
 void Filter::bind() {
   for (auto &sub : *m_subs) {
     if (!sub.layout) {
@@ -134,6 +118,27 @@ void Filter::reset() {
 
 void Filter::shutdown()
 {
+}
+
+void Filter::dump(Dump &d) {
+  std::stringstream ss;
+  dump(ss);
+  d.name = ss.str();
+  d.subs.resize(m_subs->size());
+  for (size_t i = 0; i < d.subs.size(); i++) {
+    auto &s = m_subs->at(i);
+    auto &t = d.subs[i];
+    t.index = s.index;
+    if (s.name) {
+      t.name = s.name->str();
+    } else if (s.layout) {
+      t.name = s.layout->name()->str();
+    } else {
+      t.name.clear();
+    }
+  }
+  d.sub_type = d.subs.empty() ? Dump::NONE : Dump::BRANCH;
+  d.is_fork = false;
 }
 
 auto Filter::sub_pipeline(int i, bool clone_context) -> Pipeline* {

@@ -50,6 +50,30 @@ class Filter :
   public List<Filter>::Item
 {
 public:
+
+  //
+  // Filter::Dump
+  //
+
+  struct Dump {
+    enum SubType {
+      NONE,
+      BRANCH,
+      DEMUX,
+      MUX,
+    };
+
+    struct Sub {
+      int index = -1;
+      std::string name;
+    };
+
+    std::string name;
+    std::vector<Sub> subs;
+    SubType sub_type = NONE;
+    bool is_fork = false;
+  };
+
   virtual ~Filter() {}
 
   auto module() const -> Module*;
@@ -59,9 +83,6 @@ public:
   void add_sub_pipeline(pjs::Str *name);
   void add_sub_pipeline(int index);
   auto num_sub_pipelines() const -> int { return m_subs->size(); }
-  auto get_sub_pipeline_name(int i) -> const std::string&;
-  auto get_sub_pipeline_index(int i) -> int;
-
   auto sub_pipeline(int i, bool clone_context) -> Pipeline*;
 
   virtual void bind();
@@ -70,6 +91,7 @@ public:
   virtual void reset();
   virtual void process(Event *evt) = 0;
   virtual void shutdown();
+  virtual void dump(Dump &d);
   virtual void dump(std::ostream &out) = 0;
 
 protected:
