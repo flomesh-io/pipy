@@ -553,14 +553,16 @@ auto MetricSet::Deserializer::open(Level *current, Level *list, pjs::Str *key) -
               } else if (current->type == "Gauge") {
                 m = Gauge::make(key, labels, nullptr, m_metric_set);
               } else if (utils::starts_with(current->type, s_histogram)) {
-                auto buckets_str = current->type.substr(s_histogram.length());
+                auto buckets_str = current->type.substr(
+                  s_histogram.length(),
+                  current->type.length() - s_histogram.length() - 1);
                 auto buckets = pjs::Array::make();
                 for (const auto &s : utils::split(buckets_str, ',')) {
-                  if (s == "NaN") {
+                  if (s == "\"NaN\"") {
                     buckets->push(std::numeric_limits<double>::quiet_NaN());
-                  } else if (s == "Inf") {
+                  } else if (s == "\"Inf\"") {
                     buckets->push(std::numeric_limits<double>::infinity());
-                  } else if (s == "-Inf") {
+                  } else if (s == "\"-Inf\"") {
                     buckets->push(-std::numeric_limits<double>::infinity());
                   } else {
                     auto n = std::atof(s.c_str());
