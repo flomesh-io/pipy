@@ -49,8 +49,9 @@ LinkOutput::~LinkOutput()
 {
 }
 
-void LinkOutput::dump(std::ostream &out) {
-  out << "output";
+void LinkOutput::dump(Dump &d) {
+  Filter::dump(d);
+  d.name = "output";
 }
 
 auto LinkOutput::clone() -> Filter* {

@@ -47,8 +47,9 @@ Link::~Link()
 {
 }
 
-void Link::dump(std::ostream &out) {
-  out << "link";
+void Link::dump(Dump &d) {
+  Filter::dump(d);
+  d.name = "link";
 }
 
 void Link::add_condition(pjs::Function *func) {

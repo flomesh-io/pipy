@@ -46,7 +46,7 @@ private:
   virtual auto clone() -> Filter* override;
   virtual void reset() override;
   virtual void process(Event *evt) override;
-  virtual void dump(std::ostream &out) override;
+  virtual void dump(Dump &d) override;
 
   pjs::Ref<Data> m_body;
   pjs::Ref<pjs::Function> m_callback;

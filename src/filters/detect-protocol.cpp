@@ -188,8 +188,9 @@ void ProtocolDetector::reset() {
   m_detectors[1] = new TLSDetector;
 }
 
-void ProtocolDetector::dump(std::ostream &out) {
-  out << "detectProtocol";
+void ProtocolDetector::dump(Dump &d) {
+  Filter::dump(d);
+  d.name = "detectProtocol";
 }
 
 void ProtocolDetector::process(Event *evt) {

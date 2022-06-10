@@ -227,7 +227,7 @@ protected:
   ~MuxQueue();
 
   virtual auto clone() -> Filter* override;
-  virtual void dump(std::ostream &out) override;
+  virtual void dump(Dump &d) override;
   virtual auto on_new_session() -> MuxBase::Session* override;
 
   //
@@ -260,8 +260,8 @@ private:
   ~Mux();
 
   virtual auto clone() -> Filter* override;
-  virtual void dump(std::ostream &out) override;
   virtual void process(Event *evt) override;
+  virtual void dump(Dump &d) override;
   virtual auto on_new_session() -> MuxBase::Session* override;
 
   //

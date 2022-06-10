@@ -49,8 +49,9 @@ OnBody::~OnBody()
 {
 }
 
-void OnBody::dump(std::ostream &out) {
-  out << "handleMessageBody";
+void OnBody::dump(Dump &d) {
+  Filter::dump(d);
+  d.name = "handleMessageBody";
 }
 
 auto OnBody::clone() -> Filter* {

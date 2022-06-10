@@ -44,8 +44,9 @@ Dummy::~Dummy()
 {
 }
 
-void Dummy::dump(std::ostream &out) {
-  out << "dummy";
+void Dummy::dump(Dump &d) {
+  Filter::dump(d);
+  d.name = "dummy";
 }
 
 auto Dummy::clone() -> Filter* {

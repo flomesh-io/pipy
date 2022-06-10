@@ -45,7 +45,7 @@ private:
 
   virtual auto clone() -> Filter* override;
   virtual void process(Event *evt) override;
-  virtual void dump(std::ostream &out) override;
+  virtual void dump(Filter::Dump &d) override;
 
   pjs::Value m_tag;
 };

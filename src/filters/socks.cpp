@@ -51,8 +51,9 @@ Server::~Server()
 {
 }
 
-void Server::dump(std::ostream &out) {
-  out << "acceptSOCKS";
+void Server::dump(Dump &d) {
+  Filter::dump(d);
+  d.name = "acceptSOCKS";
 }
 
 auto Server::clone() -> Filter* {
@@ -319,8 +320,9 @@ Client::~Client()
 {
 }
 
-void Client::dump(std::ostream &out) {
-  out << "connectSOCKS";
+void Client::dump(Dump &d) {
+  Filter::dump(d);
+  d.name = "connectSOCKS";
 }
 
 auto Client::clone() -> Filter* {

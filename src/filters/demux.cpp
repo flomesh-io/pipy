@@ -219,8 +219,9 @@ DemuxQueue::~DemuxQueue()
 {
 }
 
-void DemuxQueue::dump(std::ostream &out) {
-  out << "demuxQueue";
+void DemuxQueue::dump(Dump &d) {
+  Filter::dump(d);
+  d.name = "demuxQueue";
 }
 
 auto DemuxQueue::clone() -> Filter* {
@@ -267,8 +268,9 @@ Demux::~Demux()
 {
 }
 
-void Demux::dump(std::ostream &out) {
-  out << "demux";
+void Demux::dump(Dump &d) {
+  Filter::dump(d);
+  d.name = "demux";
 }
 
 auto Demux::clone() -> Filter* {

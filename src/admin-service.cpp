@@ -925,8 +925,9 @@ void AdminService::AdminLinkHandler::process(Event *evt) {
   }
 }
 
-void AdminService::AdminLinkHandler::dump(std::ostream &out) {
-  out << "AdminService::AdminLinkHandler";
+void AdminService::AdminLinkHandler::dump(Dump &d) {
+  Filter::dump(d);
+  d.name = "AdminService::AdminLinkHandler";
 }
 
 } // namespace pipy

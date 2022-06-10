@@ -29,8 +29,6 @@
 #include "message.hpp"
 #include "logging.hpp"
 
-#include <sstream>
-
 namespace pipy {
 
 Filter::Filter()
@@ -121,9 +119,6 @@ void Filter::shutdown()
 }
 
 void Filter::dump(Dump &d) {
-  std::stringstream ss;
-  dump(ss);
-  d.name = ss.str();
   d.subs.resize(m_subs->size());
   for (size_t i = 0; i < d.subs.size(); i++) {
     auto &s = m_subs->at(i);

@@ -173,7 +173,7 @@ private:
   virtual auto clone() -> Filter* override;
   virtual void reset() override;
   virtual void process(Event *evt) override;
-  virtual void dump(std::ostream &out) override;
+  virtual void dump(Dump &d) override;
 
   std::shared_ptr<TLSContext> m_tls_context;
   std::shared_ptr<Options> m_options;
@@ -203,7 +203,7 @@ private:
   virtual auto clone() -> Filter* override;
   virtual void reset() override;
   virtual void process(Event *evt) override;
-  virtual void dump(std::ostream &out) override;
+  virtual void dump(Dump &d) override;
 
   std::shared_ptr<TLSContext> m_tls_context;
   std::shared_ptr<Options> m_options;
@@ -225,7 +225,7 @@ private:
   virtual auto clone() -> Filter* override;
   virtual void reset() override;
   virtual void process(Event *evt) override;
-  virtual void dump(std::ostream &out) override;
+  virtual void dump(Dump &d) override;
 
   enum State {
     READ_TYPE,

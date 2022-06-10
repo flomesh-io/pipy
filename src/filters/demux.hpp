@@ -107,7 +107,7 @@ private:
   virtual void reset() override;
   virtual void process(Event *evt) override;
   virtual void shutdown() override;
-  virtual void dump(std::ostream &out) override;
+  virtual void dump(Dump &d) override;
 
   virtual auto on_new_sub_pipeline() -> Pipeline* override;
 };
@@ -130,7 +130,7 @@ private:
   virtual auto clone() -> Filter* override;
   virtual void reset() override;
   virtual void process(Event *evt) override;
-  virtual void dump(std::ostream &out) override;
+  virtual void dump(Dump &d) override;
 
   pjs::Ref<Pipeline> m_pipeline;
 };

@@ -41,8 +41,9 @@ ReplaceStart::~ReplaceStart()
 {
 }
 
-void ReplaceStart::dump(std::ostream &out) {
-  out << "replaceStreamStart";
+void ReplaceStart::dump(Dump &d) {
+  Filter::dump(d);
+  d.name = "replaceStreamStart";
 }
 
 auto ReplaceStart::clone() -> Filter* {

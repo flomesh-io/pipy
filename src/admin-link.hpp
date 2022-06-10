@@ -65,7 +65,7 @@ private:
     virtual auto clone() -> Filter* override;
     virtual void reset() override;
     virtual void process(Event *evt) override;
-    virtual void dump(std::ostream &out) override;
+    virtual void dump(Dump &d) override;
 
     AdminLink* m_admin_link;
     Data m_payload;

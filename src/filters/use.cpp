@@ -96,7 +96,8 @@ Use::~Use()
 {
 }
 
-void Use::dump(std::ostream &out) {
+void Use::dump(Dump &d) {
+  Filter::dump(d);
   std::string module_name;
   if (m_modules.size() > 0) {
     module_name = m_modules.front()->path();
@@ -108,7 +109,11 @@ void Use::dump(std::ostream &out) {
     module_name += std::to_string(m_modules.size() - 1);
     module_name += " more)";
   }
-  out << "use " << module_name << " [" << m_pipeline_name->str() << ']';
+  d.name = "use ";
+  d.name += module_name;
+  d.name += " [";
+  d.name += m_pipeline_name->str();
+  d.name += ']';
 }
 
 void Use::bind() {

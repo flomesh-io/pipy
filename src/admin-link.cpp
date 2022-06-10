@@ -135,8 +135,9 @@ void AdminLink::Receiver::process(Event *evt) {
   }
 }
 
-void AdminLink::Receiver::dump(std::ostream &out) {
-  out << "AdminLink::Receiver";
+void AdminLink::Receiver::dump(Dump &d) {
+  Filter::dump(d);
+  d.name = "AdminLink::Receiver";
 }
 
 } // namespace pipy

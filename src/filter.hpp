@@ -30,7 +30,6 @@
 #include "list.hpp"
 
 #include <memory>
-#include <ostream>
 #include <string>
 #include <vector>
 
@@ -92,7 +91,6 @@ public:
   virtual void process(Event *evt) = 0;
   virtual void shutdown();
   virtual void dump(Dump &d);
-  virtual void dump(std::ostream &out) = 0;
 
 protected:
   Filter();

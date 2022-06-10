@@ -172,7 +172,7 @@ private:
   virtual void chain() override;
   virtual void reset() override;
   virtual void process(Event *evt) override;
-  virtual void dump(std::ostream &out) override;
+  virtual void dump(Dump &d) override;
 
   Decoder m_ef_decode;
 };
@@ -200,7 +200,7 @@ private:
   virtual void chain() override;
   virtual void reset() override;
   virtual void process(Event *evt) override;
-  virtual void dump(std::ostream &out) override;
+  virtual void dump(Dump &d) override;
 
   struct SetBodiless : public EventFunction {
     ResponseDecoder* filter;
@@ -240,7 +240,7 @@ private:
   virtual void chain() override;
   virtual void reset() override;
   virtual void process(Event *evt) override;
-  virtual void dump(std::ostream &out) override;
+  virtual void dump(Dump &d) override;
 
   Encoder m_ef_encode;
   Options m_options;
@@ -272,7 +272,7 @@ private:
   virtual void chain() override;
   virtual void reset() override;
   virtual void process(Event *evt) override;
-  virtual void dump(std::ostream &out) override;
+  virtual void dump(Dump &d) override;
 
   Encoder m_ef_encode;
   Options m_options;
@@ -336,7 +336,7 @@ private:
   virtual void reset() override;
   virtual void process(Event *evt) override;
   virtual void shutdown() override;
-  virtual void dump(std::ostream &out) override;
+  virtual void dump(Dump &d) override;
 
   //
   // Muxer::HTTP2Demuxer
@@ -404,7 +404,7 @@ private:
   Options m_options;
 
   virtual auto clone() -> Filter* override;
-  virtual void dump(std::ostream &out) override;
+  virtual void dump(Dump &d) override;
   virtual auto on_new_session() -> MuxBase::Session* override;
 
   //
@@ -472,7 +472,7 @@ private:
   virtual void reset() override;
   virtual void process(Event *evt) override;
   virtual void shutdown() override;
-  virtual void dump(std::ostream &out) override;
+  virtual void dump(Dump &d) override;
 
   virtual void on_decode_error() override;
   virtual void on_decode_request(http::RequestHead *head) override;
@@ -547,7 +547,7 @@ private:
   virtual auto clone() -> Filter* override;
   virtual void reset() override;
   virtual void process(Event *evt) override;
-  virtual void dump(std::ostream &out) override;
+  virtual void dump(Dump &d) override;
 
   pjs::Ref<pjs::Function> m_handler;
   pjs::Ref<Pipeline> m_pipeline;
@@ -574,7 +574,7 @@ private:
   virtual auto clone() -> Filter* override;
   virtual void reset() override;
   virtual void process(Event *evt) override;
-  virtual void dump(std::ostream &out) override;
+  virtual void dump(Dump &d) override;
 
   void on_receive(Event *evt);
 

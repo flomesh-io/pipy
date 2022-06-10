@@ -57,8 +57,9 @@ Decoder::~Decoder()
 {
 }
 
-void Decoder::dump(std::ostream &out) {
-  out << "decodeDubbo";
+void Decoder::dump(Dump &d) {
+  Filter::dump(d);
+  d.name = "decodeDubbo";
 }
 
 auto Decoder::clone() -> Filter* {
@@ -187,8 +188,9 @@ Encoder::~Encoder()
 {
 }
 
-void Encoder::dump(std::ostream &out) {
-  out << "encodeDubbo";
+void Encoder::dump(Dump &d) {
+  Filter::dump(d);
+  d.name = "encodeDubbo";
 }
 
 auto Encoder::clone() -> Filter* {

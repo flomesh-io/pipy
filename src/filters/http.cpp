@@ -856,8 +856,9 @@ RequestDecoder::~RequestDecoder()
 {
 }
 
-void RequestDecoder::dump(std::ostream &out) {
-  out << "decodeHTTPRequest";
+void RequestDecoder::dump(Dump &d) {
+  Filter::dump(d);
+  d.name = "decodeHTTPRequest";
 }
 
 auto RequestDecoder::clone() -> Filter* {
@@ -916,8 +917,9 @@ ResponseDecoder::~ResponseDecoder()
 {
 }
 
-void ResponseDecoder::dump(std::ostream &out) {
-  out << "decodeHTTPResponse";
+void ResponseDecoder::dump(Dump &d) {
+  Filter::dump(d);
+  d.name = "decodeHTTPResponse";
 }
 
 void ResponseDecoder::chain() {
@@ -983,8 +985,9 @@ RequestEncoder::~RequestEncoder()
 {
 }
 
-void RequestEncoder::dump(std::ostream &out) {
-  out << "encodeHTTPRequest";
+void RequestEncoder::dump(Dump &d) {
+  Filter::dump(d);
+  d.name = "encodeHTTPRequest";
 }
 
 auto RequestEncoder::clone() -> Filter* {
@@ -1049,8 +1052,9 @@ ResponseEncoder::~ResponseEncoder()
 {
 }
 
-void ResponseEncoder::dump(std::ostream &out) {
-  out << "encodeHTTPResponse";
+void ResponseEncoder::dump(Dump &d) {
+  Filter::dump(d);
+  d.name = "encodeHTTPResponse";
 }
 
 auto ResponseEncoder::clone() -> Filter* {
@@ -1184,8 +1188,9 @@ Demux::~Demux()
 {
 }
 
-void Demux::dump(std::ostream &out) {
-  out << "demuxHTTP";
+void Demux::dump(Dump &d) {
+  Filter::dump(d);
+  d.name = "demuxHTTP";
 }
 
 auto Demux::clone() -> Filter* {
@@ -1322,8 +1327,9 @@ Mux::~Mux()
 {
 }
 
-void Mux::dump(std::ostream &out) {
-  out << "muxHTTP";
+void Mux::dump(Dump &d) {
+  Filter::dump(d);
+  d.name = "muxHTTP";
 }
 
 auto Mux::clone() -> Filter* {
@@ -1489,8 +1495,9 @@ Server::~Server()
 {
 }
 
-void Server::dump(std::ostream &out) {
-  out << "serveHTTP";
+void Server::dump(Dump &d) {
+  Filter::dump(d);
+  d.name = "serveHTTP";
 }
 
 auto Server::clone() -> Filter* {
@@ -1691,8 +1698,9 @@ TunnelServer::~TunnelServer()
 {
 }
 
-void TunnelServer::dump(std::ostream &out) {
-  out << "acceptHTTPTunnel";
+void TunnelServer::dump(Dump &d) {
+  Filter::dump(d);
+  d.name = "acceptHTTPTunnel";
 }
 
 auto TunnelServer::clone() -> Filter* {
@@ -1788,8 +1796,9 @@ TunnelClient::~TunnelClient()
 {
 }
 
-void TunnelClient::dump(std::ostream &out) {
-  out << "connectHTTPTunnel";
+void TunnelClient::dump(Dump &d) {
+  Filter::dump(d);
+  d.name = "connectHTTPTunnel";
 }
 
 auto TunnelClient::clone() -> Filter* {

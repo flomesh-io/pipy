@@ -42,8 +42,9 @@ Tee::Tee(const Tee &r)
 Tee::~Tee() {
 }
 
-void Tee::dump(std::ostream &out) {
-  out << "tee";
+void Tee::dump(Dump &d) {
+  Filter::dump(d);
+  d.name = "tee";
 }
 
 auto Tee::clone() -> Filter* {

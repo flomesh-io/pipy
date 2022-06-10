@@ -114,7 +114,7 @@ protected:
 
   virtual auto clone() -> Filter* override;
   virtual auto consume(Event *evt, double &quota) -> Event* override;
-  virtual void dump(std::ostream &out) override;
+  virtual void dump(Dump &d) override;
 };
 
 //
@@ -130,7 +130,7 @@ protected:
 
   virtual auto clone() -> Filter* override;
   virtual auto consume(Event *evt, double &quota) -> Event* override;
-  virtual void dump(std::ostream &out) override;
+  virtual void dump(Dump &d) override;
 };
 
 //
@@ -147,7 +147,7 @@ protected:
   virtual auto clone() -> Filter* override;
   virtual void reset() override;
   virtual auto consume(Event *evt, double &quota) -> Event* override;
-  virtual void dump(std::ostream &out) override;
+  virtual void dump(Dump &d) override;
 
 private:
   bool m_active = false;

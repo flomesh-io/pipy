@@ -79,8 +79,9 @@ Connect::Connect(const Connect &r)
 Connect::~Connect() {
 }
 
-void Connect::dump(std::ostream &out) {
-  out << "connect";
+void Connect::dump(Dump &d) {
+  Filter::dump(d);
+  d.name = "connect";
 }
 
 auto Connect::clone() -> Filter* {

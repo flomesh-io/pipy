@@ -58,8 +58,9 @@ Branch::~Branch()
 {
 }
 
-void Branch::dump(std::ostream &out) {
-  out << "branch";
+void Branch::dump(Dump &d) {
+  Filter::dump(d);
+  d.name = "branch";
 }
 
 auto Branch::clone() -> Filter* {

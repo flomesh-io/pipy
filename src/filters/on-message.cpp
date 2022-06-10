@@ -50,8 +50,9 @@ OnMessage::~OnMessage()
 {
 }
 
-void OnMessage::dump(std::ostream &out) {
-  out << "handleMessage";
+void OnMessage::dump(Dump &d) {
+  Filter::dump(d);
+  d.name = "handleMessage";
 }
 
 auto OnMessage::clone() -> Filter* {

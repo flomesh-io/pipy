@@ -449,8 +449,9 @@ MuxQueue::MuxQueue(const MuxQueue &r)
 MuxQueue::~MuxQueue() {
 }
 
-void MuxQueue::dump(std::ostream &out) {
-  out << "muxQueue";
+void MuxQueue::dump(Dump &d) {
+  Filter::dump(d);
+  d.name = "muxQueue";
 }
 
 auto MuxQueue::clone() -> Filter* {
@@ -499,8 +500,9 @@ Mux::Mux(const Mux &r)
 Mux::~Mux() {
 }
 
-void Mux::dump(std::ostream &out) {
-  out << "mux";
+void Mux::dump(Dump &d) {
+  Filter::dump(d);
+  d.name = "mux";
 }
 
 auto Mux::clone() -> Filter* {

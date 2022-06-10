@@ -62,8 +62,9 @@ void Fetch::Receiver::process(Event *evt) {
   }
 }
 
-void Fetch::Receiver::dump(std::ostream &out) {
-  out << "Fetch::Receiver";
+void Fetch::Receiver::dump(Dump &d) {
+  Filter::dump(d);
+  d.name = "Fetch::Receiver";
 }
 
 Fetch::Fetch(pjs::Str *host, const Options &options)

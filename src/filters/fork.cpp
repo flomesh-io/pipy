@@ -53,8 +53,9 @@ Fork::Fork(const Fork &r)
 Fork::~Fork() {
 }
 
-void Fork::dump(std::ostream &out) {
-  out << "fork";
+void Fork::dump(Dump &d) {
+  Filter::dump(d);
+  d.name = "fork";
 }
 
 auto Fork::clone() -> Filter* {

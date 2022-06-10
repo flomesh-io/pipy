@@ -65,8 +65,9 @@ Decoder::~Decoder()
 {
 }
 
-void Decoder::dump(std::ostream &out) {
-  out << "decodeWebSocket";
+void Decoder::dump(Dump &d) {
+  Filter::dump(d);
+  d.name = "decodeWebSocket";
 }
 
 auto Decoder::clone() -> Filter* {
@@ -209,8 +210,9 @@ Encoder::~Encoder()
 {
 }
 
-void Encoder::dump(std::ostream &out) {
-  out << "encodeWebSocket";
+void Encoder::dump(Dump &d) {
+  Filter::dump(d);
+  d.name = "encodeWebSocket";
 }
 
 auto Encoder::clone() -> Filter* {

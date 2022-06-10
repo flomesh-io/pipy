@@ -166,8 +166,9 @@ CompressMessage::~CompressMessage()
 {
 }
 
-void CompressMessage::dump(std::ostream &out) {
-  out << "compressMessage";
+void CompressMessage::dump(Dump &d) {
+  Filter::dump(d);
+  d.name = "compressMessage";
 }
 
 auto CompressMessage::clone() -> Filter * {
@@ -191,8 +192,9 @@ CompressHTTP::CompressHTTP(const CompressHTTP &r)
 CompressHTTP::~CompressHTTP() {
 }
 
-void CompressHTTP::dump(std::ostream &out) {
-  out << "compressHTTP";
+void CompressHTTP::dump(Dump &d) {
+  Filter::dump(d);
+  d.name = "compressHTTP";
 }
 
 auto CompressHTTP::clone() -> Filter * {

@@ -65,8 +65,9 @@ Pack::~Pack()
 {
 }
 
-void Pack::dump(std::ostream &out) {
-  out << "pack";
+void Pack::dump(Dump &d) {
+  Filter::dump(d);
+  d.name = "pack";
 }
 
 auto Pack::clone() -> Filter* {

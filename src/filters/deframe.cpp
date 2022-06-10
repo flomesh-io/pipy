@@ -54,8 +54,9 @@ Deframe::~Deframe()
 {
 }
 
-void Deframe::dump(std::ostream &out) {
-  out << "deframe";
+void Deframe::dump(Dump &d) {
+  Filter::dump(d);
+  d.name = "deframe";
 }
 
 auto Deframe::clone() -> Filter* {

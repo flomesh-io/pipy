@@ -60,7 +60,7 @@ private:
   virtual auto clone() -> Filter* override;
   virtual void reset() override;
   virtual void process(Event *evt) override;
-  virtual void dump(std::ostream &out) override;
+  virtual void dump(Dump &d) override;
 
   int m_batch_size;
   int m_message_starts = 0;

@@ -565,8 +565,9 @@ Client::Client(const Client &r)
 Client::~Client() {
 }
 
-void Client::dump(std::ostream &out) {
-  out << "connectTLS";
+void Client::dump(Dump &d) {
+  Filter::dump(d);
+  d.name = "connectTLS";
 }
 
 auto Client::clone() -> Filter* {
@@ -664,8 +665,9 @@ Server::Server(const Server &r)
 Server::~Server() {
 }
 
-void Server::dump(std::ostream &out) {
-  out << "acceptTLS";
+void Server::dump(Dump &d) {
+  Filter::dump(d);
+  d.name = "acceptTLS";
 }
 
 auto Server::clone() -> Filter* {
@@ -835,8 +837,9 @@ OnClientHello::~OnClientHello()
 {
 }
 
-void OnClientHello::dump(std::ostream &out) {
-  out << "handleTLSClientHello";
+void OnClientHello::dump(Dump &d) {
+  Filter::dump(d);
+  d.name = "handleTLSClientHello";
 }
 
 auto OnClientHello::clone() -> Filter* {

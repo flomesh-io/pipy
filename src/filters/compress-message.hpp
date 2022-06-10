@@ -93,7 +93,7 @@ private:
   ~CompressMessage();
 
   virtual auto clone() -> Filter* override;
-  virtual void dump(std::ostream &out) override;
+  virtual void dump(Dump &d) override;
 };
 
 //
@@ -109,7 +109,7 @@ private:
   ~CompressHTTP();
 
   virtual auto clone() -> Filter* override;
-  virtual void dump(std::ostream &out) override;
+  virtual void dump(Dump &d) override;
 };
 
 } // namespace pipy

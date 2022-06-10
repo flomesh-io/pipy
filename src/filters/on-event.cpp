@@ -45,12 +45,13 @@ OnEvent::~OnEvent()
 {
 }
 
-void OnEvent::dump(std::ostream &out) {
+void OnEvent::dump(Dump &d) {
+  Filter::dump(d);
   switch (m_type) {
-    case Event::Type::Data: out << "handleData"; break;
-    case Event::Type::MessageStart: out << "handleMessageStart"; break;
-    case Event::Type::MessageEnd: out << "handleMessageEnd"; break;
-    case Event::Type::StreamEnd: out << "handleStreamEnd"; break;
+    case Event::Type::Data: d.name = "handleData"; break;
+    case Event::Type::MessageStart: d.name = "handleMessageStart"; break;
+    case Event::Type::MessageEnd: d.name = "handleMessageEnd"; break;
+    case Event::Type::StreamEnd: d.name = "handleStreamEnd"; break;
     default: break;
   }
 }

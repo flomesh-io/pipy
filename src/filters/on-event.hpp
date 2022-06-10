@@ -44,7 +44,7 @@ private:
 
   virtual auto clone() -> Filter* override;
   virtual void process(Event *evt) override;
-  virtual void dump(std::ostream &out) override;
+  virtual void dump(Dump &d) override;
 
   Event::Type m_type;
   pjs::Ref<pjs::Function> m_callback;

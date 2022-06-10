@@ -1116,8 +1116,9 @@ Decoder::~Decoder()
 {
 }
 
-void Decoder::dump(std::ostream &out) {
-  out << "decodeMQTT";
+void Decoder::dump(Dump &d) {
+  Filter::dump(d);
+  d.name = "decodeMQTT";
 }
 
 auto Decoder::clone() -> Filter* {
@@ -1177,8 +1178,9 @@ Encoder::~Encoder()
 {
 }
 
-void Encoder::dump(std::ostream &out) {
-  out << "encodeMQTT";
+void Encoder::dump(Dump &d) {
+  Filter::dump(d);
+  d.name = "encodeMQTT";
 }
 
 auto Encoder::clone() -> Filter* {

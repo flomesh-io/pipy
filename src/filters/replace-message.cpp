@@ -48,8 +48,9 @@ ReplaceMessage::~ReplaceMessage()
 {
 }
 
-void ReplaceMessage::dump(std::ostream &out) {
-  out << "replaceMessage";
+void ReplaceMessage::dump(Dump &d) {
+  Filter::dump(d);
+  d.name = "replaceMessage";
 }
 
 auto ReplaceMessage::clone() -> Filter* {

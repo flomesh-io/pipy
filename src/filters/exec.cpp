@@ -54,8 +54,9 @@ Exec::~Exec()
 {
 }
 
-void Exec::dump(std::ostream &out) {
-  out << "exec";
+void Exec::dump(Dump &d) {
+  Filter::dump(d);
+  d.name = "exec";
 }
 
 auto Exec::clone() -> Filter* {

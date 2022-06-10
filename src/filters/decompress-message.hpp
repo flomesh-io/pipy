@@ -68,7 +68,7 @@ private:
   ~DecompressMessage();
 
   virtual auto clone() -> Filter* override;
-  virtual void dump(std::ostream &out) override;
+  virtual void dump(Dump &d) override;
 
   virtual auto new_decompressor(
     MessageStart *start,
@@ -91,7 +91,7 @@ private:
   ~DecompressHTTP();
 
   virtual auto clone() -> Filter* override;
-  virtual void dump(std::ostream &out) override;
+  virtual void dump(Dump &d) override;
 
   virtual auto new_decompressor(
     MessageStart *start,

@@ -109,8 +109,9 @@ DecompressMessage::~DecompressMessage()
 {
 }
 
-void DecompressMessage::dump(std::ostream &out) {
-  out << "decompressMessage";
+void DecompressMessage::dump(Dump &d) {
+  Filter::dump(d);
+  d.name = "decompressMessage";
 }
 
 auto DecompressMessage::clone() -> Filter* {
@@ -162,8 +163,9 @@ DecompressHTTP::~DecompressHTTP()
 {
 }
 
-void DecompressHTTP::dump(std::ostream &out) {
-  out << "decompressHTTP";
+void DecompressHTTP::dump(Dump &d) {
+  Filter::dump(d);
+  d.name = "decompressHTTP";
 }
 
 auto DecompressHTTP::clone() -> Filter* {

@@ -44,12 +44,13 @@ ReplaceEvent::~ReplaceEvent()
 {
 }
 
-void ReplaceEvent::dump(std::ostream &out) {
+void ReplaceEvent::dump(Dump &d) {
+  Filter::dump(d);
   switch (m_type) {
-    case Event::Type::Data: out << "replaceData"; break;
-    case Event::Type::MessageStart: out << "replaceMessageStart"; break;
-    case Event::Type::MessageEnd: out << "replaceMessageEnd"; break;
-    case Event::Type::StreamEnd: out << "replaceStreamEnd"; break;
+    case Event::Type::Data: d.name = "replaceData"; break;
+    case Event::Type::MessageStart: d.name = "replaceMessageStart"; break;
+    case Event::Type::MessageEnd: d.name = "replaceMessageEnd"; break;
+    case Event::Type::StreamEnd: d.name = "replaceStreamEnd"; break;
     default: break;
   }
 }

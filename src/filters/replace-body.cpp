@@ -49,8 +49,9 @@ ReplaceBody::~ReplaceBody()
 {
 }
 
-void ReplaceBody::dump(std::ostream &out) {
-  out << "replaceMessageBody";
+void ReplaceBody::dump(Dump &d) {
+  Filter::dump(d);
+  d.name = "replaceMessageBody";
 }
 
 auto ReplaceBody::clone() -> Filter* {

@@ -47,8 +47,9 @@ Split::~Split()
 {
 }
 
-void Split::dump(std::ostream &out) {
-  out << "split";
+void Split::dump(Dump &d) {
+  Filter::dump(d);
+  d.name = "split";
 }
 
 auto Split::clone() -> Filter* {

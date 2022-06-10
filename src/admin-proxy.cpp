@@ -90,8 +90,9 @@ private:
     }
   }
 
-  virtual void dump(std::ostream &out) override {
-    out << "AdminProxyHandler";
+  virtual void dump(Dump &d) override {
+    Filter::dump(d);
+    d.name = "AdminProxyHandler";
   }
 
   AdminProxy* m_proxy;

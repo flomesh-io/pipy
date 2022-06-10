@@ -74,8 +74,9 @@ DepositMessage::DepositMessage(const DepositMessage &r)
 DepositMessage::~DepositMessage() {
 }
 
-void DepositMessage::dump(std::ostream &out) {
-  out << "depositMessage";
+void DepositMessage::dump(Dump &d) {
+  Filter::dump(d);
+  d.name = "depositMessage";
 }
 
 auto DepositMessage::clone() -> Filter* {

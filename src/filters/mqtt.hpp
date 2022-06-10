@@ -115,7 +115,7 @@ private:
   virtual void chain() override;
   virtual void reset() override;
   virtual void process(Event *evt) override;
-  virtual void dump(std::ostream &out) override;
+  virtual void dump(Dump &d) override;
 
   virtual auto on_get_protocol_level() -> int override;
 
@@ -141,7 +141,7 @@ private:
   virtual void chain() override;
   virtual void reset() override;
   virtual void process(Event *evt) override;
-  virtual void dump(std::ostream &out) override;
+  virtual void dump(Dump &d) override;
 
   virtual void on_encode_error(const char *msg) override;
 };

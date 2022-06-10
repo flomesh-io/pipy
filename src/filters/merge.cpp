@@ -46,8 +46,9 @@ Merge::Merge(const Merge &r)
 Merge::~Merge() {
 }
 
-void Merge::dump(std::ostream &out) {
-  out << "merge";
+void Merge::dump(Dump &d) {
+  Filter::dump(d);
+  d.name = "merge";
 }
 
 auto Merge::clone() -> Filter* {

@@ -224,8 +224,9 @@ ThrottleMessageRate::ThrottleMessageRate(const ThrottleMessageRate &r)
 {
 }
 
-void ThrottleMessageRate::dump(std::ostream &out) {
-  out << "throttleMessageRate";
+void ThrottleMessageRate::dump(Dump &d) {
+  Filter::dump(d);
+  d.name = "throttleMessageRate";
 }
 
 auto ThrottleMessageRate::clone() -> Filter* {
@@ -261,8 +262,9 @@ ThrottleDataRate::ThrottleDataRate(const ThrottleDataRate &r)
 {
 }
 
-void ThrottleDataRate::dump(std::ostream &out) {
-  out << "throttleDataRate";
+void ThrottleDataRate::dump(Dump &d) {
+  Filter::dump(d);
+  d.name = "throttleDataRate";
 }
 
 auto ThrottleDataRate::clone() -> Filter* {
@@ -303,8 +305,9 @@ ThrottleConcurrency::ThrottleConcurrency(const pjs::Value &quota, const pjs::Val
 {
 }
 
-void ThrottleConcurrency::dump(std::ostream &out) {
-  out << "throttleConcurrency";
+void ThrottleConcurrency::dump(Dump &d) {
+  Filter::dump(d);
+  d.name = "throttleConcurrency";
 }
 
 auto ThrottleConcurrency::clone() -> Filter* {

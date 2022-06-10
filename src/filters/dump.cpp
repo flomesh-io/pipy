@@ -52,8 +52,9 @@ Dump::Dump(const Dump &r)
 Dump::~Dump() {
 }
 
-void Dump::dump(std::ostream &out) {
-  out << "dump";
+void Dump::dump(Filter::Dump &d) {
+  Filter::dump(d);
+  d.name = "dump";
 }
 
 auto Dump::clone() -> Filter* {

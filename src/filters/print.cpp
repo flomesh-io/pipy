@@ -42,8 +42,9 @@ Print::Print(const Print &r)
 Print::~Print() {
 }
 
-void Print::dump(std::ostream &out) {
-  out << "print";
+void Print::dump(Dump &d) {
+  Filter::dump(d);
+  d.name = "print";
 }
 
 auto Print::clone() -> Filter* {

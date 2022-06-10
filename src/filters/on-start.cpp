@@ -42,8 +42,9 @@ OnStart::~OnStart()
 {
 }
 
-void OnStart::dump(std::ostream &out) {
-  out << "handleStreamStart";
+void OnStart::dump(Dump &d) {
+  Filter::dump(d);
+  d.name = "handleStreamStart";
 }
 
 auto OnStart::clone() -> Filter* {

@@ -60,8 +60,9 @@ Wait::~Wait()
 {
 }
 
-void Wait::dump(std::ostream &out) {
-  out << "wait";
+void Wait::dump(Dump &d) {
+  Filter::dump(d);
+  d.name = "wait";
 }
 
 auto Wait::clone() -> Filter* {
