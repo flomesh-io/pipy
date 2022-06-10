@@ -36,6 +36,7 @@
 #include "logging.hpp"
 
 // all filters
+#include "filters/branch.hpp"
 #include "filters/connect.hpp"
 #include "filters/compress-message.hpp"
 #include "filters/decompress-message.hpp"
@@ -95,12 +96,16 @@ void FilterConfigurator::accept_tls(pjs::Object *options) {
   require_sub_pipeline(append_filter(new tls::Server(options)));
 }
 
-void FilterConfigurator::compress_message(pjs::Object *options) {
-  append_filter(new CompressMessage(options));
+void FilterConfigurator::branch(int count, pjs::Function **conds, const pjs::Value *layout) {
+  append_filter(new Branch(count, conds, layout));
 }
 
 void FilterConfigurator::compress_http(pjs::Object *options) {
   append_filter(new CompressHTTP(options));
+}
+
+void FilterConfigurator::compress_message(pjs::Object *options) {
+  append_filter(new CompressMessage(options));
 }
 
 void FilterConfigurator::connect(const pjs::Value &target, pjs::Object *options) {
@@ -336,11 +341,16 @@ void FilterConfigurator::to(const std::string &name, const std::function<void(Fi
   if (!m_current_joint_filter) {
     throw std::runtime_error("calling to() without a joint-filter");
   }
+  int index = sub_pipeline(name, cb);
+  m_current_joint_filter->add_sub_pipeline(index);
+  m_current_joint_filter = nullptr;
+}
+
+auto FilterConfigurator::sub_pipeline(const std::string &name, const std::function<void(FilterConfigurator*)> &cb) -> int {
   int index = -1;
   pjs::Ref<FilterConfigurator> fc(m_configuration->new_indexed_pipeline(name, index));
   cb(fc);
-  m_current_joint_filter->add_sub_pipeline(index);
-  m_current_joint_filter = nullptr;
+  return index;
 }
 
 void FilterConfigurator::check_integrity() {
@@ -682,6 +692,49 @@ template<> void ClassDef<FilterConfigurator>::init() {
       } else if (ctx.arguments(0, &options)) {
         thiz->as<FilterConfigurator>()->accept_tls(options);
       }
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // FilterConfigurator.branch
+  method("branch", [](Context &ctx, Object *thiz, Value &result) {
+    try {
+      int n = ctx.argc();
+      if (n < 2) throw std::runtime_error("requires at least 2 arguments");
+      if (n % 2) throw std::runtime_error("requires even number of arguments");
+      n /= 2;
+      Function *conds[n];
+      Value layouts[n];
+      for (int i = 0; i < n; i++) {
+        auto &cond = ctx.arg(i*2);
+        auto &layout = ctx.arg(i*2+1);
+        if (cond.is_function()) {
+          conds[i] = cond.as<Function>();
+        } else {
+          ctx.error_argument_type(i*2, "a function");
+          return;
+        }
+        if (layout.is_string()) {
+          layouts[i].set(layout.s());
+        } else if (layout.is_function()) {
+          layouts[i].set(
+            thiz->as<FilterConfigurator>()->sub_pipeline(
+              layout.f()->to_string(),
+              [&](FilterConfigurator *fc) {
+                Value arg(fc), ret;
+                (*layout.f())(ctx, 1, &arg, ret);
+              }
+            )
+          );
+          if (!ctx.ok()) return;
+        } else {
+          ctx.error_argument_type(i*2+1, "a string or a function");
+          return;
+        }
+      }
+      thiz->as<FilterConfigurator>()->branch(n, conds, layouts);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

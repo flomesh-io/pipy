@@ -23,69 +23,64 @@
  *  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include "link.hpp"
+#include "branch.hpp"
 #include "pipeline.hpp"
 
 namespace pipy {
 
 //
-// Link
+// Branch
 //
 
-Link::Link()
+Branch::Branch(int count, pjs::Function **conds, const pjs::Value *layout)
   : m_conditions(std::make_shared<std::vector<Condition>>())
 {
+  m_conditions->resize(count);
+  for (int i = 0; i < count; i++) {
+    m_conditions->at(i).func = conds[i];
+    if (layout[i].is_number()) {
+      add_sub_pipeline(layout[i].n());
+    } else if (layout[i].is_string()) {
+      add_sub_pipeline(layout[i].s());
+    } else {
+      add_sub_pipeline(pjs::Str::empty);
+    }
+  }
 }
 
-Link::Link(const Link &r)
+Branch::Branch(const Branch &r)
   : Filter(r)
   , m_conditions(r.m_conditions)
 {
 }
 
-Link::~Link()
+Branch::~Branch()
 {
 }
 
-void Link::dump(std::ostream &out) {
-  out << "link";
+void Branch::dump(std::ostream &out) {
+  out << "branch";
 }
 
-void Link::add_condition(pjs::Function *func) {
-  m_conditions->emplace_back();
-  m_conditions->back().func = func;
+auto Branch::clone() -> Filter* {
+  return new Branch(*this);
 }
 
-void Link::add_condition(const std::function<bool()> &func) {
-  m_conditions->emplace_back();
-  m_conditions->back().cpp_func = func;
-}
-
-auto Link::clone() -> Filter* {
-  return new Link(*this);
-}
-
-void Link::reset() {
+void Branch::reset() {
   Filter::reset();
   m_buffer.clear();
   m_pipeline = nullptr;
   m_chosen = false;
 }
 
-void Link::process(Event *evt) {
+void Branch::process(Event *evt) {
   if (!m_chosen) {
     const auto &conditions = *m_conditions;
     for (int i = 0; i < conditions.size(); i++) {
       const auto &cond = conditions[i];
-      if (cond.func) {
-        pjs::Value ret;
-        if (!callback(cond.func, 0, nullptr, ret)) return;
-        m_chosen = ret.to_boolean();
-      } else if (cond.cpp_func) {
-        m_chosen = cond.cpp_func();
-      } else {
-        m_chosen = true;
-      }
+      pjs::Value ret;
+      if (!eval(cond.func, ret)) return;
+      m_chosen = ret.to_boolean();
       if (m_chosen) {
         if (auto *pipeline = sub_pipeline(i, false)) {
           pipeline->chain(output());
