@@ -452,6 +452,7 @@ MuxQueue::~MuxQueue() {
 void MuxQueue::dump(Dump &d) {
   Filter::dump(d);
   d.name = "muxQueue";
+  d.sub_type = Dump::MUX;
 }
 
 auto MuxQueue::clone() -> Filter* {
@@ -497,12 +498,15 @@ Mux::Mux(const Mux &r)
 {
 }
 
-Mux::~Mux() {
+Mux::~Mux()
+{
 }
 
 void Mux::dump(Dump &d) {
   Filter::dump(d);
   d.name = "mux";
+  d.sub_type = Dump::MUX;
+  d.out_type = Dump::OUTPUT_FROM_SELF;
 }
 
 auto Mux::clone() -> Filter* {

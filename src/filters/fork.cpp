@@ -56,6 +56,7 @@ Fork::~Fork() {
 void Fork::dump(Dump &d) {
   Filter::dump(d);
   d.name = "fork";
+  d.out_type = Dump::OUTPUT_FROM_SELF;
 }
 
 auto Fork::clone() -> Filter* {

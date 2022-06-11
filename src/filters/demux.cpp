@@ -222,6 +222,7 @@ DemuxQueue::~DemuxQueue()
 void DemuxQueue::dump(Dump &d) {
   Filter::dump(d);
   d.name = "demuxQueue";
+  d.sub_type = Dump::DEMUX;
 }
 
 auto DemuxQueue::clone() -> Filter* {
@@ -271,6 +272,7 @@ Demux::~Demux()
 void Demux::dump(Dump &d) {
   Filter::dump(d);
   d.name = "demux";
+  d.sub_type = Dump::DEMUX;
 }
 
 auto Demux::clone() -> Filter* {

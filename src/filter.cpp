@@ -132,8 +132,8 @@ void Filter::dump(Dump &d) {
       t.name.clear();
     }
   }
-  d.sub_type = d.subs.empty() ? Dump::NONE : Dump::BRANCH;
-  d.is_fork = false;
+  d.sub_type = d.subs.empty() ? Dump::NO_SUBS : Dump::BRANCH;
+  d.out_type = d.subs.empty() ? Dump::OUTPUT_FROM_SELF : Dump::OUTPUT_FROM_SUBS;
 }
 
 auto Filter::sub_pipeline(int i, bool clone_context) -> Pipeline* {

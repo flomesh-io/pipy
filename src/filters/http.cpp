@@ -1191,6 +1191,7 @@ Demux::~Demux()
 void Demux::dump(Dump &d) {
   Filter::dump(d);
   d.name = "demuxHTTP";
+  d.sub_type = Dump::DEMUX;
 }
 
 auto Demux::clone() -> Filter* {
@@ -1330,6 +1331,7 @@ Mux::~Mux()
 void Mux::dump(Dump &d) {
   Filter::dump(d);
   d.name = "muxHTTP";
+  d.sub_type = Dump::MUX;
 }
 
 auto Mux::clone() -> Filter* {

@@ -43,12 +43,15 @@ Merge::Merge(const Merge &r)
 {
 }
 
-Merge::~Merge() {
+Merge::~Merge()
+{
 }
 
 void Merge::dump(Dump &d) {
   Filter::dump(d);
   d.name = "merge";
+  d.sub_type = Dump::MUX;
+  d.out_type = Dump::OUTPUT_FROM_SELF;
 }
 
 auto Merge::clone() -> Filter* {

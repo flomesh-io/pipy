@@ -27,6 +27,7 @@
 #define GRAPH_HPP
 
 #include "filter.hpp"
+#include "list.hpp"
 
 #include <list>
 #include <map>
@@ -80,45 +81,62 @@ public:
   void to_json(std::string &error, std::ostream &out);
 
 private:
-  class Node {
+  class Node : public List<Node>::Item {
   public:
     enum Type {
       ERROR,
       ROOT,
       PIPELINE,
       FILTER,
-      LINK,
+      JOINT,
+    };
+
+    enum LinkType {
+      NO_LINKS,
+      BRANCH,
       FORK,
+      DEMUX,
+      MUX,
+      MUX_FORK,
     };
 
     Node(Node *parent, Type type, const std::string &name)
-      : m_parent(parent)
-      , m_type(type)
+      : Node(parent, type, Filter::Dump::OUTPUT_FROM_SELF, Filter::Dump::NO_SUBS, name) {}
+
+    Node(
+      Node *parent, Type type,
+      Filter::Dump::OutType out_type,
+      Filter::Dump::SubType sub_type,
+      const std::string &name
+    ) : m_parent(parent)
       , m_name(name)
+      , m_type(type)
+      , m_out_type(out_type)
+      , m_sub_type(sub_type)
     {
       if (parent) {
-        parent->m_children.push_back(this);
+        parent->m_children.push(this);
       }
     }
 
-    ~Node() {
-      for (auto child : m_children) {
-        delete child;
-      }
-    }
+    ~Node();
 
     auto type() const -> Type { return m_type; }
+    auto out_type() const -> Filter::Dump::OutType { return m_out_type; }
+    auto sub_type() const -> Filter::Dump::SubType { return m_sub_type; }
     auto name() const -> const std::string& { return m_name; }
     auto parent() const -> Node* { return m_parent; }
-    auto children() const -> const std::list<Node*>& { return m_children; }
+    auto children() const -> Node* { return m_children.head(); }
     auto index() const -> int { return m_index; }
     void index(int i) { m_index = i; }
 
   private:
     Node* m_parent;
-    Type m_type;
+    List<Node> m_children;
     std::string m_name;
-    std::list<Node*> m_children;
+    Type m_type;
+    Filter::Dump::OutType m_out_type;
+    Filter::Dump::SubType m_sub_type;
     int m_index = 0;
   };
 

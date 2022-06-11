@@ -52,6 +52,7 @@ LinkInput::~LinkInput()
 void LinkInput::dump(Dump &d) {
   Filter::dump(d);
   d.name = "input";
+  d.out_type = Dump::OUTPUT_FROM_OTHERS;
 }
 
 auto LinkInput::clone() -> Filter* {

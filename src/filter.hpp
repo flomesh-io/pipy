@@ -55,8 +55,15 @@ public:
   //
 
   struct Dump {
+    enum OutType {
+      NO_OUTPUT,
+      OUTPUT_FROM_SELF,
+      OUTPUT_FROM_SUBS,
+      OUTPUT_FROM_OTHERS,
+    };
+
     enum SubType {
-      NONE,
+      NO_SUBS,
       BRANCH,
       DEMUX,
       MUX,
@@ -69,8 +76,8 @@ public:
 
     std::string name;
     std::vector<Sub> subs;
-    SubType sub_type = NONE;
-    bool is_fork = false;
+    SubType sub_type = NO_SUBS;
+    OutType out_type = OUTPUT_FROM_SELF;
   };
 
   virtual ~Filter() {}

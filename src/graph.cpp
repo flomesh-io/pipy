@@ -209,7 +209,6 @@ private:
         } else if (m == "fork" || m == "merge" || s_linking_filters.count(m) > 0) {
           Graph::Filter f;
           f.name = m;
-          f.is_fork = (m == "fork" || m == "merge");
           if (argc > 0 && cv(argv[0])->t() == STRING) {
             f.subs.emplace_back();
             f.subs.back().name = cv(argv[0])->s();
@@ -261,6 +260,10 @@ const std::set<std::string> ConfigReducer::s_linking_filters{
   "acceptSOCKS",
 };
 
+//
+// Graph
+//
+
 bool Graph::from_script(Graph &g, const std::string &script, std::string &error) {
   error.clear();
   int error_line, error_column;
@@ -276,33 +279,25 @@ bool Graph::from_script(Graph &g, const std::string &script, std::string &error)
   return true;
 }
 
-//
-// Graph
-//
-
 auto Graph::to_text(std::string &error) -> std::vector<std::string> {
   std::vector<std::string> lines;
 
   find_roots();
 
-  auto build_one = [&](const Pipeline &pipeline) {
-    std::string title("[");
-    title += pipeline.name;
-    title += ']';
-    lines.push_back(title);
-    std::string err;
-    auto node = build_tree(pipeline, err);
-    for (auto line : build_text(node)) {
-      lines.push_back(std::move(line));
-    }
-    delete node;
-    lines.push_back("");
-    if (!err.empty() && error.empty()) error = err;
-  };
-
   for (const auto &i : m_pipelines) {
     if (i.root) {
-      build_one(i);
+      std::string title("[");
+      title += i.name;
+      title += ']';
+      lines.push_back(title);
+      std::string err;
+      auto node = build_tree(i, err);
+      for (auto line : build_text(node)) {
+        lines.push_back(std::move(line));
+      }
+      delete node;
+      lines.push_back("");
+      if (!err.empty() && error.empty()) error = err;
     }
   }
 
@@ -315,16 +310,12 @@ void Graph::to_json(std::string &error, std::ostream &out) {
 
   find_roots();
 
-  auto build_one = [&](const Pipeline &pipeline) {
-    std::string err;
-    auto node = build_tree(pipeline, err);
-    roots.emplace_back(node);
-    if (!err.empty() && error.empty()) error = err;
-  };
-
   for (const auto &i : m_pipelines) {
     if (i.root) {
-      build_one(i);
+      std::string err;
+      auto node = build_tree(i, err);
+      roots.emplace_back(node);
+      if (!err.empty() && error.empty()) error = err;
     }
   }
 
@@ -332,7 +323,7 @@ void Graph::to_json(std::string &error, std::ostream &out) {
   build_node_index = [&](Node *node) {
     node->index(nodes.size());
     nodes.push_back(node);
-    for (auto child : node->children()) {
+    for (auto child = node->children(); child; child = child->next()) {
       build_node_index(child);
     }
   };
@@ -362,18 +353,17 @@ void Graph::to_json(std::string &error, std::ostream &out) {
       case Node::ROOT: out << "root"; break;
       case Node::PIPELINE: out << "pipeline"; break;
       case Node::FILTER: out << "filter"; break;
-      case Node::FORK: out << "fork"; break;
-      case Node::LINK: out << "link"; break;
+      case Node::JOINT: out << "link"; break;
     }
     out << '"';
     if (node->parent()) {
       out << ",\"p\":";
       out << node->parent()->index();
     }
-    if (!node->children().empty()) {
+    if (node->children()) {
       out << ",\"c\":[";
       bool first = true;
-      for (const auto child : node->children()) {
+      for (const auto *child = node->children(); child; child = child->next()) {
         if (first) first = false; else out << ',';
         out << child->index();
       }
@@ -390,8 +380,8 @@ void Graph::find_roots() {
     i.root = true;
   }
 
-  auto find_links = [this](const Pipeline &pipeline) {
-    for (auto &f : pipeline.filters) {
+  for (auto &i : m_pipelines) {
+    for (auto &f : i.filters) {
       for (auto &s : f.subs) {
         if (s.index >= 0) {
           auto i = m_indexed_pipelines.find(s.index);
@@ -406,10 +396,6 @@ void Graph::find_roots() {
         }
       }
     }
-  };
-
-  for (auto &i : m_pipelines) {
-    find_links(i);
   }
 }
 
@@ -422,7 +408,7 @@ auto Graph::build_tree(const Pipeline &pipeline, std::string &error) -> Node* {
       if (f.subs.empty()) {
         new Node(pipeline_node, Node::FILTER, f.name);
       } else {
-        auto link_node = new Node(pipeline_node, f.is_fork ? Node::FORK : Node::LINK, f.name);
+        auto link_node = new Node(pipeline_node, Node::JOINT, f.out_type, f.sub_type, f.name);
         for (const auto &s : f.subs) {
           bool recursive = false;
           for (auto p = pipeline_node; p; p = p->parent()) {
@@ -473,140 +459,191 @@ auto Graph::build_tree(const Pipeline &pipeline, std::string &error) -> Node* {
 auto Graph::build_text(Node *root) -> std::vector<std::string> {
   std::vector<std::string> lines;
   std::vector<Node*> exits;
-  std::function<void(Node*)> draw_node;
+  std::function<void(Node*, const std::string&, const std::string&, bool)> draw_node;
 
-  draw_node = [&](Node *node) {
-    std::string base;
-
-    Node *parent = nullptr;
-    if (node->type() == Node::PIPELINE) {
-      parent = node->parent()->parent();
-      base = "  |--> ";
-    } else {
-      parent = node->parent();
+  auto push_line = [&](const std::string &line, Node *exit = nullptr) {
+    std::string trim(line);
+    while (trim.back() == ' ') trim.pop_back();
+    if (lines.empty() || exit || trim != lines.back()) {
+      lines.push_back(trim);
+      exits.push_back(exit);
     }
+  };
 
-    for (auto p = parent; p && p->type() != Node::ROOT; p = p->parent()->parent()) {
-      if (p->parent()->type() != Node::FORK && p == p->parent()->children().back()) {
-        base = std::string(7, ' ') + base;
-      } else {
-        base = std::string("  |    ") + base;
+  auto find_output = [](Node *node) -> Node* {
+    if (node->next()) return node->next();
+    Node *p = node->parent();
+    while (p) {
+      if (p->type() == Node::JOINT) {
+        if (p->out_type() != Filter::Dump::OUTPUT_FROM_SUBS) return nullptr;
+        if (p->next()) return p;
+      } else if (p->type() == Node::ROOT) {
+        return p;
       }
+      p = p->parent();
     }
+    return nullptr;
+  };
 
-    if (node->type() == Node::ROOT) {
-      lines.push_back("----->|");
-      exits.push_back(nullptr);
+  auto draw_output = [&](Node *node, const std::string &base, bool parallel) {
+    auto first = lines.size();
+    for (auto i = lines.size() - 1; i > 0; i--) {
+      if (exits[i] == node) first = i;
     }
-
-    base = std::string(4, ' ') + base;
-
-    std::string line(base);
-    if (node->type() == Node::ROOT) {
-      line += "  |";
-    } else if (node->type() == Node::PIPELINE) {
-      line += '[';
-      line += node->name();
-      line += ']';
-    } else {
-      line += ' ';
-      line += node->name();
+    int max_width = base.length();
+    for (auto i = first; i < lines.size(); i++) {
+      int width = lines[i].length();
+      if (width > max_width) max_width = width;
     }
-
-    Node *exit = nullptr;
-
-    if ((node->type() == Node::PIPELINE && node->children().empty()) ||
-        (node->type() == Node::FILTER && node->parent()->children().back() == node)
-    ) {
-      auto pipe = node->type() == Node::FILTER ? node->parent() : node;
-      exit = pipe->parent();
-      if (exit) {
-        while (
-          exit->type() == Node::LINK &&
-          exit->parent()->type() != Node::ROOT &&
-          exit == exit->parent()->children().back()
-        ) {
-          pipe = exit->parent();
-          if (pipe->type() == Node::ROOT) {
-            exit = nullptr;
-            break;
-          } else {
-            exit = pipe->parent();
-          }
-        }
-      }
-      if (exit && exit->type() != Node::LINK) exit = nullptr;
-    }
-
-    lines.push_back(line);
-    exits.push_back(exit);
-
-    for (auto c : node->children()) {
-      if (node->type() == Node::LINK || node->type() == Node::FORK) {
-        lines.push_back(base + "  |");
-        exits.push_back(nullptr);
-      }
-      draw_node(c);
-    }
-
-    if (node->type() == Node::LINK) {
-      if (node->parent()->type() == Node::ROOT || node != node->parent()->children().back()) {
-        int end = exits.size() - 1;
-        int start = end;
-        for (int i = start; i >= 0; i--) {
-          if (exits[i] == node) {
-            start = i;
-          }
-        }
-        int max_length = 0;
-        for (int i = start; i <= end; i++) {
-          max_length = std::max(max_length, int(lines[i].length()));
-        }
-        for (int i = start; i <= end; i++) {
-          int padding = max_length - lines[i].length();
-          if (exits[i] == node) {
-            lines[i] += ' ';
-            lines[i] += std::string(padding, '-');
-            lines[i] += "-->|";
-          } else {
-            lines[i] += std::string(padding + 4, ' ');
-            lines[i] += '|';
-          }
-        }
-        lines.push_back(base + std::string(max_length - base.length() + 4, ' ') + '|');
-        exits.push_back(nullptr);
-        if (node->parent()->type() == Node::ROOT && node == node->parent()->children().back()) {
-          std::string line("<");
-          line += std::string(max_length + 3, '-');
-          line += '|';
-          lines.push_back(line);
-          exits.push_back(nullptr);
+    for (auto i = first; i < lines.size(); i++) {
+      auto &line = lines[i];
+      int padding = max_width - line.length();
+      if (exits[i] == node) {
+        if (line.back() == '|') {
+          line += std::string(padding + 3, parallel ? '=' : '-');
         } else {
-          lines.push_back(base + std::string(max_length - base.length() + 4, ' ') + 'v');
-          lines.push_back(base + "  |<" + std::string(max_length - base.length() + 1, '-'));
-          lines.push_back(base + "  |");
-          lines.push_back(base + "  v");
-          exits.push_back(nullptr);
-          exits.push_back(nullptr);
-          exits.push_back(nullptr);
-          exits.push_back(nullptr);
+          line += ' ';
+          line += std::string(padding + 2, parallel ? '=' : '-');
         }
+        line += '>';
+      } else {
+        line += std::string(padding + 4, ' ');
       }
+      line += parallel ? "||" : "|";
+    }
+    auto padding_width = max_width - base.length();
+    auto padding = std::string(padding_width + 1, parallel ? '=' : '-');
+    if (node->type() == Node::ROOT) {
+      push_line(base + '<' + padding + (parallel ? "==||" : "--|"));
+    } else {
+      push_line(base + (parallel ? "||" : " |") + '<' + padding + (parallel ? "||" : "|"));
+      push_line(base + (parallel ? "||" : " |"));
+      push_line(base + (parallel ? "vv" : " v"));
+    }
+  };
 
-    } else if (node->type() == Node::FORK) {
-      lines.push_back(base + "  |");
-      exits.push_back(nullptr);
-
-    } else if (node->type() == Node::ROOT) {
-      if (node->children().empty() || node->children().back()->type() != Node::LINK) {
-        lines.push_back(std::string(6, ' ') + '|');
-        lines.push_back("<-----|");
+  draw_node = [&](
+    Node *node,
+    const std::string &base_pipeline,
+    const std::string &base_filter,
+    bool parallel
+  ) {
+    switch (node->type()) {
+      case Node::ERROR: {
+        std::stringstream ss;
+        ss << base_filter << "!!ERROR: " << node->name();
+        push_line(ss.str());
+        break;
+      }
+      case Node::ROOT: {
+        push_line("----->|");
+        push_line("      |");
+        auto base = base_pipeline + "     ";
+        for (Node *child = node->children(); child; child = child->next()) {
+          draw_node(child, base, base, parallel);
+        }
+        push_line(base_filter);
+        draw_output(node, base_filter, false);
+        break;
+      }
+      case Node::PIPELINE: {
+        std::stringstream ss;
+        ss << base_pipeline << '[' << node->name() << ']';
+        push_line(ss.str(), node->children() ? nullptr : find_output(node));
+        for (Node *child = node->children(); child; child = child->next()) {
+          draw_node(child, base_filter, base_filter, parallel);
+        }
+        push_line(base_filter);
+        break;
+      }
+      case Node::FILTER: {
+        std::stringstream ss;
+        ss << base_filter << node->name();
+        auto *out = find_output(node);
+        if (out == node->next()) out = nullptr;
+        push_line(ss.str(), out);
+        if (node->name() == "output") {
+          push_line(base_filter + (parallel ? "||"        : " |"       ));
+          push_line(base_filter + (parallel ? "||==> ..." : " |--> ..."));
+        }
+        break;
+      }
+      case Node::JOINT: {
+        std::stringstream ss;
+        ss << base_filter << node->name();
+        push_line(ss.str());
+        if (node->sub_type() == Filter::Dump::DEMUX) parallel = true;
+        auto *out = find_output(node);
+        auto base = base_filter + (parallel ? "||" : " |");
+        auto head = base + (parallel ? "==> " : "--> ");
+        auto tail = std::string(base_filter);
+        if (node->out_type() == Filter::Dump::OUTPUT_FROM_OTHERS) {
+          tail += (parallel ? ".." : " .");
+        } else if (node->out_type() == Filter::Dump::OUTPUT_FROM_SELF) {
+          tail += out ? (parallel ? "||" : " |") : "  ";
+        } else {
+          tail += "  ";
+        }
+        push_line(base);
+        base += "     ";
+        tail += "     ";
+        auto sub_parallel = parallel;
+        if (node->sub_type() == Filter::Dump::MUX) sub_parallel = false;
+        for (Node *child = node->children(); child; child = child->next()) {
+          if (child->next()) {
+            draw_node(child, head, base, sub_parallel);
+          } else {
+            draw_node(child, head, tail, sub_parallel);
+          }
+        }
+        switch (node->out_type()) {
+          case Filter::Dump::OUTPUT_FROM_OTHERS: {
+            push_line(tail);
+            push_line(base_filter + (parallel ? "||<== ..." : " |<-- ..."));
+            push_line(base_filter + (parallel ? "||"        : " |"       ));
+            if (node->next()) {
+              push_line(base_filter + (parallel ? "vv" : " v"));
+            } else {
+              push_line(base_filter + (parallel ? "||" : " |"));
+            }
+            break;
+          }
+          case Filter::Dump::OUTPUT_FROM_SELF: {
+            if (node->next()) {
+              push_line(base_filter + (parallel ? "vv" : " v"));
+            } else if (out) {
+              push_line(tail);
+              push_line(base_filter + (parallel ? "||" : " |"), out);
+            }
+            break;
+          }
+          case Filter::Dump::OUTPUT_FROM_SUBS: {
+            if (out && out == node->next()) {
+              push_line(tail);
+              draw_output(node, base_filter, parallel);
+            }
+            break;
+          }
+          default: break;
+        }
+        break;
       }
     }
   };
 
-  draw_node(root);
+  draw_node(root, "", "", false);
   return lines;
+}
+
+//
+// Graph::Node
+//
+
+Graph::Node::~Node() {
+  while (auto *node = m_children.head()) {
+    m_children.remove(node);
+    delete node;
+  }
 }
 
 } // namespace pipy
