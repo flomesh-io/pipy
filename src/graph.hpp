@@ -100,19 +100,21 @@ private:
       MUX_FORK,
     };
 
-    Node(Node *parent, Type type, const std::string &name)
-      : Node(parent, type, Filter::Dump::OUTPUT_FROM_SELF, Filter::Dump::NO_SUBS, name) {}
+    Node(Node *parent, Type type, const std::string &name, int pipeline_index = -1)
+      : Node(parent, type, Filter::Dump::OUTPUT_FROM_SELF, Filter::Dump::NO_SUBS, name, pipeline_index) {}
 
     Node(
       Node *parent, Type type,
       Filter::Dump::OutType out_type,
       Filter::Dump::SubType sub_type,
-      const std::string &name
+      const std::string &name,
+      int pipeline_index = -1
     ) : m_parent(parent)
       , m_name(name)
       , m_type(type)
       , m_out_type(out_type)
       , m_sub_type(sub_type)
+      , m_pipeline_index(pipeline_index)
     {
       if (parent) {
         parent->m_children.push(this);
@@ -129,6 +131,7 @@ private:
     auto children() const -> Node* { return m_children.head(); }
     auto index() const -> int { return m_index; }
     void index(int i) { m_index = i; }
+    auto pipeline_index() const -> int { return m_pipeline_index; }
 
   private:
     Node* m_parent;
@@ -138,6 +141,7 @@ private:
     Filter::Dump::OutType m_out_type;
     Filter::Dump::SubType m_sub_type;
     int m_index = 0;
+    int m_pipeline_index;
   };
 
   std::list<Pipeline> m_pipelines;

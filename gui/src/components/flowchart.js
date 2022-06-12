@@ -114,7 +114,7 @@ function drawPipeline(container, graph, root, classes) {
     const node = i === '' ? null : graph[i];
     const type = node?.t;
     const isPipeline = (type === 'root' || type === 'pipeline');
-    const isLink = (type === 'link' || type === 'fork');
+    const isLink = (type === 'joint' || type === 'fork');
 
     let isInput = isPipeline || Boolean(exits[i]);
     let isOutput = isLink;
@@ -166,7 +166,7 @@ function drawPipeline(container, graph, root, classes) {
           while (p !== undefined) {
             parent = graph[p];
             if (parent.t === 'fork') break;
-            if (parent.t === 'link') {
+            if (parent.t === 'joint') {
               const pipeline = graph[parent.p];
               const siblings = pipeline.c;
               if (siblings[siblings.length - 1] !== p) {
@@ -201,7 +201,7 @@ function drawPipeline(container, graph, root, classes) {
       while (p !== undefined) {
         const parent = graph[p];
         if (parent.t === 'fork') break;
-        if (parent.t === 'link') {
+        if (parent.t === 'joint') {
           const pipeline = graph[parent.p];
           const siblings = pipeline.c;
           if (siblings[siblings.length - 1] !== p) {

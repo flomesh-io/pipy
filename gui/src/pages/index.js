@@ -106,7 +106,6 @@ function Index({ data }) {
     async () => {
       const res = await fetch('/api/v1/repo');
       if (res.status !== 200) {
-        console.log('ERROR', res.status)
         const msg = await res.text();
         throw new Error(`Error: ${msg}, status = ${res.status}`);
       }
@@ -158,7 +157,6 @@ function Index({ data }) {
     queryCodebaseList.data.forEach(
       path => populateTree(path)
     );
-    console.log(tree);
   }
 
   return (

@@ -42,6 +42,7 @@ namespace pipy {
 void Graph::from_pipelines(Graph &g, const std::set<PipelineLayout*> &pipelines) {
   for (auto *pipeline : pipelines) {
     Graph::Pipeline p;
+    p.index = pipeline->index();
     p.name = pipeline->name()->str();
     for (auto &f : pipeline->m_filters) {
       Graph::Filter gf;
@@ -353,7 +354,7 @@ void Graph::to_json(std::string &error, std::ostream &out) {
       case Node::ROOT: out << "root"; break;
       case Node::PIPELINE: out << "pipeline"; break;
       case Node::FILTER: out << "filter"; break;
-      case Node::JOINT: out << "link"; break;
+      case Node::JOINT: out << "joint"; break;
     }
     out << '"';
     if (node->parent()) {
@@ -412,7 +413,7 @@ auto Graph::build_tree(const Pipeline &pipeline, std::string &error) -> Node* {
         for (const auto &s : f.subs) {
           bool recursive = false;
           for (auto p = pipeline_node; p; p = p->parent()) {
-            if (p->type() == Node::PIPELINE && p->name() == s.name) {
+            if (p->type() == Node::PIPELINE && p->pipeline_index() < 0 && p->name() == s.name) {
               recursive = true;
               break;
             }
@@ -431,7 +432,7 @@ auto Graph::build_tree(const Pipeline &pipeline, std::string &error) -> Node* {
               new Node(link_node, Node::PIPELINE, msg);
               continue;
             }
-            auto node = new Node(link_node, Node::PIPELINE, "$=>$");
+            auto node = new Node(link_node, Node::PIPELINE, "", s.index);
             build(*i->second, node);
           } else if (s.name.empty()) {
             new Node(link_node, Node::PIPELINE, "$=>$");
