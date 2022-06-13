@@ -668,7 +668,7 @@ public:
       push(get(m_packet, STR_reasonCode, '\x00'));
       push_properties();
     }
-    frame(PacketType::PUBREL, 0);
+    frame(PacketType::PUBREL, 0x02);
   }
 
   void PUBCOMP() {
