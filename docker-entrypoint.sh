@@ -36,7 +36,7 @@ then
   chmod o+w /proc/self/fd/2 || true
 fi
 
-if [[ "$1" == "pipy" ]]; then
+if [[ "$1" == "pipy" || "$1" == "/usr/local/bin/pipy" ]]; then
   if [[ "$2" == "docker-start" ]]; then
     shift 2
     if [ "${PIPY_CONFIG_FILE}x" == 'x' ]; then
