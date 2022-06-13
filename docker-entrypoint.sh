@@ -20,7 +20,7 @@ function set_pipy_spawn() {
   then
     export DEFAULT_SPAWN=0
   else
-    export DEFAULT_SPAWN=$((QUOTA/$PERIOD - 1))
+    export DEFAULT_SPAWN=$(($QUOTA/$PERIOD - 1))
   fi
 
   export PIPY_SPAWN=${PIPY_SPAWN:-$DEFAULT_SPAWN}
