@@ -204,6 +204,8 @@ protected:
         if (m == "link") {
           Graph::Filter f;
           f.name = m;
+          f.sub_type = Filter::Dump::BRANCH;
+          f.out_type = Filter::Dump::OUTPUT_FROM_SUBS;
           for (int i = 0; i < argc; i += 2) {
             if (cv(argv[i])->t() == STRING) {
               f.subs.emplace_back();
@@ -216,6 +218,8 @@ protected:
         } else if (m == "branch") {
           Graph::Filter f;
           f.name = m;
+          f.sub_type = Filter::Dump::BRANCH;
+          f.out_type = Filter::Dump::OUTPUT_FROM_SUBS;
           for (int i = 1; i < argc; i += 2) {
             auto *b = cv(argv[i]);
             if (b->t() == STRING) {
@@ -243,12 +247,28 @@ protected:
           f.name += " [";
           f.name += arg2;
           f.name += ']';
+          f.sub_type = Filter::Dump::NO_SUBS;
+          f.out_type = Filter::Dump::OUTPUT_FROM_SELF;
           m_p->filters.emplace_back(std::move(f));
           m_f = nullptr;
 
         } else if (s_joint_filters.count(m) > 0) {
           Graph::Filter f;
           f.name = m;
+          if (s_demux_filters.count(m) > 0) {
+            f.sub_type = Filter::Dump::DEMUX;
+          } else if (s_mux_filters.count(m) > 0) {
+            f.sub_type = Filter::Dump::MUX;
+          } else {
+            f.sub_type = Filter::Dump::BRANCH;
+          }
+          if (m == "input") {
+            f.out_type = Filter::Dump::OUTPUT_FROM_OTHERS;
+          } else if (s_cloning_filters.count(m) > 0) {
+            f.out_type = Filter::Dump::OUTPUT_FROM_SELF;
+          } else {
+            f.out_type = Filter::Dump::OUTPUT_FROM_SUBS;
+          }
           if (argc > 0 && cv(argv[0])->t() == STRING) {
             f.subs.emplace_back();
             f.subs.back().name = cv(argv[0])->s();
@@ -262,6 +282,8 @@ protected:
         } else {
           Graph::Filter f;
           f.name = m;
+          f.sub_type = Filter::Dump::NO_SUBS;
+          f.out_type = Filter::Dump::OUTPUT_FROM_SELF;
           m_p->filters.emplace_back(std::move(f));
         }
       }
@@ -283,14 +305,29 @@ private:
   std::string m_fc_name;
 
   static const std::set<std::string> s_joint_filters;
+  static const std::set<std::string> s_cloning_filters;
+  static const std::set<std::string> s_demux_filters;
+  static const std::set<std::string> s_mux_filters;
 };
 
 const std::set<std::string> FilterReducer::s_joint_filters{
-  "link", "branch", "fork",
+  "link", "branch", "fork", "input",
   "demux", "demuxQueue", "demuxHTTP",
   "mux", "merge", "muxQueue", "muxHTTP",
   "acceptHTTPTunnel", "acceptSOCKS", "acceptTLS",
   "connectHTTPTunnel", "connectSOCKS", "connectTLS",
+};
+
+const std::set<std::string> FilterReducer::s_cloning_filters{
+  "fork", "mux", "merge",
+};
+
+const std::set<std::string> FilterReducer::s_demux_filters{
+  "demux", "demuxQueue", "demuxHTTP",
+};
+
+const std::set<std::string> FilterReducer::s_mux_filters{
+  "mux", "merge", "muxQueue", "muxHTTP",
 };
 
 //
@@ -476,6 +513,23 @@ void Graph::to_json(std::string &error, std::ostream &out) {
       case Node::PIPELINE: out << "pipeline"; break;
       case Node::FILTER: out << "filter"; break;
       case Node::JOINT: out << "joint"; break;
+    }
+    if (node->type() == Node::JOINT) {
+      if (node->sub_type() != Filter::Dump::BRANCH) {
+        out << "\",\"st\":\"";
+        switch (node->sub_type()) {
+          case Filter::Dump::DEMUX: out << "demux"; break;
+          case Filter::Dump::MUX: out << "mux"; break;
+          default: break;
+        }
+      }
+      out << "\",\"ot\":\"";
+      switch (node->out_type()) {
+        case Filter::Dump::OUTPUT_FROM_SELF: out << "self"; break;
+        case Filter::Dump::OUTPUT_FROM_SUBS: out << "subs"; break;
+        case Filter::Dump::OUTPUT_FROM_OTHERS: out << "others"; break;
+        default: break;
+      }
     }
     out << '"';
     if (node->parent()) {

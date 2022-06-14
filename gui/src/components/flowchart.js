@@ -86,6 +86,7 @@ function drawPipeline(container, graph, root, classes) {
   const falls = {};
   const exits = {};
   const lines = [];
+  const outputs = [];
 
   let chunk = null;
   let rightMost = 0;
@@ -110,14 +111,28 @@ function drawPipeline(container, graph, root, classes) {
     svg.appendChild(path);
   }
 
+  const drawArrowRight = (x, y) => {
+    const path = document.createElementNS(svgns, 'path');
+    path.setAttribute(
+      'd',
+      `M ${x  },${y  } ` +
+      `L ${x-8},${y-6} ` +
+      `  ${x-8},${y+6} `
+    );
+    path.setAttribute('fill', '#fff');
+    path.setAttribute('stroke', 'none');
+    svg.appendChild(path);
+  }
+
   const drawNode = (i, depth) => {
     const node = i === '' ? null : graph[i];
     const type = node?.t;
+    const outType = node?.ot;
     const isPipeline = (type === 'root' || type === 'pipeline');
-    const isLink = (type === 'joint' || type === 'fork');
+    const isJoint = (type === 'joint');
 
-    let isInput = isPipeline || Boolean(exits[i]);
-    let isOutput = isLink;
+    let isInput = isPipeline || Boolean(falls[i]) || Boolean(exits[i]);
+    let isOutput = isJoint;
 
     if (isInput) drawGutter();
 
@@ -129,6 +144,10 @@ function drawPipeline(container, graph, root, classes) {
     chunk.appendChild(div);
     boxes[i] = div;
     lines.push(div);
+
+    if (node?.name === 'output') {
+      outputs.push(div);
+    }
 
     if (exits[i]) {
       const { start } = exits[i];
@@ -147,15 +166,18 @@ function drawPipeline(container, graph, root, classes) {
     }
 
     if (node.c) {
-      if (isLink) {
+      if (isJoint) {
         const callees = (calls[i] = calls[i] || []);
         for (const i of node.c) callees.push(i);
         depth++;
       }
+
       for (const i of node.c) {
         drawNode(i, depth);
       }
-      if (type === 'fork') {
+
+      // find where the filter output goes
+      if (type === 'joint' && outType !== 'subs') {
         let target = null;
         let p = node.p;
         let parent = graph[p];
@@ -165,7 +187,7 @@ function drawPipeline(container, graph, root, classes) {
         } else {
           while (p !== undefined) {
             parent = graph[p];
-            if (parent.t === 'fork') break;
+            if (parent.ot !== 'subs') break;
             if (parent.t === 'joint') {
               const pipeline = graph[parent.p];
               const siblings = pipeline.c;
@@ -195,13 +217,14 @@ function drawPipeline(container, graph, root, classes) {
       if (!node.c) isOutput = true;
     }
 
-    if (isOutput && !isLink) {
+    // find out where the end of pipeline returns to
+    if (isOutput && !isJoint) {
       let target = null;
       let p = node.p;
       while (p !== undefined) {
         const parent = graph[p];
-        if (parent.t === 'fork') break;
         if (parent.t === 'joint') {
+          if (parent.ot !== 'subs') break;
           const pipeline = graph[parent.p];
           const siblings = pipeline.c;
           if (siblings[siblings.length - 1] !== p) {
@@ -235,6 +258,12 @@ function drawPipeline(container, graph, root, classes) {
   drawNode(root, 1);
   drawNode('', 1); // empty ending node
 
+  for (const div of outputs) {
+    const box = div.getBoundingClientRect();
+    const right = box.right + 32;
+    if (right > rightMost) rightMost = right;
+  }
+
   const svgns = 'http://www.w3.org/2000/svg';
   let bounds = container.getBoundingClientRect();
   const x0 = bounds.left;
@@ -249,6 +278,24 @@ function drawPipeline(container, graph, root, classes) {
   svg.style.left = 0;
   svg.style.pointerEvents = 'none';
   container.appendChild(svg);
+
+  for (const div of outputs) {
+    const box = div.getBoundingClientRect();
+    const x = box.right - x0;
+    const y = 0.5 * (box.top + box.bottom) - y0;
+    const path = document.createElementNS(svgns, 'path');
+    path.setAttribute(
+      'd',
+      `M ${x   },${y} `+
+      `L ${x+26},${y} `
+    );
+    path.setAttribute('fill', 'none');
+    path.setAttribute('stroke', '#fff');
+    path.setAttribute('stroke-width', '3');
+    path.setAttribute('stroke-dasharray', '3,3');
+    svg.appendChild(path);
+    drawArrowRight(x + 32, y);
+  }
 
   for (const src in calls) {
     const box = boxes[src].getBoundingClientRect();
@@ -305,6 +352,32 @@ function drawPipeline(container, graph, root, classes) {
       path.setAttribute('fill', 'none');
       path.setAttribute('stroke', '#fff');
       path.setAttribute('stroke-width', '3');
+      if (graph[src].ot === 'others') {
+        path.setAttribute('stroke-dasharray', '3,3');
+        const path2 = document.createElementNS(svgns, 'path');
+        const path3 = document.createElementNS(svgns, 'path');
+        path2.setAttribute(
+          'd',
+          `M ${x2   },${y2   } `+
+          `L ${x2   },${y2-15}` +
+          `  ${x2+5 },${y2-20}` +
+          `  ${x2+15},${y2-20}`
+        );
+        path3.setAttribute(
+          'd',
+          `M ${x2+15},${y2-20}` +
+          `L ${x2+36},${y2-20}`
+        )
+        path2.setAttribute('fill', 'none');
+        path2.setAttribute('stroke', '#fff');
+        path2.setAttribute('stroke-width', '3');
+        path3.setAttribute('fill', 'none');
+        path3.setAttribute('stroke', '#fff');
+        path3.setAttribute('stroke-width', '3');
+        path3.setAttribute('stroke-dasharray', '3,3');
+        svg.appendChild(path2);
+        svg.appendChild(path3);
+      }
       svg.appendChild(path);
     }
     drawArrow(x2, y2);
