@@ -65,7 +65,7 @@ public:
     virtual Value* is(Value *obj, Value *ctor) { return dummy(obj, ctor); }
     virtual Value* object(Value **kv, size_t count) { return dummy(kv, count); }
     virtual Value* array(Value **v, size_t count) { return dummy(v, count); }
-    virtual Value* function(Expr *expr) { return undefined(); }
+    virtual Value* function(int argc, Expr **inputs, Expr *output) { return undefined(); }
 
     // Property access
     virtual Value* get(Value *obj, Value *key) { return dummy(obj, key); }

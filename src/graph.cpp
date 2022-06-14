@@ -63,33 +63,19 @@ void Graph::from_pipelines(Graph &g, const std::set<PipelineLayout*> &pipelines)
 }
 
 //
-// Create graph from source code
+// FilterReducer
 //
 
-class ConfigReducer : public pjs::Expr::Reducer {
+class FilterReducer : public pjs::Expr::Reducer {
 public:
-  ConfigReducer(Graph &g) : m_g(g) {}
+  FilterReducer(Graph &g, Graph::Pipeline *p, const std::string &fc_name)
+    : m_g(g), m_p(p), m_fc_name(fc_name) {}
 
-  void flush() {
-    if (m_p) {
-      if (m_pt == PipelineLayout::NAMED) {
-        m_g.add_named_pipeline(std::move(*m_p));
-      } else {
-        m_g.add_root_pipeline(std::move(*m_p));
-      }
-      delete m_p;
-      m_p = nullptr;
-    }
-  }
+protected:
 
-private:
-  Graph& m_g;
-  Graph::Pipeline* m_p = nullptr;
-  PipelineLayout::Type m_pt;
-  int m_pipeline_index = 0;
-  int m_named_count = 0;
-  int m_listen_count = 0;
-  int m_task_count = 0;
+  //
+  // FilterReducer::ConfigValueType
+  //
 
   enum ConfigValueType {
     UNDEFINED,
@@ -97,12 +83,15 @@ private:
     NUMBER,
     STRING,
     FUNCTION,
-    CONFIG_MAKER,
+    IDENTIFIER,
+    GLOBAL_PIPY,
     CONFIG_OBJECT,
     CONFIG_METHOD,
   };
 
-  static const std::set<std::string> s_linking_filters;
+  //
+  // FilterReducer::ConfigValue
+  //
 
   class ConfigValue : public pjs::Pooled<ConfigValue, pjs::Expr::Reducer::Value> {
   public:
@@ -111,7 +100,7 @@ private:
     ConfigValue(bool b) : m_t(BOOLEAN), m_b(b) {}
     ConfigValue(double n) : m_t(NUMBER), m_n(n) {}
     ConfigValue(const std::string &s) : m_t(STRING), m_s(s) {}
-    ConfigValue(pjs::Expr *f) : m_t(FUNCTION), m_f(f) {}
+    ConfigValue(const std::string &s, pjs::Expr *f) : m_t(FUNCTION), m_s(s), m_f(f) {}
 
     auto t() const -> ConfigValueType { return m_t; }
     auto b() const -> bool { return m_b; }
@@ -129,6 +118,18 @@ private:
 
   static auto cv(Value *v) -> ConfigValue* {
     return static_cast<ConfigValue*>(v);
+  }
+
+  auto graph() -> Graph& {
+    return m_g;
+  }
+
+  auto current_pipeline() -> Graph::Pipeline* {
+    return m_p;
+  }
+
+  void current_pipeline(Graph::Pipeline *p) {
+    m_p = p;
   }
 
   virtual void free(Value *val) override {
@@ -151,49 +152,53 @@ private:
     return new ConfigValue(s);
   }
 
-  virtual Value* function(pjs::Expr *expr) override {
-    return new ConfigValue(expr);
+  virtual Value* function(int argc, pjs::Expr **inputs, pjs::Expr *output) override {
+    std::string arg;
+    if (argc > 0) {
+      std::vector<pjs::Ref<pjs::Str>> args, vars;
+      inputs[0]->to_arguments(args, vars);
+      if (args.size() > 0) arg = args[0]->str();
+    }
+    return new ConfigValue(arg, output);
   }
 
   virtual Value* get(const std::string &name) override {
-    if (name == "pipy") return new ConfigValue(CONFIG_MAKER);
-    return undefined();
+    if (name == m_fc_name) {
+      return new ConfigValue(CONFIG_OBJECT);
+    } else {
+      return new ConfigValue(UNDEFINED);
+    }
+  }
+
+  virtual Value* get(Value *obj, Value *key) override {
+    Value *ret = nullptr;
+    if (cv(obj)->t() == CONFIG_OBJECT && cv(key)->t() == STRING) ret = new ConfigValue(CONFIG_METHOD, cv(key)->s());
+    else ret = undefined();
+    delete obj;
+    delete key;
+    return ret;
   }
 
   virtual Value* call(Value *fn, Value **argv, int argc) override {
     Value *ret = nullptr;
     if (cv(fn)->t() == FUNCTION) {
       return cv(fn)->f()->reduce(*this);
-    } if (cv(fn)->t() == CONFIG_MAKER) {
+    } if (cv(fn)->t() == GLOBAL_PIPY) {
       ret = new ConfigValue(CONFIG_OBJECT);
     } else if (cv(fn)->t() == CONFIG_METHOD) {
       const auto &m = cv(fn)->s();
-      if (m == "pipeline") {
-        flush();
-        m_pt = PipelineLayout::NAMED;
-        m_p = new Graph::Pipeline;
-        m_p->index = m_pipeline_index++;
-        m_p->name = argc > 0 && cv(argv[0])->t() == STRING
-          ? cv(argv[0])->s()
-          : std::string("Pipeline #") + std::to_string(++m_named_count);
-
-      } else if (m == "listen") {
-        flush();
-        m_pt = PipelineLayout::LISTEN;
-        m_p = new Graph::Pipeline;
-        m_p->index = m_pipeline_index++;
-        m_p->name = argc > 0 && cv(argv[0])->t() == NUMBER
-          ? std::string("Listen 0.0.0.0:") + std::to_string(int(cv(argv[0])->n()))
-          : std::string("Listen #") + std::to_string(++m_listen_count);
-
-      } else if (m == "task") {
-        flush();
-        m_pt = PipelineLayout::TASK;
-        m_p = new Graph::Pipeline;
-        m_p->index = m_pipeline_index++;
-        m_p->name = argc > 0 && cv(argv[0])->t() == STRING
-          ? std::string("Task every ") + cv(argv[0])->s()
-          : std::string("Task #") + std::to_string(++m_task_count);
+      if (m == "to") {
+        if (m_f && argc >= 1) {
+          auto *arg = cv(argv[0]);
+          if (arg->t() == FUNCTION) {
+            Graph::Pipeline p;
+            FilterReducer r(graph(), &p, arg->s());
+            arg->f()->reduce(r);
+            m_f->subs.emplace_back();
+            m_f->subs.back().index = graph().add_named_pipeline(std::move(p));
+          }
+          m_f = nullptr;
+        }
 
       } else if (m_p) {
         if (m == "link") {
@@ -206,15 +211,26 @@ private:
             }
           }
           m_p->filters.emplace_back(std::move(f));
+          m_f = nullptr;
 
-        } else if (m == "fork" || m == "merge" || s_linking_filters.count(m) > 0) {
+        } else if (m == "branch") {
           Graph::Filter f;
           f.name = m;
-          if (argc > 0 && cv(argv[0])->t() == STRING) {
-            f.subs.emplace_back();
-            f.subs.back().name = cv(argv[0])->s();
+          for (int i = 1; i < argc; i += 2) {
+            auto *b = cv(argv[i]);
+            if (b->t() == STRING) {
+              f.subs.emplace_back();
+              f.subs.back().name = b->s();
+            } else if (b->t() == FUNCTION) {
+              Graph::Pipeline p;
+              FilterReducer r(graph(), &p, b->s());
+              b->f()->reduce(r);
+              f.subs.emplace_back();
+              f.subs.back().index = graph().add_named_pipeline(std::move(p));
+            }
           }
           m_p->filters.emplace_back(std::move(f));
+          m_f = nullptr;
 
         } else if (m == "use") {
           std::string arg1, arg2;
@@ -228,6 +244,20 @@ private:
           f.name += arg2;
           f.name += ']';
           m_p->filters.emplace_back(std::move(f));
+          m_f = nullptr;
+
+        } else if (s_joint_filters.count(m) > 0) {
+          Graph::Filter f;
+          f.name = m;
+          if (argc > 0 && cv(argv[0])->t() == STRING) {
+            f.subs.emplace_back();
+            f.subs.back().name = cv(argv[0])->s();
+            m_p->filters.emplace_back(std::move(f));
+            m_f = nullptr;
+          } else {
+            m_p->filters.emplace_back(std::move(f));
+            m_f = &m_p->filters.back();
+          }
 
         } else {
           Graph::Filter f;
@@ -240,30 +270,121 @@ private:
     } else {
       ret = undefined();
     }
+
     delete fn;
     for (int i = 0; i < argc; i++) free(argv[i]);
     return ret;
   }
 
-  virtual Value* get(Value *obj, Value *key) override {
-    Value *ret = nullptr;
-    if (cv(obj)->t() == CONFIG_OBJECT && cv(key)->t() == STRING) ret = new ConfigValue(CONFIG_METHOD, cv(key)->s());
-    else ret = undefined();
-    delete obj;
-    delete key;
-    return ret;
+private:
+  Graph& m_g;
+  Graph::Pipeline* m_p;
+  Graph::Filter* m_f = nullptr;
+  std::string m_fc_name;
+
+  static const std::set<std::string> s_joint_filters;
+};
+
+const std::set<std::string> FilterReducer::s_joint_filters{
+  "link", "branch", "fork",
+  "demux", "demuxQueue", "demuxHTTP",
+  "mux", "merge", "muxQueue", "muxHTTP",
+  "acceptHTTPTunnel", "acceptSOCKS", "acceptTLS",
+  "connectHTTPTunnel", "connectSOCKS", "connectTLS",
+};
+
+//
+// ConfigReducer
+//
+
+class ConfigReducer : public FilterReducer {
+public:
+  ConfigReducer(Graph &g) : FilterReducer(g, nullptr, "") {}
+
+  void flush() {
+    if (auto *p = current_pipeline()) {
+      if (m_pt == PipelineLayout::NAMED) {
+        graph().add_named_pipeline(std::move(*p));
+      } else {
+        graph().add_root_pipeline(std::move(*p));
+      }
+      delete p;
+      current_pipeline(nullptr);
+    }
+  }
+
+private:
+  PipelineLayout::Type m_pt;
+  int m_named_count = 0;
+  int m_listen_count = 0;
+  int m_task_count = 0;
+
+  virtual Value* get(const std::string &name) override {
+    if (name == "pipy") return new ConfigValue(GLOBAL_PIPY);
+    return FilterReducer::get(name);
+  }
+
+  virtual Value* call(Value *fn, Value **argv, int argc) override {
+    if (cv(fn)->t() == CONFIG_METHOD) {
+      const auto &m = cv(fn)->s();
+      if (m == "pipeline") {
+        flush();
+        m_pt = PipelineLayout::NAMED;
+        auto p = new Graph::Pipeline;
+        p->name = argc > 0 && cv(argv[0])->t() == STRING
+          ? cv(argv[0])->s()
+          : std::string("Pipeline #") + std::to_string(++m_named_count);
+        current_pipeline(p);
+
+      } else if (m == "listen") {
+        flush();
+        m_pt = PipelineLayout::LISTEN;
+        auto p = new Graph::Pipeline;
+        p->name = argc > 0 && cv(argv[0])->t() == NUMBER
+          ? std::string("Listen 0.0.0.0:") + std::to_string(int(cv(argv[0])->n()))
+          : std::string("Listen #") + std::to_string(++m_listen_count);
+        current_pipeline(p);
+
+      } else if (m == "task") {
+        flush();
+        m_pt = PipelineLayout::TASK;
+        auto p = new Graph::Pipeline;
+        p->name = argc > 0 && cv(argv[0])->t() == STRING
+          ? std::string("Task every ") + cv(argv[0])->s()
+          : std::string("Task #") + std::to_string(++m_task_count);
+        current_pipeline(p);
+
+      } else {
+        return FilterReducer::call(fn, argv, argc);
+      }
+
+      delete fn;
+      for (int i = 0; i < argc; i++) free(argv[i]);
+      return new ConfigValue(CONFIG_OBJECT);
+
+    } else {
+      return FilterReducer::call(fn, argv, argc);
+    }
   }
 };
 
-const std::set<std::string> ConfigReducer::s_linking_filters{
-  "mux", "demux", "muxHTTP", "demuxHTTP",
-  "acceptTLS", "connectTLS",
-  "acceptSOCKS",
-};
+auto Graph::add_root_pipeline(Pipeline &&p) -> int {
+  m_pipelines.push_back(std::move(p));
+  auto &ppl = m_pipelines.back();
+  if (ppl.index < 0) ppl.index = m_pipeline_index++;
+  m_indexed_pipelines[ppl.index] = &ppl;
+  m_root_pipelines[ppl.name] = &ppl;
+  return ppl.index;
+}
 
-//
-// Graph
-//
+auto Graph::add_named_pipeline(Pipeline &&p) -> int {
+  m_pipelines.push_back(std::move(p));
+  auto &ppl = m_pipelines.back();
+  if (ppl.index < 0) ppl.index = m_pipeline_index++;
+  m_indexed_pipelines[ppl.index] = &ppl;
+  m_named_pipelines[ppl.name] = &ppl;
+  return ppl.index;
+}
 
 bool Graph::from_script(Graph &g, const std::string &script, std::string &error) {
   error.clear();

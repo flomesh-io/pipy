@@ -476,7 +476,10 @@ void FunctionLiteral::resolve(Context &ctx, int l, Imports *imports) {
 }
 
 auto FunctionLiteral::reduce(Reducer &r) -> Reducer::Value* {
-  return r.function(m_output.get());
+  size_t argc = m_inputs.size();
+  Expr *inputs[argc];
+  for (size_t i = 0; i < argc; i++) inputs[i] = m_inputs[i].get();
+  return r.function(argc, inputs, m_output.get());
 }
 
 void FunctionLiteral::dump(std::ostream &out, const std::string &indent) {

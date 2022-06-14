@@ -37,6 +37,8 @@
 
 namespace pipy {
 
+class Worker;
+
 //
 // Graph
 //
@@ -63,19 +65,8 @@ public:
   static void from_pipelines(Graph &g, const std::set<PipelineLayout*> &pipelines);
   static bool from_script(Graph &g, const std::string &script, std::string &error);
 
-  void add_root_pipeline(Pipeline &&p) {
-    m_pipelines.push_back(std::move(p));
-    auto &ppl = m_pipelines.back();
-    m_indexed_pipelines[ppl.index] = &ppl;
-    m_root_pipelines[ppl.name] = &ppl;
-  }
-
-  void add_named_pipeline(Pipeline &&p) {
-    m_pipelines.push_back(std::move(p));
-    auto &ppl = m_pipelines.back();
-    m_indexed_pipelines[ppl.index] = &ppl;
-    m_named_pipelines[ppl.name] = &ppl;
-  }
+  auto add_root_pipeline(Pipeline &&p) -> int;
+  auto add_named_pipeline(Pipeline &&p) -> int;
 
   auto to_text(std::string &error) -> std::vector<std::string>;
   void to_json(std::string &error, std::ostream &out);
@@ -148,6 +139,7 @@ private:
   std::map<int, Pipeline*> m_indexed_pipelines;
   std::map<std::string, Pipeline*> m_root_pipelines;
   std::map<std::string, Pipeline*> m_named_pipelines;
+  int m_pipeline_index = 0;
 
   void find_roots();
   auto build_tree(const Pipeline &pipeline, std::string &error) -> Node*;
