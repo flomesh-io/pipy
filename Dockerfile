@@ -52,7 +52,7 @@ RUN rm -fr pipy/build \
 
 FROM alpine:3.14 as prod
 COPY --from=builder /pipy/bin/pipy /usr/local/bin/pipy
-COPY --from=builder /etc/pipy /etc/pipy
+COPY --from=builder /pipy/tutorial /etc/pipy/tutorial
 RUN apk add --no-cache ca-certificates libstdc++ libcap su-exec tar curl busybox-extras iptables tzdata socat logrotate 
 RUN adduser -Su 1340 pipy \
     && chmod -R g=u /usr/local/bin/pipy /etc/pipy \
