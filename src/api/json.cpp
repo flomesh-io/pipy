@@ -121,7 +121,7 @@ public:
 
   bool visit(const std::string &str) {
     if (yajl_status_ok != yajl_parse(m_parser, (const unsigned char*)str.c_str(), str.length())) return false;
-    if (yajl_status_ok != yajl_complete_parse(m_parser)) yajl_free(m_parser);
+    if (yajl_status_ok != yajl_complete_parse(m_parser)) return false;
     return true;
   }
 
