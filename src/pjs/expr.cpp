@@ -445,6 +445,32 @@ void ArrayLiteral::dump(std::ostream &out, const std::string &indent) {
 // FunctionLiteral
 //
 
+FunctionLiteral::FunctionLiteral(Expr *inputs, Expr *output) : m_output(output) {
+  if (inputs) {
+    if (auto comp = dynamic_cast<Compound*>(inputs)) {
+      comp->break_down(m_inputs);
+      delete comp;
+    } else {
+      m_inputs.push_back(std::unique_ptr<Expr>(inputs));
+    }
+    int i = 0;
+    std::vector<Ref<Str>> args, vars;
+    for (const auto &p : m_inputs) {
+      p->to_arguments(args, vars);
+      if (auto *assign = dynamic_cast<Assignment*>(p.get())) {
+        m_defaults.push_back({ i, assign->m_r.get() });
+      }
+      i++;
+    }
+    m_argc = args.size();
+    m_variables.resize(m_argc + vars.size());
+    m_need_unpack = !vars.empty();
+    for (size_t i = 0; i < m_variables.size(); i++) {
+      m_variables[i].name = (i >= m_argc ? vars[i - m_argc] : args[i]);
+    }
+  }
+}
+
 bool FunctionLiteral::eval(Context &ctx, Value &result) {
   result.set(Function::make(m_method, nullptr, ctx.scope()));
   return true;
@@ -458,12 +484,21 @@ void FunctionLiteral::resolve(Context &ctx, int l, Imports *imports) {
   m_method = Method::make(
     name, argc, nvar, &m_variables[0],
     [this](Context &ctx, Object*, Value &result) {
+      auto *scope = ctx.scope();
+      for (const auto &p : m_defaults) {
+        auto &arg = scope->value(p.first);
+        if (arg.is_undefined()) {
+          if (!p.second->eval(ctx, arg)) {
+            return;
+          }
+        }
+      }
       if (m_need_unpack) {
         int v = m_argc;
         int i = 0;
         for (const auto &arg : m_inputs) {
           if (m_variables[i].name == Str::empty) {
-            arg->unpack(ctx, ctx.arg(i++), v);
+            arg->unpack(ctx, scope->value(i++), v);
           }
         }
       }
@@ -1757,6 +1792,14 @@ void Delete::dump(std::ostream &out, const std::string &indent) {
 //
 // Assignment
 //
+
+bool Assignment::is_argument() const {
+  return m_l->is_argument();
+}
+
+void Assignment::to_arguments(std::vector<Ref<Str>> &args, std::vector<Ref<Str>> &vars) const {
+  m_l->to_arguments(args, vars);
+}
 
 bool Assignment::eval(Context &ctx, Value &result) {
   if (!m_r->eval(ctx, result)) return false;

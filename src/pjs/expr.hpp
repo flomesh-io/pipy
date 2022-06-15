@@ -415,26 +415,7 @@ private:
 
 class FunctionLiteral : public Expr {
 public:
-  FunctionLiteral(Expr *inputs, Expr *output) : m_output(output) {
-    if (inputs) {
-      if (auto comp = dynamic_cast<Compound*>(inputs)) {
-        comp->break_down(m_inputs);
-        delete comp;
-      } else {
-        m_inputs.push_back(std::unique_ptr<Expr>(inputs));
-      }
-      std::vector<Ref<Str>> args, vars;
-      for (const auto &p : m_inputs) {
-        p->to_arguments(args, vars);
-      }
-      m_argc = args.size();
-      m_variables.resize(m_argc + vars.size());
-      m_need_unpack = !vars.empty();
-      for (size_t i = 0; i < m_variables.size(); i++) {
-        m_variables[i].name = (i >= m_argc ? vars[i - m_argc] : args[i]);
-      }
-    }
-  }
+  FunctionLiteral(Expr *inputs, Expr *output);
 
   virtual bool eval(Context &ctx, Value &result) override;
   virtual void resolve(Context &ctx, int l, Imports *imports) override;
@@ -443,6 +424,7 @@ public:
 
 private:
   std::vector<std::unique_ptr<Expr>> m_inputs;
+  std::list<std::pair<int, Expr*>> m_defaults;
   std::unique_ptr<Expr> m_output;
   size_t m_argc = 0;
   bool m_need_unpack = false;
@@ -1263,6 +1245,8 @@ class Assignment : public Expr {
 public:
   Assignment(Expr *l, Expr *r) : m_l(l), m_r(r) {}
 
+  virtual bool is_argument() const override;
+  virtual void to_arguments(std::vector<Ref<Str>> &args, std::vector<Ref<Str>> &vars) const override;
   virtual bool eval(Context &ctx, Value &result) override;
   virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
@@ -1270,6 +1254,8 @@ public:
 private:
   std::unique_ptr<Expr> m_l;
   std::unique_ptr<Expr> m_r;
+
+  friend class FunctionLiteral;
 };
 
 //
