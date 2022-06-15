@@ -84,8 +84,8 @@ bool Module::load(const std::string &path) {
   }
 
   if (!result.is_class(pjs::class_of<Configuration>())) {
-    Log::error("[pjs] Script was not evaluated to Configuration:");
     Console::log(&result, 1);
+    Log::error("[pjs] Script was not evaluated to a Configuration");
     return false;
   }
 

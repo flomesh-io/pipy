@@ -734,6 +734,7 @@ void Percentile::dump(const std::function<void(double, size_t)> &cb) {
 
 namespace pjs {
 
+using namespace pipy;
 using namespace pipy::algo;
 
 //
@@ -1028,6 +1029,12 @@ template<> void ClassDef<Algo>::init() {
     if (!ctx.arguments(0, &value)) return;
     auto h = Algo::hash(value);
     ret.set(double(h & ((1ull << 53)-1)));
+  });
+
+  method("uuid", [](Context &ctx, Object *obj, Value &ret) {
+    std::string str;
+    utils::gen_uuid_v4(str);
+    ret.set(Str::make(std::move(str)));
   });
 }
 
