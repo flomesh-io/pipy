@@ -28,7 +28,7 @@
 #include "fstream.hpp"
 #include "listener.hpp"
 #include "utils.hpp"
-#include "logging.hpp"
+#include "log.hpp"
 
 #include <stdlib.h>
 #include <string.h>

@@ -29,7 +29,7 @@
 #include "net.hpp"
 #include "input.hpp"
 #include "utils.hpp"
-#include "logging.hpp"
+#include "log.hpp"
 
 #include <chrono>
 #include <functional>

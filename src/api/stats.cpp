@@ -25,7 +25,7 @@
 
 #include "stats.hpp"
 #include "utils.hpp"
-#include "logging.hpp"
+#include "log.hpp"
 
 #include <cmath>
 

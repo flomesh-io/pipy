@@ -30,16 +30,18 @@
 
 namespace pipy {
 
-Options::Value::Value(pjs::Object *options, const char *name)
+Options::Value::Value(pjs::Object *options, const char *name, const char *base_name)
   : m_name(name)
+  , m_base_name(base_name)
 {
   if (options) {
     options->get(name, m_value);
   }
 }
 
-Options::Value::Value(pjs::Object *options, pjs::Str *name)
+Options::Value::Value(pjs::Object *options, pjs::Str *name, const char *base_name)
   : m_name(name->c_str())
+  , m_base_name(base_name)
 {
   if (options) {
     options->get(name, m_value);
@@ -151,7 +153,8 @@ Options::Value& Options::Value::get_seconds(double &value) {
 
 void Options::Value::check() {
   if (!m_got) {
-    std::string msg("options.");
+    std::string msg(m_base_name);
+    msg += '.';
     msg += m_name;
     msg += " expects ";
     bool first = true;

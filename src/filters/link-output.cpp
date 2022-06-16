@@ -26,7 +26,7 @@
 #include "link-output.hpp"
 #include "pipeline.hpp"
 #include "context.hpp"
-#include "logging.hpp"
+#include "log.hpp"
 
 namespace pipy {
 

@@ -24,7 +24,7 @@
  */
 
 #include "deposit-message.hpp"
-#include "logging.hpp"
+#include "log.hpp"
 
 namespace pipy {
 

@@ -33,7 +33,7 @@
 #include "fetch.hpp"
 #include "fs.hpp"
 #include "utils.hpp"
-#include "logging.hpp"
+#include "log.hpp"
 
 #include <sys/stat.h>
 #include <dirent.h>

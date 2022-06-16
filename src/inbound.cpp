@@ -30,7 +30,7 @@
 #include "worker.hpp"
 #include "constants.hpp"
 #include "status.hpp"
-#include "logging.hpp"
+#include "log.hpp"
 
 #ifdef __linux__
 #include <linux/netfilter_ipv4.h>

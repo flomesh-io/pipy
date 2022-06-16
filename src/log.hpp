@@ -23,8 +23,8 @@
  *  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef LOGGING_H
-#define LOGGING_H
+#ifndef LOG_H
+#define LOG_H
 
 #include "pjs/pjs.hpp"
 
@@ -64,4 +64,4 @@ public:
 
 } // namespace pipy
 
-#endif // LOGGING_H
+#endif // LOG_H

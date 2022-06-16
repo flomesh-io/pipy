@@ -27,7 +27,7 @@
 #include "context.hpp"
 #include "outbound.hpp"
 #include "utils.hpp"
-#include "logging.hpp"
+#include "log.hpp"
 
 namespace pipy {
 

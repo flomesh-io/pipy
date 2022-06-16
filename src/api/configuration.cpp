@@ -33,7 +33,7 @@
 #include "worker.hpp"
 #include "graph.hpp"
 #include "utils.hpp"
-#include "logging.hpp"
+#include "log.hpp"
 
 // all filters
 #include "filters/branch.hpp"

@@ -26,7 +26,7 @@
 #include "throttle.hpp"
 #include "pipeline.hpp"
 #include "utils.hpp"
-#include "logging.hpp"
+#include "log.hpp"
 
 namespace pipy {
 

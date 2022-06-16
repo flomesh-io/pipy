@@ -27,7 +27,7 @@
 #include "context.hpp"
 #include "data.hpp"
 #include "api/json.hpp"
-#include "logging.hpp"
+#include "log.hpp"
 
 #include <iostream>
 #include <ctime>

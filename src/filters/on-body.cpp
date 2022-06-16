@@ -24,7 +24,7 @@
  */
 
 #include "on-body.hpp"
-#include "logging.hpp"
+#include "log.hpp"
 
 namespace pipy {
 

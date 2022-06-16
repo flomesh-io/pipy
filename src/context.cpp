@@ -26,7 +26,7 @@
 #include "context.hpp"
 #include "inbound.hpp"
 #include "worker.hpp"
-#include "logging.hpp"
+#include "log.hpp"
 
 namespace pipy {
 

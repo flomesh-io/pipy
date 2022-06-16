@@ -25,7 +25,7 @@
 
 #include "listener.hpp"
 #include "pipeline.hpp"
-#include "logging.hpp"
+#include "log.hpp"
 
 namespace pjs {
 

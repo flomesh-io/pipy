@@ -25,7 +25,7 @@
 
 #include "console.hpp"
 #include "json.hpp"
-#include "logging.hpp"
+#include "log.hpp"
 
 #include <sstream>
 

@@ -25,7 +25,7 @@
 
 #include "on-message.hpp"
 #include "message.hpp"
-#include "logging.hpp"
+#include "log.hpp"
 
 namespace pipy {
 

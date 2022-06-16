@@ -24,7 +24,7 @@
  */
 
 #include "websocket.hpp"
-#include "logging.hpp"
+#include "log.hpp"
 
 namespace pipy {
 namespace websocket {

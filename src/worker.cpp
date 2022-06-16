@@ -41,13 +41,14 @@
 #include "api/hessian.hpp"
 #include "api/http.hpp"
 #include "api/json.hpp"
+#include "api/logging.hpp"
 #include "api/netmask.hpp"
 #include "api/os.hpp"
 #include "api/pipy.hpp"
 #include "api/stats.hpp"
 #include "api/url.hpp"
 #include "api/xml.hpp"
-#include "logging.hpp"
+#include "log.hpp"
 
 #include <array>
 #include <limits>
@@ -143,6 +144,9 @@ template<> void ClassDef<Global>::init() {
 
   // Inbound
   variable("Inbound", class_of<Constructor<Inbound>>());
+
+  // logging
+  variable("logging", class_of<logging::Logging>());
 
   // stats
   variable("stats", class_of<stats::Stats>());

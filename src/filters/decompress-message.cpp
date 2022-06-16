@@ -26,7 +26,7 @@
 #include "decompress-message.hpp"
 #include "compress.hpp"
 #include "data.hpp"
-#include "logging.hpp"
+#include "log.hpp"
 
 namespace pipy {
 

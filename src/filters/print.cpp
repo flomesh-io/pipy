@@ -25,7 +25,7 @@
 
 #include "print.hpp"
 #include "data.hpp"
-#include "logging.hpp"
+#include "log.hpp"
 
 #include <stdio.h>
 

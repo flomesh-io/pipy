@@ -29,7 +29,7 @@
 #include "filters/tls.hpp"
 #include "gui-tarball.hpp"
 #include "listener.hpp"
-#include "logging.hpp"
+#include "log.hpp"
 
 namespace pipy {
 

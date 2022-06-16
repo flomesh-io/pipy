@@ -28,7 +28,7 @@
 #include "pipeline.hpp"
 #include "utils.hpp"
 #include "status.hpp"
-#include "logging.hpp"
+#include "log.hpp"
 
 namespace pipy {
 

@@ -31,7 +31,7 @@
 #include "api/console.hpp"
 #include "graph.hpp"
 #include "utils.hpp"
-#include "logging.hpp"
+#include "log.hpp"
 
 #include <fstream>
 #include <sstream>

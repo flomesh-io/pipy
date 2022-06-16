@@ -27,7 +27,7 @@
 #define MAIN_OPTIONS_HPP
 
 #include "api/crypto.hpp"
-#include "logging.hpp"
+#include "log.hpp"
 
 #include <list>
 #include <string>

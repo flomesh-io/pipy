@@ -148,6 +148,7 @@ add_executable(pipy
   src/api/hessian.cpp
   src/api/http.cpp
   src/api/json.cpp
+  src/api/logging.cpp
   src/api/mqtt.cpp
   src/api/netmask.cpp
   src/api/os.cpp
@@ -211,7 +212,7 @@ add_executable(pipy
   src/inbound.cpp
   src/input.cpp
   src/listener.cpp
-  src/logging.cpp
+  src/log.cpp
   src/main.cpp
   src/main-options.cpp
   src/message.cpp

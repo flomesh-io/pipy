@@ -45,8 +45,8 @@ struct Options {
 
   class Value {
   public:
-    Value(pjs::Object *options, const char *name);
-    Value(pjs::Object *options, pjs::Str *name);
+    Value(pjs::Object *options, const char *name, const char *base_name = "options");
+    Value(pjs::Object *options, pjs::Str *name, const char *base_name = "options");
 
     Value& get(bool &value);
     Value& get(double &value, int thousand = 1000);
@@ -99,6 +99,7 @@ struct Options {
     };
 
     const char* m_name;
+    const char* m_base_name;
     pjs::Value m_value;
     Type m_types[10];
     pjs::Class* m_classes[10];

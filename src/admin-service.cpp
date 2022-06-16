@@ -37,7 +37,7 @@
 #include "status.hpp"
 #include "graph.hpp"
 #include "fs.hpp"
-#include "logging.hpp"
+#include "log.hpp"
 
 namespace pipy {
 

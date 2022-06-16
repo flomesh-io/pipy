@@ -24,7 +24,7 @@
  */
 
 #include "dubbo.hpp"
-#include "logging.hpp"
+#include "log.hpp"
 
 namespace pipy {
 namespace dubbo {

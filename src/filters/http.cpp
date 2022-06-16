@@ -31,7 +31,7 @@
 #include "module.hpp"
 #include "inbound.hpp"
 #include "utils.hpp"
-#include "logging.hpp"
+#include "log.hpp"
 
 #include <queue>
 #include <limits>

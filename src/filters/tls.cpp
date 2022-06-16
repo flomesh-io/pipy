@@ -28,7 +28,7 @@
 #include "module.hpp"
 #include "pipeline.hpp"
 #include "api/crypto.hpp"
-#include "logging.hpp"
+#include "log.hpp"
 
 namespace pipy {
 namespace tls {
