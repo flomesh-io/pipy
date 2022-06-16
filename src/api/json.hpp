@@ -27,12 +27,11 @@
 #define JSON_HPP
 
 #include "pjs/pjs.hpp"
+#include "data.hpp"
 
 #include <functional>
 
 namespace pipy {
-
-class Data;
 
 //
 // JSON
@@ -77,6 +76,13 @@ public:
     const std::function<bool(pjs::Object*, const pjs::Value&, pjs::Value&)> &replacer,
     int space,
     Data &data
+  );
+
+  static bool encode(
+    const pjs::Value &val,
+    const std::function<bool(pjs::Object*, const pjs::Value&, pjs::Value&)> &replacer,
+    int space,
+    Data::Builder &db
   );
 };
 

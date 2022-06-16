@@ -27,7 +27,14 @@
 #include "context.hpp"
 #include "data.hpp"
 #include "pipeline.hpp"
+#include "input.hpp"
+#include "api/json.hpp"
+#include "api/url.hpp"
 #include "filters/tee.hpp"
+#include "filters/pack.hpp"
+#include "filters/mux.hpp"
+#include "filters/http.hpp"
+#include "filters/connect.hpp"
 
 namespace pipy {
 namespace logging {
@@ -86,6 +93,9 @@ Logger::HTTPTarget::Options::Options(pjs::Object *options) {
   Value(batch, "size", options_batch)
     .get(size)
     .check_nullable();
+  Value(batch, "timeout", options_batch)
+    .get_seconds(timeout)
+    .check_nullable();
   Value(batch, "interval", options_batch)
     .get_seconds(interval)
     .check_nullable();
@@ -107,10 +117,35 @@ Logger::HTTPTarget::Options::Options(pjs::Object *options) {
 }
 
 Logger::HTTPTarget::HTTPTarget(pjs::Str *url, const Options &options) {
+  pjs::Ref<URL> url_obj = URL::make(url);
+
+  PipelineLayout *ppl = PipelineLayout::make(nullptr, PipelineLayout::NAMED, "Logger::HTTPTarget");
+  PipelineLayout *ppl_connect = PipelineLayout::make(nullptr, PipelineLayout::NAMED, "Logger::HTTPTarget Connection");
+
+  Pack::Options pack_options;
+  pack_options.timeout = options.timeout;
+  pack_options.interval = options.interval;
+  ppl->append(new Mux(nullptr, nullptr))->add_sub_pipeline(ppl_connect);
+  ppl_connect->append(new Pack(options.size, pack_options));
+  ppl_connect->append(new http::RequestEncoder(http::RequestEncoder::Options()));
+  ppl_connect->append(new Connect(url_obj->host(), Connect::Options()));
+
+  m_ppl = ppl;
+  m_ppl_connect = ppl_connect;
+
+  auto *head = http::RequestHead::make();
+  static pjs::ConstStr s_POST("POST");
+  head->method(s_POST);
+  m_message_start = MessageStart::make(head);
 }
 
 void Logger::HTTPTarget::write(const Data &msg) {
-  m_pipeline->input()->input(Data::make(msg));
+  m_pipeline = Pipeline::make(m_ppl, new Context());
+  auto *input = m_pipeline->input();
+  InputContext ic;
+  input->input(m_message_start);
+  input->input(Data::make(msg));
+  input->input(MessageEnd::make());
 }
 
 //
@@ -118,6 +153,23 @@ void Logger::HTTPTarget::write(const Data &msg) {
 //
 
 void TextLogger::log(int argc, const pjs::Value *args) {
+  static Data::Producer s_dp("TextLogger");
+  Data data;
+  Data::Builder db(data, &s_dp);
+  for (int i = 0; i < argc; i++) {
+    auto &v = args[i];
+    auto *s = v.to_string();
+    if (i > 0) db.push(' ');
+    db.push(s->str());
+    s->release();
+    if (v.is_object()) {
+      db.push(':');
+      JSON::encode(v, nullptr, 0, db);
+    }
+  }
+  db.push('\n');
+  db.flush();
+  write(data);
 }
 
 //

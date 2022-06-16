@@ -24,7 +24,6 @@
  */
 
 #include "json.hpp"
-#include "data.hpp"
 #include "utils.hpp"
 #include "yajl/yajl_parse.h"
 
@@ -253,7 +252,18 @@ bool JSON::encode(
   Data &data
 ) {
   static Data::Producer s_dp("JSON");
+  Data::Builder db(data, &s_dp);
+  auto ret = encode(val, replacer, space, db);
+  db.flush();
+  return ret;
+}
 
+bool JSON::encode(
+  const pjs::Value &val,
+  const std::function<bool(pjs::Object*, const pjs::Value&, pjs::Value&)> &replacer,
+  int space,
+  Data::Builder &db
+) {
   static std::string s_null("null");
   static std::string s_true("true");
   static std::string s_false("false");
@@ -268,54 +278,53 @@ bool JSON::encode(
     return false;
   }
 
-  Data::Builder b(data, &s_dp);
   pjs::Object* objs[100];
   int obj_level = 0;
 
   auto push_indent = [&](int n) {
     for (int i = 0; i < n; i++) {
-      b.push(' ');
+      db.push(' ');
     }
   };
 
   write = [&](pjs::Value &v, int l) -> bool {
     if (v.is_undefined() || v.is_null()) {
-      b.push(s_null);
+      db.push(s_null);
     } else if (v.is_boolean()) {
-      b.push(v.b() ? s_true : s_false);
+      db.push(v.b() ? s_true : s_false);
     } else if (v.is_number()) {
       auto n = v.n();
       if (std::isnan(n) || std::isinf(n)) {
-        b.push(s_null);
+        db.push(s_null);
       } else {
         char buf[100];
         auto l = pjs::Number::to_string(buf, sizeof(buf), n);
-        b.push(buf, l);
+        db.push(buf, l);
       }
     } else if (v.is_string()) {
-      b.push('"');
+      db.push('"');
       utils::escape(
         v.s()->str(),
-        [&](char c) { b.push(c); }
+        [&](char c) { db.push(c); }
       );
-      b.push('"');
+      db.push('"');
     } else if (v.is_object()) {
       if (obj_level == sizeof(objs) / sizeof(objs[0])) {
-        b.push(s_null);
+        db.push(s_null);
         return true;
       }
       auto o = v.o();
       for (int i = 0; i < obj_level; i++) {
         if (objs[i] == o) {
-          b.push(s_null);
+          db.push(s_null);
           return true;
         }
       }
       objs[obj_level++] = o;
       if (o->is_array()) {
         bool first = true;
-        b.push('[');
-        if (space) b.push('\n');
+        db.push('[');
+        if (space) db.push('\n');
         auto a = v.as<pjs::Array>();
         auto n = a->iterate_while([&](pjs::Value &v, int i) -> bool {
           pjs::Value v2(v);
@@ -324,22 +333,22 @@ bool JSON::encode(
           if (first) {
             first = false;
           } else {
-            b.push(',');
-            if (space) b.push('\n');
+            db.push(',');
+            if (space) db.push('\n');
           }
           if (space) push_indent(space * l + space);
           return write(v2, l + 1);
         });
         if (n < a->length()) return false;
         if (space) {
-          b.push('\n');
+          db.push('\n');
           push_indent(space * l);
         }
-        b.push(']');
+        db.push(']');
       } else {
         bool first = true;
-        b.push('{');
-        if (space) b.push('\n');
+        db.push('{');
+        if (space) db.push('\n');
         auto done = o->iterate_while([&](pjs::Str *k, pjs::Value &v) {
           pjs::Value v2(v);
           if (replacer && !replacer(o, k, v2)) return false;
@@ -347,26 +356,26 @@ bool JSON::encode(
           if (first) {
             first = false;
           } else {
-            b.push(',');
-            if (space) b.push('\n');
+            db.push(',');
+            if (space) db.push('\n');
           }
           if (space) push_indent(space * l + space);
-          b.push('"');
+          db.push('"');
           utils::escape(
             k->str(),
-            [&](char c) { b.push(c); }
+            [&](char c) { db.push(c); }
           );
-          b.push('"');
-          b.push(':');
-          if (space) b.push(' ');
+          db.push('"');
+          db.push(':');
+          if (space) db.push(' ');
           return write(v2, l + 1);
         });
         if (!done) return false;
         if (space) {
-          b.push('\n');
+          db.push('\n');
           push_indent(space * l);
         }
-        b.push('}');
+        db.push('}');
       }
       obj_level--;
     }
@@ -374,7 +383,6 @@ bool JSON::encode(
   };
 
   auto ret = write(v, 0);
-  b.flush();
   return ret;
 }
 

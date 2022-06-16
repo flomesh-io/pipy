@@ -488,7 +488,7 @@ void MuxQueue::Session::close() {
 // Mux
 //
 
-Mux::Mux(pjs::Function *group, pjs::Object *options)
+Mux::Mux(pjs::Function *group, const Options &options)
   : MuxBase(group, options)
 {
 }

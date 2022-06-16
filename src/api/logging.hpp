@@ -38,6 +38,7 @@ class AdminLink;
 class Data;
 class Pipeline;
 class PipelineLayout;
+class MessageStart;
 
 namespace logging {
 
@@ -95,6 +96,7 @@ public:
   public:
     struct Options : public pipy::Options {
       size_t size = 1000;
+      double timeout = 5;
       double interval = 5;
       std::string head;
       std::string tail;
@@ -109,8 +111,10 @@ public:
     HTTPTarget(pjs::Str *url, const Options &options);
 
   private:
-    pjs::Ref<PipelineLayout> m_layout;
+    pjs::Ref<PipelineLayout> m_ppl;
+    pjs::Ref<PipelineLayout> m_ppl_connect;
     pjs::Ref<Pipeline> m_pipeline;
+    pjs::Ref<MessageStart> m_message_start;
 
     virtual void write(const Data &msg) override;
   };
