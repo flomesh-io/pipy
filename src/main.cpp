@@ -29,6 +29,7 @@
 #include "admin-service.hpp"
 #include "admin-proxy.hpp"
 #include "api/crypto.hpp"
+#include "api/logging.hpp"
 #include "api/stats.hpp"
 #include "codebase.hpp"
 #include "file.hpp"
@@ -111,16 +112,18 @@ static void start_checking_updates() {
 //
 
 static void start_reporting_metrics(const std::string &url) {
+  static Data::Producer s_dp("Metric Reports");
   static Timer timer;
   static std::function<void()> report;
   static int connection_id = 0;
   static auto on_receive = [](const Data &data) {};
   s_admin_link = new AdminLink(url, on_receive);
+  logging::Logger::set_admin_link(s_admin_link);
   report = []() {
     if (!Worker::exited()) {
       InputContext ic;
       auto conn_id = s_admin_link->connect();
-      Data buf;
+      Data buf; buf.push("metrics\n", &s_dp);
       stats::Metric::local().collect_all();
       stats::Metric::local().serialize(buf, Status::local.uuid, conn_id != connection_id);
       s_admin_link->send(buf);

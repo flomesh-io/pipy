@@ -31,6 +31,8 @@
 
 #include <list>
 #include <memory>
+#include <set>
+#include <functional>
 
 namespace pipy {
 
@@ -48,6 +50,11 @@ namespace logging {
 
 class Logger : public pjs::ObjectTemplate<Logger> {
 public:
+  static void set_admin_link(AdminLink *admin_link) { s_admin_link = admin_link; }
+
+  static void for_each(const std::function<void(Logger*)> &cb) {
+    for (auto i : s_all_loggers) cb(i);
+  }
 
   //
   // Logger::Target
@@ -56,21 +63,6 @@ public:
   class Target {
   public:
     virtual void write(const Data &msg) = 0;
-  };
-
-  //
-  // Logger::AdminTarget
-  //
-
-  class AdminTarget : public Target {
-  public:
-    AdminTarget(AdminLink *admin_link);
-
-  private:
-    virtual void write(const Data &msg) override;
-
-    pjs::Ref<PipelineLayout> m_layout;
-    pjs::Ref<Pipeline> m_pipeline;
   };
 
   //
@@ -119,6 +111,10 @@ public:
     virtual void write(const Data &msg) override;
   };
 
+  auto name() const -> pjs::Str* { return m_name; }
+
+  void enable_admin_link(bool enabled) { m_admin_link_enabled = enabled; }
+
   void add_target(Target *target) {
     m_targets.push_back(std::unique_ptr<Target>(target));
   }
@@ -127,12 +123,17 @@ public:
 
 protected:
   Logger(pjs::Str *name);
+  virtual ~Logger();
 
   void write(const Data &msg);
 
 private:
   pjs::Ref<pjs::Str> m_name;
   std::list<std::unique_ptr<Target>> m_targets;
+  bool m_admin_link_enabled = true;
+
+  static std::set<Logger*> s_all_loggers;
+  static AdminLink* s_admin_link;
 
   friend class pjs::ObjectTemplate<Logger>;
 };

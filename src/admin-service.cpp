@@ -873,6 +873,9 @@ auto AdminService::response_head(
   return head;
 }
 
+void AdminService::on_log(const std::string &name, const Data &data) {
+}
+
 void AdminService::on_metrics(const Data &data) {
   stats::MetricSet::deserialize(
     data,
@@ -918,7 +921,20 @@ void AdminService::AdminLinkHandler::process(Event *evt) {
     }
   } else if (evt->is<MessageEnd>()) {
     if (m_started) {
-      m_service->on_metrics(m_payload);
+      Data buf;
+      m_payload.shift_to(
+        [](int b) { return b == '\n'; },
+        buf
+      );
+      auto header = buf.to_string();
+      static std::string s_log_prefix("log/");
+      if (utils::starts_with(header, s_log_prefix)) {
+        auto name = header.substr(s_log_prefix.length());
+        name.pop_back(); // pop out the ending '\n'
+        m_service->on_log(name, m_payload);
+      } if (header == "metrics\n") {
+        m_service->on_metrics(m_payload);
+      }
       m_payload.clear();
       m_started = false;
     }

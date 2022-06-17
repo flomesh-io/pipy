@@ -32,6 +32,7 @@
 #include "outbound.hpp"
 #include "pjs/pjs.hpp"
 #include "api/json.hpp"
+#include "api/logging.hpp"
 #include "api/stats.hpp"
 #include "filters/http2.hpp"
 #include "utils.hpp"
@@ -144,7 +145,15 @@ void Status::to_json(std::ostream &out) const {
     out << '"' << utils::escape(mod.filename) << "\":{\"graph\"";
     out << ':' << mod.graph << '}';
   }
-  out << "}}";
+  out << "},\"logs\":[";
+  first = true;
+  logging::Logger::for_each(
+    [&](logging::Logger *logger) {
+      if (first) first = false; else out << ',';
+      out << '"' << utils::escape(logger->name()->str()) << '"';
+    }
+  );
+  out << "]}";
 }
 
 template<class T>

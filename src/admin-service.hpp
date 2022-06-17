@@ -156,6 +156,7 @@ private:
     const std::map<std::string, std::string> &headers
   ) -> http::ResponseHead*;
 
+  void on_log(const std::string &name, const Data &data);
   void on_metrics(const Data &data);
 
   void metrics_history_step();

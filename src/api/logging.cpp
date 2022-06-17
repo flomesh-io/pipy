@@ -28,6 +28,7 @@
 #include "data.hpp"
 #include "pipeline.hpp"
 #include "input.hpp"
+#include "admin-link.hpp"
 #include "api/json.hpp"
 #include "api/url.hpp"
 #include "filters/tee.hpp"
@@ -43,25 +44,36 @@ namespace logging {
 // Logger
 //
 
+std::set<Logger*> Logger::s_all_loggers;
+AdminLink* Logger::s_admin_link = nullptr;
+
 Logger::Logger(pjs::Str *name)
   : m_name(name)
 {
+  s_all_loggers.insert(this);
+}
+
+Logger::~Logger() {
+  s_all_loggers.erase(this);
 }
 
 void Logger::write(const Data &msg) {
+  if (s_admin_link && m_admin_link_enabled) {
+    static Data::Producer s_dp("Log Reports");
+    static std::string s_prefix("log/");
+    Data buf;
+    Data::Builder db(buf, &s_dp);
+    db.push(s_prefix);
+    db.push(m_name->str());
+    db.push('\n');
+    db.flush();
+    buf.push(msg);
+    s_admin_link->send(buf);
+  }
+
   for (const auto &p : m_targets) {
     p->write(msg);
   }
-}
-
-//
-// Logger::AdminTarget
-//
-
-Logger::AdminTarget::AdminTarget(AdminLink *admin_link) {
-}
-
-void Logger::AdminTarget::write(const Data &msg) {
 }
 
 //
