@@ -157,8 +157,8 @@ void MuxBase::Session::open()
 {
 }
 
-void MuxBase::Session::close()
-{
+void MuxBase::Session::close() {
+  forward(StreamEnd::make());
 }
 
 void MuxBase::Session::isolate() {
@@ -298,7 +298,6 @@ void MuxBase::SessionManager::recycle() {
         auto session = s; s = s->next();
         if (!session->m_weak_key) {
           if (now - session->m_free_time >= m_max_idle * 1000) {
-            session->input()->input(StreamEnd::make());
             session->reset();
           }
         }
@@ -482,6 +481,7 @@ void MuxQueue::Session::close_stream(EventFunction *stream) {
 
 void MuxQueue::Session::close() {
   QueueMuxer::reset();
+  MuxBase::Session::close();
 }
 
 //

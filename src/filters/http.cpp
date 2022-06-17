@@ -1380,6 +1380,7 @@ void Mux::Session::close() {
   if (m_http2_muxer) {
     m_http2_muxer->go_away();
   }
+  MuxBase::Session::close();
 }
 
 void Mux::Session::on_encode_request(pjs::Object *head) {
