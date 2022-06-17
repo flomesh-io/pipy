@@ -253,8 +253,8 @@ private:
 class ResponseEncoder : public Filter {
 public:
   struct Options : pipy::Options {
-    bool final;
-    bool bodiless;
+    bool final = false;
+    bool bodiless = false;
     pjs::Ref<pjs::Function> final_f;
     pjs::Ref<pjs::Function> bodiless_f;
     size_t buffer_size = DATA_CHUNK_SIZE;
