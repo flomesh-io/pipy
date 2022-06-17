@@ -181,7 +181,7 @@ private:
 // ResponseDecoder
 //
 
-class ResponseDecoder : public Filter {
+class ResponseDecoder : public Filter, public Decoder {
 public:
   struct Options : public pipy::Options {
     bool bodiless = false;
@@ -202,27 +202,16 @@ private:
   virtual void process(Event *evt) override;
   virtual void dump(Dump &d) override;
 
-  struct SetBodiless : public EventFunction {
-    ResponseDecoder* filter;
-    SetBodiless(ResponseDecoder *f) : filter(f) {}
-    virtual void on_event(Event *evt) override {
-      filter->on_set_bodiless(evt);
-      output(evt);
-    }
-  };
-
-  Decoder m_ef_decode;
-  SetBodiless m_ef_set_bodiless;
   Options m_options;
 
-  void on_set_bodiless(Event *evt);
+  virtual void on_decode_response(http::ResponseHead *head) override;
 };
 
 //
 // RequestEncoder
 //
 
-class RequestEncoder : public Filter {
+class RequestEncoder : public Filter, public Encoder {
 public:
   struct Options : pipy::Options {
     size_t buffer_size = DATA_CHUNK_SIZE;
@@ -242,7 +231,6 @@ private:
   virtual void process(Event *evt) override;
   virtual void dump(Dump &d) override;
 
-  Encoder m_ef_encode;
   Options m_options;
 };
 
@@ -250,7 +238,7 @@ private:
 // ResponseEncoder
 //
 
-class ResponseEncoder : public Filter {
+class ResponseEncoder : public Filter, public Encoder {
 public:
   struct Options : pipy::Options {
     bool final = false;
@@ -274,7 +262,6 @@ private:
   virtual void process(Event *evt) override;
   virtual void dump(Dump &d) override;
 
-  Encoder m_ef_encode;
   Options m_options;
 };
 

@@ -899,16 +899,14 @@ ResponseDecoder::Options::Options(pjs::Object *options) {
 //
 
 ResponseDecoder::ResponseDecoder(const Options &options)
-  : m_ef_decode(true)
-  , m_ef_set_bodiless(this)
+  : Decoder(true)
   , m_options(options)
 {
 }
 
 ResponseDecoder::ResponseDecoder(const ResponseDecoder &r)
   : Filter(r)
-  , m_ef_decode(true)
-  , m_ef_set_bodiless(this)
+  , Decoder(true)
   , m_options(r.m_options)
 {
 }
@@ -924,13 +922,12 @@ void ResponseDecoder::dump(Dump &d) {
 
 void ResponseDecoder::chain() {
   Filter::chain();
-  m_ef_decode.chain(m_ef_set_bodiless.input());
-  m_ef_set_bodiless.chain(output());
+  Decoder::chain(Filter::output());
 }
 
 void ResponseDecoder::reset() {
   Filter::reset();
-  m_ef_decode.reset();
+  Decoder::reset();
 }
 
 auto ResponseDecoder::clone() -> Filter* {
@@ -938,19 +935,17 @@ auto ResponseDecoder::clone() -> Filter* {
 }
 
 void ResponseDecoder::process(Event *evt) {
-  output(evt, m_ef_decode.input());
+  Filter::output(evt, Decoder::input());
 }
 
-void ResponseDecoder::on_set_bodiless(Event *evt) {
-  if (evt->is<MessageStart>()) {
-    if (m_options.bodiless_f) {
-      pjs::Value ret;
-      if (callback(m_options.bodiless_f, 0, nullptr, ret)) {
-        m_ef_decode.set_bodiless(ret.to_boolean());
-      }
-    } else {
-      m_ef_decode.set_bodiless(m_options.bodiless);
+void ResponseDecoder::on_decode_response(http::ResponseHead *head) {
+  if (m_options.bodiless_f) {
+    pjs::Value ret;
+    if (callback(m_options.bodiless_f, 0, nullptr, ret)) {
+      Decoder::set_bodiless(ret.to_boolean());
     }
+  } else {
+    Decoder::set_bodiless(m_options.bodiless);
   }
 }
 
@@ -969,14 +964,14 @@ RequestEncoder::Options::Options(pjs::Object *options) {
 //
 
 RequestEncoder::RequestEncoder(const Options &options)
-  : m_ef_encode(false)
+  : Encoder(false)
   , m_options(options)
 {
 }
 
 RequestEncoder::RequestEncoder(const RequestEncoder &r)
   : Filter(r)
-  , m_ef_encode(false)
+  , Encoder(false)
   , m_options(r.m_options)
 {
 }
@@ -996,20 +991,20 @@ auto RequestEncoder::clone() -> Filter* {
 
 void RequestEncoder::chain() {
   Filter::chain();
-  m_ef_encode.chain(output());
-  m_ef_encode.set_buffer_size(m_options.buffer_size);
+  Encoder::chain(Filter::output());
+  Encoder::set_buffer_size(m_options.buffer_size);
 }
 
 void RequestEncoder::reset() {
   Filter::reset();
-  m_ef_encode.reset();
+  Encoder::reset();
 }
 
 void RequestEncoder::process(Event *evt) {
   if (evt->is<StreamEnd>()) {
-    output(evt);
+    Filter::output(evt);
   } else {
-    output(evt, m_ef_encode.input());
+    Filter::output(evt, Encoder::input());
   }
 }
 
@@ -1036,14 +1031,14 @@ ResponseEncoder::Options::Options(pjs::Object *options) {
 //
 
 ResponseEncoder::ResponseEncoder(const Options &options)
-  : m_ef_encode(true)
+  : Encoder(true)
   , m_options(options)
 {
 }
 
 ResponseEncoder::ResponseEncoder(const ResponseEncoder &r)
   : Filter(r)
-  , m_ef_encode(true)
+  , Encoder(true)
   , m_options(r.m_options)
 {
 }
@@ -1063,38 +1058,38 @@ auto ResponseEncoder::clone() -> Filter* {
 
 void ResponseEncoder::chain() {
   Filter::chain();
-  m_ef_encode.chain(output());
-  m_ef_encode.set_buffer_size(m_options.buffer_size);
+  Encoder::chain(Filter::output());
+  Encoder::set_buffer_size(m_options.buffer_size);
 }
 
 void ResponseEncoder::reset() {
   Filter::reset();
-  m_ef_encode.reset();
+  Encoder::reset();
 }
 
 void ResponseEncoder::process(Event *evt) {
   if (evt->is<StreamEnd>()) {
-    output(evt);
+    Filter::output(evt);
   } else {
     if (evt->is<MessageStart>()) {
       if (m_options.final_f) {
         pjs::Value ret;
         if (callback(m_options.final_f, 0, nullptr, ret)) {
-          m_ef_encode.set_final(ret.to_boolean());
+          Encoder::set_final(ret.to_boolean());
         }
       } else {
-        m_ef_encode.set_final(m_options.final);
+        Encoder::set_final(m_options.final);
       }
       if (m_options.bodiless_f) {
         pjs::Value ret;
         if (callback(m_options.bodiless_f, 0, nullptr, ret)) {
-          m_ef_encode.set_bodiless(ret.to_boolean());
+          Encoder::set_bodiless(ret.to_boolean());
         }
       } else {
-        m_ef_encode.set_bodiless(m_options.bodiless);
+        Encoder::set_bodiless(m_options.bodiless);
       }
     }
-    output(evt, m_ef_encode.input());
+    Filter::output(evt, Encoder::input());
   }
 }
 
