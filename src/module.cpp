@@ -38,8 +38,35 @@
 
 namespace pipy {
 
+//
+// ModuleBase
+//
+
+void ModuleBase::add_pipeline(PipelineLayout *layout) {
+  m_pipelines.push_back(layout);
+}
+
+void ModuleBase::for_each_pipeline(const std::function<void(PipelineLayout*)> &cb) {
+  for (const auto &p : m_pipelines) {
+    cb(p);
+  }
+}
+
+void ModuleBase::shutdown() {
+  retain();
+  for (const auto &p : m_pipelines) {
+    p->shutdown();
+  }
+  m_pipelines.clear();
+  release();
+}
+
+//
+// Module
+//
+
 Module::Module(Worker *worker, int index)
-  : m_index(index)
+  : ModuleBase(index)
   , m_worker(worker)
   , m_imports(new pjs::Expr::Imports)
 {
@@ -47,8 +74,24 @@ Module::Module(Worker *worker, int index)
 }
 
 Module::~Module() {
-  Log::debug("[module   %p] -- index = %d", this, m_index);
-  m_worker->remove_module(m_index);
+  Log::debug("[module   %p] -- index = %d", this, index());
+  m_worker->remove_module(index());
+}
+
+auto Module::find_named_pipeline(pjs::Str *name) -> PipelineLayout* {
+  auto i = m_named_pipelines.find(name);
+  if (i == m_named_pipelines.end()) return nullptr;
+  return i->second;
+}
+
+auto Module::find_indexed_pipeline(int index) -> PipelineLayout* {
+  auto i = m_indexed_pipelines.find(index);
+  if (i == m_indexed_pipelines.end()) return nullptr;
+  return i->second;
+}
+
+auto Module::new_context(Context *base) -> Context* {
+  return m_worker->new_runtime_context(base);
 }
 
 bool Module::load(const std::string &path) {
@@ -74,7 +117,7 @@ bool Module::load(const std::string &path) {
   }
 
   pjs::Ref<Context> ctx = m_worker->new_loading_context();
-  expr->resolve(*ctx, m_index, m_imports.get());
+  expr->resolve(*ctx, index(), m_imports.get());
 
   pjs::Value result;
   if (!expr->eval(*ctx, result)) {
@@ -122,12 +165,9 @@ bool Module::load(const std::string &path) {
 
 void Module::unload() {
   retain();
-  for (const auto &p : m_pipelines) {
-    p->shutdown();
-  }
+  ModuleBase::shutdown();
   m_named_pipelines.clear();
   m_indexed_pipelines.clear();
-  m_pipelines.clear();
   release();
 }
 
@@ -144,21 +184,11 @@ void Module::make_pipelines() {
 }
 
 void Module::bind_pipelines() {
-  for (const auto &p : m_pipelines) {
-    p->bind();
-  }
-}
-
-auto Module::find_named_pipeline(pjs::Str *name) -> PipelineLayout* {
-  auto i = m_named_pipelines.find(name);
-  if (i == m_named_pipelines.end()) return nullptr;
-  return i->second;
-}
-
-auto Module::find_indexed_pipeline(int index) -> PipelineLayout* {
-  auto i = m_indexed_pipelines.find(index);
-  if (i == m_indexed_pipelines.end()) return nullptr;
-  return i->second;
+  ModuleBase::for_each_pipeline(
+    [](PipelineLayout *p) {
+      p->bind();
+    }
+  );
 }
 
 } // namespace pipy

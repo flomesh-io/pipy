@@ -36,14 +36,54 @@
 
 namespace pipy {
 
+class Context;
 class Configuration;
 class PipelineLayout;
 
-class Module : public pjs::RefCount<Module> {
-public:
-  static void set_script(const std::string &path, const std::string &script);
-  static void reset_script(const std::string &path);
+//
+// ModuleBase
+//
 
+class ModuleBase : public pjs::RefCount<ModuleBase> {
+public:
+  auto index() const -> int { return m_index; }
+
+  virtual auto new_context(Context *base = nullptr) -> Context* = 0;
+
+protected:
+  ModuleBase(int index)
+    : m_index(index) {}
+
+  virtual ~ModuleBase() {}
+
+  void add_pipeline(PipelineLayout *layout);
+  void for_each_pipeline(const std::function<void(PipelineLayout*)> &cb);
+  void shutdown();
+
+private:
+  int m_index;
+  std::list<pjs::Ref<PipelineLayout>> m_pipelines;
+
+  friend class pjs::RefCount<ModuleBase>;
+};
+
+//
+// Module
+//
+
+class Module : public ModuleBase {
+public:
+  auto worker() const -> Worker* { return m_worker; }
+  auto name() const -> pjs::Str* { return m_name; }
+  auto path() const -> const std::string& { return m_path; }
+  auto source() const -> const std::string& { return m_source; }
+
+  auto find_named_pipeline(pjs::Str *name) -> PipelineLayout*;
+  auto find_indexed_pipeline(int index) -> PipelineLayout*;
+
+  virtual auto new_context(Context *base = nullptr) -> Context* override;
+
+private:
   bool load(const std::string &path);
   void unload();
   void bind_exports();
@@ -57,20 +97,10 @@ public:
     return obj;
   }
 
-  auto worker() const -> Worker* { return m_worker; }
-  auto index() const -> int { return m_index; }
-  auto name() const -> pjs::Str* { return m_name; }
-  auto path() const -> const std::string& { return m_path; }
-  auto source() const -> const std::string& { return m_source; }
-
-  auto find_named_pipeline(pjs::Str *name) -> PipelineLayout*;
-  auto find_indexed_pipeline(int index) -> PipelineLayout*;
-
 private:
   Module(Worker *worker, int index);
   ~Module();
 
-  int m_index;
   pjs::Ref<Worker> m_worker;
   pjs::Ref<pjs::Str> m_name;
   std::string m_path;
@@ -80,7 +110,6 @@ private:
   pjs::Ref<pjs::Str> m_filename;
   pjs::Ref<Configuration> m_configuration;
   pjs::Ref<pjs::Class> m_context_class;
-  std::list<pjs::Ref<PipelineLayout>> m_pipelines;
   std::map<pjs::Ref<pjs::Str>, PipelineLayout*> m_named_pipelines;
   std::map<int, PipelineLayout*> m_indexed_pipelines;
 

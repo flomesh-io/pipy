@@ -95,7 +95,7 @@ void Inbound::start(PipelineLayout *layout) {
   if (!m_pipeline) {
     auto mod = layout->module();
     auto ctx = mod
-      ? mod->worker()->new_runtime_context()
+      ? mod->new_context()
       : new pipy::Context();
     ctx->m_inbound = this;
     m_pipeline = Pipeline::make(layout, ctx);

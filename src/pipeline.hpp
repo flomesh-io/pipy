@@ -38,7 +38,7 @@
 
 namespace pipy {
 
-class Module;
+class ModuleBase;
 class Pipeline;
 class Filter;
 class Context;
@@ -60,11 +60,11 @@ public:
     TASK,
   };
 
-  static auto make(Module *module, Type type, const std::string &name) -> PipelineLayout* {
+  static auto make(ModuleBase *module, Type type, const std::string &name) -> PipelineLayout* {
     return new PipelineLayout(module, type, -1, name);
   }
 
-  static auto make(Module *module, Type type, int index, const std::string &name) -> PipelineLayout* {
+  static auto make(ModuleBase *module, Type type, int index, const std::string &name) -> PipelineLayout* {
     return new PipelineLayout(module, type, index, name);
   }
 
@@ -74,7 +74,7 @@ public:
     }
   }
 
-  auto module() const -> Module* { return m_module; }
+  auto module() const -> ModuleBase* { return m_module; }
   auto index() const -> int { return m_index; }
   auto type() const -> Type { return m_type; }
   auto name() const -> pjs::Str* { return m_name; }
@@ -85,7 +85,7 @@ public:
   void shutdown();
 
 private:
-  PipelineLayout(Module *module, Type type, int index, const std::string &name);
+  PipelineLayout(ModuleBase *module, Type type, int index, const std::string &name);
   ~PipelineLayout();
 
   auto alloc(Context *ctx) -> Pipeline*;
@@ -95,7 +95,7 @@ private:
   int m_index;
   pjs::Ref<pjs::Str> m_name;
   std::list<std::unique_ptr<Filter>> m_filters;
-  pjs::Ref<Module> m_module;
+  pjs::Ref<ModuleBase> m_module;
   Pipeline* m_pool = nullptr;
   List<Pipeline> m_pipelines;
   size_t m_allocated = 0;

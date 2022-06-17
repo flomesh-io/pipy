@@ -38,7 +38,7 @@ namespace pipy {
 
 List<PipelineLayout> PipelineLayout::s_all_pipeline_layouts;
 
-PipelineLayout::PipelineLayout(Module *module, Type type, int index, const std::string &name)
+PipelineLayout::PipelineLayout(ModuleBase *module, Type type, int index, const std::string &name)
   : m_type(type)
   , m_index(index)
   , m_name(pjs::Str::make(name))

@@ -59,7 +59,7 @@ void Status::update_modules() {
 
   std::map<std::string, std::set<PipelineLayout*>> all_modules;
   PipelineLayout::for_each([&](PipelineLayout *p) {
-    if (auto mod = p->module()) {
+    if (auto mod = dynamic_cast<Module*>(p->module())) {
       if (mod->worker() == Worker::current()) {
         auto &set = all_modules[mod->path()];
         set.insert(p);
@@ -248,14 +248,15 @@ void Status::register_metrics() {
     [](stats::Gauge *gauge) {
       double total = 0;
       PipelineLayout::for_each([&](PipelineLayout *p) {
-        auto mod = p->module();
-        pjs::Str *labels[2];
-        labels[0] = mod ? mod->name() : pjs::Str::empty.get();
-        labels[1] = p->name();
-        auto metric = gauge->with_labels(labels, 2);
-        auto n = p->active();
-        metric->set(n);
-        total += n;
+        if (auto mod = dynamic_cast<Module*>(p->module())) {
+          pjs::Str *labels[2];
+          labels[0] = mod ? mod->name() : pjs::Str::empty.get();
+          labels[1] = p->name();
+          auto metric = gauge->with_labels(labels, 2);
+          auto n = p->active();
+          metric->set(n);
+          total += n;
+        }
       });
       gauge->set(total);
     }
@@ -402,13 +403,7 @@ void Status::dump_memory() {
   std::multimap<std::string, PipelineLayout*> current_pipelines;
 
   PipelineLayout::for_each([&](PipelineLayout *p) {
-    auto mod = p->module();
-    if (!mod) {
-      std::string name("[");
-      name += p->name()->str();
-      name += ']';
-      current_pipelines.insert({ name, p });
-    } else {
+    if (auto mod = dynamic_cast<Module*>(p->module())) {
       std::string name(mod->path());
       name += " [";
       name += p->name()->str();

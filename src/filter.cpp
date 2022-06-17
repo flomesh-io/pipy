@@ -41,7 +41,7 @@ Filter::Filter(const Filter &r)
 {
 }
 
-auto Filter::module() const -> Module* {
+auto Filter::module() const -> ModuleBase* {
   if (m_pipeline_layout) {
     return m_pipeline_layout->module();
   } else {
@@ -77,7 +77,7 @@ void Filter::bind() {
     if (!sub.layout) {
       if (sub.name) {
         if (sub.name != pjs::Str::empty) {
-          if (auto mod = module()) {
+          if (auto mod = dynamic_cast<Module*>(module())) {
             if (auto p = mod->find_named_pipeline(sub.name)) {
               sub.layout = p;
               continue;
@@ -88,7 +88,7 @@ void Filter::bind() {
           throw std::runtime_error(msg);
         }
       } else {
-        if (auto mod = module()) {
+        if (auto mod = dynamic_cast<Module*>(module())) {
           if (auto p = mod->find_indexed_pipeline(sub.index)) {
             sub.layout = p;
             continue;
@@ -143,7 +143,7 @@ auto Filter::sub_pipeline(int i, bool clone_context) -> Pipeline* {
   auto ctx = m_pipeline->m_context.get();
   if (clone_context) {
     if (auto mod = module()) {
-      ctx = mod->worker()->new_runtime_context(ctx);
+      ctx = mod->new_context(ctx);
     }
   }
 
@@ -201,23 +201,21 @@ bool Filter::output(const pjs::Value &evt) {
 }
 
 bool Filter::callback(pjs::Function *func, int argc, pjs::Value argv[], pjs::Value &result) {
-  auto c = m_pipeline->m_context.get();
+  auto c = context();
   (*func)(*c, argc, argv, result);
   if (c->ok()) return true;
-  auto mod = m_pipeline_layout->module();
-  Log::pjs_error(c->error(), mod->source());
+  pjs_error();
   c->reset();
   return false;
 }
 
 bool Filter::eval(pjs::Value &param, pjs::Value &result) {
   if (param.is_function()) {
-    auto c = m_pipeline->m_context.get();
+    auto c = context();
     auto f = param.as<pjs::Function>();
     (*f)(*c, 0, nullptr, result);
     if (c->ok()) return true;
-    auto mod = m_pipeline_layout->module();
-    Log::pjs_error(c->error(), mod->source());
+    pjs_error();
     c->reset();
     return false;
   } else {
@@ -228,13 +226,17 @@ bool Filter::eval(pjs::Value &param, pjs::Value &result) {
 
 bool Filter::eval(pjs::Function *func, pjs::Value &result) {
   if (!func) return true;
-  auto c = m_pipeline->m_context.get();
+  auto c = context();
   (*func)(*c, 0, nullptr, result);
   if (c->ok()) return true;
-  auto mod = m_pipeline_layout->module();
-  Log::pjs_error(c->error(), mod->source());
+  pjs_error();
   c->reset();
   return false;
+}
+
+void Filter::pjs_error() {
+  auto mod = dynamic_cast<Module*>(module());
+  Log::pjs_error(context()->error(), mod ? mod->source() : std::string());
 }
 
 } // namespace pipy

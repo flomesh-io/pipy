@@ -74,7 +74,7 @@ void Reader::FileReader::start() {
         auto ppl = m_reader->m_pipeline_layout.get();
         auto mod = ppl->module();
         auto ctx = mod
-          ? mod->worker()->new_runtime_context()
+          ? mod->new_context()
           : new pipy::Context();
         auto p = Pipeline::make(ppl, ctx);
         fs->chain(EventTarget::input());

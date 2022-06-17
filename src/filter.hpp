@@ -36,7 +36,7 @@
 namespace pipy {
 
 class Context;
-class Module;
+class ModuleBase;
 class PipelineLayout;
 class Pipeline;
 
@@ -82,7 +82,7 @@ public:
 
   virtual ~Filter() {}
 
-  auto module() const -> Module*;
+  auto module() const -> ModuleBase*;
   auto context() const -> Context*;
 
   void add_sub_pipeline(PipelineLayout *layout);
@@ -123,6 +123,8 @@ private:
   PipelineLayout* m_pipeline_layout = nullptr;
   Pipeline* m_pipeline = nullptr;
   bool m_stream_end = false;
+
+  void pjs_error();
 
   virtual void on_event(Event *evt) override;
 

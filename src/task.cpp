@@ -136,7 +136,7 @@ void Task::run() {
   if (!active()) {
     m_pipeline = Pipeline::make(
       m_pipeline_layout,
-      m_pipeline_layout->module()->worker()->new_runtime_context()
+      m_pipeline_layout->module()->new_context()
     );
     m_pipeline->chain(EventTarget::input());
     InputContext ic;

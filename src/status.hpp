@@ -38,7 +38,7 @@ class Data;
 
 class Status {
 public:
-  struct Module {
+  struct ModuleInfo {
     std::string filename;
     std::string graph;
   };
@@ -47,7 +47,7 @@ public:
   std::string uuid;
   std::string name;
   std::string version;
-  std::list<Module> modules;
+  std::list<ModuleInfo> modules;
 
   static Status local;
   static pjs::Ref<stats::Counter> metric_inbound_in;

@@ -521,7 +521,7 @@ void Configuration::apply(Module *mod) {
     for (auto &f : filters) {
       layout->append(f.release());
     }
-    mod->m_pipelines.push_back(layout);
+    mod->add_pipeline(layout);
     return layout;
   };
 
