@@ -93,8 +93,8 @@ AdminService::~AdminService() {
 void AdminService::open(int port, const Options &options) {
   Log::info("[admin] Starting admin service...");
 
-  PipelineLayout *ppl = PipelineLayout::make(nullptr, PipelineLayout::LISTEN, "Admin Service");
-  PipelineLayout *ppl_ws = PipelineLayout::make(nullptr, PipelineLayout::NAMED, "Admin Service Link");
+  PipelineLayout *ppl = PipelineLayout::make(nullptr);
+  PipelineLayout *ppl_ws = PipelineLayout::make(nullptr);
   PipelineLayout *ppl_inbound = nullptr;
 
   if (!options.cert || !options.key) {
@@ -107,7 +107,7 @@ void AdminService::open(int port, const Options &options) {
     certificate->set("key", options.key.get());
     opts.certificate = certificate;
     opts.trusted = options.trusted;
-    ppl_inbound = PipelineLayout::make(nullptr, PipelineLayout::NAMED, "Admin Service TLS-Offloaded");
+    ppl_inbound = PipelineLayout::make(nullptr);
     ppl->append(new tls::Server(opts))->add_sub_pipeline(ppl_inbound);
   }
 

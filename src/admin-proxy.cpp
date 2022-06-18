@@ -115,11 +115,11 @@ AdminProxy::AdminProxy(const std::string &target)
 void AdminProxy::open(int port, const Options &options) {
   Log::info("[admin] Starting admin proxy...");
 
-  PipelineLayout *ppl = PipelineLayout::make(nullptr, PipelineLayout::LISTEN, "Admin Proxy");
+  PipelineLayout *ppl = PipelineLayout::make(nullptr);
   PipelineLayout *ppl_inbound = nullptr;
-  PipelineLayout *ppl_request = PipelineLayout::make(nullptr, PipelineLayout::NAMED, "Admin Proxy Request");
-  PipelineLayout *ppl_forward = PipelineLayout::make(nullptr, PipelineLayout::NAMED, "Admin Proxy Forward");
-  PipelineLayout *ppl_connect = PipelineLayout::make(nullptr, PipelineLayout::NAMED, "Admin Proxy Connect");
+  PipelineLayout *ppl_request = PipelineLayout::make(nullptr);
+  PipelineLayout *ppl_forward = PipelineLayout::make(nullptr);
+  PipelineLayout *ppl_connect = PipelineLayout::make(nullptr);
 
   if (!options.cert || !options.key) {
     ppl_inbound = ppl;
@@ -131,7 +131,7 @@ void AdminProxy::open(int port, const Options &options) {
     certificate->set("key", options.key.get());
     opts.certificate = certificate;
     opts.trusted = options.trusted;
-    ppl_inbound = PipelineLayout::make(nullptr, PipelineLayout::NAMED, "Admin Proxy TLS-Offloaded");
+    ppl_inbound = PipelineLayout::make(nullptr);
     ppl->append(new tls::Server(opts))->add_sub_pipeline(ppl_inbound);
   }
 
@@ -146,7 +146,7 @@ void AdminProxy::open(int port, const Options &options) {
       opts.certificate = certificate;
     }
     opts.trusted = options.fetch_options.trusted;
-    auto pd = PipelineLayout::make(nullptr, PipelineLayout::NAMED, "Admin Proxy TLS-Encrypted");
+    auto pd = PipelineLayout::make(nullptr);
     pd->append(new tls::Client(opts))->add_sub_pipeline(ppl_connect);
     ppl_connect = pd;
   }

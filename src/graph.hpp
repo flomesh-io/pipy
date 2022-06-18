@@ -58,6 +58,7 @@ public:
   struct Pipeline {
     int index = -1;
     std::string name;
+    std::string label;
     std::list<Filter> filters;
     bool root = false;
   };
@@ -65,8 +66,7 @@ public:
   static void from_pipelines(Graph &g, const std::set<PipelineLayout*> &pipelines);
   static bool from_script(Graph &g, const std::string &script, std::string &error);
 
-  auto add_root_pipeline(Pipeline &&p) -> int;
-  auto add_named_pipeline(Pipeline &&p) -> int;
+  auto add_pipeline(Pipeline &&p) -> int;
 
   auto to_text(std::string &error) -> std::vector<std::string>;
   void to_json(std::string &error, std::ostream &out);

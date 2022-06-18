@@ -44,21 +44,13 @@ void Graph::from_pipelines(Graph &g, const std::set<PipelineLayout*> &pipelines)
     Graph::Pipeline p;
     p.index = pipeline->index();
     p.name = pipeline->name()->str();
+    p.label = pipeline->label();
     for (auto &f : pipeline->m_filters) {
       Graph::Filter gf;
       f->dump(gf);
       p.filters.emplace_back(std::move(gf));
     }
-    switch (pipeline->type()) {
-      case PipelineLayout::NAMED:
-        g.add_named_pipeline(std::move(p));
-        break;
-      case PipelineLayout::LISTEN:
-      case PipelineLayout::READ:
-      case PipelineLayout::TASK:
-        g.add_root_pipeline(std::move(p));
-        break;
-    }
+    g.add_pipeline(std::move(p));
   }
 }
 
@@ -195,7 +187,7 @@ protected:
             FilterReducer r(graph(), &p, arg->s());
             arg->f()->reduce(r);
             m_f->subs.emplace_back();
-            m_f->subs.back().index = graph().add_named_pipeline(std::move(p));
+            m_f->subs.back().index = graph().add_pipeline(std::move(p));
           }
           m_f = nullptr;
         }
@@ -230,7 +222,7 @@ protected:
               FilterReducer r(graph(), &p, b->s());
               b->f()->reduce(r);
               f.subs.emplace_back();
-              f.subs.back().index = graph().add_named_pipeline(std::move(p));
+              f.subs.back().index = graph().add_pipeline(std::move(p));
             }
           }
           m_p->filters.emplace_back(std::move(f));
@@ -340,20 +332,16 @@ public:
 
   void flush() {
     if (auto *p = current_pipeline()) {
-      if (m_pt == PipelineLayout::NAMED) {
-        graph().add_named_pipeline(std::move(*p));
-      } else {
-        graph().add_root_pipeline(std::move(*p));
-      }
+      graph().add_pipeline(std::move(*p));
       delete p;
       current_pipeline(nullptr);
     }
   }
 
 private:
-  PipelineLayout::Type m_pt;
   int m_named_count = 0;
   int m_listen_count = 0;
+  int m_read_count = 0;
   int m_task_count = 0;
 
   virtual Value* get(const std::string &name) override {
@@ -366,7 +354,6 @@ private:
       const auto &m = cv(fn)->s();
       if (m == "pipeline") {
         flush();
-        m_pt = PipelineLayout::NAMED;
         auto p = new Graph::Pipeline;
         p->name = argc > 0 && cv(argv[0])->t() == STRING
           ? cv(argv[0])->s()
@@ -375,18 +362,24 @@ private:
 
       } else if (m == "listen") {
         flush();
-        m_pt = PipelineLayout::LISTEN;
         auto p = new Graph::Pipeline;
-        p->name = argc > 0 && cv(argv[0])->t() == NUMBER
+        p->label = argc > 0 && cv(argv[0])->t() == NUMBER
           ? std::string("Listen 0.0.0.0:") + std::to_string(int(cv(argv[0])->n()))
           : std::string("Listen #") + std::to_string(++m_listen_count);
         current_pipeline(p);
 
+      } else if (m == "read") {
+        flush();
+        auto p = new Graph::Pipeline;
+        p->label = argc > 0 && cv(argv[0])->t() == STRING
+          ? std::string("Read ") + cv(argv[0])->s()
+          : std::string("Read #") + std::to_string(++m_read_count);
+        current_pipeline(p);
+
       } else if (m == "task") {
         flush();
-        m_pt = PipelineLayout::TASK;
         auto p = new Graph::Pipeline;
-        p->name = argc > 0 && cv(argv[0])->t() == STRING
+        p->label = argc > 0 && cv(argv[0])->t() == STRING
           ? std::string("Task every ") + cv(argv[0])->s()
           : std::string("Task #") + std::to_string(++m_task_count);
         current_pipeline(p);
@@ -405,21 +398,12 @@ private:
   }
 };
 
-auto Graph::add_root_pipeline(Pipeline &&p) -> int {
+auto Graph::add_pipeline(Pipeline &&p) -> int {
   m_pipelines.push_back(std::move(p));
   auto &ppl = m_pipelines.back();
   if (ppl.index < 0) ppl.index = m_pipeline_index++;
   m_indexed_pipelines[ppl.index] = &ppl;
-  m_root_pipelines[ppl.name] = &ppl;
-  return ppl.index;
-}
-
-auto Graph::add_named_pipeline(Pipeline &&p) -> int {
-  m_pipelines.push_back(std::move(p));
-  auto &ppl = m_pipelines.back();
-  if (ppl.index < 0) ppl.index = m_pipeline_index++;
-  m_indexed_pipelines[ppl.index] = &ppl;
-  m_named_pipelines[ppl.name] = &ppl;
+  if (!ppl.name.empty()) m_named_pipelines[ppl.name] = &ppl;
   return ppl.index;
 }
 
@@ -446,7 +430,7 @@ auto Graph::to_text(std::string &error) -> std::vector<std::string> {
   for (const auto &i : m_pipelines) {
     if (i.root) {
       std::string title("[");
-      title += i.name;
+      title += i.name.empty() ? i.label : i.name;
       title += ']';
       lines.push_back(title);
       std::string err;
@@ -627,7 +611,10 @@ auto Graph::build_tree(const Pipeline &pipeline, std::string &error) -> Node* {
     }
   };
 
-  auto root = new Node(nullptr, Node::ROOT, pipeline.name);
+  auto root = new Node(
+    nullptr, Node::ROOT,
+    pipeline.name.empty() ? pipeline.label : pipeline.name
+  );
   build(pipeline, root);
   return root;
 }

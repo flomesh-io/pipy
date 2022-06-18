@@ -53,19 +53,20 @@ class PipelineLayout :
   public List<PipelineLayout>::Item
 {
 public:
-  enum Type {
-    NAMED,
-    LISTEN,
-    READ,
-    TASK,
-  };
-
-  static auto make(ModuleBase *module, Type type, const std::string &name) -> PipelineLayout* {
-    return new PipelineLayout(module, type, -1, name);
+  static auto make(ModuleBase *module) -> PipelineLayout* {
+    return new PipelineLayout(module, -1, std::string());
   }
 
-  static auto make(ModuleBase *module, Type type, int index, const std::string &name) -> PipelineLayout* {
-    return new PipelineLayout(module, type, index, name);
+  static auto make(ModuleBase *module, const std::string &name) -> PipelineLayout* {
+    return new PipelineLayout(module, -1, name);
+  }
+
+  static auto make(ModuleBase *module, int index) -> PipelineLayout* {
+    return new PipelineLayout(module, index, std::string());
+  }
+
+  static auto make(ModuleBase *module, int index, const std::string &name) -> PipelineLayout* {
+    return new PipelineLayout(module, index, name);
   }
 
   static void for_each(std::function<void(PipelineLayout*)> callback) {
@@ -76,8 +77,9 @@ public:
 
   auto module() const -> ModuleBase* { return m_module; }
   auto index() const -> int { return m_index; }
-  auto type() const -> Type { return m_type; }
   auto name() const -> pjs::Str* { return m_name; }
+  auto label() const -> const std::string& { return m_label; }
+  void label(const std::string &label) { m_label = label; }
   auto allocated() const -> size_t { return m_allocated; }
   auto active() const -> size_t { return m_pipelines.size(); }
   auto append(Filter *filter) -> Filter*;
@@ -85,15 +87,15 @@ public:
   void shutdown();
 
 private:
-  PipelineLayout(ModuleBase *module, Type type, int index, const std::string &name);
+  PipelineLayout(ModuleBase *module, int index, const std::string &name);
   ~PipelineLayout();
 
   auto alloc(Context *ctx) -> Pipeline*;
   void free(Pipeline *pipeline);
 
-  Type m_type;
   int m_index;
   pjs::Ref<pjs::Str> m_name;
+  std::string m_label;
   std::list<std::unique_ptr<Filter>> m_filters;
   pjs::Ref<ModuleBase> m_module;
   Pipeline* m_pool = nullptr;

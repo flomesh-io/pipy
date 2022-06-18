@@ -70,7 +70,7 @@ void Fetch::Receiver::dump(Dump &d) {
 Fetch::Fetch(pjs::Str *host, const Options &options)
   : m_host(host)
 {
-  m_ppl_connect = PipelineLayout::make(nullptr, PipelineLayout::NAMED, "Fetch Connection");
+  m_ppl_connect = PipelineLayout::make(nullptr);
   m_ppl_connect->append(new Connect(m_host.get(), options));
 
   auto def_connect = m_ppl_connect.get();
@@ -84,12 +84,12 @@ Fetch::Fetch(pjs::Str *host, const Options &options)
       certificate->set("key", options.key.get());
       opts.certificate = certificate;
     }
-    m_ppl_tls = PipelineLayout::make(nullptr, PipelineLayout::NAMED, "Fetch TLS");
+    m_ppl_tls = PipelineLayout::make(nullptr);
     m_ppl_tls->append(new tls::Client(opts))->add_sub_pipeline(m_ppl_connect);
     def_connect = m_ppl_tls;
   }
 
-  m_ppl = PipelineLayout::make(nullptr, PipelineLayout::NAMED, "Fetch");
+  m_ppl = PipelineLayout::make(nullptr);
   m_ppl->append(new http::Mux())->add_sub_pipeline(def_connect);
   m_ppl->append(new Receiver(this));
 }

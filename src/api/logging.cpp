@@ -81,7 +81,7 @@ void Logger::write(const Data &msg) {
 //
 
 Logger::FileTarget::FileTarget(pjs::Str *filename) {
-  PipelineLayout *ppl = PipelineLayout::make(nullptr, PipelineLayout::NAMED, "Logger::FileTarget");
+  PipelineLayout *ppl = PipelineLayout::make(nullptr);
   ppl->append(new Tee(filename));
 
   m_pipeline_layout = ppl;
@@ -131,8 +131,8 @@ Logger::HTTPTarget::Options::Options(pjs::Object *options) {
 Logger::HTTPTarget::HTTPTarget(pjs::Str *url, const Options &options) {
   pjs::Ref<URL> url_obj = URL::make(url);
 
-  PipelineLayout *ppl = PipelineLayout::make(nullptr, PipelineLayout::NAMED, "Logger::HTTPTarget");
-  PipelineLayout *ppl_connect = PipelineLayout::make(nullptr, PipelineLayout::NAMED, "Logger::HTTPTarget Connection");
+  PipelineLayout *ppl = PipelineLayout::make(nullptr);
+  PipelineLayout *ppl_connect = PipelineLayout::make(nullptr);
 
   Pack::Options pack_options;
   pack_options.timeout = options.timeout;

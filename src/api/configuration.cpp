@@ -512,12 +512,14 @@ void Configuration::apply(Module *mod) {
   mod->m_context_class = m_context_class;
 
   auto make_pipeline = [&](
-    PipelineLayout::Type type,
-    int index, const std::string &name,
+    int index,
+    const std::string &name,
+    const std::string &label,
     std::list<std::unique_ptr<Filter>> &filters
   ) -> PipelineLayout*
   {
-    auto layout = PipelineLayout::make(mod, type, index, name);
+    auto layout = PipelineLayout::make(mod, index, name);
+    layout->label(label);
     for (auto &f : filters) {
       layout->append(f.release());
     }
@@ -527,12 +529,12 @@ void Configuration::apply(Module *mod) {
 
   for (auto &i : m_named_pipelines) {
     auto s = pjs::Str::make(i.name);
-    auto p = make_pipeline(PipelineLayout::NAMED, i.index, i.name, i.filters);
+    auto p = make_pipeline(i.index, i.name, "", i.filters);
     mod->m_named_pipelines[s] = p;
   }
 
   for (auto &i : m_indexed_pipelines) {
-    auto p = make_pipeline(PipelineLayout::NAMED, i.second.index, i.second.name, i.second.filters);
+    auto p = make_pipeline(i.second.index, "", i.second.name, i.second.filters);
     mod->m_indexed_pipelines[p->index()] = p;
   }
 
@@ -541,7 +543,7 @@ void Configuration::apply(Module *mod) {
   for (auto &i : m_listens) {
     if (!i.port) continue;
     auto name = std::to_string(i.port) + '@' + i.ip;
-    auto p = make_pipeline(PipelineLayout::LISTEN, i.index, name, i.filters);
+    auto p = make_pipeline(i.index, "", name, i.filters);
     auto listener = Listener::get(i.ip, i.port, i.options.protocol);
     if (listener->reserved()) {
       std::string msg("Port reserved: ");
@@ -556,13 +558,13 @@ void Configuration::apply(Module *mod) {
   }
 
   for (auto &i : m_readers) {
-    auto p = make_pipeline(PipelineLayout::READ, i.index, i.pathname, i.filters);
+    auto p = make_pipeline(i.index, "", i.pathname, i.filters);
     auto r = Reader::make(i.pathname, p);
     worker->add_reader(r);
   }
 
   for (auto &i : m_tasks) {
-    auto p = make_pipeline(PipelineLayout::TASK, i.index, i.name, i.filters);
+    auto p = make_pipeline(i.index, "", i.name, i.filters);
     auto t = Task::make(i.when, p);
     worker->add_task(t);
   }
@@ -582,43 +584,43 @@ void Configuration::draw(Graph &g) {
     p.index = i.index;
     p.name = i.name;
     add_filters(p, i.filters);
-    g.add_named_pipeline(std::move(p));
+    g.add_pipeline(std::move(p));
   }
 
   for (const auto &i : m_indexed_pipelines) {
     Graph::Pipeline p;
     p.index = i.second.index;
-    p.name = i.second.name;
+    p.label = i.second.name;
     add_filters(p, i.second.filters);
-    g.add_named_pipeline(std::move(p));
+    g.add_pipeline(std::move(p));
   }
 
   for (const auto &i : m_listens) {
     Graph::Pipeline p;
-    p.name = "Listen on ";
-    p.name += std::to_string(i.port);
-    p.name += " at ";
-    p.name += i.ip;
+    p.label = "Listen on ";
+    p.label += std::to_string(i.port);
+    p.label += " at ";
+    p.label += i.ip;
     add_filters(p, i.filters);
-    g.add_root_pipeline(std::move(p));
+    g.add_pipeline(std::move(p));
   }
 
   for (const auto &i : m_readers) {
     Graph::Pipeline p;
-    p.name = "Read ";
-    p.name += i.pathname;
+    p.label = "Read ";
+    p.label += i.pathname;
     add_filters(p, i.filters);
-    g.add_root_pipeline(std::move(p));
+    g.add_pipeline(std::move(p));
   }
 
   for (const auto &i : m_tasks) {
     Graph::Pipeline p;
-    p.name = i.name;
-    p.name += " (";
-    p.name += i.when;
-    p.name += ')';
+    p.label = i.name;
+    p.label += " (";
+    p.label += i.when;
+    p.label += ')';
     add_filters(p, i.filters);
-    g.add_root_pipeline(std::move(p));
+    g.add_pipeline(std::move(p));
   }
 }
 
