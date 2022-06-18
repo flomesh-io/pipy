@@ -30,6 +30,7 @@
 #include "api/crypto.hpp"
 #include "api/stats.hpp"
 #include "filter.hpp"
+#include "module.hpp"
 #include "message.hpp"
 #include "data.hpp"
 #include "tar.hpp"
@@ -63,6 +64,16 @@ public:
   void close();
 
 private:
+
+  //
+  // Module
+  //
+
+  class Module : public ModuleBase {
+    virtual auto new_context(Context *base = nullptr) -> Context* {
+      return new Context();
+    }
+  };
 
   //
   // AdminService::AdminLinkHandler
@@ -113,6 +124,8 @@ private:
   pjs::Ref<Message> m_response_deleted;
   pjs::Ref<Message> m_response_not_found;
   pjs::Ref<Message> m_response_method_not_allowed;
+
+  pjs::Ref<Module> m_module;
 
   auto handle(Message *req) -> Message*;
 

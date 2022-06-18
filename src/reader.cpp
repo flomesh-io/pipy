@@ -26,7 +26,6 @@
 #include "reader.hpp"
 #include "file.hpp"
 #include "fstream.hpp"
-#include "module.hpp"
 #include "pipeline.hpp"
 
 namespace pipy {
@@ -72,11 +71,7 @@ void Reader::FileReader::start() {
     [this](FileStream *fs) {
       if (fs) {
         auto ppl = m_reader->m_pipeline_layout.get();
-        auto mod = ppl->module();
-        auto ctx = mod
-          ? mod->new_context()
-          : new pipy::Context();
-        auto p = Pipeline::make(ppl, ctx);
+        auto p = Pipeline::make(ppl, ppl->new_context());
         fs->chain(EventTarget::input());
         m_pipeline = p;
         m_stream = fs;

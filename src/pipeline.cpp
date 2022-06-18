@@ -44,6 +44,7 @@ PipelineLayout::PipelineLayout(ModuleBase *module, int index, const std::string 
   , m_module(module)
 {
   s_all_pipeline_layouts.push(this);
+  if (module) module->m_pipelines.push_back(this);
   Log::debug("[p-layout %p] ++ name = %s", this, m_name->c_str());
 }
 
@@ -70,6 +71,10 @@ void PipelineLayout::shutdown() {
     p->shutdown();
     p = p->next();
   }
+}
+
+auto PipelineLayout::new_context() -> Context* {
+  return m_module ? m_module->new_context() : new Context();
 }
 
 auto PipelineLayout::append(Filter *filter) -> Filter* {

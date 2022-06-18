@@ -63,15 +63,15 @@ AdminLink::AdminLink(
   headers->set("sec-websocket-key", key_base64);
   headers->set("sec-websocket-version", "13");
 
-  m_ppl_connect = PipelineLayout::make(nullptr);
-  m_ppl_connect->append(new Connect(pjs::Str::make(host), Connect::Options()));
+  auto *ppl_connect = PipelineLayout::make();
+  ppl_connect->append(new Connect(pjs::Str::make(host), Connect::Options()));
 
-  m_ppl_tunnel = PipelineLayout::make(nullptr);
-  m_ppl_tunnel->append(new http::Mux(nullptr, nullptr))->add_sub_pipeline(m_ppl_connect);
+  auto *ppl_tunnel = PipelineLayout::make();
+  ppl_tunnel->append(new http::Mux(nullptr, nullptr))->add_sub_pipeline(ppl_connect);
 
-  m_ppl = PipelineLayout::make(nullptr);
+  m_ppl = PipelineLayout::make();
   m_ppl->append(new websocket::Encoder());
-  m_ppl->append(new http::TunnelClient(m_handshake.get()))->add_sub_pipeline(m_ppl_tunnel);
+  m_ppl->append(new http::TunnelClient(m_handshake.get()))->add_sub_pipeline(ppl_tunnel);
   m_ppl->append(new websocket::Decoder());
   m_ppl->append(new Receiver(this));
 }

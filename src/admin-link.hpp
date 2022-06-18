@@ -76,8 +76,6 @@ private:
   std::function<void(const Data&)> m_on_receive;
   pjs::Ref<Pipeline> m_pipeline;
   pjs::Ref<PipelineLayout> m_ppl;
-  pjs::Ref<PipelineLayout> m_ppl_tunnel;
-  pjs::Ref<PipelineLayout> m_ppl_connect;
   pjs::Ref<Message> m_handshake;
   int m_connection_id = 0;
 };

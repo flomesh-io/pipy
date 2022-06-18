@@ -115,11 +115,11 @@ AdminProxy::AdminProxy(const std::string &target)
 void AdminProxy::open(int port, const Options &options) {
   Log::info("[admin] Starting admin proxy...");
 
-  PipelineLayout *ppl = PipelineLayout::make(nullptr);
+  PipelineLayout *ppl = PipelineLayout::make();
   PipelineLayout *ppl_inbound = nullptr;
-  PipelineLayout *ppl_request = PipelineLayout::make(nullptr);
-  PipelineLayout *ppl_forward = PipelineLayout::make(nullptr);
-  PipelineLayout *ppl_connect = PipelineLayout::make(nullptr);
+  PipelineLayout *ppl_request = PipelineLayout::make();
+  PipelineLayout *ppl_forward = PipelineLayout::make();
+  PipelineLayout *ppl_connect = PipelineLayout::make();
 
   if (!options.cert || !options.key) {
     ppl_inbound = ppl;
@@ -131,7 +131,7 @@ void AdminProxy::open(int port, const Options &options) {
     certificate->set("key", options.key.get());
     opts.certificate = certificate;
     opts.trusted = options.trusted;
-    ppl_inbound = PipelineLayout::make(nullptr);
+    ppl_inbound = PipelineLayout::make();
     ppl->append(new tls::Server(opts))->add_sub_pipeline(ppl_inbound);
   }
 
@@ -146,9 +146,9 @@ void AdminProxy::open(int port, const Options &options) {
       opts.certificate = certificate;
     }
     opts.trusted = options.fetch_options.trusted;
-    auto pd = PipelineLayout::make(nullptr);
-    pd->append(new tls::Client(opts))->add_sub_pipeline(ppl_connect);
-    ppl_connect = pd;
+    auto *ppl = PipelineLayout::make();
+    ppl->append(new tls::Client(opts))->add_sub_pipeline(ppl_connect);
+    ppl_connect = ppl;
   }
 
   ppl_inbound->append(new http::Demux(nullptr))->add_sub_pipeline(ppl_request);

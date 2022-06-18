@@ -27,7 +27,6 @@
 #include "listener.hpp"
 #include "pipeline.hpp"
 #include "input.hpp"
-#include "module.hpp"
 #include "worker.hpp"
 #include "utils.hpp"
 
@@ -136,7 +135,7 @@ void Task::run() {
   if (!active()) {
     m_pipeline = Pipeline::make(
       m_pipeline_layout,
-      m_pipeline_layout->module()->new_context()
+      m_pipeline_layout->new_context()
     );
     m_pipeline->chain(EventTarget::input());
     InputContext ic;

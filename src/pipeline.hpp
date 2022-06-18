@@ -53,7 +53,7 @@ class PipelineLayout :
   public List<PipelineLayout>::Item
 {
 public:
-  static auto make(ModuleBase *module) -> PipelineLayout* {
+  static auto make(ModuleBase *module = nullptr) -> PipelineLayout* {
     return new PipelineLayout(module, -1, std::string());
   }
 
@@ -85,6 +85,8 @@ public:
   auto append(Filter *filter) -> Filter*;
   void bind();
   void shutdown();
+
+  auto new_context() -> Context*;
 
 private:
   PipelineLayout(ModuleBase *module, int index, const std::string &name);

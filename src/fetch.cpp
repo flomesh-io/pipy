@@ -70,10 +70,8 @@ void Fetch::Receiver::dump(Dump &d) {
 Fetch::Fetch(pjs::Str *host, const Options &options)
   : m_host(host)
 {
-  m_ppl_connect = PipelineLayout::make(nullptr);
-  m_ppl_connect->append(new Connect(m_host.get(), options));
-
-  auto def_connect = m_ppl_connect.get();
+  auto *ppl_connect = PipelineLayout::make();
+  ppl_connect->append(new Connect(m_host.get(), options));
 
   if (options.tls) {
     tls::Client::Options opts;
@@ -84,13 +82,13 @@ Fetch::Fetch(pjs::Str *host, const Options &options)
       certificate->set("key", options.key.get());
       opts.certificate = certificate;
     }
-    m_ppl_tls = PipelineLayout::make(nullptr);
-    m_ppl_tls->append(new tls::Client(opts))->add_sub_pipeline(m_ppl_connect);
-    def_connect = m_ppl_tls;
+    auto *ppl_tls = PipelineLayout::make();
+    ppl_tls->append(new tls::Client(opts))->add_sub_pipeline(ppl_connect);
+    ppl_connect = ppl_tls;
   }
 
-  m_ppl = PipelineLayout::make(nullptr);
-  m_ppl->append(new http::Mux())->add_sub_pipeline(def_connect);
+  m_ppl = PipelineLayout::make();
+  m_ppl->append(new http::Mux())->add_sub_pipeline(ppl_connect);
   m_ppl->append(new Receiver(this));
 }
 
@@ -147,9 +145,7 @@ void Fetch::close() {
 
 void Fetch::pump() {
   if (!m_current_request && !m_request_queue.empty()) {
-    auto ctx = new Context();
-    m_pipeline = Pipeline::make(m_ppl, ctx);
-
+    m_pipeline = Pipeline::make(m_ppl, m_ppl->new_context());
     m_current_request = &m_request_queue.front();
     auto msg = m_current_request->message;
 

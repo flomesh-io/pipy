@@ -42,10 +42,6 @@ namespace pipy {
 // ModuleBase
 //
 
-void ModuleBase::add_pipeline(PipelineLayout *layout) {
-  m_pipelines.push_back(layout);
-}
-
 void ModuleBase::for_each_pipeline(const std::function<void(PipelineLayout*)> &cb) {
   for (const auto &p : m_pipelines) {
     cb(p);

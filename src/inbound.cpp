@@ -26,7 +26,6 @@
 #include "inbound.hpp"
 #include "listener.hpp"
 #include "pipeline.hpp"
-#include "module.hpp"
 #include "worker.hpp"
 #include "constants.hpp"
 #include "status.hpp"
@@ -93,10 +92,7 @@ auto Inbound::ori_dst_address() -> pjs::Str* {
 
 void Inbound::start(PipelineLayout *layout) {
   if (!m_pipeline) {
-    auto mod = layout->module();
-    auto ctx = mod
-      ? mod->new_context()
-      : new pipy::Context();
+    auto ctx = layout->new_context();
     ctx->m_inbound = this;
     m_pipeline = Pipeline::make(layout, ctx);
   }

@@ -51,6 +51,7 @@ static std::string s_server_name("pipy-repo");
 AdminService::AdminService(CodebaseStore *store)
   : m_store(store)
   , m_www_files(GuiTarball::data(), GuiTarball::size())
+  , m_module(new Module())
 {
   auto create_response_head = [](const std::string &content_type) -> http::ResponseHead* {
     auto head = http::ResponseHead::make();
@@ -93,8 +94,8 @@ AdminService::~AdminService() {
 void AdminService::open(int port, const Options &options) {
   Log::info("[admin] Starting admin service...");
 
-  PipelineLayout *ppl = PipelineLayout::make(nullptr);
-  PipelineLayout *ppl_ws = PipelineLayout::make(nullptr);
+  PipelineLayout *ppl = PipelineLayout::make(m_module);
+  PipelineLayout *ppl_ws = PipelineLayout::make(m_module);
   PipelineLayout *ppl_inbound = nullptr;
 
   if (!options.cert || !options.key) {
@@ -107,7 +108,7 @@ void AdminService::open(int port, const Options &options) {
     certificate->set("key", options.key.get());
     opts.certificate = certificate;
     opts.trusted = options.trusted;
-    ppl_inbound = PipelineLayout::make(nullptr);
+    ppl_inbound = PipelineLayout::make(m_module);
     ppl->append(new tls::Server(opts))->add_sub_pipeline(ppl_inbound);
   }
 

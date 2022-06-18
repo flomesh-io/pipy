@@ -117,13 +117,10 @@ private:
   };
 
   pjs::Ref<pjs::Str> m_host;
-  pjs::Ref<Pipeline> m_pipeline;
   std::list<Request> m_request_queue;
-  Request* m_current_request = nullptr;
-
+  pjs::Ref<Pipeline> m_pipeline;
   pjs::Ref<PipelineLayout> m_ppl;
-  pjs::Ref<PipelineLayout> m_ppl_connect;
-  pjs::Ref<PipelineLayout> m_ppl_tls;
+  Request* m_current_request = nullptr;
 
   void fetch(
     Method method,

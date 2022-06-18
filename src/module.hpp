@@ -51,12 +51,11 @@ public:
   virtual auto new_context(Context *base = nullptr) -> Context* = 0;
 
 protected:
-  ModuleBase(int index)
+  ModuleBase(int index = 0)
     : m_index(index) {}
 
   virtual ~ModuleBase() {}
 
-  void add_pipeline(PipelineLayout *layout);
   void for_each_pipeline(const std::function<void(PipelineLayout*)> &cb);
   void shutdown();
 
@@ -65,6 +64,7 @@ private:
   std::list<pjs::Ref<PipelineLayout>> m_pipelines;
 
   friend class pjs::RefCount<ModuleBase>;
+  friend class PipelineLayout;
 };
 
 //

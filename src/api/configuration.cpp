@@ -523,7 +523,6 @@ void Configuration::apply(Module *mod) {
     for (auto &f : filters) {
       layout->append(f.release());
     }
-    mod->add_pipeline(layout);
     return layout;
   };
 
