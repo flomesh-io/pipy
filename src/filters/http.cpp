@@ -1463,7 +1463,7 @@ void Mux::Session::upgrade_http2() {
 // Server
 //
 
-Server::Server(const std::function<Message*(Message*)> &handler)
+Server::Server(const std::function<Message*(Server*, Message*)> &handler)
   : Decoder(false)
   , Encoder(true)
   , m_handler_func(handler)
@@ -1643,7 +1643,7 @@ void Server::Handler::on_event(Event *evt) {
       m_buffer.clear();
 
       if (auto &func = m_server->m_handler_func) {
-        res = func(req);
+        res = func(m_server, req);
 
       } else if (auto &handler = m_server->m_handler_obj) {
         if (handler->is_instance_of<Message>()) {

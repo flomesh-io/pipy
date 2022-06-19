@@ -55,11 +55,15 @@ public:
   auto worker() const -> Worker* { return m_worker; }
   auto inbound() const -> Inbound* { return m_inbound; }
 
+protected:
+  ~Context();
+
+  virtual void finalize() { delete this; }
+
 private:
   typedef pjs::PooledArray<pjs::Ref<pjs::Object>> ContextData;
 
   Context(ContextGroup *group, Worker *worker, pjs::Object *global, ContextData *data = nullptr);
-  ~Context();
 
   uint64_t m_id;
   ContextGroup* m_group;
@@ -73,6 +77,21 @@ private:
   friend class Worker;
   friend class Waiter;
   friend class Inbound;
+};
+
+//
+// ContextTemplate
+//
+
+template<class T, class Base = Context>
+class ContextTemplate : public pjs::Pooled<T, Base> {
+public:
+  virtual void finalize() {
+    delete static_cast<T*>(this);
+  }
+
+protected:
+  using pjs::Pooled<T, Base>::Pooled;
 };
 
 //

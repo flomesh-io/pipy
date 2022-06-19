@@ -447,7 +447,7 @@ class Server :
   protected Encoder
 {
 public:
-  Server(const std::function<Message*(Message*)> &handler);
+  Server(const std::function<Message*(Server*, Message*)> &handler);
   Server(pjs::Object *handler);
 
 private:
@@ -506,7 +506,7 @@ private:
     }
   };
 
-  std::function<Message*(Message*)> m_handler_func;
+  std::function<Message*(Server*, Message*)> m_handler_func;
   pjs::Ref<pjs::Object> m_handler_obj;
   pjs::Ref<Handler> m_handler;
   RequestQueue m_request_queue;

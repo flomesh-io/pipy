@@ -31,6 +31,7 @@
 #include "api/stats.hpp"
 #include "filter.hpp"
 #include "module.hpp"
+#include "context.hpp"
 #include "message.hpp"
 #include "data.hpp"
 #include "tar.hpp"
@@ -66,25 +67,37 @@ public:
 private:
 
   //
-  // Module
+  // AdminService::Context
+  //
+
+  class Context : public ContextTemplate<Context> {
+  public:
+    Context() {}
+    std::string instance_uuid;
+    std::string log_name;
+    bool is_admin_link = false;
+  };
+
+  //
+  // AdminService::Module
   //
 
   class Module : public ModuleBase {
-    virtual auto new_context(Context *base = nullptr) -> Context* {
+    virtual auto new_context(pipy::Context *base) -> pipy::Context* override {
       return new Context();
     }
   };
 
   //
-  // AdminService::AdminLinkHandler
+  // AdminService::WebSocketHandler
   //
 
-  class AdminLinkHandler : public Filter {
+  class WebSocketHandler : public Filter {
   public:
-    AdminLinkHandler(AdminService *service)
+    WebSocketHandler(AdminService *service)
       : m_service(service) {}
 
-    AdminLinkHandler(const AdminLinkHandler &r)
+    WebSocketHandler(const WebSocketHandler &r)
       : m_service(r.m_service) {}
 
   private:
@@ -98,10 +111,15 @@ private:
     bool m_started;
   };
 
+  //
+  // AdminService::Instance
+  //
+
   struct Instance {
     int index;
     Status status;
     stats::MetricSet metrics;
+    std::set<WebSocketHandler*> log_watchers;
   };
 
   int m_port;
@@ -127,7 +145,7 @@ private:
 
   pjs::Ref<Module> m_module;
 
-  auto handle(Message *req) -> Message*;
+  auto handle(Context *ctx, Message *req) -> Message*;
 
   Message* metrics_GET();
 
@@ -169,8 +187,8 @@ private:
     const std::map<std::string, std::string> &headers
   ) -> http::ResponseHead*;
 
-  void on_log(const std::string &name, const Data &data);
-  void on_metrics(const Data &data);
+  void on_log(Context *ctx, const std::string &name, const Data &data);
+  void on_metrics(Context *ctx, const Data &data);
 
   void metrics_history_step();
 };

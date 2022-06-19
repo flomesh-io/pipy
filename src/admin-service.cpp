@@ -114,14 +114,15 @@ void AdminService::open(int port, const Options &options) {
 
   ppl_inbound->append(
     new http::Server(
-      [this](Message *msg) {
-        return handle(msg);
+      [this](http::Server *server, Message *msg) {
+        auto *ctx = static_cast<Context*>(server->context());
+        return handle(ctx, msg);
       }
     )
   )->add_sub_pipeline(ppl_ws);
 
   ppl_ws->append(new websocket::Decoder());
-  ppl_ws->append(new AdminLinkHandler(this));
+  ppl_ws->append(new WebSocketHandler(this));
   ppl_ws->append(new websocket::Encoder());
 
   Listener::Options opts;
@@ -142,18 +143,27 @@ void AdminService::close() {
   m_metrics_history_timer.cancel();
 }
 
-auto AdminService::handle(Message *req) -> Message* {
+auto AdminService::handle(Context *ctx, Message *req) -> Message* {
   static std::string prefix_repo("/repo/");
   static std::string prefix_api_v1_repo("/api/v1/repo/");
   static std::string prefix_api_v1_files("/api/v1/files/");
   static std::string prefix_api_v1_metrics("/api/v1/metrics/");
-  static std::string header_accept("accept");
+  static std::string prefix_api_v1_log("/api/v1/log/");
   static std::string text_html("text/html");
+  static pjs::ConstStr s_accept("accept");
+  static pjs::ConstStr s_upgrade("upgrade");
+  static pjs::ConstStr s_websocket("websocket");
 
   auto head = req->head()->as<http::RequestHead>();
   auto body = req->body();
   auto method = head->method()->str();
   auto path = head->path()->str();
+
+  pjs::Value accept, upgrade;
+  head->headers()->get(s_accept, accept);
+  head->headers()->get(s_upgrade, upgrade);
+  bool is_browser = (accept.is_string() && accept.s()->str().find(text_html) != std::string::npos);
+  bool is_websocket = (upgrade.is_string() && upgrade.s() == s_websocket);
 
   try {
 
@@ -192,9 +202,13 @@ auto AdminService::handle(Message *req) -> Message* {
 
       // HEAD|GET|POST /repo/[path]
       if (utils::starts_with(path, prefix_repo)) {
-        pjs::Value accept;
-        head->headers()->get(header_accept, accept);
-        if (!accept.is_string() || accept.s()->str().find(text_html) == std::string::npos) {
+        if (is_websocket) {
+          auto i = path.rfind('/');
+          auto uuid = (i == std::string::npos ? path : path.substr(i + 1));
+          ctx->instance_uuid = uuid;
+          ctx->is_admin_link = true;
+          return m_response_ok;
+        } else if (!is_browser) {
           path = path.substr(prefix_repo.length() - 1);
           if (path == "/") path.clear();
           if (method == "HEAD") {
@@ -295,6 +309,22 @@ auto AdminService::handle(Message *req) -> Message* {
     if (path == "/api/v1/log") {
       if (method == "GET") {
         return api_v1_log_GET(req);
+      } else {
+        return m_response_method_not_allowed;
+      }
+    }
+
+    // GET /api/v1/log/[uuid]/[name]
+    if (utils::starts_with(path, prefix_api_v1_log)) {
+      if (method == "GET" && is_websocket) {
+        auto uuid_name = path.substr(prefix_api_v1_log.length());
+        auto i = uuid_name.find('/');
+        if (i != std::string::npos) {
+          ctx->instance_uuid = uuid_name.substr(0, i);
+          ctx->log_name = uuid_name.substr(i + 1);
+          ctx->is_admin_link = false;
+        }
+        return m_response_ok;
       } else {
         return m_response_method_not_allowed;
       }
@@ -874,10 +904,10 @@ auto AdminService::response_head(
   return head;
 }
 
-void AdminService::on_log(const std::string &name, const Data &data) {
+void AdminService::on_log(Context *ctx, const std::string &name, const Data &data) {
 }
 
-void AdminService::on_metrics(const Data &data) {
+void AdminService::on_metrics(Context *ctx, const Data &data) {
   stats::MetricSet::deserialize(
     data,
     [this](const std::string &uuid) -> stats::MetricSet* {
@@ -899,20 +929,20 @@ void AdminService::metrics_history_step() {
 }
 
 //
-// AdminService::AdminLinkHandler
+// AdminService::WebSocketHandler
 //
 
-auto AdminService::AdminLinkHandler::clone() -> Filter* {
-  return new AdminService::AdminLinkHandler(*this);
+auto AdminService::WebSocketHandler::clone() -> Filter* {
+  return new AdminService::WebSocketHandler(*this);
 }
 
-void AdminService::AdminLinkHandler::reset() {
+void AdminService::WebSocketHandler::reset() {
   Filter::reset();
   m_payload.clear();
   m_started = false;
 }
 
-void AdminService::AdminLinkHandler::process(Event *evt) {
+void AdminService::WebSocketHandler::process(Event *evt) {
   if (evt->is<MessageStart>()) {
     m_started = true;
     m_payload.clear();
@@ -928,13 +958,14 @@ void AdminService::AdminLinkHandler::process(Event *evt) {
         buf
       );
       auto header = buf.to_string();
+      auto ctx = static_cast<Context*>(context());
       static std::string s_log_prefix("log/");
       if (utils::starts_with(header, s_log_prefix)) {
         auto name = header.substr(s_log_prefix.length());
         name.pop_back(); // pop out the ending '\n'
-        m_service->on_log(name, m_payload);
+        m_service->on_log(ctx, name, m_payload);
       } if (header == "metrics\n") {
-        m_service->on_metrics(m_payload);
+        m_service->on_metrics(ctx, m_payload);
       }
       m_payload.clear();
       m_started = false;
@@ -942,9 +973,9 @@ void AdminService::AdminLinkHandler::process(Event *evt) {
   }
 }
 
-void AdminService::AdminLinkHandler::dump(Dump &d) {
+void AdminService::WebSocketHandler::dump(Dump &d) {
   Filter::dump(d);
-  d.name = "AdminService::AdminLinkHandler";
+  d.name = "AdminService::WebSocketHandler";
 }
 
 } // namespace pipy
