@@ -33,6 +33,7 @@
 #include "list.hpp"
 #include "scarce.hpp"
 #include "deframer.hpp"
+#include "options.hpp"
 
 #include <map>
 #include <vector>
@@ -349,7 +350,20 @@ class Endpoint :
   public FrameEncoder,
   public FlushTarget
 {
+private:
+  enum {
+    INITIAL_SEND_WINDOW_SIZE = 0xffff,
+    INITIAL_RECV_WINDOW_SIZE = 0xffff,
+  };
+
 public:
+  struct Options : public pipy::Options {
+    size_t connection_window_size = INITIAL_RECV_WINDOW_SIZE;
+    size_t stream_window_size = INITIAL_RECV_WINDOW_SIZE;
+    Options() {}
+    Options(pjs::Object *options);
+  };
+
   static auto server_stream_count() -> int { return m_server_stream_count; }
   static auto client_stream_count() -> int { return m_client_stream_count; }
 
@@ -358,7 +372,7 @@ private:
   static int m_client_stream_count;
 
 protected:
-  Endpoint(bool is_server_side);
+  Endpoint(bool is_server_side, const Options &options);
   virtual ~Endpoint();
 
   class StreamBase;
@@ -368,11 +382,7 @@ protected:
   virtual void on_delete_stream(StreamBase *stream) = 0;
 
 private:
-  enum {
-    INITIAL_SEND_WINDOW_SIZE = 0xffff,
-    INITIAL_RECV_WINDOW_SIZE = 0xffff,
-  };
-
+  Options m_options;
   List<StreamBase> m_streams;
   List<StreamBase> m_streams_pending;
   ScarcePointerArray<StreamBase> m_stream_map;
@@ -383,7 +393,7 @@ private:
   Data m_output_buffer;
   int m_last_received_stream_id = 0;
   int m_send_window = INITIAL_SEND_WINDOW_SIZE;
-  int m_recv_window = INITIAL_RECV_WINDOW_SIZE;
+  int m_recv_window;
   bool m_is_server_side;
   bool m_has_sent_preface = false;
   bool m_has_gone_away = false;
@@ -461,7 +471,7 @@ protected:
     HeaderEncoder& m_header_encoder;
     Data m_send_buffer;
     int m_send_window = INITIAL_SEND_WINDOW_SIZE;
-    int m_recv_window = INITIAL_RECV_WINDOW_SIZE;
+    int m_recv_window;
     int m_recv_payload_size = 0;
     const Settings& m_settings;
 
@@ -488,7 +498,7 @@ class Server :
   public EventFunction
 {
 public:
-  Server();
+  Server(const Options &options);
   virtual ~Server();
 
   auto initial_stream() -> Input*;
@@ -560,7 +570,7 @@ class Client :
   public EventSource
 {
 public:
-  Client();
+  Client(const Options &options);
 
   void open(EventFunction *session);
   auto stream() -> EventFunction*;

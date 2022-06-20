@@ -1149,11 +1149,23 @@ auto HeaderEncoder::StaticTable::find(pjs::Str *name) -> const Entry* {
 int Endpoint::m_server_stream_count = 0;
 int Endpoint::m_client_stream_count = 0;
 
-Endpoint::Endpoint(bool is_server_side)
-  : m_header_decoder(m_settings)
+Endpoint::Options::Options(pjs::Object *options) {
+  Value(options, "connectionWindowSize")
+    .get_binary_size(connection_window_size)
+    .check_nullable();
+  Value(options, "streamWindowSize")
+    .get_binary_size(stream_window_size)
+    .check_nullable();
+}
+
+Endpoint::Endpoint(bool is_server_side, const Options &options)
+  : m_options(options)
+  , m_header_decoder(m_settings)
+  , m_recv_window(options.connection_window_size)
   , m_is_server_side(is_server_side)
 {
   m_settings.enable_push = false;
+  m_settings.initial_window_size = options.stream_window_size;
 }
 
 Endpoint::~Endpoint() {
@@ -1377,6 +1389,12 @@ void Endpoint::frame(Frame &frm) {
     frm.flags = 0;
     frm.payload.push(buf, len, &s_dp);
     FrameEncoder::frame(frm, m_output_buffer);
+    if (m_options.connection_window_size > INITIAL_RECV_WINDOW_SIZE) {
+      frm.type = Frame::WINDOW_UPDATE;
+      frm.payload.clear();
+      frm.encode_window_update(m_options.connection_window_size - INITIAL_RECV_WINDOW_SIZE);
+      FrameEncoder::frame(frm, m_output_buffer);
+    }
   }
   FrameEncoder::frame(frm, m_output_buffer);
   need_flush();
@@ -1451,6 +1469,7 @@ Endpoint::StreamBase::StreamBase(
   , m_is_server_side(is_server_side)
   , m_header_decoder(endpoint->m_header_decoder)
   , m_header_encoder(endpoint->m_header_encoder)
+  , m_recv_window(endpoint->m_settings.initial_window_size)
   , m_settings(endpoint->m_peer_settings)
 {
   if (is_server_side) {
@@ -1498,14 +1517,15 @@ void Endpoint::StreamBase::on_frame(Frame &frm) {
           }
           if (!deduct_recv(size)) break;
           m_recv_window -= size;
-          if (m_recv_window <= INITIAL_RECV_WINDOW_SIZE / 2) {
+          auto max_win_size = m_settings.initial_window_size;
+          if (m_recv_window <= max_win_size / 2) {
             Frame frm;
             frm.stream_id = m_id;
             frm.type = Frame::WINDOW_UPDATE;
             frm.flags = 0;
-            frm.encode_window_update(INITIAL_RECV_WINDOW_SIZE - m_recv_window);
+            frm.encode_window_update(max_win_size - m_recv_window);
             frame(frm);
-            m_recv_window = INITIAL_RECV_WINDOW_SIZE;
+            m_recv_window = max_win_size;
           }
           event(Data::make(frm.payload));
           m_recv_payload_size += frm.payload.size();
@@ -1673,14 +1693,15 @@ bool Endpoint::StreamBase::deduct_recv(int size) {
     return false;
   }
   win_size -= size;
-  if (win_size <= INITIAL_RECV_WINDOW_SIZE / 2) {
+  auto max_win_size = m_endpoint->m_options.connection_window_size;
+  if (win_size <= max_win_size / 2) {
     Frame frm;
     frm.stream_id = 0;
     frm.type = Frame::WINDOW_UPDATE;
     frm.flags = 0;
-    frm.encode_window_update(INITIAL_RECV_WINDOW_SIZE - win_size);
+    frm.encode_window_update(max_win_size - win_size);
     frame(frm);
-    win_size = INITIAL_RECV_WINDOW_SIZE;
+    win_size = max_win_size;
   }
   return true;
 }
@@ -1849,8 +1870,7 @@ void Endpoint::StreamBase::stream_end(http::MessageTail *tail) {
 // Server
 //
 
-Server::Server()
-  : Endpoint(true)
+Server::Server(const Options &options) : Endpoint(true, options)
 {
 }
 
@@ -1924,7 +1944,7 @@ void Server::InitialStream::on_event(Event *evt) {
 // Client
 //
 
-Client::Client() : Endpoint(false)
+Client::Client(const Options &options) : Endpoint(false, options)
 {
 }
 

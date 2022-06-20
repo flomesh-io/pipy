@@ -306,7 +306,7 @@ class Demux :
   protected Encoder
 {
 public:
-  struct Options : public pipy::Options {
+  struct Options : public http2::Endpoint::Options {
     size_t buffer_size = DATA_CHUNK_SIZE;
     Options();
     Options(pjs::Object *options);
@@ -334,14 +334,16 @@ private:
     public http2::Server
   {
   public:
-    HTTP2Demuxer(Filter *filter) : m_filter(filter) {}
+    HTTP2Demuxer(Demux *demux)
+      : http2::Server(demux->m_options)
+      , m_demux(demux) {}
 
     auto on_new_stream_pipeline() -> PipelineBase* override {
-      return m_filter->sub_pipeline(0, true);
+      return m_demux->sub_pipeline(0, true);
     }
 
   private:
-    Filter* m_filter;
+    Demux* m_demux;
   };
 
   Options m_options;
@@ -365,6 +367,8 @@ class HTTP2Muxer :
   public pjs::Pooled<HTTP2Muxer>,
   public http2::Client
 {
+public:
+  using http2::Client::Client;
 };
 
 //
@@ -373,7 +377,10 @@ class HTTP2Muxer :
 
 class Mux : public pipy::MuxQueue {
 public:
-  struct Options : public pipy::MuxQueue::Options {
+  struct Options :
+    public pipy::MuxQueue::Options,
+    public http2::Endpoint::Options
+  {
     size_t buffer_size = DATA_CHUNK_SIZE;
     int version = 1;
     pjs::Ref<pjs::Function> version_f;
@@ -405,12 +412,10 @@ private:
     protected Decoder,
     public ContextGroup::Waiter
   {
-    Session(int buffer_size, int version, pjs::Function *version_f)
+    Session(const Options &options)
       : Encoder(false)
       , Decoder(true)
-      , m_buffer_size(buffer_size)
-      , m_version(version)
-      , m_version_f(version_f) {}
+      , m_options(options) {}
 
     ~Session();
 
@@ -423,10 +428,8 @@ private:
     virtual void on_decode_error() override;
     virtual void on_notify(Context *ctx) override;
 
-    int m_buffer_size;
-    int m_version;
+    const Options& m_options;
     int m_version_selected = 0;
-    pjs::Ref<pjs::Function> m_version_f;
     RequestQueue m_request_queue;
     HTTP2Muxer* m_http2_muxer = nullptr;
 
@@ -496,7 +499,9 @@ private:
     public http2::Server
   {
   public:
-    HTTP2Server(http::Server *server) : m_server(server) {}
+    HTTP2Server(http::Server *server)
+      : http2::Server(http2::Server::Options())
+      , m_server(server) {}
 
   private:
     http::Server* m_server;

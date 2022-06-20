@@ -1154,7 +1154,9 @@ bool RequestQueue::Request::is_http2() const {
 // Demux::Options
 //
 
-Demux::Options::Options(pjs::Object *options) {
+Demux::Options::Options(pjs::Object *options)
+  : http2::Endpoint::Options(options)
+{
   Value(options, "bufferSize")
     .get_binary_size(buffer_size)
     .check_nullable();
@@ -1289,6 +1291,7 @@ void Demux::upgrade_http2() {
 
 Mux::Options::Options(pjs::Object *options)
   : pipy::MuxQueue::Options(options)
+  , http2::Endpoint::Options(options)
 {
   Value(options, "bufferSize")
     .get_binary_size(buffer_size)
@@ -1334,11 +1337,7 @@ auto Mux::clone() -> Filter* {
 }
 
 auto Mux::on_new_session() -> MuxBase::Session* {
-  return new Session(
-    m_options.buffer_size,
-    m_options.version,
-    m_options.version_f
-  );
+  return new Session(m_options);
 }
 
 //
@@ -1416,10 +1415,10 @@ void Mux::Session::on_notify(Context *ctx) {
 
 void Mux::Session::select_protocol() {
   if (m_version_selected) return;
-  if (m_version_f) {
+  if (m_options.version_f) {
     auto *ctx = pipeline()->context();
     pjs::Value ret;
-    (*m_version_f)(*ctx, 0, nullptr, ret);
+    (*m_options.version_f)(*ctx, 0, nullptr, ret);
     if (!ctx->ok()) return;
     if (!ret.is_number()) {
       set_pending(true);
@@ -1429,7 +1428,7 @@ void Mux::Session::select_protocol() {
     }
     m_version_selected = ret.n();
   } else {
-    m_version_selected = m_version;
+    m_version_selected = m_options.version;
   }
 
   switch (m_version_selected) {
@@ -1445,7 +1444,7 @@ void Mux::Session::select_protocol() {
     Encoder::chain(MuxBase::Session::input());
     MuxBase::Session::chain(Decoder::input());
     Decoder::chain(QueueMuxer::reply());
-    Encoder::set_buffer_size(m_buffer_size);
+    Encoder::set_buffer_size(m_options.buffer_size);
     break;
   }
 
@@ -1454,7 +1453,7 @@ void Mux::Session::select_protocol() {
 
 void Mux::Session::upgrade_http2() {
   if (!m_http2_muxer) {
-    m_http2_muxer = new HTTP2Muxer();
+    m_http2_muxer = new HTTP2Muxer(m_options);
     m_http2_muxer->open(static_cast<MuxBase::Session*>(this));
   }
 }
