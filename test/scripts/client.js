@@ -119,6 +119,7 @@ protocols.http2 = function(target) {
 
 export default async function(config, basePath) {
   const stats = {
+    countRequests: 0,
     totalRequests: 0,
     totalTransfer: 0,
     totalStatusErrors: 0,
@@ -165,6 +166,7 @@ export default async function(config, basePath) {
         }
 
         const res = await client(req);
+        stats.countRequests += 1;
         stats.totalTransfer += res.rawBody.length;
         if (res.statusCode < 400) {
           stats.totalRequests++;
@@ -235,12 +237,14 @@ export default async function(config, basePath) {
       log(
         chalk.bgCyan('report >>>'),
         chalk.cyan(padding(tick + 's', 8)),
+        'RPS'           , chalk.green(padding(stats.countRequests, 6)),
         'Requests'      , chalk.green(padding(stats.totalRequests, 8)),
         'Status Errors' , chalk.red(padding(stats.totalStatusErrors, 8)),
         'Verify Errors' , chalk.red(padding(stats.totalVerifyErrors, 8)),
         'Transfer'      , chalk.magenta(padding(prettyBytes(Math.floor(stats.totalTransfer/t)) + '/s', 8)),
       );
       stats.totalTransfer = 0;
+      stats.countRequests = 0;
       time = now;
     },
     1000
