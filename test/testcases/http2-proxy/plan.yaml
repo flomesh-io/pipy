@@ -32,21 +32,21 @@ client:
   threads:
     - target: ${CLIENT_TARGET}
       protocol: http2
-      concurrency: 10
+      concurrency: 600
       count: 10000
       requests:
         - hello
         - bulky
     - target: ${CLIENT_TARGET}
       protocol: http2
-      concurrency: 5
+      concurrency: 800
       count: 500
       requests:
         - hello
         - bulky
     - target: ${CLIENT_TARGET}
       protocol: http2
-      concurrency: 10
+      concurrency: 600
       count: 10000
       requests:
         - hello

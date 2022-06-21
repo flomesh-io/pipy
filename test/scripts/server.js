@@ -29,7 +29,9 @@ class Response {
 }
 
 function createHTTP2() {
-  const server = http2.createServer();
+  const server = http2.createServer({
+    peerMaxConcurrentStreams: 1000,
+  });
 
   const routes = {
     GET: {},

@@ -1402,7 +1402,9 @@ void Endpoint::frame(Frame &frm) {
 
 void Endpoint::flush() {
   if (!m_output_buffer.empty()) {
-    on_output(Data::make(m_output_buffer));
+    auto *data = Data::make();
+    data->pack(m_output_buffer, &s_dp, 1);
+    on_output(data);
     m_output_buffer.clear();
   }
 }
