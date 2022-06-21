@@ -47,6 +47,7 @@ public:
   static void run();
   static void stop();
   static void post(const std::function<void()> &cb);
+  static void defer(const std::function<void()> &cb);
 
 private:
   static asio::io_context s_io_context;

@@ -393,7 +393,9 @@ private:
   Data m_output_buffer;
   int m_last_received_stream_id = 0;
   int m_send_window = INITIAL_SEND_WINDOW_SIZE;
-  int m_recv_window;
+  int m_recv_window = INITIAL_RECV_WINDOW_SIZE;
+  int m_recv_window_max;
+  int m_recv_window_low;
   bool m_is_server_side;
   bool m_has_sent_preface = false;
   bool m_has_gone_away = false;
@@ -407,6 +409,7 @@ protected:
   void on_flush() override;
   void on_deframe(Frame &frm) override;
   void on_deframe_error(ErrorCode err) override;
+  void send_window_updates();
   void frame(Frame &frm);
   void flush();
 
@@ -463,6 +466,7 @@ protected:
     bool m_is_server_side;
     bool m_is_tunnel = false;
     bool m_is_pending = false;
+    bool m_is_clearing = false;
     bool m_end_headers = false;
     bool m_end_input = false;
     bool m_end_output = false;
@@ -472,6 +476,8 @@ protected:
     Data m_send_buffer;
     int m_send_window = INITIAL_SEND_WINDOW_SIZE;
     int m_recv_window;
+    int m_recv_window_max;
+    int m_recv_window_low;
     int m_recv_payload_size = 0;
     const Settings& m_settings;
 
@@ -481,6 +487,7 @@ protected:
     bool parse_window_update(Frame &frm);
     void write_header_block(Data &data);
     void set_pending(bool pending);
+    void set_clearing(bool clearing);
     void pump(bool no_end = false);
     void recycle();
     void stream_end(http::MessageTail *tail);

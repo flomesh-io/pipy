@@ -1166,6 +1166,8 @@ Endpoint::Endpoint(bool is_server_side, const Options &options)
 {
   m_settings.enable_push = false;
   m_settings.initial_window_size = options.stream_window_size;
+  m_recv_window_max = options.connection_window_size;
+  m_recv_window_low = m_recv_window_max / 2;
 }
 
 Endpoint::~Endpoint() {
@@ -1229,6 +1231,7 @@ void Endpoint::on_event(Event *evt) {
 }
 
 void Endpoint::on_flush() {
+  send_window_updates();
   for_each_pending_stream(
     [this](StreamBase *s) {
       s->pump();
@@ -1373,8 +1376,41 @@ void Endpoint::on_deframe_error(ErrorCode err) {
   connection_error(err);
 }
 
+void Endpoint::send_window_updates() {
+  if (m_has_gone_away) return;
+
+  auto connection_window_size = m_options.connection_window_size;
+  if (m_recv_window < connection_window_size) {
+    Frame frm;
+    frm.stream_id = 0;
+    frm.type = Frame::WINDOW_UPDATE;
+    frm.flags = 0;
+    frm.encode_window_update(connection_window_size - m_recv_window);
+    FrameEncoder::frame(frm, m_output_buffer);
+    m_recv_window = connection_window_size;
+  }
+
+  auto stream_window_size = m_settings.initial_window_size;
+  for (auto *s = m_streams_pending.head(); s;) {
+    if (!s->m_is_clearing) break;
+    if (s->m_recv_window < stream_window_size) {
+      Frame frm;
+      frm.stream_id = s->m_id;
+      frm.type = Frame::WINDOW_UPDATE;
+      frm.flags = 0;
+      frm.encode_window_update(stream_window_size - s->m_recv_window);
+      FrameEncoder::frame(frm, m_output_buffer);
+      s->m_recv_window = stream_window_size;
+    }
+    auto stream = s; s = s->next();
+    stream->set_clearing(false);
+  }
+}
+
 void Endpoint::frame(Frame &frm) {
   if (m_has_gone_away) return;
+
+  // Send preface if not yet
   if (!m_has_sent_preface) {
     m_has_sent_preface = true;
     if (!m_is_server_side) {
@@ -1389,13 +1425,12 @@ void Endpoint::frame(Frame &frm) {
     frm.flags = 0;
     frm.payload.push(buf, len, &s_dp);
     FrameEncoder::frame(frm, m_output_buffer);
-    if (m_options.connection_window_size > INITIAL_RECV_WINDOW_SIZE) {
-      frm.type = Frame::WINDOW_UPDATE;
-      frm.payload.clear();
-      frm.encode_window_update(m_options.connection_window_size - INITIAL_RECV_WINDOW_SIZE);
-      FrameEncoder::frame(frm, m_output_buffer);
-    }
   }
+
+  // Send window updates
+  send_window_updates();
+
+  // Send the frame
   FrameEncoder::frame(frm, m_output_buffer);
   need_flush();
 }
@@ -1474,6 +1509,8 @@ Endpoint::StreamBase::StreamBase(
   , m_recv_window(endpoint->m_settings.initial_window_size)
   , m_settings(endpoint->m_peer_settings)
 {
+  m_recv_window_max = m_settings.initial_window_size;
+  m_recv_window_low = m_recv_window_max / 2;
   if (is_server_side) {
     m_server_stream_count++;
   } else {
@@ -1511,28 +1548,14 @@ void Endpoint::StreamBase::on_frame(Frame &frm) {
     case Frame::DATA: {
       if (m_state == OPEN || m_state == HALF_CLOSED_LOCAL) {
         if (frm.is_PADDED() && !parse_padding(frm)) break;
-        if (frm.payload.size()) {
-          auto size = frm.payload.size();
-          if (size > m_recv_window) {
-            connection_error(FLOW_CONTROL_ERROR);
-            break;
-          }
+        auto size = frm.payload.size();
+        if (size > 0) {
           if (!deduct_recv(size)) break;
-          m_recv_window -= size;
-          auto max_win_size = m_settings.initial_window_size;
-          if (m_recv_window <= max_win_size / 2) {
-            Frame frm;
-            frm.stream_id = m_id;
-            frm.type = Frame::WINDOW_UPDATE;
-            frm.flags = 0;
-            frm.encode_window_update(max_win_size - m_recv_window);
-            frame(frm);
-            m_recv_window = max_win_size;
-          }
           event(Data::make(frm.payload));
-          m_recv_payload_size += frm.payload.size();
+          m_recv_payload_size += size;
         }
         if (frm.is_END_STREAM()) {
+          set_clearing(false);
           if (m_state == OPEN) {
             m_state = HALF_CLOSED_REMOTE;
             stream_end(nullptr);
@@ -1689,22 +1712,19 @@ auto Endpoint::StreamBase::deduct_send(int size) -> int {
 }
 
 bool Endpoint::StreamBase::deduct_recv(int size) {
-  auto &win_size = m_endpoint->m_recv_window;
-  if (size > win_size) {
+  if (size > m_recv_window) {
     connection_error(FLOW_CONTROL_ERROR);
     return false;
   }
-  win_size -= size;
-  auto max_win_size = m_endpoint->m_options.connection_window_size;
-  if (win_size <= max_win_size / 2) {
-    Frame frm;
-    frm.stream_id = 0;
-    frm.type = Frame::WINDOW_UPDATE;
-    frm.flags = 0;
-    frm.encode_window_update(max_win_size - win_size);
-    frame(frm);
-    win_size = max_win_size;
+  auto &connection_recv_window = m_endpoint->m_recv_window;
+  if (size > connection_recv_window) {
+    connection_error(FLOW_CONTROL_ERROR);
+    return false;
   }
+  connection_recv_window -= size;
+  m_recv_window -= size;
+  if (m_recv_window <= m_recv_window_low) set_clearing(true);
+  if (connection_recv_window <= m_endpoint->m_recv_window_low) flush();
   return true;
 }
 
@@ -1817,8 +1837,35 @@ void Endpoint::StreamBase::set_pending(bool pending) {
     } else {
       m_endpoint->m_streams_pending.remove(this);
       m_endpoint->m_streams.push(this);
+      m_is_clearing = false;
     }
     m_is_pending = pending;
+  }
+}
+
+void Endpoint::StreamBase::set_clearing(bool clearing) {
+  if (clearing != m_is_clearing) {
+    if (clearing) {
+      if (m_endpoint->m_has_gone_away) return;
+      if (m_is_pending) {
+        m_endpoint->m_streams_pending.remove(this);
+        m_endpoint->m_streams_pending.unshift(this);
+      } else {
+        m_endpoint->m_streams.remove(this);
+        m_endpoint->m_streams_pending.unshift(this);
+        m_is_pending = true;
+      }
+    } else {
+      if (m_is_pending) {
+        m_endpoint->m_streams_pending.remove(this);
+        if (m_send_buffer.empty()) {
+          m_endpoint->m_streams.push(this);
+        } else {
+          m_endpoint->m_streams_pending.push(this);
+        }
+      }
+    }
+    m_is_clearing = clearing;
   }
 }
 

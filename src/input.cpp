@@ -74,15 +74,15 @@ InputContext::~InputContext() {
   // Flush all pumping targets
   while (auto *target = m_flush_targets_pumping.head()) {
     m_flush_targets_pumping.remove(target);
-    target->m_origin = nullptr;
     target->on_flush();
+    target->m_origin = nullptr;
   }
 
   // Flush all terminating targets
   while (auto *target = m_flush_targets_terminating.head()) {
     m_flush_targets_terminating.remove(target);
-    target->m_origin = nullptr;
     target->on_flush();
+    target->m_origin = nullptr;
   }
 
   // Clean up pipelines

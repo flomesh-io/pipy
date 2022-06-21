@@ -41,4 +41,8 @@ void Net::post(const std::function<void()> &cb) {
   asio::post(s_io_context, cb);
 }
 
+void Net::defer(const std::function<void()> &cb) {
+  asio::defer(s_io_context, cb);
+}
+
 } // namespace pipy
