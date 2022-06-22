@@ -1372,6 +1372,7 @@ void Mux::Session::close() {
   QueueMuxer::reset();
   m_request_queue.reset();
   if (m_http2_muxer) {
+    InputContext ic;
     m_http2_muxer->go_away();
   }
   MuxBase::Session::close();
