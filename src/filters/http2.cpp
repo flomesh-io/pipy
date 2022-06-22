@@ -1161,7 +1161,6 @@ Endpoint::Options::Options(pjs::Object *options) {
 Endpoint::Endpoint(bool is_server_side, const Options &options)
   : m_options(options)
   , m_header_decoder(m_settings)
-  , m_recv_window(options.connection_window_size)
   , m_is_server_side(is_server_side)
 {
   m_settings.enable_push = false;
@@ -1379,28 +1378,26 @@ void Endpoint::on_deframe_error(ErrorCode err) {
 void Endpoint::send_window_updates() {
   if (m_has_gone_away) return;
 
-  auto connection_window_size = m_options.connection_window_size;
-  if (m_recv_window < connection_window_size) {
+  if (m_recv_window < m_recv_window_max) {
     Frame frm;
     frm.stream_id = 0;
     frm.type = Frame::WINDOW_UPDATE;
     frm.flags = 0;
-    frm.encode_window_update(connection_window_size - m_recv_window);
+    frm.encode_window_update(m_recv_window_max - m_recv_window);
     FrameEncoder::frame(frm, m_output_buffer);
-    m_recv_window = connection_window_size;
+    m_recv_window = m_recv_window_max;
   }
 
-  auto stream_window_size = m_settings.initial_window_size;
   for (auto *s = m_streams_pending.head(); s;) {
     if (!s->m_is_clearing) break;
-    if (s->m_recv_window < stream_window_size) {
+    if (s->m_recv_window < s->m_recv_window_max) {
       Frame frm;
       frm.stream_id = s->m_id;
       frm.type = Frame::WINDOW_UPDATE;
       frm.flags = 0;
-      frm.encode_window_update(stream_window_size - s->m_recv_window);
+      frm.encode_window_update(s->m_recv_window_max - s->m_recv_window);
       FrameEncoder::frame(frm, m_output_buffer);
-      s->m_recv_window = stream_window_size;
+      s->m_recv_window = s->m_recv_window_max;
     }
     auto stream = s; s = s->next();
     stream->set_clearing(false);
