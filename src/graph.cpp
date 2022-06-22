@@ -44,7 +44,7 @@ void Graph::from_pipelines(Graph &g, const std::set<PipelineLayout*> &pipelines)
     Graph::Pipeline p;
     p.index = pipeline->index();
     p.name = pipeline->name()->str();
-    p.label = pipeline->label();
+    p.label = pipeline->label()->str();
     for (auto &f : pipeline->m_filters) {
       Graph::Filter gf;
       f->dump(gf);

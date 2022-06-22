@@ -78,8 +78,9 @@ public:
   auto module() const -> ModuleBase* { return m_module; }
   auto index() const -> int { return m_index; }
   auto name() const -> pjs::Str* { return m_name; }
-  auto label() const -> const std::string& { return m_label; }
-  void label(const std::string &label) { m_label = label; }
+  auto label() const -> pjs::Str* { return m_label; }
+  void label(const std::string &label) { m_label = pjs::Str::make(label); }
+  auto name_or_label() const -> pjs::Str*;
   auto allocated() const -> size_t { return m_allocated; }
   auto active() const -> size_t { return m_pipelines.size(); }
   auto append(Filter *filter) -> Filter*;
@@ -97,7 +98,7 @@ private:
 
   int m_index;
   pjs::Ref<pjs::Str> m_name;
-  std::string m_label;
+  pjs::Ref<pjs::Str> m_label;
   std::list<std::unique_ptr<Filter>> m_filters;
   pjs::Ref<ModuleBase> m_module;
   Pipeline* m_pool = nullptr;

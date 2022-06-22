@@ -251,7 +251,7 @@ void Status::register_metrics() {
         if (auto mod = dynamic_cast<Module*>(p->module())) {
           pjs::Str *labels[2];
           labels[0] = mod ? mod->name() : pjs::Str::empty.get();
-          labels[1] = p->name();
+          labels[1] = p->name_or_label();
           auto metric = gauge->with_labels(labels, 2);
           auto n = p->active();
           metric->set(n);
@@ -406,7 +406,7 @@ void Status::dump_memory() {
     if (auto mod = dynamic_cast<Module*>(p->module())) {
       std::string name(mod->path());
       name += " [";
-      name += p->name() == pjs::Str::empty ? p->label() : p->name()->str();
+      name += p->name() == pjs::Str::empty ? p->label()->str() : p->name()->str();
       name += ']';
       if (mod->worker() == current_worker) {
         current_pipelines.insert({ name, p });

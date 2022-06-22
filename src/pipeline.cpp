@@ -77,6 +77,12 @@ auto PipelineLayout::new_context() -> Context* {
   return m_module ? m_module->new_context() : new Context();
 }
 
+auto PipelineLayout::name_or_label() const -> pjs::Str* {
+  if (m_name != pjs::Str::empty) return m_name;
+  if (m_label) return m_label;
+  return pjs::Str::empty;
+}
+
 auto PipelineLayout::append(Filter *filter) -> Filter* {
   m_filters.emplace_back(filter);
   filter->m_pipeline_layout = this;
@@ -95,7 +101,7 @@ auto PipelineLayout::alloc(Context *ctx) -> Pipeline* {
   }
   pipeline->m_context = ctx;
   m_pipelines.push(pipeline);
-  Log::debug("[pipeline %p] ++ name = %s, context = %llu", pipeline, m_name->c_str(), ctx->id());
+  Log::debug("[pipeline %p] ++ name = %s, context = %llu", pipeline, name_or_label()->c_str(), ctx->id());
   return pipeline;
 }
 
@@ -103,7 +109,7 @@ void PipelineLayout::free(Pipeline *pipeline) {
   m_pipelines.remove(pipeline);
   pipeline->m_next_free = m_pool;
   m_pool = pipeline;
-  Log::debug("[pipeline %p] -- name = %s", pipeline, m_name->c_str());
+  Log::debug("[pipeline %p] -- name = %s", pipeline, name_or_label()->c_str());
   release();
 }
 
