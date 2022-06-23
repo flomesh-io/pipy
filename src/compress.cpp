@@ -77,10 +77,7 @@ private:
           s_dp.push(output_data, buf, size);
         }
         if (ret == Z_STREAM_END) { m_done = true; break; }
-        if (ret != Z_OK) {
-          inflateEnd(&m_zs);
-          return false;
-        }
+        if (ret != Z_OK) return false;
       } while (m_zs.avail_out == 0);
       if (m_done) break;
     }
@@ -177,66 +174,49 @@ private:
 
 class Deflate : public pjs::Pooled<Deflate>, public Compressor {
 public:
-  enum class CompressionMethod {
-      deflate = MAX_WBITS,
-      gzip = 16 + MAX_WBITS,
+  enum class Method {
+    deflate,
+    gzip,
   };
 
-  Deflate(const std::function<void(Data*)> &in, CompressionMethod method = CompressionMethod::gzip, int level = Z_DEFAULT_COMPRESSION)
-    : m_in(in)
-    , m_method(method)
+  Deflate(const Output &out, Method method = Method::gzip, int level = Z_DEFAULT_COMPRESSION)
+    : m_out(out)
   {
     m_zs.zalloc = Z_NULL;
     m_zs.zfree = Z_NULL;
     m_zs.opaque = Z_NULL;
     m_zs.next_in = Z_NULL;
     m_zs.avail_out = 0;
-    auto ret = deflateInit2(&m_zs, level, Z_DEFLATED, static_cast<int>(method), 8, Z_DEFAULT_STRATEGY);
 
-    if (ret != Z_OK) {
-      throw std::runtime_error("[compress] zlib init failed");
-    }
+    deflateInit2(
+      &m_zs,
+      level,
+      Z_DEFLATED,
+      method == Method::deflate ? MAX_WBITS : 16 + MAX_WBITS,
+      8,
+      Z_DEFAULT_STRATEGY
+    );
   }
 
 private:
-  const std::function<void(Data*)> m_in;
+  Output m_out;
   z_stream m_zs;
-  CompressionMethod m_method;
 
   ~Deflate(){
     deflateEnd(&m_zs);
   }
 
-  virtual bool process(const Data *data) override {
-    static Data::Producer s_dp(m_method == CompressionMethod::deflate ? "deflate" : "gzip");
-
-    auto len = data->size();
+  virtual bool input(const void *data, size_t size, bool is_final) override {
     unsigned char buf[DATA_CHUNK_SIZE];
-    pjs::Ref<Data> output_data(Data::make());
-
-    for (const auto chk : data->chunks()) {
-      m_zs.next_in = (const unsigned char*)std::get<0>(chk);
-      m_zs.avail_in = std::get<1>(chk);
-      len -= m_zs.avail_in;
-      auto flush = len ? Z_NO_FLUSH : Z_FINISH;
-      do {
-        m_zs.avail_out = DATA_CHUNK_SIZE;
-        m_zs.next_out = buf;
-
-        auto ret = ::deflate(&m_zs, flush);
-        if (ret == Z_STREAM_ERROR) {
-          deflateEnd(&m_zs);
-          return false;
-        }
-        if (auto size = DATA_CHUNK_SIZE - m_zs.avail_out) {
-          s_dp.push(output_data, buf, size);
-        }
-      } while (m_zs.avail_out == 0);
-    }
-    if (m_zs.avail_in != 0) {
-      throw std::runtime_error("[compress] not all input used.");
-    }
-    m_in(output_data);
+    m_zs.next_in = (const Bytef *)data;
+    m_zs.avail_in = size;
+    do {
+      m_zs.next_out = buf;
+      m_zs.avail_out = sizeof(buf);
+      auto ret = ::deflate(&m_zs, is_final ? Z_FINISH : Z_NO_FLUSH);
+      if (ret == Z_STREAM_ERROR) return false;
+      if (auto size = sizeof(buf) - m_zs.avail_out) m_out(buf, size);
+    } while (m_zs.avail_out == 0);
     return true;
   }
 
@@ -258,18 +238,19 @@ Decompressor* Decompressor::brotli(const std::function<void(Data*)> &out) {
 }
 
 //
-// Decompressor
+// Compressor
 //
 
-Compressor *Compressor::deflate(const std::function<void(Data *)> &in, int compression_level) {
-    return new Deflate(in,Deflate::CompressionMethod::deflate, compression_level);
+Compressor *Compressor::deflate(const Output &out, int compression_level) {
+  return new Deflate(out, Deflate::Method::deflate, compression_level);
 }
 
-Compressor *Compressor::gzip(const std::function<void(Data *)> &in, int compression_level) {
-  return new Deflate(in,Deflate::CompressionMethod::gzip, compression_level);
+Compressor *Compressor::gzip(const Output &out, int compression_level) {
+  return new Deflate(out, Deflate::Method::gzip, compression_level);
 }
 
-Compressor *Compressor::brotli(const std::function<void(Data *)> &in, int compression_level) {
+Compressor *Compressor::brotli(const Output &out, int compression_level) {
   throw std::runtime_error("Brotli compression not implemented");
 }
+
 } // namespace pipy

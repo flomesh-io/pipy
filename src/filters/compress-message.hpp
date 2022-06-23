@@ -40,23 +40,24 @@ class Data;
 
 class CompressMessageBase : public Filter {
 public:
-    enum class CompressionMethod {
-      Deflate,
-      Gzip,
-      Brotli,
+    enum class Method {
+      NO_COMPRESSION,
+      DEFLATE,
+      GZIP,
+      BROTLI,
     };
 
-    enum class CompressionLevel {
-      Default,
-      None,
-      Speed,
-      Best = 10,
+    enum class Level {
+      DEFAULT,
+      SPEED,
+      BEST,
     };
 
     struct Options : public pipy::Options {
-      bool enable = true;
-      CompressionMethod algo = CompressionMethod::Gzip;
-      CompressionLevel level = CompressionLevel::Default;
+      Method method = Method::NO_COMPRESSION;
+      pjs::Ref<pjs::Function> method_f;
+      Level level = Level::DEFAULT;
+      pjs::Ref<pjs::Function> level_f;
 
       Options() {}
       Options(pjs::Object *options);
@@ -68,16 +69,19 @@ protected:
 
   virtual auto new_compressor(
     MessageStart *start,
-    const std::function<void(Data*)> &in
-    ) -> Compressor*;
+    Method &method,
+    Level &level,
+    const std::function<void(const void *, size_t)> &out
+  ) -> Compressor*;
 
 private:
   virtual void reset() override;
   virtual void process(Event *evt) override;
 
-  Compressor* m_compressor = nullptr;
-  bool m_message_started = false;
   Options m_options;
+  Compressor* m_compressor = nullptr;
+  std::function<void(const void *, size_t)> m_output;
+  bool m_message_started = false;
 };
 
 //
@@ -110,6 +114,13 @@ private:
 
   virtual auto clone() -> Filter* override;
   virtual void dump(Dump &d) override;
+
+  virtual auto new_compressor(
+    MessageStart *start,
+    Method &method,
+    Level &level,
+    const std::function<void(const void *, size_t)> &out
+  ) -> Compressor* override;
 };
 
 } // namespace pipy

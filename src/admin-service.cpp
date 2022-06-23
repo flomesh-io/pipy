@@ -36,6 +36,7 @@
 #include "module.hpp"
 #include "status.hpp"
 #include "graph.hpp"
+#include "compress.hpp"
 #include "fs.hpp"
 #include "log.hpp"
 
@@ -53,11 +54,12 @@ AdminService::AdminService(CodebaseStore *store)
   , m_www_files(GuiTarball::data(), GuiTarball::size())
   , m_module(new Module())
 {
-  auto create_response_head = [](const std::string &content_type) -> http::ResponseHead* {
+  auto create_response_head = [](const std::string &content_type, bool gzip) -> http::ResponseHead* {
     auto head = http::ResponseHead::make();
     auto headers = pjs::Object::make();
     headers->ht_set("server", s_server_name);
     headers->ht_set("content-type", content_type);
+    if (gzip) headers->ht_set("content-encoding", "gzip");
     head->headers(headers);
     return head;
   };
@@ -71,8 +73,10 @@ AdminService::AdminService(CodebaseStore *store)
     return Message::make(head, nullptr);
   };
 
-  m_response_head_text = create_response_head("text/plain");
-  m_response_head_json = create_response_head("application/json");
+  m_response_head_text = create_response_head("text/plain", false);
+  m_response_head_json = create_response_head("application/json", false);
+  m_response_head_text_gzip = create_response_head("text/plain", true);
+  m_response_head_json_gzip = create_response_head("application/json", true);
   m_response_ok = create_response(200);
   m_response_created = create_response(201);
   m_response_deleted = create_response(204);
@@ -170,7 +174,7 @@ auto AdminService::handle(Context *ctx, Message *req) -> Message* {
     // GET /metrics
     if (path == "/metrics") {
       if (method == "GET") {
-        return metrics_GET();
+        return metrics_GET(head->headers());
       } else {
         return m_response_method_not_allowed;
       }
@@ -369,10 +373,58 @@ auto AdminService::handle(Context *ctx, Message *req) -> Message* {
   }
 }
 
-Message* AdminService::metrics_GET() {
-  Data buf;
+Message* AdminService::metrics_GET(pjs::Object *headers) {
+  static pjs::ConstStr s_accept_encoding("accept-encoding");
+  static std::string s_gzip("gzip");
+
+  pjs::Value v;
+  headers->get(s_accept_encoding, v);
+  auto use_gzip = (v.is_string() && v.s()->str().find(s_gzip) != std::string::npos);
+
+  Data data;
+  Data::Builder db(data, &s_dp);
+  auto db_input = [&](const void *data, size_t size) {
+    db.push((const char *)data, size);
+  };
+
+  Compressor *compressor = nullptr;
+  if (use_gzip) compressor = Compressor::gzip(db_input);
+
+  char buf[DATA_CHUNK_SIZE];
+  size_t buf_ptr = 0;
+
+  auto output = [&](const void *data, size_t size) {
+    if (compressor) {
+      if (size == 1) {
+        buf[buf_ptr++] = *(const char *)data;
+        if (buf_ptr >= sizeof(buf)) {
+          compressor->input(buf, buf_ptr, false);
+          buf_ptr = 0;
+        }
+      } else {
+        size_t p = 0;
+        while (p < size) {
+          auto n = std::min(sizeof(buf) - buf_ptr, size - p);
+          std::memcpy(buf + buf_ptr, (const char *)data + p, n);
+          p += n;
+          buf_ptr += n;
+          if (buf_ptr >= sizeof(buf)) {
+            compressor->input(buf, buf_ptr, false);
+            buf_ptr = 0;
+          }
+        }
+      }
+    } else {
+      if (size == 1) {
+        db.push(*(const char *)data);
+      } else {
+        db.push((const char *)data, size);
+      }
+    }
+  };
+
   stats::Metric::local().collect_all();
-  stats::Metric::local().to_prometheus(buf, "");
+  stats::Metric::local().to_prometheus(output, "");
   for (const auto inst : m_instances) {
     std::string inst_label("instance=\"");
     if (inst->status.name.empty()) {
@@ -381,9 +433,20 @@ Message* AdminService::metrics_GET() {
       inst_label += inst->status.name;
     }
     inst_label += '"';
-    inst->metrics.to_prometheus(buf, inst_label);
+    inst->metrics.to_prometheus(output, inst_label);
   }
-  return response(buf);
+
+  if (compressor) {
+    compressor->input(buf, buf_ptr, true);
+    compressor->end();
+  }
+
+  db.flush();
+
+  return Message::make(
+    use_gzip ? m_response_head_text_gzip : m_response_head_text,
+    Data::make(std::move(data))
+  );
 }
 
 Message* AdminService::repo_HEAD(const std::string &path) {

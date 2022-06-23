@@ -137,6 +137,8 @@ private:
 
   pjs::Ref<http::ResponseHead> m_response_head_text;
   pjs::Ref<http::ResponseHead> m_response_head_json;
+  pjs::Ref<http::ResponseHead> m_response_head_text_gzip;
+  pjs::Ref<http::ResponseHead> m_response_head_json_gzip;
   pjs::Ref<Message> m_response_ok;
   pjs::Ref<Message> m_response_created;
   pjs::Ref<Message> m_response_deleted;
@@ -147,7 +149,7 @@ private:
 
   auto handle(Context *ctx, Message *req) -> Message*;
 
-  Message* metrics_GET();
+  Message* metrics_GET(pjs::Object *headers);
 
   Message* repo_HEAD(const std::string &path);
   Message* repo_GET(const std::string &path);

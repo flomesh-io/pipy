@@ -24,6 +24,7 @@
  */
 
 #include "stats.hpp"
+#include "compress.hpp"
 #include "utils.hpp"
 #include "log.hpp"
 
@@ -435,12 +436,38 @@ void MetricSet::deserialize(
 }
 
 void MetricSet::to_prometheus(Data &out, const std::string &inst) const {
+  Data::Builder db(out, &s_dp);
+  to_prometheus(
+    [&](const void *data, size_t size) {
+      if (size == 1) {
+        db.push(*(const char *)data);
+      } else {
+        db.push((const char *)data, size);
+      }
+    },
+    inst
+  );
+  db.flush();
+}
+
+void MetricSet::to_prometheus(const std::function<void(const void *, size_t)> &out, const std::string &inst) const {
   static std::string s_le("le=");
   static std::string s_bucket("_bucket");
   static std::string s_sum("_sum");
   static std::string s_count("_count");
 
-  Data::Builder db(out, &s_dp);
+  auto push_c = [&](char c) {
+    out(&c, 1);
+  };
+
+  auto push_d = [&](const void *data, size_t size) {
+    out(data, size);
+  };
+
+  auto push_s = [&](const std::string &s) {
+    out(s.c_str(), s.length());
+  };
+
   for (const auto &metric : m_metrics) {
     auto name = metric->name();
     auto max_dim = metric->m_label_names->size() + 1;
@@ -450,51 +477,50 @@ void MetricSet::to_prometheus(Data &out, const std::string &inst) const {
       label_names,
       label_values,
       [&](int depth, pjs::Str *dim, double x) {
-        db.push(name->str());
+        push_s(name->str());
         bool has_le = false;
         if (dim == s_str_sum) {
-          db.push(s_sum);
+          push_s(s_sum);
         } else if (dim == s_str_count) {
-          db.push(s_count);
+          push_s(s_count);
         } else if (dim) {
-          db.push(s_bucket);
+          push_s(s_bucket);
           has_le = true;
         }
         if (depth > 0 || has_le || !inst.empty()) {
           bool first = true;
           if (!inst.empty()) {
-            db.push('{');
-            db.push(inst);
+            push_c('{');
+            push_s(inst);
             first = false;
           }
           for (int i = 0; i < depth; i++) {
             auto label_name = label_names[i];
-            db.push(first ? '{' : ',');
-            db.push(label_name->str());
-            db.push('=');
-            db.push('"');
-            db.push(label_values[i]->str());
-            db.push('"');
+            push_c(first ? '{' : ',');
+            push_s(label_name->str());
+            push_c('=');
+            push_c('"');
+            push_s(label_values[i]->str());
+            push_c('"');
             first = false;
           }
           if (has_le) {
-            db.push(first ? '{' : ',');
-            db.push(s_le);
-            db.push('"');
-            db.push(dim->str());
-            db.push('"');
+            push_c(first ? '{' : ',');
+            push_s(s_le);
+            push_c('"');
+            push_s(dim->str());
+            push_c('"');
           }
-          db.push('}');
+          push_c('}');
         }
         char buf[100];
         auto len = pjs::Number::to_string(buf, sizeof(buf), x);
-        db.push(' ');
-        db.push(buf, len);
-        db.push('\n');
+        push_c(' ');
+        push_d(buf, len);
+        push_c('\n');
       }
     );
   }
-  db.flush();
 }
 
 //

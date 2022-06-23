@@ -54,12 +54,13 @@ protected:
 
 class Compressor {
 public:
+  typedef std::function<void(const void *, size_t)> Output;
 
-  static Compressor* deflate(const std::function<void(Data*)> &in, int compression_level);
-  static Compressor* gzip(const std::function<void(Data*)> &in, int compression_level);
-  static Compressor* brotli(const std::function<void(Data*)> &in, int compression_level);
+  static Compressor* deflate(const Output &out, int compression_level = -1);
+  static Compressor* gzip(const Output &out, int compression_level = -1);
+  static Compressor* brotli(const Output &out, int compression_level = -1);
 
-  virtual bool process(const Data *data) = 0;
+  virtual bool input(const void *data, size_t size, bool is_final) = 0;
   virtual bool end() = 0;
 
 protected:

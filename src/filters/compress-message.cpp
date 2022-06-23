@@ -35,14 +35,13 @@ namespace pipy {
 //
 
 CompressMessageBase::Options::Options(pjs::Object *options) {
-  Value(options, "enable")
-    .get(enable)
-    .check_nullable();
   Value(options, "method")
-    .get_enum(algo)
+    .get_enum(method)
+    .get(method_f)
     .check_nullable();
   Value(options, "level")
     .get_enum(level)
+    .get(level_f)
     .check_nullable();
 }
 
@@ -59,6 +58,10 @@ CompressMessageBase::CompressMessageBase(const CompressMessageBase &r)
   : Filter(r)
   , m_options(r.m_options)
 {
+  static Data::Producer s_dp("Compress Message");
+  m_output = [this](const void *data, size_t size) {
+    output(s_dp.make(data, size));
+  };
 }
 
 void CompressMessageBase::reset() {
@@ -71,30 +74,25 @@ void CompressMessageBase::reset() {
 }
 
 void CompressMessageBase::process(Event *evt) {
-  if (auto *data = evt->as<Data>()) {
-    if (m_message_started) {
-      if (m_compressor) {
-        if (!m_compressor->process(data)) {
-          Log::warn("[compress] compression error");
-          m_compressor->end();
-          m_compressor = nullptr;
-        }
-      } else {
-        output(evt);
-      }
-    }
-    return;
-  }
-
   if (auto start = evt->as<MessageStart>()) {
     if (!m_message_started) {
-      m_compressor = new_compressor(
-        start,
-        [this](Data *data) {
-          output(data);
-        }
-      );
+      Method method;
+      Level level;
+      m_compressor = new_compressor(start, method, level, m_output);
       m_message_started = true;
+    }
+
+  } else if (auto *data = evt->as<Data>()) {
+    if (m_compressor) {
+      size_t size = data->size();
+      for (const auto chk : data->chunks()) {
+        auto buf = std::get<0>(chk);
+        auto len = std::get<1>(chk);
+        size -= len;
+        m_compressor->input(buf, len, !size);
+      }
+    } else {
+      output(evt);
     }
 
   } else if (evt->is<MessageEnd>()) {
@@ -108,43 +106,59 @@ void CompressMessageBase::process(Event *evt) {
   output(evt);
 }
 
-static const pjs::Ref<pjs::Str> s_headers(pjs::Str::make("headers"));
-static const pjs::Ref<pjs::Str> s_content_encoding(pjs::Str::make("content-encoding"));
-static const pjs::Ref<pjs::Str> s_gzip(pjs::Str::make("gzip"));
-static const pjs::Ref<pjs::Str> s_deflate(pjs::Str::make("deflate"));
-static const pjs::Ref<pjs::Str> s_brtoli(pjs::Str::make("brotli"));
-
 auto CompressMessageBase::new_compressor(
-        MessageStart *start,
-        const std::function<void(Data *)> &in
-) -> Compressor * {
-  if (!m_options.enable) return nullptr;
+  MessageStart *start,
+  Method &method,
+  Level &level,
+  const std::function<void(const void *, size_t)> &out
+) -> Compressor* {
 
-  auto head = start->head();
-  if (!head) return nullptr;
+  method = Method::NO_COMPRESSION;
+  level = Level::DEFAULT;
 
-  pjs::Ref<pjs::Str> method = m_options.algo == CompressionMethod::Deflate ? s_deflate : (
-          m_options.algo == CompressionMethod::Gzip ? s_gzip : s_brtoli);
-  pjs::Value headers;
-  head->get(s_headers, headers);
-  if (!headers.is_object() || !headers.o()) return nullptr;
-
-  pjs::Value content_encoding;
-  headers.o()->get(s_content_encoding, content_encoding);
-  if ((!content_encoding.is_string()) || (content_encoding.s() != method)) {
-    headers.o()->set(s_content_encoding, method.get());
+  if (m_options.method_f) {
+    pjs::Value v;
+    if (!eval(m_options.method_f, v)) return nullptr;
+    if (v.is_string()) {
+      method = pjs::EnumDef<Method>::value(v.s());
+      if (int(method) < 0) {
+        Log::error("[compress] invalid method: %s", v.s()->c_str());
+        return nullptr;
+      }
+    } else {
+      Log::error("[compress] invalid non-string method name");
+      return nullptr;
+    }
+  } else {
+    method = m_options.method;
   }
 
-  switch (m_options.algo) {
-    case CompressionMethod::Deflate:
-      return Compressor::deflate(in, static_cast<int>(m_options.level) - 1);
-    case CompressionMethod::Gzip:
-      return Compressor::gzip(in, static_cast<int>(m_options.level) - 1);
-    case CompressionMethod::Brotli:
-      return Compressor::brotli(in, static_cast<int>(m_options.level) - 1);
-    default:
-      Log::error("[compress] unknown compression algorithm: %s", m_options.algo);
+  if (m_options.level_f) {
+    pjs::Value v;
+    if (!eval(m_options.level_f, v)) return nullptr;
+    if (v.is_string()) {
+      level = pjs::EnumDef<Level>::value(v.s());
+      if (int(level) < 0) {
+        Log::error("[compress] invalid level: %s", v.s()->c_str());
+        return nullptr;
+      }
+    } else {
+      Log::error("[compress] invalid non-string level name");
       return nullptr;
+    }
+  } else {
+    level = m_options.level;
+  }
+
+  switch (method) {
+  case Method::DEFLATE:
+    return Compressor::deflate(out);
+  case Method::GZIP:
+    return Compressor::gzip(out);
+  case Method::BROTLI:
+    return Compressor::brotli(out);
+  default:
+    return nullptr;
   }
 }
 
@@ -201,26 +215,55 @@ auto CompressHTTP::clone() -> Filter * {
   return new CompressHTTP(*this);
 }
 
+auto CompressHTTP::new_compressor(
+  MessageStart *start,
+  Method &method,
+  Level &level,
+  const std::function<void(const void *, size_t)> &out
+) -> Compressor* {
+  static pjs::ConstStr s_headers("headers");
+  static pjs::ConstStr s_content_encoding("content-encoding");
+  static pjs::ConstStr s_deflate("deflate");
+  static pjs::ConstStr s_gzip("gzip");
+  static pjs::ConstStr s_brotli("brotli");
+
+  auto compressor = CompressMessageBase::new_compressor(start, method, level, out);
+  if (compressor) {
+    if (auto head = start->head()) {
+      pjs::Value headers;
+      head->get(s_headers, headers);
+      if (headers.is_object()) {
+        auto h = headers.o();
+        switch (method) {
+          case Method::DEFLATE: h->set(s_content_encoding, s_deflate.get()); break;
+          case Method::GZIP: h->set(s_content_encoding, s_gzip.get()); break;
+          case Method::BROTLI: h->set(s_content_encoding, s_brotli.get()); break;
+          default: break;
+        }
+      }
+    }
+  }
+
+  return compressor;
+}
+
 } // namespace pipy
 
-//
-// Algorithm
-//
 namespace pjs {
-  using namespace pipy;
 
-  template<>
-  void EnumDef<CompressMessageBase::CompressionMethod>::init() {
-    define(CompressMessageBase::CompressionMethod::Deflate, "deflate");
-    define(CompressMessageBase::CompressionMethod::Gzip, "gzip");
-    define(CompressMessageBase::CompressionMethod::Brotli, "brotli");
-  }
+using namespace pipy;
 
-  template<>
-  void EnumDef<CompressMessageBase::CompressionLevel>::init() {
-    define(CompressMessageBase::CompressionLevel::Default, "default");
-    define(CompressMessageBase::CompressionLevel::None, "none");
-    define(CompressMessageBase::CompressionLevel::Speed, "speed");
-    define(CompressMessageBase::CompressionLevel::Best, "best");
-  }
+template<> void EnumDef<CompressMessageBase::Method>::init() {
+  define(CompressMessageBase::Method::NO_COMPRESSION, "");
+  define(CompressMessageBase::Method::DEFLATE, "deflate");
+  define(CompressMessageBase::Method::GZIP, "gzip");
+  define(CompressMessageBase::Method::BROTLI, "brotli");
 }
+
+template<> void EnumDef<CompressMessageBase::Level>::init() {
+  define(CompressMessageBase::Level::DEFAULT, "default");
+  define(CompressMessageBase::Level::SPEED, "speed");
+  define(CompressMessageBase::Level::BEST, "best");
+}
+
+} // namespace pjs
