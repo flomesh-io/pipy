@@ -358,7 +358,7 @@ int main(int argc, char *argv[]) {
             }
 
             Status::local.version = Codebase::current()->version();
-            Status::local.update_modules();
+            Status::local.update();
 
             if (opts.admin_port) {
               s_admin = new AdminService(nullptr);

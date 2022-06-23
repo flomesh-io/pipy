@@ -12,6 +12,7 @@ import ListItemIcon from '@material-ui/core/ListItemIcon';
 // Components
 import Console from './console';
 import Editor from './editor';
+import Logs from './logs';
 import Metrics from './metrics';
 import Status from './status';
 
@@ -116,7 +117,7 @@ function Codebase({ root, dts }) {
           <ListItem button key="metrics" selected={tab === 'metrics'} onClick={() => handleClickTab('metrics')}>
             <ListItemIcon><MetricsIcon/></ListItemIcon>
           </ListItem>
-          <ListItem button key="console" selected={tab === 'console'} onClick={() => handleClickTab('console')}>
+          <ListItem button key="logs" selected={tab === 'logs'} onClick={() => handleClickTab('logs')}>
             <ListItemIcon><ConsoleIcon/></ListItemIcon>
           </ListItem>
         </List>
@@ -135,7 +136,7 @@ function Codebase({ root, dts }) {
           {tab === 'editor' && <Editor root={root} dts={dts}/>}
           {tab === 'status' && <Status root={root}/>}
           {tab === 'metrics' && <Metrics root={root}/>}
-          {tab === 'console' && <Console/>}
+          {tab === 'logs' && <Logs root={root}/>}
         </div>
       </InstanceContext.Provider>
 

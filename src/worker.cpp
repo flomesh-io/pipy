@@ -224,7 +224,7 @@ void Worker::restart() {
   if (worker->load_module(entry) && worker->start()) {
     current_worker->stop();
     Status::local.version = codebase->version();
-    Status::local.update_modules();
+    Status::local.update();
     Log::info("[restart] Codebase reloaded");
   } else {
     worker->stop();

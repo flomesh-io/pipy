@@ -48,6 +48,7 @@ public:
   std::string name;
   std::string version;
   std::list<ModuleInfo> modules;
+  std::list<pjs::Ref<pjs::Str>> log_names;
 
   static Status local;
   static pjs::Ref<stats::Counter> metric_inbound_in;
@@ -56,7 +57,7 @@ public:
   static pjs::Ref<stats::Counter> metric_outbound_out;
   static pjs::Ref<stats::Histogram> metric_outbound_conn_time;
 
-  void update_modules();
+  void update();
   bool from_json(const Data &data);
   void to_json(std::ostream &out) const;
 

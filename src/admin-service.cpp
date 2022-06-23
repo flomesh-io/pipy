@@ -787,7 +787,7 @@ Message* AdminService::api_v1_program_POST(Data *data) {
     if (name != "/") m_current_codebase = name;
     m_current_program = m_current_codebase;
     Status::local.version = new_codebase->version();
-    Status::local.update_modules();
+    Status::local.update();
     return m_response_created;
   } else {
     new_worker->stop();
@@ -811,7 +811,7 @@ Message* AdminService::api_v1_program_DELETE() {
         }
       }
     );
-    Status::local.update_modules();
+    Status::local.update();
   }
   m_current_program.clear();
   return m_response_deleted;

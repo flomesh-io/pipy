@@ -54,7 +54,7 @@ pjs::Ref<stats::Counter> Status::metric_outbound_in;
 pjs::Ref<stats::Counter> Status::metric_outbound_out;
 pjs::Ref<stats::Histogram> Status::metric_outbound_conn_time;
 
-void Status::update_modules() {
+void Status::update() {
   modules.clear();
 
   std::map<std::string, std::set<PipelineLayout*>> all_modules;
@@ -78,6 +78,13 @@ void Status::update_modules() {
     mod.filename = i.first;
     mod.graph = ss.str();
   }
+
+  log_names.clear();
+  logging::Logger::for_each(
+    [&](logging::Logger *logger) {
+      log_names.push_back(logger->name());
+    }
+  );
 }
 
 bool Status::from_json(const Data &data) {
@@ -88,6 +95,7 @@ bool Status::from_json(const Data &data) {
   static pjs::Ref<pjs::Str> key_modules(pjs::Str::make("modules"));
   static pjs::Ref<pjs::Str> key_filename(pjs::Str::make("filename"));
   static pjs::Ref<pjs::Str> key_graph(pjs::Str::make("graph"));
+  static pjs::Ref<pjs::Str> key_logs(pjs::Str::make("logs"));
 
   pjs::Value json;
   pjs::Value val_timestamp;
@@ -95,6 +103,7 @@ bool Status::from_json(const Data &data) {
   pjs::Value val_name;
   pjs::Value val_version;
   pjs::Value val_modules;
+  pjs::Value val_logs;
 
   if (!JSON::decode(data, json)) return false;
   if (!json.is_object() || !json.o()) return false;
@@ -105,12 +114,14 @@ bool Status::from_json(const Data &data) {
   root->get(key_name, val_name);
   root->get(key_version, val_version);
   root->get(key_modules, val_modules);
+  root->get(key_logs, val_logs);
 
   if (!val_timestamp.is_number()) return false;
   if (!val_uuid.is_string()) return false;
   if (!val_name.is_string()) return false;
   if (!val_version.is_string()) return false;
   if (!val_modules.is_object() || !val_modules.o()) return false;
+  if (!val_logs.is_array()) return false;
 
   timestamp = val_timestamp.n();
   uuid = val_uuid.s()->str();
@@ -127,6 +138,15 @@ bool Status::from_json(const Data &data) {
       auto &mod = modules.back();
       mod.filename = k->str();
       mod.graph = JSON::stringify(val_graph, nullptr, 0);
+    }
+  );
+
+  log_names.clear();
+  val_logs.as<pjs::Array>()->iterate_all(
+    [this](pjs::Value &v, int) {
+      if (v.is_string()) {
+        log_names.push_back(v.s());
+      }
     }
   );
 
@@ -147,12 +167,10 @@ void Status::to_json(std::ostream &out) const {
   }
   out << "},\"logs\":[";
   first = true;
-  logging::Logger::for_each(
-    [&](logging::Logger *logger) {
-      if (first) first = false; else out << ',';
-      out << '"' << utils::escape(logger->name()->str()) << '"';
-    }
-  );
+  for (const auto &name : log_names) {
+    if (first) first = false; else out << ',';
+    out << '"' << utils::escape(name->str()) << '"';
+  }
   out << "]}";
 }
 
