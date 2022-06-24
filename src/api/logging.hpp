@@ -50,7 +50,7 @@ namespace logging {
 
 class Logger : public pjs::ObjectTemplate<Logger> {
 public:
-  static void set_admin_link(AdminLink *admin_link) { s_admin_link = admin_link; }
+  static void set_admin_link(AdminLink *admin_link);
 
   static void for_each(const std::function<void(Logger*)> &cb) {
     for (auto i : s_all_loggers) cb(i);
@@ -130,7 +130,7 @@ protected:
 private:
   pjs::Ref<pjs::Str> m_name;
   std::list<std::unique_ptr<Target>> m_targets;
-  bool m_admin_link_enabled = true;
+  bool m_admin_link_enabled = false;
 
   static std::set<Logger*> s_all_loggers;
   static AdminLink* s_admin_link;

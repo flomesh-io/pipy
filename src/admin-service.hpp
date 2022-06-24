@@ -67,28 +67,6 @@ public:
 private:
 
   //
-  // AdminService::Context
-  //
-
-  class Context : public ContextTemplate<Context> {
-  public:
-    Context() {}
-    std::string instance_uuid;
-    std::string log_name;
-    bool is_admin_link = false;
-  };
-
-  //
-  // AdminService::Module
-  //
-
-  class Module : public ModuleBase {
-    virtual auto new_context(pipy::Context *base) -> pipy::Context* override {
-      return new Context();
-    }
-  };
-
-  //
   // AdminService::WebSocketHandler
   //
 
@@ -99,6 +77,9 @@ private:
 
     WebSocketHandler(const WebSocketHandler &r)
       : m_service(r.m_service) {}
+
+    void log_enable(const std::string &name, bool enabled);
+    void log_broadcast(const Data &data);
 
   private:
     virtual auto clone() -> Filter* override;
@@ -112,6 +93,64 @@ private:
   };
 
   //
+  // AdminService::LogWatcher
+  //
+
+  class LogWatcher {
+  public:
+    LogWatcher(AdminService *service, const std::string &uuid, const std::string &name)
+      : m_service(service)
+      , m_uuid(uuid)
+      , m_name(name)
+    {
+      if (auto *inst = m_service->get_instance(m_uuid)) {
+        auto &watchers = inst->log_watchers[m_name];
+        watchers.insert(this);
+      }
+    }
+
+    ~LogWatcher() {
+      if (auto *inst = m_service->get_instance(m_uuid)) {
+        auto &watchers = inst->log_watchers[m_name];
+        watchers.erase(this);
+        if (watchers.empty()) inst->log_watchers.erase(m_name);
+      }
+    }
+
+    void set_handler(WebSocketHandler *handler);
+    void send(const Data &data);
+
+  private:
+    AdminService *m_service;
+    std::string m_uuid;
+    std::string m_name;
+    WebSocketHandler *m_handler = nullptr;
+  };
+
+  //
+  // AdminService::Context
+  //
+
+  class Context : public ContextTemplate<Context> {
+  public:
+    Context() {}
+    ~Context() { delete log_watcher; }
+    std::string instance_uuid;
+    std::string log_name;
+    LogWatcher* log_watcher = nullptr;
+  };
+
+  //
+  // AdminService::Module
+  //
+
+  class Module : public ModuleBase {
+    virtual auto new_context(pipy::Context *base) -> pipy::Context* override {
+      return new Context();
+    }
+  };
+
+  //
   // AdminService::Instance
   //
 
@@ -119,7 +158,8 @@ private:
     int index;
     Status status;
     stats::MetricSet metrics;
-    std::set<WebSocketHandler*> log_watchers;
+    WebSocketHandler* admin_link = nullptr;
+    std::map<std::string, std::set<LogWatcher*>> log_watchers;
   };
 
   int m_port;
@@ -144,6 +184,7 @@ private:
   pjs::Ref<Message> m_response_deleted;
   pjs::Ref<Message> m_response_not_found;
   pjs::Ref<Message> m_response_method_not_allowed;
+  pjs::Ref<Message> m_response_upgraded_ws;
 
   pjs::Ref<Module> m_module;
 
@@ -189,6 +230,7 @@ private:
     const std::map<std::string, std::string> &headers
   ) -> http::ResponseHead*;
 
+  void on_watch_start(Context *ctx, const std::string &path);
   void on_log(Context *ctx, const std::string &name, const Data &data);
   void on_metrics(Context *ctx, const Data &data);
 

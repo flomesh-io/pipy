@@ -33,6 +33,7 @@
 #include "api/url.hpp"
 
 #include <string>
+#include <list>
 
 namespace pipy {
 
@@ -42,12 +43,12 @@ namespace pipy {
 
 class AdminLink {
 public:
-  AdminLink(
-    const std::string &url,
-    const std::function<void(const Data&)> &on_receive
-  );
+  typedef std::function<bool(const std::string &, const Data &)> Handler;
+
+  AdminLink(const std::string &url);
 
   auto connect() -> int;
+  void add_handler(const Handler &handler);
   void send(const Data &data);
   void close();
 
@@ -73,10 +74,10 @@ private:
   };
 
   pjs::Ref<URL> m_url;
-  std::function<void(const Data&)> m_on_receive;
   pjs::Ref<Pipeline> m_pipeline;
   pjs::Ref<PipelineLayout> m_ppl;
   pjs::Ref<Message> m_handshake;
+  std::list<Handler> m_handlers;
   int m_connection_id = 0;
 };
 

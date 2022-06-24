@@ -25,6 +25,7 @@
 
 #include "admin-service.hpp"
 #include "codebase.hpp"
+#include "api/crypto.hpp"
 #include "api/json.hpp"
 #include "api/stats.hpp"
 #include "filters/http.hpp"
@@ -157,6 +158,9 @@ auto AdminService::handle(Context *ctx, Message *req) -> Message* {
   static pjs::ConstStr s_accept("accept");
   static pjs::ConstStr s_upgrade("upgrade");
   static pjs::ConstStr s_websocket("websocket");
+  static pjs::ConstStr s_connection("connection");
+  static pjs::ConstStr s_sec_websocket_key("sec-websocket-key");
+  static pjs::ConstStr s_sec_websocket_accept("sec-websocket-accept");
 
   auto head = req->head()->as<http::RequestHead>();
   auto body = req->body();
@@ -168,6 +172,27 @@ auto AdminService::handle(Context *ctx, Message *req) -> Message* {
   head->headers()->get(s_upgrade, upgrade);
   bool is_browser = (accept.is_string() && accept.s()->str().find(text_html) != std::string::npos);
   bool is_websocket = (upgrade.is_string() && upgrade.s() == s_websocket);
+
+  if (is_websocket) {
+    pjs::Value sec_key;
+    head->headers()->get(s_sec_websocket_key, sec_key);
+    if (sec_key.is_string()) {
+      auto headers = pjs::Object::make();
+      auto head = http::ResponseHead::make();
+      head->status(101);
+      head->headers(headers);
+      pjs::Ref<crypto::Hash> hash = crypto::Hash::make("sha1");
+      hash->update(sec_key.s()->str() + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11");
+      headers->set(s_sec_websocket_accept, hash->digest(Data::Encoding::Base64));
+      headers->set(s_connection, s_upgrade.get());
+      headers->set(s_upgrade, s_websocket.get());
+      m_response_upgraded_ws = Message::make(head, nullptr);
+    } else {
+      m_response_upgraded_ws = m_response_ok;
+    }
+  } else {
+    m_response_upgraded_ws = nullptr;
+  }
 
   try {
 
@@ -210,8 +235,7 @@ auto AdminService::handle(Context *ctx, Message *req) -> Message* {
           auto i = path.rfind('/');
           auto uuid = (i == std::string::npos ? path : path.substr(i + 1));
           ctx->instance_uuid = uuid;
-          ctx->is_admin_link = true;
-          return m_response_ok;
+          return m_response_upgraded_ws;
         } else if (!is_browser) {
           path = path.substr(prefix_repo.length() - 1);
           if (path == "/") path.clear();
@@ -320,15 +344,9 @@ auto AdminService::handle(Context *ctx, Message *req) -> Message* {
 
     // GET /api/v1/log/[uuid]/[name]
     if (utils::starts_with(path, prefix_api_v1_log)) {
-      if (method == "GET" && is_websocket) {
-        auto uuid_name = path.substr(prefix_api_v1_log.length());
-        auto i = uuid_name.find('/');
-        if (i != std::string::npos) {
-          ctx->instance_uuid = uuid_name.substr(0, i);
-          ctx->log_name = uuid_name.substr(i + 1);
-          ctx->is_admin_link = false;
-        }
-        return m_response_ok;
+      if (is_websocket) {
+        on_watch_start(ctx, path.substr(prefix_api_v1_log.length()));
+        return m_response_upgraded_ws;
       } else {
         return m_response_method_not_allowed;
       }
@@ -967,7 +985,36 @@ auto AdminService::response_head(
   return head;
 }
 
+void AdminService::on_watch_start(Context *ctx, const std::string &path) {
+  auto i = path.find('/');
+  if (i != std::string::npos) {
+    ctx->instance_uuid = path.substr(0, i);
+    ctx->log_name = path.substr(i + 1);
+    ctx->log_watcher = new LogWatcher(this, ctx->instance_uuid, ctx->log_name);
+    if (auto *inst = get_instance(ctx->instance_uuid)) {
+      if (auto *admin_link = inst->admin_link) {
+        admin_link->log_enable(ctx->log_name, true);
+      }
+    }
+  }
+}
+
 void AdminService::on_log(Context *ctx, const std::string &name, const Data &data) {
+  if (auto *inst = get_instance(ctx->instance_uuid)) {
+    bool watching = false;
+    auto i = inst->log_watchers.find(name);
+    if (i != inst->log_watchers.end()) {
+      for (auto *w : i->second) {
+        w->send(data);
+        watching = true;
+      }
+    }
+    if (!watching) {
+      if (auto admin_link = inst->admin_link) {
+        admin_link->log_enable(name, false);
+      }
+    }
+  }
 }
 
 void AdminService::on_metrics(Context *ctx, const Data &data) {
@@ -1003,10 +1050,24 @@ void AdminService::WebSocketHandler::reset() {
   Filter::reset();
   m_payload.clear();
   m_started = false;
+  if (context()) {
+    auto ctx = static_cast<Context*>(context());
+    if (auto inst = m_service->get_instance(ctx->instance_uuid)) {
+      if (inst->admin_link == this) {
+        inst->admin_link = nullptr;
+      }
+    }
+  }
 }
 
 void AdminService::WebSocketHandler::process(Event *evt) {
-  if (evt->is<MessageStart>()) {
+  if (auto start = evt->as<MessageStart>()) {
+    auto msg = start->head()->as<websocket::MessageHead>();
+    if (msg->opcode() == 8) {
+      auto ctx = static_cast<Context*>(context());
+      delete ctx->log_watcher;
+      ctx->log_watcher = nullptr;
+    }
     m_started = true;
     m_payload.clear();
   } else if (auto data = evt->as<Data>()) {
@@ -1020,25 +1081,61 @@ void AdminService::WebSocketHandler::process(Event *evt) {
         [](int b) { return b == '\n'; },
         buf
       );
-      auto header = buf.to_string();
+      auto command = buf.to_string();
       auto ctx = static_cast<Context*>(context());
+      if (auto inst = m_service->get_instance(ctx->instance_uuid)) {
+        inst->admin_link = this;
+      }
       static std::string s_log_prefix("log/");
-      if (utils::starts_with(header, s_log_prefix)) {
-        auto name = header.substr(s_log_prefix.length());
+      if (utils::starts_with(command, s_log_prefix)) {
+        auto name = command.substr(s_log_prefix.length());
         name.pop_back(); // pop out the ending '\n'
         m_service->on_log(ctx, name, m_payload);
-      } if (header == "metrics\n") {
+      } else if (command == "metrics\n") {
         m_service->on_metrics(ctx, m_payload);
+      } else if (command == "watch\n") {
+        if (auto *w = ctx->log_watcher) w->set_handler(this);
       }
       m_payload.clear();
       m_started = false;
     }
+  } else if (evt->is<StreamEnd>()) {
+    auto ctx = static_cast<Context*>(context());
+    delete ctx->log_watcher;
+    ctx->log_watcher = nullptr;
   }
+}
+
+void AdminService::WebSocketHandler::log_enable(const std::string &name, bool enabled) {
+  static std::string s_on("log/on/");
+  static std::string s_off("log/off/");
+  auto body = (enabled ? s_on : s_off) + name;
+  auto head = websocket::MessageHead::make();
+  Filter::output(Message::make(head, body));
+}
+
+void AdminService::WebSocketHandler::log_broadcast(const Data &data) {
+  auto head = websocket::MessageHead::make();
+  Filter::output(Message::make(head, Data::make(data)));
 }
 
 void AdminService::WebSocketHandler::dump(Dump &d) {
   Filter::dump(d);
   d.name = "AdminService::WebSocketHandler";
+}
+
+//
+// AdminService::LogWatcher
+//
+
+void AdminService::LogWatcher::set_handler(WebSocketHandler *handler) {
+  m_handler = handler;
+}
+
+void AdminService::LogWatcher::send(const Data &data) {
+  if (m_handler) {
+    m_handler->log_broadcast(data);
+  }
 }
 
 } // namespace pipy

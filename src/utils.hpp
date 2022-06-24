@@ -53,6 +53,7 @@ auto get_seconds(const std::string &str) -> double;
 bool get_seconds(const pjs::Value &val, double &out);
 void gen_uuid_v4(std::string &str);
 bool starts_with(const std::string &str, const std::string &prefix);
+bool iequals(const std::string &a, const std::string &b);
 auto trim(const std::string &str) -> std::string;
 auto split(const std::string &str, char sep) -> std::list<std::string>;
 auto lower(const std::string &str) -> std::string;

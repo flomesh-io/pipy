@@ -333,6 +333,16 @@ bool starts_with(const std::string &str, const std::string &prefix) {
   return !std::strncmp(str.c_str(), prefix.c_str(), prefix.length());
 }
 
+bool iequals(const std::string &a, const std::string &b) {
+  if (a.length() != b.length()) return false;
+  for (size_t i = 0; i < a.length(); i++) {
+    auto ca = std::tolower(a[i]);
+    auto cb = std::tolower(b[i]);
+    if (ca != cb) return false;
+  }
+  return true;
+}
+
 auto trim(const std::string &str) -> std::string {
   size_t n = str.length(), i = 0, j = n;
   while (i < n && str[i] <= ' ') i++;

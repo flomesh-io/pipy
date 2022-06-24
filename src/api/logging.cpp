@@ -47,6 +47,33 @@ namespace logging {
 std::set<Logger*> Logger::s_all_loggers;
 AdminLink* Logger::s_admin_link = nullptr;
 
+void Logger::set_admin_link(AdminLink *admin_link) {
+  static std::string s_on("log/on/");
+  static std::string s_off("log/off/");
+  s_admin_link = admin_link;
+  s_admin_link->add_handler(
+    [](const std::string &command, const Data &payload) {
+      std::string name;
+      bool enabled;
+      if (utils::starts_with(command, s_on)) {
+        name = command.substr(s_on.length());
+        enabled = true;
+      } else {
+        name = command.substr(s_off.length());
+        enabled = false;
+      }
+      if (!name.empty()) {
+        for (auto *logger : s_all_loggers) {
+          if (logger->name()->str() == name) {
+            logger->enable_admin_link(enabled);
+          }
+        }
+      }
+      return false;
+    }
+  );
+}
+
 Logger::Logger(pjs::Str *name)
   : m_name(name)
 {

@@ -522,6 +522,7 @@ private:
   void upgrade_http2();
   void start_tunnel();
   void on_tunnel_data(Data *data);
+  void on_tunnel_end(StreamEnd *end);
 };
 
 //

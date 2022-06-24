@@ -176,8 +176,10 @@ public:
   static auto digest(const std::string &algorithm) -> const EVP_MD*;
 
   void update(Data *data);
-  void update(pjs::Str *str, Data::Encoding enc);
+  void update(pjs::Str *str, Data::Encoding enc = Data::Encoding::UTF8);
+  void update(const std::string &str, Data::Encoding enc = Data::Encoding::UTF8);
   auto digest() -> Data*;
+  auto digest(void *hash) -> size_t;
   auto digest(Data::Encoding enc) -> pjs::Str*;
 
 private:

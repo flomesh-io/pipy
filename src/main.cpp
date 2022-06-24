@@ -116,11 +116,10 @@ static void start_reporting_metrics(const std::string &url) {
   static Timer timer;
   static std::function<void()> report;
   static int connection_id = 0;
-  static auto on_receive = [](const Data &data) {};
   std::string url_path = url;
   if (url_path.back() != '/') url_path += '/';
   url_path += Status::local.uuid;
-  s_admin_link = new AdminLink(url_path, on_receive);
+  s_admin_link = new AdminLink(url_path);
   logging::Logger::set_admin_link(s_admin_link);
   report = []() {
     if (!Worker::exited()) {

@@ -10,7 +10,6 @@ import ListItem from '@material-ui/core/ListItem';
 import ListItemIcon from '@material-ui/core/ListItemIcon';
 
 // Components
-import Console from './console';
 import Editor from './editor';
 import Logs from './logs';
 import Metrics from './metrics';

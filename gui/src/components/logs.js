@@ -10,6 +10,7 @@ import ListItemText from '@material-ui/core/ListItemText';
 
 // Components
 import Instances, { InstanceContext } from './instances';
+import LogView from './log-view';
 import Nothing from './nothing';
 import Pane from 'react-split-pane/lib/Pane';
 import SplitPane from 'react-split-pane';
@@ -68,6 +69,7 @@ function Logs({ root }) {
     setCurrentLog(name);
   }
 
+  const uuid = instanceContext.currentInstance?.uuid;
   const logList = instanceContext.currentInstance?.logs || [];
 
   return (
@@ -116,9 +118,12 @@ function Logs({ root }) {
               <Nothing text="No logs"/>
             ) : (
               (currentLog && (
-                <Nothing text="Log (WIP)"/>
+                <LogView
+                  uuid={uuid}
+                  name={currentLog}
+                />
               )) || (
-                <Nothing text="No pipeline selected"/>
+                <Nothing text="No log selected"/>
               )
             )}
           </Pane>

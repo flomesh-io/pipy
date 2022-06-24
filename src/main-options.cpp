@@ -120,6 +120,10 @@ MainOptions::MainOptions(int argc, char *argv[]) {
     throw std::runtime_error("missing script to evaluate");
   }
 
+  if (!instance_uuid.empty() && instance_uuid.find('/') != std::string::npos) {
+    throw std::runtime_error("--instance-uuid does not allow slashes");
+  }
+
   if (admin_port < 0) {
     throw std::runtime_error("invalid --admin-port");
   }

@@ -38,11 +38,8 @@ namespace pipy {
 // AdminLink
 //
 
-AdminLink::AdminLink(
-  const std::string &url,
-  const std::function<void(const Data&)> &on_receive
-) : m_url(URL::make(url))
-  , m_on_receive(on_receive)
+AdminLink::AdminLink(const std::string &url)
+  : m_url(URL::make(url))
 {
   auto host = m_url->hostname()->str() + ':' + m_url->port()->str();
 
@@ -86,11 +83,15 @@ auto AdminLink::connect() -> int {
   return m_connection_id;
 }
 
+void AdminLink::add_handler(const Handler &handler) {
+  m_handlers.push_back(handler);
+}
+
 void AdminLink::send(const Data &data) {
   if (m_pipeline) {
     auto head = websocket::MessageHead::make();
-    pjs::set<websocket::MessageHead>(head, websocket::MessageHead::Field::opcode, 1);
-    pjs::set<websocket::MessageHead>(head, websocket::MessageHead::Field::masked, true);
+    head->opcode(1);
+    head->masked(true);
     auto inp = m_pipeline->input();
     inp->input(MessageStart::make(head));
     inp->input(Data::make(data));
@@ -128,7 +129,16 @@ void AdminLink::Receiver::process(Event *evt) {
 
   } else if (evt->is<MessageEnd>()) {
     m_started = false;
-    m_admin_link->m_on_receive(m_payload);
+    Data buf;
+    m_payload.shift_to(
+      [](int b) { return b == '\n'; },
+      buf
+    );
+    auto command = buf.to_string();
+    if (command.back() == '\n') command.pop_back();
+    for (const auto &h : m_admin_link->m_handlers) {
+      if (h(command, m_payload)) break;
+    }
 
   } else if (evt->is<StreamEnd>()) {
     m_admin_link->m_pipeline = nullptr;

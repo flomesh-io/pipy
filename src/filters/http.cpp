@@ -736,12 +736,6 @@ void Encoder::output_head() {
   if (headers.is_object()) {
     headers.o()->iterate_all(
       [&](pjs::Str *k, pjs::Value &v) {
-        if (k == s_connection) {
-          auto *s = v.to_string();
-          m_header_connection = s;
-          s->release();
-          return;
-        }
         if (k == s_keep_alive) return;
         if (k == s_transfer_encoding) return;
         if (k == s_content_length) {
@@ -750,8 +744,13 @@ void Encoder::output_head() {
           } else {
             return;
           }
-        }
-        if (k == s_upgrade) {
+        } else if (k == s_connection) {
+          auto *s = v.to_string();
+          auto is_upgrade = utils::iequals(s->str(), s_upgrade.get()->str());
+          m_header_connection = s;
+          s->release();
+          if (!is_upgrade) return;
+        } else if (k == s_upgrade) {
           auto *s = v.to_string();
           m_header_upgrade = s;
           s->release();
@@ -1595,6 +1594,7 @@ void Server::start_tunnel() {
     if (!m_tunnel) {
       if (num_sub_pipelines() > 0) {
         m_tunnel = sub_pipeline(0, false);
+        m_tunnel->chain(Filter::output());
       }
     }
     m_switching = false;
@@ -1604,6 +1604,12 @@ void Server::start_tunnel() {
 void Server::on_tunnel_data(Data *data) {
   if (m_tunnel) {
     m_tunnel->input()->input(data);
+  }
+}
+
+void Server::on_tunnel_end(StreamEnd *end) {
+  if (m_tunnel) {
+    m_tunnel->input()->input(end);
   }
 }
 
@@ -1617,6 +1623,8 @@ void Server::Handler::on_event(Event *evt) {
   if (m_server->m_tunnel) {
     if (auto data = evt->as<Data>()) {
       m_server->on_tunnel_data(data);
+    } else if (auto end = evt->as<StreamEnd>()) {
+      m_server->on_tunnel_end(end);
     }
 
   } else if (auto start = evt->as<MessageStart>()) {

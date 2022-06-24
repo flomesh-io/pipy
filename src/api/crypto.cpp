@@ -529,12 +529,16 @@ void Hash::update(Data *data) {
 }
 
 void Hash::update(pjs::Str *str, Data::Encoding enc) {
+  update(str->str(), enc);
+}
+
+void Hash::update(const std::string &str, Data::Encoding enc) {
   switch (enc) {
     case Data::Encoding::UTF8:
-      EVP_DigestUpdate(m_ctx, (unsigned char *)str->c_str(), str->size());
+      EVP_DigestUpdate(m_ctx, str.c_str(), str.length());
       break;
     default: {
-      Data data(str->str(), enc, &s_dp_hash);
+      Data data(str, enc, &s_dp_hash);
       update(&data);
       break;
     }
@@ -550,8 +554,7 @@ auto Hash::digest() -> Data* {
 
 auto Hash::digest(Data::Encoding enc) -> pjs::Str* {
   char hash[EVP_MAX_MD_SIZE];
-  unsigned int size;
-  EVP_DigestFinal_ex(m_ctx, (unsigned char *)hash, &size);
+  auto size = digest(hash);
   switch (enc) {
     case Data::Encoding::UTF8:
       return pjs::Str::make(hash, size);
@@ -572,6 +575,13 @@ auto Hash::digest(Data::Encoding enc) -> pjs::Str* {
     }
   }
   return nullptr;
+}
+
+auto Hash::digest(void *hash) -> size_t {
+  if (!hash) return EVP_MAX_MD_SIZE;
+  unsigned int size;
+  EVP_DigestFinal_ex(m_ctx, (unsigned char *)hash, &size);
+  return size;
 }
 
 //
