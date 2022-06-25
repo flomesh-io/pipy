@@ -45,8 +45,6 @@ private:
   virtual auto clone() -> Filter* override;
   virtual void process(Event *evt) override;
   virtual void dump(Dump &d) override;
-
-  std::string m_line;
 };
 
 } // namespace pipy

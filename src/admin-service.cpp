@@ -148,6 +148,15 @@ void AdminService::close() {
   m_metrics_history_timer.cancel();
 }
 
+void AdminService::write_log(const std::string &name, const Data &data) {
+  auto i = m_local_log_watchers.find(name);
+  if (i != m_local_log_watchers.end()) {
+    for (auto *w : i->second) {
+      w->send(data);
+    }
+  }
+}
+
 auto AdminService::handle(Context *ctx, Message *req) -> Message* {
   static std::string prefix_repo("/repo/");
   static std::string prefix_api_v1_repo("/api/v1/repo/");
@@ -328,15 +337,6 @@ auto AdminService::handle(Context *ctx, Message *req) -> Message* {
     if (utils::starts_with(path, prefix_api_v1_metrics)) {
       if (method == "GET") {
         return api_v1_metrics_GET(path.substr(prefix_api_v1_metrics.length()));
-      } else {
-        return m_response_method_not_allowed;
-      }
-    }
-
-    // GET /api/v1/log
-    if (path == "/api/v1/log") {
-      if (method == "GET") {
-        return api_v1_log_GET(req);
       } else {
         return m_response_method_not_allowed;
       }
@@ -886,25 +886,6 @@ Message* AdminService::api_v1_graph_POST(Data *data) {
   );
 }
 
-Message* AdminService::api_v1_log_GET(Message *req) {
-  std::string log_text;
-  pjs::Value log_size;
-  auto headers = req->head()->as<http::RequestHead>()->headers();
-  if (headers) headers->ht_get("x-log-size", log_size);
-  auto tail_size = Log::tail(log_size.to_number(), log_text);
-  return Message::make(
-    response_head(
-      200,
-      {
-        { "server", s_server_name },
-        { "content-type", "text/plain" },
-        { "x-log-size", std::to_string(tail_size) },
-      }
-    ),
-    s_dp.make(log_text)
-  );
-}
-
 Message* AdminService::response(const std::set<std::string> &lines) {
   std::string str;
   for (const auto &line : lines) {
@@ -1127,6 +1108,31 @@ void AdminService::WebSocketHandler::dump(Dump &d) {
 //
 // AdminService::LogWatcher
 //
+
+AdminService::LogWatcher::LogWatcher(AdminService *service, const std::string &uuid, const std::string &name)
+  : m_service(service)
+  , m_uuid(uuid)
+  , m_name(name)
+{
+  if (m_uuid.empty()) {
+    m_service->m_local_log_watchers[name].insert(this);
+  } else if (auto *inst = m_service->get_instance(m_uuid)) {
+    auto &watchers = inst->log_watchers[m_name];
+    watchers.insert(this);
+  }
+}
+
+AdminService::LogWatcher::~LogWatcher() {
+  if (m_uuid.empty()) {
+    auto &watchers = m_service->m_local_log_watchers[m_name];
+    watchers.erase(this);
+    if (watchers.empty()) m_service->m_local_log_watchers.erase(m_name);
+  } else if (auto *inst = m_service->get_instance(m_uuid)) {
+    auto &watchers = inst->log_watchers[m_name];
+    watchers.erase(this);
+    if (watchers.empty()) inst->log_watchers.erase(m_name);
+  }
+}
 
 void AdminService::LogWatcher::set_handler(WebSocketHandler *handler) {
   m_handler = handler;

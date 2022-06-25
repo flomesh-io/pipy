@@ -42,42 +42,15 @@ function Layout({ children }) {
   // Regularly fetch the log data
   React.useEffect(
     () => {
-      let running = true;
-      let size = 0;
       const node = document.createTextNode('');
-      const poll = async () => {
-        try {
-          const res = await fetch('/api/v1/log', {
-            headers: {
-              'x-log-size': size,
-            },
-          });
-          if (res.status === 200) {
-            const more = parseInt(res.headers.get('x-log-size')) - size;
-            if (more > 0) {
-              const text = await res.text();
-              const lines = text.split('\n').slice(-more-1);
-              size += more;
-              node.appendData(lines.join('\n'));
-              const parentEl = node.parentElement;
-              if (parentEl) parentEl.scrollIntoView(false);
-              next(100);
-              return;
-            }
-          }
-          next(1000);
-        } catch (err) {
-          next(1000);
-        }
-      };
-      const next = delay => {
-        if (running) {
-          window.setTimeout(poll, delay);
-        }
-      };
+      const loc = window.location;
+      // const url = `ws://localhost:6060/api/v1/log//pipy_log`; // For development mode
+      const url = `ws://${loc.host}/api/v1/log//pipy_log`;
+      const ws = new WebSocket(url);
+      ws.addEventListener('open', () => ws.send('watch\n'));
+      ws.addEventListener('message', evt => node.appendData(evt.data));
       setLogTextNode(node);
-      next(1000);
-      return () => running = false;
+      return () => ws.close();
     },
     []
   );

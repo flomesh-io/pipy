@@ -207,6 +207,7 @@ int main(int argc, char *argv[]) {
       Status::local.uuid = opts.instance_uuid;
     }
 
+    Log::init();
     Log::set_level(opts.log_level);
     Status::register_metrics();
     Listener::set_reuse_port(opts.reuse_port);
@@ -282,6 +283,7 @@ int main(int argc, char *argv[]) {
       repo = new CodebaseStore(store);
       s_admin = new AdminService(repo);
       s_admin->open(admin_port, admin_options);
+      logging::Logger::set_admin_service(s_admin);
 
 #ifdef PIPY_USE_GUI
       std::cout << std::endl;
@@ -362,6 +364,7 @@ int main(int argc, char *argv[]) {
             if (opts.admin_port) {
               s_admin = new AdminService(nullptr);
               s_admin->open(opts.admin_port, admin_options);
+              logging::Logger::set_admin_service(s_admin);
             }
 
             start_checking_updates();

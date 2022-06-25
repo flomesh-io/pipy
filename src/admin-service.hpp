@@ -63,6 +63,7 @@ public:
 
   void open(int port, const Options &options);
   void close();
+  void write_log(const std::string &name, const Data &data);
 
 private:
 
@@ -98,24 +99,8 @@ private:
 
   class LogWatcher {
   public:
-    LogWatcher(AdminService *service, const std::string &uuid, const std::string &name)
-      : m_service(service)
-      , m_uuid(uuid)
-      , m_name(name)
-    {
-      if (auto *inst = m_service->get_instance(m_uuid)) {
-        auto &watchers = inst->log_watchers[m_name];
-        watchers.insert(this);
-      }
-    }
-
-    ~LogWatcher() {
-      if (auto *inst = m_service->get_instance(m_uuid)) {
-        auto &watchers = inst->log_watchers[m_name];
-        watchers.erase(this);
-        if (watchers.empty()) inst->log_watchers.erase(m_name);
-      }
-    }
+    LogWatcher(AdminService *service, const std::string &uuid, const std::string &name);
+    ~LogWatcher();
 
     void set_handler(WebSocketHandler *handler);
     void send(const Data &data);
@@ -169,6 +154,7 @@ private:
   std::vector<Instance*> m_instances;
   std::map<std::string, int> m_instance_map;
   std::map<std::string, std::list<int>> m_codebase_instances;
+  std::map<std::string, std::set<LogWatcher*>> m_local_log_watchers;
   Timer m_metrics_history_timer;
   std::chrono::time_point<std::chrono::steady_clock> m_metrics_timestamp;
 
@@ -213,8 +199,6 @@ private:
   Message* api_v1_metrics_GET(const std::string &uuid);
 
   Message* api_v1_graph_POST(Data *data);
-
-  Message* api_v1_log_GET(Message *req);
 
   Message* response(const Data &text);
   Message* response(const std::string &text);

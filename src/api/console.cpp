@@ -24,6 +24,7 @@
  */
 
 #include "console.hpp"
+#include "data.hpp"
 #include "json.hpp"
 #include "log.hpp"
 
@@ -32,23 +33,29 @@
 namespace pipy {
 
 void Console::log(const pjs::Value *values, int count) {
-  std::stringstream ss;
+  static Data::Producer s_dp("Console::log");
+  Data buf;
+  Data::Builder db(buf, &s_dp);
+  char str[100];
+  db.push(str, Log::format_header(Log::INFO, str, sizeof(str)));
   for (int i = 0; i < count; i++) {
-    if (i > 0) ss << ' ';
+    if (i > 0) db.push(' ');
     auto &v = values[i];
     auto s = v.to_string();
-    ss << s->str();
+    db.push(s->str());
     s->release();
     if (v.is_object()) {
       if (auto *o = v.o()) {
         if (auto *obj = o->dump()) {
-          ss << ':';
-          ss << JSON::stringify(obj, nullptr, 0);
+          db.push(' ');
+          JSON::encode(obj, nullptr, 0, db);
         }
       }
     }
   }
-  Log::print(Log::INFO, ss.str());
+  db.push('\n');
+  db.flush();
+  Log::write(buf);
 }
 
 } // namespace pipy

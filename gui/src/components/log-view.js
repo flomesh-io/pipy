@@ -25,8 +25,9 @@ function LogView({ uuid, name }) {
       const text = document.createTextNode('');
       logEl.current.appendChild(text);
       const loc = window.location;
-      // const ws = new WebSocket(`ws://localhost:6060/api/v1/log/${uuid}/${name}`); // For development mode
-      const ws = new WebSocket(`ws://${loc.host}/api/v1/log/${uuid}/${name}`);
+      // const url = `ws://localhost:6060/api/v1/log/${uuid}/${name}`; // For development mode
+      const url = `ws://${loc.host}/api/v1/log/${uuid}/${name}`;
+      const ws = new WebSocket(url);
       ws.addEventListener('open', () => ws.send('watch\n'));
       ws.addEventListener('message', evt => text.appendData(evt.data));
       return () => ws.close();

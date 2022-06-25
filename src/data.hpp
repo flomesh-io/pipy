@@ -156,6 +156,11 @@ public:
       push(s.c_str(), s.length());
     }
 
+    void push(const Data &d, double vacancy = 1) {
+      flush();
+      m_data.pack(d, m_producer, vacancy);
+    }
+
   private:
     Data& m_data;
     Producer* m_producer;

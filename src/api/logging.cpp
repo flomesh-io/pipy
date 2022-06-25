@@ -28,6 +28,8 @@
 #include "data.hpp"
 #include "pipeline.hpp"
 #include "input.hpp"
+#include "fstream.hpp"
+#include "admin-service.hpp"
 #include "admin-link.hpp"
 #include "api/json.hpp"
 #include "api/url.hpp"
@@ -45,7 +47,12 @@ namespace logging {
 //
 
 std::set<Logger*> Logger::s_all_loggers;
+AdminService* Logger::s_admin_service = nullptr;
 AdminLink* Logger::s_admin_link = nullptr;
+
+void Logger::set_admin_service(AdminService *admin_service) {
+  s_admin_service = admin_service;
+}
 
 void Logger::set_admin_link(AdminLink *admin_link) {
   static std::string s_on("log/on/");
@@ -85,6 +92,19 @@ Logger::~Logger() {
 }
 
 void Logger::write(const Data &msg) {
+  if (InputContext::origin()) {
+    write_internal(msg);
+  } else {
+    InputContext ic;
+    write_internal(msg);
+  }
+}
+
+void Logger::write_internal(const Data &msg) {
+  if (s_admin_service) {
+    s_admin_service->write_log(m_name->str(), msg);
+  }
+
   if (s_admin_link && m_admin_link_enabled) {
     static Data::Producer s_dp("Log Reports");
     static std::string s_prefix("log/");
@@ -101,6 +121,15 @@ void Logger::write(const Data &msg) {
   for (const auto &p : m_targets) {
     p->write(msg);
   }
+}
+
+Logger::StdoutTarget::StdoutTarget(FILE *f) {
+  static Data::Producer s_dp("Logger::StdoutTarget");
+  m_file_stream = FileStream::make(f, &s_dp);
+}
+
+void Logger::StdoutTarget::write(const Data &msg) {
+  m_file_stream->input()->input(Data::make(msg));
 }
 
 //
@@ -188,6 +217,39 @@ void Logger::HTTPTarget::write(const Data &msg) {
 }
 
 //
+// BinaryLogger
+//
+
+void BinaryLogger::log(int argc, const pjs::Value *args) {
+  static Data::Producer s_dp("BinaryLogger");
+  Data data;
+  Data::Builder db(data, &s_dp);
+  for (int i = 0; i < argc; i++) {
+    auto &v = args[i];
+    if (v.is<Data>()) {
+      db.push(*v.as<Data>());
+    } else if (v.is_string()) {
+      auto *s = v.s();
+      db.push(s->c_str(), s->size());
+    } else if (v.is_array()) {
+      v.as<pjs::Array>()->iterate_all(
+        [&](pjs::Value &v, int) {
+          auto c = char(v.to_number());
+          db.push(c);
+        }
+      );
+    } else {
+      auto *s = v.to_string();
+      db.push(s->c_str(), s->size());
+      s->release();
+    }
+  }
+  db.push('\n');
+  db.flush();
+  write(data);
+}
+
+//
 // TextLogger
 //
 
@@ -234,6 +296,16 @@ template<> void ClassDef<Logger>::init() {
     obj->as<Logger>()->log(ctx.argc(), &ctx.arg(0));
   });
 
+  method("toStdout", [](Context &ctx, Object *obj, Value &ret) {
+    obj->as<Logger>()->add_target(new Logger::StdoutTarget(stdout));
+    ret.set(obj);
+  });
+
+  method("toStderr", [](Context &ctx, Object *obj, Value &ret) {
+    obj->as<Logger>()->add_target(new Logger::StdoutTarget(stderr));
+    ret.set(obj);
+  });
+
   method("toFile", [](Context &ctx, Object *obj, Value &ret) {
     pjs::Str *filename;
     if (!ctx.arguments(1, &filename)) return;
@@ -248,6 +320,25 @@ template<> void ClassDef<Logger>::init() {
     obj->as<Logger>()->add_target(new Logger::HTTPTarget(url, options));
     ret.set(obj);
   });
+}
+
+//
+// BinaryLogger
+//
+
+template<> void ClassDef<BinaryLogger>::init() {
+  super<Logger>();
+
+  ctor([](Context &ctx) -> Object* {
+    pjs::Str *name;
+    if (!ctx.arguments(1, &name)) return nullptr;
+    return BinaryLogger::make(name);
+  });
+}
+
+template<> void ClassDef<Constructor<BinaryLogger>>::init() {
+  super<Function>();
+  ctor();
 }
 
 //
@@ -294,6 +385,7 @@ template<> void ClassDef<Constructor<JSONLogger>>::init() {
 
 template<> void ClassDef<Logging>::init() {
   ctor();
+  variable("BinaryLogger", class_of<Constructor<BinaryLogger>>());
   variable("TextLogger", class_of<Constructor<TextLogger>>());
   variable("JSONLogger", class_of<Constructor<JSONLogger>>());
 }

@@ -52,29 +52,10 @@ auto Print::clone() -> Filter* {
 }
 
 void Print::process(Event *evt) {
+  static std::string s_newline("\n");
   if (auto *data = evt->as<Data>()) {
-    for (auto chunk : data->chunks()) {
-      auto data = std::get<0>(chunk);
-      auto size = std::get<1>(chunk);
-      for (size_t i = 0; i < size; i++) {
-        if (data[i] == '\n') {
-          Log::print(m_line);
-          m_line.clear();
-        } else if (data[i] >= ' ') {
-          m_line += data[i];
-          if (m_line.length() >= 100) {
-            Log::print(m_line);
-            m_line.clear();
-          }
-        }
-      }
-    }
-
-  } else if (evt->is<MessageEnd>() || evt->is<StreamEnd>()) {
-    if (!m_line.empty()) {
-      Log::print(m_line);
-      m_line.clear();
-    }
+    Log::write(*data);
+    Log::write(s_newline);
   }
 
   output(evt);

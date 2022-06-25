@@ -36,11 +36,13 @@
 
 namespace pipy {
 
+class AdminService;
 class AdminLink;
 class Data;
 class Pipeline;
 class PipelineLayout;
 class MessageStart;
+class FileStream;
 
 namespace logging {
 
@@ -50,6 +52,7 @@ namespace logging {
 
 class Logger : public pjs::ObjectTemplate<Logger> {
 public:
+  static void set_admin_service(AdminService *admin_service);
   static void set_admin_link(AdminLink *admin_link);
 
   static void for_each(const std::function<void(Logger*)> &cb) {
@@ -63,6 +66,20 @@ public:
   class Target {
   public:
     virtual void write(const Data &msg) = 0;
+  };
+
+  //
+  // Logger::StdoutTarget
+  //
+
+  class StdoutTarget : public Target {
+  public:
+    StdoutTarget(FILE *f);
+
+  private:
+    virtual void write(const Data &msg) override;
+
+    pjs::Ref<FileStream> m_file_stream;
   };
 
   //
@@ -119,23 +136,40 @@ public:
     m_targets.push_back(std::unique_ptr<Target>(target));
   }
 
+  void write(const Data &msg);
+
   virtual void log(int argc, const pjs::Value *args) = 0;
 
 protected:
   Logger(pjs::Str *name);
   virtual ~Logger();
 
-  void write(const Data &msg);
-
 private:
   pjs::Ref<pjs::Str> m_name;
   std::list<std::unique_ptr<Target>> m_targets;
   bool m_admin_link_enabled = false;
 
+  void write_internal(const Data &msg);
+
   static std::set<Logger*> s_all_loggers;
+  static AdminService* s_admin_service;
   static AdminLink* s_admin_link;
 
   friend class pjs::ObjectTemplate<Logger>;
+};
+
+//
+// BinaryLogger
+//
+
+class BinaryLogger : public pjs::ObjectTemplate<BinaryLogger, Logger> {
+private:
+  BinaryLogger(pjs::Str *name)
+    : pjs::ObjectTemplate<BinaryLogger, Logger>(name) {}
+
+  virtual void log(int argc, const pjs::Value *args) override;
+
+  friend class pjs::ObjectTemplate<BinaryLogger, Logger>;
 };
 
 //

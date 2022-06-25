@@ -30,6 +30,8 @@
 
 namespace pipy {
 
+class Data;
+
 //
 // Log
 //
@@ -43,13 +45,15 @@ public:
     INFO,
   };
 
+  static void init();
   static void set_level(Level level);
   static bool is_enabled(Level level);
 
-  static void print(const std::string &line);
-  static void print(const char *fmt, ...);
-  static void print(Level level, const char *msg);
-  static void print(Level level, const std::string &msg);
+  static auto format_header(Level level, char *buf, size_t len) -> size_t;
+
+  static void write(const Data &data);
+  static void write(const std::string &data);
+
   static void debug(const char *fmt, ...);
   static void info(const char *fmt, ...);
   static void warn(const char *fmt, ...);
@@ -58,8 +62,6 @@ public:
   static void pjs_location(const std::string &source, int line, int column);
   static void pjs_error(const pjs::Context::Error &err);
   static void pjs_error(const pjs::Context::Error &err, const std::string &source);
-
-  static auto tail(size_t first, std::string &log) -> size_t;
 };
 
 } // namespace pipy

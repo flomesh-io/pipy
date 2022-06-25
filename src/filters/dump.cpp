@@ -62,7 +62,10 @@ auto Dump::clone() -> Filter* {
 }
 
 void Dump::process(Event *evt) {
+  static Data::Producer s_dp("Dump");
   static char s_hex[] = { "0123456789ABCDEF" };
+  static std::string s_prefix("[dump] [context=");
+  static std::string s_hline(16*3+4+16, '-');
 
   pjs::Value tag;
   if (!eval(m_tag, tag)) {
@@ -70,78 +73,110 @@ void Dump::process(Event *evt) {
     return;
   }
 
-  std::stringstream ss;
-  ss << "[dump] [context=" << context()->id() << "] ";
+  Data buf;
+  Data::Builder db(buf, &s_dp);
+
+  char str[1000];
+  auto str_fmt = [&](const char *fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    auto n = std::vsnprintf(str, sizeof(str), fmt, ap);
+    va_end(ap);
+    return n;
+  };
+
+  db.push(str, Log::format_header(Log::INFO, str, sizeof(str)));
+  db.push(s_prefix);
+  db.push(str, str_fmt( "%d", context()->id()));
+  db.push(']');
+  db.push(' ');
 
   if (m_tag.to_boolean()) {
     auto s = tag.to_string();
-    ss << "[" << s->str() << "] ";
+    db.push('[');
+    db.push(s->str());
+    db.push(']');
+    db.push(' ');
     s->release();
   }
 
-  ss << evt->name();
+  db.push(evt->name());
 
   if (auto start = evt->as<MessageStart>()) {
     if (auto head = start->head()) {
-      Data buf;
-      JSON::encode(head, nullptr, 0, buf);
-      ss << ' ';
-      buf.scan([&](int c) { ss << char(c); return true; });
+      db.push(' ');
+      JSON::encode(head, nullptr, 0, db);
     }
-    Log::print(Log::INFO, ss.str());
+    db.push('\n');
 
   } else if (auto end = evt->as<MessageEnd>()) {
     if (auto tail = end->tail()) {
-      Data buf;
-      JSON::encode(tail, nullptr, 0, buf);
-      ss << ' ';
-      buf.scan([&](int c) { ss << char(c); return true; });
+      db.push(' ');
+      JSON::encode(tail, nullptr, 0, db);
     }
-    Log::print(Log::INFO, ss.str());
+    db.push('\n');
 
   } else if (auto end = evt->as<StreamEnd>()) {
     if (end->error() != StreamEnd::NO_ERROR) {
-      ss << " [" << end->error() << "] " << end->message();
+      db.push(' ');
+      db.push('[');
+      db.push(end->message());
+      db.push(']');
+      db.push(' ');
     }
-    Log::print(Log::INFO, ss.str());
+    db.push('\n');
 
   } else if (auto data = evt->as<Data>()) {
-    ss << " [size=" << data->size() << "]";
-    Log::print(Log::INFO, ss.str());
+    db.push(' ');
+    db.push('[');
+    db.push(str, str_fmt("%d", data->size()));
+    db.push(']');
+    db.push(' ');
+    db.push('\n');
     if (!data->empty()) {
-      std::string hex, txt;
-      std::string hline(16*3+4+16, '-');
-      Log::print(hline);
-      for (auto chunk : data->chunks()) {
-        auto data = std::get<0>(chunk);
-        auto size = std::get<1>(chunk);
-        for (int i = 0; i < size; ++i) {
-          auto ch = (unsigned char)data[i];
-          hex += s_hex[ch >> 4];
-          hex += s_hex[ch & 15];
-          hex += ' ';
-          txt += ch < 0x20 || ch >= 0x7f ? '?' : ch;
-          if (txt.length() == 16) {
-            Log::print(hex + " | " + txt);
-            hex.clear();
-            txt.clear();
+      char hex[100], txt[100];
+      auto i = 0, j = 0;
+      db.push(s_hline);
+      db.push('\n');
+      data->scan(
+        [&](int ch) {
+          hex[i++] = s_hex[ch >> 4];
+          hex[i++] = s_hex[ch & 15];
+          hex[i++] = ' ';
+          txt[j++] = ch < 0x20 || ch >= 0x7f ? '?' : ch;
+          if (j == 16) {
+            hex[i++] = ' ';
+            hex[i++] = '|';
+            hex[i++] = ' ';
+            db.push(hex, i);
+            db.push(txt, j);
+            db.push('\n');
+            i = 0; j = 0;
           }
+          return true;
         }
+      );
+      if (j > 0) {
+        for (int n = 16 - j; n > 0; --n) {
+          hex[i++] = ' ';
+          hex[i++] = '-';
+          hex[i++] = ' ';
+          txt[j++] = '.';
+        }
+        hex[i++] = ' ';
+        hex[i++] = '|';
+        hex[i++] = ' ';
+        db.push(hex, i);
+        db.push(txt, j);
+        db.push('\n');
       }
-      if (!txt.empty()) {
-        std::string line = hex;
-        for (int n = 16 - hex.length() / 3; n > 0; --n) line += " - ";
-        line += " | ";
-        line += txt;
-        line += std::string(16 - txt.length(), '.');
-        Log::print(line);
-      }
-      Log::print(hline);
+      db.push(s_hline);
+      db.push('\n');
     }
-
-  } else {
-    Log::print(Log::INFO, ss.str());
   }
+
+  db.flush();
+  Log::write(buf);
 
   output(evt);
 }
