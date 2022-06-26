@@ -155,7 +155,7 @@ void CodebaseFromFS::set(const std::string &path, Data *data) {
 }
 
 void CodebaseFromFS::sync(const Status &status, bool force, const std::function<void(bool)> &on_update) {
-  if (m_version.empty()) {
+  if (force || m_version.empty()) {
     m_version = "1";
     on_update(true);
   }
@@ -334,6 +334,7 @@ void CodebaseFromHTTP::sync(const Status &status, bool force, const std::functio
 
       if (force) {
         download(on_update);
+        return;
       }
 
       // Check updates

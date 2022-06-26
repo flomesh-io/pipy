@@ -159,7 +159,14 @@ static void handle_signal(int sig) {
       Worker::exit(-1);
       break;
     case SIGHUP:
-      Worker::restart();
+      if (auto *codebase = Codebase::current()) {
+        Codebase::current()->sync(
+          Status::local, true,
+          [](bool succ) {
+            if (succ) Worker::restart();
+          }
+        );
+      }
       break;
     case SIGTSTP:
       Status::dump_memory();
