@@ -225,6 +225,15 @@ void Encoder::reset() {
   m_start = nullptr;
 }
 
+void Encoder::shutdown() {
+  Filter::shutdown();
+  if (!m_start) {
+    Filter::output(StreamEnd::make());
+  } else {
+    m_shutdown = true;
+  }
+}
+
 void Encoder::process(Event *evt) {
   if (auto start = evt->as<MessageStart>()) {
     if (!m_start) {
@@ -254,7 +263,12 @@ void Encoder::process(Event *evt) {
       frame(m_buffer, true);
       m_buffer.clear();
       m_continuation = false;
-      output(evt);
+      m_start = nullptr;
+      if (m_shutdown) {
+        output(StreamEnd::make());
+      } else {
+        output(evt);
+      }
     }
 
   } else if (evt->is<StreamEnd>()) {

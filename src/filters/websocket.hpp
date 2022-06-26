@@ -117,6 +117,7 @@ private:
 
   virtual auto clone() -> Filter* override;
   virtual void reset() override;
+  virtual void shutdown() override;
   virtual void process(Event *evt) override;
   virtual void dump(Dump &d) override;
 
@@ -129,6 +130,7 @@ private:
   uint8_t m_opcode;
   bool m_masked;
   bool m_continuation;
+  bool m_shutdown = false;
 
   void frame(const Data &data, bool final);
 };

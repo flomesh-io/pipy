@@ -67,7 +67,7 @@ public:
   virtual auto list(const std::string &path) -> std::list<std::string> override;
   virtual auto get(const std::string &path) -> Data* override;
   virtual void set(const std::string &path, Data *data) override;
-  virtual void sync(const Status &status, const std::function<void(bool)> &on_update) override;
+  virtual void sync(const Status &status, bool force, const std::function<void(bool)> &on_update) override;
 
 private:
   virtual void activate() override {
@@ -154,7 +154,7 @@ void CodebaseFromFS::set(const std::string &path, Data *data) {
   }
 }
 
-void CodebaseFromFS::sync(const Status &status, const std::function<void(bool)> &on_update) {
+void CodebaseFromFS::sync(const Status &status, bool force, const std::function<void(bool)> &on_update) {
   if (m_version.empty()) {
     m_version = "1";
     on_update(true);
@@ -176,7 +176,7 @@ public:
   virtual auto list(const std::string &path) -> std::list<std::string> override;
   virtual auto get(const std::string &path) -> pipy::Data* override;
   virtual void set(const std::string &path, Data *data) override {}
-  virtual void sync(const Status &status, const std::function<void(bool)> &on_update) override {}
+  virtual void sync(const Status &status, bool force, const std::function<void(bool)> &on_update) override {}
 
 private:
   std::string m_version;
@@ -251,7 +251,7 @@ private:
   virtual auto list(const std::string &path) -> std::list<std::string> override;
   virtual auto get(const std::string &path) -> pipy::Data* override;
   virtual void set(const std::string &path, Data *data) override {}
-  virtual void sync(const Status &status, const std::function<void(bool)> &on_update) override;
+  virtual void sync(const Status &status, bool force, const std::function<void(bool)> &on_update) override;
 
   pjs::Ref<URL> m_url;
   Fetch m_fetch;
@@ -318,7 +318,7 @@ auto CodebaseFromHTTP::get(const std::string &path) -> pipy::Data* {
   return i->second;
 }
 
-void CodebaseFromHTTP::sync(const Status &status, const std::function<void(bool)> &on_update) {
+void CodebaseFromHTTP::sync(const Status &status, bool force, const std::function<void(bool)> &on_update) {
   if (m_fetch.busy()) return;
 
   std::stringstream ss;
@@ -331,6 +331,10 @@ void CodebaseFromHTTP::sync(const Status &status, const std::function<void(bool)
     m_request_header_post_status,
     Data::make(ss.str(), &s_dp),
     [=](http::ResponseHead *head, Data *body) {
+
+      if (force) {
+        download(on_update);
+      }
 
       // Check updates
       m_fetch(

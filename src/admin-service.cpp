@@ -142,9 +142,9 @@ void AdminService::open(int port, const Options &options) {
 
 void AdminService::close() {
   if (auto listener = Listener::get("::", m_port, Listener::Protocol::TCP)) {
-    listener->pipeline_layout()->shutdown();
     listener->pipeline_layout(nullptr);
   }
+  m_module->shutdown();
   m_metrics_history_timer.cancel();
 }
 

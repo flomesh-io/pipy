@@ -1309,6 +1309,11 @@ Mux::Mux()
 {
 }
 
+Mux::Mux(pjs::Function *group)
+  : pipy::MuxQueue(group)
+{
+}
+
 Mux::Mux(pjs::Function *group, const Options &options)
   : pipy::MuxQueue(group, options)
   , m_options(options)

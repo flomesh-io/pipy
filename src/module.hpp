@@ -47,20 +47,23 @@ class PipelineLayout;
 class ModuleBase : public pjs::RefCount<ModuleBase> {
 public:
   auto index() const -> int { return m_index; }
+  auto label() const -> const std::string { return m_label; }
 
   virtual auto new_context(Context *base = nullptr) -> Context* = 0;
-
-protected:
-  ModuleBase(int index = 0)
-    : m_index(index) {}
-
-  virtual ~ModuleBase() {}
 
   void for_each_pipeline(const std::function<void(PipelineLayout*)> &cb);
   void shutdown();
 
+protected:
+  ModuleBase(int index = 0, const std::string &label = std::string())
+    : m_index(index)
+    , m_label(label) {}
+
+  virtual ~ModuleBase() {}
+
 private:
   int m_index;
+  std::string m_label;
   std::list<pjs::Ref<PipelineLayout>> m_pipelines;
 
   friend class pjs::RefCount<ModuleBase>;

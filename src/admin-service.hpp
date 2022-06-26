@@ -130,6 +130,8 @@ private:
   //
 
   class Module : public ModuleBase {
+  public:
+    Module() : ModuleBase(0, "AdminService") {}
     virtual auto new_context(pipy::Context *base) -> pipy::Context* override {
       return new Context();
     }

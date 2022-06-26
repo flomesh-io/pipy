@@ -50,10 +50,13 @@ void ModuleBase::for_each_pipeline(const std::function<void(PipelineLayout*)> &c
 
 void ModuleBase::shutdown() {
   retain();
-  for (const auto &p : m_pipelines) {
-    p->shutdown();
+  {
+    InputContext ic;
+    for (const auto &p : m_pipelines) {
+      p->shutdown();
+    }
+    m_pipelines.clear();
   }
-  m_pipelines.clear();
   release();
 }
 

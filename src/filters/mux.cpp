@@ -49,6 +49,12 @@ MuxBase::MuxBase()
 {
 }
 
+MuxBase::MuxBase(pjs::Function *group)
+  : m_session_manager(new SessionManager(this))
+  , m_group(group)
+{
+}
+
 MuxBase::MuxBase(pjs::Function *group, const Options &options)
   : m_session_manager(new SessionManager(this))
   , m_group(group)
@@ -432,6 +438,11 @@ void QueueMuxer::Stream::on_event(Event *evt) {
 //
 
 MuxQueue::MuxQueue()
+{
+}
+
+MuxQueue::MuxQueue(pjs::Function *group)
+  : MuxBase(group)
 {
 }
 

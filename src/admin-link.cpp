@@ -39,7 +39,8 @@ namespace pipy {
 //
 
 AdminLink::AdminLink(const std::string &url)
-  : m_url(URL::make(url))
+  : m_module(new Module())
+  , m_url(URL::make(url))
 {
   auto host = m_url->hostname()->str() + ':' + m_url->port()->str();
 
@@ -60,13 +61,13 @@ AdminLink::AdminLink(const std::string &url)
   headers->set("sec-websocket-key", key_base64);
   headers->set("sec-websocket-version", "13");
 
-  auto *ppl_connect = PipelineLayout::make();
+  auto *ppl_connect = PipelineLayout::make(m_module);
   ppl_connect->append(new Connect(pjs::Str::make(host), Connect::Options()));
 
-  auto *ppl_tunnel = PipelineLayout::make();
+  auto *ppl_tunnel = PipelineLayout::make(m_module);
   ppl_tunnel->append(new http::Mux(nullptr, nullptr))->add_sub_pipeline(ppl_connect);
 
-  m_ppl = PipelineLayout::make();
+  m_ppl = PipelineLayout::make(m_module);
   m_ppl->append(new websocket::Encoder());
   m_ppl->append(new http::TunnelClient(m_handshake.get()))->add_sub_pipeline(ppl_tunnel);
   m_ppl->append(new websocket::Decoder());
@@ -100,6 +101,7 @@ void AdminLink::send(const Data &data) {
 }
 
 void AdminLink::close() {
+  m_module->shutdown();
   m_pipeline = nullptr;
 }
 

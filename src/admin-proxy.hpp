@@ -29,6 +29,7 @@
 #include "api/http.hpp"
 #include "api/crypto.hpp"
 #include "filter.hpp"
+#include "module.hpp"
 #include "message.hpp"
 #include "fetch.hpp"
 #include "tar.hpp"
@@ -59,6 +60,21 @@ public:
   void close();
 
 private:
+
+  //
+  // AdminProxy::Module
+  //
+
+  class Module : public ModuleBase {
+  public:
+    Module() : ModuleBase(0, "AdminProxy") {}
+    virtual auto new_context(pipy::Context *base) -> pipy::Context* override {
+      return new Context();
+    }
+  };
+
+  pjs::Ref<Module> m_module;
+
   std::string m_target;
   int m_port;
 

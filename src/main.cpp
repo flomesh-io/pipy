@@ -94,7 +94,7 @@ static void start_checking_updates() {
       InputContext ic;
       Status::local.timestamp = utils::now();
       Codebase::current()->sync(
-        Status::local,
+        Status::local, false,
         [&](bool ok) {
           if (ok) {
             Worker::restart();
@@ -332,7 +332,7 @@ int main(int argc, char *argv[]) {
 
       load = [&]() {
         codebase->sync(
-          Status::local,
+          Status::local, true,
           [&](bool ok) {
             if (!ok) {
               fail();

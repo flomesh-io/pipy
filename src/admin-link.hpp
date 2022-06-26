@@ -29,6 +29,7 @@
 #include "filter.hpp"
 #include "data.hpp"
 #include "message.hpp"
+#include "module.hpp"
 #include "pipeline.hpp"
 #include "api/url.hpp"
 
@@ -55,6 +56,18 @@ public:
 private:
 
   //
+  // AdminLink::Module
+  //
+
+  class Module : public ModuleBase {
+  public:
+    Module() : ModuleBase(0, "AdminLink") {}
+    virtual auto new_context(pipy::Context *base) -> pipy::Context* override {
+      return new Context();
+    }
+  };
+
+  //
   // AdminLink::Receiver
   //
 
@@ -73,6 +86,7 @@ private:
     bool m_started = false;
   };
 
+  pjs::Ref<Module> m_module;
   pjs::Ref<URL> m_url;
   pjs::Ref<Pipeline> m_pipeline;
   pjs::Ref<PipelineLayout> m_ppl;

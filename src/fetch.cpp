@@ -68,9 +68,17 @@ void Fetch::Receiver::dump(Dump &d) {
 }
 
 Fetch::Fetch(pjs::Str *host, const Options &options)
-  : m_host(host)
+  : m_module(new Module())
+  , m_host(host)
 {
-  auto *ppl_connect = PipelineLayout::make();
+  m_mux_grouper = pjs::Method::make(
+    "", 0, 0, nullptr,
+    [this](pjs::Context &, pjs::Object *, pjs::Value &ret) {
+      ret.set(m_mux_group);
+    }
+  );
+
+  auto *ppl_connect = PipelineLayout::make(m_module);
   ppl_connect->append(new Connect(m_host.get(), options));
 
   if (options.tls) {
@@ -82,19 +90,23 @@ Fetch::Fetch(pjs::Str *host, const Options &options)
       certificate->set("key", options.key.get());
       opts.certificate = certificate;
     }
-    auto *ppl_tls = PipelineLayout::make();
+    auto *ppl_tls = PipelineLayout::make(m_module);
     ppl_tls->append(new tls::Client(opts))->add_sub_pipeline(ppl_connect);
     ppl_connect = ppl_tls;
   }
 
-  m_ppl = PipelineLayout::make();
-  m_ppl->append(new http::Mux())->add_sub_pipeline(ppl_connect);
+  m_ppl = PipelineLayout::make(m_module);
+  m_ppl->append(new http::Mux(pjs::Function::make(m_mux_grouper)))->add_sub_pipeline(ppl_connect);
   m_ppl->append(new Receiver(this));
 }
 
 Fetch::Fetch(const std::string &host, const Options &options)
   : Fetch(pjs::Str::make(host), options)
 {
+}
+
+Fetch::~Fetch() {
+  m_module->shutdown();
 }
 
 static const pjs::Ref<pjs::Str> s_HEAD(pjs::Str::make("HEAD"));
@@ -112,6 +124,8 @@ void Fetch::fetch(
   pipy::Data *body,
   const std::function<void(http::ResponseHead*, pipy::Data*)> &cb
 ) {
+  if (!m_mux_group) m_mux_group = pjs::Object::make();
+
   if (!headers) headers = pjs::Object::make();
   headers->set(s_Host, m_host.get());
 
@@ -138,6 +152,7 @@ void Fetch::fetch(
 }
 
 void Fetch::close() {
+  m_mux_group = nullptr;
   m_pipeline = nullptr;
   m_current_request = nullptr;
   m_request_queue.clear();

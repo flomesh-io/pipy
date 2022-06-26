@@ -59,6 +59,7 @@ protected:
   class Session;
 
   MuxBase();
+  MuxBase(pjs::Function *group);
   MuxBase(pjs::Function *group, const Options &options);
   MuxBase(const MuxBase &r);
 
@@ -220,6 +221,7 @@ private:
 class MuxQueue : public MuxBase {
 public:
   MuxQueue();
+  MuxQueue(pjs::Function *group);
   MuxQueue(pjs::Function *group, const Options &options);
 
 protected:

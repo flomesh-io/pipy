@@ -30,6 +30,7 @@
 #include "api/http.hpp"
 #include "api/crypto.hpp"
 #include "filter.hpp"
+#include "module.hpp"
 #include "outbound.hpp"
 
 #include <functional>
@@ -68,6 +69,7 @@ public:
 
   Fetch(pjs::Str *host, const Options &options);
   Fetch(const std::string &host, const Options &options);
+  ~Fetch();
 
   bool busy() const {
     return m_current_request;
@@ -86,6 +88,18 @@ public:
   void close();
 
 private:
+
+  //
+  // Fetch::Module
+  //
+
+  class Module : public ModuleBase {
+  public:
+    Module() : ModuleBase(0, "Fetch") {}
+    virtual auto new_context(pipy::Context *base) -> pipy::Context* override {
+      return new Context();
+    }
+  };
 
   //
   // Fetch::Request
@@ -116,6 +130,9 @@ private:
     pjs::Ref<pipy::Data> m_body;
   };
 
+  pjs::Ref<Module> m_module;
+  pjs::Ref<pjs::Method> m_mux_grouper;
+  pjs::Ref<pjs::Object> m_mux_group;
   pjs::Ref<pjs::Str> m_host;
   std::list<Request> m_request_queue;
   pjs::Ref<Pipeline> m_pipeline;

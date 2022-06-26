@@ -105,7 +105,8 @@ private:
 //
 
 AdminProxy::AdminProxy(const std::string &target)
-  : m_target(target)
+  : m_module(new Module())
+  , m_target(target)
   , m_www_files(GuiTarball::data(), GuiTarball::size())
 {
   m_response_not_found = response(404);
@@ -115,11 +116,11 @@ AdminProxy::AdminProxy(const std::string &target)
 void AdminProxy::open(int port, const Options &options) {
   Log::info("[admin] Starting admin proxy...");
 
-  PipelineLayout *ppl = PipelineLayout::make();
+  PipelineLayout *ppl = PipelineLayout::make(m_module);
   PipelineLayout *ppl_inbound = nullptr;
-  PipelineLayout *ppl_request = PipelineLayout::make();
-  PipelineLayout *ppl_forward = PipelineLayout::make();
-  PipelineLayout *ppl_connect = PipelineLayout::make();
+  PipelineLayout *ppl_request = PipelineLayout::make(m_module);
+  PipelineLayout *ppl_forward = PipelineLayout::make(m_module);
+  PipelineLayout *ppl_connect = PipelineLayout::make(m_module);
 
   if (!options.cert || !options.key) {
     ppl_inbound = ppl;
@@ -131,7 +132,7 @@ void AdminProxy::open(int port, const Options &options) {
     certificate->set("key", options.key.get());
     opts.certificate = certificate;
     opts.trusted = options.trusted;
-    ppl_inbound = PipelineLayout::make();
+    ppl_inbound = PipelineLayout::make(m_module);
     ppl->append(new tls::Server(opts))->add_sub_pipeline(ppl_inbound);
   }
 
@@ -167,6 +168,7 @@ void AdminProxy::close() {
   if (auto listener = Listener::get("::", m_port, Listener::Protocol::TCP)) {
     listener->pipeline_layout(nullptr);
   }
+  m_module->shutdown();
 }
 
 auto AdminProxy::handle(http::RequestHead *head) -> Message* {
