@@ -69,14 +69,13 @@ void Logger::set_admin_link(AdminLink *admin_link) {
         name = command.substr(s_off.length());
         enabled = false;
       }
-      if (!name.empty()) {
-        for (auto *logger : s_all_loggers) {
-          if (logger->name()->str() == name) {
-            logger->enable_admin_link(enabled);
-          }
+      if (name.empty()) return false;
+      for (auto *logger : s_all_loggers) {
+        if (logger->name()->str() == name) {
+          logger->enable_admin_link(enabled);
         }
       }
-      return false;
+      return true;
     }
   );
 }

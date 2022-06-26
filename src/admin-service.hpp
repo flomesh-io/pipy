@@ -81,6 +81,7 @@ private:
 
     void log_enable(const std::string &name, bool enabled);
     void log_broadcast(const Data &data);
+    void signal_reload();
 
   private:
     virtual auto clone() -> Filter* override;

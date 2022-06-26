@@ -81,6 +81,42 @@ static void show_version() {
   std::cout << "Tutorial    : " << "No" << std::endl;
 #endif
 }
+//
+// Reload codebase
+//
+
+static void reload_codebase() {
+  if (auto *codebase = Codebase::current()) {
+    Codebase::current()->sync(
+      Status::local, true,
+      [](bool succ) {
+        if (succ) Worker::restart();
+      }
+    );
+  }
+}
+
+//
+// Establish admin link
+//
+
+static void start_admin_link(const std::string &url) {
+  std::string url_path = url;
+  if (url_path.back() != '/') url_path += '/';
+  url_path += Status::local.uuid;
+  s_admin_link = new AdminLink(url_path);
+  s_admin_link->add_handler(
+    [](const std::string &command, const Data &) {
+      if (command == "reload") {
+        reload_codebase();
+        return true;
+      } else {
+        return false;
+      }
+    }
+  );
+  logging::Logger::set_admin_link(s_admin_link);
+}
 
 //
 // Periodically check codebase updates
@@ -111,16 +147,11 @@ static void start_checking_updates() {
 // Periodically report metrics
 //
 
-static void start_reporting_metrics(const std::string &url) {
+static void start_reporting_metrics() {
   static Data::Producer s_dp("Metric Reports");
   static Timer timer;
   static std::function<void()> report;
   static int connection_id = 0;
-  std::string url_path = url;
-  if (url_path.back() != '/') url_path += '/';
-  url_path += Status::local.uuid;
-  s_admin_link = new AdminLink(url_path);
-  logging::Logger::set_admin_link(s_admin_link);
   report = []() {
     if (!Worker::exited()) {
       InputContext ic;
@@ -159,14 +190,7 @@ static void handle_signal(int sig) {
       Worker::exit(-1);
       break;
     case SIGHUP:
-      if (auto *codebase = Codebase::current()) {
-        Codebase::current()->sync(
-          Status::local, true,
-          [](bool succ) {
-            if (succ) Worker::restart();
-          }
-        );
-      }
+      reload_codebase();
       break;
     case SIGTSTP:
       Status::dump_memory();
@@ -377,7 +401,8 @@ int main(int argc, char *argv[]) {
             start_checking_updates();
 
             if (is_remote) {
-              start_reporting_metrics(opts.filename);
+              start_admin_link(opts.filename);
+              start_reporting_metrics();
             }
           }
         );

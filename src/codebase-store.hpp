@@ -65,7 +65,7 @@ public:
     void list_erased(std::set<std::string> &paths);
     void erase_file(const std::string &path);
     void reset_file(const std::string &path);
-    void commit(int version);
+    bool commit(int version, std::list<std::string> &updated);
     void reset();
 
   private:

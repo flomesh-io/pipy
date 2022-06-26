@@ -650,7 +650,22 @@ Message* AdminService::api_v1_repo_POST(const std::string &path, Data *data) {
     CodebaseStore::Codebase::Info info;
     codebase->get_info(info);
     if (!main.empty() && main != info.main) codebase->set_main(main);
-    if (version >= 0 && version != info.version) codebase->commit(version);
+    if (version >= 0 && version != info.version) {
+      std::list<std::string> update_list;
+      if (codebase->commit(version, update_list)) {
+        for (const auto &id : update_list) {
+          auto i = m_codebase_instances.find(id);
+          if (i != m_codebase_instances.end()) {
+            for (auto index : i->second) {
+              auto *inst = m_instances[index];
+              if (auto *admin_link = inst->admin_link) {
+                admin_link->signal_reload();
+              }
+            }
+          }
+        }
+      }
+    }
     return m_response_created;
 
   // Create codebase
@@ -1098,6 +1113,12 @@ void AdminService::WebSocketHandler::log_enable(const std::string &name, bool en
 void AdminService::WebSocketHandler::log_broadcast(const Data &data) {
   auto head = websocket::MessageHead::make();
   Filter::output(Message::make(head, Data::make(data)));
+}
+
+void AdminService::WebSocketHandler::signal_reload() {
+  static std::string s_reload("reload");
+  auto head = websocket::MessageHead::make();
+  Filter::output(Message::make(head, s_reload));
 }
 
 void AdminService::WebSocketHandler::dump(Dump &d) {

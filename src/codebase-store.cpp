@@ -191,7 +191,8 @@ CodebaseStore::CodebaseStore(Store *store)
           }
         }
       }
-      codebase->commit(1);
+      std::list<std::string> update_list;
+      codebase->commit(1, update_list);
     }
     base = codebase;
   }
@@ -569,7 +570,7 @@ void CodebaseStore::Codebase::reset_file(const std::string &path) {
   batch->commit();
 }
 
-void CodebaseStore::Codebase::commit(int version) {
+bool CodebaseStore::Codebase::commit(int version, std::list<std::string> &update_list) {
   Data buf;
 
   std::map<std::string, std::string> info;
@@ -646,8 +647,6 @@ void CodebaseStore::Codebase::commit(int version) {
     )
   > upgrade_derived;
 
-  bool has_any_upgrades = false;
-
   upgrade_derived = [&](
     const std::string &id,
     const std::string &version,
@@ -670,15 +669,16 @@ void CodebaseStore::Codebase::commit(int version) {
         m_code_store->generate_files(batch, info["path"], info["main"], derived_version, files);
         batch->set(KEY_codebase(derived_id), Data(make_record(info), &s_dp));
         batch->set(derived_key, Data(version, &s_dp));
-        has_any_upgrades = true;
+        update_list.push_back(derived_id);
       }
       upgrade_derived(derived_id, derived_version, files);
     }
   };
 
+  update_list.push_back(m_id);
   upgrade_derived(m_id, version_str, files);
-
-  return batch->commit();
+  batch->commit();
+  return true;
 }
 
 void CodebaseStore::Codebase::reset() {
