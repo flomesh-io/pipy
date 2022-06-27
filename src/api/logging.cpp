@@ -25,6 +25,7 @@
 
 #include "logging.hpp"
 #include "context.hpp"
+#include "net.hpp"
 #include "data.hpp"
 #include "pipeline.hpp"
 #include "input.hpp"
@@ -91,7 +92,13 @@ Logger::~Logger() {
 }
 
 void Logger::write(const Data &msg) {
-  if (InputContext::origin()) {
+  if (!Net::is_running()) {
+    for (const auto c : msg.chunks()) {
+      auto ptr = std::get<0>(c);
+      auto len = std::get<1>(c);
+      std::fwrite(ptr, 1, len, stderr);
+    }
+  } else if (InputContext::origin()) {
     write_internal(msg);
   } else {
     InputContext ic;

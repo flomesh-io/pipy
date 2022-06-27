@@ -52,15 +52,24 @@ static const char *s_levels[] = {
 };
 
 static void logf(Log::Level level, const char *fmt, va_list ap) {
+  static bool s_is_logging = false;
   if (Log::is_enabled(level)) {
     char header[100], msg[1000];
-    Data buf;
-    Data::Builder db(buf, &s_dp);
-    db.push(header, Log::format_header(level, header, sizeof(header)));
-    db.push(msg, std::vsnprintf(msg, sizeof(msg), fmt, ap));
-    db.push('\n');
-    db.flush();
-    s_logger->write(buf);
+    if (s_is_logging) {
+      Log::format_header(level, header, sizeof(header));
+      std::vsnprintf(msg, sizeof(msg), fmt, ap);
+      std::cerr << header << msg << std::endl;
+    } else {
+      s_is_logging = true;
+      Data buf;
+      Data::Builder db(buf, &s_dp);
+      db.push(header, Log::format_header(level, header, sizeof(header)));
+      db.push(msg, std::vsnprintf(msg, sizeof(msg), fmt, ap));
+      db.push('\n');
+      db.flush();
+      s_logger->write(buf);
+      s_is_logging = false;
+    }
   }
 }
 

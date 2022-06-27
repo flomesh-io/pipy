@@ -78,19 +78,19 @@ InputContext::~InputContext() {
     target->m_origin = nullptr;
   }
 
-  // Flush all terminating targets
-  while (auto *target = m_flush_targets_terminating.head()) {
-    m_flush_targets_terminating.remove(target);
-    target->on_flush();
-    target->m_origin = nullptr;
-  }
-
   // Clean up pipelines
   m_cleaning_up = true;
   for (auto *p = m_auto_released; p; ) {
     auto *obj = p; p = p->m_next_auto_release;
     obj->m_auto_release = false;
     obj->release();
+  }
+
+  // Flush all terminating targets
+  while (auto *target = m_flush_targets_terminating.head()) {
+    m_flush_targets_terminating.remove(target);
+    target->on_flush();
+    target->m_origin = nullptr;
   }
 
   s_stack = m_next;

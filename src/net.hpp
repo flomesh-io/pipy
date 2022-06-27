@@ -44,6 +44,8 @@ public:
     return s_io_context;
   }
 
+  static bool is_running() { return s_is_running; }
+
   static void run();
   static void stop();
   static void post(const std::function<void()> &cb);
@@ -51,6 +53,7 @@ public:
 
 private:
   static asio::io_context s_io_context;
+  static bool s_is_running;
 };
 
 //
