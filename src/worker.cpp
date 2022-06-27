@@ -378,6 +378,58 @@ auto Worker::new_runtime_context(Context *base) -> Context* {
   return ctx;
 }
 
+bool Worker::solve(pjs::Context &ctx, pjs::Str *filename, pjs::Value &result) {
+  auto i = m_solved_files.find(filename);
+  if (i != m_solved_files.end()) {
+    auto &f = i->second;
+    if (f.solving) {
+      std::string msg("recursive sovling file: ");
+      ctx.error(msg + filename->str());
+      return false;
+    } else {
+      result = f.result;
+      return true;
+    }
+  }
+
+  auto data = Codebase::current()->get(filename->str());
+  if (!data) {
+    std::string msg("cannot open file to solve: ");
+    ctx.error(msg + filename->str());
+    return false;
+  }
+
+  std::string source = data->to_string();
+  std::string error;
+  int error_line, error_column;
+  auto expr = pjs::Parser::parse(source, error, error_line, error_column);
+  if (!expr) {
+    char msg[1000];
+    std::snprintf(
+      msg, sizeof(msg), "Syntax error: %s at line %d column %d in %s",
+      error.c_str(),
+      error_line,
+      error_column,
+      filename->c_str()
+    );
+    Log::pjs_location(source, error_line, error_column);
+    Log::error("[pjs] %s", msg);
+    ctx.error(msg);
+    return false;
+  }
+
+  auto &f = m_solved_files[filename];
+  f.filename = filename;
+  f.expr = std::unique_ptr<pjs::Expr>(expr);
+  f.solving = true;
+  expr->resolve(ctx);
+  auto ret = expr->eval(ctx, result);
+  f.result = result;
+  f.solving = false;
+
+  return ret;
+}
+
 bool Worker::start() {
   try {
     for (auto i : m_modules) i->bind_exports();

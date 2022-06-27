@@ -164,7 +164,7 @@ public:
   virtual bool eval(Context &ctx, Value &result) = 0;
   virtual bool assign(Context &ctx, Value &value) { return error(ctx, "cannot assign to a right-value"); }
   virtual bool clear(Context &ctx, Value &result) { return error(ctx, "cannot delete a value"); }
-  virtual void resolve(Context &ctx, int l, Imports *imports) {}
+  virtual void resolve(Context &ctx, int l = -1, Imports *imports = nullptr) {}
   virtual auto reduce(Reducer &r) -> Reducer::Value* { return r.undefined(); }
   virtual auto reduce_lval(Reducer &r, Reducer::Value *rval) -> Reducer::Value* { return r.undefined(); }
   virtual void dump(std::ostream &out, const std::string &indent = "") = 0;

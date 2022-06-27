@@ -70,6 +70,7 @@ public:
   auto get_export(pjs::Str *ns, pjs::Str *name) -> Module*;
   auto new_loading_context() -> Context*;
   auto new_runtime_context(Context *base = nullptr) -> Context*;
+  bool solve(pjs::Context &ctx, pjs::Str *filename, pjs::Value &result);
   bool start();
   void stop();
 
@@ -85,6 +86,13 @@ private:
     Listener::Options options;
   };
 
+  struct SolvedFile {
+    pjs::Ref<pjs::Str> filename;
+    std::unique_ptr<pjs::Expr> expr;
+    pjs::Value result;
+    bool solving = false;
+  };
+
   Module* m_root = nullptr;
   pjs::Ref<pjs::Object> m_global_object;
   std::vector<Module*> m_modules;
@@ -93,6 +101,7 @@ private:
   std::set<Reader*> m_readers;
   std::set<Task*> m_tasks;
   std::map<pjs::Ref<pjs::Str>, Namespace> m_namespaces;
+  std::map<pjs::Ref<pjs::Str>, SolvedFile> m_solved_files;
 
   void remove_module(int i);
 

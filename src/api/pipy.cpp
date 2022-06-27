@@ -26,6 +26,7 @@
 #include "pipy.hpp"
 #include "codebase.hpp"
 #include "configuration.hpp"
+#include "context.hpp"
 #include "worker.hpp"
 #include "utils.hpp"
 
@@ -68,6 +69,13 @@ template<> void ClassDef<Pipy>::init() {
     if (!ctx.arguments(1, &filename)) return;
     auto path = utils::path_normalize(filename);
     ret.set(Codebase::current()->get(path));
+  });
+
+  method("solve", [](Context &ctx, Object*, Value &ret) {
+    Str *filename;
+    if (!ctx.arguments(1, &filename)) return;
+    auto worker = static_cast<pipy::Context*>(ctx.root())->worker();
+    worker->solve(ctx, filename, ret);
   });
 
   method("restart", [](Context&, Object*, Value&) {

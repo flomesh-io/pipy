@@ -30,6 +30,10 @@
 
 namespace pipy {
 
+//
+// Pipy
+//
+
 class Pipy : public pjs::FunctionTemplate<Pipy> {
 public:
   void operator()(pjs::Context &ctx, pjs::Object *obj, pjs::Value &ret);

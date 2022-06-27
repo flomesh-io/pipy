@@ -1612,7 +1612,7 @@ public:
 
   auto root() const -> Context* { return m_root; }
   auto g() const -> Object* { return m_g; }
-  auto l(int i) const -> Object* { return m_l ? m_l[i].get() : nullptr; }
+  auto l(int i) const -> Object* { return i >= 0 && m_l ? m_l[i].get() : nullptr; }
   auto scope() const -> Scope* { return m_scope; }
   auto argc() const -> int { return m_argc; }
   auto arg(int i) const -> Value& { return m_argv[i]; }
