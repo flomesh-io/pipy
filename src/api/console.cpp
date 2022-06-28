@@ -53,7 +53,6 @@ void Console::log(const pjs::Value *values, int count) {
       }
     }
   }
-  db.push('\n');
   db.flush();
   Log::write(buf);
 }

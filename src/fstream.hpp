@@ -57,6 +57,7 @@ public:
   }
 
   auto fd() const -> int { return m_fd; }
+  auto data_producer() const -> Data::Producer* { return m_dp; }
   void set_buffer_limit(size_t size) { m_buffer_limit = size; }
   void close();
 

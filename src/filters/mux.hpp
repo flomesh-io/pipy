@@ -255,6 +255,8 @@ protected:
 
 class Mux : public MuxBase {
 public:
+  Mux();
+  Mux(pjs::Function *group);
   Mux(pjs::Function *group, const Options &options);
 
 private:

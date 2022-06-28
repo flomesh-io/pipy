@@ -28,6 +28,8 @@
 
 #include "pjs/pjs.hpp"
 #include "options.hpp"
+#include "module.hpp"
+#include "filters/pack.hpp"
 
 #include <list>
 #include <memory>
@@ -54,6 +56,7 @@ class Logger : public pjs::ObjectTemplate<Logger> {
 public:
   static void set_admin_service(AdminService *admin_service);
   static void set_admin_link(AdminLink *admin_link);
+  static void shutdown_all();
 
   static void for_each(const std::function<void(Logger*)> &cb) {
     for (auto i : s_all_loggers) cb(i);
@@ -66,6 +69,7 @@ public:
   class Target {
   public:
     virtual void write(const Data &msg) = 0;
+    virtual void shutdown() {}
   };
 
   //
@@ -91,8 +95,23 @@ public:
     FileTarget(pjs::Str *filename);
 
   private:
-    virtual void write(const Data &msg) override;
 
+    //
+    // Logger::FileTarget::Module
+    //
+
+    class Module : public ModuleBase {
+    public:
+      Module() : ModuleBase(0, "Logger::FileTarget") {}
+      virtual auto new_context(pipy::Context *base) -> pipy::Context* override {
+        return new Context();
+      }
+    };
+
+    virtual void write(const Data &msg) override;
+    virtual void shutdown() override;
+
+    pjs::Ref<Module> m_module;
     pjs::Ref<PipelineLayout> m_pipeline_layout;
     pjs::Ref<Pipeline> m_pipeline;
   };
@@ -104,12 +123,8 @@ public:
   class HTTPTarget : public Target {
   public:
     struct Options : public pipy::Options {
-      size_t size = 1000;
-      double timeout = 5;
-      double interval = 5;
-      std::string head;
-      std::string tail;
-      std::string separator;
+      size_t batch_size = 1000;
+      Pack::Options batch;
       pjs::Ref<pjs::Str> method;
       pjs::Ref<pjs::Object> headers;
 
@@ -120,12 +135,28 @@ public:
     HTTPTarget(pjs::Str *url, const Options &options);
 
   private:
+
+    //
+    // Logger::HTTPTarget::Module
+    //
+
+    class Module : public ModuleBase {
+    public:
+      Module() : ModuleBase(0, "Logger::HTTPTarget") {}
+      virtual auto new_context(pipy::Context *base) -> pipy::Context* override {
+        return new Context();
+      }
+    };
+
+    pjs::Ref<Module> m_module;
+    pjs::Ref<pjs::Method> m_mux_grouper;
     pjs::Ref<PipelineLayout> m_ppl;
     pjs::Ref<PipelineLayout> m_ppl_connect;
     pjs::Ref<Pipeline> m_pipeline;
     pjs::Ref<MessageStart> m_message_start;
 
     virtual void write(const Data &msg) override;
+    virtual void shutdown() override;
   };
 
   auto name() const -> pjs::Str* { return m_name; }
@@ -139,6 +170,7 @@ public:
   void write(const Data &msg);
 
   virtual void log(int argc, const pjs::Value *args) = 0;
+  virtual void shutdown();
 
 protected:
   Logger(pjs::Str *name);

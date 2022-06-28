@@ -32,15 +32,24 @@ namespace pipy {
 // Pack::Options
 //
 
-Pack::Options::Options(pjs::Object *options) {
-  Value(options, "vacancy")
+Pack::Options::Options(pjs::Object *options, const char *base_name) {
+  Value(options, "vacancy", base_name)
     .get(vacancy)
     .check_nullable();
-  Value(options, "timeout")
+  Value(options, "timeout", base_name)
     .get_seconds(timeout)
     .check_nullable();
-  Value(options, "interval")
+  Value(options, "interval", base_name)
     .get_seconds(interval)
+    .check_nullable();
+  Value(options, "prefix", base_name)
+    .get(prefix)
+    .check_nullable();
+  Value(options, "postfix", base_name)
+    .get(postfix)
+    .check_nullable();
+  Value(options, "separator", base_name)
+    .get(separator)
     .check_nullable();
 }
 
@@ -48,16 +57,24 @@ Pack::Options::Options(pjs::Object *options) {
 // Pack
 //
 
+static Data::Producer s_dp("pack");
+
 Pack::Pack(int batch_size, const Options &options)
   : m_batch_size(batch_size)
   , m_options(options)
 {
+  if (options.prefix) m_prefix = s_dp.make(options.prefix->str());
+  if (options.postfix) m_postfix = s_dp.make(options.postfix->str());
+  if (options.separator) m_separator = s_dp.make(options.separator->str());
 }
 
 Pack::Pack(const Pack &r)
   : Filter(r)
   , m_batch_size(r.m_batch_size)
   , m_options(r.m_options)
+  , m_prefix(r.m_prefix)
+  , m_postfix(r.m_postfix)
+  , m_separator(r.m_separator)
 {
 }
 
@@ -83,14 +100,17 @@ void Pack::reset() {
 }
 
 void Pack::process(Event *evt) {
-  static Data::Producer s_dp("pack");
-
   schedule_timeout();
 
   if (auto start = evt->as<MessageStart>()) {
     if (m_message_starts == 0) {
       m_head = start->head();
       m_buffer = Data::make();
+      if (m_prefix) {
+        s_dp.pack(m_buffer, m_prefix, m_options.vacancy);
+      }
+    } else if (m_separator) {
+      s_dp.pack(m_buffer, m_separator, m_options.vacancy);
     }
     m_message_starts++;
 
@@ -120,6 +140,9 @@ void Pack::process(Event *evt) {
 }
 
 void Pack::flush(MessageEnd *end) {
+  if (m_postfix) {
+    s_dp.pack(m_buffer, m_postfix, m_options.vacancy);
+  }
   output(MessageStart::make(m_head));
   output(m_buffer);
   output(end);

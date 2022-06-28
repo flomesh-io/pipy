@@ -81,12 +81,13 @@ public:
     Data* make(const std::string &str) { return Data::make(str, this); }
     Data* make(const std::string &str, Encoding encoding) { return Data::make(str, encoding, this); }
 
+    void push(Data *data, const Data *data2) { data->push(*data2); }
     void push(Data *data, const void *p, int n) { data->push(p, n, this); }
     void push(Data *data, const std::string &str) { data->push(str, this); }
     void push(Data *data, const char *str) { data->push(str, this); }
     void push(Data *data, char ch) { data->push(ch, this); }
 
-    void pack(Data *data, Data *appendant, double vacancy = 0.5) { data->pack(*appendant, this, vacancy); }
+    void pack(Data *data, const Data *appendant, double vacancy = 0.5) { data->pack(*appendant, this, vacancy); }
 
   private:
     pjs::Ref<pjs::Str> m_name;

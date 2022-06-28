@@ -43,12 +43,15 @@ namespace pipy {
 class Pack : public Filter {
 public:
   struct Options : public pipy::Options {
-    double timeout = 0;
+    double timeout = 5;
     double vacancy = 0.5;
-    double interval = 0;
+    double interval = 5;
+    pjs::Ref<pjs::Str> prefix;
+    pjs::Ref<pjs::Str> postfix;
+    pjs::Ref<pjs::Str> separator;
 
     Options() {}
-    Options(pjs::Object *options);
+    Options(pjs::Object *options, const char *base_name = nullptr);
   };
 
   Pack(int batch_size, const Options &options);
@@ -67,6 +70,9 @@ private:
   int m_message_ends = 0;
   Options m_options;
   pjs::Ref<pjs::Object> m_head;
+  pjs::Ref<Data> m_prefix;
+  pjs::Ref<Data> m_postfix;
+  pjs::Ref<Data> m_separator;
   pjs::Ref<Data> m_buffer;
   Timer m_timer;
   bool m_timer_scheduled = false;

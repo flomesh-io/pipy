@@ -183,6 +183,7 @@ static void handle_signal(int sig) {
   switch (sig) {
     case SIGINT:
       if (!s_admin_closed) {
+        logging::Logger::shutdown_all();
         if (s_admin_link) s_admin_link->close();
         if (s_admin) s_admin->close();
         s_admin_closed = true;

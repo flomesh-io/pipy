@@ -32,7 +32,7 @@ namespace pipy {
 
 Options::Value::Value(pjs::Object *options, const char *name, const char *base_name)
   : m_name(name)
-  , m_base_name(base_name)
+  , m_base_name(base_name ? base_name : "options")
 {
   if (options) {
     options->get(name, m_value);
@@ -41,7 +41,7 @@ Options::Value::Value(pjs::Object *options, const char *name, const char *base_n
 
 Options::Value::Value(pjs::Object *options, pjs::Str *name, const char *base_name)
   : m_name(name->c_str())
-  , m_base_name(base_name)
+  , m_base_name(base_name ? base_name : "options")
 {
   if (options) {
     options->get(name, m_value);

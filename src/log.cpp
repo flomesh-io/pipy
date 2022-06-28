@@ -65,7 +65,6 @@ static void logf(Log::Level level, const char *fmt, va_list ap) {
       Data::Builder db(buf, &s_dp);
       db.push(header, Log::format_header(level, header, sizeof(header)));
       db.push(msg, std::vsnprintf(msg, sizeof(msg), fmt, ap));
-      db.push('\n');
       db.flush();
       s_logger->write(buf);
       s_is_logging = false;

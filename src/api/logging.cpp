@@ -81,6 +81,14 @@ void Logger::set_admin_link(AdminLink *admin_link) {
   );
 }
 
+void Logger::shutdown_all() {
+  for_each(
+    [](Logger *logger) {
+      logger->shutdown();
+    }
+  );
+}
+
 Logger::Logger(pjs::Str *name)
   : m_name(name)
 {
@@ -98,6 +106,7 @@ void Logger::write(const Data &msg) {
       auto len = std::get<1>(c);
       std::fwrite(ptr, 1, len, stderr);
     }
+    std::cerr << std::endl;
   } else if (InputContext::origin()) {
     write_internal(msg);
   } else {
@@ -107,12 +116,17 @@ void Logger::write(const Data &msg) {
 }
 
 void Logger::write_internal(const Data &msg) {
+  static Data::Producer s_dp("Log Reports");
+
+  Data msg_endl;
+  s_dp.pack(&msg_endl, &msg);
+  s_dp.push(&msg_endl, '\n');
+
   if (s_admin_service) {
-    s_admin_service->write_log(m_name->str(), msg);
+    s_admin_service->write_log(m_name->str(), msg_endl);
   }
 
   if (s_admin_link && m_admin_link_enabled) {
-    static Data::Producer s_dp("Log Reports");
     static std::string s_prefix("log/");
     Data buf;
     Data::Builder db(buf, &s_dp);
@@ -120,12 +134,18 @@ void Logger::write_internal(const Data &msg) {
     db.push(m_name->str());
     db.push('\n');
     db.flush();
-    buf.push(msg);
+    buf.push(msg_endl);
     s_admin_link->send(buf);
   }
 
   for (const auto &p : m_targets) {
     p->write(msg);
+  }
+}
+
+void Logger::shutdown() {
+  for (const auto &p : m_targets) {
+    p->shutdown();
   }
 }
 
@@ -135,14 +155,20 @@ Logger::StdoutTarget::StdoutTarget(FILE *f) {
 }
 
 void Logger::StdoutTarget::write(const Data &msg) {
-  m_file_stream->input()->input(Data::make(msg));
+  auto dp = m_file_stream->data_producer();
+  Data *buf = Data::make();
+  dp->push(buf, &msg);
+  dp->push(buf, '\n');
+  m_file_stream->input()->input(buf);
 }
 
 //
 // Logger::FileTarget
 //
 
-Logger::FileTarget::FileTarget(pjs::Str *filename) {
+Logger::FileTarget::FileTarget(pjs::Str *filename)
+  : m_module(new Module)
+{
   PipelineLayout *ppl = PipelineLayout::make();
   ppl->append(new Tee(filename));
 
@@ -151,7 +177,16 @@ Logger::FileTarget::FileTarget(pjs::Str *filename) {
 }
 
 void Logger::FileTarget::write(const Data &msg) {
-  m_pipeline->input()->input(Data::make(msg));
+  static Data::Producer s_dp("Logger::FileTarget");
+  Data *buf = Data::make();
+  s_dp.push(buf, &msg);
+  s_dp.push(buf, '\n');
+  m_pipeline->input()->input(buf);
+}
+
+void Logger::FileTarget::shutdown() {
+  m_module->shutdown();
+  m_pipeline = nullptr;
 }
 
 //
@@ -160,28 +195,14 @@ void Logger::FileTarget::write(const Data &msg) {
 
 Logger::HTTPTarget::Options::Options(pjs::Object *options) {
   const char *options_batch = "options.batch";
-  pjs::Ref<pjs::Object> batch;
+  pjs::Ref<pjs::Object> batch_options;
   Value(options, "batch")
-    .get(batch)
+    .get(batch_options)
     .check_nullable();
-  Value(batch, "size", options_batch)
-    .get(size)
+  Value(batch_options, "size", options_batch)
+    .get(batch_size)
     .check_nullable();
-  Value(batch, "timeout", options_batch)
-    .get_seconds(timeout)
-    .check_nullable();
-  Value(batch, "interval", options_batch)
-    .get_seconds(interval)
-    .check_nullable();
-  Value(batch, "head", options_batch)
-    .get(head)
-    .check_nullable();
-  Value(batch, "tail", options_batch)
-    .get(tail)
-    .check_nullable();
-  Value(batch, "separator", options_batch)
-    .get(separator)
-    .check_nullable();
+  batch = Pack::Options(batch_options, options_batch);
   Value(options, "method")
     .get(method)
     .check_nullable();
@@ -190,17 +211,25 @@ Logger::HTTPTarget::Options::Options(pjs::Object *options) {
     .check_nullable();
 }
 
-Logger::HTTPTarget::HTTPTarget(pjs::Str *url, const Options &options) {
+Logger::HTTPTarget::HTTPTarget(pjs::Str *url, const Options &options)
+  : m_module(new Module)
+{
+  static Data::Producer s_dp("Logger::HTTPTarget");
+
   pjs::Ref<URL> url_obj = URL::make(url);
 
-  PipelineLayout *ppl = PipelineLayout::make();
-  PipelineLayout *ppl_connect = PipelineLayout::make();
+  m_mux_grouper = pjs::Method::make(
+    "", 0, 0, nullptr,
+    [](pjs::Context &, pjs::Object *, pjs::Value &ret) {
+      ret.set(pjs::Str::empty);
+    }
+  );
 
-  Pack::Options pack_options;
-  pack_options.timeout = options.timeout;
-  pack_options.interval = options.interval;
-  ppl->append(new Mux(nullptr, nullptr))->add_sub_pipeline(ppl_connect);
-  ppl_connect->append(new Pack(options.size, pack_options));
+  PipelineLayout *ppl = PipelineLayout::make(m_module);
+  PipelineLayout *ppl_connect = PipelineLayout::make(m_module);
+
+  ppl->append(new Mux(pjs::Function::make(m_mux_grouper)))->add_sub_pipeline(ppl_connect);
+  ppl_connect->append(new Pack(options.batch_size, options.batch));
   ppl_connect->append(new http::RequestEncoder(http::RequestEncoder::Options()));
   ppl_connect->append(new Connect(url_obj->host(), Connect::Options()));
 
@@ -209,17 +238,22 @@ Logger::HTTPTarget::HTTPTarget(pjs::Str *url, const Options &options) {
 
   auto *head = http::RequestHead::make();
   static pjs::ConstStr s_POST("POST");
-  head->method(s_POST);
+  head->method(options.method ? options.method.get() : s_POST.get());
+  head->headers(options.headers ? options.headers.get() : pjs::Object::make());
   m_message_start = MessageStart::make(head);
 }
 
 void Logger::HTTPTarget::write(const Data &msg) {
   m_pipeline = Pipeline::make(m_ppl, new Context());
   auto *input = m_pipeline->input();
-  InputContext ic;
   input->input(m_message_start);
   input->input(Data::make(msg));
   input->input(MessageEnd::make());
+}
+
+void Logger::HTTPTarget::shutdown() {
+  m_module->shutdown();
+  m_pipeline = nullptr;
 }
 
 //
@@ -250,7 +284,6 @@ void BinaryLogger::log(int argc, const pjs::Value *args) {
       s->release();
     }
   }
-  db.push('\n');
   db.flush();
   write(data);
 }
@@ -274,7 +307,6 @@ void TextLogger::log(int argc, const pjs::Value *args) {
       JSON::encode(v, nullptr, 0, db);
     }
   }
-  db.push('\n');
   db.flush();
   write(data);
 }
@@ -284,6 +316,15 @@ void TextLogger::log(int argc, const pjs::Value *args) {
 //
 
 void JSONLogger::log(int argc, const pjs::Value *args) {
+  static Data::Producer s_dp("JSONLogger");
+  Data data;
+  Data::Builder db(data, &s_dp);
+  for (int i = 0; i < argc; i++) {
+    auto &v = args[i];
+    JSON::encode(v, nullptr, 0, db);
+  }
+  db.flush();
+  write(data);
 }
 
 } // namespace logging

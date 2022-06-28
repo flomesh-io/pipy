@@ -52,10 +52,8 @@ auto Print::clone() -> Filter* {
 }
 
 void Print::process(Event *evt) {
-  static std::string s_newline("\n");
   if (auto *data = evt->as<Data>()) {
     Log::write(*data);
-    Log::write(s_newline);
   }
 
   output(evt);
