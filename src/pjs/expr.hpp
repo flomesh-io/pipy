@@ -1249,6 +1249,7 @@ public:
   virtual void to_arguments(std::vector<Ref<Str>> &args, std::vector<Ref<Str>> &vars) const override;
   virtual bool eval(Context &ctx, Value &result) override;
   virtual void resolve(Context &ctx, int l, Imports *imports) override;
+  virtual bool unpack(Context &ctx, Value &arg, int &var) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:

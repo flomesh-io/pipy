@@ -1811,6 +1811,10 @@ void Assignment::resolve(Context &ctx, int l, Imports *imports) {
   m_r->resolve(ctx, l, imports);
 }
 
+bool Assignment::unpack(Context &ctx, Value &arg, int &var) {
+  return m_l->unpack(ctx, arg, var);
+}
+
 void Assignment::dump(std::ostream &out, const std::string &indent) {
   out << indent << "assignment" << std::endl;
   m_l->dump(out, indent + "  ");
