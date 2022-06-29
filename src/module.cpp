@@ -139,8 +139,15 @@ bool Module::load(const std::string &path) {
   Log::info("[config] %s", std::string(title.length(), '=').c_str());
   Log::info("[config]");
 
-  Graph g;
   auto config = result.as<Configuration>();
+  try {
+    config->check_integrity();
+  } catch (std::runtime_error &err) {
+    Log::error("[config] %s", err.what());
+    return false;
+  }
+
+  Graph g;
   config->draw(g);
 
   error.clear();

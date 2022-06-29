@@ -350,6 +350,7 @@ auto FilterConfigurator::sub_pipeline(const std::string &name, const std::functi
   int index = -1;
   pjs::Ref<FilterConfigurator> fc(m_configuration->new_indexed_pipeline(name, index));
   cb(fc);
+  fc->check_integrity();
   return index;
 }
 
@@ -364,9 +365,7 @@ auto FilterConfigurator::append_filter(Filter *filter) -> Filter* {
     delete filter;
     throw std::runtime_error("no pipeline found");
   }
-  if (m_current_joint_filter) {
-    throw std::runtime_error("missing .to(...) pointing to a sub-pipeline layout");
-  }
+  check_integrity();
   m_filters->emplace_back(filter);
   return filter;
 }
@@ -424,12 +423,14 @@ void Configuration::add_import(pjs::Object *variables) {
 }
 
 void Configuration::listen(int port, pjs::Object *options) {
+  check_integrity();
   Listener::Options opt(options);
   m_listens.push_back({ next_pipeline_index(), "0.0.0.0", port, opt });
   FilterConfigurator::set_filter_list(&m_listens.back().filters);
 }
 
 void Configuration::listen(const std::string &port, pjs::Object *options) {
+  check_integrity();
   std::string addr;
   int port_num;
   if (!utils::get_host_port(port, addr, port_num)) {
@@ -449,11 +450,13 @@ void Configuration::listen(const std::string &port, pjs::Object *options) {
 }
 
 void Configuration::read(const std::string &pathname) {
+  check_integrity();
   m_readers.push_back({ next_pipeline_index(), pathname });
   FilterConfigurator::set_filter_list(&m_readers.back().filters);
 }
 
 void Configuration::task(const std::string &when) {
+  check_integrity();
   std::string name("Task #");
   name += std::to_string(m_tasks.size() + 1);
   m_tasks.push_back({ next_pipeline_index(), name, when });
@@ -461,6 +464,7 @@ void Configuration::task(const std::string &when) {
 }
 
 void Configuration::pipeline(const std::string &name) {
+  check_integrity();
   if (name.empty()) throw std::runtime_error("pipeline name cannot be empty");
   m_named_pipelines.push_back({ next_pipeline_index(), name });
   FilterConfigurator::set_filter_list(&m_named_pipelines.back().filters);
