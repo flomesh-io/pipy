@@ -47,6 +47,7 @@ protected:
   QueueDemuxer() {}
 
   virtual auto on_new_sub_pipeline() -> Pipeline* = 0;
+  virtual bool on_reply_start(MessageStart *start) { return true; }
 
 private:
   class Stream;
@@ -57,6 +58,19 @@ private:
 
   void on_event(Event *evt) override;
   void flush();
+
+  //
+  // QueueDemuxer::Response
+  //
+
+  struct Response :
+    public pjs::Pooled<Response>,
+    public List<Response>::Item
+  {
+    pjs::Ref<MessageStart> start;
+    pjs::Ref<MessageEnd> end;
+    Data buffer;
+  };
 
   //
   // QueueDemuxer::Stream
@@ -75,11 +89,8 @@ private:
 
     QueueDemuxer* m_demuxer;
     pjs::Ref<Pipeline> m_pipeline;
-    pjs::Ref<MessageStart> m_start;
-    pjs::Ref<MessageEnd> m_end;
-    Data m_buffer;
+    List<Response> m_responses;
     bool m_input_end = false;
-    bool m_output_end = false;
     bool m_isolated = false;
 
     virtual void on_reply(Event *evt) override;

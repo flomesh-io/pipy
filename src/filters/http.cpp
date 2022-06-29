@@ -1169,6 +1169,7 @@ Demux::Demux(const Options &options)
   : Decoder(false)
   , Encoder(true)
   , m_options(options)
+  , m_prop_status(s_status)
 {
 }
 
@@ -1177,6 +1178,7 @@ Demux::Demux(const Demux &r)
   , Decoder(false)
   , Encoder(true)
   , m_options(r.m_options)
+  , m_prop_status(s_status)
 {
 }
 
@@ -1234,6 +1236,16 @@ auto Demux::on_new_sub_pipeline() -> Pipeline* {
   return sub_pipeline(0, true);
 }
 
+bool Demux::on_reply_start(MessageStart *start) {
+  int status;
+  auto head = start->head();
+  if (head && m_prop_status.get(head, status) && status == 100) {
+    return false; // not the last response
+  } else {
+    return true;
+  }
+}
+
 void Demux::on_decode_error() {
   Filter::output(StreamEnd::make());
 }
@@ -1263,7 +1275,12 @@ void Demux::on_decode_request(http::RequestHead *head) {
 }
 
 void Demux::on_encode_response(pjs::Object *head) {
-  if (auto req = m_request_queue.shift()) {
+  int status;
+  if (head && m_prop_status.get(head, status) && status == 100) {
+    if (auto req = m_request_queue.head()) {
+      Encoder::set_bodiless(true);
+    }
+  } else if (auto req = m_request_queue.shift()) {
     Encoder::set_final(req->is_final());
     Encoder::set_bodiless(req->is_bodiless());
     Encoder::set_tunnel(req->is_switching());
@@ -1399,7 +1416,12 @@ void Mux::Session::on_encode_request(pjs::Object *head) {
 }
 
 void Mux::Session::on_decode_response(http::ResponseHead *head) {
-  if (auto *req = m_request_queue.shift()) {
+  if (head->status() == 100) {
+    if (auto *req = m_request_queue.head()) {
+      Decoder::set_bodiless(true);
+      QueueMuxer::increase_queue_count();
+    }
+  } else if (auto *req = m_request_queue.shift()) {
     Decoder::set_bodiless(req->is_bodiless());
     if (req->is_http2()) {
       // TODO

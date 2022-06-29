@@ -72,6 +72,7 @@ void QueueDemuxer::on_event(Event *evt) {
   if (auto *start = evt->as<MessageStart>()) {
     if (!m_streams.tail() || m_streams.tail()->m_input_end) {
       auto stream = new Stream(this);
+      stream->m_responses.push(new Response);
       m_streams.push(stream);
       stream->output(start);
     }
@@ -104,15 +105,24 @@ void QueueDemuxer::on_event(Event *evt) {
 void QueueDemuxer::flush() {
   auto &streams = m_streams;
   while (auto stream = streams.head()) {
-    if (stream->m_start) {
-      output(stream->m_start);
-      if (!stream->m_buffer.empty()) {
-        output(Data::make(std::move(stream->m_buffer)));
+    auto &responses = stream->m_responses;
+    while (auto *r = responses.head()) {
+      if (r->start) {
+        output(r->start);
+        if (!r->buffer.empty()) {
+          output(Data::make(std::move(r->buffer)));
+        }
+      }
+      if (r->end) {
+        responses.remove(r);
+        output(r->end);
+        delete r;
+      } else {
+        break;
       }
     }
-    if (stream->m_output_end) {
+    if (responses.empty()) {
       streams.remove(stream);
-      output(stream->m_end);
       delete stream;
     } else {
       break;
@@ -144,6 +154,10 @@ QueueDemuxer::Stream::Stream(QueueDemuxer *demuxer)
 }
 
 QueueDemuxer::Stream::~Stream() {
+  while (auto *r = m_responses.head()) {
+    m_responses.remove(r);
+    delete r;
+  }
   Pipeline::auto_release(m_pipeline);
 }
 
@@ -155,49 +169,60 @@ void QueueDemuxer::Stream::on_reply(Event *evt) {
     return;
   }
 
+  auto r = m_responses.head();
+  while (r && r->end) r = r->next();
+  if (!r) return;
+
   bool is_head = (demuxer->m_streams.head() == this);
 
-  if (m_output_end) return;
-
   if (auto start = evt->as<MessageStart>()) {
-    if (!m_start) {
-      m_start = start;
+    if (!r->start) {
+      r->start = start;
+      if (!demuxer->on_reply_start(start)) {
+        m_responses.push(new Response);
+      }
       if (is_head) {
         demuxer->output(evt);
       }
     }
 
   } else if (auto data = evt->as<Data>()) {
-    if (m_start) {
+    if (r->start) {
       if (is_head) {
         demuxer->output(evt);
       } else {
-        m_buffer.push(*data);
+        r->buffer.push(*data);
       }
     }
 
   } else if (auto end = evt->as<MessageEnd>()) {
-    if (m_start) {
-      m_end = end;
+    if (r->start) {
+      r->end = end;
       if (is_head) {
-        demuxer->m_streams.remove(this);
+        m_responses.remove(r);
+        delete r;
+        bool is_stream_end = m_responses.empty();
+        if (is_stream_end) demuxer->m_streams.remove(this);
         demuxer->output(evt);
         demuxer->flush();
-        delete this;
-      } else {
-        m_output_end = true;
+        if (is_stream_end) delete this;
       }
     }
 
   } else if (evt->is<StreamEnd>()) {
     if (is_head) {
       demuxer->m_streams.remove(this);
-      if (!m_start) demuxer->output(MessageStart::make());
+      if (!r->start) demuxer->output(MessageStart::make());
       demuxer->output(MessageEnd::make());
       demuxer->flush();
       delete this;
     } else {
-      m_output_end = true;
+      if (!r->start) r->start = MessageStart::make();
+      r->end = MessageEnd::make();
+      while (auto *n = r->next()) {
+        m_responses.remove(n);
+        delete n;
+      }
     }
   }
 }

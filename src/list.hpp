@@ -85,6 +85,19 @@ public:
     m_size++;
   }
 
+  void insert(Item *item, Item *before) {
+    if (auto *b = before->m_back) {
+      item->m_back = b;
+      b->m_next = item;
+    } else {
+      item->m_back = nullptr;
+      m_head = item;
+    }
+    item->m_next = before;
+    before->m_back = item;
+    m_size++;
+  }
+
   void remove(Item *item) {
     if (item->m_next) item->m_next->m_back = item->m_back; else m_tail = item->m_back;
     if (item->m_back) item->m_back->m_next = item->m_next; else m_head = item->m_next;

@@ -289,6 +289,7 @@ public:
   void reset();
   void shutdown();
   void push(Request *req);
+  auto head() const -> Request* { return m_queue.head(); }
   auto shift() -> Request*;
 
 private:
@@ -348,9 +349,11 @@ private:
 
   Options m_options;
   RequestQueue m_request_queue;
+  pjs::PropertyCache m_prop_status;
   HTTP2Demuxer* m_http2_demuxer = nullptr;
 
   virtual auto on_new_sub_pipeline() -> Pipeline* override;
+  virtual bool on_reply_start(MessageStart *start) override;
   virtual void on_decode_error() override;
   virtual void on_decode_request(http::RequestHead *head) override;
   virtual void on_encode_response(pjs::Object *head) override;

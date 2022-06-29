@@ -172,6 +172,7 @@ class QueueMuxer : public EventSource {
 public:
   auto open() -> EventFunction*;
   void close(EventFunction *stream);
+  void increase_queue_count();
   void reset();
   void isolate();
 
@@ -204,8 +205,8 @@ private:
     QueueMuxer* m_muxer;
     pjs::Ref<MessageStart> m_start;
     Data m_buffer;
+    int m_queued_count = 0;
     bool m_started = false;
-    bool m_queued = false;
     bool m_isolated = false;
 
     friend class QueueMuxer;

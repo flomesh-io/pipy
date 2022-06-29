@@ -332,6 +332,12 @@ void QueueMuxer::close(EventFunction *stream) {
   s->release();
 }
 
+void QueueMuxer::increase_queue_count() {
+  if (auto s = m_streams.head()) {
+    s->m_queued_count++;
+  }
+}
+
 void QueueMuxer::reset() {
   while (auto s = m_streams.head()) {
     m_streams.remove(s);
@@ -370,9 +376,14 @@ void QueueMuxer::on_reply(Event *evt) {
   } else if (evt->is<MessageEnd>()) {
     if (auto s = m_streams.head()) {
       if (s->m_started) {
-        m_streams.remove(s);
-        s->output(evt);
-        s->release();
+        if (!--s->m_queued_count) {
+          m_streams.remove(s);
+          s->output(evt);
+          s->release();
+        } else {
+          s->m_started = false;
+          s->output(evt);
+        }
       }
     }
 
@@ -413,15 +424,15 @@ void QueueMuxer::Stream::on_event(Event *evt) {
     }
 
   } else if (auto data = evt->as<Data>()) {
-    if (m_start && !m_queued) {
+    if (m_start && !m_queued_count) {
       m_buffer.push(*data);
     }
 
   } else if (evt->is<MessageEnd>() || evt->is<StreamEnd>()) {
-    if (m_start && !m_queued) {
+    if (m_start && !m_queued_count) {
       auto *end = evt->as<MessageEnd>();
       retain();
-      m_queued = true;
+      m_queued_count = 1;
       muxer->m_streams.push(this);
       muxer->output(m_start);
       if (!m_buffer.empty()) {
