@@ -31,22 +31,22 @@
 
 namespace pipy {
 
-FileStream::FileStream(int fd, Data::Producer *dp)
+FileStream::FileStream(bool read, int fd, Data::Producer *dp)
   : FlushTarget(true)
   , m_stream(Net::context(), fd)
   , m_f(nullptr)
   , m_dp(dp)
 {
-  read();
+  if (read) this->read();
 }
 
-FileStream::FileStream(FILE *f, Data::Producer *dp)
+FileStream::FileStream(bool read, FILE *f, Data::Producer *dp)
   : FlushTarget(true)
   , m_stream(Net::context(), fileno(f))
   , m_f(f)
   , m_dp(dp)
 {
-  read();
+  if (read) this->read();
 }
 
 void FileStream::close() {

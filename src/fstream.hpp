@@ -48,12 +48,12 @@ class FileStream :
   public FlushTarget
 {
 public:
-  static auto make(int fd, Data::Producer *dp) -> FileStream* {
-    return new FileStream(fd, dp);
+  static auto make(bool read, int fd, Data::Producer *dp) -> FileStream* {
+    return new FileStream(read, fd, dp);
   }
 
-  static auto make(FILE *f, Data::Producer *dp) -> FileStream* {
-    return new FileStream(f, dp);
+  static auto make(bool read, FILE *f, Data::Producer *dp) -> FileStream* {
+    return new FileStream(read, f, dp);
   }
 
   auto fd() const -> int { return m_fd; }
@@ -62,8 +62,8 @@ public:
   void close();
 
 private:
-  FileStream(int fd, Data::Producer *dp);
-  FileStream(FILE *f, Data::Producer *dp);
+  FileStream(bool read, int fd, Data::Producer *dp);
+  FileStream(bool read, FILE *f, Data::Producer *dp);
 
   virtual void on_event(Event *evt) override;
   virtual void on_flush() override;

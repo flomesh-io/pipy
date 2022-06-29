@@ -104,7 +104,7 @@ void Logger::write(const Data &msg) {
     for (const auto c : msg.chunks()) {
       auto ptr = std::get<0>(c);
       auto len = std::get<1>(c);
-      std::fwrite(ptr, 1, len, stderr);
+      std::cerr.write(ptr, len);
     }
     std::cerr << std::endl;
   } else if (InputContext::origin()) {
@@ -151,7 +151,7 @@ void Logger::shutdown() {
 
 Logger::StdoutTarget::StdoutTarget(FILE *f) {
   static Data::Producer s_dp("Logger::StdoutTarget");
-  m_file_stream = FileStream::make(f, &s_dp);
+  m_file_stream = FileStream::make(false, f, &s_dp);
 }
 
 void Logger::StdoutTarget::write(const Data &msg) {

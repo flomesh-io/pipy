@@ -65,7 +65,7 @@ void File::open_read(int seek, const std::function<void(FileStream*)> &cb) {
         Net::post(
           [=]() {
             m_f = f;
-            m_stream = FileStream::make(f, &s_dp);
+            m_stream = FileStream::make(true, f, &s_dp);
             if (m_closed) {
               close();
             }
@@ -107,7 +107,7 @@ void File::open_write() {
           [=]() {
             m_f = f;
             m_writing = true;
-            m_stream = FileStream::make(f, &s_dp);
+            m_stream = FileStream::make(false, f, &s_dp);
             if (!m_buffer.empty()) {
               InputContext ic;
               m_stream->input()->input(Data::make(m_buffer));

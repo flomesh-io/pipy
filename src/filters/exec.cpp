@@ -117,8 +117,8 @@ void Exec::process(Event *evt) {
     pipe(in);
     pipe(out);
 
-    m_stdin = FileStream::make(in[1], &s_dp);
-    m_stdout = FileStream::make(out[0], &s_dp);
+    m_stdin = FileStream::make(false, in[1], &s_dp);
+    m_stdout = FileStream::make(true, out[0], &s_dp);
     m_stdout->chain(output());
 
     m_pid = fork();
