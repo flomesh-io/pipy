@@ -596,6 +596,7 @@ void Configuration::draw(Graph &g) {
 
   for (const auto &i : m_listens) {
     Graph::Pipeline p;
+    p.index = i.index;
     p.label = "Listen on ";
     p.label += std::to_string(i.port);
     p.label += " at ";
@@ -606,6 +607,7 @@ void Configuration::draw(Graph &g) {
 
   for (const auto &i : m_readers) {
     Graph::Pipeline p;
+    p.index = i.index;
     p.label = "Read ";
     p.label += i.pathname;
     add_filters(p, i.filters);
@@ -614,6 +616,7 @@ void Configuration::draw(Graph &g) {
 
   for (const auto &i : m_tasks) {
     Graph::Pipeline p;
+    p.index = i.index;
     p.label = i.name;
     p.label += " (";
     p.label += i.when;

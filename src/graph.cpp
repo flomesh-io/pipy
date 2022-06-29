@@ -626,7 +626,7 @@ auto Graph::build_text(Node *root) -> std::vector<std::string> {
 
   auto push_line = [&](const std::string &line, Node *exit = nullptr) {
     std::string trim(line);
-    while (trim.back() == ' ') trim.pop_back();
+    while (!trim.empty() && trim.back() == ' ') trim.pop_back();
     if (lines.empty() || exit || trim != lines.back()) {
       lines.push_back(trim);
       exits.push_back(exit);
