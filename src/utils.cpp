@@ -156,7 +156,7 @@ bool get_ip_v6(const std::string &str, uint16_t ip[]) {
       auto n = get_hex_uint16(&p);
       if (n < 0) return false;
       head[head_len++] = n;
-      if (*p == '\0') break;
+      if (*p == '%' || !*p) break;
       if (*p != ':') return false;
     }
   }
@@ -167,7 +167,7 @@ bool get_ip_v6(const std::string &str, uint16_t ip[]) {
       auto n = get_hex_uint16(&p);
       if (n < 0) return false;
       tail[tail_len++] = n;
-      if (*p == '\0') break;
+      if (*p == '%' || !*p) break;
       if (*p != ':') return false;
     }
   }
