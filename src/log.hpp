@@ -59,9 +59,9 @@ public:
   static void warn(const char *fmt, ...);
   static void error(const char *fmt, ...);
 
-  static void pjs_location(const std::string &source, int line, int column);
+  static void pjs_location(const std::string &source, const std::string &filename, int line, int column);
   static void pjs_error(const pjs::Context::Error &err);
-  static void pjs_error(const pjs::Context::Error &err, const std::string &source);
+  static void pjs_error(const pjs::Context::Error &err, const std::string &source, const std::string &filename);
 };
 
 } // namespace pipy

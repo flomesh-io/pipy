@@ -135,7 +135,7 @@ void Log::error(const char *fmt, ...) {
   va_end(ap);
 }
 
-void Log::pjs_location(const std::string &source, int line, int column) {
+void Log::pjs_location(const std::string &source, const std::string &filename, int line, int column) {
   if (line > 0 && column > 0) {
     size_t i = 0;
     for (int l = 1; l < line; l++, i++) {
@@ -147,6 +147,7 @@ void Log::pjs_location(const std::string &source, int line, int column) {
     while (j < source.length() && source[j] != '\n') j++;
     auto str = source.substr(i, j - i);
     auto num = std::to_string(line);
+    if (!filename.empty()) error("[pjs] File %s:", filename.c_str());
     error("[pjs] Line %s:  %s" , num.c_str(), str.c_str());
     error("[pjs]      %s   %s^", std::string(num.length(), ' ').c_str(), std::string(column - 1, ' ').c_str());
   }
@@ -167,9 +168,9 @@ void Log::pjs_error(const pjs::Context::Error &err) {
   }
 }
 
-void Log::pjs_error(const pjs::Context::Error &err, const std::string &source) {
+void Log::pjs_error(const pjs::Context::Error &err, const std::string &source, const std::string &filename) {
   if (auto *loc = err.where()) {
-    pjs_location(source, loc->line, loc->column);
+    pjs_location(source, filename, loc->line, loc->column);
   }
   pjs_error(err);
 }

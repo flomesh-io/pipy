@@ -107,7 +107,7 @@ bool Module::load(const std::string &path) {
   m_script = std::unique_ptr<pjs::Expr>(expr);
 
   if (!expr) {
-    Log::pjs_location(m_source, error_line, error_column);
+    Log::pjs_location(m_source, path, error_line, error_column);
     Log::error(
       "[pjs] Syntax error: %s at line %d column %d in %s",
       error.c_str(), error_line, error_column, path.c_str()
@@ -121,7 +121,7 @@ bool Module::load(const std::string &path) {
   pjs::Value result;
   if (!expr->eval(*ctx, result)) {
     ctx->backtrace("(root)");
-    Log::pjs_error(ctx->error(), m_source);
+    Log::pjs_error(ctx->error(), m_source, path);
     return false;
   }
 

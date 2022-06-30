@@ -357,6 +357,22 @@ auto Worker::get_export(pjs::Str *ns, pjs::Str *name) -> Module* {
   return j->second;
 }
 
+auto Worker::get_source(int l) const -> const std::string& {
+  static std::string empty;
+  if (l >= 0) {
+    if (l < m_modules.size()) {
+      return m_modules[l]->source();
+    }
+  } else {
+    for (const auto &p : m_solved_files) {
+      if (p.second.index == -l) {
+        return p.second.source;
+      }
+    }
+  }
+  return empty;
+}
+
 auto Worker::new_loading_context() -> Context* {
   return new Context(nullptr, this, m_global_object);
 }
@@ -394,36 +410,45 @@ bool Worker::solve(pjs::Context &ctx, pjs::Str *filename, pjs::Value &result) {
 
   auto data = Codebase::current()->get(filename->str());
   if (!data) {
-    std::string msg("cannot open file to solve: ");
+    std::string msg("Cannot open script to solve: ");
     ctx.error(msg + filename->str());
     return false;
   }
 
   std::string source = data->to_string();
   std::string error;
+  char error_msg[1000];
   int error_line, error_column;
   auto expr = pjs::Parser::parse(source, error, error_line, error_column);
   if (!expr) {
-    char msg[1000];
     std::snprintf(
-      msg, sizeof(msg), "Syntax error: %s at line %d column %d in %s",
+      error_msg, sizeof(error_msg), "Syntax error: %s at line %d column %d in %s",
       error.c_str(),
       error_line,
       error_column,
       filename->c_str()
     );
-    Log::pjs_location(source, error_line, error_column);
-    Log::error("[pjs] %s", msg);
-    ctx.error(msg);
+    Log::pjs_location(source, filename->str(), error_line, error_column);
+    Log::error("[pjs] %s", error_msg);
+    std::snprintf(error_msg, sizeof(error_msg), "Cannot solve script: %s", filename->c_str());
+    ctx.error(error_msg);
     return false;
   }
 
   auto &f = m_solved_files[filename];
+  f.index = m_solved_files.size();
   f.filename = filename;
+  f.source = source;
   f.expr = std::unique_ptr<pjs::Expr>(expr);
   f.solving = true;
-  expr->resolve(ctx);
+  expr->resolve(ctx, -f.index);
   auto ret = expr->eval(ctx, result);
+  if (!ctx.ok()) {
+    Log::pjs_error(ctx.error(), source, filename->str());
+    std::snprintf(error_msg, sizeof(error_msg), "Cannot solve script: %s", filename->c_str());
+    ctx.reset();
+    ctx.error(error_msg);
+  }
   f.result = result;
   f.solving = false;
 

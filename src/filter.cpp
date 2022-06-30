@@ -236,7 +236,11 @@ bool Filter::eval(pjs::Function *func, pjs::Value &result) {
 
 void Filter::pjs_error() {
   auto mod = dynamic_cast<Module*>(module());
-  Log::pjs_error(context()->error(), mod ? mod->source() : std::string());
+  Log::pjs_error(
+    context()->error(),
+    mod ? mod->source() : std::string(),
+    mod ? mod->name()->str() : std::string()
+  );
 }
 
 } // namespace pipy
