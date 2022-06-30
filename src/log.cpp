@@ -142,7 +142,7 @@ void Log::pjs_location(const std::string &source, int line, int column) {
       while (i < source.length() && source[i] != '\n') i++;
       if (source[i] != '\n') return;
     }
-    while (i < source.length() && std::isblank(source[i])) { i++; column--; }
+    while (i < source.length() && std::isblank(source[i]) && column > 1) { i++; column--; }
     size_t j = i;
     while (j < source.length() && source[j] != '\n') j++;
     auto str = source.substr(i, j - i);
