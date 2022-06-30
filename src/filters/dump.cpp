@@ -139,7 +139,8 @@ void Dump::process(Event *evt) {
       db.push(s_hline);
       db.push('\n');
       data->scan(
-        [&](int ch) {
+        [&](int c) {
+          auto ch = uint8_t(c);
           hex[i++] = s_hex[ch >> 4];
           hex[i++] = s_hex[ch & 15];
           hex[i++] = ' ';
