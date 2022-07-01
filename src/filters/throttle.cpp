@@ -34,18 +34,25 @@ namespace pipy {
 // ThrottleBase
 //
 
-ThrottleBase::ThrottleBase(const pjs::Value &quota, const pjs::Value &account, bool auto_supply)
-  : m_account_manager(std::make_shared<AccountManager>(auto_supply))
-  , m_quota(quota)
-  , m_account(account)
-{
+ThrottleBase::ThrottleBase(pjs::Object *quota) {
+  if (quota) {
+    if (quota->is<algo::Quota>()) {
+      m_quota = quota->as<algo::Quota>();
+      return;
+    } else if (quota->is<pjs::Function>()) {
+      m_quota_f = quota->as<pjs::Function>();
+      return;
+    }
+  }
+  throw std::runtime_error(
+    "throttle filter expects an algo.Quota or a function that returns that"
+  );
 }
 
 ThrottleBase::ThrottleBase(const ThrottleBase &r)
   : Filter(r)
-  , m_account_manager(r.m_account_manager)
   , m_quota(r.m_quota)
-  , m_account(r.m_account)
+  , m_quota_f(r.m_quota_f)
 {
 }
 
@@ -56,41 +63,31 @@ ThrottleBase::~ThrottleBase()
 void ThrottleBase::reset() {
   Filter::reset();
   resume();
-  m_evaluated = false;
-  m_current_account = nullptr;
+  if (m_quota_f) m_quota = nullptr;
   m_buffer.clear();
 }
 
 void ThrottleBase::process(Event *evt) {
   if (Data::is_flush(evt)) return;
 
-  if (!m_evaluated) {
-    pjs::Value account, quota;
-    if (!eval(m_account, account)) return;
-    if (!eval(m_quota, quota)) return;
-    double quota_supply = 0;
-    if (quota.is_number()) {
-      quota_supply = quota.n();
-    } else if (quota.is_string()) {
-      quota_supply = utils::get_byte_size(quota.s()->str());
-    } else {
-      Log::error("[throttle] invalid quota");
+  if (!m_quota) {
+    pjs::Value ret;
+    if (!eval(m_quota_f, ret)) return;
+    if (!ret.is<algo::Quota>()) {
+      Log::error("[throttle] function did not return an object of type algo.Quota");
+      return;
     }
-    if (quota_supply > 0) {
-      m_current_account = m_account_manager->get(account, quota_supply);
-    }
-    m_evaluated = true;
+    m_quota = ret.as<algo::Quota>();
   }
 
-  if (!m_current_account) {
-    output(evt);
-
-  } else if (m_closed_tap) {
+  if (m_closed_tap) {
     m_buffer.push(evt);
 
-  } else if (auto stalled = consume(evt, m_current_account->m_quota)) {
-    pause();
-    m_buffer.push(stalled);
+  } else if (m_quota) {
+    if (auto stalled = consume(evt, m_quota)) {
+      pause();
+      m_buffer.push(stalled);
+    }
   }
 }
 
@@ -98,131 +95,34 @@ void ThrottleBase::pause() {
   if (!m_closed_tap) {
     m_closed_tap = InputContext::tap();
     m_closed_tap->close();
-    m_current_account->enqueue(this);
+    if (m_quota) m_quota->enqueue(this);
   }
 }
 
 void ThrottleBase::resume() {
   if (m_closed_tap) {
-    m_current_account->dequeue(this);
+    if (m_quota) m_quota->dequeue(this);
     m_closed_tap->open();
     m_closed_tap = nullptr;
   }
 }
 
-bool ThrottleBase::flush() {
+void ThrottleBase::on_consume(algo::Quota *quota) {
   while (auto evt = m_buffer.shift()) {
-    if (auto stalled = consume(evt, m_current_account->m_quota)) {
+    if (auto stalled = consume(evt, quota)) {
       m_buffer.unshift(stalled);
       evt->release();
-      return false;
+      return;
     } else {
       evt->release();
     }
   }
   resume();
-  return true;
-}
-
-//
-// ThrottleBase::Account
-//
-
-void ThrottleBase::Account::enqueue(ThrottleBase *filter) {
-  m_queue.push(filter);
-}
-
-void ThrottleBase::Account::dequeue(ThrottleBase *filter) {
-  m_queue.remove(filter);
-}
-
-void ThrottleBase::Account::supply(double quota) {
-  m_quota += quota;
-  if (m_quota >= 1) {
-    auto *f = m_queue.head();
-    while (f) {
-      auto *filter = f;
-      f = f->List<ThrottleBase>::Item::next();
-      if (!filter->flush()) break;
-    }
-  }
-}
-
-void ThrottleBase::Account::supply() {
-  if (m_quota < 1 || m_quota < m_quota_supply) {
-    supply(m_quota_supply);
-  }
-}
-
-//
-// ThrottleBase::AccountManager
-//
-
-ThrottleBase::AccountManager::AccountManager(bool auto_supply) {
-  if (auto_supply) {
-    supply();
-  }
-}
-
-auto ThrottleBase::AccountManager::get(const pjs::Value &key, double quota) -> Account* {
-  bool is_weak = (key.is_object() && key.o());
-  Account* account = nullptr;
-
-  if (is_weak) {
-    pjs::WeakRef<pjs::Object> o(key.o());
-    auto i = m_weak_accounts.find(o);
-    if (i != m_weak_accounts.end()) {
-      account = i->second;
-      if (!i->first.ptr()) {
-        account = nullptr;
-      }
-    }
-  } else {
-    auto i = m_accounts.find(key);
-    if (i != m_accounts.end()) {
-      account = i->second;
-    }
-  }
-
-  if (!account) {
-    account = new Account();
-    account->m_quota = quota;
-    if (is_weak) {
-      m_weak_accounts[key.o()] = account;
-    } else {
-      m_accounts[key] = account;
-    }
-  }
-
-  account->m_quota_supply = quota;
-  return account;
-}
-
-void ThrottleBase::AccountManager::supply() {
-  InputContext ic;
-  for (const auto &p : m_accounts) p.second->supply();
-  for (const auto &p : m_weak_accounts) p.second->supply();
-  m_timer.schedule(
-    1.0,
-    [this]() {
-      supply();
-    }
-  );
 }
 
 //
 // ThrottleMessageRate
 //
-
-ThrottleMessageRate::ThrottleMessageRate(const pjs::Value &quota, const pjs::Value &account)
-  : ThrottleBase(quota, account, true)
-{
-}
-
-ThrottleMessageRate::ThrottleMessageRate(const ThrottleMessageRate &r)
-  : ThrottleBase(r)
-{
-}
 
 void ThrottleMessageRate::dump(Dump &d) {
   Filter::dump(d);
@@ -233,10 +133,9 @@ auto ThrottleMessageRate::clone() -> Filter* {
   return new ThrottleMessageRate(*this);
 }
 
-auto ThrottleMessageRate::consume(Event *evt, double &quota) -> Event* {
+auto ThrottleMessageRate::consume(Event *evt, algo::Quota *quota) -> Event* {
   if (evt->is<MessageStart>()) {
-    if (quota >= 1) {
-      quota -= 1;
+    if (quota->consume(1) > 0) {
       output(evt);
       return nullptr;
     } else {
@@ -252,16 +151,6 @@ auto ThrottleMessageRate::consume(Event *evt, double &quota) -> Event* {
 // ThrottleDataRate
 //
 
-ThrottleDataRate::ThrottleDataRate(const pjs::Value &quota, const pjs::Value &account)
-  : ThrottleBase(quota, account, true)
-{
-}
-
-ThrottleDataRate::ThrottleDataRate(const ThrottleDataRate &r)
-  : ThrottleBase(r)
-{
-}
-
 void ThrottleDataRate::dump(Dump &d) {
   Filter::dump(d);
   d.name = "throttleDataRate";
@@ -271,11 +160,10 @@ auto ThrottleDataRate::clone() -> Filter* {
   return new ThrottleDataRate(*this);
 }
 
-auto ThrottleDataRate::consume(Event *evt, double &quota) -> Event* {
+auto ThrottleDataRate::consume(Event *evt, algo::Quota *quota) -> Event* {
   if (auto data = evt->as<Data>()) {
-    int n = int(quota);
-    if (data->size() <= n) {
-      quota -= data->size();
+    auto n = quota->consume(data->size());
+    if (n == data->size()) {
       output(data);
       return nullptr;
     } else {
@@ -295,16 +183,6 @@ auto ThrottleDataRate::consume(Event *evt, double &quota) -> Event* {
 // ThrottleConcurrency
 //
 
-ThrottleConcurrency::ThrottleConcurrency(const ThrottleConcurrency &r)
-  : ThrottleBase(r)
-{
-}
-
-ThrottleConcurrency::ThrottleConcurrency(const pjs::Value &quota, const pjs::Value &account)
-  : ThrottleBase(quota, account, false)
-{
-}
-
 void ThrottleConcurrency::dump(Dump &d) {
   Filter::dump(d);
   d.name = "throttleConcurrency";
@@ -316,32 +194,22 @@ auto ThrottleConcurrency::clone() -> Filter* {
 
 void ThrottleConcurrency::reset() {
   if (m_active) {
-    if (m_current_account) {
-      auto account = m_current_account.get();
-      account->retain();
-      Net::post(
-        [=]() {
-          account->supply(1);
-          account->release();
-        }
-      );
-    }
+    if (m_quota) m_quota->produce(1);
     m_active = false;
   }
   ThrottleBase::reset();
 }
 
-auto ThrottleConcurrency::consume(Event *evt, double &quota) -> Event* {
+auto ThrottleConcurrency::consume(Event *evt, algo::Quota *quota) -> Event* {
   if (m_active) {
     output(evt);
     return nullptr;
   }
 
-  if (quota < 1) {
+  if (quota->consume(1) == 0) {
     return evt;
   }
 
-  quota -= 1;
   m_active = true;
 
   output(evt);

@@ -93,7 +93,7 @@ public:
 
   class Consumer : public List<Consumer>::Item {
   public:
-    virtual auto on_consume(double quota) -> double = 0;
+    virtual void on_consume(Quota *quota) = 0;
 
   protected:
     Consumer() {}

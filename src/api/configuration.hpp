@@ -101,9 +101,9 @@ public:
   void serve_http(pjs::Object *handler);
   void split(pjs::Function *callback);
   void tee(const pjs::Value &filename);
-  void throttle_concurrency(const pjs::Value &quota, const pjs::Value &account);
-  void throttle_data_rate(const pjs::Value &quota, const pjs::Value &account);
-  void throttle_message_rate(const pjs::Value &quota, const pjs::Value &account);
+  void throttle_concurrency(pjs::Object *quota);
+  void throttle_data_rate(pjs::Object *quota);
+  void throttle_message_rate(pjs::Object *quota);
   void use(Module *module, pjs::Str *pipeline);
   void use(const std::list<Module*> modules, pjs::Str *pipeline, pjs::Function *when);
   void use(const std::list<Module*> modules, pjs::Str *pipeline, pjs::Str *pipeline_down, pjs::Function *when);

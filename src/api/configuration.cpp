@@ -301,16 +301,16 @@ void FilterConfigurator::tee(const pjs::Value &filename) {
   append_filter(new Tee(filename));
 }
 
-void FilterConfigurator::throttle_concurrency(const pjs::Value &quota, const pjs::Value &account) {
-  append_filter(new ThrottleConcurrency(quota, account));
+void FilterConfigurator::throttle_concurrency(pjs::Object *quota) {
+  append_filter(new ThrottleConcurrency(quota));
 }
 
-void FilterConfigurator::throttle_data_rate(const pjs::Value &quota, const pjs::Value &account) {
-  append_filter(new ThrottleDataRate(quota, account));
+void FilterConfigurator::throttle_data_rate(pjs::Object *quota) {
+  append_filter(new ThrottleDataRate(quota));
 }
 
-void FilterConfigurator::throttle_message_rate(const pjs::Value &quota, const pjs::Value &account) {
-  append_filter(new ThrottleMessageRate(quota, account));
+void FilterConfigurator::throttle_message_rate(pjs::Object *quota) {
+  append_filter(new ThrottleMessageRate(quota));
 }
 
 void FilterConfigurator::use(Module *module, pjs::Str *pipeline) {
@@ -1512,30 +1512,6 @@ template<> void ClassDef<FilterConfigurator>::init() {
     }
   });
 
-  // FilterConfigurator.throttleConcurrency
-  method("throttleConcurrency", [](Context &ctx, Object *thiz, Value &result) {
-    Value quota, account;
-    if (!ctx.arguments(1, &quota, &account)) return;
-    try {
-      thiz->as<FilterConfigurator>()->throttle_concurrency(quota, account);
-      result.set(thiz);
-    } catch (std::runtime_error &err) {
-      ctx.error(err);
-    }
-  });
-
-  // FilterConfigurator.throttleDataRate
-  method("throttleDataRate", [](Context &ctx, Object *thiz, Value &result) {
-    Value quota, account;
-    if (!ctx.arguments(1, &quota, &account)) return;
-    try {
-      thiz->as<FilterConfigurator>()->throttle_data_rate(quota, account);
-      result.set(thiz);
-    } catch (std::runtime_error &err) {
-      ctx.error(err);
-    }
-  });
-
   // FilterConfigurator.tee
   method("tee", [](Context &ctx, Object *thiz, Value &result) {
     Value filename;
@@ -1548,12 +1524,36 @@ template<> void ClassDef<FilterConfigurator>::init() {
     }
   });
 
+  // FilterConfigurator.throttleConcurrency
+  method("throttleConcurrency", [](Context &ctx, Object *thiz, Value &result) {
+    pjs::Object *quota;
+    if (!ctx.arguments(1, &quota)) return;
+    try {
+      thiz->as<FilterConfigurator>()->throttle_concurrency(quota);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // FilterConfigurator.throttleDataRate
+  method("throttleDataRate", [](Context &ctx, Object *thiz, Value &result) {
+    pjs::Object *quota;
+    if (!ctx.arguments(1, &quota)) return;
+    try {
+      thiz->as<FilterConfigurator>()->throttle_data_rate(quota);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
   // FilterConfigurator.throttleMessageRate
   method("throttleMessageRate", [](Context &ctx, Object *thiz, Value &result) {
-    Value quota, account;
-    if (!ctx.arguments(1, &quota, &account)) return;
+    pjs::Object *quota;
+    if (!ctx.arguments(1, &quota)) return;
     try {
-      thiz->as<FilterConfigurator>()->throttle_message_rate(quota, account);
+      thiz->as<FilterConfigurator>()->throttle_message_rate(quota);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

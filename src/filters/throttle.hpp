@@ -29,7 +29,7 @@
 #include "filter.hpp"
 #include "input.hpp"
 #include "list.hpp"
-#include "timer.hpp"
+#include "api/algo.hpp"
 
 #include <memory>
 #include <unordered_map>
@@ -40,9 +40,12 @@ namespace pipy {
 // ThrottleBase
 //
 
-class ThrottleBase : public Filter, public List<ThrottleBase>::Item {
+class ThrottleBase :
+  public Filter,
+  public algo::Quota::Consumer
+{
 public:
-  ThrottleBase(const pjs::Value &quota, const pjs::Value &account, bool auto_supply);
+  ThrottleBase(pjs::Object *quota);
 
 protected:
   ThrottleBase(const ThrottleBase &r);
@@ -50,55 +53,17 @@ protected:
 
   virtual void reset() override;
   virtual void process(Event *evt) override;
-  virtual auto consume(Event *evt, double &quota) -> Event* = 0;
+  virtual auto consume(Event *evt, algo::Quota *quota) -> Event* = 0;
 
-  class Account :
-    public pjs::RefCount<Account>,
-    public pjs::Pooled<Account>
-  {
-  public:
-    void enqueue(ThrottleBase *filter);
-    void dequeue(ThrottleBase *filter);
-    void supply(double quota);
-
-  private:
-    List<ThrottleBase> m_queue;
-    double m_quota;
-    double m_quota_supply;
-
-    void supply();
-
-    friend class AccountManager;
-    friend class ThrottleBase;
-  };
-
-  bool m_evaluated = false;
-  pjs::Ref<Account> m_current_account;
-
-private:
-  class AccountManager {
-  public:
-    AccountManager(bool auto_supply);
-
-    auto get(const pjs::Value &key, double quota) -> Account*;
-
-  private:
-    std::unordered_map<pjs::Value, pjs::Ref<Account>> m_accounts;
-    std::unordered_map<pjs::WeakRef<pjs::Object>, pjs::Ref<Account>> m_weak_accounts;
-    Timer m_timer;
-
-    void supply();
-  };
-
-  std::shared_ptr<AccountManager> m_account_manager;
-  pjs::Value m_quota;
-  pjs::Value m_account;
+  pjs::Ref<algo::Quota> m_quota;
+  pjs::Ref<pjs::Function> m_quota_f;
   EventBuffer m_buffer;
   pjs::Ref<InputSource::Tap> m_closed_tap;
 
   void pause();
   void resume();
-  bool flush();
+
+  virtual void on_consume(algo::Quota *quota) override;
 };
 
 //
@@ -107,13 +72,11 @@ private:
 
 class ThrottleMessageRate : public ThrottleBase {
 public:
-  ThrottleMessageRate(const pjs::Value &quota, const pjs::Value &account);
+  using ThrottleBase::ThrottleBase;
 
 protected:
-  ThrottleMessageRate(const ThrottleMessageRate &r);
-
   virtual auto clone() -> Filter* override;
-  virtual auto consume(Event *evt, double &quota) -> Event* override;
+  virtual auto consume(Event *evt, algo::Quota *quota) -> Event* override;
   virtual void dump(Dump &d) override;
 };
 
@@ -123,13 +86,11 @@ protected:
 
 class ThrottleDataRate : public ThrottleBase {
 public:
-  ThrottleDataRate(const pjs::Value &quota, const pjs::Value &account);
+  using ThrottleBase::ThrottleBase;
 
 protected:
-  ThrottleDataRate(const ThrottleDataRate &r);
-
   virtual auto clone() -> Filter* override;
-  virtual auto consume(Event *evt, double &quota) -> Event* override;
+  virtual auto consume(Event *evt, algo::Quota *quota) -> Event* override;
   virtual void dump(Dump &d) override;
 };
 
@@ -139,14 +100,12 @@ protected:
 
 class ThrottleConcurrency : public ThrottleBase {
 public:
-  ThrottleConcurrency(const pjs::Value &quota, const pjs::Value &account);
+  using ThrottleBase::ThrottleBase;
 
 protected:
-  ThrottleConcurrency(const ThrottleConcurrency &r);
-
   virtual auto clone() -> Filter* override;
   virtual void reset() override;
-  virtual auto consume(Event *evt, double &quota) -> Event* override;
+  virtual auto consume(Event *evt, algo::Quota *quota) -> Event* override;
   virtual void dump(Dump &d) override;
 
 private:

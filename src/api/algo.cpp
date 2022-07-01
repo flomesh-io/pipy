@@ -25,6 +25,7 @@
 
 #include "algo.hpp"
 #include "context.hpp"
+#include "input.hpp"
 #include "utils.hpp"
 #include "log.hpp"
 
@@ -191,6 +192,7 @@ Quota::Options::Options(pjs::Object *options) {
 Quota::Quota(double initial_value, const Options &options)
   : m_options(options)
   , m_initial_value(initial_value)
+  , m_current_value(initial_value)
 {
 }
 
@@ -205,15 +207,11 @@ void Quota::reset() {
 void Quota::produce(double value) {
   if (value <= 0) return;
   m_current_value += value;
-  while (m_current_value > 0) {
-    if (auto *consumer = m_consumers.head()) {
-      auto remain = consumer->on_consume(m_current_value);
-      if (remain < 0) remain = 0; else
-      if (remain > m_current_value) remain = m_current_value;
-      m_current_value = remain;
-    } else {
-      break;
-    }
+  auto *p = m_consumers.head();
+  while (p) {
+    auto *consumer = p; p = p->next();
+    consumer->on_consume(this);
+    if (m_current_value <= 0) break;
   }
 }
 
@@ -231,6 +229,7 @@ void Quota::schedule_producing() {
   m_timer.schedule(
     m_options.per,
     [this]() {
+      InputContext ic;
       m_is_producing_scheduled = false;
       produce(m_initial_value - m_current_value);
     }
@@ -248,7 +247,7 @@ void Quota::Consumer::set_quota(Quota *quota) {
       m_quota->m_consumers.remove(this);
     }
     m_quota = quota;
-    m_quota->m_consumers.push(this);
+    if (quota) quota->m_consumers.push(this);
   }
 }
 
