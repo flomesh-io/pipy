@@ -42,13 +42,25 @@ function Layout({ children }) {
   // Regularly fetch the log data
   React.useEffect(
     () => {
+      let ws, is_reconnecting = false;
       const node = document.createTextNode('');
       const loc = window.location;
       // const url = `ws://localhost:6060/api/v1/log//pipy_log`; // For development mode
       const url = `ws://${loc.host}/api/v1/log//pipy_log`;
-      const ws = new WebSocket(url);
-      ws.addEventListener('open', () => ws.send('watch\n'));
-      ws.addEventListener('message', evt => node.appendData(evt.data));
+      const connect = () => {
+        const reconnect = () => {
+          if (is_reconnecting) return;
+          ws.close();
+          setTimeout(() => { is_reconnecting = false; connect(); }, 5000);
+          is_reconnecting = true;
+        }
+        ws = new WebSocket(url);
+        ws.addEventListener('open', () => ws.send('watch\n'));
+        ws.addEventListener('message', evt => node.appendData(evt.data));
+        ws.addEventListener('close', reconnect);
+        ws.addEventListener('error', reconnect);
+      };
+      connect();
       setLogTextNode(node);
       return () => ws.close();
     },

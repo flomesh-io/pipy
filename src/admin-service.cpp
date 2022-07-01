@@ -27,6 +27,7 @@
 #include "codebase.hpp"
 #include "api/crypto.hpp"
 #include "api/json.hpp"
+#include "api/logging.hpp"
 #include "api/stats.hpp"
 #include "filters/http.hpp"
 #include "filters/tls.hpp"
@@ -244,6 +245,7 @@ auto AdminService::handle(Context *ctx, Message *req) -> Message* {
           auto i = path.rfind('/');
           auto uuid = (i == std::string::npos ? path : path.substr(i + 1));
           ctx->instance_uuid = uuid;
+          ctx->is_admin_link = true;
           return m_response_upgraded_ws;
         } else if (!is_browser) {
           path = path.substr(prefix_repo.length() - 1);
@@ -1013,6 +1015,17 @@ void AdminService::on_log(Context *ctx, const std::string &name, const Data &dat
   }
 }
 
+void AdminService::on_log_tail(Context *ctx, const std::string &name, const Data &data) {
+  if (auto *inst = get_instance(ctx->instance_uuid)) {
+    auto i = inst->log_watchers.find(name);
+    if (i != inst->log_watchers.end()) {
+      for (auto *w : i->second) {
+        w->start(data);
+      }
+    }
+  }
+}
+
 void AdminService::on_metrics(Context *ctx, const Data &data) {
   stats::MetricSet::deserialize(
     data,
@@ -1079,18 +1092,38 @@ void AdminService::WebSocketHandler::process(Event *evt) {
       );
       auto command = buf.to_string();
       auto ctx = static_cast<Context*>(context());
-      if (auto inst = m_service->get_instance(ctx->instance_uuid)) {
-        inst->admin_link = this;
-      }
+      auto inst = m_service->get_instance(ctx->instance_uuid);
+      if (inst && ctx->is_admin_link) inst->admin_link = this;
+
       static std::string s_log_prefix("log/");
+      static std::string s_log_tail_prefix("log-tail/");
+
       if (utils::starts_with(command, s_log_prefix)) {
-        auto name = command.substr(s_log_prefix.length());
-        name.pop_back(); // pop out the ending '\n'
+        auto name = utils::trim(command.substr(s_log_prefix.length()));
         m_service->on_log(ctx, name, m_payload);
+
+      } else if (utils::starts_with(command, s_log_tail_prefix)) {
+        auto name = utils::trim(command.substr(s_log_tail_prefix.length()));
+        m_service->on_log_tail(ctx, name, m_payload);
+
       } else if (command == "metrics\n") {
         m_service->on_metrics(ctx, m_payload);
+
       } else if (command == "watch\n") {
-        if (auto *w = ctx->log_watcher) w->set_handler(this);
+        if (auto *w = ctx->log_watcher) {
+          w->set_handler(this);
+          if (ctx->instance_uuid.empty()) {
+            if (auto *logger = logging::Logger::find(ctx->log_name)) {
+              Data buf;
+              logger->tail(buf);
+              w->start(buf);
+            }
+          } else if (inst) {
+            if (auto *admin_link = inst->admin_link) {
+              admin_link->log_tail(ctx->log_name);
+            }
+          }
+        }
       }
       m_payload.clear();
       m_started = false;
@@ -1106,6 +1139,13 @@ void AdminService::WebSocketHandler::log_enable(const std::string &name, bool en
   static std::string s_on("log/on/");
   static std::string s_off("log/off/");
   auto body = (enabled ? s_on : s_off) + name;
+  auto head = websocket::MessageHead::make();
+  Filter::output(Message::make(head, body));
+}
+
+void AdminService::WebSocketHandler::log_tail(const std::string &name) {
+  static std::string s_tail("log/tail/");
+  auto body = s_tail + name;
   auto head = websocket::MessageHead::make();
   Filter::output(Message::make(head, body));
 }
@@ -1159,9 +1199,20 @@ void AdminService::LogWatcher::set_handler(WebSocketHandler *handler) {
   m_handler = handler;
 }
 
+void AdminService::LogWatcher::start(const Data &data) {
+  if (!m_started) {
+    if (m_handler) {
+      m_handler->log_broadcast(data);
+    }
+    m_started = true;
+  }
+}
+
 void AdminService::LogWatcher::send(const Data &data) {
-  if (m_handler) {
-    m_handler->log_broadcast(data);
+  if (m_started) {
+    if (m_handler) {
+      m_handler->log_broadcast(data);
+    }
   }
 }
 

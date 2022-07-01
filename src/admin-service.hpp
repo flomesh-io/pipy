@@ -80,6 +80,7 @@ private:
       : m_service(r.m_service) {}
 
     void log_enable(const std::string &name, bool enabled);
+    void log_tail(const std::string &name);
     void log_broadcast(const Data &data);
     void signal_reload();
 
@@ -104,6 +105,7 @@ private:
     ~LogWatcher();
 
     void set_handler(WebSocketHandler *handler);
+    void start(const Data &data);
     void send(const Data &data);
 
   private:
@@ -111,6 +113,7 @@ private:
     std::string m_uuid;
     std::string m_name;
     WebSocketHandler *m_handler = nullptr;
+    bool m_started = false;
   };
 
   //
@@ -124,6 +127,7 @@ private:
     std::string instance_uuid;
     std::string log_name;
     LogWatcher* log_watcher = nullptr;
+    bool is_admin_link = false;
   };
 
   //
@@ -219,6 +223,7 @@ private:
 
   void on_watch_start(Context *ctx, const std::string &path);
   void on_log(Context *ctx, const std::string &name, const Data &data);
+  void on_log_tail(Context *ctx, const std::string &name, const Data &data);
   void on_metrics(Context *ctx, const Data &data);
 
   void metrics_history_step();

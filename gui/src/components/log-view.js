@@ -23,12 +23,14 @@ function LogView({ uuid, name }) {
   React.useEffect(
     () => {
       const text = document.createTextNode('');
-      logEl.current.appendChild(text);
+      const pre = logEl.current;
+      while (pre.firstChild) pre.removeChild(pre.firstChild);
+      pre.appendChild(text);
       const loc = window.location;
       // const url = `ws://localhost:6060/api/v1/log/${uuid}/${name}`; // For development mode
       const url = `ws://${loc.host}/api/v1/log/${uuid}/${name}`;
       const ws = new WebSocket(url);
-      ws.addEventListener('open', () => ws.send('watch\n'));
+      ws.addEventListener('open', () => { text.data = ''; ws.send('watch\n'); });
       ws.addEventListener('message', evt => text.appendData(evt.data));
       return () => ws.close();
     },

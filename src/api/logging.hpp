@@ -56,6 +56,7 @@ class Logger : public pjs::ObjectTemplate<Logger> {
 public:
   static void set_admin_service(AdminService *admin_service);
   static void set_admin_link(AdminLink *admin_link);
+  static auto find(const std::string &name) -> Logger*;
   static void shutdown_all();
 
   static void for_each(const std::function<void(Logger*)> &cb) {
@@ -168,6 +169,7 @@ public:
   }
 
   void write(const Data &msg);
+  void tail(Data &buf);
 
   virtual void log(int argc, const pjs::Value *args) = 0;
   virtual void shutdown();
@@ -177,11 +179,29 @@ protected:
   virtual ~Logger();
 
 private:
+
+  //
+  // Logger::LogMessage
+  //
+
+  struct LogMessage :
+    public pjs::Pooled<LogMessage>,
+    public List<LogMessage>::Item
+  {
+    LogMessage(const Data &msg) : data(msg) {}
+    Data data;
+  };
+
   pjs::Ref<pjs::Str> m_name;
   std::list<std::unique_ptr<Target>> m_targets;
+  List<LogMessage> m_history;
+  size_t m_history_size = 0;
+  size_t m_history_max = 1024 * 1024;
   bool m_admin_link_enabled = false;
 
   void write_internal(const Data &msg);
+  void write_history(const Data &msg);
+  void send_history();
 
   static std::set<Logger*> s_all_loggers;
   static AdminService* s_admin_service;

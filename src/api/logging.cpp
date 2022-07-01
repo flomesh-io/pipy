@@ -47,6 +47,8 @@ namespace logging {
 // Logger
 //
 
+static Data::Producer s_dp("Logger");
+
 std::set<Logger*> Logger::s_all_loggers;
 AdminService* Logger::s_admin_service = nullptr;
 AdminLink* Logger::s_admin_link = nullptr;
@@ -56,29 +58,49 @@ void Logger::set_admin_service(AdminService *admin_service) {
 }
 
 void Logger::set_admin_link(AdminLink *admin_link) {
+  static std::string s_tail("log/tail/");
   static std::string s_on("log/on/");
   static std::string s_off("log/off/");
   s_admin_link = admin_link;
   s_admin_link->add_handler(
     [](const std::string &command, const Data &payload) {
-      std::string name;
-      bool enabled;
-      if (utils::starts_with(command, s_on)) {
-        name = command.substr(s_on.length());
-        enabled = true;
-      } else {
-        name = command.substr(s_off.length());
-        enabled = false;
-      }
-      if (name.empty()) return false;
-      for (auto *logger : s_all_loggers) {
-        if (logger->name()->str() == name) {
-          logger->enable_admin_link(enabled);
+      if (utils::starts_with(command, s_tail)) {
+        auto name = command.substr(s_tail.length());
+        for (auto *logger : s_all_loggers) {
+          if (logger->name()->str() == name) {
+            logger->send_history();
+          }
         }
+        return true;
+      } else {
+        std::string name;
+        bool enabled;
+        if (utils::starts_with(command, s_on)) {
+          name = command.substr(s_on.length());
+          enabled = true;
+        } else {
+          name = command.substr(s_off.length());
+          enabled = false;
+        }
+        if (name.empty()) return false;
+        for (auto *logger : s_all_loggers) {
+          if (logger->name()->str() == name) {
+            logger->enable_admin_link(enabled);
+          }
+        }
+        return true;
       }
-      return true;
     }
   );
+}
+
+auto Logger::find(const std::string &name) -> Logger* {
+  for (auto *logger : s_all_loggers) {
+    if (logger->name()->str() == name) {
+      return logger;
+    }
+  }
+  return nullptr;
 }
 
 void Logger::shutdown_all() {
@@ -97,9 +119,14 @@ Logger::Logger(pjs::Str *name)
 
 Logger::~Logger() {
   s_all_loggers.erase(this);
+  while (auto *m = m_history.head()) {
+    m_history.remove(m);
+    delete m;
+  }
 }
 
 void Logger::write(const Data &msg) {
+  write_history(msg);
   if (!Net::is_running()) {
     for (const auto c : msg.chunks()) {
       auto ptr = std::get<0>(c);
@@ -116,8 +143,6 @@ void Logger::write(const Data &msg) {
 }
 
 void Logger::write_internal(const Data &msg) {
-  static Data::Producer s_dp("Log Reports");
-
   Data msg_endl;
   s_dp.pack(&msg_endl, &msg);
   s_dp.push(&msg_endl, '\n');
@@ -140,6 +165,38 @@ void Logger::write_internal(const Data &msg) {
 
   for (const auto &p : m_targets) {
     p->write(msg);
+  }
+}
+
+void Logger::write_history(const Data &msg) {
+  m_history.push(new LogMessage(msg));
+  m_history_size += msg.size();
+  while (m_history_size > m_history_max) {
+    auto *m = m_history.head();
+    m_history.remove(m);
+    m_history_size -= m->data.size();
+    delete m;
+  }
+}
+
+void Logger::tail(Data &buf) {
+  for (auto *m = m_history.head(); m; m = m->next()) {
+    s_dp.pack(&buf, &m->data);
+    s_dp.push(&buf, '\n');
+  }
+}
+
+void Logger::send_history() {
+  if (s_admin_link) {
+    static std::string s_prefix("log-tail/");
+    Data buf;
+    Data::Builder db(buf, &s_dp);
+    db.push(s_prefix);
+    db.push(m_name->str());
+    db.push('\n');
+    db.flush();
+    tail(buf);
+    s_admin_link->send(buf);
   }
 }
 
@@ -215,6 +272,8 @@ Logger::HTTPTarget::HTTPTarget(pjs::Str *url, const Options &options)
   : m_module(new Module)
 {
   static Data::Producer s_dp("Logger::HTTPTarget");
+  static pjs::ConstStr s_host("host");
+  static pjs::ConstStr s_POST("POST");
 
   pjs::Ref<URL> url_obj = URL::make(url);
 
@@ -236,10 +295,22 @@ Logger::HTTPTarget::HTTPTarget(pjs::Str *url, const Options &options)
   m_ppl = ppl;
   m_ppl_connect = ppl_connect;
 
+  auto *headers = pjs::Object::make();
+  bool has_host = false;
+  if (options.headers) {
+    options.headers->iterate_all(
+      [&](pjs::Str *k, pjs::Value &v) {
+        if (utils::iequals(k->str(), s_host.get()->str())) has_host = true;
+        headers->set(k, v);
+      }
+    );
+  }
+  if (!has_host) headers->set(s_host, url_obj->host());
+
   auto *head = http::RequestHead::make();
-  static pjs::ConstStr s_POST("POST");
   head->method(options.method ? options.method.get() : s_POST.get());
-  head->headers(options.headers ? options.headers.get() : pjs::Object::make());
+  head->path(url_obj->path());
+  head->headers(headers);
   m_message_start = MessageStart::make(head);
 }
 
