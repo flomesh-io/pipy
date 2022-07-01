@@ -179,6 +179,80 @@ bool Cache::clear(pjs::Context &ctx) {
 }
 
 //
+// Quota
+//
+
+Quota::Options::Options(pjs::Object *options) {
+  Value(options, "per")
+    .get_seconds(per)
+    .check_nullable();
+}
+
+Quota::Quota(double initial_value, const Options &options)
+  : m_options(options)
+  , m_initial_value(initial_value)
+{
+}
+
+void Quota::reset() {
+  if (m_current_value >= m_initial_value) {
+    m_current_value = m_initial_value;
+  } else {
+    produce(m_initial_value - m_current_value);
+  }
+}
+
+void Quota::produce(double value) {
+  if (value <= 0) return;
+  m_current_value += value;
+  while (m_current_value > 0) {
+    if (auto *consumer = m_consumers.head()) {
+      auto remain = consumer->on_consume(m_current_value);
+      if (remain < 0) remain = 0; else
+      if (remain > m_current_value) remain = m_current_value;
+      m_current_value = remain;
+    } else {
+      break;
+    }
+  }
+}
+
+auto Quota::consume(double value) -> double {
+  if (value <= 0) return 0;
+  if (value > m_current_value) value = m_current_value;
+  m_current_value -= value;
+  schedule_producing();
+  return value;
+}
+
+void Quota::schedule_producing() {
+  if (m_is_producing_scheduled) return;
+  if (m_options.per <= 0) return;
+  m_timer.schedule(
+    m_options.per,
+    [this]() {
+      m_is_producing_scheduled = false;
+      produce(m_initial_value - m_current_value);
+    }
+  );
+  m_is_producing_scheduled = true;
+}
+
+//
+// Quota::Consumer
+//
+
+void Quota::Consumer::set_quota(Quota *quota) {
+  if (quota != m_quota) {
+    if (m_quota) {
+      m_quota->m_consumers.remove(this);
+    }
+    m_quota = quota;
+    m_quota->m_consumers.push(this);
+  }
+}
+
+//
 // URLRouter
 //
 
@@ -778,6 +852,43 @@ template<> void ClassDef<Constructor<Cache>>::init() {
 }
 
 //
+// Quota
+//
+
+template<> void ClassDef<Quota>::init() {
+  ctor([](Context &ctx) -> Object* {
+    double initial_value = 0;
+    pjs::Object *options = nullptr;
+    if (!ctx.arguments(0, &initial_value, &options)) return nullptr;
+    return Quota::make(initial_value, options);
+  });
+
+  accessor("initial", [](pjs::Object *obj, pjs::Value &ret) { ret.set(obj->as<Quota>()->initial()); });
+  accessor("current", [](pjs::Object *obj, pjs::Value &ret) { ret.set(obj->as<Quota>()->current()); });
+
+  method("reset", [](Context &ctx, Object *obj, Value &ret) {
+    obj->as<Quota>()->reset();
+  });
+
+  method("produce", [](Context &ctx, Object *obj, Value &ret) {
+    double value;
+    if (!ctx.arguments(1, &value)) return;
+    obj->as<Quota>()->produce(value);
+  });
+
+  method("consume", [](Context &ctx, Object *obj, Value &ret) {
+    double value;
+    if (!ctx.arguments(1, &value)) return;
+    ret.set(obj->as<Quota>()->consume(value));
+  });
+}
+
+template<> void ClassDef<Constructor<Quota>>::init() {
+  super<Function>();
+  ctor();
+}
+
+//
 // URLRouter
 //
 
@@ -1017,6 +1128,7 @@ template<> void ClassDef<Constructor<Percentile>>::init() {
 template<> void ClassDef<Algo>::init() {
   ctor();
   variable("Cache", class_of<Constructor<Cache>>());
+  variable("Quota", class_of<Constructor<Quota>>());
   variable("URLRouter", class_of<Constructor<URLRouter>>());
   variable("HashingLoadBalancer", class_of<Constructor<HashingLoadBalancer>>());
   variable("RoundRobinLoadBalancer", class_of<Constructor<RoundRobinLoadBalancer>>());

@@ -28,6 +28,7 @@
 
 #include "pjs/pjs.hpp"
 #include "list.hpp"
+#include "timer.hpp"
 #include "options.hpp"
 
 #include <map>
@@ -72,6 +73,60 @@ private:
   pjs::Ref<pjs::OrderedHash<pjs::Value, Entry>> m_cache;
 
   friend class pjs::ObjectTemplate<Cache>;
+};
+
+//
+// Quota
+//
+
+class Quota : public pjs::ObjectTemplate<Quota> {
+public:
+  struct Options : public pipy::Options {
+    double per = 0;
+    Options() {}
+    Options(pjs::Object *options);
+  };
+
+  //
+  // Quota::Consumer
+  //
+
+  class Consumer : public List<Consumer>::Item {
+  public:
+    virtual auto on_consume(double quota) -> double = 0;
+
+  protected:
+    Consumer() {}
+    ~Consumer() { set_quota(nullptr); }
+
+    void set_quota(Quota *quota);
+
+    pjs::Ref<Quota> m_quota;
+
+    friend class Quota;
+  };
+
+  void reset();
+  auto initial() const -> double { return m_initial_value; }
+  auto current() const -> double { return m_current_value; }
+  void produce(double value);
+  auto consume(double value) -> double;
+  void enqueue(Consumer *consumer) { consumer->set_quota(this); }
+  void dequeue(Consumer *consumer) { consumer->set_quota(nullptr); }
+
+private:
+  Quota(double initial_value, const Options &options);
+
+  Options m_options;
+  double m_initial_value;
+  double m_current_value;
+  bool m_is_producing_scheduled = false;
+  List<Consumer> m_consumers;
+  Timer m_timer;
+
+  void schedule_producing();
+
+  friend class pjs::ObjectTemplate<Quota>;
 };
 
 //
