@@ -38,6 +38,9 @@ MuxBase::Options::Options(pjs::Object *options) {
   Value(options, "maxIdle")
     .get_seconds(max_idle)
     .check_nullable();
+  Value(options, "maxQueue")
+    .get(max_queue)
+    .check_nullable();
 }
 
 //
@@ -59,7 +62,8 @@ MuxBase::MuxBase(pjs::Function *group, const Options &options)
   : m_session_manager(new SessionManager(this))
   , m_group(group)
 {
-  m_session_manager->set_max_idle(options.max_idle);
+  m_session_manager->m_max_idle = options.max_idle;
+  m_session_manager->m_max_queue = options.max_queue;
 }
 
 MuxBase::MuxBase(const MuxBase &r)
@@ -168,9 +172,9 @@ void MuxBase::Session::close() {
 }
 
 void MuxBase::Session::isolate() {
-  if (auto manager = m_manager) {
-    m_manager = nullptr;
-    manager->erase(this);
+  if (auto cluster = m_cluster) {
+    m_cluster = nullptr;
+    cluster->discard(this);
   }
 }
 
@@ -194,8 +198,8 @@ void MuxBase::Session::init(Pipeline *pipeline) {
 }
 
 void MuxBase::Session::free() {
-  if (m_manager) {
-    m_manager->free(this);
+  if (m_cluster) {
+    m_cluster->free(this);
   } else {
     reset();
   }
@@ -222,76 +226,160 @@ void MuxBase::Session::on_reply(Event *evt) {
 }
 
 //
+// MuxBase::SessionCluster
+//
+
+void MuxBase::SessionCluster::reset() {
+  auto *s = m_sessions.head();
+  while (s) {
+    auto session = s; s = s->next();
+    session->reset();
+  }
+}
+
+auto MuxBase::SessionCluster::alloc(int max_share_count) -> Session* {
+  auto *s = m_sessions.head();
+  while (s) {
+    if (max_share_count <= 0 || s->m_share_count < max_share_count) {
+      s->m_share_count++;
+      sort(s);
+      return s;
+    }
+    s = s->next();
+  }
+  s = m_manager->m_mux->on_new_session();
+  s->m_cluster = this;
+  s->retain();
+  m_sessions.unshift(s);
+  return s;
+}
+
+void MuxBase::SessionCluster::free(Session *session) {
+  session->m_share_count--;
+  if (session->is_free()) {
+    session->m_free_time = utils::now();
+  }
+  sort(session);
+}
+
+void MuxBase::SessionCluster::discard(Session *session) {
+  Session::auto_release(session);
+  m_sessions.remove(session);
+  session->release();
+  sort(nullptr);
+}
+
+void MuxBase::SessionCluster::sort(Session *session) {
+  if (session) {
+    auto p = session->back();
+    while (p && p->m_share_count > session->m_share_count) p = p->back();
+    if (p == session->back()) {
+      auto p = session->next();
+      while (p && p->m_share_count < session->m_share_count) p = p->next();
+      if (p != session->next()) {
+        m_sessions.remove(session);
+        if (p) {
+          m_sessions.insert(session, p);
+        } else {
+          m_sessions.push(p);
+        }
+      }
+    } else {
+      m_sessions.remove(session);
+      if (p) {
+        m_sessions.insert(session, p->next());
+      } else {
+        m_sessions.unshift(session);
+      }
+    }
+  }
+
+  if (!m_weak_key) {
+    auto s = m_sessions.head();
+    if (!s || s->m_share_count > 0) {
+      if (m_recycle_scheduled) {
+        m_manager->m_recycle_clusters.remove(this);
+        m_recycle_scheduled = false;
+      }
+    } else {
+      if (!m_recycle_scheduled) {
+        m_manager->m_recycle_clusters.push(this);
+        m_recycle_scheduled = true;
+      }
+    }
+  }
+
+  if (m_sessions.empty()) {
+    if (m_weak_key.original_ptr()) {
+      m_manager->m_weak_clusters.erase(m_weak_key);
+    } else {
+      m_manager->m_clusters.erase(m_key);
+    }
+    delete this;
+  }
+}
+
+void MuxBase::SessionCluster::recycle(double now, double max_idle) {
+  auto s = m_sessions.head();
+  while (s) {
+    auto session = s; s = s->next();
+    if (now - session->m_free_time >= max_idle) {
+      session->reset();
+    }
+  }
+}
+
+//
 // MuxBase::SessionManager
 //
 
+MuxBase::SessionManager::~SessionManager() {
+  for (const auto &p : m_clusters) delete p.second;
+  for (const auto &p : m_weak_clusters) delete p.second;
+}
+
 auto MuxBase::SessionManager::get(const pjs::Value &key) -> Session* {
   bool is_weak = (key.is_object() && key.o());
-  Session *session = nullptr;
+  SessionCluster *cluster = nullptr;
 
   if (is_weak) {
     pjs::WeakRef<pjs::Object> o(key.o());
-    auto i = m_weak_sessions.find(o);
-    if (i != m_weak_sessions.end()) {
-      session = i->second;
+    auto i = m_weak_clusters.find(o);
+    if (i != m_weak_clusters.end()) {
+      cluster = i->second;
       if (!i->first.ptr()) {
-        session->reset();
-        session = nullptr;
+        cluster->reset();
+        cluster = nullptr;
       }
     }
   } else {
-    auto i = m_sessions.find(key);
-    if (i != m_sessions.end()) {
-      session = i->second;
+    auto i = m_clusters.find(key);
+    if (i != m_clusters.end()) {
+      cluster = i->second;
     }
   }
 
-  if (session) {
-    if (session->is_free()) {
-      m_free_sessions.remove(session);
-    }
-    session->m_share_count++;
-    return session;
+  if (cluster) {
+    return cluster->alloc(m_max_queue);
   }
 
-  session = m_mux->on_new_session();
-  session->m_manager = this;
+  cluster = new SessionCluster(this);
 
   if (is_weak) {
-    session->m_weak_key = key.o();
-    session->watch(key.o()->weak_ptr());
-    m_weak_sessions[key.o()] = session;
+    cluster->m_weak_key = key.o();
+    cluster->watch(key.o()->weak_ptr());
+    m_weak_clusters[key.o()] = cluster;
   } else {
-    session->m_key = key;
-    m_sessions[key] = session;
+    cluster->m_key = key;
+    m_clusters[key] = cluster;
   }
 
-  return session;
-}
-
-void MuxBase::SessionManager::free(Session *session) {
-  if (!--session->m_share_count) {
-    session->m_free_time = utils::now();
-    m_free_sessions.push(session);
-    recycle();
-  }
-}
-
-void MuxBase::SessionManager::erase(Session *session) {
-  Session::auto_release(session);
-  if (session->is_free()) {
-    m_free_sessions.remove(session);
-  }
-  if (session->m_weak_key.original_ptr()) {
-    m_weak_sessions.erase(session->m_weak_key);
-  } else {
-    m_sessions.erase(session->m_key);
-  }
+  return cluster->alloc(m_max_queue);
 }
 
 void MuxBase::SessionManager::recycle() {
   if (m_recycling) return;
-  if (m_free_sessions.empty()) return;
+  if (m_recycle_clusters.empty()) return;
 
   m_recycle_timer.schedule(
     1.0,
@@ -299,14 +387,11 @@ void MuxBase::SessionManager::recycle() {
       InputContext ic;
       m_recycling = false;
       auto now = utils::now();
-      auto s = m_free_sessions.head();
-      while (s) {
-        auto session = s; s = s->next();
-        if (!session->m_weak_key) {
-          if (now - session->m_free_time >= m_max_idle * 1000) {
-            session->reset();
-          }
-        }
+      auto t = m_max_idle * 1000;
+      auto c = m_recycle_clusters.head();
+      while (c) {
+        auto cluster = c; c = c->next();
+        cluster->recycle(now, t);
       }
       recycle();
       release();

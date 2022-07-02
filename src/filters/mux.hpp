@@ -51,6 +51,7 @@ class MuxBase :
 public:
   struct Options : public pipy::Options {
     double max_idle = 10;
+    int max_queue = 0;
     Options() {}
     Options(pjs::Object *options);
   };
@@ -68,6 +69,7 @@ protected:
   virtual auto on_new_session() -> Session* = 0;
 
 private:
+  class SessionCluster;
   class SessionManager;
 
   pjs::Ref<SessionManager> m_session_manager;
@@ -91,7 +93,6 @@ protected:
 
   class Session :
     public pjs::Pooled<Session>,
-    public pjs::Object::WeakPtr::Watcher,
     public List<Session>::Item,
     public AutoReleased,
     public EventProxy
@@ -106,7 +107,7 @@ protected:
     virtual ~Session() {}
 
     auto pipeline() const -> Pipeline* { return m_pipeline; }
-    bool isolated() const { return !m_manager; }
+    bool isolated() const { return !m_cluster; }
     void isolate();
     bool is_free() const { return !m_share_count; }
     bool is_pending() const { return m_is_pending; }
@@ -117,9 +118,7 @@ protected:
     void free();
     void reset();
 
-    SessionManager* m_manager = nullptr;
-    pjs::Value m_key;
-    pjs::WeakRef<pjs::Object> m_weak_key;
+    SessionCluster* m_cluster = nullptr;
     pjs::Ref<Pipeline> m_pipeline;
     int m_share_count = 1;
     double m_free_time = 0;
@@ -129,13 +128,43 @@ protected:
     virtual void on_input(Event *evt) override;
     virtual void on_reply(Event *evt) override;
     virtual void on_recycle() override { delete this; }
-    virtual void on_weak_ptr_gone() override { reset(); }
 
     friend class pjs::RefCount<Session>;
     friend class MuxBase;
   };
 
 private:
+
+  //
+  // MuxBase::SessionCluter
+  //
+
+  class SessionCluster :
+    public pjs::Pooled<SessionCluster>,
+    public pjs::Object::WeakPtr::Watcher,
+    public List<SessionCluster>::Item
+  {
+    SessionCluster(SessionManager *manager)
+      : m_manager(manager) {}
+
+    void reset();
+    auto alloc(int max_share_count) -> Session*;
+    void free(Session *session);
+    void discard(Session *session);
+
+    SessionManager* m_manager;
+    pjs::Value m_key;
+    pjs::WeakRef<pjs::Object> m_weak_key;
+    List<Session> m_sessions;
+    bool m_recycle_scheduled = false;
+
+    void sort(Session *session);
+    void recycle(double now, double max_idle);
+
+    virtual void on_weak_ptr_gone() override { reset(); }
+
+    friend class MuxBase;
+  };
 
   //
   // MuxBase::SessionManager
@@ -145,21 +174,22 @@ private:
     SessionManager(MuxBase *mux)
       : m_mux(mux) {}
 
-    void set_max_idle(double max_idle) { m_max_idle = max_idle; }
+    ~SessionManager();
+
     auto get(const pjs::Value &key) -> Session*;
-    void free(Session *session);
 
     MuxBase* m_mux;
-    std::unordered_map<pjs::Value, pjs::Ref<Session>> m_sessions;
-    std::unordered_map<pjs::WeakRef<pjs::Object>, pjs::Ref<Session>> m_weak_sessions;
-    List<Session> m_free_sessions;
+    std::unordered_map<pjs::Value, SessionCluster*> m_clusters;
+    std::unordered_map<pjs::WeakRef<pjs::Object>, SessionCluster*> m_weak_clusters;
+    List<SessionCluster> m_recycle_clusters;
     double m_max_idle = 10;
+    int m_max_queue = 0;
     Timer m_recycle_timer;
     bool m_recycling = false;
 
-    void erase(Session *session);
     void recycle();
 
+    friend class pjs::RefCount<SessionManager>;
     friend class MuxBase;
   };
 };
