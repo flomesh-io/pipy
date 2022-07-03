@@ -66,11 +66,14 @@ public:
     void erase_file(const std::string &path);
     void reset_file(const std::string &path);
     bool commit(int version, std::list<std::string> &updated);
+    void erase();
     void reset();
 
   private:
     CodebaseStore* m_code_store;
     std::string m_id;
+
+    void erase(Store::Batch *batch, const std::string &codebase_id);
 
     friend class CodebaseStore;
   };
@@ -116,6 +119,8 @@ private:
     const std::string &version,
     const std::map<std::string, std::string> &files
   );
+
+  void erase_codebase(Store::Batch *batch, const std::string &codebase_id);
 
   friend class Codebase;
 };

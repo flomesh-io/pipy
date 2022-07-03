@@ -429,6 +429,51 @@ void CodebaseStore::generate_files(
   );
 }
 
+void CodebaseStore::erase_codebase(Store::Batch *batch, const std::string &codebase_id) {
+  Data buf;
+  auto store = m_store;
+
+  std::map<std::string, std::string> rec;
+  load_codebase(codebase_id, rec);
+  auto path = rec["path"];
+  auto base = rec["base"];
+
+  std::set<std::string> keys, paths;
+  auto base_key = KEY_codebase_file(codebase_id, "");
+  store->keys(base_key, keys);
+  for (const auto &key : keys) {
+    batch->erase(KEY_file_tree(path + key.substr(base_key.length())));
+  }
+
+  store->keys(KEY_codebase_edit(codebase_id, ""), keys);
+  store->keys(KEY_codebase_erased(codebase_id, ""), keys);
+  store->keys(KEY_codebase_derived(codebase_id, ""), keys);
+
+  for (const auto &key : keys) {
+    if (store->get(key, buf)) {
+      auto file_id = buf.to_string();
+      batch->erase(KEY_file(file_id));
+    }
+    batch->erase(key);
+  }
+
+  auto manifest_key = KEY_file_tree(path) + '/';
+  if (store->get(manifest_key, buf)) {
+    std::map<std::string, std::string> rec;
+    read_record(buf.to_string(), rec);
+    auto manifest_id = rec["id"];
+    batch->erase(manifest_key);
+    batch->erase(KEY_file(rec["id"]));
+  }
+
+  if (!base.empty()) {
+    batch->erase(KEY_codebase_derived(base, codebase_id));
+  }
+
+  batch->erase(KEY_codebase_tree(path));
+  batch->erase(KEY_codebase(codebase_id));
+}
+
 //
 // CodebaseStore::Codebase
 //
@@ -681,6 +726,13 @@ bool CodebaseStore::Codebase::commit(int version, std::list<std::string> &update
   return true;
 }
 
+void CodebaseStore::Codebase::erase() {
+  auto store = m_code_store->m_store;
+  auto batch = store->batch();
+  erase(batch, m_id);
+  batch->commit();
+}
+
 void CodebaseStore::Codebase::reset() {
   std::set<std::string> keys;
   auto base_key = KEY_codebase_edit(m_id, "");
@@ -694,6 +746,19 @@ void CodebaseStore::Codebase::reset() {
     batch->erase(key);
   }
   return batch->commit();
+}
+
+void CodebaseStore::Codebase::erase(Store::Batch *batch, const std::string &codebase_id) {
+  auto store = m_code_store->m_store;
+
+  std::set<std::string> derived;
+  auto base_key = KEY_codebase_derived(codebase_id, "");
+  store->keys(base_key, derived);
+  for (const auto &key : derived) {
+    erase(batch, key.substr(base_key.length()));
+  }
+
+  m_code_store->erase_codebase(batch, codebase_id);
 }
 
 } // namespace pipy

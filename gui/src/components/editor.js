@@ -38,7 +38,7 @@ import ArrowRightIcon from '@material-ui/icons/ChevronRight';
 import ArrowDownIcon from '@material-ui/icons/ExpandMore';
 import BaseIcon from '@material-ui/icons/VerticalAlignTopSharp';
 import CodebaseIcon from '@material-ui/icons/CodeSharp';
-import ConsoleIcon from '@material-ui/icons/CallToAction';
+import ConsoleIcon from '@material-ui/icons/DvrSharp';
 import DeleteFileIcon from '@material-ui/icons/DeleteSharp';
 import DerivativeIcon from '@material-ui/icons/SubdirectoryArrowRightSharp';
 import FlagIcon from '@material-ui/icons/FlagSharp';
@@ -258,6 +258,7 @@ function Editor({ root, dts }) {
   const [openDialogNewFile, setOpenDialogNewFile] = React.useState(false);
   const [openDialogResetFile, setOpenDialogResetFile] = React.useState(false);
   const [openDialogDeleteFile, setOpenDialogDeleteFile] = React.useState(false);
+  const [openDialogDeleteCodebase, setOpenDialogDeleteCodebase] = React.useState(false);
 
   const queryClient = useQueryClient();
 
@@ -620,6 +621,10 @@ function Editor({ root, dts }) {
     setOpenConsole(open);
   }
 
+  const handleClickDeleteCodebase = () => {
+    setOpenDialogDeleteCodebase(true);
+  }
+
   if (typeof window === 'undefined') return null;
 
   return (
@@ -720,6 +725,16 @@ function Editor({ root, dts }) {
         >
           <ConsoleIcon fontSize="small"/>
         </ToolbarButton>
+        <ToolbarGap/>
+        {!isLocalHost && (
+          <ToolbarTextButton
+            startIcon={<DeleteFileIcon/>}
+            color="secondary"
+            onClick={handleClickDeleteCodebase}
+          >
+            DELETE
+          </ToolbarTextButton>
+        )}
         <ToolbarGap/>
       </Toolbar>
 
@@ -832,6 +847,14 @@ function Editor({ root, dts }) {
         filename={treeSelected}
         onSuccess={() => selectFile('')}
         onClose={() => setOpenDialogDeleteFile(false)}
+      />
+
+      {/* Codebase Deletion Dialog */}
+      <DialogDeleteCodebase
+        open={openDialogDeleteCodebase}
+        root={root}
+        onSuccess={() => navigate('/')}
+        onClose={() => setOpenDialogDeleteCodebase(false)}
       />
 
     </div>
@@ -1003,6 +1026,51 @@ function DialogDeleteFile({ open, root, filename, onSuccess, onClose }) {
       <DialogContent>
         <Typography>
           Delete the file '{filename}'?
+        </Typography>
+      </DialogContent>
+      <DialogActions>
+        <Button color="secondary" onClick={handleClickDelete}>
+          Delete
+        </Button>
+        <Button onClick={onClose}>
+          Cancel
+        </Button>
+      </DialogActions>
+      <Working open={working} text="Deleting..."/>
+    </Dialog>
+  );
+}
+
+function DialogDeleteCodebase({ open, root, onSuccess, onClose }) {
+  const queryClient = useQueryClient();
+
+  const [working, setWorking] = React.useState(false);
+
+  const handleClickDelete = async () => {
+    setWorking(true);
+    try {
+      const res = await fetch(
+        '/api/v1/repo' + root,
+        {
+          method: 'DELETE',
+        }
+      );
+      if (res.status === 204) {
+        queryClient.invalidateQueries(`files:${root}`);
+        onSuccess();
+        onClose();
+      }
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} fullWidth onClose={onClose}>
+      <DialogTitle>Delete Codebase</DialogTitle>
+      <DialogContent>
+        <Typography>
+          Delete the the entire codebase {root} and all its derived codebases?
         </Typography>
       </DialogContent>
       <DialogActions>

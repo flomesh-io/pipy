@@ -710,6 +710,12 @@ Message* AdminService::api_v1_repo_DELETE(const std::string &path) {
     return m_response_deleted;
   }
 
+  // Delete codebase
+  if (auto codebase = m_store->find_codebase(path)) {
+    codebase->erase();
+    return m_response_deleted;
+  }
+
   return m_response_not_found;
 }
 
