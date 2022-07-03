@@ -1243,7 +1243,7 @@ template<> void ClassDef<FilterConfigurator>::init() {
     Function *callback = nullptr;
     if (!ctx.arguments(1, &callback)) return;
     try {
-      thiz->as<FilterConfigurator>()->on_start(callback);
+      thiz->as<FilterConfigurator>()->handle_start(callback);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
