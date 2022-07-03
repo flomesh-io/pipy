@@ -102,7 +102,10 @@ void MuxBase::process(Event *evt) {
     }
 
     if (!session->m_pipeline) {
-      auto p = sub_pipeline(0, true);
+      pjs::Value args[2];
+      args[0] = m_session_key;
+      args[1].set((int)session->m_cluster->m_sessions.size());
+      auto p = sub_pipeline(0, true, 2, args);
       session->init(p);
     }
 

@@ -48,6 +48,9 @@ class Worker;
 
 class FilterConfigurator : public pjs::ObjectTemplate<FilterConfigurator> {
 public:
+  void on_start(pjs::Function *handler);
+  void on_end(pjs::Function *handler);
+
   void accept_http_tunnel(pjs::Function *handler);
   void accept_socks(pjs::Function *on_connect);
   void accept_tls(pjs::Object *options);
@@ -80,17 +83,17 @@ public:
   void encode_websocket();
   void exec(const pjs::Value &command);
   void fork(pjs::Object *initializers);
+  void handle_body(pjs::Function *callback, int size_limit);
+  void handle_event(Event::Type type, pjs::Function *callback);
+  void handle_message(pjs::Function *callback, int size_limit);
+  void handle_start(pjs::Function *callback);
+  void handle_tls_client_hello(pjs::Function *callback);
   void input(pjs::Function *callback);
   void link(size_t count, pjs::Str **targets, pjs::Function **conditions);
   void merge(pjs::Function *group, pjs::Object *options);
   void mux(pjs::Function *group, pjs::Object *options);
   void mux_queue(pjs::Function *group, pjs::Object *options);
   void mux_http(pjs::Function *group, pjs::Object *options);
-  void on_body(pjs::Function *callback, int size_limit);
-  void on_event(Event::Type type, pjs::Function *callback);
-  void on_message(pjs::Function *callback, int size_limit);
-  void on_start(pjs::Function *callback);
-  void on_tls_client_hello(pjs::Function *callback);
   void output(pjs::Function *output_f);
   void pack(int batch_size, pjs::Object *options);
   void print();
@@ -115,14 +118,21 @@ public:
   void check_integrity();
 
 protected:
+  struct PipelineConfig {
+    int index;
+    pjs::Ref<pjs::Function> on_start;
+    pjs::Ref<pjs::Function> on_end;
+    std::list<std::unique_ptr<Filter>> filters;
+  };
+
   FilterConfigurator(
     Configuration *configuration,
-    std::list<std::unique_ptr<Filter>> *filters = nullptr
+    PipelineConfig *config = nullptr
   ) : m_configuration(configuration)
-    , m_filters(filters) {}
+    , m_config(config) {}
 
-  void set_filter_list(std::list<std::unique_ptr<Filter>> *filters) {
-    m_filters = filters;
+  void set_pipeline_config(PipelineConfig *config) {
+    m_config = config;
   }
 
 private:
@@ -130,7 +140,8 @@ private:
   void require_sub_pipeline(Filter *filter);
 
   Configuration* m_configuration;
-  std::list<std::unique_ptr<Filter>> *m_filters;
+  PipelineConfig* m_config;
+  Filter* m_current_filter = nullptr;
   Filter* m_current_joint_filter = nullptr;
 
   friend class pjs::ObjectTemplate<FilterConfigurator>;
@@ -172,31 +183,23 @@ public:
 private:
   Configuration(pjs::Object *context_prototype);
 
-  struct ListenConfig {
-    int index;
+  struct ListenConfig : public PipelineConfig {
     std::string ip;
     int port;
     Listener::Options options;
-    std::list<std::unique_ptr<Filter>> filters;
   };
 
-  struct ReaderConfig {
-    int index;
+  struct ReaderConfig : public PipelineConfig {
     std::string pathname;
-    std::list<std::unique_ptr<Filter>> filters;
   };
 
-  struct TaskConfig {
-    int index;
+  struct TaskConfig : public PipelineConfig {
     std::string name;
     std::string when;
-    std::list<std::unique_ptr<Filter>> filters;
   };
 
-  struct NamedPipelineConfig {
-    int index;
+  struct NamedPipelineConfig : public PipelineConfig {
     std::string name;
-    std::list<std::unique_ptr<Filter>> filters;
   };
 
   pjs::Ref<pjs::Object> m_context_prototype;

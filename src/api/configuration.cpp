@@ -84,6 +84,20 @@ namespace pipy {
 // FilterConfigurator
 //
 
+void FilterConfigurator::on_start(pjs::Function *handler) {
+  if (!m_config) throw std::runtime_error("no pipeline found");
+  if (m_current_filter) throw std::runtime_error("onStart() is only allowed prior to filters");
+  if (m_config->on_start) throw std::runtime_error("duplicated onStart()");
+  m_config->on_start = handler;
+}
+
+void FilterConfigurator::on_end(pjs::Function *handler) {
+  if (!m_config) throw std::runtime_error("no pipeline found");
+  if (m_current_filter) throw std::runtime_error("onEnd() is only allowed prior to filters");
+  if (m_config->on_end) throw std::runtime_error("duplicated onEnd()");
+  m_config->on_end = handler;
+}
+
 void FilterConfigurator::accept_http_tunnel(pjs::Function *handler) {
   require_sub_pipeline(append_filter(new http::TunnelServer(handler)));
 }
@@ -212,6 +226,26 @@ void FilterConfigurator::fork(pjs::Object *initializers) {
   require_sub_pipeline(append_filter(new Fork(initializers)));
 }
 
+void FilterConfigurator::handle_body(pjs::Function *callback, int size_limit) {
+  append_filter(new OnBody(callback, size_limit));
+}
+
+void FilterConfigurator::handle_event(Event::Type type, pjs::Function *callback) {
+  append_filter(new OnEvent(type, callback));
+}
+
+void FilterConfigurator::handle_message(pjs::Function *callback, int size_limit) {
+  append_filter(new OnMessage(callback, size_limit));
+}
+
+void FilterConfigurator::handle_start(pjs::Function *callback) {
+  append_filter(new OnStart(callback));
+}
+
+void FilterConfigurator::handle_tls_client_hello(pjs::Function *callback) {
+  append_filter(new tls::OnClientHello(callback));
+}
+
 void FilterConfigurator::input(pjs::Function *callback) {
   require_sub_pipeline(append_filter(new LinkInput(callback)));
 }
@@ -239,26 +273,6 @@ void FilterConfigurator::mux_queue(pjs::Function *group, pjs::Object *options) {
 
 void FilterConfigurator::mux_http(pjs::Function *group, pjs::Object *options) {
   require_sub_pipeline(append_filter(new http::Mux(group, options)));
-}
-
-void FilterConfigurator::on_body(pjs::Function *callback, int size_limit) {
-  append_filter(new OnBody(callback, size_limit));
-}
-
-void FilterConfigurator::on_event(Event::Type type, pjs::Function *callback) {
-  append_filter(new OnEvent(type, callback));
-}
-
-void FilterConfigurator::on_message(pjs::Function *callback, int size_limit) {
-  append_filter(new OnMessage(callback, size_limit));
-}
-
-void FilterConfigurator::on_start(pjs::Function *callback) {
-  append_filter(new OnStart(callback));
-}
-
-void FilterConfigurator::on_tls_client_hello(pjs::Function *callback) {
-  append_filter(new tls::OnClientHello(callback));
 }
 
 void FilterConfigurator::output(pjs::Function *output_f) {
@@ -361,12 +375,13 @@ void FilterConfigurator::check_integrity() {
 }
 
 auto FilterConfigurator::append_filter(Filter *filter) -> Filter* {
-  if (!m_filters) {
+  if (!m_config) {
     delete filter;
     throw std::runtime_error("no pipeline found");
   }
   check_integrity();
-  m_filters->emplace_back(filter);
+  m_config->filters.emplace_back(filter);
+  m_current_filter = filter;
   return filter;
 }
 
@@ -424,9 +439,13 @@ void Configuration::add_import(pjs::Object *variables) {
 
 void Configuration::listen(int port, pjs::Object *options) {
   check_integrity();
-  Listener::Options opt(options);
-  m_listens.push_back({ next_pipeline_index(), "0.0.0.0", port, opt });
-  FilterConfigurator::set_filter_list(&m_listens.back().filters);
+  m_listens.emplace_back();
+  auto &config = m_listens.back();
+  config.index = next_pipeline_index();
+  config.ip = "0.0.0.0";
+  config.port = port;
+  config.options = Listener::Options(options);
+  FilterConfigurator::set_pipeline_config(&config);
 }
 
 void Configuration::listen(const std::string &port, pjs::Object *options) {
@@ -444,30 +463,44 @@ void Configuration::listen(const std::string &port, pjs::Object *options) {
     throw std::runtime_error(msg + addr);
   }
 
-  Listener::Options opt(options);
-  m_listens.push_back({ next_pipeline_index(), addr, port_num, opt });
-  FilterConfigurator::set_filter_list(&m_listens.back().filters);
+  m_listens.emplace_back();
+  auto &config = m_listens.back();
+  config.index = next_pipeline_index();
+  config.ip = addr;
+  config.port = port_num;
+  config.options = Listener::Options(options);
+  FilterConfigurator::set_pipeline_config(&config);
 }
 
 void Configuration::read(const std::string &pathname) {
   check_integrity();
-  m_readers.push_back({ next_pipeline_index(), pathname });
-  FilterConfigurator::set_filter_list(&m_readers.back().filters);
+  m_readers.emplace_back();
+  auto &config = m_readers.back();
+  config.index = next_pipeline_index();
+  config.pathname = pathname;
+  FilterConfigurator::set_pipeline_config(&config);
 }
 
 void Configuration::task(const std::string &when) {
   check_integrity();
   std::string name("Task #");
   name += std::to_string(m_tasks.size() + 1);
-  m_tasks.push_back({ next_pipeline_index(), name, when });
-  FilterConfigurator::set_filter_list(&m_tasks.back().filters);
+  m_tasks.emplace_back();
+  auto &config = m_tasks.back();
+  config.index = next_pipeline_index();
+  config.name = name;
+  config.when = when;
+  FilterConfigurator::set_pipeline_config(&config);
 }
 
 void Configuration::pipeline(const std::string &name) {
   check_integrity();
   if (name.empty()) throw std::runtime_error("pipeline name cannot be empty");
-  m_named_pipelines.push_back({ next_pipeline_index(), name });
-  FilterConfigurator::set_filter_list(&m_named_pipelines.back().filters);
+  m_named_pipelines.emplace_back();
+  auto &config = m_named_pipelines.back();
+  config.index = next_pipeline_index();
+  config.name = name;
+  FilterConfigurator::set_pipeline_config(&config);
 }
 
 void Configuration::bind_exports(Worker *worker, Module *module) {
@@ -519,12 +552,14 @@ void Configuration::apply(Module *mod) {
     int index,
     const std::string &name,
     const std::string &label,
-    std::list<std::unique_ptr<Filter>> &filters
+    PipelineConfig &config
   ) -> PipelineLayout*
   {
     auto layout = PipelineLayout::make(mod, index, name);
     layout->label(label);
-    for (auto &f : filters) {
+    layout->on_start(config.on_start);
+    layout->on_end(config.on_end);
+    for (auto &f : config.filters) {
       layout->append(f.release());
     }
     return layout;
@@ -532,12 +567,12 @@ void Configuration::apply(Module *mod) {
 
   for (auto &i : m_named_pipelines) {
     auto s = pjs::Str::make(i.name);
-    auto p = make_pipeline(i.index, i.name, "", i.filters);
+    auto p = make_pipeline(i.index, i.name, "", i);
     mod->m_named_pipelines[s] = p;
   }
 
   for (auto &i : m_indexed_pipelines) {
-    auto p = make_pipeline(i.second.index, "", i.second.name, i.second.filters);
+    auto p = make_pipeline(i.second.index, "", i.second.name, i.second);
     mod->m_indexed_pipelines[p->index()] = p;
   }
 
@@ -546,7 +581,7 @@ void Configuration::apply(Module *mod) {
   for (auto &i : m_listens) {
     if (!i.port) continue;
     auto name = std::to_string(i.port) + '@' + i.ip;
-    auto p = make_pipeline(i.index, "", name, i.filters);
+    auto p = make_pipeline(i.index, "", name, i);
     auto listener = Listener::get(i.ip, i.port, i.options.protocol);
     if (listener->reserved()) {
       std::string msg("Port reserved: ");
@@ -561,13 +596,13 @@ void Configuration::apply(Module *mod) {
   }
 
   for (auto &i : m_readers) {
-    auto p = make_pipeline(i.index, "", i.pathname, i.filters);
+    auto p = make_pipeline(i.index, "", i.pathname, i);
     auto r = Reader::make(i.pathname, p);
     worker->add_reader(r);
   }
 
   for (auto &i : m_tasks) {
-    auto p = make_pipeline(i.index, "", i.name, i.filters);
+    auto p = make_pipeline(i.index, "", i.name, i);
     auto t = Task::make(i.when, p);
     worker->add_task(t);
   }
@@ -635,7 +670,7 @@ auto Configuration::new_indexed_pipeline(const std::string &name, int &index) ->
   auto &i = m_indexed_pipelines[index];
   i.index = index;
   i.name = name;
-  return FilterConfigurator::make(this, &i.filters);
+  return FilterConfigurator::make(this, &i);
 }
 
 } // namespace pipy
@@ -645,6 +680,30 @@ namespace pjs {
 using namespace pipy;
 
 template<> void ClassDef<FilterConfigurator>::init() {
+
+  // FilterConfigurator.onStart
+  method("onStart", [](Context &ctx, Object *thiz, Value &result) {
+    try {
+      Function *handler;
+      if (!ctx.arguments(1, &handler)) return;
+      thiz->as<FilterConfigurator>()->on_start(handler);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // FilterConfigurator.onEnd
+  method("onEnd", [](Context &ctx, Object *thiz, Value &result) {
+    try {
+      Function *handler;
+      if (!ctx.arguments(1, &handler)) return;
+      thiz->as<FilterConfigurator>()->on_end(handler);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
 
   // FilterConfigurator.acceptHTTPTunnel
   method("acceptHTTPTunnel", [](Context &ctx, Object *thiz, Value &result) {
@@ -1093,36 +1152,12 @@ template<> void ClassDef<FilterConfigurator>::init() {
     }
   });
 
-  // FilterConfigurator.handleStreamStart
-  method("handleStreamStart", [](Context &ctx, Object *thiz, Value &result) {
-    Function *callback = nullptr;
-    if (!ctx.arguments(1, &callback)) return;
-    try {
-      thiz->as<FilterConfigurator>()->on_start(callback);
-      result.set(thiz);
-    } catch (std::runtime_error &err) {
-      ctx.error(err);
-    }
-  });
-
-  // FilterConfigurator.handleTLSClientHello
-  method("handleTLSClientHello", [](Context &ctx, Object *thiz, Value &result) {
-    Function *callback = nullptr;
-    if (!ctx.arguments(1, &callback)) return;
-    try {
-      thiz->as<FilterConfigurator>()->on_tls_client_hello(callback);
-      result.set(thiz);
-    } catch (std::runtime_error &err) {
-      ctx.error(err);
-    }
-  });
-
   // FilterConfigurator.handleData
   method("handleData", [](Context &ctx, Object *thiz, Value &result) {
     Function *callback = nullptr;
     if (!ctx.arguments(1, &callback)) return;
     try {
-      thiz->as<FilterConfigurator>()->on_event(Event::Data, callback);
+      thiz->as<FilterConfigurator>()->handle_event(Event::Data, callback);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1141,7 +1176,7 @@ template<> void ClassDef<FilterConfigurator>::init() {
       !ctx.arguments(1, &callback)
     ) return;
     try {
-      thiz->as<FilterConfigurator>()->on_message(callback, size_limit);
+      thiz->as<FilterConfigurator>()->handle_message(callback, size_limit);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1153,7 +1188,7 @@ template<> void ClassDef<FilterConfigurator>::init() {
     Function *callback = nullptr;
     if (!ctx.arguments(1, &callback)) return;
     try {
-      thiz->as<FilterConfigurator>()->on_event(Event::MessageStart, callback);
+      thiz->as<FilterConfigurator>()->handle_event(Event::MessageStart, callback);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1172,7 +1207,7 @@ template<> void ClassDef<FilterConfigurator>::init() {
       !ctx.arguments(1, &callback)
     ) return;
     try {
-      thiz->as<FilterConfigurator>()->on_body(callback, size_limit);
+      thiz->as<FilterConfigurator>()->handle_body(callback, size_limit);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1184,7 +1219,7 @@ template<> void ClassDef<FilterConfigurator>::init() {
     Function *callback = nullptr;
     if (!ctx.arguments(1, &callback)) return;
     try {
-      thiz->as<FilterConfigurator>()->on_event(Event::MessageEnd, callback);
+      thiz->as<FilterConfigurator>()->handle_event(Event::MessageEnd, callback);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1196,7 +1231,31 @@ template<> void ClassDef<FilterConfigurator>::init() {
     Function *callback = nullptr;
     if (!ctx.arguments(1, &callback)) return;
     try {
-      thiz->as<FilterConfigurator>()->on_event(Event::StreamEnd, callback);
+      thiz->as<FilterConfigurator>()->handle_event(Event::StreamEnd, callback);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // FilterConfigurator.handleStreamStart
+  method("handleStreamStart", [](Context &ctx, Object *thiz, Value &result) {
+    Function *callback = nullptr;
+    if (!ctx.arguments(1, &callback)) return;
+    try {
+      thiz->as<FilterConfigurator>()->on_start(callback);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // FilterConfigurator.handleTLSClientHello
+  method("handleTLSClientHello", [](Context &ctx, Object *thiz, Value &result) {
+    Function *callback = nullptr;
+    if (!ctx.arguments(1, &callback)) return;
+    try {
+      thiz->as<FilterConfigurator>()->handle_tls_client_hello(callback);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

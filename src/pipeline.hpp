@@ -83,6 +83,8 @@ public:
   auto name_or_label() const -> pjs::Str*;
   auto allocated() const -> size_t { return m_allocated; }
   auto active() const -> size_t { return m_pipelines.size(); }
+  void on_start(pjs::Function *f) { m_on_start = f; }
+  void on_end(pjs::Function *f) { m_on_end = f; }
   auto append(Filter *filter) -> Filter*;
   void bind();
   void shutdown();
@@ -94,13 +96,17 @@ private:
   ~PipelineLayout();
 
   auto alloc(Context *ctx) -> Pipeline*;
+  void start(Pipeline *pipeline, int argc, pjs::Value *argv);
+  void end(Pipeline *pipeline);
   void free(Pipeline *pipeline);
 
   int m_index;
   pjs::Ref<pjs::Str> m_name;
   pjs::Ref<pjs::Str> m_label;
-  std::list<std::unique_ptr<Filter>> m_filters;
   pjs::Ref<ModuleBase> m_module;
+  pjs::Ref<pjs::Function> m_on_start;
+  pjs::Ref<pjs::Function> m_on_end;
+  std::list<std::unique_ptr<Filter>> m_filters;
   Pipeline* m_pool = nullptr;
   List<Pipeline> m_pipelines;
   size_t m_allocated = 0;
@@ -129,8 +135,10 @@ class Pipeline :
   public List<Pipeline>::Item
 {
 public:
-  static auto make(PipelineLayout *layout, Context *ctx) -> Pipeline* {
-    return layout->alloc(ctx);
+  static auto make(PipelineLayout *layout, Context *ctx, int argc = 0, pjs::Value *argv = nullptr) -> Pipeline* {
+    auto *p = layout->alloc(ctx);
+    layout->start(p, argc, argv);
+    return p;
   }
 
   auto layout() const -> PipelineLayout* { return m_layout; }

@@ -105,6 +105,20 @@ auto PipelineLayout::alloc(Context *ctx) -> Pipeline* {
   return pipeline;
 }
 
+void PipelineLayout::start(Pipeline *pipeline, int argc, pjs::Value *argv) {
+  if (m_on_start) {
+    pjs::Value ret;
+    (*m_on_start)(*pipeline->context(), argc, argv, ret);
+  }
+}
+
+void PipelineLayout::end(Pipeline *pipeline) {
+  if (m_on_end) {
+    pjs::Value ret;
+    (*m_on_end)(*pipeline->context(), 0, nullptr, ret);
+  }
+}
+
 void PipelineLayout::free(Pipeline *pipeline) {
   m_pipelines.remove(pipeline);
   pipeline->m_next_free = m_pool;
@@ -158,6 +172,7 @@ void Pipeline::on_event(Event *evt) {
 }
 
 void Pipeline::on_recycle() {
+  m_layout->end(this);
   reset();
   m_layout->free(this);
 }
