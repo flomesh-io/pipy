@@ -281,7 +281,7 @@ void MuxBase::SessionCluster::sort(Session *session) {
         if (p) {
           m_sessions.insert(session, p);
         } else {
-          m_sessions.push(p);
+          m_sessions.push(session);
         }
       }
     } else {
