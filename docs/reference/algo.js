@@ -54,6 +54,44 @@ class Cache {
 }
 
 /**
+ * @memberof algo
+ */
+class Quota {
+
+  /**
+   * @param {number} initialValue
+   * @param {Object} [options]
+   * @param {number|string} [options.per]
+   */
+  constructor(initialValue, options) {}
+
+  /**
+   * @type {number}
+   * @readonly
+   */
+  initial = 0;
+
+  /**
+   * @type {number}
+   * @readonly
+   */
+  current = 0;
+
+  reset() {}
+
+  /**
+   * @param {number} value
+   */
+  produce(value) {}
+
+  /**
+   * @param {number} value
+   * @returns {number}
+   */
+  consume(value) {}
+}
+
+/**
  * Path-based routing algorithm using a search tree.
  *
  * @memberof algo
@@ -219,6 +257,7 @@ class Percentile {
  */
 var algo = {
   Cache,
+  Quota,
   URLRouter,
   HashingLoadBalancer,
   RoundRobinLoadBalancer,

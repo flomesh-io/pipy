@@ -1,22 +1,28 @@
 /**
  * @callback AnyCB
- * @return {*}
+ * @returns {*}
  *
  * @callback BooleanCB
- * @return {boolean}
+ * @returns {boolean}
  *
  * @callback NumberCB
- * @return {number}
+ * @returns {number}
  *
  * @callback StringCB
- * @return {string}
+ * @returns {string}
  *
  * @callback NumberStringCB
- * @return {number|string}
+ * @returns {number|string}
+ *
+ * @callback QuotaCB
+ * @returns {Quota}
+ *
+ * @callback EventCB
+ * @returns {Event|Event[]|Message|Message[]}
  *
  * @callback RequestHandler
  * @param {Message} request
- * @return {Message}
+ * @returns {Message}
  *
  * @callback StreamStartHandler
  * @param {Event} request
@@ -38,27 +44,27 @@
  *
  * @callback StreamStartReplacer
  * @param {Event} request
- * @return {Event|Event[]|Message|Message[]}
+ * @returns {Event|Event[]|Message|Message[]}
  *
  * @callback StreamEndReplacer
  * @param {StreamEnd} request
- * @return {Event|Event[]|Message|Message[]}
+ * @returns {Event|Event[]|Message|Message[]}
  *
  * @callback DataReplacer
  * @param {Data} request
- * @return {Event|Event[]|Message|Message[]}
+ * @returns {Event|Event[]|Message|Message[]}
  *
  * @callback MessageReplacer
  * @param {Message} request
- * @return {Event|Event[]|Message|Message[]}
+ * @returns {Event|Event[]|Message|Message[]}
  *
  * @callback MessageStartReplacer
  * @param {MessageStart} request
- * @return {Event|Event[]|Message|Message[]}
+ * @returns {Event|Event[]|Message|Message[]}
  *
  * @callback MessageEndReplacer
  * @param {MessageEnd} request
- * @return {Event|Event[]|Message|Message[]}
+ * @returns {Event|Event[]|Message|Message[]}
  */
 
 /**
@@ -67,6 +73,11 @@
  * All PipyJS modules are expected to return a Configuration object after being evaluated.
  */
 class Configuration {
+
+  /**
+   * @callback PipelineBuilder
+   * @param {Configuration}
+   */
 
   /**
    * @typedef {{ key: PrivateKey, cert: Certificate|CertificateChain }} OptionCert
@@ -104,6 +115,12 @@ class Configuration {
   listen(port) {}
 
   /**
+   * @param {string} filename
+   * @returns {Configuration} The same Configuration object.
+   */
+  read(filename) {}
+
+  /**
    * Creates a pipeline layout that executes a periodic job or responds to a specified signal.
    *
    * @param {string} [interval] Interval between recurrences with a time unit suffix.
@@ -118,6 +135,24 @@ class Configuration {
    * @returns {Configuration} The same Configuration object.
    */
   pipeline(name) {}
+
+  /**
+   * @param {function} handler
+   * @returns {Configuration} The same Configuration object.
+   */
+  onStart(handler) {}
+
+  /**
+   * @param {function} handler
+   * @returns {Configuration} The same Configuration object.
+   */
+  onEnd(handler) {}
+
+  /**
+   * @param {PipelineBuilder} pipelineBuilder
+   * @returns {Configuration} The same Configuration object.
+   */
+  to(pipelineBuilder) {}
 
   /**
    * Appends an acceptHTTPTunnel filter to the current pipeline layout.
@@ -137,9 +172,19 @@ class Configuration {
    * @param {string} host
    * @param {number} port
    * @param {string} id
-   * @return {boolean}
+   * @returns {boolean}
    */
- 
+
+  /**
+   * Appends a branch filter to the current pipeline layout.
+   *
+   * @param {function} [condition] Condition under which the sub-pipeline layout is chosen.
+   * @param {string|function} layout Name of the pipeline layout based on which the sub-pipeline is created.
+   * @param {string|function} [defaultLayout] Name of the default pipeline layout when no conditions are met.
+   * @returns {Configuration} The same Configuration object.
+   */
+  branch(condition, layout, defaultLayout) {}
+
   /**
    * Appends an acceptSOCKS filter to the current pipeline layout.
    *
@@ -796,7 +841,7 @@ class Configuration {
   /**
    * @callback SplitHandler
    * @param {Number} ubyte
-   * @return {undefined|null|Event|Event[]|Message|Message[]}
+   * @returns {undefined|null|Event|Event[]|Message|Message[]}
    */
  
   /**
@@ -827,11 +872,10 @@ class Configuration {
    * A throttleConcurrency filter sets a limit to how many concurrent streams can go through its place in the pipeline layout.
    * Its input and output can be any types of events.
    *
-   * @param {number|string|NumberStringCB} quota Number of concurrent streams that are allowed through.
-   * @param {*|AnyCB} [account] Name of the account that the quota is entitled to.
+   * @param {Quota|QuotaCB} quota Number of concurrent streams that are allowed through.
    * @returns {Configuration} The same Configuration object.
    */
-  throttleConcurrency(quota, account) {}
+  throttleConcurrency(quota) {}
 
   /**
    * Appends a throttleDataRate filter to the current pipeline layout.
@@ -839,11 +883,10 @@ class Configuration {
    * A throttleDataRate filter sets a limit to how many bytes of Data can pass in every second.
    * Its input and output can be any types of events, but the limit only takes effect when they have Data events.
    *
-   * @param {number|string|NumberStringCB} quota Amount of data in bytes that are allowed through every second.
-   * @param {*|AnyCB} [account] Name of the account that the quota is entitled to.
+   * @param {Quota|QuotaCB} quota Amount of data in bytes that are allowed through every second.
    * @returns {Configuration} The same Configuration object.
    */
-  throttleDataRate(quota, account) {}
+  throttleDataRate(quota) {}
 
   /**
    * Appends a throttleMessageRate filter to the current pipeline layout.
@@ -851,11 +894,10 @@ class Configuration {
    * A throttleMessageRate filter sets a limit to how many Messages can pass in every second.
    * Its input and output can be any types of events, but the limit only take effect when they have MessageStart events.
    *
-   * @param {number|string|NumberStringCB} quota Number of messages allowed through every second.
-   * @param {*|AnyCB} [account] Name of the account that the quota is entitled to.
+   * @param {Quota|QuotaCB} quota Number of messages allowed through every second.
    * @returns {Configuration} The same Configuration object.
    */
-  throttleMessageRate(quota, account) {}
+  throttleMessageRate(quota) {}
 
   /**
    * Appends a use filter to the current pipeline layout.
