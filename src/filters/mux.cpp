@@ -304,6 +304,7 @@ void MuxBase::SessionCluster::sort(Session *session) {
     } else {
       if (!m_recycle_scheduled) {
         m_manager->m_recycle_clusters.push(this);
+        m_manager->recycle();
         m_recycle_scheduled = true;
       }
     }
