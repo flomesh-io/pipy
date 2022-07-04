@@ -79,9 +79,13 @@ void Branch::process(Event *evt) {
     const auto &conditions = *m_conditions;
     for (int i = 0; i < conditions.size(); i++) {
       const auto &cond = conditions[i];
-      pjs::Value ret;
-      if (!eval(cond.func, ret)) return;
-      m_chosen = ret.to_boolean();
+      if (cond.func) {
+        pjs::Value ret;
+        if (!eval(cond.func, ret)) return;
+        m_chosen = ret.to_boolean();
+      } else {
+        m_chosen = true;
+      }
       if (m_chosen) {
         if (auto *pipeline = sub_pipeline(i, false)) {
           pipeline->chain(output());

@@ -761,19 +761,24 @@ template<> void ClassDef<FilterConfigurator>::init() {
     try {
       int n = ctx.argc();
       if (n < 2) throw std::runtime_error("requires at least 2 arguments");
-      if (n % 2) throw std::runtime_error("requires even number of arguments");
-      n /= 2;
+      n = (n + 1) / 2;
       Function *conds[n];
       Value layouts[n];
       for (int i = 0; i < n; i++) {
-        auto &cond = ctx.arg(i*2);
-        auto &layout = ctx.arg(i*2+1);
-        if (cond.is_function()) {
-          conds[i] = cond.as<Function>();
+        auto p = i * 2;
+        auto &cond = ctx.arg(p);
+        if (p + 1 < ctx.argc()) {
+          if (cond.is_function()) {
+            conds[i] = cond.as<Function>();
+          } else {
+            ctx.error_argument_type(p, "a function");
+            return;
+          }
+          p++;
         } else {
-          ctx.error_argument_type(i*2, "a function");
-          return;
+          conds[i] = nullptr;
         }
+        auto &layout = ctx.arg(p);
         if (layout.is_string()) {
           layouts[i].set(layout.s());
         } else if (layout.is_function()) {
@@ -788,7 +793,7 @@ template<> void ClassDef<FilterConfigurator>::init() {
           );
           if (!ctx.ok()) return;
         } else {
-          ctx.error_argument_type(i*2+1, "a string or a function");
+          ctx.error_argument_type(p, "a string or a function");
           return;
         }
       }
