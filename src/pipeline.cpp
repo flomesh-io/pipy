@@ -71,6 +71,10 @@ void PipelineLayout::shutdown() {
     p->shutdown();
     p = p->next();
   }
+
+  for (const auto &f : m_filters) {
+    f->shutdown();
+  }
 }
 
 auto PipelineLayout::new_context() -> Context* {

@@ -89,6 +89,10 @@ void MuxBase::reset() {
   m_session_key = pjs::Value::undefined;
 }
 
+void MuxBase::shutdown() {
+  m_session_manager->shutdown();
+}
+
 void MuxBase::process(Event *evt) {
   if (!m_stream) {
     auto session = m_session.get();
@@ -381,6 +385,10 @@ auto MuxBase::SessionManager::get(const pjs::Value &key) -> Session* {
   return cluster->alloc(m_max_queue);
 }
 
+void MuxBase::SessionManager::shutdown() {
+  m_has_shutdown = true;
+}
+
 void MuxBase::SessionManager::recycle() {
   if (m_recycling) return;
   if (m_recycle_clusters.empty()) return;
@@ -393,6 +401,7 @@ void MuxBase::SessionManager::recycle() {
       auto now = utils::now();
       auto t = m_max_idle * 1000;
       auto c = m_recycle_clusters.head();
+      if (m_has_shutdown) now += t;
       while (c) {
         auto cluster = c; c = c->next();
         cluster->recycle(now, t);

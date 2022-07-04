@@ -50,7 +50,7 @@ class MuxBase :
 {
 public:
   struct Options : public pipy::Options {
-    double max_idle = 10;
+    double max_idle = 60;
     int max_queue = 0;
     Options() {}
     Options(pjs::Object *options);
@@ -65,6 +65,7 @@ protected:
   MuxBase(const MuxBase &r);
 
   virtual void reset() override;
+  virtual void shutdown() override;
   virtual void process(Event *evt) override;
   virtual auto on_new_session() -> Session* = 0;
 
@@ -177,6 +178,7 @@ private:
     ~SessionManager();
 
     auto get(const pjs::Value &key) -> Session*;
+    void shutdown();
 
     MuxBase* m_mux;
     std::unordered_map<pjs::Value, SessionCluster*> m_clusters;
@@ -186,6 +188,7 @@ private:
     int m_max_queue = 0;
     Timer m_recycle_timer;
     bool m_recycling = false;
+    bool m_has_shutdown = false;
 
     void recycle();
 
