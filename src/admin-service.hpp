@@ -148,6 +148,8 @@ private:
 
   struct Instance {
     int index;
+    double timestamp;
+    std::string codebase_name;
     Status status;
     stats::MetricSet metrics;
     WebSocketHandler* admin_link = nullptr;
@@ -155,14 +157,16 @@ private:
   };
 
   int m_port;
+  int m_last_instance_index = 0;
   CodebaseStore* m_store;
   std::string m_current_codebase;
   std::string m_current_program;
-  std::vector<Instance*> m_instances;
+  std::map<int, Instance*> m_instances;
   std::map<std::string, int> m_instance_map;
-  std::map<std::string, std::list<int>> m_codebase_instances;
+  std::map<std::string, std::set<int>> m_codebase_instances;
   std::map<std::string, std::set<LogWatcher*>> m_local_log_watchers;
   Timer m_metrics_history_timer;
+  Timer m_inactive_instance_removal_timer;
   std::chrono::time_point<std::chrono::steady_clock> m_metrics_timestamp;
 
   Tarball m_www_files;
@@ -215,6 +219,7 @@ private:
   auto codebase_of(const std::string &path) -> CodebaseStore::Codebase*;
   auto codebase_of(const std::string &path, std::string &filename) -> CodebaseStore::Codebase*;
   auto get_instance(const std::string &uuid) -> Instance*;
+  auto get_instance(int index) -> Instance*;
 
   static auto response_head(
     int status,
@@ -227,6 +232,7 @@ private:
   void on_metrics(Context *ctx, const Data &data);
 
   void metrics_history_step();
+  void inactive_instance_removal_step();
 };
 
 } // namespace pipy

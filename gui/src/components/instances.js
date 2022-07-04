@@ -54,6 +54,10 @@ function Instances({ root }) {
       } else {
         return null;
       }
+    },
+    {
+      cacheTime: 0,
+      refetchInterval: 1000,
     }
   );
 
@@ -91,7 +95,7 @@ function Instances({ root }) {
                 id && (
                   <div>
                     <Typography component="p" variant="caption" noWrap>{instance.uuid}</Typography>
-                    {now - instance.timestamp > 10000 ? (
+                    {now - instance.timestamp > 30000 ? (
                       <Typography component="p" variant="caption" noWrap>
                         {'Inactive since '}
                         <TimeAgo date={instance.timestamp}/>

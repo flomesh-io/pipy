@@ -85,15 +85,17 @@ AdminService::AdminService(CodebaseStore *store)
   m_response_not_found = create_response(404);
   m_response_method_not_allowed = create_response(405);
 
-  // No repo, running a fixed codebase
-  if (!store) {
+  if (store) {
+    inactive_instance_removal_step();
+  } else {
+    // No repo, running a fixed codebase
     m_current_program = "/";
   }
 }
 
 AdminService::~AdminService() {
-  for (auto *i : m_instances) {
-    delete i;
+  for (const auto &p : m_instances) {
+    delete p.second;
   }
 }
 
@@ -445,7 +447,8 @@ Message* AdminService::metrics_GET(pjs::Object *headers) {
 
   stats::Metric::local().collect_all();
   stats::Metric::local().to_prometheus(output, "");
-  for (const auto inst : m_instances) {
+  for (const auto &p : m_instances) {
+    auto inst = p.second;
     std::string inst_label("instance=\"");
     if (inst->status.name.empty()) {
       inst_label += std::to_string(inst->index);
@@ -517,9 +520,11 @@ Message* AdminService::repo_POST(const std::string &path, Data *data) {
       if (!status.from_json(*data)) return response(400, "Invalid JSON");
       Instance *inst = get_instance(status.uuid);
       if (inst->status.uuid.empty()) {
-        m_codebase_instances[codebase->id()].push_back(inst->index);
+        m_codebase_instances[codebase->id()].insert(inst->index);
+        inst->codebase_name = codebase->id();
       }
       inst->status = std::move(status);
+      inst->timestamp = utils::now();
       return m_response_created;
     }
   }
@@ -586,10 +591,11 @@ Message* AdminService::api_v1_repo_GET(const std::string &path) {
     auto &instances = m_codebase_instances[codebase->id()];
     bool first = true;
     for (const auto index : instances) {
-      auto *inst = m_instances[index];
-      if (first) first = false; else ss << ',';
-      ss << '"' << inst->index << "\":";
-      inst->status.to_json(ss);
+      if (auto *inst = get_instance(index)) {
+        if (first) first = false; else ss << ',';
+        ss << '"' << inst->index << "\":";
+        inst->status.to_json(ss);
+      }
     }
     ss << "}}";
 
@@ -659,9 +665,10 @@ Message* AdminService::api_v1_repo_POST(const std::string &path, Data *data) {
           auto i = m_codebase_instances.find(id);
           if (i != m_codebase_instances.end()) {
             for (auto index : i->second) {
-              auto *inst = m_instances[index];
-              if (auto *admin_link = inst->admin_link) {
-                admin_link->signal_reload();
+              if (auto *inst = get_instance(index)) {
+                if (auto *admin_link = inst->admin_link) {
+                  admin_link->signal_reload();
+                }
               }
             }
           }
@@ -883,7 +890,7 @@ Message* AdminService::api_v1_metrics_GET(const std::string &path) {
     ms = &stats::Metric::local();
   } else {
     auto i = m_instance_map.find(uuid);
-    if (i != m_instance_map.end()) ms = &m_instances[i->second]->metrics;
+    if (i != m_instance_map.end()) ms = &get_instance(i->second)->metrics;
   }
   if (!ms) return m_response_not_found;
   Data payload;
@@ -968,12 +975,19 @@ auto AdminService::codebase_of(const std::string &path, std::string &filename) -
 
 auto AdminService::get_instance(const std::string &uuid) -> Instance* {
   auto i = m_instance_map.find(uuid);
-  if (i != m_instance_map.end()) return m_instances[i->second];
+  if (i != m_instance_map.end()) return get_instance(i->second);
   auto *inst = new Instance;
-  inst->index = m_instances.size();
-  m_instances.push_back(inst);
+  inst->index = ++m_last_instance_index;
+  inst->timestamp = utils::now();
+  m_instances[inst->index] = inst;
   m_instance_map[uuid] = inst->index;
   return inst;
+}
+
+auto AdminService::get_instance(int index) -> Instance* {
+  auto i = m_instances.find(index);
+  if (i == m_instances.end()) return nullptr;
+  return i->second;
 }
 
 auto AdminService::response_head(
@@ -1045,11 +1059,35 @@ void AdminService::metrics_history_step() {
   m_metrics_timestamp = std::chrono::steady_clock::now();
   stats::Metric::local().collect_all();
   stats::Metric::local().history_step();
-  for (auto *i : m_instances) {
-    i->metrics.history_step();
+  for (const auto &p : m_instances) {
+    p.second->metrics.history_step();
   }
   m_metrics_history_timer.schedule(
     5, [this]() { metrics_history_step(); }
+  );
+}
+
+void AdminService::inactive_instance_removal_step() {
+  auto now = utils::now();
+  std::set<int> inactive;
+  for (const auto &p : m_instances) {
+    auto *inst = p.second;
+    if (inst->status.uuid.empty()) continue;
+    if (!inst->admin_link && inst->log_watchers.empty()) {
+      if (now - inst->timestamp >= 60*1000) {
+        inactive.insert(p.first);
+        m_instance_map.erase(inst->status.uuid);
+        auto i = m_codebase_instances.find(inst->codebase_name);
+        if (i != m_codebase_instances.end()) {
+          i->second.erase(inst->index);
+        }
+        delete inst;
+      }
+    }
+  }
+  for (auto index : inactive) m_instances.erase(index);
+  m_inactive_instance_removal_timer.schedule(
+    5, [this]() { inactive_instance_removal_step(); }
   );
 }
 
