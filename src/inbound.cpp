@@ -257,8 +257,6 @@ void InboundTCP::start() {
   m_metric_traffic_in = Status::metric_inbound_in->with_labels(labels, 2);
   m_metric_traffic_out = Status::metric_inbound_out->with_labels(labels, 2);
 
-  InputContext ic(this);
-  p->input()->input(Data::make());
   receive();
 }
 

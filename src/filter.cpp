@@ -160,44 +160,11 @@ void Filter::on_event(Event *evt) {
 }
 
 bool Filter::output(const pjs::Value &evt) {
-  if (evt.is_instance_of(pjs::class_of<Event>())) {
-    output(evt.as<Event>());
-    return true;
-  } else if (evt.is_instance_of(pjs::class_of<Message>())) {
-    auto *msg = evt.as<Message>();
-    auto *body = msg->body();
-    output(MessageStart::make(msg->head()));
-    if (body) output(body);
-    output(MessageEnd::make(msg->tail()));
-    return true;
-  } else if (evt.is_array()) {
-    auto *a = evt.as<pjs::Array>();
-    auto last = a->iterate_while([&](pjs::Value &v, int i) -> bool {
-      if (v.is_instance_of(pjs::class_of<Event>())) {
-        output(v.as<Event>());
-        return true;
-      } else if (v.is_instance_of(pjs::class_of<Message>())) {
-        auto *msg = v.as<Message>();
-        auto *body = msg->body();
-        output(MessageStart::make(msg->head()));
-        if (body) output(body);
-        output(MessageEnd::make(msg->tail()));
-        return true;
-      } else {
-        return v.is_null() || v.is_undefined();
-      }
-    });
-    if (last < a->length()) {
-      Log::error("[filter] not an Event object");
-      return false;
-    }
-    return true;
-  } else if (evt.is_null() || evt.is_undefined()) {
-    return true;
-  } else {
-    Log::error("[filter] not an Event object");
+  if (!Message::output(evt, output())) {
+    Log::error("[filter] output is not events or messages");
     return false;
   }
+  return true;
 }
 
 bool Filter::callback(pjs::Function *func, int argc, pjs::Value argv[], pjs::Value &result) {

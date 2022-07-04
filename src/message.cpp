@@ -29,6 +29,42 @@ namespace pipy {
 
 Data::Producer Message::s_dp("Message");
 
+bool Message::output(const pjs::Value &evt, EventTarget::Input *input) {
+  if (evt.is_instance_of(pjs::class_of<Event>())) {
+    input->input(evt.as<Event>());
+    return true;
+  } else if (evt.is_instance_of(pjs::class_of<Message>())) {
+    auto *msg = evt.as<Message>();
+    auto *body = msg->body();
+    input->input(MessageStart::make(msg->head()));
+    if (body) input->input(body);
+    input->input(MessageEnd::make(msg->tail()));
+    return true;
+  } else if (evt.is_array()) {
+    auto *a = evt.as<pjs::Array>();
+    auto last = a->iterate_while([&](pjs::Value &v, int i) -> bool {
+      if (v.is_instance_of(pjs::class_of<Event>())) {
+        input->input(v.as<Event>());
+        return true;
+      } else if (v.is_instance_of(pjs::class_of<Message>())) {
+        auto *msg = v.as<Message>();
+        auto *body = msg->body();
+        input->input(MessageStart::make(msg->head()));
+        if (body) input->input(body);
+        input->input(MessageEnd::make(msg->tail()));
+        return true;
+      } else {
+        return v.is_null() || v.is_undefined();
+      }
+    });
+    return last == a->length();
+  } else if (evt.is_null() || evt.is_undefined()) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
 } // namespace pipy
 
 namespace pjs {

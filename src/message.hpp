@@ -36,6 +36,8 @@ namespace pipy {
 
 class Message : public pjs::ObjectTemplate<Message> {
 public:
+  static bool output(const pjs::Value &evt, EventTarget::Input *input);
+
   auto head() const -> pjs::Object* { return m_head; }
   auto tail() const -> pjs::Object* { return m_tail; }
   auto body() const -> Data* { return m_body; }

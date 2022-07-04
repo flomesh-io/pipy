@@ -133,6 +133,8 @@ protected:
 
   void set_pipeline_config(PipelineConfig *config) {
     m_config = config;
+    m_current_filter = nullptr;
+    m_current_joint_filter = nullptr;
   }
 
 private:

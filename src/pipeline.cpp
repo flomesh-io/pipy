@@ -109,6 +109,9 @@ void PipelineLayout::start(Pipeline *pipeline, int argc, pjs::Value *argv) {
   if (m_on_start) {
     pjs::Value ret;
     (*m_on_start)(*pipeline->context(), argc, argv, ret);
+    if (!Message::output(ret, pipeline->input())) {
+      Log::error("[pipeline] starting input is not events or messages");
+    }
   }
 }
 
