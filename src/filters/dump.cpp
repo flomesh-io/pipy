@@ -107,14 +107,12 @@ void Dump::process(Event *evt) {
       db.push(' ');
       JSON::encode(head, nullptr, 0, db);
     }
-    db.push('\n');
 
   } else if (auto end = evt->as<MessageEnd>()) {
     if (auto tail = end->tail()) {
       db.push(' ');
       JSON::encode(tail, nullptr, 0, db);
     }
-    db.push('\n');
 
   } else if (auto end = evt->as<StreamEnd>()) {
     if (end->error() != StreamEnd::NO_ERROR) {
@@ -124,7 +122,6 @@ void Dump::process(Event *evt) {
       db.push(']');
       db.push(' ');
     }
-    db.push('\n');
 
   } else if (auto data = evt->as<Data>()) {
     db.push(' ');
@@ -132,10 +129,10 @@ void Dump::process(Event *evt) {
     db.push(str, str_fmt("%d", data->size()));
     db.push(']');
     db.push(' ');
-    db.push('\n');
     if (!data->empty()) {
       char hex[100], txt[100];
       auto i = 0, j = 0;
+      db.push('\n');
       db.push(s_hline);
       db.push('\n');
       data->scan(
@@ -172,7 +169,6 @@ void Dump::process(Event *evt) {
         db.push('\n');
       }
       db.push(s_hline);
-      db.push('\n');
     }
   }
 
