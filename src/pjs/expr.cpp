@@ -101,6 +101,15 @@ bool Compound::eval(Context &ctx, Value &result) {
   return true;
 }
 
+auto Compound::reduce(Reducer &r) -> Reducer::Value* {
+  size_t n = m_exprs.size();
+  Reducer::Value *v[n];
+  for (size_t i = 0; i < n; i++) {
+    v[i] = m_exprs[i]->reduce(r);
+  }
+  return r.compound(v, n);
+}
+
 void Compound::resolve(Context &ctx, int l, Imports *imports) {
   for (const auto &p : m_exprs) {
     p->resolve(ctx, l, imports);

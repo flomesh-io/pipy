@@ -144,6 +144,13 @@ protected:
     return new ConfigValue(s);
   }
 
+  virtual Value* compound(Value **v, size_t count) override {
+    for (size_t i = 0; i + 1 < count; i++) {
+      delete v[i];
+    }
+    return v[count - 1];
+  }
+
   virtual Value* function(int argc, pjs::Expr **inputs, pjs::Expr *output) override {
     std::string arg;
     if (argc > 0) {

@@ -119,6 +119,9 @@ public:
     // Select
     virtual Value* select(Value *a, Value *b, Value *c) { return dummy(a, b, c); }
 
+    // Compound
+    virtual Value* compound(Value **v, size_t count) { return dummy(v, count); }
+
     // Free values
     virtual void free(Value *val) {}
 
@@ -246,6 +249,7 @@ public:
   virtual bool is_argument_list() const override;
   virtual bool is_comma_ended() const override { return m_is_comma_ended; }
   virtual bool eval(Context &ctx, Value &result) override;
+  virtual auto reduce(Reducer &r) -> Reducer::Value* override;
   virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
