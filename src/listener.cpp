@@ -66,9 +66,6 @@ Listener::Options::Options(pjs::Object *options) {
   Value(options, "transparent")
     .get(transparent)
     .check_nullable();
-  Value(options, "closeEOF")
-    .get(close_eof)
-    .check_nullable();
 }
 
 //

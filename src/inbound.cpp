@@ -300,12 +300,8 @@ void InboundTCP::receive() {
               describe(desc);
               Log::debug("%s EOF from peer", desc);
             }
-            if (m_options.close_eof) {
-              close(StreamEnd::NO_ERROR);
-            } else {
-              linger();
-              output(StreamEnd::make());
-            }
+            linger();
+            output(StreamEnd::make());
           } else if (ec == asio::error::connection_reset) {
             if (Log::is_enabled(Log::WARN)) {
               char desc[200];
