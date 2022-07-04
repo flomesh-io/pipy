@@ -194,6 +194,7 @@ void InboundTCP::accept(asio::ip::tcp::acceptor &acceptor) {
             describe(desc);
             Log::debug("%s connection accepted", desc);
           }
+          InputContext ic(this);
           start();
         }
       }

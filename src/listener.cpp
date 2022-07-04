@@ -365,6 +365,7 @@ void Listener::AcceptorUDP::receive() {
     [=](const std::error_code &ec, std::size_t n) {
       if (ec != asio::error::operation_aborted) {
         if (!ec) {
+          InputContext ic;
           InboundUDP *inb = inbound(m_peer, !m_paused);
           if (inb && inb->is_receiving()) {
             if (n > 0) buffer->pop(buffer->size() - n);
