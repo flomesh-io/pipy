@@ -99,6 +99,7 @@ void QueueDemuxer::on_event(Event *evt) {
         stream->output(MessageEnd::make());
       }
     }
+    shutdown();
   }
 }
 

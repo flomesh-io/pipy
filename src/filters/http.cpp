@@ -1709,6 +1709,9 @@ void Server::Handler::on_event(Event *evt) {
 
       m_server->start_tunnel();
     }
+
+  } else if (evt->is<StreamEnd>()) {
+    m_server->shutdown();
   }
 }
 
