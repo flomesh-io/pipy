@@ -507,8 +507,9 @@ void FunctionLiteral::resolve(Context &ctx, int l, Imports *imports) {
         int i = 0;
         for (const auto &arg : m_inputs) {
           if (m_variables[i].name == Str::empty) {
-            arg->unpack(ctx, scope->value(i++), v);
+            arg->unpack(ctx, scope->value(i), v);
           }
+          i++;
         }
       }
       m_output->eval(ctx, result);
