@@ -39,6 +39,7 @@ class Context;
 class ModuleBase;
 class PipelineLayout;
 class Pipeline;
+class Output;
 
 //
 // Filter
@@ -89,7 +90,14 @@ public:
   void add_sub_pipeline(pjs::Str *name);
   void add_sub_pipeline(int index);
   auto num_sub_pipelines() const -> int { return m_subs->size(); }
-  auto sub_pipeline(int i, bool clone_context, int argc = 0, pjs::Value *argv = nullptr) -> Pipeline*;
+  auto sub_pipeline(
+    int i,
+    bool clone_context,
+    Input *chain_to,
+    Output *output_to = nullptr,
+    int argc = 0,
+    pjs::Value *argv = nullptr
+  ) -> Pipeline*;
 
   virtual void bind();
   virtual auto clone() -> Filter* = 0;

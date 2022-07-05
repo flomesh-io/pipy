@@ -513,7 +513,7 @@ public:
   void go_away();
 
 protected:
-  virtual auto on_new_stream_pipeline() -> PipelineBase* = 0;
+  virtual auto on_new_stream_pipeline(Input *chain_to) -> PipelineBase* = 0;
 
 private:
   class Stream;

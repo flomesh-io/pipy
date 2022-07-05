@@ -258,6 +258,7 @@ void InboundTCP::start() {
   m_metric_traffic_in = Status::metric_inbound_in->with_labels(labels, 2);
   m_metric_traffic_out = Status::metric_inbound_out->with_labels(labels, 2);
 
+  p->start();
   receive();
 }
 
@@ -536,6 +537,7 @@ void InboundUDP::start() {
     auto p = pipeline();
     p->chain(EventTarget::input());
     m_input = p->input();
+    p->start();
     wait_idle();
   }
 }

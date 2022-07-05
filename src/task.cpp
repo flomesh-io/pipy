@@ -137,8 +137,9 @@ void Task::run() {
       m_pipeline_layout,
       m_pipeline_layout->new_context()
     );
-    m_pipeline->chain(EventTarget::input());
     InputContext ic;
+    m_pipeline->chain(EventTarget::input());
+    m_pipeline->start();
     auto input = m_pipeline->input();
     input->input(MessageStart::make());
     input->input(MessageEnd::make());

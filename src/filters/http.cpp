@@ -1232,8 +1232,8 @@ void Demux::shutdown() {
   }
 }
 
-auto Demux::on_new_sub_pipeline() -> Pipeline* {
-  return sub_pipeline(0, true);
+auto Demux::on_new_sub_pipeline(Input *chain_to) -> Pipeline* {
+  return sub_pipeline(0, true, chain_to);
 }
 
 bool Demux::on_reply_start(MessageStart *start) {
@@ -1620,8 +1620,7 @@ void Server::start_tunnel() {
     Encoder::set_tunnel(true);
     if (!m_tunnel) {
       if (num_sub_pipelines() > 0) {
-        m_tunnel = sub_pipeline(0, false);
-        m_tunnel->chain(Filter::output());
+        m_tunnel = sub_pipeline(0, false, Filter::output());
       }
     }
     m_switching = false;
@@ -1791,8 +1790,7 @@ void TunnelServer::process(Event *evt) {
           pjs::Value status;
           head->get(s_status, status);
           if (status.is_undefined() || (status.is_number() && 100 <= status.n() && status.n() < 300)) {
-            m_pipeline = sub_pipeline(0, true);
-            m_pipeline->chain(output());
+            m_pipeline = sub_pipeline(0, true, output());
           }
         }
 
@@ -1856,8 +1854,7 @@ void TunnelClient::process(Event *evt) {
       Log::error("[connectHTTPTunnel] invalid handshake request");
       return;
     }
-    m_pipeline = sub_pipeline(0, true);
-    m_pipeline->chain(TunnelClientReceiver::input());
+    m_pipeline = sub_pipeline(0, true, TunnelClientReceiver::input());
     auto inp = m_pipeline->input();
     auto msg = handshake.as<Message>();
     inp->input(MessageStart::make(msg->head()));

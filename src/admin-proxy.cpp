@@ -69,8 +69,7 @@ private:
           utils::starts_with(path, "/api/") ||
           utils::starts_with(path, "/repo/")
         ) {
-          m_pipeline = sub_pipeline(0, false);
-          m_pipeline->chain(output());
+          m_pipeline = sub_pipeline(0, false, output());
         }
       }
 

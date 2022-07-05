@@ -68,8 +68,7 @@ void LinkInput::reset() {
 void LinkInput::process(Event *evt) {
   if (!m_output) {
     m_output = Output::make(output());
-    m_pipeline = sub_pipeline(0, false);
-    if (m_pipeline) m_pipeline->output(m_output);
+    m_pipeline = sub_pipeline(0, false, nullptr, m_output);
     if (m_callback) {
       pjs::Value arg(m_output), ret;
       callback(m_callback, 1, &arg, ret);

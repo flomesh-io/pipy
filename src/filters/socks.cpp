@@ -108,8 +108,7 @@ void Server::process(Event *evt) {
     }
     callback(m_on_connect, 3, argv, ret);
     if (ret.to_boolean()) {
-      auto pipeline = sub_pipeline(0, false);
-      pipeline->chain(output());
+      auto pipeline = sub_pipeline(0, false, output());
       m_pipeline = pipeline;
       if (version == 4) {
         reply_socks4(0x5a);
@@ -341,8 +340,7 @@ void Client::process(Event *evt) {
   if (m_state == STATE_CLOSED) return;
 
   if (!m_pipeline) {
-    m_pipeline = sub_pipeline(0, false);
-    m_pipeline->chain(ClientReceiver::input());
+    m_pipeline = sub_pipeline(0, false, ClientReceiver::input());
   }
 
   if (evt->is<StreamEnd>()) {

@@ -167,14 +167,13 @@ auto TLSSession::get(SSL *ssl) -> TLSSession* {
 
 TLSSession::TLSSession(
   TLSContext *ctx,
-  Pipeline *pipeline,
+  Filter *filter,
   bool is_server,
   pjs::Object *certificate,
   pjs::Function *alpn,
   pjs::Function *handshake
 )
-  : m_pipeline(pipeline)
-  , m_certificate(certificate)
+  : m_certificate(certificate)
   , m_alpn(alpn)
   , m_handshake(handshake)
   , m_is_server(is_server)
@@ -187,8 +186,8 @@ TLSSession::TLSSession(
 
   SSL_set_bio(m_ssl, m_rbio, m_wbio);
 
-  chain_forward(pipeline->input());
-  pipeline->chain(reply());
+  m_pipeline = filter->sub_pipeline(0, false, reply());
+  chain_forward(m_pipeline->input());
 
   if (is_server) {
     SSL_set_accept_state(m_ssl);
@@ -591,7 +590,7 @@ void Client::process(Event *evt) {
   if (!m_session) {
     m_session = new TLSSession(
       m_tls_context.get(),
-      sub_pipeline(0, false),
+      this,
       false,
       m_options->certificate,
       nullptr,
@@ -684,7 +683,7 @@ void Server::process(Event *evt) {
   if (!m_session) {
     m_session = new TLSSession(
       m_tls_context.get(),
-      sub_pipeline(0, false),
+      this,
       true,
       m_options->certificate,
       m_options->alpn,

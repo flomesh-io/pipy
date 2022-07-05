@@ -88,7 +88,7 @@ public:
 
   TLSSession(
     TLSContext *ctx,
-    Pipeline *pipeline,
+    Filter *filter,
     bool is_server,
     pjs::Object *certificate,
     pjs::Function *alpn,

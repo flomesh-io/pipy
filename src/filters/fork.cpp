@@ -90,7 +90,7 @@ void Fork::process(Event *evt) {
       for (int i = 0; i < arr->length(); i++) {
         pjs::Value v;
         arr->get(i, v);
-        auto pipeline = sub_pipeline(0, true);
+        auto pipeline = sub_pipeline(0, true, nullptr);
         if (mod && v.is_object()) {
           auto context = pipeline->context();
           pjs::Object::assign(context->data(mod->index()), v.o());
@@ -99,7 +99,7 @@ void Fork::process(Event *evt) {
       }
     } else {
       m_pipelines = pjs::PooledArray<pjs::Ref<Pipeline>>::make(1);
-      auto pipeline = sub_pipeline(0, initializers ? true : false);
+      auto pipeline = sub_pipeline(0, initializers ? true : false, nullptr);
       if (initializers) {
         auto context = pipeline->context();
         pjs::Object::assign(context->data(mod->index()), initializers);

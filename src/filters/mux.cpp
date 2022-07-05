@@ -109,7 +109,7 @@ void MuxBase::process(Event *evt) {
       pjs::Value args[2];
       args[0] = m_session_key;
       args[1].set((int)session->m_cluster->m_sessions.size());
-      auto p = sub_pipeline(0, true, 2, args);
+      auto p = sub_pipeline(0, true, session->reply(), nullptr, 2, args);
       session->init(p);
     }
 
@@ -199,7 +199,6 @@ void MuxBase::Session::set_pending(bool pending) {
 
 void MuxBase::Session::init(Pipeline *pipeline) {
   m_pipeline = pipeline;
-  pipeline->chain(reply());
   chain_forward(pipeline->input());
   open();
 }

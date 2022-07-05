@@ -75,6 +75,7 @@ void Reader::FileReader::start() {
         fs->chain(EventTarget::input());
         m_pipeline = p;
         m_stream = fs;
+        p->start();
       }
       release();
     }

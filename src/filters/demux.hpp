@@ -46,7 +46,7 @@ public:
 protected:
   QueueDemuxer() {}
 
-  virtual auto on_new_sub_pipeline() -> Pipeline* = 0;
+  virtual auto on_new_sub_pipeline(Input *chain_to) -> Pipeline* = 0;
   virtual bool on_reply_start(MessageStart *start) { return true; }
 
 private:
@@ -120,7 +120,7 @@ private:
   virtual void shutdown() override;
   virtual void dump(Dump &d) override;
 
-  virtual auto on_new_sub_pipeline() -> Pipeline* override;
+  virtual auto on_new_sub_pipeline(Input *chain_to) -> Pipeline* override;
 };
 
 //

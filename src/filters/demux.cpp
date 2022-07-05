@@ -148,9 +148,8 @@ void QueueDemuxer::flush() {
 QueueDemuxer::Stream::Stream(QueueDemuxer *demuxer)
   : m_demuxer(demuxer)
 {
-  auto p = demuxer->on_new_sub_pipeline();
+  auto p = demuxer->on_new_sub_pipeline(EventSource::reply());
   EventSource::chain(p->input());
-  p->chain(EventSource::reply());
   m_pipeline = p;
 }
 
@@ -274,8 +273,8 @@ void DemuxQueue::shutdown() {
   QueueDemuxer::shutdown();
 }
 
-auto DemuxQueue::on_new_sub_pipeline() -> Pipeline* {
-  return sub_pipeline(0, true);
+auto DemuxQueue::on_new_sub_pipeline(Input *chain_to) -> Pipeline* {
+  return sub_pipeline(0, true, chain_to);
 }
 
 //
@@ -313,8 +312,7 @@ void Demux::reset() {
 void Demux::process(Event *evt) {
   if (evt->is<MessageStart>()) {
     if (!m_pipeline) {
-      m_pipeline = sub_pipeline(0, true);
-      m_pipeline->chain(EventSource::reply());
+      m_pipeline = sub_pipeline(0, true, EventSource::reply());
       m_pipeline->input()->input(evt);
     }
 

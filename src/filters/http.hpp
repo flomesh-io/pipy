@@ -339,8 +339,8 @@ private:
       : http2::Server(demux->m_options)
       , m_demux(demux) {}
 
-    auto on_new_stream_pipeline() -> PipelineBase* override {
-      return m_demux->sub_pipeline(0, true);
+    auto on_new_stream_pipeline(Input *chain_to) -> PipelineBase* override {
+      return m_demux->sub_pipeline(0, true, chain_to);
     }
 
   private:
@@ -352,7 +352,7 @@ private:
   pjs::PropertyCache m_prop_status;
   HTTP2Demuxer* m_http2_demuxer = nullptr;
 
-  virtual auto on_new_sub_pipeline() -> Pipeline* override;
+  virtual auto on_new_sub_pipeline(Input *chain_to) -> Pipeline* override;
   virtual bool on_reply_start(MessageStart *start) override;
   virtual void on_decode_error() override;
   virtual void on_decode_request(http::RequestHead *head) override;
@@ -510,8 +510,10 @@ private:
   private:
     http::Server* m_server;
 
-    auto on_new_stream_pipeline() -> PipelineBase* override {
-      return new Handler(m_server);
+    auto on_new_stream_pipeline(Input *chain_to) -> PipelineBase* override {
+      auto handler = new Handler(m_server);
+      handler->chain(chain_to);
+      return handler;
     }
   };
 

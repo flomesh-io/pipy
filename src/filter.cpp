@@ -136,7 +136,15 @@ void Filter::dump(Dump &d) {
   d.out_type = d.subs.empty() ? Dump::OUTPUT_FROM_SELF : Dump::OUTPUT_FROM_SUBS;
 }
 
-auto Filter::sub_pipeline(int i, bool clone_context, int argc, pjs::Value *argv) -> Pipeline* {
+auto Filter::sub_pipeline(
+  int i,
+  bool clone_context,
+  Input *chain_to,
+  Output *output_to,
+  int argc,
+  pjs::Value *argv
+) -> Pipeline* {
+
   auto layout = m_subs->at(i).layout.get();
   if (!layout) return nullptr;
 
@@ -147,8 +155,12 @@ auto Filter::sub_pipeline(int i, bool clone_context, int argc, pjs::Value *argv)
     }
   }
 
-  auto *p = Pipeline::make(layout, ctx, argc, argv);
-  p->output(pipeline()->output());
+  auto *p = Pipeline::make(layout, ctx);
+  if (chain_to) p->chain(chain_to);
+  if (output_to) p->output(output_to); else p->output(pipeline()->output());
+
+  p->start(argc, argv);
+
   return p;
 }
 

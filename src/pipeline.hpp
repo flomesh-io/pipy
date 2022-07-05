@@ -135,16 +135,18 @@ class Pipeline :
   public List<Pipeline>::Item
 {
 public:
-  static auto make(PipelineLayout *layout, Context *ctx, int argc = 0, pjs::Value *argv = nullptr) -> Pipeline* {
-    auto *p = layout->alloc(ctx);
-    layout->start(p, argc, argv);
-    return p;
+  static auto make(PipelineLayout *layout, Context *ctx) -> Pipeline* {
+    return layout->alloc(ctx);
   }
 
   auto layout() const -> PipelineLayout* { return m_layout; }
   auto context() const -> Context* { return m_context; }
   auto output() const -> Output* { return m_output; }
   void output(Output *output) { m_output = output; }
+
+  void start(int argc = 0, pjs::Value *argv = nullptr) {
+    m_layout->start(this, argc, argv);
+  }
 
   virtual void chain(Input *input) override;
 

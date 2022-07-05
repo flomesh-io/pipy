@@ -88,8 +88,7 @@ void Link::process(Event *evt) {
         m_chosen = true;
       }
       if (m_chosen) {
-        if (auto *pipeline = sub_pipeline(i, false)) {
-          pipeline->chain(output());
+        if (auto *pipeline = sub_pipeline(i, false, output())) {
           m_pipeline = pipeline;
           m_buffer.flush([&](Event *evt) {
             output(evt, pipeline->input());

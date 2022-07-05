@@ -1950,9 +1950,8 @@ void Server::go_away() {
 Server::Stream::Stream(Server *server, int id)
   : StreamBase(server, id, true)
 {
-  auto p = server->on_new_stream_pipeline();
+  auto p = server->on_new_stream_pipeline(EventSource::reply());
   EventSource::chain(p->input());
-  p->chain(EventSource::reply());
   m_pipeline = p;
 }
 
