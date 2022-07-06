@@ -153,7 +153,7 @@ private:
     void free(Session *session);
     void discard(Session *session);
 
-    SessionManager* m_manager;
+    pjs::Ref<SessionManager> m_manager;
     pjs::Value m_key;
     pjs::WeakRef<pjs::Object> m_weak_key;
     List<Session> m_sessions;
