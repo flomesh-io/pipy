@@ -69,6 +69,7 @@ public:
 
   class Target {
   public:
+    virtual ~Target() {}
     virtual void write(const Data &msg) = 0;
     virtual void shutdown() {}
   };
