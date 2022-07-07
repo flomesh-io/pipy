@@ -395,7 +395,7 @@ void URLRouter::dump(Node *node, int level) {
 
 LoadBalancer::~LoadBalancer() {
   for (const auto &i : m_sessions) {
-    close_session(i.second);
+    delete i.second;
   }
   for (const auto &i : m_targets) {
     auto &resources = i.second->resources;
