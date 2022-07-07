@@ -39,6 +39,8 @@ namespace pjs {
 
 class Math : public ObjectTemplate<Math> {
 public:
+  static void init();
+
   static double abs(double x);
   static double acos(double x);
   static double acosh(double x);

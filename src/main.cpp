@@ -239,6 +239,7 @@ int main(int argc, char *argv[]) {
       Status::local.uuid = opts.instance_uuid;
     }
 
+    pjs::Math::init();
     Log::init();
     Log::set_level(opts.log_level);
     Status::register_metrics();

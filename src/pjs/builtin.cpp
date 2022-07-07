@@ -30,6 +30,7 @@
 #include <cstdlib>
 #include <limits>
 #include <math.h>
+#include <random>
 #include <sstream>
 #include <stack>
 
@@ -38,6 +39,13 @@ namespace pjs {
 //
 // Math
 //
+
+static std::minstd_rand s_rand;
+
+void Math::init() {
+  auto t = std::chrono::system_clock::now().time_since_epoch().count();
+  s_rand.seed(t);
+}
 
 double Math::abs(double x) {
   return std::abs(x);
@@ -145,7 +153,9 @@ double Math::pow(double x, double y) {
 }
 
 double Math::random() {
-  return double(std::rand()) / (double(RAND_MAX) + 1);
+  auto min = std::minstd_rand::min();
+  auto max = std::minstd_rand::max();
+  return double(s_rand() - min) / double(max - min);
 }
 
 double Math::round(double x) {
