@@ -39,14 +39,14 @@ Fork::Fork()
 {
 }
 
-Fork::Fork(pjs::Object *initializers)
-  : m_initializers(initializers)
+Fork::Fork(const pjs::Value &init_arg)
+  : m_init_arg(init_arg)
 {
 }
 
 Fork::Fork(const Fork &r)
   : Filter(r)
-  , m_initializers(r.m_initializers)
+  , m_init_arg(r.m_init_arg)
 {
 }
 
@@ -73,37 +73,21 @@ void Fork::reset() {
 
 void Fork::process(Event *evt) {
   if (!m_pipelines) {
-    auto mod = module();
-    pjs::Value ret;
-    pjs::Object *initializers = m_initializers.get();
-    if (initializers && initializers->is_function()) {
-      if (!callback(initializers->as<pjs::Function>(), 0, nullptr, ret)) return;
-      if (!ret.is_array()) {
-        Log::error("[fork] invalid initializer list");
-        return;
-      }
-      initializers = ret.o();
-    }
-    if (initializers && initializers->is_array()) {
-      auto arr = initializers->as<pjs::Array>();
-      m_pipelines = pjs::PooledArray<pjs::Ref<Pipeline>>::make(arr->length());
-      for (int i = 0; i < arr->length(); i++) {
+    pjs::Value init_arg;
+    if (!eval(m_init_arg, init_arg)) return;
+    if (init_arg.is_array()) {
+      auto arr = init_arg.as<pjs::Array>();
+      auto len = arr->length();
+      m_pipelines = pjs::PooledArray<pjs::Ref<Pipeline>>::make(len);
+      for (int i = 0; i < len; i++) {
         pjs::Value v;
         arr->get(i, v);
-        auto pipeline = sub_pipeline(0, true, nullptr);
-        if (mod && v.is_object()) {
-          auto context = pipeline->context();
-          pjs::Object::assign(context->data(mod->index()), v.o());
-        }
+        auto pipeline = sub_pipeline(0, true, nullptr, nullptr, 1, &v);
         m_pipelines->at(i) = pipeline;
       }
     } else {
       m_pipelines = pjs::PooledArray<pjs::Ref<Pipeline>>::make(1);
-      auto pipeline = sub_pipeline(0, initializers ? true : false, nullptr);
-      if (initializers) {
-        auto context = pipeline->context();
-        pjs::Object::assign(context->data(mod->index()), initializers);
-      }
+      auto pipeline = sub_pipeline(0, false, nullptr, nullptr, 1, &init_arg);
       m_pipelines->at(0) = pipeline;
     }
   }

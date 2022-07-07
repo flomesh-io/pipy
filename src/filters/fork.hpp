@@ -37,7 +37,7 @@ namespace pipy {
 class Fork : public Filter {
 public:
   Fork();
-  Fork(pjs::Object *initializers);
+  Fork(const pjs::Value &init_arg);
 
 private:
   Fork(const Fork &r);
@@ -49,7 +49,7 @@ private:
   virtual void dump(Dump &d) override;
 
 private:
-  pjs::Ref<pjs::Object> m_initializers;
+  pjs::Value m_init_arg;
   pjs::PooledArray<pjs::Ref<Pipeline>>* m_pipelines = nullptr;;
 };
 

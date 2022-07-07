@@ -222,8 +222,8 @@ void FilterConfigurator::exec(const pjs::Value &command) {
   append_filter(new Exec(command));
 }
 
-void FilterConfigurator::fork(pjs::Object *initializers) {
-  require_sub_pipeline(append_filter(new Fork(initializers)));
+void FilterConfigurator::fork(const pjs::Value &init_arg) {
+  require_sub_pipeline(append_filter(new Fork(init_arg)));
 }
 
 void FilterConfigurator::handle_body(pjs::Function *callback, int size_limit) {
@@ -1151,12 +1151,12 @@ template<> void ClassDef<FilterConfigurator>::init() {
   method("fork", [](Context &ctx, Object *thiz, Value &result) {
     try {
       Str *layout;
-      Object *initializers = nullptr;
-      if (ctx.try_arguments(1, &layout, &initializers)) {
-        thiz->as<FilterConfigurator>()->fork(initializers);
+      Value init_arg;
+      if (ctx.try_arguments(1, &layout, &init_arg)) {
+        thiz->as<FilterConfigurator>()->fork(init_arg);
         thiz->as<FilterConfigurator>()->to(layout);
-      } else if (ctx.arguments(0, &initializers)) {
-        thiz->as<FilterConfigurator>()->fork(initializers);
+      } else if (ctx.arguments(0, &init_arg)) {
+        thiz->as<FilterConfigurator>()->fork(init_arg);
       }
       result.set(thiz);
     } catch (std::runtime_error &err) {
