@@ -24,13 +24,32 @@
  */
 
 #include "split.hpp"
-#include "data.hpp"
+#include "log.hpp"
 
 namespace pipy {
+
+static std::string s_separator_too_long("separator over 1KB is not supported");
 
 //
 // Split
 //
+
+Split::Split(Data *separator) {
+  if (separator->size() > MAX_SEPARATOR) {
+    throw std::runtime_error(s_separator_too_long);
+  }
+  auto len = separator->size();
+  char buf[len];
+  separator->to_bytes((uint8_t*)buf);
+  m_kmp = new KMP(buf, len);
+}
+
+Split::Split(pjs::Str *separator) {
+  if (separator->size() > MAX_SEPARATOR) {
+    throw std::runtime_error(s_separator_too_long);
+  }
+  m_kmp = new KMP(separator->c_str(), separator->size());
+}
 
 Split::Split(pjs::Function *callback)
   : m_callback(callback)
@@ -39,6 +58,7 @@ Split::Split(pjs::Function *callback)
 
 Split::Split(const Split &r)
   : Filter(r)
+  , m_kmp(r.m_kmp)
   , m_callback(r.m_callback)
 {
 }
@@ -56,35 +76,74 @@ auto Split::clone() -> Filter* {
   return new Split(*this);
 }
 
+void Split::reset() {
+  Filter::reset();
+  delete m_split;
+  m_split = nullptr;
+  m_head = nullptr;
+  m_started = false;
+  if (m_callback) m_kmp = nullptr;
+}
+
 void Split::process(Event *evt) {
 
-  if (auto data = evt->as<Data>()) {
-    while (!data->empty()) {
-      pjs::Ref<Data> buf(Data::make());
-      pjs::Ref<pjs::Object> splitter;
-      bool error = false;
-      data->shift_to(
-        [&](int c) {
-          pjs::Value arg(c), ret;
-          if (!callback(m_callback, 1, &arg, ret)) {
-            error = true;
-            return true;
+  if (auto *start = evt->as<MessageStart>()) {
+    if (!m_split) {
+      m_head = start->head();
+      if (!m_kmp) {
+        pjs::Value ret;
+        if (!eval(m_callback, ret)) return;
+        if (ret.is_string()) {
+          auto *s = ret.s();
+          if (s->size() > MAX_SEPARATOR) {
+            Log::error("[split] %s", s_separator_too_long.c_str());
+            return;
           }
-          if (ret.is_object()) {
-            splitter = ret.o();
-            return true;
+          m_kmp = new KMP(s->c_str(), s->size());
+        } else if (ret.is<Data>()) {
+          auto *d = ret.as<Data>();
+          if (d->size() > MAX_SEPARATOR) {
+            Log::error("[split] %s", s_separator_too_long.c_str());
+            return;
           }
-          return false;
-        },
-        *buf
+          auto len = d->size();
+          char buf[len];
+          d->to_bytes((uint8_t*)buf);
+          m_kmp = new KMP(buf, len);
+        } else {
+          Log::error("[split] callback did not return a string or a Data");
+        }
+      }
+      m_split = m_kmp->split(
+        [this](Data *data) {
+          if (!m_started) {
+            Filter::output(MessageStart::make(m_head));
+            m_started = true;
+          }
+          if (data) {
+            Filter::output(data);
+          } else {
+            Filter::output(MessageEnd::make());
+            m_started = false;
+          }
+        }
       );
-      if (error) return;
-      output(buf);
-      if (splitter) output(splitter.get());
     }
 
-  } else if (evt->is<StreamEnd>()) {
-    output(evt);
+  } else if (auto data = evt->as<Data>()) {
+    if (m_split) {
+      m_split->input(data);
+    }
+
+  } else if (evt->is<MessageEnd>() || evt->is<StreamEnd>()) {
+    if (m_split) {
+      m_split->end();
+      delete m_split;
+      m_split = nullptr;
+      m_head = nullptr;
+      if (m_callback) m_kmp = nullptr;
+      if (evt->is<StreamEnd>()) Filter::output(evt);
+    }
   }
 }
 

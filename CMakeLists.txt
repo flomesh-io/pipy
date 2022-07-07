@@ -211,6 +211,7 @@ add_executable(pipy
   src/gui-tarball.cpp
   src/inbound.cpp
   src/input.cpp
+  src/kmp.cpp
   src/listener.cpp
   src/log.cpp
   src/main.cpp

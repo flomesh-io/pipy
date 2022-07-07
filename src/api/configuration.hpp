@@ -102,6 +102,8 @@ public:
   void replace_message(const pjs::Value &replacement, int size_limit);
   void replace_start(const pjs::Value &replacement);
   void serve_http(pjs::Object *handler);
+  void split(Data *separator);
+  void split(pjs::Str *separator);
   void split(pjs::Function *callback);
   void tee(const pjs::Value &filename);
   void throttle_concurrency(pjs::Object *quota);

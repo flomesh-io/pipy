@@ -23,42 +23,53 @@
  *  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef SPLIT_HPP
-#define SPLIT_HPP
+#ifndef KMP_HPP
+#define KMP_HPP
 
-#include "filter.hpp"
-#include "kmp.hpp"
+#include "data.hpp"
 
 namespace pipy {
 
 //
-// Split
+// KMP
 //
 
-class Split : public Filter {
+class KMP :
+  public pjs::RefCount<KMP>,
+  public pjs::Pooled<KMP> {
 public:
-  Split(Data *separator);
-  Split(pjs::Str *separator);
-  Split(pjs::Function *callback);
+  KMP(const char *pattern, size_t len);
+  ~KMP();
+
+  //
+  // KMP::Split
+  //
+
+  class Split : public pjs::Pooled<Split> {
+  public:
+    void input(Data *data);
+    void end();
+
+  private:
+    Split(KMP *kmp, const std::function<void(Data*)> &output)
+      : m_kmp(kmp)
+      , m_output(output) {}
+
+    KMP* m_kmp;
+    std::function<void(Data*)> m_output;
+    Data m_buffer;
+    int m_match_len = 0;
+
+    friend class KMP;
+  };
+
+  auto split(const std::function<void(Data*)> &output) -> Split*;
 
 private:
-  enum { MAX_SEPARATOR = 1024 };
-
-  Split(const Split &r);
-  ~Split();
-
-  virtual auto clone() -> Filter* override;
-  virtual void reset() override;
-  virtual void process(Event *evt) override;
-  virtual void dump(Dump &d) override;
-
-  pjs::Ref<KMP> m_kmp;
-  pjs::Ref<pjs::Function> m_callback;
-  pjs::Ref<pjs::Object> m_head;
-  KMP::Split* m_split = nullptr;
-  bool m_started = false;
+  pjs::PooledArray<char>* m_pattern;
+  pjs::PooledArray<int>* m_lps_table;
 };
 
 } // namespace pipy
 
-#endif // SPLIT_HPP
+#endif // KMP_HPP

@@ -307,6 +307,14 @@ void FilterConfigurator::serve_http(pjs::Object *handler) {
   append_filter(new http::Server(handler));
 }
 
+void FilterConfigurator::split(Data *separator) {
+  append_filter(new Split(separator));
+}
+
+void FilterConfigurator::split(pjs::Str *separator) {
+  append_filter(new Split(separator));
+}
+
 void FilterConfigurator::split(pjs::Function *callback) {
   append_filter(new Split(callback));
 }
@@ -1566,10 +1574,19 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.split
   method("split", [](Context &ctx, Object *thiz, Value &result) {
+    pipy::Data *seperator;
+    Str *separator_str;
     Function *callback;
-    if (!ctx.arguments(1, &callback)) return;
     try {
-      thiz->as<FilterConfigurator>()->split(callback);
+      if (ctx.try_arguments(1, &seperator)) {
+        thiz->as<FilterConfigurator>()->split(seperator);
+      } else if (ctx.try_arguments(1, &separator_str)) {
+        thiz->as<FilterConfigurator>()->split(separator_str);
+      } else if (ctx.try_arguments(1, &callback)) {
+        thiz->as<FilterConfigurator>()->split(callback);
+      } else {
+        ctx.error_argument_type(0, "a string, Data or function");
+      }
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
