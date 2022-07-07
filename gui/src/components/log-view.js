@@ -4,7 +4,7 @@ import { makeStyles } from '@material-ui/core/styles';
 
 const useStyles = makeStyles(theme => ({
   main: {
-    height: `calc(100% - ${theme.TOOLBAR_HEIGHT}px)`,
+    height: '100%',
     backgroundColor: '#202020',
     paddingLeft: 20,
     overflow: 'auto',
