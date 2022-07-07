@@ -40,6 +40,25 @@
 namespace pipy {
 
 static Data::Producer s_dp("Codebase Store");
+static std::string s_initial_code_template(
+R"***(((
+  // Global variables go here, e.g.:
+  // config = pipy.solve('config.js'),
+
+) => pipy({
+  // Context variables go here, e.g.:
+  // _target: null,
+
+})
+
+  // Pipeline layouts go here, e.g.:
+  .listen(80)
+  .dump()
+  .dummy()
+
+)()
+)***"
+);
 
 //
 // Database schema:
@@ -270,7 +289,7 @@ auto CodebaseStore::make_codebase(const std::string &path, int version, Codebase
     batch = m_store->batch();
     batch->set(
       KEY_file(main_file_id),
-      Data("pipy()", &s_dp)
+      Data(s_initial_code_template, &s_dp)
     );
     batch->set(
       KEY_codebase_file(codebase_id, main_file_path),
