@@ -439,7 +439,7 @@ int main(int argc, char *argv[]) {
 
     crypto::Crypto::free();
 
-    std::cout << "Done." << std::endl;
+    std::cerr << "Done." << std::endl;
 
   } catch (std::runtime_error &e) {
     std::cerr << e.what() << std::endl;

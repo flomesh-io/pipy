@@ -35,6 +35,7 @@
 
 #include <fstream>
 #include <sstream>
+#include <iostream>
 
 namespace pipy {
 
@@ -126,8 +127,10 @@ bool Module::load(const std::string &path) {
   }
 
   if (!result.is_class(pjs::class_of<Configuration>())) {
-    Console::log(&result, 1);
-    Log::error("[pjs] Script was not evaluated to a Configuration");
+    auto *s = result.to_string();
+    std::cout << s->str() << std::endl;
+    s->release();
+    Log::error("[pjs] Script did not result in a Configuration");
     return false;
   }
 

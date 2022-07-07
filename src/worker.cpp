@@ -269,7 +269,7 @@ void Worker::exit(int exit_code) {
       s_timer.schedule(1, check);
     } else {
       Net::stop();
-      Log::info("Stopped.");
+      Log::info("[shutdown] Stopped.");
       has_stopped = true;
     }
   };
