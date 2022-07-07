@@ -197,7 +197,7 @@ private:
   std::list<std::unique_ptr<Target>> m_targets;
   List<LogMessage> m_history;
   size_t m_history_size = 0;
-  size_t m_history_max = 1024 * 1024;
+  size_t m_history_max = 256 * 1024;
   bool m_admin_link_enabled = false;
 
   void write_internal(const Data &msg);

@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from 'react-query';
 
 import CssBaseline from '@material-ui/core/CssBaseline';
 import Console from './console';
+import { useLogWatcher } from './log-view';
 
 import '@fontsource/titillium-web';
 
@@ -39,33 +40,7 @@ const queryClient = new QueryClient();
 function Layout({ children }) {
   const [logTextNode, setLogTextNode] = React.useState(null);
 
-  // Regularly fetch the log data
-  React.useEffect(
-    () => {
-      let ws, is_reconnecting = false;
-      const node = document.createTextNode('');
-      const loc = window.location;
-      // const url = `ws://localhost:6060/api/v1/log//pipy_log`; // For development mode
-      const url = `ws://${loc.host}/api/v1/log//pipy_log`;
-      const connect = () => {
-        const reconnect = () => {
-          if (is_reconnecting) return;
-          ws.close();
-          setTimeout(() => { is_reconnecting = false; connect(); }, 5000);
-          is_reconnecting = true;
-        }
-        ws = new WebSocket(url);
-        ws.addEventListener('open', () => ws.send('watch\n'));
-        ws.addEventListener('message', evt => node.appendData(evt.data));
-        ws.addEventListener('close', reconnect);
-        ws.addEventListener('error', reconnect);
-      };
-      connect();
-      setLogTextNode(node);
-      return () => ws.close();
-    },
-    []
-  );
+  useLogWatcher('', 'pipy_log', text => setLogTextNode(text));
 
   return (
     <Console.Context.Provider
