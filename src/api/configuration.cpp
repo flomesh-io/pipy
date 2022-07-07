@@ -563,8 +563,7 @@ void Configuration::apply(Module *mod) {
     PipelineConfig &config
   ) -> PipelineLayout*
   {
-    auto layout = PipelineLayout::make(mod, index, name);
-    layout->label(label);
+    auto layout = PipelineLayout::make(mod, index, name, label);
     layout->on_start(config.on_start);
     layout->on_end(config.on_end);
     for (auto &f : config.filters) {

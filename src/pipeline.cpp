@@ -38,18 +38,19 @@ namespace pipy {
 
 List<PipelineLayout> PipelineLayout::s_all_pipeline_layouts;
 
-PipelineLayout::PipelineLayout(ModuleBase *module, int index, const std::string &name)
+PipelineLayout::PipelineLayout(ModuleBase *module, int index, const std::string &name, const std::string &label)
   : m_index(index)
   , m_name(pjs::Str::make(name))
+  , m_label(pjs::Str::make(label))
   , m_module(module)
 {
   s_all_pipeline_layouts.push(this);
   if (module) module->m_pipelines.push_back(this);
-  Log::debug("[p-layout %p] ++ name = %s", this, m_name->c_str());
+  Log::debug("[p-layout %p] ++ name = %s", this, name_or_label()->c_str());
 }
 
 PipelineLayout::~PipelineLayout() {
-  Log::debug("[p-layout %p] -- name = %s", this, m_name->c_str());
+  Log::debug("[p-layout %p] -- name = %s", this, name_or_label()->c_str());
   auto *ptr = m_pool;
   while (ptr) {
     auto *pipeline = ptr;

@@ -54,19 +54,19 @@ class PipelineLayout :
 {
 public:
   static auto make(ModuleBase *module = nullptr) -> PipelineLayout* {
-    return new PipelineLayout(module, -1, std::string());
+    return new PipelineLayout(module, -1, std::string(), std::string());
   }
 
-  static auto make(ModuleBase *module, const std::string &name) -> PipelineLayout* {
-    return new PipelineLayout(module, -1, name);
+  static auto make(ModuleBase *module, const std::string &name, const std::string &label = std::string()) -> PipelineLayout* {
+    return new PipelineLayout(module, -1, name, label);
   }
 
   static auto make(ModuleBase *module, int index) -> PipelineLayout* {
-    return new PipelineLayout(module, index, std::string());
+    return new PipelineLayout(module, index, std::string(), std::string());
   }
 
-  static auto make(ModuleBase *module, int index, const std::string &name) -> PipelineLayout* {
-    return new PipelineLayout(module, index, name);
+  static auto make(ModuleBase *module, int index, const std::string &name, const std::string &label = std::string()) -> PipelineLayout* {
+    return new PipelineLayout(module, index, name, label);
   }
 
   static void for_each(std::function<void(PipelineLayout*)> callback) {
@@ -79,7 +79,6 @@ public:
   auto index() const -> int { return m_index; }
   auto name() const -> pjs::Str* { return m_name; }
   auto label() const -> pjs::Str* { return m_label; }
-  void label(const std::string &label) { m_label = pjs::Str::make(label); }
   auto name_or_label() const -> pjs::Str*;
   auto allocated() const -> size_t { return m_allocated; }
   auto active() const -> size_t { return m_pipelines.size(); }
@@ -92,7 +91,7 @@ public:
   auto new_context() -> Context*;
 
 private:
-  PipelineLayout(ModuleBase *module, int index, const std::string &name);
+  PipelineLayout(ModuleBase *module, int index, const std::string &name, const std::string &label);
   ~PipelineLayout();
 
   auto alloc(Context *ctx) -> Pipeline*;
