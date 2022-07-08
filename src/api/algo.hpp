@@ -310,12 +310,14 @@ private:
   ~RoundRobinLoadBalancer();
 
   struct Target {
+    pjs::Ref<pjs::Str> id;
     int weight;
     int hits;
     double usage;
   };
 
-  std::map<pjs::Ref<pjs::Str>, Target> m_targets;
+  std::list<Target> m_targets;
+  std::map<pjs::Str*, Target*> m_target_map;
   pjs::Ref<Cache> m_unhealthy;
   int m_total_weight = 0;
   int m_total_hits = 0;

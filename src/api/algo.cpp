@@ -546,24 +546,26 @@ void RoundRobinLoadBalancer::set(pjs::Str *target, int weight) {
     hits = (m_total_hits * weight) / m_total_weight;
   }
 
-  auto i = m_targets.find(target);
-  if (i == m_targets.end()) {
-    auto &t = m_targets[target];
+  auto i = m_target_map.find(target);
+  if (i == m_target_map.end()) {
+    m_targets.emplace_back();
+    auto &t = m_targets.back();
+    t.id = target;
     t.weight = weight;
     t.hits = hits;
     m_total_weight += weight;
     m_total_hits += hits;
+    m_target_map[target] = &t;
   } else {
-    auto &t = i->second;
-    m_total_weight += weight - t.weight;
-    m_total_hits += hits - t.hits;
-    t.weight = weight;
-    t.hits = hits;
+    auto *t = i->second;
+    m_total_weight += weight - t->weight;
+    m_total_hits += hits - t->hits;
+    t->weight = weight;
+    t->hits = hits;
   }
 
   if (m_total_weight > 0) {
-    for (auto &i : m_targets) {
-      auto &t = i.second;
+    for (auto &t : m_targets) {
       if (t.weight > 0) {
         t.usage = double(t.hits) / m_total_weight;
       }
@@ -573,42 +575,40 @@ void RoundRobinLoadBalancer::set(pjs::Str *target, int weight) {
 
 auto RoundRobinLoadBalancer::select(const pjs::Value &key) -> pjs::Str* {
   double min = 0;
-  std::map<pjs::Ref<pjs::Str>, Target>::value_type *p = nullptr;
+  Target *p = nullptr;
   int total_weight = 0;
 
-  for (auto &i : m_targets) {
-    auto &t = i.second;
+  for (auto &t : m_targets) {
     if (t.weight <= 0) continue;
     if (m_unhealthy) {
       pjs::Value v;
-      if (m_unhealthy->find(i.first.get(), v) && v.to_boolean()) {
+      if (m_unhealthy->find(t.id.get(), v) && v.to_boolean()) {
         continue;
       }
     }
     total_weight += t.weight;
     if (!p || t.usage < min) {
       min = t.usage;
-      p = &i;
+      p = &t;
     }
   }
 
   if (!p) return nullptr;
 
-  auto &t = p->second;
+  auto &t = *p;
   t.hits++;
   t.usage = double(t.hits) / t.weight;
 
   m_total_hits++;
   if (m_total_hits >= total_weight) {
-    for (auto &i : m_targets) {
-      auto &t = i.second;
+    for (auto &t : m_targets) {
       t.hits = 0;
       t.usage = 0;
     }
     m_total_hits = 0;
   }
 
-  return p->first;
+  return p->id;
 }
 
 //
