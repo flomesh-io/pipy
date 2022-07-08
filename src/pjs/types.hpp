@@ -2424,7 +2424,7 @@ private:
 
   ~Array() {
     length(0);
-    free(m_data);
+    m_data->free();
   }
 
   Data* m_data;
