@@ -46,6 +46,7 @@ public:
   };
 
   static void init();
+  static void shutdown();
   static void set_level(Level level);
   static bool is_enabled(Level level);
 

@@ -41,7 +41,7 @@ namespace pipy {
 //
 
 static Log::Level s_log_level = Log::ERROR;
-static pjs::Ref<logging::Logger> s_logger;
+static logging::Logger *s_logger = nullptr;
 static Data::Producer s_dp("Log");
 
 static const char *s_levels[] = {
@@ -75,6 +75,11 @@ static void logf(Log::Level level, const char *fmt, va_list ap) {
 void Log::init() {
   s_logger = logging::TextLogger::make(pjs::Str::make("pipy_log"));
   s_logger->add_target(new logging::Logger::StdoutTarget(stderr));
+}
+
+void Log::shutdown() {
+  s_logger->shutdown();
+  s_logger = nullptr;
 }
 
 void Log::set_level(Level level) {

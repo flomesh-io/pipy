@@ -439,6 +439,7 @@ int main(int argc, char *argv[]) {
     if (store) store->close();
 
     crypto::Crypto::free();
+    Log::shutdown();
 
     std::cerr << "Done." << std::endl;
 
