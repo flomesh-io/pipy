@@ -372,9 +372,13 @@ public:
   }
 
   void free() {
+    this->~PooledArray();
+    recycle();
+  }
+
+  void recycle() {
     auto size = m_size;
     auto slot = slot_of_size(size);
-    this->~PooledArray();
     if (slot >= m_pools.size()) {
       m_pools.resize(slot + 1);
     }
@@ -2344,7 +2348,7 @@ public:
       auto *old_values = m_data->elements();
       auto end = std::min((int)m_data->size(), m_size);
       for (int i = 0; i < end; i++) new_values[i] = std::move(old_values[i]);
-      m_data->free();
+      m_data->recycle();
       m_data = data;
       new_values[i] = v;
     } else if (i >= 0) {
@@ -2424,7 +2428,7 @@ private:
 
   ~Array() {
     length(0);
-    m_data->free();
+    m_data->recycle();
   }
 
   Data* m_data;
