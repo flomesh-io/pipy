@@ -1596,6 +1596,7 @@ template<> void ClassDef<Array>::init() {
       obj->as<Array>()->sort(
         [&](const Value &a, const Value &b) -> bool {
           if (has_error) return false;
+          if (&a == &b) return false;
           if (b.is_empty() || b.is_undefined()) return true;
           if (a.is_empty() || a.is_undefined()) return false;
           Value argv[2], ret;
@@ -1893,6 +1894,8 @@ void Array::sort() {
     m_data->elements(),
     m_data->elements() + size,
     [](const Value &a, const Value &b) -> bool {
+      if (b.is_empty() || b.is_undefined()) return true;
+      if (a.is_empty() || a.is_undefined()) return false;
       auto sa = a.to_string();
       auto sb = b.to_string();
       auto less = sa->str() < sb->str();
@@ -1904,6 +1907,7 @@ void Array::sort() {
 }
 
 void Array::sort(const std::function<bool(const Value&, const Value&)> &comparator) {
+  // TODO: Re-write sorting algorithm to tolerate unstable comparators
   auto size = std::min(m_size, int(m_data->size()));
   std::sort(
     m_data->elements(),
