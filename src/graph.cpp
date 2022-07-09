@@ -195,6 +195,9 @@ protected:
             arg->f()->reduce(r);
             m_f->subs.emplace_back();
             m_f->subs.back().index = graph().add_pipeline(std::move(p));
+          } else if (arg->t() == STRING) {
+            m_f->subs.emplace_back();
+            m_f->subs.back().name = arg->s();
           }
           m_f = nullptr;
         }
