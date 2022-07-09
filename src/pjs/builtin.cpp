@@ -43,7 +43,7 @@ namespace pjs {
 static std::minstd_rand s_rand;
 
 void Math::init() {
-  auto t = std::chrono::system_clock::now().time_since_epoch().count();
+  auto t = std::chrono::high_resolution_clock::now().time_since_epoch().count();
   s_rand.seed(t);
 }
 
