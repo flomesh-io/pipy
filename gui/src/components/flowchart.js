@@ -91,6 +91,16 @@ function drawPipeline(container, graph, root, classes) {
   let chunk = null;
   let rightMost = 0;
 
+  const addExit = (source, target) => {
+    const exit = (
+      exits[target] = exits[target] || {
+        start: lines.length - 1,
+        sources: [],
+      }
+    );
+    exit.sources.push(source);
+  }
+
   const drawGutter = () => {
     if (chunk && !chunk.firstChild) return;
     chunk = document.createElement('div');
@@ -176,7 +186,7 @@ function drawPipeline(container, graph, root, classes) {
         drawNode(i, depth);
       }
 
-      // find where the filter output goes
+      // find where a joint filter output goes
       if (type === 'joint' && outType !== 'subs') {
         let target = null;
         let p = node.p;
@@ -184,11 +194,13 @@ function drawPipeline(container, graph, root, classes) {
         const s = parent.c;
         if (s[s.length - 1] !== i) {
           target = s[s.indexOf(i) + 1];
+          const sources = falls[target] = falls[target] || [];
+          sources.push(i);
         } else {
           while (p !== undefined) {
             parent = graph[p];
-            if (parent.ot !== 'subs') break;
             if (parent.t === 'joint') {
+              if (parent.ot !== 'subs') break;
               const pipeline = graph[parent.p];
               const siblings = pipeline.c;
               if (siblings[siblings.length - 1] !== p) {
@@ -201,10 +213,9 @@ function drawPipeline(container, graph, root, classes) {
             }
             p = parent.p;
           }
-        }
-        if (target !== null) {
-          const sources = falls[target] = falls[target] || [];
-          sources.push(i);
+          if (target !== null) {
+            addExit(i, target);
+          }
         }
       }
     }
@@ -234,13 +245,7 @@ function drawPipeline(container, graph, root, classes) {
           target = '';
         }
         if (target !== null) {
-          const exit = (
-            exits[target] = exits[target] || {
-              start: lines.length,
-              sources: [],
-            }
-          );
-          exit.sources.push(i);
+          addExit(i, target);
           break;
         }
         p = parent.p;
@@ -390,11 +395,11 @@ function drawPipeline(container, graph, root, classes) {
     const x3 = exits[dst].x - x0;
     for (const src of exits[dst].sources) {
       const box = boxes[src].getBoundingClientRect();
-      const x1 = box.left + 80 - x0;
+      const x1 = box.left + 30 - x0;
       const y1 = box.bottom + 2 - y0;
       const path = document.createElementNS(svgns, 'path');
       if (y1 + 20 >= y2 - 25) {
-        if (x1 <= x2 + 50) {
+        if (x1 <= x2) {
           path.setAttribute(
             'd',
             `M ${x2},${y1  } `+
@@ -412,19 +417,19 @@ function drawPipeline(container, graph, root, classes) {
           );
         }
       } else {
+        const x1 = box.right + 2 - x0;
+        const y1 = box.top + box.height * 0.5 - y0;
         path.setAttribute(
           'd',
           `M ${x1  },${y1   } `+
-          `L ${x1  },${y1+10}` +
-          `  ${x1+5},${y1+15}` +
-          `  ${x3-5},${y1+15}` +
-          `  ${x3  },${y1+20}` +
+          `L ${x3-5},${y1   }` +
+          `  ${x3  },${y1+5 }` +
           `  ${x3  },${y2-25}` +
           `  ${x3-5},${y2-20}` +
           `  ${x2+5},${y2-20}` +
           `  ${x2  },${y2-15}` +
           `  ${x2  },${y2-5 }`
-        );  
+        );
       }
       path.setAttribute('fill', 'none');
       path.setAttribute('stroke', '#fff');
