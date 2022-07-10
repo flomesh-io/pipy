@@ -54,6 +54,7 @@
 #include "filters/link-input.hpp"
 #include "filters/link-output.hpp"
 #include "filters/merge.hpp"
+#include "filters/mime.hpp"
 #include "filters/mqtt.hpp"
 #include "filters/mux.hpp"
 #include "filters/on-body.hpp"
@@ -152,6 +153,10 @@ void FilterConfigurator::decode_http_response(pjs::Object *options) {
 
 void FilterConfigurator::decode_mqtt(pjs::Object *options) {
   append_filter(new mqtt::Decoder(options));
+}
+
+void FilterConfigurator::decode_multipart() {
+  append_filter(new mime::MultipartDecoder());
 }
 
 void FilterConfigurator::decode_websocket() {
@@ -992,6 +997,16 @@ template<> void ClassDef<FilterConfigurator>::init() {
     if (!ctx.arguments(0, &options)) return;
     try {
       thiz->as<FilterConfigurator>()->decode_mqtt(options);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // FilterConfigurator.decodeMultipart
+  method("decodeMultipart", [](Context &ctx, Object *thiz, Value &result) {
+    try {
+      thiz->as<FilterConfigurator>()->decode_multipart();
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

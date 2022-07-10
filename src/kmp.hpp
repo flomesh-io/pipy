@@ -36,7 +36,8 @@ namespace pipy {
 
 class KMP :
   public pjs::RefCount<KMP>,
-  public pjs::Pooled<KMP> {
+  public pjs::Pooled<KMP>
+{
 public:
   KMP(const char *pattern, size_t len);
   ~KMP();
@@ -47,7 +48,7 @@ public:
 
   class Split : public pjs::Pooled<Split> {
   public:
-    void input(Data *data);
+    void input(Data &data);
     void end();
 
   private:

@@ -132,7 +132,7 @@ void Split::process(Event *evt) {
 
   } else if (auto data = evt->as<Data>()) {
     if (m_split) {
-      m_split->input(data);
+      m_split->input(*data);
     }
 
   } else if (evt->is<MessageEnd>() || evt->is<StreamEnd>()) {

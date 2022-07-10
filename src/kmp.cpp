@@ -84,13 +84,13 @@ auto KMP::split(const std::function<void(Data*)> &output) -> Split* {
 // KMP::Split
 //
 
-void KMP::Split::input(Data *data) {
+void KMP::Split::input(Data &data) {
   const char *W = m_kmp->m_pattern->elements();
   const int *LPS = m_kmp->m_lps_table->elements();
   int n = m_kmp->m_pattern->size();
   int j = m_match_len;
-  while (!data->empty()) {
-    data->shift_to(
+  while (!data.empty()) {
+    data.shift_to(
       [&](int c) {
         while (j >= 0 && c != W[j]) {
           j = LPS[j];
