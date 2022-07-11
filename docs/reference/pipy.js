@@ -1,10 +1,10 @@
 /**
  * Create a new Configuration object.
  *
- * @param {Object} [globals] Global variables and their initial values.
+ * @param {Object} [contextVariables] Context variables and their initial values.
  * @returns {Configuration} A new Configuration object.
  */
-function pipy(globals) {}
+function pipy(contextVariables) {}
 
 /**
  * Read a file's raw content from the codebase.
