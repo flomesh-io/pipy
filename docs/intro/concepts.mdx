@@ -109,7 +109,7 @@ A **pipeline layout** tells Pipy what filters a pipeline has and in what order. 
 
 A **context** is a set of variables attached to a pipeline, used by scripts to maintain the current state of the pipeline.
 
-All pipelines use the same set of _context variables_ across an entire Pipy module. In other words, all contexts are of the same "_shape_" for all pipelines in a single module. But different modules can have different context shapes. When you start a Pipy module, the first thing is define the _shape_ of the context to be used in that module by calling the builtin function [pipy()](/reference/api/pipy). It tells Pipy what _context variables_ it's going to use and their initial values.
+All pipelines use the same set of _context variables_ across an entire Pipy module. In other words, all contexts are of the same "_shape_" for all pipelines in a single module. But different modules can have different context shapes. When you start a Pipy module, the first thing is define the _shape_ of the context to be used in that module by calling the built-in function [pipy()](/reference/api/pipy). It tells Pipy what _context variables_ it's going to use and their initial values.
 
 Although all pipelines from the same module have exactly the same set of _context variables_, each pipeline can have its own variable "_values_" that are isolated from others, or let's say, each pipeline can have its own "_state_".
 
