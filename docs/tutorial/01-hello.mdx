@@ -7,106 +7,108 @@ import FlagIcon from '@material-ui/icons/FlagSharp'
 import SaveIcon from '@material-ui/icons/SaveSharp'
 import PlayIcon from '@material-ui/icons/PlayArrowSharp'
 import StopIcon from '@material-ui/icons/StopSharp'
-import SvgHelloPipeline from './hello-pipeline.svg';
+import SvgHelloPipeline from './hello-pipeline.svg'
 
 **Ahoy, world!**
 
-We are all sort of obsessed with "_Hello World_" as programmers, aren't we?
-Why don't we dive in now and do just that!
+As programmers, we're all sorta obsessed with _Hello World_, aren't we? So why don't we dive in now and do just that!
 
-## Start Pipy
+## Hello, world!
 
-First, let's start a live Pipy instance from the command line:
+Type in your terminal the following command:
 
 ``` sh
-pipy
+pipy -e "console.log('Hello, world!')"
 ```
 
-When Pipy is up and running, you will see this on your terminal:
+The '-e' option tells Pipy to _evaluate the expression_ coming after. The expression we're evaluating here is:
+
+``` js
+console.log('Hello, world!')
+```
+
+It says in _PipyJS_, invoke function [console.log()](/reference/api/console/log) with a string parameter _"Hello, world!"_.
+
+> **PipyJS** is the dialect of [ECMAScript](https://en.wikipedia.org/wiki/ECMAScript) that Pipy speaks. Refer to [PipyJS Reference](/reference/pjs) for more information.
+
+Pipy will now start but quit almost immediately, leaving the following output:
 
 ```
-[info] [codebase] Starting codebase service...
-[info] [listener] Listening on port 6060 at ::
+[INF] Hello, world!
+undefined
+[ERR] [pjs] Script did not result in a Configuration
+[INF] [shutdown] Shutting down...
+[INF] [shutdown] Stopped.
+Done.
 ```
 
-Now open your favorite web browser and navigate to <http://localhost:6060>.
-You will see the builtin _Pipy Administration Web UI_.
+Let's take a look at the output:
 
-## Create a Pipy program
+- On the first line, we see _"Hello, world!"_. This is what the function call to [console.log()](/reference/api/console/log) ended up with: a log output to the console.
 
-Let's create our first Pipy program:
+- On the second line, we see _"undefined"_. This is the result from _evaluating_ our expression. Since function [console.log()](/reference/api/console/log) has no return values, the evaluated result was _undefined_.
 
-1. Click **New Codebase**, input `/hello` for the _Codebase name_ in the
-   popped up window and then click **Create**. You will be brought to
-   a code editor for the newly created codebase.
+- On the third line, we see an error message saying _"Script did not result in a Configuration"_. Here, [Configuration](/reference/api/Configuration) is the main API provided by Pipy for pipeline setups, which we'll see being used a lot later on. For now, the only thing you need to know is, Pipy requires a _Configuration_ to continue as a long-lived server. However, since the _expression evaluation_ gave us _undefined_, which is not a _Configuration_, so there's nothing else Pipy could do but quit. That's what we see in the output after: Pipy shut down everything and stopped running.
 
-2. Click the <PlusIcon/> button up above to add a new file. Input `/hello.js`
-   for its filename and then click **Create**.
+As you can see from above, Pipy is fundamentally an _"expression evaluator"_. If you say _"pipy -e 1+1"_, it tells you _"2"_,  nothing fancy indeed. Surely that isn't what we created Pipy for. To make use of Pipy in a more meaningful way, we should write an expression that evaluates to a _Configuration_.
 
-3. Select the newly created file in the _File List_ on left. Click <FlagIcon/>
-   button to make the file our program entrance. That means the program
-   will be started from this file next time we run it.
+## Hello, world in HTTP!
 
-4. Now go ahead and write the code for **hello.js**:
+Now let's use Pipy the way it usually is: run an HTTP server.
+
+``` sh
+pipy -e "pipy().listen(8080).serveHTTP(new Message('Hi, there!'))"
+```
+
+This time, we're evaluating a slightly more complex expression. The same expression can be rewritten in multiple lines for better clarity:
 
 ``` js
 pipy()
-
-.listen(8080)
-  .serveHTTP(
-    new Message('Hi, there!\n')
-  )
+  .listen(8080)
+  .serveHTTP(new Message('Hi, there!'))
 ```
 
-5. Click <SaveIcon/> button to save your file.
+### Code dissection
 
-## Code dissection
+Take a bit of time to examine the code. Here's what's going on:
 
-Take a bit of time examining the code. Here's what's going on:
+1. At the very first line, the built-in function [pipy()](/reference/api/pipy) is called. It returns a [Configuration](/reference/api/Configuration) object. That's what Pipy expects for running a server.
 
-1. At the very first line, the builtin global function [_pipy()_](/reference/api/pipy)
-   is called. It returns a [_Configuration_](/reference/api/Configuration)
-   object which we'll be using later on to configure _pipeline layouts_ we need.
+2. At line 2, by calling method [listen()](/reference/api/Configuration/listen) on the _Configuration_ object that we just got from _pipy()_, we add a _port pipeline layout_ to the configuration that listens on port 8080. Method _listen()_ itself returns the same _Configuration_ object, so we can continually call other methods on it to add more _pipeline layouts_ and _filters_. That's exactly what we are about to do next.
 
-2. At line 3, we define a _port pipeline_ that listens on port 8080 by calling method
-   [_listen()_](/reference/api/Configuration/listen) of the _Configuration_ object
-   returned from _pipy()_ earlier. Method _listen()_ itself returns the same _Configuration_
-   object, so we can continually call other methods on it to define more pipelines and
-   filters. That's exactly what we are going to do next.
+3. At line 3, we add a [serveHTTP()](/reference/classes/Configuration/serveHTTP) filter 
+   to the pipeline layout that we just added in step 2. The filter takes a [Message](/reference/classes/Message)
+   object as its construction parameter. At runtime, it'll be outputting that same message in
+   response to any input messages.
 
-3. At line 4, we define a [_serveHTTP_](/reference/classes/Configuration/serveHTTP) filter 
-   on the pipeline we just defined in step 2. The filter takes a [_Message_](/reference/classes/Message)
-   object as its construction parameter and will be outputting that same message in
-   response to any input message.
-
-All in all the script we have written defined one _pipeline_ containing one _filter_.
-To picture it all would be like this:
+To recap, the expression we've written above defined one _pipeline layout_ containing only one _filter_. To picture it all would be like this:
 
 <div style="text-align: center">
   <SvgHelloPipeline/>
 </div>
 
-## Test in action
+### Test in action
 
-Time to roll! Click <PlayIcon/> button to run the code. The _Console Window_ would
-pop up now and you should see this:
+Input the above command in your terminal, you'll see output like this:
 
 ```
-[info] [config]
-[info] [config] Module /hello.js
-[info] [config] ================
-[info] [config]
-[info] [config]  [Listen on :::8080]
-[info] [config]  ----->|
-[info] [config]        |
-[info] [config]       serveHTTP
-[info] [config]        |
-[info] [config]  <-----|
-[info] [config]  
-[info] [listener] Listening on port 8080 at ::
+[INF] [config]
+[INF] [config] Module 
+[INF] [config] =======
+[INF] [config]
+[INF] [config]  [Listen on 8080 at 0.0.0.0]
+[INF] [config]  ----->|
+[INF] [config]        |
+[INF] [config]       serveHTTP -->|
+[INF] [config]                    |
+[INF] [config]  <-----------------|
+[INF] [config]  
+[INF] [listener] Listening on TCP port 8080 at 0.0.0.0
 ```
 
-Now open up a second terminal window and test it with `curl`:
+This time, Pipy didn't quit. Instead, it started listening on port 8080 for HTTP requests.
+
+Now open up a second terminal window and send a request with `curl`:
 
 ``` sh
 curl localhost:8080
@@ -118,29 +120,18 @@ You should see the result:
 Hi, there!
 ```
 
-Working as expected. Cool!
-
 ## Summary
 
-In this first part of our tutorial, you've learned how a Pipy program
-is composed. You also familiarized yourself to the builtin _Administration Web UI_
-while you created and ran a simple Pipy program.
+In this first part of our tutorial, you've learned how a Pipy program is organized by creating and running a simple one-liner HTTP server.
 
 ### Takeaways
 
-* A Pipy program is made of definitions for _pipelines_ and _filters_. It always
-  starts off with a call to [_pipy()_](/reference/api/pipy), which gives us
-  a [Configuration](/reference/api/Configuration) object, which we call various
-  methods on to define our pipelines and filters.
+* A Pipy program is made of definitions of _pipeline layouts_ and _filters_. It always starts off with a call to [pipy()](/reference/api/pipy), which gives us a [Configuration](/reference/api/Configuration) object, which we call various methods on to add _pipeline layouts_ and _filters_.
 
-* A _port pipeline_ gets input from reading a network port and writes back whatever
-  its last filter outputs.
+* A _port pipeline_ reads from a network port and writes back whatever its last filter outputs.
 
-* A _serveHTTP_ filter can take in HTTP messages as requests and output HTTP messages
-  as responses.
+* A [serveHTTP()](/reference/api/Configuration/serveHTTP) filter takes in HTTP messages as requests and outputs HTTP messages as responses.
 
 ### What's next?
 
-Now you've made a simple "_Hello World_" server, but it's barely useful because it always
-says the same thing. Next, we'll look into responding with different messages to different
-requests.
+Now you've made a simple _Hello World_ server, but it's barely useful because it always says the same thing. Next, we'll look at how we can respond to different requests with different responses.

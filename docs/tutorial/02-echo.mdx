@@ -2,69 +2,136 @@
 title: "Part 2: Echo"
 ---
 
+import PlusIcon from '@material-ui/icons/AddSharp'
+import FlagIcon from '@material-ui/icons/FlagSharp'
 import PlayIcon from '@material-ui/icons/PlayArrowSharp'
 import RestartIcon from '@material-ui/icons/ReplaySharp'
+import SaveIcon from '@material-ui/icons/SaveSharp'
 import StopIcon from '@material-ui/icons/StopSharp'
 
-Now that you've successfully run a simple "_Hello World_" server using Pipy.
-In this part of tutorial, you'll learn how to let the server respond with
-dynamic contents.
+Now that you've successfully run a simple HTTP server saying hello. In this part of the tutorial, you'll learn how to let the server respond with dynamic contents.
+
+## Using the IDE
+
+Starting from this chapter, our script will be getting more and more complex as we add new functionalities to it. Shortly enough it'll get to the point where the code just can't fit well in one single line any more. We'd better start organizing our scripts using _files_ for better maintainability and readability.
+
+You can write your script with any text editor you like, but in this tutorial, we'll be using the built-in IDE coming with Pipy. It provides auto-completion and documentation for [Pipy API](/reference/api). It also visualizes your pipeline layouts while you type in your code.
+
+### Pipy Repo
+
+By using the built-in IDE, you are editing files stored in a virtual filesystem called _"Pipy Repo"_. Scripts stored in this repo can be shared to remote Pipy instances. In this way, you can deploy a cluster of Pipy _workers_ and control each of them remotely from the repo.
+
+When not using as a remote cluster controller, Pipy Repo can also start Pipy workers locally for development and debugging. That's what we'll be focusing on in this tutorial.
+
+> By default, Pipy Repo stores files only in the memory. So when it quits, the files are gone. You can also let it store files in a local database. For more information on this, refer to [Pipy Repo](https://flomesh.io/docs/en/operating/repo).
+
+First, let's start Pipy in _Repo Mode_. To do so, run `pipy` with no command line arguments:
+
+``` sh
+pipy
+```
+
+When Pipy is up and running, you'll see this on your terminal:
+
+```
+[INF] [admin] Starting admin service...
+[INF] [listener] Listening on TCP port 6060 at ::
+
+=============================================
+
+  You can now view Pipy GUI in the browser:
+
+    http://localhost:6060/
+
+=============================================
+```
+
+Now open your favorite web browser and navigate to [http://localhost:6060](http://localhost:6060). You will see the built-in _Pipy Administration UI_.
+
+### Create a Pipy program
+
+Now let's rewrite the _"Hello World"_ script from last time in the repo:
+
+1. Click **New Codebase**. In the popped up window, input `/hello` for _Codebase name_, and then click **Create**. You will be brought to the code editor for the newly created codebase.
+
+2. Click <PlusIcon/> up above to add a new file. Input `/hello.js` for its filename and then click **Create**.
+
+3. Select the newly created file in the _File List_ on the left. Click <FlagIcon/> to make the file our program entrance. That means the program will start from evaluating that particular file next time we run it.
+
+4. Now go ahead and write code for **hello.js**:
+
+``` js
+pipy()
+
+  .listen(8080)
+  .serveHTTP(new Message('Hi, there!\n'))
+```
+
+5. Click <SaveIcon/> to save your file.
+
+### Start the program
+
+Click <PlayIcon/> to run the code. The _Console Window_ would pop up now and you'd see the same output as in the terminal from last time:
+
+```
+[INF] [config]
+[INF] [config] Module 
+[INF] [config] =======
+[INF] [config]
+[INF] [config]  [Listen on 8080 at 0.0.0.0]
+[INF] [config]  ----->|
+[INF] [config]        |
+[INF] [config]       serveHTTP -->|
+[INF] [config]                    |
+[INF] [config]  <-----------------|
+[INF] [config]  
+[INF] [listener] Listening on TCP port 8080 at 0.0.0.0
+```
+
+If you do the same test as last time, you'll see the same result:
+
+``` sh
+$ curl localhost:8080
+Hi, there!
+```
 
 ## Echo server
 
-First, let's make the server repeat whatever you say on port 8081:
+Now, let's change the script to open up one more port where it repeats whatever you say:
 
 ``` js
   pipy()
 
-  .listen(8080)
-    .serveHTTP(
-      new Message('Hi, there!\n')
-    )
+    .listen(8080)
+    .serveHTTP(new Message('Hi, there!\n'))
 
-+ .listen(8081)
-+   .serveHTTP(
-+     msg => new Message(msg.body)
-+   )
++   .listen(8081)
++   .serveHTTP(msg => new Message(msg.body))
 ```
 
-As you can see, we are not creating a new program. Instead, we are only extending
-the program from last time by adding one more _port pipeline_ to it.
+As you can see, we are not creating a new program. Instead, we are only extending the program from last time by adding one more _port pipeline layout_ to it.
 
-The new pipeline listens on port 8081 and contains the same filter _serveHTTP_ as last time.
-But unlike last time, the construction parameter we give to _serveHTTP_ is not a
-[_Message_](/reference/api/Message) object but a **function**.
+The new pipeline layout listens on port 8081 and contains the same solitary filter [serveHTTP()](/reference/api/Configuration/serveHTTP) as last time. But unlike last time, the construction parameter we give to _serveHTTP()_ is not a [Message](/reference/api/Message) object but a **function**.
 
-This **function** is the secret ingredient to our dynamic content.
+This **function** is the secret ingredient to our dynamic server.
 
 ### Code dissection
 
-In the first pipeline, `new Message()` will be evaluated only once when Pipy starts.
-That would leave us with only one _Message_ object no matter how many requests Pipy
-could receive later on. Therefore, responses from Pipy will never change.
+In the first pipeline layout, `new Message()` will be evaluated only once at _configure time_ when Pipy starts. That would leave us with only one _Message_ object, no matter how many requests Pipy receives _at runtime_. Therefore, responses from Pipy will never change.
 
-In the second pipeline, `msg => new Message()` is also evaluated only once when
-Pipy starts, but unlike the first one, this evaluation results in a **function**,
-not a _Message_ object just yet. At runtime, the function will be evaluated
-**once for each request** to get a _Message_ in response, which can be different
-every time.
+In the second pipeline layout, `msg => new Message()` is also evaluated only once at _configure time_, but unlike the first one, this evaluation results in a **function**, not a _Message_ object just yet. At runtime, the function will be evaluated **once for each request** to get a _Message_ in response, which can be different every time.
 
-This function has an input variable `msg`, which is the received HTTP request wrapped
-in form of a [_Message_](/reference/api/Message) object. It is supposed to output
-a _Message_ too for the response. Here we simply throw together a new _Message_ with
-the same body content as the request. That would be enough for our simple "echo server".
+This function has an input variable `msg`, which is the received HTTP request wrapped in the form of a [Message](/reference/api/Message) object. The function is supposed to output a _Message_ too for the response. Here we simply throw together a new _Message_ with the same body content found in the request. That would be enough for our simple "echo server".
 
 ### Test in action
 
-Don't forget to save your changes before testing. If Pipy is still running the
-old version of the code at this point, you can either:
+Don't forget to save your changes before testing. If Pipy is still running the old version of the code at this point, you can either:
 
-1. Click <StopIcon/> button to stop the old version, and then click <PlayIcon/>
-   button to run the new version.
+1. Click <StopIcon/> to stop the old version, and then click <PlayIcon/> to start the new version.
 
-2. Or click <RestartIcon/> button to restart the program straight in new version.
+2. Or click <RestartIcon/> to restart the program in new version all at once.
 
-Again, we'll test it with `curl` from the command line:
+Again, we'll do a test with `curl` from the command line:
 
 ``` sh
 curl localhost:8081 -d 'hello'
@@ -80,23 +147,18 @@ Awesome!
 
 ## Echo more
 
-Certainly we can do more than a "_parrot_". Now let's respond with not only
-what the client says, but also where he/she is, shall we?
+Certainly we can do more than a boring "parrot". Now let's respond with not only what the client says, but also where he/she is, shall we?
 
 ``` js
   pipy()
 
-  .listen(8080)
-    .serveHTTP(
-      new Message('Hi, there!\n')
-    )
+    .listen(8080)
+    .serveHTTP(new Message('Hi, there!\n'))
 
-  .listen(8081)
-    .serveHTTP(
-      msg => new Message(msg.body)
-    )
+    .listen(8081)
+    .serveHTTP(msg => new Message(msg.body))
 
-+ .listen(8082)
++   .listen(8082)
 +   .serveHTTP(
 +     msg => new Message(
 +       `You are requesting ${msg.head.path} from ${__inbound.remoteAddress}\n`
@@ -104,25 +166,18 @@ what the client says, but also where he/she is, shall we?
 +   )
 ```
 
-Again, we are adding upon what we already have. This time, a new pipeline
-listens on port 8082, with the same filter _serveHTTP_ but a different function.
+Again, we are adding on top of what we already have. This time, a new pipeline layout listens on port 8082, with the same filter _serveHTTP()_ but a different function.
 
 ### Code dissection
 
-This time we will return dynamically composed text content by using
-[_template string_](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Template_literals)
-in JavaScript. In that template string, we have 2 dynamic parts:
+This time we'll return some dynamically composed text by using [_template string_](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Template_literals) in JavaScript. In that template string, we have 2 variable parts:
 
-* `msg.head.path` is the requested URI in the HTTP request
+* `msg.head.path` is the requested URI from the HTTP request
 * `__inbound.remoteAddress` is the client's IP address
 
-Variable `__inbound` is a builtin global object containing address/port information about
-the current inbound connection. Although it is a _global variable_, it has different
-values across concurrent pipelines that handle concurrent inbound connections.
+Variable `__inbound` is a built-in _context variable_ containing address/port information about the current inbound connection. It's called a _"context variable"_ because its value depends on the context. It'll have different values across concurrent pipelines that handle concurrent inbound connections, each of which works in a different _context_.
 
-This may be counterintuitive to those who are used to global variables having a shared
-state across the whole program. For a deeper explanation, see
-[Context](/intro/concepts#context) in _Concepts_.
+> For a deeper explanation of _context variables_, see [Context](/intro/concepts#context) in _Concepts_.
 
 ### Test in action
 
@@ -138,26 +193,18 @@ You will get:
 You are requesting /hello from ::1
 ```
 
-Where "_::1_" is the _localhost_ address in IPv6 form.
+Where "_::1_" is the _localhost_ address in the IPv6 form.
 
 ## Summary
 
-In this part of tutorial, you've learned how dynamic content can be made
-in responses from a Pipy program. You've also tasted a bit of how _variables_
-work in Pipy.
+In this part of the tutorial, you've learned how dynamic content can be generated in response to client requests. You've also tasted a bit how _context variables_ work in Pipy.
 
 ### Takeaways
 
-1. Filter parameters are only evaluated once so they have a "_static_" value
-   at runtime. To make them "_dynamic_", they need to be **functions** that output
-   dynamic values.
+1. Filter parameters are only evaluated once at _configure time_ so they have a static value at _runtime_. To make them dynamic, they need to be "static" **functions** that output "dynamic" values.
 
-2. Global variables have isolated states between concurrent pipelines. One of
-   the builtin global variables is `__inbound`, which contains address/port
-   information about the current incoming connection.
+2. _Context variables_ have isolated states between concurrent pipelines. One of the built-in context variables is `__inbound`, which contains address/port information about the current incoming connection.
 
 ### What's next?
 
-We've seen that Pipy is good for quickly spinning up an ad-hoc server, but
-that's not what Pipy is mainly for. We use Pipy mostly as a network proxy.
-That's what we are going to look into next.
+We've seen how convenient Pipy is for quickly spinning up an ad-hoc server, but that's not what Pipy is mainly for. We use Pipy mostly as a network proxy. That's what we are going to look into next.
