@@ -26,6 +26,7 @@
 #ifndef COMPRESS_HPP
 #define COMPRESS_HPP
 
+#include <cstddef>
 #include <functional>
 
 namespace pipy {
