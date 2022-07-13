@@ -48,7 +48,7 @@ When Pipy is up and running, you'll see this on your terminal:
 
 Now open your favorite web browser and navigate to [http://localhost:6060](http://localhost:6060). You will see the built-in _Pipy Administration UI_.
 
-### Create a Pipy program
+### Create a Pipy codebase
 
 Now let's rewrite the _"Hello World"_ script from last time in the repo:
 
@@ -56,7 +56,7 @@ Now let's rewrite the _"Hello World"_ script from last time in the repo:
 
 2. Click <PlusIcon/> up above to add a new file. Input `/hello.js` for its filename and then click **Create**.
 
-3. Select the newly created file in the _File List_ on the left. Click <FlagIcon/> to make the file our program entrance. That means the program will start from evaluating that particular file next time we run it.
+3. Select the newly created file in the _File List_ on the left. Click <FlagIcon/> to make the file our codebase entrance. That means the program will start from evaluating that particular file next time we run it.
 
 4. Now go ahead and write code for **hello.js**:
 
@@ -109,7 +109,7 @@ Now, let's change the script to open up one more port where it repeats whatever 
 +   .serveHTTP(msg => new Message(msg.body))
 ```
 
-As you can see, we are not creating a new program. Instead, we are only extending the program from last time by adding one more _port pipeline layout_ to it.
+As you can see, we are not creating a new codebase. Instead, we are only extending the code from last time by adding one more _port pipeline layout_ to it.
 
 The new pipeline layout listens on port 8081 and contains the same solitary filter [serveHTTP()](/reference/api/Configuration/serveHTTP) as last time. But unlike last time, the construction parameter we give to _serveHTTP()_ is not a [Message](/reference/api/Message) object but a **function**.
 

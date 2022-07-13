@@ -1,10 +1,8 @@
 pipy()
 
-.listen(8000)
-  .demuxHTTP('forward')
-
-.pipeline('forward')
-  .muxHTTP('connection')
-
-.pipeline('connection')
-  .connect('localhost:8080')
+  .listen(8000)
+  .demuxHTTP().to(
+    $=>$.muxHTTP().to(
+      $=>$.connect('localhost:8080')
+    )
+  )
