@@ -53,11 +53,13 @@ public:
   bool has_error() const { return m_has_error; }
 
   void set_bodiless(bool b) { m_is_bodiless = b; }
+  void set_switching(bool b) { m_is_switching = b; }
   void set_tunnel(bool b) { m_is_tunnel = b; }
 
 protected:
   virtual void on_decode_request(http::RequestHead *head) {}
   virtual void on_decode_response(http::ResponseHead *head) {}
+  virtual void on_decode_tunnel() {}
   virtual void on_decode_error() {}
   virtual void on_http2_pass() {}
 
@@ -89,6 +91,7 @@ private:
   int m_body_size = 0;
   bool m_is_response;
   bool m_is_bodiless = false;
+  bool m_is_switching = false;
   bool m_is_tunnel = false;
   bool m_has_error = false;
 
@@ -122,11 +125,13 @@ public:
   void set_buffer_size(int size) { m_buffer_size = size; }
   void set_final(bool b) { m_is_final = b; }
   void set_bodiless(bool b) { m_is_bodiless = b; }
+  void set_switching(bool b) { m_is_switching = b; }
   void set_tunnel(bool b) { m_is_tunnel = b; }
 
 protected:
   virtual void on_encode_request(pjs::Object *head) {}
   virtual void on_encode_response(pjs::Object *head) {}
+  virtual void on_encode_tunnel() {}
 
 private:
   pjs::Ref<MessageStart> m_start;
@@ -136,11 +141,13 @@ private:
   pjs::Ref<pjs::Str> m_header_upgrade;
   Data m_buffer;
   int m_buffer_size = DATA_CHUNK_SIZE;
+  int m_status_code = 0;
   int m_content_length = 0;
   bool m_chunked = false;
   bool m_is_response;
   bool m_is_final = false;
   bool m_is_bodiless = false;
+  bool m_is_switching = false;
   bool m_is_tunnel = false;
 
   virtual void on_event(Event *evt) override;
@@ -357,6 +364,7 @@ private:
   virtual void on_decode_error() override;
   virtual void on_decode_request(http::RequestHead *head) override;
   virtual void on_encode_response(pjs::Object *head) override;
+  virtual void on_encode_tunnel() override;
   virtual void on_http2_pass() override;
 
   void upgrade_http2();
@@ -429,6 +437,7 @@ private:
     virtual void close() override;
     virtual void on_encode_request(pjs::Object *head) override;
     virtual void on_decode_response(http::ResponseHead *head) override;
+    virtual void on_decode_tunnel() override;
     virtual void on_decode_error() override;
     virtual void on_notify(Context *ctx) override;
 
@@ -471,6 +480,7 @@ private:
   virtual void on_decode_error() override;
   virtual void on_decode_request(http::RequestHead *head) override;
   virtual void on_encode_response(pjs::Object *head) override;
+  virtual void on_encode_tunnel() override;
   virtual void on_http2_pass() override;
 
   //
@@ -523,10 +533,8 @@ private:
   RequestQueue m_request_queue;
   pjs::Ref<Pipeline> m_tunnel;
   HTTP2Server* m_http2_server = nullptr;
-  bool m_switching = false;
 
   void upgrade_http2();
-  void start_tunnel();
   void on_tunnel_data(Data *data);
   void on_tunnel_end(StreamEnd *end);
 };
@@ -578,8 +586,11 @@ private:
   void on_receive(Event *evt);
 
   pjs::Value m_handshake;
+  pjs::PropertyCache m_prop_status;
   pjs::Ref<Pipeline> m_pipeline;
-  bool m_is_tunneling = false;
+  Data m_buffer;
+  int m_status_code = 0;
+  bool m_is_tunnel_started = false;
 
   friend class TunnelClientReceiver;
 };

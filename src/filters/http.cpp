@@ -229,6 +229,7 @@ void Decoder::reset() {
   m_header_upgrade = nullptr;
   m_body_size = 0;
   m_is_bodiless = false;
+  m_is_switching = false;
   m_is_tunnel = false;
   m_has_error = false;
 }
@@ -524,6 +525,13 @@ void Decoder::message_start() {
 }
 
 void Decoder::message_end() {
+  if (m_is_switching && m_is_response && m_head) {
+    auto status = m_head->as<ResponseHead>()->status();
+    if (101 <= status && status < 300) {
+      m_is_tunnel = true;
+      on_decode_tunnel();
+    }
+  }
   output(MessageEnd::make());
 }
 
@@ -588,8 +596,10 @@ void Encoder::reset() {
   m_method = nullptr;
   m_header_connection = nullptr;
   m_header_upgrade = nullptr;
+  m_status_code = 0;
   m_is_final = false;
   m_is_bodiless = false;
+  m_is_switching = false;
   m_is_tunnel = false;
 }
 
@@ -691,6 +701,8 @@ void Encoder::output_head() {
         s_dp.push(buffer, "OK\r\n");
       }
     }
+
+    m_status_code = status_num;
 
   } else {
     pjs::Value method, path, protocol;
@@ -827,6 +839,12 @@ void Encoder::output_end(Event *evt) {
     output_head();
     if (!m_buffer.empty()) {
       output(Data::make(std::move(m_buffer)));
+    }
+  }
+  if (m_is_response && m_is_switching) {
+    if (101 <= m_status_code && m_status_code < 300) {
+      m_is_tunnel = true;
+      on_encode_tunnel();
     }
   }
   output(evt);
@@ -1269,8 +1287,6 @@ void Demux::on_decode_request(http::RequestHead *head) {
     inp->input(MessageEnd::make());
     upgrade_http2();
     Decoder::chain(m_http2_demuxer->initial_stream());
-  } else if (req->is_switching()) {
-    isolate();
   }
 }
 
@@ -1283,9 +1299,14 @@ void Demux::on_encode_response(pjs::Object *head) {
   } else if (auto req = m_request_queue.shift()) {
     Encoder::set_final(req->is_final());
     Encoder::set_bodiless(req->is_bodiless());
-    Encoder::set_tunnel(req->is_switching());
+    Encoder::set_switching(req->is_switching());
     delete req;
   }
+}
+
+void Demux::on_encode_tunnel() {
+  Decoder::set_tunnel(true);
+  QueueDemuxer::isolate();
 }
 
 void Demux::on_http2_pass() {
@@ -1406,13 +1427,6 @@ void Mux::Session::on_encode_request(pjs::Object *head) {
   req->header_connection = Encoder::header_connection();
   req->header_upgrade = Encoder::header_upgrade();
   m_request_queue.push(req);
-  if (req->is_http2()) {
-    // TODO
-  } else if (req->is_switching()) {
-    MuxBase::Session::isolate();
-    QueueMuxer::isolate();
-    Encoder::set_tunnel(true);
-  }
 }
 
 void Mux::Session::on_decode_response(http::ResponseHead *head) {
@@ -1423,13 +1437,14 @@ void Mux::Session::on_decode_response(http::ResponseHead *head) {
     }
   } else if (auto *req = m_request_queue.shift()) {
     Decoder::set_bodiless(req->is_bodiless());
-    if (req->is_http2()) {
-      // TODO
-    } else if (req->is_switching()) {
-      Decoder::set_tunnel(true);
-    }
+    Decoder::set_switching(req->is_switching());
     delete req;
   }
+}
+
+void Mux::Session::on_decode_tunnel() {
+  Encoder::set_tunnel(true);
+  QueueMuxer::isolate();
 }
 
 void Mux::Session::on_decode_error()
@@ -1541,7 +1556,6 @@ void Server::reset() {
   Encoder::reset();
   m_request_queue.reset();
   m_tunnel = nullptr;
-  m_switching = false;
   if (m_http2_server) {
     Decoder::chain(m_handler->input());
     delete m_http2_server;
@@ -1594,10 +1608,17 @@ void Server::on_encode_response(pjs::Object *head) {
   if (auto *req = m_request_queue.shift()) {
     Encoder::set_final(req->is_final());
     Encoder::set_bodiless(req->is_bodiless());
-    if (req->is_switching() && !req->is_http2()) {
-      m_switching = true;
-    }
+    Encoder::set_switching(req->is_switching());
     delete req;
+  }
+}
+
+void Server::on_encode_tunnel() {
+  Decoder::set_tunnel(true);
+  if (!m_tunnel) {
+    if (num_sub_pipelines() > 0) {
+      m_tunnel = sub_pipeline(0, false, Filter::output());
+    }
   }
 }
 
@@ -1611,19 +1632,6 @@ void Server::upgrade_http2() {
   if (!m_http2_server) {
     m_http2_server = new HTTP2Server(this);
     m_http2_server->chain(Filter::output());
-  }
-}
-
-void Server::start_tunnel() {
-  if (m_switching) {
-    Decoder::set_tunnel(true);
-    Encoder::set_tunnel(true);
-    if (!m_tunnel) {
-      if (num_sub_pipelines() > 0) {
-        m_tunnel = sub_pipeline(0, false, Filter::output());
-      }
-    }
-    m_switching = false;
   }
 }
 
@@ -1705,8 +1713,6 @@ void Server::Handler::on_event(Event *evt) {
         output(MessageStart::make());
         output(evt);
       }
-
-      m_server->start_tunnel();
     }
 
   } else if (evt->is<StreamEnd>()) {
@@ -1817,12 +1823,14 @@ void TunnelClientReceiver::on_event(Event *evt) {
 
 TunnelClient::TunnelClient(const pjs::Value &handshake)
   : m_handshake(handshake)
+  , m_prop_status("status")
 {
 }
 
 TunnelClient::TunnelClient(const TunnelClient &r)
   : Filter(r)
   , m_handshake(r.m_handshake)
+  , m_prop_status("status")
 {
 }
 
@@ -1843,7 +1851,9 @@ void TunnelClient::reset() {
   Filter::reset();
   TunnelClientReceiver::close();
   m_pipeline = nullptr;
-  m_is_tunneling = false;
+  m_status_code = 0;
+  m_is_tunnel_started = false;
+  m_buffer.clear();
 }
 
 void TunnelClient::process(Event *evt) {
@@ -1862,21 +1872,32 @@ void TunnelClient::process(Event *evt) {
     inp->input(MessageEnd::make(msg->tail()));
   }
 
-  if (m_pipeline) {
+  if (m_is_tunnel_started) {
     m_pipeline->input()->input(evt);
+  } else if (auto *data = evt->as<Data>()) {
+    m_buffer.push(*data);
   }
 }
 
 void TunnelClient::on_receive(Event *evt) {
-  if (m_is_tunneling || evt->is<StreamEnd>()) {
+  if (m_is_tunnel_started || evt->is<StreamEnd>()) {
     output(evt);
   } else if (auto start = evt->as<MessageStart>()) {
-    m_is_tunneling = true;
+    pjs::Value status;
+    if (auto *head = start->head()) m_prop_status.get(head, status);
+    if (status.is_number()) m_status_code = status.n();
+  } else if (evt->is<MessageEnd>()) {
+    if (101 <= m_status_code && m_status_code < 300) {
+      m_is_tunnel_started = true;
+      if (!m_buffer.empty()) {
+        m_pipeline->input()->input(Data::make(std::move(m_buffer)));
+      }
+    }
   }
   if (evt->is<StreamEnd>()) {
     Pipeline::auto_release(m_pipeline);
     m_pipeline = nullptr;
-    m_is_tunneling = false;
+    m_is_tunnel_started = false;
   }
 }
 

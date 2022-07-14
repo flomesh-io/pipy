@@ -450,6 +450,7 @@ void QueueMuxer::isolate() {
 void QueueMuxer::on_reply(Event *evt) {
   if (m_isolated) {
     if (auto s = m_streams.head()) {
+      s->m_isolated = true;
       s->output(evt);
     }
     return;
@@ -536,7 +537,6 @@ void QueueMuxer::Stream::on_event(Event *evt) {
         muxer->output(Data::make(std::move(m_buffer)));
       }
       muxer->output(end ? end : MessageEnd::make());
-      if (muxer->m_isolated) m_isolated = true;
     }
   }
 }
