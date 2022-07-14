@@ -104,6 +104,14 @@ private:
   bool is_bodiless_response() const {
     return m_is_response && m_is_bodiless;
   }
+
+  bool is_turning_tunnel() const {
+    if (m_is_response && m_is_switching && m_head) {
+      auto status = m_head->as<ResponseHead>()->status();
+      return (101 <= status && status < 300);
+    }
+    return false;
+  }
 };
 
 //
@@ -112,8 +120,7 @@ private:
 
 class Encoder : public EventFunction {
 public:
-  Encoder(bool is_response)
-    : m_is_response(is_response) {}
+  Encoder(bool is_response);
 
   void reset();
 
@@ -139,6 +146,12 @@ private:
   pjs::Ref<pjs::Str> m_method;
   pjs::Ref<pjs::Str> m_header_connection;
   pjs::Ref<pjs::Str> m_header_upgrade;
+  pjs::PropertyCache m_prop_protocol;
+  pjs::PropertyCache m_prop_headers;
+  pjs::PropertyCache m_prop_method;
+  pjs::PropertyCache m_prop_path;
+  pjs::PropertyCache m_prop_status;
+  pjs::PropertyCache m_prop_status_text;
   Data m_buffer;
   int m_buffer_size = DATA_CHUNK_SIZE;
   int m_status_code = 0;
@@ -158,6 +171,13 @@ private:
 
   bool is_bodiless_response() const {
     return m_is_response && m_is_bodiless;
+  }
+
+  bool is_turning_tunnel() const {
+    return (
+      m_is_response && m_is_switching &&
+      101 <= m_status_code && m_status_code < 300
+    );
   }
 
   static Data::Producer s_dp;
@@ -559,6 +579,7 @@ private:
   pjs::Ref<pjs::Function> m_handler;
   pjs::Ref<Pipeline> m_pipeline;
   pjs::Ref<MessageStart> m_start;
+  pjs::PropertyCache m_prop_status;
   Data m_buffer;
 };
 

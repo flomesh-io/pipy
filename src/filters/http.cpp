@@ -521,18 +521,13 @@ void Decoder::message_start() {
   } else {
     on_decode_request(m_head->as<http::RequestHead>());
   }
+  if (is_turning_tunnel()) on_decode_tunnel();
   output(MessageStart::make(m_head));
 }
 
 void Decoder::message_end() {
-  if (m_is_switching && m_is_response && m_head) {
-    auto status = m_head->as<ResponseHead>()->status();
-    if (101 <= status && status < 300) {
-      m_is_tunnel = true;
-      on_decode_tunnel();
-    }
-  }
   output(MessageEnd::make());
+  if (is_turning_tunnel()) m_is_tunnel = true;
 }
 
 void Decoder::stream_end(StreamEnd *end) {
@@ -589,6 +584,17 @@ void Decoder::stream_end(StreamEnd *end) {
 
 Data::Producer Encoder::s_dp("HTTP Encoder");
 
+Encoder::Encoder(bool is_response)
+  : m_prop_protocol(s_protocol)
+  , m_prop_headers(s_headers)
+  , m_prop_method(s_method)
+  , m_prop_path(s_path)
+  , m_prop_status(s_status)
+  , m_prop_status_text(s_status_text)
+  , m_is_response(is_response)
+{
+}
+
 void Encoder::reset() {
   m_buffer.clear();
   m_start = nullptr;
@@ -616,7 +622,16 @@ void Encoder::on_event(Event *evt) {
     m_buffer.clear();
 
     if (m_is_response) {
+      m_status_code = 200;
+      pjs::Value status;
+      if (auto head = m_start->head()) m_prop_status.get(head, status);
+      if (status.is_number()) {
+        m_status_code = status.n();
+      } else if (status.is_string()) {
+        m_status_code = std::atoi(status.s()->c_str());
+      }
       on_encode_response(start->head());
+      if (is_turning_tunnel()) on_encode_tunnel();
     }
 
   } else if (auto data = evt->as<Data>()) {
@@ -661,11 +676,10 @@ void Encoder::output_head() {
   bool send_content_length = true;
 
   if (m_is_response) {
-    pjs::Value protocol, status, status_text;
+    pjs::Value protocol, status_text;
     if (auto head = m_start->head()) {
-      head->get(s_protocol, protocol);
-      head->get(s_status, status);
-      head->get(s_status_text, status_text);
+      m_prop_protocol.get(head, protocol);
+      m_prop_status_text.get(head, status_text);
     }
 
     if (protocol.is_string()) {
@@ -675,26 +689,19 @@ void Encoder::output_head() {
       s_dp.push(buffer, "HTTP/1.1 ");
     }
 
-    int status_num = 200;
-    if (status.is_number()) {
-      status_num = status.n();
-    } else if (status.is_string()) {
-      status_num = std::atoi(status.s()->c_str());
-    }
-
-    if (status_num < 200 || status_num == 204) {
+    if (m_status_code < 200 || m_status_code == 204) {
       send_content_length = false;
     }
 
     char status_str[100];
-    std::sprintf(status_str, "%d ", status_num);
+    std::sprintf(status_str, "%d ", m_status_code);
     s_dp.push(buffer, status_str);
 
     if (status_text.is_string()) {
       s_dp.push(buffer, status_text.s()->str());
       s_dp.push(buffer, "\r\n");
     } else {
-      if (auto str = lookup_status_text(status_num)) {
+      if (auto str = lookup_status_text(m_status_code)) {
         s_dp.push(buffer, str);
         s_dp.push(buffer, "\r\n");
       } else {
@@ -702,14 +709,12 @@ void Encoder::output_head() {
       }
     }
 
-    m_status_code = status_num;
-
   } else {
     pjs::Value method, path, protocol;
     if (auto head = m_start->head()) {
-      head->get(s_method, method);
-      head->get(s_path, path);
-      head->get(s_protocol, protocol);
+      m_prop_method.get(head, method);
+      m_prop_path.get(head, path);
+      m_prop_protocol.get(head, protocol);
     }
 
     if (method.is_string()) {
@@ -740,7 +745,7 @@ void Encoder::output_head() {
 
   pjs::Value headers;
   if (auto head = m_start->head()) {
-    head->get(s_headers, headers);
+    m_prop_headers.get(head, headers);
   }
 
   bool content_length_written = false;
@@ -841,13 +846,8 @@ void Encoder::output_end(Event *evt) {
       output(Data::make(std::move(m_buffer)));
     }
   }
-  if (m_is_response && m_is_switching) {
-    if (101 <= m_status_code && m_status_code < 300) {
-      m_is_tunnel = true;
-      on_encode_tunnel();
-    }
-  }
   output(evt);
+  if (is_turning_tunnel()) m_is_tunnel = true;
   m_protocol = nullptr;
   m_method = nullptr;
   m_header_connection = nullptr;
@@ -1726,12 +1726,14 @@ void Server::Handler::on_event(Event *evt) {
 
 TunnelServer::TunnelServer(pjs::Function *handler)
   : m_handler(handler)
+  , m_prop_status(s_status)
 {
 }
 
 TunnelServer::TunnelServer(const TunnelServer &r)
   : Filter(r)
   , m_handler(r.m_handler)
+  , m_prop_status(s_status)
 {
 }
 
@@ -1794,7 +1796,7 @@ void TunnelServer::process(Event *evt) {
 
         if (auto head = res->head()) {
           pjs::Value status;
-          head->get(s_status, status);
+          m_prop_status.get(head, status);
           if (status.is_undefined() || (status.is_number() && 100 <= status.n() && status.n() < 300)) {
             m_pipeline = sub_pipeline(0, true, output());
           }
@@ -1823,14 +1825,14 @@ void TunnelClientReceiver::on_event(Event *evt) {
 
 TunnelClient::TunnelClient(const pjs::Value &handshake)
   : m_handshake(handshake)
-  , m_prop_status("status")
+  , m_prop_status(s_status)
 {
 }
 
 TunnelClient::TunnelClient(const TunnelClient &r)
   : Filter(r)
   , m_handshake(r.m_handshake)
-  , m_prop_status("status")
+  , m_prop_status(s_status)
 {
 }
 
