@@ -78,7 +78,7 @@ void Logger::set_admin_link(AdminLink *admin_link) {
         if (utils::starts_with(command, s_on)) {
           name = command.substr(s_on.length());
           enabled = true;
-        } else {
+        } else if (utils::starts_with(command, s_off)) {
           name = command.substr(s_off.length());
           enabled = false;
         }
