@@ -9,103 +9,126 @@ import PlayIcon from '@material-ui/icons/PlayArrowSharp'
 import StopIcon from '@material-ui/icons/StopSharp'
 import SvgHelloPipeline from './hello-pipeline.svg';
 
-Ahoy, world!
+**Ahoy, world!**
 
 作为程序员的我们都沉迷于“Hello World”，这里也不免俗。
 
-## 启动 Pipy
+## Hello, world!
 
-从命令行启动 Pipy 实例：
+在您的终端中键入如下命令：
 
-```shell
-pipy
+``` sh
+pipy -e "console.log('Hello, world!')"
 ```
 
-启动之后将会看到如下内容：
+'-e' 选项告知 Pipy 来 _计算紧随其后的表达式_ 值，这里我们所要计算的表达式是：
+
+``` js
+console.log('Hello, world!')
+```
+
+用 _PipyJS_ 的话说，就是调用函数 [console.log()](/reference/api/console/log)，传入字符串参数 _"Hello, world!"_。
+
+> **PipyJS** 是一种兼容 [ECMAScript](https://en.wikipedia.org/wiki/ECMAScript) 标准的 JS 变种，为 Pipy 所用。参考 [PipyJS Reference](/reference/pjs) 可以获取更多信息。
+
+Pipy 现在将会启动，但是基本立刻就退出了，会留下如下的输出：
 
 ```
-[info] [codebase] Starting codebase service...
-[info] [listener] Listening on port 6060 at ::
+[INF] Hello, world!
+undefined
+[ERR] [pjs] Script did not result in a Configuration
+[INF] [shutdown] Shutting down...
+[INF] [shutdown] Stopped.
+Done.
 ```
 
-此时在浏览器中打开 [http://localhost:6060](http://localhost:6060)，就可以看到 Pipy 内置的管理界面。这里不做过多介绍，可以跳转文档 [Pipy Repo](https://flomesh-io.github.io/operating/repo/) 获取更多管理界面的使用说明。
+让我们看一看这些输出都说了什么：
 
-## 创建 Pipy 程序
+- 第一行，我们看到 _"Hello, world!"_。这是函数调用 [console.log()](/reference/api/console/log) 最终的结果：一行 log 输出到控制台。
 
-让我们开始创建第一个 Pipy 程序：
+- 第二行，我们看到 _"undefined"_。这个结果来自于对我们表达式的 _求值_。既然函数 [console.log()](/reference/api/console/log) 没有返回值，这求值结果自然就是 _undefined_。
 
-1. 在界面上点击 **New Codebase**，并在弹出窗口输入 `/hello` 作为代码库名称，最后点击 **Create** 完成创建。此时会自动跳转到代码库的编辑界面。
-2. 点击上面工具栏中的 <PlusIcon/> 按钮来创建新文件。弹出窗口中输入 `/hello.js`并点击 **Create**。
-3. 在左侧文件列表中选中刚创建的文件，然后点击上面工具栏中的 <FlagIcon/> 按钮，将该文件设置为程序的入口脚本。
-4. 接着在 `hello.js` 中输入下面的内容：
-    
-```js
+- 第三行，我们看到一个错误消息说 _"Script did not result in a Configuration"_。这里，[Configuration](/reference/api/Configuration) 是由 Pipy 为管道安装所提供的主 API，以后我们会看到很多关于它的使用方法。目前为止，您所需要知道的唯一事情就是，Pipy 需要一个 _Configuration_ 来继续作为一个长期的服务。然而，既然 _表达式求值_ 给了我们一个 _undefined_，这并不是一个 _Configuration_，所以这里 Pipy 除了退出啥也做不了。这就是我们为什么会在 Pipy 关闭每件事情并且停止运行后看到这样的输出。
+
+正如您所见，Pipy 目前基本上就是一个 _表达式求值器_。如果您说 _"pipy -e 1+1"_，它会告诉您 _"2"_，仅此而已。这肯定不是我们创建 Pipy 的初衷。要想使 Pipy 以更有意义的方式工作，我们应该写一个能够对一个 _Configuration_ 求值的表达式。
+
+## Hello, world in HTTP!
+
+现在让我们用通常的方式来使用 Pipy：运行一个 HTTP 服务。
+
+``` sh
+pipy -e "pipy().listen(8080).serveHTTP(new Message('Hi, there!'))"
+```
+
+这次，我们计算一个稍微复杂一点的表达式。当然，同样的表达式可以被重写成多行格式，这样看起来更清晰：
+
+``` js
 pipy()
-
-.listen(8080)
-+  .serveHTTP(
--    new Message('Hi, there!\n')
-  )
+  .listen(8080)
+  .serveHTTP(new Message('Hi, there!'))
 ```
-5. 点击工具栏中的 <SaveIcon/> 按钮保存修改。    
 
-## 代码剖析
+### 代码剖析
 
-在运行之前花点时间来看下代码：
+花一些时间来检查代码。这里可以看到都发生了什么：
 
-1. 第 1 行中调用内置的函数 [_pipy()_](/reference/api/pipy) 将返回一个 [Configuration](/reference/api/Configuration) 对象。后面我们使用这个对象来定义 *管道（pipeline）* 和 *过滤器（filter）*。
-2. 在第 3 行中我们通过调用前面创建的 `Configuration` 对象的 [_listen()_](/reference/api/Configuration/listen) 方法，定义一个监听在 `8080` 端口的*端口管道（port pipeline）*。这个函数会返回该 `Configuration` 对象，因此后面可以继续调用它的其他方法来定义更多的*管道*和*过滤器*。
-3. 在第 4 行，我们为了 2 中创建的管道添加 [serveHTTP](/reference/api/classes/Configuration/serveHTTP) 过滤器。过滤器使用 [Message](/reference/api/classes/Message) 作为构造参数，并在响应中输出同样类型的消息。
+1. 在最上面一行，内置函数 [pipy()](/reference/api/pipy) 被调用。它返回了一个 [Configuration](/reference/api/Configuration) 对象。这就是 Pipy 为了运行一个服务所需要的。
 
-整个脚本中，我们定义了包含一个过滤器的管道。如下图：
+2. 在第 2 行，通过调用我们刚刚从 _pipy()_ 上获取的 _Configuration_ 对象上的方法 [listen()](/reference/api/Configuration/listen)，我们添加了一个 _端口管道布局_ 给配置，使其监听端口 8080。方法 _listen()_ 本身返回同一个 _Configuration_ 对象，所以我们能够继续调用该对象上的其他方法来添加更多的 _管道布局_ 和 _过滤器_。这正是我们接下来所要做的。
+
+3. 在第 3 行，我们添加了一个 [serveHTTP()](/reference/classes/Configuration/serveHTTP) 过滤器到我们刚刚在第二步添加的那个管道布局上。该过滤器使用一个 [Message](/reference/classes/Message) 对象作为它的构造参数。在运行时，它将在响应中输出相同的消息给任何的输入消息。
+
+扼要重述下，我们上面所写的表达式定义了一个 _管道布局_，其只包含一个 _过滤器_。对它的描绘应该是这样：
 
 <div style="text-align: center">
   <SvgHelloPipeline/>
 </div>
 
-## 测试
+### 测试
 
-此时点击工具栏右侧的 <PlayIcon/> 按钮，弹出的控制台窗口会显示：
+在您的终端输入上面的命令，您将会看到如下的输出：
 
 ```
-[info] [config]
-[info] [config] Module /hello.js
-[info] [config] ================
-[info] [config]
-[info] [config]  [Listen on :::8080]
-[info] [config]  ----->|
-[info] [config]        |
-[info] [config]       serveHTTP
-[info] [config]        |
-[info] [config]  <-----|
-[info] [config]  
-[info] [listener] Listening on port 8080 at ::
+[INF] [config]
+[INF] [config] Module 
+[INF] [config] =======
+[INF] [config]
+[INF] [config]  [Listen on 8080 at 0.0.0.0]
+[INF] [config]  ----->|
+[INF] [config]        |
+[INF] [config]       serveHTTP -->|
+[INF] [config]                    |
+[INF] [config]  <-----------------|
+[INF] [config]  
+[INF] [listener] Listening on TCP port 8080 at 0.0.0.0
 ```
 
-此时在命令行中可以输入：
+这次，Pipy 没有退出。取而代之，它开启了端口 8080 的监听，等待着 HTTP 请求的到来。
 
-```sh
+现在，打开第二个终端窗口，并且用 `curl` 发送一个请求：
+
+``` sh
 curl localhost:8080
 ```
 
-将看到：
+您应该看到这样的结果：
 
 ```
 Hi, there!
 ```
 
-Cool，符合预期。
-
 ## 总结
 
-在第一个教程中，我们了解了 Pipy 程序的组成，并熟悉了管理界面的使用。
+在这个我们教程的第一部分，通过创建和运行一个简单的单行 HTTP 服务，您已经学到了一个 Pipy 程序是如何被组织的。
 
-### 收获
+### 要点
 
-* Pipy 程序由一系列的*管道*和*过滤器*的定义组成。从 [_pipy()_](/reference/api/pipy) 的调用开始，通过调用其返回 [Configuration](/reference/api/Configuration) 对象的多个方法来定义管道和过滤器。
-* *端口管道*从网络端口读取的内容作为输入，然后将其最后一个过滤器输出的内容回写到同一个端口。
-* *serveHTTP* 过滤器将 HTTP 消息作为输入，然后输出 HTTP 消息作为响应。
+* 一个 Pipy 程序由 _管道布局_ 和 _过滤器_ 的定义来组成。它永远开始于一个 [pipy()](/reference/api/pipy) 调用，其返回一个 [Configuration](/reference/api/Configuration) 对象，随之我们调用该对象上的多种方法来添加 _管道布局_ 和 _过滤器_。
+
+* 一个 _端口管道_ 从一个网络端口读取，然后回写它的最后的过滤器所输出的任意内容。
+
+* 一个 [serveHTTP()](/reference/api/Configuration/serveHTTP) 过滤器接收 HTTP 消息作为请求，输出 HTTP 消息作为响应。
 
 ### 接下来
 
-现在你已经可以写一个简单的 *“Hello world”* 服务器，但是总是输出同样的内容并没什么用。接下来我们试试针对不同的请求返回不一样的响应。
+现在，您已经制作了一个简单的 _Hello World_ 服务，但是它基本没啥用，因为它一直在说同一件事。接下来，我们将看如何用不同的响应来反馈给不同的请求。
