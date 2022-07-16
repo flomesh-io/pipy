@@ -1857,6 +1857,7 @@ void Endpoint::StreamBase::set_clearing(bool clearing) {
         m_endpoint->m_streams_pending.remove(this);
         if (m_send_buffer.empty()) {
           m_endpoint->m_streams.push(this);
+          m_is_pending = false;
         } else {
           m_endpoint->m_streams_pending.push(this);
         }
