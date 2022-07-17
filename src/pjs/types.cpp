@@ -1479,14 +1479,16 @@ template<> void ClassDef<Array>::init() {
   method("map", [](Context &ctx, Object *obj, Value &ret) {
     Function *f;
     if (!ctx.arguments(1, &f)) return;
-    ret.set(obj->as<Array>()->map([&](Value &v, int i, Value &ret) -> bool {
-      Value argv[3];
-      argv[0] = v;
-      argv[1].set(i);
-      argv[2].set(obj);
-      (*f)(ctx, 3, argv, ret);
-      return ctx.ok();
-    }));
+    ret.set(obj->as<Array>()->map(
+      [&](Value &v, int i, Value &ret) -> bool {
+        Value argv[3];
+        argv[0] = v;
+        argv[1].set(i);
+        argv[2].set(obj);
+        (*f)(ctx, 3, argv, ret);
+        return ctx.ok();
+      }
+    ));
   });
 
   method("pop", [](Context &ctx, Object *obj, Value &ret) {

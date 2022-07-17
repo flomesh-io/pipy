@@ -517,6 +517,7 @@ void FunctionLiteral::resolve(Context &ctx, int l, Imports *imports) {
   );
 
   Context fctx(ctx, argc, Scope::make(ctx.scope(), m_variables.size(), &m_variables[0]));
+  for (auto &i : m_inputs) i->resolve(fctx, l, imports);
   m_output->resolve(fctx, l, imports);
 }
 
