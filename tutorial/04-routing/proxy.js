@@ -1,42 +1,36 @@
-pipy({
-  _router: new algo.URLRouter({
+((
+  router = new algo.URLRouter({
     '/hi/*': 'localhost:8080',
     '/echo': 'localhost:8081',
     '/ip/*': 'localhost:8082',
   }),
 
-  _target: '',
+) => pipy({
+  _target: undefined,
 })
 
-.listen(8000)
-  .demuxHTTP('request')
-
-.pipeline('request')
-  .handleMessageStart(
-    msg => (
-      _target = _router.find(
-        msg.head.headers.host,
-        msg.head.path,
+  .listen(8000)
+  .demuxHTTP().to(
+    $=>$
+    .handleMessageStart(
+      msg => (
+        _target = router.find(
+          msg.head.headers.host,
+          msg.head.path,
+        )
+      )
+    )
+    .branch(
+      () => Boolean(_target), (
+        $=>$.muxHTTP(() => _target).to(
+          $=>$.connect(() => _target)
+        )
+      ), (
+        $=>$.replaceMessage(
+          new Message({ status: 404 }, 'No route')
+        )
       )
     )
   )
-  .link(
-    'forward', () => Boolean(_target),
-    '404'
-  )
 
-.pipeline('forward')
-  .muxHTTP(
-    'connection',
-    () => _target
-  )
-
-.pipeline('connection')
-  .connect(
-    () => _target
-  )
-
-.pipeline('404')
-  .replaceMessage(
-    new Message({ status: 404 }, 'No route')
-  )
+)()
