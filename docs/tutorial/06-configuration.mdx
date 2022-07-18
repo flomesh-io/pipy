@@ -2,151 +2,157 @@
 title: "Part 6: Configuration"
 ---
 
-In this part of the tutorial, we will further optimize our codebase
-by isolating code and data. The data part will be put into separate
-JSON files as configuration files.
+In this part of the tutorial, we will reorganize our codebase by isolating code and data. The data part will be exposed into a separate JSON file as a configuration file that users can change without touching the code.
 
-## Prepare JSON files
+## Refactor
 
-First, we create a JSON file for each JavaScript file that is configurable.
-In each of these JSON files, we put in the data that the corresponding
-JavaScript code needs as its configuration. We keep all these JSON files
-under the same directory `/config/`.
+### Prepare the JSON file
 
-For `/proxy.js`, we create `/config/proxy.json`:
+First, create a JSON file named "config.json" in the same way as we created "hello.js" in [Part 2: Echo](/tutorial/02-echo/#create-a-pipy-codebase), only without flagging it as the program entrance. This file will contain the configurable elements in our code:
 
 ``` js
 {
   "listen": 8000,
-  "plugins": [
-    "plugins/router.js",
-    "plugins/default.js"
-  ]
-}
-```
-
-For `/plugins/router.js`, we create `/config/router.json`:
-
-``` js
-{
   "routes": {
-    "/hi/*": "localhost:8080",
-    "/echo": "localhost:8081",
-    "/ip/*": "localhost:8082"
+    "/hi/*": "service-hi",
+    "/echo": "service-echo",
+    "/ip/*": "service-tell-ip"
+  },
+  "services": {
+    "service-hi"      : ["127.0.0.1:8080", "127.0.0.1:8082"],
+    "service-echo"    : ["127.0.0.1:8081"],
+    "service-tell-ip" : ["127.0.0.1:8082"]
   }
 }
 ```
 
-For `/plugins/default.js`, something could also be turned configurable,
-such as the message to return when a request isn't handled.
-But we'll just skip it in this tutorial for simplicity.
+As you can see, there are 3 parts to this JSON file:
 
-## Read data from JSON
+- A TCP port our proxy will be listening on, which is now 8000. That's easy to understand.
+- A routing table that maps a request path to a _service name_, which is then connected to what's in the next part.
+- A target list for every _service_, referred to by a _service name_ from the routing table.
 
-Next, we change `/proxy.js` to get its configuration from `/config/proxy.json`:
+We could have put the target lists right into the routing table, so that a request path can be routed to a target list in one shot. However, in reality, we often have multiple paths routed to the same target list, so we decided to add in a layer of _services_ so that we don't have to repeat the target list for every path that is targetting to it.
 
-1. Wrap the entire code inside a function that takes only one input parameter `config`:
+### Read data from JSON
+
+Now let's change our script to read in configuration data from "config.json". We will leave the data loaded from the file in a new global variable `config` for later use.
 
 ``` js
-+ (config =>
-
-  pipy()
-
-  .export('proxy', {
-    __turnDown: false,
-  })
-
-  .listen(8000)
-    .demuxHTTP('request')
-
-  .pipeline('request')
-    .use(
-      [
-        'plugins/router.js',
-        'plugins/default.js',
-      ],
-      'request',
-      'response',
-      () => __turnDown
-    )
-
-+ )
++   config = JSON.decode(pipy.load('config.json')),
+    router = new algo.URLRouter({
+      '/hi/*': new algo.RoundRobinLoadBalancer(['localhost:8080', 'localhost:8082']),
+      '/echo': new algo.RoundRobinLoadBalancer(['localhost:8081']),
+      '/ip/*': new algo.RoundRobinLoadBalancer(['localhost:8082']),
+    }),
 ```
 
-2. Call that function with the JSON object decoded from `/config/proxy.json`:
+Next, we initialize `router` with the data loaded into `config`.
 
 ``` js
-  (config =>
-
-  // ...
-
-  )
-+ (JSON.decode(pipy.load('config/proxy.json')))
-```
-
-> We use [_JSON.decode()_](/reference/api/JSON/decode) instead of the standard
-> [_JSON.parse()_](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/JSON/parse)
-> because _JSON.decode()_ works with binary data whereas _JSON.parse()_ only works with strings.
-
-3. Replace the listening port and the plugin list to what's in the input parameter `config`:
-
-``` js
-- .listen(8000)
-+ .listen(config.listen)
-    .demuxHTTP('request')
-
-  .pipeline('request')
-    .use(
--     [
--       'plugins/router.js',
--       'plugins/default.js',
--     ],
-+     config.plugins,
-      'request',
-      'response',
-      () => __turnDown
-    )
-```
-
-For `/plugins/router.js`, we do the same. Wrap the entire plugin
-in a function, call it with the JSON data, and then change the routing table
-to what's in the JSON.
-
-``` js
-+ (config =>
-
-  pipy({
--   _router: new algo.URLRouter({
--     '/hi/*': 'localhost:8080',
--     '/echo': 'localhost:8081',
--     '/ip/*': 'localhost:8082',
+    config = JSON.decode(pipy.load('config.json')),
+-   router = new algo.URLRouter({
+-     '/hi/*': new algo.RoundRobinLoadBalancer(['localhost:8080', 'localhost:8082']),
+-     '/echo': new algo.RoundRobinLoadBalancer(['localhost:8081']),
+-     '/ip/*': new algo.RoundRobinLoadBalancer(['localhost:8082']),
 -   }),
-+   _router: new algo.URLRouter(config.routes),
-    _target: '',
-  })
-
-  // ...
-
-+ )(JSON.decode(pipy.load('config/router.json')))
++   router = new algo.URLRouter(config.routes),
 ```
+
+Our new _URLRouter_ now maps a path to a service name instead of a _RoundRobinLoadBalancer_ directly, so we need one more step to create load balancers for each service. These balancers also come from the JSON configuration, one for each service, mapping from the service names. We can convert the target lists in JSON to _RoundRobinLoadBalancer_ objects by using [_Array.prototype.map_](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Array/map), combined with [_Object.entries_](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object/entries) and [_Object.fromEntries_](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object/fromEntries):
+
+``` js
+    config = JSON.decode(pipy.load('config.json')),
+    router = new algo.URLRouter(config.routes),
++   services = Object.fromEntries(
++     Object.entries(config.services).map(
++       ([k, v]) => [
++         k, new algo.RoundRobinLoadBalancer(v)
++       ]
++     )
++   ),
+```
+
+> In JavaScript, array elements can be easily transformed by using [_Array.prototype.map_](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Array/map). For objects, however, we have to convert them to an array of `[key, value]` pairs first, transform them by `map()`, and then convert it back to an object.
+> ``` js
+> Object.fromEntries(
+>   Object.entries(inputObject).map(
+>     ([k, v]) => [
+>       transformKey(k),
+>       transformValue(v),
+>     ]
+>   )
+> )
+> ```
+> This is a handy technique while dealing with configuration data in JSON.
+
+### Link code to data
+
+Lastly, we replace the configurable parts in our script with the data obtained from the configuration file.
+
+The listening port is pretty straigtforward:
+
+``` js
+-   .listen(8000)
++   .listen(config.listen)
+```
+
+For routing and load balancing, we need to make it two-fold. First, route a path to a service. Second, select a target from the service. Certainly we can do all that within just one deeply nested expression, but we decided to go with two expressions for better code readability. To do so, we need a _local variable_ to store the _service name_ temporarily.
+
+As mentioned in [Global variables](/tutorial/04-routing/#global-variables) from Part 4, we can't declare _global_ or _local variables_ in PipyJS like in standard JavaScript. We do similar things by using _function arguments_. So first, we enclose the entire **handleMessageStart()** callback inside a function, where the old `router.find()` call sits in the argument list.
+
+``` js
+    $=>$
+    .handleMessageStart(
+      msg => (
++       ((
+          _target = router.find(
+            msg.head.headers.host,
+            msg.head.path,
+          )?.next?.()
++       ) => (
++       ))
+      )
+    )
+```
+
+Next, we change `_target` to a new local variable `s`, and move `_target`, together with the call to `next()`, over to the function body.
+
+``` js
+    $=>$
+    .handleMessageStart(
+      msg => (
+        ((
+-         _target = router.find(
++         s = router.find(
+            msg.head.headers.host,
+            msg.head.path,
+-         )?.next?.()
++         )
+        ) => (
++         _target = services[s]?.next?.()
+        ))
+      )
+    )
+```
+
+That's all the changes we need for the code.
 
 ## Test in action
 
-Again, we didn't make any change to the functionality.
-It can be tested the same way as last time: [Test in action](/tutorial/05-plugins#test-in-action).
+We didn't make any change to the functionality, so it can be tested the same way as last time: [Test in action](/tutorial/05-load-balancing#test-in-action).
 
 ## Summary
 
-In this part of tutorial, you've learned how to separate code and data,
-which is a better way of organizing your script when it has a lot of configurable data.
+In this part of the tutorial, you've learned how to separate code and data of your script. This is a good way of organizing your script when it is intended to be used by others who don't care too much about the code in itself. You've also learned how to declare and use local variables in PipyJS.
 
 ### Takeaways
 
-1. Separating code and data is a good practice in code organizing and makes your code easier to configure.
-2. Use [_pipy.load()_](/reference/api/pipy.load) to read files as binary data.
-3. Use [_JSON.decode()_](/reference/api/JSON/decode) to decode JSON from binary data.
+1. Separating code and data is a good practice that makes your code easier to configure.
+2. Use [pipy.load()](/reference/api/pipy/load) to read binary data from a file.
+3. Use [JSON.decode()](/reference/api/JSON/decode) to decode JSON from binary data.
+4. Enclose your code inside a function with arguments that act like local variables when you need to store temporary values.
 
 ### What's next?
 
-Now we've built a solid foundation for our proxy. It has a plugin system, and can be configured by JSON.
-Moving forward, we'll continue expanding its functionalities by adding more plugins to it.
+The code logic of our proxy is getting more lenthy and complicated. Adding more features on top of that all in just one single script file would be a bad idea in the long run. We need some sort of "modularity" in place before we go even further. So next, we'll look into building a "plugin system".
