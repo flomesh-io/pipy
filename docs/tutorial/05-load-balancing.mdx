@@ -87,9 +87,9 @@ That's all we need to do for a simple load balancer.
 
 ## Test in action
 
-Now let's do some test.
+Now let's do some tests.
 
-```
+``` sh
 $ curl localhost:8000/hi
 Hi, there!
 $ curl localhost:8000/hi
@@ -100,7 +100,28 @@ $ curl localhost:8000/hi
 You are requesting /hi from ::ffff:127.0.0.1
 ```
 
-You can see that each time you visit path "/hi", the request is directed to a different target, responding with a different message.
+You can see that each time you visit path "/hi", the request is directed to a different target, responding with a different message. What about sending two requests on one single connection?
+
+``` sh
+$ curl localhost:8000/hi localhost:8000/hi
+Hi, there!
+Hi, there!
+$ curl localhost:8000/hi localhost:8000/hi
+You are requesting /hi from 127.0.0.1
+You are requesting /hi from 127.0.0.1
+```
+
+As you can see, the targets are not rotating for a specific client connection. It only rotates across different downstream connections. How does that work behind the scene?
+
+## Connection pool
+
+Under the hood, RoundRobinLoadBalancer has a _resource pool_ for each target it distributes workloads to. We usually use those pools as _connection pools_ when load balancing to upstream servers, which is also the most common use case for a proxy. RoundRobinLoadBalancer keeps track of _resource allocations_ from the pools. When a resource is requested, it _borrows_ a free resource from a pool. When a resource is no longer needed, it _returns_ the resource back to the pool. Most importantly, the balancer guarantees that the same _borrower_ won't get more than one resources from the same balancer when calling [next()](/reference/api/RoundRobinLoadBalancer/next) more than once.
+
+How does RoundRobinLoadBalancer know who is the borrower? That's what we give to [next()](/reference/api/RoundRobinLoadBalancer/next) as the first argument when calling it. And by default, the argument is from the built-in context variable `__inbound`, which represents the current downstream connection.
+
+That's also the reason why _next()_ returns an object instead of the selected target itself. The object is actually a representative of a _resource_. We can have multiple resources (or connections, in our case) for multiple borrowers (or clients), all coming from the same target (or server). Also, **muxHTTP()** uses this resource object as a _group sharing discriminator_ to bind a sub-pipeline to an allocated resource, substantializing those abstract resources in concrete connections.
+
+Since we didn't give _next()_ an argument, it defaulted to `__inbound`. That means the "borrowers" are client connections from _curl_. That's why the targets were not rotating for one go of _curl_. It only rotated for different runs of _curl_.
 
 ## Summary
 
