@@ -36,6 +36,7 @@ module.exports = {
       options: {
         name: `doc`,
         path: `${__dirname}/docs/`,
+        ignore: [`**/guides/*`],
       },
     },
     {
