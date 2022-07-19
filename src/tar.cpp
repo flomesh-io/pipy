@@ -58,9 +58,9 @@ Tarball::Tarball(const char *data, size_t size) {
 
     if (type && type != '0' && type != '5' && type != 'x') throw std::runtime_error("unsupported file type in tarball");
 
-    int sum = 8 * ' ';
-    for (int i = 0; i < 148; i++) sum += (unsigned char)ptr[i];
-    for (int i = 148 + 8; i < 512; i++) sum += (unsigned char)ptr[i];
+    // int sum = 8 * ' ';
+    // for (int i = 0; i < 148; i++) sum += (unsigned char)ptr[i];
+    // for (int i = 148 + 8; i < 512; i++) sum += (unsigned char)ptr[i];
 
     if (type == 'x') {
       auto p = ptr + 512;

@@ -1,8 +1,8 @@
 ((
   router = new algo.URLRouter({
-    '/hi/*': 'localhost:8080',
-    '/echo': 'localhost:8081',
-    '/ip/*': 'localhost:8082',
+    '/hi/*': new algo.RoundRobinLoadBalancer(['localhost:8080', 'localhost:8082']),
+    '/echo': new algo.RoundRobinLoadBalancer(['localhost:8081']),
+    '/ip/*': new algo.RoundRobinLoadBalancer(['localhost:8082']),
   }),
 
 ) => pipy({
@@ -17,13 +17,13 @@
         _target = router.find(
           msg.head.headers.host,
           msg.head.path,
-        )
+        )?.next?.()
       )
     )
     .branch(
       () => Boolean(_target), (
         $=>$.muxHTTP(() => _target).to(
-          $=>$.connect(() => _target)
+          $=>$.connect(() => _target.id)
         )
       ), (
         $=>$.replaceMessage(

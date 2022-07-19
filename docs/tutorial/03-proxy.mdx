@@ -52,7 +52,7 @@ Therefore, pipelines connected to downstream clients have a many-to-many relatio
 
 ### Filter: demuxHTTP()
 
-In our example, a _port pipeline_ gulps incoming data as a sequence of [_Data_](/reference/api/Data) events, each holding a small chunk from the TCP stream. What **demuxHTTP()** does is _"decode"_ and _"demux"_ that TCP stream into separate HTTP messages, enclose each of them between a pair of [_MessageStart_](/reference/api/MessageStart) and [_MessageEnd_](/reference/api/MessageEnd) events, before feeding each of them into a separate sub-pipeline for processing.
+In our example, a _port pipeline_ gulps incoming data as a sequence of [_Data_](/reference/api/Data) events, each holding a small chunk from the TCP stream. What **demuxHTTP()** does is _"decode"_ and _"demux"_ that TCP stream into separate HTTP messages, enclose each of them between a pair of [_MessageStart_](/reference/api/MessageStart) and [_MessageEnd_](/reference/api/MessageEnd) events, before feeding each of them into a dedicated sub-pipeline for processing.
 
 But that's not the end of the stroy yet. Each sub-pipeline will eventually have a message outputted as its response. Output messages coming out of the end of all sub-pipelines are collected by **demuxHTTP()**. They are then _"encoded"_ and _"muxed"_ into one single TCP stream before going back to the client.
 
@@ -60,11 +60,13 @@ As you can see, although the filter is named _"demuxHTTP"_, but it really perfor
 
 ### Filter: muxHTTP()
 
-The opposite to **demuxHTTP()** is **muxHTTP()**. Unlike **demuxHTTP()** spawning multiple sub-pipelines, **muxHTTP()** _shares_ a sub-pipeline with other **muxHTTP()** filters.
+The opposite to **demuxHTTP()** is **muxHTTP()**. Unlike **demuxHTTP()** spawning multiple sub-pipelines, **muxHTTP()** _shares_ a sub-pipeline with other **muxHTTP()** instances.
 
-The filter accepts an optional parameter for deciding what other **muxHTTP()** filters it shares sub-pipeline with. When two **muxHTTP()** filters' parameters have the same value (or return the same value if they're functions), they'll share the same sub-pipeline.
+The filter accepts an optional parameter `group` for deciding what other **muxHTTP()** instances it shares sub-pipeline with. When two **muxHTTP()** instances from the same pipeline layout have the same `group` value (or return the same value if `group` is a function), they'll share the same sub-pipeline.
 
-By default, the parameter is `__inbound`, which is a built-in _context variable_ representing the current downstream connection. So by default, all **muxHTTP()** filters working for the same downstream connection will share one single sub-pipeline.
+By default, `group` is `__inbound`, which is a built-in _context variable_ representing the current downstream connection. So by default, all **muxHTTP()** filters working for the same downstream connection will share one single sub-pipeline.
+
+> Note that this "group sharing" is only between **muxHTTP()** instances coming from the same place in the same pipeline layout. In 2 different pipeline layouts, or 2 different places in one pipeline layout, **muxHTTP()** instances will never share sub-pipelines.
 
 Same as **demuxHTTP()**, although it's named "muxHTTP", but really it also _demuxes_ responses from the end of the shared sub-pipeline as well as _muxing_ requests to it.
 

@@ -141,10 +141,14 @@ class HashingLoadBalancer {
   select() {}
 
   /**
-   * 
    * @param {string} target 
    */
   deselect(target) {}
+
+  /**
+   * @returns {Object}
+   */
+  next() {}
 }
 
 /**
@@ -169,10 +173,14 @@ class RoundRobinLoadBalancer {
   select() {}
 
   /**
-   * 
    * @param {string} target 
    */
   deselect(target) {}
+
+  /**
+   * @returns {Object}
+   */
+  next() {}
 }
 
 /**
@@ -197,10 +205,14 @@ class LeastWorkLoadBalancer {
   select() {}
 
   /**
-   * 
    * @param {string} target 
    */
   deselect(target) {}
+
+  /**
+   * @returns {Object}
+   */
+  next() {}
 }
 
 /**

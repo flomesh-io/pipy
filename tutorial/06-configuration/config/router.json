@@ -1,7 +1,0 @@
-{
-  "routes": {
-    "/hi/*": "localhost:8080",
-    "/echo": "localhost:8081",
-    "/ip/*": "localhost:8082"
-  }
-}

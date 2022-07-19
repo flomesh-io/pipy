@@ -2,81 +2,163 @@
 title: 02 回显
 ---
 
+import PlusIcon from '@material-ui/icons/AddSharp'
+import FlagIcon from '@material-ui/icons/FlagSharp'
 import PlayIcon from '@material-ui/icons/PlayArrowSharp'
 import RestartIcon from '@material-ui/icons/ReplaySharp'
+import SaveIcon from '@material-ui/icons/SaveSharp'
 import StopIcon from '@material-ui/icons/StopSharp'
 
-看到了这里应该已经实现了简单 Pipy 服务返回 *“Hello world”*。在这篇教程中，将学习如何返回动态内容。
+现在，您已经成功运行了一个简单的 HTTP 服务器来打招呼。在教程的这个部分，您将学习如何让服务器来响应动态的内容。
+
+## 使用集成开发环境（IDE）
+
+从本章开始，我们的脚步将变得越来越复杂，因为我们将添加新的功能给它。很快，一行代码将不再能够很好地满足我们的需要。我们最好开始使用 _文件_ 来组织我们的脚本，以便有更好的维护性和可读性。
+
+您可以使用任意的文本编辑器来撰写您的脚本，但是在本教程中，我们将使用和 Pipy 一起的内置集成开发环境（IDE）。它提供了自动补全和 [Pipy API](/reference/api) 文档。同时它还在您键入代码时会可视化您的管道布局。
+
+### Pipy 仓库
+
+使用内置的 IDE，您正在编辑的文件会被存储在一个被称之为 _"Pipy 仓库"_ 的虚拟文件系统里面。存储在这个仓库里面的脚本能够被共享给远程的 Pipy 实例。用这种方式，您能够部署一个 Pipy _工作者_ 集群，并且从仓库中远程地控制它们。
+
+当不被用作远程集群控制器时，Pipy 仓库还能够开启 Pipy 本地工作者来进行开发和调试。这就是我们本教程所要关注的焦点。
+
+> 默认地，Pipy 仓库只在内存中存储文件。所以当它退出时，文件也就随之消失了。您也可以让文件保存在一个本地数据库里面。关于这方面的更多信息，请参阅 [Pipy Repo](https://flomesh.io/docs/en/operating/repo)。
+
+首先，让我在 _仓库模式_ 开启 Pipy。要想这么做，运行 `pipy`，同时不要带命令行参数：
+
+``` sh
+pipy
+```
+
+当 Pipy 启动并运行时，您将在终端中看到如下信息：
+
+```
+[INF] [admin] Starting admin service...
+[INF] [listener] Listening on TCP port 6060 at ::
+
+=============================================
+
+  You can now view Pipy GUI in the browser:
+
+    http://localhost:6060/
+
+=============================================
+```
+
+现在打开您最喜欢的 web 浏览器，导航到 [http://localhost:6060](http://localhost:6060)。您将看到内置的 _Pipy 管理 UI_。
+
+### 创建一个 Pipy 代码库
+
+现在让我们在仓库中重写上次那个 _"Hello World"_ 脚本。
+
+1. 点击 **New Codebase**。在弹出的窗口中，输入 `/hello` 作为 _代码库名称_，然后点击 **Create**。您将被带到代码编辑器来编辑新的代码。
+
+2. 点击上方的 <PlusIcon/> 来添加一个新文件。输入 `/hello.js` 做为文件名，然后点击 **Create**。
+
+3. 在左侧的 _文件列表_ 中选择新近创建的文件。点击 <FlagIcon/> 来使该文件成为代码库的入口。这意味着下次我们运行程序时，它将从计算这个特定的文件开始。
+
+4. 现在，继续前进，为 **hello.js** 撰写代码：
+
+``` js
+pipy()
+
+  .listen(8080)
+  .serveHTTP(new Message('Hi, there!\n'))
+```
+
+5. 点击 <SaveIcon/> 来保存您的文件。
+
+### 开始程序
+
+点击 <PlayIcon/> 来运行代码。_控制台窗口_ 将弹出，并且您会在终端中看到相同的输出。
+
+```
+[INF] [config]
+[INF] [config] Module 
+[INF] [config] =======
+[INF] [config]
+[INF] [config]  [Listen on 8080 at 0.0.0.0]
+[INF] [config]  ----->|
+[INF] [config]        |
+[INF] [config]       serveHTTP -->|
+[INF] [config]                    |
+[INF] [config]  <-----------------|
+[INF] [config]  
+[INF] [listener] Listening on TCP port 8080 at 0.0.0.0
+```
+
+如果您像上次那样做如下相同的测试，您将看到相同的结果：
+
+``` sh
+$ curl localhost:8080
+Hi, there!
+```
 
 ## 回显服务器
 
-首先，让监听在 `8081` 端口的服务返回请求里的内容：
+现在，让我们修改下脚本，多打开一个端口来重复您所说的任何内容：
 
-```js
+``` js
   pipy()
 
-  .listen(8080)
-    .serveHTTP(
-      new Message('Hi, there!\n')
-    )
+    .listen(8080)
+    .serveHTTP(new Message('Hi, there!\n'))
 
-+ .listen(8081)
-+   .serveHTTP(
-+     msg => new Message(msg.body)
-+   )
++   .listen(8081)
++   .serveHTTP(msg => new Message(msg.body))
 ```
 
-这里我们没有创建一个新的 Pipy 程序，而是扩展之前代码添加了一个新的*端口管道*。
+如您所见，我们并没有创建一个新的代码库。相反，我们仅仅拓展了上次的那个代码，多添加了一个 _端口管道布局_。
 
-新的管道监听 `8081` 端口并包含同样的 `serveHTTP` 过滤器。只是这次用来构造 `serveHTTP` 过滤器是一个函数，不是 [*Message*](/reference/api/Message) 对象。
+这个新的管道布局监听 8081 端口，包含了相同的独立过滤器 [serveHTTP()](/reference/api/Configuration/serveHTTP)。但是与上次不同，这次我们给 _serveHTTP()_ 的构造参数不是一个 [Message](/reference/api/Message) 对象，而是一个 **函数**。
 
-这个函数就是动态内容的“秘密成分”。
+这个 **函数** 对我们的动态服务器来说是一种秘密成分。
 
 ### 代码剖析
 
-在第 1 个管道中，`new Message()` 只会在 Pipy 启动的时候执行一次，随后不管请求多少次都返回同一个 `Message` 对象。因此，Pipy 响应的内容不变。
+在第一个管道布局中，`new Message()` 将仅在 Pipy 启动时的 _配置时刻_ 被计算一次。无论 Pipy _在运行时_ 接收到多少请求，都将只留给我们一个 _Message_ 对象。因此，来自 Pipy 的响应将永不会改变。
 
-在第 2 个管道中，`msg => new Message()` 同样只会在 Pipy 启动的时候执行一次，但与第一个不同，这里执行的结果是个函数，而不是 *Message* 对象。 在运行时，为每个请求都执行一次来返回一个新的 *Message* 对象。
+在第二个管道布局里，`msg => new Message()` 也仅在 _配置时刻_ 被计算一次，但不同于第一种情况，这个计算结果是一个 **函数**，而不是一个 _Message_ 对象。在运行时，函数将会被为每一个请求执行一次，从而得到一个消息在响应里面，每次这个消息都不相同。
 
-该函数有一个输入变量 `msg`，这个来自对 HTTP 请求的封装而成的 [*Message*](/reference/api/Message) 对象。在响应中同样要返回一个 *Message* 对象。这里简单的将请求体中的内容放在了新的 *Message* 对象中，这样就足以实现简单的 “回显服务器”。
+这个函数有个输入变量 `msg`，该变量是包裹在一个 [Message](/reference/api/Message) 对象里面的接收到的 HTTP 请求。该函数被预期会输出一个 _Message_ 作为响应。这里我们只是简单地抛出一个新的 _Message_，其内容和请求中的包体内容相同。对于我们这个简单的 "回显服务器" 而言这已然足够了。
 
 ### 测试
 
-测试前记得保存变更。如果此时 Pipy 扔在运行上个版本的代码，这里你可以：
+不要忘记在测试之前要保存您的修改。如果 Pipy 执意运行代码的旧版本，您能够做的：
 
-* 点击工具栏中的 <StopIcon/> 按钮，并点击 <PlayIcon/> 按钮运行新的代码。
-* 或者点击 <RestartIcon/> 按钮直接使用新的版本重启程序。
+1. 要么点击 <StopIcon/> 来停止旧版本，然后点击 <PlayIcon/> 来启动新版本。
 
-这次还是使用 `curl` 命令来测试：
+2. 要么点击 <RestartIcon/> 重启程序来一次性运行全部新版本。
 
-```sh
+再次地，我们将做一个使用 `curl` 的命令行测试：
+
+``` sh
 curl localhost:8081 -d 'hello'
 ```
 
-可以看到：
+您将看到：
 
 ```
 hello
 ```
 
-## 回显更多内容
+棒极了！
 
-这里有点像“鹦鹉学舌”。现在我们在请求内容的基础上添加更多的内容：
+## 更多回显
 
-```js
+其实我们可以做的更多而不是仅仅当一只学舌的 "鹦鹉"。现在让我们响应的不仅仅是客户端所说的，而且还有他或者她的位置，我们可以做到吗？
+
+``` js
   pipy()
 
-  .listen(8080)
-    .serveHTTP(
-      new Message('Hi, there!\n')
-    )
+    .listen(8080)
+    .serveHTTP(new Message('Hi, there!\n'))
 
-  .listen(8081)
-    .serveHTTP(
-      msg => new Message(msg.body)
-    )
+    .listen(8081)
+    .serveHTTP(msg => new Message(msg.body))
 
-+ .listen(8082)
++   .listen(8082)
 +   .serveHTTP(
 +     msg => new Message(
 +       `You are requesting ${msg.head.path} from ${__inbound.remoteAddress}\n`
@@ -84,43 +166,45 @@ hello
 +   )
 ```
 
-同样在前面版本的基础上进行扩展。这次新的管道监听在 `8082` 端口，使用了同样的过滤器但不同的函数作为构造参数。
+再次地，我们在我们已经做到的基础上添加东西。这次，一个新的管道布局监听在端口 8082，使用相同的过滤器 _serveHTTP()_ 但是不同的函数。
 
 ### 代码剖析
 
-这次使用 JavaScript 的[模板字符串](https://developer.mozilla.org/zh-CN/docs/Web/JavaScript/Reference/Template_literals) 来动态组装返回的内容。模板中包含了 2 个动态的部分：
-* `msg.head.path` 这是请求的 URI
-* `__inbound.remoteAddress` 是客户端的 ip 地址
+这次我们将返回一些动态的组合文本，我们使用了 JavaScript 的 [_template string_](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Template_literals)。在模板字符串里，我们有两个可变部分。
 
-变量 `__inbound` 是一个内置的全局对象，包含了入站连接的地址和端口信息。虽然是一个全局变量，但是在处理不同连接的并发管道间，其值是不同的。
+* `msg.head.path` 是来自 HTTP 请求的被请求 URI
+* `__inbound.remoteAddress` 是客户端的 IP 地址
 
-对于那些习惯于在整个程序中具有共享状态的全局变量的人来说，这可能是违反直觉的。有关更深入的解释，请参阅[概念中的上下文](/intro/concepts#上下文)。
+变量 `__inbound` 是一个内置的 _上下文变量_，其包含当前入站连接的地址/端口信息。它被称为一个 _上下文变量_ 是因为它的值依赖于上下文。跨越处理并发入站连接的并发管道，它将有不同的数值，它们中的每一个都工作在一个不同的 _上下文_ 里面。
+
+> 对于 _上下文变量_ 的深度解释，请参阅 _概念_ 里面 [上下文](/intro/concepts#上下文)。
 
 ### 测试
 
-命令行中执行：
+现在如果您在终端说：
 
-```sh
+``` sh
 curl localhost:8082/hello
 ```
 
-会看到：
+您将得到：
 
-```sh
-You are requesting /hello from ::1
 ```
-
-`::1` 是 *localhost* 的 IPv6 格式。
+You are requesting /hello from 127.0.0.1
+```
 
 ## 总结
 
-在这个教程中，可以了解到如何在 Pipy 程序的响应中返回动态内容。同样，也体验了 Pipy 中*变量* 的工作方式。
+在这部分的教程里，您学到了对于客户端请求如何在响应中生成动态内容。您也尝试了一下 _上下文变量_ 如何在 Pipy 中工作。
 
-### 收获
+看到了这里应该已经实现了简单 Pipy 服务返回 *“Hello world”*。在这篇教程中，将学习如何返回动态内容。
 
-1. 过滤器的构造参数，只有在 Pipy 启动的时候执行一次，运行时只有*“静态”*值。要想实现“动态”，需要提供可以输出动态值的函数。
-2. 全局变量在并发的管道中的状态是隔离的。内置变量之一的 `__inbound` 包含了当前入站连接的地址和端口信息。
+### 要点
+
+1. 过滤器参数只能在 _配置时刻_ 被计算一次，所以在 _运行时_ 他们有一个静态值。要使他们动态起来，他们需要称为 "静态的" "函数"，从而可以输出 "动态的" 值。
+
+2. _上下文变量_ 隔离了并发管道之间的状态。内置上下文变量之一叫 `__inbound`，其包含了当前进入连接的地址/端口信息。
 
 ### 接下来
 
-如你所见 Pipy 非常适合快速启动临时服务器，但这并不是 Pipy 的主要用途。我们主要将 Pipye 作为网络代理使用。这也是我们接下来要研究的内容。
+我们已经看到如何方便地让 Pipy 快速成为一个 ad-hoc 服务器，但是这些都不是 Pipy 的主营业务。我们使用 Pipy 主要还是作为网络代理。这就是接下来我们要探究的事情。

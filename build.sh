@@ -202,7 +202,7 @@ if $BUILD_BINARY; then
   if $PACKAGE_OUTPUTS; then
     mkdir -p ${PIPY_DIR}/buildroot/usr/local/bin
     cp -a ${PIPY_DIR}/bin/pipy ${PIPY_DIR}/buildroot/usr/local/bin/pipy
-    tar zcv -f ${PKG_NAME}-${RELEASE_VERSION}-${OS_NAME}-${OS_ARCH}.tar.gz -C ${PIPY_DIR}/buildroot .
+    tar zcv -f ${PKG_NAME}-${RELEASE_VERSION}-${OS_NAME}-${OS_ARCH}.tar.gz -C ${PIPY_DIR}/buildroot usr/local/bin/pipy
     rm -rf ${PIPY_DIR}/buildroot
   fi
 fi

@@ -1,0 +1,138 @@
+---
+title: "Part 5: Loading Balancing"
+---
+
+Now we have a proxy that can route requests to different servers. Another requirement to a proxy coming up next would be _load balance_ requests across multiple servers.
+
+## RoundRobinLoadBalancer
+
+Pipy provides a number of built-in classes for load balancing, each of which implemented a specific load balancing algorithm. They can all be used in the same way. In this tutorial, we'll demonstrate how [algo.RoundRobinLoadBalancer](/reference/api/algo/RoundRobinLoadBalancer) can be used to build a _"round-robin"_ load balancer.
+
+To construct a _RoundRobinLoadBalancer_ object, you need a list of targets together with their weights:
+
+``` js
+new algo.RoundRobinLoadBalancer({
+  'localhost:8080': 50,
+  'localhost:8081': 25,
+  'localhost:8082': 25,
+})
+```
+
+Or, if you prefer workload to be distributed evenly, you can simply give it an array of targets, ignoring the weights:
+
+``` js
+new algo.RoundRobinLoadBalancer([
+  'localhost:8080',
+  'localhost:8081',
+  'localhost:8082',
+])
+```
+
+With that _RoundRobinLoadBalancer_, each time you call its [next()](/reference/api/algo/RoundRobinLoadBalancer/next) method, it will give you one of the targets wrapped in an object, in a round-robin fashion.
+
+We can see how it works in a one-liner script like this:
+
+``` sh
+$ pipy -e "new Array(10).fill(new algo.RoundRobinLoadBalancer(['A','B','C'])).map(b => b.next().id)" 2> /dev/null
+[object pjs::Array]
+["A","B","C","A","B","C","A","B","C","A"]
+```
+
+### Add in load balancers
+
+Our current routing script maps requests directly to string values representing server addresses. Now we need to add one layer of indirection in between: map a request to a _RoundRobinLoadBalancer_ first, before querying the balancer for a concrete target.
+
+``` js
+  ((
+    router = new algo.URLRouter({
+-     '/hi/*': 'localhost:8080',
+-     '/echo': 'localhost:8081',
+-     '/ip/*': 'localhost:8082',
++     '/hi/*': new algo.RoundRobinLoadBalancer(['localhost:8080', 'localhost:8082']),
++     '/echo': new algo.RoundRobinLoadBalancer(['localhost:8081']),
++     '/ip/*': new algo.RoundRobinLoadBalancer(['localhost:8082']),
+    }),
+
+  ) => pipy({
+    _target: undefined,
+  })
+```
+
+Now when we call `router.find()`, we won't get a server address any more. Instead, we'll get a _RoundRobinLoadBalancer_ object. To get the server address that **connect()** needs, we call [next()](/reference/api/algo/RoundRobinLoadBalancer/next) on the balancer.
+
+``` js
+    .handleMessageStart(
+      msg => (
+        _target = router.find(
+          msg.head.headers.host,
+          msg.head.path,
+-       )
++       )?.next?.()
+      )
+    )
+```
+
+Note that, since `router.find()` might return `undefined` when a route isn't found, so we're [optional chaining](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Operators/Optional_chaining) here so that `_target` gets a value of `undefined` silently in that case.
+
+What [RoundRobinLoadBalancer.next()](/reference/api/algo/RoundRobinLoadBalancer/next) returns is an internal object with a property `id` holding one _target_ in the target list given at construction time. We use that for the server address we are connecting to.
+
+``` js
+        $=>$.muxHTTP(() => _target).to(
+-         $=>$.connect(() => _target)
++         $=>$.connect(() => _target.id)
+        )
+```
+
+That's all we need to do for a simple load balancer.
+
+## Test in action
+
+Now let's do some tests.
+
+``` sh
+$ curl localhost:8000/hi
+Hi, there!
+$ curl localhost:8000/hi
+You are requesting /hi from ::ffff:127.0.0.1
+$ curl localhost:8000/hi
+Hi, there!
+$ curl localhost:8000/hi
+You are requesting /hi from ::ffff:127.0.0.1
+```
+
+You can see that each time you visit path "/hi", the request is directed to a different target, responding with a different message. What about sending two requests on one single connection?
+
+``` sh
+$ curl localhost:8000/hi localhost:8000/hi
+Hi, there!
+Hi, there!
+$ curl localhost:8000/hi localhost:8000/hi
+You are requesting /hi from 127.0.0.1
+You are requesting /hi from 127.0.0.1
+```
+
+As you can see, the targets are not rotating for a specific client connection. It only rotates across different downstream connections. How does that work behind the scene?
+
+## Connection pool
+
+Under the hood, RoundRobinLoadBalancer has a _resource pool_ for each target it distributes workloads to. We usually use those pools as _connection pools_ when load balancing to upstream servers, which is also the most common use case for a proxy. RoundRobinLoadBalancer keeps track of _resource allocations_ from the pools. When a resource is requested, it _borrows_ a free resource from a pool. When a resource is no longer needed, it _returns_ the resource back to the pool. Most importantly, the balancer guarantees that the same _borrower_ won't get more than one resources from the same balancer when calling [next()](/reference/api/RoundRobinLoadBalancer/next) more than once.
+
+How does RoundRobinLoadBalancer know who is the borrower? That's what we give to [next()](/reference/api/RoundRobinLoadBalancer/next) as the first argument when calling it. And by default, the argument is from the built-in context variable `__inbound`, which represents the current downstream connection.
+
+That's also the reason why _next()_ returns an object instead of the selected target itself. The object is actually a representative of a _resource_. We can have multiple resources (or connections, in our case) for multiple borrowers (or clients), all coming from the same target (or server). Also, **muxHTTP()** uses this resource object as a _group sharing discriminator_ to bind a sub-pipeline to an allocated resource, substantializing those abstract resources in concrete connections.
+
+Since we didn't give _next()_ an argument, it defaulted to `__inbound`. That means the "borrowers" are client connections from _curl_. That's why the targets were not rotating for one go of _curl_. It only rotated for different runs of _curl_.
+
+## Summary
+
+In this part of the tutorial, you've learned to write a simple round-robin load-balancer.
+
+### Takeaways
+
+1. Use [algo.RoundRobinLoadBalancer](/reference/api/algo/RoundRobinLoadBalancer) (or a few others similiar to it) to distribute workloads across multiple targets with respect to their weights.
+
+2. Use [algo.URLRouter](/reference/api/algo/URLRouter) to map URL-like paths to values of any type, not necessarily strings representing server addresses.
+
+### What's next?
+
+As our program gets more functionalities, we'll have more and more parameters for controlling it, such as the port we listen on and the routing table, etc. It would be more nice and tidy to have all these parameters in a dedicated _"configuration file"_. That's what we are going to do next.
