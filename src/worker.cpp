@@ -519,7 +519,6 @@ bool Worker::start() {
 }
 
 void Worker::stop() {
-  m_solved_files.clear();
   for (auto *reader : m_readers) delete reader;
   for (auto *task : m_tasks) delete task;
   for (auto *mod : m_modules) if (mod) mod->unload();
