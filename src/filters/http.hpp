@@ -336,7 +336,7 @@ class Demux :
 public:
   struct Options : public http2::Endpoint::Options {
     size_t buffer_size = DATA_CHUNK_SIZE;
-    Options();
+    Options() {}
     Options(pjs::Object *options);
   };
 

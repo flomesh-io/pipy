@@ -36,14 +36,14 @@ namespace pipy {
 
 uint64_t Context::s_context_id = 0;
 
-Context::Context()
-  : Context(nullptr, nullptr, nullptr)
+Context::Context(Context *base)
+  : Context(base, nullptr, nullptr)
 {
 }
 
-Context::Context(ContextGroup *group, Worker *worker, pjs::Object *global, ContextData *data)
+Context::Context(Context *base, Worker *worker, pjs::Object *global, ContextData *data)
   : pjs::Context(global, data ? data->elements() : nullptr)
-  , m_group(group ? group : new ContextGroup())
+  , m_group(base ? base->group() : new ContextGroup())
   , m_worker(worker)
   , m_data(data)
 {
@@ -55,6 +55,7 @@ Context::Context(ContextGroup *group, Worker *worker, pjs::Object *global, Conte
       }
     }
   }
+  if (base) m_inbound = base->m_inbound;
   if (!++s_context_id) s_context_id++;
   m_id = s_context_id;
   Log::debug("[context  %p] ++ id = %llu", this, m_id);

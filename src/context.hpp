@@ -47,7 +47,7 @@ class Context :
   public List<Context>::Item
 {
 public:
-  Context();
+  Context(Context *base = nullptr);
 
   auto id() const -> uint64_t { return m_id; }
   auto data(int i) const -> ContextDataBase* { return m_data->at(i)->as<ContextDataBase>(); }
@@ -63,7 +63,7 @@ protected:
 private:
   typedef pjs::PooledArray<pjs::Ref<pjs::Object>> ContextData;
 
-  Context(ContextGroup *group, Worker *worker, pjs::Object *global, ContextData *data = nullptr);
+  Context(Context *base, Worker *worker, pjs::Object *global, ContextData *data = nullptr);
 
   uint64_t m_id;
   ContextGroup* m_group;

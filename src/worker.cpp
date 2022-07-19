@@ -386,12 +386,7 @@ auto Worker::new_runtime_context(Context *base) -> Context* {
       data->at(i) = mod->new_context_data(proto);
     }
   }
-  auto ctx = new Context(
-    base ? base->group() : nullptr,
-    this, m_global_object, data
-  );
-  if (base) ctx->m_inbound = base->m_inbound;
-  return ctx;
+  return new Context(base, this, m_global_object, data);
 }
 
 bool Worker::solve(pjs::Context &ctx, pjs::Str *filename, pjs::Value &result) {

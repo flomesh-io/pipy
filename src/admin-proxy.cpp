@@ -61,7 +61,10 @@ private:
   }
 
   virtual void process(Event *evt) override {
-    if (auto start = evt->as<MessageStart>()) {
+    if (m_pipeline) {
+      Filter::output(evt, m_pipeline->input());
+
+    } else if (auto start = evt->as<MessageStart>()) {
       auto head = start->head()->as<http::RequestHead>();
       if (!m_pipeline) {
         auto &path = head->path()->str();
@@ -69,22 +72,19 @@ private:
           utils::starts_with(path, "/api/") ||
           utils::starts_with(path, "/repo/")
         ) {
-          m_pipeline = sub_pipeline(0, false, output());
+          m_pipeline = sub_pipeline(0, false, Filter::output());
         }
       }
 
       if (m_pipeline) {
-        output(evt, m_pipeline->input());
+        Filter::output(evt, m_pipeline->input());
       } else {
         m_head = head;
       }
 
-    } else if (m_pipeline) {
-      output(evt, m_pipeline->input());
-
     } else if (evt->is<MessageEnd>() || evt->is<StreamEnd>()) {
       if (m_head) {
-        output(m_proxy->handle(m_head));
+        Filter::output(m_proxy->handle(m_head));
       }
     }
   }
