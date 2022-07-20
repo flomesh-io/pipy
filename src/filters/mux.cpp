@@ -29,6 +29,8 @@
 #include "utils.hpp"
 #include "log.hpp"
 
+#include <limits>
+
 namespace pipy {
 
 //
@@ -438,7 +440,7 @@ void MuxBase::SessionManager::recycle() {
     [this]() {
       InputContext ic;
       m_recycling = false;
-      auto now = utils::now();
+      auto now = m_has_shutdown ? std::numeric_limits<double>::infinity() : utils::now();
       auto c = m_recycle_clusters.head();
       while (c) {
         auto cluster = c; c = c->next();
