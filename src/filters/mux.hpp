@@ -58,21 +58,24 @@ public:
 
 protected:
   class Session;
+  class SessionCluster;
 
   MuxBase();
   MuxBase(pjs::Function *group);
   MuxBase(pjs::Function *group, const Options &options);
+  MuxBase(pjs::Function *group, pjs::Function *options);
   MuxBase(const MuxBase &r);
 
   virtual void reset() override;
   virtual void shutdown() override;
   virtual void process(Event *evt) override;
-  virtual auto on_new_session() -> Session* = 0;
+  virtual auto on_new_cluster(pjs::Object *options) -> SessionCluster* = 0;
 
 private:
-  class SessionCluster;
   class SessionManager;
 
+  Options m_options;
+  pjs::Ref<pjs::Function> m_options_f;
   pjs::Ref<SessionManager> m_session_manager;
   pjs::Ref<Session> m_session;
   pjs::Ref<pjs::Function> m_group;
@@ -134,8 +137,6 @@ protected:
     friend class MuxBase;
   };
 
-private:
-
   //
   // MuxBase::SessionCluter
   //
@@ -145,11 +146,14 @@ private:
     public pjs::Object::WeakPtr::Watcher,
     public List<SessionCluster>::Item
   {
-    SessionCluster(SessionManager *manager)
-      : m_manager(manager) {}
+  protected:
+    SessionCluster(MuxBase *mux, pjs::Object *options);
+    virtual auto session() -> Session* = 0;
+    virtual void free() = 0;
 
+  private:
     void reset();
-    auto alloc(int max_share_count) -> Session*;
+    auto alloc() -> Session*;
     void free(Session *session);
     void discard(Session *session);
 
@@ -157,35 +161,33 @@ private:
     pjs::Value m_key;
     pjs::WeakRef<pjs::Object> m_weak_key;
     List<Session> m_sessions;
+    double m_max_idle;
+    int m_max_queue;
     bool m_recycle_scheduled = false;
 
     void sort(Session *session);
-    void recycle(double now, double max_idle);
+    void recycle(double now);
 
     virtual void on_weak_ptr_gone() override { reset(); }
 
     friend class MuxBase;
   };
 
+private:
+
   //
   // MuxBase::SessionManager
   //
 
   class SessionManager : public pjs::RefCount<SessionManager> {
-    SessionManager(MuxBase *mux)
-      : m_mux(mux) {}
-
     ~SessionManager();
 
-    auto get(const pjs::Value &key) -> Session*;
+    auto get(MuxBase *mux, const pjs::Value &key) -> Session*;
     void shutdown();
 
-    MuxBase* m_mux;
     std::unordered_map<pjs::Value, SessionCluster*> m_clusters;
     std::unordered_map<pjs::WeakRef<pjs::Object>, SessionCluster*> m_weak_clusters;
     List<SessionCluster> m_recycle_clusters;
-    double m_max_idle = 10;
-    int m_max_queue = 0;
     Timer m_recycle_timer;
     bool m_recycling = false;
     bool m_has_shutdown = false;
@@ -257,6 +259,7 @@ public:
   MuxQueue();
   MuxQueue(pjs::Function *group);
   MuxQueue(pjs::Function *group, const Options &options);
+  MuxQueue(pjs::Function *group, pjs::Function *options);
 
 protected:
   MuxQueue(const MuxQueue &r);
@@ -264,7 +267,7 @@ protected:
 
   virtual auto clone() -> Filter* override;
   virtual void dump(Dump &d) override;
-  virtual auto on_new_session() -> MuxBase::Session* override;
+  virtual auto on_new_cluster(pjs::Object *options) -> MuxBase::SessionCluster* override;
 
   //
   // MuxQueue::Session
@@ -281,6 +284,19 @@ protected:
 
     friend class MuxQueue;
   };
+
+  //
+  // MuxQueue::SessionCluster
+  //
+
+  class SessionCluster : public pjs::Pooled<SessionCluster, MuxBase::SessionCluster> {
+    using pjs::Pooled<SessionCluster, MuxBase::SessionCluster>::Pooled;
+
+    virtual auto session() -> Session* override { return new Session(); }
+    virtual void free() override { delete this; }
+
+    friend class MuxQueue;
+  };
 };
 
 //
@@ -292,6 +308,7 @@ public:
   Mux();
   Mux(pjs::Function *group);
   Mux(pjs::Function *group, const Options &options);
+  Mux(pjs::Function *group, pjs::Function *options);
 
 private:
   Mux(const Mux &r);
@@ -300,7 +317,7 @@ private:
   virtual auto clone() -> Filter* override;
   virtual void process(Event *evt) override;
   virtual void dump(Dump &d) override;
-  virtual auto on_new_session() -> MuxBase::Session* override;
+  virtual auto on_new_cluster(pjs::Object *options) -> MuxBase::SessionCluster* override;
 
   //
   // Mux::Session
@@ -311,6 +328,19 @@ private:
     virtual void close_stream(EventFunction *stream) override;
 
     friend class Stream;
+  };
+
+  //
+  // Mux::SessionCluster
+  //
+
+  class SessionCluster : public pjs::Pooled<SessionCluster, MuxBase::SessionCluster> {
+    using pjs::Pooled<SessionCluster, MuxBase::SessionCluster>::Pooled;
+
+    virtual auto session() -> MuxBase::Session* override { return new Session(); }
+    virtual void free() override { delete this; }
+
+    friend class Mux;
   };
 
   //

@@ -27,6 +27,7 @@
 #include "pipeline.hpp"
 #include "input.hpp"
 #include "utils.hpp"
+#include "log.hpp"
 
 namespace pipy {
 
@@ -35,10 +36,12 @@ namespace pipy {
 //
 
 MuxBase::Options::Options(pjs::Object *options) {
-  Value(options, "maxIdle")
+  static pjs::ConstStr s_max_idle("maxIdle");
+  static pjs::ConstStr s_max_queue("maxQueue");
+  Value(options, s_max_idle)
     .get_seconds(max_idle)
     .check_nullable();
-  Value(options, "maxQueue")
+  Value(options, s_max_queue)
     .get(max_queue)
     .check_nullable();
 }
@@ -48,26 +51,34 @@ MuxBase::Options::Options(pjs::Object *options) {
 //
 
 MuxBase::MuxBase()
-  : m_session_manager(new SessionManager(this))
+  : m_session_manager(new SessionManager())
 {
 }
 
 MuxBase::MuxBase(pjs::Function *group)
-  : m_session_manager(new SessionManager(this))
+  : m_session_manager(new SessionManager())
   , m_group(group)
 {
 }
 
 MuxBase::MuxBase(pjs::Function *group, const Options &options)
-  : m_session_manager(new SessionManager(this))
+  : m_options(options)
+  , m_session_manager(new SessionManager())
   , m_group(group)
 {
-  m_session_manager->m_max_idle = options.max_idle;
-  m_session_manager->m_max_queue = options.max_queue;
+}
+
+MuxBase::MuxBase(pjs::Function *group, pjs::Function *options)
+  : m_options_f(options)
+  , m_session_manager(new SessionManager())
+  , m_group(group)
+{
 }
 
 MuxBase::MuxBase(const MuxBase &r)
   : Filter(r)
+  , m_options(r.m_options)
+  , m_options_f(r.m_options_f)
   , m_session_manager(r.m_session_manager)
   , m_group(r.m_group)
 {
@@ -101,7 +112,8 @@ void MuxBase::process(Event *evt) {
       if (m_session_key.is_undefined()) {
         m_session_key.set(context()->inbound());
       }
-      session = m_session_manager->get(m_session_key);
+      session = m_session_manager->get(this, m_session_key);
+      if (!session) return;
       m_session = session;
     }
 
@@ -235,6 +247,17 @@ void MuxBase::Session::on_reply(Event *evt) {
 // MuxBase::SessionCluster
 //
 
+MuxBase::SessionCluster::SessionCluster(MuxBase *mux, pjs::Object *options) {
+  if (options) {
+    Options opts(options);
+    m_max_idle = opts.max_idle;
+    m_max_queue = opts.max_queue;
+  } else {
+    m_max_idle = mux->m_options.max_idle;
+    m_max_queue = mux->m_options.max_queue;
+  }
+}
+
 void MuxBase::SessionCluster::reset() {
   auto *s = m_sessions.head();
   while (s) {
@@ -243,7 +266,8 @@ void MuxBase::SessionCluster::reset() {
   }
 }
 
-auto MuxBase::SessionCluster::alloc(int max_share_count) -> Session* {
+auto MuxBase::SessionCluster::alloc() -> Session* {
+  auto max_share_count = m_max_queue;
   auto *s = m_sessions.head();
   while (s) {
     if (max_share_count <= 0 || s->m_share_count < max_share_count) {
@@ -253,7 +277,7 @@ auto MuxBase::SessionCluster::alloc(int max_share_count) -> Session* {
     }
     s = s->next();
   }
-  s = m_manager->m_mux->on_new_session();
+  s = session();
   s->m_cluster = this;
   s->retain();
   m_sessions.unshift(s);
@@ -322,11 +346,12 @@ void MuxBase::SessionCluster::sort(Session *session) {
     } else {
       m_manager->m_clusters.erase(m_key);
     }
-    delete this;
+    free();
   }
 }
 
-void MuxBase::SessionCluster::recycle(double now, double max_idle) {
+void MuxBase::SessionCluster::recycle(double now) {
+  auto max_idle = m_max_idle * 1000;
   auto s = m_sessions.head();
   while (s) {
     auto session = s; s = s->next();
@@ -341,11 +366,11 @@ void MuxBase::SessionCluster::recycle(double now, double max_idle) {
 //
 
 MuxBase::SessionManager::~SessionManager() {
-  for (const auto &p : m_clusters) delete p.second;
-  for (const auto &p : m_weak_clusters) delete p.second;
+  for (const auto &p : m_clusters) p.second->free();
+  for (const auto &p : m_weak_clusters) p.second->free();
 }
 
-auto MuxBase::SessionManager::get(const pjs::Value &key) -> Session* {
+auto MuxBase::SessionManager::get(MuxBase *mux, const pjs::Value &key) -> Session* {
   bool is_weak = (key.is_object() && key.o());
   SessionCluster *cluster = nullptr;
 
@@ -366,11 +391,27 @@ auto MuxBase::SessionManager::get(const pjs::Value &key) -> Session* {
     }
   }
 
-  if (cluster) {
-    return cluster->alloc(m_max_queue);
-  }
+  if (cluster) return cluster->alloc();
 
-  cluster = new SessionCluster(this);
+  try {
+    pjs::Value opts;
+    pjs::Object *options = nullptr;
+    if (auto f = mux->m_options_f.get()) {
+      if (!mux->eval(f, opts)) return nullptr;
+      if (!opts.is_object()) {
+        Log::error("[mux] options callback did not return an object");
+        return nullptr;
+      }
+      options = opts.o();
+    }
+
+    cluster = mux->on_new_cluster(options);
+    cluster->m_manager = this;
+
+  } catch (std::runtime_error &err) {
+    Log::error("[mux] %s", err.what());
+    return nullptr;
+  }
 
   if (is_weak) {
     cluster->m_weak_key = key.o();
@@ -381,7 +422,7 @@ auto MuxBase::SessionManager::get(const pjs::Value &key) -> Session* {
     m_clusters[key] = cluster;
   }
 
-  return cluster->alloc(m_max_queue);
+  return cluster->alloc();
 }
 
 void MuxBase::SessionManager::shutdown() {
@@ -398,12 +439,10 @@ void MuxBase::SessionManager::recycle() {
       InputContext ic;
       m_recycling = false;
       auto now = utils::now();
-      auto t = m_max_idle * 1000;
       auto c = m_recycle_clusters.head();
-      if (m_has_shutdown) now += t;
       while (c) {
         auto cluster = c; c = c->next();
-        cluster->recycle(now, t);
+        cluster->recycle(now);
       }
       recycle();
       release();
@@ -559,6 +598,11 @@ MuxQueue::MuxQueue(pjs::Function *group, const Options &options)
 {
 }
 
+MuxQueue::MuxQueue(pjs::Function *group, pjs::Function *options)
+  : MuxBase(group, options)
+{
+}
+
 MuxQueue::MuxQueue(const MuxQueue &r)
   : MuxBase(r)
 {
@@ -577,8 +621,8 @@ auto MuxQueue::clone() -> Filter* {
   return new MuxQueue(*this);
 }
 
-auto MuxQueue::on_new_session() -> MuxBase::Session* {
-  return new Session();
+auto MuxQueue::on_new_cluster(pjs::Object *options) -> MuxBase::SessionCluster* {
+  return new SessionCluster(this, options);
 }
 
 //
@@ -621,6 +665,11 @@ Mux::Mux(pjs::Function *group, const Options &options)
 {
 }
 
+Mux::Mux(pjs::Function *group, pjs::Function *options)
+  : MuxBase(group, options)
+{
+}
+
 Mux::Mux(const Mux &r)
   : MuxBase(r)
 {
@@ -646,8 +695,8 @@ void Mux::process(Event *evt) {
   output(evt);
 }
 
-auto Mux::on_new_session() -> MuxBase::Session* {
-  return new Session();
+auto Mux::on_new_cluster(pjs::Object *options) -> MuxBase::SessionCluster* {
+  return new SessionCluster(this, options);
 }
 
 //

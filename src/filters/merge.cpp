@@ -63,8 +63,8 @@ void Merge::process(Event *evt) {
   output(evt);
 }
 
-auto Merge::on_new_session() -> MuxBase::Session* {
-  return new Session();
+auto Merge::on_new_cluster(pjs::Object *options) -> MuxBase::SessionCluster* {
+  return new SessionCluster(this, options);
 }
 
 //

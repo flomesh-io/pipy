@@ -422,16 +422,18 @@ public:
   Mux();
   Mux(pjs::Function *group);
   Mux(pjs::Function *group, const Options &options);
+  Mux(pjs::Function *group, pjs::Function *options);
 
 private:
   Mux(const Mux &r);
   ~Mux();
 
   Options m_options;
+  pjs::Ref<pjs::Function> m_options_f;
 
   virtual auto clone() -> Filter* override;
   virtual void dump(Dump &d) override;
-  virtual auto on_new_session() -> MuxBase::Session* override;
+  virtual auto on_new_cluster(pjs::Object *options) -> MuxBase::SessionCluster* override;
 
   //
   // Mux::Session
@@ -468,6 +470,25 @@ private:
 
     void select_protocol();
     void upgrade_http2();
+
+    friend class Mux;
+  };
+
+  //
+  // Mux::SessionCluster
+  //
+
+  class SessionCluster : public pjs::Pooled<SessionCluster, MuxBase::SessionCluster> {
+    SessionCluster(Mux *mux, pjs::Object *options)
+      : pjs::Pooled<SessionCluster, MuxBase::SessionCluster>(mux, options)
+      , m_local_options(options)
+      , m_options(options ? m_local_options : mux->m_options) {}
+
+    virtual auto session() -> MuxBase::Session* override;
+    virtual void free() override { delete this; }
+
+    Options m_local_options;
+    Options& m_options;
 
     friend class Mux;
   };

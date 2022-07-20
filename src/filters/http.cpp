@@ -1358,9 +1358,16 @@ Mux::Mux(pjs::Function *group, const Options &options)
 {
 }
 
+Mux::Mux(pjs::Function *group, pjs::Function *options)
+  : pipy::MuxQueue(group, options)
+  , m_options_f(options)
+{
+}
+
 Mux::Mux(const Mux &r)
   : pipy::MuxQueue(r)
   , m_options(r.m_options)
+  , m_options_f(r.m_options_f)
 {
 }
 
@@ -1378,8 +1385,8 @@ auto Mux::clone() -> Filter* {
   return new Mux(*this);
 }
 
-auto Mux::on_new_session() -> MuxBase::Session* {
-  return new Session(m_options);
+auto Mux::on_new_cluster(pjs::Object *options) -> MuxBase::SessionCluster* {
+  return new SessionCluster(this, options);
 }
 
 //
@@ -1498,6 +1505,14 @@ void Mux::Session::upgrade_http2() {
     m_http2_muxer = new HTTP2Muxer(m_options);
     m_http2_muxer->open(static_cast<MuxBase::Session*>(this));
   }
+}
+
+//
+// Mux::SessionCluster
+//
+
+auto Mux::SessionCluster::session() -> MuxBase::Session* {
+  return new Session(m_options);
 }
 
 //

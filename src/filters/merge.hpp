@@ -45,7 +45,7 @@ private:
   virtual auto clone() -> Filter* override;
   virtual void process(Event *evt) override;
   virtual void dump(Dump &d) override;
-  virtual auto on_new_session() -> MuxBase::Session* override;
+  virtual auto on_new_cluster(pjs::Object *options) -> MuxBase::SessionCluster* override;
 
   //
   // Merge::Session
@@ -56,6 +56,19 @@ private:
     virtual void close_stream(EventFunction *stream) override;
 
     friend class Stream;
+  };
+
+  //
+  // Merge::SessionCluster
+  //
+
+  class SessionCluster : public pjs::Pooled<SessionCluster, MuxBase::SessionCluster> {
+    using pjs::Pooled<SessionCluster, MuxBase::SessionCluster>::Pooled;
+
+    virtual auto session() -> MuxBase::Session* override { return new Session(); }
+    virtual void free() override { delete this; }
+
+    friend class Merge;
   };
 
   //

@@ -269,15 +269,27 @@ void FilterConfigurator::merge(pjs::Function *group, pjs::Object *options) {
 }
 
 void FilterConfigurator::mux(pjs::Function *group, pjs::Object *options) {
-  require_sub_pipeline(append_filter(new Mux(group, options)));
+  if (options && options->is_function()) {
+    require_sub_pipeline(append_filter(new Mux(group, options->as<pjs::Function>())));
+  } else {
+    require_sub_pipeline(append_filter(new Mux(group, options)));
+  }
 }
 
 void FilterConfigurator::mux_queue(pjs::Function *group, pjs::Object *options) {
-  require_sub_pipeline(append_filter(new MuxQueue(group, options)));
+  if (options && options->is_function()) {
+    require_sub_pipeline(append_filter(new MuxQueue(group, options->as<pjs::Function>())));
+  } else {
+    require_sub_pipeline(append_filter(new MuxQueue(group, options)));
+  }
 }
 
 void FilterConfigurator::mux_http(pjs::Function *group, pjs::Object *options) {
-  require_sub_pipeline(append_filter(new http::Mux(group, options)));
+  if (options && options->is_function()) {
+    require_sub_pipeline(append_filter(new http::Mux(group, options->as<pjs::Function>())));
+  } else {
+    require_sub_pipeline(append_filter(new http::Mux(group, options)));
+  }
 }
 
 void FilterConfigurator::output(pjs::Function *output_f) {
