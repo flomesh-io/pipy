@@ -13,7 +13,7 @@
   _target: undefined,
 })
 
-  .listen(8000)
+  .listen(config.listen)
   .demuxHTTP().to(
     $=>$
     .handleMessageStart(
