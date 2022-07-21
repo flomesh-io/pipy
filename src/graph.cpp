@@ -222,8 +222,8 @@ protected:
           f.name = m;
           f.sub_type = Filter::Dump::BRANCH;
           f.out_type = Filter::Dump::OUTPUT_FROM_SUBS;
-          for (int i = 1; i < argc; i += 2) {
-            auto *b = cv(argv[i]);
+          for (int i = 0; i < argc; i += 2) {
+            auto *b = i + 1 < argc ? cv(argv[i+1]) : cv(argv[i]);
             if (b->t() == STRING) {
               f.subs.emplace_back();
               f.subs.back().name = b->s();
