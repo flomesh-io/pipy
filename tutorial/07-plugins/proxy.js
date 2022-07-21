@@ -1,19 +1,11 @@
-pipy()
+((
+  config = pipy.solve('config.js'),
 
-.export('proxy', {
-  __turnDown: false,
-})
+) => pipy()
 
-.listen(8000)
-  .demuxHTTP('request')
-
-.pipeline('request')
-  .use(
-    [
-      'plugins/router.js',
-      'plugins/default.js',
-    ],
-    'request',
-    'response',
-    () => __turnDown
+  .listen(config.listen)
+  .demuxHTTP().to(
+    $=>$.chain(config.plugins)
   )
+
+)()

@@ -1,39 +1,22 @@
-pipy({
-  _router: new algo.URLRouter({
-    '/hi/*': 'localhost:8080',
-    '/echo': 'localhost:8081',
-    '/ip/*': 'localhost:8082',
-  }),
+((
+  config = pipy.solve('config.js'),
+  router = new algo.URLRouter(config.routes),
 
-  _target: '',
-})
+) => pipy()
 
-.import({
-  __turnDown: 'proxy',
-})
+  .export('router', {
+    __serviceID: undefined,
+  })
 
-.pipeline('request')
+  .pipeline()
   .handleMessageStart(
     msg => (
-      _target = _router.find(
+      __serviceID = router.find(
         msg.head.headers.host,
         msg.head.path,
-      ),
-      _target && (__turnDown = true)
+      )
     )
   )
-  .link(
-    'forward', () => Boolean(_target),
-    ''
-  )
+  .chain()
 
-.pipeline('forward')
-  .muxHTTP(
-    'connection',
-    () => _target
-  )
-
-.pipeline('connection')
-  .connect(
-    () => _target
-  )
+)()
