@@ -55,6 +55,8 @@ public:
   void accept_socks(pjs::Function *on_connect);
   void accept_tls(pjs::Object *options);
   void branch(int count, pjs::Function **conds, const pjs::Value *layout);
+  void chain(const std::list<Module*> modules);
+  void chain_next();
   void compress_http(pjs::Object *options);
   void compress_message(pjs::Object *options);
   void connect(const pjs::Value &target, pjs::Object *options);
@@ -178,6 +180,7 @@ public:
   void read(const std::string &pathname);
   void task(const std::string &when);
   void pipeline(const std::string &name);
+  void pipeline();
 
   void bind_pipelines();
   void bind_exports(Worker *worker, Module *module);
@@ -216,6 +219,7 @@ private:
   std::list<TaskConfig> m_tasks;
   std::list<NamedPipelineConfig> m_named_pipelines;
   std::map<int, NamedPipelineConfig> m_indexed_pipelines;
+  std::unique_ptr<PipelineConfig> m_entrance_pipeline;
   int m_current_pipeline_index = 0;
 
   auto next_pipeline_index() -> int { return m_current_pipeline_index++; }

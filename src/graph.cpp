@@ -365,9 +365,13 @@ private:
       if (m == "pipeline") {
         flush();
         auto p = new Graph::Pipeline;
-        p->name = argc > 0 && cv(argv[0])->t() == STRING
-          ? cv(argv[0])->s()
-          : std::string("Pipeline #") + std::to_string(++m_named_count);
+        if (argc > 0) {
+          p->name = cv(argv[0])->t() == STRING
+            ? cv(argv[0])->s()
+            : std::string("Pipeline #") + std::to_string(++m_named_count);
+        } else {
+          p->name = "Module Entrance";
+        }
         current_pipeline(p);
 
       } else if (m == "listen") {

@@ -53,6 +53,16 @@ class PipelineLayout :
   public List<PipelineLayout>::Item
 {
 public:
+
+  //
+  // PipelineLayout::Chain
+  //
+
+  struct Chain : public pjs::RefCount<Chain> {
+    pjs::Ref<Chain> next;
+    pjs::Ref<PipelineLayout> layout;
+  };
+
   static auto make(ModuleBase *module = nullptr) -> PipelineLayout* {
     return new PipelineLayout(module, -1, std::string(), std::string());
   }
@@ -142,6 +152,8 @@ public:
   auto context() const -> Context* { return m_context; }
   auto output() const -> Output* { return m_output; }
   void output(Output *output) { m_output = output; }
+  auto chain() const -> PipelineLayout::Chain* { return m_chain; }
+  void chain(PipelineLayout::Chain *chain) { m_chain = chain; }
 
   void start(int argc = 0, pjs::Value *argv = nullptr) {
     m_layout->start(this, argc, argv);
@@ -161,6 +173,7 @@ private:
   List<Filter> m_filters;
   pjs::Ref<Context> m_context;
   pjs::Ref<Output> m_output;
+  pjs::Ref<PipelineLayout::Chain> m_chain;
 
   void shutdown();
   void reset();

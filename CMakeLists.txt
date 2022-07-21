@@ -167,6 +167,7 @@ add_executable(pipy
   src/file.cpp
   src/filter.cpp
   src/filters/branch.cpp
+  src/filters/chain.cpp
   src/filters/compress-message.cpp
   src/filters/connect.cpp
   src/filters/decompress-message.cpp

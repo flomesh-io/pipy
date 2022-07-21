@@ -156,6 +156,7 @@ auto Filter::sub_pipeline(
   }
 
   auto *p = Pipeline::make(layout, ctx);
+  p->chain(pipeline()->chain());
   if (chain_to) p->chain(chain_to);
   if (output_to) p->output(output_to); else p->output(pipeline()->output());
 

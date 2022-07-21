@@ -37,6 +37,7 @@
 
 // all filters
 #include "filters/branch.hpp"
+#include "filters/chain.hpp"
 #include "filters/connect.hpp"
 #include "filters/compress-message.hpp"
 #include "filters/decompress-message.hpp"
@@ -113,6 +114,14 @@ void FilterConfigurator::accept_tls(pjs::Object *options) {
 
 void FilterConfigurator::branch(int count, pjs::Function **conds, const pjs::Value *layout) {
   append_filter(new Branch(count, conds, layout));
+}
+
+void FilterConfigurator::chain(const std::list<Module*> modules) {
+  append_filter(new Chain(modules));
+}
+
+void FilterConfigurator::chain_next() {
+  append_filter(new ChainNext());
 }
 
 void FilterConfigurator::compress_http(pjs::Object *options) {
@@ -528,6 +537,13 @@ void Configuration::pipeline(const std::string &name) {
   FilterConfigurator::set_pipeline_config(&config);
 }
 
+void Configuration::pipeline() {
+  check_integrity();
+  if (m_entrance_pipeline) throw std::runtime_error("more than one entrance pipelines");
+  m_entrance_pipeline = std::unique_ptr<PipelineConfig>(new PipelineConfig);
+  FilterConfigurator::set_pipeline_config(m_entrance_pipeline.get());
+}
+
 void Configuration::bind_exports(Worker *worker, Module *module) {
   for (const auto &exp : m_exports) {
     if (m_context_prototype->has(exp.name)) {
@@ -589,6 +605,13 @@ void Configuration::apply(Module *mod) {
     return layout;
   };
 
+  if (m_entrance_pipeline) {
+    std::string name("Module Entrance: ");
+    name += mod->path();
+    auto p = make_pipeline(-1, "", name, *m_entrance_pipeline);
+    mod->m_entrance_pipeline = p;
+  }
+
   for (auto &i : m_named_pipelines) {
     auto s = pjs::Str::make(i.name);
     auto p = make_pipeline(i.index, i.name, "", i);
@@ -640,6 +663,14 @@ void Configuration::draw(Graph &g) {
       gp.filters.emplace_back(std::move(gf));
     }
   };
+
+  if (m_entrance_pipeline) {
+    Graph::Pipeline p;
+    p.index = -1;
+    p.name = "Module Entrance";
+    add_filters(p, m_entrance_pipeline->filters);
+    g.add_pipeline(std::move(p));
+  }
 
   for (const auto &i : m_named_pipelines) {
     Graph::Pipeline p;
@@ -825,6 +856,48 @@ template<> void ClassDef<FilterConfigurator>::init() {
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
+    }
+  });
+
+  // FilterConfigurator.chain
+  method("chain", [](Context &ctx, Object *thiz, Value &result) {
+    Array *modules = nullptr;
+    if (!ctx.arguments(0, &modules)) return;
+    if (!modules) {
+      try {
+        thiz->as<FilterConfigurator>()->chain_next();
+        result.set(thiz);
+      } catch (std::runtime_error &err) {
+        ctx.error(err);
+      }
+    } else {
+      auto root = static_cast<pipy::Context*>(ctx.root());
+      auto worker = root->worker();
+      std::list<Module*> mods;
+      modules->iterate_while(
+        [&](pjs::Value &v, int) {
+          auto s = v.to_string();
+          auto path = utils::path_normalize(s->str());
+          s->release();
+          auto mod = worker->load_module(path);
+          if (!mod) {
+            std::string msg("[chain] Cannot load module: ");
+            msg += path;
+            ctx.error(msg);
+            return false;
+          }
+          mods.push_back(mod);
+          return true;
+        }
+      );
+      if (mods.size() == modules->length()) {
+        try {
+          thiz->as<FilterConfigurator>()->chain(mods);
+          result.set(thiz);
+        } catch (std::runtime_error &err) {
+          ctx.error(err);
+        }
+      }
     }
   });
 
@@ -1810,13 +1883,22 @@ template<> void ClassDef<Configuration>::init() {
 
   // Configuration.pipeline
   method("pipeline", [](Context &ctx, Object *thiz, Value &result) {
-    std::string name;
-    if (!ctx.arguments(1, &name)) return;
-    try {
-      thiz->as<Configuration>()->pipeline(name);
-      result.set(thiz);
-    } catch (std::runtime_error &err) {
-      ctx.error(err);
+    if (ctx.argc() == 0) {
+      try {
+        thiz->as<Configuration>()->pipeline();
+        result.set(thiz);
+      } catch (std::runtime_error &err) {
+        ctx.error(err);
+      }
+    } else {
+      std::string name;
+      if (!ctx.arguments(1, &name)) return;
+      try {
+        thiz->as<Configuration>()->pipeline(name);
+        result.set(thiz);
+      } catch (std::runtime_error &err) {
+        ctx.error(err);
+      }
     }
   });
 

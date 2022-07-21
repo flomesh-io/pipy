@@ -186,6 +186,7 @@ bool Module::load(const std::string &path) {
 void Module::unload() {
   retain();
   ModuleBase::shutdown();
+  m_entrance_pipeline = nullptr;
   m_named_pipelines.clear();
   m_indexed_pipelines.clear();
   release();
