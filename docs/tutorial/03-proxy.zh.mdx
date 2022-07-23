@@ -3,6 +3,10 @@ title: 03 代理
 ---
 
 import FlagIcon from '@material-ui/icons/FlagSharp'
+import Layer4Proxy from './layer-4-proxy.svg';
+import Layer7Proxy from './layer-7-proxy.svg';
+import DemuxHTTP from './demux-http.svg';
+import MuxHTTP from './mux-http.svg';
 import SvgProxyPipelines from './proxy-pipelines.svg';
 
 前面我们将 Pipy 作为服务器来处理 HTTP 请求。这次我们尝试其最常见的用法：网络代理。
@@ -47,13 +51,25 @@ pipy()
 
 对于一个 4 层代理，事情简单得多，因为对于上游服务器到下游客户端的连接有一种一对一的关系。对于 Pipy 而言，这意味着管道处理上游和管道处理下游有一个一对一的关系。在许多情况下，我们能够在一个单一的管道里简单地代理一个 4 层流，该管道位于一个客户端和一个服务器之间，既连接客户端，也连接服务器。
 
+<div style="text-align: center">
+  <Layer4Proxy/>
+</div>
+
 对于一个 7 层代理，事情会变得复杂。一个处理下游连接的端口管道会接收超过一个 _messages_。而这些消息的每一条可能会去往不同的上游服务器。同样，当来自两个不同下游的两个消息被导向同一个服务器时，您或许首选的是发送他们到一个连接到这个服务器的 _共享_ 上游连接以减小资源的使用。
+
+<div style="text-align: center">
+  <Layer7Proxy/>
+</div>
 
 因此，连接到下游客户端的管道和那些连接到上游服务器的管道有一种多对多的关系。这就是为什么我们需要隔离的管道布局来处理下游和上游。在一个面向下游的管道里，消息被 _"demuxed"_ 出一个单一的传输流。在一个面向上游的管道里，消息被 _"muxed"_ 入一个单一的传输流。
 
 ### 过滤器: demuxHTTP()
 
-在我们的例子里，一个 _端口管道_ 吸入进入的数据作为一个 [_Data_](/reference/api/Data) 事件序列，其中每一个都保有一个来自 TCP 流的小数据块。**demuxHTTP()** 所做的就是 _"decode"_ 和 _"demux"_ TCP 流为单独的 HTTP 消息，并在把他们塞给一个专有的子管道来处理之前，用 [_MessageStart_](/reference/api/MessageStart) 和 [_MessageEnd_](/reference/api/MessageEnd) 事件对来封装他们，
+在我们的例子里，一个 _端口管道_ 吸入进入的数据作为一个 [_Data_](/reference/api/Data) 事件序列，其中每一个都保有一个来自 TCP 流的小数据块。**demuxHTTP()** 所做的就是 _"decode"_ 和 _"demux"_ TCP 流为单独的 HTTP 消息，并在把他们塞给一个专有的子管道来处理之前，用 [_MessageStart_](/reference/api/MessageStart) 和 [_MessageEnd_](/reference/api/MessageEnd) 事件对来封装他们。
+
+<div style="text-align: center">
+  <DemuxHTTP/>
+</div>
 
 但是故事还没有结束。每一个子管道将最终有一个消息被输出以作为它的响应。来自所有子管道末端的输出消息被 **demuxHTTP()** 所采集。他们在返回客户端之前被 _"encoded"_ 和 _"muxed"_ 到一个单独的 TCP 流。
 
@@ -63,13 +79,19 @@ pipy()
 
 相对于 **demuxHTTP()** 的是 **muxHTTP()**。不像 **demuxHTTP()** 产生多个子管道，**muxHTTP()** 和其他的 **muxHTTP()** _共享_ 一个子管道。
 
-该过滤器接受一个可选的参数 `group` 来决定和哪些其他的 **muxHTTP()** 来共享子管道。当两个来自相同管道布局的 **muxHTTP()** 实例有相同的 `group` 值（或者如果 `group` 是一个函数返回相同的值）时，他们将共享相同的子管道。
+<div style="text-align: center">
+  <MuxHTTP/>
+</div>
 
-默认地，`group` 是 `__inbound`，是一个内置的 _上下文变量_，代表了当前的下游连接。所以默认地，全部为相同下游连接工作的 **muxHTTP()** 过滤器将共享一个单一的子管道。
+该过滤器接受一个可选的回调函数 `target` 来鉴别它将要发送消息给哪个子管道。当两个 **muxHTTP()** 实例被 _对准_ 同一个子管道时，它们 _共享_ 同一个 HTTP 会话。换而言之，来自两个 **muxHTTP()** 实例的请求将被 _多路复用_ 到在同一个子管道内的一个 HTTP 流。
 
-> 注意 "group sharing" 只能在来自于相同管道布局的相同地方的 **muxHTTP()** 实例之间。在 2 个不同的管道布局，或者同一管道布局的 2 个不同地方，**muxHTTP()** 实例将绝不会共享子管道。
+回调 `target` 能够返回一个任意类型的值。无论它返回什么，都将是 _键_ 引用到一个共享的子管道。如果一个带那个键的子管道不存在，一个新的子管道将被创建，然后被其他后来的也引用到同一个键的 **muxHTTP()** 实例共享。
 
-同 **demuxHTTP()** 一样，虽然叫 "muxHTTP"，但是真正地是它也是 _解复用_ 来自共享的子管道末端的响应，同样 _复用_ 给它的请求。
+默认地，当一个 `target` 回调缺失时，这个 _键_ 仅是 `__inbound`。`__inbound` 是一个内置的 _上下文变量_ 代表当前的下游连接。所以默认地，全部源自同一个客户端连接的 **muxHTTP()** 过滤器将创建和共享唯一的单一子管道。如果您想要改变策略，您可以提供一个定制的 `target` 回调作为第一个参数给过滤器。
+
+> 注意，这里 "共享" 只发生在来自在同一个管道布局里同一个位置的 **muxHTTP()** 实例之间。在 2 个不同的管道布局，或者在同一个管道布局的 2 个不同位置上，**muxHTTP()** 实例是绝不会共享子管道的。
+
+像 **demuxHTTP()** 一样，虽然名字叫 "muxHTTP"，但是其实它也是在 _复用_ 请求给它之外，_解复用_ 来自其共享的子管道末端的响应。
 
 ### 管道拓扑
 
