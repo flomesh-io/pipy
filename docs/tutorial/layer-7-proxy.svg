@@ -7,13 +7,13 @@
    xmlns="http://www.w3.org/2000/svg"
    xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
    xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
-   width="820"
-   height="280"
-   viewBox="0 0 216.95833 74.083336"
+   width="780"
+   height="200"
+   viewBox="0 0 206.375 52.916669"
    version="1.1"
    id="svg3466"
    inkscape:version="1.0.2 (e86c8708, 2021-01-15)"
-   sodipodi:docname="proxy-pipelines.svg">
+   sodipodi:docname="layer-7-proxy.svg">
   <defs
      id="defs3460">
     <marker
@@ -29,21 +29,6 @@
          style="fill:#000000;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:1pt;stroke-opacity:1"
          d="M 5.77,0 -2.88,5 V -5 Z"
          id="path2189" />
-    </marker>
-    <marker
-       style="overflow:visible"
-       id="marker3487"
-       refX="0"
-       refY="0"
-       orient="auto"
-       inkscape:stockid="TriangleOutM"
-       inkscape:isstock="true"
-       inkscape:collect="always">
-      <path
-         transform="scale(0.4)"
-         style="fill:#000000;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:1pt;stroke-opacity:1"
-         d="M 5.77,0 -2.88,5 V -5 Z"
-         id="path3485" />
     </marker>
     <marker
        style="overflow:visible"
@@ -473,21 +458,6 @@
     </marker>
     <marker
        style="overflow:visible"
-       id="marker3487-96"
-       refX="0"
-       refY="0"
-       orient="auto"
-       inkscape:stockid="TriangleOutM"
-       inkscape:isstock="true"
-       inkscape:collect="always">
-      <path
-         transform="scale(0.4)"
-         style="fill:#000000;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:1pt;stroke-opacity:1"
-         d="M 5.77,0 -2.88,5 V -5 Z"
-         id="path3485-2" />
-    </marker>
-    <marker
-       style="overflow:visible"
        id="marker3487-1-8"
        refX="0"
        refY="0"
@@ -570,6 +540,132 @@
          d="M 5.77,0 -2.88,5 V -5 Z"
          id="path2189-0-7" />
     </marker>
+    <marker
+       style="overflow:visible"
+       id="marker2191-6"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="TriangleOutM"
+       inkscape:isstock="true">
+      <path
+         transform="scale(0.4)"
+         style="fill:#000000;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:1pt;stroke-opacity:1"
+         d="M 5.77,0 -2.88,5 V -5 Z"
+         id="path2189-3" />
+    </marker>
+    <marker
+       style="overflow:visible"
+       id="marker2191-6-7"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="TriangleOutM"
+       inkscape:isstock="true">
+      <path
+         transform="scale(0.4)"
+         style="fill:#000000;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:1pt;stroke-opacity:1"
+         d="M 5.77,0 -2.88,5 V -5 Z"
+         id="path2189-3-8" />
+    </marker>
+    <marker
+       style="overflow:visible"
+       id="marker2191-6-7-5"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="TriangleOutM"
+       inkscape:isstock="true">
+      <path
+         transform="scale(0.4)"
+         style="fill:#000000;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:1pt;stroke-opacity:1"
+         d="M 5.77,0 -2.88,5 V -5 Z"
+         id="path2189-3-8-5" />
+    </marker>
+    <marker
+       style="overflow:visible"
+       id="marker2191-6-79"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="TriangleOutM"
+       inkscape:isstock="true">
+      <path
+         transform="scale(0.4)"
+         style="fill:#000000;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:1pt;stroke-opacity:1"
+         d="M 5.77,0 -2.88,5 V -5 Z"
+         id="path2189-3-87" />
+    </marker>
+    <marker
+       style="overflow:visible"
+       id="marker2191-6-7-7"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="TriangleOutM"
+       inkscape:isstock="true">
+      <path
+         transform="scale(0.4)"
+         style="fill:#000000;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:1pt;stroke-opacity:1"
+         d="M 5.77,0 -2.88,5 V -5 Z"
+         id="path2189-3-8-0" />
+    </marker>
+    <marker
+       style="overflow:visible"
+       id="marker3487-9-46"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="TriangleOutM"
+       inkscape:isstock="true">
+      <path
+         transform="scale(0.4)"
+         style="fill:#000000;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:1pt;stroke-opacity:1"
+         d="M 5.77,0 -2.88,5 V -5 Z"
+         id="path3485-0-11" />
+    </marker>
+    <marker
+       style="overflow:visible"
+       id="marker3487-9-46-6"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="TriangleOutM"
+       inkscape:isstock="true">
+      <path
+         transform="scale(0.4)"
+         style="fill:#000000;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:1pt;stroke-opacity:1"
+         d="M 5.77,0 -2.88,5 V -5 Z"
+         id="path3485-0-11-5" />
+    </marker>
+    <marker
+       style="overflow:visible"
+       id="marker3487-9-46-2"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="TriangleOutM"
+       inkscape:isstock="true">
+      <path
+         transform="scale(0.4)"
+         style="fill:#000000;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:1pt;stroke-opacity:1"
+         d="M 5.77,0 -2.88,5 V -5 Z"
+         id="path3485-0-11-7" />
+    </marker>
+    <marker
+       style="overflow:visible"
+       id="marker3487-9-46-9"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="TriangleOutM"
+       inkscape:isstock="true">
+      <path
+         transform="scale(0.4)"
+         style="fill:#000000;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:1pt;stroke-opacity:1"
+         d="M 5.77,0 -2.88,5 V -5 Z"
+         id="path3485-0-11-8" />
+    </marker>
   </defs>
   <sodipodi:namedview
      id="base"
@@ -578,9 +674,9 @@
      borderopacity="1.0"
      inkscape:pageopacity="0.0"
      inkscape:pageshadow="2"
-     inkscape:zoom="0.74998836"
-     inkscape:cx="349.41457"
-     inkscape:cy="278.45495"
+     inkscape:zoom="0.79008099"
+     inkscape:cx="329.40154"
+     inkscape:cy="153.63458"
      inkscape:document-units="px"
      inkscape:current-layer="layer1"
      inkscape:document-rotation="0"
@@ -590,7 +686,7 @@
      inkscape:window-width="1440"
      inkscape:window-height="776"
      inkscape:window-x="0"
-     inkscape:window-y="25"
+     inkscape:window-y="114"
      inkscape:window-maximized="0" />
   <metadata
      id="metadata3463">
@@ -609,276 +705,236 @@
      inkscape:groupmode="layer"
      id="layer1">
     <rect
-       style="fill:#ffffff;fill-opacity:1;stroke-width:0.401541;stroke-linecap:round;stroke-linejoin:bevel"
+       style="fill:#ffffff;fill-opacity:1;stroke-width:0.330984;stroke-linecap:round;stroke-linejoin:bevel"
        id="rect4029"
-       width="216.95833"
-       height="74.083336"
+       width="206.375"
+       height="52.916668"
        x="0"
        y="-1.9482167e-08" />
     <rect
-       style="fill:#f9f9d5;fill-opacity:1;stroke:#888813;stroke-width:0.529167;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:1.5875, 1.5875;stroke-dashoffset:0;stroke-opacity:1"
-       id="rect3049-5"
-       width="36.378387"
-       height="43.113708"
-       x="41.485954"
-       y="15.103195"
-       ry="2.670228" />
-    <rect
        style="fill:#b6f5b6;fill-opacity:1;stroke:#159b15;stroke-width:0.529167;stroke-linecap:round;stroke-linejoin:bevel;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
-       id="rect1011-4"
-       width="27.299656"
-       height="25.634113"
-       x="46.364269"
-       y="28.02755"
-       ry="2.670228" />
-    <text
-       xml:space="preserve"
-       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:3.52778px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#000000;fill-opacity:0.5;stroke:none;stroke-width:0.264583"
-       x="59.990978"
-       y="42.010727"
-       id="text4159-0-3-3-7-8"><tspan
-         sodipodi:role="line"
-         x="59.990978"
-         y="42.010727"
-         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:3.52778px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:#000000;fill-opacity:0.5;stroke-width:0.264583"
-         id="tspan3391">demuxHTTP</tspan></text>
-    <rect
-       style="fill:#f9f9d5;fill-opacity:1;stroke:#888813;stroke-width:0.529167;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:1.5875, 1.5875;stroke-dashoffset:0;stroke-opacity:1"
-       id="rect3049-5-4"
-       width="35.921135"
-       height="29.502871"
-       x="90.035179"
-       y="5.1368303"
-       ry="2.670228" />
-    <rect
-       style="fill:#b6f5b6;fill-opacity:1;stroke:#159b15;stroke-width:0.529167;stroke-linecap:round;stroke-linejoin:bevel;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
-       id="rect1011-4-9"
+       id="rect1011-4-9-9"
        width="27.299629"
-       height="13.618123"
-       x="94.384331"
-       y="15.381192"
+       height="7.9735899"
+       x="52.65406"
+       y="6.5939388"
        ry="2.670228" />
     <text
        xml:space="preserve"
        style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:3.52778px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#000000;fill-opacity:0.5;stroke:none;stroke-width:0.264583"
-       x="108.01105"
-       y="23.489899"
-       id="text4159-0-3-3-7-8-9"><tspan
+       x="66.280785"
+       y="11.527645"
+       id="text4159-0-3-3-7-8-9-9"><tspan
          sodipodi:role="line"
-         x="108.01105"
-         y="23.489899"
+         x="66.280785"
+         y="11.527645"
          style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:3.52778px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:#000000;fill-opacity:0.5;stroke-width:0.264583"
-         id="tspan3391-4">muxHTTP</tspan></text>
-    <rect
-       style="fill:#f9f9d5;fill-opacity:1;stroke:#888813;stroke-width:0.529167;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:1.5875, 1.5875;stroke-dashoffset:0;stroke-opacity:1"
-       id="rect3049-5-1"
-       width="36.378387"
-       height="43.113712"
-       x="138.58444"
-       y="15.103203"
-       ry="2.670228" />
+         id="tspan3391-4-9">Pipeline</tspan></text>
+    <path
+       style="fill:none;stroke:#000000;stroke-width:0.529167;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#marker2191-6)"
+       d="m 40.628171,10.662373 h 8.56909"
+       id="path2181-93"
+       sodipodi:nodetypes="cc" />
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:3.52778px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#000000;fill-opacity:0.5;stroke:none;stroke-width:0.264583"
+       x="22.786114"
+       y="11.55806"
+       id="text4159-0-3-3-7-8-2-1-6-6-1-53"><tspan
+         sodipodi:role="line"
+         x="22.786114"
+         y="11.55806"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:3.52778px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:#000000;fill-opacity:0.5;stroke-width:0.264583"
+         id="tspan2809-6-8">Downstream #1</tspan></text>
     <rect
        style="fill:#b6f5b6;fill-opacity:1;stroke:#159b15;stroke-width:0.529167;stroke-linecap:round;stroke-linejoin:bevel;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
-       id="rect1011-4-3"
-       width="27.299644"
-       height="25.634113"
-       x="143.46275"
-       y="28.027546"
+       id="rect1011-4-9-9-2"
+       width="27.299629"
+       height="7.9735899"
+       x="52.65406"
+       y="19.859196"
        ry="2.670228" />
     <text
        xml:space="preserve"
        style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:3.52778px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#000000;fill-opacity:0.5;stroke:none;stroke-width:0.264583"
-       x="157.08943"
-       y="42.010727"
-       id="text4159-0-3-3-7-8-6"><tspan
+       x="66.280785"
+       y="24.792902"
+       id="text4159-0-3-3-7-8-9-9-7"><tspan
          sodipodi:role="line"
-         x="157.08943"
-         y="42.010727"
+         x="66.280785"
+         y="24.792902"
          style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:3.52778px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:#000000;fill-opacity:0.5;stroke-width:0.264583"
-         id="tspan3391-5">connect</tspan></text>
+         id="tspan3391-4-9-6">Pipeline</tspan></text>
     <path
-       style="fill:none;stroke:#000000;stroke-width:0.529167;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#marker3487)"
-       d="M 74.727137,30.727032 C 81.370253,30.6946 86.476208,18.890381 92.685891,18.958561"
-       id="path3477"
-       sodipodi:nodetypes="cc" />
-    <path
-       style="fill:none;stroke:#000000;stroke-width:0.529167;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#marker3487-1)"
-       d="M 93.432822,23.732205 C 87.223138,23.664025 82.117183,35.468244 75.474067,35.500676"
-       id="path3477-3"
-       sodipodi:nodetypes="cc" />
-    <path
-       style="fill:none;stroke:#000000;stroke-width:0.529167;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#marker2191)"
-       d="m 34.450707,38.771837 h 8.56909"
-       id="path2181"
-       sodipodi:nodetypes="cc" />
-    <path
-       style="fill:none;stroke:#000000;stroke-width:0.529167;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#marker2191-5)"
-       d="m 44.078131,43.00517 h -8.56909"
-       id="path2181-2"
+       style="fill:none;stroke:#000000;stroke-width:0.529167;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#marker2191-6-7)"
+       d="m 40.628168,23.92763 h 8.56909"
+       id="path2181-93-6"
        sodipodi:nodetypes="cc" />
     <text
        xml:space="preserve"
        style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:3.52778px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#000000;fill-opacity:0.5;stroke:none;stroke-width:0.264583"
-       x="59.722874"
-       y="20.209196"
-       id="text4159-0-3-3-7-8-2-1-6-6"><tspan
+       x="22.78611"
+       y="24.823317"
+       id="text4159-0-3-3-7-8-2-1-6-6-1-53-2"><tspan
          sodipodi:role="line"
-         x="59.722874"
-         y="20.209196"
+         x="22.78611"
+         y="24.823317"
          style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:3.52778px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:#000000;fill-opacity:0.5;stroke-width:0.264583"
-         id="tspan2809">Port pipeline</tspan><tspan
-         sodipodi:role="line"
-         x="59.722874"
-         y="24.618921"
-         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:3.52778px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:#000000;fill-opacity:0.5;stroke-width:0.264583"
-         id="tspan5008">(root)</tspan></text>
-    <text
-       xml:space="preserve"
-       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:3.52778px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#000000;fill-opacity:0.5;stroke:none;stroke-width:0.264583"
-       x="107.95581"
-       y="11.766967"
-       id="text4159-0-3-3-7-8-2-1-6-6-1"><tspan
-         sodipodi:role="line"
-         x="107.95581"
-         y="11.766967"
-         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:3.52778px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:#000000;fill-opacity:0.5;stroke-width:0.264583"
-         id="tspan2809-6">Sub-pipeline</tspan></text>
-    <text
-       xml:space="preserve"
-       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:3.52778px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#000000;fill-opacity:0.5;stroke:none;stroke-width:0.264583"
-       x="156.39972"
-       y="20.004782"
-       id="text4159-0-3-3-7-8-2-1-6-6-1-5"><tspan
-         sodipodi:role="line"
-         x="156.39972"
-         y="20.004782"
-         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:3.52778px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:#000000;fill-opacity:0.5;stroke-width:0.264583"
-         id="tspan2809-6-5">Sub-pipeline</tspan><tspan
-         sodipodi:role="line"
-         x="156.39972"
-         y="24.414507"
-         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:3.52778px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:#000000;fill-opacity:0.5;stroke-width:0.264583"
-         id="tspan5006">(shared)</tspan></text>
+         id="tspan2809-6-8-4">Downstream #2</tspan></text>
     <rect
-       style="fill:#ff7f2a;fill-opacity:1;stroke:#000000;stroke-width:0.529167;stroke-linecap:round;stroke-linejoin:bevel;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
-       id="rect1011-4-9-8"
-       width="30.173481"
-       height="14.686211"
-       x="3.056123"
-       y="33.385674"
+       style="fill:#b6f5b6;fill-opacity:1;stroke:#159b15;stroke-width:0.529167;stroke-linecap:round;stroke-linejoin:bevel;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       id="rect1011-4-9-9-2-1"
+       width="27.299629"
+       height="7.9735899"
+       x="52.654068"
+       y="33.124451"
+       ry="2.670228" />
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:3.52778px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#000000;fill-opacity:0.5;stroke:none;stroke-width:0.264583"
+       x="66.280792"
+       y="38.058159"
+       id="text4159-0-3-3-7-8-9-9-7-3"><tspan
+         sodipodi:role="line"
+         x="66.280792"
+         y="38.058159"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:3.52778px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:#000000;fill-opacity:0.5;stroke-width:0.264583"
+         id="tspan3391-4-9-6-8">Pipeline</tspan></text>
+    <path
+       style="fill:none;stroke:#000000;stroke-width:0.529167;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#marker2191-6-7-5)"
+       d="m 40.628179,37.192885 h 8.569092"
+       id="path2181-93-6-4"
+       sodipodi:nodetypes="cc" />
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:3.52778px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#000000;fill-opacity:0.5;stroke:none;stroke-width:0.264583"
+       x="22.786118"
+       y="38.08857"
+       id="text4159-0-3-3-7-8-2-1-6-6-1-53-2-8"><tspan
+         sodipodi:role="line"
+         x="22.786118"
+         y="38.08857"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:3.52778px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:#000000;fill-opacity:0.5;stroke-width:0.264583"
+         id="tspan2809-6-8-4-5">Downstream #3</tspan></text>
+    <rect
+       style="fill:#b6f5b6;fill-opacity:1;stroke:#159b15;stroke-width:0.529167;stroke-linecap:round;stroke-linejoin:bevel;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       id="rect1011-4-9-9-0"
+       width="27.299629"
+       height="7.9735899"
+       x="134.4984"
+       y="12.87958"
+       ry="2.670228" />
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:3.52778px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#000000;fill-opacity:0.5;stroke:none;stroke-width:0.264583"
+       x="148.12514"
+       y="17.813286"
+       id="text4159-0-3-3-7-8-9-9-3"><tspan
+         sodipodi:role="line"
+         x="148.12514"
+         y="17.813286"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:3.52778px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:#000000;fill-opacity:0.5;stroke-width:0.264583"
+         id="tspan3391-4-9-8">Pipeline</tspan></text>
+    <rect
+       style="fill:#b6f5b6;fill-opacity:1;stroke:#159b15;stroke-width:0.529167;stroke-linecap:round;stroke-linejoin:bevel;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       id="rect1011-4-9-9-2-0"
+       width="27.299629"
+       height="7.9735899"
+       x="134.4984"
+       y="26.144836"
+       ry="2.670228" />
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:3.52778px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#000000;fill-opacity:0.5;stroke:none;stroke-width:0.264583"
+       x="148.12514"
+       y="31.078543"
+       id="text4159-0-3-3-7-8-9-9-7-9"><tspan
+         sodipodi:role="line"
+         x="148.12514"
+         y="31.078543"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:3.52778px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:#000000;fill-opacity:0.5;stroke-width:0.264583"
+         id="tspan3391-4-9-6-0">Pipeline</tspan></text>
+    <path
+       style="fill:none;stroke:#000000;stroke-width:0.529167;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#marker2191-6-79)"
+       d="m 164.03127,16.776758 h 8.56909"
+       id="path2181-93-1"
+       sodipodi:nodetypes="cc" />
+    <path
+       style="fill:none;stroke:#000000;stroke-width:0.529167;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#marker2191-6-7-7)"
+       d="m 164.03127,30.042015 h 8.56909"
+       id="path2181-93-6-1"
+       sodipodi:nodetypes="cc" />
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:3.52778px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#000000;fill-opacity:0.5;stroke:none;stroke-width:0.264583"
+       x="186.73599"
+       y="17.902334"
+       id="text4159-0-3-3-7-8-2-1-6-6-1-53-26"><tspan
+         sodipodi:role="line"
+         x="186.73599"
+         y="17.902334"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:3.52778px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:#000000;fill-opacity:0.5;stroke-width:0.264583"
+         id="tspan2809-6-8-46">Upstream A</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:3.52778px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#000000;fill-opacity:0.5;stroke:none;stroke-width:0.264583"
+       x="186.73598"
+       y="31.167593"
+       id="text4159-0-3-3-7-8-2-1-6-6-1-53-2-9"><tspan
+         sodipodi:role="line"
+         x="186.73598"
+         y="31.167593"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:3.52778px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:#000000;fill-opacity:0.5;stroke-width:0.264583"
+         id="tspan2809-6-8-4-3">Upstream B</tspan></text>
+    <path
+       style="fill:none;stroke:#000000;stroke-width:0.529167;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#marker3487-9-46)"
+       d="m 83.185894,10.058695 c 23.083056,0.112684 28.133846,4.417724 48.665386,4.417724"
+       id="path3477-9-9"
+       sodipodi:nodetypes="cc" />
+    <path
+       style="fill:none;stroke:#000000;stroke-width:0.529167;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#marker3487-9-46-6)"
+       d="m 83.075962,23.139454 c 19.770768,0.09652 28.898238,8.121891 48.665378,8.121891"
+       id="path3477-9-9-5"
+       sodipodi:nodetypes="cc" />
+    <path
+       style="fill:none;stroke:#000000;stroke-width:0.529167;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#marker3487-9-46-2)"
+       d="m 83.185893,10.058695 c 15.439316,0.07537 31.701017,17.646891 48.665387,17.646891"
+       id="path3477-9-9-4"
+       sodipodi:nodetypes="cc" />
+    <path
+       style="fill:none;stroke:#000000;stroke-width:0.529167;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#marker3487-9-46-9)"
+       d="M 83.185894,37.046195 C 102.70311,37.141473 113.61292,18.180586 131.85128,18.180586"
+       id="path3477-9-9-7"
+       sodipodi:nodetypes="cc" />
+    <rect
+       style="opacity:0.8;fill:#ff7f2a;fill-opacity:1;stroke:#000000;stroke-width:0.529167;stroke-linecap:round;stroke-linejoin:bevel;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       id="rect1011-4-9-8-3-7"
+       width="30.173477"
+       height="7.6581244"
+       x="93.82148"
+       y="20.303148"
        ry="2.670228" />
     <text
        xml:space="preserve"
        style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:3.52778px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#ffffff;fill-opacity:1;stroke:none;stroke-width:0.264583"
-       x="18.231314"
-       y="39.382545"
-       id="text4159-0-3-3-7-8-2-9"><tspan
+       x="109.79504"
+       y="25.244728"
+       id="text4159-0-3-3-7-8-2-9-9-2"><tspan
          sodipodi:role="line"
-         id="tspan4157-8-2-1-3-5-49-4"
-         x="18.231314"
-         y="39.382545"
-         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:3.52778px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:#ffffff;fill-opacity:1;stroke-width:0.264583">Client</tspan><tspan
-         sodipodi:role="line"
-         x="18.231314"
-         y="43.792271"
+         x="109.79504"
+         y="25.244728"
          style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:3.52778px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:#ffffff;fill-opacity:1;stroke-width:0.264583"
-         id="tspan2771">(e.g. curl)</tspan></text>
-    <rect
-       style="fill:#f9f9d5;fill-opacity:1;stroke:#888813;stroke-width:0.529167;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:1.5875, 1.5875;stroke-dashoffset:0;stroke-opacity:1"
-       id="rect3049-5-4-2"
-       width="35.921135"
-       height="29.502871"
-       x="90.035179"
-       y="39.93137"
-       ry="2.670228" />
-    <rect
-       style="fill:#b6f5b6;fill-opacity:1;stroke:#159b15;stroke-width:0.529167;stroke-linecap:round;stroke-linejoin:bevel;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
-       id="rect1011-4-9-1"
-       width="27.299629"
-       height="13.618123"
-       x="94.384331"
-       y="50.175735"
-       ry="2.670228" />
+         id="tspan2771-4-6">Messages</tspan></text>
     <text
        xml:space="preserve"
-       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:3.52778px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#000000;fill-opacity:0.5;stroke:none;stroke-width:0.264583"
-       x="108.01105"
-       y="58.284431"
-       id="text4159-0-3-3-7-8-9-6"><tspan
+       style="font-style:italic;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:5.29166999999999987px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold Italic';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#000000;fill-opacity:0.5;stroke:none;stroke-width:0.264583;"
+       x="108.69861"
+       y="47.141212"
+       id="text4159-0-3-3-7-8-2-1-6-6-1-53-2-8-2"><tspan
          sodipodi:role="line"
-         x="108.01105"
-         y="58.284431"
-         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:3.52778px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:#000000;fill-opacity:0.5;stroke-width:0.264583"
-         id="tspan3391-4-0">muxHTTP</tspan></text>
-    <text
-       xml:space="preserve"
-       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:3.52778px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#000000;fill-opacity:0.5;stroke:none;stroke-width:0.264583"
-       x="107.95581"
-       y="46.561508"
-       id="text4159-0-3-3-7-8-2-1-6-6-1-8"><tspan
-         sodipodi:role="line"
-         x="107.95581"
-         y="46.561508"
-         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:3.52778px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:#000000;fill-opacity:0.5;stroke-width:0.264583"
-         id="tspan2809-6-4">Sub-pipeline</tspan></text>
-    <path
-       style="fill:none;stroke:#000000;stroke-width:0.529167;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#marker3487-9)"
-       d="m 74.63719,44.247266 c 6.643117,0.03243 11.749064,10.778317 17.958748,10.710137"
-       id="path3477-9"
-       sodipodi:nodetypes="cc" />
-    <path
-       style="fill:none;stroke:#000000;stroke-width:0.529167;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#marker3487-1-2)"
-       d="M 93.342862,60.767093 C 87.133191,60.835273 82.027231,50.089388 75.384127,50.056956"
-       id="path3477-3-9"
-       sodipodi:nodetypes="cc" />
-    <path
-       style="fill:none;stroke:#000000;stroke-width:0.529167;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#marker3487-96)"
-       d="m 122.7048,54.77644 c 6.64312,-0.03243 11.74908,-11.836651 17.95877,-11.768471"
-       id="path3477-6"
-       sodipodi:nodetypes="cc" />
-    <path
-       style="fill:none;stroke:#000000;stroke-width:0.529167;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#marker3487-1-8)"
-       d="m 141.4105,47.781613 c -6.20969,-0.06818 -11.31565,11.736039 -17.95877,11.768471"
-       id="path3477-3-6"
-       sodipodi:nodetypes="cc" />
-    <path
-       style="fill:none;stroke:#000000;stroke-width:0.529167;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#marker3487-9-2)"
-       d="m 122.92917,18.672581 c 6.64312,0.03243 11.74906,10.778317 17.95875,10.710137"
-       id="path3477-9-3"
-       sodipodi:nodetypes="cc" />
-    <path
-       style="fill:none;stroke:#000000;stroke-width:0.529167;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#marker3487-1-2-6)"
-       d="M 141.63484,35.192408 C 135.42517,35.260588 130.31921,24.514703 123.6761,24.482271"
-       id="path3477-3-9-7"
-       sodipodi:nodetypes="cc" />
-    <rect
-       style="fill:#ff7f2a;fill-opacity:1;stroke:#000000;stroke-width:0.529167;stroke-linecap:round;stroke-linejoin:bevel;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
-       id="rect1011-4-9-8-3"
-       width="30.173481"
-       height="14.686211"
-       x="183.73134"
-       y="33.269848"
-       ry="2.670228" />
-    <text
-       xml:space="preserve"
-       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:3.52778px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#ffffff;fill-opacity:1;stroke:none;stroke-width:0.264583"
-       x="198.90654"
-       y="41.91256"
-       id="text4159-0-3-3-7-8-2-9-9"><tspan
-         sodipodi:role="line"
-         x="198.90654"
-         y="41.91256"
-         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:3.52778px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:#ffffff;fill-opacity:1;stroke-width:0.264583"
-         id="tspan2771-4">Server</tspan></text>
-    <path
-       style="fill:none;stroke:#000000;stroke-width:0.529167;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#marker2191-51)"
-       d="m 172.51937,38.819385 h 8.56909"
-       id="path2181-9"
-       sodipodi:nodetypes="cc" />
-    <path
-       style="fill:none;stroke:#000000;stroke-width:0.529167;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#marker2191-5-9)"
-       d="m 182.1468,43.052718 h -8.5691"
-       id="path2181-2-0"
-       sodipodi:nodetypes="cc" />
+         x="108.69861"
+         y="47.141212"
+         style="font-style:italic;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:5.29166678px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold Italic';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:#000000;fill-opacity:0.5;stroke-width:0.264583;"
+         id="tspan2809-6-8-4-5-0">Layer 7 Proxy</tspan></text>
   </g>
 </svg>

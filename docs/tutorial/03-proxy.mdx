@@ -3,6 +3,10 @@ title: "Part 3: Proxy"
 ---
 
 import FlagIcon from '@material-ui/icons/FlagSharp'
+import Layer4Proxy from './layer-4-proxy.svg';
+import Layer7Proxy from './layer-7-proxy.svg';
+import DemuxHTTP from './demux-http.svg';
+import MuxHTTP from './mux-http.svg';
 import SvgProxyPipelines from './proxy-pipelines.svg';
 
 We have used Pipy as a server for handling HTTP requests. Now we will be using it as what Pipy is mostly used for: a network proxy.
@@ -46,13 +50,25 @@ Simply put it, on layer 4 we see continuous _"streams"_ while on layer 7 we see 
 
 For a layer 4 proxy, things are much easier, because connections to downstream clients have a one-on-one relation to upstream servers. For Pipy, that means pipelines handling downstreams have a one-on-one relation to pipelines handling upstreams. In many cases, we can simply proxy a layer 4 stream in one single pipeline that sits between a client and a server, connecting to both of them.
 
+<div style="text-align: center">
+  <Layer4Proxy/>
+</div>
+
 For a layer 7 proxy, things are complicated. A port pipeline handling a downstream connection would receive more than one _messages_. Each of them might go to a different upstream server. Also, when two messages coming from two different downstreams are headed to the same server, you might prefer to send them on a _shared_ upstream connection to that server for the sake of less resource usage.
+
+<div style="text-align: center">
+  <Layer7Proxy/>
+</div>
 
 Therefore, pipelines connected to downstream clients have a many-to-many relationship to those connected to upstream servers. That's why we need separate pipeline layouts to handle downstreams and upstreams differently. In a downstream-oriented pipeline, messages are _"demuxed"_ out of a single transport stream. In an upstream-oriented pipeline, messages are _"muxed"_ into a single transport stream.
 
 ### Filter: demuxHTTP()
 
 In our example, a _port pipeline_ gulps incoming data as a sequence of [_Data_](/reference/api/Data) events, each holding a small chunk from the TCP stream. What **demuxHTTP()** does is _"decode"_ and _"demux"_ that TCP stream into separate HTTP messages, enclose each of them between a pair of [_MessageStart_](/reference/api/MessageStart) and [_MessageEnd_](/reference/api/MessageEnd) events, before feeding each of them into a dedicated sub-pipeline for processing.
+
+<div style="text-align: center">
+  <DemuxHTTP/>
+</div>
 
 But that's not the end of the stroy yet. Each sub-pipeline will eventually have a message outputted as its response. Output messages coming out of the end of all sub-pipelines are collected by **demuxHTTP()**. They are then _"encoded"_ and _"muxed"_ into one single TCP stream before going back to the client.
 
@@ -62,13 +78,19 @@ As you can see, although the filter is named _"demuxHTTP"_, but it really perfor
 
 The opposite to **demuxHTTP()** is **muxHTTP()**. Unlike **demuxHTTP()** spawning multiple sub-pipelines, **muxHTTP()** _shares_ a sub-pipeline with other **muxHTTP()** instances.
 
-The filter accepts an optional parameter `group` for deciding what other **muxHTTP()** instances it shares sub-pipeline with. When two **muxHTTP()** instances from the same pipeline layout have the same `group` value (or return the same value if `group` is a function), they'll share the same sub-pipeline.
+<div style="text-align: center">
+  <MuxHTTP/>
+</div>
 
-By default, `group` is `__inbound`, which is a built-in _context variable_ representing the current downstream connection. So by default, all **muxHTTP()** filters working for the same downstream connection will share one single sub-pipeline.
+The filter accepts an optional callback function `target` that tells which sub-pipeline it's going to send messages over to. When two **muxHTTP()** instances are _targeted_ to the same sub-pipeline, they are _sharing_ the same HTTP session. In other words, requests coming from the two **muxHTTP()** instances will be _multiplexed_ into one HTTP stream in the same sub-pipeline they share.
 
-> Note that this "group sharing" is only between **muxHTTP()** instances coming from the same place in the same pipeline layout. In 2 different pipeline layouts, or 2 different places in one pipeline layout, **muxHTTP()** instances will never share sub-pipelines.
+Callback `target` can return a value of any type. Whatever it returns will be the _key_ referring to a shared sub-pipeline. If a sub-pipeline with that key doesn't exist yet, a new sub-pipeline will be created, and then shared by other **muxHTTP()** instances that come after and also refer to the same key.
 
-Same as **demuxHTTP()**, although it's named "muxHTTP", but really it also _demuxes_ responses from the end of the shared sub-pipeline as well as _muxing_ requests to it.
+By default, the _key_ is just `__inbound` when a `target` callback is absent. `__inbound` is a built-in _context variable_ representing the current downstream connection. So by default, all **muxHTTP()** filters originated from the same client connection will create and share only one single sub-pipeline. If you want to change that strategy, you can provide a custom `target` callback as the first parameter to the filter.
+
+> Note that this "sharing" only happens between **muxHTTP()** instances coming from the same place in the same pipeline layout. In 2 different pipeline layouts, or 2 different places in the same pipeline layout, **muxHTTP()** instances will never share sub-pipelines.
+
+Same as **demuxHTTP()**, although it's named "muxHTTP", but really it also _demuxes_ responses coming out from the end of the shared sub-pipeline in addition to _muxing_ requests to it.
 
 ### Pipeline topology
 

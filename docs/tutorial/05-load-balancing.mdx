@@ -2,6 +2,8 @@
 title: "Part 5: Loading Balancing"
 ---
 
+import SvgConnectionPools from './connection-pools.svg';
+
 Now we have a proxy that can route requests to different servers. Another requirement to a proxy coming up next would be _load balance_ requests across multiple servers.
 
 ## RoundRobinLoadBalancer
@@ -115,13 +117,30 @@ As you can see, the targets are not rotating for a specific client connection. I
 
 ## Connection pool
 
-Under the hood, RoundRobinLoadBalancer has a _resource pool_ for each target it distributes workloads to. We usually use those pools as _connection pools_ when load balancing to upstream servers, which is also the most common use case for a proxy. RoundRobinLoadBalancer keeps track of _resource allocations_ from the pools. When a resource is requested, it _borrows_ a free resource from a pool. When a resource is no longer needed, it _returns_ the resource back to the pool. Most importantly, the balancer guarantees that the same _borrower_ won't get more than one resources from the same balancer when calling [next()](/reference/api/RoundRobinLoadBalancer/next) more than once.
+Under the hood, RoundRobinLoadBalancer has a _resource pool_ for each target it distributes workloads to. We usually use those pools as _connection pools_ when load balancing to upstream servers, which is also the most common use case for a proxy. RoundRobinLoadBalancer keeps track of _resource allocations_ from the pools. When a target is requested by calling [next()](/reference/api/RoundRobinLoadBalancer/next), a free resource item is _borrowed_ from the target's pool. When a resource item is no longer needed, it is _returned_ back to the pool. Most importantly, the balancer guarantees that the same _borrower_ won't get more than one resource items when it calls _next()_ to _borrow_ more than once.
 
-How does RoundRobinLoadBalancer know who is the borrower? That's what we give to [next()](/reference/api/RoundRobinLoadBalancer/next) as the first argument when calling it. And by default, the argument is from the built-in context variable `__inbound`, which represents the current downstream connection.
+<div style="text-align: center">
+  <SvgConnectionPools/>
+</div>
 
-That's also the reason why _next()_ returns an object instead of the selected target itself. The object is actually a representative of a _resource_. We can have multiple resources (or connections, in our case) for multiple borrowers (or clients), all coming from the same target (or server). Also, **muxHTTP()** uses this resource object as a _group sharing discriminator_ to bind a sub-pipeline to an allocated resource, substantializing those abstract resources in concrete connections.
+By default, _next()_ considers the _current downstream connection_ as the borrower, which it can obtain from the built-in context variable `__inbound` by itself without any user interference. That means _next()_ will regard each client connection as a distinct borrower and make sure the same server connection is always allocated no matter how many times the client has requested in a session. That's why the targets, as we've seen earlier in the test, were not rotating for one go of _curl_. It only rotated for different runs of _curl_.
 
-Since we didn't give _next()_ an argument, it defaulted to `__inbound`. That means the "borrowers" are client connections from _curl_. That's why the targets were not rotating for one go of _curl_. It only rotated for different runs of _curl_.
+However, if you want to distinguish borrowers by other means, such as client IP or user ID, you can do so by giving a distinct value to the first argument of [next()](/reference/api/RoundRobinLoadBalancer/next) that can represent the actual borrower .
+
+``` js
+  // Allocate only one resource item for each client IP
+  _target = loadBalancer.next(__inbound.remoteAddress)
+```
+
+These built-in resource pools are also the reason why _next()_ returns an object instead of the selected target itself. The object is actually the representative of a resource item from one of the pools. For the same target (or server), we can have multiple resource items (or connections, in our case) allocated to different borrowers (or clients). If _next()_ had returned only the target (such as, the server), there'd be no way to distinguish individual resource items (say, connections) for different borrowers (like, different clients).
+
+Also, **muxHTTP()** can use this resource object as the _key_ to the shared sub-pipeline it _targets_ to (See [Filter: muxHTTP()](/tutorial/03-proxy/#filter-muxhttp) for a detailed explanation about _key_ and the _target callback_). As shown in the following excerpt from our code earlier, the allocated resource (which was left in the custom context variable `_target` after calling [next()](/reference/api/RoundRobinLoadBalancer/next) prior to this point) is given to **muxHTTP()** as the _key_ to the targeted sub-pipeline. That way, each allocated resource item from the balancer is associated with a sub-pipeline in **muxHTTP()**, which is a connection to the actual target server.
+
+``` js
+  $=>$.muxHTTP(() => _target).to(
+    $=>$.connect(() => _target.id)
+  )
+```
 
 ## Summary
 
