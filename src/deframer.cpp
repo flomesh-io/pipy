@@ -96,7 +96,7 @@ void Deframer::deframe(Data &data) {
               state = on_state(state, -1);
             }
           } else {
-            state = on_state(state, c);
+            state = on_state(state, (uint8_t)c);
           }
           return (m_read_length > 0 && !m_read_buffer) || state < 0;
         },
