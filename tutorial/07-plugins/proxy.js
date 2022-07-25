@@ -3,6 +3,10 @@
 
 ) => pipy()
 
+  .export('main', {
+    __route: undefined,
+  })
+
   .listen(config.listen)
   .demuxHTTP().to(
     $=>$.chain(config.plugins)
