@@ -112,7 +112,8 @@ private:
   pjs::Ref<pjs::Function> m_alpn;
   pjs::Ref<pjs::Function> m_handshake;
   bool m_is_server;
-  bool m_closed = false;
+  bool m_closed_input = false;
+  bool m_closed_output = false;
 
   virtual void on_input(Event *evt) override;
   virtual void on_reply(Event *evt) override;

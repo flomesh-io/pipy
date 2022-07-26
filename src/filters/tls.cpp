@@ -213,7 +213,7 @@ void TLSSession::start_handshake() {
 }
 
 void TLSSession::on_input(Event *evt) {
-  if (m_closed) return;
+  if (m_closed_input) return;
 
   if (evt->is<MessageEnd>() || Data::is_flush(evt)) {
     forward(evt);
@@ -228,12 +228,13 @@ void TLSSession::on_input(Event *evt) {
     }
 
   } else if (auto end = evt->as<StreamEnd>()) {
-    close(end->error());
+    m_closed_input = true;
+    forward(evt);
   }
 }
 
 void TLSSession::on_reply(Event *evt) {
-  if (m_closed) return;
+  if (m_closed_output) return;
 
   if (evt->is<MessageEnd>() || Data::is_flush(evt)) {
     output(evt);
@@ -248,7 +249,7 @@ void TLSSession::on_reply(Event *evt) {
     }
 
   } else if (auto end = evt->as<StreamEnd>()) {
-    close(end->error());
+    m_closed_output = true;
   }
 }
 
@@ -463,10 +464,16 @@ void TLSSession::pump_write() {
 }
 
 void TLSSession::close(StreamEnd::Error err) {
-  if (!m_closed) {
-    m_closed = true;
-    output(StreamEnd::make(err));
-    forward(StreamEnd::make(err));
+  if (m_is_server) {
+    if (!m_closed_output) {
+      m_closed_output = true;
+      output(StreamEnd::make(err));
+    }
+  } else {
+    if (m_closed_input) {
+      m_closed_input = true;
+      forward(StreamEnd::make(err));
+    }
   }
 }
 
