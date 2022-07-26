@@ -4,14 +4,14 @@
 
 ) => pipy()
 
-  .export('router', {
-    __serviceID: undefined,
+  .import({
+    __route: 'main',
   })
 
   .pipeline()
   .handleMessageStart(
     msg => (
-      __serviceID = router.find(
+      __route = router.find(
         msg.head.headers.host,
         msg.head.path,
       )

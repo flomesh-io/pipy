@@ -13,12 +13,12 @@
 })
 
   .import({
-    __serviceID: 'router',
+    __route: 'main',
   })
 
   .pipeline()
   .branch(
-    () => Boolean(_target = services[__serviceID]?.next?.()), (
+    () => Boolean(_target = services[__route]?.next?.()), (
       $=>$
       .muxHTTP(() => _target).to(
         $=>$.connect(() => _target.id)
