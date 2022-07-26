@@ -2,6 +2,8 @@
 title: 05 负载均衡
 ---
 
+import SvgConnectionPools from './connection-pools.svg';
+
 现在，我们已经有了一个代理可以路由请求到不同的服务器。对于一个代理紧接的另一个需求就是能够跨越多个服务器来 _负载均衡_ 请求。
 
 ## RoundRobinLoadBalancer
@@ -115,13 +117,30 @@ You are requesting /hi from 127.0.0.1
 
 ## 连接池
 
-底层实现，RoundRobinLoadBalancer 有一个 _资源池_ 给每一个被分发工作负载的目标所用。当要负载均衡到上游服务器时，我们通常使用这些池子作为 _连接池_，这也是对于一个代理用例来说最通用的做法。RoundRobinLoadBalancer 跟踪池子的 _资源分配_。当一个资源被需要时，它从一个池子中 _借用_ 一个闲置资源。当一个资源不再需要时，它 _返回_ 该资源给该池子。最重要的是，当调用 [next()](/reference/api/RoundRobinLoadBalancer/next) 超过一次时，均衡器确保同一个 _借用者_ 不能从同一个均衡器那里获取到超过一个资源。
+在底层，RoundRobinLoadBalancer 有一个 _资源池_ 给它派发工作负载到的每一个目标所用。当负载均衡到上游服务器时，我们通常使用这些池子作为 _连接池_，其也是对于一个代理来说最通用的用例。RoundRobinLoadBalancer 持续跟踪来自池子的 _资源分配_。当一个目标通过调用 [next()](/reference/api/RoundRobinLoadBalancer/next) 被请求时，一个闲置的资源项从目标的池子中被 _借用_。当一个资源项不再需要时，它被 _返还_ 回池子。最重要的是，均衡器确保同一个 _借用者_ 不能获取超过 1 个资源项，当它调用 _next()_ 来 _借用_ 超过一次的时候。
 
-RoundRobinLoadBalancer 如何知道谁是借用者？这就是我们调用 [next()](/reference/api/RoundRobinLoadBalancer/next) 时给与的第一个实参。默认地，该实参来自于内置上下文变量 `__inbound`，其代表了当前的下游连接。
+<div style="text-align: center">
+  <SvgConnectionPools/>
+</div>
 
-这也是为什么 _next()_ 返回一个对象而不是被选择的目标本身的原因。该对象实际上是一个 _资源_ 代表。我们能够让多个借用者（或者说是客户端）有多个资源（在我们的这个例子里是连接），其全部来自于同一个目标（或者说是服务器）。同样，**muxHTTP()** 使用这个资源对象作为一个 _组共享鉴别器_ 来绑定一个子管道到一个分配的资源，实质化这些抽象的资源为具体的连接。
+默认地，_next()_ 把 _当前的下游连接_ 当做借用者，这个能够从内置的上下文变量 `__inbound` 来获得而不需要任何的用户接口。这意味着 _next()_ 将把每个客户端连接作为一个不同的借用者，并且确信同一个服务器连接一直被分配，而不管该客户端在一个会话中请求了多少次。这就是为什么就像我们之前在测试中看到的那样，对于跑一个 _curl_，目标不会被轮换。轮换只为不同的 _curl_ 运行。
 
-既然我们没有给 _next()_ 一个实参，它默认用了 `__inbound`。这意味着 "借用者" 是来自 _curl_ 的客户端连接。这就是为什么对于 _curl_ 的一个运转目标不会轮换的原因。它只会为不同的 _curl_ 运行而轮换。
+然而，如果您想要通过其他的方式来区别借用者，例如像客户端 IP 或者用户 ID，您能够通过把一个有区别的值给到 [next()](/reference/api/RoundRobinLoadBalancer/next) 的第一个实参来完成，该值代表了实际的借用者。
+
+``` js
+  // Allocate only one resource item for each client IP
+  _target = loadBalancer.next(__inbound.remoteAddress)
+```
+
+这些内置的资源池也是为什么 _next()_ 返回一个对象而不是被选择的目标本身的原因。该对象实际是来自其中一个池子的一个资源项。对于同一个目标（或者服务器），我们能够有多个资源项（或者，在我们这个例子中就是连接）被分配给不同的借用者（或者客户端）。如果 _next()_ 返回的只是目标（例如服务器）的话，对不同的借用者（像不同的客户端）而言就没有办法来区分各自的资源项（连接）了。
+
+同样，**muxHTTP()** 能够使用这个资源项作为 _键_ 给到它面向的共享子管道（参阅 [过滤器: muxHTTP()](/tutorial/03-proxy/#过滤器-muxhttp) 获取更多关于 _键_ 和 _目标回调_ 更详细的解释）。正如下面来自我们先前代码的节选所示，被分配的资源（通过调用 [next()](/reference/api/RoundRobinLoadBalancer/next)，其被保留在定制的上下文变量 `_target`中）被给到 **muxHTTP()** 以作为给目标子管道的 _键_。通过这种方式，每一个从均衡器分配的资源项被关联到一个在 **muxHTTP()** 里的子管道，这就是一个到实际目标服务器的连接。
+
+``` js
+  $=>$.muxHTTP(() => _target).to(
+    $=>$.connect(() => _target.id)
+  )
+```
 
 ## 总结
 
