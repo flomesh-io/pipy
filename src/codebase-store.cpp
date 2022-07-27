@@ -28,8 +28,8 @@
 #include "tar.hpp"
 #include "utils.hpp"
 
-#ifdef PIPY_USE_TUTORIAL
-#include "tutorial.tar.gz.h"
+#ifdef PIPY_USE_SAMPLES
+#include "samples.tar.gz.h"
 #endif
 
 #include <iostream>
@@ -162,8 +162,8 @@ static void read_record(const std::string &str, std::map<std::string, std::strin
 CodebaseStore::CodebaseStore(Store *store)
   : m_store(store)
 {
-#ifdef PIPY_USE_TUTORIAL
-  Data input(s_tutorial_tar_gz, sizeof(s_tutorial_tar_gz), &s_dp), output;
+#ifdef PIPY_USE_SAMPLES
+  Data input(s_samples_tar_gz, sizeof(s_samples_tar_gz), &s_dp), output;
   auto decompressor = Decompressor::inflate(
     [&](Data *data) {
       output.push(*data);
@@ -184,28 +184,27 @@ CodebaseStore::CodebaseStore(Store *store)
   for (const auto &filename : filenames) {
     auto i = filename.find('/', 1);
     if (i != std::string::npos) {
-      auto codebase_name = filename.substr(0, i);
-      auto &codebase = codebases[codebase_name];
-      codebase.insert(filename.substr(i));
+      i = filename.find('/', i + 1);
+      if (i != std::string::npos) {
+        auto codebase_name = filename.substr(0, i);
+        auto &codebase = codebases[codebase_name];
+        codebase.insert(filename.substr(i));
+      }
     }
   }
 
-  std::string base_path("/tutorial");
-  Codebase *base = nullptr;
   for (const auto &i : codebases) {
-    auto path = base_path + i.first;
+    auto path = i.first;
     auto codebase = find_codebase(path);
     if (!codebase) {
-      codebase = make_codebase(path, 0, base);
-      if (!base) {
-        codebase->erase_file("/main.js");
-        codebase->set_main("/hello.js");
-      }
+      codebase = make_codebase(path, 0);
+      codebase->erase_file("/main.js");
+      codebase->set_main("/hello.js");
       for (const auto &name : i.second) {
         size_t size;
         if (auto data = tarball.get(i.first + name, size)) {
           codebase->set_file(name, Data(data, &s_dp));
-          if (name == "/proxy.js") {
+          if (name == "/main.js" || name == "/proxy.js") {
             codebase->set_main(name);
           }
         }
@@ -213,9 +212,8 @@ CodebaseStore::CodebaseStore(Store *store)
       std::list<std::string> update_list;
       codebase->commit(1, update_list);
     }
-    base = codebase;
   }
-#endif // PIPY_USE_TUTORIAL
+#endif // PIPY_USE_SAMPLES
 }
 
 CodebaseStore::~CodebaseStore() {

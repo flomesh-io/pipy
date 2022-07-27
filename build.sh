@@ -189,7 +189,7 @@ function build() {
   mkdir ${PIPY_DIR}/build 2>&1 > /dev/null || true
   rm -fr ${PIPY_DIR}/build/*
   cd ${PIPY_DIR}/build
-  $CMAKE -DPIPY_GUI=${PIPY_GUI} -DPIPY_TUTORIAL=${PIPY_GUI} -DPIPY_STATIC=${PIPY_STATIC} -DCMAKE_BUILD_TYPE=${BUILD_TYPE} $PIPY_DIR
+  $CMAKE -DPIPY_GUI=${PIPY_GUI} -DPIPY_SAMPLES=${PIPY_GUI} -DPIPY_STATIC=${PIPY_STATIC} -DCMAKE_BUILD_TYPE=${BUILD_TYPE} $PIPY_DIR
   make -j${__NPROC}
   if [ $? -eq 0 ];then 
     echo "pipy now is in ${PIPY_DIR}/bin"

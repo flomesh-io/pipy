@@ -7,7 +7,7 @@ endif()
 project(pipy)
 
 option(PIPY_GUI "include builtin GUI" ON)
-option(PIPY_TUTORIAL "include builtin tutorial scripts" ON)
+option(PIPY_SAMPLES "include builtin sample scripts" ON)
 option(PIPY_SOIL_FREED_SPACE "invalidate freed space for debugging" OFF)
 option(PIPY_ZLIB "external zlib location" "")
 option(PIPY_OPENSSL "external libopenssl location" "")
@@ -264,21 +264,24 @@ if(PIPY_GUI)
   add_dependencies(pipy PackGui)
 endif()
 
-if(PIPY_TUTORIAL)
-  add_definitions(-DPIPY_USE_TUTORIAL)
+if(PIPY_SAMPLES)
+  add_definitions(-DPIPY_USE_SAMPLES)
 
-  file(GLOB_RECURSE TUTORIAL_FILES LIST_DIRECTORIES false ${CMAKE_SOURCE_DIR}/tutorial/*)
-
-  add_custom_command(
-    OUTPUT ${CMAKE_BINARY_DIR}/deps/tutorial.tar.gz.h
-    COMMAND node
-    ARGS pack-tutorial.js ${CMAKE_BINARY_DIR}/deps/tutorial.tar.gz.h
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/gui
-    DEPENDS gui/pack-tutorial.js ${TUTORIAL_FILES}
+  file(GLOB_RECURSE SAMPLE_FILES LIST_DIRECTORIES false
+    ${CMAKE_SOURCE_DIR}/tutorial/*
+    ${CMAKE_SOURCE_DIR}/samples/*
   )
 
-  add_custom_target(PackTutorial DEPENDS ${CMAKE_BINARY_DIR}/deps/tutorial.tar.gz.h)
-  add_dependencies(pipy PackTutorial)
+  add_custom_command(
+    OUTPUT ${CMAKE_BINARY_DIR}/deps/samples.tar.gz.h
+    COMMAND node
+    ARGS pack-samples.js ${CMAKE_BINARY_DIR}/deps/samples.tar.gz.h
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/gui
+    DEPENDS gui/pack-samples.js ${SAMPLE_FILES}
+  )
+
+  add_custom_target(PackSamples DEPENDS ${CMAKE_BINARY_DIR}/deps/samples.tar.gz.h)
+  add_dependencies(pipy PackSamples)
 endif()
 
 if(PIPY_SOIL_FREED_SPACE)

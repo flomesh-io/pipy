@@ -75,10 +75,10 @@ static void show_version() {
   std::cout << "Builtin GUI : " << "No" << std::endl;
 #endif
 
-#ifdef PIPY_USE_TUTORIAL
-  std::cout << "Tutorial    : " << "Yes" << std::endl;
+#ifdef PIPY_USE_SAMPLES
+  std::cout << "Samples     : " << "Yes" << std::endl;
 #else
-  std::cout << "Tutorial    : " << "No" << std::endl;
+  std::cout << "Samples     : " << "No" << std::endl;
 #endif
 }
 //
