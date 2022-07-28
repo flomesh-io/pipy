@@ -128,6 +128,7 @@ protected:
     double m_free_time = 0;
     List<MuxBase> m_waiting_muxers;
     bool m_is_pending = false;
+    bool m_is_closed = false;
 
     virtual void on_input(Event *evt) override;
     virtual void on_reply(Event *evt) override;
@@ -152,7 +153,6 @@ protected:
     virtual void free() = 0;
 
   private:
-    void reset();
     auto alloc() -> Session*;
     void free(Session *session);
     void discard(Session *session);
@@ -163,12 +163,14 @@ protected:
     List<Session> m_sessions;
     double m_max_idle;
     int m_max_queue;
+    bool m_weak_ptr_gone = false;
     bool m_recycle_scheduled = false;
 
     void sort(Session *session);
+    void schedule_recycling();
     void recycle(double now);
 
-    virtual void on_weak_ptr_gone() override { reset(); }
+    virtual void on_weak_ptr_gone() override;
 
     friend class MuxBase;
   };

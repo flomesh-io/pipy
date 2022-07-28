@@ -241,7 +241,7 @@ void MuxBase::Session::on_input(Event *evt) {
 void MuxBase::Session::on_reply(Event *evt) {
   output(evt);
   if (evt->is<StreamEnd>()) {
-    reset();
+    m_is_closed = true;
   }
 }
 
@@ -257,14 +257,6 @@ MuxBase::SessionCluster::SessionCluster(MuxBase *mux, pjs::Object *options) {
   } else {
     m_max_idle = mux->m_options.max_idle;
     m_max_queue = mux->m_options.max_queue;
-  }
-}
-
-void MuxBase::SessionCluster::reset() {
-  auto *s = m_sessions.head();
-  while (s) {
-    auto session = s; s = s->next();
-    session->reset();
   }
 }
 
@@ -326,21 +318,7 @@ void MuxBase::SessionCluster::sort(Session *session) {
     }
   }
 
-  if (!m_weak_key) {
-    auto s = m_sessions.head();
-    if (!s || s->m_share_count > 0) {
-      if (m_recycle_scheduled) {
-        m_manager->m_recycle_clusters.remove(this);
-        m_recycle_scheduled = false;
-      }
-    } else {
-      if (!m_recycle_scheduled) {
-        m_manager->m_recycle_clusters.push(this);
-        m_manager->recycle();
-        m_recycle_scheduled = true;
-      }
-    }
-  }
+  schedule_recycling();
 
   if (m_sessions.empty()) {
     if (m_weak_key.original_ptr()) {
@@ -352,15 +330,38 @@ void MuxBase::SessionCluster::sort(Session *session) {
   }
 }
 
+void MuxBase::SessionCluster::schedule_recycling() {
+  auto s = m_sessions.head();
+  if (!s || s->m_share_count > 0) {
+    if (m_recycle_scheduled) {
+      m_manager->m_recycle_clusters.remove(this);
+      m_recycle_scheduled = false;
+    }
+  } else {
+    if (!m_recycle_scheduled) {
+      m_manager->m_recycle_clusters.push(this);
+      m_manager->recycle();
+      m_recycle_scheduled = true;
+    }
+  }
+}
+
 void MuxBase::SessionCluster::recycle(double now) {
   auto max_idle = m_max_idle * 1000;
   auto s = m_sessions.head();
   while (s) {
     auto session = s; s = s->next();
-    if (now - session->m_free_time >= max_idle) {
+    if (session->m_share_count > 0) break;
+    if (session->m_is_closed || m_weak_ptr_gone || now - session->m_free_time >= max_idle) {
       session->reset();
     }
   }
+}
+
+void MuxBase::SessionCluster::on_weak_ptr_gone() {
+  m_weak_ptr_gone = true;
+  m_manager->m_weak_clusters.erase(m_weak_key);
+  schedule_recycling();
 }
 
 //
@@ -381,10 +382,6 @@ auto MuxBase::SessionManager::get(MuxBase *mux, const pjs::Value &key) -> Sessio
     auto i = m_weak_clusters.find(o);
     if (i != m_weak_clusters.end()) {
       cluster = i->second;
-      if (!i->first.ptr()) {
-        cluster->reset();
-        cluster = nullptr;
-      }
     }
   } else {
     auto i = m_clusters.find(key);
