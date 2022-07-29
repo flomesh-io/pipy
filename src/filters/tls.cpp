@@ -250,6 +250,7 @@ void TLSSession::on_reply(Event *evt) {
 
   } else if (auto end = evt->as<StreamEnd>()) {
     m_closed_output = true;
+    output(evt);
   }
 }
 
