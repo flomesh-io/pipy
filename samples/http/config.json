@@ -2,19 +2,39 @@
   "listen": 8000,
   "plugins": [
     "plugins/router.js",
+    "plugins/hello.js",
     "plugins/balancer.js",
+    "plugins/serve-files.js",
     "plugins/default.js"
   ],
-  "upstreams": {
+  "hello": {
     "hi": {
+      "status": 200,
+      "content-type": "text/plain",
+      "message": "Hi, there!\n"
+    }
+  },
+  "upstreams": {
+    "api": {
       "policy": "round-robin",
       "targets": ["localhost:80"]
     }
   },
+  "serve-files": {
+    "home": {
+      "root": "home"
+    }
+  },
   "endpoints": {
     "/hi": {
-      "route": "hi",
-      "rewrite": ["^/hi/?", "/"]
+      "route": "hi"
+    },
+    "/api": {
+      "route": "api",
+      "rewrite": ["^/api/?", "/"]
+    },
+    "/*": {
+      "route": "home"
     }
   },
   "log": [
