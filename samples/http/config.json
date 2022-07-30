@@ -2,11 +2,24 @@
   "listen": 8000,
   "plugins": [
     "plugins/router.js",
+    "plugins/cache.js",
     "plugins/hello.js",
     "plugins/balancer.js",
     "plugins/serve-files.js",
     "plugins/default.js"
   ],
+  "endpoints": {
+    "/hi": {
+      "route": "hi"
+    },
+    "/api": {
+      "route": "api",
+      "rewrite": ["^/api/?", "/"]
+    },
+    "/*": {
+      "route": "home"
+    }
+  },
   "hello": {
     "hi": {
       "status": 200,
@@ -25,16 +38,10 @@
       "root": "home"
     }
   },
-  "endpoints": {
-    "/hi": {
-      "route": "hi"
-    },
-    "/api": {
-      "route": "api",
-      "rewrite": ["^/api/?", "/"]
-    },
-    "/*": {
-      "route": "home"
+  "cache": {
+    "home": {
+      "extensions": ["/", ".html", ".css", ".js"],
+      "timeout": "10s"
     }
   },
   "log": [
