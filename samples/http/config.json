@@ -2,6 +2,7 @@
   "listen": 8000,
   "plugins": [
     "plugins/router.js",
+    "plugins/jwt.js",
     "plugins/cache.js",
     "plugins/hello.js",
     "plugins/balancer.js",
@@ -16,6 +17,9 @@
       "route": "api",
       "rewrite": ["^/api/?", "/"]
     },
+    "/api/private": {
+      "route": "private"
+    },
     "/*": {
       "route": "home"
     }
@@ -25,6 +29,9 @@
       "status": 200,
       "content-type": "text/plain",
       "message": "Hi, there!\n"
+    },
+    "private": {
+      "message": "Staff only\n"
     }
   },
   "upstreams": {
@@ -42,6 +49,14 @@
     "home": {
       "extensions": ["/", ".html", ".css", ".js"],
       "timeout": "10s"
+    }
+  },
+  "jwt": {
+    "private": {
+      "keys": [
+        "sample-key-rsa",
+        "sample-key-ecdsa"
+      ]
     }
   },
   "log": [

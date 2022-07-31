@@ -1637,7 +1637,7 @@ template<> void ClassDef<JWT>::init() {
         ctx.error(err);
       }
     } else {
-      ctx.error_argument_type(0, "a Data object or a string or a private key object");
+      ctx.error_argument_type(0, "a Data object or a string or a public key object");
     }
   });
 }
