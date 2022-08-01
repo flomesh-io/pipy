@@ -50,7 +50,7 @@ Let's take a look at the output:
 
 - On the third line, we see an error message saying _"Script did not result in a Configuration"_. Here, [Configuration](/reference/api/Configuration) is the main API provided by Pipy for pipeline setups, which we'll see being used a lot later on. For now, the only thing you need to know is, Pipy requires a _Configuration_ to continue as a long-lived server. However, since the _expression evaluation_ gave us _undefined_, which is not a _Configuration_, so there's nothing else Pipy could do but quit. That's what we see in the output after: Pipy shut down everything and stopped running.
 
-As you can see from above, Pipy is fundamentally an _"expression evaluator"_. If you say _"pipy -e 1+1"_, it tells you _"2"_,  nothing fancy indeed. Surely that isn't what we created Pipy for. To make use of Pipy in a more meaningful way, we should write an expression that evaluates to a _Configuration_.
+As you can see from above, Pipy is fundamentally an _"expression evaluator"_. If you say _"pipy -e 1+1"_, it tells you _"2"_,  nothing fancy indeed. Surely that isn't what we created Pipy for. To make Pipy do something more interesting, we should write an expression that evaluates to a _Configuration_.
 
 ## Hello, world in HTTP!
 
@@ -77,7 +77,7 @@ Take a bit of time to examine the code. Here's what's going on:
 2. At line 2, by calling method [listen()](/reference/api/Configuration/listen) on the _Configuration_ object that we just got from _pipy()_, we add a _port pipeline layout_ to the configuration that listens on port 8080. Method _listen()_ itself returns the same _Configuration_ object, so we can continually call other methods on it to add more _pipeline layouts_ and _filters_. That's exactly what we are about to do next.
 
 3. At line 3, we add a [serveHTTP()](/reference/classes/Configuration/serveHTTP) filter 
-   to the pipeline layout that we just added in step 2. The filter takes a [Message](/reference/classes/Message)
+   to the pipeline layout that we just added in line 2. The filter takes a [Message](/reference/classes/Message)
    object as its construction parameter. At runtime, it'll be outputting that same message in
    response to any input messages.
 
@@ -128,7 +128,7 @@ In this first part of our tutorial, you've learned how a Pipy program is organiz
 
 * A Pipy program is made of definitions of _pipeline layouts_ and _filters_. It always starts off with a call to [pipy()](/reference/api/pipy), which gives us a [Configuration](/reference/api/Configuration) object, which we call various methods on to add _pipeline layouts_ and _filters_.
 
-* A _port pipeline_ reads from a network port and writes back whatever its last filter outputs.
+* A _port pipeline_ reads from a network port and writes back to that port whatever its last filter outputs.
 
 * A [serveHTTP()](/reference/api/Configuration/serveHTTP) filter takes in HTTP messages as requests and outputs HTTP messages as responses.
 

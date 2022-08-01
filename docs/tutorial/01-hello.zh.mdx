@@ -9,29 +9,29 @@ import PlayIcon from '@material-ui/icons/PlayArrowSharp'
 import StopIcon from '@material-ui/icons/StopSharp'
 import SvgHelloPipeline from './hello-pipeline.svg';
 
-**Ahoy, world!**
+**你好，世界！**
 
-作为程序员的我们都沉迷于“Hello World”，这里也不免俗。
+作为程序员，我们都有点儿痴迷于 “Hello World” ，不是么？那还等什么，就让我们快点儿开始吧！
 
 ## Hello, world!
 
-在您的终端中键入如下命令：
+在终端上输入如下命令：
 
 ``` sh
 pipy -e "console.log('Hello, world!')"
 ```
 
-'-e' 选项告知 Pipy 来 _计算紧随其后的表达式_ 值，这里我们所要计算的表达式是：
+这里的 '-e' 选项让 Pipy _计算_ 跟在后面的 _表达式_ 的值。这里我们要计算的表达式是：
 
 ``` js
 console.log('Hello, world!')
 ```
 
-用 _PipyJS_ 的话说，就是调用函数 [console.log()](/reference/api/console/log)，传入字符串参数 _"Hello, world!"_。
+用 _PipyJS_ 的话讲，就是调用函数 [console.log()](/reference/api/console/log)，并且传入字符串 _"Hello, world!"_ 作为参数。
 
-> **PipyJS** 是一种兼容 [ECMAScript](https://en.wikipedia.org/wiki/ECMAScript) 标准的 JS 变种，为 Pipy 所用。参考 [PipyJS Reference](/reference/pjs) 可以获取更多信息。
+> **PipyJS** 是 Pipy 所使用的 [ECMAScript](https://en.wikipedia.org/wiki/ECMAScript) 方言。参考 [PipyJS Reference](/reference/pjs) 可以获得更多信息。
 
-Pipy 现在将会启动，但是基本立刻就退出了，会留下如下的输出：
+现在 Pipy 会开始运行，但几乎立刻就退出了，并且留下这样的输出：
 
 ```
 [INF] Hello, world!
@@ -42,25 +42,25 @@ undefined
 Done.
 ```
 
-让我们看一看这些输出都说了什么：
+让我们看一看这些输出都说了些什么：
 
-- 第一行，我们看到 _"Hello, world!"_。这是函数调用 [console.log()](/reference/api/console/log) 最终的结果：一行 log 输出到控制台。
+- 第一行，我们看到 _"Hello, world!"_。这是调用函数 [console.log()](/reference/api/console/log) 产生的结果，即打印一行 log 到控制台。
 
-- 第二行，我们看到 _"undefined"_。这个结果来自于对我们表达式的 _求值_。既然函数 [console.log()](/reference/api/console/log) 没有返回值，这求值结果自然就是 _undefined_。
+- 第二行，我们看到 _"undefined"_。这个结果来自于对表达式的 _求解_。既然函数 [console.log()](/reference/api/console/log) 没有返回值，求值的结果自然就是 _undefined_。
 
-- 第三行，我们看到一个错误消息说 _"Script did not result in a Configuration"_。这里，[Configuration](/reference/api/Configuration) 是由 Pipy 为管道安装所提供的主 API，以后我们会看到很多关于它的使用方法。目前为止，您所需要知道的唯一事情就是，Pipy 需要一个 _Configuration_ 来继续作为一个长期的服务。然而，既然 _表达式求值_ 给了我们一个 _undefined_，这并不是一个 _Configuration_，所以这里 Pipy 除了退出啥也做不了。这就是我们为什么会在 Pipy 关闭每件事情并且停止运行后看到这样的输出。
+- 第三行，我们看到一个错误消息说 _"Script did not result in a Configuration"_。这里，[Configuration](/reference/api/Configuration) 是由 Pipy 提供的最主要的 API，用于进行管道配置。以后会看到，我们会经常使用它。目前，只要知道 Pipy 需要一个 _Configuration_ 才能成为持续运行的服务。既然前面的 _表达式求解_ 给了我们一个 _undefined_ 的结果，并非 _Configuration_，所以 Pipy 除了退出以外什么也做不了。这正是我们在后续输出里看到的结果：Pipy 关闭了一切并停止了运行。
 
-正如您所见，Pipy 目前基本上就是一个 _表达式求值器_。如果您说 _"pipy -e 1+1"_，它会告诉您 _"2"_，仅此而已。这肯定不是我们创建 Pipy 的初衷。要想使 Pipy 以更有意义的方式工作，我们应该写一个能够对一个 _Configuration_ 求值的表达式。
+正如你所看到的，Pipy 本质上是一个 _表达式计算器_。如果你问它 _"pipy -e 1+1"_，它会告诉你 _"2"_，仅此而已。这肯定不是我们创建 Pipy 的初衷。想要让 Pipy 做些更有意思的工作，我们应该写一个能够求得 _Configuration_ 结果的表达式。
 
 ## Hello, world in HTTP!
 
-现在让我们用通常的方式来使用 Pipy：运行一个 HTTP 服务。
+现在让我们用常规的方式来使用 Pipy：运行一个 HTTP 服务。
 
 ``` sh
 pipy -e "pipy().listen(8080).serveHTTP(new Message('Hi, there!'))"
 ```
 
-这次，我们计算一个稍微复杂一点的表达式。当然，同样的表达式可以被重写成多行格式，这样看起来更清晰：
+这次，我们求解了一个稍微复杂一点的表达式。这个表达式也可以写成多行格式，这样看起来更清晰：
 
 ``` js
 pipy()
@@ -70,15 +70,15 @@ pipy()
 
 ### 代码剖析
 
-花一些时间来检查代码。这里可以看到都发生了什么：
+花一点时间来仔细阅读一下代码，看看它在做什么：
 
-1. 在最上面一行，内置函数 [pipy()](/reference/api/pipy) 被调用。它返回了一个 [Configuration](/reference/api/Configuration) 对象。这就是 Pipy 为了运行一个服务所需要的。
+1. 在最上面一行，调用了内置函数 [pipy()](/reference/api/pipy) ，它会返回一个 [Configuration](/reference/api/Configuration) 对象。这正是 Pipy 运行一个服务所需要的。
 
-2. 在第 2 行，通过调用我们刚刚从 _pipy()_ 上获取的 _Configuration_ 对象上的方法 [listen()](/reference/api/Configuration/listen)，我们添加了一个 _端口管道布局_ 给配置，使其监听端口 8080。方法 _listen()_ 本身返回同一个 _Configuration_ 对象，所以我们能够继续调用该对象上的其他方法来添加更多的 _管道布局_ 和 _过滤器_。这正是我们接下来所要做的。
+2. 在第 2 行，通过调用刚刚从 _pipy()_ 返回得到的 _Configuration_ 对象上的方法 [listen()](/reference/api/Configuration/listen)，我们向配置里添加了一个 _端口管道布局_，这个管道布局会在 8080 端口上监听。_listen()_ 方法本身会返回同一个 _Configuration_ 对象，这样，我们就可以继续调用该对象上的其他方法来添加更多的 _管道布局_ 和 _过滤器_。这正是我们接下来所要做的。
 
-3. 在第 3 行，我们添加了一个 [serveHTTP()](/reference/classes/Configuration/serveHTTP) 过滤器到我们刚刚在第二步添加的那个管道布局上。该过滤器使用一个 [Message](/reference/classes/Message) 对象作为它的构造参数。在运行时，它将在响应中输出相同的消息给任何的输入消息。
+3. 在第 3 行，我们为第 2 行添加的那个管道布局增添了一个 [serveHTTP()](/reference/classes/Configuration/serveHTTP) 过滤器。该过滤器接受一个 [Message](/reference/classes/Message) 对象作为构造参数。在运行时，对于任何输入消息，它都回应这同一个 Message。
 
-扼要重述下，我们上面所写的表达式定义了一个 _管道布局_，其只包含一个 _过滤器_。对它的描绘应该是这样：
+总结一下，我们上面所写的表达式定义了 1 个 _管道布局_，里面只包含 1 个 _过滤器_。如果用图形表示就是这样：
 
 <div style="text-align: center">
   <SvgHelloPipeline/>
@@ -86,7 +86,7 @@ pipy()
 
 ### 测试
 
-在您的终端输入上面的命令，您将会看到如下的输出：
+在终端上输入上述命令，你将看到如下输出：
 
 ```
 [INF] [config]
@@ -103,15 +103,15 @@ pipy()
 [INF] [listener] Listening on TCP port 8080 at 0.0.0.0
 ```
 
-这次，Pipy 没有退出。取而代之，它开启了端口 8080 的监听，等待着 HTTP 请求的到来。
+这次，Pipy 没有立刻退出。相反，它开始监听 8080 端口，等待 HTTP 请求。
 
-现在，打开第二个终端窗口，并且用 `curl` 发送一个请求：
+现在，打开另一个终端窗口，用 `curl` 发送一个请求：
 
 ``` sh
 curl localhost:8080
 ```
 
-您应该看到这样的结果：
+你会看到这样的结果：
 
 ```
 Hi, there!
@@ -119,16 +119,16 @@ Hi, there!
 
 ## 总结
 
-在这个我们教程的第一部分，通过创建和运行一个简单的单行 HTTP 服务，您已经学到了一个 Pipy 程序是如何被组织的。
+在本教程的第一部分，通过创建和运行一个仅有一行代码的 HTTP 服务器，你了解到了一个 Pipy 程序是如何组织的。
 
 ### 要点
 
-* 一个 Pipy 程序由 _管道布局_ 和 _过滤器_ 的定义来组成。它永远开始于一个 [pipy()](/reference/api/pipy) 调用，其返回一个 [Configuration](/reference/api/Configuration) 对象，随之我们调用该对象上的多种方法来添加 _管道布局_ 和 _过滤器_。
+* Pipy 程序由 _管道布局_ 和 _过滤器_ 的定义组成。它总是以一次 [pipy()](/reference/api/pipy) 调用开始，此调用返回一个 [Configuration](/reference/api/Configuration) 对象，通过调用该对象上的各种方法来添加 _管道布局_ 和 _过滤器_。
 
-* 一个 _端口管道_ 从一个网络端口读取，然后回写它的最后的过滤器所输出的任意内容。
+* _端口管道_ 可以从网络端口读取，并把它最后一个过滤器的输出写回它读取的端口。
 
-* 一个 [serveHTTP()](/reference/api/Configuration/serveHTTP) 过滤器接收 HTTP 消息作为请求，输出 HTTP 消息作为响应。
+* [serveHTTP()](/reference/api/Configuration/serveHTTP) 过滤器可以接收 HTTP 消息作为请求，输出 HTTP 消息作为响应。
 
 ### 接下来
 
-现在，您已经制作了一个简单的 _Hello World_ 服务，但是它基本没啥用，因为它一直在说同一件事。接下来，我们将看如何用不同的响应来反馈给不同的请求。
+你已经创建了一个简单的 _Hello World_ 服务器程序，但是它用处不大，因为它总说同一句话。接下来，我们将看到如何针对不同的请求给出不同的响应。
