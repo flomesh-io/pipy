@@ -1,7 +1,0 @@
-{
-  "routes": {
-    "/hi/*": "service-hi",
-    "/echo": "service-echo",
-    "/ip/*": "service-tell-ip"
-  }
-}

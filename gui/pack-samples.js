@@ -42,12 +42,6 @@ dirnames.forEach(dirname => {
   listFilenames(dirpath, '', filenames)
   for (const name of filenames) {
     let content = fs.readFileSync(path.join(dirpath, name), 'utf8');
-    for (let i = codebases.length - 1; i >= 0; i--) {
-      if (codebases[i].files[name] === content) {
-        content = null;
-        break;
-      }
-    }
     if (content !== null) {
       files[name] = content;
       console.log('  ' + name);
