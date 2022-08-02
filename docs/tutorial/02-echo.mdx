@@ -175,7 +175,7 @@ This time we'll return some dynamically composed text by using [_template string
 * `msg.head.path` is the requested URI from the HTTP request
 * `__inbound.remoteAddress` is the client's IP address
 
-Variable `__inbound` is a built-in _context variable_ containing address/port information about the current inbound connection. It's called a _"context variable"_ because its value depends on the context. It'll have different values across concurrent pipelines that handle concurrent inbound connections, each of which works in a different _context_.
+Variable `__inbound` is a built-in _context variable_ containing address/port information about the current inbound connection. It's called a _"context variable"_ because its value depends on the context. It'll have different values across concurrent pipelines that handle concurrent inbound connections, because each of these pipelines works in a different _context_.
 
 > For a deeper explanation of _context variables_, see [Context](/intro/concepts#context) in _Concepts_.
 
