@@ -30,7 +30,7 @@ new algo.RoundRobinLoadBalancer([
 ])
 ```
 
-With that _RoundRobinLoadBalancer_, each time you call its [next()](/reference/api/algo/RoundRobinLoadBalancer/next) method, it will give you one of the targets wrapped in an object, in a round-robin fashion.
+With that _RoundRobinLoadBalancer_, each time you call its [next()](/reference/api/algo/RoundRobinLoadBalancer/next) method, it will give you one of the targets in a round-robin fashion. The target is given as the `id` property of a wrapper object.
 
 We can see how it works in a one-liner script like this:
 

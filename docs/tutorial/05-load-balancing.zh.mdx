@@ -4,13 +4,13 @@ title: 05 负载均衡
 
 import SvgConnectionPools from './connection-pools.svg';
 
-现在，我们已经有了一个代理可以路由请求到不同的服务器。对于一个代理紧接的另一个需求就是能够跨越多个服务器来 _负载均衡_ 请求。
+现在，我们已经有了一个代理可以把请求路由到不同的服务器。对于一个代理来说，紧接着另一个需求就是能够跨越多个服务器对请求做 _负载均衡_。
 
 ## RoundRobinLoadBalancer
 
-Pipy 提供了一批内置类来为负载均衡服务，其中每一个都实现了一个特定的负载均衡算法。它们都能够按照同样的方式来使用。在这个教程里，我们将演示如何使用 [algo.RoundRobinLoadBalancer](/reference/api/algo/RoundRobinLoadBalancer) 来建立一个 _"round-robin"_ 负载均衡器。
+Pipy 为负载均衡提供了几个内置类，其中每一个都实现了某个特定的负载均衡算法。它们都能够按照同样的方式来使用。在这个教程里，我们将演示如何使用 [algo.RoundRobinLoadBalancer](/reference/api/algo/RoundRobinLoadBalancer) 来建立一个 _“round-robin”_ 负载均衡器。
 
-要构建一个 _RoundRobinLoadBalancer_ 对象，您需要一个目标列表，并伴有它们的权重。
+要构建一个 _RoundRobinLoadBalancer_ 对象，需要一个目标列表，以及目标的权重。
 
 ``` js
 new algo.RoundRobinLoadBalancer({
@@ -20,7 +20,7 @@ new algo.RoundRobinLoadBalancer({
 })
 ```
 
-或者，如果您首选工作负载被均衡地分配，您可以简单地给它一个目标数组，直接忽略权重：
+或者，如果你希望工作负荷被均衡地分配，可以简单地给它一个目标数组，忽略权重：
 
 ``` js
 new algo.RoundRobinLoadBalancer([
@@ -30,9 +30,9 @@ new algo.RoundRobinLoadBalancer([
 ])
 ```
 
-用 _RoundRobinLoadBalancer_，每次您调用它的 [next()](/reference/api/algo/RoundRobinLoadBalancer/next) 方法，它将给您被包裹在一个对象中的目标之一，其按照一个 round-robin 风格。
+用 _RoundRobinLoadBalancer_，每次调用它的 [next()](/reference/api/algo/RoundRobinLoadBalancer/next) 方法，会以 round-robin 的方式得到一个目标，这个目标会以一个包装对象的 `id` 属性的形式给出。
 
-我们可以看到它是如何在像下面这样一行脚本中工作的：
+我们可以用下面这样一行脚本看看它是如何工作的：
 
 ``` sh
 $ pipy -e "new Array(10).fill(new algo.RoundRobinLoadBalancer(['A','B','C'])).map(b => b.next().id)" 2> /dev/null
@@ -40,9 +40,9 @@ $ pipy -e "new Array(10).fill(new algo.RoundRobinLoadBalancer(['A','B','C'])).ma
 ["A","B","C","A","B","C","A","B","C","A"]
 ```
 
-### 在负载均衡器中添加
+### 加入负载均衡器
 
-我们当前的路由脚本直接映射请求到代表服务器地址的字符串值。现在我们需要添加一个间接层：其在映射一个请求到一个 _RoundRobinLoadBalancer_ 和 为一个具体的目标查询均衡器之间。
+我们目前的路由脚本是把请求映射到代表服务器地址的字符串，现在我们需要添加一个间接层：先把请求映射到一个 _RoundRobinLoadBalancer_，然后询问它得到具体的目标。
 
 ``` js
   ((
@@ -60,7 +60,7 @@ $ pipy -e "new Array(10).fill(new algo.RoundRobinLoadBalancer(['A','B','C'])).ma
   })
 ```
 
-现在，当我们调用 `router.find()`，我们将不再能得到一个服务器的地址。相反，我们将得到一个 _RoundRobinLoadBalancer_ 对象。要得到 **connect()** 所需要的服务器地址，我们得调用均衡器上的 [next()](/reference/api/algo/RoundRobinLoadBalancer/next)。
+现在，当我们调用 `router.find()`，我们得到的不是一个服务器地址，相反，我们会得到一个 _RoundRobinLoadBalancer_ 对象。要拿到 **connect()** 所需要的服务器地址，我们得调用均衡器的 [next()](/reference/api/algo/RoundRobinLoadBalancer/next)。
 
 ``` js
     .handleMessageStart(
@@ -74,9 +74,9 @@ $ pipy -e "new Array(10).fill(new algo.RoundRobinLoadBalancer(['A','B','C'])).ma
     )
 ```
 
-注意，既然当路由没有找到时 `router.find()` 可能返回 `undefined`，所以我们是 [可选择链路](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Operators/Optional_chaining)，这样 `_target` 在这种情况下默默地得到一个 `undefined`。
+注意，既然 `router.find()` 会在路由没有找到时返回 `undefined`，所以我们使用了 [可选择链路](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Operators/Optional_chaining)，这样 `_target` 在此情况下会静默得到一个 `undefined`。
 
-[RoundRobinLoadBalancer.next()](/reference/api/algo/RoundRobinLoadBalancer/next) 返回的是一个内部对象，其带一个属性 `id` 用来保存在构建时目标列表中的一个 _target_。我们使用这个来服务于我们要连接的服务器地址。
+[RoundRobinLoadBalancer.next()](/reference/api/algo/RoundRobinLoadBalancer/next) 返回的是一个内部对象，它在属性 `id` 里含有构建时目标列表中的某个 _target_，我们把它用作要连接的服务器地址。
 
 ``` js
         $=>$.muxHTTP(() => _target).to(
@@ -85,11 +85,11 @@ $ pipy -e "new Array(10).fill(new algo.RoundRobinLoadBalancer(['A','B','C'])).ma
         )
 ```
 
-这就是我们为一个简单的负载均衡器所做的全部。
+以上就是实现一个简单的负载均衡器所需的一切。
 
 ## 测试
 
-现在让我们做一些测试。
+现在让我们做些测试。
 
 ``` sh
 $ curl localhost:8000/hi
@@ -102,7 +102,7 @@ $ curl localhost:8000/hi
 You are requesting /hi from ::ffff:127.0.0.1
 ```
 
-您能够看到每次您访问路径 "/hi"，请求被定向到一个不同的目标，有不同消息响应。在一个单一连接上发送两个请求会如何？
+你会看到，每次访问路径 "/hi"，请求被定向到一个不同的目标，产生不同的响应消息。要是在单个连接上发送两个请求会如何？
 
 ``` sh
 $ curl localhost:8000/hi localhost:8000/hi
@@ -113,28 +113,28 @@ You are requesting /hi from 127.0.0.1
 You are requesting /hi from 127.0.0.1
 ```
 
-正如您所见到的，对一个特定的客户端连接，目标并未轮换。它只会为跨越不同的下游连接做轮换。这幕后的工作是如何进行的呢？
+正如你所见到的，对于一个既定的客户端连接，目标并未轮换。只有跨越不同的下游连接时，目标才轮换。这幕后的工作原理是什么呢？
 
 ## 连接池
 
-在底层，RoundRobinLoadBalancer 有一个 _资源池_ 给它派发工作负载到的每一个目标所用。当负载均衡到上游服务器时，我们通常使用这些池子作为 _连接池_，其也是对于一个代理来说最通用的用例。RoundRobinLoadBalancer 持续跟踪来自池子的 _资源分配_。当一个目标通过调用 [next()](/reference/api/RoundRobinLoadBalancer/next) 被请求时，一个闲置的资源项从目标的池子中被 _借用_。当一个资源项不再需要时，它被 _返还_ 回池子。最重要的是，均衡器确保同一个 _借用者_ 不能获取超过 1 个资源项，当它调用 _next()_ 来 _借用_ 超过一次的时候。
+在内部，RoundRobinLoadBalancer 针对它分发工作的每一个目标都有一个 _资源池_。如果是负载均衡到上游服务器，一般我们利用这些池作为 _连接池_，这也是对于一个代理来说最常见的场景。RoundRobinLoadBalancer 会跟踪这些池的 _资源分配_。当调用 [next()](/reference/api/RoundRobinLoadBalancer/next) 请求到一个目标时，一个闲置的资源项会从这个目标的池被 _借走_。当一个资源项不再需要时，它被 _归还_ 到池里。最重要的是，均衡器会确保同一个 _借用者_ 不会因调用 _next()_ 超过一次而获取到多个资源项。
 
 <div style="text-align: center">
   <SvgConnectionPools/>
 </div>
 
-默认地，_next()_ 把 _当前的下游连接_ 当做借用者，这个能够从内置的上下文变量 `__inbound` 来获得而不需要任何的用户接口。这意味着 _next()_ 将把每个客户端连接作为一个不同的借用者，并且确信同一个服务器连接一直被分配，而不管该客户端在一个会话中请求了多少次。这就是为什么就像我们之前在测试中看到的那样，对于跑一个 _curl_，目标不会被轮换。轮换只为不同的 _curl_ 运行。
+默认地，_next()_ 把 _当前下游连接_ 当做借用者，这能够从内置的上下文变量 `__inbound` 来获得而不需要用户介入。这就意味着 _next()_ 会把每个客户端连接作为一个不同的借用者，并且确保不管客户端在一次会话中请求了多少次，总是分配同一个服务器连接给它。这就是为什么 _curl_ 像之前看到的那样，一次运行的中间目标不轮换，不同次的运行才轮换。
 
-然而，如果您想要通过其他的方式来区别借用者，例如像客户端 IP 或者用户 ID，您能够通过把一个有区别的值给到 [next()](/reference/api/RoundRobinLoadBalancer/next) 的第一个实参来完成，该值代表了实际的借用者。
+然而，如果想要通过其他方式来区别借用者，例如，客户端 IP 或者用户 ID，可以把一个代表实际借用者的可分辨值给 [next()](/reference/api/RoundRobinLoadBalancer/next) 的第一个参数。
 
 ``` js
   // Allocate only one resource item for each client IP
   _target = loadBalancer.next(__inbound.remoteAddress)
 ```
 
-这些内置的资源池也是为什么 _next()_ 返回一个对象而不是被选择的目标本身的原因。该对象实际是来自其中一个池子的一个资源项。对于同一个目标（或者服务器），我们能够有多个资源项（或者，在我们这个例子中就是连接）被分配给不同的借用者（或者客户端）。如果 _next()_ 返回的只是目标（例如服务器）的话，对不同的借用者（像不同的客户端）而言就没有办法来区分各自的资源项（连接）了。
+这些内置的资源池也是为什么 _next()_ 不直接返回被选目标本身而返回一个对象的原因。该对象其实是来自某个资源池的资源项。对于同一个目标（或者服务器），我们可以有多个资源项（或者，在我们这个例子中就是连接）被分配给不同的借用者（或者客户端）。如果 _next()_ 返回的只是目标（例如服务器）的话，对不同的借用者（不同的客户端）而言就没有办法来区分各自的资源项（连接）了。
 
-同样，**muxHTTP()** 能够使用这个资源项作为 _键_ 给到它面向的共享子管道（参阅 [过滤器: muxHTTP()](/tutorial/03-proxy/#过滤器-muxhttp) 获取更多关于 _键_ 和 _目标回调_ 更详细的解释）。正如下面来自我们先前代码的节选所示，被分配的资源（通过调用 [next()](/reference/api/RoundRobinLoadBalancer/next)，其被保留在定制的上下文变量 `_target`中）被给到 **muxHTTP()** 以作为给目标子管道的 _键_。通过这种方式，每一个从均衡器分配的资源项被关联到一个在 **muxHTTP()** 里的子管道，这就是一个到实际目标服务器的连接。
+而且，**muxHTTP()** 还可以把这个资源对象作为目标共享子管道的 _键_ （参阅 [过滤器: muxHTTP()](/tutorial/03-proxy/#过滤器-muxhttp) 获取更多关于 _键_ 和 _目标回调_ 的详细解释）。正如下面这段先前代码的节选所示，被分配的资源（在此之前调用 [next()](/reference/api/RoundRobinLoadBalancer/next) 以后就留在了上下文变量 `_target` 中）被给予 **muxHTTP()** 作为目标子管道的 _键_。通过这种方式，每一个从均衡器分配的资源项都被关联到一个 **muxHTTP()** 的子管道，也就是一个去往实际目标服务器的连接。
 
 ``` js
   $=>$.muxHTTP(() => _target).to(
@@ -144,14 +144,14 @@ You are requesting /hi from 127.0.0.1
 
 ## 总结
 
-在这部分教程，您学会了撰写一个简单的 round-robin 负载均衡器。
+在这部分教程里，你学会了编写一个简单的 round-robin 负载均衡器。
 
 ### 要点
 
-1. 使用 [algo.RoundRobinLoadBalancer](/reference/api/algo/RoundRobinLoadBalancer)（或者其他的类似者）来派发工作负载给多个目标，同时其各自携带权重。
+1. 使用 [algo.RoundRobinLoadBalancer](/reference/api/algo/RoundRobinLoadBalancer)（或者其他类似者）来按照权重向多个目标分配工作负荷。
 
-2. 使用 [algo.URLRouter](/reference/api/algo/URLRouter) 来映射类 URL 路径到任意类型的值，而没有必要是代表服务器地址的字符串。
+2. 可以使用 [algo.URLRouter](/reference/api/algo/URLRouter) 来把类 URL 路径映射到任意类型的值，而不一定非要是代表服务器地址的字符串。
 
 ### 接下来
 
-当我们的程序具备了更多的功能，我们会有越来越多的参数来控制它，譬如我们监听的端口和路由表等等。如果能把全部这些参数置于一个专属的 _"配置文件"_ 里会更加的优雅和简洁。而这正是我们接下来所要做的。
+随着程序的功能增加，会有越来越多的参数来控制它，譬如监听的端口和路由表等等。如果能把这些参数全部放到一个专门的 _“配置文件”_ 里，那样会更加的整洁，而这正是我们接下来所要做的。
