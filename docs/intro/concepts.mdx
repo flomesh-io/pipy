@@ -12,7 +12,7 @@ import SvgModulePipelineContext from './module-pipeline-context.svg';
 
 ## Stream
 
-Pipy is a proxy that works like a "_stream processor_". It gulps in _streams_, processes _streams_, and spews out _streams_.
+Pipy is a proxy that works like a _"stream processor"_. It gulps in _streams_, processes _streams_, and spews out _streams_.
 
 ### Inbound and outbound
 
@@ -44,7 +44,7 @@ For example, a typical HTTP request would be like this:
   <SvgStreamInput/>
 </div>
 
-What Pipy does is process the events in the input stream. Some are transformed, some are discarded. New events can be inserted too. Those new events also include other types of events besides **Data** and **StreamEnd**, namely **MessageStart** and **MessageEnd**. These non-Data events are used inside Pipy as "_markers_" to give the original raw bytes some higher-level meanings for the business logic you are running.
+What Pipy does is process the events in the input stream. Some are transformed, some are discarded. New events can be inserted too. Those new events also include other types of events besides **Data** and **StreamEnd**, namely **MessageStart** and **MessageEnd**. These non-Data events are used inside Pipy as _"markers"_ to give the original raw bytes some higher-level meanings for the business logic you are running.
 
 For example, the above input stream would be decoded into an _HTTP request message_ wrapped between a pair of **MessageStart** and **MessageEnd** events. That message is transformed into an _HTTP response message_ and encoded into a series of **Data** events before going to the output.
 
@@ -73,7 +73,7 @@ by various input sources:
 
 ### Port pipeline
 
-A **port pipeline** is created whenever there's an incoming TCP connection (or a UDP virtual session) on a listening port. It then reads **Data** events from the connection, processes them, and writes output back to the client. This resembles the widely adopted "_request and response_" communication model as in HTTP, where the input to the pipeline is the requests and the output from the pipeline is the responses. Every incoming connection to Pipy has a dedicated _port pipeline_ to it, handling the communication happening in that connection.
+A **port pipeline** is created whenever there's an incoming TCP connection (or a UDP virtual session) on a listening port. It then reads **Data** events from the connection, processes them, and writes output back to the client. This resembles the widely adopted "_request and response_" communication model as in HTTP, where the input to the pipeline is the requests and the output from the pipeline is the responses. Every incoming connection to Pipy has a dedicated _port pipeline_ to it, handling the two-way communication happening in that connection.
 
 ### File pipeline
 
@@ -89,7 +89,7 @@ A **signal pipeline** is created when a signal is received by the Pipy process. 
 
 ### Sub-pipeline
 
-A **sub-pipeline** is a pipeline that can be started from other pipelines by using a **joint filter**. The most basic joint filter, besides a couple of others, is [link()](/reference/api/Configuration/link). It receives events from its predecessor in its own pipeline, pumps them to a sub-pipeline for processing, reads back whatever that sub-pipeline outputs and pumps them all down to its next filter.
+A **sub-pipeline** is a pipeline that can be started from other pipelines by using a **joint filter**. The most basic joint filter, besides a couple of others, is [link()](/reference/api/Configuration/link). It receives events from the filter before it in its own pipeline, pumps them to a sub-pipeline for processing, reads back whatever that sub-pipeline outputs and pumps them all down to its next filter.
 
 <div style="text-align: center">
   <SvgSubPipeline/>
@@ -97,7 +97,7 @@ A **sub-pipeline** is a pipeline that can be started from other pipelines by usi
 
 One way to understand _joint filters_ and _sub-pipelines_ is compare them to _callers_ and _callees_ when calling a sub-routine in procedural programming. The input to the joint filter is like parameters to the sub-routine, and the output is like return values from it.
 
-Unlike sub-pipelines, the other types of pipelines, namely **port pipelines**, **file pipelines**, **timer pipelines** and **signal pipelines**, cannot be "_called_" internally from a joint filter. They can only be started from external sources. We call these pipelines **root pipelines**.
+Unlike sub-pipelines, the other types of pipelines, namely **port pipelines**, **file pipelines**, **timer pipelines** and **signal pipelines**, cannot be _"called"_ internally from a joint filter. They can only be started from external sources. We call these pipelines **root pipelines**.
 
 ## Module
 
