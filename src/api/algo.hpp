@@ -83,6 +83,7 @@ class Quota : public pjs::ObjectTemplate<Quota> {
 public:
   struct Options : public pipy::Options {
     double per = 0;
+    double produce = 0;
     Options() {}
     Options(pjs::Object *options);
   };

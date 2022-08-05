@@ -62,6 +62,7 @@ class Quota {
    * @param {number} initialValue
    * @param {Object} [options]
    * @param {number|string} [options.per]
+   * @param {number} [options.produce]
    */
   constructor(initialValue, options) {}
 

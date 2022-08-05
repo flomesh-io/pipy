@@ -187,6 +187,9 @@ Quota::Options::Options(pjs::Object *options) {
   Value(options, "per")
     .get_seconds(per)
     .check_nullable();
+  Value(options, "produce")
+    .get(produce)
+    .check_nullable();
 }
 
 Quota::Quota(double initial_value, const Options &options)
@@ -231,7 +234,11 @@ void Quota::schedule_producing() {
     [this]() {
       InputContext ic;
       m_is_producing_scheduled = false;
-      produce(m_initial_value - m_current_value);
+      double value = m_initial_value - m_current_value;
+      if (m_options.produce > 0 && m_options.produce < value) {
+        value = m_options.produce;
+      }
+      produce(value);
     }
   );
   m_is_producing_scheduled = true;
