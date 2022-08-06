@@ -15,7 +15,7 @@ We have implemented 2 functions in our proxy so far: routing and load balancing.
   <SvgPluginPipelines/>
 </div>
 
-That being said, let's take a look at the plugins we'll create.
+With That, let's take a look at the plugins we'll create.
 
 ### Routing plugin
 
@@ -35,8 +35,7 @@ The first plugin we do is the routing plugin. Let's create a standalone file for
 
 1. Click <PlusIcon/> and input `/plugins/router.js` for the new file's name. Click **Create**.
 
-> No need to create a folder before adding a new file in it. Just put in the
-> full pathname including folder names and the folders will be created automatically.
+> No need to create a folder before adding a new file in it. Just put in the full pathname including folder names and the folders will be created automatically.
 
 2. Copy the entire content from `/proxy.js` to `/plugins/router.js`.
 
@@ -223,7 +222,7 @@ Now let's put those plugins together into a chain. First, let's prepare the data
 
 > Note that the order matters. Plugins coming first have a higher priority over those after, not only they are visited earlier, but also they can decide if plugins after them should continue being visited.
 
-Now let's go back to the entrance file `proxy.js` and delete all code for its functionality, leaving only the _"scaffold"_ for the plugins.
+Now let's go back to the entrance file `proxy.js` and delete all code for its functionality, leaving only the _"scaffolding"_ for the plugins.
 
 ``` js
   ((
@@ -297,7 +296,7 @@ The last thing is fix the undefined variable we have in `router.js`. This variab
   )()
 ```
 
-The first construction parameter to [export()](/reference/api/Configuration/export) is the _namespace_ that other files need to refer to when they import a context variable. It can be any arbitrary name. Here we use "main" because it's related to the main framework our plugins are running under.
+The first parameter to [export()](/reference/api/Configuration/export) is the _namespace_ that other files need to refer to when they import a context variable. It can be any arbitrary name. Here we use "main" because it's related to the main framework our plugins are running under.
 
 > Exported context variables can have any names that are valid JavaScript identifiers. But as a best practice, we recommend that all _exported_ context variable names should be prefixed with 2 underscores, just to make them distinct from context variables that are only locally accessible to a module itself.
 
