@@ -115,7 +115,7 @@ class Configuration {
   listen(port) {}
 
   /**
-   * @param {string} filename
+   * @param {string} filename Pathname of the input file.
    * @returns {Configuration} The same Configuration object.
    */
   read(filename) {}
@@ -137,19 +137,25 @@ class Configuration {
   pipeline(name) {}
 
   /**
-   * @param {function} handler
+   * Registers a function to be called when a pipeline is created.
+   *
+   * @param {function} handler Function to be called when a pipeline is created.
    * @returns {Configuration} The same Configuration object.
    */
   onStart(handler) {}
 
   /**
-   * @param {function} handler
+   * Registers a function to be called when a pipeline is destroyed.
+   *
+   * @param {function} handler Function to be called when a pipeline is created.
    * @returns {Configuration} The same Configuration object.
    */
   onEnd(handler) {}
 
   /**
-   * @param {PipelineBuilder} pipelineBuilder
+   * Attaches a sub-pipeline layout to the last joint filter.
+   *
+   * @param {PipelineBuilder} pipelineBuilder Function to be called to append filters to the sub-pipeline layout.
    * @returns {Configuration} The same Configuration object.
    */
   to(pipelineBuilder) {}
@@ -161,11 +167,10 @@ class Configuration {
    * Its input and output are Messages at the beginning and switch to Data after the tunnel is established.
    * Its sub-pipeline's input and output are Data streams.
    *
-   * @param {string} layout Name of the pipeline layout based on which sub-pipelines are created.
    * @param {*} handler Callback function that receives an HTTP request and returns an HTTP response.
    * @returns {Configuration} The same Configuration object.
    */
-  acceptHTTPTunnel(layout, handler) {}
+  acceptHTTPTunnel(handler) {}
 
   /**
    * @callback SOCKSSessionHandler
@@ -174,6 +179,32 @@ class Configuration {
    * @param {string} id
    * @returns {boolean}
    */
+
+  /**
+   * Appends an acceptSOCKS filter to the current pipeline layout.
+   *
+   * An acceptSOCKS filter implements SOCKS protocol on the server side.
+   * Its input and output are Data streams (usually TCP streams).
+   * Its sub-pipeline's input and output are also Data streams.
+   *
+   * @param {SOCKSSessionHandler} handler Callback function while a client tries to connect via SOCKS.
+   * @returns {Configuration} The same Configuration object.
+   */
+  acceptSOCKS(handler) {}
+
+  /**
+   * Appends an acceptTLS filter to the current pipeline layout.
+   *
+   * An acceptTLS filter implements TLS protocol on the server side.
+   * Its input and output are Data streams (usually TCP streams).
+   * Its sub-pipeline's input and output are also Data streams.
+   *
+   * @param {Object} [options] Options including certificate and trusted.
+   * @param {OptionCert | () => OptionCert} [options.certificate] Server certificate and private key.
+   * @param {Certificate[]} [options.trusted] List of trusted client certifcates.
+   * @returns {Configuration} The same Configuration object.
+   */
+  acceptTLS(options) {}
 
   /**
    * Appends a branch filter to the current pipeline layout.
@@ -186,32 +217,26 @@ class Configuration {
   branch(condition, layout, defaultLayout) {}
 
   /**
-   * Appends an acceptSOCKS filter to the current pipeline layout.
+   * Starts a module chain or links to the next module on a chain.
    *
-   * An acceptSOCKS filter implements SOCKS protocol on the server side.
-   * Its input and output are Data streams (usually TCP streams).
-   * Its sub-pipeline's input and output are also Data streams.
-   *
-   * @param {string} layout Name of the pipeline layout based on which a sub-pipeline is created for each SOCKS session.
-   * @param {SOCKSSessionHandler} handler Callback function while a client tries to connect via SOCKS.
+   * @param {string[]} [modules] Filenames of the modules on the chain.
    * @returns {Configuration} The same Configuration object.
    */
-  acceptSOCKS(layout, handler) {}
+  chain(modules) {}
 
   /**
-   * Appends an acceptTLS filter to the current pipeline layout.
+   * Appends a compressHTTP filter to the current pipeline layout.
    *
-   * An acceptTLS filter implements TLS protocol on the server side.
-   * Its input and output are Data streams (usually TCP streams).
-   * Its sub-pipeline's input and output are also Data streams.
+   * A compressHTTP filter compresses the bodies of HTTP Messages.
+   * Its input and output are both _Messages_.
    *
-   * @param {string} layout Name of the pipeline layout based on which a sub-pipeline is created for each TLS session.
-   * @param {Object} [options] Options including certificate and trusted.
-   * @param {OptionCert | () => OptionCert} [options.certificate] Server certificate and private key.
-   * @param {Certificate[]} [options.trusted] List of trusted client certifcates.
+   * @param {Object} [options] Options including enabled, method and level.
+   * @param {boolean} [options.enabled] Whether the message should be compressed.
+   * @param {string} [options.method] Compression algorithm.
+   * @param {level} [options.level] Level of compression.
    * @returns {Configuration} The same Configuration object.
    */
-  acceptTLS(layout, options) {}
+   compressHTTP(options) {}
 
   /**
    * Appends a compressMessage filter to the current pipeline layout.
@@ -226,20 +251,6 @@ class Configuration {
    * @returns {Configuration} The same Configuration object.
    */
   compressMessage(options) {}
-
-  /**
-   * Appends a compressHTTP filter to the current pipeline layout.
-   *
-   * A compressHTTP filter compresses the bodies of HTTP Messages.
-   * Its input and output are both _Messages_.
-   *
-   * @param {Object} [options] Options including enabled, method and level.
-   * @param {boolean} [options.enabled] Whether the message should be compressed.
-   * @param {string} [options.method] Compression algorithm.
-   * @param {level} [options.level] Level of compression.
-   * @returns {Configuration} The same Configuration object.
-   */
-  compressHTTP(options) {}
 
   /**
    * Appends a connect filter to the current pipeline layout.
@@ -266,11 +277,10 @@ class Configuration {
    * Its input and output are Data streams.
    * Its sub-pipeline's input and output are Messages at the beginning and switch to Data after the tunnel is established.
    *
-   * @param {string} layout Name of the pipeline layout based on which a sub-pipeline is created for the tunnel.
    * @param {string | StringCB} target Target endpoint to connect to, in form of "host:port".
    * @returns {Configuration} The same Configuration object.
    */
-  connectHTTPTunnel(layout, target) {}
+  connectHTTPTunnel(target) {}
 
   /**
    * Appends a connectSOCKS filter to the current pipeline layout.
@@ -279,11 +289,10 @@ class Configuration {
    * Its input and output are Data streams.
    * Its sub-pipeline's input and output are also Data streams (usually TCP streams).
    *
-   * @param {string} layout Name of the pipeline layout based on which a sub-pipeline is created for the SOCKS session.
    * @param {string | StrinbCB} destination Destination to connection to, in form of "host:port".
    * @returns {Configuration} The same Configuration object.
    */
-  connectSOCKS(layout, destination) {}
+  connectSOCKS(destination) {}
 
   /**
    * Appends a connectTLS filter to the current pipeline layout.
@@ -292,14 +301,13 @@ class Configuration {
    * Its input and output are Data streams.
    * Its sub-pipeline's input and output are also Data streams (usually TCP streams).
    *
-   * @param {string} layout Name of the pipeline layout based on which a sub-pipeline is created for the TLS session.
    * @param {Object} [options] Options including certificate, trusted and sni.
    * @param {OptionCert | () => OptionCert} [options.certificate] Client certificate and private key.
    * @param {Certificate[]} [options.trusted] List of trusted server certificate.
    * @param {string | () => string} [options.sni] Host name for SNI.
    * @returns {Configuration} The same Configuration object.
    */
-  connectTLS(layout, options) {}
+  connectTLS(options) {}
 
   /**
    * Appends a decodeDubbo filter to the current pipeline layout.
@@ -334,16 +342,6 @@ class Configuration {
   decodeHTTPResponse(options) {}
 
   /**
-   * Appends a decodeWebSocket filter to the current pipeline layout.
-   *
-   * A decodeWebSocket filter decodes WebSocket messages in its input Data and outputs Messages after decoding.
-   * Its input is a Data stream and its output is a Message stream.
-   *
-   * @returns {Configuration} The same Configuration object.
-   */
-  decodeWebSocket() {}
-
-  /**
    * Appends a decodeMQTT filter to the current pipeline layout.
    *
    * A decodeMQTT filter decodes MQTT packets in its input Data and outputs Messages after decoding.
@@ -354,6 +352,23 @@ class Configuration {
    * @returns {Configuration} The same Configuration object.
    */
   decodeMQTT(options) {}
+
+  /**
+   * Appends a decodeMultipart filter to the current pipeline layout.
+   *
+   * @returns {Configuration} The same Configuration object.
+   */
+  decodeMultipart() {}
+
+  /**
+   * Appends a decodeWebSocket filter to the current pipeline layout.
+   *
+   * A decodeWebSocket filter decodes WebSocket messages in its input Data and outputs Messages after decoding.
+   * Its input is a Data stream and its output is a Message stream.
+   *
+   * @returns {Configuration} The same Configuration object.
+   */
+  decodeWebSocket() {}
 
   /**
    * Appends a decompressHTTP filter to the current pipeline layout.
@@ -378,6 +393,14 @@ class Configuration {
   decompressMessage(algorithm) {}
 
   /**
+   * Appends a deframe filter to the current pipeline layout.
+   *
+   * @param {Object} states State map.
+   * @returns {Configuration} The same Configuration object.
+   */
+  deframe(states) {}
+
+  /**
    * Appends a demux filter to the current pipeline layout.
    *
    * A demux filter de-multiplexes Messages from its input stream,
@@ -385,10 +408,9 @@ class Configuration {
    * multiplexes their output Messages into a single output Message stream.
    * Its input and output are Messages. Its sub-pipelines's input and output are also Messages.
    *
-   * @param {string} layout Name of the pipeline layout based on which sub-pipelines are created to handle input Messages.
    * @returns {Configuration} The same Configuration object.
    */
-  demux(layout) {}
+  demux() {}
 
   /**
    * Appends a demuxQueue filter to the current pipeline layout.
@@ -399,10 +421,9 @@ class Configuration {
    * where the Messages come in the same order as the input.
    * Its input and output are Messages. Its sub-pipelines's input and output are also Messages.
    *
-   * @param {string} layout Name of the pipeline layout based on which sub-pipelines are created to handle input Messages.
    * @returns {Configuration} The same Configuration object.
    */
-  demuxQueue(layout) {}
+  demuxQueue() {}
 
   /**
    * Appends a demuxHTTP filter to the current pipeline layout.
@@ -413,12 +434,11 @@ class Configuration {
    * Its input and output are Data (usually TCP streams).
    * Its sub-pipelines's input and output are HTTP Messages.
    *
-   * @param {string} layout Name of the pipeline layout based on which sub-pipelines are created to handle HTTP requests.
    * @param {Object} [options] Options including bufferSize.
    * @param {number|string} [options.bufferSize] Response bodies larger than this would be transfered in chunks.
    * @returns {Configuration} The same Configuration object.
    */
-  demuxHTTP(layout, options) {}
+  demuxHTTP(options) {}
 
   /**
    * Appends a depositMessage filter to the current pipeline layout.
@@ -552,74 +572,10 @@ class Configuration {
    * All output from the created sub-pipelines are discarded.
    * The filter and its sub-pipelines's input and output can be any types of events.
    *
-   * @param {string} layout Name of the pipeline layout based on which sub-pipelines are created.
    * @param {Object[]} [variables] Global variable initial values for each sub-pipeline.
    * @returns {Configuration} The same Configuration object.
    */
-  fork(layout, variables) {}
-
-  /**
-   * Appends a link filter to the current pipeline layout.
-   *
-   * A link filter creates a new sub-pipeline and pumps all events through it,
-   * as if the new sub-pipeline has taken the place of the link filter.
-   * The filter and its sub-pipeline's input and output can be any types of events.
-   *
-   * @param {string} layout Name of the pipeline layout based on which the sub-pipeline is created.
-   * @param {function} [condition] Condition under which the sub-pipeline layout is chosen.
-   * @param {string} [defaultLayout] Name of the default pipeline layout when no conditions are met.
-   * @returns {Configuration} The same Configuration object.
-   */
-  link(layout, condition, defaultLayout) {}
-
-  /**
-   * Appends a merge filter to the current pipeline layout.
-   *
-   * A merge filter queues up input Messages into a shared sub-pipeline.
-   * Its input and output are Messages.
-   * Its sub-pipelines's input is also Messages while their output is simply discarded.
-   *
-   * @param {string} layout Name of the pipeline layout based on which shared sub-pipelines are created.
-   * @param {*} group ID of the group of filters that share the same sub-pipeline.
-   * @param {Object} [options] Options including maxIdle.
-   * @param {number} [options.maxIdle] Time to wait before an idle shared sub-pipeline is closed.
-   * @returns {Configuration} The same Configuration object.
-   */
-  merge(layout, group, options) {}
-
-  /**
-   * Appends a muxQueue filter to the current pipeline layout.
-   *
-   * A muxQueue filter multiplexes input Messages into a shared sub-pipeline and
-   * de-multiplexes output Messages out of it.
-   * Its input and output are _Messages_.
-   * Its sub-pipelines's input and output are also _Messages_.
-   *
-   * @param {string} layout Name of the pipeline layout based on which shared sub-pipelines are created.
-   * @param {*} group ID of the group of filters that share the same sub-pipeline.
-   * @param {Object} [options] Options including maxIdle.
-   * @param {number} [options.maxIdle] Time to wait before an unused sub-pipeline is destroyed.
-   * @returns {Configuration} The same Configuration object.
-   */
-  muxQueue(layout, group, options) {}
-
-  /**
-   * Appends a muxHTTP filter to the current pipeline layout.
-   *
-   * A muxHTTP filter encodes and multiplexes HTTP requests into a shared sub-pipeline and
-   * de-multiplexes and decodes HTTP responses out of it.
-   * Its input and output are HTTP Messages.
-   * Its sub-pipelines's input and output are Data (usually TCP streams).
-   *
-   * @param {string} layout Name of the pipeline layout based on which shared sub-pipelines are created.
-   * @param {*} group ID of the group of filters that share the same sub-pipeline.
-   * @param {Object} [options] Options including bufferSize, maxIdle, version.
-   * @param {number|string} [options.bufferSize] Request bodies larger than this would be transfered in chunks.
-   * @param {number|string} [options.maxIdle] Time to wait before an unused sub-pipeline is closed.
-   * @param {number|string} [options.version] HTTP protocol version to use. Can be 1 for HTTP/1.1 or 2 for HTTP/2.
-   * @returns {Configuration} The same Configuration object.
-   */
-  muxHTTP(layout, group, options) {}
+  fork(variables) {}
 
   /**
    * Appends a handleData filter to the current pipeline layout.
@@ -630,91 +586,177 @@ class Configuration {
    * @param {DataHandler} handler Callback function invoked for Data events.
    * @returns {Configuration} The same Configuration object.
    */
-  handleData(handler) {}
+   handleData(handler) {}
+
+   /**
+    * Appends a handleMessage filter to the current pipeline layout.
+    *
+    * A handleMessage filter calls a user function every time it sees a complete Message in the input stream.
+    * Its input and output can be any kinds of events.
+    * 
+    * @param {MessageHandler} handler Callback function invoked for whole messages.
+    * @returns {Configuration} The same Configuration object.
+    */
+   handleMessage(handler) {}
+ 
+   /**
+    * Appends a handleMessageBody filter to the current pipeline layout.
+    *
+    * A handleMessageBody filter calls a user function every time it sees a complete message body in the input stream.
+    * Its input and output can be any kinds of events.
+    *
+    * @param {DataHandler} handler Callback function invoked for whole message bodies.
+    * @returns {Configuration} The same Configuration object.
+    */
+   handleMessageBody(handler) {}
+ 
+   /**
+    * Appends a handleMessageEnd filter to the current pipeline layout.
+    *
+    * A handleMessageEnd filter calls a user function every time it sees a MessageEnd event in the input stream.
+    * Its input and output can be any kinds of events.
+    *
+    * @param {MessageEndHandler} handler Callback function invoked for MessageEnd event.
+    * @returns {Configuration} The same Configuration object.
+    */
+   handleMessageEnd(handler) {}
+ 
+   /**
+    * Appends a handleMessageStart filter to the current pipeline layout.
+    *
+    * A handleMessageStart filter calls a user function every time it sees a MessageStart event in the input stream.
+    * Its input and output can be any kinds of events.
+    *
+    * @param {MessageStartHandler} handler Callback function invoked for MessageStart events.
+    * @returns {Configuration} The same Configuration object.
+    */
+   handleMessageStart(handler) {}
+ 
+   /**
+    * Appends a handleStreamEnd filter to the current pipeline layout.
+    *
+    * A handleStreamEnd filter calls a user function every time it sees a StreamEnd event in the input stream.
+    * Its input and output can be any kinds of events.
+    *
+    * @param {StreamEndHandler} handler Callback function invoked for StreamStart events.
+    * @returns {Configuration} The same Configuration object.
+    */
+   handleStreamEnd(handler) {}
+ 
+   /**
+    * Appends a handleStreamStart filter to the current pipeline layout.
+    *
+    * A handleStreamStart filter calls a user function when it sees the first event in an input stream.
+    * Its input and output can be any kinds of events.
+    *
+    * @param {EventHandler} handler Callback function invoked for the first event.
+    * @returns {Configuration} The same Configuration object.
+    */
+   handleStreamStart(handler) {}
+ 
+   /**
+    * @callback TLSClientHelloHandler
+    * @param {Object} message
+    * @param {string[]} message.serverNames
+    * @param {string[]} message.protocolNames
+    */
+ 
+   /**
+    * Appends a handleTLSClientHello filter to the current pipeline layout.
+    *
+    * A handleTLSClientHello filter calls a user function when it sees a TLS client hello message at the beginning of an input stream.
+    * Its input and output can be any kinds of events.
+    *
+    * @param {TLSClientHelloHandler} handler Callback function invoked for the ClientHello message.
+    * @returns {Configuration} The same Configuration object.
+    */
+   handleTLSClientHello(handler) {}
 
   /**
-   * Appends a handleMessage filter to the current pipeline layout.
+   * Appends an input filter to the current pipeline layout.
    *
-   * A handleMessage filter calls a user function every time it sees a complete Message in the input stream.
-   * Its input and output can be any kinds of events.
-   * 
-   * @param {MessageHandler} handler Callback function invoked for whole messages.
+   * @param {function} [callback] Function to receive an Output object.
+   */
+  input(callback) {}
+
+  /**
+   * Appends a link filter to the current pipeline layout.
+   *
+   * A link filter creates a new sub-pipeline and pumps all events through it,
+   * as if the new sub-pipeline has taken the place of the link filter.
+   * The filter and its sub-pipeline's input and output can be any types of events.
+   *
+   * @param {string} layout Name of the pipeline layout based on which the sub-pipeline is created.
    * @returns {Configuration} The same Configuration object.
    */
-  handleMessage(handler) {}
+  link(layout) {}
 
   /**
-   * Appends a handleMessageBody filter to the current pipeline layout.
+   * Appends a merge filter to the current pipeline layout.
    *
-   * A handleMessageBody filter calls a user function every time it sees a complete message body in the input stream.
-   * Its input and output can be any kinds of events.
+   * A merge filter queues up input Messages into a shared sub-pipeline.
+   * Its input and output are Messages.
+   * Its sub-pipelines's input is also Messages while their output is simply discarded.
    *
-   * @param {DataHandler} handler Callback function invoked for whole message bodies.
+   * @param {function} target Returns the key to a sub-pipeline where the message is merged to.
+   * @param {Object} [options] Options including maxIdle.
+   * @param {number} [options.maxIdle] Time to wait before an idle shared sub-pipeline is closed.
    * @returns {Configuration} The same Configuration object.
    */
-  handleMessageBody(handler) {}
+  merge(target, options) {}
 
   /**
-   * Appends a handleMessageEnd filter to the current pipeline layout.
+   * Appends a mux filter to the current pipeline layout.
    *
-   * A handleMessageEnd filter calls a user function every time it sees a MessageEnd event in the input stream.
-   * Its input and output can be any kinds of events.
+   * A mux filter queues up input Messages into a shared sub-pipeline.
+   * Its input and output are Messages.
+   * Its sub-pipelines's input is also Messages while their output is simply discarded.
    *
-   * @param {MessageEndHandler} handler Callback function invoked for MessageEnd event.
+   * @param {function} target Returns the key to a sub-pipeline where the message is multiplexed to.
+   * @param {Object} [options] Options including maxIdle.
+   * @param {number} [options.maxIdle] Time to wait before an unused sub-pipeline is destroyed.
    * @returns {Configuration} The same Configuration object.
    */
-  handleMessageEnd(handler) {}
+  mux(target, options) {}
 
   /**
-   * Appends a handleMessageStart filter to the current pipeline layout.
+   * Appends a muxQueue filter to the current pipeline layout.
    *
-   * A handleMessageStart filter calls a user function every time it sees a MessageStart event in the input stream.
-   * Its input and output can be any kinds of events.
+   * A muxQueue filter multiplexes input Messages into a shared sub-pipeline and
+   * de-multiplexes output Messages out of it.
+   * Its input and output are Messages.
+   * Its sub-pipelines's input and output are also Messages.
    *
-   * @param {MessageStartHandler} handler Callback function invoked for MessageStart events.
+   * @param {function} target Returns the key to a sub-pipeline where the message is multiplexed to.
+   * @param {Object} [options] Options including maxIdle.
+   * @param {number} [options.maxIdle] Time to wait before an unused sub-pipeline is destroyed.
    * @returns {Configuration} The same Configuration object.
    */
-  handleMessageStart(handler) {}
+  muxQueue(target, options) {}
 
   /**
-   * Appends a handleStreamEnd filter to the current pipeline layout.
+   * Appends a muxHTTP filter to the current pipeline layout.
    *
-   * A handleStreamEnd filter calls a user function every time it sees a StreamEnd event in the input stream.
-   * Its input and output can be any kinds of events.
+   * A muxHTTP filter encodes and multiplexes HTTP requests into a shared sub-pipeline and
+   * de-multiplexes and decodes HTTP responses out of it.
+   * Its input and output are HTTP Messages.
+   * Its sub-pipelines's input and output are Data (usually TCP streams).
    *
-   * @param {StreamEndHandler} handler Callback function invoked for StreamStart events.
+   * @param {function} target Returns the key to a sub-pipeline where the HTTP request is multiplexed to.
+   * @param {Object} [options] Options including bufferSize, maxIdle, version.
+   * @param {number|string} [options.bufferSize] Request bodies larger than this would be transfered in chunks.
+   * @param {number|string} [options.maxIdle] Time to wait before an unused sub-pipeline is closed.
+   * @param {number|string} [options.version] HTTP protocol version to use. Can be 1 for HTTP/1.1 or 2 for HTTP/2.
    * @returns {Configuration} The same Configuration object.
    */
-  handleStreamEnd(handler) {}
+  muxHTTP(target, options) {}
 
   /**
-   * Appends a handleStreamStart filter to the current pipeline layout.
+   * Appends an output filter to the current pipeline layout.
    *
-   * A handleStreamStart filter calls a user function when it sees the first event in an input stream.
-   * Its input and output can be any kinds of events.
-   *
-   * @param {EventHandler} handler Callback function invoked for the first event.
-   * @returns {Configuration} The same Configuration object.
+   * @param {function} [callback] Function to return an Output object.
    */
-  handleStreamStart(handler) {}
-
-  /**
-   * @callback TLSClientHelloHandler
-   * @param {Object} message
-   * @param {string[]} message.serverNames
-   * @param {string[]} message.protocolNames
-   */
-
-  /**
-   * Appends a handleTLSClientHello filter to the current pipeline layout.
-   *
-   * A handleTLSClientHello filter calls a user function when it sees a TLS client hello message at the beginning of an input stream.
-   * Its input and output can be any kinds of events.
-   *
-   * @param {TLSClientHelloHandler} handler Callback function invoked for the ClientHello message.
-   * @returns {Configuration} The same Configuration object.
-   */
-  handleTLSClientHello(handler) {}
+  input(callback) {}
 
   /**
    * Appends a pack filter to the current pipeline layout.
@@ -739,14 +781,6 @@ class Configuration {
    * @returns {Configuration} The same Configuration object.
    */
   print() {}
-
-  /**
-   * Creates a pipeline layout to read and process Data from a file.
-   *
-   * @param {string} filename Pathname of the input file.
-   * @returns {Configuration} The same Configuration object.
-   */
-  read(filename) {}
 
   /**
    * Appends a replaceData filter to the current pipeline layout.
@@ -908,11 +942,9 @@ class Configuration {
    *
    * @param {string|string[]} filenames One or more module filenames.
    * @param {string} layout Name of the pipeline layout to process input events in all modules.
-   * @param {string} [layoutDown] Name of the pipeline layout to process output events in all modules.
-   * @param {BooleanCB} [turnDown] Callback function that decides where the chaining should turn back.
    * @returns {Configuration} The same Configuration object.
    */
-  use(filenames, layout, layoutDown, turnDown) {}
+  use(filenames, layout) {}
 
   /**
    * Appends a wait filter to the current pipeline layout.

@@ -760,6 +760,28 @@ template<> void ClassDef<FilterConfigurator>::init() {
     }
   });
 
+  // FilterConfigurator.to
+  method("to", [](Context &ctx, Object *thiz, Value &result) {
+    try {
+      pjs::Str *layout_name;
+      pjs::Function *layout_builder;
+      if (ctx.try_arguments(1, &layout_name)) {
+        thiz->as<FilterConfigurator>()->to(layout_name);
+      } else if (ctx.try_arguments(1, &layout_builder)) {
+        thiz->as<FilterConfigurator>()->to(
+          layout_builder->to_string(),
+          [&](FilterConfigurator *fc) {
+            pjs::Value arg(fc), ret;
+            (*layout_builder)(ctx, 1, &arg, ret);
+          }
+        );
+      }
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
   // FilterConfigurator.acceptHTTPTunnel
   method("acceptHTTPTunnel", [](Context &ctx, Object *thiz, Value &result) {
     try {
@@ -989,61 +1011,6 @@ template<> void ClassDef<FilterConfigurator>::init() {
     }
   });
 
-  // FilterConfigurator.deframe
-  method("deframe", [](Context &ctx, Object *thiz, Value &result) {
-    pjs::Object *states;
-    if (!ctx.arguments(1, &states)) return;
-    try {
-      thiz->as<FilterConfigurator>()->deframe(states);
-      result.set(thiz);
-    } catch (std::runtime_error &err) {
-      ctx.error(err);
-    }
-  });
-
-  // FilterConfigurator.demux
-  method("demux", [](Context &ctx, Object *thiz, Value &result) {
-    try {
-      Str *layout = nullptr;
-      if (!ctx.arguments(0, &layout)) return;
-      thiz->as<FilterConfigurator>()->demux();
-      if (layout) thiz->as<FilterConfigurator>()->to(layout);
-      result.set(thiz);
-    } catch (std::runtime_error &err) {
-      ctx.error(err);
-    }
-  });
-
-  // FilterConfigurator.demuxQueue
-  method("demuxQueue", [](Context &ctx, Object *thiz, Value &result) {
-    try {
-      Str *layout = nullptr;
-      if (!ctx.arguments(0, &layout)) return;
-      thiz->as<FilterConfigurator>()->demux_queue();
-      if (layout) thiz->as<FilterConfigurator>()->to(layout);
-      result.set(thiz);
-    } catch (std::runtime_error &err) {
-      ctx.error(err);
-    }
-  });
-
-  // FilterConfigurator.demuxHTTP
-  method("demuxHTTP", [](Context &ctx, Object *thiz, Value &result) {
-    try {
-      Str *layout;
-      Object *options = nullptr;
-      if (ctx.try_arguments(1, &layout, &options)) {
-        thiz->as<FilterConfigurator>()->demux_http(options);
-        thiz->as<FilterConfigurator>()->to(layout);
-      } else if (ctx.arguments(0, &options)) {
-        thiz->as<FilterConfigurator>()->demux_http(options);
-      }
-      result.set(thiz);
-    } catch (std::runtime_error &err) {
-      ctx.error(err);
-    }
-  });
-
   // FilterConfigurator.decodeDubbo
   method("decodeDubbo", [](Context &ctx, Object *thiz, Value &result) {
     try {
@@ -1126,6 +1093,61 @@ template<> void ClassDef<FilterConfigurator>::init() {
     if (!ctx.arguments(1, &algorithm)) return;
     try {
       thiz->as<FilterConfigurator>()->decompress_message(algorithm);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // FilterConfigurator.deframe
+  method("deframe", [](Context &ctx, Object *thiz, Value &result) {
+    pjs::Object *states;
+    if (!ctx.arguments(1, &states)) return;
+    try {
+      thiz->as<FilterConfigurator>()->deframe(states);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // FilterConfigurator.demux
+  method("demux", [](Context &ctx, Object *thiz, Value &result) {
+    try {
+      Str *layout = nullptr;
+      if (!ctx.arguments(0, &layout)) return;
+      thiz->as<FilterConfigurator>()->demux();
+      if (layout) thiz->as<FilterConfigurator>()->to(layout);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // FilterConfigurator.demuxQueue
+  method("demuxQueue", [](Context &ctx, Object *thiz, Value &result) {
+    try {
+      Str *layout = nullptr;
+      if (!ctx.arguments(0, &layout)) return;
+      thiz->as<FilterConfigurator>()->demux_queue();
+      if (layout) thiz->as<FilterConfigurator>()->to(layout);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // FilterConfigurator.demuxHTTP
+  method("demuxHTTP", [](Context &ctx, Object *thiz, Value &result) {
+    try {
+      Str *layout;
+      Object *options = nullptr;
+      if (ctx.try_arguments(1, &layout, &options)) {
+        thiz->as<FilterConfigurator>()->demux_http(options);
+        thiz->as<FilterConfigurator>()->to(layout);
+      } else if (ctx.arguments(0, &options)) {
+        thiz->as<FilterConfigurator>()->demux_http(options);
+      }
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1295,18 +1317,6 @@ template<> void ClassDef<FilterConfigurator>::init() {
     }
   });
 
-  // FilterConfigurator.handleMessageStart
-  method("handleMessageStart", [](Context &ctx, Object *thiz, Value &result) {
-    Function *callback = nullptr;
-    if (!ctx.arguments(1, &callback)) return;
-    try {
-      thiz->as<FilterConfigurator>()->handle_event(Event::MessageStart, callback);
-      result.set(thiz);
-    } catch (std::runtime_error &err) {
-      ctx.error(err);
-    }
-  });
-
   // FilterConfigurator.handleMessageBody
   method("handleMessageBody", [](Context &ctx, Object *thiz, Value &result) {
     Function *callback = nullptr;
@@ -1332,6 +1342,18 @@ template<> void ClassDef<FilterConfigurator>::init() {
     if (!ctx.arguments(1, &callback)) return;
     try {
       thiz->as<FilterConfigurator>()->handle_event(Event::MessageEnd, callback);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // FilterConfigurator.handleMessageStart
+  method("handleMessageStart", [](Context &ctx, Object *thiz, Value &result) {
+    Function *callback = nullptr;
+    if (!ctx.arguments(1, &callback)) return;
+    try {
+      thiz->as<FilterConfigurator>()->handle_event(Event::MessageStart, callback);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1561,18 +1583,6 @@ template<> void ClassDef<FilterConfigurator>::init() {
     }
   });
 
-  // FilterConfigurator.replaceStreamStart
-  method("replaceStreamStart", [](Context &ctx, Object *thiz, Value &result) {
-    Value replacement;
-    if (!ctx.arguments(0, &replacement)) return;
-    try {
-      thiz->as<FilterConfigurator>()->replace_start(replacement);
-      result.set(thiz);
-    } catch (std::runtime_error &err) {
-      ctx.error(err);
-    }
-  });
-
   // FilterConfigurator.replaceData
   method("replaceData", [](Context &ctx, Object *thiz, Value &result) {
     Value replacement;
@@ -1598,18 +1608,6 @@ template<> void ClassDef<FilterConfigurator>::init() {
     ) return;
     try {
       thiz->as<FilterConfigurator>()->replace_message(replacement, size_limit);
-      result.set(thiz);
-    } catch (std::runtime_error &err) {
-      ctx.error(err);
-    }
-  });
-
-  // FilterConfigurator.replaceMessageStart
-  method("replaceMessageStart", [](Context &ctx, Object *thiz, Value &result) {
-    Value replacement;
-    if (!ctx.arguments(0, &replacement)) return;
-    try {
-      thiz->as<FilterConfigurator>()->replace_event(Event::MessageStart, replacement);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1647,12 +1645,36 @@ template<> void ClassDef<FilterConfigurator>::init() {
     }
   });
 
+  // FilterConfigurator.replaceMessageStart
+  method("replaceMessageStart", [](Context &ctx, Object *thiz, Value &result) {
+    Value replacement;
+    if (!ctx.arguments(0, &replacement)) return;
+    try {
+      thiz->as<FilterConfigurator>()->replace_event(Event::MessageStart, replacement);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
   // FilterConfigurator.replaceStreamEnd
   method("replaceStreamEnd", [](Context &ctx, Object *thiz, Value &result) {
     Value replacement;
     if (!ctx.arguments(0, &replacement)) return;
     try {
       thiz->as<FilterConfigurator>()->replace_event(Event::StreamEnd, replacement);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // FilterConfigurator.replaceStreamStart
+  method("replaceStreamStart", [](Context &ctx, Object *thiz, Value &result) {
+    Value replacement;
+    if (!ctx.arguments(0, &replacement)) return;
+    try {
+      thiz->as<FilterConfigurator>()->replace_start(replacement);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1803,28 +1825,6 @@ template<> void ClassDef<FilterConfigurator>::init() {
     if (!ctx.arguments(1, &condition, &options)) return;
     try {
       thiz->as<FilterConfigurator>()->wait(condition, options);
-      result.set(thiz);
-    } catch (std::runtime_error &err) {
-      ctx.error(err);
-    }
-  });
-
-  // FilterConfigurator.to
-  method("to", [](Context &ctx, Object *thiz, Value &result) {
-    try {
-      pjs::Str *layout_name;
-      pjs::Function *layout_builder;
-      if (ctx.try_arguments(1, &layout_name)) {
-        thiz->as<FilterConfigurator>()->to(layout_name);
-      } else if (ctx.try_arguments(1, &layout_builder)) {
-        thiz->as<FilterConfigurator>()->to(
-          layout_builder->to_string(),
-          [&](FilterConfigurator *fc) {
-            pjs::Value arg(fc), ret;
-            (*layout_builder)(ctx, 1, &arg, ret);
-          }
-        );
-      }
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

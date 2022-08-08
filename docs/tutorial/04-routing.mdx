@@ -246,7 +246,7 @@ Pipy pipelines are one-way paths. Events stream in to its first filter, out from
 
 When a _joint filter_ like **branch()** links to a sub-pipeilne, the input to the joint filter goes to the input of the sub-pipeline, and the output from that sub-pipeline usually goes back to the joint filter and becomes the filter's output also. In our example, what **replaceMessage()** outputs becomes **branch()**'s output too. It then in turn goes back to **demuxHTTP()**, and eventually, back to the port pipeline's output as response.
 
-That being said, when a request can't be routed and has to go down the "404" branch, its entire traveling path would be like this:
+With that, when a request can't be routed and has to go down the "404" branch, its entire traveling path would be like this:
 
 <div style="text-align: center">
   <SvgRoutingPipelines/>

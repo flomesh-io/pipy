@@ -72,11 +72,11 @@ public:
   void decompress_http(pjs::Function *enable);
   void decompress_message(const pjs::Value &algorithm);
   void deframe(pjs::Object *states);
-  void deposit_message(const pjs::Value &filename, pjs::Object *options);
-  void detect_protocol(pjs::Function *callback);
   void demux();
   void demux_queue();
   void demux_http(pjs::Object *options);
+  void deposit_message(const pjs::Value &filename, pjs::Object *options);
+  void detect_protocol(pjs::Function *callback);
   void dummy();
   void dump(const pjs::Value &tag);
   void encode_dubbo(pjs::Object *message_obj);
