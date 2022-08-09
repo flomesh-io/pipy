@@ -17,7 +17,7 @@ A **handleStreamStart** filter calls a user function when it sees the first even
 | ↓                   | **Event** |
 | _Output_            |           |
 
-The user function that gets called will have an event object as parameter, which is whatever first event is in that stream. It can be any of the four types of events decribed in [Concept: Stream](/intro/concepts/#stream).
+The user function that gets called will have an event object as parameter, which is whatever first event is in that stream. It can be any of the four types of events described in [Concept: Stream](/intro/concepts/#stream).
 
 This filter passes every input event down to its output. It doesn't change how many or what events there are. However, since events are all just objects being passed around by reference, if you alter the event object itself, the change will be visible on the output, even when the references to the events are still identical between the input and the output.
 

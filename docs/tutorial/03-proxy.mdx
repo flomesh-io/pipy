@@ -36,7 +36,7 @@ pipy()
 
 Besides one _port pipeline_ layout, this time we also added two _sub-pipeline_ layouts called _"forward"_ and _"connection"_.
 
-1. The port pipeline layout listens on port 8000. It has only one filter **demuxHTTP()**. It's similar to **serveHTTP()** that we've been using before for receiving HTTP requests and sending back responses. But instead of handling HTTP requests in a _callback function_, it handles them in a _sub-pipeline_, which is refered to under name _"forward"_ by calling method **to()** right after it.
+1. The port pipeline layout listens on port 8000. It has only one filter **demuxHTTP()**. It's similar to **serveHTTP()** that we've been using before for receiving HTTP requests and sending back responses. But instead of handling HTTP requests in a _callback function_, it handles them in a _sub-pipeline_, which is referred to under name _"forward"_ by calling method **to()** right after it.
 
 2. The _sub-pipeline_ layout named _"forward"_ has only one filter **muxHTTP()**. This filter _queues_ up its input message in a shared stream to another _sub-pipeline_ under the name _"connection"_ (as given in method **to()** called after it). It also _dequeues_ a message out of the output from _sub-pipeline "connection"_. The dequeued message would become its own output.
 
@@ -70,7 +70,7 @@ In our example, a _port pipeline_ gulps incoming data as a sequence of [_Data_](
   <DemuxHTTP/>
 </div>
 
-But that's not the end of the stroy yet. Each sub-pipeline will eventually have a message outputted as its response. Output messages coming out of the end of all sub-pipelines are collected by **demuxHTTP()**. They are then _"encoded"_ and _"muxed"_ into one single TCP stream before going back to the client.
+But that's not the end of the story yet. Each sub-pipeline will eventually have a message outputted as its response. Output messages coming out of the end of all sub-pipelines are collected by **demuxHTTP()**. They are then _"encoded"_ and _"muxed"_ into one single TCP stream before going back to the client.
 
 As you can see, although the filter is named _"demuxHTTP"_, but it really performs both _demuxing_ and _muxing_. It demuxes on the requesting path, and muxes on the responding path.
 

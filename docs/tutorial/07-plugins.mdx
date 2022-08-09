@@ -5,7 +5,7 @@ title: "Part 7: Plugins"
 import SvgPluginPipelines from './plugin-pipelines.svg';
 import PlusIcon from '@material-ui/icons/AddSharp'
 
-Now our little proxy program has routing and load balancing abilities. However, as we were implementing it, we found ourself throwing more and more pipeline layouts into a single source file. The file has been growing rapidly in length. We'd better do some refactoring to the code stucture so that every new function coming in the future can sit in its own file, only optionally hooked up into the system, aka, a _"plugin system"_.
+Now our little proxy program has routing and load balancing abilities. However, as we were implementing it, we found ourself throwing more and more pipeline layouts into a single source file. The file has been growing rapidly in length. We'd better do some refactoring to the code structure so that every new function coming in the future can sit in its own file, only optionally hooked up into the system, aka, a _"plugin system"_.
 
 ## Design
 
@@ -166,7 +166,7 @@ The second plugin can be made in the same way as the first one:
   )()
 ```
 
-As [discussed ealier](/tutorial/07-plugins/#load-balancing-plugin), when a target is not found, this plugin should just pass on the request to the next plugin (the [default plugin](/tutorial/07-plugins/#the-default-plugin) in our case) to continue, instead of responding with a 404 message directly. So we change that to a call to _chain()_.
+As [discussed earlier](/tutorial/07-plugins/#load-balancing-plugin), when a target is not found, this plugin should just pass on the request to the next plugin (the [default plugin](/tutorial/07-plugins/#the-default-plugin) in our case) to continue, instead of responding with a 404 message directly. So we change that to a call to _chain()_.
 
 ``` js
     .pipeline()

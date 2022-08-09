@@ -32,7 +32,7 @@ As you can see, there are 3 parts to this JSON file:
 - A routing table that maps a request path to a _service name_, which is then connected to what's in the next part.
 - A target list for every _service_, referred to by a _service name_ from the routing table.
 
-We could have put the target lists right into the routing table, so that a request path can be routed to a target list in one shot. However, in reality, we often have multiple paths routed to the same target list, so we decided to add in a layer of _services_ so that we don't have to repeat the target list for every path that is targetting to it.
+We could have put the target lists right into the routing table, so that a request path can be routed to a target list in one shot. However, in reality, we often have multiple paths routed to the same target list, so we decided to add in a layer of _services_ so that we don't have to repeat the target list for every path that is targeting to it.
 
 ### Read data from JSON
 
