@@ -236,6 +236,7 @@ void Quota::schedule_producing() {
       m_is_producing_scheduled = false;
       double value = m_initial_value - m_current_value;
       if (m_options.produce > 0 && m_options.produce < value) {
+        schedule_producing();
         value = m_options.produce;
       }
       produce(value);
