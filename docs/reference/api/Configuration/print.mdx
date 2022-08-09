@@ -9,13 +9,11 @@ Appends a **print** filter to the current pipeline layout.
 
 A **print** filter outputs all [Data](/reference/api/Data) in the input stream to the standard output. Its input and output can be any kinds of events.
 
-|          |           |
-|:--------:|:---------:|
-| _Input_  |           |
-| ↓        | **Event** |
-| `print`  |           |
-| ↓        | **Event** |
-| _Output_ |           |
+<FilterDiagram
+  name="print"
+  input="Event"
+  output="Event"
+/>
 
 This filter is different from [dump()](/reference/api/Configuration/dump) in that:
 

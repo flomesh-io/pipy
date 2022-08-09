@@ -9,13 +9,11 @@ Appends a **throttleDataRate** filter to the current pipeline layout.
 
 A **throttleDataRate** filter sets a limit to how many bytes of [Data](/reference/api/Data) can pass in every second. Its input and output can be any types of events, but the limit only takes effect when they have _Data_ events.
 
-|                    |           |
-|:------------------:|:---------:|
-| _Input_            |           |
-| ↓                  | **Event** |
-| `throttleDataRate` |           |
-| ↓                  | **Event** |
-| _Output_           |           |
+<FilterDiagram
+  name="throttleDataRate"
+  input="Event"
+  output="Event"
+/>
 
 The rate limit is set by the _quota_ parameter. It can be a number in bytes, or a string with a size unit suffix such as `'k'`, `'m'`, `'g'` or `'t'`. It can also be a function that returns that value. When the limit is reached in a second, all events afterwards will be blocked until quota is recovered the next second. When the limit is zero or less, no limit is set.
 

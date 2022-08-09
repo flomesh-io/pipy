@@ -9,13 +9,14 @@ Appends a **muxQueue** filter to the current pipeline layout.
 
 A **muxQueue** filter **multiplexes** input [Messages](/reference/api/Message) into a shared sub-pipeline and de-multiplexes output _Messages_ out of it. Its input and output are _Messages_. Its sub-pipelines's input and output are also _Messages_.
 
-|          |             |            |             |                |
-|---------:|:-----------:|:----------:|:-----------:|:--------------:|
-|          | **Message** |            | **Message** |                |
-| _Input_  | →           |            | →           |                |
-|          |             | `muxQueue` |             | `sub-pipeline` |
-| _Output_ | ←           |            | ←           |                |
-|          | **Message** |            | **Message** |                |
+<FilterDiagram
+  name="muxQueue"
+  input="Message"
+  output="Message"
+  subInput="Message"
+  subOutput="Message"
+  subType="mux"
+/>
 
 A **muxQueue** filter works like this:
 
@@ -24,15 +25,7 @@ A **muxQueue** filter works like this:
 - At the output from the shared sub-pipeline, the _Message_ stream is de-queue and sent back to their original **muxQueue** filters
 - At the output from the **muxQueue** filter, output _Mesasges_ corresponding to its input _Messages_ are received in the same order as in the queue
 
-A group of **muxQueue** filters can have one shared sub-pipeline, in which many input/output _Messages_ are multiplexed.
-
-|                    |    |            |    |                |
-|-------------------:|:--:|:----------:|:--:|:---------------|
-| `main pipeline #1` | ←→ | `muxQueue` |    |                |
-| `main pipeline #2` | ←→ | `muxQueue` | ←→ | `sub-pipeline` |
-| `main pipeline #N` | ←→ | `muxQueue` |    |                |
-
-Compare this to [demuxQueue()](/reference/api/Configuration/demuxQueue).
+A group of **muxQueue** filters can have one shared sub-pipeline, in which many input/output _Messages_ are multiplexed. Compare this to [demuxQueue()](/reference/api/Configuration/demuxQueue).
 
 ### Stream Grouping
 

@@ -9,13 +9,14 @@ Appends a **connectSOCKS** filter to the current pipeline layout.
 
 A **connectSOCKS** filter implements [SOCKS](https://en.wikipedia.org/wiki/SOCKS) protocol on the client side. Its input and output are [Data](/reference/api/Data) streams. Its sub-pipeline's input and output are also _Data_ streams (usually TCP streams).
 
-|          |          |                |          |                |
-|---------:|:--------:|:--------------:|:--------:|:--------------:|
-|          | **Data** |                | **Data** |                |
-| _Input_  | →        |                | →        |                |
-|          |          | `connectSOCKS` |          | `sub-pipeline` |
-| _Output_ | ←        |                | ←        |                |
-|          | **Data** |                | **Data** |                |
+<FilterDiagram
+  name="connectSOCKS"
+  input="Data"
+  output="Data"
+  subInput="Data"
+  subOutput="Data"
+  subType="link"
+/>
 
 A **connectSOCKS** filter pumps its input _Data_ stream into a newly created sub-pipeline, prepended by a SOCKS connection request. Its output is the _Data_ stream coming out of the sub-pipeline, with the leading SOCKS connection response removed.
 

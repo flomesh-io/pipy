@@ -9,13 +9,11 @@ Appends a **handleStreamStart** filter to the current pipeline layout.
 
 A **handleStreamStart** filter calls a user function when it sees the first event in an input stream. Its input and output can be any kinds of events.
 
-|                     |           |
-|:-------------------:|:---------:|
-| _Input_             |           |
-| ↓                   | **Event** |
-| `handleStreamStart` |           |
-| ↓                   | **Event** |
-| _Output_            |           |
+<FilterDiagram
+  name="handleStreamStart"
+  input="Event"
+  output="Event"
+/>
 
 The user function that gets called will have an event object as parameter, which is whatever first event is in that stream. It can be any of the four types of events described in [Concept: Stream](/intro/concepts/#stream).
 

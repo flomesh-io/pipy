@@ -9,13 +9,11 @@ Appends a **decompressMessage** filter to the current pipeline layout.
 
 A **decompressMessage** filter decompresses the bodies of [Messages](/reference/api/Message). Its input and output are both _Messages_.
 
-|                     |             |
-|:-------------------:|:-----------:|
-| _Input_             |             |
-| ↓                   | **Message** |
-| `decompressMessage` |             |
-| ↓                   | **Message** |
-| _Output_            |             |
+<FilterDiagram
+  name="decompressMessage"
+  input="Message"
+  output="Message"
+/>
 
 The algorithm used for decompression is specified by the _algorithm_ parameter. The decompression algorithms currently supported are _"inflate"_ and _"brotli"_.
 

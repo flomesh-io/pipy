@@ -9,13 +9,11 @@ Appends a **connect** filter to the current pipeline layout.
 
 A **connect** filter establishes a TCP connection to a remote host. Its input and output are both TCP streams represented as [Data](/reference/api/Data) streams.
 
-|           |          |
-|:---------:|:--------:|
-| _Input_   |          |
-| ↓         | **Data** |
-| `connect` |          |
-| ↓         | **Data** |
-| _Output_  |          |
+<FilterDiagram
+  name="connect"
+  input="Data"
+  output="Data"
+/>
 
 A **connect** filter works like this:
 

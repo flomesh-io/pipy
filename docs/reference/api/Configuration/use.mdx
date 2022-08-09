@@ -9,13 +9,14 @@ Appends a **use** filter to the current pipeline layout.
 
 A **use** filter pumps events through a sub-pipeline in a different module, or a series of sub-pipelines in a module chain. The filter and its sub-pipelines's input and output can be any types of events.
 
-|          |           |       |           |             |           |       |           |             |
-|---------:|:---------:|:-----:|:---------:|:-----------:|:---------:|:-----:|:---------:|:-----------:|
-|          | **Event** |       | **Event** |             | **Event** |       | **Event** |             |
-| _Input_  | →         |       | →         |             | →         |       | →         |             |
-|          |           | `use` |           | `module #1` |           | `...` |           | `module #N` |
-| _Output_ | ←         |       | ←         |             | ←         |       | ←         |             |
-|          | **Event** |       | **Event** |             | **Event** |       | **Event** |             |
+<FilterDiagram
+  name="use"
+  input="Event"
+  output="Event"
+  subInput="Event"
+  subOutput="Event"
+  subType="link"
+/>
 
 You can use a **use** filter in multiple ways as being discussed down below.
 

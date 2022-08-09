@@ -9,13 +9,11 @@ Appends a **handleStreamEnd** filter to the current pipeline layout.
 
 A **handleStreamEnd** filter calls a user function every time it sees a [StreamEnd](/reference/api/StreamEnd) event in the input stream. Its input and output can be any kinds of events.
 
-|                   |           |
-|:-----------------:|:---------:|
-| _Input_           |           |
-| ↓                 | **Event** |
-| `handleStreamEnd` |           |
-| ↓                 | **Event** |
-| _Output_          |           |
+<FilterDiagram
+  name="handleStreamEnd"
+  input="Event"
+  output="Event"
+/>
 
 The user function that gets called will have a [StreamEnd](/reference/api/StreamEnd) object as parameter.
 

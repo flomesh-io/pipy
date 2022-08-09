@@ -9,13 +9,14 @@ Appends a **muxHTTP** filter to the current pipeline layout.
 
 A **muxHTTP** filter encodes and **multiplexes** HTTP requests into a shared sub-pipeline and de-multiplexes and decodes HTTP responses out of it. Its input and output are HTTP [Messages](/reference/api/Message). Its sub-pipelines's input and output are [Data](/reference/api/Data) (usually TCP streams).
 
-|          |             |           |          |                |
-|---------:|:-----------:|:---------:|:--------:|:--------------:|
-|          | **Message** |           | **Data** |                |
-| _Input_  | →           |           | →        |                |
-|          |             | `muxHTTP` |          | `sub-pipeline` |
-| _Output_ | ←           |           | ←        |                |
-|          | **Message** |           | **Data** |                |
+<FilterDiagram
+  name="muxHTTP"
+  input="Message"
+  output="Message"
+  subInput="Data"
+  subOutput="Data"
+  subType="mux"
+/>
 
 A **muxHTTP** filter works like this:
 
@@ -24,15 +25,7 @@ A **muxHTTP** filter works like this:
 - At the output from the shared sub-pipeline, the _Data_ stream (usually a TCP stream) is de-multiplexed and sent back to their original **muxHTTP** filters as responses
 - At the output from the **muxHTTP** filter, HTTP responses are decoded into _Messages_
 
-A group of **muxHTTP** filters can have one shared sub-pipeline, in which many HTTP requests and responses are multiplexed.
-
-|                    |    |           |    |                |
-|-------------------:|:--:|:---------:|:--:|:---------------|
-| `main pipeline #1` | ←→ | `muxHTTP` |    |                |
-| `main pipeline #2` | ←→ | `muxHTTP` | ←→ | `sub-pipeline` |
-| `main pipeline #N` | ←→ | `muxHTTP` |    |                |
-
-Compare this to [demuxHTTP()](/reference/api/Configuration/demuxHTTP).
+A group of **muxHTTP** filters can have one shared sub-pipeline, in which many HTTP requests and responses are multiplexed. Compare this to [demuxHTTP()](/reference/api/Configuration/demuxHTTP).
 
 ### Stream Grouping
 

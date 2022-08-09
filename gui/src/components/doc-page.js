@@ -26,6 +26,7 @@ import TipIcon from '@material-ui/icons/EmojiObjectsSharp';
 
 import PipyLogo from '../images/pipy.svg';
 import HighlightTheme from 'prism-react-renderer/themes/vsDark';
+import FilterDiagram from './filter-diagram';
 
 const FONT_TITLE = '"Titillium Web", sans-serif';
 const FONT_TOC = '"Titillium Web", verdana, sans-serif';
@@ -298,8 +299,8 @@ const useStyles = makeStyles(theme => ({
     paddingRight: theme.spacing(0.5),
     paddingTop: '3px',
     paddingBottom: '3px',
-    color: 'black',
-    backgroundColor: '#ccf',
+    color: '#9cdcfe',
+    backgroundColor: '#1e1e1e',
     borderRadius: '3px',
   },
 
@@ -705,6 +706,7 @@ const components = {
   StaticMethods,
   Parameters,
   ReturnValue,
+  FilterDiagram,
 };
 
 const DocNavItem = ({ nodes, label, path, uri }) => {

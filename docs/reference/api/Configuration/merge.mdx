@@ -9,13 +9,13 @@ Appends a **merge** filter to the current pipeline layout.
 
 A **merge** filter queues up input [Messages](/reference/api/Message) into a shared sub-pipeline. Its input and output are _Messages_. Its sub-pipelines's input is also _Messages_ while their output is simply discarded.
 
-|          |             |         |             |                |           |            |
-|---------:|:-----------:|:-------:|:-----------:|:--------------:|:---------:|:-----------|
-|          | **Message** |         |             |                |           |            |
-| _Input_  | →           |         | **Message** |                | **Event** |            |
-|          |             | `merge` | →           | `sub-pipeline` | →         | _Discared_ |
-| _Output_ | ←           |         |             |                |           |            |
-|          | **Message** |         |             |                |           |            |
+<FilterDiagram
+  name="merge"
+  input="Message"
+  output="Message"
+  subInput="Message"
+  subType="mux"
+/>
 
 A **merge** filter works like this:
 
@@ -25,12 +25,6 @@ A **merge** filter works like this:
 - At the output from the **merge** filter, out come the same _Mesasges_ from its input
 
 A group of **merge** filters can have one shared sub-pipeline, in which many input _Messages_ are queued up.
-
-|                    |    |         |    |                |
-|-------------------:|:--:|:-------:|:--:|:---------------|
-| `main pipeline #1` | ←→ | `merge` |    |                |
-| `main pipeline #2` | ←→ | `merge` | ←→ | `sub-pipeline` |
-| `main pipeline #N` | ←→ | `merge` |    |                |
 
 ### Stream Grouping
 

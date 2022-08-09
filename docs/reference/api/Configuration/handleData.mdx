@@ -9,13 +9,11 @@ Appends a **handleData** filter to the current pipeline layout.
 
 A **handleData** filter calls a user function every time it sees a [Data](/reference/api/Data) event in the input stream. Its input and output can be any kinds of events.
 
-|              |           |
-|:------------:|:---------:|
-| _Input_      |           |
-| ↓            | **Event** |
-| `handleData` |           |
-| ↓            | **Event** |
-| _Output_     |           |
+<FilterDiagram
+  name="handleData"
+  input="Event"
+  output="Event"
+/>
 
 The user function that gets called will have a [Data](/reference/api/Data) object as parameter.
 

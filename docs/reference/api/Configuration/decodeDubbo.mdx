@@ -9,13 +9,11 @@ Appends a **decodeDubbo** filter to the current pipeline layout.
 
 A **decodeDubbo** filter decodes [Dubbo](https://dubbo.apache.org/) messages in its input [Data](/reference/api/Data) and outputs [Messages](/reference/api/Message) after decoding. Its input is a _Data_ stream and its output is a _Message_ stream.
 
-|               |             |
-|:-------------:|:-----------:|
-| _Input_       |             |
-| ↓             | **Data**    |
-| `decodeDubbo` |             |
-| ↓             | **Message** |
-| _Output_      |             |
+<FilterDiagram
+  name="decodeDubbo"
+  input="Data"
+  output="Message"
+/>
 
 The _Messages_ after decoding will have these contents:
 

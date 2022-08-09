@@ -9,13 +9,11 @@ Appends a **wait** filter to the current pipeline layout.
 
 A **wait** filter blocks all input events up until a condition is met. Its input and output can be any types of events.
 
-|          |           |
-|:--------:|:---------:|
-| _Input_  |           |
-| ↓        | **Event** |
-| `wait`   |           |
-| ↓        | **Event** |
-| _Output_ |           |
+<FilterDiagram
+  name="wait"
+  input="Event"
+  output="Event"
+/>
 
 The condition to wait is given by the _condition_ parameter. It should be a function that returns a truthy value when the condition is met. The function will be called every time a relevant asynchronous event happens, such as having received a response from the upstream, etc.
 

@@ -9,13 +9,11 @@ Appends a **detectProtocol** filter to the current pipeline layout.
 
 A **detectProtocol** filter calls a user function to tell what protocol the input stream is. Its input and output can be any kinds of events.
 
-|                  |           |
-|:----------------:|:---------:|
-| _Input_          |           |
-| ↓                | **Event** |
-| `detectProtocol` |           |
-| ↓                | **Event** |
-| _Output_         |           |
+<FilterDiagram
+  name="detectProtocol"
+  input="Event"
+  output="Event"
+/>
 
 The user function that gets called will have a string as parameter, which can be:
 

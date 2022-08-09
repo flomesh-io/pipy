@@ -9,14 +9,13 @@ Appends a **fork** filter to the current pipeline layout.
 
 A **fork** filter creates one or more sub-pipelines, each receiving a clone of all events from the filter's input. The filter's output is exactly the same as its input. All output from the created sub-pipelines are discarded. The filter and its sub-pipelines's input and output can be any types of events.
 
-|          |           |        |           |                |           |           |
-|---------:|:---------:|:------:|:---------:|:--------------:|:---------:|:----------|
-|          | **Event** |        |           |                |           |           |
-| _Input_  | →         |        | **Event** |                | **Event** |           |
-|          |           | `fork` | →         | `sub-pipeline` | →         | _Discard_ |
-| _Output_ | ←         |        |           |                |           |           |
-|          | **Event** |        |           |                |           |           |
-
+<FilterDiagram
+  name="fork"
+  input="Event"
+  output="Event"
+  subInput="Event"
+  subType="demux"
+/>
 
 The layout based on which sub-pipelines are created is given by the first argument when you call `fork()`. The second argument is optional. It decides how many sub-pipelines are created, and what their [_contexts_](/intro/concepts#context) are.
 

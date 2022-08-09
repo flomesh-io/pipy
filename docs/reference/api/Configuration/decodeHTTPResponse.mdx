@@ -9,13 +9,11 @@ Appends a **decodeHTTPResponse** filter to the current pipeline layout.
 
 A **decodeHTTPResponse** filter decodes HTTP/1.x responses in its input [Data](/reference/api/Data) and outputs [Messages](/reference/api/Message) after decoding. Its input is a _Data_ stream and its output is a _Message_ stream.
 
-|                      |             |
-|:--------------------:|:-----------:|
-| _Input_              |             |
-| ↓                    | **Data**    |
-| `decodeHTTPResponse` |             |
-| ↓                    | **Message** |
-| _Output_             |             |
+<FilterDiagram
+  name="decodeHTTPResponse"
+  input="Data"
+  output="Message"
+/>
 
 The _Messages_ after decoding will have these contents:
 

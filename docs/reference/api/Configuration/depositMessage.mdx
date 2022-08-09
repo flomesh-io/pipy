@@ -9,13 +9,11 @@ Appends a **depositMessage** filter to the current pipeline layout.
 
 A **depositMessage** filter buffers a whole message body in a temporary file. Its input and output are all messages.
 
-|                  |             |
-|:----------------:|:-----------:|
-| _Input_          |             |
-| ↓                | **Message** |
-| `depositMessage` |             |
-| ↓                | **Message** |
-| _Output_         |             |
+<FilterDiagram
+  name="depositMessage"
+  input="Message"
+  output="Message"
+/>
 
 The pathname of the output file is specified in the first parameter. It can be a string or a function that returns a string.
 

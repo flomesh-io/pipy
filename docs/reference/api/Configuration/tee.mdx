@@ -9,13 +9,11 @@ Appends a **tee** filter to the current pipeline layout.
 
 A **tee** filter writes Data to a file while passing all events through. Its input and output can be any kinds of events.
 
-|          |           |
-|:--------:|:---------:|
-| _Input_  |           |
-| ↓        | **Event** |
-| `tee`    |           |
-| ↓        | **Event** |
-| _Output_ |           |
+<FilterDiagram
+  name="tee"
+  input="Event"
+  output="Event"
+/>
 
 This filter resembles what the Unix command [tee](https://en.wikipedia.org/wiki/Tee_(command)) does. The pathname of the output file is specified in the first parameter. It is expected to be a string or a function that returns a string. Use `"-"` for writing to the standard output.
 

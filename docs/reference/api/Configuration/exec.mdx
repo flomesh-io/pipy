@@ -9,13 +9,11 @@ Appends an **exec** filter to the current pipeline layout.
 
 An **exec** filter starts an external process, feeds the input [Data](/reference/api/Data) to the process's standard input and outputs the _Data_ coming out of the process's standard output. Its input and output are both _Data_ events.
 
-|          |          |
-|:--------:|:--------:|
-| _Input_  |          |
-| ↓        | **Data** |
-| `exec`   |          |
-| ↓        | **Data** |
-| _Output_ |          |
+<FilterDiagram
+  name="exec"
+  input="Data"
+  output="Data"
+/>
 
 The external process is started from a shell command given by the _command_ parameter when the first event hits the filter's input. The command can be a string or a function that returns a dynamic string.
 

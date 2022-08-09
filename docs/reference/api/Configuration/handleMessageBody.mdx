@@ -9,13 +9,11 @@ Appends a **handleMessageBody** filter to the current pipeline layout.
 
 A **handleMessageBody** filter calls a user function every time it sees a complete message body in the input stream. Its input and output can be any kinds of events.
 
-|                     |           |
-|:-------------------:|:---------:|
-| _Input_             |           |
-| ↓                   | **Event** |
-| `handleMessageBody` |           |
-| ↓                   | **Event** |
-| _Output_            |           |
+<FilterDiagram
+  name="handleMessageBody"
+  input="Event"
+  output="Event"
+/>
 
 The user function that gets called will have a [Data](/reference/api/Data) object as parameter.
 

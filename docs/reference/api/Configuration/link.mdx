@@ -9,14 +9,14 @@ Appends a **link** filter to the current pipeline layout.
 
 A **link** filter creates a new sub-pipeline and pumps all events through it, as if the new sub-pipeline has taken the place of the **link** filter. The filter and its sub-pipeline's input and output can be any types of events.
 
-|          |           |        |           |                |
-|---------:|:---------:|:------:|:---------:|:--------------:|
-|          | **Event** |        | **Event** |                |
-| _Input_  | →         |        | →         |                |
-|          |           | `link` |           | `sub-pipeline` |
-| _Output_ | ←         |        | ←         |                |
-|          | **Event** |        | **Event** |                |
-
+<FilterDiagram
+  name="link"
+  input="Event"
+  output="Event"
+  subInput="Event"
+  subOutput="Event"
+  subType="link"
+/>
 
 The **link** filter can be used in a few different scenarios: reuse a shared sub-pipeline layout, select a sub-pipeline layout out of a few based on some conditions, or back up all events until a condition is met.
 

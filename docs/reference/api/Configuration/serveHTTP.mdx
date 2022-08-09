@@ -9,13 +9,11 @@ Appends a **serveHTTP** filter to the current pipeline layout.
 
 A **serveHTTP** filter de-multiplexes and decodes HTTP requests from its input [Data](/reference/api/Data) stream, calls a user-defined script handler for each request to get a response and encodes and multiplexes those HTTP responses into a single output _Data_ stream. Its input and output are _Data_ (usually TCP streams).
 
-|             |          |
-|:-----------:|:--------:|
-| _Input_     |          |
-| ↓           | **Data** |
-| `serveHTTP` |          |
-| ↓           | **Data** |
-| _Output_    |          |
+<FilterDiagram
+  name="serveHTTP"
+  input="Data"
+  output="Data"
+/>
 
 ## Syntax
 

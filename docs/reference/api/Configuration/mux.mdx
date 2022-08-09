@@ -9,13 +9,13 @@ Appends a **mux** filter to the current pipeline layout.
 
 A **mux** filter queues up input [Messages](/reference/api/Message) into a shared sub-pipeline. Its input and output are _Messages_. Its sub-pipelines's input is also _Messages_ while their output is simply discarded.
 
-|          |             |       |             |                |           |            |
-|---------:|:-----------:|:-----:|:-----------:|:--------------:|:---------:|:-----------|
-|          | **Message** |       |             |                |           |            |
-| _Input_  | →           |       | **Message** |                | **Event** |            |
-|          |             | `mux` | →           | `sub-pipeline` | →         | _Discared_ |
-| _Output_ | ←           |       |             |                |           |            |
-|          | **Message** |       |             |                |           |            |
+<FilterDiagram
+  name="mux"
+  input="Message"
+  output="Message"
+  subInput="Message"
+  subType="mux"
+/>
 
 A **mux** filter works like this:
 
@@ -25,12 +25,6 @@ A **mux** filter works like this:
 - At the output from the **mux** filter, out come the same _Mesasges_ from its input
 
 A group of **mux** filters can have one shared sub-pipeline, in which many input _Messages_ are queued up.
-
-|                    |    |       |    |                |
-|-------------------:|:--:|:-----:|:--:|:---------------|
-| `main pipeline #1` | ←→ | `mux` |    |                |
-| `main pipeline #2` | ←→ | `mux` | ←→ | `sub-pipeline` |
-| `main pipeline #N` | ←→ | `mux` |    |                |
 
 ### Stream Grouping
 

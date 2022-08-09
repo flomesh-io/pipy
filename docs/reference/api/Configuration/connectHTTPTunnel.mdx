@@ -9,15 +9,14 @@ Appends a **connectHTTPTunnel** filter to the current pipeline layout.
 
 A **connectHTTPTunnel** filter implements [HTTP tunnel](https://en.wikipedia.org/wiki/HTTP_tunnel) on the client side. Its input and output are [Data](/reference/api/Data) streams. Its sub-pipeline's input and output are [Messages](/reference/api/Message) at the beginning and switch to _Data_ after the tunnel is established.
 
-|          |          |                     |             |                |
-|---------:|:--------:|:-------------------:|:-----------:|:--------------:|
-|          |          |                     | **Message** |                |
-|          | **Data** |                     | **+ Data**  |                |
-| _Input_  | →        |                     | →           |                |
-|          |          | `connectHTTPTunnel` |             | `sub-pipeline` |
-| _Output_ | ←        |                     | ←           |                |
-|          | **Data** |                     | **Message** |                |
-|          |          |                     | **+ Data**  |                |
+<FilterDiagram
+  name="connectHTTPTunnel"
+  input="Data"
+  output="Data"
+  subInput="Message + Data"
+  subOutput="Message + Data"
+  subType="link"
+/>
 
 A **connectHTTPTunnel** filter pumps its input _Data_ stream into a newly created sub-pipeline, prepended by an HTTP [CONNECT](https://developer.mozilla.org/docs/Web/HTTP/Methods/CONNECT) request _Message_. Its output is the _Data_ stream coming out of the sub-pipeline, with the leading HTTP _Message_ in response to the _CONNECT_ request removed.
 

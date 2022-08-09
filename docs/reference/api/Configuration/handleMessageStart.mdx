@@ -9,13 +9,11 @@ Appends a **handleMessageStart** filter to the current pipeline layout.
 
 A **handleMessageStart** filter calls a user function every time it sees a [MessageStart](/reference/api/MessageStart) event in the input stream. Its input and output can be any kinds of events.
 
-|                      |           |
-|:--------------------:|:---------:|
-| _Input_              |           |
-| ↓                    | **Event** |
-| `handleMessageStart` |           |
-| ↓                    | **Event** |
-| _Output_             |           |
+<FilterDiagram
+  name="handleMessageStart"
+  input="Event"
+  output="Event"
+/>
 
 The user function that gets called will have a [MessageStart](/reference/api/MessageStart) object as parameter.
 

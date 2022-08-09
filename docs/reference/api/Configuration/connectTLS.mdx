@@ -9,13 +9,14 @@ Appends a **connectTLS** filter to the current pipeline layout.
 
 A **connectTLS** filter implements [TLS](https://en.wikipedia.org/wiki/Transport_Layer_Security) protocol on the client side. Its input and output are [Data](/reference/api/Data) streams. Its sub-pipeline's input and output are also _Data_ streams (usually TCP streams).
 
-|          |          |              |          |                |
-|---------:|:--------:|:------------:|:--------:|:--------------:|
-|          | **Data** |              | **Data** |                |
-| _Input_  | →        |              | →        |                |
-|          |          | `connectTLS` |          | `sub-pipeline` |
-| _Output_ | ←        |              | ←        |                |
-|          | **Data** |              | **Data** |                |
+<FilterDiagram
+  name="connectTLS"
+  input="Data"
+  output="Data"
+  subInput="Data"
+  subOutput="Data"
+  subType="link"
+/>
 
 A **connectTLS** filter works like this:
 

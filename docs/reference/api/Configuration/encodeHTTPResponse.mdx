@@ -9,13 +9,11 @@ Appends an **encodeHTTPResponse** filter to the current pipeline layout.
 
 An **encodeHTTPResponse** filter encodes its input [Messages](/reference/api/Message) into HTTP/1.x responses and outputs encoded [Data](/reference/api/Data). Its input is a _Message_ stream and its output is a _Data_ stream.
 
-|                      |             |
-|:--------------------:|:-----------:|
-| _Input_              |             |
-| ↓                    | **Message** |
-| `encodeHTTPResponse` |             |
-| ↓                    | **Data**    |
-| _Output_             |             |
+<FilterDiagram
+  name="encodeHTTPResponse"
+  input="Message"
+  output="Data"
+/>
 
 The input _Messages_ can have these contents:
 

@@ -9,13 +9,11 @@ Appends a **handleMessage** filter to the current pipeline layout.
 
 A **handleMessage** filter calls a user function every time it sees a complete [Message](/reference/api/Message) in the input stream. Its input and output can be any kinds of events.
 
-|                 |           |
-|:---------------:|:---------:|
-| _Input_         |           |
-| ↓               | **Event** |
-| `handleMessage` |           |
-| ↓               | **Event** |
-| _Output_        |           |
+<FilterDiagram
+  name="handleMessage"
+  input="Event"
+  output="Event"
+/>
 
 The user function that gets called will have a [Message](/reference/api/Message) object as parameter.
 

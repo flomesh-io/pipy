@@ -9,13 +9,11 @@ Appends a **throttleMessageRate** filter to the current pipeline layout.
 
 A **throttleMessageRate** filter sets a limit to how many [Messages](/reference/api/Message) can pass in every second. Its input and output can be any types of events, but the limit only take effect when they have [MessageStart](/reference/api/Message) events.
 
-|                       |           |
-|:---------------------:|:---------:|
-| _Input_               |           |
-| ↓                     | **Event** |
-| `throttleMessageRate` |           |
-| ↓                     | **Event** |
-| _Output_              |           |
+<FilterDiagram
+  name="throttleMessageRate"
+  input="Event"
+  output="Event"
+/>
 
 The rate limit is set by the _quota_ parameter, which is the number of _Messages_ allowed to pass every second, or a function that returns that number. When the limit is reached in a second, all events afterwards will be blocked until quota is recovered the next second. When the limit is zero or less, no limit is set.
 

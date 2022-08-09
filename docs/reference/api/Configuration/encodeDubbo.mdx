@@ -9,13 +9,11 @@ Appends an **encodeDubbo** filter to the current pipeline layout.
 
 An **encodeDubbo** filter encodes its input [Messages](/reference/api/Message) into [Dubbo](https://dubbo.apache.org/) messages and outputs encoded [Data](/reference/api/Data). Its input is a _Message_ stream and its output is a _Data_ stream.
 
-|               |             |
-|:-------------:|:-----------:|
-| _Input_       |             |
-| ↓             | **Message** |
-| `encodeDubbo` |             |
-| ↓             | **Data**    |
-| _Output_      |             |
+<FilterDiagram
+  name="encodeDubbo"
+  input="Message"
+  output="Data"
+/>
 
 The input _Messages_ can have these contents:
 

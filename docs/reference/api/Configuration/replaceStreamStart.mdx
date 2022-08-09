@@ -9,13 +9,11 @@ Appends a **replaceStreamStart** filter to the current pipeline layout.
 
 A **replaceStreamStart** filter calls a user function to get a replacement for the first event in an input stream. Its input and output can be any kinds of events.
 
-|                      |           |
-|:--------------------:|:---------:|
-| _Input_              |           |
-| ↓                    | **Event** |
-| `replaceStreamStart` |           |
-| ↓                    | **Event** |
-| _Output_             |           |
+<FilterDiagram
+  name="replaceStreamStart"
+  input="Event"
+  output="Event"
+/>
 
 The user function will receive as parameter the first event object in the input stream. The event will be removed from the stream. Whatever the function returns will be inserted into the output stream in place of the removed event. It can be an event or a [Message](/reference/api/Message), or an array of events or _Messages_. If the function returns nothing (_null_ or _undefined_), no events will be inserted in the output.
 

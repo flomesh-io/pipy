@@ -9,13 +9,11 @@ Appends a **compressMessage** filter to the current pipeline layout.
 
 A **compressMessage** filter compresses the bodies of [Messages](/reference/api/Message). Its input and output are both _Messages_.
 
-|                   |             |
-|:-----------------:|:-----------:|
-| _Input_           |             |
-| ↓                 | **Message** |
-| `compressMessage` |             |
-| ↓                 | **Message** |
-| _Output_          |             |
+<FilterDiagram
+  name="compressMessage"
+  input="Message"
+  output="Message"
+/>
 
 The method, compression level used for compression are specified by the _options_ parameter. Currently supported compression methods are _deflate_, _gzip_.
 

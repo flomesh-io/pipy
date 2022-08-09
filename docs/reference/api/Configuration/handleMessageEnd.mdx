@@ -9,13 +9,11 @@ Appends a **handleMessageEnd** filter to the current pipeline layout.
 
 A **handleMessageEnd** filter calls a user function every time it sees a [MessageEnd](/reference/api/MessageEnd) event in the input stream. Its input and output can be any kinds of events.
 
-|                    |           |
-|:------------------:|:---------:|
-| _Input_            |           |
-| ↓                  | **Event** |
-| `handleMessageEnd` |           |
-| ↓                  | **Event** |
-| _Output_           |           |
+<FilterDiagram
+  name="handleMessageEnd"
+  input="Event"
+  output="Event"
+/>
 
 The user function that gets called will have a [MessageEnd](/reference/api/MessageEnd) object as parameter.
 

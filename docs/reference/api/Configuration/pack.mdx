@@ -9,13 +9,11 @@ Appends a **pack** filter to the current pipeline layout.
 
 A **pack** filter concatenates [Data](/reference/api/Data) from multiple input [Message](/reference/api/Message) bodies into one and outputs the combined _Messages_. Its input and output are both _Message_ streams.
 
-|          |             |
-|:--------:|:-----------:|
-| _Input_  |             |
-| ↓        | **Message** |
-| `pack`   |             |
-| ↓        | **Message** |
-| _Output_ |             |
+<FilterDiagram
+  name="pack"
+  input="Message x N"
+  output="Message"
+/>
 
 The number of input _Messages_ to combine into one is given by the _batchSize_ parameter, which defaults to 1 if not presented.
 

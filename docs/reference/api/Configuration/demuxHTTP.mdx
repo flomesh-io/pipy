@@ -9,13 +9,14 @@ Appends a **demuxHTTP** filter to the current pipeline layout.
 
 A **demuxHTTP** filter **de-multiplexes** and decodes HTTP requests from its input [Data](/reference/api/Data) stream, distribute them to many sub-pipelines and encodes and multiplexes their HTTP responses into a single output _Data_ stream. Its input and output are _Data_ (usually TCP streams). Its sub-pipelines's input and output are HTTP [Messages](/reference/api/Message).
 
-|          |          |             |             |                |
-|---------:|:--------:|:-----------:|:-----------:|:--------------:|
-|          | **Data** |             | **Message** |                |
-| _Input_  | →        |             | →           |                |
-|          |          | `demuxHTTP` |             | `sub-pipeline` |
-| _Output_ | ←        |             | ←           |                |
-|          | **Data** |             | **Message** |                |
+<FilterDiagram
+  name="demuxHTTP"
+  input="Data"
+  output="Data"
+  subInput="Message"
+  subOutput="Message"
+  subType="demux"
+/>
 
 A **demuxHTTP** filter works like this:
 
@@ -23,15 +24,7 @@ A **demuxHTTP** filter works like this:
 - For each request, a dedicated sub-pipeline is created, whose input will be the decoded request _Message_
 - At the output from the **demuxHTTP** filter, response _Messages_ coming out of all sub-pipelines are encoded and multiplexed into one single _Data_ stream (usually a TCP stream)
 
-One **demuxHTTP** filter can have more than one sub-pipelines, each of which handles one HTTP request.
-
-|                 |    |             |    |                   |
-|----------------:|:--:|:-----------:|:--:|:------------------|
-|                 |    |             | ←→ | `sub-pipeline #1` |
-| `main pipeline` | ←→ | `demuxHTTP` | ←→ | `sub-pipeline #2` |
-|                 |    |             | ←→ | `sub-pipeline #N` |
-
-Compare this to [muxHTTP()](/reference/api/Configuration/muxHTTP).
+One **demuxHTTP** filter can have more than one sub-pipelines, each of which handles one HTTP request. Compare this to [muxHTTP()](/reference/api/Configuration/muxHTTP).
 
 ### HTTP versions
 

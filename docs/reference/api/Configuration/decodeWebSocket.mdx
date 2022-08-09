@@ -9,13 +9,11 @@ Appends a **decodeWebSocket** filter to the current pipeline layout.
 
 A **decodeWebSocket** filter decodes [WebSocket](https://en.wikipedia.org/wiki/WebSocket) messages in its input [Data](/reference/api/Data) and outputs [Messages](/reference/api/Message) after decoding. Its input is a _Data_ stream and its output is a _Message_ stream.
 
-|                   |             |
-|:-----------------:|:-----------:|
-| _Input_           |             |
-| ↓                 | **Data**    |
-| `decodeWebSocket` |             |
-| ↓                 | **Message** |
-| _Output_          |             |
+<FilterDiagram
+  name="decodeWebSocket"
+  input="Data"
+  output="Message"
+/>
 
 The _Messages_ after decoding will have these contents:
 

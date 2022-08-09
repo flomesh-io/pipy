@@ -9,13 +9,11 @@ Appends an **encodeWebSocket** filter to the current pipeline layout.
 
 An **encodeWebSocket** filter encodes its input [Messages](/reference/api/Message) into [WebSocket](https://en.wikipedia.org/wiki/WebSocket) messages and outputs encoded [Data](/reference/api/Data). Its input is a _Message_ stream and its output is a _Data_ stream.
 
-|                   |             |
-|:-----------------:|:-----------:|
-| _Input_           |             |
-| ↓                 | **Message** |
-| `decodeWebSocket` |             |
-| ↓                 | **Data**    |
-| _Output_          |             |
+<FilterDiagram
+  name="encodeWebSocket"
+  input="Message"
+  output="Data"
+/>
 
 The input _Messages_ can have these contents:
 

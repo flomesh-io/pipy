@@ -9,13 +9,11 @@ Appends a **handleTLSClientHello** filter to the current pipeline layout.
 
 A **handleTLSClientHello** filter calls a user function when it sees a [TLS client hello message](https://www.rfc-editor.org/rfc/rfc8446.html#section-4.1.2) at the beginning of an input stream. Its input and output can be any kinds of events.
 
-|                        |           |
-|:----------------------:|:---------:|
-| _Input_                |           |
-| ↓                      | **Event** |
-| `handleTLSClientHello` |           |
-| ↓                      | **Event** |
-| _Output_               |           |
+<FilterDiagram
+  name="handleTLSClientHello"
+  input="Event"
+  output="Event"
+/>
 
 The user function that gets called will have an object as parameter. The object has these fields:
 

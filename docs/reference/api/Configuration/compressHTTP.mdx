@@ -9,13 +9,11 @@ Appends a **compressHTTP** filter to the current pipeline layout.
 
 A **compressHTTP** filter compresses the bodies of HTTP [Messages](/reference/api/Message). Its input and output are both _Messages_.
 
-|                |             |
-|:--------------:|:-----------:|
-| _Input_        |             |
-| ↓              | **Message** |
-| `compressHTTP` |             |
-| ↓              | **Message** |
-| _Output_       |             |
+<FilterDiagram
+  name="compressHTTP"
+  input="Message"
+  output="Message"
+/>
 
 This filter checks _head.headers['content-encoding']_ of the input [MessageStart](/reference/api/MessageStart) event. If its value is not set or its value is different with selected compression method, the message body will be compressed with selected compression method in the output.
 

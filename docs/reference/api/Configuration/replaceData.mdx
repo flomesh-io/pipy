@@ -9,13 +9,11 @@ Appends a **replaceData** filter to the current pipeline layout.
 
 A **replaceData** filter calls a user function to get a replacement for every [Data](/reference/api/Data) event in the input stream. Its input and output can be any kinds of events.
 
-|               |           |
-|:-------------:|:---------:|
-| _Input_       |           |
-| ↓             | **Event** |
-| `replaceData` |           |
-| ↓             | **Event** |
-| _Output_      |           |
+<FilterDiagram
+  name="replaceData"
+  input="Event"
+  output="Event"
+/>
 
 The user function will receive as parameter a [Data](/reference/api/Data) object that is removed from the input stream. Whatever the function returns will be inserted into the output stream in place of the removed event. It can be an event or a [Message](/reference/api/Message), or an array of events or _Messages_. If the function returns nothing (_null_ or _undefined_), no events will be inserted in the output.
 
