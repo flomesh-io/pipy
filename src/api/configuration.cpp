@@ -1695,12 +1695,12 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.split
   method("split", [](Context &ctx, Object *thiz, Value &result) {
-    pipy::Data *seperator;
+    pipy::Data *separator;
     Str *separator_str;
     Function *callback;
     try {
-      if (ctx.try_arguments(1, &seperator)) {
-        thiz->as<FilterConfigurator>()->split(seperator);
+      if (ctx.try_arguments(1, &separator)) {
+        thiz->as<FilterConfigurator>()->split(separator);
       } else if (ctx.try_arguments(1, &separator_str)) {
         thiz->as<FilterConfigurator>()->split(separator_str);
       } else if (ctx.try_arguments(1, &callback)) {

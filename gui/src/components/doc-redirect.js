@@ -12,7 +12,7 @@ const DocRedirect = () => {
     () => {
       window.setTimeout(
         () => {
-          const prefered = navigator.language;
+          const preferred = navigator.language;
           const lang = LANGS.find(s => prefered.startsWith(s)) || 'en';
           navigate(
             `/docs/${lang}/${loc.pathname.substring(6)}`,

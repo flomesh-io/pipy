@@ -129,7 +129,7 @@ MainOptions::MainOptions(int argc, char *argv[]) {
   }
 
   if (bool(admin_tls_cert) != bool(admin_tls_key)) {
-    throw std::runtime_error("--admin-tls-cert and --admin-tls-key must be used in conjuction");
+    throw std::runtime_error("--admin-tls-cert and --admin-tls-key must be used in conjunction");
   }
 
   if (!admin_tls_trusted.empty() && !admin_tls_cert) {
@@ -137,7 +137,7 @@ MainOptions::MainOptions(int argc, char *argv[]) {
   }
 
   if (bool(tls_cert) != bool(tls_key)) {
-    throw std::runtime_error("--tls-cert and --tls-key must be used in conjuction");
+    throw std::runtime_error("--tls-cert and --tls-key must be used in conjunction");
   }
 }
 

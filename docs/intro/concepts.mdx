@@ -117,6 +117,6 @@ Although all pipelines from the same module have exactly the same set of _contex
   <SvgModulePipelineContext/>
 </div>
 
-To the scripts in a module, these context variables are used like _global varaibles_ in other programming languages, which means that they are always accessible to the scripts from anywhere in the same module file. However, they are **NOT** the _global varaibles_ you know in the common sense.
+To the scripts in a module, these context variables are used like _global variables_ in other programming languages, which means that they are always accessible to the scripts from anywhere in the same module file. However, they are **NOT** the _global variables_ you know in the common sense.
 
 "_Global variable_" usually means "_globally unique_", you should only have one single state of these variables at a given time, whereas in Pipy you can have many separate states of them depending on how many different contexts you have. If you are familiar with multi-thread programming concepts, you can correlate this to [_TLS (thread-local storage)_](https://en.wikipedia.org/wiki/Thread-local_storage), where _TLS variables_ can have different states across different _threads_, or by the terms of Pipy, _context variables_ can have different states across different _pipelines_.

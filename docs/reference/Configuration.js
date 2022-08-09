@@ -435,7 +435,7 @@ class Configuration {
    * Its sub-pipelines's input and output are HTTP Messages.
    *
    * @param {Object} [options] Options including bufferSize.
-   * @param {number|string} [options.bufferSize] Response bodies larger than this would be transfered in chunks.
+   * @param {number|string} [options.bufferSize] Response bodies larger than this would be transferred in chunks.
    * @returns {Configuration} The same Configuration object.
    */
   demuxHTTP(options) {}
@@ -744,7 +744,7 @@ class Configuration {
    *
    * @param {function} target Returns the key to a sub-pipeline where the HTTP request is multiplexed to.
    * @param {Object} [options] Options including bufferSize, maxIdle, version.
-   * @param {number|string} [options.bufferSize] Request bodies larger than this would be transfered in chunks.
+   * @param {number|string} [options.bufferSize] Request bodies larger than this would be transferred in chunks.
    * @param {number|string} [options.maxIdle] Time to wait before an unused sub-pipeline is closed.
    * @param {number|string} [options.version] HTTP protocol version to use. Can be 1 for HTTP/1.1 or 2 for HTTP/2.
    * @returns {Configuration} The same Configuration object.

@@ -73,7 +73,7 @@ Let's write the code of our logger plugin.
 
 ### Global Variables
 
-We certainly do not want to report the collected request and response information separately (which makes it difficult to store and query the data), but we would like to aggregate the logging information, do some statistical operations. This appraoch will require us to record the request information before forwarding it to host for processing, combine this with response received from target host, so we need some mechanism to store such information. This is where *Global Variables* come into play, if you get scared after hearing *Global Variable* then that means you haven't yet read our previous tutorials and especially the *Context* section of [Concepts](/intro/concepts) where we explained that *Global Variables* are context specific and don't work like what you have learned in procedural style programming languages.
+We certainly do not want to report the collected request and response information separately (which makes it difficult to store and query the data), but we would like to aggregate the logging information, do some statistical operations. This approach will require us to record the request information before forwarding it to host for processing, combine this with response received from target host, so we need some mechanism to store such information. This is where *Global Variables* come into play, if you get scared after hearing *Global Variable* then that means you haven't yet read our previous tutorials and especially the *Context* section of [Concepts](/intro/concepts) where we explained that *Global Variables* are context specific and don't work like what you have learned in procedural style programming languages.
 
 ```js
 pipy({
@@ -100,7 +100,7 @@ Let's first write the skeleton:
 .pipeline('response')
 ```
 
-These are the two sub-pipelines used as plug-ins. Log recording is an auxiliary service and it shouldn't affect the core functionalty of our proxy service, so in order for it to work transparently, it will be working on a copy of the data without interfering the core functionality of the proxy service.
+These are the two sub-pipelines used as plug-ins. Log recording is an auxiliary service and it shouldn't affect the core functionality of our proxy service, so in order for it to work transparently, it will be working on a copy of the data without interfering the core functionality of the proxy service.
 
 ## Filters
 
