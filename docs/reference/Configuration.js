@@ -236,7 +236,7 @@ class Configuration {
    * @param {level} [options.level] Level of compression.
    * @returns {Configuration} The same Configuration object.
    */
-   compressHTTP(options) {}
+  compressHTTP(options) {}
 
   /**
    * Appends a compressMessage filter to the current pipeline layout.

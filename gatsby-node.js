@@ -21,33 +21,16 @@ exports.onCreateWebpackConfig = ({
 exports.sourceNodes = ({ actions, createNodeId, createContentDigest }) => {
   const { createNode } = actions;
 
-  const options = {
-    allowJs: true,
-    declaration: true,
-    emitDeclarationOnly: true,
-    lib: 'ES6',
-  };
-
-  const filenames = fs
-    .readdirSync('docs/reference')
-    .filter(s => s.endsWith('.js'))
-    .map(s => `docs/reference/${s}`);
-
-  const allFiles = {};
-  const host = ts.createCompilerHost(options);
-  host.writeFile = (filename, content) => allFiles[filename] = content;
-
-  console.log('===== JSDoc files =====');
-  filenames.forEach((s, i) => console.log(i + 1, s));
-
-  const program = ts.createProgram(filenames, options, host);
-  program.emit();
+  const dtsFilenames = fs
+    .readdirSync('docs/dts')
+    .filter(s => s.endsWith('.d.ts'))
+    .map(s => `docs/dts/${s}`);
 
   console.log('===== DTS files =====');
-  Object.keys(allFiles).forEach((s, i) => console.log(i + 1, s));
 
-  for (const filename in allFiles) {
-    const content = allFiles[filename];
+  for (const filename of dtsFilenames) {
+    console.log(filename);
+    const content = fs.readFileSync(filename, 'utf-8');
     createNode({
       id: createNodeId(filename),
       filename,

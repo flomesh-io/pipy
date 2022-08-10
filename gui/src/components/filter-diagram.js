@@ -191,7 +191,7 @@ const FilterDiagram = ({ name, input, output, subInput, subOutput, subType }) =>
 
         {(subType === 'link' || subType == 'demux') && (
           <React.Fragment>
-            <Box x={200} y={80} width={100} height={30} text="Sub-pipeline" fill="green"/>
+            <Box x={200} y={80} width={100} height={30} text="Sub-pipeline" fill="lightgreen"/>
             <LineSubInput x1={170} y1={40} x2={200} y2={95} text={subInput}/>
             <LineSubOutput x1={300} y1={95} x2={330} y2={40} text={subOutput}/>
           </React.Fragment>
@@ -199,7 +199,7 @@ const FilterDiagram = ({ name, input, output, subInput, subOutput, subType }) =>
 
         {subType === 'demux' && (
           <React.Fragment>
-            <Box x={200} y={120} width={100} height={30} text="Sub-pipeline" fill="green"/>
+            <Box x={200} y={120} width={100} height={30} text="Sub-pipeline" fill="lightgreen"/>
             <LineSubInput x1={170} y1={40} x2={200} y2={135} text=""/>
             <LineSubOutput x1={300} y1={135} x2={330} y2={40} text={subOutput && ""}/>
           </React.Fragment>
@@ -207,7 +207,7 @@ const FilterDiagram = ({ name, input, output, subInput, subOutput, subType }) =>
 
         {subType === 'mux' && (
           <React.Fragment>
-            <Box x={200} y={80} width={100} height={50} text="Sub-pipeline" fill="green"/>
+            <Box x={200} y={80} width={100} height={50} text="Sub-pipeline" fill="lightgreen"/>
             <LineSubInput x1={170} y1={40} x2={200} y2={95} text={subInput}/>
             <LineSubOutput x1={300} y1={95} x2={330} y2={40} text={subOutput}/>
             <Box x={150} y={170} width={200} height={30} text={name} fill="orange"/>
