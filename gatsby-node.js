@@ -5,7 +5,6 @@
  */
 
 const fs = require('fs');
-const ts = require('typescript');
 const MonacoWebpackPlugin = require('monaco-editor-webpack-plugin');
 
 exports.onCreateWebpackConfig = ({

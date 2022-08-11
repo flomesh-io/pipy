@@ -36,7 +36,6 @@
     "got": "^12.1.0",
     "pretty-bytes": "^5.6.0",
     "tar-stream": "^2.2.0",
-    "typescript": "^4.4.4",
     "yaml": "^1.10.2"
   },
   "scripts": {
