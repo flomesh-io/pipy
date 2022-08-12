@@ -325,4 +325,45 @@ declare class Configuration {
       [state: string]: (data: number | number[] | Data) => (Event | Message | number | number[])[]
     }
   ): Configuration;
+
+  /**
+   * Appends a _demux_ filter to the current pipeline layout.
+   *
+   * A _demux_ filter distributes each input _Message_ to a separate sub-pipeline.
+   *
+   * - **INPUT** - _Messages_ to distribute to different sub-pipelines.
+   * - **OUTPUT** - No output.
+   * - **SUB-INPUT** - A _Message_ streaming into the _demux_ filter.
+   * - **SUB-OUTPUT** - Disgarded.
+   */
+  demux(): Configuration;
+
+  /**
+   * Appends a _demuxHTTP_ filter to the current pipeline layout.
+   *
+   * A _demuxHTTP_ filter implements HTTP/1 and HTTP/2 protocol on the server side.
+   *
+   * - **INPUT** - _Data_ stream received from the client with HTTP/1 or HTTP/2 requests.
+   * - **OUTPUT** - _Data_ stream to send to the client with HTTP/1 or HTTP/2 responses.
+   * - **SUB-INPUT** - HTTP request _Message_ received from the client.
+   * - **SUB-OUTPUT** - HTTP response _Message_ to send to the client.
+   */
+  demuxHTTP({
+    bufferSize = 16384
+  }? : {
+    bufferSize: number | string
+  }): Configuration;
+
+  /**
+   * Appends a _demuxQueue_ filter to the current pipeline layout.
+   *
+   * A _demuxQueue_ filter distributes each input _Message_ to a separate sub-pipeline
+   * and outputs _Messages_ coming out from those sub-pipelines in the same order as in the input.
+   *
+   * - **INPUT** - _Messages_ to distribute to different sub-pipelines.
+   * - **OUTPUT** - _Messages_ coming out from the sub-pipelines.
+   * - **SUB-INPUT** - A _Message_ streaming into the _demuxQueue_ filter.
+   * - **SUB-OUTPUT** - A _Message_ to stream out the _demuxQueue_ filter.
+   */
+  demuxQueue(): Configuration;
 }
