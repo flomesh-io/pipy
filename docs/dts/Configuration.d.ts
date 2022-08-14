@@ -105,7 +105,7 @@ declare class Configuration {
    * A _branch_ filter selects a pipeline layout from a number of candidates based on condition callbacks,
    * and then creates a sub-pipeline from the selected pipeline layout before streaming events through it.
    *
-   * - **INPUT** - Any types of _Events_.
+   * - **INPUT** - Any types of _Events_ to stream into the selected sub-pipeline.
    * - **OUTPUT** - _Events_ streaming out from the selected sub-pipeline.
    * - **SUB-INPUT** - _Events_ streaming into the _branch_ filter.
    * - **SUB-OUTPUT** - Any types of _Events_.
@@ -493,7 +493,7 @@ declare class Configuration {
   /**
    * Appends a _handleData_ filter to the current pipeline layout.
    *
-   * A _handleData_ filter calls back user scripts every time a _Data_ event is found in the input.
+   * A _handleData_ filter calls back user scripts every time a _Data_ event is found in the input stream.
    *
    * - **INPUT** - Any types of _Events_.
    * - **OUTPUT** - Same _Events_ as input.
@@ -503,7 +503,7 @@ declare class Configuration {
   /**
    * Appends a _handleMessage_ filter to the current pipeline layout.
    *
-   * A _handleMessage_ filter calls back user scripts every time a _Message_ is found in the input.
+   * A _handleMessage_ filter calls back user scripts every time a complete message _(Message)_ is found in the input stream.
    *
    * - **INPUT** - Any types of _Events_.
    * - **OUTPUT** - Same _Events_ as input.
@@ -513,7 +513,7 @@ declare class Configuration {
   /**
    * Appends a _handleMessageData_ filter to the current pipeline layout.
    *
-   * A _handleMessageData_ filter calls back user scripts every time a complete message body _(Data)_ is found in the input.
+   * A _handleMessageData_ filter calls back user scripts every time a complete message body _(Data)_ is found in the input stream.
    *
    * - **INPUT** - Any types of _Events_.
    * - **OUTPUT** - Same _Events_ as input.
@@ -523,7 +523,7 @@ declare class Configuration {
   /**
    * Appends a _handleMessageEnd_ filter to the current pipeline layout.
    *
-   * A _handleMessageEnd_ filter calls back user scripts every time a _MessageEnd_ event is found in the input.
+   * A _handleMessageEnd_ filter calls back user scripts every time a _MessageEnd_ event is found in the input stream.
    *
    * - **INPUT** - Any types of _Events_.
    * - **OUTPUT** - Same _Events_ as input.
@@ -533,7 +533,7 @@ declare class Configuration {
   /**
    * Appends a _handleMessageStart_ filter to the current pipeline layout.
    *
-   * A _handleMessageStart_ filter calls back user scripts every time a _MessageStart_ event is found in the input.
+   * A _handleMessageStart_ filter calls back user scripts every time a _MessageStart_ event is found in the input stream.
    *
    * - **INPUT** - Any types of _Events_.
    * - **OUTPUT** - Same _Events_ as input.
@@ -543,7 +543,7 @@ declare class Configuration {
   /**
    * Appends a _handleStreamEnd_ filter to the current pipeline layout.
    *
-   * A _handleStreamEnd_ filter calls back user scripts every time a _StreamEnd_ event is found in the input.
+   * A _handleStreamEnd_ filter calls back user scripts every time a _StreamEnd_ event is found in the input stream.
    *
    * - **INPUT** - Any types of _Events_.
    * - **OUTPUT** - Same _Events_ as input.
@@ -553,7 +553,7 @@ declare class Configuration {
   /**
    * Appends a _handleStreamStart_ filter to the current pipeline layout.
    *
-   * A _handleStreamStart_ filter calls back user scripts for the first _Event_ in the input.
+   * A _handleStreamStart_ filter calls back user scripts for the first _Event_ in the input stream.
    *
    * - **INPUT** - Any types of _Events_.
    * - **OUTPUT** - Same _Events_ as input.
@@ -563,7 +563,7 @@ declare class Configuration {
   /**
    * Appends a _handleTLSClientHello_ filter to the current pipeline layout.
    *
-   * A _handleTLSClientHello_ filter calls back user scripts when a TLS client hello message is found in the input.
+   * A _handleTLSClientHello_ filter calls back user scripts when a TLS client hello message is found in the input stream.
    *
    * - **INPUT** - Any types of _Events_.
    * - **OUTPUT** - Same _Events_ as input.
@@ -585,8 +585,10 @@ declare class Configuration {
    *
    * A _link_ filter starts a sub-pipeline and streams events through it.
    *
-   * - **INPUT** - Any types of _Events_.
+   * - **INPUT** - Any types of _Events_ to stream into the sub-pipeline.
    * - **OUTPUT** - _Events_ streaming out from the sub-pipeline.
+   * - **SUB-INPUT** - _Events_ streaming into the _link_ filter.
+   * - **SUB-OUTPUT** - Any types of _Events_.
    */
   link(pipelineLayoutName: string): Configuration;
 
@@ -692,4 +694,158 @@ declare class Configuration {
    * - **OUTPUT** - Same Events as the input.
    */
   print(): Configuration;
+
+  /**
+   * Appends a _replaceData_ filter to the current pipeline layout.
+   *
+   * A _replaceData_ filter calls back user scripts to get a replacement for each _Data_ event found in the input stream.
+   *
+   * - **INPUT** - Any types of _Events_.
+   * - **OUTPUT** - Any types of _Events_.
+   */
+  replaceData(handler?: (data: Data) => Event | Message | (Event|Message)[] | void): Configuration;
+
+  /**
+   * Appends a _replaceMessage_ filter to the current pipeline layout.
+   *
+   * A _replaceMessage_ filter calls back user scripts to get a replacement for each complete message _(Message)_ found in the input stream.
+   *
+   * - **INPUT** - Any types of _Events_.
+   * - **OUTPUT** - Any types of _Events_.
+   */
+  replaceMessage(handler?: (msg: Message) => Event | Message | (Event|Message)[] | void): Configuration;
+
+  /**
+   * Appends a _replaceMessageBody_ filter to the current pipeline layout.
+   *
+   * A _replaceMessageBody_ filter calls back user scripts to get a replacement for each complete message body _(Data)_ found in the input stream.
+   *
+   * - **INPUT** - Any types of _Events_.
+   * - **OUTPUT** - Any types of _Events_.
+   */
+  replaceMessageBody(handler?: (data: Data) => Event | Message | (Event|Message)[] | void): Configuration;
+
+  /**
+   * Appends a _replaceMessageEnd_ filter to the current pipeline layout.
+   *
+   * A _replaceMessageEnd_ filter calls back user scripts to get a replacement for each _MessageEnd_ event found in the input stream.
+   *
+   * - **INPUT** - Any types of _Events_.
+   * - **OUTPUT** - Any types of _Events_.
+   */
+  replaceMessageEnd(handler?: (evt: MessageEnd) => Event | Message | (Event|Message)[] | void): Configuration;
+
+  /**
+   * Appends a _replaceMessageStart_ filter to the current pipeline layout.
+   *
+   * A _replaceMessageStart_ filter calls back user scripts to get a replacement for each _MessageStart_ event found in the input stream.
+   *
+   * - **INPUT** - Any types of _Events_.
+   * - **OUTPUT** - Any types of _Events_.
+   */
+  replaceMessageStart(handler?: (evt: MessageStart) => Event | Message | (Event|Message)[] | void): Configuration;
+
+  /**
+   * Appends a _replaceStreamEnd_ filter to the current pipeline layout.
+   *
+   * A _replaceStreamEnd_ filter calls back user scripts to get a replacement for each _StreamEnd_ event found in the input stream.
+   *
+   * - **INPUT** - Any types of _Events_.
+   * - **OUTPUT** - Any types of _Events_.
+   */
+  replaceStreamEnd(handler?: (evt: StreamEnd) => Event | Message | (Event|Message)[] | void): Configuration;
+
+  /**
+   * Appends a _replaceStreamStart_ filter to the current pipeline layout.
+   *
+   * A _replaceStreamStart_ filter calls back user scripts to get a replacement for the first event in the input stream.
+   *
+   * - **INPUT** - Any types of _Events_.
+   * - **OUTPUT** - Any types of _Events_.
+   */
+  replaceStreamStart(handler?: (evt: StreamStart) => Event | Message | (Event|Message)[] | void): Configuration;
+
+  /**
+   * Appends a _serveHTTP_ filter to the current pipeline layout.
+   *
+   * A _serveHTTP_ filter calls back user scripts to get an output HTTP response for each HTTP request found in the input stream.
+   *
+   * - **INPUT** - _Data_ stream containing HTTP requests received from the client.
+   * - **OUTPUT** - _Data_ stream containing HTTP responses to send to the client.
+   */
+  serveHTTP(handler: (request: Message) => Message): Configuration;
+
+  /**
+   * Appends a _split_ filter to the current pipeline layout.
+   *
+   * A _split_ filter splits an input _Message_ into multiple _Messages_ by a given separator.
+   *
+   * - **INPUT** - _Messages_ to split.
+   * - **OUTPUT** - _Messages_ splitted from the input.
+   */
+  split(separator: string | Data | (() => string | Data)): Configuration;
+
+  /**
+   * Appends a _tee_ filter to the current pipeline layout.
+   *
+   * A _tee_ filter writes input _Data_ to a file.
+   *
+   * - **INPUT** - Any types of _Events_.
+   * - **OUTPUT** - Same _Events_ as the input.
+   */
+  tee(filename: string | (() => string)): Configuration;
+
+  /**
+   * Appends a _throttleConcurrency_ filter to the current pipeline layout.
+   *
+   * A _throttleConcurrency_ filter limits the number of concurrent streams.
+   *
+   * - **INPUT** - Any types of _Events_.
+   * - **OUTPUT** - Same _Events_ as the input.
+   */
+  throttleConcurrency(quota: algo.Quota | (() => algo.Quota)): Configuration;
+
+  /**
+   * Appends a _throttleDataRate_ filter to the current pipeline layout.
+   *
+   * A _throttleDataRate_ filter limits the amout of _Data_ passing through per unit of time.
+   *
+   * - **INPUT** - Any types of _Events_.
+   * - **OUTPUT** - Same _Events_ as the input.
+   */
+  throttleDataRate(quota: algo.Quota | (() => algo.Quota)): Configuration;
+
+  /**
+   * Appends a _throttleMessageRate_ filter to the current pipeline layout.
+   *
+   * A _throttleMessageRate_ filter limits the number of _Messages_ passing through per unit of time.
+   *
+   * - **INPUT** - Any types of _Events_.
+   * - **OUTPUT** - Same _Events_ as the input.
+   */
+  throttleMessageRate(quota: algo.Quota | (() => algo.Quota)): Configuration;
+
+  /**
+   * Appends a _use_ filter to the current pipeline layout.
+   *
+   * A _use_ filter creates a sub-pipeline from a pipeline layout in a differen module
+   * and streams _Events_ through it.
+   *
+   * - **INPUT** - Any types of _Events_ to stream into the sub-pipeline.
+   * - **OUTPUT** - _Events_ streaming out from the sub-pipeline.
+   * - **SUB-INPUT** - _Events_ streaming into the _use_ filter.
+   * - **SUB-OUTPUT** - Any types of _Events_.
+   */
+  use(filename: string, pipelineLayoutName?: string): Configuration;
+
+  /**
+   * Appends a _wait_ filter to the current pipeline layout.
+   *
+   * A _wait_ filter blocks all input _Events_ up until a condition is met.
+   *
+   * - **INPUT** - Any types of _Events_.
+   * - **OUTPUT** - Same _Events_ as the input.
+   */
+  wait(condition: () => boolean): Configuration;
+
 }
