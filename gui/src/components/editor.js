@@ -506,6 +506,7 @@ function Editor({ root, dts }) {
             languageDefaults.getCompilerOptions(),
             {
               lib: ['lib.es5.d.ts'],
+              noImplicitAny: true,
             }
           )
         );
@@ -514,6 +515,9 @@ function Editor({ root, dts }) {
             content => ({ content })
           )
         );
+        languageDefaults.setInlayHintsOptions({
+          includeInlayParameterNameHints: 'literals',
+        });
         setInitialized(true);
       });
       return () => {
