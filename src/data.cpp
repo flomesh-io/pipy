@@ -113,7 +113,7 @@ template<> void ClassDef<pipy::Data>::init() {
           return nullptr;
         }
         return s_dp.make(str->str(), enc);
-      } else if (ctx.try_arguments(1, &data, &encoding) && data) {
+      } else if (ctx.try_arguments(1, &data) && data) {
         return pipy::Data::make(*data);
       }
       ctx.error_argument_type(0, "a string, Array or Data");
