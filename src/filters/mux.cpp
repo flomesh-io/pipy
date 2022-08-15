@@ -264,10 +264,12 @@ auto MuxBase::SessionCluster::alloc() -> Session* {
   auto max_share_count = m_max_queue;
   auto *s = m_sessions.head();
   while (s) {
-    if (max_share_count <= 0 || s->m_share_count < max_share_count) {
-      s->m_share_count++;
-      sort(s);
-      return s;
+    if (!s->m_is_closed) {
+      if (max_share_count <= 0 || s->m_share_count < max_share_count) {
+        s->m_share_count++;
+        sort(s);
+        return s;
+      }
     }
     s = s->next();
   }
