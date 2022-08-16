@@ -5,7 +5,7 @@
 declare class Message {
 
   /**
-   * Creates a _Message_ object.
+   * Creates an instance of _Message_.
    */
   constructor(body?: string | Data);
   constructor(head: object, body?: string | Data, tail?: object);

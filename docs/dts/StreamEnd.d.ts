@@ -4,7 +4,7 @@
 declare class StreamEnd extends Event {
 
   /**
-   * Creates an instance of _MessageEnd_ object.
+   * Creates an instance of _MessageEnd_.
    */
   constructor(error?: ''
     | 'UnknownError'

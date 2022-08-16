@@ -4,7 +4,7 @@
 declare class MessageEnd extends Event {
 
   /**
-   * Creates an instance of _MessageEnd_ object.
+   * Creates an instance of _MessageEnd_.
    */
   constructor(tail?: object);
 
