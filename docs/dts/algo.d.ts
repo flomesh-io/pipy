@@ -3,7 +3,7 @@ declare namespace algo {
   /**
    * An ephemeral key-value storage that automatically cleans up old entries.
    */
-  declare class Cache {
+  class Cache {
 
     /**
      * Creates an instance of _Cache_.
@@ -41,7 +41,7 @@ declare namespace algo {
   /**
    * Keeps track of quota.
    */
-  declare class Quota {
+  class Quota {
 
     /**
      * Creates an instance of _Quota_.
@@ -83,7 +83,7 @@ declare namespace algo {
   /**
    * Path-based routing algorithm.
    */
-  declare class URLRouter {
+  class URLRouter {
 
     /**
      * Creates an instance of _URLRouter_.
@@ -104,7 +104,7 @@ declare namespace algo {
   /**
    * Load-balancer base class.
    */
-  declare interface LoadBalancer {
+  abstract class LoadBalancer {
 
     /**
      * Allocates an resource item for the next selected target.
@@ -115,7 +115,7 @@ declare namespace algo {
   /**
    * Load-balancer using consistent hashing.
    */
-  declare class HashingLoadBalancer extends LoadBalancer {
+  class HashingLoadBalancer extends LoadBalancer {
 
     /**
      * Creates an instance of _HashingLoadBalancer_.
@@ -131,7 +131,7 @@ declare namespace algo {
   /**
    * Load-balancer that rotates targets by round-robin algorithm.
    */
-  declare class RoundRobinLoadBalancer extends LoadBalancer {
+  class RoundRobinLoadBalancer extends LoadBalancer {
 
     /**
      * Creates an instance of _RoundRobinLoadBalancer_.
@@ -147,7 +147,7 @@ declare namespace algo {
   /**
    * Load-balancer that evens out workload among targets.
    */
-   declare class LeastWorkLoadBalancer extends LoadBalancer {
+   class LeastWorkLoadBalancer extends LoadBalancer {
 
     /**
      * Creates an instance of _RoundRobinLoadBalancer_.

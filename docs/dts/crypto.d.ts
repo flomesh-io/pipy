@@ -3,7 +3,7 @@ declare namespace crypto {
   /**
    * Public key in asymmetric cryptography.
    */
-  declare class PublicKey {
+  class PublicKey {
 
     /**
      * Creates an instance of _PublicKey_.
@@ -17,7 +17,7 @@ declare namespace crypto {
   /**
    * Private key in asymmetric cryptography.
    */
-  declare class PrivateKey {
+  class PrivateKey {
 
     /**
      * Creates an instance of _PrivateKey_.
@@ -31,7 +31,7 @@ declare namespace crypto {
   /**
    * Certificate in X.509 standard.
    */
-  declare class Certificate {
+  class Certificate {
 
     /**
      * Creates an instance of _Certificate_.
@@ -42,7 +42,7 @@ declare namespace crypto {
   /**
    * Certificate chain in X.509 standard.
    */
-  declare class CertificateChain {
+  class CertificateChain {
 
     /**
      * Creates an instance of _CertificateChain_.
@@ -53,7 +53,7 @@ declare namespace crypto {
   /**
    * Encryption operation.
    */
-  declare class Cipher {
+  class Cipher {
 
     /**
      * Creates an instance of _Cipher_.
@@ -77,7 +77,7 @@ declare namespace crypto {
   /**
    * Decryption operation.
    */
-   declare class Decipher {
+   class Decipher {
 
     /**
      * Creates an instance of _Decipher_.
@@ -101,7 +101,7 @@ declare namespace crypto {
   /**
    * Digest calculation.
    */
-  declare class Hash {
+  class Hash {
 
     /**
      * Creates an instance of _Hash_.
@@ -122,7 +122,7 @@ declare namespace crypto {
   /**
    * HMAC (Hash-based Message Authentication Code) calculation.
    */
-  declare class Hmac {
+  class Hmac {
 
     /**
      * Creates an instance of _Hmac_.
@@ -143,7 +143,7 @@ declare namespace crypto {
   /**
    * Signing operation.
    */
-  declare class Sign {
+  class Sign {
 
     /**
      * Creates an instance of _Sign_.
@@ -165,7 +165,7 @@ declare namespace crypto {
   /**
    * Signature verification.
    */
-  declare class Verify {
+  class Verify {
 
     /**
      * Creates an instance of _Verify_.
@@ -187,7 +187,7 @@ declare namespace crypto {
   /**
    * JSON Web Key.
    */
-  declare class JWK {
+  class JWK {
 
     /**
      * Creates an instance of _JWK_.
@@ -198,7 +198,7 @@ declare namespace crypto {
   /**
    * JSON Web Token.
    */
-  declare class JWT {
+  class JWT {
 
     /**
      * Creates an instace of _JWT_.

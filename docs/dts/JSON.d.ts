@@ -1,14 +1,14 @@
-declare namespace JSON {
+declare interface JSON {
 
   /**
    * Deserializes values in JSON format.
    */
-  declare function parse(text: string): any;
+  static parse(text: string): any;
 
   /**
    * Serializes values in JSON format.
    */
-  declare function stringify(
+  static stringify(
     value: any,
     replacer?: (key: string, value: any) => any,
     space?: number
@@ -17,12 +17,12 @@ declare namespace JSON {
   /**
    * Deserializes values in JSON format.
    */
-  declare function decode(data: Data): any;
+  static decode(data: Data): any;
 
   /**
    * Serializes values in JSON format.
    */
-  declare function encode(
+  static encode(
     value: any,
     replacer?: (key: string, value: any) => any,
     space?: number

@@ -1,7 +1,7 @@
 /**
  * _Event_ base interface.
  */
-declare interface Event {
+abstract class Event {
 }
 
 /**

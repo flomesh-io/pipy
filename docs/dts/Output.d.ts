@@ -1,3 +1,2 @@
-declare class Output
-{
+declare interface Output {
 }

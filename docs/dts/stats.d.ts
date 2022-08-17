@@ -3,7 +3,7 @@ declare namespace stats {
   /**
    * Metric base interface.
    */
-  declare interface Metric {
+  abstract class Metric {
 
     /**
      * Retrieves a sub-metric by labels.
@@ -14,7 +14,7 @@ declare namespace stats {
   /**
    * Counter metric.
    */
-  declare class Counter implements Metric {
+  class Counter implements Metric {
 
     /**
      * Creates an instance of _Counter_.
@@ -40,7 +40,7 @@ declare namespace stats {
   /**
    * Gauge metric.
    */
-  declare class Gauge implements Metric {
+  class Gauge implements Metric {
 
     /**
      * Creates an instance of _Metric_.
@@ -71,7 +71,7 @@ declare namespace stats {
   /**
    * Histogram metric.
    */
-  declare class Histogram implements Metric {
+  class Histogram implements Metric {
 
     /**
      * Creates an instance of _Histogram_.
