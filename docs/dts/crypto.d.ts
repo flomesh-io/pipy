@@ -158,8 +158,8 @@ declare namespace crypto {
     /**
      * Calculates signature.
      */
-    sign(key: crypto.PrivateKey, options?: { id?: Data }): Data;
-    sign(key: crypto.PrivateKey, encoding: 'utf8' | 'hex' | 'base64' | 'base64url', options?: { id?: Data }): string;
+    sign(key: PrivateKey, options?: { id?: Data }): Data;
+    sign(key: PrivateKey, encoding: 'utf8' | 'hex' | 'base64' | 'base64url', options?: { id?: Data }): string;
   }
 
   /**
@@ -180,8 +180,8 @@ declare namespace crypto {
     /**
      * Verifies signature.
      */
-    verify(key: crypto.PublicKey, signature: Data, options?: { id?: Data }): boolean;
-    verify(key: crypto.PublicKey, signature: string, encoding: 'utf8' | 'hex' | 'base64' | 'base64url', options?: { id?: Data }): boolean;
+    verify(key: PublicKey, signature: Data, options?: { id?: Data }): boolean;
+    verify(key: PublicKey, signature: string, encoding: 'utf8' | 'hex' | 'base64' | 'base64url', options?: { id?: Data }): boolean;
   }
 
   /**
@@ -223,6 +223,6 @@ declare namespace crypto {
     /**
      * Verifies the token.
      */
-    verify(key: crypto.JWK | crypto.PublicKey | Data | string): boolean;
+    verify(key: JWK | PublicKey | Data | string): boolean;
   }
 }

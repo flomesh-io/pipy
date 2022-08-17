@@ -1,7 +1,6 @@
 /**
- * Container of a series of events that compose a whole message in an event stream.
+ * Container of a series of _Events_ that compose a whole message.
  */
-
 declare class Message {
 
   /**
@@ -24,4 +23,5 @@ declare class Message {
    * Message body or payload.
    */
   body?: Data;
+
 }

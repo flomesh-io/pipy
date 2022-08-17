@@ -120,7 +120,7 @@ declare namespace algo {
     /**
      * Creates an instance of _HashingLoadBalancer_.
      */
-    constructor(targets: string[], unhealthy?: algo.Cache);
+    constructor(targets: string[], unhealthy?: Cache);
 
     /**
      * Adds a target.
@@ -136,7 +136,7 @@ declare namespace algo {
     /**
      * Creates an instance of _RoundRobinLoadBalancer_.
      */
-    constructor(targets: string[] | { [id: string]: number }, unhealthy?: algo.Cache);
+    constructor(targets: string[] | { [id: string]: number }, unhealthy?: Cache);
 
     /**
      * Sets weight of a target.
@@ -152,7 +152,7 @@ declare namespace algo {
     /**
      * Creates an instance of _RoundRobinLoadBalancer_.
      */
-    constructor(targets: string[] | { [id: string]: number }, unhealthy?: algo.Cache);
+    constructor(targets: string[] | { [id: string]: number }, unhealthy?: Cache);
 
     /**
      * Sets weight of a target.
