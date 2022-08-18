@@ -147,7 +147,7 @@ struct Options : public pipy::Options {
   pjs::Ref<pjs::Function> handshake;
 
   Options() {}
-  Options(pjs::Object *options);
+  Options(pjs::Object *options, const char *base_name = nullptr);
 };
 
 //
@@ -162,7 +162,7 @@ public:
     pjs::Ref<pjs::Function> sni_f;
 
     Options() {}
-    Options(pjs::Object *options);
+    Options(pjs::Object *options, const char *base_name = nullptr);
   };
 
   Client(const Options &options);

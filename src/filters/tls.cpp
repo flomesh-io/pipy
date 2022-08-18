@@ -482,29 +482,30 @@ void TLSSession::close(StreamEnd::Error err) {
 // Options
 //
 
-Options::Options(pjs::Object *options) {
-  Value(options, "certificate")
+Options::Options(pjs::Object *options, const char *base_name) {
+  Value(options, "certificate", base_name)
     .get(certificate)
     .check_nullable();
 
   pjs::Ref<pjs::Array> trusted_array;
-  Value(options, "trusted")
+  Value(options, "trusted", base_name)
     .get(trusted_array)
     .check_nullable();
 
   if (trusted_array) {
     trusted.resize(trusted_array->length());
-    trusted_array->iterate_all([this](pjs::Value &v, int i) {
+    trusted_array->iterate_all([&](pjs::Value &v, int i) {
       if (!v.is<crypto::Certificate>()) {
         char msg[100];
-        std::sprintf(msg, "options.trusted[%d] expects an object of type crypto.Certificate", i);
+        auto options = base_name ? base_name : "options";
+        std::sprintf(msg, "%s.trusted[%d] expects an object of type crypto.Certificate", options, i);
         throw std::runtime_error(msg);
       }
       trusted[i] = v.as<crypto::Certificate>();
     });
   }
 
-  Value(options, "handshake")
+  Value(options, "handshake", base_name)
     .get(handshake)
     .check_nullable();
 }
@@ -513,12 +514,12 @@ Options::Options(pjs::Object *options) {
 // Client::Options
 //
 
-Client::Options::Options(pjs::Object *options)
-  : tls::Options(options)
+Client::Options::Options(pjs::Object *options, const char *base_name)
+  : tls::Options(options, base_name)
 {
   pjs::Ref<pjs::Str> alpn_string;
   pjs::Ref<pjs::Array> alpn_array;
-  Value(options, "alpn")
+  Value(options, "alpn", base_name)
     .get(alpn_string)
     .get(alpn_array)
     .check_nullable();
@@ -528,10 +529,11 @@ Client::Options::Options(pjs::Object *options)
   } else if (alpn_array) {
     alpn.resize(alpn_array->length());
     alpn_array->iterate_all(
-      [this](pjs::Value &v, int i) {
+      [&](pjs::Value &v, int i) {
         if (!v.is_string()) {
           char msg[100];
-          std::sprintf(msg, "options.alpn[%d] expects a string", i);
+          auto options = base_name ? base_name : "options";
+          std::sprintf(msg, "%s.alpn[%d] expects a string", options, i);
           throw std::runtime_error(msg);
         }
         alpn[i] = v.s()->str();
@@ -539,7 +541,7 @@ Client::Options::Options(pjs::Object *options)
     );
   }
 
-  Value(options, "sni")
+  Value(options, "sni", base_name)
     .get(sni)
     .get(sni_f)
     .check_nullable();

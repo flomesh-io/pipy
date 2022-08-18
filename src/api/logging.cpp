@@ -252,7 +252,8 @@ void Logger::FileTarget::shutdown() {
 
 Logger::HTTPTarget::Options::Options(pjs::Object *options) {
   const char *options_batch = "options.batch";
-  pjs::Ref<pjs::Object> batch_options;
+  const char *options_tls = "options.tls";
+  pjs::Ref<pjs::Object> batch_options, tls_options;
   Value(options, "batch")
     .get(batch_options)
     .check_nullable();
@@ -260,6 +261,7 @@ Logger::HTTPTarget::Options::Options(pjs::Object *options) {
     .get(batch_size)
     .check_nullable();
   batch = Pack::Options(batch_options, options_batch);
+  tls = tls::Client::Options(tls_options, options_tls);
   Value(options, "method")
     .get(method)
     .check_nullable();
@@ -276,6 +278,7 @@ Logger::HTTPTarget::HTTPTarget(pjs::Str *url, const Options &options)
   static pjs::ConstStr s_POST("POST");
 
   pjs::Ref<URL> url_obj = URL::make(url);
+  bool is_tls = url_obj->protocol()->str() == "https:";
 
   m_mux_grouper = pjs::Method::make(
     "", 0, 0, nullptr,
@@ -285,15 +288,21 @@ Logger::HTTPTarget::HTTPTarget(pjs::Str *url, const Options &options)
   );
 
   PipelineLayout *ppl = PipelineLayout::make(m_module);
-  PipelineLayout *ppl_connect = PipelineLayout::make(m_module);
+  PipelineLayout *ppl_pack = PipelineLayout::make(m_module);
 
-  ppl->append(new Mux(pjs::Function::make(m_mux_grouper)))->add_sub_pipeline(ppl_connect);
-  ppl_connect->append(new Pack(options.batch_size, options.batch));
-  ppl_connect->append(new http::RequestEncoder(http::RequestEncoder::Options()));
-  ppl_connect->append(new Connect(url_obj->host(), Connect::Options()));
+  ppl->append(new Mux(pjs::Function::make(m_mux_grouper)))->add_sub_pipeline(ppl_pack);
+  ppl_pack->append(new Pack(options.batch_size, options.batch));
+  ppl_pack->append(new http::RequestEncoder(http::RequestEncoder::Options()));
+
+  if (is_tls) {
+    PipelineLayout *ppl_connect = PipelineLayout::make(m_module);
+    ppl_pack->append(new tls::Client(options.tls))->add_sub_pipeline(ppl_connect);
+    ppl_pack = ppl_connect;
+  }
+
+  ppl_pack->append(new Connect(url_obj->host(), Connect::Options()));
 
   m_ppl = ppl;
-  m_ppl_connect = ppl_connect;
 
   auto *headers = pjs::Object::make();
   bool has_host = false;

@@ -30,6 +30,7 @@
 #include "options.hpp"
 #include "module.hpp"
 #include "filters/pack.hpp"
+#include "filters/tls.hpp"
 
 #include <list>
 #include <memory>
@@ -127,6 +128,7 @@ public:
     struct Options : public pipy::Options {
       size_t batch_size = 1000;
       Pack::Options batch;
+      tls::Client::Options tls;
       pjs::Ref<pjs::Str> method;
       pjs::Ref<pjs::Object> headers;
 
@@ -153,7 +155,6 @@ public:
     pjs::Ref<Module> m_module;
     pjs::Ref<pjs::Method> m_mux_grouper;
     pjs::Ref<PipelineLayout> m_ppl;
-    pjs::Ref<PipelineLayout> m_ppl_connect;
     pjs::Ref<Pipeline> m_pipeline;
     pjs::Ref<MessageStart> m_message_start;
 
