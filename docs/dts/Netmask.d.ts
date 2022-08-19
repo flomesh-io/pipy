@@ -1,12 +1,9 @@
+/// <reference no-default-lib="true"/>
+
 /**
  * IPv4 CIDR address block.
  */
-declare class Netmask {
-
-  /**
-   * Creates an instance of _Netmask_.
-   */
-  constructor(cidr: string);
+interface Netmask {
 
   /**
    * Base address.
@@ -57,5 +54,14 @@ declare class Netmask {
    * Allocates an address from the block.
    */
   next(): string;
-
 }
+
+interface NetmaskConstructor {
+
+  /**
+   * Creates an instance of _Netmask_.
+   */
+  new(cidr: string): Netmask;
+}
+
+declare var Netmask: NetmaskConstructor;

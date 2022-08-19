@@ -1,19 +1,27 @@
-declare namespace http {
+/// <reference no-default-lib="true"/>
+/// <reference path="./Message.d.ts" />
+
+/**
+ * Generates an HTTP response from a file in the current codebase.
+ */
+interface HttpFile {
 
   /**
-   * Generates an HTTP response from a file in the current codebase.
+   * Converts to an HTTP response message.
    */
-  class File {
-
-    /**
-     * Creates an instance of _File_.
-     */
-    static from(filename: string): File;
-
-    /**
-     * Converts to an HTTP response message.
-     */
-    toMessage(): Message;
-  }
-
+  toMessage(): Message;
 }
+
+interface HttpFileConstructor {
+
+  /**
+   * Creates an instance of _File_.
+   */
+  from(filename: string): HttpFile;
+}
+
+interface Http {
+  File: HttpFileConstructor;
+}
+
+declare var http: Http;

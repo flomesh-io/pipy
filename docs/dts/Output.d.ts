@@ -1,2 +1,4 @@
-declare interface Output {
+/// <reference no-default-lib="true"/>
+
+interface Output {
 }

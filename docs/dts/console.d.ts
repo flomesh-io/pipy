@@ -1,8 +1,11 @@
-declare namespace console {
+/// <reference no-default-lib="true"/>
+
+interface Console {
 
   /**
    * Log values to the terminal.
    */
-  function log(...values: any[]): void;
-
+  log(...values: any[]): void;
 }
+
+declare var console: Console;

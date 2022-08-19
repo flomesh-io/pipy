@@ -1,18 +1,15 @@
+/// <reference no-default-lib="true"/>
+
 /**
  * _Event_ base interface.
  */
-abstract class Event {
+interface Event {
 }
 
 /**
  * _Event_ to mark the start of a message in an event stream.
  */
-declare class MessageStart implements Event {
-
-  /**
-   * Creates an instance of _MessageStart_.
-   */
-  constructor(head?: object);
+interface MessageStart extends Event {
 
   /**
    * Protocol-dependent message header.
@@ -20,47 +17,37 @@ declare class MessageStart implements Event {
   head?: object;
 }
 
+interface MessageStartConstructor {
+
+  /**
+   * Creates an instance of _MessageStart_.
+   */
+  new(head?: object): MessageStart;
+}
+
 /**
  * _Event_ to mark the end of a message in an event stream.
  */
-declare class MessageEnd implements Event {
-
-  /**
-   * Creates an instance of _MessageEnd_.
-   */
-  constructor(tail?: object);
+interface MessageEnd extends Event {
 
   /**
    * Protocol-dependent message footer.
    */
   tail?: object;
+}
 
+interface MessageEndConstructor {
+
+  /**
+   * Creates an instance of _MessageEnd_.
+   */
+   new(tail?: object): MessageEnd;
 }
 
 /**
  * _Event_ to mark the end of an event stream.
  */
-declare class StreamEnd implements Event {
-
-  /**
-   * Creates an instance of _MessageEnd_.
-   */
-  constructor(error?: ''
-    | 'UnknownError'
-    | 'RuntimeError'
-    | 'ReadError'
-    | 'WriteError'
-    | 'CannotResolve'
-    | 'ConnectionCanceled'
-    | 'ConnectionReset'
-    | 'ConnectionRefused'
-    | 'ConnectionTimeout'
-    | 'ReadTimeout'
-    | 'WriteTimeout'
-    | 'IdleTimeout'
-    | 'Unauthorized'
-    | 'BufferOverflow' = ''
-  );
+interface StreamEnd extends Event {
 
   /**
    * Error type if any.
@@ -79,24 +66,37 @@ declare class StreamEnd implements Event {
     | 'WriteTimeout'
     | 'IdleTimeout'
     | 'Unauthorized'
-    | 'BufferOverflow' = '';
+    | 'BufferOverflow';
 
+}
+
+interface StreamEndConstructor extends StreamEnd {
+
+  /**
+   * Creates an instance of _MessageEnd_.
+   */
+  new(error?: ''
+    | 'UnknownError'
+    | 'RuntimeError'
+    | 'ReadError'
+    | 'WriteError'
+    | 'CannotResolve'
+    | 'ConnectionCanceled'
+    | 'ConnectionReset'
+    | 'ConnectionRefused'
+    | 'ConnectionTimeout'
+    | 'ReadTimeout'
+    | 'WriteTimeout'
+    | 'IdleTimeout'
+    | 'Unauthorized'
+    | 'BufferOverflow'
+  ): StreamEnd;
 }
 
 /**
  * A chunk of bytes.
  */
-declare class Data implements Event {
-
-  static from(text: string, encoding?: 'utf8' | 'hex' | 'base64' | 'base64url' = 'utf8'): Data;
-
-  /**
-   * Creates an instance of _Data_.
-   */
-  constructor();
-  constructor(bytes: number[]);
-  constructor(text: string, encoding?: 'utf8' | 'hex' | 'base64' | 'base64url' = 'utf8');
-  constructor(data: Data);
+interface Data extends Event {
 
   /**
    * Number of bytes.
@@ -126,6 +126,23 @@ declare class Data implements Event {
   /**
    * Converts to a string.
    */
-  toString(encoding?: 'utf8' | 'hex' | 'base64' | 'base64url' = 'utf8'): string;
-
+  toString(encoding?: 'utf8' | 'hex' | 'base64' | 'base64url'): string;
 }
+
+interface DataConstructor {
+
+  /**
+   * Creates an instance of _Data_.
+   */
+   new(): Data;
+   new(bytes: number[]): Data;
+   new(text: string, encoding?: 'utf8' | 'hex' | 'base64' | 'base64url'): Data;
+   new(data: Data): Data;
+
+   from(text: string, encoding?: 'utf8' | 'hex' | 'base64' | 'base64url'): Data;
+}
+
+declare var MessageStart: MessageStartConstructor;
+declare var MessageEnd: MessageEndConstructor;
+declare var StreamEnd: StreamEndConstructor;
+declare var Data: DataConstructor;

@@ -1,9 +1,6 @@
-declare class URL {
+/// <reference no-default-lib="true"/>
 
-  /**
-   * Creates an instance of _URL_.
-   */
-  constructor(url: string, base?: string);
+interface URL {
 
   /**
    * Username and password.
@@ -79,5 +76,46 @@ declare class URL {
    * Username.
    */
   readonly username: string;
-
 }
+
+interface URLConstructor {
+
+  /**
+   * Creates an instance of _URL_.
+   */
+  new(url: string, base?: string): URL;
+}
+
+interface URLSearchParams {
+
+  /**
+   * Retreives all values with a name.
+   */
+  getAll(name: string): string[];
+
+  /**
+   * Gets the value of a name.
+   */
+  get(name: string): string | null;
+
+  /**
+   * Sets the value or values of a name.
+   */
+  set(name: string, value: string | string[]);
+
+  /**
+   * Makes an object with the key-value pairs.
+   */
+  toObject(): { [name: string]: string | string[] };
+}
+
+interface URLSearchParamsConstructor {
+
+  /**
+   * Creates an instance of _URLSearchParams_.
+   */
+  new(search: string): URLSearchParams;
+}
+
+declare var URL: URLConstructor;
+declare var URLSearchParams: URLSearchParamsConstructor;

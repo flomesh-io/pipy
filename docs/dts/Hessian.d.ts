@@ -1,13 +1,16 @@
+/// <reference no-default-lib="true"/>
+
 declare interface Hessian {
 
   /**
    * Deserializes values in Hessian format.
    */
-  static decode(data: Data): any;
+  decode(data: Data): any;
 
   /**
    * Serializes values in Hessian format.
    */
-  static encode(value: any): Data;
-
+  encode(value: any): Data;
 }
+
+declare var Hessian: Hessian;

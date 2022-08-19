@@ -1,3 +1,6 @@
+/// <reference no-default-lib="true"/>
+/// <reference path="./Configuration.d.ts" />
+
 /**
  * Creates a new configuration.
  *
@@ -25,6 +28,5 @@ declare namespace pipy {
   /**
    * Gracefully shuts down Pipy.
    */
-  function exit(exitCode?: number = 0): void;
-
+  function exit(exitCode?: number): void;
 }

@@ -1,14 +1,16 @@
-declare interface JSON {
+/// <reference no-default-lib="true"/>
+
+interface JSON {
 
   /**
    * Deserializes values in JSON format.
    */
-  static parse(text: string): any;
+  parse(text: string): any;
 
   /**
    * Serializes values in JSON format.
    */
-  static stringify(
+  stringify(
     value: any,
     replacer?: (key: string, value: any) => any,
     space?: number
@@ -17,15 +19,16 @@ declare interface JSON {
   /**
    * Deserializes values in JSON format.
    */
-  static decode(data: Data): any;
+  decode(data: Data): any;
 
   /**
    * Serializes values in JSON format.
    */
-  static encode(
+  encode(
     value: any,
     replacer?: (key: string, value: any) => any,
     space?: number
   ): any;
-
 }
+
+declare var JSON: JSON;

@@ -1,54 +1,64 @@
-declare namespace XML {
+/// <reference no-default-lib="true"/>
+
+/**
+ * Node in an XML document.
+ */
+interface XMLNode {
 
   /**
-   * Node in an XML document.
+   * Tag name.
    */
-  class Node {
-
-    /**
-     * Creates an instance of _Node_.
-     */
-    constructor(
-      name: string,
-      attributes?: { [name: string]: string },
-      children?: (Node | string)[]
-    );
-
-    /**
-     * Tag name.
-     */
-    readonly name: string;
-
-    /**
-     * Attributes.
-     */
-    readonly attributes: { [name: string]: string };
-
-    /**
-     * Child nodes.
-     */
-    readonly children: (Node | string)[];
-
-  }
+  readonly name: string;
 
   /**
-   * Reads XML document from text.
+   * Attributes.
    */
-  function parse(text: string): Node;
+  readonly attributes: { [name: string]: string };
 
   /**
-   * Writes document into text.
+   * Child nodes.
    */
-  function stringify(rootNode: Node, space?: number): string;
-
-  /**
-   * Reads XML document from text.
-   */
-  function decode(data: Data): Node;
-
-  /**
-   * Writes document into text.
-   */
-  function encode(rootNode: Node, space?: number): Data;
-
+  readonly children: (XMLNode | string)[];
 }
+
+interface XMLNodeConstructor {
+
+  /**
+   * Creates an instance of _Node_.
+   */
+  new(
+    name: string,
+    attributes?: { [name: string]: string },
+    children?: (XMLNode | string)[]
+  ): XMLNode;
+}
+
+interface XML {
+
+  /**
+   * A node in an XML document.
+   */
+  Node: XMLNodeConstructor;
+
+  /**
+   * Reads XML document from text.
+   */
+  parse(text: string): XMLNode;
+
+  /**
+   * Writes document into text.
+   */
+  stringify(rootNode: XMLNode, space?: number): string;
+
+  /**
+   * Reads XML document from text.
+   */
+  decode(data: Data): XMLNode;
+
+  /**
+   * Writes document into text.
+   */
+  encode(rootNode: XMLNode, space?: number): Data;
+}
+
+declare var XML: XML;

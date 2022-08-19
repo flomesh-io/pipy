@@ -1,7 +1,29 @@
+/// <reference no-default-lib="true"/>
+/// <reference path="./Event.d.ts" />
+/// <reference path="./Message.d.ts" />
+/// <reference path="./Output.d.ts" />
+/// <reference path="./algo.d.ts" />
+/// <reference path="./crypto.d.ts" />
+
+interface MuxOptions {
+  maxIdle: number | string,
+  maxQueue: number,
+}
+
+interface MuxHTTPOptions extends MuxOptions {
+  bufferSize: number | string,
+  version: number | (() => number),
+}
+
+interface CertificateOptions {
+  key: PrivateKey,
+  cert: Certificate | CertificateChain,
+}
+
 /**
  * Configuration is used to set up context variables and pipeline layouts in a module.
  */
-declare class Configuration {
+interface Configuration {
 
   /**
    * Defines context variables that are accessible to other modules.
@@ -84,16 +106,8 @@ declare class Configuration {
    */
   acceptTLS(
     options?: {
-      certificate?: {
-        key: crypto.PrivateKey,
-        cert: crypto.Certificate | crypto.CertificateChain,
-      } | (
-        (sni: string) => {
-          key: crypto.PrivateKey,
-          cert: crypto.Certificate | crypto.CertificateChain,
-        }
-      ),
-      trusted?: crypto.Certificate[],
+      certificate?: CertificateOptions | ((sni: string) => CertificateOptions),
+      trusted?: Certificate[],
       alpn?: string[] | ((protocolNames: string[]) => number),
       handshake?: (protocolName: string | undefined) => void,
     }
@@ -141,7 +155,7 @@ declare class Configuration {
    * - **OUTPUT** - Compressed HTTP _Messages_.
    */
   compressHTTP(
-    { method = '', level = 'default' }?: {
+    options?: {
       method?: '' | 'deflate' | 'gzip' | (() => (''|'deflate'|'gzip')),
       level?: 'default' | 'speed' | 'best' | (() => ('default'|'speed'|'best')),
     }
@@ -156,7 +170,7 @@ declare class Configuration {
    * - **OUTPUT** - Compressed _Messages_.
    */
   compressMessage(
-    { method = '', level = 'default' }?: {
+    options?: {
       method?: '' | 'deflate' | 'gzip' | (() => (''|'deflate'|'gzip')),
       level?: 'default' | 'speed' | 'best' | (() => ('default'|'speed'|'best')),
     }
@@ -172,9 +186,7 @@ declare class Configuration {
    */
   connect(
     target: string | (() => string),
-    { bufferLimit = 0, retryCount = 0, retryDelay = 0,
-      connectTimeout = 0, readTimeout = 0, writeTimeout = 0, idleTimeout = 0,
-    }?: {
+    options?: {
       bufferLimit?: number | string,
       retryCount?: number,
       retryDelay?: number | string,
@@ -221,16 +233,8 @@ declare class Configuration {
    */
   connectTLS(
     options?: {
-      certificate?: {
-        key: crypto.PrivateKey,
-        cert: crypto.Certificate | crypto.CertificateChain,
-      } | (
-        (sni: string) => {
-          key: crypto.PrivateKey,
-          cert: crypto.Certificate | crypto.CertificateChain,
-        }
-      ),
-      trusted?: crypto.Certificate[],
+      certificate?: CertificateOptions | (() => CertificateOptions),
+      trusted?: Certificate[],
       alpn?: string | string[],
       sni?: string | (() => string),
       handshake?: (protocolName: string | undefined) => void,
@@ -267,7 +271,7 @@ declare class Configuration {
    * - **OUTPUT** - HTTP/1 response _Messages_ decoded from the input _Data_ stream.
    */
    decodeHTTPResponse(
-    { bodiless = false }: { bodiless?: boolean | (() => boolean) }
+    options?: { bodiless?: boolean | (() => boolean) }
    ): Configuration;
 
   /**
@@ -279,7 +283,7 @@ declare class Configuration {
    * - **OUTPUT** - MQTT packets _(Messages)_ decoded from the input _Data_ stream.
    */
   decodeMQTT(
-    { protocolLevel = 4 }: { protocolLevel?: number | (() => number) }
+    options?: { protocolLevel?: number | (() => number) }
   ): Configuration;
 
   /**
@@ -353,9 +357,7 @@ declare class Configuration {
    * - **SUB-INPUT** - HTTP request _Message_ received from the client.
    * - **SUB-OUTPUT** - HTTP response _Message_ to send to the client.
    */
-  demuxHTTP({
-    bufferSize = 16384
-  }? : {
+  demuxHTTP(options? : {
     bufferSize: number | string
   }): Configuration;
 
@@ -382,7 +384,7 @@ declare class Configuration {
    */
   depositMessage(
     filename: string | (() => string),
-    { threshold = 0, keep = false }? : {
+    options? : {
       threshold?: number | string,
       keep?: boolean,
     }
@@ -604,17 +606,21 @@ declare class Configuration {
    */
   mux(
     target?: () => any,
-    { maxIdle = 60, maxQueue = 0 }?: {
-      maxIdle: number | string,
-      maxQueue: number,
-    }
+    options?: MuxOptions | (() => MuxOptions),
   ): Configuration;
 
+  /**
+   * Appends a _mux_ filter to the current pipeline layout.
+   *
+   * Multiple _mux_ filters queue input _Messages_ into a shared sub-pipeline.
+   *
+   * - **INPUT** - A _Message_ to queue into the shared sub-pipeline.
+   * - **OUTPUT** - The same _Message_ as input.
+   * - **SUB-INPUT** - _Messages_ from multiple _mux_ filters.
+   * - **SUB-OUTPUT** - Discarded.
+   */
   mux(
-    { maxIdle = 60, maxQueue = 0 }?: {
-      maxIdle: number | string,
-      maxQueue: number,
-    }
+    options?: MuxOptions | (() => MuxOptions),
   ): Configuration;
 
   /**
@@ -630,17 +636,22 @@ declare class Configuration {
    */
   muxQueue(
     target?: () => any,
-    { maxIdle = 60, maxQueue = 0 }?: {
-      maxIdle: number | string,
-      maxQueue: number,
-    }
+    options?: MuxOptions | (() => MuxOptions),
   ): Configuration;
 
+  /**
+   * Appends a _muxQueue_ filter to the current pipeline layout.
+   *
+   * Multiple _muxQueue_ filters queue input _Messages_ into a shared sub-pipeline
+   * as well as dequeue output _Messages_ from the sub-pipeline.
+   *
+   * - **INPUT** - A _Message_ to queue into the shared sub-pipeline.
+   * - **OUTPUT** - A _Message_ dequeued from the shared sub-pipeline.
+   * - **SUB-INPUT** - _Messages_ from multiple _muxQueue_ filters.
+   * - **SUB-OUTPUT** - _Messages_ to be dequeued by multiple _muxQueue_ filters.
+   */
   muxQueue(
-    { maxIdle = 60, maxQueue = 0 }?: {
-      maxIdle: number | string,
-      maxQueue: number,
-    }
+    options?: MuxOptions | (() => MuxOptions),
   ): Configuration;
 
   /**
@@ -655,17 +666,21 @@ declare class Configuration {
    */
   muxHTTP(
     target?: () => any,
-    { maxIdle = 60, maxQueue = 0 }?: {
-      maxIdle: number | string,
-      maxQueue: number,
-    }
+    options?: MuxHTTPOptions | (() => MuxHTTPOptions),
   ): Configuration;
 
+  /**
+   * Appends a _muxHTTP_ filter to the current pipeline layout.
+   *
+   * A _muxHTTP_ filter implements HTTP/1 and HTTP/2 protocol on the client side.
+   *
+   * - **INPUT** - HTTP request _Message_ to send to the server.
+   * - **OUTPUT** - HTTP response _Message_ received from the server.
+   * - **SUB-INPUT** - _Data_ stream to send to the server with HTTP/1 or HTTP/2 requests.
+   * - **SUB-OUTPUT** - _Data_ stream received from the server with HTTP/1 or HTTP/2 responses.
+   */
   muxHTTP(
-    { maxIdle = 60, maxQueue = 0 }?: {
-      maxIdle: number | string,
-      maxQueue: number,
-    }
+    options?: MuxHTTPOptions | (() => MuxHTTPOptions),
   ): Configuration;
 
   /**
@@ -677,8 +692,8 @@ declare class Configuration {
    * - **OUTPUT** - Stream of combined _Messages_.
    */
   pack(
-    batchSize?: number = 1,
-    { vacancy = 0.5, timeout = 0, interval = 0 }?: {
+    batchSize?: number,
+    options?: {
       vacancy?: number,
       timeout?: number | string,
       interval?: number | string,
@@ -763,7 +778,7 @@ declare class Configuration {
    * - **INPUT** - Any types of _Events_.
    * - **OUTPUT** - Any types of _Events_.
    */
-  replaceStreamStart(handler?: (evt: StreamStart) => Event | Message | (Event|Message)[] | void): Configuration;
+  replaceStreamStart(handler?: (evt: Event) => Event | Message | (Event|Message)[] | void): Configuration;
 
   /**
    * Appends a _serveHTTP_ filter to the current pipeline layout.
@@ -803,7 +818,7 @@ declare class Configuration {
    * - **INPUT** - Any types of _Events_.
    * - **OUTPUT** - Same _Events_ as the input.
    */
-  throttleConcurrency(quota: algo.Quota | (() => algo.Quota)): Configuration;
+  throttleConcurrency(quota: Quota | (() => Quota)): Configuration;
 
   /**
    * Appends a _throttleDataRate_ filter to the current pipeline layout.
@@ -813,7 +828,7 @@ declare class Configuration {
    * - **INPUT** - Any types of _Events_.
    * - **OUTPUT** - Same _Events_ as the input.
    */
-  throttleDataRate(quota: algo.Quota | (() => algo.Quota)): Configuration;
+  throttleDataRate(quota: Quota | (() => Quota)): Configuration;
 
   /**
    * Appends a _throttleMessageRate_ filter to the current pipeline layout.
@@ -823,7 +838,7 @@ declare class Configuration {
    * - **INPUT** - Any types of _Events_.
    * - **OUTPUT** - Same _Events_ as the input.
    */
-  throttleMessageRate(quota: algo.Quota | (() => algo.Quota)): Configuration;
+  throttleMessageRate(quota: Quota | (() => Quota)): Configuration;
 
   /**
    * Appends a _use_ filter to the current pipeline layout.
@@ -847,5 +862,4 @@ declare class Configuration {
    * - **OUTPUT** - Same _Events_ as the input.
    */
   wait(condition: () => boolean): Configuration;
-
 }

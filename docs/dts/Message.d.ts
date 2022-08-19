@@ -1,13 +1,10 @@
+/// <reference no-default-lib="true"/>
+/// <reference path="./Event.d.ts" />
+
 /**
  * Container of a series of _Events_ that compose a whole message.
  */
-declare class Message {
-
-  /**
-   * Creates an instance of _Message_.
-   */
-  constructor(body?: string | Data);
-  constructor(head: object, body?: string | Data, tail?: object);
+interface Message {
 
   /**
    * Protocol-dependent message header.
@@ -23,5 +20,19 @@ declare class Message {
    * Message body or payload.
    */
   body?: Data;
-
 }
+
+interface MessageConstructor {
+
+  /**
+   * Creates an instance of _Message_.
+   */
+  new(body?: string | Data): Message;
+
+  /**
+   * Creates an instance of _Message_.
+   */
+  new(head: object, body?: string | Data, tail?: object);
+}
+
+declare var Message: MessageConstructor;
