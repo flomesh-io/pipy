@@ -446,7 +446,7 @@ private:
       m_packet->set(STR_will, will);
       will->set(STR_qos, int((flags >> 3) & 0x03));
       will->set(STR_retain, bool(flags & 0x20));
-      will->set(STR_properties, will);
+      will->set(STR_properties, props);
       if (!read_properties(props)) return false;
 
       pjs::Str *topic;
