@@ -865,13 +865,14 @@ void OnClientHello::reset() {
 void OnClientHello::process(Event *evt) {
   if (m_hsk_state != DONE) {
     if (auto data = evt->as<Data>()) {
-      while (!data->empty()) {
+      Data buf(*data);
+      while (!buf.empty()) {
         auto rec_state = m_rec_state;
         auto hsk_state = m_hsk_state;
         pjs::Ref<Data> output(Data::make());
 
         // byte scan
-        data->shift_to(
+        buf.shift_to(
           [&](int c) -> bool {
             switch (rec_state) {
               case READ_TYPE:
@@ -945,11 +946,11 @@ void OnClientHello::process(Event *evt) {
         if (hsk_state == DONE) {
           pjs::Value msg(pjs::Object::make());
           ClientHelloParser parser(msg.o(), m_message);
-          m_message.clear();
           if (parser.parse()) {
             pjs::Value ret;
             callback(m_callback, 1, &msg, ret);
           }
+          m_message.clear();
           break;
         }
 
