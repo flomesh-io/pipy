@@ -1,5 +1,3 @@
-/// <reference no-default-lib="true"/>
-
 /**
  * _Event_ base interface.
  */

@@ -6,6 +6,7 @@
 
 const fs = require('fs');
 const MonacoWebpackPlugin = require('monaco-editor-webpack-plugin');
+const { Application, TypeDocReader, TSConfigReader } = require("typedoc");
 
 exports.onCreateWebpackConfig = ({
   actions,
@@ -43,6 +44,159 @@ exports.sourceNodes = ({ actions, createNodeId, createContentDigest }) => {
       },
     });
   }
+
+  const app = new Application();
+  app.options.addReader(new TypeDocReader());
+  app.options.addReader(new TSConfigReader());
+
+  app.bootstrap({
+    tsconfig: `${__dirname}/docs/dts/tsconfig.json`,
+  });
+
+  app.options.setValue('entryPoints', dtsFilenames);
+
+  const reflection = app.convert();
+  const tree = app.serializer.toObject(reflection);
+  const nodes = [];
+
+  const visitNode = (node, parent) => {
+    switch (node.kindString) {
+      case 'Variable':
+      case 'Function':
+      case 'Namespace':
+      case 'Interface':
+      case 'Method':
+      case 'Property':
+        nodes.push(node);
+        break;
+    }
+    if (parent && parent.kindString === 'Namespace') node.namespace = parent.name;
+    if (node.children) {
+      for (const child of node.children) {
+        visitNode(child, node);
+      }
+    }
+  }
+
+  visitNode(tree, null);
+
+  const findNode = (kind, name) => nodes.find(i => i.kindString === kind && i.name == name);
+  const findClassFromConstructor = (name) => findNode('Interface', name.substring(0, name.length - 11));
+
+  const namespaces = {};
+  const classes = {};
+  const functions = {};
+
+  for (const node of nodes) {
+    if (node.kindString === 'Interface' && !node.name.endsWith('Constructor') && !node.name.endsWith('Options')) {
+      if (node.children && node.children.length > 0 && !node.extendedBy) {
+        classes[node.name] = node;
+      }
+    }
+  }
+
+  for (const node of nodes) {
+    if (node.kindString === 'Variable') {
+      if (node.type.name.endsWith('Constructor')) {
+        const classNode = findClassFromConstructor(node.type.name);
+        classNode.constructorClass = findNode('Interface', node.type.name);
+        classes[node.name] = classNode;
+      } else {
+        const namespaceNode = findNode('Interface', node.type.name);
+        namespaces[node.name] = namespaceNode;
+        delete classes[node.type.name];
+      }
+    } else if (node.kindString === 'Function') {
+      let name = node.name;
+      if (node.namespace) name = node.namespace + '.' + name;
+      functions[name] = node;
+    }
+  }
+
+  const addNode = (name, data) => {
+    const content = JSON.stringify(data);
+    createNode({
+      id: createNodeId(name),
+      filename: name,
+      parent: null,
+      children: [],
+      internal: {
+        type: 'TypeDoc',
+        mediaType: 'application/json',
+        content,
+        contentDigest: createContentDigest(content),
+      },
+    });
+  }
+
+  const addClassMembers = (className, classNode) => {
+    const children = classNode.children;
+    if (children) {
+      for (const child of classNode.children) {
+        switch (child.kindString) {
+          case 'Method':
+            addNode(className + '.' + child.name + '()', child);
+            break;
+          case 'Property':
+            addNode(className + '.' + child.name, child);
+            break;
+        }
+      }
+    }
+  }
+
+  for (const name in namespaces) {
+    const node = namespaces[name];
+    addNode(name, node);
+    for (const child of node.children) {
+      if (child.kindString === 'Method') {
+        addNode(name + '.' + child.name + '()', child);
+      } else if (child.kindString === 'Property') {
+        const type = child.type.name;
+        if (type && type.endsWith('Constructor')) {
+          const classNode = findClassFromConstructor(child.type.name);
+          if (classNode) {
+            classNode.constructorClass = findNode('Interface', child.type.name);
+            addNode(name + '.' + child.name, classNode);
+            addClassMembers(name + '.' + child.name, classNode);
+            delete classes[classNode.name];
+          }
+        }
+      }
+    }
+  }
+
+  for (const name in classes) {
+    const node = classes[name];
+    addNode(name, node);
+    addClassMembers(name, node);
+    const constructor = node.constructorClass;
+    if (constructor) {
+      for (const child of constructor.children) {
+        switch (child.kindString) {
+          case 'Constructor':
+            addNode(name + '.new()', child);
+            break;
+          case 'Method':
+            addNode(name + '.' + child.name + '()', child);
+            break;
+        }
+      }
+    }
+  }
+
+  for (const name in functions) {
+    const node = functions[name];
+    addNode(name + '()', node);
+  }
+
+  console.log('===== TypeDoc =====');
+  console.log('Namespaces');
+  for (const name in namespaces) console.log(' ', name);
+  console.log('Classes');
+  for (const name in classes) console.log(' ', name);
+  console.log('Functions');
+  for (const name in functions) console.log(' ', name);
 }
 
 const LANGS = ['en', 'zh', 'jp'];

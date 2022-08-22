@@ -1,5 +1,3 @@
-/// <reference no-default-lib="true"/>
-
 /**
  * IPv4 CIDR address block.
  */

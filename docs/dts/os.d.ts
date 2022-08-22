@@ -1,5 +1,3 @@
-/// <reference no-default-lib="true"/>
-
 interface Stats {
   readonly dev: number;
   readonly ino: number;

@@ -1,5 +1,3 @@
-/// <reference no-default-lib="true"/>
-
 /**
  * An ephemeral key-value storage that automatically cleans up old entries.
  */

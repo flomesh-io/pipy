@@ -1,4 +1,3 @@
-/// <reference no-default-lib="true"/>
 /// <reference path="./Event.d.ts" />
 
 /**

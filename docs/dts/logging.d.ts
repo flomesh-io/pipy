@@ -1,5 +1,3 @@
-/// <reference no-default-lib="true"/>
-
 /**
  * Logger base interface.
  */

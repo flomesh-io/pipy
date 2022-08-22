@@ -1,5 +1,3 @@
-/// <reference no-default-lib="true"/>
-
 /**
  * Node in an XML document.
  */

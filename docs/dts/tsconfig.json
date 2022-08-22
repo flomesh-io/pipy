@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json.schemastore.org/tsconfig",
+  "compilerOptions": {
+    "target": "es6",
+    "module": "none",
+    "noEmit": true,
+    "noEmitHelpers": true,
+    "downlevelIteration": false,
+    "declaration": false,
+    "sourceMap": false,
+    "declarationMap": false,
+    "types": [],
+    "lib": [
+      "ES2015",
+      "ES2015.Core",
+      "ES2015.Collection",
+      "ES2016.Array.Include"
+    ]
+  },
+  "include": ["./*.d.ts"]
+}
