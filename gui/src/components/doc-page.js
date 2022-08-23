@@ -1,4 +1,5 @@
 import React from 'react';
+import ReactMarkdown from 'react-markdown';
 import Slugger from 'github-slugger';
 
 import { graphql, navigate, Link } from 'gatsby';
@@ -306,7 +307,7 @@ const useStyles = makeStyles(theme => ({
 
   memberName: {
     fontFamily: FONT_CODE,
-    fontSize: '0.9rem',
+    fontSize: '1.0rem',
     fontWeight: 'bold',
     color: theme.palette.text.link,
     padding: theme.spacing(0.8),
@@ -317,17 +318,31 @@ const useStyles = makeStyles(theme => ({
     },
   },
 
+  parameterList: {
+    paddingInlineStart: theme.spacing(5),
+  },
+
   parameterName: {
     fontFamily: FONT_CODE,
-    fontSize: '0.9rem',
-    fontWeight: 'bold',
+    fontSize: '1.0rem',
     color: theme.palette.text.primary,
     padding: theme.spacing(0.8),
   },
 
+  returnValue: {
+    fontFamily: FONT_TEXT,
+    fontSize: '0.8rem',
+    paddingLeft: theme.spacing(0.5),
+    paddingRight: theme.spacing(0.5),
+    paddingTop: '3px',
+    paddingBottom: '3px',
+    color: '#fff',
+    backgroundColor: '#1e1e1e',
+    borderRadius: '3px',
+  },
+
   description: {
-    paddingInlineStart: theme.spacing(3),
-    paddingBottom: theme.spacing(1.2),
+    paddingInlineStart: theme.spacing(5),
     fontFamily: FONT_TEXT,
     fontSize: '16px',
     lineHeight: '26px',
@@ -350,8 +365,7 @@ const LANGNAMES = {
 export const query = graphql`
   query(
     $id: String
-    $name: String
-    $parent: String
+    $api: String
   ) {
     mdx(id: {eq: $id}) {
       frontmatter {
@@ -363,48 +377,9 @@ export const query = graphql`
         value
       }
     }
-    documentationJs(
-      name: {eq: $name}
-      memberof: {eq: $parent}
-    ) {
-      name
-      memberof
-      members {
-        instance {
-          name
-          kind
-          description {
-            internal {
-              content
-            }
-          }
-        }
-        static {
-          name
-          kind
-          description {
-            internal {
-              content
-            }
-          }
-        }
-      }
-      params {
-        name
-        description {
-          internal {
-            content
-          }
-        }
-        optional
-        default
-      }
-      returns {
-        description {
-          internal {
-            content
-          }
-        }
+    typeDoc(filename: {eq: $api}) {
+      internal {
+        content
       }
     }
     allMdx {
@@ -514,172 +489,215 @@ const SourceCode = ({ children, className }) => {
   );
 }
 
+const Comment = ({ comment }) => {
+  const classes = useStyles();
+  return (
+    <div className={classes.description}>
+      <ReactMarkdown>
+        {comment?.summary?.[0]?.text || '_No description_'}
+      </ReactMarkdown>
+    </div>
+  );
+}
+
+const Summary = () => {
+  const classes = useStyles();
+  let { typedoc } = React.useContext(DocContext);
+  let comment = typedoc.comment;
+  if (typedoc.kindString === 'Method' || typedoc.kindString === 'Function') {
+    comment = typedoc.signatures[0].comment;
+  }
+  return (
+    <div className={classes.p}>
+      <ReactMarkdown>
+        {comment?.summary?.[0]?.text || '_No description_'}
+      </ReactMarkdown>
+    </div>
+  );
+}
+
 const Classes = () => {
   const classes = useStyles();
-  let { jsdoc, lang, path } = React.useContext(DocContext);
+  let { typedoc, lang, path } = React.useContext(DocContext);
   if (path.endsWith('/')) path = path.substring(0, path.length - 1);
-  const members = jsdoc.members.static.filter(m => m.kind === 'class');
   return (
-    members.map(
-      m => (
-        <React.Fragment>
+    <React.Fragment>
+      {typedoc.children.filter(i => i.kindString === 'Property').map(
+        child => [
           <Link
             className={classes.memberName}
-            to={`/docs/${lang}/${path}/${m.name}`}
+            to={`/docs/${lang}/${path}/${child.name}`}
           >
-            {m.name}
-          </Link>
-          <p className={classes.description}>
-            {m.description?.internal?.content || '[No description]'}
-          </p>
-        </React.Fragment>
-      )
-    )
+            {child.name}
+          </Link>,
+          <Comment comment={child.classNode?.comment}/>
+        ]
+      ).flat()}
+    </React.Fragment>
+  );
+}
+
+const Functions = () => {
+  const classes = useStyles();
+  let { typedoc, lang, path } = React.useContext(DocContext);
+  if (path.endsWith('/')) path = path.substring(0, path.length - 1);
+  return (
+    <React.Fragment>
+      {typedoc.children.filter(i => i.kindString === 'Method').map(
+        child => [
+          <Link
+            className={classes.memberName}
+            to={`/docs/${lang}/${path}/${child.name}`}
+          >
+            {child.name}
+          </Link>,
+          <Comment comment={child.signatures?.[0]?.comment}/>
+        ]
+      ).flat()}
+    </React.Fragment>
+  );
+}
+
+const Prototype = ({ name, parameters, link }) => {
+  const classes = useStyles();
+  return (
+    <p>
+      {link ? (
+        <Link className={classes.memberName} to={link}>
+          {name}
+        </Link>
+      ): (
+        <span className={classes.parameterName}>
+          {name}
+        </span>
+      )}
+      <span className={classes.parameterName}>
+        ({(parameters?.map?.(p => p.flags?.isOptional ? p.name + '?': p.name) || []).join(', ')})
+      </span>
+    </p>
   );
 }
 
 const Constructor = () => {
-  const classes = useStyles();
-  let { jsdoc, lang, path } = React.useContext(DocContext);
+  let { typedoc, lang, path } = React.useContext(DocContext);
   if (path.endsWith('/')) path = path.substring(0, path.length - 1);
   return (
     <React.Fragment>
-      <Link
-        className={classes.memberName}
-        to={`/docs/${lang}/${path}/constructor`}
-      >
-        new {jsdoc.memberof ? jsdoc.memberof + '.' : ''}{jsdoc.name}()
-      </Link>
-      <p className={classes.description}>
-        Create an instance of {jsdoc.name}.
-      </p>
+      {typedoc.constructorClass.children.filter(i => i.kindString === 'Constructor').map(
+        child => child.signatures.map(
+          sig => [
+            <Prototype
+              name={`new ${typedoc.className}`}
+              link={`/docs/${lang}/${path}/new`}
+              parameters={sig.parameters}
+            />,
+            <Comment comment={sig.comment}/>
+          ]
+        )
+      ).flat()}
     </React.Fragment>
   );
 }
 
 const Properties = () => {
   const classes = useStyles();
-  let { jsdoc, lang, path } = React.useContext(DocContext);
+  let { typedoc, lang, path } = React.useContext(DocContext);
   if (path.endsWith('/')) path = path.substring(0, path.length - 1);
-  const members = jsdoc.members.instance.filter(m => m.kind === 'member');
   return (
-    members.map(
-      m => (
-        <React.Fragment>
+    <React.Fragment>
+      {typedoc.children.filter(i => i.kindString === 'Property').map(
+        child => [
           <Link
             className={classes.memberName}
-            to={`/docs/${lang}/${path}/${m.name}`}
+            to={`/docs/${lang}/${path}/${child.name}`}
           >
-            {m.name}
-          </Link>
-          <p className={classes.description}>
-            {m.description?.internal?.content || '[No description]'}
-          </p>
-        </React.Fragment>
-      )
-    )
-  );
-}
-
-const StaticProperties = () => {
-  const classes = useStyles();
-  let { jsdoc, lang, path } = React.useContext(DocContext);
-  if (path.endsWith('/')) path = path.substring(0, path.length - 1);
-  const members = jsdoc.members.static.filter(m => m.kind === 'member');
-  return (
-    members.map(
-      m => (
-        <React.Fragment>
-          <Link
-            className={classes.memberName}
-            to={`/docs/${lang}/${path}/${m.name}`}
-          >
-            {m.name}
-          </Link>
-          <p className={classes.description}>
-            {m.description?.internal?.content || '[No description]'}
-          </p>
-        </React.Fragment>
-      )
-    )
+            {child.name}
+          </Link>,
+          <Comment comment={child.comment}/>
+        ]
+      ).flat()}
+    </React.Fragment>
   );
 }
 
 const Methods = () => {
-  const classes = useStyles();
-  let { jsdoc, lang, path } = React.useContext(DocContext);
+  let { typedoc, lang, path } = React.useContext(DocContext);
   if (path.endsWith('/')) path = path.substring(0, path.length - 1);
-  const members = jsdoc.members.instance.filter(m => m.kind === 'function');
   return (
-    members.map(
-      m => (
-        <React.Fragment>
-          <Link
-            className={classes.memberName}
-            to={`/docs/${lang}/${path}/${m.name}`}
-          >
-            {m.name}()
-          </Link>
-          <p className={classes.description}>
-            {m.description?.internal?.content || '[No description]'}
-          </p>
-        </React.Fragment>
-      )
-    )
+    <React.Fragment>
+      {typedoc.children.filter(i => i.kindString === 'Method').map(
+        child => child.signatures.map(
+          sig => [
+            <Prototype
+              name={child.name}
+              link={`/docs/${lang}/${path}/${child.name}`}
+              parameters={sig.parameters}
+            />,
+            <Comment comment={sig.comment}/>
+          ]
+        )
+      ).flat()}
+    </React.Fragment>
   );
 }
 
 const StaticMethods = () => {
-  const classes = useStyles();
-  let { jsdoc, lang, path } = React.useContext(DocContext);
+  let { typedoc, lang, path } = React.useContext(DocContext);
   if (path.endsWith('/')) path = path.substring(0, path.length - 1);
-  const members = jsdoc.members.static.filter(m => m.kind === 'function');
   return (
-    members.map(
-      m => (
-        <React.Fragment>
-          <Link
-            className={classes.memberName}
-            to={`/docs/${lang}/${path}/${m.name}`}
-          >
-            {m.name}()
-          </Link>
-          <p className={classes.description}>
-            {m.description?.internal?.content || '[No description]'}
-          </p>
-        </React.Fragment>
-      )
-    )
+    <React.Fragment>
+      {typedoc.constructorClass.children.filter(i => i.kindString === 'Method').map(
+        child => child.signatures.map(
+          sig => [
+            <Prototype
+              name={child.name}
+              link={`/docs/${lang}/${path}/${child.name}`}
+              parameters={sig.parameters}
+            />,
+            <Comment comment={sig.comment}/>
+          ]
+        )
+      ).flat()}
+    </React.Fragment>
   );
 }
 
 const Parameters = () => {
   const classes = useStyles();
-  const { jsdoc } = React.useContext(DocContext);
-  const params = jsdoc.params;
+  let { typedoc } = React.useContext(DocContext);
   return (
-    params.map(
-      p => (
-        <React.Fragment>
-          <h6>
-            <span className={classes.parameterName}>{p.name}</span>
-          </h6>
-          <p className={classes.description}>
-            {p.description?.internal?.content || '[No description]'}
-          </p>
-        </React.Fragment>
-      )
-    )
-  );
-}
-
-const ReturnValue = () => {
-  const classes = useStyles();
-  const { jsdoc } = React.useContext(DocContext);
-  return (
-    <p className={classes.description}>
-      {jsdoc.returns[0].description.internal.content || '[No description]'}
-    </p>
+    <React.Fragment>
+      {typedoc.signatures.map(
+        sig => {
+          const returns = sig.comment?.blockTags?.find?.(t => t.tag === '@returns');
+          return [
+            <Prototype
+              name={typedoc.kindString === 'Constructor' ? 'new ' + typedoc.className : typedoc.name}
+              parameters={sig.parameters}
+            />,
+            <Comment comment={sig.comment}/>,
+            <div className={classes.parameterList}>
+              {sig.parameters?.map?.(
+                param => [
+                  <span className={classes.inlineCode}>
+                    {param.name}
+                  </span>,
+                  <Comment comment={param.comment}/>
+                ]
+              )}
+            </div>,
+            returns && (
+              <div className={classes.parameterList}>
+                <span className={classes.returnValue}>Return value</span>
+                <div className={classes.description}>
+                  <ReactMarkdown>{returns.content[0].text}</ReactMarkdown>
+                </div>
+              </div>
+            )
+          ];
+        }
+      ).flat()}
+    </React.Fragment>
   );
 }
 
@@ -698,14 +716,14 @@ const components = {
   code: SourceCode,
   inlineCode: makeStyledTag('span', 'inlineCode'),
 
+  Summary,
   Classes,
+  Functions,
   Constructor,
   Properties,
   Methods,
-  StaticProperties,
   StaticMethods,
   Parameters,
-  ReturnValue,
   FilterDiagram,
 };
 
@@ -872,9 +890,10 @@ const DocPage = ({ data }) => {
 
   const slugger = new Slugger;
   const nodes = data.allMdx.nodes;
+  const typedoc = JSON.parse(data.typeDoc?.internal?.content || 'null');
 
   return (
-    <DocContext.Provider value={{ jsdoc: data.documentationJs, lang, path }}>
+    <DocContext.Provider value={{ typedoc, lang, path }}>
       <div className={classes.head}>
         <div className={classes.home}>
           <img

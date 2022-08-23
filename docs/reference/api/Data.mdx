@@ -5,13 +5,13 @@ api: Data
 
 ## Description
 
-**Data** is an array of read-only octets. It can be read from network as an input event or created by script and sent out over to network.
+<Summary/>
 
-Once created, you can't alter a byte in it, but you can cut it short or enlarge it by joining to other **Data** objects.
+Once created, you can't alter a byte in it, but you can cut it short or enlarge it by joining to other _Data_ objects.
 
 ### Conversion from/to strings
 
-To convert from a string, you can [construct](/reference/api/Data/constructor) a **Data** object or call [Data.from()](/reference/api/Data/from) with the string as parameter, plus an optional _encoding_ parameter. The following encodings are supported:
+To convert from a string, you can [construct](/reference/api/Data/new) a _Data_ object or call [Data.from()](/reference/api/Data/from) with the string as parameter, plus an optional _encoding_ parameter. The following encodings are supported:
 
 - "utf8" (default)
 - "hex"
@@ -22,9 +22,9 @@ To convert to a string, call [toString](/reference/api/Data/toString) with one o
 
 ### Create binary data using script
 
-To make raw binary data from scratch, first, create an array of numbers, each representing a byte, and then [construct](/reference/api/Data/constructor) a **Data** object with the array as parameter.
+To make raw binary data from scratch, first, create an array of numbers, each representing a byte, and then [construct](/reference/api/Data/new) a _Data_ object with the array as parameter.
 
-After a **Data** object is created, you can also call [push()](/reference/api/Data/push) to concatenate it with other **Data** objects.
+After a _Data_ object is created, you can also call [push()](/reference/api/Data/push) to concatenate it with other _Data_ objects.
 
 ## Constructor
 

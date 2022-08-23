@@ -143,11 +143,24 @@ exports.sourceNodes = ({ actions, createNodeId, createContentDigest }) => {
         }
       }
     }
+    const constructor = classNode.constructorClass;
+    if (constructor) {
+      for (const child of constructor.children) {
+        switch (child.kindString) {
+          case 'Constructor':
+            child.className = className;
+            addNode(className + '.new()', child);
+            break;
+          case 'Method':
+            addNode(className + '.' + child.name + '()', child);
+            break;
+        }
+      }
+    }
   }
 
   for (const name in namespaces) {
     const node = namespaces[name];
-    addNode(name, node);
     for (const child of node.children) {
       if (child.kindString === 'Method') {
         addNode(name + '.' + child.name + '()', child);
@@ -156,33 +169,25 @@ exports.sourceNodes = ({ actions, createNodeId, createContentDigest }) => {
         if (type && type.endsWith('Constructor')) {
           const classNode = findClassFromConstructor(child.type.name);
           if (classNode) {
+            const className = name + '.' + child.name;
+            classNode.className = className;
             classNode.constructorClass = findNode('Interface', child.type.name);
-            addNode(name + '.' + child.name, classNode);
-            addClassMembers(name + '.' + child.name, classNode);
+            child.classNode = classNode;
+            addClassMembers(className, classNode);
+            addNode(className, classNode);
             delete classes[classNode.name];
           }
         }
       }
     }
+    addNode(name, node);
   }
 
   for (const name in classes) {
     const node = classes[name];
-    addNode(name, node);
+    node.className = name;
     addClassMembers(name, node);
-    const constructor = node.constructorClass;
-    if (constructor) {
-      for (const child of constructor.children) {
-        switch (child.kindString) {
-          case 'Constructor':
-            addNode(name + '.new()', child);
-            break;
-          case 'Method':
-            addNode(name + '.' + child.name + '()', child);
-            break;
-        }
-      }
-    }
+    addNode(name, node);
   }
 
   for (const name in functions) {
@@ -278,44 +283,17 @@ exports.createPages = async ({ graphql, actions }) => {
         const { id, frontmatter } = node;
         const { api } = frontmatter;
 
-        let kind, name, parent;
-        if (api) {
-          if (api.endsWith('()')) {
-            kind = 'function';
-            name = api.substring(0, api.length - 2);
-          } else {
-            kind = 'class';
-            name = api;
-          }
-          const i = name.lastIndexOf('.');
-          if (i >= 0) {
-            parent = name.substring(0, i);
-            name = name.substring(i + 1);
-          }
-          if (kind === 'function' && name === 'constructor') {
-            kind = 'class';
-            name = parent;
-            const i = name.lastIndexOf('.');
-            if (i >= 0) {
-              parent = name.substring(0, i);
-              name = name.substring(i + 1);
-            } else {
-              parent = undefined;
-            }
-          }
-        }
-
         createPage({
           path: `/docs/${lang}/${path}`,
           component: componentDocPage,
-          context: { id, kind, name, parent },
+          context: { id, api },
         });
 
         if (path == HOME) {
           createPage({
             path: `/docs/${lang}`,
             component: componentDocPage,
-            context: { id, kind, name, parent },
+            context: { id, api },
           });
         }
       }

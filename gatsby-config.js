@@ -45,6 +45,5 @@ module.exports = {
         path: `${__dirname}/gui/src/pages/`,
       },
     },
-    `gatsby-transformer-documentationjs`,
   ],
 }

@@ -216,6 +216,11 @@ interface VerifyConstructor {
  * JSON Web Key.
  */
 interface JWK {
+
+  /**
+   * Whether the token is valid.
+   */
+  readonly isValid: boolean;
 }
 
 interface JWKConstructor {

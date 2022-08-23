@@ -1,0 +1,44 @@
+---
+title: algo.Cache.new()
+api: algo.Cache.new()
+---
+
+## Description
+
+Creates an instance of **Cache**.
+
+You can provide two optional callbacks:
+
+- _add_ - Will be called with the key when a requested entry cannot be found and its return value will be used to fill in that entry
+- _remove_ - Will be called with the key and value when an entry is about to be erased
+
+You can set the maximum number of entries by option _size_ in the _options_ parameter. When entries are more than that number, _old_ entries will be purged on the _LRU_ (least recently used) basis.
+
+You can also specify the TTL (time to live) for all entries by option _ttl_ in the _options_ parameter.
+
+## Syntax
+
+``` js
+new algo.Cache()
+
+new algo.Cache(
+  (k) => getEntryValue(k)
+)
+
+new algo.Cache(
+  (k) => getEntryValue(k),
+  (k, v) => onRemoveEntry(k, v),
+  {
+    size,
+    ttl,
+  }
+)
+```
+
+## Parameters
+
+<Parameters/>
+
+## See Also
+
+* [Cache](/reference/api/algo/Cache)

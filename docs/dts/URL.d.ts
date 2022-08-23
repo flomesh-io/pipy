@@ -105,6 +105,11 @@ interface URLSearchParams {
    * Makes an object with the key-value pairs.
    */
   toObject(): { [name: string]: string | string[] };
+
+  /**
+   * Composes the query string.
+   */
+  toString(): string;
 }
 
 interface URLSearchParamsConstructor {

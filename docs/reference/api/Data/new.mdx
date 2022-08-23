@@ -1,0 +1,36 @@
+---
+title: "new Data()"
+api: Data.new()
+---
+
+## Description
+
+Creates an instance of _Data_.
+
+The following options are supported for the _encoding_ parameter:
+
+- _"utf8" (default)_ - Encode the text as UTF-8
+- _"hex"_ - Decode the text as hexadecimal representation
+- _"base64"_ - Decode the text as Base64 format
+- _"base64url"_ - Decode the text as Base64URL format
+
+When decoding is required but fails, a runtime error is generated to stop the script. This is different from [Data.from()](/reference/api/Data/from) where _null_ is returned to indicate the error.
+
+## Syntax
+
+``` js
+new Data()
+new Data(data)
+new Data(text)
+new Data(text, encoding)
+new Data(byteArray)
+```
+
+### Parameters
+
+<Parameters/>
+
+## See Also
+
+* [Data](/reference/api/Data)
+* [Data.from()](/reference/api/Data/from)

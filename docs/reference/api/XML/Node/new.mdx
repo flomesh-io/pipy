@@ -1,0 +1,52 @@
+---
+title: "Node()"
+api: XML.Node.new()
+---
+
+## Description
+
+Creates an instance of _Node_ object.
+
+## Syntax
+
+``` js
+new XML.Node(name)
+new XML.Node(name, { ...attributes })
+new XML.Node(name, { ...attributes }, [ ...children ])
+```
+
+## Parameters
+
+<Parameters/>
+
+## Example
+
+``` js
+//
+// <book category="CHILDREN">
+//   <title lang="en">Harry Potter</title>
+//   <author>J K. Rowling</author>
+//   <year>2005</year>
+//   <price>29.99</price>
+// </book>
+//
+new XML.Node(
+  'book',
+  {
+    category: 'CHILDREN',
+  },
+  [
+    new XML.Node('title', { lang: 'en' }, ['Harry Potter']),
+    new XML.Node('author', null, ['J K. Rowling']),
+    new XML.Node('year', null, ['2005']),
+    new XML.Node('price', null, ['29.99']),
+  ]
+)
+```
+
+## See Also
+
+* [Node](/reference/api/XML/Node)
+* [name](/reference/api/XML/Node/name)
+* [attributes](/reference/api/XML/Node/attributes)
+* [children](/reference/api/XML/Node/children)
