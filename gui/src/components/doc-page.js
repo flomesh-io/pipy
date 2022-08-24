@@ -522,7 +522,7 @@ const Classes = () => {
   if (path.endsWith('/')) path = path.substring(0, path.length - 1);
   return (
     <React.Fragment>
-      {typedoc.children.filter(i => i.kindString === 'Property').map(
+      {typedoc.classes.map(
         child => [
           <Link
             className={classes.memberName}
@@ -530,7 +530,28 @@ const Classes = () => {
           >
             {child.name}
           </Link>,
-          <Comment comment={child.classNode?.comment}/>
+          <Comment comment={child.comment}/>
+        ]
+      ).flat()}
+    </React.Fragment>
+  );
+}
+
+const Variables = () => {
+  const classes = useStyles();
+  let { typedoc, lang, path } = React.useContext(DocContext);
+  if (path.endsWith('/')) path = path.substring(0, path.length - 1);
+  return (
+    <React.Fragment>
+      {typedoc.variables.map(
+        child => [
+          <Link
+            className={classes.memberName}
+            to={`/docs/${lang}/${path}/${child.name}`}
+          >
+            {child.name}
+          </Link>,
+          <Comment comment={child.comment}/>
         ]
       ).flat()}
     </React.Fragment>
@@ -543,7 +564,7 @@ const Functions = () => {
   if (path.endsWith('/')) path = path.substring(0, path.length - 1);
   return (
     <React.Fragment>
-      {typedoc.children.filter(i => i.kindString === 'Method').map(
+      {typedoc.functions.map(
         child => [
           <Link
             className={classes.memberName}
@@ -551,7 +572,7 @@ const Functions = () => {
           >
             {child.name}
           </Link>,
-          <Comment comment={child.signatures?.[0]?.comment}/>
+          <Comment comment={child.comment}/>
         ]
       ).flat()}
     </React.Fragment>
@@ -581,13 +602,15 @@ const Prototype = ({ name, parameters, link }) => {
 const Constructor = () => {
   let { typedoc, lang, path } = React.useContext(DocContext);
   if (path.endsWith('/')) path = path.substring(0, path.length - 1);
+  let className = typedoc.name;
+  if (typedoc.memberOf) className = typedoc.memberOf + '.' + className;
   return (
     <React.Fragment>
-      {typedoc.constructorClass.children.filter(i => i.kindString === 'Constructor').map(
-        child => child.signatures.map(
+      {typedoc.constructors.map(
+        child => child.overloads.map(
           sig => [
             <Prototype
-              name={`new ${typedoc.className}`}
+              name={`new ${className}`}
               link={`/docs/${lang}/${path}/new`}
               parameters={sig.parameters}
             />,
@@ -605,7 +628,7 @@ const Properties = () => {
   if (path.endsWith('/')) path = path.substring(0, path.length - 1);
   return (
     <React.Fragment>
-      {typedoc.children.filter(i => i.kindString === 'Property').map(
+      {typedoc.properties.map(
         child => [
           <Link
             className={classes.memberName}
@@ -625,8 +648,8 @@ const Methods = () => {
   if (path.endsWith('/')) path = path.substring(0, path.length - 1);
   return (
     <React.Fragment>
-      {typedoc.children.filter(i => i.kindString === 'Method').map(
-        child => child.signatures.map(
+      {typedoc.methods.map(
+        child => child.overloads.map(
           sig => [
             <Prototype
               name={child.name}
@@ -646,8 +669,8 @@ const StaticMethods = () => {
   if (path.endsWith('/')) path = path.substring(0, path.length - 1);
   return (
     <React.Fragment>
-      {typedoc.constructorClass.children.filter(i => i.kindString === 'Method').map(
-        child => child.signatures.map(
+      {typedoc.staticMethods.map(
+        child => child.overloads.map(
           sig => [
             <Prototype
               name={child.name}
@@ -667,12 +690,12 @@ const Parameters = () => {
   let { typedoc } = React.useContext(DocContext);
   return (
     <React.Fragment>
-      {typedoc.signatures.map(
+      {typedoc.overloads.map(
         sig => {
           const returns = sig.comment?.blockTags?.find?.(t => t.tag === '@returns');
           return [
             <Prototype
-              name={typedoc.kindString === 'Constructor' ? 'new ' + typedoc.className : typedoc.name}
+              name={typedoc.name === 'constructor' ? 'new ' + typedoc.memberOf : typedoc.name}
               parameters={sig.parameters}
             />,
             <Comment comment={sig.comment}/>,
@@ -718,6 +741,7 @@ const components = {
 
   Summary,
   Classes,
+  Variables,
   Functions,
   Constructor,
   Properties,
