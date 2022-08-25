@@ -356,6 +356,7 @@ void InboundTCP::linger() {
         describe(desc);
         Log::error("%s socket error: %s", desc, ec.message().c_str());
       }
+      InputContext ic(this);
       release();
     }
   );
