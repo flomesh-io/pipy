@@ -5,4 +5,31 @@ api: Configuration.onStart
 
 ## Description
 
-Registers a function to be called when a pipeline is created.
+<Summary/>
+
+## Syntax
+
+``` js
+pipy()
+  .pipeline()
+  .onStart(
+    () => void onPipelineCreated()
+  )
+  .filterA()
+  .filterB()
+  // ...
+
+pipy()
+  .pipeline()
+  .onStart(
+    () => getInitialInputEvents()
+  )
+  .filterA()
+  .filterB()
+  // ...
+```
+
+## Parameters
+
+<Parameters/>
+

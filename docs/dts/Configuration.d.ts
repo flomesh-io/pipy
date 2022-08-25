@@ -4,6 +4,16 @@
 /// <reference path="./algo.d.ts" />
 /// <reference path="./crypto.d.ts" />
 
+interface ListenOptions {
+  protocol?: 'tcp' | 'udp',
+  maxPacketSize?: number | string,
+  maxConnections?: number,
+  readTimeout?: number | string,
+  writeTimeout?: number | string,
+  idleTimeout?: number | string,
+  transparent?: boolean,
+}
+
 interface MuxOptions {
   maxIdle: number | string,
   maxQueue: number,
@@ -26,58 +36,131 @@ interface Configuration {
 
   /**
    * Defines context variables that are accessible to other modules.
+   *
+   * @param namespace - The namespace to refer when being imported in other modules.
+   * @param variables - An object containing key-value pairs of context variable names and their initial values.
+   * @returns The same _Configuration_ object.
    */
   export(namespace: string, variables: { [key: string]: any }): Configuration;
 
   /**
    * Imports context variables defined and exported from other modules.
+   *
+   * @param variables - An object containing key-value pairs of context variable names and their namespaces.
+   * @returns The same _Configuration_ object.
    */
   import(variables: { [key: string]: string }): Configuration;
 
   /**
-   * Creates a pipeline layout for incoming TCP/UDP connections on a port.
+   * Creates a _port pipeline layout_ for incoming TCP/UDP connections on a port.
+   *
+   * A _port pipeline_ has the following input/output:
+   *
+   * - **INPUT** - _Data_ stream received from the client.
+   * - **OUTPUT** - _Data_ stream to send to the client.
+   *
+   * @param port - Port number to listen on, or _null_ to skip this pipeline layout.
+   * @param options - Options including:
+   *   - _protocol_ - Can be _"tcp"_ or _"udp"_. Default is _"tcp"_.
+   *   - _maxPacketSize_ - Maximum packet size when using UDP. Default is 16KB.
+   *   - _maxConnections_ - Maximum number of concurrent connections. Default is -1, which means _"unlimited"_.
+   *   - _readTimeout_ - Timeout duration for reading, in seconds.
+   *       Can be a string with one of the time unit suffixes such as `s`, `m` or `h`.
+   *       Defaults to no timeout (waiting forever).
+   *   - _writeTimeout_ - Timeout duration for writing, in seconds.
+   *       Can be a string with one of the time unit suffixes such as `s`, `m` or `h`.
+   *       Defaults to no timeout (waiting forever).
+   *   - _idleTimeout_ - Time in seconds before connection is closed due to no active reading or writing.
+   *       Can be a string with one of the time unit suffixes such as `s`, `m` or `h`.
+   *       Defaults to 1 minute.
+   *   - _transparent_ - Set to _true_ to enable [transparent proxy](https://en.wikipedia.org/wiki/Proxy_server#Transparent_proxy) mode,
+   *       where the original destination address and port can be found through `__inbound.destinationAddress` and `__inbound.destinationPort` properties.
+   *       This is only available on Linux by using NAT or TPROXY.
+   * @returns The same _Configuration_ object.
    */
-  listen(port: number | null, options?: {}): Configuration;
+  listen(port: number | null, options?: ListenOptions): Configuration;
 
   /**
-   * Creates a pipeline layout for reading from a file.
+   * Creates a _file pipeline layout_ for reading from a file.
+   *
+   * A _file pipeline_ has the following input/output:
+   *
+   * - **INPUT** - _Data_ stream from the file.
+   * - **OUTPUT** - Discarded.
+   *
+   * @param filename - Pathname of the file to read from. Can be `"-"` for reading from the standard input.
+   * @returns The same _Configuration_ object.
    */
   read(filename: string): Configuration;
 
   /**
-   * Creates a pipeline layout for a periodic job or a signal. 
+   * Creates a _timer pipeline layout_ or a _signal pipeline layout_ for a periodic job or a signal.
+   *
+   * A _timer pipeline_ or a _signal pipeline_ has the following input/output:
+   *
+   * - **INPUT** - Nothing.
+   * - **OUTPUT** - Discarded.
+   *
+   * @param intervalOrSignal - Can be either:
+   *   - _Nothing (undefined)_ - Create a pipeline only at startup time.
+   *   - _A time duration_ - Create a pipeline regularly every specified amount of time.
+   *       Can be a number in seconds or a string with one of the time unit suffixes such as `s`, `m` or `h`.
+   *   - _A signal name_ - Create a pipeline when receiving a signal, e.g. _"SIGHUP"_, _"SIGINT"_.
+   * @returns The same _Configuration_ object.
    */
   task(intervalOrSignal?: number | string): Configuration;
 
   /**
-   * Creates a sub-pipeline layout.
+   * Creates a _sub-pipeline layout_.
+   *
+   * A _sub-pipeline_ has the following input/output:
+   *
+   * - **INPUT** - Any types of _Events_.
+   * - **OUTPUT** - Any types of _Events_.
+   *
+   * @param name - The name of the sub-pipeline, or the _module entry_ pipeline layout is created if the name is absent.
+   * @returns The same _Configuration_ object.
    */
   pipeline(name?: string): Configuration;
 
   /**
    * Registers a function to be called when a pipeline is created.
+   *
+   * @param handler - A function that is called every time a new pipeline instance is created.
+   *   Its return value, if any, is an _Event_ or a _Message_ or an array of them that makes up the initial input to the pipeline.
+   * @returns The same _Configuration_ object.
    */
   onStart(handler: () => Event | Message | (Event|Message)[]): Configuration;
 
   /**
    * Registers a function to be called when a pipeline is destroyed.
+   *
+   * @param handler - A function that is called every time the pipeline instance is destroyed.
+   * @returns The same _Configuration_ object.
    */
   onEnd(handler: () => void): Configuration;
 
   /**
    * Attaches a sub-pipeline layout to the last joint filter.
+   *
+   * @param pipelineLayout - The name of a sub-pipeline layout, or a function that receives a _Configuration_ object
+   *   for configuring an anonymous sub-pipeline.
+   * @returns The same _Configuration_ object.
    */
   to(pipelineLayout: string | ((pipelineConfigurator: Configuration) => void)): Configuration;
 
   /**
    * Appends an _acceptHTTPTunnel_ filter to the current pipeline layout.
    *
-   * An _acceptHTTPTunnel_ filter implements HTTP tunnel on the server side.
+   * An _acceptHTTPTunnel_ filter implements [HTTP tunnel](https://en.wikipedia.org/wiki/HTTP_tunnel) on the server side.
    *
    * - **INPUT** - _Data_ stream received from the client with a leading HTTP CONNECT request _Message_.
    * - **OUTPUT** - _Data_ stream to send to the client with a leading HTTP CONNECT response _Message_.
    * - **SUB-INPUT** - _Data_ stream received from the client via HTTP tunnel.
    * - **SUB-OUTPUT** - _Data_ stream to send to the client via HTTP tunnel.
+   *
+   * @param handler - A function that receives the starting request _Message_ and returns a response _Message_.
+   * @returns The same _Configuration_ object.
    */
   acceptHTTPTunnel(handler: (request: Message) => Message): Configuration;
 
@@ -90,6 +173,8 @@ interface Configuration {
    * - **OUTPUT** - _Data_ stream to send to the client with a leading SOCKS connection response.
    * - **SUB-INPUT** - _Data_ stream received from the client via SOCKS.
    * - **SUB-OUTPUT** - _Data_ stream to send to the client via SOCKS.
+   *
+   * @returns The same _Configuration_ object.
    */
   acceptSOCKS(handler: (host, port, id) => boolean): Configuration;
 
@@ -102,6 +187,8 @@ interface Configuration {
    * - **OUTPUT** - TLS-encrypted _Data_ stream to send to the client.
    * - **SUB-INPUT** - _Data_ stream received from the client after TLS decryption.
    * - **SUB-OUTPUT** - _Data_ stream to send to the client before TLS encryption.
+   *
+   * @returns The same _Configuration_ object.
    */
   acceptTLS(
     options?: {
@@ -122,6 +209,8 @@ interface Configuration {
    * - **OUTPUT** - _Events_ streaming out from the selected sub-pipeline.
    * - **SUB-INPUT** - _Events_ streaming into the _branch_ filter.
    * - **SUB-OUTPUT** - Any types of _Events_.
+   *
+   * @returns The same _Configuration_ object.
    */
   branch(
     condition: () => boolean,
@@ -142,6 +231,8 @@ interface Configuration {
    * - **OUTPUT** - _Events_ streaming out from the selected sub-pipeline.
    * - **SUB-INPUT** - _Events_ streaming into the _chain_ filter.
    * - **SUB-OUTPUT** - Any types of _Events_.
+   *
+   * @returns The same _Configuration_ object.
    */
   chain(modules?: string[]): Configuration;
 
@@ -152,6 +243,8 @@ interface Configuration {
    *
    * - **INPUT** - HTTP _Messages_ to compress.
    * - **OUTPUT** - Compressed HTTP _Messages_.
+   *
+   * @returns The same _Configuration_ object.
    */
   compressHTTP(
     options?: {
@@ -167,6 +260,8 @@ interface Configuration {
    *
    * - **INPUT** - _Messages_ to compress.
    * - **OUTPUT** - Compressed _Messages_.
+   *
+   * @returns The same _Configuration_ object.
    */
   compressMessage(
     options?: {
@@ -182,6 +277,8 @@ interface Configuration {
    *
    * - **INPUT** - _Data_ stream to send to the host.
    * - **OUTPUT** - _Data_ stream received from the host.
+   *
+   * @returns The same _Configuration_ object.
    */
   connect(
     target: string | (() => string),
@@ -205,6 +302,8 @@ interface Configuration {
    * - **OUTPUT** - _Data_ stream received from the server via HTTP tunnel.
    * - **SUB-INPUT** - _Data_ stream to send to the server with a leading HTTP CONNECT request _Message_.
    * - **SUB-OUTPUT** - _Data_ stream received from the server with a leading HTTP CONNECT response _Message_.
+   *
+   * @returns The same _Configuration_ object.
    */
   connectHTTPTunnel(target: string | (() => string)): Configuration;
 
@@ -217,6 +316,8 @@ interface Configuration {
    * - **OUTPUT** - _Data_ stream received from the server via SOCKS.
    * - **SUB-INPUT** - _Data_ stream to send to the server with a leading SOCKS connection request.
    * - **SUB-OUTPUT** - _Data_ stream received from the server with a leading SOCKS connection response.
+   *
+   * @returns The same _Configuration_ object.
    */
   connectSOCKS(target: string | (() => string)): Configuration;
 
@@ -229,6 +330,8 @@ interface Configuration {
    * - **OUTPUT** - _Data_ stream received from the server via TLS.
    * - **SUB-INPUT** - TLS-encrypted _Data_ stream to send to the server.
    * - **SUB-OUTPUT** - TLS-encrypted _Data_ stream received from the server.
+   *
+   * @returns The same _Configuration_ object.
    */
   connectTLS(
     options?: {
@@ -247,6 +350,8 @@ interface Configuration {
    *
    * - **INPUT** - _Data_ stream to decode Dubbo messages from.
    * - **OUTPUT** - Dubbo _Messages_ decoded from the input _Data_ stream.
+   *
+   * @returns The same _Configuration_ object.
    */
   decodeDubbo(): Configuration;
 
@@ -257,6 +362,8 @@ interface Configuration {
    *
    * - **INPUT** - _Data_ stream to decode HTTP/1 request messages from.
    * - **OUTPUT** - HTTP/1 request _Messages_ decoded from the input _Data_ stream.
+   *
+   * @returns The same _Configuration_ object.
    */
    decodeHTTPRequest(): Configuration;
 
@@ -268,6 +375,8 @@ interface Configuration {
    *
    * - **INPUT** - _Data_ stream to decode HTTP/1 response messages from.
    * - **OUTPUT** - HTTP/1 response _Messages_ decoded from the input _Data_ stream.
+   *
+   * @returns The same _Configuration_ object.
    */
    decodeHTTPResponse(
     options?: { bodiless?: boolean | (() => boolean) }
@@ -280,6 +389,8 @@ interface Configuration {
    *
    * - **INPUT** - _Data_ stream to decode MQTT packets from.
    * - **OUTPUT** - MQTT packets _(Messages)_ decoded from the input _Data_ stream.
+   *
+   * @returns The same _Configuration_ object.
    */
   decodeMQTT(
     options?: { protocolLevel?: number | (() => number) }
@@ -292,6 +403,8 @@ interface Configuration {
    *
    * - **INPUT** - _Messages_ to decode as MIME multipart format.
    * - **OUTPUT** - Parts _(Messages)_ decoded from the input MIME multipart messages.
+   *
+   * @returns The same _Configuration_ object.
    */
   decodeMultipart(): Configuration;
 
@@ -302,6 +415,8 @@ interface Configuration {
    *
    * - **INPUT** - _Data_ stream to decode WebSocket messages from.
    * - **OUTPUT** - WebSocket _Messages_ decoded from the input _Data_ stream.
+   *
+   * @returns The same _Configuration_ object.
    */
   decodeWebSocket(): Configuration;
 
@@ -312,6 +427,8 @@ interface Configuration {
    *
    * - **INPUT** - HTTP _Messages_ to decompress.
    * - **OUTPUT** - Decompressed HTTP _Messages_.
+   *
+   * @returns The same _Configuration_ object.
    */
   decompressHTTP(enable?: () => boolean): Configuration;
 
@@ -322,11 +439,15 @@ interface Configuration {
    *
    * - **INPUT** - _Messages_ to decompress.
    * - **OUTPUT** - Decompressed _Messages_.
+   *
+   * @returns The same _Configuration_ object.
    */
   decompressMessage(algorithm: () => '' | 'deflate' | 'gzip' | 'brotli'): Configuration;
 
   /**
    * Appends a _deframe_ filter to the current pipeline layout.
+   *
+   * @returns The same _Configuration_ object.
    */
   deframe(
     states: {
@@ -343,6 +464,8 @@ interface Configuration {
    * - **OUTPUT** - No output.
    * - **SUB-INPUT** - A _Message_ streaming into the _demux_ filter.
    * - **SUB-OUTPUT** - Disgarded.
+   *
+   * @returns The same _Configuration_ object.
    */
   demux(): Configuration;
 
@@ -355,6 +478,8 @@ interface Configuration {
    * - **OUTPUT** - _Data_ stream to send to the client with HTTP/1 or HTTP/2 responses.
    * - **SUB-INPUT** - HTTP request _Message_ received from the client.
    * - **SUB-OUTPUT** - HTTP response _Message_ to send to the client.
+   *
+   * @returns The same _Configuration_ object.
    */
   demuxHTTP(options? : {
     bufferSize: number | string
@@ -370,6 +495,8 @@ interface Configuration {
    * - **OUTPUT** - _Messages_ streaming out from the sub-pipelines.
    * - **SUB-INPUT** - A _Message_ streaming into the _demuxQueue_ filter.
    * - **SUB-OUTPUT** - A _Message_ to stream out the _demuxQueue_ filter.
+   *
+   * @returns The same _Configuration_ object.
    */
   demuxQueue(): Configuration;
 
@@ -380,6 +507,8 @@ interface Configuration {
    *
    * - **INPUT** - _Message_ to store in a file.
    * - **OUTPUT** - The same _Message_ as input.
+   *
+   * @returns The same _Configuration_ object.
    */
   depositMessage(
     filename: string | (() => string),
@@ -396,6 +525,8 @@ interface Configuration {
    *
    * - **INPUT** - _Data_ stream to detect protocol for.
    * - **OUTPUT** - The same _Data_ stream as input.
+   *
+   * @returns The same _Configuration_ object.
    */
   detectProtocol(handler: (protocol: string) => void): Configuration;
 
@@ -406,6 +537,8 @@ interface Configuration {
    *
    * - **INPUT** - Any types of _Events_.
    * - **OUTPUT** - Nothing.
+   *
+   * @returns The same _Configuration_ object.
    */
   dummy(): Configuration;
 
@@ -416,6 +549,8 @@ interface Configuration {
    *
    * - **INPUT** - Any types of _Events_.
    * - **OUTPUT** - The same _Events_ from the input.
+   *
+   * @returns The same _Configuration_ object.
    */
   dump(tag?: string | (() => any)): Configuration;
 
@@ -426,6 +561,8 @@ interface Configuration {
    *
    * - **INPUT** - Dubbo _Messages_ to encode.
    * - **OUTPUT** - Encoded _Data_ stream from the input Dubbo messages.
+   *
+   * @returns The same _Configuration_ object.
    */
   encodeDubbo(): Configuration;
 
@@ -436,6 +573,8 @@ interface Configuration {
    *
    * - **INPUT** - HTTP/1 request _Messages_ to encode.
    * - **OUTPUT** - Encoded _Data_ stream from the input HTTP/1 request messages.
+   *
+   * @returns The same _Configuration_ object.
    */
   encodeHTTPRequest(): Configuration;
 
@@ -446,6 +585,8 @@ interface Configuration {
    *
    * - **INPUT** - HTTP/1 response _Messages_ to encode.
    * - **OUTPUT** - Encoded _Data_ stream from the input HTTP/1 response messages.
+   *
+   * @returns The same _Configuration_ object.
    */
   encodeHTTPResponse(): Configuration;
 
@@ -456,6 +597,8 @@ interface Configuration {
    *
    * - **INPUT** - MQTT packets _(Messages)_ to encode.
    * - **OUTPUT** - Encoded _Data_ stream from the input MQTT packets.
+   *
+   * @returns The same _Configuration_ object.
    */
   encodeMQTT(): Configuration;
 
@@ -466,6 +609,8 @@ interface Configuration {
    *
    * - **INPUT** - WebSocket _Messages_ to encode.
    * - **OUTPUT** - Encoded _Data_ stream from the input WebSocket messages.
+   *
+   * @returns The same _Configuration_ object.
    */
   encodeWebSocket(): Configuration;
 
@@ -476,6 +621,8 @@ interface Configuration {
    *
    * - **INPUT** - The child process's standard input _Data_ stream.
    * - **OUTPUT** - The child process's standard output _Data_ stream.
+   *
+   * @returns The same _Configuration_ object.
    */
   exec(command: string | (() => string)): Configuration;
 
@@ -488,6 +635,8 @@ interface Configuration {
    * - **OUTPUT** - Same _Events_ as input.
    * - **SUB-INPUT** - Cloned _Events_ from the _fork_ filter's input.
    * - **SUB-OUTPUT** - Discarded.
+   *
+   * @returns The same _Configuration_ object.
    */
   fork(initialParameters?: any[] | (() => any[])): Configuration;
 
@@ -498,6 +647,8 @@ interface Configuration {
    *
    * - **INPUT** - Any types of _Events_.
    * - **OUTPUT** - Same _Events_ as input.
+   *
+   * @returns The same _Configuration_ object.
    */
   handleData(handler : (evt: Event) => void): Configuration;
 
@@ -508,6 +659,8 @@ interface Configuration {
    *
    * - **INPUT** - Any types of _Events_.
    * - **OUTPUT** - Same _Events_ as input.
+   *
+   * @returns The same _Configuration_ object.
    */
   handleMessage(handler : (msg: Message) => void): Configuration;
 
@@ -518,6 +671,8 @@ interface Configuration {
    *
    * - **INPUT** - Any types of _Events_.
    * - **OUTPUT** - Same _Events_ as input.
+   *
+   * @returns The same _Configuration_ object.
    */
   handleMessageBody(handler : (body: Data) => void): Configuration;
 
@@ -528,6 +683,8 @@ interface Configuration {
    *
    * - **INPUT** - Any types of _Events_.
    * - **OUTPUT** - Same _Events_ as input.
+   *
+   * @returns The same _Configuration_ object.
    */
   handleMessageEnd(handler : (evt: MessageEnd) => void): Configuration;
 
@@ -538,6 +695,8 @@ interface Configuration {
    *
    * - **INPUT** - Any types of _Events_.
    * - **OUTPUT** - Same _Events_ as input.
+   *
+   * @returns The same _Configuration_ object.
    */
   handleMessageStart(handler : (evt: MessageStart) => void): Configuration;
 
@@ -548,6 +707,8 @@ interface Configuration {
    *
    * - **INPUT** - Any types of _Events_.
    * - **OUTPUT** - Same _Events_ as input.
+   *
+   * @returns The same _Configuration_ object.
    */
   handleStreamEnd(handler : (evt: StreamEnd) => void): Configuration;
 
@@ -558,6 +719,8 @@ interface Configuration {
    *
    * - **INPUT** - Any types of _Events_.
    * - **OUTPUT** - Same _Events_ as input.
+   *
+   * @returns The same _Configuration_ object.
    */
   handleStreamStart(handler : (evt: Event) => void): Configuration;
 
@@ -568,6 +731,8 @@ interface Configuration {
    *
    * - **INPUT** - Any types of _Events_.
    * - **OUTPUT** - Same _Events_ as input.
+   *
+   * @returns The same _Configuration_ object.
    */
   handleTLSClientHello(handler: (msg: { serverNames: string[], protocolNames: string[] }) => void): Configuration;
 
@@ -578,6 +743,8 @@ interface Configuration {
    *
    * - **INPUT** - Any types of _Events_.
    * - **OUTPUT** - _Events_ outputted from _output_ filters in the sub-pipeline.
+   *
+   * @returns The same _Configuration_ object.
    */
   input(callback?: (out: Output) => void): Configuration;
 
@@ -590,6 +757,8 @@ interface Configuration {
    * - **OUTPUT** - _Events_ streaming out from the sub-pipeline.
    * - **SUB-INPUT** - _Events_ streaming into the _link_ filter.
    * - **SUB-OUTPUT** - Any types of _Events_.
+   *
+   * @returns The same _Configuration_ object.
    */
   link(pipelineLayoutName: string): Configuration;
 
@@ -602,21 +771,19 @@ interface Configuration {
    * - **OUTPUT** - The same _Message_ as input.
    * - **SUB-INPUT** - _Messages_ from multiple _mux_ filters.
    * - **SUB-OUTPUT** - Discarded.
+   *
+   * @returns The same _Configuration_ object.
    */
   mux(
-    target?: () => any,
+    target: () => any,
     options?: MuxOptions | (() => MuxOptions),
   ): Configuration;
 
   /**
-   * Appends a _mux_ filter to the current pipeline layout.
+   * Appends a _mux_ filter that shares the same target sub-pipline
+   * with other _mux_ filters coming from the same inbound connection.
    *
-   * Multiple _mux_ filters queue input _Messages_ into a shared sub-pipeline.
-   *
-   * - **INPUT** - A _Message_ to queue into the shared sub-pipeline.
-   * - **OUTPUT** - The same _Message_ as input.
-   * - **SUB-INPUT** - _Messages_ from multiple _mux_ filters.
-   * - **SUB-OUTPUT** - Discarded.
+   * @returns The same _Configuration_ object.
    */
   mux(
     options?: MuxOptions | (() => MuxOptions),
@@ -632,22 +799,19 @@ interface Configuration {
    * - **OUTPUT** - A _Message_ dequeued from the shared sub-pipeline.
    * - **SUB-INPUT** - _Messages_ from multiple _muxQueue_ filters.
    * - **SUB-OUTPUT** - _Messages_ to be dequeued by multiple _muxQueue_ filters.
+   *
+   * @returns The same _Configuration_ object.
    */
   muxQueue(
-    target?: () => any,
+    target: () => any,
     options?: MuxOptions | (() => MuxOptions),
   ): Configuration;
 
   /**
-   * Appends a _muxQueue_ filter to the current pipeline layout.
+   * Appends a _muxQueue_ filter that shares the same target sub-pipline
+   * with other _muxQueue_ filters coming from the same inbound connection.
    *
-   * Multiple _muxQueue_ filters queue input _Messages_ into a shared sub-pipeline
-   * as well as dequeue output _Messages_ from the sub-pipeline.
-   *
-   * - **INPUT** - A _Message_ to queue into the shared sub-pipeline.
-   * - **OUTPUT** - A _Message_ dequeued from the shared sub-pipeline.
-   * - **SUB-INPUT** - _Messages_ from multiple _muxQueue_ filters.
-   * - **SUB-OUTPUT** - _Messages_ to be dequeued by multiple _muxQueue_ filters.
+   * @returns The same _Configuration_ object.
    */
   muxQueue(
     options?: MuxOptions | (() => MuxOptions),
@@ -662,21 +826,19 @@ interface Configuration {
    * - **OUTPUT** - HTTP response _Message_ received from the server.
    * - **SUB-INPUT** - _Data_ stream to send to the server with HTTP/1 or HTTP/2 requests.
    * - **SUB-OUTPUT** - _Data_ stream received from the server with HTTP/1 or HTTP/2 responses.
+   *
+   * @returns The same _Configuration_ object.
    */
   muxHTTP(
-    target?: () => any,
+    target: () => any,
     options?: MuxHTTPOptions | (() => MuxHTTPOptions),
   ): Configuration;
 
   /**
-   * Appends a _muxHTTP_ filter to the current pipeline layout.
+   * Appends a _muxHTTP_ filter that shares the same target sub-pipline
+   * with other _muxHTTP_ filters coming from the same inbound connection.
    *
-   * A _muxHTTP_ filter implements HTTP/1 and HTTP/2 protocol on the client side.
-   *
-   * - **INPUT** - HTTP request _Message_ to send to the server.
-   * - **OUTPUT** - HTTP response _Message_ received from the server.
-   * - **SUB-INPUT** - _Data_ stream to send to the server with HTTP/1 or HTTP/2 requests.
-   * - **SUB-OUTPUT** - _Data_ stream received from the server with HTTP/1 or HTTP/2 responses.
+   * @returns The same _Configuration_ object.
    */
   muxHTTP(
     options?: MuxHTTPOptions | (() => MuxHTTPOptions),
@@ -689,6 +851,8 @@ interface Configuration {
    *
    * - **INPUT** - Stream of _Messages_ to combine.
    * - **OUTPUT** - Stream of combined _Messages_.
+   *
+   * @returns The same _Configuration_ object.
    */
   pack(
     batchSize?: number,
@@ -706,6 +870,8 @@ interface Configuration {
    *
    * - **INPUT** - Any types of _Events_.
    * - **OUTPUT** - Same Events as the input.
+   *
+   * @returns The same _Configuration_ object.
    */
   print(): Configuration;
 
@@ -716,6 +882,8 @@ interface Configuration {
    *
    * - **INPUT** - Any types of _Events_.
    * - **OUTPUT** - Any types of _Events_.
+   *
+   * @returns The same _Configuration_ object.
    */
   replaceData(handler?: (data: Data) => Event | Message | (Event|Message)[] | void): Configuration;
 
@@ -726,6 +894,8 @@ interface Configuration {
    *
    * - **INPUT** - Any types of _Events_.
    * - **OUTPUT** - Any types of _Events_.
+   *
+   * @returns The same _Configuration_ object.
    */
   replaceMessage(handler?: (msg: Message) => Event | Message | (Event|Message)[] | void): Configuration;
 
@@ -736,6 +906,8 @@ interface Configuration {
    *
    * - **INPUT** - Any types of _Events_.
    * - **OUTPUT** - Any types of _Events_.
+   *
+   * @returns The same _Configuration_ object.
    */
   replaceMessageBody(handler?: (data: Data) => Event | Message | (Event|Message)[] | void): Configuration;
 
@@ -746,6 +918,8 @@ interface Configuration {
    *
    * - **INPUT** - Any types of _Events_.
    * - **OUTPUT** - Any types of _Events_.
+   *
+   * @returns The same _Configuration_ object.
    */
   replaceMessageEnd(handler?: (evt: MessageEnd) => Event | Message | (Event|Message)[] | void): Configuration;
 
@@ -756,6 +930,8 @@ interface Configuration {
    *
    * - **INPUT** - Any types of _Events_.
    * - **OUTPUT** - Any types of _Events_.
+   *
+   * @returns The same _Configuration_ object.
    */
   replaceMessageStart(handler?: (evt: MessageStart) => Event | Message | (Event|Message)[] | void): Configuration;
 
@@ -766,6 +942,8 @@ interface Configuration {
    *
    * - **INPUT** - Any types of _Events_.
    * - **OUTPUT** - Any types of _Events_.
+   *
+   * @returns The same _Configuration_ object.
    */
   replaceStreamEnd(handler?: (evt: StreamEnd) => Event | Message | (Event|Message)[] | void): Configuration;
 
@@ -776,6 +954,8 @@ interface Configuration {
    *
    * - **INPUT** - Any types of _Events_.
    * - **OUTPUT** - Any types of _Events_.
+   *
+   * @returns The same _Configuration_ object.
    */
   replaceStreamStart(handler?: (evt: Event) => Event | Message | (Event|Message)[] | void): Configuration;
 
@@ -786,6 +966,8 @@ interface Configuration {
    *
    * - **INPUT** - _Data_ stream containing HTTP requests received from the client.
    * - **OUTPUT** - _Data_ stream containing HTTP responses to send to the client.
+   *
+   * @returns The same _Configuration_ object.
    */
   serveHTTP(handler: (request: Message) => Message): Configuration;
 
@@ -796,6 +978,8 @@ interface Configuration {
    *
    * - **INPUT** - _Messages_ to split.
    * - **OUTPUT** - _Messages_ splitted from the input.
+   *
+   * @returns The same _Configuration_ object.
    */
   split(separator: string | Data | (() => string | Data)): Configuration;
 
@@ -806,6 +990,8 @@ interface Configuration {
    *
    * - **INPUT** - Any types of _Events_.
    * - **OUTPUT** - Same _Events_ as the input.
+   *
+   * @returns The same _Configuration_ object.
    */
   tee(filename: string | (() => string)): Configuration;
 
@@ -816,6 +1002,8 @@ interface Configuration {
    *
    * - **INPUT** - Any types of _Events_.
    * - **OUTPUT** - Same _Events_ as the input.
+   *
+   * @returns The same _Configuration_ object.
    */
   throttleConcurrency(quota: Quota | (() => Quota)): Configuration;
 
@@ -826,6 +1014,8 @@ interface Configuration {
    *
    * - **INPUT** - Any types of _Events_.
    * - **OUTPUT** - Same _Events_ as the input.
+   *
+   * @returns The same _Configuration_ object.
    */
   throttleDataRate(quota: Quota | (() => Quota)): Configuration;
 
@@ -836,6 +1026,8 @@ interface Configuration {
    *
    * - **INPUT** - Any types of _Events_.
    * - **OUTPUT** - Same _Events_ as the input.
+   *
+   * @returns The same _Configuration_ object.
    */
   throttleMessageRate(quota: Quota | (() => Quota)): Configuration;
 
@@ -849,6 +1041,8 @@ interface Configuration {
    * - **OUTPUT** - _Events_ streaming out from the sub-pipeline.
    * - **SUB-INPUT** - _Events_ streaming into the _use_ filter.
    * - **SUB-OUTPUT** - Any types of _Events_.
+   *
+   * @returns The same _Configuration_ object.
    */
   use(filename: string, pipelineLayoutName?: string): Configuration;
 
@@ -858,7 +1052,9 @@ interface Configuration {
    * A _wait_ filter blocks all input _Events_ up until a condition is met.
    *
    * - **INPUT** - Any types of _Events_.
-   * - **OUTPUT** - Same _Events_ as the input.
+   * - **OUTPUT** - Same _Events_ as the input
+   *
+   * @returns The same _Configuration_ object.
    */
   wait(condition: () => boolean): Configuration;
 }

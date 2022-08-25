@@ -332,6 +332,7 @@ const useStyles = makeStyles(theme => ({
   returnValue: {
     fontFamily: FONT_TEXT,
     fontSize: '0.8rem',
+    fontStyle: 'italic',
     paddingLeft: theme.spacing(0.5),
     paddingRight: theme.spacing(0.5),
     paddingTop: '3px',
@@ -489,12 +490,27 @@ const SourceCode = ({ children, className }) => {
   );
 }
 
+const components = {
+  h1: makeStyledTag('h1'),
+  h2: makeStyledTag('h2'),
+  h3: makeStyledTag('h3'),
+  h4: makeStyledTag('h4'),
+  h5: makeStyledTag('h5'),
+  li: makeStyledTag('li', 'p'),
+  p: makeStyledTag('p'),
+  a: DocLink,
+  strong: makeStyledTag('strong'),
+  table: makeStyledTag('table'),
+  blockquote: Tip,
+  code: makeStyledTag('span', 'inlineCode'),
+}
+
 const Comment = ({ comment }) => {
   const classes = useStyles();
   return (
     <div className={classes.description}>
-      <ReactMarkdown>
-        {comment?.summary?.[0]?.text || '_No description_'}
+      <ReactMarkdown components={components}>
+        {comment?.summary || '_No description_'}
       </ReactMarkdown>
     </div>
   );
@@ -509,8 +525,8 @@ const Summary = () => {
   }
   return (
     <div className={classes.p}>
-      <ReactMarkdown>
-        {comment?.summary?.[0]?.text || '_No description_'}
+      <ReactMarkdown components={components}>
+        {comment?.summary || '_No description_'}
       </ReactMarkdown>
     </div>
   );
@@ -691,14 +707,14 @@ const Parameters = () => {
   return (
     <React.Fragment>
       {typedoc.overloads.map(
-        sig => {
+        (sig, i) => {
           const returns = sig.comment?.blockTags?.find?.(t => t.tag === '@returns');
           return [
             <Prototype
               name={typedoc.name === 'constructor' ? 'new ' + typedoc.memberOf : typedoc.name}
               parameters={sig.parameters}
             />,
-            <Comment comment={sig.comment}/>,
+            (i > 0 && <Comment comment={sig.comment}/>),
             <div className={classes.parameterList}>
               {sig.parameters?.map?.(
                 param => [
@@ -711,9 +727,9 @@ const Parameters = () => {
             </div>,
             returns && (
               <div className={classes.parameterList}>
-                <span className={classes.returnValue}>Return value</span>
+                <span className={classes.returnValue}>Return Value</span>
                 <div className={classes.description}>
-                  <ReactMarkdown>{returns.content[0].text}</ReactMarkdown>
+                  <ReactMarkdown>{returns.content}</ReactMarkdown>
                 </div>
               </div>
             )
@@ -724,18 +740,9 @@ const Parameters = () => {
   );
 }
 
-const components = {
-  h1: makeStyledTag('h1'),
-  h2: makeStyledTag('h2'),
-  h3: makeStyledTag('h3'),
-  h4: makeStyledTag('h4'),
-  h5: makeStyledTag('h5'),
-  li: makeStyledTag('li', 'p'),
-  p: makeStyledTag('p'),
-  a: DocLink,
-  strong: makeStyledTag('strong'),
-  table: makeStyledTag('table'),
-  blockquote: Tip,
+const componentsApi = {
+  ...components,
+
   code: SourceCode,
   inlineCode: makeStyledTag('span', 'inlineCode'),
 
@@ -960,7 +967,7 @@ const DocPage = ({ data }) => {
           <Typography component="h1" className={classes[`title_${lang}`] || classes.title}>
             {data.mdx.frontmatter.title}
           </Typography>
-          <MDXProvider components={components}>
+          <MDXProvider components={componentsApi}>
             <MDXRenderer headings={data.mdx.headings}>
               {data.mdx.body}
             </MDXRenderer>

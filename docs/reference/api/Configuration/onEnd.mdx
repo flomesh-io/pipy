@@ -5,4 +5,21 @@ api: Configuration.onEnd
 
 ## Description
 
-Registers a function to be called when a pipeline is destroyed.
+<Summary/>
+
+## Syntax
+
+``` js
+pipy()
+  .pipeline()
+  .onEnd(
+    () => onPipelineDestroyed()
+  )
+  .filterA()
+  .filterB()
+  // ...
+```
+
+# Parameters
+
+<Parameters/>

@@ -133,12 +133,37 @@ exports.sourceNodes = ({ actions, createNodeId, createContentDigest }) => {
     functions[f.name] = f;
   }
 
+  const mergeTexts = (texts) => {
+    if (typeof texts === 'string') return texts;
+    return texts.filter(i => i.kind === 'text' || i.kind === 'code').map(i => i.text).join('');
+  }
+
+  const mergeComment = (comment) => {
+    if (!comment) return undefined;
+    const { summary, blockTags } = comment;
+    return {
+      summary: summary && mergeTexts(summary),
+      blockTags: blockTags && blockTags.map(
+        ({tag, content}) => ({
+          tag,
+          content: mergeTexts(content),
+        })
+      )
+    }
+  }
+
+  const extractComments = ({ name, comment, overloads }) => {
+    const ret = { name, comment };
+    if (overloads) ret.overloads = overloads.map(({ comment, parameters }) => ({ comment: mergeComment(comment), parameters }));
+    return ret;
+  }
+
   const makePropertyNode = (data, memberOf) => {
     const { name, comment } = data;
     return {
       kind: 'property',
       name,
-      comment,
+      comment: mergeComment(comment),
       memberOf,
     };
   }
@@ -147,15 +172,15 @@ exports.sourceNodes = ({ actions, createNodeId, createContentDigest }) => {
     const { name, signatures } = data;
     const overloads = signatures.map(
       ({comment, parameters}) => ({
-        comment,
-        parameters: parameters?.map?.(({ name, comment, flags }) => ({ name, comment, flags }))
+        comment: mergeComment(comment),
+        parameters: parameters?.map?.(({ name, comment, flags }) => ({ name, comment: mergeComment(comment), flags }))
       })
     );
     const first = overloads[0];
     return {
       kind: 'function',
       name,
-      comment: first?.comment,
+      comment: mergeComment(first?.comment),
       overloads,
       memberOf,
     }
@@ -191,7 +216,7 @@ exports.sourceNodes = ({ actions, createNodeId, createContentDigest }) => {
     return {
       name,
       kind: 'class',
-      comment: data.comment,
+      comment: mergeComment(data.comment),
       constructors,
       properties,
       methods,
@@ -224,7 +249,7 @@ exports.sourceNodes = ({ actions, createNodeId, createContentDigest }) => {
     return {
       name,
       kind: 'namespace',
-      comment: data.comment,
+      comment: mergeComment(data.comment),
       variables,
       functions,
       classes,
@@ -246,12 +271,6 @@ exports.sourceNodes = ({ actions, createNodeId, createContentDigest }) => {
         Object.assign(f, rest);
       }
     }
-  }
-
-  const extractComments = ({ name, comment, overloads }) => {
-    const ret = { name, comment };
-    if (overloads) ret.overloads = overloads.map(({ comment, parameters }) => ({ comment, parameters }));
-    return ret;
   }
 
   const addNode = (name, data) => {

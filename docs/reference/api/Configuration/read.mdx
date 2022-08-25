@@ -5,32 +5,32 @@ api: Configuration.read
 
 ## Description
 
-Creates a pipeline layout to read and process Data from a file.
+<Summary/>
 
 The pathname of the file to read is specified in the first parameter. It can be `"-"` for reading from the standard input.
 
-After calling this method on a _Configuration_, the newly created pipeline layout would become current. Any _filter-creating_ methods called after this point would append filters to that layout, until another _pipeline-layout-creating_ method is called.
+After calling this method on a _Configuration_, the newly created pipeline layout would become current. Any _filter-creating_ methods called after this point would append filters to that pipeline layout, until another _pipeline-layout-creating_ method is called.
 
 ## Syntax
 
 ``` js
-pipy().read(filename)
+pipy()
+  .read(filename)
+  .filterA()
+  .filterB()
+  // ...
 ```
 
-### Parameters
+## Parameters
 
 <Parameters/>
-
-### Return value
-
-<ReturnValue/>
 
 ## Example
 
 ``` js
 pipy()
 
-.read('/path/to/input.txt') // Open and read from file /path/to/input.txt
+  .read('/path/to/input.txt') // Open and read from file /path/to/input.txt
   .dump() // Add filter, dump to stdout whatever is in the file
 ```
 

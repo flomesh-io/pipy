@@ -5,4 +5,29 @@ api: Configuration.to
 
 ## Description
 
-Attaches a sub-pipeline layout to the last joint filter.
+<Summary/>
+
+## Syntax
+
+``` js
+pipy()
+  .pipeline()
+  .someJointFilter().to(subPipelineLayoutName)
+  .otherFilters()
+  // ...
+
+pipy()
+  .pipeline()
+  .someJointFilter().to(
+    $=>$
+    .filterA()
+    .filterB()
+    // ...
+  )
+  .otherFilters()
+  // ...
+```
+
+## Parameters
+
+<Parameters/>

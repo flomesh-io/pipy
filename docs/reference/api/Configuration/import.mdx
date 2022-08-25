@@ -5,7 +5,7 @@ api: Configuration.import
 
 ## Description
 
-Imports global variables defined and exported from other modules.
+<Summary/>
 
 In PipyJS, global variables can be defined in two ways. One way is by [pipy()](/reference/api/pipy), where the variables are only visible to script in the same file. The other way is by using [Configuration.export()](/reference/api/Configuration/export), where the variables are not only visible to the file where they are defined, but also to other files where they are _imported_ with `Configuration.import()`.
 
@@ -18,16 +18,18 @@ After a variable is imported to a module, it can be used just like a global vari
 ## Syntax
 
 ``` js
-pipy().import({ ...variables })
+pipy()
+  .import({
+    contextVariable1: namespace1,
+    contextVariable2: namespace2,
+    contextVariable3: namespace3,
+    // ...
+  })
 ```
 
 ### Parameters
 
 <Parameters/>
-
-### Return value
-
-<ReturnValue/>
 
 ## Example
 
