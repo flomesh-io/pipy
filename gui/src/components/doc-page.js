@@ -609,7 +609,9 @@ const Prototype = ({ name, parameters, link }) => {
         </span>
       )}
       <span className={classes.parameterName}>
-        ({(parameters?.map?.(p => p.flags?.isOptional ? p.name + '?': p.name) || []).join(', ')})
+        ({(parameters?.map?.(
+          ({ name, flags }) => (flags?.isRest ? '...' : '') + name + (flags?.isOptional ? '?' : '')
+        ) || []).join(', ')})
       </span>
     </p>
   );
@@ -717,11 +719,13 @@ const Parameters = () => {
             (i > 0 && <Comment comment={sig.comment}/>),
             <div className={classes.parameterList}>
               {sig.parameters?.map?.(
-                param => [
+                ({ name, flags, comment }) => [
                   <span className={classes.inlineCode}>
-                    {param.name}
+                    {flags?.isRest && '...'}
+                    {name}
+                    {flags?.isOptional && '?'}
                   </span>,
-                  <Comment comment={param.comment}/>
+                  <Comment comment={comment}/>
                 ]
               )}
             </div>,

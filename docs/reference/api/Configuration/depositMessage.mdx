@@ -5,9 +5,7 @@ api: Configuration.depositMessage
 
 ## Description
 
-Appends a **depositMessage** filter to the current pipeline layout.
-
-A **depositMessage** filter buffers a whole message body in a temporary file. Its input and output are all messages.
+<Summary/>
 
 <FilterDiagram
   name="depositMessage"
@@ -21,7 +19,7 @@ This filter passes down messages unaltered. It doesn't change anything in a mess
 
 ### Option: threshold
 
-You can set a minimum message size for the writing to kick in by the option _threshold_ in the _options_ parameter. It can be a number in bytes, or a string ending with one of the size unit suffixes, such as `"k"`, `"m"` and `"g"`. Before the message body size has reached the threshold, events are simply passed through without delay. The default threshold is zero.
+You can set a minimum message size for the file writing to kick in by the option _threshold_ in the _options_ parameter. It can be a number in bytes, or a string ending with one of the size unit suffixes, such as `'k'`, `'m'`, `'g'` and `'t'`. Before the message body size has reached the threshold, events are simply passed through without delay. The default threshold is zero.
 
 ### Option: keep
 
@@ -31,33 +29,29 @@ By default, the temporary file will be deleted after the whole message has passe
 
 ``` js
 pipy()
-  .pipeline('example')
-    .depositMessage(filename)
+  .pipeline()
+  .depositMessage(filename)
 
 pipy()
-  .pipeline('example')
-    .depositMessage(
-      () => getFilename()
-    )
+  .pipeline()
+  .depositMessage(
+    () => getFilename()
+  )
 
 pipy()
-  .pipeline('example')
-    .depositMessage(
-      () => getFilename(),
-      {
-        threshold,
-        keep,
-      }
-    )
+  .pipeline()
+  .depositMessage(
+    () => getFilename(),
+    {
+      threshold,
+      keep,
+    }
+  )
 ```
 
-### Parameters
+## Parameters
 
 <Parameters/>
-
-### Return value
-
-<ReturnValue/>
 
 ## See Also
 

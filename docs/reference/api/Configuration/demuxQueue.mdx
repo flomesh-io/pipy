@@ -5,9 +5,7 @@ api: Configuration.demuxQueue
 
 ## Description
 
-Appends a **demuxQueue** filter to the current pipeline layout.
-
-A **demuxQueue** filter **de-multiplexes** [Messages](/reference/api/Message) from its input stream, distribute them to many sub-pipelines and multiplexes their output _Messages_ into a single _Message_ stream where the _Messages_ come in the same order as the input. Its input and output are _Messages_. Its sub-pipelines's input and output are also _Messages_.
+<Summary/>
 
 <FilterDiagram
   name="demuxQueue"
@@ -18,32 +16,33 @@ A **demuxQueue** filter **de-multiplexes** [Messages](/reference/api/Message) fr
   subType="demux"
 />
 
-A **demuxQueue** filter works like this:
+A _demuxQueue_ filter does the following:
 
-- At the input to a **demuxQueue** filter, _Messages_ are separated and queued up
-- For each input _Message_, a dedicated sub-pipeline is created, whose input will be that _Message_
-- At the output from the **demuxQueue** filter, output _Messages_ coming out of all sub-pipelines are queued and sent out in the same order as the input _Messages_ (compare to [demux()](/reference/api/Configuration/demux))
+- At the input to a _demuxQueue_ filter, _Messages_ are separated and queued up
+- For each input _Message_, a dedicated sub-pipeline is created, whose input is only that _Message_
+- At the output from the _demuxQueue_ filter, output _Messages_ coming out from all sub-pipelines are queued and spit out in the same order as in the input (compare to [demux()](/reference/api/Configuration/demux))
 
-One **demuxQueue** filter can have more than one sub-pipelines, each of which handles one _Message_. Compare this to [muxQueue()](/reference/api/Configuration/muxQueue).
+One _demuxQueue_ filter can have more than one sub-pipelines, each of which handles one _Message_. Compare this to [muxQueue()](/reference/api/Configuration/muxQueue).
 
 ## Syntax
 
 ``` js
 pipy()
-  .pipeline('example')
-    .demuxQueue(layout)
+  .pipeline()
+  .demuxQueue().to(
+    subPipelineLayout
+  )
 ```
 
-### Return value
+## Parameters
 
-<ReturnValue/>
+<Parameters/>
 
 ## See Also
 
 * [Configuration](/reference/api/Configuration)
 * [demux()](/reference/api/Configuration/demux)
 * [demuxHTTP()](/reference/api/Configuration/demuxHTTP)
-* [merge()](/reference/api/Configuration/merge)
 * [muxQueue()](/reference/api/Configuration/muxQueue)
 * [muxHTTP()](/reference/api/Configuration/muxHTTP)
 * [serveHTTP()](/reference/api/Configuration/serveHTTP)

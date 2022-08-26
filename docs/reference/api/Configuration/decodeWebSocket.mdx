@@ -5,9 +5,7 @@ api: Configuration.decodeWebSocket
 
 ## Description
 
-Appends a **decodeWebSocket** filter to the current pipeline layout.
-
-A **decodeWebSocket** filter decodes [WebSocket](https://en.wikipedia.org/wiki/WebSocket) messages in its input [Data](/reference/api/Data) and outputs [Messages](/reference/api/Message) after decoding. Its input is a _Data_ stream and its output is a _Message_ stream.
+<Summary/>
 
 <FilterDiagram
   name="decodeWebSocket"
@@ -15,7 +13,7 @@ A **decodeWebSocket** filter decodes [WebSocket](https://en.wikipedia.org/wiki/W
   output="Message"
 />
 
-The _Messages_ after decoding will have these contents:
+After decoding, the output [Message](/reference/api/Message) has:
 
 * _head_
   - _opcode_ - Interpretation of the payload
@@ -34,50 +32,49 @@ The _opcode_ can be:
 
 ``` js
 pipy()
-  .pipeline('example')
-    .decodeWebSocket()
+  .pipeline()
+  .decodeWebSocket()
 ```
 
-### Return value
+## Parameters
 
-<ReturnValue/>
+<Parameters/>
 
 ## Example
 
 ``` js
 pipy()
 
-.listen(8080)
-  .demuxHTTP('req')
-
-.pipeline('req')
-  .acceptHTTPTunnel(
-    'tunnel',
-    msg => (
-      ((hash) => (
-        hash = new crypto.Hash('sha1'),
-        hash.update(
-          msg.head.headers['sec-websocket-key'] +
-          '258EAFA5-E914-47DA-95CA-C5AB0DC85B11'
-        ),
-        new Message({
-          status: 101,
-          headers: {
-            'upgrade': 'websocket',
-            'connection': 'upgrade',
-            'sec-websocket-accept': hash.digest('base64'),
-          }
-        })
-      ))()
+  .listen(8080)
+  .demuxHTTP().to(
+    $=>$.acceptHTTPTunnel(
+      msg => (
+        ((
+          hash = new crypto.Hash('sha1'),
+        ) => (
+          hash.update(
+            msg.head.headers['sec-websocket-key'] +
+            '258EAFA5-E914-47DA-95CA-C5AB0DC85B11'
+          ),
+          new Message({
+            status: 101,
+            headers: {
+              'upgrade': 'websocket',
+              'connection': 'upgrade',
+              'sec-websocket-accept': hash.digest('base64'),
+            }
+          })
+        ))()
+      )
+    ).to(
+      $=>$
+      .decodeWebSocket()
+      .replaceMessage(
+        () => new Message({ opcode: 1 }, 'yay!')
+      )
+      .encodeWebSocket()
     )
   )
-
-.pipeline('tunnel')
-  .decodeWebSocket()
-  .replaceMessage(
-    () => new Message({ opcode: 1 }, 'yay!')
-  )
-  .encodeWebSocket()
 ```
 
 ## See Also

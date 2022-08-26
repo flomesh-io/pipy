@@ -5,9 +5,7 @@ api: Configuration.dump
 
 ## Description
 
-Appends a **dump** filter to the current pipeline layout.
-
-A **dump** filter prints out all events in the input stream to the standard output. Its input and output can be any kinds of events.
+<Summary/>
 
 <FilterDiagram
   name="dump"
@@ -28,21 +26,21 @@ This filter passes everything down unaltered. It doesn't change anything in the 
 
 ``` js
 pipy()
-  .pipeline('example')
-    .dump()
+  .pipeline()
+  .dump()
 
 pipy()
-  .pipeline('example')
-    .dump(tag)
+  .pipeline()
+  .dump(tag)
+
+pipy()
+  .pipeline()
+  .dump(() => getTag())
 ```
 
-### Parameters
+## Parameters
 
 <Parameters/>
-
-### Return value
-
-<ReturnValue/>
 
 ## See Also
 

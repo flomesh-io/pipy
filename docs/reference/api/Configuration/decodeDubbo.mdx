@@ -5,9 +5,7 @@ api: Configuration.decodeDubbo
 
 ## Description
 
-Appends a **decodeDubbo** filter to the current pipeline layout.
-
-A **decodeDubbo** filter decodes [Dubbo](https://dubbo.apache.org/) messages in its input [Data](/reference/api/Data) and outputs [Messages](/reference/api/Message) after decoding. Its input is a _Data_ stream and its output is a _Message_ stream.
+<Summary/>
 
 <FilterDiagram
   name="decodeDubbo"
@@ -15,7 +13,7 @@ A **decodeDubbo** filter decodes [Dubbo](https://dubbo.apache.org/) messages in 
   output="Message"
 />
 
-The _Messages_ after decoding will have these contents:
+After decoding, the output [Message](/reference/api/Message) has:
 
 * _head_
   - _id_ - Request ID as a string
@@ -31,38 +29,44 @@ The body data is a [Data](/reference/api/Data) object left without being decoded
 
 ``` js
 pipy()
-  .pipeline('example')
-    .decodeDubbo()
+  .pipeline()
+  .decodeDubbo()
 ```
 
-### Return value
+## Parameters
 
-<ReturnValue/>
+<Parameters/>
 
 ## Example
 
 ``` js
 pipy()
 
-.listen(20880)
+  .listen(20880)
   .decodeDubbo()
-  .demux('req')
-  .encodeDubbo({
-    isRequest: false,
-  })
-
-.pipeline('req')
-  .replaceMessageBody(
-    data => (
-      JSON.encode(
-        Hessian.decode(data)
+  .demuxQueue().to(
+    $=>$
+    .replaceMessageBody(
+      data => (
+        JSON.encode(
+          Hessian.decode(data)
+        )
+      )
+    )
+    .muxHTTP().to(
+      $=>$.connect('localhost:8080')
+    )
+    .replaceMessageBody(
+      data => (
+        Hessian.encode(
+          JSON.decode(data)
+        )
       )
     )
   )
-  .muxHTTP('conn', () => __inbound)
-
-.pipeline('conn')
-  .connect('localhost:8080')
+  .encodeDubbo({
+    isRequest: false,
+  })
 ```
 
 ## See Also

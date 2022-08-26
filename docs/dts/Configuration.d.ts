@@ -37,8 +37,8 @@ interface Configuration {
   /**
    * Defines context variables that are accessible to other modules.
    *
-   * @param namespace - The namespace to refer when being imported in other modules.
-   * @param variables - An object containing key-value pairs of context variable names and their initial values.
+   * @param namespace The namespace to refer when being imported in other modules.
+   * @param variables An object containing key-value pairs of context variable names and their initial values.
    * @returns The same _Configuration_ object.
    */
   export(namespace: string, variables: { [key: string]: any }): Configuration;
@@ -46,7 +46,7 @@ interface Configuration {
   /**
    * Imports context variables defined and exported from other modules.
    *
-   * @param variables - An object containing key-value pairs of context variable names and their namespaces.
+   * @param variables An object containing key-value pairs of context variable names and their namespaces.
    * @returns The same _Configuration_ object.
    */
   import(variables: { [key: string]: string }): Configuration;
@@ -59,19 +59,19 @@ interface Configuration {
    * - **INPUT** - _Data_ stream received from the client.
    * - **OUTPUT** - _Data_ stream to send to the client.
    *
-   * @param port - Port number to listen on, or _null_ to skip this pipeline layout.
-   * @param options - Options including:
-   *   - _protocol_ - Can be _"tcp"_ or _"udp"_. Default is _"tcp"_.
+   * @param port Port number to listen on, or _null_ to skip this pipeline layout.
+   * @param options Options including:
+   *   - _protocol_ - Can be `"tcp"` or `"udp"`. Default is `"tcp"`.
    *   - _maxPacketSize_ - Maximum packet size when using UDP. Default is 16KB.
-   *   - _maxConnections_ - Maximum number of concurrent connections. Default is -1, which means _"unlimited"_.
-   *   - _readTimeout_ - Timeout duration for reading, in seconds.
-   *       Can be a string with one of the time unit suffixes such as `s`, `m` or `h`.
+   *   - _maxConnections_ - Maximum number of concurrent connections. Default is -1, which means _unlimited_.
+   *   - _readTimeout_ - Timeout duration for reading.
+   *       Can be a number in seconds or a string with one of the time unit suffixes such as `s`, `m` or `h`.
    *       Defaults to no timeout (waiting forever).
-   *   - _writeTimeout_ - Timeout duration for writing, in seconds.
-   *       Can be a string with one of the time unit suffixes such as `s`, `m` or `h`.
+   *   - _writeTimeout_ - Timeout duration for writing.
+   *       Can be a number in seconds or a string with one of the time unit suffixes such as `s`, `m` or `h`.
    *       Defaults to no timeout (waiting forever).
    *   - _idleTimeout_ - Time in seconds before connection is closed due to no active reading or writing.
-   *       Can be a string with one of the time unit suffixes such as `s`, `m` or `h`.
+   *       Can be a number in seconds or a string with one of the time unit suffixes such as `s`, `m` or `h`.
    *       Defaults to 1 minute.
    *   - _transparent_ - Set to _true_ to enable [transparent proxy](https://en.wikipedia.org/wiki/Proxy_server#Transparent_proxy) mode,
    *       where the original destination address and port can be found through `__inbound.destinationAddress` and `__inbound.destinationPort` properties.
@@ -88,7 +88,7 @@ interface Configuration {
    * - **INPUT** - _Data_ stream from the file.
    * - **OUTPUT** - Discarded.
    *
-   * @param filename - Pathname of the file to read from. Can be `"-"` for reading from the standard input.
+   * @param filename Pathname of the file to read from. Can be `"-"` for reading from the standard input.
    * @returns The same _Configuration_ object.
    */
   read(filename: string): Configuration;
@@ -101,11 +101,11 @@ interface Configuration {
    * - **INPUT** - Nothing.
    * - **OUTPUT** - Discarded.
    *
-   * @param intervalOrSignal - Can be either:
+   * @param intervalOrSignal Can be either:
    *   - _Nothing (undefined)_ - Create a pipeline only at startup time.
    *   - _A time duration_ - Create a pipeline regularly every specified amount of time.
    *       Can be a number in seconds or a string with one of the time unit suffixes such as `s`, `m` or `h`.
-   *   - _A signal name_ - Create a pipeline when receiving a signal, e.g. _"SIGHUP"_, _"SIGINT"_.
+   *   - _A signal name_ - Create a pipeline when receiving a signal, e.g. `"SIGHUP"`, `"SIGINT"`.
    * @returns The same _Configuration_ object.
    */
   task(intervalOrSignal?: number | string): Configuration;
@@ -118,7 +118,7 @@ interface Configuration {
    * - **INPUT** - Any types of _Events_.
    * - **OUTPUT** - Any types of _Events_.
    *
-   * @param name - The name of the sub-pipeline, or the _module entry_ pipeline layout is created if the name is absent.
+   * @param name The name of the sub-pipeline, or the _module entry_ pipeline layout is created if the name is absent.
    * @returns The same _Configuration_ object.
    */
   pipeline(name?: string): Configuration;
@@ -126,7 +126,7 @@ interface Configuration {
   /**
    * Registers a function to be called when a pipeline is created.
    *
-   * @param handler - A function that is called every time a new pipeline instance is created.
+   * @param handler A function that is called every time a new pipeline instance is created.
    *   Its return value, if any, is an _Event_ or a _Message_ or an array of them that makes up the initial input to the pipeline.
    * @returns The same _Configuration_ object.
    */
@@ -135,7 +135,7 @@ interface Configuration {
   /**
    * Registers a function to be called when a pipeline is destroyed.
    *
-   * @param handler - A function that is called every time the pipeline instance is destroyed.
+   * @param handler A function that is called every time the pipeline instance is destroyed.
    * @returns The same _Configuration_ object.
    */
   onEnd(handler: () => void): Configuration;
@@ -143,8 +143,8 @@ interface Configuration {
   /**
    * Attaches a sub-pipeline layout to the last joint filter.
    *
-   * @param pipelineLayout - The name of a sub-pipeline layout, or a function that receives a _Configuration_ object
-   *   for configuring an anonymous sub-pipeline.
+   * @param pipelineLayout The name of a sub-pipeline layout, or a function that receives a _Configuration_ object
+   *   for configuring an anonymous sub-pipeline layout.
    * @returns The same _Configuration_ object.
    */
   to(pipelineLayout: string | ((pipelineConfigurator: Configuration) => void)): Configuration;
@@ -159,7 +159,7 @@ interface Configuration {
    * - **SUB-INPUT** - _Data_ stream received from the client via HTTP tunnel.
    * - **SUB-OUTPUT** - _Data_ stream to send to the client via HTTP tunnel.
    *
-   * @param handler - A function that receives the starting request _Message_ and returns a response _Message_.
+   * @param handler A function that receives the starting request _Message_ and returns a response _Message_.
    * @returns The same _Configuration_ object.
    */
   acceptHTTPTunnel(handler: (request: Message) => Message): Configuration;
@@ -167,13 +167,15 @@ interface Configuration {
   /**
    * Appends an _acceptSOCKS_ filter to the current pipeline layout.
    *
-   * An _acceptSOCKS_ filter implements SOCKS protocol on the server side.
+   * An _acceptSOCKS_ filter implements [SOCKS](https://en.wikipedia.org/wiki/SOCKS) protocol on the server side.
    *
    * - **INPUT** - _Data_ stream received from the client with a leading SOCKS connection request.
    * - **OUTPUT** - _Data_ stream to send to the client with a leading SOCKS connection response.
    * - **SUB-INPUT** - _Data_ stream received from the client via SOCKS.
    * - **SUB-OUTPUT** - _Data_ stream to send to the client via SOCKS.
    *
+   * @param handler A function that receives _host_, _port_ and _username_ of the SOCKS request and
+   *   returns _true_ to accept the connection or _false_ to refuse it
    * @returns The same _Configuration_ object.
    */
   acceptSOCKS(handler: (host, port, id) => boolean): Configuration;
@@ -181,13 +183,22 @@ interface Configuration {
   /**
    * Appends an _acceptTLS_ filter to the current pipeline layout.
    *
-   * An _acceptTLS_ filter implements TLS protocol on the server side.
+   * An _acceptTLS_ filter implements [TLS](https://en.wikipedia.org/wiki/Transport_Layer_Security) protocol on the server side.
    *
    * - **INPUT** - TLS-encrypted _Data_ stream received from the client.
    * - **OUTPUT** - TLS-encrypted _Data_ stream to send to the client.
    * - **SUB-INPUT** - _Data_ stream received from the client after TLS decryption.
    * - **SUB-OUTPUT** - _Data_ stream to send to the client before TLS encryption.
    *
+   * @param options Options including:
+   *   - _certificate_ - (required) An object containing _cert_ and _key_ or a function that returns such an object
+   *       after receiving _sni_ for the requested server name.
+   *       In both cases, _cert_ can be a _crypto.Certificate_ or a _crypto.CertificateChain_
+   *       and _key must be a _crypto.PrivateKey_.
+   *   - _trusted_ - (optional) An array of _crypto.Certificate_ objects for allowed client certificates
+   *   - _alpn_ - (optional) An array of allowed protocol names, or a function that receives an array of client-preferred protocol names
+   *       and returns the index of the server-chosen protocol in that array.
+   *   - _handshake_ - (optional) A callback function that receives the negotiated protocol name after handshake.
    * @returns The same _Configuration_ object.
    */
   acceptTLS(
@@ -210,6 +221,11 @@ interface Configuration {
    * - **SUB-INPUT** - _Events_ streaming into the _branch_ filter.
    * - **SUB-OUTPUT** - Any types of _Events_.
    *
+   * @param condition A function that returns _true_ to select the sub-pipeline layout coming after
+   * @param pipelineLayout The name of a sub-pipeline layout, or a function that receives a _Configuration_ object
+   *   for configuring an anonymous sub-pipeline layout.
+   * @param restBranches Other _condition/pipelineLayout_ pairs to select from, with an optional
+   *   single _pipelineLayout_ at the end for the fallback branch.
    * @returns The same _Configuration_ object.
    */
   branch(
@@ -232,6 +248,7 @@ interface Configuration {
    * - **SUB-INPUT** - _Events_ streaming into the _chain_ filter.
    * - **SUB-OUTPUT** - Any types of _Events_.
    *
+   * @param modules An array of module filenames.
    * @returns The same _Configuration_ object.
    */
   chain(modules?: string[]): Configuration;
@@ -244,6 +261,13 @@ interface Configuration {
    * - **INPUT** - HTTP _Messages_ to compress.
    * - **OUTPUT** - Compressed HTTP _Messages_.
    *
+   * @param options Options including:
+   *   - method - Compression method or a function that returns the compression method.
+   *       Available compression methods are `"deflate"`, `"gzip"` and  `""` for no compression.
+   *       Default is `""`.
+   *   - level - Compression level or a function that returns the compression level.
+   *       Available compression levels are `"default"`, `"speed"` and `"best"`.
+   *       Default is `"default"`.
    * @returns The same _Configuration_ object.
    */
   compressHTTP(
@@ -261,6 +285,13 @@ interface Configuration {
    * - **INPUT** - _Messages_ to compress.
    * - **OUTPUT** - Compressed _Messages_.
    *
+   * @param options Options including:
+   *   - method - Compression method or a function that returns the compression method.
+   *       Available compression methods are `"deflate"`, `"gzip"` and  `""` for no compression.
+   *       Default is `""`.
+   *   - level - Compression level or a function that returns the compression level.
+   *       Available compression levels are `"default"`, `"speed"` and `"best"`.
+   *       Default is `"default"`.
    * @returns The same _Configuration_ object.
    */
   compressMessage(
@@ -278,6 +309,24 @@ interface Configuration {
    * - **INPUT** - _Data_ stream to send to the host.
    * - **OUTPUT** - _Data_ stream received from the host.
    *
+   * @param target The target to connect to, in form of `"<host>:<port>"`, or a function that returns the target.
+   * @param options Options including:
+   *   - _bufferLimit_ - Maximum size of data allowed to stay in buffer due to slow outbound bandwidth.
+   *      Can be a number in bytes or a string with a unit suffix such as `'k'`, `'m'`, `'g'` and `'t'`.
+   *   - _retryCount_ - How many times it should retry connection after a failure, or -1 for the infinite retries. Defaults to 0.
+   *   - _retryDelay_ - Time duration to wait between connection retries. Defaults to 0.
+   *   - _connectTimeout_ - Timeout while connecting.
+   *       Can be a number in seconds or a string with one of the time unit suffixes such as `s`, `m` or `h`.
+   *       Defaults to no timeout.
+   *   - _readTimeout_ - Timeout while reading.
+   *       Can be a number in seconds or a string with one of the time unit suffixes such as `s`, `m` or `h`.
+   *       Defaults to no timeout.
+   *   - _writeTimeout_ - Timeout while writing.
+   *       Can be a number in seconds or a string with one of the time unit suffixes such as `s`, `m` or `h`.
+   *       Defaults to no timeout.
+   *   - _idleTimeout_ - Duration before connection is closed due to no active reading or writing.
+   *       Can be a number in seconds or a string with one of the time unit suffixes such as `s`, `m` or `h`.
+   *       Defaults to 1 minute.
    * @returns The same _Configuration_ object.
    */
   connect(
@@ -296,13 +345,14 @@ interface Configuration {
   /**
    * Appends a _connectHTTPTunnel_ filter to the current pipeline layout.
    *
-   * A _connectHTTPTunnel_ filter implements HTTP tunnel on the client side.
+   * A _connectHTTPTunnel_ filter implements [HTTP tunnel](https://en.wikipedia.org/wiki/HTTP_tunnel) on the client side.
    *
    * - **INPUT** - _Data_ stream to send to the server via HTTP tunnel.
    * - **OUTPUT** - _Data_ stream received from the server via HTTP tunnel.
    * - **SUB-INPUT** - _Data_ stream to send to the server with a leading HTTP CONNECT request _Message_.
    * - **SUB-OUTPUT** - _Data_ stream received from the server with a leading HTTP CONNECT response _Message_.
    *
+   * @param target The target to connect to, or a function that returns the target.
    * @returns The same _Configuration_ object.
    */
   connectHTTPTunnel(target: string | (() => string)): Configuration;
@@ -310,13 +360,14 @@ interface Configuration {
   /**
    * Appends a _connectSOCKS_ filter to the current pipeline layout.
    *
-   * A _connectSOCKS_ filter implements SOCKS protocol on the client side.
+   * A _connectSOCKS_ filter implements [SOCKS](https://en.wikipedia.org/wiki/SOCKS) protocol on the client side.
    *
    * - **INPUT** - _Data_ stream to send to the server via SOCKS.
    * - **OUTPUT** - _Data_ stream received from the server via SOCKS.
    * - **SUB-INPUT** - _Data_ stream to send to the server with a leading SOCKS connection request.
    * - **SUB-OUTPUT** - _Data_ stream received from the server with a leading SOCKS connection response.
    *
+   * @param target The destination to connect to, in form of `"<host>:<port>"`, or a function that returns the destination.
    * @returns The same _Configuration_ object.
    */
   connectSOCKS(target: string | (() => string)): Configuration;
@@ -324,13 +375,21 @@ interface Configuration {
   /**
    * Appends a connectTLS filter to the current pipeline layout.
    *
-   * A connectTLS filter implements TLS protocol on the client side.
+   * A connectTLS filter implements [TLS](https://en.wikipedia.org/wiki/Transport_Layer_Security) protocol on the client side.
    *
    * - **INPUT** - _Data_ stream to send to the server via TLS.
    * - **OUTPUT** - _Data_ stream received from the server via TLS.
    * - **SUB-INPUT** - TLS-encrypted _Data_ stream to send to the server.
    * - **SUB-OUTPUT** - TLS-encrypted _Data_ stream received from the server.
    *
+   * @param options Options including:
+   *   - _certificate_ - (optional) An object containing _cert_ and _key_ or a function that returns such an object.
+   *       In both cases, _cert_ can be a _crypto.Certificate_ or a _crypto.CertificateChain_
+   *       and _key must be a _crypto.PrivateKey_.
+   *   - _trusted_ - (optional) An array of _crypto.Certificate_ objects for allowed server certificates
+   *   - _sni_ - (optional) SNI server name or a function that returns it
+   *   - _alpn_ - (optional) Requested protocol name or an array of preferred protocol names
+   *   - _handshake_ - (optional) A callback function that receives the negotiated protocol name after handshake.
    * @returns The same _Configuration_ object.
    */
   connectTLS(
@@ -346,7 +405,7 @@ interface Configuration {
   /**
    * Appends a _decodeDubbo_ filter to the current pipeline layout.
    *
-   * A _decodeDubbo_ filter decodes Dubbo messages from a raw byte stream.
+   * A _decodeDubbo_ filter decodes [Dubbo](https://dubbo.apache.org/) messages from a raw byte stream.
    *
    * - **INPUT** - _Data_ stream to decode Dubbo messages from.
    * - **OUTPUT** - Dubbo _Messages_ decoded from the input _Data_ stream.
@@ -365,8 +424,7 @@ interface Configuration {
    *
    * @returns The same _Configuration_ object.
    */
-   decodeHTTPRequest(): Configuration;
-
+  decodeHTTPRequest(): Configuration;
 
   /**
    * Appends a _decodeHTTPResponse_ filter to the current pipeline layout.
@@ -376,6 +434,9 @@ interface Configuration {
    * - **INPUT** - _Data_ stream to decode HTTP/1 response messages from.
    * - **OUTPUT** - HTTP/1 response _Messages_ decoded from the input _Data_ stream.
    *
+   * @param options Options including:
+   *   - _bodiless_ - (optional) Whether the input response has a body.
+   *       Can be a boolean or a function that returns a boolean.
    * @returns The same _Configuration_ object.
    */
    decodeHTTPResponse(
@@ -385,11 +446,14 @@ interface Configuration {
   /**
    * Appends a _decodeMQTT_ filter to the current pipeline layout.
    *
-   * A _decodeMQTT_ filter decodes MQTT packets from a raw byte stream.
+   * A _decodeMQTT_ filter decodes [MQTT](https://mqtt.org/) packets from a raw byte stream.
    *
    * - **INPUT** - _Data_ stream to decode MQTT packets from.
    * - **OUTPUT** - MQTT packets _(Messages)_ decoded from the input _Data_ stream.
    *
+   * @param options Options including:
+   *   - _protocolLevel_ - Version of MQTT protocol.
+   *     Can be 4 for MQTT v3.1.1, or 5 for MQTT v5.0, or a function that returns 4 or 5.
    * @returns The same _Configuration_ object.
    */
   decodeMQTT(
@@ -411,7 +475,7 @@ interface Configuration {
   /**
    * Appends a _decodeWebSocket_ filter to the current pipeline layout.
    *
-   * A _decodeWebSocket_ filter decodes WebSocket messages from a raw byte stream.
+   * A _decodeWebSocket_ filter decodes [WebSocket](https://en.wikipedia.org/wiki/WebSocket) messages from a raw byte stream.
    *
    * - **INPUT** - _Data_ stream to decode WebSocket messages from.
    * - **OUTPUT** - WebSocket _Messages_ decoded from the input _Data_ stream.
@@ -428,6 +492,7 @@ interface Configuration {
    * - **INPUT** - HTTP _Messages_ to decompress.
    * - **OUTPUT** - Decompressed HTTP _Messages_.
    *
+   * @param enable A function that returns _true_ to enable HTTP message decompression.
    * @returns The same _Configuration_ object.
    */
   decompressHTTP(enable?: () => boolean): Configuration;
@@ -440,13 +505,17 @@ interface Configuration {
    * - **INPUT** - _Messages_ to decompress.
    * - **OUTPUT** - Decompressed _Messages_.
    *
+   * @param algorithm Algorithm used in decompression.
+   *   Available algorithms include `"inflate"`, `"brotli"`, and `""` for no decompression.
+   *   Can be one of these strings or a function that returns one of them.
    * @returns The same _Configuration_ object.
    */
-  decompressMessage(algorithm: () => '' | 'deflate' | 'gzip' | 'brotli'): Configuration;
+  decompressMessage(algorithm: string | (() => '' | 'inflate' | 'brotli')): Configuration;
 
   /**
    * Appends a _deframe_ filter to the current pipeline layout.
    *
+   * @param states An object containing key-value pairs of state names and their corresponding handling functions.
    * @returns The same _Configuration_ object.
    */
   deframe(
@@ -479,6 +548,8 @@ interface Configuration {
    * - **SUB-INPUT** - HTTP request _Message_ received from the client.
    * - **SUB-OUTPUT** - HTTP response _Message_ to send to the client.
    *
+   * @param options Options including:
+   *   - _bufferSize_ - The minimum body size above which a message should be transferred in chunks.
    * @returns The same _Configuration_ object.
    */
   demuxHTTP(options? : {
@@ -508,6 +579,12 @@ interface Configuration {
    * - **INPUT** - _Message_ to store in a file.
    * - **OUTPUT** - The same _Message_ as input.
    *
+   * @param filename Filename of a temporary file to write to, or a function that returns it.
+   * @param options Options including:
+   *   - _threshold_ - Minimum message body size for the file writing to start.
+   *     Can be a number in bytes or a string with one of the size unit suffixes such as `'k'`, `'m'`, `'g'` and `'t'`.
+   *     Default is zero.
+   *   - _keep_ - Whether the temporary file should be kept after the message has fully passed.
    * @returns The same _Configuration_ object.
    */
   depositMessage(
@@ -526,6 +603,9 @@ interface Configuration {
    * - **INPUT** - _Data_ stream to detect protocol for.
    * - **OUTPUT** - The same _Data_ stream as input.
    *
+   * @param handler A function that receives the detected protocol.
+   *   Its parameter can be `"TLS"` or `"HTTP"`.
+   *   When no known protocols can be detected, it receives `""`.
    * @returns The same _Configuration_ object.
    */
   detectProtocol(handler: (protocol: string) => void): Configuration;
@@ -550,6 +630,7 @@ interface Configuration {
    * - **INPUT** - Any types of _Events_.
    * - **OUTPUT** - The same _Events_ from the input.
    *
+   * @param tag A value to be printed along with the dump output, or a function that returns such a value.
    * @returns The same _Configuration_ object.
    */
   dump(tag?: string | (() => any)): Configuration;

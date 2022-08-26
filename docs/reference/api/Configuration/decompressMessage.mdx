@@ -5,9 +5,7 @@ api: Configuration.decompressMessage
 
 ## Description
 
-Appends a **decompressMessage** filter to the current pipeline layout.
-
-A **decompressMessage** filter decompresses the bodies of [Messages](/reference/api/Message). Its input and output are both _Messages_.
+<Summary/>
 
 <FilterDiagram
   name="decompressMessage"
@@ -23,23 +21,19 @@ You can also give a function to _algorithm_ that dynamically returns the algorit
 
 ``` js
 pipy()
-  .pipeline('example')
-    .decompressMessage(algorithm)
+  .pipeline()
+  .decompressMessage(algorithm)
 
 pipy()
-  .pipeline('example')
-    .decompressMessage(
-      () => whatAlgorithm()
-    )
+  .pipeline()
+  .decompressMessage(
+    () => whatAlgorithm()
+  )
 ```
 
-### Parameters
+## Parameters
 
 <Parameters/>
-
-### Return value
-
-<ReturnValue/>
 
 ## See Also
 

@@ -5,9 +5,7 @@ api: Configuration.acceptTLS
 
 ## Description
 
-Appends an **acceptTLS** filter to the current pipeline layout.
-
-An **acceptTLS** filter implements [TLS](https://en.wikipedia.org/wiki/Transport_Layer_Security) protocol on the server side. Its input and output are [Data](/reference/api/Data) streams (usually TCP streams). Its sub-pipeline's input and output are also _Data_ streams.
+<Summary/>
 
 <FilterDiagram
   name="acceptTLS"
@@ -18,7 +16,7 @@ An **acceptTLS** filter implements [TLS](https://en.wikipedia.org/wiki/Transport
   subType="link"
 />
 
-An **acceptTLS** filter works like this:
+An _acceptTLS_ filter does the following:
 
 - First, it handles a TLS handshake by reading handshake messages from the client via its input and sending messages back to the client via its output
 - After the handshake is done, it goes on reading and decrypting the _Data_ stream from the filter's input and pumping the decrypted _Data_ stream to a newly created sub-pipeline
@@ -46,18 +44,15 @@ For example,
 ``` js
 pipy()
   .listen(8443)
-    .acceptTLS(
-      'tls-offloaded',
-      {
-        certificate: {
-          // ...
-        },
-        // Select HTTP/2 if requested, or HTTP/1.1
-        alpn: names => (
-          ((names.indexOf('h2')+1) || (names.indexOf('http/1.1')+1)) - 1
-        )
-      }
+  .acceptTLS({
+    certificate: {
+      // ...
+    },
+    // Select HTTP/2 if requested, or HTTP/1.1
+    alpn: names => (
+      ((names.indexOf('h2')+1) || (names.indexOf('http/1.1')+1)) - 1
     )
+  }).to('tls-offloaded')
 ```
 
 You can also simply give an array of strings to this option, telling what protocols should be accepted during TLS handshake.
@@ -65,15 +60,12 @@ You can also simply give an array of strings to this option, telling what protoc
 ``` js
 pipy()
   .listen(8443)
-    .acceptTLS(
-      'tls-offloaded',
-      {
-        certificate: {
-          // ...
-        },
-        alpn: ['http/1.1', 'h2']
-      }
-    )
+  .acceptTLS({
+    certificate: {
+      // ...
+    },
+    alpn: ['http/1.1', 'h2']
+  }).to('tls-offloaded')
 ```
 
 If nothing is provided, or the callback function returns an invalid index, the first protocol requested by the client side would be chosen.
@@ -86,61 +78,42 @@ A handshake callback function can be given to the _handshake_ option in the _opt
 
 ``` js
 pipy()
-  .pipeline('example')
-    .acceptTLS(
-      layout,
-      {
-        certificate: {
-          cert, // crypto.Certificate or crypto.CertificateChain
-          key,  // crypto.PrivateKey
-        },
-        trusted: [
-          ...trustedCerts // array of crypto.Certificate
-        ],
-        alpn: [...allowedProtocols],
-        handshake: (chosenProtocol) => onHandshakeComplete(chosenProtocol),
-      }
-    )
-
-pipy()
-  .pipeline('example')
-    .acceptTLS(
-      layout,
-      {
-        // whatCert should return { cert, key } as above
-        certificate: serverName => whatCert(serverName),
-      }
-    )
+  .pipeline()
+  .acceptTLS({
+    certificate: {
+      cert, // crypto.Certificate or crypto.CertificateChain
+      key,  // crypto.PrivateKey
+    },
+    trusted: [
+      ...trustedCerts // array of crypto.Certificate
+    ],
+    alpn: [...allowedProtocols],
+    handshake: (chosenProtocol) => onHandshakeComplete(chosenProtocol),
+  }).to(
+    subPipelineLayout
+  )
 ```
 
-### Parameters
+## Parameters
 
 <Parameters/>
-
-### Return value
-
-<ReturnValue/>
 
 ## Example
 
 ``` js
 pipy()
 
-.listen(8443)
-  .acceptTLS(
-    'tls-offloaded',
-    {
-      certificate: {
-        // Suppose we have server-cert.pem and server-key.pem in 'secret' folder
-        cert: new crypto.Certificate(pipy.load('secret/server-cert.pem')),
-        key: new crypto.Certificate(pipy.load('secret/server-key.pem')),
-      }
+  .listen(8443)
+  .acceptTLS({
+    certificate: {
+      // Suppose we have server-cert.pem and server-key.pem in 'secret' folder
+      cert: new crypto.Certificate(pipy.load('secret/server-cert.pem')),
+      key: new crypto.Certificate(pipy.load('secret/server-key.pem')),
     }
-  )
-
-.pipeline('tls-offload')
-  .serveHTTP(
-    new Message('Hello, TLS!\n')
+  }).to(
+    $=>$.serveHTTP(
+      new Message('Hello, TLS!\n')
+    )
   )
 ```
 

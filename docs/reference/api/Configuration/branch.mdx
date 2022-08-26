@@ -5,7 +5,7 @@ api: Configuration.branch
 
 ## Description
 
-Appends a branch filter to the current pipeline layout.
+<Summary/>
 
 <FilterDiagram
   name="branch"
@@ -15,3 +15,33 @@ Appends a branch filter to the current pipeline layout.
   subOutput="Event"
   subType="demux"
 />
+
+## Syntax
+
+``` js
+pipy()
+  .pipeline()
+  .branch(
+    () => isConditionAMet(), pipelineLayoutA,
+    () => isConditionBMet(), pipelineLayoutB,
+    // ...
+    fallbackPipelineLayout,
+  )
+
+pipy()
+  .pipeline()
+  .branch(
+    () => isConditionAMet(), pipelineLayoutA,
+    () => isConditionBMet(), pipelineLayoutB,
+    // ...
+  )
+```
+
+## Parameters
+
+<Parameters/>
+
+## See Also
+
+* [Configuration](/reference/api/Configuration)
+* [link()](/reference/api/Configuration/link)

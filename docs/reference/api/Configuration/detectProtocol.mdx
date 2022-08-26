@@ -5,9 +5,7 @@ api: Configuration.detectProtocol
 
 ## Description
 
-Appends a **detectProtocol** filter to the current pipeline layout.
-
-A **detectProtocol** filter calls a user function to tell what protocol the input stream is. Its input and output can be any kinds of events.
+<Summary/>
 
 <FilterDiagram
   name="detectProtocol"
@@ -27,19 +25,15 @@ This filter passes everything down unaltered. It doesn't change anything in the 
 
 ``` js
 pipy()
-  .pipeline('example')
-    .detectProtocol(
-      (protocolName) => onProtocolDetected()
-    )
+  .pipeline()
+  .detectProtocol(
+    (protocolName) => onProtocolDetected(protocolName)
+  )
 ```
 
-### Parameters
+## Parameters
 
 <Parameters/>
-
-### Return value
-
-<ReturnValue/>
 
 ## See Also
 

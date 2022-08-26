@@ -5,9 +5,7 @@ api: Configuration.connectTLS
 
 ## Description
 
-Appends a **connectTLS** filter to the current pipeline layout.
-
-A **connectTLS** filter implements [TLS](https://en.wikipedia.org/wiki/Transport_Layer_Security) protocol on the client side. Its input and output are [Data](/reference/api/Data) streams. Its sub-pipeline's input and output are also _Data_ streams (usually TCP streams).
+<Summary/>
 
 <FilterDiagram
   name="connectTLS"
@@ -18,11 +16,11 @@ A **connectTLS** filter implements [TLS](https://en.wikipedia.org/wiki/Transport
   subType="link"
 />
 
-A **connectTLS** filter works like this:
+A _connectTLS_ filter does the following:
 
 - First, it initiates and carries out a TLS handshake with the server via a newly created sub-pipeline
-- After the handshake is done, it goes on reading and encrypting the _Data_ stream from the filter's input and pumping the encrypted _Data_ stream to the sub-pipeline
-- Output from that sub-pipeline is supposed to be the encrypted _Data_ stream received from the server and will be decrypted and sent out via the filter's output
+- After the handshake is done, it goes on reading and encrypting _Data_ stream from the filter's input and pumping the encrypted _Data_ stream to the sub-pipeline
+- The sub-pipeline's output, which is encrypted _Data_ stream received from the server, is decrypted before coming out from the filter's output
 
 ### SNI
 
@@ -49,46 +47,41 @@ A handshake callback function can be given to the _handshake_ option in the _opt
 
 ``` js
 pipy()
-  .pipeline('example')
-    .connectTLS(layout)
+  .pipeline()
+  .connectTLS().to(
+    subPipelineLayout
+  )
 
 pipy()
   .pipeline('example')
-    .connectTLS(
-      layout,
-      {
-        certificate: {
-          cert, // crypto.Certificate or crypto.CertificateChain
-          key,  // crypto.PrivateKey
-        },
-        trusted: [
-          ...trustedCerts // array of crypto.Certificate
-        ],
-        sni: () => getServerName(),
-        alpn: [...requestedProtocols],
-        handshake: (chosenProtocol) => onHandshakeComplete(chosenProtocol),
-      }
-    )
+  .connectTLS({
+    certificate: {
+      cert, // crypto.Certificate or crypto.CertificateChain
+      key,  // crypto.PrivateKey
+    },
+    trusted: [
+      ...trustedCerts // array of crypto.Certificate
+    ],
+    sni: () => getServerName(),
+    alpn: [...requestedProtocols],
+    handshake: (chosenProtocol) => onHandshakeComplete(chosenProtocol),
+  })
 ```
 
-### Parameters
+## Parameters
 
 <Parameters/>
-
-### Return value
-
-<ReturnValue/>
 
 ## Example
 
 ``` js
 pipy()
 
-// Start a one-shot task
-.task()
+  // Start a one-shot task
+  .task()
   // Throw together a simple HTTP request: GET /hello
-  .replaceMessage(
-    new Message(
+  .onStart(
+    () => new Message(
       {
         method: 'GET',
         path: '/hello',
@@ -98,11 +91,12 @@ pipy()
       }
     )
   )
-  .connectTLS('outbound-connection')
+  .muxHTTP().to(
+    $=>$.connectTLS().to(
+      $=>$.connect('example.com:443') // Connect to the target with TCP
+    )
+  )
   .print() // Print out the response as plain text
-
-.pipeline('outbound-connection')
-  .connect('example.com:443') // Connect to the target with TCP
 ```
 
 ## See Also

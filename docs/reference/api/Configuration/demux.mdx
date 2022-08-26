@@ -5,37 +5,36 @@ api: Configuration.demux
 
 ## Description
 
-Appends a **demux** filter to the current pipeline layout.
-
-A **demux** filter **de-multiplexes** [Messages](/reference/api/Message) from its input stream, distribute them to many sub-pipelines and multiplexes their output _Messages_ into a single output _Message_ stream. Its input and output are _Messages_. Its sub-pipelines's input and output are also _Messages_.
+<Summary/>
 
 <FilterDiagram
   name="demux"
   input="Message"
-  output="Message"
   subInput="Message"
   subType="demux"
 />
 
-A **demux** filter works like this:
+A _demux_ filter does the following:
 
-- At the input to a **demux** filter, _Messages_ are separated
-- For each input _Message_, a dedicated sub-pipeline is created, whose input will be that _Message_
-- At the output from the **demux** filter, output _Messages_ coming out of all sub-pipelines are combined in the same order as they come out of their sub-pipelines (compare to [demuxQueue()](/reference/api/Configuration/demuxQueue))
+- At the input to a _demux_ filter, _Messages_ are separated
+- For each input _Message_, a dedicated sub-pipeline is created, whose input is only that _Message_
+- At the output from the _demux_ filter, nothing is outputted (compare to [demuxQueue()](/reference/api/Configuration/demuxQueue))
 
-One **demux** filter can have more than one sub-pipelines, each of which handles one _Message_.
+One _demux_ filter can have more than one sub-pipelines, each of which handles only one _Message_. Compare this to [mux()](/reference/api/Configuration/mux).
 
 ## Syntax
 
 ``` js
 pipy()
-  .pipeline('example')
-    .demux(layout)
+  .pipeline()
+  .demux().to(
+    subPipelineLayout
+  )
 ```
 
-### Return value
+## Parameters
 
-<ReturnValue/>
+<Parameters/>
 
 ## See Also
 

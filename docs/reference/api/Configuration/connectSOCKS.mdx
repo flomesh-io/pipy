@@ -5,9 +5,7 @@ api: Configuration.connectSOCKS
 
 ## Description
 
-Appends a **connectSOCKS** filter to the current pipeline layout.
-
-A **connectSOCKS** filter implements [SOCKS](https://en.wikipedia.org/wiki/SOCKS) protocol on the client side. Its input and output are [Data](/reference/api/Data) streams. Its sub-pipeline's input and output are also _Data_ streams (usually TCP streams).
+<Summary/>
 
 <FilterDiagram
   name="connectSOCKS"
@@ -18,38 +16,42 @@ A **connectSOCKS** filter implements [SOCKS](https://en.wikipedia.org/wiki/SOCKS
   subType="link"
 />
 
-A **connectSOCKS** filter pumps its input _Data_ stream into a newly created sub-pipeline, prepended by a SOCKS connection request. Its output is the _Data_ stream coming out of the sub-pipeline, with the leading SOCKS connection response removed.
+A _connectSOCKS_ filter pumps its input _Data_ stream into a newly created sub-pipeline, prepended by a SOCKS connection request. Its output is the _Data_ stream coming out of the sub-pipeline, with the leading SOCKS connection response removed.
 
 ## Syntax
 
 ``` js
 pipy()
-  .pipeline('example')
-    .connectSOCKS(layout, destination)
+  .pipeline()
+  .connectSOCKS(destination).to(
+    subPipelineLayout
+  )
+
+pipy()
+  .pipeline()
+  .connectSOCKS(
+    () => getDestination()
+  ).to(
+    subPipelineLayout
+  )
 ```
 
-### Parameters
+## Parameters
 
 <Parameters/>
-
-### Return value
-
-<ReturnValue/>
 
 ## Example
 
 ``` js
 pipy()
 
-.listen(8443)
+  .listen(8443)
   .connectSOCKS(
-     'connection',
      'example.com:443', // the destination address we intend to connect to
-  )
-
-.pipeline('connection')
-  .connect(
-    'localhost:1080' // suppose we have a local SOCKS proxy on port 1080
+  ).to(
+    $=>$.connect(
+      'localhost:1080' // suppose we have a local SOCKS proxy on port 1080
+    )
   )
 ```
 

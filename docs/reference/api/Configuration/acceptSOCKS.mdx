@@ -5,9 +5,7 @@ api: Configuration.acceptSOCKS
 
 ## Description
 
-Appends an **acceptSOCKS** filter to the current pipeline layout.
-
-An **acceptSOCKS** filter implements [SOCKS](https://en.wikipedia.org/wiki/SOCKS) protocol on the server side. Its input and output are [Data](/reference/api/Data) streams (usually TCP streams). Its sub-pipeline's input and output are also _Data_ streams.
+<Summary/>
 
 <FilterDiagram
   name="acceptSOCKS"
@@ -18,13 +16,13 @@ An **acceptSOCKS** filter implements [SOCKS](https://en.wikipedia.org/wiki/SOCKS
   subType="link"
 />
 
-An **acceptSOCKS** filter decodes the connection request from its input stream, and calls back a user function with the connection parameters including:
+An _acceptSOCKS_ filter decodes the connection request from its input stream, and calls back a user function with the connection parameters including:
 
 - _host_ - Destination address, could be an IPv4 address or a domain name
 - _port_ - Destination port number
 - _id_ - Username if any
 
-If the callback returns `true`, the request will be accepted, and a sub-pipeline will be created based on the pipeline layout given by _layout_ parameter. All subsequently received _Data_ from the client is pumped into it. Output _Data_ from the sub-pipeline is sent back to the client.
+If the callback returns `true`, the request will be accepted, and a sub-pipeline will be created. All subsequently received _Data_ from the client is forwarded to it. Output _Data_ from the sub-pipeline is sent back to the client.
 
 If the callback returns `false`, the request will be rejected, and no sub-pipelines will be created.
 
@@ -32,20 +30,17 @@ If the callback returns `false`, the request will be rejected, and no sub-pipeli
 
 ``` js
 pipy()
-  .pipeline('example')
-    .acceptSOCKS(
-      layout,
-      (host, port, id) => shouldAcceptSession(host, port, id)
-    )
+  .pipeline()
+  .acceptSOCKS(
+    (host, port, id) => shouldAcceptSession(host, port, id)
+  ).to(
+    subPipelineLayout
+  )
 ```
 
-### Parameters
+## Parameters
 
 <Parameters/>
-
-### Return value
-
-<ReturnValue/>
 
 ## Example
 
@@ -55,19 +50,17 @@ pipy({
   _port: 0,
 })
 
-.listen(1080)
+  .listen(1080)
   .acceptSOCKS(
-    'connection',
     (host, port) => (
       _host = host,
       _port = port,
       true // return true to accept the session
     )
-  )
-
-.pipeline('connection')
-  .connect(
-    () => `${_host}:${_port}`
+  ).to(
+    $=>$.connect(
+      () => `${_host}:${_port}`
+    )
   )
 ```
 

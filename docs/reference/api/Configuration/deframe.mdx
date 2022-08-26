@@ -5,10 +5,31 @@ api: Configuration.deframe
 
 ## Description
 
-Appends a deframe filter to the current pipeline layout.
+<Summary/>
 
 <FilterDiagram
   name="deframe"
   input="Data"
   output="Message"
 />
+
+## Syntax
+
+``` js
+pipy()
+  .pipeline()
+  .deframe({
+    state1: data => getState1Output(data),
+    state2: data => getState2Output(data),
+    state3: data => getState3Output(data),
+    // ...
+  })
+```
+
+## Parameters
+
+<Parameters/>
+
+## See Also
+
+* [Configuration](/reference/api/Configuration)

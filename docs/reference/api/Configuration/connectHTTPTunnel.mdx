@@ -5,9 +5,7 @@ api: Configuration.connectHTTPTunnel
 
 ## Description
 
-Appends a **connectHTTPTunnel** filter to the current pipeline layout.
-
-A **connectHTTPTunnel** filter implements [HTTP tunnel](https://en.wikipedia.org/wiki/HTTP_tunnel) on the client side. Its input and output are [Data](/reference/api/Data) streams. Its sub-pipeline's input and output are [Messages](/reference/api/Message) at the beginning and switch to _Data_ after the tunnel is established.
+<Summary/>
 
 <FilterDiagram
   name="connectHTTPTunnel"
@@ -18,51 +16,44 @@ A **connectHTTPTunnel** filter implements [HTTP tunnel](https://en.wikipedia.org
   subType="link"
 />
 
-A **connectHTTPTunnel** filter pumps its input _Data_ stream into a newly created sub-pipeline, prepended by an HTTP [CONNECT](https://developer.mozilla.org/docs/Web/HTTP/Methods/CONNECT) request _Message_. Its output is the _Data_ stream coming out of the sub-pipeline, with the leading HTTP _Message_ in response to the _CONNECT_ request removed.
+A _connectHTTPTunnel_ filter pumps its input _Data_ stream into a newly created sub-pipeline, prepended by an HTTP [CONNECT](https://developer.mozilla.org/docs/Web/HTTP/Methods/CONNECT) request _Message_. Its output is the _Data_ stream coming out of the sub-pipeline, with the leading HTTP _Message_ in response to the _CONNECT_ request removed.
 
 ## Syntax
 
 ``` js
 pipy()
-  .pipeline('example')
-    .connectHTTPTunnel(layout, target)
+  .pipeline()
+  .connectHTTPTunnel(target).to(
+    subPipelineLayout
+  )
 
 pipy()
-  .pipeline('example')
-    .connectHTTPTunnel(
-      layout,
-      () => getTarget()
-    )
+  .pipeline()
+  .connectHTTPTunnel(
+    () => getTarget()
+  ).to(
+    subPipelineLayout
+  )
 ```
 
-### Parameters
+## Parameters
 
 <Parameters/>
-
-### Return value
-
-<ReturnValue/>
 
 ## Example
 
 ``` js
 pipy()
 
-.listen(8443)
+  .listen(8443)
   .connectHTTPTunnel(
-     'tunnel',
      'example.com:443', // the target address we intend to connect to
-  )
-
-.pipeline('tunnel')
-  .muxHTTP(
-    'conn',
-    () => __inbound
-  ) // encode CONNECT requests into an HTTP stream
-
-.pipeline('conn')
-  .connect(
-    'localhost:8000' // suppose we have a local HTTP proxy on port 8000
+  ).to(
+    $=>$.muxHTTP().to( // encode CONNECT requests into an HTTP stream
+      $=>$.connect(
+        'localhost:8000' // suppose we have a local HTTP proxy on port 8000
+      )
+    )
   )
 ```
 
