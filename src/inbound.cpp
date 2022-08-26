@@ -495,7 +495,8 @@ void InboundTCP::describe(char *buf) {
 //
 
 auto InboundUDP::get(int port, const std::string &peer) -> InboundUDP* {
-  if (auto *listener = Listener::find(port, Listener::Protocol::UDP)) {
+  static std::string s_0_0_0_0("0.0.0.0");
+  if (auto *listener = Listener::find(Listener::Protocol::UDP, s_0_0_0_0, port)) {
     if (auto *acceptor = listener->m_acceptor.get()) {
       std::string ip;
       int port;

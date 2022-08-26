@@ -72,7 +72,7 @@ Listener::Options::Options(pjs::Object *options) {
 // Listener
 //
 
-std::map<Listener::Protocol, std::map<int, Listener*>> Listener::s_listeners;
+std::set<Listener*> Listener::s_listeners[int(Listener::Protocol::MAX)];
 bool Listener::s_reuse_port = false;
 
 void Listener::set_reuse_port(bool reuse) {
@@ -86,11 +86,11 @@ Listener::Listener(Protocol protocol, const std::string &ip, int port)
 {
   m_address = asio::ip::make_address(m_ip);
   m_ip = m_address.to_string();
-  s_listeners[protocol][port] = this;
+  s_listeners[int(protocol)].insert(this);
 }
 
 Listener::~Listener() {
-  s_listeners[m_protocol].erase(m_port);
+  s_listeners[int(m_protocol)].erase(this);
 }
 
 void Listener::pipeline_layout(PipelineLayout *layout) {
@@ -156,6 +156,7 @@ void Listener::start() {
         m_acceptor = acceptor;
         break;
       }
+      default: break;
     }
 
     Log::info("[listener] Listening on %s", desc);
@@ -210,6 +211,7 @@ void Listener::describe(char *buf, size_t len) {
   switch (m_protocol) {
     case Protocol::TCP: proto = "TCP"; break;
     case Protocol::UDP: proto = "UDP"; break;
+    default: proto = "?"; break;
   }
   std::snprintf(
     buf, len, "%s port %d at %s",
@@ -235,12 +237,11 @@ void Listener::set_sock_opts(int sock) {
   }
 }
 
-auto Listener::find(int port, Protocol protocol) -> Listener* {
-  auto i = s_listeners.find(protocol);
-  if (i != s_listeners.end()) {
-    const auto &m = i->second;
-    auto i = m.find(port);
-    if (i != m.end()) return i->second;
+auto Listener::find(Protocol protocol, const std::string &ip, int port) -> Listener* {
+  for (auto *l : s_listeners[int(protocol)]) {
+    if (l->ip() == ip && l->port() == port) {
+      return l;
+    }
   }
   return nullptr;
 }

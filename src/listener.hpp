@@ -32,7 +32,7 @@
 
 #include <functional>
 #include <string>
-#include <list>
+#include <set>
 #include <map>
 
 namespace pipy {
@@ -45,9 +45,10 @@ class PipelineLayout;
 
 class Listener {
 public:
-  enum class Protocol {
+  enum class Protocol : int {
     TCP,
     UDP,
+    MAX,
   };
 
   struct Options : public Inbound::Options, public pipy::Options {
@@ -62,27 +63,27 @@ public:
 
   static void set_reuse_port(bool reuse);
 
-  static auto get(const std::string &ip, int port, Protocol protocol) -> Listener* {
-    if (auto *l = find(port, protocol)) return l;
+  static auto get(Protocol protocol, const std::string &ip, int port) -> Listener* {
+    if (auto *l = find(protocol, ip, port)) return l;
     return new Listener(protocol, ip, port);
   }
 
-  static bool is_open(int port, Protocol protocol) {
-    if (auto *l = find(port, protocol)) return l->is_open();
+  static bool is_open(Protocol protocol, const std::string &ip, int port) {
+    if (auto *l = find(protocol, ip, port)) return l->is_open();
     return false;
   }
 
   static void for_each(const std::function<void(Listener*)> &cb) {
-    for (const auto &p : s_listeners) {
-      for (const auto &q : p.second) {
-        cb(q.second);
+    for (int i = 0; i < int(Protocol::MAX); i++) {
+      for (auto *l : s_listeners[i]) {
+        cb(l);
       }
     }
   }
 
+  auto protocol() const -> Protocol { return m_protocol; }
   auto ip() const -> const std::string& { return m_ip; }
   auto port() const -> int { return m_port; }
-  auto protocol() const -> Protocol { return m_protocol; }
   bool is_open() const { return m_pipeline_layout; }
   bool reserved() const { return m_options.reserved; }
   auto pipeline_layout() const -> PipelineLayout* { return m_pipeline_layout; }
@@ -189,11 +190,10 @@ private:
   pjs::Ref<Acceptor> m_acceptor;
   pjs::Ref<PipelineLayout> m_pipeline_layout;
 
-  // static std::list<Listener*> s_all_listeners;
-  static std::map<Protocol, std::map<int, Listener*>> s_listeners;
+  static std::set<Listener*> s_listeners[];
   static bool s_reuse_port;
 
-  static auto find(int port, Protocol protocol) -> Listener*;
+  static auto find(Protocol protocol, const std::string &ip, int port) -> Listener*;
 
   friend class InboundTCP;
   friend class InboundUDP;
