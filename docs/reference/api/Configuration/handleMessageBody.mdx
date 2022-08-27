@@ -5,9 +5,7 @@ api: Configuration.handleMessageBody
 
 ## Description
 
-Appends a **handleMessageBody** filter to the current pipeline layout.
-
-A **handleMessageBody** filter calls a user function every time it sees a complete message body in the input stream. Its input and output can be any kinds of events.
+<Summary/>
 
 <FilterDiagram
   name="handleMessageBody"
@@ -17,7 +15,7 @@ A **handleMessageBody** filter calls a user function every time it sees a comple
 
 The user function that gets called will have a [Data](/reference/api/Data) object as parameter.
 
-This filter only calls the user function once for each message in the input stream. If the message's body is composed of multiple _Data_ objects, **handleMessageBody** will wait until all _Data_ objects composing the whole message are collected and call the user function with a combined _Data_ object.
+This filter only calls the user function once for each message in the input stream. If the message's body is composed of multiple _Data_ objects, _handleMessageBody_ will wait until all _Data_ objects composing a whole message are collected and call the user function with a combined _Data_ object.
 
 This filter passes everything down unaltered. It doesn't change anything in the event stream.
 
@@ -25,19 +23,15 @@ This filter passes everything down unaltered. It doesn't change anything in the 
 
 ``` js
 pipy()
-  .pipeline('example')
-    .handleMessageBody(
-      data => onMessageBody(data)
-    )
+  .pipeline()
+  .handleMessageBody(
+    data => onMessageBody(data)
+  )
 ```
 
-### Parameters
+## Parameters
 
 <Parameters/>
-
-### Return value
-
-<ReturnValue/>
 
 ## See Also
 

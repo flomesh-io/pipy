@@ -435,13 +435,14 @@ interface Configuration {
    * - **OUTPUT** - HTTP/1 response _Messages_ decoded from the input _Data_ stream.
    *
    * @param options Options including:
-   *   - _bodiless_ - (optional) Whether the input response has a body.
-   *       Can be a boolean or a function that returns a boolean.
+   *   - _bodiless_ - (optional) A boolean or a function that returns a boolean
+   *       indicating whether the message is a response to a HEAD request.
+   *       Default is `false`.
    * @returns The same _Configuration_ object.
    */
-   decodeHTTPResponse(
+  decodeHTTPResponse(
     options?: { bodiless?: boolean | (() => boolean) }
-   ): Configuration;
+  ): Configuration;
 
   /**
    * Appends a _decodeMQTT_ filter to the current pipeline layout.
@@ -549,7 +550,8 @@ interface Configuration {
    * - **SUB-OUTPUT** - HTTP response _Message_ to send to the client.
    *
    * @param options Options including:
-   *   - _bufferSize_ - The minimum body size above which a message should be transferred in chunks.
+   *   - _bufferSize_ - (optional) The minimum body size above which a message should be transferred in chunks.
+   *       Default is _16KB_.
    * @returns The same _Configuration_ object.
    */
   demuxHTTP(options? : {
@@ -638,7 +640,7 @@ interface Configuration {
   /**
    * Appends an _encodeDubbo_ filter to the current pipeline layout.
    *
-   * An _encodeDubbo_ filter encodes Dubbo messages into a raw byte stream.
+   * An _encodeDubbo_ filter encodes [Dubbo](https://dubbo.apache.org/) messages into a raw byte stream.
    *
    * - **INPUT** - Dubbo _Messages_ to encode.
    * - **OUTPUT** - Encoded _Data_ stream from the input Dubbo messages.
@@ -667,14 +669,27 @@ interface Configuration {
    * - **INPUT** - HTTP/1 response _Messages_ to encode.
    * - **OUTPUT** - Encoded _Data_ stream from the input HTTP/1 response messages.
    *
+   * @param options Options including:
+   *   - _final_ - (optional) A boolean or a function that returns a boolean
+   *       indicating whether the response is the last one on this session.
+   *       Default is `false`.
+   *   - _bodiless_ - (optional) A boolean or a function that returns a boolean
+   *       indicating whether the message is a response to a HEAD request.
+   *       Default is `false`.
+   *   - _bufferSize_ - (optional) The minimum body size above which a message should be transferred in chunks.
+   *       Default is _16KB_.
    * @returns The same _Configuration_ object.
    */
-  encodeHTTPResponse(): Configuration;
+  encodeHTTPResponse(options?: {
+    final?: boolean | (() => boolean),
+    bodiless?: boolean | (() => boolean),
+    bufferSize?: number | string,
+  }): Configuration;
 
   /**
    * Appends an _encodeMQTT_ filter to the current pipeline layout.
    *
-   * An _encodeMQTT_ filter encodes MQTT packets into a raw byte stream.
+   * An _encodeMQTT_ filter encodes [MQTT](https://mqtt.org/) packets into a raw byte stream.
    *
    * - **INPUT** - MQTT packets _(Messages)_ to encode.
    * - **OUTPUT** - Encoded _Data_ stream from the input MQTT packets.
@@ -686,7 +701,7 @@ interface Configuration {
   /**
    * Appends an _encodeWebSocket_ filter to the current pipeline layout.
    *
-   * An _encodeWebSocket_ filter encodes WebSocket messages into a raw byte stream.
+   * An _encodeWebSocket_ filter encodes [WebSocket](https://en.wikipedia.org/wiki/WebSocket) messages into a raw byte stream.
    *
    * - **INPUT** - WebSocket _Messages_ to encode.
    * - **OUTPUT** - Encoded _Data_ stream from the input WebSocket messages.
@@ -717,9 +732,12 @@ interface Configuration {
    * - **SUB-INPUT** - Cloned _Events_ from the _fork_ filter's input.
    * - **SUB-OUTPUT** - Discarded.
    *
+   * @param startupValues An array of _startup values_, or a function that returns that.
+   *   Each startup value will be given to a newly created sub-pipeline via the
+   *   parameter to its `onStart()` callback.
    * @returns The same _Configuration_ object.
    */
-  fork(initialParameters?: any[] | (() => any[])): Configuration;
+  fork(startupValues?: any[] | (() => any[])): Configuration;
 
   /**
    * Appends a _handleData_ filter to the current pipeline layout.
@@ -729,6 +747,7 @@ interface Configuration {
    * - **INPUT** - Any types of _Events_.
    * - **OUTPUT** - Same _Events_ as input.
    *
+   * @param handler A callback function that receives _Data_ events passing through the filter.
    * @returns The same _Configuration_ object.
    */
   handleData(handler : (evt: Event) => void): Configuration;
@@ -741,6 +760,7 @@ interface Configuration {
    * - **INPUT** - Any types of _Events_.
    * - **OUTPUT** - Same _Events_ as input.
    *
+   * @param handler A callback function that receives _Messages_ passing through the filter.
    * @returns The same _Configuration_ object.
    */
   handleMessage(handler : (msg: Message) => void): Configuration;
@@ -753,6 +773,7 @@ interface Configuration {
    * - **INPUT** - Any types of _Events_.
    * - **OUTPUT** - Same _Events_ as input.
    *
+   * @param handler A callback function that receives message bodies passing through the filter.
    * @returns The same _Configuration_ object.
    */
   handleMessageBody(handler : (body: Data) => void): Configuration;
@@ -765,6 +786,7 @@ interface Configuration {
    * - **INPUT** - Any types of _Events_.
    * - **OUTPUT** - Same _Events_ as input.
    *
+   * @param handler A callback function that receives _MessageEnd_ events passing through the filter.
    * @returns The same _Configuration_ object.
    */
   handleMessageEnd(handler : (evt: MessageEnd) => void): Configuration;
@@ -777,6 +799,7 @@ interface Configuration {
    * - **INPUT** - Any types of _Events_.
    * - **OUTPUT** - Same _Events_ as input.
    *
+   * @param handler A callback function that receives _MessageStart_ events passing through the filter.
    * @returns The same _Configuration_ object.
    */
   handleMessageStart(handler : (evt: MessageStart) => void): Configuration;
@@ -789,6 +812,7 @@ interface Configuration {
    * - **INPUT** - Any types of _Events_.
    * - **OUTPUT** - Same _Events_ as input.
    *
+   * @param handler A callback function that receives _StreamEnd_ events passing through the filter.
    * @returns The same _Configuration_ object.
    */
   handleStreamEnd(handler : (evt: StreamEnd) => void): Configuration;
@@ -801,6 +825,7 @@ interface Configuration {
    * - **INPUT** - Any types of _Events_.
    * - **OUTPUT** - Same _Events_ as input.
    *
+   * @param handler A callback function that receives the first event passing through the filter.
    * @returns The same _Configuration_ object.
    */
   handleStreamStart(handler : (evt: Event) => void): Configuration;
@@ -808,11 +833,15 @@ interface Configuration {
   /**
    * Appends a _handleTLSClientHello_ filter to the current pipeline layout.
    *
-   * A _handleTLSClientHello_ filter calls back user scripts when a TLS client hello message is found in the input stream.
+   * A _handleTLSClientHello_ filter calls back user scripts when a [TLS client hello message](https://www.rfc-editor.org/rfc/rfc8446.html#section-4.1.2) is found in the input stream.
    *
    * - **INPUT** - Any types of _Events_.
    * - **OUTPUT** - Same _Events_ as input.
    *
+   * @param handler A callback function that receives SNI and ALPN information in the _TLS client hello message_ passing through the filter.
+   *   The parameter the callback function receives is an object containing the following fields:
+   *   - _serverNames_ - An array of server names from [SNI](https://www.rfc-editor.org/rfc/rfc6066#section-3)
+   *   - _protocolNames_ - An array of protocol names from [ALPN](https://www.rfc-editor.org/rfc/rfc7301)
    * @returns The same _Configuration_ object.
    */
   handleTLSClientHello(handler: (msg: { serverNames: string[], protocolNames: string[] }) => void): Configuration;

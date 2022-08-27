@@ -5,9 +5,7 @@ api: Configuration.exec
 
 ## Description
 
-Appends an **exec** filter to the current pipeline layout.
-
-An **exec** filter starts an external process, feeds the input [Data](/reference/api/Data) to the process's standard input and outputs the _Data_ coming out of the process's standard output. Its input and output are both _Data_ events.
+<Summary/>
 
 <FilterDiagram
   name="exec"
@@ -25,30 +23,27 @@ When the filter is destroyed with its pipeline, the process (if any) will be kil
 
 ``` js
 pipy()
-  .pipeline('example')
-    .exec(command)
+  .pipeline()
+  .exec(command)
 
 pipy()
-  .pipeline('example')
-    .exec(
-      () => whatCommand()
-    )
+  .pipeline()
+  .exec(
+    () => whatCommand()
+  )
 ```
 
-### Parameters
+## Parameters
 
 <Parameters/>
-
-### Return value
-
-<ReturnValue/>
 
 ## Example
 
 ``` js
 pipy()
 
-.task()
+  .task()
+  .onStart(() => new Message)
   .exec('ls -l') // Execute shell command: `ls -l`
   .print()       // Print out the standard output from that command
 ```

@@ -26,19 +26,15 @@ This filter passes everything down unaltered. It doesn't change anything in the 
 
 ``` js
 pipy()
-  .pipeline('example')
-    .handleTLSClientHello(
-      ({ serverNames, protocolNames }) => onClientHello()
-    )
+  .pipeline()
+  .handleTLSClientHello(
+    ({ serverNames, protocolNames }) => onClientHello()
+  )
 ```
 
-### Parameters
+## Parameters
 
 <Parameters/>
-
-### Return value
-
-<ReturnValue/>
 
 ## See Also
 

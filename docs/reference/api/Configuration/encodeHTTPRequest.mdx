@@ -5,9 +5,7 @@ api: Configuration.encodeHTTPRequest
 
 ## Description
 
-Appends an **encodeHTTPRequest** filter to the current pipeline layout.
-
-An **encodeHTTPRequest** filter encodes its input [Messages](/reference/api/Message) into HTTP/1.x requests and outputs encoded [Data](/reference/api/Data). Its input is a _Message_ stream and its output is a _Data_ stream.
+<Summary/>
 
 <FilterDiagram
   name="encodeHTTPRequest"
@@ -15,7 +13,7 @@ An **encodeHTTPRequest** filter encodes its input [Messages](/reference/api/Mess
   output="Data"
 />
 
-The input _Messages_ can have these contents:
+The encoder expects an input [Message](/reference/api/Message) to have:
 
 * _head_
   - _protocol_ - Can be _"HTTP/1.0"_ or _"HTTP/1.1"_ (Defaults to _"HTTP/1.1"_)
@@ -38,21 +36,19 @@ The buffering is limited to 4KB by default. When the buffered data is over 4KB, 
 
 ``` js
 pipy()
-  .pipeline('example')
-    .encodeHTTPRequest()
+  .pipeline()
+  .encodeHTTPRequest()
 
 pipy()
-  .pipeline('example')
-    .encodeHTTPRequest(
-      {
-        bufferSize,
-      }
-    )
+  .pipeline()
+  .encodeHTTPRequest({
+    bufferSize,
+  })
 ```
 
-### Return value
+## Parameters
 
-<ReturnValue/>
+<Parameters/>
 
 ## See Also
 

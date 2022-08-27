@@ -5,9 +5,7 @@ api: Configuration.handleMessageStart
 
 ## Description
 
-Appends a **handleMessageStart** filter to the current pipeline layout.
-
-A **handleMessageStart** filter calls a user function every time it sees a [MessageStart](/reference/api/MessageStart) event in the input stream. Its input and output can be any kinds of events.
+<Summary/>
 
 <FilterDiagram
   name="handleMessageStart"
@@ -17,25 +15,21 @@ A **handleMessageStart** filter calls a user function every time it sees a [Mess
 
 The user function that gets called will have a [MessageStart](/reference/api/MessageStart) object as parameter.
 
-This filter passes every input event down to its output. It doesn't change how many or what events there are. However, since events are all just objects being passed around by reference, if you alter the event object itself, the change will be visible on the output, even when the references to the events are still identical between the input and the output.
+This filter passes every input event down to its output. It doesn't change how many or what events there are. However, since events are all just objects being passed around by reference, if you alter the event object itself, the change will be visible on the output, even though the references to the events are identical between the input and the output.
 
 ## Syntax
 
 ``` js
 pipy()
-  .pipeline('example')
-    .handleMessageStart(
-      event => onMessageStart(event)
-    )
+  .pipeline()
+  .handleMessageStart(
+    event => onMessageStart(event)
+  )
 ```
 
-### Parameters
+## Parameters
 
 <Parameters/>
-
-### Return value
-
-<ReturnValue/>
 
 ## See Also
 

@@ -5,9 +5,7 @@ api: Configuration.encodeDubbo
 
 ## Description
 
-Appends an **encodeDubbo** filter to the current pipeline layout.
-
-An **encodeDubbo** filter encodes its input [Messages](/reference/api/Message) into [Dubbo](https://dubbo.apache.org/) messages and outputs encoded [Data](/reference/api/Data). Its input is a _Message_ stream and its output is a _Data_ stream.
+<Summary/>
 
 <FilterDiagram
   name="encodeDubbo"
@@ -15,7 +13,7 @@ An **encodeDubbo** filter encodes its input [Messages](/reference/api/Message) i
   output="Data"
 />
 
-The input _Messages_ can have these contents:
+The encoder expects an input [Message](/reference/api/Message) to have:
 
 * _head_
   - _id_ - Request ID as a string
@@ -31,27 +29,13 @@ The body data is a [Data](/reference/api/Data) object and will be left unchanged
 
 ``` js
 pipy()
-  .pipeline('example')
-    .encodeDubbo()
-
-pipy()
-  .pipeline('example')
-    .encodeDubbo({
-      id,
-      status,
-      isRequest,
-      isTwoWay,
-      isEvent,
-    })
+  .pipeline()
+  .encodeDubbo()
 ```
 
-### Parameters
+## Parameters
 
 <Parameters/>
-
-### Return value
-
-<ReturnValue/>
 
 ## Example
 
@@ -60,23 +44,29 @@ pipy()
 
 .listen(20880)
   .decodeDubbo()
-  .demux('req')
-  .encodeDubbo({
-    isRequest: false,
-  })
-
-.pipeline('req')
-  .replaceMessageBody(
-    data => (
-      JSON.encode(
-        Hessian.decode(data)
+  .demux().to(
+    $=>$
+    .replaceMessageBody(
+      data => (
+        JSON.encode(
+          Hessian.decode(data)
+        )
+      )
+    )
+    .muxHTTP().to(
+      $=>$.connect('localhost:8080')
+    )
+    .replaceMessageBody(
+      data => (
+        Hessian.encode(
+          JSON.decode(data)
+        )
       )
     )
   )
-  .muxHTTP('conn', () => __inbound)
-
-.pipeline('conn')
-  .connect('localhost:8080')
+  .encodeDubbo({
+    isRequest: false,
+  })
 ```
 
 ## See Also
