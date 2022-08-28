@@ -5,9 +5,7 @@ api: Configuration.print
 
 ## Description
 
-Appends a **print** filter to the current pipeline layout.
-
-A **print** filter outputs all [Data](/reference/api/Data) in the input stream to the standard output. Its input and output can be any kinds of events.
+<Summary/>
 
 <FilterDiagram
   name="print"
@@ -26,13 +24,13 @@ This filter passes everything down unaltered. It doesn't change anything in the 
 
 ``` js
 pipy()
-  .pipeline('example')
-    .print()
+  .pipeline()
+  .print()
 ```
 
-### Return value
+## Parameters
 
-<ReturnValue/>
+<Parameters/>
 
 ## See Also
 

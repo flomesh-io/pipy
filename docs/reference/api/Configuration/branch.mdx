@@ -16,6 +16,50 @@ api: Configuration.branch
   subType="demux"
 />
 
+### Select from several sub-pipeline layouts
+
+The _branch_ filter can be given more than one sub-pipeline layouts, each corresponding to a condition. As the first event arrives at the filter, it evaluates each condition in order to find the first one that is met, and creates a sub-pipeline based on its corresponding sub-pipeline layout.
+
+> Once a pipeline layout is selected, it won't change throughout the whole lifetime of the current stream, even when the conditions may change afterwards.
+
+If no conditions are met, the last pipeline layout without a set condition is selected.
+
+``` js
+pipy({
+  _condition: undefined,
+})
+
+  .pipeline()
+  .branch(
+    () => _condition === 'cond1', (
+      $=>$.dump('branch1')
+    ),
+    () => _condition === 'cond2', (
+      $=>$.dump('branch1')
+    ),
+    (
+      $=>$.dump('default branch')
+    )
+  )
+```
+
+### Block up events until a condition is met
+
+If all sub-pipeline layout options have conditions but none of them are met, _branch_ filter will block the stream until a condition is met. This can be used to buffer up events while waiting for a certain situation.
+
+``` js
+pipy({
+  _targetDetected: false,
+})
+
+  .pipeline()
+  .branch(
+    () => _targetDetected, (
+      $=>$.dump()
+    )
+  )
+```
+
 ## Syntax
 
 ``` js

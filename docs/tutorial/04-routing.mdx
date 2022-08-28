@@ -280,9 +280,9 @@ You are requesting /hi from 127.0.0.1
 
 Both requests were directed to the same server as the first request in that client connection. What gives?
 
-This is because the upstream connection was established by **connect()** in a sub-pipeline created from **muxHTTP()**, and the connection is established only once for every sub-pipeline it creates. That means, there's a one-on-one relationship between a server connection and a sub-pipeline from **muxHTTP()**. As explained in [Filter: muxHTTP](/tutorial/03-proxy/#filter-muxhttp) from the last chapter, multiple **muxHTTP()** instances share, by default, the same sub-pipeline for a particular _Inbound_ (or in our case, a particular connection from _curl_ client). Once the outbound connection is up, it won't change any more until the next inbound connection leads **muxHTTP()** to a different sub-pipeline. Even when each request has a different `_target` value to it, the variable is only used once as the connection is established. After that, its value is no longer relevant. It won't lead to a reconnection in the **connect()** filter.
+This is because the upstream connection was established by **connect()** in a sub-pipeline created from **muxHTTP()**, and the connection is established only once for every sub-pipeline it creates. That means, there's a one-on-one relationship between a server connection and a sub-pipeline from **muxHTTP()**. As explained in [Filter: muxHTTP](/tutorial/03-proxy/#filter-muxhttp) from the last chapter, multiple **muxHTTP()** instances merge to, by default, the same sub-pipeline for a particular _Inbound_ (or in our case, a particular connection from _curl_ client). Once the outbound connection is up, it won't change any more until the next inbound connection leads **muxHTTP()** to a different sub-pipeline. Even when each request has a different `_target` value to it, the variable is only used once as the connection is established. After that, its value is no longer relevant. It won't lead to a reconnection in the **connect()** filter.
 
-To solve this problem, we change the strategy how **muxHTTP()** instances share sub-pipelines by giving it the variable `_target` for the _group sharing_ criterion, so that sub-pipelines will only be shared by requests targeting to the same server, regardless of what client connection.
+To solve this problem, we change the strategy how **muxHTTP()** instances share sub-pipelines by giving it the variable `_target` for the _merging target_, so that sub-pipelines will only be shared by requests targeting to the same server, regardless of what client connection.
 
 ``` js
       .branch(
@@ -299,7 +299,7 @@ To solve this problem, we change the strategy how **muxHTTP()** instances share 
       )
 ```
 
-This is not the best strategy for HTTP/1 though, as when more than one client requests have to share the same server connection, they'll be queued up and served only one at a time. There would be no concurrency. But we'll leave the solution to that problem for the next topic in this tutorial.
+This is not the best strategy for HTTP/1 though, as when more than one client requests have to be merged to the same server connection, they'll be queued up and served only one at a time. There would be no concurrency. But we'll leave the solution to that problem for the next topic in this tutorial.
 
 ## Test in action
 

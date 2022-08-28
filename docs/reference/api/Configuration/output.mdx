@@ -12,3 +12,26 @@ Appends an output filter to the current pipeline layout.
   input="Event"
   output="Event"
 />
+
+## Syntax
+
+``` js
+pipy()
+  .pipeline()
+  .output()
+
+pipy()
+  .pipeline()
+  .output(
+    () => whereToOutput()
+  )
+```
+
+## Parameters
+
+<Parameters/>
+
+## See Also
+
+* [Configuration](/reference/api/Configuration)
+* [input()](/reference/api/Configuration/input)

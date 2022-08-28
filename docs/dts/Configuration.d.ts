@@ -312,7 +312,7 @@ interface Configuration {
    * @param target The target to connect to, in form of `"<host>:<port>"`, or a function that returns the target.
    * @param options Options including:
    *   - _bufferLimit_ - Maximum size of data allowed to stay in buffer due to slow outbound bandwidth.
-   *      Can be a number in bytes or a string with a unit suffix such as `'k'`, `'m'`, `'g'` and `'t'`.
+   *       Can be a number in bytes or a string with a unit suffix such as `'k'`, `'m'`, `'g'` and `'t'`.
    *   - _retryCount_ - How many times it should retry connection after a failure, or -1 for the infinite retries. Defaults to 0.
    *   - _retryDelay_ - Time duration to wait between connection retries. Defaults to 0.
    *   - _connectTimeout_ - Timeout while connecting.
@@ -550,7 +550,8 @@ interface Configuration {
    * - **SUB-OUTPUT** - HTTP response _Message_ to send to the client.
    *
    * @param options Options including:
-   *   - _bufferSize_ - (optional) The minimum body size above which a message should be transferred in chunks.
+   *   - _bufferSize_ - (optional) Maximum body size above which a message should be transferred in chunks.
+   *       Can be a number in bytes or a string with a unit suffix such as `'k'`, `'m'`, `'g'` and `'t'`.
    *       Default is _16KB_.
    * @returns The same _Configuration_ object.
    */
@@ -676,7 +677,8 @@ interface Configuration {
    *   - _bodiless_ - (optional) A boolean or a function that returns a boolean
    *       indicating whether the message is a response to a HEAD request.
    *       Default is `false`.
-   *   - _bufferSize_ - (optional) The minimum body size above which a message should be transferred in chunks.
+   *   - _bufferSize_ - (optional) Maximum body size above which a message should be transferred in chunks.
+   *       Can be a number in bytes or a string with a unit suffix such as `'k'`, `'m'`, `'g'` and `'t'`.
    *       Default is _16KB_.
    * @returns The same _Configuration_ object.
    */
@@ -854,6 +856,7 @@ interface Configuration {
    * - **INPUT** - Any types of _Events_.
    * - **OUTPUT** - _Events_ outputted from _output_ filters in the sub-pipeline.
    *
+   * @param callback A function to receive an _Output_ object representing the _input_ filter's output.
    * @returns The same _Configuration_ object.
    */
   input(callback?: (out: Output) => void): Configuration;
@@ -868,6 +871,7 @@ interface Configuration {
    * - **SUB-INPUT** - _Events_ streaming into the _link_ filter.
    * - **SUB-OUTPUT** - Any types of _Events_.
    *
+   * @param pipelineLayoutName The name of the sub-pipeline layout to link to.
    * @returns The same _Configuration_ object.
    */
   link(pipelineLayoutName: string): Configuration;
@@ -875,13 +879,19 @@ interface Configuration {
   /**
    * Appends a _mux_ filter to the current pipeline layout.
    *
-   * Multiple _mux_ filters queue input _Messages_ into a shared sub-pipeline.
+   * Multiple _mux_ filters merge input _Messages_ into a shared sub-pipeline.
    *
    * - **INPUT** - A _Message_ to queue into the shared sub-pipeline.
    * - **OUTPUT** - The same _Message_ as input.
    * - **SUB-INPUT** - _Messages_ from multiple _mux_ filters.
    * - **SUB-OUTPUT** - Discarded.
    *
+   * @param target A function that returns a key identifiying the shared sub-pipeline to merge messages to.
+   * @param options Options or a function that returns the options including:
+   *   - _maxIdle_ - Maximum time an idle sub-pipeline should stay around.
+   *       Can be a number in seconds or a string with one of the time unit suffixes such as `s`, `m` or `h`.
+   *       Defaults is _60 seconds_.
+   *   - _maxQueue_ - Maximum number of messages allowed to merge into one sub-pipeline.
    * @returns The same _Configuration_ object.
    */
   mux(
@@ -890,9 +900,14 @@ interface Configuration {
   ): Configuration;
 
   /**
-   * Appends a _mux_ filter that shares the same target sub-pipline
-   * with other _mux_ filters coming from the same inbound connection.
+   * Appends a _mux_ filter that merges to the same target sub-pipline
+   * as other _mux_ filters coming from the same inbound connection.
    *
+   * @param options Options or a function that returns the options including:
+   *   - _maxIdle_ - Maximum time an idle sub-pipeline should stay around.
+   *       Can be a number in seconds or a string with one of the time unit suffixes such as `s`, `m` or `h`.
+   *       Defaults is _60 seconds_.
+   *   - _maxQueue_ - Maximum number of messages allowed to merge into one sub-pipeline.
    * @returns The same _Configuration_ object.
    */
   mux(
@@ -910,6 +925,12 @@ interface Configuration {
    * - **SUB-INPUT** - _Messages_ from multiple _muxQueue_ filters.
    * - **SUB-OUTPUT** - _Messages_ to be dequeued by multiple _muxQueue_ filters.
    *
+   * @param target A function that returns a key identifiying the shared sub-pipeline to merge messages to.
+   * @param options Options or a function that returns the options including:
+   *   - _maxIdle_ - Maximum time an idle sub-pipeline should stay around.
+   *       Can be a number in seconds or a string with one of the time unit suffixes such as `s`, `m` or `h`.
+   *       Defaults is _60 seconds_.
+   *   - _maxQueue_ - Maximum number of messages allowed to merge into one sub-pipeline.
    * @returns The same _Configuration_ object.
    */
   muxQueue(
@@ -918,9 +939,14 @@ interface Configuration {
   ): Configuration;
 
   /**
-   * Appends a _muxQueue_ filter that shares the same target sub-pipline
-   * with other _muxQueue_ filters coming from the same inbound connection.
+   * Appends a _muxQueue_ filter that merges to the same target sub-pipline
+   * as other _muxQueue_ filters coming from the same inbound connection.
    *
+   * @param options Options or a function that returns the options including:
+   *   - _maxIdle_ - Maximum time an idle sub-pipeline should stay around.
+   *       Can be a number in seconds or a string with one of the time unit suffixes such as `s`, `m` or `h`.
+   *       Defaults is _60 seconds_.
+   *   - _maxQueue_ - Maximum number of messages allowed to merge into one sub-pipeline.
    * @returns The same _Configuration_ object.
    */
   muxQueue(
@@ -937,6 +963,16 @@ interface Configuration {
    * - **SUB-INPUT** - _Data_ stream to send to the server with HTTP/1 or HTTP/2 requests.
    * - **SUB-OUTPUT** - _Data_ stream received from the server with HTTP/1 or HTTP/2 responses.
    *
+   * @param target A function that returns a key identifiying the shared sub-pipeline to merge messages to.
+   * @param options Options or a function that returns the options including:
+   *   - _maxIdle_ - Maximum time an idle sub-pipeline should stay around.
+   *       Can be a number in seconds or a string with one of the time unit suffixes such as `s`, `m` or `h`.
+   *       Defaults is `60` seconds.
+   *   - _maxQueue_ - Maximum number of messages allowed to merge into one sub-pipeline.
+   *   - _bufferSize_ - Maximum body size above which a message should be transferred in chunks.
+   *       Can be a number in bytes or a string with a unit suffix such as `'k'`, `'m'`, `'g'` and `'t'`.
+   *       Default is _16KB_.
+   *   - _version_ - Number `1` for HTTP/1 or number `2` for HTTP/2. Can also be a function that returns `1` or `2`.
    * @returns The same _Configuration_ object.
    */
   muxHTTP(
@@ -945,14 +981,36 @@ interface Configuration {
   ): Configuration;
 
   /**
-   * Appends a _muxHTTP_ filter that shares the same target sub-pipline
-   * with other _muxHTTP_ filters coming from the same inbound connection.
+   * Appends a _muxHTTP_ filter that merges to the same target sub-pipline
+   * as other _muxHTTP_ filters coming from the same inbound connection.
    *
+   * @param options Options or a function that returns the options including:
+   *   - _maxIdle_ - Maximum time an idle sub-pipeline should stay around.
+   *       Can be a number in seconds or a string with one of the time unit suffixes such as `s`, `m` or `h`.
+   *       Defaults is `60` seconds.
+   *   - _maxQueue_ - Maximum number of messages allowed to merge into one sub-pipeline.
+   *   - _bufferSize_ - Maximum body size above which a message should be transferred in chunks.
+   *       Can be a number in bytes or a string with a unit suffix such as `'k'`, `'m'`, `'g'` and `'t'`.
+   *       Default is _16KB_.
+   *   - _version_ - Number `1` for HTTP/1 or number `2` for HTTP/2. Can also be a function that returns `1` or `2`.
    * @returns The same _Configuration_ object.
    */
   muxHTTP(
     options?: MuxHTTPOptions | (() => MuxHTTPOptions),
   ): Configuration;
+
+  /**
+   * Appends an _output_ filter to the current pipeline layout.
+   *
+   * An _output_ filter forwards its input _Events_ to the output of a _input_ filter.
+   *
+   * - **INPUT** - Any types of _Events_.
+   * - **OUTPUT** - Nothing.
+   *
+   * @param out A function that returns an _Output_ object representing an _input_ filter's output.
+   * @returns The same _Configuration_ object.
+   */
+  output(out?: () => Output): Configuration;
 
   /**
    * Appends a _pack_ filter to the current pipeline layout.
@@ -962,13 +1020,18 @@ interface Configuration {
    * - **INPUT** - Stream of _Messages_ to combine.
    * - **OUTPUT** - Stream of combined _Messages_.
    *
+   * @param batchSize Number of messages to pack into one. Default is `1`.
+   * @param options Options including:
+   *   - _vacancy_ - Percentage of spare space letf in the internal storage of packed _Data_ object. Default is `0.5`.
+   *   - _interval_ - Maximum time to wait before outputting a batch even if the number of messages is not enough.
+   *       Can be a number in seconds or a string with one of the time unit suffixes such as `s`, `m` or `h`.
+   *       Default is _5 seconds_.
    * @returns The same _Configuration_ object.
    */
   pack(
     batchSize?: number,
     options?: {
       vacancy?: number,
-      timeout?: number | string,
       interval?: number | string,
     }
   ): Configuration;
@@ -993,6 +1056,8 @@ interface Configuration {
    * - **INPUT** - Any types of _Events_.
    * - **OUTPUT** - Any types of _Events_.
    *
+   * @param handler A callback function that receives _Data_ events passing through the filter and returns their replacements.
+   *   The replacement can be an _Event_, a _Message_ or an array of them.
    * @returns The same _Configuration_ object.
    */
   replaceData(handler?: (data: Data) => Event | Message | (Event|Message)[] | void): Configuration;
@@ -1005,6 +1070,8 @@ interface Configuration {
    * - **INPUT** - Any types of _Events_.
    * - **OUTPUT** - Any types of _Events_.
    *
+   * @param handler A callback function that receives _Messages_ passing through the filter and returns their replacements.
+   *   The replacement can be an _Event_, a _Message_ or an array of them.
    * @returns The same _Configuration_ object.
    */
   replaceMessage(handler?: (msg: Message) => Event | Message | (Event|Message)[] | void): Configuration;
@@ -1017,6 +1084,8 @@ interface Configuration {
    * - **INPUT** - Any types of _Events_.
    * - **OUTPUT** - Any types of _Events_.
    *
+   * @param handler A callback function that receives message bodies passing through the filter and returns their replacements.
+   *   The replacement can be an _Event_, a _Message_ or an array of them.
    * @returns The same _Configuration_ object.
    */
   replaceMessageBody(handler?: (data: Data) => Event | Message | (Event|Message)[] | void): Configuration;
@@ -1029,6 +1098,8 @@ interface Configuration {
    * - **INPUT** - Any types of _Events_.
    * - **OUTPUT** - Any types of _Events_.
    *
+   * @param handler A callback function that receives _MessageEnd_ events passing through the filter and returns their replacements.
+   *   The replacement can be an _Event_, a _Message_ or an array of them.
    * @returns The same _Configuration_ object.
    */
   replaceMessageEnd(handler?: (evt: MessageEnd) => Event | Message | (Event|Message)[] | void): Configuration;
@@ -1041,6 +1112,8 @@ interface Configuration {
    * - **INPUT** - Any types of _Events_.
    * - **OUTPUT** - Any types of _Events_.
    *
+   * @param handler A callback function that receives _MessageStart_ events passing through the filter and returns their replacements.
+   *   The replacement can be an _Event_, a _Message_ or an array of them.
    * @returns The same _Configuration_ object.
    */
   replaceMessageStart(handler?: (evt: MessageStart) => Event | Message | (Event|Message)[] | void): Configuration;
@@ -1053,6 +1126,8 @@ interface Configuration {
    * - **INPUT** - Any types of _Events_.
    * - **OUTPUT** - Any types of _Events_.
    *
+   * @param handler A callback function that receives _StreamEnd_ events passing through the filter and returns their replacements.
+   *   The replacement can be an _Event_, a _Message_ or an array of them.
    * @returns The same _Configuration_ object.
    */
   replaceStreamEnd(handler?: (evt: StreamEnd) => Event | Message | (Event|Message)[] | void): Configuration;
@@ -1065,6 +1140,8 @@ interface Configuration {
    * - **INPUT** - Any types of _Events_.
    * - **OUTPUT** - Any types of _Events_.
    *
+   * @param handler A callback function tha receives the first event passing through the filter and returns its replacement.
+   *   The replacement can be an _Event_, a _Message_ or an array of them.
    * @returns The same _Configuration_ object.
    */
   replaceStreamStart(handler?: (evt: Event) => Event | Message | (Event|Message)[] | void): Configuration;
@@ -1077,6 +1154,7 @@ interface Configuration {
    * - **INPUT** - _Data_ stream containing HTTP requests received from the client.
    * - **OUTPUT** - _Data_ stream containing HTTP responses to send to the client.
    *
+   * @param handler A callback function that receives a request _Message_ and returns the corresponding response _Message_.
    * @returns The same _Configuration_ object.
    */
   serveHTTP(handler: (request: Message) => Message): Configuration;
@@ -1089,6 +1167,7 @@ interface Configuration {
    * - **INPUT** - _Messages_ to split.
    * - **OUTPUT** - _Messages_ splitted from the input.
    *
+   * @param separator A string or a _Data_ object as the separator, or a function that returns that.
    * @returns The same _Configuration_ object.
    */
   split(separator: string | Data | (() => string | Data)): Configuration;
@@ -1101,6 +1180,7 @@ interface Configuration {
    * - **INPUT** - Any types of _Events_.
    * - **OUTPUT** - Same _Events_ as the input.
    *
+   * @param filename Pathname of the file to write to.
    * @returns The same _Configuration_ object.
    */
   tee(filename: string | (() => string)): Configuration;
@@ -1113,6 +1193,7 @@ interface Configuration {
    * - **INPUT** - Any types of _Events_.
    * - **OUTPUT** - Same _Events_ as the input.
    *
+   * @param quota A _Quota_ object or a function returns it.
    * @returns The same _Configuration_ object.
    */
   throttleConcurrency(quota: Quota | (() => Quota)): Configuration;
@@ -1125,6 +1206,7 @@ interface Configuration {
    * - **INPUT** - Any types of _Events_.
    * - **OUTPUT** - Same _Events_ as the input.
    *
+   * @param quota A _Quota_ object or a function returns it.
    * @returns The same _Configuration_ object.
    */
   throttleDataRate(quota: Quota | (() => Quota)): Configuration;
@@ -1137,6 +1219,7 @@ interface Configuration {
    * - **INPUT** - Any types of _Events_.
    * - **OUTPUT** - Same _Events_ as the input.
    *
+   * @param quota A _Quota_ object or a function returns it.
    * @returns The same _Configuration_ object.
    */
   throttleMessageRate(quota: Quota | (() => Quota)): Configuration;
@@ -1152,6 +1235,8 @@ interface Configuration {
    * - **SUB-INPUT** - _Events_ streaming into the _use_ filter.
    * - **SUB-OUTPUT** - Any types of _Events_.
    *
+   * @param filename Module file pathname in the current codebase.
+   * @param pipelineLayoutName Name of the sub-pipeline layout in the module being used.
    * @returns The same _Configuration_ object.
    */
   use(filename: string, pipelineLayoutName?: string): Configuration;
@@ -1164,6 +1249,7 @@ interface Configuration {
    * - **INPUT** - Any types of _Events_.
    * - **OUTPUT** - Same _Events_ as the input
    *
+   * @param condition A callback function that returns `true` to let through input events.
    * @returns The same _Configuration_ object.
    */
   wait(condition: () => boolean): Configuration;

@@ -38,7 +38,7 @@ Besides one _port pipeline_ layout, this time we also added two _sub-pipeline_ l
 
 1. The port pipeline layout listens on port 8000. It has only one filter **demuxHTTP()**. It's similar to **serveHTTP()** that we've been using before for receiving HTTP requests and sending back responses. But instead of handling HTTP requests in a _callback function_, it handles them in a _sub-pipeline_, which is referred to under name _"forward"_ by calling method **to()** right after it.
 
-2. The _sub-pipeline_ layout named _"forward"_ has only one filter **muxHTTP()**. This filter _queues_ up its input message in a shared stream to another _sub-pipeline_ under the name _"connection"_ (as given in method **to()** called after it). It also _dequeues_ a message out of the output from _sub-pipeline "connection"_. The dequeued message would become its own output.
+2. The _sub-pipeline_ layout named _"forward"_ has only one filter **muxHTTP()**. This filter _queues_ up its input message in another _sub-pipeline_ under the name _"connection"_ (as given in method **to()** called after it). It also _dequeues_ a message out of the output from _sub-pipeline "connection"_. The dequeued message would become its own output.
 
 3. The last pipeline layout _"connection"_ is also a _sub-pipeline_. It contains only one filter **connect()** that establishes a TCP connection to remote host _"localhost:8080"_ (given in its construction parameter). After the connection is established, it sends its input data to that host and outputs data received from it.
 
@@ -76,21 +76,21 @@ As you can see, although the filter is named _"demuxHTTP"_, but it really perfor
 
 ### Filter: muxHTTP()
 
-The opposite to **demuxHTTP()** is **muxHTTP()**. Unlike **demuxHTTP()** spawning multiple sub-pipelines, **muxHTTP()** _shares_ a sub-pipeline with other **muxHTTP()** instances.
+The opposite to **demuxHTTP()** is **muxHTTP()**. Unlike **demuxHTTP()** spawning multiple sub-pipelines, multiple **muxHTTP()** instances _merge_ messages into a shared sub-pipeline.
 
 <div style="text-align: center">
   <MuxHTTP/>
 </div>
 
-The filter accepts an optional callback function `target` that tells which sub-pipeline it's going to send messages over to. When two **muxHTTP()** instances are _targeted_ to the same sub-pipeline, they are _sharing_ the same HTTP session. In other words, requests coming from the two **muxHTTP()** instances will be _multiplexed_ into one HTTP stream in the same sub-pipeline they share.
+The filter accepts an optional callback function `target` that tells which sub-pipeline it's going to merge messages to. When two **muxHTTP()** instances have the same _target_, they are merging into the same HTTP session. In other words, requests coming from the two **muxHTTP()** instances will be _multiplexed_ into one HTTP stream in a _shared_ sub-pipeline.
 
 Callback `target` can return a value of any type. Whatever it returns will be the _key_ referring to a shared sub-pipeline. If a sub-pipeline with that key doesn't exist yet, a new sub-pipeline will be created, and then shared by other **muxHTTP()** instances that come after and also refer to the same key.
 
-By default, the _key_ is just `__inbound` when a `target` callback is absent. `__inbound` is a built-in _context variable_ representing the current downstream connection. So by default, all **muxHTTP()** filters originated from the same client connection will create and share only one single sub-pipeline. If you want to change that strategy, you can provide a custom `target` callback as the first parameter to the filter.
+By default, the _key_ is just `__inbound` when a `target` callback is absent. `__inbound` is a built-in _context variable_ representing the current downstream connection. So by default, all **muxHTTP()** filters originated from the same client connection will create only one single sub-pipeline and merge to it. If you want to change that strategy, you can provide a custom `target` callback as the first parameter to the filter.
 
-> Note that this "sharing" only happens between **muxHTTP()** instances coming from the same place in the same pipeline layout. In 2 different pipeline layouts, or 2 different places in the same pipeline layout, **muxHTTP()** instances will never share sub-pipelines.
+> Note that this "merging" only happens between **muxHTTP()** instances coming from the same place in the same pipeline layout. In 2 different pipeline layouts, or 2 different places in the same pipeline layout, **muxHTTP()** instances will never merge to the same sub-pipeline.
 
-Same as **demuxHTTP()**, although it's named "muxHTTP", but really it also _demuxes_ responses coming out from the end of the shared sub-pipeline in addition to _muxing_ requests to it.
+Same as **demuxHTTP()**, although it's named "muxHTTP", but really it also _demuxes_ responses coming out from the end of the shared sub-pipeline they merge to in addition to _muxing_ requests to it.
 
 ### Pipeline topology
 

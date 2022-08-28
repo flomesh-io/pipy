@@ -5,9 +5,7 @@ api: Configuration.mux
 
 ## Description
 
-Appends a **mux** filter to the current pipeline layout.
-
-A **mux** filter queues up input [Messages](/reference/api/Message) into a shared sub-pipeline. Its input and output are _Messages_. Its sub-pipelines's input is also _Messages_ while their output is simply discarded.
+<Summary/>
 
 <FilterDiagram
   name="mux"
@@ -17,56 +15,69 @@ A **mux** filter queues up input [Messages](/reference/api/Message) into a share
   subType="mux"
 />
 
-A **mux** filter works like this:
+A _mux_ filter does the following:
 
-- At the input to a **mux** filter, _Messages_ are sent to a sub-pipeline that is shared by a group of **mux** filters
-- At the input to the shared sub-pipeline, all streams from the group of **mux** filters are queued up into one single _Message_ stream
-- Whatever is output from the shared sub-pipeline is discared
-- At the output from the **mux** filter, out come the same _Mesasges_ from its input
+- At the input to a _mux_ filter, the _Message_ is merged to a sub-pipeline that is shared by multiple _mux_ filters
+- At the input to the shared sub-pipeline, _Messages_ from multiple _mux_ filters are queued up into one single _Message_ stream
+- Whatever is outputted from the shared sub-pipeline is discared
+- At the output from the _mux_ filter, out come the same _Mesasge_ as its input
 
-A group of **mux** filters can have one shared sub-pipeline, in which many input _Messages_ are queued up.
+Multiple _mux_ filters can have one shared sub-pipeline, in which many input _Messages_ are queued up.
 
-### Stream Grouping
+### Stream sharing
 
-You can control the grouping of **mux** filters by using the _group_ parameter. It can be a value of any type or a function that returns a dynamic value of any type. Filters in the same _group_ will share the same sub-pipeline.
+You can control where a _mux_ filter merges its input _Message_ to by specifying a _"merging target"_. It can be a value of any type or a function that returns it. Filters with the same _merging target_ share and merge to the same sub-pipeline.
 
-> Grouping only happens among filters coming from the same place in the same pipeline layout. Two filters from different pipeline layouts or different places in the same pipeline layout will never share the same sub-pipeline, even when given the same _group_ parameter.
+> Merging only happens among filters coming from the same place in the same pipeline layout. Two filters from different pipeline layouts or different places in the same pipeline layout will never merge to the same sub-pipeline, even when they have the same _merging target_.
 
 ### Sub-pipeline lifecycle
 
-Since the sub-pipeline is shared by multiple streams coming from a group of **mux** filters, it won't be closed until the last stream ends in the group. After all streams in the group are closed, the sub-pipeline will wait for 10 seconds to ensure no more new streams are coming. You can change this waiting time by the _maxIdle_ option in the _options_ parameter. It can be either a number in seconds or a string with a unit suffix such as `'s'`, `'m'`, `'h'`, `'d'`.
+Since the sub-pipeline is shared by multiple _mux_ filter instances, it won't be closed until the last _mux_ ends. After all _mux_ filter instances sharing it are done, the sub-pipeline will wait for 60 seconds to ensure no more new _mux_ filters come and merge to it. You can change this waiting time by the _maxIdle_ option in the _options_ parameter. It can be either a number in seconds or a string with a unit suffix such as `'s'`, `'m'`, `'h'`, `'d'`.
 
-> When the _group_ parameter is an object, it will be a _weak ref_ as the key in a [WeakMap](https://developer.mozilla.org/docs/Web/JavaScript/Guide/Keyed_collections#weakmap_object). When the object is dead, so is the sub-pipeline, regardless of the _idleTime_ option. The stream in that dead sub-pipeline could be closed earlier or later than the idle time, but it will never be reused again.
+> When the _merging target_ is an object, it will be a _weak ref_, just like a key in a [WeakMap](https://developer.mozilla.org/docs/Web/JavaScript/Guide/Keyed_collections#weakmap_object). When the object is dead, so is the sub-pipeline being weakly referenced by the object, regardless of the _idleTime_ option.
 
 ## Syntax
 
 ``` js
 pipy()
-  .pipeline('example')
-    .mux(layout, group)
+  .pipeline()
+  .mux().to(
+    subPipelineLayout
+  )
 
 pipy()
-  .pipeline('example')
-    .mux(layout, () => whichGroup())
+  .pipeline()
+  .mux(
+    () => whereToMerge()
+  ).to(
+    subPipelineLayout
+  )
 
 pipy()
-  .pipeline('example')
-    .mux(
-      layout,
-      group,
-      {
-        maxIdle,
-      }
-    )
+  .pipeline()
+  .mux({
+    maxIdle,
+    maxQueue,
+  }).to(
+    subPipelineLayout
+  )
+
+pipy()
+  .pipeline()
+  .mux(
+    () => whereToMerge(),
+    {
+      maxIdle,
+      maxQueue,
+    }
+  ).to(
+    subPipelineLayout
+  )
 ```
 
-### Parameters
+## Parameters
 
 <Parameters/>
-
-### Return value
-
-<ReturnValue/>
 
 ## See Also
 

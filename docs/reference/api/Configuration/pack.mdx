@@ -5,9 +5,7 @@ api: Configuration.pack
 
 ## Description
 
-Appends a **pack** filter to the current pipeline layout.
-
-A **pack** filter concatenates [Data](/reference/api/Data) from multiple input [Message](/reference/api/Message) bodies into one and outputs the combined _Messages_. Its input and output are both _Message_ streams.
+<Summary/>
 
 <FilterDiagram
   name="pack"
@@ -17,7 +15,7 @@ A **pack** filter concatenates [Data](/reference/api/Data) from multiple input [
 
 The number of input _Messages_ to combine into one is given by the _batchSize_ parameter, which defaults to 1 if not presented.
 
-You can set the maximum time interval between two consecutive batches coming out of a **pack** filter by the _interval_ option in the _options_ parameter. When this interval is greater than 0, a combined _Message_, if any, is guaranteed to be produced after every that amount of time, whether the _batchSize_ is reached or not.
+You can set the maximum time interval between two consecutive batches coming out of a _pack_ filter by the _interval_ option in the _options_ parameter. When this interval is greater than 0, a combined _Message_, if any, is guaranteed to be produced after every that amount of time, whether the _batchSize_ is reached or not.
 
 You can also let the filter produce a combined _Message_ after a certain amount of time when no _Messages_ are coming through its input. This is done by the _timeout_ option in the _options_ parameter.
 
@@ -25,7 +23,7 @@ Both _interval_ and _timeout_ can be a number in seconds, or a string with a tim
 
 ### Defragmentation
 
-A [Data](/reference/api/Data) object stores its bytes in an array of _4KB chunks_. After a series of _Data_ splitting and joining operations by codecs and scripting, the chunks stored in _Data_ will be fragmented and have unused spaces in them. The **pack** filter has a side-effect to _defragment_ the chunks to save memory.
+A [Data](/reference/api/Data) object stores its bytes in an array of _4KB chunks_. After a series of _Data_ splitting and joining operations by codecs and scripting, the chunks stored in _Data_ will be fragmented and have unused spaces in them. The _pack_ filter has a side-effect to _defragment_ the chunks to save memory.
 
 The degree of defragmentation can be controlled by the _vacancy_ option in the _options_ parameter. It tells the filter how much vacant space is allowed in every chunk, ranging from 0 where no vacancy should be kept, to 1 where no defragmentation is done. The default is 0.5, which means when a chunk has over half (2KB) space unused, it should be merged with its neighboring chunks.
 
@@ -35,32 +33,27 @@ Defragmentation does not change your code logic, it only saves memory consumptio
 
 ``` js
 pipy()
-  .pipeline('example')
-    .pack()
+  .pipeline()
+  .pack()
 
 pipy()
-  .pipeline('example')
-    .pack(batchSize)
+  .pipeline()
+  .pack(batchSize)
 
 pipy()
-  .pipeline('example')
-    .pack(
-      batchSize,
-      {
-        vacancy,
-        timeout,
-        interval,
-      }
-    )
+  .pipeline()
+  .pack(
+    batchSize,
+    {
+      vacancy,
+      interval,
+    }
+  )
 ```
 
-### Parameters
+## Parameters
 
 <Parameters/>
-
-### Return value
-
-<ReturnValue/>
 
 ## See Also
 

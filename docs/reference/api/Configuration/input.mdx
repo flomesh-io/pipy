@@ -5,7 +5,7 @@ api: Configuration.input
 
 ## Description
 
-Appends an input filter to the current pipeline layout.
+<Summary/>
 
 <FilterDiagram
   name="input"
@@ -14,3 +14,26 @@ Appends an input filter to the current pipeline layout.
   subInput="Event"
   subType="link"
 />
+
+## Syntax
+
+``` js
+pipy()
+  .pipeline()
+  .input()
+
+pipy()
+  .pipeline()
+  .input(
+    out => setupOutput(out)
+  )
+```
+
+## Parameters
+
+<Parameters/>
+
+## See Also
+
+* [Configuration](/reference/api/Configuration)
+* [output()](/reference/api/Configuration/output)
