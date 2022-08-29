@@ -5,9 +5,7 @@ api: Configuration.serveHTTP
 
 ## Description
 
-Appends a **serveHTTP** filter to the current pipeline layout.
-
-A **serveHTTP** filter de-multiplexes and decodes HTTP requests from its input [Data](/reference/api/Data) stream, calls a user-defined script handler for each request to get a response and encodes and multiplexes those HTTP responses into a single output _Data_ stream. Its input and output are _Data_ (usually TCP streams).
+<Summary/>
 
 <FilterDiagram
   name="serveHTTP"
@@ -19,23 +17,34 @@ A **serveHTTP** filter de-multiplexes and decodes HTTP requests from its input [
 
 ``` js
 pipy()
-  .pipeline('example')
-    .serveHTTP(response)
+  .pipeline()
+  .serveHTTP(
+    new Message(head, body)
+  )
 
 pipy()
-  .pipeline('example')
-    .serveHTTP(
-      request => getResponse(request)
-    )
+  .pipeline()
+  .serveHTTP(
+    request => getResponse(request)
+  )
 ```
 
-### Parameters
+## Parameters
 
 <Parameters/>
 
-### Return value
+## Example
 
-<ReturnValue/>
+``` js
+pipy()
+
+  .listen(8080)
+  .serveHTTP(
+    msg => new Message(
+      `You requested ${msg.head.path}`
+    )
+  )
+```
 
 ## See Also
 

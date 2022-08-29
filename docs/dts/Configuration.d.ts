@@ -127,6 +127,7 @@ interface Configuration {
    * Registers a function to be called when a pipeline is created.
    *
    * @param handler A function that is called every time a new pipeline instance is created.
+   *   Its parameters depend on the type of joint-filter that creates the pipeline.
    *   Its return value, if any, is an _Event_ or a _Message_ or an array of them that makes up the initial input to the pipeline.
    * @returns The same _Configuration_ object.
    */
@@ -720,6 +721,7 @@ interface Configuration {
    * - **INPUT** - The child process's standard input _Data_ stream.
    * - **OUTPUT** - The child process's standard output _Data_ stream.
    *
+   * @param command A string or a function that returns a string containing the shell command to execute.
    * @returns The same _Configuration_ object.
    */
   exec(command: string | (() => string)): Configuration;
@@ -1002,7 +1004,7 @@ interface Configuration {
   /**
    * Appends an _output_ filter to the current pipeline layout.
    *
-   * An _output_ filter forwards its input _Events_ to the output of a _input_ filter.
+   * An _output_ filter forwards its input _Events_ to the output of an _input_ filter.
    *
    * - **INPUT** - Any types of _Events_.
    * - **OUTPUT** - Nothing.
@@ -1237,6 +1239,7 @@ interface Configuration {
    *
    * @param filename Module file pathname in the current codebase.
    * @param pipelineLayoutName Name of the sub-pipeline layout in the module being used.
+   *   The _entry pipeline_ will be used if the name is not given.
    * @returns The same _Configuration_ object.
    */
   use(filename: string, pipelineLayoutName?: string): Configuration;

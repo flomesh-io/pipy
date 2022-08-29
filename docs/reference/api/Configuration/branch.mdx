@@ -60,6 +60,8 @@ pipy({
   )
 ```
 
+> The condition the filter is waiting for is only checked every time there's an input event to the filter. To check the condition whenever any state in the context has changed, regardless of any input events, use [wait()](/reference/api/Configuration/wait) instead.
+
 ## Syntax
 
 ``` js

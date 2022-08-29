@@ -16,6 +16,47 @@ api: Configuration.chain
   subType="link"
 />
 
+### Module and entry pipeline
+
+In Pipy, a module is a standalone script file defining a bunch of pipeline layouts (See [Module](/intro/concepts#module) in _Concepts_). Every module can have an _entry pipeline layout_, which is defined by using [pipeline()](/reference/api/Configuration/pipeline) without providing a name. The entry pipeline layout is the starting point to link to while referring a module as a whole from other modules.
+
+### Module chain
+
+Modules can be organized into a _"chain of modules"_, where processing starts from the first module and passes down the module chain in order. Each module, after receving and processing the input, decides if the modules after it would get to continue processing.
+
+#### Start a chain
+
+Calling _chain()_ with an array of module filenames starts a module chain. All inputs to the _chain_ filter would go to the _entry pipeline_ of the first module on the chain. All outputs from that first module would become the _chain_ filter's output as well.
+
+``` js
+pipy()
+
+  .listen(8000)
+  .demuxHTTP().to(
+    $=>$.chain([
+      'module-1.js',
+      'module-2.js',
+      'module-3.js',
+    ])
+  )
+```
+
+#### Pass to the next
+
+Calling _chain()_ with no parameters would link to the _entry pipeline_ of the next module on the current module chain. The _current module chain_ is the chain that has started from the nearest _chain_ filter up in the parent pipelines.
+
+``` js
+pipy()
+
+  .pipeline() // The entry pipeline layout
+  .handleMessageStart(
+    msg => doSomething(msg)
+  )
+  .chain() // Link to the next module on the current module chain
+```
+
+> For more information about _module chains_, please see [Tutorial Step 7: Plugins](/tutorial/07-plugins) for how a _plugin system_ can be built using module chains.
+
 ## Syntax
 
 ``` js

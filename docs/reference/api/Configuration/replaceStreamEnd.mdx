@@ -5,9 +5,7 @@ api: Configuration.replaceStreamEnd
 
 ## Description
 
-Appends a **replaceStreamEnd** filter to the current pipeline layout.
-
-A **replaceStreamEnd** filter calls a user function to get a replacement for every [StreamEnd](/reference/api/StreamEnd) event in the input stream. Its input and output can be any kinds of events.
+<Summary/>
 
 <FilterDiagram
   name="replaceStreamEnd"
@@ -15,7 +13,7 @@ A **replaceStreamEnd** filter calls a user function to get a replacement for eve
   output="Event"
 />
 
-The user function will receive as parameter a [StreamEnd](/reference/api/StreamEnd) object that is removed from the input stream. Whatever the function returns will be inserted into the output stream in place of the removed event. It can be an event or a [Message](/reference/api/Message), or an array of events or _Messages_. If the function returns nothing (_null_ or _undefined_), no events will be inserted in the output.
+The user function will receive as parameter a [StreamEnd](/reference/api/StreamEnd) event that is removed from the input stream. Whatever the function returns will be inserted into the output stream in place of the removed event. It can be an event or a [Message](/reference/api/Message), or an array of events or _Messages_. If the function returns nothing (_null_ or _undefined_), no events will be inserted back into the stream.
 
 You can also use a fixed replacement value instead of a function if the replacement is static.
 
@@ -23,19 +21,15 @@ You can also use a fixed replacement value instead of a function if the replacem
 
 ``` js
 pipy()
-  .pipeline('example')
-    .replaceStreamEnd(
-      event => transform(event)
-    )
+  .pipeline()
+  .replaceStreamEnd(
+    event => transform(event)
+  )
 ```
 
-### Parameters
+## Parameters
 
 <Parameters/>
-
-### Return value
-
-<ReturnValue/>
 
 ## See Also
 

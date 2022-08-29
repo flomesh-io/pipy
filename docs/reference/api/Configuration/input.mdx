@@ -15,6 +15,14 @@ api: Configuration.input
   subType="link"
 />
 
+### Link back from its sub-pipeline tree
+
+The _input_ filter is similar to [link()](/reference/api/Configuration/link) in that, it forwards all input events to a newly created sub-pipeline without any changes. But the difference is, unlike _link_ filter outputting events coming out directly from the sub-pipeline, an _input_ filter outputs events coming from an [output()](/reference/api/Configuration/output) filter in the sub-pipeline, or the sub-pipeline's sub-pipelines, and so on.
+
+### Link back from any sub-pipelines
+
+An _input_ filter's output can also be linked to a sub-pipeline's output not in its own sub-pipeline tree. One can do so by first giving _input()_ a callback function to receive an _Output_ object. The _Output_ object can be used by an _output_ filter in any other sub-pipelines to direct events towards this _input_ filter. See [output()](/reference/api/Configuration/output) for more information on the usage of an _output_ filter.
+
 ## Syntax
 
 ``` js
@@ -37,3 +45,4 @@ pipy()
 
 * [Configuration](/reference/api/Configuration)
 * [output()](/reference/api/Configuration/output)
+* [link()](/reference/api/Configuration/link)

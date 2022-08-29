@@ -5,9 +5,7 @@ api: Configuration.wait
 
 ## Description
 
-Appends a **wait** filter to the current pipeline layout.
-
-A **wait** filter blocks all input events up until a condition is met. Its input and output can be any types of events.
+<Summary/>
 
 <FilterDiagram
   name="wait"
@@ -21,33 +19,34 @@ You can optionally set the maximum waiting time with _timeout_ option in the _op
 
 This filter passes everything down unaltered. It doesn't change anything in the event stream. It only delays them.
 
+### Similarity to _branch()_
+
+When [branch()](/reference/api/Configuration/branch) filter is used without a fallback branch, it has a similar effect as _wait_, where input events are blocked until certain condition is met. The differece is, however, _branch_ only checks the provided condition callback when there's an input event to the filter, while _wait_ checks it whenever any state in the context has changed.
+
 ## Syntax
 
 ``` js
 pipy()
-  .pipeline('example')
-    .wait(
-      () => shouldContinue()
-    )
+  .pipeline()
+  .wait(
+    () => shouldContinue()
+  )
 
 pipy()
-  .pipeline('example')
-    .wait(
-      () => shouldContinue(),
-      {
-        timeout,
-      }
-    )
+  .pipeline()
+  .wait(
+    () => shouldContinue(),
+    {
+      timeout,
+    }
+  )
 ```
 
-### Parameters
+## Parameters
 
 <Parameters/>
-
-### Return value
-
-<ReturnValue/>
 
 ## See Also
 
 * [Configuration](/reference/api/Configuration)
+* [branch()](/reference/api/Configuration/branch)

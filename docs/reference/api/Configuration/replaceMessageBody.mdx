@@ -5,9 +5,7 @@ api: Configuration.replaceMessageBody
 
 ## Description
 
-Appends a **replaceMessageBody** filter to the current pipeline layout.
-
-A **replaceMessageBody** filter calls a user function to get a replacement for every complete message body in the input stream. Its input and output can be any kinds of events.
+<Summary/>
 
 <FilterDiagram
   name="replaceMessageBody"
@@ -15,9 +13,9 @@ A **replaceMessageBody** filter calls a user function to get a replacement for e
   output="Event"
 />
 
-The user function will receive as parameter a [Data](/reference/api/Data) object that contains a full message body and is removed from the input stream. Whatever the function returns will be inserted into the output stream in place of the removed events. It can be an event or a [Message](/reference/api/Message), or an array of events or _Messages_. If the function returns nothing (_null_ or _undefined_), no events will be inserted in the output.
+The user function will receive as parameter a [Data](/reference/api/Data) object that contains a full message body and is removed from the input stream. Whatever the function returns will be inserted into the output stream in place of the removed events. It can be an event or a [Message](/reference/api/Message), or an array of events or _Messages_. If the function returns nothing (_null_ or _undefined_), no events will be inserted back into the stream.
 
-This filter only calls the user function once for each message in the input stream. If the message's body is composed of multiple _Data_ objects, **replaceMessageBody** will wait until all _Data_ objects composing the whole message are collected and call the user function with a combined _Data_ object.
+This filter only calls the user function once for each message in the input stream. If the message's body is composed of multiple _Data_ events, **replaceMessageBody** will wait until all _Data_ objects composing the whole message are collected and call the user function with a combined _Data_ event.
 
 You can also use a fixed replacement value instead of a function if the replacement is static.
 
@@ -25,19 +23,15 @@ You can also use a fixed replacement value instead of a function if the replacem
 
 ``` js
 pipy()
-  .pipeline('example')
-    .replaceMessageBody(
-      data => transform(data)
-    )
+  .pipeline()
+  .replaceMessageBody(
+    data => transform(data)
+  )
 ```
 
-### Parameters
+## Parameters
 
 <Parameters/>
-
-### Return value
-
-<ReturnValue/>
 
 ## See Also
 

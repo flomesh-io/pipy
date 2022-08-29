@@ -5,13 +5,17 @@ api: Configuration.output
 
 ## Description
 
-Appends an output filter to the current pipeline layout.
+<Summary/>
 
 <FilterDiagram
   name="output"
   input="Event"
   output="Event"
 />
+
+Without any parameters, an _output_ filter forwards its input events to the nearest [input()](/reference/api/Configuration/input) filter up the parent pipelines.
+
+When given an _Output_ object, an _output_ filter forwards its input events to the _input_ filter that provides the _Output_ object. See [Link back from any sub-pipelines](/reference/api/Configuration/input#link-back-from-any-sub-pipelines) for how an _Output_ object can be obtained from an _input_ filter.
 
 ## Syntax
 

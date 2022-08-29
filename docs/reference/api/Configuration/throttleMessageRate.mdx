@@ -5,9 +5,7 @@ api: Configuration.throttleMessageRate
 
 ## Description
 
-Appends a **throttleMessageRate** filter to the current pipeline layout.
-
-A **throttleMessageRate** filter sets a limit to how many [Messages](/reference/api/Message) can pass in every second. Its input and output can be any types of events, but the limit only take effect when they have [MessageStart](/reference/api/Message) events.
+<Summary/>
 
 <FilterDiagram
   name="throttleMessageRate"
@@ -15,34 +13,31 @@ A **throttleMessageRate** filter sets a limit to how many [Messages](/reference/
   output="Event"
 />
 
-The rate limit is set by the _quota_ parameter, which is the number of _Messages_ allowed to pass every second, or a function that returns that number. When the limit is reached in a second, all events afterwards will be blocked until quota is recovered the next second. When the limit is zero or less, no limit is set.
-
-Quota can be counted per account by giving an account ID in the _account_ parameter. It can be a value of any type, or a function that returns a dynamic value.
-
 This filter passes down everything unaltered. It doesn't change anything in the event stream. It only delays them.
 
 ## Syntax
 
 ``` js
 pipy()
-  .pipeline('example')
-    .throttleMessageRate(quota)
+  .pipeline()
+  .throttleMessageRate(
+    new algo.Quota(quota, { per })
+  )
 
 pipy()
-  .pipeline('example')
-    .throttleMessageRate(quota, account)
+  .pipeline()
+  .throttleMessageRate(
+    () => getQuota()
+  )
 ```
 
-### Parameters
+## Parameters
 
 <Parameters/>
-
-### Return value
-
-<ReturnValue/>
 
 ## See Also
 
 * [Configuration](/reference/api/Configuration)
+* [algo.Quota](/reference/api/algo/Quota)
 * [throttleConcurrency()](/reference/api/Configuration/throttleConcurrency)
 * [throttleDataRate()](/reference/api/Configuration/throttleDataRate)

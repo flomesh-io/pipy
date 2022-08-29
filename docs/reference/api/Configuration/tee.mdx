@@ -5,9 +5,7 @@ api: Configuration.tee
 
 ## Description
 
-Appends a **tee** filter to the current pipeline layout.
-
-A **tee** filter writes Data to a file while passing all events through. Its input and output can be any kinds of events.
+<Summary/>
 
 <FilterDiagram
   name="tee"
@@ -17,7 +15,7 @@ A **tee** filter writes Data to a file while passing all events through. Its inp
 
 This filter resembles what the Unix command [tee](https://en.wikipedia.org/wiki/Tee_(command)) does. The pathname of the output file is specified in the first parameter. It is expected to be a string or a function that returns a string. Use `"-"` for writing to the standard output.
 
-> When outputting to the standard output, this filter is different from [print()](/reference/api/Configuration/print) in that, it does not format the output by any means while _print()_ has a limit to how many characters can go in a single line. Also, unlike _print()_, the output won't be visible on the _Admin GUI_.
+> When outputting to the standard output, this filter is different from [print()](/reference/api/Configuration/print) in that, the output does not go to the logging system so won't be visible on the _Admin GUI_.
 
 The content of the output file will be erased before writing. If the output file does not exist yet, it will be created. The directories containing the file are also created if not exist. Make sure the process has required privileges to create and write to the file and the directories.
 
@@ -27,21 +25,17 @@ This filter passes everything down unaltered. It doesn't change anything in the 
 
 ``` js
 pipy()
-  .pipeline('example')
-    .tee(filename)
+  .pipeline()
+  .tee(filename)
 
 pipy()
-  .pipeline('example')
-    .tee(() => getFilename())
+  .pipeline()
+  .tee(() => getFilename())
 ```
 
-### Parameters
+## Parameters
 
 <Parameters/>
-
-### Return value
-
-<ReturnValue/>
 
 ## See Also
 
