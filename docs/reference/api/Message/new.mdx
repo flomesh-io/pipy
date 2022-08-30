@@ -5,11 +5,13 @@ api: Message.new
 
 ## Description
 
-Creates an instance of **Message**.
+<Summary/>
 
-A **Message** can be created with either a _head_ or a _body_, or both of them or none.
+While constructing a _Message_, 3 parameters can be provided to initialize the message's content: _head_, _body_ and _tail_. All 3 parameters are optional.
 
 The _head_ parameter is an object holding varying content according to the protocol being used. See [For each protocol](/reference/api/MessageStart/head/#for-each-protocol).
+
+The _tail_ parameter is also an object holding varying content according to the protocol being used. See [For each protocol](/reference/api/MessageEnd/tail/#for-each-protocol).
 
 The _body_ parameter can be a [Data](/reference/api/Data) or a string. When it is a string, it'll be UTF-8 encoded into _Data_.
 
@@ -20,9 +22,10 @@ new Message()
 new Message(head)
 new Message(body)
 new Message(head, body)
+new Message(head, body, tail)
 ```
 
-### Parameters
+## Parameters
 
 <Parameters/>
 
@@ -31,3 +34,4 @@ new Message(head, body)
 * [Message](/reference/api/Message)
 * [head](/reference/api/Message/head)
 * [body](/reference/api/Message/body)
+* [tail](/reference/api/Message/tail)

@@ -75,7 +75,7 @@ These filters translate streams between the _raw byte form_ and the _message for
 * [demux()](/reference/api/Configuration/demux)
 * [demuxQueue()](/reference/api/Configuration/demuxQueue)
 * [demuxHTTP()](/reference/api/Configuration/demuxHTTP)
-* [merge()](/reference/api/Configuration/merge)
+* [mux()](/reference/api/Configuration/mux)
 * [muxQueue()](/reference/api/Configuration/muxQueue)
 * [muxHTTP()](/reference/api/Configuration/muxHTTP)
 * [serveHTTP()](/reference/api/Configuration/serveHTTP)
@@ -84,8 +84,12 @@ These filters split messages from one stream into multiple streams, or the oppos
 
 #### Connectors
 
+* [branch()](/reference/api/Configuration/branch)
+* [chain()](/reference/api/Configuration/chain)
 * [fork()](/reference/api/Configuration/fork)
+* [input()](/reference/api/Configuration/input)
 * [link()](/reference/api/Configuration/link)
+* [output()](/reference/api/Configuration/output)
 * [use()](/reference/api/Configuration/use)
 
 These filters pass events in a stream from one pipeline to another. Unlike _muxers and demuxers_, they only change where streams are going without changing their content.
@@ -93,7 +97,6 @@ These filters pass events in a stream from one pipeline to another. Unlike _muxe
 #### Buffering
 
 * [depositMessage()](/reference/api/Configuration/depositMessage)
-* [pack()](/reference/api/Configuration/pack)
 * [throttleConcurrency()](/reference/api/Configuration/throttleConcurrency)
 * [throttleDataRate()](/reference/api/Configuration/throttleDataRate)
 * [throttleMessageRate()](/reference/api/Configuration/throttleMessageRate)
@@ -123,6 +126,7 @@ These filters don't change anything in the stream. They simply pass down all eve
 * [decompressHTTP()](/reference/api/Configuration/decompressHTTP)
 * [decompressMessage()](/reference/api/Configuration/decompressMessage)
 * [exec()](/reference/api/Configuration/exec)
+* [pack()](/reference/api/Configuration/pack)
 * [replaceData()](/reference/api/Configuration/replaceData)
 * [replaceMessage()](/reference/api/Configuration/replaceMessage)
 * [replaceMessageBody()](/reference/api/Configuration/replaceMessageBody)

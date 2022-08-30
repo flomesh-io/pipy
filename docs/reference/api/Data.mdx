@@ -13,10 +13,10 @@ Once created, you can't alter a byte in it, but you can cut it short or enlarge 
 
 To convert from a string, you can [construct](/reference/api/Data/new) a _Data_ object or call [Data.from()](/reference/api/Data/from) with the string as parameter, plus an optional _encoding_ parameter. The following encodings are supported:
 
-- "utf8" (default)
-- "hex"
-- "base64"
-- "base64url"
+- `"utf8"` (default) - As a UTF-8 encoded string.
+- `"hex"` - As hexadecimal numbers.
+- `"base64"` - [Base64](https://datatracker.ietf.org/doc/html/rfc4648#section-4) representation.
+- `"base64url"` - [Base64url](https://datatracker.ietf.org/doc/html/rfc4648#section-5) representation.
 
 To convert to a string, call [toString](/reference/api/Data/toString) with one of the above encodings as the optional _encoding_ parameter.
 

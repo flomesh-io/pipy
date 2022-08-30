@@ -5,7 +5,9 @@ api: MessageStart
 
 ## Description
 
-**MessageStart** marks the start of a message in an event stream. It also contains meta-info for that message in its optional [head](/reference/api/MessageStart/head) property.
+<Summary/>
+
+It can also hold the high-level representation for the header of the message in its _head_ property.
 
 > The content of _head_ can vary according to the protocol being used. See [For each protocol](/reference/api/MessageStart/head/#for-each-protocol).
 
@@ -24,22 +26,21 @@ api: MessageStart
 ``` js
 pipy()
 
-.listen(8080)
-  .demuxHTTP('req')
-
-.pipeline('req')
-  .replaceMessage([
-    // This can also be done with a single Message object.
-    new MessageStart({
-      status: 200,
-      statusText: 'OK',
-      headers: {
-        'content-type': 'text/plain'
-      }
-    }),
-    new Data('Hello!\n'),
-    new MessageEnd,
-  ])
+  .listen(8080)
+  .demuxHTTP().to(
+    $=>$.replaceMessage([
+      // This can also be done with a single Message object.
+      new MessageStart({
+        status: 200,
+        statusText: 'OK',
+        headers: {
+          'content-type': 'text/plain'
+        }
+      }),
+      new Data('Hello!\n'),
+      new MessageEnd,
+    ])
+  )
 ```
 
 ## See Also

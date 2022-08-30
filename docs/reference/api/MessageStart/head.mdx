@@ -5,7 +5,7 @@ api: MessageStart.head
 
 ## Description
 
-The meta-info of a message in its head.
+<Summary/>
 
 ### For each protocol
 
@@ -60,17 +60,17 @@ messageStart.head
 ``` js
 pipy()
 
-.listen(8080)
-  .demuxHTTP('req')
-
-.pipeline('req')
-  .handleMessageStart(
-    msg => (
-      console.log('Path:', msg.head.path, 'Headers:', msg.head.headers)
+  .listen(8080)
+  .demuxHTTP().to(
+    $=>$
+    .handleMessageStart(
+      msg => (
+        console.log('Path:', msg.head.path, 'Headers:', msg.head.headers)
+      )
     )
-  )
-  .replaceMessage(
-    new Message('Hello!')
+    .replaceMessage(
+      new Message('Hello!')
+    )
   )
 ```
 

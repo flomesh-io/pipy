@@ -2,6 +2,8 @@ interface Console {
 
   /**
    * Log values to the terminal.
+   *
+   * @param values Values to log to the terminal.
    */
   log(...values: any[]): void;
 }

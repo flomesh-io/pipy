@@ -581,15 +581,16 @@ const Functions = () => {
   return (
     <React.Fragment>
       {typedoc.functions.map(
-        child => [
-          <Link
-            className={classes.memberName}
-            to={`/docs/${lang}/${path}/${child.name}`}
-          >
-            {child.name}
-          </Link>,
-          <Comment comment={child.comment}/>
-        ]
+        child => child.overloads.map(
+          sig => [
+            <Prototype
+              name={child.name}
+              link={`/docs/${lang}/${path}/${child.name}`}
+              parameters={sig.parameters}
+            />,
+            <Comment comment={sig.comment}/>
+          ]
+        )
       ).flat()}
     </React.Fragment>
   );

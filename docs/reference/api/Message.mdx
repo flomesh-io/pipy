@@ -5,9 +5,9 @@ api: Message
 
 ## Description
 
-**Message** is a container of a series of events that compose a whole message in an event stream.
+<Summary/>
 
-**Message** in itself is not an event. Instead, it's a convenient wrapper of an event series including a leading [MessageStart](/reference/api/MessageStart) event, an ending [MessageEnd](/reference/api/MessageEnd) event and one or more [Data](/reference/api/Data) events in between for the message body (or payload).
+_Message_ in itself is not an event. Instead, it's a convenient wrapper of an event series including a leading [MessageStart](/reference/api/MessageStart) event, an ending [MessageEnd](/reference/api/MessageEnd) event and one or more [Data](/reference/api/Data) events in between for the message body (or payload).
 
 When a filter callback needs a _Message_, such as [handleMessage](/reference/Configuration/handleMessage), it'll wait and collect all those events composing a full message and combine them into a _Message_ object for handling by the script. When a filter is to output a _Message_, it decomposes the object into a series of events representing the original full message.
 

@@ -4,7 +4,7 @@
 interface Netmask {
 
   /**
-   * Base address.
+   * Base address in dot-decimal notation.
    */
   readonly base: string;
 
@@ -24,7 +24,7 @@ interface Netmask {
   readonly hostmask: string;
 
   /**
-   * Broadcast address.
+   * Broadcast address in dot-decimal notation.
    */
   readonly broadcast: string;
 
@@ -45,11 +45,16 @@ interface Netmask {
 
   /**
    * Check if an address belongs to the block.
+   *
+   * @param ip A string containing an IP address in dot-decimal notation.
+   * @returns A boolean indicating if the specified IP address belongs to the block.
    */
   contains(ip: string): boolean;
 
   /**
    * Allocates an address from the block.
+   *
+   * @returns A string containing the allocated IP address in dot-decimal notation.
    */
   next(): string;
 }
@@ -58,6 +63,9 @@ interface NetmaskConstructor {
 
   /**
    * Creates an instance of _Netmask_.
+   *
+   * @param cidr A string containing an IPv4 address block in CIDR notation.
+   * @returns A _Netmask_ object representing the address block.
    */
   new(cidr: string): Netmask;
 }
