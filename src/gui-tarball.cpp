@@ -24,6 +24,8 @@
  */
 
 #include "gui-tarball.hpp"
+#include "compress.hpp"
+#include "data.hpp"
 
 #ifdef PIPY_USE_GUI
 #include "gui.tar.h"
@@ -33,12 +35,36 @@ namespace pipy {
 
 #ifdef PIPY_USE_GUI
 
+uint8_t *s_decompressed_gui_tar = nullptr;
+size_t s_decompressed_gui_tar_size = 0;
+
+static void decompress_gui_tar() {
+  static Data::Producer s_dp("GUI Tarball");
+
+  Data out;
+  auto *decompressor = Decompressor::brotli(
+    [&](Data *data) {
+      out.push(*data);
+    }
+  );
+
+  Data *inp = Data::make(s_gui_tar, sizeof(s_gui_tar), &s_dp);
+  decompressor->process(inp);
+  decompressor->end();
+  inp->release();
+  s_decompressed_gui_tar = new uint8_t[out.size()];
+  s_decompressed_gui_tar_size = out.size();
+  out.to_bytes(s_decompressed_gui_tar);
+}
+
 auto GuiTarball::data() -> const char* {
-  return (const char *)s_gui_tar;
+  if (!s_decompressed_gui_tar) decompress_gui_tar();
+  return (const char *)s_decompressed_gui_tar;
 }
 
 auto GuiTarball::size() -> size_t {
-  return sizeof(s_gui_tar);
+  if (!s_decompressed_gui_tar) decompress_gui_tar();
+  return s_decompressed_gui_tar_size;
 }
 
 #else // !PIPY_USE_GUI

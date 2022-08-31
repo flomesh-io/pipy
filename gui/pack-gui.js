@@ -23,15 +23,6 @@ function traverse(pathname) {
     if (ent.isDirectory()) {
       traverse(filename);
     } else {
-      // const data = fs.readFileSync(dirname + '/' + name);
-      // const br = zlib.brotliCompressSync(data, {
-      //   params: {
-      //     [zlib.constants.BROTLI_PARAM_QUALITY]: zlib.constants.BROTLI_MAX_QUALITY,
-      //     [zlib.constants.BROTLI_PARAM_LGWIN]: zlib.constants.BROTLI_MAX_WINDOW_BITS,
-      //   },
-      // })
-      // pack.entry({ name: filename + '.br' }, br);
-      // console.log('Packed', formatSize(data.length), '->', formatSize(br.length), filename);
       const data = fs.readFileSync(dirname + '/' + name);
       const gz = zlib.gzipSync(data);
       pack.entry({ name: filename + '.gz' }, gz);
@@ -41,9 +32,16 @@ function traverse(pathname) {
 }
 
 require('get-stream').buffer(pack).then(buffer => {
-  console.log(`GUI tarball size: ${formatSize(buffer.length)}`);
+  console.log(`Compressing GUI tarball (size = ${formatSize(buffer.length)})...`);
+  const compressed = zlib.brotliCompressSync(buffer, {
+    params: {
+      [zlib.constants.BROTLI_PARAM_QUALITY]: zlib.constants.BROTLI_MAX_QUALITY,
+      [zlib.constants.BROTLI_PARAM_LGWIN]: zlib.constants.BROTLI_MAX_WINDOW_BITS,
+    },
+  })
+  console.log(`GUI tarball size after compression: ${formatSize(compressed.length)}`);
   console.log(`Writing to ${OUTPUT_PATH}...`);
-  writeBinaryHeaderFile(OUTPUT_PATH, 's_gui_tar', buffer);
+  writeBinaryHeaderFile(OUTPUT_PATH, 's_gui_tar', compressed);
 });
 
 traverse('.');
