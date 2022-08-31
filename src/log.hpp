@@ -48,7 +48,9 @@ public:
   static void init();
   static void shutdown();
   static void set_level(Level level);
+  static void set_graph_enabled(bool enabled);
   static bool is_enabled(Level level);
+  static bool is_graph_enabled();
 
   static auto format_header(Level level, char *buf, size_t len) -> size_t;
 

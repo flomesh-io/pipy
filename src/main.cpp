@@ -242,6 +242,7 @@ int main(int argc, char *argv[]) {
     pjs::Math::init();
     Log::init();
     Log::set_level(opts.log_level);
+    Log::set_graph_enabled(!opts.no_graph);
     Status::register_metrics();
     Listener::set_reuse_port(opts.reuse_port);
     crypto::Crypto::init(opts.openssl_engine);

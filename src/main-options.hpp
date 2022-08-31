@@ -50,6 +50,7 @@ public:
   bool        help = false;
   bool        eval = false;
   bool        verify = false;
+  bool        no_graph = false;
   bool        reuse_port = false;
   int         admin_port = 0;
   Log::Level  log_level = Log::ERROR;

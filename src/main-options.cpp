@@ -43,6 +43,7 @@ void MainOptions::show_help() {
   std::cout << "  -e, -eval, --eval                    Evaluate the given string as script" << std::endl;
   std::cout << "  --log-level=<debug|info|warn|error>  Set the level of log output" << std::endl;
   std::cout << "  --verify                             Verify configuration only" << std::endl;
+  std::cout << "  --no-graph                           Do not print pipeline graphs to the log" << std::endl;
   std::cout << "  --instance-uuid=<uuid>               Specify a UUID for this worker process" << std::endl;
   std::cout << "  --instance-name=<name>               Specify a name for this worker process" << std::endl;
   std::cout << "  --reuse-port                         Enable kernel load balancing for all listening ports" << std::endl;
@@ -87,6 +88,8 @@ MainOptions::MainOptions(int argc, char *argv[]) {
         }
       } else if (k == "--verify") {
         verify = true;
+      } else if (k == "--no-graph") {
+        no_graph = true;
       } else if (k == "--instance-uuid") {
         instance_uuid = v;
       } else if (k == "--instance-name") {

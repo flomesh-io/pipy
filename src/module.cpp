@@ -145,14 +145,6 @@ bool Module::load(const std::string &path) {
     return false;
   }
 
-  std::string title("Module ");
-  title += path;
-
-  Log::info("[config]");
-  Log::info("[config] %s", title.c_str());
-  Log::info("[config] %s", std::string(title.length(), '=').c_str());
-  Log::info("[config]");
-
   auto config = result.as<Configuration>();
   try {
     config->check_integrity();
@@ -166,8 +158,20 @@ bool Module::load(const std::string &path) {
 
   error.clear();
   auto lines = g.to_text(error);
-  for (const auto &l : lines) {
-    Log::info("[config]  %s", l.c_str());
+
+  if (Log::is_graph_enabled() || !error.empty()) {
+    std::string title("Module ");
+    title += path;
+
+    Log::info("[config]");
+    Log::info("[config] %s", title.c_str());
+    Log::info("[config] %s", std::string(title.length(), '=').c_str());
+    Log::info("[config]");
+
+
+    for (const auto &l : lines) {
+      Log::info("[config]  %s", l.c_str());
+    }
   }
 
   if (!error.empty()) {
