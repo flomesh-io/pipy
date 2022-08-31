@@ -168,10 +168,12 @@ bool Module::load(const std::string &path) {
     Log::info("[config] %s", std::string(title.length(), '=').c_str());
     Log::info("[config]");
 
-
     for (const auto &l : lines) {
       Log::info("[config]  %s", l.c_str());
     }
+
+  } else {
+    Log::info("[config] Module loaded: %s", path.c_str());
   }
 
   if (!error.empty()) {
