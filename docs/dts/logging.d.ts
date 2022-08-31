@@ -5,21 +5,45 @@ interface Logger {
 
   /**
    * Adds output to the standard output.
+   *
+   * @returns The same logger object.
    */
   toStdout(): Logger;
 
   /**
    * Adds output to the standard error.
+   *
+   * @returns The same logger object.
    */
   toStderr(): Logger;
 
   /**
    * Adds output to a file.
+   *
+   * @param filename Pathname of the file to write to.
+   * @returns The same logger object.
    */
   toFile(filename: string): Logger;
 
   /**
    * Adds output to an HTTP endpoint.
+   *
+   * @param url URL to send log to.
+   * @param options Options including:
+   *   - _method_ - HTTP request method. Default is `"POST"`.
+   *   - _headers_ - An object of key-value pairs for HTTP header items.
+   *   - _batch_ - Batching settings.
+   *   - _batch.size_ - Number of log items in each batch.
+   *   - _batch.vacancy_ - Percentage of spare space letf in the internal storage of packed _Data_ object. Default is `0.5`.
+   *   - _batch.interval_ - Maximum time to wait before outputting a batch even if the number of messages is not enough.
+   *       Can be a number in seconds or a string with one of the time unit suffixes such as `s`, `m` or `h`.
+   *       Default is _5 seconds_.
+   *   - _tls_ - Optional TLS settings if using HTTPS.
+   *   - _tls.certificate_ - An object containing _cert_ and _key_,
+   *       where _cert_ can be a _crypto.Certificate_ or a _crypto.CertificateChain_
+   *       and _key_ must be a _crypto.PrivateKey_.
+   *   - _tls.trusted_ - An array of _crypto.Certificate_ objects for allowed client certificates.
+   * @returns The same logger object.
    */
   toHTTP(
     url: string,
@@ -28,9 +52,8 @@ interface Logger {
       headers?: { [name: string]: string },
       batch?: {
         size?: number,
-        interval?: number | string,
-        timeout?: number | string,
         vacancy?: number,
+        interval?: number | string,
       },
       tls: {
         certificate?: {
@@ -44,6 +67,8 @@ interface Logger {
 
   /**
    * Writes to the log.
+   *
+   * @param values Values to log.
    */
   log(...values: any[]): void;
 
@@ -59,6 +84,9 @@ interface BinaryLoggerConstructor {
 
   /**
    * Creates an instance of _BinaryLogger_.
+   *
+   * @param name Name of the logger.
+   * @returns A _BinaryLogger_ object with the specified name.
    */
   new(name: string): BinaryLogger;
 }
@@ -73,6 +101,9 @@ interface TextLoggerConstructor {
 
   /**
    * Creates an instance of _TextLogger_.
+   *
+   * @param name Name of the logger.
+   * @returns A _TextLogger_ object with the specified name.
    */
   new(name: string): TextLogger;
 }
@@ -87,6 +118,9 @@ interface JSONLoggerConstructor {
 
   /**
    * Creates an instance of _JSONLogger_.
+   *
+   * @param name Name of the logger.
+   * @returns A _JSONLogger_ object with the specified name.
    */
   new(name: string): JSONLogger;
 }

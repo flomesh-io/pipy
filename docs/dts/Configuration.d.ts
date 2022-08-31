@@ -195,8 +195,8 @@ interface Configuration {
    *   - _certificate_ - (required) An object containing _cert_ and _key_ or a function that returns such an object
    *       after receiving _sni_ for the requested server name.
    *       In both cases, _cert_ can be a _crypto.Certificate_ or a _crypto.CertificateChain_
-   *       and _key must be a _crypto.PrivateKey_.
-   *   - _trusted_ - (optional) An array of _crypto.Certificate_ objects for allowed client certificates
+   *       and _key_ must be a _crypto.PrivateKey_.
+   *   - _trusted_ - (optional) An array of _crypto.Certificate_ objects for allowed client certificates.
    *   - _alpn_ - (optional) An array of allowed protocol names, or a function that receives an array of client-preferred protocol names
    *       and returns the index of the server-chosen protocol in that array.
    *   - _handshake_ - (optional) A callback function that receives the negotiated protocol name after handshake.

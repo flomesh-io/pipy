@@ -3,7 +3,9 @@ title: stats.Counter
 api: stats.Counter
 ---
 
-# Description
+## Description
+
+<Summary/>
 
 _Counter_ is one of a few types of metrics supported by the _stats_ system, and it is the simplest one, which is just a monotonic increasing number. Once you've created one, it becomes visible to the _stats_ system, and its current value can be queried via admin port under the endpoint `GET /metrics` in [_Prometheus exposition formats_](https://prometheus.io/docs/instrumenting/exposition_formats/).
 
@@ -30,10 +32,14 @@ _counter.withLabels('GET').increase()
 _counter.withLabels('GET', 200).increase()
 ```
 
-# Constructor
+## Constructor
 
 <Constructor/>
 
-# Methods
+## Methods
 
 <Methods/>
+
+## See Also
+
+* [stats](/reference/api/stats)

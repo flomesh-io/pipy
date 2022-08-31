@@ -1,0 +1,44 @@
+---
+title: logging.JSONLogger.toHTTP()
+api: logging.JSONLogger.toHTTP
+---
+
+## Description
+
+<Summary/>
+
+## Syntax
+
+``` js
+logger.toHTTP(url)
+logger.toHTTP(
+  url,
+  {
+    method,
+    headers: { ...headers },
+    batch: {
+      size,
+      vacancy,
+      interval,
+    },
+    tls: {
+      certificate: {
+        cert,
+        key,
+      },
+      trusted: [ ...trustedCerts ],
+    },
+  }
+)
+```
+
+## Parameters
+
+<Parameters/>
+
+## See Also
+
+* [logging.JSONLogger](/reference/api/logging/JSONLogger)
+* [toFile()](/reference/api/logging/JSONLogger/toFile)
+* [toStderr()](/reference/api/logging/JSONLogger/toStderr)
+* [toStdout()](/reference/api/logging/JSONLogger/toStdout)

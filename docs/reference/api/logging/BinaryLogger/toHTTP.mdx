@@ -1,0 +1,44 @@
+---
+title: logging.BinaryLogger.toHTTP()
+api: logging.BinaryLogger.toHTTP
+---
+
+## Description
+
+<Summary/>
+
+## Syntax
+
+``` js
+logger.toHTTP(url)
+logger.toHTTP(
+  url,
+  {
+    method,
+    headers: { ...headers },
+    batch: {
+      size,
+      vacancy,
+      interval,
+    },
+    tls: {
+      certificate: {
+        cert,
+        key,
+      },
+      trusted: [ ...trustedCerts ],
+    },
+  }
+)
+```
+
+## Parameters
+
+<Parameters/>
+
+## See Also
+
+* [logging.BinaryLogger](/reference/api/logging/BinaryLogger)
+* [toFile()](/reference/api/logging/BinaryLogger/toFile)
+* [toStderr()](/reference/api/logging/BinaryLogger/toStderr)
+* [toStdout()](/reference/api/logging/BinaryLogger/toStdout)

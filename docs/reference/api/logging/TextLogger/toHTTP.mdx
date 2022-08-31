@@ -1,0 +1,44 @@
+---
+title: logging.TextLogger.toHTTP()
+api: logging.TextLogger.toHTTP
+---
+
+## Description
+
+<Summary/>
+
+## Syntax
+
+``` js
+logger.toHTTP(url)
+logger.toHTTP(
+  url,
+  {
+    method,
+    headers: { ...headers },
+    batch: {
+      size,
+      vacancy,
+      interval,
+    },
+    tls: {
+      certificate: {
+        cert,
+        key,
+      },
+      trusted: [ ...trustedCerts ],
+    },
+  }
+)
+```
+
+## Parameters
+
+<Parameters/>
+
+## See Also
+
+* [logging.TextLogger](/reference/api/logging/TextLogger)
+* [toFile()](/reference/api/logging/TextLogger/toFile)
+* [toStderr()](/reference/api/logging/TextLogger/toStderr)
+* [toStdout()](/reference/api/logging/TextLogger/toStdout)

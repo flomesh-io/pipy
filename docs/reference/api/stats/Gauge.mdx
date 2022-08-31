@@ -3,7 +3,9 @@ title: stats.Gauge
 api: stats.Gauge
 ---
 
-# Description
+## Description
+
+<Summary/>
 
 _Gauge_ is one of a few types of metrics supported by the _stats_ system. It reflects a fluctuating value that is usually sampled at a regular frequency. Once you've created one, it becomes visible to the _stats_ system, and its current value can be queried via admin port under the endpoint `GET /metrics` in [_Prometheus exposition formats_](https://prometheus.io/docs/instrumenting/exposition_formats/).
 
@@ -29,10 +31,14 @@ You can also access a sub-metric by giving values to the labels. The label value
 _gauge.withLabels('127.0.0.1').set(3)
 ```
 
-# Constructor
+## Constructor
 
 <Constructor/>
 
-# Methods
+## Methods
 
 <Methods/>
+
+## See Also
+
+* [stats](/reference/api/stats)

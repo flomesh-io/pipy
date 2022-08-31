@@ -3,7 +3,9 @@ title: stats.Histogram
 api: stats.Histogram
 ---
 
-# Description
+## Description
+
+<Summary/>
 
 _Histogram_ is one of a few types of metrics supported by the _stats_ system. It keeps track of observations in an array of buckets, and can be used to calculate quantiles. Once you've created one, it becomes visible to the _stats_ system, and its current value can be queried via admin port under the endpoint `GET /metrics` in [_Prometheus exposition formats_](https://prometheus.io/docs/instrumenting/exposition_formats/).
 
@@ -33,10 +35,14 @@ You can also access a sub-metric by giving values to the labels. The label value
 _lantency.withLabels('login-service').observe(3)
 ```
 
-# Constructor
+## Constructor
 
 <Constructor/>
 
-# Methods
+## Methods
 
 <Methods/>
+
+## See Also
+
+* [stats](/reference/api/stats)
