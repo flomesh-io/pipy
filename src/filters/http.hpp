@@ -461,7 +461,7 @@ private:
     virtual void on_decode_response(http::ResponseHead *head) override;
     virtual void on_decode_tunnel() override;
     virtual void on_decode_error() override;
-    virtual void on_notify(Context *ctx) override;
+    virtual void on_notify() override;
 
     const Options& m_options;
     int m_version_selected = 0;

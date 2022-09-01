@@ -58,8 +58,7 @@ private:
   virtual void reset() override;
   virtual void process(Event *evt) override;
   virtual void dump(Dump &d) override;
-
-  virtual void on_notify(Context *ctx) override;
+  virtual void on_notify() override;
 
   pjs::Ref<pjs::Function> m_condition;
   Options m_options;

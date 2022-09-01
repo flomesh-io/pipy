@@ -29,6 +29,7 @@
 #include "pjs/pjs.hpp"
 #include "list.hpp"
 #include "inbound.hpp"
+#include "input.hpp"
 
 namespace pipy {
 
@@ -98,7 +99,10 @@ protected:
 // ContextGroup
 //
 
-class ContextGroup : public pjs::Pooled<ContextGroup> {
+class ContextGroup :
+  public pjs::Pooled<ContextGroup>,
+  public List<ContextGroup>::Item
+{
 public:
   class Waiter : public List<Waiter>::Item {
   public:
@@ -117,7 +121,7 @@ public:
     }
 
   private:
-    virtual void on_notify(Context *ctx) = 0;
+    virtual void on_notify() = 0;
 
     ContextGroup* m_context_group = nullptr;
 
@@ -135,18 +139,27 @@ public:
     }
   }
 
-  void notify(Context *ctx) {
+  void touch() {
+    if (!m_input_context && !m_waiters.empty()) {
+      InputContext::defer_notify(this);
+    }
+  }
+
+  void notify() {
     Waiter *p = m_waiters.head();
     while (p) {
       auto waiter = p;
       p = p->next();
-      waiter->on_notify(ctx);
+      waiter->on_notify();
     }
   }
 
 private:
   List<Context> m_contexts;
   List<Waiter> m_waiters;
+  InputContext* m_input_context = nullptr;
+
+  friend class InputContext;
 };
 
 //

@@ -168,6 +168,7 @@ auto Filter::sub_pipeline(
 void Filter::on_event(Event *evt) {
   if (m_stream_end) return;
   if (evt->is<StreamEnd>()) m_stream_end = true;
+  context()->group()->touch();
   Pipeline::auto_release(m_pipeline);
   process(evt);
 }

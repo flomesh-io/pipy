@@ -1458,7 +1458,7 @@ void Mux::Session::on_decode_error()
 {
 }
 
-void Mux::Session::on_notify(Context *ctx) {
+void Mux::Session::on_notify() {
   select_protocol();
 }
 

@@ -24,7 +24,6 @@
  */
 
 #include "exec.hpp"
-#include "context.hpp"
 #include "fstream.hpp"
 #include "listener.hpp"
 #include "utils.hpp"
@@ -170,10 +169,8 @@ void Exec::ChildProcessMonitor::check() {
     auto i = m_processes.find(pid);
     if (i != m_processes.end()) {
       auto exec = i->second;
-      auto ctx = exec->context();
       m_processes.erase(i);
       exec->output(StreamEnd::make());
-      ctx->group()->notify(ctx);
     }
   }
   schedule();

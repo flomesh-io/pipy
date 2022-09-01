@@ -32,6 +32,7 @@
 namespace pipy {
 
 class AutoReleased;
+class ContextGroup;
 class InputContext;
 
 //
@@ -142,6 +143,7 @@ public:
 private:
   InputContext* m_origin;
   InputContext* m_next;
+  List<ContextGroup> m_context_groups;
   List<FlushTarget> m_flush_targets_pumping;
   List<FlushTarget> m_flush_targets_terminating;
   pjs::Ref<InputSource::Tap> m_tap;
@@ -151,9 +153,11 @@ private:
   static InputContext* s_stack;
 
   static void auto_release(AutoReleased *obj);
+  static void defer_notify(ContextGroup *grp);
 
   friend class FlushTarget;
   friend class AutoReleased;
+  friend class ContextGroup;
 };
 
 //

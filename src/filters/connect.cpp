@@ -24,7 +24,6 @@
  */
 
 #include "connect.hpp"
-#include "context.hpp"
 #include "outbound.hpp"
 #include "utils.hpp"
 #include "log.hpp"
@@ -133,9 +132,7 @@ void Connect::process(Event *evt) {
 
 void ConnectReceiver::on_event(Event *evt) {
   auto *conn = static_cast<Connect*>(this);
-  auto *ctx = conn->context();
   conn->output(evt);
-  ctx->group()->notify(ctx);
 }
 
 } // namespace pipy

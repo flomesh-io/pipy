@@ -24,6 +24,7 @@
  */
 
 #include "input.hpp"
+#include "context.hpp"
 #include "pipeline.hpp"
 #include "log.hpp"
 
@@ -71,6 +72,13 @@ InputContext::InputContext(InputSource *source)
 
 InputContext::~InputContext() {
 
+  // Notify context groups
+  for (auto *g = m_context_groups.head(); g; g = g->next()) g->notify();
+  while (auto *g = m_context_groups.head()) {
+    g->m_input_context = nullptr;
+    m_context_groups.remove(g);
+  }
+
   // Flush all pumping targets
   while (auto *target = m_flush_targets_pumping.head()) {
     m_flush_targets_pumping.remove(target);
@@ -104,6 +112,12 @@ void InputContext::auto_release(AutoReleased *obj) {
     obj->m_next_auto_release = s_stack->m_auto_released;
     s_stack->m_auto_released = obj;
   }
+}
+
+void InputContext::defer_notify(ContextGroup *grp) {
+  auto *ic = s_stack;
+  ic->m_context_groups.push(grp);
+  grp->m_input_context = ic;
 }
 
 } // namespace pipy

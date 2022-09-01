@@ -100,7 +100,7 @@ void Wait::process(Event *evt) {
   }
 }
 
-void Wait::on_notify(Context *ctx) {
+void Wait::on_notify() {
   pjs::Value ret;
   if (!callback(m_condition, 0, nullptr, ret)) return;
   if (ret.to_boolean()) {
