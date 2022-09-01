@@ -45,12 +45,9 @@ void QueueDemuxer::reset() {
 }
 
 void QueueDemuxer::isolate() {
-  auto stream = m_streams.tail();
-  if (!stream) {
-    stream = new Stream(this);
-    m_streams.push(stream);
+  if (auto stream = m_streams.tail()) {
+    stream->m_isolated = true;
   }
-  stream->m_isolated = true;
   m_isolated = true;
 }
 
@@ -64,8 +61,9 @@ void QueueDemuxer::shutdown() {
 
 void QueueDemuxer::on_event(Event *evt) {
   if (m_isolated) {
-    auto stream = m_streams.tail();
-    stream->output(evt);
+    if (auto stream = m_streams.tail()) {
+      stream->output(evt);
+    }
     return;
   }
 
