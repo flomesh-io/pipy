@@ -40,6 +40,8 @@
 #include "filters/http.hpp"
 #include "filters/connect.hpp"
 
+#include <syslog.h>
+
 namespace pipy {
 namespace logging {
 
@@ -247,6 +249,32 @@ void Logger::FileTarget::shutdown() {
 }
 
 //
+// Logger::SyslogTarget
+//
+
+Logger::SyslogTarget::SyslogTarget(Priority priority) {
+  switch (priority) {
+    case Priority::EMERG   : m_priority = LOG_EMERG; break;
+    case Priority::ALERT   : m_priority = LOG_ALERT; break;
+    case Priority::CRIT    : m_priority = LOG_CRIT; break;
+    case Priority::ERR     : m_priority = LOG_ERR; break;
+    case Priority::WARNING : m_priority = LOG_WARNING; break;
+    case Priority::NOTICE  : m_priority = LOG_NOTICE; break;
+    case Priority::INFO    : m_priority = LOG_INFO; break;
+    case Priority::DEBUG   : m_priority = LOG_DEBUG; break;
+    default                : m_priority = LOG_INFO; break;
+  }
+}
+
+void Logger::SyslogTarget::write(const Data &msg) {
+  auto len = msg.size();
+  uint8_t buf[len+1];
+  msg.to_bytes(buf);
+  buf[len] = 0;
+  syslog(m_priority, "%s", buf);
+}
+
+//
 // Logger::HTTPTarget
 //
 
@@ -418,6 +446,17 @@ using namespace pipy::logging;
 // Logger
 //
 
+template<> void EnumDef<Logger::SyslogTarget::Priority>::init() {
+  define(Logger::SyslogTarget::Priority::EMERG, "EMERG");
+  define(Logger::SyslogTarget::Priority::ALERT, "ALERT");
+  define(Logger::SyslogTarget::Priority::CRIT, "CRIT");
+  define(Logger::SyslogTarget::Priority::ERR, "ERR");
+  define(Logger::SyslogTarget::Priority::WARNING, "WARNING");
+  define(Logger::SyslogTarget::Priority::NOTICE, "NOTICE");
+  define(Logger::SyslogTarget::Priority::INFO, "INFO");
+  define(Logger::SyslogTarget::Priority::DEBUG, "DEBUG");
+}
+
 template<> void ClassDef<Logger>::init() {
   method("log", [](Context &ctx, Object *obj, Value &ret) {
     obj->as<Logger>()->log(ctx.argc(), &ctx.arg(0));
@@ -437,6 +476,13 @@ template<> void ClassDef<Logger>::init() {
     pjs::Str *filename;
     if (!ctx.arguments(1, &filename)) return;
     obj->as<Logger>()->add_target(new Logger::FileTarget(filename));
+    ret.set(obj);
+  });
+
+  method("toSyslog", [](Context &ctx, Object *obj, Value &ret) {
+    EnumValue<Logger::SyslogTarget::Priority> priority(Logger::SyslogTarget::Priority::INFO);
+    if (!ctx.arguments(0, &priority)) return;
+    obj->as<Logger>()->add_target(new Logger::SyslogTarget(priority));
     ret.set(obj);
   });
 

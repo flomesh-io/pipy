@@ -937,6 +937,29 @@ template<class T> std::vector<Str*> EnumDef<T>::m_val_to_str;
 template<class T> std::map<Str*, T> EnumDef<T>::m_str_to_val;
 
 //
+// EnumValue
+//
+
+template<class T>
+class EnumValue {
+public:
+  EnumValue(T v): m_value(v) {}
+  operator T() const { return m_value; }
+  auto get() const -> T { return m_value; }
+  void set(T value) { m_value = value; }
+  bool set(Str *name) {
+    auto v = EnumDef<T>::value(name);
+    if (int(v) < 0) return false;
+    m_value = v;
+    return true;
+  }
+  auto name() const -> Str* { return EnumDef<T>::name(m_value); }
+
+private:
+  T m_value;
+};
+
+//
 // Accessor
 //
 
@@ -1815,6 +1838,19 @@ private:
     }
     if (i >= n && arg(i).is_nullish()) return true;
     return get_arg(set_error, i, a);
+  }
+
+  template<typename T>
+  bool get_arg(bool set_error, int i, EnumValue<T> *a) {
+    if (!arg(i).is_string()) {
+      if (set_error) error_argument_type(i, "a string");
+      return false;
+    }
+    if (!a->set(arg(i).s())) {
+      if (set_error) error_argument_type(i, "a valid enum string");
+      return false;
+    }
+    return true;
   }
 
   bool get_arg(bool set_error, int i, Value *v) {

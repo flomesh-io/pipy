@@ -120,6 +120,31 @@ public:
   };
 
   //
+  // Logger::SyslogTarget
+  //
+
+  class SyslogTarget : public Target {
+  public:
+    enum class Priority {
+      EMERG,
+      ALERT,
+      CRIT,
+      ERR,
+      WARNING,
+      NOTICE,
+      INFO,
+      DEBUG,
+    };
+
+    SyslogTarget(Priority prority = Priority::INFO);
+
+  private:
+    virtual void write(const Data &msg) override;
+
+    int m_priority;
+  };
+
+  //
   // Logger::HTTPTarget
   //
 

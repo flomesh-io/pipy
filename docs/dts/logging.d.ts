@@ -26,6 +26,33 @@ interface Logger {
   toFile(filename: string): Logger;
 
   /**
+   * Adds output to the [Syslog](https://en.wikipedia.org/wiki/Syslog).
+   *
+   * @param priority Severity of the log messages.
+   *   Can be one of:
+   *   - `"EMERG"`
+   *   - `"ALERT"`
+   *   - `"CRIT"`
+   *   - `"ERR"`
+   *   - `"WARNING"`
+   *   - `"NOTICE"`
+   *   - `"INFO"` (Default)
+   *   - `"DEBUG"`
+   * @returns The same logger object.
+   */
+  toSyslog(
+    priority?:
+      "EMERG"
+    | "ALERT"
+    | "CRIT"
+    | "ERR"
+    | "WARNING"
+    | "NOTICE"
+    | "INFO"
+    | "DEBUG"
+  ): Logger;
+
+  /**
    * Adds output to an HTTP endpoint.
    *
    * @param url URL to send log to.
