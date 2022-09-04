@@ -97,32 +97,25 @@ void Connect::reset() {
 }
 
 void Connect::process(Event *evt) {
-  if (evt->is<StreamEnd>()) {
-    if (m_outbound) {
-      m_outbound->end();
+  if (!evt->is<StreamEnd>()) {
+    if (!m_outbound) {
+      pjs::Value target;
+      if (!eval(m_target, target)) return;
+      auto s = target.to_string();
+      std::string host; int port;
+      if (utils::get_host_port(s->str(), host, port)) {
+        auto outbound = new OutboundTCP(ConnectReceiver::input(), m_options);
+        outbound->connect(host, port);
+        m_outbound = outbound;
+      } else {
+        Log::error("[connect] invalid target: %s", s->c_str());
+      }
+      s->release();
     }
-    return;
-  }
-
-  if (!m_outbound) {
-    pjs::Value target;
-    if (!eval(m_target, target)) return;
-    auto s = target.to_string();
-    std::string host; int port;
-    if (utils::get_host_port(s->str(), host, port)) {
-      auto outbound = new Outbound(ConnectReceiver::input(), m_options);
-      outbound->connect(host, port);
-      m_outbound = outbound;
-    } else {
-      Log::error("[connect] invalid target: %s", s->c_str());
-    }
-    s->release();
   }
 
   if (m_outbound) {
-    if (auto *data = evt->as<Data>()) {
-      m_outbound->send(data);
-    }
+    m_outbound->send(evt);
   }
 }
 

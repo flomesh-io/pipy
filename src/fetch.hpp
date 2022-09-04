@@ -60,7 +60,7 @@ public:
     DELETE,
   };
 
-  struct Options : public Outbound::Options {
+  struct Options : public OutboundTCP::Options {
     bool tls = false;
     pjs::Ref<crypto::Certificate> cert;
     pjs::Ref<crypto::PrivateKey> key;

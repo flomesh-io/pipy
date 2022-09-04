@@ -489,8 +489,6 @@ void Status::dump_memory() {
 
   struct OutboundSum {
     int connections = 0;
-    int buffered = 0;
-    int overflowed = 0;
     double max_connection_time = 0;
     double avg_connection_time = 0;
   };
@@ -503,13 +501,9 @@ void Status::dump_memory() {
     auto conn_time = outbound->connection_time() / (outbound->retries() + 1);
     auto &sum = outbound_sums[key];
     sum.connections++;
-    sum.buffered += outbound->buffered();
-    sum.overflowed += outbound->overflowed();
     sum.max_connection_time = std::max(sum.max_connection_time, conn_time);
     sum.avg_connection_time += conn_time;
     outbound_total.connections++;
-    outbound_total.buffered += outbound->buffered();
-    outbound_total.overflowed += outbound->overflowed();
     outbound_total.max_connection_time = std::max(outbound_total.max_connection_time, conn_time);
     outbound_total.avg_connection_time += conn_time;
   });
@@ -536,8 +530,6 @@ void Status::dump_memory() {
     outbounds.push_back({
       name,
       std::to_string(sum.connections),
-      std::to_string(sum.buffered/1024),
-      std::to_string(sum.overflowed),
       std::to_string(int(sum.max_connection_time)),
       std::to_string(int(sum.avg_connection_time / sum.connections)),
     });
@@ -552,8 +544,6 @@ void Status::dump_memory() {
   outbounds.push_back({
     "TOTAL",
     std::to_string(outbound_total.connections),
-    std::to_string(outbound_total.buffered/1024),
-    std::to_string(outbound_total.overflowed),
     std::to_string(int(outbound_total.max_connection_time)),
     std::to_string(int(outbound_total.connections ? outbound_total.avg_connection_time / outbound_total.connections : 0)),
   });
@@ -567,7 +557,7 @@ void Status::dump_memory() {
   std::cout << std::endl;
   print_table({ "INBOUND", "#CONNECTIONS", "BUFFERED(KB)" }, inbounds);
   std::cout << std::endl;
-  print_table({ "OUTBOUND", "#CONNECTIONS", "BUFFERED(KB)", "#OVERFLOWED", "MAX_CONN_TIME", "AVG_CONN_TIME" }, outbounds);
+  print_table({ "OUTBOUND", "#CONNECTIONS", "MAX_CONN_TIME", "AVG_CONN_TIME" }, outbounds);
   std::cout << std::endl;
 }
 

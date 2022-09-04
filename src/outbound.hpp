@@ -45,24 +45,25 @@ class Data;
 
 class Outbound :
   public pjs::RefCount<Outbound>,
-  public pjs::Pooled<Outbound>,
-  public List<Outbound>::Item,
-  public InputSource,
-  public FlushTarget
+  public List<Outbound>::Item
 {
 public:
-  struct Options {
-    size_t buffer_limit = 0;
-    int    retry_count = 0;
-    double retry_delay = 0;
-    double connect_timeout = 0;
-    double read_timeout = 0;
-    double write_timeout = 0;
-    double idle_timeout = 60;
+  enum class Protocol {
+    TCP,
+    UDP,
   };
 
-  Outbound(EventTarget::Input *output, const Options &options);
-  ~Outbound();
+  struct Options {
+    Protocol  protocol = Protocol::TCP;
+    size_t    max_packet_size = 16 * 1024;
+    size_t    buffer_limit = 0;
+    int       retry_count = 0;
+    double    retry_delay = 0;
+    double    connect_timeout = 0;
+    double    read_timeout = 0;
+    double    write_timeout = 0;
+    double    idle_timeout = 60;
+  };
 
   static void for_each(const std::function<void(Outbound*)> &cb) {
     for (auto p = s_all_outbounds.head(); p; p = p->List<Outbound>::Item::next()) {
@@ -73,35 +74,68 @@ public:
   auto address() -> pjs::Str*;
   auto host() const -> const std::string& { return m_host; }
   auto port() const -> int { return m_port; }
-  bool connected() const { return m_connected; }
-  auto buffered() const -> int { return m_buffer.size(); }
-  bool overflowed() const { return m_overflowed; }
-  bool ended() const { return m_ended; }
   auto retries() const -> int { return m_retries; }
   auto connection_time() const -> double { return m_connection_time; }
 
-  void connect(const std::string &host, int port);
-  void send(const pjs::Ref<Data> &data);
-  void end();
-  void reset();
+  virtual void connect(const std::string &host, int port) = 0;
+  virtual void send(Event *evt) = 0;
+  virtual void reset() = 0;
 
-private:
+protected:
+  Outbound(EventTarget::Input *output, const Options &options);
+  ~Outbound();
+
+  Options m_options;
   std::string m_host;
-  int m_port;
-  pjs::Ref<stats::Counter> m_metric_traffic_out;
-  pjs::Ref<stats::Counter> m_metric_traffic_in;
-  pjs::Ref<stats::Histogram> m_metric_conn_time;
-  pjs::Ref<pjs::Str> m_address;
   std::string m_remote_addr;
   std::string m_local_addr;
-  int m_local_port;
-  asio::ip::tcp::resolver m_resolver;
-  asio::ip::tcp::socket m_socket;
+  pjs::Ref<pjs::Str> m_address;
   pjs::Ref<EventTarget::Input> m_output;
-  Options m_options;
+  int m_port;
+  int m_local_port;
   int m_retries = 0;
   double m_start_time = 0;
   double m_connection_time = 0;
+
+  void output(Event *evt);
+  void describe(char *desc);
+
+private:
+  virtual void finalize() = 0;
+
+  static List<Outbound> s_all_outbounds;
+
+  friend class pjs::RefCount<Outbound>;
+};
+
+//
+// OutboundTCP
+//
+
+class OutboundTCP :
+  public pjs::Pooled<OutboundTCP>,
+  public Outbound,
+  public InputSource,
+  public FlushTarget
+{
+public:
+  OutboundTCP(EventTarget::Input *output, const Options &options);
+
+  bool overflowed() const { return m_overflowed; }
+  auto buffered() const -> int { return m_buffer.size(); }
+
+  virtual void connect(const std::string &host, int port) override;
+  virtual void send(Event *evt) override;
+  // void send(const pjs::Ref<Data> &data);
+  // void end();
+  virtual void reset() override;
+
+private:
+  pjs::Ref<stats::Counter> m_metric_traffic_out;
+  pjs::Ref<stats::Counter> m_metric_traffic_in;
+  pjs::Ref<stats::Histogram> m_metric_conn_time;
+  asio::ip::tcp::resolver m_resolver;
+  asio::ip::tcp::socket m_socket;
   Timer m_connect_timer;
   Timer m_retry_timer;
   Timer m_read_timer;
@@ -126,11 +160,56 @@ private:
   void receive();
   void pump();
   void wait();
-  void output(Event *evt);
   void close(StreamEnd::Error err);
-  void describe(char *desc);
 
-  static List<Outbound> s_all_outbounds;
+  virtual void finalize() override { delete this; }
+};
+
+//
+// OutboundUDP
+//
+
+class OutboundUDP :
+  public pjs::Pooled<OutboundUDP>,
+  public Outbound,
+  public InputSource
+{
+public:
+  OutboundUDP(EventTarget::Input *output, const Options &options);
+
+  virtual void connect(const std::string &host, int port) override;
+  virtual void send(Event *evt) override;
+  virtual void reset() override;
+
+private:
+  pjs::Ref<stats::Counter> m_metric_traffic_out;
+  pjs::Ref<stats::Counter> m_metric_traffic_in;
+  pjs::Ref<stats::Histogram> m_metric_conn_time;
+  asio::ip::udp::resolver m_resolver;
+  asio::ip::udp::socket m_socket;
+  Timer m_connect_timer;
+  Timer m_retry_timer;
+  Timer m_idle_timer;
+  Data m_buffer;
+  EventBuffer m_pending_buffer;
+  bool m_message_started = false;
+  bool m_connecting = false;
+  bool m_connected = false;
+  bool m_ended = false;
+
+  virtual void on_tap_open() override;
+  virtual void on_tap_close() override;
+
+  void start(double delay);
+  void resolve();
+  void connect(const asio::ip::udp::endpoint &target);
+  void restart(StreamEnd::Error err);
+  void receive();
+  void pump();
+  void wait();
+  void close(StreamEnd::Error err);
+
+  virtual void finalize() override { delete this; }
 };
 
 } // namespace pipy
