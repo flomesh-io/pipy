@@ -312,6 +312,7 @@ interface Configuration {
    *
    * @param target The target to connect to, in form of `"<host>:<port>"`, or a function that returns the target.
    * @param options Options including:
+   *   - _protocol_ - Protocol to use. Can be `"TCP"` or `"UDP"`. Default is `"TCP"`.
    *   - _bufferLimit_ - Maximum size of data allowed to stay in buffer due to slow outbound bandwidth.
    *       Can be a number in bytes or a string with a unit suffix such as `'k'`, `'m'`, `'g'` and `'t'`.
    *   - _retryCount_ - How many times it should retry connection after a failure, or -1 for the infinite retries. Defaults to 0.

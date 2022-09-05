@@ -28,6 +28,18 @@
 #include "utils.hpp"
 #include "log.hpp"
 
+namespace pjs {
+
+using namespace pipy;
+
+template<>
+void EnumDef<Outbound::Protocol>::init() {
+  define(Outbound::Protocol::TCP, "tcp");
+  define(Outbound::Protocol::UDP, "udp");
+}
+
+} // namespace pjs
+
 namespace pipy {
 
 //
@@ -35,6 +47,9 @@ namespace pipy {
 //
 
 Connect::Options::Options(pjs::Object *options) {
+  Value(options, "protocol")
+    .get_enum(protocol)
+    .check_nullable();
   Value(options, "bufferLimit")
     .get_binary_size(buffer_limit)
     .check_nullable();
@@ -104,7 +119,15 @@ void Connect::process(Event *evt) {
       auto s = target.to_string();
       std::string host; int port;
       if (utils::get_host_port(s->str(), host, port)) {
-        auto outbound = new OutboundTCP(ConnectReceiver::input(), m_options);
+        Outbound *outbound = nullptr;
+        switch (m_options.protocol) {
+          case Outbound::Protocol::TCP:
+            outbound = new OutboundTCP(ConnectReceiver::input(), m_options);
+            break;
+          case Outbound::Protocol::UDP:
+            outbound = new OutboundUDP(ConnectReceiver::input(), m_options);
+            break;
+        }
         outbound->connect(host, port);
         m_outbound = outbound;
       } else {

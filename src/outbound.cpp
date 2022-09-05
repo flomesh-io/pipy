@@ -42,8 +42,8 @@ List<Outbound> Outbound::s_all_outbounds;
 //
 
 Outbound::Outbound(EventTarget::Input *output, const Options &options)
-  : m_output(output)
-  , m_options(options)
+  : m_options(options)
+  , m_output(output)
 {
   Log::debug("[outbound %p] ++", this);
   s_all_outbounds.push(this);
@@ -52,6 +52,16 @@ Outbound::Outbound(EventTarget::Input *output, const Options &options)
 Outbound::~Outbound() {
   Log::debug("[outbound %p] --", this);
   s_all_outbounds.remove(this);
+}
+
+auto Outbound::protocol_name() const -> pjs::Str* {
+  static pjs::ConstStr s_TCP("TCP");
+  static pjs::ConstStr s_UDP("UDP");
+  switch (m_options.protocol) {
+    case Protocol::TCP: return s_TCP;
+    case Protocol::UDP: return s_UDP;
+  }
+  return nullptr;
 }
 
 auto Outbound::address() -> pjs::Str* {
@@ -98,10 +108,12 @@ void OutboundTCP::connect(const std::string &host, int port) {
   m_port = port;
   m_connecting = true;
 
-  auto *addr = address();
-  m_metric_traffic_out = Status::metric_outbound_out->with_labels(&addr, 1);
-  m_metric_traffic_in = Status::metric_outbound_in->with_labels(&addr, 1);
-  m_metric_conn_time = Status::metric_outbound_conn_time->with_labels(&addr, 1);
+  pjs::Str *keys[2];
+  keys[0] = protocol_name();
+  keys[1] = address();
+  m_metric_traffic_out = Status::metric_outbound_out->with_labels(keys, 2);
+  m_metric_traffic_in = Status::metric_outbound_in->with_labels(keys, 2);
+  m_metric_conn_time = Status::metric_outbound_conn_time->with_labels(keys, 2);
 
   start(0);
 }
@@ -519,10 +531,12 @@ void OutboundUDP::connect(const std::string &host, int port) {
   m_port = port;
   m_connecting = true;
 
-  auto *addr = address();
-  m_metric_traffic_out = Status::metric_outbound_out->with_labels(&addr, 1);
-  m_metric_traffic_in = Status::metric_outbound_in->with_labels(&addr, 1);
-  m_metric_conn_time = Status::metric_outbound_conn_time->with_labels(&addr, 1);
+  pjs::Str *keys[2];
+  keys[0] = protocol_name();
+  keys[1] = address();
+  m_metric_traffic_out = Status::metric_outbound_out->with_labels(keys, 2);
+  m_metric_traffic_in = Status::metric_outbound_in->with_labels(keys, 2);
+  m_metric_conn_time = Status::metric_outbound_conn_time->with_labels(keys, 2);
 
   start(0);
 }
@@ -797,13 +811,11 @@ void OutboundUDP::pump() {
 
     if (auto data = evt->as<Data>()) {
       m_socket.async_send(
-        DataChunks(m_buffer.chunks()),
+        DataChunks(data->chunks()),
         [=](const std::error_code &ec, std::size_t n) {
           if (ec != asio::error::operation_aborted) {
-            m_buffer.shift(n);
             m_metric_traffic_out->increase(n);
             Status::metric_outbound_out->increase(n);
-
             if (ec) {
               if (Log::is_enabled(Log::WARN)) {
                 char desc[200];

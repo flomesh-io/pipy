@@ -319,8 +319,9 @@ void Status::register_metrics() {
     label_names
   );
 
-  label_names->length(1);
-  label_names->set(0, "peer");
+  label_names->length(2);
+  label_names->set(0, "protocol");
+  label_names->set(1, "peer");
 
   stats::Gauge::make(
     pjs::Str::make("pipy_outbound_count"),
@@ -329,8 +330,10 @@ void Status::register_metrics() {
       int total = 0;
       gauge->clear();
       Outbound::for_each([&](Outbound *outbound) {
-        auto k = outbound->address();
-        auto cnt = gauge->with_labels(&k, 1);
+        pjs::Str *k[2];
+        k[0] = outbound->protocol_name();
+        k[1] = outbound->address();
+        auto cnt = gauge->with_labels(k, 2);
         cnt->increase();
         total++;
       });
@@ -497,7 +500,11 @@ void Status::dump_memory() {
   std::unordered_map<std::string, OutboundSum> outbound_sums;
   Outbound::for_each([&](Outbound *outbound) {
     char key[1000];
-    std::sprintf(key, "[%s]:%d", outbound->host().c_str(), outbound->port());
+    std::sprintf(key, "%s [%s]:%d",
+      outbound->protocol_name()->c_str(),
+      outbound->host().c_str(),
+      outbound->port()
+    );
     auto conn_time = outbound->connection_time() / (outbound->retries() + 1);
     auto &sum = outbound_sums[key];
     sum.connections++;

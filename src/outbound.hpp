@@ -71,6 +71,8 @@ public:
     }
   }
 
+  auto protocol() const -> Protocol { return m_options.protocol; }
+  auto protocol_name() const -> pjs::Str*;
   auto address() -> pjs::Str*;
   auto host() const -> const std::string& { return m_host; }
   auto port() const -> int { return m_port; }
