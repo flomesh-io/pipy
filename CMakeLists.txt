@@ -202,6 +202,7 @@ add_executable(pipy
   src/filters/socks.cpp
   src/filters/split.cpp
   src/filters/tee.cpp
+  src/filters/thrift.cpp
   src/filters/throttle.cpp
   src/filters/tls.cpp
   src/filters/use.cpp
