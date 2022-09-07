@@ -93,6 +93,7 @@ void Deframer::deframe(Data &data) {
             m_read_buffer[m_read_pointer++] = c;
             if (m_read_pointer >= m_read_length) {
               m_read_length = 0;
+              m_read_buffer = nullptr;
               state = on_state(state, -1);
             }
           } else {

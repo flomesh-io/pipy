@@ -28,6 +28,7 @@
 
 #include "filter.hpp"
 #include "deframer.hpp"
+#include "options.hpp"
 
 namespace pipy {
 namespace thrift {
@@ -42,6 +43,7 @@ public:
     seqID,
     type,
     name,
+    value,
   };
 
   auto seqID() -> int {
@@ -62,9 +64,16 @@ public:
     return ret.is_string() ? ret.s() : pjs::Str::empty.get();
   }
 
+  auto value() -> pjs::Object* {
+    pjs::Value ret;
+    pjs::get<Message>(this, Message::Field::value, ret);
+    return ret.is_object() ? ret.o() : nullptr;
+  }
+
   void seqID(int n) { pjs::set<Message>(this, Message::Field::seqID, n); }
   void type(pjs::Str *s) { pjs::set<Message>(this, Message::Field::type, s); }
   void name(pjs::Str *s) { pjs::set<Message>(this, Message::Field::name, s); }
+  void value(pjs::Object *o) { pjs::set<Message>(this, Message::Field::value, o); }
 };
 
 //
@@ -73,7 +82,14 @@ public:
 
 class Decoder : public Filter, public Deframer {
 public:
-  Decoder();
+  struct Options : public pipy::Options {
+    bool body = false;
+
+    Options() {}
+    Options(pjs::Object *options);
+  };
+
+  Decoder(const Options &options);
 
 private:
   Decoder(const Decoder &r);
@@ -97,46 +113,62 @@ private:
     MESSAGE_NAME,
     MESSAGE_TYPE,
     SEQ_ID,
-    STRUCT_FIELD,
+    STRUCT_FIELD_TYPE,
+    STRUCT_FIELD_ID,
     VALUE_BOOL,
     VALUE_I8,
     VALUE_I16,
     VALUE_I32,
     VALUE_I64,
     VALUE_DOUBLE,
-    VALUE_BINARY,
+    VALUE_UUID,
+    BINARY_SIZE,
+    BINARY_DATA,
     LIST_HEAD,
     SET_HEAD,
     MAP_HEAD,
-    ERROR,
+    ERROR = -1,
   };
 
-  struct Level :
-    public pjs::Pooled<Level>,
-    public List<Level>::Item
-  {
-    enum Type {
+  struct Level : public pjs::Pooled<Level> {
+    enum Kind {
       STRUCT,
       LIST,
       SET,
       MAP,
     };
 
-    Level(Type t) : type(t), obj(pjs::Object::make()) {}
-
-    Type type;
+    Level* back;
+    Kind kind;
+    State element_types[2];
+    int element_sizes[2];
+    int size;
+    int index;
+    pjs::Value key;
     pjs::Ref<pjs::Object> obj;
   };
 
+  Options m_options;
   Format m_format;
-  uint8_t m_read_buf[8];
+  uint8_t m_read_buf[16];
   pjs::Ref<Data> m_read_data;
   pjs::Ref<Message> m_msg;
-  List<Level> m_levels;
+  Level* m_stack = nullptr;
 
   virtual auto on_state(int state, int c) -> int override;
 
-  bool set_type(int type);
+  bool set_message_type(int type);
+  void set_value_type(int type, State &state, int &read_size);
+  auto set_value_start() -> State;
+  auto set_value_end() -> State;
+  void set_value(const pjs::Value &v);
+  auto push_struct(pjs::Object *obj) -> State;
+  auto push_list(int type, int size, pjs::Object *obj) -> State;
+  auto push_set(int type, int size, pjs::Object *obj) -> State;
+  auto push_map(int key_type, int value_type, int size, pjs::Object *obj) -> State;
+  auto pop() -> State;
+  void message_start();
+  void message_end();
 };
 
 //

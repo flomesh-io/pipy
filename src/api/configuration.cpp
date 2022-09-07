@@ -71,6 +71,7 @@
 #include "filters/socks.hpp"
 #include "filters/split.hpp"
 #include "filters/tee.hpp"
+#include "filters/thrift.hpp"
 #include "filters/throttle.hpp"
 #include "filters/tls.hpp"
 #include "filters/use.hpp"
@@ -166,6 +167,10 @@ void FilterConfigurator::decode_mqtt(pjs::Object *options) {
 
 void FilterConfigurator::decode_multipart() {
   append_filter(new mime::MultipartDecoder());
+}
+
+void FilterConfigurator::decode_thrift(pjs::Object *options) {
+  append_filter(new thrift::Decoder(options));
 }
 
 void FilterConfigurator::decode_websocket() {
@@ -1059,6 +1064,18 @@ template<> void ClassDef<FilterConfigurator>::init() {
   method("decodeMultipart", [](Context &ctx, Object *thiz, Value &result) {
     try {
       thiz->as<FilterConfigurator>()->decode_multipart();
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // FilterConfigurator.decodeThrift
+  method("decodeThrift", [](Context &ctx, Object *thiz, Value &result) {
+    Object *options = nullptr;
+    if (!ctx.arguments(0, &options)) return;
+    try {
+      thiz->as<FilterConfigurator>()->decode_thrift(options);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
