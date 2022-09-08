@@ -773,4 +773,126 @@ template<> void ClassDef<Constructor<Date>>::init() {
   });
 }
 
+//
+// Map
+//
+
+template<> void ClassDef<Map>::init() {
+  ctor([](Context &ctx) -> Object* {
+    Array *entries = nullptr;
+    if (!ctx.arguments(0, &entries)) return nullptr;
+    if (entries) return Map::make(entries);
+    return Map::make();
+  });
+
+  accessor("size", [](Object *obj, Value &ret) { ret.set(obj->as<Map>()->size()); });
+
+  method("clear", [](Context &ctx, Object *obj, Value &ret) {
+    obj->as<Map>()->clear();
+  });
+
+  method("delete", [](Context &ctx, Object *obj, Value &ret) {
+    Value key;
+    if (!ctx.arguments(1, &key)) return;
+    ret.set(obj->as<Map>()->erase(key));
+  });
+
+  method("get", [](Context &ctx, Object *obj, Value &ret) {
+    Value key;
+    if (!ctx.arguments(1, &key)) return;
+    obj->as<Map>()->get(key, ret);
+  });
+
+  method("set", [](Context &ctx, Object *obj, Value &ret) {
+    Value key, value;
+    if (!ctx.arguments(2, &key, &value)) return;
+    obj->as<Map>()->set(key, value);
+    ret.set(obj);
+  });
+
+  method("has", [](Context &ctx, Object *obj, Value &ret) {
+    Value key;
+    if (!ctx.arguments(1, &key)) return;
+    ret.set(obj->as<Map>()->has(key));
+  });
+
+  method("forEach", [](Context &ctx, Object *obj, Value &ret) {
+    Function *cb;
+    if (!ctx.arguments(1, &cb)) return;
+    obj->as<Map>()->forEach(
+      [&](const Value &k, const Value &v) {
+        Value args[3], ret;
+        args[0] = k;
+        args[1] = v;
+        args[2].set(obj);
+        (*cb)(ctx, 3, args, ret);
+        return ctx.ok();
+      }
+    );
+  });
+}
+
+template<> void ClassDef<Constructor<Map>>::init() {
+  super<Function>();
+  ctor();
+}
+
+//
+// Set
+//
+
+template<> void ClassDef<Set>::init() {
+  ctor([](Context &ctx) -> Object* {
+    Array *entries = nullptr;
+    if (!ctx.arguments(0, &entries)) return nullptr;
+    if (entries) return Set::make(entries);
+    return Set::make();
+  });
+
+  accessor("size", [](Object *obj, Value &ret) { ret.set(obj->as<Set>()->size()); });
+
+  method("clear", [](Context &ctx, Object *obj, Value &ret) {
+    obj->as<Set>()->clear();
+  });
+
+  method("delete", [](Context &ctx, Object *obj, Value &ret) {
+    Value key;
+    if (!ctx.arguments(1, &key)) return;
+    ret.set(obj->as<Set>()->erase(key));
+  });
+
+  method("add", [](Context &ctx, Object *obj, Value &ret) {
+    Value value;
+    if (!ctx.arguments(1, &value)) return;
+    obj->as<Set>()->add(value);
+    ret.set(obj);
+  });
+
+  method("has", [](Context &ctx, Object *obj, Value &ret) {
+    Value value;
+    if (!ctx.arguments(1, &value)) return;
+    ret.set(obj->as<Set>()->has(value));
+  });
+
+  method("forEach", [](Context &ctx, Object *obj, Value &ret) {
+    Function *cb;
+    if (!ctx.arguments(1, &cb)) return;
+    obj->as<Set>()->forEach(
+      [&](const Value &v) {
+        Value args[3], ret;
+        args[0] = v;
+        args[1] = v;
+        args[2].set(obj);
+        (*cb)(ctx, 3, args, ret);
+        return ctx.ok();
+      }
+    );
+  });
+}
+
+template<> void ClassDef<Constructor<Set>>::init() {
+  super<Function>();
+  ctor();
+}
+
 } // namespace pjs

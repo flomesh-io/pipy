@@ -100,6 +100,12 @@ template<> void ClassDef<Global>::init() {
   // Date
   variable("Date", class_of<Constructor<Date>>());
 
+  // Map
+  variable("Map", class_of<Constructor<Map>>());
+
+  // Set
+  variable("Set", class_of<Constructor<Set>>());
+
   // RegExp
   variable("RegExp", class_of<Constructor<RegExp>>());
 

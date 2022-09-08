@@ -137,11 +137,82 @@ private:
   friend class ObjectTemplate<Date>;
 };
 
-template<>
-class Constructor<Date> : public ConstructorTemplate<Date> {
+//
+// Map
+//
+
+class Map : public ObjectTemplate<Map> {
 public:
-  void operator()(Context &ctx, Object *obj, Value &ret) {
+  auto size() -> size_t { return m_ht->size(); }
+  void clear() { m_ht->clear(); }
+  bool erase(const Value &key) { return m_ht->erase(key); }
+  void get(const Value &key, Value &value) { m_ht->get(key, value); }
+  void set(const Value &key, const Value &value) { m_ht->set(key, value); }
+  bool has(const Value &key) { return m_ht->has(key); }
+
+  void forEach(const std::function<bool(const Value &, const Value &)> &cb) {
+    OrderedHash<Value, Value>::Iterator it(m_ht);
+    while (auto *ent = it.next()) {
+      if (!cb(ent->k, ent->v)) break;
+    }
   }
+
+private:
+  Map() : m_ht(OrderedHash<Value, Value>::make()) {}
+
+  Map(Array *entries) : m_ht(OrderedHash<Value, Value>::make()) {
+    entries->iterate_all(
+      [this](Value &p, int i) {
+        if (!p.is_array()) {
+          std::string msg("Entry expects an array at index ");
+          throw std::runtime_error(msg + std::to_string(i));
+        }
+        Value k, v;
+        p.as<Array>()->get(0, k);
+        p.as<Array>()->get(1, v);
+        set(k, v);
+      }
+    );
+  }
+
+  Ref<OrderedHash<Value, Value>> m_ht;
+
+  friend class ObjectTemplate<Map>;
+};
+
+//
+// Set
+//
+
+class Set : public ObjectTemplate<Set> {
+public:
+  auto size() -> size_t { return m_ht->size(); }
+  void clear() { m_ht->clear(); }
+  bool erase(const Value &value) { return m_ht->erase(value); }
+  void add(const Value &value) { m_ht->set(value, true); }
+  bool has(const Value &value) { return m_ht->has(value); }
+
+  void forEach(const std::function<bool(const Value &)> &cb) {
+    OrderedHash<Value, bool>::Iterator it(m_ht);
+    while (auto *ent = it.next()) {
+      if (!cb(ent->k)) break;
+    }
+  }
+
+private:
+  Set() : m_ht(OrderedHash<Value, bool>::make()) {}
+
+  Set(Array *values) : m_ht(OrderedHash<Value, bool>::make()) {
+    values->iterate_all(
+      [this](Value &v, int) {
+        add(v);
+      }
+    );
+  }
+
+  Ref<OrderedHash<Value, bool>> m_ht;
+
+  friend class ObjectTemplate<Set>;
 };
 
 } // namespace pjs
