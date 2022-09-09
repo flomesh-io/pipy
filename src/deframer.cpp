@@ -29,6 +29,7 @@ namespace pipy {
 
 void Deframer::reset(int state) {
   m_state = state;
+  m_passing = false;
   m_read_length = 0;
   m_read_buffer = nullptr;
   m_read_data = nullptr;
@@ -64,29 +65,41 @@ void Deframer::pass(size_t size) {
   m_read_array = nullptr;
 }
 
+void Deframer::pass_all(bool enable) {
+  m_passing = enable;
+}
+
 void Deframer::deframe(Data &data) {
+  Data output;
   while (!data.empty() && m_state >= 0) {
+
     if (m_read_length > 0 && !m_read_buffer) {
       auto n = m_read_length;
       if (n > data.size()) n = data.size();
+      Data read_in;
+      data.shift(n, read_in);
+      if (m_passing) output.push(read_in);
+
       if (m_read_data) {
-        data.shift(n, *m_read_data);
+        m_read_data->push(read_in);
       } else if (m_read_array) {
         uint8_t buf[n];
-        data.shift(n, buf);
+        read_in.to_bytes(buf);
         for (int i = 0; i < n; i++) m_read_array->push(int(buf[i]));
-      } else {
-        Data buf;
-        data.shift(n, buf);
-        on_pass(buf);
+      } else if (!m_passing) {
+        output.push(read_in);
+        on_pass(output);
+        output.clear();
       }
+
       if (0 == (m_read_length -= n)) {
         m_state = on_state(m_state, -1);
       }
 
     } else {
       auto state = m_state;
-      Data output;
+      bool passing = m_passing;
+      Data read_in;
       data.shift_to(
         [&](int c) -> bool {
           if (m_read_buffer) {
@@ -99,13 +112,18 @@ void Deframer::deframe(Data &data) {
           } else {
             state = on_state(state, (uint8_t)c);
           }
-          return (m_read_length > 0 && !m_read_buffer) || state < 0;
+          return state < 0 ||
+            (m_read_length > 0 && !m_read_buffer) ||
+            (m_passing != passing);
         },
-        output
+        read_in
       );
+      if (passing) output.push(read_in);
       m_state = state;
     }
   }
+
+  if (!output.empty()) on_pass(output);
 }
 
 } // namespace pipy

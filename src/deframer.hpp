@@ -42,6 +42,7 @@ public:
   void read(size_t size, Data *data);
   void read(size_t size, pjs::Array *array);
   void pass(size_t size);
+  void pass_all(bool enable);
 
 protected:
   virtual auto on_state(int state, int c) -> int = 0;
@@ -49,6 +50,7 @@ protected:
 
 private:
   int m_state = 0;
+  bool m_passing = false;
   size_t m_read_length = 0;
   size_t m_read_pointer = 0;
   uint8_t* m_read_buffer = nullptr;

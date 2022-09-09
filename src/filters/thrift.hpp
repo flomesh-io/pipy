@@ -156,6 +156,7 @@ private:
   Level* m_stack = nullptr;
 
   virtual auto on_state(int state, int c) -> int override;
+  virtual void on_pass(const Data &data) override;
 
   bool set_message_type(int type);
   void set_value_type(int type, State &state, int &read_size);

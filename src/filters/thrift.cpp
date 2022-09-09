@@ -206,6 +206,7 @@ auto Decoder::on_state(int state, int c) -> int {
         );
         auto obj = pjs::Object::make();
         set_value(obj);
+        Deframer::pass_all(true);
         return push_struct(obj);
       }
 
@@ -365,6 +366,10 @@ auto Decoder::on_state(int state, int c) -> int {
   }
 }
 
+void Decoder::on_pass(const Data &data) {
+  Filter::output(Data::make(data));
+}
+
 bool Decoder::set_message_type(int type) {
   switch (type) {
     case 1: m_msg->type(s_call); return true;
@@ -416,6 +421,7 @@ auto Decoder::set_value_end() -> State {
       return set_value_start();
     }
   } else {
+    Deframer::pass_all(false);
     return START;
   }
 }
@@ -527,6 +533,7 @@ auto Decoder::pop() -> State {
     if (!m_stack) {
       message_start();
       message_end();
+      Deframer::pass_all(false);
       return START;
     }
     if (m_stack->kind == Level::STRUCT) return STRUCT_FIELD_TYPE;
