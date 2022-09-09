@@ -69,8 +69,14 @@ void Deframer::pass_all(bool enable) {
   m_passing = enable;
 }
 
+void Deframer::flush() {
+  if (!m_output_buffer.empty()) {
+    on_pass(m_output_buffer);
+    m_output_buffer.clear();
+  }
+}
+
 void Deframer::deframe(Data &data) {
-  Data output;
   while (!data.empty() && m_state >= 0) {
 
     if (m_read_length > 0 && !m_read_buffer) {
@@ -78,7 +84,7 @@ void Deframer::deframe(Data &data) {
       if (n > data.size()) n = data.size();
       Data read_in;
       data.shift(n, read_in);
-      if (m_passing) output.push(read_in);
+      if (m_passing) m_output_buffer.push(read_in);
 
       if (m_read_data) {
         m_read_data->push(read_in);
@@ -87,9 +93,8 @@ void Deframer::deframe(Data &data) {
         read_in.to_bytes(buf);
         for (int i = 0; i < n; i++) m_read_array->push(int(buf[i]));
       } else if (!m_passing) {
-        output.push(read_in);
-        on_pass(output);
-        output.clear();
+        m_output_buffer.push(read_in);
+        flush();
       }
 
       if (0 == (m_read_length -= n)) {
@@ -118,12 +123,12 @@ void Deframer::deframe(Data &data) {
         },
         read_in
       );
-      if (passing) output.push(read_in);
+      if (passing) m_output_buffer.push(read_in);
       m_state = state;
     }
   }
 
-  if (!output.empty()) on_pass(output);
+  flush();
 }
 
 } // namespace pipy

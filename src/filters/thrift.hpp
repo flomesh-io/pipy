@@ -34,46 +34,65 @@ namespace pipy {
 namespace thrift {
 
 //
-// Message
+// MessageHead
 //
 
-class Message : public pjs::ObjectTemplate<Message> {
+class MessageHead : public pjs::ObjectTemplate<MessageHead> {
 public:
   enum class Field {
     seqID,
     type,
     name,
-    value,
+    protocol,
   };
 
   auto seqID() -> int {
     pjs::Value ret;
-    pjs::get<Message>(this, Message::Field::name, ret);
+    pjs::get<MessageHead>(this, MessageHead::Field::name, ret);
     return ret.is_number() ? ret.n() : 0;
   }
 
   auto type() -> pjs::Str* {
     pjs::Value ret;
-    pjs::get<Message>(this, Message::Field::type, ret);
+    pjs::get<MessageHead>(this, MessageHead::Field::type, ret);
     return ret.is_string() ? ret.s() : pjs::Str::empty.get();
   }
 
   auto name() -> pjs::Str* {
     pjs::Value ret;
-    pjs::get<Message>(this, Message::Field::name, ret);
+    pjs::get<MessageHead>(this, MessageHead::Field::name, ret);
     return ret.is_string() ? ret.s() : pjs::Str::empty.get();
   }
 
-  auto value() -> pjs::Object* {
+  auto protocol() -> pjs::Str* {
     pjs::Value ret;
-    pjs::get<Message>(this, Message::Field::value, ret);
+    pjs::get<MessageHead>(this, MessageHead::Field::protocol, ret);
+    return ret.is_string() ? ret.s() : pjs::Str::empty.get();
+  }
+
+  void seqID(int n) { pjs::set<MessageHead>(this, MessageHead::Field::seqID, n); }
+  void type(pjs::Str *s) { pjs::set<MessageHead>(this, MessageHead::Field::type, s); }
+  void name(pjs::Str *s) { pjs::set<MessageHead>(this, MessageHead::Field::name, s); }
+  void protocol(pjs::Str *s) { pjs::set<MessageHead>(this, MessageHead::Field::protocol, s); }
+};
+
+//
+// MessageTail
+//
+
+class MessageTail : public pjs::ObjectTemplate<MessageTail> {
+public:
+  enum class Field {
+    payload,
+  };
+
+  auto payload() -> pjs::Object* {
+    pjs::Value ret;
+    pjs::get<MessageTail>(this, MessageTail::Field::payload, ret);
     return ret.is_object() ? ret.o() : nullptr;
   }
 
-  void seqID(int n) { pjs::set<Message>(this, Message::Field::seqID, n); }
-  void type(pjs::Str *s) { pjs::set<Message>(this, Message::Field::type, s); }
-  void name(pjs::Str *s) { pjs::set<Message>(this, Message::Field::name, s); }
-  void value(pjs::Object *o) { pjs::set<Message>(this, Message::Field::value, o); }
+  void payload(pjs::Object *o) { pjs::set<MessageTail>(this, MessageTail::Field::payload, o); }
 };
 
 //
@@ -152,8 +171,10 @@ private:
   Format m_format;
   uint8_t m_read_buf[16];
   pjs::Ref<Data> m_read_data;
-  pjs::Ref<Message> m_msg;
+  pjs::Ref<MessageHead> m_head;
+  pjs::Ref<MessageTail> m_tail;
   Level* m_stack = nullptr;
+  bool m_started = false;
 
   virtual auto on_state(int state, int c) -> int override;
   virtual void on_pass(const Data &data) override;
@@ -179,7 +200,6 @@ private:
 class Encoder : public Filter {
 public:
   Encoder();
-  Encoder(pjs::Object *head);
 
 private:
   Encoder(const Encoder &r);
@@ -191,6 +211,11 @@ private:
   virtual void dump(Dump &d) override;
 
 private:
+  bool m_started = false;
+  pjs::PropertyCache m_prop_seqID;
+  pjs::PropertyCache m_prop_type;
+  pjs::PropertyCache m_prop_name;
+  pjs::PropertyCache m_prop_protocol;
 };
 
 } // namespace thrift

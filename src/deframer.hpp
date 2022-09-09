@@ -36,6 +36,7 @@ namespace pipy {
 
 class Deframer {
 public:
+  auto state() const -> int { return m_state; }
   void reset(int state = 0);
   void deframe(Data &data);
   void read(size_t size, void *buffer);
@@ -43,6 +44,7 @@ public:
   void read(size_t size, pjs::Array *array);
   void pass(size_t size);
   void pass_all(bool enable);
+  void flush();
 
 protected:
   virtual auto on_state(int state, int c) -> int = 0;
@@ -56,6 +58,7 @@ private:
   uint8_t* m_read_buffer = nullptr;
   pjs::Ref<Data> m_read_data;
   pjs::Ref<pjs::Array> m_read_array;
+  Data m_output_buffer;
 };
 
 } // namespace pipy

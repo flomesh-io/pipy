@@ -30,11 +30,15 @@ namespace pjs {
 
 using namespace pipy::thrift;
 
-template<> void ClassDef<Message>::init() {
-  variable("seqID", Message::Field::seqID);
-  variable("type", Message::Field::type);
-  variable("name", Message::Field::name);
-  variable("value", Message::Field::value);
+template<> void ClassDef<MessageHead>::init() {
+  variable("seqID", MessageHead::Field::seqID);
+  variable("type", MessageHead::Field::type);
+  variable("name", MessageHead::Field::name);
+  variable("protocol", MessageHead::Field::protocol);
+}
+
+template<> void ClassDef<MessageTail>::init() {
+  variable("payload", MessageTail::Field::payload);
 }
 
 } // namespace pjs
@@ -60,6 +64,8 @@ namespace thrift {
 // +--------+--------+--------+...+--------+--------+...+--------+--------+...+--------+
 //
 
+static pjs::ConstStr s_binary("binary");
+static pjs::ConstStr s_compact("compact");
 static pjs::ConstStr s_call("call");
 static pjs::ConstStr s_reply("reply");
 static pjs::ConstStr s_exception("exception");
@@ -106,25 +112,29 @@ void Decoder::reset() {
   Filter::reset();
   Deframer::reset();
   m_read_data = nullptr;
-  m_msg = nullptr;
+  m_head = nullptr;
+  m_tail = nullptr;
   while (auto *s = m_stack) {
     m_stack = s->back;
     delete s;
   }
+  m_started = false;
 }
 
 void Decoder::process(Event *evt) {
   if (evt->is<StreamEnd>()) {
-    output(evt);
+    Filter::output(evt);
     Deframer::reset();
   } else if (auto *data = evt->as<Data>()) {
     Deframer::deframe(*data);
+    if (Deframer::state() == START) message_end();
   }
 }
 
 auto Decoder::on_state(int state, int c) -> int {
   switch (state) {
     case START:
+      message_end();
       m_read_buf[0] = c;
       if (c == 0x80) {
         m_format = BINARY;
@@ -143,9 +153,10 @@ auto Decoder::on_state(int state, int c) -> int {
       }
 
     case MESSAGE_HEAD:
-      m_msg = Message::make();
+      m_head = MessageHead::make();
       switch (m_format) {
         case BINARY: {
+          m_head->protocol(s_binary);
           if (m_read_buf[1] != 0x01) return ERROR;
           if (!set_message_type(m_read_buf[3] & 0x07)) return ERROR;
           int32_t len = (
@@ -160,6 +171,7 @@ auto Decoder::on_state(int state, int c) -> int {
           return MESSAGE_NAME;
         }
         case BINARY_OLD: {
+          m_head->protocol(s_binary);
           int32_t len = (
             ((int32_t)m_read_buf[4] << 24) |
             ((int32_t)m_read_buf[5] << 16) |
@@ -172,6 +184,7 @@ auto Decoder::on_state(int state, int c) -> int {
           return MESSAGE_NAME;
         }
         case COMPACT: {
+          m_head->protocol(s_compact);
           if ((m_read_buf[1] & 0x1f) != 1) return ERROR;
           if (!set_message_type(m_read_buf[1] >> 5)) return ERROR;
           return SEQ_ID;
@@ -180,7 +193,7 @@ auto Decoder::on_state(int state, int c) -> int {
       return ERROR;
 
     case MESSAGE_NAME:
-      m_msg->name(pjs::Str::make(m_read_data->to_string()));
+      m_head->name(pjs::Str::make(m_read_data->to_string()));
       switch (m_format) {
         case BINARY: Deframer::read(4, m_read_buf); return SEQ_ID;
         case BINARY_OLD: return MESSAGE_TYPE;
@@ -198,12 +211,13 @@ auto Decoder::on_state(int state, int c) -> int {
         // TODO
         return ERROR;
       } else {
-        m_msg->seqID(
+        m_head->seqID(
           ((int32_t)m_read_buf[0] << 24) |
           ((int32_t)m_read_buf[1] << 16) |
           ((int32_t)m_read_buf[2] <<  8) |
           ((int32_t)m_read_buf[3] <<  0)
         );
+        message_start();
         auto obj = pjs::Object::make();
         set_value(obj);
         Deframer::pass_all(true);
@@ -372,10 +386,10 @@ void Decoder::on_pass(const Data &data) {
 
 bool Decoder::set_message_type(int type) {
   switch (type) {
-    case 1: m_msg->type(s_call); return true;
-    case 2: m_msg->type(s_reply); return true;
-    case 3: m_msg->type(s_exception); return true;
-    case 4: m_msg->type(s_oneway); return true;
+    case 1: m_head->type(s_call); return true;
+    case 2: m_head->type(s_reply); return true;
+    case 3: m_head->type(s_exception); return true;
+    case 4: m_head->type(s_oneway); return true;
     default: return false;
   }
 }
@@ -452,7 +466,8 @@ void Decoder::set_value(const pjs::Value &v) {
     }
   } else {
     if (v.is_object()) {
-      m_msg->value(v.o());
+      m_tail = MessageTail::make();
+      m_tail->payload(v.o());
     }
   }
 }
@@ -531,8 +546,6 @@ auto Decoder::pop() -> State {
     m_stack = l->back;
     delete l;
     if (!m_stack) {
-      message_start();
-      message_end();
       Deframer::pass_all(false);
       return START;
     }
@@ -542,11 +555,125 @@ auto Decoder::pop() -> State {
 }
 
 void Decoder::message_start() {
-  Filter::output(MessageStart::make(m_msg));
+  if (!m_started) {
+    Deframer::flush();
+    Filter::output(MessageStart::make(m_head));
+    m_started = true;
+  }
 }
 
 void Decoder::message_end() {
-  Filter::output(MessageEnd::make());
+  if (m_started) {
+    Deframer::flush();
+    Filter::output(MessageEnd::make(m_tail));
+    m_started = false;
+  }
+}
+
+//
+// Encoder
+//
+
+Encoder::Encoder()
+  : m_prop_seqID("seqID")
+  , m_prop_type("type")
+  , m_prop_name("name")
+  , m_prop_protocol("protocol")
+{
+}
+
+Encoder::Encoder(const Encoder &r)
+  : Encoder()
+{
+}
+
+Encoder::~Encoder()
+{
+}
+
+void Encoder::dump(Dump &d) {
+  Filter::dump(d);
+  d.name = "encodeThrift";
+}
+
+auto Encoder::clone() -> Filter* {
+  return new Encoder(*this);
+}
+
+void Encoder::reset() {
+  Filter::reset();
+  m_started = false;
+}
+
+void Encoder::process(Event *evt) {
+  static Data::Producer s_dp("encodeThrift");
+
+  if (auto *start = evt->as<MessageStart>()) {
+    if (!m_started) {
+      int seq_id = 0;
+      pjs::Str *type = nullptr;
+      pjs::Str *name = nullptr;
+      pjs::Str *protocol = nullptr;
+      if (auto *head = start->head()) {
+        m_prop_seqID.get(head, seq_id);
+        m_prop_type.get(head, type);
+        m_prop_name.get(head, name);
+        m_prop_protocol.get(head, protocol);
+      }
+
+      Data data;
+      Data::Builder db(data, &s_dp);
+
+      if (protocol == s_compact) {
+        // TODO
+      } else {
+        db.push(0x80);
+        db.push(0x01);
+        db.push('\0');
+        if (type == s_reply) db.push(0x02);
+        else if (type == s_exception) db.push(0x03);
+        else if (type == s_oneway) db.push(0x04);
+        else db.push(0x01);
+        if (name) {
+          int len = name->size();
+          db.push(0xff & (len >> 24));
+          db.push(0xff & (len >> 16));
+          db.push(0xff & (len >>  8));
+          db.push(0xff & (len >>  0));
+          db.push(name->c_str(), len);
+        } else {
+          db.push('\0');
+          db.push('\0');
+          db.push('\0');
+          db.push('\0');
+        }
+        db.push(0xff & (seq_id >> 24));
+        db.push(0xff & (seq_id >> 16));
+        db.push(0xff & (seq_id >>  8));
+        db.push(0xff & (seq_id >>  0));
+      }
+
+      db.flush();
+      Filter::output(evt);
+      Filter::output(Data::make(std::move(data)));
+      m_started = true;
+    }
+
+  } else if (evt->is<Data>()) {
+    if (m_started) {
+      Filter::output(evt);
+    }
+
+  } else if (evt->is<MessageEnd>()) {
+    if (m_started) {
+      m_started = false;
+      Filter::output(evt);
+    }
+
+  } else if (evt->is<StreamEnd>()) {
+    m_started = false;
+    Filter::output(evt);
+  }
 }
 
 } // namespace thrift
