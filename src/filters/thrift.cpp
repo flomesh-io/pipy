@@ -37,10 +37,6 @@ template<> void ClassDef<MessageHead>::init() {
   variable("protocol", MessageHead::Field::protocol);
 }
 
-template<> void ClassDef<MessageTail>::init() {
-  variable("payload", MessageTail::Field::payload);
-}
-
 } // namespace pjs
 
 namespace pipy {
@@ -113,7 +109,7 @@ void Decoder::reset() {
   Deframer::reset();
   m_read_data = nullptr;
   m_head = nullptr;
-  m_tail = nullptr;
+  m_payload = nullptr;
   while (auto *s = m_stack) {
     m_stack = s->back;
     delete s;
@@ -466,8 +462,7 @@ void Decoder::set_value(const pjs::Value &v) {
     }
   } else {
     if (v.is_object()) {
-      m_tail = MessageTail::make();
-      m_tail->payload(v.o());
+      m_payload = v.o();
     }
   }
 }
@@ -565,7 +560,7 @@ void Decoder::message_start() {
 void Decoder::message_end() {
   if (m_started) {
     Deframer::flush();
-    Filter::output(MessageEnd::make(m_tail));
+    Filter::output(MessageEnd::make(nullptr, m_payload));
     m_started = false;
   }
 }

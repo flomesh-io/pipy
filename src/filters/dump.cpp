@@ -113,6 +113,10 @@ void Dump::process(Event *evt) {
       db.push(' ');
       JSON::encode(tail, nullptr, 0, db);
     }
+    if (auto payload = end->payload()) {
+      db.push(' ');
+      JSON::encode(payload, nullptr, 0, db);
+    }
 
   } else if (auto end = evt->as<StreamEnd>()) {
     if (end->error() != StreamEnd::NO_ERROR) {

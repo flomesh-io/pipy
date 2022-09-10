@@ -77,25 +77,6 @@ public:
 };
 
 //
-// MessageTail
-//
-
-class MessageTail : public pjs::ObjectTemplate<MessageTail> {
-public:
-  enum class Field {
-    payload,
-  };
-
-  auto payload() -> pjs::Object* {
-    pjs::Value ret;
-    pjs::get<MessageTail>(this, MessageTail::Field::payload, ret);
-    return ret.is_object() ? ret.o() : nullptr;
-  }
-
-  void payload(pjs::Object *o) { pjs::set<MessageTail>(this, MessageTail::Field::payload, o); }
-};
-
-//
 // Decoder
 //
 
@@ -172,7 +153,7 @@ private:
   uint8_t m_read_buf[16];
   pjs::Ref<Data> m_read_data;
   pjs::Ref<MessageHead> m_head;
-  pjs::Ref<MessageTail> m_tail;
+  pjs::Ref<pjs::Object> m_payload;
   Level* m_stack = nullptr;
   bool m_started = false;
 

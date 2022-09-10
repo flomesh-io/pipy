@@ -104,10 +104,12 @@ template<> void ClassDef<MessageEnd>::init() {
   super<Event>();
   ctor([](Context &ctx) -> Object* {
     Object *tail = nullptr;
-    if (!ctx.arguments(0, &tail)) return nullptr;
-    return MessageEnd::make(tail);
+    Object *payload = nullptr;
+    if (!ctx.arguments(0, &tail, &payload)) return nullptr;
+    return MessageEnd::make(tail, payload);
   });
   accessor("tail", [](Object *obj, Value &val) { val.set(obj->as<MessageEnd>()->tail()); });
+  accessor("payload", [](Object *obj, Value &val) { val.set(obj->as<MessageEnd>()->payload()); });
 }
 
 template<> void EnumDef<StreamEnd::Error>::init() {

@@ -128,17 +128,21 @@ public:
   static const Type __TYPE = Event::MessageEnd;
 
   auto tail() -> pjs::Object* { return m_tail; }
+  auto payload() -> pjs::Object* { return m_payload; }
 
 private:
   MessageEnd() {}
 
-  MessageEnd(pjs::Object *tail)
-    : m_tail(tail) {}
+  MessageEnd(pjs::Object *tail, pjs::Object *payload = nullptr)
+    : m_tail(tail)
+    , m_payload(payload) {}
 
   MessageEnd(const MessageEnd &r)
-    : m_tail(r.m_tail) {}
+    : m_tail(r.m_tail)
+    , m_payload(r.m_payload) {}
 
   pjs::Ref<pjs::Object> m_tail;
+  pjs::Ref<pjs::Object> m_payload;
 
   friend class pjs::ObjectTemplate<MessageEnd, Event>;
 };
