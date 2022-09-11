@@ -110,6 +110,7 @@ private:
   enum State {
     START,
     MESSAGE_HEAD,
+    MESSAGE_NAME_LEN,
     MESSAGE_NAME,
     MESSAGE_TYPE,
     SEQ_ID,
@@ -125,8 +126,11 @@ private:
     BINARY_SIZE,
     BINARY_DATA,
     LIST_HEAD,
+    LIST_SIZE,
     SET_HEAD,
+    SET_SIZE,
     MAP_HEAD,
+    MAP_TYPE,
     ERROR = -1,
   };
 
@@ -155,23 +159,31 @@ private:
   pjs::Ref<MessageHead> m_head;
   pjs::Ref<pjs::Object> m_payload;
   Level* m_stack = nullptr;
+  uint64_t m_var_int = 0;
+  int m_element_type = 0;
+  bool m_bool_field = false;
   bool m_started = false;
 
   virtual auto on_state(int state, int c) -> int override;
   virtual void on_pass(const Data &data) override;
 
   bool set_message_type(int type);
+  auto set_field_type(int type) -> State;
   void set_value_type(int type, State &state, int &read_size);
   auto set_value_start() -> State;
   auto set_value_end() -> State;
   void set_value(const pjs::Value &v);
-  auto push_struct(pjs::Object *obj) -> State;
-  auto push_list(int type, int size, pjs::Object *obj) -> State;
-  auto push_set(int type, int size, pjs::Object *obj) -> State;
-  auto push_map(int key_type, int value_type, int size, pjs::Object *obj) -> State;
+  auto push_struct() -> State;
+  auto push_list(int type, int size) -> State;
+  auto push_set(int type, int size) -> State;
+  auto push_map(int key_type, int value_type, int size) -> State;
   auto pop() -> State;
-  void message_start();
+  bool var_int(int c);
+  auto message_start() -> State;
   void message_end();
+
+  static auto zigzag_to_int(uint32_t i) -> int32_t;
+  static auto zigzag_to_int(uint64_t i) -> int64_t;
 };
 
 //
@@ -197,6 +209,8 @@ private:
   pjs::PropertyCache m_prop_type;
   pjs::PropertyCache m_prop_name;
   pjs::PropertyCache m_prop_protocol;
+
+  static void var_int(Data::Builder &db, uint64_t i);
 };
 
 } // namespace thrift
