@@ -785,7 +785,7 @@ template<> void ClassDef<Map>::init() {
     return Map::make();
   });
 
-  accessor("size", [](Object *obj, Value &ret) { ret.set(obj->as<Map>()->size()); });
+  accessor("size", [](Object *obj, Value &ret) { ret.set((int)obj->as<Map>()->size()); });
 
   method("clear", [](Context &ctx, Object *obj, Value &ret) {
     obj->as<Map>()->clear();
@@ -849,7 +849,7 @@ template<> void ClassDef<Set>::init() {
     return Set::make();
   });
 
-  accessor("size", [](Object *obj, Value &ret) { ret.set(obj->as<Set>()->size()); });
+  accessor("size", [](Object *obj, Value &ret) { ret.set((int)obj->as<Set>()->size()); });
 
   method("clear", [](Context &ctx, Object *obj, Value &ret) {
     obj->as<Set>()->clear();
