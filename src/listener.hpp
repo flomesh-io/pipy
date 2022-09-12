@@ -146,11 +146,15 @@ private:
 
   class AcceptorUDP : public Acceptor {
   public:
-    AcceptorUDP(Listener *listener);
+    AcceptorUDP(Listener *listener, bool transparent = false);
     virtual ~AcceptorUDP();
 
     void start(const asio::ip::udp::endpoint &endpoint);
-    auto inbound(const asio::ip::udp::endpoint &peer, bool create = false) -> InboundUDP*;
+    auto inbound(
+      const asio::ip::udp::endpoint &src,
+      const asio::ip::udp::endpoint &dst,
+      bool create = false
+    ) -> InboundUDP*;
 
     virtual auto count() -> size_t const override;
     virtual void accept() override;
@@ -161,11 +165,16 @@ private:
     virtual void for_each_inbound(const std::function<void(Inbound*)> &cb) override;
 
   private:
+    typedef std::map<asio::ip::udp::endpoint, InboundUDP*> PeerMap;
+
     Listener* m_listener;
     List<InboundUDP> m_inbounds;
-    asio::ip::udp::socket m_socket;
+    asio::ip::udp::endpoint m_local;
     asio::ip::udp::endpoint m_peer;
-    std::map<asio::ip::udp::endpoint, InboundUDP*> m_inbound_map;
+    asio::ip::udp::socket m_socket;
+    asio::generic::raw_protocol::socket m_socket_raw;
+    std::map<asio::ip::udp::endpoint, PeerMap> m_inbound_map;
+    bool m_transparent;
     bool m_paused = false;
 
     void receive();

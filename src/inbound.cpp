@@ -109,28 +109,6 @@ void Inbound::address() {
   }
 }
 
-void Inbound::get_original_dest(int sock) {
-#ifdef __linux__
-  struct sockaddr addr;
-  socklen_t len = sizeof(addr);
-  if (!getsockopt(sock, SOL_IP, SO_ORIGINAL_DST, &addr, &len)) {
-    char str[100];
-    auto n = std::sprintf(
-      str, "%d.%d.%d.%d",
-      (unsigned char)addr.sa_data[2],
-      (unsigned char)addr.sa_data[3],
-      (unsigned char)addr.sa_data[4],
-      (unsigned char)addr.sa_data[5]
-    );
-    m_ori_dst_addr.assign(str, n);
-    m_ori_dst_port = (
-      ((int)(unsigned char)addr.sa_data[0] << 8) |
-      ((int)(unsigned char)addr.sa_data[1] << 0)
-    );
-  }
-#endif // __linux__
-}
-
 void Inbound::on_tap_open() {
   switch (m_receiving_state) {
     case PAUSING:
@@ -212,11 +190,31 @@ void InboundTCP::on_get_address() {
     m_local_addr = ep.address().to_string();
     m_local_port = ep.port();
   }
+
   m_remote_addr = m_peer.address().to_string();
   m_remote_port = m_peer.port();
+
+#ifdef __linux__
   if (m_options.transparent && m_socket.is_open()) {
-    get_original_dest(m_socket.native_handle());
+    struct sockaddr addr;
+    socklen_t len = sizeof(addr);
+    if (!getsockopt(m_socket.native_handle(), SOL_IP, SO_ORIGINAL_DST, &addr, &len)) {
+      char str[100];
+      auto n = std::sprintf(
+        str, "%d.%d.%d.%d",
+        (unsigned char)addr.sa_data[2],
+        (unsigned char)addr.sa_data[3],
+        (unsigned char)addr.sa_data[4],
+        (unsigned char)addr.sa_data[5]
+      );
+      m_ori_dst_addr.assign(str, n);
+      m_ori_dst_port = (
+        ((int)(unsigned char)addr.sa_data[0] << 8) |
+        ((int)(unsigned char)addr.sa_data[1] << 0)
+      );
+    }
   }
+#endif // __linux__
 }
 
 void InboundTCP::on_event(Event *evt) {
@@ -494,35 +492,19 @@ void InboundTCP::describe(char *buf) {
 // InboundUDP
 //
 
-auto InboundUDP::get(int port, const std::string &peer) -> InboundUDP* {
-  static std::string s_0_0_0_0("0.0.0.0");
-  if (auto *listener = Listener::find(Listener::Protocol::UDP, s_0_0_0_0, port)) {
-    if (auto *acceptor = listener->m_acceptor.get()) {
-      std::string ip;
-      int port;
-      if (!utils::get_host_port(peer, ip, port)) return nullptr;
-      asio::error_code ec;
-      auto addr = asio::ip::make_address(ip, ec);
-      if (ec) {
-        std::string msg("invalid IP address: ");
-        throw std::runtime_error(msg + ip);
-      }
-      asio::ip::udp::endpoint peer(addr, port);
-      return static_cast<Listener::AcceptorUDP*>(acceptor)->inbound(peer, true);
-    }
-  }
-  return nullptr;
-}
-
 InboundUDP::InboundUDP(
   Listener* listener,
   const Options &options,
   asio::ip::udp::socket &socket,
-  const asio::ip::udp::endpoint &peer
+  const asio::ip::udp::endpoint &local,
+  const asio::ip::udp::endpoint &peer,
+  const asio::ip::udp::endpoint &destination
 ) : m_listener(listener)
   , m_options(options)
   , m_socket(socket)
+  , m_local(local)
   , m_peer(peer)
+  , m_destination(destination)
 {
   listener->open(this);
 }
@@ -564,15 +546,13 @@ auto InboundUDP::size_in_buffer() const -> size_t {
 
 void InboundUDP::on_get_address() {
   if (m_listener) {
-    if (m_socket.is_open()) {
-      const auto &ep = m_socket.local_endpoint();
-      m_local_addr = ep.address().to_string();
-      m_local_port = ep.port();
-    }
+    m_local_addr = m_local.address().to_string();
+    m_local_port = m_local.port();
     m_remote_addr = m_peer.address().to_string();
     m_remote_port = m_peer.port();
-    if (m_options.transparent && m_socket.is_open()) {
-      get_original_dest(m_socket.native_handle());
+    if (m_options.transparent) {
+      m_ori_dst_addr = m_destination.address().to_string();
+      m_ori_dst_port = m_destination.port();
     }
   }
 }
@@ -594,19 +574,16 @@ void InboundUDP::on_event(Event *evt) {
       m_message_started = false;
       m_sending_size += m_buffer.size();
 
-      pjs::Ref<Data> buffer(Data::make(std::move(m_buffer)));
-
       if (m_listener) {
+        auto *buffer = Data::make(std::move(m_buffer));
         m_socket.async_send_to(
           DataChunks(buffer->chunks()),
           m_peer,
           [=](const std::error_code &ec, std::size_t n) {
-            m_sending_size -= buffer->size();
-            release();
+            buffer->release();
           }
         );
-
-        retain();
+        buffer->retain();
       }
     }
   }
@@ -636,17 +613,6 @@ template<> void ClassDef<Inbound>::init() {
   accessor("destinationAddress" , [](Object *obj, Value &ret) { ret.set(obj->as<Inbound>()->ori_dst_address()); });
   accessor("destinationPort"    , [](Object *obj, Value &ret) { ret.set(obj->as<Inbound>()->ori_dst_port()); });
   accessor("output"             , [](Object *obj, Value &ret) { ret.set(obj->as<Inbound>()->output()); });
-}
-
-template<> void ClassDef<Constructor<Inbound>>::init() {
-  ctor();
-
-  method("udp", [](Context &ctx, Object *obj, Value &ret) {
-    int port;
-    Str *peer;
-    if (!ctx.arguments(2, &port, &peer)) return;
-    ret.set(InboundUDP::get(port, peer->str()));
-  });
 }
 
 template<> void ClassDef<InboundTCP>::init() {

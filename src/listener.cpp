@@ -27,6 +27,8 @@
 #include "pipeline.hpp"
 #include "log.hpp"
 
+#include <netinet/udp.h>
+
 namespace pjs {
 
 using namespace pipy;
@@ -150,7 +152,7 @@ void Listener::start() {
       }
       case Protocol::UDP: {
         asio::ip::udp::endpoint endpoint(m_address, m_port);
-        auto *acceptor = new AcceptorUDP(this);
+        auto *acceptor = new AcceptorUDP(this, m_options.transparent);
         acceptor->start(endpoint);
         m_paused = false;
         m_acceptor = acceptor;
@@ -224,6 +226,7 @@ void Listener::set_sock_opts(int sock) {
   if (m_options.transparent) {
     int enabled = 1;
     setsockopt(sock, SOL_IP, IP_TRANSPARENT, &enabled, sizeof(enabled));
+    setsockopt(sock, SOL_IP, IP_ORIGDSTADDR, &enabled, sizeof(enabled));
   }
 #endif
 
@@ -319,9 +322,11 @@ void Listener::AcceptorTCP::for_each_inbound(const std::function<void(Inbound*)>
 // Listener::AcceptorUDP
 //
 
-Listener::AcceptorUDP::AcceptorUDP(Listener *listener)
+Listener::AcceptorUDP::AcceptorUDP(Listener *listener, bool transparent)
   : m_listener(listener)
   , m_socket(Net::context())
+  , m_socket_raw(Net::context())
+  , m_transparent(transparent)
 {
 }
 
@@ -334,17 +339,27 @@ void Listener::AcceptorUDP::start(const asio::ip::udp::endpoint &endpoint) {
   m_socket.set_option(asio::socket_base::reuse_address(true));
   m_listener->set_sock_opts(m_socket.native_handle());
   m_socket.bind(endpoint);
+  m_local = m_socket.local_endpoint();
   receive();
 }
 
-auto Listener::AcceptorUDP::inbound(const asio::ip::udp::endpoint &peer, bool create) -> InboundUDP* {
-  auto i = m_inbound_map.find(peer);
-  if (i != m_inbound_map.end()) return i->second;
+auto Listener::AcceptorUDP::inbound(
+  const asio::ip::udp::endpoint &src,
+  const asio::ip::udp::endpoint &dst,
+  bool create
+) -> InboundUDP* {
+  auto i = m_inbound_map.find(dst);
+  if (i != m_inbound_map.end()) {
+    auto &peers = i->second;
+    auto j = peers.find(src);
+    if (j != peers.end()) return j->second;
+  }
   if (create) {
     auto *inbound = InboundUDP::make(
       m_listener,
       m_listener->m_options,
-      m_socket, peer
+      m_socket,
+      m_local, src, dst
     );
     inbound->retain();
     return inbound;
@@ -358,20 +373,75 @@ auto Listener::AcceptorUDP::count() -> size_t const {
 
 void Listener::AcceptorUDP::receive() {
   static Data::Producer s_data_producer("InboundUDP");
-  pjs::Ref<Data> buffer(Data::make(m_listener->m_options.max_packet_size, &s_data_producer));
 
   m_socket.async_receive_from(
-    DataChunks(buffer->chunks()),
+    asio::null_buffers(),
     m_peer,
     [=](const std::error_code &ec, std::size_t n) {
       if (ec != asio::error::operation_aborted) {
         if (!ec) {
           InputContext ic;
-          InboundUDP *inb = inbound(m_peer, !m_paused);
-          if (inb && inb->is_receiving()) {
-            if (n > 0) buffer->pop(buffer->size() - n);
-            inb->receive(buffer);
+
+          auto max_size = m_listener->m_options.max_packet_size;
+          auto iov_size = (max_size + DATA_CHUNK_SIZE - 1) / DATA_CHUNK_SIZE;
+          Data buf(max_size, &s_data_producer);
+
+          auto s = m_socket.native_handle();
+
+          struct sockaddr_in addr;
+          struct msghdr msg;
+          struct iovec iov[iov_size];
+
+          int i = 0;
+          for (auto c : buf.chunks()) {
+            auto buf = std::get<0>(c);
+            auto len = std::get<1>(c);
+            iov[i].iov_base = buf;
+            iov[i].iov_len = len;
+            i++;
           }
+
+          msg.msg_name = &addr;
+          msg.msg_namelen = sizeof(addr);
+          msg.msg_iov = iov;
+          msg.msg_iovlen = iov_size;
+          msg.msg_flags = 0;
+
+          char control_data[1000];
+          if (m_transparent) {
+            msg.msg_control = control_data;
+            msg.msg_controllen = sizeof(control_data);
+          } else {
+            msg.msg_control = nullptr;
+            msg.msg_controllen = 0;
+          }
+
+          auto n = recvmsg(s, &msg, 0);
+          if (n > 0) {
+            buf.pop(buf.size() - n);
+            m_peer.address(asio::ip::make_address_v4(ntohl(addr.sin_addr.s_addr)));
+            m_peer.port(ntohs(addr.sin_port));
+            asio::ip::udp::endpoint destination;
+
+#ifdef __linux__
+            if (m_transparent) {
+              for (auto *cmsg = CMSG_FIRSTHDR(&msg); cmsg; cmsg = CMSG_NXTHDR(&msg, cmsg)) {
+                if (cmsg->cmsg_level == SOL_IP && cmsg->cmsg_type == IP_ORIGDSTADDR) {
+                  auto *addr = (struct sockaddr_in *)CMSG_DATA(cmsg);
+                  destination.address(asio::ip::make_address_v4(ntohl(addr->sin_addr.s_addr)));
+                  destination.port(ntohs(addr->sin_port));
+                  break;
+                }
+              }
+            }
+#endif // __linux__
+
+            InboundUDP *inb = inbound(m_peer, destination, !m_paused);
+            if (inb && inb->is_receiving()) {
+              inb->receive(Data::make(std::move(buf)));
+            }
+          }
+
         } else {
           if (Log::is_enabled(Log::WARN)) {
             char desc[200];
@@ -404,13 +474,18 @@ void Listener::AcceptorUDP::cancel() {
 void Listener::AcceptorUDP::open(Inbound *inbound) {
   auto *inb = static_cast<InboundUDP*>(inbound);
   m_inbounds.push(static_cast<InboundUDP*>(inbound));
-  m_inbound_map[inb->peer()] = inb;
+  auto &peers = m_inbound_map[inb->destination()];
+  peers[inb->peer()] = inb;
 }
 
 void Listener::AcceptorUDP::close(Inbound *inbound) {
   auto *inb = static_cast<InboundUDP*>(inbound);
   m_inbounds.remove(inb);
-  m_inbound_map.erase(inb->peer());
+  auto i = m_inbound_map.find(inb->destination());
+  if (i != m_inbound_map.end()) {
+    i->second.erase(inb->peer());
+    if (i->second.empty()) m_inbound_map.erase(i);
+  }
 }
 
 void Listener::AcceptorUDP::close() {

@@ -92,7 +92,6 @@ protected:
   void start(PipelineLayout *layout);
   void stop();
   void address();
-  void get_original_dest(int sock);
 
 private:
   virtual void on_get_address() = 0;
@@ -160,7 +159,7 @@ private:
   void output(Event *evt);
   void close(StreamEnd::Error err);
   void describe(char *desc);
-  void free();
+  void get_original_dest(int sock);
 
   friend class pjs::ObjectTemplate<InboundTCP, Inbound>;
 };
@@ -174,9 +173,9 @@ class InboundUDP :
   public List<InboundUDP>::Item
 {
 public:
-  static auto get(int port, const std::string &peer) -> InboundUDP*;
-
+  auto local() const -> const asio::ip::udp::endpoint& { return m_local; }
   auto peer() const -> const asio::ip::udp::endpoint& { return m_peer; }
+  auto destination() const -> const asio::ip::udp::endpoint& { return m_destination; }
 
   void start();
   void receive(Data *data);
@@ -188,7 +187,9 @@ private:
     Listener* listener,
     const Options &options,
     asio::ip::udp::socket &socket,
-    const asio::ip::udp::endpoint &peer
+    const asio::ip::udp::endpoint &local,
+    const asio::ip::udp::endpoint &peer,
+    const asio::ip::udp::endpoint &destination
   );
 
   ~InboundUDP();
@@ -197,7 +198,9 @@ private:
   Options m_options;
   Timer m_idle_timer;
   asio::ip::udp::socket& m_socket;
+  asio::ip::udp::endpoint m_local;
   asio::ip::udp::endpoint m_peer;
+  asio::ip::udp::endpoint m_destination;
   pjs::Ref<EventTarget::Input> m_input;
   Data m_buffer;
   bool m_message_started = false;

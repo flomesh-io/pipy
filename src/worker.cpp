@@ -148,9 +148,6 @@ template<> void ClassDef<Global>::init() {
   // StreamEnd
   variable("StreamEnd", class_of<Constructor<StreamEnd>>());
 
-  // Inbound
-  variable("Inbound", class_of<Constructor<Inbound>>());
-
   // logging
   variable("logging", class_of<logging::Logging>());
 
