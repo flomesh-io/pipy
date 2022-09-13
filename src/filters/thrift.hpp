@@ -83,7 +83,7 @@ public:
 class Decoder : public Filter, public Deframer {
 public:
   struct Options : public pipy::Options {
-    bool body = false;
+    bool payload = false;
 
     Options() {}
     Options(pjs::Object *options);

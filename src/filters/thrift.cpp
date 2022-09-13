@@ -72,8 +72,8 @@ static pjs::ConstStr s_oneway("oneway");
 //
 
 Decoder::Options::Options(pjs::Object *options) {
-  Value(options, "body")
-    .get(body)
+  Value(options, "payload")
+    .get(payload)
     .check_nullable();
 }
 
@@ -541,51 +541,53 @@ auto Decoder::set_value_end() -> State {
 }
 
 void Decoder::set_value(const pjs::Value &v) {
-  if (auto *s = m_stack) {
-    auto &i = s->index;
-    switch (s->kind) {
-      case Level::STRUCT:
-        s->obj->set(pjs::Str::make(i), v);
-        break;
-      case Level::LIST:
-        s->obj->as<pjs::Array>()->set(i++, v);
-        break;
-      case Level::SET:
-        s->obj->as<pjs::Array>()->set(i++, v);
-        break;
-      case Level::MAP:
-        if (i++ & 1) {
-          if (s->key.is_string()) { // TODO
-            s->obj->set(m_stack->key.s(), v);
+  if (m_options.payload) {
+    if (auto *s = m_stack) {
+      auto &i = s->index;
+      switch (s->kind) {
+        case Level::STRUCT:
+          s->obj->set(pjs::Str::make(i), v);
+          break;
+        case Level::LIST:
+          s->obj->as<pjs::Array>()->set(i++, v);
+          break;
+        case Level::SET:
+          s->obj->as<pjs::Array>()->set(i++, v);
+          break;
+        case Level::MAP:
+          if (i++ & 1) {
+            if (s->key.is_string()) { // TODO
+              s->obj->set(m_stack->key.s(), v);
+            }
+          } else {
+            s->key = v;
           }
-        } else {
-          s->key = v;
-        }
-        break;
-      default: return;
-    }
-  } else {
-    if (v.is_object()) {
-      m_payload = v.o();
+          break;
+        default: return;
+      }
+    } else {
+      if (v.is_object()) {
+        m_payload = v.o();
+      }
     }
   }
 }
 
 auto Decoder::push_struct() -> State {
-  auto obj = pjs::Object::make();
-  set_value(obj);
   auto *l = new Level;
   l->back = m_stack;
   l->kind = Level::STRUCT;
   l->index = 0;
-  l->obj = obj;
+  if (m_options.payload) {
+    auto obj = pjs::Object::make();
+    set_value(obj);
+    l->obj = obj;
+  }
   m_stack = l;
   return STRUCT_FIELD_TYPE;
 }
 
 auto Decoder::push_list(int type, int size) -> State {
-  auto *obj = pjs::Array::make();
-  set_value(obj);
   if (size <= 0) return set_value_end();
   State state;
   int read_size;
@@ -599,15 +601,17 @@ auto Decoder::push_list(int type, int size) -> State {
   l->element_sizes[1] = read_size;
   l->size = size;
   l->index = 0;
-  l->obj = obj;
+  if (m_options.payload) {
+    auto *obj = pjs::Array::make();
+    set_value(obj);
+    l->obj = obj;
+  }
   m_stack = l;
   if (read_size > 1) Deframer::read(read_size, m_read_buf);
   return state;
 }
 
 auto Decoder::push_set(int type, int size) -> State {
-  auto *obj = pjs::Array::make();
-  set_value(obj);
   if (size <= 0) return set_value_end();
   State state;
   int read_size;
@@ -621,15 +625,17 @@ auto Decoder::push_set(int type, int size) -> State {
   l->element_sizes[1] = read_size;
   l->size = size;
   l->index = 0;
-  l->obj = obj;
+  if (m_options.payload) {
+    auto *obj = pjs::Array::make();
+    set_value(obj);
+    l->obj = obj;
+  }
   m_stack = l;
   if (read_size > 1) Deframer::read(read_size, m_read_buf);
   return state;
 }
 
 auto Decoder::push_map(int type_k, int type_v, int size) -> State {
-  auto *obj = pjs::Object::make();
-  set_value(obj);
   if (size <= 0) return set_value_end();
   State state_k, state_v;
   int read_size_k, read_size_v;
@@ -644,7 +650,11 @@ auto Decoder::push_map(int type_k, int type_v, int size) -> State {
   l->element_sizes[1] = read_size_v;
   l->size = size * 2;
   l->index = 0;
-  l->obj = obj;
+  if (m_options.payload) {
+    auto *obj = pjs::Object::make();
+    set_value(obj);
+    l->obj = obj;
+  }
   m_stack = l;
   if (read_size_k > 1) Deframer::read(read_size_k, m_read_buf);
   return state_k;
