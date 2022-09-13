@@ -1,0 +1,40 @@
+---
+title: Configuration.encodeThrift()
+api: Configuration.encodeThrift
+---
+
+## Description
+
+<Summary/>
+
+<FilterDiagram
+  name="encodeThrift"
+  input="Message"
+  output="Data"
+/>
+
+The encoder expects an input [Message](/reference/api/Message) to have:
+
+* _head_
+  - _seqID_ - Sequence ID as a number
+  - _type_ - Type of the message: `"call"`, `"reply"`, `"exception"` or `"oneway"`
+  - _name_ - Name of the message
+  - _protocol_ - Encoding protocol: `"binary"` or `"compact"`
+* _body_ - Payload of the message in raw binary
+
+## Syntax
+
+``` js
+pipy()
+  .pipeline()
+  .encodeThrift()
+```
+
+## Parameters
+
+<Parameters/>
+
+## See Also
+
+* [Configuration](/reference/api/Configuration)
+* [decodeMQTT()](/reference/api/Configuration/decodeThrift)

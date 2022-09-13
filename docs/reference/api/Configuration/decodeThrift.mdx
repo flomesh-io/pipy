@@ -1,0 +1,48 @@
+---
+title: Configuration.decodeThrift()
+api: Configuration.decodeThrift
+---
+
+## Description
+
+<Summary/>
+
+<FilterDiagram
+  name="decodeThrift"
+  input="Data"
+  output="Message"
+/>
+
+After decoding, the output [Message](/reference/api/Message) has:
+
+* _head_
+  - _seqID_ - Sequence ID as a number
+  - _type_ - Type of the message: `"call"`, `"reply"`, `"exception"` or `"oneway"`
+  - _name_ - Name of the message
+  - _protocol_ - Encoding protocol: `"binary"` or `"compact"`
+* _body_ - Payload of the message in raw binary
+* _tail_
+  - payload - Payload of the message decoded as an object (only when option _payload_ is set to true)
+
+## Syntax
+
+``` js
+pipy()
+  .pipeline()
+  .decodeThrift()
+
+pipy()
+  .pipeline()
+  .decodeThrift({
+    payload: true
+  })
+```
+
+## Parameters
+
+<Parameters/>
+
+## See Also
+
+* [Configuration](/reference/api/Configuration)
+* [encodeMQTT()](/reference/api/Configuration/encodeThrift)

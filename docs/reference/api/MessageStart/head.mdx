@@ -13,41 +13,50 @@ The content of _head_ can vary depending on the protocol used by the message.
 
 #### HTTP
 
-The _head_ of an HTTP request message has these contents:
+The _head_ of an HTTP request message has the following content:
 
-- _scheme_ - For HTTP/2 only, _"http"_ or _"https"_
+- _scheme_ - For HTTP/2 only, `"http"` or `"https"`
 - _authority_ - Equivalent to the _Host_ header in HTTP/2
-- _protocol_ - Can be _"HTTP/1.0"_ or _"HTTP/1.1"_
-- _method_ - HTTP method such as _"GET"_ and _"POST"_
+- _protocol_ - Can be `"HTTP/1.0"` or `"HTTP/1.1"`
+- _method_ - HTTP method such as `"GET"` and `"POST"`
 - _path_ - Requested URI
 - _headers_ - Header fields
 
-The _head_ of an HTTP response message has these contents:
+The _head_ of an HTTP response message has the following content:
 
-- _protocol_ - Can be _"HTTP/1.0"_ or _"HTTP/1.1"_
+- _protocol_ - Can be `"HTTP/1.0"` or `"HTTP/1.1"`
 - _status_ - Response status code
 - _statusText_ - Response reason phrase
 - _headers_ - Header fields
 
+#### MQTT
+
+The _head_ of an MQTT packet has the following content:
+
+- _type_ - Type of the packet such as `"SUBSCRIBE"` and `"PUBLISH"`
+- _qos_ - PUBLISH Quality of Service
+- _dup_ - Duplicate delivery of a PUBLISH packet
+- _retain_ - PUBLISH retained message flag
+- Other properties defined in the [specification](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901027)
+
+#### Thrift
+
+The _head_ of a Thrift message has the following content:
+
+- _seqID_ - Sequence ID as a number
+- _type_ - Type of the message: `"call"`, `"reply"`, `"exception"` or `"oneway"`
+- _name_ - Name of the message
+- _protocol_ - Encoding protocol: `"binary"` or `"compact"`
+
 #### Dubbo
 
-The _head_ of a Dubbo message has these contents:
+The _head_ of a Dubbo message has the following content:
 
 - _id_ - Request ID as a string
 - _status_ - Status code
 - _isRequest_ - Is it a request?
 - _isTwoWay_ - Is it 2-way?
 - _isEvent_ - Is it an event?
-
-#### MQTT
-
-The _head_ of an MQTT packet has these contents:
-
-- _type_ - Type of the packet such as _"SUBSCRIBE"_ and _"PUBLISH"_
-- _qos_ - PUBLISH Quality of Service
-- _dup_ - Duplicate delivery of a PUBLISH packet
-- _retain_ - PUBLISH retained message flag
-- Other properties defined in the [specification](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901027)
 
 ## Syntax
 

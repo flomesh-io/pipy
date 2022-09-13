@@ -15,13 +15,17 @@ The content of _tail_ can vary depending on the protocol used by the message.
 
 A chunked HTTP message has an optional [trailer](https://developer.mozilla.org/docs/Web/HTTP/Headers/Trailer) where extra header fields can be transferred at the end of the message. These header fields, if any, can be accessed via _headers_ property of the _tail_ object.
 
-#### Dubbo
-
-A Dubbo message has no meta-info in its tail, therefore the property is always null.
-
 #### MQTT
 
 A MQTT packet has no meta-info in its tail, therefore the property is always null.
+
+#### Thrift
+
+A Thrift message can have the decoded struct in the _payload_ property of the _tail_ object if [decodeThrift()](/reference/api/Configuration/decodeThrift) has its _paylaod_ option set to true.
+
+#### Dubbo
+
+A Dubbo message has no meta-info in its tail, therefore the property is always null.
 
 ## Syntax
 

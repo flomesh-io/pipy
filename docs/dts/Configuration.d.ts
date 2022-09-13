@@ -468,6 +468,23 @@ interface Configuration {
   ): Configuration;
 
   /**
+   * Appends a _decodeThrift_ filter to the current pipeline layout.
+   *
+   * A _decodeThrift_ filter decodes [Thrift](https://thrift.apache.org/) messages from a raw byte stream.
+   *
+   * - **INPUT** - _Data_ stream to decode MQTT packets from.
+   * - **OUTPUT** - Thrift _Messages_ decoded from the input _Data_ stream.
+   *
+   * @param options Options including:
+   *   - _payload_ - A boolean indicating if the message payload struct should be decoded into an object.
+   *       After decoding, the object can be found as the _payload_ property of a _MessageEnd_ event.
+   * @returns The same _Configuration_ object.
+   */
+  decodeThrift(
+    options?: { payload?: boolean }
+  ): Configuration;
+
+  /**
    * Appends a _decodeMultipart_ filter to the current pipeline layout.
    *
    * A _decodeMultipart_ filter decodes parts from MIME multipart messages.
@@ -709,6 +726,18 @@ interface Configuration {
    * @returns The same _Configuration_ object.
    */
   encodeMQTT(): Configuration;
+
+  /**
+   * Appends an _encodeThrift_ filter to the current pipeline layout.
+   *
+   * An _encodeThrift_ filter encodes [Thrift](https://thrift.apache.org/) messages into a raw byte stream.
+   *
+   * - **INPUT** - Thrift _Messages_ to encode.
+   * - **OUTPUT** - Encoded _Data_ stream from the input Thrift messages.
+   *
+   * @returns The same _Configuration_ object.
+   */
+  encodeThrift(): Configuration;
 
   /**
    * Appends an _encodeWebSocket_ filter to the current pipeline layout.
