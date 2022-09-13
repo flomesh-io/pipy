@@ -74,7 +74,7 @@ public:
   void decompress_message(const pjs::Value &algorithm);
   void deframe(pjs::Object *states);
   void demux();
-  void demux_queue();
+  void demux_queue(pjs::Object *options);
   void demux_http(pjs::Object *options);
   void deposit_message(const pjs::Value &filename, pjs::Object *options);
   void detect_protocol(pjs::Function *callback);

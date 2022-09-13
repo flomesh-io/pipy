@@ -193,8 +193,8 @@ void FilterConfigurator::demux() {
   require_sub_pipeline(append_filter(new Demux()));
 }
 
-void FilterConfigurator::demux_queue() {
-  require_sub_pipeline(append_filter(new DemuxQueue()));
+void FilterConfigurator::demux_queue(pjs::Object *options) {
+  require_sub_pipeline(append_filter(new DemuxQueue(options)));
 }
 
 void FilterConfigurator::demux_http(pjs::Object *options) {
@@ -1149,9 +1149,13 @@ template<> void ClassDef<FilterConfigurator>::init() {
   method("demuxQueue", [](Context &ctx, Object *thiz, Value &result) {
     try {
       Str *layout = nullptr;
-      if (!ctx.arguments(0, &layout)) return;
-      thiz->as<FilterConfigurator>()->demux_queue();
-      if (layout) thiz->as<FilterConfigurator>()->to(layout);
+      pjs::Object *options = nullptr;
+      if (ctx.try_arguments(1, &layout, &options)) {
+        thiz->as<FilterConfigurator>()->demux_queue(options);
+        thiz->as<FilterConfigurator>()->to(layout);
+      } else if (ctx.arguments(0, &options)) {
+        thiz->as<FilterConfigurator>()->demux_queue(options);
+      }
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

@@ -30,6 +30,7 @@
 #include "data.hpp"
 #include "list.hpp"
 #include "pipeline.hpp"
+#include "options.hpp"
 
 namespace pipy {
 
@@ -47,12 +48,14 @@ protected:
   QueueDemuxer() {}
 
   virtual auto on_new_sub_pipeline(Input *chain_to) -> Pipeline* = 0;
-  virtual bool on_reply_start(MessageStart *start) { return true; }
+  virtual bool on_request_start(MessageStart *start) { return true; }
+  virtual bool on_response_start(MessageStart *start) { return true; }
 
 private:
   class Stream;
 
   List<Stream> m_streams;
+  pjs::Ref<Pipeline> m_one_way_pipeline;
   bool m_isolated = false;
   bool m_shutdown = false;
 
@@ -107,7 +110,14 @@ private:
 
 class DemuxQueue : public Filter, public QueueDemuxer {
 public:
+  struct Options : public pipy::Options {
+    pjs::Ref<pjs::Function> is_one_way;
+    Options() {}
+    Options(pjs::Object *options);
+  };
+
   DemuxQueue();
+  DemuxQueue(const Options &options);
 
 private:
   DemuxQueue(const DemuxQueue &r);
@@ -121,6 +131,9 @@ private:
   virtual void dump(Dump &d) override;
 
   virtual auto on_new_sub_pipeline(Input *chain_to) -> Pipeline* override;
+  virtual bool on_request_start(MessageStart *start) override;
+
+  Options m_options;
 };
 
 //

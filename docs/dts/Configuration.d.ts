@@ -19,6 +19,10 @@ interface MuxOptions {
   maxQueue: number,
 }
 
+interface MuxQueueOptions extends MuxOptions {
+  isOneWay: (msg: MessageStart) => boolean,
+}
+
 interface MuxHTTPOptions extends MuxOptions {
   bufferSize: number | string,
   version: number | (() => number),
@@ -572,9 +576,13 @@ interface Configuration {
    * - **SUB-INPUT** - A _Message_ streaming into the _demuxQueue_ filter.
    * - **SUB-OUTPUT** - A _Message_ to stream out the _demuxQueue_ filter.
    *
+   * @param options Options including:
+   *   - _isOneWay_ - A function that receives a _MessageStart_ object and returns a boolean indicating if the message is one-way.
    * @returns The same _Configuration_ object.
    */
-  demuxQueue(): Configuration;
+  demuxQueue(options? : {
+    isOneWay: (evt: MessageStart) => boolean,
+  }): Configuration;
 
   /**
    * Appends a _depositMessage_ filter to the current pipeline layout.
@@ -934,11 +942,12 @@ interface Configuration {
    *       Can be a number in seconds or a string with one of the time unit suffixes such as `s`, `m` or `h`.
    *       Defaults is _60 seconds_.
    *   - _maxQueue_ - Maximum number of messages allowed to merge into one sub-pipeline.
+   *   - _isOneWay_ - A function that receives a _MessageStart_ object and returns a boolean indicating if the message is one-way.
    * @returns The same _Configuration_ object.
    */
   muxQueue(
     target: () => any,
-    options?: MuxOptions | (() => MuxOptions),
+    options?: MuxQueueOptions | (() => MuxQueueOptions),
   ): Configuration;
 
   /**
@@ -950,10 +959,11 @@ interface Configuration {
    *       Can be a number in seconds or a string with one of the time unit suffixes such as `s`, `m` or `h`.
    *       Defaults is _60 seconds_.
    *   - _maxQueue_ - Maximum number of messages allowed to merge into one sub-pipeline.
+   *   - _isOneWay_ - A function that receives a _MessageStart_ object and returns a boolean indicating if the message is one-way.
    * @returns The same _Configuration_ object.
    */
   muxQueue(
-    options?: MuxOptions | (() => MuxOptions),
+    options?: MuxQueueOptions | (() => MuxQueueOptions),
   ): Configuration;
 
   /**

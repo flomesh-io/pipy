@@ -66,6 +66,9 @@ protected:
   MuxBase(pjs::Function *group, pjs::Function *options);
   MuxBase(const MuxBase &r);
 
+  auto session() -> Session* { return m_session; }
+  auto stream() -> EventFunction* { return m_stream; }
+
   virtual void reset() override;
   virtual void shutdown() override;
   virtual void process(Event *evt) override;
@@ -209,6 +212,7 @@ class QueueMuxer : public EventSource {
 public:
   auto open() -> EventFunction*;
   void close(EventFunction *stream);
+  void set_one_way(EventFunction *stream);
   void increase_queue_count();
   void reset();
   void isolate();
@@ -243,6 +247,7 @@ private:
     pjs::Ref<MessageStart> m_start;
     Data m_buffer;
     int m_queued_count = 0;
+    bool m_one_way = false;
     bool m_started = false;
     bool m_isolated = false;
 
@@ -258,6 +263,12 @@ private:
 
 class MuxQueue : public MuxBase {
 public:
+  struct Options : public MuxBase::Options {
+    pjs::Ref<pjs::Function> is_one_way;
+    Options() {}
+    Options(pjs::Object *options);
+  };
+
   MuxQueue();
   MuxQueue(pjs::Function *group);
   MuxQueue(pjs::Function *group, const Options &options);
@@ -269,6 +280,8 @@ protected:
 
   virtual auto clone() -> Filter* override;
   virtual void dump(Dump &d) override;
+  virtual void reset() override;
+  virtual void process(Event *evt) override;
   virtual auto on_new_cluster(pjs::Object *options) -> MuxBase::SessionCluster* override;
 
   //
@@ -299,6 +312,10 @@ protected:
 
     friend class MuxQueue;
   };
+
+private:
+  Options m_options;
+  bool m_started = false;
 };
 
 //

@@ -136,7 +136,7 @@ void MuxBase::process(Event *evt) {
     open_stream();
   }
 
-  output(evt, m_stream->input());
+  Filter::output(evt, m_stream->input());
 }
 
 void MuxBase::open_stream() {
@@ -469,6 +469,11 @@ void QueueMuxer::close(EventFunction *stream) {
   s->release();
 }
 
+void QueueMuxer::set_one_way(EventFunction *stream) {
+  auto s = static_cast<Stream*>(stream);
+  s->m_one_way = true;
+}
+
 void QueueMuxer::increase_queue_count() {
   if (auto s = m_streams.head()) {
     s->m_queued_count++;
@@ -568,10 +573,12 @@ void QueueMuxer::Stream::on_event(Event *evt) {
 
   } else if (evt->is<MessageEnd>() || evt->is<StreamEnd>()) {
     if (m_start && !m_queued_count) {
-      auto *end = evt->as<MessageEnd>();
-      retain();
       m_queued_count = 1;
-      muxer->m_streams.push(this);
+      if (!m_one_way) {
+        muxer->m_streams.push(this);
+        retain();
+      }
+      auto *end = evt->as<MessageEnd>();
       muxer->output(m_start);
       if (!m_buffer.empty()) {
         muxer->output(Data::make(std::move(m_buffer)));
@@ -579,6 +586,18 @@ void QueueMuxer::Stream::on_event(Event *evt) {
       muxer->output(end ? end : MessageEnd::make());
     }
   }
+}
+
+//
+// MuxQueue::Options
+//
+
+MuxQueue::Options::Options(pjs::Object *options)
+  : MuxBase::Options(options)
+{
+  Value(options, "isOneWay")
+    .get(is_one_way)
+    .check_nullable();
 }
 
 //
@@ -596,6 +615,7 @@ MuxQueue::MuxQueue(pjs::Function *group)
 
 MuxQueue::MuxQueue(pjs::Function *group, const Options &options)
   : MuxBase(group, options)
+  , m_options(options)
 {
 }
 
@@ -620,6 +640,32 @@ void MuxQueue::dump(Dump &d) {
 
 auto MuxQueue::clone() -> Filter* {
   return new MuxQueue(*this);
+}
+
+void MuxQueue::reset() {
+  MuxBase::reset();
+  m_started = false;
+}
+
+void MuxQueue::process(Event *evt) {
+  MuxBase::process(evt);
+
+  if (auto *f = m_options.is_one_way.get()) {
+    if (!m_started) {
+      if (auto *start = evt->as<MessageStart>()) {
+        if (auto *s = MuxBase::stream()) {
+          pjs::Value arg(start), ret;
+          if (Filter::callback(f, 1, &arg, ret)) {
+            if (ret.to_boolean()) {
+              auto *session = static_cast<Session*>(MuxBase::session());
+              static_cast<QueueMuxer*>(session)->set_one_way(s);
+            }
+          }
+        }
+        m_started = true;
+      }
+    }
+  }
 }
 
 auto MuxQueue::on_new_cluster(pjs::Object *options) -> MuxBase::SessionCluster* {
@@ -732,8 +778,7 @@ void Mux::Stream::on_event(Event *evt) {
       auto inp = m_output.get();
       inp->input(m_start);
       if (!m_buffer.empty()) {
-        inp->input(Data::make(m_buffer));
-        m_buffer.clear();
+        inp->input(Data::make(std::move(m_buffer)));
       }
       inp->input(MessageEnd::make());
     }

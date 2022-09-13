@@ -1254,7 +1254,7 @@ auto Demux::on_new_sub_pipeline(Input *chain_to) -> Pipeline* {
   return sub_pipeline(0, true, chain_to);
 }
 
-bool Demux::on_reply_start(MessageStart *start) {
+bool Demux::on_response_start(MessageStart *start) {
   int status;
   auto head = start->head();
   if (head && m_prop_status.get(head, status) && status == 100) {
