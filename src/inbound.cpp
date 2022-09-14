@@ -33,7 +33,9 @@
 
 #ifdef __linux__
 #include <linux/netfilter_ipv4.h>
-#endif
+#include <netinet/ip.h>
+#include <netinet/udp.h>
+#endif // __linux__
 
 namespace pipy {
 
@@ -496,17 +498,40 @@ InboundUDP::InboundUDP(
   Listener* listener,
   const Options &options,
   asio::ip::udp::socket &socket,
+  asio::generic::raw_protocol::socket &socket_raw,
   const asio::ip::udp::endpoint &local,
   const asio::ip::udp::endpoint &peer,
   const asio::ip::udp::endpoint &destination
 ) : m_listener(listener)
   , m_options(options)
+  , m_socket_raw(socket_raw)
   , m_socket(socket)
   , m_local(local)
   , m_peer(peer)
   , m_destination(destination)
 {
   listener->open(this);
+  if (m_options.transparent) {
+    auto &src = destination.port() ? destination : local;
+    auto &dst = peer;
+    auto &ip = *reinterpret_cast<struct ip*>(m_datagram_header);
+    auto &udp = *reinterpret_cast<struct udphdr*>(m_datagram_header + 20);
+    ip.ip_v = 4;
+    ip.ip_hl = 20/4;
+    ip.ip_tos = 0;
+    ip.ip_len = 0;
+    ip.ip_id = 0;
+    ip.ip_off = 0;
+    ip.ip_ttl = 23;
+    ip.ip_p = SOL_UDP;
+    ip.ip_sum = 0;
+    ip.ip_src.s_addr = htonl(src.address().to_v4().to_uint());
+    ip.ip_dst.s_addr = htonl(dst.address().to_v4().to_uint());
+    udp.uh_sport = htons(src.port());
+    udp.uh_dport = htons(dst.port());
+    udp.uh_ulen = 0;
+    udp.uh_sum = 0;
+  }
 }
 
 InboundUDP::~InboundUDP() {
@@ -572,18 +597,45 @@ void InboundUDP::on_event(Event *evt) {
   } else if (evt->is<MessageEnd>()) {
     if (m_message_started) {
       m_message_started = false;
-      m_sending_size += m_buffer.size();
-
       if (m_listener) {
-        auto *buffer = Data::make(std::move(m_buffer));
-        m_socket.async_send_to(
-          DataChunks(buffer->chunks()),
-          m_peer,
-          [=](const std::error_code &ec, std::size_t n) {
-            buffer->release();
-          }
-        );
-        buffer->retain();
+#ifdef __linux__
+        if (m_options.masquerade) {
+          static Data::Producer s_dp("InboundUDP Raw");
+          auto *buf = Data::make();
+          auto *ip = reinterpret_cast<struct ip *>(m_datagram_header);
+          auto *udp = reinterpret_cast<struct udphdr *>(m_datagram_header + 20);
+          auto size = m_buffer.size();
+          ip->ip_len = htons(20 + 8 + size);
+          udp->uh_ulen = htons(8 + size);
+          buf->push(m_datagram_header, sizeof(m_datagram_header), &s_dp);
+          buf->push(std::move(m_buffer));
+          m_socket_raw.async_send_to(
+            DataChunks(buf->chunks()),
+            m_peer,
+            [=](const std::error_code &ec, std::size_t n) {
+              m_sending_size -= size;
+              buf->release();
+            }
+          );
+          m_sending_size += size;
+          buf->retain();
+
+        } else
+#endif // __linux__
+        {
+          auto *buf = Data::make(std::move(m_buffer));
+          auto size = m_buffer.size();
+          m_socket.async_send_to(
+            DataChunks(buf->chunks()),
+            m_peer,
+            [=](const std::error_code &ec, std::size_t n) {
+              m_sending_size -= size;
+              buf->release();
+            }
+          );
+          m_sending_size += size;
+          buf->retain();
+        }
       }
     }
   }

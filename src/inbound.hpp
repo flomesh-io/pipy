@@ -56,6 +56,7 @@ public:
     double write_timeout = 0;
     double idle_timeout = 60;
     bool transparent = false;
+    bool masquerade = false;
   };
 
   auto id() const -> uint64_t { return m_id; }
@@ -187,6 +188,7 @@ private:
     Listener* listener,
     const Options &options,
     asio::ip::udp::socket &socket,
+    asio::generic::raw_protocol::socket &socket_raw,
     const asio::ip::udp::endpoint &local,
     const asio::ip::udp::endpoint &peer,
     const asio::ip::udp::endpoint &destination
@@ -197,6 +199,7 @@ private:
   Listener* m_listener;
   Options m_options;
   Timer m_idle_timer;
+  asio::generic::raw_protocol::socket& m_socket_raw;
   asio::ip::udp::socket& m_socket;
   asio::ip::udp::endpoint m_local;
   asio::ip::udp::endpoint m_peer;
@@ -204,6 +207,7 @@ private:
   pjs::Ref<EventTarget::Input> m_input;
   Data m_buffer;
   bool m_message_started = false;
+  uint8_t m_datagram_header[20+8];
   size_t m_sending_size = 0;
 
   virtual auto size_in_buffer() const -> size_t override;

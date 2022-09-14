@@ -12,6 +12,7 @@ interface ListenOptions {
   writeTimeout?: number | string,
   idleTimeout?: number | string,
   transparent?: boolean,
+  masquerade?: boolean,
 }
 
 interface MuxOptions {
@@ -80,6 +81,7 @@ interface Configuration {
    *   - _transparent_ - Set to _true_ to enable [transparent proxy](https://en.wikipedia.org/wiki/Proxy_server#Transparent_proxy) mode,
    *       where the original destination address and port can be found through `__inbound.destinationAddress` and `__inbound.destinationPort` properties.
    *       This is only available on Linux by using NAT or TPROXY.
+   *   - _masquerade_ - Set to _true_ to change the source address of responding UDP packets to the original destination.
    * @returns The same _Configuration_ object.
    */
   listen(port: number | null, options?: ListenOptions): Configuration;

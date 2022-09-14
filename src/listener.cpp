@@ -27,8 +27,6 @@
 #include "pipeline.hpp"
 #include "log.hpp"
 
-#include <netinet/udp.h>
-
 namespace pjs {
 
 using namespace pipy;
@@ -67,6 +65,9 @@ Listener::Options::Options(pjs::Object *options) {
     .check_nullable();
   Value(options, "transparent")
     .get(transparent)
+    .check_nullable();
+  Value(options, "masquerade")
+    .get(masquerade)
     .check_nullable();
 }
 
@@ -152,7 +153,11 @@ void Listener::start() {
       }
       case Protocol::UDP: {
         asio::ip::udp::endpoint endpoint(m_address, m_port);
-        auto *acceptor = new AcceptorUDP(this, m_options.transparent);
+        auto *acceptor = new AcceptorUDP(
+          this,
+          m_options.transparent,
+          m_options.masquerade
+        );
         acceptor->start(endpoint);
         m_paused = false;
         m_acceptor = acceptor;
@@ -322,11 +327,12 @@ void Listener::AcceptorTCP::for_each_inbound(const std::function<void(Inbound*)>
 // Listener::AcceptorUDP
 //
 
-Listener::AcceptorUDP::AcceptorUDP(Listener *listener, bool transparent)
+Listener::AcceptorUDP::AcceptorUDP(Listener *listener, bool transparent, bool masquerade)
   : m_listener(listener)
   , m_socket(Net::context())
   , m_socket_raw(Net::context())
   , m_transparent(transparent)
+  , m_masquerade(masquerade)
 {
 }
 
@@ -340,6 +346,9 @@ void Listener::AcceptorUDP::start(const asio::ip::udp::endpoint &endpoint) {
   m_listener->set_sock_opts(m_socket.native_handle());
   m_socket.bind(endpoint);
   m_local = m_socket.local_endpoint();
+  if (m_masquerade) {
+    m_socket_raw.open(asio::generic::raw_protocol(AF_INET, IPPROTO_RAW));
+  }
   receive();
 }
 
@@ -359,6 +368,7 @@ auto Listener::AcceptorUDP::inbound(
       m_listener,
       m_listener->m_options,
       m_socket,
+      m_socket_raw,
       m_local, src, dst
     );
     inbound->retain();

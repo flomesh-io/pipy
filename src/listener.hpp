@@ -146,7 +146,7 @@ private:
 
   class AcceptorUDP : public Acceptor {
   public:
-    AcceptorUDP(Listener *listener, bool transparent = false);
+    AcceptorUDP(Listener *listener, bool transparent, bool masquerade);
     virtual ~AcceptorUDP();
 
     void start(const asio::ip::udp::endpoint &endpoint);
@@ -175,6 +175,7 @@ private:
     asio::generic::raw_protocol::socket m_socket_raw;
     std::map<asio::ip::udp::endpoint, PeerMap> m_inbound_map;
     bool m_transparent;
+    bool m_masquerade;
     bool m_paused = false;
 
     void receive();
