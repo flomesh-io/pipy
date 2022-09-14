@@ -34,6 +34,28 @@ pipy()
 
 <Parameters/>
 
+## Example
+
+``` js
+pipy()
+
+  .listen(9000)
+  .decodeThrift()
+  .demuxQueue({
+    isOneWay: msg => msg.head.type === 'oneway',
+  }).to(
+    $=>$.muxQueue({
+      isOneWay: msg => msg.head.type === 'oneway',
+    }).to(
+      $=>$
+      .encodeThrift()
+      .connect('localhost:9090')
+      .decodeThrift()
+    )
+  )
+  .encodeThrift()
+```
+
 ## See Also
 
 * [Configuration](/reference/api/Configuration)
