@@ -555,13 +555,15 @@ void Decoder::set_value(const pjs::Value &v) {
           s->obj->as<pjs::Array>()->set(i++, v);
           break;
         case Level::MAP:
-          if (i++ & 1) {
-            if (s->key.is_string()) { // TODO
-              s->obj->set(m_stack->key.s(), v);
-            }
+          if (i & 1) {
+            auto *ent = pjs::Array::make(2);
+            ent->set(0, s->key);
+            ent->set(1, v);
+            s->obj->as<pjs::Array>()->set(i/2, ent);
           } else {
             s->key = v;
           }
+          i++;
           break;
         default: return;
       }
@@ -651,7 +653,7 @@ auto Decoder::push_map(int type_k, int type_v, int size) -> State {
   l->size = size * 2;
   l->index = 0;
   if (m_options.payload) {
-    auto *obj = pjs::Object::make();
+    auto *obj = pjs::Array::make();
     set_value(obj);
     l->obj = obj;
   }
