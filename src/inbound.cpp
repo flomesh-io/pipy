@@ -511,7 +511,8 @@ InboundUDP::InboundUDP(
   , m_destination(destination)
 {
   listener->open(this);
-  if (m_options.transparent) {
+#ifdef __linux__
+  if (m_options.masquerade) {
     auto &src = destination.port() ? destination : local;
     auto &dst = peer;
     auto &ip = *reinterpret_cast<struct ip*>(m_datagram_header);
@@ -532,6 +533,7 @@ InboundUDP::InboundUDP(
     udp.uh_ulen = 0;
     udp.uh_sum = 0;
   }
+#endif // __linux__
 }
 
 InboundUDP::~InboundUDP() {
