@@ -87,7 +87,8 @@ Decoder::Decoder(const Options &options)
 }
 
 Decoder::Decoder(const Decoder &r)
-  : m_options(r.m_options)
+  : Filter(r)
+  , m_options(r.m_options)
 {
 }
 
@@ -721,7 +722,11 @@ Encoder::Encoder()
 }
 
 Encoder::Encoder(const Encoder &r)
-  : Encoder()
+  : Filter(r)
+  , m_prop_seqID("seqID")
+  , m_prop_type("type")
+  , m_prop_name("name")
+  , m_prop_protocol("protocol")
 {
 }
 
