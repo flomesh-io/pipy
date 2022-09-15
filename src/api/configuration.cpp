@@ -68,6 +68,7 @@
 #include "filters/replace-event.hpp"
 #include "filters/replace-message.hpp"
 #include "filters/replace-start.hpp"
+#include "filters/replay.hpp"
 #include "filters/socks.hpp"
 #include "filters/split.hpp"
 #include "filters/tee.hpp"
@@ -336,6 +337,10 @@ void FilterConfigurator::replace_message(const pjs::Value &replacement, int size
 
 void FilterConfigurator::replace_start(const pjs::Value &replacement) {
   append_filter(new ReplaceStart(replacement));
+}
+
+void FilterConfigurator::replay() {
+  require_sub_pipeline(append_filter(new Replay()));
 }
 
 void FilterConfigurator::serve_http(pjs::Object *handler) {
@@ -1710,6 +1715,16 @@ template<> void ClassDef<FilterConfigurator>::init() {
     if (!ctx.arguments(0, &replacement)) return;
     try {
       thiz->as<FilterConfigurator>()->replace_start(replacement);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // FilterConfigurator.replay
+  method("replay", [](Context &ctx, Object *thiz, Value &result) {
+    try {
+      thiz->as<FilterConfigurator>()->replay();
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

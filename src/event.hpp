@@ -157,6 +157,7 @@ public:
 
   enum Error {
     NO_ERROR = 0,
+    REPLAY,
     UNKNOWN_ERROR,
     RUNTIME_ERROR,
     READ_ERROR,
@@ -489,6 +490,12 @@ public:
     e->m_in_buffer = true;
     e->retain();
     m_events.unshift(e);
+  }
+
+  void iterate(const std::function<void(Event*)> &cb) {
+    for (auto e = m_events.head(); e; e = e->next()) {
+      cb(e);
+    }
   }
 
   void flush(const std::function<void(Event*)> &out) {

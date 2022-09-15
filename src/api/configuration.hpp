@@ -106,6 +106,7 @@ public:
   void replace_event(Event::Type type, const pjs::Value &replacement);
   void replace_message(const pjs::Value &replacement, int size_limit);
   void replace_start(const pjs::Value &replacement);
+  void replay();
   void serve_http(pjs::Object *handler);
   void split(Data *separator);
   void split(pjs::Str *separator);
