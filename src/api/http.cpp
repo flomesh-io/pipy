@@ -137,14 +137,12 @@ void File::load(const std::string &filename, std::function<Data*(const std::stri
 auto File::to_message(pjs::Str *accept_encoding) -> pipy::Message* {
   auto &s = accept_encoding->str();
   bool has_gzip = false;
-  bool has_deflate = false;
   bool has_br = false;
   for (size_t i = 0; i < s.length(); i++) {
     while (i < s.length() && std::isblank(s[i])) i++;
     if (i < s.length()) {
       auto n = 0; while (std::isalpha(s[i+n])) n++;
       if (n == 4 && !strncasecmp(&s[i], "gzip", n)) has_gzip = true;
-      else if (n == 7 && !strncasecmp(&s[i], "deflate", n)) has_deflate = true;
       else if (n == 2 && !strncasecmp(&s[i], "br", n)) has_br = true;
       i += n;
       while (i < s.length() && s[i] != ',') i++;
