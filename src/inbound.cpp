@@ -33,8 +33,8 @@
 
 #ifdef __linux__
 #include <linux/netfilter_ipv4.h>
-#include <netinet/ip.h>
-#include <netinet/udp.h>
+#include <linux/ip.h>
+#include <linux/udp.h>
 #endif // __linux__
 
 namespace pipy {
@@ -515,23 +515,23 @@ InboundUDP::InboundUDP(
   if (m_options.masquerade) {
     auto &src = destination.port() ? destination : local;
     auto &dst = peer;
-    auto &ip = *reinterpret_cast<struct ip*>(m_datagram_header);
+    auto &ip = *reinterpret_cast<struct iphdr*>(m_datagram_header);
     auto &udp = *reinterpret_cast<struct udphdr*>(m_datagram_header + 20);
-    ip.ip_v = 4;
-    ip.ip_hl = 20/4;
-    ip.ip_tos = 0;
-    ip.ip_len = 0;
-    ip.ip_id = 0;
-    ip.ip_off = 0;
-    ip.ip_ttl = 23;
-    ip.ip_p = SOL_UDP;
-    ip.ip_sum = 0;
-    ip.ip_src.s_addr = htonl(src.address().to_v4().to_uint());
-    ip.ip_dst.s_addr = htonl(dst.address().to_v4().to_uint());
-    udp.uh_sport = htons(src.port());
-    udp.uh_dport = htons(dst.port());
-    udp.uh_ulen = 0;
-    udp.uh_sum = 0;
+    ip.version = 4;
+    ip.ihl = 20/4;
+    ip.tos = 0;
+    ip.tot_len = 0;
+    ip.id = 0;
+    ip.frag_off = 0;
+    ip.ttl = 23;
+    ip.protocol = 17; // UDP
+    ip.check = 0;
+    ip.saddr = htonl(src.address().to_v4().to_uint());
+    ip.daddr = htonl(dst.address().to_v4().to_uint());
+    udp.source = htons(src.port());
+    udp.dest = htons(dst.port());
+    udp.len = 0;
+    udp.check = 0;
   }
 #endif // __linux__
 }
@@ -604,11 +604,11 @@ void InboundUDP::on_event(Event *evt) {
         if (m_options.masquerade) {
           static Data::Producer s_dp("InboundUDP Raw");
           auto *buf = Data::make();
-          auto *ip = reinterpret_cast<struct ip *>(m_datagram_header);
+          auto *ip = reinterpret_cast<struct iphdr *>(m_datagram_header);
           auto *udp = reinterpret_cast<struct udphdr *>(m_datagram_header + 20);
           auto size = m_buffer.size();
-          ip->ip_len = htons(20 + 8 + size);
-          udp->uh_ulen = htons(8 + size);
+          ip->tot_len = htons(20 + 8 + size);
+          udp->len = htons(8 + size);
           buf->push(m_datagram_header, sizeof(m_datagram_header), &s_dp);
           buf->push(std::move(m_buffer));
           m_socket_raw.async_send_to(
