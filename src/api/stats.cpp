@@ -150,6 +150,13 @@ void Metric::create_value() {
   m_has_value = true;
 }
 
+void Metric::zero_all() {
+  zero();
+  for (const auto &i : m_subs) {
+    i->zero_all();
+  }
+}
+
 //
 // Initial state:
 //   {
@@ -285,11 +292,12 @@ auto Metric::get_sub(int i) -> Metric* {
 
 void Metric::truncate(int i) {
   if (0 <= i && i < m_subs.size()) {
+    auto n = i;
     while (i < m_subs.size()) {
       auto metric = m_subs[i++].get();
       m_sub_map.erase(metric->label());
     }
-    m_subs.resize(i);
+    m_subs.resize(n);
   }
 }
 

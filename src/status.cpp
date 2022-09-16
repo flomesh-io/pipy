@@ -294,7 +294,7 @@ void Status::register_metrics() {
           auto k = p->name();
           auto l = gauge->with_labels(&k, 1);
           auto n = 0;
-          l->clear();
+          l->zero_all();
           listener->for_each_inbound([&](Inbound *inbound) {
             auto k = inbound->remote_address();
             auto m = l->with_labels(&k, 1);
@@ -328,7 +328,7 @@ void Status::register_metrics() {
     label_names,
     [=](stats::Gauge *gauge) {
       int total = 0;
-      gauge->clear();
+      gauge->zero_all();
       Outbound::for_each([&](Outbound *outbound) {
         pjs::Str *k[2];
         k[0] = outbound->protocol_name();

@@ -62,7 +62,10 @@ public:
   auto history_size() -> size_t { return m_history_end - m_history_start; }
   void history_step();
   auto history(int dim, double *values) -> size_t;
+  void zero_all();
   void clear();
+
+  virtual void zero() = 0;
 
 protected:
   Metric(pjs::Str *name, pjs::Array *label_names, MetricSet *set = nullptr);
@@ -232,7 +235,8 @@ private:
 
 class Counter : public MetricTemplate<Counter> {
 public:
-  void zero();
+  virtual void zero() override;
+
   void increase(double n = 1);
   auto value() const -> double { return m_value; }
 
@@ -273,7 +277,8 @@ private:
 
 class Gauge : public MetricTemplate<Gauge> {
 public:
-  void zero();
+  virtual void zero() override;
+
   void set(double n);
   void increase(double n = 1);
   void decrease(double n = 1);
@@ -323,7 +328,8 @@ private:
 
 class Histogram : public MetricTemplate<Histogram> {
 public:
-  void zero();
+  virtual void zero() override;
+
   void observe(double n);
 
 private:
