@@ -170,6 +170,7 @@ void Exec::ChildProcessMonitor::check() {
     if (i != m_processes.end()) {
       auto exec = i->second;
       m_processes.erase(i);
+      InputContext ic;
       exec->output(StreamEnd::make());
     }
   }
