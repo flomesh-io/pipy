@@ -225,13 +225,16 @@ public:
     friend class pjs::ObjectTemplate<Resource>;
   };
 
-  auto next(pjs::Object *session_key, const pjs::Value &target_key = pjs::Value::undefined) -> Resource*;
+  auto next(pjs::Object *session_key, const pjs::Value &target_key = pjs::Value::undefined, Cache *unhealthy = nullptr) -> Resource*;
 
-  virtual auto select(const pjs::Value &key) -> pjs::Str* = 0;
+  virtual auto select(const pjs::Value &key, Cache *unhealthy) -> pjs::Str* = 0;
   virtual void deselect(pjs::Str *id) = 0;
 
 protected:
+  LoadBalancer(Cache *unhealthy) : m_unhealthy(unhealthy) {}
   ~LoadBalancer();
+
+  bool is_healthy(pjs::Str *target, Cache *unhealthy);
 
 private:
 
@@ -268,6 +271,7 @@ private:
 
   std::map<pjs::WeakRef<pjs::Object>, Session*> m_sessions;
   std::map<pjs::Ref<pjs::Str>, Target*> m_targets;
+  pjs::Ref<Cache> m_unhealthy;
 
   void close_session(Session *session);
 
@@ -282,7 +286,7 @@ class HashingLoadBalancer : public pjs::ObjectTemplate<HashingLoadBalancer, Load
 public:
   void add(pjs::Str *target);
 
-  virtual auto select(const pjs::Value &key) -> pjs::Str* override;
+  virtual auto select(const pjs::Value &key, Cache *unhealthy) -> pjs::Str* override;
   virtual void deselect(pjs::Str *target) override {}
 
 private:
@@ -290,7 +294,6 @@ private:
   ~HashingLoadBalancer();
 
   std::vector<pjs::Ref<pjs::Str>> m_targets;
-  pjs::Ref<Cache> m_unhealthy;
 
   friend class pjs::ObjectTemplate<HashingLoadBalancer, LoadBalancer>;
 };
@@ -303,7 +306,7 @@ class RoundRobinLoadBalancer : public pjs::ObjectTemplate<RoundRobinLoadBalancer
 public:
   void set(pjs::Str *target, int weight);
 
-  virtual auto select(const pjs::Value &key) -> pjs::Str* override;
+  virtual auto select(const pjs::Value &key, Cache *unhealthy) -> pjs::Str* override;
   virtual void deselect(pjs::Str *target) override {}
 
 private:
@@ -319,7 +322,6 @@ private:
 
   std::list<Target> m_targets;
   std::map<pjs::Str*, Target*> m_target_map;
-  pjs::Ref<Cache> m_unhealthy;
   int m_total_weight = 0;
   int m_total_hits = 0;
 
@@ -334,7 +336,7 @@ class LeastWorkLoadBalancer : public pjs::ObjectTemplate<LeastWorkLoadBalancer, 
 public:
   void set(pjs::Str *target, double weight);
 
-  virtual auto select(const pjs::Value &key) -> pjs::Str* override;
+  virtual auto select(const pjs::Value &key, Cache *unhealthy) -> pjs::Str* override;
   virtual void deselect(pjs::Str *target) override;
 
 private:
@@ -348,7 +350,6 @@ private:
   };
 
   std::map<pjs::Ref<pjs::Str>, Target> m_targets;
-  pjs::Ref<Cache> m_unhealthy;
 
   friend class pjs::ObjectTemplate<LeastWorkLoadBalancer, LoadBalancer>;
 };

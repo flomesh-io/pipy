@@ -160,9 +160,10 @@ interface LoadBalancer {
    *   It defaults to the current value of `__inbound` if not present.
    * @param tag A value of any type as a tag given to the selected target so that the same target can be selected
    *   next time the same tag is requested.
+   * @param unhealthy A _Cache_ object storing excluded targets that should not be picked.
    * @returns A resource object containing a field named `id` for the allocated target.
    */
-  next(borrower?: any, tag?: any): { id: string } | undefined;
+  next(borrower?: any, tag?: any, unhealthy?: Cache): { id: string } | undefined;
 }
 
 /**

@@ -414,21 +414,28 @@ LoadBalancer::~LoadBalancer() {
   }
 }
 
-auto LoadBalancer::next(pjs::Object *session_key, const pjs::Value &target_key) -> Resource* {
+auto LoadBalancer::next(pjs::Object *session_key, const pjs::Value &target_key, Cache *unhealthy) -> Resource* {
   if (!session_key) {
-    auto id = select(target_key);
+    auto id = select(target_key, unhealthy);
     if (!id) return nullptr;
     return Resource::make(id);
   }
 
-  auto &session = m_sessions[session_key];
-  if (session) {
-    return session->resource();
-  } else {
+  auto &s = m_sessions[session_key];
+  if (!s) s = new Session(this, session_key);
+
+  auto *session = s;
+  auto *res = session->resource();
+  if (res && !is_healthy(res->id(), unhealthy)) {
+    close_session(session);
     session = new Session(this, session_key);
+    m_sessions[session_key] = session;
+    res = nullptr;
   }
 
-  auto id = select(target_key);
+  if (res) return res;
+
+  auto id = select(target_key, unhealthy);
   if (!id) return nullptr;
 
   auto &target = m_targets[id];
@@ -437,7 +444,7 @@ auto LoadBalancer::next(pjs::Object *session_key, const pjs::Value &target_key) 
   }
 
   auto &resources = target->resources;
-  auto res = resources.tail();
+  res = resources.tail();
   if (!res) {
     res = Resource::make(id);
     res->retain();
@@ -447,6 +454,14 @@ auto LoadBalancer::next(pjs::Object *session_key, const pjs::Value &target_key) 
 
   session->resource(res);
   return res;
+}
+
+bool LoadBalancer::is_healthy(pjs::Str *target, Cache *unhealthy) {
+  pjs::Value v;
+  if (!unhealthy && !m_unhealthy) return true;
+  if (m_unhealthy && m_unhealthy->find(target, v) && v.to_boolean()) return false;
+  if (unhealthy && unhealthy->find(target, v) && v.to_boolean()) return false;
+  return true;
 }
 
 void LoadBalancer::close_session(Session *session) {
@@ -480,8 +495,8 @@ void LoadBalancer::Session::on_weak_ptr_gone() {
 //
 
 HashingLoadBalancer::HashingLoadBalancer(pjs::Array *targets, Cache *unhealthy)
-  : m_targets(targets ? targets->length() : 0)
-  , m_unhealthy(unhealthy)
+  : pjs::ObjectTemplate<HashingLoadBalancer, LoadBalancer>(unhealthy)
+  , m_targets(targets ? targets->length() : 0)
 {
   if (targets) {
     targets->iterate_all(
@@ -502,17 +517,12 @@ void HashingLoadBalancer::add(pjs::Str *target) {
   m_targets.push_back(target);
 }
 
-auto HashingLoadBalancer::select(const pjs::Value &key) -> pjs::Str* {
+auto HashingLoadBalancer::select(const pjs::Value &key, Cache *unhealthy) -> pjs::Str* {
   if (m_targets.empty()) return nullptr;
   std::hash<pjs::Value> hash;
   auto h = hash(key);
   auto s = m_targets[h % m_targets.size()].get();
-  if (s && m_unhealthy) {
-    pjs::Value v;
-    if (m_unhealthy->find(s, v) && v.to_boolean()) {
-      return nullptr;
-    }
-  }
+  if (s && !is_healthy(s, unhealthy)) return nullptr;
   return s;
 }
 
@@ -521,7 +531,7 @@ auto HashingLoadBalancer::select(const pjs::Value &key) -> pjs::Str* {
 //
 
 RoundRobinLoadBalancer::RoundRobinLoadBalancer(pjs::Object *targets, Cache *unhealthy)
-  : m_unhealthy(unhealthy)
+  : pjs::ObjectTemplate<RoundRobinLoadBalancer, LoadBalancer>(unhealthy)
 {
   if (targets) {
     if (targets->is_array()) {
@@ -581,19 +591,14 @@ void RoundRobinLoadBalancer::set(pjs::Str *target, int weight) {
   }
 }
 
-auto RoundRobinLoadBalancer::select(const pjs::Value &key) -> pjs::Str* {
+auto RoundRobinLoadBalancer::select(const pjs::Value &key, Cache *unhealthy) -> pjs::Str* {
   double min = 0;
   Target *p = nullptr;
   int total_weight = 0;
 
   for (auto &t : m_targets) {
     if (t.weight <= 0) continue;
-    if (m_unhealthy) {
-      pjs::Value v;
-      if (m_unhealthy->find(t.id.get(), v) && v.to_boolean()) {
-        continue;
-      }
-    }
+    if (!is_healthy(t.id.get(), unhealthy)) continue;
     total_weight += t.weight;
     if (!p || t.usage < min) {
       min = t.usage;
@@ -624,7 +629,7 @@ auto RoundRobinLoadBalancer::select(const pjs::Value &key) -> pjs::Str* {
 //
 
 LeastWorkLoadBalancer::LeastWorkLoadBalancer(pjs::Object *targets, Cache *unhealthy)
-  : m_unhealthy(unhealthy)
+  : pjs::ObjectTemplate<LeastWorkLoadBalancer, LoadBalancer>(unhealthy)
 {
   if (targets) {
     if (targets->is_array()) {
@@ -665,18 +670,13 @@ void LeastWorkLoadBalancer::set(pjs::Str *target, double weight) {
   }
 }
 
-auto LeastWorkLoadBalancer::select(const pjs::Value &key) -> pjs::Str* {
+auto LeastWorkLoadBalancer::select(const pjs::Value &key, Cache *unhealthy) -> pjs::Str* {
   double min = 0;
   std::map<pjs::Ref<pjs::Str>, Target>::value_type *p = nullptr;
   for (auto &i : m_targets) {
     auto &t = i.second;
     if (t.weight <= 0) continue;
-    if (m_unhealthy) {
-      pjs::Value v;
-      if (m_unhealthy->find(i.first.get(), v) && v.to_boolean()) {
-        continue;
-      }
-    }
+    if (!is_healthy(i.first.get(), unhealthy)) continue;
     if (!p || t.usage < min) {
       min = t.usage;
       p = &i;
@@ -953,15 +953,17 @@ template<> void ClassDef<LoadBalancer>::init() {
   method("next", [](Context &ctx, Object *obj, Value &ret) {
     pjs::Object *session_key = nullptr;
     pjs::Value target_key;
-    if (!ctx.arguments(0, &session_key, &target_key)) return;
+    Cache *unhealthy = nullptr;
+    if (!ctx.arguments(0, &session_key, &target_key, &unhealthy)) return;
     if (!session_key) session_key = static_cast<pipy::Context*>(ctx.root())->inbound();
-    ret.set(obj->as<LoadBalancer>()->next(session_key, target_key));
+    ret.set(obj->as<LoadBalancer>()->next(session_key, target_key, unhealthy));
   });
 
   method("select", [](Context &ctx, Object *obj, Value &ret) {
     pjs::Value key;
-    if (!ctx.arguments(0, &key)) return;
-    if (auto target = obj->as<LoadBalancer>()->select(key)) {
+    Cache *unhealthy = nullptr;
+    if (!ctx.arguments(0, &key, &unhealthy)) return;
+    if (auto target = obj->as<LoadBalancer>()->select(key, unhealthy)) {
       ret.set(target);
     }
   });
