@@ -1,0 +1,94 @@
+---
+title: Configuration.replay()
+api: Configuration.replay
+---
+
+## Description
+
+<Summary/>
+
+<FilterDiagram
+  name="replay"
+  input="Event"
+  output="Event"
+  subInput="Event"
+  subOutput="Event"
+  subType="link"
+/>
+
+The _replay_ filter works sort of like [link()](/reference/api/Configuration/link), except that it also _"records"_ everything from its input so that the exactly same event sequence can be _"replayed"_ afterwards when needed. Replay only happens when the sub-pipeline outputs a [StreamEnd](/reference/api/StreamEnd) event with an error code of `"Replay"`. When it replays, a new sub-pipeline will be created to receive and process the event sequence that has been recorded up to that point.
+
+## Syntax
+
+``` js
+pipy()
+  .pipeline()
+  .replay().to(
+    subPipelineLayout
+  )
+```
+
+## Parameters
+
+<Parameters/>
+
+## Example
+
+``` js
+((
+  lb = new algo.RoundRobinLoadBalancer([
+    'localhost:8081',
+    'localhost:8082',
+    'localhost:8083',
+    'localhost:8084',
+    'localhost:8085',
+  ]),
+
+) => pipy({
+  _unhealthy: null,
+  _target: null,
+})
+
+  .listen(8080)
+  .handleStreamStart(
+    () => _unhealthy = new algo.Cache
+  )
+  .demuxHTTP().to(
+    $=>$.replay().to(
+      $=>$.muxHTTP(
+        () => (_target = lb.next(undefined, undefined, _unhealthy))
+      ).to(
+        $=>$.connect(() => _target.id)
+      )
+      .replaceMessage(
+        msg => (
+          (
+            status = msg.head.status,
+          ) => (
+            200 <= status && status < 300 ? (
+              msg // successful response
+            ) : (
+              _unhealthy.set(_target.id, true),
+              console.log(`Target ${_target.id} failed`),
+              new StreamEnd('Replay') // trigger replay
+            )
+          )
+        )()
+      )
+    )
+  )
+
+  // Only listen on 8083, leaving other ports as unhealthy
+  .listen(8083)
+  .serveHTTP(
+    new Message('Hi')
+  )
+
+)()
+```
+
+## See also
+
+* [Configuration](/reference/api/Configuration)
+* [pipeline()](/reference/api/Configuration/pipeline)
+* [link()](/reference/api/Configuration/link)

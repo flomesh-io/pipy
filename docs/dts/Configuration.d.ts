@@ -1191,6 +1191,21 @@ interface Configuration {
   replaceStreamStart(handler?: (evt: Event) => Event | Message | (Event|Message)[] | void): Configuration;
 
   /**
+   * Appends a _replay_ filter to the current pipeline layout.
+   *
+   * A _replay_ filter repeats its input event sequence to a new sub-pipeline
+   * when the previous sub-pipeline outputs a StreamEnd event with error code _"Replay"_.
+   *
+   * - **INPUT** - Any types of _Events_ to stream into the sub-pipelines.
+   * - **OUTPUT** - _Events_ streaming out from the sub-pipelines.
+   * - **SUB-INPUT** - _Events_ streaming into the _replay_ filter.
+   * - **SUB-OUTPUT** - Any types of _Events_.
+   *
+   * @returns The same _Configuration_ object.
+   */
+  replay(): Configuration;
+
+  /**
    * Appends a _serveHTTP_ filter to the current pipeline layout.
    *
    * A _serveHTTP_ filter calls back user scripts to get an output HTTP response for each HTTP request found in the input stream.

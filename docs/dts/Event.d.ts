@@ -56,6 +56,7 @@ interface StreamEnd extends Event {
   /**
    * Error type if any. Possible values include:
    *   - `""` (no error)
+   *   - `"Replay"` (used with _replay_ filter)
    *   - `"UnknownError"`
    *   - `"RuntimeError"`
    *   - `"ReadError"`
@@ -72,6 +73,7 @@ interface StreamEnd extends Event {
    *   - `"BufferOverflow"`
    */
   error: ''
+    | 'Replay'
     | 'UnknownError'
     | 'RuntimeError'
     | 'ReadError'
@@ -96,6 +98,7 @@ interface StreamEndConstructor extends StreamEnd {
    *
    * @param error Error type. Available error types include:
    *   - `""` (default)
+   *   - `"Replay"` (used with _replay_ filter)
    *   - `"UnknownError"`
    *   - `"RuntimeError"`
    *   - `"ReadError"`
@@ -113,6 +116,7 @@ interface StreamEndConstructor extends StreamEnd {
    * @returns A _StreamEnd_ object with the specified error if any.
    */
   new(error?: ''
+    | 'Replay'
     | 'UnknownError'
     | 'RuntimeError'
     | 'ReadError'
