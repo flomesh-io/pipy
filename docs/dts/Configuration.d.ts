@@ -474,7 +474,7 @@ interface Configuration {
    *
    * A _decodeThrift_ filter decodes [Thrift](https://thrift.apache.org/) messages from a raw byte stream.
    *
-   * - **INPUT** - _Data_ stream to decode MQTT packets from.
+   * - **INPUT** - _Data_ stream to decode Thrift messages from.
    * - **OUTPUT** - Thrift _Messages_ decoded from the input _Data_ stream.
    *
    * @param options Options including:
