@@ -39,11 +39,11 @@ extern "C" {
 typedef int pjs_value;
 
 enum pjs_type {
-  PJS_VALUE_TYPE_UNDEFINED = 0,
-  PJS_VALUE_TYPE_BOOLEAN   = 1,
-  PJS_VALUE_TYPE_NUMBER    = 2,
-  PJS_VALUE_TYPE_STRING    = 3,
-  PJS_VALUE_TYPE_OBJECT    = 4,
+  PJS_TYPE_UNDEFINED = 0,
+  PJS_TYPE_BOOLEAN   = 1,
+  PJS_TYPE_NUMBER    = 2,
+  PJS_TYPE_STRING    = 3,
+  PJS_TYPE_OBJECT    = 4,
 };
 
 pjs_value   pjs_undefined();
@@ -72,9 +72,9 @@ int         pjs_string_get_length(pjs_value str);
 int         pjs_string_get_char_code(pjs_value str, int pos);
 int         pjs_string_get_utf8_size(pjs_value str);
 int         pjs_string_get_utf8_data(pjs_value str, char *buf, int len);
-void        pjs_object_get_property(pjs_value obj, pjs_value k, pjs_value v);
-void        pjs_object_set_property(pjs_value obj, pjs_value k, pjs_value v);
-void        pjs_object_delete(pjs_value obj, pjs_value k);
+int         pjs_object_get_property(pjs_value obj, pjs_value k, pjs_value v);
+int         pjs_object_set_property(pjs_value obj, pjs_value k, pjs_value v);
+int         pjs_object_delete(pjs_value obj, pjs_value k);
 void        pjs_object_iterate(pjs_value obj, int (*cb)(pjs_value k, pjs_value v));
 int         pjs_array_get_length(pjs_value arr);
 void        pjs_array_set_length(pjs_value arr, int len);

@@ -126,6 +126,7 @@ add_compile_options(
 
 include_directories(
   "${CMAKE_SOURCE_DIR}/src"
+  "${CMAKE_SOURCE_DIR}/include"
   "${CMAKE_SOURCE_DIR}/deps/asio-1.12.2/include"
   "${CMAKE_BINARY_DIR}/deps"
   "${CMAKE_BINARY_DIR}/deps/yajl-2.1.0/yajl-2.1.0/include"
@@ -223,6 +224,7 @@ add_executable(pipy
   src/message.cpp
   src/module.cpp
   src/net.cpp
+  src/nmi.cpp
   src/options.cpp
   src/outbound.cpp
   src/output.cpp
