@@ -30,6 +30,7 @@
 #include "pjs/pjs.hpp"
 #include "list.hpp"
 
+#include <stdarg.h>
 #include <algorithm>
 
 namespace pipy {
