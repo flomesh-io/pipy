@@ -393,6 +393,8 @@ void Context::backtrace(const std::string &name) {
 //
 
 std::map<std::string, Class*> Class::m_class_map;
+std::vector<Class::ClassSlot> Class::m_class_slots(1);
+size_t Class::m_class_slot_free = 0;
 
 Class::Class(
   const std::string &name,
@@ -424,10 +426,22 @@ Class::Class(
   }
   for (auto &p : m_field_map) p.first->retain();
   m_class_map[name] = this;
+  if (auto id = m_class_slot_free) {
+    m_id = id;
+    m_class_slot_free = m_class_slots[id].next_slot;
+    m_class_slots[id].class_ptr = this;
+  } else {
+    m_id = m_class_slots.size();
+    m_class_slots.push_back({ this });
+  }
 }
 
 Class::~Class() {
   m_class_map.erase(m_name->str());
+  auto &slot = m_class_slots[m_id];
+  slot.class_ptr = nullptr;
+  slot.next_slot = m_class_slot_free;
+  m_class_slot_free = m_id;
   for (auto &p : m_field_map) {
     p.first->release();
   }

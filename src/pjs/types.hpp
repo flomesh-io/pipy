@@ -736,7 +736,13 @@ public:
     return i == m_class_map.end() ? nullptr : i->second;
   }
 
+  static auto get(size_t id) -> Class* {
+    if (id >= m_class_slots.size()) return nullptr;
+    return m_class_slots[id].class_ptr;
+  }
+
   auto name() const -> pjs::Str* { return m_name; }
+  auto id() const -> size_t { return m_id; }
   void set_ctor(const std::function<Object*(Context&)> &ctor) { m_ctor = ctor; }
   void set_geti(const std::function<void(Object*, int, Value&)> &geti) { m_geti = geti; }
   void set_seti(const std::function<void(Object*, int, const Value&)> &seti) { m_seti = seti; }
@@ -796,9 +802,17 @@ private:
   std::vector<Ref<Field>> m_fields;
   std::vector<int> m_field_index;
   std::unordered_map<Str*, int> m_field_map;
+  size_t m_id;
   size_t m_object_count = 0;
 
+  struct ClassSlot {
+    Class *class_ptr;
+    size_t next_slot;
+  };
+
   static std::map<std::string, Class*> m_class_map;
+  static std::vector<ClassSlot> m_class_slots;
+  static size_t m_class_slot_free;
 
   friend class RefCount<Class>;
 };

@@ -281,10 +281,18 @@ pjs_type pjs_type_of(pjs_value v) {
 }
 
 int pjs_class_of(pjs_value v) {
+  if (auto *r = nmi::s_values.get(v)) {
+    if (r->v.is_object()) {
+      return r->v.o()->type()->id();
+    }
+  }
   return 0;
 }
 
 int pjs_class_id(const char *name) {
+  if (auto *c = pjs::Class::get(name)) {
+    return c->id();
+  }
   return 0;
 }
 
@@ -303,6 +311,13 @@ int pjs_is_nullish(pjs_value v) {
 }
 
 int pjs_is_instance_of(pjs_value v, int class_id) {
+  if (auto *r = nmi::s_values.get(v)) {
+    if (r->v.is_object()) {
+      if (auto *c = pjs::Class::get(class_id)) {
+        return r->v.o()->type()->is_derived_from(c);
+      }
+    }
+  }
   return 0;
 }
 
