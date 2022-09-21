@@ -40,11 +40,15 @@ namespace pipy {
 MuxBase::Options::Options(pjs::Object *options) {
   static pjs::ConstStr s_max_idle("maxIdle");
   static pjs::ConstStr s_max_queue("maxQueue");
+  static pjs::ConstStr s_max_messages("maxMessages");
   Value(options, s_max_idle)
     .get_seconds(max_idle)
     .check_nullable();
   Value(options, s_max_queue)
     .get(max_queue)
+    .check_nullable();
+  Value(options, s_max_messages)
+    .get(max_messages)
     .check_nullable();
 }
 
@@ -254,19 +258,25 @@ MuxBase::SessionCluster::SessionCluster(MuxBase *mux, pjs::Object *options) {
     Options opts(options);
     m_max_idle = opts.max_idle;
     m_max_queue = opts.max_queue;
+    m_max_messages = opts.max_messages;
   } else {
     m_max_idle = mux->m_options.max_idle;
     m_max_queue = mux->m_options.max_queue;
+    m_max_messages = mux->m_options.max_messages;
   }
 }
 
 auto MuxBase::SessionCluster::alloc() -> Session* {
   auto max_share_count = m_max_queue;
+  auto max_message_count = m_max_messages;
   auto *s = m_sessions.head();
   while (s) {
     if (!s->m_is_closed) {
-      if (max_share_count <= 0 || s->m_share_count < max_share_count) {
+      if ((max_share_count <= 0 || s->m_share_count < max_share_count) &&
+          (max_message_count <= 0 || s->m_message_count < max_message_count)
+       ) {
         s->m_share_count++;
+        s->m_message_count++;
         sort(s);
         return s;
       }
@@ -354,7 +364,10 @@ void MuxBase::SessionCluster::recycle(double now) {
   while (s) {
     auto session = s; s = s->next();
     if (session->m_share_count > 0) break;
-    if (session->m_is_closed || m_weak_ptr_gone || now - session->m_free_time >= max_idle) {
+    if (session->m_is_closed || m_weak_ptr_gone ||
+       (m_max_messages >= 0 && session->m_message_count >= m_max_messages) ||
+       (now - session->m_free_time >= max_idle))
+    {
       session->reset();
     }
   }

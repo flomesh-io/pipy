@@ -16,17 +16,18 @@ interface ListenOptions {
 }
 
 interface MuxOptions {
-  maxIdle: number | string,
-  maxQueue: number,
+  maxIdle?: number | string,
+  maxQueue?: number,
+  maxMessages?: number,
 }
 
 interface MuxQueueOptions extends MuxOptions {
-  isOneWay: (msg: MessageStart) => boolean,
+  isOneWay?: (msg: MessageStart) => boolean,
 }
 
 interface MuxHTTPOptions extends MuxOptions {
-  bufferSize: number | string,
-  version: number | (() => number),
+  bufferSize?: number | string,
+  version?: number | (() => number),
 }
 
 interface CertificateOptions {
@@ -933,7 +934,8 @@ interface Configuration {
    *   - _maxIdle_ - Maximum time an idle sub-pipeline should stay around.
    *       Can be a number in seconds or a string with one of the time unit suffixes such as `s`, `m` or `h`.
    *       Defaults is _60 seconds_.
-   *   - _maxQueue_ - Maximum number of messages allowed to merge into one sub-pipeline.
+   *   - _maxQueue_ - Maximum number of messages allowed to run concurrently in one sub-pipeline.
+   *   - _maxMessages_ - Maximum number of messages allowed to run accumulatively in one sub-pipeline.
    * @returns The same _Configuration_ object.
    */
   mux(
@@ -949,7 +951,8 @@ interface Configuration {
    *   - _maxIdle_ - Maximum time an idle sub-pipeline should stay around.
    *       Can be a number in seconds or a string with one of the time unit suffixes such as `s`, `m` or `h`.
    *       Defaults is _60 seconds_.
-   *   - _maxQueue_ - Maximum number of messages allowed to merge into one sub-pipeline.
+   *   - _maxQueue_ - Maximum number of messages allowed to run concurrently in one sub-pipeline.
+   *   - _maxMessages_ - Maximum number of messages allowed to run accumulatively in one sub-pipeline.
    * @returns The same _Configuration_ object.
    */
   mux(
@@ -972,7 +975,8 @@ interface Configuration {
    *   - _maxIdle_ - Maximum time an idle sub-pipeline should stay around.
    *       Can be a number in seconds or a string with one of the time unit suffixes such as `s`, `m` or `h`.
    *       Defaults is _60 seconds_.
-   *   - _maxQueue_ - Maximum number of messages allowed to merge into one sub-pipeline.
+   *   - _maxQueue_ - Maximum number of messages allowed to run concurrently in one sub-pipeline.
+   *   - _maxMessages_ - Maximum number of messages allowed to run accumulatively in one sub-pipeline.
    *   - _isOneWay_ - A function that receives a _MessageStart_ object and returns a boolean indicating if the message is one-way.
    * @returns The same _Configuration_ object.
    */
@@ -989,7 +993,8 @@ interface Configuration {
    *   - _maxIdle_ - Maximum time an idle sub-pipeline should stay around.
    *       Can be a number in seconds or a string with one of the time unit suffixes such as `s`, `m` or `h`.
    *       Defaults is _60 seconds_.
-   *   - _maxQueue_ - Maximum number of messages allowed to merge into one sub-pipeline.
+   *   - _maxQueue_ - Maximum number of messages allowed to run concurrently in one sub-pipeline.
+   *   - _maxMessages_ - Maximum number of messages allowed to run accumulatively in one sub-pipeline.
    *   - _isOneWay_ - A function that receives a _MessageStart_ object and returns a boolean indicating if the message is one-way.
    * @returns The same _Configuration_ object.
    */
@@ -1012,7 +1017,8 @@ interface Configuration {
    *   - _maxIdle_ - Maximum time an idle sub-pipeline should stay around.
    *       Can be a number in seconds or a string with one of the time unit suffixes such as `s`, `m` or `h`.
    *       Defaults is `60` seconds.
-   *   - _maxQueue_ - Maximum number of messages allowed to merge into one sub-pipeline.
+   *   - _maxQueue_ - Maximum number of messages allowed to run concurrently in one sub-pipeline.
+   *   - _maxMessages_ - Maximum number of messages allowed to run accumulatively in one sub-pipeline.
    *   - _bufferSize_ - Maximum body size above which a message should be transferred in chunks.
    *       Can be a number in bytes or a string with a unit suffix such as `'k'`, `'m'`, `'g'` and `'t'`.
    *       Default is _16KB_.
@@ -1032,7 +1038,8 @@ interface Configuration {
    *   - _maxIdle_ - Maximum time an idle sub-pipeline should stay around.
    *       Can be a number in seconds or a string with one of the time unit suffixes such as `s`, `m` or `h`.
    *       Defaults is `60` seconds.
-   *   - _maxQueue_ - Maximum number of messages allowed to merge into one sub-pipeline.
+   *   - _maxQueue_ - Maximum number of messages allowed to run concurrently in one sub-pipeline.
+   *   - _maxMessages_ - Maximum number of messages allowed to run accumulatively in one sub-pipeline.
    *   - _bufferSize_ - Maximum body size above which a message should be transferred in chunks.
    *       Can be a number in bytes or a string with a unit suffix such as `'k'`, `'m'`, `'g'` and `'t'`.
    *       Default is _16KB_.

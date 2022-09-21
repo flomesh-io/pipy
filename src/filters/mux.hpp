@@ -52,6 +52,7 @@ public:
   struct Options : public pipy::Options {
     double max_idle = 60;
     int max_queue = 0;
+    int max_messages = 0;
     Options() {}
     Options(pjs::Object *options);
   };
@@ -128,6 +129,7 @@ protected:
     SessionCluster* m_cluster = nullptr;
     pjs::Ref<Pipeline> m_pipeline;
     int m_share_count = 1;
+    int m_message_count = 0;
     double m_free_time = 0;
     List<MuxBase> m_waiting_muxers;
     bool m_is_pending = false;
@@ -166,6 +168,7 @@ protected:
     List<Session> m_sessions;
     double m_max_idle;
     int m_max_queue;
+    int m_max_messages;
     bool m_weak_ptr_gone = false;
     bool m_recycle_scheduled = false;
 
