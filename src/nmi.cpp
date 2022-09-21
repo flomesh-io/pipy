@@ -473,15 +473,171 @@ void pjs_object_iterate(pjs_value obj, int (*cb)(pjs_value k, pjs_value v)) {
   }
 }
 
-int         pjs_array_get_length(pjs_value arr);
-void        pjs_array_set_length(pjs_value arr, int len);
-void        pjs_array_get_element(pjs_value arr, int i, pjs_value v);
-void        pjs_array_set_element(pjs_value arr, int i, pjs_value v);
-int         pjs_array_delete(pjs_value arr, int i);
-void        pjs_array_push(pjs_value arr, int cnt, pjs_value v, ...);
-pjs_value   pjs_array_pop(pjs_value arr);
-pjs_value   pjs_array_shift(pjs_value arr);
-pjs_value   pjs_array_unshift(pjs_value arr, int cnt, pjs_value v, ...);
-pjs_value   pjs_array_splice(pjs_value arr, int pos, int del_cnt, int ins_cnt, pjs_value v, ...);
+int pjs_array_get_length(pjs_value arr) {
+  if (auto *r = nmi::s_values.get(arr)) {
+    if (r->v.is_array()) {
+      return r->v.as<pjs::Array>()->length();
+    }
+  }
+  return -1;
+}
+
+int pjs_array_set_length(pjs_value arr, int len) {
+  if (auto *r = nmi::s_values.get(arr)) {
+    if (r->v.is_array()) {
+      r->v.as<pjs::Array>()->length(len);
+      return 1;
+    }
+  }
+  return 0;
+}
+
+int pjs_array_get_element(pjs_value arr, int i, pjs_value v) {
+  if (auto *r = nmi::s_values.get(arr)) {
+    if (r->v.is_array()) {
+      if (auto *rv = nmi::s_values.get(v)) {
+        r->v.as<pjs::Array>()->get(i, rv->v);
+        return 1;
+      }
+    }
+  }
+  return 0;
+}
+
+int pjs_array_set_element(pjs_value arr, int i, pjs_value v) {
+  if (auto *r = nmi::s_values.get(arr)) {
+    if (r->v.is_array()) {
+      if (auto *rv = nmi::s_values.get(v)) {
+        r->v.as<pjs::Array>()->set(i, rv->v);
+        return 1;
+      }
+    }
+  }
+  return 0;
+}
+
+int pjs_array_delete(pjs_value arr, int i) {
+  if (auto *r = nmi::s_values.get(arr)) {
+    if (r->v.is_array()) {
+      r->v.as<pjs::Array>()->clear(i);
+      return 1;
+    }
+  }
+  return 0;
+}
+
+int pjs_array_push(pjs_value arr, int cnt, pjs_value v, ...) {
+  if (cnt < 1) return -1;
+  if (auto *r = nmi::s_values.get(arr)) {
+    if (r->v.is_array()) {
+      auto *a = r->v.as<pjs::Array>();
+      if (auto *rv = nmi::s_values.get(v)) {
+        a->push(rv->v);
+        if (cnt > 1) {
+          va_list ap;
+          va_start(ap, v);
+          for (int i = 1; i < cnt; i++) {
+            auto v = va_arg(ap, pjs_value);
+            if (auto *rv = nmi::s_values.get(v)) {
+              a->push(rv->v);
+            } else {
+              va_end(ap);
+              return -1;
+            }
+          }
+          va_end(ap);
+        }
+        return a->length();
+      }
+    }
+  }
+  return -1;
+}
+
+pjs_value pjs_array_pop(pjs_value arr) {
+  if (auto *r = nmi::s_values.get(arr)) {
+    if (r->v.is_array()) {
+      pjs::Value v;
+      r->v.as<pjs::Array>()->pop(v);
+      auto i = nmi::s_values.alloc(v);
+      nmi::LocalRefPool::add(i);
+      return i;
+    }
+  }
+  return 0;
+}
+
+pjs_value pjs_array_shift(pjs_value arr) {
+  if (auto *r = nmi::s_values.get(arr)) {
+    if (r->v.is_array()) {
+      pjs::Value v;
+      r->v.as<pjs::Array>()->shift(v);
+      auto i = nmi::s_values.alloc(v);
+      nmi::LocalRefPool::add(i);
+      return i;
+    }
+  }
+  return 0;
+}
+
+int pjs_array_unshift(pjs_value arr, int cnt, pjs_value v, ...) {
+  if (cnt < 1) return -1;
+  if (auto *r = nmi::s_values.get(arr)) {
+    if (r->v.is_array()) {
+      auto *a = r->v.as<pjs::Array>();
+      pjs::Value vs[cnt];
+      if (auto *rv = nmi::s_values.get(v)) {
+        vs[0] = rv->v;
+        if (cnt > 1) {
+          va_list ap;
+          va_start(ap, v);
+          for (int i = 1; i < cnt; i++) {
+            auto v = va_arg(ap, pjs_value);
+            if (auto *rv = nmi::s_values.get(v)) {
+              vs[i] = rv->v;
+            } else {
+              va_end(ap);
+              return -1;
+            }
+          }
+          va_end(ap);
+        }
+        a->unshift(vs, cnt);
+        return a->length();
+      }
+    }
+  }
+  return -1;
+}
+
+pjs_value pjs_array_splice(pjs_value arr, int pos, int del_cnt, int ins_cnt, ...) {
+  if (del_cnt < 0) return 0;
+  if (ins_cnt < 0) return 0;
+  if (auto *r = nmi::s_values.get(arr)) {
+    if (r->v.is_array()) {
+      auto *a = r->v.as<pjs::Array>();
+      pjs::Value vs[ins_cnt];
+      if (ins_cnt > 0) {
+        va_list ap;
+        va_start(ap, ins_cnt);
+        for (int i = 0; i < ins_cnt; i++) {
+          auto v = va_arg(ap, pjs_value);
+          if (auto *rv = nmi::s_values.get(v)) {
+            vs[i] = rv->v;
+          } else {
+            va_end(ap);
+            return -1;
+          }
+        }
+        va_end(ap);
+      }
+      auto *ret = a->splice(pos, del_cnt, vs, ins_cnt);
+      auto i = nmi::s_values.alloc(ret);
+      nmi::LocalRefPool::add(i);
+      return i;
+    }
+  }
+  return 0;
+}
 
 #endif // NMI_HPP

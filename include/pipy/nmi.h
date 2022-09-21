@@ -77,14 +77,14 @@ int         pjs_object_set_property(pjs_value obj, pjs_value k, pjs_value v);
 int         pjs_object_delete(pjs_value obj, pjs_value k);
 void        pjs_object_iterate(pjs_value obj, int (*cb)(pjs_value k, pjs_value v));
 int         pjs_array_get_length(pjs_value arr);
-void        pjs_array_set_length(pjs_value arr, int len);
-void        pjs_array_get_element(pjs_value arr, int i, pjs_value v);
-void        pjs_array_set_element(pjs_value arr, int i, pjs_value v);
+int         pjs_array_set_length(pjs_value arr, int len);
+int         pjs_array_get_element(pjs_value arr, int i, pjs_value v);
+int         pjs_array_set_element(pjs_value arr, int i, pjs_value v);
 int         pjs_array_delete(pjs_value arr, int i);
-void        pjs_array_push(pjs_value arr, int cnt, pjs_value v, ...);
+int         pjs_array_push(pjs_value arr, int cnt, pjs_value v, ...);
 pjs_value   pjs_array_pop(pjs_value arr);
 pjs_value   pjs_array_shift(pjs_value arr);
-pjs_value   pjs_array_unshift(pjs_value arr, int cnt, pjs_value v, ...);
+int         pjs_array_unshift(pjs_value arr, int cnt, pjs_value v, ...);
 pjs_value   pjs_array_splice(pjs_value arr, int pos, int del_cnt, int ins_cnt, pjs_value v, ...);
 
 /*
