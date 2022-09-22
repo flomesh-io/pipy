@@ -28,6 +28,7 @@
 
 #include "filter.hpp"
 #include "timer.hpp"
+#include "options.hpp"
 
 namespace pipy {
 
@@ -45,7 +46,14 @@ class ReplayReceiver : public EventTarget {
 
 class Replay : public Filter, public ReplayReceiver {
 public:
-  Replay();
+  struct Options : public pipy::Options {
+    double delay = 0;
+    pjs::Ref<pjs::Function> delay_f;
+    Options() {}
+    Options(pjs::Object *options);
+  };
+
+  Replay(const Options &options);
 
 private:
   Replay(const Replay &r);
@@ -56,6 +64,7 @@ private:
   virtual void process(Event *evt) override;
   virtual void dump(Dump &d) override;
 
+  Options m_options;
   pjs::Ref<Pipeline> m_pipeline;
   EventBuffer m_buffer;
   Timer m_timer;

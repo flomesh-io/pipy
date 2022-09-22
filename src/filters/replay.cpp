@@ -28,17 +28,29 @@
 
 namespace pipy {
 
+//
+// Replay::Options
+//
+
+Replay::Options::Options(pjs::Object *options) {
+  Value(options, "delay")
+    .get_seconds(delay)
+    .get(delay_f)
+    .check_nullable();
+}
 
 //
 // Replay
 //
 
-Replay::Replay()
+Replay::Replay(const Options &options)
+  : m_options(options)
 {
 }
 
 Replay::Replay(const Replay &r)
   : Filter(r)
+  , m_options(r.m_options)
 {
 }
 
@@ -73,7 +85,13 @@ void Replay::process(Event *evt) {
 
 void Replay::schedule_replay() {
   if (!m_replay_scheduled) {
-    m_timer.schedule(0, [this]() {
+    double delay = m_options.delay;
+    if (auto *f = m_options.delay_f.get()) {
+      pjs::Value ret;
+      if (!Filter::eval(f, ret)) return;
+      pipy::Options::get_seconds(ret, delay);
+    }
+    m_timer.schedule(delay, [this]() {
       m_replay_scheduled = false;
       replay();
     });

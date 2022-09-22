@@ -339,8 +339,8 @@ void FilterConfigurator::replace_start(const pjs::Value &replacement) {
   append_filter(new ReplaceStart(replacement));
 }
 
-void FilterConfigurator::replay() {
-  require_sub_pipeline(append_filter(new Replay()));
+void FilterConfigurator::replay(pjs::Object *options) {
+  require_sub_pipeline(append_filter(new Replay(options)));
 }
 
 void FilterConfigurator::serve_http(pjs::Object *handler) {
@@ -1723,8 +1723,10 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.replay
   method("replay", [](Context &ctx, Object *thiz, Value &result) {
+    Object *options = nullptr;
+    if (!ctx.arguments(0, &options)) return;
     try {
-      thiz->as<FilterConfigurator>()->replay();
+      thiz->as<FilterConfigurator>()->replay(options);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

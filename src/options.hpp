@@ -39,6 +39,8 @@ namespace pipy {
 
 struct Options {
 
+  static bool get_seconds(const pjs::Value &value, double &t);
+
   //
   // Value
   //

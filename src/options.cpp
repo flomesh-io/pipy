@@ -30,6 +30,21 @@
 
 namespace pipy {
 
+bool Options::get_seconds(const pjs::Value &value, double &t) {
+  if (value.is_number() && !std::isnan(value.n())) {
+    t = value.n();
+    return true;
+  }
+  if (value.is_string()) {
+    auto n = utils::get_seconds(value.s()->str());
+    if (!std::isnan(n)) {
+      t = n;
+      return true;
+    }
+  }
+  return false;
+}
+
 Options::Value::Value(pjs::Object *options, const char *name, const char *base_name)
   : m_name(name)
   , m_base_name(base_name ? base_name : "options")
@@ -135,18 +150,9 @@ Options::Value& Options::Value::get_seconds(double &value) {
   add_type(NUMBER);
   if (m_got) return *this;
   if (m_value.is_nullish()) return *this;
-  if (m_value.is_number() && !std::isnan(m_value.n())) {
-    value = m_value.n();
+  if (Options::get_seconds(m_value, value)) {
     m_got = true;
     return *this;
-  }
-  if (m_value.is_string()) {
-    auto n = utils::get_seconds(m_value.s()->str());
-    if (!std::isnan(n)) {
-      value = n;
-      m_got = true;
-      return *this;
-    }
   }
   return *this;
 }

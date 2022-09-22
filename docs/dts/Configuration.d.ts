@@ -1208,9 +1208,13 @@ interface Configuration {
    * - **SUB-INPUT** - _Events_ streaming into the _replay_ filter.
    * - **SUB-OUTPUT** - Any types of _Events_.
    *
+   * @param options Options including:
+   *   - _delay_ - Time interval to wait before each replay.
+   *       Can be a number in seconds, or a string with a time unit suffix like `'s'`, `'m'` or `'h'`,
+   *       or a function that returns that.
    * @returns The same _Configuration_ object.
    */
-  replay(): Configuration;
+  replay(options?: { delay?: number | string | (() => number | string) }): Configuration;
 
   /**
    * Appends a _serveHTTP_ filter to the current pipeline layout.
