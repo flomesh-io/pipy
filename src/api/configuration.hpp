@@ -116,6 +116,7 @@ public:
   void throttle_data_rate(pjs::Object *quota);
   void throttle_message_rate(pjs::Object *quota);
   void use(Module *module, pjs::Str *pipeline);
+  void use(const std::string &native_module, pjs::Str *pipeline);
   void use(const std::list<Module*> modules, pjs::Str *pipeline, pjs::Function *when);
   void use(const std::list<Module*> modules, pjs::Str *pipeline, pjs::Str *pipeline_down, pjs::Function *when);
   void wait(pjs::Function *condition, pjs::Object *options);

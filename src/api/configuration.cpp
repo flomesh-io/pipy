@@ -379,6 +379,10 @@ void FilterConfigurator::use(Module *module, pjs::Str *pipeline) {
   append_filter(new Use(module, pipeline));
 }
 
+void FilterConfigurator::use(const std::string &native_module, pjs::Str *pipeline) {
+  append_filter(new Use(native_module, pipeline));
+}
+
 void FilterConfigurator::use(const std::list<Module*> modules, pjs::Str *pipeline, pjs::Function *when) {
   append_filter(new Use(modules, pipeline, when));
 }
@@ -1816,6 +1820,7 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.use
   method("use", [](Context &ctx, Object *thiz, Value &result) {
+    static std::string s_dot_so(".so");
     std::string module;
     Array *modules;
     Str *pipeline;
@@ -1853,19 +1858,28 @@ template<> void ClassDef<FilterConfigurator>::init() {
         }
       }
     } else if (ctx.arguments(2, &module, &pipeline)) {
-      auto path = utils::path_normalize(module);
-      auto mod = worker->load_module(path);
-      if (!mod) {
-        std::string msg("[pjs] Cannot load module: ");
-        msg += module;
-        ctx.error(msg);
-        return;
-      }
-      try {
-        thiz->as<FilterConfigurator>()->use(mod, pipeline);
-        result.set(thiz);
-      } catch (std::runtime_error &err) {
-        ctx.error(err);
+      if (utils::ends_with(module, s_dot_so)) {
+        try {
+          thiz->as<FilterConfigurator>()->use(module, pipeline);
+          result.set(thiz);
+        } catch (std::runtime_error &err) {
+          ctx.error(err);
+        }
+      } else {
+        auto path = utils::path_normalize(module);
+        auto mod = worker->load_module(path);
+        if (!mod) {
+          std::string msg("[pjs] Cannot load module: ");
+          msg += module;
+          ctx.error(msg);
+          return;
+        }
+        try {
+          thiz->as<FilterConfigurator>()->use(mod, pipeline);
+          result.set(thiz);
+        } catch (std::runtime_error &err) {
+          ctx.error(err);
+        }
       }
     }
   });

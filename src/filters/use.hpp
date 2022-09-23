@@ -41,6 +41,11 @@ class Module;
 class Use : public Filter {
 public:
   Use(
+    const std::string &native_module,
+    pjs::Str *pipeline_name
+  );
+
+  Use(
     Module *module,
     pjs::Str *pipeline_name
   );
@@ -98,7 +103,10 @@ private:
     friend class Use;
   };
 
+  bool m_native = false;
   bool m_multiple = false;
+  std::string m_native_module_name;
+  pjs::Ref<pjs::Str> m_native_pipeline_name;
   std::list<Module*> m_modules;
   std::list<Stage> m_stages;
   pjs::Ref<pjs::Str> m_pipeline_name;

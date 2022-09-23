@@ -28,12 +28,22 @@
 #include "module.hpp"
 #include "pipeline.hpp"
 #include "log.hpp"
+#include "pipy/nmi.h"
+
+#include <dlfcn.h>
 
 namespace pipy {
 
 //
 // Use
 //
+
+Use::Use(const std::string &native_module, pjs::Str *pipeline_name)
+  : m_native(true)
+  , m_native_module_name(native_module)
+  , m_native_pipeline_name(pipeline_name)
+{
+}
 
 Use::Use(Module *module, pjs::Str *pipeline_name)
   : m_multiple(false)
@@ -98,40 +108,62 @@ Use::~Use()
 
 void Use::dump(Dump &d) {
   Filter::dump(d);
-  std::string module_name;
-  if (m_modules.size() > 0) {
-    module_name = m_modules.front()->path();
+  if (m_native) {
+    d.name = "use ";
+    d.name += m_native_module_name;
+    d.name += " [";
+    d.name += m_native_pipeline_name->str();
+    d.name += ']';
   } else {
-    module_name = "(0 modules)";
+    std::string module_name;
+    if (m_modules.size() > 0) {
+      module_name = m_modules.front()->path();
+    } else {
+      module_name = "(0 modules)";
+    }
+    if (m_modules.size() > 1) {
+      module_name += " (plus ";
+      module_name += std::to_string(m_modules.size() - 1);
+      module_name += " more)";
+    }
+    d.name = "use ";
+    d.name += module_name;
+    d.name += " [";
+    d.name += m_pipeline_name->str();
+    d.name += ']';
   }
-  if (m_modules.size() > 1) {
-    module_name += " (plus ";
-    module_name += std::to_string(m_modules.size() - 1);
-    module_name += " more)";
-  }
-  d.name = "use ";
-  d.name += module_name;
-  d.name += " [";
-  d.name += m_pipeline_name->str();
-  d.name += ']';
 }
 
 void Use::bind() {
   Filter::bind();
-  for (auto *mod : m_modules) {
-    auto p = mod->find_named_pipeline(m_pipeline_name);
-    if (!p && !m_multiple) {
-      std::string msg("pipeline not found in module ");
-      msg += mod->path();
-      msg += ": ";
-      msg += m_pipeline_name->str();
-      throw std::runtime_error(msg);
+  if (m_native) {
+    auto *handle = dlopen(m_native_module_name.c_str(), RTLD_NOW);
+    if (!handle) {
+      std::string msg("cannot load native module ");
+      throw std::runtime_error(msg + m_native_module_name);
     }
-    PipelineLayout *pd = nullptr;
-    if (m_pipeline_name_down) {
-      pd = mod->find_named_pipeline(m_pipeline_name_down);
+    auto *init_fn = dlsym(handle, "pipy_module_init");
+    if (!init_fn) {
+      std::string msg("pipy_module_init not found in native module ");
+      throw std::runtime_error(msg + m_native_module_name);
     }
-    if (p || pd) m_stages.emplace_back(p, pd);
+    (*(pipy_module_init_fn)init_fn)(0);
+  } else {
+    for (auto *mod : m_modules) {
+      auto p = mod->find_named_pipeline(m_pipeline_name);
+      if (!p && !m_multiple) {
+        std::string msg("pipeline not found in module ");
+        msg += mod->path();
+        msg += ": ";
+        msg += m_pipeline_name->str();
+        throw std::runtime_error(msg);
+      }
+      PipelineLayout *pd = nullptr;
+      if (m_pipeline_name_down) {
+        pd = mod->find_named_pipeline(m_pipeline_name_down);
+      }
+      if (p || pd) m_stages.emplace_back(p, pd);
+    }
   }
 }
 
@@ -147,10 +179,14 @@ void Use::reset() {
 }
 
 void Use::process(Event *evt) {
-  if (m_stages.empty()) {
-    output(evt);
+  if (m_native) {
+    // TODO
   } else {
-    output(evt, m_stages.front().input());
+    if (m_stages.empty()) {
+      output(evt);
+    } else {
+      output(evt, m_stages.front().input());
+    }
   }
 }
 

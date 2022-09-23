@@ -292,6 +292,8 @@ if(PIPY_SOIL_FREED_SPACE)
   add_definitions(-DPIPY_SOIL_FREED_SPACE)
 endif()
 
+target_link_options(pipy PRIVATE -Wl,--dynamic-list=${CMAKE_SOURCE_DIR}/include/pipy/nmi-exports.txt)
+
 if(PIPY_STATIC)
   target_link_options(pipy PRIVATE -static)
 endif()

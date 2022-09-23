@@ -333,6 +333,11 @@ bool starts_with(const std::string &str, const std::string &prefix) {
   return !std::strncmp(str.c_str(), prefix.c_str(), prefix.length());
 }
 
+bool ends_with(const std::string &str, const std::string &suffix) {
+  if (str.length() < suffix.length()) return false;
+  return !std::strncmp(str.c_str() + str.length() - suffix.length(), suffix.c_str(), suffix.length());
+}
+
 bool iequals(const std::string &a, const std::string &b) {
   if (a.length() != b.length()) return false;
   for (size_t i = 0; i < a.length(); i++) {
