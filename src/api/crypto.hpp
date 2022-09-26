@@ -92,14 +92,21 @@ class Certificate : public pjs::ObjectTemplate<Certificate> {
 public:
   auto x509() const -> X509* { return m_x509; }
 
+  auto subject() -> pjs::Object*;
+  auto issuer() -> pjs::Object*;
+
 private:
+  Certificate(X509 *x509);
   Certificate(Data *data);
   Certificate(pjs::Str *data);
   ~Certificate();
 
   X509* m_x509 = nullptr;
+  pjs::Ref<pjs::Object> m_subject;
+  pjs::Ref<pjs::Object> m_issuer;
 
   static auto read_pem(const void *data, size_t size) -> X509*;
+  static auto get_x509_name(X509_NAME *name) -> pjs::Object*;
 
   friend class pjs::ObjectTemplate<Certificate>;
 };

@@ -71,7 +71,7 @@ TLSContext::~TLSContext() {
 
 void TLSContext::add_certificate(crypto::Certificate *cert) {
   X509_STORE_add_cert(m_verify_store, cert->x509());
-  SSL_CTX_set_verify(m_ctx, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, nullptr);
+  SSL_CTX_set_verify(m_ctx, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, on_verify);
 }
 
 void TLSContext::set_client_alpn(const std::vector<std::string> &protocols) {
@@ -89,6 +89,11 @@ void TLSContext::set_client_alpn(const std::vector<std::string> &protocols) {
 
 void TLSContext::set_server_alpn(const std::set<pjs::Ref<pjs::Str>> &protocols) {
   m_server_alpn = protocols;
+}
+
+auto TLSContext::on_verify(int preverify_ok, X509_STORE_CTX *ctx) -> int {
+  auto *ssl = (SSL*)X509_STORE_CTX_get_ex_data(ctx, SSL_get_ex_data_X509_STORE_CTX_idx());
+  return TLSSession::get(ssl)->on_verify(preverify_ok, ctx);
 }
 
 auto TLSContext::on_server_name(SSL *ssl, int*, void *thiz) -> int {
@@ -170,10 +175,12 @@ TLSSession::TLSSession(
   Filter *filter,
   bool is_server,
   pjs::Object *certificate,
+  pjs::Function *verify,
   pjs::Function *alpn,
   pjs::Function *handshake
 )
   : m_certificate(certificate)
+  , m_verify(verify)
   , m_alpn(alpn)
   , m_handshake(handshake)
   , m_is_server(is_server)
@@ -252,6 +259,19 @@ void TLSSession::on_reply(Event *evt) {
     m_closed_output = true;
     output(evt);
   }
+}
+
+auto TLSSession::on_verify(int preverify_ok, X509_STORE_CTX *cert_store_ctx) -> int {
+  if (!m_verify) return preverify_ok;
+  auto *x509 = X509_STORE_CTX_get0_cert(cert_store_ctx);
+  pjs::Ref<crypto::Certificate> cert(crypto::Certificate::make(x509));
+  pjs::Value args[2], ret;
+  args[0].set((bool)preverify_ok);
+  args[1].set(cert.get());
+  Context &ctx = *m_pipeline->context();
+  (*m_verify)(ctx, 2, args, ret);
+  if (!ctx.ok()) return 0;
+  return ret.to_boolean();
 }
 
 void TLSSession::on_server_name() {
@@ -505,6 +525,10 @@ Options::Options(pjs::Object *options, const char *base_name) {
     });
   }
 
+  Value(options, "verify", base_name)
+    .get(verify)
+    .check_nullable();
+
   Value(options, "handshake", base_name)
     .get(handshake)
     .check_nullable();
@@ -603,6 +627,7 @@ void Client::process(Event *evt) {
       this,
       false,
       m_options->certificate,
+      m_options->verify,
       nullptr,
       m_options->handshake
     );
@@ -696,6 +721,7 @@ void Server::process(Event *evt) {
       this,
       true,
       m_options->certificate,
+      m_options->verify,
       m_options->alpn,
       m_options->handshake
     );

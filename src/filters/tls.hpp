@@ -63,6 +63,7 @@ private:
   X509_STORE* m_verify_store;
   std::set<pjs::Ref<pjs::Str>> m_server_alpn;
 
+  static auto on_verify(int preverify_ok, X509_STORE_CTX *ctx) -> int;
   static auto on_server_name(SSL *ssl, int*, void*) -> int;
   static auto on_select_alpn(
     SSL *ssl,
@@ -91,6 +92,7 @@ public:
     Filter *filter,
     bool is_server,
     pjs::Object *certificate,
+    pjs::Function *verify,
     pjs::Function *alpn,
     pjs::Function *handshake
   );
@@ -109,6 +111,7 @@ private:
   pjs::Ref<Pipeline> m_pipeline;
   pjs::Ref<pjs::Object> m_certificate;
   pjs::Ref<pjs::Object> m_ca;
+  pjs::Ref<pjs::Function> m_verify;
   pjs::Ref<pjs::Function> m_alpn;
   pjs::Ref<pjs::Function> m_handshake;
   bool m_is_server;
@@ -119,6 +122,7 @@ private:
   virtual void on_reply(Event *evt) override;
 
   void on_receive_peer(Event *evt);
+  auto on_verify(int preverify_ok, X509_STORE_CTX *ctx) -> int;
   void on_server_name();
   auto on_select_alpn(pjs::Array *names) -> int;
 
@@ -144,6 +148,7 @@ private:
 struct Options : public pipy::Options {
   pjs::Ref<pjs::Object> certificate;
   std::vector<pjs::Ref<crypto::Certificate>> trusted;
+  pjs::Ref<pjs::Function> verify;
   pjs::Ref<pjs::Function> handshake;
 
   Options() {}

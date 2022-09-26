@@ -46,6 +46,16 @@ interface PrivateKeyConstructor {
  * Certificate in X.509 standard.
  */
 interface Certificate {
+
+  /**
+   * The subject of the certificate.
+   */
+  readonly subject: { [name: string]: string };
+
+  /**
+   * The issuer of the certificate.
+   */
+  readonly issuer: { [name: string]: string };
 }
 
 interface CertificateConstructor {

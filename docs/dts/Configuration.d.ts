@@ -204,6 +204,10 @@ interface Configuration {
    *       In both cases, _cert_ can be a _crypto.Certificate_ or a _crypto.CertificateChain_
    *       and _key_ must be a _crypto.PrivateKey_.
    *   - _trusted_ - (optional) An array of _crypto.Certificate_ objects for allowed client certificates.
+   *   - _verify_ - (optional) A callback function that gets called for each certificate in the peer's certificate chain.
+   *       It receives 2 arguments: _ok_ and _cert_, where _ok_ is a boolean indicating whether pre-verification is fine,
+   *       and _cert_ is the _Certificate_ object being verified.
+   *       It is expected to return `true` if verification should go on, or `false` if the TLS connection should be rejected.
    *   - _alpn_ - (optional) An array of allowed protocol names, or a function that receives an array of client-preferred protocol names
    *       and returns the index of the server-chosen protocol in that array.
    *   - _handshake_ - (optional) A callback function that receives the negotiated protocol name after handshake.
@@ -213,6 +217,7 @@ interface Configuration {
     options?: {
       certificate?: CertificateOptions | ((sni: string) => CertificateOptions),
       trusted?: Certificate[],
+      verify?: (ok, cert) => boolean,
       alpn?: string[] | ((protocolNames: string[]) => number),
       handshake?: (protocolName: string | undefined) => void,
     }
@@ -396,6 +401,10 @@ interface Configuration {
    *       In both cases, _cert_ can be a _crypto.Certificate_ or a _crypto.CertificateChain_
    *       and _key must be a _crypto.PrivateKey_.
    *   - _trusted_ - (optional) An array of _crypto.Certificate_ objects for allowed server certificates
+   *   - _verify_ - (optional) A callback function that gets called for each certificate in the peer's certificate chain.
+   *       It receives 2 arguments: _ok_ and _cert_, where _ok_ is a boolean indicating whether pre-verification is fine,
+   *       and _cert_ is the _Certificate_ object being verified.
+   *       It is expected to return `true` if verification should go on, or `false` if the TLS connection should be rejected.
    *   - _sni_ - (optional) SNI server name or a function that returns it
    *   - _alpn_ - (optional) Requested protocol name or an array of preferred protocol names
    *   - _handshake_ - (optional) A callback function that receives the negotiated protocol name after handshake.
@@ -405,6 +414,7 @@ interface Configuration {
     options?: {
       certificate?: CertificateOptions | (() => CertificateOptions),
       trusted?: Certificate[],
+      verify?: (ok, cert) => boolean,
       alpn?: string | string[],
       sni?: string | (() => string),
       handshake?: (protocolName: string | undefined) => void,

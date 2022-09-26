@@ -87,6 +87,7 @@ pipy()
     trusted: [
       ...trustedCerts // array of crypto.Certificate
     ],
+    verify: (ok, cert) => onVerifyPeerCertificate(cert),
     alpn: [...allowedProtocols],
     handshake: (chosenProtocol) => onHandshakeComplete(chosenProtocol),
   }).to(

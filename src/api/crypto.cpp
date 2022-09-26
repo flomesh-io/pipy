@@ -35,6 +35,7 @@
 #include <openssl/hmac.h>
 #include <openssl/pem.h>
 #include <openssl/rsa.h>
+#include <openssl/x509.h>
 
 #include <stdexcept>
 
@@ -272,6 +273,11 @@ auto PrivateKey::load_by_engine(const std::string &id) -> EVP_PKEY* {
 // Certificate
 //
 
+Certificate::Certificate(X509 *x509) {
+  m_x509 = x509;
+  X509_up_ref(x509);
+}
+
 Certificate::Certificate(Data *data) {
   auto buf = data->to_bytes();
   m_x509 = read_pem(&buf[0], buf.size());
@@ -285,12 +291,42 @@ Certificate::~Certificate() {
   if (m_x509) X509_free(m_x509);
 }
 
+auto Certificate::subject() -> pjs::Object* {
+  if (!m_subject) {
+    auto name = X509_get_subject_name(m_x509);
+    m_subject = get_x509_name(name);
+  }
+  return m_subject;
+}
+
+auto Certificate::issuer() -> pjs::Object* {
+  if (!m_subject) {
+    auto name = X509_get_issuer_name(m_x509);
+    m_subject = get_x509_name(name);
+  }
+  return m_subject;
+}
+
 auto Certificate::read_pem(const void *data, size_t size) -> X509* {
   auto bio = BIO_new_mem_buf(data, size);
   auto x509 = PEM_read_bio_X509(bio, nullptr, nullptr, nullptr);
   BIO_free(bio);
   if (!x509) throw_error();
   return x509;
+}
+
+auto Certificate::get_x509_name(X509_NAME *name) -> pjs::Object* {
+  auto *obj = pjs::Object::make();
+  for (auto i = 0; i < X509_NAME_entry_count(name); i++) {
+    X509_NAME_ENTRY *e = X509_NAME_get_entry(name, i);
+    auto *o = X509_NAME_ENTRY_get_object(e);
+    auto *d = X509_NAME_ENTRY_get_data(e);
+    obj->set(
+      pjs::Str::make(OBJ_nid2ln(OBJ_obj2nid(o))),
+      pjs::Str::make((const char *)ASN1_STRING_get0_data(d), ASN1_STRING_length(d))
+    );
+  }
+  return obj;
 }
 
 //
@@ -1158,6 +1194,9 @@ template<> void ClassDef<Certificate>::init() {
       return nullptr;
     }
   });
+
+  accessor("subject", [](Object *obj, Value &ret) { ret.set(obj->as<Certificate>()->subject()); });
+  accessor("issuer", [](Object *obj, Value &ret) { ret.set(obj->as<Certificate>()->issuer()); });
 }
 
 template<> void ClassDef<Constructor<Certificate>>::init() {
