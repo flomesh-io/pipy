@@ -36,6 +36,7 @@
 #include <openssl/pem.h>
 #include <openssl/rsa.h>
 #include <openssl/x509.h>
+#include <openssl/x509v3.h>
 
 #include <stdexcept>
 
@@ -291,6 +292,14 @@ Certificate::~Certificate() {
   if (m_x509) X509_free(m_x509);
 }
 
+auto Certificate::issuer() -> pjs::Object* {
+  if (!m_subject) {
+    auto name = X509_get_issuer_name(m_x509);
+    m_subject = get_x509_name(name);
+  }
+  return m_subject;
+}
+
 auto Certificate::subject() -> pjs::Object* {
   if (!m_subject) {
     auto name = X509_get_subject_name(m_x509);
@@ -299,12 +308,21 @@ auto Certificate::subject() -> pjs::Object* {
   return m_subject;
 }
 
-auto Certificate::issuer() -> pjs::Object* {
-  if (!m_subject) {
-    auto name = X509_get_issuer_name(m_x509);
-    m_subject = get_x509_name(name);
+auto Certificate::subject_alt_names() -> pjs::Array* {
+  if (!m_subject_alt_names) {
+    auto *arr = pjs::Array::make();
+    auto names = (GENERAL_NAMES*)X509_get_ext_d2i(m_x509, NID_subject_alt_name, 0, 0);
+    for (int i = 0, n = sk_GENERAL_NAME_num(names); i < n; i++) {
+      auto name = sk_GENERAL_NAME_value(names, i);
+      if (!name) continue;
+      if (name->type == GEN_DNS) {
+        auto *nm = name->d.dNSName;
+        arr->push(pjs::Str::make((const char *)ASN1_STRING_get0_data(nm), ASN1_STRING_length(nm)));
+      }
+    }
+    m_subject_alt_names = arr;
   }
-  return m_subject;
+  return m_subject_alt_names;
 }
 
 auto Certificate::read_pem(const void *data, size_t size) -> X509* {
@@ -317,7 +335,7 @@ auto Certificate::read_pem(const void *data, size_t size) -> X509* {
 
 auto Certificate::get_x509_name(X509_NAME *name) -> pjs::Object* {
   auto *obj = pjs::Object::make();
-  for (auto i = 0; i < X509_NAME_entry_count(name); i++) {
+  for (auto i = 0, n = X509_NAME_entry_count(name); i < n; i++) {
     X509_NAME_ENTRY *e = X509_NAME_get_entry(name, i);
     auto *o = X509_NAME_ENTRY_get_object(e);
     auto *d = X509_NAME_ENTRY_get_data(e);
@@ -1195,8 +1213,9 @@ template<> void ClassDef<Certificate>::init() {
     }
   });
 
-  accessor("subject", [](Object *obj, Value &ret) { ret.set(obj->as<Certificate>()->subject()); });
   accessor("issuer", [](Object *obj, Value &ret) { ret.set(obj->as<Certificate>()->issuer()); });
+  accessor("subject", [](Object *obj, Value &ret) { ret.set(obj->as<Certificate>()->subject()); });
+  accessor("subjectAltNames", [](Object *obj, Value &ret) { ret.set(obj->as<Certificate>()->subject_alt_names()); });
 }
 
 template<> void ClassDef<Constructor<Certificate>>::init() {

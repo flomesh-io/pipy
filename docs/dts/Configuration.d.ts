@@ -217,7 +217,7 @@ interface Configuration {
     options?: {
       certificate?: CertificateOptions | ((sni: string) => CertificateOptions),
       trusted?: Certificate[],
-      verify?: (ok, cert) => boolean,
+      verify?: (ok: boolean, cert: Certificate) => boolean,
       alpn?: string[] | ((protocolNames: string[]) => number),
       handshake?: (protocolName: string | undefined) => void,
     }
@@ -414,7 +414,7 @@ interface Configuration {
     options?: {
       certificate?: CertificateOptions | (() => CertificateOptions),
       trusted?: Certificate[],
-      verify?: (ok, cert) => boolean,
+      verify?: (ok: boolean, cert: Certificate) => boolean,
       alpn?: string | string[],
       sni?: string | (() => string),
       handshake?: (protocolName: string | undefined) => void,

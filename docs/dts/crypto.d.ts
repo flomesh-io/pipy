@@ -48,14 +48,20 @@ interface PrivateKeyConstructor {
 interface Certificate {
 
   /**
+   * The issuer of the certificate.
+   */
+  readonly issuer: { [name: string]: string };
+
+  /**
    * The subject of the certificate.
    */
   readonly subject: { [name: string]: string };
 
   /**
-   * The issuer of the certificate.
+   * Array of subject alternative names.
    */
-  readonly issuer: { [name: string]: string };
+  readonly subjectAltNames: [string];
+
 }
 
 interface CertificateConstructor {
