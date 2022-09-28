@@ -1,0 +1,33 @@
+name: GUI Build Test
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '**.js'
+      - 'gui/**'
+      - 'package.json'
+      - 'package-lock.json'
+
+defaults:
+  run:
+    shell: bash
+    working-directory: pipy
+
+jobs:
+  build-gui:
+    name: build-gui
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          path: pipy
+
+      - name: Show node version
+        run: |
+          node --version
+          npm --version
+
+      - name: Build
+        run: |
+          npm install && npm run build
