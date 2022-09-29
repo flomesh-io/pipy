@@ -116,7 +116,19 @@ bool get_host_port(const std::string &str, std::string &host, int &port) {
 }
 
 bool get_ip_v4(const std::string &str, uint8_t ip[]) {
-  const char *p = str.c_str();
+  return get_ip_v4(str.c_str(), ip);
+}
+
+bool get_ip_v6(const std::string &str, uint8_t ip[]) {
+  return get_ip_v6(str.c_str(), ip);
+}
+
+bool get_ip_v6(const std::string &str, uint16_t ip[]) {
+  return get_ip_v6(str.c_str(), ip);
+}
+
+bool get_ip_v4(const char *str, uint8_t ip[]) {
+  const char *p = str;
   for (int i = 0; i < 4; i++, p++) {
     auto n = get_dec_uint8(&p);
     if (n < 0 ||
@@ -130,7 +142,7 @@ bool get_ip_v4(const std::string &str, uint8_t ip[]) {
   return true;
 }
 
-bool get_ip_v6(const std::string &str, uint8_t ip[]) {
+bool get_ip_v6(const char *str, uint8_t ip[]) {
   uint16_t buf[8];
   if (!get_ip_v6(str, buf)) return false;
   for (int i = 0; i < 8; i++) {
@@ -140,8 +152,8 @@ bool get_ip_v6(const std::string &str, uint8_t ip[]) {
   return true;
 }
 
-bool get_ip_v6(const std::string &str, uint16_t ip[]) {
-  const char *p = str.c_str();
+bool get_ip_v6(const char *str, uint16_t ip[]) {
+  const char *p = str;
   uint16_t head[8]; int head_len = 0;
   uint16_t tail[8]; int tail_len = 0;
 

@@ -51,6 +51,7 @@ public:
   void on_start(pjs::Function *handler);
   void on_end(pjs::Function *handler);
 
+  void accept_haproxy(pjs::Function *handler);
   void accept_http_tunnel(pjs::Function *handler);
   void accept_socks(pjs::Function *on_connect);
   void accept_tls(pjs::Object *options);
@@ -60,6 +61,7 @@ public:
   void compress_http(pjs::Object *options);
   void compress_message(pjs::Object *options);
   void connect(const pjs::Value &target, pjs::Object *options);
+  void connect_haproxy(const pjs::Value &address);
   void connect_http_tunnel(const pjs::Value &address);
   void connect_socks(const pjs::Value &address);
   void connect_tls(pjs::Object *options);

@@ -50,6 +50,7 @@
 #include "filters/dump.hpp"
 #include "filters/exec.hpp"
 #include "filters/fork.hpp"
+#include "filters/haproxy.hpp"
 #include "filters/http.hpp"
 #include "filters/link.hpp"
 #include "filters/link-input.hpp"
@@ -102,6 +103,10 @@ void FilterConfigurator::on_end(pjs::Function *handler) {
   m_config->on_end = handler;
 }
 
+void FilterConfigurator::accept_haproxy(pjs::Function *handler) {
+  require_sub_pipeline(append_filter(new haproxy::Server(handler)));
+}
+
 void FilterConfigurator::accept_http_tunnel(pjs::Function *handler) {
   require_sub_pipeline(append_filter(new http::TunnelServer(handler)));
 }
@@ -136,6 +141,10 @@ void FilterConfigurator::compress_message(pjs::Object *options) {
 
 void FilterConfigurator::connect(const pjs::Value &target, pjs::Object *options) {
   append_filter(new Connect(target, options));
+}
+
+void FilterConfigurator::connect_haproxy(const pjs::Value &address) {
+  require_sub_pipeline(append_filter(new haproxy::Client(address)));
 }
 
 void FilterConfigurator::connect_http_tunnel(const pjs::Value &address) {
@@ -800,6 +809,18 @@ template<> void ClassDef<FilterConfigurator>::init() {
     }
   });
 
+  // FilterConfigurator.acceptHAProxy
+  method("acceptHAProxy", [](Context &ctx, Object *thiz, Value &result) {
+    try {
+      Function *handler;
+      if (!ctx.arguments(1, &handler)) return;
+      thiz->as<FilterConfigurator>()->accept_haproxy(handler);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
   // FilterConfigurator.acceptHTTPTunnel
   method("acceptHTTPTunnel", [](Context &ctx, Object *thiz, Value &result) {
     try {
@@ -972,6 +993,18 @@ template<> void ClassDef<FilterConfigurator>::init() {
     if (!ctx.arguments(1, &target, &options)) return;
     try {
       thiz->as<FilterConfigurator>()->connect(target, options);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // FilterConfigurator.connectHAProxy
+  method("connectHAProxy", [](Context &ctx, Object *thiz, Value &result) {
+    Value target;
+    if (!ctx.arguments(1, &target)) return;
+    try {
+      thiz->as<FilterConfigurator>()->connect_haproxy(target);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
