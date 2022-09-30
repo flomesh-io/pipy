@@ -116,9 +116,9 @@ void Server::parse_header() {
   }
 
   pjs::Ref<pjs::Str> protocol;
-  if (!std::memcpy(p, "TCP4 ", 5)) { protocol = s_TCP4; p += 5; } else
-  if (!std::memcpy(p, "TCP6 ", 5)) { protocol = s_TCP6; p += 5; } else
-  if (!std::memcpy(p, "UNKNOWN ", 8)) { protocol = s_UNKNOWN; p += 8; }
+  if (!std::memcmp(p, "TCP4 ", 5)) { protocol = s_TCP4; p += 5; } else
+  if (!std::memcmp(p, "TCP6 ", 5)) { protocol = s_TCP6; p += 5; } else
+  if (!std::memcmp(p, "UNKNOWN ", 8)) { protocol = s_UNKNOWN; p += 8; }
   else { parse_error(); return; }
 
   auto next_field = [](char **ptr) -> char* {
@@ -127,7 +127,7 @@ void Server::parse_header() {
     while (p[n] && p[n] != ' ') n++;
     if (!n) return nullptr;
     p[n] = '\0';
-    *ptr = p + 1;
+    *ptr = p + n + 1;
     return p;
   };
 
