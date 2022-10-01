@@ -51,13 +51,17 @@ private:
 
   pjs::Ref<pjs::Function> m_on_connect;
   pjs::Ref<Pipeline> m_pipeline;
+  int m_version = 0;
   int m_header_read_ptr = 0;
   int m_header_read_chr = 0;
-  char m_header[108];
+  int m_address_size_v2 = 0;
+  char m_header[232];
   bool m_error = false;
 
-  void parse_header();
-  void parse_error();
+  void parse_header_v1();
+  void parse_header_v2();
+  void start(pjs::Value &obj);
+  void error();
 };
 
 //
