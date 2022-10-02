@@ -30,6 +30,8 @@
 #include "api/crypto.hpp"
 #include "log.hpp"
 
+#include <openssl/err.h>
+
 namespace pipy {
 namespace tls {
 

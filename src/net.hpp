@@ -30,7 +30,6 @@
 
 #define ASIO_STANDALONE
 #include <asio.hpp>
-#include <asio/ssl.hpp>
 
 namespace pipy {
 
