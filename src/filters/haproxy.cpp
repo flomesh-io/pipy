@@ -29,6 +29,9 @@
 #include "module.hpp"
 #include "log.hpp"
 
+#define ASIO_STANDALONE
+#include <asio.hpp>
+
 namespace pipy {
 namespace haproxy {
 
@@ -235,6 +238,13 @@ void Server::parse_header_v2() {
   }
 
   if (is_ipv6) {
+    auto p = (const uint8_t*)(m_header + 16);
+    auto *src = reinterpret_cast<const std::array<uint8_t, 16>*>(p +  0);
+    auto *dst = reinterpret_cast<const std::array<uint8_t, 16>*>(p + 16);
+    obj.o()->set(s_sourceAddress, pjs::Str::make(asio::ip::address_v6(*src).to_string()));
+    obj.o()->set(s_targetAddress, pjs::Str::make(asio::ip::address_v6(*dst).to_string()));
+    obj.o()->set(s_sourcePort, ((int)p[32] << 8) | p[33]);
+    obj.o()->set(s_targetPort, ((int)p[34] << 8) | p[35]);
 
   } else if (is_unix) {
 
