@@ -83,6 +83,14 @@ private:
 
   pjs::Value m_target;
   pjs::Ref<Pipeline> m_pipeline;
+  pjs::PropertyCache m_prop_version;
+  pjs::PropertyCache m_prop_command;
+  pjs::PropertyCache m_prop_protocol;
+  pjs::PropertyCache m_prop_source_address;
+  pjs::PropertyCache m_prop_target_address;
+  pjs::PropertyCache m_prop_source_port;
+  pjs::PropertyCache m_prop_target_port;
+  bool m_error = false;
 };
 
 } // namespace haproxy

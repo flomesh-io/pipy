@@ -35,6 +35,10 @@
 namespace pipy {
 namespace haproxy {
 
+static std::string s_v1_fixed_header("PROXY ");
+static std::string s_v2_fixed_header("\r\n\r\n\0\r\nQUIT\n");
+static std::string s_ip_v4_zero("0.0.0.0");
+static std::string s_ip_v6_zero("::");
 static pjs::ConstStr s_TCP4("TCP4");
 static pjs::ConstStr s_TCP6("TCP6");
 static pjs::ConstStr s_UDP4("UDP4");
@@ -44,6 +48,7 @@ static pjs::ConstStr s_UNIX_DGRAM("UNIX_DGRAM");
 static pjs::ConstStr s_UNKNOWN("UNKNOWN");
 static pjs::ConstStr s_LOCAL("LOCAL");
 static pjs::ConstStr s_PROXY("PROXY");
+static pjs::ConstStr s_version("version");
 static pjs::ConstStr s_command("command");
 static pjs::ConstStr s_protocol("protocol");
 static pjs::ConstStr s_sourceAddress("sourceAddress");
@@ -117,11 +122,11 @@ void Server::process(Event *evt) {
 
           if (!m_version) {
             if (m_header_read_ptr == 6) {
-              if (!std::memcmp(m_header, "PROXY ", 6)) {
+              if (!std::memcmp(m_header, s_v1_fixed_header.c_str(), s_v1_fixed_header.length())) {
                 m_version = 1;
               }
             } else if (m_header_read_ptr == 12) {
-              if (!std::memcmp(m_header, "\r\n\r\n\0\r\nQUIT\n", 12)) {
+              if (!std::memcmp(m_header, s_v2_fixed_header.c_str(), s_v2_fixed_header.length())) {
                 m_version = 2;
               }
             } else if (m_header_read_ptr > 16) {
@@ -172,6 +177,7 @@ void Server::parse_header_v1() {
   };
 
   pjs::Value obj(pjs::Object::make());
+  obj.o()->set(s_version, m_version);
   obj.o()->set(s_protocol, protocol.get());
 
   if (protocol != s_UNKNOWN) {
@@ -231,7 +237,7 @@ void Server::parse_header_v2() {
     case 0x11: obj.o()->set(s_protocol, s_TCP4.get()); break;
     case 0x12: obj.o()->set(s_protocol, s_UDP4.get()); break;
     case 0x21: obj.o()->set(s_protocol, s_TCP6.get()); is_ipv6 = true; break;
-    case 0x22: obj.o()->set(s_protocol, s_TCP6.get()); is_ipv6 = true; break;
+    case 0x22: obj.o()->set(s_protocol, s_UDP6.get()); is_ipv6 = true; break;
     case 0x31: obj.o()->set(s_protocol, s_UNIX.get()); is_unix = true; break;
     case 0x32: obj.o()->set(s_protocol, s_UNIX_DGRAM.get()); is_unix = true; break;
     default: error(); return;
@@ -288,12 +294,26 @@ static Data::Producer s_dp("connectHAProxy");
 
 Client::Client(const pjs::Value &target)
   : m_target(target)
+  , m_prop_version("version")
+  , m_prop_command("command")
+  , m_prop_protocol("protocol")
+  , m_prop_source_address("sourceAddress")
+  , m_prop_target_address("targetAddress")
+  , m_prop_source_port("sourcePort")
+  , m_prop_target_port("targetPort")
 {
 }
 
 Client::Client(const Client &r)
   : Filter(r)
   , m_target(r.m_target)
+  , m_prop_version("version")
+  , m_prop_command("command")
+  , m_prop_protocol("protocol")
+  , m_prop_source_address("sourceAddress")
+  , m_prop_target_address("targetAddress")
+  , m_prop_source_port("sourcePort")
+  , m_prop_target_port("targetPort")
 {
 }
 
@@ -313,9 +333,108 @@ auto Client::clone() -> Filter* {
 void Client::reset() {
   Filter::reset();
   m_pipeline = nullptr;
+  m_error = false;
 }
 
 void Client::process(Event *evt) {
+  static Data::Producer s_dp("connectHAProxy");
+
+  if (m_error) return;
+
+  if (!m_pipeline) {
+    pjs::Value obj;
+    if (!Filter::eval(m_target, obj)) {
+      m_error = true;
+      return;
+    }
+    if (!obj.is_object()) {
+      Log::error("[connectHAProxy] an object containing source/target addresses is expected");
+      m_error = true;
+      return;
+    }
+
+    int version = 0, src_port = 0, dst_port = 0;
+    pjs::Str* command = nullptr;
+    pjs::Str* protocol = nullptr;
+    pjs::Str* src_addr = nullptr;
+    pjs::Str* dst_addr = nullptr;
+
+    m_prop_version.get(obj.o(), version);
+    m_prop_protocol.get(obj.o(), protocol);
+    m_prop_command.get(obj.o(), command);
+    m_prop_source_address.get(obj.o(), src_addr);
+    m_prop_target_address.get(obj.o(), dst_addr);
+    m_prop_source_port.get(obj.o(), src_port);
+    m_prop_target_port.get(obj.o(), dst_port);
+
+    Data header;
+    Data::Builder db(header, &s_dp);
+
+    if (version == 2) {
+      int cmd = 1;
+      int proto = 0x11;
+      bool is_ipv6 = false;
+
+      if (command == s_LOCAL) cmd = 0;
+      if (protocol == s_UDP4) proto = 0x12; else
+      if (protocol == s_TCP6) { proto = 0x21; is_ipv6 = true; } else
+      if (protocol == s_UDP6) { proto = 0x22; is_ipv6 = true; }
+
+
+      db.push(s_v2_fixed_header);
+      db.push(char(0x02 | cmd));
+      db.push(char(proto));
+
+      uint8_t src_ip[16], dst_ip[16];
+
+      if (is_ipv6) {
+        if (!src_addr || !utils::get_ip_v6(src_addr->str(), src_ip)) std::memset(src_ip, 0, 16);
+        if (!dst_addr || !utils::get_ip_v6(dst_addr->str(), dst_ip)) std::memset(dst_ip, 0, 16);
+        db.push('\0');
+        db.push((char)(16 + 16 + 2 + 2));
+        db.push((char *)src_ip, 16);
+        db.push((char *)dst_ip, 16);
+
+      } else {
+        if (!src_addr || !utils::get_ip_v4(src_addr->str(), src_ip)) std::memset(src_ip, 0, 4);
+        if (!dst_addr || !utils::get_ip_v4(dst_addr->str(), dst_ip)) std::memset(dst_ip, 0, 4);
+        db.push('\0');
+        db.push((char)(4 + 4 + 2 + 2));
+        db.push((char *)src_ip, 4);
+        db.push((char *)dst_ip, 4);
+      }
+
+      db.push((char)(src_port >> 8));
+      db.push((char)(src_port >> 0));
+      db.push((char)(dst_port >> 8));
+      db.push((char)(dst_port >> 0));
+
+    } else {
+      char src_port_str[100], dst_port_str[100];
+      std::snprintf(src_port_str, sizeof(src_port_str), "%d", src_port);
+      std::snprintf(dst_port_str, sizeof(dst_port_str), "%d", dst_port);
+
+      db.push(s_v1_fixed_header);
+      db.push(protocol ? protocol->str() : s_TCP4.get()->str());
+      db.push(' ');
+      db.push(src_addr ? src_addr->str() : (protocol == s_TCP6 ? s_ip_v6_zero : s_ip_v4_zero));
+      db.push(' ');
+      db.push(dst_addr ? dst_addr->str() : (protocol == s_TCP6 ? s_ip_v6_zero : s_ip_v4_zero));
+      db.push(' ');
+      db.push(src_port_str);
+      db.push(' ');
+      db.push(dst_port_str);
+      db.push('\r');
+      db.push('\n');
+    }
+
+    db.flush();
+
+    m_pipeline = Filter::sub_pipeline(0, false, Filter::output());
+    m_pipeline->input()->input(Data::make(std::move(header)));
+  }
+
+  m_pipeline->input()->input(evt);
 }
 
 } // namespace haproxy
