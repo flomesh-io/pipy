@@ -30,6 +30,7 @@
 #include "log.hpp"
 
 #include <iostream>
+#include <cstdarg>
 #include <ctime>
 #include <sstream>
 
