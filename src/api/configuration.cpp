@@ -103,12 +103,12 @@ void FilterConfigurator::on_end(pjs::Function *handler) {
   m_config->on_end = handler;
 }
 
-void FilterConfigurator::accept_proxy_protocol(pjs::Function *handler) {
-  require_sub_pipeline(append_filter(new proxy_protocol::Server(handler)));
-}
-
 void FilterConfigurator::accept_http_tunnel(pjs::Function *handler) {
   require_sub_pipeline(append_filter(new http::TunnelServer(handler)));
+}
+
+void FilterConfigurator::accept_proxy_protocol(pjs::Function *handler) {
+  require_sub_pipeline(append_filter(new proxy_protocol::Server(handler)));
 }
 
 void FilterConfigurator::accept_socks(pjs::Function *on_connect) {
@@ -143,12 +143,12 @@ void FilterConfigurator::connect(const pjs::Value &target, pjs::Object *options)
   append_filter(new Connect(target, options));
 }
 
-void FilterConfigurator::connect_proxy_protocol(const pjs::Value &address) {
-  require_sub_pipeline(append_filter(new proxy_protocol::Client(address)));
-}
-
 void FilterConfigurator::connect_http_tunnel(const pjs::Value &address) {
   require_sub_pipeline(append_filter(new http::TunnelClient(address)));
+}
+
+void FilterConfigurator::connect_proxy_protocol(const pjs::Value &address) {
+  require_sub_pipeline(append_filter(new proxy_protocol::Client(address)));
 }
 
 void FilterConfigurator::connect_socks(const pjs::Value &address) {
@@ -809,18 +809,6 @@ template<> void ClassDef<FilterConfigurator>::init() {
     }
   });
 
-  // FilterConfigurator.acceptProxyProtocol
-  method("acceptProxyProtocol", [](Context &ctx, Object *thiz, Value &result) {
-    try {
-      Function *handler;
-      if (!ctx.arguments(1, &handler)) return;
-      thiz->as<FilterConfigurator>()->accept_proxy_protocol(handler);
-      result.set(thiz);
-    } catch (std::runtime_error &err) {
-      ctx.error(err);
-    }
-  });
-
   // FilterConfigurator.acceptHTTPTunnel
   method("acceptHTTPTunnel", [](Context &ctx, Object *thiz, Value &result) {
     try {
@@ -832,6 +820,18 @@ template<> void ClassDef<FilterConfigurator>::init() {
       } else if (ctx.arguments(1, &handler)) {
         thiz->as<FilterConfigurator>()->accept_http_tunnel(handler);
       }
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // FilterConfigurator.acceptProxyProtocol
+  method("acceptProxyProtocol", [](Context &ctx, Object *thiz, Value &result) {
+    try {
+      Function *handler;
+      if (!ctx.arguments(1, &handler)) return;
+      thiz->as<FilterConfigurator>()->accept_proxy_protocol(handler);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -999,18 +999,6 @@ template<> void ClassDef<FilterConfigurator>::init() {
     }
   });
 
-  // FilterConfigurator.connectProxyProtocol
-  method("connectProxyProtocol", [](Context &ctx, Object *thiz, Value &result) {
-    Value target;
-    if (!ctx.arguments(1, &target)) return;
-    try {
-      thiz->as<FilterConfigurator>()->connect_proxy_protocol(target);
-      result.set(thiz);
-    } catch (std::runtime_error &err) {
-      ctx.error(err);
-    }
-  });
-
   // FilterConfigurator.connectHTTPTunnel
   method("connectHTTPTunnel", [](Context &ctx, Object *thiz, Value &result) {
     try {
@@ -1022,6 +1010,18 @@ template<> void ClassDef<FilterConfigurator>::init() {
       } else if (ctx.arguments(1, &address)) {
         thiz->as<FilterConfigurator>()->connect_http_tunnel(address);
       }
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // FilterConfigurator.connectProxyProtocol
+  method("connectProxyProtocol", [](Context &ctx, Object *thiz, Value &result) {
+    Value target;
+    if (!ctx.arguments(1, &target)) return;
+    try {
+      thiz->as<FilterConfigurator>()->connect_proxy_protocol(target);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

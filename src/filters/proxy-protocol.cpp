@@ -224,6 +224,7 @@ void Server::parse_header_v2() {
   }
 
   pjs::Value obj(pjs::Object::make());
+  obj.o()->set(s_version, version);
 
   switch (command) {
     case 0: obj.o()->set(s_command, s_LOCAL.get()); break;
