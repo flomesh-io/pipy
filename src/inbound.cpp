@@ -351,7 +351,7 @@ void InboundTCP::linger() {
   m_socket.async_wait(
     tcp::socket::wait_error,
     [this](const std::error_code &ec) {
-      if (ec != asio::error::operation_aborted) {
+      if (ec && ec != asio::error::operation_aborted) {
         char desc[200];
         describe(desc);
         Log::error("%s socket error: %s", desc, ec.message().c_str());
