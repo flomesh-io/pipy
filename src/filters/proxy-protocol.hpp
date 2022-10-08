@@ -23,14 +23,14 @@
  *  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef HAPROXY_HPP
-#define HAPROXY_HPP
+#ifndef PROXY_PROTOCOL_HPP
+#define PROXY_PROTOCOL_HPP
 
 #include "filter.hpp"
 
 namespace pipy {
 
-namespace haproxy {
+namespace proxy_protocol {
 
 //
 // Server
@@ -93,7 +93,7 @@ private:
   bool m_error = false;
 };
 
-} // namespace haproxy
+} // namespace proxy_protocol
 } // namespace pipy
 
-#endif // HAPROXY_HPP
+#endif // PROXY_PROTOCOL_HPP

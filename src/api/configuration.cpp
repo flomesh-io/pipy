@@ -50,7 +50,6 @@
 #include "filters/dump.hpp"
 #include "filters/exec.hpp"
 #include "filters/fork.hpp"
-#include "filters/haproxy.hpp"
 #include "filters/http.hpp"
 #include "filters/link.hpp"
 #include "filters/link-input.hpp"
@@ -65,6 +64,7 @@
 #include "filters/on-start.hpp"
 #include "filters/pack.hpp"
 #include "filters/print.hpp"
+#include "filters/proxy-protocol.hpp"
 #include "filters/replace-body.hpp"
 #include "filters/replace-event.hpp"
 #include "filters/replace-message.hpp"
@@ -103,8 +103,8 @@ void FilterConfigurator::on_end(pjs::Function *handler) {
   m_config->on_end = handler;
 }
 
-void FilterConfigurator::accept_haproxy(pjs::Function *handler) {
-  require_sub_pipeline(append_filter(new haproxy::Server(handler)));
+void FilterConfigurator::accept_proxy_protocol(pjs::Function *handler) {
+  require_sub_pipeline(append_filter(new proxy_protocol::Server(handler)));
 }
 
 void FilterConfigurator::accept_http_tunnel(pjs::Function *handler) {
@@ -143,8 +143,8 @@ void FilterConfigurator::connect(const pjs::Value &target, pjs::Object *options)
   append_filter(new Connect(target, options));
 }
 
-void FilterConfigurator::connect_haproxy(const pjs::Value &address) {
-  require_sub_pipeline(append_filter(new haproxy::Client(address)));
+void FilterConfigurator::connect_proxy_protocol(const pjs::Value &address) {
+  require_sub_pipeline(append_filter(new proxy_protocol::Client(address)));
 }
 
 void FilterConfigurator::connect_http_tunnel(const pjs::Value &address) {
@@ -809,12 +809,12 @@ template<> void ClassDef<FilterConfigurator>::init() {
     }
   });
 
-  // FilterConfigurator.acceptHAProxy
-  method("acceptHAProxy", [](Context &ctx, Object *thiz, Value &result) {
+  // FilterConfigurator.acceptProxyProtocol
+  method("acceptProxyProtocol", [](Context &ctx, Object *thiz, Value &result) {
     try {
       Function *handler;
       if (!ctx.arguments(1, &handler)) return;
-      thiz->as<FilterConfigurator>()->accept_haproxy(handler);
+      thiz->as<FilterConfigurator>()->accept_proxy_protocol(handler);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -999,12 +999,12 @@ template<> void ClassDef<FilterConfigurator>::init() {
     }
   });
 
-  // FilterConfigurator.connectHAProxy
-  method("connectHAProxy", [](Context &ctx, Object *thiz, Value &result) {
+  // FilterConfigurator.connectProxyProtocol
+  method("connectProxyProtocol", [](Context &ctx, Object *thiz, Value &result) {
     Value target;
     if (!ctx.arguments(1, &target)) return;
     try {
-      thiz->as<FilterConfigurator>()->connect_haproxy(target);
+      thiz->as<FilterConfigurator>()->connect_proxy_protocol(target);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

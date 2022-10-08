@@ -23,7 +23,7 @@
  *  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include "haproxy.hpp"
+#include "proxy-protocol.hpp"
 #include "data.hpp"
 #include "pipeline.hpp"
 #include "module.hpp"
@@ -33,7 +33,9 @@
 #include <asio.hpp>
 
 namespace pipy {
-namespace haproxy {
+namespace proxy_protocol {
+
+static Data::Producer s_dp("Proxy Protocol");
 
 static std::string s_v1_fixed_header("PROXY ");
 static std::string s_v2_fixed_header("\r\n\r\n\0\r\nQUIT\n", 12);
@@ -77,7 +79,7 @@ Server::~Server()
 
 void Server::dump(Dump &d) {
   Filter::dump(d);
-  d.name = "acceptHAProxy";
+  d.name = "acceptProxyProtocol";
 }
 
 auto Server::clone() -> Filter* {
@@ -290,8 +292,6 @@ void Server::error() {
 // Client
 //
 
-static Data::Producer s_dp("connectHAProxy");
-
 Client::Client(const pjs::Value &target)
   : m_target(target)
   , m_prop_version("version")
@@ -323,7 +323,7 @@ Client::~Client()
 
 void Client::dump(Dump &d) {
   Filter::dump(d);
-  d.name = "connectHAProxy";
+  d.name = "connectProxyProtocol";
 }
 
 auto Client::clone() -> Filter* {
@@ -337,8 +337,6 @@ void Client::reset() {
 }
 
 void Client::process(Event *evt) {
-  static Data::Producer s_dp("connectHAProxy");
-
   if (m_error) return;
 
   if (!m_pipeline) {
@@ -348,7 +346,7 @@ void Client::process(Event *evt) {
       return;
     }
     if (!obj.is_object()) {
-      Log::error("[connectHAProxy] an object containing source/target addresses is expected");
+      Log::error("[connectProxyProtocol] an object containing source/target addresses is expected");
       m_error = true;
       return;
     }
@@ -437,5 +435,5 @@ void Client::process(Event *evt) {
   m_pipeline->input()->input(evt);
 }
 
-} // namespace haproxy
+} // namespace proxy_protocol
 } // namespace pipy

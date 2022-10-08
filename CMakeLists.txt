@@ -181,7 +181,6 @@ add_executable(pipy
   src/filters/dump.cpp
   src/filters/exec.cpp
   src/filters/fork.cpp
-  src/filters/haproxy.cpp
   src/filters/http.cpp
   src/filters/http2.cpp
   src/filters/link.cpp
@@ -197,6 +196,7 @@ add_executable(pipy
   src/filters/on-start.cpp
   src/filters/pack.cpp
   src/filters/print.cpp
+  src/filters/proxy-protocol.cpp
   src/filters/replace-body.cpp
   src/filters/replace-event.cpp
   src/filters/replace-message.cpp
