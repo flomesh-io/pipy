@@ -35,6 +35,16 @@ interface CertificateOptions {
   cert: Certificate | CertificateChain,
 }
 
+interface ProxyProtocolHeader {
+  version?: 1 | 2,
+  command?: 'PROXY' | 'LOCAL',
+  protocol?: 'TCP4' | 'TCP6' | 'UDP4' | 'UDP6' | 'UNIX' | 'UNIX_DGRAM' | 'UNKNOWN',
+  sourceAddress?: string,
+  targetAddress?: string,
+  sourcePort?: number,
+  targetPort?: number,
+}
+
 /**
  * Configuration is used to set up context variables and pipeline layouts in a module.
  */
@@ -171,6 +181,29 @@ interface Configuration {
    * @returns The same _Configuration_ object.
    */
   acceptHTTPTunnel(handler: (request: Message) => Message): Configuration;
+
+  /**
+   * Appends an _acceptProxyProtocol_ filter to the current pipeline layout.
+   *
+   * An _acceptProxyProtocol_ filter implements the [Proxy Protocol](https://github.com/haproxy/haproxy/blob/master/doc/proxy-protocol.txt) on the server side.
+   *
+   * - **INPUT** - _Data_ stream received from the client with a Proxy Protocol header.
+   * - **OUTPUT** - _Data_ stream to send back to the client.
+   * - **SUB-INPUT** - _Data_ stream received from the client with the Proxy Protocol header removed.
+   * - **SUB-OUTPUT** - _Data_ stream to send back to the client.
+   *
+   * @param handler A function that receives the Proxy Protocol header and returns a boolean determining whether the connection should be accepted.
+   *   The received header includes the following fields:
+   *   - _version_ - Could be 1 or 2
+   *   - _command_ - Could be `"PROXY"` or `"LOCAL"` for version 2 only
+   *   - _protocol_ - One of `"TCP4"`, `"TCP6"`, `"UDP4"`, `"UDP6"`, `"UNIX"`, `"UNIX_DGRAM"` and `"UNKNOWN"`
+   *   - _sourceAddress_ - Source IP address
+   *   - _sourcePort_ - Source port
+   *   - _targetAddress_ - Destination IP address
+   *   - _targetPort_ - Destination port
+   * @returns The same _Configuration_ object.
+   */
+  acceptProxyProtocol(handler: (header: ProxyProtocolHeader) => boolean): Configuration;
 
   /**
    * Appends an _acceptSOCKS_ filter to the current pipeline layout.
@@ -370,6 +403,28 @@ interface Configuration {
    * @returns The same _Configuration_ object.
    */
   connectHTTPTunnel(target: string | (() => string)): Configuration;
+
+  /**
+   * Appends a _connectProxyProtocol_ filter to the current pipeline layout.
+   *
+   * A _connectProxyProtocol_ filter implements the [Proxy Protocol](https://github.com/haproxy/haproxy/blob/master/doc/proxy-protocol.txt) on the client side.
+   *
+   * - **INPUT** - _Data_ stream to send to the server via the Proxy Protocol.
+   * - **OUTPUT** - _Data_ stream received from the server.
+   * - **SUB-INPUT** - _Data_ stream to send to the server with the Proxy Protocol header added.
+   * - **SUB-OUTPUT** - _Data_ stream received from the server.
+   *
+   * @param header The Proxy Protocol header, or a function that returns it. The header should include the following fields:
+   *   - _version_ - Can be 1 (default) or 2
+   *   - _command_ - Can be `"PROXY"` (default) or `"LOCAL"`
+   *   - _protocol_ - One of `"TCP4"` (default), `"TCP6"`, `"UDP4"`, `"UDP6"`, `"UNIX"`, `"UNIX_DGRAM"` and `"UNKNOWN"`
+   *   - _sourceAddress_ - Source IP address
+   *   - _sourcePort_ - Source port
+   *   - _targetAddress_ - Destination IP address
+   *   - _targetPort_ - Destination port
+   * @returns The same _Configuration_ object.
+   */
+  connectProxyProtocol(header: ProxyProtocolHeader | (() => ProxyProtocolHeader)): Configuration;
 
   /**
    * Appends a _connectSOCKS_ filter to the current pipeline layout.

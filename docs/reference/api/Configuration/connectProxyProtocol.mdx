@@ -1,0 +1,46 @@
+---
+title: Configuration.connectProxyProtocol()
+api: Configuration.connectProxyProtocol
+---
+
+## Description
+
+<Summary/>
+
+<FilterDiagram
+  name="connectProxyProtocol"
+  input="Data"
+  output="Data"
+  subInput="Data"
+  subOutput="Data"
+  subType="link"
+/>
+
+A _connectProxyProtocol_ filter adds the [Proxy Protocol](https://github.com/haproxy/haproxy/blob/master/doc/proxy-protocol.txt) header to its input _Data_ stream and then pumps it into a newly created sub-pipeline. Its output is the same output from the sub-pipeline.
+
+## Syntax
+
+``` js
+pipy()
+  .pipeline()
+  .connectProxyProtocol(header).to(
+    subPipelineLayout
+  )
+
+pipy()
+  .pipeline()
+  .connectProxyProtocol(
+    () => makeProxyProtocolHeader()
+  ).to(
+    subPipelineLayout
+  )
+```
+
+## Parameters
+
+<Parameters/>
+
+## See Also
+
+* [Configuration](/reference/api/Configuration)
+* [acceptProxyProtocol()](/reference/api/Configuration/acceptProxyProtocol)

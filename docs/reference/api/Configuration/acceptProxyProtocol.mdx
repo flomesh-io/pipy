@@ -1,0 +1,40 @@
+---
+title: Configuration.acceptProxyProtocol()
+api: Configuration.acceptProxyProtocol
+---
+
+## Description
+
+<Summary/>
+
+<FilterDiagram
+  name="acceptProxyProtocol"
+  input="Data"
+  output="Data"
+  subInput="Data"
+  subOutput="Data"
+  subType="link"
+/>
+
+An _acceptProxyProtocol_ filter extracts the [Proxy Protocol](https://github.com/haproxy/haproxy/blob/master/doc/proxy-protocol.txt) header from the input _Data_ stream and calls back a user handler with it. When the user handler returns `true`, a sub-pipeline will be created to accept the input stream without the Proxy Protocol header. The filter output is the same output from the sub-pipeline.
+
+## Syntax
+
+``` js
+pipy()
+  .pipeline()
+  .acceptProxyProtocol(
+    header => shouldAccept(header)
+  ).to(
+    subPipelineLayout
+  )
+```
+
+## Parameters
+
+<Parameters/>
+
+## See Also
+
+* [Configuration](/reference/api/Configuration)
+* [connectProxyProtocol()](/reference/api/Configuration/connectProxyProtocol)
