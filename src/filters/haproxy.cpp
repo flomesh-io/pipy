@@ -36,7 +36,7 @@ namespace pipy {
 namespace haproxy {
 
 static std::string s_v1_fixed_header("PROXY ");
-static std::string s_v2_fixed_header("\r\n\r\n\0\r\nQUIT\n");
+static std::string s_v2_fixed_header("\r\n\r\n\0\r\nQUIT\n", 12);
 static std::string s_ip_v4_zero("0.0.0.0");
 static std::string s_ip_v6_zero("::");
 static pjs::ConstStr s_TCP4("TCP4");
@@ -382,7 +382,7 @@ void Client::process(Event *evt) {
 
 
       db.push(s_v2_fixed_header);
-      db.push(char(0x02 | cmd));
+      db.push(char(0x20 | cmd));
       db.push(char(proto));
 
       uint8_t src_ip[16], dst_ip[16];
