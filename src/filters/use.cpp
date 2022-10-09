@@ -147,7 +147,7 @@ void Use::bind() {
       std::string msg("pipy_module_init not found in native module ");
       throw std::runtime_error(msg + m_native_module_name);
     }
-    (*(pipy_module_init_fn)init_fn)(0);
+    (*(pipy_module_init_fn)init_fn)();
   } else {
     for (auto *mod : m_modules) {
       auto p = mod->find_named_pipeline(m_pipeline_name);

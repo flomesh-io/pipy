@@ -28,13 +28,22 @@
 
 #include "pipy/nmi.h"
 #include "pjs/pjs.hpp"
+#include "context.hpp"
+#include "event.hpp"
 #include "list.hpp"
 
 #include <cstdarg>
 #include <algorithm>
+#include <list>
+
+#include <dlfcn.h>
 
 namespace pipy {
 namespace nmi {
+
+class Pipeline;
+class PipelineLayout;
+class Module;
 
 //
 // Table
@@ -204,6 +213,157 @@ private:
 };
 
 LocalRefPool* LocalRefPool::s_current = nullptr;
+
+//
+// Pipeline
+//
+
+class Pipeline : public pjs::Pooled<Pipeline> {
+public:
+  void input(Event *evt) {
+    LocalRefPool lrf;
+    auto e = nmi::s_values.alloc(evt);
+    lrf.add(e);
+    m_process(m_id, e);
+  }
+
+private:
+  Pipeline(
+    Context *ctx, EventTarget::Input *out,
+    void (*process)(pipy_pipeline ppl, pjs_value evt)
+  ) : m_process(process)
+    , m_context(ctx)
+    , m_output(out) {}
+
+  void (*m_process)(pipy_pipeline ppl, pjs_value evt);
+
+  int m_id = 0;
+  pjs::Ref<Context> m_context;
+  pjs::Ref<EventTarget::Input> m_output;
+
+  friend class PipelineLayout;
+};
+
+//
+// PipelineLayout
+//
+
+class PipelineLayout {
+public:
+  PipelineLayout(Module *mod, struct pipy_pipeline_def *def)
+    : m_module(mod)
+    , m_def(*def) {}
+
+  auto pipeline(Context *ctx, EventTarget::Input *out) -> Pipeline* {
+    return new Pipeline(ctx, out, m_def.pipeline_process);
+  }
+
+private:
+  Module* m_module;
+  struct pipy_pipeline_def m_def;
+
+  friend class Pipeline;
+};
+
+//
+// Module
+//
+
+class Module {
+public:
+  Module(const char *filename) {
+    auto *handle = dlopen(filename, RTLD_NOW);
+    if (!handle) {
+      std::string msg("cannot load native module ");
+      throw std::runtime_error(msg + filename);
+    }
+
+    auto *init_fn = dlsym(handle, "pipy_module_init");
+    if (!init_fn) {
+      std::string msg("pipy_module_init() not found in native module ");
+      throw std::runtime_error(msg + filename);
+    }
+
+    struct pipy_native_module *mod = (*(pipy_module_init_fn)init_fn)();
+    if (!mod) {
+      std::string msg("pipy_module_init() failed in native module ");
+      throw std::runtime_error(msg + filename);
+    }
+
+    std::list<pjs::Field*> fields;
+    int variable_id = 0;
+    for (const auto *p = mod->variables; *p; p++) {
+      auto *vd = *p;
+      std::string name(vd->name);
+      for (auto &prev : fields) {
+        if (prev->name()->str() == name) {
+          std::string msg("duplicated variables ");
+          msg += name;
+          msg += " in native module ";
+          msg += filename;
+          throw std::runtime_error(msg + filename);
+        }
+      }
+      auto *v = s_values.get(vd->init_value);
+      fields.push_back(
+        pjs::Variable::make(
+          name, v ? v->v : pjs::Value::undefined,
+          pjs::Field::Enumerable | pjs::Field::Writable,
+          variable_id++
+        )
+      );
+      if (auto *ns = vd->export_to) {
+        m_exports.emplace_back();
+        m_exports.back().ns = pjs::Str::make(ns);
+        m_exports.back().name = pjs::Str::make(name);
+      }
+    }
+
+    m_context_class = pjs::Class::make(
+      "ContextData",
+      pjs::class_of<ContextDataBase>(),
+      fields
+    );
+
+    for (const auto *p = mod->pipelines; *p; p++) {
+      auto *pd = *p;
+      if (pd->name) {
+        pjs::Ref<pjs::Str> name(pjs::Str::make(pd->name));
+        if (m_pipeline_layouts.count(name) > 0) {
+          std::string msg("duplicated pipeline ");
+          msg += name->str();
+          msg += " in native module ";
+          msg += filename;
+          throw std::runtime_error(msg + filename);
+        }
+        m_pipeline_layouts[name] = new PipelineLayout(this, pd);
+      } else {
+        m_entry_pipeline = new PipelineLayout(this, pd);
+      }
+    }
+  }
+
+  auto pipeline_layout(pjs::Str *name) -> PipelineLayout* {
+    if (name) {
+      auto i = m_pipeline_layouts.find(name);
+      if (i == m_pipeline_layouts.end()) return nullptr;
+      return i->second;
+    } else {
+      return m_entry_pipeline;
+    }
+  }
+
+private:
+  struct Export {
+    pjs::Ref<pjs::Str> ns;
+    pjs::Ref<pjs::Str> name;
+  };
+
+  pjs::Ref<pjs::Class> m_context_class;
+  std::list<Export> m_exports;
+  std::map<pjs::Ref<pjs::Str>, PipelineLayout*> m_pipeline_layouts;
+  PipelineLayout* m_entry_pipeline = nullptr;
+};
 
 } // namespace nmi
 } // namespace pipy

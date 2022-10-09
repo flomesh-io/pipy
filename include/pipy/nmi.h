@@ -91,24 +91,28 @@ extern pjs_value   pjs_array_splice(pjs_value arr, int pos, int del_cnt, int ins
  * Pipy API
  */
 
-typedef int pipy_module;
-typedef int pipy_context;
 typedef int pipy_pipeline;
 
-struct pipy_pipeline_handlers {
-  void (*pipeline_init   )(pipy_pipeline ppl, pipy_context ctx, pjs_value init_value);
-  void (*pipeline_free   )(pipy_pipeline ppl, pipy_context ctx);
-  void (*pipeline_process)(pipy_pipeline ppl, pipy_context ctx, pjs_value evt);
+struct pipy_variable_def {
+  int id;
+  const char *name;
+  const char *export_to;
+  pjs_value init_value;
 };
 
-typedef int (*pipy_module_init_fn)(pipy_module mod);
+struct pipy_pipeline_def {
+  const char *name;
+  void (*pipeline_init   )(pipy_pipeline ppl, pjs_value init_value);
+  void (*pipeline_free   )(pipy_pipeline ppl);
+  void (*pipeline_process)(pipy_pipeline ppl, pjs_value evt);
+};
 
-extern int  pipy_export_variable(pipy_module mod, const char *name, const char *ns, pjs_value value);
-extern void pipy_define_pipeline(pipy_module mod, const char *name, struct pipy_pipeline_handlers *handlers);
+struct pipy_native_module {
+  pipy_variable_def **variables;
+  pipy_pipeline_def **pipelines;
+};
 
-extern void pipy_context_set(pipy_context ctx, int export_id, pjs_value value);
-extern void pipy_context_get(pipy_context ctx, int export_id, pjs_value value);
-extern void pipy_pipeline_output(pipy_pipeline ppl, pjs_value evt);
+typedef pipy_native_module* (*pipy_module_init_fn)();
 
 extern pjs_value pipy_Data_new(const char *buf, int len);
 extern pjs_value pipy_Data_push(pjs_value obj, pjs_value data);
@@ -123,6 +127,10 @@ extern pjs_value pipy_MessageEnd_get_tail(pjs_value obj);
 extern pjs_value pipy_MessageEnd_get_payload(pjs_value obj);
 extern pjs_value pipy_StreamEnd_new(pjs_value error);
 extern pjs_value pipy_StreamEnd_get_error(pjs_value obj);
+
+extern void pipy_output_event(pipy_pipeline ppl, pjs_value evt);
+extern void pipy_get_variable(pipy_pipeline ppl, int id, pjs_value value);
+extern void pipy_set_variable(pipy_pipeline ppl, int id, pjs_value value);
 
 #ifdef __cplusplus
 } /* extern "C" */
