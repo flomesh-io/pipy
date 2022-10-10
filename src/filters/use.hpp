@@ -27,6 +27,7 @@
 #define USE_HPP
 
 #include "filter.hpp"
+#include "nmi.hpp"
 
 #include <list>
 
@@ -106,7 +107,9 @@ private:
   bool m_native = false;
   bool m_multiple = false;
   std::string m_native_module_name;
-  pjs::Ref<pjs::Str> m_native_pipeline_name;
+  nmi::Module* m_native_module = nullptr;
+  nmi::PipelineLayout* m_native_pipeline_layout = nullptr;
+  nmi::Pipeline* m_native_pipeline = nullptr;
   std::list<Module*> m_modules;
   std::list<Stage> m_stages;
   pjs::Ref<pjs::Str> m_pipeline_name;

@@ -1856,7 +1856,7 @@ template<> void ClassDef<FilterConfigurator>::init() {
     static std::string s_dot_so(".so");
     std::string module;
     Array *modules;
-    Str *pipeline;
+    Str *pipeline = nullptr;
     Str *pipeline_down = nullptr;
     Function *when = nullptr;
     auto root = static_cast<pipy::Context*>(ctx.root());
@@ -1890,7 +1890,7 @@ template<> void ClassDef<FilterConfigurator>::init() {
           ctx.error(err);
         }
       }
-    } else if (ctx.arguments(2, &module, &pipeline)) {
+    } else if (ctx.arguments(1, &module, &pipeline)) {
       if (utils::ends_with(module, s_dot_so)) {
         try {
           thiz->as<FilterConfigurator>()->use(module, pipeline);

@@ -23,13 +23,7 @@
  *  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef NMI_HPP
-#define NMI_HPP
-
-#include "pipy/nmi.h"
-#include "pjs/pjs.hpp"
-#include "context.hpp"
-#include "event.hpp"
+#include "nmi.hpp"
 #include "list.hpp"
 
 #include <cstdarg>
@@ -40,105 +34,6 @@
 
 namespace pipy {
 namespace nmi {
-
-class Pipeline;
-class PipelineLayout;
-class Module;
-
-//
-// Table
-//
-
-class TableBase {
-private:
-  enum { SUB_TABLE_WIDTH = 8 };
-
-  struct Entry {
-    int next_free = 0;
-    char data[0];
-  };
-
-  std::vector<Entry*> m_sub_tables;
-
-  int m_size = 0;
-  int m_free = 0;
-  int m_data_size;
-
-protected:
-  TableBase(int data_size)
-    : m_data_size(data_size) {}
-
-  Entry* get_entry(int i, bool create) {
-    int y = i & ((1 << SUB_TABLE_WIDTH) - 1);
-    int x = i >> SUB_TABLE_WIDTH;
-    if (x >= m_sub_tables.size()) {
-      if (!create) return nullptr;
-      m_sub_tables.resize(x + 1);
-    }
-    auto sub = m_sub_tables[x];
-    if (!sub) {
-      if (!create) return nullptr;
-      auto *buf = new char[(sizeof(Entry) + m_data_size) * (1 << SUB_TABLE_WIDTH)];
-      m_sub_tables[x] = sub = reinterpret_cast<Entry*>(buf);
-    }
-    return &sub[y];
-  }
-
-  Entry* alloc_entry(int *i) {
-    Entry *ent;
-    auto id = m_free;
-    if (!id) {
-      id = ++m_size;
-      ent = get_entry(id, true);
-    } else {
-      ent = get_entry(id, false);
-      m_free = ent->next_free;
-    }
-    ent->next_free = -1;
-    *i = id;
-    return ent;
-  }
-
-  Entry* free_entry(int i) {
-    if (auto *ent = get_entry(i, false)) {
-      if (ent->next_free < 0) {
-        ent->next_free = m_free;
-        m_free = i;
-        return ent;
-      }
-    }
-    return nullptr;
-  }
-};
-
-template<class T>
-class Table : public TableBase {
-public:
-  Table() : TableBase(sizeof(T)) {}
-
-  T* get(int i) {
-    if (i <= 0) return nullptr;
-    if (auto *ent = get_entry(i, false)) {
-      return reinterpret_cast<T*>(ent->data);
-    } else {
-      return nullptr;
-    }
-  }
-
-  template<typename... Args>
-  int alloc(Args... args) {
-    int i;
-    auto *ent = alloc_entry(&i);
-    new (ent->data) T(std::forward<Args>(args)...);
-    return i;
-  }
-
-  void free(int i) {
-    if (auto *ent = free_entry(i)) {
-      ((T*)ent->data)->~T();
-    }
-  }
-};
 
 //
 // Value
@@ -218,152 +113,106 @@ LocalRefPool* LocalRefPool::s_current = nullptr;
 // Pipeline
 //
 
-class Pipeline : public pjs::Pooled<Pipeline> {
-public:
-  void input(Event *evt) {
-    LocalRefPool lrf;
-    auto e = nmi::s_values.alloc(evt);
-    lrf.add(e);
-    m_process(m_id, e);
-  }
+Table<Pipeline*> Pipeline::m_pipeline_table;
 
-private:
-  Pipeline(
-    Context *ctx, EventTarget::Input *out,
-    void (*process)(pipy_pipeline ppl, pjs_value evt)
-  ) : m_process(process)
-    , m_context(ctx)
-    , m_output(out) {}
+void Pipeline::input(Event *evt) {
+  LocalRefPool lrf;
+  auto e = nmi::s_values.alloc(evt);
+  lrf.add(e);
+  m_process(m_id, e);
+}
 
-  void (*m_process)(pipy_pipeline ppl, pjs_value evt);
-
-  int m_id = 0;
-  pjs::Ref<Context> m_context;
-  pjs::Ref<EventTarget::Input> m_output;
-
-  friend class PipelineLayout;
-};
-
-//
-// PipelineLayout
-//
-
-class PipelineLayout {
-public:
-  PipelineLayout(Module *mod, struct pipy_pipeline_def *def)
-    : m_module(mod)
-    , m_def(*def) {}
-
-  auto pipeline(Context *ctx, EventTarget::Input *out) -> Pipeline* {
-    return new Pipeline(ctx, out, m_def.pipeline_process);
-  }
-
-private:
-  Module* m_module;
-  struct pipy_pipeline_def m_def;
-
-  friend class Pipeline;
-};
+void Pipeline::free() {
+  m_free(m_id);
+  m_pipeline_table.free(m_id);
+  delete this;
+}
 
 //
 // Module
 //
 
-class Module {
-public:
-  Module(const char *filename) {
-    auto *handle = dlopen(filename, RTLD_NOW);
-    if (!handle) {
-      std::string msg("cannot load native module ");
-      throw std::runtime_error(msg + filename);
-    }
+Module::Module(const char *filename) {
+  auto *handle = dlopen(filename, RTLD_NOW);
+  if (!handle) {
+    std::string msg("cannot load native module ");
+    throw std::runtime_error(msg + filename);
+  }
 
-    auto *init_fn = dlsym(handle, "pipy_module_init");
-    if (!init_fn) {
-      std::string msg("pipy_module_init() not found in native module ");
-      throw std::runtime_error(msg + filename);
-    }
+  auto *init_fn = dlsym(handle, "pipy_module_init");
+  if (!init_fn) {
+    std::string msg("pipy_module_init() not found in native module ");
+    throw std::runtime_error(msg + filename);
+  }
 
-    struct pipy_native_module *mod = (*(pipy_module_init_fn)init_fn)();
-    if (!mod) {
-      std::string msg("pipy_module_init() failed in native module ");
-      throw std::runtime_error(msg + filename);
-    }
+  struct pipy_native_module *mod = (*(pipy_module_init_fn)init_fn)();
+  if (!mod) {
+    std::string msg("pipy_module_init() failed in native module ");
+    throw std::runtime_error(msg + filename);
+  }
 
-    std::list<pjs::Field*> fields;
-    int variable_id = 0;
-    for (const auto *p = mod->variables; *p; p++) {
-      auto *vd = *p;
-      std::string name(vd->name);
-      for (auto &prev : fields) {
-        if (prev->name()->str() == name) {
-          std::string msg("duplicated variables ");
-          msg += name;
-          msg += " in native module ";
-          msg += filename;
-          throw std::runtime_error(msg + filename);
-        }
-      }
-      auto *v = s_values.get(vd->init_value);
-      fields.push_back(
-        pjs::Variable::make(
-          name, v ? v->v : pjs::Value::undefined,
-          pjs::Field::Enumerable | pjs::Field::Writable,
-          variable_id++
-        )
-      );
-      if (auto *ns = vd->export_to) {
-        m_exports.emplace_back();
-        m_exports.back().ns = pjs::Str::make(ns);
-        m_exports.back().name = pjs::Str::make(name);
+  std::list<pjs::Field*> fields;
+  int variable_id = 0;
+  for (const auto *p = mod->variables; *p; p++) {
+    auto *vd = *p;
+    std::string name(vd->name);
+    for (auto &prev : fields) {
+      if (prev->name()->str() == name) {
+        std::string msg("duplicated variables ");
+        msg += name;
+        msg += " in native module ";
+        msg += filename;
+        throw std::runtime_error(msg + filename);
       }
     }
-
-    m_context_class = pjs::Class::make(
-      "ContextData",
-      pjs::class_of<ContextDataBase>(),
-      fields
+    auto *v = s_values.get(vd->init_value);
+    fields.push_back(
+      pjs::Variable::make(
+        name, v ? v->v : pjs::Value::undefined,
+        pjs::Field::Enumerable | pjs::Field::Writable,
+        variable_id++
+      )
     );
+    if (auto *ns = vd->export_to) {
+      m_exports.emplace_back();
+      m_exports.back().ns = pjs::Str::make(ns);
+      m_exports.back().name = pjs::Str::make(name);
+    }
+  }
 
-    for (const auto *p = mod->pipelines; *p; p++) {
-      auto *pd = *p;
-      if (pd->name) {
-        pjs::Ref<pjs::Str> name(pjs::Str::make(pd->name));
-        if (m_pipeline_layouts.count(name) > 0) {
-          std::string msg("duplicated pipeline ");
-          msg += name->str();
-          msg += " in native module ";
-          msg += filename;
-          throw std::runtime_error(msg + filename);
-        }
-        m_pipeline_layouts[name] = new PipelineLayout(this, pd);
-      } else {
-        m_entry_pipeline = new PipelineLayout(this, pd);
+  m_context_class = pjs::Class::make(
+    "ContextData",
+    pjs::class_of<ContextDataBase>(),
+    fields
+  );
+
+  for (const auto *p = mod->pipelines; *p; p++) {
+    auto *pd = *p;
+    if (pd->name && pd->name[0]) {
+      pjs::Ref<pjs::Str> name(pjs::Str::make(pd->name));
+      if (m_pipeline_layouts.count(name) > 0) {
+        std::string msg("duplicated pipeline ");
+        msg += name->str();
+        msg += " in native module ";
+        msg += filename;
+        throw std::runtime_error(msg + filename);
       }
-    }
-  }
-
-  auto pipeline_layout(pjs::Str *name) -> PipelineLayout* {
-    if (name) {
-      auto i = m_pipeline_layouts.find(name);
-      if (i == m_pipeline_layouts.end()) return nullptr;
-      return i->second;
+      m_pipeline_layouts[name] = new PipelineLayout(this, pd);
     } else {
-      return m_entry_pipeline;
+      m_entry_pipeline = new PipelineLayout(this, pd);
     }
   }
+}
 
-private:
-  struct Export {
-    pjs::Ref<pjs::Str> ns;
-    pjs::Ref<pjs::Str> name;
-  };
-
-  pjs::Ref<pjs::Class> m_context_class;
-  std::list<Export> m_exports;
-  std::map<pjs::Ref<pjs::Str>, PipelineLayout*> m_pipeline_layouts;
-  PipelineLayout* m_entry_pipeline = nullptr;
-};
+auto Module::pipeline_layout(pjs::Str *name) -> PipelineLayout* {
+  if (name) {
+    auto i = m_pipeline_layouts.find(name);
+    if (i == m_pipeline_layouts.end()) return nullptr;
+    return i->second;
+  } else {
+    return m_entry_pipeline;
+  }
+}
 
 } // namespace nmi
 } // namespace pipy
@@ -800,5 +649,3 @@ pjs_value pjs_array_splice(pjs_value arr, int pos, int del_cnt, int ins_cnt, ...
   }
   return 0;
 }
-
-#endif // NMI_HPP

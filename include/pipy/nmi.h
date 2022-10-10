@@ -108,11 +108,11 @@ struct pipy_pipeline_def {
 };
 
 struct pipy_native_module {
-  pipy_variable_def **variables;
-  pipy_pipeline_def **pipelines;
+  struct pipy_variable_def **variables;
+  struct pipy_pipeline_def **pipelines;
 };
 
-typedef pipy_native_module* (*pipy_module_init_fn)();
+typedef struct pipy_native_module* (*pipy_module_init_fn)();
 
 extern pjs_value pipy_Data_new(const char *buf, int len);
 extern pjs_value pipy_Data_push(pjs_value obj, pjs_value data);
