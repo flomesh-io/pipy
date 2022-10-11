@@ -23,8 +23,8 @@
  *  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef __PIPY_MODULE_H__
-#define __PIPY_MODULE_H__
+#ifndef __PIPY_NMI_H__
+#define __PIPY_NMI_H__
 
 #include <stddef.h>
 
@@ -102,9 +102,9 @@ struct pipy_variable_def {
 
 struct pipy_pipeline_def {
   const char *name;
-  void (*pipeline_init   )(pipy_pipeline ppl, pjs_value init_value);
-  void (*pipeline_free   )(pipy_pipeline ppl);
-  void (*pipeline_process)(pipy_pipeline ppl, pjs_value evt);
+  void (*pipeline_init   )(pipy_pipeline ppl, void **user_ptr);
+  void (*pipeline_free   )(pipy_pipeline ppl, void  *user_ptr);
+  void (*pipeline_process)(pipy_pipeline ppl, void  *user_ptr, pjs_value evt);
 };
 
 struct pipy_native_module {
@@ -128,12 +128,12 @@ extern pjs_value pipy_MessageEnd_get_payload(pjs_value obj);
 extern pjs_value pipy_StreamEnd_new(pjs_value error);
 extern pjs_value pipy_StreamEnd_get_error(pjs_value obj);
 
-extern void pipy_output_event(pipy_pipeline ppl, pjs_value evt);
-extern void pipy_get_variable(pipy_pipeline ppl, int id, pjs_value value);
-extern void pipy_set_variable(pipy_pipeline ppl, int id, pjs_value value);
+extern void  pipy_output_event(pipy_pipeline ppl, pjs_value evt);
+extern void  pipy_get_variable(pipy_pipeline ppl, int id, pjs_value value);
+extern void  pipy_set_variable(pipy_pipeline ppl, int id, pjs_value value);
 
 #ifdef __cplusplus
 } /* extern "C" */
 #endif
 
-#endif /* __PIPY_MODULE_H__ */
+#endif /* __PIPY_NMI_H__ */

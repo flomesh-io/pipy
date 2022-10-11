@@ -77,7 +77,7 @@ void Filter::bind() {
     if (!sub.layout) {
       if (sub.name) {
         if (sub.name != pjs::Str::empty) {
-          if (auto mod = dynamic_cast<Module*>(module())) {
+          if (auto mod = dynamic_cast<JSModule*>(module())) {
             if (auto p = mod->find_named_pipeline(sub.name)) {
               sub.layout = p;
               continue;
@@ -88,7 +88,7 @@ void Filter::bind() {
           throw std::runtime_error(msg);
         }
       } else {
-        if (auto mod = dynamic_cast<Module*>(module())) {
+        if (auto mod = dynamic_cast<JSModule*>(module())) {
           if (auto p = mod->find_indexed_pipeline(sub.index)) {
             sub.layout = p;
             continue;
@@ -216,11 +216,11 @@ bool Filter::eval(pjs::Function *func, pjs::Value &result) {
 }
 
 void Filter::pjs_error() {
-  auto mod = dynamic_cast<Module*>(module());
+  auto mod = dynamic_cast<JSModule*>(module());
   Log::pjs_error(
     context()->error(),
     mod ? mod->source() : std::string(),
-    mod ? mod->name()->str() : std::string()
+    mod ? mod->path() : std::string()
   );
 }
 

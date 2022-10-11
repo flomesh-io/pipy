@@ -829,7 +829,7 @@ Message* AdminService::api_v1_program_POST(Data *data) {
 
   pjs::Ref<Worker> old_worker = Worker::current();
   pjs::Ref<Worker> new_worker = Worker::make();
-  if (new_worker->load_module(entry) && new_worker->start()) {
+  if (new_worker->load_js_module(entry) && new_worker->start()) {
     if (old_worker) old_worker->stop();
     if (new_codebase != old_codebase) delete old_codebase;
     if (name != "/") m_current_codebase = name;

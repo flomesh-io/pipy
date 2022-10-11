@@ -375,7 +375,7 @@ int main(int argc, char *argv[]) {
 
             auto &entry = Codebase::current()->entry();
             auto worker = Worker::make();
-            auto mod = worker->load_module(entry);
+            auto mod = worker->load_js_module(entry);
 
             if (!mod) {
               fail();

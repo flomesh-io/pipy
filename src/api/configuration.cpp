@@ -123,7 +123,7 @@ void FilterConfigurator::branch(int count, pjs::Function **conds, const pjs::Val
   append_filter(new Branch(count, conds, layout));
 }
 
-void FilterConfigurator::chain(const std::list<Module*> modules) {
+void FilterConfigurator::chain(const std::list<JSModule*> modules) {
   append_filter(new Chain(modules));
 }
 
@@ -384,7 +384,7 @@ void FilterConfigurator::throttle_message_rate(pjs::Object *quota) {
   append_filter(new ThrottleMessageRate(quota));
 }
 
-void FilterConfigurator::use(Module *module, pjs::Str *pipeline) {
+void FilterConfigurator::use(JSModule *module, pjs::Str *pipeline) {
   append_filter(new Use(module, pipeline));
 }
 
@@ -392,11 +392,11 @@ void FilterConfigurator::use(const std::string &native_module, pjs::Str *pipelin
   append_filter(new Use(native_module, pipeline));
 }
 
-void FilterConfigurator::use(const std::list<Module*> modules, pjs::Str *pipeline, pjs::Function *when) {
+void FilterConfigurator::use(const std::list<JSModule*> modules, pjs::Str *pipeline, pjs::Function *when) {
   append_filter(new Use(modules, pipeline, when));
 }
 
-void FilterConfigurator::use(const std::list<Module*> modules, pjs::Str *pipeline, pjs::Str *pipeline_down, pjs::Function *when) {
+void FilterConfigurator::use(const std::list<JSModule*> modules, pjs::Str *pipeline, pjs::Str *pipeline_down, pjs::Function *when) {
   append_filter(new Use(modules, pipeline, pipeline_down, when));
 }
 
@@ -585,19 +585,19 @@ void Configuration::bind_exports(Worker *worker, Module *module) {
 
 void Configuration::bind_imports(Worker *worker, Module *module, pjs::Expr::Imports *imports) {
   for (const auto &imp : m_imports) {
-    auto m = worker->get_export(imp.ns, imp.original_name);
-    if (!m) {
+    auto l = worker->get_export(imp.ns, imp.original_name);
+    if (l < 0) {
       std::string msg("cannot import variable ");
       msg += imp.name->str();
       msg += " in ";
-      msg += module->path();
+      msg += module->m_path;
       throw std::runtime_error(msg);
     }
-    imports->add(imp.name, m->index(), imp.original_name);
+    imports->add(imp.name, l, imp.original_name);
   }
 }
 
-void Configuration::apply(Module *mod) {
+void Configuration::apply(JSModule *mod) {
   std::list<pjs::Field*> fields;
   m_context_prototype->iterate_all([&](pjs::Str *key, pjs::Value &val) {
     fields.push_back(
@@ -934,13 +934,13 @@ template<> void ClassDef<FilterConfigurator>::init() {
     } else {
       auto root = static_cast<pipy::Context*>(ctx.root());
       auto worker = root->worker();
-      std::list<Module*> mods;
+      std::list<JSModule*> mods;
       modules->iterate_while(
         [&](pjs::Value &v, int) {
           auto s = v.to_string();
           auto path = utils::path_normalize(s->str());
           s->release();
-          auto mod = worker->load_module(path);
+          auto mod = worker->load_js_module(path);
           if (!mod) {
             std::string msg("[chain] Cannot load module: ");
             msg += path;
@@ -1865,13 +1865,13 @@ template<> void ClassDef<FilterConfigurator>::init() {
       ctx.try_arguments(3, &modules, &pipeline, &pipeline_down, &when) ||
       ctx.try_arguments(2, &modules, &pipeline, &when)
     ) {
-      std::list<Module*> mods;
+      std::list<JSModule*> mods;
       modules->iterate_while(
         [&](pjs::Value &v, int) {
           auto s = v.to_string();
           auto path = utils::path_normalize(s->str());
           s->release();
-          auto mod = worker->load_module(path);
+          auto mod = worker->load_js_module(path);
           if (!mod) {
             std::string msg("[pjs] Cannot load module: ");
             msg += module;
@@ -1900,7 +1900,7 @@ template<> void ClassDef<FilterConfigurator>::init() {
         }
       } else {
         auto path = utils::path_normalize(module);
-        auto mod = worker->load_module(path);
+        auto mod = worker->load_js_module(path);
         if (!mod) {
           std::string msg("[pjs] Cannot load module: ");
           msg += module;

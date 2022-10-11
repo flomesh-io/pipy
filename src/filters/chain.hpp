@@ -33,7 +33,7 @@
 
 namespace pipy {
 
-class Module;
+class JSModule;
 
 //
 // Chain
@@ -41,7 +41,7 @@ class Module;
 
 class Chain : public Filter {
 public:
-  Chain(const std::list<Module*> &modules);
+  Chain(const std::list<JSModule*> &modules);
 
 private:
   Chain(const Chain &r);
@@ -53,7 +53,7 @@ private:
   virtual void process(Event *evt) override;
   virtual void dump(Dump &d) override;
 
-  std::list<Module*> m_modules;
+  std::list<JSModule*> m_modules;
   pjs::Ref<PipelineLayout::Chain> m_chain;
   pjs::Ref<Pipeline> m_entrance;
 };

@@ -28,7 +28,6 @@
 
 #include "pjs/pjs.hpp"
 #include "context.hpp"
-#include "worker.hpp"
 #include "task.hpp"
 
 #include <map>
@@ -46,7 +45,6 @@ class PipelineLayout;
 
 class ModuleBase : public pjs::RefCount<ModuleBase> {
 public:
-  auto index() const -> int { return m_index; }
   auto label() const -> const std::string { return m_label; }
 
   virtual auto new_context(Context *base = nullptr) -> Context* = 0;
@@ -55,14 +53,12 @@ public:
   void shutdown();
 
 protected:
-  ModuleBase(int index = 0, const std::string &label = std::string())
-    : m_index(index)
-    , m_label(label) {}
+  ModuleBase(const std::string &label = std::string())
+    : m_label(label) {}
 
   virtual ~ModuleBase() {}
 
 private:
-  int m_index;
   std::string m_label;
   std::list<pjs::Ref<PipelineLayout>> m_pipelines;
 
@@ -76,10 +72,34 @@ private:
 
 class Module : public ModuleBase {
 public:
-  auto worker() const -> Worker* { return m_worker; }
-  auto name() const -> pjs::Str* { return m_name; }
+  auto index() const -> int { return m_index; }
   auto path() const -> const std::string& { return m_path; }
   auto source() const -> const std::string& { return m_source; }
+
+protected:
+  int m_index = -1;
+  std::string m_path;
+  std::string m_source;
+
+private:
+  virtual void bind_exports(Worker *worker) = 0;
+  virtual void bind_imports(Worker *worker) = 0;
+  virtual void make_pipelines() = 0;
+  virtual void bind_pipelines() = 0;
+  virtual auto new_context_data(pjs::Object *prototype) -> pjs::Object* = 0;
+
+  friend class Configuration;
+  friend class Worker;
+};
+
+//
+// JSModule
+//
+
+class JSModule : public Module {
+public:
+  auto worker() const -> Worker* { return m_worker; }
+  auto name() const -> pjs::Str* { return m_name; }
 
   auto entrance_pipeline() -> PipelineLayout* { return m_entrance_pipeline; }
   auto find_named_pipeline(pjs::Str *name) -> PipelineLayout*;
@@ -90,28 +110,26 @@ public:
 private:
   bool load(const std::string &path);
   void unload();
-  void bind_exports();
-  void bind_imports();
-  void make_pipelines();
-  void bind_pipelines();
 
-  auto new_context_data(pjs::Object *prototype = nullptr) -> pjs::Object* {
-    auto obj = new ContextDataBase(m_filename);
+  virtual void bind_exports(Worker *worker) override;
+  virtual void bind_imports(Worker *worker) override;
+  virtual void make_pipelines() override;
+  virtual void bind_pipelines() override;
+
+  virtual auto new_context_data(pjs::Object *prototype) -> pjs::Object* override {
+    auto obj = new ContextDataBase(m_name);
     m_context_class->init(obj, prototype);
     return obj;
   }
 
 private:
-  Module(Worker *worker, int index);
-  ~Module();
+  JSModule(Worker *worker, int l);
+  ~JSModule();
 
   pjs::Ref<Worker> m_worker;
   pjs::Ref<pjs::Str> m_name;
-  std::string m_path;
-  std::string m_source;
   std::unique_ptr<pjs::Expr> m_script;
   std::unique_ptr<pjs::Expr::Imports> m_imports;
-  pjs::Ref<pjs::Str> m_filename;
   pjs::Ref<Configuration> m_configuration;
   pjs::Ref<pjs::Class> m_context_class;
   std::map<pjs::Ref<pjs::Str>, PipelineLayout*> m_named_pipelines;

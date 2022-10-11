@@ -28,13 +28,14 @@
 
 #include "context.hpp"
 #include "listener.hpp"
+#include "nmi.hpp"
 
+#include <list>
 #include <set>
 #include <vector>
 
 namespace pipy {
 
-class Module;
 class PipelineLayout;
 class Reader;
 class Task;
@@ -61,13 +62,15 @@ public:
   auto root() const -> Module* { return m_root; }
   auto global_object() const -> pjs::Object* { return m_global_object; }
   bool handling_signal(int sig);
-  auto find_module(const std::string &path) -> Module*;
-  auto load_module(const std::string &path) -> Module*;
+  auto find_js_module(const std::string &path) -> JSModule*;
+  auto load_js_module(const std::string &path) -> JSModule*;
+  auto load_native_module(const std::string &path) -> nmi::NativeModule*;
   void add_listener(Listener *listener, PipelineLayout *layout, const Listener::Options &options);
   void add_reader(Reader *reader);
   void add_task(Task *task);
   void add_export(pjs::Str *ns, pjs::Str *name, Module *module);
-  auto get_export(pjs::Str *ns, pjs::Str *name) -> Module*;
+  void add_export(pjs::Str *ns, pjs::Str *name, nmi::NativeModule *module);
+  auto get_export(pjs::Str *ns, pjs::Str *name) -> int;
   auto get_source(int l) const -> const std::string&;
   auto new_loading_context() -> Context*;
   auto new_runtime_context(Context *base = nullptr) -> Context*;
@@ -99,7 +102,8 @@ private:
   Module* m_root = nullptr;
   pjs::Ref<pjs::Object> m_global_object;
   std::vector<Module*> m_modules;
-  std::map<std::string, Module*> m_module_map;
+  std::map<std::string, JSModule*> m_module_map;
+  std::map<std::string, nmi::NativeModule*> m_native_module_map;
   std::map<Listener*, ListeningPipeline> m_listeners;
   std::set<Reader*> m_readers;
   std::set<Task*> m_tasks;
@@ -111,7 +115,7 @@ private:
   static pjs::Ref<Worker> s_current;
 
   friend class pjs::RefCount<Worker>;
-  friend class Module;
+  friend class JSModule;
 };
 
 } // namespace pipy

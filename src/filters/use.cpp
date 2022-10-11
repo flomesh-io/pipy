@@ -26,6 +26,7 @@
 #include "use.hpp"
 #include "context.hpp"
 #include "module.hpp"
+#include "worker.hpp"
 #include "pipeline.hpp"
 #include "log.hpp"
 #include "pipy/nmi.h"
@@ -45,7 +46,7 @@ Use::Use(const std::string &native_module, pjs::Str *pipeline_name)
 {
 }
 
-Use::Use(Module *module, pjs::Str *pipeline_name)
+Use::Use(JSModule *module, pjs::Str *pipeline_name)
   : m_multiple(false)
   , m_pipeline_name(pipeline_name)
 {
@@ -53,7 +54,7 @@ Use::Use(Module *module, pjs::Str *pipeline_name)
 }
 
 Use::Use(
-  const std::list<Module*> &modules,
+  const std::list<JSModule*> &modules,
   pjs::Str *pipeline_name,
   pjs::Function *turn_down
 ) : m_multiple(true)
@@ -64,7 +65,7 @@ Use::Use(
 }
 
 Use::Use(
-  const std::list<Module*> &modules,
+  const std::list<JSModule*> &modules,
   pjs::Str *pipeline_name,
   pjs::Str *pipeline_name_down,
   pjs::Function *turn_down
@@ -77,7 +78,9 @@ Use::Use(
 }
 
 Use::Use(const Use &r)
-  : m_multiple(r.m_multiple)
+  : m_native(r.m_native)
+  , m_multiple(r.m_multiple)
+  , m_native_pipeline_layout(r.m_native_pipeline_layout)
   , m_stages(r.m_stages)
   , m_pipeline_name(r.m_pipeline_name)
   , m_pipeline_name_down(r.m_pipeline_name_down)
@@ -141,8 +144,9 @@ void Use::dump(Dump &d) {
 void Use::bind() {
   Filter::bind();
   if (m_native) {
-    m_native_module = new nmi::Module(m_native_module_name.c_str());
-    m_native_pipeline_layout = m_native_module->pipeline_layout(m_pipeline_name);
+    auto worker = static_cast<JSModule*>(Filter::module())->worker();
+    auto mod = worker->load_native_module(m_native_module_name);
+    m_native_pipeline_layout = mod->pipeline_layout(m_pipeline_name);
     if (!m_native_pipeline_layout) {
       if (m_pipeline_name) {
         std::string msg("cannot find pipeline with name ");
@@ -193,9 +197,10 @@ void Use::reset() {
 
 void Use::process(Event *evt) {
   if (m_native) {
-    if (m_native_pipeline) {
-      m_native_pipeline->input(evt);
+    if (!m_native_pipeline) {
+      m_native_pipeline = m_native_pipeline_layout->pipeline(Filter::context(), Filter::output());
     }
+    m_native_pipeline->input(evt);
   } else {
     if (m_stages.empty()) {
       output(evt);

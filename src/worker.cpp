@@ -224,7 +224,7 @@ void Worker::restart() {
   Log::info("[restart] Reloading codebase...");
 
   pjs::Ref<Worker> worker = make();
-  if (worker->load_module(entry) && worker->start()) {
+  if (worker->load_js_module(entry) && worker->start()) {
     current_worker->stop();
     Status::local.version = codebase->version();
     Status::local.update();
@@ -307,22 +307,30 @@ bool Worker::handling_signal(int signal) {
   return false;
 }
 
-auto Worker::find_module(const std::string &path) -> Module* {
+auto Worker::find_js_module(const std::string &path) -> JSModule* {
   auto i = m_module_map.find(path);
   if (i == m_module_map.end()) return nullptr;
   return i->second;
 }
 
-auto Worker::load_module(const std::string &path) -> Module* {
+auto Worker::load_js_module(const std::string &path) -> JSModule* {
   auto i = m_module_map.find(path);
   if (i != m_module_map.end()) return i->second;
   auto l = m_modules.size();
-  auto mod = new Module(this, l);
-  m_module_map[path] = mod;
-  m_modules.push_back(mod);
-  if (!m_root) m_root = mod;
-  if (!mod->load(path)) return nullptr;
-  return mod;
+  auto m = new JSModule(this, l);
+  m_modules.push_back(m);
+  m_module_map[path] = m;
+  if (!m_root) m_root = m;
+  if (!m->load(path)) return nullptr;
+  return m;
+}
+
+auto Worker::load_native_module(const std::string &path) -> nmi::NativeModule* {
+  auto i = m_native_module_map.find(path);
+  if (i != m_native_module_map.end()) return i->second;
+  auto m = nmi::NativeModule::load(path);
+  m_native_module_map[path] = m;
+  return m;
 }
 
 void Worker::add_listener(Listener *listener, PipelineLayout *layout, const Listener::Options &options) {
@@ -346,25 +354,28 @@ void Worker::add_export(pjs::Str *ns, pjs::Str *name, Module *module) {
     std::string msg("duplicated variable exporting name ");
     msg += name->str();
     msg += " from ";
-    msg += module->path();
+    msg += module->m_path;
     throw std::runtime_error(msg);
   }
   names[name] = module;
 }
 
-auto Worker::get_export(pjs::Str *ns, pjs::Str *name) -> Module* {
+void Worker::add_export(pjs::Str *ns, pjs::Str *name, nmi::NativeModule *module) {
+}
+
+auto Worker::get_export(pjs::Str *ns, pjs::Str *name) -> int {
   auto i = m_namespaces.find(ns);
-  if (i == m_namespaces.end()) return nullptr;
+  if (i == m_namespaces.end()) return -1;
   auto j = i->second.find(name);
-  if (j == i->second.end()) return nullptr;
-  return j->second;
+  if (j == i->second.end()) return -1;
+  return j->second->m_index;
 }
 
 auto Worker::get_source(int l) const -> const std::string& {
   static std::string empty;
   if (l >= 0) {
     if (l < m_modules.size()) {
-      return m_modules[l]->source();
+      return m_modules[l]->m_source;
     }
   } else {
     for (const auto &p : m_solved_files) {
@@ -455,8 +466,13 @@ bool Worker::solve(pjs::Context &ctx, pjs::Str *filename, pjs::Value &result) {
 
 bool Worker::start() {
   try {
-    for (auto i : m_modules) i->bind_exports();
-    for (auto i : m_modules) i->bind_imports();
+    nmi::NativeModule::for_each(
+      [this](nmi::NativeModule *m) {
+        m_modules.push_back(m);
+      }
+    );
+    for (auto i : m_modules) i->bind_exports(this);
+    for (auto i : m_modules) i->bind_imports(this);
     for (auto i : m_modules) i->make_pipelines();
     for (auto i : m_modules) i->bind_pipelines();
   } catch (std::runtime_error &err) {
@@ -519,14 +535,14 @@ bool Worker::start() {
 void Worker::stop() {
   for (auto *reader : m_readers) delete reader;
   for (auto *task : m_tasks) delete task;
-  for (auto *mod : m_modules) if (mod) mod->unload();
+  for (auto i : m_module_map) i.second->unload();
   if (s_current == this) s_current = nullptr;
 }
 
 void Worker::remove_module(int i) {
   auto mod = m_modules[i];
   m_modules[i] = nullptr;
-  m_module_map.erase(mod->path());
+  m_module_map.erase(mod->m_path);
 }
 
 } // namespace pipy

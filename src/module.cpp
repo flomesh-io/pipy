@@ -63,39 +63,39 @@ void ModuleBase::shutdown() {
 }
 
 //
-// Module
+// JSModule
 //
 
-Module::Module(Worker *worker, int index)
-  : ModuleBase(index)
-  , m_worker(worker)
+JSModule::JSModule(Worker *worker, int index)
+  : m_worker(worker)
   , m_imports(new pjs::Expr::Imports)
 {
+  m_index = index;
   Log::debug("[module   %p] ++ index = %d", this, index);
 }
 
-Module::~Module() {
+JSModule::~JSModule() {
   Log::debug("[module   %p] -- index = %d", this, index());
   m_worker->remove_module(index());
 }
 
-auto Module::find_named_pipeline(pjs::Str *name) -> PipelineLayout* {
+auto JSModule::find_named_pipeline(pjs::Str *name) -> PipelineLayout* {
   auto i = m_named_pipelines.find(name);
   if (i == m_named_pipelines.end()) return nullptr;
   return i->second;
 }
 
-auto Module::find_indexed_pipeline(int index) -> PipelineLayout* {
+auto JSModule::find_indexed_pipeline(int index) -> PipelineLayout* {
   auto i = m_indexed_pipelines.find(index);
   if (i == m_indexed_pipelines.end()) return nullptr;
   return i->second;
 }
 
-auto Module::new_context(Context *base) -> Context* {
+auto JSModule::new_context(Context *base) -> Context* {
   return m_worker->new_runtime_context(base);
 }
 
-bool Module::load(const std::string &path) {
+bool JSModule::load(const std::string &path) {
   auto data = Codebase::current()->get(path);
   if (!data) {
     Log::error("[pjs] Cannot open script at %s", path.c_str());
@@ -183,13 +183,12 @@ bool Module::load(const std::string &path) {
 
   m_path = path;
   m_name = pjs::Str::make(path);
-  m_filename = pjs::Str::make(path);
   m_configuration = config;
 
   return true;
 }
 
-void Module::unload() {
+void JSModule::unload() {
   retain();
   ModuleBase::shutdown();
   m_entrance_pipeline = nullptr;
@@ -198,19 +197,19 @@ void Module::unload() {
   release();
 }
 
-void Module::bind_exports() {
-  m_configuration->bind_exports(m_worker, this);
+void JSModule::bind_exports(Worker *worker) {
+  m_configuration->bind_exports(worker, this);
 }
 
-void Module::bind_imports() {
-  m_configuration->bind_imports(m_worker, this, m_imports.get());
+void JSModule::bind_imports(Worker *worker) {
+  m_configuration->bind_imports(worker, this, m_imports.get());
 }
 
-void Module::make_pipelines() {
+void JSModule::make_pipelines() {
   m_configuration->apply(this);
 }
 
-void Module::bind_pipelines() {
+void JSModule::bind_pipelines() {
   ModuleBase::for_each_pipeline(
     [](PipelineLayout *p) {
       p->bind();

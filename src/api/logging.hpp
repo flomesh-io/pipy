@@ -105,7 +105,7 @@ public:
 
     class Module : public ModuleBase {
     public:
-      Module() : ModuleBase(0, "Logger::FileTarget") {}
+      Module() : ModuleBase("Logger::FileTarget") {}
       virtual auto new_context(pipy::Context *base) -> pipy::Context* override {
         return new Context();
       }
@@ -171,7 +171,7 @@ public:
 
     class Module : public ModuleBase {
     public:
-      Module() : ModuleBase(0, "Logger::HTTPTarget") {}
+      Module() : ModuleBase("Logger::HTTPTarget") {}
       virtual auto new_context(pipy::Context *base) -> pipy::Context* override {
         return new Context();
       }

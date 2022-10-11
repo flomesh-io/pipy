@@ -25,6 +25,7 @@
 
 #include "nmi.hpp"
 #include "list.hpp"
+#include "worker.hpp"
 
 #include <cstdarg>
 #include <algorithm>
@@ -34,6 +35,8 @@
 
 namespace pipy {
 namespace nmi {
+
+static Data::Producer s_dp("NMI");
 
 //
 // Value
@@ -119,21 +122,42 @@ void Pipeline::input(Event *evt) {
   LocalRefPool lrf;
   auto e = nmi::s_values.alloc(evt);
   lrf.add(e);
-  m_process(m_id, e);
+  m_process(m_id, m_user_ptr, e);
 }
 
 void Pipeline::free() {
-  m_free(m_id);
+  m_free(m_id, m_user_ptr);
   m_pipeline_table.free(m_id);
   delete this;
 }
 
 //
-// Module
+// NativeModule
 //
 
-Module::Module(const char *filename) {
-  auto *handle = dlopen(filename, RTLD_NOW);
+std::list<NativeModule*> NativeModule::m_native_modules;
+
+auto NativeModule::load(const std::string &filename) -> NativeModule* {
+  for (auto *m : m_native_modules) {
+    if (m->m_path == filename) return m;
+  }
+  auto *m = new NativeModule(filename);
+  m->m_index = m_native_modules.size();
+  m->m_path = filename;
+  m_native_modules.push_back(m);
+  return m;
+}
+
+void NativeModule::for_each(const std::function<void(NativeModule*)> &cb) {
+  for (auto *m : m_native_modules) {
+    cb(m);
+  }
+}
+
+NativeModule::NativeModule(const std::string &filename)
+  : m_filename(pjs::Str::make(filename))
+{
+  auto *handle = dlopen(filename.c_str(), RTLD_NOW);
   if (!handle) {
     std::string msg("cannot load native module ");
     throw std::runtime_error(msg + filename);
@@ -204,7 +228,7 @@ Module::Module(const char *filename) {
   }
 }
 
-auto Module::pipeline_layout(pjs::Str *name) -> PipelineLayout* {
+auto NativeModule::pipeline_layout(pjs::Str *name) -> PipelineLayout* {
   if (name) {
     auto i = m_pipeline_layouts.find(name);
     if (i == m_pipeline_layouts.end()) return nullptr;
@@ -212,6 +236,18 @@ auto Module::pipeline_layout(pjs::Str *name) -> PipelineLayout* {
   } else {
     return m_entry_pipeline;
   }
+}
+
+void NativeModule::bind_exports(Worker *worker) {
+  for (auto &i : m_exports) {
+    worker->add_export(i.ns, i.name, this);
+  }
+}
+
+auto NativeModule::new_context_data(pjs::Object *prototype) -> pjs::Object* {
+  auto obj = new ContextDataBase(m_filename);
+  m_context_class->init(obj, prototype);
+  return obj;
 }
 
 } // namespace nmi
@@ -648,4 +684,41 @@ pjs_value pjs_array_splice(pjs_value arr, int pos, int del_cnt, int ins_cnt, ...
     }
   }
   return 0;
+}
+
+pjs_value pipy_Data_new(const char *buf, int len) {
+  auto i = nmi::s_values.alloc(Data::make(buf, len, &nmi::s_dp));
+  nmi::LocalRefPool::add(i);
+  return i;
+}
+
+pjs_value pipy_Data_push(pjs_value obj, pjs_value data) {
+}
+
+pjs_value pipy_Data_pop(pjs_value obj, int len) {
+}
+
+pjs_value pipy_Data_shift(pjs_value obj, int len) {
+}
+
+int pipy_Data_get_size(pjs_value obj) {
+  if (auto *pv = nmi::s_values.get(obj)) {
+    auto &v = pv->v;
+    if (v.is_instance_of<pipy::Data>()) {
+      return v.as<pipy::Data>()->size();
+    }
+  }
+  return -1;
+}
+
+int pipy_Data_get_data(pjs_value obj, char *buf, int len) {
+  if (auto *pv = nmi::s_values.get(obj)) {
+    auto &v = pv->v;
+    if (v.is_instance_of<pipy::Data>()) {
+      auto data = v.as<pipy::Data>();
+      data->to_bytes((uint8_t *)buf, len);
+      return data->size();
+    }
+  }
+  return -1;
 }

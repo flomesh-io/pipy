@@ -33,7 +33,7 @@
 
 namespace pipy {
 
-class Module;
+class JSModule;
 
 //
 // Use
@@ -47,18 +47,18 @@ public:
   );
 
   Use(
-    Module *module,
+    JSModule *module,
     pjs::Str *pipeline_name
   );
 
   Use(
-    const std::list<Module*> &modules,
+    const std::list<JSModule*> &modules,
     pjs::Str *pipeline_name,
     pjs::Function *turn_down = nullptr
   );
 
   Use(
-    const std::list<Module*> &modules,
+    const std::list<JSModule*> &modules,
     pjs::Str *pipeline_name,
     pjs::Str *pipeline_name_down,
     pjs::Function *turn_down = nullptr
@@ -107,10 +107,9 @@ private:
   bool m_native = false;
   bool m_multiple = false;
   std::string m_native_module_name;
-  nmi::Module* m_native_module = nullptr;
   nmi::PipelineLayout* m_native_pipeline_layout = nullptr;
   nmi::Pipeline* m_native_pipeline = nullptr;
-  std::list<Module*> m_modules;
+  std::list<JSModule*> m_modules;
   std::list<Stage> m_stages;
   pjs::Ref<pjs::Str> m_pipeline_name;
   pjs::Ref<pjs::Str> m_pipeline_name_down;

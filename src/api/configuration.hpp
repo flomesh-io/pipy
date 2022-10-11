@@ -39,8 +39,9 @@ namespace pipy {
 class Configuration;
 class Filter;
 class Graph;
-class Module;
 class Worker;
+class Module;
+class JSModule;
 
 //
 // FilterConfigurator
@@ -56,7 +57,7 @@ public:
   void accept_socks(pjs::Function *on_connect);
   void accept_tls(pjs::Object *options);
   void branch(int count, pjs::Function **conds, const pjs::Value *layout);
-  void chain(const std::list<Module*> modules);
+  void chain(const std::list<JSModule*> modules);
   void chain_next();
   void compress_http(pjs::Object *options);
   void compress_message(pjs::Object *options);
@@ -117,10 +118,10 @@ public:
   void throttle_concurrency(pjs::Object *quota);
   void throttle_data_rate(pjs::Object *quota);
   void throttle_message_rate(pjs::Object *quota);
-  void use(Module *module, pjs::Str *pipeline);
+  void use(JSModule *module, pjs::Str *pipeline);
   void use(const std::string &native_module, pjs::Str *pipeline);
-  void use(const std::list<Module*> modules, pjs::Str *pipeline, pjs::Function *when);
-  void use(const std::list<Module*> modules, pjs::Str *pipeline, pjs::Str *pipeline_down, pjs::Function *when);
+  void use(const std::list<JSModule*> modules, pjs::Str *pipeline, pjs::Function *when);
+  void use(const std::list<JSModule*> modules, pjs::Str *pipeline, pjs::Str *pipeline_down, pjs::Function *when);
   void wait(pjs::Function *condition, pjs::Object *options);
 
   void to(pjs::Str *layout_name);
@@ -191,7 +192,7 @@ public:
   void bind_pipelines();
   void bind_exports(Worker *worker, Module *module);
   void bind_imports(Worker *worker, Module *module, pjs::Expr::Imports *imports);
-  void apply(Module *module);
+  void apply(JSModule *module);
   void draw(Graph &g);
 
 private:

@@ -720,6 +720,17 @@ public:
     }
   }
 
+  void to_bytes(uint8_t *buf, size_t len) const {
+    auto ptr = buf;
+    for (auto view = m_head; view && len > 0; view = view->next) {
+      auto length = view->length;
+      auto n = length < len ? length : len;
+      std::memcpy(ptr, view->chunk->data + view->offset, n);
+      len -= n;
+      ptr += n;
+    }
+  }
+
   void to_bytes(std::vector<uint8_t> &buf) const {
     buf.resize(size());
     to_bytes(&buf[0]);

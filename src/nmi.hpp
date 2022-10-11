@@ -29,16 +29,22 @@
 #include "pipy/nmi.h"
 #include "pjs/pjs.hpp"
 #include "context.hpp"
+#include "module.hpp"
 #include "event.hpp"
 
+#include <list>
+#include <string>
 #include <vector>
 
 namespace pipy {
+
+class Worker;
+
 namespace nmi {
 
 class Pipeline;
 class PipelineLayout;
-class Module;
+class NativeModule;
 
 //
 // Table
@@ -139,7 +145,6 @@ public:
   }
 };
 
-
 //
 // Pipeline
 //
@@ -157,14 +162,19 @@ public:
 private:
   Pipeline(
     Context *ctx, EventTarget::Input *out,
-    void (*process)(pipy_pipeline ppl, pjs_value evt),
-    void (*free)(pipy_pipeline ppl)
-  );
+    void (*process)(pipy_pipeline ppl, void  *user_ptr, pjs_value evt),
+    void (*free)(pipy_pipeline ppl, void  *user_ptr)
+  ) : m_process(process)
+    , m_free(free)
+    , m_id(m_pipeline_table.alloc(this))
+    , m_context(ctx)
+    , m_output(out) {}
 
-  void (*m_process)(pipy_pipeline ppl, pjs_value evt);
-  void (*m_free   )(pipy_pipeline ppl);
+  void (*m_process)(pipy_pipeline ppl, void  *user_ptr, pjs_value evt);
+  void (*m_free   )(pipy_pipeline ppl, void  *user_ptr);
 
   int m_id;
+  void* m_user_ptr = nullptr;
   pjs::Ref<Context> m_context;
   pjs::Ref<EventTarget::Input> m_output;
 
@@ -173,52 +183,66 @@ private:
   friend class PipelineLayout;
 };
 
-
 //
 // PipelineLayout
 //
 
 class PipelineLayout {
 public:
-  PipelineLayout(Module *mod, struct pipy_pipeline_def *def)
+  PipelineLayout(NativeModule *mod, struct pipy_pipeline_def *def)
     : m_module(mod)
     , m_def(*def) {}
 
   auto pipeline(Context *ctx, EventTarget::Input *out) -> Pipeline* {
-    return new Pipeline(
+    auto *p = new Pipeline(
       ctx, out,
       m_def.pipeline_process,
       m_def.pipeline_free
     );
+    m_def.pipeline_init(p->m_id, &p->m_user_ptr);
+    return p;
   }
 
 private:
-  Module* m_module;
+  NativeModule* m_module;
   struct pipy_pipeline_def m_def;
 
   friend class Pipeline;
 };
 
 //
-// Module
+// NativeModule
 //
 
-class Module {
+class NativeModule : public pipy::Module {
 public:
-  Module(const char *filename);
+  static auto load(const std::string &filename) -> NativeModule*;
+  static void for_each(const std::function<void(NativeModule*)> &cb);
 
   auto pipeline_layout(pjs::Str *name) -> PipelineLayout*;
 
 private:
+  NativeModule(const std::string &filename);
+
   struct Export {
     pjs::Ref<pjs::Str> ns;
     pjs::Ref<pjs::Str> name;
   };
 
+  pjs::Ref<pjs::Str> m_filename;
   pjs::Ref<pjs::Class> m_context_class;
   std::list<Export> m_exports;
   std::map<pjs::Ref<pjs::Str>, PipelineLayout*> m_pipeline_layouts;
   PipelineLayout* m_entry_pipeline = nullptr;
+
+  virtual void bind_exports(Worker *worker) override;
+  virtual void bind_imports(Worker *worker) override {}
+  virtual void make_pipelines() override {}
+  virtual void bind_pipelines() override {}
+  virtual auto new_context(Context *base) -> Context* override { return nullptr; }
+  virtual auto new_context_data(pjs::Object *prototype) -> pjs::Object* override;
+
+  static std::list<NativeModule*> m_native_modules;
 };
 
 } // nmi

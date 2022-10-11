@@ -32,7 +32,7 @@ namespace pipy {
 // Chain
 //
 
-Chain::Chain(const std::list<Module*> &modules)
+Chain::Chain(const std::list<JSModule*> &modules)
   : m_modules(modules)
 {
 }
