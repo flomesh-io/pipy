@@ -723,7 +723,10 @@ protected:
 // Class
 //
 
-class Class : public RefCount<Class> {
+class Class :
+  public RefCount<Class>,
+  public Pooled<Class> // TODO: crashes when reload on Ubuntu without being pooled, why?
+{
 public:
   static auto make(const std::string &name, Class *super, const std::list<Field*> &fields) -> Class* {
     return new Class(name, super, fields);
