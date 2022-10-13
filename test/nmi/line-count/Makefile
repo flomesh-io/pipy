@@ -1,0 +1,23 @@
+ROOT_DIR = $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
+PIPY_DIR = $(abspath ${ROOT_DIR}/../../..)
+
+BIN_DIR = $(abspath ${PIPY_DIR}/bin)
+INC_DIR = $(abspath ${PIPY_DIR}/include)
+
+PRODUCT = ${BIN_DIR}/line-count.so
+
+all: ${PRODUCT}
+
+${PRODUCT}: ${ROOT_DIR}/line-count.c
+	clang -I${INC_DIR} -shared $< -o $@
+
+clean:
+	rm ${PRODUCT}
+
+test:
+	${BIN_DIR}/pipy -e " \
+	  pipy() \
+	  .import({ __lineCount: 'line-count' }) \
+	  .read('${ROOT_DIR}/line-count.c') \
+	  .use('${PRODUCT}') \
+	  .handleStreamEnd(() => console.log('Line count:', __lineCount))"

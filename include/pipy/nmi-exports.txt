@@ -57,5 +57,8 @@
     pipy_MessageEnd_get_payload;
     pipy_StreamEnd_new;
     pipy_StreamEnd_get_error;
+    pipy_output_event;
+    pipy_get_variable;
+    pipy_set_variable;
   };
 };

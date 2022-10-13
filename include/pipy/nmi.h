@@ -96,8 +96,8 @@ typedef int pipy_pipeline;
 struct pipy_variable_def {
   int id;
   const char *name;
-  const char *export_to;
-  pjs_value init_value;
+  const char *ns;
+  pjs_value value;
 };
 
 struct pipy_pipeline_def {
@@ -107,12 +107,12 @@ struct pipy_pipeline_def {
   void (*pipeline_process)(pipy_pipeline ppl, void  *user_ptr, pjs_value evt);
 };
 
-struct pipy_native_module {
+struct pipy_module_def {
   struct pipy_variable_def **variables;
   struct pipy_pipeline_def **pipelines;
 };
 
-typedef struct pipy_native_module* (*pipy_module_init_fn)();
+typedef struct pipy_module_def* (*pipy_module_init_fn)();
 
 extern pjs_value pipy_Data_new(const char *buf, int len);
 extern pjs_value pipy_Data_push(pjs_value obj, pjs_value data);
@@ -128,9 +128,9 @@ extern pjs_value pipy_MessageEnd_get_payload(pjs_value obj);
 extern pjs_value pipy_StreamEnd_new(pjs_value error);
 extern pjs_value pipy_StreamEnd_get_error(pjs_value obj);
 
-extern void  pipy_output_event(pipy_pipeline ppl, pjs_value evt);
-extern void  pipy_get_variable(pipy_pipeline ppl, int id, pjs_value value);
-extern void  pipy_set_variable(pipy_pipeline ppl, int id, pjs_value value);
+extern void pipy_output_event(pipy_pipeline ppl, pjs_value evt);
+extern void pipy_get_variable(pipy_pipeline ppl, int id, pjs_value value);
+extern void pipy_set_variable(pipy_pipeline ppl, int id, pjs_value value);
 
 #ifdef __cplusplus
 } /* extern "C" */

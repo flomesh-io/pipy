@@ -28,6 +28,7 @@
 #include "worker.hpp"
 
 #include <cstdarg>
+#include <cstring>
 #include <algorithm>
 #include <list>
 
@@ -122,11 +123,19 @@ void Pipeline::input(Event *evt) {
   LocalRefPool lrf;
   auto e = nmi::s_values.alloc(evt);
   lrf.add(e);
-  m_process(m_id, m_user_ptr, e);
+  NativeModule::set_current(m_layout->m_module);
+  m_layout->m_def.pipeline_process(m_id, m_user_ptr, e);
+  NativeModule::set_current(nullptr);
+}
+
+void Pipeline::output(Event *evt) {
+  m_output->input(evt);
 }
 
 void Pipeline::free() {
-  m_free(m_id, m_user_ptr);
+  NativeModule::set_current(m_layout->m_module);
+  m_layout->m_def.pipeline_free(m_id, m_user_ptr);
+  NativeModule::set_current(nullptr);
   m_pipeline_table.free(m_id);
   delete this;
 }
@@ -135,28 +144,31 @@ void Pipeline::free() {
 // NativeModule
 //
 
-std::list<NativeModule*> NativeModule::m_native_modules;
+std::vector<NativeModule*> NativeModule::m_native_modules;
+NativeModule* NativeModule::m_current = nullptr;
 
-auto NativeModule::load(const std::string &filename) -> NativeModule* {
+auto NativeModule::find(const std::string &filename) -> NativeModule* {
   for (auto *m : m_native_modules) {
-    if (m->m_path == filename) return m;
+    if (m && m->m_path == filename) return m;
   }
-  auto *m = new NativeModule(filename);
-  m->m_index = m_native_modules.size();
-  m->m_path = filename;
-  m_native_modules.push_back(m);
+  return nullptr;
+}
+
+auto NativeModule::load(const std::string &filename, int index) -> NativeModule* {
+  auto *m = new NativeModule(index, filename);
+  if (m_native_modules.size() <= index) {
+    m_native_modules.resize(index + 1);
+  }
+  m_native_modules[index] = m;
   return m;
 }
 
-void NativeModule::for_each(const std::function<void(NativeModule*)> &cb) {
-  for (auto *m : m_native_modules) {
-    cb(m);
-  }
-}
-
-NativeModule::NativeModule(const std::string &filename)
-  : m_filename(pjs::Str::make(filename))
+NativeModule::NativeModule(int index, const std::string &filename)
+  : Module(index)
+  , m_filename(pjs::Str::make(filename))
 {
+  m_path = filename;
+
   auto *handle = dlopen(filename.c_str(), RTLD_NOW);
   if (!handle) {
     std::string msg("cannot load native module ");
@@ -169,14 +181,14 @@ NativeModule::NativeModule(const std::string &filename)
     throw std::runtime_error(msg + filename);
   }
 
-  struct pipy_native_module *mod = (*(pipy_module_init_fn)init_fn)();
+  struct pipy_module_def *mod = (*(pipy_module_init_fn)init_fn)();
   if (!mod) {
     std::string msg("pipy_module_init() failed in native module ");
     throw std::runtime_error(msg + filename);
   }
 
   std::list<pjs::Field*> fields;
-  int variable_id = 0;
+
   for (const auto *p = mod->variables; *p; p++) {
     auto *vd = *p;
     std::string name(vd->name);
@@ -189,15 +201,15 @@ NativeModule::NativeModule(const std::string &filename)
         throw std::runtime_error(msg + filename);
       }
     }
-    auto *v = s_values.get(vd->init_value);
+    auto *v = s_values.get(vd->value);
     fields.push_back(
       pjs::Variable::make(
         name, v ? v->v : pjs::Value::undefined,
         pjs::Field::Enumerable | pjs::Field::Writable,
-        variable_id++
+        vd->id
       )
     );
-    if (auto *ns = vd->export_to) {
+    if (auto *ns = vd->ns) {
       m_exports.emplace_back();
       m_exports.back().ns = pjs::Str::make(ns);
       m_exports.back().name = pjs::Str::make(name);
@@ -274,6 +286,7 @@ pjs_value pjs_number(double n) {
 }
 
 pjs_value pjs_string(const char *s, int len) {
+  if (len < 0) len = std::strlen(s);
   auto i = nmi::s_values.alloc(pjs::Str::make(s, len));
   nmi::LocalRefPool::add(i);
   return i;
@@ -721,4 +734,45 @@ int pipy_Data_get_data(pjs_value obj, char *buf, int len) {
     }
   }
   return -1;
+}
+
+void pipy_output_event(pipy_pipeline ppl, pjs_value evt) {
+  if (auto *m = nmi::NativeModule::current()) {
+    if (auto *p = nmi::Pipeline::get(ppl)) {
+      if (auto *pv = nmi::s_values.get(evt)) {
+        auto &v = pv->v;
+        if (v.is_instance_of<pipy::Event>()) {
+          p->output(v.as<pipy::Event>());
+        }
+      }
+    }
+  }
+}
+
+void pipy_get_variable(pipy_pipeline ppl, int id, pjs_value value) {
+  if (auto *m = nmi::NativeModule::current()) {
+    if (auto *p = nmi::Pipeline::get(ppl)) {
+      if (auto *pv = nmi::s_values.get(value)) {
+        auto &v = pv->v;
+        auto ctx = p->context();
+        if (auto *obj = ctx->data(m->index())) {
+          obj->type()->get(obj, id, v);
+        }
+      }
+    }
+  }
+}
+
+void pipy_set_variable(pipy_pipeline ppl, int id, pjs_value value) {
+  if (auto *m = nmi::NativeModule::current()) {
+    if (auto *p = nmi::Pipeline::get(ppl)) {
+      if (auto *pv = nmi::s_values.get(value)) {
+        auto &v = pv->v;
+        auto ctx = p->context();
+        if (auto *obj = ctx->data(m->index())) {
+          obj->type()->set(obj, id, v);
+        }
+      }
+    }
+  }
 }

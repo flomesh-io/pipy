@@ -67,10 +67,10 @@ void ModuleBase::shutdown() {
 //
 
 JSModule::JSModule(Worker *worker, int index)
-  : m_worker(worker)
+  : Module(index)
+  , m_worker(worker)
   , m_imports(new pjs::Expr::Imports)
 {
-  m_index = index;
   Log::debug("[module   %p] ++ index = %d", this, index);
 }
 

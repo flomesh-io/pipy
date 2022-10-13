@@ -77,7 +77,9 @@ public:
   auto source() const -> const std::string& { return m_source; }
 
 protected:
-  int m_index = -1;
+  Module(int index) : m_index(index) {}
+
+  int m_index;
   std::string m_path;
   std::string m_source;
 
@@ -87,6 +89,7 @@ private:
   virtual void make_pipelines() = 0;
   virtual void bind_pipelines() = 0;
   virtual auto new_context_data(pjs::Object *prototype) -> pjs::Object* = 0;
+  virtual void unload() = 0;
 
   friend class Configuration;
   friend class Worker;
@@ -109,7 +112,7 @@ public:
 
 private:
   bool load(const std::string &path);
-  void unload();
+  virtual void unload() override;
 
   virtual void bind_exports(Worker *worker) override;
   virtual void bind_imports(Worker *worker) override;
@@ -123,7 +126,7 @@ private:
   }
 
 private:
-  JSModule(Worker *worker, int l);
+  JSModule(Worker *worker, int index);
   ~JSModule();
 
   pjs::Ref<Worker> m_worker;

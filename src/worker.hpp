@@ -69,7 +69,6 @@ public:
   void add_reader(Reader *reader);
   void add_task(Task *task);
   void add_export(pjs::Str *ns, pjs::Str *name, Module *module);
-  void add_export(pjs::Str *ns, pjs::Str *name, nmi::NativeModule *module);
   auto get_export(pjs::Str *ns, pjs::Str *name) -> int;
   auto get_source(int l) const -> const std::string&;
   auto new_loading_context() -> Context*;
@@ -110,6 +109,8 @@ private:
   std::map<pjs::Ref<pjs::Str>, Namespace> m_namespaces;
   std::map<pjs::Ref<pjs::Str>, SolvedFile> m_solved_files;
 
+  auto new_module_index() -> int;
+  void add_module(Module *m);
   void remove_module(int i);
 
   static pjs::Ref<Worker> s_current;

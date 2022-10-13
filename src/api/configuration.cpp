@@ -388,8 +388,8 @@ void FilterConfigurator::use(JSModule *module, pjs::Str *pipeline) {
   append_filter(new Use(module, pipeline));
 }
 
-void FilterConfigurator::use(const std::string &native_module, pjs::Str *pipeline) {
-  append_filter(new Use(native_module, pipeline));
+void FilterConfigurator::use(nmi::NativeModule *module, pjs::Str *pipeline) {
+  append_filter(new Use(module, pipeline));
 }
 
 void FilterConfigurator::use(const std::list<JSModule*> modules, pjs::Str *pipeline, pjs::Function *when) {
@@ -1893,7 +1893,8 @@ template<> void ClassDef<FilterConfigurator>::init() {
     } else if (ctx.arguments(1, &module, &pipeline)) {
       if (utils::ends_with(module, s_dot_so)) {
         try {
-          thiz->as<FilterConfigurator>()->use(module, pipeline);
+          auto mod = worker->load_native_module(module);
+          thiz->as<FilterConfigurator>()->use(mod, pipeline);
           result.set(thiz);
         } catch (std::runtime_error &err) {
           ctx.error(err);

@@ -37,3 +37,6 @@ _pjs_array_push
 _pjs_array_pop
 _pjs_array_shift
 _pjs_array_unshift
+_pipy_output_event
+_pipy_get_variable
+_pipy_set_variable

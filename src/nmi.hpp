@@ -146,83 +146,20 @@ public:
 };
 
 //
-// Pipeline
-//
-
-class Pipeline : public pjs::Pooled<Pipeline> {
-public:
-  static auto get(int id) -> Pipeline* {
-    auto *pp = m_pipeline_table.get(id);
-    return pp ? *pp : nullptr;
-  }
-
-  void input(Event *evt);
-  void free();
-
-private:
-  Pipeline(
-    Context *ctx, EventTarget::Input *out,
-    void (*process)(pipy_pipeline ppl, void  *user_ptr, pjs_value evt),
-    void (*free)(pipy_pipeline ppl, void  *user_ptr)
-  ) : m_process(process)
-    , m_free(free)
-    , m_id(m_pipeline_table.alloc(this))
-    , m_context(ctx)
-    , m_output(out) {}
-
-  void (*m_process)(pipy_pipeline ppl, void  *user_ptr, pjs_value evt);
-  void (*m_free   )(pipy_pipeline ppl, void  *user_ptr);
-
-  int m_id;
-  void* m_user_ptr = nullptr;
-  pjs::Ref<Context> m_context;
-  pjs::Ref<EventTarget::Input> m_output;
-
-  static Table<Pipeline*> m_pipeline_table;
-
-  friend class PipelineLayout;
-};
-
-//
-// PipelineLayout
-//
-
-class PipelineLayout {
-public:
-  PipelineLayout(NativeModule *mod, struct pipy_pipeline_def *def)
-    : m_module(mod)
-    , m_def(*def) {}
-
-  auto pipeline(Context *ctx, EventTarget::Input *out) -> Pipeline* {
-    auto *p = new Pipeline(
-      ctx, out,
-      m_def.pipeline_process,
-      m_def.pipeline_free
-    );
-    m_def.pipeline_init(p->m_id, &p->m_user_ptr);
-    return p;
-  }
-
-private:
-  NativeModule* m_module;
-  struct pipy_pipeline_def m_def;
-
-  friend class Pipeline;
-};
-
-//
 // NativeModule
 //
 
 class NativeModule : public pipy::Module {
 public:
-  static auto load(const std::string &filename) -> NativeModule*;
-  static void for_each(const std::function<void(NativeModule*)> &cb);
+  static auto find(const std::string &filename) -> NativeModule*;
+  static auto load(const std::string &filename, int index) -> NativeModule*;
+  static auto current() -> NativeModule* { return m_current; }
+  static void set_current(NativeModule *m) { m_current = m; }
 
   auto pipeline_layout(pjs::Str *name) -> PipelineLayout*;
 
 private:
-  NativeModule(const std::string &filename);
+  NativeModule(int index, const std::string &filename);
 
   struct Export {
     pjs::Ref<pjs::Str> ns;
@@ -241,9 +178,73 @@ private:
   virtual void bind_pipelines() override {}
   virtual auto new_context(Context *base) -> Context* override { return nullptr; }
   virtual auto new_context_data(pjs::Object *prototype) -> pjs::Object* override;
+  virtual void unload() override {}
 
-  static std::list<NativeModule*> m_native_modules;
+  static std::vector<NativeModule*> m_native_modules;
+  static NativeModule* m_current;
 };
+
+//
+// PipelineLayout
+//
+
+class PipelineLayout {
+public:
+  PipelineLayout(NativeModule *mod, struct pipy_pipeline_def *def)
+    : m_module(mod)
+    , m_def(*def) {}
+
+private:
+  NativeModule* m_module;
+  struct pipy_pipeline_def m_def;
+
+  friend class Pipeline;
+};
+
+//
+// Pipeline
+//
+
+class Pipeline : public pjs::Pooled<Pipeline> {
+public:
+  static auto get(int id) -> Pipeline* {
+    auto *pp = m_pipeline_table.get(id);
+    return pp ? *pp : nullptr;
+  }
+
+  static auto make(PipelineLayout *layout, Context *ctx, EventTarget::Input *out) -> Pipeline* {
+    return new Pipeline(layout, ctx, out);
+  }
+
+  auto context() -> Context* { return m_context; }
+  void input(Event *evt);
+  void output(Event *evt);
+  void free();
+
+private:
+  Pipeline(PipelineLayout *layout, Context *ctx, EventTarget::Input *out)
+    : m_layout(layout)
+    , m_id(m_pipeline_table.alloc(this))
+    , m_context(ctx)
+    , m_output(out)
+  {
+    NativeModule::set_current(layout->m_module);
+    layout->m_def.pipeline_init(m_id, &m_user_ptr);
+    NativeModule::set_current(nullptr);
+  }
+
+  PipelineLayout* m_layout;
+  int m_id;
+  void* m_user_ptr = nullptr;
+  pjs::Ref<Context> m_context;
+  pjs::Ref<EventTarget::Input> m_output;
+
+  static Table<Pipeline*> m_pipeline_table;
+
+  friend class PipelineLayout;
+};
+
+
 
 } // nmi
 } // pipy

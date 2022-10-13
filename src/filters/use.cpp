@@ -39,18 +39,19 @@ namespace pipy {
 // Use
 //
 
-Use::Use(const std::string &native_module, pjs::Str *pipeline_name)
-  : m_native(true)
-  , m_native_module_name(native_module)
-  , m_pipeline_name(pipeline_name)
-{
-}
-
 Use::Use(JSModule *module, pjs::Str *pipeline_name)
   : m_multiple(false)
   , m_pipeline_name(pipeline_name)
 {
   m_modules.push_back(module);
+}
+
+Use::Use(nmi::NativeModule *module, pjs::Str *pipeline_name)
+  : m_native(true)
+  , m_multiple(false)
+  , m_native_module(module)
+  , m_pipeline_name(pipeline_name)
+{
 }
 
 Use::Use(
@@ -113,7 +114,7 @@ void Use::dump(Dump &d) {
   Filter::dump(d);
   if (m_native) {
     d.name = "use ";
-    d.name += m_native_module_name;
+    d.name += m_native_module->path();
     if (m_pipeline_name) {
       d.name += " [";
       d.name += m_pipeline_name->str();
@@ -144,16 +145,14 @@ void Use::dump(Dump &d) {
 void Use::bind() {
   Filter::bind();
   if (m_native) {
-    auto worker = static_cast<JSModule*>(Filter::module())->worker();
-    auto mod = worker->load_native_module(m_native_module_name);
-    m_native_pipeline_layout = mod->pipeline_layout(m_pipeline_name);
+    m_native_pipeline_layout = m_native_module->pipeline_layout(m_pipeline_name);
     if (!m_native_pipeline_layout) {
       if (m_pipeline_name) {
         std::string msg("cannot find pipeline with name ");
         throw std::runtime_error(msg + m_pipeline_name->str());
       } else {
         std::string msg("cannot find the entry pipeline in native module ");
-        throw std::runtime_error(msg + m_native_module_name);
+        throw std::runtime_error(msg + m_native_module->path());
       }
     }
 
@@ -198,7 +197,7 @@ void Use::reset() {
 void Use::process(Event *evt) {
   if (m_native) {
     if (!m_native_pipeline) {
-      m_native_pipeline = m_native_pipeline_layout->pipeline(Filter::context(), Filter::output());
+      m_native_pipeline = nmi::Pipeline::make(m_native_pipeline_layout, Filter::context(), Filter::output());
     }
     m_native_pipeline->input(evt);
   } else {

@@ -316,9 +316,8 @@ auto Worker::find_js_module(const std::string &path) -> JSModule* {
 auto Worker::load_js_module(const std::string &path) -> JSModule* {
   auto i = m_module_map.find(path);
   if (i != m_module_map.end()) return i->second;
-  auto l = m_modules.size();
-  auto m = new JSModule(this, l);
-  m_modules.push_back(m);
+  auto m = new JSModule(this, new_module_index());
+  add_module(m);
   m_module_map[path] = m;
   if (!m_root) m_root = m;
   if (!m->load(path)) return nullptr;
@@ -328,7 +327,9 @@ auto Worker::load_js_module(const std::string &path) -> JSModule* {
 auto Worker::load_native_module(const std::string &path) -> nmi::NativeModule* {
   auto i = m_native_module_map.find(path);
   if (i != m_native_module_map.end()) return i->second;
-  auto m = nmi::NativeModule::load(path);
+  auto m = nmi::NativeModule::find(path);
+  if (!m) m = nmi::NativeModule::load(path, new_module_index());
+  add_module(m);
   m_native_module_map[path] = m;
   return m;
 }
@@ -358,9 +359,6 @@ void Worker::add_export(pjs::Str *ns, pjs::Str *name, Module *module) {
     throw std::runtime_error(msg);
   }
   names[name] = module;
-}
-
-void Worker::add_export(pjs::Str *ns, pjs::Str *name, nmi::NativeModule *module) {
 }
 
 auto Worker::get_export(pjs::Str *ns, pjs::Str *name) -> int {
@@ -466,15 +464,10 @@ bool Worker::solve(pjs::Context &ctx, pjs::Str *filename, pjs::Value &result) {
 
 bool Worker::start() {
   try {
-    nmi::NativeModule::for_each(
-      [this](nmi::NativeModule *m) {
-        m_modules.push_back(m);
-      }
-    );
-    for (auto i : m_modules) i->bind_exports(this);
-    for (auto i : m_modules) i->bind_imports(this);
-    for (auto i : m_modules) i->make_pipelines();
-    for (auto i : m_modules) i->bind_pipelines();
+    for (auto i : m_modules) if (i) i->bind_exports(this);
+    for (auto i : m_modules) if (i) i->bind_imports(this);
+    for (auto i : m_modules) if (i) i->make_pipelines();
+    for (auto i : m_modules) if (i) i->bind_pipelines();
   } catch (std::runtime_error &err) {
     Log::error("%s", err.what());
     return false;
@@ -535,8 +528,22 @@ bool Worker::start() {
 void Worker::stop() {
   for (auto *reader : m_readers) delete reader;
   for (auto *task : m_tasks) delete task;
-  for (auto i : m_module_map) i.second->unload();
+  for (auto *mod : m_modules) if (mod) mod->unload();
   if (s_current == this) s_current = nullptr;
+}
+
+auto Worker::new_module_index() -> int {
+  int index = 0;
+  while (index < m_modules.size() && m_modules[index]) index++;
+  return index;
+}
+
+void Worker::add_module(Module *m) {
+  auto i = m->index();
+  if (i >= m_modules.size()) {
+    m_modules.resize(i + 1);
+  }
+  m_modules[i] = m;
 }
 
 void Worker::remove_module(int i) {

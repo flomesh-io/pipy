@@ -42,12 +42,12 @@ class JSModule;
 class Use : public Filter {
 public:
   Use(
-    const std::string &native_module,
+    JSModule *module,
     pjs::Str *pipeline_name
   );
 
   Use(
-    JSModule *module,
+    nmi::NativeModule *module,
     pjs::Str *pipeline_name
   );
 
@@ -106,7 +106,7 @@ private:
 
   bool m_native = false;
   bool m_multiple = false;
-  std::string m_native_module_name;
+  nmi::NativeModule* m_native_module;
   nmi::PipelineLayout* m_native_pipeline_layout = nullptr;
   nmi::Pipeline* m_native_pipeline = nullptr;
   std::list<JSModule*> m_modules;
