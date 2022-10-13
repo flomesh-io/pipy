@@ -365,7 +365,7 @@ void MuxBase::SessionCluster::recycle(double now) {
     auto session = s; s = s->next();
     if (session->m_share_count > 0) break;
     if (session->m_is_closed || m_weak_ptr_gone ||
-       (m_max_messages >= 0 && session->m_message_count >= m_max_messages) ||
+       (m_max_messages > 0 && session->m_message_count >= m_max_messages) ||
        (now - session->m_free_time >= max_idle))
     {
       session->reset();
