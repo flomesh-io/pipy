@@ -267,41 +267,36 @@ auto NativeModule::new_context_data(pjs::Object *prototype) -> pjs::Object* {
 
 using namespace pipy;
 
-pjs_value pjs_undefined() {
-  auto i = nmi::s_values.alloc();
+template<typename T>
+inline pjs_value to_local_value(T v) {
+  auto i = nmi::s_values.alloc(v);
   nmi::LocalRefPool::add(i);
   return i;
+}
+
+pjs_value pjs_undefined() {
+  return to_local_value(pjs::Value::undefined);
 }
 
 pjs_value pjs_boolean(int b) {
-  auto i = nmi::s_values.alloc(bool(b));
-  nmi::LocalRefPool::add(i);
-  return i;
+  return to_local_value(bool(b));
 }
 
 pjs_value pjs_number(double n) {
-  auto i = nmi::s_values.alloc(n);
-  nmi::LocalRefPool::add(i);
-  return i;
+  return to_local_value(n);
 }
 
 pjs_value pjs_string(const char *s, int len) {
   if (len < 0) len = std::strlen(s);
-  auto i = nmi::s_values.alloc(pjs::Str::make(s, len));
-  nmi::LocalRefPool::add(i);
-  return i;
+  return to_local_value(pjs::Str::make(s, len));
 }
 
 pjs_value pjs_object() {
-  auto i = nmi::s_values.alloc(pjs::Object::make());
-  nmi::LocalRefPool::add(i);
-  return i;
+  return to_local_value(pjs::Object::make());
 }
 
 pjs_value pjs_array(int len) {
-  auto i = nmi::s_values.alloc(pjs::Array::make(len));
-  nmi::LocalRefPool::add(i);
-  return i;
+  return to_local_value(pjs::Array::make(len));
 }
 
 pjs_value pjs_copy(pjs_value v, pjs_value src) {
@@ -355,6 +350,13 @@ int pjs_class_id(const char *name) {
   return 0;
 }
 
+int pjs_is_undefined(pjs_value v) {
+  if (auto *r = nmi::s_values.get(v)) {
+    return r->v.is_undefined();
+  }
+  return false;
+}
+
 int pjs_is_null(pjs_value v) {
   if (auto *r = nmi::s_values.get(v)) {
     return r->v.is_null();
@@ -365,6 +367,13 @@ int pjs_is_null(pjs_value v) {
 int pjs_is_nullish(pjs_value v) {
   if (auto *r = nmi::s_values.get(v)) {
     return r->v.is_nullish();
+  }
+  return false;
+}
+
+int pjs_is_empty_string(pjs_value v) {
+  if (auto *r = nmi::s_values.get(v)) {
+    return r->v.is_string() && r->v.s()->length() == 0;
   }
   return false;
 }
@@ -425,8 +434,7 @@ double pjs_to_number(pjs_value v) {
 pjs_value pjs_to_string(pjs_value v) {
   if (auto *r = nmi::s_values.get(v)) {
     auto s = r->v.to_string();
-    auto v = nmi::s_values.alloc(s);
-    nmi::LocalRefPool::add(v);
+    auto v = to_local_value(s);
     s->release();
     return v;
   }
@@ -618,9 +626,7 @@ pjs_value pjs_array_pop(pjs_value arr) {
     if (r->v.is_array()) {
       pjs::Value v;
       r->v.as<pjs::Array>()->pop(v);
-      auto i = nmi::s_values.alloc(v);
-      nmi::LocalRefPool::add(i);
-      return i;
+      return to_local_value(v);
     }
   }
   return 0;
@@ -631,9 +637,7 @@ pjs_value pjs_array_shift(pjs_value arr) {
     if (r->v.is_array()) {
       pjs::Value v;
       r->v.as<pjs::Array>()->shift(v);
-      auto i = nmi::s_values.alloc(v);
-      nmi::LocalRefPool::add(i);
-      return i;
+      return to_local_value(v);
     }
   }
   return 0;
@@ -691,34 +695,68 @@ pjs_value pjs_array_splice(pjs_value arr, int pos, int del_cnt, int ins_cnt, ...
         va_end(ap);
       }
       auto *ret = a->splice(pos, del_cnt, vs, ins_cnt);
-      auto i = nmi::s_values.alloc(ret);
-      nmi::LocalRefPool::add(i);
-      return i;
+      return to_local_value(ret);
     }
   }
   return 0;
 }
 
 pjs_value pipy_Data_new(const char *buf, int len) {
-  auto i = nmi::s_values.alloc(Data::make(buf, len, &nmi::s_dp));
-  nmi::LocalRefPool::add(i);
-  return i;
+  return to_local_value(Data::make(buf, len, &nmi::s_dp));
 }
 
 pjs_value pipy_Data_push(pjs_value obj, pjs_value data) {
+  if (auto *pv = nmi::s_values.get(obj)) {
+    auto &v = pv->v;
+    if (v.is_instance_of<Data>()) {
+      auto *o = v.as<Data>();
+      if (auto *pv2 = nmi::s_values.get(data)) {
+        auto &v2 = pv2->v;
+        if (v2.is_number()) {
+          o->push((char)v2.n(), &nmi::s_dp);
+          return obj;
+        } else if (v2.is_string()) {
+          o->push(v2.s()->str(), &nmi::s_dp);
+          return obj;
+        } else if (v2.is_instance_of<Data>()) {
+          o->push(*v2.as<Data>());
+          return obj;
+        }
+      }
+    }
+  }
+  return 0;
 }
 
 pjs_value pipy_Data_pop(pjs_value obj, int len) {
+  if (auto *pv = nmi::s_values.get(obj)) {
+    auto &v = pv->v;
+    if (v.is_instance_of<Data>()) {
+      Data out;
+      v.as<Data>()->pop(len, out);
+      return to_local_value(Data::make(std::move(out)));
+    }
+  }
+  return 0;
 }
 
 pjs_value pipy_Data_shift(pjs_value obj, int len) {
+  if (auto *pv = nmi::s_values.get(obj)) {
+    auto &v = pv->v;
+    if (v.is_instance_of<Data>()) {
+      Data out;
+      v.as<Data>()->shift(len, out);
+      return to_local_value(Data::make(std::move(out)));
+    }
+  }
+  return 0;
 }
 
 int pipy_Data_get_size(pjs_value obj) {
   if (auto *pv = nmi::s_values.get(obj)) {
     auto &v = pv->v;
-    if (v.is_instance_of<pipy::Data>()) {
-      return v.as<pipy::Data>()->size();
+    if (v.is_instance_of<Data>()) {
+      return v.as<Data>()->size();
     }
   }
   return -1;
@@ -727,13 +765,98 @@ int pipy_Data_get_size(pjs_value obj) {
 int pipy_Data_get_data(pjs_value obj, char *buf, int len) {
   if (auto *pv = nmi::s_values.get(obj)) {
     auto &v = pv->v;
-    if (v.is_instance_of<pipy::Data>()) {
-      auto data = v.as<pipy::Data>();
+    if (v.is_instance_of<Data>()) {
+      auto data = v.as<Data>();
       data->to_bytes((uint8_t *)buf, len);
       return data->size();
     }
   }
   return -1;
+}
+
+pjs_value pipy_MessageStart_new(pjs_value head) {
+  pjs::Object *head_obj = nullptr;
+  if (head) {
+    auto pv = nmi::s_values.get(head);
+    if (!pv) return 0;
+    auto &v = pv->v;
+    if (!v.is_object()) return 0;
+    head_obj = v.o();
+  }
+  return to_local_value(MessageStart::make(head_obj));
+}
+
+pjs_value pipy_MessageStart_get_head(pjs_value obj) {
+  if (auto *pv = nmi::s_values.get(obj)) {
+    auto &v = pv->v;
+    if (v.is_instance_of<MessageStart>()) {
+      return to_local_value(v.as<MessageStart>()->head());
+    }
+  }
+  return 0;
+}
+
+pjs_value pipy_MessageEnd_new(pjs_value tail, pjs_value payload) {
+  pjs::Object *tail_obj = nullptr, *payload_obj = nullptr;
+  if (tail) {
+    auto pv = nmi::s_values.get(tail);
+    if (!pv) return 0;
+    auto &v = pv->v;
+    if (!v.is_object()) return 0;
+    tail_obj = v.o();
+  }
+  if (payload) {
+    auto pv = nmi::s_values.get(payload);
+    if (!pv) return 0;
+    auto &v = pv->v;
+    if (!v.is_object()) return 0;
+    payload_obj = v.o();
+  }
+  return to_local_value(MessageEnd::make(tail_obj, payload_obj));
+}
+
+pjs_value pipy_MessageEnd_get_tail(pjs_value obj) {
+  if (auto *pv = nmi::s_values.get(obj)) {
+    auto &v = pv->v;
+    if (v.is_instance_of<MessageEnd>()) {
+      return to_local_value(v.as<MessageEnd>()->tail());
+    }
+  }
+  return 0;
+}
+
+pjs_value pipy_MessageEnd_get_payload(pjs_value obj) {
+  if (auto *pv = nmi::s_values.get(obj)) {
+    auto &v = pv->v;
+    if (v.is_instance_of<MessageEnd>()) {
+      return to_local_value(v.as<MessageEnd>()->payload());
+    }
+  }
+  return 0;
+}
+
+pjs_value pipy_StreamEnd_new(pjs_value error) {
+  StreamEnd::Error err = StreamEnd::NO_ERROR;
+  if (error) {
+    auto pv = nmi::s_values.get(error);
+    if (!pv) return 0;
+    auto &v = pv->v;
+    if (!v.is_string()) return 0;
+    err = pjs::EnumDef<StreamEnd::Error>::value(v.s());
+    if (int(err) < 0) return 0;
+  }
+  return to_local_value(StreamEnd::make(err));
+}
+
+pjs_value pipy_StreamEnd_get_error(pjs_value obj) {
+  if (auto *pv = nmi::s_values.get(obj)) {
+    auto &v = pv->v;
+    if (v.is_instance_of<StreamEnd>()) {
+      auto err = v.as<StreamEnd>()->error();
+      return to_local_value(pjs::EnumDef<StreamEnd::Error>::name(err));
+    }
+  }
+  return 0;
 }
 
 void pipy_output_event(pipy_pipeline ppl, pjs_value evt) {

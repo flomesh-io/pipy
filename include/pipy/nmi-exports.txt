@@ -12,8 +12,10 @@
     pjs_type_of;
     pjs_class_of;
     pjs_class_id;
+    pjs_is_undefined;
     pjs_is_null;
     pjs_is_nullish;
+    pjs_is_empty_string;
     pjs_is_instance_of;
     pjs_is_array;
     pjs_is_function;
@@ -40,11 +42,6 @@
     pjs_array_shift;
     pjs_array_unshift;
     pjs_array_splice;
-    pipy_export_variable;
-    pipy_define_pipeline;
-    pipy_context_get;
-    pipy_context_set;
-    pipy_pipeline_output;
     pipy_Data_new;
     pipy_Data_push;
     pipy_Data_pop;
@@ -53,6 +50,7 @@
     pipy_Data_get_data;
     pipy_MessageStart_new;
     pipy_MessageStart_get_head;
+    pipy_MessageEnd_new;
     pipy_MessageEnd_get_tail;
     pipy_MessageEnd_get_payload;
     pipy_StreamEnd_new;
