@@ -28,6 +28,7 @@
 #include "configuration.hpp"
 #include "context.hpp"
 #include "worker.hpp"
+#include "net.hpp"
 #include "utils.hpp"
 
 namespace pipy {
@@ -85,7 +86,7 @@ template<> void ClassDef<Pipy>::init() {
   method("exit", [](Context &ctx, Object*, Value&) {
     int exit_code = 0;
     if (!ctx.arguments(0, &exit_code)) return;
-    Worker::exit(exit_code);
+    Net::post([=]() { Worker::exit(exit_code); });
   });
 }
 

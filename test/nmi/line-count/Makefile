@@ -21,9 +21,4 @@ clean:
 	rm -f ${PRODUCT}
 
 test:
-	${BIN_DIR}/pipy -e " \
-	  pipy() \
-	  .import({ __lineCount: 'line-count' }) \
-	  .read('${ROOT_DIR}/line-count.c') \
-	  .use('${PRODUCT}') \
-	  .handleStreamEnd(() => console.log('Line count:', __lineCount))"
+	${BIN_DIR}/pipy main.js
