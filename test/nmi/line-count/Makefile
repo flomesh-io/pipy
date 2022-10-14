@@ -6,13 +6,19 @@ INC_DIR = $(abspath ${PIPY_DIR}/include)
 
 PRODUCT = ${BIN_DIR}/line-count.so
 
+OS = $(shell uname -s)
+
+ifeq (${OS},Darwin)
+  LDFLAGS = -Wl,-flat_namespace,-undefined,dynamic_lookup
+endif
+
 all: ${PRODUCT}
 
 ${PRODUCT}: ${ROOT_DIR}/line-count.c
-	clang -I${INC_DIR} -shared $< -o $@
+	clang -I${INC_DIR} ${LDFLAGS} -shared $< -o $@
 
 clean:
-	rm ${PRODUCT}
+	rm -f ${PRODUCT}
 
 test:
 	${BIN_DIR}/pipy -e " \
