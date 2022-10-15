@@ -1373,11 +1373,11 @@ public:
     return obj;
   }
 
+protected:
   virtual void finalize() override {
     delete static_cast<T*>(this);
   }
 
-protected:
   using Pooled<T, Base>::Pooled;
 };
 

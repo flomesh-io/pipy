@@ -253,12 +253,16 @@ ObjectLiteral::ObjectLiteral(std::list<std::pair<std::unique_ptr<Expr>, std::uni
     });
     if (auto *s = dynamic_cast<StringLiteral*>(ent.key.get())) {
       auto *f = Variable::make(s->s()->str(), Field::Enumerable | Field::Writable);
-      ent.index = fields.size();
       fields.push_back(f);
     }
     m_entries.emplace_back(std::move(ent));
   }
   m_class = Class::make("Literal", class_of<Object>(), fields);
+  for (auto &e : m_entries) {
+    if (auto *s = dynamic_cast<StringLiteral*>(e.key.get())) {
+      e.index = m_class->find_field(s->s());
+    }
+  }
 }
 
 bool ObjectLiteral::is_left_value() const {
@@ -306,14 +310,13 @@ bool ObjectLiteral::unpack(Context &ctx, Value &arg, int &var) {
 
 bool ObjectLiteral::eval(Context &ctx, Value &result) {
   auto obj = Object::make(m_class);
-  auto base = class_of<Object>()->field_count();
   auto data = obj->data();
   result.set(obj);
   for (const auto &e : m_entries) {
     auto k = e.key.get();
     auto v = e.value.get();
     if (e.index >= 0) {
-      if (!v->eval(ctx, data->at(base + e.index))) return false;
+      if (!v->eval(ctx, data->at(e.index))) return false;
     } else if (!k) {
       Value val; if (!v->eval(ctx, val)) return false;
       if (val.is_object()) {
