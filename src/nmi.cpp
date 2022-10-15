@@ -102,6 +102,7 @@ public:
       }
       delete ref;
     }
+    s_current = m_back;
   }
 
 private:
@@ -306,10 +307,11 @@ pjs_value pjs_copy(pjs_value v, pjs_value src) {
   return v;
 }
 
-void pjs_hold(pjs_value v) {
+pjs_value pjs_hold(pjs_value v) {
   if (auto *r = nmi::s_values.get(v)) {
     r->hold_count++;
   }
+  return v;
 }
 
 void pjs_free(pjs_value v) {

@@ -53,7 +53,7 @@ extern pjs_value   pjs_string(const char *s, int len);
 extern pjs_value   pjs_object();
 extern pjs_value   pjs_array(int len);
 extern pjs_value   pjs_copy(pjs_value v, pjs_value src);
-extern void        pjs_hold(pjs_value v);
+extern pjs_value   pjs_hold(pjs_value v);
 extern void        pjs_free(pjs_value v);
 extern pjs_type    pjs_type_of(pjs_value v);
 extern int         pjs_class_of(pjs_value v);
