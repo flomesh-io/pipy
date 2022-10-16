@@ -59,7 +59,7 @@ private:
     char data[0];
   };
 
-  std::vector<Entry*> m_sub_tables;
+  std::vector<char*> m_sub_tables;
 
   int m_size = 0;
   int m_free = 0;
@@ -80,9 +80,9 @@ protected:
     if (!sub) {
       if (!create) return nullptr;
       auto *buf = new char[(sizeof(Entry) + m_data_size) * (1 << SUB_TABLE_WIDTH)];
-      m_sub_tables[x] = sub = reinterpret_cast<Entry*>(buf);
+      m_sub_tables[x] = sub = buf;
     }
-    return &sub[y];
+    return reinterpret_cast<Entry*>(sub + (sizeof(Entry) + m_data_size) * y);
   }
 
   Entry* alloc_entry(int *i) {
