@@ -264,7 +264,6 @@ if(PIPY_GUI)
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/gui
     DEPENDS gui/pack-gui.js ${CMAKE_SOURCE_DIR}/public/index.html
   )
-
   add_custom_target(PackGui DEPENDS ${CMAKE_BINARY_DIR}/deps/gui.tar.h)
   add_dependencies(pipy PackGui)
 endif()
@@ -294,9 +293,9 @@ if(PIPY_SOIL_FREED_SPACE)
 endif()
 
 if(APPLE)
-  target_link_options(pipy PRIVATE -Wl,-exported_symbols_list ${CMAKE_SOURCE_DIR}/include/pipy/nmi-exports.lst)
+  set(CMAKE_EXE_LINKER_FLAGS "-Wl,-exported_symbols_list ${CMAKE_SOURCE_DIR}/include/pipy/nmi-exports.lst")
 else()
-  target_link_options(pipy PRIVATE -Wl,--dynamic-list ${CMAKE_SOURCE_DIR}/include/pipy/nmi-exports.txt)
+  set(CMAKE_EXE_LINKER_FLAGS "-Wl,--dynamic-list ${CMAKE_SOURCE_DIR}/include/pipy/nmi-exports.txt")
 endif()
 
 if(PIPY_STATIC)
