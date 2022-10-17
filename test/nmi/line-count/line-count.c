@@ -7,9 +7,6 @@ enum {
 
 static int id_class_Data = 0;
 
-static struct pipy_variable_def  variable_lineCount = { id_variable_lineCount, "__lineCount", "line-count" };
-static struct pipy_variable_def* variables[] = { &variable_lineCount, 0 };
-
 static void pipeline_init(pipy_pipeline ppl, void **user_ptr) {
   *user_ptr = calloc(1, sizeof(int));
 }
@@ -41,21 +38,29 @@ static void pipeline_process(pipy_pipeline ppl, void *user_ptr, pjs_value evt) {
   pipy_output_event(ppl, evt);
 }
 
-static struct pipy_pipeline_def pipeline = {
-  "",
-  pipeline_init,
-  pipeline_free,
-  pipeline_process,
-};
-
-static struct pipy_pipeline_def* pipelines[] = { &pipeline, 0 };
-
-static struct pipy_module_def module = {
-  variables,
-  pipelines,
-};
-
 struct pipy_module_def* pipy_module_init() {
+  static struct pipy_variable_def variable_lineCount = {
+    id_variable_lineCount,
+    "__lineCount",
+    "line-count",
+  };
+
+  static struct pipy_pipeline_def pipeline = {
+    "",
+    pipeline_init,
+    pipeline_free,
+    pipeline_process,
+  };
+
+  static struct pipy_variable_def* variables[] = { &variable_lineCount, 0 };
+  static struct pipy_pipeline_def* pipelines[] = { &pipeline, 0 };
+
+  static struct pipy_module_def module = {
+    variables,
+    pipelines,
+  };
+
+
   id_class_Data = pjs_class_id("pipy::Data");
   variable_lineCount.value = pjs_number(0);
   return &module;
