@@ -32,6 +32,8 @@
 extern "C" {
 #endif
 
+#define NMI_EXPORT extern __attribute__((used))
+
 /*
  * PipyJS
  */
@@ -46,48 +48,48 @@ typedef enum _pjs_type {
   PJS_TYPE_OBJECT    = 4,
 } pjs_type;
 
-extern pjs_value   pjs_undefined();
-extern pjs_value   pjs_boolean(int b);
-extern pjs_value   pjs_number(double n);
-extern pjs_value   pjs_string(const char *s, int len);
-extern pjs_value   pjs_object();
-extern pjs_value   pjs_array(int len);
-extern pjs_value   pjs_copy(pjs_value v, pjs_value src);
-extern pjs_value   pjs_hold(pjs_value v);
-extern void        pjs_free(pjs_value v);
-extern pjs_type    pjs_type_of(pjs_value v);
-extern int         pjs_class_of(pjs_value v);
-extern int         pjs_class_id(const char *name);
-extern int         pjs_is_undefined(pjs_value v);
-extern int         pjs_is_null(pjs_value v);
-extern int         pjs_is_nullish(pjs_value v);
-extern int         pjs_is_empty_string(pjs_value v);
-extern int         pjs_is_instance_of(pjs_value v, int class_id);
-extern int         pjs_is_array(pjs_value v);
-extern int         pjs_is_function(pjs_value v);
-extern int         pjs_is_equal(pjs_value a, pjs_value b);
-extern int         pjs_is_identical(pjs_value a, pjs_value b);
-extern int         pjs_to_boolean(pjs_value v);
-extern double      pjs_to_number(pjs_value v);
-extern pjs_value   pjs_to_string(pjs_value v);
-extern int         pjs_string_get_length(pjs_value str);
-extern int         pjs_string_get_char_code(pjs_value str, int pos);
-extern int         pjs_string_get_utf8_size(pjs_value str);
-extern int         pjs_string_get_utf8_data(pjs_value str, char *buf, int len);
-extern int         pjs_object_get_property(pjs_value obj, pjs_value k, pjs_value v);
-extern int         pjs_object_set_property(pjs_value obj, pjs_value k, pjs_value v);
-extern int         pjs_object_delete(pjs_value obj, pjs_value k);
-extern void        pjs_object_iterate(pjs_value obj, int (*cb)(pjs_value k, pjs_value v));
-extern int         pjs_array_get_length(pjs_value arr);
-extern int         pjs_array_set_length(pjs_value arr, int len);
-extern int         pjs_array_get_element(pjs_value arr, int i, pjs_value v);
-extern int         pjs_array_set_element(pjs_value arr, int i, pjs_value v);
-extern int         pjs_array_delete(pjs_value arr, int i);
-extern int         pjs_array_push(pjs_value arr, int cnt, pjs_value v, ...);
-extern pjs_value   pjs_array_pop(pjs_value arr);
-extern pjs_value   pjs_array_shift(pjs_value arr);
-extern int         pjs_array_unshift(pjs_value arr, int cnt, pjs_value v, ...);
-extern pjs_value   pjs_array_splice(pjs_value arr, int pos, int del_cnt, int ins_cnt, pjs_value v, ...);
+NMI_EXPORT pjs_value   pjs_undefined();
+NMI_EXPORT pjs_value   pjs_boolean(int b);
+NMI_EXPORT pjs_value   pjs_number(double n);
+NMI_EXPORT pjs_value   pjs_string(const char *s, int len);
+NMI_EXPORT pjs_value   pjs_object();
+NMI_EXPORT pjs_value   pjs_array(int len);
+NMI_EXPORT pjs_value   pjs_copy(pjs_value v, pjs_value src);
+NMI_EXPORT pjs_value   pjs_hold(pjs_value v);
+NMI_EXPORT void        pjs_free(pjs_value v);
+NMI_EXPORT pjs_type    pjs_type_of(pjs_value v);
+NMI_EXPORT int         pjs_class_of(pjs_value v);
+NMI_EXPORT int         pjs_class_id(const char *name);
+NMI_EXPORT int         pjs_is_undefined(pjs_value v);
+NMI_EXPORT int         pjs_is_null(pjs_value v);
+NMI_EXPORT int         pjs_is_nullish(pjs_value v);
+NMI_EXPORT int         pjs_is_empty_string(pjs_value v);
+NMI_EXPORT int         pjs_is_instance_of(pjs_value v, int class_id);
+NMI_EXPORT int         pjs_is_array(pjs_value v);
+NMI_EXPORT int         pjs_is_function(pjs_value v);
+NMI_EXPORT int         pjs_is_equal(pjs_value a, pjs_value b);
+NMI_EXPORT int         pjs_is_identical(pjs_value a, pjs_value b);
+NMI_EXPORT int         pjs_to_boolean(pjs_value v);
+NMI_EXPORT double      pjs_to_number(pjs_value v);
+NMI_EXPORT pjs_value   pjs_to_string(pjs_value v);
+NMI_EXPORT int         pjs_string_get_length(pjs_value str);
+NMI_EXPORT int         pjs_string_get_char_code(pjs_value str, int pos);
+NMI_EXPORT int         pjs_string_get_utf8_size(pjs_value str);
+NMI_EXPORT int         pjs_string_get_utf8_data(pjs_value str, char *buf, int len);
+NMI_EXPORT int         pjs_object_get_property(pjs_value obj, pjs_value k, pjs_value v);
+NMI_EXPORT int         pjs_object_set_property(pjs_value obj, pjs_value k, pjs_value v);
+NMI_EXPORT int         pjs_object_delete(pjs_value obj, pjs_value k);
+NMI_EXPORT void        pjs_object_iterate(pjs_value obj, int (*cb)(pjs_value k, pjs_value v));
+NMI_EXPORT int         pjs_array_get_length(pjs_value arr);
+NMI_EXPORT int         pjs_array_set_length(pjs_value arr, int len);
+NMI_EXPORT int         pjs_array_get_element(pjs_value arr, int i, pjs_value v);
+NMI_EXPORT int         pjs_array_set_element(pjs_value arr, int i, pjs_value v);
+NMI_EXPORT int         pjs_array_delete(pjs_value arr, int i);
+NMI_EXPORT int         pjs_array_push(pjs_value arr, pjs_value v);
+NMI_EXPORT pjs_value   pjs_array_pop(pjs_value arr);
+NMI_EXPORT pjs_value   pjs_array_shift(pjs_value arr);
+NMI_EXPORT int         pjs_array_unshift(pjs_value arr, pjs_value v);
+NMI_EXPORT pjs_value   pjs_array_splice(pjs_value arr, int pos, int del_cnt, int ins_cnt, pjs_value v[]);
 
 /*
  * Pipy API

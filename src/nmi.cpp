@@ -275,46 +275,46 @@ inline pjs_value to_local_value(T v) {
   return i;
 }
 
-pjs_value pjs_undefined() {
+NMI_EXPORT pjs_value pjs_undefined() {
   return to_local_value(pjs::Value::undefined);
 }
 
-pjs_value pjs_boolean(int b) {
+NMI_EXPORT pjs_value pjs_boolean(int b) {
   return to_local_value(bool(b));
 }
 
-pjs_value pjs_number(double n) {
+NMI_EXPORT pjs_value pjs_number(double n) {
   return to_local_value(n);
 }
 
-pjs_value pjs_string(const char *s, int len) {
+NMI_EXPORT pjs_value pjs_string(const char *s, int len) {
   if (len < 0) len = std::strlen(s);
   return to_local_value(pjs::Str::make(s, len));
 }
 
-pjs_value pjs_object() {
+NMI_EXPORT pjs_value pjs_object() {
   return to_local_value(pjs::Object::make());
 }
 
-pjs_value pjs_array(int len) {
+NMI_EXPORT pjs_value pjs_array(int len) {
   return to_local_value(pjs::Array::make(len));
 }
 
-pjs_value pjs_copy(pjs_value v, pjs_value src) {
+NMI_EXPORT pjs_value pjs_copy(pjs_value v, pjs_value src) {
   auto *ra = nmi::s_values.get(v);
   auto *rb = nmi::s_values.get(src);
   if (ra && rb) ra->v = rb->v;
   return v;
 }
 
-pjs_value pjs_hold(pjs_value v) {
+NMI_EXPORT pjs_value pjs_hold(pjs_value v) {
   if (auto *r = nmi::s_values.get(v)) {
     r->hold_count++;
   }
   return v;
 }
 
-void pjs_free(pjs_value v) {
+NMI_EXPORT void pjs_free(pjs_value v) {
   if (auto *r = nmi::s_values.get(v)) {
     if (!--r->hold_count) {
       nmi::s_values.free(v);
@@ -322,7 +322,7 @@ void pjs_free(pjs_value v) {
   }
 }
 
-pjs_type pjs_type_of(pjs_value v) {
+NMI_EXPORT pjs_type pjs_type_of(pjs_value v) {
   if (auto *r = nmi::s_values.get(v)) {
     switch (r->v.type()) {
       case pjs::Value::Type::Empty    : return PJS_TYPE_UNDEFINED;
@@ -336,7 +336,7 @@ pjs_type pjs_type_of(pjs_value v) {
   return PJS_TYPE_UNDEFINED;
 }
 
-int pjs_class_of(pjs_value v) {
+NMI_EXPORT int pjs_class_of(pjs_value v) {
   if (auto *r = nmi::s_values.get(v)) {
     if (r->v.is_object()) {
       return r->v.o()->type()->id();
@@ -345,42 +345,42 @@ int pjs_class_of(pjs_value v) {
   return 0;
 }
 
-int pjs_class_id(const char *name) {
+NMI_EXPORT int pjs_class_id(const char *name) {
   if (auto *c = pjs::Class::get(name)) {
     return c->id();
   }
   return 0;
 }
 
-int pjs_is_undefined(pjs_value v) {
+NMI_EXPORT int pjs_is_undefined(pjs_value v) {
   if (auto *r = nmi::s_values.get(v)) {
     return r->v.is_undefined();
   }
   return false;
 }
 
-int pjs_is_null(pjs_value v) {
+NMI_EXPORT int pjs_is_null(pjs_value v) {
   if (auto *r = nmi::s_values.get(v)) {
     return r->v.is_null();
   }
   return false;
 }
 
-int pjs_is_nullish(pjs_value v) {
+NMI_EXPORT int pjs_is_nullish(pjs_value v) {
   if (auto *r = nmi::s_values.get(v)) {
     return r->v.is_nullish();
   }
   return false;
 }
 
-int pjs_is_empty_string(pjs_value v) {
+NMI_EXPORT int pjs_is_empty_string(pjs_value v) {
   if (auto *r = nmi::s_values.get(v)) {
     return r->v.is_string() && r->v.s()->length() == 0;
   }
   return false;
 }
 
-int pjs_is_instance_of(pjs_value v, int class_id) {
+NMI_EXPORT int pjs_is_instance_of(pjs_value v, int class_id) {
   if (auto *r = nmi::s_values.get(v)) {
     if (r->v.is_object()) {
       if (auto *c = pjs::Class::get(class_id)) {
@@ -391,49 +391,49 @@ int pjs_is_instance_of(pjs_value v, int class_id) {
   return 0;
 }
 
-int pjs_is_array(pjs_value v) {
+NMI_EXPORT int pjs_is_array(pjs_value v) {
   if (auto *r = nmi::s_values.get(v)) {
     return r->v.is_array();
   }
   return false;
 }
 
-int pjs_is_function(pjs_value v) {
+NMI_EXPORT int pjs_is_function(pjs_value v) {
   if (auto *r = nmi::s_values.get(v)) {
     return r->v.is_function();
   }
   return false;
 }
 
-int pjs_is_equal(pjs_value a, pjs_value b) {
+NMI_EXPORT int pjs_is_equal(pjs_value a, pjs_value b) {
   auto *ra = nmi::s_values.get(a);
   auto *rb = nmi::s_values.get(b);
   if (ra && rb) return pjs::Value::is_equal(ra->v, rb->v);
   return false;
 }
 
-int pjs_is_identical(pjs_value a, pjs_value b) {
+NMI_EXPORT int pjs_is_identical(pjs_value a, pjs_value b) {
   auto *ra = nmi::s_values.get(a);
   auto *rb = nmi::s_values.get(b);
   if (ra && rb) return pjs::Value::is_identical(ra->v, rb->v);
   return false;
 }
 
-int pjs_to_boolean(pjs_value v) {
+NMI_EXPORT int pjs_to_boolean(pjs_value v) {
   if (auto *r = nmi::s_values.get(v)) {
     return r->v.to_boolean();
   }
   return 0;
 }
 
-double pjs_to_number(pjs_value v) {
+NMI_EXPORT double pjs_to_number(pjs_value v) {
   if (auto *r = nmi::s_values.get(v)) {
     return r->v.to_number();
   }
   return 0;
 }
 
-pjs_value pjs_to_string(pjs_value v) {
+NMI_EXPORT pjs_value pjs_to_string(pjs_value v) {
   if (auto *r = nmi::s_values.get(v)) {
     auto s = r->v.to_string();
     auto v = to_local_value(s);
@@ -443,7 +443,7 @@ pjs_value pjs_to_string(pjs_value v) {
   return 0;
 }
 
-int pjs_string_get_length(pjs_value str) {
+NMI_EXPORT int pjs_string_get_length(pjs_value str) {
   if (auto *r = nmi::s_values.get(str)) {
     if (r->v.is_string()) {
       return r->v.s()->length();
@@ -452,7 +452,7 @@ int pjs_string_get_length(pjs_value str) {
   return -1;
 }
 
-int pjs_string_get_char_code(pjs_value str, int pos) {
+NMI_EXPORT int pjs_string_get_char_code(pjs_value str, int pos) {
   if (auto *r = nmi::s_values.get(str)) {
     if (r->v.is_string()) {
       return r->v.s()->chr_at(pos);
@@ -461,7 +461,7 @@ int pjs_string_get_char_code(pjs_value str, int pos) {
   return -1;
 }
 
-int pjs_string_get_utf8_size(pjs_value str) {
+NMI_EXPORT int pjs_string_get_utf8_size(pjs_value str) {
   if (auto *r = nmi::s_values.get(str)) {
     if (r->v.is_string()) {
       return r->v.s()->size();
@@ -470,7 +470,7 @@ int pjs_string_get_utf8_size(pjs_value str) {
   return -1;
 }
 
-int pjs_string_get_utf8_data(pjs_value str, char *buf, int len) {
+NMI_EXPORT int pjs_string_get_utf8_data(pjs_value str, char *buf, int len) {
   if (auto *r = nmi::s_values.get(str)) {
     if (r->v.is_string()) {
       int n = r->v.s()->size();
@@ -483,7 +483,7 @@ int pjs_string_get_utf8_data(pjs_value str, char *buf, int len) {
   return -1;
 }
 
-int pjs_object_get_property(pjs_value obj, pjs_value k, pjs_value v) {
+NMI_EXPORT int pjs_object_get_property(pjs_value obj, pjs_value k, pjs_value v) {
   if (auto *r = nmi::s_values.get(obj)) {
     if (r->v.is_object()) {
       auto *rk = nmi::s_values.get(k);
@@ -497,7 +497,7 @@ int pjs_object_get_property(pjs_value obj, pjs_value k, pjs_value v) {
   return 0;
 }
 
-int pjs_object_set_property(pjs_value obj, pjs_value k, pjs_value v) {
+NMI_EXPORT int pjs_object_set_property(pjs_value obj, pjs_value k, pjs_value v) {
   if (auto *r = nmi::s_values.get(obj)) {
     if (r->v.is_object()) {
       auto *rk = nmi::s_values.get(k);
@@ -511,7 +511,7 @@ int pjs_object_set_property(pjs_value obj, pjs_value k, pjs_value v) {
   return 0;
 }
 
-int pjs_object_delete(pjs_value obj, pjs_value k) {
+NMI_EXPORT int pjs_object_delete(pjs_value obj, pjs_value k) {
   if (auto *r = nmi::s_values.get(obj)) {
     if (r->v.is_object()) {
       if (auto *rk = nmi::s_values.get(k)) {
@@ -525,7 +525,7 @@ int pjs_object_delete(pjs_value obj, pjs_value k) {
   return 0;
 }
 
-void pjs_object_iterate(pjs_value obj, int (*cb)(pjs_value k, pjs_value v)) {
+NMI_EXPORT void pjs_object_iterate(pjs_value obj, int (*cb)(pjs_value k, pjs_value v)) {
   if (auto *r = nmi::s_values.get(obj)) {
     if (r->v.is_object()) {
       r->v.o()->iterate_while(
@@ -542,7 +542,7 @@ void pjs_object_iterate(pjs_value obj, int (*cb)(pjs_value k, pjs_value v)) {
   }
 }
 
-int pjs_array_get_length(pjs_value arr) {
+NMI_EXPORT int pjs_array_get_length(pjs_value arr) {
   if (auto *r = nmi::s_values.get(arr)) {
     if (r->v.is_array()) {
       return r->v.as<pjs::Array>()->length();
@@ -551,7 +551,7 @@ int pjs_array_get_length(pjs_value arr) {
   return -1;
 }
 
-int pjs_array_set_length(pjs_value arr, int len) {
+NMI_EXPORT int pjs_array_set_length(pjs_value arr, int len) {
   if (auto *r = nmi::s_values.get(arr)) {
     if (r->v.is_array()) {
       r->v.as<pjs::Array>()->length(len);
@@ -561,7 +561,7 @@ int pjs_array_set_length(pjs_value arr, int len) {
   return 0;
 }
 
-int pjs_array_get_element(pjs_value arr, int i, pjs_value v) {
+NMI_EXPORT int pjs_array_get_element(pjs_value arr, int i, pjs_value v) {
   if (auto *r = nmi::s_values.get(arr)) {
     if (r->v.is_array()) {
       if (auto *rv = nmi::s_values.get(v)) {
@@ -573,7 +573,7 @@ int pjs_array_get_element(pjs_value arr, int i, pjs_value v) {
   return 0;
 }
 
-int pjs_array_set_element(pjs_value arr, int i, pjs_value v) {
+NMI_EXPORT int pjs_array_set_element(pjs_value arr, int i, pjs_value v) {
   if (auto *r = nmi::s_values.get(arr)) {
     if (r->v.is_array()) {
       if (auto *rv = nmi::s_values.get(v)) {
@@ -585,7 +585,7 @@ int pjs_array_set_element(pjs_value arr, int i, pjs_value v) {
   return 0;
 }
 
-int pjs_array_delete(pjs_value arr, int i) {
+NMI_EXPORT int pjs_array_delete(pjs_value arr, int i) {
   if (auto *r = nmi::s_values.get(arr)) {
     if (r->v.is_array()) {
       r->v.as<pjs::Array>()->clear(i);
@@ -595,27 +595,12 @@ int pjs_array_delete(pjs_value arr, int i) {
   return 0;
 }
 
-int pjs_array_push(pjs_value arr, int cnt, pjs_value v, ...) {
-  if (cnt < 1) return -1;
+NMI_EXPORT int pjs_array_push(pjs_value arr, pjs_value v) {
   if (auto *r = nmi::s_values.get(arr)) {
     if (r->v.is_array()) {
       auto *a = r->v.as<pjs::Array>();
       if (auto *rv = nmi::s_values.get(v)) {
         a->push(rv->v);
-        if (cnt > 1) {
-          va_list ap;
-          va_start(ap, v);
-          for (int i = 1; i < cnt; i++) {
-            auto v = va_arg(ap, pjs_value);
-            if (auto *rv = nmi::s_values.get(v)) {
-              a->push(rv->v);
-            } else {
-              va_end(ap);
-              return -1;
-            }
-          }
-          va_end(ap);
-        }
         return a->length();
       }
     }
@@ -623,7 +608,7 @@ int pjs_array_push(pjs_value arr, int cnt, pjs_value v, ...) {
   return -1;
 }
 
-pjs_value pjs_array_pop(pjs_value arr) {
+NMI_EXPORT pjs_value pjs_array_pop(pjs_value arr) {
   if (auto *r = nmi::s_values.get(arr)) {
     if (r->v.is_array()) {
       pjs::Value v;
@@ -634,7 +619,7 @@ pjs_value pjs_array_pop(pjs_value arr) {
   return 0;
 }
 
-pjs_value pjs_array_shift(pjs_value arr) {
+NMI_EXPORT pjs_value pjs_array_shift(pjs_value arr) {
   if (auto *r = nmi::s_values.get(arr)) {
     if (r->v.is_array()) {
       pjs::Value v;
@@ -645,29 +630,12 @@ pjs_value pjs_array_shift(pjs_value arr) {
   return 0;
 }
 
-int pjs_array_unshift(pjs_value arr, int cnt, pjs_value v, ...) {
-  if (cnt < 1) return -1;
+NMI_EXPORT int pjs_array_unshift(pjs_value arr, pjs_value v) {
   if (auto *r = nmi::s_values.get(arr)) {
     if (r->v.is_array()) {
       auto *a = r->v.as<pjs::Array>();
-      pjs::Value vs[cnt];
       if (auto *rv = nmi::s_values.get(v)) {
-        vs[0] = rv->v;
-        if (cnt > 1) {
-          va_list ap;
-          va_start(ap, v);
-          for (int i = 1; i < cnt; i++) {
-            auto v = va_arg(ap, pjs_value);
-            if (auto *rv = nmi::s_values.get(v)) {
-              vs[i] = rv->v;
-            } else {
-              va_end(ap);
-              return -1;
-            }
-          }
-          va_end(ap);
-        }
-        a->unshift(vs, cnt);
+        a->unshift(&rv->v, 1);
         return a->length();
       }
     }
@@ -675,7 +643,7 @@ int pjs_array_unshift(pjs_value arr, int cnt, pjs_value v, ...) {
   return -1;
 }
 
-pjs_value pjs_array_splice(pjs_value arr, int pos, int del_cnt, int ins_cnt, ...) {
+NMI_EXPORT pjs_value pjs_array_splice(pjs_value arr, int pos, int del_cnt, int ins_cnt, pjs_value v[]) {
   if (del_cnt < 0) return 0;
   if (ins_cnt < 0) return 0;
   if (auto *r = nmi::s_values.get(arr)) {
@@ -683,18 +651,13 @@ pjs_value pjs_array_splice(pjs_value arr, int pos, int del_cnt, int ins_cnt, ...
       auto *a = r->v.as<pjs::Array>();
       pjs::Value vs[ins_cnt];
       if (ins_cnt > 0) {
-        va_list ap;
-        va_start(ap, ins_cnt);
         for (int i = 0; i < ins_cnt; i++) {
-          auto v = va_arg(ap, pjs_value);
-          if (auto *rv = nmi::s_values.get(v)) {
+          if (auto *rv = nmi::s_values.get(v[i])) {
             vs[i] = rv->v;
           } else {
-            va_end(ap);
             return -1;
           }
         }
-        va_end(ap);
       }
       auto *ret = a->splice(pos, del_cnt, vs, ins_cnt);
       return to_local_value(ret);
@@ -703,11 +666,11 @@ pjs_value pjs_array_splice(pjs_value arr, int pos, int del_cnt, int ins_cnt, ...
   return 0;
 }
 
-pjs_value pipy_Data_new(const char *buf, int len) {
+NMI_EXPORT pjs_value pipy_Data_new(const char *buf, int len) {
   return to_local_value(Data::make(buf, len, &nmi::s_dp));
 }
 
-pjs_value pipy_Data_push(pjs_value obj, pjs_value data) {
+NMI_EXPORT pjs_value pipy_Data_push(pjs_value obj, pjs_value data) {
   if (auto *pv = nmi::s_values.get(obj)) {
     auto &v = pv->v;
     if (v.is_instance_of<Data>()) {
@@ -730,7 +693,7 @@ pjs_value pipy_Data_push(pjs_value obj, pjs_value data) {
   return 0;
 }
 
-pjs_value pipy_Data_pop(pjs_value obj, int len) {
+NMI_EXPORT pjs_value pipy_Data_pop(pjs_value obj, int len) {
   if (auto *pv = nmi::s_values.get(obj)) {
     auto &v = pv->v;
     if (v.is_instance_of<Data>()) {
@@ -742,7 +705,7 @@ pjs_value pipy_Data_pop(pjs_value obj, int len) {
   return 0;
 }
 
-pjs_value pipy_Data_shift(pjs_value obj, int len) {
+NMI_EXPORT pjs_value pipy_Data_shift(pjs_value obj, int len) {
   if (auto *pv = nmi::s_values.get(obj)) {
     auto &v = pv->v;
     if (v.is_instance_of<Data>()) {
@@ -754,7 +717,7 @@ pjs_value pipy_Data_shift(pjs_value obj, int len) {
   return 0;
 }
 
-int pipy_Data_get_size(pjs_value obj) {
+NMI_EXPORT int pipy_Data_get_size(pjs_value obj) {
   if (auto *pv = nmi::s_values.get(obj)) {
     auto &v = pv->v;
     if (v.is_instance_of<Data>()) {
@@ -764,7 +727,7 @@ int pipy_Data_get_size(pjs_value obj) {
   return -1;
 }
 
-int pipy_Data_get_data(pjs_value obj, char *buf, int len) {
+NMI_EXPORT int pipy_Data_get_data(pjs_value obj, char *buf, int len) {
   if (auto *pv = nmi::s_values.get(obj)) {
     auto &v = pv->v;
     if (v.is_instance_of<Data>()) {
@@ -776,7 +739,7 @@ int pipy_Data_get_data(pjs_value obj, char *buf, int len) {
   return -1;
 }
 
-pjs_value pipy_MessageStart_new(pjs_value head) {
+NMI_EXPORT pjs_value pipy_MessageStart_new(pjs_value head) {
   pjs::Object *head_obj = nullptr;
   if (head) {
     auto pv = nmi::s_values.get(head);
@@ -788,7 +751,7 @@ pjs_value pipy_MessageStart_new(pjs_value head) {
   return to_local_value(MessageStart::make(head_obj));
 }
 
-pjs_value pipy_MessageStart_get_head(pjs_value obj) {
+NMI_EXPORT pjs_value pipy_MessageStart_get_head(pjs_value obj) {
   if (auto *pv = nmi::s_values.get(obj)) {
     auto &v = pv->v;
     if (v.is_instance_of<MessageStart>()) {
@@ -798,7 +761,7 @@ pjs_value pipy_MessageStart_get_head(pjs_value obj) {
   return 0;
 }
 
-pjs_value pipy_MessageEnd_new(pjs_value tail, pjs_value payload) {
+NMI_EXPORT pjs_value pipy_MessageEnd_new(pjs_value tail, pjs_value payload) {
   pjs::Object *tail_obj = nullptr, *payload_obj = nullptr;
   if (tail) {
     auto pv = nmi::s_values.get(tail);
@@ -817,7 +780,7 @@ pjs_value pipy_MessageEnd_new(pjs_value tail, pjs_value payload) {
   return to_local_value(MessageEnd::make(tail_obj, payload_obj));
 }
 
-pjs_value pipy_MessageEnd_get_tail(pjs_value obj) {
+NMI_EXPORT pjs_value pipy_MessageEnd_get_tail(pjs_value obj) {
   if (auto *pv = nmi::s_values.get(obj)) {
     auto &v = pv->v;
     if (v.is_instance_of<MessageEnd>()) {
@@ -827,7 +790,7 @@ pjs_value pipy_MessageEnd_get_tail(pjs_value obj) {
   return 0;
 }
 
-pjs_value pipy_MessageEnd_get_payload(pjs_value obj) {
+NMI_EXPORT pjs_value pipy_MessageEnd_get_payload(pjs_value obj) {
   if (auto *pv = nmi::s_values.get(obj)) {
     auto &v = pv->v;
     if (v.is_instance_of<MessageEnd>()) {
@@ -837,7 +800,7 @@ pjs_value pipy_MessageEnd_get_payload(pjs_value obj) {
   return 0;
 }
 
-pjs_value pipy_StreamEnd_new(pjs_value error) {
+NMI_EXPORT pjs_value pipy_StreamEnd_new(pjs_value error) {
   StreamEnd::Error err = StreamEnd::NO_ERROR;
   if (error) {
     auto pv = nmi::s_values.get(error);
@@ -850,7 +813,7 @@ pjs_value pipy_StreamEnd_new(pjs_value error) {
   return to_local_value(StreamEnd::make(err));
 }
 
-pjs_value pipy_StreamEnd_get_error(pjs_value obj) {
+NMI_EXPORT pjs_value pipy_StreamEnd_get_error(pjs_value obj) {
   if (auto *pv = nmi::s_values.get(obj)) {
     auto &v = pv->v;
     if (v.is_instance_of<StreamEnd>()) {
@@ -861,7 +824,7 @@ pjs_value pipy_StreamEnd_get_error(pjs_value obj) {
   return 0;
 }
 
-void pipy_output_event(pipy_pipeline ppl, pjs_value evt) {
+NMI_EXPORT void pipy_output_event(pipy_pipeline ppl, pjs_value evt) {
   if (auto *m = nmi::NativeModule::current()) {
     if (auto *p = nmi::Pipeline::get(ppl)) {
       if (auto *pv = nmi::s_values.get(evt)) {
@@ -874,7 +837,7 @@ void pipy_output_event(pipy_pipeline ppl, pjs_value evt) {
   }
 }
 
-void pipy_get_variable(pipy_pipeline ppl, int id, pjs_value value) {
+NMI_EXPORT void pipy_get_variable(pipy_pipeline ppl, int id, pjs_value value) {
   if (auto *m = nmi::NativeModule::current()) {
     if (auto *p = nmi::Pipeline::get(ppl)) {
       if (auto *pv = nmi::s_values.get(value)) {
@@ -888,7 +851,7 @@ void pipy_get_variable(pipy_pipeline ppl, int id, pjs_value value) {
   }
 }
 
-void pipy_set_variable(pipy_pipeline ppl, int id, pjs_value value) {
+NMI_EXPORT void pipy_set_variable(pipy_pipeline ppl, int id, pjs_value value) {
   if (auto *m = nmi::NativeModule::current()) {
     if (auto *p = nmi::Pipeline::get(ppl)) {
       if (auto *pv = nmi::s_values.get(value)) {
