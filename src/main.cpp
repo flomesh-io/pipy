@@ -254,8 +254,15 @@ int main(int argc, char *argv[]) {
     admin_options.key = opts.admin_tls_key;
     admin_options.trusted = opts.admin_tls_trusted;
 
-    auto admin_port = opts.admin_port;
-    if (!admin_port) admin_port = 6060; // default repo port
+    std::string admin_ip("::");
+    int admin_port = 6060; // default repo port
+    auto admin_ip_port = opts.admin_port;
+    if (!admin_ip_port.empty()) {
+      if (!utils::get_host_port(admin_ip_port, admin_ip, admin_port)) {
+        admin_port = std::atoi(admin_ip_port.c_str());
+      }
+      if (admin_ip.empty()) admin_ip = "::";
+    }
 
     bool is_eval = false;
     bool is_repo = false;
@@ -316,7 +323,7 @@ int main(int argc, char *argv[]) {
         : Store::open_level_db(opts.filename);
       repo = new CodebaseStore(store);
       s_admin = new AdminService(repo);
-      s_admin->open(admin_port, admin_options);
+      s_admin->open(admin_ip, admin_port, admin_options);
       logging::Logger::set_admin_service(s_admin);
 
 #ifdef PIPY_USE_GUI
@@ -342,7 +349,7 @@ int main(int argc, char *argv[]) {
       options.fetch_options.key = opts.tls_key;
       options.fetch_options.trusted = opts.tls_trusted;
       s_admin_proxy = new AdminProxy(opts.filename);
-      s_admin_proxy->open(admin_port, options);
+      s_admin_proxy->open(admin_ip, admin_port, options);
 
     // Start as a fixed codebase
     } else {
@@ -395,9 +402,9 @@ int main(int argc, char *argv[]) {
             Status::local.version = Codebase::current()->version();
             Status::local.update();
 
-            if (opts.admin_port) {
+            if (!opts.admin_port.empty()) {
               s_admin = new AdminService(nullptr);
-              s_admin->open(opts.admin_port, admin_options);
+              s_admin->open(admin_ip, admin_port, admin_options);
               logging::Logger::set_admin_service(s_admin);
             }
 

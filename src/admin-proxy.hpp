@@ -56,7 +56,7 @@ public:
 
   AdminProxy(const std::string &target);
 
-  void open(int port, const Options &options);
+  void open(const std::string &ip, int port, const Options &options);
   void close();
 
 private:
@@ -76,6 +76,7 @@ private:
   pjs::Ref<Module> m_module;
 
   std::string m_target;
+  std::string m_ip;
   int m_port;
 
   Tarball m_www_files;

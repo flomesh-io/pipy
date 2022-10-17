@@ -61,7 +61,7 @@ public:
   AdminService(CodebaseStore *store);
   ~AdminService();
 
-  void open(int port, const Options &options);
+  void open(const std::string &ip, int port, const Options &options);
   void close();
   void write_log(const std::string &name, const Data &data);
 
@@ -156,6 +156,7 @@ private:
     std::map<std::string, std::set<LogWatcher*>> log_watchers;
   };
 
+  std::string m_ip;
   int m_port;
   int m_last_instance_index = 0;
   CodebaseStore* m_store;

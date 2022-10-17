@@ -99,7 +99,7 @@ AdminService::~AdminService() {
   }
 }
 
-void AdminService::open(int port, const Options &options) {
+void AdminService::open(const std::string &ip, int port, const Options &options) {
   Log::info("[admin] Starting admin service...");
 
   PipelineLayout *ppl = PipelineLayout::make(m_module);
@@ -135,16 +135,17 @@ void AdminService::open(int port, const Options &options) {
 
   Listener::Options opts;
   opts.reserved = true;
-  auto listener = Listener::get(Listener::Protocol::TCP, "::", port);
+  auto listener = Listener::get(Listener::Protocol::TCP, ip, port);
   listener->set_options(opts);
   listener->pipeline_layout(ppl);
+  m_ip = ip;
   m_port = port;
 
   metrics_history_step();
 }
 
 void AdminService::close() {
-  if (auto listener = Listener::get(Listener::Protocol::TCP, "::", m_port)) {
+  if (auto listener = Listener::get(Listener::Protocol::TCP, m_ip, m_port)) {
     listener->pipeline_layout(nullptr);
   }
   m_module->shutdown();

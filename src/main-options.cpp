@@ -28,6 +28,7 @@
 #include "data.hpp"
 #include "utils.hpp"
 
+#include <cstdlib>
 #include <iostream>
 
 namespace pipy {
@@ -47,7 +48,7 @@ void MainOptions::show_help() {
   std::cout << "  --instance-uuid=<uuid>               Specify a UUID for this worker process" << std::endl;
   std::cout << "  --instance-name=<name>               Specify a name for this worker process" << std::endl;
   std::cout << "  --reuse-port                         Enable kernel load balancing for all listening ports" << std::endl;
-  std::cout << "  --admin-port=<port>                  Enable administration service on the specified port" << std::endl;
+  std::cout << "  --admin-port=<[[ip]:]port>           Enable administration service on the specified port" << std::endl;
   std::cout << "  --admin-tls-cert=<filename>          Administration service certificate" << std::endl;
   std::cout << "  --admin-tls-key=<filename>           Administration service private key" << std::endl;
   std::cout << "  --admin-tls-trusted=<filename>       Client certificate(s) trusted by administration service" << std::endl;
@@ -97,7 +98,7 @@ MainOptions::MainOptions(int argc, char *argv[]) {
       } else if (k == "--reuse-port") {
         reuse_port = true;
       } else if (k == "--admin-port") {
-        admin_port = std::atoi(v.c_str());
+        admin_port = v;
       } else if (k == "--admin-tls-cert") {
         admin_tls_cert = load_certificate(v);
       } else if (k == "--admin-tls-key") {
@@ -127,8 +128,20 @@ MainOptions::MainOptions(int argc, char *argv[]) {
     throw std::runtime_error("--instance-uuid does not allow slashes");
   }
 
-  if (admin_port < 0) {
-    throw std::runtime_error("invalid --admin-port");
+  if (!admin_port.empty()) {
+    std::string host;
+    int port;
+    if (utils::get_host_port(admin_port, host, port)) {
+      uint8_t ip[16];
+      if (!host.empty() && !utils::get_ip_v4(host.c_str(), ip) && !utils::get_ip_v6(host.c_str(), ip)) {
+        throw std::runtime_error("invalid --admin-port");
+      }
+    } else {
+      char *ptr_end;
+      if (std::strtol(admin_port.c_str(), &ptr_end, 10) <= 0 || *ptr_end) {
+        throw std::runtime_error("invalid --admin-port");
+      }
+    }
   }
 
   if (bool(admin_tls_cert) != bool(admin_tls_key)) {
