@@ -40,6 +40,10 @@ _pjs_array_pop
 _pjs_array_shift
 _pjs_array_unshift
 _pjs_array_splice
+_pipy_is_Data
+_pipy_is_MessageStart
+_pipy_is_MessageEnd
+_pipy_is_StreamEnd
 _pipy_Data_new
 _pipy_Data_push
 _pipy_Data_pop

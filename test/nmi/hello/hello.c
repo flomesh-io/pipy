@@ -6,11 +6,6 @@ struct pipeline_state {
   pjs_value body;
 };
 
-static int class_id_Data;
-static int class_id_MessageStart;
-static int class_id_MessageEnd;
-static int class_id_StreamEnd;
-
 static void pipeline_init(pipy_pipeline ppl, void **user_ptr) {
   *user_ptr = calloc(1, sizeof(struct pipeline_state));
 }
@@ -24,16 +19,16 @@ static void pipeline_free(pipy_pipeline ppl, void *user_ptr) {
 
 static void pipeline_process(pipy_pipeline ppl, void *user_ptr, pjs_value evt) {
   struct pipeline_state *state = (struct pipeline_state *)user_ptr;
-  if (pjs_is_instance_of(evt, class_id_MessageStart)) {
+  if (pipy_is_MessageStart(evt)) {
     if (!state->start) {
       state->start = pjs_hold(evt);
       state->body = pjs_hold(pipy_Data_new(0, 0));
     }
-  } else if (pjs_is_instance_of(evt, class_id_Data)) {
+  } else if (pipy_is_Data(evt)) {
     if (state->start) {
       pipy_Data_push(state->body, evt);
     }
-  } else if (pjs_is_instance_of(evt, class_id_MessageEnd)) {
+  } else if (pipy_is_MessageEnd(evt)) {
     if (state->start) {
       pjs_free(state->start);
       pjs_free(state->body);
@@ -61,11 +56,6 @@ struct pipy_module_def* pipy_module_init() {
     variables,
     pipelines,
   };
-
-  class_id_Data = pjs_class_id("pipy::Data");
-  class_id_MessageStart = pjs_class_id("pipy::MessageStart");
-  class_id_MessageEnd = pjs_class_id("pipy::MessageEnd");
-  class_id_StreamEnd = pjs_class_id("pipy::StreamEnd");
 
   return &module;
 }

@@ -666,6 +666,34 @@ NMI_EXPORT pjs_value pjs_array_splice(pjs_value arr, int pos, int del_cnt, int i
   return 0;
 }
 
+NMI_EXPORT int pipy_is_Data(pjs_value obj) {
+  if (auto *pv = nmi::s_values.get(obj)) {
+    return pv->v.is_instance_of<Data>();
+  }
+  return 0;
+}
+
+NMI_EXPORT int pipy_is_MessageStart(pjs_value obj) {
+  if (auto *pv = nmi::s_values.get(obj)) {
+    return pv->v.is_instance_of<MessageStart>();
+  }
+  return 0;
+}
+
+NMI_EXPORT int pipy_is_MessageEnd(pjs_value obj) {
+  if (auto *pv = nmi::s_values.get(obj)) {
+    return pv->v.is_instance_of<MessageEnd>();
+  }
+  return 0;
+}
+
+NMI_EXPORT int pipy_is_StreamEnd(pjs_value obj) {
+  if (auto *pv = nmi::s_values.get(obj)) {
+    return pv->v.is_instance_of<StreamEnd>();
+  }
+  return 0;
+}
+
 NMI_EXPORT pjs_value pipy_Data_new(const char *buf, int len) {
   return to_local_value(Data::make(buf, len, &nmi::s_dp));
 }

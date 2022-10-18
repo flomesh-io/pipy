@@ -5,8 +5,6 @@ enum {
   id_variable_lineCount,
 };
 
-static int id_class_Data = 0;
-
 static void pipeline_init(pipy_pipeline ppl, void **user_ptr) {
   *user_ptr = calloc(1, sizeof(int));
 }
@@ -16,7 +14,7 @@ static void pipeline_free(pipy_pipeline ppl, void *user_ptr) {
 }
 
 static void pipeline_process(pipy_pipeline ppl, void *user_ptr, pjs_value evt) {
-  if (pjs_is_instance_of(evt, id_class_Data)) {
+  if (pipy_is_Data(evt)) {
     int n = pipy_Data_get_size(evt);
     char buf[n];
     pipy_Data_get_data(evt, buf, n);
@@ -60,8 +58,7 @@ struct pipy_module_def* pipy_module_init() {
     pipelines,
   };
 
-
-  id_class_Data = pjs_class_id("pipy::Data");
   variable_lineCount.value = pjs_number(0);
+
   return &module;
 }

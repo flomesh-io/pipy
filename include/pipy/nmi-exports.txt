@@ -42,6 +42,10 @@
     pjs_array_shift;
     pjs_array_unshift;
     pjs_array_splice;
+    pipy_is_Data;
+    pipy_is_MessageStart;
+    pipy_is_MessageEnd;
+    pipy_is_StreamEnd;
     pipy_Data_new;
     pipy_Data_push;
     pipy_Data_pop;

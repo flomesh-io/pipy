@@ -118,23 +118,27 @@ struct pipy_module_def {
 
 typedef struct pipy_module_def* (*pipy_module_init_fn)();
 
-extern pjs_value pipy_Data_new(const char *buf, int len);
-extern pjs_value pipy_Data_push(pjs_value obj, pjs_value data);
-extern pjs_value pipy_Data_pop(pjs_value obj, int len);
-extern pjs_value pipy_Data_shift(pjs_value obj, int len);
-extern int       pipy_Data_get_size(pjs_value obj);
-extern int       pipy_Data_get_data(pjs_value obj, char *buf, int len);
-extern pjs_value pipy_MessageStart_new(pjs_value head);
-extern pjs_value pipy_MessageStart_get_head(pjs_value obj);
-extern pjs_value pipy_MessageEnd_new(pjs_value tail, pjs_value payload);
-extern pjs_value pipy_MessageEnd_get_tail(pjs_value obj);
-extern pjs_value pipy_MessageEnd_get_payload(pjs_value obj);
-extern pjs_value pipy_StreamEnd_new(pjs_value error);
-extern pjs_value pipy_StreamEnd_get_error(pjs_value obj);
+NMI_EXPORT int       pipy_is_Data(pjs_value obj);
+NMI_EXPORT int       pipy_is_MessageStart(pjs_value obj);
+NMI_EXPORT int       pipy_is_MessageEnd(pjs_value obj);
+NMI_EXPORT int       pipy_is_StreamEnd(pjs_value obj);
+NMI_EXPORT pjs_value pipy_Data_new(const char *buf, int len);
+NMI_EXPORT pjs_value pipy_Data_push(pjs_value obj, pjs_value data);
+NMI_EXPORT pjs_value pipy_Data_pop(pjs_value obj, int len);
+NMI_EXPORT pjs_value pipy_Data_shift(pjs_value obj, int len);
+NMI_EXPORT int       pipy_Data_get_size(pjs_value obj);
+NMI_EXPORT int       pipy_Data_get_data(pjs_value obj, char *buf, int len);
+NMI_EXPORT pjs_value pipy_MessageStart_new(pjs_value head);
+NMI_EXPORT pjs_value pipy_MessageStart_get_head(pjs_value obj);
+NMI_EXPORT pjs_value pipy_MessageEnd_new(pjs_value tail, pjs_value payload);
+NMI_EXPORT pjs_value pipy_MessageEnd_get_tail(pjs_value obj);
+NMI_EXPORT pjs_value pipy_MessageEnd_get_payload(pjs_value obj);
+NMI_EXPORT pjs_value pipy_StreamEnd_new(pjs_value error);
+NMI_EXPORT pjs_value pipy_StreamEnd_get_error(pjs_value obj);
 
-extern void pipy_output_event(pipy_pipeline ppl, pjs_value evt);
-extern void pipy_get_variable(pipy_pipeline ppl, int id, pjs_value value);
-extern void pipy_set_variable(pipy_pipeline ppl, int id, pjs_value value);
+NMI_EXPORT void pipy_output_event(pipy_pipeline ppl, pjs_value evt);
+NMI_EXPORT void pipy_get_variable(pipy_pipeline ppl, int id, pjs_value value);
+NMI_EXPORT void pipy_set_variable(pipy_pipeline ppl, int id, pjs_value value);
 
 #ifdef __cplusplus
 } /* extern "C" */
