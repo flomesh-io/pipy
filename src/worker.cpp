@@ -48,6 +48,7 @@
 #include "api/stats.hpp"
 #include "api/url.hpp"
 #include "api/xml.hpp"
+#include "api/dns.hpp"
 #include "log.hpp"
 
 #include <array>
@@ -114,6 +115,9 @@ template<> void ClassDef<Global>::init() {
 
   // XML
   variable("XML", class_of<XML>());
+
+  // DNS
+  variable("DNS", class_of<DNS>());
 
   // Hessian
   variable("Hessian", class_of<Hessian>());

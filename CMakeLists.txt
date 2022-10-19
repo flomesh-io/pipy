@@ -157,6 +157,7 @@ add_executable(pipy
   src/api/stats.cpp
   src/api/url.cpp
   src/api/xml.cpp
+  src/api/dns.cpp
   src/codebase.cpp
   src/codebase-store.cpp
   src/compress.cpp
