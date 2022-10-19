@@ -38,6 +38,7 @@
 #include "api/configuration.hpp"
 #include "api/console.hpp"
 #include "api/crypto.hpp"
+#include "api/dns.hpp"
 #include "api/hessian.hpp"
 #include "api/http.hpp"
 #include "api/json.hpp"
@@ -114,6 +115,9 @@ template<> void ClassDef<Global>::init() {
 
   // XML
   variable("XML", class_of<XML>());
+
+  // DNS
+  variable("DNS", class_of<DNS>());
 
   // Hessian
   variable("Hessian", class_of<Hessian>());
