@@ -27,6 +27,8 @@
 #include "message.hpp"
 #include "utils.hpp"
 
+namespace pipy {
+
 // DNS Header
 static pjs::ConstStr STR_id("id");
 static pjs::ConstStr STR_qr("qr");
@@ -84,19 +86,6 @@ enum class RecordType {
   TYPE_OPT   = 41
 };
 
-template <> void pjs::EnumDef<RecordType>::init() {
-  define(RecordType::TYPE_A,     "A");
-  define(RecordType::TYPE_NS,    "NS");
-  define(RecordType::TYPE_CNAME, "CNAME");
-  define(RecordType::TYPE_SOA,   "SOA");
-  define(RecordType::TYPE_PTR,   "PTR");
-  define(RecordType::TYPE_MX,    "MX");
-  define(RecordType::TYPE_TXT,   "TXT");
-  define(RecordType::TYPE_AAAA,  "AAAA");
-  define(RecordType::TYPE_SRV,   "SRV");
-  define(RecordType::TYPE_OPT,   "OPT");
-}
-
 static const unsigned int DNS_IN_CLASS      = 1;
 static const unsigned int MIN_PACKET_LENGTH = 12;
 static const unsigned int DNS_MAX_LABELLEN  = 63;
@@ -104,20 +93,20 @@ static const unsigned int DNS_MAX_DOMAINLEN = 255;
 
 // clang-format on
 
-static pipy::Data::Producer s_dp("dns_codec");
+static Data::Producer s_dp("dns_codec");
 
-static int push_int8(pipy::Data::Builder &db, int value) {
+static int push_int8(Data::Builder &db, int value) {
   db.push(value & 0xff);
   return 1;
 }
 
-static int push_int16(pipy::Data::Builder &db, int value) {
+static int push_int16(Data::Builder &db, int value) {
   db.push(value >> 8 & 0xff);
   db.push(value & 0xff);
   return 2;
 }
 
-static int push_int32(pipy::Data::Builder &db, int value) {
+static int push_int32(Data::Builder &db, int value) {
   db.push(value >> 24);
   db.push(value >> 16 & 0xff);
   db.push(value >> 8 & 0xff);
@@ -424,8 +413,8 @@ static int read_record(const uint8_t *buf, const uint8_t *buf_end, uint8_t *plac
     if (rdlength != 16) {
       throw std::runtime_error("dns decode # AAAA rdata error");
     }
-    pipy::Data data(ptr, rdlength, &s_dp);
-    record->set(STR_rdata, pjs::Str::make(data.to_string(pipy::Data::Encoding::Hex)));
+    Data data(ptr, rdlength, &s_dp);
+    record->set(STR_rdata, pjs::Str::make(data.to_string(Data::Encoding::Hex)));
   } else if (type == int(RecordType::TYPE_SOA)) {
     auto soa = pjs::Ref<pjs::Object>(pjs::Object::make());
     int num = read_soa(buf, buf_end, ptr, soa);
@@ -464,8 +453,8 @@ static int read_record(const uint8_t *buf, const uint8_t *buf_end, uint8_t *plac
     }
     record->set(STR_rdata, pjs::Str::make((char *)name, len));
   } else { // HEX
-    pipy::Data data(ptr, rdlength, &s_dp);
-    record->set(STR_rdata, pjs::Str::make(data.to_string(pipy::Data::Encoding::Hex)));
+    Data data(ptr, rdlength, &s_dp);
+    record->set(STR_rdata, pjs::Str::make(data.to_string(Data::Encoding::Hex)));
   }
   ptr += rdlength;
   array->push(record.get());
@@ -473,7 +462,7 @@ static int read_record(const uint8_t *buf, const uint8_t *buf_end, uint8_t *plac
   return ptr - place;
 }
 
-static auto decode(const uint8_t *buf, int length, pjs::Object *dns) -> pjs::Object * {
+static auto dns_decode(const uint8_t *buf, int length, pjs::Object *dns) -> pjs::Object * {
   const uint8_t *buf_end = buf + length;
   int pos = 0, qdcount, ancount, nscount, arcount;
 
@@ -551,7 +540,7 @@ static auto decode(const uint8_t *buf, int length, pjs::Object *dns) -> pjs::Obj
   return dns;
 }
 
-static int write_soa(pjs::Object *soa, pipy::Data::Builder &db) {
+static int write_soa(pjs::Object *soa, Data::Builder &db) {
   int len, skip = 0;
   uint8_t name[DNS_MAX_DOMAINLEN];
 
@@ -602,7 +591,7 @@ static int write_soa(pjs::Object *soa, pipy::Data::Builder &db) {
   return skip;
 }
 
-static int write_srv(pjs::Object *srv, pipy::Data::Builder &db) {
+static int write_srv(pjs::Object *srv, Data::Builder &db) {
   int len, skip = 0;
   uint8_t name[DNS_MAX_DOMAINLEN];
 
@@ -634,7 +623,7 @@ static int write_srv(pjs::Object *srv, pipy::Data::Builder &db) {
   return skip;
 }
 
-static int write_mx(pjs::Object *mx, pipy::Data::Builder &db) {
+static int write_mx(pjs::Object *mx, Data::Builder &db) {
   int len, skip = 0;
   uint8_t name[DNS_MAX_DOMAINLEN];
 
@@ -654,7 +643,7 @@ static int write_mx(pjs::Object *mx, pipy::Data::Builder &db) {
   return skip;
 }
 
-static int write_question(pjs::Object *dns, pipy::Data::Builder &db) {
+static int write_question(pjs::Object *dns, Data::Builder &db) {
   int len, skip = 0;
   uint8_t name[DNS_MAX_DOMAINLEN];
 
@@ -704,9 +693,9 @@ static int get_array_size(pjs::Object *dns, pjs::ConstStr &key) {
   return 0;
 }
 
-static int push_r_data(pipy::Data::Builder &db, pjs::Object *rdata, std::function<int(pjs::Object *soa, pipy::Data::Builder &db)> func) {
-  pipy::Data data;
-  pipy::Data::Builder tdb(data, &s_dp);
+static int push_r_data(Data::Builder &db, pjs::Object *rdata, std::function<int(pjs::Object *soa, Data::Builder &db)> func) {
+  Data data;
+  Data::Builder tdb(data, &s_dp);
 
   int skip = 0;
   int num = func(rdata, tdb);
@@ -721,16 +710,16 @@ static int push_r_data(pipy::Data::Builder &db, pjs::Object *rdata, std::functio
   return skip;
 }
 
-static int push_hex_string(pipy::Data::Builder &db, const std::string *hex_str) {
+static int push_hex_string(Data::Builder &db, const std::string *hex_str) {
   int skip = 0;
-  pipy::Data data(*hex_str, pipy::Data::Encoding::Hex, &s_dp);
+  Data data(*hex_str, Data::Encoding::Hex, &s_dp);
   skip += push_int16(db, data.size());
   skip += data.size();
   db.push(std::move(data));
   return skip;
 }
 
-static int write_record(pjs::Object *dns, pipy::Data::Builder &db) {
+static int write_record(pjs::Object *dns, Data::Builder &db) {
   int len, skip = 0;
   uint8_t name[DNS_MAX_DOMAINLEN];
 
@@ -830,7 +819,7 @@ static int write_record(pjs::Object *dns, pipy::Data::Builder &db) {
   return skip;
 }
 
-static int encode(pjs::Object *dns, pipy::Data::Builder &db) {
+static int dns_encode(pjs::Object *dns, Data::Builder &db) {
   int skip = 0;
 
   int id = get_number(dns, STR_id);
@@ -902,7 +891,42 @@ static int encode(pjs::Object *dns, pipy::Data::Builder &db) {
   return skip;
 }
 
+auto DNS::decode(const Data &data) -> pjs::Object * {
+  std::vector<uint8_t> buffer;
+  auto dns = pjs::Object::make();
+
+  try {
+    data.to_bytes(buffer);
+    return dns_decode(buffer.data(), buffer.size(), dns);
+  } catch (std::runtime_error &err) {
+    dns->release();
+    throw err;
+  }
+}
+
+void DNS::encode(pjs::Object *dns, Data::Builder &db) {
+  if (!dns) {
+    throw std::runtime_error("dns encode # object is null");
+  }
+  dns_encode(dns, db);
+}
+
+} // namespace pipy
+
 namespace pjs {
+
+template <> void EnumDef<pipy::RecordType>::init() {
+  define(pipy::RecordType::TYPE_A, "A");
+  define(pipy::RecordType::TYPE_NS, "NS");
+  define(pipy::RecordType::TYPE_CNAME, "CNAME");
+  define(pipy::RecordType::TYPE_SOA, "SOA");
+  define(pipy::RecordType::TYPE_PTR, "PTR");
+  define(pipy::RecordType::TYPE_MX, "MX");
+  define(pipy::RecordType::TYPE_TXT, "TXT");
+  define(pipy::RecordType::TYPE_AAAA, "AAAA");
+  define(pipy::RecordType::TYPE_SRV, "SRV");
+  define(pipy::RecordType::TYPE_OPT, "OPT");
+}
 
 template <> void ClassDef<pipy::DNS>::init() {
   ctor();
@@ -916,7 +940,6 @@ template <> void ClassDef<pipy::DNS>::init() {
     try {
       ret.set(pipy::DNS::decode(*data));
     } catch (std::runtime_error &err) {
-      std::cerr << err.what() << std::endl;
       ctx.error(err);
     }
   });
@@ -929,40 +952,15 @@ template <> void ClassDef<pipy::DNS>::init() {
     }
     try {
       pipy::Data data;
-      pipy::Data::Builder db(data, &s_dp);
+      pipy::Data::Builder db(data, &pipy::s_dp);
 
       pipy::DNS::encode(value.o(), db);
       db.flush();
       ret.set(pipy::Data::make(std::move(data)));
     } catch (std::runtime_error &err) {
-      std::cerr << err.what() << std::endl;
       ctx.error(err);
     }
   });
 }
 
 } // namespace pjs
-
-namespace pipy {
-
-auto DNS::decode(const Data &data) -> pjs::Object * {
-  std::vector<uint8_t> buffer;
-  auto dns = pjs::Object::make();
-
-  try {
-    data.to_bytes(buffer);
-    return ::decode(buffer.data(), data.size(), dns);
-  } catch (std::runtime_error &err) {
-    dns->release();
-    throw err;
-  }
-}
-
-void DNS::encode(pjs::Object *dns, pipy::Data::Builder &db) {
-  if (!dns) {
-    throw std::runtime_error("dns encode # object is null");
-  }
-  ::encode(dns, db);
-}
-
-} // namespace pipy

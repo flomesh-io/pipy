@@ -38,6 +38,7 @@
 #include "api/configuration.hpp"
 #include "api/console.hpp"
 #include "api/crypto.hpp"
+#include "api/dns.hpp"
 #include "api/hessian.hpp"
 #include "api/http.hpp"
 #include "api/json.hpp"
@@ -48,7 +49,6 @@
 #include "api/stats.hpp"
 #include "api/url.hpp"
 #include "api/xml.hpp"
-#include "api/dns.hpp"
 #include "log.hpp"
 
 #include <array>

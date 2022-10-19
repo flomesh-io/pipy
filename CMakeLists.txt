@@ -146,6 +146,7 @@ add_executable(pipy
   src/api/configuration.cpp
   src/api/console.cpp
   src/api/crypto.cpp
+  src/api/dns.cpp
   src/api/hessian.cpp
   src/api/http.cpp
   src/api/json.cpp
@@ -157,7 +158,6 @@ add_executable(pipy
   src/api/stats.cpp
   src/api/url.cpp
   src/api/xml.cpp
-  src/api/dns.cpp
   src/codebase.cpp
   src/codebase-store.cpp
   src/compress.cpp
