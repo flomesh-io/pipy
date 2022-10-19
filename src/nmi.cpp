@@ -125,7 +125,7 @@ void Pipeline::input(Event *evt) {
   auto e = nmi::s_values.alloc(evt);
   lrf.add(e);
   NativeModule::set_current(m_layout->m_module);
-  m_layout->m_def.pipeline_process(m_id, m_user_ptr, e);
+  m_layout->m_pipeline_process(m_id, m_user_ptr, e);
   NativeModule::set_current(nullptr);
 }
 
@@ -135,7 +135,7 @@ void Pipeline::output(Event *evt) {
 
 void Pipeline::free() {
   NativeModule::set_current(m_layout->m_module);
-  m_layout->m_def.pipeline_free(m_id, m_user_ptr);
+  m_layout->m_pipeline_free(m_id, m_user_ptr);
   NativeModule::set_current(nullptr);
   m_pipeline_table.free(m_id);
   delete this;
@@ -182,38 +182,32 @@ NativeModule::NativeModule(int index, const std::string &filename)
     throw std::runtime_error(msg + filename);
   }
 
-  struct pipy_module_def *mod = (*(pipy_module_init_fn)init_fn)();
-  if (!mod) {
-    std::string msg("pipy_module_init() failed in native module ");
-    throw std::runtime_error(msg + filename);
-  }
+  set_current(this);
+  (*(fn_pipy_module_init)init_fn)();
+  set_current(nullptr);
 
   std::list<pjs::Field*> fields;
 
-  for (const auto *p = mod->variables; *p; p++) {
-    auto *vd = *p;
-    std::string name(vd->name);
+  for (const auto &vd : m_variable_defs) {
     for (auto &prev : fields) {
-      if (prev->name()->str() == name) {
+      if (prev->name()->str() == vd.name) {
         std::string msg("duplicated variables ");
-        msg += name;
+        msg += vd.name;
         msg += " in native module ";
         msg += filename;
         throw std::runtime_error(msg + filename);
       }
     }
-    auto *v = s_values.get(vd->value);
-    fields.push_back(
-      pjs::Variable::make(
-        name, v ? v->v : pjs::Value::undefined,
-        pjs::Field::Enumerable | pjs::Field::Writable,
-        vd->id
-      )
+    auto *v = pjs::Variable::make(
+      vd.name, vd.value,
+      pjs::Field::Enumerable | pjs::Field::Writable,
+      vd.id
     );
-    if (auto *ns = vd->ns) {
+    fields.push_back(v);
+    if (vd.ns) {
       m_exports.emplace_back();
-      m_exports.back().ns = pjs::Str::make(ns);
-      m_exports.back().name = pjs::Str::make(name);
+      m_exports.back().ns = vd.ns;
+      m_exports.back().name = v->name();
     }
   }
 
@@ -223,22 +217,38 @@ NativeModule::NativeModule(int index, const std::string &filename)
     fields
   );
 
-  for (const auto *p = mod->pipelines; *p; p++) {
-    auto *pd = *p;
-    if (pd->name && pd->name[0]) {
-      pjs::Ref<pjs::Str> name(pjs::Str::make(pd->name));
-      if (m_pipeline_layouts.count(name) > 0) {
+  for (const auto &pd : m_pipeline_defs) {
+    if (pd.name && pd.name != pjs::Str::empty) {
+      if (m_pipeline_layouts.count(pd.name) > 0) {
         std::string msg("duplicated pipeline ");
-        msg += name->str();
+        msg += pd.name->str();
         msg += " in native module ";
         msg += filename;
         throw std::runtime_error(msg + filename);
       }
-      m_pipeline_layouts[name] = new PipelineLayout(this, pd);
+      m_pipeline_layouts[pd.name] = new PipelineLayout(this, pd.init, pd.free, pd.process);
     } else {
-      m_entry_pipeline = new PipelineLayout(this, pd);
+      m_entry_pipeline = new PipelineLayout(this, pd.init, pd.free, pd.process);
     }
   }
+}
+
+void NativeModule::define_variable(int id, const char *name, const char *ns, const pjs::Value &value) {
+  m_variable_defs.emplace_back();
+  auto &v = m_variable_defs.back();
+  v.id = id;
+  v.name = name;
+  v.ns = ns ? pjs::Str::make(ns) : nullptr;
+  v.value = value;
+}
+
+void NativeModule::define_pipeline(const char *name, fn_pipeline_init init, fn_pipeline_free free, fn_pipeline_process process) {
+  m_pipeline_defs.emplace_back();
+  auto &p = m_pipeline_defs.back();
+  p.name = name ? pjs::Str::make(name) : nullptr;
+  p.init = init;
+  p.free = free;
+  p.process = process;
 }
 
 auto NativeModule::pipeline_layout(pjs::Str *name) -> PipelineLayout* {
@@ -850,6 +860,24 @@ NMI_EXPORT pjs_value pipy_StreamEnd_get_error(pjs_value obj) {
     }
   }
   return 0;
+}
+
+NMI_EXPORT void pipy_define_variable(int id, const char *name, const char *ns, pjs_value value) {
+  if (auto *m = nmi::NativeModule::current()) {
+    if (value) {
+      if (auto *pv = nmi::s_values.get(value)) {
+        m->define_variable(id, name, ns, pv->v);
+      }
+    } else {
+      m->define_variable(id, name, ns, pjs::Value::undefined);
+    }
+  }
+}
+
+NMI_EXPORT void pipy_define_pipeline(const char *name, fn_pipeline_init init, fn_pipeline_free free, fn_pipeline_process process) {
+  if (auto *m = nmi::NativeModule::current()) {
+    m->define_pipeline(name, init, free, process);
+  }
 }
 
 NMI_EXPORT void pipy_output_event(pipy_pipeline ppl, pjs_value evt) {

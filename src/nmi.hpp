@@ -156,10 +156,26 @@ public:
   static auto current() -> NativeModule* { return m_current; }
   static void set_current(NativeModule *m) { m_current = m; }
 
+  void define_variable(int id, const char *name, const char *ns, const pjs::Value &value);
+  void define_pipeline(const char *name, fn_pipeline_init init, fn_pipeline_free free, fn_pipeline_process process);
   auto pipeline_layout(pjs::Str *name) -> PipelineLayout*;
 
 private:
   NativeModule(int index, const std::string &filename);
+
+  struct VariableDef {
+    int id;
+    std::string name;
+    pjs::Ref<pjs::Str> ns;
+    pjs::Value value;
+  };
+
+  struct PipelineDef {
+    pjs::Ref<pjs::Str> name;
+    fn_pipeline_init init;
+    fn_pipeline_free free;
+    fn_pipeline_process process;
+  };
 
   struct Export {
     pjs::Ref<pjs::Str> ns;
@@ -168,6 +184,8 @@ private:
 
   pjs::Ref<pjs::Str> m_filename;
   pjs::Ref<pjs::Class> m_context_class;
+  std::list<VariableDef> m_variable_defs;
+  std::list<PipelineDef> m_pipeline_defs;
   std::list<Export> m_exports;
   std::map<pjs::Ref<pjs::Str>, PipelineLayout*> m_pipeline_layouts;
   PipelineLayout* m_entry_pipeline = nullptr;
@@ -190,13 +208,22 @@ private:
 
 class PipelineLayout {
 public:
-  PipelineLayout(NativeModule *mod, struct pipy_pipeline_def *def)
+  PipelineLayout(
+    NativeModule *mod,
+    fn_pipeline_init init,
+    fn_pipeline_free free,
+    fn_pipeline_process process
+  )
     : m_module(mod)
-    , m_def(*def) {}
+    , m_pipeline_init(init)
+    , m_pipeline_free(free)
+    , m_pipeline_process(process) {}
 
 private:
   NativeModule* m_module;
-  struct pipy_pipeline_def m_def;
+  fn_pipeline_init m_pipeline_init;
+  fn_pipeline_free m_pipeline_free;
+  fn_pipeline_process m_pipeline_process;
 
   friend class Pipeline;
 };
@@ -229,7 +256,7 @@ private:
     , m_output(out)
   {
     NativeModule::set_current(layout->m_module);
-    layout->m_def.pipeline_init(m_id, &m_user_ptr);
+    layout->m_pipeline_init(m_id, &m_user_ptr);
     NativeModule::set_current(nullptr);
   }
 

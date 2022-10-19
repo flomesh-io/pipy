@@ -36,29 +36,7 @@ static void pipeline_process(pipy_pipeline ppl, void *user_ptr, pjs_value evt) {
   pipy_output_event(ppl, evt);
 }
 
-struct pipy_module_def* pipy_module_init() {
-  static struct pipy_variable_def variable_lineCount = {
-    id_variable_lineCount,
-    "__lineCount",
-    "line-count",
-  };
-
-  static struct pipy_pipeline_def pipeline = {
-    "",
-    pipeline_init,
-    pipeline_free,
-    pipeline_process,
-  };
-
-  static struct pipy_variable_def* variables[] = { &variable_lineCount, 0 };
-  static struct pipy_pipeline_def* pipelines[] = { &pipeline, 0 };
-
-  static struct pipy_module_def module = {
-    variables,
-    pipelines,
-  };
-
-  variable_lineCount.value = pjs_number(0);
-
-  return &module;
+void pipy_module_init() {
+  pipy_define_variable(id_variable_lineCount, "__lineCount", "line-count", pjs_number(0));
+  pipy_define_pipeline("", pipeline_init, pipeline_free, pipeline_process);
 }

@@ -97,26 +97,10 @@ NMI_EXPORT pjs_value   pjs_array_splice(pjs_value arr, int pos, int del_cnt, int
 
 typedef int pipy_pipeline;
 
-struct pipy_variable_def {
-  int id;
-  const char *name;
-  const char *ns;
-  pjs_value value;
-};
-
-struct pipy_pipeline_def {
-  const char *name;
-  void (*pipeline_init   )(pipy_pipeline ppl, void **user_ptr);
-  void (*pipeline_free   )(pipy_pipeline ppl, void  *user_ptr);
-  void (*pipeline_process)(pipy_pipeline ppl, void  *user_ptr, pjs_value evt);
-};
-
-struct pipy_module_def {
-  struct pipy_variable_def **variables;
-  struct pipy_pipeline_def **pipelines;
-};
-
-typedef struct pipy_module_def* (*pipy_module_init_fn)();
+typedef void (*fn_pipy_module_init)();
+typedef void (*fn_pipeline_init   )(pipy_pipeline ppl, void **user_ptr);
+typedef void (*fn_pipeline_free   )(pipy_pipeline ppl, void  *user_ptr);
+typedef void (*fn_pipeline_process)(pipy_pipeline ppl, void  *user_ptr, pjs_value evt);
 
 NMI_EXPORT int       pipy_is_Data(pjs_value obj);
 NMI_EXPORT int       pipy_is_MessageStart(pjs_value obj);
@@ -136,6 +120,8 @@ NMI_EXPORT pjs_value pipy_MessageEnd_get_payload(pjs_value obj);
 NMI_EXPORT pjs_value pipy_StreamEnd_new(pjs_value error);
 NMI_EXPORT pjs_value pipy_StreamEnd_get_error(pjs_value obj);
 
+NMI_EXPORT void pipy_define_variable(int id, const char *name, const char *ns, pjs_value value);
+NMI_EXPORT void pipy_define_pipeline(const char *name, fn_pipeline_init init, fn_pipeline_free free, fn_pipeline_process process);
 NMI_EXPORT void pipy_output_event(pipy_pipeline ppl, pjs_value evt);
 NMI_EXPORT void pipy_get_variable(pipy_pipeline ppl, int id, pjs_value value);
 NMI_EXPORT void pipy_set_variable(pipy_pipeline ppl, int id, pjs_value value);

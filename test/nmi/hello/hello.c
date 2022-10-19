@@ -41,21 +41,6 @@ static void pipeline_process(pipy_pipeline ppl, void *user_ptr, pjs_value evt) {
   }
 }
 
-struct pipy_module_def* pipy_module_init() {
-  static struct pipy_pipeline_def pipeline = {
-    "",
-    pipeline_init,
-    pipeline_free,
-    pipeline_process,
-  };
-
-  static struct pipy_variable_def* variables[] = { 0 };
-  static struct pipy_pipeline_def* pipelines[] = { &pipeline, 0 };
-
-  static struct pipy_module_def module = {
-    variables,
-    pipelines,
-  };
-
-  return &module;
+void pipy_module_init() {
+  pipy_define_pipeline("", pipeline_init, pipeline_free, pipeline_process);
 }
