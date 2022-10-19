@@ -451,8 +451,13 @@ const Tip = ({ children }) => {
 
 const SourceCode = ({ children, className }) => {
   const classes = useStyles();
-  const language = className === 'language-js' ? 'javascript' : undefined;
   const lines = children.split('\n');
+
+  let language;
+  switch (className) {
+    case 'language-js': language = 'javascript'; break;
+    case 'language-c': language = 'c'; break;
+  }
 
   let isDiff = true;
   const colors = lines.map(

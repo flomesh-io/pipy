@@ -18,6 +18,10 @@ api: Configuration.use
 
 This filter is similar to [link()](/reference/api/Configuration/link), only for a sub-pipeline layout defined in a _different_ file than the current. The filename of the other module is required in the first parameter. The second parameter is the name of the sub-pipeline layout in that module. When the second parameter is absent, the _entry pipeline_ of that module will be used.
 
+When the provided filename has extension name ".so", it indicates a _native module_ that should be dynamically loaded and linked to the Pipy main executable. Native modules are similar to modules written in PipyJS, only different in that they are written in other languages such as C and hooked up to Pipy via [NMI](/reference/pjs/3-nmi) (Native Module Interface).
+
+> See [NMI](/reference/pjs/3-nmi) for more details on how to create a native module.
+
 ## Syntax
 
 ``` js

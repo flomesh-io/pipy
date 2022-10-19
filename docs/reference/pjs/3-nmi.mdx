@@ -1,0 +1,225 @@
+---
+title: "NMI"
+---
+
+Pipy is able to dynamically load and run an external module written in C via _NMI (Native Module Interface)_. Since it's pure C interface, it also allows other languages that have a native C interface to interoperate with Pipy.
+
+A native module hooked up into Pipy can do the following things:
+
+- Define custom native pipelines
+- Receive input events coming to a native pipeline
+- Output events from a native pipeline
+- Define/access/export (but not import) context variables related to a native pipeline's current context
+
+## Define a native module
+
+For a native module to be utilized by Pipy, it needs to be a dynamically-loadable shared library that exports one single entrance function under the name `pipy_module_init`. Inside the function, you call `pipy_define_variable` and `pipy_define_pipeline` to tell Pipy what variables and pipelines your native module has.
+
+> All types and functions that NMI provides for native modules can be found in header file `include/pipy/nmi.h`.
+
+### Variable definition
+
+Call `pipy_define_variable` to define a context variable being used by the native module. You can call this function multiple times to define multiple variables.
+
+Each variable definition needs the following information:
+
+- _id_ - An integer for referring the variable in C code directly and efficiently. Module developers should make sure this ID is unique among all variables within a module. Better have consecutive increasing numbers starting from 0.
+- _name_ - Name of the variable seen by PipyJS.
+- _ns_ - When given, the namespace this variable is exported to. The variable won't be visible to other modules if _ns_ is NULL.
+- _value_ - The initial value.
+
+> For how to create an initial value for a variable definition, see [Operating pjs_value](/reference/pjs/3-nmi/#operating-pjs_value).
+
+### Pipeline definition
+
+Call `pipy_define_pipeline` to define a pipeline the native module provides. You can call this function multiple times to define multiple pipelines under different names.
+
+Each pipeline definition needs the following information:
+
+- _name_ - Name under which the pipeline can be referred to from PipyJS. It can be an empty string for the _entrance pipeline_, which is the pipeline that can be referred to by only the module name and without a pipeline name.
+- _init_ - Function to be called when a pipeline instance is created.
+- _free_ - Function to be called when a pipeline instance is destroyed.
+- _process_ - Function to be called when an event arrives to a pipeline instance.
+
+### Pipeline implementation
+
+The implementation of a native pipeline sits in the 3 callback functions provided in the definition.
+
+#### Lifecycle management
+
+2 of the 3 callbacks, `fn_pipeline_init` and `fn_pipeline_free` namely, are for lifecycle management. When a native pipeline is created, `fn_pipeline_init` will be called. When a native pipeline is destroyed, `fn_pipeline_free` will be called. Both functions have the pipeline instance ID as their first argument.
+
+When a pipeline is being created, you can optionally provide a user pointer of any type via the 2nd parameter to `fn_pipeline_init`. The pointer you give will be bound to the pipeline instance and will be presented to the other 2 callback functions each time they are called for this specific pipeline instance. That way, you can attach any types of user data you need to a pipeline instance.
+
+> The allocation of user data is not under control of Pipy. It relies completely on user code. So make sure to free the allocated data in callback `fn_pipeline_free` when the pipeline using it is destroyed.
+
+#### Event handling
+
+A native pipeline handles its input events in callback `fn_pipeline_process`. It receives 3 arguments:
+
+- Pipeline ID
+- Pointer to the user data (provided by `fn_pipeline_init`)
+- An event object
+
+The event object is given as a `pjs_value`. It can be an object of one of the 4 event types:
+
+- [Data](/reference/api/Data)
+- [MessageStart](/reference/api/MessageStart)
+- [MessageEnd](/reference/api/MessageEnd)
+- [StreamEnd](/reference/api/StreamEnd)
+
+> See [Operating pjs_value](/reference/pjs/3-nmi/#operating-pjs_value) for how to use *pjs_value*.
+
+NMI provides the following functions for deciding what type the event really is:
+
+``` c
+int pipy_is_Data(pjs_value obj);
+int pipy_is_MessageStart(pjs_value obj);
+int pipy_is_MessageEnd(pjs_value obj);
+int pipy_is_StreamEnd(pjs_value obj);
+```
+
+The following functions are provided for accessing these event objects:
+
+``` c
+pjs_value pipy_Data_push(pjs_value obj, pjs_value data);
+pjs_value pipy_Data_pop(pjs_value obj, int len);
+pjs_value pipy_Data_shift(pjs_value obj, int len);
+int       pipy_Data_get_size(pjs_value obj);
+int       pipy_Data_get_data(pjs_value obj, char *buf, int len);
+pjs_value pipy_MessageStart_get_head(pjs_value obj);
+pjs_value pipy_MessageEnd_get_tail(pjs_value obj);
+pjs_value pipy_MessageEnd_get_payload(pjs_value obj);
+pjs_value pipy_StreamEnd_get_error(pjs_value obj);
+```
+
+While you process an input event in `fn_pipeline_process`, you can generate new events as the pipeline's output. This is done through a call to function `pipy_output_event`. The function requires 2 arguments: the ID of the pipeline you want to output from, and an event object as a `pjs_value`. You can pass in any existing event objects, or create a new event object with one of the following functions:
+
+``` c
+pjs_value pipy_Data_new(const char *buf, int len);
+pjs_value pipy_MessageStart_new(pjs_value head);
+pjs_value pipy_MessageEnd_new(pjs_value tail, pjs_value payload);
+pjs_value pipy_StreamEnd_new(pjs_value error);
+```
+
+You can also access any variables related to the pipeline's current context by using the following 2 functions:
+
+``` c
+void pipy_get_variable(pipy_pipeline ppl, int id, pjs_value value);
+void pipy_set_variable(pipy_pipeline ppl, int id, pjs_value value);
+```
+
+Both of the above functions receive 3 arguments:
+
+- ID of the pipeline instance
+- ID of the variable to access (as defined in `pipy_module_init` when module starts)
+- A `pjs_value` giving or receiving the value
+
+## Operating pjs_value
+
+From the view point of NMI, every piece of information you get from or give to Pipy is `pjs_value`. It's crucial to understand how *pjs_value* works to interoperate with Pipy.
+
+### Types of pjs_value
+
+A *pjs_value* represents a _value_ in PipyJS, so its type system also resembles the same type system being used by PipyJS, which includes the following basic types:
+
+- Undefined
+- Boolean (true or false)
+- Number (64-bit floating numbers)
+- String (A sequence of Unicode characters)
+- Object (A generic key-value container with optional methods to operate its internal state)
+
+> An array object is also an object. Therefore, array in itself is not a distinct basic type. Compared to other types of objects, an array only has array-specific methods to operate the elements it contains.
+
+### Scope of pjs_value
+
+By default, a *pjs_value*, either created within a function or received as a function argument, is in _local scope_. That means, the value will only be valid inside the current function. When execution exits from the current function, Pipy will make sure all local scope values are freed promptly.
+
+If a *pjs_value* needs to stay alive outside of its local scope, for instance, when it is assigned to a C struct allocated in the heap, you need to `pjs_hold` it to let Pipy know that it's still in use. Also, when the value is no longer needed, don't forget to `pjs_free` it so that no memory leaks could happen.
+
+That being said, when a value is assigned to a PipyJS container object such as an object or an array instead of a C struct, don't worry about `pjs_hold` since reference counting is done automatically by those PipyJS objects internally.
+
+### Operations on pjs_value
+
+#### Creation
+
+Use the following functions to create various types of *pjs_value*:
+
+``` c
+pjs_value pjs_undefined();
+pjs_value pjs_boolean(int b);
+pjs_value pjs_number(double n);
+pjs_value pjs_string(const char *s, int len);
+pjs_value pjs_object();
+pjs_value pjs_array(int len);
+```
+
+#### Type checking
+
+Use the following functions to obtain type information of a *pjs_value*:
+
+``` c
+pjs_type pjs_type_of(pjs_value v);
+int      pjs_class_of(pjs_value v);
+int      pjs_class_id(const char *name);
+int      pjs_is_undefined(pjs_value v);
+int      pjs_is_null(pjs_value v);
+int      pjs_is_nullish(pjs_value v);
+int      pjs_is_empty_string(pjs_value v);
+int      pjs_is_instance_of(pjs_value v, int class_id);
+int      pjs_is_array(pjs_value v);
+int      pjs_is_function(pjs_value v);
+```
+
+#### Generic value operations
+
+You can clone or check equality of values of any type with these functions:
+
+``` c
+pjs_value pjs_copy(pjs_value v, pjs_value src);
+int       pjs_is_equal(pjs_value a, pjs_value b);
+int       pjs_is_identical(pjs_value a, pjs_value b);
+```
+
+#### String operations
+
+If a *pjs_value* is a string, the following functions can be used on it:
+
+``` c
+int pjs_string_get_length(pjs_value str);
+int pjs_string_get_char_code(pjs_value str, int pos);
+int pjs_string_get_utf8_size(pjs_value str);
+int pjs_string_get_utf8_data(pjs_value str, char *buf, int len);
+```
+
+#### Object operations
+
+If a *pjs_value* is an object, the following functions can be used on it:
+
+``` c
+int  pjs_object_get_property(pjs_value obj, pjs_value k, pjs_value v);
+int  pjs_object_set_property(pjs_value obj, pjs_value k, pjs_value v);
+int  pjs_object_delete(pjs_value obj, pjs_value k);
+void pjs_object_iterate(pjs_value obj, int (*cb)(pjs_value k, pjs_value v));
+```
+
+#### Array operations
+
+If a *pjs_value* is an array object, the following functions can be used on it:
+
+``` c
+int       pjs_array_get_length(pjs_value arr);
+int       pjs_array_set_length(pjs_value arr, int len);
+int       pjs_array_get_element(pjs_value arr, int i, pjs_value v);
+int       pjs_array_set_element(pjs_value arr, int i, pjs_value v);
+int       pjs_array_delete(pjs_value arr, int i);
+int       pjs_array_push(pjs_value arr, pjs_value v);
+pjs_value pjs_array_pop(pjs_value arr);
+pjs_value pjs_array_shift(pjs_value arr);
+int       pjs_array_unshift(pjs_value arr, pjs_value v);
+pjs_value pjs_array_splice(pjs_value arr, int pos, int del_cnt, int ins_cnt, pjs_value v[]);
+```
+
+## Calling from PipyJS
+
+Native modules are loaded and dynamically linked to the Pipy main executable via a [use()](/reference/api/Configuration/use) filter. It's similar to loading a PipyJS module, where all you have to provide to the filter as parameters are a _filename_ and an optional _pipeline name_.
