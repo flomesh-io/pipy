@@ -371,7 +371,6 @@ auto Listener::AcceptorUDP::inbound(
       m_socket_raw,
       m_local, src, dst
     );
-    inbound->retain();
     return inbound;
   }
   return nullptr;

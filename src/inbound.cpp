@@ -544,6 +544,7 @@ InboundUDP::~InboundUDP() {
 
 void InboundUDP::start() {
   if (!pipeline()) {
+    retain();
     Inbound::start(m_listener->pipeline_layout());
     auto p = pipeline();
     p->chain(EventTarget::input());
@@ -565,6 +566,7 @@ void InboundUDP::receive(Data *data) {
 void InboundUDP::stop() {
   m_idle_timer.cancel();
   Inbound::stop();
+  release();
 }
 
 auto InboundUDP::size_in_buffer() const -> size_t {
