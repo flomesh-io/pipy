@@ -226,6 +226,8 @@ void Status::register_metrics() {
     [](stats::Gauge *gauge) {
       double total = 0;
       for (const auto &i : pjs::Class::all()) {
+        static std::string prefix("pjs::Constructor");
+        if (utils::starts_with(i.second->name()->str(), prefix)) continue;
         if (auto n = i.second->object_count()) {
           pjs::Str *name = i.second->name();
           auto metric = gauge->with_labels(&name, 1);
@@ -401,6 +403,8 @@ void Status::dump_memory() {
   auto current_worker = Worker::current();
 
   for (const auto &i : pjs::Class::all()) {
+    static std::string prefix("pjs::Constructor");
+    if (utils::starts_with(i.second->name()->str(), prefix)) continue;
     if (auto n = i.second->object_count()) {
       objects.push_back({ indentation + i.first, std::to_string(n) });
       total_instances += n;
