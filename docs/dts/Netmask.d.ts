@@ -4,6 +4,21 @@
 interface Netmask {
 
   /**
+   * The Internet Protocol version, 4 or 6.
+   */
+  readonly version: 4 | 6;
+
+  /**
+   * Subnet mask width.
+   */
+  readonly bitmask: number;
+
+  /**
+   * The IP address part of CIDR notation.
+   */
+  readonly ip: string;
+
+  /**
    * Base address in dot-decimal notation.
    */
   readonly base: string;
@@ -12,11 +27,6 @@ interface Netmask {
    * Subnet mask in dot-decimal notation.
    */
   readonly mask: string;
-
-  /**
-   * Subnet mask width.
-   */
-  readonly bitmask: number;
 
   /**
    * Host mask in dot-decimal notation.
@@ -44,7 +54,14 @@ interface Netmask {
   readonly last: string;
 
   /**
-   * Check if an address belongs to the block.
+   * Extracts the number components of the IP address.
+   *
+   * @returns An array of numbers composing the IP address with length of 4 for IPv4 or 8 for IPv6.
+   */
+  decompose(): number[];
+
+  /**
+   * Checks if an address belongs to the block.
    *
    * @param ip A string containing an IP address in dot-decimal notation.
    * @returns A boolean indicating if the specified IP address belongs to the block.
