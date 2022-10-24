@@ -387,6 +387,7 @@ void Status::register_metrics() {
 
 void Status::dump_memory() {
   std::string indentation("  ");
+  std::list<std::array<std::string, 4>> pools;
   std::list<std::array<std::string, 2>> objects;
   std::list<std::array<std::string, 3>> chunks;
   std::list<std::array<std::string, 3>> pipelines;
@@ -401,6 +402,18 @@ void Status::dump_memory() {
   int total_inbound_buffered = 0;
 
   auto current_worker = Worker::current();
+
+  for (const auto &p : pjs::PooledClass::all()) {
+    auto *c = p.second;
+    if (c->allocated() + c->pooled() > 1) {
+      pools.push_back({
+        c->name(),
+        std::to_string(c->size() * (c->allocated() + c->pooled())),
+        std::to_string(c->allocated()),
+        std::to_string(c->pooled()),
+      });
+    }
+  }
 
   for (const auto &i : pjs::Class::all()) {
     static std::string prefix("pjs::Constructor");
@@ -559,6 +572,8 @@ void Status::dump_memory() {
     std::to_string(int(outbound_total.connections ? outbound_total.avg_connection_time / outbound_total.connections : 0)),
   });
 
+  std::cout << std::endl;
+  print_table({ "POOL", "SIZE", "#USED", "#SPARE" }, pools);
   std::cout << std::endl;
   print_table({ "CLASS", "#INSTANCES" }, objects );
   std::cout << std::endl;

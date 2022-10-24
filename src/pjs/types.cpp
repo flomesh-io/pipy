@@ -31,6 +31,25 @@
 namespace pjs {
 
 //
+// PooledClass
+//
+
+auto PooledClass::all() -> std::map<std::string, PooledClass *> & {
+  static std::map<std::string, PooledClass*> a;
+  return a;
+}
+
+PooledClass::PooledClass(const char *c_name, size_t size) : m_size(size) {
+  int status;
+  auto cxx_name = abi::__cxa_demangle(c_name, 0, 0, &status);
+  m_name = cxx_name ? cxx_name : c_name;
+  all()[m_name] = this;
+}
+
+void PooledClass::gc_step() {
+}
+
+//
 // Str
 //
 

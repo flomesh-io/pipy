@@ -58,6 +58,33 @@ class Value;
 template<class T> Class* class_of();
 
 //
+// PooledClass
+//
+
+class PooledClass {
+public:
+  static auto all() -> std::map<std::string, PooledClass *> &;
+
+  PooledClass(const char *c_name, size_t size);
+
+  auto name() const -> const std::string& { return m_name; }
+  auto size() const -> size_t { return m_size; }
+  auto allocated() const -> int { return m_allocated; }
+  auto pooled() const -> int { return m_pooled; }
+
+  void count_allocated(int d) { m_allocated += d; }
+  void count_pooled(int d) { m_pooled += d; }
+
+  void gc_step();
+
+private:
+  std::string m_name;
+  size_t m_size;
+  int m_allocated = 0;
+  int m_pooled = 0;
+};
+
+//
 // Pooled
 //
 
@@ -69,8 +96,10 @@ public:
   using Base::Base;
 
   void* operator new(size_t) {
+    m_class.count_allocated(1);
     if (auto p = m_free) {
       m_free = *(void**)p;
+      m_class.count_pooled(-1);
       return p;
     } else {
       return new char[std::max(sizeof(T), sizeof(void*))];
@@ -86,14 +115,20 @@ public:
       0xfe, sizeof(T) - sizeof(void*)
     );
 #endif // PIPY_SOIL_FREED_SPACE
+    m_class.count_allocated(-1);
+    m_class.count_pooled(1);
   }
 
 private:
   static void* m_free;
+  static PooledClass m_class;
 };
 
 template<class T, class Base>
 void* Pooled<T, Base>::m_free = nullptr;
+
+template<class T, class Base>
+PooledClass Pooled<T, Base>::m_class(typeid(T).name(), sizeof(T));
 
 //
 // RefCount
