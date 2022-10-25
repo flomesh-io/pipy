@@ -72,16 +72,20 @@ public:
   auto allocated() const -> int { return m_allocated; }
   auto pooled() const -> int { return m_pooled; }
 
-  void count_allocated(int d) { m_allocated += d; }
-  void count_pooled(int d) { m_pooled += d; }
-
-  void gc_step();
+  auto alloc() -> void*;
+  void free(void *p);
+  void clean();
 
 private:
+  enum { CURVE_LENGTH = 3 };
+
   std::string m_name;
   size_t m_size;
+  void* m_free = nullptr;
   int m_allocated = 0;
   int m_pooled = 0;
+  int m_curve[CURVE_LENGTH] = { 0 };
+  size_t m_curve_pointer = 0;
 };
 
 //
@@ -95,37 +99,12 @@ class Pooled : public Base {
 public:
   using Base::Base;
 
-  void* operator new(size_t) {
-    m_class.count_allocated(1);
-    if (auto p = m_free) {
-      m_free = *(void**)p;
-      m_class.count_pooled(-1);
-      return p;
-    } else {
-      return new char[std::max(sizeof(T), sizeof(void*))];
-    }
-  }
-
-  void operator delete(void *p) {
-    *(void**)p = m_free;
-    m_free = p;
-#ifdef PIPY_SOIL_FREED_SPACE
-    std::memset(
-      (uint8_t *)p + sizeof(void*),
-      0xfe, sizeof(T) - sizeof(void*)
-    );
-#endif // PIPY_SOIL_FREED_SPACE
-    m_class.count_allocated(-1);
-    m_class.count_pooled(1);
-  }
+  void* operator new(size_t) { return m_class.alloc(); }
+  void operator delete(void *p) { m_class.free(p); }
 
 private:
-  static void* m_free;
   static PooledClass m_class;
 };
-
-template<class T, class Base>
-void* Pooled<T, Base>::m_free = nullptr;
 
 template<class T, class Base>
 PooledClass Pooled<T, Base>::m_class(typeid(T).name(), sizeof(T));

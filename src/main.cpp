@@ -119,6 +119,22 @@ static void start_admin_link(const std::string &url) {
 }
 
 //
+// Periodically clean up pools
+//
+
+static void start_cleaning_pools() {
+  static Timer timer;
+  static std::function<void()> clean;
+  clean = []() {
+    for (const auto &p : pjs::PooledClass::all()) {
+      p.second->clean();
+    }
+    timer.schedule(5, clean);
+  };
+  clean();
+}
+
+//
 // Periodically check codebase updates
 //
 
@@ -434,6 +450,8 @@ int main(int argc, char *argv[]) {
     signals.add(SIGHUP);
     signals.add(SIGTSTP);
     wait_for_signals(signals);
+
+    start_cleaning_pools();
 
     Net::run();
 

@@ -39,14 +39,54 @@ auto PooledClass::all() -> std::map<std::string, PooledClass *> & {
   return a;
 }
 
-PooledClass::PooledClass(const char *c_name, size_t size) : m_size(size) {
+PooledClass::PooledClass(const char *c_name, size_t size)
+  : m_size(std::max(size, sizeof(void*)))
+{
   int status;
   auto cxx_name = abi::__cxa_demangle(c_name, 0, 0, &status);
   m_name = cxx_name ? cxx_name : c_name;
   all()[m_name] = this;
 }
 
-void PooledClass::gc_step() {
+auto PooledClass::alloc() -> void* {
+  m_allocated++;
+  if (auto p = m_free) {
+    m_free = *(void**)p;
+    m_pooled--;
+    return p;
+  } else {
+    return new char[m_size];
+  }
+}
+
+void PooledClass::free(void *p) {
+  *(void**)p = m_free;
+  m_free = p;
+#ifdef PIPY_SOIL_FREED_SPACE
+  std::memset(
+    (uint8_t *)p + sizeof(void*),
+    0xfe, m_size - sizeof(void*)
+  );
+#endif // PIPY_SOIL_FREED_SPACE
+  m_allocated--;
+  m_pooled++;
+}
+
+void PooledClass::clean() {
+  int max = 0;
+  for (int i = 0; i < CURVE_LENGTH; i++) {
+    if (m_curve[i] > max) max = m_curve[i];
+  }
+  int room = max + (max >> 2) - m_allocated;
+  if (room >= 0) {
+    while (m_pooled > room) {
+      auto p = m_free;
+      m_free = *(void**)p;
+      m_pooled--;
+      delete [] (char *)p;
+    }
+  }
+  m_curve[m_curve_pointer++ % CURVE_LENGTH] = m_allocated;
 }
 
 //
