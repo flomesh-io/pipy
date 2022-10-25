@@ -444,7 +444,10 @@ static int read_record(const uint8_t *buf, const uint8_t *buf_end, uint8_t *plac
     }
     record->set(STR_rdata, pjs::Str::make((char *)name, len));
   } else if (type == int(RecordType::TYPE_TXT)) {
-    record->set(STR_rdata, pjs::Str::make((char *)ptr, rdlength));
+    int len = *ptr;
+    if (len + 1 == rdlength) {
+      record->set(STR_rdata, pjs::Str::make((char *)ptr + 1, len));
+    }
   } else if (type == int(RecordType::TYPE_CNAME) || type == int(RecordType::TYPE_NS)) {
     int len = 0;
     int num = read_name(buf, buf_end, ptr, name, sizeof(name), &len);
@@ -796,7 +799,8 @@ static int write_record(pjs::Object *dns, Data::Builder &db) {
       throw std::runtime_error("dns encode # TXT rdata error");
     }
     int num = strlen(txt_str);
-    skip += push_int16(db, num);
+    skip += push_int16(db, num + 1);
+    skip += push_int8(db, num);
     db.push((char *)txt_str, num);
     skip += num;
   } else if (type == int(RecordType::TYPE_CNAME) || type == int(RecordType::TYPE_NS)) {
