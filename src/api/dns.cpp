@@ -23,6 +23,8 @@
  *  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
+#include <cstring>
+
 #include "dns.hpp"
 #include "message.hpp"
 #include "utils.hpp"
