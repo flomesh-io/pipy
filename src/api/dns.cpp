@@ -23,6 +23,8 @@
  *  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
+#include <cstring>
+
 #include "dns.hpp"
 #include "message.hpp"
 #include "utils.hpp"
@@ -141,7 +143,7 @@ static int read_name(const uint8_t *buf, const uint8_t *buf_end, uint8_t *place,
     if (pos > 0) {
       name[pos++] = '.';
     }
-    memcpy(&name[pos], ptr + 1, *ptr);
+    std::memcpy(&name[pos], ptr + 1, *ptr);
     pos += *ptr;
     ptr += *ptr + 1;
     jumped = 0;
@@ -166,7 +168,7 @@ static int write_name(uint8_t *place, uint8_t name[], const int size) {
         return -2;
       }
       *ptr++ = n;
-      memcpy(ptr, ps, n);
+      std::memcpy(ptr, ps, n);
       ptr += n;
       ps = ++pe;
     } else {
@@ -179,7 +181,7 @@ static int write_name(uint8_t *place, uint8_t name[], const int size) {
       return -3;
     }
     *ptr++ = n;
-    memcpy(ptr, ps, n);
+    std::memcpy(ptr, ps, n);
     ptr += n;
   }
   *ptr++ = '\0';
@@ -444,7 +446,10 @@ static int read_record(const uint8_t *buf, const uint8_t *buf_end, uint8_t *plac
     }
     record->set(STR_rdata, pjs::Str::make((char *)name, len));
   } else if (type == int(RecordType::TYPE_TXT)) {
-    record->set(STR_rdata, pjs::Str::make((char *)ptr, rdlength));
+    int len = *ptr;
+    if (len + 1 == rdlength) {
+      record->set(STR_rdata, pjs::Str::make((char *)ptr + 1, len));
+    }
   } else if (type == int(RecordType::TYPE_CNAME) || type == int(RecordType::TYPE_NS)) {
     int len = 0;
     int num = read_name(buf, buf_end, ptr, name, sizeof(name), &len);
@@ -791,13 +796,14 @@ static int write_record(pjs::Object *dns, Data::Builder &db) {
     db.push((char *)name, len);
     skip += len;
   } else if (type == int(RecordType::TYPE_TXT)) {
-    const char *txt_str = get_c_string(dns);
+    const std::string *txt_str = get_string(dns);
     if (!txt_str) {
       throw std::runtime_error("dns encode # TXT rdata error");
     }
-    int num = strlen(txt_str);
-    skip += push_int16(db, num);
-    db.push((char *)txt_str, num);
+    int num = txt_str->length();
+    skip += push_int16(db, num + 1);
+    skip += push_int8(db, num);
+    db.push((char *)txt_str->c_str(), num);
     skip += num;
   } else if (type == int(RecordType::TYPE_CNAME) || type == int(RecordType::TYPE_NS)) {
     int len;
