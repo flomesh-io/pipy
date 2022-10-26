@@ -1642,6 +1642,7 @@ public:
   Context()
     : m_root(this)
     , m_caller(nullptr)
+    , m_level(0)
     , m_narg(0)
     , m_argc(0)
     , m_argv(nullptr)
@@ -1652,6 +1653,7 @@ public:
     , m_caller(nullptr)
     , m_g(g)
     , m_l(l)
+    , m_level(0)
     , m_narg(0)
     , m_argc(0)
     , m_argv(nullptr)
@@ -1663,6 +1665,7 @@ public:
     , m_g(ctx.m_g)
     , m_l(ctx.m_l)
     , m_scope(scope)
+    , m_level(ctx.m_level + 1)
     , m_narg(narg)
     , m_argc(0)
     , m_argv(nullptr)
@@ -1672,6 +1675,7 @@ public:
   auto g() const -> Object* { return m_g; }
   auto l(int i) const -> Object* { return i >= 0 && m_l ? m_l[i].get() : nullptr; }
   auto scope() const -> Scope* { return m_scope; }
+  auto level() const -> int { return m_level; }
   auto argc() const -> int { return m_argc; }
   auto arg(int i) const -> Value& { return m_argv[i]; }
 
@@ -1839,6 +1843,7 @@ private:
   Context* m_caller;
   Ref<Object> m_g, *m_l;
   Ref<Scope> m_scope;
+  int m_level;
   int m_narg;
   int m_argc;
   Value* m_argv;
@@ -1995,9 +2000,14 @@ public:
     Context fctx(ctx, m_argc, callee_scope);
     fctx.init(argc, argv);
     retv = Value::undefined;
-    m_invoke(fctx, thiz, retv);
-    callee_scope->clear();
-    if (!fctx.ok()) fctx.backtrace(name()->str());
+    if (fctx.level() > 100) {
+      fctx.error("call stack overflow");
+      fctx.backtrace(name()->str());
+    } else {
+      m_invoke(fctx, thiz, retv);
+      callee_scope->clear();
+      if (!fctx.ok()) fctx.backtrace(name()->str());
+    }
   }
 
   auto construct(Context &ctx, int argc, Value argv[]) -> Object* {
@@ -2007,9 +2017,15 @@ public:
     }
     Context fctx(ctx); // No need for a scope since JS ctors are not supported yet
     fctx.init(argc, argv);
-    auto *obj = m_constructor_class->construct(fctx);
-    if (!fctx.ok()) fctx.backtrace(name()->str());
-    return obj;
+    if (fctx.level() > 100) {
+      fctx.error("call stack overflow");
+      fctx.backtrace(name()->str());
+      return nullptr;
+    } else {
+      auto *obj = m_constructor_class->construct(fctx);
+      if (!fctx.ok()) fctx.backtrace(name()->str());
+      return obj;
+    }
   }
 
 private:
