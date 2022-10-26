@@ -16,7 +16,7 @@ const {
 
 const dirnames = [].concat(
   fs.readdirSync(TUTORIAL_PATH).sort().map(s => `tutorial/${s}`),
-  fs.readdirSync(SAMPLES_PATH).sort().map(s => `samples/${s}`),
+  fs.readdirSync(SAMPLES_PATH).filter(s => s !== 'nmi').sort().map(s => `samples/${s}`),
 );
 
 const codebases = [];
