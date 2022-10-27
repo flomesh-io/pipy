@@ -164,6 +164,7 @@ void AdminService::write_log(const std::string &name, const Data &data) {
 auto AdminService::handle(Context *ctx, Message *req) -> Message* {
   static std::string prefix_repo("/repo/");
   static std::string prefix_api_v1_repo("/api/v1/repo/");
+  static std::string prefix_api_v1_repo_files("/api/v1/repo-files/");
   static std::string prefix_api_v1_files("/api/v1/files/");
   static std::string prefix_api_v1_metrics("/api/v1/metrics/");
   static std::string prefix_api_v1_log("/api/v1/log/");
@@ -274,7 +275,7 @@ auto AdminService::handle(Context *ctx, Message *req) -> Message* {
         }
       }
 
-      // GET|POST|DELETE /api/v1/repo/[path]
+      // GET|POST|PATCH|DELETE /api/v1/repo/[path]
       if (utils::starts_with(path, prefix_api_v1_repo)) {
         path = path.substr(prefix_api_v1_repo.length() - 1);
         if (method == "GET") {
@@ -289,26 +290,44 @@ auto AdminService::handle(Context *ctx, Message *req) -> Message* {
           return m_response_method_not_allowed;
         }
       }
+
+      // GET|POST|DELETE /api/v1/repo-files/[path]
+      if (utils::starts_with(path, prefix_api_v1_repo_files)) {
+        path = path.substr(prefix_api_v1_repo_files.length() - 1);
+        if (method == "GET") {
+          return api_v1_repo_files_GET(path);
+        } else if (method == "POST") {
+          return api_v1_repo_files_POST(path, body);
+        } else if (method == "PATCH") {
+          return api_v1_repo_files_PATCH(path, body);
+        } else if (method == "DELETE") {
+          return api_v1_repo_files_DELETE(path);
+        } else {
+          return m_response_method_not_allowed;
+        }
+      }
     }
 
-    // GET /api/v1/files
+    // GET|PATCH /api/v1/files
     if (path == "/api/v1/files") {
       if (method == "GET") {
         return api_v1_files_GET("/");
-      } else if (method == "POST") {
-        return api_v1_files_POST("/", body);
+      } else if (method == "PATCH") {
+        return api_v1_files_PATCH("/", body);
       } else {
         return m_response_method_not_allowed;
       }
     }
 
-    // GET|POST /api/v1/files/[path]
+    // GET|POST|DELETE /api/v1/files/[path]
     if (utils::starts_with(path, prefix_api_v1_files)) {
       path = utils::path_normalize(path.substr(prefix_api_v1_files.length() - 1));
       if (method == "GET") {
         return api_v1_files_GET(path);
       } else if (method == "POST") {
         return api_v1_files_POST(path, body);
+      } else if (method == "PATCH") {
+        return api_v1_files_PATCH(path, body);
       } else if (method == "DELETE") {
         return api_v1_files_DELETE(path);
       } else {
@@ -613,15 +632,7 @@ Message* AdminService::api_v1_repo_GET(const std::string &path) {
 
 Message* AdminService::api_v1_repo_POST(const std::string &path, Data *data) {
   if (path.empty() || path.back() == '/') {
-    return response(400, "Invalid codebase or filename");
-  }
-
-  std::string filename;
-
-  // Create codebase file
-  if (auto codebase = codebase_of(path, filename)) {
-    codebase->set_file(filename, *data);
-    return m_response_created;
+    return response(400, "Invalid codebase name");
   }
 
   pjs::Value json, base_val, main_val, version_val;
@@ -644,13 +655,48 @@ Message* AdminService::api_v1_repo_POST(const std::string &path, Data *data) {
 
   std::string main;
   if (!main_val.is_undefined()) {
-    if (!main_val.is_string()) return response(400, "Invalid main filename");
+    if (!main_val.is_string() || !main_val.s()->length()) return response(400, "Invalid main filename");
+    main = main_val.s()->str();
+  }
+
+  int version = 1;
+  if (!version_val.is_undefined()) {
+    if (!version_val.is_number() || version_val.n() < 0) return response(400, "Invalid version number");
+    version = version_val.n();
+  }
+
+  if (m_store->find_codebase(path)) {
+    return response(400, "Codebase already exists");
+  }
+
+  m_store->make_codebase(path, version, base);
+  return m_response_created;
+}
+
+Message* AdminService::api_v1_repo_PATCH(const std::string &path, Data *data) {
+  if (path.empty() || path.back() == '/') {
+    return response(400, "Invalid codebase name");
+  }
+
+  pjs::Value json, main_val, version_val;
+  if (JSON::decode(*data, json)) {
+    if (json.is_object()) {
+      if (auto obj = json.o()) {
+        obj->get("main", main_val);
+        obj->get("version", version_val);
+      }
+    }
+  }
+
+  std::string main;
+  if (!main_val.is_undefined()) {
+    if (!main_val.is_string() || !main_val.s()->length()) return response(400, "Invalid main filename");
     main = main_val.s()->str();
   }
 
   int version = -1;
   if (!version_val.is_undefined()) {
-    if (!version_val.is_number()) return response(400, "Invalid version number");
+    if (!version_val.is_number() || version_val.n() < 0) return response(400, "Invalid version number");
     version = version_val.n();
   }
 
@@ -677,17 +723,57 @@ Message* AdminService::api_v1_repo_POST(const std::string &path, Data *data) {
       }
     }
     return m_response_created;
-
-  // Create codebase
-  } else {
-    m_store->make_codebase(path, version, base);
-    return m_response_created;
   }
+
+  return m_response_not_found;
 }
 
-Message* AdminService::api_v1_repo_PATCH(const std::string &path, Data *data) {  
+Message* AdminService::api_v1_repo_DELETE(const std::string &path) {
   if (path.empty() || path.back() == '/') {
-    return response(400, "Invalid codebase or filename");
+    return response(400, "Invalid codebase name");
+  }
+
+  // Delete codebase
+  if (auto codebase = m_store->find_codebase(path)) {
+    codebase->erase();
+    return m_response_deleted;
+  }
+
+  return m_response_not_found;
+}
+
+Message* AdminService::api_v1_repo_files_GET(const std::string &path) {
+  std::string filename;
+
+  // Get codebase file
+  if (auto codebase = codebase_of(path, filename)) {
+    Data buf;
+    if (!codebase->get_file(filename, buf)) return m_response_not_found;
+    return response(buf);
+  }
+
+  return m_response_not_found;
+}
+
+Message* AdminService::api_v1_repo_files_POST(const std::string &path, Data *data) {
+  if (path.empty() || path.back() == '/') {
+    return response(400, "Invalid filename");
+  }
+
+  std::string filename;
+
+  // Create codebase file
+  if (auto codebase = codebase_of(path, filename)) {
+    codebase->set_file(filename, *data);
+    return m_response_created;
+  }
+
+  return response(404, "Codebase not found");
+}
+
+Message* AdminService::api_v1_repo_files_PATCH(const std::string &path, Data *data) {
+  if (path.empty() || path.back() == '/') {
+    return response(400, "Invalid filename");
   }
 
   std::string filename;
@@ -702,12 +788,12 @@ Message* AdminService::api_v1_repo_PATCH(const std::string &path, Data *data) {
     return m_response_created;
   }
 
-  return m_response_not_found;
+  return response(404, "Codebase not found");
 }
 
-Message* AdminService::api_v1_repo_DELETE(const std::string &path) {
+Message* AdminService::api_v1_repo_files_DELETE(const std::string &path) {
   if (path.empty() || path.back() == '/') {
-    return response(400, "Invalid codebase or filename");
+    return response(400, "Invalid filename");
   }
 
   std::string filename;
@@ -715,12 +801,6 @@ Message* AdminService::api_v1_repo_DELETE(const std::string &path) {
   // Delete codebase file
   if (auto codebase = codebase_of(path, filename)) {
     codebase->erase_file(filename);
-    return m_response_deleted;
-  }
-
-  // Delete codebase
-  if (auto codebase = m_store->find_codebase(path)) {
-    codebase->erase();
     return m_response_deleted;
   }
 
@@ -775,6 +855,14 @@ Message* AdminService::api_v1_files_GET(const std::string &path) {
 }
 
 Message* AdminService::api_v1_files_POST(const std::string &path, Data *data) {
+  auto codebase = Codebase::current();
+  if (!codebase) return m_response_not_found;
+  if (path == "/") return m_response_method_not_allowed;
+  codebase->set(path, data);
+  return m_response_created;
+}
+
+Message* AdminService::api_v1_files_PATCH(const std::string &path, Data *data) {
   auto codebase = Codebase::current();
   if (!codebase) return m_response_not_found;
   if (path == "/") {

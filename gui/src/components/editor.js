@@ -359,7 +359,7 @@ function Editor({ root, dts }) {
       if (filename in states.files) {
         const monaco = await import('monaco-editor');
         const res = await fetch(
-          isLocalHost ? '/api/v1/files' + filename : '/api/v1/repo' + root + filename
+          isLocalHost ? '/api/v1/files' + filename : '/api/v1/repo-files' + root + filename
         );
         if (res.status === 200) {
           const content = await res.text();
@@ -391,7 +391,7 @@ function Editor({ root, dts }) {
       setWorking('Saving...');
       try {
         const res = await fetch(
-          isLocalHost ? '/api/v1/files' + file.name : '/api/v1/repo' + root + file.name,
+          isLocalHost ? '/api/v1/files' + file.name : '/api/v1/repo-files' + root + file.name,
           {
             method: 'POST',
             headers: {
@@ -418,7 +418,7 @@ function Editor({ root, dts }) {
       const res = await fetch(
         isLocalHost ? '/api/v1/files' : '/api/v1/repo' + root,
         {
-          method: 'POST',
+          method: 'PATCH',
           body: JSON.stringify({ main: filename }),
         }
       );
@@ -439,7 +439,7 @@ function Editor({ root, dts }) {
       if (res.status === 200) {
         const ver = (info.version|0) + 1;
         const res = await fetch(uri, {
-          method: 'POST',
+          method: 'PATCH',
           body: JSON.stringify({ version: ver }),
         });
         if (res.status === 201) {
@@ -906,7 +906,7 @@ function DialogNewFile({ open, root, files, folders, filename, onSuccess, onClos
     try {
       const isLocalHost = (root === '/');
       const res = await fetch(
-        isLocalHost ? '/api/v1/files' + name : '/api/v1/repo' + root + name,
+        isLocalHost ? '/api/v1/files' + name : '/api/v1/repo-files' + root + name,
         {
           method: 'POST',
           headers: {
@@ -963,7 +963,7 @@ function DialogResetFile({ open, root, filename, onSuccess, onClose }) {
     setWorking(true);
     try {
       const res = await fetch(
-        '/api/v1/repo' + root + filename,
+        '/api/v1/repo-files' + root + filename,
         {
           method: 'PATCH',
         }
@@ -1009,7 +1009,7 @@ function DialogDeleteFile({ open, root, filename, onSuccess, onClose }) {
     try {
       const isLocalHost = (root === '/');
       const res = await fetch(
-        isLocalHost ? '/api/v1/files' + filename : '/api/v1/repo' + root + filename,
+        isLocalHost ? '/api/v1/files' + filename : '/api/v1/repo-files' + root + filename,
         {
           method: 'DELETE',
         }

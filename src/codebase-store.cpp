@@ -295,7 +295,7 @@ auto CodebaseStore::make_codebase(const std::string &path, int version, Codebase
     );
   }
 
-  rec["version"] = "1";
+  rec["version"] = std::to_string(version);
   rec["path"] = path;
 
   batch->set(KEY_codebase(codebase_id), Data(make_record(rec), &s_dp));
