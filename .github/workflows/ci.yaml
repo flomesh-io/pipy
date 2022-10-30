@@ -7,6 +7,7 @@ on:
 env:
   IMAGE: flomesh/pipy
   PKG_NAME: pipy
+  S3_PATH: actions-repo/pipy-ci-debug
 
 defaults:
   run:
@@ -18,7 +19,7 @@ jobs:
     name: set-release-version
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           path: pipy
 
@@ -33,12 +34,12 @@ jobs:
           RELEASE_VERSION=`git name-rev --tags --name-only $(git rev-parse HEAD)`
           if [ $RELEASE_VERSION = 'undefined' ]
           then
-              echo "::set-output name=release_version::nightly-${CI_COMMIT_DATE}"
-              echo "::set-output name=version::nightly"
-              echo "::set-output name=commit_date::${CI_COMMIT_DATE}"
+              echo "release_version=nightly-${CI_COMMIT_DATE}" >> $GITHUB_OUTPUT
+              echo "version=nightly" >> $GITHUB_OUTPUT
+              echo "commit_date=${CI_COMMIT_DATE}" >> $GITHUB_OUTPUT
           else
-              echo "::set-output name=release_version::${RELEASE_VERSION}"
-              echo "::set-output name=commit_date::${CI_COMMIT_DATE}"
+              echo "release_version=${RELEASE_VERSION}" >> $GITHUB_OUTPUT
+              echo "commit_date=${CI_COMMIT_DATE}" >> $GITHUB_OUTPUT
           fi
 
       - name: Show envs
@@ -52,14 +53,14 @@ jobs:
     name: x86-binary
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           path: pipy
 
       - name: Show envs
         run: export
 
-      - uses: actions/setup-node@v2
+      - uses: actions/setup-node@v3
         with:
           node-version: 16
 
@@ -71,15 +72,23 @@ jobs:
           set -x
           ./build.sh -sp -t ${RELEASE_VERSION}
           ls -l
-          echo "::set-output name=artifact_name::$(ls *${RELEASE_VERSION}*.tar.gz)"
-          echo "::set-output name=arch::$(uname -m)"
+          echo "artifact_name=$(ls *${RELEASE_VERSION}*.tar.gz)" >> $GITHUB_OUTPUT
+          echo "arch=$(uname -m)" >> $GITHUB_OUTPUT
+
+      - name: Setup s3cmd
+        run: |
+          sudo apt-get install -y s3cmd
+          cat > $HOME/.s3cfg << EOF
+          bucket_location = ${{ secrets.S3_REGION }}
+          host_base = ${{ secrets.S3_GLOBAL_ACC_HOST_BASE }}
+          host_bucket = %(bucket)s.${{ secrets.S3_GLOBAL_ACC_HOST_BASE}}
+          access_key = ${{ secrets.S3_ACCESS_KEY }}
+          secret_key = ${{ secrets.S3_SECRET_KEY }}
+          EOF
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v2
-        with:
-          if-no-files-found: error
-          path: pipy/${{ steps.build.outputs.artifact_name }}
-          name: ${{ steps.build.outputs.artifact_name }}
+        run: |
+          s3cmd put ${{steps.build.outputs.artifact_name}} s3://${{ secrets.S3_BUCKET }}/${S3_PATH}/$(uname -m)/binary/${{steps.build.outputs.artifact_name}}
 
     outputs:
       artifact_name: ${{steps.build.outputs.artifact_name}}
@@ -90,12 +99,12 @@ jobs:
     name: x86-alpine-docker
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           path: pipy
 
       - name: Setup buildx
-        uses: docker/setup-buildx-action@v1
+        uses: docker/setup-buildx-action@v2
 
       - name: Show envs
         run: export
@@ -108,15 +117,23 @@ jobs:
         run: |
           ./build.sh -ncp -t ${RELEASE_VERSION}
           ls -l
-          echo "::set-output name=artifact_name::$(ls *${RELEASE_VERSION}*.tar.gz)"
-          echo "::set-output name=arch::$(uname -m)"
+          echo "artifact_name=$(ls *${RELEASE_VERSION}*.tar.gz)" >> $GITHUB_OUTPUT
+          echo "arch=$(uname -m)" >> $GITHUB_OUTPUT
+
+      - name: Setup s3cmd
+        run: |
+          sudo apt-get install -y s3cmd
+          cat > $HOME/.s3cfg << EOF
+          bucket_location = ${{ secrets.S3_REGION }}
+          host_base = ${{ secrets.S3_GLOBAL_ACC_HOST_BASE }}
+          host_bucket = %(bucket)s.${{ secrets.S3_GLOBAL_ACC_HOST_BASE}}
+          access_key = ${{ secrets.S3_ACCESS_KEY }}
+          secret_key = ${{ secrets.S3_SECRET_KEY }}
+          EOF
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v2
-        with:
-          if-no-files-found: error
-          path: pipy/${{ steps.build.outputs.artifact_name }}
-          name: ${{ steps.build.outputs.artifact_name }}
+        run: |
+          s3cmd put ${{steps.build.outputs.artifact_name}} s3://${{ secrets.S3_BUCKET }}/${S3_PATH}/$(uname -m)/image/${{steps.build.outputs.artifact_name}}
 
     outputs:
       artifact_name: ${{steps.build.outputs.artifact_name}}
@@ -127,14 +144,14 @@ jobs:
     name: aarch64-binary
     runs-on: [self-hosted, arm64]
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           path: pipy
 
       - name: Show envs
         run: export
 
-      - uses: actions/setup-node@v2
+      - uses: actions/setup-node@v3
         with:
           node-version: 16
 
@@ -145,15 +162,23 @@ jobs:
         run: |
           ./build.sh -sp -t ${RELEASE_VERSION}
           ls -l
-          echo "::set-output name=artifact_name::$(ls *${RELEASE_VERSION}*.tar.gz)"
-          echo "::set-output name=arch::$(uname -m)"
+          echo "artifact_name=$(ls *${RELEASE_VERSION}*.tar.gz)" >> $GITHUB_OUTPUT
+          echo "arch=$(uname -m)" >> $GITHUB_OUTPUT
+
+      - name: Setup s3cmd
+        run: |
+          sudo apt-get install -y s3cmd
+          cat > $HOME/.s3cfg << EOF
+          bucket_location = ${{ secrets.S3_REGION }}
+          host_base = ${{ secrets.S3_GLOBAL_ACC_HOST_BASE }}
+          host_bucket = %(bucket)s.${{ secrets.S3_GLOBAL_ACC_HOST_BASE}}
+          access_key = ${{ secrets.S3_ACCESS_KEY }}
+          secret_key = ${{ secrets.S3_SECRET_KEY }}
+          EOF
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v2
-        with:
-          if-no-files-found: error
-          path: pipy/${{ steps.build.outputs.artifact_name }}
-          name: ${{ steps.build.outputs.artifact_name }}
+        run: |
+          s3cmd put ${{steps.build.outputs.artifact_name}} s3://${{ secrets.S3_BUCKET }}/${S3_PATH}/$(uname -m)/binary/${{steps.build.outputs.artifact_name}}
 
     outputs:
       artifact_name: ${{steps.build.outputs.artifact_name}}
@@ -164,12 +189,12 @@ jobs:
     name: aarch64-alpine-docker
     runs-on: [self-hosted, arm64]
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           path: pipy
 
       - name: Setup buildx
-        uses: docker/setup-buildx-action@v1
+        uses: docker/setup-buildx-action@v2
 
       - name: Show envs
         run: export
@@ -182,15 +207,23 @@ jobs:
         run: |
           ./build.sh -ncp -t ${RELEASE_VERSION}
           ls -l
-          echo "::set-output name=artifact_name::$(ls *${RELEASE_VERSION}*.tar.gz)"
-          echo "::set-output name=arch::$(uname -m)"
+          echo "artifact_name=$(ls *${RELEASE_VERSION}*.tar.gz)" >> $GITHUB_OUTPUT
+          echo "arch=$(uname -m)" >> $GITHUB_OUTPUT
+
+      - name: Setup s3cmd
+        run: |
+          sudo apt-get install -y s3cmd
+          cat > $HOME/.s3cfg << EOF
+          bucket_location = ${{ secrets.S3_REGION }}
+          host_base = ${{ secrets.S3_GLOBAL_ACC_HOST_BASE }}
+          host_bucket = %(bucket)s.${{ secrets.S3_GLOBAL_ACC_HOST_BASE}}
+          access_key = ${{ secrets.S3_ACCESS_KEY }}
+          secret_key = ${{ secrets.S3_SECRET_KEY }}
+          EOF
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v2
-        with:
-          if-no-files-found: error
-          path: pipy/${{ steps.build.outputs.artifact_name }}
-          name: ${{ steps.build.outputs.artifact_name }}
+        run: |
+          s3cmd put ${{steps.build.outputs.artifact_name}} s3://${{ secrets.S3_BUCKET }}/${S3_PATH}/$(uname -m)/image/${{steps.build.outputs.artifact_name}}
 
     outputs:
       artifact_name: ${{steps.build.outputs.artifact_name}}
@@ -201,7 +234,7 @@ jobs:
     name: x86-rpm
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           path: pipy
 
@@ -215,15 +248,24 @@ jobs:
         run: |
           ./build.sh -nr -t ${RELEASE_VERSION}
           ls -l
-          echo "::set-output name=artifact_name::$(cd rpm; ls *.rpm)"
-          echo "::set-output name=arch::$(uname -m)"
+          echo "artifact_name=$(cd rpm; ls *.rpm)" >> $GITHUB_OUTPUT
+          echo "arch=$(uname -m)" >> $GITHUB_OUTPUT
+
+      - name: Setup s3cmd
+        run: |
+          sudo apt-get install -y s3cmd
+          cat > $HOME/.s3cfg << EOF
+          bucket_location = ${{ secrets.S3_REGION }}
+          host_base = ${{ secrets.S3_GLOBAL_ACC_HOST_BASE }}
+          host_bucket = %(bucket)s.${{ secrets.S3_GLOBAL_ACC_HOST_BASE}}
+          access_key = ${{ secrets.S3_ACCESS_KEY }}
+          secret_key = ${{ secrets.S3_SECRET_KEY }}
+          EOF
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v2
-        with:
-          if-no-files-found: error
-          path: pipy/rpm/${{ steps.build.outputs.artifact_name }}
-          name: ${{ steps.build.outputs.artifact_name }}
+        run: |
+          TARGET_FILE_NAME=`echo ${{steps.build.outputs.artifact_name}} | sed 's/.el7./-el7-/g'`
+          s3cmd put rpm/${{steps.build.outputs.artifact_name}} s3://${{ secrets.S3_BUCKET }}/${S3_PATH}/$(uname -m)/rpm/${TARGET_FILE_NAME}
 
     outputs:
       artifact_name: ${{steps.build.outputs.artifact_name}}
