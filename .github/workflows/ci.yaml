@@ -7,7 +7,7 @@ on:
 env:
   IMAGE: flomesh/pipy
   PKG_NAME: pipy
-  S3_PATH: actions-repo/pipy-ci-debug
+  S3_PATH: repo/pipy
 
 defaults:
   run:
