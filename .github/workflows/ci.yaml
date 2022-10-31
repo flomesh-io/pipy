@@ -88,7 +88,12 @@ jobs:
 
       - name: Upload artifacts
         run: |
-          s3cmd put ${{steps.build.outputs.artifact_name}} s3://${{ secrets.S3_BUCKET }}/${S3_PATH}/$(uname -m)/binary/${{steps.build.outputs.artifact_name}}
+          if [[ "$RELEASE_VERSION" == "nightly"* ]]
+          then
+            s3cmd put ${{steps.build.outputs.artifact_name}} s3://${{ secrets.S3_BUCKET }}/${S3_PATH}-nightly/$(uname -m)/binary/${{steps.build.outputs.artifact_name}}
+          else
+            s3cmd put ${{steps.build.outputs.artifact_name}} s3://${{ secrets.S3_BUCKET }}/${S3_PATH}/$(uname -m)/binary/${{steps.build.outputs.artifact_name}}
+          fi
 
     outputs:
       artifact_name: ${{steps.build.outputs.artifact_name}}
@@ -133,7 +138,12 @@ jobs:
 
       - name: Upload artifacts
         run: |
-          s3cmd put ${{steps.build.outputs.artifact_name}} s3://${{ secrets.S3_BUCKET }}/${S3_PATH}/$(uname -m)/image/${{steps.build.outputs.artifact_name}}
+          if [[ "$RELEASE_VERSION" == "nightly"* ]]
+          then
+            s3cmd put ${{steps.build.outputs.artifact_name}} s3://${{ secrets.S3_BUCKET }}/${S3_PATH}-nightly/$(uname -m)/image/${{steps.build.outputs.artifact_name}}
+          else
+            s3cmd put ${{steps.build.outputs.artifact_name}} s3://${{ secrets.S3_BUCKET }}/${S3_PATH}/$(uname -m)/image/${{steps.build.outputs.artifact_name}}
+          fi
 
     outputs:
       artifact_name: ${{steps.build.outputs.artifact_name}}
@@ -178,7 +188,12 @@ jobs:
 
       - name: Upload artifacts
         run: |
-          s3cmd put ${{steps.build.outputs.artifact_name}} s3://${{ secrets.S3_BUCKET }}/${S3_PATH}/$(uname -m)/binary/${{steps.build.outputs.artifact_name}}
+          if [[ "$RELEASE_VERSION" == "nightly"* ]]
+          then
+            s3cmd put ${{steps.build.outputs.artifact_name}} s3://${{ secrets.S3_BUCKET }}/${S3_PATH}-nightly/$(uname -m)/binary/${{steps.build.outputs.artifact_name}}
+          else
+            s3cmd put ${{steps.build.outputs.artifact_name}} s3://${{ secrets.S3_BUCKET }}/${S3_PATH}/$(uname -m)/binary/${{steps.build.outputs.artifact_name}}
+          fi
 
     outputs:
       artifact_name: ${{steps.build.outputs.artifact_name}}
@@ -223,7 +238,12 @@ jobs:
 
       - name: Upload artifacts
         run: |
-          s3cmd put ${{steps.build.outputs.artifact_name}} s3://${{ secrets.S3_BUCKET }}/${S3_PATH}/$(uname -m)/image/${{steps.build.outputs.artifact_name}}
+          if [[ "$RELEASE_VERSION" == "nightly"* ]]
+          then 
+            s3cmd put ${{steps.build.outputs.artifact_name}} s3://${{ secrets.S3_BUCKET }}/${S3_PATH}-nightly/$(uname -m)/image/${{steps.build.outputs.artifact_name}}
+          else
+            s3cmd put ${{steps.build.outputs.artifact_name}} s3://${{ secrets.S3_BUCKET }}/${S3_PATH}/$(uname -m)/image/${{steps.build.outputs.artifact_name}}
+          fi
 
     outputs:
       artifact_name: ${{steps.build.outputs.artifact_name}}
@@ -265,7 +285,12 @@ jobs:
       - name: Upload artifacts
         run: |
           TARGET_FILE_NAME=`echo ${{steps.build.outputs.artifact_name}} | sed 's/.el7./-el7-/g'`
-          s3cmd put rpm/${{steps.build.outputs.artifact_name}} s3://${{ secrets.S3_BUCKET }}/${S3_PATH}/$(uname -m)/rpm/${TARGET_FILE_NAME}
+          if [[ "$RELEASE_VERSION" == "nightly"* ]]
+          then
+            s3cmd put rpm/${{steps.build.outputs.artifact_name}} s3://${{ secrets.S3_BUCKET }}/${S3_PATH}-nightly/$(uname -m)/rpm/${TARGET_FILE_NAME}
+          else
+            s3cmd put rpm/${{steps.build.outputs.artifact_name}} s3://${{ secrets.S3_BUCKET }}/${S3_PATH}/$(uname -m)/rpm/${TARGET_FILE_NAME}
+          fi
 
     outputs:
       artifact_name: ${{steps.build.outputs.artifact_name}}
