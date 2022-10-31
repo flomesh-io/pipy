@@ -87,6 +87,8 @@ jobs:
           EOF
 
       - name: Upload artifacts
+        env:
+          RELEASE_VERSION: ${{ needs.set-release-version.outputs.release_version }}
         run: |
           if [[ "$RELEASE_VERSION" == "nightly"* ]]
           then
@@ -137,6 +139,8 @@ jobs:
           EOF
 
       - name: Upload artifacts
+        env:
+          RELEASE_VERSION: ${{ needs.set-release-version.outputs.release_version }}
         run: |
           if [[ "$RELEASE_VERSION" == "nightly"* ]]
           then
@@ -187,6 +191,8 @@ jobs:
           EOF
 
       - name: Upload artifacts
+        env:
+          RELEASE_VERSION: ${{ needs.set-release-version.outputs.release_version }}
         run: |
           if [[ "$RELEASE_VERSION" == "nightly"* ]]
           then
@@ -237,6 +243,8 @@ jobs:
           EOF
 
       - name: Upload artifacts
+        env:
+          RELEASE_VERSION: ${{ needs.set-release-version.outputs.release_version }}
         run: |
           if [[ "$RELEASE_VERSION" == "nightly"* ]]
           then 
@@ -283,6 +291,8 @@ jobs:
           EOF
 
       - name: Upload artifacts
+        env:
+          RELEASE_VERSION: ${{ needs.set-release-version.outputs.release_version }}
         run: |
           TARGET_FILE_NAME=`echo ${{steps.build.outputs.artifact_name}} | sed 's/.el7./-el7-/g'`
           if [[ "$RELEASE_VERSION" == "nightly"* ]]
