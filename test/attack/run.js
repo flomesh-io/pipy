@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import fs from 'fs';
+import net from 'net';
 import got from 'got';
 import chalk from 'chalk';
 
@@ -129,33 +130,137 @@ async function startCodebase(url) {
   return proc;
 }
 
-async function startTest(name) {
-  const basePath = join(currentDir, name);
+function createAttacks(port) {
+  class Attack {
+    constructor(id, events, verify, delay) {
+      this.id = id;
+      this.events = events.map(
+        evt => {
+          if (Buffer.isBuffer(evt)) {
+            return evt;
+          } else if (typeof evt === 'string') {
+            return Buffer.from(evt);
+          } else {
+            throw new Error('Events are expected to be Buffers or strings');
+          }
+        }
+      );
+      this.cursor = 0;
+      this.verify = verify;
+      this.delay = delay || 0;
+      this.socket = null;
+      this.buffers = [];
+      this.writeEnd = false;
+      this.readEnd = false;
+      this.checked = false;
+    }
 
-  log('Uploading codebase', chalk.magenta(name), '...');
-  await uploadCodebase(`test/${name}`, basePath);
+    write() {
+      if (this.writeEnd) {
+        return false;
+      } else if (this.delay > 0) {
+        this.delay--;
+        return true;
+      } else if (!this.socket) {
+        return new Promise((resolve, reject) => {
+          const s = net.createConnection({ port }, () => {
+            log(`Attack #${this.id} started`);
+            resolve(true);
+          });
+          s.on('data', data => this.buffers.push(data));
+          s.on('end', () => this.readEnd = true);
+          s.on('error', err => reject(err));
+          this.socket = s;
+        });
+      } else if (this.cursor < this.events.length) {
+        return new Promise(resolve => {
+          this.socket.write(
+            this.events[this.cursor++],
+            () => resolve(true)
+          );
+        });
+      } else {
+        this.socket.end();
+        this.writeEnd = true;
+        return false;
+      }
+    }
 
-  log('Starting codebase...');
-  const worker = await startCodebase(`http://localhost:6060/repo/test/${name}/`);
+    check() {
+      if (this.checked) return true;
+      if (this.readEnd) {
+        const f = this.verify;
+        if (typeof f === 'function') {
+          try {
+            f(Buffer.concat(this.buffers));
+            log(`Attack #${this.id} done`);
+          } catch (e) {
+            error(`Verification error from attack #${this.id}`);
+            throw e;
+          }
+        }
+        this.checked = true;
+        return true;
+      }
+      return false;
+    }
+  }
 
-  log('Codebase', chalk.magenta(name), 'started');
-  return worker;
+  const attacks = [];
+
+  function attack(start, events, verify) {
+    const a = new Attack(attacks.length, events, verify, start);
+    attacks.push(a);
+    return a;
+  }
+
+  async function run() {
+    for (;;) {
+      let done = true;
+      for (let i = 0, n = attacks.length; i < n; i++) {
+        if (await attacks[i].write()) {
+          done = false;
+        }
+      }
+      if (done) break;
+    }
+    for (;;) {
+      let checked = true;
+      attacks.forEach(
+        a => {
+          if (!a.check()) checked = false;
+        }
+      );
+      if (checked) break;
+      await sleep(1);
+    }
+  }
+
+  return { attack, run };
 }
 
-async function startTestcase(id) {
-  id = id.toString();
-  id = '0'.repeat(Math.max(0, 3 - id.length)) + id;
-  const name = `test-${id}`;
+async function runTestByName(name) {
+  const basePath = join(currentDir, name);
 
   let worker;
   try {
-    worker = await startTest(name);
+    log('Uploading codebase', chalk.magenta(name), '...');
+    await uploadCodebase(`test/${name}`, basePath);
+  
+    log('Starting codebase...');
+    worker = await startCodebase(`http://localhost:6060/repo/test/${name}/`);
+  
+    log('Codebase', chalk.magenta(name), 'started');
 
+    const { attack, run } = createAttacks(8000);
     const f = await import(join(currentDir, name, 'test.js'));
-    f.default({});
+    f.default({ attack });
+
+    log('Running attacks...');
+    await run();
+    log('All attacks done');
 
     worker.kill('SIGINT');
-
     for (let i = 0; i < 10 && worker.exitCode === null; i++) await sleep(1);
     if (worker.exitCode === null) throw new Error('Worker did not quit timely');
     log('Worker exited with code', worker.exitCode);
@@ -166,12 +271,32 @@ async function startTestcase(id) {
   }
 }
 
+function runTest(id) {
+  if (isNaN(parseInt(id))) {
+    return runTestByName(id);
+  } else {
+    id = id.toString();
+    id = '0'.repeat(Math.max(0, 3 - id.length)) + id;
+    return runTestByName(`test-${id}`);
+  }
+}
+
 async function start(id) {
   let repo;
   try {
     log('Starting repo...');
     repo = await startRepo();
-    await startTestcase(id);
+
+    if (id) {
+      await runTest(id);
+
+    } else {
+      const dirnames = fs.readdirSync(currentDir).filter(n => n.startsWith('test-'));
+      for (const dir of dirnames) {
+        await runTest(dir);
+      }
+    }
+
   } catch (e) {
     error(e.message);
     log(e);
@@ -185,7 +310,7 @@ async function start(id) {
 }
 
 program
-  .argument('<testcase-id>')
+  .argument('[testcase-id]')
   .option('-p, --pipy', 'Run the Pipy codebase under testing')
   .option('-c, --client', 'Run the test client')
   .option('-s, --server', 'Run the mock server')
