@@ -4,6 +4,7 @@ import fs from 'fs';
 import net from 'net';
 import got from 'got';
 import chalk from 'chalk';
+import logUpdate from 'log-update';
 
 import { spawn } from 'child_process';
 import { join, dirname } from 'path';
@@ -131,6 +132,26 @@ async function startCodebase(url) {
 }
 
 function createAttacks(port) {
+
+  function formatSize(size) {
+    let n, unit;
+    if (size < 1024) {
+      n = size;
+      unit = 'B';
+    } else if (size < 1024 * 1024) {
+      n = size / 1024;
+      unit = 'KB';
+    } else {
+      n = size / (1024 * 1024);
+      unit = 'MB';
+    }
+    return n.toFixed(2) + unit;
+  }
+
+  function formatPadding(width, str) {
+    return str + ' '.repeat(Math.max(0, width - str.length));
+  }
+
   class Attack {
     constructor(id, events, verify, delay) {
       this.id = id;
@@ -150,6 +171,8 @@ function createAttacks(port) {
       this.delay = delay || 0;
       this.socket = null;
       this.buffers = [];
+      this.sentSize = 0;
+      this.receivedSize = 0;
       this.writeEnd = false;
       this.readEnd = false;
       this.checked = false;
@@ -163,20 +186,21 @@ function createAttacks(port) {
         return true;
       } else if (!this.socket) {
         return new Promise((resolve, reject) => {
-          const s = net.createConnection({ port }, () => {
-            log(`Attack #${this.id} started`);
-            resolve(true);
-          });
-          s.on('data', data => this.buffers.push(data));
+          const s = net.createConnection({ port }, () => resolve(true));
+          s.on('data', data => { this.buffers.push(data); this.receivedSize += data.byteLength; });
           s.on('end', () => this.readEnd = true);
           s.on('error', err => reject(err));
           this.socket = s;
         });
       } else if (this.cursor < this.events.length) {
         return new Promise(resolve => {
+          const evt = this.events[this.cursor++];
           this.socket.write(
-            this.events[this.cursor++],
-            () => resolve(true)
+            evt,
+            () => {
+              this.sentSize += evt.byteLength;
+              resolve(true);
+            }
           );
         });
       } else {
@@ -193,7 +217,6 @@ function createAttacks(port) {
         if (typeof f === 'function') {
           try {
             f(Buffer.concat(this.buffers));
-            log(`Attack #${this.id} done`);
           } catch (e) {
             error(`Verification error from attack #${this.id}`);
             throw e;
@@ -204,9 +227,34 @@ function createAttacks(port) {
       }
       return false;
     }
+
+    stats() {
+      let status;
+      if (this.checked) {
+        status = 'DONE';
+      } else if (this.writeEnd) {
+        status = 'WAIT';
+      } else if (this.delay > 0) {
+        status = 'IDLE';
+      } else {
+        status = 'SEND';
+      }
+      return (
+        formatPadding(12, `Attack #${this.id}`) +
+        formatPadding( 6, status) +
+        formatPadding(20, 'UP ' + formatSize(this.sentSize)) +
+        formatPadding( 0, 'DOWN ' + formatSize(this.receivedSize))
+      );
+    }
   }
 
   const attacks = [];
+
+  function dumpStats() {
+    logUpdate(
+      attacks.map(a => a.stats()).join('\n')
+    );
+  }
 
   function attack(start, events, verify) {
     const a = new Attack(attacks.length, events, verify, start);
@@ -222,8 +270,10 @@ function createAttacks(port) {
           done = false;
         }
       }
+      dumpStats();
       if (done) break;
     }
+
     for (;;) {
       let checked = true;
       attacks.forEach(
@@ -231,9 +281,12 @@ function createAttacks(port) {
           if (!a.check()) checked = false;
         }
       );
+      dumpStats();
       if (checked) break;
       await sleep(1);
     }
+
+    logUpdate.done();
   }
 
   return { attack, run };

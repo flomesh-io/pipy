@@ -45,7 +45,7 @@ export default function({ attack }) {
   );
 
   attack(
-    10,
+    5,
     new Array(100).fill(
       [
         'GET /foo ', 'HTTP/1.1\r\n\r\n',
@@ -58,5 +58,25 @@ export default function({ attack }) {
       ]
     ).flat(),
     data => verify(data, 300),
-  )
+  );
+
+  for (let i = 0; i < 10; i++) {
+    attack(
+      i * 20,
+      new Array(10).fill(
+        [
+          'POST /foo HTTP/1.1\r\n',
+          'content-length: 6\r\n\r\n',
+          'Hello!',
+          'POST /bar HTTP/1.1\r\n',
+          'content-length: 6\r\n\r\n',
+          'Hello!',
+          'POST /xyz HTTP/1.1\r\n',
+          'content-length: 6\r\n\r\n',
+          'Hello!',
+        ]
+      ).flat(),
+      data => verify(data, 30),
+    );
+  }
 }
