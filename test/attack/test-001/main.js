@@ -17,11 +17,14 @@
   _target: undefined,
 })
 
+  .listen(8000).link('test')
+  .listen(8001).link('test').decodeHTTPResponse().replaceMessageBody(body => body.push('\n'))
+
   .listen(8080).serveHTTP(new Message('8080'))
   .listen(8081).serveHTTP(new Message('8081'))
   .listen(8082).serveHTTP(new Message('8082' + 'X'.repeat(10000)))
 
-  .listen(8000)
+  .pipeline('test')
   .demuxHTTP().to(
     $=>$
     .handleMessageStart(
@@ -31,9 +34,9 @@
       $=>$.connect(() => _target)
     )
   )
+
+  .pipeline('http-to-lines')
   .decodeHTTPResponse()
-  .replaceMessageBody(
-    body => body.push('\n')
-  )
+  .replaceMessageBody(body => body.push('\n'))
 
 )()

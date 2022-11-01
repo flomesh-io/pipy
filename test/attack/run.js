@@ -112,7 +112,7 @@ async function uploadCodebase(codebaseName, basePath) {
 async function startCodebase(url) {
   let started = false;
   const proc = startProcess(
-    pipyBinPath, [url],
+    pipyBinPath, ['--no-graph', url],
     line => {
       log(chalk.bgGreen('worker >>>'), line);
       if (line.indexOf('Listening on TCP port') >= 0) {
@@ -305,7 +305,7 @@ async function runTestByName(name) {
   
     log('Codebase', chalk.magenta(name), 'started');
 
-    const { attack, run } = createAttacks(8000);
+    const { attack, run } = createAttacks(8001);
     const f = await import(join(currentDir, name, 'test.js'));
     f.default({ attack });
 
