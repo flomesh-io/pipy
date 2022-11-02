@@ -168,6 +168,10 @@ void Log::pjs_location(const std::string &source, const std::string &filename, i
 }
 
 void Log::pjs_error(const pjs::Context::Error &err) {
+  if (auto *loc = err.where()) {
+    const auto *src = loc->source;
+    pjs_location(src->content, src->filename, loc->line, loc->column);
+  }
   error("[pjs] Error: %s", err.message.c_str());
   error("[pjs] Backtrace:");
   for (const auto &l : err.backtrace) {
@@ -175,18 +179,11 @@ void Log::pjs_error(const pjs::Context::Error &err) {
     str += l.name;
     if (l.line && l.column) {
       char s[100];
-      std::sprintf(s, " at line %d column %d", l.line, l.column);
+      std::sprintf(s, " at line %d column %d in %s", l.line, l.column, l.source->filename.c_str());
       str += s;
     }
     error("    %s", str.c_str());
   }
-}
-
-void Log::pjs_error(const pjs::Context::Error &err, const std::string &source, const std::string &filename) {
-  if (auto *loc = err.where()) {
-    pjs_location(source, filename, loc->line, loc->column);
-  }
-  pjs_error(err);
 }
 
 } // namespace pipy

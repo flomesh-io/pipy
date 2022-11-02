@@ -132,8 +132,6 @@ private:
   Pipeline* m_pipeline = nullptr;
   bool m_stream_end = false;
 
-  void pjs_error();
-
   virtual void on_event(Event *evt) override;
 
   friend class Pipeline;

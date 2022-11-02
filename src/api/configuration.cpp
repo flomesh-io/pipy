@@ -590,7 +590,7 @@ void Configuration::bind_imports(Worker *worker, Module *module, pjs::Expr::Impo
       std::string msg("cannot import variable ");
       msg += imp.name->str();
       msg += " in ";
-      msg += module->m_path;
+      msg += module->filename()->str();
       throw std::runtime_error(msg);
     }
     imports->add(imp.name, l, imp.original_name);
@@ -634,7 +634,7 @@ void Configuration::apply(JSModule *mod) {
 
   if (m_entrance_pipeline) {
     std::string name("Module Entrance: ");
-    name += mod->path();
+    name += mod->filename()->str();
     auto p = make_pipeline(-1, "", name, *m_entrance_pipeline);
     mod->m_entrance_pipeline = p;
   }

@@ -359,7 +359,7 @@ void Worker::add_export(pjs::Str *ns, pjs::Str *name, Module *module) {
     std::string msg("duplicated variable exporting name ");
     msg += name->str();
     msg += " from ";
-    msg += module->m_path;
+    msg += module->filename()->str();
     throw std::runtime_error(msg);
   }
   names[name] = module;
@@ -371,22 +371,6 @@ auto Worker::get_export(pjs::Str *ns, pjs::Str *name) -> int {
   auto j = i->second.find(name);
   if (j == i->second.end()) return -1;
   return j->second->m_index;
-}
-
-auto Worker::get_source(int l) const -> const std::string& {
-  static std::string empty;
-  if (l >= 0) {
-    if (l < m_modules.size()) {
-      return m_modules[l]->m_source;
-    }
-  } else {
-    for (const auto &p : m_solved_files) {
-      if (p.second.index == -l) {
-        return p.second.source;
-      }
-    }
-  }
-  return empty;
 }
 
 auto Worker::new_loading_context() -> Context* {
@@ -426,11 +410,13 @@ bool Worker::solve(pjs::Context &ctx, pjs::Str *filename, pjs::Value &result) {
     return false;
   }
 
-  std::string source = data->to_string();
+  auto &f = m_solved_files[filename];
+  f.source.filename = filename->str();
+  f.source.content = data->to_string();
   std::string error;
   char error_msg[1000];
   int error_line, error_column;
-  auto expr = pjs::Parser::parse(source, error, error_line, error_column);
+  auto expr = pjs::Parser::parse(&f.source, error, error_line, error_column);
   if (!expr) {
     std::snprintf(
       error_msg, sizeof(error_msg), "Syntax error: %s at line %d column %d in %s",
@@ -439,23 +425,22 @@ bool Worker::solve(pjs::Context &ctx, pjs::Str *filename, pjs::Value &result) {
       error_column,
       filename->c_str()
     );
-    Log::pjs_location(source, filename->str(), error_line, error_column);
+    Log::pjs_location(f.source.content, filename->str(), error_line, error_column);
     Log::error("[pjs] %s", error_msg);
     std::snprintf(error_msg, sizeof(error_msg), "Cannot solve script: %s", filename->c_str());
     ctx.error(error_msg);
+    m_solved_files.erase(filename);
     return false;
   }
 
-  auto &f = m_solved_files[filename];
   f.index = m_solved_files.size();
   f.filename = filename;
-  f.source = source;
   f.expr = std::unique_ptr<pjs::Expr>(expr);
   f.solving = true;
   expr->resolve(ctx, -f.index);
   auto ret = expr->eval(ctx, result);
   if (!ctx.ok()) {
-    Log::pjs_error(ctx.error(), source, filename->str());
+    Log::pjs_error(ctx.error());
     std::snprintf(error_msg, sizeof(error_msg), "Cannot solve script: %s", filename->c_str());
     ctx.reset();
     ctx.error(error_msg);
@@ -553,7 +538,7 @@ void Worker::add_module(Module *m) {
 void Worker::remove_module(int i) {
   auto mod = m_modules[i];
   m_modules[i] = nullptr;
-  m_module_map.erase(mod->m_path);
+  m_module_map.erase(mod->filename()->str());
 }
 
 } // namespace pipy

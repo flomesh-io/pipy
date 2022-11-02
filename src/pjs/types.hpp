@@ -43,6 +43,7 @@
 
 namespace pjs {
 
+class Source;
 class Array;
 class Boolean;
 class Class;
@@ -1627,8 +1628,8 @@ private:
 class Context {
 public:
   struct Location {
+    const Source* source;
     std::string name;
-    int file = 0;
     int line = 0;
     int column = 0;
   };
@@ -1699,7 +1700,7 @@ public:
   void error_argument_count(int n);
   void error_argument_count(int min, int max);
   void error_argument_type(int i, const char *type);
-  void backtrace(int module, int line, int column);
+  void backtrace(const Source *source, int line, int column);
   void backtrace(const std::string &name);
 
   bool check(int i, bool &v) {

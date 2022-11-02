@@ -35,7 +35,7 @@ async function startRepo(codebaseName, basePath) {
     pipyBinPath, [],
     line => {
       log(chalk.bgGreen('repo >>>'), line);
-      if (line.indexOf('Listening on port') >= 0) {
+      if (line.indexOf('Listening on TCP port') >= 0) {
         started = true;
       }
     }
@@ -54,6 +54,7 @@ async function startRepo(codebaseName, basePath) {
   }
 
   const codebasePath = join('api/v1/repo', codebaseName);
+  const codebaseFilePath = join('api/v1/repo-files', codebaseName);
 
   const client = got.extend({
     prefixUrl: 'http://localhost:6060',
@@ -78,7 +79,7 @@ async function startRepo(codebaseName, basePath) {
         log('  Uploading', path);
         const body = fs.readFileSync(path);
         await client.post(
-          join(codebasePath, dirName, name),
+          join(codebaseFilePath, dirName, name),
           { body }
         );
       }
@@ -93,7 +94,7 @@ async function startRepo(codebaseName, basePath) {
 
   log('Publishing codebase...');
   try {
-    await client.post(codebasePath, {
+    await client.patch(codebasePath, {
       json: { version: 2 }
     });
   } catch (e) {

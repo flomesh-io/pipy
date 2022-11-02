@@ -426,9 +426,9 @@ void Context::error_argument_type(int i, const char *type) {
   error(s);
 }
 
-void Context::backtrace(int file, int line, int column) {
+void Context::backtrace(const Source *source, int line, int column) {
   Location l;
-  l.file = file;
+  l.source = source;
   l.line = line;
   l.column = column;
   m_error->backtrace.push_back(l);

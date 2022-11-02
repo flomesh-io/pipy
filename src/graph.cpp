@@ -422,10 +422,12 @@ auto Graph::add_pipeline(Pipeline &&p) -> int {
 }
 
 bool Graph::from_script(Graph &g, const std::string &script, std::string &error) {
+  pjs::Source src;
+  src.content = script;
   error.clear();
   int error_line, error_column;
   std::unique_ptr<pjs::Expr> ast(
-    pjs::Parser::parse(script, error, error_line, error_column)
+    pjs::Parser::parse(&src, error, error_line, error_column)
   );
 
   if (!error.empty()) return false;

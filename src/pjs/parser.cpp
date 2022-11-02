@@ -692,7 +692,7 @@ private:
 
 class ExpressionParser {
 public:
-  ExpressionParser(const std::string &script);
+  ExpressionParser(const Source *source);
 
   auto parse(
     std::string &error,
@@ -714,6 +714,7 @@ private:
     AmbiguousPrecedence,
   };
 
+  const Source* m_source;
   Tokenizer m_tokenizer;
   Location m_location;
   std::string m_error;
@@ -723,17 +724,17 @@ private:
   Token read(Location &l) { return m_tokenizer.read(l); }
 
   Expr* locate(Expr *e) {
-    e->locate(m_location.line, m_location.column);
+    locate(e, m_location);
     return e;
   }
 
   Expr* locate(Expr *e, const Location &l) {
-    e->locate(l.line, l.column);
+    e->locate(m_source, l.line, l.column);
     return e;
   }
 
   Expr* locate(Expr *e, Expr *l) {
-    e->locate(l->line(), l->column());
+    e->locate(l->source(), l->line(), l->column());
     return e;
   }
 
@@ -840,7 +841,9 @@ std::unordered_map<int, int> ExpressionParser::s_precedence_table = {
   { Token::OPR(","   ),  1 },
 };
 
-ExpressionParser::ExpressionParser(const std::string &script) : m_tokenizer(script)
+ExpressionParser::ExpressionParser(const Source *source)
+  : m_source(source)
+  , m_tokenizer(source->content)
 {
 }
 
@@ -1393,13 +1396,13 @@ Expr* ExpressionParser::operand() {
 //
 
 auto Parser::parse(
-  const std::string &script,
+  const Source *source,
   std::string &error,
   int &error_line,
   int &error_column) -> Expr*
 {
   Token::clear();
-  ExpressionParser parser(script);
+  ExpressionParser parser(source);
   return parser.parse(error, error_line, error_column);
 }
 

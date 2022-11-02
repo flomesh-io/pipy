@@ -852,7 +852,7 @@ bool Construction::eval(Context &ctx, Value &result) {
   }
   result.set(f.as<Function>()->construct(ctx, argc, argv));
   if (ctx.ok()) return true;
-  ctx.backtrace(file(), line(), column());
+  ctx.backtrace(source(), line(), column());
   return false;
 }
 
@@ -883,7 +883,7 @@ bool Invocation::eval(Context &ctx, Value &result) {
   }
   (*f.as<Function>())(ctx, argc, argv, result);
   if (ctx.ok()) return true;
-  ctx.backtrace(file(), line(), column());
+  ctx.backtrace(source(), line(), column());
   return false;
 }
 
@@ -927,7 +927,7 @@ bool OptionalInvocation::eval(Context &ctx, Value &result) {
   }
   (*f.as<Function>())(ctx, argc, argv, result);
   if (ctx.ok()) return true;
-  ctx.backtrace(file(), line(), column());
+  ctx.backtrace(source(), line(), column());
   return false;
 }
 

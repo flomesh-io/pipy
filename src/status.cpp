@@ -61,7 +61,7 @@ void Status::update() {
   PipelineLayout::for_each([&](PipelineLayout *p) {
     if (auto mod = dynamic_cast<JSModule*>(p->module())) {
       if (mod->worker() == Worker::current()) {
-        auto &set = all_modules[mod->path()];
+        auto &set = all_modules[mod->filename()->str()];
         set.insert(p);
       }
     }
@@ -270,7 +270,7 @@ void Status::register_metrics() {
       PipelineLayout::for_each([&](PipelineLayout *p) {
         if (auto mod = dynamic_cast<JSModule*>(p->module())) {
           pjs::Str *labels[2];
-          labels[0] = mod ? mod->name() : pjs::Str::empty.get();
+          labels[0] = mod ? mod->filename() : pjs::Str::empty.get();
           labels[1] = p->name_or_label();
           auto metric = gauge->with_labels(labels, 2);
           auto n = p->active();
@@ -442,7 +442,7 @@ void Status::dump_memory() {
 
   PipelineLayout::for_each([&](PipelineLayout *p) {
     if (auto mod = dynamic_cast<JSModule*>(p->module())) {
-      std::string name(mod->path());
+      std::string name(mod->filename()->str());
       name += " [";
       name += p->name() == pjs::Str::empty ? p->label()->str() : p->name()->str();
       name += ']';

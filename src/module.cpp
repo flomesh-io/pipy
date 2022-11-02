@@ -101,15 +101,17 @@ bool JSModule::load(const std::string &path) {
     Log::error("[pjs] Cannot open script at %s", path.c_str());
     return false;
   }
-  m_source = data->to_string();
+
+  m_source.filename = path;
+  m_source.content = data->to_string();
 
   std::string error;
   int error_line, error_column;
-  auto expr = pjs::Parser::parse(m_source, error, error_line, error_column);
+  auto expr = pjs::Parser::parse(&m_source, error, error_line, error_column);
   m_script = std::unique_ptr<pjs::Expr>(expr);
 
   if (!expr) {
-    Log::pjs_location(m_source, path, error_line, error_column);
+    Log::pjs_location(m_source.content, path, error_line, error_column);
     Log::error(
       "[pjs] Syntax error: %s at line %d column %d in %s",
       error.c_str(), error_line, error_column, path.c_str()
@@ -123,7 +125,7 @@ bool JSModule::load(const std::string &path) {
   pjs::Value result;
   if (!expr->eval(*ctx, result)) {
     ctx->backtrace("(root)");
-    Log::pjs_error(ctx->error(), m_source, path);
+    Log::pjs_error(ctx->error());
     return false;
   }
 
@@ -181,8 +183,7 @@ bool JSModule::load(const std::string &path) {
     return false;
   }
 
-  m_path = path;
-  m_name = pjs::Str::make(path);
+  m_filename = pjs::Str::make(path);
   m_configuration = config;
 
   return true;

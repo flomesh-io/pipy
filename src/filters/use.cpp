@@ -114,7 +114,7 @@ void Use::dump(Dump &d) {
   Filter::dump(d);
   if (m_native) {
     d.name = "use ";
-    d.name += m_native_module->path();
+    d.name += m_native_module->filename()->str();
     if (m_pipeline_name) {
       d.name += " [";
       d.name += m_pipeline_name->str();
@@ -123,7 +123,7 @@ void Use::dump(Dump &d) {
   } else {
     std::string module_name;
     if (m_modules.size() > 0) {
-      module_name = m_modules.front()->path();
+      module_name = m_modules.front()->filename()->str();
     } else {
       module_name = "(0 modules)";
     }
@@ -152,7 +152,7 @@ void Use::bind() {
         throw std::runtime_error(msg + m_pipeline_name->str());
       } else {
         std::string msg("cannot find the entry pipeline in native module ");
-        throw std::runtime_error(msg + m_native_module->path());
+        throw std::runtime_error(msg + m_native_module->filename()->str());
       }
     }
 
@@ -163,7 +163,7 @@ void Use::bind() {
         : mod->entrance_pipeline();
       if (!p && !m_multiple) {
         std::string msg("pipeline not found in module ");
-        msg += mod->path();
+        msg += mod->filename()->str();
         if (m_pipeline_name) {
           msg += ": ";
           msg += m_pipeline_name->str();

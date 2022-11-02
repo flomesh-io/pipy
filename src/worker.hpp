@@ -70,7 +70,6 @@ public:
   void add_task(Task *task);
   void add_export(pjs::Str *ns, pjs::Str *name, Module *module);
   auto get_export(pjs::Str *ns, pjs::Str *name) -> int;
-  auto get_source(int l) const -> const std::string&;
   auto new_loading_context() -> Context*;
   auto new_runtime_context(Context *base = nullptr) -> Context*;
   bool solve(pjs::Context &ctx, pjs::Str *filename, pjs::Value &result);
@@ -92,7 +91,7 @@ private:
   struct SolvedFile {
     int index;
     pjs::Ref<pjs::Str> filename;
-    std::string source;
+    pjs::Source source;
     std::unique_ptr<pjs::Expr> expr;
     pjs::Value result;
     bool solving = false;

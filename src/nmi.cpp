@@ -150,7 +150,7 @@ NativeModule* NativeModule::m_current = nullptr;
 
 auto NativeModule::find(const std::string &filename) -> NativeModule* {
   for (auto *m : m_native_modules) {
-    if (m && m->m_path == filename) return m;
+    if (m && m->filename()->str() == filename) return m;
   }
   return nullptr;
 }
@@ -166,9 +166,8 @@ auto NativeModule::load(const std::string &filename, int index) -> NativeModule*
 
 NativeModule::NativeModule(int index, const std::string &filename)
   : Module(index)
-  , m_filename(pjs::Str::make(filename))
 {
-  m_path = filename;
+  m_filename = pjs::Str::make(filename);
 
   auto *handle = dlopen(filename.c_str(), RTLD_NOW);
   if (!handle) {

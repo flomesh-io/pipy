@@ -37,6 +37,16 @@
 namespace pjs {
 
 //
+// Source
+//
+
+class Source {
+public:
+  std::string filename;
+  std::string content;
+};
+
+//
 // Expression base
 //
 
@@ -176,11 +186,12 @@ public:
   // Expression location in script
   //
 
-  int file() const { return m_file; }
-  int line() const { return m_line; }
-  int column() const { return m_column; }
+  auto source() const -> const Source* { return m_source; }
+  auto line() const -> int { return m_line; }
+  auto column() const -> int { return m_column; }
 
-  void locate(int line, int column) {
+  void locate(const Source *source, int line, int column) {
+    m_source = source;
     m_line = line;
     m_column = column;
   }
@@ -188,12 +199,12 @@ public:
 protected:
   bool error(Context &ctx, const std::string &msg) {
     ctx.error(msg);
-    ctx.backtrace(m_file, m_line, m_column);
+    ctx.backtrace(m_source, m_line, m_column);
     return false;
   }
 
 private:
-  int m_file = -1;
+  const Source* m_source = nullptr;
   int m_line = 0;
   int m_column = 0;
 };
@@ -529,7 +540,7 @@ private:
   void resolve(Context &ctx);
 
   auto locate(Expr *expr) -> Expr* {
-    expr->locate(line(), column());
+    expr->locate(source(), line(), column());
     return expr;
   }
 };

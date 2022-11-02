@@ -126,12 +126,7 @@ void PipelineLayout::end(Pipeline *pipeline) {
     pjs::Value ret;
     (*m_on_end)(ctx, 0, nullptr, ret);
     if (!ctx.ok()) {
-      auto mod = dynamic_cast<JSModule*>(module());
-      Log::pjs_error(
-        ctx.error(),
-        mod ? mod->source() : std::string(),
-        mod ? mod->path() : std::string()
-      );
+      Log::pjs_error(ctx.error());
       ctx.reset();
     }
   }

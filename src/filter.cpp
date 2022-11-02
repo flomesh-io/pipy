@@ -185,7 +185,7 @@ bool Filter::callback(pjs::Function *func, int argc, pjs::Value argv[], pjs::Val
   auto c = context();
   (*func)(*c, argc, argv, result);
   if (c->ok()) return true;
-  pjs_error();
+  Log::pjs_error(c->error());
   c->reset();
   return false;
 }
@@ -196,7 +196,7 @@ bool Filter::eval(pjs::Value &param, pjs::Value &result) {
     auto f = param.as<pjs::Function>();
     (*f)(*c, 0, nullptr, result);
     if (c->ok()) return true;
-    pjs_error();
+    Log::pjs_error(c->error());
     c->reset();
     return false;
   } else {
@@ -210,18 +210,9 @@ bool Filter::eval(pjs::Function *func, pjs::Value &result) {
   auto c = context();
   (*func)(*c, 0, nullptr, result);
   if (c->ok()) return true;
-  pjs_error();
+  Log::pjs_error(c->error());
   c->reset();
   return false;
-}
-
-void Filter::pjs_error() {
-  auto mod = dynamic_cast<JSModule*>(module());
-  Log::pjs_error(
-    context()->error(),
-    mod ? mod->source() : std::string(),
-    mod ? mod->path() : std::string()
-  );
 }
 
 } // namespace pipy

@@ -34,11 +34,12 @@
 namespace pjs {
 
 class Expr;
+class Source;
 
 class Parser {
 public:
   static auto parse(
-    const std::string &script,
+    const Source *source,
     std::string &error,
     int &error_line,
     int &error_column

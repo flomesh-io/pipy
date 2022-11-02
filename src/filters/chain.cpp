@@ -50,7 +50,7 @@ void Chain::dump(Dump &d) {
   Filter::dump(d);
   std::string module_name;
   if (m_modules.size() > 0) {
-    module_name = m_modules.front()->path();
+    module_name = m_modules.front()->filename()->str();
   } else {
     module_name = "(0 modules)";
   }
@@ -71,7 +71,7 @@ void Chain::bind() {
     auto p = mod->entrance_pipeline();
     if (!p) {
       std::string msg("entrance pipeline not found in module ");
-      msg += mod->path();
+      msg += mod->filename()->str();
       throw std::runtime_error(msg);
     }
     if (chain) {

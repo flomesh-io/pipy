@@ -73,15 +73,13 @@ private:
 class Module : public ModuleBase {
 public:
   auto index() const -> int { return m_index; }
-  auto path() const -> const std::string& { return m_path; }
-  auto source() const -> const std::string& { return m_source; }
+  auto filename() const -> pjs::Str* { return m_filename; }
 
 protected:
   Module(int index) : m_index(index) {}
 
   int m_index;
-  std::string m_path;
-  std::string m_source;
+  pjs::Ref<pjs::Str> m_filename;
 
 private:
   virtual void bind_exports(Worker *worker) = 0;
@@ -102,8 +100,6 @@ private:
 class JSModule : public Module {
 public:
   auto worker() const -> Worker* { return m_worker; }
-  auto name() const -> pjs::Str* { return m_name; }
-
   auto entrance_pipeline() -> PipelineLayout* { return m_entrance_pipeline; }
   auto find_named_pipeline(pjs::Str *name) -> PipelineLayout*;
   auto find_indexed_pipeline(int index) -> PipelineLayout*;
@@ -120,7 +116,7 @@ private:
   virtual void bind_pipelines() override;
 
   virtual auto new_context_data(pjs::Object *prototype) -> pjs::Object* override {
-    auto obj = new ContextDataBase(m_name);
+    auto obj = new ContextDataBase(m_filename);
     m_context_class->init(obj, prototype);
     return obj;
   }
@@ -130,7 +126,7 @@ private:
   ~JSModule();
 
   pjs::Ref<Worker> m_worker;
-  pjs::Ref<pjs::Str> m_name;
+  pjs::Source m_source;
   std::unique_ptr<pjs::Expr> m_script;
   std::unique_ptr<pjs::Expr::Imports> m_imports;
   pjs::Ref<Configuration> m_configuration;

@@ -156,6 +156,7 @@ public:
   static auto current() -> NativeModule* { return m_current; }
   static void set_current(NativeModule *m) { m_current = m; }
 
+  auto filename() const -> pjs::Str* { return m_filename; }
   void define_variable(int id, const char *name, const char *ns, const pjs::Value &value);
   void define_pipeline(const char *name, fn_pipeline_init init, fn_pipeline_free free, fn_pipeline_process process);
   auto pipeline_layout(pjs::Str *name) -> PipelineLayout*;
@@ -182,7 +183,6 @@ private:
     pjs::Ref<pjs::Str> name;
   };
 
-  pjs::Ref<pjs::Str> m_filename;
   pjs::Ref<pjs::Class> m_context_class;
   std::list<VariableDef> m_variable_defs;
   std::list<PipelineDef> m_pipeline_defs;
