@@ -177,6 +177,7 @@ void LevelDBStore::keys(const std::string &base_key, std::set<std::string> &keys
       keys.insert(key);
     }
   }
+  delete it;
 }
 
 bool LevelDBStore::get(const std::string &key, Data &data) {
