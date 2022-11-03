@@ -314,7 +314,6 @@ public:
 
   bool empty() const { return m_queue.empty(); }
   void reset();
-  void shutdown();
   void push(Request *req);
   auto head() const -> Request* { return m_queue.head(); }
   auto shift() -> Request*;
@@ -354,7 +353,7 @@ private:
   virtual void dump(Dump &d) override;
 
   //
-  // Muxer::HTTP2Demuxer
+  // Demux::HTTP2Demuxer
   //
 
   class HTTP2Demuxer :
@@ -378,6 +377,7 @@ private:
   RequestQueue m_request_queue;
   pjs::PropertyCache m_prop_status;
   HTTP2Demuxer* m_http2_demuxer = nullptr;
+  bool m_shutdown = false;
 
   virtual auto on_new_sub_pipeline(Input *chain_to) -> Pipeline* override;
   virtual bool on_response_start(MessageStart *start) override;
@@ -574,6 +574,7 @@ private:
   RequestQueue m_request_queue;
   pjs::Ref<Pipeline> m_tunnel;
   HTTP2Server* m_http2_server = nullptr;
+  bool m_shutdown = false;
 
   void upgrade_http2();
   void on_tunnel_data(Data *data);

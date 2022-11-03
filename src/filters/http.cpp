@@ -1121,12 +1121,6 @@ void RequestQueue::reset() {
   }
 }
 
-void RequestQueue::shutdown() {
-  if (!m_queue.empty()) {
-    m_queue.tail()->header_connection = s_close;
-  }
-}
-
 void RequestQueue::push(Request *req) {
   m_queue.push(req);
 }
@@ -1233,6 +1227,7 @@ void Demux::reset() {
     delete m_http2_demuxer;
     m_http2_demuxer = nullptr;
   }
+  m_shutdown = false;
 }
 
 void Demux::process(Event *evt) {
@@ -1246,7 +1241,7 @@ void Demux::shutdown() {
   } else if (m_request_queue.empty()) {
     Filter::output(StreamEnd::make());
   } else {
-    m_request_queue.shutdown();
+    m_shutdown = true;
   }
 }
 
@@ -1297,7 +1292,7 @@ void Demux::on_encode_response(pjs::Object *head) {
       Encoder::set_bodiless(true);
     }
   } else if (auto req = m_request_queue.shift()) {
-    Encoder::set_final(req->is_final());
+    Encoder::set_final(req->is_final() || (m_shutdown && m_request_queue.empty()));
     Encoder::set_bodiless(req->is_bodiless());
     Encoder::set_switching(req->is_switching());
     delete req;
@@ -1576,6 +1571,7 @@ void Server::reset() {
     delete m_http2_server;
     m_http2_server = nullptr;
   }
+  m_shutdown = false;
 }
 
 void Server::process(Event *evt) {
@@ -1589,7 +1585,7 @@ void Server::shutdown() {
   } else if (m_request_queue.empty()) {
     Filter::output(StreamEnd::make());
   } else {
-    m_request_queue.shutdown();
+    m_shutdown = true;
   }
 }
 
@@ -1621,7 +1617,7 @@ void Server::on_decode_request(http::RequestHead *head) {
 
 void Server::on_encode_response(pjs::Object *head) {
   if (auto *req = m_request_queue.shift()) {
-    Encoder::set_final(req->is_final());
+    Encoder::set_final(req->is_final() || (m_shutdown && m_request_queue.empty()));
     Encoder::set_bodiless(req->is_bodiless());
     Encoder::set_switching(req->is_switching());
     delete req;
