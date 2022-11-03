@@ -131,7 +131,7 @@ async function startCodebase(url) {
   return proc;
 }
 
-function createAttacks(port) {
+function createAttacks(proc, port) {
 
   function formatSize(size) {
     let n, unit;
@@ -249,11 +249,18 @@ function createAttacks(port) {
   }
 
   const attacks = [];
+  const reloads = [];
 
-  function dumpStats() {
+  function dumpStats(t) {
     logUpdate(
+      `T = ${t}\n` +
       attacks.map(a => a.stats()).join('\n')
     );
+  }
+
+  function triggerReload() {
+    logUpdate.done();
+    proc.kill('SIGHUP');
   }
 
   function attack(start, events, verify) {
@@ -262,7 +269,13 @@ function createAttacks(port) {
     return a;
   }
 
+  function reload(t) {
+    reloads[t] = true;
+  }
+
   async function run() {
+    let tick = 0;
+
     for (;;) {
       let done = true;
       for (let i = 0, n = attacks.length; i < n; i++) {
@@ -270,8 +283,10 @@ function createAttacks(port) {
           done = false;
         }
       }
-      dumpStats();
+      dumpStats(tick);
       if (done) break;
+      if (reloads[tick++]) triggerReload();
+      await sleep(0.1);
     }
 
     for (;;) {
@@ -281,15 +296,16 @@ function createAttacks(port) {
           if (!a.check()) checked = false;
         }
       );
-      dumpStats();
+      dumpStats(tick);
       if (checked) break;
-      await sleep(1);
+      if (reloads[tick++]) triggerReload();
+      await sleep(0.1);
     }
 
     logUpdate.done();
   }
 
-  return { attack, run };
+  return { attack, reload, run };
 }
 
 async function runTestByName(name) {
@@ -305,9 +321,9 @@ async function runTestByName(name) {
   
     log('Codebase', chalk.magenta(name), 'started');
 
-    const { attack, run } = createAttacks(8001);
+    const { attack, reload, run } = createAttacks(worker, 8001);
     const f = await import(join(currentDir, name, 'test.js'));
-    f.default({ attack });
+    f.default({ attack, reload });
 
     log('Running attacks...');
     await run();

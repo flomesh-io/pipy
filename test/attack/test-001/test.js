@@ -1,4 +1,4 @@
-export default function({ attack }) {
+export default function({ attack, reload }) {
 
   const expected = [
     '8080',
@@ -33,20 +33,20 @@ export default function({ attack }) {
   );
 
   attack(
-    2,
-    new Array(100).fill(
+    10,
+    new Array(50).fill(
       [
         'GET /foo ', 'HTTP/1.1\r\n\r\n',
         'GET /bar ', 'HTTP/1.1\r\n\r\n',
         'GET /xyz ', 'HTTP/1.1\r\n\r\n',
       ]
     ).flat(),
-    data => verify(data, 300),
+    data => verify(data, 150),
   );
 
   attack(
-    5,
-    new Array(100).fill(
+    100,
+    new Array(30).fill(
       [
         'GET /foo ', 'HTTP/1.1\r\n\r\n',
         'GET /bar ', 'HTTP/1.1\r\n\r\n',
@@ -57,13 +57,13 @@ export default function({ attack }) {
         'Z'.repeat(1000),
       ]
     ).flat(),
-    data => verify(data, 300),
+    data => verify(data, 90),
   );
 
   for (let i = 0; i < 10; i++) {
     attack(
       i * 20,
-      new Array(10).fill(
+      new Array(30).fill(
         [
           'POST /foo HTTP/1.1\r\n',
           'content-length: 6\r\n\r\n',
@@ -76,7 +76,11 @@ export default function({ attack }) {
           'Hello!',
         ]
       ).flat(),
-      data => verify(data, 30),
+      data => verify(data, 90),
     );
   }
+
+  reload(100);
+  reload(200);
+  reload(300);
 }
