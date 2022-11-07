@@ -1231,12 +1231,6 @@ void Endpoint::on_event(Event *evt) {
 
 void Endpoint::on_flush() {
   send_window_updates();
-  for_each_pending_stream(
-    [this](StreamBase *s) {
-      s->pump();
-      return m_send_window > 0;
-    }
-  );
   flush();
 }
 
@@ -1348,7 +1342,7 @@ void Endpoint::on_deframe(Frame &frm) {
               m_send_window = n;
               for_each_pending_stream(
                 [this](StreamBase *s) {
-                  s->on_pump();
+                  s->update_connection_send_window();
                   return m_send_window > 0;
                 }
               );
@@ -1537,7 +1531,13 @@ bool Endpoint::StreamBase::update_send_window(int delta) {
   }
   m_send_window += delta;
   pump();
+  recycle();
   return true;
+}
+
+void Endpoint::StreamBase::update_connection_send_window() {
+  pump();
+  recycle();
 }
 
 void Endpoint::StreamBase::on_frame(Frame &frm) {
@@ -1692,11 +1692,6 @@ void Endpoint::StreamBase::on_event(Event *evt) {
     }
     recycle();
   }
-}
-
-void Endpoint::StreamBase::on_pump() {
-  pump();
-  recycle();
 }
 
 auto Endpoint::StreamBase::deduct_send(int size) -> int {
@@ -1891,7 +1886,7 @@ void Endpoint::StreamBase::pump(bool no_end) {
     } while (remain > 0);
     m_send_window -= size;
   }
-  set_pending(m_send_buffer.empty());
+  set_pending(!m_send_buffer.empty());
 }
 
 void Endpoint::StreamBase::recycle() {

@@ -446,9 +446,9 @@ protected:
     auto id() const -> int { return m_id; }
 
     bool update_send_window(int delta);
+    void update_connection_send_window();
     void on_frame(Frame &frm);
     void on_event(Event *evt);
-    void on_pump();
 
     virtual void event(Event *evt) = 0;
 
