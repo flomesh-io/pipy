@@ -162,6 +162,7 @@ void AdminService::write_log(const std::string &name, const Data &data) {
 }
 
 auto AdminService::handle(Context *ctx, Message *req) -> Message* {
+  static std::string prefix_dump("/dump/");
   static std::string prefix_repo("/repo/");
   static std::string prefix_api_v1_repo("/api/v1/repo/");
   static std::string prefix_api_v1_repo_files("/api/v1/repo-files/");
@@ -210,8 +211,16 @@ auto AdminService::handle(Context *ctx, Message *req) -> Message* {
 
   try {
 
+    // GET /dump/*
+    if (utils::starts_with(path, prefix_dump)) {
+      if (method == "GET") {
+        return dump_GET(path.substr(prefix_dump.length()));
+      } else {
+        return m_response_method_not_allowed;
+      }
+
     // GET /metrics
-    if (path == "/metrics") {
+    } else if (path == "/metrics") {
       if (method == "GET") {
         return metrics_GET(head->headers());
       } else {
@@ -413,6 +422,28 @@ auto AdminService::handle(Context *ctx, Message *req) -> Message* {
   } catch (std::runtime_error &err) {
     return response(500, err.what());
   }
+}
+
+Message* AdminService::dump_GET(const std::string &path) {
+  Data buf;
+  Data::Builder db(buf, &s_dp);
+  if (path == "pools") {
+    Status::dump_pools(db);
+  } else if (path == "objects") {
+    Status::dump_objects(db);
+  } else if (path == "chunks") {
+    Status::dump_chunks(db);
+  } else if (path == "pipelines") {
+    Status::dump_pipelines(db);
+  } else if (path == "inbound") {
+    Status::dump_inbound(db);
+  } else if (path == "outbound") {
+    Status::dump_outbound(db);
+  } else {
+    return m_response_not_found;
+  }
+  db.flush();
+  return response(buf);
 }
 
 Message* AdminService::metrics_GET(pjs::Object *headers) {

@@ -211,6 +211,56 @@ static void print_table(const T &header, const std::list<T> &rows) {
   }
 }
 
+template<class T>
+static void print_table(Data::Builder &db, const T &header, const std::list<T> &rows) {
+  static std::string spacing("  ");
+
+  int n = header.size();
+  int max_width[header.size()];
+
+  for (int i = 0; i < n; i++) {
+    max_width[i] = header[i].length();
+  }
+
+  for (const auto &row : rows) {
+    for (int i = 0; i < n; i++) {
+      if (row[i].length() > max_width[i]) {
+        max_width[i] = row[i].length();
+      }
+    }
+  }
+
+  int total_width = 0;
+  for (int i = 0; i < n; i++) {
+    std::string padding(max_width[i] - header[i].length(), ' ');
+    db.push(header[i]);
+    db.push(padding);
+    db.push(spacing);
+    // std::cout << header[i] << padding << "  ";
+    total_width += max_width[i] + 2;
+  }
+
+  db.push('\n');
+  db.push(std::string(total_width, '-'));
+  db.push('\n');
+
+  // std::cout << std::endl;
+  // std::cout << std::string(total_width, '-');
+  // std::cout << std::endl;
+
+  for (const auto &row : rows) {
+    for (int i = 0; i < n; i++) {
+      std::string padding(max_width[i] - row[i].length(), ' ');
+      db.push(row[i]);
+      db.push(padding);
+      db.push(spacing);
+      // std::cout << row[i] << padding << "  ";
+    }
+    db.push('\n');
+    // std::cout << std::endl;
+  }
+}
+
 void Status::register_metrics() {
   static pjs::ConstStr s_server("Server");
   static pjs::ConstStr s_client("Client");
@@ -386,22 +436,30 @@ void Status::register_metrics() {
 }
 
 void Status::dump_memory() {
-  std::string indentation("  ");
+  static Data::Producer s_dp("Dump");
+
+  Data buf;
+  Data::Builder db(buf, &s_dp);
+
+  db.push('\n');
+  dump_pools(db);
+  db.push('\n');
+  dump_objects(db);
+  db.push('\n');
+  dump_chunks(db);
+  db.push('\n');
+  dump_pipelines(db);
+  db.push('\n');
+  dump_inbound(db);
+  db.push('\n');
+  dump_outbound(db);
+
+  db.flush();
+  std::cout << buf.to_string();
+}
+
+void Status::dump_pools(Data::Builder &db) {
   std::list<std::array<std::string, 4>> pools;
-  std::list<std::array<std::string, 2>> objects;
-  std::list<std::array<std::string, 3>> chunks;
-  std::list<std::array<std::string, 3>> pipelines;
-  std::list<std::array<std::string, 3>> inbounds;
-  std::list<std::array<std::string, 6>> outbounds;
-
-  int total_allocated = 0;
-  int total_active = 0;
-  int total_chunks = 0;
-  int total_instances = 0;
-  int total_inbound_connections = 0;
-  int total_inbound_buffered = 0;
-
-  auto current_worker = Worker::current();
 
   for (const auto &p : pjs::PooledClass::all()) {
     auto *c = p.second;
@@ -415,16 +473,29 @@ void Status::dump_memory() {
     }
   }
 
+  print_table(db, { "POOL", "SIZE", "#USED", "#SPARE" }, pools);
+}
+
+void Status::dump_objects(Data::Builder &db) {
+  std::list<std::array<std::string, 2>> objects;
+  int total_instances = 0;
+
   for (const auto &i : pjs::Class::all()) {
     static std::string prefix("pjs::Constructor");
     if (utils::starts_with(i.second->name()->str(), prefix)) continue;
     if (auto n = i.second->object_count()) {
-      objects.push_back({ indentation + i.first, std::to_string(n) });
+      objects.push_back({ i.first, std::to_string(n) });
       total_instances += n;
     }
   }
 
   objects.push_back({ "TOTAL", std::to_string(total_instances) });
+  print_table(db, { "CLASS", "#INSTANCES" }, objects );
+}
+
+void Status::dump_chunks(Data::Builder &db) {
+  std::list<std::array<std::string, 3>> chunks;
+  int total_chunks = 0;
 
   Data::Producer::for_each([&](Data::Producer *producer) {
     chunks.push_back({
@@ -436,9 +507,17 @@ void Status::dump_memory() {
   });
 
   chunks.push_back({ "TOTAL", std::to_string(total_chunks * DATA_CHUNK_SIZE / 1024), "n/a" });
+  print_table(db, { "DATA", "CURRENT(KB)", "PEAK(KB)" }, chunks );
+}
 
+void Status::dump_pipelines(Data::Builder &db) {
+  std::list<std::array<std::string, 3>> pipelines;
   std::multimap<std::string, PipelineLayout*> stale_pipelines;
   std::multimap<std::string, PipelineLayout*> current_pipelines;
+  int total_allocated = 0;
+  int total_active = 0;
+
+  auto current_worker = Worker::current();
 
   PipelineLayout::for_each([&](PipelineLayout *p) {
     if (auto mod = dynamic_cast<JSModule*>(p->module())) {
@@ -458,7 +537,7 @@ void Status::dump_memory() {
   for (const auto &i : current_pipelines) {
     auto p = i.second;
     pipelines.push_back({
-      indentation + i.first,
+      i.first,
       std::to_string(p->allocated()),
       std::to_string(p->active()),
     });
@@ -469,7 +548,7 @@ void Status::dump_memory() {
   for (const auto &i : stale_pipelines) {
     auto p = i.second;
     pipelines.push_back({
-      indentation + i.first,
+      i.first,
       std::to_string(p->allocated()),
       std::to_string(p->active()),
     });
@@ -482,6 +561,14 @@ void Status::dump_memory() {
     std::to_string(total_allocated),
     std::to_string(total_active),
   });
+
+  print_table(db, { "PIPELINE", "#ALLOCATED", "#ACTIVE" }, pipelines);
+}
+
+void Status::dump_inbound(Data::Builder &db) {
+  std::list<std::array<std::string, 3>> inbounds;
+  int total_inbound_connections = 0;
+  int total_inbound_buffered = 0;
 
   Listener::for_each([&](Listener *listener) {
     int count = 0;
@@ -506,6 +593,12 @@ void Status::dump_memory() {
     std::to_string(total_inbound_connections),
     std::to_string(total_inbound_buffered),
   });
+
+  print_table(db, { "INBOUND", "#CONNECTIONS", "BUFFERED(KB)" }, inbounds);
+}
+
+void Status::dump_outbound(Data::Builder &db) {
+  std::list<std::array<std::string, 6>> outbounds;
 
   struct OutboundSum {
     int connections = 0;
@@ -572,19 +665,7 @@ void Status::dump_memory() {
     std::to_string(int(outbound_total.connections ? outbound_total.avg_connection_time / outbound_total.connections : 0)),
   });
 
-  std::cout << std::endl;
-  print_table({ "POOL", "SIZE", "#USED", "#SPARE" }, pools);
-  std::cout << std::endl;
-  print_table({ "CLASS", "#INSTANCES" }, objects );
-  std::cout << std::endl;
-  print_table({ "DATA", "CURRENT(KB)", "PEAK(KB)" }, chunks );
-  std::cout << std::endl;
-  print_table({ "PIPELINE", "#ALLOCATED", "#ACTIVE" }, pipelines);
-  std::cout << std::endl;
-  print_table({ "INBOUND", "#CONNECTIONS", "BUFFERED(KB)" }, inbounds);
-  std::cout << std::endl;
-  print_table({ "OUTBOUND", "#CONNECTIONS", "MAX_CONN_TIME", "AVG_CONN_TIME" }, outbounds);
-  std::cout << std::endl;
+  print_table(db, { "OUTBOUND", "#CONNECTIONS", "MAX_CONN_TIME", "AVG_CONN_TIME" }, outbounds);
 }
 
 } // namespace pipy

@@ -27,6 +27,7 @@
 #define STATUS_HPP
 
 #include "api/stats.hpp"
+#include "data.hpp"
 
 #include <list>
 #include <ostream>
@@ -63,6 +64,12 @@ public:
 
   static void register_metrics();
   static void dump_memory();
+  static void dump_pools(Data::Builder &db);
+  static void dump_objects(Data::Builder &db);
+  static void dump_chunks(Data::Builder &db);
+  static void dump_pipelines(Data::Builder &db);
+  static void dump_inbound(Data::Builder &db);
+  static void dump_outbound(Data::Builder &db);
 };
 
 } // namespace pipy
