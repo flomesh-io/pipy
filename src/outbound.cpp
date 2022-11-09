@@ -206,6 +206,10 @@ void OutboundTCP::resolve() {
       const std::error_code &ec,
       tcp::resolver::results_type results
     ) {
+      if (ec && m_options.connect_timeout > 0) {
+        m_connect_timer.cancel();
+      }
+
       if (ec != asio::error::operation_aborted) {
         if (ec) {
           if (Log::is_enabled(Log::ERROR)) {
@@ -237,8 +241,9 @@ void OutboundTCP::resolve() {
     m_connect_timer.schedule(
       m_options.connect_timeout,
       [this]() {
+        asio::error_code ec;
         m_resolver.cancel();
-        m_socket.cancel();
+        m_socket.cancel(ec);
         restart(StreamEnd::CONNECTION_TIMEOUT);
       }
     );
@@ -623,6 +628,10 @@ void OutboundUDP::resolve() {
       const std::error_code &ec,
       udp::resolver::results_type results
     ) {
+      if (ec && m_options.connect_timeout > 0) {
+        m_connect_timer.cancel();
+      }
+
       if (ec != asio::error::operation_aborted) {
         if (ec) {
           if (Log::is_enabled(Log::ERROR)) {
@@ -654,8 +663,9 @@ void OutboundUDP::resolve() {
     m_connect_timer.schedule(
       m_options.connect_timeout,
       [this]() {
+        asio::error_code ec;
         m_resolver.cancel();
-        m_socket.cancel();
+        m_socket.cancel(ec);
         restart(StreamEnd::CONNECTION_TIMEOUT);
       }
     );
