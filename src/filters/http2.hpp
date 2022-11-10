@@ -467,6 +467,8 @@ protected:
     bool m_is_tunnel = false;
     bool m_is_pending = false;
     bool m_is_clearing = false;
+    bool m_is_message_started = false;
+    bool m_is_message_ended = false;
     bool m_end_headers = false;
     bool m_end_input = false;
     bool m_end_output = false;
@@ -474,6 +476,7 @@ protected:
     HeaderDecoder& m_header_decoder;
     HeaderEncoder& m_header_encoder;
     Data m_send_buffer;
+    Data m_tail_buffer;
     int m_send_window = INITIAL_SEND_WINDOW_SIZE;
     int m_recv_window;
     int m_recv_window_max;
@@ -488,7 +491,7 @@ protected:
     void write_header_block(Data &data);
     void set_pending(bool pending);
     void set_clearing(bool clearing);
-    void pump(bool no_end = false);
+    void pump();
     void recycle();
     void stream_end(http::MessageTail *tail);
 

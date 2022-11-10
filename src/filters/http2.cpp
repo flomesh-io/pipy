@@ -1637,60 +1637,61 @@ void Endpoint::StreamBase::on_frame(Frame &frm) {
 
 void Endpoint::StreamBase::on_event(Event *evt) {
   if (auto start = evt->as<MessageStart>()) {
-    Data buf;
-    m_header_encoder.encode(m_is_server_side, false, start->head(), buf);
-    write_header_block(buf);
-    if (m_state == IDLE) {
-      m_state = OPEN;
-    } else if (m_state == RESERVED_LOCAL) {
-      m_state = HALF_CLOSED_REMOTE;
-    }
-    if (!m_is_server_side) {
-      if (auto head = start->head()) {
-        pjs::Value method;
-        head->get(s_method, method);
-        if (method.is_string() && method.s() == s_CONNECT) {
-          m_is_tunnel = true;
+    if (!m_is_message_started) {
+      Data buf;
+      m_header_encoder.encode(m_is_server_side, false, start->head(), buf);
+      write_header_block(buf);
+      if (m_state == IDLE) {
+        m_state = OPEN;
+      } else if (m_state == RESERVED_LOCAL) {
+        m_state = HALF_CLOSED_REMOTE;
+      }
+      if (!m_is_server_side) {
+        if (auto head = start->head()) {
+          pjs::Value method;
+          head->get(s_method, method);
+          if (method.is_string() && method.s() == s_CONNECT) {
+            m_is_tunnel = true;
+          }
         }
       }
+      m_is_message_started = true;
     }
 
   } else if (auto data = evt->as<Data>()) {
-    if (!data->empty()) {
+    if (m_is_message_started && !data->empty()) {
       if (m_is_tunnel) {
         m_send_buffer.push(*data);
         pump();
-      } else if (!m_end_output) {
+        flush();
+      } else if (m_state == OPEN || m_state == HALF_CLOSED_REMOTE) {
         pump();
         m_send_buffer.push(*data);
         set_pending(true);
+        flush();
       }
-      flush();
     }
 
   } else if (
     (evt->is<MessageEnd>() && !m_is_tunnel) ||
     (evt->is<StreamEnd>()))
   {
-    pjs::Object *tail = nullptr;
-    if (auto *end = evt->as<MessageEnd>()) {
-      tail = end->tail();
-    }
-    if (m_state == OPEN) {
-      m_state = HALF_CLOSED_LOCAL;
+    if (m_is_message_started && !m_is_message_ended) {
+      if (auto *end = evt->as<MessageEnd>()) {
+        if (auto tail = end->tail()) {
+          m_header_encoder.encode(m_is_server_side, true, tail, m_tail_buffer);
+        }
+      }
+      if (m_state == OPEN) {
+        m_state = HALF_CLOSED_LOCAL;
+      } else if (m_state == HALF_CLOSED_REMOTE) {
+        m_state = CLOSED;
+      }
+      m_is_message_ended = true;
       m_end_output = true;
-      pump(tail);
-    } else if (m_state == HALF_CLOSED_REMOTE) {
-      m_state = CLOSED;
-      m_end_output = true;
-      pump(tail);
+      pump();
+      recycle();
     }
-    if (tail) {
-      Data buf;
-      m_header_encoder.encode(m_is_server_side, true, tail, buf);
-      write_header_block(buf);
-    }
-    recycle();
   }
 }
 
@@ -1862,8 +1863,8 @@ void Endpoint::StreamBase::set_clearing(bool clearing) {
   }
 }
 
-void Endpoint::StreamBase::pump(bool no_end) {
-  bool is_empty_end = (!no_end && m_end_output && m_send_buffer.empty());
+void Endpoint::StreamBase::pump() {
+  bool is_empty_end = (m_end_output && m_send_buffer.empty() && m_tail_buffer.empty());
   int size = m_send_buffer.size();
   if (size > m_send_window) size = m_send_window;
   if (size > 0) size = deduct_send(size);
@@ -1876,7 +1877,7 @@ void Endpoint::StreamBase::pump(bool no_end) {
       frm.stream_id = m_id;
       frm.type = Frame::DATA;
       if (n > 0) m_send_buffer.shift(n, frm.payload);
-      if (!no_end && m_end_output && m_send_buffer.empty()) {
+      if (m_end_output && m_send_buffer.empty() && m_tail_buffer.empty()) {
         frm.flags = Frame::BIT_END_STREAM;
         m_end_output = false;
       } else {
@@ -1886,7 +1887,12 @@ void Endpoint::StreamBase::pump(bool no_end) {
     } while (remain > 0);
     m_send_window -= size;
   }
-  set_pending(!m_send_buffer.empty());
+  if (m_send_buffer.empty()) {
+    if (!m_tail_buffer.empty()) write_header_block(m_tail_buffer);
+    set_pending(false);
+  } else {
+    set_pending(true);
+  }
 }
 
 void Endpoint::StreamBase::recycle() {
