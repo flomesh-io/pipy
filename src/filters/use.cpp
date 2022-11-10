@@ -239,13 +239,15 @@ void Use::Stage::on_event(Event *evt) {
       }
 
     } else if (m_pipeline_layout) {
-      m_pipeline = Pipeline::make(m_pipeline_layout, m_filter->context());
-      chain(m_pipeline->input());
+      auto p = Pipeline::make(m_pipeline_layout, m_filter->context());
+      chain(p->input());
       if (m_next) {
-        m_pipeline->chain(m_next->input());
+        p->chain(m_next->input());
       } else {
-        m_pipeline->chain(input_down());
+        p->chain(input_down());
       }
+      m_pipeline = p;
+      p->start();
 
     } else if (m_next) {
       chain(m_next->input());
@@ -266,6 +268,7 @@ auto Use::Stage::input_down() -> EventTarget::Input* {
       p->chain(m_filter->output());
     }
     m_pipeline_down = p;
+    p->start();
     return p->input();
 
   } else if (m_prev) {
