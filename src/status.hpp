@@ -70,6 +70,7 @@ public:
   static void dump_pipelines(Data::Builder &db);
   static void dump_inbound(Data::Builder &db);
   static void dump_outbound(Data::Builder &db);
+  static void dump_http2(Data::Builder &db);
 };
 
 } // namespace pipy

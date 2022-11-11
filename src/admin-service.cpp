@@ -441,6 +441,8 @@ Message* AdminService::dump_GET(const std::string &path) {
     Status::dump_inbound(db);
   } else if (path == "outbound") {
     Status::dump_outbound(db);
+  } else if (path == "http2") {
+    Status::dump_http2(db);
   } else {
     return m_response_not_found;
   }

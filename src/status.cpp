@@ -174,93 +174,6 @@ void Status::to_json(std::ostream &out) const {
   out << "]}";
 }
 
-template<class T>
-static void print_table(const T &header, const std::list<T> &rows) {
-  int n = header.size();
-  int max_width[header.size()];
-
-  for (int i = 0; i < n; i++) {
-    max_width[i] = header[i].length();
-  }
-
-  for (const auto &row : rows) {
-    for (int i = 0; i < n; i++) {
-      if (row[i].length() > max_width[i]) {
-        max_width[i] = row[i].length();
-      }
-    }
-  }
-
-  int total_width = 0;
-  for (int i = 0; i < n; i++) {
-    std::string padding(max_width[i] - header[i].length(), ' ');
-    std::cout << header[i] << padding << "  ";
-    total_width += max_width[i] + 2;
-  }
-
-  std::cout << std::endl;
-  std::cout << std::string(total_width, '-');
-  std::cout << std::endl;
-
-  for (const auto &row : rows) {
-    for (int i = 0; i < n; i++) {
-      std::string padding(max_width[i] - row[i].length(), ' ');
-      std::cout << row[i] << padding << "  ";
-    }
-    std::cout << std::endl;
-  }
-}
-
-template<class T>
-static void print_table(Data::Builder &db, const T &header, const std::list<T> &rows) {
-  static std::string spacing("  ");
-
-  int n = header.size();
-  int max_width[header.size()];
-
-  for (int i = 0; i < n; i++) {
-    max_width[i] = header[i].length();
-  }
-
-  for (const auto &row : rows) {
-    for (int i = 0; i < n; i++) {
-      if (row[i].length() > max_width[i]) {
-        max_width[i] = row[i].length();
-      }
-    }
-  }
-
-  int total_width = 0;
-  for (int i = 0; i < n; i++) {
-    std::string padding(max_width[i] - header[i].length(), ' ');
-    db.push(header[i]);
-    db.push(padding);
-    db.push(spacing);
-    // std::cout << header[i] << padding << "  ";
-    total_width += max_width[i] + 2;
-  }
-
-  db.push('\n');
-  db.push(std::string(total_width, '-'));
-  db.push('\n');
-
-  // std::cout << std::endl;
-  // std::cout << std::string(total_width, '-');
-  // std::cout << std::endl;
-
-  for (const auto &row : rows) {
-    for (int i = 0; i < n; i++) {
-      std::string padding(max_width[i] - row[i].length(), ' ');
-      db.push(row[i]);
-      db.push(padding);
-      db.push(spacing);
-      // std::cout << row[i] << padding << "  ";
-    }
-    db.push('\n');
-    // std::cout << std::endl;
-  }
-}
-
 void Status::register_metrics() {
   static pjs::ConstStr s_server("Server");
   static pjs::ConstStr s_client("Client");
@@ -433,6 +346,49 @@ void Status::register_metrics() {
       );
     }
   );
+}
+
+template<class T>
+static void print_table(Data::Builder &db, const T &header, const std::list<T> &rows) {
+  static std::string spacing("  ");
+
+  int n = header.size();
+  int max_width[header.size()];
+
+  for (int i = 0; i < n; i++) {
+    max_width[i] = header[i].length();
+  }
+
+  for (const auto &row : rows) {
+    for (int i = 0; i < n; i++) {
+      if (row[i].length() > max_width[i]) {
+        max_width[i] = row[i].length();
+      }
+    }
+  }
+
+  int total_width = 0;
+  for (int i = 0; i < n; i++) {
+    std::string padding(max_width[i] - header[i].length(), ' ');
+    db.push(header[i]);
+    db.push(padding);
+    db.push(spacing);
+    total_width += max_width[i] + 2;
+  }
+
+  db.push('\n');
+  db.push(std::string(total_width, '-'));
+  db.push('\n');
+
+  for (const auto &row : rows) {
+    for (int i = 0; i < n; i++) {
+      std::string padding(max_width[i] - row[i].length(), ' ');
+      db.push(row[i]);
+      db.push(padding);
+      db.push(spacing);
+    }
+    db.push('\n');
+  }
 }
 
 void Status::dump_memory() {
@@ -666,6 +622,18 @@ void Status::dump_outbound(Data::Builder &db) {
   });
 
   print_table(db, { "OUTBOUND", "#CONNECTIONS", "MAX_CONN_TIME", "AVG_CONN_TIME" }, outbounds);
+}
+
+void Status::dump_http2(Data::Builder &db) {
+  auto server_stream_count = http2::Endpoint::server_stream_count();
+  auto client_stream_count = http2::Endpoint::client_stream_count();
+
+  std::list<std::array<std::string, 2>> streams;
+  streams.push_back({ "Server", std::to_string(server_stream_count) });
+  streams.push_back({ "Client", std::to_string(client_stream_count) });
+  streams.push_back({ "TOTAL" , std::to_string(server_stream_count + client_stream_count) });
+
+  print_table(db, { "HTTP/2", "#STREAMS" }, streams);
 }
 
 } // namespace pipy
