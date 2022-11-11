@@ -63,7 +63,6 @@ public:
   void to_json(std::ostream &out) const;
 
   static void register_metrics();
-  static void dump_memory();
   static void dump_pools(Data::Builder &db);
   static void dump_objects(Data::Builder &db);
   static void dump_chunks(Data::Builder &db);

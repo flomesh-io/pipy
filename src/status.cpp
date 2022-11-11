@@ -391,29 +391,6 @@ static void print_table(Data::Builder &db, const T &header, const std::list<T> &
   }
 }
 
-void Status::dump_memory() {
-  static Data::Producer s_dp("Dump");
-
-  Data buf;
-  Data::Builder db(buf, &s_dp);
-
-  db.push('\n');
-  dump_pools(db);
-  db.push('\n');
-  dump_objects(db);
-  db.push('\n');
-  dump_chunks(db);
-  db.push('\n');
-  dump_pipelines(db);
-  db.push('\n');
-  dump_inbound(db);
-  db.push('\n');
-  dump_outbound(db);
-
-  db.flush();
-  std::cout << buf.to_string();
-}
-
 void Status::dump_pools(Data::Builder &db) {
   std::list<std::array<std::string, 4>> pools;
 

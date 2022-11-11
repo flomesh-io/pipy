@@ -54,9 +54,12 @@
 
 using namespace pipy;
 
-AdminService *s_admin = nullptr;
-AdminProxy *s_admin_proxy = nullptr;
-AdminLink *s_admin_link = nullptr;
+static AdminService *s_admin = nullptr;
+static AdminProxy *s_admin_proxy = nullptr;
+static AdminLink *s_admin_link = nullptr;
+static std::string s_admin_ip;
+static int s_admin_port = 0;
+static AdminService::Options s_admin_options;
 
 //
 // Show version
@@ -184,6 +187,26 @@ static void start_reporting_metrics() {
 }
 
 //
+// Open/close admin port
+//
+
+static void toggle_admin_port() {
+  if (s_admin_port) {
+    if (s_admin) {
+      logging::Logger::set_admin_service(nullptr);
+      s_admin->close();
+      delete s_admin;
+      s_admin = nullptr;
+      Log::info("[admin] Admin service stopped on port %d", s_admin_port);
+    } else {
+      s_admin = new AdminService(nullptr);
+      s_admin->open(s_admin_ip, s_admin_port, s_admin_options);
+      logging::Logger::set_admin_service(s_admin);
+    }
+  }
+}
+
+//
 // Handle signals
 //
 
@@ -210,7 +233,7 @@ static void handle_signal(int sig) {
       reload_codebase();
       break;
     case SIGTSTP:
-      Status::dump_memory();
+      toggle_admin_port();
       break;
   }
 }
@@ -265,10 +288,9 @@ int main(int argc, char *argv[]) {
     tls::TLSSession::init();
     File::start_bg_thread();
 
-    AdminService::Options admin_options;
-    admin_options.cert = opts.admin_tls_cert;
-    admin_options.key = opts.admin_tls_key;
-    admin_options.trusted = opts.admin_tls_trusted;
+    s_admin_options.cert = opts.admin_tls_cert;
+    s_admin_options.key = opts.admin_tls_key;
+    s_admin_options.trusted = opts.admin_tls_trusted;
 
     std::string admin_ip("::");
     int admin_port = 6060; // default repo port
@@ -339,7 +361,7 @@ int main(int argc, char *argv[]) {
         : Store::open_level_db(opts.filename);
       repo = new CodebaseStore(store);
       s_admin = new AdminService(repo);
-      s_admin->open(admin_ip, admin_port, admin_options);
+      s_admin->open(admin_ip, admin_port, s_admin_options);
       logging::Logger::set_admin_service(s_admin);
 
 #ifdef PIPY_USE_GUI
@@ -418,12 +440,12 @@ int main(int argc, char *argv[]) {
             Status::local.version = Codebase::current()->version();
             Status::local.update();
 
-            if (!opts.admin_port.empty()) {
-              s_admin = new AdminService(nullptr);
-              s_admin->open(admin_ip, admin_port, admin_options);
-              logging::Logger::set_admin_service(s_admin);
-            }
+            s_admin_ip = admin_ip;
+            s_admin_port = admin_port;
 
+            if (!opts.admin_port.empty()) toggle_admin_port();
+
+            Log::set_graph_enabled(false);
             start_checking_updates();
 
             if (is_remote) {
