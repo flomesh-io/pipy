@@ -42,6 +42,8 @@
 #include "fs.hpp"
 #include "log.hpp"
 
+#include <limits>
+
 namespace pipy {
 
 static Data::Producer s_dp("Codebase Service");
@@ -621,7 +623,7 @@ Message* AdminService::api_v1_repo_GET(const std::string &path) {
       ss << ']';
     };
 
-    ss << "{\"version\":" << info.version;
+    ss << "{\"version\":\"" << utils::escape(info.version) << '"';
     ss << ",\"path\":\"" << utils::escape(info.path) << '"';
     ss << ",\"main\":\"" << utils::escape(info.main) << '"';
     ss << ",\"files\":"; to_array(files);
@@ -725,10 +727,15 @@ Message* AdminService::api_v1_repo_PATCH(const std::string &path, Data *data) {
     main = main_val.s()->str();
   }
 
-  int version = -1;
+  std::string version;
   if (!version_val.is_undefined()) {
-    if (!version_val.is_number() || version_val.n() < 0) return response(400, "Invalid version number");
-    version = version_val.n();
+    if (version_val.is_number()) {
+      if (version_val.n() < 0 || version_val.n() > std::numeric_limits<int>::max()) return response(400, "Invalid version number");
+      version = std::to_string((int)version_val.n());
+    } else if (version_val.is_string()) {
+      version = version_val.s()->str();
+    }
+    if (version.empty()) return response(400, "Invalid version");
   }
 
   // Commit codebase edit
@@ -736,7 +743,7 @@ Message* AdminService::api_v1_repo_PATCH(const std::string &path, Data *data) {
     CodebaseStore::Codebase::Info info;
     codebase->get_info(info);
     if (!main.empty() && main != info.main) codebase->set_main(main);
-    if (version >= 0 && version != info.version) {
+    if (!version.empty() && version != info.version) {
       std::list<std::string> update_list;
       if (codebase->commit(version, update_list)) {
         for (const auto &id : update_list) {

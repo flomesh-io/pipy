@@ -42,7 +42,7 @@ public:
   class Codebase {
   public:
     struct Info {
-      int version;
+      std::string version;
       std::string path;
       std::string base;
       std::string main;
@@ -65,7 +65,7 @@ public:
     void list_erased(std::set<std::string> &paths);
     void erase_file(const std::string &path);
     void reset_file(const std::string &path);
-    bool commit(int version, std::list<std::string> &updated);
+    bool commit(const std::string &version, std::list<std::string> &updated);
     void erase();
     void reset();
 

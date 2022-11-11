@@ -437,10 +437,10 @@ function Editor({ root, dts }) {
       const res = await fetch(uri);
       const info = await res.json();
       if (res.status === 200) {
-        const ver = (info.version|0) + 1;
+        const ver = (parseInt(info.version)|0) + 1;
         const res = await fetch(uri, {
           method: 'PATCH',
-          body: JSON.stringify({ version: ver }),
+          body: JSON.stringify({ version: ver.toString() }),
         });
         if (res.status === 201) {
           queryClient.invalidateQueries(`files:${root}`);

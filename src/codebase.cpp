@@ -193,7 +193,7 @@ CodebsaeFromStore::CodebsaeFromStore(CodebaseStore *store, const std::string &na
 
   CodebaseStore::Codebase::Info info;
   codebase->get_info(info);
-  m_version = std::to_string(info.version);
+  m_version = info.version;
   m_entry = info.main;
 
   std::set<std::string> paths;

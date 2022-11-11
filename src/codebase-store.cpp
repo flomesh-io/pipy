@@ -210,7 +210,7 @@ CodebaseStore::CodebaseStore(Store *store)
         }
       }
       std::list<std::string> update_list;
-      codebase->commit(1, update_list);
+      codebase->commit("1", update_list);
     }
   }
 #endif // PIPY_USE_SAMPLES
@@ -498,7 +498,7 @@ void CodebaseStore::erase_codebase(Store::Batch *batch, const std::string &codeb
 void CodebaseStore::Codebase::get_info(Info &info) {
   std::map<std::string, std::string> rec;
   m_code_store->load_codebase(m_id, rec);
-  info.version = std::atoi(rec["version"].c_str());
+  info.version = rec["version"].c_str();
   info.path = rec["path"];
   info.base = rec["base"];
   info.main = rec["main"];
@@ -632,7 +632,7 @@ void CodebaseStore::Codebase::reset_file(const std::string &path) {
   batch->commit();
 }
 
-bool CodebaseStore::Codebase::commit(int version, std::list<std::string> &update_list) {
+bool CodebaseStore::Codebase::commit(const std::string &version, std::list<std::string> &update_list) {
   Data buf;
 
   std::map<std::string, std::string> info;
@@ -644,8 +644,7 @@ bool CodebaseStore::Codebase::commit(int version, std::list<std::string> &update
   list_edit(edit);
   list_erased(erased);
 
-  auto version_str = std::to_string(version);
-  info["version"] = version_str;
+  info["version"] = version;
 
   auto store = m_code_store->m_store;
   auto batch = store->batch();
@@ -692,7 +691,7 @@ bool CodebaseStore::Codebase::commit(int version, std::list<std::string> &update
     batch,
     info["path"],
     info["main"],
-    version_str,
+    version,
     files
   );
 
@@ -738,7 +737,7 @@ bool CodebaseStore::Codebase::commit(int version, std::list<std::string> &update
   };
 
   update_list.push_back(m_id);
-  upgrade_derived(m_id, version_str, files);
+  upgrade_derived(m_id, version, files);
   batch->commit();
   return true;
 }
