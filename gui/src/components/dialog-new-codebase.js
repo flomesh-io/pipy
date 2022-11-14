@@ -76,7 +76,7 @@ function DialogNewCodebase({ open, base, onSuccess, onClose }) {
         {
           method: 'POST',
           body: JSON.stringify({
-            version: 1,
+            version: '1',
             base,
           }),
         }

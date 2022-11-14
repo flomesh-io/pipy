@@ -197,7 +197,7 @@ CodebaseStore::CodebaseStore(Store *store)
     auto path = i.first;
     auto codebase = find_codebase(path);
     if (!codebase) {
-      codebase = make_codebase(path, 0);
+      codebase = make_codebase(path, "0");
       codebase->erase_file("/main.js");
       codebase->set_main("/hello.js");
       for (const auto &name : i.second) {
@@ -257,7 +257,7 @@ void CodebaseStore::list_codebases(const std::string &prefix, std::set<std::stri
   for (const auto &k : keys) paths.insert(k.substr(base_key.length()));
 }
 
-auto CodebaseStore::make_codebase(const std::string &path, int version, Codebase* base) -> Codebase* {
+auto CodebaseStore::make_codebase(const std::string &path, const std::string &version, Codebase* base) -> Codebase* {
   std::map<std::string, std::string> rec;
   std::map<std::string, std::string> files;
   std::string codebase_id, main_file_path;
@@ -295,7 +295,7 @@ auto CodebaseStore::make_codebase(const std::string &path, int version, Codebase
     );
   }
 
-  rec["version"] = std::to_string(version);
+  rec["version"] = version;
   rec["path"] = path;
 
   batch->set(KEY_codebase(codebase_id), Data(make_record(rec), &s_dp));
@@ -305,7 +305,7 @@ auto CodebaseStore::make_codebase(const std::string &path, int version, Codebase
     batch,
     path,
     main_file_path,
-    std::to_string(version),
+    version,
     files
   );
 

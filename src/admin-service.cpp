@@ -694,10 +694,17 @@ Message* AdminService::api_v1_repo_POST(const std::string &path, Data *data) {
     main = main_val.s()->str();
   }
 
-  int version = 1;
+  std::string version("1");
   if (!version_val.is_undefined()) {
-    if (!version_val.is_number() || version_val.n() < 0) return response(400, "Invalid version number");
-    version = version_val.n();
+    if (version_val.is_number()) {
+      if (version_val.n() < 0 || version_val.n() > std::numeric_limits<int>::max()) return response(400, "Invalid version number");
+      version = std::to_string((int)version_val.n());
+    } else if (version_val.is_string()) {
+      version = version_val.s()->str();
+    } else {
+      version.clear();
+    }
+    if (version.empty()) return response(400, "Invalid version");
   }
 
   if (m_store->find_codebase(path)) {

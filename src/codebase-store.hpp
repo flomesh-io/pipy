@@ -83,7 +83,7 @@ public:
   bool find_file(const std::string &path, Data &data, std::string &version);
   auto find_codebase(const std::string &path) -> Codebase*;
   void list_codebases(const std::string &prefix, std::set<std::string> &paths);
-  auto make_codebase(const std::string &path, int version, Codebase* base = nullptr) -> Codebase*;
+  auto make_codebase(const std::string &path, const std::string &version, Codebase* base = nullptr) -> Codebase*;
 
   void dump();
 
