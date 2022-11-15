@@ -369,15 +369,19 @@ static void print_table(Data::Builder &db, const T &header, const std::list<T> &
 
   int total_width = 0;
   for (int i = 0; i < n; i++) {
+    total_width += max_width[i] + 2;
+  }
+
+  db.push(std::string(total_width, '-'));
+  db.push('\n');
+
+  for (int i = 0; i < n; i++) {
     std::string padding(max_width[i] - header[i].length(), ' ');
     db.push(header[i]);
     db.push(padding);
     db.push(spacing);
-    total_width += max_width[i] + 2;
   }
 
-  db.push('\n');
-  db.push(std::string(total_width, '-'));
   db.push('\n');
 
   for (const auto &row : rows) {

@@ -429,22 +429,27 @@ auto AdminService::handle(Context *ctx, Message *req) -> Message* {
 Message* AdminService::dump_GET(const std::string &path) {
   Data buf;
   Data::Builder db(buf, &s_dp);
-  if (path == "pools") {
-    Status::dump_pools(db);
-  } else if (path == "objects") {
-    Status::dump_objects(db);
-  } else if (path == "chunks") {
-    Status::dump_chunks(db);
-  } else if (path == "pipelines") {
-    Status::dump_pipelines(db);
-  } else if (path == "inbound") {
-    Status::dump_inbound(db);
-  } else if (path == "outbound") {
-    Status::dump_outbound(db);
-  } else if (path == "http2") {
-    Status::dump_http2(db);
-  } else {
-    return m_response_not_found;
+  auto items = utils::split(path, '+');
+  for (const auto &item : items) {
+    if (item == "pools") {
+      Status::dump_pools(db);
+    } else if (item == "objects") {
+      Status::dump_objects(db);
+    } else if (item == "chunks") {
+      Status::dump_chunks(db);
+    } else if (item == "pipelines") {
+      Status::dump_pipelines(db);
+    } else if (item == "inbound") {
+      Status::dump_inbound(db);
+    } else if (item == "outbound") {
+      Status::dump_outbound(db);
+    } else if (item == "http2") {
+      Status::dump_http2(db);
+    } else {
+      db.push("Unknown dump item: ");
+      db.push(item);
+      db.push('\n');
+    }
   }
   db.flush();
   return response(buf);
