@@ -5,7 +5,7 @@ Flomesh Pipy depends on some open source codebases located in `deps` directory.
 Licenses of these open source projects are also included in this file.
 
 * Flomesh Pipy 
-* Boost Asio 1.12.2
+* Boost Asio 1.24.0
 * OpenSSL 1.1.1o
 * YAJL 2.1.0
 * Expat 2.2.6
@@ -54,7 +54,7 @@ SOFTWARE.
 ----------------------------------------------------------------
 ----------------------------------------------------------------
 
-Boost Asio 1.12.2
+Boost Asio 1.24.0
 
 Boost Software License - Version 1.0 - August 17th, 2003
 

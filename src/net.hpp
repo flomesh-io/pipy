@@ -97,20 +97,6 @@ public:
 namespace asio {
 
 template<>
-inline auto buffer_sequence_begin(
-  const pipy::DataChunks &chunks
-) -> pipy::DataChunks::Iterator {
-  return chunks.begin();
-}
-
-template<>
-inline auto buffer_sequence_end(
-  const pipy::DataChunks &chunks
-) -> pipy::DataChunks::Iterator {
-  return chunks.end();
-}
-
-template<>
 class is_const_buffer_sequence<pipy::DataChunks> {
 public:
   const static bool value = true;
