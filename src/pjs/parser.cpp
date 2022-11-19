@@ -1321,7 +1321,9 @@ Expr* ExpressionParser::operand() {
         }
       } else if (t.is_number()) {
         read();
-        k = locate(string(std::to_string(t.n())));
+        char str[100];
+        auto len = Number::to_string(str, sizeof(str), t.n());
+        k = locate(string(std::string(str, len)));
       } else if (t.id() == Token::OPR("[")) {
         read();
         k = expression();
