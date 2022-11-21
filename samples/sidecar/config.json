@@ -1,0 +1,166 @@
+{
+ "Certificate": {
+  "CommonName": "default.default.cluster.local",
+  "Expiration": "2022-11-19 08:09:34",
+  "CertChain": "-----BEGIN CERTIFICATE-----\nMIIDtTCCAp2gAwIBAgIRAI4+4EfSrEblkeMmpsTuBkcwDQYJKoZIhvcNAQELBQAw\nWjELMAkGA1UEBhMCVVMxCzAJBgNVBAcTAkNBMRowGAYDVQQKExFPcGVuIFNlcnZp\nY2UgTWVzaDEiMCAGA1UEAxMZb3NtLWNhLm9wZW5zZXJ2aWNlbWVzaC5pbzAeFw0y\nMjExMTgwODA5NTZaFw0yMjExMTkwODA5MzRaMEQxGjAYBgNVBAoTEU9wZW4gU2Vy\ndmljZSBNZXNoMSYwJAYDVQQDEx1kZWZhdWx0LmRlZmF1bHQuY2x1c3Rlci5sb2Nh\nbDCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBANX3JZY78Eqyu3TQHX6x\nxhK0VXGzrL9m5G/W/dYn7F5FS/YcoMVdccxwcCZQMMyVrVZfeLAdOG6AClqeF7Nm\nurc9B6NFhNEhWDu2v8IFor2Zl/t/2FN6uzBD3TUofvMfdzyqL8iWEQJlcNoIQ7Bk\nKa7ygr1V0oEQEWsBsfhHOJC6cWZkYtEZAZP30E5f0KxnsvAtrgaAah4RAqpB/x4T\n48vv0U9PAnCyF1epdP5yeMl2xdudgLpHbxobW90EIzz5Qm8BSX+sUPJcqsomxQDp\nrmPoIDkWMcLQivCRUmCbr1HWoFZYe5ok1mudg4XD+NfNEBbFXaI3R3Zj5/7G9UiE\nlakCAwEAAaOBizCBiDAOBgNVHQ8BAf8EBAMCBaAwHQYDVR0lBBYwFAYIKwYBBQUH\nAwIGCCsGAQUFBwMBMAwGA1UdEwEB/wQCMAAwHwYDVR0jBBgwFoAUn+K8tSz9g2De\n1eDjIFfGMEgzFhAwKAYDVR0RBCEwH4IdZGVmYXVsdC5kZWZhdWx0LmNsdXN0ZXIu\nbG9jYWwwDQYJKoZIhvcNAQELBQADggEBAKhETBm9tZ7E9Lo8Af4TpPYHhxJmooms\nwXJgPG0o2/oqVTifydJ2Cylm4tiJ0X/B2zWZ2m/d6K81o1TW6T1Z3ZkOo0pbK42V\nWpB4qyQsspTisPmzGobdoZWysdYnVTFZR0GHMZkwCgCjywfPIzMXNtxJIp8hhARa\nZ04O9yeoZk+DK/ISZsS4l4LiXwYhqcJX1487kQjtVuAnjxSUVSzH1MeNo0GJZSzT\nwocW59NdkAtfvqK/KEBwDAQBjL86ANoSEsXpjNbKv3mbuqUTp1hWMm4N8n2apK4D\nJOIrp5f7Q3VOAZqz7DjvQMZ1UeSZSTLSV929zYzfWiKNkQ5Y5qwljog=\n-----END CERTIFICATE-----\n",
+  "PrivateKey": "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDV9yWWO/BKsrt0\n0B1+scYStFVxs6y/ZuRv1v3WJ+xeRUv2HKDFXXHMcHAmUDDMla1WX3iwHThugApa\nnhezZrq3PQejRYTRIVg7tr/CBaK9mZf7f9hTerswQ901KH7zH3c8qi/IlhECZXDa\nCEOwZCmu8oK9VdKBEBFrAbH4RziQunFmZGLRGQGT99BOX9CsZ7LwLa4GgGoeEQKq\nQf8eE+PL79FPTwJwshdXqXT+cnjJdsXbnYC6R28aG1vdBCM8+UJvAUl/rFDyXKrK\nJsUA6a5j6CA5FjHC0IrwkVJgm69R1qBWWHuaJNZrnYOFw/jXzRAWxV2iN0d2Y+f+\nxvVIhJWpAgMBAAECggEAUhZCZlPSiWXuww8A8dVUL2LeEQQktz3LUBkEQ4AHj9c4\nIFC1YWLLQOq2LAzB3Atkd+mizLY5KzOWRVO3tg0ofxo77ujB3tXTGv2urcopuGHP\nzB4tKUHBxO+UU0uZAL9GqJCGSodAOVIfrJZVGbwjvcmuXOMrIna+p/X7iEwSqHsb\nZxg94KKIFIhMgUGmV0DBEQJk5yZ1StOUR8DUSfc9itNuYLkeSPQeMWyOTCqIyOT2\nFGV0pXUZHjVb+QceoPP9Li6JclwW2cMdmc5DjuNqlk8lAsvMgstUQHPCBPt3MVkr\njge0Jx1+4Um2nX6t3EbJIZo8PnY+NqqetU9AljcmgQKBgQDrZ5vyUuClBRIRyGm1\ntmu9C0UQYJXl+H+6Wm2wf6ul4G87d4taEDu6xU2LBvJYl6Z3bAa5Gob2eEscaejv\n/wCX5Zv/UtqEHz0BKUClElYqXtwQ59Fd3tmssd/8QLkK62gyxrqIveUDIhdsNhHz\n+P6ynB2seiBFDpOEZAlXuuSWmQKBgQDor1vSGL6caEjKwZBVIVjtSwG0XkYGfaGA\nPKK2GRzE/ZCjz4WuZ1dTe+vGXS/8UeOKPWsCCaUOWgwtBEbfjBmSfu6DW112Dqgi\nnoHxVBaxUjenpbp+w9J3xyNtrXfLAuFuk7+GuMJgPEqpPo518HHMcjiHdIeScqOQ\nrgkYCPgxkQKBgD/zab4vHbA27G3AUFd5M1OsGBsW4iITnD94CYyFYpAxpIY3N7hD\n6LYYm7RFMtk2eZa/1iO7PScADwetDgcE85hQXEzEqXBzPBNwrYsqrBXep1JAZ/Rk\nciYkPIE+5AY/ZZNFwa8cR3bOcCaJmd75qdfD6ZvNoa6hAxpYQuF+eFMhAoGBAIWM\nuIfSufxtgnIVPPEPjcnMhjLu9QQesUY4By+7JB8QZicPIewi1iVNd9rHe5Y3rgCX\nFcb6oCinmFtyG/eMotTJU75C/1aWPPx5u502pTurM9ReM7c0T6V9v6DgsmPryFW+\nKWx6uN2hXTzcccnRco9kc3uTb4inkaelrASGiWVxAoGBAMCskVLG3n7KueaHfD0K\nTJqmKKkh5ksAWTG1x+ukKKI5kS0TqUHhlxAwxiePgp5s5D8iQBjs+gdf8GKH9H1s\nPF4416sUQhu7BfoOP7xWNpsjdAKkQT8+p8731/BZ3yTQ293crmSQms26Co6uBG2h\nsM3vsCyGDTsXV2sXS47TKaBS\n-----END PRIVATE KEY-----\n",
+  "IssuingCA": "-----BEGIN CERTIFICATE-----\nMIIDgTCCAmmgAwIBAgIRAIEZg/8rlvSmVyUsyCEYl/EwDQYJKoZIhvcNAQELBQAw\nWjELMAkGA1UEBhMCVVMxCzAJBgNVBAcTAkNBMRowGAYDVQQKExFPcGVuIFNlcnZp\nY2UgTWVzaDEiMCAGA1UEAxMZb3NtLWNhLm9wZW5zZXJ2aWNlbWVzaC5pbzAeFw0y\nMjExMTgwNzUyMzBaFw0zMjExMTUwNzUyMzBaMFoxCzAJBgNVBAYTAlVTMQswCQYD\nVQQHEwJDQTEaMBgGA1UEChMRT3BlbiBTZXJ2aWNlIE1lc2gxIjAgBgNVBAMTGW9z\nbS1jYS5vcGVuc2VydmljZW1lc2guaW8wggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAw\nggEKAoIBAQDNx8xWmQGiWpZjCv7N3aJuR/jmY6l7GvsG1SEjKznw7F8BllyVmWCG\noF4l/JRUGjXyt2kmRD8Bx5w5GsfEq+unGaoJNxhJsrUAMoem2iikMHjpQnNiSn8z\n4ZKCaUIqruzpoiZJJ0h1tnyug55aB9mPNayz7D9wEhL9VLYyH/vasdT7C6nXB0LZ\nd7F6yOtr81pS8NNLXLIZ9S30F4iOZ7O9B9JtSr5dRjCYOc17Yv//uO0ySV/6mR0Y\nerbUm7H12AKlWsqkfHysdKdvUceLv3APkV/1VuRGd9T2hhaLsI7x4a5x6rO0UbKw\n9tIEIdHe03lieL0veqpIEaKnRnX6XjUTAgMBAAGjQjBAMA4GA1UdDwEB/wQEAwIB\nBjAPBgNVHRMBAf8EBTADAQH/MB0GA1UdDgQWBBSf4ry1LP2DYN7V4OMgV8YwSDMW\nEDANBgkqhkiG9w0BAQsFAAOCAQEAVltasB9HHLxiP0wHgB/0uAwfXDIfVJYwwHQg\nfdbqkSnUBh/kTjm5aS4G3YwBF/vo8yVvAMmCP3ci6hRitFKLKHyMHbQu1p/mEoc3\nODJrl30EkY0L/aNd5BPaFTYrfXE3SUyrJIV/gUcvlRK8akc9+VjOiGST6j6/wAYl\np508JIVckTAysXymrsrULO7/rOYJ3n1BaoPAEzEUTnwQO+bFiGzBsodYPeGj5rzu\n+M9S9+6UHF9i59CHKPbFxgOQtqsls7gcM9em94k7s3Wr6J06Chv6yxHy6l3WxKFG\nyM/DdY0P6Za+XDsDKPFoKuuUFEZ23qJqdcDbnBHTuBhgdZXbyQ==\n-----END CERTIFICATE-----\n"
+ },
+ "Inbound": {
+  "TrafficMatches": {
+   "15003": {
+    "Protocol": "http",
+    "SourceIPRanges": {
+     "127.0.0.1/32": null
+    },
+    "HttpHostPort2Service": {
+     "*": "*",
+     "fortio": "fortio.default.svc.cluster.local",
+     "fortio.default": "fortio.default.svc.cluster.local",
+     "fortio.default.svc": "fortio.default.svc.cluster.local",
+     "fortio.default.svc.cluster": "fortio.default.svc.cluster.local",
+     "fortio.default.svc.cluster.local": "fortio.default.svc.cluster.local",
+     "fortio.default.svc.cluster.local:8080": "fortio.default.svc.cluster.local",
+     "fortio.default.svc.cluster:8080": "fortio.default.svc.cluster.local",
+     "fortio.default.svc:8080": "fortio.default.svc.cluster.local",
+     "fortio.default:8080": "fortio.default.svc.cluster.local",
+     "fortio:8080": "fortio.default.svc.cluster.local"
+    },
+    "HttpServiceRouteRules": {
+     "*": {
+      "RouteRules": {
+       ".*": {
+        "Headers": null,
+        "Methods": null,
+        "TargetClusters": {
+         "default/fortio|8080|local": 100
+        },
+        "AllowedServices": null,
+        "RateLimit": null
+       }
+      },
+      "RateLimit": null,
+      "HeaderRateLimits": null
+     },
+     "fortio.default.svc.cluster.local": {
+      "RouteRules": {
+       ".*": {
+        "Headers": null,
+        "Methods": null,
+        "TargetClusters": {
+         "default/fortio|8080|local": 100
+        },
+        "AllowedServices": null,
+        "RateLimit": null
+       }
+      },
+      "RateLimit": null,
+      "HeaderRateLimits": null
+     }
+    },
+    "TargetClusters": null,
+    "AllowedEndpoints": null,
+    "RateLimit": null
+   }
+  },
+  "ClustersConfigs": {
+   "default/fortio|8080|local": {
+    "127.0.0.1:8080": 100
+   }
+  }
+ },
+ "Outbound": {
+  "TrafficMatches": {
+   "443": [
+    {
+     "DestinationIPRanges": {
+      "10.96.0.1/32": null
+     },
+     "Port": 443,
+     "Protocol": "http",
+     "HttpHostPort2Service": {
+      "kubernetes": "kubernetes.default.svc.cluster.local",
+      "kubernetes.default": "kubernetes.default.svc.cluster.local",
+      "kubernetes.default.svc": "kubernetes.default.svc.cluster.local",
+      "kubernetes.default.svc.cluster": "kubernetes.default.svc.cluster.local",
+      "kubernetes.default.svc.cluster.local": "kubernetes.default.svc.cluster.local",
+      "kubernetes.default.svc.cluster.local:443": "kubernetes.default.svc.cluster.local",
+      "kubernetes.default.svc.cluster:443": "kubernetes.default.svc.cluster.local",
+      "kubernetes.default.svc:443": "kubernetes.default.svc.cluster.local",
+      "kubernetes.default:443": "kubernetes.default.svc.cluster.local",
+      "kubernetes:443": "kubernetes.default.svc.cluster.local"
+     },
+     "HttpServiceRouteRules": {
+      "kubernetes.default.svc.cluster.local": {
+       ".*": {
+        "Headers": null,
+        "Methods": null,
+        "TargetClusters": {
+         "default/kubernetes|6443": 100
+        },
+        "AllowedServices": null
+       }
+      }
+     },
+     "TargetClusters": null,
+     "ServiceIdentity": "default.default",
+     "AllowedEgressTraffic": false,
+     "EgressForwardGateway": null
+    }
+   ],
+   "8080": [
+    {
+     "DestinationIPRanges": {
+      "10.96.51.226/32": null
+     },
+     "Port": 8080,
+     "Protocol": "http",
+     "HttpHostPort2Service": {
+      "fortio": "fortio.default.svc.cluster.local",
+      "fortio.default": "fortio.default.svc.cluster.local",
+      "fortio.default.svc": "fortio.default.svc.cluster.local",
+      "fortio.default.svc.cluster": "fortio.default.svc.cluster.local",
+      "fortio.default.svc.cluster.local": "fortio.default.svc.cluster.local",
+      "fortio.default.svc.cluster.local:8080": "fortio.default.svc.cluster.local",
+      "fortio.default.svc.cluster:8080": "fortio.default.svc.cluster.local",
+      "fortio.default.svc:8080": "fortio.default.svc.cluster.local",
+      "fortio.default:8080": "fortio.default.svc.cluster.local",
+      "fortio:8080": "fortio.default.svc.cluster.local"
+     },
+     "HttpServiceRouteRules": {
+      "fortio.default.svc.cluster.local": {
+       ".*": {
+        "Headers": null,
+        "Methods": null,
+        "TargetClusters": {
+         "default/fortio|8080": 100
+        },
+        "AllowedServices": null
+       }
+      }
+     },
+     "TargetClusters": null,
+     "ServiceIdentity": "default.default",
+     "AllowedEgressTraffic": false,
+     "EgressForwardGateway": null
+    }
+   ]
+  },
+  "ClustersConfigs": {
+   "default/fortio|8080": {
+    "Endpoints": {
+     "10.244.0.12:8080": 100
+    }
+   },
+   "default/kubernetes|6443": {
+    "Endpoints": {
+     "172.18.0.2:443": 100
+    }
+   }
+  }
+ },
+ "Forward": null,
+ "AllowedEndpoints": {
+  "127.0.0.1": "Ingress Controller"
+ }
+}
