@@ -1,9 +1,8 @@
 ((
   allMethods = ['GET', 'HEAD', 'POST', 'PUT', 'DELETE', 'PATCH'],
 
-  makeHostHandler = (portConfig, host) => (
+  makeServiceHandler = (portConfig, service) => (
     (
-      service = portConfig.HttpHostPort2Service[host],
       rules = portConfig.HttpServiceRouteRules[service]?.RouteRules || {},
       tree = {},
     ) => (
@@ -45,6 +44,14 @@
     (
       ingressRanges = Object.keys(portConfig.SourceIPRanges || {}).map(k => new Netmask(k)),
 
+      serviceHandlers = new algo.Cache(
+        service => makeServiceHandler(portConfig, service)
+      ),
+
+      makeHostHandler = (portConfig, host) => (
+        serviceHandlers.get(portConfig.HttpHostPort2Service[host])
+      ),
+
       hostHandlers = new algo.Cache(
         host => makeHostHandler(portConfig, host)
       ),
@@ -81,7 +88,7 @@
 ) => pipy()
 
 .import({
-  __port: 'inbound-classification',
+  __port: 'inbound-main',
 })
 
 .export('inbound-http-routing', {

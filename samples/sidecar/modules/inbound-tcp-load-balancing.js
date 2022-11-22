@@ -1,43 +1,29 @@
 ((
   config = pipy.solve('config.js'),
 
-  makeTargetBalancer = (clusterName) => (
+  makeBalancer = (clusters) => (
     (
-      targets = config.Inbound.ClustersConfigs[clusterName]
+      clusterName = Object.keys(clusters || {})[0],
+      targets = config.Inbound.ClustersConfigs[clusterName] || [],
     ) => (
       new algo.RoundRobinLoadBalancer(targets)
     )
   )(),
 
-  targetBalancers = new algo.Cache(makeTargetBalancer),
-
-  makeClusterBalancer = (clusters) => (
-    (
-      balancer = new algo.RoundRobinLoadBalancer(clusters)
-    ) => (
-      () => targetBalancers.get(balancer.next()?.id).next()
-    )
-  )(),
-
-  clusterBalancers = new algo.Cache(makeClusterBalancer),
+  balancers = new algo.Cache(makeBalancer),
 
 ) => pipy({
   _target: null,
 })
 
 .import({
-  __port: 'inbound-classification',
+  __port: 'inbound-main',
 })
 
 .pipeline()
-.onStart(
-  () => void (
-    _target = clusterBalancers.get(__port?.TargetClusters)()
-  )
-)
 .branch(
-  () => (_target = clusterBalancers.get(__port?.TargetClusters)()), (
-    $=>$.connect(() => _target)
+  () => (_target = balancers.get(__port?.TargetClusters).next()), (
+    $=>$.connect(() => _target.id)
   ), (
     $=>$.chain()
   )

@@ -1,25 +1,16 @@
 ((
   config = pipy.solve('config.js'),
 
-  makeTargetBalancer = (clusterName) => (
+  makeBalancer = (clusters) => (
     (
-      targets = config.Inbound.ClustersConfigs[clusterName]
+      clusterName = Object.keys(clusters || {})[0],
+      targets = config.Inbound.ClustersConfigs[clusterName] || [],
     ) => (
       new algo.RoundRobinLoadBalancer(targets)
     )
   )(),
 
-  targetBalancers = new algo.Cache(makeTargetBalancer),
-
-  makeClusterBalancer = (clusters) => (
-    (
-      balancer = new algo.RoundRobinLoadBalancer(clusters)
-    ) => (
-      () => targetBalancers.get(balancer.next()?.id).next()
-    )
-  )(),
-
-  clusterBalancers = new algo.Cache(makeClusterBalancer),
+  balancers = new algo.Cache(makeBalancer),
 
 ) => pipy({
   _target: null,
@@ -31,7 +22,7 @@
 
 .pipeline()
 .branch(
-  () => (_target = clusterBalancers.get(__route?.TargetClusters)()), (
+  () => (_target = balancers.get(__route?.TargetClusters).next()), (
     $=>$.muxHTTP(() => _target).to(
       $=>$.connect(() => _target.id)
     )

@@ -1,0 +1,8 @@
+((
+
+) => pipy()
+
+.pipeline()
+.chain()
+
+)()

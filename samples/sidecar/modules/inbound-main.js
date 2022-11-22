@@ -5,14 +5,19 @@
     (
       portConfig = config.Inbound.TrafficMatches[port || 0],
       protocol = portConfig?.Protocol === 'http' || portConfig?.Protocol === 'grpc' ? 'http' : 'tcp',
-      allowedEndpointsLocal = portConfig?.AllowedEndpoints || {},
-      allowedEndpointsGlobal = config.AllowedEndpoints || {},
-      allowedEndpoints = new Set,
+      isHTTP2 = portConfig?.Protocol === 'grpc',
+      allowedEndpointsLocal = portConfig?.AllowedEndpoints,
+      allowedEndpointsGlobal = config.AllowedEndpoints,
+      allowedEndpoints = new Set(
+        Object.keys(allowedEndpointsLocal || allowedEndpointsGlobal || {}).filter(
+          k => (
+            (!allowedEndpointsLocal || k in allowedEndpointsLocal) &&
+            (!allowedEndpointsGlobal || k in allowedEndpointsGlobal)
+          )
+        )
+      ),
 
     ) => (
-      Object.keys(allowedEndpointsLocal).forEach(k => (k in allowedEndpointsGlobal) && allowedEndpoints.add(k)),
-      Object.keys(allowedEndpointsGlobal).forEach(k => (k in allowedEndpointsLocal) && allowedEndpoints.add(k)),
-
       !portConfig && (
         () => undefined
       ) ||
@@ -21,7 +26,8 @@
         () => void (
           allowedEndpoints.has(__inbound.remoteAddress || '127.0.0.1') && (
             __port = portConfig,
-            __protocol = protocol
+            __protocol = protocol,
+            __isHTTP2 = isHTTP2
           )
         )
       ) ||
@@ -29,7 +35,8 @@
       (
         () => void (
           __port = portConfig,
-          __protocol = protocol
+          __protocol = protocol,
+          __isHTTP2 = isHTTP2
         )
       )
 
@@ -40,9 +47,10 @@
 
 ) => pipy()
 
-.export('inbound-classification', {
+.export('inbound-main', {
   __port: null,
   __protocol: undefined,
+  __isHTTP2: false,
 })
 
 .pipeline()
