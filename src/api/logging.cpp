@@ -309,8 +309,7 @@ Logger::HTTPTarget::HTTPTarget(pjs::Str *url, const Options &options)
   bool is_tls = url_obj->protocol()->str() == "https:";
 
   m_mux_grouper = pjs::Method::make(
-    "", 0, 0, nullptr,
-    [](pjs::Context &, pjs::Object *, pjs::Value &ret) {
+    "", [](pjs::Context &, pjs::Object *, pjs::Value &ret) {
       ret.set(pjs::Str::empty);
     }
   );

@@ -1597,6 +1597,13 @@ public:
   auto values() -> Value* { return m_data->elements(); }
   auto variables() const -> Variable* { return m_variables; }
 
+  void init(int argc, const Value *args) {
+    auto data = m_data->elements();
+    auto size = m_data->size();
+    for (int i = 0; i < argc; i++) data[i] = args[i];
+    for (int i = argc; i < size; i++) data[i] = Value::undefined;
+  }
+
   void clear() {
     auto values = m_data->elements();
     for (size_t i = 0, n = m_data->size(); i < n; i++) {
@@ -1644,7 +1651,6 @@ public:
     : m_root(this)
     , m_caller(nullptr)
     , m_level(0)
-    , m_narg(0)
     , m_argc(0)
     , m_argv(nullptr)
     , m_error(std::make_shared<Error>()) {}
@@ -1655,42 +1661,29 @@ public:
     , m_g(g)
     , m_l(l)
     , m_level(0)
-    , m_narg(0)
     , m_argc(0)
     , m_argv(nullptr)
     , m_error(std::make_shared<Error>()) {}
 
-  Context(Context &ctx, int narg = 0, Scope *scope = nullptr)
+  Context(Context &ctx, int argc, Value *argv, Scope *scope)
     : m_root(ctx.m_root)
     , m_caller(&ctx)
     , m_g(ctx.m_g)
     , m_l(ctx.m_l)
     , m_scope(scope)
     , m_level(ctx.m_level + 1)
-    , m_narg(narg)
-    , m_argc(0)
-    , m_argv(nullptr)
+    , m_argc(argc)
+    , m_argv(argv)
     , m_error(ctx.m_error) {}
 
   auto root() const -> Context* { return m_root; }
   auto g() const -> Object* { return m_g; }
   auto l(int i) const -> Object* { return i >= 0 && m_l ? m_l[i].get() : nullptr; }
   auto scope() const -> Scope* { return m_scope; }
+  void scope(Scope *scope) { m_scope = scope; }
   auto level() const -> int { return m_level; }
   auto argc() const -> int { return m_argc; }
   auto arg(int i) const -> Value& { return m_argv[i]; }
-
-  void init(int argc, Value argv[]) {
-    m_argc = argc;
-    m_argv = argv;
-    if (auto *scope = m_scope.get()) {
-      int n = std::min(argc, m_narg);
-      auto data = scope->values();
-      auto size = scope->size();
-      for (int i = 0; i < n; i++) data[i] = argv[i];
-      while (n < size) data[n++] = Value::undefined;
-    }
-  }
 
   void reset();
   bool ok() const { return !m_has_error; }
@@ -1702,6 +1695,13 @@ public:
   void error_argument_type(int i, const char *type);
   void backtrace(const Source *source, int line, int column);
   void backtrace(const std::string &name);
+
+  auto new_scope(int argc, int nvar, Scope::Variable *variables) -> Scope* {
+    auto *scope = Scope::make(m_scope, nvar, variables);
+    scope->init(std::min(m_argc, argc), m_argv);
+    m_scope = scope;
+    return scope;
+  }
 
   bool check(int i, bool &v) {
     auto &a = arg(i);
@@ -1845,7 +1845,6 @@ private:
   Ref<Object> m_g, *m_l;
   Ref<Scope> m_scope;
   int m_level;
-  int m_narg;
   int m_argc;
   Value* m_argv;
   bool m_has_error = false;
@@ -1986,27 +1985,22 @@ class Method : public Field {
 public:
   static auto make(
     const std::string &name,
-    int argc, int nvar, Scope::Variable *variables,
     std::function<void(Context&, Object*, Value&)> invoke,
     Class *constructor_class = nullptr
   ) -> Method* {
-    assert(nvar >= argc);
-    return new Method(name, argc, nvar, variables, invoke, constructor_class);
+    return new Method(name, invoke, constructor_class);
   }
 
   auto constructor_class() const -> Class* { return m_constructor_class; }
 
   void invoke(Context &ctx, Scope *scope, Object *thiz, int argc, Value argv[], Value &retv) {
-    auto callee_scope = Scope::make(scope, m_nvar, m_variables);
-    Context fctx(ctx, m_argc, callee_scope);
-    fctx.init(argc, argv);
+    Context fctx(ctx, argc, argv, scope);
     retv = Value::undefined;
     if (fctx.level() > 100) {
       fctx.error("call stack overflow");
       fctx.backtrace(name()->str());
     } else {
       m_invoke(fctx, thiz, retv);
-      callee_scope->clear();
       if (!fctx.ok()) fctx.backtrace(name()->str());
     }
   }
@@ -2016,36 +2010,22 @@ public:
       ctx.error("function is not a constructor");
       return nullptr;
     }
-    Context fctx(ctx); // No need for a scope since JS ctors are not supported yet
-    fctx.init(argc, argv);
-    if (fctx.level() > 100) {
-      fctx.error("call stack overflow");
-      fctx.backtrace(name()->str());
-      return nullptr;
-    } else {
-      auto *obj = m_constructor_class->construct(fctx);
-      if (!fctx.ok()) fctx.backtrace(name()->str());
-      return obj;
-    }
+    Context fctx(ctx, argc, argv, nullptr); // No need for a scope since JS ctors are not supported yet
+    auto *obj = m_constructor_class->construct(fctx);
+    if (!fctx.ok()) fctx.backtrace(name()->str());
+    return obj;
   }
 
 private:
   Method(
     const std::string &name,
-    int argc, int nvar, Scope::Variable *variables,
     std::function<void(Context&, Object*, Value&)> invoke,
     Class *constructor_class = nullptr
   ) : Field(name, Field::Method)
-    , m_argc(argc)
-    , m_nvar(nvar)
     , m_invoke(invoke)
-    , m_variables(variables)
     , m_constructor_class(constructor_class) {}
 
-  int m_argc;
-  int m_nvar;
   std::function<void(Context&, Object*, Value&)> m_invoke;
-  Scope::Variable* m_variables;
   Class* m_constructor_class;
 };
 
@@ -2055,7 +2035,7 @@ void ClassDef<T>::method(
   std::function<void(Context&, Object*, Value&)> invoke,
   Class *constructor_class
 ) {
-  m_fields.push_back(Method::make(name, 0, 0, nullptr, invoke, constructor_class));
+  m_fields.push_back(Method::make(name, invoke, constructor_class));
 }
 
 //
@@ -2103,7 +2083,7 @@ protected:
   FunctionTemplate() {
     auto c = class_of<T>();
     Function::m_method = Method::make(
-      c->name()->str(), 0, 0, nullptr,
+      c->name()->str(),
       [this](Context &ctx, Object *obj, Value &ret) {
         (*static_cast<T*>(this))(ctx, obj, ret);
       }
@@ -2126,7 +2106,7 @@ protected:
   ConstructorTemplate() {
     auto c = class_of<T>();
     Function::m_method = Method::make(
-      c->name()->str(), 0, 0, nullptr,
+      c->name()->str(),
       [this](Context &ctx, Object *obj, Value &ret) {
         (*static_cast<Constructor<T>*>(this))(ctx, obj, ret);
       }, c);

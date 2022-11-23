@@ -489,14 +489,12 @@ bool FunctionLiteral::eval(Context &ctx, Value &result) {
 }
 
 void FunctionLiteral::resolve(Context &ctx, int l, Imports *imports) {
-  auto argc = int(m_argc);
-  auto nvar = int(m_variables.size());
   char name[100];
   std::sprintf(name, "(anonymous function at line %d column %d)", line(), column());
   m_method = Method::make(
-    name, argc, nvar, &m_variables[0],
+    name,
     [this](Context &ctx, Object*, Value &result) {
-      auto *scope = ctx.scope();
+      auto *scope = ctx.new_scope(m_argc, m_variables.size(), &m_variables[0]);
       for (const auto &p : m_defaults) {
         auto &arg = scope->value(p.first);
         if (arg.is_undefined()) {
@@ -516,10 +514,11 @@ void FunctionLiteral::resolve(Context &ctx, int l, Imports *imports) {
         }
       }
       m_output->eval(ctx, result);
+      scope->clear();
     }
   );
 
-  Context fctx(ctx, argc, Scope::make(ctx.scope(), m_variables.size(), &m_variables[0]));
+  Context fctx(ctx, 0, nullptr, Scope::make(ctx.scope(), m_variables.size(), &m_variables[0]));
   for (auto &i : m_inputs) i->resolve(fctx, l, imports);
   m_output->resolve(fctx, l, imports);
 }

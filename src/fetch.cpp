@@ -72,8 +72,7 @@ Fetch::Fetch(pjs::Str *host, const Options &options)
   , m_host(host)
 {
   m_mux_grouper = pjs::Method::make(
-    "", 0, 0, nullptr,
-    [this](pjs::Context &, pjs::Object *, pjs::Value &ret) {
+    "", [this](pjs::Context &, pjs::Object *, pjs::Value &ret) {
       ret.set(m_mux_group);
     }
   );
