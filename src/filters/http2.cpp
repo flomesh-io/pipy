@@ -1226,6 +1226,7 @@ void Endpoint::on_event(Event *evt) {
 
   } else if (auto end = evt->as<StreamEnd>()) {
     end_all(end);
+    on_output(StreamEnd::make());
   }
 }
 
