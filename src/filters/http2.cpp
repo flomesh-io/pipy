@@ -1660,13 +1660,9 @@ void Endpoint::StreamBase::on_event(Event *evt) {
 
   } else if (auto data = evt->as<Data>()) {
     if (m_is_message_started && !data->empty()) {
-      if (m_is_tunnel) {
+      if (m_state == OPEN || m_state == HALF_CLOSED_REMOTE) {
         m_send_buffer.push(*data);
         pump();
-        flush();
-      } else if (m_state == OPEN || m_state == HALF_CLOSED_REMOTE) {
-        pump();
-        m_send_buffer.push(*data);
         set_pending(true);
         flush();
       }
