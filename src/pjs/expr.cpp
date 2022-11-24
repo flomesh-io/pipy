@@ -469,14 +469,18 @@ FunctionLiteral::FunctionLiteral(Expr *inputs, Expr *output) : m_output(output) 
     std::vector<Ref<Str>> args, vars;
     for (const auto &p : m_inputs) {
       p->to_arguments(args, vars);
+      Parameter param;
+      param.index = i++;
       if (auto *assign = dynamic_cast<Assignment*>(p.get())) {
-        m_defaults.push_back({ i, assign->m_r.get() });
+        param.value = assign->m_r.get();
       }
-      i++;
+      if (args.back() == Str::empty) {
+        param.unpack = p.get();
+      }
+      m_parameters.push_back(param);
     }
     m_argc = args.size();
     m_variables.resize(m_argc + vars.size());
-    m_need_unpack = !vars.empty();
     for (size_t i = 0; i < m_variables.size(); i++) {
       m_variables[i].name = (i >= m_argc ? vars[i - m_argc] : args[i]);
     }
@@ -495,22 +499,16 @@ void FunctionLiteral::resolve(Context &ctx, int l, Imports *imports) {
     name,
     [this](Context &ctx, Object*, Value &result) {
       auto *scope = ctx.new_scope(m_argc, m_variables.size(), &m_variables[0]);
-      for (const auto &p : m_defaults) {
-        auto &arg = scope->value(p.first);
-        if (arg.is_undefined()) {
-          if (!p.second->eval(ctx, arg)) {
+      int var_index = m_argc;
+      for (const auto &p : m_parameters) {
+        auto &arg = scope->value(p.index);
+        if (auto *v = p.value) {
+          if (!v->eval(ctx, arg)) {
             return;
           }
         }
-      }
-      if (m_need_unpack) {
-        int v = m_argc;
-        int i = 0;
-        for (const auto &arg : m_inputs) {
-          if (m_variables[i].name == Str::empty) {
-            arg->unpack(ctx, scope->value(i), v);
-          }
-          i++;
+        if (auto *e = p.unpack) {
+          e->unpack(ctx, arg, var_index);
         }
       }
       m_output->eval(ctx, result);

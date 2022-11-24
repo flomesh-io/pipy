@@ -438,11 +438,16 @@ public:
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
+  struct Parameter {
+    int index;
+    Expr* value = nullptr;
+    Expr* unpack = nullptr;
+  };
+
   std::vector<std::unique_ptr<Expr>> m_inputs;
-  std::list<std::pair<int, Expr*>> m_defaults;
   std::unique_ptr<Expr> m_output;
+  std::list<Parameter> m_parameters;
   size_t m_argc = 0;
-  bool m_need_unpack = false;
   std::vector<pjs::Scope::Variable> m_variables;
   Ref<Method> m_method;
 };
