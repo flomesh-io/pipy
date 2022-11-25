@@ -238,6 +238,7 @@ add_executable(pipy
   src/reader.cpp
   src/status.cpp
   src/store.cpp
+  src/str-map.cpp
   src/tar.cpp
   src/task.cpp
   src/timer.cpp

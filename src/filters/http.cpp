@@ -30,9 +30,11 @@
 #include "pipeline.hpp"
 #include "module.hpp"
 #include "inbound.hpp"
+#include "str-map.hpp"
 #include "utils.hpp"
 #include "log.hpp"
 
+#include <cctype>
 #include <queue>
 #include <limits>
 
@@ -70,6 +72,45 @@ static const pjs::ConstStr s_gateway_timeout("Gateway Timeout");
 static const pjs::ConstStr s_http2_preface_method("PRI");
 static const pjs::ConstStr s_http2_preface_path("*");
 static const pjs::ConstStr s_http2_preface_protocol("HTTP/2.0");
+
+static const StrMap s_strmap_methods({
+  "PRI", "GET", "HEAD", "POST", "PUT",
+  "PATCH", "DELETE", "CONNECT", "OPTIONS", "TRACE",
+});
+
+static const StrMap s_strmap_paths({
+  "*", "/", "/index.html",
+});
+
+static const StrMap s_strmap_protocols({
+  "HTTP/1.0",
+  "HTTP/1.1",
+  "HTTP/2.0",
+});
+
+static const StrMap s_strmap_statuses({
+  "OK", "Created", "Continue",
+});
+
+
+static const StrMap s_strmap_headers({
+  "host",
+  "user-agent",
+  "accept",
+  "connection",
+  "content-length",
+  "content-type",
+  "transfer-encoding",
+});
+
+static const StrMap s_strmap_header_values({
+  "*/*",
+  "text/html",
+  "application/json",
+  "chunked",
+  "close",
+  "keep-alive",
+});
 
 // HTTP status code as in:
 // https://www.iana.org/assignments/http-status-codes/http-status-codes.txt
@@ -215,6 +256,76 @@ static auto lookup_status_text(int status) -> const char* {
   return nullptr;
 }
 
+static auto read_str(Data::Reader &dr, char ending, const StrMap &strmap) -> pjs::Str* {
+  size_t i = 0;
+  StrMap::Parser p(strmap);
+  pjs::Str *found = nullptr;
+  for (;;) {
+    auto c = dr.get();
+    if (c < 0) return nullptr;
+    if (c == ending) return found;
+    if (c == ' ' && !i) continue;
+    found = p.parse(c);
+    if (found == pjs::Str::empty) return nullptr;
+    i++;
+  }
+}
+
+static auto read_str(Data::Reader &dr, char ending, const StrMap &strmap, char *buf) -> pjs::Str* {
+  size_t i = 0;
+  StrMap::Parser p(strmap);
+  pjs::Str *found = nullptr;
+  for (;;) {
+    auto c = dr.get();
+    if (c < 0) return nullptr;
+    if (c == ending) {
+      if (found && found != pjs::Str::empty) {
+        return found;
+      } else {
+        return i > 0 ? pjs::Str::make(buf, i) : nullptr;
+      }
+    }
+    if (c == ' ' && !i) continue;
+    found = p.parse(c);
+    buf[i++] = c;
+  }
+}
+
+static auto read_str_lower(Data::Reader &dr, char ending, const StrMap &strmap, char *buf) -> pjs::Str* {
+  size_t i = 0;
+  StrMap::Parser p(strmap);
+  pjs::Str *found = nullptr;
+  for (;;) {
+    auto c = dr.get();
+    if (c < 0) return nullptr;
+    if (c == ending) {
+      if (found && found != pjs::Str::empty) {
+        return found;
+      } else {
+        return i > 0 ? pjs::Str::make(buf, i) : nullptr;
+      }
+    }
+    if (c == ' ' && !i) continue;
+    c = std::tolower(c);
+    found = p.parse(c);
+    buf[i++] = c;
+  }
+}
+
+static auto read_uint(Data::Reader &dr, char ending) -> int {
+  int n = 0;
+  for (;;) {
+    auto c = dr.get();
+    if (c < 0) return -1;
+    if (c == ending) return n;
+    if ('0' <= c && c <= '9') {
+      n = n * 10 + (c - '0');
+    } else {
+      return -1;
+    }
+  }
+}
+
 //
 // Decoder
 //
@@ -357,31 +468,23 @@ void Decoder::on_event(Event *evt) {
     // new state
     switch (state) {
       case HEAD_EOL: {
-        auto len = m_head_buffer.size();
-        char buf[len + 1];
-        m_head_buffer.to_bytes((uint8_t *)buf);
-        buf[len] = 0;
-        std::string segs[3];
-        char *str = buf;
-        for (int i = 0; i < 3; i++) {
-          if (auto p = std::strpbrk(str, " \r\n")) {
-            segs[i].assign(str, p - str);
-            str = p + 1;
-          } else {
-            break;
-          }
-        }
+        Data::Reader dr(m_head_buffer);
+        char buf[m_head_buffer.size()];
         if (m_is_response) {
+          pjs::Ref<pjs::Str> protocol, status_text; int status;
+          protocol = read_str(dr, ' ', s_strmap_protocols); if (!protocol) { error(); break; }
+          status = read_uint(dr, ' '); if (status < 100 || status > 599) { error(); break; }
+          status_text = read_str(dr, '\r', s_strmap_statuses, buf); if (!status_text) { error(); break; }
           auto res = ResponseHead::make();
-          res->protocol(pjs::Str::make(segs[0]));
-          res->status(std::atoi(segs[1].c_str()));
-          res->status_text(pjs::Str::make(segs[2]));
+          res->protocol(protocol);
+          res->status(status);
+          res->status_text(status_text);
           m_head = res;
         } else {
-          auto req = RequestHead::make();
-          auto method = pjs::Str::make(segs[0]);
-          auto path = pjs::Str::make(segs[1]);
-          auto protocol = pjs::Str::make(segs[2]);
+          pjs::Ref<pjs::Str> method, path, protocol;
+          method = read_str(dr, ' ', s_strmap_methods); if (!method) { error(); break; }
+          path = read_str(dr, ' ', s_strmap_paths, buf); if (!path) { error(); break; }
+          protocol = read_str(dr, '\r', s_strmap_protocols); if (!protocol) { error(); break; }
           if (
             (s_http2_preface_method == method) &&
             (s_http2_preface_path == path) &&
@@ -391,10 +494,10 @@ void Decoder::on_event(Event *evt) {
             state = HTTP2_PREFACE;
             break;
           } else if (protocol != s_http_1_0 && protocol != s_http_1_1) {
-            m_has_error = true;
-            on_decode_error();
+            error();
             break;
           } else {
+            auto req = RequestHead::make();
             req->method(method);
             req->path(path);
             req->protocol(protocol);
@@ -413,40 +516,31 @@ void Decoder::on_event(Event *evt) {
       case HEADER_EOL: {
         auto len = m_head_buffer.size();
         if (len > 2) {
-          char buf[len + 1];
-          m_head_buffer.to_bytes((uint8_t *)buf);
-          buf[len] = 0;
-          if (auto p = std::strchr(buf, ':')) {
-            std::string name(buf, p - buf);
-            p++; while (*p && std::isblank(*p)) p++;
-            if (auto q = std::strpbrk(p, "\r\n")) {
-              std::string value(p, q - p);
-              for (auto &c : name) c = std::tolower(c);
-              pjs::Ref<pjs::Str> key(pjs::Str::make(name));
-              pjs::Ref<pjs::Str> val(pjs::Str::make(value));
-              auto headers = m_head->headers();
-              if (key == s_set_cookie) {
-                pjs::Value old;
-                headers->get(key, old);
-                if (old.is_array()) {
-                  old.as<pjs::Array>()->push(val.get());
-                } else if (old.is_string()) {
-                  auto a = pjs::Array::make(2);
-                  a->set(0, old.s());
-                  a->set(1, val.get());
-                  headers->set(key, a);
-                } else {
-                  headers->set(key, val.get());
-                }
-              } else {
-                auto v = val.get();
-                headers->set(key, val.get());
-                if (key == s_transfer_encoding) m_header_transfer_encoding = v;
-                else if (key == s_content_length) m_header_content_length = v;
-                else if (key == s_connection) m_header_connection = v;
-                else if (key == s_upgrade) m_header_upgrade = v;
-              }
+          Data::Reader dr(m_head_buffer);
+          char buf[len];
+          pjs::Ref<pjs::Str> key(read_str_lower(dr, ':', s_strmap_headers, buf));
+          pjs::Ref<pjs::Str> val(read_str(dr, '\r', s_strmap_header_values, buf));
+          auto headers = m_head->headers();
+          if (key == s_set_cookie) {
+            pjs::Value old;
+            headers->get(key, old);
+            if (old.is_array()) {
+              old.as<pjs::Array>()->push(val.get());
+            } else if (old.is_string()) {
+              auto a = pjs::Array::make(2);
+              a->set(0, old.s());
+              a->set(1, val.get());
+              headers->set(key, a);
+            } else {
+              headers->set(key, val.get());
             }
+          } else {
+            auto v = val.get();
+            headers->set(key, v);
+            if (key == s_transfer_encoding) m_header_transfer_encoding = v;
+            else if (key == s_content_length) m_header_content_length = v;
+            else if (key == s_connection) m_header_connection = v;
+            else if (key == s_upgrade) m_header_upgrade = v;
           }
           state = HEADER;
           m_head_buffer.clear();

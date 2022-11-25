@@ -112,6 +112,11 @@ private:
     }
     return false;
   }
+
+  void error() {
+    m_has_error = true;
+    on_decode_error();
+  }
 };
 
 //
