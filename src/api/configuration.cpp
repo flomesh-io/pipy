@@ -878,42 +878,92 @@ template<> void ClassDef<FilterConfigurator>::init() {
       int n = ctx.argc();
       if (n < 2) throw std::runtime_error("requires at least 2 arguments");
       n = (n + 1) / 2;
-      Function *conds[n];
-      Value layouts[n];
+
+      bool has_default = (ctx.argc() % 2 > 0);
+      bool has_functions = false;
       for (int i = 0; i < n; i++) {
-        auto p = i * 2;
-        auto &cond = ctx.arg(p);
-        if (p + 1 < ctx.argc()) {
-          if (cond.is_function()) {
-            conds[i] = cond.as<Function>();
+        if (ctx.arg(i*2).is_function()) {
+          has_functions = true;
+          break;
+        }
+      }
+
+      // Dynamic branch
+      if (has_functions) {
+        for (int i = 0; i < n; i++) {
+          auto p = i * 2;
+          if (p + 1 < ctx.argc()) {
+            if (!ctx.arg(p).is_function()) {
+              ctx.error_argument_type(p, "a function");
+              return;
+            }
+            p++;
+          }
+          if (!ctx.arg(p).is_string() && !ctx.arg(p).is_function()) {
+            ctx.error_argument_type(p, "a string or a function");
+            return;
+          }
+        }
+        Function *conds[n];
+        Value layouts[n];
+        for (int i = 0; i < n; i++) {
+          auto p = i * 2;
+          auto &cond = ctx.arg(p);
+          if (p + 1 < ctx.argc()) {
+            conds[i] = cond.f();
+            p++;
           } else {
+            conds[i] = nullptr;
+          }
+          auto &layout = ctx.arg(p);
+          if (layout.is_string()) {
+            layouts[i].set(layout.s());
+          } else {
+            layouts[i].set(
+              thiz->as<FilterConfigurator>()->sub_pipeline(
+                layout.f()->to_string(),
+                [&](FilterConfigurator *fc) {
+                  Value arg(fc), ret;
+                  (*layout.f())(ctx, 1, &arg, ret);
+                }
+              )
+            );
+            if (!ctx.ok()) return;
+          }
+        }
+        thiz->as<FilterConfigurator>()->branch(n, conds, layouts);
+
+      // Static branch
+      } else {
+        for (int i = 0; i < n; i++) {
+          auto p = i * 2 + 1;
+          if (!ctx.arg(p).is_function()) {
             ctx.error_argument_type(p, "a function");
             return;
           }
-          p++;
-        } else {
-          conds[i] = nullptr;
         }
-        auto &layout = ctx.arg(p);
-        if (layout.is_string()) {
-          layouts[i].set(layout.s());
-        } else if (layout.is_function()) {
-          layouts[i].set(
-            thiz->as<FilterConfigurator>()->sub_pipeline(
-              layout.f()->to_string(),
-              [&](FilterConfigurator *fc) {
-                Value arg(fc), ret;
-                (*layout.f())(ctx, 1, &arg, ret);
-              }
-            )
-          );
-          if (!ctx.ok()) return;
-        } else {
-          ctx.error_argument_type(p, "a string or a function");
-          return;
+        if (has_default) {
+          auto p = ctx.argc() - 1;
+          if (!ctx.arg(p).is_function()) {
+            ctx.error_argument_type(p, "a function");
+            return;
+          }
+        }
+        int selected = -1;
+        for (int i = 0; i < n; i++) {
+          auto p = i * 2;
+          if (ctx.arg(p).to_boolean()) {
+            selected = p + 1;
+            break;
+          }
+        }
+        if (selected < 0 && has_default) selected = ctx.argc() - 1;
+        if (selected > 0) {
+          auto *f = ctx.arg(selected).f();
+          pjs::Value arg(thiz), ret;
+          (*f)(ctx, 1, &arg, ret);
         }
       }
-      thiz->as<FilterConfigurator>()->branch(n, conds, layouts);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

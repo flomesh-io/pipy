@@ -62,6 +62,26 @@ pipy({
 
 > The condition the filter is waiting for is only checked every time there's an input event to the filter. To check the condition whenever any state in the context has changed, regardless of any input events, use [wait()](/reference/api/Configuration/wait) instead.
 
+### Static branch
+
+If none of the condition arguments are functions, the _branch_ filter will be *static*, in which case there will not be a _branch_ filter being appended to the current pipeline configuration. Instead, all conditions will be evaluated at _configuration time_ to find a branch. The function for that branch will then be executed with one single argument for the current _Configuration_, giving your script a chance to selectively insert or bypass filters from the very beginning.
+
+``` js
+((
+  dumpEnabled = false,
+) => pipy()
+
+.listen(8080)
+.branch(
+  dumpEnabled, (
+    $=>$.dump()
+  )
+)
+.dummy()
+
+)()
+```
+
 ## Syntax
 
 ``` js
