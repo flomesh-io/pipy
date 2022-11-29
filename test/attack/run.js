@@ -16,6 +16,27 @@ const sleep = (t) => new Promise(resolve => setTimeout(resolve, t * 1000));
 const currentDir = dirname(new URL(import.meta.url).pathname);
 const pipyBinPath = join(currentDir, '../../bin/pipy');
 
+function http(method, path, headers, body) {
+  if (typeof headers !== 'object') {
+    body = headers;
+    headers = {};
+  }
+  body = Buffer.from(body || '');
+  const hasBody = !(method === 'GET' || method === 'HEAD' || method === 'DELETE');
+  const head = [
+    `${method} ${path} HTTP/1.1`,
+    ...Object.entries(headers).map(([k, v]) => `${k}: ${v}`),
+    hasBody ? `Content-Length: ${body.byteLength}\r\n` : '',
+  ].join('\r\n');
+  return [Buffer.concat([Buffer.from(head + '\r\n'), body])];
+}
+
+function split(count, buffers) {
+  const buffer = Buffer.concat(buffers);
+  const size = Math.ceil(buffer.byteLength / count);
+  return new Array(count).fill(0).map((_, i) => buffer.subarray(i * size, Math.min(i * size + size, buffer.byteLength)));
+}
+
 function startProcess(cmd, args, onStdout) {
   const proc = spawn(cmd, args);
   const lineBuffer = [];
@@ -153,48 +174,68 @@ function createAttacks(proc, port) {
   }
 
   class Attack {
-    constructor(id, events, verify, delay) {
+    constructor(id, messages, verify, delay) {
       this.id = id;
-      this.events = events.map(
-        evt => {
-          if (Buffer.isBuffer(evt)) {
-            return evt;
-          } else if (typeof evt === 'string') {
-            return Buffer.from(evt);
-          } else {
-            throw new Error('Events are expected to be Buffers or strings');
+      this.messages = messages.map(
+        msg => msg.map(
+          evt => {
+            if (Buffer.isBuffer(evt)) {
+              return evt;
+            } else if (typeof evt === 'string') {
+              return Buffer.from(evt);
+            } else {
+              throw new Error('Events are expected to be Buffers or strings');
+            }
           }
-        }
+        )
       );
-      this.cursor = 0;
+      this.cursorSend = 0;
+      this.cursorSendEvent = 0;
+      this.cursorVerify = 0;
       this.verify = verify;
       this.delay = delay || 0;
       this.socket = null;
-      this.buffers = [];
+      this.responseBuffer = [];
       this.sentSize = 0;
       this.receivedSize = 0;
-      this.writeEnd = false;
-      this.readEnd = false;
-      this.checked = false;
+      this.error = null;
+      this.done = false;
     }
 
-    write() {
-      if (this.writeEnd) {
+    step() {
+      if (this.error) {
+        throw this.error;
+      } else if (this.done) {
         return false;
-      } else if (this.delay > 0) {
+      } if (this.delay > 0) {
         this.delay--;
         return true;
       } else if (!this.socket) {
         return new Promise((resolve, reject) => {
           const s = net.createConnection({ port }, () => resolve(true));
-          s.on('data', data => { this.buffers.push(data); this.receivedSize += data.byteLength; });
-          s.on('end', () => this.readEnd = true);
+          s.on('data', data => {
+            this.responseBuffer.push(data);
+            this.receivedSize += data.byteLength;
+          });
+          s.on('end', () => {
+            this.socket = null;
+            try {
+              this.check();
+            } catch (e) {
+              this.error = e;
+            }
+          });
           s.on('error', err => reject(err));
           this.socket = s;
         });
-      } else if (this.cursor < this.events.length) {
+      } else if (this.cursorSend < this.messages.length) {
         return new Promise(resolve => {
-          const evt = this.events[this.cursor++];
+          const msg = this.messages[this.cursorSend];
+          const evt = msg[this.cursorSendEvent++];
+          if (this.cursorSendEvent >= msg.length) {
+            this.cursorSendEvent = 0;
+            this.cursorSend++;
+          }
           this.socket.write(
             evt,
             () => {
@@ -205,39 +246,52 @@ function createAttacks(proc, port) {
         });
       } else {
         this.socket.end();
-        this.writeEnd = true;
-        return false;
+        this.socket = null;
+        return true;
       }
     }
 
     check() {
-      if (this.checked) return true;
-      if (this.readEnd) {
-        const f = this.verify;
-        if (typeof f === 'function') {
-          try {
-            f(Buffer.concat(this.buffers));
-          } catch (e) {
-            error(`Verification error from attack #${this.id}`);
-            throw e;
-          }
+      let p = 0;
+      const data = Buffer.concat(this.responseBuffer);
+      this.responseBuffer.length = 0;
+
+      function readLine() {
+        const start = p;
+        while (p < data.byteLength) {
+          if (data[p] === 10) break;
+          p++;
         }
-        this.checked = true;
-        return true;
+        const str = data.subarray(start, p).toString();
+        if (p < data.byteLength) p += 1;
+        return str;
       }
-      return false;
+
+      while (p < data.byteLength) {
+        const line = readLine();
+        if (this.cursorVerify >= this.cursorSend) {
+          throw new Error(`Received extra responses from attack #${this.id}`);
+        }
+        this.verify(line, this.cursorVerify);
+        if (++this.cursorVerify >= this.messages.length) {
+          this.done = true;
+        }
+      }
+
+      this.cursorSend = this.cursorVerify;
+      this.cursorSendEvent = 0;
     }
 
     stats() {
       let status;
-      if (this.checked) {
+      if (this.done) {
         status = 'DONE';
-      } else if (this.writeEnd) {
-        status = 'WAIT';
       } else if (this.delay > 0) {
         status = 'IDLE';
-      } else {
+      } else if (this.cursorSend < this.messages.length) {
         status = 'SEND';
+      } else {
+        status = 'WAIT';
       }
       return (
         formatPadding(12, `Attack #${this.id}`) +
@@ -263,8 +317,8 @@ function createAttacks(proc, port) {
     proc.kill('SIGHUP');
   }
 
-  function attack(start, events, verify) {
-    const a = new Attack(attacks.length, events, verify, start);
+  function attack({ delay, messages, verify }) {
+    const a = new Attack(attacks.length, messages, verify, delay || 0);
     attacks.push(a);
     return a;
   }
@@ -279,8 +333,13 @@ function createAttacks(proc, port) {
     for (;;) {
       let done = true;
       for (let i = 0, n = attacks.length; i < n; i++) {
-        if (await attacks[i].write()) {
-          done = false;
+        try {
+          if (await attacks[i].step()) {
+            done = false;
+          }
+        } catch (e) {
+          error(`Error from attack #${i}`);
+          throw e;
         }
       }
       dumpStats(tick);
@@ -289,23 +348,10 @@ function createAttacks(proc, port) {
       await sleep(0.1);
     }
 
-    for (;;) {
-      let checked = true;
-      attacks.forEach(
-        a => {
-          if (!a.check()) checked = false;
-        }
-      );
-      dumpStats(tick);
-      if (checked) break;
-      if (reloads[tick++]) triggerReload();
-      await sleep(0.1);
-    }
-
     logUpdate.done();
   }
 
-  return { attack, reload, run };
+  return { attack, run, reload };
 }
 
 async function runTestByName(name) {
@@ -323,7 +369,7 @@ async function runTestByName(name) {
 
     const { attack, reload, run } = createAttacks(worker, 8001);
     const f = await import(join(currentDir, name, 'test.js'));
-    f.default({ attack, reload });
+    f.default({ attack, http, split, reload });
 
     log('Running attacks...');
     await run();

@@ -18,7 +18,7 @@
 })
 
   .listen(8000).link('test')
-  .listen(8001).link('test').decodeHTTPResponse().replaceMessageBody(body => body.push('\n'))
+  .listen(8001).link('test').link('http-to-lines')
 
   .listen(8080).serveHTTP(new Message('8080'))
   .listen(8081).serveHTTP(new Message('8081'))
