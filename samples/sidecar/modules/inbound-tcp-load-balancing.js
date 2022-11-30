@@ -23,7 +23,8 @@
 .pipeline()
 .branch(
   () => (_target = balancers.get(__port?.TargetClusters).next()), (
-    $=>$.connect(() => _target.id)
+    $=>$
+    .connect(() => _target.id)
   ), (
     $=>$.chain()
   )

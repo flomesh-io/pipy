@@ -1,6 +1,10 @@
 ((
   config = pipy.solve('config.js'),
 
+  tlsCertChain = config?.Certificate?.CertChain,
+  tlsPrivateKey = config?.Certificate?.PrivateKey,
+  tlsIssuingCA = config?.Certificate?.IssuingCA,
+
   makeTargetBalancer = (clusterName) => (
     (
       targets = config.Outbound.ClustersConfigs[clusterName].Endpoints
@@ -32,9 +36,20 @@
 .pipeline()
 .branch(
   () => (_target = clusterBalancers.get(__route?.TargetClusters)()), (
-    $=>$.muxHTTP(() => _target).to(
-      $=>$.connect(() => _target.id)
+    $=>$
+    .muxHTTP(() => _target).to(
+      $=>$
+      .connectTLS({
+        certificate: () => ({
+          cert: new crypto.Certificate(tlsCertChain),
+          key: new crypto.PrivateKey(tlsPrivateKey),
+        }),
+        trusted: tlsIssuingCA ? [new crypto.Certificate(tlsIssuingCA)] : [],
+      }).to(
+        $=>$.connect(() => _target.id)
+      )
     )
+
   ), (
     $=>$.chain()
   )

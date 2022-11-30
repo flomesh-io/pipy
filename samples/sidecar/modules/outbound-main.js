@@ -3,7 +3,7 @@
 
   makePortHandler = (port) => (
     (
-      destinations = (config.Outbound.TrafficMatches[port] || []).map(
+      destinations = (config?.Outbound?.TrafficMatches[port] || []).map(
         config => ({
           ranges: Object.entries(config.DestinationIPRanges).map(
             ([k, config]) => ({ mask: new Netmask(k), config })
@@ -20,8 +20,8 @@
                 r => r.mask.contains(address)
               )
             ),
-            protocol = dst?.Protocol === 'http' || dst?.Protocol === 'grpc' ? 'http' : 'tcp',
-            isHTTP2 = dst?.Protocol === 'grpc',
+            protocol = dst?.config?.Protocol === 'http' || dst?.config?.Protocol === 'grpc' ? 'http' : 'tcp',
+            isHTTP2 = dst?.config?.Protocol === 'grpc',
           ) => (
             () => (
               __port = dst?.config,
@@ -51,7 +51,7 @@
 
 .pipeline()
 .onStart(
-  () => portHandlers.get(__inbound.destinationPort)()
+  () => void portHandlers.get(__inbound.destinationPort)()
 )
 .branch(
   () => __protocol === 'http', (

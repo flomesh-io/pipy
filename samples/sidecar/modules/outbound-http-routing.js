@@ -47,7 +47,7 @@
           head = msg.head,
           headers = head.headers,
         ) => (
-          hostHandlers.get(headers.host)(head.method, head.path, headers)()
+          hostHandlers.get(headers.host)(head.method, head.path, headers)
         )
       )()
     )

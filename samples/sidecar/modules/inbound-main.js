@@ -55,7 +55,7 @@
 
 .pipeline()
 .onStart(
-  () => portHandlers.get(__inbound.destinationPort)()
+  () => void portHandlers.get(__inbound.destinationPort)()
 )
 .branch(
   () => __protocol === 'http', (
