@@ -17,26 +17,19 @@
   _target: undefined,
 })
 
-  .listen(8000).link('test')
-  .listen(8001).link('test').link('http-to-lines')
+.listen(8080).serveHTTP(new Message('8080'))
+.listen(8081).serveHTTP(new Message('8081'))
+.listen(8082).serveHTTP(new Message('8082' + 'X'.repeat(10000)))
 
-  .listen(8080).serveHTTP(new Message('8080'))
-  .listen(8081).serveHTTP(new Message('8081'))
-  .listen(8082).serveHTTP(new Message('8082' + 'X'.repeat(10000)))
-
-  .pipeline('test')
-  .demuxHTTP().to(
-    $=>$
-    .handleMessageStart(
-      msg => _target = router.find(msg.head.path)
-    )
-    .muxHTTP(() => _target).to(
-      $=>$.connect(() => _target)
-    )
+.listen(8000)
+.demuxHTTP().to(
+  $=>$
+  .handleMessageStart(
+    msg => _target = router.find(msg.head.path)
   )
-
-  .pipeline('http-to-lines')
-  .decodeHTTPResponse()
-  .replaceMessageBody(body => body.push('\n'))
+  .muxHTTP(() => _target).to(
+    $=>$.connect(() => _target)
+  )
+)
 
 )()

@@ -152,7 +152,7 @@ async function startCodebase(url) {
   return proc;
 }
 
-function createAttacks(proc, port) {
+function createAttacks(proc, port, options) {
 
   function formatSize(size) {
     let n, unit;
@@ -210,43 +210,49 @@ function createAttacks(proc, port) {
       } if (this.delay > 0) {
         this.delay--;
         return true;
-      } else if (!this.socket) {
-        return new Promise((resolve, reject) => {
-          const s = net.createConnection({ port }, () => resolve(true));
-          s.on('data', data => {
-            this.responseBuffer.push(data);
-            this.receivedSize += data.byteLength;
-          });
-          s.on('end', () => {
-            this.socket = null;
-            try {
-              this.check();
-            } catch (e) {
-              this.error = e;
-            }
-          });
-          s.on('error', err => reject(err));
-          this.socket = s;
-        });
       } else if (this.cursorSend < this.messages.length) {
-        return new Promise(resolve => {
-          const msg = this.messages[this.cursorSend];
-          const evt = msg[this.cursorSendEvent++];
-          if (this.cursorSendEvent >= msg.length) {
-            this.cursorSendEvent = 0;
-            this.cursorSend++;
-          }
-          this.socket.write(
-            evt,
-            () => {
-              this.sentSize += evt.byteLength;
-              resolve(true);
+        if (this.socket) {
+          return new Promise(resolve => {
+            const msg = this.messages[this.cursorSend];
+            const evt = msg[this.cursorSendEvent++];
+            if (this.cursorSendEvent >= msg.length) {
+              this.cursorSendEvent = 0;
+              this.cursorSend++;
             }
-          );
-        });
+            this.socket.write(
+              evt,
+              () => {
+                this.sentSize += evt.byteLength;
+                resolve(true);
+              }
+            );
+          });
+        } else {
+          return new Promise((resolve, reject) => {
+            const s = net.createConnection({ port }, () => resolve(true));
+            s.on('data', data => {
+              this.responseBuffer.push(data);
+              this.receivedSize += data.byteLength;
+            });
+            s.on('end', () => {
+              this.socket = null;
+              try {
+                this.check();
+              } catch (e) {
+                this.error = e;
+              }
+            });
+            s.on('error', err => reject(err));
+            this.socket = s;
+            this.cursorSend = this.cursorVerify;
+            this.cursorSendEvent = 0;
+          });
+        }
       } else {
-        this.socket.end();
-        this.socket = null;
+        if (this.socket) {
+          this.socket.end();
+          this.socket = null;
+        }
         return true;
       }
     }
@@ -259,27 +265,66 @@ function createAttacks(proc, port) {
       function readLine() {
         const start = p;
         while (p < data.byteLength) {
-          if (data[p] === 10) break;
+          if (data[p] === 13 && data[p+1] === 10) break;
           p++;
         }
         const str = data.subarray(start, p).toString();
-        if (p < data.byteLength) p += 1;
+        if (p < data.byteLength) p += 2;
         return str;
       }
 
+      function readBlock(size) {
+        const block = data.subarray(p, p + size);
+        p += size;
+        return block.toString();
+      }
+
       while (p < data.byteLength) {
-        const line = readLine();
+        const head = readLine();
+        const status = parseInt(head.split(' ')[1]);
+        if (!(100 <= status && status <= 599)) {
+          throw new Error(`Invalid status code ${status} in response from attack #${this.id}`);
+        }
+
+        const headers = {};
+        for (;;) {
+          const line = readLine();
+          if (line.length === 0) break;
+          const segs = line.split(':');
+          const k = segs[0] || '';
+          const v = segs[1] || '';
+          headers[k.toLowerCase()] = v.trim();
+        }
+        let body = '';
+        if (headers['transfer-encoding'] === 'chunked') {
+          for (;;) {
+            const line = readLine();
+            const size = parseInt(line, 16);
+            if (size >= 0) {
+              body += readBlock(size);
+            } else {
+              throw new Error(`Invalid chunked encoding in response from attack #${this.id}`);
+            }
+            if (readLine() !== '') throw new Error(`Invalid chunked encoding in response from attack #${this.id}`);
+            if (size === 0) break;
+          }
+        } else if ('content-length' in headers) {
+          const length = parseInt(headers['content-length']);
+          if (length >= 0) {
+            body = readBlock(length);
+          } else {
+            throw new Error(`Invalid Content-Length in response from attack #${this.id}`);
+          }
+        }
+
         if (this.cursorVerify >= this.cursorSend) {
           throw new Error(`Received extra responses from attack #${this.id}`);
         }
-        this.verify(line, this.cursorVerify);
+        this.verify({ status, headers, body }, this.cursorVerify);
         if (++this.cursorVerify >= this.messages.length) {
           this.done = true;
         }
       }
-
-      this.cursorSend = this.cursorVerify;
-      this.cursorSendEvent = 0;
     }
 
     stats() {
@@ -324,7 +369,9 @@ function createAttacks(proc, port) {
   }
 
   function reload(t) {
-    reloads[t] = true;
+    if (options.reload) {
+      reloads[t] = true;
+    }
   }
 
   async function run() {
@@ -354,7 +401,7 @@ function createAttacks(proc, port) {
   return { attack, run, reload };
 }
 
-async function runTestByName(name) {
+async function runTestByName(name, options) {
   const basePath = join(currentDir, name);
 
   let worker;
@@ -367,7 +414,7 @@ async function runTestByName(name) {
   
     log('Codebase', chalk.magenta(name), 'started');
 
-    const { attack, reload, run } = createAttacks(worker, 8001);
+    const { attack, reload, run } = createAttacks(worker, 8000, options);
     const f = await import(join(currentDir, name, 'test.js'));
     f.default({ attack, http, split, reload });
 
@@ -386,29 +433,29 @@ async function runTestByName(name) {
   }
 }
 
-function runTest(id) {
+function runTest(id, options) {
   if (isNaN(parseInt(id))) {
-    return runTestByName(id);
+    return runTestByName(id, options);
   } else {
     id = id.toString();
     id = '0'.repeat(Math.max(0, 3 - id.length)) + id;
-    return runTestByName(`test-${id}`);
+    return runTestByName(`test-${id}`, options);
   }
 }
 
-async function start(id) {
+async function start(id, options) {
   let repo;
   try {
     log('Starting repo...');
     repo = await startRepo();
 
     if (id) {
-      await runTest(id);
+      await runTest(id, options);
 
     } else {
       const dirnames = fs.readdirSync(currentDir).filter(n => n.startsWith('test-'));
       for (const dir of dirnames) {
-        await runTest(dir);
+        await runTest(dir, options);
       }
     }
 
@@ -426,8 +473,6 @@ async function start(id) {
 
 program
   .argument('[testcase-id]')
-  .option('-p, --pipy', 'Run the Pipy codebase under testing')
-  .option('-c, --client', 'Run the test client')
-  .option('-s, --server', 'Run the mock server')
+  .option('--no-reload', 'Without reloading tests')
   .action((id, options) => start(id, options))
   .parse(process.argv)

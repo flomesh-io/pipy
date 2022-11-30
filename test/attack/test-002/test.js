@@ -6,59 +6,62 @@ export default function({ attack, http, split, reload }) {
     '8082' + 'X'.repeat(10000),
   ];
 
-  function verify(line, i) {
-    if (line !== expected[i % 3]) {
-      throw new Error(`Unexpected response at line ${i}: ${line}`);
+  function verify(msg, i) {
+    if (msg.status !== 200) {
+      throw new Error(`Unexpected status code ${msg.status}`);
+    }
+    if (msg.body !== expected[i % 3]) {
+      throw new Error(`Unexpected body in response ${i}: ${msg.body}`);
     }
   }
 
   attack({
     delay: 0,
-    verify,
-    messages: new Array(100).fill(
+    messages: [].concat.apply([], new Array(100).fill(
       [
         http('GET', '/foo'),
         http('GET', '/bar'),
         http('GET', '/xyz'),
       ]
-    ).flat(),
+    )),
+    verify,
   });
 
   attack({
     delay: 10,
-    verify,
-    messages: new Array(50).fill(
+    messages: [].concat.apply([], new Array(50).fill(
       [
         split(2, http('GET', '/foo')),
         split(2, http('GET', '/bar')),
         split(2, http('GET', '/xyz')),
       ]
-    ).flat(),
+    )),
+    verify,
   });
 
   attack({
     delay: 100,
-    verify,
-    messages: new Array(30).fill(
+    messages: [].concat.apply([], new Array(30).fill(
       [
         split(2, http('GET', '/foo')),
         split(2, http('GET', '/bar')),
-        split(6, http('POST', '/xyz', 'X'.repeat(1000) + 'Y'.repeat(1000) + 'Z'.repeat(1000))),
+        split(6, http('POST', '/xyz', 'X'.repeat(3000))),
       ]
-    ).flat(),
+    )),
+    verify,
   });
 
   for (let i = 0; i < 10; i++) {
     attack({
       delay: i * 20,
-      verify,
-      messages: new Array(30).fill(
+      messages: [].concat.apply([], new Array(30).fill(
         [
           split(3, http('POST', '/foo', 'Hello!')),
           split(3, http('POST', '/bar', 'Hello!')),
           split(3, http('POST', '/xyz', 'Hello!')),
         ]
-      ).flat(),
+      )),
+      verify,
     });
   }
 

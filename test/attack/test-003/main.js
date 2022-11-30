@@ -17,35 +17,28 @@
   _target: null,
 })
 
-  .listen(8000).link('test')
-  .listen(8001).link('test').link('http-to-lines')
+.listen(8080).onStart(() => void(_quota = new algo.Quota(1, { per: '0.1s' }))).link('service')
+.listen(8081).onStart(() => void(_quota = new algo.Quota(2, { per: '0.5s' }))).link('service')
+.listen(8082).onStart(() => void(_quota = new algo.Quota(1, { per: '0.2s' }))).link('service')
+.listen(8088).onStart(() => void(_quota = new algo.Quota(1, { per: '0.1s' }))).link('service')
+.listen(8089).onStart(() => void(_quota = new algo.Quota(5, { per: '0.2s' }))).link('service')
 
-  .listen(8080).onStart(() => void(_quota = new algo.Quota(1, { per: '0.1s' }))).link('service')
-  .listen(8081).onStart(() => void(_quota = new algo.Quota(2, { per: '0.5s' }))).link('service')
-  .listen(8082).onStart(() => void(_quota = new algo.Quota(1, { per: '0.2s' }))).link('service')
-  .listen(8088).onStart(() => void(_quota = new algo.Quota(1, { per: '0.1s' }))).link('service')
-  .listen(8089).onStart(() => void(_quota = new algo.Quota(5, { per: '0.2s' }))).link('service')
-
-  .pipeline('test')
-  .demuxHTTP().to(
-    $=>$
-    .handleMessageStart(
-      msg => _target = router.find(msg.head.path).next({})
-    )
-    .muxHTTP(() => _target).to(
-      $=>$.connect(() => _target.id)
-    )
+.listen(8000)
+.demuxHTTP().to(
+  $=>$
+  .handleMessageStart(
+    msg => _target = router.find(msg.head.path).next({})
   )
-
-  .pipeline('http-to-lines')
-  .decodeHTTPResponse()
-  .replaceMessageBody(body => body.push('\n'))
-
-  .pipeline('service')
-  .demuxHTTP().to(
-    $=>$
-    .throttleMessageRate(() => _quota)
-    .replaceMessage(() => new Message(__inbound.localPort.toString()))
+  .muxHTTP(() => _target).to(
+    $=>$.connect(() => _target.id)
   )
+)
+
+.pipeline('service')
+.demuxHTTP().to(
+  $=>$
+  .throttleMessageRate(() => _quota)
+  .replaceMessage(() => new Message(__inbound.localPort.toString()))
+)
 
 )()

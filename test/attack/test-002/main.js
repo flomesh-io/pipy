@@ -17,34 +17,27 @@
   _target: undefined,
 })
 
-  .listen(8000).link('test')
-  .listen(8001).link('test').link('http-to-lines')
+.listen(8080).serveHTTP(new Message('8080'))
+.listen(8081).serveHTTP(new Message('8081'))
+.listen(8082).serveHTTP(new Message('8082' + 'X'.repeat(10000)))
+             .throttleDataRate(() => new algo.Quota(100000, { per: '1s' }))
 
-  .listen(8080).serveHTTP(new Message('8080'))
-  .listen(8081).serveHTTP(new Message('8081'))
-  .listen(8082).serveHTTP(new Message('8082' + 'X'.repeat(10000)))
-               .throttleDataRate(() => new algo.Quota(100000, { per: '1s' }))
-
-  .pipeline('test')
-  .demuxHTTP().to(
-    $=>$
-    .handleMessageStart(
-      msg => _target = router.find(msg.head.path)
-    )
-    .branch(
-      () => _target === 'localhost:8081', (
-        $=>$.throttleMessageRate(new algo.Quota(10, { per: '1s' }))
-      ), (
-        $=>$
-      )
-    )
-    .muxHTTP(() => _target).to(
-      $=>$.connect(() => _target)
+.listen(8000)
+.demuxHTTP().to(
+  $=>$
+  .handleMessageStart(
+    msg => _target = router.find(msg.head.path)
+  )
+  .branch(
+    () => _target === 'localhost:8081', (
+      $=>$.throttleMessageRate(new algo.Quota(10, { per: '1s' }))
+    ), (
+      $=>$
     )
   )
-
-  .pipeline('http-to-lines')
-  .decodeHTTPResponse()
-  .replaceMessageBody(body => body.push('\n'))
+  .muxHTTP(() => _target).to(
+    $=>$.connect(() => _target)
+  )
+)
 
 )()
