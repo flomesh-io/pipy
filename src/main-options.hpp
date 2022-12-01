@@ -52,6 +52,7 @@ public:
   bool        verify = false;
   bool        no_graph = false;
   bool        reuse_port = false;
+  int         threads = 0;
   Log::Level  log_level = Log::ERROR;
   std::string admin_port;
   std::string instance_uuid;

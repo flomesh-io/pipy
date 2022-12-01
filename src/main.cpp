@@ -475,7 +475,17 @@ int main(int argc, char *argv[]) {
 
     start_cleaning_pools();
 
-    Net::run();
+    if (is_repo || is_repo_proxy) {
+      Net::run();
+
+    } else if (opts.threads > 1) {
+      Log::info("Running %d worker threads...", opts.threads);
+      Net::run();
+
+    } else {
+      Log::info("Running single worker thread...");
+      Net::run();
+    }
 
     File::stop_bg_thread();
 
