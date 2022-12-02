@@ -244,6 +244,7 @@ add_executable(pipy
   src/timer.cpp
   src/utils.cpp
   src/worker.cpp
+  src/worker-thread.cpp
 )
 
 add_custom_command(
