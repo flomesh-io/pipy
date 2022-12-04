@@ -72,6 +72,50 @@ void WorkerThread::reload() {
   );
 }
 
+auto WorkerThread::stop(bool force) -> int {
+  if (force) {
+    m_io_context.stop();
+    m_thread.join();
+    return 0;
+
+  } else {
+    if (!m_shutdown) {
+      m_io_context.post(
+        []() {
+          if (auto worker = Worker::current()) worker->stop();
+          Listener::for_each([&](Listener *l) { l->pipeline_layout(nullptr); });
+        }
+      );
+      m_shutdown = true;
+    }
+
+    std::unique_lock<std::mutex> lock(m_mutex);
+    m_polled = false;
+
+    m_io_context.post(
+      [this]() {
+        int n = 0;
+        PipelineLayout::for_each(
+          [&](PipelineLayout *layout) {
+            n += layout->active();
+          }
+        );
+        m_pending_pipelines = n;
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_polled = true;
+      }
+    );
+
+    m_cv.wait(lock, [this]() { return m_polled; });
+    if (m_pending_pipelines > 0) return m_pending_pipelines;
+
+    m_io_context.stop();
+    m_thread.join();
+
+    return 0;
+  }
+}
+
 void WorkerThread::fail() {
   std::lock_guard<std::mutex> lock(m_mutex);
   m_failed = true;

@@ -39,8 +39,11 @@ class WorkerThread {
 public:
   WorkerThread(int index);
 
+  auto index() const -> int { return m_index; }
+
   bool start();
   void reload();
+  auto stop(bool force = false) -> int;
 
 private:
   int m_index;
@@ -48,8 +51,11 @@ private:
   std::thread m_thread;
   std::mutex m_mutex;
   std::condition_variable m_cv;
+  int m_pending_pipelines = 0;
   bool m_started = false;
   bool m_failed = false;
+  bool m_polled = false;
+  bool m_shutdown = false;
 
   void fail();
 };
