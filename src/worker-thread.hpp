@@ -47,14 +47,13 @@ public:
 
 private:
   int m_index;
-  asio::io_context m_io_context;
+  asio::io_context* m_io_context = nullptr;
   std::thread m_thread;
   std::mutex m_mutex;
   std::condition_variable m_cv;
   int m_pending_pipelines = 0;
   bool m_started = false;
   bool m_failed = false;
-  bool m_polled = false;
   bool m_shutdown = false;
 
   void fail();

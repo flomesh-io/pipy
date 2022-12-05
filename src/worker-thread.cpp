@@ -26,6 +26,7 @@
 #include "worker-thread.hpp"
 #include "worker.hpp"
 #include "codebase.hpp"
+#include "net.hpp"
 
 #include <mutex>
 
@@ -37,6 +38,8 @@ WorkerThread::WorkerThread(int index)
 }
 
 bool WorkerThread::start() {
+  std::unique_lock<std::mutex> lock(m_mutex);
+
   m_thread = std::thread(
     [this]() {
       auto &entry = Codebase::current()->entry();
@@ -53,19 +56,23 @@ bool WorkerThread::start() {
         return;
       }
 
-      std::lock_guard<std::mutex> lock(m_mutex);
-      m_started = true;
+      {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_started = true;
+        m_io_context = &Net::context();
+      }
+
+      m_cv.notify_one();
+      Net::run();
     }
   );
 
-  std::unique_lock<std::mutex> lock(m_mutex);
   m_cv.wait(lock, [this]() { return m_started || m_failed; });
-
   return !m_failed;
 }
 
 void WorkerThread::reload() {
-  m_io_context.post(
+  m_io_context->post(
     []() {
       Worker::restart();
     }
@@ -74,13 +81,13 @@ void WorkerThread::reload() {
 
 auto WorkerThread::stop(bool force) -> int {
   if (force) {
-    m_io_context.stop();
+    m_io_context->stop();
     m_thread.join();
     return 0;
 
   } else {
     if (!m_shutdown) {
-      m_io_context.post(
+      m_io_context->post(
         []() {
           if (auto worker = Worker::current()) worker->stop();
           Listener::for_each([&](Listener *l) { l->pipeline_layout(nullptr); });
@@ -90,9 +97,9 @@ auto WorkerThread::stop(bool force) -> int {
     }
 
     std::unique_lock<std::mutex> lock(m_mutex);
-    m_polled = false;
+    m_pending_pipelines = -1;
 
-    m_io_context.post(
+    m_io_context->post(
       [this]() {
         int n = 0;
         PipelineLayout::for_each(
@@ -100,16 +107,19 @@ auto WorkerThread::stop(bool force) -> int {
             n += layout->active();
           }
         );
-        m_pending_pipelines = n;
-        std::lock_guard<std::mutex> lock(m_mutex);
-        m_polled = true;
+
+        {
+          std::lock_guard<std::mutex> lock(m_mutex);
+          m_pending_pipelines = n;
+        }
+        m_cv.notify_one();
       }
     );
 
-    m_cv.wait(lock, [this]() { return m_polled; });
+    m_cv.wait(lock, [this]() { return m_pending_pipelines >= 0; });
     if (m_pending_pipelines > 0) return m_pending_pipelines;
 
-    m_io_context.stop();
+    m_io_context->stop();
     m_thread.join();
 
     return 0;
