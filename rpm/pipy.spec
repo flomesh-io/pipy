@@ -7,7 +7,17 @@ Summary: 	Pipy is a programmable network proxy for the cloud, edge and IoT.
 License: 	NEU License
 Source0: 	pipy.tar.gz
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{revision}-root-%(%{__id_u} -n)
+BuildRequires: 	/usr/bin/chrpath
+BuildRequires: 	autoconf
+BuildRequires: 	automake
+BuildRequires: 	clang
 BuildRequires: 	cmake3
+BuildRequires: 	gcc
+BuildRequires: 	make
+BuildRequires: 	nodejs-packaging
+BuildRequires: 	perl-interpreter
+BuildRequires: 	perl(Module::Load::Conditional), perl(File::Temp)
+BuildRequires: 	zlib-devel
 #AutoReqProv: no
 %define revision %{release}
 %define prefix /usr/local
