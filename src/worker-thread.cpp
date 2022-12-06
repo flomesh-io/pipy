@@ -28,8 +28,6 @@
 #include "codebase.hpp"
 #include "net.hpp"
 
-#include <mutex>
-
 namespace pipy {
 
 WorkerThread::WorkerThread(int index)
@@ -85,44 +83,47 @@ auto WorkerThread::stop(bool force) -> int {
     m_thread.join();
     return 0;
 
-  } else {
-    if (!m_shutdown) {
-      m_io_context->post(
-        []() {
-          if (auto worker = Worker::current()) worker->stop();
-          Listener::for_each([&](Listener *l) { l->pipeline_layout(nullptr); });
-        }
-      );
-      m_shutdown = true;
-    }
-
+  } else if (!m_shutdown) {
     std::unique_lock<std::mutex> lock(m_mutex);
+    m_shutdown = true;
     m_pending_pipelines = -1;
 
     m_io_context->post(
       [this]() {
-        int n = 0;
-        PipelineLayout::for_each(
-          [&](PipelineLayout *layout) {
-            n += layout->active();
-          }
-        );
-
-        {
-          std::lock_guard<std::mutex> lock(m_mutex);
-          m_pending_pipelines = n;
-        }
-        m_cv.notify_one();
+        if (auto worker = Worker::current()) worker->stop();
+        Listener::for_each([&](Listener *l) { l->pipeline_layout(nullptr); });
+        m_pending_timer = new Timer();
+        wait();
       }
     );
 
     m_cv.wait(lock, [this]() { return m_pending_pipelines >= 0; });
-    if (m_pending_pipelines > 0) return m_pending_pipelines;
+  }
 
+  std::lock_guard<std::mutex> lock(m_mutex);
+  return m_pending_pipelines;
+}
+
+void WorkerThread::wait() {
+  int n = 0;
+  PipelineLayout::for_each(
+    [&](PipelineLayout *layout) {
+      n += layout->active();
+    }
+  );
+
+  {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_pending_pipelines = n;
+  }
+  m_cv.notify_one();
+
+  if (n > 0) {
+    m_pending_timer->schedule(1, [this]() { wait(); });
+  } else {
+    delete m_pending_timer;
+    m_pending_timer = nullptr;
     m_io_context->stop();
-    m_thread.join();
-
-    return 0;
   }
 }
 

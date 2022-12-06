@@ -26,6 +26,8 @@
 #ifndef WORKER_THREAD_HPP
 #define WORKER_THREAD_HPP
 
+#include "timer.hpp"
+
 #define ASIO_STANDALONE
 #include <asio.hpp>
 
@@ -48,6 +50,7 @@ public:
 private:
   int m_index;
   asio::io_context* m_io_context = nullptr;
+  Timer* m_pending_timer = nullptr;
   std::thread m_thread;
   std::mutex m_mutex;
   std::condition_variable m_cv;
@@ -56,6 +59,7 @@ private:
   bool m_failed = false;
   bool m_shutdown = false;
 
+  void wait();
   void fail();
 };
 
