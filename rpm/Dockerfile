@@ -30,7 +30,7 @@ COPY rpmmacros /rpmmacros
 COPY pipy.tar.gz /pipy.tar.gz
 COPY pipy.spec /pipy.spec
 
-RUN yum install -y -q gcc make unzip rpm-build rpmdevtools chrpath expat-devel zlib-devel \
+RUN yum install -y -q gcc make unzip rpm-build rpmdevtools chrpath expat-devel zlib-devel autoconf automake nodejs-packaging perl-Module-Load-Conditional \
     && rpmdev-setuptree \
     && mv /rpmmacros ~/.rpmmacros \
     && curl -sL https://rpm.nodesource.com/setup_14.x | bash - \

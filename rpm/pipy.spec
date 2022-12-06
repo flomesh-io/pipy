@@ -10,7 +10,11 @@ BuildRoot:      %{_tmppath}/%{name}-%{version}-%{revision}-root-%(%{__id_u} -n)
 BuildRequires: 	/usr/bin/chrpath
 BuildRequires: 	autoconf
 BuildRequires: 	automake
-BuildRequires: 	clang
+%if 0%{?rhel} == 7
+BuildRequires: llvm-toolset-7
+%else
+BuildRequires:  clang
+%endif
 BuildRequires: 	cmake3
 BuildRequires: 	gcc
 BuildRequires: 	make
