@@ -40,15 +40,20 @@ RUN yum install -y -q gcc make unzip rpm-build rpmdevtools chrpath expat-devel z
 
 RUN mv /pipy.tar.gz ~/rpmbuild/SOURCES \
     && mv /pipy.spec ~/rpmbuild/SPECS \
-    && export CI_COMMIT_SHA \
+    && spectool -g -R ~/rpmbuild/SPECS/pipy.spec
+
+RUN if test "$PIPY_GUI" = ON ; then   \
+      rpmbuild_opts=' --with gui';    \
+    else                              \
+      rpmbuild_opts=' --without gui'; \
+    fi;                               \
+       export CI_COMMIT_SHA \
     && export CI_COMMIT_TAG=${VERSION}-${REVISION} \
     && export CI_COMMIT_DATE \
-    && export PIPY_GUI \
     && export PIPY_STATIC \
     && export BUILD_TYPE \
-    && spectool -g -R ~/rpmbuild/SPECS/pipy.spec \
     && PATH="/opt/rh/llvm-toolset-7/root/usr/bin:/opt/rh/llvm-toolset-7/root/usr/sbin${PATH:+:${PATH}}" \
-    && rpmbuild -ba ~/rpmbuild/SPECS/pipy.spec \
+    && rpmbuild $rpmbuild_opts -ba ~/rpmbuild/SPECS/pipy.spec \
     && mkdir /rpm \
     && find ~/rpmbuild/RPMS -name pipy*.rpm -exec mv {} /rpm/ \;
 
