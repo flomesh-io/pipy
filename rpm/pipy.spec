@@ -10,7 +10,11 @@ BuildRoot:      %{_tmppath}/%{name}-%{version}-%{revision}-root-%(%{__id_u} -n)
 BuildRequires: 	/usr/bin/chrpath
 BuildRequires: 	autoconf
 BuildRequires: 	automake
+%if 0%{?rhel} >= 8 || 0%{?fedora}
 BuildRequires: 	clang
+%else
+BuildRequires: 	llvm-toolset-7.0-clang
+%endif
 BuildRequires: 	cmake3
 BuildRequires: 	gcc
 BuildRequires: 	make
