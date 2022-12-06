@@ -13,8 +13,17 @@
         targetBalancer: new algo.RoundRobinLoadBalancer(clusterConfig?.Endpoints),
         needRetry: Boolean(clusterConfig?.RetryPolicy?.NumRetries),
         numRetries: clusterConfig?.RetryPolicy?.NumRetries,
-        lowerbound: clusterConfig?.RetryPolicy?.RetryOn ? clusterConfig.RetryPolicy.RetryOn.replaceAll('x', '0') : 500,
-        upperbound: clusterConfig?.RetryPolicy?.RetryOn ? clusterConfig.RetryPolicy.RetryOn.replaceAll('x', '9') : 599,
+        retryStatusCodes: (clusterConfig?.RetryPolicy?.RetryOn || '5xx').split(',').reduce(
+          (lut, code) => (
+            code.endsWith('xx') ? (
+              new Array(100).fill(0).forEach((_, i) => lut[(code.charAt(0)|0)*100+i] = true)
+            ) : (
+              lut[code|0] = true
+            ),
+            lut
+          ),
+          []
+        ),
         retryBackoffBaseInterval: clusterConfig?.RetryPolicy?.RetryBackoffBaseInterval || 1, // default 1 second
         muxHttpOptions: {
           version: () => __isHTTP2 ? 2 : 1,
@@ -38,18 +47,22 @@
 
   clusterBalancers = new algo.Cache(makeClusterBalancer),
 
-  calcScaleRatio = (n) => (
-    n < 1 ? 0 : (n = Math.pow(2, n - 1), n > 10 ? 10 : n)
-  ),
-
   shouldRetry = (statusCode) => (
-    (_clusterConfig.lowerbound <= _statusCode && statusCode <= _clusterConfig.upperbound) &&
-    (_retryCount++ < _clusterConfig.numRetries)
-  ),
+    _clusterConfig.retryStatusCodes[statusCode] ? (
+      (_retryCount < _clusterConfig.numRetries) ? (
+        _retryCount++,
+        true
+      ) : (
+        false
+      )
+    ) : (
+      false
+    )
+),
 
 ) => pipy({
   _target: null,
-  _retryCount: null,
+  _retryCount: 0,
   _clusterConfig: null,
 })
 
@@ -70,17 +83,14 @@
   () => !_target, $=>$.chain(),
   () => _clusterConfig.needRetry, (
     $=>$
-    .handleMessageStart(
-      () => (
-        _retryCount = 0
-      )
-    )
-    .replay({ 'delay': () => _clusterConfig.retryBackoffBaseInterval * calcScaleRatio(_retryCount) }).to(
+    .replay({
+        delay: () => _clusterConfig.retryBackoffBaseInterval * Math.min(10, Math.pow(2, _retryCount-1)|0)
+    }).to(
       $=>$
       .link('upstream')
       .replaceMessageStart(
-        evt => (
-          shouldRetry(evt.head.status) ? new StreamEnd('Replay') : evt
+        msg => (
+          shouldRetry(msg.head.status) ? new StreamEnd('Replay') : msg
         )
       )
     )
