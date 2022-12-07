@@ -502,9 +502,11 @@ void FunctionLiteral::resolve(Context &ctx, int l, Imports *imports) {
       int var_index = m_argc;
       for (const auto &p : m_parameters) {
         auto &arg = scope->value(p.index);
-        if (auto *v = p.value) {
-          if (!v->eval(ctx, arg)) {
-            return;
+        if (arg.is_undefined()) {
+          if (auto *v = p.value) {
+            if (!v->eval(ctx, arg)) {
+              return;
+            }
           }
         }
         if (auto *e = p.unpack) {
