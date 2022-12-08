@@ -55,6 +55,7 @@ namespace logging {
 
 class Logger : public pjs::ObjectTemplate<Logger> {
 public:
+  static void init();
   static void set_admin_service(AdminService *admin_service);
   static void set_admin_link(AdminLink *admin_link);
   static auto find(const std::string &name) -> Logger*;
@@ -226,6 +227,7 @@ private:
   size_t m_history_max = 256 * 1024;
   bool m_admin_link_enabled = false;
 
+  void write_async(const Data &msg);
   void write_internal(const Data &msg);
   void write_history(const Data &msg);
   void send_history();

@@ -43,6 +43,7 @@
 #include "timer.hpp"
 #include "utils.hpp"
 #include "worker.hpp"
+#include "worker-thread.hpp"
 
 #include <signal.h>
 
@@ -60,6 +61,7 @@ static AdminLink *s_admin_link = nullptr;
 static std::string s_admin_ip;
 static int s_admin_port = 0;
 static AdminService::Options s_admin_options;
+static WorkerThread* s_worker_thread = nullptr;
 
 //
 // Show version
@@ -152,7 +154,10 @@ static void start_checking_updates() {
         Status::local, false,
         [&](bool ok) {
           if (ok) {
-            Worker::restart();
+            // Worker::restart();
+            if (s_worker_thread) {
+              s_worker_thread->reload();
+            }
           }
         }
       );
@@ -212,6 +217,9 @@ static void toggle_admin_port() {
 
 static void handle_signal(int sig) {
   static bool s_admin_closed = false;
+  static bool s_has_shutdown = false;
+  static std::function<void()> wait, stop;
+  static Timer timer;
 
   if (auto worker = Worker::current()) {
     if (worker->handling_signal(sig)) {
@@ -220,18 +228,51 @@ static void handle_signal(int sig) {
   }
 
   switch (sig) {
-    case SIGINT:
+    case SIGINT: {
+      wait = []() {
+        auto n = s_worker_thread->stop();
+        if (n > 0) {
+          Log::info("[shutdown] Waiting for remaining %d pipelines...", n);
+          timer.schedule(1, wait);
+        } else {
+          stop();
+        }
+      };
+
+      stop = []() {
+        Log::info("[shutdown] Stopping event loop...");
+        Net::stop();
+      };
+
       if (!s_admin_closed) {
         logging::Logger::shutdown_all();
         if (s_admin_link) s_admin_link->close();
         if (s_admin) s_admin->close();
         s_admin_closed = true;
       }
-      Worker::exit(-1);
+
+      if (s_worker_thread) {
+        if (s_has_shutdown) {
+          Log::info("[shutdown] Forcing to shut down...");
+          s_worker_thread->stop(true);
+          stop();
+        } else {
+          Log::info("[shutdown] Shutting down...");
+          wait();
+        }
+      } else {
+        stop();
+      }
+
+      s_has_shutdown = true;
+      // Worker::exit(-1);
       break;
+    }
+
     case SIGHUP:
       reload_codebase();
       break;
+
     case SIGTSTP:
       toggle_admin_port();
       break;
@@ -279,6 +320,7 @@ int main(int argc, char *argv[]) {
     }
 
     pjs::Math::init();
+    logging::Logger::init();
     Log::init();
     Log::set_level(opts.log_level);
     Log::set_graph_enabled(!opts.no_graph);
@@ -418,24 +460,31 @@ int main(int argc, char *argv[]) {
               return;
             }
 
-            auto &entry = Codebase::current()->entry();
-            auto worker = Worker::make();
-            auto mod = worker->load_js_module(entry);
-
-            if (!mod) {
-              fail();
-              return;
+            auto wt = new WorkerThread(0);
+            if (!wt->start()) {
+              delete wt;
             }
 
-            if (opts.verify) {
-              Worker::exit(0);
-              return;
-            }
+            s_worker_thread = wt;
 
-            if (!worker->start()) {
-              fail();
-              return;
-            }
+            // auto &entry = Codebase::current()->entry();
+            // auto worker = Worker::make();
+            // auto mod = worker->load_js_module(entry);
+
+            // if (!mod) {
+            //   fail();
+            //   return;
+            // }
+
+            // if (opts.verify) {
+            //   Worker::exit(0);
+            //   return;
+            // }
+
+            // if (!worker->start()) {
+            //   fail();
+            //   return;
+            // }
 
             Status::local.version = Codebase::current()->version();
             Status::local.update();

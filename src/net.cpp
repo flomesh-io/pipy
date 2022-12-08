@@ -27,8 +27,8 @@
 
 namespace pipy {
 
-asio::io_context Net::s_io_context;
-bool Net::s_is_running = false;;
+thread_local asio::io_context Net::s_io_context;
+thread_local bool Net::s_is_running = false;;
 
 void Net::run() {
   s_is_running = true;

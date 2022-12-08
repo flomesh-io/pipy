@@ -51,8 +51,8 @@ public:
   static void defer(const std::function<void()> &cb);
 
 private:
-  static asio::io_context s_io_context;
-  static bool s_is_running;
+  static thread_local asio::io_context s_io_context;
+  static thread_local bool s_is_running;
 };
 
 //
