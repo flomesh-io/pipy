@@ -33,9 +33,8 @@ COPY pipy.spec /pipy.spec
 RUN yum install -y -q gcc make unzip rpm-build rpmdevtools chrpath \
     && rpmdev-setuptree \
     && mv /rpmmacros ~/.rpmmacros \
-    && curl -sL https://rpm.nodesource.com/setup_14.x | bash - \
     && yum install -y centos-release-scl epel-release yum-utils \
-    && yum-builddep -y /pipy.spec
+    && yum-builddep --define "_with_gui 1" -y /pipy.spec
 
 RUN mv /pipy.tar.gz ~/rpmbuild/SOURCES \
     && mv /pipy.spec ~/rpmbuild/SPECS \
