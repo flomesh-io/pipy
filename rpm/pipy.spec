@@ -26,7 +26,11 @@ BuildRequires: 	cmake3
 BuildRequires: 	gcc
 BuildRequires: 	make
 %if 0%{with gui}
+%if 0%{?rhel} >= 8 || 0%{?fedora}
 BuildRequires: 	npm
+%else
+BuildRequires: 	rh-nodejs14-npm
+%endif
 %endif
 BuildRequires: 	perl-interpreter
 BuildRequires: 	perl(Module::Load::Conditional), perl(File::Temp)
@@ -48,6 +52,9 @@ rm -fr pipy/build
 %{__mkdir} pipy/build
 cd pipy
 %if 0%{with gui}
+%if 0%{?rhel} == 7
+source /opt/rh/rh-nodejs14/enable
+%endif
   npm install
   npm run build
 %endif
