@@ -20,7 +20,7 @@ BuildRequires: 	cmake3
 BuildRequires: 	gcc
 BuildRequires: 	make
 %if 0%{with gui}
-BuildRequires: 	nodejs-packaging
+BuildRequires: 	npm
 %endif
 BuildRequires: 	perl-interpreter
 BuildRequires: 	perl(Module::Load::Conditional), perl(File::Temp)
