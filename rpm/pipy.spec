@@ -1,3 +1,4 @@
+%bcond_with gui
 Name:		pipy
 Version: 	%{getenv:VERSION}
 Release: 	%{getenv:REVISION}%{?dist}
@@ -18,7 +19,9 @@ BuildRequires: 	llvm-toolset-7.0-clang
 BuildRequires: 	cmake3
 BuildRequires: 	gcc
 BuildRequires: 	make
+%if 0%{with gui}
 BuildRequires: 	nodejs-packaging
+%endif
 BuildRequires: 	perl-interpreter
 BuildRequires: 	perl(Module::Load::Conditional), perl(File::Temp)
 BuildRequires: 	zlib-devel
@@ -38,12 +41,16 @@ Pipy is a tiny, high performance, highly stable, programmable proxy.
 rm -fr pipy/build
 %{__mkdir} pipy/build
 cd pipy
-if [ $PIPY_GUI == "ON" ] ; then
+%if 0%{with gui}
   npm install
   npm run build
-fi
+%endif
 cd build
-CXX=clang++ CC=clang cmake3 -DPIPY_GUI=${PIPY_GUI} -DPIPY_STATIC=${PIPY_STATIC} -DPIPY_SAMPLES=${PIPY_GUI} -DCMAKE_BUILD_TYPE=${BUILD_TYPE} ..
+CXX=clang++ CC=clang cmake3 \
+  -DPIPY_GUI==%{?with_gui:ON}%{?!with_gui:OFF} \
+  -DPIPY_SAMPLES=%{?with_gui:ON}%{?!with_gui:OFF} \
+  -DPIPY_STATIC=${PIPY_STATIC} \
+  -DCMAKE_BUILD_TYPE=${BUILD_TYPE} ..
 make -j$(getconf _NPROCESSORS_ONLN)
 
 %preun
