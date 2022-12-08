@@ -53,7 +53,10 @@ RUN if test "$PIPY_GUI" = ON ; then   \
     && export PIPY_STATIC \
     && export BUILD_TYPE \
     && PATH="/opt/rh/llvm-toolset-7/root/usr/bin:/opt/rh/llvm-toolset-7/root/usr/sbin${PATH:+:${PATH}}" \
-    && rpmbuild $rpmbuild_opts -ba ~/rpmbuild/SPECS/pipy.spec \
+    && rpmbuild $rpmbuild_opts \
+         --define "pipy_version $VERSION" \
+         --define "pipy_revision $REVISION" \
+         -ba ~/rpmbuild/SPECS/pipy.spec \
     && mkdir /rpm \
     && find ~/rpmbuild/RPMS -name pipy*.rpm -exec mv {} /rpm/ \;
 

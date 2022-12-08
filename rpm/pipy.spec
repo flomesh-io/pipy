@@ -1,7 +1,13 @@
 %bcond_with gui
+
+# optionally fetch the version number from environmental variable of "VERSION"
+# and "REVISION" respectively
+%{!?pipy_version: %global pipy_version latest}
+%{!?pipy_revision: %global pipy_revision 0}
+
 Name:		pipy
-Version: 	%{getenv:VERSION}
-Release: 	%{getenv:REVISION}%{?dist}
+Version: 	%pipy_version
+Release: 	%pipy_revision%{?dist}
 
 Summary: 	Pipy is a programmable network proxy for the cloud, edge and IoT.
 
