@@ -30,13 +30,11 @@ COPY rpmmacros /rpmmacros
 COPY pipy.tar.gz /pipy.tar.gz
 COPY pipy.spec /pipy.spec
 
-RUN yum install -y -q gcc make unzip rpm-build rpmdevtools chrpath expat-devel zlib-devel \
+RUN yum install -y -q gcc make unzip rpm-build rpmdevtools chrpath \
     && rpmdev-setuptree \
     && mv /rpmmacros ~/.rpmmacros \
-    && curl -sL https://rpm.nodesource.com/setup_14.x | bash - \
-    && yum install -y -q nodejs \
-    && yum install -y centos-release-scl epel-release \
-    && yum install -y llvm-toolset-7 cmake3
+    && yum install -y centos-release-scl epel-release yum-utils \
+    && yum-builddep --define "_with_gui 1" -y /pipy.spec
 
 RUN mv /pipy.tar.gz ~/rpmbuild/SOURCES \
     && mv /pipy.spec ~/rpmbuild/SPECS \
@@ -53,7 +51,10 @@ RUN if test "$PIPY_GUI" = ON ; then   \
     && export PIPY_STATIC \
     && export BUILD_TYPE \
     && PATH="/opt/rh/llvm-toolset-7/root/usr/bin:/opt/rh/llvm-toolset-7/root/usr/sbin${PATH:+:${PATH}}" \
-    && rpmbuild $rpmbuild_opts -ba ~/rpmbuild/SPECS/pipy.spec \
+    && rpmbuild $rpmbuild_opts \
+         --define "pipy_version $VERSION" \
+         --define "pipy_revision $REVISION" \
+         -ba ~/rpmbuild/SPECS/pipy.spec \
     && mkdir /rpm \
     && find ~/rpmbuild/RPMS -name pipy*.rpm -exec mv {} /rpm/ \;
 
