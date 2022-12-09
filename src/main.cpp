@@ -241,7 +241,7 @@ static void handle_signal(int sig) {
 
       stop = []() {
         Log::info("[shutdown] Stopping event loop...");
-        Net::stop();
+        Net::current().stop();
       };
 
       if (!s_admin_closed) {
@@ -525,15 +525,15 @@ int main(int argc, char *argv[]) {
     start_cleaning_pools();
 
     if (is_repo || is_repo_proxy) {
-      Net::run();
+      Net::current().run();
 
     } else if (opts.threads > 1) {
       Log::info("Running %d worker threads...", opts.threads);
-      Net::run();
+      Net::current().run();
 
     } else {
       Log::info("Running single worker thread...");
-      Net::run();
+      Net::current().run();
     }
 
     File::stop_bg_thread();

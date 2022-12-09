@@ -39,20 +39,25 @@ namespace pipy {
 
 class Net {
 public:
-  static auto context() -> asio::io_context& {
-    return s_io_context;
+  static auto current() -> Net& {
+    return s_current;
   }
 
-  static bool is_running() { return s_is_running; }
+  static auto context() -> asio::io_context& {
+    return s_current.m_io_context;
+  }
 
-  static void run();
-  static void stop();
-  static void post(const std::function<void()> &cb);
-  static void defer(const std::function<void()> &cb);
+  bool is_running() const { return m_is_running; }
+
+  void run();
+  void stop();
+  void post(const std::function<void()> &cb);
+  void defer(const std::function<void()> &cb);
 
 private:
-  static thread_local asio::io_context s_io_context;
-  static thread_local bool s_is_running;
+  asio::io_context m_io_context;
+  bool m_is_running;
+  static thread_local Net s_current;
 };
 
 //

@@ -62,7 +62,7 @@ void File::open_read(int seek, const std::function<void(FileStream*)> &cb) {
     [=]() {
       if (auto f = (path == "-" ? stdin : fopen(path.c_str(), "rb"))) {
         if (seek > 0) fseek(f, seek, SEEK_SET);
-        Net::post(
+        Net::current().post(
           [=]() {
             m_f = f;
             m_stream = FileStream::make(true, f, &s_dp);
@@ -74,7 +74,7 @@ void File::open_read(int seek, const std::function<void(FileStream*)> &cb) {
           }
         );
       } else {
-        Net::post(
+        Net::current().post(
           [=]() {
             Log::error("[file] cannot open file for reading: %s", m_path.c_str());
             release();
@@ -96,14 +96,14 @@ void File::open_write() {
     [=]() {
       auto dirname = utils::path_dirname(path);
       if (!dirname.empty() && !mkdir_p(dirname)) {
-        Net::post(
+        Net::current().post(
           [=]() {
             Log::error("[file] cannot create directory: %s", dirname.c_str());
             release();
           }
         );
       } else if (auto f = (path == "-" ? stdout : fopen(path.c_str(), "wb"))) {
-        Net::post(
+        Net::current().post(
           [=]() {
             m_f = f;
             m_writing = true;
@@ -120,7 +120,7 @@ void File::open_write() {
           }
         );
       } else {
-        Net::post(
+        Net::current().post(
           [=]() {
             Log::error("[file] cannot open file for writing: %s", m_path.c_str());
             release();
@@ -157,7 +157,7 @@ void File::unlink() {
     *s_thread_pool,
     [this]() {
       auto succ = fs::unlink(m_path);
-      Net::post(
+      Net::current().post(
         [=]() {
           if (!succ) {
             Log::error("[file] cannot delete file: %s", m_path.c_str());

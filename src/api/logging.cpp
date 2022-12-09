@@ -50,14 +50,14 @@ namespace logging {
 //
 
 static Data::Producer s_dp("Logger");
-static asio::io_context* s_io_context = nullptr;
+static Net* s_net = nullptr;
 
 std::set<Logger*> Logger::s_all_loggers;
 AdminService* Logger::s_admin_service = nullptr;
 AdminLink* Logger::s_admin_link = nullptr;
 
 void Logger::init() {
-  s_io_context = &Net::context();
+  s_net = &Net::current();
 }
 
 void Logger::set_admin_service(AdminService *admin_service) {
@@ -133,23 +133,25 @@ Logger::~Logger() {
 }
 
 void Logger::write(const Data &msg) {
-  s_io_context->post(
-    [=]() {
-      write_async(msg);
-    }
-  );
-}
-
-void Logger::write_async(const Data &msg) {
-  write_history(msg);
-  if (!Net::is_running()) {
+  if (s_net->is_running()) {
+    s_net->post(
+      [=]() {
+        write_async(msg);
+      }
+    );
+  } else {
     for (const auto c : msg.chunks()) {
       auto ptr = std::get<0>(c);
       auto len = std::get<1>(c);
       std::cerr.write(ptr, len);
     }
     std::cerr << std::endl;
-  } else if (InputContext::origin()) {
+  }
+}
+
+void Logger::write_async(const Data &msg) {
+  write_history(msg);
+  if (InputContext::origin()) {
     write_internal(msg);
   } else {
     InputContext ic;

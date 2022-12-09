@@ -27,25 +27,24 @@
 
 namespace pipy {
 
-thread_local asio::io_context Net::s_io_context;
-thread_local bool Net::s_is_running = false;;
+thread_local Net Net::s_current;
 
 void Net::run() {
-  s_is_running = true;
-  s_io_context.run();
-  s_is_running = false;
+  m_is_running = true;
+  m_io_context.run();
+  m_is_running = false;
 }
 
 void Net::stop() {
-  s_io_context.stop();
+  m_io_context.stop();
 }
 
 void Net::post(const std::function<void()> &cb) {
-  asio::post(s_io_context, cb);
+  asio::post(m_io_context, cb);
 }
 
 void Net::defer(const std::function<void()> &cb) {
-  asio::defer(s_io_context, cb);
+  asio::defer(m_io_context, cb);
 }
 
 } // namespace pipy

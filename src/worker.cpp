@@ -250,7 +250,7 @@ void Worker::exit(int exit_code) {
 
   if (s_has_exited) {
     Log::info("[shutdown] Forcing to shut down...");
-    Net::stop();
+    Net::current().stop();
     Log::info("[shutdown] Stopped.");
     has_stopped = true;
     return;
@@ -275,7 +275,7 @@ void Worker::exit(int exit_code) {
       Log::info("[shutdown] Waiting for remaining %d pipelines...", n);
       s_timer.schedule(1, check);
     } else {
-      Net::stop();
+      Net::current().stop();
       Log::info("[shutdown] Stopped.");
       has_stopped = true;
     }

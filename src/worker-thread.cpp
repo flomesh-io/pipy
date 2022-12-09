@@ -61,7 +61,7 @@ bool WorkerThread::start() {
       }
 
       m_cv.notify_one();
-      Net::run();
+      Net::current().run();
     }
   );
 

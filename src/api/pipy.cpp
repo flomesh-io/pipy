@@ -86,7 +86,7 @@ template<> void ClassDef<Pipy>::init() {
   method("exit", [](Context &ctx, Object*, Value&) {
     int exit_code = 0;
     if (!ctx.arguments(0, &exit_code)) return;
-    Net::post([=]() { Worker::exit(exit_code); });
+    Net::current().post([=]() { Worker::exit(exit_code); });
   });
 }
 
