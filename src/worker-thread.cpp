@@ -35,6 +35,10 @@ WorkerThread::WorkerThread(int index)
 {
 }
 
+WorkerThread::~WorkerThread() {
+  m_thread.join();
+}
+
 bool WorkerThread::start() {
   std::unique_lock<std::mutex> lock(m_mutex);
 
@@ -43,25 +47,30 @@ bool WorkerThread::start() {
       auto &entry = Codebase::current()->entry();
       auto worker = Worker::make();
       auto mod = worker->load_js_module(entry);
+      bool started = (mod && worker->start());
 
-      if (!mod) {
-        fail();
-        return;
-      }
+      // if (!mod) {
+      //   fail();
+      //   return;
+      // }
 
-      if (!worker->start()) {
-        fail();
-        return;
-      }
+      // if (!worker->start()) {
+      //   fail();
+      //   return;
+      // }
 
       {
         std::lock_guard<std::mutex> lock(m_mutex);
-        m_started = true;
-        m_io_context = &Net::context();
+        m_started = started;
+        m_failed = !started;
+        m_net = &Net::current();
       }
 
       m_cv.notify_one();
-      Net::current().run();
+
+      if (started) {
+        Net::current().run();
+      }
     }
   );
 
@@ -70,7 +79,7 @@ bool WorkerThread::start() {
 }
 
 void WorkerThread::reload() {
-  m_io_context->post(
+  m_net->post(
     []() {
       Worker::restart();
     }
@@ -79,7 +88,7 @@ void WorkerThread::reload() {
 
 auto WorkerThread::stop(bool force) -> int {
   if (force) {
-    m_io_context->stop();
+    m_net->stop();
     m_thread.join();
     return 0;
 
@@ -88,7 +97,7 @@ auto WorkerThread::stop(bool force) -> int {
     m_shutdown = true;
     m_pending_pipelines = -1;
 
-    m_io_context->post(
+    m_net->post(
       [this]() {
         if (auto worker = Worker::current()) worker->stop();
         Listener::for_each([&](Listener *l) { l->pipeline_layout(nullptr); });
@@ -98,10 +107,12 @@ auto WorkerThread::stop(bool force) -> int {
     );
 
     m_cv.wait(lock, [this]() { return m_pending_pipelines >= 0; });
-  }
+    return m_pending_pipelines;
 
-  std::lock_guard<std::mutex> lock(m_mutex);
-  return m_pending_pipelines;
+  } else {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return m_pending_pipelines;
+  }
 }
 
 void WorkerThread::wait() {
@@ -123,7 +134,7 @@ void WorkerThread::wait() {
   } else {
     delete m_pending_timer;
     m_pending_timer = nullptr;
-    m_io_context->stop();
+    m_net->stop();
   }
 }
 

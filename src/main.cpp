@@ -62,6 +62,7 @@ static std::string s_admin_ip;
 static int s_admin_port = 0;
 static AdminService::Options s_admin_options;
 static WorkerThread* s_worker_thread = nullptr;
+static bool s_has_shutdown = false;
 
 //
 // Show version
@@ -147,7 +148,7 @@ static void start_checking_updates() {
   static Timer timer;
   static std::function<void()> poll;
   poll = []() {
-    if (!Worker::exited()) {
+    if (!s_has_shutdown) {
       InputContext ic;
       Status::local.timestamp = utils::now();
       Codebase::current()->sync(
@@ -177,7 +178,7 @@ static void start_reporting_metrics() {
   static std::function<void()> report;
   static int connection_id = 0;
   report = []() {
-    if (!Worker::exited()) {
+    if (!s_has_shutdown) {
       InputContext ic;
       auto conn_id = s_admin_link->connect();
       Data buf; buf.push("metrics\n", &s_dp);
@@ -217,7 +218,6 @@ static void toggle_admin_port() {
 
 static void handle_signal(int sig) {
   static bool s_admin_closed = false;
-  static bool s_has_shutdown = false;
   static std::function<void()> wait, stop;
   static Timer timer;
 
@@ -463,6 +463,8 @@ int main(int argc, char *argv[]) {
             auto wt = new WorkerThread(0);
             if (!wt->start()) {
               delete wt;
+              fail();
+              return;
             }
 
             s_worker_thread = wt;

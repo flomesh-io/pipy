@@ -11,7 +11,7 @@ export default function({ attack, http, split, reload }) {
       Object.keys(targets).map(k => [k, 0])
     );
     let count = 0;
-    return function (msg) {
+    return function (msg, i) {
       const body = msg.body;
       if (body in counts) {
         counts[body]++;

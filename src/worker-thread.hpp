@@ -26,10 +26,8 @@
 #ifndef WORKER_THREAD_HPP
 #define WORKER_THREAD_HPP
 
+#include "net.hpp"
 #include "timer.hpp"
-
-#define ASIO_STANDALONE
-#include <asio.hpp>
 
 #include <thread>
 #include <condition_variable>
@@ -40,6 +38,7 @@ namespace pipy {
 class WorkerThread {
 public:
   WorkerThread(int index);
+  ~WorkerThread();
 
   auto index() const -> int { return m_index; }
 
@@ -49,7 +48,7 @@ public:
 
 private:
   int m_index;
-  asio::io_context* m_io_context = nullptr;
+  Net* m_net = nullptr;
   Timer* m_pending_timer = nullptr;
   std::thread m_thread;
   std::mutex m_mutex;
