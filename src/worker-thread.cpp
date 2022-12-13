@@ -49,16 +49,6 @@ bool WorkerThread::start() {
       auto mod = worker->load_js_module(entry);
       bool started = (mod && worker->start());
 
-      // if (!mod) {
-      //   fail();
-      //   return;
-      // }
-
-      // if (!worker->start()) {
-      //   fail();
-      //   return;
-      // }
-
       {
         std::lock_guard<std::mutex> lock(m_mutex);
         m_started = started;

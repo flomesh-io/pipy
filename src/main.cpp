@@ -95,8 +95,12 @@ static void reload_codebase() {
   if (auto *codebase = Codebase::current()) {
     Codebase::current()->sync(
       Status::local, true,
-      [](bool succ) {
-        if (succ) Worker::restart();
+      [](bool ok) {
+        if (ok) {
+          if (s_worker_thread) {
+            s_worker_thread->reload();
+          }
+        }
       }
     );
   }
