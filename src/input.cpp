@@ -60,7 +60,7 @@ void FlushTarget::need_flush() {
 // InputContext
 //
 
-InputContext* InputContext::s_stack = nullptr;
+thread_local InputContext* InputContext::s_stack = nullptr;
 
 InputContext::InputContext(InputSource *source)
   : m_tap(source ? source->tap() : new InputSource::Tap())

@@ -223,16 +223,12 @@ void Logger::shutdown() {
   }
 }
 
-Logger::StdoutTarget::StdoutTarget(FILE *f) {
-  static Data::Producer s_dp("Logger::StdoutTarget");
-  m_file_stream = FileStream::make(false, f, &s_dp);
-}
-
 void Logger::StdoutTarget::write(const Data &msg) {
-  auto dp = m_file_stream->data_producer();
+  static Data::Producer s_dp("Logger::StdoutTarget");
+  if (!m_file_stream) m_file_stream = FileStream::make(false, m_f, &s_dp);
   Data *buf = Data::make();
-  dp->push(buf, &msg);
-  dp->push(buf, '\n');
+  s_dp.push(buf, &msg);
+  s_dp.push(buf, '\n');
   m_file_stream->input()->input(buf);
 }
 

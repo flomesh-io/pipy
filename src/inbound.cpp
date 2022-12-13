@@ -41,7 +41,7 @@ namespace pipy {
 
 using tcp = asio::ip::tcp;
 
-uint64_t Inbound::s_inbound_id = 0;
+std::atomic<uint64_t> Inbound::s_inbound_id;
 
 //
 // Inbound

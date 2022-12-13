@@ -29,6 +29,7 @@
 #include "pjs/pjs.hpp"
 #include "options.hpp"
 #include "module.hpp"
+#include "fstream.hpp"
 #include "filters/pack.hpp"
 #include "filters/tls.hpp"
 
@@ -82,11 +83,12 @@ public:
 
   class StdoutTarget : public Target {
   public:
-    StdoutTarget(FILE *f);
+    StdoutTarget(FILE *f) : m_f(f) {}
 
   private:
     virtual void write(const Data &msg) override;
 
+    FILE* m_f;
     pjs::Ref<FileStream> m_file_stream;
   };
 

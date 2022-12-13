@@ -33,6 +33,7 @@
 
 #include <cstring>
 #include <functional>
+#include <atomic>
 
 namespace pipy {
 
@@ -91,10 +92,15 @@ public:
 
   private:
     pjs::Ref<pjs::Str> m_name;
-    int m_peak = 0;
-    int m_current = 0;
+    std::atomic<int> m_peak;
+    std::atomic<int> m_current;
 
-    void increase() { m_peak = std::max(m_peak, ++m_current); }
+    void increase() {
+      auto peak = m_peak.load();
+      auto current = m_current.fetch_add(1) + 1;
+      if (current > peak) m_peak.compare_exchange_strong(peak, current);
+    }
+
     void decrease() { m_current--; }
 
     static List<Producer> s_all_producers;
@@ -223,7 +229,7 @@ private:
 
   struct Chunk : public Pooled<Chunk> {
     char data[DATA_CHUNK_SIZE];
-    int retain_count = 0;
+    std::atomic<int> retain_count;
 
     Chunk(Producer *producer) : m_producer(producer) { producer->increase(); }
     ~Chunk() { m_producer->decrease(); }

@@ -34,6 +34,8 @@
 #include "list.hpp"
 #include "api/stats.hpp"
 
+#include <atomic>
+
 namespace pipy {
 
 class Listener;
@@ -110,7 +112,7 @@ private:
   virtual void on_tap_close() override;
   virtual void on_weak_ptr_gone() override;
 
-  static uint64_t s_inbound_id;
+  static std::atomic<uint64_t> s_inbound_id;
 
   friend class pjs::ObjectTemplate<Inbound>;
 };

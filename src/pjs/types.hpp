@@ -104,11 +104,11 @@ public:
   void operator delete(void *p) { m_class.free(p); }
 
 private:
-  static PooledClass m_class;
+  thread_local static PooledClass m_class;
 };
 
 template<class T, class Base>
-PooledClass Pooled<T, Base>::m_class(typeid(T).name(), sizeof(T));
+thread_local PooledClass Pooled<T, Base>::m_class(typeid(T).name(), sizeof(T));
 
 //
 // RefCount
@@ -444,11 +444,11 @@ private:
     return 1 << (slot - 256 + 8);
   }
 
-  static std::vector<PooledArray*> m_pools;
+  thread_local static std::vector<PooledArray*> m_pools;
 };
 
 template<class T>
-std::vector<PooledArray<T>*> PooledArray<T>::m_pools;
+thread_local std::vector<PooledArray<T>*> PooledArray<T>::m_pools;
 
 //
 // OrderedHash
@@ -581,14 +581,14 @@ private:
 
 class Str : public Pooled<Str, RefCount<Str>> {
 public:
-  static const Ref<Str> empty;
-  static const Ref<Str> nan;
-  static const Ref<Str> pos_inf;
-  static const Ref<Str> neg_inf;
-  static const Ref<Str> undefined;
-  static const Ref<Str> null;
-  static const Ref<Str> bool_true;
-  static const Ref<Str> bool_false;
+  thread_local static const Ref<Str> empty;
+  thread_local static const Ref<Str> nan;
+  thread_local static const Ref<Str> pos_inf;
+  thread_local static const Ref<Str> neg_inf;
+  thread_local static const Ref<Str> undefined;
+  thread_local static const Ref<Str> null;
+  thread_local static const Ref<Str> bool_true;
+  thread_local static const Ref<Str> bool_false;
 
   static auto max_size() -> size_t {
     return s_max_size;
@@ -828,9 +828,9 @@ private:
     size_t next_slot;
   };
 
-  static std::map<std::string, Class*> m_class_map;
-  static std::vector<ClassSlot> m_class_slots;
-  static size_t m_class_slot_free;
+  thread_local static std::map<std::string, Class*> m_class_map;
+  thread_local static std::vector<ClassSlot> m_class_slots;
+  thread_local static size_t m_class_slot_free;
 
   friend class RefCount<Class>;
 };
@@ -890,23 +890,23 @@ private:
     Class *constructor_class = nullptr
   );
 
-  static Class* m_c;
-  static Class* m_super;
-  static std::list<Field*> m_fields;
-  static std::function<Object*(Context&)> m_ctor;
-  static std::function<void(Object*, int, Value&)> m_geti;
-  static std::function<void(Object*, int, const Value&)> m_seti;
+  thread_local static Class* m_c;
+  thread_local static Class* m_super;
+  thread_local static std::list<Field*> m_fields;
+  thread_local static std::function<Object*(Context&)> m_ctor;
+  thread_local static std::function<void(Object*, int, Value&)> m_geti;
+  thread_local static std::function<void(Object*, int, const Value&)> m_seti;
 };
 
 template<class T>
 Class* class_of() { return ClassDef<T>::get(); }
 
-template<class T> Class* ClassDef<T>::m_c = nullptr;
-template<class T> Class* ClassDef<T>::m_super = nullptr;
-template<class T> std::list<Field*> ClassDef<T>::m_fields;
-template<class T> std::function<Object*(Context&)> ClassDef<T>::m_ctor = [](Context&) -> Object* { return nullptr; };
-template<class T> std::function<void(Object*, int, Value&)> ClassDef<T>::m_geti;
-template<class T> std::function<void(Object*, int, const Value&)> ClassDef<T>::m_seti;
+template<class T> thread_local Class* ClassDef<T>::m_c = nullptr;
+template<class T> thread_local Class* ClassDef<T>::m_super = nullptr;
+template<class T> thread_local std::list<Field*> ClassDef<T>::m_fields;
+template<class T> thread_local std::function<Object*(Context&)> ClassDef<T>::m_ctor = [](Context&) -> Object* { return nullptr; };
+template<class T> thread_local std::function<void(Object*, int, Value&)> ClassDef<T>::m_geti;
+template<class T> thread_local std::function<void(Object*, int, const Value&)> ClassDef<T>::m_seti;
 
 //
 // EnumDef
@@ -959,14 +959,14 @@ private:
     m_str_to_val[s] = val;
   }
 
-  static bool m_initialized;
-  static std::vector<Str*> m_val_to_str;
-  static std::map<Str*, T> m_str_to_val;
+  thread_local static bool m_initialized;
+  thread_local static std::vector<Str*> m_val_to_str;
+  thread_local static std::map<Str*, T> m_str_to_val;
 };
 
-template<class T> bool EnumDef<T>::m_initialized = false;
-template<class T> std::vector<Str*> EnumDef<T>::m_val_to_str;
-template<class T> std::map<Str*, T> EnumDef<T>::m_str_to_val;
+template<class T> thread_local bool EnumDef<T>::m_initialized = false;
+template<class T> thread_local std::vector<Str*> EnumDef<T>::m_val_to_str;
+template<class T> thread_local std::map<Str*, T> EnumDef<T>::m_str_to_val;
 
 //
 // EnumValue

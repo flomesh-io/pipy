@@ -35,7 +35,7 @@ namespace pjs {
 //
 
 auto PooledClass::all() -> std::map<std::string, PooledClass *> & {
-  static std::map<std::string, PooledClass*> a;
+  thread_local static std::map<std::string, PooledClass*> a;
   return a;
 }
 
@@ -93,18 +93,18 @@ void PooledClass::clean() {
 // Str
 //
 
-const Ref<Str> Str::empty(Str::make(""));
-const Ref<Str> Str::nan(Str::make("NaN"));
-const Ref<Str> Str::pos_inf(Str::make("Infinity"));
-const Ref<Str> Str::neg_inf(Str::make("-Infinity"));
-const Ref<Str> Str::undefined(Str::make("undefined"));
-const Ref<Str> Str::null(Str::make("null"));
-const Ref<Str> Str::bool_true(Str::make("true"));
-const Ref<Str> Str::bool_false(Str::make("false"));
+thread_local const Ref<Str> Str::empty(Str::make(""));
+thread_local const Ref<Str> Str::nan(Str::make("NaN"));
+thread_local const Ref<Str> Str::pos_inf(Str::make("Infinity"));
+thread_local const Ref<Str> Str::neg_inf(Str::make("-Infinity"));
+thread_local const Ref<Str> Str::undefined(Str::make("undefined"));
+thread_local const Ref<Str> Str::null(Str::make("null"));
+thread_local const Ref<Str> Str::bool_true(Str::make("true"));
+thread_local const Ref<Str> Str::bool_false(Str::make("false"));
 
 size_t Str::s_max_size = 256 * 0x400 * 0x400;
 
-static char s_shared_str_tmp_buf[0x10000];
+thread_local static char s_shared_str_tmp_buf[0x10000];
 
 auto Str::make_tmp_buf(size_t size) -> char* {
   if (size < sizeof(s_shared_str_tmp_buf)) {
@@ -160,7 +160,7 @@ auto Str::make(double n) -> Str* {
 }
 
 auto Str::ht() -> std::unordered_map<std::string, Str*>& {
-  static std::unordered_map<std::string, Str*> s_ht;
+  thread_local static std::unordered_map<std::string, Str*> s_ht;
   return s_ht;
 }
 
@@ -451,9 +451,9 @@ void Context::backtrace(const std::string &name) {
 // Class
 //
 
-std::map<std::string, Class*> Class::m_class_map;
-std::vector<Class::ClassSlot> Class::m_class_slots(1);
-size_t Class::m_class_slot_free = 0;
+thread_local std::map<std::string, Class*> Class::m_class_map;
+thread_local std::vector<Class::ClassSlot> Class::m_class_slots(1);
+thread_local size_t Class::m_class_slot_free = 0;
 
 Class::Class(
   const std::string &name,

@@ -150,7 +150,7 @@ private:
   AutoReleased* m_auto_released = nullptr;
   bool m_cleaning_up = false;
 
-  static InputContext* s_stack;
+  thread_local static InputContext* s_stack;
 
   static void auto_release(AutoReleased *obj);
   static void defer_notify(ContextGroup *grp);

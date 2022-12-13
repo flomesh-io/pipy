@@ -155,7 +155,6 @@ static void start_checking_updates() {
         Status::local, false,
         [&](bool ok) {
           if (ok) {
-            // Worker::restart();
             if (s_worker_thread) {
               s_worker_thread->reload();
             }
@@ -265,7 +264,6 @@ static void handle_signal(int sig) {
       }
 
       s_has_shutdown = true;
-      // Worker::exit(-1);
       break;
     }
 
@@ -468,25 +466,6 @@ int main(int argc, char *argv[]) {
             }
 
             s_worker_thread = wt;
-
-            // auto &entry = Codebase::current()->entry();
-            // auto worker = Worker::make();
-            // auto mod = worker->load_js_module(entry);
-
-            // if (!mod) {
-            //   fail();
-            //   return;
-            // }
-
-            // if (opts.verify) {
-            //   Worker::exit(0);
-            //   return;
-            // }
-
-            // if (!worker->start()) {
-            //   fail();
-            //   return;
-            // }
 
             Status::local.version = Codebase::current()->version();
             Status::local.update();

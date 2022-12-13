@@ -105,7 +105,7 @@ protected:
 private:
   virtual void finalize() = 0;
 
-  static List<Outbound> s_all_outbounds;
+  thread_local static List<Outbound> s_all_outbounds;
 
   friend class pjs::RefCount<Outbound>;
 };

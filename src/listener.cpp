@@ -75,7 +75,7 @@ Listener::Options::Options(pjs::Object *options) {
 // Listener
 //
 
-std::set<Listener*> Listener::s_listeners[int(Listener::Protocol::MAX)];
+thread_local std::set<Listener*> Listener::s_listeners[int(Listener::Protocol::MAX)];
 bool Listener::s_reuse_port = false;
 
 void Listener::set_reuse_port(bool reuse) {

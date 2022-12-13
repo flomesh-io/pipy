@@ -35,7 +35,7 @@ namespace pipy {
 using tcp = asio::ip::tcp;
 using udp = asio::ip::udp;
 
-List<Outbound> Outbound::s_all_outbounds;
+thread_local List<Outbound> Outbound::s_all_outbounds;
 
 //
 // Outbound

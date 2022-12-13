@@ -200,7 +200,7 @@ private:
   pjs::Ref<Acceptor> m_acceptor;
   pjs::Ref<PipelineLayout> m_pipeline_layout;
 
-  static std::set<Listener*> s_listeners[];
+  thread_local static std::set<Listener*> s_listeners[];
   static bool s_reuse_port;
 
   static auto find(Protocol protocol, const std::string &ip, int port) -> Listener*;
