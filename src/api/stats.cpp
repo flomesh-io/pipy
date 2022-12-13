@@ -531,6 +531,11 @@ void MetricSet::to_prometheus(const std::function<void(const void *, size_t)> &o
   }
 }
 
+void MetricSet::clear() {
+  m_metric_map.clear();
+  m_metrics.clear();
+}
+
 //
 // MetricSet::Deserializer
 //

@@ -113,8 +113,6 @@ private:
   size_t m_history_start = 0;
   size_t m_history_end = 0;
 
-  static std::unordered_map<pjs::Ref<pjs::Str>, pjs::Ref<Metric>> s_all_metrics;
-
   friend class pjs::ObjectTemplate<Metric>;
   friend class MetricSet;
 };
@@ -132,6 +130,7 @@ public:
   void serialize_history(Data &out, const std::string &metric_name, std::chrono::time_point<std::chrono::steady_clock> timestamp);
   void to_prometheus(const std::function<void(const void *, size_t)> &out, const std::string &inst) const;
   void to_prometheus(Data &out, const std::string &inst) const;
+  void clear();
 
   static void deserialize(
     const Data &in,

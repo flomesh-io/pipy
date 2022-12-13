@@ -348,6 +348,14 @@ void Status::register_metrics() {
   );
 }
 
+void Status::clear_metrics() {
+  metric_inbound_in = nullptr;
+  metric_inbound_out = nullptr;
+  metric_outbound_in = nullptr;
+  metric_outbound_out = nullptr;
+  metric_outbound_conn_time = nullptr;
+}
+
 template<class T>
 static void print_table(Data::Builder &db, const T &header, const std::list<T> &rows) {
   static std::string spacing("  ");

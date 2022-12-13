@@ -531,6 +531,8 @@ int main(int argc, char *argv[]) {
     if (store) store->close();
 
     crypto::Crypto::free();
+    stats::Metric::local().clear();
+    Status::clear_metrics();
     Log::shutdown();
 
     std::cerr << "Done." << std::endl;
