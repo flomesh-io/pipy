@@ -29,26 +29,26 @@
 namespace pipy {
 namespace mqtt {
 
-static pjs::ConstStr STR_MQTT("MQTT");
-static pjs::ConstStr STR_cleanStart("cleanStart");
-static pjs::ConstStr STR_clientID("clientID");
-static pjs::ConstStr STR_filter("filter");
-static pjs::ConstStr STR_keepAlive("keepAlive");
-static pjs::ConstStr STR_packetIdentifier("packetIdentifier");
-static pjs::ConstStr STR_password("password");
-static pjs::ConstStr STR_payload("payload");
-static pjs::ConstStr STR_properties("properties");
-static pjs::ConstStr STR_protocolLevel("protocolLevel");
-static pjs::ConstStr STR_qos("qos");
-static pjs::ConstStr STR_reasonCode("reasonCode");
-static pjs::ConstStr STR_reasonCodes("reasonCodes");
-static pjs::ConstStr STR_retain("retain");
-static pjs::ConstStr STR_sessionPresent("sessionPresent");
-static pjs::ConstStr STR_topic("topic");
-static pjs::ConstStr STR_topicFilters("topicFilters");
-static pjs::ConstStr STR_topicName("topicName");
-static pjs::ConstStr STR_username("username");
-static pjs::ConstStr STR_will("will");
+thread_local static pjs::ConstStr STR_MQTT("MQTT");
+thread_local static pjs::ConstStr STR_cleanStart("cleanStart");
+thread_local static pjs::ConstStr STR_clientID("clientID");
+thread_local static pjs::ConstStr STR_filter("filter");
+thread_local static pjs::ConstStr STR_keepAlive("keepAlive");
+thread_local static pjs::ConstStr STR_packetIdentifier("packetIdentifier");
+thread_local static pjs::ConstStr STR_password("password");
+thread_local static pjs::ConstStr STR_payload("payload");
+thread_local static pjs::ConstStr STR_properties("properties");
+thread_local static pjs::ConstStr STR_protocolLevel("protocolLevel");
+thread_local static pjs::ConstStr STR_qos("qos");
+thread_local static pjs::ConstStr STR_reasonCode("reasonCode");
+thread_local static pjs::ConstStr STR_reasonCodes("reasonCodes");
+thread_local static pjs::ConstStr STR_retain("retain");
+thread_local static pjs::ConstStr STR_sessionPresent("sessionPresent");
+thread_local static pjs::ConstStr STR_topic("topic");
+thread_local static pjs::ConstStr STR_topicFilters("topicFilters");
+thread_local static pjs::ConstStr STR_topicName("topicName");
+thread_local static pjs::ConstStr STR_username("username");
+thread_local static pjs::ConstStr STR_will("will");
 
 //
 // PropertyMap

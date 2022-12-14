@@ -34,8 +34,8 @@ namespace pipy {
 namespace stats {
 
 static Data::Producer s_dp("Stats");
-static pjs::ConstStr s_str_count("count");
-static pjs::ConstStr s_str_sum("sum");
+thread_local static pjs::ConstStr s_str_count("count");
+thread_local static pjs::ConstStr s_str_sum("sum");
 
 //
 // Metric

@@ -175,8 +175,8 @@ void Status::to_json(std::ostream &out) const {
 }
 
 void Status::register_metrics() {
-  static pjs::ConstStr s_server("Server");
-  static pjs::ConstStr s_client("Client");
+  thread_local static pjs::ConstStr s_server("Server");
+  thread_local static pjs::ConstStr s_client("Client");
 
   pjs::Ref<pjs::Array> label_names = pjs::Array::make();
 

@@ -35,8 +35,8 @@
 namespace pipy {
 namespace tls {
 
-static pjs::ConstStr STR_serverNames("serverNames");
-static pjs::ConstStr STR_protocolNames("protocolNames");
+thread_local static pjs::ConstStr STR_serverNames("serverNames");
+thread_local static pjs::ConstStr STR_protocolNames("protocolNames");
 
 static Data::Producer s_dp("TLS");
 

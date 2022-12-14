@@ -294,6 +294,7 @@ private:
     std::vector<Huffman> m_tree;
   };
 
+  thread_local
   static StaticTable s_static_table;
   static HuffmanTree s_huffman_tree;
 };
@@ -338,7 +339,7 @@ private:
     std::map<pjs::Ref<pjs::Str>, Entry> m_table;
   };
 
-  static StaticTable m_static_table;
+  thread_local static StaticTable m_static_table;
 };
 
 //

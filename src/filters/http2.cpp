@@ -34,32 +34,32 @@ static Data::Producer s_dp("HTTP2 Codec");
 // HPACK static table
 //
 
-static const pjs::ConstStr s_colon_scheme(":scheme");
-static const pjs::ConstStr s_colon_method(":method");
-static const pjs::ConstStr s_colon_path(":path");
-static const pjs::ConstStr s_colon_status(":status");
-static const pjs::ConstStr s_colon_authority(":authority");
-static const pjs::ConstStr s_method("method");
-static const pjs::ConstStr s_scheme("scheme");
-static const pjs::ConstStr s_authority("authority");
-static const pjs::ConstStr s_host("host");
-static const pjs::ConstStr s_path("path");
-static const pjs::ConstStr s_status("status");
-static const pjs::ConstStr s_headers("headers");
-static const pjs::ConstStr s_http("http");
-static const pjs::ConstStr s_GET("GET");
-static const pjs::ConstStr s_CONNECT("CONNECT");
-static const pjs::ConstStr s_root_path("/");
-static const pjs::ConstStr s_200("200");
-static const pjs::ConstStr s_http2_settings("http2-settings");
-static const pjs::ConstStr s_connection("connection");
-static const pjs::ConstStr s_keep_alive("keep-alive");
-static const pjs::ConstStr s_proxy_connection("proxy-connection");
-static const pjs::ConstStr s_transfer_encoding("transfer-encoding");
-static const pjs::ConstStr s_upgrade("upgrade");
-static const pjs::ConstStr s_te("te");
-static const pjs::ConstStr s_trailers("trailers");
-static const pjs::ConstStr s_content_length("content-length");
+thread_local static const pjs::ConstStr s_colon_scheme(":scheme");
+thread_local static const pjs::ConstStr s_colon_method(":method");
+thread_local static const pjs::ConstStr s_colon_path(":path");
+thread_local static const pjs::ConstStr s_colon_status(":status");
+thread_local static const pjs::ConstStr s_colon_authority(":authority");
+thread_local static const pjs::ConstStr s_method("method");
+thread_local static const pjs::ConstStr s_scheme("scheme");
+thread_local static const pjs::ConstStr s_authority("authority");
+thread_local static const pjs::ConstStr s_host("host");
+thread_local static const pjs::ConstStr s_path("path");
+thread_local static const pjs::ConstStr s_status("status");
+thread_local static const pjs::ConstStr s_headers("headers");
+thread_local static const pjs::ConstStr s_http("http");
+thread_local static const pjs::ConstStr s_GET("GET");
+thread_local static const pjs::ConstStr s_CONNECT("CONNECT");
+thread_local static const pjs::ConstStr s_root_path("/");
+thread_local static const pjs::ConstStr s_200("200");
+thread_local static const pjs::ConstStr s_http2_settings("http2-settings");
+thread_local static const pjs::ConstStr s_connection("connection");
+thread_local static const pjs::ConstStr s_keep_alive("keep-alive");
+thread_local static const pjs::ConstStr s_proxy_connection("proxy-connection");
+thread_local static const pjs::ConstStr s_transfer_encoding("transfer-encoding");
+thread_local static const pjs::ConstStr s_upgrade("upgrade");
+thread_local static const pjs::ConstStr s_te("te");
+thread_local static const pjs::ConstStr s_trailers("trailers");
+thread_local static const pjs::ConstStr s_content_length("content-length");
 
 static struct {
   const char *name;
@@ -626,6 +626,7 @@ void DynamicTable::evict() {
 // HeaderDecoder
 //
 
+thread_local
 HeaderDecoder::StaticTable HeaderDecoder::s_static_table;
 HeaderDecoder::HuffmanTree HeaderDecoder::s_huffman_tree;
 
@@ -1007,7 +1008,7 @@ HeaderDecoder::HuffmanTree::HuffmanTree() {
 // HeaderEncoder
 //
 
-HeaderEncoder::StaticTable HeaderEncoder::m_static_table;
+thread_local HeaderEncoder::StaticTable HeaderEncoder::m_static_table;
 
 void HeaderEncoder::encode(bool is_response, bool is_tail, pjs::Object *head, Data &data) {
   Data::Builder db(data, &s_dp);
@@ -1406,7 +1407,7 @@ void Endpoint::frame(Frame &frm) {
   if (!m_has_sent_preface) {
     m_has_sent_preface = true;
     if (!m_is_server_side) {
-      static Data s_preface("PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n", &s_dp);
+      thread_local static Data s_preface("PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n", &s_dp);
       m_output_buffer.push(s_preface);
     }
     uint8_t buf[Settings::MAX_SIZE];

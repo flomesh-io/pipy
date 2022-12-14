@@ -33,7 +33,8 @@ namespace mime {
 
 static std::string s_multipart("multipart/");
 static std::string s_boundary("boundary=");
-static pjs::ConstStr s_content_type("content-type");
+
+thread_local static pjs::ConstStr s_content_type("content-type");
 
 //
 // MultipartDecoder

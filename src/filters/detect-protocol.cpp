@@ -30,8 +30,8 @@
 
 namespace pipy {
 
-static pjs::ConstStr STR_HTTP("HTTP");
-static pjs::ConstStr STR_TLS("TLS");
+thread_local static pjs::ConstStr STR_HTTP("HTTP");
+thread_local static pjs::ConstStr STR_TLS("TLS");
 
 //
 // HTTPDetector

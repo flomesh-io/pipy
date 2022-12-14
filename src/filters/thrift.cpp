@@ -60,12 +60,12 @@ namespace thrift {
 // +--------+--------+--------+...+--------+--------+...+--------+--------+...+--------+
 //
 
-static pjs::ConstStr s_binary("binary");
-static pjs::ConstStr s_compact("compact");
-static pjs::ConstStr s_call("call");
-static pjs::ConstStr s_reply("reply");
-static pjs::ConstStr s_exception("exception");
-static pjs::ConstStr s_oneway("oneway");
+thread_local static pjs::ConstStr s_binary("binary");
+thread_local static pjs::ConstStr s_compact("compact");
+thread_local static pjs::ConstStr s_call("call");
+thread_local static pjs::ConstStr s_reply("reply");
+thread_local static pjs::ConstStr s_exception("exception");
+thread_local static pjs::ConstStr s_oneway("oneway");
 
 //
 // Decoder::Options

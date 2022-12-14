@@ -38,9 +38,9 @@ namespace pipy {
 //
 
 MuxBase::Options::Options(pjs::Object *options) {
-  static pjs::ConstStr s_max_idle("maxIdle");
-  static pjs::ConstStr s_max_queue("maxQueue");
-  static pjs::ConstStr s_max_messages("maxMessages");
+  thread_local static pjs::ConstStr s_max_idle("maxIdle");
+  thread_local static pjs::ConstStr s_max_queue("maxQueue");
+  thread_local static pjs::ConstStr s_max_messages("maxMessages");
   Value(options, s_max_idle)
     .get_seconds(max_idle)
     .check_nullable();

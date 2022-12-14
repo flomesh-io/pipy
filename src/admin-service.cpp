@@ -172,12 +172,13 @@ auto AdminService::handle(Context *ctx, Message *req) -> Message* {
   static std::string prefix_api_v1_metrics("/api/v1/metrics/");
   static std::string prefix_api_v1_log("/api/v1/log/");
   static std::string text_html("text/html");
-  static pjs::ConstStr s_accept("accept");
-  static pjs::ConstStr s_upgrade("upgrade");
-  static pjs::ConstStr s_websocket("websocket");
-  static pjs::ConstStr s_connection("connection");
-  static pjs::ConstStr s_sec_websocket_key("sec-websocket-key");
-  static pjs::ConstStr s_sec_websocket_accept("sec-websocket-accept");
+
+  thread_local static pjs::ConstStr s_accept("accept");
+  thread_local static pjs::ConstStr s_upgrade("upgrade");
+  thread_local static pjs::ConstStr s_websocket("websocket");
+  thread_local static pjs::ConstStr s_connection("connection");
+  thread_local static pjs::ConstStr s_sec_websocket_key("sec-websocket-key");
+  thread_local static pjs::ConstStr s_sec_websocket_accept("sec-websocket-accept");
 
   auto head = req->head()->as<http::RequestHead>();
   auto body = req->body();
@@ -456,7 +457,7 @@ Message* AdminService::dump_GET(const std::string &path) {
 }
 
 Message* AdminService::metrics_GET(pjs::Object *headers) {
-  static pjs::ConstStr s_accept_encoding("accept-encoding");
+  thread_local static pjs::ConstStr s_accept_encoding("accept-encoding");
   static std::string s_gzip("gzip");
 
   pjs::Value v;

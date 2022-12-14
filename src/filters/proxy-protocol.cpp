@@ -41,22 +41,23 @@ static std::string s_v1_fixed_header("PROXY ");
 static std::string s_v2_fixed_header("\r\n\r\n\0\r\nQUIT\n", 12);
 static std::string s_ip_v4_zero("0.0.0.0");
 static std::string s_ip_v6_zero("::");
-static pjs::ConstStr s_TCP4("TCP4");
-static pjs::ConstStr s_TCP6("TCP6");
-static pjs::ConstStr s_UDP4("UDP4");
-static pjs::ConstStr s_UDP6("UDP6");
-static pjs::ConstStr s_UNIX("UNIX");
-static pjs::ConstStr s_UNIX_DGRAM("UNIX_DGRAM");
-static pjs::ConstStr s_UNKNOWN("UNKNOWN");
-static pjs::ConstStr s_LOCAL("LOCAL");
-static pjs::ConstStr s_PROXY("PROXY");
-static pjs::ConstStr s_version("version");
-static pjs::ConstStr s_command("command");
-static pjs::ConstStr s_protocol("protocol");
-static pjs::ConstStr s_sourceAddress("sourceAddress");
-static pjs::ConstStr s_sourcePort("sourcePort");
-static pjs::ConstStr s_targetAddress("targetAddress");
-static pjs::ConstStr s_targetPort("targetPort");
+
+thread_local static pjs::ConstStr s_TCP4("TCP4");
+thread_local static pjs::ConstStr s_TCP6("TCP6");
+thread_local static pjs::ConstStr s_UDP4("UDP4");
+thread_local static pjs::ConstStr s_UDP6("UDP6");
+thread_local static pjs::ConstStr s_UNIX("UNIX");
+thread_local static pjs::ConstStr s_UNIX_DGRAM("UNIX_DGRAM");
+thread_local static pjs::ConstStr s_UNKNOWN("UNKNOWN");
+thread_local static pjs::ConstStr s_LOCAL("LOCAL");
+thread_local static pjs::ConstStr s_PROXY("PROXY");
+thread_local static pjs::ConstStr s_version("version");
+thread_local static pjs::ConstStr s_command("command");
+thread_local static pjs::ConstStr s_protocol("protocol");
+thread_local static pjs::ConstStr s_sourceAddress("sourceAddress");
+thread_local static pjs::ConstStr s_sourcePort("sourcePort");
+thread_local static pjs::ConstStr s_targetAddress("targetAddress");
+thread_local static pjs::ConstStr s_targetPort("targetPort");
 
 //
 // Server

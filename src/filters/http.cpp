@@ -41,59 +41,59 @@
 namespace pipy {
 namespace http {
 
-static const pjs::ConstStr s_protocol("protocol");
-static const pjs::ConstStr s_method("method");
-static const pjs::ConstStr s_GET("GET");
-static const pjs::ConstStr s_HEAD("HEAD");
-static const pjs::ConstStr s_CONNECT("CONNECT");
-static const pjs::ConstStr s_path("path");
-static const pjs::ConstStr s_status("status");
-static const pjs::ConstStr s_status_text("statusText");
-static const pjs::ConstStr s_headers("headers");
-static const pjs::ConstStr s_http_1_0("HTTP/1.0");
-static const pjs::ConstStr s_http_1_1("HTTP/1.1");
-static const pjs::ConstStr s_connection("connection");
-static const pjs::ConstStr s_keep_alive("keep-alive");
-static const pjs::ConstStr s_set_cookie("set-cookie");
-static const pjs::ConstStr s_close("close");
-static const pjs::ConstStr s_transfer_encoding("transfer-encoding");
-static const pjs::ConstStr s_content_length("content-length");
-static const pjs::ConstStr s_content_encoding("content-encoding");
-static const pjs::ConstStr s_upgrade("upgrade");
-static const pjs::ConstStr s_websocket("websocket");
-static const pjs::ConstStr s_h2c("h2c");
-static const pjs::ConstStr s_bad_gateway("Bad Gateway");
-static const pjs::ConstStr s_cannot_resolve("Cannot Resolve");
-static const pjs::ConstStr s_connection_refused("Connection Refused");
-static const pjs::ConstStr s_unauthorized("Unauthorized");
-static const pjs::ConstStr s_read_error("Read Error");
-static const pjs::ConstStr s_write_error("Write Error");
-static const pjs::ConstStr s_gateway_timeout("Gateway Timeout");
-static const pjs::ConstStr s_http2_preface_method("PRI");
-static const pjs::ConstStr s_http2_preface_path("*");
-static const pjs::ConstStr s_http2_preface_protocol("HTTP/2.0");
+thread_local static const pjs::ConstStr s_protocol("protocol");
+thread_local static const pjs::ConstStr s_method("method");
+thread_local static const pjs::ConstStr s_GET("GET");
+thread_local static const pjs::ConstStr s_HEAD("HEAD");
+thread_local static const pjs::ConstStr s_CONNECT("CONNECT");
+thread_local static const pjs::ConstStr s_path("path");
+thread_local static const pjs::ConstStr s_status("status");
+thread_local static const pjs::ConstStr s_status_text("statusText");
+thread_local static const pjs::ConstStr s_headers("headers");
+thread_local static const pjs::ConstStr s_http_1_0("HTTP/1.0");
+thread_local static const pjs::ConstStr s_http_1_1("HTTP/1.1");
+thread_local static const pjs::ConstStr s_connection("connection");
+thread_local static const pjs::ConstStr s_keep_alive("keep-alive");
+thread_local static const pjs::ConstStr s_set_cookie("set-cookie");
+thread_local static const pjs::ConstStr s_close("close");
+thread_local static const pjs::ConstStr s_transfer_encoding("transfer-encoding");
+thread_local static const pjs::ConstStr s_content_length("content-length");
+thread_local static const pjs::ConstStr s_content_encoding("content-encoding");
+thread_local static const pjs::ConstStr s_upgrade("upgrade");
+thread_local static const pjs::ConstStr s_websocket("websocket");
+thread_local static const pjs::ConstStr s_h2c("h2c");
+thread_local static const pjs::ConstStr s_bad_gateway("Bad Gateway");
+thread_local static const pjs::ConstStr s_cannot_resolve("Cannot Resolve");
+thread_local static const pjs::ConstStr s_connection_refused("Connection Refused");
+thread_local static const pjs::ConstStr s_unauthorized("Unauthorized");
+thread_local static const pjs::ConstStr s_read_error("Read Error");
+thread_local static const pjs::ConstStr s_write_error("Write Error");
+thread_local static const pjs::ConstStr s_gateway_timeout("Gateway Timeout");
+thread_local static const pjs::ConstStr s_http2_preface_method("PRI");
+thread_local static const pjs::ConstStr s_http2_preface_path("*");
+thread_local static const pjs::ConstStr s_http2_preface_protocol("HTTP/2.0");
 
-static const StrMap s_strmap_methods({
+thread_local static const StrMap s_strmap_methods({
   "PRI", "GET", "HEAD", "POST", "PUT",
   "PATCH", "DELETE", "CONNECT", "OPTIONS", "TRACE",
 });
 
-static const StrMap s_strmap_paths({
+thread_local static const StrMap s_strmap_paths({
   "*", "/", "/index.html",
 });
 
-static const StrMap s_strmap_protocols({
+thread_local static const StrMap s_strmap_protocols({
   "HTTP/1.0",
   "HTTP/1.1",
   "HTTP/2.0",
 });
 
-static const StrMap s_strmap_statuses({
+thread_local static const StrMap s_strmap_statuses({
   "OK", "Created", "Continue",
 });
 
 
-static const StrMap s_strmap_headers({
+thread_local static const StrMap s_strmap_headers({
   "host",
   "user-agent",
   "accept",
@@ -103,7 +103,7 @@ static const StrMap s_strmap_headers({
   "transfer-encoding",
 });
 
-static const StrMap s_strmap_header_values({
+thread_local static const StrMap s_strmap_header_values({
   "*/*",
   "text/html",
   "application/json",

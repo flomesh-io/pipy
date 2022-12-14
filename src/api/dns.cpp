@@ -32,46 +32,46 @@
 namespace pipy {
 
 // DNS Header
-static pjs::ConstStr STR_id("id");
-static pjs::ConstStr STR_qr("qr");
-static pjs::ConstStr STR_opcode("opcode");
-static pjs::ConstStr STR_aa("aa");
-static pjs::ConstStr STR_tc("tc");
-static pjs::ConstStr STR_rd("rd");
-static pjs::ConstStr STR_ra("ra");
-static pjs::ConstStr STR_zero("zero");
-static pjs::ConstStr STR_rcode("rcode");
-static pjs::ConstStr STR_question("question");
-static pjs::ConstStr STR_answer("answer");
-static pjs::ConstStr STR_authority("authority");
-static pjs::ConstStr STR_additional("additional");
+thread_local static pjs::ConstStr STR_id("id");
+thread_local static pjs::ConstStr STR_qr("qr");
+thread_local static pjs::ConstStr STR_opcode("opcode");
+thread_local static pjs::ConstStr STR_aa("aa");
+thread_local static pjs::ConstStr STR_tc("tc");
+thread_local static pjs::ConstStr STR_rd("rd");
+thread_local static pjs::ConstStr STR_ra("ra");
+thread_local static pjs::ConstStr STR_zero("zero");
+thread_local static pjs::ConstStr STR_rcode("rcode");
+thread_local static pjs::ConstStr STR_question("question");
+thread_local static pjs::ConstStr STR_answer("answer");
+thread_local static pjs::ConstStr STR_authority("authority");
+thread_local static pjs::ConstStr STR_additional("additional");
 
 // DNS Record
-static pjs::ConstStr STR_name("name");
-static pjs::ConstStr STR_type("type");
-static pjs::ConstStr STR_class("class");
-static pjs::ConstStr STR_ttl("ttl");
-static pjs::ConstStr STR_rdlength("rdlength");
-static pjs::ConstStr STR_rdata("rdata");
+thread_local static pjs::ConstStr STR_name("name");
+thread_local static pjs::ConstStr STR_type("type");
+thread_local static pjs::ConstStr STR_class("class");
+thread_local static pjs::ConstStr STR_ttl("ttl");
+thread_local static pjs::ConstStr STR_rdlength("rdlength");
+thread_local static pjs::ConstStr STR_rdata("rdata");
 
 // SOA Data
-static pjs::ConstStr STR_mname("mname");
-static pjs::ConstStr STR_rname("rname");
-static pjs::ConstStr STR_serial("serial");
-static pjs::ConstStr STR_refresh("refresh");
-static pjs::ConstStr STR_retry("retry");
-static pjs::ConstStr STR_expire("expire");
-static pjs::ConstStr STR_minimum("minimum");
+thread_local static pjs::ConstStr STR_mname("mname");
+thread_local static pjs::ConstStr STR_rname("rname");
+thread_local static pjs::ConstStr STR_serial("serial");
+thread_local static pjs::ConstStr STR_refresh("refresh");
+thread_local static pjs::ConstStr STR_retry("retry");
+thread_local static pjs::ConstStr STR_expire("expire");
+thread_local static pjs::ConstStr STR_minimum("minimum");
 
 // SRV Data
-static pjs::ConstStr STR_priority("priority");
-static pjs::ConstStr STR_weight("weight");
-static pjs::ConstStr STR_port("port");
-static pjs::ConstStr STR_target("target");
+thread_local static pjs::ConstStr STR_priority("priority");
+thread_local static pjs::ConstStr STR_weight("weight");
+thread_local static pjs::ConstStr STR_port("port");
+thread_local static pjs::ConstStr STR_target("target");
 
 //  MX Data
-static pjs::ConstStr STR_preference("preference");
-static pjs::ConstStr STR_exchange("exchange");
+thread_local static pjs::ConstStr STR_preference("preference");
+thread_local static pjs::ConstStr STR_exchange("exchange");
 
 // clang-format off
 
@@ -871,7 +871,7 @@ static int dns_encode(pjs::Object *dns, Data::Builder &db) {
     skip += len;
   }
 
-  pjs::ConstStr *records[] = {&STR_answer, &STR_authority, &STR_additional};
+  thread_local static pjs::ConstStr *records[] = { &STR_answer, &STR_authority, &STR_additional };
 
   for (auto rec : records) {
     pjs::Array *array = get_array(dns, *rec);

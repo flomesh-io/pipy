@@ -313,8 +313,8 @@ Logger::HTTPTarget::HTTPTarget(pjs::Str *url, const Options &options)
   : m_module(new Module)
 {
   static Data::Producer s_dp("Logger::HTTPTarget");
-  static pjs::ConstStr s_host("host");
-  static pjs::ConstStr s_POST("POST");
+  thread_local static pjs::ConstStr s_host("host");
+  thread_local static pjs::ConstStr s_POST("POST");
 
   pjs::Ref<URL> url_obj = URL::make(url);
   bool is_tls = url_obj->protocol()->str() == "https:";

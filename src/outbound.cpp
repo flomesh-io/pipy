@@ -55,8 +55,8 @@ Outbound::~Outbound() {
 }
 
 auto Outbound::protocol_name() const -> pjs::Str* {
-  static pjs::ConstStr s_TCP("TCP");
-  static pjs::ConstStr s_UDP("UDP");
+  thread_local static pjs::ConstStr s_TCP("TCP");
+  thread_local static pjs::ConstStr s_UDP("UDP");
   switch (m_options.protocol) {
     case Protocol::TCP: return s_TCP;
     case Protocol::UDP: return s_UDP;

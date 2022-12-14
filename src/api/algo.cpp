@@ -47,7 +47,7 @@ auto Algo::hash(const pjs::Value &value) -> size_t {
 //
 
 Cache::Options::Options(pjs::Object *options) {
-  static pjs::ConstStr str_size("size"), str_ttl("ttl");
+  thread_local static pjs::ConstStr str_size("size"), str_ttl("ttl");
   Value(options, str_size)
     .get(size)
     .check_nullable();

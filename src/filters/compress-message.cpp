@@ -221,11 +221,11 @@ auto CompressHTTP::new_compressor(
   Level &level,
   const std::function<void(const void *, size_t)> &out
 ) -> Compressor* {
-  static pjs::ConstStr s_headers("headers");
-  static pjs::ConstStr s_content_encoding("content-encoding");
-  static pjs::ConstStr s_deflate("deflate");
-  static pjs::ConstStr s_gzip("gzip");
-  static pjs::ConstStr s_brotli("brotli");
+  thread_local static pjs::ConstStr s_headers("headers");
+  thread_local static pjs::ConstStr s_content_encoding("content-encoding");
+  thread_local static pjs::ConstStr s_deflate("deflate");
+  thread_local static pjs::ConstStr s_gzip("gzip");
+  thread_local static pjs::ConstStr s_brotli("brotli");
 
   auto compressor = CompressMessageBase::new_compressor(start, method, level, out);
   if (compressor) {
