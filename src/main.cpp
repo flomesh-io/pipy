@@ -87,6 +87,7 @@ static void show_version() {
   std::cout << "Samples     : " << "No" << std::endl;
 #endif
 }
+
 //
 // Reload codebase
 //

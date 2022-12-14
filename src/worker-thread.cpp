@@ -59,7 +59,10 @@ bool WorkerThread::start() {
       m_cv.notify_one();
 
       if (started) {
+        m_cleaning_timer = new Timer();
         Net::current().run();
+        delete m_cleaning_timer;
+        m_cleaning_timer = nullptr;
       }
     }
   );
@@ -103,6 +106,13 @@ auto WorkerThread::stop(bool force) -> int {
     std::lock_guard<std::mutex> lock(m_mutex);
     return m_pending_pipelines;
   }
+}
+
+void WorkerThread::clean() {
+  for (const auto &p : pjs::PooledClass::all()) {
+    p.second->clean();
+  }
+  m_cleaning_timer->schedule(5, [this]() { clean(); });
 }
 
 void WorkerThread::wait() {
