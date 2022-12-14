@@ -69,7 +69,8 @@ template<> void ClassDef<Pipy>::init() {
     std::string filename;
     if (!ctx.arguments(1, &filename)) return;
     auto path = utils::path_normalize(filename);
-    ret.set(Codebase::current()->get(path));
+    auto data = Codebase::current()->get(path);
+    ret.set(data ? pipy::Data::make(*data) : nullptr);
   });
 
   method("solve", [](Context &ctx, Object*, Value &ret) {
