@@ -626,50 +626,102 @@ public:
 
   static auto make(const uint32_t *codes, size_t len) -> Str*;
   static auto make(double n) -> Str*;
+  static auto make(int id) -> Str*;
 
   static auto make_tmp_buf(size_t size) -> char*;
   static void free_tmp_buf(char *buf);
 
-  auto length() const -> int { return m_length; }
-  auto size() const -> size_t { return m_str.length(); }
-  auto str() const -> const std::string& { return m_str; }
-  auto c_str() const -> const char* { return m_str.c_str(); }
+  auto id() const -> int { return m_id; }
+  auto length() const -> int { return m_char_data->length(); }
+  auto size() const -> size_t { return m_char_data->size(); }
+  auto str() const -> const std::string& { return m_char_data->str(); }
+  auto c_str() const -> const char* { return m_char_data->c_str(); }
+
+  auto pos_to_chr(int i) const -> int { return m_char_data->pos_to_chr(i); }
+  auto chr_to_pos(int i) const -> int { return m_char_data->chr_to_pos(i); }
+  auto chr_at(int i) const -> int { return m_char_data->chr_at(i); }
+
   auto parse_int() const -> double;
   auto parse_float() const -> double;
-  auto pos_to_chr(int i) -> int;
-  auto chr_to_pos(int i) -> int;
-  auto chr_at(int i) -> int;
   auto substring(int start, int end) -> std::string;
 
 private:
-  enum { CHUNK_SIZE = 32 };
 
-  std::string m_str;
-  std::vector<uint32_t> m_chunks;
-  int m_length;
+  //
+  // Str::CharData
+  //
 
-  Str(const std::string &str) : m_str(str) {
-    make_chunks();
-    ht()[str] = this;
-  }
+  class CharData : public Pooled<CharData, RefCount<CharData>> {
+  public:
+    CharData(std::string &&str);
 
-  Str(std::string &&str) : m_str(std::move(str)) {
-    make_chunks();
-    ht()[m_str] = this;
-  }
+    auto str() const -> const std::string& { return m_str; }
+    auto c_str() const -> const char * { return m_str.c_str(); }
+    auto size() const -> size_t { return m_str.length(); }
+    auto length() const -> int { return m_length; }
+
+    auto pos_to_chr(int i) -> int;
+    auto chr_to_pos(int i) -> int;
+    auto chr_at(int i) -> int;
+
+  private:
+    enum { CHUNK_SIZE = 32 };
+
+    std::string m_str;
+    std::vector<uint32_t> m_chunks;
+    int m_length;
+  };
+
+  //
+  // Str::GlobalIndex
+  //
+
+  class GlobalIndex {
+  public:
+    struct Entry {
+      Entry* next_free;
+      Str* local_str;
+      Ref<CharData> char_data;
+      std::atomic<int> hold_count;
+    };
+
+    auto get(int i) -> Str*;
+    void set(int i, Str *s);
+    auto alloc(Str *s) -> int;
+    auto hold(int i) -> Entry*;
+    void free(int i);
+
+  private:
+    struct Chunk {
+      Entry entries[256];
+    };
+
+    std::vector<Chunk*> m_chunks;
+    std::atomic<int> m_max_id;
+  };
+
+  int m_id;
+  Ref<CharData> m_char_data;
+
+  Str(int id, CharData *char_data)
+    : m_id(id), m_char_data(char_data) { ht()[char_data->str()] = this; }
+
+  Str(const std::string &str)
+    : m_id(0), m_char_data(new CharData(std::string(str))) { ht()[str] = this; }
+
+  Str(std::string &&str)
+    : m_id(0), m_char_data(new CharData(std::move(str))) { ht()[m_char_data->str()] = this; }
 
   ~Str() {
-    ht().erase(m_str);
+    ht().erase(m_char_data->str());
   }
 
-  void make_chunks();
-  auto get_code(int i) -> int;
-
-  static bool is_mult(char c) { return (c & 0xc0) == 0xc0; }
-  static bool is_half(char c) { return (c & 0xc0) == 0x80; }
   static auto ht() -> std::unordered_map<std::string, Str*>&;
-
   static size_t s_max_size;
+
+  thread_local
+  static GlobalIndex m_local_index;
+  static GlobalIndex m_global_index;
 
   friend class RefCount<Str>;
 };

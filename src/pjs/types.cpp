@@ -167,13 +167,24 @@ auto Str::make(double n) -> Str* {
   return make(str, len);
 }
 
+auto Str::make(int id) -> Str* {
+  if (id <= 0) return nullptr;
+  if (auto *s = m_local_index.get(id)) return s;
+  if (auto *e = m_global_index.hold(id)) {
+    auto *s = new Str(id, e->char_data);
+    m_local_index.set(id, s);
+    return s;
+  }
+  return nullptr;
+}
+
 auto Str::ht() -> std::unordered_map<std::string, Str*>& {
   thread_local static std::unordered_map<std::string, Str*> s_ht;
   return s_ht;
 }
 
 auto Str::parse_int() const -> double {
-  const auto *p = m_str.c_str();
+  const auto *p = m_char_data->c_str();
   while (*p && std::isblank(*p)) p++;
   if (*p == '-' || *p == '+') {
     auto next = *(p+1);
@@ -187,7 +198,7 @@ auto Str::parse_int() const -> double {
 }
 
 auto Str::parse_float() const -> double {
-  const auto *p = m_str.c_str();
+  const auto *p = m_char_data->c_str();
   while (*p && std::isblank(*p)) p++;
   if (*p == '-' || *p == '+') {
     auto next = *(p+1);
@@ -200,7 +211,39 @@ auto Str::parse_float() const -> double {
   }
 }
 
-auto Str::pos_to_chr(int i) -> int {
+auto Str::substring(int start, int end) -> std::string {
+  auto a = chr_to_pos(start);
+  auto b = chr_to_pos(end);
+  return m_char_data->str().substr(a, b - a);
+}
+
+//
+// Str::CharData
+//
+
+Str::CharData::CharData(std::string &&str)
+  : m_str(std::move(str))
+{
+  int n = 0, p = 0, i = 0;
+  Utf8Decoder decoder(
+    [&](int cp) {
+      if (n > 0) {
+        if (n % CHUNK_SIZE == 0) {
+          m_chunks.push_back(p);
+        }
+      }
+      n++;
+    }
+  );
+  for (const auto c : m_str) {
+    if (!(c & 0x80) || (c & 0x40)) p = i;
+    if (!decoder.input(c)) break;
+    i++;
+  }
+  m_length = n;
+}
+
+auto Str::CharData::pos_to_chr(int i) -> int {
   int p = 0, n = 0;
   if (i >= size()) return m_length;
   if (i < 0) i = 0;
@@ -242,7 +285,7 @@ auto Str::pos_to_chr(int i) -> int {
   return n;
 }
 
-auto Str::chr_to_pos(int i) -> int {
+auto Str::CharData::chr_to_pos(int i) -> int {
   int chk = i / CHUNK_SIZE;
   int off = i % CHUNK_SIZE;
   int min, max;
@@ -274,39 +317,9 @@ auto Str::chr_to_pos(int i) -> int {
   return p;
 }
 
-auto Str::chr_at(int i) -> int {
-  auto p = chr_to_pos(i);
-  if (p >= size()) return -1;
-  return get_code(p);
-}
-
-auto Str::substring(int start, int end) -> std::string {
-  auto a = chr_to_pos(start);
-  auto b = chr_to_pos(end);
-  return m_str.substr(a, b - a);
-}
-
-void Str::make_chunks() {
-  int n = 0, p = 0, i = 0;
-  Utf8Decoder decoder(
-    [&](int cp) {
-      if (n > 0) {
-        if (n % CHUNK_SIZE == 0) {
-          m_chunks.push_back(p);
-        }
-      }
-      n++;
-    }
-  );
-  for (const auto c : m_str) {
-    if (!(c & 0x80) || (c & 0x40)) p = i;
-    if (!decoder.input(c)) break;
-    i++;
-  }
-  m_length = n;
-}
-
-auto Str::get_code(int i) -> int {
+auto Str::CharData::chr_at(int i) -> int {
+  i = chr_to_pos(i);
+  if (i >= size()) return -1;
   auto c = m_str[i];
   auto n = size();
   if (c & 0x80) {
@@ -332,6 +345,28 @@ auto Str::get_code(int i) -> int {
   } else {
     return c;
   }
+}
+
+//
+// Str::GlobalIndex
+//
+
+auto Str::GlobalIndex::get(int i) -> Str* {
+  return nullptr;
+}
+
+void Str::GlobalIndex::set(int i, Str *s) {
+}
+
+auto Str::GlobalIndex::alloc(Str *s) -> int {
+  return 0;
+}
+
+auto Str::GlobalIndex::hold(int i) -> Entry* {
+  return nullptr;
+}
+
+void Str::GlobalIndex::free(int i) {
 }
 
 //
