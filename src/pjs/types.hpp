@@ -26,6 +26,7 @@
 #ifndef PJS_TYPES_HPP
 #define PJS_TYPES_HPP
 
+#include <atomic>
 #include <cassert>
 #include <cmath>
 #include <cstring>
@@ -82,9 +83,9 @@ private:
 
   std::string m_name;
   size_t m_size;
-  void* m_free = nullptr;
-  int m_allocated = 0;
-  int m_pooled = 0;
+  std::atomic<void*> m_free;
+  std::atomic<int> m_allocated;
+  std::atomic<int> m_pooled;
   int m_curve[CURVE_LENGTH] = { 0 };
   size_t m_curve_pointer = 0;
 };
@@ -104,11 +105,11 @@ public:
   void operator delete(void *p) { m_class.free(p); }
 
 private:
-  thread_local static PooledClass m_class;
+  static PooledClass m_class;
 };
 
 template<class T, class Base>
-thread_local PooledClass Pooled<T, Base>::m_class(typeid(T).name(), sizeof(T));
+PooledClass Pooled<T, Base>::m_class(typeid(T).name(), sizeof(T));
 
 //
 // RefCount

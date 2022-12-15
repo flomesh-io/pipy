@@ -49,7 +49,6 @@ public:
 private:
   int m_index;
   Net* m_net = nullptr;
-  Timer* m_cleaning_timer = nullptr;
   Timer* m_pending_timer = nullptr;
   std::thread m_thread;
   std::mutex m_mutex;
@@ -59,7 +58,6 @@ private:
   bool m_failed = false;
   bool m_shutdown = false;
 
-  void clean();
   void wait();
   void fail();
 };

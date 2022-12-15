@@ -40,7 +40,7 @@ auto PooledClass::all() -> std::map<std::string, PooledClass *> & {
 }
 
 PooledClass::PooledClass(const char *c_name, size_t size)
-  : m_size(std::max(size, sizeof(void*)))
+  : m_size(std::max(size, sizeof(std::atomic<void*>)))
 {
   int status;
   auto cxx_name = abi::__cxa_demangle(c_name, 0, 0, &status);
@@ -50,24 +50,27 @@ PooledClass::PooledClass(const char *c_name, size_t size)
 
 auto PooledClass::alloc() -> void* {
   m_allocated++;
-  if (auto p = m_free) {
-    m_free = *(void**)p;
-    m_pooled--;
-    return p;
-  } else {
-    return new char[m_size];
+  auto *p = m_free.load();
+  while (p) {
+    auto *q = static_cast<std::atomic<void*>*>(p)->load();
+    if (m_free.compare_exchange_weak(p, q)) {
+      m_pooled--;
+      return p;
+    }
   }
+  p = new char[m_size];
+  new (p) std::atomic<void*>();
+  return p;
 }
 
 void PooledClass::free(void *p) {
-  *(void**)p = m_free;
-  m_free = p;
 #ifdef PIPY_SOIL_FREED_SPACE
-  std::memset(
-    (uint8_t *)p + sizeof(void*),
-    0xfe, m_size - sizeof(void*)
-  );
+  std::memset(p, 0xfe, m_size);
 #endif // PIPY_SOIL_FREED_SPACE
+  auto *q = m_free.load();
+  do {
+    static_cast<std::atomic<void*>*>(p)->store(q);
+  } while (!m_free.compare_exchange_weak(q, p));
   m_allocated--;
   m_pooled++;
 }
@@ -77,13 +80,18 @@ void PooledClass::clean() {
   for (int i = 0; i < CURVE_LENGTH; i++) {
     if (m_curve[i] > max) max = m_curve[i];
   }
-  int room = max + (max >> 2) - m_allocated;
-  if (room >= 0) {
-    while (m_pooled > room) {
-      auto p = m_free;
-      m_free = *(void**)p;
-      m_pooled--;
-      delete [] (char *)p;
+  for (;;) {
+    int room = max + (max >> 2) - m_allocated;
+    if (room < 0 || m_pooled <= room) break;
+    auto *p = m_free.load();
+    while (p) {
+      auto *q = static_cast<std::atomic<void*>*>(p)->load();
+      if (m_free.compare_exchange_weak(p, q)) {
+        m_pooled--;
+        static_cast<std::atomic<void*>*>(p)->~atomic();
+        delete [] (char*)p;
+        break;
+      }
     }
   }
   m_curve[m_curve_pointer++ % CURVE_LENGTH] = m_allocated;
