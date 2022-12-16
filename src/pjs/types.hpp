@@ -626,12 +626,20 @@ public:
 
   static auto make(const uint32_t *codes, size_t len) -> Str*;
   static auto make(double n) -> Str*;
-  static auto make(int id) -> Str*;
 
-  static auto make_tmp_buf(size_t size) -> char*;
-  static void free_tmp_buf(char *buf);
+  //
+  // Str::ID
+  //
 
-  auto id() const -> int { return m_id; }
+  class ID {
+  public:
+    ID(Str *s);
+    auto str() const -> Str* { return m_local_index.get(m_id); }
+    auto to_string() const -> Str*;
+  private:
+    int m_id;
+  };
+
   auto length() const -> int { return m_char_data->length(); }
   auto size() const -> size_t { return m_char_data->size(); }
   auto str() const -> const std::string& { return m_char_data->str(); }
@@ -651,7 +659,7 @@ private:
   // Str::CharData
   //
 
-  class CharData : public Pooled<CharData, RefCount<CharData>> {
+  class CharData : public Pooled<CharData> {
   public:
     CharData(std::string &&str);
 
@@ -664,12 +672,40 @@ private:
     auto chr_to_pos(int i) -> int;
     auto chr_at(int i) -> int;
 
+    void retain() { m_refs.fetch_add(1); }
+    void release() { if (m_refs.fetch_sub(1) == 1) delete this; }
+
   private:
     enum { CHUNK_SIZE = 32 };
 
+    std::atomic<int> m_refs;
     std::string m_str;
     std::vector<uint32_t> m_chunks;
     int m_length;
+  };
+
+  //
+  // Str::LocalIndex
+  //
+
+  class LocalIndex {
+  public:
+    LocalIndex();
+
+    auto get(int i) -> Str*;
+    void set(int i, Str *s);
+    void del(int i);
+
+  private:
+    struct Chunk {
+      pjs::Str *entries[256];
+    };
+
+    struct Range {
+      Chunk* chunks[256];
+    };
+
+    Range* m_ranges[256];
   };
 
   //
@@ -679,15 +715,12 @@ private:
   class GlobalIndex {
   public:
     struct Entry {
-      Entry* next_free;
-      Str* local_str;
       Ref<CharData> char_data;
       std::atomic<int> hold_count;
+      int next_free = 0;
     };
 
-    auto get(int i) -> Str*;
-    void set(int i, Str *s);
-    auto alloc(Str *s) -> int;
+    auto alloc(CharData *data) -> int;
     auto hold(int i) -> Entry*;
     void free(int i);
 
@@ -696,9 +729,23 @@ private:
       Entry entries[256];
     };
 
-    std::vector<Chunk*> m_chunks;
+    struct Range {
+      std::atomic<Chunk*> chunks[256];
+    };
+
+    std::atomic<Range*> m_ranges[256];
     std::atomic<int> m_max_id;
+    std::atomic<int> m_free_id;
+
+    auto get_entry(int i) -> Entry*;
+    auto add_entry(int i) -> Entry*;
   };
+
+  static void index_to_xyz(int i, int &x, int &y, int &z) {
+    z = 0xff & (i >> 0);
+    y = 0xff & (i >> 8);
+    x = 0xff & (i >> 16);
+  }
 
   int m_id;
   Ref<CharData> m_char_data;
@@ -714,13 +761,17 @@ private:
 
   ~Str() {
     ht().erase(m_char_data->str());
+    if (auto id = m_id) {
+      m_local_index.del(id);
+      m_global_index.free(id);
+    }
   }
 
   static auto ht() -> std::unordered_map<std::string, Str*>&;
   static size_t s_max_size;
 
   thread_local
-  static GlobalIndex m_local_index;
+  static LocalIndex m_local_index;
   static GlobalIndex m_global_index;
 
   friend class RefCount<Str>;

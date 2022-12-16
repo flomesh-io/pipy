@@ -112,9 +112,13 @@ thread_local const Ref<Str> Str::bool_false(Str::make("false"));
 
 size_t Str::s_max_size = 256 * 0x400 * 0x400;
 
+thread_local
+Str::LocalIndex Str::m_local_index;
+Str::GlobalIndex Str::m_global_index;
+
 thread_local static char s_shared_str_tmp_buf[0x10000];
 
-auto Str::make_tmp_buf(size_t size) -> char* {
+static auto str_make_tmp_buf(size_t size) -> char* {
   if (size < sizeof(s_shared_str_tmp_buf)) {
     return s_shared_str_tmp_buf;
   } else {
@@ -122,7 +126,7 @@ auto Str::make_tmp_buf(size_t size) -> char* {
   }
 }
 
-void Str::free_tmp_buf(char *buf) {
+static void str_free_tmp_buf(char *buf) {
   if (buf != s_shared_str_tmp_buf) {
     delete [] buf;
   }
@@ -130,7 +134,7 @@ void Str::free_tmp_buf(char *buf) {
 
 auto Str::make(const uint32_t *codes, size_t len) -> Str* {
   if (len > s_max_size) len = s_max_size;
-  auto buf = make_tmp_buf(len);
+  auto buf = str_make_tmp_buf(len);
   int p = 0;
   for (size_t i = 0; i < len; i++) {
     auto c = codes[i];
@@ -155,7 +159,7 @@ auto Str::make(const uint32_t *codes, size_t len) -> Str* {
     }
   }
   auto *s = make(buf, p);
-  free_tmp_buf(buf);
+  str_free_tmp_buf(buf);
   return s;
 }
 
@@ -165,17 +169,6 @@ auto Str::make(double n) -> Str* {
   char str[100];
   auto len = Number::to_string(str, sizeof(str), n);
   return make(str, len);
-}
-
-auto Str::make(int id) -> Str* {
-  if (id <= 0) return nullptr;
-  if (auto *s = m_local_index.get(id)) return s;
-  if (auto *e = m_global_index.hold(id)) {
-    auto *s = new Str(id, e->char_data);
-    m_local_index.set(id, s);
-    return s;
-  }
-  return nullptr;
 }
 
 auto Str::ht() -> std::unordered_map<std::string, Str*>& {
@@ -215,6 +208,43 @@ auto Str::substring(int start, int end) -> std::string {
   auto a = chr_to_pos(start);
   auto b = chr_to_pos(end);
   return m_char_data->str().substr(a, b - a);
+}
+
+//
+// Str::ID
+//
+
+Str::ID::ID(Str *s) {
+  if (s) {
+    auto id = s->m_id;
+    if (!id) {
+      id = m_global_index.alloc(s->m_char_data);
+      s->m_id = id;
+    }
+    m_id = id;
+  } else {
+    m_id = 0;
+  }
+}
+
+auto Str::ID::to_string() const -> Str* {
+  if (auto id = m_id) {
+    if (auto *s = m_local_index.get(id)) return s;
+    if (auto *e = m_global_index.hold(id)) {
+      auto data = e->char_data.get();
+      auto i = ht().find(data->str());
+      if (i == ht().end()) {
+        auto *s = new Str(id, e->char_data);
+        m_local_index.set(id, s);
+        return s->retain();
+      } else {
+        auto *s = i->second;
+        m_local_index.set(id, s);
+        return s->retain();
+      }
+    }
+  }
+  return nullptr;
 }
 
 //
@@ -348,25 +378,118 @@ auto Str::CharData::chr_at(int i) -> int {
 }
 
 //
+// Str::LocalIndex
+//
+
+Str::LocalIndex::LocalIndex() {
+  std::memset(m_ranges, 0, sizeof(m_ranges));
+}
+
+auto Str::LocalIndex::get(int i) -> Str* {
+  int x, y, z;
+  index_to_xyz(i, x, y, z);
+  auto r = m_ranges[x]; if (!r) return nullptr;
+  auto c = r->chunks[y]; if (!c) return nullptr;
+  return c->entries[z];
+}
+
+void Str::LocalIndex::set(int i, Str *s) {
+  int x, y, z;
+  index_to_xyz(i, x, y, z);
+  auto r = m_ranges[x];
+  if (!r) {
+    r = new Range;
+    std::memset(r->chunks, 0, sizeof(r->chunks));
+    m_ranges[x] = r;
+  }
+  auto c = r->chunks[y];
+  if (!c) {
+    c = new Chunk;
+    std::memset(c->entries, 0, sizeof(c->entries));
+    r->chunks[y] = c;
+  }
+  c->entries[z] = s;
+}
+
+void Str::LocalIndex::del(int i) {
+  int x, y, z;
+  index_to_xyz(i, x, y, z);
+  auto r = m_ranges[x]; if (!r) return;
+  auto c = r->chunks[y]; if (!c) return;
+  c->entries[z] = nullptr;
+}
+
+//
 // Str::GlobalIndex
 //
 
-auto Str::GlobalIndex::get(int i) -> Str* {
-  return nullptr;
-}
-
-void Str::GlobalIndex::set(int i, Str *s) {
-}
-
-auto Str::GlobalIndex::alloc(Str *s) -> int {
-  return 0;
+auto Str::GlobalIndex::alloc(CharData *data) -> int {
+  auto i = m_free_id.load();
+  while (i) {
+    auto e = get_entry(i);
+    if (!e) break;
+    auto next = e->next_free;
+    if (m_free_id.compare_exchange_weak(i, next)) {
+      e->char_data = data;
+      e->hold_count.store(1);
+      return i;
+    }
+  }
+  i = m_max_id.fetch_add(1) + 1;
+  auto e = add_entry(i);
+  e->char_data = data;
+  e->hold_count.store(1);
+  return i;
 }
 
 auto Str::GlobalIndex::hold(int i) -> Entry* {
-  return nullptr;
+  auto e = get_entry(i);
+  if (!e->hold_count.fetch_add(1)) return nullptr;
+  return e;
 }
 
 void Str::GlobalIndex::free(int i) {
+  auto e = get_entry(i);
+  if (e->hold_count.fetch_sub(1) == 1) {
+    e->char_data = nullptr;
+    auto next = m_free_id.load();
+    do {
+      e->next_free = next;
+    }
+    while (!m_free_id.compare_exchange_weak(next, i));
+  }
+}
+
+auto Str::GlobalIndex::get_entry(int i) -> Entry* {
+  int x, y, z;
+  index_to_xyz(i, x, y, z);
+  auto r = m_ranges[x].load();
+  auto c = r->chunks[y].load();
+  return &c->entries[z];
+}
+
+auto Str::GlobalIndex::add_entry(int i) -> Entry* {
+  int x, y, z;
+  index_to_xyz(i, x, y, z);
+  auto r = m_ranges[x].load();
+  if (!r) {
+    auto *p = new Range;
+    if (m_ranges[x].compare_exchange_weak(r, p)) {
+      r = p;
+    } else {
+      delete p;
+    }
+  }
+  auto c = r->chunks[y].load();
+  if (!c) {
+    auto *p = new Chunk;
+    if (r->chunks[y].compare_exchange_weak(c, p)) {
+      c = p;
+    } else {
+      delete p;
+    }
+  }
+  return &c->entries[z];
 }
 
 //
@@ -891,7 +1014,7 @@ template<> void ClassDef<String>::init() {
       size += s->size();
     }
     if (size > Str::max_size()) size = Str::max_size();
-    auto buf = Str::make_tmp_buf(size);
+    auto buf = str_make_tmp_buf(size);
     std::memcpy(buf, s->c_str(), s->size());
     for (int i = 0; i < n; i++) {
       auto s = strs[i];
@@ -903,7 +1026,7 @@ template<> void ClassDef<String>::init() {
       s->release();
     }
     ret.set(Str::make(buf, size));
-    Str::free_tmp_buf(buf);
+    str_free_tmp_buf(buf);
   });
 
   method("endsWith", [](Context &ctx, Object *obj, Value &ret) {
