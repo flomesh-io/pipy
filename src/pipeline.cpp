@@ -36,7 +36,7 @@ namespace pipy {
 // PipelineLayout
 //
 
-List<PipelineLayout> PipelineLayout::s_all_pipeline_layouts;
+thread_local List<PipelineLayout> PipelineLayout::s_all_pipeline_layouts;
 
 PipelineLayout::PipelineLayout(ModuleBase *module, int index, const std::string &name, const std::string &label)
   : m_index(index)

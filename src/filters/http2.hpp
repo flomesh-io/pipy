@@ -365,12 +365,12 @@ public:
     Options(pjs::Object *options);
   };
 
-  static auto server_stream_count() -> int { return m_server_stream_count; }
-  static auto client_stream_count() -> int { return m_client_stream_count; }
-
 private:
-  static int m_server_stream_count;
-  static int m_client_stream_count;
+  thread_local static bool s_metrics_initialized;
+  thread_local static int s_server_stream_count;
+  thread_local static int s_client_stream_count;
+
+  static void init_metrics();
 
 protected:
   Endpoint(bool is_server_side, const Options &options);

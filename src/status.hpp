@@ -26,7 +26,6 @@
 #ifndef STATUS_HPP
 #define STATUS_HPP
 
-#include "api/stats.hpp"
 #include "data.hpp"
 
 #include <list>
@@ -51,26 +50,18 @@ public:
   std::list<ModuleInfo> modules;
   std::list<pjs::Ref<pjs::Str>> log_names;
 
-  static Status local;
-  static pjs::Ref<stats::Counter> metric_inbound_in;
-  static pjs::Ref<stats::Counter> metric_inbound_out;
-  static pjs::Ref<stats::Counter> metric_outbound_in;
-  static pjs::Ref<stats::Counter> metric_outbound_out;
-  static pjs::Ref<stats::Histogram> metric_outbound_conn_time;
+  thread_local static Status local;
 
   void update();
   bool from_json(const Data &data);
   void to_json(std::ostream &out) const;
 
-  static void register_metrics();
-  static void clear_metrics();
   static void dump_pools(Data::Builder &db);
   static void dump_objects(Data::Builder &db);
   static void dump_chunks(Data::Builder &db);
   static void dump_pipelines(Data::Builder &db);
   static void dump_inbound(Data::Builder &db);
   static void dump_outbound(Data::Builder &db);
-  static void dump_http2(Data::Builder &db);
 };
 
 } // namespace pipy

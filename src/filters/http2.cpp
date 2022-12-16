@@ -24,6 +24,7 @@
  */
 
 #include "http2.hpp"
+#include "api/stats.hpp"
 
 namespace pipy {
 namespace http2 {
@@ -1147,8 +1148,9 @@ auto HeaderEncoder::StaticTable::find(pjs::Str *name) -> const Entry* {
 // Endpoint
 //
 
-int Endpoint::m_server_stream_count = 0;
-int Endpoint::m_client_stream_count = 0;
+thread_local bool Endpoint::s_metrics_initialized = false;
+thread_local int Endpoint::s_server_stream_count = 0;
+thread_local int Endpoint::s_client_stream_count = 0;
 
 Endpoint::Options::Options(pjs::Object *options) {
   Value(options, "connectionWindowSize")
@@ -1164,6 +1166,7 @@ Endpoint::Endpoint(bool is_server_side, const Options &options)
   , m_header_decoder(m_settings)
   , m_is_server_side(is_server_side)
 {
+  init_metrics();
   m_settings.enable_push = false;
   m_settings.initial_window_size = options.stream_window_size;
   m_recv_window_max = options.connection_window_size;
@@ -1485,6 +1488,31 @@ void Endpoint::end_all(StreamEnd *evt) {
   );
 }
 
+void Endpoint::init_metrics() {
+  if (!s_metrics_initialized) {
+    thread_local static pjs::ConstStr s_server("Server");
+    thread_local static pjs::ConstStr s_client("Client");
+
+    pjs::Ref<pjs::Array> label_names = pjs::Array::make();
+    label_names->length(1);
+    label_names->set(0, "type");
+
+    stats::Gauge::make(
+      pjs::Str::make("pipy_http2_stream_count"),
+      label_names,
+      [=](stats::Gauge *gauge) {
+        pjs::Str *server = s_server;
+        pjs::Str *client = s_client;
+        gauge->with_labels(&server, 1)->set(s_server_stream_count);
+        gauge->with_labels(&client, 1)->set(s_client_stream_count);
+        gauge->set(s_server_stream_count + s_client_stream_count);
+      }
+    );
+
+    s_metrics_initialized = true;
+  }
+}
+
 //
 // Endpoint::StreamBase
 //
@@ -1505,17 +1533,17 @@ Endpoint::StreamBase::StreamBase(
   m_recv_window_max = m_settings.initial_window_size;
   m_recv_window_low = m_recv_window_max / 2;
   if (is_server_side) {
-    m_server_stream_count++;
+    s_server_stream_count++;
   } else {
-    m_client_stream_count++;
+    s_client_stream_count++;
   }
 }
 
 Endpoint::StreamBase::~StreamBase() {
   if (m_is_server_side) {
-    m_server_stream_count--;
+    s_server_stream_count--;
   } else {
-    m_client_stream_count--;
+    s_client_stream_count--;
   }
 }
 

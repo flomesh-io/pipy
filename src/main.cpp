@@ -327,7 +327,6 @@ int main(int argc, char *argv[]) {
     Log::init();
     Log::set_level(opts.log_level);
     Log::set_graph_enabled(!opts.no_graph);
-    Status::register_metrics();
     Listener::set_reuse_port(opts.reuse_port);
     crypto::Crypto::init(opts.openssl_engine);
     tls::TLSSession::init();
@@ -533,7 +532,6 @@ int main(int argc, char *argv[]) {
 
     crypto::Crypto::free();
     stats::Metric::local().clear();
-    Status::clear_metrics();
     Log::shutdown();
 
     std::cerr << "Done." << std::endl;

@@ -102,10 +102,17 @@ protected:
   void output(Event *evt);
   void describe(char *desc);
 
+  thread_local static pjs::Ref<stats::Gauge> s_metric_concurrency;
+  thread_local static pjs::Ref<stats::Counter> s_metric_traffic_in;
+  thread_local static pjs::Ref<stats::Counter> s_metric_traffic_out;
+  thread_local static pjs::Ref<stats::Histogram> s_metric_conn_time;
+
 private:
   virtual void finalize() = 0;
 
   thread_local static List<Outbound> s_all_outbounds;
+
+  static void init_metrics();
 
   friend class pjs::RefCount<Outbound>;
 };

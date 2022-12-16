@@ -27,7 +27,6 @@
 #include "constants.hpp"
 #include "pipeline.hpp"
 #include "utils.hpp"
-#include "status.hpp"
 #include "log.hpp"
 
 namespace pipy {
@@ -35,16 +34,21 @@ namespace pipy {
 using tcp = asio::ip::tcp;
 using udp = asio::ip::udp;
 
-thread_local List<Outbound> Outbound::s_all_outbounds;
-
 //
 // Outbound
 //
+
+thread_local List<Outbound> Outbound::s_all_outbounds;
+thread_local pjs::Ref<stats::Gauge> Outbound::s_metric_concurrency;
+thread_local pjs::Ref<stats::Counter> Outbound::s_metric_traffic_in;
+thread_local pjs::Ref<stats::Counter> Outbound::s_metric_traffic_out;
+thread_local pjs::Ref<stats::Histogram> Outbound::s_metric_conn_time;
 
 Outbound::Outbound(EventTarget::Input *output, const Options &options)
   : m_options(options)
   , m_output(output)
 {
+  init_metrics();
   Log::debug("[outbound %p] ++", this);
   s_all_outbounds.push(this);
 }
@@ -91,6 +95,56 @@ void Outbound::describe(char *desc) {
   );
 }
 
+void Outbound::init_metrics() {
+  if (!s_metric_concurrency) {
+    pjs::Ref<pjs::Array> label_names = pjs::Array::make();
+    label_names->length(2);
+    label_names->set(0, "protocol");
+    label_names->set(1, "peer");
+
+    s_metric_concurrency = stats::Gauge::make(
+      pjs::Str::make("pipy_outbound_count"),
+      label_names,
+      [=](stats::Gauge *gauge) {
+        int total = 0;
+        gauge->zero_all();
+        Outbound::for_each([&](Outbound *outbound) {
+          pjs::Str *k[2];
+          k[0] = outbound->protocol_name();
+          k[1] = outbound->address();
+          auto cnt = gauge->with_labels(k, 2);
+          cnt->increase();
+          total++;
+        });
+        gauge->set(total);
+      }
+    );
+
+    s_metric_traffic_in = stats::Counter::make(
+      pjs::Str::make("pipy_outbound_in"),
+      label_names
+    );
+
+    s_metric_traffic_out = stats::Counter::make(
+      pjs::Str::make("pipy_outbound_out"),
+      label_names
+    );
+
+    pjs::Ref<pjs::Array> buckets = pjs::Array::make(21);
+    double limit = 1.5;
+    for (int i = 0; i < 20; i++) {
+      buckets->set(i, std::floor(limit));
+      limit *= 1.5;
+    }
+    buckets->set(20, std::numeric_limits<double>::infinity());
+
+    s_metric_conn_time = stats::Histogram::make(
+      pjs::Str::make("pipy_outbound_conn_time"),
+      buckets, label_names
+    );
+  }
+}
+
 //
 // OutboundTCP
 //
@@ -111,9 +165,9 @@ void OutboundTCP::connect(const std::string &host, int port) {
   pjs::Str *keys[2];
   keys[0] = protocol_name();
   keys[1] = address();
-  m_metric_traffic_out = Status::metric_outbound_out->with_labels(keys, 2);
-  m_metric_traffic_in = Status::metric_outbound_in->with_labels(keys, 2);
-  m_metric_conn_time = Status::metric_outbound_conn_time->with_labels(keys, 2);
+  m_metric_traffic_out = Outbound::s_metric_traffic_out->with_labels(keys, 2);
+  m_metric_traffic_in = Outbound::s_metric_traffic_in->with_labels(keys, 2);
+  m_metric_conn_time = Outbound::s_metric_conn_time->with_labels(keys, 2);
 
   start(0);
 }
@@ -292,7 +346,7 @@ void OutboundTCP::connect(const asio::ip::tcp::endpoint &target) {
             auto conn_time = utils::now() - m_start_time;
             m_connection_time += conn_time;
             m_metric_conn_time->observe(conn_time);
-            Status::metric_outbound_conn_time->observe(conn_time);
+            s_metric_conn_time->observe(conn_time);
             m_connected = true;
             m_connecting = false;
             receive();
@@ -357,7 +411,7 @@ void OutboundTCP::receive() {
             }
           }
           m_metric_traffic_in->increase(buffer->size());
-          Status::metric_outbound_in->increase(buffer->size());
+          s_metric_traffic_in->increase(buffer->size());
           output(buffer);
         }
 
@@ -431,7 +485,7 @@ void OutboundTCP::pump() {
       if (ec != asio::error::operation_aborted) {
         m_buffer.shift(n);
         m_metric_traffic_out->increase(n);
-        Status::metric_outbound_out->increase(n);
+        s_metric_traffic_out->increase(n);
 
         if (ec) {
           if (Log::is_enabled(Log::WARN)) {
@@ -539,9 +593,9 @@ void OutboundUDP::connect(const std::string &host, int port) {
   pjs::Str *keys[2];
   keys[0] = protocol_name();
   keys[1] = address();
-  m_metric_traffic_out = Status::metric_outbound_out->with_labels(keys, 2);
-  m_metric_traffic_in = Status::metric_outbound_in->with_labels(keys, 2);
-  m_metric_conn_time = Status::metric_outbound_conn_time->with_labels(keys, 2);
+  m_metric_traffic_out = Outbound::s_metric_traffic_out->with_labels(keys, 2);
+  m_metric_traffic_in = Outbound::s_metric_traffic_in->with_labels(keys, 2);
+  m_metric_conn_time = Outbound::s_metric_conn_time->with_labels(keys, 2);
 
   start(0);
 }
@@ -714,7 +768,7 @@ void OutboundUDP::connect(const asio::ip::udp::endpoint &target) {
             auto conn_time = utils::now() - m_start_time;
             m_connection_time += conn_time;
             m_metric_conn_time->observe(conn_time);
-            Status::metric_outbound_conn_time->observe(conn_time);
+            s_metric_conn_time->observe(conn_time);
             m_connected = true;
             m_connecting = false;
             receive();
@@ -769,7 +823,7 @@ void OutboundUDP::receive() {
             buffer->pop(buffer->size() - n);
           }
           m_metric_traffic_in->increase(buffer->size());
-          Status::metric_outbound_in->increase(buffer->size());
+          s_metric_traffic_in->increase(buffer->size());
           output(MessageStart::make());
           output(buffer);
           output(MessageEnd::make());
@@ -825,7 +879,7 @@ void OutboundUDP::pump() {
         [=](const std::error_code &ec, std::size_t n) {
           if (ec != asio::error::operation_aborted) {
             m_metric_traffic_out->increase(n);
-            Status::metric_outbound_out->increase(n);
+            s_metric_traffic_out->increase(n);
             if (ec) {
               if (Log::is_enabled(Log::WARN)) {
                 char desc[200];

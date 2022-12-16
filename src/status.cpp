@@ -33,7 +33,6 @@
 #include "pjs/pjs.hpp"
 #include "api/json.hpp"
 #include "api/logging.hpp"
-#include "api/stats.hpp"
 #include "filters/http2.hpp"
 #include "utils.hpp"
 
@@ -47,12 +46,7 @@
 
 namespace pipy {
 
-Status Status::local;
-pjs::Ref<stats::Counter> Status::metric_inbound_in;
-pjs::Ref<stats::Counter> Status::metric_inbound_out;
-pjs::Ref<stats::Counter> Status::metric_outbound_in;
-pjs::Ref<stats::Counter> Status::metric_outbound_out;
-pjs::Ref<stats::Histogram> Status::metric_outbound_conn_time;
+thread_local Status Status::local;
 
 void Status::update() {
   modules.clear();
@@ -172,188 +166,6 @@ void Status::to_json(std::ostream &out) const {
     out << '"' << utils::escape(name->str()) << '"';
   }
   out << "]}";
-}
-
-void Status::register_metrics() {
-  thread_local static pjs::ConstStr s_server("Server");
-  thread_local static pjs::ConstStr s_client("Client");
-
-  pjs::Ref<pjs::Array> label_names = pjs::Array::make();
-
-  label_names->length(1);
-  label_names->set(0, "type");
-
-  stats::Gauge::make(
-    pjs::Str::make("pipy_object_count"),
-    label_names,
-    [](stats::Gauge *gauge) {
-      double total = 0;
-      for (const auto &i : pjs::Class::all()) {
-        static std::string prefix("pjs::Constructor");
-        if (utils::starts_with(i.second->name()->str(), prefix)) continue;
-        if (auto n = i.second->object_count()) {
-          pjs::Str *name = i.second->name();
-          auto metric = gauge->with_labels(&name, 1);
-          metric->set(n);
-          total += n;
-        }
-      }
-      gauge->set(total);
-    }
-  );
-
-  label_names->length(1);
-  label_names->set(0, "type");
-
-  stats::Gauge::make(
-    pjs::Str::make("pipy_chunk_size"),
-    label_names,
-    [](stats::Gauge *gauge) {
-      double total = 0;
-      Data::Producer::for_each([&](Data::Producer *producer) {
-        pjs::Str *name = producer->name();
-        auto metric = gauge->with_labels(&name, 1);
-        auto size = producer->current() * DATA_CHUNK_SIZE;
-        metric->set(size);
-        total += size;
-      });
-      gauge->set(total);
-    }
-  );
-
-  label_names->length(2);
-  label_names->set(0, "module");
-  label_names->set(1, "name");
-
-  stats::Gauge::make(
-    pjs::Str::make("pipy_pipeline_count"),
-    label_names,
-    [](stats::Gauge *gauge) {
-      double total = 0;
-      PipelineLayout::for_each([&](PipelineLayout *p) {
-        if (auto mod = dynamic_cast<JSModule*>(p->module())) {
-          pjs::Str *labels[2];
-          labels[0] = mod ? mod->filename() : pjs::Str::empty.get();
-          labels[1] = p->name_or_label();
-          auto metric = gauge->with_labels(labels, 2);
-          auto n = p->active();
-          metric->set(n);
-          total += n;
-        }
-      });
-      gauge->set(total);
-    }
-  );
-
-  label_names->length(2);
-  label_names->set(0, "listen");
-  label_names->set(1, "peer");
-
-  stats::Gauge::make(
-    pjs::Str::make("pipy_inbound_count"),
-    label_names,
-    [=](stats::Gauge *gauge) {
-      int total = 0;
-      Listener::for_each([&](Listener *listener) {
-        if (auto *p = listener->pipeline_layout()) {
-          auto k = p->name();
-          auto l = gauge->with_labels(&k, 1);
-          auto n = 0;
-          l->zero_all();
-          listener->for_each_inbound([&](Inbound *inbound) {
-            auto k = inbound->remote_address();
-            auto m = l->with_labels(&k, 1);
-            m->increase();
-            n++;
-          });
-          l->set(n);
-          total += n;
-        }
-      });
-      gauge->set(total);
-    }
-  );
-
-  metric_inbound_in = stats::Counter::make(
-    pjs::Str::make("pipy_inbound_in"),
-    label_names
-  );
-
-  metric_inbound_out = stats::Counter::make(
-    pjs::Str::make("pipy_inbound_out"),
-    label_names
-  );
-
-  label_names->length(2);
-  label_names->set(0, "protocol");
-  label_names->set(1, "peer");
-
-  stats::Gauge::make(
-    pjs::Str::make("pipy_outbound_count"),
-    label_names,
-    [=](stats::Gauge *gauge) {
-      int total = 0;
-      gauge->zero_all();
-      Outbound::for_each([&](Outbound *outbound) {
-        pjs::Str *k[2];
-        k[0] = outbound->protocol_name();
-        k[1] = outbound->address();
-        auto cnt = gauge->with_labels(k, 2);
-        cnt->increase();
-        total++;
-      });
-      gauge->set(total);
-    }
-  );
-
-  metric_outbound_in = stats::Counter::make(
-    pjs::Str::make("pipy_outbound_in"),
-    label_names
-  );
-
-  metric_outbound_out = stats::Counter::make(
-    pjs::Str::make("pipy_outbound_out"),
-    label_names
-  );
-
-  pjs::Ref<pjs::Array> buckets = pjs::Array::make(21);
-  double limit = 1.5;
-  for (int i = 0; i < 20; i++) {
-    buckets->set(i, std::floor(limit));
-    limit *= 1.5;
-  }
-  buckets->set(20, std::numeric_limits<double>::infinity());
-
-  metric_outbound_conn_time = stats::Histogram::make(
-    pjs::Str::make("pipy_outbound_conn_time"),
-    buckets, label_names
-  );
-
-  label_names->length(1);
-  label_names->set(0, "type");
-
-  stats::Gauge::make(
-    pjs::Str::make("pipy_http2_stream_count"),
-    label_names,
-    [=](stats::Gauge *gauge) {
-      pjs::Str *server = s_server;
-      pjs::Str *client = s_client;
-      gauge->with_labels(&server, 1)->set(http2::Endpoint::server_stream_count());
-      gauge->with_labels(&client, 1)->set(http2::Endpoint::client_stream_count());
-      gauge->set(
-        http2::Endpoint::server_stream_count() +
-        http2::Endpoint::client_stream_count()
-      );
-    }
-  );
-}
-
-void Status::clear_metrics() {
-  metric_inbound_in = nullptr;
-  metric_inbound_out = nullptr;
-  metric_outbound_in = nullptr;
-  metric_outbound_out = nullptr;
-  metric_outbound_conn_time = nullptr;
 }
 
 template<class T>
@@ -611,18 +423,6 @@ void Status::dump_outbound(Data::Builder &db) {
   });
 
   print_table(db, { "OUTBOUND", "#CONNECTIONS", "MAX_CONN_TIME", "AVG_CONN_TIME" }, outbounds);
-}
-
-void Status::dump_http2(Data::Builder &db) {
-  auto server_stream_count = http2::Endpoint::server_stream_count();
-  auto client_stream_count = http2::Endpoint::client_stream_count();
-
-  std::list<std::array<std::string, 2>> streams;
-  streams.push_back({ "Server", std::to_string(server_stream_count) });
-  streams.push_back({ "Client", std::to_string(client_stream_count) });
-  streams.push_back({ "TOTAL" , std::to_string(server_stream_count + client_stream_count) });
-
-  print_table(db, { "HTTP/2", "#STREAMS" }, streams);
 }
 
 } // namespace pipy

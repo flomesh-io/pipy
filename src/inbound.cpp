@@ -28,7 +28,6 @@
 #include "pipeline.hpp"
 #include "worker.hpp"
 #include "constants.hpp"
-#include "status.hpp"
 #include "log.hpp"
 
 #ifdef __linux__
@@ -41,13 +40,18 @@ namespace pipy {
 
 using tcp = asio::ip::tcp;
 
-std::atomic<uint64_t> Inbound::s_inbound_id;
-
 //
 // Inbound
 //
 
+std::atomic<uint64_t> Inbound::s_inbound_id;
+
+thread_local pjs::Ref<stats::Gauge> Inbound::s_metric_concurrency;
+thread_local pjs::Ref<stats::Counter> Inbound::s_metric_traffic_in;
+thread_local pjs::Ref<stats::Counter> Inbound::s_metric_traffic_out;
+
 Inbound::Inbound() {
+  init_metrics();
   Log::debug("[inbound  %p] ++", this);
   if (!++s_inbound_id) s_inbound_id++;
   m_id = s_inbound_id;
@@ -133,6 +137,50 @@ void Inbound::on_tap_close() {
 
 void Inbound::on_weak_ptr_gone() {
   m_output = nullptr;
+}
+
+void Inbound::init_metrics() {
+  if (!s_metric_concurrency) {
+    pjs::Ref<pjs::Array> label_names = pjs::Array::make();
+    label_names->length(2);
+    label_names->set(0, "listen");
+    label_names->set(1, "peer");
+
+    s_metric_concurrency = stats::Gauge::make(
+      pjs::Str::make("pipy_inbound_count"),
+      label_names,
+      [=](stats::Gauge *gauge) {
+        int total = 0;
+        Listener::for_each([&](Listener *listener) {
+          if (auto *p = listener->pipeline_layout()) {
+            auto k = p->name();
+            auto l = gauge->with_labels(&k, 1);
+            auto n = 0;
+            l->zero_all();
+            listener->for_each_inbound([&](Inbound *inbound) {
+              auto k = inbound->remote_address();
+              auto m = l->with_labels(&k, 1);
+              m->increase();
+              n++;
+            });
+            l->set(n);
+            total += n;
+          }
+        });
+        gauge->set(total);
+      }
+    );
+
+    s_metric_traffic_in = stats::Counter::make(
+      pjs::Str::make("pipy_inbound_in"),
+      label_names
+    );
+
+    s_metric_traffic_out = stats::Counter::make(
+      pjs::Str::make("pipy_inbound_out"),
+      label_names
+    );
+  }
 }
 
 //
@@ -255,8 +303,8 @@ void InboundTCP::start() {
   pjs::Str *labels[2];
   labels[0] = m_listener->pipeline_layout()->name();
   labels[1] = remote_address();
-  m_metric_traffic_in = Status::metric_inbound_in->with_labels(labels, 2);
-  m_metric_traffic_out = Status::metric_inbound_out->with_labels(labels, 2);
+  m_metric_traffic_in = Inbound::s_metric_traffic_in->with_labels(labels, 2);
+  m_metric_traffic_out = Inbound::s_metric_traffic_out->with_labels(labels, 2);
 
   p->start();
   receive();
@@ -289,7 +337,7 @@ void InboundTCP::receive() {
             }
           }
           m_metric_traffic_in->increase(buffer->size());
-          Status::metric_inbound_in->increase(buffer->size());
+          s_metric_traffic_in->increase(buffer->size());
           output(buffer);
         }
 
@@ -381,7 +429,7 @@ void InboundTCP::pump() {
       if (ec != asio::error::operation_aborted) {
         m_buffer.shift(n);
         m_metric_traffic_out->increase(n);
-        Status::metric_inbound_out->increase(n);
+        s_metric_traffic_out->increase(n);
 
         if (ec) {
           if (Log::is_enabled(Log::WARN)) {

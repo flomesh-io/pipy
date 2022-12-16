@@ -96,6 +96,11 @@ protected:
   void stop();
   void address();
 
+protected:
+  thread_local static pjs::Ref<stats::Gauge> s_metric_concurrency;
+  thread_local static pjs::Ref<stats::Counter> s_metric_traffic_in;
+  thread_local static pjs::Ref<stats::Counter> s_metric_traffic_out;
+
 private:
   virtual void on_get_address() = 0;
   virtual void on_inbound_resume() = 0;
@@ -113,6 +118,8 @@ private:
   virtual void on_weak_ptr_gone() override;
 
   static std::atomic<uint64_t> s_inbound_id;
+
+  static void init_metrics();
 
   friend class pjs::ObjectTemplate<Inbound>;
 };

@@ -42,7 +42,7 @@ thread_local static pjs::ConstStr s_str_sum("sum");
 //
 
 auto Metric::local() -> MetricSet& {
-  static MetricSet s_local_metric_set;
+  thread_local static MetricSet s_local_metric_set;
   return s_local_metric_set;
 }
 

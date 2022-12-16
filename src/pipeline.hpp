@@ -120,7 +120,7 @@ private:
   List<Pipeline> m_pipelines;
   size_t m_allocated = 0;
 
-  static List<PipelineLayout> s_all_pipeline_layouts;
+  thread_local static List<PipelineLayout> s_all_pipeline_layouts;
 
   friend class pjs::RefCount<PipelineLayout>;
   friend class Pipeline;

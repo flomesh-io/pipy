@@ -444,8 +444,6 @@ Message* AdminService::dump_GET(const std::string &path) {
       Status::dump_inbound(db);
     } else if (item == "outbound") {
       Status::dump_outbound(db);
-    } else if (item == "http2") {
-      Status::dump_http2(db);
     } else {
       db.push("Unknown dump item: ");
       db.push(item);
