@@ -633,9 +633,15 @@ public:
 
   class ID {
   public:
+    ID() : m_id(0) {}
     ID(Str *s);
+    ~ID() { if (auto id = m_id) m_global_index.free(id); }
     auto str() const -> Str* { return m_local_index.get(m_id); }
     auto to_string() const -> Str*;
+    operator int() const { return m_id; }
+    bool operator ==(const ID &r) const { return m_id == r.m_id; }
+    bool operator <=(const ID &r) const { return m_id <= r.m_id; }
+    bool operator < (const ID &r) const { return m_id <  r.m_id; }
   private:
     int m_id;
   };
@@ -718,9 +724,12 @@ private:
       Ref<CharData> char_data;
       std::atomic<int> hold_count;
       int next_free = 0;
+      void hold() { hold_count.fetch_add(1); }
     };
 
     auto alloc(CharData *data) -> int;
+    auto get(int i) -> Entry*;
+    auto add(int i) -> Entry*;
     auto hold(int i) -> Entry*;
     void free(int i);
 
@@ -736,9 +745,6 @@ private:
     std::atomic<Range*> m_ranges[256];
     std::atomic<int> m_max_id;
     std::atomic<int> m_free_id;
-
-    auto get_entry(int i) -> Entry*;
-    auto add_entry(int i) -> Entry*;
   };
 
   static void index_to_xyz(int i, int &x, int &y, int &z) {
@@ -750,8 +756,8 @@ private:
   int m_id;
   Ref<CharData> m_char_data;
 
-  Str(int id, CharData *char_data)
-    : m_id(id), m_char_data(char_data) { ht()[char_data->str()] = this; }
+  Str(int id, GlobalIndex::Entry *ent)
+    : m_id(id), m_char_data(ent->char_data) { ent->hold(); ht()[m_char_data->str()] = this; }
 
   Str(const std::string &str)
     : m_id(0), m_char_data(new CharData(std::string(str))) { ht()[str] = this; }
@@ -776,6 +782,22 @@ private:
 
   friend class RefCount<Str>;
 };
+
+} // namespace pjs
+
+namespace std {
+
+template<>
+struct hash<pjs::Str::ID> {
+  size_t operator()(const pjs::Str::ID &k) const {
+    hash<int> h;
+    return h(k);
+  }
+};
+
+} // namespace std
+
+namespace pjs {
 
 //
 // ConstStr

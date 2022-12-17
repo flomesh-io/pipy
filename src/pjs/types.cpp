@@ -221,6 +221,7 @@ Str::ID::ID(Str *s) {
       id = m_global_index.alloc(s->m_char_data);
       s->m_id = id;
     }
+    m_global_index.hold(id);
     m_id = id;
   } else {
     m_id = 0;
@@ -230,11 +231,11 @@ Str::ID::ID(Str *s) {
 auto Str::ID::to_string() const -> Str* {
   if (auto id = m_id) {
     if (auto *s = m_local_index.get(id)) return s;
-    if (auto *e = m_global_index.hold(id)) {
+    if (auto *e = m_global_index.get(id)) {
       auto data = e->char_data.get();
       auto i = ht().find(data->str());
       if (i == ht().end()) {
-        auto *s = new Str(id, e->char_data);
+        auto *s = new Str(id, e);
         m_local_index.set(id, s);
         return s->retain();
       } else {
@@ -423,44 +424,7 @@ void Str::LocalIndex::del(int i) {
 // Str::GlobalIndex
 //
 
-auto Str::GlobalIndex::alloc(CharData *data) -> int {
-  auto i = m_free_id.load();
-  while (i) {
-    auto e = get_entry(i);
-    if (!e) break;
-    auto next = e->next_free;
-    if (m_free_id.compare_exchange_weak(i, next)) {
-      e->char_data = data;
-      e->hold_count.store(1);
-      return i;
-    }
-  }
-  i = m_max_id.fetch_add(1) + 1;
-  auto e = add_entry(i);
-  e->char_data = data;
-  e->hold_count.store(1);
-  return i;
-}
-
-auto Str::GlobalIndex::hold(int i) -> Entry* {
-  auto e = get_entry(i);
-  if (!e->hold_count.fetch_add(1)) return nullptr;
-  return e;
-}
-
-void Str::GlobalIndex::free(int i) {
-  auto e = get_entry(i);
-  if (e->hold_count.fetch_sub(1) == 1) {
-    e->char_data = nullptr;
-    auto next = m_free_id.load();
-    do {
-      e->next_free = next;
-    }
-    while (!m_free_id.compare_exchange_weak(next, i));
-  }
-}
-
-auto Str::GlobalIndex::get_entry(int i) -> Entry* {
+auto Str::GlobalIndex::get(int i) -> Entry* {
   int x, y, z;
   index_to_xyz(i, x, y, z);
   auto r = m_ranges[x].load();
@@ -468,7 +432,7 @@ auto Str::GlobalIndex::get_entry(int i) -> Entry* {
   return &c->entries[z];
 }
 
-auto Str::GlobalIndex::add_entry(int i) -> Entry* {
+auto Str::GlobalIndex::add(int i) -> Entry* {
   int x, y, z;
   index_to_xyz(i, x, y, z);
   auto r = m_ranges[x].load();
@@ -490,6 +454,43 @@ auto Str::GlobalIndex::add_entry(int i) -> Entry* {
     }
   }
   return &c->entries[z];
+}
+
+auto Str::GlobalIndex::alloc(CharData *data) -> int {
+  auto i = m_free_id.load();
+  while (i) {
+    auto e = get(i);
+    if (!e) break;
+    auto next = e->next_free;
+    if (m_free_id.compare_exchange_weak(i, next)) {
+      e->char_data = data;
+      e->hold_count.store(1);
+      return i;
+    }
+  }
+  i = m_max_id.fetch_add(1) + 1;
+  auto e = add(i);
+  e->char_data = data;
+  e->hold_count.store(1);
+  return i;
+}
+
+auto Str::GlobalIndex::hold(int i) -> Entry* {
+  auto e = get(i);
+  e->hold();
+  return e;
+}
+
+void Str::GlobalIndex::free(int i) {
+  auto e = get(i);
+  if (e->hold_count.fetch_sub(1) == 1) {
+    e->char_data = nullptr;
+    auto next = m_free_id.load();
+    do {
+      e->next_free = next;
+    }
+    while (!m_free_id.compare_exchange_weak(next, i));
+  }
 }
 
 //
