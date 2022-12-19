@@ -25,7 +25,7 @@ BuildRequires: 	llvm-toolset-7.0-clang
 BuildRequires: 	cmake3
 BuildRequires: 	gcc
 BuildRequires: 	make
-%if 0%{with gui}
+%if %{with gui}
 %if 0%{?rhel} >= 8 || 0%{?fedora}
 BuildRequires: 	npm
 %else
@@ -51,7 +51,7 @@ Pipy is a tiny, high performance, highly stable, programmable proxy.
 rm -fr pipy/build
 %{__mkdir} pipy/build
 cd pipy
-%if 0%{with gui}
+%if %{with gui}
 %if 0%{?rhel} == 7
 source /opt/rh/rh-nodejs14/enable
 %endif
@@ -60,8 +60,8 @@ source /opt/rh/rh-nodejs14/enable
 %endif
 cd build
 CXX=clang++ CC=clang cmake3 \
-  -DPIPY_GUI==%{?with_gui:ON}%{?!with_gui:OFF} \
-  -DPIPY_SAMPLES=%{?with_gui:ON}%{?!with_gui:OFF} \
+  -DPIPY_GUI=%{?with_gui:ON}%{!?with_gui:OFF} \
+  -DPIPY_SAMPLES=%{?with_gui:ON}%{!?with_gui:OFF} \
   -DPIPY_STATIC=${PIPY_STATIC} \
   -DCMAKE_BUILD_TYPE=${BUILD_TYPE} ..
 make -j$(getconf _NPROCESSORS_ONLN)

@@ -45,12 +45,12 @@ RUN if test "$PIPY_GUI" = ON ; then   \
     else                              \
       rpmbuild_opts=' --without gui'; \
     fi;                               \
-       export CI_COMMIT_SHA \
+    export CI_COMMIT_SHA \
     && export CI_COMMIT_TAG=${VERSION}-${REVISION} \
     && export CI_COMMIT_DATE \
     && export PIPY_STATIC \
     && export BUILD_TYPE \
-    && PATH="/opt/rh/llvm-toolset-7/root/usr/bin:/opt/rh/llvm-toolset-7/root/usr/sbin${PATH:+:${PATH}}" \
+    && source /opt/rh/llvm-toolset-7.0/enable \
     && rpmbuild $rpmbuild_opts \
          --define "pipy_version $VERSION" \
          --define "pipy_revision $REVISION" \
