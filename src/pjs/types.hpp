@@ -634,16 +634,24 @@ public:
   class ID {
   public:
     ID() : m_id(0) {}
+    ID(ID &&rval) : m_id(rval.m_id) { rval.m_id = 0; }
     ID(Str *s);
-    ~ID() { if (auto id = m_id) m_global_index.free(id); }
+    ~ID() { clear(); }
     auto str() const -> Str* { return m_local_index.get(m_id); }
+    void str(Str *s);
     auto to_string() const -> Str*;
     operator int() const { return m_id; }
+    auto operator = (ID &&rval) -> ID& { m_id = rval.m_id; rval.m_id = 0; return *this; }
     bool operator ==(const ID &r) const { return m_id == r.m_id; }
     bool operator <=(const ID &r) const { return m_id <= r.m_id; }
     bool operator < (const ID &r) const { return m_id <  r.m_id; }
   private:
     int m_id;
+    void clear() {
+      if (auto id = m_id) {
+        m_global_index.free(id);
+      }
+    }
   };
 
   auto length() const -> int { return m_char_data->length(); }

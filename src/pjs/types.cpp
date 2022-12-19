@@ -228,6 +228,21 @@ Str::ID::ID(Str *s) {
   }
 }
 
+void Str::ID::str(Str *s) {
+  if (s) {
+    auto id = s->m_id;
+    if (!id) id = m_global_index.alloc(s->m_char_data);
+    if (m_id != id) {
+      clear();
+      m_global_index.hold(id);
+      m_id = id;
+    }
+  } else {
+    clear();
+    m_id = 0;
+  }
+}
+
 auto Str::ID::to_string() const -> Str* {
   if (auto id = m_id) {
     if (auto *s = m_local_index.get(id)) return s;
