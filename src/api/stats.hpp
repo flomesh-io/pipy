@@ -40,6 +40,7 @@
 namespace pipy {
 namespace stats {
 
+class MetricData;
 class MetricSet;
 
 //
@@ -55,9 +56,9 @@ public:
   auto root() const -> Metric* { return m_root; }
   auto name() const -> pjs::Str* { return m_name; }
   auto label() const -> pjs::Str* { return m_label; }
-  auto shape() const -> const std::string& { return m_root ? m_root->m_shape : m_shape; }
-  auto type() -> const std::string& { return m_root ? m_root->get_type() : get_type(); }
-  auto dimension() -> int { return get_dim(); }
+  auto shape() const -> pjs::Str* { return m_root ? m_root->m_shape : m_shape; }
+  auto type() -> pjs::Str*;
+  auto dimensions() -> int { return get_dim(); }
   auto with_labels(pjs::Str *const *labels, int count) -> Metric*;
   auto history_size() -> size_t { return m_history_end - m_history_start; }
   void history_step();
@@ -77,7 +78,7 @@ protected:
   void serialize(Data::Builder &db, bool initial, bool recursive, bool history);
 
   virtual auto create_new(Metric *parent, pjs::Str **labels) -> Metric* = 0;
-  virtual auto get_type() -> const std::string& = 0;
+  virtual auto get_type() -> pjs::Str* = 0;
   virtual auto get_dim() -> int { return 1; }
   virtual auto get_value(int dim) -> double = 0;
   virtual void set_value(int dim, double value) = 0;
@@ -100,8 +101,9 @@ private:
   );
 
   Metric* m_root;
-  std::string m_shape;
   pjs::Ref<pjs::Str> m_name;
+  pjs::Ref<pjs::Str> m_type;
+  pjs::Ref<pjs::Str> m_shape;
   pjs::Ref<pjs::Str> m_label;
   int m_label_index;
   bool m_has_value = false;
@@ -114,6 +116,7 @@ private:
   size_t m_history_end = 0;
 
   friend class pjs::ObjectTemplate<Metric>;
+  friend class MetricData;
   friend class MetricSet;
 };
 
@@ -206,6 +209,90 @@ private:
   void truncate(int i);
 
   friend class Metric;
+  friend class MetricData;
+};
+
+//
+// MetricData
+//
+
+class MetricData {
+public:
+  ~MetricData();
+
+  void update(MetricSet *metrics);
+  void deserialize(Data &in);
+  void serialize(Data &out, bool initial);
+  void to_prometheus(const std::function<void(const void *, size_t)> &out, const std::string &inst) const;
+
+private:
+  struct Node {
+    pjs::Str::ID key;
+    Node* subs = nullptr;
+    Node* next = nullptr;
+    double values[1];
+    static auto make(int dimensions) -> Node*;
+    ~Node();
+  private:
+    Node() {}
+  };
+
+  struct Entry {
+    pjs::Str::ID name;
+    pjs::Str::ID type;
+    pjs::Str::ID shape;
+    int dimensions;
+    std::unique_ptr<Node> root;
+    Entry* next = nullptr;
+  };
+
+  Entry* m_entries = nullptr;
+};
+
+//
+// MetricDataSum
+//
+
+class MetricDataSum {
+public:
+  void zero();
+  void sum(MetricData *data);
+  void serialize(Data &out, bool initial);
+
+private:
+  struct Node : public List<Node>::Item {
+    pjs::Ref<pjs::Str> key;
+    std::map<pjs::Str*, Node*> subs;
+    double values[1];
+    static auto make(int dimensions) -> Node*;
+    ~Node();
+  };
+
+  struct Entry {
+    pjs::Ref<pjs::Str> name;
+    pjs::Ref<pjs::Str> type;
+    pjs::Ref<pjs::Str> shape;
+    int dimensions;
+    std::unique_ptr<Node> root;
+  };
+
+  std::unordered_map<pjs::Ref<pjs::Str>, Entry> m_entries;
+};
+
+//
+// MetricHistory
+//
+
+class MetricHistory {
+public:
+  MetricHistory(int duration = 1) : m_duration(duration) {}
+
+  void store(int time, MetricData *data);
+  void serialize(int time, int duration, Data &out);
+  void serialize(int time, int duration, const std::string &metric_name, Data &out);
+
+private:
+  int m_duration;
 };
 
 //
@@ -247,10 +334,7 @@ private:
     out.set(m_value);
   }
 
-  virtual auto get_type() -> const std::string& override {
-    static std::string type("Counter");
-    return type;
-  }
+  virtual auto get_type() -> pjs::Str* override;
 
   virtual auto get_value(int dim) -> double override {
     return m_value;
@@ -291,10 +375,7 @@ private:
     out.set(m_value);
   }
 
-  virtual auto get_type() -> const std::string& override {
-    static std::string type("Gauge");
-    return type;
-  }
+  virtual auto get_type() -> pjs::Str* override;
 
   virtual auto get_value(int dim) -> double override {
     return m_value;
@@ -336,7 +417,7 @@ private:
   Histogram(Metric *parent, pjs::Str **labels);
 
   virtual void value_of(pjs::Value &out) override;
-  virtual auto get_type() -> const std::string& override;
+  virtual auto get_type() -> pjs::Str* override;
   virtual auto get_dim() -> int override;
   virtual auto get_value(int dim) -> double override;
   virtual void set_value(int dim, double value) override;
@@ -346,7 +427,6 @@ private:
   pjs::Ref<pjs::Array> m_buckets;
   pjs::Ref<algo::Percentile> m_percentile;
   std::vector<pjs::Ref<pjs::Str>> m_labels;
-  std::string m_type;
   double m_sum = 0;
   size_t m_count = 0;
 

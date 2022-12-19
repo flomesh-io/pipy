@@ -34,6 +34,8 @@ namespace pipy {
 namespace stats {
 
 static Data::Producer s_dp("Stats");
+thread_local static pjs::ConstStr s_str_Counter("Counter");
+thread_local static pjs::ConstStr s_str_Gauge("Gauge");
 thread_local static pjs::ConstStr s_str_count("count");
 thread_local static pjs::ConstStr s_str_sum("sum");
 
@@ -53,16 +55,20 @@ Metric::Metric(pjs::Str *name, pjs::Array *label_names, MetricSet *set)
   , m_label_names(std::make_shared<std::vector<pjs::Ref<pjs::Str>>>())
 {
   if (label_names) {
+    std::string shape;
     auto n = label_names->length();
     m_label_names->resize(n);
     for (auto i = 0; i < n; i++) {
       pjs::Value v; label_names->get(i, v);
       auto *s = v.to_string();
-      if (!m_shape.empty()) m_shape += '/';
-      m_shape += s->str();
+      if (!shape.empty()) shape += '/';
+      shape += s->str();
       m_label_names->at(i) = s;
       s->release();
     }
+    m_shape = pjs::Str::make(std::move(shape));
+  } else {
+    m_shape = pjs::Str::empty;
   }
 
   if (set) {
@@ -104,6 +110,13 @@ auto Metric::with_labels(pjs::Str *const *labels, int count) -> Metric* {
   }
 
   return metric;
+}
+
+auto Metric::type() -> pjs::Str* {
+  auto *m = m_root ? m_root : this;
+  if (m->m_type) return m_type;
+  m_type = m->get_type();
+  return m_type;
 }
 
 void Metric::history_step() {
@@ -217,12 +230,12 @@ void Metric::serialize(Data::Builder &db, bool initial, bool recursive, bool his
         db.push(',');
         db.push(s_l);
         db.push('"');
-        utils::escape(shape(), [&](char c) { db.push(c); });
+        utils::escape(shape()->str(), [&](char c) { db.push(c); });
         db.push('"');
         db.push(',');
         db.push(s_t);
         db.push('"');
-        utils::escape(type(), [&](char c) { db.push(c); });
+        utils::escape(type()->str(), [&](char c) { db.push(c); });
       }
       db.push('"');
       db.push(',');
@@ -571,8 +584,8 @@ auto MetricSet::Deserializer::open(Level *current, Level *list, pjs::Str *key) -
             if (m && key) {
               if (
                 m->name() != key ||
-                m->shape() != current->shape ||
-                m->type() != current->type
+                m->shape()->str() != current->shape ||
+                m->type()->str() != current->type
               ) {
                 m_metric_set->truncate(i);
                 m = nullptr;
@@ -783,6 +796,92 @@ void MetricSet::Deserializer::array_end() {
 }
 
 //
+// MetricData
+//
+
+MetricData::~MetricData() {
+  auto *p = m_entries;
+  while (p) {
+    auto *ent = p; p = p->next;
+    delete ent;
+  }
+}
+
+void MetricData::update(MetricSet *metrics) {
+  std::function<void(int, Node*, Metric*)> update;
+
+  update = [=](int level, Node *node, Metric *metric) {
+    if (level > 0) node->key.str(metric->label());
+
+    auto dim = metric->dimensions();
+    for (int d = 0; d < dim; d++) {
+      node->values[d] = metric->get_value(d);
+    }
+
+    auto **sub = &node->subs;
+    for (const auto &m : metric->m_subs) {
+      auto s = *sub;
+      if (!s) s = *sub = Node::make(dim);
+      update(level + 1, s, m);
+      sub = &s->next;
+    }
+
+    auto *s = *sub;
+    while (s) {
+      auto sub = s; s = s->next;
+      delete sub;
+    }
+  };
+
+  auto **ent = &m_entries;
+  for (const auto &i : metrics->m_metrics) {
+    auto metric = i.get();
+    auto e = *ent;
+    if (!e ||
+      e->name.str() != metric->name() ||
+      e->type.str() != metric->type() ||
+      e->shape.str() != metric->shape() ||
+      e->dimensions != metric->dimensions()
+    ) {
+      delete e;
+      e = *ent = new Entry;
+      e->root.reset(Node::make(metric->dimensions()));
+      e->name.str(metric->name());
+      e->type.str(metric->type());
+      e->shape.str(metric->shape());
+      e->dimensions = metric->dimensions();
+    }
+    update(0, e->root.get(), metric);
+    ent = &e->next;
+  }
+
+  auto *e = *ent;
+  while (e) {
+    auto ent = e; e = e->next;
+    delete ent;
+  }
+}
+
+//
+// MetricData::Node
+//
+
+auto MetricData::Node::make(int dimensions) -> Node* {
+  auto len = sizeof(Node) + (dimensions - 1) * sizeof(double);
+  auto ptr = (Node *)std::malloc(len);
+  new (ptr) Node;
+  return ptr;
+}
+
+MetricData::Node::~Node() {
+  auto *s = subs;
+  while (s) {
+    auto sub = s; s = s->next;
+    delete sub;
+  }
+}
+
+//
 // Counter
 //
 
@@ -794,6 +893,10 @@ Counter::Counter(pjs::Str *name, pjs::Array *label_names, MetricSet *set)
 Counter::Counter(Metric *parent, pjs::Str **labels)
   : MetricTemplate<Counter>(parent, labels)
 {
+}
+
+auto Counter::get_type() -> pjs::Str* {
+  return s_str_Counter.get();
 }
 
 void Counter::zero() {
@@ -819,6 +922,10 @@ Gauge::Gauge(pjs::Str *name, pjs::Array *label_names, const std::function<void(G
 Gauge::Gauge(Metric *parent, pjs::Str **labels)
   : MetricTemplate<Gauge>(parent, labels)
 {
+}
+
+auto Gauge::get_type() -> pjs::Str* {
+  return s_str_Gauge.get();
 }
 
 void Gauge::zero() {
@@ -894,30 +1001,29 @@ void Histogram::value_of(pjs::Value &out) {
   out.set(a);
 }
 
-auto Histogram::get_type() -> const std::string& {
-  if (m_type.empty()) {
-    m_buckets->iterate_all(
-      [this](pjs::Value &v, int) {
-        if (m_type.empty()) {
-          m_type = "Histogram[";
-        } else {
-          m_type += ',';
-        }
-        auto n = v.to_number();
-        if (std::isnan(n)) {
-          m_type += "\"NaN\"";
-        } else if (std::isinf(n)) {
-          m_type += n > 0 ? "\"Inf\"" : "\"-Inf\"";
-        } else {
-          char str[100];
-          auto len = pjs::Number::to_string(str, sizeof(str), v.to_number());
-          m_type += std::string(str, len);
-        }
+auto Histogram::get_type() -> pjs::Str* {
+  std::string type;
+  m_buckets->iterate_all(
+    [&](pjs::Value &v, int) {
+      if (type.empty()) {
+        type = "Histogram[";
+      } else {
+        type += ',';
       }
-    );
-    m_type += ']';
-  }
-  return m_type;
+      auto n = v.to_number();
+      if (std::isnan(n)) {
+        type += "\"NaN\"";
+      } else if (std::isinf(n)) {
+        type += n > 0 ? "\"Inf\"" : "\"-Inf\"";
+      } else {
+        char str[100];
+        auto len = pjs::Number::to_string(str, sizeof(str), v.to_number());
+        type += std::string(str, len);
+      }
+    }
+  );
+  type += ']';
+  return pjs::Str::make(std::move(type));
 }
 
 auto Histogram::get_dim() -> int {
