@@ -130,27 +130,22 @@ public:
   auto get(pjs::Str *name) -> Metric*;
   void collect_all();
   void history_step();
+  void deserialize(const Data &in);
   void serialize(Data &out, const std::string &uuid, bool initial);
   void serialize_history(Data &out, const std::string &metric_name, std::chrono::time_point<std::chrono::steady_clock> timestamp);
   void to_prometheus(const std::function<void(const void *, size_t)> &out, const std::string &inst) const;
   void to_prometheus(Data &out, const std::string &inst) const;
   void clear();
 
-  static void deserialize(
-    const Data &in,
-    const std::function<MetricSet*(const std::string&)> &by_uuid
-  );
-
 private:
+
   //
   // MetricSet::Deserializer
   //
 
   class Deserializer : public JSON::Visitor {
   public:
-    Deserializer(const std::function<MetricSet*(const std::string&)> &by_uuid)
-      : m_by_uuid(by_uuid) {}
-
+    Deserializer(MetricSet *metric_set) : m_metric_set(metric_set) {}
     ~Deserializer();
 
     bool has_error() const { return m_has_error; }
@@ -160,7 +155,6 @@ private:
       enum class ID {
         NONE,
         INDEX,
-        UUID,
         METRICS,
         KEY,
         LABELS,
@@ -180,8 +174,7 @@ private:
       std::string type;
     };
 
-    std::function<MetricSet*(const std::string&)> m_by_uuid;
-    MetricSet* m_metric_set = nullptr;
+    MetricSet* m_metric_set;
     Level* m_current = nullptr;
     bool m_has_error = false;
 

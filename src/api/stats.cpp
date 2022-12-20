@@ -392,6 +392,17 @@ void MetricSet::history_step() {
   }
 }
 
+void MetricSet::deserialize(const Data &in) {
+  Deserializer des(this);
+  if (!JSON::visit(in, &des)) {
+    Log::error("[stats] JSON deserialization failed for metrics");
+    return;
+  }
+  if (des.has_error()) {
+    Log::error("[stats] Invalid JSON structure for metrics");
+  }
+}
+
 void MetricSet::serialize(Data &out, const std::string &uuid, bool initial) {
   static std::string s_uuid("\"uuid\":");
   static std::string s_metrics("\"metrics\":");
@@ -440,20 +451,6 @@ void MetricSet::serialize_history(Data &out, const std::string &metric_name, std
   db.push(']');
   db.push('}');
   db.flush();
-}
-
-void MetricSet::deserialize(
-  const Data &in,
-  const std::function<MetricSet*(const std::string &uuid)> &by_uuid
-) {
-  Deserializer des(by_uuid);
-  if (!JSON::visit(in, &des)) {
-    Log::error("[stats] JSON deserialization failed for metrics");
-    return;
-  }
-  if (des.has_error()) {
-    Log::error("[stats] Invalid JSON structure for metrics");
-  }
 }
 
 void MetricSet::to_prometheus(Data &out, const std::string &inst) const {
@@ -712,11 +709,6 @@ void MetricSet::Deserializer::string(const char *s, size_t len) {
   if (m_has_error) return;
   if (auto *level = m_current) {
     switch (level->id) {
-      case Level::ID::UUID:
-        if (!m_metric_set) {
-          m_metric_set = m_by_uuid(std::string(s, len));
-        }
-        break;
       case Level::ID::KEY:
         level->key = pjs::Str::make(s, len);
         break;
@@ -763,8 +755,7 @@ void MetricSet::Deserializer::map_key(const char *s, size_t len) {
       }
     }
   } else if (m_current && !m_current->parent) {
-    if (!std::strncmp(s, "uuid", len)) m_current->id = Level::ID::UUID;
-    else if (!std::strncmp(s, "metrics", len)) m_current->id = Level::ID::METRICS;
+    if (!std::strncmp(s, "metrics", len)) m_current->id = Level::ID::METRICS;
     else error();
   } else {
     error();
@@ -964,6 +955,7 @@ void MetricDataSum::serialize(Data &out, bool initial) {
 }
 
 void MetricDataSum::serialize(Data::Builder &db, bool initial) {
+  static std::string s_metrics("\"metrics\":"); // metrics
   static std::string s_k("\"k\":"); // key
   static std::string s_t("\"t\":"); // type
   static std::string s_v("\"v\":"); // value
@@ -1031,6 +1023,8 @@ void MetricDataSum::serialize(Data::Builder &db, bool initial) {
     node->serialized = true;
   };
 
+  db.push('{');
+  db.push(s_metrics);
   db.push('[');
   for (auto *e = m_entries.head(); e; e = e->next()) {
     auto *root = e->root.get();
@@ -1038,6 +1032,7 @@ void MetricDataSum::serialize(Data::Builder &db, bool initial) {
     write_node(0, e, root);
   }
   db.push(']');
+  db.push('}');
 }
 
 //
