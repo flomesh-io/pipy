@@ -807,10 +807,10 @@ MetricData::~MetricData() {
   }
 }
 
-void MetricData::update(MetricSet *metrics) {
-  std::function<void(int, Node*, Metric*)> update;
+void MetricData::update(MetricSet &metrics) {
+  static std::function<void(int, Node*, Metric*)> update;
 
-  update = [=](int level, Node *node, Metric *metric) {
+  update = [](int level, Node *node, Metric *metric) {
     if (level > 0) node->key.str(metric->label());
 
     auto dim = metric->dimensions();
@@ -834,7 +834,7 @@ void MetricData::update(MetricSet *metrics) {
   };
 
   auto **ent = &m_entries;
-  for (const auto &i : metrics->m_metrics) {
+  for (const auto &i : metrics.m_metrics) {
     auto metric = i.get();
     auto e = *ent;
     if (!e ||
@@ -877,6 +877,184 @@ MetricData::Node::~Node() {
   auto *s = subs;
   while (s) {
     auto sub = s; s = s->next;
+    delete sub;
+  }
+}
+
+//
+// MetricDataSum
+//
+
+MetricDataSum::~MetricDataSum() {
+  auto *e = m_entries.head();
+  while (e) {
+    auto *ent = e; e = e->next();
+    delete ent;
+  }
+}
+
+void MetricDataSum::sum(MetricData &data, bool initial) {
+  static std::function<void(int, Node*, MetricData::Node*)> sum;
+
+  sum = [=](int dimensions, Node *node, MetricData::Node* src_node) {
+    if (initial) {
+      for (int i = 0; i < dimensions; i++) {
+        node->values[i] = src_node->values[i];
+      }
+    } else {
+      for (int i = 0; i < dimensions; i++) {
+        node->values[i] += src_node->values[i];
+      }
+    }
+
+    auto &submap = node->submap;
+    for (auto s = src_node->subs; s; s = s->next) {
+      auto *key = s->key.to_string();
+      Node *sub = nullptr;
+      auto i = submap.find(key);
+      if (i == submap.end()) {
+        submap[key] = sub = Node::make(dimensions);
+        sub->key = key;
+        node->subs.push(sub);
+      } else {
+        sub = i->second;
+      }
+      key->release();
+      sum(dimensions, sub, s);
+    }
+  };
+
+  for (auto *e = data.m_entries; e; e = e->next) {
+    auto *name = e->name.to_string();
+    auto *type = e->type.to_string();
+    auto *shape = e->shape.to_string();
+
+    auto &ent = m_entry_map[name];
+    if (!ent || (initial && (
+      ent->type != type ||
+      ent->shape != shape ||
+      ent->dimensions != e->dimensions
+    ))) {
+      if (!ent) {
+        ent = new Entry;
+        m_entries.push(ent);
+      }
+      ent->name = name;
+      ent->type = type;
+      ent->shape = shape;
+      ent->dimensions = e->dimensions;
+      ent->root.reset(Node::make(ent->dimensions));
+    }
+
+    name->release();
+    type->release();
+    shape->release();
+
+    sum(
+      std::min(ent->dimensions, e->dimensions),
+      ent->root.get(), e->root.get()
+    );
+  }
+}
+
+void MetricDataSum::serialize(Data &out, bool initial) {
+  Data::Builder db(out, &s_dp);
+  serialize(db, initial);
+  db.flush();
+}
+
+void MetricDataSum::serialize(Data::Builder &db, bool initial) {
+  static std::string s_k("\"k\":"); // key
+  static std::string s_t("\"t\":"); // type
+  static std::string s_v("\"v\":"); // value
+  static std::string s_l("\"l\":"); // label
+  static std::string s_s("\"s\":"); // sub
+
+  std::function<void(int, Entry*, Node*)> write_node;
+  write_node = [&](int level, Entry *ent, Node *node) {
+    bool keyed = (initial || !node->serialized);
+    bool value_only = (!keyed && node->subs.empty());
+
+    if (!value_only) {
+      db.push('{');
+
+      if (keyed) {
+        db.push(s_k);
+        db.push('"');
+        if (level > 0) {
+          utils::escape(node->key->str(), [&](char c) { db.push(c); });
+        } else {
+          utils::escape(ent->name->str(), [&](char c) { db.push(c); });
+          db.push('"');
+          db.push(',');
+          db.push(s_t);
+          db.push('"');
+          utils::escape(ent->type->str(), [&](char c) { db.push(c); });
+          db.push('"');
+          db.push(',');
+          db.push(s_l);
+          db.push('"');
+          utils::escape(ent->shape->str(), [&](char c) { db.push(c); });
+        }
+        db.push('"');
+        db.push(',');
+      }
+
+      db.push(s_v);
+    }
+
+    int dim = ent->dimensions;
+    if (dim > 1) db.push('[');
+
+    for (int d = 0; d < dim; d++) {
+      if (d > 0) db.push(',');
+      char buf[100];
+      auto len = pjs::Number::to_string(buf, sizeof(buf), node->values[d]);
+      db.push(buf, len);
+    }
+
+    if (dim > 1) db.push(']');
+
+    if (!node->subs.empty()) {
+      db.push(',');
+      db.push(s_s);
+      db.push('[');
+      bool first = true;
+      for (auto *s = node->subs.head(); s; s = s->next()) {
+        if (first) first = false; else db.push(',');
+        write_node(level + 1, ent, s);
+      }
+      db.push(']');
+    }
+
+    if (!value_only) db.push('}');
+    node->serialized = true;
+  };
+
+  db.push('[');
+  for (auto *e = m_entries.head(); e; e = e->next()) {
+    auto *root = e->root.get();
+    if (e->back()) db.push(',');
+    write_node(0, e, root);
+  }
+  db.push(']');
+}
+
+//
+// MetricDataSum::Node
+//
+
+auto MetricDataSum::Node::make(int dimensions) -> Node* {
+  auto len = sizeof(Node) + (dimensions - 1) * sizeof(double);
+  auto ptr = (Node *)std::malloc(len);
+  new (ptr) Node;
+  return ptr;
+}
+
+MetricDataSum::Node::~Node() {
+  auto *s = subs.head();
+  while (s) {
+    auto sub = s; s = s->next();
     delete sub;
   }
 }

@@ -180,18 +180,30 @@ static void start_reporting_metrics() {
   static Data::Producer s_dp("Metric Reports");
   static Timer timer;
   static std::function<void()> report;
+  static stats::MetricDataSum metric_data_sum;
   static int connection_id = 0;
   report = []() {
-    if (!s_has_shutdown) {
-      InputContext ic;
-      auto conn_id = s_admin_link->connect();
-      Data buf; buf.push("metrics\n", &s_dp);
-      stats::Metric::local().collect_all();
-      stats::Metric::local().serialize(buf, Status::local.uuid, conn_id != connection_id);
-      s_admin_link->send(buf);
-      connection_id = conn_id;
-    }
-    timer.schedule(5, report);
+    if (s_has_shutdown) return;
+    auto &main = Net::current();
+    s_worker_thread->stats(
+      [&](stats::MetricData &metric_data) {
+        main.post(
+          [&]() {
+            InputContext ic;
+            Data buf;
+            Data::Builder db(buf, &s_dp);
+            db.push("metrics\n");
+            auto conn_id = s_admin_link->connect();
+            metric_data_sum.sum(metric_data, true);
+            metric_data_sum.serialize(db, conn_id != connection_id);
+            db.flush();
+            s_admin_link->send(buf);
+            connection_id = conn_id;
+            timer.schedule(5, report);
+          }
+        );
+      }
+    );
   };
   report();
 }

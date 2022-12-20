@@ -28,10 +28,12 @@
 
 #include "net.hpp"
 #include "timer.hpp"
+#include "api/stats.hpp"
 
 #include <thread>
 #include <condition_variable>
 #include <mutex>
+#include <functional>
 
 namespace pipy {
 
@@ -43,6 +45,7 @@ public:
   auto index() const -> int { return m_index; }
 
   bool start();
+  void stats(const std::function<void(stats::MetricData&)> &cb);
   void reload();
   auto stop(bool force = false) -> int;
 
@@ -50,6 +53,7 @@ private:
   int m_index;
   Net* m_net = nullptr;
   Timer* m_pending_timer = nullptr;
+  stats::MetricData m_metric_data;
   std::thread m_thread;
   std::mutex m_mutex;
   std::condition_variable m_cv;

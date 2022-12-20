@@ -245,7 +245,7 @@ void Str::ID::str(Str *s) {
 
 auto Str::ID::to_string() const -> Str* {
   if (auto id = m_id) {
-    if (auto *s = m_local_index.get(id)) return s;
+    if (auto *s = m_local_index.get(id)) return s->retain();
     if (auto *e = m_global_index.get(id)) {
       auto data = e->char_data.get();
       auto i = ht().find(data->str());

@@ -41,6 +41,7 @@ namespace pipy {
 namespace stats {
 
 class MetricData;
+class MetricDataSum;
 class MetricSet;
 
 //
@@ -220,10 +221,9 @@ class MetricData {
 public:
   ~MetricData();
 
-  void update(MetricSet *metrics);
+  void update(MetricSet &metrics);
   void deserialize(Data &in);
-  void serialize(Data &out, bool initial);
-  void to_prometheus(const std::function<void(const void *, size_t)> &out, const std::string &inst) const;
+  void to_prometheus(const std::string &inst, const std::function<void(const void *, size_t)> &out) const;
 
 private:
   struct Node {
@@ -247,6 +247,8 @@ private:
   };
 
   Entry* m_entries = nullptr;
+
+  friend class MetricDataSum;
 };
 
 //
@@ -255,20 +257,26 @@ private:
 
 class MetricDataSum {
 public:
-  void zero();
-  void sum(MetricData *data);
+  ~MetricDataSum();
+
+  void sum(MetricData &data, bool initial);
   void serialize(Data &out, bool initial);
+  void serialize(Data::Builder &db, bool initial);
 
 private:
   struct Node : public List<Node>::Item {
     pjs::Ref<pjs::Str> key;
-    std::map<pjs::Str*, Node*> subs;
+    std::map<pjs::Str*, Node*> submap;
+    List<Node> subs;
+    bool serialized = false;
     double values[1];
     static auto make(int dimensions) -> Node*;
     ~Node();
+  private:
+    Node() {}
   };
 
-  struct Entry {
+  struct Entry : public List<Entry>::Item {
     pjs::Ref<pjs::Str> name;
     pjs::Ref<pjs::Str> type;
     pjs::Ref<pjs::Str> shape;
@@ -276,7 +284,8 @@ private:
     std::unique_ptr<Node> root;
   };
 
-  std::unordered_map<pjs::Ref<pjs::Str>, Entry> m_entries;
+  List<Entry> m_entries;
+  std::unordered_map<pjs::Ref<pjs::Str>, Entry*> m_entry_map;
 };
 
 //

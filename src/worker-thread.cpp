@@ -68,6 +68,16 @@ bool WorkerThread::start() {
   return !m_failed;
 }
 
+void WorkerThread::stats(const std::function<void(stats::MetricData&)> &cb) {
+  m_net->post(
+    [=]() {
+      stats::Metric::local().collect_all();
+      m_metric_data.update(stats::Metric::local());
+      cb(m_metric_data);
+    }
+  );
+}
+
 void WorkerThread::reload() {
   m_net->post(
     []() {
