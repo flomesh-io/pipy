@@ -219,6 +219,11 @@ public:
   void to_prometheus(const std::string &inst, const std::function<void(const void *, size_t)> &out) const;
 
 private:
+
+  //
+  // MetricData::Node
+  //
+
   struct Node {
     pjs::Str::ID key;
     Node* subs = nullptr;
@@ -230,6 +235,10 @@ private:
     Node() {}
   };
 
+  //
+  // MetricData::Entry
+  //
+
   struct Entry {
     pjs::Str::ID name;
     pjs::Str::ID type;
@@ -237,6 +246,72 @@ private:
     int dimensions;
     std::unique_ptr<Node> root;
     Entry* next = nullptr;
+  };
+
+  //
+  // MetricData::Deserializer
+  //
+
+  class Deserializer : public JSON::Visitor {
+  public:
+    Deserializer(MetricData *metric_data) : m_entry_ptr(&metric_data->m_entries) {}
+    ~Deserializer();
+
+    bool has_error() const { return m_has_error; }
+
+  private:
+    struct Level : public pjs::Pooled<Level> {
+      enum class Type {
+        ROOT,
+        METRICS,
+        METRIC,
+        SUBS,
+        SUB,
+        VALUES,
+      };
+
+      enum class Field {
+        NONE,
+        INDEX,
+        METRICS,
+        KEY,
+        TYPE,
+        LABELS,
+        VALUE,
+        SUB,
+      };
+
+      Level(Type t) : type(t) {}
+
+      Level* parent;
+      Type type;
+      Field field = Field::NONE;
+      int index = 0;
+      Entry* entry = nullptr;
+      Node* node = nullptr;
+      Node** ptr = nullptr;
+    };
+
+    Level* m_current = nullptr;
+    Entry* m_current_entry = nullptr;
+    Entry** m_entry_ptr;
+    bool m_has_error = false;
+
+    void push(Level *level);
+    void pop();
+    auto create_root_node() -> Node*;
+    void error();
+
+    virtual void null() override;
+    virtual void boolean(bool b) override;
+    virtual void integer(int64_t i) override;
+    virtual void number(double n) override;
+    virtual void string(const char *s, size_t len) override;
+    virtual void map_start() override;
+    virtual void map_key(const char *s, size_t len) override;
+    virtual void map_end() override;
+    virtual void array_start() override;
+    virtual void array_end() override;
   };
 
   Entry* m_entries = nullptr;
@@ -257,6 +332,11 @@ public:
   void serialize(Data::Builder &db, bool initial);
 
 private:
+
+  //
+  // MetricDataSum::Node
+  //
+
   struct Node : public List<Node>::Item {
     pjs::Ref<pjs::Str> key;
     std::map<pjs::Str*, Node*> submap;
@@ -268,6 +348,10 @@ private:
   private:
     Node() {}
   };
+
+  //
+  // MetricDataSum::Entry
+  //
 
   struct Entry : public List<Entry>::Item {
     pjs::Ref<pjs::Str> name;
