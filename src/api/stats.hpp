@@ -130,7 +130,6 @@ public:
   auto get(pjs::Str *name) -> Metric*;
   void collect_all();
   void history_step();
-  void deserialize(const Data &in);
   void serialize(Data &out, const std::string &uuid, bool initial);
   void serialize_history(Data &out, const std::string &metric_name, std::chrono::time_point<std::chrono::steady_clock> timestamp);
   void to_prometheus(const std::function<void(const void *, size_t)> &out, const std::string &inst) const;
@@ -138,63 +137,6 @@ public:
   void clear();
 
 private:
-
-  //
-  // MetricSet::Deserializer
-  //
-
-  class Deserializer : public JSON::Visitor {
-  public:
-    Deserializer(MetricSet *metric_set) : m_metric_set(metric_set) {}
-    ~Deserializer();
-
-    bool has_error() const { return m_has_error; }
-
-  private:
-    struct Level : public pjs::Pooled<Level> {
-      enum class ID {
-        NONE,
-        INDEX,
-        METRICS,
-        KEY,
-        LABELS,
-        TYPE,
-        VALUE,
-        SUB,
-      };
-
-      Level(ID i) : id(i) {}
-
-      Level* parent;
-      Metric* metric = nullptr;
-      ID id;
-      int index = -1;
-      pjs::Ref<pjs::Str> key;
-      std::string shape;
-      std::string type;
-    };
-
-    MetricSet* m_metric_set;
-    Level* m_current = nullptr;
-    bool m_has_error = false;
-
-    void push(Level *level);
-    void pop();
-    auto open(Level *current, Level *list, pjs::Str *key) -> Metric*;
-    void error();
-
-    virtual void null() override;
-    virtual void boolean(bool b) override;
-    virtual void integer(int64_t i) override;
-    virtual void number(double n) override;
-    virtual void string(const char *s, size_t len) override;
-    virtual void map_start() override;
-    virtual void map_key(const char *s, size_t len) override;
-    virtual void map_end() override;
-    virtual void array_start() override;
-    virtual void array_end() override;
-  };
-
   std::vector<pjs::Ref<Metric>> m_metrics;
   std::unordered_map<pjs::Ref<pjs::Str>, int> m_metric_map;
 
@@ -215,7 +157,7 @@ public:
   ~MetricData();
 
   void update(MetricSet &metrics);
-  void deserialize(Data &in);
+  void deserialize(const Data &in);
   void to_prometheus(const std::string &inst, const std::function<void(const void *, size_t)> &out) const;
 
 private:
@@ -243,9 +185,28 @@ private:
     pjs::Str::ID name;
     pjs::Str::ID type;
     pjs::Str::ID shape;
-    int dimensions;
+    int dimensions = 0;
     std::unique_ptr<Node> root;
     Entry* next = nullptr;
+  };
+
+  //
+  // MetricData::Iterator
+  //
+
+  template<class T>
+  class Iterator {
+  public:
+    Iterator(T** start) : m_ptr(start) {}
+    operator bool() const { return m_ptr; }
+    auto next(const std::function<T*()> &creator = nullptr) -> T* {
+      auto obj = *m_ptr;
+      if (!obj && creator) obj = *m_ptr = creator();
+      if (obj) m_ptr = &obj->next;
+      return obj;
+    }
+  private:
+    T** m_ptr;
   };
 
   //
@@ -254,25 +215,23 @@ private:
 
   class Deserializer : public JSON::Visitor {
   public:
-    Deserializer(MetricData *metric_data) : m_entry_ptr(&metric_data->m_entries) {}
+    Deserializer(MetricData *metric_data) : m_entries(&metric_data->m_entries) {}
     ~Deserializer();
 
     bool has_error() const { return m_has_error; }
 
   private:
     struct Level : public pjs::Pooled<Level> {
-      enum class Type {
+      enum class Kind {
         ROOT,
-        METRICS,
-        METRIC,
+        ENTRIES,
         SUBS,
-        SUB,
+        METRIC,
         VALUES,
       };
 
       enum class Field {
         NONE,
-        INDEX,
         METRICS,
         KEY,
         TYPE,
@@ -281,25 +240,26 @@ private:
         SUB,
       };
 
-      Level(Type t) : type(t) {}
+      Level(Kind k, Node *n = nullptr, Node **s = nullptr)
+        : kind(k)
+        , node(n)
+        , subs(s) {}
 
       Level* parent;
-      Type type;
+      Kind kind;
       Field field = Field::NONE;
       int index = 0;
-      Entry* entry = nullptr;
-      Node* node = nullptr;
-      Node** ptr = nullptr;
+      Node* node;
+      Iterator<Node> subs;
     };
 
-    Level* m_current = nullptr;
+    Level* m_current_level = nullptr;
     Entry* m_current_entry = nullptr;
-    Entry** m_entry_ptr;
+    Iterator<Entry> m_entries;
     bool m_has_error = false;
 
     void push(Level *level);
     void pop();
-    auto create_root_node() -> Node*;
     void error();
 
     virtual void null() override;

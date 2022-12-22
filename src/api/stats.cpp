@@ -392,17 +392,6 @@ void MetricSet::history_step() {
   }
 }
 
-void MetricSet::deserialize(const Data &in) {
-  Deserializer des(this);
-  if (!JSON::visit(in, &des)) {
-    Log::error("[stats] JSON deserialization failed for metrics");
-    return;
-  }
-  if (des.has_error()) {
-    Log::error("[stats] Invalid JSON structure for metrics");
-  }
-}
-
 void MetricSet::serialize(Data &out, const std::string &uuid, bool initial) {
   static std::string s_uuid("\"uuid\":");
   static std::string s_metrics("\"metrics\":");
@@ -547,246 +536,6 @@ void MetricSet::clear() {
 }
 
 //
-// MetricSet::Deserializer
-//
-
-MetricSet::Deserializer::~Deserializer() {
-  while (m_current) {
-    pop();
-  }
-}
-
-void MetricSet::Deserializer::push(Level *level) {
-  level->parent = m_current;
-  m_current = level;
-}
-
-void MetricSet::Deserializer::pop() {
-  if (auto *level = m_current) {
-    m_current = level->parent;
-    delete level;
-  }
-}
-
-auto MetricSet::Deserializer::open(Level *current, Level *list, pjs::Str *key) -> Metric* {
-  if (list) {
-    if (auto parent = list->parent) {
-      auto i = ++list->index;
-      switch (parent->id) {
-
-        // Root metric
-        case Level::ID::METRICS: {
-          if (m_metric_set) {
-            auto m = m_metric_set->get(i);
-            if (m && key) {
-              if (
-                m->name() != key ||
-                m->shape()->str() != current->shape ||
-                m->type()->str() != current->type
-              ) {
-                m_metric_set->truncate(i);
-                m = nullptr;
-              }
-            }
-
-            if (!m && key) {
-              static std::string s_histogram("Histogram[");
-
-              auto labels = pjs::Array::make();
-              for (const auto &s : utils::split(current->shape, '/')) {
-                labels->push(s);
-              }
-
-              if (current->type == "Counter") {
-                m = Counter::make(key, labels, m_metric_set);
-              } else if (current->type == "Gauge") {
-                m = Gauge::make(key, labels, nullptr, m_metric_set);
-              } else if (utils::starts_with(current->type, s_histogram)) {
-                auto buckets_str = current->type.substr(
-                  s_histogram.length(),
-                  current->type.length() - s_histogram.length() - 1);
-                auto buckets = pjs::Array::make();
-                for (const auto &s : utils::split(buckets_str, ',')) {
-                  if (s == "\"NaN\"") {
-                    buckets->push(std::numeric_limits<double>::quiet_NaN());
-                  } else if (s == "\"Inf\"") {
-                    buckets->push(std::numeric_limits<double>::infinity());
-                  } else if (s == "\"-Inf\"") {
-                    buckets->push(-std::numeric_limits<double>::infinity());
-                  } else {
-                    auto n = std::atof(s.c_str());
-                    buckets->push(n);
-                  }
-                }
-                m = Histogram::make(key, buckets, labels, m_metric_set);
-              }
-            }
-
-            if (m) {
-              current->metric = m;
-              return m;
-            }
-          }
-          break;
-        }
-
-        // Sub metric
-        case Level::ID::SUB: {
-          auto p = parent->metric;
-          auto m = p->get_sub(i);
-          if (m && key && m->label() != key) {
-            p->truncate(i);
-            m = nullptr;
-          }
-          if (!m && key) {
-            m = p->with_labels(&key, 1);
-          }
-          current->metric = m;
-          return m;
-        }
-
-        default: break;
-      }
-    }
-  }
-
-  error();
-  return nullptr;
-}
-
-void MetricSet::Deserializer::error() {
-  m_has_error = true;
-}
-
-void MetricSet::Deserializer::null() {
-  error();
-}
-
-void MetricSet::Deserializer::boolean(bool b) {
-  error();
-}
-
-void MetricSet::Deserializer::integer(int64_t i) {
-  number(i);
-}
-
-void MetricSet::Deserializer::number(double n) {
-  if (m_has_error) return;
-  if (auto *current = m_current) {
-    auto *list = current;
-    pjs::Str *key = nullptr;
-    if (current->id == Level::ID::VALUE) {
-      list = current->parent;
-      key = current->key.get();
-    }
-
-    if (list && list->id == Level::ID::INDEX) {
-      if (auto parent = list->parent) {
-        switch (parent->id) {
-          case Level::ID::METRICS:
-          case Level::ID::SUB:
-            if (auto m = open(current, list, key)) {
-              m->set_value(0, n);
-              return;
-            }
-            break;
-          case Level::ID::VALUE:
-          case Level::ID::INDEX:
-            if (auto m = parent->metric) {
-              m->set_value(++list->index, n);
-              return;
-            }
-            break;
-          default: break;
-        }
-      }
-    }
-  }
-  error();
-}
-
-void MetricSet::Deserializer::string(const char *s, size_t len) {
-  if (m_has_error) return;
-  if (auto *level = m_current) {
-    switch (level->id) {
-      case Level::ID::KEY:
-        level->key = pjs::Str::make(s, len);
-        break;
-      case Level::ID::LABELS:
-        level->shape.assign(s, len);
-        break;
-      case Level::ID::TYPE:
-        level->type.assign(s, len);
-        break;
-      default: error(); break;
-    }
-  } else {
-    error();
-  }
-}
-
-void MetricSet::Deserializer::map_start() {
-  if (!m_has_error) {
-    push(new Level(Level::ID::NONE));
-  }
-}
-
-void MetricSet::Deserializer::map_key(const char *s, size_t len) {
-  if (m_has_error) return;
-  if (len == 1) {
-    switch (*s) {
-      case 'k': m_current->id = Level::ID::KEY; break;
-      case 'l': m_current->id = Level::ID::LABELS; break;
-      case 't': m_current->id = Level::ID::TYPE; break;
-      case 'v': m_current->id = Level::ID::VALUE; break;
-      case 's': m_current->id = Level::ID::SUB; break;
-      default: error(); break;
-    }
-    if (
-      m_current->id == Level::ID::LABELS ||
-      m_current->id == Level::ID::TYPE
-    ) {
-      auto p1 = m_current->parent;
-      auto p2 = p1 ? p1->parent : nullptr;
-      if (!p1 || p1->id != Level::ID::INDEX ||
-          !p2 || p2->id != Level::ID::METRICS
-      ) {
-        error();
-      }
-    }
-  } else if (m_current && !m_current->parent) {
-    if (!std::strncmp(s, "metrics", len)) m_current->id = Level::ID::METRICS;
-    else error();
-  } else {
-    error();
-  }
-}
-
-void MetricSet::Deserializer::map_end() {
-  if (!m_has_error) {
-    pop();
-  }
-}
-
-void MetricSet::Deserializer::array_start() {
-  if (m_has_error) return;
-  if (auto *level = m_current) {
-    if (level->id == Level::ID::VALUE) {
-      open(level, level->parent, level->key);
-    } else if (level->id == Level::ID::INDEX) {
-      open(level, level, nullptr);
-    }
-  }
-  push(new Level(Level::ID::INDEX));
-}
-
-void MetricSet::Deserializer::array_end() {
-  if (!m_has_error) {
-    pop();
-  }
-}
-
-//
 // MetricData
 //
 
@@ -853,6 +602,17 @@ void MetricData::update(MetricSet &metrics) {
   }
 }
 
+void MetricData::deserialize(const Data &in) {
+  Deserializer des(this);
+  if (!JSON::visit(in, &des)) {
+    Log::error("[stats] JSON deserialization failed for metrics");
+    return;
+  }
+  if (des.has_error()) {
+    Log::error("[stats] Invalid JSON structure for metrics");
+  }
+}
+
 //
 // MetricData::Node
 //
@@ -877,43 +637,21 @@ MetricData::Node::~Node() {
 //
 
 MetricData::Deserializer::~Deserializer() {
-  while (m_current) {
+  while (m_current_level) {
     pop();
   }
 }
 
 void MetricData::Deserializer::push(Level *level) {
-  auto *parent = m_current;
-  level->parent = parent;
-  if (parent) {
-    switch (level->type) {
-      case Level::Type::SUBS:
-        level->ptr = &parent->node->subs;
-        break;
-      case Level::Type::SUB:
-        level->node = *parent->ptr;
-        break;
-    }
-  }
-  m_current = level;
+  level->parent = m_current_level;
+  m_current_level = level;
 }
 
 void MetricData::Deserializer::pop() {
-  if (auto *level = m_current) {
-    m_current = level->parent;
+  if (auto *level = m_current_level) {
+    m_current_level = level->parent;
     delete level;
   }
-}
-
-auto MetricData::Deserializer::create_root_node() -> Node* {
-  int dimensions = 0;
-  auto *s = m_current_entry->type.to_string();
-  for (const char c : s->str()) if (c == ',') dimensions++;
-  s->release();
-  auto *node = Node::make(dimensions);
-  m_current_entry->dimensions = dimensions;
-  m_current_entry->root.reset(node);
-  return node;
 }
 
 void MetricData::Deserializer::error() {
@@ -934,134 +672,134 @@ void MetricData::Deserializer::integer(int64_t i) {
 
 void MetricData::Deserializer::number(double n) {
   if (!m_has_error) {
-    if (auto level = m_current) {
-      switch (level->type) {
-        case Level::Type::METRICS: {
-          break;
-        }
-        case Level::Type::METRIC: {
-          if (level->field == Level::Field::VALUE) {
-            auto node = level->node;
-            if (!node) node = level->node = create_root_node();
-            node->values[0] = n;
-          } else {
-            error();
+    if (auto level = m_current_level) {
+      switch (level->kind) {
+        case Level::Kind::ENTRIES: {
+          if (auto ent = m_entries.next()) {
+            m_current_entry = ent;
+            if (auto node = ent->root.get()) {
+              node->values[0] = n;
+              return;
+            }
           }
           break;
         }
-        case Level::Type::SUBS: {
-          if (auto node = *level->ptr) {
-            node->values[0] = n;
-            level->ptr = &node->next;
-          } else {
-            error();
+        case Level::Kind::SUBS: {
+          if (auto sub = level->subs.next()) {
+            sub->values[0] = n;
+            return;
           }
           break;
         }
-        case Level::Type::SUB: {
-          if (level->field == Level::Field::VALUE) {
-            level->node->values[0] = n;
-          } else {
-            error();
+        case Level::Kind::METRIC: {
+          if (auto *node = level->node) {
+            if (level->field == Level::Field::VALUE) {
+              node->values[0] = n;
+              return;
+            }
           }
           break;
         }
-        case Level::Type::VALUES: {
+        case Level::Kind::VALUES: {
           int i = level->index++;
           if (i < m_current_entry->dimensions) {
             level->node->values[i] = n;
           }
           break;
         }
+        default: break;
       }
-    } else {
-      error();
     }
+    error();
   }
 }
 
 void MetricData::Deserializer::string(const char *s, size_t len) {
   if (!m_has_error) {
-    if (auto level = m_current) {
-      pjs::Ref<pjs::Str> str(pjs::Str::make(s, len));
-      switch (level->field) {
-        case Level::Field::KEY:
-          if (level->type == Level::Type::METRIC) {
-            m_current_entry->name.str(str);
-          } else {
-            level->node->key.str(str);
-          }
-          break;
-        case Level::Field::TYPE:
-          if (level->type == Level::Type::METRIC) {
-            m_current_entry->type.str(str);
-          } else {
-            error();
-          }
-          break;
-        case Level::Field::LABELS:
-          if (level->type == Level::Type::METRIC) {
-            m_current_entry->shape.str(str);
-          } else {
-            error();
-          }
-          break;
-        default: error(); break;
+    if (auto level = m_current_level) {
+      if (level->kind == Level::Kind::METRIC) {
+        auto is_entry = !(level->subs);
+        pjs::Ref<pjs::Str> str(pjs::Str::make(s, len));
+        switch (level->field) {
+          case Level::Field::KEY:
+            if (is_entry) {
+              m_current_entry->name.str(str);
+            } else {
+              level->node->key.str(str);
+            }
+            return;
+          case Level::Field::TYPE:
+            if (is_entry) {
+              int dim = 1; for (auto c : str->str()) if (c == ',') dim++;
+              if (dim <= 100) {
+                auto node = Node::make(dim);
+                m_current_entry->type.str(str);
+                m_current_entry->dimensions = dim;
+                m_current_entry->root.reset(node);
+                level->node = node;
+                return;
+              }
+            }
+            break;
+          case Level::Field::LABELS:
+            if (is_entry) {
+              m_current_entry->shape.str(str);
+              return;
+            }
+            break;
+          default: break;
+        }
       }
-    } else {
-      error();
     }
+    error();
   }
 }
 
 void MetricData::Deserializer::map_start() {
   if (!m_has_error) {
-    if (auto *level = m_current) {
-      switch (level->type) {
-        case Level::Type::METRICS: {
-          auto ent = *m_entry_ptr;
-          if (!ent) ent = *m_entry_ptr = new Entry;
-          m_current_entry = ent;
-          m_entry_ptr = &ent->next;
-          push(new Level(Level::Type::METRIC));
+    if (auto *level = m_current_level) {
+      switch (level->kind) {
+        case Level::Kind::ENTRIES: {
+          m_current_entry = m_entries.next([]() { return new Entry; });
+          push(new Level(Level::Kind::METRIC, m_current_entry->root.get()));
           break;
         }
-        case Level::Type::SUBS: {
-          auto sub = *level->ptr;
-          if (!sub) sub = *level->ptr = Node::make(m_current_entry->dimensions);
-          level->ptr = &sub->next;
-          push(new Level(Level::Type::SUB));
+        case Level::Kind::SUBS: {
+          auto sub = level->subs.next([this]() { return Node::make(m_current_entry->dimensions); });
+          push(new Level(Level::Kind::METRIC, sub));
           break;
         }
         default: error(); break;
       }
     } else {
-      push(new Level(Level::Type::ROOT));
+      push(new Level(Level::Kind::ROOT));
     }
   }
 }
 
 void MetricData::Deserializer::map_key(const char *s, size_t len) {
   if (!m_has_error) {
-    if (auto level = m_current) {
-      if (len == 1) {
-        switch (*s) {
-          case 'k': level->field = Level::Field::KEY; break;
-          case 't': level->field = Level::Field::TYPE; break;
-          case 'l': level->field = Level::Field::LABELS; break;
-          case 'v': level->field = Level::Field::VALUE; break;
-          case 's': level->field = Level::Field::SUB; break;
-          default: error(); break;
-        }
-      } else if (level->type == Level::Type::ROOT) {
-        if (!std::strncmp(s, "metrics", len)) level->field = Level::Field::METRICS;
-        else error();
-      } else {
-        error();
+    if (auto *level = m_current_level) {
+      switch (level->kind) {
+        case Level::Kind::ROOT:
+          if (!std::strncmp(s, "metrics", len)) { level->field = Level::Field::METRICS; return; }
+          break;
+        case Level::Kind::METRIC:
+          if (len == 1) {
+            switch (*s) {
+              case 'k': level->field = Level::Field::KEY; return;
+              case 't': level->field = Level::Field::TYPE; return;
+              case 'l': level->field = Level::Field::LABELS; return;
+              case 'v': level->field = Level::Field::VALUE; return;
+              case 's': level->field = Level::Field::SUB; return;
+              default: break;
+            }
+          }
+          break;
+        default: break;
       }
-    } else {
-      error();
     }
+    error();
   }
 }
 
@@ -1073,22 +811,48 @@ void MetricData::Deserializer::map_end() {
 
 void MetricData::Deserializer::array_start() {
   if (!m_has_error) {
-    if (auto level = m_current) {
-      if (level->field == Level::Field::METRICS) {
-        push(new Level(Level::Type::METRICS));
-      } else if (auto *node = level->node) {
-        switch (level->field) {
-          case Level::Field::SUB:
-            push(new Level(Level::Type::SUBS));
-            break;
-          case Level::Field::VALUE:
-            push(new Level(Level::Type::VALUES));
-            break;
+    if (auto level = m_current_level) {
+      switch (level->kind) {
+        case Level::Kind::ROOT: {
+          if (level->field == Level::Field::METRICS) {
+            push(new Level(Level::Kind::ENTRIES));
+            return;
+          }
+          break;
         }
-      } else {
-        error();
+        case Level::Kind::ENTRIES: {
+          if (auto ent = m_entries.next()) {
+            m_current_entry = ent;
+            if (auto node = ent->root.get()) {
+              push(new Level(Level::Kind::VALUES, node));
+              return;
+            }
+          }
+          break;
+        }
+        case Level::Kind::SUBS: {
+          if (auto sub = level->subs.next()) {
+            push(new Level(Level::Kind::VALUES, sub));
+            return;
+          }
+          break;
+        }
+        case Level::Kind::METRIC: {
+          if (auto *node = level->node) {
+            if (level->field == Level::Field::VALUE) {
+              push(new Level(Level::Kind::VALUES, node));
+              return;
+            } else if (level->field == Level::Field::SUB) {
+              push(new Level(Level::Kind::SUBS, node, &node->subs));
+              return;
+            }
+          }
+          break;
+        }
+        default: break;
       }
     }
+    error();
   }
 }
 

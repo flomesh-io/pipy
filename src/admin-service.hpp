@@ -152,6 +152,7 @@ private:
     std::string codebase_name;
     Status status;
     stats::MetricSet metrics;
+    stats::MetricData metric_data;
     WebSocketHandler* admin_link = nullptr;
     std::map<std::string, std::set<LogWatcher*>> log_watchers;
   };
