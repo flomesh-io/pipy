@@ -704,6 +704,7 @@ void MetricData::Deserializer::number(double n) {
           int i = level->index++;
           if (i < m_current_entry->dimensions) {
             level->node->values[i] = n;
+            return;
           }
           break;
         }
@@ -730,7 +731,12 @@ void MetricData::Deserializer::string(const char *s, size_t len) {
             return;
           case Level::Field::TYPE:
             if (is_entry) {
-              int dim = 1; for (auto c : str->str()) if (c == ',') dim++;
+              static std::string s_prefix_histogram("Histogram[");
+              int dim = 1;
+              if (utils::starts_with(str->str(), s_prefix_histogram)) {
+                for (auto c : str->str()) if (c == ',') dim++;
+                dim += 2;
+              }
               if (dim <= 100) {
                 auto node = Node::make(dim);
                 m_current_entry->type.str(str);
