@@ -275,6 +275,7 @@ void Metric::serialize(Data::Builder &db, bool initial, bool recursive, bool his
       db.push(',');
       db.push(s_s);
       db.push('[');
+
       bool first = true;
       for (const auto &i : m_subs) {
         if (first) first = false; else db.push(',');
@@ -719,7 +720,7 @@ void MetricData::Deserializer::string(const char *s, size_t len) {
   if (!m_has_error) {
     if (auto level = m_current_level) {
       if (level->kind == Level::Kind::METRIC) {
-        auto is_entry = !(level->subs);
+        auto is_entry = (level->parent && level->parent->kind == Level::Kind::ENTRIES);
         pjs::Ref<pjs::Str> str(pjs::Str::make(s, len));
         switch (level->field) {
           case Level::Field::KEY:
@@ -1048,6 +1049,206 @@ MetricDataSum::Node::~Node() {
   while (s) {
     auto sub = s; s = s->next();
     delete sub;
+  }
+}
+
+//
+// MetricHistory
+//
+
+MetricHistory::~MetricHistory() {
+  for (const auto &i : m_entries) {
+    delete i.second;
+  }
+}
+
+void MetricHistory::update(MetricData &data) {
+  static std::function<void(int, Node*, MetricData::Node*)> update;
+
+  int i = m_current % m_duration;
+
+  update = [=](int dimensions, Node *node, MetricData::Node* src_node) {
+    int base = i * dimensions;
+    for (int d = 0; d < dimensions; d++) {
+      node->values[base + d] = src_node->values[d];
+    }
+
+    auto &submap = node->submap;
+    for (auto s = src_node->subs; s; s = s->next) {
+      auto *key = s->key.to_string();
+      Node *sub = nullptr;
+      auto it = submap.find(key);
+      if (it == submap.end()) {
+        submap[key] = sub = Node::make(dimensions, m_duration);
+        sub->key = key;
+      } else {
+        sub = it->second;
+      }
+      key->release();
+      update(dimensions, sub, s);
+    }
+  };
+
+  for (auto *e = data.m_entries; e; e = e->next) {
+    auto *name = e->name.to_string();
+    auto *type = e->type.to_string();
+    auto *shape = e->shape.to_string();
+
+    auto &ent = m_entries[name];
+    if (!ent ||
+      ent->type != type ||
+      ent->shape != shape ||
+      ent->dimensions != e->dimensions
+    ) {
+      if (!ent) ent = new Entry;
+      ent->name = name;
+      ent->type = type;
+      ent->shape = shape;
+      ent->dimensions = e->dimensions;
+      ent->root.reset(Node::make(ent->dimensions, m_duration));
+    }
+
+    name->release();
+    type->release();
+    shape->release();
+
+    update(ent->dimensions, ent->root.get(), e->root.get());
+  }
+}
+
+void MetricHistory::step() {
+  auto old = m_current;
+  auto cur = old + 1;
+  m_current = cur;
+
+  if (cur - m_start >= m_duration) m_start = cur - (m_duration - 1);
+
+  old %= m_duration;
+  cur %= m_duration;
+
+  static std::function<void(int, Node*)> step;
+
+  step = [=](int dimensions, Node *node) {
+    std::memcpy(
+      &node->values[cur * dimensions],
+      &node->values[old * dimensions],
+      sizeof(double) * dimensions
+    );
+
+    for (const auto &i : node->submap) {
+      step(dimensions, i.second);
+    }
+  };
+
+  for (const auto &i : m_entries) {
+    auto ent = i.second;
+    step(ent->dimensions, ent->root.get());
+  }
+}
+
+void MetricHistory::serialize(Data::Builder &db) {
+  bool first = true;
+  db.push('[');
+  for (const auto &i : m_entries) {
+    auto entry = i.second;
+    if (auto node = entry->root.get()) {
+      if (first) first = false; else db.push(',');
+      serialize(db, entry, node, 0, false);
+    }
+  }
+  db.push(']');
+}
+
+void MetricHistory::serialize(Data::Builder &db, const std::string &metric_name) {
+  pjs::Ref<pjs::Str> k(pjs::Str::make(metric_name));
+  db.push('[');
+  auto i = m_entries.find(k);
+  if (i != m_entries.end()) {
+    auto entry = i->second;
+    if (auto node = entry->root.get()) {
+      serialize(db, entry, node, 0, true);
+    }
+  }
+  db.push(']');
+}
+
+void MetricHistory::serialize(Data::Builder &db, Entry *entry, Node *node, int level, bool recursive) {
+  static std::string s_k("\"k\":"); // key
+  static std::string s_t("\"t\":"); // type
+  static std::string s_v("\"v\":"); // value
+  static std::string s_l("\"l\":"); // label
+  static std::string s_s("\"s\":"); // sub
+
+  db.push('{');
+  db.push(s_k);
+  db.push('"');
+  if (level > 0) {
+    utils::escape(node->key->str(), [&](char c) { db.push(c); });
+  } else {
+    utils::escape(entry->name->str(), [&](char c) { db.push(c); });
+    db.push('"');
+    db.push(',');
+    db.push(s_t);
+    db.push('"');
+    utils::escape(entry->type->str(), [&](char c) { db.push(c); });
+    db.push('"');
+    db.push(',');
+    db.push(s_l);
+    db.push('"');
+    utils::escape(entry->shape->str(), [&](char c) { db.push(c); });
+  }
+  db.push('"');
+  db.push(',');
+  db.push(s_v);
+
+  auto dim = entry->dimensions;
+  if (dim > 1) db.push('[');
+
+  for (int d = 0; d < dim; d++) {
+    if (d > 0) db.push(',');
+    db.push('[');
+    for (auto i = m_start; i <= m_current; i++) {
+      if (i > m_start) db.push(',');
+      char buf[100];
+      auto len = pjs::Number::to_string(buf, sizeof(buf), node->values[i % m_duration]);
+      db.push(buf, len);
+    }
+    db.push(']');
+  }
+
+  if (dim > 1) db.push(']');
+
+  if (recursive && !node->submap.empty()) {
+    db.push(',');
+    db.push(s_s);
+    db.push('[');
+
+    bool first = true;
+    for (const auto &i : node->submap) {
+      if (first) first = false; else db.push(',');
+      serialize(db, entry, i.second, level + 1, true);
+    }
+
+    db.push(']');
+  }
+
+  db.push('}');
+}
+
+//
+// MetricHistory::Node
+//
+
+auto MetricHistory::Node::make(int dimensions, int duration) -> Node* {
+  auto len = sizeof(Node) + (dimensions * duration - 1) * sizeof(double);
+  auto ptr = (Node *)std::calloc(len, 1);
+  new (ptr) Node;
+  return ptr;
+}
+
+MetricHistory::Node::~Node() {
+  for (const auto &i : submap) {
+    delete i.second;
   }
 }
 

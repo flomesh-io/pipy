@@ -55,6 +55,7 @@ static std::string s_server_name("pipy-repo");
 
 AdminService::AdminService(CodebaseStore *store)
   : m_store(store)
+  , m_local_metric_history(METRIC_HISTORY_SIZE)
   , m_www_files(GuiTarball::data(), GuiTarball::size())
   , m_module(new Module())
 {
@@ -1015,7 +1016,7 @@ Message* AdminService::api_v1_status_GET() {
 }
 
 Message* AdminService::api_v1_metrics_GET(const std::string &path) {
-  stats::MetricSet *ms = nullptr;
+  stats::MetricHistory *mh = nullptr;
   std::string uuid, name;
   if (!path.empty()) {
     auto i = path.find('/');
@@ -1027,14 +1028,29 @@ Message* AdminService::api_v1_metrics_GET(const std::string &path) {
     }
   }
   if (uuid.empty()) {
-    ms = &stats::Metric::local();
+    mh = &m_local_metric_history;
   } else {
     auto i = m_instance_map.find(uuid);
-    if (i != m_instance_map.end()) ms = &get_instance(i->second)->metrics;
+    if (i != m_instance_map.end()) mh = &get_instance(i->second)->metric_history;
   }
-  if (!ms) return m_response_not_found;
+  if (!mh) return m_response_not_found;
   Data payload;
-  ms->serialize_history(payload, name, m_metrics_timestamp);
+  Data::Builder db(payload, &s_dp);
+  static std::string s_time("\"time\":");
+  static std::string s_metrics("\"metrics\":");
+  auto time = std::chrono::duration_cast<std::chrono::seconds>(m_metrics_timestamp.time_since_epoch()).count();
+  db.push('{');
+  db.push(s_time);
+  db.push(std::to_string(time));
+  db.push(',');
+  db.push(s_metrics);
+  if (name.empty()) {
+    mh->serialize(db);
+  } else {
+    mh->serialize(db, name);
+  }
+  db.push('}');
+  db.flush();
   return Message::make(
     m_response_head_json,
     Data::make(payload)
@@ -1187,15 +1203,20 @@ void AdminService::on_log_tail(Context *ctx, const std::string &name, const Data
 }
 
 void AdminService::on_metrics(Context *ctx, const Data &data) {
-  get_instance(ctx->instance_uuid)->metric_data.deserialize(data);
+  if (auto inst = get_instance(ctx->instance_uuid)) {
+    inst->metric_data.deserialize(data);
+    inst->metric_history.update(inst->metric_data);
+  }
 }
 
 void AdminService::metrics_history_step() {
-  m_metrics_timestamp = std::chrono::steady_clock::now();
   stats::Metric::local().collect_all();
-  stats::Metric::local().history_step();
+  m_local_metric_data.update(stats::Metric::local());
+  m_local_metric_history.update(m_local_metric_data);
+  m_local_metric_history.step();
+  m_metrics_timestamp = std::chrono::steady_clock::now();
   for (const auto &p : m_instances) {
-    p.second->metrics.history_step();
+    p.second->metric_history.step();
   }
   m_metrics_history_timer.schedule(
     5, [this]() { metrics_history_step(); }

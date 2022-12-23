@@ -42,6 +42,7 @@ namespace stats {
 
 class MetricData;
 class MetricDataSum;
+class MetricHistory;
 class MetricSet;
 
 //
@@ -159,6 +160,7 @@ public:
   void update(MetricSet &metrics);
   void deserialize(const Data &in);
   void to_prometheus(const std::string &inst, const std::function<void(const void *, size_t)> &out) const;
+  void dump();
 
 private:
 
@@ -277,6 +279,7 @@ private:
   Entry* m_entries = nullptr;
 
   friend class MetricDataSum;
+  friend class MetricHistory;
 };
 
 //
@@ -322,7 +325,7 @@ private:
   };
 
   List<Entry> m_entries;
-  std::unordered_map<pjs::Ref<pjs::Str>, Entry*> m_entry_map;
+  std::unordered_map<pjs::Str*, Entry*> m_entry_map;
 };
 
 //
@@ -331,14 +334,48 @@ private:
 
 class MetricHistory {
 public:
-  MetricHistory(int duration = 1) : m_duration(duration) {}
+  MetricHistory(size_t duration = 1) : m_duration(duration) {}
+  ~MetricHistory();
 
-  void store(int time, MetricData *data);
-  void serialize(int time, int duration, Data &out);
-  void serialize(int time, int duration, const std::string &metric_name, Data &out);
+  void update(MetricData &data);
+  void step();
+  void serialize(Data::Builder &db);
+  void serialize(Data::Builder &db, const std::string &metric_name);
 
 private:
-  int m_duration;
+
+  //
+  // MetricHistory::Node
+  //
+
+  struct Node {
+    pjs::Ref<pjs::Str> key;
+    std::map<pjs::Str*, Node*> submap;
+    double values[1];
+    static auto make(int dimensions, int duration) -> Node*;
+    ~Node();
+  private:
+    Node() {}
+  };
+
+  //
+  // MetricHistory::Entry
+  //
+
+  struct Entry {
+    pjs::Ref<pjs::Str> name;
+    pjs::Ref<pjs::Str> type;
+    pjs::Ref<pjs::Str> shape;
+    int dimensions;
+    std::unique_ptr<Node> root;
+  };
+
+  size_t m_duration;
+  size_t m_current = 0;
+  size_t m_start = 0;
+  std::unordered_map<pjs::Str*, Entry*> m_entries;
+
+  void serialize(Data::Builder &db, Entry *entry, Node *node, int level, bool recursive);
 };
 
 //

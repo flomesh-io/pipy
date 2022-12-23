@@ -66,6 +66,7 @@ public:
   void write_log(const std::string &name, const Data &data);
 
 private:
+  enum { METRIC_HISTORY_SIZE = 60 };
 
   //
   // AdminService::WebSocketHandler
@@ -153,8 +154,10 @@ private:
     Status status;
     stats::MetricSet metrics;
     stats::MetricData metric_data;
+    stats::MetricHistory metric_history;
     WebSocketHandler* admin_link = nullptr;
     std::map<std::string, std::set<LogWatcher*>> log_watchers;
+    Instance() : metric_history(METRIC_HISTORY_SIZE) {}
   };
 
   std::string m_ip;
@@ -167,6 +170,8 @@ private:
   std::map<std::string, int> m_instance_map;
   std::map<std::string, std::set<int>> m_codebase_instances;
   std::map<std::string, std::set<LogWatcher*>> m_local_log_watchers;
+  stats::MetricData m_local_metric_data;
+  stats::MetricHistory m_local_metric_history;
   Timer m_metrics_history_timer;
   Timer m_inactive_instance_removal_timer;
   std::chrono::time_point<std::chrono::steady_clock> m_metrics_timestamp;
