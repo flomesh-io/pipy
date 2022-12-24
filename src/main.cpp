@@ -61,7 +61,6 @@ static AdminLink *s_admin_link = nullptr;
 static std::string s_admin_ip;
 static int s_admin_port = 0;
 static AdminService::Options s_admin_options;
-static WorkerThread* s_worker_thread = nullptr;
 static bool s_has_shutdown = false;
 
 //
@@ -98,9 +97,7 @@ static void reload_codebase() {
       Status::local, true,
       [](bool ok) {
         if (ok) {
-          if (s_worker_thread) {
-            s_worker_thread->reload();
-          }
+          WorkerManager::get().reload();
         }
       }
     );
@@ -160,9 +157,7 @@ static void start_checking_updates() {
         Status::local, false,
         [&](bool ok) {
           if (ok) {
-            if (s_worker_thread) {
-              s_worker_thread->reload();
-            }
+            WorkerManager::get().reload();
           }
         }
       );
@@ -184,24 +179,18 @@ static void start_reporting_metrics() {
   static int connection_id = 0;
   report = []() {
     if (s_has_shutdown) return;
-    auto &main = Net::current();
-    s_worker_thread->stats(
-      [&](stats::MetricData &metric_data) {
-        main.post(
-          [&]() {
-            InputContext ic;
-            Data buf;
-            Data::Builder db(buf, &s_dp);
-            db.push("metrics\n");
-            auto conn_id = s_admin_link->connect();
-            metric_data_sum.sum(metric_data, true);
-            metric_data_sum.serialize(db, conn_id != connection_id);
-            db.flush();
-            s_admin_link->send(buf);
-            connection_id = conn_id;
-            timer.schedule(5, report);
-          }
-        );
+    WorkerManager::get().stats(
+      [](stats::MetricDataSum &metric_data_sum) {
+        InputContext ic;
+        Data buf;
+        Data::Builder db(buf, &s_dp);
+        db.push("metrics\n");
+        auto conn_id = s_admin_link->connect();
+        metric_data_sum.serialize(db, conn_id != connection_id);
+        db.flush();
+        s_admin_link->send(buf);
+        connection_id = conn_id;
+        timer.schedule(5, report);
       }
     );
   };
@@ -246,7 +235,7 @@ static void handle_signal(int sig) {
   switch (sig) {
     case SIGINT: {
       wait = []() {
-        auto n = s_worker_thread->stop();
+        auto n = WorkerManager::get().stop();
         if (n > 0) {
           Log::info("[shutdown] Waiting for remaining %d pipelines...", n);
           timer.schedule(1, wait);
@@ -267,10 +256,10 @@ static void handle_signal(int sig) {
         s_admin_closed = true;
       }
 
-      if (s_worker_thread) {
+      if (WorkerManager::get().started()) {
         if (s_has_shutdown) {
           Log::info("[shutdown] Forcing to shut down...");
-          s_worker_thread->stop(true);
+          WorkerManager::get().stop(true);
           stop();
         } else {
           Log::info("[shutdown] Shutting down...");
@@ -474,14 +463,10 @@ int main(int argc, char *argv[]) {
               return;
             }
 
-            auto wt = new WorkerThread(0);
-            if (!wt->start()) {
-              delete wt;
+            if (!WorkerManager::get().start()) {
               fail();
               return;
             }
-
-            s_worker_thread = wt;
 
             Status::local.version = Codebase::current()->version();
             Status::local.update();

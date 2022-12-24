@@ -37,6 +37,10 @@
 
 namespace pipy {
 
+//
+// WorkerThread
+//
+
 class WorkerThread {
 public:
   WorkerThread(int index);
@@ -64,6 +68,25 @@ private:
 
   void wait();
   void fail();
+};
+
+//
+// WorkerManager
+//
+
+class WorkerManager {
+public:
+  static auto get() -> WorkerManager&;
+
+  bool started() const { return m_worker_thread; }
+  bool start();
+  void stats(const std::function<void(stats::MetricDataSum&)> &cb);
+  void reload();
+  auto stop(bool force = false) -> int;
+
+private:
+  WorkerThread* m_worker_thread = nullptr;
+  stats::MetricDataSum m_metric_data_sum;
 };
 
 } // namespace pipy

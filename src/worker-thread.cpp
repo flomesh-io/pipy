@@ -143,4 +143,56 @@ void WorkerThread::fail() {
   m_failed = true;
 }
 
+//
+// WorkerManager
+//
+
+auto WorkerManager::get() -> WorkerManager& {
+  static WorkerManager s_worker_manager;
+  return s_worker_manager;
+}
+
+bool WorkerManager::start() {
+  if (m_worker_thread) return false;
+
+  auto wt = new WorkerThread(0);
+  if (!wt->start()) {
+    delete wt;
+    return false;
+  }
+
+  m_worker_thread = wt;
+  return true;
+}
+
+void WorkerManager::stats(const std::function<void(stats::MetricDataSum&)> &cb) {
+  if (m_worker_thread) {
+    auto &main = Net::current();
+    m_worker_thread->stats(
+      [&, cb](stats::MetricData &metric_data) {
+        main.post(
+          [&, cb]() {
+            m_metric_data_sum.sum(metric_data, true);
+            cb(m_metric_data_sum);
+          }
+        );
+      }
+    );
+  }
+}
+
+void WorkerManager::reload() {
+  if (m_worker_thread) {
+    m_worker_thread->reload();
+  }
+}
+
+auto WorkerManager::stop(bool force) -> int {
+  if (m_worker_thread) {
+    return m_worker_thread->stop(force);
+  } else {
+    return 0;
+  }
+}
+
 } // namespace pipy
