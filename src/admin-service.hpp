@@ -152,7 +152,6 @@ private:
     double timestamp;
     std::string codebase_name;
     Status status;
-    stats::MetricSet metrics;
     stats::MetricData metric_data;
     stats::MetricHistory metric_history;
     WebSocketHandler* admin_link = nullptr;

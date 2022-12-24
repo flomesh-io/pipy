@@ -34,6 +34,7 @@ namespace pipy {
 namespace stats {
 
 static Data::Producer s_dp("Stats");
+static std::string s_prefix_histogram("Histogram[");
 thread_local static pjs::ConstStr s_str_Counter("Counter");
 thread_local static pjs::ConstStr s_str_Gauge("Gauge");
 thread_local static pjs::ConstStr s_str_count("count");
@@ -537,6 +538,111 @@ void MetricSet::clear() {
 }
 
 //
+// Prometheus
+//
+
+template<class Node>
+class Prometheus {
+public:
+  Prometheus(
+    const std::string &name,
+    const std::vector<std::string> &label_names,
+    pjs::Str *label_values[],
+    const char *le_str,
+    const std::function<void(const void *, size_t)> &out
+  ) : m_name(name)
+    , m_label_names(label_names)
+    , m_label_values(label_values)
+    , m_le_str(le_str)
+    , m_out(out) {}
+
+  void output(Node *node, int level) {
+    static std::string s_bucket("_bucket");
+    static std::string s_sum("_sum");
+    static std::string s_count("_count");
+
+    if (level >= m_label_names.size()) return;
+
+    if (level > 0) {
+      m_label_values[level-1] = node->get_key();
+    }
+
+    if (m_le_str) {
+      auto le = 0;
+      auto *p = m_le_str;
+      while (p) {
+        auto q = p;
+        while (*q != ',' && *q != ']') q++;
+        output(m_name);
+        output(s_bucket);
+        output(level, node->values[le++], p, q - p);
+        p = (*q == ',' ? q+1 : nullptr);
+      }
+      output(m_name);
+      output(s_count);
+      output(level, node->values[le++]);
+      output(m_name);
+      output(s_sum);
+      output(level, node->values[le++]);
+
+    } else {
+      output(m_name);
+      output(level, node->values[0]);
+    }
+
+    node->for_subs([=](Node *sub) {
+      output(sub, level + 1);
+    });
+
+    if (level > 0) {
+      m_label_values[level-1]->release();
+    }
+  }
+
+private:
+  const std::string &m_name;
+  const std::vector<std::string> &m_label_names;
+  pjs::Str **m_label_values;
+  const char *m_le_str;
+  const std::function<void(const void *, size_t)> &m_out;
+
+  void output(char c) { m_out(&c, 1); }
+  void output(const std::string &s) { m_out(s.c_str(), s.length()); }
+  void output(const void *data, size_t size) { m_out(data, size); }
+
+  void output(
+    int level, double num,
+    const char *le = nullptr, int le_len = 0
+  ) {
+    static std::string s_le("le=");
+    if (level > 0) {
+      output('{');
+      for (int i = 0, n = (le ? level+1 : level); i < n; i++) {
+        if (i > 0) output(',');
+        if (i == level) {
+          output(s_le);
+          output('"');
+          output(le, le_len);
+          output('"');
+        } else {
+          output(m_label_names[i]);
+          output('=');
+          output('"');
+          output(m_label_values[i]->str());
+          output('"');
+        }
+      }
+      output('}');
+    }
+    output(' ');
+    char buf[100];
+    auto len = pjs::Number::to_string(buf, sizeof(buf), num);
+    output(buf, len);
+    output('\n');
+  }
+};
+
+//
 // MetricData
 //
 
@@ -612,6 +718,9 @@ void MetricData::deserialize(const Data &in) {
   if (des.has_error()) {
     Log::error("[stats] Invalid JSON structure for metrics");
   }
+}
+
+void MetricData::to_prometheus(const std::string &inst, const std::function<void(const void *, size_t)> &out) const {
 }
 
 //
@@ -732,7 +841,6 @@ void MetricData::Deserializer::string(const char *s, size_t len) {
             return;
           case Level::Field::TYPE:
             if (is_entry) {
-              static std::string s_prefix_histogram("Histogram[");
               int dim = 1;
               if (utils::starts_with(str->str(), s_prefix_histogram)) {
                 for (auto c : str->str()) if (c == ',') dim++;
@@ -932,6 +1040,7 @@ void MetricDataSum::sum(MetricData &data, bool initial) {
       ent->type = type;
       ent->shape = shape;
       ent->dimensions = e->dimensions;
+      ent->labels.clear();
       ent->root.reset(Node::make(ent->dimensions));
     }
 
@@ -1031,6 +1140,27 @@ void MetricDataSum::serialize(Data::Builder &db, bool initial) {
   }
   db.push(']');
   db.push('}');
+}
+
+void MetricDataSum::to_prometheus(const std::function<void(const void *, size_t)> &out) const {
+  for (const auto &p : m_entry_map) {
+    auto ent = p.second;
+    if (auto root = ent->root.get()) {
+      const char *le_str = nullptr;
+      if (utils::starts_with(ent->type->str(), s_prefix_histogram)) {
+        le_str = ent->type->c_str() + s_prefix_histogram.length();
+      }
+      if (ent->shape->size() > 0 && ent->labels.empty()) {
+        auto labels = utils::split(ent->shape->str(), '/');
+        ent->labels.resize(labels.size());
+        int i = 0;
+        for (auto &s : labels) { ent->labels[i++] = std::move(s); }
+      }
+      pjs::Str *label_values[ent->labels.size()];
+      Prometheus<Node> prom(ent->name->str(), ent->labels, label_values, le_str, out);
+      prom.output(root, 0);
+    }
+  }
 }
 
 //

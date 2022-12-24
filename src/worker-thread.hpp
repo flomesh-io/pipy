@@ -81,6 +81,7 @@ public:
   bool started() const { return m_worker_thread; }
   bool start();
   void stats(const std::function<void(stats::MetricDataSum&)> &cb);
+  auto stats() -> stats::MetricDataSum&;
   void reload();
   auto stop(bool force = false) -> int;
 

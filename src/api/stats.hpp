@@ -160,7 +160,6 @@ public:
   void update(MetricSet &metrics);
   void deserialize(const Data &in);
   void to_prometheus(const std::string &inst, const std::function<void(const void *, size_t)> &out) const;
-  void dump();
 
 private:
 
@@ -175,6 +174,7 @@ private:
     double values[1];
     static auto make(int dimensions) -> Node*;
     ~Node();
+    auto get_key() -> pjs::Str* { return key.to_string(); }
   private:
     Node() {}
   };
@@ -293,6 +293,7 @@ public:
   void sum(MetricData &data, bool initial);
   void serialize(Data &out, bool initial);
   void serialize(Data::Builder &db, bool initial);
+  void to_prometheus(const std::function<void(const void *, size_t)> &out) const;
 
 private:
 
@@ -308,6 +309,12 @@ private:
     double values[1];
     static auto make(int dimensions) -> Node*;
     ~Node();
+    auto get_key() -> pjs::Str* { return key->retain(); }
+    void for_subs(const std::function<void(Node*)> &cb) {
+      for (const auto &p : submap) {
+        cb(p.second);
+      }
+    }
   private:
     Node() {}
   };
@@ -320,6 +327,7 @@ private:
     pjs::Ref<pjs::Str> name;
     pjs::Ref<pjs::Str> type;
     pjs::Ref<pjs::Str> shape;
+    std::vector<std::string> labels;
     int dimensions;
     std::unique_ptr<Node> root;
   };

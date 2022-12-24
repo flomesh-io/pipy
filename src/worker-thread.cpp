@@ -181,6 +181,29 @@ void WorkerManager::stats(const std::function<void(stats::MetricDataSum&)> &cb) 
   }
 }
 
+auto WorkerManager::stats() -> stats::MetricDataSum& {
+  if (m_worker_thread) {
+    std::mutex m;
+    std::condition_variable cv;
+    stats::MetricData *metric_data = nullptr;
+
+    m_worker_thread->stats(
+      [&](stats::MetricData &md) {
+        {
+          std::lock_guard<std::mutex> lock(m);
+          metric_data = &md;
+        }
+        cv.notify_one();
+      }
+    );
+
+    std::unique_lock<std::mutex> lock(m);
+    cv.wait(lock, [&]{ return metric_data; });
+    m_metric_data_sum.sum(*metric_data, true);
+  }
+  return m_metric_data_sum;
+}
+
 void WorkerManager::reload() {
   if (m_worker_thread) {
     m_worker_thread->reload();

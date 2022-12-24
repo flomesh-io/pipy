@@ -35,6 +35,7 @@
 #include "gui-tarball.hpp"
 #include "listener.hpp"
 #include "worker.hpp"
+#include "worker-thread.hpp"
 #include "module.hpp"
 #include "status.hpp"
 #include "graph.hpp"
@@ -505,8 +506,9 @@ Message* AdminService::metrics_GET(pjs::Object *headers) {
     }
   };
 
-  stats::Metric::local().collect_all();
-  stats::Metric::local().to_prometheus(output, "");
+  auto &metric_data_sum = WorkerManager::get().stats();
+  metric_data_sum.to_prometheus(output);
+
   for (const auto &p : m_instances) {
     auto inst = p.second;
     std::string inst_label("instance=\"");
@@ -516,8 +518,22 @@ Message* AdminService::metrics_GET(pjs::Object *headers) {
       inst_label += inst->status.name;
     }
     inst_label += '"';
-    inst->metrics.to_prometheus(output, inst_label);
+    inst->metric_data.to_prometheus(inst_label, output);
   }
+
+  // stats::Metric::local().collect_all();
+  // stats::Metric::local().to_prometheus(output, "");
+  // for (const auto &p : m_instances) {
+  //   auto inst = p.second;
+  //   std::string inst_label("instance=\"");
+  //   if (inst->status.name.empty()) {
+  //     inst_label += std::to_string(inst->index);
+  //   } else {
+  //     inst_label += inst->status.name;
+  //   }
+  //   inst_label += '"';
+  //   inst->metrics.to_prometheus(output, inst_label);
+  // }
 
   if (compressor) {
     compressor->input(buf, buf_ptr, true);
