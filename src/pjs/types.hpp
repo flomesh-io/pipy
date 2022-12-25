@@ -728,10 +728,13 @@ private:
 
   class GlobalIndex {
   public:
+    GlobalIndex();
+
     struct Entry {
       Ref<CharData> char_data;
       std::atomic<int> hold_count;
       int next_free = 0;
+      Entry() : hold_count(0) {}
       void hold() { hold_count.fetch_add(1); }
     };
 

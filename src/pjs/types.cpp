@@ -41,6 +41,9 @@ auto PooledClass::all() -> std::map<std::string, PooledClass *> & {
 
 PooledClass::PooledClass(const char *c_name, size_t size)
   : m_size(std::max(size, sizeof(std::atomic<void*>)))
+  , m_free(nullptr)
+  , m_allocated(0)
+  , m_pooled(0)
 {
   int status;
   auto cxx_name = abi::__cxa_demangle(c_name, 0, 0, &status);
@@ -272,7 +275,8 @@ auto Str::ID::to_string() const -> Str* {
 //
 
 Str::CharData::CharData(std::string &&str)
-  : m_str(std::move(str))
+  : m_refs(0)
+  , m_str(std::move(str))
 {
   int n = 0, p = 0, i = 0;
   Utf8Decoder decoder(
@@ -442,6 +446,13 @@ void Str::LocalIndex::del(int i) {
 //
 // Str::GlobalIndex
 //
+
+Str::GlobalIndex::GlobalIndex()
+  : m_max_id(0)
+  , m_free_id(0)
+{
+  std::memset(m_ranges, 0, sizeof(m_ranges));
+}
 
 auto Str::GlobalIndex::get(int i) -> Entry* {
   int x, y, z;
