@@ -655,9 +655,9 @@ MetricData::~MetricData() {
 }
 
 void MetricData::update(MetricSet &metrics) {
-  static std::function<void(int, Node*, Metric*)> update;
+  std::function<void(int, Node*, Metric*)> update;
 
-  update = [](int level, Node *node, Metric *metric) {
+  update = [&](int level, Node *node, Metric *metric) {
     if (level > 0) node->key.str(metric->label());
 
     auto dim = metric->dimensions();
@@ -673,7 +673,7 @@ void MetricData::update(MetricSet &metrics) {
       sub = &s->next;
     }
 
-    auto *s = *sub;
+    auto s = *sub; *sub = nullptr;
     while (s) {
       auto sub = s; s = s->next;
       delete sub;
@@ -690,8 +690,7 @@ void MetricData::update(MetricSet &metrics) {
       e->shape.str() != metric->shape() ||
       e->dimensions != metric->dimensions()
     ) {
-      delete e;
-      e = *ent = new Entry;
+      if (!e) e = *ent = new Entry;
       e->root.reset(Node::make(metric->dimensions()));
       e->name.str(metric->name());
       e->type.str(metric->type());
@@ -702,7 +701,7 @@ void MetricData::update(MetricSet &metrics) {
     ent = &e->next;
   }
 
-  auto *e = *ent;
+  auto e = *ent; *ent = nullptr;
   while (e) {
     auto ent = e; e = e->next;
     delete ent;
@@ -991,9 +990,9 @@ MetricDataSum::~MetricDataSum() {
 }
 
 void MetricDataSum::sum(MetricData &data, bool initial) {
-  static std::function<void(int, Node*, MetricData::Node*)> sum;
+  std::function<void(int, Node*, MetricData::Node*)> sum;
 
-  sum = [=](int dimensions, Node *node, MetricData::Node* src_node) {
+  sum = [&](int dimensions, Node *node, MetricData::Node* src_node) {
     if (initial) {
       for (int i = 0; i < dimensions; i++) {
         node->values[i] = src_node->values[i];
@@ -1193,11 +1192,10 @@ MetricHistory::~MetricHistory() {
 }
 
 void MetricHistory::update(MetricData &data) {
-  static std::function<void(int, Node*, MetricData::Node*)> update;
-
   int i = m_current % m_duration;
 
-  update = [=](int dimensions, Node *node, MetricData::Node* src_node) {
+  std::function<void(int, Node*, MetricData::Node*)> update;
+  update = [&](int dimensions, Node *node, MetricData::Node* src_node) {
     int base = i * dimensions;
     for (int d = 0; d < dimensions; d++) {
       node->values[base + d] = src_node->values[d];
@@ -1256,9 +1254,8 @@ void MetricHistory::step() {
   old %= m_duration;
   cur %= m_duration;
 
-  static std::function<void(int, Node*)> step;
-
-  step = [=](int dimensions, Node *node) {
+  std::function<void(int, Node*)> step;
+  step = [&](int dimensions, Node *node) {
     std::memcpy(
       &node->values[cur * dimensions],
       &node->values[old * dimensions],

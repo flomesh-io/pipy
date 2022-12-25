@@ -231,7 +231,10 @@ Str::ID::ID(Str *s) {
 void Str::ID::str(Str *s) {
   if (s) {
     auto id = s->m_id;
-    if (!id) id = m_global_index.alloc(s->m_char_data);
+    if (!id) {
+      id = s->m_id = m_global_index.alloc(s->m_char_data);
+      m_local_index.set(id, s);
+    }
     if (m_id != id) {
       clear();
       m_global_index.hold(id);
@@ -256,6 +259,7 @@ auto Str::ID::to_string() const -> Str* {
       } else {
         auto *s = i->second;
         m_local_index.set(id, s);
+        s->m_id = id;
         return s->retain();
       }
     }
