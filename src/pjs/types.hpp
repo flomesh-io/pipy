@@ -39,6 +39,7 @@
 #include <regex>
 #include <stdexcept>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <vector>
 
@@ -1500,9 +1501,26 @@ public:
   static auto keys(Object *obj) -> Array*;
   static auto values(Object *obj) -> Array*;
 
+  static void assert_same_thread(const Object &obj) {
+#ifdef PIPY_ASSERT_SAME_THREAD
+    auto current_thread_id = std::this_thread::get_id();
+    if (current_thread_id != obj.m_thread_id) {
+      throw std::runtime_error("cross-thread access");
+    }
+#endif
+  }
+
 protected:
-  Object() {}
-  ~Object() { if (m_class) m_class->free(this); }
+  Object()
+#ifdef PIPY_ASSERT_SAME_THREAD
+    : m_thread_id(std::this_thread::get_id())
+#endif
+  {}
+
+  ~Object() {
+    assert_same_thread(*this);
+    if (m_class) m_class->free(this);
+  }
 
   virtual void finalize() { delete this; }
 
@@ -1510,6 +1528,10 @@ private:
   Class* m_class = nullptr;
   Data* m_data = nullptr;
   Ref<OrderedHash<Ref<Str>, Value>> m_hash;
+
+#ifdef PIPY_ASSERT_SAME_THREAD
+  std::thread::id m_thread_id;
+#endif
 
   friend class RefCount<Object>;
   friend class Class;
@@ -1625,60 +1647,71 @@ inline void Class::free(Object *obj) {
 }
 
 inline void Class::get(Object *obj, int id, Value &val) {
+  Object::assert_same_thread(*obj);
   val = obj->m_data->at(m_field_index[id]);
 }
 
 inline void Class::set(Object *obj, int id, const Value &val) {
+  Object::assert_same_thread(*obj);
   obj->m_data->at(m_field_index[id]) = val;
 }
 
 template<class T>
 inline void get(Object *obj, typename T::Field id, Value &val) {
+  Object::assert_same_thread(*obj);
   auto c = class_of<T>();
   c->get(obj, int(id), val);
 }
 
 template<class T>
 inline void set(Object *obj, typename T::Field id, const Value &val) {
+  Object::assert_same_thread(*obj);
   auto c = class_of<T>();
   c->set(obj, int(id), val);
 }
 
 inline bool Object::has(Str *key) {
+  assert_same_thread(*this);
   auto i = m_class->find_field(key);
   if (i >= 0) return true;
   else return ht_has(key);
 }
 
 inline void Object::get(Str *key, Value &val) {
+  assert_same_thread(*this);
   auto i = m_class->find_field(key);
   if (i >= 0) val = m_data->at(i);
   else ht_get(key, val);
 }
 
 inline void Object::set(Str *key, const Value &val) {
+  assert_same_thread(*this);
   auto i = m_class->find_field(key);
   if (i >= 0) m_data->at(i) = val;
   else ht_set(key, val);
 }
 
 inline void Object::ht_get(Str *key, Value &val) {
+  assert_same_thread(*this);
   if (!m_hash || !m_hash->get(key, val)) {
     val = Value::undefined;
   }
 }
 
 inline void Object::ht_set(Str *key, const Value &val) {
+  assert_same_thread(*this);
   if (!m_hash) m_hash = OrderedHash<Ref<Str>, Value>::make();
   m_hash->set(key, val);
 }
 
 inline bool Object::ht_delete(Str *key) {
+  assert_same_thread(*this);
   if (!m_hash) return false;
   return m_hash->erase(key);
 }
 
 inline void Object::iterate_all(std::function<void(Str*, Value&)> callback) {
+  assert_same_thread(*this);
   for (size_t i = 0, n = m_class->field_count(); i < n; i++) {
     auto f = m_class->field(i);
     if (f->is_enumerable()) {
@@ -1694,6 +1727,7 @@ inline void Object::iterate_all(std::function<void(Str*, Value&)> callback) {
 }
 
 inline bool Object::iterate_while(std::function<bool(Str*, Value&)> callback) {
+  assert_same_thread(*this);
   for (size_t i = 0, n = m_class->field_count(); i < n; i++) {
     auto f = m_class->field(i);
     if (f->is_enumerable()) {

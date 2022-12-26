@@ -33,6 +33,7 @@ List<Data::Producer> Data::Producer::s_all_producers;
 Data::Producer Data::s_unknown_producer("Unknown");
 
 void Data::pack(const Data &data, Producer *producer, double vacancy) {
+  assert_same_thread(*this);
   if (&data == this) return;
   if (!producer) producer = &s_unknown_producer;
   auto occupancy = DATA_CHUNK_SIZE - int(DATA_CHUNK_SIZE * vacancy);

@@ -228,15 +228,15 @@ private:
   //
 
   struct Chunk : public Pooled<Chunk> {
-    char data[DATA_CHUNK_SIZE];
     std::atomic<int> retain_count;
+    char data[DATA_CHUNK_SIZE];
 
-    Chunk(Producer *producer) : m_producer(producer) { producer->increase(); }
+    Chunk(Producer *producer) : retain_count(0), m_producer(producer) { producer->increase(); }
     ~Chunk() { m_producer->decrease(); }
 
     auto size() const -> int { return sizeof(data); }
-    void retain() { ++retain_count; }
-    void release() { if (!--retain_count) delete this; }
+    void retain() { retain_count.fetch_add(1, std::memory_order_relaxed); }
+    void release() { if (retain_count.fetch_sub(1, std::memory_order_relaxed) == 1) delete this; }
 
   private:
     Producer* m_producer;
@@ -466,6 +466,8 @@ public:
   }
 
   auto operator=(const Data &other) -> Data& {
+    assert_same_thread(*this);
+    assert_same_thread(other);
     if (this != &other) {
       clear();
       for (auto view = other.m_head; view; view = view->next) {
@@ -476,6 +478,8 @@ public:
   }
 
   auto operator=(Data &&other) -> Data& {
+    assert_same_thread(*this);
+    assert_same_thread(other);
     if (this != &other) {
       for (auto *p = m_head; p; ) {
         auto *v = p; p = p->next;
@@ -492,18 +496,22 @@ public:
   }
 
   bool empty() const {
+    assert_same_thread(*this);
     return !m_size;
   }
 
   int size() const {
+    assert_same_thread(*this);
     return m_size;
   }
 
   Chunks chunks() const {
+    assert_same_thread(*this);
     return Chunks(m_head);
   }
 
   void clear() {
+    assert_same_thread(*this);
     for (auto *p = m_head; p; ) {
       auto *v = p; p = p->next;
       delete v;
@@ -513,6 +521,7 @@ public:
   }
 
   void push(const Data &data) {
+    assert_same_thread(*this);
     if (&data == this) return;
     for (auto view = data.m_head; view; view = view->next) {
       push_view(new View(view));
@@ -520,14 +529,17 @@ public:
   }
 
   void push(const std::string &str, Producer *producer) {
+    assert_same_thread(*this);
     push(str.c_str(), str.length(), producer);
   }
 
   void push(const char *str, Producer *producer) {
+    assert_same_thread(*this);
     push(str, std::strlen(str), producer);
   }
 
   void push(const void *data, int n, Producer *producer) {
+    assert_same_thread(*this);
     if (!producer) producer = &s_unknown_producer;
     const char *p = (const char*)data;
     if (auto view = m_tail) {
@@ -553,6 +565,7 @@ public:
   }
 
   void scan(const std::function<bool(int)> &f) {
+    assert_same_thread(*this);
     for (auto view = m_head; view; view = view->next) {
       auto data = view->chunk->data;
       auto size = view->length;
@@ -562,6 +575,7 @@ public:
   }
 
   void pop(int n) {
+    assert_same_thread(*this);
     while (auto view = m_tail) {
       if (n <= 0) break;
       if (view->length <= n) {
@@ -576,6 +590,8 @@ public:
   }
 
   void pop(int n, Data &out) {
+    assert_same_thread(*this);
+    assert_same_thread(out);
     while (auto view = m_tail) {
       if (n <= 0) break;
       if (view->length <= n) {
@@ -590,6 +606,7 @@ public:
   }
 
   void shift(int n) {
+    assert_same_thread(*this);
     while (auto view = m_head) {
       if (n <= 0) break;
       if (view->length <= n) {
@@ -604,6 +621,7 @@ public:
   }
 
   void shift(int n, uint8_t *out) {
+    assert_same_thread(*this);
     auto i = 0;
     while (auto view = m_head) {
       if (n <= 0) break;
@@ -625,6 +643,8 @@ public:
   }
 
   void shift(int n, Data &out) {
+    assert_same_thread(*this);
+    assert_same_thread(out);
     while (auto view = m_head) {
       if (n <= 0) break;
       if (view->length <= n) {
@@ -639,6 +659,8 @@ public:
   }
 
   void shift(const std::function<int(int)> &f, Data &out) {
+    assert_same_thread(*this);
+    assert_same_thread(out);
     while (auto view = m_head) {
       auto data = view->chunk->data;
       auto size = view->length;
@@ -663,6 +685,8 @@ public:
   }
 
   void shift_while(const std::function<bool(int)> &f, Data &out) {
+    assert_same_thread(*this);
+    assert_same_thread(out);
     while (auto view = m_head) {
       auto data = view->chunk->data;
       auto size = view->length;
@@ -686,6 +710,8 @@ public:
   }
 
   void shift_to(const std::function<bool(int)> &f, Data &out) {
+    assert_same_thread(*this);
+    assert_same_thread(out);
     while (auto view = m_head) {
       auto data = view->chunk->data;
       auto size = view->length;
@@ -712,12 +738,14 @@ public:
   void pack(const Data &data, Producer *producer, double vacancy = 0.5);
 
   void to_chunks(const std::function<void(const uint8_t*, int)> &cb) {
+    assert_same_thread(*this);
     for (auto view = m_head; view; view = view->next) {
       cb((uint8_t*)view->chunk->data + view->offset, view->length);
     }
   }
 
   void to_bytes(uint8_t *buf) const {
+    assert_same_thread(*this);
     auto p = buf;
     for (auto view = m_head; view; view = view->next) {
       auto length = view->length;
@@ -727,6 +755,7 @@ public:
   }
 
   void to_bytes(uint8_t *buf, size_t len) const {
+    assert_same_thread(*this);
     auto ptr = buf;
     for (auto view = m_head; view && len > 0; view = view->next) {
       auto length = view->length;
@@ -749,6 +778,7 @@ public:
   }
 
   virtual auto to_string() const -> std::string override {
+    assert_same_thread(*this);
     auto size = m_size;
     if (size > pjs::Str::max_size()) size = pjs::Str::max_size();
     std::string str(size, 0);
@@ -764,6 +794,7 @@ public:
   }
 
   auto to_string(Encoding encoding) const -> std::string {
+    assert_same_thread(*this);
     switch (encoding) {
       case Encoding::UTF8: {
         pjs::Utf8Decoder decoder([](int) {});
