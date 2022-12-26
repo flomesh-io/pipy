@@ -546,11 +546,13 @@ class Prometheus {
 public:
   Prometheus(
     const std::string &name,
+    const std::string &extra_labels,
     const std::vector<std::string> &label_names,
     pjs::Str *label_values[],
     const char *le_str,
     const std::function<void(const void *, size_t)> &out
   ) : m_name(name)
+    , m_extra_labels(extra_labels)
     , m_label_names(label_names)
     , m_label_values(label_values)
     , m_le_str(le_str)
@@ -601,6 +603,7 @@ public:
 
 private:
   const std::string &m_name;
+  const std::string &m_extra_labels;
   const std::vector<std::string> &m_label_names;
   pjs::Str **m_label_values;
   const char *m_le_str;
@@ -615,10 +618,15 @@ private:
     const char *le = nullptr, int le_len = 0
   ) {
     static std::string s_le("le=");
-    if (level > 0) {
+    if (level > 0 || !m_extra_labels.empty()) {
+      bool first = true;
       output('{');
+      if (!m_extra_labels.empty()) {
+        output(m_extra_labels);
+        first = false;
+      }
       for (int i = 0, n = (le ? level+1 : level); i < n; i++) {
-        if (i > 0) output(',');
+        if (first) first = false; else output(',');
         if (i == level) {
           output(s_le);
           output('"');
@@ -696,6 +704,7 @@ void MetricData::update(MetricSet &metrics) {
       e->type.str(metric->type());
       e->shape.str(metric->shape());
       e->dimensions = metric->dimensions();
+      e->labels.clear();
     }
     update(0, e->root.get(), metric);
     ent = &e->next;
@@ -719,7 +728,30 @@ void MetricData::deserialize(const Data &in) {
   }
 }
 
-void MetricData::to_prometheus(const std::string &inst, const std::function<void(const void *, size_t)> &out) const {
+void MetricData::to_prometheus(const std::string &extra_labels, const std::function<void(const void *, size_t)> &out) const {
+  for (auto *ent = m_entries; ent; ent = ent->next) {
+    if (auto root = ent->root.get()) {
+      const char *le_str = nullptr;
+      auto *name = ent->name.to_string();
+      auto *type = ent->name.to_string();
+      auto *shape = ent->name.to_string();
+      if (utils::starts_with(type->str(), s_prefix_histogram)) {
+        le_str = type->c_str() + s_prefix_histogram.length();
+      }
+      if (shape->size() > 0 && ent->labels.empty()) {
+        auto labels = utils::split(shape->str(), '/');
+        ent->labels.resize(labels.size());
+        int i = 0;
+        for (auto &s : labels) { ent->labels[i++] = std::move(s); }
+      }
+      pjs::Str *label_values[ent->labels.size()];
+      Prometheus<Node> prom(name->str(), extra_labels, ent->labels, label_values, le_str, out);
+      prom.output(root, 0);
+      name->release();
+      type->release();
+      shape->release();
+    }
+  }
 }
 
 //
@@ -1156,7 +1188,7 @@ void MetricDataSum::to_prometheus(const std::function<void(const void *, size_t)
         for (auto &s : labels) { ent->labels[i++] = std::move(s); }
       }
       pjs::Str *label_values[ent->labels.size()];
-      Prometheus<Node> prom(ent->name->str(), ent->labels, label_values, le_str, out);
+      Prometheus<Node> prom(ent->name->str(), std::string(), ent->labels, label_values, le_str, out);
       prom.output(root, 0);
     }
   }

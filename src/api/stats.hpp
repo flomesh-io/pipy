@@ -175,6 +175,11 @@ private:
     static auto make(int dimensions) -> Node*;
     ~Node();
     auto get_key() -> pjs::Str* { return key.to_string(); }
+    void for_subs(const std::function<void(Node*)> &cb) {
+      for (auto sub = subs; sub; sub = sub->next) {
+        cb(sub);
+      }
+    }
   private:
     Node() {}
   };
@@ -188,6 +193,7 @@ private:
     pjs::Str::ID type;
     pjs::Str::ID shape;
     int dimensions = 0;
+    std::vector<std::string> labels;
     std::unique_ptr<Node> root;
     Entry* next = nullptr;
   };
