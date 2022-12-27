@@ -84,9 +84,9 @@ private:
 
   std::string m_name;
   size_t m_size;
-  std::atomic<void*> m_free;
-  std::atomic<int> m_allocated;
-  std::atomic<int> m_pooled;
+  void* m_free;
+  int m_allocated;
+  int m_pooled;
   int m_curve[CURVE_LENGTH] = { 0 };
   size_t m_curve_pointer = 0;
 };
@@ -106,11 +106,11 @@ public:
   void operator delete(void *p) { m_class.free(p); }
 
 private:
-  static PooledClass m_class;
+  thread_local static PooledClass m_class;
 };
 
 template<class T, class Base>
-PooledClass Pooled<T, Base>::m_class(typeid(T).name(), sizeof(T));
+thread_local PooledClass Pooled<T, Base>::m_class(typeid(T).name(), sizeof(T));
 
 //
 // RefCount

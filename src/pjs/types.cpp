@@ -53,48 +53,67 @@ PooledClass::PooledClass(const char *c_name, size_t size)
 
 auto PooledClass::alloc() -> void* {
   m_allocated++;
-  auto *p = m_free.load();
-  while (p) {
-    auto *q = static_cast<std::atomic<void*>*>(p)->load();
-    if (m_free.compare_exchange_weak(p, q)) {
-      m_pooled--;
-      return p;
-    }
+  if (auto *p = m_free) {
+    m_free = *(void**)p;
+    m_pooled--;
+    return p;
+  } else {
+    return new char[m_size];
   }
-  p = new char[m_size];
-  new (p) std::atomic<void*>();
-  return p;
 }
 
 void PooledClass::free(void *p) {
 #ifdef PIPY_SOIL_FREED_SPACE
   std::memset(p, 0xfe, m_size);
 #endif // PIPY_SOIL_FREED_SPACE
-  auto *q = m_free.load();
-  do {
-    static_cast<std::atomic<void*>*>(p)->store(q);
-  } while (!m_free.compare_exchange_weak(q, p));
+  *(void**)p = m_free;
+  m_free = p;
   m_allocated--;
   m_pooled++;
 }
+
+//
+// Naive non-blocking stack implementation with ABA problem unsolved
+//
+// auto PooledClass::alloc() -> void* {
+//   auto *p = m_free.load(std::memory_order_seq_cst);
+//   while (p) {
+//     auto *q = *static_cast<void**>(p);
+//     if (m_free.compare_exchange_weak(
+//       p, q,
+//       std::memory_order_seq_cst,
+//       std::memory_order_seq_cst
+//     )) {
+//       return p;
+//     }
+//   }
+//   return new char[m_size];
+// }
+
+// void PooledClass::free(void *p) {
+//   std::memset(p, 0xfe, m_size);
+//   auto *q = m_free.load(std::memory_order_seq_cst);
+//   do {
+//     *static_cast<void**>(p) = q;
+//   } while (!m_free.compare_exchange_weak(
+//     q, p,
+//     std::memory_order_seq_cst,
+//     std::memory_order_seq_cst
+//   ));
+// }
 
 void PooledClass::clean() {
   int max = 0;
   for (int i = 0; i < CURVE_LENGTH; i++) {
     if (m_curve[i] > max) max = m_curve[i];
   }
-  for (;;) {
-    int room = max + (max >> 2) - m_allocated;
-    if (room < 0 || m_pooled <= room) break;
-    auto *p = m_free.load();
-    while (p) {
-      auto *q = static_cast<std::atomic<void*>*>(p)->load();
-      if (m_free.compare_exchange_weak(p, q)) {
-        m_pooled--;
-        static_cast<std::atomic<void*>*>(p)->~atomic();
-        delete [] (char*)p;
-        break;
-      }
+  int room = max + (max >> 2) - m_allocated;
+  if (room >= 0) {
+    while (m_pooled > room) {
+      auto p = m_free;
+      m_free = *(void**)p;
+      delete [] (char *)p;
+      m_pooled--;
     }
   }
   m_curve[m_curve_pointer++ % CURVE_LENGTH] = m_allocated;
