@@ -30,7 +30,7 @@ COPY rpmmacros /rpmmacros
 COPY pipy.tar.gz /pipy.tar.gz
 COPY pipy.spec /pipy.spec
 
-RUN yum install -y -q gcc make unzip rpm-build rpmdevtools chrpath \
+RUN yum install -y -q unzip rpm-build rpmdevtools \
     && rpmdev-setuptree \
     && mv /rpmmacros ~/.rpmmacros \
     && yum install -y centos-release-scl epel-release yum-utils \
