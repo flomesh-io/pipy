@@ -117,10 +117,16 @@ add_definitions(
   -DPIPY_HOST="${CMAKE_HOST_SYSTEM} ${CMAKE_HOST_SYSTEM_PROCESSOR}"
 )
 
+include(CheckCXXCompilerFlag)
+check_cxx_compiler_flag("-Wdelete-non-abstract-non-virtual-dtor"
+  COMPILER_SUPPORTS_DELETE_NON_ABSTRACT_NON_VIRTUAL_DTOR)
+if(COMPILER_SUPPORTS_DELETE_NON_ABSTRACT_NON_VIRTUAL_DTOR)
+  add_compile_options(
+    $<$<COMPILE_LANGUAGE:CXX>:-Wno-delete-non-abstract-non-virtual-dtor>)
+endif()
 add_compile_options(
   -Wall
   -Wno-overloaded-virtual
-  -Wno-delete-non-abstract-non-virtual-dtor
   -Wno-delete-non-virtual-dtor
   -Wno-sign-compare
 )

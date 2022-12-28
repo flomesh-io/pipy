@@ -1,7 +1,13 @@
 %bcond_with gui
+
+# optionally fetch the version number from environmental variable of "VERSION"
+# and "REVISION" respectively
+%{!?pipy_version: %global pipy_version latest}
+%{!?pipy_revision: %global pipy_revision 0}
+
 Name:		pipy
-Version: 	%{getenv:VERSION}
-Release: 	%{getenv:REVISION}%{?dist}
+Version: 	%pipy_version
+Release: 	%pipy_revision%{?dist}
 
 Summary: 	Pipy is a programmable network proxy for the cloud, edge and IoT.
 
@@ -19,8 +25,12 @@ BuildRequires: 	llvm-toolset-7.0-clang
 BuildRequires: 	cmake3
 BuildRequires: 	gcc
 BuildRequires: 	make
-%if 0%{with gui}
-BuildRequires: 	nodejs-packaging
+%if %{with gui}
+%if 0%{?rhel} >= 8 || 0%{?fedora}
+BuildRequires: 	npm
+%else
+BuildRequires: 	rh-nodejs14-npm
+%endif
 %endif
 BuildRequires: 	perl-interpreter
 BuildRequires: 	perl(Module::Load::Conditional), perl(File::Temp)
@@ -41,14 +51,17 @@ Pipy is a tiny, high performance, highly stable, programmable proxy.
 rm -fr pipy/build
 %{__mkdir} pipy/build
 cd pipy
-%if 0%{with gui}
+%if %{with gui}
+%if 0%{?rhel} == 7
+source /opt/rh/rh-nodejs14/enable
+%endif
   npm install
   npm run build
 %endif
 cd build
 CXX=clang++ CC=clang cmake3 \
-  -DPIPY_GUI==%{?with_gui:ON}%{?!with_gui:OFF} \
-  -DPIPY_SAMPLES=%{?with_gui:ON}%{?!with_gui:OFF} \
+  -DPIPY_GUI=%{?with_gui:ON}%{!?with_gui:OFF} \
+  -DPIPY_SAMPLES=%{?with_gui:ON}%{!?with_gui:OFF} \
   -DPIPY_STATIC=${PIPY_STATIC} \
   -DCMAKE_BUILD_TYPE=${BUILD_TYPE} ..
 make -j$(getconf _NPROCESSORS_ONLN)
