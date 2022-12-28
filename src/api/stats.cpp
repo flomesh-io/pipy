@@ -120,37 +120,6 @@ auto Metric::type() -> pjs::Str* {
   return m_type;
 }
 
-void Metric::history_step() {
-  auto i = (m_history_end++) % MAX_HISTORY;
-  if (m_history_end - m_history_start > MAX_HISTORY) {
-    m_history_start = m_history_end - MAX_HISTORY;
-  }
-
-  int dim = get_dim();
-  if (m_history.size() < dim) m_history.resize(dim);
-  for (int d = 0; d < dim; d++) {
-    auto v = get_value(d);
-    m_history[d].v[i] = v;
-  }
-
-  for (const auto &sub : m_subs) {
-    sub->history_step();
-  }
-}
-
-auto Metric::history(int dim, double *values) -> size_t {
-  if (0 <= dim && dim < m_history.size()) {
-    const auto &v = m_history[dim].v;
-    size_t n = m_history_end - m_history_start;
-    for (size_t i = 0; i < n; i++) {
-      values[i] = v[(i + m_history_start) % MAX_HISTORY];
-    }
-    return n;
-  } else {
-    return 0;
-  }
-}
-
 void Metric::clear() {
   for (const auto &i : m_subs) {
     i->clear();
@@ -171,125 +140,6 @@ void Metric::zero_all() {
   }
 }
 
-//
-// Initial state:
-//   {
-//     "k": "metric-1",
-//     "l": "label-1/label-2",
-//     "t": "Counter",
-//     "v": 123,
-//     "s": [
-//       {
-//         "k": "label-value-1",
-//         "v": 123,
-//         "s": [...]
-//       }
-//     ]
-//   }
-//
-// Update state:
-//   {
-//     "v": 123,
-//     "s": [
-//       {
-//         "v": 123,
-//         "s": [...]
-//       },
-//       123
-//     ]
-//   }
-//
-// Vector:
-//   {
-//     "k": "latency-1",
-//     "t": "Histogram[1,2,4,8,16,32]",
-//     "v": [12345, 1234, 123, 12, 1, 0]
-//   }
-//
-
-void Metric::serialize(Data::Builder &db, bool initial, bool recursive, bool history) {
-  static std::string s_k("\"k\":"); // key
-  static std::string s_t("\"t\":"); // type
-  static std::string s_v("\"v\":"); // value
-  static std::string s_l("\"l\":"); // label
-  static std::string s_s("\"s\":"); // sub
-
-  bool keyed = (initial || !m_has_serialized);
-  bool value_only = (!keyed && m_subs.empty());
-
-  if (!value_only) {
-    db.push('{');
-
-    if (keyed) {
-      db.push(s_k);
-      db.push('"');
-      if (m_label_index >= 0) {
-        utils::escape(m_label->str(), [&](char c) { db.push(c); });
-      } else {
-        utils::escape(m_name->str(), [&](char c) { db.push(c); });
-        db.push('"');
-        db.push(',');
-        db.push(s_l);
-        db.push('"');
-        utils::escape(shape()->str(), [&](char c) { db.push(c); });
-        db.push('"');
-        db.push(',');
-        db.push(s_t);
-        db.push('"');
-        utils::escape(type()->str(), [&](char c) { db.push(c); });
-      }
-      db.push('"');
-      db.push(',');
-    }
-
-    db.push(s_v);
-  }
-
-  auto dim = get_dim();
-  if (dim > 1) db.push('[');
-
-  for (int d = 0; d < dim; d++) {
-    if (d > 0) db.push(',');
-    if (history) {
-      auto n = history_size();
-      double v[n];
-      n = this->history(d, v);
-      db.push('[');
-      for (size_t i = 0; i < n; i++) {
-        if (i > 0) db.push(',');
-        char buf[100];
-        auto len = pjs::Number::to_string(buf, sizeof(buf), v[i]);
-        db.push(buf, len);
-      }
-      db.push(']');
-    } else {
-      char buf[100];
-      auto len = pjs::Number::to_string(buf, sizeof(buf), get_value(d));
-      db.push(buf, len);
-    }
-  }
-
-  if (dim > 1) db.push(']');
-
-  if (recursive) {
-    if (!m_subs.empty()) {
-      db.push(',');
-      db.push(s_s);
-      db.push('[');
-
-      bool first = true;
-      for (const auto &i : m_subs) {
-        if (first) first = false; else db.push(',');
-        i->serialize(db, initial, recursive, history);
-      }
-      db.push(']');
-    }
-  }
-
-  if (!value_only) db.push('}');
-  m_has_serialized = true;
-}
-
 auto Metric::get_sub(pjs::Str **labels) -> Metric* {
   auto k = labels[m_label_index + 1];
   auto i = m_sub_map.find(k);
@@ -302,43 +152,6 @@ auto Metric::get_sub(int i) -> Metric* {
     return m_subs[i].get();
   } else {
     return nullptr;
-  }
-}
-
-void Metric::truncate(int i) {
-  if (0 <= i && i < m_subs.size()) {
-    auto n = i;
-    while (i < m_subs.size()) {
-      auto metric = m_subs[i++].get();
-      m_sub_map.erase(metric->label());
-    }
-    m_subs.resize(n);
-  }
-}
-
-void Metric::dump_tree(
-  pjs::Str **label_names,
-  pjs::Str **label_values,
-  const std::function<void(int, pjs::Str*, double)> &out
-) {
-  int i = m_label_index;
-  if (i >= 0) {
-    label_names[i] = m_label_names->at(i);
-    label_values[i] = m_label;
-  }
-  if (m_has_value) {
-    dump(
-      [&](pjs::Str *dim, double x) {
-        out(i+1, dim, x);
-      }
-    );
-  }
-  for (const auto &i : m_subs) {
-    i->dump_tree(
-      label_names,
-      label_values,
-      out
-    );
   }
 }
 
@@ -371,164 +184,9 @@ void MetricSet::add(Metric *metric) {
   }
 }
 
-void MetricSet::truncate(int i) {
-  if (0 <= i && i < m_metrics.size()) {
-    auto n = i;
-    while (i < m_metrics.size()) {
-      auto metric = m_metrics[i++].get();
-      m_metric_map.erase(metric->name());
-    }
-    m_metrics.resize(n);
-  }
-}
-
 void MetricSet::collect_all() {
   for (const auto &m : m_metrics) {
     m->collect();
-  }
-}
-
-void MetricSet::history_step() {
-  for (const auto &m : m_metrics) {
-    m->history_step();
-  }
-}
-
-void MetricSet::serialize(Data &out, const std::string &uuid, bool initial) {
-  static std::string s_uuid("\"uuid\":");
-  static std::string s_metrics("\"metrics\":");
-  Data::Builder db(out, &s_dp);
-  db.push('{');
-  db.push(s_uuid);
-  db.push('"');
-  db.push(uuid);
-  db.push('"');
-  db.push(',');
-  db.push(s_metrics);
-  db.push('[');
-  bool first = true;
-  for (const auto &metric : m_metrics) {
-    if (first) first = false; else db.push(',');
-    metric->serialize(db, initial, true, false);
-  }
-  db.push(']');
-  db.push('}');
-  db.flush();
-}
-
-void MetricSet::serialize_history(Data &out, const std::string &metric_name, std::chrono::time_point<std::chrono::steady_clock> timestamp) {
-  static std::string s_time("\"time\":");
-  static std::string s_metrics("\"metrics\":");
-  auto time = std::chrono::duration_cast<std::chrono::seconds>(timestamp.time_since_epoch()).count();
-  Data::Builder db(out, &s_dp);
-  db.push('{');
-  db.push(s_time);
-  db.push(std::to_string(time));
-  db.push(',');
-  db.push(s_metrics);
-  db.push('[');
-  if (metric_name.empty()) {
-    bool first = true;
-    for (const auto &metric : m_metrics) {
-      if (first) first = false; else db.push(',');
-      metric->serialize(db, true, false, true);
-    }
-  } else {
-    pjs::Ref<pjs::Str> k(pjs::Str::make(metric_name));
-    if (auto *metric = get(k)) {
-      metric->serialize(db, true, true, true);
-    }
-  }
-  db.push(']');
-  db.push('}');
-  db.flush();
-}
-
-void MetricSet::to_prometheus(Data &out, const std::string &inst) const {
-  Data::Builder db(out, &s_dp);
-  to_prometheus(
-    [&](const void *data, size_t size) {
-      if (size == 1) {
-        db.push(*(const char *)data);
-      } else {
-        db.push((const char *)data, size);
-      }
-    },
-    inst
-  );
-  db.flush();
-}
-
-void MetricSet::to_prometheus(const std::function<void(const void *, size_t)> &out, const std::string &inst) const {
-  static std::string s_le("le=");
-  static std::string s_bucket("_bucket");
-  static std::string s_sum("_sum");
-  static std::string s_count("_count");
-
-  auto push_c = [&](char c) {
-    out(&c, 1);
-  };
-
-  auto push_d = [&](const void *data, size_t size) {
-    out(data, size);
-  };
-
-  auto push_s = [&](const std::string &s) {
-    out(s.c_str(), s.length());
-  };
-
-  for (const auto &metric : m_metrics) {
-    auto name = metric->name();
-    auto max_dim = metric->m_label_names->size() + 1;
-    pjs::Str *label_names[max_dim];
-    pjs::Str *label_values[max_dim];
-    metric->dump_tree(
-      label_names,
-      label_values,
-      [&](int depth, pjs::Str *dim, double x) {
-        push_s(name->str());
-        bool has_le = false;
-        if (dim == s_str_sum) {
-          push_s(s_sum);
-        } else if (dim == s_str_count) {
-          push_s(s_count);
-        } else if (dim) {
-          push_s(s_bucket);
-          has_le = true;
-        }
-        if (depth > 0 || has_le || !inst.empty()) {
-          bool first = true;
-          if (!inst.empty()) {
-            push_c('{');
-            push_s(inst);
-            first = false;
-          }
-          for (int i = 0; i < depth; i++) {
-            auto label_name = label_names[i];
-            push_c(first ? '{' : ',');
-            push_s(label_name->str());
-            push_c('=');
-            push_c('"');
-            push_s(label_values[i]->str());
-            push_c('"');
-            first = false;
-          }
-          if (has_le) {
-            push_c(first ? '{' : ',');
-            push_s(s_le);
-            push_c('"');
-            push_s(dim->str());
-            push_c('"');
-          }
-          push_c('}');
-        }
-        char buf[100];
-        auto len = pjs::Number::to_string(buf, sizeof(buf), x);
-        push_c(' ');
-        push_d(buf, len);
-        push_c('\n');
-      }
-    );
   }
 }
 
@@ -649,6 +307,42 @@ private:
     output('\n');
   }
 };
+
+//
+// Initial state:
+//   {
+//     "k": "metric-1",
+//     "l": "label-1/label-2",
+//     "t": "Counter",
+//     "v": 123,
+//     "s": [
+//       {
+//         "k": "label-value-1",
+//         "v": 123,
+//         "s": [...]
+//       }
+//     ]
+//   }
+//
+// Update state:
+//   {
+//     "v": 123,
+//     "s": [
+//       {
+//         "v": 123,
+//         "s": [...]
+//       },
+//       123
+//     ]
+//   }
+//
+// Vector:
+//   {
+//     "k": "latency-1",
+//     "t": "Histogram[1,2,4,8,16,32]",
+//     "v": [12345, 1234, 123, 12, 1, 0]
+//   }
+//
 
 //
 // MetricData
@@ -1007,7 +701,6 @@ void MetricData::Deserializer::array_end() {
     pop();
   }
 }
-
 
 //
 // MetricDataSum
@@ -1582,18 +1275,6 @@ void Histogram::set_value(int dim, double value) {
     case 1: m_sum = value; break;
   }
   create_value();
-}
-
-void Histogram::dump(const std::function<void(pjs::Str*, double)> &out) {
-  const auto &labels = m_root ? m_root->m_labels : m_labels;
-  int i = 0;
-  m_percentile->dump(
-    [&](double, size_t count) {
-      out(labels[i++], count);
-    }
-  );
-  out(s_str_count, m_count);
-  out(s_str_sum, m_sum);
 }
 
 } // namespace stats
