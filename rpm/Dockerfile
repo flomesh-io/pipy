@@ -50,7 +50,6 @@ RUN if test "$PIPY_GUI" = ON ; then   \
     && export CI_COMMIT_DATE \
     && export PIPY_STATIC \
     && export BUILD_TYPE \
-    && source /opt/rh/llvm-toolset-7.0/enable \
     && rpmbuild $rpmbuild_opts \
          --define "pipy_version $VERSION" \
          --define "pipy_revision $REVISION" \
