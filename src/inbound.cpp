@@ -153,7 +153,7 @@ void Inbound::init_metrics() {
         int total = 0;
         Listener::for_each([&](Listener *listener) {
           if (auto *p = listener->pipeline_layout()) {
-            auto k = p->name();
+            auto k = p->name_or_label();
             auto l = gauge->with_labels(&k, 1);
             auto n = 0;
             l->zero_all();
@@ -301,7 +301,7 @@ void InboundTCP::start() {
   m_listener->open(this);
 
   pjs::Str *labels[2];
-  labels[0] = m_listener->pipeline_layout()->name();
+  labels[0] = m_listener->pipeline_layout()->name_or_label();
   labels[1] = remote_address();
   m_metric_traffic_in = Inbound::s_metric_traffic_in->with_labels(labels, 2);
   m_metric_traffic_out = Inbound::s_metric_traffic_out->with_labels(labels, 2);

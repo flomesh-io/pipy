@@ -59,6 +59,7 @@ bool WorkerThread::start() {
       m_cv.notify_one();
 
       if (started) {
+        init_metrics();
         Net::current().run();
       }
     }
@@ -113,6 +114,36 @@ auto WorkerThread::stop(bool force) -> int {
     std::lock_guard<std::mutex> lock(m_mutex);
     return m_pending_pipelines;
   }
+}
+
+void WorkerThread::init_metrics() {
+  pjs::Ref<pjs::Array> label_names = pjs::Array::make();
+
+  label_names->length(2);
+  label_names->set(0, "module");
+  label_names->set(1, "name");
+
+  stats::Gauge::make(
+    pjs::Str::make("pipy_pipeline_count"),
+    label_names,
+    [](stats::Gauge *gauge) {
+      double total = 0;
+      PipelineLayout::for_each(
+        [&](PipelineLayout *p) {
+          if (auto mod = dynamic_cast<JSModule*>(p->module())) {
+            pjs::Str *labels[2];
+            labels[0] = mod ? mod->filename() : pjs::Str::empty.get();
+            labels[1] = p->name_or_label();
+            auto metric = gauge->with_labels(labels, 2);
+            auto n = p->active();
+            metric->set(n);
+            total += n;
+          }
+        }
+      );
+      gauge->set(total);
+    }
+  );
 }
 
 void WorkerThread::wait() {

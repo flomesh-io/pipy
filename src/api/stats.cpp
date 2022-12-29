@@ -221,7 +221,7 @@ public:
     static std::string s_sum("_sum");
     static std::string s_count("_count");
 
-    if (level >= m_label_names.size()) return;
+    if (level > m_label_names.size()) return;
 
     if (level > 0) {
       m_label_values[level-1] = node->get_key();

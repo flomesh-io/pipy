@@ -66,6 +66,7 @@ private:
   bool m_failed = false;
   bool m_shutdown = false;
 
+  void init_metrics();
   void wait();
   void fail();
 };
