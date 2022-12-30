@@ -109,6 +109,8 @@ template<> void ClassDef<JSON>::init() {
 
 namespace pipy {
 
+thread_local static Data::Producer s_dp("JSON");
+
 //
 // JSONVisitor
 //
@@ -251,7 +253,6 @@ bool JSON::encode(
   int space,
   Data &data
 ) {
-  static Data::Producer s_dp("JSON");
   Data::Builder db(data, &s_dp);
   auto ret = encode(val, replacer, space, db);
   db.flush();

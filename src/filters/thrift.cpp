@@ -60,6 +60,7 @@ namespace thrift {
 // +--------+--------+--------+...+--------+--------+...+--------+--------+...+--------+
 //
 
+thread_local static Data::Producer s_dp("Thrift");
 thread_local static pjs::ConstStr s_binary("binary");
 thread_local static pjs::ConstStr s_compact("compact");
 thread_local static pjs::ConstStr s_call("call");
@@ -749,8 +750,6 @@ void Encoder::reset() {
 }
 
 void Encoder::process(Event *evt) {
-  static Data::Producer s_dp("encodeThrift");
-
   if (auto *start = evt->as<MessageStart>()) {
     if (!m_started) {
       int seq_id = 0;

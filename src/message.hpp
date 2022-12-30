@@ -75,7 +75,7 @@ private:
   pjs::Ref<pjs::Object> m_tail;
   pjs::Ref<Data> m_body;
 
-  static Data::Producer s_dp;
+  thread_local static Data::Producer s_dp;
 
   friend class pjs::ObjectTemplate<Message>;
 };

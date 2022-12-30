@@ -36,7 +36,7 @@
 
 namespace pipy {
 
-static Data::Producer s_dp("File I/O");
+thread_local static Data::Producer s_dp("File I/O");
 static asio::thread_pool* s_thread_pool = nullptr;
 
 void File::start_bg_thread() {

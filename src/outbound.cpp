@@ -34,6 +34,9 @@ namespace pipy {
 using tcp = asio::ip::tcp;
 using udp = asio::ip::udp;
 
+thread_local static Data::Producer s_dp_tcp("OutboundTCP");
+thread_local static Data::Producer s_dp_udp("OutboundUDP");
+
 //
 // Outbound
 //
@@ -387,8 +390,7 @@ void OutboundTCP::restart(StreamEnd::Error err) {
 void OutboundTCP::receive() {
   if (!m_socket.is_open()) return;
 
-  static Data::Producer s_data_producer("OutboundTCP");
-  pjs::Ref<Data> buffer(Data::make(RECEIVE_BUFFER_SIZE, &s_data_producer));
+  pjs::Ref<Data> buffer(Data::make(RECEIVE_BUFFER_SIZE, &s_dp_tcp));
 
   m_socket.async_read_some(
     DataChunks(buffer->chunks()),
@@ -404,7 +406,7 @@ void OutboundTCP::receive() {
           if (m_socket.is_open()) {
             buffer->pop(buffer->size() - n);
             if (auto more = m_socket.available()) {
-              Data buf(more, &s_data_producer);
+              Data buf(more, &s_dp_tcp);
               auto n = m_socket.read_some(DataChunks(buf.chunks()));
               if (n < more) buf.pop(more - n);
               buffer->push(buf);
@@ -809,8 +811,7 @@ void OutboundUDP::restart(StreamEnd::Error err) {
 void OutboundUDP::receive() {
   if (!m_socket.is_open()) return;
 
-  static Data::Producer s_data_producer("OutboundUDP");
-  pjs::Ref<Data> buffer(Data::make(m_options.max_packet_size, &s_data_producer));
+  pjs::Ref<Data> buffer(Data::make(m_options.max_packet_size, &s_dp_udp));
 
   m_socket.async_receive(
     DataChunks(buffer->chunks()),

@@ -35,7 +35,7 @@
 namespace pipy {
 namespace proxy_protocol {
 
-static Data::Producer s_dp("Proxy Protocol");
+thread_local static Data::Producer s_dp("Proxy Protocol");
 
 static std::string s_v1_fixed_header("PROXY ");
 static std::string s_v2_fixed_header("\r\n\r\n\0\r\nQUIT\n", 12);

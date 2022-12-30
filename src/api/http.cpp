@@ -56,7 +56,7 @@ static std::map<std::string, std::string> s_content_types = {
   { "json"  , "application/json" },
 };
 
-static Data::Producer s_dp_http_file("http.File");
+thread_local static Data::Producer s_dp_http_file("http.File");
 
 auto File::from(const std::string &path) -> File* {
   try {

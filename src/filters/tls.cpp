@@ -37,8 +37,7 @@ namespace tls {
 
 thread_local static pjs::ConstStr STR_serverNames("serverNames");
 thread_local static pjs::ConstStr STR_protocolNames("protocolNames");
-
-static Data::Producer s_dp("TLS");
+thread_local static Data::Producer s_dp("TLS");
 
 static void throw_error() {
   char str[1000];

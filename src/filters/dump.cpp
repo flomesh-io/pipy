@@ -36,6 +36,8 @@
 
 namespace pipy {
 
+thread_local static Data::Producer s_dp("dump()");
+
 Dump::Dump() {
 }
 
@@ -63,7 +65,6 @@ auto Dump::clone() -> Filter* {
 }
 
 void Dump::process(Event *evt) {
-  static Data::Producer s_dp("Dump");
   static char s_hex[] = { "0123456789ABCDEF" };
   static std::string s_prefix("[dump] [context=");
   static std::string s_hline(16*3+4+16, '-');

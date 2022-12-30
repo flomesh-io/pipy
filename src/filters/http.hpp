@@ -184,8 +184,6 @@ private:
       101 <= m_status_code && m_status_code < 300
     );
   }
-
-  static Data::Producer s_dp;
 };
 
 //

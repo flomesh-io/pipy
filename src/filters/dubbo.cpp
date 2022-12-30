@@ -29,6 +29,8 @@
 namespace pipy {
 namespace dubbo {
 
+thread_local static Data::Producer s_dp("Dubbo");
+
 class DubboHead : public pjs::ObjectTemplate<DubboHead> {
 public:
   enum class Field {
@@ -204,8 +206,6 @@ void Encoder::reset() {
 }
 
 void Encoder::process(Event *evt) {
-  static Data::Producer s_dp("encodeDubbo");
-
   if (auto start = evt->as<MessageStart>()) {
     m_message_start = start;
     m_buffer = Data::make();

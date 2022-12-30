@@ -34,7 +34,7 @@
 
 namespace pipy {
 
-static Data::Producer s_dp("Command Line Options");
+thread_local static Data::Producer s_dp("Command Line Options");
 
 void MainOptions::show_help() {
   std::cout << "Usage: pipy [options] [<filename or URL>]" << std::endl;

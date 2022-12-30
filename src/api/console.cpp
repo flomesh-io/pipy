@@ -32,8 +32,9 @@
 
 namespace pipy {
 
+thread_local static Data::Producer s_dp("Console");
+
 void Console::log(const pjs::Value *values, int count) {
-  static Data::Producer s_dp("Console::log");
   Data buf;
   Data::Builder db(buf, &s_dp);
   char str[100];

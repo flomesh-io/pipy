@@ -44,6 +44,9 @@ using tcp = asio::ip::tcp;
 // Inbound
 //
 
+thread_local static Data::Producer s_dp_tcp("InboundTCP");
+thread_local static Data::Producer s_dp_udp("InboundUDP Raw");
+
 std::atomic<uint64_t> Inbound::s_inbound_id;
 
 thread_local pjs::Ref<stats::Gauge> Inbound::s_metric_concurrency;
@@ -317,8 +320,7 @@ void InboundTCP::start() {
 void InboundTCP::receive() {
   if (!m_socket.is_open()) return;
 
-  static Data::Producer s_data_producer("InboundTCP");
-  pjs::Ref<Data> buffer(Data::make(RECEIVE_BUFFER_SIZE, &s_data_producer));
+  pjs::Ref<Data> buffer(Data::make(RECEIVE_BUFFER_SIZE, &s_dp_tcp));
 
   m_socket.async_read_some(
     DataChunks(buffer->chunks()),
@@ -334,7 +336,7 @@ void InboundTCP::receive() {
           buffer->pop(buffer->size() - n);
           if (m_socket.is_open()) {
             if (auto more = m_socket.available()) {
-              Data buf(more, &s_data_producer);
+              Data buf(more, &s_dp_tcp);
               auto n = m_socket.read_some(DataChunks(buf.chunks()));
               if (n < more) buf.pop(more - n);
               buffer->push(buf);
@@ -656,14 +658,13 @@ void InboundUDP::on_event(Event *evt) {
       if (m_listener) {
 #ifdef __linux__
         if (m_options.masquerade) {
-          static Data::Producer s_dp("InboundUDP Raw");
           auto *buf = Data::make();
           auto *ip = reinterpret_cast<struct iphdr *>(m_datagram_header);
           auto *udp = reinterpret_cast<struct udphdr *>(m_datagram_header + 20);
           auto size = m_buffer.size();
           ip->tot_len = htons(20 + 8 + size);
           udp->len = htons(8 + size);
-          buf->push(m_datagram_header, sizeof(m_datagram_header), &s_dp);
+          buf->push(m_datagram_header, sizeof(m_datagram_header), &s_dp_udp);
           buf->push(std::move(m_buffer));
           m_socket_raw.async_send_to(
             DataChunks(buf->chunks()),

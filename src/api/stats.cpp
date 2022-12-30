@@ -33,12 +33,12 @@
 namespace pipy {
 namespace stats {
 
-static Data::Producer s_dp("Stats");
 static std::string s_prefix_histogram("Histogram[");
 thread_local static pjs::ConstStr s_str_Counter("Counter");
 thread_local static pjs::ConstStr s_str_Gauge("Gauge");
 thread_local static pjs::ConstStr s_str_count("count");
 thread_local static pjs::ConstStr s_str_sum("sum");
+thread_local static Data::Producer s_dp("Stats");
 
 //
 // Metric

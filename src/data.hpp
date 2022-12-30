@@ -103,7 +103,7 @@ public:
 
     void decrease() { m_current--; }
 
-    static List<Producer> s_all_producers;
+    thread_local static List<Producer> s_all_producers;
 
     friend struct Chunk;
   };
@@ -917,7 +917,7 @@ private:
     m_size += size;
   }
 
-  static Producer s_unknown_producer;
+  thread_local static Producer s_unknown_producer;
 };
 
 } // namespace pipy

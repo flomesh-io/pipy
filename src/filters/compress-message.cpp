@@ -30,6 +30,8 @@
 
 namespace pipy {
 
+thread_local static Data::Producer s_dp("compressMessage()");
+
 //
 // CompressMessageBase::Options
 //
@@ -58,7 +60,6 @@ CompressMessageBase::CompressMessageBase(const CompressMessageBase &r)
   : Filter(r)
   , m_options(r.m_options)
 {
-  static Data::Producer s_dp("Compress Message");
   m_output = [this](const void *data, size_t size) {
     output(s_dp.make(data, size));
   };

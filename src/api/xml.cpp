@@ -111,6 +111,8 @@ template<> void ClassDef<Constructor<XML::Node>>::init() {
 
 namespace pipy {
 
+thread_local static Data::Producer s_dp("XML");
+
 //
 // XMLParser
 //
@@ -224,7 +226,6 @@ auto XML::decode(const Data &data) -> Node* {
 }
 
 bool XML::encode(Node *doc, int space, Data &data) {
-  static Data::Producer s_dp("XML");
   static std::string s_escaped_chars("<>&");
   static std::string s_cdata_start("<![CDATA[");
   static std::string s_cdata_end("]]>");

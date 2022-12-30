@@ -29,7 +29,7 @@
 namespace pipy {
 namespace http2 {
 
-static Data::Producer s_dp("HTTP2 Codec");
+thread_local static Data::Producer s_dp("HTTP2");
 
 //
 // HPACK static table

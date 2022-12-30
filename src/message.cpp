@@ -27,7 +27,7 @@
 
 namespace pipy {
 
-Data::Producer Message::s_dp("Message");
+thread_local Data::Producer Message::s_dp("Message");
 
 bool Message::output(const pjs::Value &evt, EventTarget::Input *input) {
   if (evt.is_instance_of(pjs::class_of<Event>())) {

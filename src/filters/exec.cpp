@@ -35,6 +35,8 @@
 
 namespace pipy {
 
+thread_local static Data::Producer s_dp("exec()");
+
 //
 // Exec
 //
@@ -80,8 +82,6 @@ void Exec::reset() {
 }
 
 void Exec::process(Event *evt) {
-  static Data::Producer s_dp("exec");
-
   if (!m_pid) {
     pjs::Value ret;
     if (!eval(m_command, ret)) return;

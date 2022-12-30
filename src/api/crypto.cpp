@@ -43,12 +43,12 @@
 namespace pipy {
 namespace crypto {
 
-static Data::Producer s_dp_cipher("Cipher");
-static Data::Producer s_dp_decipher("Decipher");
-static Data::Producer s_dp_hmac("Hmac");
-static Data::Producer s_dp_hash("Hash");
-static Data::Producer s_dp_sign("Sign");
-static Data::Producer s_dp_verify("Verify");
+thread_local static Data::Producer s_dp_cipher("Cipher");
+thread_local static Data::Producer s_dp_decipher("Decipher");
+thread_local static Data::Producer s_dp_hmac("Hmac");
+thread_local static Data::Producer s_dp_hash("Hash");
+thread_local static Data::Producer s_dp_sign("Sign");
+thread_local static Data::Producer s_dp_verify("Verify");
 
 static void throw_error() {
   char str[1000];

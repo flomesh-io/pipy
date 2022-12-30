@@ -57,7 +57,7 @@ Pack::Options::Options(pjs::Object *options, const char *base_name) {
 // Pack
 //
 
-static Data::Producer s_dp("pack");
+thread_local static Data::Producer s_dp("pack()");
 
 Pack::Pack(int batch_size, const Options &options)
   : m_batch_size(batch_size)

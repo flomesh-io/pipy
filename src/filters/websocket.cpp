@@ -48,6 +48,8 @@ namespace websocket {
 // |                     Payload Data continued ...                |
 // +---------------------------------------------------------------+
 
+thread_local static Data::Producer s_dp("WebSocket");
+
 //
 // Decoder
 //
@@ -148,8 +150,6 @@ auto Decoder::on_state(int state, int c) -> int {
 }
 
 void Decoder::on_pass(const Data &data) {
-  static Data::Producer s_dp("decodeWebSocket");
-
   if (m_has_mask) {
     uint8_t buf[DATA_CHUNK_SIZE];
     auto output = Data::make();
@@ -277,8 +277,6 @@ void Encoder::process(Event *evt) {
 }
 
 void Encoder::frame(const Data &data, bool final) {
-  static Data::Producer s_dp("encodeWebSocket");
-
   int p = 0;
   uint8_t head[12];
   if (m_continuation) {

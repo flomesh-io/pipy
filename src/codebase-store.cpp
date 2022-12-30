@@ -39,7 +39,8 @@
 
 namespace pipy {
 
-static Data::Producer s_dp("Codebase Store");
+thread_local static Data::Producer s_dp("Codebase Store");
+
 static std::string s_initial_code_template(
 R"***(((
   // Global variables go here, e.g.:

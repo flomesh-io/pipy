@@ -43,6 +43,8 @@ namespace pipy {
 
 using tcp = asio::ip::tcp;
 
+thread_local static Data::Producer s_dp_udp("InboundUDP");
+
 //
 // Listener::Options
 //
@@ -381,8 +383,6 @@ auto Listener::AcceptorUDP::count() -> size_t const {
 }
 
 void Listener::AcceptorUDP::receive() {
-  static Data::Producer s_data_producer("InboundUDP");
-
   m_socket.async_receive_from(
     asio::null_buffers(),
     m_peer,
@@ -393,7 +393,7 @@ void Listener::AcceptorUDP::receive() {
 
           auto max_size = m_listener->m_options.max_packet_size;
           auto iov_size = (max_size + DATA_CHUNK_SIZE - 1) / DATA_CHUNK_SIZE;
-          Data buf(max_size, &s_data_producer);
+          Data buf(max_size, &s_dp_udp);
 
           auto s = m_socket.native_handle();
 

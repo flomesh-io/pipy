@@ -35,12 +35,11 @@ namespace pipy {
 
 #ifdef PIPY_USE_GUI
 
+thread_local static Data::Producer s_dp("GUI Tarball");
 uint8_t *s_decompressed_gui_tar = nullptr;
 size_t s_decompressed_gui_tar_size = 0;
 
 static void decompress_gui_tar() {
-  static Data::Producer s_dp("GUI Tarball");
-
   Data out;
   auto *decompressor = Decompressor::brotli(
     [&](Data *data) {

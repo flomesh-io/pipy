@@ -30,6 +30,8 @@
 
 namespace pipy {
 
+thread_local static Data::Producer s_dp("LevelDB");
+
 //
 // MemoryStore
 //
@@ -49,6 +51,10 @@ class MemoryStore : public Store {
 
   friend class MemoryStoreBatch;
 };
+
+//
+// MemoryStoreBatch
+//
 
 class MemoryStoreBatch : public Store::Batch {
   MemoryStoreBatch(MemoryStore *store)
@@ -181,7 +187,6 @@ void LevelDBStore::keys(const std::string &base_key, std::set<std::string> &keys
 }
 
 bool LevelDBStore::get(const std::string &key, Data &data) {
-  static Data::Producer s_dp("LevelDB");
   std::string value;
   auto status = m_db->Get(leveldb::ReadOptions(), key, &value);
   if (status.IsNotFound()) return false;

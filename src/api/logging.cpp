@@ -49,7 +49,12 @@ namespace logging {
 // Logger
 //
 
-static Data::Producer s_dp("Logger");
+thread_local static Data::Producer s_dp("Logger");
+thread_local static Data::Producer s_dp_stdout("Logger::StdoutTarget");
+thread_local static Data::Producer s_dp_binary("BinaryLogger");
+thread_local static Data::Producer s_dp_text("TextLogger");
+thread_local static Data::Producer s_dp_json("JSONLogger");
+
 static Net* s_net = nullptr;
 
 std::set<Logger*> Logger::s_all_loggers;
@@ -224,8 +229,7 @@ void Logger::shutdown() {
 }
 
 void Logger::StdoutTarget::write(const Data &msg) {
-  static Data::Producer s_dp("Logger::StdoutTarget");
-  if (!m_file_stream) m_file_stream = FileStream::make(false, m_f, &s_dp);
+  if (!m_file_stream) m_file_stream = FileStream::make(false, m_f, &s_dp_stdout);
   Data *buf = Data::make();
   s_dp.push(buf, &msg);
   s_dp.push(buf, '\n');
@@ -247,7 +251,6 @@ Logger::FileTarget::FileTarget(pjs::Str *filename)
 }
 
 void Logger::FileTarget::write(const Data &msg) {
-  static Data::Producer s_dp("Logger::FileTarget");
   Data *buf = Data::make();
   s_dp.push(buf, &msg);
   s_dp.push(buf, '\n');
@@ -312,7 +315,6 @@ Logger::HTTPTarget::Options::Options(pjs::Object *options) {
 Logger::HTTPTarget::HTTPTarget(pjs::Str *url, const Options &options)
   : m_module(new Module)
 {
-  static Data::Producer s_dp("Logger::HTTPTarget");
   thread_local static pjs::ConstStr s_host("host");
   thread_local static pjs::ConstStr s_POST("POST");
 
@@ -379,9 +381,8 @@ void Logger::HTTPTarget::shutdown() {
 //
 
 void BinaryLogger::log(int argc, const pjs::Value *args) {
-  static Data::Producer s_dp("BinaryLogger");
   Data data;
-  Data::Builder db(data, &s_dp);
+  Data::Builder db(data, &s_dp_binary);
   for (int i = 0; i < argc; i++) {
     auto &v = args[i];
     if (v.is<Data>()) {
@@ -411,9 +412,8 @@ void BinaryLogger::log(int argc, const pjs::Value *args) {
 //
 
 void TextLogger::log(int argc, const pjs::Value *args) {
-  static Data::Producer s_dp("TextLogger");
   Data data;
-  Data::Builder db(data, &s_dp);
+  Data::Builder db(data, &s_dp_text);
   for (int i = 0; i < argc; i++) {
     auto &v = args[i];
     auto *s = v.to_string();
@@ -434,9 +434,8 @@ void TextLogger::log(int argc, const pjs::Value *args) {
 //
 
 void JSONLogger::log(int argc, const pjs::Value *args) {
-  static Data::Producer s_dp("JSONLogger");
   Data data;
-  Data::Builder db(data, &s_dp);
+  Data::Builder db(data, &s_dp_json);
   for (int i = 0; i < argc; i++) {
     auto &v = args[i];
     JSON::encode(v, nullptr, 0, db);

@@ -29,6 +29,7 @@
 namespace pipy {
 namespace mqtt {
 
+thread_local static Data::Producer s_dp("MQTT");
 thread_local static pjs::ConstStr STR_MQTT("MQTT");
 thread_local static pjs::ConstStr STR_cleanStart("cleanStart");
 thread_local static pjs::ConstStr STR_clientID("clientID");
@@ -575,11 +576,7 @@ protected:
     } while (n && i < 4);
     return i;
   }
-
-  static Data::Producer s_dp;
 };
-
-Data::Producer DataBuilder::s_dp("MQTT Encoder");
 
 //
 // PacketBuilder

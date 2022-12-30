@@ -41,6 +41,8 @@
 namespace pipy {
 namespace http {
 
+static Data::Producer s_dp("HTTP");
+
 thread_local static const pjs::ConstStr s_protocol("protocol");
 thread_local static const pjs::ConstStr s_method("method");
 thread_local static const pjs::ConstStr s_GET("GET");
@@ -675,8 +677,6 @@ void Decoder::stream_end(StreamEnd *end) {
 //
 // Encoder
 //
-
-Data::Producer Encoder::s_dp("HTTP Encoder");
 
 Encoder::Encoder(bool is_response)
   : m_prop_protocol(s_protocol)

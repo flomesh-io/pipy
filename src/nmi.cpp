@@ -37,7 +37,7 @@
 namespace pipy {
 namespace nmi {
 
-static Data::Producer s_dp("NMI");
+thread_local static Data::Producer s_dp("NMI");
 
 //
 // Value

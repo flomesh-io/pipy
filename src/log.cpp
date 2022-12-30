@@ -43,7 +43,8 @@ namespace pipy {
 static Log::Level s_log_level = Log::ERROR;
 static bool s_graph_enabled = false;
 static logging::Logger *s_logger = nullptr;
-static Data::Producer s_dp("Log");
+
+thread_local static Data::Producer s_dp("Log");
 
 static const char *s_levels[] = {
   "[DBG]", // DEBUG

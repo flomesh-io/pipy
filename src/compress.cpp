@@ -34,6 +34,9 @@
 
 namespace pipy {
 
+thread_local static Data::Producer s_dp_inflate("inflate");
+thread_local static Data::Producer s_dp_brotli("brotli");
+
 //
 // Inflate
 //
@@ -61,8 +64,6 @@ private:
   }
 
   virtual bool process(const Data *data) override {
-    static Data::Producer s_dp("inflate");
-
     if (m_done) return true;
     unsigned char buf[DATA_CHUNK_SIZE];
     pjs::Ref<Data> output_data(Data::make());
@@ -74,7 +75,7 @@ private:
         m_zs.avail_out = sizeof(buf);
         auto ret = ::inflate(&m_zs, Z_NO_FLUSH);
         if (auto size = sizeof(buf) - m_zs.avail_out) {
-          s_dp.push(output_data, buf, size);
+          s_dp_inflate.push(output_data, buf, size);
         }
         if (ret == Z_STREAM_END) { m_done = true; break; }
         if (ret != Z_OK) return false;
@@ -117,8 +118,6 @@ private:
   }
 
   virtual bool process(const Data *data) override {
-    static Data::Producer s_dp("brotli-dec");
-
     if (m_done) return true;
     uint8_t buf[DATA_CHUNK_SIZE];
     pjs::Ref<Data> output_data(Data::make());
@@ -136,14 +135,14 @@ private:
         switch (result) {
           case BROTLI_DECODER_RESULT_NEEDS_MORE_OUTPUT:
             if (auto size = (size_t)(next_out - buf)) {
-              s_dp.push(output_data, buf, size);
+              s_dp_brotli.push(output_data, buf, size);
             }
             avail_out = DATA_CHUNK_SIZE;
             next_out = buf;
             break;
           case BROTLI_DECODER_RESULT_SUCCESS:
             if (auto size = (size_t)(next_out - buf)) {
-              s_dp.push(output_data, buf, size);
+              s_dp_brotli.push(output_data, buf, size);
             }
             avail_out = 0;
             if (avail_in != 0) return false;

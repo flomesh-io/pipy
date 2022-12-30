@@ -64,6 +64,8 @@ template<> void ClassDef<Hessian>::init() {
 
 namespace pipy {
 
+thread_local static Data::Producer s_dp("Hessian");
+
 //
 // ByteBuf
 //
@@ -768,8 +770,6 @@ void Hessian::decode(const Data &data, pjs::Value &val) {
 }
 
 bool Hessian::encode(const pjs::Value &val, Data &data) {
-  static Data::Producer s_dp("Hessian");
-
   int level = 0;
 
   auto write_str = [&](const std::string &str) {

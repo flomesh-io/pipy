@@ -32,6 +32,8 @@
 namespace pipy {
 namespace socks {
 
+thread_local static Data::Producer s_dp("SOCKS");
+
 //
 // Server
 //
@@ -67,7 +69,6 @@ void Server::reset() {
 }
 
 void Server::process(Event *evt) {
-  static Data::Producer s_dp("acceptSOCKS");
 
   auto reply = [this](const uint8_t *buf, size_t len) {
     output(s_dp.make(buf, len));
@@ -297,8 +298,6 @@ void Server::process(Event *evt) {
 //
 // Client
 //
-
-static Data::Producer s_dp("connectSOCKS");
 
 void ClientReceiver::on_event(Event *evt) {
   static_cast<Client*>(this)->on_receive(evt);

@@ -29,8 +29,8 @@
 
 namespace pipy {
 
-List<Data::Producer> Data::Producer::s_all_producers;
-Data::Producer Data::s_unknown_producer("Unknown");
+thread_local List<Data::Producer> Data::Producer::s_all_producers;
+thread_local Data::Producer Data::s_unknown_producer("Unknown");
 
 void Data::pack(const Data &data, Producer *producer, double vacancy) {
   assert_same_thread(*this);
