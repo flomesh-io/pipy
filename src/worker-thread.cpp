@@ -119,6 +119,115 @@ auto WorkerThread::stop(bool force) -> int {
 void WorkerThread::init_metrics() {
   pjs::Ref<pjs::Array> label_names = pjs::Array::make();
 
+  //
+  // Stats - size of allocated pool space
+  //
+
+  label_names->length(1);
+  label_names->set(0, "class");
+
+  stats::Gauge::make(
+    pjs::Str::make("pipy_pool_allocated_size"),
+    label_names,
+    [](stats::Gauge *gauge) {
+      double total = 0;
+      for (const auto &i : pjs::PooledClass::all()) {
+        auto c = i.second;
+        auto n = c->allocated();
+        if (n > 1) {
+          pjs::Str *name = pjs::Str::make(c->name())->retain();
+          auto metric = gauge->with_labels(&name, 1);
+          auto size = n * c->size();
+          metric->set(size);
+          total += size;
+          name->release();
+        }
+      }
+      gauge->set(total);
+    }
+  );
+
+  //
+  // Stats - size of spare pool space
+  //
+
+  label_names->length(1);
+  label_names->set(0, "class");
+
+  stats::Gauge::make(
+    pjs::Str::make("pipy_pool_spare_size"),
+    label_names,
+    [](stats::Gauge *gauge) {
+      double total = 0;
+      for (const auto &i : pjs::PooledClass::all()) {
+        auto c = i.second;
+        auto n = c->pooled();
+        if (n > 0) {
+          pjs::Str *name = pjs::Str::make(c->name())->retain();
+          auto metric = gauge->with_labels(&name, 1);
+          auto size = n * c->size();
+          metric->set(size);
+          total += size;
+          name->release();
+        }
+      }
+      gauge->set(total);
+    }
+  );
+
+  //
+  // Stats - # of objects
+  //
+
+  label_names->length(1);
+  label_names->set(0, "class");
+
+  stats::Gauge::make(
+    pjs::Str::make("pipy_object_count"),
+    label_names,
+    [](stats::Gauge *gauge) {
+      double total = 0;
+      for (const auto &i : pjs::Class::all()) {
+        static std::string prefix("pjs::Constructor");
+        if (utils::starts_with(i.second->name()->str(), prefix)) continue;
+        if (auto n = i.second->object_count()) {
+          pjs::Str *name = i.second->name();
+          auto metric = gauge->with_labels(&name, 1);
+          metric->set(n);
+          total += n;
+        }
+      }
+      gauge->set(total);
+    }
+  );
+
+  //
+  // Stats - # of chunks
+  //
+
+  label_names->length(1);
+  label_names->set(0, "type");
+
+  stats::Gauge::make(
+    pjs::Str::make("pipy_chunk_count"),
+    label_names,
+    [](stats::Gauge *gauge) {
+      double total = 0;
+      Data::Producer::for_each([&](Data::Producer *producer) {
+        pjs::Str *name = producer->name();
+        auto metric = gauge->with_labels(&name, 1);
+        auto n = producer->current();
+        metric->set(n);
+        total += n;
+      });
+      gauge->set(total);
+    }
+  );
+
+  //
+  // Stats - # of pipelines
+  //
+
   label_names->length(2);
   label_names->set(0, "module");
   label_names->set(1, "name");
