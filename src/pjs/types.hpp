@@ -687,8 +687,8 @@ private:
     auto chr_to_pos(int i) -> int;
     auto chr_at(int i) -> int;
 
-    void retain() { m_refs.fetch_add(1); }
-    void release() { if (m_refs.fetch_sub(1) == 1) delete this; }
+    void retain() { m_refs.fetch_add(1, std::memory_order_relaxed); }
+    void release() { if (m_refs.fetch_sub(1, std::memory_order_relaxed) == 1) delete this; }
 
   private:
     enum { CHUNK_SIZE = 32 };
@@ -736,7 +736,7 @@ private:
       std::atomic<int> hold_count;
       int next_free = 0;
       Entry() : hold_count(0) {}
-      void hold() { hold_count.fetch_add(1); }
+      void hold() { hold_count.fetch_add(1, std::memory_order_relaxed); }
     };
 
     auto alloc(CharData *data) -> int;

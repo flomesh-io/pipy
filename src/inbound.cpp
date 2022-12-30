@@ -53,8 +53,12 @@ thread_local pjs::Ref<stats::Counter> Inbound::s_metric_traffic_out;
 Inbound::Inbound() {
   init_metrics();
   Log::debug("[inbound  %p] ++", this);
-  if (!++s_inbound_id) s_inbound_id++;
-  m_id = s_inbound_id;
+  for (;;) {
+    if (auto id = s_inbound_id.fetch_add(1, std::memory_order_relaxed) + 1) {
+      m_id = id;
+      break;
+    }
+  }
 }
 
 Inbound::~Inbound() {

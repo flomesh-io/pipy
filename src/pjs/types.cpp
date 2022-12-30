@@ -40,7 +40,7 @@ auto PooledClass::all() -> std::map<std::string, PooledClass *> & {
 }
 
 PooledClass::PooledClass(const char *c_name, size_t size)
-  : m_size(std::max(size, sizeof(std::atomic<void*>)))
+  : m_size(std::max(size, sizeof(void*)))
   , m_free(nullptr)
   , m_allocated(0)
   , m_pooled(0)
@@ -513,14 +513,14 @@ auto Str::GlobalIndex::alloc(CharData *data) -> int {
     auto next = e->next_free;
     if (m_free_id.compare_exchange_weak(i, next)) {
       e->char_data = data;
-      e->hold_count.store(1);
+      e->hold_count.store(1, std::memory_order_relaxed);
       return i;
     }
   }
   i = m_max_id.fetch_add(1) + 1;
   auto e = add(i);
   e->char_data = data;
-  e->hold_count.store(1);
+  e->hold_count.store(1, std::memory_order_relaxed);
   return i;
 }
 
@@ -532,7 +532,7 @@ auto Str::GlobalIndex::hold(int i) -> Entry* {
 
 void Str::GlobalIndex::free(int i) {
   auto e = get(i);
-  if (e->hold_count.fetch_sub(1) == 1) {
+  if (e->hold_count.fetch_sub(1, std::memory_order_relaxed) == 1) {
     e->char_data = nullptr;
     auto next = m_free_id.load();
     do {

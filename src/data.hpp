@@ -96,8 +96,8 @@ public:
     std::atomic<int> m_current;
 
     void increase() {
-      auto peak = m_peak.load();
-      auto current = m_current.fetch_add(1) + 1;
+      auto peak = m_peak.load(std::memory_order_relaxed);
+      auto current = m_current.fetch_add(1, std::memory_order_relaxed) + 1;
       if (current > peak) m_peak.compare_exchange_strong(peak, current);
     }
 
