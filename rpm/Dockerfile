@@ -30,7 +30,7 @@ COPY rpmmacros /rpmmacros
 COPY pipy.tar.gz /pipy.tar.gz
 COPY pipy.spec /pipy.spec
 
-RUN yum install -y -q gcc make unzip rpm-build rpmdevtools chrpath \
+RUN yum install -y -q unzip rpm-build rpmdevtools \
     && rpmdev-setuptree \
     && mv /rpmmacros ~/.rpmmacros \
     && yum install -y centos-release-scl epel-release yum-utils \
@@ -50,7 +50,6 @@ RUN if test "$PIPY_GUI" = ON ; then   \
     && export CI_COMMIT_DATE \
     && export PIPY_STATIC \
     && export BUILD_TYPE \
-    && source /opt/rh/llvm-toolset-7.0/enable \
     && rpmbuild $rpmbuild_opts \
          --define "pipy_version $VERSION" \
          --define "pipy_revision $REVISION" \

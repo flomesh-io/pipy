@@ -58,6 +58,9 @@ source /opt/rh/rh-nodejs14/enable
   npm install
   npm run build
 %endif
+%if 0%{?rhel} == 7
+source /opt/rh/llvm-toolset-7.0/enable
+%endif
 cd build
 CXX=clang++ CC=clang cmake3 \
   -DPIPY_GUI=%{?with_gui:ON}%{!?with_gui:OFF} \
