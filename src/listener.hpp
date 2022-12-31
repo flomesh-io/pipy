@@ -81,6 +81,7 @@ public:
     }
   }
 
+  auto options() const -> const Options& { return m_options; }
   auto protocol() const -> Protocol { return m_protocol; }
   auto ip() const -> const std::string& { return m_ip; }
   auto port() const -> int { return m_port; }
@@ -88,6 +89,7 @@ public:
   bool reserved() const { return m_options.reserved; }
   auto pipeline_layout() const -> PipelineLayout* { return m_pipeline_layout; }
   void pipeline_layout(PipelineLayout *layout);
+  auto current_connections() const -> int { return m_acceptor->count(); }
   auto peak_connections() const -> int { return m_peak_connections; }
 
   void set_options(const Options &options);

@@ -59,6 +59,7 @@ public:
     double idle_timeout = 60;
     bool transparent = false;
     bool masquerade = false;
+    bool peer_stats = false;
   };
 
   auto id() const -> uint64_t { return m_id; }

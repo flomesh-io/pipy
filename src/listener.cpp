@@ -71,6 +71,9 @@ Listener::Options::Options(pjs::Object *options) {
   Value(options, "masquerade")
     .get(masquerade)
     .check_nullable();
+  Value(options, "peerStats")
+    .get(peer_stats)
+    .check_nullable();
 }
 
 //

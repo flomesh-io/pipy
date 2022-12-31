@@ -162,16 +162,22 @@ void Inbound::init_metrics() {
           if (auto *p = listener->pipeline_layout()) {
             auto k = p->name_or_label();
             auto l = gauge->with_labels(&k, 1);
-            auto n = 0;
-            l->zero_all();
-            listener->for_each_inbound([&](Inbound *inbound) {
-              auto k = inbound->remote_address();
-              auto m = l->with_labels(&k, 1);
-              m->increase();
-              n++;
-            });
-            l->set(n);
-            total += n;
+            if (listener->options().peer_stats) {
+              auto n = 0;
+              l->zero_all();
+              listener->for_each_inbound([&](Inbound *inbound) {
+                auto k = inbound->remote_address();
+                auto m = l->with_labels(&k, 1);
+                m->increase();
+                n++;
+              });
+              l->set(n);
+              total += n;
+            } else {
+              auto n = listener->current_connections();
+              l->set(n);
+              total += n;
+            }
           }
         });
         gauge->set(total);
@@ -307,11 +313,13 @@ void InboundTCP::start() {
   m_input = p->input();
   m_listener->open(this);
 
+  int n = 1;
   pjs::Str *labels[2];
   labels[0] = m_listener->pipeline_layout()->name_or_label();
-  labels[1] = remote_address();
-  m_metric_traffic_in = Inbound::s_metric_traffic_in->with_labels(labels, 2);
-  m_metric_traffic_out = Inbound::s_metric_traffic_out->with_labels(labels, 2);
+  if (m_options.peer_stats) labels[n++] = remote_address();
+
+  m_metric_traffic_in = Inbound::s_metric_traffic_in->with_labels(labels, n);
+  m_metric_traffic_out = Inbound::s_metric_traffic_out->with_labels(labels, n);
 
   p->start();
   receive();
