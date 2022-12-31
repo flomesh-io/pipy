@@ -61,6 +61,90 @@ class Value;
 template<class T> Class* class_of();
 
 //
+// SharedIndexBase
+//
+
+class SharedIndexBase {
+protected:
+
+  //
+  // SharedIndexBase::Entry
+  //
+
+  struct Entry {
+    void hold() { m_hold_count.fetch_add(1, std::memory_order_relaxed); }
+    bool release() { return m_hold_count.fetch_sub(1, std::memory_order_relaxed) == 1; }
+  protected:
+    Entry() {}
+  private:
+    std::atomic<int> m_hold_count;
+    uint32_t m_next_free = 0;
+    friend class SharedIndexBase;
+  };
+
+  SharedIndexBase(size_t entry_size);
+
+  auto get_entry(int i) -> Entry*;
+  auto add_entry(int i) -> Entry*;
+  auto alloc_entry(int &index) -> Entry*;
+  void free_entry(int i, Entry *e);
+
+private:
+  struct Range {
+    std::atomic<char*> chunks[256];
+  };
+
+  size_t m_entry_size;
+  std::atomic<Range*> m_ranges[256];
+  std::atomic<uint32_t> m_max_id;
+  std::atomic<uint64_t> m_free_id;
+
+  static void index_to_xyz(int i, int &x, int &y, int &z) {
+    z = 0xff & (i >> 0);
+    y = 0xff & (i >> 8);
+    x = 0xff & (i >> 16);
+  }
+};
+
+//
+// SharedIndex
+//
+
+template<class T>
+class SharedIndex : public SharedIndexBase {
+public:
+
+  //
+  // SharedIndex::Entry
+  //
+
+  struct Entry : public SharedIndexBase::Entry {
+    T data;
+  };
+
+  SharedIndex() : SharedIndexBase(sizeof(Entry)) {}
+
+  auto get(int i) -> Entry* {
+    return static_cast<Entry*>(get_entry(i));
+  }
+
+  auto alloc(const T &data) -> int {
+    int i;
+    auto e = static_cast<Entry*>(alloc_entry(i));
+    new (&e->data) T(data);
+    return i;
+  }
+
+  void free(int i) {
+    auto e = static_cast<Entry*>(get_entry(i));
+    if (e->release()) {
+      e->data.~T();
+      free_entry(i, e);
+    }
+  }
+};
+
+//
 // PooledClass
 //
 
@@ -674,7 +758,7 @@ private:
   // Str::CharData
   //
 
-  class CharData : public Pooled<CharData> {
+  class CharData {
   public:
     CharData(std::string &&str);
 
@@ -723,42 +807,6 @@ private:
     Range* m_ranges[256];
   };
 
-  //
-  // Str::GlobalIndex
-  //
-
-  class GlobalIndex {
-  public:
-    GlobalIndex();
-
-    struct Entry {
-      Ref<CharData> char_data;
-      std::atomic<int> hold_count;
-      int next_free = 0;
-      Entry() : hold_count(0) {}
-      void hold() { hold_count.fetch_add(1, std::memory_order_relaxed); }
-    };
-
-    auto alloc(CharData *data) -> int;
-    auto get(int i) -> Entry*;
-    auto add(int i) -> Entry*;
-    auto hold(int i) -> Entry*;
-    void free(int i);
-
-  private:
-    struct Chunk {
-      Entry entries[256];
-    };
-
-    struct Range {
-      std::atomic<Chunk*> chunks[256];
-    };
-
-    std::atomic<Range*> m_ranges[256];
-    std::atomic<int> m_max_id;
-    std::atomic<int> m_free_id;
-  };
-
   static void index_to_xyz(int i, int &x, int &y, int &z) {
     z = 0xff & (i >> 0);
     y = 0xff & (i >> 8);
@@ -768,8 +816,8 @@ private:
   int m_id;
   Ref<CharData> m_char_data;
 
-  Str(int id, GlobalIndex::Entry *ent)
-    : m_id(id), m_char_data(ent->char_data) { ent->hold(); ht()[m_char_data->str()] = this; }
+  Str(int id, CharData *char_data)
+    : m_id(id), m_char_data(char_data) { ht()[char_data->str()] = this; }
 
   Str(const std::string &str)
     : m_id(0), m_char_data(new CharData(std::string(str))) { ht()[str] = this; }
@@ -788,9 +836,8 @@ private:
   static auto ht() -> std::unordered_map<std::string, Str*>&;
   static size_t s_max_size;
 
-  thread_local
-  static LocalIndex m_local_index;
-  static GlobalIndex m_global_index;
+  static SharedIndex<Ref<CharData>> m_global_index;
+  thread_local static LocalIndex m_local_index;
 
   friend class RefCount<Str>;
 };

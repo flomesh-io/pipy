@@ -30,6 +30,84 @@
 
 namespace pjs {
 
+SharedIndexBase::SharedIndexBase(size_t entry_size)
+  : m_entry_size(entry_size)
+  , m_max_id(0)
+  , m_free_id(0)
+{
+  std::memset(m_ranges, 0, sizeof(m_ranges));
+}
+
+auto SharedIndexBase::get_entry(int i) -> Entry* {
+  int x, y, z;
+  index_to_xyz(i, x, y, z);
+  auto r = m_ranges[x].load(std::memory_order_relaxed);
+  auto c = r->chunks[y].load(std::memory_order_relaxed);
+  return reinterpret_cast<Entry*>(c + z * m_entry_size);
+}
+
+auto SharedIndexBase::add_entry(int i) -> Entry* {
+  int x, y, z;
+  index_to_xyz(i, x, y, z);
+  auto r = m_ranges[x].load(std::memory_order_relaxed);
+  if (!r) {
+    auto *p = new Range;
+    if (m_ranges[x].compare_exchange_weak(r, p, std::memory_order_relaxed)) {
+      r = p;
+    } else {
+      delete p;
+    }
+  }
+  auto c = r->chunks[y].load();
+  if (!c) {
+    auto *p = new char[256 * m_entry_size];
+    if (r->chunks[y].compare_exchange_weak(c, p, std::memory_order_relaxed)) {
+      c = p;
+    } else {
+      delete [] p;
+    }
+  }
+  return reinterpret_cast<Entry*>(c + z * m_entry_size);
+}
+
+auto SharedIndexBase::alloc_entry(int &index) -> Entry* {
+  auto i_npop = m_free_id.load(std::memory_order_relaxed);
+  while (auto i = uint32_t(i_npop)) {
+    auto e = get_entry(i);
+    if (!e) break;
+    auto npop = uint32_t(i_npop >> 32);
+    auto i_npop_new = (uint64_t(npop+1) << 32) | e->m_next_free;
+    if (m_free_id.compare_exchange_weak(
+      i_npop, i_npop_new,
+      std::memory_order_acquire,
+      std::memory_order_relaxed
+    )) {
+      e->m_hold_count.store(1, std::memory_order_relaxed);
+      index = i;
+      return e;
+    }
+  }
+  auto i = m_max_id.fetch_add(1, std::memory_order_relaxed) + 1;
+  auto e = add_entry(i);
+  e->m_hold_count.store(1, std::memory_order_relaxed);
+  index = i;
+  return e;
+}
+
+void SharedIndexBase::free_entry(int i, Entry *e) {
+  uint64_t i_npop = m_free_id.load(std::memory_order_relaxed);
+  uint64_t i_npop_new;
+  do {
+    e->m_next_free = uint32_t(i_npop);
+    i_npop_new = (i_npop & (~uint64_t(0) << 32)) | uint32_t(i);
+  }
+  while (!m_free_id.compare_exchange_weak(
+    i_npop, i_npop_new,
+    std::memory_order_release,
+    std::memory_order_relaxed
+  ));
+}
+
 //
 // PooledClass
 //
@@ -134,9 +212,8 @@ thread_local const Ref<Str> Str::bool_false(Str::make("false"));
 
 size_t Str::s_max_size = 256 * 0x400 * 0x400;
 
-thread_local
-Str::LocalIndex Str::m_local_index;
-Str::GlobalIndex Str::m_global_index;
+SharedIndex<Ref<Str::CharData>> Str::m_global_index;
+thread_local Str::LocalIndex Str::m_local_index;
 
 thread_local static char s_shared_str_tmp_buf[0x10000];
 
@@ -243,7 +320,7 @@ Str::ID::ID(Str *s) {
       id = m_global_index.alloc(s->m_char_data);
       s->m_id = id;
     }
-    m_global_index.hold(id);
+    m_global_index.get(id)->hold();
     m_id = id;
   } else {
     m_id = 0;
@@ -259,7 +336,7 @@ void Str::ID::str(Str *s) {
     }
     if (m_id != id) {
       clear();
-      m_global_index.hold(id);
+      m_global_index.get(id)->hold();
       m_id = id;
     }
   } else {
@@ -272,10 +349,11 @@ auto Str::ID::to_string() const -> Str* {
   if (auto id = m_id) {
     if (auto *s = m_local_index.get(id)) return s->retain();
     if (auto *e = m_global_index.get(id)) {
-      auto data = e->char_data.get();
+      auto data = e->data.get();
       auto i = ht().find(data->str());
       if (i == ht().end()) {
-        auto *s = new Str(id, e);
+        e->hold();
+        auto *s = new Str(id, data);
         m_local_index.set(id, s);
         return s->retain();
       } else {
@@ -460,86 +538,6 @@ void Str::LocalIndex::del(int i) {
   auto r = m_ranges[x]; if (!r) return;
   auto c = r->chunks[y]; if (!c) return;
   c->entries[z] = nullptr;
-}
-
-//
-// Str::GlobalIndex
-//
-
-Str::GlobalIndex::GlobalIndex()
-  : m_max_id(0)
-  , m_free_id(0)
-{
-  std::memset(m_ranges, 0, sizeof(m_ranges));
-}
-
-auto Str::GlobalIndex::get(int i) -> Entry* {
-  int x, y, z;
-  index_to_xyz(i, x, y, z);
-  auto r = m_ranges[x].load();
-  auto c = r->chunks[y].load();
-  return &c->entries[z];
-}
-
-auto Str::GlobalIndex::add(int i) -> Entry* {
-  int x, y, z;
-  index_to_xyz(i, x, y, z);
-  auto r = m_ranges[x].load();
-  if (!r) {
-    auto *p = new Range;
-    if (m_ranges[x].compare_exchange_weak(r, p)) {
-      r = p;
-    } else {
-      delete p;
-    }
-  }
-  auto c = r->chunks[y].load();
-  if (!c) {
-    auto *p = new Chunk;
-    if (r->chunks[y].compare_exchange_weak(c, p)) {
-      c = p;
-    } else {
-      delete p;
-    }
-  }
-  return &c->entries[z];
-}
-
-auto Str::GlobalIndex::alloc(CharData *data) -> int {
-  auto i = m_free_id.load();
-  while (i) {
-    auto e = get(i);
-    if (!e) break;
-    auto next = e->next_free;
-    if (m_free_id.compare_exchange_weak(i, next)) {
-      e->char_data = data;
-      e->hold_count.store(1, std::memory_order_relaxed);
-      return i;
-    }
-  }
-  i = m_max_id.fetch_add(1) + 1;
-  auto e = add(i);
-  e->char_data = data;
-  e->hold_count.store(1, std::memory_order_relaxed);
-  return i;
-}
-
-auto Str::GlobalIndex::hold(int i) -> Entry* {
-  auto e = get(i);
-  e->hold();
-  return e;
-}
-
-void Str::GlobalIndex::free(int i) {
-  auto e = get(i);
-  if (e->hold_count.fetch_sub(1, std::memory_order_relaxed) == 1) {
-    e->char_data = nullptr;
-    auto next = m_free_id.load();
-    do {
-      e->next_free = next;
-    }
-    while (!m_free_id.compare_exchange_weak(next, i));
-  }
 }
 
 //
