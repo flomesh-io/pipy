@@ -92,15 +92,10 @@ public:
 
   private:
     pjs::Ref<pjs::Str> m_name;
-    std::atomic<int> m_peak;
-    std::atomic<int> m_current;
+    int m_peak;
+    int m_current;
 
-    void increase() {
-      auto peak = m_peak.load(std::memory_order_relaxed);
-      auto current = m_current.fetch_add(1, std::memory_order_relaxed) + 1;
-      if (current > peak) m_peak.compare_exchange_strong(peak, current);
-    }
-
+    void increase() { if (++m_current > m_peak) m_peak = m_current; }
     void decrease() { m_current--; }
 
     thread_local static List<Producer> s_all_producers;
