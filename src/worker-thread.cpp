@@ -131,7 +131,7 @@ void WorkerThread::init_metrics() {
     label_names,
     [](stats::Gauge *gauge) {
       double total = 0;
-      for (const auto &i : pjs::PooledClass::all()) {
+      for (const auto &i : pjs::Pool::all()) {
         auto c = i.second;
         auto n = c->allocated();
         if (n > 1) {
@@ -159,7 +159,7 @@ void WorkerThread::init_metrics() {
     label_names,
     [](stats::Gauge *gauge) {
       double total = 0;
-      for (const auto &i : pjs::PooledClass::all()) {
+      for (const auto &i : pjs::Pool::all()) {
         auto c = i.second;
         auto n = c->pooled();
         if (n > 0) {

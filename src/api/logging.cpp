@@ -139,9 +139,14 @@ Logger::~Logger() {
 
 void Logger::write(const Data &msg) {
   if (s_net->is_running()) {
+    auto *sd = new SharedData(msg);
+    sd->retain();
     s_net->post(
       [=]() {
+        Data msg;
+        sd->to_data(msg);
         write_async(msg);
+        sd->release();
       }
     );
   } else {

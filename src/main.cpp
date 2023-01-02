@@ -134,7 +134,7 @@ static void start_cleaning_pools() {
   static Timer timer;
   static std::function<void()> clean;
   clean = []() {
-    for (const auto &p : pjs::PooledClass::all()) {
+    for (const auto &p : pjs::Pool::all()) {
       p.second->clean();
     }
     timer.schedule(5, clean);

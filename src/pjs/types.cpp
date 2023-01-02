@@ -70,11 +70,10 @@ auto SharedIndexBase::add_entry(int i) -> Entry* {
   return reinterpret_cast<Entry*>(c + z * m_entry_size);
 }
 
-auto SharedIndexBase::alloc_entry(int &index) -> Entry* {
+auto SharedIndexBase::alloc_entry() -> Entry* {
   auto i_npop = m_free_id.load(std::memory_order_relaxed);
   while (auto i = uint32_t(i_npop)) {
     auto e = get_entry(i);
-    if (!e) break;
     auto npop = uint32_t(i_npop >> 32);
     auto i_npop_new = (uint64_t(npop+1) << 32) | e->m_next_free;
     if (m_free_id.compare_exchange_weak(
@@ -82,19 +81,20 @@ auto SharedIndexBase::alloc_entry(int &index) -> Entry* {
       std::memory_order_acquire,
       std::memory_order_relaxed
     )) {
+      e->index = i;
       e->m_hold_count.store(1, std::memory_order_relaxed);
-      index = i;
       return e;
     }
   }
   auto i = m_max_id.fetch_add(1, std::memory_order_relaxed) + 1;
   auto e = add_entry(i);
+  e->index = i;
   e->m_hold_count.store(1, std::memory_order_relaxed);
-  index = i;
   return e;
 }
 
-void SharedIndexBase::free_entry(int i, Entry *e) {
+void SharedIndexBase::free_entry(Entry *e) {
+  int i = e->index;
   uint64_t i_npop = m_free_id.load(std::memory_order_relaxed);
   uint64_t i_npop_new;
   do {
@@ -109,17 +109,17 @@ void SharedIndexBase::free_entry(int i, Entry *e) {
 }
 
 //
-// PooledClass
+// Pool
 //
 
-auto PooledClass::all() -> std::map<std::string, PooledClass *> & {
-  thread_local static std::map<std::string, PooledClass*> a;
+auto Pool::all() -> std::map<std::string, Pool*> & {
+  thread_local static std::map<std::string, Pool*> a;
   return a;
 }
 
-PooledClass::PooledClass(const char *c_name, size_t size)
+Pool::Pool(const char *c_name, size_t size)
   : m_size(std::max(size, sizeof(void*)))
-  , m_free(nullptr)
+  , m_free_list(nullptr)
   , m_allocated(0)
   , m_pooled(0)
 {
@@ -129,58 +129,65 @@ PooledClass::PooledClass(const char *c_name, size_t size)
   all()[m_name] = this;
 }
 
-auto PooledClass::alloc() -> void* {
+auto Pool::alloc() -> void* {
+  accept_returns();
   m_allocated++;
-  if (auto *p = m_free) {
-    m_free = *(void**)p;
+  if (auto *h = m_free_list) {
+    m_free_list = h->next;
     m_pooled--;
-    return p;
+    return (char*)h + sizeof(Head);
   } else {
-    return new char[m_size];
+    h = (Head*)std::malloc(sizeof(Head) + m_size);
+    h->pool = this;
+    h->next = nullptr;
+    return (char*)h + sizeof(Head);
   }
 }
 
-void PooledClass::free(void *p) {
+void Pool::free(void *p) {
 #ifdef PIPY_SOIL_FREED_SPACE
   std::memset(p, 0xfe, m_size);
 #endif // PIPY_SOIL_FREED_SPACE
-  *(void**)p = m_free;
-  m_free = p;
-  m_allocated--;
-  m_pooled++;
+  auto *h = (Head*)((char*)p - sizeof(Head));
+  if (h->pool == this) {
+    h->next = m_free_list;
+    m_free_list = h;
+    m_allocated--;
+    m_pooled++;
+  } else {
+    h->pool->add_return(h);
+  }
 }
 
-//
-// Naive non-blocking stack implementation with ABA problem unsolved
-//
-// auto PooledClass::alloc() -> void* {
-//   auto *p = m_free.load(std::memory_order_seq_cst);
-//   while (p) {
-//     auto *q = *static_cast<void**>(p);
-//     if (m_free.compare_exchange_weak(
-//       p, q,
-//       std::memory_order_seq_cst,
-//       std::memory_order_seq_cst
-//     )) {
-//       return p;
-//     }
-//   }
-//   return new char[m_size];
-// }
+void Pool::add_return(Head *h) {
+  auto *p = m_return_list.load(std::memory_order_relaxed);
+  do {
+    h->next = p;
+  } while (!m_return_list.compare_exchange_weak(
+    p, h,
+    std::memory_order_release,
+    std::memory_order_relaxed
+  ));
+}
 
-// void PooledClass::free(void *p) {
-//   std::memset(p, 0xfe, m_size);
-//   auto *q = m_free.load(std::memory_order_seq_cst);
-//   do {
-//     *static_cast<void**>(p) = q;
-//   } while (!m_free.compare_exchange_weak(
-//     q, p,
-//     std::memory_order_seq_cst,
-//     std::memory_order_seq_cst
-//   ));
-// }
+void Pool::accept_returns() {
+  if (auto *h = m_return_list.load(std::memory_order_relaxed)) {
+    while (!m_return_list.compare_exchange_weak(
+      h, nullptr,
+      std::memory_order_acquire,
+      std::memory_order_relaxed
+    )) {}
+    int n = 1;
+    auto *p = h;
+    while (p->next) { p = p->next; n++; }
+    p->next = m_free_list;
+    m_free_list = h;
+    m_allocated -= n;
+    m_pooled += n;
+  }
+}
 
-void PooledClass::clean() {
+void Pool::clean() {
   int max = 0;
   for (int i = 0; i < CURVE_LENGTH; i++) {
     if (m_curve[i] > max) max = m_curve[i];
@@ -188,9 +195,9 @@ void PooledClass::clean() {
   int room = max + (max >> 2) - m_allocated;
   if (room >= 0) {
     while (m_pooled > room) {
-      auto p = m_free;
-      m_free = *(void**)p;
-      delete [] (char *)p;
+      auto *h = m_free_list;
+      m_free_list = h->next;
+      std::free(h);
       m_pooled--;
     }
   }

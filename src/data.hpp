@@ -37,6 +37,8 @@
 
 namespace pipy {
 
+class SharedData;
+
 //
 // Data
 //
@@ -913,6 +915,78 @@ private:
   }
 
   thread_local static Producer s_unknown_producer;
+
+  friend class SharedData;
+};
+
+//
+// SharedData
+//
+
+class SharedData : public pjs::Pooled<SharedData> {
+public:
+  SharedData(const Data &data) : m_retain_count(0) {
+    auto **p = &m_views;
+    for (auto *v = data.m_head; v; v = v->next) {
+      p = &(*p = new View(v))->next;
+    }
+  }
+
+  ~SharedData() {
+    auto *v = m_views;
+    while (v) {
+      auto *view = v; v = v->next;
+      delete view;
+    }
+  }
+
+  void to_data(Data &data) {
+    for (auto *v = m_views; v; v = v->next) {
+      data.push_view(new Data::View(
+        v->chunk,
+        v->offset,
+        v->length
+      ));
+    }
+  }
+
+  void retain() {
+    m_retain_count.fetch_add(1, std::memory_order_relaxed);
+  }
+
+  void release() {
+    if (m_retain_count.fetch_sub(1, std::memory_order_relaxed) == 1) {
+      delete this;
+    }
+  }
+
+private:
+
+  //
+  // SharedData::View
+  //
+
+  struct View : public pjs::Pooled<View> {
+    View* next = nullptr;
+    Data::Chunk* chunk;
+    int offset;
+    int length;
+
+    View(Data::View *v)
+      : chunk(v->chunk)
+      , offset(v->offset)
+      , length(v->length)
+    {
+      chunk->retain();
+    }
+
+    ~View() {
+      chunk->release();
+    }
+  };
+
+  View* m_views = nullptr;
+  std::atomic<int> m_retain_count;
 };
 
 } // namespace pipy

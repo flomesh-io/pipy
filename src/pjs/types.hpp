@@ -72,6 +72,7 @@ protected:
   //
 
   struct Entry {
+    int index;
     void hold() { m_hold_count.fetch_add(1, std::memory_order_relaxed); }
     bool release() { return m_hold_count.fetch_sub(1, std::memory_order_relaxed) == 1; }
   protected:
@@ -86,8 +87,8 @@ protected:
 
   auto get_entry(int i) -> Entry*;
   auto add_entry(int i) -> Entry*;
-  auto alloc_entry(int &index) -> Entry*;
-  void free_entry(int i, Entry *e);
+  auto alloc_entry() -> Entry*;
+  void free_entry(Entry *e);
 
 private:
   struct Range {
@@ -129,30 +130,29 @@ public:
   }
 
   auto alloc(const T &data) -> int {
-    int i;
-    auto e = static_cast<Entry*>(alloc_entry(i));
+    auto e = static_cast<Entry*>(alloc_entry());
     new (&e->data) T(data);
-    return i;
+    return e->index;
   }
 
   void free(int i) {
     auto e = static_cast<Entry*>(get_entry(i));
     if (e->release()) {
       e->data.~T();
-      free_entry(i, e);
+      free_entry(e);
     }
   }
 };
 
 //
-// PooledClass
+// Pool
 //
 
-class PooledClass {
+class Pool {
 public:
-  static auto all() -> std::map<std::string, PooledClass *> &;
+  static auto all() -> std::map<std::string, Pool*> &;
 
-  PooledClass(const char *c_name, size_t size);
+  Pool(const char *c_name, size_t size);
 
   auto name() const -> const std::string& { return m_name; }
   auto size() const -> size_t { return m_size; }
@@ -166,13 +166,22 @@ public:
 private:
   enum { CURVE_LENGTH = 3 };
 
+  struct Head {
+    Pool* pool;
+    Head* next;
+  };
+
   std::string m_name;
   size_t m_size;
-  void* m_free;
+  Head* m_free_list;
+  std::atomic<Head*> m_return_list;
   int m_allocated;
   int m_pooled;
   int m_curve[CURVE_LENGTH] = { 0 };
   size_t m_curve_pointer = 0;
+
+  void add_return(Head *h);
+  void accept_returns();
 };
 
 //
@@ -190,11 +199,11 @@ public:
   void operator delete(void *p) { m_class.free(p); }
 
 private:
-  thread_local static PooledClass m_class;
+  thread_local static Pool m_class;
 };
 
 template<class T, class Base>
-thread_local PooledClass Pooled<T, Base>::m_class(typeid(T).name(), sizeof(T));
+thread_local Pool Pooled<T, Base>::m_class(typeid(T).name(), sizeof(T));
 
 //
 // RefCount
@@ -758,7 +767,7 @@ private:
   // Str::CharData
   //
 
-  class CharData {
+  class CharData : public Pooled<CharData> {
   public:
     CharData(std::string &&str);
 

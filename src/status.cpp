@@ -218,7 +218,7 @@ static void print_table(Data::Builder &db, const T &header, const std::list<T> &
 void Status::dump_pools(Data::Builder &db) {
   std::list<std::array<std::string, 4>> pools;
 
-  for (const auto &p : pjs::PooledClass::all()) {
+  for (const auto &p : pjs::Pool::all()) {
     auto *c = p.second;
     if (c->allocated() + c->pooled() > 1) {
       pools.push_back({
