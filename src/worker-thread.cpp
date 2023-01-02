@@ -60,7 +60,10 @@ bool WorkerThread::start() {
 
       if (started) {
         init_metrics();
+        m_recycle_timer = new Timer();
+        clean_pools();
         Net::current().run();
+        delete m_recycle_timer;
       }
     }
   );
@@ -255,6 +258,13 @@ void WorkerThread::init_metrics() {
       gauge->set(total);
     }
   );
+}
+
+void WorkerThread::clean_pools() {
+  for (const auto &p : pjs::Pool::all()) {
+    p.second->clean();
+  }
+  m_recycle_timer->schedule(1, [this]() { clean_pools(); });
 }
 
 void WorkerThread::wait() {

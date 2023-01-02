@@ -56,6 +56,7 @@ public:
 private:
   int m_index;
   Net* m_net = nullptr;
+  Timer* m_recycle_timer = nullptr;
   Timer* m_pending_timer = nullptr;
   stats::MetricData m_metric_data;
   std::thread m_thread;
@@ -67,6 +68,7 @@ private:
   bool m_shutdown = false;
 
   void init_metrics();
+  void clean_pools();
   void wait();
   void fail();
 };
