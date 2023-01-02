@@ -221,6 +221,7 @@ size_t Str::s_max_size = 256 * 0x400 * 0x400;
 
 SharedIndex<Ref<Str::CharData>> Str::m_global_index;
 thread_local Str::LocalIndex Str::m_local_index;
+thread_local Str::LocalMap Str::m_local_map;
 
 thread_local static char s_shared_str_tmp_buf[0x10000];
 
@@ -275,11 +276,6 @@ auto Str::make(double n) -> Str* {
   char str[100];
   auto len = Number::to_string(str, sizeof(str), n);
   return make(str, len);
-}
-
-auto Str::ht() -> std::unordered_map<std::string, Str*>& {
-  thread_local static std::unordered_map<std::string, Str*> s_ht;
-  return s_ht;
 }
 
 auto Str::parse_int() const -> double {
@@ -357,14 +353,13 @@ auto Str::ID::to_string() const -> Str* {
     if (auto *s = m_local_index.get(id)) return s->retain();
     if (auto *e = m_global_index.get(id)) {
       auto data = e->data.get();
-      auto i = ht().find(data->str());
-      if (i == ht().end()) {
+      auto s = m_local_map.get(data->str());
+      if (!s) {
         e->hold();
         auto *s = new Str(id, data);
         m_local_index.set(id, s);
         return s->retain();
       } else {
-        auto *s = i->second;
         m_local_index.set(id, s);
         s->m_id = id;
         return s->retain();
