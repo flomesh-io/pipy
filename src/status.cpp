@@ -245,6 +245,7 @@ bool Status::from_json(const Data &data) {
 
 void Status::to_json(std::ostream &out) const {
   out << "{\"timestamp\":" << uint64_t(timestamp);
+  out << ",\"since\":" << uint64_t(since);
   out << ",\"uuid\":\"" << uuid << '"';
   out << ",\"name\":\"" << name << '"';
   out << ",\"version\":\"" << utils::escape(version) << '"';

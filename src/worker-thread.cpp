@@ -27,6 +27,7 @@
 #include "worker.hpp"
 #include "codebase.hpp"
 #include "net.hpp"
+#include "utils.hpp"
 
 namespace pipy {
 
@@ -345,6 +346,7 @@ auto WorkerManager::status() -> Status& {
     std::unique_lock<std::mutex> lock(m);
     cv.wait(lock, [&]{ return status; });
     m_status = *status;
+    m_status.timestamp = utils::now();
   }
   return m_status;
 }

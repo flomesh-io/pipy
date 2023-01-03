@@ -94,8 +94,7 @@ static void show_version() {
 static void reload_codebase() {
   if (auto *codebase = Codebase::current()) {
     Codebase::current()->sync(
-      Status::local, true,
-      [](bool ok) {
+      true, [](bool ok) {
         if (ok) {
           WorkerManager::get().reload();
         }
@@ -152,10 +151,8 @@ static void start_checking_updates() {
   poll = []() {
     if (!s_has_shutdown) {
       InputContext ic;
-      Status::local.timestamp = utils::now();
       Codebase::current()->sync(
-        Status::local, false,
-        [&](bool ok) {
+        false, [&](bool ok) {
           if (ok) {
             WorkerManager::get().reload();
           }
@@ -165,6 +162,42 @@ static void start_checking_updates() {
     timer.schedule(5, poll);
   };
   poll();
+}
+
+static void start_reporting_status(const std::string &address, const Fetch::Options &options) {
+  static Data::Producer s_dp("Status Reports");
+  static Fetch *fetch = nullptr;
+  static Timer timer;
+  static pjs::Ref<URL> url;
+  static pjs::Ref<pjs::Object> headers;
+  static std::function<void()> report;
+  report = [&]() {
+    if (s_has_shutdown) return;
+    if (!fetch) {
+      url = URL::make(pjs::Value(address).s());
+      headers = pjs::Object::make();
+      headers->set("content-type", "application/json");
+      fetch = new Fetch(url->hostname()->str() + ':' + url->port()->str(), options);
+    }
+    if (!fetch->busy()) {
+      std::stringstream ss;
+      auto &status = WorkerManager::get().status();
+      status.since = Status::local.since;
+      status.name = Status::local.name;
+      status.uuid = Status::local.uuid;
+      status.to_json(ss);
+      InputContext ic;
+      (*fetch)(
+        Fetch::POST,
+        url->path(),
+        headers,
+        Data::make(ss.str(), &s_dp),
+        [=](http::ResponseHead *head, Data *body) {}
+      );
+    }
+    timer.schedule(5, report);
+  };
+  report();
 }
 
 //
@@ -314,7 +347,7 @@ int main(int argc, char *argv[]) {
       return 0;
     }
 
-    Status::local.timestamp = utils::now();
+    Status::local.since = utils::now();
     Status::local.name = opts.instance_name;
 
     if (opts.instance_uuid.empty()) {
@@ -443,6 +476,7 @@ int main(int argc, char *argv[]) {
         options.key = opts.tls_key;
         options.trusted = opts.tls_trusted;
         codebase = Codebase::from_http(opts.filename, options);
+        start_reporting_status(opts.filename, options);
       } else if (is_eval) {
         codebase = Codebase::from_fs(
           fs::abs_path("."),
@@ -456,8 +490,7 @@ int main(int argc, char *argv[]) {
 
       load = [&]() {
         codebase->sync(
-          Status::local, true,
-          [&](bool ok) {
+          true, [&](bool ok) {
             if (!ok) {
               fail();
               return;
@@ -467,9 +500,6 @@ int main(int argc, char *argv[]) {
               fail();
               return;
             }
-
-            Status::local.version = Codebase::current()->version();
-            Status::local.update();
 
             s_admin_ip = admin_ip;
             s_admin_port = admin_port;

@@ -35,7 +35,6 @@ namespace pipy {
 
 class CodebaseStore;
 class Data;
-class Status;
 
 //
 // Codebase
@@ -65,7 +64,7 @@ public:
   virtual auto list(const std::string &path) -> std::list<std::string> = 0;
   virtual auto get(const std::string &path) -> Data* = 0;
   virtual void set(const std::string &path, Data *data) = 0;
-  virtual void sync(const Status &status, bool force, const std::function<void(bool)> &on_update) = 0;
+  virtual void sync(bool force, const std::function<void(bool)> &on_update) = 0;
 
 protected:
   virtual void activate() {};

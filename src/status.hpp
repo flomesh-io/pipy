@@ -92,6 +92,7 @@ public:
     int buffered = 0;
   };
 
+  double since = 0;
   double timestamp = 0;
   std::string uuid;
   std::string name;

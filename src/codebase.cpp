@@ -27,7 +27,6 @@
 #include "codebase-store.hpp"
 #include "context.hpp"
 #include "pipeline.hpp"
-#include "status.hpp"
 #include "api/http.hpp"
 #include "api/url.hpp"
 #include "fetch.hpp"
@@ -67,7 +66,7 @@ public:
   virtual auto list(const std::string &path) -> std::list<std::string> override;
   virtual auto get(const std::string &path) -> Data* override;
   virtual void set(const std::string &path, Data *data) override;
-  virtual void sync(const Status &status, bool force, const std::function<void(bool)> &on_update) override;
+  virtual void sync(bool force, const std::function<void(bool)> &on_update) override;
 
 private:
   virtual void activate() override {
@@ -154,7 +153,7 @@ void CodebaseFromFS::set(const std::string &path, Data *data) {
   }
 }
 
-void CodebaseFromFS::sync(const Status &status, bool force, const std::function<void(bool)> &on_update) {
+void CodebaseFromFS::sync(bool force, const std::function<void(bool)> &on_update) {
   if (force || m_version.empty()) {
     m_version = "1";
     on_update(true);
@@ -176,7 +175,7 @@ public:
   virtual auto list(const std::string &path) -> std::list<std::string> override;
   virtual auto get(const std::string &path) -> pipy::Data* override;
   virtual void set(const std::string &path, Data *data) override {}
-  virtual void sync(const Status &status, bool force, const std::function<void(bool)> &on_update) override {}
+  virtual void sync(bool force, const std::function<void(bool)> &on_update) override {}
 
 private:
   std::string m_version;
@@ -251,7 +250,7 @@ private:
   virtual auto list(const std::string &path) -> std::list<std::string> override;
   virtual auto get(const std::string &path) -> pipy::Data* override;
   virtual void set(const std::string &path, Data *data) override {}
-  virtual void sync(const Status &status, bool force, const std::function<void(bool)> &on_update) override;
+  virtual void sync(bool force, const std::function<void(bool)> &on_update) override;
 
   pjs::Ref<URL> m_url;
   Fetch m_fetch;
@@ -318,55 +317,41 @@ auto CodebaseFromHTTP::get(const std::string &path) -> pipy::Data* {
   return i->second;
 }
 
-void CodebaseFromHTTP::sync(const Status &status, bool force, const std::function<void(bool)> &on_update) {
+void CodebaseFromHTTP::sync(bool force, const std::function<void(bool)> &on_update) {
   if (m_fetch.busy()) return;
 
-  std::stringstream ss;
-  status.to_json(ss);
+  if (force) {
+    download(on_update);
+    return;
+  }
 
-  // Post status
+  // Check updates
   m_fetch(
-    Fetch::POST,
+    Fetch::HEAD,
     m_url->path(),
-    m_request_header_post_status,
-    Data::make(ss.str(), &s_dp),
+    nullptr,
+    nullptr,
     [=](http::ResponseHead *head, Data *body) {
-
-      if (force) {
-        download(on_update);
+      if (!head || head->status() != 200) {
+        response_error("HEAD", m_url->href()->c_str(), head);
+        on_update(false);
         return;
       }
 
-      // Check updates
-      m_fetch(
-        Fetch::HEAD,
-        m_url->path(),
-        nullptr,
-        nullptr,
-        [=](http::ResponseHead *head, Data *body) {
-          if (!head || head->status() != 200) {
-            response_error("HEAD", m_url->href()->c_str(), head);
-            on_update(false);
-            return;
-          }
+      pjs::Value etag, date;
+      head->headers()->get(s_etag, etag);
+      head->headers()->get(s_date, date);
 
-          pjs::Value etag, date;
-          head->headers()->get(s_etag, etag);
-          head->headers()->get(s_date, date);
+      std::string etag_str;
+      std::string date_str;
+      if (etag.is_string()) etag_str = etag.s()->str();
+      if (date.is_string()) date_str = date.s()->str();
 
-          std::string etag_str;
-          std::string date_str;
-          if (etag.is_string()) etag_str = etag.s()->str();
-          if (date.is_string()) date_str = date.s()->str();
-
-          if (!m_downloaded || etag_str != m_etag || date_str != m_date) {
-            download(on_update);
-          } else {
-            m_fetch.close();
-          }
-        }
-      );
-
+      if (!m_downloaded || etag_str != m_etag || date_str != m_date) {
+        download(on_update);
+      } else {
+        m_fetch.close();
+      }
     }
   );
 }
