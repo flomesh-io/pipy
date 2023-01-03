@@ -28,6 +28,7 @@
 
 #include "net.hpp"
 #include "timer.hpp"
+#include "status.hpp"
 #include "api/stats.hpp"
 
 #include <thread>
@@ -49,6 +50,7 @@ public:
   auto index() const -> int { return m_index; }
 
   bool start();
+  void status(const std::function<void(Status&)> &cb);
   void stats(const std::function<void(stats::MetricData&)> &cb);
   void reload();
   auto stop(bool force = false) -> int;
@@ -83,13 +85,15 @@ public:
 
   bool started() const { return m_worker_thread; }
   bool start();
-  void stats(const std::function<void(stats::MetricDataSum&)> &cb);
+  auto status() -> Status&;
   auto stats() -> stats::MetricDataSum&;
+  void stats(const std::function<void(stats::MetricDataSum&)> &cb);
   void reload();
   auto stop(bool force = false) -> int;
 
 private:
   WorkerThread* m_worker_thread = nullptr;
+  Status m_status;
   stats::MetricDataSum m_metric_data_sum;
 };
 

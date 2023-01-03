@@ -135,8 +135,6 @@ public:
 
   virtual void connect(const std::string &host, int port) override;
   virtual void send(Event *evt) override;
-  // void send(const pjs::Ref<Data> &data);
-  // void end();
   virtual void reset() override;
 
 private:

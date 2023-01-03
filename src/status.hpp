@@ -38,9 +38,58 @@ class Data;
 
 class Status {
 public:
+  thread_local static Status local;
+
+  enum class Protocol {
+    UNKNOWN,
+    TCP,
+    UDP,
+  };
+
   struct ModuleInfo {
     std::string filename;
     std::string graph;
+  };
+
+  struct PoolInfo {
+    std::string name;
+    int size;
+    int allocated;
+    int pooled;
+  };
+
+  struct ObjectInfo {
+    std::string name;
+    int count;
+  };
+
+  struct ChunkInfo {
+    std::string name;
+    int current;
+    int peak;
+  };
+
+  struct PipelineInfo {
+    std::string module;
+    std::string name;
+    bool stale;
+    int active;
+    int allocated;
+  };
+
+  struct InboundInfo {
+    Protocol protocol;
+    std::string ip;
+    int port;
+    int connections;
+    int buffered;
+  };
+
+  struct OutboundInfo {
+    Protocol protocol = Protocol::UNKNOWN;
+    int port = 0;
+    int connections = 0;
+    int buffered = 0;
   };
 
   double timestamp = 0;
@@ -48,20 +97,23 @@ public:
   std::string name;
   std::string version;
   std::list<ModuleInfo> modules;
+  std::list<PoolInfo> pools;
+  std::list<ObjectInfo> objects;
+  std::list<ChunkInfo> chunks;
+  std::list<PipelineInfo> pipelines;
+  std::list<InboundInfo> inbounds;
+  std::list<OutboundInfo> outbounds;
   std::list<pjs::Ref<pjs::Str>> log_names;
-
-  thread_local static Status local;
 
   void update();
   bool from_json(const Data &data);
   void to_json(std::ostream &out) const;
-
-  static void dump_pools(Data::Builder &db);
-  static void dump_objects(Data::Builder &db);
-  static void dump_chunks(Data::Builder &db);
-  static void dump_pipelines(Data::Builder &db);
-  static void dump_inbound(Data::Builder &db);
-  static void dump_outbound(Data::Builder &db);
+  void dump_pools(Data::Builder &db);
+  void dump_objects(Data::Builder &db);
+  void dump_chunks(Data::Builder &db);
+  void dump_pipelines(Data::Builder &db);
+  void dump_inbound(Data::Builder &db);
+  void dump_outbound(Data::Builder &db);
 };
 
 } // namespace pipy

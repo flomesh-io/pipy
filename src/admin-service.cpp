@@ -433,20 +433,21 @@ auto AdminService::handle(Context *ctx, Message *req) -> Message* {
 Message* AdminService::dump_GET(const std::string &path) {
   Data buf;
   Data::Builder db(buf, &s_dp);
+  auto &status = WorkerManager::get().status();
   auto items = utils::split(path, '+');
   for (const auto &item : items) {
     if (item == "pools") {
-      Status::dump_pools(db);
+      status.dump_pools(db);
     } else if (item == "objects") {
-      Status::dump_objects(db);
+      status.dump_objects(db);
     } else if (item == "chunks") {
-      Status::dump_chunks(db);
+      status.dump_chunks(db);
     } else if (item == "pipelines") {
-      Status::dump_pipelines(db);
+      status.dump_pipelines(db);
     } else if (item == "inbound") {
-      Status::dump_inbound(db);
+      status.dump_inbound(db);
     } else if (item == "outbound") {
-      Status::dump_outbound(db);
+      status.dump_outbound(db);
     } else {
       db.push("Unknown dump item: ");
       db.push(item);

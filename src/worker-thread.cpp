@@ -72,6 +72,15 @@ bool WorkerThread::start() {
   return !m_failed;
 }
 
+void WorkerThread::status(const std::function<void(Status&)> &cb) {
+  m_net->post(
+    [=]() {
+      Status::local.update();
+      cb(Status::local);
+    }
+  );
+}
+
 void WorkerThread::stats(const std::function<void(stats::MetricData&)> &cb) {
   m_net->post(
     [=]() {
@@ -317,20 +326,27 @@ bool WorkerManager::start() {
   return true;
 }
 
-void WorkerManager::stats(const std::function<void(stats::MetricDataSum&)> &cb) {
+auto WorkerManager::status() -> Status& {
   if (m_worker_thread) {
-    auto &main = Net::current();
-    m_worker_thread->stats(
-      [&, cb](stats::MetricData &metric_data) {
-        main.post(
-          [&, cb]() {
-            m_metric_data_sum.sum(metric_data, true);
-            cb(m_metric_data_sum);
-          }
-        );
+    std::mutex m;
+    std::condition_variable cv;
+    Status *status = nullptr;
+
+    m_worker_thread->status(
+      [&](Status &s) {
+        {
+          std::lock_guard<std::mutex> lock(m);
+          status = &s;
+        }
+        cv.notify_one();
       }
     );
+
+    std::unique_lock<std::mutex> lock(m);
+    cv.wait(lock, [&]{ return status; });
+    m_status = *status;
   }
+  return m_status;
 }
 
 auto WorkerManager::stats() -> stats::MetricDataSum& {
@@ -354,6 +370,22 @@ auto WorkerManager::stats() -> stats::MetricDataSum& {
     m_metric_data_sum.sum(*metric_data, true);
   }
   return m_metric_data_sum;
+}
+
+void WorkerManager::stats(const std::function<void(stats::MetricDataSum&)> &cb) {
+  if (m_worker_thread) {
+    auto &main = Net::current();
+    m_worker_thread->stats(
+      [&, cb](stats::MetricData &metric_data) {
+        main.post(
+          [&, cb]() {
+            m_metric_data_sum.sum(metric_data, true);
+            cb(m_metric_data_sum);
+          }
+        );
+      }
+    );
+  }
 }
 
 void WorkerManager::reload() {

@@ -50,6 +50,13 @@ thread_local Status Status::local;
 
 void Status::update() {
   modules.clear();
+  pools.clear();
+  objects.clear();
+  chunks.clear();
+  pipelines.clear();
+  inbounds.clear();
+  outbounds.clear();
+  log_names.clear();
 
   std::map<std::string, std::set<PipelineLayout*>> all_modules;
   PipelineLayout::for_each([&](PipelineLayout *p) {
@@ -73,7 +80,96 @@ void Status::update() {
     mod.graph = ss.str();
   }
 
-  log_names.clear();
+  for (const auto &p : pjs::Pool::all()) {
+    auto *c = p.second;
+    if (c->allocated() + c->pooled() > 1) {
+      pools.push_back({
+        c->name(),
+        (int)c->size(),
+        (int)c->allocated(),
+        (int)c->pooled(),
+      });
+    }
+  }
+
+  for (const auto &i : pjs::Class::all()) {
+    static std::string prefix("pjs::Constructor");
+    if (utils::starts_with(i.second->name()->str(), prefix)) continue;
+    if (auto n = i.second->object_count()) {
+      objects.push_back({ i.first, (int)n });
+    }
+  }
+
+  Data::Producer::for_each([&](Data::Producer *producer) {
+    chunks.push_back({
+      producer->name()->str(),
+      producer->current(),
+      producer->peak(),
+    });
+  });
+
+  PipelineLayout::for_each([&](PipelineLayout *p) {
+    if (auto mod = dynamic_cast<JSModule*>(p->module())) {
+      pipelines.push_back({
+        mod->filename()->str(),
+        p->name_or_label()->str(),
+        mod->worker() != Worker::current(),
+        (int)p->active(),
+        (int)p->allocated(),
+      });
+    }
+  });
+
+  Listener::for_each([&](Listener *listener) {
+    auto protocol = Protocol::UNKNOWN;
+    switch (listener->protocol()) {
+      case Listener::Protocol::TCP: protocol = Status::Protocol::TCP; break;
+      case Listener::Protocol::UDP: protocol = Status::Protocol::UDP; break;
+      default: break;
+    }
+    int count = 0;
+    int buffered = 0;
+    listener->for_each_inbound([&](Inbound *inbound) {
+      count++;
+      buffered += inbound->size_in_buffer();
+    });
+    inbounds.push_back({
+      protocol,
+      listener->ip(),
+      (int)listener->port(),
+      count,
+      buffered,
+    });
+  });
+
+  std::map<int, OutboundInfo> outbound_tcp, outbound_udp;
+  Outbound::for_each([&](Outbound *outbound) {
+    std::map<int, OutboundInfo> *m = nullptr;
+    auto protocol = Protocol::UNKNOWN;
+    auto buffered = 0;
+    switch (outbound->protocol()) {
+      case Outbound::Protocol::TCP:
+        protocol = Protocol::TCP;
+        m = &outbound_tcp;
+        buffered = static_cast<OutboundTCP*>(outbound)->buffered();
+        break;
+      case Outbound::Protocol::UDP:
+        protocol = Protocol::UDP;
+        m = &outbound_udp;
+        break;
+    }
+    if (m) {
+      auto port = outbound->port();
+      auto &info = (*m)[port];
+      info.protocol = protocol;
+      info.port = port;
+      info.connections++;
+      info.buffered += buffered;
+    }
+  });
+  for (auto &p : outbound_tcp) outbounds.push_back(p.second);
+  for (auto &p : outbound_udp) outbounds.push_back(p.second);
+
   logging::Logger::for_each(
     [&](logging::Logger *logger) {
       log_names.push_back(logger->name());
@@ -216,213 +312,97 @@ static void print_table(Data::Builder &db, const T &header, const std::list<T> &
 }
 
 void Status::dump_pools(Data::Builder &db) {
-  std::list<std::array<std::string, 4>> pools;
-
-  for (const auto &p : pjs::Pool::all()) {
-    auto *c = p.second;
-    if (c->allocated() + c->pooled() > 1) {
-      pools.push_back({
-        c->name(),
-        std::to_string(c->size() * (c->allocated() + c->pooled())),
-        std::to_string(c->allocated()),
-        std::to_string(c->pooled()),
-      });
-    }
+  std::list<std::array<std::string, 4>> rows;
+  for (const auto &i : pools) {
+    rows.push_back({
+      i.name,
+      std::to_string(i.size * (i.allocated * i.pooled)),
+      std::to_string(i.allocated),
+      std::to_string(i.pooled),
+    });
   }
-
-  print_table(db, { "POOL", "SIZE", "#USED", "#SPARE" }, pools);
+  print_table(db, { "POOL", "SIZE", "#USED", "#SPARE" }, rows);
 }
 
 void Status::dump_objects(Data::Builder &db) {
-  std::list<std::array<std::string, 2>> objects;
-  int total_instances = 0;
-
-  for (const auto &i : pjs::Class::all()) {
-    static std::string prefix("pjs::Constructor");
-    if (utils::starts_with(i.second->name()->str(), prefix)) continue;
-    if (auto n = i.second->object_count()) {
-      objects.push_back({ i.first, std::to_string(n) });
-      total_instances += n;
-    }
+  std::list<std::array<std::string, 2>> rows;
+  for (const auto &i : objects) {
+    rows.push_back({ i.name, std::to_string(i.count) });
   }
-
-  objects.push_back({ "TOTAL", std::to_string(total_instances) });
-  print_table(db, { "CLASS", "#INSTANCES" }, objects );
+  print_table(db, { "CLASS", "#INSTANCES" }, rows);
 }
 
 void Status::dump_chunks(Data::Builder &db) {
-  std::list<std::array<std::string, 3>> chunks;
-  int total_chunks = 0;
-
-  Data::Producer::for_each([&](Data::Producer *producer) {
-    chunks.push_back({
-      producer->name()->str(),
-      std::to_string(producer->current() * DATA_CHUNK_SIZE / 1024),
-      std::to_string(producer->peak() * DATA_CHUNK_SIZE / 1024),
+  std::list<std::array<std::string, 3>> rows;
+  for (const auto &i : chunks) {
+    rows.push_back({
+      i.name,
+      std::to_string(DATA_CHUNK_SIZE * i.current / 1024),
+      std::to_string(DATA_CHUNK_SIZE * i.peak / 1024),
     });
-    total_chunks += producer->current();
-  });
-
-  chunks.push_back({ "TOTAL", std::to_string(total_chunks * DATA_CHUNK_SIZE / 1024), "n/a" });
-  print_table(db, { "DATA", "CURRENT(KB)", "PEAK(KB)" }, chunks );
+  }
+  print_table(db, { "DATA", "CURRENT(KB)", "PEAK(KB)" }, rows);
 }
 
 void Status::dump_pipelines(Data::Builder &db) {
-  std::list<std::array<std::string, 3>> pipelines;
-  std::multimap<std::string, PipelineLayout*> stale_pipelines;
-  std::multimap<std::string, PipelineLayout*> current_pipelines;
-  int total_allocated = 0;
-  int total_active = 0;
-
-  auto current_worker = Worker::current();
-
-  PipelineLayout::for_each([&](PipelineLayout *p) {
-    if (auto mod = dynamic_cast<JSModule*>(p->module())) {
-      std::string name(mod->filename()->str());
-      name += " [";
-      name += p->name() == pjs::Str::empty ? p->label()->str() : p->name()->str();
-      name += ']';
-      if (mod->worker() == current_worker) {
-        current_pipelines.insert({ name, p });
-      } else if (p->active() > 0) {
-        name = std::string("[STALE] ") + name;
-        stale_pipelines.insert({ name, p });
-      }
-    }
-  });
-
-  for (const auto &i : current_pipelines) {
-    auto p = i.second;
-    pipelines.push_back({
-      i.first,
-      std::to_string(p->allocated()),
-      std::to_string(p->active()),
+  static std::string s_draining("Draining");
+  static std::string s_running("Running");
+  std::list<std::array<std::string, 5>> rows;
+  for (const auto &i : pipelines) {
+    rows.push_back({
+      i.module,
+      i.name,
+      i.stale ? s_draining : s_running,
+      std::to_string(i.allocated),
+      std::to_string(i.active),
     });
-    total_allocated += p->allocated();
-    total_active += p->active();
   }
-
-  for (const auto &i : stale_pipelines) {
-    auto p = i.second;
-    pipelines.push_back({
-      i.first,
-      std::to_string(p->allocated()),
-      std::to_string(p->active()),
-    });
-    total_allocated += p->allocated();
-    total_active += p->active();
-  }
-
-  pipelines.push_back({
-    "TOTAL",
-    std::to_string(total_allocated),
-    std::to_string(total_active),
-  });
-
-  print_table(db, { "PIPELINE", "#ALLOCATED", "#ACTIVE" }, pipelines);
+  print_table(db, { "MODULE", "PIPELINE", "STATE", "#ALLOCATED", "#ACTIVE" }, rows);
 }
 
 void Status::dump_inbound(Data::Builder &db) {
-  std::list<std::array<std::string, 3>> inbounds;
-  int total_inbound_connections = 0;
-  int total_inbound_buffered = 0;
-
-  Listener::for_each([&](Listener *listener) {
-    int count = 0;
-    int buffered = 0;
-    listener->for_each_inbound([&](Inbound *inbound) {
-      count++;
-      buffered += inbound->size_in_buffer();
+  static std::string s_tcp("TCP");
+  static std::string s_udp("UDP");
+  static std::string s_unknown("?");
+  std::list<std::array<std::string, 5>> rows;
+  for (const auto &i : inbounds) {
+    const std::string *protocol = &s_unknown;
+    switch (i.protocol) {
+      case Protocol::TCP: protocol = &s_tcp; break;
+      case Protocol::UDP: protocol = &s_udp; break;
+      default: break;
+    }
+    rows.push_back({
+      *protocol,
+      i.ip,
+      std::to_string(i.port),
+      std::to_string(i.connections),
+      std::to_string(i.buffered/1024),
     });
-    char count_peak[100];
-    sprintf(count_peak, "%d/%d", count, listener->peak_connections());
-    inbounds.push_back({
-      std::to_string(listener->port()),
-      std::string(count_peak),
-      std::to_string(buffered/1024),
-    });
-    total_inbound_connections += count;
-    total_inbound_buffered += buffered;
-  });
-
-  inbounds.push_back({
-    "TOTAL",
-    std::to_string(total_inbound_connections),
-    std::to_string(total_inbound_buffered),
-  });
-
-  print_table(db, { "INBOUND", "#CONNECTIONS", "BUFFERED(KB)" }, inbounds);
+  }
+  print_table(db, { "INBOUND", "IP", "PORT", "#CONNECTIONS", "BUFFERED(KB)" }, rows);
 }
 
 void Status::dump_outbound(Data::Builder &db) {
-  std::list<std::array<std::string, 6>> outbounds;
-
-  struct OutboundSum {
-    int connections = 0;
-    double max_connection_time = 0;
-    double avg_connection_time = 0;
-  };
-
-  OutboundSum outbound_total;
-  std::unordered_map<std::string, OutboundSum> outbound_sums;
-  Outbound::for_each([&](Outbound *outbound) {
-    char key[1000];
-    std::sprintf(key, "%s [%s]:%d",
-      outbound->protocol_name()->c_str(),
-      outbound->host().c_str(),
-      outbound->port()
-    );
-    auto conn_time = outbound->connection_time() / (outbound->retries() + 1);
-    auto &sum = outbound_sums[key];
-    sum.connections++;
-    sum.max_connection_time = std::max(sum.max_connection_time, conn_time);
-    sum.avg_connection_time += conn_time;
-    outbound_total.connections++;
-    outbound_total.max_connection_time = std::max(outbound_total.max_connection_time, conn_time);
-    outbound_total.avg_connection_time += conn_time;
-  });
-
-  int i = 0;
-  std::vector<const std::pair<const std::string, OutboundSum> *> ranks(outbound_sums.size());
-  for (const auto &p : outbound_sums) ranks[i++] = &p;
-
-  std::sort(
-    ranks.begin(), ranks.end(),
-    [](
-      const std::pair<const std::string, OutboundSum> *a,
-      const std::pair<const std::string, OutboundSum> *b)
-    {
-      return a->second.connections > b->second.connections;
+  static std::string s_tcp("TCP");
+  static std::string s_udp("UDP");
+  static std::string s_unknown("?");
+  std::list<std::array<std::string, 4>> rows;
+  for (const auto &i : outbounds) {
+    const std::string *protocol = &s_unknown;
+    switch (i.protocol) {
+      case Protocol::TCP: protocol = &s_tcp; break;
+      case Protocol::UDP: protocol = &s_udp; break;
+      default: break;
     }
-  );
-
-  const int max_outbounds = 10;
-
-  for (int i = 0; i < max_outbounds && i < ranks.size(); i++) {
-    const auto name = ranks[i]->first;
-    const auto &sum = ranks[i]->second;
-    outbounds.push_back({
-      name,
-      std::to_string(sum.connections),
-      std::to_string(int(sum.max_connection_time)),
-      std::to_string(int(sum.avg_connection_time / sum.connections)),
+    rows.push_back({
+      *protocol,
+      std::to_string(i.port),
+      std::to_string(i.connections),
+      std::to_string(i.buffered/1024),
     });
   }
-
-  if (ranks.size() > max_outbounds) {
-    char str[100];
-    std::sprintf(str, "  (%d more...)", int(ranks.size() - max_outbounds));
-    outbounds.push_back({ str, "", "", "", "", "" });
-  }
-
-  outbounds.push_back({
-    "TOTAL",
-    std::to_string(outbound_total.connections),
-    std::to_string(int(outbound_total.max_connection_time)),
-    std::to_string(int(outbound_total.connections ? outbound_total.avg_connection_time / outbound_total.connections : 0)),
-  });
-
-  print_table(db, { "OUTBOUND", "#CONNECTIONS", "MAX_CONN_TIME", "AVG_CONN_TIME" }, outbounds);
+  print_table(db, { "OUTBOUND", "PORT", "#CONNECTIONS", "BUFFERED(KB)" }, rows);
 }
 
 } // namespace pipy
