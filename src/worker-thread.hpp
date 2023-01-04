@@ -35,6 +35,7 @@
 #include <condition_variable>
 #include <mutex>
 #include <functional>
+#include <vector>
 
 namespace pipy {
 
@@ -83,8 +84,8 @@ class WorkerManager {
 public:
   static auto get() -> WorkerManager&;
 
-  bool started() const { return m_worker_thread; }
-  bool start();
+  bool started() const { return !m_worker_threads.empty(); }
+  bool start(int concurrency = 1);
   auto status() -> Status&;
   auto stats() -> stats::MetricDataSum&;
   void stats(const std::function<void(stats::MetricDataSum&)> &cb);
@@ -92,9 +93,10 @@ public:
   auto stop(bool force = false) -> int;
 
 private:
-  WorkerThread* m_worker_thread = nullptr;
+  std::vector<WorkerThread*> m_worker_threads;
   Status m_status;
   stats::MetricDataSum m_metric_data_sum;
+  int m_metric_data_sum_counter = 0;
 };
 
 } // namespace pipy

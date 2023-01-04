@@ -314,75 +314,96 @@ auto WorkerManager::get() -> WorkerManager& {
   return s_worker_manager;
 }
 
-bool WorkerManager::start() {
-  if (m_worker_thread) return false;
+bool WorkerManager::start(int concurrency) {
+  if (started()) return false;
 
-  auto wt = new WorkerThread(0);
-  if (!wt->start()) {
-    delete wt;
-    return false;
+  for (int i = 0; i < concurrency; i++) {
+    auto wt = new WorkerThread(i);
+    if (!wt->start()) {
+      delete wt;
+      stop(true);
+      return false;
+    }
+    m_worker_threads.push_back(wt);
   }
 
-  m_worker_thread = wt;
   return true;
 }
 
 auto WorkerManager::status() -> Status& {
-  if (m_worker_thread) {
+  if (auto n = m_worker_threads.size()) {
     std::mutex m;
     std::condition_variable cv;
-    Status *status = nullptr;
+    Status *statuses[n];
 
-    m_worker_thread->status(
-      [&](Status &s) {
-        {
-          std::lock_guard<std::mutex> lock(m);
-          status = &s;
+    for (auto *wt : m_worker_threads) {
+      auto i = wt->index();
+      wt->status(
+        [&, i](Status &s) {
+          {
+            std::lock_guard<std::mutex> lock(m);
+            statuses[i] = &s;
+            n--;
+          }
+          cv.notify_one();
         }
-        cv.notify_one();
-      }
-    );
+      );
+    }
 
     std::unique_lock<std::mutex> lock(m);
-    cv.wait(lock, [&]{ return status; });
-    m_status = *status;
+    cv.wait(lock, [&]{ return n == 0; });
+
+    m_status = *statuses[0];
     m_status.timestamp = utils::now();
   }
   return m_status;
 }
 
 auto WorkerManager::stats() -> stats::MetricDataSum& {
-  if (m_worker_thread) {
+  if (auto n = m_worker_threads.size()) {
     std::mutex m;
     std::condition_variable cv;
-    stats::MetricData *metric_data = nullptr;
+    stats::MetricData *metric_data[n];
 
-    m_worker_thread->stats(
-      [&](stats::MetricData &md) {
-        {
-          std::lock_guard<std::mutex> lock(m);
-          metric_data = &md;
+    for (auto *wt : m_worker_threads) {
+      auto i = wt->index();
+      wt->stats(
+        [&, i](stats::MetricData &md) {
+          {
+            std::lock_guard<std::mutex> lock(m);
+            metric_data[i] = &md;
+            n--;
+          }
+          cv.notify_one();
         }
-        cv.notify_one();
-      }
-    );
+      );
+    }
 
     std::unique_lock<std::mutex> lock(m);
-    cv.wait(lock, [&]{ return metric_data; });
-    m_metric_data_sum.sum(*metric_data, true);
+    cv.wait(lock, [&]{ return n == 0; });
+
+    for (auto i = 0; i < m_worker_threads.size(); i++) {
+      m_metric_data_sum.sum(*metric_data[i], i == 0);
+    }
   }
   return m_metric_data_sum;
 }
 
 void WorkerManager::stats(const std::function<void(stats::MetricDataSum&)> &cb) {
-  if (m_worker_thread) {
-    auto &main = Net::current();
-    m_worker_thread->stats(
+  if (m_metric_data_sum_counter > 0) return;
+
+  auto &main = Net::current();
+  m_metric_data_sum_counter = m_worker_threads.size();
+
+  for (auto *wt : m_worker_threads) {
+    bool initial = (wt->index() == 0);
+    wt->stats(
       [&, cb](stats::MetricData &metric_data) {
         main.post(
-          [&, cb]() {
-            m_metric_data_sum.sum(metric_data, true);
-            cb(m_metric_data_sum);
+          [&, cb, initial]() {
+            m_metric_data_sum.sum(metric_data, initial);
+            m_metric_data_sum_counter--;
+            if (!m_metric_data_sum_counter) cb(m_metric_data_sum);
           }
         );
       }
@@ -391,17 +412,17 @@ void WorkerManager::stats(const std::function<void(stats::MetricDataSum&)> &cb) 
 }
 
 void WorkerManager::reload() {
-  if (m_worker_thread) {
-    m_worker_thread->reload();
+  for (auto *wt : m_worker_threads) {
+    wt->reload();
   }
 }
 
 auto WorkerManager::stop(bool force) -> int {
-  if (m_worker_thread) {
-    return m_worker_thread->stop(force);
-  } else {
-    return 0;
+  int n = 0;
+  for (auto *wt : m_worker_threads) {
+    n += wt->stop(force);
   }
+  return n;
 }
 
 } // namespace pipy
