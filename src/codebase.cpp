@@ -41,6 +41,7 @@
 
 #include <fstream>
 #include <sstream>
+#include <mutex>
 
 namespace pipy {
 
@@ -73,6 +74,7 @@ private:
     chdir(m_base.c_str());
   }
 
+  std::mutex m_mutex;
   std::string m_version;
   std::string m_base;
   std::string m_entry;
@@ -107,6 +109,7 @@ CodebaseFromFS::CodebaseFromFS(const std::string &path, const std::string &scrip
 }
 
 auto CodebaseFromFS::list(const std::string &path) -> std::list<std::string> {
+  std::lock_guard<std::mutex> lock(m_mutex);
   std::list<std::string> list;
   auto full_path = utils::path_join(m_base, path);
   fs::read_dir(full_path, list);
@@ -114,6 +117,7 @@ auto CodebaseFromFS::list(const std::string &path) -> std::list<std::string> {
 }
 
 auto CodebaseFromFS::get(const std::string &path) -> Data* {
+  std::lock_guard<std::mutex> lock(m_mutex);
   if (path.empty() && !m_script.empty()) {
     return s_dp.make(m_script);
   } else {
@@ -126,6 +130,7 @@ auto CodebaseFromFS::get(const std::string &path) -> Data* {
 }
 
 void CodebaseFromFS::set(const std::string &path, Data *data) {
+  std::lock_guard<std::mutex> lock(m_mutex);
   if (data) {
     auto segs = utils::split(path, '/');
     if (segs.size() > 1) {
@@ -178,6 +183,7 @@ public:
   virtual void sync(bool force, const std::function<void(bool)> &on_update) override {}
 
 private:
+  std::mutex m_mutex;
   std::string m_version;
   std::string m_entry;
   std::map<std::string, pjs::Ref<pipy::Data>> m_files;
@@ -207,6 +213,7 @@ CodebsaeFromStore::CodebsaeFromStore(CodebaseStore *store, const std::string &na
 }
 
 auto CodebsaeFromStore::list(const std::string &path) -> std::list<std::string> {
+  std::lock_guard<std::mutex> lock(m_mutex);
   std::set<std::string> names;
   auto n = path.length();
   for (const auto &i : m_files) {
@@ -227,6 +234,7 @@ auto CodebsaeFromStore::list(const std::string &path) -> std::list<std::string> 
 }
 
 auto CodebsaeFromStore::get(const std::string &path) -> pipy::Data* {
+  std::lock_guard<std::mutex> lock(m_mutex);
   auto k = path;
   if (k.front() != '/') k.insert(k.begin(), '/');
   auto i = m_files.find(k);
@@ -264,6 +272,7 @@ private:
   std::map<std::string, pjs::Ref<pipy::Data>> m_dl_temp;
   std::list<std::string> m_dl_list;
   pjs::Ref<pjs::Object> m_request_header_post_status;
+  std::mutex m_mutex;
 
   void download(const std::function<void(bool)> &on_update);
   void download_next(const std::function<void(bool)> &on_update);
@@ -290,6 +299,7 @@ CodebaseFromHTTP::CodebaseFromHTTP(const std::string &url, const Fetch::Options 
 }
 
 auto CodebaseFromHTTP::list(const std::string &path) -> std::list<std::string> {
+  std::lock_guard<std::mutex> lock(m_mutex);
   std::set<std::string> names;
   auto n = path.length();
   for (const auto &i : m_files) {
@@ -310,6 +320,7 @@ auto CodebaseFromHTTP::list(const std::string &path) -> std::list<std::string> {
 }
 
 auto CodebaseFromHTTP::get(const std::string &path) -> pipy::Data* {
+  std::lock_guard<std::mutex> lock(m_mutex);
   auto k = path;
   if (k.front() != '/') k.insert(k.begin(), '/');
   auto i = m_files.find(k);
@@ -398,11 +409,13 @@ void CodebaseFromHTTP::download(const std::function<void(bool)> &on_update) {
         m_entry = m_dl_list.front();
         download_next(on_update);
       } else {
+        m_mutex.lock();
         m_files.clear();
         m_files[m_root] = body;
-        m_fetch.close();
         m_entry = m_root;
         m_downloaded = true;
+        m_mutex.unlock();
+        m_fetch.close();
         on_update(true);
       }
     }
@@ -411,9 +424,11 @@ void CodebaseFromHTTP::download(const std::function<void(bool)> &on_update) {
 
 void CodebaseFromHTTP::download_next(const std::function<void(bool)> &on_update) {
   if (m_dl_list.empty()) {
+    m_mutex.lock();
     m_files = std::move(m_dl_temp);
-    m_fetch.close();
     m_downloaded = true;
+    m_mutex.unlock();
+    m_fetch.close();
     on_update(true);
     return;
   }
