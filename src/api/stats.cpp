@@ -232,10 +232,15 @@ public:
       auto *p = m_le_str;
       while (p) {
         auto q = p;
-        while (*q != ',' && *q != ']') q++;
+        while (*q && *q != ',' && *q != ']') q++;
+        auto n = q - p;
+        if (*p == '"') {
+          p++; n--;
+          if (n > 1 && *(q-1) == '"') n--;
+        }
         output(m_name);
         output(s_bucket);
-        output(level, node->values[le++], p, q - p);
+        output(level, node->values[le++], p, n);
         p = (*q == ',' ? q+1 : nullptr);
       }
       output(m_name);
