@@ -427,8 +427,8 @@ void MetricData::to_prometheus(const std::string &extra_labels, const std::funct
     if (auto root = ent->root.get()) {
       const char *le_str = nullptr;
       auto *name = ent->name.to_string();
-      auto *type = ent->name.to_string();
-      auto *shape = ent->name.to_string();
+      auto *type = ent->type.to_string();
+      auto *shape = ent->shape.to_string();
       if (utils::starts_with(type->str(), s_prefix_histogram)) {
         le_str = type->c_str() + s_prefix_histogram.length();
       }

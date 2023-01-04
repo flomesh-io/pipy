@@ -975,6 +975,7 @@ size_t Number::to_string(char *str, size_t len, double n) {
   auto max = std::numeric_limits<double>::digits10 + 1;
   len = std::snprintf(str, len, "%.*f", max, n);
   while (len > 1 && str[len-1] == '0') len--;
+  if (len > 1 && str[len-1] == '.') len--;
   return len;
 }
 
