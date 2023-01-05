@@ -27,6 +27,7 @@
 #include "expr.hpp"
 
 #include <map>
+#include <mutex>
 #include <stack>
 
 namespace pjs {
@@ -47,8 +48,8 @@ struct Location {
 
 class Token {
 public:
-  static Token eof;
-  static Token err;
+  static const Token eof;
+  static const Token err;
 
   static const int OPERATOR_BIT = (1<<31);
 
@@ -140,16 +141,16 @@ private:
     std::string s;
   };
 
-  static std::vector<TokenData> s_tokens;
-  static std::map<double, int> s_number_map;
-  static std::map<std::string, int> s_string_map;
+  thread_local static std::vector<TokenData> s_tokens;
+  thread_local static std::map<double, int> s_number_map;
+  thread_local static std::map<std::string, int> s_string_map;
 };
 
-Token Token::eof(0);
-Token Token::err(-1);
-std::vector<Token::TokenData> Token::s_tokens(1);
-std::map<double, int> Token::s_number_map;
-std::map<std::string, int> Token::s_string_map;
+const Token Token::eof(0);
+const Token Token::err(-1);
+thread_local std::vector<Token::TokenData> Token::s_tokens(1);
+thread_local std::map<double, int> Token::s_number_map;
+thread_local std::map<std::string, int> Token::s_string_map;
 
 //
 // Tokenizer
@@ -191,6 +192,7 @@ public:
   }
 
 private:
+  static std::mutex s_init_operator_map_mutex;
   static std::map<std::string, int> s_operator_map;
   static std::map<int, std::string> s_identifier_names;
   static void init_operator_map();
@@ -225,10 +227,13 @@ private:
   }
 };
 
+std::mutex Tokenizer::s_init_operator_map_mutex;
 std::map<std::string, int> Tokenizer::s_operator_map;
 std::map<int, std::string> Tokenizer::s_identifier_names;
 
 void Tokenizer::init_operator_map() {
+  std::lock_guard<std::mutex> lock(s_init_operator_map_mutex);
+
   static const char* operators[] = {
     ","     , "."     ,
     "`"     , "="     ,
@@ -770,13 +775,13 @@ private:
     return nullptr;
   }
 
-  static std::unordered_map<int, int> s_precedence_table;
+  static const std::unordered_map<int, int> s_precedence_table;
 };
 
 // Operator precedence table as in:
 // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Operator_Precedence#table
 
-std::unordered_map<int, int> ExpressionParser::s_precedence_table = {
+const std::unordered_map<int, int> ExpressionParser::s_precedence_table = {
   { Token::OPR("."   ), 20 },
   { Token::OPR("["   ), 20 },
   { Token::OPR("("   ), 20 },
