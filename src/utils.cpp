@@ -297,9 +297,9 @@ bool get_seconds(const pjs::Value &val, double &out) {
 }
 
 void gen_uuid_v4(std::string &str) {
-  static std::random_device rd;
-  static std::mt19937_64 rn1, rn2;
-  static bool is_initialized = false;
+  thread_local static std::random_device rd;
+  thread_local static std::mt19937_64 rn1, rn2;
+  thread_local static bool is_initialized = false;
 
   if (!is_initialized) {
     union {
