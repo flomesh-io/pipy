@@ -69,7 +69,7 @@ auto StreamEnd::message() const -> const char* {
 //
 
 auto EventTarget::Input::dummy() -> Input* {
-  static pjs::Ref<Input> dummy(new DummyInput());
+  thread_local static pjs::Ref<Input> dummy(new DummyInput());
   return dummy;
 }
 

@@ -151,8 +151,6 @@ private:
     Node(int l) : level(l) {
       std::memset(branches, 0, sizeof(branches));
     }
-
-    static int s_count;
   };
 
   //
@@ -194,9 +192,6 @@ private:
     delete node;
   }
 };
-
-template<typename T, int S>
-int ScarcePointerArray<T, S>::Node::s_count = 0;
 
 } // namespace pipy
 

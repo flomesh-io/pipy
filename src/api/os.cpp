@@ -64,7 +64,7 @@ template<> void ClassDef<OS>::init() {
 
   // os.readFile
   method("readFile", [](Context &ctx, Object*, Value &ret) {
-    static pipy::Data::Producer s_dp("os.readFile");
+    thread_local static pipy::Data::Producer s_dp("os.readFile");
 
     Str *filename;
     if (!ctx.arguments(1, &filename)) return;
