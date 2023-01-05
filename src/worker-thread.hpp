@@ -48,6 +48,8 @@ public:
   WorkerThread(int index);
   ~WorkerThread();
 
+  static auto current() -> WorkerThread* { return s_current; }
+
   auto index() const -> int { return m_index; }
 
   bool start();
@@ -74,6 +76,8 @@ private:
   void clean_pools();
   void wait();
   void fail();
+
+  thread_local static WorkerThread* s_current;
 };
 
 //

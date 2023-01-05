@@ -31,6 +31,8 @@
 
 namespace pipy {
 
+thread_local WorkerThread* WorkerThread::s_current = nullptr;
+
 WorkerThread::WorkerThread(int index)
   : m_index(index)
 {
@@ -45,6 +47,8 @@ bool WorkerThread::start() {
 
   m_thread = std::thread(
     [this]() {
+      s_current = this;
+
       auto &entry = Codebase::current()->entry();
       auto worker = Worker::make();
       auto mod = worker->load_js_module(entry);

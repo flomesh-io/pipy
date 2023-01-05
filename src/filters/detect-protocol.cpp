@@ -84,10 +84,10 @@ class HTTPDetector :
   bool m_seen_method = false;
   bool m_read_protocol = false;
 
-  static std::set<std::string> s_valid_methods;
+  static const std::set<std::string> s_valid_methods;
 };
 
-std::set<std::string> HTTPDetector::s_valid_methods({
+const std::set<std::string> HTTPDetector::s_valid_methods({
   "GET",
   "HEAD",
   "POST",

@@ -26,6 +26,7 @@
 #include "dump.hpp"
 #include "context.hpp"
 #include "data.hpp"
+#include "worker-thread.hpp"
 #include "api/json.hpp"
 #include "log.hpp"
 
@@ -66,7 +67,8 @@ auto Dump::clone() -> Filter* {
 
 void Dump::process(Event *evt) {
   static char s_hex[] = { "0123456789ABCDEF" };
-  static std::string s_prefix("[dump] [context=");
+  static std::string s_prefix_worker("[dump] [worker=");
+  static std::string s_prefix_context("] [context=");
   static std::string s_hline(16*3+4+16, '-');
 
   pjs::Value tag;
@@ -88,7 +90,9 @@ void Dump::process(Event *evt) {
   };
 
   db.push(str, Log::format_header(Log::INFO, str, sizeof(str)));
-  db.push(s_prefix);
+  db.push(s_prefix_worker);
+  db.push(str, str_fmt( "%d", WorkerThread::current()->index()));
+  db.push(s_prefix_context);
   db.push(str, str_fmt( "%d", context()->id()));
   db.push(']');
   db.push(' ');
