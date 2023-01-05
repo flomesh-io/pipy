@@ -31,6 +31,8 @@
 #include "inbound.hpp"
 #include "input.hpp"
 
+#include <atomic>
+
 namespace pipy {
 
 class ContextGroup;
@@ -72,7 +74,7 @@ private:
   ContextData* m_data;
   pjs::WeakRef<Inbound> m_inbound;
 
-  static uint64_t s_context_id;
+  static std::atomic<uint64_t> s_context_id;
 
   friend class pjs::RefCount<Context>;
   friend class Worker;

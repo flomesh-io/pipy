@@ -34,7 +34,7 @@ namespace pipy {
 // Context
 //
 
-uint64_t Context::s_context_id = 0;
+std::atomic<uint64_t> Context::s_context_id(0);
 
 Context::Context(Context *base)
   : Context(base, nullptr, nullptr)
@@ -56,8 +56,12 @@ Context::Context(Context *base, Worker *worker, pjs::Object *global, ContextData
     }
   }
   if (base) m_inbound = base->m_inbound;
-  if (!++s_context_id) s_context_id++;
-  m_id = s_context_id;
+  for (;;) {
+    if (auto id = s_context_id.fetch_add(1, std::memory_order_relaxed) + 1) {
+      m_id = id;
+      break;
+    }
+  }
   Log::debug("[context  %p] ++ id = %llu", this, m_id);
 }
 
