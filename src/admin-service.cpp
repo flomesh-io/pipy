@@ -508,8 +508,9 @@ Message* AdminService::metrics_GET(pjs::Object *headers) {
     }
   };
 
-  auto &metric_data_sum = WorkerManager::get().stats();
-  metric_data_sum.to_prometheus(output);
+  stats::MetricDataSum stats;
+  WorkerManager::get().stats(stats);
+  stats.to_prometheus(output);
 
   for (const auto &p : m_instances) {
     auto inst = p.second;

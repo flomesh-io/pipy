@@ -363,7 +363,7 @@ auto WorkerManager::status() -> Status& {
   return m_status;
 }
 
-auto WorkerManager::stats() -> stats::MetricDataSum& {
+void WorkerManager::stats(stats::MetricDataSum &stats) {
   if (auto n = m_worker_threads.size()) {
     std::mutex m;
     std::condition_variable cv;
@@ -387,10 +387,9 @@ auto WorkerManager::stats() -> stats::MetricDataSum& {
     cv.wait(lock, [&]{ return n == 0; });
 
     for (auto i = 0; i < m_worker_threads.size(); i++) {
-      m_metric_data_sum.sum(*metric_data[i], i == 0);
+      stats.sum(*metric_data[i], i == 0);
     }
   }
-  return m_metric_data_sum;
 }
 
 void WorkerManager::stats(const std::function<void(stats::MetricDataSum&)> &cb) {
@@ -402,12 +401,14 @@ void WorkerManager::stats(const std::function<void(stats::MetricDataSum&)> &cb) 
   for (auto *wt : m_worker_threads) {
     bool initial = (wt->index() == 0);
     wt->stats(
-      [&, cb](stats::MetricData &metric_data) {
+      [&, cb, initial](stats::MetricData &metric_data) {
         main.post(
           [&, cb, initial]() {
             m_metric_data_sum.sum(metric_data, initial);
             m_metric_data_sum_counter--;
-            if (!m_metric_data_sum_counter) cb(m_metric_data_sum);
+            if (!m_metric_data_sum_counter) {
+              cb(m_metric_data_sum);
+            }
           }
         );
       }

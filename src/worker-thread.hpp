@@ -91,7 +91,7 @@ public:
   bool started() const { return !m_worker_threads.empty(); }
   bool start(int concurrency = 1);
   auto status() -> Status&;
-  auto stats() -> stats::MetricDataSum&;
+  void stats(stats::MetricDataSum &stats);
   void stats(const std::function<void(stats::MetricDataSum&)> &cb);
   void reload();
   auto stop(bool force = false) -> int;
