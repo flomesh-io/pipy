@@ -77,11 +77,20 @@ bool WorkerThread::start() {
   return !m_failed;
 }
 
+void WorkerThread::status(Status &status, const std::function<void()> &cb) {
+  m_net->post(
+    [&, cb]() {
+      status.update();
+      cb();
+    }
+  );
+}
+
 void WorkerThread::status(const std::function<void(Status&)> &cb) {
   m_net->post(
     [=]() {
-      Status::local.update();
-      cb(Status::local);
+      m_status.update();
+      cb(m_status);
     }
   );
 }
@@ -334,19 +343,19 @@ bool WorkerManager::start(int concurrency) {
   return true;
 }
 
-auto WorkerManager::status() -> Status& {
+void WorkerManager::status(Status &status) {
   if (auto n = m_worker_threads.size()) {
     std::mutex m;
     std::condition_variable cv;
-    Status *statuses[n];
+    Status statuses[n];
 
     for (auto *wt : m_worker_threads) {
       auto i = wt->index();
       wt->status(
-        [&, i](Status &s) {
+        statuses[i],
+        [&]() {
           {
             std::lock_guard<std::mutex> lock(m);
-            statuses[i] = &s;
             n--;
           }
           cv.notify_one();
@@ -357,10 +366,9 @@ auto WorkerManager::status() -> Status& {
     std::unique_lock<std::mutex> lock(m);
     cv.wait(lock, [&]{ return n == 0; });
 
-    m_status = *statuses[0];
-    m_status.timestamp = utils::now();
+    status = statuses[0];
+    status.timestamp = utils::now();
   }
-  return m_status;
 }
 
 void WorkerManager::status(const std::function<void(Status&)> &cb) {

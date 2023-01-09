@@ -169,6 +169,7 @@ private:
   std::map<std::string, int> m_instance_map;
   std::map<std::string, std::set<int>> m_codebase_instances;
   std::map<std::string, std::set<LogWatcher*>> m_local_log_watchers;
+  Status m_local_status;
   stats::MetricData m_local_metric_data;
   stats::MetricHistory m_local_metric_history;
   Timer m_metrics_history_timer;

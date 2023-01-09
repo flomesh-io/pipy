@@ -433,7 +433,8 @@ auto AdminService::handle(Context *ctx, Message *req) -> Message* {
 Message* AdminService::dump_GET(const std::string &path) {
   Data buf;
   Data::Builder db(buf, &s_dp);
-  auto &status = WorkerManager::get().status();
+  Status status;
+  WorkerManager::get().status(status);
   auto items = utils::split(path, '+');
   for (const auto &item : items) {
     if (item == "pools") {
@@ -980,8 +981,8 @@ Message* AdminService::api_v1_program_POST(Data *data) {
     if (new_codebase != old_codebase) delete old_codebase;
     if (name != "/") m_current_codebase = name;
     m_current_program = m_current_codebase;
-    Status::local.version = new_codebase->version();
-    Status::local.update();
+    m_local_status.version = new_codebase->version();
+    m_local_status.update();
     return m_response_created;
   } else {
     new_worker->stop();
@@ -1005,7 +1006,7 @@ Message* AdminService::api_v1_program_DELETE() {
         }
       }
     );
-    Status::local.update();
+    m_local_status.update();
   }
   m_current_program.clear();
   return m_response_deleted;
@@ -1013,7 +1014,7 @@ Message* AdminService::api_v1_program_DELETE() {
 
 Message* AdminService::api_v1_status_GET() {
   std::stringstream ss;
-  Status::local.to_json(ss);
+  m_local_status.to_json(ss);
   return Message::make(
     m_response_head_json,
     s_dp.make(ss.str())

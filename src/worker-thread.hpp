@@ -53,6 +53,7 @@ public:
   auto index() const -> int { return m_index; }
 
   bool start();
+  void status(Status &status, const std::function<void()> &cb);
   void status(const std::function<void(Status&)> &cb);
   void stats(const std::function<void(stats::MetricData&)> &cb);
   void reload();
@@ -63,6 +64,7 @@ private:
   Net* m_net = nullptr;
   Timer* m_recycle_timer = nullptr;
   Timer* m_pending_timer = nullptr;
+  Status m_status;
   stats::MetricData m_metric_data;
   std::thread m_thread;
   std::mutex m_mutex;
@@ -90,7 +92,7 @@ public:
 
   bool started() const { return !m_worker_threads.empty(); }
   bool start(int concurrency = 1);
-  auto status() -> Status&;
+  void status(Status &status);
   void status(const std::function<void(Status&)> &cb);
   void stats(stats::MetricDataSum &stats);
   void stats(const std::function<void(stats::MetricDataSum&)> &cb);
