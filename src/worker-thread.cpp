@@ -363,6 +363,31 @@ auto WorkerManager::status() -> Status& {
   return m_status;
 }
 
+void WorkerManager::status(const std::function<void(Status&)> &cb) {
+  if (m_status_counter > 0) return;
+
+  auto &main = Net::current();
+  m_status_counter = m_worker_threads.size();
+
+  for (auto *wt : m_worker_threads) {
+    bool initial = (wt->index() == 0);
+    wt->status(
+      [&, cb, initial](Status &s) {
+        main.post(
+          [&, cb, initial]() {
+            if (initial) m_status = s;
+            m_status_counter--;
+            m_status.timestamp = utils::now();
+            if (!m_status_counter) {
+              cb(m_status);
+            }
+          }
+        );
+      }
+    );
+  }
+}
+
 void WorkerManager::stats(stats::MetricDataSum &stats) {
   if (auto n = m_worker_threads.size()) {
     std::mutex m;

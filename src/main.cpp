@@ -180,19 +180,22 @@ static void start_reporting_status(const std::string &address, const Fetch::Opti
       fetch = new Fetch(url->hostname()->str() + ':' + url->port()->str(), options);
     }
     if (!fetch->busy()) {
-      std::stringstream ss;
-      auto &status = WorkerManager::get().status();
-      status.since = Status::local.since;
-      status.name = Status::local.name;
-      status.uuid = Status::local.uuid;
-      status.to_json(ss);
-      InputContext ic;
-      (*fetch)(
-        Fetch::POST,
-        url->path(),
-        headers,
-        Data::make(ss.str(), &s_dp),
-        [=](http::ResponseHead *head, Data *body) {}
+      WorkerManager::get().status(
+        [](Status &status) {
+          std::stringstream ss;
+          status.since = Status::local.since;
+          status.name = Status::local.name;
+          status.uuid = Status::local.uuid;
+          status.to_json(ss);
+          InputContext ic;
+          (*fetch)(
+            Fetch::POST,
+            url->path(),
+            headers,
+            Data::make(ss.str(), &s_dp),
+            [=](http::ResponseHead *head, Data *body) {}
+          );
+        }
       );
     }
     timer.schedule(5, report);

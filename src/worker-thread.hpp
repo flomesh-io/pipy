@@ -91,6 +91,7 @@ public:
   bool started() const { return !m_worker_threads.empty(); }
   bool start(int concurrency = 1);
   auto status() -> Status&;
+  void status(const std::function<void(Status&)> &cb);
   void stats(stats::MetricDataSum &stats);
   void stats(const std::function<void(stats::MetricDataSum&)> &cb);
   void reload();
@@ -99,6 +100,7 @@ public:
 private:
   std::vector<WorkerThread*> m_worker_threads;
   Status m_status;
+  int m_status_counter = 0;
   stats::MetricDataSum m_metric_data_sum;
   int m_metric_data_sum_counter = 0;
 };
