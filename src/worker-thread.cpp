@@ -95,6 +95,16 @@ void WorkerThread::status(const std::function<void(Status&)> &cb) {
   );
 }
 
+void WorkerThread::stats(stats::MetricData &metric_data, const std::function<void()> &cb) {
+  m_net->post(
+    [&, cb]() {
+      stats::Metric::local().collect_all();
+      metric_data.update(stats::Metric::local());
+      cb();
+    }
+  );
+}
+
 void WorkerThread::stats(const std::function<void(stats::MetricData&)> &cb) {
   m_net->post(
     [=]() {
@@ -400,15 +410,15 @@ void WorkerManager::stats(stats::MetricDataSum &stats) {
   if (auto n = m_worker_threads.size()) {
     std::mutex m;
     std::condition_variable cv;
-    stats::MetricData *metric_data[n];
+    stats::MetricData metric_data[n];
 
     for (auto *wt : m_worker_threads) {
       auto i = wt->index();
       wt->stats(
-        [&, i](stats::MetricData &md) {
+        metric_data[i],
+        [&]() {
           {
             std::lock_guard<std::mutex> lock(m);
-            metric_data[i] = &md;
             n--;
           }
           cv.notify_one();
@@ -420,7 +430,7 @@ void WorkerManager::stats(stats::MetricDataSum &stats) {
     cv.wait(lock, [&]{ return n == 0; });
 
     for (auto i = 0; i < m_worker_threads.size(); i++) {
-      stats.sum(*metric_data[i], i == 0);
+      stats.sum(metric_data[i], i == 0);
     }
   }
 }

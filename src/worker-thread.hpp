@@ -55,6 +55,7 @@ public:
   bool start();
   void status(Status &status, const std::function<void()> &cb);
   void status(const std::function<void(Status&)> &cb);
+  void stats(stats::MetricData &metric_data, const std::function<void()> &cb);
   void stats(const std::function<void(stats::MetricData&)> &cb);
   void reload();
   auto stop(bool force = false) -> int;
