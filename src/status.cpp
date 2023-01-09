@@ -336,7 +336,7 @@ void Status::dump_pools(Data::Builder &db) {
   for (const auto &i : pools) {
     rows.push_back({
       i.name,
-      std::to_string(i.size * (i.allocated * i.pooled)),
+      std::to_string(i.size * (i.allocated + i.pooled)),
       std::to_string(i.allocated),
       std::to_string(i.pooled),
     });
