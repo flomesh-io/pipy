@@ -376,8 +376,11 @@ void WorkerManager::status(Status &status) {
     std::unique_lock<std::mutex> lock(m);
     cv.wait(lock, [&]{ return n == 0; });
 
-    status = statuses[0];
     status.timestamp = utils::now();
+    status = std::move(statuses[0]);
+    for (auto i = 1; i < m_worker_threads.size(); i++) {
+      status.merge(statuses[i]);
+    }
   }
 }
 
@@ -393,10 +396,14 @@ void WorkerManager::status(const std::function<void(Status&)> &cb) {
       [&, cb, initial](Status &s) {
         main.post(
           [&, cb, initial]() {
-            if (initial) m_status = s;
+            if (initial) {
+              m_status = std::move(s);
+            } else {
+              m_status.merge(s);
+            }
             m_status_counter--;
-            m_status.timestamp = utils::now();
             if (!m_status_counter) {
+              m_status.timestamp = utils::now();
               cb(m_status);
             }
           }

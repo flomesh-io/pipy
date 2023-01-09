@@ -28,8 +28,8 @@
 
 #include "data.hpp"
 
-#include <list>
 #include <ostream>
+#include <set>
 #include <string>
 
 namespace pipy {
@@ -49,47 +49,124 @@ public:
   struct ModuleInfo {
     std::string filename;
     std::string graph;
+
+    bool operator<(const ModuleInfo &r) const {
+      return filename < r.filename;
+    }
+
+    auto operator+=(const ModuleInfo &r) const -> const ModuleInfo& {
+      return *this;
+    }
   };
 
   struct PoolInfo {
     std::string name;
     int size;
-    int allocated;
-    int pooled;
+    mutable int allocated;
+    mutable int pooled;
+
+    bool operator<(const PoolInfo &r) const {
+      return name < r.name;
+    }
+
+    auto operator+=(const PoolInfo &r) const -> const PoolInfo& {
+      allocated += r.allocated;
+      pooled += r.pooled;
+      return *this;
+    }
   };
 
   struct ObjectInfo {
     std::string name;
-    int count;
+    mutable int count;
+
+    bool operator<(const ObjectInfo &r) const {
+      return name < r.name;
+    }
+
+    auto operator+=(const ObjectInfo &r) const -> const ObjectInfo& {
+      count += r.count;
+      return *this;
+    }
   };
 
   struct ChunkInfo {
     std::string name;
-    int current;
-    int peak;
+    mutable int current;
+    mutable int peak;
+
+    bool operator<(const ChunkInfo &r) const {
+      return name < r.name;
+    }
+
+    auto operator+=(const ChunkInfo &r) const -> const ChunkInfo& {
+      current += r.current;
+      peak += r.peak;
+      return *this;
+    }
   };
 
   struct PipelineInfo {
     std::string module;
     std::string name;
     bool stale;
-    int active;
-    int allocated;
+    mutable int active;
+    mutable int allocated;
+
+    bool operator<(const PipelineInfo &r) const {
+      if (stale < r.stale) return true;
+      if (stale > r.stale) return false;
+      if (module < r.module) return true;
+      if (module > r.module) return false;
+      return name < r.name;
+    }
+
+    auto operator+=(const PipelineInfo &r) const -> const PipelineInfo& {
+      active += r.active;
+      allocated += r.allocated;
+      return *this;
+    }
   };
 
   struct InboundInfo {
     Protocol protocol;
     std::string ip;
     int port;
-    int connections;
-    int buffered;
+    mutable int connections;
+    mutable int buffered;
+
+    bool operator<(const InboundInfo &r) const {
+      if (protocol < r.protocol) return true;
+      if (protocol > r.protocol) return false;
+      if (ip < r.ip) return true;
+      if (ip > r.ip) return false;
+      return port < r.port;
+    }
+
+    auto operator+=(const InboundInfo &r) const -> const InboundInfo& {
+      connections += r.connections;
+      buffered += r.buffered;
+      return *this;
+    }
   };
 
   struct OutboundInfo {
     Protocol protocol = Protocol::UNKNOWN;
     int port = 0;
-    int connections = 0;
-    int buffered = 0;
+    mutable int connections = 0;
+    mutable int buffered = 0;
+
+    bool operator<(const OutboundInfo &r) const {
+      if (protocol < r.protocol) return true;
+      if (protocol > r.protocol) return false;
+      return port < r.port;
+    }
+
+    auto operator+=(const OutboundInfo &r) const -> const OutboundInfo& {
+      connections += r.connections;
+      buffered += r.buffered;
+      return *this;
+    }
   };
 
   double since = 0;
@@ -97,16 +174,17 @@ public:
   std::string uuid;
   std::string name;
   std::string version;
-  std::list<ModuleInfo> modules;
-  std::list<PoolInfo> pools;
-  std::list<ObjectInfo> objects;
-  std::list<ChunkInfo> chunks;
-  std::list<PipelineInfo> pipelines;
-  std::list<InboundInfo> inbounds;
-  std::list<OutboundInfo> outbounds;
-  std::list<pjs::Ref<pjs::Str>> log_names;
+  std::set<ModuleInfo> modules;
+  std::set<PoolInfo> pools;
+  std::set<ObjectInfo> objects;
+  std::set<ChunkInfo> chunks;
+  std::set<PipelineInfo> pipelines;
+  std::set<InboundInfo> inbounds;
+  std::set<OutboundInfo> outbounds;
+  std::set<pjs::Ref<pjs::Str>> log_names;
 
   void update();
+  void merge(const Status &other);
   bool from_json(const Data &data);
   void to_json(std::ostream &out) const;
   void dump_pools(Data::Builder &db);

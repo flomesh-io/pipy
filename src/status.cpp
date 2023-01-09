@@ -69,21 +69,18 @@ void Status::update() {
   });
 
   for (const auto &i : all_modules) {
-    modules.emplace_back();
-    auto &mod = modules.back();
     Graph g;
     Graph::from_pipelines(g, i.second);
     std::string error;
     std::stringstream ss;
     g.to_json(error, ss);
-    mod.filename = i.first;
-    mod.graph = ss.str();
+    modules.insert({ i.first, ss.str() });
   }
 
   for (const auto &p : pjs::Pool::all()) {
     auto *c = p.second;
     if (c->allocated() + c->pooled() > 1) {
-      pools.push_back({
+      pools.insert({
         c->name(),
         (int)c->size(),
         (int)c->allocated(),
@@ -96,12 +93,12 @@ void Status::update() {
     static std::string prefix("pjs::Constructor");
     if (utils::starts_with(i.second->name()->str(), prefix)) continue;
     if (auto n = i.second->object_count()) {
-      objects.push_back({ i.first, (int)n });
+      objects.insert({ i.first, (int)n });
     }
   }
 
   Data::Producer::for_each([&](Data::Producer *producer) {
-    chunks.push_back({
+    chunks.insert({
       producer->name()->str(),
       producer->current(),
       producer->peak(),
@@ -110,7 +107,7 @@ void Status::update() {
 
   PipelineLayout::for_each([&](PipelineLayout *p) {
     if (auto mod = dynamic_cast<JSModule*>(p->module())) {
-      pipelines.push_back({
+      pipelines.insert({
         mod->filename()->str(),
         p->name_or_label()->str(),
         mod->worker() != Worker::current(),
@@ -133,7 +130,7 @@ void Status::update() {
       count++;
       buffered += inbound->size_in_buffer();
     });
-    inbounds.push_back({
+    inbounds.insert({
       protocol,
       listener->ip(),
       (int)listener->port(),
@@ -167,14 +164,36 @@ void Status::update() {
       info.buffered += buffered;
     }
   });
-  for (auto &p : outbound_tcp) outbounds.push_back(p.second);
-  for (auto &p : outbound_udp) outbounds.push_back(p.second);
+  for (auto &p : outbound_tcp) outbounds.insert(p.second);
+  for (auto &p : outbound_udp) outbounds.insert(p.second);
 
   logging::Logger::for_each(
     [&](logging::Logger *logger) {
-      log_names.push_back(logger->name());
+      log_names.insert(logger->name());
     }
   );
+}
+
+template<class T>
+inline static void merge_sets(std::set<T> &a, const std::set<T> &b) {
+  for (const auto &i : b) {
+    typename std::set<T>::iterator p = a.find(i);
+    if (p == a.end()) {
+      a.insert(i);
+    } else {
+      *p += i;
+    }
+  }
+}
+
+void Status::merge(const Status &other) {
+  merge_sets(modules, other.modules);
+  merge_sets(pools, other.pools);
+  merge_sets(objects, other.objects);
+  merge_sets(chunks, other.chunks);
+  merge_sets(pipelines, other.pipelines);
+  merge_sets(inbounds, other.inbounds);
+  merge_sets(outbounds, other.outbounds);
 }
 
 bool Status::from_json(const Data &data) {
@@ -224,10 +243,10 @@ bool Status::from_json(const Data &data) {
       pjs::Value val_graph;
       v.o()->get(key_graph, val_graph);
       if (!val_graph.is_object() || !val_graph.o()) return;
-      modules.emplace_back();
-      auto &mod = modules.back();
-      mod.filename = k->str();
-      mod.graph = JSON::stringify(val_graph, nullptr, 0);
+      modules.insert({
+        k->str(),
+        JSON::stringify(val_graph, nullptr, 0),
+      });
     }
   );
 
@@ -235,7 +254,7 @@ bool Status::from_json(const Data &data) {
   val_logs.as<pjs::Array>()->iterate_all(
     [this](pjs::Value &v, int) {
       if (v.is_string()) {
-        log_names.push_back(v.s());
+        log_names.insert(v.s());
       }
     }
   );
