@@ -57,9 +57,10 @@ thread_local static Data::Producer s_dp_json("JSONLogger");
 
 static Net* s_net = nullptr;
 
-std::set<Logger*> Logger::s_all_loggers;
 AdminService* Logger::s_admin_service = nullptr;
 AdminLink* Logger::s_admin_link = nullptr;
+
+thread_local std::set<Logger*> Logger::s_all_loggers;
 
 void Logger::init() {
   s_net = &Net::current();
@@ -77,50 +78,51 @@ void Logger::set_admin_link(AdminLink *admin_link) {
   s_admin_link->add_handler(
     [](const std::string &command, const Data &payload) {
       if (utils::starts_with(command, s_tail)) {
-        auto name = command.substr(s_tail.length());
-        for (auto *logger : s_all_loggers) {
-          if (logger->name()->str() == name) {
-            logger->send_history();
-          }
-        }
+        static std::string s_prefix("log-tail/");
+        pjs::Ref<pjs::Str> name(pjs::Str::make(command.substr(s_tail.length())));
+        Data buf;
+        Data::Builder db(buf, &s_dp);
+        db.push(s_prefix);
+        db.push(name->str());
+        db.push('\n');
+        db.flush();
+        History::tail(name, buf);
+        s_admin_link->send(buf);
         return true;
       } else {
-        std::string name;
+        pjs::Ref<pjs::Str> name;
         bool enabled;
         if (utils::starts_with(command, s_on)) {
-          name = command.substr(s_on.length());
+          name = pjs::Str::make(command.substr(s_on.length()));
           enabled = true;
         } else if (utils::starts_with(command, s_off)) {
-          name = command.substr(s_off.length());
+          name = pjs::Str::make(command.substr(s_off.length()));
           enabled = false;
         }
-        if (name.empty()) return false;
-        for (auto *logger : s_all_loggers) {
-          if (logger->name()->str() == name) {
-            logger->enable_admin_link(enabled);
-          }
-        }
+        if (!name) return false;
+        History::enable_streaming(name, enabled);
         return true;
       }
     }
   );
 }
 
-auto Logger::find(const std::string &name) -> Logger* {
-  for (auto *logger : s_all_loggers) {
-    if (logger->name()->str() == name) {
-      return logger;
+void Logger::get_names(const std::function<void(pjs::Str*)> &cb) {
+  History::for_each(
+    [&](History *h) {
+      cb(h->name());
     }
-  }
-  return nullptr;
+  );
+}
+
+void Logger::tail(pjs::Str *name, Data &buffer) {
+  History::tail(name, buffer);
 }
 
 void Logger::shutdown_all() {
-  for_each(
-    [](Logger *logger) {
-      logger->shutdown();
-    }
-  );
+  for (auto *logger : s_all_loggers) {
+    logger->shutdown();
+  }
 }
 
 Logger::Logger(pjs::Str *name)
@@ -131,22 +133,26 @@ Logger::Logger(pjs::Str *name)
 
 Logger::~Logger() {
   s_all_loggers.erase(this);
-  while (auto *m = m_history.head()) {
-    m_history.remove(m);
-    delete m;
-  }
 }
 
 void Logger::write(const Data &msg) {
   if (s_net->is_running()) {
+    auto name = pjs::Str::ID(m_name).release();
     auto *sd = new SharedData(msg);
     sd->retain();
     s_net->post(
       [=]() {
         Data msg;
         sd->to_data(msg);
-        write_async(msg);
+        auto *s = pjs::Str::ID(name).to_string();
+        History::write(s, msg);
+        s->release();
         sd->release();
+      }
+    );
+    Net::current().post(
+      [=]() {
+        write_async(msg);
       }
     );
   } else {
@@ -160,16 +166,70 @@ void Logger::write(const Data &msg) {
 }
 
 void Logger::write_async(const Data &msg) {
-  write_history(msg);
   if (InputContext::origin()) {
-    write_internal(msg);
+    write_targets(msg);
   } else {
     InputContext ic;
-    write_internal(msg);
+    write_targets(msg);
   }
 }
 
-void Logger::write_internal(const Data &msg) {
+void Logger::write_targets(const Data &msg) {
+  for (const auto &p : m_targets) {
+    p->write(msg);
+  }
+}
+
+void Logger::shutdown() {
+  for (const auto &p : m_targets) {
+    p->shutdown();
+  }
+}
+
+//
+// Logger::History
+//
+
+std::map<pjs::Str*, Logger::History> Logger::History::s_all_histories;
+
+void Logger::History::write(pjs::Str *name, const Data &msg) {
+  auto &h = s_all_histories[name];
+  if (!h.m_name) h.m_name = name;
+  h.write_message(msg);
+}
+
+void Logger::History::tail(pjs::Str *name, Data &buffer) {
+  auto p = s_all_histories.find(name);
+  if (p != s_all_histories.end()) {
+    p->second.dump_messages(buffer);
+  }
+}
+
+void Logger::History::enable_streaming(pjs::Str *name, bool enabled) {
+  auto p = s_all_histories.find(name);
+  if (p != s_all_histories.end()) {
+    p->second.m_streaming_enabled = enabled;
+  }
+}
+
+void Logger::History::for_each(const std::function<void(History*)> &cb) {
+  for (auto &i : s_all_histories) {
+    cb(&i.second);
+  }
+}
+
+void Logger::History::write_message(const Data &msg) {
+  InputContext ic;
+
+  m_messages.push(new LogMessage(msg));
+  m_size += msg.size();
+  while (m_size > m_size_max) {
+    auto *m = m_messages.head();
+    m_messages.remove(m);
+    m_size -= m->data.size();
+    delete m;
+  }
+
   Data msg_endl;
   s_dp.pack(&msg_endl, &msg);
   s_dp.push(&msg_endl, '\n');
@@ -178,7 +238,7 @@ void Logger::write_internal(const Data &msg) {
     s_admin_service->write_log(m_name->str(), msg_endl);
   }
 
-  if (s_admin_link && m_admin_link_enabled) {
+  if (s_admin_link && m_streaming_enabled) {
     static std::string s_prefix("log/");
     Data buf;
     Data::Builder db(buf, &s_dp);
@@ -189,49 +249,18 @@ void Logger::write_internal(const Data &msg) {
     buf.push(msg_endl);
     s_admin_link->send(buf);
   }
+}
 
-  for (const auto &p : m_targets) {
-    p->write(msg);
+void Logger::History::dump_messages(Data &buffer) {
+  for (auto *m = m_messages.head(); m; m = m->next()) {
+    s_dp.pack(&buffer, &m->data);
+    s_dp.push(&buffer, '\n');
   }
 }
 
-void Logger::write_history(const Data &msg) {
-  m_history.push(new LogMessage(msg));
-  m_history_size += msg.size();
-  while (m_history_size > m_history_max) {
-    auto *m = m_history.head();
-    m_history.remove(m);
-    m_history_size -= m->data.size();
-    delete m;
-  }
-}
-
-void Logger::tail(Data &buf) {
-  for (auto *m = m_history.head(); m; m = m->next()) {
-    s_dp.pack(&buf, &m->data);
-    s_dp.push(&buf, '\n');
-  }
-}
-
-void Logger::send_history() {
-  if (s_admin_link) {
-    static std::string s_prefix("log-tail/");
-    Data buf;
-    Data::Builder db(buf, &s_dp);
-    db.push(s_prefix);
-    db.push(m_name->str());
-    db.push('\n');
-    db.flush();
-    tail(buf);
-    s_admin_link->send(buf);
-  }
-}
-
-void Logger::shutdown() {
-  for (const auto &p : m_targets) {
-    p->shutdown();
-  }
-}
+//
+// Logger::StdoutTarget
+//
 
 void Logger::StdoutTarget::write(const Data &msg) {
   if (!m_file_stream) m_file_stream = FileStream::make(false, m_f, &s_dp_stdout);

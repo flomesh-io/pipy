@@ -286,7 +286,6 @@ static void handle_signal(int sig) {
       };
 
       if (!s_admin_closed) {
-        logging::Logger::shutdown_all();
         if (s_admin_link) s_admin_link->close();
         if (s_admin) s_admin->close();
         s_admin_closed = true;
@@ -364,7 +363,7 @@ int main(int argc, char *argv[]) {
     Log::init();
     Log::set_level(opts.log_level);
     Log::set_graph_enabled(!opts.no_graph);
-    Listener::set_reuse_port(opts.reuse_port);
+    Listener::set_reuse_port(opts.reuse_port || opts.threads > 1);
     crypto::Crypto::init(opts.openssl_engine);
     tls::TLSSession::init();
     File::start_bg_thread();

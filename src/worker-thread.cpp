@@ -27,6 +27,8 @@
 #include "worker.hpp"
 #include "codebase.hpp"
 #include "net.hpp"
+#include "log.hpp"
+#include "api/logging.hpp"
 #include "utils.hpp"
 
 namespace pipy {
@@ -49,6 +51,8 @@ bool WorkerThread::start() {
     [this]() {
       s_current = this;
 
+      Log::init();
+
       auto &entry = Codebase::current()->entry();
       auto worker = Worker::make();
       auto mod = worker->load_js_module(entry);
@@ -70,6 +74,8 @@ bool WorkerThread::start() {
         Net::current().run();
         delete m_recycle_timer;
       }
+
+      Log::shutdown();
     }
   );
 
@@ -80,7 +86,7 @@ bool WorkerThread::start() {
 void WorkerThread::status(Status &status, const std::function<void()> &cb) {
   m_net->post(
     [&, cb]() {
-      status.update();
+      status.update_local();
       cb();
     }
   );
@@ -89,7 +95,7 @@ void WorkerThread::status(Status &status, const std::function<void()> &cb) {
 void WorkerThread::status(const std::function<void(Status&)> &cb) {
   m_net->post(
     [=]() {
-      m_status.update();
+      m_status.update_local();
       cb(m_status);
     }
   );
@@ -137,6 +143,7 @@ auto WorkerThread::stop(bool force) -> int {
     m_net->post(
       [this]() {
         if (auto worker = Worker::current()) worker->stop();
+        logging::Logger::shutdown_all();
         Listener::for_each([&](Listener *l) { l->pipeline_layout(nullptr); });
         m_pending_timer = new Timer();
         wait();
@@ -376,11 +383,11 @@ void WorkerManager::status(Status &status) {
     std::unique_lock<std::mutex> lock(m);
     cv.wait(lock, [&]{ return n == 0; });
 
-    status.timestamp = utils::now();
     status = std::move(statuses[0]);
     for (auto i = 1; i < m_worker_threads.size(); i++) {
       status.merge(statuses[i]);
     }
+    status.update_global();
   }
 }
 
@@ -403,7 +410,7 @@ void WorkerManager::status(const std::function<void(Status&)> &cb) {
             }
             m_status_counter--;
             if (!m_status_counter) {
-              m_status.timestamp = utils::now();
+              m_status.update_global();
               cb(m_status);
             }
           }

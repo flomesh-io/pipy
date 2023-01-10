@@ -725,12 +725,14 @@ public:
   class ID {
   public:
     ID() : m_id(0) {}
+    ID(int id) : m_id(id) {}
     ID(ID &&rval) : m_id(rval.m_id) { rval.m_id = 0; }
     ID(Str *s);
     ~ID() { clear(); }
     auto str() const -> Str* { return m_local_index.get(m_id); }
     void str(Str *s);
     auto to_string() const -> Str*;
+    auto release() -> int { auto id = m_id; m_id = 0; return id; }
     operator int() const { return m_id; }
     auto operator = (ID &&rval) -> ID& { m_id = rval.m_id; rval.m_id = 0; return *this; }
     bool operator ==(const ID &r) const { return m_id == r.m_id; }

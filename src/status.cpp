@@ -48,7 +48,17 @@ namespace pipy {
 
 thread_local Status Status::local;
 
-void Status::update() {
+void Status::update_global() {
+  log_names.clear();
+  logging::Logger::get_names(
+    [this](pjs::Str *name) {
+      log_names.insert(name);
+    }
+  );
+  timestamp = utils::now();
+}
+
+void Status::update_local() {
   modules.clear();
   pools.clear();
   objects.clear();
@@ -56,7 +66,6 @@ void Status::update() {
   pipelines.clear();
   inbounds.clear();
   outbounds.clear();
-  log_names.clear();
 
   std::map<std::string, std::set<PipelineLayout*>> all_modules;
   PipelineLayout::for_each([&](PipelineLayout *p) {
@@ -166,12 +175,6 @@ void Status::update() {
   });
   for (auto &p : outbound_tcp) outbounds.insert(p.second);
   for (auto &p : outbound_udp) outbounds.insert(p.second);
-
-  logging::Logger::for_each(
-    [&](logging::Logger *logger) {
-      log_names.insert(logger->name());
-    }
-  );
 }
 
 template<class T>

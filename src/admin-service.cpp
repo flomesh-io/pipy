@@ -982,7 +982,8 @@ Message* AdminService::api_v1_program_POST(Data *data) {
     if (name != "/") m_current_codebase = name;
     m_current_program = m_current_codebase;
     m_local_status.version = new_codebase->version();
-    m_local_status.update();
+    m_local_status.update_local();
+    m_local_status.update_global();
     return m_response_created;
   } else {
     new_worker->stop();
@@ -1006,7 +1007,8 @@ Message* AdminService::api_v1_program_DELETE() {
         }
       }
     );
-    m_local_status.update();
+    m_local_status.update_local();
+    m_local_status.update_global();
   }
   m_current_program.clear();
   return m_response_deleted;
@@ -1319,11 +1321,10 @@ void AdminService::WebSocketHandler::process(Event *evt) {
         if (auto *w = ctx->log_watcher) {
           w->set_handler(this);
           if (ctx->instance_uuid.empty()) {
-            if (auto *logger = logging::Logger::find(ctx->log_name)) {
-              Data buf;
-              logger->tail(buf);
-              w->start(buf);
-            }
+            Data buf;
+            pjs::Ref<pjs::Str> name(pjs::Str::make(ctx->log_name));
+            logging::Logger::tail(name, buf);
+            w->start(buf);
           } else if (inst) {
             if (auto *admin_link = inst->admin_link) {
               admin_link->log_tail(ctx->log_name);

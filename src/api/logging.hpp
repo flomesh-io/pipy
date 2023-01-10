@@ -59,12 +59,9 @@ public:
   static void init();
   static void set_admin_service(AdminService *admin_service);
   static void set_admin_link(AdminLink *admin_link);
-  static auto find(const std::string &name) -> Logger*;
+  static void get_names(const std::function<void(pjs::Str*)> &cb);
+  static void tail(pjs::Str *name, Data &buffer);
   static void shutdown_all();
-
-  static void for_each(const std::function<void(Logger*)> &cb) {
-    for (auto i : s_all_loggers) cb(i);
-  }
 
   //
   // Logger::Target
@@ -192,14 +189,11 @@ public:
 
   auto name() const -> pjs::Str* { return m_name; }
 
-  void enable_admin_link(bool enabled) { m_admin_link_enabled = enabled; }
-
   void add_target(Target *target) {
     m_targets.push_back(std::unique_ptr<Target>(target));
   }
 
   void write(const Data &msg);
-  void tail(Data &buf);
 
   virtual void log(int argc, const pjs::Value *args) = 0;
   virtual void shutdown();
@@ -222,21 +216,50 @@ private:
     Data data;
   };
 
+  //
+  // Logger::History
+  //
+
+  class History {
+  public:
+    static void write(pjs::Str *name, const Data &msg);
+    static void tail(pjs::Str *name, Data &buffer);
+    static void enable_streaming(pjs::Str *name, bool enabled);
+    static void for_each(const std::function<void(History*)> &cb);
+
+    auto name() const -> pjs::Str* { return m_name; }
+
+  private:
+    struct Message :
+      public pjs::Pooled<Message>,
+      public List<Message>::Item
+    {
+      Message(const Data &msg) : data(msg) {}
+      Data data;
+    };
+
+    pjs::Ref<pjs::Str> m_name;
+    List<LogMessage> m_messages;
+    size_t m_size = 0;
+    size_t m_size_max = 256 * 1024;
+    bool m_streaming_enabled = false;
+
+    void write_message(const Data &msg);
+    void dump_messages(Data &buffer);
+
+    static std::map<pjs::Str*, History> s_all_histories;
+  };
+
   pjs::Ref<pjs::Str> m_name;
   std::list<std::unique_ptr<Target>> m_targets;
-  List<LogMessage> m_history;
-  size_t m_history_size = 0;
-  size_t m_history_max = 256 * 1024;
-  bool m_admin_link_enabled = false;
 
   void write_async(const Data &msg);
-  void write_internal(const Data &msg);
-  void write_history(const Data &msg);
-  void send_history();
+  void write_targets(const Data &msg);
 
-  static std::set<Logger*> s_all_loggers;
   static AdminService* s_admin_service;
   static AdminLink* s_admin_link;
+
+  thread_local static std::set<Logger*> s_all_loggers;
 
   friend class pjs::ObjectTemplate<Logger>;
 };

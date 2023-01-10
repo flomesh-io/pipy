@@ -183,7 +183,8 @@ public:
   std::set<OutboundInfo> outbounds;
   std::set<pjs::Ref<pjs::Str>> log_names;
 
-  void update();
+  void update_global();
+  void update_local();
   void merge(const Status &other);
   bool from_json(const Data &data);
   void to_json(std::ostream &out) const;
