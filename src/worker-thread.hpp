@@ -75,8 +75,10 @@ private:
   bool m_failed = false;
   bool m_shutdown = false;
 
-  void init_metrics();
-  void clean_pools();
+  static void init_metrics();
+  static void shutdown_all();
+
+  void recycle();
   void wait();
   void fail();
 
@@ -95,6 +97,7 @@ public:
   bool start(int concurrency = 1);
   void status(Status &status);
   void status(const std::function<void(Status&)> &cb);
+  void stats(int i, stats::MetricData &stats);
   void stats(stats::MetricDataSum &stats);
   void stats(const std::function<void(stats::MetricDataSum&)> &cb);
   void reload();

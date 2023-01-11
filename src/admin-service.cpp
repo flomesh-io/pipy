@@ -28,13 +28,13 @@
 #include "api/crypto.hpp"
 #include "api/json.hpp"
 #include "api/logging.hpp"
+#include "api/pipy.hpp"
 #include "api/stats.hpp"
 #include "filters/http.hpp"
 #include "filters/tls.hpp"
 #include "filters/websocket.hpp"
 #include "gui-tarball.hpp"
 #include "listener.hpp"
-#include "worker.hpp"
 #include "worker-thread.hpp"
 #include "module.hpp"
 #include "status.hpp"
@@ -96,6 +96,8 @@ AdminService::AdminService(CodebaseStore *store)
     // No repo, running a fixed codebase
     m_current_program = "/";
   }
+
+  Pipy::on_exit([this](int code) { m_current_program.clear(); });
 }
 
 AdminService::~AdminService() {
@@ -974,19 +976,17 @@ Message* AdminService::api_v1_program_POST(Data *data) {
     new_codebase->set_current();
   }
 
-  pjs::Ref<Worker> old_worker = Worker::current();
-  pjs::Ref<Worker> new_worker = Worker::make();
-  if (new_worker->load_js_module(entry) && new_worker->start()) {
-    if (old_worker) old_worker->stop();
+  if (WorkerManager::get().started()) {
+    WorkerManager::get().stop(true);
+    m_current_program.clear();
+  }
+
+  if (WorkerManager::get().start()) {
     if (new_codebase != old_codebase) delete old_codebase;
     if (name != "/") m_current_codebase = name;
     m_current_program = m_current_codebase;
-    m_local_status.version = new_codebase->version();
-    m_local_status.update_local();
-    m_local_status.update_global();
     return m_response_created;
   } else {
-    new_worker->stop();
     if (new_codebase != old_codebase) {
       if (old_codebase) {
         old_codebase->set_current();
@@ -998,25 +998,16 @@ Message* AdminService::api_v1_program_POST(Data *data) {
 }
 
 Message* AdminService::api_v1_program_DELETE() {
-  if (auto worker = Worker::current()) {
-    worker->stop();
-    Listener::for_each(
-      [](Listener *l) {
-        if (!l->reserved()) {
-          l->pipeline_layout(nullptr);
-        }
-      }
-    );
-    m_local_status.update_local();
-    m_local_status.update_global();
-  }
+  WorkerManager::get().stop(true);
   m_current_program.clear();
   return m_response_deleted;
 }
 
 Message* AdminService::api_v1_status_GET() {
   std::stringstream ss;
-  m_local_status.to_json(ss);
+  Status status;
+  WorkerManager::get().status(status);
+  status.to_json(ss);
   return Message::make(
     m_response_head_json,
     s_dp.make(ss.str())
@@ -1218,8 +1209,7 @@ void AdminService::on_metrics(Context *ctx, const Data &data) {
 }
 
 void AdminService::metrics_history_step() {
-  stats::Metric::local().collect_all();
-  m_local_metric_data.update(stats::Metric::local());
+  WorkerManager::get().stats(0, m_local_metric_data);
   m_local_metric_history.update(m_local_metric_data);
   m_local_metric_history.step();
   m_metrics_timestamp = std::chrono::steady_clock::now();

@@ -41,7 +41,9 @@ WorkerThread::WorkerThread(int index)
 }
 
 WorkerThread::~WorkerThread() {
-  m_thread.join();
+  if (m_thread.joinable()) {
+    m_thread.join();
+  }
 }
 
 bool WorkerThread::start() {
@@ -70,7 +72,7 @@ bool WorkerThread::start() {
       if (started) {
         init_metrics();
         m_recycle_timer = new Timer();
-        clean_pools();
+        recycle();
         Net::current().run();
         delete m_recycle_timer;
       }
@@ -131,7 +133,12 @@ void WorkerThread::reload() {
 
 auto WorkerThread::stop(bool force) -> int {
   if (force) {
-    m_net->stop();
+    m_net->post(
+      []() {
+        shutdown_all();
+        Net::current().stop();
+      }
+    );
     m_thread.join();
     return 0;
 
@@ -142,9 +149,7 @@ auto WorkerThread::stop(bool force) -> int {
 
     m_net->post(
       [this]() {
-        if (auto worker = Worker::current()) worker->stop();
-        logging::Logger::shutdown_all();
-        Listener::for_each([&](Listener *l) { l->pipeline_layout(nullptr); });
+        shutdown_all();
         m_pending_timer = new Timer();
         wait();
       }
@@ -300,11 +305,17 @@ void WorkerThread::init_metrics() {
   );
 }
 
-void WorkerThread::clean_pools() {
+void WorkerThread::shutdown_all() {
+  if (auto worker = Worker::current()) worker->stop();
+  logging::Logger::shutdown_all();
+  Listener::for_each([&](Listener *l) { l->pipeline_layout(nullptr); });
+}
+
+void WorkerThread::recycle() {
   for (const auto &p : pjs::Pool::all()) {
     p.second->clean();
   }
-  m_recycle_timer->schedule(1, [this]() { clean_pools(); });
+  m_recycle_timer->schedule(1, [this]() { recycle(); });
 }
 
 void WorkerThread::wait() {
@@ -420,6 +431,30 @@ void WorkerManager::status(const std::function<void(Status&)> &cb) {
   }
 }
 
+void WorkerManager::stats(int i, stats::MetricData &stats) {
+  if (0 <= i && i < m_worker_threads.size()) {
+    std::mutex m;
+    std::condition_variable cv;
+    bool done = false;
+
+    if (auto *wt = m_worker_threads[i]) {
+      wt->stats(
+        stats,
+        [&]() {
+          {
+            std::lock_guard<std::mutex> lock(m);
+            done = true;
+          }
+          cv.notify_one();
+        }
+      );
+    }
+
+    std::unique_lock<std::mutex> lock(m);
+    cv.wait(lock, [&]{ return done; });
+  }
+}
+
 void WorkerManager::stats(stats::MetricDataSum &stats) {
   if (auto n = m_worker_threads.size()) {
     std::mutex m;
@@ -482,7 +517,17 @@ void WorkerManager::reload() {
 auto WorkerManager::stop(bool force) -> int {
   int n = 0;
   for (auto *wt : m_worker_threads) {
-    n += wt->stop(force);
+    if (wt) {
+      n += wt->stop(force);
+    }
+  }
+  if (!n) {
+    for (auto *wt : m_worker_threads) {
+      delete wt;
+    }
+    m_worker_threads.clear();
+    m_status_counter = 0;
+    m_metric_data_sum_counter = 0;
   }
   return n;
 }
