@@ -886,7 +886,8 @@ void MetricDataSum::to_prometheus(const std::function<void(const void *, size_t)
         for (auto &s : labels) { ent->labels[i++] = std::move(s); }
       }
       pjs::Str *label_values[ent->labels.size()];
-      Prometheus<Node> prom(ent->name->str(), std::string(), ent->labels, label_values, le_str, out);
+      std::string empty;
+      Prometheus<Node> prom(ent->name->str(), empty, ent->labels, label_values, le_str, out);
       prom.output(root, 0);
     }
   }
