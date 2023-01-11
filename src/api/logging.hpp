@@ -56,7 +56,6 @@ namespace logging {
 
 class Logger : public pjs::ObjectTemplate<Logger> {
 public:
-  static void init();
   static void set_admin_service(AdminService *admin_service);
   static void set_admin_link(AdminLink *admin_link);
   static void get_names(const std::function<void(pjs::Str*)> &cb);

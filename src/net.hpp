@@ -39,6 +39,12 @@ namespace pipy {
 
 class Net {
 public:
+  static void init();
+
+  static auto main() -> Net& {
+    return *s_main;
+  }
+
   static auto current() -> Net& {
     return s_current;
   }
@@ -57,6 +63,7 @@ public:
 private:
   asio::io_context m_io_context;
   bool m_is_running;
+  static Net* s_main;
   static thread_local Net s_current;
 };
 

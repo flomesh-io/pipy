@@ -27,7 +27,12 @@
 
 namespace pipy {
 
+Net* Net::s_main = nullptr;
 thread_local Net Net::s_current;
+
+void Net::init() {
+  s_main = &s_current;
+}
 
 void Net::run() {
   m_is_running = true;

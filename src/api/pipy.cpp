@@ -28,10 +28,17 @@
 #include "configuration.hpp"
 #include "context.hpp"
 #include "worker.hpp"
+#include "worker-thread.hpp"
 #include "net.hpp"
 #include "utils.hpp"
 
 namespace pipy {
+
+static std::function<void(int)> s_on_exit;
+
+void Pipy::on_exit(const std::function<void(int)> &on_exit) {
+  s_on_exit = on_exit;
+}
 
 void Pipy::operator()(pjs::Context &ctx, pjs::Object *obj, pjs::Value &ret) {
   pjs::Value ret_obj;
@@ -81,13 +88,29 @@ template<> void ClassDef<Pipy>::init() {
   });
 
   method("restart", [](Context&, Object*, Value&) {
-    Worker::restart();
+    Net::main().post(
+      []() {
+        InputContext ic;
+        Codebase::current()->sync(
+          true, [](bool ok) {
+            if (ok) {
+              WorkerManager::get().reload();
+            }
+          }
+        );
+      }
+    );
   });
 
   method("exit", [](Context &ctx, Object*, Value&) {
     int exit_code = 0;
     if (!ctx.arguments(0, &exit_code)) return;
-    Net::current().post([=]() { Worker::exit(exit_code); });
+    Net::main().post(
+      [=]() {
+        WorkerManager::get().stop(true);
+        if (s_on_exit) s_on_exit(exit_code);
+      }
+    );
   });
 }
 

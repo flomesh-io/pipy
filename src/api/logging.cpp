@@ -55,16 +55,10 @@ thread_local static Data::Producer s_dp_binary("BinaryLogger");
 thread_local static Data::Producer s_dp_text("TextLogger");
 thread_local static Data::Producer s_dp_json("JSONLogger");
 
-static Net* s_net = nullptr;
-
 AdminService* Logger::s_admin_service = nullptr;
 AdminLink* Logger::s_admin_link = nullptr;
 
 thread_local std::set<Logger*> Logger::s_all_loggers;
-
-void Logger::init() {
-  s_net = &Net::current();
-}
 
 void Logger::set_admin_service(AdminService *admin_service) {
   s_admin_service = admin_service;
@@ -136,11 +130,11 @@ Logger::~Logger() {
 }
 
 void Logger::write(const Data &msg) {
-  if (s_net->is_running()) {
+  if (Net::main().is_running()) {
     auto name = pjs::Str::ID(m_name).release();
     auto *sd = new SharedData(msg);
     sd->retain();
-    s_net->post(
+    Net::main().post(
       [=]() {
         Data msg;
         sd->to_data(msg);

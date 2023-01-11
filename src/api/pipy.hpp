@@ -28,6 +28,8 @@
 
 #include "pjs/pjs.hpp"
 
+#include <functional>
+
 namespace pipy {
 
 //
@@ -36,6 +38,8 @@ namespace pipy {
 
 class Pipy : public pjs::FunctionTemplate<Pipy> {
 public:
+  static void on_exit(const std::function<void(int)> &on_exit);
+
   void operator()(pjs::Context &ctx, pjs::Object *obj, pjs::Value &ret);
 };
 

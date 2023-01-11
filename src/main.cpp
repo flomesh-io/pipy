@@ -30,6 +30,7 @@
 #include "admin-proxy.hpp"
 #include "api/crypto.hpp"
 #include "api/logging.hpp"
+#include "api/pipy.hpp"
 #include "api/stats.hpp"
 #include "codebase.hpp"
 #include "file.hpp"
@@ -91,10 +92,11 @@ static void show_version() {
 // Reload codebase
 //
 
-static void reload_codebase() {
+static void reload_codebase(bool force) {
   if (auto *codebase = Codebase::current()) {
+    InputContext ic;
     Codebase::current()->sync(
-      true, [](bool ok) {
+      force, [](bool ok) {
         if (ok) {
           WorkerManager::get().reload();
         }
@@ -115,7 +117,7 @@ static void start_admin_link(const std::string &url) {
   s_admin_link->add_handler(
     [](const std::string &command, const Data &) {
       if (command == "reload") {
-        reload_codebase();
+        reload_codebase(true);
         return true;
       } else {
         return false;
@@ -150,14 +152,7 @@ static void start_checking_updates() {
   static std::function<void()> poll;
   poll = []() {
     if (!s_has_shutdown) {
-      InputContext ic;
-      Codebase::current()->sync(
-        false, [&](bool ok) {
-          if (ok) {
-            WorkerManager::get().reload();
-          }
-        }
-      );
+      reload_codebase(false);
     }
     timer.schedule(5, poll);
   };
@@ -309,7 +304,7 @@ static void handle_signal(int sig) {
     }
 
     case SIGHUP:
-      reload_codebase();
+      reload_codebase(true);
       break;
 
     case SIGTSTP:
@@ -336,6 +331,8 @@ static void wait_for_signals(asio::signal_set &signals) {
 //
 
 int main(int argc, char *argv[]) {
+  int exit_code = 0;
+
   try {
     MainOptions opts(argc, argv);
 
@@ -358,12 +355,12 @@ int main(int argc, char *argv[]) {
       Status::local.uuid = opts.instance_uuid;
     }
 
-    pjs::Math::init();
-    logging::Logger::init();
+    Net::init();
     Log::init();
     Log::set_level(opts.log_level);
     Log::set_graph_enabled(!opts.no_graph);
     Listener::set_reuse_port(opts.reuse_port || opts.threads > 1);
+    pjs::Math::init();
     crypto::Crypto::init(opts.openssl_engine);
     tls::TLSSession::init();
     File::start_bg_thread();
@@ -515,6 +512,13 @@ int main(int argc, char *argv[]) {
               start_admin_link(opts.filename);
               start_reporting_metrics();
             }
+
+            Pipy::on_exit(
+              [&](int code) {
+                exit_code = code;
+                Net::current().stop();
+              }
+            );
           }
         );
       };
@@ -570,5 +574,5 @@ int main(int argc, char *argv[]) {
     return -1;
   }
 
-  return Worker::exit_code();
+  return exit_code;
 }
