@@ -79,6 +79,10 @@ public:
     return new PipelineLayout(module, index, name, label);
   }
 
+  static auto active_pipeline_count() -> size_t {
+    return s_active_pipeline_count;
+  }
+
   static void for_each(std::function<void(PipelineLayout*)> callback) {
     for (auto *p = s_all_pipeline_layouts.head(); p; p = p->next()) {
       callback(p);
@@ -121,6 +125,7 @@ private:
   size_t m_allocated = 0;
 
   thread_local static List<PipelineLayout> s_all_pipeline_layouts;
+  thread_local static size_t s_active_pipeline_count;
 
   friend class pjs::RefCount<PipelineLayout>;
   friend class Pipeline;

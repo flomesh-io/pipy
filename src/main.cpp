@@ -266,12 +266,12 @@ static void handle_signal(int sig) {
   switch (sig) {
     case SIGINT: {
       wait = []() {
-        auto n = WorkerManager::get().stop();
-        if (n > 0) {
+        if (WorkerManager::get().stop()) {
+          stop();
+        } else {
+          int n = WorkerManager::get().active_pipeline_count();
           Log::info("[shutdown] Waiting for remaining %d pipelines...", n);
           timer.schedule(1, wait);
-        } else {
-          stop();
         }
       };
 
@@ -527,7 +527,8 @@ int main(int argc, char *argv[]) {
         if (is_remote) {
           retry_timer.schedule(5, load);
         } else {
-          Worker::exit(-1);
+          exit_code = -1;
+          Net::main().stop();
         }
       };
 
@@ -541,19 +542,7 @@ int main(int argc, char *argv[]) {
     wait_for_signals(signals);
 
     start_cleaning_pools();
-
-    if (is_repo || is_repo_proxy) {
-      Net::current().run();
-
-    } else if (opts.threads > 1) {
-      Log::info("Running %d worker threads...", opts.threads);
-      Net::current().run();
-
-    } else {
-      Log::info("Running single worker thread...");
-      Net::current().run();
-    }
-
+    Net::current().run();
     File::stop_bg_thread();
 
     delete s_admin_link;

@@ -37,6 +37,7 @@ namespace pipy {
 //
 
 thread_local List<PipelineLayout> PipelineLayout::s_all_pipeline_layouts;
+thread_local size_t PipelineLayout::s_active_pipeline_count = 0;
 
 PipelineLayout::PipelineLayout(ModuleBase *module, int index, const std::string &name, const std::string &label)
   : m_index(index)
@@ -106,6 +107,7 @@ auto PipelineLayout::alloc(Context *ctx) -> Pipeline* {
   }
   pipeline->m_context = ctx;
   m_pipelines.push(pipeline);
+  s_active_pipeline_count++;
   Log::debug("[pipeline %p] ++ name = %s, context = %llu", pipeline, name_or_label()->c_str(), ctx->id());
   return pipeline;
 }
@@ -136,6 +138,7 @@ void PipelineLayout::free(Pipeline *pipeline) {
   m_pipelines.remove(pipeline);
   pipeline->m_next_free = m_pool;
   m_pool = pipeline;
+  s_active_pipeline_count--;
   Log::debug("[pipeline %p] -- name = %s", pipeline, name_or_label()->c_str());
   release();
 }

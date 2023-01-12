@@ -54,11 +54,6 @@ public:
     return s_current;
   }
 
-  static void restart();
-  static void exit(int exit_code);
-  static bool exited();
-  static auto exit_code() -> int;
-
   auto root() const -> Module* { return m_root; }
   auto global_object() const -> pjs::Object* { return m_global_object; }
   bool handling_signal(int sig);
@@ -73,7 +68,8 @@ public:
   auto new_loading_context() -> Context*;
   auto new_runtime_context(Context *base = nullptr) -> Context*;
   bool solve(pjs::Context &ctx, pjs::Str *filename, pjs::Value &result);
-  bool start();
+  bool bind();
+  bool start(bool force);
   void stop();
 
 private:

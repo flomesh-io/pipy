@@ -150,7 +150,7 @@ auto Pool::alloc() -> void* {
 void Pool::free(void *p) {
 #ifdef PIPY_SOIL_FREED_SPACE
   std::memset(p, 0xfe, m_size);
-#endif // PIPY_SOIL_FREED_SPACE
+#endif
   auto *h = (Head*)((char*)p - sizeof(Head));
   if (h->pool == this) {
     h->next = m_free_list;

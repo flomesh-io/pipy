@@ -26,6 +26,7 @@
 #include "worker-thread.hpp"
 #include "worker.hpp"
 #include "codebase.hpp"
+#include "timer.hpp"
 #include "net.hpp"
 #include "log.hpp"
 #include "api/logging.hpp"
@@ -37,6 +38,9 @@ thread_local WorkerThread* WorkerThread::s_current = nullptr;
 
 WorkerThread::WorkerThread(int index)
   : m_index(index)
+  , m_active_pipeline_count(0)
+  , m_shutdown(false)
+  , m_done(false)
 {
 }
 
@@ -52,32 +56,8 @@ bool WorkerThread::start() {
   m_thread = std::thread(
     [this]() {
       s_current = this;
-
-      Log::init();
-
-      auto &entry = Codebase::current()->entry();
-      auto worker = Worker::make();
-      auto mod = worker->load_js_module(entry);
-      bool started = (mod && worker->start());
-
-      {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        m_started = started;
-        m_failed = !started;
-        m_net = &Net::current();
-      }
-
-      m_cv.notify_one();
-
-      if (started) {
-        init_metrics();
-        m_recycle_timer = new Timer();
-        recycle();
-        Net::current().run();
-        delete m_recycle_timer;
-      }
-
-      Log::shutdown();
+      main();
+      m_done.store(true, std::memory_order_relaxed);
     }
   );
 
@@ -89,6 +69,7 @@ void WorkerThread::status(Status &status, const std::function<void()> &cb) {
   m_net->post(
     [&, cb]() {
       status.update_local();
+      status.version = m_version;
       cb();
     }
   );
@@ -98,6 +79,7 @@ void WorkerThread::status(const std::function<void(Status&)> &cb) {
   m_net->post(
     [=]() {
       m_status.update_local();
+      m_status.version = m_version;
       cb(m_status);
     }
   );
@@ -123,44 +105,79 @@ void WorkerThread::stats(const std::function<void(stats::MetricData&)> &cb) {
   );
 }
 
-void WorkerThread::reload() {
+void WorkerThread::reload(const std::function<void(bool)> &cb) {
   m_net->post(
-    []() {
-      Worker::restart();
+    [=]() {
+      auto codebase = Codebase::current();
+
+      auto &entry = codebase->entry();
+      if (entry.empty()) {
+        Log::error("[restart] Codebase has no entry point");
+        cb(false);
+        return;
+      }
+
+      Log::info("[restart] Reloading codebase on thread %d...", m_index);
+
+      m_new_version = codebase->version();
+      m_new_worker = Worker::make();
+
+      cb(m_new_worker->load_js_module(entry) && m_new_worker->bind());
     }
   );
 }
 
-auto WorkerThread::stop(bool force) -> int {
+void WorkerThread::reload_done(bool ok) {
+  if (ok) {
+    m_net->post(
+      [this]() {
+        if (m_new_worker) {
+          pjs::Ref<Worker> current_worker = Worker::current();
+          m_new_worker->start(true);
+          current_worker->stop();
+          m_new_worker = nullptr;
+          m_version = m_new_version;
+          Log::info("[restart] Codebase reloaded on thread %d", m_index);
+        }
+      }
+    );
+  } else {
+    m_net->post(
+      [this]() {
+        if (m_new_worker) {
+          m_new_worker->stop();
+          m_new_worker = nullptr;
+          m_new_version.clear();
+          Log::error("[restart] Failed reloading codebase %d", m_index);
+        }
+      }
+    );
+  }
+}
+
+bool WorkerThread::stop(bool force) {
   if (force) {
     m_net->post(
-      []() {
+      [this]() {
+        m_new_worker = nullptr;
         shutdown_all();
         Net::current().stop();
       }
     );
     m_thread.join();
-    return 0;
-
-  } else if (!m_shutdown) {
-    std::unique_lock<std::mutex> lock(m_mutex);
-    m_shutdown = true;
-    m_pending_pipelines = -1;
-
-    m_net->post(
-      [this]() {
-        shutdown_all();
-        m_pending_timer = new Timer();
-        wait();
-      }
-    );
-
-    m_cv.wait(lock, [this]() { return m_pending_pipelines >= 0; });
-    return m_pending_pipelines;
+    return true;
 
   } else {
-    std::lock_guard<std::mutex> lock(m_mutex);
-    return m_pending_pipelines;
+    if (!m_shutdown.load(std::memory_order_relaxed)) {
+      m_shutdown.store(true, std::memory_order_relaxed);
+      m_net->post(
+        [this]() {
+          m_new_worker = nullptr;
+          shutdown_all();
+        }
+      );
+    }
+    return m_done.load(std::memory_order_relaxed);
   }
 }
 
@@ -311,39 +328,54 @@ void WorkerThread::shutdown_all() {
   Listener::for_each([&](Listener *l) { l->pipeline_layout(nullptr); });
 }
 
+void WorkerThread::main() {
+  Log::init();
+
+  auto &entry = Codebase::current()->entry();
+  auto worker = Worker::make();
+  auto mod = worker->load_js_module(entry);
+  bool started = (mod && worker->bind() && worker->start(false));
+
+  {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_started = started;
+    m_failed = !started;
+    m_net = &Net::current();
+  }
+
+  m_cv.notify_one();
+
+  if (started) {
+    Log::info("[start] Thread %d started", m_index);
+
+    Timer timer;
+    std::function<void()> recycle;
+    recycle = [&]() {
+      this->recycle();
+      timer.schedule(1, recycle);
+    };
+    recycle();
+
+    init_metrics();
+    Net::current().run();
+
+    Log::info("[start] Thread %d ended", m_index);
+
+  } else {
+    Log::error("[start] Thread %d failed to start", m_index);
+  }
+
+  Log::shutdown();
+}
+
 void WorkerThread::recycle() {
   for (const auto &p : pjs::Pool::all()) {
     p.second->clean();
   }
-  m_recycle_timer->schedule(1, [this]() { recycle(); });
-}
 
-void WorkerThread::wait() {
-  int n = 0;
-  PipelineLayout::for_each(
-    [&](PipelineLayout *layout) {
-      n += layout->active();
-    }
-  );
-
-  {
-    std::lock_guard<std::mutex> lock(m_mutex);
-    m_pending_pipelines = n;
-  }
-  m_cv.notify_one();
-
-  if (n > 0) {
-    m_pending_timer->schedule(1, [this]() { wait(); });
-  } else {
-    delete m_pending_timer;
-    m_pending_timer = nullptr;
-    m_net->stop();
-  }
-}
-
-void WorkerThread::fail() {
-  std::lock_guard<std::mutex> lock(m_mutex);
-  m_failed = true;
+  auto n = PipelineLayout::active_pipeline_count();
+  if (!n && m_shutdown.load(std::memory_order_relaxed)) Net::current().stop();
+  m_active_pipeline_count.store(n, std::memory_order_relaxed);
 }
 
 //
@@ -509,27 +541,58 @@ void WorkerManager::stats(const std::function<void(stats::MetricDataSum&)> &cb) 
 }
 
 void WorkerManager::reload() {
-  for (auto *wt : m_worker_threads) {
-    wt->reload();
+  if (auto n = m_worker_threads.size()) {
+    std::mutex m;
+    std::condition_variable cv;
+    bool all_ok = true;
+
+    for (auto *wt : m_worker_threads) {
+      wt->reload(
+        [&](bool ok) {
+          {
+            std::lock_guard<std::mutex> lock(m);
+            if (!ok) all_ok = false;
+            n--;
+          }
+          cv.notify_one();
+        }
+      );
+    }
+
+    std::unique_lock<std::mutex> lock(m);
+    cv.wait(lock, [&]{ return n == 0; });
+
+    for (auto *wt : m_worker_threads) {
+      wt->reload_done(all_ok);
+    }
   }
 }
 
-auto WorkerManager::stop(bool force) -> int {
-  int n = 0;
+auto WorkerManager::active_pipeline_count() -> size_t {
+  size_t n = 0;
   for (auto *wt : m_worker_threads) {
     if (wt) {
-      n += wt->stop(force);
+      n += wt->active_pipeline_count();
     }
-  }
-  if (!n) {
-    for (auto *wt : m_worker_threads) {
-      delete wt;
-    }
-    m_worker_threads.clear();
-    m_status_counter = 0;
-    m_metric_data_sum_counter = 0;
   }
   return n;
+}
+
+bool WorkerManager::stop(bool force) {
+  bool pending = false;
+  for (auto *wt : m_worker_threads) {
+    if (wt) {
+      if (!wt->stop(force)) pending = true;
+    }
+  }
+  if (pending) return false;
+  for (auto *wt : m_worker_threads) {
+    delete wt;
+  }
+  m_worker_threads.clear();
+  m_status_counter = 0;
+  m_metric_data_sum_counter = 0;
+  return true;
 }
 
 } // namespace pipy

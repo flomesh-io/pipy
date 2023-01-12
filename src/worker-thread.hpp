@@ -27,17 +27,19 @@
 #define WORKER_THREAD_HPP
 
 #include "net.hpp"
-#include "timer.hpp"
 #include "status.hpp"
 #include "api/stats.hpp"
 
 #include <thread>
+#include <atomic>
 #include <condition_variable>
 #include <mutex>
 #include <functional>
 #include <vector>
 
 namespace pipy {
+
+class Worker;
 
 //
 // WorkerThread
@@ -51,36 +53,39 @@ public:
   static auto current() -> WorkerThread* { return s_current; }
 
   auto index() const -> int { return m_index; }
+  auto active_pipeline_count() const -> size_t { return m_active_pipeline_count.load(std::memory_order_relaxed); }
 
   bool start();
   void status(Status &status, const std::function<void()> &cb);
   void status(const std::function<void(Status&)> &cb);
   void stats(stats::MetricData &metric_data, const std::function<void()> &cb);
   void stats(const std::function<void(stats::MetricData&)> &cb);
-  void reload();
-  auto stop(bool force = false) -> int;
+  void reload(const std::function<void(bool)> &cb);
+  void reload_done(bool ok);
+  bool stop(bool force = false);
 
 private:
   int m_index;
   Net* m_net = nullptr;
-  Timer* m_recycle_timer = nullptr;
-  Timer* m_pending_timer = nullptr;
+  std::string m_version;
+  std::string m_new_version;
+  pjs::Ref<Worker> m_new_worker;
   Status m_status;
   stats::MetricData m_metric_data;
+  std::atomic<size_t> m_active_pipeline_count;
+  std::atomic<bool> m_shutdown;
+  std::atomic<bool> m_done;
   std::thread m_thread;
   std::mutex m_mutex;
   std::condition_variable m_cv;
-  int m_pending_pipelines = 0;
   bool m_started = false;
   bool m_failed = false;
-  bool m_shutdown = false;
 
   static void init_metrics();
   static void shutdown_all();
 
+  void main();
   void recycle();
-  void wait();
-  void fail();
 
   thread_local static WorkerThread* s_current;
 };
@@ -101,7 +106,8 @@ public:
   void stats(stats::MetricDataSum &stats);
   void stats(const std::function<void(stats::MetricDataSum&)> &cb);
   void reload();
-  auto stop(bool force = false) -> int;
+  auto active_pipeline_count() -> size_t;
+  bool stop(bool force = false);
 
 private:
   std::vector<WorkerThread*> m_worker_threads;
