@@ -692,17 +692,17 @@ public:
   static auto make(const std::string &str) -> Str* {
     if (str.length() > s_max_size) {
       auto sub = str.substr(0, s_max_size);
-      if (auto s = m_local_map.get(sub)) return s;
+      if (auto s = local_map().get(sub)) return s;
       return new Str(std::move(sub));
     } else {
-      if (auto s = m_local_map.get(str)) return s;
+      if (auto s = local_map().get(str)) return s;
       return new Str(str);
     }
   }
 
   static auto make(std::string &&str) -> Str* {
     if (str.length() > s_max_size) str.resize(s_max_size);
-    if (auto s = m_local_map.get(str)) return s;
+    if (auto s = local_map().get(str)) return s;
     return new Str(std::move(str));
   }
 
@@ -729,7 +729,7 @@ public:
     ID(ID &&rval) : m_id(rval.m_id) { rval.m_id = 0; }
     ID(Str *s);
     ~ID() { clear(); }
-    auto str() const -> Str* { return m_local_index.get(m_id); }
+    auto str() const -> Str* { return local_index().get(m_id); }
     void str(Str *s);
     auto to_string() const -> Str*;
     auto release() -> int { auto id = m_id; m_id = 0; return id; }
@@ -742,7 +742,7 @@ public:
     int m_id;
     void clear() {
       if (auto id = m_id) {
-        m_global_index.free(id);
+        global_index().free(id);
       }
     }
   };
@@ -828,32 +828,28 @@ private:
   class LocalMap {
   public:
     ~LocalMap() {
-      delete m_hash;
       m_destructed = true;
     }
 
     auto get(const std::string &k) -> Str* {
       if (m_destructed) return nullptr;
-      if (!m_hash) return nullptr;
-      auto i = m_hash->find(k);
-      if (i == m_hash->end()) return nullptr;
+      auto i = m_hash.find(k);
+      if (i == m_hash.end()) return nullptr;
       return i->second;
     }
 
     void set(const std::string &k, Str *s) {
       if (m_destructed) return;
-      if (!m_hash) m_hash = new std::unordered_map<std::string, Str*>;
-      (*m_hash)[k] = s;
+      m_hash[k] = s;
     }
 
     void erase(const std::string &k) {
       if (m_destructed) return;
-      if (!m_hash) return;
-      m_hash->erase(k);
+      m_hash.erase(k);
     }
 
   private:
-    std::unordered_map<std::string, Str*> *m_hash = nullptr;
+    std::unordered_map<std::string, Str*> m_hash;
     bool m_destructed = false;
   };
 
@@ -861,27 +857,27 @@ private:
   Ref<CharData> m_char_data;
 
   Str(int id, CharData *char_data)
-    : m_id(id), m_char_data(char_data) { m_local_map.set(char_data->str(), this); }
+    : m_id(id), m_char_data(char_data) { local_map().set(char_data->str(), this); }
 
   Str(const std::string &str)
-    : m_id(0), m_char_data(new CharData(std::string(str))) { m_local_map.set(str, this); }
+    : m_id(0), m_char_data(new CharData(std::string(str))) { local_map().set(str, this); }
 
   Str(std::string &&str)
-    : m_id(0), m_char_data(new CharData(std::move(str))) { m_local_map.set(m_char_data->str(), this); }
+    : m_id(0), m_char_data(new CharData(std::move(str))) { local_map().set(m_char_data->str(), this); }
 
   ~Str() {
-    m_local_map.erase(m_char_data->str());
+    local_map().erase(m_char_data->str());
     if (auto id = m_id) {
-      m_local_index.del(id);
-      m_global_index.free(id);
+      local_index().del(id);
+      global_index().free(id);
     }
   }
 
   static size_t s_max_size;
 
-  static SharedIndex<Ref<CharData>> m_global_index;
-  thread_local static LocalIndex m_local_index;
-  thread_local static LocalMap m_local_map;
+  static auto global_index() -> SharedIndex<Ref<CharData>>&;
+  static auto local_index() -> LocalIndex&;
+  static auto local_map() -> LocalMap&;
 
   friend class RefCount<Str>;
 };

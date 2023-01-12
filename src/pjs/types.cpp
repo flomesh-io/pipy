@@ -52,6 +52,7 @@ auto SharedIndexBase::add_entry(int i) -> Entry* {
   auto r = m_ranges[x].load(std::memory_order_relaxed);
   if (!r) {
     auto *p = new Range;
+    std::memset(p, 0, sizeof(Range));
     if (m_ranges[x].compare_exchange_weak(r, p, std::memory_order_relaxed)) {
       r = p;
     } else {
@@ -60,7 +61,9 @@ auto SharedIndexBase::add_entry(int i) -> Entry* {
   }
   auto c = r->chunks[y].load();
   if (!c) {
-    auto *p = new char[256 * m_entry_size];
+    auto size = 256 * m_entry_size;
+    auto *p = new char[size];
+    std::memset(p, 0, size);
     if (r->chunks[y].compare_exchange_weak(c, p, std::memory_order_relaxed)) {
       c = p;
     } else {
@@ -219,10 +222,6 @@ thread_local const Ref<Str> Str::bool_false(Str::make("false"));
 
 size_t Str::s_max_size = 256 * 0x400 * 0x400;
 
-SharedIndex<Ref<Str::CharData>> Str::m_global_index;
-thread_local Str::LocalIndex Str::m_local_index;
-thread_local Str::LocalMap Str::m_local_map;
-
 thread_local static char s_shared_str_tmp_buf[0x10000];
 
 static auto str_make_tmp_buf(size_t size) -> char* {
@@ -237,6 +236,21 @@ static void str_free_tmp_buf(char *buf) {
   if (buf != s_shared_str_tmp_buf) {
     delete [] buf;
   }
+}
+
+auto Str::global_index() -> SharedIndex<Ref<CharData>>& {
+  static SharedIndex<Ref<CharData>> s_global_index;
+  return s_global_index;
+}
+
+auto Str::local_index() -> LocalIndex& {
+  thread_local static LocalIndex s_local_index;
+  return s_local_index;
+}
+
+auto Str::local_map() -> LocalMap& {
+  thread_local static LocalMap s_local_map;
+  return s_local_map;
 }
 
 auto Str::make(const uint32_t *codes, size_t len) -> Str* {
@@ -320,10 +334,10 @@ Str::ID::ID(Str *s) {
   if (s) {
     auto id = s->m_id;
     if (!id) {
-      id = m_global_index.alloc(s->m_char_data);
+      id = global_index().alloc(s->m_char_data);
       s->m_id = id;
     }
-    m_global_index.get(id)->hold();
+    global_index().get(id)->hold();
     m_id = id;
   } else {
     m_id = 0;
@@ -334,12 +348,12 @@ void Str::ID::str(Str *s) {
   if (s) {
     auto id = s->m_id;
     if (!id) {
-      id = s->m_id = m_global_index.alloc(s->m_char_data);
-      m_local_index.set(id, s);
+      id = s->m_id = global_index().alloc(s->m_char_data);
+      local_index().set(id, s);
     }
     if (m_id != id) {
       clear();
-      m_global_index.get(id)->hold();
+      global_index().get(id)->hold();
       m_id = id;
     }
   } else {
@@ -350,17 +364,17 @@ void Str::ID::str(Str *s) {
 
 auto Str::ID::to_string() const -> Str* {
   if (auto id = m_id) {
-    if (auto *s = m_local_index.get(id)) return s->retain();
-    if (auto *e = m_global_index.get(id)) {
+    if (auto *s = local_index().get(id)) return s->retain();
+    if (auto *e = global_index().get(id)) {
       auto data = e->data.get();
-      auto s = m_local_map.get(data->str());
+      auto s = local_map().get(data->str());
       if (!s) {
         e->hold();
         auto *s = new Str(id, data);
-        m_local_index.set(id, s);
+        local_index().set(id, s);
         return s->retain();
       } else {
-        m_local_index.set(id, s);
+        local_index().set(id, s);
         s->m_id = id;
         return s->retain();
       }
