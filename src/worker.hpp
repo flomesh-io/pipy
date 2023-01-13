@@ -46,8 +46,8 @@ class Task;
 
 class Worker : public pjs::RefCount<Worker> {
 public:
-  static auto make() -> Worker* {
-    return new Worker();
+  static auto make(bool is_graph_enabled = false) -> Worker* {
+    return new Worker(is_graph_enabled);
   }
 
   static auto current() -> Worker* {
@@ -73,7 +73,7 @@ public:
   void stop();
 
 private:
-  Worker();
+  Worker(bool is_graph_enabled);
   ~Worker();
 
   typedef pjs::PooledArray<pjs::Ref<pjs::Object>> ContextData;
@@ -103,12 +103,13 @@ private:
   std::set<Task*> m_tasks;
   std::map<pjs::Ref<pjs::Str>, Namespace> m_namespaces;
   std::map<pjs::Ref<pjs::Str>, SolvedFile> m_solved_files;
+  bool m_graph_enabled = false;
 
   auto new_module_index() -> int;
   void add_module(Module *m);
   void remove_module(int i);
 
-  static pjs::Ref<Worker> s_current;
+  thread_local static pjs::Ref<Worker> s_current;
 
   friend class pjs::RefCount<Worker>;
   friend class JSModule;

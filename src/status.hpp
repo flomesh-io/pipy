@@ -38,12 +38,16 @@ class Data;
 
 class Status {
 public:
-  thread_local static Status local;
-
   enum class Protocol {
     UNKNOWN,
     TCP,
     UDP,
+  };
+
+  struct LocalInstance {
+    static double since;
+    static std::string uuid;
+    static std::string name;
   };
 
   struct ModuleInfo {

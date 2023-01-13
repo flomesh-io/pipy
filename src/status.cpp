@@ -46,9 +46,15 @@
 
 namespace pipy {
 
-thread_local Status Status::local;
+double Status::LocalInstance::since;
+std::string Status::LocalInstance::uuid;
+std::string Status::LocalInstance::name;
 
 void Status::update_global() {
+  since = Status::LocalInstance::since;
+  uuid = Status::LocalInstance::uuid;
+  name = Status::LocalInstance::name;
+
   log_names.clear();
   logging::Logger::get_names(
     [this](pjs::Str *name) {

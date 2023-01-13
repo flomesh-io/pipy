@@ -36,11 +36,12 @@ namespace pipy {
 
 thread_local WorkerThread* WorkerThread::s_current = nullptr;
 
-WorkerThread::WorkerThread(int index)
+WorkerThread::WorkerThread(int index, bool is_graph_enabled)
   : m_index(index)
   , m_active_pipeline_count(0)
   , m_shutdown(false)
   , m_done(false)
+  , m_graph_enabled(is_graph_enabled)
 {
 }
 
@@ -332,7 +333,7 @@ void WorkerThread::main() {
   Log::init();
 
   auto &entry = Codebase::current()->entry();
-  auto worker = Worker::make();
+  auto worker = Worker::make(m_graph_enabled);
   auto mod = worker->load_js_module(entry);
   bool started = (mod && worker->bind() && worker->start(false));
 
@@ -391,7 +392,7 @@ bool WorkerManager::start(int concurrency) {
   if (started()) return false;
 
   for (int i = 0; i < concurrency; i++) {
-    auto wt = new WorkerThread(i);
+    auto wt = new WorkerThread(i, m_graph_enabled && (i == 0));
     if (!wt->start()) {
       delete wt;
       stop(true);

@@ -161,7 +161,7 @@ bool JSModule::load(const std::string &path) {
   error.clear();
   auto lines = g.to_text(error);
 
-  if (Log::is_graph_enabled() || !error.empty()) {
+  if (m_worker->m_graph_enabled || !error.empty()) {
     std::string title("Module ");
     title += path;
 

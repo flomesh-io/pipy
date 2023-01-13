@@ -204,10 +204,11 @@ template<> void ClassDef<Global>::init() {
 
 namespace pipy {
 
-pjs::Ref<Worker> Worker::s_current;
+thread_local pjs::Ref<Worker> Worker::s_current;
 
-Worker::Worker()
+Worker::Worker(bool is_graph_enabled)
   : m_global_object(Global::make())
+  , m_graph_enabled(is_graph_enabled)
 {
   Log::debug("[worker   %p] ++", this);
 }

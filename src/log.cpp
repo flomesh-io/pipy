@@ -41,7 +41,6 @@ namespace pipy {
 //
 
 static Log::Level s_log_level = Log::ERROR;
-static bool s_graph_enabled = false;
 
 thread_local static logging::Logger *s_logger = nullptr;
 thread_local static Data::Producer s_dp("Log");
@@ -88,16 +87,8 @@ void Log::set_level(Level level) {
   s_log_level = level;
 }
 
-void Log::set_graph_enabled(bool enabled) {
-  s_graph_enabled = enabled;
-}
-
 bool Log::is_enabled(Level level) {
   return (level >= s_log_level);
-}
-
-bool Log::is_graph_enabled() {
-  return s_graph_enabled;
 }
 
 auto Log::format_header(Level level, char *buf, size_t len) -> size_t {

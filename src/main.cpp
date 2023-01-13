@@ -112,7 +112,7 @@ static void reload_codebase(bool force) {
 static void start_admin_link(const std::string &url) {
   std::string url_path = url;
   if (url_path.back() != '/') url_path += '/';
-  url_path += Status::local.uuid;
+  url_path += Status::LocalInstance::uuid;
   s_admin_link = new AdminLink(url_path);
   s_admin_link->add_handler(
     [](const std::string &command, const Data &) {
@@ -178,9 +178,6 @@ static void start_reporting_status(const std::string &address, const Fetch::Opti
       WorkerManager::get().status(
         [](Status &status) {
           std::stringstream ss;
-          status.since = Status::local.since;
-          status.name = Status::local.name;
-          status.uuid = Status::local.uuid;
           status.to_json(ss);
           InputContext ic;
           (*fetch)(
@@ -346,19 +343,18 @@ int main(int argc, char *argv[]) {
       return 0;
     }
 
-    Status::local.since = utils::now();
-    Status::local.name = opts.instance_name;
+    Status::LocalInstance::since = utils::now();
+    Status::LocalInstance::name = opts.instance_name;
 
     if (opts.instance_uuid.empty()) {
-      utils::gen_uuid_v4(Status::local.uuid);
+      utils::gen_uuid_v4(Status::LocalInstance::uuid);
     } else {
-      Status::local.uuid = opts.instance_uuid;
+      Status::LocalInstance::uuid = opts.instance_uuid;
     }
 
     Net::init();
     Log::init();
     Log::set_level(opts.log_level);
-    Log::set_graph_enabled(!opts.no_graph);
     Listener::set_reuse_port(opts.reuse_port || opts.threads > 1);
     pjs::Math::init();
     crypto::Crypto::init(opts.openssl_engine);
@@ -495,7 +491,9 @@ int main(int argc, char *argv[]) {
               return;
             }
 
-            if (!WorkerManager::get().start()) {
+            WorkerManager::get().enable_graph(!opts.no_graph);
+
+            if (!WorkerManager::get().start(opts.threads)) {
               fail();
               return;
             }
@@ -505,7 +503,6 @@ int main(int argc, char *argv[]) {
 
             if (!opts.admin_port.empty()) toggle_admin_port();
 
-            Log::set_graph_enabled(false);
             start_checking_updates();
 
             if (is_remote) {

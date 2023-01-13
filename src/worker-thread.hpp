@@ -47,7 +47,7 @@ class Worker;
 
 class WorkerThread {
 public:
-  WorkerThread(int index);
+  WorkerThread(int index, bool is_graph_enabled);
   ~WorkerThread();
 
   static auto current() -> WorkerThread* { return s_current; }
@@ -78,6 +78,7 @@ private:
   std::thread m_thread;
   std::mutex m_mutex;
   std::condition_variable m_cv;
+  bool m_graph_enabled = false;
   bool m_started = false;
   bool m_failed = false;
 
@@ -98,6 +99,7 @@ class WorkerManager {
 public:
   static auto get() -> WorkerManager&;
 
+  void enable_graph(bool b) { m_graph_enabled = b; }
   bool started() const { return !m_worker_threads.empty(); }
   bool start(int concurrency = 1);
   void status(Status &status);
@@ -115,6 +117,7 @@ private:
   int m_status_counter = 0;
   stats::MetricDataSum m_metric_data_sum;
   int m_metric_data_sum_counter = 0;
+  bool m_graph_enabled = false;
 };
 
 } // namespace pipy
