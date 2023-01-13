@@ -83,7 +83,7 @@ void Outbound::describe(char *desc) {
   sprintf(
     desc, "[outbound %p] [%s]:%d -> [%s]:%d (%s)",
     this,
-    m_local_addr.c_str(),
+    m_local_addr.empty() ? "0.0.0.0" : m_local_addr.c_str(),
     m_local_port,
     m_remote_addr.c_str(),
     m_port,
@@ -107,6 +107,9 @@ void OutboundTCP::bind(const std::string &ip, int port) {
   tcp::endpoint ep(asio::ip::make_address(ip), port);
   m_socket.open(ep.protocol());
   m_socket.bind(ep);
+  const auto &local = m_socket.local_endpoint();
+  m_local_addr = local.address().to_string();
+  m_local_port = local.port();
 }
 
 void OutboundTCP::connect(const std::string &host, int port) {
@@ -541,6 +544,9 @@ void OutboundUDP::bind(const std::string &ip, int port) {
   udp::endpoint ep(asio::ip::make_address(ip), port);
   m_socket.open(ep.protocol());
   m_socket.bind(ep);
+  const auto &local = m_socket.local_endpoint();
+  m_local_addr = local.address().to_string();
+  m_local_port = local.port();
 }
 
 void OutboundUDP::connect(const std::string &host, int port) {
