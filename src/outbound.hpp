@@ -79,6 +79,7 @@ public:
   auto retries() const -> int { return m_retries; }
   auto connection_time() const -> double { return m_connection_time; }
 
+  virtual void bind(const std::string &ip, int port) = 0;
   virtual void connect(const std::string &host, int port) = 0;
   virtual void send(Event *evt) = 0;
   virtual void reset() = 0;
@@ -133,6 +134,7 @@ public:
   bool overflowed() const { return m_overflowed; }
   auto buffered() const -> int { return m_buffer.size(); }
 
+  virtual void bind(const std::string &ip, int port) override;
   virtual void connect(const std::string &host, int port) override;
   virtual void send(Event *evt) override;
   virtual void reset() override;
@@ -184,6 +186,7 @@ class OutboundUDP :
 public:
   OutboundUDP(EventTarget::Input *output, const Options &options);
 
+  virtual void bind(const std::string &ip, int port) override;
   virtual void connect(const std::string &host, int port) override;
   virtual void send(Event *evt) override;
   virtual void reset() override;

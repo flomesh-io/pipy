@@ -50,6 +50,10 @@ Connect::Options::Options(pjs::Object *options) {
   Value(options, "protocol")
     .get_enum(protocol)
     .check_nullable();
+  Value(options, "bind")
+    .get(bind)
+    .get(bind_f)
+    .check_nullable();
   Value(options, "bufferLimit")
     .get_binary_size(buffer_limit)
     .check_nullable();
@@ -119,6 +123,17 @@ void Connect::process(Event *evt) {
       auto s = target.to_string();
       std::string host; int port;
       if (utils::get_host_port(s->str(), host, port)) {
+        pjs::Ref<pjs::Str> bind(m_options.bind);
+        if (m_options.bind_f) {
+          pjs::Value ret;
+          if (!Filter::eval(m_options.bind_f, ret)) return;
+          if (!ret.is_string()) {
+            Log::error("[connect] options.bind expected to return a string");
+            return;
+          }
+          bind = ret.s();
+        }
+
         Outbound *outbound = nullptr;
         switch (m_options.protocol) {
           case Outbound::Protocol::TCP:
@@ -128,8 +143,25 @@ void Connect::process(Event *evt) {
             outbound = new OutboundUDP(ConnectReceiver::input(), m_options);
             break;
         }
+
+        if (bind) {
+          const auto &str = bind->str();
+          std::string ip;
+          int port;
+          if (!utils::get_host_port(str, ip, port)) {
+            ip = str;
+            port = 0;
+          }
+          try {
+            outbound->bind(ip, port);
+          } catch (std::runtime_error &e) {
+            Log::error("[connect] %s", e.what());
+          }
+        }
+
         outbound->connect(host, port);
         m_outbound = outbound;
+
       } else {
         Log::error("[connect] invalid target: %s", s->c_str());
       }

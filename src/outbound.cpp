@@ -160,6 +160,12 @@ OutboundTCP::OutboundTCP(EventTarget::Input *output, const Options &options)
 {
 }
 
+void OutboundTCP::bind(const std::string &ip, int port) {
+  tcp::endpoint ep(asio::ip::make_address(ip), port);
+  m_socket.open(ep.protocol());
+  m_socket.bind(ep);
+}
+
 void OutboundTCP::connect(const std::string &host, int port) {
   m_host = host;
   m_port = port;
@@ -585,6 +591,12 @@ OutboundUDP::OutboundUDP(EventTarget::Input *output, const Options &options)
   , m_resolver(Net::context())
   , m_socket(Net::context())
 {
+}
+
+void OutboundUDP::bind(const std::string &ip, int port) {
+  udp::endpoint ep(asio::ip::make_address(ip), port);
+  m_socket.open(ep.protocol());
+  m_socket.bind(ep);
 }
 
 void OutboundUDP::connect(const std::string &host, int port) {

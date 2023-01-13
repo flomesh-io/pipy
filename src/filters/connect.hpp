@@ -47,6 +47,8 @@ class ConnectReceiver : public EventTarget {
 class Connect : public Filter, public ConnectReceiver {
 public:
   struct Options : public pipy::Options, public Outbound::Options {
+    pjs::Ref<pjs::Str> bind;
+    pjs::Ref<pjs::Function> bind_f;
     Options() {}
     Options(const Outbound::Options &options) : Outbound::Options(options) {}
     Options(pjs::Object *options);
@@ -65,7 +67,7 @@ private:
 
   pjs::Value m_target;
   pjs::Ref<Outbound> m_outbound;
-  Outbound::Options m_options;
+  Options m_options;
 
   friend class ConnectReceiver;
 };
