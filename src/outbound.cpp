@@ -304,6 +304,7 @@ void OutboundTCP::connect(const asio::ip::tcp::endpoint &target) {
             Status::metric_outbound_conn_time->observe(conn_time);
             m_connected = true;
             m_connecting = false;
+            m_socket.set_option(asio::socket_base::keep_alive(m_options.keep_alive));
             receive();
             pump();
           } else {

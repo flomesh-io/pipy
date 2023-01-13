@@ -63,6 +63,7 @@ public:
     double    read_timeout = 0;
     double    write_timeout = 0;
     double    idle_timeout = 60;
+    bool      keep_alive = true;
   };
 
   static void for_each(const std::function<void(Outbound*)> &cb) {

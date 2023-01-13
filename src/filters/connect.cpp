@@ -75,6 +75,9 @@ Connect::Options::Options(pjs::Object *options) {
   Value(options, "idleTimeout")
     .get_seconds(idle_timeout)
     .check_nullable();
+  Value(options, "keepAlive")
+    .get(keep_alive)
+    .check_nullable();
 }
 
 //

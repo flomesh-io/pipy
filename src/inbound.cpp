@@ -174,6 +174,9 @@ void InboundTCP::accept(asio::ip::tcp::acceptor &acceptor) {
             describe(desc);
             Log::debug("%s connection accepted", desc);
           }
+
+          m_socket.set_option(asio::socket_base::keep_alive(m_options.keep_alive));
+
           InputContext ic(this);
           start();
         }
