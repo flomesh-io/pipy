@@ -408,10 +408,13 @@ async function runTestByName(name, options) {
   try {
     log('Uploading codebase', chalk.magenta(name), '...');
     await uploadCodebase(`test/${name}`, basePath);
-  
+
     log('Starting codebase...');
     worker = await startCodebase(`http://localhost:6060/repo/test/${name}/`);
-  
+
+    let exitCode;
+    worker.on('exit', code => exitCode = code);
+
     log('Codebase', chalk.magenta(name), 'started');
 
     const { attack, reload, run } = createAttacks(worker, 8000, options);
@@ -423,9 +426,9 @@ async function runTestByName(name, options) {
     log('All attacks done');
 
     worker.kill('SIGINT');
-    for (let i = 0; i < 10 && worker.exitCode === null; i++) await sleep(1);
-    if (worker.exitCode === null) throw new Error('Worker did not quit timely');
-    log('Worker exited with code', worker.exitCode);
+    for (let i = 0; i < 10 && exitCode === undefined; i++) await sleep(1);
+    if (exitCode === undefined) throw new Error('Worker did not quit timely');
+    log('Worker exited with code', exitCode);
 
   } catch (e) {
     if (worker) worker.kill();

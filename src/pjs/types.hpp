@@ -152,7 +152,8 @@ class Pool {
 public:
   static auto all() -> std::map<std::string, Pool*> &;
 
-  Pool(const char *c_name, size_t size);
+  Pool(const std::string &name, size_t size);
+  ~Pool();
 
   auto name() const -> const std::string& { return m_name; }
   auto size() const -> size_t { return m_size; }
@@ -162,6 +163,9 @@ public:
   auto alloc() -> void*;
   void free(void *p);
   void clean();
+
+  void retain() { m_retain_count.fetch_add(1, std::memory_order_relaxed); }
+  void release() { if (m_retain_count.fetch_sub(1, std::memory_order_relaxed) == 1) delete this; }
 
 private:
   enum { CURVE_LENGTH = 3 };
@@ -174,6 +178,7 @@ private:
   std::string m_name;
   size_t m_size;
   Head* m_free_list;
+  std::atomic<int> m_retain_count;
   std::atomic<Head*> m_return_list;
   int m_allocated;
   int m_pooled;
@@ -182,6 +187,21 @@ private:
 
   void add_return(Head *h);
   void accept_returns();
+};
+
+//
+// PooledClass
+//
+
+class PooledClass {
+public:
+  PooledClass(const char *c_name, size_t size);
+  ~PooledClass();
+
+  auto pool() const -> Pool& { return *m_pool; }
+
+private:
+  Pool* m_pool;
 };
 
 //
@@ -195,15 +215,15 @@ class Pooled : public Base {
 public:
   using Base::Base;
 
-  void* operator new(size_t) { return m_class.alloc(); }
-  void operator delete(void *p) { m_class.free(p); }
+  void* operator new(size_t) { return pool().alloc(); }
+  void operator delete(void *p) { pool().free(p); }
 
 private:
-  thread_local static Pool m_class;
+  static auto pool() -> Pool& {
+    thread_local static PooledClass s_class(typeid(T).name(), sizeof(T));
+    return s_class.pool();
+  }
 };
-
-template<class T, class Base>
-thread_local Pool Pooled<T, Base>::m_class(typeid(T).name(), sizeof(T));
 
 //
 // RefCount

@@ -120,16 +120,27 @@ auto Pool::all() -> std::map<std::string, Pool*> & {
   return a;
 }
 
-Pool::Pool(const char *c_name, size_t size)
-  : m_size(std::max(size, sizeof(void*)))
+Pool::Pool(const std::string &name, size_t size)
+  : m_name(name)
+  , m_size(std::max(size, sizeof(void*)))
   , m_free_list(nullptr)
+  , m_retain_count(1)
+  , m_return_list(nullptr)
   , m_allocated(0)
   , m_pooled(0)
 {
-  int status;
-  auto cxx_name = abi::__cxa_demangle(c_name, 0, 0, &status);
-  m_name = cxx_name ? cxx_name : c_name;
-  all()[m_name] = this;
+  all()[name] = this;
+}
+
+Pool::~Pool() {
+  for (auto *p = m_free_list; p; ) {
+    auto h = p; p = p->next;
+    std::free(h);
+  }
+  for (auto *p = m_return_list.load(); p; ) {
+    auto h = p; p = p->next;
+    std::free(h);
+  }
 }
 
 auto Pool::alloc() -> void* {
@@ -138,11 +149,13 @@ auto Pool::alloc() -> void* {
   if (auto *h = m_free_list) {
     m_free_list = h->next;
     m_pooled--;
+    retain();
     return (char*)h + sizeof(Head);
   } else {
     h = (Head*)std::malloc(sizeof(Head) + m_size);
     h->pool = this;
     h->next = nullptr;
+    retain();
     return (char*)h + sizeof(Head);
   }
 }
@@ -157,6 +170,7 @@ void Pool::free(void *p) {
     m_free_list = h;
     m_allocated--;
     m_pooled++;
+    release();
   } else {
     h->pool->add_return(h);
   }
@@ -171,6 +185,7 @@ void Pool::add_return(Head *h) {
     std::memory_order_release,
     std::memory_order_relaxed
   ));
+  release();
 }
 
 void Pool::accept_returns() {
@@ -182,7 +197,7 @@ void Pool::accept_returns() {
     )) {}
     int n = 1;
     auto *p = h;
-    while (p->next) { p = p->next; n++; }
+    while (p->next) {p = p->next; n++; }
     p->next = m_free_list;
     m_free_list = h;
     m_allocated -= n;
@@ -205,6 +220,20 @@ void Pool::clean() {
     }
   }
   m_curve[m_curve_pointer++ % CURVE_LENGTH] = m_allocated;
+}
+
+//
+// PooledClass
+//
+
+PooledClass::PooledClass(const char *c_name, size_t size) {
+  int status;
+  auto cxx_name = abi::__cxa_demangle(c_name, 0, 0, &status);
+  m_pool = new Pool(cxx_name ? cxx_name : c_name, size);
+}
+
+PooledClass::~PooledClass() {
+  m_pool->release();
 }
 
 //
