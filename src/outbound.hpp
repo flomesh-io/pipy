@@ -63,6 +63,7 @@ public:
     double    read_timeout = 0;
     double    write_timeout = 0;
     double    idle_timeout = 60;
+    bool      keep_alive = true;
   };
 
   static void for_each(const std::function<void(Outbound*)> &cb) {
@@ -94,8 +95,8 @@ protected:
   std::string m_local_addr;
   pjs::Ref<pjs::Str> m_address;
   pjs::Ref<EventTarget::Input> m_output;
-  int m_port;
-  int m_local_port;
+  int m_port = 0;
+  int m_local_port = 0;
   int m_retries = 0;
   double m_start_time = 0;
   double m_connection_time = 0;
