@@ -96,14 +96,16 @@ auto JSModule::new_context(Context *base) -> Context* {
 }
 
 bool JSModule::load(const std::string &path) {
-  auto data = Codebase::current()->get(path);
-  if (!data) {
+  auto sd = Codebase::current()->get(path);
+  if (!sd) {
     Log::error("[pjs] Cannot open script at %s", path.c_str());
     return false;
   }
 
+  Data data(*sd);
+  sd->release();
   m_source.filename = path;
-  m_source.content = data->to_string();
+  m_source.content = data.to_string();
 
   std::string error;
   int error_line, error_column;

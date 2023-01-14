@@ -132,8 +132,7 @@ Logger::~Logger() {
 void Logger::write(const Data &msg) {
   if (Net::main().is_running()) {
     auto name = pjs::Str::ID(m_name).release();
-    auto *sd = new SharedData(msg);
-    sd->retain();
+    auto *sd = SharedData::make(msg)->retain();
     Net::main().post(
       [=]() {
         Data msg;

@@ -76,7 +76,9 @@ auto File::from(Tarball *tarball, const std::string &path) -> File* {
 
 File::File(const std::string &path) {
   load(path, [](const std::string &filename) -> Data* {
-    return Codebase::current()->get(filename);
+    auto sd = Codebase::current()->get(filename);
+    if (!sd) return nullptr;
+    return Data::make(*sd);
   });
 
   m_path = pjs::Str::make(path);

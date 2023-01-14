@@ -458,6 +458,8 @@ public:
     other.m_size = 0;
   }
 
+  Data(const SharedData &other);
+
   ~Data() {
     clear();
   }
@@ -925,22 +927,11 @@ private:
 
 class SharedData : public pjs::Pooled<SharedData> {
 public:
-  SharedData(const Data &data) : m_retain_count(0) {
-    auto **p = &m_views;
-    for (auto *v = data.m_head; v; v = v->next) {
-      p = &(*p = new View(v))->next;
-    }
+  static auto make(const Data &data) -> SharedData* {
+    return new SharedData(data);
   }
 
-  ~SharedData() {
-    auto *v = m_views;
-    while (v) {
-      auto *view = v; v = v->next;
-      delete view;
-    }
-  }
-
-  void to_data(Data &data) {
+  void to_data(Data &data) const {
     for (auto *v = m_views; v; v = v->next) {
       data.push_view(new Data::View(
         v->chunk,
@@ -950,8 +941,9 @@ public:
     }
   }
 
-  void retain() {
+  auto retain() -> SharedData* {
     m_retain_count.fetch_add(1, std::memory_order_relaxed);
+    return this;
   }
 
   void release() {
@@ -985,9 +977,32 @@ private:
     }
   };
 
+  SharedData(const Data &data) : m_retain_count(0) {
+    auto **p = &m_views;
+    for (auto *v = data.m_head; v; v = v->next) {
+      p = &(*p = new View(v))->next;
+    }
+  }
+
+  ~SharedData() {
+    auto *v = m_views;
+    while (v) {
+      auto *view = v; v = v->next;
+      delete view;
+    }
+  }
+
   View* m_views = nullptr;
   std::atomic<int> m_retain_count;
 };
+
+inline Data::Data(const SharedData &other)
+  : m_head(nullptr)
+  , m_tail(nullptr)
+  , m_size(0)
+{
+  other.to_data(*this);
+}
 
 } // namespace pipy
 

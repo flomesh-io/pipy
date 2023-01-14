@@ -65,8 +65,8 @@ public:
   virtual auto entry() const -> const std::string& override { return m_entry; }
   virtual void entry(const std::string &path) override { m_entry = path; }
   virtual auto list(const std::string &path) -> std::list<std::string> override;
-  virtual auto get(const std::string &path) -> Data* override;
-  virtual void set(const std::string &path, Data *data) override;
+  virtual auto get(const std::string &path) -> SharedData* override;
+  virtual void set(const std::string &path, SharedData *data) override;
   virtual void sync(bool force, const std::function<void(bool)> &on_update) override;
 
 private:
@@ -116,20 +116,22 @@ auto CodebaseFromFS::list(const std::string &path) -> std::list<std::string> {
   return list;
 }
 
-auto CodebaseFromFS::get(const std::string &path) -> Data* {
+auto CodebaseFromFS::get(const std::string &path) -> SharedData* {
   std::lock_guard<std::mutex> lock(m_mutex);
   if (path.empty() && !m_script.empty()) {
-    return s_dp.make(m_script);
+    Data buf(m_script, &s_dp);
+    return SharedData::make(buf)->retain();
   } else {
     std::vector<uint8_t> data;
     auto full_path = utils::path_join(m_base, path);
     if (!fs::is_file(full_path)) return nullptr;
     if (!fs::read_file(full_path, data)) return nullptr;
-    return s_dp.make(&data[0], data.size());
+    Data buf(&data[0], data.size(), &s_dp);
+    return SharedData::make(buf)->retain();
   }
 }
 
-void CodebaseFromFS::set(const std::string &path, Data *data) {
+void CodebaseFromFS::set(const std::string &path, SharedData *data) {
   std::lock_guard<std::mutex> lock(m_mutex);
   if (data) {
     auto segs = utils::split(path, '/');
@@ -149,7 +151,8 @@ void CodebaseFromFS::set(const std::string &path, Data *data) {
     auto full_path = utils::path_join(m_base, path);
     std::ofstream fs(full_path, std::ios::out | std::ios::trunc);
     if (!fs.is_open()) return;
-    for (const auto c : data->chunks()) {
+    Data buf(*data);
+    for (const auto c : buf.chunks()) {
       fs.write(std::get<0>(c), std::get<1>(c));
     }
   } else {
@@ -178,15 +181,15 @@ public:
   virtual auto entry() const -> const std::string& override { return m_entry; }
   virtual void entry(const std::string &path) override {}
   virtual auto list(const std::string &path) -> std::list<std::string> override;
-  virtual auto get(const std::string &path) -> pipy::Data* override;
-  virtual void set(const std::string &path, Data *data) override {}
+  virtual auto get(const std::string &path) -> SharedData* override;
+  virtual void set(const std::string &path, SharedData *data) override {}
   virtual void sync(bool force, const std::function<void(bool)> &on_update) override {}
 
 private:
   std::mutex m_mutex;
   std::string m_version;
   std::string m_entry;
-  std::map<std::string, pjs::Ref<pipy::Data>> m_files;
+  std::map<std::string, pjs::Ref<SharedData>> m_files;
 };
 
 CodebsaeFromStore::CodebsaeFromStore(CodebaseStore *store, const std::string &name) {
@@ -208,7 +211,7 @@ CodebsaeFromStore::CodebsaeFromStore(CodebaseStore *store, const std::string &na
   for (const auto &path : paths) {
     Data buf;
     codebase->get_file(path, buf);
-    m_files[path] = Data::make(buf);
+    m_files[path] = SharedData::make(buf);
   }
 }
 
@@ -233,13 +236,13 @@ auto CodebsaeFromStore::list(const std::string &path) -> std::list<std::string> 
   return list;
 }
 
-auto CodebsaeFromStore::get(const std::string &path) -> pipy::Data* {
+auto CodebsaeFromStore::get(const std::string &path) -> SharedData* {
   std::lock_guard<std::mutex> lock(m_mutex);
   auto k = path;
   if (k.front() != '/') k.insert(k.begin(), '/');
   auto i = m_files.find(k);
   if (i == m_files.end()) return nullptr;
-  return i->second;
+  return i->second->retain();
 }
 
 //
@@ -256,8 +259,8 @@ private:
   virtual auto entry() const -> const std::string& override { return m_entry; }
   virtual void entry(const std::string &path) override {}
   virtual auto list(const std::string &path) -> std::list<std::string> override;
-  virtual auto get(const std::string &path) -> pipy::Data* override;
-  virtual void set(const std::string &path, Data *data) override {}
+  virtual auto get(const std::string &path) -> SharedData* override;
+  virtual void set(const std::string &path, SharedData *data) override {}
   virtual void sync(bool force, const std::function<void(bool)> &on_update) override;
 
   pjs::Ref<URL> m_url;
@@ -268,8 +271,8 @@ private:
   std::string m_base;
   std::string m_root;
   std::string m_entry;
-  std::map<std::string, pjs::Ref<pipy::Data>> m_files;
-  std::map<std::string, pjs::Ref<pipy::Data>> m_dl_temp;
+  std::map<std::string, pjs::Ref<SharedData>> m_files;
+  std::map<std::string, pjs::Ref<SharedData>> m_dl_temp;
   std::list<std::string> m_dl_list;
   pjs::Ref<pjs::Object> m_request_header_post_status;
   std::mutex m_mutex;
@@ -319,13 +322,13 @@ auto CodebaseFromHTTP::list(const std::string &path) -> std::list<std::string> {
   return list;
 }
 
-auto CodebaseFromHTTP::get(const std::string &path) -> pipy::Data* {
+auto CodebaseFromHTTP::get(const std::string &path) -> SharedData* {
   std::lock_guard<std::mutex> lock(m_mutex);
   auto k = path;
   if (k.front() != '/') k.insert(k.begin(), '/');
   auto i = m_files.find(k);
   if (i == m_files.end()) return nullptr;
-  return i->second;
+  return i->second->retain();
 }
 
 void CodebaseFromHTTP::sync(bool force, const std::function<void(bool)> &on_update) {
@@ -411,7 +414,7 @@ void CodebaseFromHTTP::download(const std::function<void(bool)> &on_update) {
       } else {
         m_mutex.lock();
         m_files.clear();
-        m_files[m_root] = body;
+        m_files[m_root] = SharedData::make(*body);
         m_entry = m_root;
         m_downloaded = true;
         m_mutex.unlock();
@@ -455,7 +458,12 @@ void CodebaseFromHTTP::download_next(const std::function<void(bool)> &on_update)
         );
       }
 
-      m_dl_temp[name] = body;
+      if (body) {
+        m_dl_temp[name] = SharedData::make(*body);
+      } else {
+        m_dl_temp[name] = SharedData::make(Data());
+      }
+
       download_next(on_update);
     }
   );

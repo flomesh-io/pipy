@@ -318,16 +318,18 @@ bool Worker::solve(pjs::Context &ctx, pjs::Str *filename, pjs::Value &result) {
     }
   }
 
-  auto data = Codebase::current()->get(filename->str());
-  if (!data) {
+  auto sd = Codebase::current()->get(filename->str());
+  if (!sd) {
     std::string msg("Cannot open script to solve: ");
     ctx.error(msg + filename->str());
     return false;
   }
 
+  Data data(*sd);
+  sd->release();
   auto &f = m_solved_files[filename];
   f.source.filename = filename->str();
-  f.source.content = data->to_string();
+  f.source.content = data.to_string();
   std::string error;
   char error_msg[1000];
   int error_line, error_column;

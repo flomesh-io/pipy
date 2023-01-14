@@ -910,7 +910,9 @@ Message* AdminService::api_v1_files_GET(const std::string &path) {
     if (!codebase) return m_response_not_found;
     auto data = codebase->get(path);
     if (!data) return m_response_not_found;
-    return response(*data);
+    Data buf(*data);
+    data->release();
+    return response(buf);
   }
 }
 
@@ -918,7 +920,9 @@ Message* AdminService::api_v1_files_POST(const std::string &path, Data *data) {
   auto codebase = Codebase::current();
   if (!codebase) return m_response_not_found;
   if (path == "/") return m_response_method_not_allowed;
-  codebase->set(path, data);
+  auto *sd = SharedData::make(*data)->retain();
+  codebase->set(path, sd);
+  sd->release();
   return m_response_created;
 }
 
@@ -934,7 +938,9 @@ Message* AdminService::api_v1_files_PATCH(const std::string &path, Data *data) {
     codebase->entry(main.s()->str());
     return m_response_created;
   } else {
-    codebase->set(path, data);
+    auto *sd = SharedData::make(*data)->retain();
+    codebase->set(path, sd);
+    sd->release();
     return m_response_created;
   }
 }
