@@ -1318,8 +1318,7 @@ void AdminService::WebSocketHandler::process(Event *evt) {
           w->set_handler(this);
           if (ctx->instance_uuid.empty()) {
             Data buf;
-            pjs::Ref<pjs::Str> name(pjs::Str::make(ctx->log_name));
-            logging::Logger::tail(name, buf);
+            logging::Logger::tail(ctx->log_name, buf);
             w->start(buf);
           } else if (inst) {
             if (auto *admin_link = inst->admin_link) {

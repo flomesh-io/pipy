@@ -57,7 +57,7 @@ void Status::update_global() {
 
   log_names.clear();
   logging::Logger::get_names(
-    [this](pjs::Str *name) {
+    [this](const std::string &name) {
       log_names.insert(name);
     }
   );
@@ -263,7 +263,7 @@ bool Status::from_json(const Data &data) {
   val_logs.as<pjs::Array>()->iterate_all(
     [this](pjs::Value &v, int) {
       if (v.is_string()) {
-        log_names.insert(v.s());
+        log_names.insert(v.s()->str());
       }
     }
   );
@@ -288,7 +288,7 @@ void Status::to_json(std::ostream &out) const {
   first = true;
   for (const auto &name : log_names) {
     if (first) first = false; else out << ',';
-    out << '"' << utils::escape(name->str()) << '"';
+    out << '"' << utils::escape(name) << '"';
   }
   out << "]}";
 }

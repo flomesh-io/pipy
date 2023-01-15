@@ -58,8 +58,8 @@ class Logger : public pjs::ObjectTemplate<Logger> {
 public:
   static void set_admin_service(AdminService *admin_service);
   static void set_admin_link(AdminLink *admin_link);
-  static void get_names(const std::function<void(pjs::Str*)> &cb);
-  static void tail(pjs::Str *name, Data &buffer);
+  static void get_names(const std::function<void(const std::string &)> &cb);
+  static void tail(const std::string &name, Data &buffer);
   static void shutdown_all();
 
   //
@@ -221,12 +221,12 @@ private:
 
   class History {
   public:
-    static void write(pjs::Str *name, const Data &msg);
-    static void tail(pjs::Str *name, Data &buffer);
-    static void enable_streaming(pjs::Str *name, bool enabled);
+    static void write(const std::string &name, const Data &msg);
+    static void tail(const std::string &name, Data &buffer);
+    static void enable_streaming(const std::string &name, bool enabled);
     static void for_each(const std::function<void(History*)> &cb);
 
-    auto name() const -> pjs::Str* { return m_name; }
+    auto name() const -> const std::string& { return m_name; }
 
   private:
     struct Message :
@@ -237,7 +237,7 @@ private:
       Data data;
     };
 
-    pjs::Ref<pjs::Str> m_name;
+    std::string m_name;
     List<LogMessage> m_messages;
     size_t m_size = 0;
     size_t m_size_max = 256 * 1024;
@@ -246,7 +246,7 @@ private:
     void write_message(const Data &msg);
     void dump_messages(Data &buffer);
 
-    static std::map<pjs::Str*, History> s_all_histories;
+    static std::map<std::string, History> s_all_histories;
   };
 
   pjs::Ref<pjs::Str> m_name;

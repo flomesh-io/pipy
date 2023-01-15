@@ -185,7 +185,7 @@ public:
   std::set<PipelineInfo> pipelines;
   std::set<InboundInfo> inbounds;
   std::set<OutboundInfo> outbounds;
-  std::set<pjs::Ref<pjs::Str>> log_names;
+  std::set<std::string> log_names;
 
   void update_global();
   void update_local();

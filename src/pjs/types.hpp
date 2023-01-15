@@ -61,90 +61,6 @@ class Value;
 template<class T> Class* class_of();
 
 //
-// SharedIndexBase
-//
-
-class SharedIndexBase {
-protected:
-
-  //
-  // SharedIndexBase::Entry
-  //
-
-  struct Entry {
-    int index;
-    void hold() { m_hold_count.fetch_add(1, std::memory_order_relaxed); }
-    bool release() { return m_hold_count.fetch_sub(1, std::memory_order_relaxed) == 1; }
-  protected:
-    Entry() {}
-  private:
-    std::atomic<int> m_hold_count;
-    uint32_t m_next_free = 0;
-    friend class SharedIndexBase;
-  };
-
-  SharedIndexBase(size_t entry_size);
-
-  auto get_entry(int i) -> Entry*;
-  auto add_entry(int i) -> Entry*;
-  auto alloc_entry() -> Entry*;
-  void free_entry(Entry *e);
-
-private:
-  struct Range {
-    std::atomic<char*> chunks[256];
-  };
-
-  size_t m_entry_size;
-  std::atomic<Range*> m_ranges[256];
-  std::atomic<uint32_t> m_max_id;
-  std::atomic<uint64_t> m_free_id;
-
-  static void index_to_xyz(int i, int &x, int &y, int &z) {
-    z = 0xff & (i >> 0);
-    y = 0xff & (i >> 8);
-    x = 0xff & (i >> 16);
-  }
-};
-
-//
-// SharedIndex
-//
-
-template<class T>
-class SharedIndex : public SharedIndexBase {
-public:
-
-  //
-  // SharedIndex::Entry
-  //
-
-  struct Entry : public SharedIndexBase::Entry {
-    T data;
-  };
-
-  SharedIndex() : SharedIndexBase(sizeof(Entry)) {}
-
-  auto get(int i) -> Entry* {
-    return static_cast<Entry*>(get_entry(i));
-  }
-
-  auto alloc(const T &data) -> int {
-    auto e = static_cast<Entry*>(alloc_entry());
-    new (&e->data) T(data);
-    return e->index;
-  }
-
-  void free(int i) {
-    auto e = static_cast<Entry*>(get_entry(i));
-    if (e->release()) {
-      e->data.~T();
-      free_entry(e);
-    }
-  }
-};
-
-//
 // Pool
 //
 
@@ -705,6 +621,37 @@ public:
   thread_local static const Ref<Str> bool_true;
   thread_local static const Ref<Str> bool_false;
 
+  //
+  // Str::CharData
+  //
+
+  class CharData : public Pooled<CharData> {
+  public:
+    auto str() const -> const std::string& { return m_str; }
+    auto c_str() const -> const char * { return m_str.c_str(); }
+    auto size() const -> size_t { return m_str.length(); }
+    auto length() const -> int { return m_length; }
+
+    auto pos_to_chr(int i) const -> int;
+    auto chr_to_pos(int i) const -> int;
+    auto chr_at(int i) const -> int;
+
+    auto retain() -> CharData* { m_refs.fetch_add(1, std::memory_order_relaxed); return this; }
+    void release() { if (m_refs.fetch_sub(1, std::memory_order_relaxed) == 1) delete this; }
+
+  private:
+    enum { CHUNK_SIZE = 32 };
+
+    CharData(std::string &&str);
+
+    const std::string m_str;
+    int m_length;
+    std::vector<uint32_t> m_chunks;
+    std::atomic<int> m_refs;
+
+    friend class Str;
+  };
+
   static auto max_size() -> size_t {
     return s_max_size;
   }
@@ -735,40 +682,17 @@ public:
     return make(str, std::strlen(str));
   }
 
+  static auto make(CharData *data) -> Str* {
+    if (auto s = local_map().get(data->str())) return s;
+    return new Str(data);
+  }
+
   static auto make(const uint32_t *codes, size_t len) -> Str*;
   static auto make(double n) -> Str*;
 
-  //
-  // Str::ID
-  //
-
-  class ID {
-  public:
-    ID() : m_id(0) {}
-    ID(int id) : m_id(id) {}
-    ID(ID &&rval) : m_id(rval.m_id) { rval.m_id = 0; }
-    ID(Str *s);
-    ~ID() { clear(); }
-    auto str() const -> Str* { return local_index().get(m_id); }
-    void str(Str *s);
-    auto to_string() const -> Str*;
-    auto release() -> int { auto id = m_id; m_id = 0; return id; }
-    operator int() const { return m_id; }
-    auto operator = (ID &&rval) -> ID& { m_id = rval.m_id; rval.m_id = 0; return *this; }
-    bool operator ==(const ID &r) const { return m_id == r.m_id; }
-    bool operator <=(const ID &r) const { return m_id <= r.m_id; }
-    bool operator < (const ID &r) const { return m_id <  r.m_id; }
-  private:
-    int m_id;
-    void clear() {
-      if (auto id = m_id) {
-        global_index().free(id);
-      }
-    }
-  };
-
   auto length() const -> int { return m_char_data->length(); }
   auto size() const -> size_t { return m_char_data->size(); }
+  auto data() const -> CharData* { return m_char_data; }
   auto str() const -> const std::string& { return m_char_data->str(); }
   auto c_str() const -> const char* { return m_char_data->c_str(); }
 
@@ -781,65 +705,6 @@ public:
   auto substring(int start, int end) -> std::string;
 
 private:
-
-  //
-  // Str::CharData
-  //
-
-  class CharData : public Pooled<CharData> {
-  public:
-    CharData(std::string &&str);
-
-    auto str() const -> const std::string& { return m_str; }
-    auto c_str() const -> const char * { return m_str.c_str(); }
-    auto size() const -> size_t { return m_str.length(); }
-    auto length() const -> int { return m_length; }
-
-    auto pos_to_chr(int i) -> int;
-    auto chr_to_pos(int i) -> int;
-    auto chr_at(int i) -> int;
-
-    void retain() { m_refs.fetch_add(1, std::memory_order_relaxed); }
-    void release() { if (m_refs.fetch_sub(1, std::memory_order_relaxed) == 1) delete this; }
-
-  private:
-    enum { CHUNK_SIZE = 32 };
-
-    std::atomic<int> m_refs;
-    std::string m_str;
-    std::vector<uint32_t> m_chunks;
-    int m_length;
-  };
-
-  //
-  // Str::LocalIndex
-  //
-
-  class LocalIndex {
-  public:
-    LocalIndex();
-
-    auto get(int i) -> Str*;
-    void set(int i, Str *s);
-    void del(int i);
-
-  private:
-    struct Chunk {
-      pjs::Str *entries[256];
-    };
-
-    struct Range {
-      Chunk* chunks[256];
-    };
-
-    Range* m_ranges[256];
-  };
-
-  static void index_to_xyz(int i, int &x, int &y, int &z) {
-    z = 0xff & (i >> 0);
-    y = 0xff & (i >> 8);
-    x = 0xff & (i >> 16);
-  }
 
   //
   // Str::LocalMap
@@ -873,50 +738,44 @@ private:
     bool m_destructed = false;
   };
 
-  int m_id;
   Ref<CharData> m_char_data;
 
-  Str(int id, CharData *char_data)
-    : m_id(id), m_char_data(char_data) { local_map().set(char_data->str(), this); }
+#ifdef PIPY_ASSERT_SAME_THREAD
+  std::thread::id m_thread_id;
+#endif
 
-  Str(const std::string &str)
-    : m_id(0), m_char_data(new CharData(std::string(str))) { local_map().set(str, this); }
+  Str(CharData *char_data)
+    : m_char_data(char_data)
+#ifdef PIPY_ASSERT_SAME_THREAD
+    , m_thread_id(std::this_thread::get_id())
+#endif
+  {
+    local_map().set(char_data->str(), this);
+  }
 
-  Str(std::string &&str)
-    : m_id(0), m_char_data(new CharData(std::move(str))) { local_map().set(m_char_data->str(), this); }
+  Str(const std::string &str) : Str(new CharData(std::string(str))) {}
+  Str(std::string &&str) : Str(new CharData(std::move(str))) {}
 
   ~Str() {
+    assert_same_thread(*this);
     local_map().erase(m_char_data->str());
-    if (auto id = m_id) {
-      local_index().del(id);
-      global_index().free(id);
-    }
   }
 
   static size_t s_max_size;
 
-  static auto global_index() -> SharedIndex<Ref<CharData>>&;
-  static auto local_index() -> LocalIndex&;
   static auto local_map() -> LocalMap&;
+
+  static void assert_same_thread(const Str &str) {
+#ifdef PIPY_ASSERT_SAME_THREAD
+    auto current_thread_id = std::this_thread::get_id();
+    if (current_thread_id != str.m_thread_id) {
+      throw std::runtime_error("cross-thread access");
+    }
+#endif
+  }
 
   friend class RefCount<Str>;
 };
-
-} // namespace pjs
-
-namespace std {
-
-template<>
-struct hash<pjs::Str::ID> {
-  size_t operator()(const pjs::Str::ID &k) const {
-    hash<int> h;
-    return h(k);
-  }
-};
-
-} // namespace std
-
-namespace pjs {
 
 //
 // ConstStr

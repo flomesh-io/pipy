@@ -73,27 +73,27 @@ void Logger::set_admin_link(AdminLink *admin_link) {
     [](const std::string &command, const Data &payload) {
       if (utils::starts_with(command, s_tail)) {
         static std::string s_prefix("log-tail/");
-        pjs::Ref<pjs::Str> name(pjs::Str::make(command.substr(s_tail.length())));
+        auto name = command.substr(s_tail.length());
         Data buf;
         Data::Builder db(buf, &s_dp);
         db.push(s_prefix);
-        db.push(name->str());
+        db.push(name);
         db.push('\n');
         db.flush();
         History::tail(name, buf);
         s_admin_link->send(buf);
         return true;
       } else {
-        pjs::Ref<pjs::Str> name;
+        std::string name;
         bool enabled;
         if (utils::starts_with(command, s_on)) {
-          name = pjs::Str::make(command.substr(s_on.length()));
+          name = command.substr(s_on.length());
           enabled = true;
         } else if (utils::starts_with(command, s_off)) {
-          name = pjs::Str::make(command.substr(s_off.length()));
+          name = command.substr(s_off.length());
           enabled = false;
         }
-        if (!name) return false;
+        if (name.empty()) return false;
         History::enable_streaming(name, enabled);
         return true;
       }
@@ -101,7 +101,7 @@ void Logger::set_admin_link(AdminLink *admin_link) {
   );
 }
 
-void Logger::get_names(const std::function<void(pjs::Str*)> &cb) {
+void Logger::get_names(const std::function<void(const std::string &)> &cb) {
   History::for_each(
     [&](History *h) {
       cb(h->name());
@@ -109,7 +109,7 @@ void Logger::get_names(const std::function<void(pjs::Str*)> &cb) {
   );
 }
 
-void Logger::tail(pjs::Str *name, Data &buffer) {
+void Logger::tail(const std::string &name, Data &buffer) {
   History::tail(name, buffer);
 }
 
@@ -131,15 +131,14 @@ Logger::~Logger() {
 
 void Logger::write(const Data &msg) {
   if (Net::main().is_running()) {
-    auto name = pjs::Str::ID(m_name).release();
+    auto name = m_name->data()->retain();
     auto *sd = SharedData::make(msg)->retain();
     Net::main().post(
       [=]() {
         Data msg;
         sd->to_data(msg);
-        auto *s = pjs::Str::ID(name).to_string();
-        History::write(s, msg);
-        s->release();
+        History::write(name->str(), msg);
+        name->release();
         sd->release();
       }
     );
@@ -183,22 +182,22 @@ void Logger::shutdown() {
 // Logger::History
 //
 
-std::map<pjs::Str*, Logger::History> Logger::History::s_all_histories;
+std::map<std::string, Logger::History> Logger::History::s_all_histories;
 
-void Logger::History::write(pjs::Str *name, const Data &msg) {
+void Logger::History::write(const std::string &name, const Data &msg) {
   auto &h = s_all_histories[name];
-  if (!h.m_name) h.m_name = name;
+  if (h.m_name.empty()) h.m_name = name;
   h.write_message(msg);
 }
 
-void Logger::History::tail(pjs::Str *name, Data &buffer) {
+void Logger::History::tail(const std::string &name, Data &buffer) {
   auto p = s_all_histories.find(name);
   if (p != s_all_histories.end()) {
     p->second.dump_messages(buffer);
   }
 }
 
-void Logger::History::enable_streaming(pjs::Str *name, bool enabled) {
+void Logger::History::enable_streaming(const std::string &name, bool enabled) {
   auto p = s_all_histories.find(name);
   if (p != s_all_histories.end()) {
     p->second.m_streaming_enabled = enabled;
@@ -228,7 +227,7 @@ void Logger::History::write_message(const Data &msg) {
   s_dp.push(&msg_endl, '\n');
 
   if (s_admin_service) {
-    s_admin_service->write_log(m_name->str(), msg_endl);
+    s_admin_service->write_log(m_name, msg_endl);
   }
 
   if (s_admin_link && m_streaming_enabled) {
@@ -236,7 +235,7 @@ void Logger::History::write_message(const Data &msg) {
     Data buf;
     Data::Builder db(buf, &s_dp);
     db.push(s_prefix);
-    db.push(m_name->str());
+    db.push(m_name);
     db.push('\n');
     db.flush();
     buf.push(msg_endl);

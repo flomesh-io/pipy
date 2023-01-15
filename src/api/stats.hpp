@@ -142,13 +142,13 @@ private:
   //
 
   struct Node {
-    pjs::Str::ID key;
+    pjs::Ref<pjs::Str::CharData> key;
     Node* subs = nullptr;
     Node* next = nullptr;
     double values[1];
     static auto make(int dimensions) -> Node*;
     ~Node();
-    auto get_key() -> pjs::Str* { return key.to_string(); }
+    auto get_key() -> pjs::Str::CharData* { return key; }
     void for_subs(const std::function<void(Node*)> &cb) {
       for (auto sub = subs; sub; sub = sub->next) {
         cb(sub);
@@ -163,9 +163,9 @@ private:
   //
 
   struct Entry {
-    pjs::Str::ID name;
-    pjs::Str::ID type;
-    pjs::Str::ID shape;
+    pjs::Ref<pjs::Str::CharData> name;
+    pjs::Ref<pjs::Str::CharData> type;
+    pjs::Ref<pjs::Str::CharData> shape;
     int dimensions = 0;
     std::vector<std::string> labels;
     std::unique_ptr<Node> root;
@@ -289,7 +289,7 @@ private:
     double values[1];
     static auto make(int dimensions) -> Node*;
     ~Node();
-    auto get_key() -> pjs::Str* { return key->retain(); }
+    auto get_key() -> pjs::Str::CharData* { return key->data(); }
     void for_subs(const std::function<void(Node*)> &cb) {
       for (const auto &p : submap) {
         cb(p.second);

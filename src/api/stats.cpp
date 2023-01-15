@@ -30,6 +30,42 @@
 
 #include <cmath>
 
+//
+// Initial state:
+//   {
+//     "k": "metric-1",
+//     "l": "label-1/label-2",
+//     "t": "Counter",
+//     "v": 123,
+//     "s": [
+//       {
+//         "k": "label-value-1",
+//         "v": 123,
+//         "s": [...]
+//       }
+//     ]
+//   }
+//
+// Update state:
+//   {
+//     "v": 123,
+//     "s": [
+//       {
+//         "v": 123,
+//         "s": [...]
+//       },
+//       123
+//     ]
+//   }
+//
+// Vector:
+//   {
+//     "k": "latency-1",
+//     "t": "Histogram[1,2,4,8,16,32]",
+//     "v": [12345, 1234, 123, 12, 1, 0]
+//   }
+//
+
 namespace pipy {
 namespace stats {
 
@@ -206,7 +242,7 @@ public:
     const std::string &name,
     const std::string &extra_labels,
     const std::vector<std::string> &label_names,
-    pjs::Str *label_values[],
+    pjs::Str::CharData *label_values[],
     const char *le_str,
     const std::function<void(const void *, size_t)> &out
   ) : m_name(name)
@@ -258,17 +294,13 @@ public:
     node->for_subs([=](Node *sub) {
       output(sub, level + 1);
     });
-
-    if (level > 0) {
-      m_label_values[level-1]->release();
-    }
   }
 
 private:
   const std::string &m_name;
   const std::string &m_extra_labels;
   const std::vector<std::string> &m_label_names;
-  pjs::Str **m_label_values;
+  pjs::Str::CharData **m_label_values;
   const char *m_le_str;
   const std::function<void(const void *, size_t)> &m_out;
 
@@ -314,42 +346,6 @@ private:
 };
 
 //
-// Initial state:
-//   {
-//     "k": "metric-1",
-//     "l": "label-1/label-2",
-//     "t": "Counter",
-//     "v": 123,
-//     "s": [
-//       {
-//         "k": "label-value-1",
-//         "v": 123,
-//         "s": [...]
-//       }
-//     ]
-//   }
-//
-// Update state:
-//   {
-//     "v": 123,
-//     "s": [
-//       {
-//         "v": 123,
-//         "s": [...]
-//       },
-//       123
-//     ]
-//   }
-//
-// Vector:
-//   {
-//     "k": "latency-1",
-//     "t": "Histogram[1,2,4,8,16,32]",
-//     "v": [12345, 1234, 123, 12, 1, 0]
-//   }
-//
-
-//
 // MetricData
 //
 
@@ -365,7 +361,7 @@ void MetricData::update(MetricSet &metrics) {
   std::function<void(int, Node*, Metric*)> update;
 
   update = [&](int level, Node *node, Metric *metric) {
-    if (level > 0) node->key.str(metric->label());
+    if (level > 0) node->key = metric->label()->data();
 
     auto dim = metric->dimensions();
     for (int d = 0; d < dim; d++) {
@@ -392,16 +388,16 @@ void MetricData::update(MetricSet &metrics) {
     auto metric = i.get();
     auto e = *ent;
     if (!e ||
-      e->name.str() != metric->name() ||
-      e->type.str() != metric->type() ||
-      e->shape.str() != metric->shape() ||
+      e->name != metric->name()->data() ||
+      e->type != metric->type()->data() ||
+      e->shape != metric->shape()->data() ||
       e->dimensions != metric->dimensions()
     ) {
       if (!e) e = *ent = new Entry;
       e->root.reset(Node::make(metric->dimensions()));
-      e->name.str(metric->name());
-      e->type.str(metric->type());
-      e->shape.str(metric->shape());
+      e->name = metric->name()->data();
+      e->type = metric->type()->data();
+      e->shape = metric->shape()->data();
       e->dimensions = metric->dimensions();
       e->labels.clear();
     }
@@ -431,9 +427,9 @@ void MetricData::to_prometheus(const std::string &extra_labels, const std::funct
   for (auto *ent = m_entries; ent; ent = ent->next) {
     if (auto root = ent->root.get()) {
       const char *le_str = nullptr;
-      auto *name = ent->name.to_string();
-      auto *type = ent->type.to_string();
-      auto *shape = ent->shape.to_string();
+      auto *name = ent->name.get();
+      auto *type = ent->type.get();
+      auto *shape = ent->shape.get();
       if (utils::starts_with(type->str(), s_prefix_histogram)) {
         le_str = type->c_str() + s_prefix_histogram.length();
       }
@@ -443,12 +439,9 @@ void MetricData::to_prometheus(const std::string &extra_labels, const std::funct
         int i = 0;
         for (auto &s : labels) { ent->labels[i++] = std::move(s); }
       }
-      pjs::Str *label_values[ent->labels.size()];
+      pjs::Str::CharData *label_values[ent->labels.size()];
       Prometheus<Node> prom(name->str(), extra_labels, ent->labels, label_values, le_str, out);
       prom.output(root, 0);
-      name->release();
-      type->release();
-      shape->release();
     }
   }
 }
@@ -564,9 +557,9 @@ void MetricData::Deserializer::string(const char *s, size_t len) {
         switch (level->field) {
           case Level::Field::KEY:
             if (is_entry) {
-              m_current_entry->name.str(str);
+              m_current_entry->name = str->data();
             } else {
-              level->node->key.str(str);
+              level->node->key = str->data();
             }
             return;
           case Level::Field::TYPE:
@@ -578,7 +571,7 @@ void MetricData::Deserializer::string(const char *s, size_t len) {
               }
               if (dim <= 100) {
                 auto node = Node::make(dim);
-                m_current_entry->type.str(str);
+                m_current_entry->type = str->data();
                 m_current_entry->dimensions = dim;
                 m_current_entry->root.reset(node);
                 level->node = node;
@@ -588,7 +581,7 @@ void MetricData::Deserializer::string(const char *s, size_t len) {
             break;
           case Level::Field::LABELS:
             if (is_entry) {
-              m_current_entry->shape.str(str);
+              m_current_entry->shape = str->data();
               return;
             }
             break;
@@ -735,7 +728,7 @@ void MetricDataSum::sum(MetricData &data, bool initial) {
 
     auto &submap = node->submap;
     for (auto s = src_node->subs; s; s = s->next) {
-      auto *key = s->key.to_string();
+      auto *key = pjs::Str::make(s->key)->retain();
       Node *sub = nullptr;
       auto i = submap.find(key);
       if (i == submap.end()) {
@@ -751,9 +744,9 @@ void MetricDataSum::sum(MetricData &data, bool initial) {
   };
 
   for (auto *e = data.m_entries; e; e = e->next) {
-    auto *name = e->name.to_string();
-    auto *type = e->type.to_string();
-    auto *shape = e->shape.to_string();
+    auto *name = pjs::Str::make(e->name)->retain();
+    auto *type = pjs::Str::make(e->type)->retain();
+    auto *shape = pjs::Str::make(e->shape)->retain();
 
     auto &ent = m_entry_map[name];
     if (!ent || (initial && (
@@ -885,7 +878,7 @@ void MetricDataSum::to_prometheus(const std::function<void(const void *, size_t)
         int i = 0;
         for (auto &s : labels) { ent->labels[i++] = std::move(s); }
       }
-      pjs::Str *label_values[ent->labels.size()];
+      pjs::Str::CharData *label_values[ent->labels.size()];
       std::string empty;
       Prometheus<Node> prom(ent->name->str(), empty, ent->labels, label_values, le_str, out);
       prom.output(root, 0);
@@ -934,7 +927,7 @@ void MetricHistory::update(MetricData &data) {
 
     auto &submap = node->submap;
     for (auto s = src_node->subs; s; s = s->next) {
-      auto *key = s->key.to_string();
+      auto *key = pjs::Str::make(s->key)->retain();
       Node *sub = nullptr;
       auto it = submap.find(key);
       if (it == submap.end()) {
@@ -949,9 +942,9 @@ void MetricHistory::update(MetricData &data) {
   };
 
   for (auto *e = data.m_entries; e; e = e->next) {
-    auto *name = e->name.to_string();
-    auto *type = e->type.to_string();
-    auto *shape = e->shape.to_string();
+    auto *name = pjs::Str::make(e->name)->retain();
+    auto *type = pjs::Str::make(e->type)->retain();
+    auto *shape = pjs::Str::make(e->shape)->retain();
 
     auto &ent = m_entries[name];
     if (!ent ||
