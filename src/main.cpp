@@ -355,7 +355,7 @@ int main(int argc, char *argv[]) {
     Net::init();
     Log::init();
     Log::set_level(opts.log_level);
-    Listener::set_reuse_port(opts.reuse_port || opts.threads > 1);
+    Listener::set_reuse_port(opts.reuse_port);
     pjs::Math::init();
     crypto::Crypto::init(opts.openssl_engine);
     tls::TLSSession::init();

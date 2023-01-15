@@ -43,7 +43,7 @@ void MainOptions::show_help() {
   std::cout << "  -h, -help, --help                    Show help information" << std::endl;
   std::cout << "  -v, -version, --version              Show version information" << std::endl;
   std::cout << "  -e, -eval, --eval                    Evaluate the given string as script" << std::endl;
-  std::cout << "  --threads=<number>                   Number of worker threads" << std::endl;
+  std::cout << "  --threads=<number>                   Number of worker threads (1, 2, ... max)" << std::endl;
   std::cout << "  --log-level=<debug|info|warn|error>  Set the level of log output" << std::endl;
   std::cout << "  --verify                             Verify configuration only" << std::endl;
   std::cout << "  --no-graph                           Do not print pipeline graphs to the log" << std::endl;
@@ -62,6 +62,8 @@ void MainOptions::show_help() {
 }
 
 MainOptions::MainOptions(int argc, char *argv[]) {
+  auto max_threads = std::thread::hardware_concurrency();
+
   for (int i = 1; i < argc; i++) {
     std::string term(argv[i]);
     if (term[0] != '-') {
@@ -81,10 +83,18 @@ MainOptions::MainOptions(int argc, char *argv[]) {
       } else if (k == "-e" || k == "-eval" || k == "--eval") {
         eval = true;
       } else if (k == "--threads") {
-        char *end;
-        threads = std::strtol(v.c_str(), &end, 10);
-        if (*end) throw std::runtime_error("--threads expects a number");
-        if (threads <= 0) throw std::runtime_error("invalid number of threads");
+        if (v == "max") {
+          threads = max_threads;
+        } else {
+          char *end;
+          threads = std::strtol(v.c_str(), &end, 10);
+          if (*end) throw std::runtime_error("--threads expects a number");
+          if (threads <= 0) throw std::runtime_error("invalid number of threads");
+          if (threads > max_threads) {
+            std::string msg("number of threads exceeds the maximum ");
+            throw std::runtime_error(msg + std::to_string(max_threads));
+          }
+        }
       } else if (k == "--log-level") {
         if (v == "debug") log_level = Log::DEBUG;
         else if (v == "warn") log_level = Log::WARN;
@@ -126,10 +136,6 @@ MainOptions::MainOptions(int argc, char *argv[]) {
       }
     }
   }
-
-  auto max_threads = std::thread::hardware_concurrency();
-  if (threads < 1) threads = 1;
-  if (threads > max_threads) threads = max_threads;
 
   if (eval && filename.empty()) {
     throw std::runtime_error("missing script to evaluate");
