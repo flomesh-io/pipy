@@ -142,18 +142,16 @@ void Logger::write(const Data &msg) {
         sd->release();
       }
     );
+  }
+
+  if (Net::current().is_running()) {
     Net::current().post(
       [=]() {
         write_async(msg);
       }
     );
   } else {
-    for (const auto c : msg.chunks()) {
-      auto ptr = std::get<0>(c);
-      auto len = std::get<1>(c);
-      std::cerr.write(ptr, len);
-    }
-    std::cerr << std::endl;
+    write_async(msg);
   }
 }
 
@@ -255,11 +253,20 @@ void Logger::History::dump_messages(Data &buffer) {
 //
 
 void Logger::StdoutTarget::write(const Data &msg) {
-  if (!m_file_stream) m_file_stream = FileStream::make(false, m_f, &s_dp_stdout);
-  Data *buf = Data::make();
-  s_dp.push(buf, &msg);
-  s_dp.push(buf, '\n');
-  m_file_stream->input()->input(buf);
+  if (Net::current().is_running()) {
+    if (!m_file_stream) m_file_stream = FileStream::make(false, m_f, &s_dp_stdout);
+    Data *buf = Data::make();
+    s_dp.push(buf, &msg);
+    s_dp.push(buf, '\n');
+    m_file_stream->input()->input(buf);
+  } else {
+    for (const auto c : msg.chunks()) {
+      auto ptr = std::get<0>(c);
+      auto len = std::get<1>(c);
+      std::fwrite(ptr, 1, len, m_f);
+    }
+    std::fputc('\n', m_f);
+  }
 }
 
 //
