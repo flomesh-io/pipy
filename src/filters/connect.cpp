@@ -119,8 +119,11 @@ void Connect::reset() {
 }
 
 void Connect::process(Event *evt) {
-  if (!evt->is<StreamEnd>()) {
-    if (!m_outbound) {
+  if (!m_outbound) {
+    if (evt->is<StreamEnd>()) {
+      Filter::output(evt);
+      return;
+    } else {
       pjs::Value target;
       if (!eval(m_target, target)) return;
       auto s = target.to_string();

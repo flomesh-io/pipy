@@ -139,6 +139,7 @@ private:
   private:
     Listener* m_listener;
     asio::ip::tcp::acceptor m_acceptor;
+    pjs::Ref<InboundTCP> m_accepting;
     List<InboundTCP> m_inbounds;
   };
 
