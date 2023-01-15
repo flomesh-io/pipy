@@ -268,12 +268,7 @@ Listener::AcceptorTCP::AcceptorTCP(Listener *listener)
 }
 
 Listener::AcceptorTCP::~AcceptorTCP() {
-  for (
-    auto *p = m_inbounds.head();
-    p; p = p->List<InboundTCP>::Item::next()
-  ) {
-    p->dangle();
-  }
+  close();
 }
 
 bool Listener::AcceptorTCP::start(const asio::ip::tcp::endpoint &endpoint) {
@@ -302,6 +297,7 @@ auto Listener::AcceptorTCP::count() -> size_t const {
 void Listener::AcceptorTCP::accept() {
   auto inbound = InboundTCP::make(m_listener, m_listener->m_options);
   inbound->accept(m_acceptor);
+  m_accepting = inbound;
 }
 
 void Listener::AcceptorTCP::cancel() {
@@ -318,6 +314,11 @@ void Listener::AcceptorTCP::close(Inbound *inbound) {
 
 void Listener::AcceptorTCP::close() {
   m_acceptor.close();
+  if (m_accepting) m_accepting->dangle();
+  while (auto *ib = m_inbounds.head()) {
+    ib->dangle();
+    m_inbounds.remove(ib);
+  }
 }
 
 void Listener::AcceptorTCP::for_each_inbound(const std::function<void(Inbound*)> &cb) {

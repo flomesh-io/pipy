@@ -175,10 +175,11 @@ void InboundTCP::accept(asio::ip::tcp::acceptor &acceptor) {
             Log::debug("%s connection accepted", desc);
           }
 
-          m_socket.set_option(asio::socket_base::keep_alive(m_options.keep_alive));
-
-          InputContext ic(this);
-          start();
+          if (m_listener && m_listener->pipeline_layout()) {
+            m_socket.set_option(asio::socket_base::keep_alive(m_options.keep_alive));
+            InputContext ic(this);
+            start();
+          }
         }
       }
 
