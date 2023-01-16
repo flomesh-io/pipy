@@ -43,9 +43,6 @@ class File :
   public pjs::Pooled<File>
 {
 public:
-  static void start_bg_thread();
-  static void stop_bg_thread();
-
   static auto make(const std::string &path) -> File* {
     return new File(path);
   }

@@ -33,7 +33,6 @@
 #include "api/pipy.hpp"
 #include "api/stats.hpp"
 #include "codebase.hpp"
-#include "file.hpp"
 #include "fs.hpp"
 #include "filters/tls.hpp"
 #include "input.hpp"
@@ -359,7 +358,6 @@ int main(int argc, char *argv[]) {
     pjs::Math::init();
     crypto::Crypto::init(opts.openssl_engine);
     tls::TLSSession::init();
-    File::start_bg_thread();
 
     s_admin_options.cert = opts.admin_tls_cert;
     s_admin_options.key = opts.admin_tls_key;
@@ -540,7 +538,6 @@ int main(int argc, char *argv[]) {
 
     start_cleaning_pools();
     Net::current().run();
-    File::stop_bg_thread();
 
     delete s_admin_link;
     delete s_admin;
