@@ -318,8 +318,8 @@ void URLRouter::add(const std::string &url, const pjs::Value &value) {
 }
 
 bool URLRouter::find(const std::string &url, pjs::Value &value) {
-  static std::string s_slash("/");
-  static std::string s_asterisk("*");
+  static const std::string s_slash("/");
+  static const std::string s_asterisk("*");
 
   auto path_start = url.find_first_of('/');
   if (path_start == std::string::npos) return false;

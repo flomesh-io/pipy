@@ -265,9 +265,9 @@ bool JSON::encode(
   int space,
   Data::Builder &db
 ) {
-  static std::string s_null("null");
-  static std::string s_true("true");
-  static std::string s_false("false");
+  static const std::string s_null("null");
+  static const std::string s_true("true");
+  static const std::string s_false("false");
 
   if (space < 0) space = 0;
   if (space > 10) space = 10;

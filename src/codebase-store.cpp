@@ -94,42 +94,42 @@ R"***(((
 //
 
 static std::string KEY_file(const std::string &id) {
-  static std::string prefix("files/");
+  static const std::string prefix("files/");
   return prefix + id;
 }
 
 static std::string KEY_file_tree(const std::string &path) {
-  static std::string prefix("files/tree/");
+  static const std::string prefix("files/tree/");
   return prefix + path;
 }
 
 static std::string KEY_codebase(const std::string &id) {
-  static std::string prefix("codebases/");
+  static const std::string prefix("codebases/");
   return prefix + id;
 }
 
 static std::string KEY_codebase_tree(const std::string &path) {
-  static std::string prefix("codebases/tree/");
+  static const std::string prefix("codebases/tree/");
   return prefix + path;
 }
 
 static std::string KEY_codebase_file(const std::string &id, const std::string &path) {
-  static std::string prefix("/files/");
+  static const std::string prefix("/files/");
   return KEY_codebase(id) + prefix + path;
 }
 
 static std::string KEY_codebase_edit(const std::string &id, const std::string &path) {
-  static std::string prefix("/edit/");
+  static const std::string prefix("/edit/");
   return KEY_codebase(id) + prefix + path;
 }
 
 static std::string KEY_codebase_erased(const std::string &id, const std::string &path) {
-  static std::string prefix("/erased/");
+  static const std::string prefix("/erased/");
   return KEY_codebase(id) + prefix + path;
 }
 
 static std::string KEY_codebase_derived(const std::string &id, const std::string &derived_id) {
-  static std::string prefix("/derived/");
+  static const std::string prefix("/derived/");
   return KEY_codebase(id) + prefix + derived_id;
 }
 

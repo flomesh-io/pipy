@@ -66,10 +66,10 @@ auto Dump::clone() -> Filter* {
 }
 
 void Dump::process(Event *evt) {
-  static char s_hex[] = { "0123456789ABCDEF" };
-  static std::string s_prefix_worker("[dump] [worker=");
-  static std::string s_prefix_context("] [context=");
-  static std::string s_hline(16*3+4+16, '-');
+  static const char s_hex[] = { "0123456789ABCDEF" };
+  static const std::string s_prefix_worker("[dump] [worker=");
+  static const std::string s_prefix_context("] [context=");
+  static const std::string s_hline(16*3+4+16, '-');
 
   pjs::Value tag;
   if (!eval(m_tag, tag)) {

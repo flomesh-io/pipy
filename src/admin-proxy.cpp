@@ -173,11 +173,11 @@ void AdminProxy::close() {
 }
 
 auto AdminProxy::handle(http::RequestHead *head) -> Message* {
-  static std::string prefix_repo("/repo/");
-  static std::string prefix_api_v1_repo("/api/v1/repo/");
-  static std::string prefix_api_v1_files("/api/v1/files/");
-  static std::string header_accept("accept");
-  static std::string text_html("text/html");
+  static const std::string prefix_repo("/repo/");
+  static const std::string prefix_api_v1_repo("/api/v1/repo/");
+  static const std::string prefix_api_v1_files("/api/v1/files/");
+  static const std::string header_accept("accept");
+  static const std::string text_html("text/html");
 
   auto method = head->method()->str();
   auto path = head->path()->str();

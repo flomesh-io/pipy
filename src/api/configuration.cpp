@@ -1903,7 +1903,7 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.use
   method("use", [](Context &ctx, Object *thiz, Value &result) {
-    static std::string s_dot_so(".so");
+    static const std::string s_dot_so(".so");
     std::string module;
     Array *modules;
     Str *pipeline = nullptr;

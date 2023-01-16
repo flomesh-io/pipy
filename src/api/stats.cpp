@@ -253,9 +253,9 @@ public:
     , m_out(out) {}
 
   void output(Node *node, int level) {
-    static std::string s_bucket("_bucket");
-    static std::string s_sum("_sum");
-    static std::string s_count("_count");
+    static const std::string s_bucket("_bucket");
+    static const std::string s_sum("_sum");
+    static const std::string s_count("_count");
 
     if (level > m_label_names.size()) return;
 
@@ -312,7 +312,7 @@ private:
     int level, double num,
     const char *le = nullptr, int le_len = 0
   ) {
-    static std::string s_le("le=");
+    static const std::string s_le("le=");
     if (level > 0 || !m_extra_labels.empty()) {
       bool first = true;
       output('{');
@@ -784,12 +784,12 @@ void MetricDataSum::serialize(Data &out, bool initial) {
 }
 
 void MetricDataSum::serialize(Data::Builder &db, bool initial) {
-  static std::string s_metrics("\"metrics\":"); // metrics
-  static std::string s_k("\"k\":"); // key
-  static std::string s_t("\"t\":"); // type
-  static std::string s_v("\"v\":"); // value
-  static std::string s_l("\"l\":"); // label
-  static std::string s_s("\"s\":"); // sub
+  static const std::string s_metrics("\"metrics\":"); // metrics
+  static const std::string s_k("\"k\":"); // key
+  static const std::string s_t("\"t\":"); // type
+  static const std::string s_v("\"v\":"); // value
+  static const std::string s_l("\"l\":"); // label
+  static const std::string s_s("\"s\":"); // sub
 
   std::function<void(int, Entry*, Node*)> write_node;
   write_node = [&](int level, Entry *ent, Node *node) {
@@ -1024,11 +1024,11 @@ void MetricHistory::serialize(Data::Builder &db, const std::string &metric_name)
 }
 
 void MetricHistory::serialize(Data::Builder &db, Entry *entry, Node *node, int level, bool recursive) {
-  static std::string s_k("\"k\":"); // key
-  static std::string s_t("\"t\":"); // type
-  static std::string s_v("\"v\":"); // value
-  static std::string s_l("\"l\":"); // label
-  static std::string s_s("\"s\":"); // sub
+  static const std::string s_k("\"k\":"); // key
+  static const std::string s_t("\"t\":"); // type
+  static const std::string s_v("\"v\":"); // value
+  static const std::string s_l("\"l\":"); // label
+  static const std::string s_s("\"s\":"); // sub
 
   db.push('{');
   db.push(s_k);

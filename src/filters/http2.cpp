@@ -628,8 +628,8 @@ void DynamicTable::evict() {
 //
 
 thread_local
-HeaderDecoder::StaticTable HeaderDecoder::s_static_table;
-HeaderDecoder::HuffmanTree HeaderDecoder::s_huffman_tree;
+const HeaderDecoder::StaticTable HeaderDecoder::s_static_table;
+const HeaderDecoder::HuffmanTree HeaderDecoder::s_huffman_tree;
 
 HeaderDecoder::HeaderDecoder(const Settings &settings)
   : m_settings(settings)

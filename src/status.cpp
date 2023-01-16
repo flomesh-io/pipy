@@ -105,7 +105,7 @@ void Status::update_local() {
   }
 
   for (const auto &i : pjs::Class::all()) {
-    static std::string prefix("pjs::Constructor");
+    static const std::string prefix("pjs::Constructor");
     if (utils::starts_with(i.second->name()->str(), prefix)) continue;
     if (auto n = i.second->object_count()) {
       objects.insert({ i.first, (int)n });
@@ -206,14 +206,14 @@ void Status::merge(const Status &other) {
 }
 
 bool Status::from_json(const Data &data) {
-  static pjs::Ref<pjs::Str> key_timestamp(pjs::Str::make("timestamp"));
-  static pjs::Ref<pjs::Str> key_uuid(pjs::Str::make("uuid"));
-  static pjs::Ref<pjs::Str> key_name(pjs::Str::make("name"));
-  static pjs::Ref<pjs::Str> key_version(pjs::Str::make("version"));
-  static pjs::Ref<pjs::Str> key_modules(pjs::Str::make("modules"));
-  static pjs::Ref<pjs::Str> key_filename(pjs::Str::make("filename"));
-  static pjs::Ref<pjs::Str> key_graph(pjs::Str::make("graph"));
-  static pjs::Ref<pjs::Str> key_logs(pjs::Str::make("logs"));
+  thread_local static pjs::Ref<pjs::Str> key_timestamp(pjs::Str::make("timestamp"));
+  thread_local static pjs::Ref<pjs::Str> key_uuid(pjs::Str::make("uuid"));
+  thread_local static pjs::Ref<pjs::Str> key_name(pjs::Str::make("name"));
+  thread_local static pjs::Ref<pjs::Str> key_version(pjs::Str::make("version"));
+  thread_local static pjs::Ref<pjs::Str> key_modules(pjs::Str::make("modules"));
+  thread_local static pjs::Ref<pjs::Str> key_filename(pjs::Str::make("filename"));
+  thread_local static pjs::Ref<pjs::Str> key_graph(pjs::Str::make("graph"));
+  thread_local static pjs::Ref<pjs::Str> key_logs(pjs::Str::make("logs"));
 
   pjs::Value json;
   pjs::Value val_timestamp;
@@ -295,7 +295,7 @@ void Status::to_json(std::ostream &out) const {
 
 template<class T>
 static void print_table(Data::Builder &db, const T &header, const std::list<T> &rows) {
-  static std::string spacing("  ");
+  static const std::string spacing("  ");
 
   int n = header.size();
   int max_width[header.size()];
@@ -374,8 +374,8 @@ void Status::dump_chunks(Data::Builder &db) {
 }
 
 void Status::dump_pipelines(Data::Builder &db) {
-  static std::string s_draining("Draining");
-  static std::string s_running("Running");
+  static const std::string s_draining("Draining");
+  static const std::string s_running("Running");
   std::list<std::array<std::string, 5>> rows;
   for (const auto &i : pipelines) {
     rows.push_back({
@@ -390,9 +390,9 @@ void Status::dump_pipelines(Data::Builder &db) {
 }
 
 void Status::dump_inbound(Data::Builder &db) {
-  static std::string s_tcp("TCP");
-  static std::string s_udp("UDP");
-  static std::string s_unknown("?");
+  static const std::string s_tcp("TCP");
+  static const std::string s_udp("UDP");
+  static const std::string s_unknown("?");
   std::list<std::array<std::string, 5>> rows;
   for (const auto &i : inbounds) {
     const std::string *protocol = &s_unknown;
@@ -413,9 +413,9 @@ void Status::dump_inbound(Data::Builder &db) {
 }
 
 void Status::dump_outbound(Data::Builder &db) {
-  static std::string s_tcp("TCP");
-  static std::string s_udp("UDP");
-  static std::string s_unknown("?");
+  static const std::string s_tcp("TCP");
+  static const std::string s_udp("UDP");
+  static const std::string s_unknown("?");
   std::list<std::array<std::string, 4>> rows;
   for (const auto &i : outbounds) {
     const std::string *protocol = &s_unknown;

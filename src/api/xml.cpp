@@ -226,9 +226,9 @@ auto XML::decode(const Data &data) -> Node* {
 }
 
 bool XML::encode(Node *doc, int space, Data &data) {
-  static std::string s_escaped_chars("<>&");
-  static std::string s_cdata_start("<![CDATA[");
-  static std::string s_cdata_end("]]>");
+  static const std::string s_escaped_chars("<>&");
+  static const std::string s_cdata_start("<![CDATA[");
+  static const std::string s_cdata_end("]]>");
 
   auto children = doc->children();
   if (!children || children->length() != 1) return false;

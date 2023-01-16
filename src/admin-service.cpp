@@ -169,14 +169,14 @@ void AdminService::write_log(const std::string &name, const Data &data) {
 }
 
 auto AdminService::handle(Context *ctx, Message *req) -> Message* {
-  static std::string prefix_dump("/dump/");
-  static std::string prefix_repo("/repo/");
-  static std::string prefix_api_v1_repo("/api/v1/repo/");
-  static std::string prefix_api_v1_repo_files("/api/v1/repo-files/");
-  static std::string prefix_api_v1_files("/api/v1/files/");
-  static std::string prefix_api_v1_metrics("/api/v1/metrics/");
-  static std::string prefix_api_v1_log("/api/v1/log/");
-  static std::string text_html("text/html");
+  static const std::string prefix_dump("/dump/");
+  static const std::string prefix_repo("/repo/");
+  static const std::string prefix_api_v1_repo("/api/v1/repo/");
+  static const std::string prefix_api_v1_repo_files("/api/v1/repo-files/");
+  static const std::string prefix_api_v1_files("/api/v1/files/");
+  static const std::string prefix_api_v1_metrics("/api/v1/metrics/");
+  static const std::string prefix_api_v1_log("/api/v1/log/");
+  static const std::string text_html("text/html");
 
   thread_local static pjs::ConstStr s_accept("accept");
   thread_local static pjs::ConstStr s_upgrade("upgrade");
@@ -463,7 +463,7 @@ Message* AdminService::dump_GET(const std::string &path) {
 
 Message* AdminService::metrics_GET(pjs::Object *headers) {
   thread_local static pjs::ConstStr s_accept_encoding("accept-encoding");
-  static std::string s_gzip("gzip");
+  static const std::string s_gzip("gzip");
 
   pjs::Value v;
   headers->get(s_accept_encoding, v);
@@ -1041,8 +1041,8 @@ Message* AdminService::api_v1_metrics_GET(const std::string &path) {
   if (!mh) return m_response_not_found;
   Data payload;
   Data::Builder db(payload, &s_dp);
-  static std::string s_time("\"time\":");
-  static std::string s_metrics("\"metrics\":");
+  static const std::string s_time("\"time\":");
+  static const std::string s_metrics("\"metrics\":");
   auto time = std::chrono::duration_cast<std::chrono::seconds>(m_metrics_timestamp.time_since_epoch()).count();
   db.push('{');
   db.push(s_time);
@@ -1299,8 +1299,8 @@ void AdminService::WebSocketHandler::process(Event *evt) {
       auto inst = m_service->get_instance(ctx->instance_uuid);
       if (inst && ctx->is_admin_link) inst->admin_link = this;
 
-      static std::string s_log_prefix("log/");
-      static std::string s_log_tail_prefix("log-tail/");
+      static const std::string s_log_prefix("log/");
+      static const std::string s_log_tail_prefix("log-tail/");
 
       if (utils::starts_with(command, s_log_prefix)) {
         auto name = utils::trim(command.substr(s_log_prefix.length()));
@@ -1338,15 +1338,15 @@ void AdminService::WebSocketHandler::process(Event *evt) {
 }
 
 void AdminService::WebSocketHandler::log_enable(const std::string &name, bool enabled) {
-  static std::string s_on("log/on/");
-  static std::string s_off("log/off/");
+  static const std::string s_on("log/on/");
+  static const std::string s_off("log/off/");
   auto body = (enabled ? s_on : s_off) + name;
   auto head = websocket::MessageHead::make();
   Filter::output(Message::make(head, body));
 }
 
 void AdminService::WebSocketHandler::log_tail(const std::string &name) {
-  static std::string s_tail("log/tail/");
+  static const std::string s_tail("log/tail/");
   auto body = s_tail + name;
   auto head = websocket::MessageHead::make();
   Filter::output(Message::make(head, body));
@@ -1358,7 +1358,7 @@ void AdminService::WebSocketHandler::log_broadcast(const Data &data) {
 }
 
 void AdminService::WebSocketHandler::signal_reload() {
-  static std::string s_reload("reload");
+  static const std::string s_reload("reload");
   auto head = websocket::MessageHead::make();
   Filter::output(Message::make(head, s_reload));
 }

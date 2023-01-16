@@ -277,7 +277,7 @@ private:
   class StaticTable {
   public:
     StaticTable();
-    auto get() -> const std::vector<TableEntry>& { return m_table; }
+    auto get() const -> const std::vector<TableEntry>& { return m_table; }
   private:
     std::vector<TableEntry> m_table;
   };
@@ -289,14 +289,14 @@ private:
   class HuffmanTree {
   public:
     HuffmanTree();
-    auto get() -> const std::vector<Huffman>& { return m_tree; }
+    auto get() const -> const std::vector<Huffman>& { return m_tree; }
   private:
     std::vector<Huffman> m_tree;
   };
 
   thread_local
-  static StaticTable s_static_table;
-  static HuffmanTree s_huffman_tree;
+  static const StaticTable s_static_table;
+  static const HuffmanTree s_huffman_tree;
 };
 
 //

@@ -65,14 +65,14 @@ void Logger::set_admin_service(AdminService *admin_service) {
 }
 
 void Logger::set_admin_link(AdminLink *admin_link) {
-  static std::string s_tail("log/tail/");
-  static std::string s_on("log/on/");
-  static std::string s_off("log/off/");
+  static const std::string s_tail("log/tail/");
+  static const std::string s_on("log/on/");
+  static const std::string s_off("log/off/");
   s_admin_link = admin_link;
   s_admin_link->add_handler(
     [](const std::string &command, const Data &payload) {
       if (utils::starts_with(command, s_tail)) {
-        static std::string s_prefix("log-tail/");
+        static const std::string s_prefix("log-tail/");
         auto name = command.substr(s_tail.length());
         Data buf;
         Data::Builder db(buf, &s_dp);
@@ -229,7 +229,7 @@ void Logger::History::write_message(const Data &msg) {
   }
 
   if (s_admin_link && m_streaming_enabled) {
-    static std::string s_prefix("log/");
+    static const std::string s_prefix("log/");
     Data buf;
     Data::Builder db(buf, &s_dp);
     db.push(s_prefix);

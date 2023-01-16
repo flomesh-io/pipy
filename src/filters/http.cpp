@@ -551,7 +551,7 @@ void Decoder::on_event(Event *evt) {
           m_body_size = 0;
           m_head_buffer.clear();
 
-          static std::string s_chunked("chunked");
+          static const std::string s_chunked("chunked");
 
           // Transfer-Encoding and Content-Length
           if (
@@ -895,7 +895,7 @@ void Encoder::output_head() {
 
   if (send_content_length) {
     if (m_chunked) {
-      static std::string str("transfer-encoding: chunked\r\n");
+      static const std::string str("transfer-encoding: chunked\r\n");
       s_dp.push(buffer, str);
     } else if (!content_length_written) {
       char str[100];
@@ -905,10 +905,10 @@ void Encoder::output_head() {
     }
 
     if (m_is_final) {
-      static std::string str("connection: close\r\n");
+      static const std::string str("connection: close\r\n");
       s_dp.push(buffer, str);
     } else {
-      static std::string str("connection: keep-alive\r\n");
+      static const std::string str("connection: keep-alive\r\n");
       s_dp.push(buffer, str);
     }
   }

@@ -254,7 +254,7 @@ void WorkerThread::init_metrics() {
     [](stats::Gauge *gauge) {
       double total = 0;
       for (const auto &i : pjs::Class::all()) {
-        static std::string prefix("pjs::Constructor");
+        static const std::string prefix("pjs::Constructor");
         if (utils::starts_with(i.second->name()->str(), prefix)) continue;
         if (auto n = i.second->object_count()) {
           pjs::Str *name = i.second->name();
