@@ -21,4 +21,4 @@ clean:
 	rm -f ${PRODUCT}
 
 test:
-	${BIN_DIR}/pipy main.js
+	${BIN_DIR}/pipy main.js --threads=max --reuse-port

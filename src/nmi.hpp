@@ -198,8 +198,8 @@ private:
   virtual auto new_context_data(pjs::Object *prototype) -> pjs::Object* override;
   virtual void unload() override {}
 
-  static std::vector<NativeModule*> m_native_modules;
-  static NativeModule* m_current;
+  thread_local static std::vector<NativeModule*> m_native_modules;
+  thread_local static NativeModule* m_current;
 };
 
 //
@@ -266,7 +266,7 @@ private:
   pjs::Ref<Context> m_context;
   pjs::Ref<EventTarget::Input> m_output;
 
-  static Table<Pipeline*> m_pipeline_table;
+  thread_local static Table<Pipeline*> m_pipeline_table;
 
   friend class PipelineLayout;
 };

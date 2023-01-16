@@ -52,7 +52,7 @@ struct Value {
     : v(std::forward<Args>(args)...) {}
 };
 
-static Table<Value> s_values;
+thread_local static Table<Value> s_values;
 
 //
 // LocalRef
@@ -109,16 +109,16 @@ private:
   LocalRefPool* m_back;
   List<LocalRef> m_values;
 
-  static LocalRefPool* s_current;
+  thread_local static LocalRefPool* s_current;
 };
 
-LocalRefPool* LocalRefPool::s_current = nullptr;
+thread_local LocalRefPool* LocalRefPool::s_current = nullptr;
 
 //
 // Pipeline
 //
 
-Table<Pipeline*> Pipeline::m_pipeline_table;
+thread_local Table<Pipeline*> Pipeline::m_pipeline_table;
 
 void Pipeline::input(Event *evt) {
   LocalRefPool lrf;
@@ -145,8 +145,8 @@ void Pipeline::free() {
 // NativeModule
 //
 
-std::vector<NativeModule*> NativeModule::m_native_modules;
-NativeModule* NativeModule::m_current = nullptr;
+thread_local std::vector<NativeModule*> NativeModule::m_native_modules;
+thread_local NativeModule* NativeModule::m_current = nullptr;
 
 auto NativeModule::find(const std::string &filename) -> NativeModule* {
   for (auto *m : m_native_modules) {
