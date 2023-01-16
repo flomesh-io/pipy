@@ -31,6 +31,7 @@
 
 #include <unistd.h>
 #include <map>
+#include <mutex>
 
 namespace pipy {
 
@@ -61,28 +62,31 @@ private:
 
   void on_process_exit();
 
+  //
+  // Exec::ChildProcessMonitor
+  //
+
   class ChildProcessMonitor {
   public:
-    ChildProcessMonitor() {
-      schedule();
-    }
+    ChildProcessMonitor();
 
-    void monitor(int pid, Exec *exec) {
-      m_processes[pid] = exec;
-    }
-
-    void remove(int pid) {
-      m_processes.erase(pid);
-    }
+    void monitor(int pid, Exec *exec);
+    void remove(int pid);
 
   private:
-    void schedule();
-    void check();
-    std::map<int, Exec*> m_processes;
-    Timer m_timer;
+    struct Waiter {
+      Net* net;
+      Exec* filter;
+    };
+
+    void wait();
+
+    std::thread m_wait_thread;
+    std::mutex m_mutex;
+    std::map<int, Waiter> m_waiters;
   };
 
-  static auto child_process_monitor() -> ChildProcessMonitor*;
+  static ChildProcessMonitor s_child_process_monitor;
 };
 
 } // namespace pipy

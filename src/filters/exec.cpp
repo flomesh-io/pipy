@@ -67,7 +67,7 @@ auto Exec::clone() -> Filter* {
 void Exec::reset() {
   Filter::reset();
   if (m_pid > 0) {
-    child_process_monitor()->remove(m_pid);
+    s_child_process_monitor.remove(m_pid);
     kill(m_pid, SIGTERM);
   }
   m_pid = 0;
@@ -136,7 +136,7 @@ void Exec::process(Event *evt) {
     } else if (m_pid < 0) {
       Log::error("[exec] unable to fork");
     } else {
-      child_process_monitor()->monitor(m_pid, this);
+      s_child_process_monitor.monitor(m_pid, this);
     }
 
     for (i = 0; i < argc; i++) free(argv[i]);
@@ -147,34 +147,52 @@ void Exec::process(Event *evt) {
   }
 }
 
-auto Exec::child_process_monitor() -> ChildProcessMonitor* {
-  static ChildProcessMonitor monitor;
-  return &monitor;
+//
+// Exec::ChildProcessMoinitor
+//
+
+Exec::ChildProcessMonitor Exec::s_child_process_monitor;
+
+Exec::ChildProcessMonitor::ChildProcessMonitor()
+  : m_wait_thread([this]() { wait(); })
+{
+  m_wait_thread.detach();
 }
 
-void Exec::ChildProcessMonitor::schedule() {
-  m_timer.schedule(
-    1.0,
-    [this]() {
-      check();
-    }
-  );
+void Exec::ChildProcessMonitor::monitor(int pid, Exec *exec) {
+  std::lock_guard<std::mutex> lock(m_mutex);
+  auto &w = m_waiters[pid];
+  w.net = &Net::current();
+  w.filter = exec;
 }
 
-void Exec::ChildProcessMonitor::check() {
-  int status;
-  auto pid = waitpid(0, &status, WNOHANG);
-  if (pid > 0 && (WIFEXITED(status) || WIFSIGNALED(status))) {
-    Log::debug("[exec] child process exited [pid = %d]", pid);
-    auto i = m_processes.find(pid);
-    if (i != m_processes.end()) {
-      auto exec = i->second;
-      m_processes.erase(i);
-      InputContext ic;
-      exec->output(StreamEnd::make());
+void Exec::ChildProcessMonitor::remove(int pid) {
+  std::lock_guard<std::mutex> lock(m_mutex);
+  m_waiters.erase(pid);
+}
+
+void Exec::ChildProcessMonitor::wait() {
+  Log::init();
+  for (;;) {
+    int status;
+    auto pid = waitpid(0, &status, 0);
+    if (pid > 0 && (WIFEXITED(status) || WIFSIGNALED(status))) {
+      Log::debug("[exec] child process exited [pid = %d]", pid);
+      std::lock_guard<std::mutex> lock(m_mutex);
+      auto i = m_waiters.find(pid);
+      if (i != m_waiters.end()) {
+        auto &w = i->second;
+        auto *f = w.filter;
+        w.net->post(
+          [=]() {
+            InputContext ic;
+            f->output(StreamEnd::make());
+          }
+        );
+        m_waiters.erase(i);
+      }
     }
   }
-  schedule();
 }
 
 } // namespace pipy
