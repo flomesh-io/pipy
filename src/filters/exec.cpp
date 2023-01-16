@@ -31,6 +31,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include <sys/wait.h>
 
 namespace pipy {
@@ -175,8 +176,10 @@ void Exec::ChildProcessMonitor::wait() {
   Log::init();
   for (;;) {
     int status;
-    auto pid = waitpid(0, &status, 0);
-    if (pid > 0 && (WIFEXITED(status) || WIFSIGNALED(status))) {
+    auto pid = waitpid(-1, &status, 0);
+    if (pid < 0) {
+      sleep(1);
+    } else if (pid > 0 && (WIFEXITED(status) || WIFSIGNALED(status))) {
       Log::debug("[exec] child process exited [pid = %d]", pid);
       std::lock_guard<std::mutex> lock(m_mutex);
       auto i = m_waiters.find(pid);
