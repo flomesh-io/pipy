@@ -27,6 +27,7 @@
 #define TIMER_HPP
 
 #include "net.hpp"
+#include "list.hpp"
 
 namespace pipy {
 
@@ -34,11 +35,18 @@ namespace pipy {
 // Timer
 //
 
-class Timer {
+class Timer : public List<Timer>::Item {
 public:
-  Timer() : m_timer(Net::context()) {}
+  static void cancel_all();
 
-  ~Timer() { cancel(); }
+  Timer() : m_timer(Net::context()) {
+    s_all_timers.push(this);
+  }
+
+  ~Timer() {
+    s_all_timers.remove(this);
+    cancel();
+  }
 
   void schedule(double timeout, const std::function<void()> &handler);
   void cancel();
@@ -62,6 +70,8 @@ private:
 
   asio::steady_timer m_timer;
   pjs::Ref<Handler> m_handler;
+
+  thread_local static List<Timer> s_all_timers;
 };
 
 } // namespace pipy

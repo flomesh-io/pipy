@@ -27,6 +27,14 @@
 
 namespace pipy {
 
+thread_local List<Timer> Timer::s_all_timers;
+
+void Timer::cancel_all() {
+  for (auto *timer = s_all_timers.head(); timer; timer = timer->next()) {
+    timer->cancel();
+  }
+}
+
 void Timer::schedule(double timeout, const std::function<void()> &handler) {
   cancel();
   pjs::Ref<Handler> h = new Handler(handler);

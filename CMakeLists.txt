@@ -129,6 +129,7 @@ add_compile_options(
   -Wno-overloaded-virtual
   -Wno-delete-non-virtual-dtor
   -Wno-sign-compare
+  -Wno-deprecated-declarations
 )
 
 include_directories(

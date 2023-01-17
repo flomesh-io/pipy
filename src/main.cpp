@@ -549,6 +549,7 @@ int main(int argc, char *argv[]) {
     crypto::Crypto::free();
     stats::Metric::local().clear();
     Log::shutdown();
+    Timer::cancel_all();
 
     std::cerr << "Done." << std::endl;
 

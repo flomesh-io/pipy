@@ -367,6 +367,7 @@ void WorkerThread::main() {
   }
 
   Log::shutdown();
+  Timer::cancel_all();
 }
 
 void WorkerThread::recycle() {
