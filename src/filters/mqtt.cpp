@@ -74,15 +74,15 @@ public:
 
   PropertyMap();
 
-  auto by_id(int id) -> const Property*;
-  auto by_name(pjs::Str *name) -> const Property*;
+  auto by_id(int id) const -> const Property*;
+  auto by_name(pjs::Str *name) const -> const Property*;
 
 private:
   std::vector<Property> m_properties;
   std::map<pjs::Str*, int> m_name_map;
 };
 
-static struct {
+static const struct {
   int id;
   const char *name;
   PropertyMap::Property::Type type;
@@ -129,20 +129,20 @@ PropertyMap::PropertyMap() {
   }
 }
 
-auto PropertyMap::by_id(int id) -> const Property* {
+auto PropertyMap::by_id(int id) const -> const Property* {
   if (id < 1 || id >= m_properties.size()) return nullptr;
   const auto &p = m_properties[id];
   if (p.id) return &p;
   return nullptr;
 }
 
-auto PropertyMap::by_name(pjs::Str *name) -> const Property* {
+auto PropertyMap::by_name(pjs::Str *name) const -> const Property* {
   auto i = m_name_map.find(name);
   if (i == m_name_map.end()) return nullptr;
   return &m_properties[i->second];
 }
 
-static PropertyMap s_property_map;
+thread_local static const PropertyMap s_property_map;
 
 //
 // PacketParser
