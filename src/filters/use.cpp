@@ -186,7 +186,7 @@ auto Use::clone() -> Filter* {
 void Use::reset() {
   Filter::reset();
   if (m_native_pipeline) {
-    m_native_pipeline->free();
+    m_native_pipeline->release();
     m_native_pipeline = nullptr;
   }
   for (auto &s : m_stages) {

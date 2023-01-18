@@ -247,6 +247,7 @@ add_executable(pipy
   src/status.cpp
   src/store.cpp
   src/str-map.cpp
+  src/table.cpp
   src/tar.cpp
   src/task.cpp
   src/timer.cpp

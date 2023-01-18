@@ -118,13 +118,19 @@ thread_local LocalRefPool* LocalRefPool::s_current = nullptr;
 // Pipeline
 //
 
-thread_local Table<Pipeline*> Pipeline::m_pipeline_table;
+SharedTable<Pipeline*> Pipeline::m_pipeline_table;
+
+void Pipeline::check_thread() {
+  if (module()->net() != &Net::current()) {
+    throw std::runtime_error("operating native pipeline from a different thread");
+  }
+}
 
 void Pipeline::input(Event *evt) {
   LocalRefPool lrf;
   auto e = nmi::s_values.alloc(evt);
   lrf.add(e);
-  NativeModule::set_current(m_layout->m_module);
+  NativeModule::set_current(module());
   m_layout->m_pipeline_process(m_id, m_user_ptr, e);
   NativeModule::set_current(nullptr);
 }
@@ -133,12 +139,14 @@ void Pipeline::output(Event *evt) {
   m_output->input(evt);
 }
 
-void Pipeline::free() {
-  NativeModule::set_current(m_layout->m_module);
-  m_layout->m_pipeline_free(m_id, m_user_ptr);
-  NativeModule::set_current(nullptr);
-  m_pipeline_table.free(m_id);
-  delete this;
+void Pipeline::release() {
+  if (m_retain_count.fetch_sub(1, std::memory_order_relaxed) == 1) {
+    NativeModule::set_current(module());
+    m_layout->m_pipeline_free(m_id, m_user_ptr);
+    NativeModule::set_current(nullptr);
+    m_pipeline_table.free(m_id);
+    delete this;
+  }
 }
 
 //
@@ -166,6 +174,7 @@ auto NativeModule::load(const std::string &filename, int index) -> NativeModule*
 
 NativeModule::NativeModule(int index, const std::string &filename)
   : Module(index)
+  , m_net(&Net::current())
 {
   m_filename = pjs::Str::make(filename);
 
@@ -258,6 +267,29 @@ auto NativeModule::pipeline_layout(pjs::Str *name) -> PipelineLayout* {
   } else {
     return m_entry_pipeline;
   }
+}
+
+void NativeModule::schedule(double timeout, const std::function<void()> &fn) {
+  m_net->post(
+    [=]() {
+      if (timeout > 0) {
+        auto *tmo = new Timeout;
+        tmo->timer.schedule(timeout, [=]() {
+          delete tmo;
+          callback(fn);
+        });
+      } else {
+        callback(fn);
+      }
+    }
+  );
+}
+
+void NativeModule::callback(const std::function<void()> &fn) {
+  LocalRefPool lrf;
+  set_current(this);
+  fn();
+  set_current(nullptr);
 }
 
 void NativeModule::bind_exports(Worker *worker) {
@@ -879,9 +911,30 @@ NMI_EXPORT void pipy_define_pipeline(const char *name, fn_pipeline_init init, fn
   }
 }
 
+NMI_EXPORT void pipy_hold(pipy_pipeline ppl) {
+  if (auto *p = nmi::Pipeline::get(ppl)) {
+    p->check_thread();
+    p->retain();
+  }
+}
+
+NMI_EXPORT void pipy_free(pipy_pipeline ppl) {
+  if (auto *p = nmi::Pipeline::get(ppl)) {
+    auto net = p->module()->net();
+    if (&Net::current() == net) {
+      p->release();
+    } else {
+      net->post(
+        [=]() { p->release(); }
+      );
+    }
+  }
+}
+
 NMI_EXPORT void pipy_output_event(pipy_pipeline ppl, pjs_value evt) {
   if (auto *m = nmi::NativeModule::current()) {
     if (auto *p = nmi::Pipeline::get(ppl)) {
+      p->check_thread();
       if (auto *pv = nmi::s_values.get(evt)) {
         auto &v = pv->v;
         if (v.is_instance_of<pipy::Event>()) {
@@ -895,6 +948,7 @@ NMI_EXPORT void pipy_output_event(pipy_pipeline ppl, pjs_value evt) {
 NMI_EXPORT void pipy_get_variable(pipy_pipeline ppl, int id, pjs_value value) {
   if (auto *m = nmi::NativeModule::current()) {
     if (auto *p = nmi::Pipeline::get(ppl)) {
+      p->check_thread();
       if (auto *pv = nmi::s_values.get(value)) {
         auto &v = pv->v;
         auto ctx = p->context();
@@ -909,6 +963,7 @@ NMI_EXPORT void pipy_get_variable(pipy_pipeline ppl, int id, pjs_value value) {
 NMI_EXPORT void pipy_set_variable(pipy_pipeline ppl, int id, pjs_value value) {
   if (auto *m = nmi::NativeModule::current()) {
     if (auto *p = nmi::Pipeline::get(ppl)) {
+      p->check_thread();
       if (auto *pv = nmi::s_values.get(value)) {
         auto &v = pv->v;
         auto ctx = p->context();
@@ -917,5 +972,18 @@ NMI_EXPORT void pipy_set_variable(pipy_pipeline ppl, int id, pjs_value value) {
         }
       }
     }
+  }
+}
+
+NMI_EXPORT void pipy_schedule(pipy_pipeline ppl, double timeout, void (*fn)(void *), void *user_ptr) {
+  if (auto *p = nmi::Pipeline::get(ppl)) {
+    p->retain();
+    p->module()->schedule(
+      timeout,
+      [=]() {
+        (*fn)(user_ptr);
+        p->release();
+      }
+    );
   }
 }

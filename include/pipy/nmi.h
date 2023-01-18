@@ -122,9 +122,12 @@ NMI_EXPORT pjs_value pipy_StreamEnd_get_error(pjs_value obj);
 
 NMI_EXPORT void pipy_define_variable(int id, const char *name, const char *ns, pjs_value value);
 NMI_EXPORT void pipy_define_pipeline(const char *name, fn_pipeline_init init, fn_pipeline_free free, fn_pipeline_process process);
+NMI_EXPORT void pipy_hold(pipy_pipeline ppl);
+NMI_EXPORT void pipy_free(pipy_pipeline ppl);
 NMI_EXPORT void pipy_output_event(pipy_pipeline ppl, pjs_value evt);
 NMI_EXPORT void pipy_get_variable(pipy_pipeline ppl, int id, pjs_value value);
 NMI_EXPORT void pipy_set_variable(pipy_pipeline ppl, int id, pjs_value value);
+NMI_EXPORT void pipy_schedule(pipy_pipeline ppl, double timeout, void (*fn)(void *), void *user_ptr);
 
 #ifdef __cplusplus
 } /* extern "C" */

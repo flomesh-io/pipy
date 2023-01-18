@@ -31,6 +31,7 @@
 #include "context.hpp"
 #include "module.hpp"
 #include "event.hpp"
+#include "table.hpp"
 
 #include <list>
 #include <string>
@@ -47,105 +48,6 @@ class PipelineLayout;
 class NativeModule;
 
 //
-// Table
-//
-
-class TableBase {
-private:
-  enum { SUB_TABLE_WIDTH = 8 };
-
-  struct Entry {
-    int next_free = 0;
-    char data[0];
-  };
-
-  std::vector<char*> m_sub_tables;
-
-  int m_size = 0;
-  int m_free = 0;
-  int m_data_size;
-
-protected:
-  TableBase(int data_size)
-    : m_data_size(data_size) {}
-
-  Entry* get_entry(int i, bool create) {
-    int y = i & ((1 << SUB_TABLE_WIDTH) - 1);
-    int x = i >> SUB_TABLE_WIDTH;
-    if (x >= m_sub_tables.size()) {
-      if (!create) return nullptr;
-      m_sub_tables.resize(x + 1);
-    }
-    auto sub = m_sub_tables[x];
-    if (!sub) {
-      if (!create) return nullptr;
-      auto *buf = new char[(sizeof(Entry) + m_data_size) * (1 << SUB_TABLE_WIDTH)];
-      m_sub_tables[x] = sub = buf;
-    }
-    return reinterpret_cast<Entry*>(sub + (sizeof(Entry) + m_data_size) * y);
-  }
-
-  Entry* alloc_entry(int *i) {
-    Entry *ent;
-    auto id = m_free;
-    if (!id) {
-      id = ++m_size;
-      ent = get_entry(id, true);
-    } else {
-      ent = get_entry(id, false);
-      m_free = ent->next_free;
-    }
-    ent->next_free = -1;
-    *i = id;
-    return ent;
-  }
-
-  Entry* free_entry(int i) {
-    if (auto *ent = get_entry(i, false)) {
-      if (ent->next_free < 0) {
-        ent->next_free = m_free;
-        m_free = i;
-        return ent;
-      }
-    }
-    return nullptr;
-  }
-};
-
-//
-// Table
-//
-
-template<class T>
-class Table : public TableBase {
-public:
-  Table() : TableBase(sizeof(T)) {}
-
-  T* get(int i) {
-    if (i <= 0) return nullptr;
-    if (auto *ent = get_entry(i, false)) {
-      return reinterpret_cast<T*>(ent->data);
-    } else {
-      return nullptr;
-    }
-  }
-
-  template<typename... Args>
-  int alloc(Args... args) {
-    int i;
-    auto *ent = alloc_entry(&i);
-    new (ent->data) T(std::forward<Args>(args)...);
-    return i;
-  }
-
-  void free(int i) {
-    if (auto *ent = free_entry(i)) {
-      ((T*)ent->data)->~T();
-    }
-  }
-};
-
-//
 // NativeModule
 //
 
@@ -156,10 +58,12 @@ public:
   static auto current() -> NativeModule* { return m_current; }
   static void set_current(NativeModule *m) { m_current = m; }
 
+  auto net() const -> Net* { return m_net; }
   auto filename() const -> pjs::Str* { return m_filename; }
   void define_variable(int id, const char *name, const char *ns, const pjs::Value &value);
   void define_pipeline(const char *name, fn_pipeline_init init, fn_pipeline_free free, fn_pipeline_process process);
   auto pipeline_layout(pjs::Str *name) -> PipelineLayout*;
+  void schedule(double timeout, const std::function<void()> &fn);
 
 private:
   NativeModule(int index, const std::string &filename);
@@ -183,12 +87,19 @@ private:
     pjs::Ref<pjs::Str> name;
   };
 
+  struct Timeout : public pjs::Pooled<Timeout> {
+    Timer timer;
+  };
+
+  Net* m_net;
   pjs::Ref<pjs::Class> m_context_class;
   std::list<VariableDef> m_variable_defs;
   std::list<PipelineDef> m_pipeline_defs;
   std::list<Export> m_exports;
   std::map<pjs::Ref<pjs::Str>, PipelineLayout*> m_pipeline_layouts;
   PipelineLayout* m_entry_pipeline = nullptr;
+
+  void callback(const std::function<void()> &fn);
 
   virtual void bind_exports(Worker *worker) override;
   virtual void bind_imports(Worker *worker) override {}
@@ -243,10 +154,13 @@ public:
     return new Pipeline(layout, ctx, out);
   }
 
+  auto module() -> NativeModule* { return m_layout->m_module; }
   auto context() -> Context* { return m_context; }
+  void check_thread();
   void input(Event *evt);
   void output(Event *evt);
-  void free();
+  void retain() { m_retain_count.fetch_add(1, std::memory_order_relaxed); }
+  void release();
 
 private:
   Pipeline(PipelineLayout *layout, Context *ctx, EventTarget::Input *out)
@@ -254,6 +168,7 @@ private:
     , m_id(m_pipeline_table.alloc(this))
     , m_context(ctx)
     , m_output(out)
+    , m_retain_count(1)
   {
     NativeModule::set_current(layout->m_module);
     layout->m_pipeline_init(m_id, &m_user_ptr);
@@ -265,13 +180,12 @@ private:
   void* m_user_ptr = nullptr;
   pjs::Ref<Context> m_context;
   pjs::Ref<EventTarget::Input> m_output;
+  std::atomic<int> m_retain_count;
 
-  thread_local static Table<Pipeline*> m_pipeline_table;
+  static SharedTable<Pipeline*> m_pipeline_table;
 
   friend class PipelineLayout;
 };
-
-
 
 } // nmi
 } // pipy
