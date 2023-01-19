@@ -7,7 +7,7 @@ INC_DIR = $(abspath ${PIPY_DIR}/include)
 PRODUCT = ${BIN_DIR}/counter-threads.so
 
 CXXFLAGS = -std=c++11 -fPIC
-LDFLAGS = -latomic
+LDFLAGS = -lpthread
 
 OS = $(shell uname -s)
 
