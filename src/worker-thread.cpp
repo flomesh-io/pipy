@@ -437,26 +437,25 @@ void WorkerManager::status(Status &status) {
 }
 
 void WorkerManager::status(const std::function<void(Status&)> &cb) {
-  if (m_status_counter > 0) return;
+  if (m_status_counter >= 0) return;
 
   auto &main = Net::current();
-  m_status_counter = m_worker_threads.size();
+  m_status_counter = 0;
 
   for (auto *wt : m_worker_threads) {
-    bool initial = (wt->index() == 0);
     wt->status(
-      [&, cb, initial](Status &s) {
+      [&, cb](Status &s) {
         main.post(
-          [&, cb, initial]() {
-            if (initial) {
+          [&, cb]() {
+            if (m_status_counter == 0) {
               m_status = std::move(s);
             } else {
               m_status.merge(s);
             }
-            m_status_counter--;
-            if (!m_status_counter) {
+            if (++m_status_counter == m_worker_threads.size()) {
               m_status.update_global();
               cb(m_status);
+              m_status_counter = -1;
             }
           }
         );
@@ -519,21 +518,20 @@ void WorkerManager::stats(stats::MetricDataSum &stats) {
 }
 
 void WorkerManager::stats(const std::function<void(stats::MetricDataSum&)> &cb) {
-  if (m_metric_data_sum_counter > 0) return;
+  if (m_metric_data_sum_counter >= 0) return;
 
   auto &main = Net::current();
-  m_metric_data_sum_counter = m_worker_threads.size();
+  m_metric_data_sum_counter = 0;
 
   for (auto *wt : m_worker_threads) {
-    bool initial = (wt->index() == 0);
     wt->stats(
-      [&, cb, initial](stats::MetricData &metric_data) {
+      [&, cb](stats::MetricData &metric_data) {
         main.post(
-          [&, cb, initial]() {
-            m_metric_data_sum.sum(metric_data, initial);
-            m_metric_data_sum_counter--;
-            if (!m_metric_data_sum_counter) {
+          [&, cb]() {
+            m_metric_data_sum.sum(metric_data, m_metric_data_sum_counter == 0);
+            if (++m_metric_data_sum_counter == m_worker_threads.size()) {
               cb(m_metric_data_sum);
+              m_metric_data_sum_counter = -1;
             }
           }
         );

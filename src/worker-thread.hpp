@@ -114,9 +114,9 @@ public:
 private:
   std::vector<WorkerThread*> m_worker_threads;
   Status m_status;
-  int m_status_counter = 0;
+  int m_status_counter = -1;
   stats::MetricDataSum m_metric_data_sum;
-  int m_metric_data_sum_counter = 0;
+  int m_metric_data_sum_counter = -1;
   bool m_graph_enabled = false;
 };
 
