@@ -61,13 +61,14 @@ $ bin/pipy
 
 ## 文档
 
-* [概述](https://flomesh.io/docs/intro/overview)
-* [开始使用](https://flomesh.io/docs/getting-started/build-install)
-* [教程](https://flomesh.io/docs/tutorial/01-hello)
+* [概述](https://flomesh.io/pipy/docs/intro/overview)
+* [开始使用](https://flomesh.io/pipy/docs/getting-started/build-install)
+* [教程](https://flomesh.io/pipy/docs/tutorial/01-hello)
 * 参考
-  * [API 参考](https://flomesh.io/docs/reference/api)
-  * [PipyJS 参考](https://flomesh.io/docs/reference/pjs)
-* 学习和文章
+  * [API 参考](https://flomesh.io/pipy/docs/reference/api)
+  * [PipyJS 参考](https://flomesh.io/pipy/docs/reference/pjs)
+* 学习资源
+  * [博客](https://blog.flomesh.io/)
   * [Katacoda](https://katacoda.com/flomesh-io) - Katacoda 场景
   * [InfoQ 文章](https://www.infoq.com/articles/network-proxy-stream-processor-pipy/) - 简要介绍
 * [版权](COPYRIGHT)

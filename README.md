@@ -67,7 +67,8 @@ Open the browser of your choice, point to `http://localhost:6060`. You will now 
 * Reference
   * [API Reference](https://flomesh.io/pipy/docs/reference/api)
   * [PipyJS Reference](https://flomesh.io/pipy/docs/reference/pjs)
-* Learnings & Articles
+* Learning Resources
+  * [Blog](https://blog.flomesh.io/)
   * [Katacoda](https://katacoda.com/flomesh-io) - Katacoda scenarios
   * [InfoQ article](https://www.infoq.com/articles/network-proxy-stream-processor-pipy/) - Brief Introduction
 * [Copyright](COPYRIGHT)
