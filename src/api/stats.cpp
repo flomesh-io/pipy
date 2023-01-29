@@ -313,7 +313,7 @@ private:
     const char *le = nullptr, int le_len = 0
   ) {
     static const std::string s_le("le=");
-    if (level > 0 || !m_extra_labels.empty()) {
+    if (level > 0 || !m_extra_labels.empty() || le) {
       bool first = true;
       output('{');
       if (!m_extra_labels.empty()) {
