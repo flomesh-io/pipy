@@ -181,6 +181,10 @@ public:
     Reader(const Data &data)
       : m_view(data.m_head) {}
 
+    bool eof() {
+      return !m_view;
+    }
+
     int get() {
       auto v = m_view;
       if (!v) return -1;
@@ -190,6 +194,30 @@ public:
         m_offset = 0;
       }
       return c;
+    }
+
+    int read(int n, void *out) {
+      auto *p = (char *)out;
+      int i = 0;
+      while (i < n) {
+        auto v = m_view;
+        if (!v) break;
+        auto a = v->length - m_offset;
+        auto b = n - i;
+        if (a <= b) {
+          std::memcpy(p, v->chunk->data + v->offset + m_offset, a);
+          p += a;
+          i += a;
+          m_view = v->next;
+          m_offset = 0;
+        } else {
+          std::memcpy(p, v->chunk->data + v->offset + m_offset, b);
+          p += b;
+          i += b;
+          m_offset += b;
+        }
+      }
+      return i;
     }
 
     int read(int n, Data &out) {
