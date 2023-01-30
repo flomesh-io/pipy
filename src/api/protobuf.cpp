@@ -214,3 +214,16 @@ bool Message::read_varint(Data::Reader &r, uint64_t &n) {
 
 } // namespace protobuf
 } // namespace pipy
+
+namespace pjs {
+
+using namespace pipy;
+
+//
+// Protobuf
+//
+
+template<> void ClassDef<protobuf::Message>::init() {
+}
+
+} // namespace pjs
