@@ -54,12 +54,14 @@ public:
 
   bool get(pjs::Context &ctx, const pjs::Value &key, pjs::Value &value);
   void set(pjs::Context &ctx, const pjs::Value &key, const pjs::Value &value);
+  bool get(const pjs::Value &key, pjs::Value &value);
+  void set(const pjs::Value &key, const pjs::Value &value);
   bool find(const pjs::Value &key, pjs::Value &value);
   bool remove(pjs::Context &ctx, const pjs::Value &key);
   bool clear(pjs::Context &ctx);
 
 private:
-  Cache(const Options &options, pjs::Function *allocate, pjs::Function *free = nullptr);
+  Cache(const Options &options, pjs::Function *allocate = nullptr, pjs::Function *free = nullptr);
   ~Cache();
 
   struct Entry {
@@ -71,6 +73,16 @@ private:
   pjs::Ref<pjs::Function> m_allocate;
   pjs::Ref<pjs::Function> m_free;
   pjs::Ref<pjs::OrderedHash<pjs::Value, Entry>> m_cache;
+
+  bool get(
+    const pjs::Value &key, pjs::Value &value,
+    const std::function<bool(pjs::Value &)> &allocate
+  );
+
+  void set(
+    const pjs::Value &key, const pjs::Value &value,
+    const std::function<bool(const pjs::Value &, const pjs::Value &)> &free
+  );
 
   friend class pjs::ObjectTemplate<Cache>;
 };
@@ -322,6 +334,7 @@ private:
 
   std::list<Target> m_targets;
   std::map<pjs::Str*, Target*> m_target_map;
+  pjs::Ref<Cache> m_target_cache;
   int m_total_weight = 0;
   int m_total_hits = 0;
 
@@ -350,6 +363,7 @@ private:
   };
 
   std::map<pjs::Ref<pjs::Str>, Target> m_targets;
+  pjs::Ref<Cache> m_target_cache;
 
   friend class pjs::ObjectTemplate<LeastWorkLoadBalancer, LoadBalancer>;
 };

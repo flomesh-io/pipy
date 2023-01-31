@@ -73,59 +73,37 @@ Cache::~Cache() {
 }
 
 bool Cache::get(pjs::Context &ctx, const pjs::Value &key, pjs::Value &value) {
-  auto now = (m_options.ttl > 0 ? utils::now() : 0);
-  Entry entry;
-  bool found = m_cache->use(key, entry);
-  if (found) {
-    if (m_options.ttl > 0) {
-      if (now >= entry.ttl) {
-        found = false;
-      }
+  return get(
+    key, value,
+    [&](pjs::Value &value) {
+      if (!m_allocate) return false;
+      pjs::Value arg(key);
+      (*m_allocate)(ctx, 1, &arg, value);
+      return ctx.ok();
     }
-  }
-  if (!found) {
-    if (!m_allocate) return false;
-    pjs::Value arg(key);
-    (*m_allocate)(ctx, 1, &arg, value);
-    if (!ctx.ok()) return false;
-    entry.value = value;
-    entry.ttl = now + m_options.ttl;
-    m_cache->set(key, entry);
-    return true;
-  } else {
-    value = entry.value;
-    return true;
-  }
+  );
 }
 
 void Cache::set(pjs::Context &ctx, const pjs::Value &key, const pjs::Value &value) {
-  auto now = (m_options.ttl > 0 ? utils::now() : 0);
-  Entry entry;
-  entry.value = value;
-  entry.ttl = now + m_options.ttl;
-  if (m_cache->set(key, entry)) {
-    if (m_options.size > 0 && m_cache->size() > m_options.size) {
-      int n = m_cache->size() - m_options.size;
-      pjs::OrderedHash<pjs::Value, Entry>::Iterator it(m_cache);
-      if (m_free) {
-        pjs::Value argv[2], ret;
-        while (auto *p = it.next()) {
-          argv[0] = p->k;
-          argv[1] = p->v.value;
-          (*m_free)(ctx, 2, argv, ret);
-          if (!ctx.ok()) break;
-          m_cache->erase(p->k);
-          if (!--n) break;
-        }
-      }
-      if (n > 0) {
-        while (auto *p = it.next()) {
-          m_cache->erase(p->k);
-          if (!--n) break;
-        }
-      }
+  set(
+    key, value,
+    [&](const pjs::Value &key, const pjs::Value &value) {
+      if (!m_free) return true;
+      pjs::Value argv[2], ret;
+      argv[0] = key;
+      argv[1] = value;
+      (*m_free)(ctx, 2, argv, ret);
+      return ctx.ok();
     }
-  }
+  );
+}
+
+bool Cache::get(const pjs::Value &key, pjs::Value &value) {
+  return get(key, value, nullptr);
+}
+
+void Cache::set(const pjs::Value &key, const pjs::Value &value) {
+  set(key, value, nullptr);
 }
 
 bool Cache::find(const pjs::Value &key, pjs::Value &value) {
@@ -177,6 +155,63 @@ bool Cache::clear(pjs::Context &ctx) {
   }
   m_cache->clear();
   return true;
+}
+
+bool Cache::get(
+  const pjs::Value &key, pjs::Value &value,
+  const std::function<bool(pjs::Value &)> &allocate
+) {
+  auto now = (m_options.ttl > 0 ? utils::now() : 0);
+  Entry entry;
+  bool found = m_cache->use(key, entry);
+  if (found) {
+    if (m_options.ttl > 0) {
+      if (now >= entry.ttl) {
+        found = false;
+      }
+    }
+  }
+  if (!found) {
+    if (!allocate) return false;
+    if (!allocate(value)) return false;
+    entry.value = value;
+    entry.ttl = now + m_options.ttl;
+    m_cache->set(key, entry);
+    return true;
+  } else {
+    value = entry.value;
+    return true;
+  }
+}
+
+void Cache::set(
+  const pjs::Value &key, const pjs::Value &value,
+  const std::function<bool(const pjs::Value &, const pjs::Value &)> &free
+) {
+  auto now = (m_options.ttl > 0 ? utils::now() : 0);
+  Entry entry;
+  entry.value = value;
+  entry.ttl = now + m_options.ttl;
+  if (m_cache->set(key, entry)) {
+    if (m_options.size > 0 && m_cache->size() > m_options.size) {
+      int n = m_cache->size() - m_options.size;
+      pjs::OrderedHash<pjs::Value, Entry>::Iterator it(m_cache);
+      if (free) {
+        pjs::Value argv[2], ret;
+        while (auto *p = it.next()) {
+          if (!free(p->k, p->v.value)) break;
+          m_cache->erase(p->k);
+          if (!--n) break;
+        }
+      }
+      if (n > 0) {
+        while (auto *p = it.next()) {
+          m_cache->erase(p->k);
+          if (!--n) break;
+        }
+      }
+    }
+  }
 }
 
 //
@@ -592,6 +627,17 @@ void RoundRobinLoadBalancer::set(pjs::Str *target, int weight) {
 }
 
 auto RoundRobinLoadBalancer::select(const pjs::Value &key, Cache *unhealthy) -> pjs::Str* {
+  if (!key.is_undefined()) {
+    if (!m_target_cache) {
+      Cache::Options options;
+      m_target_cache = Cache::make(options);
+    }
+    pjs::Value target;
+    if (m_target_cache->get(key, target)) {
+      return target.s();
+    }
+  }
+
   double min = 0;
   Target *p = nullptr;
   int total_weight = 0;
@@ -619,6 +665,10 @@ auto RoundRobinLoadBalancer::select(const pjs::Value &key, Cache *unhealthy) -> 
       t.usage = 0;
     }
     m_total_hits = 0;
+  }
+
+  if (!key.is_undefined()) {
+    m_target_cache->set(key, p->id.get());
   }
 
   return p->id;
@@ -671,6 +721,17 @@ void LeastWorkLoadBalancer::set(pjs::Str *target, double weight) {
 }
 
 auto LeastWorkLoadBalancer::select(const pjs::Value &key, Cache *unhealthy) -> pjs::Str* {
+  if (!key.is_undefined()) {
+    if (!m_target_cache) {
+      Cache::Options options;
+      m_target_cache = Cache::make(options);
+    }
+    pjs::Value target;
+    if (m_target_cache->get(key, target)) {
+      return target.s();
+    }
+  }
+
   double min = 0;
   std::map<pjs::Ref<pjs::Str>, Target>::value_type *p = nullptr;
   for (auto &i : m_targets) {
@@ -688,6 +749,10 @@ auto LeastWorkLoadBalancer::select(const pjs::Value &key, Cache *unhealthy) -> p
   auto &t = p->second;
   t.hits++;
   t.usage = double(t.hits) / t.weight;
+
+  if (!key.is_undefined()) {
+    m_target_cache->set(key, p->first.get());
+  }
 
   return p->first;
 }
