@@ -56,8 +56,8 @@ public:
   auto getUint64(int field) const -> uint64_t;
   auto getSint32(int field) const -> int32_t;
   auto getSint64(int field) const -> int64_t;
-  auto getFixed32(int field) const -> uint32_t;
-  auto getFixed64(int field) const -> uint64_t;
+  auto getFixed32(int field) const -> int32_t;
+  auto getFixed64(int field) const -> int64_t;
   auto getSfixed32(int field) const -> int32_t;
   auto getSfixed64(int field) const -> int64_t;
   auto getBool(int field) const -> bool;
@@ -140,12 +140,16 @@ private:
 
   struct I32 {
     uint32_t bits;
+    I32() {}
     I32(uint64_t v) : bits(v) {}
+    bool read(Data::Reader &r) { return read_varint(r, bits); }
   };
 
   struct I64 {
     uint64_t bits;
+    I64() {}
     I64(uint64_t v) : bits(v) {}
+    bool read(Data::Reader &r) { return read_varint(r, bits); }
   };
 
   struct Float : public I32 {
@@ -196,14 +200,34 @@ private:
     T value() const { return (T)bits; }
   };
 
+  struct Fixed32 : public Int32 {
+    using Int32::Int32;
+    bool read(Data::Reader &r) { return read_uint32(r, bits); }
+  };
+
+  struct Fixed64 : public Int64 {
+    using Int64::Int64;
+    bool read(Data::Reader &r) { return read_uint64(r, bits); }
+  };
+
+  struct Sfixed32 : public Sint32 {
+    using Sint32::Sint32;
+    bool read(Data::Reader &r) { return read_uint32(r, bits); }
+  };
+
+  struct Sfixed64 : public Sint64 {
+    using Sint64::Sint64;
+    bool read(Data::Reader &r) { return read_uint64(r, bits); }
+  };
+
   struct Bool : public I64 {
     typedef bool T;
     using I64::I64;
     T value() const { return (T)bits; }
   };
 
-  template<class T>
-  typename T::T get_scalar(int field, WireType type) const;
+  template<class T> auto get_scalar(int field, WireType type) const -> typename T::T;
+  template<class T> auto get_scalar_array(int field, WireType type) const -> pjs::Array*;
 
   std::map<int, List<Record>> m_records;
 
@@ -212,6 +236,9 @@ private:
 
   static auto read_record(Data::Reader &r) -> Record*;
   static bool read_varint(Data::Reader &r, uint64_t &n);
+  static bool read_varint(Data::Reader &r, uint32_t &n);
+  static bool read_uint32(Data::Reader &r, uint32_t &n);
+  static bool read_uint64(Data::Reader &r, uint64_t &n);
 
   friend class pjs::ObjectTemplate<Message>;
 };

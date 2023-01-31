@@ -31,11 +31,33 @@ namespace pipy {
 namespace protobuf {
 
 template<class T>
-typename T::T Message::get_scalar(int field, WireType type) const {
+auto Message::get_scalar(int field, WireType type) const -> typename T::T {
   auto r = get_tail_record(field, type);
   if (!r) return 0;
-  T v(r->bits());
-  return v.value();
+  return T(r->bits()).value();
+}
+
+template<class T>
+auto Message::get_scalar_array(int field, WireType type) const -> pjs::Array* {
+  auto *a = pjs::Array::make();
+  for (auto *r = get_all_records(field, type); r; r = r->next()) {
+    if (r->type() == WireType::LEN) {
+      Data::Reader dr(r->data());
+      while (!dr.eof()) {
+        T value;
+        if (!value.read(dr)) {
+          a->retain();
+          a->release();
+          return nullptr;
+        }
+        pjs::Value v(value.value());
+        a->push(v);
+      }
+    } else {
+      pjs::Value v(T(r->bits()).value());
+    }
+  }
+  return a;
 }
 
 Message::~Message() {
@@ -86,20 +108,20 @@ auto Message::getSint64(int field) const -> int64_t {
   return get_scalar<Sint64>(field, WireType::VARINT);
 }
 
-auto Message::getFixed32(int field) const -> uint32_t {
-  return get_scalar<Uint32>(field, WireType::I32);
+auto Message::getFixed32(int field) const -> int32_t {
+  return get_scalar<Fixed32>(field, WireType::I32);
 }
 
-auto Message::getFixed64(int field) const -> uint64_t {
-  return get_scalar<Uint64>(field, WireType::I64);
+auto Message::getFixed64(int field) const -> int64_t {
+  return get_scalar<Fixed64>(field, WireType::I64);
 }
 
 auto Message::getSfixed32(int field) const -> int32_t {
-  return get_scalar<Int32>(field, WireType::I32);
+  return get_scalar<Sfixed32>(field, WireType::I32);
 }
 
 auto Message::getSfixed64(int field) const -> int64_t {
-  return get_scalar<Int64>(field, WireType::I64);
+  return get_scalar<Sfixed64>(field, WireType::I64);
 }
 
 auto Message::getBool(int field) const -> bool {
@@ -126,6 +148,88 @@ auto Message::getMessage(int field) const -> Message* {
   if (msg->deserialize(r->data())) return msg;
   msg->release();
   return nullptr;
+}
+
+auto Message::getFloatArray(int field) const -> pjs::Array* {
+  return get_scalar_array<Float>(field, WireType::I32);
+}
+
+auto Message::getDoubleArray(int field) const -> pjs::Array* {
+  return get_scalar_array<Double>(field, WireType::I64);
+}
+
+auto Message::getInt32Array(int field) const -> pjs::Array* {
+  return get_scalar_array<Int32>(field, WireType::VARINT);
+}
+
+auto Message::getInt64Array(int field) const -> pjs::Array* {
+  return get_scalar_array<Int64>(field, WireType::VARINT);
+}
+
+auto Message::getUint32Array(int field) const -> pjs::Array* {
+  return get_scalar_array<Uint32>(field, WireType::VARINT);
+}
+
+auto Message::getUint64Array(int field) const -> pjs::Array* {
+  return get_scalar_array<Uint64>(field, WireType::VARINT);
+}
+
+auto Message::getSint32Array(int field) const -> pjs::Array* {
+  return get_scalar_array<Sint32>(field, WireType::VARINT);
+}
+
+auto Message::getSint64Array(int field) const -> pjs::Array* {
+  return get_scalar_array<Sint64>(field, WireType::VARINT);
+}
+
+auto Message::getFixed32Array(int field) const -> pjs::Array* {
+  return get_scalar_array<Fixed32>(field, WireType::I32);
+}
+
+auto Message::getFixed64Array(int field) const -> pjs::Array* {
+  return get_scalar_array<Fixed64>(field, WireType::I64);
+}
+
+auto Message::getSfixed32Array(int field) const -> pjs::Array* {
+  return get_scalar_array<Sfixed32>(field, WireType::I32);
+}
+
+auto Message::getSfixed64Array(int field) const -> pjs::Array* {
+  return get_scalar_array<Sfixed64>(field, WireType::I64);
+}
+
+auto Message::getBoolArray(int field) const -> pjs::Array* {
+  return get_scalar_array<Bool>(field, WireType::VARINT);
+}
+
+auto Message::getStringArray(int field) const -> pjs::Array* {
+  auto *a = pjs::Array::make();
+  for (auto *r = get_all_records(field, WireType::LEN); r; r = r->next()) {
+    a->push(pjs::Str::make(r->data().to_string()));
+  }
+  return a;
+}
+
+auto Message::getBytesArray(int field) const -> pjs::Array* {
+  auto *a = pjs::Array::make();
+  for (auto *r = get_all_records(field, WireType::LEN); r; r = r->next()) {
+    a->push(Data::make(r->data()));
+  }
+  return a;
+}
+
+auto Message::getMessageArray(int field) const -> pjs::Array* {
+  auto *a = pjs::Array::make();
+  for (auto *r = get_all_records(field, WireType::LEN); r; r = r->next()) {
+    auto *msg = Message::make();
+    a->push(msg);
+    if (!msg->deserialize(r->data())) {
+      a->retain();
+      a->release();
+      return nullptr;
+    }
+  }
+  return a;
 }
 
 bool Message::deserialize(const Data &data) {
@@ -162,23 +266,14 @@ auto Message::read_record(Data::Reader &r) -> Record* {
   auto index = tag >> 3;
   switch (tag & 7) {
     case 0: {
-      uint64_t value;
-      if (!read_varint(r, value)) return nullptr;
-      return new Record(index, WireType::VARINT, value);
+      uint64_t data;
+      if (!read_varint(r, data)) return nullptr;
+      return new Record(index, WireType::VARINT, data);
     }
     case 1: {
-      uint8_t data[8];
-      if (r.read(8, data) < 8) return nullptr;
-      return new Record(index, WireType::I64, (
-        ((uint64_t)data[7] << 56)|
-        ((uint64_t)data[6] << 48)|
-        ((uint64_t)data[5] << 40)|
-        ((uint64_t)data[4] << 32)|
-        ((uint64_t)data[3] << 24)|
-        ((uint64_t)data[2] << 16)|
-        ((uint64_t)data[1] <<  8)|
-        ((uint64_t)data[0]      )
-      ));
+      uint64_t data;
+      if (!read_uint64(r, data)) return nullptr;
+      return new Record(index, WireType::I64, data);
     }
     case 2: {
       Data data;
@@ -188,14 +283,9 @@ auto Message::read_record(Data::Reader &r) -> Record* {
       return new Record(index, WireType::LEN, data);
     }
     case 5: {
-      uint8_t data[4];
-      if (r.read(4, data) < 4) return nullptr;
-      return new Record(index, WireType::I32, (
-        ((uint64_t)data[3] << 24)|
-        ((uint64_t)data[2] << 16)|
-        ((uint64_t)data[1] <<  8)|
-        ((uint64_t)data[0]      )
-      ));
+      uint32_t data;
+      if (!read_uint32(r, data)) return nullptr;
+      return new Record(index, WireType::I32, data);
     }
     default: return nullptr;
   }
@@ -210,6 +300,41 @@ bool Message::read_varint(Data::Reader &r, uint64_t &n) {
     if (!(c & 0x80)) return true;
   }
   return false;
+}
+
+bool Message::read_varint(Data::Reader &r, uint32_t &n) {
+  uint64_t data;
+  if (!read_varint(r, data)) return false;
+  n = (uint32_t)data;
+  return true;
+}
+
+bool Message::read_uint32(Data::Reader &r, uint32_t &n) {
+  uint8_t buf[4];
+  if (r.read(4, buf) < 4) return false;
+  n = (
+    ((uint32_t)buf[3] << 24)|
+    ((uint32_t)buf[2] << 16)|
+    ((uint32_t)buf[1] <<  8)|
+    ((uint32_t)buf[0]      )
+  );
+  return true;
+}
+
+bool Message::read_uint64(Data::Reader &r, uint64_t &n) {
+  uint8_t buf[8];
+  if (r.read(8, buf) < 8) return false;
+  n = (
+    ((uint64_t)buf[7] << 56)|
+    ((uint64_t)buf[6] << 48)|
+    ((uint64_t)buf[5] << 40)|
+    ((uint64_t)buf[4] << 32)|
+    ((uint64_t)buf[3] << 24)|
+    ((uint64_t)buf[2] << 16)|
+    ((uint64_t)buf[1] <<  8)|
+    ((uint64_t)buf[0]      )
+  );
+  return true;
 }
 
 } // namespace protobuf

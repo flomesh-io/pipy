@@ -1160,6 +1160,7 @@ public:
   Value(bool b) : m_t(Type::Boolean) { m_v.b = b; }
   Value(int n) : m_t(Type::Number) { m_v.n = n; }
   Value(unsigned int n) : m_t(Type::Number) { m_v.n = n; }
+  Value(int64_t n) : m_t(Type::Number) { m_v.n = n; }
   Value(uint64_t n) : m_t(Type::Number) { m_v.n = n; }
   Value(double n) : m_t(Type::Number) { m_v.n = n; }
   Value(const char *s) : m_t(Type::String) { m_v.s = Str::make(s)->retain(); }
