@@ -284,7 +284,7 @@ static auto read_str(Data::Reader &dr, char ending, const StrMap &strmap, char *
       if (found && found != pjs::Str::empty) {
         return found;
       } else {
-        return i > 0 ? pjs::Str::make(buf, i) : nullptr;
+        return i > 0 ? pjs::Str::make(buf, i) : pjs::Str::empty.get();
       }
     }
     if (c == ' ' && !i) continue;
