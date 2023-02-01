@@ -1203,6 +1203,7 @@ public:
   void set(bool b) { release(); m_t = Type::Boolean; m_v.b = b; }
   void set(int n) { release(); m_t = Type::Number; m_v.n = n; }
   void set(unsigned int n) { release(); m_t = Type::Number; m_v.n = n; }
+  void set(int64_t n) { release(); m_t = Type::Number; m_v.n = n; }
   void set(uint64_t n) { release(); m_t = Type::Number; m_v.n = n; }
   void set(double n) { release(); m_t = Type::Number; m_v.n = n; }
   void set(const char *s) { release(); m_t = Type::String; m_v.s = Str::make(s)->retain(); }

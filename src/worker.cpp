@@ -46,6 +46,7 @@
 #include "api/netmask.hpp"
 #include "api/os.hpp"
 #include "api/pipy.hpp"
+#include "api/protobuf.hpp"
 #include "api/stats.hpp"
 #include "api/url.hpp"
 #include "api/xml.hpp"
@@ -115,6 +116,9 @@ template<> void ClassDef<Global>::init() {
 
   // XML
   variable("XML", class_of<XML>());
+
+  // Protobuf
+  variable("protobuf", class_of<Protobuf>());
 
   // DNS
   variable("DNS", class_of<DNS>());
