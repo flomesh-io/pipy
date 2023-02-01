@@ -59,10 +59,6 @@ public:
     auto getUint64(int field) const -> uint64_t;
     auto getSint32(int field) const -> int32_t;
     auto getSint64(int field) const -> int64_t;
-    auto getFixed32(int field) const -> int32_t;
-    auto getFixed64(int field) const -> int64_t;
-    auto getSfixed32(int field) const -> int32_t;
-    auto getSfixed64(int field) const -> int64_t;
     auto getBool(int field) const -> bool;
     auto getString(int field) const -> pjs::Str*;
     auto getBytes(int field) const -> const Data*;
@@ -83,8 +79,8 @@ public:
     auto getStringArray(int field) const -> pjs::Array*;
     auto getBytesArray(int field) const -> pjs::Array*;
     auto getMessageArray(int field) const -> pjs::Array*;
-    void setDouble(int field, double value);
     void setFloat(int field, float value);
+    void setDouble(int field, double value);
     void setInt32(int field, int32_t value);
     void setInt64(int field, int64_t value);
     void setUint32(int field, uint32_t value);
@@ -115,7 +111,7 @@ public:
     void setStringArray(int field, pjs::Array *values);
     void setBytesArray(int field, pjs::Array *values);
     void setMessageArray(int field, pjs::Array *values);
-    void serialize(Data &buffer);
+    void serialize(Data &data);
     bool deserialize(const Data &data);
 
   private:
@@ -145,104 +141,129 @@ public:
     struct I32 {
       uint32_t bits;
       I32() {}
-      I32(uint64_t v) : bits(v) {}
+      I32(Record *r) : bits(r->bits()) {}
       bool read(Data::Reader &r) { return read_varint(r, bits); }
+      void write(Data::Builder &db) { write_varint(db, bits); }
     };
 
     struct I64 {
       uint64_t bits;
       I64() {}
-      I64(uint64_t v) : bits(v) {}
+      I64(Record *r) : bits(r->bits()) {}
       bool read(Data::Reader &r) { return read_varint(r, bits); }
+      void write(Data::Builder &db) { write_varint(db, bits); }
     };
 
     struct Float : public I32 {
       typedef float T;
       using I32::I32;
+      Float(T v) { bits = *reinterpret_cast<const uint32_t*>(&v); }
       T value() const { return *reinterpret_cast<const T*>(&bits); }
     };
 
     struct Double : public I64 {
       typedef double T;
       using I64::I64;
+      Double(T v) { bits = *reinterpret_cast<const uint64_t*>(&v); }
       T value() const { return *reinterpret_cast<const T*>(&bits); }
     };
 
     struct Int32 : public I32 {
       typedef int32_t T;
       using I32::I32;
+      Int32(T v) { bits = v; }
       T value() const { return (T)bits; }
     };
 
     struct Int64 : public I64 {
       typedef int64_t T;
       using I64::I64;
+      Int64(T v) { bits = v; }
       T value() const { return (T)bits; }
     };
 
     struct Uint32 : public I32 {
       typedef int32_t T;
       using I32::I32;
+      Uint32(T v) { bits = v; }
       T value() const { return (T)bits; }
     };
 
     struct Uint64 : public I64 {
       typedef int64_t T;
       using I64::I64;
+      Uint64(T v) { bits = v; }
       T value() const { return (T)bits; }
     };
 
     struct Sint32 : public I32 {
       typedef int32_t T;
       using I32::I32;
+      Sint32(T v) { bits = encode_sint(v); }
       T value() const { return decode_sint(bits); }
     };
 
     struct Sint64 : public I64 {
       typedef int64_t T;
       using I64::I64;
+      Sint64(T v) { bits = encode_sint(v); }
       T value() const { return decode_sint(bits); }
     };
 
-    struct Fixed32 : public Int32 {
+    struct Fixed32 : public Uint32 {
+      using Uint32::Uint32;
+      Fixed32(T v) { bits = v; }
+      bool read(Data::Reader &r) { return read_uint32(r, bits); }
+      void write(Data::Builder &db) { write_uint32(db, bits); }
+    };
+
+    struct Fixed64 : public Uint64 {
+      using Uint64::Uint64;
+      Fixed64(T v) { bits = v; }
+      bool read(Data::Reader &r) { return read_uint64(r, bits); }
+      void write(Data::Builder &db) { write_uint64(db, bits); }
+    };
+
+    struct Sfixed32 : public Int32 {
       using Int32::Int32;
+      Sfixed32(T v) { bits = v; }
       bool read(Data::Reader &r) { return read_uint32(r, bits); }
+      void write(Data::Builder &db) { write_uint32(db, bits); }
     };
 
-    struct Fixed64 : public Int64 {
+    struct Sfixed64 : public Int64 {
       using Int64::Int64;
+      Sfixed64(T v) { bits = v; }
       bool read(Data::Reader &r) { return read_uint64(r, bits); }
-    };
-
-    struct Sfixed32 : public Sint32 {
-      using Sint32::Sint32;
-      bool read(Data::Reader &r) { return read_uint32(r, bits); }
-    };
-
-    struct Sfixed64 : public Sint64 {
-      using Sint64::Sint64;
-      bool read(Data::Reader &r) { return read_uint64(r, bits); }
+      void write(Data::Builder &db) { write_uint64(db, bits); }
     };
 
     struct Bool : public I64 {
       typedef bool T;
       using I64::I64;
+      Bool(T v) { bits = v; }
       T value() const { return (T)bits; }
     };
 
-    template<class T> auto get_scalar(int field, WireType type) const -> typename T::T;
-    template<class T> auto get_scalar_array(int field, WireType type) const -> pjs::Array*;
+    template<class T> auto get_scalar(int field) const -> typename T::T;
+    template<class T> auto get_scalar_array(int field) const -> pjs::Array*;
+    template<class T> void set_scalar(int field, WireType type, typename T::T value);
+    template<class T> void set_scalar_array(int field, pjs::Array *values);
 
     std::map<int, List<Record>> m_records;
 
-    auto get_all_records(int field, WireType type) const -> Record*;
-    auto get_tail_record(int field, WireType type) const -> Record*;
+    auto get_all_records(int field) const -> Record*;
+    auto get_tail_record(int field) const -> Record*;
+    void set_record(int field, Record *rec);
 
     static auto read_record(Data::Reader &r) -> Record*;
     static bool read_varint(Data::Reader &r, uint64_t &n);
     static bool read_varint(Data::Reader &r, uint32_t &n);
     static bool read_uint32(Data::Reader &r, uint32_t &n);
     static bool read_uint64(Data::Reader &r, uint64_t &n);
+    static void write_varint(Data::Builder &db, uint64_t n);
+    static void write_uint32(Data::Builder &db, uint32_t n);
+    static void write_uint64(Data::Builder &db, uint64_t n);
     static auto decode_sint(uint32_t n) -> int32_t;
     static auto decode_sint(uint64_t n) -> int64_t;
     static auto encode_sint(int32_t n) -> uint32_t;
