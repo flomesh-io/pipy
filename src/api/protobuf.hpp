@@ -191,13 +191,13 @@ private:
   struct Sint32 : public I32 {
     typedef int32_t T;
     using I32::I32;
-    T value() const { return (T)bits; }
+    T value() const { return decode_sint(bits); }
   };
 
   struct Sint64 : public I64 {
     typedef int64_t T;
     using I64::I64;
-    T value() const { return (T)bits; }
+    T value() const { return decode_sint(bits); }
   };
 
   struct Fixed32 : public Int32 {
@@ -239,6 +239,10 @@ private:
   static bool read_varint(Data::Reader &r, uint32_t &n);
   static bool read_uint32(Data::Reader &r, uint32_t &n);
   static bool read_uint64(Data::Reader &r, uint64_t &n);
+  static auto decode_sint(uint32_t n) -> int32_t;
+  static auto decode_sint(uint64_t n) -> int64_t;
+  static auto encode_sint(int32_t n) -> uint32_t;
+  static auto encode_sint(int64_t n) -> uint64_t;
 
   friend class pjs::ObjectTemplate<Message>;
 };

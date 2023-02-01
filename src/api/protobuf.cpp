@@ -337,6 +337,22 @@ bool Message::read_uint64(Data::Reader &r, uint64_t &n) {
   return true;
 }
 
+auto Message::decode_sint(uint32_t n) -> int32_t {
+  return (n >> 1) ^ -(n & 1);
+}
+
+auto Message::decode_sint(uint64_t n) -> int64_t {
+  return (n >> 1) ^ -(n & 1);
+}
+
+auto Message::encode_sint(int32_t n) -> uint32_t {
+  return (n << 1) ^ (n >> 31);
+}
+
+auto Message::encode_sint(int64_t n) -> uint64_t {
+  return (n << 1) ^ (n >> 63);
+}
+
 } // namespace protobuf
 } // namespace pipy
 
