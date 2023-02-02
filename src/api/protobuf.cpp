@@ -31,6 +31,28 @@ namespace pipy {
 
 static Data::Producer s_dp("Protobuf");
 
+//
+// Protobuf
+//
+
+auto Protobuf::decode(const Data &data) -> Message* {
+  auto msg = Protobuf::Message::make();
+  if (!msg->deserialize(data)) {
+    msg->retain();
+    msg->release();
+    return nullptr;
+  }
+  return msg;
+}
+
+void Protobuf::encode(Message *msg, Data &data) {
+  msg->serialize(data);
+}
+
+//
+// Protobuf::Message
+//
+
 template<class T>
 auto Protobuf::Message::get_scalar(int field) const -> typename T::T {
   auto r = get_tail_record(field);
@@ -291,7 +313,7 @@ void Protobuf::Message::setBool(int field, bool value) {
 }
 
 void Protobuf::Message::setString(int field, pjs::Str *value) {
-  Data buf(value->c_str(), value->size(), &s_dp);
+  Data buf(value->str(), &s_dp);
   set_record(field, new Record(field, WireType::LEN, buf));
 }
 
@@ -358,15 +380,78 @@ void Protobuf::Message::setBoolArray(int field, pjs::Array *values) {
 }
 
 void Protobuf::Message::setStringArray(int field, pjs::Array *values) {
+  auto &list = m_records[field];
+  clear_records(list);
+  values->iterate_all(
+    [&](pjs::Value &v, int) {
+      auto *s = v.to_string();
+      Data buf(s->str(), &s_dp);
+      list.push(new Record(field, WireType::LEN, buf));
+      s->release();
+    }
+  );
 }
 
 void Protobuf::Message::setBytesArray(int field, pjs::Array *values) {
+  auto &list = m_records[field];
+  clear_records(list);
+  values->iterate_all(
+    [&](pjs::Value &v, int) {
+      if (v.is<Data>()) {
+        list.push(new Record(field, WireType::LEN, *v.as<Data>()));
+      } else {
+        list.push(new Record(field, WireType::LEN, Data()));
+      }
+    }
+  );
 }
 
 void Protobuf::Message::setMessageArray(int field, pjs::Array *values) {
+  auto &list = m_records[field];
+  clear_records(list);
+  values->iterate_all(
+    [&](pjs::Value &v, int) {
+      if (v.is<Protobuf::Message>()) {
+        Data buf;
+        v.as<Protobuf::Message>()->serialize(buf);
+        list.push(new Record(field, WireType::LEN, buf));
+      } else {
+        list.push(new Record(field, WireType::LEN, Data()));
+      }
+    }
+  );
 }
 
 void Protobuf::Message::serialize(Data &data) {
+  Data::Builder db(data, &s_dp);
+  for (auto &p : m_records) {
+    auto tag = (uint64_t)p.first << 3;
+    auto *r = p.second.head();
+    while (r) {
+      switch (r->type()) {
+        case WireType::VARINT:
+          write_varint(db, tag);
+          write_varint(db, r->bits());
+          break;
+        case WireType::I32:
+          write_varint(db, tag | 5);
+          write_uint32(db, r->bits());
+          break;
+        case WireType::I64:
+          write_varint(db, tag | 1);
+          write_uint64(db, r->bits());
+          break;
+        case WireType::LEN:
+          write_varint(db, tag | 2);
+          write_varint(db, r->data().size());
+          db.push(r->data(), 0);
+          break;
+        default: continue;
+      }
+      r = r->next();
+    }
+  }
+  db.flush();
 }
 
 bool Protobuf::Message::deserialize(const Data &data) {
@@ -395,11 +480,15 @@ auto Protobuf::Message::get_tail_record(int field) const -> Record* {
 
 void Protobuf::Message::set_record(int field, Record *rec) {
   auto &list = m_records[field];
+  clear_records(list);
+  list.push(rec);
+}
+
+void Protobuf::Message::clear_records(List<Record> &list) {
   while (auto *r = list.head()) {
     list.remove(r);
     delete r;
   }
-  list.push(rec);
 }
 
 auto Protobuf::Message::read_record(Data::Reader &r) -> Record* {
@@ -533,7 +622,22 @@ using namespace pipy;
 
 template<> void ClassDef<Protobuf>::init() {
   ctor();
+
   variable("Message", class_of<Constructor<Protobuf::Message>>());
+
+  method("decode", [](Context &ctx, Object *obj, Value &ret) {
+    pipy::Data *data;
+    if (!ctx.arguments(1, &data)) return;
+    ret.set(Protobuf::decode(*data));
+  });
+
+  method("encode", [](Context &ctx, Object *obj, Value &ret) {
+    Protobuf::Message *msg;
+    if (!ctx.arguments(1, &msg)) return;
+    pipy::Data data;
+    Protobuf::encode(msg, data);
+    ret.set(pipy::Data::make(std::move(data)));
+  });
 }
 
 //
@@ -553,20 +657,7 @@ template<> void EnumDef<Protobuf::WireType>::init() {
 //
 
 template<> void ClassDef<Protobuf::Message>::init() {
-  ctor([](Context &ctx) -> Object* {
-    pipy::Data *data = nullptr;
-    if (!ctx.arguments(0, &data)) return nullptr;
-    auto *obj = Protobuf::Message::make();
-    if (data) {
-      if (!obj->deserialize(*data)) {
-        obj->retain();
-        obj->release();
-        ctx.error("Protobuf deserializing error");
-        return nullptr;
-      }
-    }
-    return obj;
-  });
+  ctor();
 
   method("getWireType", [](Context &ctx, Object *obj, Value &ret) {
     int field;
@@ -847,6 +938,30 @@ template<> void ClassDef<Protobuf::Message>::init() {
     ret.set(obj);
   });
 
+  method("setString", [](Context &ctx, Object *obj, Value &ret) {
+    int field;
+    Str *value;
+    if (!ctx.arguments(2, &field, &value)) return;
+    obj->as<Protobuf::Message>()->setString(field, value);
+    ret.set(obj);
+  });
+
+  method("setBytes", [](Context &ctx, Object *obj, Value &ret) {
+    int field;
+    pipy::Data *value;
+    if (!ctx.arguments(2, &field, &value)) return;
+    obj->as<Protobuf::Message>()->setBytes(field, *value);
+    ret.set(obj);
+  });
+
+  method("setMessage", [](Context &ctx, Object *obj, Value &ret) {
+    int field;
+    Protobuf::Message *value;
+    if (!ctx.arguments(2, &field, &value)) return;
+    obj->as<Protobuf::Message>()->setMessage(field, value);
+    ret.set(obj);
+  });
+
   method("setFloatArray", [](Context &ctx, Object *obj, Value &ret) {
     int field;
     Array *values;
@@ -948,6 +1063,30 @@ template<> void ClassDef<Protobuf::Message>::init() {
     Array *values;
     if (!ctx.arguments(2, &field, &values)) return;
     obj->as<Protobuf::Message>()->setBoolArray(field, values);
+    ret.set(obj);
+  });
+
+  method("setStringArray", [](Context &ctx, Object *obj, Value &ret) {
+    int field;
+    Array *values;
+    if (!ctx.arguments(2, &field, &values)) return;
+    obj->as<Protobuf::Message>()->setStringArray(field, values);
+    ret.set(obj);
+  });
+
+  method("setBytesArray", [](Context &ctx, Object *obj, Value &ret) {
+    int field;
+    Array *values;
+    if (!ctx.arguments(2, &field, &values)) return;
+    obj->as<Protobuf::Message>()->setBytesArray(field, values);
+    ret.set(obj);
+  });
+
+  method("setMessageArray", [](Context &ctx, Object *obj, Value &ret) {
+    int field;
+    Array *values;
+    if (!ctx.arguments(2, &field, &values)) return;
+    obj->as<Protobuf::Message>()->setMessageArray(field, values);
     ret.set(obj);
   });
 }

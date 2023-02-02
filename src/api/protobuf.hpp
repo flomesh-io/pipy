@@ -95,8 +95,8 @@ public:
     void setString(int field, pjs::Str *value);
     void setBytes(int field, const Data &value);
     void setMessage(int field, Message *value);
-    void setDoubleArray(int field, pjs::Array *values);
     void setFloatArray(int field, pjs::Array *values);
+    void setDoubleArray(int field, pjs::Array *values);
     void setInt32Array(int field, pjs::Array *values);
     void setInt64Array(int field, pjs::Array *values);
     void setUint32Array(int field, pjs::Array *values);
@@ -111,11 +111,12 @@ public:
     void setStringArray(int field, pjs::Array *values);
     void setBytesArray(int field, pjs::Array *values);
     void setMessageArray(int field, pjs::Array *values);
-    void serialize(Data &data);
-    bool deserialize(const Data &data);
 
   private:
     ~Message();
+
+    void serialize(Data &data);
+    bool deserialize(const Data &data);
 
     //
     // Message::Record
@@ -255,6 +256,7 @@ public:
     auto get_all_records(int field) const -> Record*;
     auto get_tail_record(int field) const -> Record*;
     void set_record(int field, Record *rec);
+    void clear_records(List<Record> &list);
 
     static auto read_record(Data::Reader &r) -> Record*;
     static bool read_varint(Data::Reader &r, uint64_t &n);
@@ -270,7 +272,11 @@ public:
     static auto encode_sint(int64_t n) -> uint64_t;
 
     friend class pjs::ObjectTemplate<Message>;
+    friend class Protobuf;
   };
+
+  static auto decode(const Data &data) -> Message*;
+  static void encode(Message *msg, Data &data);
 };
 
 } // namespace pipy
