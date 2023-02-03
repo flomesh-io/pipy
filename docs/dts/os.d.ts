@@ -6,6 +6,14 @@ interface OS {
   env: { [name: string]: string };
 
   /**
+   * List filenames in a directory.
+   *
+   * @param filename Pathname of the directory to read.
+   * @returns An array of filenames contained in that directory.
+   */
+  readDir(filename: string): string[];
+
+  /**
    * Read the entire content of a file.
    *
    * @param filename Pathname of the file to read.

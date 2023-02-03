@@ -24,6 +24,7 @@
  */
 
 #include "os.hpp"
+#include "fs.hpp"
 #include "data.hpp"
 #include "log.hpp"
 
@@ -61,6 +62,20 @@ using namespace pipy;
 
 template<> void ClassDef<OS>::init() {
   ctor();
+
+  // os.readDir
+  method("readDir", [](Context &ctx, Object*, Value &ret) {
+    Str *pathname;
+    if (!ctx.arguments(1, &pathname)) return;
+    std::list<std::string> names;
+    fs::read_dir(pathname->str(), names);
+    auto a = Array::make(names.size());
+    auto i = 0;
+    for (auto &s : names) {
+      a->set(i++, Str::make(std::move(s)));
+    }
+    ret.set(a);
+  });
 
   // os.readFile
   method("readFile", [](Context &ctx, Object*, Value &ret) {
