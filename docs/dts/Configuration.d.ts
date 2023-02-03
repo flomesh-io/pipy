@@ -98,19 +98,6 @@ interface Configuration {
   listen(port: number | null, options?: ListenOptions): Configuration;
 
   /**
-   * Creates a _file pipeline layout_ for reading from a file.
-   *
-   * A _file pipeline_ has the following input/output:
-   *
-   * - **INPUT** - _Data_ stream from the file.
-   * - **OUTPUT** - Discarded.
-   *
-   * @param filename Pathname of the file to read from. Can be `"-"` for reading from the standard input.
-   * @returns The same _Configuration_ object.
-   */
-  read(filename: string): Configuration;
-
-  /**
    * Creates a _timer pipeline layout_ or a _signal pipeline layout_ for a periodic job or a signal.
    *
    * A _timer pipeline_ or a _signal pipeline_ has the following input/output:
@@ -1163,6 +1150,20 @@ interface Configuration {
    * @returns The same _Configuration_ object.
    */
   print(): Configuration;
+
+  /**
+   * Appends a _read_ filter to the current pipeline layout.
+   *
+   * A _read_ filter reads from a file and outputs its content as a _Data_ stream.
+   *
+   * - **INPUT** - Any types of _Events_.
+   * - **OUTPUT** - File content as a _Data_ stream.
+   *
+   * @param filename Pathname to read from or a callback function that returns the pathname.
+   *   Can be `"-"` for reading from the standard input.
+   * @returns The same _Configuration_ object.
+   */
+  read(filename: string | (() => string)): Configuration;
 
   /**
    * Appends a _replaceData_ filter to the current pipeline layout.

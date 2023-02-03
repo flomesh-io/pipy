@@ -7,18 +7,26 @@ api: Configuration.read
 
 <Summary/>
 
-The pathname of the file to read is specified in the first parameter. It can be `"-"` for reading from the standard input.
+<FilterDiagram
+  name="read"
+  input="Event"
+  output="Data"
+/>
 
-After calling this method on a _Configuration_, the newly created pipeline layout would become current. Any _filter-creating_ methods called after this point would append filters to that pipeline layout, until another _pipeline-layout-creating_ method is called.
+The specified file is opened at the first received input event, whatever type of event it is. The filter's output has only _Data_ events from the file's content, ended with a _StreamEnd_ event. All input events are simply discarded.
+
+The pathname of the file to read is specified in the first parameter. It can be a function that returns a pathname. The pathname can be `"-"` for reading from the standard input.
 
 ## Syntax
 
 ``` js
 pipy()
+  .pipeline()
   .read(filename)
-  .filterA()
-  .filterB()
-  // ...
+
+pipy()
+  .pipeline()
+  .read(() => getFilename())
 ```
 
 ## Parameters
@@ -29,14 +37,13 @@ pipy()
 
 ``` js
 pipy()
-
+  .task()
+  .onStart(() => new Message)
   .read('/path/to/input.txt') // Open and read from file /path/to/input.txt
-  .dump() // Add filter, dump to stdout whatever is in the file
+  .dump() // Dump to stdout whatever is in the file
 ```
 
 ## See Also
 
 * [Configuration](/reference/api/Configuration)
-* [listen()](/reference/api/Configuration/listen)
-* [task()](/reference/api/Configuration/task)
-* [pipeline()](/reference/api/Configuration/pipeline)
+* [tee()](/reference/api/Configuration/tee)

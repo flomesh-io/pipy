@@ -68,16 +68,12 @@ An input stream is processed through a chain of **filters** inside of Pipy. Each
   <SvgPipelineFilters/>
 </div>
 
-A chain of filters is called a **pipeline**. There are 5 types of pipelines, categorized
+A chain of filters is called a **pipeline**. There are 4 types of pipelines, categorized
 by various input sources:
 
 ### Port pipeline
 
 A **port pipeline** is created whenever there's an incoming TCP connection (or a UDP virtual session) on a listening port. It then reads **Data** events from the connection, processes them, and writes output back to the client. This resembles the widely adopted "_request and response_" communication model as in HTTP, where the input to the pipeline is the requests and the output from the pipeline is the responses. Every incoming connection to Pipy has a dedicated _port pipeline_ to it, handling the two-way communication happening in that connection.
-
-### File pipeline
-
-A **file pipeline** is created to read from a file. The input to the pipeline is the data from that file, in the form of a series of **Data** events. Any output from the pipeline is simply discarded.
 
 ### Timer pipeline
 
