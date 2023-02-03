@@ -23,68 +23,38 @@
  *  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef READER_HPP
-#define READER_HPP
+#ifndef READ_HPP
+#define READ_HPP
 
-#include "pjs/pjs.hpp"
-#include "list.hpp"
-#include "event.hpp"
-
-#include <string>
+#include "filter.hpp"
+#include "fstream.hpp"
 
 namespace pipy {
 
 class File;
-class FileStream;
-class PipelineLayout;
 
 //
-// Reader
+// Read
 //
 
-class Reader {
+class Read : public Filter {
 public:
-  static auto make(const std::string &pathname, PipelineLayout *layout) -> Reader* {
-    return new Reader(pathname, layout);
-  }
-
-  void start();
+  Read(const pjs::Value &pathname);
 
 private:
-  Reader(const std::string &pathname, PipelineLayout *layout);
-  ~Reader();
+  Read(const Read &r);
+  ~Read();
 
-  //
-  // Reader::FileReader
-  //
+  virtual auto clone() -> Filter* override;
+  virtual void reset() override;
+  virtual void process(Event *evt) override;
+  virtual void dump(Dump &d) override;
 
-  class FileReader :
-    public pjs::RefCount<FileReader>,
-    public pjs::Pooled<FileReader>,
-    public List<FileReader>::Item,
-    public EventTarget
-  {
-  public:
-    FileReader(Reader *reader, const std::string &pathname);
-
-    void start();
-
-  private:
-    virtual void on_event(Event *evt) override;
-
-    Reader* m_reader;
-    pjs::Ref<File> m_file;
-    pjs::Ref<FileStream> m_stream;
-    pjs::Ref<Pipeline> m_pipeline;
-  };
-
-  std::string m_pathname;
-  pjs::Ref<PipelineLayout> m_pipeline_layout;
-  List<FileReader> m_readers;
-
-  friend class Worker;
+  pjs::Value m_pathname;
+  pjs::Ref<File> m_file;
+  bool m_started = false;
 };
 
-} // namespace pipy
+#endif // READ_HPP
 
-#endif // READER_HPP
+} // namespace pipy

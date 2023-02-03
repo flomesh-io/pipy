@@ -27,7 +27,6 @@
 #include "pipeline.hpp"
 #include "module.hpp"
 #include "listener.hpp"
-#include "reader.hpp"
 #include "task.hpp"
 #include "context.hpp"
 #include "worker.hpp"
@@ -65,6 +64,7 @@
 #include "filters/pack.hpp"
 #include "filters/print.hpp"
 #include "filters/proxy-protocol.hpp"
+#include "filters/read.hpp"
 #include "filters/replace-body.hpp"
 #include "filters/replace-event.hpp"
 #include "filters/replace-message.hpp"
@@ -332,6 +332,10 @@ void FilterConfigurator::print() {
   append_filter(new Print());
 }
 
+void FilterConfigurator::read(const pjs::Value &pathname) {
+  append_filter(new Read(pathname));
+}
+
 void FilterConfigurator::replace_body(const pjs::Value &replacement, int size_limit) {
   append_filter(new ReplaceBody(replacement, size_limit));
 }
@@ -533,15 +537,6 @@ void Configuration::listen(const std::string &port, pjs::Object *options) {
   FilterConfigurator::set_pipeline_config(&config);
 }
 
-void Configuration::read(const std::string &pathname) {
-  check_integrity();
-  m_readers.emplace_back();
-  auto &config = m_readers.back();
-  config.index = next_pipeline_index();
-  config.pathname = pathname;
-  FilterConfigurator::set_pipeline_config(&config);
-}
-
 void Configuration::task(const std::string &when) {
   check_integrity();
   std::string name("Task #");
@@ -669,12 +664,6 @@ void Configuration::apply(JSModule *mod) {
     worker->add_listener(listener, p, i.options);
   }
 
-  for (auto &i : m_readers) {
-    auto p = make_pipeline(i.index, "", i.pathname, i);
-    auto r = Reader::make(i.pathname, p);
-    worker->add_reader(r);
-  }
-
   for (auto &i : m_tasks) {
     auto p = make_pipeline(i.index, "", i.name, i);
     auto t = Task::make(i.when, p);
@@ -722,15 +711,6 @@ void Configuration::draw(Graph &g) {
     p.label += std::to_string(i.port);
     p.label += " at ";
     p.label += i.ip;
-    add_filters(p, i.filters);
-    g.add_pipeline(std::move(p));
-  }
-
-  for (const auto &i : m_readers) {
-    Graph::Pipeline p;
-    p.index = i.index;
-    p.label = "Read ";
-    p.label += i.pathname;
     add_filters(p, i.filters);
     g.add_pipeline(std::move(p));
   }
@@ -1704,6 +1684,18 @@ template<> void ClassDef<FilterConfigurator>::init() {
   method("print", [](Context &ctx, Object *thiz, Value &result) {
     try {
       thiz->as<FilterConfigurator>()->print();
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // FilterConfigurator.read
+  method("read", [](Context &ctx, Object *thiz, Value &result) {
+    Value pathname;
+    if (!ctx.arguments(1, &pathname)) return;
+    try {
+      thiz->as<FilterConfigurator>()->read(pathname);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

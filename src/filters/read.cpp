@@ -23,72 +23,63 @@
  *  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include "reader.hpp"
+#include "read.hpp"
 #include "file.hpp"
 #include "fstream.hpp"
-#include "pipeline.hpp"
 
 namespace pipy {
 
 //
-// Reader
+// Read
 //
 
-Reader::Reader(const std::string &pathname, PipelineLayout *layout)
+Read::Read(const pjs::Value &pathname)
   : m_pathname(pathname)
-  , m_pipeline_layout(layout)
-{
-  auto *r = new FileReader(this, pathname);
-  r->retain();
-  m_readers.push(r);
-}
-
-Reader::~Reader() {
-  while (auto r = m_readers.head()) {
-    m_readers.remove(r);
-    r->release();
-  }
-}
-
-void Reader::start() {
-  for (auto *r = m_readers.head(); r; r = r->next()) {
-    r->start();
-  }
-}
-
-//
-// Reader::FileReader
-//
-
-Reader::FileReader::FileReader(Reader *reader, const std::string &pathname)
-  : m_reader(reader)
-  , m_file(File::make(pathname))
 {
 }
 
-void Reader::FileReader::start() {
-  m_file->open_read(
-    [this](FileStream *fs) {
-      if (fs) {
-        auto ppl = m_reader->m_pipeline_layout.get();
-        auto p = Pipeline::make(ppl, ppl->new_context());
-        fs->chain(EventTarget::input());
-        m_pipeline = p;
-        m_stream = fs;
-        p->start();
+Read::Read(const Read &r)
+  : m_pathname(r.m_pathname)
+{
+}
+
+Read::~Read()
+{
+}
+
+void Read::dump(Dump &d) {
+  Filter::dump(d);
+  d.name = "read";
+}
+
+auto Read::clone() -> Filter* {
+  return new Read(*this);
+}
+
+void Read::reset() {
+  Filter::reset();
+  if (m_file) {
+    m_file->close();
+    m_file = nullptr;
+  }
+  m_started = false;
+}
+
+void Read::process(Event *evt) {
+  if (!m_started) {
+    m_started = true;
+    pjs::Value pathname;
+    if (!Filter::eval(m_pathname, pathname)) return;
+    auto *s = pathname.to_string();
+    m_file = File::make(s->str());
+    s->release();
+    m_file->open_read(
+      [this](FileStream *fs) {
+        if (fs) {
+          fs->chain(Filter::output());
+        }
       }
-      release();
-    }
-  );
-
-  retain();
-}
-
-void Reader::FileReader::on_event(Event *evt) {
-  auto is_end = evt->is<StreamEnd>();
-  if (m_pipeline) {
-    m_pipeline->input()->input(evt);
-    if (is_end) m_pipeline = nullptr;
+    );
   }
 }
 

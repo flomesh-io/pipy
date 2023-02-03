@@ -207,6 +207,7 @@ add_executable(pipy
   src/filters/pack.cpp
   src/filters/print.cpp
   src/filters/proxy-protocol.cpp
+  src/filters/read.cpp
   src/filters/replace-body.cpp
   src/filters/replace-event.cpp
   src/filters/replace-message.cpp
@@ -244,7 +245,6 @@ add_executable(pipy
   src/pjs/expr.cpp
   src/pjs/parser.cpp
   src/pjs/types.cpp
-  src/reader.cpp
   src/status.cpp
   src/store.cpp
   src/str-map.cpp

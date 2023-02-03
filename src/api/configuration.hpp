@@ -106,6 +106,7 @@ public:
   void output(pjs::Function *output_f);
   void pack(int batch_size, pjs::Object *options);
   void print();
+  void read(const pjs::Value &pathname);
   void replace_body(const pjs::Value &replacement, int size_limit);
   void replace_event(Event::Type type, const pjs::Value &replacement);
   void replace_message(const pjs::Value &replacement, int size_limit);
@@ -185,7 +186,6 @@ public:
 
   void listen(int port, pjs::Object *options);
   void listen(const std::string &port, pjs::Object *options);
-  void read(const std::string &pathname);
   void task(const std::string &when);
   void pipeline(const std::string &name);
   void pipeline();
@@ -205,10 +205,6 @@ private:
     Listener::Options options;
   };
 
-  struct ReaderConfig : public PipelineConfig {
-    std::string pathname;
-  };
-
   struct TaskConfig : public PipelineConfig {
     std::string name;
     std::string when;
@@ -223,7 +219,6 @@ private:
   std::list<Export> m_exports;
   std::list<Import> m_imports;
   std::list<ListenConfig> m_listens;
-  std::list<ReaderConfig> m_readers;
   std::list<TaskConfig> m_tasks;
   std::list<NamedPipelineConfig> m_named_pipelines;
   std::map<int, NamedPipelineConfig> m_indexed_pipelines;

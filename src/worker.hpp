@@ -37,7 +37,6 @@
 namespace pipy {
 
 class PipelineLayout;
-class Reader;
 class Task;
 
 //
@@ -61,7 +60,6 @@ public:
   auto load_js_module(const std::string &path) -> JSModule*;
   auto load_native_module(const std::string &path) -> nmi::NativeModule*;
   void add_listener(Listener *listener, PipelineLayout *layout, const Listener::Options &options);
-  void add_reader(Reader *reader);
   void add_task(Task *task);
   void add_export(pjs::Str *ns, pjs::Str *name, Module *module);
   auto get_export(pjs::Str *ns, pjs::Str *name) -> int;
@@ -99,7 +97,6 @@ private:
   std::map<std::string, JSModule*> m_module_map;
   std::map<std::string, nmi::NativeModule*> m_native_module_map;
   std::map<Listener*, ListeningPipeline> m_listeners;
-  std::set<Reader*> m_readers;
   std::set<Task*> m_tasks;
   std::map<pjs::Ref<pjs::Str>, Namespace> m_namespaces;
   std::map<pjs::Ref<pjs::Str>, SolvedFile> m_solved_files;
