@@ -213,6 +213,7 @@ add_executable(pipy
   src/filters/replace-message.cpp
   src/filters/replace-start.cpp
   src/filters/replay.cpp
+  src/filters/resp.cpp
   src/filters/socks.cpp
   src/filters/split.cpp
   src/filters/tee.cpp
