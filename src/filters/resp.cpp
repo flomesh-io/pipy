@@ -104,7 +104,7 @@ auto Decoder::on_state(int state, int c) -> int {
     case ERROR_STRING:
       if (c == '\r') {
         auto s = m_read_data.to_string();
-        push_value(pjs::Str::make(std::move(s)));
+        push_value(pjs::Error::make(pjs::Str::make(std::move(s))));
         return NEWLINE;
       } else {
         m_read_data.push(char(c), &s_dp);
