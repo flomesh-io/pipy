@@ -92,6 +92,9 @@ template<> void ClassDef<Global>::init() {
   // String
   variable("String", class_of<Constructor<String>>());
 
+  // Error
+  variable("Error", class_of<Constructor<Error>>());
+
   // Array
   variable("Array", class_of<Constructor<Array>>());
 

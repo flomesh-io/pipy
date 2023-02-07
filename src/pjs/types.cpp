@@ -1404,6 +1404,33 @@ auto Function::to_string() const -> std::string {
 }
 
 //
+// Error
+//
+
+template<> void ClassDef<Error>::init() {
+  ctor([](Context &ctx) -> Object* {
+    Str *message = nullptr;
+    Error *cause = nullptr;
+    if (!ctx.arguments(0, &message, &cause)) return nullptr;
+    return Error::make(message, cause);
+  });
+
+  accessor("name", [](Object *obj, Value &val) { val.set(obj->as<Error>()->name()); });
+  accessor("message", [](Object *obj, Value &val) { val.set(obj->as<Error>()->message()); });
+  accessor("cause", [](Object *obj, Value &val) { val.set(obj->as<Error>()->cause()); });
+}
+
+template<> void ClassDef<Constructor<Error>>::init() {
+  super<Function>();
+  ctor();
+}
+
+auto Error::name() const -> Str* {
+  thread_local static ConstStr s_error("Error");
+  return s_error;
+}
+
+//
 // Array
 //
 

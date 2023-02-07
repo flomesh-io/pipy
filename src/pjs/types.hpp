@@ -2513,6 +2513,27 @@ public:
 };
 
 //
+// Error
+//
+
+class Error : public ObjectTemplate<Error> {
+public:
+  auto name() const -> Str*;
+  auto message() const -> Str* { return m_message; }
+  auto cause() const -> Error* { return m_cause; }
+
+private:
+  Error(Str *message = nullptr, Object *cause = nullptr)
+    : m_message(message ? message : Str::empty.get())
+    , m_cause(cause) {}
+
+  Ref<Str> m_message;
+  Ref<Error> m_cause;
+
+  friend class ObjectTemplate<Error>;
+};
+
+//
 // Array
 //
 
