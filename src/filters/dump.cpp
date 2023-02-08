@@ -119,7 +119,8 @@ void Dump::process(Event *evt) {
       db.push(' ');
       JSON::encode(tail, nullptr, 0, db);
     }
-    if (auto payload = end->payload()) {
+    const auto &payload = end->payload();
+    if (!payload.is_undefined()) {
       db.push(' ');
       JSON::encode(payload, nullptr, 0, db);
     }
