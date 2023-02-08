@@ -30,6 +30,13 @@
 
 namespace pipy {
 
+thread_local static const pjs::ConstStr s_headers("headers");
+thread_local static const pjs::ConstStr s_content_encoding("content-encoding");
+thread_local static const pjs::ConstStr s_gzip("gzip");
+thread_local static const pjs::ConstStr s_br("br");
+thread_local static const pjs::ConstStr s_inflate("inflate");
+thread_local static const pjs::ConstStr s_brotli("brotli");
+
 //
 // DecompressMessageBase
 //
@@ -118,9 +125,6 @@ auto DecompressMessage::clone() -> Filter* {
   return new DecompressMessage(*this);
 }
 
-static const pjs::Ref<pjs::Str> s_inflate(pjs::Str::make("inflate"));
-static const pjs::Ref<pjs::Str> s_brotli(pjs::Str::make("brotli"));
-
 auto DecompressMessage::new_decompressor(
   MessageStart *start,
   const std::function<void(Data*)> &out
@@ -171,11 +175,6 @@ void DecompressHTTP::dump(Dump &d) {
 auto DecompressHTTP::clone() -> Filter* {
   return new DecompressHTTP(*this);
 }
-
-static const pjs::Ref<pjs::Str> s_headers(pjs::Str::make("headers"));
-static const pjs::Ref<pjs::Str> s_content_encoding(pjs::Str::make("content-encoding"));
-static const pjs::Ref<pjs::Str> s_gzip(pjs::Str::make("gzip"));
-static const pjs::Ref<pjs::Str> s_br(pjs::Str::make("br"));
 
 auto DecompressHTTP::new_decompressor(
   MessageStart *start,
