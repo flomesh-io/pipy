@@ -110,7 +110,7 @@ template<> void ClassDef<MessageEnd>::init() {
     return MessageEnd::make(tail, payload);
   });
   accessor("tail", [](Object *obj, Value &val) { val.set(obj->as<MessageEnd>()->tail()); });
-  accessor("payload", [](Object *obj, Value &val) { val.set(obj->as<MessageEnd>()->payload()); });
+  accessor("payload", [](Object *obj, Value &val) { val = obj->as<MessageEnd>()->payload(); });
 }
 
 template<> void EnumDef<StreamEnd::Error>::init() {

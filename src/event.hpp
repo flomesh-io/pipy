@@ -103,7 +103,7 @@ class MessageStart : public EventTemplate<MessageStart> {
 public:
   static const Type __TYPE = Event::MessageStart;
 
-  auto head() -> pjs::Object* { return m_head; }
+  auto head() const -> pjs::Object* { return m_head; }
 
 private:
   MessageStart() {}
@@ -127,13 +127,16 @@ struct MessageEnd : public EventTemplate<MessageEnd> {
 public:
   static const Type __TYPE = Event::MessageEnd;
 
-  auto tail() -> pjs::Object* { return m_tail; }
-  auto payload() -> pjs::Object* { return m_payload; }
+  auto tail() const -> pjs::Object* { return m_tail; }
+  auto payload() const -> const pjs::Value& { return m_payload; }
 
 private:
   MessageEnd() {}
 
-  MessageEnd(pjs::Object *tail, pjs::Object *payload = nullptr)
+  MessageEnd(pjs::Object *tail)
+    : m_tail(tail) {}
+
+  MessageEnd(pjs::Object *tail, const pjs::Value &payload)
     : m_tail(tail)
     , m_payload(payload) {}
 
@@ -142,7 +145,7 @@ private:
     , m_payload(r.m_payload) {}
 
   pjs::Ref<pjs::Object> m_tail;
-  pjs::Ref<pjs::Object> m_payload;
+  pjs::Value m_payload;
 
   friend class pjs::ObjectTemplate<MessageEnd, Event>;
 };
