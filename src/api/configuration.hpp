@@ -72,6 +72,7 @@ public:
   void decode_http_response(pjs::Object *options);
   void decode_mqtt(pjs::Object *options);
   void decode_multipart();
+  void decode_resp();
   void decode_thrift(pjs::Object *options);
   void decode_websocket();
   void decompress_http(pjs::Function *enable);

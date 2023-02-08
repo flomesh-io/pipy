@@ -70,6 +70,7 @@
 #include "filters/replace-message.hpp"
 #include "filters/replace-start.hpp"
 #include "filters/replay.hpp"
+#include "filters/resp.hpp"
 #include "filters/socks.hpp"
 #include "filters/split.hpp"
 #include "filters/tee.hpp"
@@ -177,6 +178,10 @@ void FilterConfigurator::decode_mqtt(pjs::Object *options) {
 
 void FilterConfigurator::decode_multipart() {
   append_filter(new mime::MultipartDecoder());
+}
+
+void FilterConfigurator::decode_resp() {
+  append_filter(new resp::Decoder());
 }
 
 void FilterConfigurator::decode_thrift(pjs::Object *options) {
@@ -1140,6 +1145,16 @@ template<> void ClassDef<FilterConfigurator>::init() {
   method("decodeMultipart", [](Context &ctx, Object *thiz, Value &result) {
     try {
       thiz->as<FilterConfigurator>()->decode_multipart();
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // FilterConfigurator.decodeRESP
+  method("decodeRESP", [](Context &ctx, Object *thiz, Value &result) {
+    try {
+      thiz->as<FilterConfigurator>()->decode_resp();
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

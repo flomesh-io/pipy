@@ -59,10 +59,12 @@ auto Decoder::clone() -> Filter* {
 void Decoder::reset() {
   Filter::reset();
   Deframer::reset();
+  Deframer::pass_all(true);
   while (auto *s = m_stack) {
     m_stack = s->back;
     delete s;
   }
+  m_root = pjs::Value::undefined;
 }
 
 void Decoder::process(Event *evt) {
@@ -71,12 +73,15 @@ void Decoder::process(Event *evt) {
     Deframer::reset();
   } else if (auto *data = evt->as<Data>()) {
     Deframer::deframe(*data);
+    if (Deframer::state() == START) message_end();
   }
 }
 
 auto Decoder::on_state(int state, int c) -> int {
   switch (state) {
     case START:
+      message_end();
+      message_start();
       switch (c) {
         case '+': m_read_data.clear(); return SIMPLE_STRING;
         case '-': m_read_data.clear(); return ERROR_STRING;
@@ -88,6 +93,7 @@ auto Decoder::on_state(int state, int c) -> int {
       break;
     case NEWLINE:
       if (c == '\n') {
+        if (!m_stack) Deframer::need_flush();
         return START;
       } else {
         return ERROR;
@@ -166,7 +172,7 @@ auto Decoder::on_state(int state, int c) -> int {
       }
     case ARRAY_SIZE:
       if (c == '\r') {
-        push_array(m_read_int);
+        push_value(pjs::Array::make(m_read_int));
         return NEWLINE;
       } else if ('0' <= c && c <= '9') {
         m_read_int = m_read_int * 10 + (c - '0');
@@ -180,16 +186,48 @@ auto Decoder::on_state(int state, int c) -> int {
   return ERROR;
 }
 
-void Decoder::push_array(int size) {
-}
-
 void Decoder::push_value(const pjs::Value &value) {
+  if (auto *l = m_stack) {
+    l->array->set(l->index++, value);
+    if (value.is_array() && value.as<pjs::Array>()->length() > 0) {
+      auto *l = new Level;
+      l->back = m_stack;
+      l->array = value.as<pjs::Array>();
+      m_stack = l;
+    } else {
+      while (l && l->index == l->array->length()) {
+        auto *level = l; l = l->back;
+        delete level;
+      }
+      m_stack = l;
+      if (!l) message_end();
+    }
+
+  } else {
+    message_start();
+    m_root = value;
+    if (value.is_array()) {
+      l = new Level;
+      l->back = nullptr;
+      l->array = value.as<pjs::Array>();
+      m_stack = l;
+    } else {
+      message_end();
+    }
+  }
 }
 
-void Decoder::pop_array() {
+void Decoder::message_start() {
+  if (!m_stack && m_root.is_undefined()) {
+    Filter::output(MessageStart::make());
+  }
 }
 
 void Decoder::message_end() {
+  if (!m_stack && !m_root.is_undefined()) {
+    Filter::output(MessageEnd::make(nullptr, m_root));
+    m_root = pjs::Value::undefined;
+  }
 }
 
 } // namespace resp

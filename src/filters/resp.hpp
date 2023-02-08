@@ -67,19 +67,19 @@ private:
 
   struct Level : public pjs::Pooled<Level> {
     Level* back;
-    pjs::Value value;
+    pjs::Array *array;
+    int index = 0;
   };
 
+  pjs::Value m_root;
   Level* m_stack = nullptr;
   Data m_read_data;
   uint64_t m_read_int;
 
   virtual auto on_state(int state, int c) -> int override;
-  virtual void on_pass(const Data &data) override;
 
-  void push_array(int size);
   void push_value(const pjs::Value &value);
-  void pop_array();
+  void message_start();
   void message_end();
 };
 
