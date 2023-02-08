@@ -538,6 +538,7 @@ auto Decoder::set_value_end() -> State {
     }
   } else {
     Deframer::pass_all(false);
+    Deframer::need_flush();
     return START;
   }
 }
@@ -672,6 +673,7 @@ auto Decoder::pop() -> State {
     delete l;
     if (!m_stack) {
       Deframer::pass_all(false);
+      Deframer::need_flush();
       return START;
     }
     if (m_stack->kind == Level::STRUCT) return STRUCT_FIELD_TYPE;
@@ -686,7 +688,6 @@ bool Decoder::var_int(int c) {
 
 auto Decoder::message_start() -> State {
   if (!m_started) {
-    Deframer::flush();
     Filter::output(MessageStart::make(m_head));
     m_started = true;
   }
@@ -696,8 +697,7 @@ auto Decoder::message_start() -> State {
 
 void Decoder::message_end() {
   if (m_started) {
-    Deframer::flush();
-    Filter::output(MessageEnd::make(nullptr, m_payload));
+    Filter::output(MessageEnd::make(nullptr, m_payload.get()));
     m_started = false;
   }
 }

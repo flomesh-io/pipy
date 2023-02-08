@@ -454,7 +454,7 @@ protected:
     virtual void event(Event *evt) = 0;
 
     void frame(Frame &frm) { m_endpoint->frame(frm); }
-    void flush() { m_endpoint->need_flush(); }
+    void flush() { m_endpoint->FlushTarget::need_flush(); }
     void close() { m_endpoint->stream_close(id()); }
     auto deduct_send(int size) -> int;
     bool deduct_recv(int size);

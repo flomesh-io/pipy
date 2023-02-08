@@ -104,6 +104,7 @@ void Deframer::deframe(Data &data) {
     } else {
       auto state = m_state;
       bool passing = m_passing;
+      m_need_flush = false;
       Data read_in;
       data.shift_to(
         [&](int c) -> bool {
@@ -117,13 +118,14 @@ void Deframer::deframe(Data &data) {
           } else {
             state = on_state(state, (uint8_t)c);
           }
-          return state < 0 ||
+          return state < 0 || m_need_flush ||
             (m_read_length > 0 && !m_read_buffer) ||
             (m_passing != passing);
         },
         read_in
       );
       if (passing) m_output_buffer.push(read_in);
+      if (m_need_flush) flush();
       m_state = state;
     }
   }

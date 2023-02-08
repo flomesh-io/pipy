@@ -44,7 +44,7 @@ public:
   void read(size_t size, pjs::Array *array);
   void pass(size_t size);
   void pass_all(bool enable);
-  void flush();
+  void need_flush() { m_need_flush = true; }
 
 protected:
   virtual auto on_state(int state, int c) -> int = 0;
@@ -53,12 +53,15 @@ protected:
 private:
   int m_state = 0;
   bool m_passing = false;
+  bool m_need_flush = false;
   size_t m_read_length = 0;
   size_t m_read_pointer = 0;
   uint8_t* m_read_buffer = nullptr;
   pjs::Ref<Data> m_read_data;
   pjs::Ref<pjs::Array> m_read_array;
   Data m_output_buffer;
+
+  void flush();
 };
 
 } // namespace pipy

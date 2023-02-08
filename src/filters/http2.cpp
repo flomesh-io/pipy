@@ -1428,7 +1428,7 @@ void Endpoint::frame(Frame &frm) {
 
   // Send the frame
   FrameEncoder::frame(frm, m_output_buffer);
-  need_flush();
+  FlushTarget::need_flush();
 }
 
 void Endpoint::flush() {
@@ -1459,7 +1459,7 @@ void Endpoint::stream_close(int id) {
 void Endpoint::stream_error(int id, ErrorCode err) {
   stream_close(id);
   FrameEncoder::RST_STREAM(id, err, m_output_buffer);
-  need_flush();
+  FlushTarget::need_flush();
 }
 
 void Endpoint::connection_error(ErrorCode err) {
