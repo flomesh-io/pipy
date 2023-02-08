@@ -103,8 +103,12 @@ void ReplaceMessage::process(Event *evt) {
       }
       if (m_replacement.is_function()) {
         pjs::Object *tail = nullptr;
-        if (auto *end = evt->as<MessageEnd>()) tail = end->tail();
-        pjs::Value arg(Message::make(m_head, m_body, tail)), result;
+        pjs::Value payload;
+        if (auto *end = evt->as<MessageEnd>()) {
+          tail = end->tail();
+          payload = end->payload();
+        }
+        pjs::Value arg(Message::make(m_head, m_body, tail, payload)), result;
         if (callback(m_replacement.f(), 1, &arg, result)) {
           output(result);
         }

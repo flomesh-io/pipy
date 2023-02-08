@@ -41,6 +41,7 @@ public:
   auto head() const -> pjs::Object* { return m_head; }
   auto tail() const -> pjs::Object* { return m_tail; }
   auto body() const -> Data* { return m_body; }
+  auto payload() const -> const pjs::Value& { return m_payload; }
 
 private:
   Message() {}
@@ -64,16 +65,29 @@ private:
     , m_tail(tail)
     , m_body(body) {}
 
+  Message(pjs::Object *head, Data *body, pjs::Object *tail, const pjs::Value &payload)
+    : m_head(head)
+    , m_tail(tail)
+    , m_body(body)
+    , m_payload(payload) {}
+
   Message(pjs::Object *head, const std::string &body, pjs::Object *tail)
     : m_head(head)
     , m_tail(tail)
     , m_body(s_dp.make(body)) {}
+
+  Message(pjs::Object *head, const std::string &body, pjs::Object *tail, const pjs::Value &payload)
+    : m_head(head)
+    , m_tail(tail)
+    , m_body(s_dp.make(body))
+    , m_payload(payload) {}
 
   ~Message() {}
 
   pjs::Ref<pjs::Object> m_head;
   pjs::Ref<pjs::Object> m_tail;
   pjs::Ref<Data> m_body;
+  pjs::Value m_payload;
 
   thread_local static Data::Producer s_dp;
 

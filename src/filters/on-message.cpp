@@ -100,8 +100,12 @@ void OnMessage::process(Event *evt) {
         );
       }
       pjs::Object *tail = nullptr;
-      if (auto *end = evt->as<MessageEnd>()) tail = end->tail();
-      pjs::Value arg(Message::make(m_head, m_body, tail)), result;
+      pjs::Value payload;
+      if (auto *end = evt->as<MessageEnd>()) {
+        tail = end->tail();
+        payload = end->payload();
+      }
+      pjs::Value arg(Message::make(m_head, m_body, tail, payload)), result;
       if (!callback(m_callback, 1, &arg, result)) return;
       m_head = nullptr;
       m_body = nullptr;
