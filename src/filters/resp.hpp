@@ -56,12 +56,16 @@ private:
     ERROR_STRING,
     BULK_STRING_SIZE,
     BULK_STRING_SIZE_NEWLINE,
+    BULK_STRING_SIZE_NEGATIVE,
+    BULK_STRING_SIZE_NEGATIVE_CR,
     BULK_STRING_DATA,
     BULK_STRING_DATA_CR,
     INTEGER_START,
     INTEGER_POSITIVE,
     INTEGER_NEGATIVE,
     ARRAY_SIZE,
+    ARRAY_SIZE_NEGATIVE,
+    ARRAY_SIZE_NEGATIVE_CR,
     ERROR,
   };
 
@@ -74,7 +78,7 @@ private:
   Level* m_stack = nullptr;
   pjs::Value m_root;
   pjs::Ref<Data> m_read_data;
-  uint64_t m_read_int;
+  int64_t m_read_int;
 
   virtual auto on_state(int state, int c) -> int override;
   virtual void on_pass(const Data &data) override;

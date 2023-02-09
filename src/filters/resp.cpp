@@ -123,6 +123,8 @@ auto Decoder::on_state(int state, int c) -> int {
     case BULK_STRING_SIZE:
       if (c == '\r') {
         return BULK_STRING_SIZE_NEWLINE;
+      } else if (c == '-') {
+        return BULK_STRING_SIZE_NEGATIVE;
       } else if ('0' <= c && c <= '9') {
         m_read_int = m_read_int * 10 + (c - '0');
         return BULK_STRING_SIZE;
@@ -131,9 +133,27 @@ auto Decoder::on_state(int state, int c) -> int {
       }
     case BULK_STRING_SIZE_NEWLINE:
       if (c == '\n') {
-        m_read_data->clear();
-        Deframer::read(m_read_int, m_read_data);
-        return BULK_STRING_DATA;
+        if (m_read_int > 0) {
+          m_read_data->clear();
+          Deframer::read(m_read_int, m_read_data);
+          return BULK_STRING_DATA;
+        } else {
+          push_value(pjs::Str::empty.get());
+          return START;
+        }
+      } else {
+        return ERROR;
+      }
+    case BULK_STRING_SIZE_NEGATIVE:
+      if (c == '1') {
+        return BULK_STRING_SIZE_NEGATIVE_CR;
+      } else {
+        return ERROR;
+      }
+    case BULK_STRING_SIZE_NEGATIVE_CR:
+      if (c == '\r') {
+        push_value(pjs::Value::null);
+        return NEWLINE;
       } else {
         return ERROR;
       }
@@ -178,6 +198,8 @@ auto Decoder::on_state(int state, int c) -> int {
       if (c == '\r') {
         push_value(pjs::Array::make(m_read_int));
         return NEWLINE;
+      } else if (c == '-') {
+        return ARRAY_SIZE_NEGATIVE;
       } else if ('0' <= c && c <= '9') {
         m_read_int = m_read_int * 10 + (c - '0');
         return ARRAY_SIZE;
@@ -185,6 +207,19 @@ auto Decoder::on_state(int state, int c) -> int {
         return ERROR;
       }
       break;
+    case ARRAY_SIZE_NEGATIVE:
+      if (c == '1') {
+        return ARRAY_SIZE_NEGATIVE_CR;
+      } else {
+        return ERROR;
+      }
+    case ARRAY_SIZE_NEGATIVE_CR:
+      if (c == '\r') {
+        push_value(pjs::Value::null);
+        return NEWLINE;
+      } else {
+        return ERROR;
+      }
     default: break;
   }
   return ERROR;
@@ -197,30 +232,22 @@ void Decoder::on_pass(const Data &data) {
 void Decoder::push_value(const pjs::Value &value) {
   if (auto *l = m_stack) {
     l->array->set(l->index++, value);
-    if (value.is_array() && value.as<pjs::Array>()->length() > 0) {
-      auto *l = new Level;
-      l->back = m_stack;
-      l->array = value.as<pjs::Array>();
-      m_stack = l;
-    } else {
-      while (l && l->index == l->array->length()) {
-        auto *level = l; l = l->back;
-        delete level;
-      }
-      m_stack = l;
-      if (!l) Deframer::need_flush();
-    }
-
   } else {
     m_root = value;
-    if (value.is_array()) {
-      l = new Level;
-      l->back = nullptr;
-      l->array = value.as<pjs::Array>();
-      m_stack = l;
-    } else {
-      Deframer::need_flush();
+  }
+  if (value.is_array() && value.as<pjs::Array>()->length() > 0) {
+    auto *l = new Level;
+    l->back = m_stack;
+    l->array = value.as<pjs::Array>();
+    m_stack = l;
+  } else {
+    auto *l = m_stack;
+    while (l && l->index == l->array->length()) {
+      auto *level = l; l = l->back;
+      delete level;
     }
+    m_stack = l;
+    if (!l) Deframer::need_flush();
   }
 }
 
