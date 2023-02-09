@@ -77,6 +77,7 @@ private:
   uint64_t m_read_int;
 
   virtual auto on_state(int state, int c) -> int override;
+  virtual void on_pass(const Data &data) override;
 
   void push_value(const pjs::Value &value);
   void message_start();

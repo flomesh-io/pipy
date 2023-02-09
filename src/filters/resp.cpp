@@ -66,6 +66,7 @@ void Decoder::reset() {
     m_stack = s->back;
     delete s;
   }
+  m_stack = nullptr;
   m_root = pjs::Value::undefined;
   m_read_data->clear();
 }
@@ -189,6 +190,10 @@ auto Decoder::on_state(int state, int c) -> int {
   return ERROR;
 }
 
+void Decoder::on_pass(const Data &data) {
+  Filter::output(Data::make(data));
+}
+
 void Decoder::push_value(const pjs::Value &value) {
   if (auto *l = m_stack) {
     l->array->set(l->index++, value);
@@ -203,11 +208,10 @@ void Decoder::push_value(const pjs::Value &value) {
         delete level;
       }
       m_stack = l;
-      if (!l) message_end();
+      if (!l) Deframer::need_flush();
     }
 
   } else {
-    message_start();
     m_root = value;
     if (value.is_array()) {
       l = new Level;
@@ -215,7 +219,7 @@ void Decoder::push_value(const pjs::Value &value) {
       l->array = value.as<pjs::Array>();
       m_stack = l;
     } else {
-      message_end();
+      Deframer::need_flush();
     }
   }
 }
