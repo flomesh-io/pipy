@@ -35,11 +35,13 @@ static Data::Producer s_dp("RESP");
 //
 
 Decoder::Decoder()
+  : m_read_data(Data::make())
 {
 }
 
 Decoder::Decoder(const Decoder &r)
   : Filter(r)
+  , m_read_data(Data::make())
 {
 }
 
@@ -65,6 +67,7 @@ void Decoder::reset() {
     delete s;
   }
   m_root = pjs::Value::undefined;
+  m_read_data->clear();
 }
 
 void Decoder::process(Event *evt) {
@@ -83,8 +86,8 @@ auto Decoder::on_state(int state, int c) -> int {
       message_end();
       message_start();
       switch (c) {
-        case '+': m_read_data.clear(); return SIMPLE_STRING;
-        case '-': m_read_data.clear(); return ERROR_STRING;
+        case '+': m_read_data->clear(); return SIMPLE_STRING;
+        case '-': m_read_data->clear(); return ERROR_STRING;
         case '$': m_read_int = 0; return BULK_STRING_SIZE;
         case ':': m_read_int = 0; return INTEGER_START;
         case '*': m_read_int = 0; return ARRAY_SIZE;
@@ -100,20 +103,20 @@ auto Decoder::on_state(int state, int c) -> int {
       }
     case SIMPLE_STRING:
       if (c == '\r') {
-        auto s = m_read_data.to_string();
+        auto s = m_read_data->to_string();
         push_value(pjs::Str::make(std::move(s)));
         return NEWLINE;
       } else {
-        m_read_data.push(char(c), &s_dp);
+        m_read_data->push(char(c), &s_dp);
         return SIMPLE_STRING;
       }
     case ERROR_STRING:
       if (c == '\r') {
-        auto s = m_read_data.to_string();
+        auto s = m_read_data->to_string();
         push_value(pjs::Error::make(pjs::Str::make(std::move(s))));
         return NEWLINE;
       } else {
-        m_read_data.push(char(c), &s_dp);
+        m_read_data->push(char(c), &s_dp);
         return ERROR_STRING;
       }
     case BULK_STRING_SIZE:
@@ -127,14 +130,14 @@ auto Decoder::on_state(int state, int c) -> int {
       }
     case BULK_STRING_SIZE_NEWLINE:
       if (c == '\n') {
-        m_read_data.clear();
-        Deframer::read(m_read_int, &m_read_data);
+        m_read_data->clear();
+        Deframer::read(m_read_int, m_read_data);
         return BULK_STRING_DATA;
       } else {
         return ERROR;
       }
     case BULK_STRING_DATA:
-      push_value(pjs::Str::make(m_read_data.to_string()));
+      push_value(pjs::Str::make(m_read_data->to_string()));
       return BULK_STRING_DATA_CR;
     case BULK_STRING_DATA_CR:
       if (c == '\r') {

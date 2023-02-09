@@ -71,9 +71,9 @@ private:
     int index = 0;
   };
 
-  pjs::Value m_root;
   Level* m_stack = nullptr;
-  Data m_read_data;
+  pjs::Value m_root;
+  pjs::Ref<Data> m_read_data;
   uint64_t m_read_int;
 
   virtual auto on_state(int state, int c) -> int override;
