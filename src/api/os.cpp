@@ -149,6 +149,13 @@ template<> void ClassDef<OS>::init() {
     }
   });
 
+  // os.unlink
+  method("unlink", [](Context &ctx, Object*, Value &ret) {
+    Str *filename;
+    if (!ctx.arguments(1, &filename)) return;
+    ret.set(fs::unlink(filename->str()));
+  });
+
   // os.env
   accessor("env", [](Object *obj, Value &ret) { ret.set(obj->as<OS>()->env()); });
 }
