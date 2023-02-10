@@ -2059,18 +2059,6 @@ template<> void ClassDef<Configuration>::init() {
     }
   });
 
-  // Configuration.read
-  method("read", [](Context &ctx, Object *thiz, Value &result) {
-    std::string pathname;
-    try {
-      if (!ctx.arguments(1, &pathname)) return;
-      thiz->as<Configuration>()->read(pathname);
-      result.set(thiz);
-    } catch (std::runtime_error &err) {
-      ctx.error(err);
-    }
-  });
-
   // Configuration.task
   method("task", [](Context &ctx, Object *thiz, Value &result) {
     std::string when;
