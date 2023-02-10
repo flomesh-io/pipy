@@ -594,10 +594,14 @@ RoundRobinLoadBalancer::~RoundRobinLoadBalancer()
 void RoundRobinLoadBalancer::set(pjs::Str *target, int weight) {
   if (weight < 0) weight = 0;
 
-  auto hits = 0;
-  if (m_total_weight > 0) {
-    hits = (m_total_hits * weight) / m_total_weight;
+  double min_usage = -1;
+  for (const auto &t : m_targets) {
+    if (min_usage < 0 || t.usage < min_usage) {
+      min_usage = t.usage;
+    }
   }
+
+  if (min_usage < 0) min_usage = 0;
 
   auto i = m_target_map.find(target);
   if (i == m_target_map.end()) {
@@ -605,24 +609,16 @@ void RoundRobinLoadBalancer::set(pjs::Str *target, int weight) {
     auto &t = m_targets.back();
     t.id = target;
     t.weight = weight;
-    t.hits = hits;
-    m_total_weight += weight;
-    m_total_hits += hits;
+    t.hits = weight * min_usage;
+    t.usage = min_usage;
+    t.healthy = weight > 0;
     m_target_map[target] = &t;
   } else {
     auto *t = i->second;
-    m_total_weight += weight - t->weight;
-    m_total_hits += hits - t->hits;
     t->weight = weight;
-    t->hits = hits;
-  }
-
-  if (m_total_weight > 0) {
-    for (auto &t : m_targets) {
-      if (t.weight > 0) {
-        t.usage = double(t.hits) / m_total_weight;
-      }
-    }
+    t->hits = weight * min_usage;
+    t->usage = min_usage;
+    t->healthy = weight > 0;
   }
 }
 
@@ -641,14 +637,24 @@ auto RoundRobinLoadBalancer::select(const pjs::Value &key, Cache *unhealthy) -> 
   double min = 0;
   Target *p = nullptr;
   int total_weight = 0;
+  int total_hits = 0;
 
   for (auto &t : m_targets) {
-    if (t.weight <= 0) continue;
-    if (!is_healthy(t.id.get(), unhealthy)) continue;
+    if (!is_healthy(t.id.get(), unhealthy)) t.healthy = false;
+    if (!t.healthy) continue;
     total_weight += t.weight;
+    total_hits += t.hits;
     if (!p || t.usage < min) {
       min = t.usage;
       p = &t;
+    }
+  }
+
+  for (auto &t : m_targets) {
+    if (!t.healthy && is_healthy(t.id.get(), unhealthy)) {
+      t.healthy = true;
+      t.usage = min;
+      t.hits = t.weight * t.usage;
     }
   }
 
@@ -657,14 +663,13 @@ auto RoundRobinLoadBalancer::select(const pjs::Value &key, Cache *unhealthy) -> 
   auto &t = *p;
   t.hits++;
   t.usage = double(t.hits) / t.weight;
+  total_hits++;
 
-  m_total_hits++;
-  if (m_total_hits >= total_weight) {
+  if (total_hits >= total_weight) {
     for (auto &t : m_targets) {
       t.hits = 0;
       t.usage = 0;
     }
-    m_total_hits = 0;
   }
 
   if (!key.is_undefined()) {

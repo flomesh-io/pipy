@@ -330,13 +330,12 @@ private:
     int weight;
     int hits;
     double usage;
+    bool healthy;
   };
 
   std::list<Target> m_targets;
   std::map<pjs::Str*, Target*> m_target_map;
   pjs::Ref<Cache> m_target_cache;
-  int m_total_weight = 0;
-  int m_total_hits = 0;
 
   friend class pjs::ObjectTemplate<RoundRobinLoadBalancer, LoadBalancer>;
 };
