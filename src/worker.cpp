@@ -46,6 +46,7 @@
 #include "api/os.hpp"
 #include "api/pipy.hpp"
 #include "api/protobuf.hpp"
+#include "api/resp.hpp"
 #include "api/stats.hpp"
 #include "api/url.hpp"
 #include "api/xml.hpp"
@@ -127,6 +128,9 @@ template<> void ClassDef<Global>::init() {
 
   // Hessian
   variable("Hessian", class_of<Hessian>());
+
+  // RESP
+  variable("RESP", class_of<RESP>());
 
   // console
   variable("console", class_of<Console>());
