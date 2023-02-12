@@ -25,12 +25,12 @@
 
 #include "detect-protocol.hpp"
 #include "data.hpp"
-
-#include <set>
+#include "str-map.hpp"
 
 namespace pipy {
 
 thread_local static pjs::ConstStr STR_HTTP("HTTP");
+thread_local static pjs::ConstStr STR_HTTP2("HTTP2");
 thread_local static pjs::ConstStr STR_TLS("TLS");
 
 //
@@ -41,63 +41,84 @@ class HTTPDetector :
   public pjs::Pooled<HTTPDetector>,
   public ProtocolDetector::Detector
 {
+public:
+  HTTPDetector()
+    : m_method_parser(s_valid_methods)
+    , m_version_parser(s_valid_versions) {}
+
+private:
   virtual auto feed(const char *data, size_t size) -> pjs::Str* override {
-    auto &p = m_read_length;
-    auto &s = m_read_buffer;
     for (size_t i = 0; i < size; i++) {
       auto c = data[i];
-      if (m_read_protocol) {
-        s[p++] = c;
-        if (p == 7) {
-          if (std::strncmp(s, "HTTP/1.", 7)) {
-            return pjs::Str::empty;
-          } else {
-            break;
+      switch (m_state) {
+        case CHECK_METHOD:
+          if (auto found = m_method_parser.parse(c)) {
+            if (found == pjs::Str::empty) return found;
+            m_state = CHECK_PATH;
           }
-        }
-      } else if (m_seen_method) {
-        if (c == ' ') {
-          p = 0;
-          m_read_protocol = true;
-        }
-      } else {
-        if (c == ' ') {
-          std::string method(s, p);
-          if (s_valid_methods.count(method)) {
-            m_seen_method = true;
-          } else {
-            return pjs::Str::empty;
+          break;
+        case CHECK_PATH:
+          if (c == ' ') m_state = CHECK_VERSION;
+          break;
+        case CHECK_VERSION:
+          if (auto found = m_version_parser.parse(c)) {
+            if (found == pjs::Str::empty) return found;
+            return STR_HTTP;
           }
-        } else if (p < sizeof(s)) {
-          s[p++] = c;
-        } else {
-          return pjs::Str::empty;
-        }
+          break;
+        default: break;
       }
     }
-    if (m_seen_method) return STR_HTTP;
     return nullptr;
   }
 
-  char m_read_buffer[8];
-  size_t m_read_length = 0;
-  bool m_seen_method = false;
-  bool m_read_protocol = false;
+  enum State {
+    CHECK_METHOD,
+    CHECK_PATH,
+    CHECK_VERSION,
+  };
 
-  static const std::set<std::string> s_valid_methods;
+  State m_state = CHECK_METHOD;
+  StrMap::Parser m_method_parser;
+  StrMap::Parser m_version_parser;
+
+  thread_local static const StrMap s_valid_methods;
+  thread_local static const StrMap s_valid_versions;
 };
 
-const std::set<std::string> HTTPDetector::s_valid_methods({
-  "GET",
-  "HEAD",
-  "POST",
-  "PUT",
-  "DELETE",
-  "CONNECT",
-  "OPTIONS",
-  "TRACE",
-  "PATCH",
+thread_local const StrMap HTTPDetector::s_valid_methods({
+  "GET ", "HEAD ", "POST ", "PUT ",
+  "PATCH ", "DELETE ", "CONNECT ", "OPTIONS ", "TRACE ",
 });
+
+thread_local const StrMap HTTPDetector::s_valid_versions({
+  "HTTP/1.0\r\n", "HTTP/1.1\r\n",
+});
+
+//
+// HTTP2Detector
+//
+
+class HTTP2Detector :
+  public pjs::Pooled<HTTP2Detector>,
+  public ProtocolDetector::Detector
+{
+  virtual auto feed(const char *data, size_t size) -> pjs::Str* override {
+    auto n = std::min(size, s_prefix.length() - m_pointer);
+    if (std::strncmp(data, s_prefix.c_str() + m_pointer, n)) {
+      return pjs::Str::empty;
+    }
+    m_pointer += n;
+    if (m_pointer == s_prefix.length()) return STR_HTTP2;
+    return nullptr;
+  }
+
+  size_t m_pointer = 0;
+
+  static const std::string s_prefix;
+};
+
+const std::string HTTP2Detector::s_prefix("PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n");
 
 //
 // TLSDetector
@@ -183,9 +204,10 @@ void ProtocolDetector::reset() {
   }
   m_negatives = 0;
   m_result = nullptr;
-  m_num_detectors = 2;
+  m_num_detectors = 3;
   m_detectors[0] = new HTTPDetector;
-  m_detectors[1] = new TLSDetector;
+  m_detectors[1] = new HTTP2Detector;
+  m_detectors[2] = new TLSDetector;
 }
 
 void ProtocolDetector::dump(Dump &d) {
