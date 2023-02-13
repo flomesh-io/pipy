@@ -75,12 +75,22 @@ void Read::process(Event *evt) {
     s->release();
     m_file->open_read(
       [this](FileStream *fs) {
+        m_keep_alive.cancel();
         if (fs) {
           fs->chain(Filter::output());
         }
       }
     );
+    keep_alive();
   }
+}
+
+void Read::keep_alive() {
+  m_keep_alive.schedule(
+    10, [this]() {
+      keep_alive();
+    }
+  );
 }
 
 } // namespace pipy

@@ -36,11 +36,14 @@ namespace pipy {
 
 thread_local WorkerThread* WorkerThread::s_current = nullptr;
 
-WorkerThread::WorkerThread(int index, bool is_graph_enabled)
-  : m_index(index)
+WorkerThread::WorkerThread(WorkerManager *manager, int index, bool is_graph_enabled)
+  : m_manager(manager)
+  , m_index(index)
   , m_active_pipeline_count(0)
+  , m_working(false)
+  , m_recycling(false)
   , m_shutdown(false)
-  , m_done(false)
+  , m_ended(false)
   , m_graph_enabled(is_graph_enabled)
 {
 }
@@ -58,7 +61,7 @@ bool WorkerThread::start() {
     [this]() {
       s_current = this;
       main();
-      m_done.store(true, std::memory_order_relaxed);
+      m_ended.store(true, std::memory_order_relaxed);
     }
   );
 
@@ -106,6 +109,23 @@ void WorkerThread::stats(const std::function<void(stats::MetricData&)> &cb) {
   );
 }
 
+void WorkerThread::recycle() {
+  if (m_working && !m_recycling) {
+    m_recycling = true;
+    m_net->post(
+      [this]() {
+        for (const auto &p : pjs::Pool::all()) {
+          p.second->clean();
+        }
+        auto n = PipelineLayout::active_pipeline_count();
+        if (!n && m_shutdown) Net::current().stop();
+        m_active_pipeline_count = n;
+        m_recycling = false;
+      }
+    );
+  }
+}
+
 void WorkerThread::reload(const std::function<void(bool)> &cb) {
   m_net->post(
     [=]() {
@@ -138,6 +158,7 @@ void WorkerThread::reload_done(bool ok) {
           current_worker->stop();
           m_new_worker = nullptr;
           m_version = m_new_version;
+          m_working = true;
           Log::info("[restart] Codebase reloaded on thread %d", m_index);
         }
       }
@@ -169,8 +190,8 @@ bool WorkerThread::stop(bool force) {
     return true;
 
   } else {
-    if (!m_shutdown.load(std::memory_order_relaxed)) {
-      m_shutdown.store(true, std::memory_order_relaxed);
+    if (!m_shutdown) {
+      m_shutdown = true;
       m_net->post(
         [this]() {
           m_new_worker = nullptr;
@@ -178,7 +199,7 @@ bool WorkerThread::stop(bool force) {
         }
       );
     }
-    return m_done.load(std::memory_order_relaxed);
+    return m_ended.load(std::memory_order_relaxed);
   }
 }
 
@@ -349,16 +370,33 @@ void WorkerThread::main() {
   if (started) {
     Log::info("[start] Thread %d started", m_index);
 
-    Timer timer;
-    std::function<void()> recycle;
-    recycle = [&]() {
-      this->recycle();
-      timer.schedule(1, recycle);
-    };
-    recycle();
-
     init_metrics();
-    Net::current().run();
+
+    m_working = true;
+    while (m_working) {
+      Net::current().run();
+      m_working = false;
+      m_manager->on_thread_done(m_index);
+
+      Log::info("[start] Thread %d done", m_index);
+
+      Timer timer;
+      std::function<void()> wait_for_work;
+      wait_for_work = [&]() {
+        if (!m_working && !m_shutdown) {
+          timer.schedule(1, wait_for_work);
+        }
+      };
+
+      wait_for_work();
+      Net::current().context().restart();
+      Net::current().run();
+
+      if (m_working) {
+        Net::current().context().restart();
+        Log::info("[start] Thread %d restarted", m_index);
+      }
+    }
 
     Log::info("[start] Thread %d ended", m_index);
 
@@ -368,16 +406,6 @@ void WorkerThread::main() {
 
   Log::shutdown();
   Timer::cancel_all();
-}
-
-void WorkerThread::recycle() {
-  for (const auto &p : pjs::Pool::all()) {
-    p.second->clean();
-  }
-
-  auto n = PipelineLayout::active_pipeline_count();
-  if (!n && m_shutdown.load(std::memory_order_relaxed)) Net::current().stop();
-  m_active_pipeline_count.store(n, std::memory_order_relaxed);
 }
 
 //
@@ -393,7 +421,7 @@ bool WorkerManager::start(int concurrency) {
   if (started()) return false;
 
   for (int i = 0; i < concurrency; i++) {
-    auto wt = new WorkerThread(i, m_graph_enabled && (i == 0));
+    auto wt = new WorkerThread(this, i, m_graph_enabled && (i == 0));
     if (!wt->start()) {
       delete wt;
       stop(true);
@@ -437,6 +465,7 @@ void WorkerManager::status(Status &status) {
 }
 
 void WorkerManager::status(const std::function<void(Status&)> &cb) {
+  if (m_worker_threads.empty()) return;
   if (m_status_counter >= 0) return;
 
   auto &main = Net::current();
@@ -518,6 +547,7 @@ void WorkerManager::stats(stats::MetricDataSum &stats) {
 }
 
 void WorkerManager::stats(const std::function<void(stats::MetricDataSum&)> &cb) {
+  if (m_worker_threads.empty()) return;
   if (m_metric_data_sum_counter >= 0) return;
 
   auto &main = Net::current();
@@ -537,6 +567,12 @@ void WorkerManager::stats(const std::function<void(stats::MetricDataSum&)> &cb) 
         );
       }
     );
+  }
+}
+
+void WorkerManager::recycle() {
+  for (auto *wt : m_worker_threads) {
+    wt->recycle();
   }
 }
 
@@ -593,6 +629,19 @@ bool WorkerManager::stop(bool force) {
   m_status_counter = 0;
   m_metric_data_sum_counter = 0;
   return true;
+}
+
+void WorkerManager::on_thread_done(int index) {
+  if (m_on_done) {
+    Net::main().post(
+      [this]() {
+        for (auto *wt : m_worker_threads) {
+          if (wt && wt->working()) return;
+        }
+        m_on_done();
+      }
+    );
+  }
 }
 
 } // namespace pipy

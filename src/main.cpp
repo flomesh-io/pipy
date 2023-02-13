@@ -137,6 +137,7 @@ static void start_cleaning_pools() {
     for (const auto &p : pjs::Pool::all()) {
       p.second->clean();
     }
+    WorkerManager::get().recycle();
     timer.schedule(5, clean);
   };
   clean();
@@ -506,6 +507,13 @@ int main(int argc, char *argv[]) {
             if (is_remote) {
               start_admin_link(opts.filename);
               start_reporting_metrics();
+            } else if (!is_repo) {
+              WorkerManager::get().on_done(
+                [&]() {
+                  exit_code = 0;
+                  Net::current().stop();
+                }
+              );
             }
 
             Pipy::on_exit(

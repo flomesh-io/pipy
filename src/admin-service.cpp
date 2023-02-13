@@ -97,6 +97,13 @@ AdminService::AdminService(CodebaseStore *store)
     m_current_program = "/";
   }
 
+  WorkerManager::get().on_done(
+    [this]() {
+      WorkerManager::get().stop(true);
+      m_current_program.clear();
+    }
+  );
+
   Pipy::on_exit([this](int code) { m_current_program.clear(); });
 }
 

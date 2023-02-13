@@ -96,6 +96,8 @@ auto JSModule::new_context(Context *base) -> Context* {
 }
 
 bool JSModule::load(const std::string &path) {
+  m_filename = pjs::Str::make(path);
+
   auto sd = Codebase::current()->get(path);
   if (!sd) {
     Log::error("[pjs] Cannot open script at %s", path.c_str());
@@ -185,7 +187,6 @@ bool JSModule::load(const std::string &path) {
     return false;
   }
 
-  m_filename = pjs::Str::make(path);
   m_configuration = config;
 
   return true;

@@ -28,6 +28,7 @@
 
 #include "filter.hpp"
 #include "fstream.hpp"
+#include "timer.hpp"
 
 namespace pipy {
 
@@ -52,7 +53,10 @@ private:
 
   pjs::Value m_pathname;
   pjs::Ref<File> m_file;
+  Timer m_keep_alive;
   bool m_started = false;
+
+  void keep_alive();
 };
 
 #endif // READ_HPP

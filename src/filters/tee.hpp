@@ -30,6 +30,7 @@
 #include "file.hpp"
 #include "data.hpp"
 #include "fstream.hpp"
+#include "timer.hpp"
 
 namespace pipy {
 
@@ -53,9 +54,9 @@ private:
   pjs::Value m_filename;
   pjs::Ref<pjs::Str> m_resolved_filename;
   pjs::Ref<File> m_file;
+  Timer m_keep_alive;
 
-  void open();
-  void close();
+  void keep_alive();
 };
 
 } // namespace pipy

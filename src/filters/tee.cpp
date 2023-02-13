@@ -56,6 +56,7 @@ void Tee::reset() {
   if (m_file) {
     m_file->close();
     m_file = nullptr;
+    m_keep_alive.cancel();
   }
   m_resolved_filename = nullptr;
 }
@@ -70,6 +71,7 @@ void Tee::process(Event *evt) {
       s->release();
       m_file = File::make(m_resolved_filename->str());
       m_file->open_write();
+      keep_alive();
     }
 
     if (m_file) {
@@ -80,10 +82,19 @@ void Tee::process(Event *evt) {
     if (m_file) {
       m_file->close();
       m_file = nullptr;
+      m_keep_alive.cancel();
     }
   }
 
   output(evt);
+}
+
+void Tee::keep_alive() {
+  m_keep_alive.schedule(
+    10, [this]() {
+      keep_alive();
+    }
+  );
 }
 
 } // namespace pipy

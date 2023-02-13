@@ -198,7 +198,7 @@ void FileStream::pump() {
       m_overflowed = false;
     }
 
-    if (m_ended) close();
+    if (m_ended && m_buffer.empty()) close();
 
     release();
   };
