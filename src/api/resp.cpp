@@ -46,15 +46,10 @@ void RESP::encode(const pjs::Value &value, Data::Builder &db) {
   std::function<void(const pjs::Value &)> write_value;
   write_value = [&](const pjs::Value &value) {
     if (value.is_string()) {
-      if (value.s()->size() > 0) {
-        char buf[100];
-        db.push(buf, std::snprintf(buf, sizeof(buf), "$%d\r\n", (int)value.s()->size()));
-        db.push(value.s()->str());
-        db.push('\r');
-        db.push('\n');
-      } else {
-        db.push("+\r\n", 3);
-      }
+      db.push('+');
+      db.push(value.s()->str());
+      db.push('\r');
+      db.push('\n');
 
     } else if (value.is_number()) {
       char buf[100];
@@ -69,6 +64,14 @@ void RESP::encode(const pjs::Value &value, Data::Builder &db) {
           write_value(v);
         }
       );
+
+    } else if (value.is<Data>()) {
+      auto *data = value.as<Data>();
+      char buf[100];
+      db.push(buf, std::snprintf(buf, sizeof(buf), "$%d\r\n", (int)data->size()));
+      db.push(*data, 0);
+      db.push('\r');
+      db.push('\n');
 
     } else if (value.is<pjs::Error>()) {
       db.push('-');

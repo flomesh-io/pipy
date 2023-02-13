@@ -138,8 +138,8 @@ auto Decoder::on_state(int state, int c) -> int {
           Deframer::read(m_read_int, m_read_data);
           return BULK_STRING_DATA;
         } else {
-          push_value(pjs::Str::empty.get());
-          return START;
+          push_value(Data::make());
+          return BULK_STRING_DATA_CR;
         }
       } else {
         return ERROR;
@@ -158,7 +158,7 @@ auto Decoder::on_state(int state, int c) -> int {
         return ERROR;
       }
     case BULK_STRING_DATA:
-      push_value(pjs::Str::make(m_read_data->to_string()));
+      push_value(Data::make(std::move(*m_read_data)));
       return BULK_STRING_DATA_CR;
     case BULK_STRING_DATA_CR:
       if (c == '\r') {
