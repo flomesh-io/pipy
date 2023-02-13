@@ -128,6 +128,7 @@ template<> void ClassDef<pipy::Message>::init() {
   accessor("head", [](Object *obj, Value &ret) { ret.set(obj->as<pipy::Message>()->head()); });
   accessor("tail", [](Object *obj, Value &ret) { ret.set(obj->as<pipy::Message>()->tail()); });
   accessor("body", [](Object *obj, Value &ret) { ret.set(obj->as<pipy::Message>()->body()); });
+  accessor("payload", [](Object *obj, Value &ret) { ret = obj->as<pipy::Message>()->payload(); });
 }
 
 template<> void ClassDef<Constructor<pipy::Message>>::init() {
