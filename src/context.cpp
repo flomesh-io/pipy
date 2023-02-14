@@ -26,6 +26,7 @@
 #include "context.hpp"
 #include "inbound.hpp"
 #include "worker.hpp"
+#include "thread.hpp"
 #include "log.hpp"
 
 namespace pipy {
@@ -79,6 +80,7 @@ using namespace pipy;
 
 template<> void ClassDef<ContextDataBase>::init() {
   accessor("__filename", [](Object *obj, Value &ret) { ret.set(obj->as<ContextDataBase>()->filename()); });
+  accessor("__thread", [](Object *obj, Value &ret) { ret.set(obj->as<ContextDataBase>()->worker()->thread()); });
   accessor("__inbound" , [](Object *obj, Value &ret) { ret.set(obj->as<ContextDataBase>()->inbound()); });
 }
 

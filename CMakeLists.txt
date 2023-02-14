@@ -253,6 +253,7 @@ add_executable(pipy
   src/table.cpp
   src/tar.cpp
   src/task.cpp
+  src/thread.cpp
   src/timer.cpp
   src/utils.cpp
   src/worker.cpp

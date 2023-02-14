@@ -36,6 +36,7 @@
 
 namespace pipy {
 
+class Thread;
 class PipelineLayout;
 class Task;
 
@@ -54,6 +55,7 @@ public:
   }
 
   auto root() const -> Module* { return m_root; }
+  auto thread() const -> Thread* { return m_thread; }
   auto global_object() const -> pjs::Object* { return m_global_object; }
   bool handling_signal(int sig);
   auto find_js_module(const std::string &path) -> JSModule*;
@@ -92,6 +94,7 @@ private:
   };
 
   Module* m_root = nullptr;
+  pjs::Ref<Thread> m_thread;
   pjs::Ref<pjs::Object> m_global_object;
   std::vector<Module*> m_modules;
   std::map<std::string, JSModule*> m_module_map;

@@ -24,6 +24,8 @@
  */
 
 #include "worker.hpp"
+#include "worker-thread.hpp"
+#include "thread.hpp"
 #include "module.hpp"
 #include "listener.hpp"
 #include "inbound.hpp"
@@ -217,7 +219,8 @@ namespace pipy {
 thread_local pjs::Ref<Worker> Worker::s_current;
 
 Worker::Worker(bool is_graph_enabled)
-  : m_global_object(Global::make())
+  : m_thread(Thread::make(WorkerThread::current()))
+  , m_global_object(Global::make())
   , m_graph_enabled(is_graph_enabled)
 {
   Log::debug("[worker   %p] ++", this);
