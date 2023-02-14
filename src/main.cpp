@@ -127,105 +127,6 @@ static void start_admin_link(const std::string &url) {
 }
 
 //
-// Periodically clean up pools
-//
-
-static void start_cleaning_pools() {
-  static Timer timer;
-  static std::function<void()> clean;
-  clean = []() {
-    for (const auto &p : pjs::Pool::all()) {
-      p.second->clean();
-    }
-    WorkerManager::get().recycle();
-    timer.schedule(5, clean);
-  };
-  clean();
-}
-
-//
-// Periodically check codebase updates
-//
-
-static void start_checking_updates() {
-  static Timer timer;
-  static std::function<void()> poll;
-  poll = []() {
-    if (!s_has_shutdown) {
-      reload_codebase(false);
-    }
-    timer.schedule(5, poll);
-  };
-  poll();
-}
-
-static void start_reporting_status(const std::string &address, const Fetch::Options &options) {
-  static Data::Producer s_dp("Status Reports");
-  static Fetch *fetch = nullptr;
-  static Timer timer;
-  static pjs::Ref<URL> url;
-  static pjs::Ref<pjs::Object> headers;
-  static std::function<void()> report;
-  report = [&]() {
-    if (s_has_shutdown) return;
-    if (!fetch) {
-      url = URL::make(pjs::Value(address).s());
-      headers = pjs::Object::make();
-      headers->set("content-type", "application/json");
-      fetch = new Fetch(url->hostname()->str() + ':' + url->port()->str(), options);
-    }
-    if (!fetch->busy()) {
-      WorkerManager::get().status(
-        [](Status &status) {
-          std::stringstream ss;
-          status.to_json(ss);
-          InputContext ic;
-          (*fetch)(
-            Fetch::POST,
-            url->path(),
-            headers,
-            Data::make(ss.str(), &s_dp),
-            [=](http::ResponseHead *head, Data *body) {}
-          );
-        }
-      );
-    }
-    timer.schedule(5, report);
-  };
-  report();
-}
-
-//
-// Periodically report metrics
-//
-
-static void start_reporting_metrics() {
-  static Data::Producer s_dp("Metric Reports");
-  static Timer timer;
-  static std::function<void()> report;
-  static stats::MetricDataSum metric_data_sum;
-  static int connection_id = 0;
-  report = []() {
-    if (s_has_shutdown) return;
-    WorkerManager::get().stats(
-      [](stats::MetricDataSum &metric_data_sum) {
-        InputContext ic;
-        Data buf;
-        Data::Builder db(buf, &s_dp);
-        db.push("metrics\n");
-        auto conn_id = s_admin_link->connect();
-        metric_data_sum.serialize(db, conn_id != connection_id);
-        db.flush();
-        s_admin_link->send(buf);
-        connection_id = conn_id;
-        timer.schedule(5, report);
-      }
-    );
-  };
-  report();
-}
-
-//
 // Open/close admin port
 //
 
@@ -246,82 +147,216 @@ static void toggle_admin_port() {
 }
 
 //
+// Periodic job base
+//
+
+class PeriodicJob {
+public:
+  void start() { run(); }
+  void stop() { m_timer.cancel(); }
+protected:
+  virtual void run() = 0;
+  void next() { m_timer.schedule(5, [this]() { run(); }); }
+private:
+  Timer m_timer;
+};
+
+//
+// Periodically clean up pools
+//
+
+class PoolCleaner : public PeriodicJob {
+  virtual void run() override {
+    for (const auto &p : pjs::Pool::all()) {
+      p.second->clean();
+    }
+    WorkerManager::get().recycle();
+    next();
+  }
+};
+
+static PoolCleaner s_pool_cleaner;
+
+//
+// Periodically check codebase updates
+//
+
+class CodeUpdater : public PeriodicJob {
+  virtual void run() override {
+    if (!s_has_shutdown) {
+      reload_codebase(false);
+    }
+    next();
+  }
+};
+
+static CodeUpdater s_code_updater;
+
+//
+// Periodically report status
+//
+
+class StatusReporter : public PeriodicJob {
+public:
+  void init(const std::string &address, const Fetch::Options &options) {
+    m_url = URL::make(pjs::Value(address).s());
+    m_headers = pjs::Object::make();
+    m_headers->set("content-type", "application/json");
+    m_fetch = new Fetch(m_url->hostname()->str() + ':' + m_url->port()->str(), options);
+  }
+
+private:
+  virtual void run() override {
+    static Data::Producer s_dp("Status Reports");
+    if (s_has_shutdown) return;
+    if (!m_fetch->busy()) {
+      WorkerManager::get().status(
+        [this](Status &status) {
+          std::stringstream ss;
+          status.to_json(ss);
+          InputContext ic;
+          (*m_fetch)(
+            Fetch::POST,
+            m_url->path(),
+            m_headers,
+            Data::make(ss.str(), &s_dp),
+            [=](http::ResponseHead *head, Data *body) {}
+          );
+        }
+      );
+    }
+    next();
+  }
+
+  Fetch *m_fetch = nullptr;
+  pjs::Ref<URL> m_url;
+  pjs::Ref<pjs::Object> m_headers;
+};
+
+static StatusReporter s_status_reporter;
+
+//
+// Periodically report metrics
+//
+
+class MetricReporter : public PeriodicJob {
+  virtual void run() override {
+    static Data::Producer s_dp("Metric Reports");
+    if (s_has_shutdown) return;
+    WorkerManager::get().stats(
+      [this](stats::MetricDataSum &metric_data_sum) {
+        InputContext ic;
+        Data buf;
+        Data::Builder db(buf, &s_dp);
+        db.push("metrics\n");
+        auto conn_id = s_admin_link->connect();
+        metric_data_sum.serialize(db, conn_id != m_connection_id);
+        db.flush();
+        s_admin_link->send(buf);
+        m_connection_id = conn_id;
+        next();
+      }
+    );
+  }
+
+  int m_connection_id = 0;
+};
+
+static MetricReporter s_metric_reporter;
+
+//
 // Handle signals
 //
 
-static void handle_signal(int sig) {
-  static bool s_admin_closed = false;
-  static std::function<void()> wait, stop;
-  static Timer timer;
+class SignalHandler {
+public:
+  SignalHandler() : m_signals(Net::context()) {
+    m_signals.add(SIGINT);
+    m_signals.add(SIGHUP);
+    m_signals.add(SIGTSTP);
+  }
 
-  if (auto worker = Worker::current()) {
-    if (worker->handling_signal(sig)) {
-      return;
+  void start() { wait(); }
+  void stop() { m_signals.cancel(); }
+
+private:
+  asio::signal_set m_signals;
+  bool m_admin_closed = false;
+  Timer m_timer;
+
+  void wait() {
+    m_signals.async_wait(
+      [this](const std::error_code &ec, int sig) {
+        if (!ec) handle(sig);
+        if (ec != asio::error::operation_aborted) wait();
+      }
+    );
+  }
+
+  void handle(int sig) {
+    if (auto worker = Worker::current()) {
+      if (worker->handling_signal(sig)) {
+        return;
+      }
+    }
+
+    switch (sig) {
+      case SIGINT: {
+        if (!m_admin_closed) {
+          if (s_admin_link) s_admin_link->close();
+          if (s_admin) s_admin->close();
+          m_admin_closed = true;
+        }
+
+        if (WorkerManager::get().started()) {
+          if (s_has_shutdown) {
+            Log::info("[shutdown] Forcing to shut down...");
+            WorkerManager::get().stop(true);
+            drain_events();
+          } else {
+            Log::info("[shutdown] Shutting down...");
+            wait_pipelines();
+          }
+        } else {
+          drain_events();
+        }
+
+        s_has_shutdown = true;
+        break;
+      }
+
+      case SIGHUP:
+        reload_codebase(true);
+        break;
+
+      case SIGTSTP:
+        toggle_admin_port();
+        break;
     }
   }
 
-  switch (sig) {
-    case SIGINT: {
-      wait = []() {
-        if (WorkerManager::get().stop()) {
-          stop();
-        } else {
-          int n = WorkerManager::get().active_pipeline_count();
-          Log::info("[shutdown] Waiting for remaining %d pipelines...", n);
-          timer.schedule(1, wait);
-        }
-      };
-
-      stop = []() {
-        Log::info("[shutdown] Stopping event loop...");
-        Net::current().stop();
-      };
-
-      if (!s_admin_closed) {
-        if (s_admin_link) s_admin_link->close();
-        if (s_admin) s_admin->close();
-        s_admin_closed = true;
-      }
-
-      if (WorkerManager::get().started()) {
-        if (s_has_shutdown) {
-          Log::info("[shutdown] Forcing to shut down...");
-          WorkerManager::get().stop(true);
-          stop();
-        } else {
-          Log::info("[shutdown] Shutting down...");
-          wait();
-        }
-      } else {
-        stop();
-      }
-
-      s_has_shutdown = true;
-      break;
+  void wait_pipelines() {
+    if (WorkerManager::get().stop()) {
+      drain_events();
+    } else {
+      int n = WorkerManager::get().active_pipeline_count();
+      Log::info("[shutdown] Waiting for remaining %d pipelines...", n);
+      m_timer.schedule(1, [this]() { wait_pipelines(); });
     }
-
-    case SIGHUP:
-      reload_codebase(true);
-      break;
-
-    case SIGTSTP:
-      toggle_admin_port();
-      break;
   }
-}
 
-//
-// Wait for signals
-//
+  void drain_events() {
+    Net::current().stop();
+    Log::info("[shutdown] Draining event loop...");
+    s_pool_cleaner.stop();
+    s_code_updater.stop();
+    s_status_reporter.stop();
+    s_metric_reporter.stop();
+    stop();
+  }
+};
 
-static void wait_for_signals(asio::signal_set &signals) {
-  signals.async_wait(
-    [&](const std::error_code &ec, int sig) {
-      if (!ec) handle_signal(sig);
-      wait_for_signals(signals);
-    }
-  );
-}
+static SignalHandler s_signal_handler;
 
 //
 // Program entrance
@@ -461,7 +496,7 @@ int main(int argc, char *argv[]) {
       s_admin_proxy = new AdminProxy(opts.filename);
       s_admin_proxy->open(admin_ip, admin_port, options);
 
-    // Start as a fixed codebase
+    // Start as a static codebase
     } else {
       if (is_remote) {
         Fetch::Options options;
@@ -470,7 +505,7 @@ int main(int argc, char *argv[]) {
         options.key = opts.tls_key;
         options.trusted = opts.tls_trusted;
         codebase = Codebase::from_http(opts.filename, options);
-        start_reporting_status(opts.filename, options);
+        s_status_reporter.init(opts.filename, options);
       } else if (is_eval) {
         codebase = Codebase::from_fs(
           fs::abs_path("."),
@@ -492,6 +527,17 @@ int main(int argc, char *argv[]) {
 
             WorkerManager::get().enable_graph(!opts.no_graph);
 
+            if (!is_repo && !is_remote) {
+              WorkerManager::get().on_done(
+                [&]() {
+                  exit_code = 0;
+                  s_pool_cleaner.stop();
+                  s_code_updater.stop();
+                  s_signal_handler.stop();
+                }
+              );
+            }
+
             if (!WorkerManager::get().start(opts.threads)) {
               fail();
               return;
@@ -502,18 +548,12 @@ int main(int argc, char *argv[]) {
 
             if (!opts.admin_port.empty()) toggle_admin_port();
 
-            start_checking_updates();
+            s_code_updater.start();
 
             if (is_remote) {
               start_admin_link(opts.filename);
-              start_reporting_metrics();
-            } else if (!is_repo) {
-              WorkerManager::get().on_done(
-                [&]() {
-                  exit_code = 0;
-                  Net::current().stop();
-                }
-              );
+              s_status_reporter.start();
+              s_metric_reporter.start();
             }
 
             Pipy::on_exit(
@@ -538,17 +578,13 @@ int main(int argc, char *argv[]) {
       load();
     }
 
-    asio::signal_set signals(Net::context());
-    signals.add(SIGINT);
-    signals.add(SIGHUP);
-    signals.add(SIGTSTP);
-    wait_for_signals(signals);
+    s_pool_cleaner.start();
+    s_signal_handler.start();
 
-    start_cleaning_pools();
     Net::current().run();
 
-    delete s_admin_link;
     delete s_admin;
+    delete s_admin_link;
     delete s_admin_proxy;
     delete repo;
 

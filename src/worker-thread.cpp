@@ -43,6 +43,7 @@ WorkerThread::WorkerThread(WorkerManager *manager, int index, bool is_graph_enab
   , m_working(false)
   , m_recycling(false)
   , m_shutdown(false)
+  , m_done(false)
   , m_ended(false)
   , m_graph_enabled(is_graph_enabled)
 {
@@ -377,6 +378,7 @@ void WorkerThread::main() {
     while (m_working) {
       Net::current().run();
       m_working = false;
+      m_done = true;
       m_manager->on_thread_done(m_index);
 
       Log::info("[start] Thread %d done", m_index);
@@ -394,6 +396,7 @@ void WorkerThread::main() {
       Net::current().run();
 
       if (m_working) {
+        m_done = false;
         Net::current().context().restart();
         Log::info("[start] Thread %d restarted", m_index);
       }
@@ -637,7 +640,7 @@ void WorkerManager::on_thread_done(int index) {
     Net::main().post(
       [this]() {
         for (auto *wt : m_worker_threads) {
-          if (wt && wt->working()) return;
+          if (wt && !wt->done()) return;
         }
         m_on_done();
       }

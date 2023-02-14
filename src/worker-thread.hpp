@@ -54,7 +54,7 @@ public:
   static auto current() -> WorkerThread* { return s_current; }
 
   auto index() const -> int { return m_index; }
-  bool working() { return m_working; }
+  bool done() { return m_done; }
   auto active_pipeline_count() const -> size_t { return m_active_pipeline_count.load(std::memory_order_relaxed); }
 
   bool start();
@@ -80,6 +80,7 @@ private:
   std::atomic<bool> m_working;
   std::atomic<bool> m_recycling;
   std::atomic<bool> m_shutdown;
+  std::atomic<bool> m_done;
   std::atomic<bool> m_ended;
   std::thread m_thread;
   std::mutex m_mutex;
