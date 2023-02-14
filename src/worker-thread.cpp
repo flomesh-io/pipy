@@ -181,6 +181,7 @@ bool WorkerThread::stop(bool force) {
   if (force) {
     m_net->post(
       [this]() {
+        m_shutdown = true;
         m_new_worker = nullptr;
         shutdown_all();
         Net::current().stop();
