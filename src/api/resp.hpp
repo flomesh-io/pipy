@@ -28,6 +28,7 @@
 
 #include "pjs/pjs.hpp"
 #include "data.hpp"
+#include "deframer.hpp"
 
 namespace pipy {
 
@@ -37,8 +38,80 @@ namespace pipy {
 
 class RESP : public pjs::ObjectTemplate<RESP> {
 public:
+  static auto decode(const Data &data) -> pjs::Array*;
   static void encode(const pjs::Value &value, Data &data);
   static void encode(const pjs::Value &value, Data::Builder &db);
+
+  //
+  // RESP::Parser
+  //
+
+  class Parser : protected Deframer {
+  public:
+    Parser();
+
+    void reset();
+    void parse(Data &data);
+
+  protected:
+    virtual void on_message_start() {}
+    virtual void on_message_end(const pjs::Value &value) = 0;
+
+  private:
+    enum State {
+      START,
+      NEWLINE,
+      SIMPLE_STRING,
+      ERROR_STRING,
+      BULK_STRING_SIZE,
+      BULK_STRING_SIZE_NEWLINE,
+      BULK_STRING_SIZE_NEGATIVE,
+      BULK_STRING_SIZE_NEGATIVE_CR,
+      BULK_STRING_DATA,
+      BULK_STRING_DATA_CR,
+      INTEGER_START,
+      INTEGER_POSITIVE,
+      INTEGER_NEGATIVE,
+      ARRAY_SIZE,
+      ARRAY_SIZE_NEGATIVE,
+      ARRAY_SIZE_NEGATIVE_CR,
+      ERROR,
+    };
+
+    struct Level : public pjs::Pooled<Level> {
+      Level* back;
+      pjs::Array *array;
+      int index = 0;
+    };
+
+    Level* m_stack = nullptr;
+    pjs::Value m_root;
+    pjs::Ref<Data> m_read_data;
+    int64_t m_read_int;
+
+    virtual auto on_state(int state, int c) -> int override;
+
+    void push_value(const pjs::Value &value);
+    void message_start();
+    void message_end();
+  };
+
+  //
+  // RESP::StreamParser
+  //
+
+  class StreamParser : public Parser {
+  public:
+    StreamParser(const std::function<void(const pjs::Value &)> &cb)
+      : m_cb(cb) {}
+
+    virtual void on_message_end(const pjs::Value &value) override {
+      m_cb(value);
+    }
+
+  private:
+    std::function<void(const pjs::Value &)> m_cb;
+  };
 };
 
 } // namespace pipy

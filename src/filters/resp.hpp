@@ -27,7 +27,7 @@
 #define RESP_HPP
 
 #include "filter.hpp"
-#include "deframer.hpp"
+#include "api/resp.hpp"
 
 namespace pipy {
 namespace resp {
@@ -36,7 +36,7 @@ namespace resp {
 // Decoder
 //
 
-class Decoder : public Filter, public Deframer {
+class Decoder : public Filter, public RESP::Parser {
 public:
   Decoder();
 
@@ -49,50 +49,9 @@ private:
   virtual void process(Event *evt) override;
   virtual void dump(Dump &d) override;
 
-  enum State {
-    START,
-    NEWLINE,
-    SIMPLE_STRING,
-    ERROR_STRING,
-    BULK_STRING_SIZE,
-    BULK_STRING_SIZE_NEWLINE,
-    BULK_STRING_SIZE_NEGATIVE,
-    BULK_STRING_SIZE_NEGATIVE_CR,
-    BULK_STRING_DATA,
-    BULK_STRING_DATA_CR,
-    INTEGER_START,
-    INTEGER_POSITIVE,
-    INTEGER_NEGATIVE,
-    ARRAY_SIZE,
-    ARRAY_SIZE_NEGATIVE,
-    ARRAY_SIZE_NEGATIVE_CR,
-    ERROR,
-  };
-
-  struct Level : public pjs::Pooled<Level> {
-    Level* back;
-    pjs::Array *array;
-    int index = 0;
-  };
-
-  Level* m_stack = nullptr;
-  pjs::Value m_root;
-  pjs::Ref<Data> m_read_data;
-  int64_t m_read_int;
-
-  virtual auto on_state(int state, int c) -> int override;
   virtual void on_pass(const Data &data) override;
-
-  void push_value(const pjs::Value &value);
-  void message_start();
-  void message_end();
-};
-
-//
-// Encoder
-//
-
-class Encoder : public Filter {
+  virtual void on_message_start() override;
+  virtual void on_message_end(const pjs::Value &value) override;
 };
 
 } // namespace resp
