@@ -36,6 +36,7 @@
 #include "codebase.hpp"
 #include "status.hpp"
 #include "api/algo.hpp"
+#include "api/bgp.hpp"
 #include "api/configuration.hpp"
 #include "api/console.hpp"
 #include "api/crypto.hpp"
@@ -124,6 +125,9 @@ template<> void ClassDef<Global>::init() {
 
   // Protobuf
   variable("protobuf", class_of<Protobuf>());
+
+  // BGP
+  variable("BGP", class_of<BGP>());
 
   // DNS
   variable("DNS", class_of<DNS>());

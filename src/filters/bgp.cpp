@@ -23,10 +23,10 @@
  *  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include "resp.hpp"
+#include "bgp.hpp"
 
 namespace pipy {
-namespace resp {
+namespace bgp {
 
 //
 // Decoder
@@ -47,7 +47,7 @@ Decoder::~Decoder()
 
 void Decoder::dump(Dump &d) {
   Filter::dump(d);
-  d.name = "decodeRESP";
+  d.name = "decodeBGP";
 }
 
 auto Decoder::clone() -> Filter* {
@@ -56,15 +56,15 @@ auto Decoder::clone() -> Filter* {
 
 void Decoder::reset() {
   Filter::reset();
-  RESP::Parser::reset();
+  BGP::Parser::reset();
 }
 
 void Decoder::process(Event *evt) {
   if (evt->is<StreamEnd>()) {
     Filter::output(evt);
-    RESP::Parser::reset();
+    BGP::Parser::reset();
   } else if (auto *data = evt->as<Data>()) {
-    RESP::Parser::parse(*data);
+    BGP::Parser::parse(*data);
   }
 }
 
@@ -76,9 +76,9 @@ void Decoder::on_message_start() {
   Filter::output(MessageStart::make());
 }
 
-void Decoder::on_message_end(const pjs::Value &value) {
-  Filter::output(MessageEnd::make(nullptr, value));
+void Decoder::on_message_end(pjs::Object *payload) {
+  Filter::output(MessageEnd::make(nullptr, payload));
 }
 
-} // namespace resp
+} // namespace bgp
 } // namespace pipy

@@ -151,6 +151,7 @@ add_executable(pipy
   src/admin-proxy.cpp
   src/admin-service.cpp
   src/api/algo.cpp
+  src/api/bgp.cpp
   src/api/configuration.cpp
   src/api/console.cpp
   src/api/crypto.cpp
@@ -178,6 +179,7 @@ add_executable(pipy
   src/fetch.cpp
   src/file.cpp
   src/filter.cpp
+  src/filters/bgp.cpp
   src/filters/branch.cpp
   src/filters/chain.cpp
   src/filters/compress-message.cpp

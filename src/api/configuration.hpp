@@ -67,6 +67,7 @@ public:
   void connect_proxy_protocol(const pjs::Value &address);
   void connect_socks(const pjs::Value &address);
   void connect_tls(pjs::Object *options);
+  void decode_bgp();
   void decode_dubbo();
   void decode_http_request();
   void decode_http_response(pjs::Object *options);

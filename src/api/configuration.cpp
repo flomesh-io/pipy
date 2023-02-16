@@ -35,6 +35,7 @@
 #include "log.hpp"
 
 // all filters
+#include "filters/bgp.hpp"
 #include "filters/branch.hpp"
 #include "filters/chain.hpp"
 #include "filters/connect.hpp"
@@ -158,6 +159,10 @@ void FilterConfigurator::connect_socks(const pjs::Value &address) {
 
 void FilterConfigurator::connect_tls(pjs::Object *options) {
   require_sub_pipeline(append_filter(new tls::Client(options)));
+}
+
+void FilterConfigurator::decode_bgp() {
+  append_filter(new bgp::Decoder());
 }
 
 void FilterConfigurator::decode_dubbo() {
@@ -1091,6 +1096,16 @@ template<> void ClassDef<FilterConfigurator>::init() {
       } else if (ctx.arguments(0, &options)) {
         thiz->as<FilterConfigurator>()->connect_tls(options);
       }
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // FilterConfigurator.decodeBGP
+  method("decodeBGP", [](Context &ctx, Object *thiz, Value &result) {
+    try {
+      thiz->as<FilterConfigurator>()->decode_bgp();
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

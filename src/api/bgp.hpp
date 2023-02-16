@@ -23,62 +23,64 @@
  *  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include "resp.hpp"
+#ifndef API_BGP_HPP
+#define API_BGP_HPP
+
+#include "pjs/pjs.hpp"
+#include "data.hpp"
+#include "deframer.hpp"
 
 namespace pipy {
-namespace resp {
 
 //
-// Decoder
+// BGP
 //
 
-Decoder::Decoder()
-{
-}
+class BGP : public pjs::ObjectTemplate<BGP> {
+public:
+  static auto decode(const Data &data) -> pjs::Array*;
+  static void encode(const pjs::Value &value, Data &data);
+  static void encode(const pjs::Value &value, Data::Builder &db);
 
-Decoder::Decoder(const Decoder &r)
-  : Filter(r)
-{
-}
+  //
+  // BGP::Parser
+  //
 
-Decoder::~Decoder()
-{
-}
+  class Parser : protected Deframer {
+  public:
+    Parser();
 
-void Decoder::dump(Dump &d) {
-  Filter::dump(d);
-  d.name = "decodeRESP";
-}
+    void reset();
+    void parse(Data &data);
 
-auto Decoder::clone() -> Filter* {
-  return new Decoder(*this);
-}
+  protected:
+    virtual void on_message_start() {}
+    virtual void on_message_end(pjs::Object *payload) = 0;
 
-void Decoder::reset() {
-  Filter::reset();
-  RESP::Parser::reset();
-}
+  private:
+    virtual auto on_state(int state, int c) -> int override;
 
-void Decoder::process(Event *evt) {
-  if (evt->is<StreamEnd>()) {
-    Filter::output(evt);
-    RESP::Parser::reset();
-  } else if (auto *data = evt->as<Data>()) {
-    RESP::Parser::parse(*data);
-  }
-}
+    pjs::Ref<Data> m_payload;
+  };
 
-void Decoder::on_pass(const Data &data) {
-  Filter::output(Data::make(data));
-}
+  //
+  // BGP::StreamParser
+  //
 
-void Decoder::on_message_start() {
-  Filter::output(MessageStart::make());
-}
+  class StreamParser : public Parser {
+  public:
+    StreamParser(const std::function<void(pjs::Object *)> &cb)
+      : m_cb(cb) {}
 
-void Decoder::on_message_end(const pjs::Value &value) {
-  Filter::output(MessageEnd::make(nullptr, value));
-}
+    virtual void on_message_end(pjs::Object *payload) override {
+      m_cb(payload);
+    }
 
-} // namespace resp
+  private:
+    std::function<void(pjs::Object *)> m_cb;
+  };
+};
+
 } // namespace pipy
+
+#endif // API_BGP_HPP

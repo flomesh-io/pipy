@@ -23,62 +23,38 @@
  *  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include "resp.hpp"
+#ifndef BGP_HPP
+#define BGP_HPP
+
+#include "filter.hpp"
+#include "api/bgp.hpp"
 
 namespace pipy {
-namespace resp {
+namespace bgp {
 
 //
 // Decoder
 //
 
-Decoder::Decoder()
-{
-}
+class Decoder : public Filter, public BGP::Parser {
+public:
+  Decoder();
 
-Decoder::Decoder(const Decoder &r)
-  : Filter(r)
-{
-}
+private:
+  Decoder(const Decoder &r);
+  ~Decoder();
 
-Decoder::~Decoder()
-{
-}
+  virtual auto clone() -> Filter* override;
+  virtual void reset() override;
+  virtual void process(Event *evt) override;
+  virtual void dump(Dump &d) override;
 
-void Decoder::dump(Dump &d) {
-  Filter::dump(d);
-  d.name = "decodeRESP";
-}
+  virtual void on_pass(const Data &data) override;
+  virtual void on_message_start() override;
+  virtual void on_message_end(pjs::Object *payload) override;
+};
 
-auto Decoder::clone() -> Filter* {
-  return new Decoder(*this);
-}
-
-void Decoder::reset() {
-  Filter::reset();
-  RESP::Parser::reset();
-}
-
-void Decoder::process(Event *evt) {
-  if (evt->is<StreamEnd>()) {
-    Filter::output(evt);
-    RESP::Parser::reset();
-  } else if (auto *data = evt->as<Data>()) {
-    RESP::Parser::parse(*data);
-  }
-}
-
-void Decoder::on_pass(const Data &data) {
-  Filter::output(Data::make(data));
-}
-
-void Decoder::on_message_start() {
-  Filter::output(MessageStart::make());
-}
-
-void Decoder::on_message_end(const pjs::Value &value) {
-  Filter::output(MessageEnd::make(nullptr, value));
-}
-
-} // namespace resp
+} // namespace bgp
 } // namespace pipy
+
+#endif // BGP_HPP
