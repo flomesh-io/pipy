@@ -575,6 +575,23 @@ Class::~Class() {
   }
 }
 
+void Class::assign(Object *obj, Object *src) {
+  for (size_t i = 0, n = m_fields.size(); i < n; i++) {
+    auto *f = m_fields[i].get();
+    if (f->type() != Field::Method) {
+      auto *k = f->name();
+      Value v;
+      if (src->get(k, v)) {
+        if (f->type() == Field::Accessor) {
+          static_cast<Accessor*>(f)->set(obj, v);
+        } else {
+          obj->data()->at(i) = v;
+        }
+      }
+    }
+  }
+}
+
 //
 // Object
 //

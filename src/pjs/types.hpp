@@ -907,6 +907,8 @@ public:
     return false;
   }
 
+  void assign(Object *obj, Object *src);
+
 private:
   Class(
     const std::string &name,
@@ -1209,7 +1211,7 @@ public:
   void set(const char *s) { release(); m_t = Type::String; m_v.s = Str::make(s)->retain(); }
   void set(const std::string &s) { release(); m_t = Type::String; m_v.s = Str::make(s)->retain(); }
   void set(std::string &&s) { release(); m_t = Type::String; m_v.s = Str::make(std::move(s))->retain(); }
-  void set(Str *s) { s->retain(); release(); m_t = Type::String; m_v.s = s; }
+  void set(Str *s) { if (s) s->retain(); release(); m_t = s ? Type::String : Type::Undefined; m_v.s = s; }
   void set(Object *o) { if (o) retain(o); release(); m_t = Type::Object; m_v.o = o; }
 
   auto to_boolean() const -> bool {
@@ -1421,11 +1423,11 @@ public:
   bool is_array() const { return is_instance_of<Array>(); }
 
   bool has(Str *key);
-  void get(Str *key, Value &val);
+  bool get(Str *key, Value &val);
   void set(Str *key, const Value &val);
   auto ht_size() const -> size_t { return m_hash ? m_hash->size() : 0; }
   bool ht_has(Str *key) { return m_hash ? m_hash->has(key) : false; }
-  void ht_get(Str *key, Value &val);
+  bool ht_get(Str *key, Value &val);
   void ht_set(Str *key, const Value &val);
   bool ht_delete(Str *key);
 
@@ -1645,11 +1647,12 @@ inline bool Object::has(Str *key) {
   else return ht_has(key);
 }
 
-inline void Object::get(Str *key, Value &val) {
+inline bool Object::get(Str *key, Value &val) {
   assert_same_thread(*this);
   auto i = m_class->find_field(key);
-  if (i >= 0) val = m_data->at(i);
-  else ht_get(key, val);
+  if (i < 0) return ht_get(key, val);
+  val = m_data->at(i);
+  return true;
 }
 
 inline void Object::set(Str *key, const Value &val) {
@@ -1659,11 +1662,13 @@ inline void Object::set(Str *key, const Value &val) {
   else ht_set(key, val);
 }
 
-inline void Object::ht_get(Str *key, Value &val) {
+inline bool Object::ht_get(Str *key, Value &val) {
   assert_same_thread(*this);
   if (!m_hash || !m_hash->get(key, val)) {
     val = Value::undefined;
+    return false;
   }
+  return true;
 }
 
 inline void Object::ht_set(Str *key, const Value &val) {
