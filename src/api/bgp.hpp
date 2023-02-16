@@ -39,8 +39,77 @@ namespace pipy {
 class BGP : public pjs::ObjectTemplate<BGP> {
 public:
   static auto decode(const Data &data) -> pjs::Array*;
-  static void encode(const pjs::Value &value, Data &data);
-  static void encode(const pjs::Value &value, Data::Builder &db);
+  static void encode(pjs::Object *payload, Data &data);
+
+  //
+  // MessageType
+  //
+
+  enum class MessageType {
+    OPEN = 1,
+    UPDATE = 2,
+    NOTIFICATION = 3,
+    KEEPALIVE = 4,
+  };
+
+  //
+  // PathAttribute
+  //
+
+  class PathAttribute : public pjs::ObjectTemplate<PathAttribute> {
+  public:
+    pjs::Ref<pjs::Str> name;
+    pjs::Value value;
+    int code;
+    bool optional;
+    bool transitive;
+    bool partial;
+  };
+
+  //
+  // Message
+  //
+
+  class Message : public pjs::ObjectTemplate<Message> {
+  public:
+    MessageType type = MessageType::KEEPALIVE;
+    pjs::Ref<pjs::Object> body;
+  };
+
+  //
+  // MessageOpen
+  //
+
+  class MessageOpen : public pjs::ObjectTemplate<MessageOpen> {
+  public:
+    int version = 4;
+    int myAS = 0;
+    int holdTime = 0;
+    pjs::Ref<pjs::Str> identifier;
+    pjs::Ref<pjs::Object> parameters;
+  };
+
+  //
+  // MessageUpdate
+  //
+
+  class MessageUpdate : public pjs::ObjectTemplate<MessageUpdate> {
+  public:
+    pjs::Ref<pjs::Array> withdrawnRoutes;
+    pjs::Ref<pjs::Array> pathAttributes;
+    pjs::Ref<pjs::Array> destinations;
+  };
+
+  //
+  // MessageNotification
+  //
+
+  class MessageNotification : public pjs::ObjectTemplate<MessageNotification> {
+  public:
+    int errorCode;
+    int errorSubcode;
+    pjs::Ref<Data> data;
+  };
 
   //
   // BGP::Parser

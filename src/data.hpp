@@ -555,6 +555,20 @@ public:
     }
   }
 
+  void push(Data &&data) {
+    assert_same_thread(*this);
+    if (&data == this) return;
+    if (!data.m_head) return;
+    if (m_tail) {
+      data.m_head->prev = m_tail;
+      m_tail->next = data.m_head;
+    } else {
+      m_head = data.m_head;
+    }
+    m_tail = data.m_tail;
+    data.m_head = data.m_tail = nullptr;
+  }
+
   void push(const std::string &str, Producer *producer) {
     assert_same_thread(*this);
     push(str.c_str(), str.length(), producer);
