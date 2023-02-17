@@ -86,6 +86,7 @@ public:
     int myAS = 0;
     int holdTime = 0;
     pjs::Ref<pjs::Str> identifier;
+    pjs::Ref<pjs::Object> capabilities;
     pjs::Ref<pjs::Object> parameters;
   };
 

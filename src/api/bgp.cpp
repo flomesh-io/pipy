@@ -36,6 +36,12 @@ namespace pipy {
 
 thread_local static Data::Producer s_dp("BGP");
 
+inline static void clamp_data_size(Data &data, size_t limit) {
+  if (data.size() > limit) {
+    data.pop(data.size() - limit);
+  }
+}
+
 auto BGP::decode(const Data &data) -> pjs::Array* {
   pjs::Array *a = pjs::Array::make();
   StreamParser sp(
@@ -50,6 +56,7 @@ auto BGP::decode(const Data &data) -> pjs::Array* {
 
 void BGP::encode(pjs::Object *payload, Data &data) {
   Data payload_buffer;
+
   pjs::Ref<Message> msg;
   if (payload && payload->is<Message>()) {
     msg = payload->as<Message>();
@@ -57,13 +64,99 @@ void BGP::encode(pjs::Object *payload, Data &data) {
     msg = Message::make();
     if (payload) pjs::class_of<Message>()->assign(msg, payload);
   }
+
   if (auto *body = msg->body.get()) {
     Data::Builder db(payload_buffer, &s_dp);
     switch (msg->type) {
-      case MessageType::OPEN:
+      case MessageType::OPEN: {
+        pjs::Ref<MessageOpen> m;
+        if (body->is<MessageOpen>()) {
+          m = body->as<MessageOpen>();
+        } else {
+          m = MessageOpen::make();
+          pjs::class_of<MessageOpen>()->assign(m, body);
+        }
+        uint8_t ip[4];
+        if (!m->identifier || !utils::get_ip_v4(m->identifier->str(), ip)) {
+          std::memset(ip, 0, sizeof(ip));
+        }
+        db.push((char)m->version);
+        db.push((char)m->myAS >> 8);
+        db.push((char)m->myAS >> 0);
+        db.push((char)m->holdTime >> 8);
+        db.push((char)m->holdTime >> 0);
+        db.push((char *)ip, sizeof(ip));
+        Data param_buffer;
+        Data::Builder db2(param_buffer, &s_dp);
+        if (auto *caps = m->capabilities.get()) {
+          Data caps_buffer;
+          Data::Builder db3(caps_buffer, &s_dp);
+          caps->iterate_all(
+            [&](pjs::Str *k, pjs::Value &v) {
+              auto n = k->parse_int();
+              if (!std::isnan(n)) {
+                int id(n);
+                if (v.is<Data>()) {
+                  Data data(*v.as<Data>());
+                  clamp_data_size(data, 255);
+                  db3.push((char)id);
+                  db3.push((char)data.size());
+                  db3.push(data, 0);
+                } else {
+                  db3.push((char)id);
+                  switch (id) {
+                    default: {
+                      db3.push('\0');
+                      break;
+                    }
+                  }
+                }
+              }
+            }
+          );
+          db3.flush();
+          if (caps_buffer.size() > 0) {
+            clamp_data_size(caps_buffer, 255);
+            db2.push('\02');
+            db2.push((char)caps_buffer.size());
+            db2.push(caps_buffer, 0);
+          }
+        }
+        if (auto *params = m->parameters.get()) {
+          params->iterate_all(
+            [&](pjs::Str *k, pjs::Value &v) {
+              if (v.is<Data>()) {
+                auto n = k->parse_int();
+                if (!std::isnan(n)) {
+                  int id(n);
+                  Data data(*v.as<Data>());
+                  clamp_data_size(data, 255);
+                  db2.push((char)id);
+                  db2.push((char)data.size());
+                  db2.push(data, 0);
+                }
+              }
+            }
+          );
+        }
+        db2.flush();
+        clamp_data_size(param_buffer, 255);
+        db.push((char)param_buffer.size());
+        db.push(std::move(param_buffer));
         break;
-      case MessageType::UPDATE:
+      }
+
+      case MessageType::UPDATE: {
+        pjs::Ref<MessageUpdate> m;
+        if (body->is<MessageUpdate>()) {
+          m = body->as<MessageUpdate>();
+        } else {
+          m = MessageUpdate::make();
+          pjs::class_of<MessageUpdate>()->assign(m, body);
+        }
         break;
+      }
+
       case MessageType::NOTIFICATION: {
         pjs::Ref<MessageNotification> m;
         if (body->is<MessageNotification>()) {
@@ -81,6 +174,7 @@ void BGP::encode(pjs::Object *payload, Data &data) {
     }
     db.flush();
   }
+
   uint8_t header[19];
   std::memset(header, 0xff, 16);
   auto length = payload_buffer.size() + sizeof(header);
@@ -174,6 +268,55 @@ template<> void ClassDef<BGP::Message>::init() {
     [](Object *obj, Value &val) { val.set(obj->as<BGP::Message>()->body.get()); },
     [](Object *obj, const Value &val) { obj->as<BGP::Message>()->body = val.is_object() ? val.o() : nullptr; }
   );
+}
+
+//
+// BGP::MessageOpen
+//
+
+template<> void ClassDef<BGP::MessageOpen>::init() {
+  accessor(
+    "version",
+    [](Object *obj, Value &val) { val.set(obj->as<BGP::MessageOpen>()->version); },
+    [](Object *obj, const Value &val) { obj->as<BGP::MessageOpen>()->version = val.to_number(); }
+  );
+
+  accessor(
+    "myAS",
+    [](Object *obj, Value &val) { val.set(obj->as<BGP::MessageOpen>()->myAS); },
+    [](Object *obj, const Value &val) { obj->as<BGP::MessageOpen>()->myAS = val.to_number(); }
+  );
+
+  accessor(
+    "holdTime",
+    [](Object *obj, Value &val) { val.set(obj->as<BGP::MessageOpen>()->holdTime); },
+    [](Object *obj, const Value &val) { obj->as<BGP::MessageOpen>()->holdTime = val.to_number(); }
+  );
+
+  accessor(
+    "identifier",
+    [](Object *obj, Value &val) { val.set(obj->as<BGP::MessageOpen>()->identifier); },
+    [](Object *obj, const Value &val) { (obj->as<BGP::MessageOpen>()->identifier = val.to_string())->release(); }
+  );
+
+  accessor(
+    "capabilities",
+    [](Object *obj, Value &val) { val.set(obj->as<BGP::MessageOpen>()->capabilities); },
+    [](Object *obj, const Value &val) { obj->as<BGP::MessageOpen>()->capabilities = val.is_object() ? val.o() : nullptr; }
+  );
+
+  accessor(
+    "parameters",
+    [](Object *obj, Value &val) { val.set(obj->as<BGP::MessageOpen>()->parameters); },
+    [](Object *obj, const Value &val) { obj->as<BGP::MessageOpen>()->parameters = val.is_object() ? val.o() : nullptr; }
+  );
+}
+
+//
+// BGP::MessageUpdate
+//
+
+template<> void ClassDef<BGP::MessageUpdate>::init() {
 }
 
 //
