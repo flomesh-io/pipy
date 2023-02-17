@@ -234,6 +234,22 @@ auto Netmask::decompose() -> pjs::Array* {
   }
 }
 
+bool Netmask::decompose_v4(uint8_t ip[]) {
+  if (m_is_v6) return false;
+  for (int i = 0; i < 4; i++) {
+    ip[i] = (m_ip_full.v4 >> (24 - i * 8)) & 255;
+  }
+  return true;
+}
+
+bool Netmask::decompose_v6(uint16_t ip[]) {
+  if (!m_is_v6) return false;
+  for (int i = 0; i < 8; i++) {
+    ip[i] = m_ip_full.v6[i];
+  }
+  return true;
+}
+
 auto Netmask::last() -> pjs::Str* {
   if (!m_last) {
     if (m_is_v6) {

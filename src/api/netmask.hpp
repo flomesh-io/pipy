@@ -47,6 +47,8 @@ public:
   auto first() -> pjs::Str*;
   auto last() -> pjs::Str*;
   auto decompose() -> pjs::Array*;
+  bool decompose_v4(uint8_t ip[]);
+  bool decompose_v6(uint16_t ip[]);
   bool contains(pjs::Str *addr);
   auto next() -> pjs::Str*;
 

@@ -1101,15 +1101,15 @@ void HeaderEncoder::encode_header_field(Data::Builder &db, pjs::Str *k, pjs::Str
 void HeaderEncoder::encode_int(Data::Builder &db, uint8_t prefix, int prefix_len, uint32_t n) {
   uint8_t mask = (1 << (8 - prefix_len)) - 1;
   if (n < mask) {
-    db.push(prefix | n);
+    db.push(uint8_t(prefix | n));
   } else {
-    db.push(prefix | mask);
+    db.push(uint8_t(prefix | mask));
     n -= mask;
     while (n) {
       if (n >> 7) {
-        db.push(0x80 | (n & 0x7f));
+        db.push(uint8_t(0x80 | (n & 0x7f)));
       } else {
-        db.push(n & 0x7f);
+        db.push(uint8_t(n & 0x7f));
       }
       n >>= 7;
     }
@@ -1120,7 +1120,7 @@ void HeaderEncoder::encode_str(Data::Builder &db, pjs::Str *s, bool lowercase) {
   encode_int(db, 0, 1, s->size());
   if (lowercase) {
     for (auto ch : s->str()) {
-      db.push(std::tolower(ch));
+      db.push(char(std::tolower(ch)));
     }
   } else {
     db.push(s->str());

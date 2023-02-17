@@ -135,6 +135,14 @@ public:
       }
     }
 
+    void push(uint8_t c) {
+      push((char)c);
+    }
+
+    void push(int c) {
+      push((char)c);
+    }
+
     void push(const char *s, int n) {
       auto &p = m_ptr;
       while (n > 0) {
@@ -150,6 +158,10 @@ public:
           p = 0;
         }
       }
+    }
+
+    void push(const void *p, int n) {
+      push((const char *)p, n);
     }
 
     void push(const char *s) {

@@ -42,7 +42,7 @@ public:
   static void encode(pjs::Object *payload, Data &data);
 
   //
-  // MessageType
+  // BGP::MessageType
   //
 
   enum class MessageType {
@@ -53,11 +53,26 @@ public:
   };
 
   //
-  // PathAttribute
+  // BGP::PathAttribute
   //
 
   class PathAttribute : public pjs::ObjectTemplate<PathAttribute> {
   public:
+
+    //
+    // BGP::PathAttribute::TypeCode
+    //
+
+    enum class TypeCode {
+      ORIGIN = 1,
+      AS_PATH = 2,
+      NEXT_HOP = 3,
+      MULTI_EXIT_DISC = 4,
+      LOCAL_PREF = 5,
+      ATOMIC_AGGREGATE = 6,
+      AGGREGATOR = 7,
+    };
+
     pjs::Ref<pjs::Str> name;
     pjs::Value value;
     int code;
@@ -67,7 +82,7 @@ public:
   };
 
   //
-  // Message
+  // BGP::Message
   //
 
   class Message : public pjs::ObjectTemplate<Message> {
@@ -77,7 +92,7 @@ public:
   };
 
   //
-  // MessageOpen
+  // BGP::MessageOpen
   //
 
   class MessageOpen : public pjs::ObjectTemplate<MessageOpen> {
@@ -91,7 +106,7 @@ public:
   };
 
   //
-  // MessageUpdate
+  // BGP::MessageUpdate
   //
 
   class MessageUpdate : public pjs::ObjectTemplate<MessageUpdate> {
@@ -102,7 +117,7 @@ public:
   };
 
   //
-  // MessageNotification
+  // BGP::MessageNotification
   //
 
   class MessageNotification : public pjs::ObjectTemplate<MessageNotification> {

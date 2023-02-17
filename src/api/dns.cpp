@@ -98,21 +98,21 @@ static const unsigned int DNS_MAX_DOMAINLEN = 255;
 thread_local static Data::Producer s_dp("DNS");
 
 static int push_int8(Data::Builder &db, int value) {
-  db.push(value & 0xff);
+  db.push(uint8_t(value));
   return 1;
 }
 
 static int push_int16(Data::Builder &db, int value) {
-  db.push(value >> 8 & 0xff);
-  db.push(value & 0xff);
+  db.push(uint8_t(value >> 8));
+  db.push(uint8_t(value >> 0));
   return 2;
 }
 
 static int push_int32(Data::Builder &db, int value) {
-  db.push(value >> 24);
-  db.push(value >> 16 & 0xff);
-  db.push(value >> 8 & 0xff);
-  db.push(value & 0xff);
+  db.push(uint8_t(value >> 24));
+  db.push(uint8_t(value >> 16));
+  db.push(uint8_t(value >>  8));
+  db.push(uint8_t(value >>  0));
   return 4;
 }
 
