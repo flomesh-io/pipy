@@ -231,31 +231,17 @@ auto Str::make(double n) -> Str* {
 }
 
 auto Str::parse_int() const -> double {
-  const auto *p = m_char_data->c_str();
+  char *p = nullptr;
+  auto n = std::strtol(c_str(), &p, 10);
   while (*p && std::isblank(*p)) p++;
-  if (*p == '-' || *p == '+') {
-    auto next = *(p+1);
-    if (!std::isdigit(next)) return NAN;
-    return std::atoi(p);
-  } else if (std::isdigit(*p)) {
-    return std::atof(p);
-  } else {
-    return NAN;
-  }
+  return *p ? NAN : n;
 }
 
 auto Str::parse_float() const -> double {
-  const auto *p = m_char_data->c_str();
+  char *p = nullptr;
+  auto n = std::strtod(c_str(), &p);
   while (*p && std::isblank(*p)) p++;
-  if (*p == '-' || *p == '+') {
-    auto next = *(p+1);
-    if (next != '.' && !std::isdigit(next)) return NAN;
-    return std::atof(p);
-  } else if (*p == '.' || std::isdigit(*p)) {
-    return std::atof(p);
-  } else {
-    return NAN;
-  }
+  return *p ? NAN : n;
 }
 
 auto Str::substring(int start, int end) -> std::string {
