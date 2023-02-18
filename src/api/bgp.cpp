@@ -354,14 +354,15 @@ void BGP::encode(pjs::Object *payload, Data &data) {
 //
 
 BGP::Parser::Parser()
-  : m_payload(Data::make())
+  : m_body(Data::make())
 {
 }
 
 void BGP::Parser::reset() {
   Deframer::reset();
   Deframer::pass_all(true);
-  m_payload->clear();
+  m_body->clear();
+  m_message = nullptr;
 }
 
 void BGP::Parser::parse(Data &data) {
@@ -369,7 +370,182 @@ void BGP::Parser::parse(Data &data) {
 }
 
 auto BGP::Parser::on_state(int state, int c) -> int {
-  return 0;
+  switch (state) {
+    case START:
+      on_message_start();
+      Deframer::read(sizeof(m_header) - 1, m_header + 1);
+      return HEADER;
+    case HEADER: {
+      uint16_t size =
+        (uint16_t(m_header[16]) << 8)|
+        (uint16_t(m_header[17]) << 0);
+      m_message = Message::make();
+      m_message->type = MessageType(m_header[18]);
+      switch (m_message->type) {
+        case MessageType::OPEN:
+          m_message->body = MessageOpen::make();
+          break;
+        case MessageType::UPDATE:
+          m_message->body = MessageUpdate::make();
+          break;
+        case MessageType::NOTIFICATION:
+          m_message->body = MessageNotification::make();
+          break;
+        case MessageType::KEEPALIVE:
+          break;
+        default: error(0, 0); return ERROR;
+      }
+      if (size > 0) {
+        m_body->clear();
+        Deframer::read(size, m_body);
+        return BODY;
+      } else {
+        on_message_end(m_message);
+      }
+    }
+    case BODY: {
+      Data::Reader r(*m_body);
+      bool parse_ok = false;
+      switch (m_message->type) {
+        case MessageType::OPEN:
+          parse_ok = parse_open(r);
+          break;
+        case MessageType::UPDATE:
+          parse_ok = parse_update(r);
+          break;
+        case MessageType::NOTIFICATION:
+          parse_ok = parse_notification(r);
+          break;
+        default: break;
+      }
+      if (parse_ok) {
+        on_message_end(m_message);
+        m_message = nullptr;
+        return START;
+      } else {
+        return ERROR;
+      }
+    }
+    case ERROR: break;
+  }
+  return ERROR;
+}
+
+bool BGP::Parser::parse_open(Data::Reader &r) {
+  auto *body = m_message->body->as<MessageOpen>();
+
+  uint8_t version;
+  uint16_t my_as;
+  uint16_t hold_time;
+  uint8_t identifier[4];
+  uint8_t param_size;
+
+  if (!read(r, version)) return false;
+  if (!read(r, my_as)) return false;
+  if (!read(r, hold_time)) return false;
+  if (!read(r, identifier, sizeof(identifier))) return false;
+  if (!read(r, param_size)) return false;
+
+  Data params;
+  if (!read(r, params, param_size)) return false;
+
+  Data::Reader r2(params);
+  while (!r2.eof()) {
+    pjs::Value value;
+    uint8_t type;
+    uint8_t size;
+    if (!read(r2, type)) return false;
+    if (!read(r2, size)) return false;
+    switch (type) {
+      case 2: { // capabilities
+        auto *caps = pjs::Object::make();
+        value.set(caps);
+        while (!r2.eof()) {
+          uint8_t code;
+          uint8_t size;
+          Data data;
+          if (!read(r2, code)) return false;
+          if (!read(r2, size)) return false;
+          if (!read(r2, data, size)) return false;
+          pjs::Ref<pjs::Str> k(pjs::Str::make(int(code)));
+          caps->set(k, data.empty() ? nullptr : Data::make(std::move(data)));
+        }
+        break;
+      }
+      default: {
+        Data data;
+        if (!read(r2, data, size)) return false;
+        value.set(data.empty() ? nullptr : Data::make(std::move(data)));
+        break;
+      }
+    }
+    auto params = body->parameters.get();
+    if (!params) body->parameters = params = pjs::Object::make();
+    pjs::Ref<pjs::Str> k(pjs::Str::make(int(type)));
+    pjs::Value old;
+    if (params->get(k, old)) {
+      if (old.is_array()) {
+        old.as<pjs::Array>()->push(value);
+      } else {
+        auto a = pjs::Array::make(2);
+        a->set(0, old);
+        a->set(1, value);
+        params->set(k, a);
+      }
+    } else {
+      params->set(k, value);
+    }
+  }
+  return true;
+}
+
+bool BGP::Parser::parse_update(Data::Reader &r) {
+  return false;
+}
+
+bool BGP::Parser::parse_notification(Data::Reader &r) {
+  return false;
+}
+
+bool BGP::Parser::error(int code, int subcode) {
+  pjs::Ref<MessageNotification> msg(MessageNotification::make(code, subcode));
+  on_message_error(msg);
+  return false;
+}
+
+bool BGP::Parser::read(Data::Reader &r, Data &data, size_t size) {
+  return r.read(size, data) == size;
+}
+
+bool BGP::Parser::read(Data::Reader &r, uint8_t *data, size_t size) {
+  return r.read(size, data) == size;
+}
+
+bool BGP::Parser::read(Data::Reader &r, uint8_t &data) {
+  auto b = r.get();
+  if (b < 0) return false;
+  data = uint8_t(b);
+  return true;
+}
+
+bool BGP::Parser::read(Data::Reader &r, uint16_t &data) {
+  auto b0 = r.get(); if (b0 < 0) return false;
+  auto b1 = r.get(); if (b1 < 0) return false;
+  data = (uint16_t(b0) << 8)|
+         (uint16_t(b1) << 0);
+  return true;
+}
+
+bool BGP::Parser::read(Data::Reader &r, uint32_t &data) {
+  auto b0 = r.get(); if (b0 < 0) return false;
+  auto b1 = r.get(); if (b1 < 0) return false;
+  auto b2 = r.get(); if (b2 < 0) return false;
+  auto b3 = r.get(); if (b3 < 0) return false;
+  data = (uint32_t(b0) << 24)|
+         (uint32_t(b1) << 16)|
+         (uint32_t(b2) <<  8)|
+         (uint32_t(b3) <<  0);
+  return true;
 }
 
 } // namespace pipy

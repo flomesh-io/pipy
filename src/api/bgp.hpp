@@ -122,9 +122,17 @@ public:
 
   class MessageNotification : public pjs::ObjectTemplate<MessageNotification> {
   public:
-    int errorCode;
-    int errorSubcode;
+    int errorCode = 0;
+    int errorSubcode = 0;
     pjs::Ref<Data> data;
+
+  private:
+    MessageNotification() {}
+    MessageNotification(int code, int subcode)
+      : errorCode(code)
+      , errorSubcode(subcode) {}
+
+    friend class pjs::ObjectTemplate<MessageNotification>;
   };
 
   //
@@ -141,11 +149,32 @@ public:
   protected:
     virtual void on_message_start() {}
     virtual void on_message_end(pjs::Object *payload) = 0;
+    virtual void on_message_error(MessageNotification *msg) {}
 
   private:
     virtual auto on_state(int state, int c) -> int override;
 
-    pjs::Ref<Data> m_payload;
+    enum State {
+      ERROR = -1,
+      START = 0,
+      HEADER,
+      BODY,
+    };
+
+    uint8_t m_header[19];
+    pjs::Ref<Data> m_body;
+    pjs::Ref<Message> m_message;
+
+    bool parse_open(Data::Reader &r);
+    bool parse_update(Data::Reader &r);
+    bool parse_notification(Data::Reader &r);
+    bool error(int code, int subcode);
+
+    bool read(Data::Reader &r, Data &data, size_t size);
+    bool read(Data::Reader &r, uint8_t *data, size_t size);
+    bool read(Data::Reader &r, uint8_t &data);
+    bool read(Data::Reader &r, uint16_t &data);
+    bool read(Data::Reader &r, uint32_t &data);
   };
 
   //
