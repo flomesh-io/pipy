@@ -689,6 +689,7 @@ public:
 
   static auto make(const uint32_t *codes, size_t len) -> Str*;
   static auto make(double n) -> Str*;
+  static auto make(int n) -> Str*;
 
   auto length() const -> int { return m_char_data->length(); }
   auto size() const -> size_t { return m_char_data->size(); }

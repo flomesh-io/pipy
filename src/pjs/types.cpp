@@ -230,6 +230,12 @@ auto Str::make(double n) -> Str* {
   return make(str, len);
 }
 
+auto Str::make(int n) -> Str* {
+  char str[100];
+  auto len = std::snprintf(str, sizeof(str), "%d", n);
+  return make(str, len);
+}
+
 auto Str::parse_int() const -> double {
   char *p = nullptr;
   auto n = std::strtol(c_str(), &p, 10);
