@@ -153,6 +153,27 @@ Netmask::Netmask(pjs::Str *cidr) : m_cidr(cidr) {
   }
 }
 
+Netmask::Netmask(int mask, uint8_t ipv4[])
+  : m_is_v6(false)
+  , m_bitmask(mask)
+{
+  m_ip_full.v4 = (
+    ((uint32_t)ipv4[0] << 24) |
+    ((uint32_t)ipv4[1] << 16) |
+    ((uint32_t)ipv4[2] <<  8) |
+    ((uint32_t)ipv4[3] <<  0)
+  );
+  init_mask();
+}
+
+Netmask::Netmask(int mask, uint16_t ipv6[])
+  : m_is_v6(true)
+  , m_bitmask(mask)
+{
+  std::memcpy(m_ip_full.v6, ipv6, sizeof(m_ip_full.v6));
+  init_mask();
+}
+
 auto Netmask::ip() -> pjs::Str* {
   if (!m_ip) {
     if (m_is_v6) {
@@ -306,6 +327,20 @@ auto Netmask::next() -> pjs::Str* {
     if (m_next == ~m_ip_mask.v4) return pjs::Str::empty;
     auto n = m_next++;
     return ip4_to_str(m_ip_base.v4 | n);
+  }
+}
+
+void Netmask::init_mask() {
+  if (m_is_v6) {
+    for (int i = 0; i < 8; i++) {
+      int n = std::min(m_bitmask - i * 16, 16);
+      int m = (n <= 0 ? 0 : (mask_of(n) << (16 - n)));
+      m_ip_mask.v6[i] = m;
+      m_ip_base.v6[i] = m_ip_full.v6[i] & m;
+    }
+  } else {
+    m_ip_mask.v4 = mask_of(m_bitmask) << (32 - m_bitmask);
+    m_ip_base.v4 = m_ip_full.v4 & m_ip_mask.v4;
   }
 }
 

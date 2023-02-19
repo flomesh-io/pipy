@@ -63,6 +63,8 @@ private:
   };
 
   Netmask(pjs::Str *cidr);
+  Netmask(int mask, uint8_t ipv4[]);
+  Netmask(int mask, uint16_t ipv6[]);
 
   pjs::Ref<pjs::Str> m_cidr;
   pjs::Ref<pjs::Str> m_ip;
@@ -79,6 +81,8 @@ private:
   IP m_ip_base;
   IP m_ip_mask;
   uint64_t m_next = 1;
+
+  void init_mask();
 
   friend class pjs::ObjectTemplate<Netmask>;
 };
