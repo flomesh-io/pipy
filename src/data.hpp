@@ -253,6 +253,20 @@ public:
       return i;
     }
 
+    int read(Data &out) {
+      int n = 0;
+      auto v = m_view;
+      while (v) {
+        auto l = v->length - m_offset;
+        n += l;
+        out.push_view(new View(v->chunk, v->offset + m_offset, l));
+        v = v->next;
+        m_offset = 0;
+      }
+      m_view = nullptr;
+      return n;
+    }
+
   private:
     View* m_view;
     int m_offset = 0;
