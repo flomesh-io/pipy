@@ -136,6 +136,12 @@ inline static void write_path_attribute_value(
   }
 }
 
+inline static auto ipv4_to_str(const uint8_t ip[]) -> pjs::Str* {
+  char str[100];
+  auto len = std::snprintf(str, sizeof(str), "%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
+  return pjs::Str::make(str, len);
+}
+
 auto BGP::decode(const Data &data) -> pjs::Array* {
   pjs::Array *a = pjs::Array::make();
   StreamParser sp(
@@ -497,25 +503,53 @@ bool BGP::Parser::parse_open(Data::Reader &r) {
     }
   }
 
-  char str[100];
-  auto len = std::snprintf(
-    str, sizeof(str), "%d.%d.%d.%d",
-    identifier[0],
-    identifier[1],
-    identifier[2],
-    identifier[3]
-  );
-
   body->version = version;
   body->myAS = my_as;
   body->holdTime = hold_time;
-  body->identifier = pjs::Str::make(str, len);
+  body->identifier = ipv4_to_str(identifier);
 
   return true;
 }
 
 bool BGP::Parser::parse_update(Data::Reader &r) {
-  return false;
+  auto *body = m_message->body->as<MessageUpdate>();
+
+  uint16_t withdrawn_size; Data withdrawn_data;
+  uint16_t path_addr_size; Data path_addr_data;
+
+  if (!read(r, withdrawn_size)) return false;
+  if (!read(r, withdrawn_data, withdrawn_size)) return false;
+  if (!read(r, path_addr_size)) return false;
+  if (!read(r, path_addr_data, path_addr_size)) return false;
+
+  if (!withdrawn_data.empty()) {
+    Data::Reader r(withdrawn_data);
+    while (!r.eof()) {
+      auto nm = read_address_prefix(r);
+      if (!nm) return false;
+      if (!body->withdrawnRoutes) body->withdrawnRoutes = pjs::Array::make();
+      body->withdrawnRoutes->push(nm);
+    }
+  }
+
+  if (!path_addr_data.empty()) {
+    Data::Reader r(path_addr_data);
+    while (!r.eof()) {
+      auto pa = read_path_attribute(r);
+      if (!pa) return false;
+      if (!body->pathAttributes) body->pathAttributes = pjs::Array::make();
+      body->pathAttributes->push(pa);
+    }
+  }
+
+  while (!r.eof()) {
+    auto nm = read_address_prefix(r);
+    if (!nm) return false;
+    if (!body->destinations) body->destinations = pjs::Array::make();
+    body->destinations->push(nm);
+  }
+
+  return true;
 }
 
 bool BGP::Parser::parse_notification(Data::Reader &r) {
@@ -575,6 +609,121 @@ bool BGP::Parser::read(Data::Reader &r, uint32_t &data) {
          (uint32_t(b2) <<  8)|
          (uint32_t(b3) <<  0);
   return true;
+}
+
+auto BGP::Parser::read_address_prefix(Data::Reader &r) -> Netmask* {
+  uint8_t mask, ip[4];
+  if (!read(r, mask)) return nullptr;
+  if (mask > 32) return nullptr;
+  int n = (mask + 7) / 8;
+  for (int i = 0; i < 4; i++) {
+    if (i < n) {
+      if (!read(r, ip[i])) return nullptr;
+    } else {
+      ip[i] = 0;
+    }
+  }
+  return Netmask::make(mask, ip);
+}
+
+auto BGP::Parser::read_path_attribute(Data::Reader &r) -> PathAttribute* {
+  uint8_t flags, type_code;
+  if (!read(r, flags)) return nullptr;
+  if (!read(r, type_code)) return nullptr;
+
+  Data data;
+  if (flags & 0x10) {
+    uint16_t size;
+    if (!read(r, size)) return nullptr;
+    if (!read(r, data, size)) return nullptr;
+  } else {
+    uint8_t size;
+    if (!read(r, size)) return nullptr;
+    if (!read(r, data, size)) return nullptr;
+  }
+
+  pjs::Value value;
+  auto type = PathAttribute::TypeCode(type_code);
+  if (!data.empty()) {
+    Data::Reader r(data);
+    switch (type) {
+      case PathAttribute::TypeCode::ORIGIN: {
+        uint8_t origin;
+        if (!read(r, origin)) return nullptr;
+        value.set(origin);
+        break;
+      }
+      case PathAttribute::TypeCode::AS_PATH: {
+        auto *segs = pjs::Array::make();
+        value.set(segs);
+        while (!r.eof()) {
+          uint8_t type, size;
+          if (!read(r, type)) return nullptr;
+          if (!read(r, size)) return nullptr;
+          if (type == 1) {
+            auto *o = pjs::Object::make();
+            segs->push(o);
+            for (int i = 0; i < size; i++) {
+              uint16_t as;
+              if (!read(r, as)) return nullptr;
+              o->set(pjs::Str::make(int(as)), as);
+            }
+          } else if (type == 2) {
+            auto *a = pjs::Array::make(size);
+            segs->push(a);
+            for (int i = 0; i < size; i++) {
+              uint16_t as;
+              if (!read(r, as)) return nullptr;
+              a->set(i, as);
+            }
+          } else {
+            return nullptr;
+          }
+        }
+        break;
+      }
+      case PathAttribute::TypeCode::NEXT_HOP: {
+        uint8_t ip[4];
+        if (!read(r, ip, sizeof(ip))) return nullptr;
+        value.set(ipv4_to_str(ip));
+        break;
+      }
+      case PathAttribute::TypeCode::MULTI_EXIT_DISC:
+      case PathAttribute::TypeCode::LOCAL_PREF: {
+        uint32_t num;
+        if (!read(r, num)) return nullptr;
+        value.set(num);
+        break;
+      }
+      case PathAttribute::TypeCode::ATOMIC_AGGREGATE:
+        break;
+      case PathAttribute::TypeCode::AGGREGATOR: {
+        uint16_t as;
+        uint8_t ip[4];
+        if (!read(r, as)) return nullptr;
+        if (!read(r, ip, 4)) return nullptr;
+        auto *a = pjs::Array::make(2);
+        a->set(0, as);
+        a->set(1, ipv4_to_str(ip));
+        value.set(a);
+        break;
+      }
+      default: value.set(Data::make(std::move(data))); break;
+    }
+  }
+
+  auto *pa = PathAttribute::make();
+  if (auto *k = pjs::EnumDef<PathAttribute::TypeCode>::name(type)) {
+    pa->name = k;
+  }
+
+  pa->value = value;
+  pa->code = type_code;
+  pa->optional = flags & 0x80;
+  pa->transitive = flags & 0x40;
+  pa->partial = flags & 0x20;
+
+  return pa;
 }
 
 } // namespace pipy
