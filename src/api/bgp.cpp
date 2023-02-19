@@ -496,6 +496,21 @@ bool BGP::Parser::parse_open(Data::Reader &r) {
       params->set(k, value);
     }
   }
+
+  char str[100];
+  auto len = std::snprintf(
+    str, sizeof(str), "%d.%d.%d.%d",
+    identifier[0],
+    identifier[1],
+    identifier[2],
+    identifier[3]
+  );
+
+  body->version = version;
+  body->myAS = my_as;
+  body->holdTime = hold_time;
+  body->identifier = pjs::Str::make(str, len);
+
   return true;
 }
 
@@ -504,7 +519,21 @@ bool BGP::Parser::parse_update(Data::Reader &r) {
 }
 
 bool BGP::Parser::parse_notification(Data::Reader &r) {
-  return false;
+  auto *body = m_message->body->as<MessageNotification>();
+
+  uint8_t code;
+  uint8_t subcode;
+  Data data;
+
+  if (!read(r, code)) return false;
+  if (!read(r, subcode)) return false;
+  r.read(data);
+
+  body->errorCode = code;
+  body->errorSubcode = subcode;
+  if (!data.empty()) body->data = Data::make(std::move(data));
+
+  return true;
 }
 
 bool BGP::Parser::error(int code, int subcode) {
