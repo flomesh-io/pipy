@@ -373,19 +373,20 @@ void BGP::Parser::reset() {
 
 void BGP::Parser::parse(Data &data) {
   Deframer::deframe(data);
+  if (Deframer::state() == START) message_end();
 }
 
 auto BGP::Parser::on_state(int state, int c) -> int {
   switch (state) {
     case START:
-      on_message_start();
+      message_end();
+      message_start();
       Deframer::read(sizeof(m_header) - 1, m_header + 1);
       return HEADER;
     case HEADER: {
       uint16_t size =
         (uint16_t(m_header[16]) << 8)|
         (uint16_t(m_header[17]) << 0);
-      m_message = Message::make();
       m_message->type = MessageType(m_header[18]);
       switch (m_message->type) {
         case MessageType::OPEN:
@@ -401,12 +402,15 @@ auto BGP::Parser::on_state(int state, int c) -> int {
           break;
         default: error(0, 0); return ERROR;
       }
-      if (size > 0) {
+      if (size > sizeof(m_header)) {
         m_body->clear();
-        Deframer::read(size, m_body);
+        Deframer::read(size - sizeof(m_header), m_body);
         return BODY;
+      } else if (size == sizeof(m_header)) {
+        Deframer::need_flush();
+        return START;
       } else {
-        on_message_end(m_message);
+        return ERROR;
       }
     }
     case BODY: {
@@ -425,8 +429,7 @@ auto BGP::Parser::on_state(int state, int c) -> int {
         default: break;
       }
       if (parse_ok) {
-        on_message_end(m_message);
-        m_message = nullptr;
+        Deframer::need_flush();
         return START;
       } else {
         return ERROR;
@@ -435,6 +438,20 @@ auto BGP::Parser::on_state(int state, int c) -> int {
     case ERROR: break;
   }
   return ERROR;
+}
+
+void BGP::Parser::message_start() {
+  if (!m_message) {
+    m_message = Message::make();
+    on_message_start();
+  }
+}
+
+void BGP::Parser::message_end() {
+  if (m_message) {
+    on_message_end(m_message);
+    m_message = nullptr;
+  }
 }
 
 bool BGP::Parser::parse_open(Data::Reader &r) {

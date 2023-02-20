@@ -167,6 +167,9 @@ public:
     pjs::Ref<Data> m_body;
     pjs::Ref<Message> m_message;
 
+    void message_start();
+    void message_end();
+
     bool parse_open(Data::Reader &r);
     bool parse_update(Data::Reader &r);
     bool parse_notification(Data::Reader &r);
