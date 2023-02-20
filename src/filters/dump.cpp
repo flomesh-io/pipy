@@ -27,7 +27,7 @@
 #include "context.hpp"
 #include "data.hpp"
 #include "worker-thread.hpp"
-#include "api/json.hpp"
+#include "api/console.hpp"
 #include "log.hpp"
 
 #include <iostream>
@@ -69,6 +69,9 @@ void Dump::process(Event *evt) {
   static const char s_hex[] = { "0123456789ABCDEF" };
   static const std::string s_prefix_worker("[dump] [worker=");
   static const std::string s_prefix_context("] [context=");
+  static const std::string s_prefix_head(", head = ");
+  static const std::string s_prefix_tail(", tail = ");
+  static const std::string s_prefix_payload(", payload = ");
   static const std::string s_hline(16*3+4+16, '-');
 
   pjs::Value tag;
@@ -110,19 +113,19 @@ void Dump::process(Event *evt) {
 
   if (auto start = evt->as<MessageStart>()) {
     if (auto head = start->head()) {
-      db.push(' ');
-      JSON::encode(head, nullptr, 0, db);
+      db.push(s_prefix_head);
+      Console::dump(head, db);
     }
 
   } else if (auto end = evt->as<MessageEnd>()) {
     if (auto tail = end->tail()) {
-      db.push(' ');
-      JSON::encode(tail, nullptr, 0, db);
+      db.push(s_prefix_tail);
+      Console::dump(tail, db);
     }
     const auto &payload = end->payload();
     if (!payload.is_undefined()) {
-      db.push(' ');
-      JSON::encode(payload, nullptr, 0, db);
+      db.push(s_prefix_payload);
+      Console::dump(payload, db);
     }
 
   } else if (auto end = evt->as<StreamEnd>()) {

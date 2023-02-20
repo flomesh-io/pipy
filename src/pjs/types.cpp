@@ -1445,13 +1445,19 @@ auto Error::name() const -> Str* {
 
 template<> void ClassDef<Array>::init() {
   ctor([](Context &ctx) -> Object* {
-    int size;
+    int size = 0;
     if (!ctx.arguments(0, &size)) return nullptr;
     if (size < 0) {
       ctx.error("invalid array length");
       return nullptr;
     }
-    return Array::make(size);
+    auto a = Array::make();
+    auto d = a->elements();
+    for (int i = 0; i < d->size(); i++) {
+      d->at(i) = Value::empty;
+    }
+    a->length(size);
+    return a;
   });
 
   geti([](Object *obj, int i, Value &val) {
@@ -1846,7 +1852,7 @@ void Array::copyWithin(int target, int start, int end) {
 void Array::fill(const Value &v, int start) {
   if (start < 0) start = m_size + start;
   if (start < 0) start = 0;
-  for (int i = start; i < m_size; i++) set(i, v);
+  for (int i = m_size - 1; i >= start; i--) set(i, v);
 }
 
 void Array::fill(const Value &v, int start, int end) {
@@ -1854,7 +1860,7 @@ void Array::fill(const Value &v, int start, int end) {
   if (start < 0) start = 0;
   if (end < 0) end = m_size + end;
   if (end < 0) end = 0;
-  for (int i = start; i < end; i++) set(i, v);
+  for (int i = end - 1; i >= start; i--) set(i, v);
 }
 
 auto Array::filter(std::function<bool(Value&, int)> callback) -> Array* {

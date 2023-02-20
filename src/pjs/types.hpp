@@ -1452,8 +1452,9 @@ public:
     ht_set(s, val);
   }
 
-  void iterate_all(std::function<void(Str*, Value&)> callback);
-  bool iterate_while(std::function<bool(Str*, Value&)> callback);
+  void iterate_all(const std::function<void(Str*, Value&)> &callback);
+  bool iterate_while(const std::function<bool(Str*, Value&)> &callback);
+  bool iterate_hash(const std::function<bool(Str*, Value&)> &callback);
 
   virtual void value_of(Value &out);
   virtual auto to_string() const -> std::string;
@@ -1684,7 +1685,7 @@ inline bool Object::ht_delete(Str *key) {
   return m_hash->erase(key);
 }
 
-inline void Object::iterate_all(std::function<void(Str*, Value&)> callback) {
+inline void Object::iterate_all(const std::function<void(Str*, Value&)> &callback) {
   assert_same_thread(*this);
   for (size_t i = 0, n = m_class->field_count(); i < n; i++) {
     auto f = m_class->field(i);
@@ -1700,7 +1701,7 @@ inline void Object::iterate_all(std::function<void(Str*, Value&)> callback) {
   }
 }
 
-inline bool Object::iterate_while(std::function<bool(Str*, Value&)> callback) {
+inline bool Object::iterate_while(const std::function<bool(Str*, Value&)> &callback) {
   assert_same_thread(*this);
   for (size_t i = 0, n = m_class->field_count(); i < n; i++) {
     auto f = m_class->field(i);
@@ -1710,6 +1711,11 @@ inline bool Object::iterate_while(std::function<bool(Str*, Value&)> callback) {
       }
     }
   }
+  return iterate_hash(callback);
+}
+
+inline bool Object::iterate_hash(const std::function<bool(Str*, Value&)> &callback) {
+  assert_same_thread(*this);
   if (m_hash) {
     OrderedHash<Ref<Str>, Value>::Iterator iterator(m_hash);
     while (auto *ent = iterator.next()) {
@@ -2546,6 +2552,8 @@ private:
 class Array : public ObjectTemplate<Array> {
 public:
   static const size_t MAX_SIZE = 0x100000;
+
+  auto elements() const -> Data* { return m_data; }
 
   auto length() const -> int { return m_size; }
 

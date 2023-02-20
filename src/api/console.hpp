@@ -27,12 +27,15 @@
 #define API_CONSOLE_HPP
 
 #include "pjs/pjs.hpp"
+#include "data.hpp"
 
 namespace pipy {
 
 class Console : public pjs::ObjectTemplate<Console> {
 public:
   static void log(const pjs::Value *values, int count);
+  static void dump(const pjs::Value &value, Data &out);
+  static void dump(const pjs::Value &value, Data::Builder &db);
 };
 
 } // namespace pipy
