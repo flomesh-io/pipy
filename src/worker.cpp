@@ -65,8 +65,16 @@
 
 namespace pipy {
 
-class Global : public pjs::ObjectTemplate<Global>
-{
+class Global : public pjs::ObjectTemplate<Global> {
+public:
+  auto worker() const -> Worker* { return m_worker; }
+
+private:
+  Global(Worker *worker) : m_worker(worker) {}
+
+  Worker* m_worker;
+
+  friend class pjs::ObjectTemplate<Global>;
 };
 
 } // namespace pipy
@@ -76,7 +84,6 @@ namespace pjs {
 using namespace pipy;
 
 template<> void ClassDef<Global>::init() {
-  ctor();
 
   // NaN
   variable("NaN", std::numeric_limits<double>::quiet_NaN());
@@ -186,6 +193,11 @@ template<> void ClassDef<Global>::init() {
   // pipy
   variable("pipy", class_of<Pipy>());
 
+  // __thread
+  accessor("__thread", [](Object *obj, Value &ret) {
+    ret.set(obj->as<Global>()->worker()->thread());
+  });
+
   // repeat
   method("repeat", [](Context &ctx, Object *obj, Value &ret) {
     int count;
@@ -224,7 +236,7 @@ thread_local pjs::Ref<Worker> Worker::s_current;
 
 Worker::Worker(bool is_graph_enabled)
   : m_thread(Thread::make(WorkerThread::current()))
-  , m_global_object(Global::make())
+  , m_global_object(Global::make(this))
   , m_graph_enabled(is_graph_enabled)
 {
   Log::debug("[worker   %p] ++", this);

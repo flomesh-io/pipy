@@ -174,7 +174,6 @@ public:
     : m_filename(filename) {}
 
   auto filename() const -> pjs::Str* { return m_filename; }
-  auto worker() const -> Worker* { return m_context->worker(); }
   auto inbound() const -> Inbound* { return m_context->inbound(); }
 
 protected:
