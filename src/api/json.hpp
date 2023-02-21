@@ -61,7 +61,11 @@ public:
   static bool visit(const std::string &str, Visitor *visitor);
   static bool visit(const Data &data, Visitor *visitor);
 
-  static bool parse(const std::string &str, pjs::Value &val);
+  static bool parse(
+    const std::string &str,
+    const std::function<bool(pjs::Object*, const pjs::Value&, pjs::Value&)> &reviver,
+    pjs::Value &val
+  );
 
   static auto stringify(
     const pjs::Value &val,
@@ -69,7 +73,11 @@ public:
     int space
   ) -> std::string;
 
-  static bool decode(const Data &data, pjs::Value &val);
+  static bool decode(
+    const Data &data,
+    const std::function<bool(pjs::Object*, const pjs::Value&, pjs::Value&)> &reviver,
+    pjs::Value &val
+  );
 
   static bool encode(
     const pjs::Value &val,

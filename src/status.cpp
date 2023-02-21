@@ -223,7 +223,7 @@ bool Status::from_json(const Data &data) {
   pjs::Value val_modules;
   pjs::Value val_logs;
 
-  if (!JSON::decode(data, json)) return false;
+  if (!JSON::decode(data, nullptr, json)) return false;
   if (!json.is_object() || !json.o()) return false;
 
   auto *root = json.o();

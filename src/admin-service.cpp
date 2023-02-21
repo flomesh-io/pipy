@@ -691,7 +691,7 @@ Message* AdminService::api_v1_repo_POST(const std::string &path, Data *data) {
   }
 
   pjs::Value json, base_val, main_val, version_val;
-  if (JSON::decode(*data, json)) {
+  if (JSON::decode(*data, nullptr, json)) {
     if (json.is_object()) {
       if (auto obj = json.o()) {
         obj->get("base", base_val);
@@ -741,7 +741,7 @@ Message* AdminService::api_v1_repo_PATCH(const std::string &path, Data *data) {
   }
 
   pjs::Value json, main_val, version_val;
-  if (JSON::decode(*data, json)) {
+  if (JSON::decode(*data, nullptr, json)) {
     if (json.is_object()) {
       if (auto obj = json.o()) {
         obj->get("main", main_val);
@@ -938,7 +938,7 @@ Message* AdminService::api_v1_files_PATCH(const std::string &path, Data *data) {
   if (!codebase) return m_response_not_found;
   if (path == "/") {
     pjs::Value json, main;
-    if (!JSON::decode(*data, json)) return response(400, "Invalid JSON");
+    if (!JSON::decode(*data, nullptr, json)) return response(400, "Invalid JSON");
     if (!json.is_object() || !json.o()) return response(400, "Invalid JSON object");
     json.o()->get("main", main);
     if (!main.is_string()) return response(400, "Invalid main filename");

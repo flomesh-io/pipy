@@ -42,8 +42,20 @@ template<> void ClassDef<JSON>::init() {
 
   method("parse", [](Context &ctx, Object *obj, Value &ret) {
     Str *str;
-    if (!ctx.arguments(1, &str)) return;
-    if (!JSON::parse(str->str(), ret)) {
+    Function *reviver = nullptr;
+    if (!ctx.arguments(1, &str, &reviver)) return;
+    std::function<bool(pjs::Object*, const pjs::Value&, Value&)> rev;
+    if (reviver) {
+      rev = [&](pjs::Object *obj, const pjs::Value &key, Value &val) -> bool {
+        Value args[3];
+        args[0] = key;
+        args[1] = val;
+        args[2].set(obj);
+        (*reviver)(ctx, 3, args, val);
+        return ctx.ok();
+      };
+    }
+    if (!JSON::parse(str->str(), rev, ret)) {
       ret = Value::undefined;
     }
   });
@@ -73,8 +85,20 @@ template<> void ClassDef<JSON>::init() {
 
   method("decode", [](Context &ctx, Object *obj, Value &ret) {
     pipy::Data *data;
-    if (!ctx.arguments(1, &data)) return;
-    if (!data || !JSON::decode(*data, ret)) {
+    Function *reviver = nullptr;
+    if (!ctx.arguments(1, &data, &reviver)) return;
+    std::function<bool(pjs::Object*, const pjs::Value&, Value&)> rev;
+    if (reviver) {
+      rev = [&](pjs::Object *obj, const pjs::Value &key, Value &val) -> bool {
+        Value args[3];
+        args[0] = key;
+        args[1] = val;
+        args[2].set(obj);
+        (*reviver)(ctx, 3, args, val);
+        return ctx.ok();
+      };
+    }
+    if (!data || !JSON::decode(*data, rev, ret)) {
       ret = Value::undefined;
     }
   });
@@ -172,7 +196,17 @@ yajl_callbacks JSONVisitor::s_callbacks = {
 
 class JSONParser : public JSONVisitor, public JSON::Visitor {
 public:
-  JSONParser() : JSONVisitor(this) {}
+  JSONParser(const std::function<bool(pjs::Object*, const pjs::Value&, pjs::Value&)> &reviver)
+    : JSONVisitor(this)
+    , m_reviver(reviver) {}
+
+  ~JSONParser() {
+    auto *l = m_stack;
+    while (l) {
+      auto level = l; l = l->back;
+      delete level;
+    }
+  }
 
   bool parse(const std::string &str, pjs::Value &val) {
     if (!visit(str)) return false;
@@ -187,31 +221,94 @@ public:
   }
 
 private:
-  std::stack<pjs::Value> m_stack;
+  struct Level : public pjs::Pooled<Level> {
+    Level* back;
+    pjs::Ref<pjs::Object> container;
+    pjs::Ref<pjs::Str> key;
+  };
+
+  Level* m_stack = nullptr;
   pjs::Value m_root;
-  pjs::Ref<pjs::Str> m_current_key;
+  const std::function<bool(pjs::Object*, const pjs::Value&, pjs::Value&)>& m_reviver;
+  bool m_aborted = false;
 
   void null() { value(pjs::Value::null); }
   void boolean(bool b) { value(b); }
   void integer(int64_t i) { value(double(i)); }
   void number(double n) { value(n); }
   void string(const char *s, size_t len) { value(std::string(s, len)); }
-  void map_start() { pjs::Value v(pjs::Object::make()); value(v); m_stack.push(v); }
-  void map_key(const char *s, size_t len) { m_current_key = pjs::Str::make(std::string(s, len)); }
-  void map_end() { m_stack.pop(); }
-  void array_start() { pjs::Value v(pjs::Array::make()); value(v); m_stack.push(v); }
-  void array_end() { m_stack.pop(); }
 
-  void value(const pjs::Value &v) {
-    if (m_stack.empty()) {
-      m_stack.push(v);
-      m_root = v;
-    } else {
-      auto &top = m_stack.top();
-      if (top.is_array()) {
-        top.as<pjs::Array>()->push(v);
+  void map_start() {
+    if (!m_aborted) {
+      auto l = new Level;
+      l->back = m_stack;
+      l->container = pjs::Object::make();
+      m_stack = l;
+    }
+  }
+
+  void map_key(const char *s, size_t len) {
+    if (!m_aborted) {
+      if (auto l = m_stack) {
+        l->key = pjs::Str::make(s, len);
+      }
+    }
+  }
+
+  void map_end() {
+    if (!m_aborted) {
+      if (auto l = m_stack) {
+        pjs::Value v(l->container.get());
+        m_stack = l->back;
+        delete l;
+        value(v);
+      }
+    }
+  }
+
+  void array_start() {
+    if (!m_aborted) {
+      auto l = new Level;
+      l->back = m_stack;
+      l->container = pjs::Array::make();
+      m_stack = l;
+    }
+  }
+
+  void array_end() {
+    map_end();
+  }
+
+  void value(const pjs::Value &value) {
+    if (!m_aborted) {
+      pjs::Value v(value);
+      pjs::Value k;
+      pjs::Object *obj = m_stack ? m_stack->container.get() : nullptr;
+
+      if (m_reviver) {
+        if (obj) {
+          if (obj->is<pjs::Array>()) {
+            k.set(pjs::Str::make(obj->as<pjs::Array>()->length()));
+          } else {
+            k.set(m_stack->key.get());
+          }
+        } else {
+          k.set(pjs::Str::empty);
+        }
+        if (!m_reviver(obj, k, v)) {
+          m_aborted = true;
+          return;
+        }
+      }
+
+      if (obj) {
+        if (obj->is<pjs::Array>()) {
+          obj->as<pjs::Array>()->push(v);
+        } else {
+          obj->set(m_stack->key, v);
+        }
       } else {
-        top.as<pjs::Object>()->ht_set(m_current_key, v);
+        m_root = v;
       }
     }
   }
@@ -227,8 +324,12 @@ bool JSON::visit(const Data &data, Visitor *visitor) {
   return v.visit(data);
 }
 
-bool JSON::parse(const std::string &str, pjs::Value &val) {
-  JSONParser parser;
+bool JSON::parse(
+  const std::string &str,
+  const std::function<bool(pjs::Object*, const pjs::Value&, pjs::Value&)> &reviver,
+  pjs::Value &val
+) {
+  JSONParser parser(reviver);
   return parser.parse(str, val);
 }
 
@@ -242,8 +343,12 @@ auto JSON::stringify(
   return data.to_string();
 }
 
-bool JSON::decode(const Data &data, pjs::Value &val) {
-  JSONParser parser;
+bool JSON::decode(
+  const Data &data,
+  const std::function<bool(pjs::Object*, const pjs::Value&, pjs::Value&)> &reviver,
+  pjs::Value &val
+) {
+  JSONParser parser(reviver);
   return parser.parse(data, val);
 }
 

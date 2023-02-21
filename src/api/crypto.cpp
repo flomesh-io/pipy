@@ -920,8 +920,8 @@ JWT::JWT(pjs::Str *token) {
   auto len3 = utils::decode_base64url(buf3, m_signature_str.c_str(), m_signature_str.length());
 
   if (len1 < 0 || len2 < 0 || len3 < 0) return;
-  if (!JSON::parse(std::string(buf1, len1), m_header)) return;
-  if (!JSON::parse(std::string(buf2, len2), m_payload)) return;
+  if (!JSON::parse(std::string(buf1, len1), nullptr, m_header)) return;
+  if (!JSON::parse(std::string(buf2, len2), nullptr, m_payload)) return;
 
   if (!m_header.is_object() || m_header.is_null()) return;
   if (!m_payload.is_object() || m_payload.is_null()) return;
