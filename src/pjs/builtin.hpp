@@ -215,6 +215,16 @@ private:
   friend class ObjectTemplate<Set>;
 };
 
+//
+// Global
+//
+
+class Global : public pjs::ObjectTemplate<Global> {
+protected:
+  Global() {}
+  friend class pjs::ObjectTemplate<Global>;
+};
+
 } // namespace pjs
 
 #endif // PJS_BUILTIN_HPP

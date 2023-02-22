@@ -895,4 +895,147 @@ template<> void ClassDef<Constructor<Set>>::init() {
   ctor();
 }
 
+//
+// Global
+//
+
+template<> void ClassDef<Global>::init() {
+
+  // NaN
+  variable("NaN", std::numeric_limits<double>::quiet_NaN());
+
+  // Infinity
+  variable("Infinity", std::numeric_limits<double>::infinity());
+
+  // Object
+  variable("Object", class_of<Constructor<Object>>());
+
+  // Boolean
+  variable("Boolean", class_of<Constructor<Boolean>>());
+
+  // Number
+  variable("Number", class_of<Constructor<Number>>());
+
+  // String
+  variable("String", class_of<Constructor<String>>());
+
+  // Error
+  variable("Error", class_of<Constructor<Error>>());
+
+  // Array
+  variable("Array", class_of<Constructor<Array>>());
+
+  // Math
+  variable("Math", class_of<Math>());
+
+  // Date
+  variable("Date", class_of<Constructor<Date>>());
+
+  // Map
+  variable("Map", class_of<Constructor<Map>>());
+
+  // Set
+  variable("Set", class_of<Constructor<Set>>());
+
+  // RegExp
+  variable("RegExp", class_of<Constructor<RegExp>>());
+
+  // repeat
+  method("repeat", [](Context &ctx, Object *obj, Value &ret) {
+    int count;
+    Function *f;
+    if (ctx.try_arguments(1, &f)) {
+      Value idx;
+      for (int i = 0;; i++) {
+        idx.set(i);
+        (*f)(ctx, 1, &idx, ret);
+        if (!ctx.ok()) break;
+        if (!ret.to_boolean()) break;
+      }
+    } else if (ctx.try_arguments(2, &count, &f)) {
+      Value idx;
+      for (int i = 0; i < count; i++) {
+        idx.set(i);
+        (*f)(ctx, 1, &idx, ret);
+        if (!ctx.ok()) break;
+        if (!ret.to_boolean()) break;
+      }
+    } else {
+      ctx.error_argument_type(0, "a function");
+    }
+  });
+
+  // branch
+  method("branch", [](Context &ctx, Object *obj, Value &ret) {
+    int n = ctx.argc(), i;
+    if (n < 2) {
+      ctx.error_argument_count(2);
+      return;
+    }
+    for (i = 0; i + 1 < n; i += 2) {
+      bool is_met;
+      const auto &cond = ctx.arg(i);
+      if (cond.is_function()) {
+        Value ret;
+        (*cond.f())(ctx, 0, nullptr, ret);
+        if (!ctx.ok()) return;
+        is_met = ret.to_boolean();
+      } else {
+        is_met = cond.to_boolean();
+      }
+      if (is_met) {
+        const auto &result = ctx.arg(i+1);
+        if (result.is_function()) {
+          (*result.f())(ctx, 0, nullptr, ret);
+        } else {
+          ret = result;
+        }
+        return;
+      }
+    }
+    if (i < n) {
+      const auto &result = ctx.arg(i);
+      if (result.is_function()) {
+        (*result.f())(ctx, 0, nullptr, ret);
+      } else {
+        ret = result;
+      }
+    }
+  });
+
+  // select
+  method("select", [](Context &ctx, Object *obj, Value &ret) {
+    int n = ctx.argc(), i;
+    if (n < 3) {
+      ctx.error_argument_count(3);
+      return;
+    }
+    const auto &selector = ctx.arg(0);
+    for (i = 1; i + 1 < n; i += 2) {
+      Value case_value(ctx.arg(i));
+      if (case_value.is_function()) {
+        (*case_value.f())(ctx, 0, nullptr, case_value);
+        if (!ctx.ok()) return;
+      }
+      if (Value::is_equal(case_value, selector)) {
+        const auto &result = ctx.arg(i+1);
+        if (result.is_function()) {
+          (*result.f())(ctx, 0, nullptr, ret);
+        } else {
+          ret = result;
+        }
+        return;
+      }
+    }
+    if (i < n) {
+      const auto &result = ctx.arg(i);
+      if (result.is_function()) {
+        (*result.f())(ctx, 0, nullptr, ret);
+      } else {
+        ret = result;
+      }
+    }
+  });
+}
+
 } // namespace pjs

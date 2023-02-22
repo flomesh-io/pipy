@@ -65,7 +65,7 @@
 
 namespace pipy {
 
-class Global : public pjs::ObjectTemplate<Global> {
+class Global : public pjs::ObjectTemplate<Global, pjs::Global> {
 public:
   auto worker() const -> Worker* { return m_worker; }
 
@@ -74,7 +74,7 @@ private:
 
   Worker* m_worker;
 
-  friend class pjs::ObjectTemplate<Global>;
+  friend class pjs::ObjectTemplate<Global, pjs::Global>;
 };
 
 } // namespace pipy
@@ -83,46 +83,8 @@ namespace pjs {
 
 using namespace pipy;
 
-template<> void ClassDef<Global>::init() {
-
-  // NaN
-  variable("NaN", std::numeric_limits<double>::quiet_NaN());
-
-  // Infinity
-  variable("Infinity", std::numeric_limits<double>::infinity());
-
-  // Object
-  variable("Object", class_of<Constructor<Object>>());
-
-  // Boolean
-  variable("Boolean", class_of<Constructor<Boolean>>());
-
-  // Number
-  variable("Number", class_of<Constructor<Number>>());
-
-  // String
-  variable("String", class_of<Constructor<String>>());
-
-  // Error
-  variable("Error", class_of<Constructor<Error>>());
-
-  // Array
-  variable("Array", class_of<Constructor<Array>>());
-
-  // Math
-  variable("Math", class_of<Math>());
-
-  // Date
-  variable("Date", class_of<Constructor<Date>>());
-
-  // Map
-  variable("Map", class_of<Constructor<Map>>());
-
-  // Set
-  variable("Set", class_of<Constructor<Set>>());
-
-  // RegExp
-  variable("RegExp", class_of<Constructor<RegExp>>());
+template<> void ClassDef<pipy::Global>::init() {
+  super<pjs::Global>();
 
   // JSON
   variable("JSON", class_of<JSON>());
@@ -195,33 +157,9 @@ template<> void ClassDef<Global>::init() {
 
   // __thread
   accessor("__thread", [](Object *obj, Value &ret) {
-    ret.set(obj->as<Global>()->worker()->thread());
+    ret.set(obj->as<pipy::Global>()->worker()->thread());
   });
 
-  // repeat
-  method("repeat", [](Context &ctx, Object *obj, Value &ret) {
-    int count;
-    Function *f;
-    if (ctx.try_arguments(1, &f)) {
-      Value idx;
-      for (int i = 0;; i++) {
-        idx.set(i);
-        (*f)(ctx, 1, &idx, ret);
-        if (!ctx.ok()) break;
-        if (!ret.to_boolean()) break;
-      }
-    } else if (ctx.try_arguments(2, &count, &f)) {
-      Value idx;
-      for (int i = 0; i < count; i++) {
-        idx.set(i);
-        (*f)(ctx, 1, &idx, ret);
-        if (!ctx.ok()) break;
-        if (!ret.to_boolean()) break;
-      }
-    } else {
-      ctx.error_argument_type(0, "a function");
-    }
-  });
 }
 
 } // namespace pjs
