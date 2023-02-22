@@ -951,18 +951,21 @@ class ClassDef {
 public:
   static Class* get() {
     if (!m_c) {
+      m_init_data = new InitData;
       init();
       if (!m_c) {
-        auto s = m_super;
+        auto s = m_init_data->super;
         if (!s) s = class_of<Object>();
         int status;
         auto c_name = typeid(T).name();
         auto cxx_name = abi::__cxa_demangle(c_name, 0, 0, &status);
-        m_c = Class::make(cxx_name ? cxx_name : c_name, s, m_fields);
-        m_c->set_ctor(m_ctor);
-        m_c->set_geti(m_geti);
-        m_c->set_seti(m_seti);
+        m_c = Class::make(cxx_name ? cxx_name : c_name, s, m_init_data->fields);
+        m_c->set_ctor(m_init_data->ctor);
+        m_c->set_geti(m_init_data->geti);
+        m_c->set_seti(m_init_data->seti);
       }
+      delete m_init_data;
+      m_init_data = nullptr;
       m_c->retain();
     }
     return m_c;
@@ -972,11 +975,11 @@ private:
   static void init();
 
   template<class S>
-  static void super() { m_super = class_of<S>(); }
-  static void super(Class *super) { m_super = super; }
-  static void ctor(std::function<Object*(Context&)> f = [](Context&) -> Object* { return T::make(); }) { m_ctor = f; };
-  static void geti(std::function<void(Object*, int, Value&)> f) { m_geti = f; }
-  static void seti(std::function<void(Object*, int, const Value&)> f) { m_seti = f; }
+  static void super() { m_init_data->super = class_of<S>(); }
+  static void super(Class *super) { m_init_data->super = super; }
+  static void ctor(std::function<Object*(Context&)> f = [](Context&) -> Object* { return T::make(); }) { m_init_data->ctor = f; };
+  static void geti(std::function<void(Object*, int, Value&)> f) { m_init_data->geti = f; }
+  static void seti(std::function<void(Object*, int, const Value&)> f) { m_init_data->seti = f; }
 
   static void variable(const std::string &name);
   static void variable(const std::string &name, typename T::Field id, int options = Field::Enumerable | Field::Writable);
@@ -997,23 +1000,23 @@ private:
     Class *constructor_class = nullptr
   );
 
+  struct InitData {
+    Class* super = nullptr;
+    std::list<Field*> fields;
+    std::function<Object*(Context&)> ctor;
+    std::function<void(Object*, int, Value&)> geti;
+    std::function<void(Object*, int, const Value&)> seti;
+  };
+
   thread_local static Class* m_c;
-  thread_local static Class* m_super;
-  thread_local static std::list<Field*> m_fields;
-  thread_local static std::function<Object*(Context&)> m_ctor;
-  thread_local static std::function<void(Object*, int, Value&)> m_geti;
-  thread_local static std::function<void(Object*, int, const Value&)> m_seti;
+  thread_local static InitData* m_init_data;
 };
 
 template<class T>
 Class* class_of() { return ClassDef<T>::get(); }
 
 template<class T> thread_local Class* ClassDef<T>::m_c = nullptr;
-template<class T> thread_local Class* ClassDef<T>::m_super = nullptr;
-template<class T> thread_local std::list<Field*> ClassDef<T>::m_fields;
-template<class T> thread_local std::function<Object*(Context&)> ClassDef<T>::m_ctor = [](Context&) -> Object* { return nullptr; };
-template<class T> thread_local std::function<void(Object*, int, Value&)> ClassDef<T>::m_geti;
-template<class T> thread_local std::function<void(Object*, int, const Value&)> ClassDef<T>::m_seti;
+template<class T> thread_local typename ClassDef<T>::InitData* ClassDef<T>::m_init_data = nullptr;
 
 //
 // EnumDef
@@ -1134,7 +1137,7 @@ void ClassDef<T>::accessor(
   std::function<void(Object*, Value&)> getter,
   std::function<void(Object*, const Value&)> setter
 ) {
-  m_fields.push_back(new Accessor(name, getter, setter));
+  m_init_data->fields.push_back(new Accessor(name, getter, setter));
 }
 
 //
@@ -1555,32 +1558,32 @@ private:
 
 template<class T>
 void ClassDef<T>::variable(const std::string &name) {
-  m_fields.push_back(Variable::make(name, Field::Enumerable | Field::Writable));
+  m_init_data->fields.push_back(Variable::make(name, Field::Enumerable | Field::Writable));
 }
 
 template<class T>
 void ClassDef<T>::variable(const std::string &name, typename T::Field id, int options) {
-  m_fields.push_back(Variable::make(name, options, int(id)));
+  m_init_data->fields.push_back(Variable::make(name, options, int(id)));
 }
 
 template<class T>
 void ClassDef<T>::variable(const std::string &name, const Value &value, int options) {
-  m_fields.push_back(Variable::make(name, value, options));
+  m_init_data->fields.push_back(Variable::make(name, value, options));
 }
 
 template<class T>
 void ClassDef<T>::variable(const std::string &name, const Value &value, typename T::Field id, int options) {
-  m_fields.push_back(Variable::make(name, value, options, int(id)));
+  m_init_data->fields.push_back(Variable::make(name, value, options, int(id)));
 }
 
 template<class T>
 void ClassDef<T>::variable(const std::string &name, Class *clazz, int options) {
-  m_fields.push_back(Variable::make(name, clazz->construct(), options));
+  m_init_data->fields.push_back(Variable::make(name, clazz->construct(), options));
 }
 
 template<class T>
 void ClassDef<T>::variable(const std::string &name, Class *clazz, typename T::Field id, int options) {
-  m_fields.push_back(Variable::make(name, clazz->construct(), options, int(id)));
+  m_init_data->fields.push_back(Variable::make(name, clazz->construct(), options, int(id)));
 }
 
 inline auto Class::init(Object *obj, Object *prototype) -> Object* {
@@ -2186,7 +2189,7 @@ void ClassDef<T>::method(
   std::function<void(Context&, Object*, Value&)> invoke,
   Class *constructor_class
 ) {
-  m_fields.push_back(Method::make(name, invoke, constructor_class));
+  m_init_data->fields.push_back(Method::make(name, invoke, constructor_class));
 }
 
 //
