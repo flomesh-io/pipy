@@ -591,7 +591,7 @@ void Class::assign(Object *obj, Object *src) {
 template<> void ClassDef<Object>::init() {
   method("toString", [](Context &ctx, Object *obj, Value &ret) { ret.set(obj->to_string()); });
   method("valueOf", [](Context &ctx, Object *obj, Value &ret) { obj->value_of(ret); });
-  m_c = Class::make("Object", nullptr, m_fields);
+  m_c = Class::make("Object", nullptr, m_init_data->fields);
   m_c->set_ctor([](Context &ctx) -> Object* { return Object::make(); });
 }
 
