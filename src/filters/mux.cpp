@@ -793,7 +793,7 @@ void Mux::Stream::on_event(Event *evt) {
       if (!m_buffer.empty()) {
         inp->input(Data::make(std::move(m_buffer)));
       }
-      inp->input(MessageEnd::make());
+      inp->input(evt->is<StreamEnd>() ? MessageEnd::make() : evt);
     }
   }
 }
