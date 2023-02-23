@@ -436,6 +436,7 @@ bool ArrayLiteral::eval(Context &ctx, Value &result) {
       obj->set(i++, val);
     }
   }
+  obj->length(i);
   return true;
 }
 
