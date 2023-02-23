@@ -201,7 +201,7 @@ void BGP::encode(pjs::Object *payload, Data &data) {
                   clamp_data_size(data, 0xff);
                   db3.push(uint8_t(id));
                   db3.push(uint8_t(data.size()));
-                  db3.push(data, 0);
+                  db3.push(data);
                 } else {
                   db3.push(uint8_t(id));
                   switch (id) {
@@ -219,7 +219,7 @@ void BGP::encode(pjs::Object *payload, Data &data) {
             clamp_data_size(caps_buffer, 0xff);
             db2.push(0x02);
             db2.push(uint8_t(caps_buffer.size()));
-            db2.push(caps_buffer, 0);
+            db2.push(caps_buffer);
           }
         }
         if (auto *params = m->parameters.get()) {
@@ -233,7 +233,7 @@ void BGP::encode(pjs::Object *payload, Data &data) {
                   clamp_data_size(data, 0xff);
                   db2.push(uint8_t(id));
                   db2.push(uint8_t(data.size()));
-                  db2.push(data, 0);
+                  db2.push(data);
                 }
               }
             }
@@ -303,7 +303,7 @@ void BGP::encode(pjs::Object *payload, Data &data) {
                 db.push(uint8_t(type_code));
                 db.push(uint8_t(buf.size()));
               }
-              db.push(buf, 0);
+              db.push(buf);
             }
           );
           db.flush();
@@ -312,11 +312,11 @@ void BGP::encode(pjs::Object *payload, Data &data) {
         clamp_data_size(path_addr, 0xffff);
         db.push(uint8_t(withdrawn.size() >> 8));
         db.push(uint8_t(withdrawn.size() >> 0));
-        db.push(withdrawn, 0);
+        db.push(withdrawn);
         db.push(uint8_t(path_addr.size() >> 8));
         db.push(uint8_t(path_addr.size() >> 0));
-        db.push(path_addr, 0);
-        if (auto *a = m->pathAttributes.get()) {
+        db.push(path_addr);
+        if (auto *a = m->destinations.get()) {
           a->iterate_all(
             [&](pjs::Value &v, int) {
               write_address_prefix(db, v);
@@ -336,7 +336,7 @@ void BGP::encode(pjs::Object *payload, Data &data) {
         }
         db.push(uint8_t(m->errorCode));
         db.push(uint8_t(m->errorSubcode));
-        if (auto *data = m->data.get()) db.push(*data, 0);
+        if (auto *data = m->data.get()) db.push(*data);
         break;
       }
       default: break;
@@ -916,14 +916,14 @@ template<> void ClassDef<BGP::MessageUpdate>::init() {
 
   accessor(
     "pathAttributes",
-    [](Object *obj, Value &val) { val.set(obj->as<BGP::MessageUpdate>()->withdrawnRoutes); },
-    [](Object *obj, const Value &val) { obj->as<BGP::MessageUpdate>()->withdrawnRoutes = val.is_array() ? val.as<Array>() : nullptr; }
+    [](Object *obj, Value &val) { val.set(obj->as<BGP::MessageUpdate>()->pathAttributes); },
+    [](Object *obj, const Value &val) { obj->as<BGP::MessageUpdate>()->pathAttributes = val.is_array() ? val.as<Array>() : nullptr; }
   );
 
   accessor(
     "destinations",
-    [](Object *obj, Value &val) { val.set(obj->as<BGP::MessageUpdate>()->withdrawnRoutes); },
-    [](Object *obj, const Value &val) { obj->as<BGP::MessageUpdate>()->withdrawnRoutes = val.is_array() ? val.as<Array>() : nullptr; }
+    [](Object *obj, Value &val) { val.set(obj->as<BGP::MessageUpdate>()->destinations); },
+    [](Object *obj, const Value &val) { obj->as<BGP::MessageUpdate>()->destinations = val.is_array() ? val.as<Array>() : nullptr; }
   );
 }
 

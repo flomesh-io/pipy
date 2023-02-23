@@ -77,10 +77,10 @@ public:
 
     pjs::Ref<pjs::Str> name;
     pjs::Value value;
-    int code;
-    bool optional;
-    bool transitive;
-    bool partial;
+    int code = 0;
+    bool optional = false;
+    bool transitive = false;
+    bool partial = false;
   };
 
   //
