@@ -113,10 +113,12 @@ public:
   public:
     Builder(Data &data, Producer *producer)
       : m_data(data)
+      , m_buffer(new Data)
       , m_producer(producer)
       , m_chunk(new Chunk(producer)) {}
 
     ~Builder() {
+      delete m_buffer;
       delete m_chunk;
     }
 
@@ -172,13 +174,22 @@ public:
       push(s.c_str(), s.length());
     }
 
-    void push(const Data &d, double vacancy = 1) {
+    void push(const Data &d) {
+      d.to_chunks(
+        [this](const uint8_t *p, int n) {
+          push(p, n);
+        }
+      );
+    }
+
+    void push(Data &&d) {
       flush();
-      m_data.pack(d, m_producer, vacancy);
+      m_data.push(std::move(d));
     }
 
   private:
     Data& m_data;
+    Data* m_buffer;
     Producer* m_producer;
     Chunk* m_chunk;
     int m_ptr = 0;
@@ -458,27 +469,32 @@ public:
         break;
       case Encoding::Hex: {
         if (str.length() % 2) throw std::runtime_error("incomplete hex string");
-        utils::HexDecoder decoder([&](uint8_t b) { push(b, producer); });
+        Builder db(*this, producer);
+        utils::HexDecoder decoder([&](uint8_t b) { db.push(b); });
         for (auto c : str) {
           if (!decoder.input(c)) {
             throw std::runtime_error("invalid hex encoding");
           }
         }
+        db.flush();
         break;
       }
       case Encoding::Base64: {
         if (str.length() % 4) throw std::runtime_error("incomplete Base64 string");
-        utils::Base64Decoder decoder([&](uint8_t b) { push(b, producer); });
+        Builder db(*this, producer);
+        utils::Base64Decoder decoder([&](uint8_t b) { db.push(b); });
         for (auto c : str) {
           if (!decoder.input(c)) {
             throw std::runtime_error("invalid Base64 encoding");
           }
         }
         if (!decoder.complete()) throw std::runtime_error("incomplete Base64 encoding");
+        db.flush();
         break;
       }
       case Encoding::Base64Url: {
-        utils::Base64UrlDecoder decoder([&](uint8_t b) { push(b, producer); });
+        Builder db(*this, producer);
+        utils::Base64UrlDecoder decoder([&](uint8_t b) { db.push(b); });
         for (auto c : str) {
           if (!decoder.input(c)) {
             throw std::runtime_error("invalid Base64 encoding");
@@ -487,6 +503,7 @@ public:
         if (!decoder.flush()) {
           throw std::runtime_error("invalid Base64 encoding");
         }
+        db.flush();
         break;
       }
     }
@@ -591,8 +608,10 @@ public:
     } else {
       m_head = data.m_head;
     }
+    m_size += data.m_size;
     m_tail = data.m_tail;
     data.m_head = data.m_tail = nullptr;
+    data.m_size = 0;
   }
 
   void push(const std::string &str, Producer *producer) {
@@ -628,7 +647,24 @@ public:
   }
 
   void push(char ch, Producer *producer) {
-    push(&ch, 1, producer);
+    assert_same_thread(*this);
+    if (auto tail = m_tail) {
+      auto chunk = tail->chunk;
+      if (chunk->retain_count == 1) {
+        int end = tail->offset + tail->length;
+        if (end < chunk->size()) {
+          chunk->data[end] = ch;
+          tail->length++;
+          m_size++;
+          return;
+        }
+      }
+    }
+    auto chunk = new Chunk(producer ? producer : &s_unknown_producer);
+    auto view = new View(chunk, 0, 1);
+    chunk->data[0] = ch;
+    push_view(view);
+    m_size++;
   }
 
   void scan(const std::function<bool(int)> &f) {
@@ -804,7 +840,7 @@ public:
 
   void pack(const Data &data, Producer *producer, double vacancy = 0.5);
 
-  void to_chunks(const std::function<void(const uint8_t*, int)> &cb) {
+  void to_chunks(const std::function<void(const uint8_t*, int)> &cb) const {
     assert_same_thread(*this);
     for (auto view = m_head; view; view = view->next) {
       cb((uint8_t*)view->chunk->data + view->offset, view->length);

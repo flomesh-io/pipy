@@ -444,7 +444,7 @@ void Protobuf::Message::serialize(Data &data) {
         case WireType::LEN:
           write_varint(db, tag | 2);
           write_varint(db, r->data().size());
-          db.push(r->data(), 0);
+          db.push(r->data());
           break;
         default: continue;
       }

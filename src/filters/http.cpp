@@ -769,6 +769,8 @@ void Encoder::output_head() {
   auto buffer = Data::make();
   bool send_content_length = true;
 
+  Data::Builder db(*buffer, &s_dp);
+
   if (m_is_response) {
     pjs::Value protocol, status_text;
     if (auto head = m_start->head()) {
@@ -777,10 +779,10 @@ void Encoder::output_head() {
     }
 
     if (protocol.is_string()) {
-      s_dp.push(buffer, protocol.s()->str());
-      s_dp.push(buffer, ' ');
+      db.push(protocol.s()->str());
+      db.push(' ');
     } else {
-      s_dp.push(buffer, "HTTP/1.1 ");
+      db.push("HTTP/1.1 ");
     }
 
     if (m_status_code < 200 || m_status_code == 204) {
@@ -789,17 +791,17 @@ void Encoder::output_head() {
 
     char status_str[100];
     std::sprintf(status_str, "%d ", m_status_code);
-    s_dp.push(buffer, status_str);
+    db.push(status_str);
 
     if (status_text.is_string()) {
-      s_dp.push(buffer, status_text.s()->str());
-      s_dp.push(buffer, "\r\n");
+      db.push(status_text.s()->str());
+      db.push("\r\n");
     } else {
       if (auto str = lookup_status_text(m_status_code)) {
-        s_dp.push(buffer, str);
-        s_dp.push(buffer, "\r\n");
+        db.push(str);
+        db.push("\r\n");
       } else {
-        s_dp.push(buffer, "OK\r\n");
+        db.push("OK\r\n");
       }
     }
 
@@ -813,27 +815,27 @@ void Encoder::output_head() {
 
     if (method.is_string()) {
       m_method = method.s();
-      s_dp.push(buffer, method.s()->str());
-      s_dp.push(buffer, ' ');
+      db.push(method.s()->str());
+      db.push(' ');
     } else {
       m_method = s_GET;
-      s_dp.push(buffer, "GET ");
+      db.push("GET ");
     }
 
     if (path.is_string()) {
-      s_dp.push(buffer, path.s()->str());
-      s_dp.push(buffer, ' ');
+      db.push(path.s()->str());
+      db.push(' ');
     } else {
-      s_dp.push(buffer, "/ ");
+      db.push("/ ");
     }
 
     if (protocol.is_string()) {
       m_protocol = protocol.s();
-      s_dp.push(buffer, protocol.s()->str());
-      s_dp.push(buffer, "\r\n");
+      db.push(protocol.s()->str());
+      db.push("\r\n");
     } else {
       m_protocol = s_http_1_1;
-      s_dp.push(buffer, "HTTP/1.1\r\n");
+      db.push("HTTP/1.1\r\n");
     }
   }
 
@@ -870,19 +872,19 @@ void Encoder::output_head() {
           v.as<pjs::Array>()->iterate_all(
             [&](pjs::Value &v, int) {
               auto s = v.to_string();
-              s_dp.push(buffer, k->str());
-              s_dp.push(buffer, ": ");
-              s_dp.push(buffer, s->str());
-              s_dp.push(buffer, "\r\n");
+              db.push(k->str());
+              db.push(": ");
+              db.push(s->str());
+              db.push("\r\n");
               s->release();
             }
           );
         } else {
-          s_dp.push(buffer, k->str());
-          s_dp.push(buffer, ": ");
+          db.push(k->str());
+          db.push(": ");
           auto s = v.to_string();
-          s_dp.push(buffer, s->str());
-          s_dp.push(buffer, "\r\n");
+          db.push(s->str());
+          db.push("\r\n");
           s->release();
         }
       }
@@ -896,24 +898,25 @@ void Encoder::output_head() {
   if (send_content_length) {
     if (m_chunked) {
       static const std::string str("transfer-encoding: chunked\r\n");
-      s_dp.push(buffer, str);
+      db.push(str);
     } else if (!content_length_written) {
       char str[100];
       std::sprintf(str, ": %d\r\n", m_content_length);
-      s_dp.push(buffer, s_content_length.get()->str());
-      s_dp.push(buffer, str);
+      db.push(s_content_length.get()->str());
+      db.push(str);
     }
 
     if (m_is_final) {
       static const std::string str("connection: close\r\n");
-      s_dp.push(buffer, str);
+      db.push(str);
     } else {
       static const std::string str("connection: keep-alive\r\n");
-      s_dp.push(buffer, str);
+      db.push(str);
     }
   }
 
-  s_dp.push(buffer, "\r\n");
+  db.push("\r\n");
+  db.flush();
 
   output(m_start);
   output(buffer);

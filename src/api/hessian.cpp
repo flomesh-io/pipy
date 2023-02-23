@@ -771,6 +771,7 @@ void Hessian::decode(const Data &data, pjs::Value &val) {
 
 bool Hessian::encode(const pjs::Value &val, Data &data) {
   int level = 0;
+  Data::Builder db(data, &s_dp);
 
   auto write_str = [&](const std::string &str) {
     size_t n = 0;
@@ -792,66 +793,66 @@ bool Hessian::encode(const pjs::Value &val, Data &data) {
     }
 
     if (n < 32) {
-      s_dp.push(&data, (char)n);
-      s_dp.push(&data, str.c_str());
+      db.push((char)n);
+      db.push(str.c_str());
     } else if (n < 1024) {
-      s_dp.push(&data, (char)(n >> 8) | 0x30);
-      s_dp.push(&data, (char)(n >> 0));
-      s_dp.push(&data, str.c_str());
+      db.push((char)(n >> 8) | 0x30);
+      db.push((char)(n >> 0));
+      db.push(str.c_str());
     } else if (n < 65536) {
-      s_dp.push(&data, 'S');
-      s_dp.push(&data, (char)(n >> 8));
-      s_dp.push(&data, (char)(n >> 0));
-      s_dp.push(&data, str.c_str());
+      db.push('S');
+      db.push((char)(n >> 8));
+      db.push((char)(n >> 0));
+      db.push(str.c_str());
     } else {
-      s_dp.push(&data, 'S');
-      s_dp.push(&data, 0xff);
-      s_dp.push(&data, 0xff);
-      s_dp.push(&data, str.c_str(), 65536);
+      db.push('S');
+      db.push(0xff);
+      db.push(0xff);
+      db.push(str.c_str(), 65536);
     }
   };
 
   std::function<bool(const pjs::Value&)> write;
   write = [&](const pjs::Value &v) -> bool {
     if (v.is_undefined()) {
-      s_dp.push(&data, 'N');
+      db.push('N');
 
     } else if (v.is_boolean()) {
-      s_dp.push(&data, v.b() ? 'T' : 'F');
+      db.push(v.b() ? 'T' : 'F');
 
     } else if (v.is_number()) {
       auto n = v.n();
       double i;
       if (std::isnan(n) || std::isinf(n) || std::modf(n, &i)) {
         int64_t tmp; *(double*)&tmp = n;
-        s_dp.push(&data, 'D');
-        s_dp.push(&data, (char)(tmp >> 56));
-        s_dp.push(&data, (char)(tmp >> 48));
-        s_dp.push(&data, (char)(tmp >> 40));
-        s_dp.push(&data, (char)(tmp >> 32));
-        s_dp.push(&data, (char)(tmp >> 24));
-        s_dp.push(&data, (char)(tmp >> 16));
-        s_dp.push(&data, (char)(tmp >> 8 ));
-        s_dp.push(&data, (char)(tmp >> 0 ));
+        db.push('D');
+        db.push((char)(tmp >> 56));
+        db.push((char)(tmp >> 48));
+        db.push((char)(tmp >> 40));
+        db.push((char)(tmp >> 32));
+        db.push((char)(tmp >> 24));
+        db.push((char)(tmp >> 16));
+        db.push((char)(tmp >> 8 ));
+        db.push((char)(tmp >> 0 ));
 
       } else {
         auto n = int64_t(v.n());
         if (std::numeric_limits<int>::min() <= n && n <= std::numeric_limits<int>::max()) {
-          s_dp.push(&data, 'I');
-          s_dp.push(&data, (char)(n >> 24));
-          s_dp.push(&data, (char)(n >> 16));
-          s_dp.push(&data, (char)(n >> 8 ));
-          s_dp.push(&data, (char)(n >> 0 ));
+          db.push('I');
+          db.push((char)(n >> 24));
+          db.push((char)(n >> 16));
+          db.push((char)(n >> 8 ));
+          db.push((char)(n >> 0 ));
         } else {
-          s_dp.push(&data, 'L');
-          s_dp.push(&data, (char)(n >> 56));
-          s_dp.push(&data, (char)(n >> 48));
-          s_dp.push(&data, (char)(n >> 40));
-          s_dp.push(&data, (char)(n >> 32));
-          s_dp.push(&data, (char)(n >> 24));
-          s_dp.push(&data, (char)(n >> 16));
-          s_dp.push(&data, (char)(n >> 8 ));
-          s_dp.push(&data, (char)(n >> 0 ));
+          db.push('L');
+          db.push((char)(n >> 56));
+          db.push((char)(n >> 48));
+          db.push((char)(n >> 40));
+          db.push((char)(n >> 32));
+          db.push((char)(n >> 24));
+          db.push((char)(n >> 16));
+          db.push((char)(n >> 8 ));
+          db.push((char)(n >> 0 ));
         }
       }
 
@@ -861,26 +862,26 @@ bool Hessian::encode(const pjs::Value &val, Data &data) {
     } else if (v.is_object()) {
 
       if (v.is_array()) {
-        if (level++ > 0) s_dp.push(&data, 0x57);
+        if (level++ > 0) db.push(0x57);
         auto a = v.as<pjs::Array>();
         auto n = a->iterate_while([&](pjs::Value &v, int i) -> bool {
           return write(v);
         });
         if (n < a->length()) return false;
-        if (--level > 0) s_dp.push(&data, 'Z');
+        if (--level > 0) db.push('Z');
 
       } else if (!v.o()) {
-        s_dp.push(&data, 'N');
+        db.push('N');
 
       } else {
-        s_dp.push(&data, 'H');
+        db.push('H');
         level++;
         auto done = v.o()->iterate_while([&](pjs::Str *k, pjs::Value &v) -> bool {
           write_str(k->str());
           return write(v);
         });
         if (!done) return false;
-        s_dp.push(&data, 'Z');
+        db.push('Z');
         level--;
       }
     }
@@ -888,7 +889,9 @@ bool Hessian::encode(const pjs::Value &val, Data &data) {
     return true;
   };
 
-  return write(val);
+  auto ret = write(val);
+  db.flush();
+  return ret;
 }
 
 } // namespace pipy

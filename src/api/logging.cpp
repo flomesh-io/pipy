@@ -419,7 +419,8 @@ void BinaryLogger::log(int argc, const pjs::Value *args) {
   for (int i = 0; i < argc; i++) {
     auto &v = args[i];
     if (v.is<Data>()) {
-      db.push(*v.as<Data>());
+      Data buf(*v.as<Data>());
+      db.push(std::move(buf));
     } else if (v.is_string()) {
       auto *s = v.s();
       db.push(s->c_str(), s->size());

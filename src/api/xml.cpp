@@ -240,11 +240,13 @@ bool XML::encode(Node *doc, int space, Data &data) {
   if (space < 0) space = 0;
   if (space > 10) space = 10;
 
+  Data::Builder db(data, &s_dp);
+
   auto write_text = [&](pjs::Value &v) {
     auto *s = v.to_string();
     auto &str = s->str();
     if (str.find_first_of(s_escaped_chars) == std::string::npos) {
-      s_dp.push(&data, str);
+      db.push(str);
     } else {
       size_t i = 0;
       while (i < str.length()) {
@@ -254,9 +256,9 @@ bool XML::encode(Node *doc, int space, Data &data) {
         } else {
           j += 2;
         }
-        s_dp.push(&data, s_cdata_start);
-        s_dp.push(&data, &str[i], j - i);
-        s_dp.push(&data, s_cdata_end);
+        db.push(s_cdata_start);
+        db.push(&str[i], j - i);
+        db.push(s_cdata_end);
         i = j;
       }
     }
@@ -269,18 +271,18 @@ bool XML::encode(Node *doc, int space, Data &data) {
     if (node->name() == 0) return;
 
     std::string padding(space * l, ' ');
-    if (space) s_dp.push(&data, padding);
-    s_dp.push(&data, '<');
-    s_dp.push(&data, node->name()->str());
+    if (space) db.push(padding);
+    db.push('<');
+    db.push(node->name()->str());
     if (auto attrs = node->attributes()) {
       attrs->iterate_all([&](pjs::Str *k, pjs::Value &v) {
         auto *s = v.to_string();
-        s_dp.push(&data, ' ');
-        s_dp.push(&data, k->str());
-        s_dp.push(&data, '=');
-        s_dp.push(&data, '"');
-        s_dp.push(&data, s->str());
-        s_dp.push(&data, '"');
+        db.push(' ');
+        db.push(k->str());
+        db.push('=');
+        db.push('"');
+        db.push(s->str());
+        db.push('"');
         s->release();
       });
     }
@@ -293,7 +295,7 @@ bool XML::encode(Node *doc, int space, Data &data) {
         pjs::Value front;
         children->get(0, front);
         if (!front.is_instance_of<XML::Node>()) {
-          s_dp.push(&data, '>');
+          db.push('>');
           write_text(front);
           is_closed = true;
           is_text = true;
@@ -301,35 +303,37 @@ bool XML::encode(Node *doc, int space, Data &data) {
       }
 
       if (!is_text && children->length() > 0) {
-        s_dp.push(&data, '>');
-        if (space) s_dp.push(&data, '\n');
+        db.push('>');
+        if (space) db.push('\n');
         is_closed = true;
         std::string padding(space * l + space, ' ');
         children->iterate_all([&](pjs::Value &v, int) {
           if (v.is_instance_of<XML::Node>()) {
             write(v.as<XML::Node>(), l + 1);
           } else {
-            if (space) s_dp.push(&data, padding);
+            if (space) db.push(padding);
             write_text(v);
-            if (space) s_dp.push(&data, '\n');
+            if (space) db.push('\n');
           }
         });
       }
     }
 
     if (is_closed) {
-      if (space && !is_text) s_dp.push(&data, padding);
-      s_dp.push(&data, "</");
-      s_dp.push(&data, node->name()->str());
-      s_dp.push(&data, '>');
-      if (space) s_dp.push(&data, '\n');
+      if (space && !is_text) db.push(padding);
+      db.push("</");
+      db.push(node->name()->str());
+      db.push('>');
+      if (space) db.push('\n');
     } else {
-      s_dp.push(&data, "/>");
-      if (space) s_dp.push(&data, '\n');
+      db.push("/>");
+      if (space) db.push('\n');
     }
   };
 
   write(root.as<XML::Node>(), 0);
+  db.flush();
+
   return true;
 }
 

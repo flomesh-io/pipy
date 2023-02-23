@@ -81,7 +81,7 @@ void RESP::encode(const pjs::Value &value, Data::Builder &db) {
       auto *data = value.as<Data>();
       char buf[100];
       db.push(buf, std::snprintf(buf, sizeof(buf), "$%d\r\n", (int)data->size()));
-      db.push(*data, 0);
+      db.push(*data);
       db.push('\r');
       db.push('\n');
 
