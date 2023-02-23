@@ -237,6 +237,10 @@ void FilterConfigurator::dump(const pjs::Value &tag) {
   append_filter(new Dump(tag));
 }
 
+void FilterConfigurator::encode_bgp() {
+  append_filter(new bgp::Encoder());
+}
+
 void FilterConfigurator::encode_dubbo(pjs::Object *message_obj) {
   append_filter(new dubbo::Encoder(message_obj));
 }
@@ -1322,6 +1326,16 @@ template<> void ClassDef<FilterConfigurator>::init() {
     if (!ctx.arguments(0, &tag)) return;
     try {
       thiz->as<FilterConfigurator>()->dump(tag);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // FilterConfigurator.encodeBGP
+  method("encodeBGP", [](Context &ctx, Object *thiz, Value &result) {
+    try {
+      thiz->as<FilterConfigurator>()->encode_bgp();
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

@@ -54,6 +54,26 @@ private:
   virtual void on_message_end(pjs::Object *payload) override;
 };
 
+//
+// Encoder
+//
+
+class Encoder : public Filter {
+public:
+  Encoder();
+
+private:
+  Encoder(const Encoder &r);
+  ~Encoder();
+
+  virtual auto clone() -> Filter* override;
+  virtual void reset() override;
+  virtual void process(Event *evt) override;
+  virtual void dump(Dump &d) override;
+
+  bool m_message_started = false;
+};
+
 } // namespace bgp
 } // namespace pipy
 
