@@ -38,7 +38,7 @@ bool Message::output(const pjs::Value &evt, EventTarget::Input *input) {
     auto *body = msg->body();
     input->input(MessageStart::make(msg->head()));
     if (body) input->input(body);
-    input->input(MessageEnd::make(msg->tail()));
+    input->input(MessageEnd::make(msg->tail(), msg->payload()));
     return true;
   } else if (evt.is_array()) {
     auto *a = evt.as<pjs::Array>();
@@ -51,7 +51,7 @@ bool Message::output(const pjs::Value &evt, EventTarget::Input *input) {
         auto *body = msg->body();
         input->input(MessageStart::make(msg->head()));
         if (body) input->input(body);
-        input->input(MessageEnd::make(msg->tail()));
+        input->input(MessageEnd::make(msg->tail(), msg->payload()));
         return true;
       } else {
         return v.is_null() || v.is_undefined();
@@ -88,7 +88,7 @@ template<> void ClassDef<pipy::Message>::init() {
       }
       case 2: {
         Object *head = nullptr;
-        if (!ctx.check(0, head)) return nullptr;
+        if (!ctx.check(0, head, head)) return nullptr;
         const auto &arg1 = ctx.arg(1);
         if (arg1.is_string()) {
           return pipy::Message::make(head, arg1.s()->str());
@@ -97,15 +97,14 @@ template<> void ClassDef<pipy::Message>::init() {
         } else if (arg1.is_null()) {
           return pipy::Message::make(head, nullptr);
         } else {
-          ctx.error_argument_type(1, "a string or a Data object");
-          return nullptr;
+          return pipy::Message::make(head, nullptr, nullptr, arg1);
         }
       }
       case 3: {
         Object *head = nullptr;
         Object *tail = nullptr;
-        if (!ctx.check(0, head)) return nullptr;
-        if (!ctx.check(2, tail)) return nullptr;
+        if (!ctx.check(0, head, head)) return nullptr;
+        if (!ctx.check(2, tail, tail)) return nullptr;
         const auto &arg1 = ctx.arg(1);
         if (arg1.is_string()) {
           return pipy::Message::make(head, arg1.s()->str(), tail);
@@ -114,8 +113,7 @@ template<> void ClassDef<pipy::Message>::init() {
         } else if (arg1.is_null()) {
           return pipy::Message::make(head, nullptr, tail);
         } else {
-          ctx.error_argument_type(1, "a string or a Data object");
-          return nullptr;
+          return pipy::Message::make(head, nullptr, tail, arg1);
         }
       }
       default: {
