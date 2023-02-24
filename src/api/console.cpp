@@ -25,7 +25,6 @@
 
 #include "console.hpp"
 #include "data.hpp"
-#include "log.hpp"
 
 #include <sstream>
 
@@ -33,22 +32,24 @@ namespace pipy {
 
 thread_local static Data::Producer s_dp("Console");
 
-void Console::log(const pjs::Value *values, int count) {
-  Data buf;
-  Data::Builder db(buf, &s_dp);
-  char str[100];
-  db.push(str, Log::format_header(Log::INFO, str, sizeof(str)));
-  for (int i = 0; i < count; i++) {
-    if (i > 0) db.push(' ');
-    auto &v = values[i];
-    if (v.is_string()) {
-      db.push(v.s()->str());
-    } else {
-      dump(v, db);
+void Console::log(Log::Level level, const pjs::Value *values, int count) {
+  if (Log::is_enabled(level)) {
+    Data buf;
+    Data::Builder db(buf, &s_dp);
+    char str[100];
+    db.push(str, Log::format_header(level, str, sizeof(str)));
+    for (int i = 0; i < count; i++) {
+      if (i > 0) db.push(' ');
+      auto &v = values[i];
+      if (v.is_string()) {
+        db.push(v.s()->str());
+      } else {
+        dump(v, db);
+      }
     }
+    db.flush();
+    Log::write(buf);
   }
-  db.flush();
-  Log::write(buf);
 }
 
 void Console::dump(const pjs::Value &value, Data &out) {
@@ -199,9 +200,28 @@ template<> void ClassDef<Console>::init() {
 
   // console.log
   method("log", [](Context &ctx, Object *, Value &result) {
-    Console::log(&ctx.arg(0), ctx.argc());
+    Console::log(Log::INFO, &ctx.arg(0), ctx.argc());
   });
 
+  // console.info
+  method("info", [](Context &ctx, Object *, Value &result) {
+    Console::log(Log::INFO, &ctx.arg(0), ctx.argc());
+  });
+
+  // console.debug
+  method("debug", [](Context &ctx, Object *, Value &result) {
+    Console::log(Log::DEBUG, &ctx.arg(0), ctx.argc());
+  });
+
+  // console.warn
+  method("warn", [](Context &ctx, Object *, Value &result) {
+    Console::log(Log::WARN, &ctx.arg(0), ctx.argc());
+  });
+
+  // console.error
+  method("error", [](Context &ctx, Object *, Value &result) {
+    Console::log(Log::ERROR, &ctx.arg(0), ctx.argc());
+  });
 }
 
 } // namespace pjs
