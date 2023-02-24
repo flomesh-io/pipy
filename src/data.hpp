@@ -664,7 +664,6 @@ public:
     auto view = new View(chunk, 0, 1);
     chunk->data[0] = ch;
     push_view(view);
-    m_size++;
   }
 
   void scan(const std::function<bool(int)> &f) {
