@@ -543,7 +543,7 @@ void QueueMuxer::on_reply(Event *evt) {
       }
     }
 
-  } else if (auto end = evt->as<StreamEnd>()) {
+  } else if (evt->is<StreamEnd>()) {
     while (auto s = m_streams.head()) {
       m_streams.remove(s);
       if (!s->m_started) {

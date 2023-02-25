@@ -932,7 +932,7 @@ NMI_EXPORT void pipy_free(pipy_pipeline ppl) {
 }
 
 NMI_EXPORT void pipy_output_event(pipy_pipeline ppl, pjs_value evt) {
-  if (auto *m = nmi::NativeModule::current()) {
+  if (nmi::NativeModule::current()) {
     if (auto *p = nmi::Pipeline::get(ppl)) {
       p->check_thread();
       if (auto *pv = nmi::s_values.get(evt)) {

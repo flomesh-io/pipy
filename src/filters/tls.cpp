@@ -235,7 +235,7 @@ void TLSSession::on_input(Event *evt) {
       if (handshake_step()) pump_write();
     }
 
-  } else if (auto end = evt->as<StreamEnd>()) {
+  } else if (evt->is<StreamEnd>()) {
     m_closed_input = true;
     forward(evt);
   }
@@ -256,7 +256,7 @@ void TLSSession::on_reply(Event *evt) {
       if (handshake_step()) pump_read();
     }
 
-  } else if (auto end = evt->as<StreamEnd>()) {
+  } else if (evt->is<StreamEnd>()) {
     m_closed_output = true;
     output(evt);
   }

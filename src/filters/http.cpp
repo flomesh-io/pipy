@@ -990,7 +990,7 @@ void RequestDecoder::reset() {
 }
 
 void RequestDecoder::process(Event *evt) {
-  if (auto data = evt->as<Data>()) {
+  if (evt->is<Data>()) {
     output(evt, m_ef_decode.input());
   } else if (evt->is<StreamEnd>()) {
     output(evt);
@@ -1385,7 +1385,7 @@ void Demux::on_decode_request(http::RequestHead *head) {
 void Demux::on_encode_response(pjs::Object *head) {
   int status;
   if (head && m_prop_status.get(head, status) && status == 100) {
-    if (auto req = m_request_queue.head()) {
+    if (m_request_queue.head()) {
       Encoder::set_bodiless(true);
     }
   } else if (auto req = m_request_queue.shift()) {
@@ -1530,7 +1530,7 @@ void Mux::Session::on_encode_request(pjs::Object *head) {
 
 void Mux::Session::on_decode_response(http::ResponseHead *head) {
   if (head->status() == 100) {
-    if (auto *req = m_request_queue.head()) {
+    if (m_request_queue.head()) {
       Decoder::set_bodiless(true);
       QueueMuxer::increase_queue_count();
     }

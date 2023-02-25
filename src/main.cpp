@@ -94,7 +94,7 @@ static void show_version() {
 static void reload_codebase(bool force) {
   if (auto *codebase = Codebase::current()) {
     InputContext ic;
-    Codebase::current()->sync(
+    codebase->sync(
       force, [](bool ok) {
         if (ok) {
           WorkerManager::get().reload();
