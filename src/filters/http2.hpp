@@ -359,8 +359,8 @@ private:
 
 public:
   struct Options : public pipy::Options {
-    size_t connection_window_size = INITIAL_RECV_WINDOW_SIZE;
-    size_t stream_window_size = INITIAL_RECV_WINDOW_SIZE;
+    size_t connection_window_size = 0x100000;
+    size_t stream_window_size = 0x100000;
     Options() {}
     Options(pjs::Object *options);
   };
