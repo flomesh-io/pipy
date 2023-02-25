@@ -25,6 +25,7 @@
 
 #include "http2.hpp"
 #include "api/stats.hpp"
+#include "log.hpp"
 
 namespace pipy {
 namespace http2 {
@@ -1743,7 +1744,7 @@ bool Endpoint::StreamBase::deduct_recv(int size) {
   connection_recv_window -= size;
   m_recv_window -= size;
   if (m_recv_window <= m_recv_window_low) set_clearing(true);
-  if (connection_recv_window <= m_endpoint->m_recv_window_low) flush();
+  if (m_is_clearing || connection_recv_window <= m_endpoint->m_recv_window_low) flush();
   return true;
 }
 
@@ -1854,6 +1855,7 @@ void Endpoint::StreamBase::set_pending(bool pending) {
       m_endpoint->m_streams.remove(this);
       m_endpoint->m_streams_pending.push(this);
     } else {
+      if (m_is_clearing) return;
       m_endpoint->m_streams_pending.remove(this);
       m_endpoint->m_streams.push(this);
       m_is_clearing = false;
