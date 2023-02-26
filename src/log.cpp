@@ -93,11 +93,11 @@ void Log::set_topics(int topics) {
 }
 
 bool Log::is_enabled(Level level) {
-  return (s_log_level <= DEBUG) && (level >= s_log_level);
+  return (level >= s_log_level);
 }
 
 bool Log::is_enabled(Topic topic) {
-  return (s_log_topics & topic);
+  return (s_log_level <= DEBUG) && (s_log_topics & topic);
 }
 
 auto Log::format_header(Level level, char *buf, size_t len) -> size_t {

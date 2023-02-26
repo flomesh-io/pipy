@@ -73,6 +73,7 @@ void Dump::process(Event *evt) {
   static const std::string s_prefix_tail(", tail = ");
   static const std::string s_prefix_payload(", payload = ");
   static const std::string s_hline(16*3+4+16, '-');
+  static const std::string s_ellipsis("...");
 
   pjs::Value tag;
   if (!eval(m_tag, tag)) {
@@ -142,47 +143,67 @@ void Dump::process(Event *evt) {
     db.push('[');
     db.push(str, str_fmt("%d", data->size()));
     db.push(']');
-    db.push(' ');
     if (!data->empty()) {
-      char hex[100], txt[100];
-      auto i = 0, j = 0;
-      db.push('\n');
-      db.push(s_hline);
-      db.push('\n');
-      data->scan(
-        [&](int c) {
-          auto ch = uint8_t(c);
-          hex[i++] = s_hex[ch >> 4];
-          hex[i++] = s_hex[ch & 15];
-          hex[i++] = ' ';
-          txt[j++] = ch < 0x20 || ch >= 0x7f ? '?' : ch;
-          if (j == 16) {
-            hex[i++] = ' ';
-            hex[i++] = '|';
-            hex[i++] = ' ';
-            db.push(hex, i);
-            db.push(txt, j);
-            db.push('\n');
-            i = 0; j = 0;
-          }
-          return true;
-        }
-      );
-      if (j > 0) {
-        for (int n = 16 - j; n > 0; --n) {
-          hex[i++] = ' ';
-          hex[i++] = '-';
-          hex[i++] = ' ';
-          txt[j++] = '.';
-        }
-        hex[i++] = ' ';
-        hex[i++] = '|';
-        hex[i++] = ' ';
-        db.push(hex, i);
-        db.push(txt, j);
+      if (Log::is_enabled(Log::DUMP)) {
+        char hex[100], txt[100];
+        auto i = 0, j = 0;
         db.push('\n');
+        db.push(s_hline);
+        db.push('\n');
+        data->scan(
+          [&](int c) {
+            auto ch = uint8_t(c);
+            hex[i++] = s_hex[ch >> 4];
+            hex[i++] = s_hex[ch & 15];
+            hex[i++] = ' ';
+            txt[j++] = ch < 0x20 || ch >= 0x7f ? '?' : ch;
+            if (j == 16) {
+              hex[i++] = ' ';
+              hex[i++] = '|';
+              hex[i++] = ' ';
+              db.push(hex, i);
+              db.push(txt, j);
+              db.push('\n');
+              i = 0; j = 0;
+            }
+            return true;
+          }
+        );
+        if (j > 0) {
+          for (int n = 16 - j; n > 0; --n) {
+            hex[i++] = ' ';
+            hex[i++] = '-';
+            hex[i++] = ' ';
+            txt[j++] = '.';
+          }
+          hex[i++] = ' ';
+          hex[i++] = '|';
+          hex[i++] = ' ';
+          db.push(hex, i);
+          db.push(txt, j);
+          db.push('\n');
+        }
+        db.push(s_hline);
+      } else {
+        db.push(' ');
+        db.push('[');
+        int i = 0;
+        data->scan(
+          [&](int c) {
+            auto ch = uint8_t(c);
+            db.push(' ');
+            db.push(s_hex[ch >> 4]);
+            db.push(s_hex[ch & 15]);
+            return (++i < 16);
+          }
+        );
+        db.push(' ');
+        if (data->size() > 16) {
+          db.push(s_ellipsis);
+          db.push(' ');
+        }
+        db.push(']');
       }
-      db.push(s_hline);
     }
   }
 
