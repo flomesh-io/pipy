@@ -61,6 +61,20 @@ void MainOptions::show_help() {
   std::cout << std::endl;
 }
 
+static const struct {
+  Log::Topic topic;
+  const char *name;
+} s_topic_names[] = {
+  { Log::ALLOC    , "alloc" },
+  { Log::DUMP     , "dump" },
+  { Log::INBOUND  , "inbound" },
+  { Log::OUTBOUND , "outbound" },
+  { Log::FILES    , "files" },
+  { Log::SUBPROC  , "subproc" },
+  { Log::USER     , "user" },
+  { Log::NO_TOPIC , nullptr },
+};
+
 MainOptions::MainOptions(int argc, char *argv[]) {
   auto max_threads = std::thread::hardware_concurrency();
 
@@ -96,7 +110,39 @@ MainOptions::MainOptions(int argc, char *argv[]) {
           }
         }
       } else if (k == "--log-level") {
-        if (v == "debug") log_level = Log::DEBUG;
+        if (
+          utils::starts_with(v, "debug") && (
+          v.length() == 5 ||
+          v.at(5) == ':')
+        ) {
+          log_level = Log::DEBUG;
+          if (v.length() == 5) {
+            log_topics = 0xffffffff;
+          } else {
+            log_topics = 0;
+            for (const auto &topic : utils::split(v.substr(6), '+')) {
+              int mask = 0;
+              for (int i = 0; s_topic_names[i].name; i++) {
+                if (topic == s_topic_names[i].name) {
+                  mask = s_topic_names[i].topic;
+                  break;
+                }
+              }
+              if (!mask) {
+                std::string msg("unknown log topic: ");
+                msg += topic;
+                msg += " (available topics include: ";
+                for (int i = 0; s_topic_names[i].name; i++) {
+                  if (i > 0) msg += " | ";
+                  msg += s_topic_names[i].name;
+                }
+                msg += ')';
+                throw std::runtime_error(msg);
+              }
+              log_topics |= mask;
+            }
+          }
+        }
         else if (v == "warn") log_level = Log::WARN;
         else if (v == "error") log_level = Log::ERROR;
         else if (v == "info") log_level = Log::INFO;

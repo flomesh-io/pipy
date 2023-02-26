@@ -60,8 +60,8 @@ void FileStream::close() {
 
   if (ec) {
     Log::error("FileStream: %p, error closing stream [fd = %d], %s", this, m_fd, ec.message().c_str());
-  } else {
-    Log::debug("FileStream: %p, stream closed [fd = %d]", this, m_fd);
+  } else if (Log::is_enabled(Log::FILES)) {
+    Log::debug(Log::FILES, "FileStream: %p, stream closed [fd = %d]", this, m_fd);
   }
 
   if (m_f) {
@@ -115,7 +115,7 @@ void FileStream::read() {
 
     if (ec) {
       if (ec == asio::error::eof) {
-        Log::debug("FileStream: %p, end of stream [fd = %d]", this, m_fd);
+        Log::debug(Log::FILES, "FileStream: %p, end of stream [fd = %d]", this, m_fd);
         output(StreamEnd::make(StreamEnd::NO_ERROR));
       } else if (ec != asio::error::operation_aborted) {
         auto msg = ec.message();

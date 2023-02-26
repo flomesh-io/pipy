@@ -177,11 +177,11 @@ Worker::Worker(bool is_graph_enabled)
   , m_global_object(Global::make(this))
   , m_graph_enabled(is_graph_enabled)
 {
-  Log::debug("[worker   %p] ++", this);
+  Log::debug(Log::ALLOC, "[worker   %p] ++", this);
 }
 
 Worker::~Worker() {
-  Log::debug("[worker   %p] --", this);
+  Log::debug(Log::ALLOC, "[worker   %p] --", this);
 }
 
 bool Worker::handling_signal(int signal) {

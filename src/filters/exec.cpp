@@ -180,7 +180,7 @@ void Exec::ChildProcessMonitor::wait() {
     if (pid < 0) {
       sleep(1);
     } else if (pid > 0 && (WIFEXITED(status) || WIFSIGNALED(status))) {
-      Log::debug("[exec] child process exited [pid = %d]", pid);
+      Log::debug(Log::SUBPROC, "[exec] child process exited [pid = %d]", pid);
       std::lock_guard<std::mutex> lock(m_mutex);
       auto i = m_waiters.find(pid);
       if (i != m_waiters.end()) {

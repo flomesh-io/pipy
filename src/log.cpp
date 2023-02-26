@@ -41,6 +41,7 @@ namespace pipy {
 //
 
 static Log::Level s_log_level = Log::ERROR;
+static int s_log_topics = 0;
 
 thread_local static logging::Logger *s_logger = nullptr;
 thread_local static Data::Producer s_dp("Log");
@@ -87,8 +88,16 @@ void Log::set_level(Level level) {
   s_log_level = level;
 }
 
+void Log::set_topics(int topics) {
+  s_log_topics = topics;
+}
+
 bool Log::is_enabled(Level level) {
-  return (level >= s_log_level);
+  return (s_log_level <= DEBUG) && (level >= s_log_level);
+}
+
+bool Log::is_enabled(Topic topic) {
+  return (s_log_topics & topic);
 }
 
 auto Log::format_header(Level level, char *buf, size_t len) -> size_t {
@@ -113,11 +122,13 @@ void Log::write(const std::string &data) {
   s_logger->write(buf);
 }
 
-void Log::debug(const char *fmt, ...) {
-  va_list ap;
-  va_start(ap, fmt);
-  logf(Log::DEBUG, fmt, ap);
-  va_end(ap);
+void Log::debug(Topic topic, const char *fmt, ...) {
+  if (is_enabled(topic)) {
+    va_list ap;
+    va_start(ap, fmt);
+    logf(Log::DEBUG, fmt, ap);
+    va_end(ap);
+  }
 }
 
 void Log::info(const char *fmt, ...) {

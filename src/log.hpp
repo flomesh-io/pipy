@@ -45,17 +45,30 @@ public:
     INFO,
   };
 
+  enum Topic {
+    NO_TOPIC  = 0,
+    ALLOC     = 1<<0,
+    DUMP      = 1<<1,
+    INBOUND   = 1<<2,
+    OUTBOUND  = 1<<3,
+    FILES     = 1<<4,
+    SUBPROC   = 1<<5,
+    USER      = 1<<6,
+  };
+
   static void init();
   static void shutdown();
   static void set_level(Level level);
+  static void set_topics(int topics);
   static bool is_enabled(Level level);
+  static bool is_enabled(Topic topic);
 
   static auto format_header(Level level, char *buf, size_t len) -> size_t;
 
   static void write(const Data &data);
   static void write(const std::string &data);
 
-  static void debug(const char *fmt, ...);
+  static void debug(Topic topic, const char *fmt, ...);
   static void info(const char *fmt, ...);
   static void warn(const char *fmt, ...);
   static void error(const char *fmt, ...);

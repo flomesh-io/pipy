@@ -47,11 +47,11 @@ PipelineLayout::PipelineLayout(ModuleBase *module, int index, const std::string 
 {
   s_all_pipeline_layouts.push(this);
   if (module) module->m_pipelines.push_back(this);
-  Log::debug("[p-layout %p] ++ name = %s", this, name_or_label()->c_str());
+  Log::debug(Log::ALLOC, "[p-layout %p] ++ name = %s", this, name_or_label()->c_str());
 }
 
 PipelineLayout::~PipelineLayout() {
-  Log::debug("[p-layout %p] -- name = %s", this, name_or_label()->c_str());
+  Log::debug(Log::ALLOC, "[p-layout %p] -- name = %s", this, name_or_label()->c_str());
   auto *ptr = m_pool;
   while (ptr) {
     auto *pipeline = ptr;
@@ -108,7 +108,7 @@ auto PipelineLayout::alloc(Context *ctx) -> Pipeline* {
   pipeline->m_context = ctx;
   m_pipelines.push(pipeline);
   s_active_pipeline_count++;
-  Log::debug("[pipeline %p] ++ name = %s, context = %llu", pipeline, name_or_label()->c_str(), ctx->id());
+  Log::debug(Log::ALLOC, "[pipeline %p] ++ name = %s, context = %llu", pipeline, name_or_label()->c_str(), ctx->id());
   return pipeline;
 }
 
@@ -139,7 +139,7 @@ void PipelineLayout::free(Pipeline *pipeline) {
   pipeline->m_next_free = m_pool;
   m_pool = pipeline;
   s_active_pipeline_count--;
-  Log::debug("[pipeline %p] -- name = %s", pipeline, name_or_label()->c_str());
+  Log::debug(Log::ALLOC, "[pipeline %p] -- name = %s", pipeline, name_or_label()->c_str());
   release();
 }
 

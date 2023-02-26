@@ -54,6 +54,7 @@ public:
   bool        reuse_port = false;
   int         threads = 1;
   Log::Level  log_level = Log::ERROR;
+  int         log_topics = 0;
   std::string admin_port;
   std::string instance_uuid;
   std::string instance_name;

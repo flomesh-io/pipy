@@ -52,12 +52,12 @@ Outbound::Outbound(EventTarget::Input *output, const Options &options)
   , m_output(output)
 {
   init_metrics();
-  Log::debug("[outbound %p] ++", this);
+  Log::debug(Log::ALLOC, "[outbound %p] ++", this);
   s_all_outbounds.push(this);
 }
 
 Outbound::~Outbound() {
-  Log::debug("[outbound %p] --", this);
+  Log::debug(Log::ALLOC, "[outbound %p] --", this);
   s_all_outbounds.remove(this);
 }
 
@@ -297,10 +297,10 @@ void OutboundTCP::resolve() {
     }
   );
 
-  if (Log::is_enabled(Log::DEBUG)) {
+  if (Log::is_enabled(Log::OUTBOUND)) {
     char desc[200];
     describe(desc);
-    Log::debug("%s resolving hostname...", desc);
+    Log::debug(Log::OUTBOUND, "%s resolving hostname...", desc);
   }
 
   if (m_options.connect_timeout > 0) {
@@ -346,10 +346,10 @@ void OutboundTCP::connect(const asio::ip::tcp::endpoint &target) {
           restart(StreamEnd::CONNECTION_REFUSED);
 
         } else {
-          if (Log::is_enabled(Log::DEBUG)) {
+          if (Log::is_enabled(Log::OUTBOUND)) {
             char desc[200];
             describe(desc);
-            Log::debug("%s connected", desc);
+            Log::debug(Log::OUTBOUND, "%s connected", desc);
           }
           if (m_connecting) {
             const auto &ep = m_socket.local_endpoint();
@@ -374,10 +374,10 @@ void OutboundTCP::connect(const asio::ip::tcp::endpoint &target) {
     }
   );
 
-  if (Log::is_enabled(Log::DEBUG)) {
+  if (Log::is_enabled(Log::OUTBOUND)) {
     char desc[200];
     describe(desc);
-    Log::debug("%s connecting...", desc);
+    Log::debug(Log::OUTBOUND, "%s connecting...", desc);
   }
 
   retain();
@@ -429,10 +429,10 @@ void OutboundTCP::receive() {
 
         if (ec) {
           if (ec == asio::error::eof) {
-            if (Log::is_enabled(Log::DEBUG)) {
+            if (Log::is_enabled(Log::OUTBOUND)) {
               char desc[200];
               describe(desc);
-              Log::debug("%s connection closed by peer", desc);
+              Log::debug(Log::OUTBOUND, "%s connection closed by peer", desc);
             }
             close(StreamEnd::NO_ERROR);
           } else if (ec == asio::error::connection_reset) {
@@ -574,10 +574,10 @@ void OutboundTCP::close(StreamEnd::Error err) {
         Log::error("%s error closing socket: %s", desc, ec.message().c_str());
       }
     } else {
-      if (Log::is_enabled(Log::DEBUG)) {
+      if (Log::is_enabled(Log::OUTBOUND)) {
         char desc[200];
         describe(desc);
-        Log::debug("%s connection closed to peer", desc);
+        Log::debug(Log::OUTBOUND, "%s connection closed to peer", desc);
       }
     }
   }
@@ -728,10 +728,10 @@ void OutboundUDP::resolve() {
     }
   );
 
-  if (Log::is_enabled(Log::DEBUG)) {
+  if (Log::is_enabled(Log::OUTBOUND)) {
     char desc[200];
     describe(desc);
-    Log::debug("%s resolving hostname...", desc);
+    Log::debug(Log::OUTBOUND, "%s resolving hostname...", desc);
   }
 
   if (m_options.connect_timeout > 0) {
@@ -777,10 +777,10 @@ void OutboundUDP::connect(const asio::ip::udp::endpoint &target) {
           restart(StreamEnd::CONNECTION_REFUSED);
 
         } else {
-          if (Log::is_enabled(Log::DEBUG)) {
+          if (Log::is_enabled(Log::OUTBOUND)) {
             char desc[200];
             describe(desc);
-            Log::debug("%s connected", desc);
+            Log::debug(Log::OUTBOUND, "%s connected", desc);
           }
           if (m_connecting) {
             const auto &ep = m_socket.local_endpoint();
@@ -804,10 +804,10 @@ void OutboundUDP::connect(const asio::ip::udp::endpoint &target) {
     }
   );
 
-  if (Log::is_enabled(Log::DEBUG)) {
+  if (Log::is_enabled(Log::OUTBOUND)) {
     char desc[200];
     describe(desc);
-    Log::debug("%s connecting...", desc);
+    Log::debug(Log::OUTBOUND, "%s connecting...", desc);
   }
 
   retain();
@@ -851,10 +851,10 @@ void OutboundUDP::receive() {
 
         if (ec) {
           if (ec == asio::error::eof) {
-            if (Log::is_enabled(Log::DEBUG)) {
+            if (Log::is_enabled(Log::OUTBOUND)) {
               char desc[200];
               describe(desc);
-              Log::debug("%s connection closed by peer", desc);
+              Log::debug(Log::OUTBOUND, "%s connection closed by peer", desc);
             }
             close(StreamEnd::NO_ERROR);
           } else if (ec == asio::error::connection_reset) {
@@ -957,10 +957,10 @@ void OutboundUDP::close(StreamEnd::Error err) {
         Log::error("%s error closing socket: %s", desc, ec.message().c_str());
       }
     } else {
-      if (Log::is_enabled(Log::DEBUG)) {
+      if (Log::is_enabled(Log::OUTBOUND)) {
         char desc[200];
         describe(desc);
-        Log::debug("%s connection closed to peer", desc);
+        Log::debug(Log::OUTBOUND, "%s connection closed to peer", desc);
       }
     }
   }

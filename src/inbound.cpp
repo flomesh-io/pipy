@@ -55,7 +55,7 @@ thread_local pjs::Ref<stats::Counter> Inbound::s_metric_traffic_out;
 
 Inbound::Inbound() {
   init_metrics();
-  Log::debug("[inbound  %p] ++", this);
+  Log::debug(Log::ALLOC, "[inbound  %p] ++", this);
   for (;;) {
     if (auto id = s_inbound_id.fetch_add(1, std::memory_order_relaxed) + 1) {
       m_id = id;
@@ -65,7 +65,7 @@ Inbound::Inbound() {
 }
 
 Inbound::~Inbound() {
-  Log::debug("[inbound  %p] --", this);
+  Log::debug(Log::ALLOC, "[inbound  %p] --", this);
   if (m_pipeline) {
     Pipeline::auto_release(m_pipeline);
   }
@@ -230,10 +230,10 @@ void InboundTCP::accept(asio::ip::tcp::acceptor &acceptor) {
           dangle();
 
         } else {
-          if (Log::is_enabled(Log::DEBUG)) {
+          if (Log::is_enabled(Log::INBOUND)) {
             char desc[200];
             describe(desc);
-            Log::debug("%s connection accepted", desc);
+            Log::debug(Log::INBOUND, "%s connection accepted", desc);
           }
 
           if (m_listener && m_listener->pipeline_layout()) {
@@ -361,10 +361,10 @@ void InboundTCP::receive() {
 
         if (ec) {
           if (ec == asio::error::eof) {
-            if (Log::is_enabled(Log::DEBUG)) {
+            if (Log::is_enabled(Log::INBOUND)) {
               char desc[200];
               describe(desc);
-              Log::debug("%s EOF from peer", desc);
+              Log::debug(Log::INBOUND, "%s EOF from peer", desc);
             }
             linger();
             output(StreamEnd::make());
@@ -514,10 +514,10 @@ void InboundTCP::close(StreamEnd::Error err) {
         Log::error("%s error closing socket: %s", desc, ec.message().c_str());
       }
     } else {
-      if (Log::is_enabled(Log::DEBUG)) {
+      if (Log::is_enabled(Log::INBOUND)) {
         char desc[200];
         describe(desc);
-        Log::debug("%s connection closed to peer", desc);
+        Log::debug(Log::INBOUND, "%s connection closed to peer", desc);
       }
     }
   }

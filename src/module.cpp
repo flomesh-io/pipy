@@ -71,11 +71,11 @@ JSModule::JSModule(Worker *worker, int index)
   , m_worker(worker)
   , m_imports(new pjs::Expr::Imports)
 {
-  Log::debug("[module   %p] ++ index = %d", this, index);
+  Log::debug(Log::ALLOC, "[module   %p] ++ index = %d", this, index);
 }
 
 JSModule::~JSModule() {
-  Log::debug("[module   %p] -- index = %d", this, index());
+  Log::debug(Log::ALLOC, "[module   %p] -- index = %d", this, index());
   m_worker->remove_module(index());
 }
 

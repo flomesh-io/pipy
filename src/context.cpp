@@ -61,13 +61,13 @@ Context::Context(Context *base, Worker *worker, pjs::Object *global, ContextData
       break;
     }
   }
-  Log::debug("[context  %p] ++ id = %llu", this, m_id);
+  Log::debug(Log::ALLOC, "[context  %p] ++ id = %llu", this, m_id);
 }
 
 Context::~Context() {
   m_group->remove(this);
   if (m_data) m_data->free();
-  Log::debug("[context  %p] -- id = %llu", this, m_id);
+  Log::debug(Log::ALLOC, "[context  %p] -- id = %llu", this, m_id);
 }
 
 } // namespace pipy
