@@ -633,6 +633,85 @@ void CodebaseStore::Codebase::reset_file(const std::string &path) {
   batch->commit();
 }
 
+bool CodebaseStore::Codebase::commit_files() {
+  Data buf;
+
+  std::set<std::string> edit, erased;
+  list_edit(edit);
+  list_erased(erased);
+  if (edit.empty() && erased.empty()) return false;
+
+  std::map<std::string, std::string> info;
+  std::map<std::string, std::string> files;
+  m_code_store->load_codebase(m_id, info);
+  m_code_store->list_files(m_id, false, files);
+
+  auto store = m_code_store->m_store;
+  auto batch = store->batch();
+  auto codebase_path = info["path"];
+
+  for (const auto &path : edit) {
+    auto key = KEY_codebase_edit(m_id, path);
+    if (store->get(key, buf)) {
+      auto id = buf.to_string();
+      auto old_key = KEY_codebase_file(m_id, path);
+      if (store->get(old_key, buf)) {
+        batch->erase(KEY_file(buf.to_string()));
+      }
+      batch->set(old_key, Data(id, &s_dp));
+      batch->erase(key);
+      files[path] = id;
+    }
+  }
+
+  if (!erased.empty()) {
+    std::map<std::string, std::string> base_files;
+    auto base_id = info["base"];
+    if (!base_id.empty()) {
+      m_code_store->list_files(base_id, true, base_files);
+    }
+
+    for (const auto &path : erased) {
+      auto key = KEY_codebase_erased(m_id, path);
+      if (store->get(key, buf)) {
+        auto id = buf.to_string();
+        batch->erase(KEY_file(id));
+        batch->erase(KEY_codebase_file(m_id, path));
+        batch->erase(key);
+        auto i = base_files.find(path);
+        if (i == base_files.end()) {
+          batch->erase(KEY_file_tree(codebase_path + path));
+        } else {
+          files[path] = i->second;
+        }
+      }
+    }
+  }
+
+  for (const auto &i : files) {
+    std::map<std::string, std::string> rec;
+    auto &path = i.first;
+    auto &file_id = i.second;
+    auto key = KEY_file_tree(codebase_path + path);
+    if (store->get(key, buf)) read_record(buf.to_string(), rec);
+    auto version = rec["version"];
+    auto p = version.rfind('.');
+    if (p == std::string::npos) {
+      version += ".1";
+    } else {
+      auto base = version.substr(0,p);
+      auto tail = version.substr(p+1);
+      version = base + '.' + std::to_string(std::atoi(tail.c_str()) + 1);
+    }
+    rec["id"] = file_id;
+    rec["version"] = version;
+    batch->set(key, Data(make_record(rec), &s_dp));
+  }
+
+  batch->commit();
+  return true;
+}
+
 bool CodebaseStore::Codebase::commit(const std::string &version, std::list<std::string> &update_list) {
   Data buf;
 

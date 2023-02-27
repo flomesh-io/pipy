@@ -38,16 +38,17 @@ import ArrowRightIcon from '@material-ui/icons/ChevronRight';
 import ArrowDownIcon from '@material-ui/icons/ExpandMore';
 import BaseIcon from '@material-ui/icons/VerticalAlignTopSharp';
 import CodebaseIcon from '@material-ui/icons/CodeSharp';
+import CommitIcon from '@material-ui/icons/AssignmentTurnedInSharp';
 import ConsoleIcon from '@material-ui/icons/DvrSharp';
 import DeleteFileIcon from '@material-ui/icons/DeleteSharp';
 import DerivativeIcon from '@material-ui/icons/SubdirectoryArrowRightSharp';
 import FlagIcon from '@material-ui/icons/FlagSharp';
+import PushIcon from '@material-ui/icons/CloudUploadSharp';
 import ResetIcon from '@material-ui/icons/RotateLeft';
 import RestartIcon from '@material-ui/icons/ReplaySharp';
 import SaveFileIcon from '@material-ui/icons/SaveSharp';
 import StartIcon from '@material-ui/icons/PlayArrowSharp';
 import StopIcon from '@material-ui/icons/StopSharp';
-import UploadIcon from '@material-ui/icons/CloudUploadSharp';
 
 // CSS styles
 const useStyles = makeStyles(theme => ({
@@ -430,7 +431,7 @@ function Editor({ root, dts }) {
     }
   }
 
-  const commitChanges = async () => {
+  const commitChanges = async (bumpVersion) => {
     setWorking('Uploading...');
     try {
       const uri = '/api/v1/repo' + root;
@@ -440,7 +441,7 @@ function Editor({ root, dts }) {
         const ver = (parseInt(info.version)|0) + 1;
         const res = await fetch(uri, {
           method: 'PATCH',
-          body: JSON.stringify({ version: ver.toString() }),
+          body: JSON.stringify(bumpVersion ? { version: ver.toString() } : {}),
         });
         if (res.status === 201) {
           queryClient.invalidateQueries(`files:${root}`);
@@ -602,8 +603,12 @@ function Editor({ root, dts }) {
     setOpenDialogResetFile(true);
   }
 
+  const handleClickCommitFiles = () => {
+    commitChanges(false);
+  }
+
   const handleClickCommit = () => {
-    commitChanges();
+    commitChanges(true);
   }
 
   const handleStart = async () => {
@@ -684,9 +689,15 @@ function Editor({ root, dts }) {
             </ToolbarButton>
             <ToolbarButton
               disabled={!states.isChanged}
+              onClick={handleClickCommitFiles}
+            >
+              <CommitIcon fontSize="small"/>
+            </ToolbarButton>
+            <ToolbarButton
+              disabled={!states.isChanged}
               onClick={handleClickCommit}
             >
-              <UploadIcon fontSize="small"/>
+              <PushIcon fontSize="small"/>
             </ToolbarButton>
             <ToolbarGap/>
             <ToolbarTextButton

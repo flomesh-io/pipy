@@ -772,7 +772,7 @@ Message* AdminService::api_v1_repo_PATCH(const std::string &path, Data *data) {
     CodebaseStore::Codebase::Info info;
     codebase->get_info(info);
     if (!main.empty() && main != info.main) codebase->set_main(main);
-    if (!version.empty() && version != info.version) {
+    if (!version.empty()) {
       std::list<std::string> update_list;
       if (codebase->commit(version, update_list)) {
         for (const auto &id : update_list) {
@@ -788,6 +788,8 @@ Message* AdminService::api_v1_repo_PATCH(const std::string &path, Data *data) {
           }
         }
       }
+    } else {
+      codebase->commit_files();
     }
     return m_response_created;
   }
