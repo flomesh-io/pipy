@@ -23,14 +23,14 @@
  *  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef TASK_HPP
-#define TASK_HPP
+#ifndef WATCH_HPP
+#define WATCH_HPP
 
 #include "pjs/pjs.hpp"
 #include "event.hpp"
 #include "pipeline.hpp"
+#include "codebase.hpp"
 #include "net.hpp"
-#include "timer.hpp"
 
 #include <set>
 
@@ -38,22 +38,13 @@ namespace pipy {
 
 class PipelineLayout;
 
-class Task : public EventTarget {
+class Watch : public EventTarget {
 public:
-  static auto make(const std::string &when, PipelineLayout *layout) -> Task* {
-    return new Task(when, layout);
+  static auto make(const std::string &filename, PipelineLayout *layout) -> Watch* {
+    return new Watch(filename, layout);
   }
 
-  enum Type {
-    ONE_SHOT,
-    CRON,
-    SIGNAL,
-  };
-
-  auto when() const -> const std::string& { return m_when; }
-  auto type() const -> Type { return m_type; }
-  auto interval() const -> int { return m_interval; }
-  auto signal() const -> int { return m_signal; }
+  auto filename() const -> pjs::Str* { return m_filename; }
   auto pipeline_layout() const -> PipelineLayout* { return m_pipeline_layout; }
   auto pipeline() const -> Pipeline* { return m_pipeline; }
   bool active() const;
@@ -61,26 +52,20 @@ public:
   void end();
 
 private:
-  Task(const std::string &when, PipelineLayout *layout);
-  ~Task();
+  Watch(const std::string &filename, PipelineLayout *layout);
+  ~Watch();
 
-  std::string m_when;
-  Type m_type = ONE_SHOT;
-  double m_interval = 0;
-  int m_signal = 0;
-  Timer m_timer;
-  asio::signal_set m_signal_set;
+  pjs::Ref<pjs::Str> m_filename;
+  pjs::Ref<Codebase::Watch> m_watch;
   pjs::Ref<PipelineLayout> m_pipeline_layout;
   pjs::Ref<Pipeline> m_pipeline;
+  Net& m_net;
 
-  void schedule(double interval);
-  void wait();
-  void tick();
-  void run();
+  void on_update();
 
   virtual void on_event(Event *evt) override;
 };
 
 } // namespace pipy
 
-#endif // TASK_HPP
+#endif // WATCH_HPP

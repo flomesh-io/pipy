@@ -190,6 +190,7 @@ public:
   void listen(int port, pjs::Object *options);
   void listen(const std::string &port, pjs::Object *options);
   void task(const std::string &when);
+  void watch(const std::string &filename);
   void pipeline(const std::string &name);
   void pipeline();
 
@@ -213,6 +214,10 @@ private:
     std::string when;
   };
 
+  struct WatchConfig : public PipelineConfig {
+    std::string filename;
+  };
+
   struct NamedPipelineConfig : public PipelineConfig {
     std::string name;
   };
@@ -223,6 +228,7 @@ private:
   std::list<Import> m_imports;
   std::list<ListenConfig> m_listens;
   std::list<TaskConfig> m_tasks;
+  std::list<WatchConfig> m_watches;
   std::list<NamedPipelineConfig> m_named_pipelines;
   std::map<int, NamedPipelineConfig> m_indexed_pipelines;
   std::unique_ptr<PipelineConfig> m_entrance_pipeline;

@@ -67,6 +67,7 @@ public:
   virtual auto list(const std::string &path) -> std::list<std::string> override;
   virtual auto get(const std::string &path) -> SharedData* override;
   virtual void set(const std::string &path, SharedData *data) override;
+  virtual auto watch(const std::string &path, const std::function<void()> &on_update) -> Watch* override;
   virtual void sync(bool force, const std::function<void(bool)> &on_update) override;
 
 private:
@@ -161,6 +162,10 @@ void CodebaseFromFS::set(const std::string &path, SharedData *data) {
   }
 }
 
+auto CodebaseFromFS::watch(const std::string &path, const std::function<void()> &on_update) -> Watch* {
+  return new Watch(on_update);
+}
+
 void CodebaseFromFS::sync(bool force, const std::function<void(bool)> &on_update) {
   if (force || m_version.empty()) {
     m_version = "1";
@@ -183,6 +188,7 @@ public:
   virtual auto list(const std::string &path) -> std::list<std::string> override;
   virtual auto get(const std::string &path) -> SharedData* override;
   virtual void set(const std::string &path, SharedData *data) override {}
+  virtual auto watch(const std::string &path, const std::function<void()> &on_update) -> Watch* override;
   virtual void sync(bool force, const std::function<void(bool)> &on_update) override {}
 
 private:
@@ -245,6 +251,10 @@ auto CodebsaeFromStore::get(const std::string &path) -> SharedData* {
   return i->second->retain();
 }
 
+auto CodebsaeFromStore::watch(const std::string &path, const std::function<void()> &on_update) -> Watch* {
+  return new Watch(on_update);
+}
+
 //
 // CodebaseFromHTTP
 //
@@ -261,7 +271,14 @@ private:
   virtual auto list(const std::string &path) -> std::list<std::string> override;
   virtual auto get(const std::string &path) -> SharedData* override;
   virtual void set(const std::string &path, SharedData *data) override {}
+  virtual auto watch(const std::string &path, const std::function<void()> &on_update) -> Watch* override;
   virtual void sync(bool force, const std::function<void(bool)> &on_update) override;
+
+  struct WatchedFile {
+    std::string etag;
+    std::string date;
+    std::set<pjs::Ref<Watch>> watches;
+  };
 
   pjs::Ref<URL> m_url;
   Fetch m_fetch;
@@ -273,12 +290,14 @@ private:
   std::string m_entry;
   std::map<std::string, pjs::Ref<SharedData>> m_files;
   std::map<std::string, pjs::Ref<SharedData>> m_dl_temp;
+  std::map<std::string, WatchedFile> m_watched_files;
   std::list<std::string> m_dl_list;
   pjs::Ref<pjs::Object> m_request_header_post_status;
   std::mutex m_mutex;
 
   void download(const std::function<void(bool)> &on_update);
   void download_next(const std::function<void(bool)> &on_update);
+  void watch_next();
   void response_error(const char *method, const char *path, http::ResponseHead *head);
 };
 
@@ -331,6 +350,15 @@ auto CodebaseFromHTTP::get(const std::string &path) -> SharedData* {
   return i->second->retain();
 }
 
+auto CodebaseFromHTTP::watch(const std::string &path, const std::function<void()> &on_update) -> Watch* {
+  auto w = new Watch(on_update);
+  m_mutex.lock();
+  auto &wf = m_watched_files[path];
+  wf.watches.insert(w);
+  m_mutex.unlock();
+  return w;
+}
+
 void CodebaseFromHTTP::sync(bool force, const std::function<void(bool)> &on_update) {
   if (m_fetch.busy()) return;
 
@@ -364,7 +392,21 @@ void CodebaseFromHTTP::sync(bool force, const std::function<void(bool)> &on_upda
       if (!m_downloaded || etag_str != m_etag || date_str != m_date) {
         download(on_update);
       } else {
-        m_fetch.close();
+        m_mutex.lock();
+        m_dl_list.clear();
+        for (auto &wf : m_watched_files) {
+          auto &watches = wf.second.watches;
+          auto i = watches.begin();
+          while (i != watches.end()) {
+            const auto w = i++;
+            if ((*w)->closed()) {
+              watches.erase(w);
+            }
+          }
+          if (!watches.empty()) m_dl_list.push_back(wf.first);
+        }
+        m_mutex.unlock();
+        watch_next();
       }
     }
   );
@@ -430,6 +472,10 @@ void CodebaseFromHTTP::download_next(const std::function<void(bool)> &on_update)
     m_mutex.lock();
     m_files = std::move(m_dl_temp);
     m_downloaded = true;
+    for (auto &wf : m_watched_files) {
+      wf.second.etag.clear();
+      wf.second.date.clear();
+    }
     m_mutex.unlock();
     m_fetch.close();
     on_update(true);
@@ -458,13 +504,82 @@ void CodebaseFromHTTP::download_next(const std::function<void(bool)> &on_update)
         );
       }
 
-      if (body) {
-        m_dl_temp[name] = SharedData::make(*body);
+      m_dl_temp[name] = SharedData::make(body ? *body : Data());
+      download_next(on_update);
+    }
+  );
+}
+
+void CodebaseFromHTTP::watch_next() {
+  if (m_dl_list.empty()) {
+    m_fetch.close();
+    return;
+  }
+
+  auto name = m_dl_list.front();
+  auto path = m_base + name;
+  m_dl_list.pop_front();
+  m_fetch(
+    Fetch::HEAD,
+    pjs::Value(path).s(),
+    nullptr,
+    nullptr,
+    [=](http::ResponseHead *head, Data *body) {
+      if (head && head->status() == 200) {
+        pjs::Value etag, date;
+        head->headers()->get(s_etag, etag);
+        head->headers()->get(s_date, date);
+
+        std::string etag_str;
+        std::string date_str;
+        if (etag.is_string()) etag_str = etag.s()->str();
+        if (date.is_string()) date_str = date.s()->str();
+
+        m_mutex.lock();
+
+        auto i = m_watched_files.find(name);
+        if (i != m_watched_files.end()) {
+          auto &wf = i->second;
+          if (wf.etag.empty() && wf.date.empty()) {
+            wf.etag = etag_str;
+            wf.date = date_str;
+          } else if (etag_str != wf.etag || date_str != wf.date) {
+            m_fetch(
+              Fetch::GET,
+              pjs::Value(path).s(),
+              nullptr,
+              nullptr,
+              [=](http::ResponseHead *head, Data *body) {
+                if (head && head->status() == 200) {
+                  m_mutex.lock();
+                  auto i = m_watched_files.find(name);
+                  if (i != m_watched_files.end()) {
+                    auto &wf = i->second;
+                    pjs::Value etag, date;
+                    head->headers()->get(s_etag, etag);
+                    head->headers()->get(s_date, date);
+                    if (etag.is_string()) wf.etag = etag.s()->str(); else wf.etag.clear();
+                    if (date.is_string()) wf.date = date.s()->str(); else wf.date.clear();
+                    m_files[name] = SharedData::make(body ? *body : Data());
+                    for (const auto &w : wf.watches) notify(w);
+                  }
+                  m_mutex.unlock();
+                } else {
+                  response_error("GET", path.c_str(), head);
+                }
+                watch_next();
+              }
+            );
+          }
+        }
+
+        m_mutex.unlock();
+
       } else {
-        m_dl_temp[name] = SharedData::make(Data());
+        response_error("HEAD", path.c_str(), head);
       }
 
-      download_next(on_update);
+      if (!m_fetch.busy()) watch_next();
     }
   );
 }

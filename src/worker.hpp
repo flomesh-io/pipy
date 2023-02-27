@@ -39,6 +39,7 @@ namespace pipy {
 class Thread;
 class PipelineLayout;
 class Task;
+class Watch;
 
 //
 // Worker
@@ -63,6 +64,7 @@ public:
   auto load_native_module(const std::string &path) -> nmi::NativeModule*;
   void add_listener(Listener *listener, PipelineLayout *layout, const Listener::Options &options);
   void add_task(Task *task);
+  void add_watch(Watch *watch);
   void add_export(pjs::Str *ns, pjs::Str *name, Module *module);
   auto get_export(pjs::Str *ns, pjs::Str *name) -> int;
   auto new_loading_context() -> Context*;
@@ -101,6 +103,7 @@ private:
   std::map<std::string, nmi::NativeModule*> m_native_module_map;
   std::map<Listener*, ListeningPipeline> m_listeners;
   std::set<Task*> m_tasks;
+  std::set<Watch*> m_watches;
   std::map<pjs::Ref<pjs::Str>, Namespace> m_namespaces;
   std::map<pjs::Ref<pjs::Str>, SolvedFile> m_solved_files;
   bool m_graph_enabled = false;

@@ -30,6 +30,7 @@
 #include "listener.hpp"
 #include "inbound.hpp"
 #include "task.hpp"
+#include "watch.hpp"
 #include "event.hpp"
 #include "message.hpp"
 #include "pipeline.hpp"
@@ -230,6 +231,10 @@ void Worker::add_task(Task *task) {
   m_tasks.insert(task);
 }
 
+void Worker::add_watch(Watch *watch) {
+  m_watches.insert(watch);
+}
+
 void Worker::add_export(pjs::Str *ns, pjs::Str *name, Module *module) {
   auto &names = m_namespaces[ns];
   auto i = names.find(name);
@@ -391,12 +396,18 @@ bool Worker::start(bool force) {
     task->start();
   }
 
+  // Start watches
+  for (auto *watch : m_watches) {
+    watch->start();
+  }
+
   s_current = this;
   return true;
 }
 
 void Worker::stop() {
-  for (auto *task : m_tasks) delete task;
+  for (auto *task : m_tasks) task->end();
+  for (auto *watch : m_watches) watch->end();
   for (auto *mod : m_modules) if (mod) mod->unload();
   if (s_current == this) s_current = nullptr;
 }

@@ -112,6 +112,10 @@ void Task::start() {
   }
 }
 
+void Task::end() {
+  delete this;
+}
+
 void Task::schedule(double interval) {
   m_timer.schedule(
     interval,

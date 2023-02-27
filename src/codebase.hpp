@@ -29,6 +29,7 @@
 #include "pjs/pjs.hpp"
 #include "fetch.hpp"
 
+#include <mutex>
 #include <functional>
 
 namespace pipy {
@@ -42,6 +43,42 @@ class SharedData;
 
 class Codebase {
 public:
+
+  //
+  // Codebase::Watch
+  //
+
+  class Watch : public pjs::RefCount<Watch> {
+  public:
+    Watch(const std::function<void()> &on_update)
+      : m_on_update(on_update) {}
+
+    bool closed() {
+      m_mutex.lock();
+      bool is_closed = (m_on_update == nullptr);
+      m_mutex.unlock();
+      return is_closed;
+    }
+
+    void close() {
+      m_mutex.lock();
+      m_on_update = nullptr;
+      m_mutex.unlock();
+    }
+
+  private:
+    void notify() {
+      m_mutex.lock();
+      if (m_on_update) m_on_update();
+      m_mutex.unlock();
+    }
+
+    std::function<void()> m_on_update;
+    std::mutex m_mutex;
+
+    friend class Codebase;
+  };
+
   static auto current() -> Codebase* { return s_current; }
 
   static Codebase* from_fs(const std::string &path);
@@ -64,11 +101,14 @@ public:
   virtual auto list(const std::string &path) -> std::list<std::string> = 0;
   virtual auto get(const std::string &path) -> SharedData* = 0;
   virtual void set(const std::string &path, SharedData *data) = 0;
+  virtual auto watch(const std::string &path, const std::function<void()> &on_update) -> Watch* = 0;
   virtual void sync(bool force, const std::function<void(bool)> &on_update) = 0;
 
 protected:
   virtual void activate() {};
   virtual void deactivate() {};
+
+  void notify(Watch *w) { w->notify(); }
 
 private:
   static Codebase* s_current;

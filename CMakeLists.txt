@@ -258,6 +258,7 @@ add_executable(pipy
   src/thread.cpp
   src/timer.cpp
   src/utils.cpp
+  src/watch.cpp
   src/worker.cpp
   src/worker-thread.cpp
 )

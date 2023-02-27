@@ -28,6 +28,7 @@
 #include "module.hpp"
 #include "listener.hpp"
 #include "task.hpp"
+#include "watch.hpp"
 #include "context.hpp"
 #include "worker.hpp"
 #include "graph.hpp"
@@ -563,6 +564,16 @@ void Configuration::task(const std::string &when) {
   FilterConfigurator::set_pipeline_config(&config);
 }
 
+void Configuration::watch(const std::string &filename) {
+  check_integrity();
+  if (filename.empty()) throw std::runtime_error("filename cannot be empty");
+  m_watches.emplace_back();
+  auto &config = m_watches.back();
+  config.index = next_pipeline_index();
+  config.filename = filename[0] == '/' ? filename : std::string("/") + filename;
+  FilterConfigurator::set_pipeline_config(&config);
+}
+
 void Configuration::pipeline(const std::string &name) {
   check_integrity();
   if (name.empty()) throw std::runtime_error("pipeline name cannot be empty");
@@ -683,6 +694,13 @@ void Configuration::apply(JSModule *mod) {
     auto t = Task::make(i.when, p);
     worker->add_task(t);
   }
+
+  for (auto &i : m_watches) {
+    std::string name("Watch ");
+    auto p = make_pipeline(i.index, "", name + i.filename, i);
+    auto w = Watch::make(i.filename, p);
+    worker->add_watch(w);
+  }
 }
 
 void Configuration::draw(Graph &g) {
@@ -736,6 +754,15 @@ void Configuration::draw(Graph &g) {
     p.label += " (";
     p.label += i.when;
     p.label += ')';
+    add_filters(p, i.filters);
+    g.add_pipeline(std::move(p));
+  }
+
+  for (const auto &i : m_watches) {
+    Graph::Pipeline p;
+    p.index = i.index;
+    p.label = "Watch ";
+    p.label += i.filename;
     add_filters(p, i.filters);
     g.add_pipeline(std::move(p));
   }
@@ -2100,6 +2127,17 @@ template<> void ClassDef<Configuration>::init() {
     }
   });
 
+  // Configuration.watch
+  method("watch", [](Context &ctx, Object *thiz, Value &result) {
+    std::string filename;
+    try {
+      if (!ctx.arguments(1, &filename)) return;
+      thiz->as<Configuration>()->watch(filename);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
 }
 
 } // namespace pjs
