@@ -714,7 +714,7 @@ Message* AdminService::api_v1_repo_POST(const std::string &path, Data *data) {
     main = main_val.s()->str();
   }
 
-  std::string version("1");
+  std::string version("0");
   if (!version_val.is_undefined()) {
     if (version_val.is_number()) {
       if (version_val.n() < 0 || version_val.n() > std::numeric_limits<int>::max()) return response(400, "Invalid version number");

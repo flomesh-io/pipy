@@ -302,14 +302,6 @@ auto CodebaseStore::make_codebase(const std::string &path, const std::string &ve
   batch->set(KEY_codebase(codebase_id), Data(make_record(rec), &s_dp));
   batch->set(KEY_codebase_tree(path), Data(codebase_id, &s_dp));
 
-  generate_files(
-    batch,
-    path,
-    main_file_path,
-    version,
-    files
-  );
-
   batch->commit();
   return codebase(codebase_id);
 }

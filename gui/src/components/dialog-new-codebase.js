@@ -75,10 +75,7 @@ function DialogNewCodebase({ open, base, onSuccess, onClose }) {
         `/api/v1/repo/${path}`,
         {
           method: 'POST',
-          body: JSON.stringify({
-            version: '1',
-            base,
-          }),
+          body: JSON.stringify({ base }),
         }
       );
       if (res.status !== 201) {
