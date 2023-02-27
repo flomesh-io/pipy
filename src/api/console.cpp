@@ -33,6 +33,7 @@ namespace pipy {
 thread_local static Data::Producer s_dp("Console");
 
 void Console::log(Log::Level level, const pjs::Value *values, int count) {
+  if (level == Log::DEBUG && !Log::is_enabled(Log::USER)) return;
   if (Log::is_enabled(level)) {
     Data buf;
     Data::Builder db(buf, &s_dp);
