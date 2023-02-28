@@ -37,6 +37,7 @@ namespace pipy {
 //
 
 thread_local static Data::Producer s_dp("BGP");
+thread_local static const pjs::ConstStr s_Capabilities("Capabilities");
 
 inline static void clamp_data_size(Data &data, size_t limit) {
   if (data.size() > limit) {
@@ -188,45 +189,14 @@ void BGP::encode(pjs::Object *payload, Data &data) {
         db.push(ip, sizeof(ip));
         Data param_buffer;
         Data::Builder db2(param_buffer, &s_dp);
-        if (auto *caps = m->capabilities.get()) {
-          Data caps_buffer;
-          Data::Builder db3(caps_buffer, &s_dp);
-          caps->iterate_all(
-            [&](pjs::Str *k, pjs::Value &v) {
-              auto n = k->parse_int();
-              if (!std::isnan(n)) {
-                int id(n);
-                if (v.is<Data>()) {
-                  Data data(*v.as<Data>());
-                  clamp_data_size(data, 0xff);
-                  db3.push(uint8_t(id));
-                  db3.push(uint8_t(data.size()));
-                  db3.push(data);
-                } else {
-                  db3.push(uint8_t(id));
-                  switch (id) {
-                    default: {
-                      db3.push('\0');
-                      break;
-                    }
-                  }
-                }
-              }
-            }
-          );
-          db3.flush();
-          if (caps_buffer.size() > 0) {
-            clamp_data_size(caps_buffer, 0xff);
-            db2.push(0x02);
-            db2.push(uint8_t(caps_buffer.size()));
-            db2.push(caps_buffer);
-          }
-        }
         if (auto *params = m->parameters.get()) {
           params->iterate_all(
             [&](pjs::Str *k, pjs::Value &v) {
               if (v.is<Data>()) {
                 auto n = k->parse_int();
+                if (std::isnan(n)) {
+                  if (k == s_Capabilities) n = 0x02;
+                }
                 if (!std::isnan(n)) {
                   int id(n);
                   Data data(*v.as<Data>());
@@ -234,6 +204,43 @@ void BGP::encode(pjs::Object *payload, Data &data) {
                   db2.push(uint8_t(id));
                   db2.push(uint8_t(data.size()));
                   db2.push(data);
+                }
+              } else if (k == s_Capabilities) {
+                Data caps_buffer;
+                Data::Builder db3(caps_buffer, &s_dp);
+                if (v.is_object() && v.o()) {
+                  v.as<pjs::Object>()->iterate_all(
+                    [&](pjs::Str *k, pjs::Value &v) {
+                      if (!v.is_undefined()) {
+                        auto n = k->parse_int();
+                        if (!std::isnan(n)) {
+                          int id(n);
+                          if (v.is<Data>()) {
+                            Data data(*v.as<Data>());
+                            clamp_data_size(data, 0xff);
+                            db3.push(uint8_t(id));
+                            db3.push(uint8_t(data.size()));
+                            db3.push(data);
+                          } else {
+                            db3.push(uint8_t(id));
+                            switch (id) {
+                              default: {
+                                db3.push('\0');
+                                break;
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  );
+                }
+                db3.flush();
+                if (caps_buffer.size() > 0) {
+                  clamp_data_size(caps_buffer, 0xff);
+                  db2.push(0x02);
+                  db2.push(uint8_t(caps_buffer.size()));
+                  db2.push(caps_buffer);
                 }
               }
             }
@@ -474,6 +481,7 @@ bool BGP::Parser::parse_open(Data::Reader &r) {
 
   Data::Reader r2(params);
   while (!r2.eof()) {
+    pjs::Ref<pjs::Str> key;
     pjs::Value value;
     uint8_t type;
     uint8_t size;
@@ -483,6 +491,7 @@ bool BGP::Parser::parse_open(Data::Reader &r) {
       case 2: { // capabilities
         auto *caps = pjs::Object::make();
         value.set(caps);
+        key = s_Capabilities;
         while (!r2.eof()) {
           uint8_t code;
           uint8_t size;
@@ -504,19 +513,18 @@ bool BGP::Parser::parse_open(Data::Reader &r) {
     }
     auto params = body->parameters.get();
     if (!params) body->parameters = params = pjs::Object::make();
-    pjs::Ref<pjs::Str> k(pjs::Str::make(int(type)));
     pjs::Value old;
-    if (params->get(k, old)) {
+    if (params->get(key, old)) {
       if (old.is_array()) {
         old.as<pjs::Array>()->push(value);
       } else {
         auto a = pjs::Array::make(2);
         a->set(0, old);
         a->set(1, value);
-        params->set(k, a);
+        params->set(key, a);
       }
     } else {
-      params->set(k, value);
+      params->set(key, value);
     }
   }
 
@@ -888,12 +896,6 @@ template<> void ClassDef<BGP::MessageOpen>::init() {
     "identifier",
     [](Object *obj, Value &val) { val.set(obj->as<BGP::MessageOpen>()->identifier); },
     [](Object *obj, const Value &val) { (obj->as<BGP::MessageOpen>()->identifier = val.to_string())->release(); }
-  );
-
-  accessor(
-    "capabilities",
-    [](Object *obj, Value &val) { val.set(obj->as<BGP::MessageOpen>()->capabilities); },
-    [](Object *obj, const Value &val) { obj->as<BGP::MessageOpen>()->capabilities = val.is_object() ? val.o() : nullptr; }
   );
 
   accessor(
