@@ -191,8 +191,8 @@
                     16, ...ipv6(NEXT_HOP).data,
                     // No SNPAs
                     0,
-                    // Destinations
-                    ...config.prefixes.flatMap(
+                    // NLRI
+                    ...config.reachable.flatMap(
                       prefix => ipv6Prefix(prefix)
                     ),
                   ])
@@ -205,7 +205,8 @@
                 },
               ])
             ],
-            destinations: config.isIPv6 ? [] : config.prefixes,
+            withdrawnRoutes: config.isIPv6 ? [] : config.unreachable,
+            destinations: config.isIPv6 ? [] : config.reachable,
           }
         }
       )

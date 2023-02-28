@@ -32,7 +32,8 @@
     update = JSON.decode(pipy.load('config.json')),
   ) => (
     console.info('config.json updated to', update),
-    config.prefixes = update.prefixes,
+    config.reachable = update.reachable,
+    config.unreachable = update.unreachable,
     allPeers.forEach(peer => peer.update()),
     new StreamEnd
   )
