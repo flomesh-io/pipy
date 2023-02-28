@@ -1,6 +1,8 @@
 (config, address) => (
   (
     MY_AS = config.as,
+    IS_AS4 = (MY_AS > 0xffff),
+    AS_TRANS = 23456,
     BGP_IDENTIFIER = config.id,
     NEXT_HOP = config.nextHop,
     HOLD_TIME = (holdTime in config ? config.holdTime : 90),
@@ -11,6 +13,7 @@
     keepaliveTimer = -1,
     keepaliveTime = -1,
     peerAS = -1,
+    isEBGP = undefined,
     updateScheduled = false,
 
     ipv6 = (ip) => (
@@ -64,29 +67,39 @@
             null, {
               type: 'OPEN',
               body: {
-                myAS: MY_AS,
+                myAS: IS_AS4 ? AS_TRANS : MY_AS,
                 identifier: BGP_IDENTIFIER,
                 holdTime: HOLD_TIME,
-                parameters: {
-                  Capabilities: {
-                    // Multiprotocol Extensions
-                    '1': config.isIPv6 ? [
-                      new Data([0, 1, 0, 1]), // IPv4 unicast
-                      new Data([0, 2, 0, 1]), // IPv6 unicast
-                    ] : undefined,
+                parameters: [
+                  {
+                    name: 'Capabilities',
+                    value: [
 
-                    // Route Refresh
-                    '2': null,
+                      // Multiprotocol Extensions: IPv4 unicast
+                      {
+                        code: 1,
+                        value: new Data([0, 1, 0, 1]), // IPv4 unicast
+                      },
 
-                    // Support for 4-octet AS number
-                    '65': MY_AS > 0xffff ? new Data([
-                      255 & (MY_AS >> 24),
-                      255 & (MY_AS >> 16),
-                      255 & (MY_AS >>  8),
-                      255 & (MY_AS >>  0),
-                    ]) : undefined,
-                  },
-                },
+                      // Multiprotocol Extensions: Ipv6 unicast
+                      config.isIPv6 ? {
+                        code: 1,
+                        value: new Data([0, 2, 0, 1]), // IPv6 unicast
+                      } : undefined,
+
+                      // Support for 4-octet AS number
+                      IS_AS4 ? {
+                        code: 65,
+                        value: new Data([
+                          255 & (MY_AS >> 24),
+                          255 & (MY_AS >> 16),
+                          255 & (MY_AS >>  8),
+                          255 & (MY_AS >>  0),
+                        ]),
+                      } : undefined,
+                    ]
+                  }
+                ],
               }
             }
           )
@@ -149,7 +162,8 @@
     ),
 
     verifyOpen = (msg) => void (
-      peerAS = msg.body.myAS
+      peerAS = msg.body.myAS,
+      isEBGP = peerAS !== MY_AS
     ),
 
     composeUpdate = () => (
@@ -160,10 +174,16 @@
             pathAttributes: [
               {
                 name: 'ORIGIN',
-                value: peerAS === MY_AS ? 0 : 1,
+                value: isEBGP ? 1 : 0,
                 transitive: true,
               },
-              ...(peerAS === MY_AS ? [
+              ...(isEBGP ? [
+                {
+                  name: 'AS_PATH',
+                  value: [[ MY_AS ]],
+                  transitive: true,
+                },
+              ] : [
                 {
                   name: 'AS_PATH',
                   value: [],
@@ -171,19 +191,14 @@
                 },
                 {
                   name: 'LOCAL_PREF',
-                  value: peerAS === MY_AS ? 0 : 1,
-                  transitive: true,
-                },
-              ] : [
-                {
-                  name: 'AS_PATH',
-                  value: [[ MY_AS ]],
+                  value: 0,
                   transitive: true,
                 },
               ]),
               ...(config.isIPv6 ? [
                 {
-                  code: 14, // MP_REACH_NLRI
+                  // MP_REACH_NLRI
+                  code: 14,
                   value: new Data([
                     // IPv6 unicast
                     0, 2, 1,
@@ -195,7 +210,8 @@
                     ...config.reachable.flatMap(
                       prefix => ipv6Prefix(prefix)
                     ),
-                  ])
+                  ]),
+                  optional: true,
                 }
               ] : [
                 {

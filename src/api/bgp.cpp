@@ -37,7 +37,6 @@ namespace pipy {
 //
 
 thread_local static Data::Producer s_dp("BGP");
-thread_local static const pjs::ConstStr s_Capabilities("Capabilities");
 
 inline static void clamp_data_size(Data &data, size_t limit) {
   if (data.size() > limit) {
@@ -61,6 +60,43 @@ inline static void write_address_prefix(Data::Builder &db, const pjs::Value &add
   if (t > 0) ip[n-1] &= uint8_t(0xff << t);
   db.push(uint8_t(mask));
   db.push(ip, n);
+}
+
+inline static void write_optional_param_value(
+  Data::Builder &db,
+  BGP::OptionalParameter::TypeCode type_code,
+  const pjs::Value &value
+) {
+  switch (type_code) {
+    case BGP::OptionalParameter::TypeCode::Capabilities: {
+      if (value.is_array()) {
+        value.as<pjs::Array>()->iterate_all(
+          [&](pjs::Value &v, int) {
+            if (v.is_undefined()) return;
+            pjs::Ref<BGP::OptionalParameter::Capability> cap;
+            if (v.is<BGP::OptionalParameter::Capability>()) {
+              cap = v.as<BGP::OptionalParameter::Capability>();
+            } else {
+              cap = BGP::OptionalParameter::Capability::make();
+              if (v.is_object() && v.o()) pjs::class_of<BGP::OptionalParameter::Capability>()->assign(cap, v.o());
+            }
+            if (cap->value.is<Data>()) {
+              Data buf(*cap->value.as<Data>());
+              clamp_data_size(buf, 0xff);
+              db.push(uint8_t(cap->code));
+              db.push(uint8_t(buf.size()));
+              db.push(buf);
+            } else {
+              db.push(uint8_t(cap->code));
+              db.push('\0');
+            }
+          }
+        );
+      }
+      break;
+    }
+    default: break;
+  }
 }
 
 inline static void write_path_attribute_value(
@@ -88,6 +124,8 @@ inline static void write_path_attribute_value(
             db.push(n);
             for (int i = 0; i < n; i++) {
               int as = a->data()->at(i).to_number();
+              db.push(uint8_t(as >> 24));
+              db.push(uint8_t(as >> 16));
               db.push(uint8_t(as >> 8));
               db.push(uint8_t(as >> 0));
             }
@@ -191,64 +229,32 @@ void BGP::encode(pjs::Object *payload, Data &data) {
         Data::Builder db2(param_buffer, &s_dp);
         if (auto *params = m->parameters.get()) {
           params->iterate_all(
-            [&](pjs::Str *k, pjs::Value &v) {
-              if (v.is<Data>()) {
-                auto n = k->parse_int();
-                if (std::isnan(n)) {
-                  if (k == s_Capabilities) n = 0x02;
-                }
-                if (!std::isnan(n)) {
-                  int id(n);
-                  Data data(*v.as<Data>());
-                  clamp_data_size(data, 0xff);
-                  db2.push(uint8_t(id));
-                  db2.push(uint8_t(data.size()));
-                  db2.push(data);
-                }
-              } else if (k == s_Capabilities) {
-                Data caps_buffer;
-                Data::Builder db3(caps_buffer, &s_dp);
-                auto push_cap = [&](int id, pjs::Value &v) {
-                  if (v.is<Data>()) {
-                    Data data(*v.as<Data>());
-                    clamp_data_size(data, 0xff);
-                    db3.push(uint8_t(id));
-                    db3.push(uint8_t(data.size()));
-                    db3.push(data);
-                  } else {
-                    db3.push(uint8_t(id));
-                    db3.push('\0');
-                  }
-                };
-                if (v.is_object() && v.o()) {
-                  v.as<pjs::Object>()->iterate_all(
-                    [&](pjs::Str *k, pjs::Value &v) {
-                      if (!v.is_undefined()) {
-                        auto n = k->parse_int();
-                        if (!std::isnan(n)) {
-                          int id(n);
-                          if (v.is<pjs::Array>()) {
-                            v.as<pjs::Array>()->iterate_all(
-                              [&](pjs::Value &v, int) {
-                                push_cap(id, v);
-                              }
-                            );
-                          } else {
-                            push_cap(id, v);
-                          }
-                        }
-                      }
-                    }
-                  );
-                }
-                db3.flush();
-                if (caps_buffer.size() > 0) {
-                  clamp_data_size(caps_buffer, 0xff);
-                  db2.push(0x02);
-                  db2.push(uint8_t(caps_buffer.size()));
-                  db2.push(caps_buffer);
-                }
+            [&](pjs::Value &v, int) {
+              if (v.is_undefined()) return;
+              pjs::Ref<OptionalParameter> op;
+              if (v.is<OptionalParameter>()) {
+                op = v.as<OptionalParameter>();
+              } else {
+                op = OptionalParameter::make();
+                if (v.is_object() && v.o()) pjs::class_of<OptionalParameter>()->assign(op, v.o());
               }
+              int type_code = op->code;
+              if (auto *s = op->name.get()) {
+                int i = int(pjs::EnumDef<OptionalParameter::TypeCode>::value(s));
+                if (i >= 0) type_code = i;
+              }
+              Data buf;
+              if (op->value.is<Data>()) {
+                buf.push(*op->value.as<Data>());
+              } else {
+                Data::Builder db(buf, &s_dp);
+                write_optional_param_value(db, OptionalParameter::TypeCode(type_code), op->value);
+                db.flush();
+              }
+              clamp_data_size(buf, 0xff);
+              db2.push(uint8_t(type_code));
+              db2.push(uint8_t(buf.size()));
+              db2.push(buf);
             }
           );
         }
@@ -281,12 +287,13 @@ void BGP::encode(pjs::Object *payload, Data &data) {
           Data::Builder db(path_addr, &s_dp);
           a->iterate_all(
             [&](pjs::Value &v, int) {
+              if (v.is_undefined()) return;
               pjs::Ref<PathAttribute> pa;
               if (v.is<PathAttribute>()) {
                 pa = v.as<PathAttribute>();
               } else {
                 pa = PathAttribute::make();
-                if (v.is_object()) pjs::class_of<PathAttribute>()->assign(pa, v.o());
+                if (v.is_object() && v.o()) pjs::class_of<PathAttribute>()->assign(pa, v.o());
               }
               int type_code = pa->code;
               if (auto *s = pa->name.get()) {
@@ -482,68 +489,17 @@ bool BGP::Parser::parse_open(Data::Reader &r) {
   if (!read(r, identifier, sizeof(identifier))) return false;
   if (!read(r, param_size)) return false;
 
-  Data params;
-  if (!read(r, params, param_size)) return false;
+  Data param_data;
+  if (!read(r, param_data, param_size)) return false;
 
-  Data::Reader r2(params);
-  while (!r2.eof()) {
-    pjs::Ref<pjs::Str> key;
-    pjs::Value value;
-    uint8_t type;
-    uint8_t size;
-    if (!read(r2, type)) return false;
-    if (!read(r2, size)) return false;
-    switch (type) {
-      case 2: { // capabilities
-        auto *caps = pjs::Object::make();
-        value.set(caps);
-        key = s_Capabilities;
-        while (!r2.eof()) {
-          uint8_t code;
-          uint8_t size;
-          Data data;
-          if (!read(r2, code)) return false;
-          if (!read(r2, size)) return false;
-          if (!read(r2, data, size)) return false;
-          auto *v = data.empty() ? nullptr : Data::make(std::move(data));
-          pjs::Ref<pjs::Str> k(pjs::Str::make(int(code)));
-          pjs::Value old;
-          if (caps->get(k, old)) {
-            if (old.is_array()) {
-              old.as<pjs::Array>()->push(v);
-            } else {
-              auto a = pjs::Array::make(2);
-              a->set(0, old);
-              a->set(1, v);
-              caps->set(k, a);
-            }
-          } else {
-            caps->set(k, v);
-          }
-        }
-        break;
-      }
-      default: {
-        Data data;
-        if (!read(r2, data, size)) return false;
-        value.set(data.empty() ? nullptr : Data::make(std::move(data)));
-        break;
-      }
-    }
-    auto params = body->parameters.get();
-    if (!params) body->parameters = params = pjs::Object::make();
-    pjs::Value old;
-    if (params->get(key, old)) {
-      if (old.is_array()) {
-        old.as<pjs::Array>()->push(value);
-      } else {
-        auto a = pjs::Array::make(2);
-        a->set(0, old);
-        a->set(1, value);
-        params->set(key, a);
-      }
-    } else {
-      params->set(key, value);
+  if (param_size > 0) {
+    auto *params = pjs::Array::make();
+    body->parameters = params;
+    Data::Reader r2(param_data);
+    while (!r2.eof()) {
+      auto op = read_optional_param(r2);
+      if (!op) return false;
+      params->push(op);
     }
   }
 
@@ -670,6 +626,51 @@ auto BGP::Parser::read_address_prefix(Data::Reader &r) -> Netmask* {
   return Netmask::make(mask, ip);
 }
 
+auto BGP::Parser::read_optional_param(Data::Reader &r) -> OptionalParameter* {
+  uint8_t type_code, length;
+  Data data;
+  if (!read(r, type_code)) return nullptr;
+  if (!read(r, length)) return nullptr;
+  if (!read(r, data, length)) return nullptr;
+
+  pjs::Value value;
+  auto type = OptionalParameter::TypeCode(type_code);
+  if (!data.empty()) {
+    Data::Reader r(data);
+    switch (type) {
+      case OptionalParameter::TypeCode::Capabilities: {
+        auto a = pjs::Array::make();
+        value.set(a);
+        while (!r.eof()) {
+          uint8_t code, size;
+          Data data;
+          if (!read(r, code)) return nullptr;
+          if (!read(r, size)) return nullptr;
+          if (!read(r, data, size)) return nullptr;
+          auto cap = OptionalParameter::Capability::make();
+          cap->code = code;
+          cap->value.set(Data::make(std::move(data)));
+          a->push(cap);
+        }
+        break;
+      }
+      default: value.set(Data::make(std::move(data))); break;
+    }
+  } else {
+    value = pjs::Value::null;
+  }
+
+  auto *op = OptionalParameter::make();
+  if (auto *k = pjs::EnumDef<OptionalParameter::TypeCode>::name(type)) {
+    op->name = k;
+  }
+
+  op->value = value;
+  op->code = type_code;
+
+  return op;
+}
+
 auto BGP::Parser::read_path_attribute(Data::Reader &r) -> PathAttribute* {
   uint8_t flags, type_code;
   if (!read(r, flags)) return nullptr;
@@ -754,6 +755,8 @@ auto BGP::Parser::read_path_attribute(Data::Reader &r) -> PathAttribute* {
       }
       default: value.set(Data::make(std::move(data))); break;
     }
+  } else {
+    value = pjs::Value::null;
   }
 
   auto *pa = PathAttribute::make();
@@ -807,6 +810,56 @@ template<> void EnumDef<BGP::MessageType>::init() {
   define(BGP::MessageType::UPDATE, "UPDATE");
   define(BGP::MessageType::NOTIFICATION, "NOTIFICATION");
   define(BGP::MessageType::KEEPALIVE, "KEEPALIVE");
+}
+
+//
+// BGP::OptionalParameter::TypeCode
+//
+
+template<> void EnumDef<BGP::OptionalParameter::TypeCode>::init() {
+  define(BGP::OptionalParameter::TypeCode::Capabilities, "Capabilities");
+}
+
+//
+// BGP::OptionalParameter
+//
+
+template<> void ClassDef<BGP::OptionalParameter>::init() {
+  accessor(
+    "name",
+    [](Object *obj, Value &val) { val.set(obj->as<BGP::OptionalParameter>()->name); },
+    [](Object *obj, const Value &val) { (obj->as<BGP::OptionalParameter>()->name = val.to_string())->release(); }
+  );
+
+  accessor(
+    "value",
+    [](Object *obj, Value &val) { val = obj->as<BGP::OptionalParameter>()->value; },
+    [](Object *obj, const Value &val) { obj->as<BGP::OptionalParameter>()->value = val; }
+  );
+
+  accessor(
+    "code",
+    [](Object *obj, Value &val) { val.set(obj->as<BGP::OptionalParameter>()->code); },
+    [](Object *obj, const Value &val) { obj->as<BGP::OptionalParameter>()->code = val.to_number(); }
+  );
+}
+
+//
+// BGP::OptionalParameter::Capability
+//
+
+template<> void ClassDef<BGP::OptionalParameter::Capability>::init() {
+  accessor(
+    "code",
+    [](Object *obj, Value &val) { val.set(obj->as<BGP::OptionalParameter::Capability>()->code); },
+    [](Object *obj, const Value &val) { obj->as<BGP::OptionalParameter::Capability>()->code = val.to_number(); }
+  );
+
+  accessor(
+    "value",
+    [](Object *obj, Value &val) { val = obj->as<BGP::OptionalParameter::Capability>()->value; },
+    [](Object *obj, const Value &val) { obj->as<BGP::OptionalParameter::Capability>()->value = val; }
+  );
 }
 
 //
@@ -920,7 +973,7 @@ template<> void ClassDef<BGP::MessageOpen>::init() {
   accessor(
     "parameters",
     [](Object *obj, Value &val) { val.set(obj->as<BGP::MessageOpen>()->parameters); },
-    [](Object *obj, const Value &val) { obj->as<BGP::MessageOpen>()->parameters = val.is_object() ? val.o() : nullptr; }
+    [](Object *obj, const Value &val) { obj->as<BGP::MessageOpen>()->parameters = val.is_array() ? val.as<Array>() : nullptr; }
   );
 }
 

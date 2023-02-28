@@ -18,6 +18,7 @@
     $=>$
     .encodeBGP()
     .handleMessage(msg => console.debug('>>>', _peer.state(), msg.payload))
+    .dump()
     .connect(() => _peer.destination, { idleTimeout: 0 })
     .decodeBGP()
     .handleMessage(msg => console.debug('<<<', _peer.state(), msg.payload))

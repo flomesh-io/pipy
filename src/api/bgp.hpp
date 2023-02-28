@@ -55,6 +55,36 @@ public:
   };
 
   //
+  // BGP::OptionalParameter
+  //
+
+  class OptionalParameter : public pjs::ObjectTemplate<OptionalParameter> {
+  public:
+
+    //
+    // BGP::OptionalParameter::TypeCode
+    //
+
+    enum class TypeCode {
+      Capabilities = 2,
+    };
+
+    pjs::Ref<pjs::Str> name;
+    pjs::Value value;
+    int code = 0;
+
+    //
+    // BGP::OptionalParameter::Capability
+    //
+
+    class Capability : public pjs::ObjectTemplate<Capability> {
+    public:
+      int code = 0;
+      pjs::Value value;
+    };
+  };
+
+  //
   // BGP::PathAttribute
   //
 
@@ -103,7 +133,7 @@ public:
     int myAS = 0;
     int holdTime = 0;
     pjs::Ref<pjs::Str> identifier;
-    pjs::Ref<pjs::Object> parameters;
+    pjs::Ref<pjs::Array> parameters;
   };
 
   //
@@ -181,6 +211,7 @@ public:
     bool read(Data::Reader &r, uint32_t &data);
 
     auto read_address_prefix(Data::Reader &r) -> Netmask*;
+    auto read_optional_param(Data::Reader &r) -> OptionalParameter*;
     auto read_path_attribute(Data::Reader &r) -> PathAttribute*;
   };
 
