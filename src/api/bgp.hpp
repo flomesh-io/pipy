@@ -40,8 +40,8 @@ class Netmask;
 
 class BGP : public pjs::ObjectTemplate<BGP> {
 public:
-  static auto decode(const Data &data) -> pjs::Array*;
-  static void encode(pjs::Object *payload, Data &data);
+  static auto decode(const Data &data, bool enable_as4) -> pjs::Array*;
+  static void encode(pjs::Object *payload, bool enable_as4, Data &data);
 
   //
   // BGP::MessageType
@@ -174,10 +174,12 @@ public:
   public:
     Parser();
 
+    void enable_as4(bool b);
     void reset();
     void parse(Data &data);
 
   protected:
+    virtual void on_parse_start() {}
     virtual void on_message_start() {}
     virtual void on_message_end(pjs::Object *payload) = 0;
     virtual void on_message_error(MessageNotification *msg) {}
@@ -195,6 +197,7 @@ public:
     uint8_t m_header[19];
     pjs::Ref<Data> m_body;
     pjs::Ref<Message> m_message;
+    bool m_enable_as4 = false;
 
     void message_start();
     void message_end();

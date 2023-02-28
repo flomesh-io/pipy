@@ -29,6 +29,17 @@ namespace pipy {
 namespace bgp {
 
 //
+// Options
+//
+
+Options::Options(pjs::Object *options) {
+  Value(options, "enableAS4")
+    .get(enable_as4)
+    .get(enable_as4_f)
+    .check_nullable();
+}
+
+//
 // Decoder
 //
 
@@ -36,8 +47,14 @@ Decoder::Decoder()
 {
 }
 
+Decoder::Decoder(const Options &options)
+  : m_options(options)
+{
+}
+
 Decoder::Decoder(const Decoder &r)
   : Filter(r)
+  , m_options(r.m_options)
 {
 }
 
@@ -72,6 +89,16 @@ void Decoder::on_pass(const Data &data) {
   Filter::output(Data::make(data));
 }
 
+void Decoder::on_parse_start() {
+  bool enable_as4 = m_options.enable_as4;
+  if (m_options.enable_as4_f) {
+    pjs::Value ret;
+    if (!Filter::eval(m_options.enable_as4_f, ret)) return;
+    enable_as4 = ret.to_boolean();
+  }
+  Parser::enable_as4(enable_as4);
+}
+
 void Decoder::on_message_start() {
   Filter::output(MessageStart::make());
 }
@@ -88,8 +115,14 @@ Encoder::Encoder()
 {
 }
 
+Encoder::Encoder(const Options &options)
+  : m_options(options)
+{
+}
+
 Encoder::Encoder(const Encoder &r)
   : Filter(r)
+  , m_options(r.m_options)
 {
 }
 
@@ -126,8 +159,14 @@ void Encoder::process(Event *evt) {
       const auto &payload = evt->as<MessageEnd>()->payload();
       if (payload.is_object()) {
         if (auto *obj = payload.o()) {
+          bool enable_as4 = m_options.enable_as4;
+          if (m_options.enable_as4_f) {
+            pjs::Value ret;
+            if (!Filter::eval(m_options.enable_as4_f, ret)) return;
+            enable_as4 = ret.to_boolean();
+          }
           Data buf;
-          BGP::encode(obj, buf);
+          BGP::encode(obj, enable_as4, buf);
           Filter::output(Data::make(std::move(buf)));
         }
       }

@@ -16,11 +16,11 @@
   .replaceStreamEnd()
   .mux(() => _peer).to(
     $=>$
-    .encodeBGP()
+    .encodeBGP({ enableAS4: () => _peer.isAS4() })
     .handleMessage(msg => console.debug('>>>', _peer.state(), msg.payload))
     .dump()
     .connect(() => _peer.destination, { idleTimeout: 0 })
-    .decodeBGP()
+    .decodeBGP({ enableAS4: () => _peer.isAS4() })
     .handleMessage(msg => console.debug('<<<', _peer.state(), msg.payload))
     .handleMessage(msg => _peer.receive(msg))
     .handleStreamEnd(() => _peer.end())

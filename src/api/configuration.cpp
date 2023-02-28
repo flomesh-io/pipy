@@ -162,8 +162,8 @@ void FilterConfigurator::connect_tls(pjs::Object *options) {
   require_sub_pipeline(append_filter(new tls::Client(options)));
 }
 
-void FilterConfigurator::decode_bgp() {
-  append_filter(new bgp::Decoder());
+void FilterConfigurator::decode_bgp(pjs::Object *options) {
+  append_filter(new bgp::Decoder(options));
 }
 
 void FilterConfigurator::decode_dubbo() {
@@ -238,8 +238,8 @@ void FilterConfigurator::dump(const pjs::Value &tag) {
   append_filter(new Dump(tag));
 }
 
-void FilterConfigurator::encode_bgp() {
-  append_filter(new bgp::Encoder());
+void FilterConfigurator::encode_bgp(pjs::Object *options) {
+  append_filter(new bgp::Encoder(options));
 }
 
 void FilterConfigurator::encode_dubbo(pjs::Object *message_obj) {
@@ -1136,7 +1136,9 @@ template<> void ClassDef<FilterConfigurator>::init() {
   // FilterConfigurator.decodeBGP
   method("decodeBGP", [](Context &ctx, Object *thiz, Value &result) {
     try {
-      thiz->as<FilterConfigurator>()->decode_bgp();
+      Object *options = nullptr;
+      if (!ctx.arguments(0, &options)) return;
+      thiz->as<FilterConfigurator>()->decode_bgp(options);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1362,7 +1364,9 @@ template<> void ClassDef<FilterConfigurator>::init() {
   // FilterConfigurator.encodeBGP
   method("encodeBGP", [](Context &ctx, Object *thiz, Value &result) {
     try {
-      thiz->as<FilterConfigurator>()->encode_bgp();
+      Object *options = nullptr;
+      if (!ctx.arguments(0, &options)) return;
+      thiz->as<FilterConfigurator>()->encode_bgp(options);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

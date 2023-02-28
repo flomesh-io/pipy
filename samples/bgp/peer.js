@@ -1,8 +1,7 @@
 (config, address) => (
   (
-    MY_AS = config.as,
-    IS_AS4 = (MY_AS > 0xffff),
     AS_TRANS = 23456,
+    MY_AS = config.as,
     BGP_IDENTIFIER = config.id,
     NEXT_HOP = config.nextHop,
     HOLD_TIME = (holdTime in config ? config.holdTime : 90),
@@ -14,6 +13,7 @@
     keepaliveTime = -1,
     peerAS = -1,
     isEBGP = undefined,
+    isAS4 = false,
     updateScheduled = false,
 
     ipv6 = (ip) => (
@@ -63,46 +63,7 @@
         'ManualStart', () => (
           holdTimer = 4*60,
           state = 'OpenSent',
-          new Message(
-            null, {
-              type: 'OPEN',
-              body: {
-                myAS: IS_AS4 ? AS_TRANS : MY_AS,
-                identifier: BGP_IDENTIFIER,
-                holdTime: HOLD_TIME,
-                parameters: [
-                  {
-                    name: 'Capabilities',
-                    value: [
-
-                      // Multiprotocol Extensions: IPv4 unicast
-                      {
-                        code: 1,
-                        value: new Data([0, 1, 0, 1]), // IPv4 unicast
-                      },
-
-                      // Multiprotocol Extensions: Ipv6 unicast
-                      config.isIPv6 ? {
-                        code: 1,
-                        value: new Data([0, 2, 0, 1]), // IPv6 unicast
-                      } : undefined,
-
-                      // Support for 4-octet AS number
-                      IS_AS4 ? {
-                        code: 65,
-                        value: new Data([
-                          255 & (MY_AS >> 24),
-                          255 & (MY_AS >> 16),
-                          255 & (MY_AS >>  8),
-                          255 & (MY_AS >>  0),
-                        ]),
-                      } : undefined,
-                    ]
-                  }
-                ],
-              }
-            }
-          )
+          composeOpen()
         )
       )
     ),
@@ -163,7 +124,54 @@
 
     verifyOpen = (msg) => void (
       peerAS = msg.body.myAS,
-      isEBGP = peerAS !== MY_AS
+      isEBGP = peerAS !== MY_AS,
+      isAS4 = msg.body.parameters.some(
+        p => p.name === 'Capabilities' && (
+          p.value.find(
+            cap => cap.code === 65 // Support for 4-octet AS number
+          )
+        )
+      )
+    ),
+
+    composeOpen = () => (
+      new Message(
+        null, {
+          type: 'OPEN',
+          body: {
+            myAS: MY_AS > 0xffff ? AS_TRANS : MY_AS,
+            identifier: BGP_IDENTIFIER,
+            holdTime: HOLD_TIME,
+            parameters: [
+              {
+                name: 'Capabilities',
+                value: [
+                  {
+                    // Multiprotocol Extensions: IPv4 unicast
+                    code: 1,
+                    value: new Data([0, 1, 0, 1]),
+                  },
+                  {
+                    // Multiprotocol Extensions: Ipv6 unicast
+                    code: 1,
+                    value: new Data([0, 2, 0, 1]),
+                  },
+                  {
+                    // Support for 4-octet AS number
+                    code: 65,
+                    value: new Data([
+                      255 & (MY_AS >> 24),
+                      255 & (MY_AS >> 16),
+                      255 & (MY_AS >>  8),
+                      255 & (MY_AS >>  0),
+                    ]),
+                  },
+                ]
+              }
+            ],
+          }
+        }
+      )
     ),
 
     composeUpdate = () => (
@@ -207,9 +215,18 @@
                     // No SNPAs
                     0,
                     // NLRI
-                    ...config.reachable.flatMap(
-                      prefix => ipv6Prefix(prefix)
-                    ),
+                    ...config.reachable.flatMap(a => ipv6Prefix(a)),
+                  ]),
+                  optional: true,
+                },
+                {
+                  // MP_UNREACH_NLRI
+                  code: 15,
+                  value: new Data([
+                    // IPv6 unicast
+                    0, 2, 1,
+                    // NLRI
+                    ...config.unreachable.flatMap(a => ipv6Prefix(a)),
                   ]),
                   optional: true,
                 }
@@ -260,6 +277,7 @@
     destination: `${address}:179`,
 
     state: () => state,
+    isAS4: () => isAS4,
 
     //
     // Run once every second

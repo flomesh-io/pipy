@@ -28,9 +28,21 @@
 
 #include "filter.hpp"
 #include "api/bgp.hpp"
+#include "options.hpp"
 
 namespace pipy {
 namespace bgp {
+
+//
+// Options
+//
+
+struct Options : public pipy::Options {
+  bool enable_as4 = false;
+  pjs::Ref<pjs::Function> enable_as4_f;
+  Options() {}
+  Options(pjs::Object *options);
+};
 
 //
 // Decoder
@@ -39,6 +51,7 @@ namespace bgp {
 class Decoder : public Filter, public BGP::Parser {
 public:
   Decoder();
+  Decoder(const Options &options);
 
 private:
   Decoder(const Decoder &r);
@@ -50,8 +63,11 @@ private:
   virtual void dump(Dump &d) override;
 
   virtual void on_pass(const Data &data) override;
+  virtual void on_parse_start() override;
   virtual void on_message_start() override;
   virtual void on_message_end(pjs::Object *payload) override;
+
+  Options m_options;
 };
 
 //
@@ -61,6 +77,7 @@ private:
 class Encoder : public Filter {
 public:
   Encoder();
+  Encoder(const Options &options);
 
 private:
   Encoder(const Encoder &r);
@@ -71,6 +88,7 @@ private:
   virtual void process(Event *evt) override;
   virtual void dump(Dump &d) override;
 
+  Options m_options;
   bool m_message_started = false;
 };
 

@@ -102,7 +102,8 @@ inline static void write_optional_param_value(
 inline static void write_path_attribute_value(
   Data::Builder &db,
   BGP::PathAttribute::TypeCode type_code,
-  const pjs::Value &value
+  const pjs::Value &value,
+  bool enable_as4
 ) {
   switch (type_code) {
     case BGP::PathAttribute::TypeCode::ORIGIN:
@@ -120,14 +121,18 @@ inline static void write_path_attribute_value(
             } else if (v.is_object() && v.o()) {
               a = pjs::Object::keys(v.o());
             }
-            auto n = std::min((a ? a->length() : 0), 0xff);
-            db.push(n);
-            for (int i = 0; i < n; i++) {
-              int as = a->data()->at(i).to_number();
-              db.push(uint8_t(as >> 24));
-              db.push(uint8_t(as >> 16));
-              db.push(uint8_t(as >> 8));
-              db.push(uint8_t(as >> 0));
+            if (a) {
+              auto n = std::min((a ? a->length() : 0), 0xff);
+              db.push(n);
+              for (int i = 0; i < n; i++) {
+                int as = a->elements()->at(i).to_number();
+                if (enable_as4) {
+                  db.push(uint8_t(as >> 24));
+                  db.push(uint8_t(as >> 16));
+                }
+                db.push(uint8_t(as >> 8));
+                db.push(uint8_t(as >> 0));
+              }
             }
           }
         );
@@ -159,12 +164,16 @@ inline static void write_path_attribute_value(
       uint8_t ip[4] = { 0 };
       if (value.is_array()) {
         auto *a = value.as<pjs::Array>();
-        if (a->length() > 0) as = a->data()->at(0).to_number();
+        if (a->length() > 0) as = a->elements()->at(0).to_number();
         if (a->length() > 1) {
-          auto *s = a->data()->at(1).to_string();
+          auto *s = a->elements()->at(1).to_string();
           utils::get_ip_v4(s->str(), ip);
           s->release();
         }
+      }
+      if (enable_as4) {
+        db.push(uint8_t(as >> 24));
+        db.push(uint8_t(as >> 16));
       }
       db.push(uint8_t(as >> 8));
       db.push(uint8_t(as >> 0));
@@ -181,7 +190,7 @@ inline static auto ipv4_to_str(const uint8_t ip[]) -> pjs::Str* {
   return pjs::Str::make(str, len);
 }
 
-auto BGP::decode(const Data &data) -> pjs::Array* {
+auto BGP::decode(const Data &data, bool enable_as4) -> pjs::Array* {
   pjs::Array *a = pjs::Array::make();
   StreamParser sp(
     [=](const pjs::Value &value) {
@@ -189,11 +198,12 @@ auto BGP::decode(const Data &data) -> pjs::Array* {
     }
   );
   Data buf(data);
+  sp.enable_as4(enable_as4);
   sp.parse(buf);
   return a;
 }
 
-void BGP::encode(pjs::Object *payload, Data &data) {
+void BGP::encode(pjs::Object *payload, bool enable_as4, Data &data) {
   Data payload_buffer;
 
   pjs::Ref<Message> msg;
@@ -305,7 +315,7 @@ void BGP::encode(pjs::Object *payload, Data &data) {
                 buf.push(*pa->value.as<Data>());
               } else {
                 Data::Builder db(buf, &s_dp);
-                write_path_attribute_value(db, PathAttribute::TypeCode(type_code), pa->value);
+                write_path_attribute_value(db, PathAttribute::TypeCode(type_code), pa->value, enable_as4);
                 db.flush();
               }
               clamp_data_size(buf, 0xffff);
@@ -384,6 +394,10 @@ BGP::Parser::Parser()
 {
 }
 
+void BGP::Parser::enable_as4(bool b) {
+  m_enable_as4 = b;
+}
+
 void BGP::Parser::reset() {
   Deframer::reset();
   Deframer::pass_all(true);
@@ -400,6 +414,7 @@ auto BGP::Parser::on_state(int state, int c) -> int {
   switch (state) {
     case START:
       message_end();
+      on_parse_start();
       message_start();
       Deframer::read(sizeof(m_header) - 1, m_header + 1);
       return HEADER;
@@ -709,17 +724,29 @@ auto BGP::Parser::read_path_attribute(Data::Reader &r) -> PathAttribute* {
             auto *o = pjs::Object::make();
             segs->push(o);
             for (int i = 0; i < size; i++) {
-              uint16_t as;
-              if (!read(r, as)) return nullptr;
-              o->set(pjs::Str::make(int(as)), as);
+              if (m_enable_as4) {
+                uint32_t as;
+                if (!read(r, as)) return nullptr;
+                o->set(pjs::Str::make(int(as)), as);
+              } else {
+                uint16_t as;
+                if (!read(r, as)) return nullptr;
+                o->set(pjs::Str::make(int(as)), as);
+              }
             }
           } else if (type == 2) {
             auto *a = pjs::Array::make(size);
             segs->push(a);
             for (int i = 0; i < size; i++) {
-              uint16_t as;
-              if (!read(r, as)) return nullptr;
-              a->set(i, as);
+              if (m_enable_as4) {
+                uint32_t as;
+                if (!read(r, as)) return nullptr;
+                a->set(i, as);
+              } else {
+                uint16_t as;
+                if (!read(r, as)) return nullptr;
+                a->set(i, as);
+              }
             }
           } else {
             return nullptr;
@@ -743,9 +770,15 @@ auto BGP::Parser::read_path_attribute(Data::Reader &r) -> PathAttribute* {
       case PathAttribute::TypeCode::ATOMIC_AGGREGATE:
         break;
       case PathAttribute::TypeCode::AGGREGATOR: {
-        uint16_t as;
+        uint32_t as;
         uint8_t ip[4];
-        if (!read(r, as)) return nullptr;
+        if (m_enable_as4) {
+          if (!read(r, as)) return nullptr;
+        } else {
+          uint16_t as2;
+          if (!read(r, as2)) return nullptr;
+          as = as2;
+        }
         if (!read(r, ip, 4)) return nullptr;
         auto *a = pjs::Array::make(2);
         a->set(0, as);
@@ -788,15 +821,17 @@ template<> void ClassDef<BGP>::init() {
 
   method("decode", [](Context &ctx, Object *obj, Value &ret) {
     pipy::Data *data;
-    if (!ctx.arguments(1, &data)) return;
-    ret.set(BGP::decode(*data));
+    bool enable_as4 = false;
+    if (!ctx.arguments(1, &data, &enable_as4)) return;
+    ret.set(BGP::decode(*data, enable_as4));
   });
 
   method("encode", [](Context &ctx, Object *obj, Value &ret) {
     pjs::Object *payload;
-    if (!ctx.arguments(1, &payload)) return;
+    bool enable_as4 = false;
+    if (!ctx.arguments(1, &payload, &enable_as4)) return;
     auto *data = pipy::Data::make();
-    BGP::encode(payload, *data);
+    BGP::encode(payload, enable_as4, *data);
     ret.set(data);
   });
 }
