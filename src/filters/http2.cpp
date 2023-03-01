@@ -1529,10 +1529,10 @@ Endpoint::StreamBase::StreamBase(
   , m_header_decoder(endpoint->m_header_decoder)
   , m_header_encoder(endpoint->m_header_encoder)
   , m_recv_window(endpoint->m_settings.initial_window_size)
-  , m_settings(endpoint->m_peer_settings)
+  , m_recv_window_max(m_recv_window)
+  , m_recv_window_low(m_recv_window_max / 2)
+  , m_peer_settings(endpoint->m_peer_settings)
 {
-  m_recv_window_max = m_settings.initial_window_size;
-  m_recv_window_low = m_recv_window_max / 2;
   if (is_server_side) {
     s_server_stream_count++;
   } else {
@@ -1899,7 +1899,7 @@ void Endpoint::StreamBase::pump() {
   if (size > 0 || is_empty_end) {
     auto remain = size;
     do {
-      auto n = std::min(remain, m_settings.max_frame_size);
+      auto n = std::min(remain, m_peer_settings.max_frame_size);
       remain -= n;
       Frame frm;
       frm.stream_id = m_id;

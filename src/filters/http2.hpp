@@ -483,7 +483,7 @@ protected:
     int m_recv_window_max;
     int m_recv_window_low;
     int m_recv_payload_size = 0;
-    const Settings& m_settings;
+    const Settings& m_peer_settings;
 
     bool parse_padding(Frame &frm);
     bool parse_priority(Frame &frm);
