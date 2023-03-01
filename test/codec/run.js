@@ -78,7 +78,7 @@ async function runTest(name) {
 async function start(id) {
   try {
     if (id) {
-      await runTest(id, options);
+      await runTest(id);
 
     } else {
       const entries = fs.readdirSync(currentDir, { withFileTypes: true }).filter(e => e.isDirectory());
