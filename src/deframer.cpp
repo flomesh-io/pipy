@@ -98,7 +98,9 @@ void Deframer::deframe(Data &data) {
       }
 
       if (0 == (m_read_length -= n)) {
-        m_state = on_state(m_state, -1);
+        auto state = on_state(m_state, -1);
+        if (m_need_flush) flush();
+        m_state = state;
       }
 
     } else {
