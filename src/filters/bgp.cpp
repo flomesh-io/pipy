@@ -85,8 +85,8 @@ void Decoder::process(Event *evt) {
   }
 }
 
-void Decoder::on_pass(const Data &data) {
-  Filter::output(Data::make(data));
+void Decoder::on_pass(Data &data) {
+  Filter::output(Data::make(std::move(data)));
 }
 
 void Decoder::on_parse_start() {

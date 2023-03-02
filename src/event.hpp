@@ -173,8 +173,9 @@ public:
     READ_TIMEOUT,
     WRITE_TIMEOUT,
     IDLE_TIMEOUT,
-    UNAUTHORIZED,
     BUFFER_OVERFLOW,
+    PROTOCOL_ERROR,
+    UNAUTHORIZED,
   };
 
   auto error() const -> Error { return m_error; }

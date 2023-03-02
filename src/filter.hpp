@@ -118,6 +118,7 @@ protected:
   bool callback(pjs::Function *func, int argc, pjs::Value argv[], pjs::Value &result);
   bool eval(pjs::Value &param, pjs::Value &result);
   bool eval(pjs::Function *func, pjs::Value &result);
+  void error(StreamEnd::Error type);
 
 private:
   struct Sub {

@@ -28,15 +28,30 @@
 
 #include "filter.hpp"
 #include "data.hpp"
+#include "deframer.hpp"
 
 namespace pipy {
 namespace dubbo {
 
 //
+// MessageHead
+//
+
+class MessageHead : public pjs::ObjectTemplate<MessageHead> {
+public:
+  uint64_t requestID = 0;
+  bool isRequest = false;
+  bool isTwoWay = false;
+  bool isEvent = false;
+  int serializationType = 0;
+  int status = 0;
+};
+
+//
 // Decoder
 //
 
-class Decoder : public Filter {
+class Decoder : public Filter, public Deframer {
 public:
   Decoder();
 
@@ -51,22 +66,15 @@ private:
 
 private:
   enum State {
-    FRAME_HEAD,
-    FRAME_DATA,
+    START,
+    HEAD,
+    BODY,
   };
 
-  State m_state;
-  int m_size;
-  int m_head_size;
   uint8_t m_head[16];
-  pjs::Ref<pjs::Object> m_head_object;
 
-  std::string m_var_request_id;
-  std::string m_var_request_bit;
-  std::string m_var_2_way_bit;
-  std::string m_var_event_bit;
-  std::string m_var_status;
-  bool m_stream_end = false;
+  virtual auto on_state(int state, int c) -> int override;
+  virtual void on_pass(Data &data) override;
 };
 
 //
@@ -76,7 +84,6 @@ private:
 class Encoder : public Filter {
 public:
   Encoder();
-  Encoder(pjs::Object *head);
 
 private:
   Encoder(const Encoder &r);
@@ -88,22 +95,8 @@ private:
   virtual void dump(Dump &d) override;
 
 private:
-  pjs::Ref<Data> m_buffer;
-  pjs::Ref<MessageStart> m_message_start;
   pjs::Ref<pjs::Object> m_head;
-  pjs::PropertyCache m_prop_id;
-  pjs::PropertyCache m_prop_status;
-  pjs::PropertyCache m_prop_is_request;
-  pjs::PropertyCache m_prop_is_two_way;
-  pjs::PropertyCache m_prop_is_event;
-  long long m_auto_id = 0;
-
-  static long long get_header(
-    const Context &ctx,
-    pjs::Object *obj,
-    pjs::PropertyCache &prop,
-    long long value
-  );
+  Data m_buffer;
 };
 
 } // namespace dubbo

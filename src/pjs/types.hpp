@@ -690,6 +690,8 @@ public:
   static auto make(const uint32_t *codes, size_t len) -> Str*;
   static auto make(double n) -> Str*;
   static auto make(int n) -> Str*;
+  static auto make(int64_t n) -> Str*;
+  static auto make(uint64_t n) -> Str*;
 
   auto length() const -> int { return m_char_data->length(); }
   auto size() const -> size_t { return m_char_data->size(); }
@@ -702,6 +704,7 @@ public:
   auto chr_at(int i) const -> int { return m_char_data->chr_at(i); }
 
   auto parse_int() const -> double;
+  bool parse_int64(int64_t &i);
   auto parse_float() const -> double;
   auto substring(int start, int end) -> std::string;
 

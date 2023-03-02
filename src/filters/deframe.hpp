@@ -54,7 +54,7 @@ private:
   pjs::Ref<pjs::Object> m_read_buffer;
 
   virtual auto on_state(int state, int c) -> int override;
-  virtual void on_pass(const Data &data) override;
+  virtual void on_pass(Data &data) override;
 };
 
 } // namespace pipy

@@ -236,11 +236,30 @@ auto Str::make(int n) -> Str* {
   return make(str, len);
 }
 
+auto Str::make(int64_t n) -> Str* {
+  char str[100];
+  auto len = std::snprintf(str, sizeof(str), "%lld", (long long)n);
+  return make(str, len);
+}
+
+auto Str::make(uint64_t n) -> Str* {
+  char str[100];
+  auto len = std::snprintf(str, sizeof(str), "%llu", (unsigned long long)n);
+  return make(str, len);
+}
+
 auto Str::parse_int() const -> double {
   char *p = nullptr;
   auto n = std::strtol(c_str(), &p, 10);
   while (*p && std::isblank(*p)) p++;
   return *p ? NAN : n;
+}
+
+bool Str::parse_int64(int64_t &i) {
+  char *p = nullptr;
+  i = std::strtoll(c_str(), &p, 10);
+  while (*p && std::isblank(*p)) p++;
+  return !*p;
 }
 
 auto Str::parse_float() const -> double {

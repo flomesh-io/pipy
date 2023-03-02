@@ -149,7 +149,7 @@ auto Decoder::on_state(int state, int c) -> int {
   return state;
 }
 
-void Decoder::on_pass(const Data &data) {
+void Decoder::on_pass(Data &data) {
   if (m_has_mask) {
     uint8_t buf[DATA_CHUNK_SIZE];
     auto output = Data::make();
@@ -162,7 +162,7 @@ void Decoder::on_pass(const Data &data) {
     }
     Filter::output(output);
   } else {
-    Filter::output(Data::make(data));
+    Filter::output(Data::make(std::move(data)));
   }
 }
 

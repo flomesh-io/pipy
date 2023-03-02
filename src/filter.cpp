@@ -215,4 +215,8 @@ bool Filter::eval(pjs::Function *func, pjs::Value &result) {
   return false;
 }
 
+void Filter::error(StreamEnd::Error type) {
+  output(StreamEnd::make(type));
+}
+
 } // namespace pipy

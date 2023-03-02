@@ -242,16 +242,16 @@ void FilterConfigurator::encode_bgp(pjs::Object *options) {
   append_filter(new bgp::Encoder(options));
 }
 
-void FilterConfigurator::encode_dubbo(pjs::Object *message_obj) {
-  append_filter(new dubbo::Encoder(message_obj));
+void FilterConfigurator::encode_dubbo() {
+  append_filter(new dubbo::Encoder());
 }
 
 void FilterConfigurator::encode_http_request(pjs::Object *options) {
   append_filter(new http::RequestEncoder(options));
 }
 
-void FilterConfigurator::encode_http_response(pjs::Object *response_obj) {
-  append_filter(new http::ResponseEncoder(response_obj));
+void FilterConfigurator::encode_http_response(pjs::Object *options) {
+  append_filter(new http::ResponseEncoder(options));
 }
 
 void FilterConfigurator::encode_mqtt() {
@@ -1375,10 +1375,8 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.encodeDubbo
   method("encodeDubbo", [](Context &ctx, Object *thiz, Value &result) {
-    Object *message_obj = nullptr;
-    if (!ctx.arguments(0, &message_obj)) return;
     try {
-      thiz->as<FilterConfigurator>()->encode_dubbo(message_obj);
+      thiz->as<FilterConfigurator>()->encode_dubbo();
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

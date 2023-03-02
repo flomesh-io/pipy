@@ -153,8 +153,8 @@ auto Deframe::on_state(int state, int c) -> int {
   }
 }
 
-void Deframe::on_pass(const Data &data) {
-  Filter::output(Data::make(data));
+void Deframe::on_pass(Data &data) {
+  Filter::output(Data::make(std::move(data)));
 }
 
 } // namespace pipy

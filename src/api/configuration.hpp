@@ -87,7 +87,7 @@ public:
   void dummy();
   void dump(const pjs::Value &tag);
   void encode_bgp(pjs::Object *options);
-  void encode_dubbo(pjs::Object *message_obj);
+  void encode_dubbo();
   void encode_http_request(pjs::Object *options);
   void encode_http_response(pjs::Object *options);
   void encode_mqtt();

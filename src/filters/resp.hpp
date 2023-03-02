@@ -49,7 +49,7 @@ private:
   virtual void process(Event *evt) override;
   virtual void dump(Dump &d) override;
 
-  virtual void on_pass(const Data &data) override;
+  virtual void on_pass(Data &data) override;
   virtual void on_message_start() override;
   virtual void on_message_end(const pjs::Value &value) override;
 };

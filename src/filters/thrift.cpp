@@ -442,8 +442,8 @@ auto Decoder::on_state(int state, int c) -> int {
   }
 }
 
-void Decoder::on_pass(const Data &data) {
-  Filter::output(Data::make(data));
+void Decoder::on_pass(Data &data) {
+  Filter::output(Data::make(std::move(data)));
 }
 
 bool Decoder::set_message_type(int type) {

@@ -97,7 +97,7 @@ private:
   bool m_started;
 
   virtual auto on_state(int state, int c) -> int override;
-  virtual void on_pass(const Data &data) override;
+  virtual void on_pass(Data &data) override;
 
   auto message_start() -> State;
   void message_end();

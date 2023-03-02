@@ -58,8 +58,9 @@ auto StreamEnd::message() const -> const char* {
     case READ_TIMEOUT: return "read timeout";
     case WRITE_TIMEOUT: return "write timeout";
     case IDLE_TIMEOUT: return "idle timeout";
-    case UNAUTHORIZED: return "unauthorized";
     case BUFFER_OVERFLOW: return "buffer overflow";
+    case PROTOCOL_ERROR: return "protocol error";
+    case UNAUTHORIZED: return "unauthorized";
   }
   return "???";
 }
@@ -128,8 +129,9 @@ template<> void EnumDef<StreamEnd::Error>::init() {
   define(StreamEnd::READ_TIMEOUT       , "ReadTimeout");
   define(StreamEnd::WRITE_TIMEOUT      , "WriteTimeout");
   define(StreamEnd::IDLE_TIMEOUT       , "IdleTimeout");
-  define(StreamEnd::UNAUTHORIZED       , "Unauthorized");
   define(StreamEnd::BUFFER_OVERFLOW    , "BufferOverflow");
+  define(StreamEnd::PROTOCOL_ERROR     , "ProtocolError");
+  define(StreamEnd::UNAUTHORIZED       , "Unauthorized");
 }
 
 template<> void ClassDef<StreamEnd>::init() {

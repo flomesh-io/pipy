@@ -165,7 +165,7 @@ private:
   bool m_started = false;
 
   virtual auto on_state(int state, int c) -> int override;
-  virtual void on_pass(const Data &data) override;
+  virtual void on_pass(Data &data) override;
 
   bool set_message_type(int type);
   auto set_field_type(int type) -> State;

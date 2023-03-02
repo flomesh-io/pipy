@@ -24,23 +24,11 @@
  */
 
 #include "dubbo.hpp"
-#include "log.hpp"
 
 namespace pipy {
 namespace dubbo {
 
 thread_local static Data::Producer s_dp("Dubbo");
-
-class DubboHead : public pjs::ObjectTemplate<DubboHead> {
-public:
-  enum class Field {
-    id,
-    status,
-    isRequest,
-    isTwoWay,
-    isEvent,
-  };
-};
 
 //
 // Decoder
@@ -70,97 +58,68 @@ auto Decoder::clone() -> Filter* {
 
 void Decoder::reset() {
   Filter::reset();
-  m_state = FRAME_HEAD;
-  m_size = 0;
-  m_head_size = 0;
-  m_stream_end = false;
+  Deframer::reset();
 }
 
 void Decoder::process(Event *evt) {
-  if (m_stream_end) return;
-
-  // Data
-  if (auto data = evt->as<Data>()) {
-    while (!data->empty()) {
-      pjs::Ref<Data> read(Data::make());
-      auto old_state = m_state;
-      data->shift_while([&](int c) {
-        if (m_state != old_state)
-          return false;
-
-        // Parse one character.
-        switch (m_state) {
-
-        // Read frame header.
-        case FRAME_HEAD:
-          m_head[m_head_size++] = c;
-          if (m_head_size == 16) {
-            if ((unsigned char)m_head[0] != 0xda ||
-                (unsigned char)m_head[1] != 0xbb
-            ) {
-              Log::error("[dubbo] magic number not found");
-            }
-
-            auto F = m_head[2];
-            auto S = m_head[3];
-            auto R = ((long long)(unsigned char)m_head[4] << 56)
-                  | ((long long)(unsigned char)m_head[5] << 48)
-                  | ((long long)(unsigned char)m_head[6] << 40)
-                  | ((long long)(unsigned char)m_head[7] << 32)
-                  | ((long long)(unsigned char)m_head[8] << 24)
-                  | ((long long)(unsigned char)m_head[9] << 16)
-                  | ((long long)(unsigned char)m_head[10] << 8)
-                  | ((long long)(unsigned char)m_head[11] << 0);
-            auto L = ((int)(unsigned char)m_head[12] << 24)
-                  | ((int)(unsigned char)m_head[13] << 16)
-                  | ((int)(unsigned char)m_head[14] << 8)
-                  | ((int)(unsigned char)m_head[15] << 0);
-
-            auto obj = DubboHead::make();
-            pjs::set<DubboHead>(obj, DubboHead::Field::id, std::to_string(R));
-            pjs::set<DubboHead>(obj, DubboHead::Field::status, int(S));
-            pjs::set<DubboHead>(obj, DubboHead::Field::isRequest, bool(F & 0x80));
-            pjs::set<DubboHead>(obj, DubboHead::Field::isTwoWay, bool(F & 0x40));
-            pjs::set<DubboHead>(obj, DubboHead::Field::isEvent, bool(F & 0x20));
-
-            m_size = L;
-            m_head_object = obj;
-            m_state = FRAME_DATA;
-          }
-          break;
-
-        // Read data.
-        case FRAME_DATA:
-          if (!--m_size) {
-            m_state = FRAME_HEAD;
-            m_head_size = 0;
-          }
-          break;
-        }
-        return true;
-
-      }, *read);
-
-      // Pass the body data.
-      if (old_state == FRAME_DATA) {
-        if (!read->empty()) output(read);
-        if (m_state != FRAME_DATA) output(MessageEnd::make());
-
-      // Start of the body.
-      } else if (m_state == FRAME_DATA) {
-        output(MessageStart::make(m_head_object));
-        if (m_size == 0) {
-          output(MessageEnd::make());
-          m_state = FRAME_HEAD;
-          m_head_size = 0;
-        }
-      }
-    }
-
-  // End of stream
+  if (auto *data = evt->as<Data>()) {
+    Deframer::deframe(*data);
   } else if (evt->is<StreamEnd>()) {
-    output(evt);
+    Filter::output(evt);
   }
+}
+
+auto Decoder::on_state(int state, int c) -> int {
+  switch (state) {
+    case START: {
+      m_head[0] = c;
+      Deframer::read(sizeof(m_head) - 1, m_head + 1);
+      return HEAD;
+    }
+    case HEAD: {
+      const auto &head = m_head;
+      if (head[0] != 0xda ||
+          head[1] != 0xbb
+      ) {
+        Filter::error(StreamEnd::PROTOCOL_ERROR);
+        return -1;
+      }
+      auto flags = head[2];
+      auto *mh = MessageHead::make();
+      mh->isRequest = (flags & 0x80);
+      mh->isTwoWay = (flags & 0x40);
+      mh->isEvent = (flags & 0x20);
+      mh->serializationType = (flags & 0x1f);
+      mh->status = head[3];
+      mh->requestID = (
+        ((uint64_t)m_head[4] << 56)|
+        ((uint64_t)m_head[5] << 48)|
+        ((uint64_t)m_head[6] << 40)|
+        ((uint64_t)m_head[7] << 32)|
+        ((uint64_t)m_head[8] << 24)|
+        ((uint64_t)m_head[9] << 16)|
+        ((uint64_t)m_head[10] << 8)|
+        ((uint64_t)m_head[11] << 0)
+      );
+      Filter::output(MessageStart::make(mh));
+      Deframer::pass(
+        ((uint32_t)m_head[12] << 24)|
+        ((uint32_t)m_head[13] << 16)|
+        ((uint32_t)m_head[14] <<  8)|
+        ((uint32_t)m_head[15] <<  0)
+      );
+      return BODY;
+    }
+    case BODY: {
+      Filter::output(MessageEnd::make());
+      return START;
+    }
+    default: return -1;
+  }
+}
+
+void Decoder::on_pass(Data &data) {
+  Filter::output(Data::make(std::move(data)));
 }
 
 //
@@ -171,18 +130,7 @@ Encoder::Encoder()
 {
 }
 
-Encoder::Encoder(pjs::Object *head)
-  : m_head(head)
-  , m_prop_id("id")
-  , m_prop_status("status")
-  , m_prop_is_request("isRequest")
-  , m_prop_is_two_way("isTwoWay")
-  , m_prop_is_event("isEvent")
-{
-}
-
 Encoder::Encoder(const Encoder &r)
-  : Encoder(r.m_head)
 {
 }
 
@@ -201,79 +149,71 @@ auto Encoder::clone() -> Filter* {
 
 void Encoder::reset() {
   Filter::reset();
-  m_buffer = nullptr;
-  m_auto_id = 0;
+  m_head = nullptr;
+  m_buffer.clear();
 }
 
 void Encoder::process(Event *evt) {
   if (auto start = evt->as<MessageStart>()) {
-    m_message_start = start;
-    m_buffer = Data::make();
-
-  } else if (evt->is<MessageEnd>()) {
-    if (!m_message_start) return;
-
-    pjs::Value head_obj(m_head), head;
-    if (!eval(head_obj, head)) return;
-    if (!head.is_object() || head.is_null()) head.set(m_message_start->head());
-
-    pjs::Object *obj = head.is_object() ? head.o() : nullptr;
-    auto ctx = context();
-    auto R = get_header(*ctx, obj, m_prop_id, m_auto_id++);
-    auto S = get_header(*ctx, obj, m_prop_status, 0);
-    char F = get_header(*ctx, obj, m_prop_is_request, 1) ? 0x82 : 0x02;
-    auto D = get_header(*ctx, obj, m_prop_is_two_way, 1);
-    auto E = get_header(*ctx, obj, m_prop_is_event, 0);
-    auto L = m_buffer->size();
-
-    if (D) F |= 0x40;
-    if (E) F |= 0x20;
-
-    char header[16];
-    header[0] = 0xda;
-    header[1] = 0xbb;
-    header[2] = F;
-    header[3] = S;
-    header[4] = R >> 56;
-    header[5] = R >> 48;
-    header[6] = R >> 40;
-    header[7] = R >> 32;
-    header[8] = R >> 24;
-    header[9] = R >> 16;
-    header[10] = R >> 8;
-    header[11] = R >> 0;
-    header[12] = L >> 24;
-    header[13] = L >> 16;
-    header[14] = L >> 8;
-    header[15] = L >> 0;
-
-    output(m_message_start);
-    output(s_dp.make(header, sizeof(header)));
-    output(m_buffer);
-    output(evt);
-
-    m_buffer = nullptr;
+    if (!m_head) {
+      m_head = start->head();
+      m_buffer.clear();
+    }
 
   } else if (auto data = evt->as<Data>()) {
-    if (m_buffer) m_buffer->push(*data);
+    if (m_head) {
+      m_buffer.push(*data);
+    }
 
-  } else if (evt->is<StreamEnd>()) {
-    output(evt);
+  } else if (evt->is<MessageEnd>() || evt->is<StreamEnd>()) {
+    if (m_head) {
+      MessageHead *mh;
+      if (m_head->is<MessageHead>()) {
+        mh = m_head->as<MessageHead>();
+      } else {
+        mh = MessageHead::make();
+        if (m_head) pjs::class_of<MessageHead>()->assign(mh, m_head);
+      }
+
+      uint8_t flags = mh->serializationType & 0x1f;
+      if (mh->isRequest) flags |= 0x80;
+      if (mh->isTwoWay) flags |= 0x40;
+      if (mh->isEvent) flags |= 0x20;
+
+      auto rid = mh->requestID;
+      auto len = m_buffer.size();
+
+      uint8_t hdr[16];
+      hdr[0] = 0xda;
+      hdr[1] = 0xbb;
+      hdr[2] = flags;
+      hdr[3] = mh->status;
+      hdr[4] = rid >> 56;
+      hdr[5] = rid >> 48;
+      hdr[6] = rid >> 40;
+      hdr[7] = rid >> 32;
+      hdr[8] = rid >> 24;
+      hdr[9] = rid >> 16;
+      hdr[10] = rid >> 8;
+      hdr[11] = rid >> 0;
+      hdr[12] = len >> 24;
+      hdr[13] = len >> 16;
+      hdr[14] = len >> 8;
+      hdr[15] = len >> 0;
+
+      auto *body = Data::make(hdr, sizeof(hdr), &s_dp);
+      body->push(std::move(m_buffer));
+
+      Filter::output(MessageStart::make(mh));
+      Filter::output(body);
+      Filter::output(evt);
+
+      m_head = nullptr;
+
+    } else if (evt->is<StreamEnd>()) {
+      Filter::output(evt);
+    }
   }
-}
-
-long long Encoder::get_header(
-  const Context &ctx,
-  pjs::Object *obj,
-  pjs::PropertyCache &prop,
-  long long value
-) {
-  if (!obj) return value;
-  pjs::Value v;
-  prop.get(obj, v);
-  if (v.is_undefined()) return value;
-  if (v.is_string()) return std::atoll(v.s()->c_str());
-  return (long long)v.to_number();
 }
 
 } // namespace dubbo
@@ -283,13 +223,65 @@ namespace pjs {
 
 using namespace pipy::dubbo;
 
-template<> void ClassDef<DubboHead>::init() {
-  ctor();
-  variable("id", DubboHead::Field::id);
-  variable("status", DubboHead::Field::status);
-  variable("isRequest", DubboHead::Field::isRequest);
-  variable("isTwoWay", DubboHead::Field::isTwoWay);
-  variable("isEvent", DubboHead::Field::isEvent);
+//
+// MessageHead
+//
+
+template<> void ClassDef<MessageHead>::init() {
+  accessor(
+    "requestID",
+    [](Object *obj, Value &val) {
+      auto rid = obj->as<MessageHead>()->requestID;
+      if (rid >> 32) {
+        val.set(pjs::Str::make(rid));
+      } else {
+        val.set(uint32_t(rid));
+      }
+    },
+    [](Object *obj, const Value &val) {
+      auto *mh = obj->as<MessageHead>();
+      if (val.is_string()) {
+        int64_t i;
+        if (val.s()->parse_int64(i)) {
+          mh->requestID = i;
+        } else {
+          mh->requestID = 0;
+        }
+      } else {
+        mh->requestID = uint64_t(val.to_number());
+      }
+    }
+  );
+
+  accessor(
+    "isRequest",
+    [](Object *obj, Value &val) { val.set(obj->as<MessageHead>()->isRequest); },
+    [](Object *obj, const Value &val) { obj->as<MessageHead>()->isRequest = val.to_boolean(); }
+  );
+
+  accessor(
+    "isTwoWay",
+    [](Object *obj, Value &val) { val.set(obj->as<MessageHead>()->isTwoWay); },
+    [](Object *obj, const Value &val) { obj->as<MessageHead>()->isTwoWay = val.to_boolean(); }
+  );
+
+  accessor(
+    "isEvent",
+    [](Object *obj, Value &val) { val.set(obj->as<MessageHead>()->isEvent); },
+    [](Object *obj, const Value &val) { obj->as<MessageHead>()->isEvent = val.to_boolean(); }
+  );
+
+  accessor(
+    "serializationType",
+    [](Object *obj, Value &val) { val.set(obj->as<MessageHead>()->serializationType); },
+    [](Object *obj, const Value &val) { obj->as<MessageHead>()->serializationType = val.to_number(); }
+  );
+
+  accessor(
+    "status",
+    [](Object *obj, Value &val) { val.set(obj->as<MessageHead>()->status); },
+    [](Object *obj, const Value &val) { obj->as<MessageHead>()->status = val.to_number(); }
+  );
 }
 
 } // namespace pjs

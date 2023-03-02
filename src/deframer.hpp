@@ -48,7 +48,7 @@ public:
 
 protected:
   virtual auto on_state(int state, int c) -> int = 0;
-  virtual void on_pass(const Data &data) {}
+  virtual void on_pass(Data &data) {}
 
 private:
   int m_state = 0;
