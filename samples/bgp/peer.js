@@ -152,9 +152,22 @@
                     value: new Data([0, 1, 0, 1]),
                   },
                   {
-                    // Multiprotocol Extensions: Ipv6 unicast
+                    // Multiprotocol Extensions: IPv6 unicast
                     code: 1,
                     value: new Data([0, 2, 0, 1]),
+                  },
+                  {
+                    // Graceful Restart Capability
+                    code: 64,
+                    value: new Data([
+                      // Restart State + Restart Time
+                      0x80 | (0x0f & (HOLD_TIME>>8)),
+                      0x00 | (0xff & (HOLD_TIME>>0)),
+                      // IPv4 unicast + Forwarding State
+                      0, 1, 1, 0x80,
+                      // IPv6 unicast + Forwarding State
+                      0, 2, 1, 0x80,
+                    ]),
                   },
                   {
                     // Support for 4-octet AS number
@@ -174,7 +187,7 @@
       )
     ),
 
-    composeUpdate = () => (
+    composeUpdate = () => [
       new Message(
         null, {
           type: 'UPDATE',
@@ -242,8 +255,36 @@
             destinations: config.isIPv6 ? [] : config.reachable,
           }
         }
-      )
-    ),
+      ),
+
+      // End-of-RIB for IPv4 unicast
+      new Message(
+        null, {
+          type: 'UPDATE',
+          body: {},
+        }
+      ),
+
+      // End-of-RIB for IPv6 unicast
+      new Message(
+        null, {
+          type: 'UPDATE',
+          body: {
+            pathAttributes: [
+              {
+                // MP_UNREACH_NLRI
+                code: 15,
+                value: new Data([
+                  // IPv6 unicast
+                  0, 2, 1,
+                ]),
+                optional: true,
+              },
+            ],
+          }
+        }
+      ),
+    ],
 
     holdTimerExpired = () => (
       resetStateMachine(),

@@ -1,7 +1,7 @@
 {
   "as": 0,
   "id": "0.0.0.0",
-  "isIPv6": true,
+  "isIPv6": false,
   "peers": [],
   "nextHop": "0.0.0.0",
   "reachable": [],

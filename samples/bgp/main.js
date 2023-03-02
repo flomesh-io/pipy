@@ -14,16 +14,17 @@
   .onStart(peer => void (_peer = peer))
   .replaceMessage(() => _peer.tick())
   .replaceStreamEnd()
-  .mux(() => _peer).to(
-    $=>$
-    .encodeBGP({ enableAS4: () => _peer.isAS4() })
-    .handleMessage(msg => console.debug('>>>', _peer.state(), msg.payload))
-    .dump()
-    .connect(() => _peer.destination, { idleTimeout: 0 })
-    .decodeBGP({ enableAS4: () => _peer.isAS4() })
-    .handleMessage(msg => console.debug('<<<', _peer.state(), msg.payload))
-    .handleMessage(msg => _peer.receive(msg))
-    .handleStreamEnd(() => _peer.end())
+  .demux().to(
+    $=>$.mux(() => _peer).to(
+      $=>$
+      .encodeBGP({ enableAS4: () => _peer.isAS4() })
+      .handleMessage(msg => console.debug('>>>', _peer.state(), msg.payload))
+      .connect(() => _peer.destination, { idleTimeout: 0 })
+      .decodeBGP({ enableAS4: () => _peer.isAS4() })
+      .handleMessage(msg => console.debug('<<<', _peer.state(), msg.payload))
+      .handleMessage(msg => _peer.receive(msg))
+      .handleStreamEnd(() => _peer.end())
+    )
   )
 )
 
