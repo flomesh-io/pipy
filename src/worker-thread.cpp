@@ -62,7 +62,7 @@ bool WorkerThread::start() {
     [this]() {
       s_current = this;
       main();
-      m_ended.store(true, std::memory_order_relaxed);
+      m_ended.store(true);
     }
   );
 
@@ -201,7 +201,7 @@ bool WorkerThread::stop(bool force) {
         }
       );
     }
-    return m_ended.load(std::memory_order_relaxed);
+    return m_ended.load();
   }
 }
 
@@ -365,9 +365,8 @@ void WorkerThread::main() {
     m_started = started;
     m_failed = !started;
     m_net = &Net::current();
+    m_cv.notify_one();
   }
-
-  m_cv.notify_one();
 
   if (started) {
     Log::info("[start] Thread %d started", m_index);
@@ -448,10 +447,8 @@ void WorkerManager::status(Status &status) {
       wt->status(
         statuses[i],
         [&]() {
-          {
-            std::lock_guard<std::mutex> lock(m);
-            n--;
-          }
+          std::lock_guard<std::mutex> lock(m);
+          n--;
           cv.notify_one();
         }
       );
@@ -507,10 +504,8 @@ void WorkerManager::stats(int i, stats::MetricData &stats) {
       wt->stats(
         stats,
         [&]() {
-          {
-            std::lock_guard<std::mutex> lock(m);
-            done = true;
-          }
+          std::lock_guard<std::mutex> lock(m);
+          done = true;
           cv.notify_one();
         }
       );
@@ -532,10 +527,8 @@ void WorkerManager::stats(stats::MetricDataSum &stats) {
       wt->stats(
         metric_data[i],
         [&]() {
-          {
-            std::lock_guard<std::mutex> lock(m);
-            n--;
-          }
+          std::lock_guard<std::mutex> lock(m);
+          n--;
           cv.notify_one();
         }
       );
@@ -589,11 +582,9 @@ void WorkerManager::reload() {
     for (auto *wt : m_worker_threads) {
       wt->reload(
         [&](bool ok) {
-          {
-            std::lock_guard<std::mutex> lock(m);
-            if (!ok) all_ok = false;
-            n--;
-          }
+          std::lock_guard<std::mutex> lock(m);
+          if (!ok) all_ok = false;
+          n--;
           cv.notify_one();
         }
       );

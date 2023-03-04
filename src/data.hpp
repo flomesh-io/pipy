@@ -298,7 +298,7 @@ private:
 
     auto size() const -> int { return sizeof(data); }
     void retain() { retain_count.fetch_add(1, std::memory_order_relaxed); }
-    void release() { if (retain_count.fetch_sub(1, std::memory_order_relaxed) == 1) delete this; }
+    void release() { if (retain_count.fetch_sub(1, std::memory_order_acq_rel) == 1) delete this; }
 
   private:
     Producer* m_producer;
@@ -1050,7 +1050,7 @@ public:
   }
 
   void release() {
-    if (m_retain_count.fetch_sub(1, std::memory_order_relaxed) == 1) {
+    if (m_retain_count.fetch_sub(1, std::memory_order_acq_rel) == 1) {
       delete this;
     }
   }

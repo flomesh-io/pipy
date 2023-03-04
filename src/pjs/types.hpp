@@ -81,7 +81,7 @@ public:
   void clean();
 
   void retain() { m_retain_count.fetch_add(1, std::memory_order_relaxed); }
-  void release() { if (m_retain_count.fetch_sub(1, std::memory_order_relaxed) == 1) delete this; }
+  void release() { if (m_retain_count.fetch_sub(1, std::memory_order_acq_rel) == 1) delete this; }
 
 private:
   enum { CURVE_LENGTH = 3 };
@@ -637,7 +637,7 @@ public:
     auto chr_at(int i) const -> int;
 
     auto retain() -> CharData* { m_refs.fetch_add(1, std::memory_order_relaxed); return this; }
-    void release() { if (m_refs.fetch_sub(1, std::memory_order_relaxed) == 1) delete this; }
+    void release() { if (m_refs.fetch_sub(1, std::memory_order_acq_rel) == 1) delete this; }
 
   private:
     enum { CHUNK_SIZE = 32 };

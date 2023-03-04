@@ -140,7 +140,7 @@ void Pipeline::output(Event *evt) {
 }
 
 void Pipeline::release() {
-  if (m_retain_count.fetch_sub(1, std::memory_order_relaxed) == 1) {
+  if (m_retain_count.fetch_sub(1, std::memory_order_acq_rel) == 1) {
     NativeModule::set_current(module());
     m_layout->m_pipeline_free(m_id, m_user_ptr);
     NativeModule::set_current(nullptr);
