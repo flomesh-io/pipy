@@ -92,7 +92,7 @@ namespace pipy {
 // FilterConfigurator
 //
 
-void FilterConfigurator::on_start(pjs::Function *handler) {
+void FilterConfigurator::on_start(pjs::Object *handler) {
   if (!m_config) throw std::runtime_error("no pipeline found");
   if (m_current_filter) throw std::runtime_error("onStart() is only allowed prior to filters");
   if (m_config->on_start) throw std::runtime_error("duplicated onStart()");
@@ -787,9 +787,18 @@ template<> void ClassDef<FilterConfigurator>::init() {
   // FilterConfigurator.onStart
   method("onStart", [](Context &ctx, Object *thiz, Value &result) {
     try {
-      Function *handler;
-      if (!ctx.arguments(1, &handler)) return;
-      thiz->as<FilterConfigurator>()->on_start(handler);
+      Object *starting_events = nullptr;
+      if (!ctx.arguments(1, &starting_events)) return;
+      if (!starting_events &&
+          !starting_events->is<Event>() &&
+          !starting_events->is<Message>() &&
+          !starting_events->is<Array>() &&
+          !starting_events->is<Function>()
+      ) {
+        ctx.error_argument_type(1, "an Event, a Message, a function or an array");
+        return;
+      }
+      thiz->as<FilterConfigurator>()->on_start(starting_events);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

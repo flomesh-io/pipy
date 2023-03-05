@@ -113,11 +113,23 @@ auto PipelineLayout::alloc(Context *ctx) -> Pipeline* {
 }
 
 void PipelineLayout::start(Pipeline *pipeline, int argc, pjs::Value *argv) {
-  if (m_on_start) {
-    pjs::Value ret;
-    (*m_on_start)(*pipeline->context(), argc, argv, ret);
-    if (!Message::output(ret, pipeline->input())) {
+  pjs::Value starting_events;
+  if (auto *o = m_on_start.get()) {
+    if (o->is<pjs::Function>()) {
+      auto &ctx = *pipeline->context();
+      (*o->as<pjs::Function>())(ctx, argc, argv, starting_events);
+      if (!ctx.ok()) {
+        pipeline->input()->input(StreamEnd::make(StreamEnd::RUNTIME_ERROR));
+        return;
+      }
+    } else {
+      starting_events.set(o);
+    }
+  }
+  if (!starting_events.is_nullish()) {
+    if (!Message::output(starting_events, pipeline->input())) {
       Log::error("[pipeline] starting input is not events or messages");
+      pipeline->input()->input(StreamEnd::make(StreamEnd::RUNTIME_ERROR));
     }
   }
 }

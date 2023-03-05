@@ -50,6 +50,7 @@ class JSModule;
 
 class FilterConfigurator : public pjs::ObjectTemplate<FilterConfigurator> {
 public:
+  void on_start(pjs::Object *starting_events);
   void on_start(pjs::Function *handler);
   void on_end(pjs::Function *handler);
 
@@ -137,7 +138,7 @@ public:
 protected:
   struct PipelineConfig {
     int index;
-    pjs::Ref<pjs::Function> on_start;
+    pjs::Ref<pjs::Object> on_start;
     pjs::Ref<pjs::Function> on_end;
     std::list<std::unique_ptr<Filter>> filters;
   };

@@ -96,7 +96,7 @@ public:
   auto name_or_label() const -> pjs::Str*;
   auto allocated() const -> size_t { return m_allocated; }
   auto active() const -> size_t { return m_pipelines.size(); }
-  void on_start(pjs::Function *f) { m_on_start = f; }
+  void on_start(pjs::Object *e) { m_on_start = e; }
   void on_end(pjs::Function *f) { m_on_end = f; }
   auto append(Filter *filter) -> Filter*;
   void bind();
@@ -117,7 +117,7 @@ private:
   pjs::Ref<pjs::Str> m_name;
   pjs::Ref<pjs::Str> m_label;
   pjs::Ref<ModuleBase> m_module;
-  pjs::Ref<pjs::Function> m_on_start;
+  pjs::Ref<pjs::Object> m_on_start;
   pjs::Ref<pjs::Function> m_on_end;
   std::list<std::unique_ptr<Filter>> m_filters;
   Pipeline* m_pool = nullptr;
