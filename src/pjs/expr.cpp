@@ -1150,8 +1150,8 @@ bool ShiftLeft::eval(Context &ctx, Value &result) {
   Value a, b;
   if (!m_a->eval(ctx, a)) return false;
   if (!m_b->eval(ctx, b)) return false;
-  int32_t na(a.to_number());
-  int32_t nb(b.to_number());
+  int32_t na((int64_t)a.to_number());
+  int32_t nb((int64_t)b.to_number());
   result.set(na << nb);
   return true;
 }
@@ -1175,8 +1175,8 @@ bool ShiftRight::eval(Context &ctx, Value &result) {
   Value a, b;
   if (!m_a->eval(ctx, a)) return false;
   if (!m_b->eval(ctx, b)) return false;
-  int32_t na(a.to_number());
-  int32_t nb(b.to_number());
+  int32_t na((int64_t)a.to_number());
+  int32_t nb((int64_t)b.to_number());
   result.set(na >> nb);
   return true;
 }
@@ -1200,8 +1200,8 @@ bool UnsignedShiftRight::eval(Context &ctx, Value &result) {
   Value a, b;
   if (!m_a->eval(ctx, a)) return false;
   if (!m_b->eval(ctx, b)) return false;
-  int32_t na(a.to_number());
-  int32_t nb(b.to_number());
+  int32_t na((int64_t)a.to_number());
+  int32_t nb((int64_t)b.to_number());
   result.set((uint32_t)na >> nb);
   return true;
 }
@@ -1224,7 +1224,7 @@ void UnsignedShiftRight::dump(std::ostream &out, const std::string &indent) {
 bool BitwiseNot::eval(Context &ctx, Value &result) {
   Value x;
   if (!m_x->eval(ctx, x)) return false;
-  result.set(~int(x.to_number()));
+  result.set(~int32_t((int64_t)x.to_number()));
   return true;
 }
 
@@ -1245,8 +1245,8 @@ bool BitwiseAnd::eval(Context &ctx, Value &result) {
   Value a, b;
   if (!m_a->eval(ctx, a)) return false;
   if (!m_b->eval(ctx, b)) return false;
-  int32_t na(a.to_number());
-  int32_t nb(b.to_number());
+  int32_t na((int64_t)a.to_number());
+  int32_t nb((int64_t)b.to_number());
   result.set(na & nb);
   return true;
 }
@@ -1270,8 +1270,8 @@ bool BitwiseOr::eval(Context &ctx, Value &result) {
   Value a, b;
   if (!m_a->eval(ctx, a)) return false;
   if (!m_b->eval(ctx, b)) return false;
-  int32_t na(a.to_number());
-  int32_t nb(b.to_number());
+  int32_t na((int64_t)a.to_number());
+  int32_t nb((int64_t)b.to_number());
   result.set(na | nb);
   return true;
 }
@@ -1295,8 +1295,8 @@ bool BitwiseXor::eval(Context &ctx, Value &result) {
   Value a, b;
   if (!m_a->eval(ctx, a)) return false;
   if (!m_b->eval(ctx, b)) return false;
-  int32_t na(a.to_number());
-  int32_t nb(b.to_number());
+  int32_t na((int64_t)a.to_number());
+  int32_t nb((int64_t)b.to_number());
   result.set(na ^ nb);
   return true;
 }
