@@ -47,6 +47,9 @@ thread_local static const pjs::ConstStr s_protocol("protocol");
 thread_local static const pjs::ConstStr s_method("method");
 thread_local static const pjs::ConstStr s_GET("GET");
 thread_local static const pjs::ConstStr s_HEAD("HEAD");
+thread_local static const pjs::ConstStr s_POST("POST");
+thread_local static const pjs::ConstStr s_PUT("PUT");
+thread_local static const pjs::ConstStr s_PATCH("PATCH");
 thread_local static const pjs::ConstStr s_CONNECT("CONNECT");
 thread_local static const pjs::ConstStr s_path("path");
 thread_local static const pjs::ConstStr s_status("status");
@@ -767,7 +770,7 @@ void Encoder::on_event(Event *evt) {
 
 void Encoder::output_head() {
   auto buffer = Data::make();
-  bool send_content_length = true;
+  bool no_content_length = false;
 
   Data::Builder db(*buffer, &s_dp);
 
@@ -786,7 +789,7 @@ void Encoder::output_head() {
     }
 
     if (m_status_code < 200 || m_status_code == 204) {
-      send_content_length = false;
+      no_content_length = true;
     }
 
     char status_str[100];
@@ -844,8 +847,6 @@ void Encoder::output_head() {
     m_prop_headers.get(head, headers);
   }
 
-  bool content_length_written = false;
-
   if (headers.is_object()) {
     headers.o()->iterate_all(
       [&](pjs::Str *k, pjs::Value &v) {
@@ -853,7 +854,7 @@ void Encoder::output_head() {
         if (k == s_transfer_encoding) return;
         if (k == s_content_length) {
           if (is_bodiless_response()) {
-            content_length_written = true;
+            no_content_length = true;
           } else {
             return;
           }
@@ -895,15 +896,20 @@ void Encoder::output_head() {
     on_encode_request(m_start->head());
   }
 
-  if (send_content_length) {
+  if (!no_content_length) {
     if (m_chunked) {
       static const std::string str("transfer-encoding: chunked\r\n");
       db.push(str);
-    } else if (!content_length_written) {
+    } else if (
+      m_content_length > 0 ||
+      m_method == s_POST ||
+      m_method == s_PUT ||
+      m_method == s_PATCH
+    ) {
       char str[100];
-      std::sprintf(str, ": %d\r\n", m_content_length);
+      auto len = std::snprintf(str, sizeof(str), ": %d\r\n", m_content_length);
       db.push(s_content_length.get()->str());
-      db.push(str);
+      db.push(str, len);
     }
 
     if (m_is_final) {
