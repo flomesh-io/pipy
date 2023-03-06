@@ -902,6 +902,7 @@ void Encoder::output_head() {
       db.push(str);
     } else if (
       m_content_length > 0 ||
+      m_is_response ||
       m_method == s_POST ||
       m_method == s_PUT ||
       m_method == s_PATCH
