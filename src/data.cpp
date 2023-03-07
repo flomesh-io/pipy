@@ -180,6 +180,20 @@ template<> void ClassDef<pipy::Data>::init() {
     ret.set(out);
   });
 
+  method("toArray", [](Context &ctx, Object *obj, Value &ret) {
+    auto data = obj->as<pipy::Data>();
+    auto a = Array::make(data->size());
+    auto p = 0;
+    data->to_chunks(
+      [&](const uint8_t *ptr, int len) {
+        for (int i = 0; i < len; i++) {
+          a->set(p++, ptr[i]);
+        }
+      }
+    );
+    ret.set(a);
+  });
+
   method("toString", [](Context &ctx, Object *obj, Value &ret) {
     Str *encoding = nullptr;
     if (!ctx.arguments(0, &encoding)) return;
