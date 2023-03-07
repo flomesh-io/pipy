@@ -1373,7 +1373,7 @@ template<class T> bool Value::to(EnumValue<T> &v) const {
 }
 
 template<class T> bool Value::to(Ref<T> &v) const {
-  if (is<T>()) {
+  if (is_instance_of<T>()) {
     v = as<T>();
     return true;
   } else {
