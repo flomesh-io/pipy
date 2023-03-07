@@ -216,7 +216,7 @@ void BGP::encode(pjs::Object *payload, bool enable_as4, Data &data) {
 
   if (auto *body = msg->body.get()) {
     Data::Builder db(payload_buffer, &s_dp);
-    switch (msg->type) {
+    switch (msg->type.get()) {
       case MessageType::OPEN: {
         pjs::Ref<MessageOpen> m;
         if (body->is<MessageOpen>()) {
@@ -423,7 +423,7 @@ auto BGP::Parser::on_state(int state, int c) -> int {
         (uint16_t(m_header[16]) << 8)|
         (uint16_t(m_header[17]) << 0);
       m_message->type = MessageType(m_header[18]);
-      switch (m_message->type) {
+      switch (m_message->type.get()) {
         case MessageType::OPEN:
           m_message->body = MessageOpen::make();
           break;
@@ -451,7 +451,7 @@ auto BGP::Parser::on_state(int state, int c) -> int {
     case BODY: {
       Data::Reader r(*m_body);
       bool parse_ok = false;
-      switch (m_message->type) {
+      switch (m_message->type.get()) {
         case MessageType::OPEN:
           parse_ok = parse_open(r);
           break;
@@ -860,23 +860,9 @@ template<> void EnumDef<BGP::OptionalParameter::TypeCode>::init() {
 //
 
 template<> void ClassDef<BGP::OptionalParameter>::init() {
-  accessor(
-    "name",
-    [](Object *obj, Value &val) { val.set(obj->as<BGP::OptionalParameter>()->name); },
-    [](Object *obj, const Value &val) { (obj->as<BGP::OptionalParameter>()->name = val.to_string())->release(); }
-  );
-
-  accessor(
-    "value",
-    [](Object *obj, Value &val) { val = obj->as<BGP::OptionalParameter>()->value; },
-    [](Object *obj, const Value &val) { obj->as<BGP::OptionalParameter>()->value = val; }
-  );
-
-  accessor(
-    "code",
-    [](Object *obj, Value &val) { val.set(obj->as<BGP::OptionalParameter>()->code); },
-    [](Object *obj, const Value &val) { obj->as<BGP::OptionalParameter>()->code = val.to_number(); }
-  );
+  field<Ref<Str>>("name", [](BGP::OptionalParameter *obj) { return &obj->name; });
+  field<Value>("value", [](BGP::OptionalParameter *obj) { return &obj->value; });
+  field<int>("code", [](BGP::OptionalParameter *obj) { return &obj->code; });
 }
 
 //
@@ -884,17 +870,8 @@ template<> void ClassDef<BGP::OptionalParameter>::init() {
 //
 
 template<> void ClassDef<BGP::OptionalParameter::Capability>::init() {
-  accessor(
-    "code",
-    [](Object *obj, Value &val) { val.set(obj->as<BGP::OptionalParameter::Capability>()->code); },
-    [](Object *obj, const Value &val) { obj->as<BGP::OptionalParameter::Capability>()->code = val.to_number(); }
-  );
-
-  accessor(
-    "value",
-    [](Object *obj, Value &val) { val = obj->as<BGP::OptionalParameter::Capability>()->value; },
-    [](Object *obj, const Value &val) { obj->as<BGP::OptionalParameter::Capability>()->value = val; }
-  );
+  field<int>("code", [](BGP::OptionalParameter::Capability *obj) { return &obj->code; });
+  field<Value>("value", [](BGP::OptionalParameter::Capability *obj) { return &obj->value; });
 }
 
 //
@@ -916,41 +893,12 @@ template<> void EnumDef<BGP::PathAttribute::TypeCode>::init() {
 //
 
 template<> void ClassDef<BGP::PathAttribute>::init() {
-  accessor(
-    "name",
-    [](Object *obj, Value &val) { val.set(obj->as<BGP::PathAttribute>()->name); },
-    [](Object *obj, const Value &val) { (obj->as<BGP::PathAttribute>()->name = val.to_string())->release(); }
-  );
-
-  accessor(
-    "value",
-    [](Object *obj, Value &val) { val = obj->as<BGP::PathAttribute>()->value; },
-    [](Object *obj, const Value &val) { obj->as<BGP::PathAttribute>()->value = val; }
-  );
-
-  accessor(
-    "code",
-    [](Object *obj, Value &val) { val.set(obj->as<BGP::PathAttribute>()->code); },
-    [](Object *obj, const Value &val) { obj->as<BGP::PathAttribute>()->code = val.to_number(); }
-  );
-
-  accessor(
-    "optional",
-    [](Object *obj, Value &val) { val.set(obj->as<BGP::PathAttribute>()->optional); },
-    [](Object *obj, const Value &val) { obj->as<BGP::PathAttribute>()->optional = val.to_boolean(); }
-  );
-
-  accessor(
-    "transitive",
-    [](Object *obj, Value &val) { val.set(obj->as<BGP::PathAttribute>()->transitive); },
-    [](Object *obj, const Value &val) { obj->as<BGP::PathAttribute>()->transitive = val.to_boolean(); }
-  );
-
-  accessor(
-    "partial",
-    [](Object *obj, Value &val) { val.set(obj->as<BGP::PathAttribute>()->partial); },
-    [](Object *obj, const Value &val) { obj->as<BGP::PathAttribute>()->partial = val.to_boolean(); }
-  );
+  field<Ref<Str>>("name", [](BGP::PathAttribute *obj) { return &obj->name; });
+  field<Value>("value", [](BGP::PathAttribute *obj) { return &obj->value; });
+  field<int>("code", [](BGP::PathAttribute *obj) { return &obj->code; });
+  field<bool>("optional", [](BGP::PathAttribute *obj) { return &obj->optional; });
+  field<bool>("transitive", [](BGP::PathAttribute *obj) { return &obj->transitive; });
+  field<bool>("partial", [](BGP::PathAttribute *obj) { return &obj->partial; });
 }
 
 //
@@ -958,22 +906,8 @@ template<> void ClassDef<BGP::PathAttribute>::init() {
 //
 
 template<> void ClassDef<BGP::Message>::init() {
-  accessor(
-    "type",
-    [](Object *obj, Value &val) { val.set(EnumDef<BGP::MessageType>::name(obj->as<BGP::Message>()->type)); },
-    [](Object *obj, const Value &val) {
-      auto s = val.to_string();
-      auto i = EnumDef<BGP::MessageType>::value(s);
-      s->release();
-      obj->as<BGP::Message>()->type = int(i) > 0 ? i : BGP::MessageType::KEEPALIVE;
-    }
-  );
-
-  accessor(
-    "body",
-    [](Object *obj, Value &val) { val.set(obj->as<BGP::Message>()->body.get()); },
-    [](Object *obj, const Value &val) { obj->as<BGP::Message>()->body = val.is_object() ? val.o() : nullptr; }
-  );
+  field<EnumValue<BGP::MessageType>>("type", [](BGP::Message *obj) { return &obj->type; });
+  field<Ref<Object>>("body", [](BGP::Message *obj) { return &obj->body; });
 }
 
 //
@@ -981,35 +915,11 @@ template<> void ClassDef<BGP::Message>::init() {
 //
 
 template<> void ClassDef<BGP::MessageOpen>::init() {
-  accessor(
-    "version",
-    [](Object *obj, Value &val) { val.set(obj->as<BGP::MessageOpen>()->version); },
-    [](Object *obj, const Value &val) { obj->as<BGP::MessageOpen>()->version = val.to_number(); }
-  );
-
-  accessor(
-    "myAS",
-    [](Object *obj, Value &val) { val.set(obj->as<BGP::MessageOpen>()->myAS); },
-    [](Object *obj, const Value &val) { obj->as<BGP::MessageOpen>()->myAS = val.to_number(); }
-  );
-
-  accessor(
-    "holdTime",
-    [](Object *obj, Value &val) { val.set(obj->as<BGP::MessageOpen>()->holdTime); },
-    [](Object *obj, const Value &val) { obj->as<BGP::MessageOpen>()->holdTime = val.to_number(); }
-  );
-
-  accessor(
-    "identifier",
-    [](Object *obj, Value &val) { val.set(obj->as<BGP::MessageOpen>()->identifier); },
-    [](Object *obj, const Value &val) { (obj->as<BGP::MessageOpen>()->identifier = val.to_string())->release(); }
-  );
-
-  accessor(
-    "parameters",
-    [](Object *obj, Value &val) { val.set(obj->as<BGP::MessageOpen>()->parameters); },
-    [](Object *obj, const Value &val) { obj->as<BGP::MessageOpen>()->parameters = val.is_array() ? val.as<Array>() : nullptr; }
-  );
+  field<int>("version", [](BGP::MessageOpen *obj) { return &obj->version; });
+  field<int>("myAS", [](BGP::MessageOpen *obj) { return &obj->myAS; });
+  field<int>("holdTime", [](BGP::MessageOpen *obj) { return &obj->holdTime; });
+  field<Ref<Str>>("identifier", [](BGP::MessageOpen *obj) { return &obj->identifier; });
+  field<Ref<Array>>("parameters", [](BGP::MessageOpen *obj) { return &obj->parameters; });
 }
 
 //
@@ -1017,23 +927,9 @@ template<> void ClassDef<BGP::MessageOpen>::init() {
 //
 
 template<> void ClassDef<BGP::MessageUpdate>::init() {
-  accessor(
-    "withdrawnRoutes",
-    [](Object *obj, Value &val) { val.set(obj->as<BGP::MessageUpdate>()->withdrawnRoutes); },
-    [](Object *obj, const Value &val) { obj->as<BGP::MessageUpdate>()->withdrawnRoutes = val.is_array() ? val.as<Array>() : nullptr; }
-  );
-
-  accessor(
-    "pathAttributes",
-    [](Object *obj, Value &val) { val.set(obj->as<BGP::MessageUpdate>()->pathAttributes); },
-    [](Object *obj, const Value &val) { obj->as<BGP::MessageUpdate>()->pathAttributes = val.is_array() ? val.as<Array>() : nullptr; }
-  );
-
-  accessor(
-    "destinations",
-    [](Object *obj, Value &val) { val.set(obj->as<BGP::MessageUpdate>()->destinations); },
-    [](Object *obj, const Value &val) { obj->as<BGP::MessageUpdate>()->destinations = val.is_array() ? val.as<Array>() : nullptr; }
-  );
+  field<Ref<Array>>("withdrawnRoutes", [](BGP::MessageUpdate *obj) { return &obj->withdrawnRoutes; });
+  field<Ref<Array>>("pathAttributes", [](BGP::MessageUpdate *obj) { return &obj->pathAttributes; });
+  field<Ref<Array>>("destinations", [](BGP::MessageUpdate *obj) { return &obj->destinations; });
 }
 
 //
@@ -1041,23 +937,9 @@ template<> void ClassDef<BGP::MessageUpdate>::init() {
 //
 
 template<> void ClassDef<BGP::MessageNotification>::init() {
-  accessor(
-    "errorCode",
-    [](Object *obj, Value &val) { val.set(obj->as<BGP::MessageNotification>()->errorCode); },
-    [](Object *obj, const Value &val) { obj->as<BGP::MessageNotification>()->errorCode = val.to_number(); }
-  );
-
-  accessor(
-    "errorSubcode",
-    [](Object *obj, Value &val) { val.set(obj->as<BGP::MessageNotification>()->errorSubcode); },
-    [](Object *obj, const Value &val) { obj->as<BGP::MessageNotification>()->errorSubcode = val.to_number(); }
-  );
-
-  accessor(
-    "data",
-    [](Object *obj, Value &val) { val.set(obj->as<BGP::MessageNotification>()->data.get()); },
-    [](Object *obj, const Value &val) { obj->as<BGP::MessageNotification>()->data = val.is<pipy::Data>() ? val.as<pipy::Data>() : nullptr; }
-  );
+  field<int>("errorCode", [](BGP::MessageNotification *obj) { return &obj->errorCode; });
+  field<int>("errorSubcode", [](BGP::MessageNotification *obj) { return &obj->errorSubcode; });
+  field<Ref<pipy::Data>>("data", [](BGP::MessageNotification *obj) { return &obj->data; });
 }
 
 } // namespace pjs

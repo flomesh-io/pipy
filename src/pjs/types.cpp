@@ -439,6 +439,7 @@ bool Value::is_equal(const Value &a, const Value &b) {
       case Value::Type::Number: return a.n() == b.n();
       case Value::Type::String: return a.s() == b.s();
       case Value::Type::Object: return a.o() == b.o();
+      default: return false;
     }
   } else if (a.is_object() && b.is_object()) {
     return a.o() == b.o();
@@ -2297,6 +2298,11 @@ auto RegExp::chars_to_flags(Str *chars, bool &global) -> std::regex::flag_type {
 //
 // Utf8Decoder
 //
+
+void Utf8Decoder::reset() {
+  m_codepoint = 0;
+  m_shift = 0;
+}
 
 bool Utf8Decoder::input(char c) {
   if (!m_shift) {

@@ -329,6 +329,7 @@ template<> void ClassDef<RESP>::init() {
   method("decode", [](Context &ctx, Object *obj, Value &ret) {
     pipy::Data *data;
     if (!ctx.arguments(1, &data)) return;
+    if (!data) { ret = Value::null; return; }
     ret.set(RESP::decode(*data));
   });
 

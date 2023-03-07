@@ -1003,6 +1003,9 @@ private:
     Class *constructor_class = nullptr
   );
 
+  template<class U>
+  static void field(const std::string &name, const std::function<U*(T*)> &locate);
+
   struct InitData {
     Class* super = nullptr;
     std::list<Field*> fields;
@@ -1089,16 +1092,22 @@ template<class T>
 class EnumValue {
 public:
   EnumValue(T v): m_value(v) {}
+
   operator T() const { return m_value; }
+  operator int() const { return int(m_value); }
   auto get() const -> T { return m_value; }
   void set(T value) { m_value = value; }
+
   bool set(Str *name) {
     auto v = EnumDef<T>::value(name);
     if (int(v) < 0) return false;
     m_value = v;
     return true;
   }
-  auto name() const -> Str* { return EnumDef<T>::name(m_value); }
+
+  auto name() const -> Str* {
+    return EnumDef<T>::name(m_value);
+  }
 
 private:
   T m_value;
@@ -1195,6 +1204,12 @@ public:
   template<class T> auto as() const -> T* { return static_cast<T*>(o()); }
   template<class T> bool is() const { return is_class(class_of<T>()); }
   template<class T> bool is_instance_of() const { return is_instance_of(class_of<T>()); }
+  template<class T> bool to(T &v) const;
+  template<class T> bool to(EnumValue<T> &v) const;
+  template<class T> bool to(Ref<T> &v) const;
+  template<class T> void from(const T &v);
+  template<class T> void from(const EnumValue<T> &v);
+  template<class T> void from(const Ref<T> &v);
 
   bool is_empty() const { return m_t == Type::Empty; }
   bool is_undefined() const { return m_t == Type::Undefined; }
@@ -1332,6 +1347,69 @@ private:
   auto box_number() const -> Object*;
   auto box_string() const -> Object*;
 };
+
+template<> inline bool Value::to<Value>(Value &v) const {
+  v = *this;
+  return true;
+}
+
+template<> inline bool Value::to<bool>(bool &v) const {
+  v = to_boolean();
+  return true;
+}
+
+template<> inline bool Value::to<int>(int &v) const {
+  v = int(to_number());
+  return true;
+}
+
+template<> inline bool Value::to<double>(double &v) const {
+  v = to_number();
+  return true;
+}
+
+template<class T> bool Value::to(EnumValue<T> &v) const {
+  return is_string() ? v.set(s()) : false;
+}
+
+template<class T> bool Value::to(Ref<T> &v) const {
+  if (is<T>()) {
+    v = as<T>();
+    return true;
+  } else {
+    v = nullptr;
+    return false;
+  }
+}
+
+template<> inline bool Value::to(Ref<Str> &v) const {
+  (v = to_string())->release();
+  return true;
+}
+
+template<> inline void Value::from<Value>(const Value &v) {
+  *this = v;
+}
+
+template<> inline void Value::from<bool>(const bool &v) {
+  set(v);
+}
+
+template<> inline void Value::from<int>(const int &v) {
+  set(v);
+}
+
+template<> inline void Value::from<double>(const double &v) {
+  set(v);
+}
+
+template<class T> void Value::from(const EnumValue<T> &v) {
+  set(v.name());
+}
+
+template<class T> void Value::from(const Ref<T> &v) {
+  set(v.get());
+}
 
 } // namespace pjs
 
@@ -2195,6 +2273,16 @@ void ClassDef<T>::method(
   m_init_data->fields.push_back(Method::make(name, invoke, constructor_class));
 }
 
+template<class T>
+template<class U>
+void ClassDef<T>::field(const std::string &name, const std::function<U*(T*)> &locate) {
+  accessor(
+    name,
+    [=](Object *obj, Value &ret) { ret.from(*locate(obj->as<T>())); },
+    [=](Object *obj, const Value &ret) { ret.to(*locate(obj->as<T>())); }
+  );
+}
+
 //
 // Function
 //
@@ -2729,6 +2817,7 @@ public:
   Utf8Decoder(const std::function<void(int)> &output)
     : m_output(output) {}
 
+  void reset();
   bool input(char c);
   bool end();
 

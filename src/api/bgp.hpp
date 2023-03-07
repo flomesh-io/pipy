@@ -119,7 +119,7 @@ public:
 
   class Message : public pjs::ObjectTemplate<Message> {
   public:
-    MessageType type = MessageType::KEEPALIVE;
+    pjs::EnumValue<MessageType> type = MessageType::KEEPALIVE;
     pjs::Ref<pjs::Object> body;
   };
 
