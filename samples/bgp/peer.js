@@ -123,16 +123,30 @@
     ),
 
     verifyOpen = (msg) => void (
-      peerAS = msg.body.myAS,
-      isEBGP = peerAS !== MY_AS,
-      isAS4 = msg.body.parameters.some(
-        p => p.name === 'Capabilities' && (
-          p.value.find(
-            cap => cap.code === 65 // Support for 4-octet AS number
+      (
+        as2 = msg.body.myAS,
+        as4 = msg.body.parameters
+                      .filter(p => p.name === 'Capabilities')
+                      .flatMap(p => p.value)
+                      .find(cap => cap.code === 65)?.value?.toArray?.(),
+      ) => (
+        peerAS = as2 !== AS_TRANS ? as2 : (
+          (as4[0] << 24) |
+          (as4[1] << 16) |
+          (as4[2] <<  8) |
+          (as4[3] <<  0)
+        )>>>0,
+        isEBGP = peerAS !== MY_AS,
+        console.debug('Peer AS =', peerAS, isEBGP ? '(eBGP)' : '(iBGP)'),
+        isAS4 = msg.body.parameters.some(
+          p => p.name === 'Capabilities' && (
+            p.value.find(
+              cap => cap.code === 65 // Support for 4-octet AS number
+            )
           )
         )
       )
-    ),
+    )(),
 
     composeOpen = () => (
       new Message(
