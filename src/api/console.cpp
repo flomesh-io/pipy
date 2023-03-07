@@ -65,129 +65,174 @@ void Console::dump(const pjs::Value &value, Data::Builder &db) {
   static const std::string s_true("true");
   static const std::string s_false("false");
   static const std::string s_null("null");
+  static const std::string s_function("Function{ ");
   static const std::string s_data("Data");
+  static const std::string s_omited("{ ... }");
+  static const std::string s_recursive("{ ...recursive }");
   static const std::string s_comma(", ");
   static const std::string s_colon(": ");
   static const std::string s_hex_numbers("0123456789abcdef");
 
-  switch (value.type()) {
-    case pjs::Value::Type::Empty: db.push(s_empty); break;
-    case pjs::Value::Type::Undefined: db.push(s_undefined); break;
-    case pjs::Value::Type::Boolean: db.push(value.b() ? s_true : s_false); break;
-    case pjs::Value::Type::Number: {
-      char str[100];
-      auto len = pjs::Number::to_string(str, sizeof(str), value.n());
-      db.push(str, len);
-      break;
-    }
-    case pjs::Value::Type::String: {
-      db.push('"');
-      utils::escape(value.s()->str(), [&](char c) { db.push(c); });
-      db.push('"');
-      break;
-    }
-    case pjs::Value::Type::Object: {
-      auto obj = value.o();
-      if (!obj) {
-        db.push(s_null);
-      } else if (obj->is<pjs::Array>()) {
-        auto a = obj->as<pjs::Array>();
-        auto p = 0;
-        bool first = true;
-        auto push_empty = [&](int n) {
-          db.push(s_empty);
-          if (n > 1) {
-            char str[100];
-            auto len = std::snprintf(str, sizeof(str), " x %d times", n);
-            db.push(str, len);
-          }
-        };
-        db.push('[');
-        db.push(' ');
-        a->iterate_all(
-          [&](pjs::Value &v, int i) {
-            if (first) first = false; else db.push(s_comma);
-            if (i > p) push_empty(i - p);
-            dump(v, db);
-            p = i + 1;
-          }
-        );
-        int n = a->length() - p;
-        if (n > 0) {
-          if (!first) db.push(s_comma);
-          push_empty(n);
-        }
-        db.push(' ');
-        db.push(']');
-      } else if (obj->is<Data>()) {
-        Data::Reader r(*obj->as<Data>());
-        db.push(s_data);
-        db.push('[');
-        for (int i = 0; i < 10; i++) {
-          int c = r.get();
-          if (c < 0) break;
+  pjs::Object* objs[100];
+  int obj_level = 0;
+
+  std::function<void(const pjs::Value&)> write;
+  write = [&](const pjs::Value &value) {
+    switch (value.type()) {
+      case pjs::Value::Type::Empty: db.push(s_empty); break;
+      case pjs::Value::Type::Undefined: db.push(s_undefined); break;
+      case pjs::Value::Type::Boolean: db.push(value.b() ? s_true : s_false); break;
+      case pjs::Value::Type::Number: {
+        char str[100];
+        auto len = pjs::Number::to_string(str, sizeof(str), value.n());
+        db.push(str, len);
+        break;
+      }
+      case pjs::Value::Type::String: {
+        db.push('"');
+        utils::escape(value.s()->str(), [&](char c) { db.push(c); });
+        db.push('"');
+        break;
+      }
+      case pjs::Value::Type::Object: {
+        auto obj = value.o();
+        if (!obj) {
+          db.push(s_null);
+
+        } else if (obj->is<pjs::Function>()) {
+          auto m = obj->as<pjs::Function>()->method();
+          db.push(s_function);
+          db.push(m->name()->str());
           db.push(' ');
-          db.push(s_hex_numbers[0xf & (c>>4)]);
-          db.push(s_hex_numbers[0xf & (c>>0)]);
-        }
-        if (!r.eof()) {
-          int n = obj->as<Data>()->size() - 10;
-          if (n == 1) {
+          db.push('}');
+
+        } else if (obj->is<Data>()) {
+          Data::Reader r(*obj->as<Data>());
+          db.push(s_data);
+          db.push('[');
+          for (int i = 0; i < 10; i++) {
             int c = r.get();
+            if (c < 0) break;
             db.push(' ');
             db.push(s_hex_numbers[0xf & (c>>4)]);
             db.push(s_hex_numbers[0xf & (c>>0)]);
-          } else {
-            char str[100];
-            auto len = std::snprintf(str, sizeof(str), " ... and %d more bytes", n);
-            db.push(str, len);
           }
-        }
-        db.push(' ');
-        db.push(']');
-
-      } else {
-        auto t = obj->type();
-        if (t != pjs::class_of<pjs::Object>()) {
-          db.push(t->name()->str());
-        }
-        bool first = true;
-        db.push('{');
-        db.push(' ');
-        for (int i = 0, n = t->field_count(); i < n; i++) {
-          auto f = t->field(i);
-          if (f->type() == pjs::Field::Variable ||
-              f->type() == pjs::Field::Accessor
-          ) {
-            if (first) first = false; else db.push(s_comma);
-            db.push(f->name()->str());
-            db.push(s_colon);
-            if (f->type() == pjs::Field::Accessor) {
-              pjs::Value v;
-              static_cast<pjs::Accessor*>(f)->get(obj, v);
-              dump(v, db);
+          if (!r.eof()) {
+            int n = obj->as<Data>()->size() - 10;
+            if (n == 1) {
+              int c = r.get();
+              db.push(' ');
+              db.push(s_hex_numbers[0xf & (c>>4)]);
+              db.push(s_hex_numbers[0xf & (c>>0)]);
             } else {
-              dump(obj->data()->at(i), db);
+              char str[100];
+              auto len = std::snprintf(str, sizeof(str), " ... and %d more bytes", n);
+              db.push(str, len);
             }
           }
-        }
-        obj->iterate_hash(
-          [&](pjs::Str *k, pjs::Value &v) {
-            if (first) first = false; else db.push(s_comma);
-            db.push('"');
-            utils::escape(k->str(), [&](char c) { db.push(c); });
-            db.push('"');
-            db.push(s_colon);
-            dump(v, db);
-            return true;
+          db.push(' ');
+          db.push(']');
+
+        } else if (obj_level == sizeof(objs) / sizeof(objs[0])) {
+          db.push(obj->type()->name()->str());
+          db.push(s_omited);
+
+        } else {
+          bool recursive = false;
+          for (int i = 0; i < obj_level; i++) {
+            if (objs[i] == obj) {
+              recursive = true;
+              break;
+            }
           }
-        );
-        db.push(' ');
-        db.push('}');
+
+          if (recursive) {
+            db.push(obj->type()->name()->str());
+            db.push(s_recursive);
+
+          } else {
+            objs[obj_level++] = obj;
+
+            if (obj->is<pjs::Array>()) {
+              auto a = obj->as<pjs::Array>();
+              auto p = 0;
+              bool first = true;
+              auto push_empty = [&](int n) {
+                db.push(s_empty);
+                if (n > 1) {
+                  char str[100];
+                  auto len = std::snprintf(str, sizeof(str), " x %d times", n);
+                  db.push(str, len);
+                }
+              };
+              db.push('[');
+              db.push(' ');
+              a->iterate_all(
+                [&](pjs::Value &v, int i) {
+                  if (first) first = false; else db.push(s_comma);
+                  if (i > p) push_empty(i - p);
+                  write(v);
+                  p = i + 1;
+                }
+              );
+              int n = a->length() - p;
+              if (n > 0) {
+                if (!first) db.push(s_comma);
+                push_empty(n);
+              }
+              db.push(' ');
+              db.push(']');
+
+            } else {
+              auto t = obj->type();
+              if (t != pjs::class_of<pjs::Object>()) {
+                db.push(t->name()->str());
+              }
+              bool first = true;
+              db.push('{');
+              db.push(' ');
+              for (int i = 0, n = t->field_count(); i < n; i++) {
+                auto f = t->field(i);
+                if (f->type() == pjs::Field::Variable ||
+                    f->type() == pjs::Field::Accessor
+                ) {
+                  if (first) first = false; else db.push(s_comma);
+                  db.push(f->name()->str());
+                  db.push(s_colon);
+                  if (f->type() == pjs::Field::Accessor) {
+                    pjs::Value v;
+                    static_cast<pjs::Accessor*>(f)->get(obj, v);
+                    write(v);
+                  } else {
+                    write(obj->data()->at(i));
+                  }
+                }
+              }
+              obj->iterate_hash(
+                [&](pjs::Str *k, pjs::Value &v) {
+                  if (first) first = false; else db.push(s_comma);
+                  db.push('"');
+                  utils::escape(k->str(), [&](char c) { db.push(c); });
+                  db.push('"');
+                  db.push(s_colon);
+                  write(v);
+                  return true;
+                }
+              );
+              db.push(' ');
+              db.push('}');
+            }
+
+            obj_level--;
+          }
+        }
+
+        break;
       }
-      break;
     }
-  }
+  };
+
+  write(value);
 }
 
 } // namespace pipy
