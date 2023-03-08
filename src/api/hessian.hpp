@@ -27,6 +27,8 @@
 #define HESSIAN_HPP
 
 #include "pjs/pjs.hpp"
+#include "data.hpp"
+#include "deframer.hpp"
 
 namespace pipy {
 
@@ -38,8 +40,155 @@ class Data;
 
 class Hessian : public pjs::ObjectTemplate<Hessian> {
 public:
-  static void decode(const Data &data, pjs::Value &val);
-  static bool encode(const pjs::Value &val, Data &data);
+  static auto decode(const Data &data) -> pjs::Array*;
+  static void encode(const pjs::Value &value, Data &data);
+  static void encode(const pjs::Value &value, Data::Builder &db);
+
+  //
+  // Hessian::Collection
+  //
+
+  class Collection : public pjs::ObjectTemplate<Collection> {
+  public:
+    enum class Kind {
+      list,
+      map,
+      class_def,
+      object,
+    };
+
+    pjs::EnumValue<Kind> kind;
+    pjs::Ref<pjs::Str> type;
+    pjs::Ref<pjs::Object> elements;
+    pjs::Ref<Collection> definition;
+
+  private:
+    Collection(Kind k) : kind(k) {}
+    friend class pjs::ObjectTemplate<Collection>;
+  };
+
+  //
+  // Hessian::Parser
+  //
+
+  class Parser : protected Deframer {
+  public:
+    Parser();
+
+    void reset();
+    void parse(Data &data);
+
+  protected:
+    virtual void on_message_start() {}
+    virtual void on_message_end(const pjs::Value &value) = 0;
+
+  private:
+    enum State {
+      ERROR = -1,
+      START = 0,
+      INT,
+      LONG,
+      DOUBLE,
+      DOUBLE_8,
+      DOUBLE_16,
+      DOUBLE_32,
+      DATE_32,
+      DATE_64,
+      STRING_SIZE,
+      STRING_SIZE_FINAL,
+      STRING_DATA,
+      STRING_DATA_FINAL,
+      BINARY_SIZE,
+      BINARY_SIZE_FINAL,
+      BINARY_DATA,
+      BINARY_DATA_FINAL,
+    };
+
+    enum class CollectionState {
+      VALUE,
+      LENGTH,
+      TYPE,
+      TYPE_LENGTH,
+      CLASS_DEF,
+    };
+
+    struct Level : public pjs::Pooled<Level> {
+      Level *back;
+      pjs::Ref<Collection> collection;
+      CollectionState state;
+      int length;
+      int count = 0;
+    };
+
+    //
+    // Hessian::Parser::ReferenceMap
+    //
+
+    template<class T, int S = 10>
+    class ReferenceMap {
+    public:
+      void add(T *obj) {
+        if (m_size < S) {
+          m_refs[m_size++] = obj;
+        } else {
+          m_excessive.push_back(obj);
+        }
+      }
+
+      auto get(int i) -> T* {
+        if (0 <= i && i < m_size) return m_refs[i].get();
+        if (S <= i && i < S + m_excessive.size()) return m_excessive[i-S].get();
+        return nullptr;
+      }
+
+      void clear() {
+        for (int i = 0; i < S; i++) m_refs[i] = nullptr;
+        m_excessive.clear();
+      }
+
+    private:
+      int m_size = 0;
+      pjs::Ref<T> m_refs[S];
+      std::vector<pjs::Ref<T>> m_excessive;
+    };
+
+    Level* m_stack = nullptr;
+    pjs::Value m_root;
+    pjs::Ref<Data> m_read_data;
+    pjs::Utf8Decoder m_utf8_decoder;
+    int m_utf8_length = 0;
+    uint8_t m_read_number[8];
+    ReferenceMap<Collection> m_obj_refs;
+    ReferenceMap<Collection> m_def_refs;
+    ReferenceMap<pjs::Str> m_type_refs;
+    bool m_is_ref = false;
+
+    virtual auto on_state(int state, int c) -> int override;
+
+    void push_utf8_char(int c);
+    auto push_string() -> State;
+    auto push(const pjs::Value &value, CollectionState state = CollectionState::VALUE, int length = -1) -> State;
+    void pop();
+    void start();
+    void end();
+  };
+
+  //
+  // RESP::StreamParser
+  //
+
+  class StreamParser : public Parser {
+  public:
+    StreamParser(const std::function<void(const pjs::Value &)> &cb)
+      : m_cb(cb) {}
+
+    virtual void on_message_end(const pjs::Value &value) override {
+      m_cb(value);
+    }
+
+  private:
+    std::function<void(const pjs::Value &)> m_cb;
+  };
 };
 
 } // namespace pipy
