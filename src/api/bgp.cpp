@@ -125,7 +125,7 @@ inline static void write_path_attribute_value(
               auto n = std::min((a ? a->length() : 0), 0xff);
               db.push(n);
               for (int i = 0; i < n; i++) {
-                int as = a->elements()->at(i).to_number();
+                uint32_t as = a->elements()->at(i).to_number();
                 if (enable_as4) {
                   db.push(uint8_t(as >> 24));
                   db.push(uint8_t(as >> 16));
@@ -148,7 +148,7 @@ inline static void write_path_attribute_value(
     }
     case BGP::PathAttribute::TypeCode::MULTI_EXIT_DISC:
     case BGP::PathAttribute::TypeCode::LOCAL_PREF: {
-      unsigned int n = value.to_number();
+      uint32_t n = value.to_number();
       db.push(uint8_t(n >> 24));
       db.push(uint8_t(n >> 16));
       db.push(uint8_t(n >>  8));
@@ -160,7 +160,7 @@ inline static void write_path_attribute_value(
       break;
     }
     case BGP::PathAttribute::TypeCode::AGGREGATOR: {
-      uint16_t as = 0;
+      uint32_t as = 0;
       uint8_t ip[4] = { 0 };
       if (value.is_array()) {
         auto *a = value.as<pjs::Array>();
