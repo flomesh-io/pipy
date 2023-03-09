@@ -280,7 +280,7 @@
       ),
 
       // End-of-RIB for IPv6 unicast
-      new Message(
+      config.isIPv6 ? new Message(
         null, {
           type: 'UPDATE',
           body: {
@@ -297,7 +297,7 @@
             ],
           }
         }
-      ),
+      ) : undefined,
     ],
 
     holdTimerExpired = () => (
