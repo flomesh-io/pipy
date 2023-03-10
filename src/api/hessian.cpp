@@ -480,6 +480,7 @@ auto Hessian::Parser::on_state(int state, int c) -> int {
         auto n = d->elements->as<pjs::Array>()->length();
         auto o = Collection::make(Collection::Kind::object);
         o->definition = d;
+        o->type = d->type;
         return push(o, CollectionState::VALUE, n);
 
       } else if (c < 0x78) {
@@ -656,93 +657,96 @@ auto Hessian::Parser::push(const pjs::Value &value, CollectionState state, int l
     v.set(obj);
   }
 
-  if (auto *l = m_stack) {
-    auto &i = l->count;
-    auto *c = l->collection.get();
-    switch (l->state) {
-      case CollectionState::VALUE: {
-        if (!c->elements) {
-          c->elements = (c->kind == Collection::Kind::object
-            ? pjs::Object::make()
-            : pjs::Array::make(std::max(0, l->length))
-          );
+  if (!v.is<Collection>() || v.as<Collection>()->kind != Collection::Kind::class_def) {
+    if (auto *l = m_stack) {
+      auto &i = l->count;
+      auto *c = l->collection.get();
+      switch (l->state) {
+        case CollectionState::VALUE: {
+          if (!c->elements) {
+            c->elements = (c->kind == Collection::Kind::object
+              ? pjs::Object::make()
+              : pjs::Array::make(std::max(0, l->length))
+            );
+          }
+          switch (c->kind.get()) {
+            case Collection::Kind::list:
+              c->elements->as<pjs::Array>()->set(i, v);
+              break;
+            case Collection::Kind::map:
+              if (i & 1) {
+                c->elements->as<pjs::Array>()->elements()->at(i>>1).as<pjs::Array>()->set(1, v);
+              } else {
+                auto *a = pjs::Array::make(2);
+                a->set(0, v);
+                c->elements->as<pjs::Array>()->set(i>>1, a);
+              }
+              break;
+            case Collection::Kind::class_def:
+              if (m_is_ref) return ERROR;
+              if (!v.is_string()) return ERROR;
+              c->elements->as<pjs::Array>()->set(i, v.s());
+              break;
+            case Collection::Kind::object:
+              if (auto *d = c->definition.get()) {
+                pjs::Value k;
+                d->elements->as<pjs::Array>()->get(i, k);
+                if (!k.is_string()) return ERROR;
+                c->elements->set(k.s(), v);
+              } else {
+                return ERROR;
+              }
+              break;
+            default: return ERROR;
+          }
+          i++;
+          break;
         }
-        switch (c->kind.get()) {
-          case Collection::Kind::list:
-            c->elements->as<pjs::Array>()->set(i, v);
-            break;
-          case Collection::Kind::map:
-            if (i & 1) {
-              c->elements->as<pjs::Array>()->elements()->at(i>>1).as<pjs::Array>()->set(1, v);
-            } else {
-              auto *a = pjs::Array::make(2);
-              a->set(0, v);
-              c->elements->as<pjs::Array>()->set(i>>1, a);
-            }
-            break;
-          case Collection::Kind::class_def:
-            if (m_is_ref) return ERROR;
-            if (!v.is_string()) return ERROR;
-            c->elements->as<pjs::Array>()->set(i, v.s());
-            break;
-          case Collection::Kind::object:
-            if (auto *d = c->definition.get()) {
-              pjs::Value k;
-              d->elements->as<pjs::Array>()->get(i, k);
-              if (!k.is_string()) return ERROR;
-              c->elements->set(k.s(), v);
-            } else {
-              return ERROR;
-            }
-            break;
-          default: return ERROR;
-        }
-        i++;
-        break;
-      }
-      case CollectionState::LENGTH:
-        if (m_is_ref) return ERROR;
-        if (v.is_number()) {
-          int n = v.n();
-          if (n < 0) return ERROR;
-          l->length = n;
-          l->state = CollectionState::VALUE;
-          if (!n) pop();
-          return START;
-        }
-        return ERROR;
-      case CollectionState::TYPE:
-      case CollectionState::TYPE_LENGTH:
-        if (m_is_ref) return ERROR;
-        if (v.is_string()) {
-          m_type_refs.add(v.s());
-          c->type = v.s();
-          if (
-            c->kind == Collection::Kind::list ||
-            c->kind == Collection::Kind::map
-          ) m_type_refs.add(v.s());
-        } else if (value.is_number()) {
-          auto s = m_type_refs.get(v.n());
-          if (!s) return ERROR;
-          c->type = s;
-        } else {
-          return ERROR;
-        }
-        l->state = (l->state == CollectionState::TYPE_LENGTH ? CollectionState::LENGTH : CollectionState::VALUE);
-        return START;
-      case CollectionState::CLASS_DEF:
-        if (!m_is_ref && v.is_number()) {
-          if (auto d = m_def_refs.get(v.n())) {
-            c->definition = d;
-            l->state = CollectionState::LENGTH;
+        case CollectionState::LENGTH:
+          if (m_is_ref) return ERROR;
+          if (v.is_number()) {
+            int n = v.n();
+            if (n < 0) return ERROR;
+            l->length = n;
+            l->state = CollectionState::VALUE;
+            if (!n) pop();
             return START;
           }
-        }
-        return ERROR;
-      default: return ERROR;
+          return ERROR;
+        case CollectionState::TYPE:
+        case CollectionState::TYPE_LENGTH:
+          if (m_is_ref) return ERROR;
+          if (v.is_string()) {
+            m_type_refs.add(v.s());
+            c->type = v.s();
+            if (
+              c->kind == Collection::Kind::list ||
+              c->kind == Collection::Kind::map
+            ) m_type_refs.add(v.s());
+          } else if (value.is_number()) {
+            auto s = m_type_refs.get(v.n());
+            if (!s) return ERROR;
+            c->type = s;
+          } else {
+            return ERROR;
+          }
+          l->state = (l->state == CollectionState::TYPE_LENGTH ? CollectionState::LENGTH : CollectionState::VALUE);
+          return START;
+        case CollectionState::CLASS_DEF:
+          if (!m_is_ref && v.is_number()) {
+            if (auto d = m_def_refs.get(v.n())) {
+              c->definition = d;
+              c->type = d->type;
+              l->state = CollectionState::LENGTH;
+              return START;
+            }
+          }
+          return ERROR;
+        default: return ERROR;
+      }
+    } else {
+      m_root = v;
     }
-  } else {
-    m_root = v;
   }
 
   if (m_is_ref) {
