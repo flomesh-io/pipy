@@ -184,13 +184,10 @@ void Console::dump(const pjs::Value &value, Data::Builder &db) {
               db.push(']');
 
             } else {
-              auto t = obj->type();
-              if (t != pjs::class_of<pjs::Object>()) {
-                db.push(t->name()->str());
-              }
-              bool first = true;
               db.push('{');
               db.push(' ');
+              auto t = obj->type();
+              bool first = true;
               for (int i = 0, n = t->field_count(); i < n; i++) {
                 auto f = t->field(i);
                 if (f->type() == pjs::Field::Variable ||
