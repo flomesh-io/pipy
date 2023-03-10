@@ -3,7 +3,6 @@
     AS_TRANS = 23456,
     MY_AS = config.as,
     BGP_IDENTIFIER = config.id,
-    NEXT_HOP = config.nextHop,
     HOLD_TIME = (holdTime in config ? config.holdTime : 90),
 
     state = 'Idle',
@@ -201,36 +200,55 @@
       )
     ),
 
-    composeUpdate = () => [
-      new Message(
-        null, {
-          type: 'UPDATE',
-          body: {
-            pathAttributes: [
-              {
-                name: 'ORIGIN',
-                value: isEBGP ? 1 : 0,
-                transitive: true,
-              },
-              ...(isEBGP ? [
+    composeUpdate = () => (
+      (
+        hasIPv4 = config.ipv4.reachable.length > 0 || config.ipv4.unreachable.length > 0,
+        hasIPv6 = config.ipv6.reachable.length > 0 || config.ipv6.unreachable.length > 0,
+        commonPathAttrs = [
+          {
+            name: 'ORIGIN',
+            value: isEBGP ? 1 : 0,
+            transitive: true,
+          },
+          {
+            name: 'AS_PATH',
+            value: isEBGP ? [[ MY_AS ]] : [],
+            transitive: true,
+          },
+          isEBGP ? {
+            name: 'LOCAL_PREF',
+            value: 0,
+            transitive: true,
+          } : undefined,
+        ],
+      ) => [
+
+        // Routes for IPv4 unicast
+        hasIPv4 ? new Message(
+          null, {
+            type: 'UPDATE',
+            body: {
+              pathAttributes: [
+                ...commonPathAttrs,
                 {
-                  name: 'AS_PATH',
-                  value: [[ MY_AS ]],
+                  name: 'NEXT_HOP',
+                  value: config.ipv4.nextHop,
                   transitive: true,
                 },
-              ] : [
-                {
-                  name: 'AS_PATH',
-                  value: [],
-                  transitive: true,
-                },
-                {
-                  name: 'LOCAL_PREF',
-                  value: 0,
-                  transitive: true,
-                },
-              ]),
-              ...(config.isIPv6 ? [
+              ],
+              withdrawnRoutes: config.ipv4.unreachable,
+              destinations: config.ipv4.reachable,
+            }
+          }
+        ) : undefined,
+
+        // Routes for IPv6 unicast
+        hasIPv6 ? new Message(
+          null, {
+            type: 'UPDATE',
+            body: {
+              pathAttributes: [
+                ...commonPathAttrs,
                 {
                   // MP_REACH_NLRI
                   code: 14,
@@ -238,11 +256,11 @@
                     // IPv6 unicast
                     0, 2, 1,
                     // Next Hop
-                    16, ...ipv6(NEXT_HOP).data,
+                    16, ...ipv6(config.ipv6.nextHop).data,
                     // No SNPAs
                     0,
                     // NLRI
-                    ...config.reachable.flatMap(a => ipv6Prefix(a)),
+                    ...config.ipv6.reachable.flatMap(a => ipv6Prefix(a)),
                   ]),
                   optional: true,
                 },
@@ -253,52 +271,46 @@
                     // IPv6 unicast
                     0, 2, 1,
                     // NLRI
-                    ...config.unreachable.flatMap(a => ipv6Prefix(a)),
+                    ...config.ipv6.unreachable.flatMap(a => ipv6Prefix(a)),
                   ]),
                   optional: true,
                 }
-              ] : [
+              ],
+              withdrawnRoutes: [],
+              destinations: [],
+            }
+          }
+        ) : undefined,
+
+        // End-of-RIB for IPv4 unicast
+        hasIPv4 ? new Message(
+          null, {
+            type: 'UPDATE',
+            body: {},
+          }
+        ) : undefined,
+
+        // End-of-RIB for IPv6 unicast
+        hasIPv6 ? new Message(
+          null, {
+            type: 'UPDATE',
+            body: {
+              pathAttributes: [
                 {
-                  name: 'NEXT_HOP',
-                  value: NEXT_HOP,
-                  transitive: true,
+                  // MP_UNREACH_NLRI
+                  code: 15,
+                  value: new Data([
+                    // IPv6 unicast
+                    0, 2, 1,
+                  ]),
+                  optional: true,
                 },
-              ])
-            ],
-            withdrawnRoutes: config.isIPv6 ? [] : config.unreachable,
-            destinations: config.isIPv6 ? [] : config.reachable,
+              ],
+            }
           }
-        }
-      ),
-
-      // End-of-RIB for IPv4 unicast
-      new Message(
-        null, {
-          type: 'UPDATE',
-          body: {},
-        }
-      ),
-
-      // End-of-RIB for IPv6 unicast
-      config.isIPv6 ? new Message(
-        null, {
-          type: 'UPDATE',
-          body: {
-            pathAttributes: [
-              {
-                // MP_UNREACH_NLRI
-                code: 15,
-                value: new Data([
-                  // IPv6 unicast
-                  0, 2, 1,
-                ]),
-                optional: true,
-              },
-            ],
-          }
-        }
-      ) : undefined,
-    ],
+        ) : undefined,
+      ]
+    )(),
 
     holdTimerExpired = () => (
       resetStateMachine(),

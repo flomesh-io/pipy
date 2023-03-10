@@ -1,9 +1,15 @@
 {
   "as": 0,
   "id": "0.0.0.0",
-  "isIPv6": false,
   "peers": [],
-  "nextHop": "0.0.0.0",
-  "reachable": [],
-  "unreachable": []
+  "ipv4": {
+    "nextHop": "0.0.0.0",
+    "reachable": [],
+    "unreachable": []
+  },
+  "ipv6": {
+    "nextHop": "::",
+    "reachable": [],
+    "unreachable": []
+  }
 }
