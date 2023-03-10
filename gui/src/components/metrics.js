@@ -198,7 +198,8 @@ function Metrics({ root }) {
   const classes = useStyles();
   const instanceContext = React.useContext(InstanceContext);
   const instance = instanceContext.currentInstance;
-  const uuid = instance?.uuid || '';
+  const status = instance?.status;
+  const uuid = status?.uuid || '';
 
   const [currentMetric, setCurrentMetric] = React.useState('');
   const [cursorX, setCursorX] = React.useState(-1);

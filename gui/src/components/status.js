@@ -75,7 +75,7 @@ function Status({ root }) {
     setCurrentPipeline(i);
   }
 
-  const moduleMap = instanceContext.currentInstance?.modules || {};
+  const moduleMap = instanceContext.currentInstance?.status?.modules || {};
   const moduleList = Object.entries(moduleMap);
 
   return (

@@ -70,8 +70,9 @@ function Logs({ root }) {
   }
 
   const instance = instanceContext.currentInstance;
-  const uuid = instance?.id ? instance?.uuid : '';
-  const logList = instance?.logs || [];
+  const status = instance?.status;
+  const uuid = instance?.id ? status?.uuid : '';
+  const logList = status?.logs || [];
 
   return (
     <div className={classes.root}>

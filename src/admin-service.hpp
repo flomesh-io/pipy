@@ -150,6 +150,7 @@ private:
   struct Instance {
     int index;
     double timestamp;
+    std::string ip;
     std::string codebase_name;
     Status status;
     stats::MetricData metric_data;
@@ -198,7 +199,7 @@ private:
 
   Message* repo_HEAD(const std::string &path);
   Message* repo_GET(const std::string &path);
-  Message* repo_POST(const std::string &path, Data *data);
+  Message* repo_POST(Context *ctx, const std::string &path, Data *data);
 
   Message* api_v1_repo_GET(const std::string &path);
   Message* api_v1_repo_POST(const std::string &path, Data *data);

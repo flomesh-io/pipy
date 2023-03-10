@@ -283,7 +283,7 @@ auto AdminService::handle(Context *ctx, Message *req) -> Message* {
           } else if (method == "GET") {
             return repo_GET(path);
           } else if (method == "POST") {
-            return repo_POST(path, body);
+            return repo_POST(ctx, path, body);
           } else {
             return m_response_method_not_allowed;
           }
@@ -587,7 +587,7 @@ Message* AdminService::repo_GET(const std::string &path) {
   );
 }
 
-Message* AdminService::repo_POST(const std::string &path, Data *data) {
+Message* AdminService::repo_POST(Context *ctx, const std::string &path, Data *data) {
   if (path.back() == '/') {
     auto name = path.substr(0, path.length() - 1);
     if (auto codebase = m_store->find_codebase(name)) {
@@ -600,6 +600,7 @@ Message* AdminService::repo_POST(const std::string &path, Data *data) {
       }
       inst->status = std::move(status);
       inst->timestamp = utils::now();
+      inst->ip = ctx->inbound()->remote_address()->str();
       return m_response_created;
     }
   }
@@ -669,7 +670,11 @@ Message* AdminService::api_v1_repo_GET(const std::string &path) {
       if (auto *inst = get_instance(index)) {
         if (first) first = false; else ss << ',';
         ss << '"' << inst->index << "\":";
+        ss << "{\"ip\":\"" << inst->ip << '"';
+        ss << ",\"timestamp\":" << uint64_t(inst->timestamp);
+        ss << ",\"status\":";
         inst->status.to_json(ss);
+        ss << '}';
       }
     }
     ss << "}}";
