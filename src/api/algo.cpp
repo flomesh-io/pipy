@@ -912,6 +912,12 @@ template<> void ClassDef<Cache>::init() {
     obj->as<Cache>()->set(ctx, key, val);
   });
 
+  method("find", [](Context &ctx, Object *obj, Value &ret) {
+    Value key;
+    if (!ctx.arguments(1, &key)) return;
+    if (!obj->as<Cache>()->find(key, ret)) ret = Value::undefined;
+  });
+
   method("remove", [](Context &ctx, Object *obj, Value &ret) {
     Value key;
     if (!ctx.arguments(1, &key)) return;
