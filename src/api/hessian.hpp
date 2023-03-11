@@ -60,7 +60,6 @@ public:
     pjs::EnumValue<Kind> kind;
     pjs::Ref<pjs::Str> type;
     pjs::Ref<pjs::Object> elements;
-    pjs::Ref<Collection> definition;
 
   private:
     Collection(Kind k) : kind(k) {}
@@ -115,6 +114,7 @@ public:
     struct Level : public pjs::Pooled<Level> {
       Level *back;
       pjs::Ref<Collection> collection;
+      pjs::Ref<Collection> class_def;
       CollectionState state;
       int length;
       int count = 0;
@@ -167,7 +167,12 @@ public:
 
     void push_utf8_char(int c);
     auto push_string() -> State;
-    auto push(const pjs::Value &value, CollectionState state = CollectionState::VALUE, int length = -1) -> State;
+    auto push(
+      const pjs::Value &value,
+      CollectionState state = CollectionState::VALUE,
+      int length = -1,
+      Collection *class_def = nullptr
+    ) -> State;
     void pop();
     void start();
     void end();
