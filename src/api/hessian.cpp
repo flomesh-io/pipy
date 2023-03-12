@@ -195,57 +195,75 @@ void Hessian::encode(const pjs::Value &value, Data &data) {
 }
 
 void Hessian::encode(const pjs::Value &value, Data::Builder &db) {
-  int level = 0;
+  ReferenceMap<pjs::Object> map_objs;
+  ReferenceMap<pjs::Str> map_defs;
+  ReferenceMap<pjs::Str> map_types;
 
-  auto write_str = [&](const std::string &str) {
-    size_t n = 0;
-    for (size_t i = 0; i < str.length(); n++) {
-      auto b = str[i];
-      if (b & 0x80) {
-        if ((b & 0xe0) == 0xc0) {
-          i += 2;
-        } else if ((b & 0xf0) == 0xe0) {
-          i += 3;
-        } else if ((b & 0xf8) == 0xf0) {
-          i += 4;
-        } else {
-          i += 1;
-        }
-      } else {
-        i += 1;
-      }
-    }
-
-    if (n < 32) {
-      db.push((char)n);
-      db.push(str.c_str());
-    } else if (n < 1024) {
-      db.push((char)(n >> 8) | 0x30);
-      db.push((char)(n >> 0));
-      db.push(str.c_str());
-    } else if (n < 65536) {
-      db.push('S');
-      db.push((char)(n >> 8));
-      db.push((char)(n >> 0));
-      db.push(str.c_str());
+  auto write_int = [&](int value) {
+    if (-0x10 <= value && value <= 0x3f) {
+      db.push(0x90 + value);
+    } else if (-0x800 <= value && value <= 0x7ff) {
+      auto n = 0xc800 + value;
+      db.push(n >> 8);
+      db.push(n >> 0);
+    } else if (-0x40000 <= value && value <= 0x3ffff) {
+      auto n = 0xd40000 + value;
+      db.push(n >> 16);
+      db.push(n >>  8);
+      db.push(n >>  0);
     } else {
-      db.push('S');
-      db.push(0xff);
-      db.push(0xff);
-      db.push(str.c_str(), 65536);
+      db.push('I');
+      db.push(value >> 24);
+      db.push(value >> 16);
+      db.push(value >>  8);
+      db.push(value >>  0);
     }
   };
 
-  std::function<bool(const pjs::Value&)> write;
-  write = [&](const pjs::Value &v) -> bool {
-    if (v.is_undefined()) {
+  auto write_string = [&](pjs::Str *value) {
+    auto n = value->length();
+    if (n < 32) {
+      db.push(n);
+      db.push(value->str());
+    } else if (n < 1024) {
+      db.push(0x30 + (n >> 8));
+      db.push(n);
+      db.push(value->str());
+    } else {
+      int i = 0;
+      while (i < n) {
+        auto l = std::min(n - i, 0xffff);
+        auto a = value->chr_to_pos(i);
+        auto b = value->chr_to_pos(i + l);
+        if (b == value->size()) db.push('S'); else db.push('R');
+        db.push(l >> 8);
+        db.push(l >> 0);
+        db.push(value->c_str() + a, b - a);
+        i += l;
+      }
+    }
+  };
+
+  auto write_type = [&](pjs::Str *value) {
+    int i = map_types.find(value);
+    if (i >= 0) {
+      write_int(i);
+    } else {
+      write_string(value);
+      map_types.add(value);
+    }
+  };
+
+  std::function<bool(const pjs::Value &)> write_value;
+  write_value = [&](const pjs::Value &value) -> bool {
+    if (value.is_null()) {
       db.push('N');
 
-    } else if (v.is_boolean()) {
-      db.push(v.b() ? 'T' : 'F');
+    } else if (value.is_boolean()) {
+      db.push(value.b() ? 'T' : 'F');
 
-    } else if (v.is_number()) {
-      auto n = v.n();
+    } else if (value.is_number()) {
+      auto n = value.n();
       double i;
       if (std::isnan(n) || std::isinf(n) || std::modf(n, &i)) {
         int64_t tmp; *(double*)&tmp = n;
@@ -256,65 +274,182 @@ void Hessian::encode(const pjs::Value &value, Data::Builder &db) {
         db.push((char)(tmp >> 32));
         db.push((char)(tmp >> 24));
         db.push((char)(tmp >> 16));
-        db.push((char)(tmp >> 8 ));
-        db.push((char)(tmp >> 0 ));
+        db.push((char)(tmp >>  8));
+        db.push((char)(tmp >>  0));
 
       } else {
-        auto n = int64_t(v.n());
-        if (std::numeric_limits<int>::min() <= n && n <= std::numeric_limits<int>::max()) {
-          db.push('I');
-          db.push((char)(n >> 24));
-          db.push((char)(n >> 16));
-          db.push((char)(n >> 8 ));
-          db.push((char)(n >> 0 ));
+        auto i = int64_t(n);
+        if (std::numeric_limits<int>::min() <= i && i <= std::numeric_limits<int>::max()) {
+          write_int(i);
         } else {
           db.push('L');
-          db.push((char)(n >> 56));
-          db.push((char)(n >> 48));
-          db.push((char)(n >> 40));
-          db.push((char)(n >> 32));
-          db.push((char)(n >> 24));
-          db.push((char)(n >> 16));
-          db.push((char)(n >> 8 ));
-          db.push((char)(n >> 0 ));
+          db.push((char)(i >> 56));
+          db.push((char)(i >> 48));
+          db.push((char)(i >> 40));
+          db.push((char)(i >> 32));
+          db.push((char)(i >> 24));
+          db.push((char)(i >> 16));
+          db.push((char)(i >>  8));
+          db.push((char)(i >>  0));
         }
       }
 
-    } else if (v.is_string()) {
-      write_str(v.s()->str());
+    } else if (value.is_string()) {
+      write_string(value.s());
 
-    } else if (v.is_object()) {
+    } else if (value.is<pjs::Date>()) {
+      uint64_t t = value.as<pjs::Date>()->getTime();
+      db.push(0x4a);
+      db.push((char)(t >> 56));
+      db.push((char)(t >> 48));
+      db.push((char)(t >> 40));
+      db.push((char)(t >> 32));
+      db.push((char)(t >> 24));
+      db.push((char)(t >> 16));
+      db.push((char)(t >>  8));
+      db.push((char)(t >>  0));
 
-      if (v.is_array()) {
-        if (level++ > 0) db.push(0x57);
-        auto a = v.as<pjs::Array>();
-        auto n = a->iterate_while([&](pjs::Value &v, int i) -> bool {
-          return write(v);
-        });
-        if (n < a->length()) return false;
-        if (--level > 0) db.push('Z');
+    } else if (value.is<Data>()) {
+      Data &d(*value.as<Data>());
+      if (d.size() < 16) {
+        db.push(0x20 + d.size());
+        db.push(d);
+      } else if (d.size() < 1024) {
+        db.push(0x34 + (d.size() >> 8));
+        db.push(d.size() & 0xff);
+        db.push(d);
+      } else {
+        Data buf(d);
+        do {
+          Data chk;
+          buf.shift(std::min(buf.size(), 0xffff), chk);
+          db.push(buf.empty() ? 'B' : 0x41);
+          db.push(chk.size() >> 8);
+          db.push(chk.size() >> 0);
+          db.push(chk);
+        } while (!buf.empty());
+      }
 
-      } else if (!v.o()) {
-        db.push('N');
+    } else if (value.is_object()) {
+      int i = map_objs.find(value.o());
+      if (i >= 0) {
+        db.push(0x51);
+        write_int(i);
 
       } else {
-        db.push('H');
-        level++;
-        auto done = v.o()->iterate_while([&](pjs::Str *k, pjs::Value &v) -> bool {
-          write_str(k->str());
-          return write(v);
-        });
-        if (!done) return false;
-        db.push('Z');
-        level--;
+        pjs::Ref<Collection> c;
+        if (value.is<Collection>()) {
+          c = value.as<Collection>();
+        } else {
+          c = Collection::make(Collection::Kind::class_def);
+          pjs::class_of<Collection>()->assign(c, value.o());
+        }
+
+        auto *t = c->type.get();
+        auto *e = c->elements.get();
+        auto *a = e && e->is_array() ? e->as<pjs::Array>() : nullptr;
+
+        switch (c->kind.get()) {
+          case Collection::Kind::list: {
+            int n = a ? a->length() : 0;
+            if (t && t != pjs::Str::empty) {
+              if (n < 8) {
+                db.push(0x70 + n);
+                write_type(t);
+              } else {
+                db.push('V');
+                write_type(t);
+                write_int(n);
+              }
+            } else {
+              if (n < 8) {
+                db.push(0x78 + n);
+              } else {
+                db.push(0x58);
+                write_int(n);
+              }
+            }
+            for (int i = 0; i < n; i++) {
+              pjs::Value v;
+              a->get(i, v);
+              if (!write_value(v)) return false;
+            }
+            break;
+          }
+
+          case Collection::Kind::map: {
+            if (t && t != pjs::Str::empty) {
+              db.push('M');
+              write_type(t);
+            } else {
+              db.push('H');
+            }
+            if (a) {
+              for (int i = 0, n = a->length(); i < n; i++) {
+                pjs::Value e, k, v;
+                a->get(i, e); if (!e.is_array()) return false;
+                e.as<pjs::Array>()->get(0, k); if (!write_value(k)) return false;
+                e.as<pjs::Array>()->get(1, v); if (!write_value(v)) return false;
+              }
+            }
+            db.push('Z');
+            break;
+          }
+
+          case Collection::Kind::object: {
+            if (!t || t == pjs::Str::empty) return false;
+            int n = e ? e->ht_size() : 0;
+            int i = map_defs.find(t);
+            if (i < 0) {
+              i = map_defs.add(t);
+              db.push('C');
+              write_string(t);
+              write_int(n);
+              if (e) {
+                e->iterate_hash(
+                  [&](pjs::Str *k, pjs::Value &) {
+                    write_string(k);
+                    return true;
+                  }
+                );
+              }
+            }
+            if (n < 16) {
+              db.push(0x60 + n);
+            } else {
+              db.push('O');
+              write_int(n);
+            }
+            if (e) {
+              auto done = e->iterate_hash(
+                [&](pjs::Str *, pjs::Value &v) {
+                  return write_value(v);
+                }
+              );
+              if (!done) return false;
+            }
+            break;
+          }
+
+          default: return false;
+        }
+
+        map_objs.add(value.o());
       }
     }
 
     return true;
   };
 
-  write(value);
-  db.flush();
+  if (value.is_array()) {
+    value.as<pjs::Array>()->iterate_while(
+      [&](pjs::Value &v, int) {
+        return write_value(v);
+      }
+    );
+  } else {
+    write_value(value);
+  }
 }
 
 //
@@ -716,7 +851,6 @@ auto Hessian::Parser::push(const pjs::Value &value, CollectionState state, int l
         case CollectionState::TYPE_LENGTH:
           if (m_is_ref) return ERROR;
           if (v.is_string()) {
-            m_type_refs.add(v.s());
             c->type = v.s();
             if (
               c->kind == Collection::Kind::list ||

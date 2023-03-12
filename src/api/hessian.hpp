@@ -67,6 +67,48 @@ public:
   };
 
   //
+  // Hessian::ReferenceMap
+  //
+
+  template<class T, int S = 10>
+  class ReferenceMap {
+  public:
+    int add(T *obj) {
+      if (m_size < S) {
+        auto i = m_size;
+        m_refs[m_size++] = obj;
+        return i;
+      } else {
+        auto i = m_excessive.size() + S;
+        m_excessive.push_back(obj);
+        return i;
+      }
+    }
+
+    auto get(int i) -> T* {
+      if (0 <= i && i < m_size) return m_refs[i].get();
+      if (S <= i && i < S + m_excessive.size()) return m_excessive[i-S].get();
+      return nullptr;
+    }
+
+    auto find(T *obj) -> int {
+      for (int i = 0; i < m_size; i++) if (m_refs[i] == obj) return i;
+      for (int i = 0; i < m_excessive.size(); i++) if (m_excessive[i] == obj) return i + S;
+      return -1;
+    }
+
+    void clear() {
+      for (int i = 0; i < S; i++) m_refs[i] = nullptr;
+      m_excessive.clear();
+    }
+
+  private:
+    int m_size = 0;
+    pjs::Ref<T> m_refs[S];
+    std::vector<pjs::Ref<T>> m_excessive;
+  };
+
+  //
   // Hessian::Parser
   //
 
@@ -118,38 +160,6 @@ public:
       CollectionState state;
       int length;
       int count = 0;
-    };
-
-    //
-    // Hessian::Parser::ReferenceMap
-    //
-
-    template<class T, int S = 10>
-    class ReferenceMap {
-    public:
-      void add(T *obj) {
-        if (m_size < S) {
-          m_refs[m_size++] = obj;
-        } else {
-          m_excessive.push_back(obj);
-        }
-      }
-
-      auto get(int i) -> T* {
-        if (0 <= i && i < m_size) return m_refs[i].get();
-        if (S <= i && i < S + m_excessive.size()) return m_excessive[i-S].get();
-        return nullptr;
-      }
-
-      void clear() {
-        for (int i = 0; i < S; i++) m_refs[i] = nullptr;
-        m_excessive.clear();
-      }
-
-    private:
-      int m_size = 0;
-      pjs::Ref<T> m_refs[S];
-      std::vector<pjs::Ref<T>> m_excessive;
     };
 
     Level* m_stack = nullptr;
