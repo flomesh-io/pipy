@@ -414,11 +414,11 @@ void Hessian::encode(const pjs::Value &value, Data::Builder &db) {
                 );
               }
             }
-            if (n < 16) {
-              db.push(0x60 + n);
+            if (i < 16) {
+              db.push(0x60 + i);
             } else {
               db.push('O');
-              write_int(n);
+              write_int(i);
             }
             if (e) {
               auto done = e->iterate_hash(
