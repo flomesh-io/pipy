@@ -78,7 +78,9 @@ File::File(const std::string &path) {
   load(path, [](const std::string &filename) -> Data* {
     auto sd = Codebase::current()->get(filename);
     if (!sd) return nullptr;
-    return Data::make(*sd);
+    auto data = Data::make(*sd);
+    sd->release();
+    return data;
   });
 
   m_path = pjs::Str::make(path);
