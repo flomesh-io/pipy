@@ -4,6 +4,8 @@
     MY_AS = config.as,
     BGP_IDENTIFIER = config.id,
     HOLD_TIME = (holdTime in config ? config.holdTime : 90),
+    IPV4_NEXT_HOP = os.env.BGP_SPEAKER_IPV4_NEXTHOP || config.ipv4.nextHop,
+    IPV6_NEXT_HOP = os.env.BGP_SPEAKER_IPV6_NEXTHOP || config.ipv6.nextHop,
 
     state = 'Idle',
     holdTimer = -1,
@@ -232,7 +234,7 @@
                 ...commonPathAttrs,
                 {
                   name: 'NEXT_HOP',
-                  value: config.ipv4.nextHop,
+                  value: IPV4_NEXT_HOP,
                   transitive: true,
                 },
               ],
@@ -256,7 +258,7 @@
                     // IPv6 unicast
                     0, 2, 1,
                     // Next Hop
-                    16, ...ipv6(config.ipv6.nextHop).data,
+                    16, ...ipv6(IPV6_NEXT_HOP).data,
                     // No SNPAs
                     0,
                     // NLRI
