@@ -217,11 +217,11 @@
             value: isEBGP ? [[ MY_AS ]] : [],
             transitive: true,
           },
-          isEBGP ? {
+          isEBGP ? undefined : {
             name: 'LOCAL_PREF',
             value: 0,
             transitive: true,
-          } : undefined,
+          },
         ],
       ) => [
 
