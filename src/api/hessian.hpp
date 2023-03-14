@@ -189,7 +189,7 @@ public:
   };
 
   //
-  // RESP::StreamParser
+  // Hessian::StreamParser
   //
 
   class StreamParser : public Parser {

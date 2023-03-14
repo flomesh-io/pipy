@@ -190,8 +190,8 @@ void FilterConfigurator::decode_resp() {
   append_filter(new resp::Decoder());
 }
 
-void FilterConfigurator::decode_thrift(pjs::Object *options) {
-  append_filter(new thrift::Decoder(options));
+void FilterConfigurator::decode_thrift() {
+  append_filter(new thrift::Decoder());
 }
 
 void FilterConfigurator::decode_websocket() {
@@ -1220,10 +1220,8 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.decodeThrift
   method("decodeThrift", [](Context &ctx, Object *thiz, Value &result) {
-    Object *options = nullptr;
-    if (!ctx.arguments(0, &options)) return;
     try {
-      thiz->as<FilterConfigurator>()->decode_thrift(options);
+      thiz->as<FilterConfigurator>()->decode_thrift();
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

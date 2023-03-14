@@ -167,6 +167,7 @@ add_executable(pipy
   src/api/protobuf.cpp
   src/api/resp.cpp
   src/api/stats.cpp
+  src/api/thrift.cpp
   src/api/url.cpp
   src/api/xml.cpp
   src/codebase.cpp

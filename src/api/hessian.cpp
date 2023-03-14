@@ -478,6 +478,11 @@ void Hessian::Parser::reset() {
   m_is_ref = false;
 }
 
+void Hessian::Parser::parse(Data &data) {
+  Deframer::deframe(data);
+  if (Deframer::state() == START) end();
+}
+
 auto Hessian::Parser::on_state(int state, int c) -> int {
   switch (state) {
     case START:
@@ -764,11 +769,6 @@ auto Hessian::Parser::on_state(int state, int c) -> int {
     case BINARY_DATA_FINAL: return push(Data::make(std::move(*m_read_data)));
     default: return ERROR;
   }
-}
-
-void Hessian::Parser::parse(Data &data) {
-  Deframer::deframe(data);
-  if (Deframer::state() == START) end();
 }
 
 void Hessian::Parser::push_utf8_char(int c) {

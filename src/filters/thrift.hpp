@@ -27,69 +27,18 @@
 #define THRIFT_HPP
 
 #include "filter.hpp"
-#include "deframer.hpp"
-#include "options.hpp"
+#include "api/thrift.hpp"
 
 namespace pipy {
 namespace thrift {
 
 //
-// MessageHead
-//
-
-class MessageHead : public pjs::ObjectTemplate<MessageHead> {
-public:
-  enum class Field {
-    seqID,
-    type,
-    name,
-    protocol,
-  };
-
-  auto seqID() -> int {
-    pjs::Value ret;
-    pjs::get<MessageHead>(this, MessageHead::Field::name, ret);
-    return ret.is_number() ? ret.n() : 0;
-  }
-
-  auto type() -> pjs::Str* {
-    pjs::Value ret;
-    pjs::get<MessageHead>(this, MessageHead::Field::type, ret);
-    return ret.is_string() ? ret.s() : pjs::Str::empty.get();
-  }
-
-  auto name() -> pjs::Str* {
-    pjs::Value ret;
-    pjs::get<MessageHead>(this, MessageHead::Field::name, ret);
-    return ret.is_string() ? ret.s() : pjs::Str::empty.get();
-  }
-
-  auto protocol() -> pjs::Str* {
-    pjs::Value ret;
-    pjs::get<MessageHead>(this, MessageHead::Field::protocol, ret);
-    return ret.is_string() ? ret.s() : pjs::Str::empty.get();
-  }
-
-  void seqID(int n) { pjs::set<MessageHead>(this, MessageHead::Field::seqID, n); }
-  void type(pjs::Str *s) { pjs::set<MessageHead>(this, MessageHead::Field::type, s); }
-  void name(pjs::Str *s) { pjs::set<MessageHead>(this, MessageHead::Field::name, s); }
-  void protocol(pjs::Str *s) { pjs::set<MessageHead>(this, MessageHead::Field::protocol, s); }
-};
-
-//
 // Decoder
 //
 
-class Decoder : public Filter, public Deframer {
+class Decoder : public Filter, public Thrift::Parser {
 public:
-  struct Options : public pipy::Options {
-    bool payload = false;
-
-    Options() {}
-    Options(pjs::Object *options);
-  };
-
-  Decoder(const Options &options);
+  Decoder();
 
 private:
   Decoder(const Decoder &r);
@@ -100,90 +49,9 @@ private:
   virtual void process(Event *evt) override;
   virtual void dump(Dump &d) override;
 
-private:
-  enum Format {
-    BINARY,
-    BINARY_OLD,
-    COMPACT,
-  };
-
-  enum State {
-    START,
-    MESSAGE_HEAD,
-    MESSAGE_NAME_LEN,
-    MESSAGE_NAME,
-    MESSAGE_TYPE,
-    SEQ_ID,
-    STRUCT_FIELD_TYPE,
-    STRUCT_FIELD_ID,
-    VALUE_BOOL,
-    VALUE_I8,
-    VALUE_I16,
-    VALUE_I32,
-    VALUE_I64,
-    VALUE_DOUBLE,
-    VALUE_UUID,
-    BINARY_SIZE,
-    BINARY_DATA,
-    LIST_HEAD,
-    LIST_SIZE,
-    SET_HEAD,
-    SET_SIZE,
-    MAP_HEAD,
-    MAP_TYPE,
-    ERROR = -1,
-  };
-
-  struct Level : public pjs::Pooled<Level> {
-    enum Kind {
-      STRUCT,
-      LIST,
-      SET,
-      MAP,
-    };
-
-    Level* back;
-    Kind kind;
-    State element_types[2];
-    int element_sizes[2];
-    int size;
-    int index;
-    pjs::Value key;
-    pjs::Ref<pjs::Object> obj;
-  };
-
-  Options m_options;
-  Format m_format;
-  uint8_t m_read_buf[16];
-  pjs::Ref<Data> m_read_data;
-  pjs::Ref<MessageHead> m_head;
-  pjs::Ref<pjs::Object> m_payload;
-  Level* m_stack = nullptr;
-  uint64_t m_var_int = 0;
-  int m_element_type = 0;
-  bool m_bool_field = false;
-  bool m_started = false;
-
-  virtual auto on_state(int state, int c) -> int override;
   virtual void on_pass(Data &data) override;
-
-  bool set_message_type(int type);
-  auto set_field_type(int type) -> State;
-  void set_value_type(int type, State &state, int &read_size);
-  auto set_value_start() -> State;
-  auto set_value_end() -> State;
-  void set_value(const pjs::Value &v);
-  auto push_struct() -> State;
-  auto push_list(int type, int size) -> State;
-  auto push_set(int type, int size) -> State;
-  auto push_map(int key_type, int value_type, int size) -> State;
-  auto pop() -> State;
-  bool var_int(int c);
-  auto message_start() -> State;
-  void message_end();
-
-  static auto zigzag_to_int(uint32_t i) -> int32_t;
-  static auto zigzag_to_int(uint64_t i) -> int64_t;
+  virtual void on_message_start() override;
+  virtual void on_message_end(Thrift::Message *msg) override;
 };
 
 //
