@@ -296,7 +296,51 @@ bool get_seconds(const pjs::Value &val, double &out) {
   return false;
 }
 
-void gen_uuid_v4(std::string &str) {
+bool get_uuid(const std::string &str, uint8_t uuid[]) {
+  static const char *format = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx";
+
+  if (str.length() != 36) return false;
+
+  for (int i = 0, p = 0; i < 36; i++) {
+    auto c = format[i];
+    switch (c) {
+      case 'x': {
+        c = str[i];
+        if ('0' <= c && c <= '9') c = c - '0'; else
+        if ('a' <= c && c <= 'f') c = c - 'a' + 10; else
+        if ('A' <= c && c <= 'F') c = c - 'A' + 10; else return false;
+        if (p & 1) uuid[p>>1] |= c; else uuid[p>>1] = (c << 4);
+        p++;
+        break;
+      }
+      default: {
+        if (str[i] != c) return false;
+        break;
+      }
+    }
+  }
+
+  return true;
+}
+
+auto make_uuid(const uint8_t uuid[]) -> std::string {
+  static const char *format = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx";
+  static const char *hex = "0123456789abcdef";
+
+  std::string str(36, ' ');
+
+  for (int i = 0, p = 0; i < 36; i++) {
+    auto c = format[i];
+    switch (c) {
+      case 'x': str[i] = hex[(uuid[p>>1] >> (p&1?0:4)) & 0xf]; p++; break;
+      default : str[i] = c; break;
+    }
+  }
+
+  return str;
+}
+
+auto make_uuid_v4() -> std::string {
   thread_local static std::random_device rd;
   thread_local static std::mt19937_64 rn1, rn2;
   thread_local static bool is_initialized = false;
@@ -327,7 +371,7 @@ void gen_uuid_v4(std::string &str) {
   static const char *hex_x = "0123456789abcdef";
   static const char *hex_y = hex_x + 8;
 
-  str.resize(36);
+  std::string str(36, ' ');
 
   for (int i = 0, p = 0; i < 36; i++) {
     auto c = format[i];
@@ -338,6 +382,8 @@ void gen_uuid_v4(std::string &str) {
       default : str[i] = c; p++; break;
     }
   }
+
+  return str;
 }
 
 bool starts_with(const std::string &str, const std::string &prefix) {

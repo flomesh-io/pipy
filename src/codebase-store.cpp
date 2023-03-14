@@ -261,9 +261,8 @@ void CodebaseStore::list_codebases(const std::string &prefix, std::set<std::stri
 auto CodebaseStore::make_codebase(const std::string &path, const std::string &version, Codebase* base) -> Codebase* {
   std::map<std::string, std::string> rec;
   std::map<std::string, std::string> files;
-  std::string codebase_id, main_file_path;
-
-  utils::gen_uuid_v4(codebase_id);
+  std::string codebase_id = utils::make_uuid_v4();
+  std::string main_file_path;
 
   Store::Batch *batch = nullptr;
 
@@ -280,8 +279,7 @@ auto CodebaseStore::make_codebase(const std::string &path, const std::string &ve
     );
 
   } else {
-    std::string main_file_id;
-    utils::gen_uuid_v4(main_file_id);
+    std::string main_file_id = utils::make_uuid_v4();
     main_file_path = "/main.js";
     rec["main"] = main_file_path;
     files[main_file_path] = main_file_id;
@@ -422,7 +420,7 @@ void CodebaseStore::generate_files(
   }
 
   if (manifest_id.empty()) {
-    utils::gen_uuid_v4(manifest_id);
+    manifest_id = utils::make_uuid_v4();
   }
 
   batch->set(
@@ -531,8 +529,7 @@ void CodebaseStore::Codebase::set_file(const std::string &path, const Data &data
   auto store = m_code_store->m_store;
   auto batch = store->batch();
   if (!store->get(key, buf)) {
-    std::string file_id;
-    utils::gen_uuid_v4(file_id);
+    std::string file_id = utils::make_uuid_v4();
     batch->set(KEY_file(file_id), data);
     batch->set(key, Data(file_id, &s_dp));
   } else {

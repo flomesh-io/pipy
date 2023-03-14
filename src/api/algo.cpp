@@ -1229,8 +1229,7 @@ template<> void ClassDef<Algo>::init() {
   });
 
   method("uuid", [](Context &ctx, Object *obj, Value &ret) {
-    std::string str;
-    utils::gen_uuid_v4(str);
+    auto str = utils::make_uuid_v4();
     ret.set(Str::make(std::move(str)));
   });
 }

@@ -382,7 +382,7 @@ int main(int argc, char *argv[]) {
     Status::LocalInstance::name = opts.instance_name;
 
     if (opts.instance_uuid.empty()) {
-      utils::gen_uuid_v4(Status::LocalInstance::uuid);
+      Status::LocalInstance::uuid = utils::make_uuid_v4();
     } else {
       Status::LocalInstance::uuid = opts.instance_uuid;
     }

@@ -386,8 +386,7 @@ auto Thrift::Parser::on_state(int state, int c) -> int {
       return set_value_end();
 
     case VALUE_UUID:
-      // TODO
-      set_value(pjs::Value::null);
+      set_value(pjs::Str::make(utils::make_uuid(m_read_buf)));
       return set_value_end();
 
     case BINARY_SIZE:
