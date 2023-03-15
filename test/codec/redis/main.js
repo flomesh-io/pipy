@@ -1,7 +1,7 @@
 pipy()
 
 .task()
-.onStart(() => new Message)
+.onStart(new Message)
 .read('input')
 .decodeRESP()
 .replaceMessage(
