@@ -137,13 +137,107 @@ auto Thrift::decode(const Data &data) -> pjs::Array* {
   return a;
 }
 
-void Thrift::encode(const pjs::Value &value, Data &data) {
+void Thrift::encode(pjs::Object *msg, Data &data) {
   Data::Builder db(data, &s_dp);
-  encode(value, db);
+  encode(msg, db);
   db.flush();
 }
 
-void Thrift::encode(const pjs::Value &value, Data::Builder &db) {
+void Thrift::encode(pjs::Object *msg, Data::Builder &db) {
+  if (!msg) return;
+
+  auto write_varint = [&](uint64_t i) {
+    do {
+      char c = i & 0x7f;
+      i >>= 7;
+      if (!i) db.push(c); else db.push(c | 0x80);
+    } while (i);
+  };
+
+  auto write_struct = [&](Protocol protocol, pjs::Object *obj) {
+    db.push(0);
+  };
+
+  auto write_message = [&](pjs::Object *obj) {
+    pjs::Ref<Message> msg;
+    if (obj->is<Message>()) {
+      msg = obj->as<Message>();
+    } else {
+      msg = Message::make(Protocol::compact);
+      pjs::class_of<Message>()->assign(msg, obj);
+    }
+
+    auto protocol = msg->protocol.get();
+    switch (protocol) {
+      case Protocol::binary:
+        db.push(0x80);
+        db.push(0x01);
+        db.push(0x00);
+        db.push(int(msg->type));
+        if (auto s = msg->name.get()) {
+          int len = s->size();
+          db.push(0xff & (len >> 24));
+          db.push(0xff & (len >> 16));
+          db.push(0xff & (len >>  8));
+          db.push(0xff & (len >>  0));
+          db.push(s->str());
+        } else {
+          db.push(0);
+          db.push(0);
+          db.push(0);
+          db.push(0);
+        }
+        db.push(0xff & (msg->seqID >> 24));
+        db.push(0xff & (msg->seqID >> 16));
+        db.push(0xff & (msg->seqID >>  8));
+        db.push(0xff & (msg->seqID >>  0));
+        write_struct(protocol, msg->data);
+        break;
+
+      case Protocol::compact:
+        db.push(0x82);
+        db.push(0x01 | (int(msg->type) << 5));
+        write_varint(uint32_t(msg->seqID));
+        write_varint(uint32_t(msg->name ? msg->name->size() : 0));
+        if (auto s = msg->name.get()) db.push(s->str());
+        break;
+
+      case Protocol::old:
+        if (auto s = msg->name.get()) {
+          int len = s->size();
+          db.push(0xff & (len >> 24));
+          db.push(0xff & (len >> 16));
+          db.push(0xff & (len >>  8));
+          db.push(0xff & (len >>  0));
+          db.push(s->str());
+        } else {
+          db.push(0);
+          db.push(0);
+          db.push(0);
+          db.push(0);
+        }
+        db.push(int(msg->type));
+        db.push(0xff & (msg->seqID >> 24));
+        db.push(0xff & (msg->seqID >> 16));
+        db.push(0xff & (msg->seqID >>  8));
+        db.push(0xff & (msg->seqID >>  0));
+        write_struct(protocol, msg->data);
+        break;
+      default: break;
+    }
+  };
+
+  if (msg->is_array()) {
+    msg->as<pjs::Array>()->iterate_while(
+      [&](pjs::Value v, int) {
+        if (!v.is_object()) return false;
+        if (!v.is_null()) write_message(v.o());
+        return true;
+      }
+    );
+  } else {
+    write_message(msg);
+  }
 }
 
 //
@@ -273,8 +367,8 @@ auto Thrift::Parser::on_state(int state, int c) -> int {
         if (state == ERROR) return state;
         if (c & 0xf0) {
           m_stack->index += (c >> 4) & 0x0f;
-          if (state == VALUE_BOOL) {
-            set_value(m_bool_field);
+          if (m_field_type == Type::BOOL) {
+            set_value(m_field_bool);
             return set_value_end();
           }
           return set_value_start();
@@ -291,9 +385,8 @@ auto Thrift::Parser::on_state(int state, int c) -> int {
       if (m_protocol == Protocol::compact) {
         if (var_int(c)) return STRUCT_FIELD_ID;
         m_stack->index = zigzag_to_int((uint32_t)m_var_int);
-        auto state = m_stack->element_types[0];
-        if (state == VALUE_BOOL) {
-          set_value(m_bool_field);
+        if (m_field_type == Type::BOOL) {
+          set_value(m_field_bool);
           return set_value_end();
         }
         return set_value_start();
@@ -408,9 +501,9 @@ auto Thrift::Parser::on_state(int state, int c) -> int {
 
     case LIST_HEAD:
       if (m_protocol == Protocol::compact) {
-        m_element_type = c & 0x0f;
+        m_element_type_code = c & 0x0f;
         if ((c & 0xf0) == 0xf0) return LIST_SIZE;
-        return push_list(m_element_type, (c & 0xf0) >> 4);
+        return push_list(m_element_type_code, false, (c & 0xf0) >> 4);
       } else {
         auto n = (
           ((int32_t)m_read_buf[1] << 24) |
@@ -419,18 +512,18 @@ auto Thrift::Parser::on_state(int state, int c) -> int {
           ((int32_t)m_read_buf[4] <<  0)
         );
         if (n < 0) return ERROR;
-        return push_list(m_read_buf[0], n);
+        return push_list(m_read_buf[0], false, n);
       }
 
     case LIST_SIZE: // must be compact protocol
       if (var_int(c)) return LIST_SIZE;
-      return push_list(m_element_type, m_var_int);
+      return push_list(m_element_type_code, false, m_var_int);
 
     case SET_HEAD:
       if (m_protocol == Protocol::compact) {
-        m_element_type = c & 0x0f;
+        m_element_type_code = c & 0x0f;
         if ((c & 0xf0) == 0xf0) return SET_SIZE;
-        return push_set(m_element_type, (c & 0xf0) >> 4);
+        return push_list(m_element_type_code, true, (c & 0xf0) >> 4);
       } else {
         auto n = (
           ((int32_t)m_read_buf[1] << 24) |
@@ -439,12 +532,12 @@ auto Thrift::Parser::on_state(int state, int c) -> int {
           ((int32_t)m_read_buf[4] <<  0)
         );
         if (n < 0) return ERROR;
-        return push_set(m_read_buf[0], n);
+        return push_list(m_read_buf[0], true, n);
       }
 
     case SET_SIZE: // must be compact protocol
       if (var_int(c)) return SET_SIZE;
-      return push_set(m_element_type, m_var_int);
+      return push_list(m_element_type_code, true, m_var_int);
 
     case MAP_HEAD:
       if (m_protocol == Protocol::compact) {
@@ -501,23 +594,25 @@ bool Thrift::Parser::set_message_type(int type) {
   return false;
 }
 
-auto Thrift::Parser::set_field_type(int type) -> State {
+auto Thrift::Parser::set_field_type(int code) -> State {
   State state;
   int read_size;
   if (m_protocol == Protocol::compact) {
-    if (type == 1) {
+    if (code == 1) {
       state = VALUE_BOOL;
       read_size = 0;
-      m_bool_field = true;
-    } else if (type == 2) {
+      m_field_type = Type::BOOL;
+      m_field_bool = true;
+    } else if (code == 2) {
       state = VALUE_BOOL;
       read_size = 0;
-      m_bool_field = false;
+      m_field_type = Type::BOOL;
+      m_field_bool = false;
     } else {
-      set_value_type(type, state, read_size);
+      set_value_type(code, m_field_type, state, read_size);
     }
   } else {
-    set_value_type(type, state, read_size);
+    set_value_type(code, m_field_type, state, read_size);
   }
   if (state == ERROR) return state;
   auto l = m_stack;
@@ -528,40 +623,63 @@ auto Thrift::Parser::set_field_type(int type) -> State {
   return state;
 }
 
-void Thrift::Parser::set_value_type(int type, State &state, int &read_size) {
+void Thrift::Parser::set_value_type(int code, Type &type, State &state, int &read_size) {
+  static const struct { Type t; State s; int w; }
+  s_compact_types[] = {
+    { Type::BOOL, VALUE_BOOL, 1 }, // 2
+    { Type::I8, VALUE_I8, 1 }, // 3
+    { Type::I16, VALUE_I16, 1 }, // 4
+    { Type::I32, VALUE_I32, 1 }, // 5
+    { Type::I64, VALUE_I64, 1 }, // 6
+    { Type::DOUBLE, VALUE_DOUBLE, 8 }, // 7
+    { Type::BINARY, BINARY_SIZE, 1 }, // 8
+    { Type::LIST, LIST_HEAD, 1 }, // 9
+    { Type::SET, SET_HEAD, 1 }, // 10
+    { Type::MAP, MAP_HEAD, 1 }, // 11
+    { Type::STRUCT, STRUCT_FIELD_TYPE, 1 }, // 12
+    { Type::UUID, VALUE_UUID, 16 }, // 13
+  },
+  s_binary_types[] = {
+    { Type::BOOL, VALUE_BOOL, 1 }, // 2
+    { Type::I8, VALUE_I8, 1 }, // 3
+    { Type::DOUBLE, VALUE_DOUBLE, 8 }, // 4
+    { Type::DOUBLE, VALUE_DOUBLE, 0 }, // 5 (invalid)
+    { Type::I16, VALUE_I16, 2 }, // 6
+    { Type::I16, VALUE_I16, 0 }, // 7 (invalid)
+    { Type::I32, VALUE_I32, 4 }, // 8
+    { Type::I32, VALUE_I32, 0 }, // 9 (invalid)
+    { Type::I64, VALUE_I64, 8 }, // 10
+    { Type::BINARY, BINARY_SIZE, 4 }, // 11
+    { Type::STRUCT, STRUCT_FIELD_TYPE, 1 }, // 12
+    { Type::MAP, MAP_HEAD, 6 }, // 13
+    { Type::SET, SET_HEAD, 5 }, // 14
+    { Type::LIST, LIST_HEAD, 5 }, // 15
+    { Type::UUID, VALUE_UUID, 16 }, // 16
+  };
+
   if (m_protocol == Protocol::compact) {
-    switch (type) {
-      case 2: state = VALUE_BOOL; read_size = 1; break;
-      case 3: state = VALUE_I8; read_size = 1; break;
-      case 4: state = VALUE_I16; read_size = 1; m_var_int = 0; break;
-      case 5: state = VALUE_I32; read_size = 1; m_var_int = 0; break;
-      case 6: state = VALUE_I64; read_size = 1; m_var_int = 0; break;
-      case 7: state = VALUE_DOUBLE; read_size = 8; break;
-      case 8: state = BINARY_SIZE; read_size = 1; m_var_int = 0; break;
-      case 9: state = LIST_HEAD; read_size = 1; m_var_int = 0; break;
-      case 10: state = SET_HEAD; read_size = 1; m_var_int = 0; break;
-      case 11: state = MAP_HEAD; read_size = 1; m_var_int = 0; break;
-      case 12: state = STRUCT_FIELD_TYPE; read_size = 1; break;
-      case 13: state = VALUE_UUID; read_size = 16; break;
-      default: state = ERROR; read_size = 0; break;
+    if (2 <= code && code <= 13) {
+      const auto &r = s_compact_types[code - 2];
+      type = r.t;
+      state = r.s;
+      read_size = r.w;
+      m_var_int = 0;
+      return;
     }
   } else {
-    switch (type) {
-      case 2: state = VALUE_BOOL; read_size = 1; break;
-      case 3: state = VALUE_I8; read_size = 1; break;
-      case 4: state = VALUE_DOUBLE; read_size = 8; break;
-      case 6: state = VALUE_I16; read_size = 2; m_var_int = 0; break;
-      case 8: state = VALUE_I32; read_size = 4; m_var_int = 0; break;
-      case 10: state = VALUE_I64; read_size = 8; m_var_int = 0; break;
-      case 11: state = BINARY_SIZE; read_size = 4; m_var_int = 0; break;
-      case 12: state = STRUCT_FIELD_TYPE; read_size = 1; break;
-      case 13: state = MAP_HEAD; read_size = 6; m_var_int = 0; break;
-      case 14: state = SET_HEAD; read_size = 5; m_var_int = 0; break;
-      case 15: state = LIST_HEAD; read_size = 5; m_var_int = 0; break;
-      case 16: state = VALUE_UUID; read_size = 16; break;
-      default: state = ERROR; read_size = 0; break;
+    if (2 <= code && code <= 16) {
+      const auto &r = s_binary_types[code - 2];
+      if (r.w > 0) {
+        type = r.t;
+        state = r.s;
+        read_size = r.w;
+        return;
+      }
     }
   }
+
+  state = ERROR;
+  read_size = 0;
 }
 
 auto Thrift::Parser::set_value_start() -> State {
@@ -594,21 +712,24 @@ void Thrift::Parser::set_value(const pjs::Value &v) {
   if (auto l = m_stack) {
     auto &i = l->index;
     switch (l->kind) {
-      case Level::STRUCT:
-        l->obj->set(pjs::Str::make(i), v);
+      case Level::STRUCT: {
+        auto f = Field::make();
+        f->id = i;
+        f->type = m_field_type;
+        f->value = v;
+        l->obj->as<pjs::Array>()->push(f);
         break;
+      }
       case Level::LIST:
-        l->obj->as<pjs::Array>()->set(i++, v);
-        break;
       case Level::SET:
-        l->obj->as<pjs::Array>()->set(i++, v);
+        l->obj->as<List>()->elements->set(i++, v);
         break;
       case Level::MAP:
         if (i & 1) {
           auto *ent = pjs::Array::make(2);
           ent->set(0, l->key);
           ent->set(1, v);
-          l->obj->as<pjs::Array>()->set(i/2, ent);
+          l->obj->as<Map>()->pairs->set(i>>1, ent);
         } else {
           l->key = v;
         }
@@ -624,7 +745,7 @@ void Thrift::Parser::set_value(const pjs::Value &v) {
 }
 
 auto Thrift::Parser::push_struct() -> State {
-  auto obj = pjs::Object::make();
+  auto obj = pjs::Array::make();
   set_value(obj);
   auto l = new Level;
   l->back = m_stack;
@@ -635,38 +756,20 @@ auto Thrift::Parser::push_struct() -> State {
   return STRUCT_FIELD_TYPE;
 }
 
-auto Thrift::Parser::push_list(int type, int size) -> State {
+auto Thrift::Parser::push_list(int code, bool is_set, int size) -> State {
   if (size <= 0) return set_value_end();
+  Type type;
   State state;
   int read_size;
-  set_value_type(type, state, read_size);
-  auto l = new Level;
-  l->back = m_stack;
-  l->kind = Level::LIST;
-  l->element_types[0] = state;
-  l->element_types[1] = state;
-  l->element_sizes[0] = read_size;
-  l->element_sizes[1] = read_size;
-  l->size = size;
-  l->index = 0;
-  auto *obj = pjs::Array::make();
-  set_value(obj);
-  l->obj = obj;
-  m_stack = l;
-  if (read_size > 1) Deframer::read(read_size, m_read_buf);
-  return state;
-}
-
-auto Thrift::Parser::push_set(int type, int size) -> State {
-  if (size <= 0) return set_value_end();
-  State state;
-  int read_size;
-  set_value_type(type, state, read_size);
-  auto obj = pjs::Array::make();
+  set_value_type(code, type, state, read_size);
+  if (state == ERROR) return state;
+  auto *obj = List::make();
+  obj->elementType = type;
+  obj->elements = pjs::Array::make();
   set_value(obj);
   auto l = new Level;
   l->back = m_stack;
-  l->kind = Level::SET;
+  l->kind = is_set ? Level::SET : Level::LIST;
   l->element_types[0] = state;
   l->element_types[1] = state;
   l->element_sizes[0] = read_size;
@@ -679,13 +782,17 @@ auto Thrift::Parser::push_set(int type, int size) -> State {
   return state;
 }
 
-auto Thrift::Parser::push_map(int type_k, int type_v, int size) -> State {
+auto Thrift::Parser::push_map(int code_k, int code_v, int size) -> State {
   if (size <= 0) return set_value_end();
+  Type type_k, type_v;
   State state_k, state_v;
   int read_size_k, read_size_v;
-  set_value_type(type_k, state_k, read_size_k);
-  set_value_type(type_v, state_v, read_size_v);
-  auto obj = pjs::Array::make();
+  set_value_type(code_k, type_k, state_k, read_size_k);
+  set_value_type(code_v, type_v, state_v, read_size_v);
+  auto obj = Map::make();
+  obj->keyType = type_k;
+  obj->valueType = type_v;
+  obj->pairs = pjs::Array::make();
   set_value(obj);
   auto l = new Level;
   l->back = m_stack;
@@ -747,6 +854,25 @@ template<> void EnumDef<Thrift::Protocol>::init() {
 }
 
 //
+// Thrift::Type
+//
+
+template<> void EnumDef<Thrift::Type>::init() {
+  define(Thrift::Type::BOOL, "BOOL");
+  define(Thrift::Type::I8, "I8");
+  define(Thrift::Type::I16, "I16");
+  define(Thrift::Type::I32, "I32");
+  define(Thrift::Type::I64, "I64");
+  define(Thrift::Type::DOUBLE, "DOUBLE");
+  define(Thrift::Type::BINARY, "BINARY");
+  define(Thrift::Type::STRUCT, "STRUCT");
+  define(Thrift::Type::MAP, "MAP");
+  define(Thrift::Type::SET, "SET");
+  define(Thrift::Type::LIST, "LIST");
+  define(Thrift::Type::UUID, "UUID");
+}
+
+//
 // Thrift::Message::Type
 //
 
@@ -755,6 +881,35 @@ template<> void EnumDef<Thrift::Message::Type>::init() {
   define(Thrift::Message::Type::reply, "reply");
   define(Thrift::Message::Type::exception, "exception");
   define(Thrift::Message::Type::oneway, "oneway");
+}
+
+//
+// Thrift::Field
+//
+
+template<> void ClassDef<Thrift::Field>::init() {
+  field<int>("id", [](Thrift::Field *obj) { return &obj->id; });
+  field<EnumValue<Thrift::Type>>("type", [](Thrift::Field *obj) { return &obj->type; });
+  field<Value>("value", [](Thrift::Field *obj) { return &obj->value; });
+}
+
+//
+// Thrift::List
+//
+
+template<> void ClassDef<Thrift::List>::init() {
+  field<EnumValue<Thrift::Type>>("elementType", [](Thrift::List *obj) { return &obj->elementType; });
+  field<Ref<Array>>("elements", [](Thrift::List *obj) { return &obj->elements; });
+}
+
+//
+// Thrift::Map
+//
+
+template<> void ClassDef<Thrift::Map>::init() {
+  field<EnumValue<Thrift::Type>>("keyType", [](Thrift::Map *obj) { return &obj->keyType; });
+  field<EnumValue<Thrift::Type>>("valueType", [](Thrift::Map *obj) { return &obj->valueType; });
+  field<Ref<Array>>("pairs", [](Thrift::Map *obj) { return &obj->pairs; });
 }
 
 //
@@ -784,10 +939,10 @@ template<> void ClassDef<Thrift>::init() {
   });
 
   method("encode", [](Context &ctx, Object *obj, Value &ret) {
-    Value val;
-    if (!ctx.arguments(1, &val)) return;
+    Object *msg;
+    if (!ctx.arguments(1, &msg)) return;
     auto *data = pipy::Data::make();
-    Thrift::encode(val, *data);
+    Thrift::encode(msg, *data);
     ret.set(data);
   });
 }

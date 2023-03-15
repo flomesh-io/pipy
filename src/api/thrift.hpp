@@ -41,8 +41,8 @@ class Data;
 class Thrift : public pjs::ObjectTemplate<Thrift> {
 public:
   static auto decode(const Data &data) -> pjs::Array*;
-  static void encode(const pjs::Value &value, Data &data);
-  static void encode(const pjs::Value &value, Data::Builder &db);
+  static void encode(pjs::Object *msg, Data &data);
+  static void encode(pjs::Object *mag, Data::Builder &db);
 
   //
   // Thrift::Protocol
@@ -52,6 +52,57 @@ public:
     binary,
     compact,
     old,
+  };
+
+  //
+  // Thrift::Type
+  //
+
+  enum class Type {
+    BOOL,
+    I8,
+    I16,
+    I32,
+    I64,
+    DOUBLE,
+    BINARY,
+    STRUCT,
+    MAP,
+    SET,
+    LIST,
+    UUID,
+  };
+
+  //
+  // Thrift::Field
+  //
+
+  class Field : public pjs::ObjectTemplate<Field> {
+  public:
+    int id = 0;
+    pjs::EnumValue<Type> type = Type::I32;
+    pjs::Value value;
+  };
+
+  //
+  // Thrift::List
+  //
+
+  class List : public pjs::ObjectTemplate<List> {
+  public:
+    pjs::EnumValue<Type> elementType = Type::I32;
+    pjs::Ref<pjs::Array> elements;
+  };
+
+  //
+  // Thrift::Map
+  //
+
+  class Map : public pjs::ObjectTemplate<Map> {
+  public:
+    pjs::EnumValue<Type> keyType = Type::I32;
+    pjs::EnumValue<Type> valueType = Type::I32;
+    pjs::Ref<pjs::Array> pairs;
   };
 
   //
@@ -137,6 +188,7 @@ public:
 
       Level* back;
       Kind kind;
+      Type field_type;
       State element_types[2];
       int element_sizes[2];
       int size;
@@ -151,8 +203,9 @@ public:
     Protocol m_protocol;
     Level* m_stack = nullptr;
     uint64_t m_var_int = 0;
-    int m_element_type = 0;
-    bool m_bool_field = false;
+    int m_element_type_code = 0;
+    Type m_field_type;
+    bool m_field_bool = false;
 
     virtual auto on_state(int state, int c) -> int override;
 
@@ -161,15 +214,14 @@ public:
     auto zigzag_to_int(uint64_t i) -> int64_t;
 
     bool set_message_type(int type);
-    auto set_field_type(int type) -> State;
-    void set_value_type(int type, State &state, int &read_size);
+    auto set_field_type(int code) -> State;
+    void set_value_type(int code, Type &type, State &state, int &read_size);
     auto set_value_start() -> State;
     auto set_value_end() -> State;
     void set_value(const pjs::Value &v);
     auto push_struct() -> State;
-    auto push_list(int type, int size) -> State;
-    auto push_set(int type, int size) -> State;
-    auto push_map(int type_k, int type_v, int size) -> State;
+    auto push_list(int code, bool is_set, int size) -> State;
+    auto push_map(int code_k, int code_v, int size) -> State;
     auto pop() -> State;
 
     void start();
