@@ -84,28 +84,12 @@ void Decoder::on_message_end(Thrift::Message *msg) {
 // Encoder
 //
 
-thread_local static Data::Producer s_dp("Thrift");
-thread_local static pjs::ConstStr s_binary("binary");
-thread_local static pjs::ConstStr s_compact("compact");
-thread_local static pjs::ConstStr s_call("call");
-thread_local static pjs::ConstStr s_reply("reply");
-thread_local static pjs::ConstStr s_exception("exception");
-thread_local static pjs::ConstStr s_oneway("oneway");
-
 Encoder::Encoder()
-  : m_prop_seqID("seqID")
-  , m_prop_type("type")
-  , m_prop_name("name")
-  , m_prop_protocol("protocol")
 {
 }
 
 Encoder::Encoder(const Encoder &r)
   : Filter(r)
-  , m_prop_seqID("seqID")
-  , m_prop_type("type")
-  , m_prop_name("name")
-  , m_prop_protocol("protocol")
 {
 }
 
@@ -124,93 +108,32 @@ auto Encoder::clone() -> Filter* {
 
 void Encoder::reset() {
   Filter::reset();
-  m_started = false;
+  m_message_started = false;
 }
 
 void Encoder::process(Event *evt) {
-  if (auto *start = evt->as<MessageStart>()) {
-    if (!m_started) {
-      int seq_id = 0;
-      pjs::Str *type = nullptr;
-      pjs::Str *name = nullptr;
-      pjs::Str *protocol = nullptr;
-      if (auto *head = start->head()) {
-        m_prop_seqID.get(head, seq_id);
-        m_prop_type.get(head, type);
-        m_prop_name.get(head, name);
-        m_prop_protocol.get(head, protocol);
-      }
-
-      Data data;
-      Data::Builder db(data, &s_dp);
-
-      if (protocol == s_compact) {
-        char t = 1;
-        if (type == s_reply) t = 2;
-        else if (type == s_exception) t = 3;
-        else if (type == s_oneway) t = 4;
-        db.push(0x82);
-        db.push(0x01 | (t << 5));
-        var_int(db, (uint32_t)seq_id);
-        var_int(db, (uint32_t)(name ? name->size() : 0));
-        if (name) db.push(name->c_str(), name->size());
-
-      } else {
-        db.push(0x80);
-        db.push(0x01);
-        db.push('\0');
-        if (type == s_reply) db.push(0x02);
-        else if (type == s_exception) db.push(0x03);
-        else if (type == s_oneway) db.push(0x04);
-        else db.push(0x01);
-        if (name) {
-          int len = name->size();
-          db.push(0xff & (len >> 24));
-          db.push(0xff & (len >> 16));
-          db.push(0xff & (len >>  8));
-          db.push(0xff & (len >>  0));
-          db.push(name->c_str(), len);
-        } else {
-          db.push('\0');
-          db.push('\0');
-          db.push('\0');
-          db.push('\0');
-        }
-        db.push(0xff & (seq_id >> 24));
-        db.push(0xff & (seq_id >> 16));
-        db.push(0xff & (seq_id >>  8));
-        db.push(0xff & (seq_id >>  0));
-      }
-
-      db.flush();
-      Filter::output(evt);
-      Filter::output(Data::make(std::move(data)));
-      m_started = true;
-    }
-
-  } else if (evt->is<Data>()) {
-    if (m_started) {
-      Filter::output(evt);
-    }
-
-  } else if (evt->is<MessageEnd>()) {
-    if (m_started) {
-      m_started = false;
-      Filter::output(evt);
-    }
-
-  } else if (evt->is<StreamEnd>()) {
-    m_started = false;
+  if (evt->is<StreamEnd>()) {
+    m_message_started = false;
     Filter::output(evt);
+  } else if (evt->is<MessageStart>()) {
+    if (!m_message_started) {
+      m_message_started = true;
+      Filter::output(evt);
+    }
+  } else if (evt->is<MessageEnd>()) {
+    if (m_message_started) {
+      m_message_started = false;
+      const auto &payload = evt->as<MessageEnd>()->payload();
+      if (payload.is_object()) {
+        if (auto *obj = payload.o()) {
+          Data buf;
+          Thrift::encode(obj, buf);
+          Filter::output(Data::make(std::move(buf)));
+        }
+      }
+      Filter::output(evt);
+    }
   }
-}
-
-void Encoder::var_int(Data::Builder &db, uint64_t i) {
-  do {
-    char c = i & 0x7f;
-    i >>= 7;
-    if (!i) db.push(c); else db.push(c | 0x80);
-  } while (i);
 }
 
 } // namespace thrift

@@ -71,14 +71,7 @@ private:
   virtual void process(Event *evt) override;
   virtual void dump(Dump &d) override;
 
-private:
-  bool m_started = false;
-  pjs::PropertyCache m_prop_seqID;
-  pjs::PropertyCache m_prop_type;
-  pjs::PropertyCache m_prop_name;
-  pjs::PropertyCache m_prop_protocol;
-
-  static void var_int(Data::Builder &db, uint64_t i);
+  bool m_message_started = false;
 };
 
 } // namespace thrift

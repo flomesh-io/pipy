@@ -127,7 +127,7 @@ public:
     pjs::EnumValue<Type> type = Type::call;
     int seqID = 0;
     pjs::Ref<pjs::Str> name;
-    pjs::Ref<pjs::Object> data;
+    pjs::Ref<pjs::Array> fields;
 
   private:
     Message(Protocol p = Protocol::compact) : protocol(p) {}

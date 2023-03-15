@@ -59,6 +59,7 @@ class String;
 class Value;
 
 template<class T> Class* class_of();
+template<class T> T* coerce(Object *obj);
 
 //
 // Pool
@@ -1610,6 +1611,17 @@ protected:
 
   using Pooled<T, Base>::Pooled;
 };
+
+template<class T>
+T* coerce(Object *obj) {
+  if (obj && obj->is_instance_of<T>()) {
+    return obj->as<T>();
+  } else {
+    auto coerced = T::make();
+    class_of<T>()->assign(coerced, obj);
+    return coerced;
+  }
+}
 
 inline auto Value::retain(Object *obj) -> Object* { obj->retain(); return obj; }
 inline void Value::release(Object *obj) { obj->release(); }

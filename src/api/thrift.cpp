@@ -144,7 +144,43 @@ void Thrift::encode(pjs::Object *msg, Data &data) {
 }
 
 void Thrift::encode(pjs::Object *msg, Data::Builder &db) {
+  static struct { int binary_code, compact_code; }
+  s_type_codes[] = {
+    { 2 , 2  }, // BOOL
+    { 3 , 3  }, // I8
+    { 6 , 4  }, // I16
+    { 8 , 5  }, // I32
+    { 10, 6  }, // I64
+    { 4 , 7  }, // DOUBLE
+    { 11, 8  }, // BINARY
+    { 12, 12 }, // STRUCT
+    { 13, 11 }, // MAP
+    { 14, 10 }, // SET
+    { 15, 9  }, // LIST
+    { 16, 13 }, // UUID
+  };
+
   if (!msg) return;
+
+  auto get_type_code = [](Protocol protocol, Type type) -> int {
+    if (Type::BOOL <= type && type <= Type::UUID) {
+      int i = int(type) - int(Type::BOOL);
+      if (protocol == Protocol::compact) {
+        return s_type_codes[i].compact_code;
+      } else {
+        return s_type_codes[i].binary_code;
+      }
+    }
+    return 0;
+  };
+
+  auto get_zigzag_int32 = [](int32_t i) -> uint32_t {
+    return (i << 1) ^ (i >> 31);
+  };
+
+  auto get_zigzag_int64 = [](int64_t i) -> uint64_t {
+    return (i << 1) ^ (i >> 63);
+  };
 
   auto write_varint = [&](uint64_t i) {
     do {
@@ -154,20 +190,199 @@ void Thrift::encode(pjs::Object *msg, Data::Builder &db) {
     } while (i);
   };
 
-  auto write_struct = [&](Protocol protocol, pjs::Object *obj) {
-    db.push(0);
+  std::function<void(Protocol, Type, const pjs::Value &)> write_value;
+  write_value = [&](Protocol protocol, Type type, const pjs::Value &value) {
+    switch (type) {
+      case Type::BOOL:
+        db.push(value.to_boolean() ? 1 : 0);
+        break;
+      case Type::I8:
+        db.push(int(value.to_number()));
+        break;
+      case Type::I16:
+        if (protocol == Protocol::compact) {
+          write_varint(
+            get_zigzag_int32(
+              int16_t(value.to_number())
+            )
+          );
+        } else {
+          auto i = int16_t(value.to_number());
+          db.push(i >> 8);
+          db.push(i >> 0);
+        }
+        break;
+      case Type::I32:
+        if (protocol == Protocol::compact) {
+          write_varint(
+            get_zigzag_int32(
+              int32_t(value.to_number())
+            )
+          );
+        } else {
+          auto i = int32_t(value.to_number());
+          db.push(i >> 24);
+          db.push(i >> 16);
+          db.push(i >>  8);
+          db.push(i >>  0);
+        }
+        break;
+      case Type::I64:
+        if (protocol == Protocol::compact) {
+          write_varint(
+            get_zigzag_int64(
+              int64_t(value.to_number())
+            )
+          );
+        } else {
+          auto i = int64_t(value.to_number());
+          db.push(char(i >> 56));
+          db.push(char(i >> 48));
+          db.push(char(i >> 40));
+          db.push(char(i >> 32));
+          db.push(char(i >> 24));
+          db.push(char(i >> 16));
+          db.push(char(i >>  8));
+          db.push(char(i >>  0));
+        }
+        break;
+      case Type::DOUBLE: {
+        auto n = value.to_number();
+        auto i = *reinterpret_cast<uint64_t*>(&n);
+        db.push(char(i >> 56));
+        db.push(char(i >> 48));
+        db.push(char(i >> 40));
+        db.push(char(i >> 32));
+        db.push(char(i >> 24));
+        db.push(char(i >> 16));
+        db.push(char(i >>  8));
+        db.push(char(i >>  0));
+        break;
+      }
+      case Type::BINARY: {
+        uint32_t size = 0;
+        if (value.is_string()) size = value.s()->size();
+        else if (value.is<Data>()) size = value.as<Data>()->size();
+        if (protocol == Protocol::compact) {
+          write_varint(size);
+        } else {
+          int i = size;
+          db.push(i >> 24);
+          db.push(i >> 16);
+          db.push(i >>  8);
+          db.push(i >>  0);
+        }
+        if (value.is_string()) db.push(value.s()->str());
+        else if (value.is<Data>()) db.push(*value.as<Data>());
+        break;
+      }
+      case Type::STRUCT:
+        if (value.is_array()) {
+          auto a = value.as<pjs::Array>();
+          auto i = 0;
+          a->iterate_all(
+            [&](pjs::Value &v, int) {
+              if (v.is_object() && v.o()) {
+                pjs::Ref<Field> f = pjs::coerce<Field>(v.o());
+                int t = get_type_code(protocol, f->type);
+                if (protocol == Protocol::compact) {
+                  if (f->type == Type::BOOL) t = f->value.to_boolean() ? 1 : 2;
+                  int d = f->id - i;
+                  if (1 <= d && d <= 15) {
+                    db.push((d << 4) | t);
+                  } else {
+                    db.push(t);
+                    write_varint(get_zigzag_int32(f->id));
+                  }
+                  if (f->type != Type::BOOL) write_value(protocol, f->type, f->value);
+                  i = f->id;
+                } else {
+                  db.push(t);
+                  db.push(f->id >> 8);
+                  db.push(f->id >> 0);
+                  write_value(protocol, f->type, f->value);
+                }
+              }
+            }
+          );
+        }
+        db.push(0);
+        break;
+      case Type::MAP: {
+        pjs::Ref<Map> m = pjs::coerce<Map>(value.is_object() ? value.o() : nullptr);
+        auto size = m->pairs ? m->pairs->length() : 0;
+        auto kt = get_type_code(protocol, m->keyType);
+        auto vt = get_type_code(protocol, m->valueType);
+        if (protocol == Protocol::compact) {
+          if (size == 0) {
+            db.push(0); // empty map
+          } else {
+            write_varint(size);
+            db.push((kt << 4) | (vt & 0xf));
+          }
+        } else {
+          int i = size;
+          db.push(kt);
+          db.push(vt);
+          db.push(i >> 24);
+          db.push(i >> 16);
+          db.push(i >>  8);
+          db.push(i >>  0);
+        }
+        for (int i = 0; i < size; i++) {
+          pjs::Value p, k, v;
+          m->pairs->get(i, p);
+          if (p.is_array()) {
+            p.as<pjs::Array>()->get(0, k);
+            p.as<pjs::Array>()->get(1, v);
+          }
+          write_value(protocol, m->keyType, k);
+          write_value(protocol, m->valueType, v);
+        }
+        break;
+      }
+      case Type::SET:
+      case Type::LIST: {
+        pjs::Ref<List> l = pjs::coerce<List>(value.is_object() ? value.o() : nullptr);
+        auto size = l->elements ? l->elements->length() : 0;
+        auto type = get_type_code(protocol, l->elementType);
+        if (protocol == Protocol::compact) {
+          if (0 <= size && size <= 14) {
+            db.push((size << 4) | (type & 0xf));
+          } else {
+            db.push(0xf0 | (type & 0xf));
+            write_varint(size);
+          }
+        } else {
+          int i = size;
+          db.push(type);
+          db.push(i >> 24);
+          db.push(i >> 16);
+          db.push(i >>  8);
+          db.push(i >>  0);
+        }
+        for (int i = 0; i < size; i++) {
+          pjs::Value e;
+          l->elements->get(i, e);
+          write_value(protocol, l->elementType, e);
+        }
+        break;
+      }
+      case Type::UUID: {
+        uint8_t data[16] = { 0 };
+        if (value.is_string()) {
+          utils::get_uuid(value.s()->str(), data);
+        }
+        db.push(data, sizeof(data));
+        break;
+      }
+    }
   };
 
   auto write_message = [&](pjs::Object *obj) {
-    pjs::Ref<Message> msg;
-    if (obj->is<Message>()) {
-      msg = obj->as<Message>();
-    } else {
-      msg = Message::make(Protocol::compact);
-      pjs::class_of<Message>()->assign(msg, obj);
-    }
-
+    pjs::Ref<Message> msg = pjs::coerce<Message>(obj);
     auto protocol = msg->protocol.get();
+
     switch (protocol) {
       case Protocol::binary:
         db.push(0x80);
@@ -191,7 +406,6 @@ void Thrift::encode(pjs::Object *msg, Data::Builder &db) {
         db.push(0xff & (msg->seqID >> 16));
         db.push(0xff & (msg->seqID >>  8));
         db.push(0xff & (msg->seqID >>  0));
-        write_struct(protocol, msg->data);
         break;
 
       case Protocol::compact:
@@ -221,10 +435,12 @@ void Thrift::encode(pjs::Object *msg, Data::Builder &db) {
         db.push(0xff & (msg->seqID >> 16));
         db.push(0xff & (msg->seqID >>  8));
         db.push(0xff & (msg->seqID >>  0));
-        write_struct(protocol, msg->data);
         break;
-      default: break;
+
+      default: return;
     }
+
+    write_value(protocol, Type::STRUCT, msg->fields.get());
   };
 
   if (msg->is_array()) {
@@ -542,6 +758,10 @@ auto Thrift::Parser::on_state(int state, int c) -> int {
     case MAP_HEAD:
       if (m_protocol == Protocol::compact) {
         if (var_int(c)) return MAP_HEAD;
+        if (m_var_int == 0) {
+          set_value(Map::make());
+          return set_value_end();
+        }
         return MAP_TYPE;
       } else {
         auto n = (
@@ -702,7 +922,6 @@ auto Thrift::Parser::set_value_end() -> State {
       return set_value_start();
     }
   } else {
-    Deframer::pass_all(false);
     Deframer::need_flush();
     return START;
   }
@@ -737,10 +956,9 @@ void Thrift::Parser::set_value(const pjs::Value &v) {
         break;
       default: return;
     }
-  } else {
-    if (v.is_object()) {
-      m_message->data = v.o();
-    }
+
+  } else if (v.is_array()) {
+    m_message->fields = v.as<pjs::Array>();
   }
 }
 
@@ -757,7 +975,6 @@ auto Thrift::Parser::push_struct() -> State {
 }
 
 auto Thrift::Parser::push_list(int code, bool is_set, int size) -> State {
-  if (size <= 0) return set_value_end();
   Type type;
   State state;
   int read_size;
@@ -767,6 +984,7 @@ auto Thrift::Parser::push_list(int code, bool is_set, int size) -> State {
   obj->elementType = type;
   obj->elements = pjs::Array::make();
   set_value(obj);
+  if (size <= 0) return set_value_end();
   auto l = new Level;
   l->back = m_stack;
   l->kind = is_set ? Level::SET : Level::LIST;
@@ -783,7 +1001,6 @@ auto Thrift::Parser::push_list(int code, bool is_set, int size) -> State {
 }
 
 auto Thrift::Parser::push_map(int code_k, int code_v, int size) -> State {
-  if (size <= 0) return set_value_end();
   Type type_k, type_v;
   State state_k, state_v;
   int read_size_k, read_size_v;
@@ -794,6 +1011,7 @@ auto Thrift::Parser::push_map(int code_k, int code_v, int size) -> State {
   obj->valueType = type_v;
   obj->pairs = pjs::Array::make();
   set_value(obj);
+  if (size <= 0) return set_value_end();
   auto l = new Level;
   l->back = m_stack;
   l->kind = Level::SET;
@@ -921,7 +1139,7 @@ template<> void ClassDef<Thrift::Message>::init() {
   field<EnumValue<Thrift::Message::Type>>("type", [](Thrift::Message *obj) { return &obj->type; });
   field<int>("seqID", [](Thrift::Message *obj) { return &obj->seqID; });
   field<Ref<Str>>("name", [](Thrift::Message *obj) { return &obj->name; });
-  field<Ref<Object>>("data", [](Thrift::Message *obj) { return &obj->data; });
+  field<Ref<Array>>("fields", [](Thrift::Message *obj) { return &obj->fields; });
 }
 
 //
