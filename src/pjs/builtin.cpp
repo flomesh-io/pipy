@@ -913,6 +913,9 @@ template<> void ClassDef<Global>::init() {
   // Boolean
   variable("Boolean", class_of<Constructor<Boolean>>());
 
+  // Int
+  variable("Int", class_of<Constructor<Int>>());
+
   // Number
   variable("Number", class_of<Constructor<Number>>());
 

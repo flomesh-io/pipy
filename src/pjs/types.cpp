@@ -507,6 +507,12 @@ void Context::error_argument_type(int i, const char *type) {
   error(s);
 }
 
+void Context::error_invalid_enum_value(int i) {
+  char s[200];
+  std::sprintf(s, "argument #%d has an invalid enum value", i + 1);
+  error(s);
+}
+
 void Context::backtrace(const Source *source, int line, int column) {
   Location l;
   l.source = source;
@@ -745,6 +751,160 @@ void Boolean::value_of(Value &out) {
 
 auto Boolean::to_string() const -> std::string {
   return m_b ? "true" : "false";
+}
+
+//
+// Int
+//
+
+template<> void EnumDef<Int::Type>::init() {
+  define(Int::Type::i8, "i8");
+  define(Int::Type::u8, "u8");
+  define(Int::Type::i16, "i16");
+  define(Int::Type::u16, "u16");
+  define(Int::Type::i32, "i32");
+  define(Int::Type::u32, "u32");
+  define(Int::Type::i64, "i64");
+  define(Int::Type::u64, "u64");
+}
+
+template<> void ClassDef<Int>::init() {
+  ctor([](Context &ctx) -> Object* {
+    EnumValue<Int::Type> t = Int::Type::i32;
+    double n; Str *s; Array *a; Int *i; int l, h;
+    if (ctx.is_string_like(0)) {
+      switch (ctx.argc()) {
+        case 1:
+          if (ctx.get(0, t)) {
+            return Int::make(t.get());
+          } else {
+            ctx.get(0, s);
+            return Int::make(s);
+          }
+        case 2:
+          if (!ctx.check(0, t)) return nullptr;
+          if (ctx.get(1, i)) return Int::make(t, i);
+          if (ctx.get(1, n)) return Int::make(t, n);
+          if (ctx.get(1, s)) return Int::make(t, s);
+          if (ctx.get(1, a)) return Int::make(t, a);
+          ctx.error_argument_type(1, "a number, a string or an array");
+          return nullptr;
+        default:
+          if (!ctx.arguments(3, &t, &l, &h)) return nullptr;
+          return Int::make(t, l, h);
+      }
+    } else {
+      if (ctx.get(0, i)) return Int::make(i);
+      if (ctx.get(0, s)) return Int::make(t, s);
+      if (ctx.get(0, a)) return Int::make(t, a);
+      if (ctx.get(0, n)) {
+        int l = n, h = 0;
+        if (ctx.get(1, h)) return Int::make(l, h);
+        return Int::make(n);
+      }
+      ctx.error_argument_type(0, "a number, a string or an array");
+      return nullptr;
+    }
+  });
+
+  accessor("type", [](Object *obj, Value &ret) { ret.set(EnumDef<Int::Type>::name(obj->as<Int>()->type())); });
+  accessor("width", [](Object *obj, Value &ret) { ret.set(obj->as<Int>()->width()); });
+  accessor("low", [](Object *obj, Value &ret) { ret.set(obj->as<Int>()->low()); });
+  accessor("high", [](Object *obj, Value &ret) { ret.set(obj->as<Int>()->high()); });
+  accessor("isUnsigned", [](Object *obj, Value &ret) { ret.set(obj->as<Int>()->isUnsigned()); });
+
+  method("toBytes", [](Context &ctx, Object *obj, Value &ret) {
+    ret.set(obj->as<Int>()->toBytes());
+  });
+}
+
+template<> void ClassDef<Constructor<Int>>::init() {
+  super<Function>();
+  ctor();
+}
+
+Int::Int(Array *bytes) : m_i(0) {
+  int n = bytes ? bytes->length() : 0;
+  if (n > 4) m_t = Type::u64; else
+  if (n > 2) m_t = Type::u32; else
+  if (n > 1) m_t = Type::u16; else m_t = Type::u8;
+  fill(bytes);
+}
+
+void Int::fill(Array *bytes) {
+  if (bytes) {
+    auto n = width() >> 3;
+    for (int i = 0; i < n; i++) {
+      Value v;
+      bytes->get(i, v);
+      int b = v.to_number();
+      m_i |= (int64_t)(uint8_t)b << (i << 3);
+    }
+  }
+}
+
+auto Int::convert(Type t, int64_t i) -> int64_t {
+  switch (t) {
+    case Type::i8 : return int8_t(i);
+    case Type::i16: return int16_t(i);
+    case Type::i32: return int32_t(i);
+    case Type::u8 : return uint8_t(i);
+    case Type::u16: return uint16_t(i);
+    case Type::u32: return uint32_t(i);
+    default: return i;
+  }
+}
+
+auto Int::convert(Type t, double n) -> int64_t {
+  switch (t) {
+    case Type::i8 : return int8_t(n);
+    case Type::i16: return int16_t(n);
+    case Type::i32: return int32_t(n);
+    case Type::u8 : return uint8_t(n);
+    case Type::u16: return uint16_t(n);
+    case Type::u32: return uint32_t(n);
+    default: return n;
+  }
+}
+
+auto Int::convert(Type t, const std::string &s) -> int64_t {
+  auto i = std::atoll(s.c_str());
+  return convert(t, int64_t(i));
+}
+
+auto Int::to_number() const -> double {
+  if (isUnsigned()) {
+    return uint64_t(m_i);
+  } else {
+    return m_i;
+  }
+}
+
+auto Int::to_string(char *str, size_t len) const -> size_t {
+  if (isUnsigned()) {
+    return std::snprintf(str, len, "%llu", (unsigned long long)m_i);
+  } else {
+    return std::snprintf(str, len, "%lld", (long long)m_i);
+  }
+}
+
+auto Int::toBytes() const -> Array* {
+  auto n = width() >> 3;
+  auto a = Array::make(n);
+  for (int i = 0; i < n; i++) {
+    a->set(i, 0xff & (m_i >> (i << 3)));
+  }
+  return a;
+}
+
+void Int::value_of(Value &out) {
+  out.set(to_number());
+}
+
+auto Int::to_string() const -> std::string {
+  char str[100];
+  auto len = to_string(str, sizeof(str));
+  return std::string(str, len);
 }
 
 //

@@ -52,6 +52,7 @@ class Class;
 class Context;
 class Field;
 class Function;
+class Int;
 class Number;
 class Object;
 class RegExp;
@@ -1224,6 +1225,8 @@ public:
   bool is_instance_of(Class *c) const { return m_t == Type::Object && o() && type_of(o())->is_derived_from(c); }
   bool is_function() const { return is_instance_of(class_of<Function>()); }
   bool is_array() const { return is_instance_of(class_of<Array>()); }
+  bool is_number_like() const { return is_number() || is<Number>() || is<Int>(); }
+  bool is_string_like() const { return is_string() || is<String>(); }
 
   void set(bool b) { release(); m_t = Type::Boolean; m_v.b = b; }
   void set(int n) { release(); m_t = Type::Number; m_v.n = n; }
@@ -1256,18 +1259,7 @@ public:
       case Value::Type::Boolean: return b() ? 1 : 0;
       case Value::Type::Number: return n();
       case Value::Type::String: return s()->parse_float();
-      case Value::Type::Object: {
-        if (!o()) return 0;
-        Value v; value_of(o(), v);
-        switch (v.type()) {
-          case Value::Type::Empty: return 0;
-          case Value::Type::Undefined: return 0;
-          case Value::Type::Boolean: return v.b() ? 1 : 0;
-          case Value::Type::Number: return v.n();
-          case Value::Type::String: return v.s()->parse_float();
-          case Value::Type::Object: return v.o() ? std::numeric_limits<double>::quiet_NaN() : 0;
-        }
-      }
+      case Value::Type::Object: return value_of();
     }
     return 0;
   }
@@ -1295,6 +1287,20 @@ public:
     }
     return nullptr;
   }
+
+  auto to_int() const -> int {
+    switch (m_t) {
+      case Value::Type::Empty: return 0;
+      case Value::Type::Undefined: return 0;
+      case Value::Type::Boolean: return b();
+      case Value::Type::Number: return n();
+      case Value::Type::String: return s()->parse_float();
+      case Value::Type::Object: return value_of();
+    }
+    return 0;
+  }
+
+  auto to_int64() const -> int64_t;
 
   static bool is_identical(const Value &a, const Value &b);
   static bool is_equal(const Value &a, const Value &b);
@@ -1341,9 +1347,9 @@ private:
   static auto retain(Object *obj) -> Object*;
   static void release(Object *obj);
   static auto type_of(Object *obj) -> Class*;
-  static void value_of(Object *obj, Value &out);
   static auto to_string(Object *obj) -> Str*;
 
+  auto value_of() const -> double;
   auto box_boolean() const -> Object*;
   auto box_number() const -> Object*;
   auto box_string() const -> Object*;
@@ -1626,8 +1632,21 @@ T* coerce(Object *obj) {
 inline auto Value::retain(Object *obj) -> Object* { obj->retain(); return obj; }
 inline void Value::release(Object *obj) { obj->release(); }
 inline auto Value::type_of(Object *obj) -> Class* { return obj->type(); }
-inline void Value::value_of(Object *obj, Value &out) { obj->value_of(out); }
 inline auto Value::to_string(Object *obj) -> Str* { return Str::make(obj->to_string()); }
+
+inline auto Value::value_of() const -> double {
+  if (!o()) return 0;
+  Value v; o()->value_of(v);
+  switch (v.type()) {
+    case Value::Type::Empty: return 0;
+    case Value::Type::Undefined: return 0;
+    case Value::Type::Boolean: return v.b() ? 1 : 0;
+    case Value::Type::Number: return v.n();
+    case Value::Type::String: return v.s()->parse_float();
+    case Value::Type::Object: return v.o() ? std::numeric_limits<double>::quiet_NaN() : 0;
+  }
+  return 0;
+}
 
 //
 // Variable
@@ -1940,6 +1959,7 @@ public:
   void error_argument_count(int n);
   void error_argument_count(int min, int max);
   void error_argument_type(int i, const char *type);
+  void error_invalid_enum_value(int i);
   void backtrace(const Source *source, int line, int column);
   void backtrace(const std::string &name);
 
@@ -1948,6 +1968,46 @@ public:
     scope->init(std::min(m_argc, argc), m_argv);
     m_scope = scope;
     return scope;
+  }
+
+  bool is_undefined(int i) const { return i >= argc() || arg(i).is_undefined(); }
+  bool is_null(int i) const { return i < argc() && arg(i).is_null(); }
+  bool is_nullish(int i) const { return i < argc() && arg(i).is_nullish(); }
+  bool is_boolean(int i) const { return i < argc() && arg(i).is_boolean(); }
+  bool is_number(int i) const { return i < argc() && arg(i).is_number(); }
+  bool is_string(int i) const { return i < argc() && arg(i).is_string(); }
+  bool is_object(int i) const { return i < argc() && arg(i).is_object(); }
+  bool is_class(int i, Class *c) const { return i < argc() && arg(i).is_class(c); }
+  bool is_instance_of(int i, Class *c) const { return i < argc() && arg(i).is_instance_of(c); }
+  bool is_function(int i) const { return i < argc() && arg(i).is_function(); }
+  bool is_array(int i) const { return i < argc() && arg(i).is_array(); }
+  bool is_number_like(int i) const { return i < argc() && arg(i).is_number_like(); }
+  bool is_string_like(int i) const { return i < argc() && arg(i).is_string_like(); }
+
+  template<class T> bool is(int i) const { return is_class(i, class_of<T>()); }
+  template<class T> bool is_instance_of(int i) const { return is_instance_of(i, class_of<T>()); }
+
+  bool get(int i, bool &v);
+  bool get(int i, int &v);
+  bool get(int i, int64_t &v);
+  bool get(int i, double &v);
+  bool get(int i, Str* &v);
+
+  template<class T>
+  bool get(int i, EnumValue<T> &v) {
+    if (i >= argc()) return false;
+    auto &a = arg(i);
+    if (a.is_string()) return v.set(a.s());
+    return false;
+  }
+
+  template<class T>
+  bool get(int i, T* &v) {
+    if (i >= argc()) return false;
+    auto &a = arg(i);
+    if (a.is_null()) { v = nullptr; return true; }
+    if (a.is<T>()) { v = a.as<T>(); return true; }
+    return false;
   }
 
   bool check(int i, bool &v) {
@@ -1966,12 +2026,7 @@ public:
       v = def;
       return true;
     }
-    if (!a.is_boolean()) {
-      error_argument_type(i, "a boolean");
-      return false;
-    }
-    v = a.b();
-    return true;
+    return check(i, v);
   }
 
   bool check(int i, int &v) {
@@ -1990,12 +2045,7 @@ public:
       v = def;
       return true;
     }
-    if (!a.is_number()) {
-      error_argument_type(i, "a number");
-      return false;
-    }
-    v = a.n();
-    return true;
+    return check(i, v);
   }
 
   bool check(int i, double &v) {
@@ -2014,15 +2064,10 @@ public:
       v = def;
       return true;
     }
-    if (!a.is_number()) {
-      error_argument_type(i, "a number");
-      return false;
-    }
-    v = a.n();
-    return true;
+    return check(i, v);
   }
 
-  bool check(int i, pjs::Str* &v) {
+  bool check(int i, Str* &v) {
     auto &a = arg(i);
     if (!a.is_string()) {
       error_argument_type(i, "a string");
@@ -2032,18 +2077,37 @@ public:
     return true;
   }
 
-  bool check(int i, pjs::Str* &v, pjs::Str* def) {
+  bool check(int i, Str* &v, Str* def) {
     auto &a = arg(i);
     if (i >= argc() || a.is_undefined()) {
       v = def;
       return true;
     }
+    return check(i, v);
+  }
+
+  template<class T>
+  bool check(int i, EnumValue<T> &v) {
+    auto &a = arg(i);
     if (!a.is_string()) {
       error_argument_type(i, "a string");
       return false;
     }
-    v = a.s();
+    if (!v.set(a.s())) {
+      error_invalid_enum_value(i);
+      return false;
+    }
     return true;
+  }
+
+  template<class T>
+  bool check(int i, EnumValue<T> &v, T def) {
+    auto &a = arg(i);
+    if (i >= argc() || a.is_undefined()) {
+      v = def;
+      return true;
+    }
+    return check(i, v);
   }
 
   template<class T>
@@ -2066,14 +2130,7 @@ public:
       v = def;
       return true;
     }
-    if (!a.is_object() || !a.is_instance_of<T>()) {
-      std::string type("an instance of ");
-      type += class_of<T>()->name()->str();
-      error_argument_type(i, type.c_str());
-      return false;
-    }
-    v = a.as<T>();
-    return true;
+    return check(i, v);
   }
 
   template<typename... Args>
@@ -2123,90 +2180,151 @@ private:
     return get_arg(set_error, i, a);
   }
 
-  template<typename T>
-  bool get_arg(bool set_error, int i, EnumValue<T> *a) {
-    if (!arg(i).is_string()) {
-      if (set_error) error_argument_type(i, "a string");
-      return false;
-    }
-    if (!a->set(arg(i).s())) {
-      if (set_error) error_argument_type(i, "a valid enum string");
-      return false;
-    }
-    return true;
-  }
-
   bool get_arg(bool set_error, int i, Value *v) {
     *v = arg(i);
     return true;
   }
 
   bool get_arg(bool set_error, int i, bool *b) {
-    if (!arg(i).is_boolean()) {
+    auto &a = arg(i);
+    if (a.is_boolean()) {
+      *b = a.b();
+      return true;
+    } else {
       if (set_error) error_argument_type(i, "a boolean");
       return false;
     }
-    *b = arg(i).b();
-    return true;
   }
 
   bool get_arg(bool set_error, int i, int *n) {
-    if (!arg(i).is_number()) {
+    auto &a = arg(i);
+    if (a.is_number()) {
+      *n = int(a.n());
+      return true;
+    } else if (a.is<Number>() || a.is<Int>()) {
+      *n = a.to_int();
+      return true;
+    } else {
       if (set_error) error_argument_type(i, "a number");
       return false;
     }
-    *n = int(arg(i).n());
-    return true;
+  }
+
+  bool get_arg(bool set_error, int i, int64_t *n) {
+    auto &a = arg(i);
+    if (a.is_number()) {
+      *n = int64_t(a.n());
+      return true;
+    } else if (a.is<Number>() || a.is<Int>()) {
+      *n = a.to_int64();
+      return true;
+    } else {
+      if (set_error) error_argument_type(i, "a number");
+      return false;
+    }
   }
 
   bool get_arg(bool set_error, int i, double *n) {
-    if (!arg(i).is_number()) {
+    auto &a = arg(i);
+    if (a.is_number()) {
+      *n = a.n();
+      return true;
+    } else if (a.is<Number>() || a.is<Int>()) {
+      *n = a.to_number();
+      return true;
+    } else {
       if (set_error) error_argument_type(i, "a number");
       return false;
     }
-    *n = arg(i).n();
-    return true;
   }
 
   bool get_arg(bool set_error, int i, Str **s) {
-    if (!arg(i).is_string()) {
+    auto &a = arg(i);
+    if (a.is_string()) {
+      *s = a.s();
+      return true;
+    } else {
       if (set_error) error_argument_type(i, "a string");
       return false;
     }
-    *s = arg(i).s();
-    return true;
   }
 
   bool get_arg(bool set_error, int i, std::string *s) {
-    if (!arg(i).is_string()) {
+    auto &a = arg(i);
+    if (a.is_string()) {
+      *s = a.s()->str();
+      return true;
+    } else {
       if (set_error) error_argument_type(i, "a string");
       return false;
     }
-    *s = arg(i).s()->str();
-    return true;
   }
 
   bool get_arg(bool set_error, int i, Object **o) {
-    if (!arg(i).is_object()) {
+    auto &a = arg(i);
+    if (a.is_object()) {
+      *o = a.o();
+      return true;
+    } else {
       if (set_error) error_argument_type(i, "an object");
       return false;
     }
-    *o = arg(i).o();
-    return true;
   }
 
   bool get_arg(bool set_error, int i, Function **f) {
-    if (!arg(i).is_function()) {
+    auto &a = arg(i);
+    if (a.is_null()) {
+      *f = nullptr;
+      return true;
+    } else if (a.is_function()) {
+      *f = a.as<Function>();
+      return true;
+    } else {
       if (set_error) error_argument_type(i, "a function");
       return false;
     }
-    *f = arg(i).as<Function>();
-    return true;
+  }
+
+  bool get_arg(bool set_error, int i, Array **o) {
+    auto &a = arg(i);
+    if (a.is_null()) {
+      *o = nullptr;
+      return true;
+    } else if (a.is_array()) {
+      *o = a.as<Array>();
+      return true;
+    } else {
+      if (set_error) error_argument_type(i, "an array");
+      return false;
+    }
+  }
+
+  template<typename T>
+  bool get_arg(bool set_error, int i, EnumValue<T> *e) {
+    auto &a = arg(i);
+    if (a.is_string()) {
+      if (e->set(a.s())) {
+        return true;
+      } else {
+        if (set_error) error_invalid_enum_value(i);
+        return false;
+      }
+    } else {
+      if (set_error) error_argument_type(i, "a string");
+      return false;
+    }
   }
 
   template<class T>
   bool get_arg(bool set_error, int i, T **o) {
-    if (!arg(i).is_null() && !arg(i).is_instance_of<T>()) {
+    auto &a = arg(i);
+    if (a.is_null()) {
+      *o = nullptr;
+      return true;
+    } else if (a.is_instance_of<T>()) {
+      *o = a.as<T>();
+      return true;
+    } else {
       if (set_error) {
         std::string type("an instance of ");
         type += class_of<T>()->name()->str();
@@ -2214,8 +2332,6 @@ private:
       }
       return false;
     }
-    *o = arg(i).is_null() ? nullptr : arg(i).as<T>();
-    return true;
   }
 };
 
@@ -2523,6 +2639,71 @@ public:
   }
 };
 
+inline bool Context::get(int i, bool &v) {
+  if (i >= argc()) return false;
+  auto &a = arg(i);
+  if (a.is_boolean()) { v = a.b(); return true; }
+  if (a.is<Boolean>()) { v = a.as<Boolean>()->value(); return true; }
+  return false;
+}
+
+//
+// Int
+//
+
+class Int : public ObjectTemplate<Int> {
+public:
+  enum class Type {
+    i8, i16, i32, i64,
+    u8, u16, u32, u64,
+  };
+
+  static auto convert(Type t, int64_t i) -> int64_t;
+  static auto convert(Type t, double n) -> int64_t;
+  static auto convert(Type t, const std::string &s) -> int64_t;
+
+  auto to_number() const -> double;
+  auto to_string(char *str, size_t len) const -> size_t;
+
+  auto type() const -> Type { return m_t; }
+  auto width() const -> int { return (1 << (int(m_t) & 3)) << 3; }
+  auto value() const -> int64_t { return m_i; }
+  auto low() const -> double { return isUnsigned() ? uint32_t(m_i) : int32_t(m_i); }
+  auto high() const -> double { return isUnsigned() ? m_i >> 32 : int64_t(m_i) >> 32; }
+  bool isUnsigned() const { return int(m_t) >= int(Type::u8); }
+
+  auto toBytes() const -> Array*;
+
+  virtual void value_of(Value &out) override;
+  virtual auto to_string() const -> std::string override;
+
+private:
+  Int(int i) : m_t(Type::i32), m_i(i) {}
+  Int(int l, int h) : m_t(Type::i64), m_i(uint32_t(l) + (int64_t(h) << 32)) {}
+  Int(int64_t i) : m_t(Type::i64), m_i(i) {}
+  Int(double n) : m_t(Type::i64), m_i(n) {}
+  Int(Int *i) : m_t(i->m_t), m_i(i->m_i) {}
+  Int(Str *s) : m_t(Type::i64), m_i(convert(Type::i64, s->str())) {}
+  Int(Array *bytes);
+  Int(Type t) : m_t(t), m_i(0) {}
+  Int(Type t, int l, int h = 0) : m_t(t), m_i(convert(t, uint32_t(l) + (int64_t(h) << 32))) {}
+  Int(Type t, double n) : m_t(t), m_i(convert(t, n)) {}
+  Int(Type t, Int *i) : m_t(t), m_i(convert(t, i->m_i)) {}
+  Int(Type t, Str *s) : m_t(t), m_i(convert(t, s->str())) {}
+  Int(Type t, Array *bytes) : m_t(t), m_i(0) { fill(bytes); }
+
+  Type m_t;
+  int64_t m_i;
+
+  void fill(Array *bytes);
+
+  friend class ObjectTemplate<Int>;
+};
+
+inline auto Value::to_int64() const -> int64_t {
+  return is<Int>() ? as<Int>()->value() : to_number();
+}
+
 //
 // Number
 //
@@ -2559,6 +2740,33 @@ public:
     ret.set(ctx.argc() > 0 ? ctx.arg(0).to_number() : 0);
   }
 };
+
+inline bool Context::get(int i, int &v) {
+  if (i >= argc()) return false;
+  auto &a = arg(i);
+  if (a.is_number()) { v = a.n(); return true; }
+  if (a.is<Number>()) { v = a.as<Number>()->value(); return true; }
+  if (a.is<Int>()) { v = a.as<Int>()->value(); return true; }
+  return false;
+}
+
+inline bool Context::get(int i, int64_t &v) {
+  if (i >= argc()) return false;
+  auto &a = arg(i);
+  if (a.is_number()) { v = a.n(); return true; }
+  if (a.is<Number>()) { v = a.as<Number>()->value(); return true; }
+  if (a.is<Int>()) { v = a.as<Int>()->value(); return true; }
+  return false;
+}
+
+inline bool Context::get(int i, double &v) {
+  if (i >= argc()) return false;
+  auto &a = arg(i);
+  if (a.is_number()) { v = a.n(); return true; }
+  if (a.is<Number>()) { v = a.as<Number>()->value(); return true; }
+  if (a.is<Int>()) { v = a.as<Int>()->value(); return true; }
+  return false;
+}
 
 //
 // String
@@ -2629,6 +2837,14 @@ public:
     }
   }
 };
+
+inline bool Context::get(int i, Str* &v) {
+  if (i >= argc()) return false;
+  auto &a = arg(i);
+  if (a.is_string()) { v = a.s(); return true; }
+  if (a.is<String>()) { v = a.as<String>()->value(); return true; }
+  return false;
+}
 
 //
 // Error
