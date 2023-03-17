@@ -971,6 +971,10 @@ void Plus::dump(std::ostream &out, const std::string &indent) {
 bool Negation::eval(Context &ctx, Value &result) {
   Value x;
   if (!m_x->eval(ctx, x)) return false;
+  if (x.is<Int>()) {
+    result.set(x.as<Int>()->neg());
+    return true;
+  }
   result.set(-x.to_number());
   return true;
 }
@@ -998,11 +1002,19 @@ bool Addition::eval(Context &ctx, Value &result) {
     result.set(sa->str() + sb->str());
     sa->release();
     sb->release();
-  } else {
-    auto na = a.to_number();
-    auto nb = b.to_number();
-    result.set(na + nb);
+    return true;
   }
+  if (a.is<Int>() || b.is<Int>()) {
+    auto ia = a.to_int();
+    auto ib = b.to_int();
+    result.set(ia->add(ib));
+    ia->release();
+    ib->release();
+    return true;
+  }
+  auto na = a.to_number();
+  auto nb = b.to_number();
+  result.set(na + nb);
   return true;
 }
 
@@ -1025,6 +1037,14 @@ bool Subtraction::eval(Context &ctx, Value &result) {
   Value a, b;
   if (!m_a->eval(ctx, a)) return false;
   if (!m_b->eval(ctx, b)) return false;
+  if (a.is<Int>() || b.is<Int>()) {
+    auto ia = a.to_int();
+    auto ib = b.to_int();
+    result.set(ia->sub(ib));
+    ia->release();
+    ib->release();
+    return true;
+  }
   auto na = a.to_number();
   auto nb = b.to_number();
   result.set(na - nb);
@@ -1050,6 +1070,14 @@ bool Multiplication::eval(Context &ctx, Value &result) {
   Value a, b;
   if (!m_a->eval(ctx, a)) return false;
   if (!m_b->eval(ctx, b)) return false;
+  if (a.is<Int>() || b.is<Int>()) {
+    auto ia = a.to_int();
+    auto ib = b.to_int();
+    result.set(ia->mul(ib));
+    ia->release();
+    ib->release();
+    return true;
+  }
   auto na = a.to_number();
   auto nb = b.to_number();
   result.set(na * nb);
@@ -1075,6 +1103,14 @@ bool Division::eval(Context &ctx, Value &result) {
   Value a, b;
   if (!m_a->eval(ctx, a)) return false;
   if (!m_b->eval(ctx, b)) return false;
+  if (a.is<Int>() || b.is<Int>()) {
+    auto ia = a.to_int();
+    auto ib = b.to_int();
+    result.set(ia->div(ib));
+    ia->release();
+    ib->release();
+    return true;
+  }
   auto na = a.to_number();
   auto nb = b.to_number();
   result.set(na / nb);
@@ -1100,6 +1136,14 @@ bool Remainder::eval(Context &ctx, Value &result) {
   Value a, b;
   if (!m_a->eval(ctx, a)) return false;
   if (!m_b->eval(ctx, b)) return false;
+  if (a.is<Int>() || b.is<Int>()) {
+    auto ia = a.to_int();
+    auto ib = b.to_int();
+    result.set(ia->mod(ib));
+    ia->release();
+    ib->release();
+    return true;
+  }
   auto na = a.to_number();
   auto nb = b.to_number();
   result.set(std::fmod(na, nb));
@@ -1150,8 +1194,12 @@ bool ShiftLeft::eval(Context &ctx, Value &result) {
   Value a, b;
   if (!m_a->eval(ctx, a)) return false;
   if (!m_b->eval(ctx, b)) return false;
-  int32_t na((int64_t)a.to_number());
-  int32_t nb((int64_t)b.to_number());
+  if (a.is<Int>()) {
+    result.set(a.as<Int>()->shl(b.to_int32()));
+    return true;
+  }
+  int32_t na = a.to_int32();
+  int32_t nb = b.to_int32();
   result.set(na << nb);
   return true;
 }
@@ -1175,8 +1223,12 @@ bool ShiftRight::eval(Context &ctx, Value &result) {
   Value a, b;
   if (!m_a->eval(ctx, a)) return false;
   if (!m_b->eval(ctx, b)) return false;
-  int32_t na((int64_t)a.to_number());
-  int32_t nb((int64_t)b.to_number());
+  if (a.is<Int>()) {
+    result.set(a.as<Int>()->shr(b.to_int32()));
+    return true;
+  }
+  int32_t na = a.to_int32();
+  int32_t nb = b.to_int32();
   result.set(na >> nb);
   return true;
 }
@@ -1200,8 +1252,12 @@ bool UnsignedShiftRight::eval(Context &ctx, Value &result) {
   Value a, b;
   if (!m_a->eval(ctx, a)) return false;
   if (!m_b->eval(ctx, b)) return false;
-  int32_t na((int64_t)a.to_number());
-  int32_t nb((int64_t)b.to_number());
+  if (a.is<Int>()) {
+    result.set(a.as<Int>()->bitwise_shr(b.to_int32()));
+    return true;
+  }
+  int32_t na = a.to_int32();
+  int32_t nb = b.to_int32();
   result.set((uint32_t)na >> nb);
   return true;
 }
@@ -1224,7 +1280,11 @@ void UnsignedShiftRight::dump(std::ostream &out, const std::string &indent) {
 bool BitwiseNot::eval(Context &ctx, Value &result) {
   Value x;
   if (!m_x->eval(ctx, x)) return false;
-  result.set(~int32_t((int64_t)x.to_number()));
+  if (x.is<Int>()) {
+    result.set(x.as<Int>()->bitwise_not());
+    return true;
+  }
+  result.set(~x.to_int32());
   return true;
 }
 
@@ -1245,8 +1305,16 @@ bool BitwiseAnd::eval(Context &ctx, Value &result) {
   Value a, b;
   if (!m_a->eval(ctx, a)) return false;
   if (!m_b->eval(ctx, b)) return false;
-  int32_t na((int64_t)a.to_number());
-  int32_t nb((int64_t)b.to_number());
+  if (a.is<Int>() || b.is<Int>()) {
+    auto ia = a.to_int();
+    auto ib = b.to_int();
+    result.set(ia->bitwise_and(ib));
+    ia->release();
+    ib->release();
+    return true;
+  }
+  int32_t na = a.to_int32();
+  int32_t nb = b.to_int32();
   result.set(na & nb);
   return true;
 }
@@ -1270,8 +1338,16 @@ bool BitwiseOr::eval(Context &ctx, Value &result) {
   Value a, b;
   if (!m_a->eval(ctx, a)) return false;
   if (!m_b->eval(ctx, b)) return false;
-  int32_t na((int64_t)a.to_number());
-  int32_t nb((int64_t)b.to_number());
+  if (a.is<Int>() || b.is<Int>()) {
+    auto ia = a.to_int();
+    auto ib = b.to_int();
+    result.set(ia->bitwise_or(ib));
+    ia->release();
+    ib->release();
+    return true;
+  }
+  int32_t na = a.to_int32();
+  int32_t nb = b.to_int32();
   result.set(na | nb);
   return true;
 }
@@ -1295,8 +1371,16 @@ bool BitwiseXor::eval(Context &ctx, Value &result) {
   Value a, b;
   if (!m_a->eval(ctx, a)) return false;
   if (!m_b->eval(ctx, b)) return false;
-  int32_t na((int64_t)a.to_number());
-  int32_t nb((int64_t)b.to_number());
+  if (a.is<Int>() || b.is<Int>()) {
+    auto ia = a.to_int();
+    auto ib = b.to_int();
+    result.set(ia->bitwise_xor(ib));
+    ia->release();
+    ib->release();
+    return true;
+  }
+  int32_t na = a.to_int32();
+  int32_t nb = b.to_int32();
   result.set(na ^ nb);
   return true;
 }
@@ -1406,6 +1490,14 @@ bool Equality::eval(Context &ctx, Value &result) {
   Value a, b;
   if (!m_a->eval(ctx, a)) return false;
   if (!m_b->eval(ctx, b)) return false;
+  if (a.is<Int>() || b.is<Int>()) {
+    auto ia = a.to_int();
+    auto ib = b.to_int();
+    result.set(ia->eql(ib));
+    ia->release();
+    ib->release();
+    return true;
+  }
   result.set(Value::is_equal(a, b));
   return true;
 }
@@ -1429,6 +1521,14 @@ bool Inequality::eval(Context &ctx, Value &result) {
   Value a, b;
   if (!m_a->eval(ctx, a)) return false;
   if (!m_b->eval(ctx, b)) return false;
+  if (a.is<Int>() || b.is<Int>()) {
+    auto ia = a.to_int();
+    auto ib = b.to_int();
+    result.set(!ia->eql(ib));
+    ia->release();
+    ib->release();
+    return true;
+  }
   result.set(!Value::is_equal(a, b));
   return true;
 }
@@ -1502,6 +1602,12 @@ bool GreaterThan::eval(Context &ctx, Value &result) {
     result.set(false);
   } else if (a.is_string() && b.is_string()) {
     result.set(a.s()->str() > b.s()->str());
+  } else if (a.is<Int>() || b.is<Int>()) {
+    auto ia = a.to_int();
+    auto ib = b.to_int();
+    result.set(ia->cmp(ib) > 0);
+    ia->release();
+    ib->release();
   } else {
     auto na = a.to_number();
     auto nb = b.to_number();
@@ -1533,6 +1639,12 @@ bool GreaterThanOrEqual::eval(Context &ctx, Value &result) {
     result.set(false);
   } else if (a.is_string() && b.is_string()) {
     result.set(a.s()->str() >= b.s()->str());
+  } else if (a.is<Int>() || b.is<Int>()) {
+    auto ia = a.to_int();
+    auto ib = b.to_int();
+    result.set(ia->cmp(ib) >= 0);
+    ia->release();
+    ib->release();
   } else {
     auto na = a.to_number();
     auto nb = b.to_number();
@@ -1564,6 +1676,12 @@ bool LessThan::eval(Context &ctx, Value &result) {
     result.set(false);
   } else if (a.is_string() && b.is_string()) {
     result.set(a.s()->str() < b.s()->str());
+  } else if (a.is<Int>() || b.is<Int>()) {
+    auto ia = a.to_int();
+    auto ib = b.to_int();
+    result.set(ia->cmp(ib) < 0);
+    ia->release();
+    ib->release();
   } else {
     auto na = a.to_number();
     auto nb = b.to_number();
@@ -1595,6 +1713,12 @@ bool LessThanOrEqual::eval(Context &ctx, Value &result) {
     result.set(false);
   } else if (a.is_string() && b.is_string()) {
     result.set(a.s()->str() <= b.s()->str());
+  } else if (a.is<Int>() || b.is<Int>()) {
+    auto ia = a.to_int();
+    auto ib = b.to_int();
+    result.set(ia->cmp(ib) <= 0);
+    ia->release();
+    ib->release();
   } else {
     auto na = a.to_number();
     auto nb = b.to_number();
@@ -1716,6 +1840,10 @@ void TypeOf::dump(std::ostream &out, const std::string &indent) {
 
 bool PostIncrement::eval(Context &ctx, Value &result) {
   if (!m_x->eval(ctx, result)) return false;
+  if (result.is<Int>()) {
+    Value v(result.as<Int>()->inc());
+    return m_x->assign(ctx, v);
+  }
   Value v(result.to_number() + 1);
   return m_x->assign(ctx, v);
 }
@@ -1735,6 +1863,10 @@ void PostIncrement::dump(std::ostream &out, const std::string &indent) {
 
 bool PostDecrement::eval(Context &ctx, Value &result) {
   if (!m_x->eval(ctx, result)) return false;
+  if (result.is<Int>()) {
+    Value v(result.as<Int>()->dec());
+    return m_x->assign(ctx, v);
+  }
   Value v(result.to_number() - 1);
   return m_x->assign(ctx, v);
 }
@@ -1754,7 +1886,11 @@ void PostDecrement::dump(std::ostream &out, const std::string &indent) {
 
 bool PreIncrement::eval(Context &ctx, Value &result) {
   if (!m_x->eval(ctx, result)) return false;
-  result.set(result.to_number() + 1);
+  if (result.is<Int>()) {
+    result.set(result.as<Int>()->inc());
+  } else {
+    result.set(result.to_number() + 1);
+  }
   return m_x->assign(ctx, result);
 }
 
@@ -1773,7 +1909,11 @@ void PreIncrement::dump(std::ostream &out, const std::string &indent) {
 
 bool PreDecrement::eval(Context &ctx, Value &result) {
   if (!m_x->eval(ctx, result)) return false;
-  result.set(result.to_number() - 1);
+  if (result.is<Int>()) {
+    result.set(result.as<Int>()->dec());
+  } else {
+    result.set(result.to_number() - 1);
+  }
   return m_x->assign(ctx, result);
 }
 
@@ -1849,6 +1989,12 @@ bool AdditionAssignment::eval(Context &ctx, Value &result) {
     result.set(sa->str() + sb->str());
     sa->release();
     sb->release();
+  } else if (a.is<Int>() || b.is<Int>()) {
+    auto ia = a.to_int();
+    auto ib = b.to_int();
+    result.set(ia->add(ib));
+    ia->release();
+    ib->release();
   } else {
     auto na = a.to_number();
     auto nb = b.to_number();
@@ -1876,9 +2022,17 @@ bool SubtractionAssignment::eval(Context &ctx, Value &result) {
   Value a, b;
   if (!m_l->eval(ctx, a)) return false;
   if (!m_r->eval(ctx, b)) return false;
-  auto na = a.to_number();
-  auto nb = b.to_number();
-  result.set(na - nb);
+  if (a.is<Int>() || b.is<Int>()) {
+    auto ia = a.to_int();
+    auto ib = b.to_int();
+    result.set(ia->sub(ib));
+    ia->release();
+    ib->release();
+  } else {
+    auto na = a.to_number();
+    auto nb = b.to_number();
+    result.set(na - nb);
+  }
   return m_l->assign(ctx, result);
 }
 
@@ -1901,9 +2055,17 @@ bool MultiplicationAssignment::eval(Context &ctx, Value &result) {
   Value a, b;
   if (!m_l->eval(ctx, a)) return false;
   if (!m_r->eval(ctx, b)) return false;
-  auto na = a.to_number();
-  auto nb = b.to_number();
-  result.set(na * nb);
+  if (a.is<Int>() || b.is<Int>()) {
+    auto ia = a.to_int();
+    auto ib = b.to_int();
+    result.set(ia->mul(ib));
+    ia->release();
+    ib->release();
+  } else {
+    auto na = a.to_number();
+    auto nb = b.to_number();
+    result.set(na * nb);
+  }
   return m_l->assign(ctx, result);
 }
 
@@ -1926,9 +2088,17 @@ bool DivisionAssignment::eval(Context &ctx, Value &result) {
   Value a, b;
   if (!m_l->eval(ctx, a)) return false;
   if (!m_r->eval(ctx, b)) return false;
-  auto na = a.to_number();
-  auto nb = b.to_number();
-  result.set(na / nb);
+  if (a.is<Int>() || b.is<Int>()) {
+    auto ia = a.to_int();
+    auto ib = b.to_int();
+    result.set(ia->div(ib));
+    ia->release();
+    ib->release();
+  } else {
+    auto na = a.to_number();
+    auto nb = b.to_number();
+    result.set(na / nb);
+  }
   return m_l->assign(ctx, result);
 }
 
@@ -1951,9 +2121,17 @@ bool RemainderAssignment::eval(Context &ctx, Value &result) {
   Value a, b;
   if (!m_l->eval(ctx, a)) return false;
   if (!m_r->eval(ctx, b)) return false;
-  auto na = a.to_number();
-  auto nb = b.to_number();
-  result.set(std::fmod(na, nb));
+  if (a.is<Int>() || b.is<Int>()) {
+    auto ia = a.to_int();
+    auto ib = b.to_int();
+    result.set(ia->mod(ib));
+    ia->release();
+    ib->release();
+  } else {
+    auto na = a.to_number();
+    auto nb = b.to_number();
+    result.set(std::fmod(na, nb));
+  }
   return m_l->assign(ctx, result);
 }
 
@@ -2001,9 +2179,13 @@ bool ShiftLeftAssignment::eval(Context &ctx, Value &result) {
   Value a, b;
   if (!m_l->eval(ctx, a)) return false;
   if (!m_r->eval(ctx, b)) return false;
-  int32_t na(a.to_number());
-  int32_t nb(b.to_number());
-  result.set(na << nb);
+  if (a.is<Int>()) {
+    result.set(a.as<Int>()->shl(b.to_int32()));
+  } else {
+    int32_t na(a.to_number());
+    int32_t nb(b.to_number());
+    result.set(na << nb);
+  }
   return m_l->assign(ctx, result);
 }
 
@@ -2026,9 +2208,13 @@ bool ShiftRightAssignment::eval(Context &ctx, Value &result) {
   Value a, b;
   if (!m_l->eval(ctx, a)) return false;
   if (!m_r->eval(ctx, b)) return false;
-  int32_t na(a.to_number());
-  int32_t nb(b.to_number());
-  result.set(na >> nb);
+  if (a.is<Int>()) {
+    result.set(a.as<Int>()->shr(b.to_int32()));
+  } else {
+    int32_t na(a.to_number());
+    int32_t nb(b.to_number());
+    result.set(na >> nb);
+  }
   return m_l->assign(ctx, result);
 }
 
@@ -2051,9 +2237,13 @@ bool UnsignedShiftRightAssignment::eval(Context &ctx, Value &result) {
   Value a, b;
   if (!m_l->eval(ctx, a)) return false;
   if (!m_r->eval(ctx, b)) return false;
-  int32_t na(a.to_number());
-  int32_t nb(b.to_number());
-  result.set((uint32_t)na >> nb);
+  if (a.is<Int>()) {
+    result.set(a.as<Int>()->bitwise_shr(b.to_int32()));
+  } else {
+    int32_t na(a.to_number());
+    int32_t nb(b.to_number());
+    result.set((uint32_t)na >> nb);
+  }
   return m_l->assign(ctx, result);
 }
 
@@ -2076,9 +2266,17 @@ bool BitwiseAndAssignment::eval(Context &ctx, Value &result) {
   Value a, b;
   if (!m_l->eval(ctx, a)) return false;
   if (!m_r->eval(ctx, b)) return false;
-  int32_t na(a.to_number());
-  int32_t nb(b.to_number());
-  result.set(na & nb);
+  if (a.is<Int>() || b.is<Int>()) {
+    auto ia = a.to_int();
+    auto ib = b.to_int();
+    result.set(ia->bitwise_and(ib));
+    ia->release();
+    ib->release();
+  } else {
+    int32_t na(a.to_number());
+    int32_t nb(b.to_number());
+    result.set(na & nb);
+  }
   return m_l->assign(ctx, result);
 }
 
@@ -2101,9 +2299,17 @@ bool BitwiseOrAssignment::eval(Context &ctx, Value &result) {
   Value a, b;
   if (!m_l->eval(ctx, a)) return false;
   if (!m_r->eval(ctx, b)) return false;
-  int32_t na(a.to_number());
-  int32_t nb(b.to_number());
-  result.set(na | nb);
+  if (a.is<Int>() || b.is<Int>()) {
+    auto ia = a.to_int();
+    auto ib = b.to_int();
+    result.set(ia->bitwise_or(ib));
+    ia->release();
+    ib->release();
+  } else {
+    int32_t na(a.to_number());
+    int32_t nb(b.to_number());
+    result.set(na | nb);
+  }
   return m_l->assign(ctx, result);
 }
 
@@ -2126,9 +2332,17 @@ bool BitwiseXorAssignment::eval(Context &ctx, Value &result) {
   Value a, b;
   if (!m_l->eval(ctx, a)) return false;
   if (!m_r->eval(ctx, b)) return false;
-  int32_t na(a.to_number());
-  int32_t nb(b.to_number());
-  result.set(na ^ nb);
+  if (a.is<Int>() || b.is<Int>()) {
+    auto ia = a.to_int();
+    auto ib = b.to_int();
+    result.set(ia->bitwise_xor(ib));
+    ia->release();
+    ib->release();
+  } else {
+    int32_t na(a.to_number());
+    int32_t nb(b.to_number());
+    result.set(na ^ nb);
+  }
   return m_l->assign(ctx, result);
 }
 

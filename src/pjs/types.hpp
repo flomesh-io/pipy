@@ -1288,7 +1288,7 @@ public:
     return nullptr;
   }
 
-  auto to_int() const -> int {
+  auto to_int32() const -> int {
     switch (m_t) {
       case Value::Type::Empty: return 0;
       case Value::Type::Undefined: return 0;
@@ -1301,6 +1301,7 @@ public:
   }
 
   auto to_int64() const -> int64_t;
+  auto to_int() const -> Int*;
 
   static bool is_identical(const Value &a, const Value &b);
   static bool is_equal(const Value &a, const Value &b);
@@ -2202,7 +2203,7 @@ private:
       *n = int(a.n());
       return true;
     } else if (a.is<Number>() || a.is<Int>()) {
-      *n = a.to_int();
+      *n = a.to_int32();
       return true;
     } else {
       if (set_error) error_argument_type(i, "a number");
@@ -2658,6 +2659,7 @@ public:
     u8, u16, u32, u64,
   };
 
+  static auto promote(Type t, Type u) -> Type;
   static auto convert(Type t, int64_t i) -> int64_t;
   static auto convert(Type t, double n) -> int64_t;
   static auto convert(Type t, const std::string &s) -> int64_t;
@@ -2665,14 +2667,33 @@ public:
   auto to_number() const -> double;
   auto to_string(char *str, size_t len) const -> size_t;
 
+  auto toBytes() const -> Array*;
+
   auto type() const -> Type { return m_t; }
   auto width() const -> int { return (1 << (int(m_t) & 3)) << 3; }
   auto value() const -> int64_t { return m_i; }
-  auto low() const -> double { return isUnsigned() ? uint32_t(m_i) : int32_t(m_i); }
-  auto high() const -> double { return isUnsigned() ? m_i >> 32 : int64_t(m_i) >> 32; }
+  auto low() const -> double { return uint32_t(m_i); }
+  auto high() const -> double { return isUnsigned() ? double(uint64_t(m_i) >> 32) : double(m_i >> 32); }
   bool isUnsigned() const { return int(m_t) >= int(Type::u8); }
 
-  auto toBytes() const -> Array*;
+  bool is_zero() const { return m_i == 0; }
+  bool eql(const Int *i) const;
+  auto cmp(const Int *i) const -> int;
+  auto neg() const -> Int*;
+  auto inc() const -> Int*;
+  auto dec() const -> Int*;
+  auto add(const Int *i) const -> Int*;
+  auto sub(const Int *i) const -> Int*;
+  auto mul(const Int *i) const -> Int*;
+  auto div(const Int *i) const -> Int*;
+  auto mod(const Int *i) const -> Int*;
+  auto shl(int n) const -> Int*;
+  auto shr(int n) const -> Int*;
+  auto bitwise_shr(int n) const -> Int*;
+  auto bitwise_not() const -> Int*;
+  auto bitwise_and(const Int *i) const -> Int*;
+  auto bitwise_or (const Int *i) const -> Int*;
+  auto bitwise_xor(const Int *i) const -> Int*;
 
   virtual void value_of(Value &out) override;
   virtual auto to_string() const -> std::string override;
@@ -2686,7 +2707,8 @@ private:
   Int(Str *s) : m_t(Type::i64), m_i(convert(Type::i64, s->str())) {}
   Int(Array *bytes);
   Int(Type t) : m_t(t), m_i(0) {}
-  Int(Type t, int l, int h = 0) : m_t(t), m_i(convert(t, uint32_t(l) + (int64_t(h) << 32))) {}
+  Int(Type t, int64_t i) : m_t(t), m_i(convert(t, i)) {}
+  Int(Type t, int l, int h) : m_t(t), m_i(convert(t, uint32_t(l) + (int64_t(h) << 32))) {}
   Int(Type t, double n) : m_t(t), m_i(convert(t, n)) {}
   Int(Type t, Int *i) : m_t(t), m_i(convert(t, i->m_i)) {}
   Int(Type t, Str *s) : m_t(t), m_i(convert(t, s->str())) {}
@@ -2702,6 +2724,10 @@ private:
 
 inline auto Value::to_int64() const -> int64_t {
   return is<Int>() ? as<Int>()->value() : to_number();
+}
+
+inline auto Value::to_int() const -> Int* {
+  return (is<Int>() ? as<Int>() : Int::make(to_number()))->retain()->as<Int>();
 }
 
 //

@@ -798,8 +798,8 @@ template<> void ClassDef<Int>::init() {
       if (ctx.get(0, s)) return Int::make(t, s);
       if (ctx.get(0, a)) return Int::make(t, a);
       if (ctx.get(0, n)) {
-        int l = n, h = 0;
-        if (ctx.get(1, h)) return Int::make(l, h);
+        int h = 0;
+        if (ctx.get(1, h)) return Int::make(int(n), h);
         return Int::make(n);
       }
       ctx.error_argument_type(0, "a number, a string or an array");
@@ -841,6 +841,21 @@ void Int::fill(Array *bytes) {
       m_i |= (int64_t)(uint8_t)b << (i << 3);
     }
   }
+}
+
+auto Int::promote(Type t, Type u) -> Type {
+  static const Type s_table[8][8] = {
+    //      i8         i16        i32        i64        u8         u16        u32        u64
+    { Type::i8 , Type::i16, Type::i32, Type::i64, Type::i16, Type::i32, Type::i64, Type::u64 }, // i8
+    { Type::i16, Type::i16, Type::i32, Type::i64, Type::i16, Type::i32, Type::i64, Type::u64 }, // i16
+    { Type::i32, Type::i32, Type::i32, Type::i64, Type::i32, Type::i32, Type::i64, Type::u64 }, // i32
+    { Type::i64, Type::i64, Type::i64, Type::i64, Type::i64, Type::i64, Type::i64, Type::u64 }, // i64
+    { Type::i16, Type::i16, Type::i32, Type::i64, Type::u8 , Type::u16, Type::u32, Type::u64 }, // u8
+    { Type::i32, Type::i32, Type::i32, Type::i64, Type::u16, Type::u16, Type::u32, Type::u64 }, // u16
+    { Type::i64, Type::i64, Type::i64, Type::i64, Type::u32, Type::u32, Type::u32, Type::u64 }, // u32
+    { Type::u64, Type::u64, Type::u64, Type::u64, Type::u64, Type::u64, Type::u64, Type::u64 }, // u64
+  };
+  return s_table[int(t)][int(u)];
 }
 
 auto Int::convert(Type t, int64_t i) -> int64_t {
@@ -895,6 +910,127 @@ auto Int::toBytes() const -> Array* {
     a->set(i, 0xff & (m_i >> (i << 3)));
   }
   return a;
+}
+
+bool Int::eql(const Int *i) const {
+  if (i->m_i != m_i) return false;
+  if (i->isUnsigned() != isUnsigned()) {
+    if (m_i & (1ull << 63)) return false;
+  }
+  return true;
+}
+
+auto Int::cmp(const Int *i) const -> int {
+  if (eql(i)) return 0;
+  if (isUnsigned()) {
+    if (i->isUnsigned() || i->m_i > 0) {
+      return uint64_t(m_i) > uint64_t(i->m_i) ? 1 : -1;
+    } else {
+      return 1;
+    }
+  } else {
+    if (i->isUnsigned()) {
+      if (m_i <= 0) {
+        return -1;
+      } else {
+        return uint64_t(m_i) > uint64_t(i->m_i) ? 1 : -1;
+      }
+    } else {
+      return m_i > i->m_i ? 1 : -1;
+    }
+  }
+}
+
+auto Int::neg() const -> Int* {
+  return Int::make(m_t, -m_i);
+}
+
+auto Int::inc() const -> Int* {
+  return Int::make(m_t, m_i + 1);
+}
+
+auto Int::dec() const -> Int* {
+  return Int::make(m_t, m_i - 1);
+}
+
+auto Int::add(const Int *i) const -> Int* {
+  auto t = promote(m_t, i->m_t);
+  auto a = convert(t, m_i);
+  auto b = convert(t, i->m_i);
+  return Int::make(t, a + b);
+}
+
+auto Int::sub(const Int *i) const -> Int* {
+  auto t = promote(m_t, i->m_t);
+  auto a = convert(t, m_i);
+  auto b = convert(t, i->m_i);
+  return Int::make(t, a - b);
+}
+
+auto Int::mul(const Int *i) const -> Int* {
+  auto t = promote(m_t, i->m_t);
+  auto a = convert(t, m_i);
+  auto b = convert(t, i->m_i);
+  return Int::make(t, a * b);
+}
+
+auto Int::div(const Int *i) const -> Int* {
+  auto t = promote(m_t, i->m_t);
+  auto a = convert(t, m_i);
+  auto b = convert(t, i->m_i);
+  if (int(t) >= int(Type::u8)) {
+    return Int::make(t, int64_t(uint64_t(a) / uint64_t(b)));
+  } else {
+    return Int::make(t, a / b);
+  }
+}
+
+auto Int::mod(const Int *i) const -> Int* {
+  auto t = promote(m_t, i->m_t);
+  auto a = convert(t, m_i);
+  auto b = convert(t, i->m_i);
+  if (int(t) >= int(Type::u8)) {
+    return Int::make(t, int64_t(uint64_t(a) % uint64_t(b)));
+  } else {
+    return Int::make(t, a % b);
+  }
+}
+
+auto Int::shl(int n) const -> Int* {
+  return Int::make(m_t, m_i << n);
+}
+
+auto Int::shr(int n) const -> Int* {
+  return Int::make(m_t, m_i >> n);
+}
+
+auto Int::bitwise_shr(int n) const -> Int* {
+  return Int::make(m_t, int64_t(uint64_t(m_i) >> n));
+}
+
+auto Int::bitwise_not() const -> Int* {
+  return Int::make(m_t, ~m_i);
+}
+
+auto Int::bitwise_and(const Int *i) const -> Int* {
+  auto t = promote(m_t, i->m_t);
+  auto a = convert(t, m_i);
+  auto b = convert(t, i->m_i);
+  return Int::make(t, a & b);
+}
+
+auto Int::bitwise_or(const Int *i) const -> Int* {
+  auto t = promote(m_t, i->m_t);
+  auto a = convert(t, m_i);
+  auto b = convert(t, i->m_i);
+  return Int::make(t, a | b);
+}
+
+auto Int::bitwise_xor(const Int *i) const -> Int* {
+  auto t = promote(m_t, i->m_t);
+  auto a = convert(t, m_i);
+  auto b = convert(t, i->m_i);
+  return Int::make(t, a ^ b);
 }
 
 void Int::value_of(Value &out) {
