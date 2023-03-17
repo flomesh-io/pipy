@@ -705,8 +705,8 @@ public:
   auto chr_to_pos(int i) const -> int { return m_char_data->chr_to_pos(i); }
   auto chr_at(int i) const -> int { return m_char_data->chr_at(i); }
 
-  auto parse_int() const -> double;
-  bool parse_int64(int64_t &i);
+  auto parse_int(int base = 10) const -> double;
+  bool parse_int64(int64_t &i, int base = 10);
   auto parse_float() const -> double;
   auto substring(int start, int end) -> std::string;
 
@@ -2737,6 +2737,10 @@ inline auto Value::to_int() const -> Int* {
 class Number : public ObjectTemplate<Number> {
 public:
   auto value() const -> double { return m_n; }
+
+  static bool is_nan(double n);
+  static bool is_finite(double n);
+  static bool is_integer(double n);
 
   static size_t to_string(char *str, size_t len, double n);
   static size_t to_precision(char *str, size_t len, double n, int precision);

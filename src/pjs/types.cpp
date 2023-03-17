@@ -248,16 +248,16 @@ auto Str::make(uint64_t n) -> Str* {
   return make(str, len);
 }
 
-auto Str::parse_int() const -> double {
+auto Str::parse_int(int base) const -> double {
   char *p = nullptr;
-  auto n = std::strtol(c_str(), &p, 10);
+  auto n = std::strtol(c_str(), &p, base);
   while (*p && std::isblank(*p)) p++;
   return *p ? NAN : n;
 }
 
-bool Str::parse_int64(int64_t &i) {
+bool Str::parse_int64(int64_t &i, int base) {
   char *p = nullptr;
-  i = std::strtoll(c_str(), &p, 10);
+  i = std::strtoll(c_str(), &p, base);
   while (*p && std::isblank(*p)) p++;
   return !*p;
 }
@@ -821,6 +821,14 @@ template<> void ClassDef<Int>::init() {
 template<> void ClassDef<Constructor<Int>>::init() {
   super<Function>();
   ctor();
+
+  method("parse", [](Context &ctx, Object*, Value &ret) {
+    Str *s;
+    int base = 10;
+    if (!ctx.arguments(1, &s, &base)) return;
+    int64_t i;
+    ret.set(s->parse_int64(i, base) ? Int::make(i) : nullptr);
+  });
 }
 
 Int::Int(Array *bytes) : m_i(0) {
@@ -1099,6 +1107,7 @@ template<> void ClassDef<Number>::init() {
 template<> void ClassDef<Constructor<Number>>::init() {
   super<Function>();
   ctor();
+
   variable("EPSILON", std::numeric_limits<double>::epsilon());
   variable("MAX_SAFE_INTEGER", double(1ull << 53));
   variable("MAX_VALUE", std::numeric_limits<double>::max());
@@ -1107,18 +1116,52 @@ template<> void ClassDef<Constructor<Number>>::init() {
   variable("NaN", std::numeric_limits<double>::quiet_NaN());
   variable("NEGATIVE_INFINITY", -std::numeric_limits<double>::infinity());
   variable("POSITIVE_INFINITY", std::numeric_limits<double>::infinity());
+
+  method("isNaN", [](Context &ctx, Object*, Value &ret) {
+    double n;
+    if (!ctx.arguments(1, &n)) return;
+    ret.set(Number::is_nan(n));
+  });
+
+  method("isFinite", [](Context &ctx, Object*, Value &ret) {
+    double n;
+    if (!ctx.arguments(1, &n)) return;
+    ret.set(Number::is_finite(n));
+  });
+
+  method("isInteger", [](Context &ctx, Object*, Value &ret) {
+    double n;
+    if (!ctx.arguments(1, &n)) return;
+    ret.set(Number::is_integer(n));
+  });
+
+  method("parseFloat", [](Context &ctx, Object*, Value &ret) {
+    Str *s;
+    if (!ctx.arguments(1, &s)) return;
+    ret.set(s->parse_float());
+  });
+
+  method("parseInt", [](Context &ctx, Object*, Value &ret) {
+    Str *s;
+    int base = 10;
+    if (!ctx.arguments(1, &s, &base)) return;
+    ret.set(s->parse_int(base));
+  });
 }
 
-void Number::value_of(Value &out) {
-  out.set(m_n);
+bool Number::is_nan(double n) {
+  return std::isnan(n);
 }
 
-auto Number::to_string() const -> std::string {
-  if (std::isnan(m_n)) return Str::nan->str();
-  if (std::isinf(m_n)) return std::signbit(m_n) ? Str::neg_inf->str() : Str::pos_inf->str();
-  char str[100];
-  auto len = to_string(str, sizeof(str), m_n);
-  return std::string(str, len);
+bool Number::is_finite(double n) {
+  return std::isfinite(n);
+}
+
+bool Number::is_integer(double n) {
+  double i;
+  if (std::isnan(n)) return false;
+  if (std::isinf(n)) return false;
+  return (std::modf(n, &i) == 0);
 }
 
 static size_t special_number_to_string(char *str, size_t len, double n) {
@@ -1200,6 +1243,18 @@ size_t Number::to_exponential(char *str, size_t len, double n, int digits) {
   if (digits < 0) digits = 0;
   if (digits > max) digits = max;
   return std::snprintf(str, len, "%.*e", digits, n);
+}
+
+void Number::value_of(Value &out) {
+  out.set(m_n);
+}
+
+auto Number::to_string() const -> std::string {
+  if (std::isnan(m_n)) return Str::nan->str();
+  if (std::isinf(m_n)) return std::signbit(m_n) ? Str::neg_inf->str() : Str::pos_inf->str();
+  char str[100];
+  auto len = to_string(str, sizeof(str), m_n);
+  return std::string(str, len);
 }
 
 //
