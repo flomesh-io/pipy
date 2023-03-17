@@ -1231,8 +1231,8 @@ public:
   void set(bool b) { release(); m_t = Type::Boolean; m_v.b = b; }
   void set(int n) { release(); m_t = Type::Number; m_v.n = n; }
   void set(unsigned int n) { release(); m_t = Type::Number; m_v.n = n; }
-  void set(int64_t n) { release(); m_t = Type::Number; m_v.n = n; }
-  void set(uint64_t n) { release(); m_t = Type::Number; m_v.n = n; }
+  void set(int64_t n);
+  void set(uint64_t n);
   void set(double n) { release(); m_t = Type::Number; m_v.n = n; }
   void set(const char *s) { release(); m_t = Type::String; m_v.s = Str::make(s)->retain(); }
   void set(const std::string &s) { release(); m_t = Type::String; m_v.s = Str::make(s)->retain(); }
@@ -1371,6 +1371,16 @@ template<> inline bool Value::to<int>(int &v) const {
   return true;
 }
 
+template<> inline bool Value::to<int64_t>(int64_t &v) const {
+  v = to_int64();
+  return true;
+}
+
+template<> inline bool Value::to<uint64_t>(uint64_t &v) const {
+  v = to_int64();
+  return true;
+}
+
 template<> inline bool Value::to<double>(double &v) const {
   v = to_number();
   return true;
@@ -1404,6 +1414,14 @@ template<> inline void Value::from<bool>(const bool &v) {
 }
 
 template<> inline void Value::from<int>(const int &v) {
+  set(v);
+}
+
+template<> inline void Value::from<int64_t>(const int64_t &v) {
+  set(v);
+}
+
+template<> inline void Value::from<uint64_t>(const uint64_t &v) {
   set(v);
 }
 
@@ -2721,6 +2739,14 @@ private:
 
   friend class ObjectTemplate<Int>;
 };
+
+inline void Value::set(int64_t n) {
+  set(Int::make(Int::Type::i64, n));
+}
+
+inline void Value::set(uint64_t n) {
+  set(Int::make(Int::Type::u64, int64_t(n)));
+}
 
 inline auto Value::to_int64() const -> int64_t {
   return is<Int>() ? as<Int>()->value() : to_number();

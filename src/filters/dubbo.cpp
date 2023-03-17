@@ -167,13 +167,7 @@ void Encoder::process(Event *evt) {
 
   } else if (evt->is<MessageEnd>() || evt->is<StreamEnd>()) {
     if (m_head) {
-      MessageHead *mh;
-      if (m_head->is<MessageHead>()) {
-        mh = m_head->as<MessageHead>();
-      } else {
-        mh = MessageHead::make();
-        if (m_head) pjs::class_of<MessageHead>()->assign(mh, m_head);
-      }
+      MessageHead *mh = pjs::coerce<MessageHead>(m_head);
 
       uint8_t flags = mh->serializationType & 0x1f;
       if (mh->isRequest) flags |= 0x80;
@@ -228,60 +222,12 @@ using namespace pipy::dubbo;
 //
 
 template<> void ClassDef<MessageHead>::init() {
-  accessor(
-    "requestID",
-    [](Object *obj, Value &val) {
-      auto rid = obj->as<MessageHead>()->requestID;
-      if (rid >> 32) {
-        val.set(pjs::Str::make(rid));
-      } else {
-        val.set(uint32_t(rid));
-      }
-    },
-    [](Object *obj, const Value &val) {
-      auto *mh = obj->as<MessageHead>();
-      if (val.is_string()) {
-        int64_t i;
-        if (val.s()->parse_int64(i)) {
-          mh->requestID = i;
-        } else {
-          mh->requestID = 0;
-        }
-      } else {
-        mh->requestID = uint64_t(val.to_number());
-      }
-    }
-  );
-
-  accessor(
-    "isRequest",
-    [](Object *obj, Value &val) { val.set(obj->as<MessageHead>()->isRequest); },
-    [](Object *obj, const Value &val) { obj->as<MessageHead>()->isRequest = val.to_boolean(); }
-  );
-
-  accessor(
-    "isTwoWay",
-    [](Object *obj, Value &val) { val.set(obj->as<MessageHead>()->isTwoWay); },
-    [](Object *obj, const Value &val) { obj->as<MessageHead>()->isTwoWay = val.to_boolean(); }
-  );
-
-  accessor(
-    "isEvent",
-    [](Object *obj, Value &val) { val.set(obj->as<MessageHead>()->isEvent); },
-    [](Object *obj, const Value &val) { obj->as<MessageHead>()->isEvent = val.to_boolean(); }
-  );
-
-  accessor(
-    "serializationType",
-    [](Object *obj, Value &val) { val.set(obj->as<MessageHead>()->serializationType); },
-    [](Object *obj, const Value &val) { obj->as<MessageHead>()->serializationType = val.to_number(); }
-  );
-
-  accessor(
-    "status",
-    [](Object *obj, Value &val) { val.set(obj->as<MessageHead>()->status); },
-    [](Object *obj, const Value &val) { obj->as<MessageHead>()->status = val.to_number(); }
-  );
+  field<uint64_t>("requestID", [](MessageHead *obj) { return &obj->requestID; });
+  field<bool>("isRequest", [](MessageHead *obj) { return &obj->isRequest; });
+  field<bool>("isTwoWay", [](MessageHead *obj) { return &obj->isTwoWay; });
+  field<bool>("isEvent", [](MessageHead *obj) { return &obj->isEvent; });
+  field<int>("serializationType", [](MessageHead *obj) { return &obj->serializationType; });
+  field<int>("status", [](MessageHead *obj) { return &obj->status; });
 }
 
 } // namespace pjs
