@@ -69,7 +69,7 @@
 // x60 - x6f    # object with direct type
 // x70 - x77    # fixed list with direct length
 // x78 - x7f    # fixed untyped list with direct length
-// x80 - xbf    # one-octet compact int (-x10 to x3f, x90 is 0)
+// x80 - xbf    # one-octet compact int (-x10 to x2f, x90 is 0)
 // xc0 - xcf    # two-octet compact int (-x800 to x7ff)
 // xd0 - xd7    # three-octet compact int (-x40000 to x3ffff)
 // xd8 - xef    # one-octet compact long (-x8 to xf, xe0 is 0)
@@ -109,7 +109,7 @@
 //
 //            # 32-bit signed integer
 // int        ::= 'I' b3 b2 b1 b0
-//            ::= [x80-xbf]             # -x10 to x3f
+//            ::= [x80-xbf]             # -x10 to x2f
 //            ::= [xc0-xcf] b0          # -x800 to x7ff
 //            ::= [xd0-xd7] b1 b0       # -x40000 to x3ffff
 //
@@ -200,23 +200,22 @@ void Hessian::encode(const pjs::Value &value, Data::Builder &db) {
   ReferenceMap<pjs::Str> map_types;
 
   auto write_int = [&](int value) {
-    if (-0x10 <= value && value <= 0x3f) {
-      db.push(0x90 + value);
-    } else if (-0x800 <= value && value <= 0x7ff) {
-      auto n = 0xc800 + value;
-      db.push(n >> 8);
-      db.push(n >> 0);
-    } else if (-0x40000 <= value && value <= 0x3ffff) {
-      auto n = 0xd40000 + value;
-      db.push(n >> 16);
-      db.push(n >>  8);
-      db.push(n >>  0);
+    auto i = int32_t(value);
+    if (-0x10 <= i && i <= 0x2f) {
+      db.push(int(i) + 0x90);
+    } else if (-0x800 <= i && i <= 0x7ff) {
+      db.push(int(i >> 8) + 0xc8);
+      db.push(int(i >> 0) & 0xff);
+    } else if (-0x40000 <= i && i <= 0x3ffff) {
+      db.push(int(i >> 16) + 0xd4);
+      db.push(int(i >>  8) & 0xff);
+      db.push(int(i >>  0) & 0xff);
     } else {
       db.push('I');
-      db.push(value >> 24);
-      db.push(value >> 16);
-      db.push(value >>  8);
-      db.push(value >>  0);
+      db.push(int(i >> 24) & 0xff);
+      db.push(int(i >> 16) & 0xff);
+      db.push(int(i >>  8) & 0xff);
+      db.push(int(i >>  0) & 0xff);
     }
   };
 
@@ -262,36 +261,72 @@ void Hessian::encode(const pjs::Value &value, Data::Builder &db) {
     } else if (value.is_boolean()) {
       db.push(value.b() ? 'T' : 'F');
 
-    } else if (value.is_number()) {
-      auto n = value.n();
-      double i;
-      if (std::isnan(n) || std::isinf(n) || std::modf(n, &i)) {
-        int64_t tmp; *(double*)&tmp = n;
-        db.push('D');
-        db.push((char)(tmp >> 56));
-        db.push((char)(tmp >> 48));
-        db.push((char)(tmp >> 40));
-        db.push((char)(tmp >> 32));
-        db.push((char)(tmp >> 24));
-        db.push((char)(tmp >> 16));
-        db.push((char)(tmp >>  8));
-        db.push((char)(tmp >>  0));
-
-      } else {
-        auto i = int64_t(n);
-        if (std::numeric_limits<int>::min() <= i && i <= std::numeric_limits<int>::max()) {
-          write_int(i);
+    } else if (value.is<pjs::Int>()) {
+      auto *i = value.as<pjs::Int>();
+      if (i->width() == 64) {
+        auto n = i->value();
+        if (-0x8 <= n && n <= 0xf) {
+          db.push(int(n) + 0xe0);
+        } else if (-0x800 <= n && n <= 0x7ff) {
+          db.push(int(n >> 8) + 0xf8);
+          db.push(int(n >> 0) & 0xff);
+        } else if (-0x40000 <= n && n <= 0x3ffff) {
+          db.push(int(n >> 16) + 0x3c);
+          db.push(int(n >>  8) & 0xff);
+          db.push(int(n >>  0) & 0xff);
+        } else if (-0x80000000ll <= n && n <= 0x7fffffffll) {
+          db.push(0x59);
+          db.push(int(n >> 24) & 0xff);
+          db.push(int(n >> 16) & 0xff);
+          db.push(int(n >>  8) & 0xff);
+          db.push(int(n >>  0) & 0xff);
         } else {
           db.push('L');
-          db.push((char)(i >> 56));
-          db.push((char)(i >> 48));
-          db.push((char)(i >> 40));
-          db.push((char)(i >> 32));
-          db.push((char)(i >> 24));
-          db.push((char)(i >> 16));
-          db.push((char)(i >>  8));
-          db.push((char)(i >>  0));
+          db.push(int(n >> 56) & 0xff);
+          db.push(int(n >> 48) & 0xff);
+          db.push(int(n >> 40) & 0xff);
+          db.push(int(n >> 32) & 0xff);
+          db.push(int(n >> 24) & 0xff);
+          db.push(int(n >> 16) & 0xff);
+          db.push(int(n >>  8) & 0xff);
+          db.push(int(n >>  0) & 0xff);
         }
+      } else {
+        write_int(i->value());
+      }
+    } else if (value.is_number()) {
+      auto n = value.n();
+      auto done = false;
+      if (pjs::Number::is_integer(n)) {
+        auto i = int32_t(n);
+        if (i == 0) {
+          db.push(0x5b);
+          done = true;
+        } else if (i == 1) {
+          db.push(0x5c);
+          done = true;
+        } else if (-128 <= i && i <= 127) {
+          db.push(0x5d);
+          db.push(i);
+          done = true;
+        } else if (-32768 <= i && i <= 32767) {
+          db.push(0x5e);
+          db.push(int(i >> 8) & 0xff);
+          db.push(int(i >> 0) & 0xff);
+          done = true;
+        }
+      }
+      if (!done) {
+        int64_t i; *(double*)&i = n;
+        db.push('D');
+        db.push(int(i >> 56) & 0xff);
+        db.push(int(i >> 48) & 0xff);
+        db.push(int(i >> 40) & 0xff);
+        db.push(int(i >> 32) & 0xff);
+        db.push(int(i >> 24) & 0xff);
+        db.push(int(i >> 16) & 0xff);
+        db.push(int(i >>  8) & 0xff);
+        db.push(int(i >>  0) & 0xff);
       }
 
     } else if (value.is_string()) {
@@ -337,14 +372,7 @@ void Hessian::encode(const pjs::Value &value, Data::Builder &db) {
         write_int(i);
 
       } else {
-        pjs::Ref<Collection> c;
-        if (value.is<Collection>()) {
-          c = value.as<Collection>();
-        } else {
-          c = Collection::make(Collection::Kind::class_def);
-          pjs::class_of<Collection>()->assign(c, value.o());
-        }
-
+        pjs::Ref<Collection> c = pjs::coerce<Collection>(value.o());
         auto *t = c->type.get();
         auto *e = c->elements.get();
         auto *a = e && e->is_array() ? e->as<pjs::Array>() : nullptr;
@@ -353,18 +381,26 @@ void Hessian::encode(const pjs::Value &value, Data::Builder &db) {
           case Collection::Kind::list: {
             int n = a ? a->length() : 0;
             if (t && t != pjs::Str::empty) {
+              // Small fixed-length list optimization is currently disabled
+#if 0
               if (n < 8) {
                 db.push(0x70 + n);
                 write_type(t);
-              } else {
+              } else
+#endif
+              {
                 db.push('V');
                 write_type(t);
                 write_int(n);
               }
             } else {
+              // Small fixed-length list optimization is currently disabled
+#if 0
               if (n < 8) {
                 db.push(0x78 + n);
-              } else {
+              } else
+#endif
+              {
                 db.push(0x58);
                 write_int(n);
               }
@@ -631,8 +667,8 @@ auto Hessian::Parser::on_state(int state, int c) -> int {
         return push(Collection::make(Collection::Kind::list), CollectionState::VALUE, c - 0x78);
 
       } else if (c < 0xc0) {
-        // x80 - xbf : one-octet compact int (-x10 to x3f, x90 is 0)
-        return push(c - 0x90);
+        // x80 - xbf : one-octet compact int (-x10 to x2f, x90 is 0)
+        return push(pjs::Int::make(pjs::Int::Type::i32, int64_t(c - 0x90)));
 
       } else if (c < 0xd0) {
         // xc0 - xcf : two-octet compact int (-x800 to x7ff)
@@ -653,7 +689,7 @@ auto Hessian::Parser::on_state(int state, int c) -> int {
 
       } else if (c < 0xf0) {
         // xd8 - xef : one-octet compact long (-x8 to xf, xe0 is 0)
-        return push(c - 0xe0);
+        return push(pjs::Int::make(pjs::Int::Type::i64, int64_t(c - 0xe0)));
 
       } else {
         // xf0 - xff : two-octet compact long (-x800 to x7ff, xf8 is 0)
@@ -672,14 +708,14 @@ auto Hessian::Parser::on_state(int state, int c) -> int {
       return ERROR;
 
     case INT:
-      return push(
+      return push(pjs::Int::make(pjs::Int::Type::i32, int64_t(
         ((int32_t)m_read_number[0] << 24)|
         ((int32_t)m_read_number[1] << 16)|
         ((int32_t)m_read_number[2] <<  8)|
         ((int32_t)m_read_number[3] <<  0)
-      );
+      )));
     case LONG:
-      return push(
+      return push(pjs::Int::make(pjs::Int::Type::i64,
         ((int64_t)m_read_number[0] << 56)|
         ((int64_t)m_read_number[1] << 48)|
         ((int64_t)m_read_number[2] << 40)|
@@ -688,7 +724,7 @@ auto Hessian::Parser::on_state(int state, int c) -> int {
         ((int64_t)m_read_number[5] << 16)|
         ((int64_t)m_read_number[6] <<  8)|
         ((int64_t)m_read_number[7] <<  0)
-      );
+      ));
     case DOUBLE: {
       auto n = (
         ((uint64_t)m_read_number[0] << 56)|
@@ -838,8 +874,8 @@ auto Hessian::Parser::push(const pjs::Value &value, CollectionState state, int l
         }
         case CollectionState::LENGTH:
           if (m_is_ref) return ERROR;
-          if (v.is_number()) {
-            int n = v.n();
+          if (v.is_number_like()) {
+            int n = v.to_int32();
             if (n < 0) return ERROR;
             l->length = n;
             l->state = CollectionState::VALUE;
@@ -856,8 +892,8 @@ auto Hessian::Parser::push(const pjs::Value &value, CollectionState state, int l
               c->kind == Collection::Kind::list ||
               c->kind == Collection::Kind::map
             ) m_type_refs.add(v.s());
-          } else if (value.is_number()) {
-            auto s = m_type_refs.get(v.n());
+          } else if (value.is_number_like()) {
+            auto s = m_type_refs.get(v.to_int32());
             if (!s) return ERROR;
             c->type = s;
           } else {
@@ -866,8 +902,8 @@ auto Hessian::Parser::push(const pjs::Value &value, CollectionState state, int l
           l->state = (l->state == CollectionState::TYPE_LENGTH ? CollectionState::LENGTH : CollectionState::VALUE);
           return START;
         case CollectionState::CLASS_DEF:
-          if (!m_is_ref && v.is_number()) {
-            if (auto d = m_def_refs.get(v.n())) {
+          if (!m_is_ref && v.is_number_like()) {
+            if (auto d = m_def_refs.get(v.to_int32())) {
               c->type = d->type;
               l->class_def = d;
               l->state = CollectionState::LENGTH;

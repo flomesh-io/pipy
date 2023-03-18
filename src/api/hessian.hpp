@@ -62,6 +62,7 @@ public:
     pjs::Ref<pjs::Object> elements;
 
   private:
+    Collection() : kind(Kind::list) {}
     Collection(Kind k) : kind(k) {}
     friend class pjs::ObjectTemplate<Collection>;
   };
