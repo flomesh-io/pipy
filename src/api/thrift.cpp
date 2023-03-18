@@ -197,17 +197,17 @@ void Thrift::encode(pjs::Object *msg, Data::Builder &db) {
         db.push(value.to_boolean() ? 1 : 0);
         break;
       case Type::I8:
-        db.push(int(value.to_number()));
+        db.push(int(value.to_int32()));
         break;
       case Type::I16:
         if (protocol == Protocol::compact) {
           write_varint(
             get_zigzag_int32(
-              int16_t(value.to_number())
+              int16_t(value.to_int32())
             )
           );
         } else {
-          auto i = int16_t(value.to_number());
+          auto i = int16_t(value.to_int32());
           db.push(i >> 8);
           db.push(i >> 0);
         }
@@ -216,11 +216,11 @@ void Thrift::encode(pjs::Object *msg, Data::Builder &db) {
         if (protocol == Protocol::compact) {
           write_varint(
             get_zigzag_int32(
-              int32_t(value.to_number())
+              int32_t(value.to_int32())
             )
           );
         } else {
-          auto i = int32_t(value.to_number());
+          auto i = int32_t(value.to_int32());
           db.push(i >> 24);
           db.push(i >> 16);
           db.push(i >>  8);
@@ -231,11 +231,11 @@ void Thrift::encode(pjs::Object *msg, Data::Builder &db) {
         if (protocol == Protocol::compact) {
           write_varint(
             get_zigzag_int64(
-              int64_t(value.to_number())
+              value.to_int64()
             )
           );
         } else {
-          auto i = int64_t(value.to_number());
+          auto i = int64_t(value.to_int64());
           db.push(char(i >> 56));
           db.push(char(i >> 48));
           db.push(char(i >> 40));
@@ -247,7 +247,7 @@ void Thrift::encode(pjs::Object *msg, Data::Builder &db) {
         }
         break;
       case Type::DOUBLE: {
-        auto n = value.to_number();
+        auto n = value.to_int64();
         auto i = *reinterpret_cast<uint64_t*>(&n);
         db.push(char(i >> 56));
         db.push(char(i >> 48));
@@ -651,9 +651,9 @@ auto Thrift::Parser::on_state(int state, int c) -> int {
     case VALUE_I64:
       if (m_protocol == Protocol::compact) {
         if (var_int(c)) return VALUE_I64;
-        set_value((double)zigzag_to_int(m_var_int));
+        set_value(pjs::Int::make(pjs::Int::Type::i64, zigzag_to_int(m_var_int)));
       } else {
-        set_value((double)(
+        set_value(pjs::Int::make(pjs::Int::Type::i64,
           ((int64_t)m_read_buf[0] << 56) |
           ((int64_t)m_read_buf[1] << 48) |
           ((int64_t)m_read_buf[2] << 40) |
