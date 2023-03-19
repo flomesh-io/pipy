@@ -52,10 +52,10 @@ public:
   static const Type __TYPE = Event::Data;
 
   enum class Encoding {
-    UTF8,
-    Hex,
-    Base64,
-    Base64Url,
+    utf8,
+    hex,
+    base64,
+    base64url,
   };
 
   //
@@ -464,10 +464,10 @@ public:
 
   Data(const std::string &str, Encoding encoding, Producer *producer) : Data() {
     switch (encoding) {
-      case Encoding::UTF8:
+      case Encoding::utf8:
         push(str, producer);
         break;
-      case Encoding::Hex: {
+      case Encoding::hex: {
         if (str.length() % 2) throw std::runtime_error("incomplete hex string");
         Builder db(*this, producer);
         utils::HexDecoder decoder([&](uint8_t b) { db.push(b); });
@@ -479,7 +479,7 @@ public:
         db.flush();
         break;
       }
-      case Encoding::Base64: {
+      case Encoding::base64: {
         if (str.length() % 4) throw std::runtime_error("incomplete Base64 string");
         Builder db(*this, producer);
         utils::Base64Decoder decoder([&](uint8_t b) { db.push(b); });
@@ -492,7 +492,7 @@ public:
         db.flush();
         break;
       }
-      case Encoding::Base64Url: {
+      case Encoding::base64url: {
         Builder db(*this, producer);
         utils::Base64UrlDecoder decoder([&](uint8_t b) { db.push(b); });
         for (auto c : str) {
@@ -898,7 +898,7 @@ public:
   auto to_string(Encoding encoding) const -> std::string {
     assert_same_thread(*this);
     switch (encoding) {
-      case Encoding::UTF8: {
+      case Encoding::utf8: {
         pjs::Utf8Decoder decoder([](int) {});
         for (const auto c : chunks()) {
           auto ptr = std::get<0>(c);
@@ -911,7 +911,7 @@ public:
         }
         return to_string();
       }
-      case Encoding::Hex: {
+      case Encoding::hex: {
         std::string str;
         utils::HexEncoder encoder([&](char c) { str += c; });
         for (const auto c : chunks()) {
@@ -921,7 +921,7 @@ public:
         }
         return str;
       }
-      case Encoding::Base64: {
+      case Encoding::base64: {
         std::string str;
         utils::Base64Encoder encoder([&](char c) { str += c; });
         for (const auto c : chunks()) {
@@ -932,7 +932,7 @@ public:
         encoder.flush();
         return str;
       }
-      case Encoding::Base64Url: {
+      case Encoding::base64url: {
         std::string str;
         utils::Base64UrlEncoder encoder([&](char c) { str += c; });
         for (const auto c : chunks()) {

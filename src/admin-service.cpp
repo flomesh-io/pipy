@@ -213,7 +213,7 @@ auto AdminService::handle(Context *ctx, Message *req) -> Message* {
       head->headers(headers);
       pjs::Ref<crypto::Hash> hash = crypto::Hash::make("sha1");
       hash->update(sec_key.s()->str() + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11");
-      headers->set(s_sec_websocket_accept, hash->digest(Data::Encoding::Base64));
+      headers->set(s_sec_websocket_accept, hash->digest(Data::Encoding::base64));
       headers->set(s_connection, s_upgrade.get());
       headers->set(s_upgrade, s_websocket.get());
       m_response_upgraded_ws = Message::make(head, nullptr);

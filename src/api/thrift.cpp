@@ -783,7 +783,7 @@ auto Thrift::Parser::on_state(int state, int c) -> int {
 
     case BINARY_DATA:
       try {
-        set_value(m_read_data->to_string(Data::Encoding::UTF8));
+        set_value(m_read_data->to_string(Data::Encoding::utf8));
       } catch (std::runtime_error &err) {
         set_value(m_read_data.get());
       }

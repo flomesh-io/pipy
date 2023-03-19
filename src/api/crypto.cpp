@@ -588,7 +588,7 @@ void Hash::update(pjs::Str *str, Data::Encoding enc) {
 
 void Hash::update(const std::string &str, Data::Encoding enc) {
   switch (enc) {
-    case Data::Encoding::UTF8:
+    case Data::Encoding::utf8:
       EVP_DigestUpdate(m_ctx, str.c_str(), str.length());
       break;
     default: {
@@ -610,19 +610,19 @@ auto Hash::digest(Data::Encoding enc) -> pjs::Str* {
   char hash[EVP_MAX_MD_SIZE];
   auto size = digest(hash);
   switch (enc) {
-    case Data::Encoding::UTF8:
+    case Data::Encoding::utf8:
       return pjs::Str::make(hash, size);
-    case Data::Encoding::Hex: {
+    case Data::Encoding::hex: {
       char str[size * 2];
       auto len = utils::encode_hex(str, hash, size);
       return pjs::Str::make(str, len);
     }
-    case Data::Encoding::Base64: {
+    case Data::Encoding::base64: {
       char str[size * 2];
       auto len = utils::encode_base64(str, hash, size);
       return pjs::Str::make(str, len);
     }
-    case Data::Encoding::Base64Url: {
+    case Data::Encoding::base64url: {
       char str[size * 2];
       auto len = utils::encode_base64url(str, hash, size);
       return pjs::Str::make(str, len);
@@ -667,7 +667,7 @@ void Hmac::update(Data *data) {
 
 void Hmac::update(pjs::Str *str, Data::Encoding enc) {
   switch (enc) {
-    case Data::Encoding::UTF8:
+    case Data::Encoding::utf8:
       HMAC_Update(m_ctx, (unsigned char *)str->c_str(), str->size());
       break;
     default: {
@@ -690,19 +690,19 @@ auto Hmac::digest(Data::Encoding enc) -> pjs::Str* {
   unsigned int size;
   HMAC_Final(m_ctx, (unsigned char *)hash, &size);
   switch (enc) {
-    case Data::Encoding::UTF8:
+    case Data::Encoding::utf8:
       return pjs::Str::make(hash, size);
-    case Data::Encoding::Hex: {
+    case Data::Encoding::hex: {
       char str[size * 2];
       auto len = utils::encode_hex(str, hash, size);
       return pjs::Str::make(str, len);
     }
-    case Data::Encoding::Base64: {
+    case Data::Encoding::base64: {
       char str[size * 2];
       auto len = utils::encode_base64(str, hash, size);
       return pjs::Str::make(str, len);
     }
-    case Data::Encoding::Base64Url: {
+    case Data::Encoding::base64url: {
       char str[size * 2];
       auto len = utils::encode_base64url(str, hash, size);
       return pjs::Str::make(str, len);
@@ -736,7 +736,7 @@ void Sign::update(Data *data) {
 
 void Sign::update(pjs::Str *str, Data::Encoding enc) {
   switch (enc) {
-    case Data::Encoding::UTF8:
+    case Data::Encoding::utf8:
       if (!EVP_DigestUpdate(m_ctx, (unsigned char *)str->c_str(), str->size())) throw_error();
       break;
     default: {
@@ -799,7 +799,7 @@ void Verify::update(Data *data) {
 
 void Verify::update(pjs::Str *str, Data::Encoding enc) {
   switch (enc) {
-    case Data::Encoding::UTF8:
+    case Data::Encoding::utf8:
       if (!EVP_DigestUpdate(m_ctx, (unsigned char *)str->c_str(), str->size())) throw_error();
       break;
     default: {
@@ -1367,16 +1367,12 @@ template<> void ClassDef<Hash>::init() {
 
   method("update", [](Context &ctx, Object *obj, Value &ret) {
     pipy::Data *data = nullptr;
-    Str *str, *encoding_name = nullptr;
+    Str *str;
+    EnumValue<pipy::Data::Encoding> encoding = pipy::Data::Encoding::utf8;
     if (ctx.try_arguments(1, &data) && data) {
       obj->as<Hash>()->update(data);
-    } else if (ctx.try_arguments(1, &str, &encoding_name)) {
-      auto encoding = EnumDef<pipy::Data::Encoding>::value(encoding_name, pipy::Data::Encoding::UTF8);
-      if (int(encoding) < 0) {
-        ctx.error("unknown encoding");
-      } else {
-        obj->as<Hash>()->update(str, encoding);
-      }
+    } else if (ctx.try_arguments(1, &str, &encoding)) {
+      obj->as<Hash>()->update(str, encoding);
     } else {
       ctx.error_argument_type(0, "a Data object or a string");
     }
@@ -1428,16 +1424,12 @@ template<> void ClassDef<Hmac>::init() {
 
   method("update", [](Context &ctx, Object *obj, Value &ret) {
     pipy::Data *data = nullptr;
-    Str *str, *encoding_name = nullptr;
+    Str *str;
+    EnumValue<pipy::Data::Encoding> encoding = pipy::Data::Encoding::utf8;
     if (ctx.try_arguments(1, &data) && data) {
       obj->as<Hmac>()->update(data);
-    } else if (ctx.try_arguments(1, &str, &encoding_name)) {
-      auto encoding = EnumDef<pipy::Data::Encoding>::value(encoding_name, pipy::Data::Encoding::UTF8);
-      if (int(encoding) < 0) {
-        ctx.error("unknown encoding");
-      } else {
-        obj->as<Hmac>()->update(str, encoding);
-      }
+    } else if (ctx.try_arguments(1, &str, &encoding)) {
+      obj->as<Hmac>()->update(str, encoding);
     } else {
       ctx.error_argument_type(0, "a Data object or a string");
     }
@@ -1483,17 +1475,13 @@ template<> void ClassDef<Sign>::init() {
 
   method("update", [](Context &ctx, Object *obj, Value &ret) {
     pipy::Data *data = nullptr;
-    Str *str, *encoding_name = nullptr;
+    Str *str;
+    EnumValue<pipy::Data::Encoding> encoding = pipy::Data::Encoding::utf8;
     try {
       if (ctx.try_arguments(1, &data) && data) {
         obj->as<Sign>()->update(data);
-      } else if (ctx.try_arguments(1, &str, &encoding_name)) {
-        auto encoding = EnumDef<pipy::Data::Encoding>::value(encoding_name, pipy::Data::Encoding::UTF8);
-        if (int(encoding) < 0) {
-          ctx.error("unknown encoding");
-        } else {
-          obj->as<Sign>()->update(str, encoding);
-        }
+      } else if (ctx.try_arguments(1, &str, &encoding)) {
+        obj->as<Sign>()->update(str, encoding);
       } else {
         ctx.error_argument_type(0, "a Data object or a string");
       }
@@ -1504,23 +1492,18 @@ template<> void ClassDef<Sign>::init() {
 
   method("sign", [](Context &ctx, Object *obj, Value &ret) {
     PrivateKey *key;
-    Str *encoding_name = nullptr;
+    EnumValue<pipy::Data::Encoding> encoding = pipy::Data::Encoding::utf8;
     Object *options = nullptr;
     try {
       if (ctx.try_arguments(1, &key, &options) ||
-          ctx.try_arguments(1, &key, &encoding_name, &options)
+          ctx.try_arguments(1, &key, &encoding, &options)
       ) {
         if (!key) {
           ctx.error_argument_type(0, "a PrivateKey object");
           return;
         }
-        auto encoding = EnumDef<pipy::Data::Encoding>::value(encoding_name, pipy::Data::Encoding::UTF8);
-        if (int(encoding) < 0) {
-          ctx.error("unknown encoding");
-          return;
-        }
         try {
-          if (encoding_name) {
+          if (ctx.is_string(1)) {
             ret.set(obj->as<Sign>()->sign(key, encoding, options));
           } else {
             ret.set(obj->as<Sign>()->sign(key, options));
@@ -1560,17 +1543,13 @@ template<> void ClassDef<Verify>::init() {
 
   method("update", [](Context &ctx, Object *obj, Value &ret) {
     pipy::Data *data = nullptr;
-    Str *str, *encoding_name = nullptr;
+    Str *str;
+    EnumValue<pipy::Data::Encoding> encoding = pipy::Data::Encoding::utf8;
     try {
       if (ctx.try_arguments(1, &data) && data) {
         obj->as<Verify>()->update(data);
-      } else if (ctx.try_arguments(1, &str, &encoding_name)) {
-        auto encoding = EnumDef<pipy::Data::Encoding>::value(encoding_name, pipy::Data::Encoding::UTF8);
-        if (int(encoding) < 0) {
-          ctx.error("unknown encoding");
-        } else {
-          obj->as<Verify>()->update(str, encoding);
-        }
+      } else if (ctx.try_arguments(1, &str, &encoding)) {
+        obj->as<Verify>()->update(str, encoding);
       } else {
         ctx.error_argument_type(0, "a Data object or a string");
       }
@@ -1581,20 +1560,16 @@ template<> void ClassDef<Verify>::init() {
 
   method("verify", [](Context &ctx, Object *obj, Value &ret) {
     PublicKey *key;
-    Str *signature_str = nullptr, *encoding_name = nullptr;
+    Str *signature_str = nullptr;
+    EnumValue<pipy::Data::Encoding> encoding = pipy::Data::Encoding::utf8;
     pipy::Data *signature = nullptr;
     Object *options = nullptr;
     try {
       if (ctx.try_arguments(2, &key, &signature, &options) ||
-          ctx.try_arguments(2, &key, &signature_str, &encoding_name, &options)
+          ctx.try_arguments(2, &key, &signature_str, &encoding, &options)
       ) {
         if (!key) {
           ctx.error_argument_type(0, "a PublicKey object");
-          return;
-        }
-        auto encoding = EnumDef<pipy::Data::Encoding>::value(encoding_name, pipy::Data::Encoding::UTF8);
-        if (int(encoding) < 0) {
-          ctx.error("unknown encoding");
           return;
         }
         try {

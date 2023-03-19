@@ -82,10 +82,10 @@ namespace pjs {
 using namespace pipy;
 
 template<> void EnumDef<pipy::Data::Encoding>::init() {
-  define(pipy::Data::Encoding::UTF8, "utf8");
-  define(pipy::Data::Encoding::Hex, "hex");
-  define(pipy::Data::Encoding::Base64, "base64");
-  define(pipy::Data::Encoding::Base64Url, "base64url");
+  define(pipy::Data::Encoding::utf8, "utf8");
+  define(pipy::Data::Encoding::hex, "hex");
+  define(pipy::Data::Encoding::base64, "base64");
+  define(pipy::Data::Encoding::base64url, "base64url");
 }
 
 static pipy::Data::Producer s_dp("Script");
@@ -95,30 +95,35 @@ template<> void ClassDef<pipy::Data>::init() {
 
   ctor([](Context &ctx) -> Object* {
     Array *arr;
-    Str *str, *encoding = nullptr;
+    Str *str;
+    EnumValue<pipy::Data::Encoding> encoding;
     pipy::Data *data;
     try {
-      if (ctx.argc() == 0) {
-        return pipy::Data::make();
-      } else if (ctx.try_arguments(1, &arr)) {
-        auto data = pipy::Data::make();
-        for (int i = 0, n = arr->length(); i < n; i++) {
-          Value v; arr->get(i, v);
-          s_dp.push(data, uint8_t(v.to_number()));
-        }
-        return data;
-      } else if (ctx.try_arguments(1, &str, &encoding)) {
-        auto enc = EnumDef<pipy::Data::Encoding>::value(encoding, pipy::Data::Encoding::UTF8);
-        if (int(enc) < 0) {
-          ctx.error("unknown encoding");
-          return nullptr;
-        }
-        return s_dp.make(str->str(), enc);
-      } else if (ctx.try_arguments(1, &data) && data) {
-        return pipy::Data::make(*data);
+      switch (ctx.argc()) {
+        case 0:
+          return pipy::Data::make();
+        case 1:
+          if (ctx.get(0, str)) {
+            return pipy::Data::make(str->str(), &s_dp);
+          } else if (ctx.get(0, arr)) {
+            data = pipy::Data::make();
+            pipy::Data::Builder db(*data, &s_dp);
+            for (int i = 0, n = arr->length(); i < n; i++) {
+              Value v; arr->get(i, v);
+              db.push(v.to_int32());
+            }
+            db.flush();
+            return data;
+          } else if (ctx.get(0, data)) {
+            return pipy::Data::make(*data);
+          } else {
+            ctx.error_argument_type(0, "a string, an array or a Data");
+            return nullptr;
+          }
+        default:
+          if (!ctx.arguments(2, &str, &encoding)) return nullptr;
+          return s_dp.make(str->str(), encoding);
       }
-      ctx.error_argument_type(0, "a string, Array or Data");
-      return nullptr;
     } catch (std::runtime_error &err) {
       ctx.error(err);
       return nullptr;
@@ -195,15 +200,10 @@ template<> void ClassDef<pipy::Data>::init() {
   });
 
   method("toString", [](Context &ctx, Object *obj, Value &ret) {
-    Str *encoding = nullptr;
+    EnumValue<pipy::Data::Encoding> encoding = pipy::Data::Encoding::utf8;
     if (!ctx.arguments(0, &encoding)) return;
-    auto enc = EnumDef<pipy::Data::Encoding>::value(encoding, pipy::Data::Encoding::UTF8);
-    if (int(enc) < 0) {
-      ctx.error("unknown encoding");
-      return;
-    }
     try {
-      ret.set(obj->as<pipy::Data>()->to_string(enc));
+      ret.set(obj->as<pipy::Data>()->to_string(encoding));
     } catch (std::runtime_error &err) {
       ret = pjs::Value::undefined;
     }
@@ -215,15 +215,11 @@ template<> void ClassDef<Constructor<pipy::Data>>::init() {
   ctor();
 
   method("from", [](Context &ctx, Object *obj, Value &ret) {
-    Str *str, *encoding = nullptr;
+    Str *str;
+    EnumValue<pipy::Data::Encoding> encoding = pipy::Data::Encoding::utf8;
     try {
       if (!ctx.arguments(1, &str, &encoding)) return;
-      auto enc = EnumDef<pipy::Data::Encoding>::value(encoding, pipy::Data::Encoding::UTF8);
-      if (int(enc) < 0) {
-        ctx.error("unknown encoding");
-        return;
-      }
-      ret.set(s_dp.make(str->str(), enc));
+      ret.set(s_dp.make(str->str(), encoding));
     } catch (std::runtime_error &err) {
       ret = Value::null;
     }

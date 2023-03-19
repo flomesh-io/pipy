@@ -416,7 +416,7 @@ static int read_record(const uint8_t *buf, const uint8_t *buf_end, uint8_t *plac
       throw std::runtime_error("dns decode # AAAA rdata error");
     }
     Data data(ptr, rdlength, &s_dp);
-    record->set(STR_rdata, pjs::Str::make(data.to_string(Data::Encoding::Hex)));
+    record->set(STR_rdata, pjs::Str::make(data.to_string(Data::Encoding::hex)));
   } else if (type == int(RecordType::TYPE_SOA)) {
     auto soa = pjs::Ref<pjs::Object>(pjs::Object::make());
     int num = read_soa(buf, buf_end, ptr, soa);
@@ -459,7 +459,7 @@ static int read_record(const uint8_t *buf, const uint8_t *buf_end, uint8_t *plac
     record->set(STR_rdata, pjs::Str::make((char *)name, len));
   } else { // HEX
     Data data(ptr, rdlength, &s_dp);
-    record->set(STR_rdata, pjs::Str::make(data.to_string(Data::Encoding::Hex)));
+    record->set(STR_rdata, pjs::Str::make(data.to_string(Data::Encoding::hex)));
   }
   ptr += rdlength;
   array->push(record.get());
@@ -717,7 +717,7 @@ static int push_r_data(Data::Builder &db, pjs::Object *rdata, std::function<int(
 
 static int push_hex_string(Data::Builder &db, const std::string *hex_str) {
   int skip = 0;
-  Data data(*hex_str, Data::Encoding::Hex, &s_dp);
+  Data data(*hex_str, Data::Encoding::hex, &s_dp);
   skip += push_int16(db, data.size());
   skip += data.size();
   db.push(std::move(data));

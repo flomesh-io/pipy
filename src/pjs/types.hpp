@@ -1093,6 +1093,7 @@ template<class T> thread_local std::map<Str*, T> EnumDef<T>::m_str_to_val;
 template<class T>
 class EnumValue {
 public:
+  EnumValue() {}
   EnumValue(T v): m_value(v) {}
 
   operator T() const { return m_value; }
