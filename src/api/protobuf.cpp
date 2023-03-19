@@ -628,12 +628,14 @@ template<> void ClassDef<Protobuf>::init() {
   method("decode", [](Context &ctx, Object *obj, Value &ret) {
     pipy::Data *data;
     if (!ctx.arguments(1, &data)) return;
+    if (!data) { ret = Value::null; return; }
     ret.set(Protobuf::decode(*data));
   });
 
   method("encode", [](Context &ctx, Object *obj, Value &ret) {
     Protobuf::Message *msg;
     if (!ctx.arguments(1, &msg)) return;
+    if (!msg) { ret = Value::null; return; }
     pipy::Data data;
     Protobuf::encode(msg, data);
     ret.set(pipy::Data::make(std::move(data)));

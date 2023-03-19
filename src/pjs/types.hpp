@@ -1180,8 +1180,8 @@ public:
   Value(bool b) : m_t(Type::Boolean) { m_v.b = b; }
   Value(int n) : m_t(Type::Number) { m_v.n = n; }
   Value(unsigned int n) : m_t(Type::Number) { m_v.n = n; }
-  Value(int64_t n) : m_t(Type::Number) { m_v.n = n; }
-  Value(uint64_t n) : m_t(Type::Number) { m_v.n = n; }
+  Value(int64_t n);
+  Value(uint64_t n);
   Value(double n) : m_t(Type::Number) { m_v.n = n; }
   Value(const char *s) : m_t(Type::String) { m_v.s = Str::make(s)->retain(); }
   Value(const char *s, size_t n) : m_t(Type::String) { m_v.s = Str::make(s, n)->retain(); }
@@ -2739,6 +2739,12 @@ private:
 
   friend class ObjectTemplate<Int>;
 };
+
+inline Value::Value(int64_t n)
+  : Value(Int::make(Int::Type::i64, n)) {}
+
+inline Value::Value(uint64_t n)
+  : Value(Int::make(Int::Type::u64, int64_t(n))) {}
 
 inline void Value::set(int64_t n) {
   set(Int::make(Int::Type::i64, n));
