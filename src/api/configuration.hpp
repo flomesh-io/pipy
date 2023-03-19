@@ -92,6 +92,7 @@ public:
   void encode_http_request(pjs::Object *options);
   void encode_http_response(pjs::Object *options);
   void encode_mqtt();
+  void encode_resp();
   void encode_thrift();
   void encode_websocket();
   void exec(const pjs::Value &command);

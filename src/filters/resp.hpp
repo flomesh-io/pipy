@@ -54,6 +54,26 @@ private:
   virtual void on_message_end(const pjs::Value &value) override;
 };
 
+//
+// Encoder
+//
+
+class Encoder : public Filter {
+public:
+  Encoder();
+
+private:
+  Encoder(const Encoder &r);
+  ~Encoder();
+
+  virtual auto clone() -> Filter* override;
+  virtual void reset() override;
+  virtual void process(Event *evt) override;
+  virtual void dump(Dump &d) override;
+
+  bool m_message_started = false;
+};
+
 } // namespace resp
 } // namespace pipy
 

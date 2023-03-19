@@ -80,5 +80,57 @@ void Decoder::on_message_end(const pjs::Value &value) {
   Filter::output(MessageEnd::make(nullptr, value));
 }
 
+//
+// Encoder
+//
+
+Encoder::Encoder()
+{
+}
+
+Encoder::Encoder(const Encoder &r)
+  : Filter(r)
+{
+}
+
+Encoder::~Encoder()
+{
+}
+
+void Encoder::dump(Dump &d) {
+  Filter::dump(d);
+  d.name = "encodeRESP";
+}
+
+auto Encoder::clone() -> Filter* {
+  return new Encoder(*this);
+}
+
+void Encoder::reset() {
+  Filter::reset();
+  m_message_started = false;
+}
+
+void Encoder::process(Event *evt) {
+  if (evt->is<StreamEnd>()) {
+    m_message_started = false;
+    Filter::output(evt);
+  } else if (evt->is<MessageStart>()) {
+    if (!m_message_started) {
+      m_message_started = true;
+      Filter::output(evt);
+    }
+  } else if (evt->is<MessageEnd>()) {
+    if (m_message_started) {
+      m_message_started = false;
+      const auto &payload = evt->as<MessageEnd>()->payload();
+      Data buf;
+      RESP::encode(payload, buf);
+      Filter::output(Data::make(std::move(buf)));
+      Filter::output(evt);
+    }
+  }
+}
+
 } // namespace resp
 } // namespace pipy

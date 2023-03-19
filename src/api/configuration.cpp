@@ -258,6 +258,10 @@ void FilterConfigurator::encode_mqtt() {
   append_filter(new mqtt::Encoder());
 }
 
+void FilterConfigurator::encode_resp() {
+  append_filter(new resp::Encoder());
+}
+
 void FilterConfigurator::encode_thrift() {
   append_filter(new thrift::Encoder());
 }
@@ -1418,6 +1422,16 @@ template<> void ClassDef<FilterConfigurator>::init() {
   method("encodeMQTT", [](Context &ctx, Object *thiz, Value &result) {
     try {
       thiz->as<FilterConfigurator>()->encode_mqtt();
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // FilterConfigurator.encodeRESP
+  method("encodeRESP", [](Context &ctx, Object *thiz, Value &result) {
+    try {
+      thiz->as<FilterConfigurator>()->encode_resp();
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
