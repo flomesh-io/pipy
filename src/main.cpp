@@ -213,6 +213,7 @@ private:
       WorkerManager::get().status(
         [this](Status &status) {
           std::stringstream ss;
+          status.ip = m_local_ip;
           status.to_json(ss);
           InputContext ic;
           (*m_fetch)(
@@ -220,7 +221,9 @@ private:
             m_url->path(),
             m_headers,
             Data::make(ss.str(), &s_dp),
-            [=](http::ResponseHead *head, Data *body) {}
+            [this](http::ResponseHead *head, Data *body) {
+              m_local_ip = m_fetch->outbound()->local_address()->str();
+            }
           );
         }
       );
@@ -229,6 +232,7 @@ private:
   }
 
   Fetch *m_fetch = nullptr;
+  std::string m_local_ip;
   pjs::Ref<URL> m_url;
   pjs::Ref<pjs::Object> m_headers;
 };

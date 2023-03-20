@@ -77,8 +77,13 @@ Fetch::Fetch(pjs::Str *host, const Options &options)
     }
   );
 
+  Connect::Options connect_options(options);
+  connect_options.on_state_changed = [this](Outbound *ob) {
+    m_outbound = ob;
+  };
+
   auto *ppl_connect = PipelineLayout::make(m_module);
-  ppl_connect->append(new Connect(m_host.get(), options));
+  ppl_connect->append(new Connect(m_host.get(), connect_options));
 
   if (options.tls) {
     tls::Client::Options opts;

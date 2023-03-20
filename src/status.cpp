@@ -209,6 +209,7 @@ bool Status::from_json(const Data &data) {
   thread_local static pjs::Ref<pjs::Str> key_timestamp(pjs::Str::make("timestamp"));
   thread_local static pjs::Ref<pjs::Str> key_uuid(pjs::Str::make("uuid"));
   thread_local static pjs::Ref<pjs::Str> key_name(pjs::Str::make("name"));
+  thread_local static pjs::Ref<pjs::Str> key_ip(pjs::Str::make("ip"));
   thread_local static pjs::Ref<pjs::Str> key_version(pjs::Str::make("version"));
   thread_local static pjs::Ref<pjs::Str> key_modules(pjs::Str::make("modules"));
   thread_local static pjs::Ref<pjs::Str> key_filename(pjs::Str::make("filename"));
@@ -219,6 +220,7 @@ bool Status::from_json(const Data &data) {
   pjs::Value val_timestamp;
   pjs::Value val_uuid;
   pjs::Value val_name;
+  pjs::Value val_ip;
   pjs::Value val_version;
   pjs::Value val_modules;
   pjs::Value val_logs;
@@ -230,6 +232,7 @@ bool Status::from_json(const Data &data) {
   root->get(key_timestamp, val_timestamp);
   root->get(key_uuid, val_uuid);
   root->get(key_name, val_name);
+  root->get(key_ip, val_ip);
   root->get(key_version, val_version);
   root->get(key_modules, val_modules);
   root->get(key_logs, val_logs);
@@ -237,6 +240,7 @@ bool Status::from_json(const Data &data) {
   if (!val_timestamp.is_number()) return false;
   if (!val_uuid.is_string()) return false;
   if (!val_name.is_string()) return false;
+  if (!val_ip.is_string()) return false;
   if (!val_version.is_string()) return false;
   if (!val_modules.is_object() || !val_modules.o()) return false;
   if (!val_logs.is_array()) return false;
@@ -244,6 +248,7 @@ bool Status::from_json(const Data &data) {
   timestamp = val_timestamp.n();
   uuid = val_uuid.s()->str();
   name = val_name.s()->str();
+  ip = val_ip.s()->str();
   version = val_version.s()->str();
 
   val_modules.o()->iterate_all(
@@ -276,6 +281,7 @@ void Status::to_json(std::ostream &out) const {
   out << ",\"since\":" << uint64_t(since);
   out << ",\"uuid\":\"" << uuid << '"';
   out << ",\"name\":\"" << name << '"';
+  out << ",\"ip\":\"" << ip << '"';
   out << ",\"version\":\"" << utils::escape(version) << '"';
   out << ",\"modules\":{";
   bool first = true;

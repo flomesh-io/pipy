@@ -177,6 +177,7 @@ public:
   double timestamp = 0;
   std::string uuid;
   std::string name;
+  std::string ip;
   std::string version;
   std::set<ModuleInfo> modules;
   std::set<PoolInfo> pools;

@@ -29,6 +29,7 @@
 #include "pjs/pjs.hpp"
 #include "api/http.hpp"
 #include "api/crypto.hpp"
+#include "filters/connect.hpp"
 #include "filter.hpp"
 #include "module.hpp"
 #include "outbound.hpp"
@@ -60,7 +61,7 @@ public:
     DELETE,
   };
 
-  struct Options : public OutboundTCP::Options {
+  struct Options : public Connect::Options {
     bool tls = false;
     pjs::Ref<crypto::Certificate> cert;
     pjs::Ref<crypto::PrivateKey> key;
@@ -73,6 +74,10 @@ public:
 
   bool busy() const {
     return m_current_request;
+  }
+
+  auto outbound() const -> Outbound* {
+    return m_outbound;
   }
 
   void operator()(
@@ -137,6 +142,7 @@ private:
   std::list<Request> m_request_queue;
   pjs::Ref<Pipeline> m_pipeline;
   pjs::Ref<PipelineLayout> m_ppl;
+  pjs::Ref<Outbound> m_outbound;
   Request* m_current_request = nullptr;
 
   void fetch(
