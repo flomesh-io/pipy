@@ -49,6 +49,7 @@ public:
   struct Options : public pipy::Options, public Outbound::Options {
     pjs::Ref<pjs::Str> bind;
     pjs::Ref<pjs::Function> bind_f;
+    pjs::Ref<pjs::Function> on_state_f;
     Options() {}
     Options(const Outbound::Options &options) : Outbound::Options(options) {}
     Options(pjs::Object *options);

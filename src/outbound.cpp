@@ -71,6 +71,20 @@ auto Outbound::protocol_name() const -> pjs::Str* {
   return nullptr;
 }
 
+auto Outbound::local_address() -> pjs::Str* {
+  if (!m_local_addr_str) {
+    m_local_addr_str = pjs::Str::make(m_local_addr);
+  }
+  return m_local_addr_str;
+}
+
+auto Outbound::remote_address() -> pjs::Str* {
+  if (!m_remote_addr_str) {
+    m_remote_addr_str = pjs::Str::make(m_remote_addr);
+  }
+  return m_remote_addr_str;
+}
+
 auto Outbound::address() -> pjs::Str* {
   if (!m_address) {
     std::string s("[");
@@ -82,8 +96,22 @@ auto Outbound::address() -> pjs::Str* {
   return m_address;
 }
 
+void Outbound::state(State state) {
+  m_state = state;
+  if (const auto &f = m_options.on_state_changed) {
+    f(this);
+  }
+}
+
 void Outbound::output(Event *evt) {
   m_output->input(evt);
+}
+
+void Outbound::error(StreamEnd::Error err) {
+  m_error = err;
+  InputContext ic(this);
+  output(StreamEnd::make(err));
+  state(State::closed);
 }
 
 void Outbound::describe(char *desc) {
@@ -153,7 +181,7 @@ void Outbound::init_metrics() {
 //
 
 OutboundTCP::OutboundTCP(EventTarget::Input *output, const Options &options)
-  : Outbound(output, options)
+  : pjs::ObjectTemplate<OutboundTCP, Outbound>(output, options)
   , FlushTarget(true)
   , m_resolver(Net::context())
   , m_socket(Net::context())
@@ -167,6 +195,7 @@ void OutboundTCP::bind(const std::string &ip, int port) {
   const auto &local = m_socket.local_endpoint();
   m_local_addr = local.address().to_string();
   m_local_port = local.port();
+  m_local_addr_str = nullptr;
 }
 
 void OutboundTCP::connect(const std::string &host, int port) {
@@ -257,6 +286,7 @@ void OutboundTCP::start(double delay) {
         resolve();
       }
     );
+    state(State::idle);
   } else {
     resolve();
   }
@@ -289,6 +319,7 @@ void OutboundTCP::resolve() {
           auto &result = *results;
           const auto &target = result.endpoint();
           m_remote_addr = target.address().to_string();
+          m_remote_addr_str = nullptr;
           connect(target);
         }
       }
@@ -326,6 +357,7 @@ void OutboundTCP::resolve() {
   }
 
   retain();
+  state(State::resolving);
 }
 
 void OutboundTCP::connect(const asio::ip::tcp::endpoint &target) {
@@ -345,27 +377,33 @@ void OutboundTCP::connect(const asio::ip::tcp::endpoint &target) {
           }
           restart(StreamEnd::CONNECTION_REFUSED);
 
-        } else {
+        } else if (m_connecting) {
+          const auto &ep = m_socket.local_endpoint();
+          m_local_addr = ep.address().to_string();
+          m_local_port = ep.port();
+          m_local_addr_str = nullptr;
+          auto conn_time = utils::now() - m_start_time;
+          m_connection_time += conn_time;
+          m_metric_conn_time->observe(conn_time);
+          s_metric_conn_time->observe(conn_time);
           if (Log::is_enabled(Log::OUTBOUND)) {
             char desc[200];
             describe(desc);
-            Log::debug(Log::OUTBOUND, "%s connected", desc);
+            Log::debug(Log::OUTBOUND, "%s connected in %g ms", desc, conn_time);
           }
-          if (m_connecting) {
-            const auto &ep = m_socket.local_endpoint();
-            m_local_addr = ep.address().to_string();
-            m_local_port = ep.port();
-            auto conn_time = utils::now() - m_start_time;
-            m_connection_time += conn_time;
-            m_metric_conn_time->observe(conn_time);
-            s_metric_conn_time->observe(conn_time);
-            m_connected = true;
-            m_connecting = false;
-            m_socket.set_option(asio::socket_base::keep_alive(m_options.keep_alive));
-            receive();
-            pump();
-          } else {
-            close(StreamEnd::CONNECTION_CANCELED);
+          m_connected = true;
+          m_connecting = false;
+          m_socket.set_option(asio::socket_base::keep_alive(m_options.keep_alive));
+          state(State::connected);
+          receive();
+          pump();
+
+        } else {
+          close(StreamEnd::CONNECTION_CANCELED);
+          if (Log::is_enabled(Log::OUTBOUND)) {
+            char desc[200];
+            describe(desc);
+            Log::debug(Log::OUTBOUND, "%s cancelled", desc);
           }
         }
       }
@@ -381,13 +419,13 @@ void OutboundTCP::connect(const asio::ip::tcp::endpoint &target) {
   }
 
   retain();
+  state(State::connecting);
 }
 
 void OutboundTCP::restart(StreamEnd::Error err) {
   if (m_options.retry_count >= 0 && m_retries >= m_options.retry_count) {
     m_connecting = false;
-    InputContext ic(this);
-    output(StreamEnd::make(err));
+    error(err);
   } else {
     m_retries++;
     std::error_code ec;
@@ -582,8 +620,7 @@ void OutboundTCP::close(StreamEnd::Error err) {
     }
   }
 
-  InputContext ic(this);
-  output(StreamEnd::make(err));
+  error(err);
 }
 
 //
@@ -591,7 +628,7 @@ void OutboundTCP::close(StreamEnd::Error err) {
 //
 
 OutboundUDP::OutboundUDP(EventTarget::Input *output, const Options &options)
-  : Outbound(output, options)
+  : pjs::ObjectTemplate<OutboundUDP, Outbound>(output, options)
   , m_resolver(Net::context())
   , m_socket(Net::context())
 {
@@ -604,6 +641,7 @@ void OutboundUDP::bind(const std::string &ip, int port) {
   const auto &local = m_socket.local_endpoint();
   m_local_addr = local.address().to_string();
   m_local_port = local.port();
+  m_local_addr_str = nullptr;
 }
 
 void OutboundUDP::connect(const std::string &host, int port) {
@@ -688,6 +726,7 @@ void OutboundUDP::start(double delay) {
         resolve();
       }
     );
+    state(State::idle);
   } else {
     resolve();
   }
@@ -720,6 +759,7 @@ void OutboundUDP::resolve() {
           auto &result = *results;
           const auto &target = result.endpoint();
           m_remote_addr = target.address().to_string();
+          m_remote_addr_str = nullptr;
           connect(target);
         }
       }
@@ -757,6 +797,7 @@ void OutboundUDP::resolve() {
   }
 
   retain();
+  state(State::resolving);
 }
 
 void OutboundUDP::connect(const asio::ip::udp::endpoint &target) {
@@ -786,12 +827,14 @@ void OutboundUDP::connect(const asio::ip::udp::endpoint &target) {
             const auto &ep = m_socket.local_endpoint();
             m_local_addr = ep.address().to_string();
             m_local_port = ep.port();
+            m_local_addr_str = nullptr;
             auto conn_time = utils::now() - m_start_time;
             m_connection_time += conn_time;
             m_metric_conn_time->observe(conn_time);
             s_metric_conn_time->observe(conn_time);
             m_connected = true;
             m_connecting = false;
+            state(State::connected);
             receive();
             pump();
           } else {
@@ -811,13 +854,13 @@ void OutboundUDP::connect(const asio::ip::udp::endpoint &target) {
   }
 
   retain();
+  state(State::connecting);
 }
 
 void OutboundUDP::restart(StreamEnd::Error err) {
   if (m_options.retry_count >= 0 && m_retries >= m_options.retry_count) {
     m_connecting = false;
-    InputContext ic(this);
-    output(StreamEnd::make(err));
+    error(err);
   } else {
     m_retries++;
     std::error_code ec;
@@ -965,8 +1008,37 @@ void OutboundUDP::close(StreamEnd::Error err) {
     }
   }
 
-  InputContext ic(this);
-  output(StreamEnd::make(err));
+  error(err);
 }
 
 } // namespace pipy
+
+namespace pjs {
+
+using namespace pipy;
+
+template<> void EnumDef<Outbound::State>::init() {
+  define(Outbound::State::idle, "idle");
+  define(Outbound::State::resolving, "resolving");
+  define(Outbound::State::connecting, "connecting");
+  define(Outbound::State::connected, "connected");
+  define(Outbound::State::closed, "closed");
+}
+
+template<> void ClassDef<Outbound>::init() {
+  accessor("state",         [](Object *obj, Value &ret) { ret.set(EnumDef<Outbound::State>::name(obj->as<Outbound>()->state())); });
+  accessor("localAddress" , [](Object *obj, Value &ret) { ret.set(obj->as<Outbound>()->local_address()); });
+  accessor("localPort"    , [](Object *obj, Value &ret) { ret.set(obj->as<Outbound>()->local_port()); });
+  accessor("remoteAddress", [](Object *obj, Value &ret) { ret.set(obj->as<Outbound>()->remote_address()); });
+  accessor("remotePort"   , [](Object *obj, Value &ret) { ret.set(obj->as<Outbound>()->remote_port()); });
+}
+
+template<> void ClassDef<OutboundTCP>::init() {
+  super<Outbound>();
+}
+
+template<> void ClassDef<OutboundUDP>::init() {
+  super<Outbound>();
+}
+
+} // namespace pjs

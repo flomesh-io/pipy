@@ -44,13 +44,22 @@ class Data;
 //
 
 class Outbound :
-  public pjs::RefCount<Outbound>,
+  public pjs::ObjectTemplate<Outbound>,
+  public InputSource,
   public List<Outbound>::Item
 {
 public:
   enum class Protocol {
     TCP,
     UDP,
+  };
+
+  enum class State {
+    idle,
+    resolving,
+    connecting,
+    connected,
+    closed,
   };
 
   struct Options {
@@ -64,6 +73,8 @@ public:
     double    write_timeout = 0;
     double    idle_timeout = 60;
     bool      keep_alive = true;
+
+    std::function<void(Outbound*)> on_state_changed;
   };
 
   static void for_each(const std::function<void(Outbound*)> &cb) {
@@ -77,6 +88,12 @@ public:
   auto address() -> pjs::Str*;
   auto host() const -> const std::string& { return m_host; }
   auto port() const -> int { return m_port; }
+  auto state() const -> State { return m_state; }
+  auto error() const -> StreamEnd::Error { return m_error; }
+  auto local_address() -> pjs::Str*;
+  auto local_port() -> int { address(); return m_local_port; }
+  auto remote_address() -> pjs::Str*;
+  auto remote_port() -> int { address(); return m_port; }
   auto retries() const -> int { return m_retries; }
   auto connection_time() const -> double { return m_connection_time; }
 
@@ -94,14 +111,20 @@ protected:
   std::string m_remote_addr;
   std::string m_local_addr;
   pjs::Ref<pjs::Str> m_address;
+  pjs::Ref<pjs::Str> m_local_addr_str;
+  pjs::Ref<pjs::Str> m_remote_addr_str;
   pjs::Ref<EventTarget::Input> m_output;
+  State m_state = State::idle;
+  StreamEnd::Error m_error = StreamEnd::Error::NO_ERROR;
   int m_port = 0;
   int m_local_port = 0;
   int m_retries = 0;
   double m_start_time = 0;
   double m_connection_time = 0;
 
+  void state(State state);
   void output(Event *evt);
+  void error(StreamEnd::Error err);
   void describe(char *desc);
 
   thread_local static pjs::Ref<stats::Gauge> s_metric_concurrency;
@@ -110,13 +133,11 @@ protected:
   thread_local static pjs::Ref<stats::Histogram> s_metric_conn_time;
 
 private:
-  virtual void finalize() = 0;
-
   thread_local static List<Outbound> s_all_outbounds;
 
   static void init_metrics();
 
-  friend class pjs::RefCount<Outbound>;
+  friend class pjs::ObjectTemplate<Outbound>;
 };
 
 //
@@ -124,14 +145,10 @@ private:
 //
 
 class OutboundTCP :
-  public pjs::Pooled<OutboundTCP>,
-  public Outbound,
-  public InputSource,
+  public pjs::ObjectTemplate<OutboundTCP, Outbound>,
   public FlushTarget
 {
 public:
-  OutboundTCP(EventTarget::Input *output, const Options &options);
-
   bool overflowed() const { return m_overflowed; }
   auto buffered() const -> int { return m_buffer.size(); }
 
@@ -141,6 +158,8 @@ public:
   virtual void reset() override;
 
 private:
+  OutboundTCP(EventTarget::Input *output, const Options &options);
+
   pjs::Ref<stats::Counter> m_metric_traffic_out;
   pjs::Ref<stats::Counter> m_metric_traffic_in;
   pjs::Ref<stats::Histogram> m_metric_conn_time;
@@ -172,27 +191,23 @@ private:
   void wait();
   void close(StreamEnd::Error err);
 
-  virtual void finalize() override { delete this; }
+  friend class pjs::ObjectTemplate<OutboundTCP, Outbound>;
 };
 
 //
 // OutboundUDP
 //
 
-class OutboundUDP :
-  public pjs::Pooled<OutboundUDP>,
-  public Outbound,
-  public InputSource
-{
+class OutboundUDP : public pjs::ObjectTemplate<OutboundUDP, Outbound> {
 public:
-  OutboundUDP(EventTarget::Input *output, const Options &options);
-
   virtual void bind(const std::string &ip, int port) override;
   virtual void connect(const std::string &host, int port) override;
   virtual void send(Event *evt) override;
   virtual void reset() override;
 
 private:
+  OutboundUDP(EventTarget::Input *output, const Options &options);
+
   pjs::Ref<stats::Counter> m_metric_traffic_out;
   pjs::Ref<stats::Counter> m_metric_traffic_in;
   pjs::Ref<stats::Histogram> m_metric_conn_time;
@@ -220,7 +235,7 @@ private:
   void wait();
   void close(StreamEnd::Error err);
 
-  virtual void finalize() override { delete this; }
+  friend class pjs::ObjectTemplate<OutboundUDP, Outbound>;
 };
 
 } // namespace pipy

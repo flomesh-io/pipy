@@ -54,6 +54,9 @@ Connect::Options::Options(pjs::Object *options) {
     .get(bind)
     .get(bind_f)
     .check_nullable();
+  Value(options, "onState")
+    .get(on_state_f)
+    .check_nullable();
   Value(options, "bufferLimit")
     .get_binary_size(buffer_limit)
     .check_nullable();
@@ -140,13 +143,20 @@ void Connect::process(Event *evt) {
           bind = ret.s();
         }
 
+        if (m_options.on_state_f) {
+          m_options.on_state_changed = [this](Outbound *ob) {
+            pjs::Value arg(ob), ret;
+            Filter::callback(m_options.on_state_f, 1, &arg, ret);
+          };
+        }
+
         Outbound *outbound = nullptr;
         switch (m_options.protocol) {
           case Outbound::Protocol::TCP:
-            outbound = new OutboundTCP(ConnectReceiver::input(), m_options);
+            outbound = OutboundTCP::make(ConnectReceiver::input(), m_options);
             break;
           case Outbound::Protocol::UDP:
-            outbound = new OutboundUDP(ConnectReceiver::input(), m_options);
+            outbound = OutboundUDP::make(ConnectReceiver::input(), m_options);
             break;
         }
 
