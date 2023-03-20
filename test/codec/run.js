@@ -12,6 +12,8 @@ const error = (...args) => log.apply(this, [chalk.bgRed('ERROR')].concat(args.ma
 const sleep = (t) => new Promise(resolve => setTimeout(resolve, t * 1000));
 const currentDir = dirname(new URL(import.meta.url).pathname);
 const pipyBinPath = join(currentDir, '../../bin/pipy');
+const hexMap = new Array(256).fill().map((_, i) => (i < 16 ? '0' + i.toString(16) : i.toString(16)));
+const charMap = new Array(256).fill().map((_, i) => (0x20 <= i && i < 0x80 ? String.fromCharCode(i) : '.'));
 
 function startProcess(cmd, args, onStderr, onStdout) {
   const proc = spawn(cmd, args);
@@ -42,6 +44,49 @@ function startPipy(filename, onStdout) {
   );
 }
 
+function diff(a, b) {
+  const sizeA = a.byteLength;
+  const sizeB = b.byteLength;
+  const size = Math.max(sizeA, sizeB);
+  for (let row = 0; row < size; row += 16) {
+    const bytesL = [];
+    const bytesR = [];
+    const charsL = [];
+    const charsR = [];
+    for (let col = 0; col < 16; col++) {
+      const i = row + col;
+      const same = (a[i] === b[i]);
+      if (i < sizeA) {
+        const hex = hexMap[a[i]];
+        const chr = charMap[a[i]];
+        bytesL.push(same ? hex : chalk.bgGreen(hex));
+        charsL.push(same ? chr : chalk.bgGreen(chr));
+      } else {
+        bytesL.push('  ');
+        charsL.push(' ');
+      }
+      if (i < sizeB) {
+        const hex = hexMap[b[i]];
+        const chr = charMap[b[i]];
+        bytesR.push(same ? hex : chalk.bgRed(hex));
+        charsR.push(same ? chr : chalk.bgRed(chr));
+      } else {
+        bytesR.push('  ');
+        charsR.push(' ');
+      }
+      if (col == 7) {
+        bytesL.push('');
+        charsL.push('');
+        bytesR.push('');
+        charsR.push('');
+      }
+    }
+    let addr = row.toString(16);
+    if (addr.length < 8) addr = '0'.repeat(8 - addr.length) + addr;
+    log(`${addr}  ${bytesL.join(' ')}  |${charsL.join('')}|  ${bytesR.join(' ')}  |${charsR.join('')}|`);
+  }
+}
+
 async function runTest(name) {
   const basePath = join(currentDir, name);
 
@@ -64,6 +109,7 @@ async function runTest(name) {
     const stdout = Buffer.concat(stdoutBuffer);
     const expected = fs.readFileSync(`${basePath}/output`);
     if (Buffer.compare(stdout, expected)) {
+      diff(expected, stdout);
       error(`Test ${name} did not output expected data`);
     } else {
       log(`Test ${chalk.cyan(name)} OK`);
