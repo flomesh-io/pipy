@@ -72,7 +72,7 @@ public:
   void decode_dubbo();
   void decode_http_request();
   void decode_http_response(pjs::Object *options);
-  void decode_mqtt(pjs::Object *options);
+  void decode_mqtt();
   void decode_multipart();
   void decode_resp();
   void decode_thrift();

@@ -160,7 +160,6 @@ add_executable(pipy
   src/api/http.cpp
   src/api/json.cpp
   src/api/logging.cpp
-  src/api/mqtt.cpp
   src/api/netmask.cpp
   src/api/os.cpp
   src/api/pipy.cpp

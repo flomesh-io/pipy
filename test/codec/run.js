@@ -76,9 +76,9 @@ function diff(a, b) {
       }
       if (col == 7) {
         bytesL.push('');
-        charsL.push('');
+        charsL.push(' ');
         bytesR.push('');
-        charsR.push('');
+        charsR.push(' ');
       }
     }
     let addr = row.toString(16);

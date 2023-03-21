@@ -1644,7 +1644,7 @@ T* coerce(Object *obj) {
     return obj->as<T>();
   } else {
     auto coerced = T::make();
-    class_of<T>()->assign(coerced, obj);
+    if (obj) class_of<T>()->assign(coerced, obj);
     return coerced;
   }
 }

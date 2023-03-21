@@ -24,32 +24,11 @@
  */
 
 #include "mqtt.hpp"
-#include "log.hpp"
 
 namespace pipy {
 namespace mqtt {
 
 thread_local static Data::Producer s_dp("MQTT");
-thread_local static pjs::ConstStr STR_MQTT("MQTT");
-thread_local static pjs::ConstStr STR_cleanStart("cleanStart");
-thread_local static pjs::ConstStr STR_clientID("clientID");
-thread_local static pjs::ConstStr STR_filter("filter");
-thread_local static pjs::ConstStr STR_keepAlive("keepAlive");
-thread_local static pjs::ConstStr STR_packetIdentifier("packetIdentifier");
-thread_local static pjs::ConstStr STR_password("password");
-thread_local static pjs::ConstStr STR_payload("payload");
-thread_local static pjs::ConstStr STR_properties("properties");
-thread_local static pjs::ConstStr STR_protocolLevel("protocolLevel");
-thread_local static pjs::ConstStr STR_qos("qos");
-thread_local static pjs::ConstStr STR_reasonCode("reasonCode");
-thread_local static pjs::ConstStr STR_reasonCodes("reasonCodes");
-thread_local static pjs::ConstStr STR_retain("retain");
-thread_local static pjs::ConstStr STR_sessionPresent("sessionPresent");
-thread_local static pjs::ConstStr STR_topic("topic");
-thread_local static pjs::ConstStr STR_topicFilters("topicFilters");
-thread_local static pjs::ConstStr STR_topicName("topicName");
-thread_local static pjs::ConstStr STR_username("username");
-thread_local static pjs::ConstStr STR_will("will");
 
 //
 // PropertyMap
@@ -150,22 +129,26 @@ thread_local static const PropertyMap s_property_map;
 
 class PacketParser {
 public:
-  PacketParser(PacketType type, int protocol_level, MessageHead *packet, const Data &data)
-    : m_type(type)
-    , m_protocol_level(protocol_level)
-    , m_packet(packet)
+  PacketParser(MessageHead *head, const Data &data)
+    : m_protocol_level(head->protocolLevel)
+    , m_head(head)
+    , m_payload_data(Data::make(data))
     , m_reader(data) {}
 
   int protocol_level() const {
     return m_protocol_level;
   }
 
-  int position() const {
-    return m_position;
+  auto payload() const -> pjs::Object* {
+    return m_payload;
+  }
+
+  auto payload_data() const -> Data* {
+    return m_payload_data;
   }
 
   bool decode() {
-    switch (m_type) {
+    switch (m_head->type.get()) {
       case PacketType::CONNECT: {
         int flags = 0;
         if (!read_protocol_name()) return false;
@@ -173,6 +156,7 @@ public:
         if (!read_connect_flags(flags)) return false;
         if (!read_keep_alive()) return false;
         if (m_protocol_level >= 5 && !read_properties()) return false;
+        payload_start();
         if (!read_connect_payload(flags)) return false;
         break;
       }
@@ -180,12 +164,14 @@ public:
         if (!read_connect_ack_flags()) return false;
         if (!read_reason_code()) return false;
         if (m_protocol_level >= 5 && !read_properties()) return false;
+        payload_start();
         break;
       }
       case PacketType::PUBLISH: {
         if (!read_topic_name()) return false;
-        if (m_packet->qos() > 0 && !read_packet_identifier()) return false;
+        if (m_head->qos > 0 && !read_packet_identifier()) return false;
         if (m_protocol_level >= 5 && !read_properties()) return false;
+        payload_start();
         break;
       }
       case PacketType::PUBACK:
@@ -195,52 +181,67 @@ public:
         if (!read_packet_identifier()) return false;
         if (!read_reason_code()) return false;
         if (m_protocol_level >= 5 && !read_properties()) return false;
+        payload_start();
         break;
       }
       case PacketType::SUBSCRIBE: {
         if (!read_packet_identifier()) return false;
         if (m_protocol_level >= 5 && !read_properties()) return false;
+        payload_start();
         if (!read_subscribe_payload()) return false;
         break;
       }
       case PacketType::SUBACK: {
         if (!read_packet_identifier()) return false;
         if (m_protocol_level >= 5 && !read_properties()) return false;
-        if (!read_reason_codes()) return false;
+        payload_start();
+        if (!read_suback_payload()) return false;
         break;
       }
       case PacketType::UNSUBSCRIBE: {
         if (!read_packet_identifier()) return false;
         if (m_protocol_level >= 5 && !read_properties()) return false;
+        payload_start();
         if (!read_unsubscribe_payload()) return false;
         break;
       }
       case PacketType::UNSUBACK: {
         if (!read_packet_identifier()) return false;
         if (m_protocol_level >= 5 && !read_properties()) return false;
-        if (!read_reason_codes()) return false;
+        payload_start();
+        if (!read_suback_payload()) return false;
         break;
       }
       case PacketType::PINGREQ:
       case PacketType::PINGRESP:
+        payload_start();
         break;
       case PacketType::DISCONNECT:
       case PacketType::AUTH: {
         if (!read_reason_code()) return false;
         if (m_protocol_level >= 5 && !read_properties()) return false;
+        payload_start();
         break;
       }
       default: return false;
     }
+
+    m_payload_data->shift(m_position_payload);
     return true;
   }
 
 private:
-  PacketType m_type;
   int m_protocol_level;
-  MessageHead* m_packet;
+  pjs::Ref<MessageHead> m_head;
+  pjs::Ref<pjs::Object> m_payload;
+  pjs::Ref<Data> m_payload_data;
   Data::Reader m_reader;
   int m_position = 0;
+  int m_position_payload = 0;
+
+  void payload_start() {
+    m_position_payload = m_position;
+  }
 
   auto read() -> int {
     int c = m_reader.get();
@@ -270,10 +271,10 @@ private:
       b[i] = c;
     }
     n = (
-      ((uint32_t)b[3] << 24) |
-      ((uint32_t)b[2] << 16) |
-      ((uint32_t)b[1] <<  8) |
-      ((uint32_t)b[0] <<  0)
+      ((uint32_t)b[0] << 24) |
+      ((uint32_t)b[1] << 16) |
+      ((uint32_t)b[2] <<  8) |
+      ((uint32_t)b[3] <<  0)
     );
     return true;
   }
@@ -325,7 +326,7 @@ private:
     auto c = read();
     if (c < 0) return false;
     m_protocol_level = c;
-    m_packet->set(STR_protocolLevel, int(c));
+    m_head->protocolLevel = c;
     return true;
   }
 
@@ -339,38 +340,34 @@ private:
   bool read_keep_alive() {
     uint16_t n;
     if (!read(n)) return false;
-    m_packet->set(STR_keepAlive, int(n));
+    m_head->keepAlive = n;
     return true;
   }
 
   bool read_connect_ack_flags() {
     auto c = read();
     if (c < 0) return false;
-    m_packet->set(STR_sessionPresent, (c & 0x01 ? true : false));
+    m_head->sessionPresent = (c & 0x01 ? true : false);
     return true;
   }
 
   bool read_reason_code() {
     auto c = read();
-    if (c < 0) {
-      m_packet->set(STR_reasonCode, 0);
-    } else {
-      m_packet->set(STR_reasonCode, c);
-    }
+    m_head->reasonCode = (c < 0 ? 0 : c);
     return true;
   }
 
   bool read_topic_name() {
     pjs::Str *s;
     if (!read(s)) return false;
-    m_packet->set(STR_topicName, s);
+    m_head->topicName = s;
     return true;
   }
 
   bool read_packet_identifier() {
     uint16_t n;
     if (!read(n)) return false;
-    m_packet->set(STR_packetIdentifier, n);
+    m_head->packetIdentifier = n;
     return true;
   }
 
@@ -379,7 +376,7 @@ private:
     if (!size) return true;
     if (!props) {
       props = pjs::Object::make();
-      m_packet->set(STR_properties, props);
+      m_head->properties = props;
     }
     int start = m_position;
     while (m_position - start < size) {
@@ -436,78 +433,88 @@ private:
   }
 
   bool read_connect_payload(int flags) {
+    auto payload = ConnectPayload::make();
+    m_payload = payload;
+
     pjs::Str *client_id;
     if (!read(client_id)) return false;
-    m_packet->set(STR_clientID, client_id);
-    m_packet->set(STR_cleanStart, bool(flags & 0x02));
+    payload->clientID = client_id;
+    payload->cleanStart = bool(flags & 0x02);
 
     if (flags & 0x04) {
-      pjs::Object *will = pjs::Object::make();
-      pjs::Object *props = pjs::Object::make();
-      m_packet->set(STR_will, will);
-      will->set(STR_qos, int((flags >> 3) & 0x03));
-      will->set(STR_retain, bool(flags & 0x20));
-      will->set(STR_properties, props);
+      auto will = Will::make();
+      auto props = pjs::Object::make();
+      payload->will = will;
+      will->qos = int((flags >> 3) & 0x03);
+      will->retained = bool(flags & 0x20);
+      will->properties = props;
       if (!read_properties(props)) return false;
 
       pjs::Str *topic;
       if (!read(topic)) return false;
-      will->set(STR_topic, topic);
+      will->topic = topic;
 
-      Data payload;
-      if (!read(payload)) return false;
-      will->set(STR_payload, Data::make(payload));
+      Data buf;
+      if (!read(buf)) return false;
+      will->payload = Data::make(std::move(buf));
     }
 
     if (flags & 0x40) {
       pjs::Str *username;
       if (!read(username)) return false;
-      m_packet->set(STR_username, username);
+      payload->username = username;
     }
 
     if (flags & 0x80) {
       Data password;
       if (!read(password)) return false;
-      m_packet->set(STR_password, Data::make(password));
+      payload->password = Data::make(password);
     }
 
     return true;
   }
 
   bool read_subscribe_payload() {
+    auto payload = SubscribePayload::make();
+    m_payload = payload;
+
     auto filters = pjs::Array::make();
-    m_packet->set(STR_topicFilters, filters);
+    payload->topicFilters = filters;
+
     for (;;) {
       pjs::Str *filter;
       if (!read(filter)) break;
+
+      auto f = TopicFilter::make();
+      filters->push(f);
+      f->filter = filter;
+
       uint8_t options;
       if (!read(options)) return false;
-      auto *f = pjs::Object::make();
-      filters->push(f);
-      f->set(STR_filter, filter);
-      f->set(STR_qos, int(options & 0x03));
+      f->qos = int(options & 0x03);
     }
+
     return true;
   }
 
-  bool read_reason_codes() {
-    auto codes = pjs::Array::make();
-    m_packet->set(STR_reasonCodes, codes);
+  bool read_suback_payload() {
+    auto payload = pjs::Array::make();
+    m_payload = payload;
     for (;;) {
-      uint16_t code;
+      uint8_t code;
       if (!read(code)) break;
-      codes->push(code);
+      payload->push(code);
     }
     return true;
   }
 
   bool read_unsubscribe_payload() {
-    auto filters = pjs::Array::make();
-    m_packet->set(STR_topicFilters, filters);
+    auto payload = pjs::Array::make();
+    m_payload = payload;
     for (;;) {
       pjs::Str *filter;
       if (!read(filter)) break;
-      filters->push(filter);
+      payload->push(filter);
     }
     return true;
   }
@@ -519,52 +526,72 @@ private:
 
 class DataBuilder {
 public:
-  auto buffer() const -> const Data& {
-    return m_buffer;
+  DataBuilder(Data &buffer)
+    : m_db(buffer, &s_dp) {}
+
+  ~DataBuilder() {
+    m_db.flush();
   }
 
-  void push(const Data &data) {
-    m_buffer.push(data);
-  }
-
-  void push(uint8_t c) {
-    s_dp.push(&m_buffer, c);
-  }
-
-  void push(uint16_t n) {
-    push(uint8_t((n >> 8) & 0xff));
-    push(uint8_t((n >> 0) & 0xff));
-  }
-
-  void push(uint32_t n) {
-    push(uint8_t((n >> 24) & 0xff));
-    push(uint8_t((n >> 16) & 0xff));
-    push(uint8_t((n >>  8) & 0xff));
-    push(uint8_t((n >>  0) & 0xff));
-  }
-
-  void push(int n) {
+  void push(int i) {
     uint8_t buf[4];
-    int len = make_var_int(n, buf);
-    s_dp.push(&m_buffer, buf, len);
+    m_db.push(buf, make_var_int(i, buf));
+  }
+
+  void push(uint8_t i) {
+    m_db.push(i);
+  }
+
+  void push(uint16_t i) {
+    m_db.push(uint8_t(i >> 8));
+    m_db.push(uint8_t(i >> 0));
+  }
+
+  void push(uint32_t i) {
+    m_db.push(uint8_t(i >> 24));
+    m_db.push(uint8_t(i >> 16));
+    m_db.push(uint8_t(i >>  8));
+    m_db.push(uint8_t(i >>  0));
+  }
+
+  void push(const void *p, size_t n) {
+    m_db.push(p, n);
+  }
+
+  void push(const std::string &s) {
+    push(uint16_t(s.length()));
+    push(s.c_str(), s.length());
   }
 
   void push(pjs::Str *s) {
-    push(uint16_t(s->size()));
-    s_dp.push(&m_buffer, s->str());
-  }
-
-  void push(Data *data) {
-    if (data) {
-      push(uint16_t(data->size()));
-      push(*data);
+    if (s) {
+      push(s->str());
     } else {
       push(uint16_t(0));
     }
   }
 
-protected:
-  Data m_buffer;
+  void push(const Data *d) {
+    if (d) {
+      Data buf(*d);
+      if (buf.size() > 0xffff) buf.pop(buf.size() - 0xffff);
+      push(uint16_t(d->size()));
+      m_db.push(std::move(buf));
+    } else {
+      push(uint16_t(0));
+    }
+  }
+
+  void append(const Data &data) {
+    m_db.push(data);
+  }
+
+  void append(Data &&data) {
+    m_db.push(std::move(data));
+  }
+
+private:
+  Data::Builder m_db;
 
   static int make_var_int(int n, uint8_t buf[4]) {
     int i = 0;
@@ -582,277 +609,247 @@ protected:
 // PacketBuilder
 //
 
-class PacketBuilder : private DataBuilder {
+class PacketBuilder {
 public:
-  PacketBuilder(int protocol_level, pjs::Object *packet, Data &out)
-    : m_protocol_level(protocol_level)
-    , m_packet(packet)
-    , m_out(out) {}
-
-  int protocol_level() const {
-    return m_protocol_level;
-  }
-
-  void CONNECT() {
-    m_protocol_level = get(m_packet, STR_protocolLevel, 4);
-    int flags = 0;
-    if (get(m_packet, STR_cleanStart, false)) flags |= 0x02;
-    auto *will = get(m_packet, STR_will);
-    if (will) {
-      flags |= 0x04;
-      flags |= (get(will, STR_qos, 0) & 3) << 3;
-      if (get(will, STR_retain, false)) flags |= 0x20;
+  void build(Data &out, MessageHead *head, pjs::Object *payload) {
+    Data buf;
+    DataBuilder db(out);
+    auto t = head->type.get();
+    switch (t) {
+      case PacketType::CONNECT:
+        CONNECT(buf, head, pjs::Ref<ConnectPayload>(pjs::coerce<ConnectPayload>(payload)));
+        push_fixed_header(db, t, 0, buf.size());
+        db.append(buf);
+        break;
+      case PacketType::CONNACK:
+        CONNACK(buf, head);
+        push_fixed_header(db, t, 0, buf.size());
+        db.append(buf);
+        break;
+      case PacketType::PUBLISH:
+        PUBLISH(buf, head);
+        if (payload && payload->is<Data>()) {
+          Data data(*payload->as<Data>());
+          push_fixed_header(db, t, make_flags(head), buf.size() + data.size());
+          db.append(buf);
+          db.append(std::move(data));
+        } else {
+          push_fixed_header(db, t, make_flags(head), buf.size());
+          db.append(buf);
+        }
+        break;
+      case PacketType::PUBACK:
+        PUBACK(buf, head);
+        push_fixed_header(db, t, 0, buf.size());
+        db.append(buf);
+        break;
+      case PacketType::PUBREC:
+        PUBACK(buf, head);
+        push_fixed_header(db, t, 0, buf.size());
+        db.append(buf);
+        break;
+      case PacketType::PUBREL:
+        PUBACK(buf, head);
+        push_fixed_header(db, t, 0x02, buf.size());
+        db.append(buf);
+        break;
+      case PacketType::PUBCOMP:
+        PUBACK(buf, head);
+        push_fixed_header(db, t, 0, buf.size());
+        db.append(buf);
+        break;
+      case PacketType::SUBSCRIBE:
+        SUBSCRIBE(buf, head, pjs::Ref<SubscribePayload>(pjs::coerce<SubscribePayload>(payload)));
+        push_fixed_header(db, t, 0x02, buf.size());
+        db.append(buf);
+        break;
+      case PacketType::SUBACK:
+        SUBACK(buf, head, payload);
+        push_fixed_header(db, t, 0, buf.size());
+        db.append(buf);
+        break;
+      case PacketType::UNSUBSCRIBE:
+        UNSUBSCRIBE(buf, head, payload);
+        push_fixed_header(db, t, 0x02, buf.size());
+        db.append(buf);
+        break;
+      case PacketType::UNSUBACK:
+        SUBACK(buf, head, payload);
+        push_fixed_header(db, t, 0, buf.size());
+        db.append(buf);
+        break;
+      case PacketType::PINGREQ:
+        push_fixed_header(db, t, 0, 0);
+        break;
+      case PacketType::PINGRESP:
+        push_fixed_header(db, t, 0, 0);
+        db.append(buf);
+        break;
+      case PacketType::DISCONNECT:
+        DISCONNECT(buf, head);
+        push_fixed_header(db, t, 0, buf.size());
+        db.append(buf);
+        break;
+      case PacketType::AUTH:
+        AUTH(buf, head);
+        push_fixed_header(db, t, 0, buf.size());
+        db.append(buf);
+        break;
     }
-    auto username = get(m_packet, STR_username, (pjs::Str*)nullptr);
-    auto password = get(m_packet, STR_password, (Data*)nullptr);
-    if (username) flags |= 0x80;
-    if (password) flags |= 0x40;
-    push(STR_MQTT);
-    push(uint8_t(m_protocol_level));
-    push(uint8_t(flags));
-    push(get(m_packet, STR_keepAlive, uint16_t(0)));
-    push_properties();
-    push(get(m_packet, STR_clientID, pjs::Str::empty));
-    if (will) {
-      push(get(will, STR_topic, pjs::Str::empty));
-      push(pjs::Ref<Data>(get(will, STR_payload, Data::make())).get());
-    }
-    if (username) push(username);
-    if (password) push(password);
-    frame(PacketType::CONNECT, 0);
-  }
-
-  void CONNACK() {
-    m_protocol_level = get(m_packet, STR_protocolLevel, 4);
-    push(get(m_packet, STR_sessionPresent, false) ? '\x01' : '\x00');
-    push(get(m_packet, STR_reasonCode, '\x00'));
-    push_properties();
-    frame(PacketType::CONNACK, 0);
-  }
-
-  void PUBLISH(int qos, bool dup, bool retain, const Data &payload) {
-    int flags = (qos & 3) << 1;
-    if (dup) flags |= 0x04;
-    if (retain) flags |= 0x01;
-    push(get(m_packet, STR_topicName, pjs::Str::empty));
-    if (qos > 0) push(get(m_packet, STR_packetIdentifier, uint16_t(0)));
-    push_properties();
-    push(payload);
-    frame(PacketType::PUBLISH, flags);
-  }
-
-  void PUBACK() {
-    push(get(m_packet, STR_packetIdentifier, uint16_t(0)));
-    if (m_protocol_level >= 5) {
-      push(get(m_packet, STR_reasonCode, '\x00'));
-      push_properties();
-    }
-    frame(PacketType::PUBACK, 0);
-  }
-
-  void PUBREC() {
-    push(get(m_packet, STR_packetIdentifier, uint16_t(0)));
-    if (m_protocol_level >= 5) {
-      push(get(m_packet, STR_reasonCode, '\x00'));
-      push_properties();
-    }
-    frame(PacketType::PUBREC, 0);
-  }
-
-  void PUBREL() {
-    push(get(m_packet, STR_packetIdentifier, uint16_t(0)));
-    if (m_protocol_level >= 5) {
-      push(get(m_packet, STR_reasonCode, '\x00'));
-      push_properties();
-    }
-    frame(PacketType::PUBREL, 0x02);
-  }
-
-  void PUBCOMP() {
-    push(get(m_packet, STR_packetIdentifier, uint16_t(0)));
-    if (m_protocol_level >= 5) {
-      push(get(m_packet, STR_reasonCode, '\x00'));
-      push_properties();
-    }
-    frame(PacketType::PUBCOMP, 0);
-  }
-
-  void SUBSCRIBE() {
-    push(get(m_packet, STR_packetIdentifier, uint16_t(0)));
-    push_properties();
-    if (auto filters = get(m_packet, STR_topicFilters)) {
-      if (filters->is_array()) {
-        filters->as<pjs::Array>()->iterate_all(
-          [this](pjs::Value &v, int i) {
-            if (v.is_object() && v.o()) {
-              auto filter = get(v.o(), STR_filter, pjs::Str::empty);
-              auto qos = get(v.o(), STR_qos, 0);
-              push(filter);
-              push(uint8_t(qos & 3));
-            }
-          }
-        );
-      }
-    }
-    frame(PacketType::SUBSCRIBE, 0x02);
-  }
-
-  void SUBACK() {
-    push(get(m_packet, STR_packetIdentifier, uint16_t(0)));
-    push_properties();
-    push_reason_codes();
-    frame(PacketType::SUBACK, 0);
-  }
-
-  void UNSUBSCRIBE() {
-    push(get(m_packet, STR_packetIdentifier, uint16_t(0)));
-    push_properties();
-    if (auto filters = get(m_packet, STR_topicFilters)) {
-      if (filters->is_array()) {
-        filters->as<pjs::Array>()->iterate_all(
-          [this](pjs::Value &v, int i) {
-            auto *s = v.to_string();
-            push(s);
-            s->release();
-          }
-        );
-      }
-    }
-    frame(PacketType::UNSUBSCRIBE, 0x02);
-  }
-
-  void UNSUBACK() {
-    push(get(m_packet, STR_packetIdentifier, uint16_t(0)));
-    push_properties();
-    push_reason_codes();
-    frame(PacketType::UNSUBACK, 0);
-  }
-
-  void PINGREQ() {
-    frame(PacketType::PINGREQ, 0);
-  }
-
-  void PINGRESP() {
-    frame(PacketType::PINGRESP, 0);
-  }
-
-  void DISCONNECT() {
-    if (m_protocol_level >= 5) {
-      push(get(m_packet, STR_reasonCode, '\x00'));
-      push_properties();
-    }
-    frame(PacketType::DISCONNECT, 0);
-  }
-
-  void AUTH() {
-    if (m_protocol_level >= 5) {
-      push(get(m_packet, STR_reasonCode, '\x00'));
-      push_properties();
-    }
-    frame(PacketType::AUTH, 0);
   }
 
 private:
-  int m_protocol_level;
-  pjs::Object* m_packet;
-  Data& m_out;
-
-  bool get(pjs::Object *obj, pjs::Str *k, bool def) {
-    pjs::Value v; obj->get(k, v);
-    return v.is_undefined() ? def : v.to_boolean();
+  void CONNECT(Data &out, MessageHead *head, ConnectPayload *payload) {
+    DataBuilder db(out);
+    int flags = 0;
+    pjs::Ref<Will> will = payload->will ? pjs::coerce<Will>(payload->will) : nullptr;
+    if (payload->cleanStart) flags |= 0x02;
+    if (will) {
+      flags |= 0x04;
+      flags |= (will->qos & 3) << 3;
+      if (will->retained) flags |= 0x20;
+    }
+    if (payload->username) flags |= 0x80;
+    if (payload->password) flags |= 0x40;
+    db.push(uint16_t(4));
+    db.push("MQTT", 4);
+    db.push(uint8_t(head->protocolLevel));
+    db.push(uint8_t(flags));
+    db.push(uint16_t(head->keepAlive));
+    push_properties(db, head);
+    db.push(payload->clientID);
+    if (will) {
+      db.push(will->topic);
+      db.push(will->payload);
+    }
+    if (payload->username) db.push(payload->username);
+    if (payload->password) db.push(payload->password);
   }
 
-  uint8_t get(pjs::Object *obj, pjs::Str *k, uint8_t def) {
-    pjs::Value v; obj->get(k, v);
-    return v.is_number() ? v.n() : def;
+  void CONNACK(Data &out, MessageHead *head) {
+    DataBuilder db(out);
+    db.push(uint8_t(head->sessionPresent));
+    db.push(uint8_t(head->reasonCode));
+    push_properties(db, head);
   }
 
-  uint16_t get(pjs::Object *obj, pjs::Str *k, uint16_t def) {
-    pjs::Value v; obj->get(k, v);
-    return v.is_number() ? v.n() : def;
+  void PUBLISH(Data &out, MessageHead *head) {
+    DataBuilder db(out);
+    db.push(head->topicName);
+    if (head->qos > 0) db.push(uint16_t(head->packetIdentifier));
+    push_properties(db, head);
   }
 
-  int get(pjs::Object *obj, pjs::Str *k, int def) {
-    pjs::Value v; obj->get(k, v);
-    return v.is_number() ? v.n() : def;
-  }
-
-  pjs::Str* get(pjs::Object *obj, pjs::Str *k, pjs::Str* def) {
-    pjs::Value v; obj->get(k, v);
-    return v.is_string() ? v.s() : def;
-  }
-
-  Data* get(pjs::Object *obj, pjs::Str *k, Data* def) {
-    pjs::Value v; obj->get(k, v);
-    if (v.is_instance_of<Data>()) {
-      return v.as<Data>();
-    } else if (!v.is_nullish()) {
-      auto *s = v.to_string();
-      auto *d = s_dp.make(s->str());
-      s->release();
-      return d;
-    } else {
-      return def;
+  void PUBACK(Data &out, MessageHead *head) {
+    DataBuilder db(out);
+    db.push(uint16_t(head->packetIdentifier));
+    if (head->protocolLevel >= 5) {
+      db.push(uint8_t(head->reasonCode));
+      push_properties(db, head);
     }
   }
 
-  pjs::Object* get(pjs::Object *obj, pjs::Str *k) {
-    pjs::Value v; obj->get(k, v);
-    return v.is_object() ? v.o() : nullptr;
+  void SUBSCRIBE(Data &out, MessageHead *head, SubscribePayload *payload) {
+    DataBuilder db(out);
+    db.push(uint16_t(head->packetIdentifier));
+    push_properties(db, head);
+    if (auto filters = payload->topicFilters.get()) {
+      filters->iterate_all(
+        [&](pjs::Value &v, int) {
+          pjs::Ref<TopicFilter> f = pjs::coerce<TopicFilter>(v.is_object() ? v.o() : nullptr);
+          db.push(f->filter);
+          db.push(uint8_t(f->qos & 3));
+        }
+      );
+    }
   }
 
-  void push_properties() {
-    if (m_protocol_level >= 5) {
-      DataBuilder db;
-      pjs::Value v; m_packet->get(STR_properties, v);
-      if (v.is_object() && v.o()) {
-        v.o()->iterate_all(
+  void SUBACK(Data &out, MessageHead *head, pjs::Object *payload) {
+    DataBuilder db(out);
+    db.push(uint16_t(head->packetIdentifier));
+    push_properties(db, head);
+    push_reason_codes(db, payload);
+  }
+
+  void UNSUBSCRIBE(Data &out, MessageHead *head, pjs::Object *payload) {
+    DataBuilder db(out);
+    db.push(uint16_t(head->packetIdentifier));
+    push_properties(db, head);
+    if (payload && payload->is_array()) {
+      payload->as<pjs::Array>()->iterate_all(
+        [&](pjs::Value &v, int) {
+          auto *s = v.to_string();
+          db.push(s);
+          s->release();
+        }
+      );
+    }
+  }
+
+  void DISCONNECT(Data &out, MessageHead *head) {
+    DataBuilder db(out);
+    if (head->protocolLevel >= 5) {
+      db.push(uint8_t(head->reasonCode));
+      push_properties(db, head);
+    }
+  }
+
+  void AUTH(Data &out, MessageHead *head) {
+    DataBuilder db(out);
+    if (head->protocolLevel >= 5) {
+      db.push(uint8_t(head->reasonCode));
+      push_properties(db, head);
+    }
+  }
+
+  auto make_flags(MessageHead *head) -> uint8_t {
+    uint8_t flags = (head->qos & 3) << 1;
+    if (head->dup) flags |= 0x04;
+    if (head->retained) flags |= 0x01;
+    return flags;
+  }
+
+  void push_fixed_header(DataBuilder &db, PacketType type, uint8_t flags, size_t size) {
+    db.push(uint8_t((int(type) << 4) | (flags & 0x0f)));
+    db.push(int(size));
+  }
+
+  void push_properties(DataBuilder &db, MessageHead *head) {
+    if (head->protocolLevel >= 5) {
+      Data buffer;
+      if (auto props = head->properties.get()) {
+        DataBuilder db(buffer);
+        props->iterate_all(
           [&](pjs::Str *k, pjs::Value &v) {
             if (auto *p = s_property_map.by_name(k)) {
               db.push(p->id);
               switch (p->type) {
-                case PropertyMap::Property::INT: {
-                  int n = v.to_number();
-                  db.push(n);
+                case PropertyMap::Property::INT:
+                  db.push(v.to_int32());
                   break;
-                }
-                case PropertyMap::Property::INT8: {
-                  uint8_t n = v.to_number();
-                  db.push(n);
+                case PropertyMap::Property::INT8:
+                  db.push(uint8_t(v.to_int32()));
                   break;
-                }
-                case PropertyMap::Property::INT16: {
-                  uint16_t n = v.to_number();
-                  db.push(n);
+                case PropertyMap::Property::INT16:
+                  db.push(uint16_t(v.to_int32()));
                   break;
-                }
-                case PropertyMap::Property::INT32: {
-                  uint32_t n = v.to_number();
-                  db.push(n);
+                case PropertyMap::Property::INT32:
+                  db.push(uint32_t(v.to_int32()));
                   break;
-                }
                 case PropertyMap::Property::STR: {
                   auto s = v.to_string();
                   db.push(s);
                   s->release();
                   break;
                 }
-                case PropertyMap::Property::BIN: {
-                  if (v.is_instance_of<Data>()) {
-                    auto data = v.as<Data>();
-                    db.push(uint16_t(data->size()));
-                    db.push(*data);
-                  } else {
-                    db.push(uint16_t(0));
-                  }
+                case PropertyMap::Property::BIN:
+                  db.push(v.is_instance_of<Data>() ? v.as<Data>() : nullptr);
                   break;
-                }
                 default: break;
               }
             } else {
-              int id = 38; // user property
               auto s = v.to_string();
-              db.push(id);
+              db.push(int(38)); // user property
               db.push(k);
               db.push(s);
               s->release();
@@ -860,252 +857,32 @@ private:
           }
         );
       }
-      push(int(db.buffer().size()));
-      push(db.buffer());
+      db.push(int(buffer.size()));
+      db.append(buffer);
     }
   }
 
-  void push_reason_codes() {
-    pjs::Value v;
-    m_packet->get(STR_reasonCodes, v);
-    if (v.is_array()) {
-      auto *a = v.as<pjs::Array>();
-      a->iterate_all(
-        [this](pjs::Value &v, int i) {
-          if (v.is_number()) {
-            push(uint8_t(v.n()));
-          } else {
-            push(uint8_t(0));
-          }
+  void push_reason_codes(DataBuilder &db, pjs::Object *payload) {
+    if (payload && payload->is_array()) {
+      payload->as<pjs::Array>()->iterate_all(
+        [&](pjs::Value &v, int) {
+          db.push(uint8_t(v.to_int32()));
         }
       );
     }
   }
-
-  void frame(PacketType type, uint8_t flags) {
-    uint8_t buf[5];
-    buf[0] = ((uint8_t)type << 4) | (flags & 0x0f);
-    int len = 1 + make_var_int(m_buffer.size(), &buf[1]);
-    s_dp.push(&m_out, buf, len);
-    m_out.push(m_buffer);
-  }
 };
-
-//
-// DecoderFunction
-//
-
-void DecoderFunction::reset() {
-  m_protocol_level = 0;
-  m_state = FIXED_HEADER;
-  m_buffer.clear();
-}
-
-void DecoderFunction::on_event(Event *evt) {
-
-  auto data = evt->as<Data>();
-  if (!data) return;
-
-  while (!data->empty() && m_state != ERROR) {
-    auto state = m_state;
-    pjs::Ref<Data> output(Data::make());
-
-    // byte scan
-    data->shift_to(
-      [&](int c) -> bool {
-        switch (state) {
-          case FIXED_HEADER:
-            m_fixed_header = c;
-            m_remaining_length = 0;
-            m_remaining_length_shift = 0;
-            state = REMAINING_LENGTH;
-            return false;
-          case REMAINING_LENGTH:
-            m_remaining_length |= (c & 0x7f) << m_remaining_length_shift;
-            m_remaining_length_shift += 7;
-            if (c & 0x80) return false;
-            if (!m_remaining_length) {
-              auto type = PacketType(m_fixed_header >> 4);
-              if (type != PacketType::PINGREQ && type != PacketType::PINGRESP) {
-                state = ERROR;
-                return true;
-              }
-              message();
-              state = FIXED_HEADER;
-              return false;
-            } else {
-              m_buffer.clear();
-              state = REMAINING_DATA;
-              return true;
-            }
-          case REMAINING_DATA:
-            if (--m_remaining_length) return false;
-            state = FIXED_HEADER;
-            return true;
-          default: return false;
-        }
-      },
-      *output
-    );
-
-    // old state
-    if (m_state == REMAINING_DATA) {
-      m_buffer.push(*output);
-    }
-
-    // new state
-    if (state == FIXED_HEADER) {
-      message();
-    }
-
-    m_state = state;
-  }
-}
-
-void DecoderFunction::message() {
-  auto type = PacketType(m_fixed_header >> 4);
-  auto head = MessageHead::make();
-  head->type(pjs::EnumDef<PacketType>::name(type));
-  head->qos((m_fixed_header >> 1) & 3);
-  head->dup(m_fixed_header & 0x08);
-  head->retained(m_fixed_header & 1);
-
-  if (!m_protocol_level) m_protocol_level = on_get_protocol_level();
-  if (!m_protocol_level) return;
-
-  PacketParser parser(type, m_protocol_level, head, m_buffer);
-  parser.decode();
-  output(MessageStart::make(head));
-
-  if (type == PacketType::PUBLISH) {
-    m_buffer.shift(parser.position());
-    if (!m_buffer.empty()) {
-      output(Data::make(m_buffer));
-    }
-  }
-
-  m_protocol_level = parser.protocol_level();
-  m_buffer.clear();
-
-  output(MessageEnd::make());
-}
-
-//
-// EncoderFunction
-//
-
-EncoderFunction::EncoderFunction()
-  : m_prop_type("type")
-  , m_prop_qos("qos")
-  , m_prop_dup("dup")
-  , m_prop_retain("retain")
-{
-}
-
-void EncoderFunction::reset() {
-  m_protocol_level = 0;
-  m_start = nullptr;
-  m_buffer.clear();
-}
-
-void EncoderFunction::on_event(Event *evt) {
-  if (auto start = evt->as<MessageStart>()) {
-    m_start = start;
-    m_buffer.clear();
-
-  } else if (auto data = evt->as<Data>()) {
-    if (m_start) {
-      m_buffer.push(*data);
-    }
-
-  } else if (evt->is<MessageEnd>() || evt->is<StreamEnd>()) {
-    if (m_start) {
-      auto head = m_start->head();
-      if (!head) {
-        on_encode_error("trying to encode a packet without a head");
-        return;
-      }
-      pjs::Str *type_str;
-      if (!m_prop_type.get(head, type_str)) {
-        m_start = nullptr;
-        m_buffer.clear();
-        on_encode_error("invalid packet type");
-        return;
-      }
-      auto type = pjs::EnumDef<PacketType>::value(type_str);
-      if (int(type) < 0) {
-        m_start = nullptr;
-        m_buffer.clear();
-        on_encode_error("invalid packet type");
-        return;
-      }
-      Data buf;
-      PacketBuilder builder(m_protocol_level, head, buf);
-      switch (type) {
-        case PacketType::CONNECT: {
-          builder.CONNECT();
-          m_protocol_level = builder.protocol_level();
-          break;
-        }
-        case PacketType::CONNACK: {
-          builder.CONNACK();
-          m_protocol_level = builder.protocol_level();
-          break;
-        }
-        case PacketType::PUBLISH: {
-          int qos = 0;
-          bool dup = false, retain = false;
-          m_prop_qos.get(head, qos);
-          m_prop_dup.get(head, dup);
-          m_prop_retain.get(head, retain);
-          builder.PUBLISH(qos, dup, retain, m_buffer);
-          break;
-        }
-        case PacketType::PUBACK: builder.PUBACK(); break;
-        case PacketType::PUBREC: builder.PUBREC(); break;
-        case PacketType::PUBREL: builder.PUBREL(); break;
-        case PacketType::PUBCOMP: builder.PUBCOMP(); break;
-        case PacketType::SUBSCRIBE: builder.SUBSCRIBE(); break;
-        case PacketType::SUBACK: builder.SUBACK(); break;
-        case PacketType::UNSUBSCRIBE: builder.UNSUBSCRIBE(); break;
-        case PacketType::UNSUBACK: builder.UNSUBACK(); break;
-        case PacketType::PINGREQ: builder.PINGREQ(); break;
-        case PacketType::PINGRESP: builder.PINGRESP(); break;
-        case PacketType::DISCONNECT: builder.DISCONNECT(); break;
-        case PacketType::AUTH: builder.AUTH(); break;
-      }
-      output(m_start);
-      output(Data::make(buf));
-      output(evt);
-      m_start = nullptr;
-      m_buffer.clear();
-    }
-  }
-}
-
-//
-// Decoder::Options
-//
-
-Decoder::Options::Options(pjs::Object *options) {
-  Value(options, "protocolLevel")
-    .get(protocol_level)
-    .get(protocol_level_f)
-    .check_nullable();
-}
 
 //
 // Decoder
 //
 
-Decoder::Decoder(const Options &options)
-  : m_options(options)
+Decoder::Decoder()
 {
 }
 
 Decoder::Decoder(const Decoder &r)
-  : Filter(r)
-  , m_options(r.m_options)
+  : Decoder()
 {
 }
 
@@ -1122,40 +899,78 @@ auto Decoder::clone() -> Filter* {
   return new Decoder(*this);
 }
 
-void Decoder::chain() {
-  Filter::chain();
-  DecoderFunction::chain(Filter::output());
-}
-
 void Decoder::reset() {
   Filter::reset();
-  DecoderFunction::reset();
+  Deframer::reset();
+  m_buffer = nullptr;
 }
 
 void Decoder::process(Event *evt) {
-  if (evt->is<StreamEnd>()) {
+  if (auto *data = evt->as<Data>()) {
+    Deframer::deframe(*data);
+  } else if (evt->is<StreamEnd>()) {
     Filter::output(evt);
-  } else {
-    Filter::output(evt, DecoderFunction::input());
   }
 }
 
-auto Decoder::on_get_protocol_level() -> int {
-  pjs::Value protocol_level(m_options.protocol_level);
-  if (!eval(m_options.protocol_level_f, protocol_level)) return 0;
-  if (!protocol_level.is_undefined()) {
-    if (protocol_level.is_number()) {
-      int n = protocol_level.n();
-      if (n == 4 || n == 5) {
-        return protocol_level.n();
+auto Decoder::on_state(int state, int c) -> int {
+  switch (state) {
+    case FIXED_HEADER: {
+      auto type = (c >> 4);
+      if (type < 1 || type > 15) return ERROR;
+      m_fixed_header = c;
+      m_remaining_length = 0;
+      m_remaining_length_shift = 0;
+      return REMAINING_LENGTH;
+    }
+    case REMAINING_LENGTH:
+      m_remaining_length |= (c & 0x7f) << m_remaining_length_shift;
+      m_remaining_length_shift += 7;
+      if (c & 0x80) return REMAINING_LENGTH;
+      if (!m_remaining_length) {
+        auto type = PacketType(m_fixed_header >> 4);
+        if (type != PacketType::PINGREQ && type != PacketType::PINGRESP) return ERROR;
+        m_buffer = nullptr;
+        message();
+        return FIXED_HEADER;
       } else {
-        Log::error("[decodeMQTT] options.protocolLevel expects 4 or 5");
+        m_buffer = Data::make();
+        Deframer::read(m_remaining_length, m_buffer);
+        return REMAINING_DATA;
       }
+    case REMAINING_DATA:
+      message();
+      return FIXED_HEADER;
+    default: return ERROR;
+  }
+}
+
+void Decoder::on_pass(Data &data) {
+  Filter::output(Data::make(std::move(data)));
+}
+
+void Decoder::message() {
+  auto type = PacketType(m_fixed_header >> 4);
+  auto head = MessageHead::make();
+  head->type = type;
+  head->qos = (m_fixed_header >> 1) & 3;
+  head->dup = bool(m_fixed_header & 0x08);
+  head->retained = bool(m_fixed_header & 1);
+
+  PacketParser parser(head, *m_buffer);
+  if (parser.decode()) {
+    output(MessageStart::make(head));
+    if (!parser.payload_data()->empty()) {
+      output(parser.payload_data());
+    }
+    if (auto payload = parser.payload()) {
+      output(MessageEnd::make(nullptr, payload));
     } else {
-      Log::error("[decodeMQTT] options.protocolLevel expects a number or a function returning a number");
+      output(MessageEnd::make());
     }
   }
-  return 0;
+
+  m_buffer = nullptr;
 }
 
 //
@@ -1167,7 +982,7 @@ Encoder::Encoder()
 }
 
 Encoder::Encoder(const Encoder &r)
-  : Filter(r)
+  : Encoder()
 {
 }
 
@@ -1184,27 +999,115 @@ auto Encoder::clone() -> Filter* {
   return new Encoder(*this);
 }
 
-void Encoder::chain() {
-  Filter::chain();
-  EncoderFunction::chain(Filter::output());
-}
-
 void Encoder::reset() {
   Filter::reset();
-  EncoderFunction::reset();
+  m_head = nullptr;
+  m_buffer = nullptr;
 }
 
 void Encoder::process(Event *evt) {
-  if (evt->is<StreamEnd>()) {
-    Filter::output(evt);
-  } else {
-    Filter::output(evt, EncoderFunction::input());
-  }
-}
+  if (auto start = evt->as<MessageStart>()) {
+    if (!m_head) {
+      m_head = pjs::coerce<MessageHead>(start->head());
+      if (m_head->type.get() == PacketType::PUBLISH) {
+        m_buffer = Data::make();
+      }
+      Filter::output(evt);
+    }
 
-void Encoder::on_encode_error(const char *msg) {
-  Log::error("[encodeMQTT] %s", msg);
+  } else if (auto data = evt->as<Data>()) {
+    if (m_buffer) {
+      m_buffer->push(*data);
+    }
+
+  } else if (auto end = evt->as<MessageEnd>()) {
+    if (m_head) {
+      pjs::Object *payload = nullptr;
+      if (m_head->type == PacketType::PUBLISH) {
+        payload = m_buffer.get();
+      } else if (end->payload().is_object()) {
+        payload = end->payload().o();
+      }
+      Data buf;
+      PacketBuilder pb;
+      pb.build(buf, m_head, payload);
+      Filter::output(Data::make(std::move(buf)));
+      Filter::output(evt);
+      m_head = nullptr;
+    }
+
+  } else if (evt->is<StreamEnd>()) {
+    Filter::output(evt);
+  }
 }
 
 } // namespace mqtt
 } // namespace pipy
+
+namespace pjs {
+
+using namespace pipy;
+using namespace pipy::mqtt;
+
+//
+// PacketType
+//
+
+template<> void EnumDef<PacketType>::init() {
+  define(PacketType::CONNECT    , "CONNECT");
+  define(PacketType::CONNACK    , "CONNACK");
+  define(PacketType::PUBLISH    , "PUBLISH");
+  define(PacketType::PUBACK     , "PUBACK");
+  define(PacketType::PUBREC     , "PUBREC");
+  define(PacketType::PUBREL     , "PUBREL");
+  define(PacketType::PUBCOMP    , "PUBCOMP");
+  define(PacketType::SUBSCRIBE  , "SUBSCRIBE");
+  define(PacketType::SUBACK     , "SUBACK");
+  define(PacketType::UNSUBSCRIBE, "UNSUBSCRIBE");
+  define(PacketType::UNSUBACK   , "UNSUBACK");
+  define(PacketType::PINGREQ    , "PINGREQ");
+  define(PacketType::PINGRESP   , "PINGRESP");
+  define(PacketType::DISCONNECT , "DISCONNECT");
+  define(PacketType::AUTH       , "AUTH");
+}
+
+template<> void ClassDef<MessageHead>::init() {
+  field<EnumValue<PacketType>>("type", [](MessageHead *obj) { return &obj->type; });
+  field<bool>("dup", [](MessageHead *obj) { return &obj->dup; });
+  field<bool>("retain", [](MessageHead *obj) { return &obj->retained; });
+  field<bool>("sessionPresent", [](MessageHead *obj) { return &obj->sessionPresent; });
+  field<int>("qos", [](MessageHead *obj) { return &obj->qos; });
+  field<int>("packetIdentifier", [](MessageHead *obj) { return &obj->packetIdentifier; });
+  field<int>("protocolLevel", [](MessageHead *obj) { return &obj->protocolLevel; });
+  field<int>("keepAlive", [](MessageHead *obj) { return &obj->keepAlive; });
+  field<int>("reasonCode", [](MessageHead *obj) { return &obj->reasonCode; });
+  field<Ref<Str>>("topicName", [](MessageHead *obj) { return &obj->topicName; });
+  field<Ref<Object>>("properties", [](MessageHead *obj) { return &obj->properties; });
+}
+
+template<> void ClassDef<Will>::init() {
+  field<int>("qos", [](Will *obj) { return &obj->qos; });
+  field<bool>("retain", [](Will *obj) { return &obj->retained; });
+  field<Ref<Object>>("properties", [](Will *obj) { return &obj->properties; });
+  field<Ref<Str>>("topic", [](Will *obj) { return &obj->topic; });
+  field<Ref<pipy::Data>>("payload", [](Will *obj) { return &obj->payload; });
+}
+
+template<> void ClassDef<ConnectPayload>::init() {
+  field<Ref<Str>>("clientID", [](ConnectPayload *obj) { return &obj->clientID; });
+  field<Ref<Str>>("username", [](ConnectPayload *obj) { return &obj->username; });
+  field<Ref<pipy::Data>>("password", [](ConnectPayload *obj) { return &obj->password; });
+  field<Ref<Will>>("will", [](ConnectPayload *obj) { return &obj->will; });
+  field<bool>("cleanStart", [](ConnectPayload *obj) { return &obj->cleanStart; });
+}
+
+template<> void ClassDef<TopicFilter>::init() {
+  field<Ref<Str>>("filter", [](TopicFilter *obj) { return &obj->filter; });
+  field<int>("qos", [](TopicFilter *obj) { return &obj->qos; });
+}
+
+template<> void ClassDef<SubscribePayload>::init() {
+  field<Ref<Array>>("topicFilters", [](SubscribePayload *obj) { return &obj->topicFilters; });
+}
+
+} // namespace pjs

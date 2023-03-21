@@ -27,109 +27,137 @@
 #define MQTT_HPP
 
 #include "filter.hpp"
-#include "data.hpp"
-#include "api/mqtt.hpp"
-#include "options.hpp"
+#include "deframer.hpp"
 
 namespace pipy {
 namespace mqtt {
 
 //
-// DecoderFunction
+// PacketType
 //
 
-class DecoderFunction : public EventFunction {
-public:
-  void reset();
-
-private:
-  virtual void on_event(Event *evt) override;
-
-  enum State {
-    FIXED_HEADER,
-    REMAINING_LENGTH,
-    REMAINING_DATA,
-    ERROR,
-  };
-
-  State m_state;
-  uint8_t m_fixed_header;
-  uint32_t m_remaining_length;
-  int m_remaining_length_shift;
-  int m_protocol_level;
-  Data m_buffer;
-
-  void message();
-
-  virtual auto on_get_protocol_level() -> int { return 4; }
+enum class PacketType {
+  CONNECT     = 1,
+  CONNACK     = 2,
+  PUBLISH     = 3,
+  PUBACK      = 4,
+  PUBREC      = 5,
+  PUBREL      = 6,
+  PUBCOMP     = 7,
+  SUBSCRIBE   = 8,
+  SUBACK      = 9,
+  UNSUBSCRIBE = 10,
+  UNSUBACK    = 11,
+  PINGREQ     = 12,
+  PINGRESP    = 13,
+  DISCONNECT  = 14,
+  AUTH        = 15,
 };
 
 //
-// EncoderFunction
+// MessageHead
 //
 
-class EncoderFunction : public EventFunction {
+class MessageHead : public pjs::ObjectTemplate<MessageHead> {
 public:
-  EncoderFunction();
+  pjs::EnumValue<PacketType> type = PacketType::CONNECT;
+  bool dup = false;
+  bool retained = false;
+  bool sessionPresent = false;
+  int qos = 0;
+  int packetIdentifier = 0;
+  int protocolLevel = 5;
+  int keepAlive = 0;
+  int reasonCode = 0;
+  pjs::Ref<pjs::Str> topicName;
+  pjs::Ref<pjs::Object> properties;
+};
 
-  void reset();
+//
+// Will
+//
 
-private:
-  virtual void on_event(Event *evt) override;
+class Will : public pjs::ObjectTemplate<Will> {
+public:
+  int qos;
+  bool retained;
+  pjs::Ref<pjs::Object> properties;
+  pjs::Ref<pjs::Str> topic;
+  pjs::Ref<Data> payload;
+};
 
-  pjs::Ref<MessageStart> m_start;
-  Data m_buffer;
-  pjs::PropertyCache m_prop_type;
-  pjs::PropertyCache m_prop_qos;
-  pjs::PropertyCache m_prop_dup;
-  pjs::PropertyCache m_prop_retain;
-  int m_protocol_level;
+//
+// ConnectPayload
+//
 
-  virtual void on_encode_error(const char *msg) {}
+class ConnectPayload : public pjs::ObjectTemplate<ConnectPayload> {
+public:
+  pjs::Ref<pjs::Str> clientID;
+  pjs::Ref<pjs::Str> username;
+  pjs::Ref<Data> password;
+  pjs::Ref<Will> will;
+  bool cleanStart;
+};
+
+//
+// TopicFilter
+//
+
+class TopicFilter : public pjs::ObjectTemplate<TopicFilter> {
+public:
+  pjs::Ref<pjs::Str> filter;
+  int qos;
+};
+
+//
+// SubscribePayload
+//
+
+class SubscribePayload : public pjs::ObjectTemplate<SubscribePayload> {
+public:
+  pjs::Ref<pjs::Array> topicFilters;
 };
 
 //
 // Decoder
 //
 
-class Decoder :
-  public Filter,
-  protected DecoderFunction
-{
+class Decoder : public Filter, public Deframer {
 public:
-  struct Options : public pipy::Options {
-    int protocol_level = 4;
-    pjs::Ref<pjs::Function> protocol_level_f;
-
-    Options() {}
-    Options(pjs::Object *options);
-  };
-
-  Decoder(const Options &options);
+  Decoder();
 
 private:
   Decoder(const Decoder &r);
   ~Decoder();
 
   virtual auto clone() -> Filter* override;
-  virtual void chain() override;
   virtual void reset() override;
   virtual void process(Event *evt) override;
   virtual void dump(Dump &d) override;
 
-  virtual auto on_get_protocol_level() -> int override;
+  enum State {
+    ERROR = -1,
+    FIXED_HEADER = 0,
+    REMAINING_LENGTH,
+    REMAINING_DATA,
+  };
 
-  Options m_options;
+  int m_fixed_header;
+  int m_remaining_length;
+  int m_remaining_length_shift;
+  pjs::Ref<Data> m_buffer;
+
+  virtual auto on_state(int state, int c) -> int override;
+  virtual void on_pass(Data &data) override;
+
+  void message();
 };
 
 //
 // Encoder
 //
 
-class Encoder :
-  public Filter,
-  protected EncoderFunction
-{
+class Encoder : public Filter {
 public:
   Encoder();
 
@@ -138,12 +166,12 @@ private:
   ~Encoder();
 
   virtual auto clone() -> Filter* override;
-  virtual void chain() override;
   virtual void reset() override;
   virtual void process(Event *evt) override;
   virtual void dump(Dump &d) override;
 
-  virtual void on_encode_error(const char *msg) override;
+  pjs::Ref<MessageHead> m_head;
+  pjs::Ref<Data> m_buffer;
 };
 
 } // namespace mqtt

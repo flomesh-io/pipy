@@ -156,7 +156,7 @@ void Dump::process(Event *evt) {
             hex[i++] = s_hex[ch >> 4];
             hex[i++] = s_hex[ch & 15];
             hex[i++] = ' ';
-            txt[j++] = ch < 0x20 || ch >= 0x7f ? '?' : ch;
+            txt[j++] = ch < 0x20 || ch >= 0x7f ? '.' : ch;
             if (j == 16) {
               hex[i++] = ' ';
               hex[i++] = '|';

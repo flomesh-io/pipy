@@ -178,8 +178,8 @@ void FilterConfigurator::decode_http_response(pjs::Object *options) {
   append_filter(new http::ResponseDecoder(options));
 }
 
-void FilterConfigurator::decode_mqtt(pjs::Object *options) {
-  append_filter(new mqtt::Decoder(options));
+void FilterConfigurator::decode_mqtt() {
+  append_filter(new mqtt::Decoder());
 }
 
 void FilterConfigurator::decode_multipart() {
@@ -1192,10 +1192,8 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.decodeMQTT
   method("decodeMQTT", [](Context &ctx, Object *thiz, Value &result) {
-    Object *options = nullptr;
-    if (!ctx.arguments(0, &options)) return;
     try {
-      thiz->as<FilterConfigurator>()->decode_mqtt(options);
+      thiz->as<FilterConfigurator>()->decode_mqtt();
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
