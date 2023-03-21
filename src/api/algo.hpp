@@ -57,6 +57,7 @@ public:
   bool get(const pjs::Value &key, pjs::Value &value);
   void set(const pjs::Value &key, const pjs::Value &value);
   bool find(const pjs::Value &key, pjs::Value &value);
+  bool remove(const pjs::Value &key);
   bool remove(pjs::Context &ctx, const pjs::Value &key);
   bool clear(pjs::Context &ctx);
 
@@ -296,13 +297,14 @@ private:
 
 class HashingLoadBalancer : public pjs::ObjectTemplate<HashingLoadBalancer, LoadBalancer> {
 public:
+  void set(pjs::Object *targets);
   void add(pjs::Str *target);
 
   virtual auto select(const pjs::Value &key, Cache *unhealthy) -> pjs::Str* override;
   virtual void deselect(pjs::Str *target) override {}
 
 private:
-  HashingLoadBalancer(pjs::Array *targets, Cache *unhealthy = nullptr);
+  HashingLoadBalancer(pjs::Object *targets, Cache *unhealthy = nullptr);
   ~HashingLoadBalancer();
 
   std::vector<pjs::Ref<pjs::Str>> m_targets;
@@ -316,6 +318,7 @@ private:
 
 class RoundRobinLoadBalancer : public pjs::ObjectTemplate<RoundRobinLoadBalancer, LoadBalancer> {
 public:
+  void set(pjs::Object *targets);
   void set(pjs::Str *target, int weight);
 
   virtual auto select(const pjs::Value &key, Cache *unhealthy) -> pjs::Str* override;
@@ -331,6 +334,7 @@ private:
     int hits;
     double usage;
     bool healthy;
+    bool removed;
   };
 
   std::list<Target> m_targets;
@@ -346,6 +350,7 @@ private:
 
 class LeastWorkLoadBalancer : public pjs::ObjectTemplate<LeastWorkLoadBalancer, LoadBalancer> {
 public:
+  void set(pjs::Object *targets);
   void set(pjs::Str *target, double weight);
 
   virtual auto select(const pjs::Value &key, Cache *unhealthy) -> pjs::Str* override;
@@ -359,6 +364,7 @@ private:
     int weight;
     int hits;
     double usage;
+    bool removed;
   };
 
   std::map<pjs::Ref<pjs::Str>, Target> m_targets;

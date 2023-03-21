@@ -121,6 +121,10 @@ bool Cache::find(const pjs::Value &key, pjs::Value &value) {
   return true;
 }
 
+bool Cache::remove(const pjs::Value &key) {
+  return m_cache->erase(key);
+}
+
 bool Cache::remove(pjs::Context &ctx, const pjs::Value &key) {
   if (m_free) {
     Entry entry;
@@ -529,23 +533,35 @@ void LoadBalancer::Session::on_weak_ptr_gone() {
 // HashingLoadBalancer
 //
 
-HashingLoadBalancer::HashingLoadBalancer(pjs::Array *targets, Cache *unhealthy)
+HashingLoadBalancer::HashingLoadBalancer(pjs::Object *targets, Cache *unhealthy)
   : pjs::ObjectTemplate<HashingLoadBalancer, LoadBalancer>(unhealthy)
-  , m_targets(targets ? targets->length() : 0)
 {
-  if (targets) {
-    targets->iterate_all(
-      [this](pjs::Value &v, int i) {
-        auto s = v.to_string();
-        m_targets[i] = s;
-        s->release();
-      }
-    );
-  }
+  set(targets);
 }
 
 HashingLoadBalancer::~HashingLoadBalancer()
 {
+}
+
+void HashingLoadBalancer::set(pjs::Object *targets) {
+  if (targets) {
+    m_targets.clear();
+    if (targets->is_array()) {
+      targets->as<pjs::Array>()->iterate_all(
+        [this](pjs::Value &v, int i) {
+          auto s = v.to_string();
+          m_targets.push_back(s);
+          s->release();
+        }
+      );
+    } else {
+      targets->iterate_all(
+        [this](pjs::Str *k, pjs::Value &) {
+          m_targets.push_back(k);
+        }
+      );
+    }
+  }
 }
 
 void HashingLoadBalancer::add(pjs::Str *target) {
@@ -580,7 +596,7 @@ RoundRobinLoadBalancer::RoundRobinLoadBalancer(pjs::Object *targets, Cache *unhe
     } else {
       targets->iterate_all(
         [this](pjs::Str *k, pjs::Value &v) {
-          set(k, v.to_number());
+          set(k, v.to_int32());
         }
       );
     }
@@ -589,6 +605,47 @@ RoundRobinLoadBalancer::RoundRobinLoadBalancer(pjs::Object *targets, Cache *unhe
 
 RoundRobinLoadBalancer::~RoundRobinLoadBalancer()
 {
+}
+
+void RoundRobinLoadBalancer::set(pjs::Object *targets) {
+  if (!targets) return;
+  for (auto &t : m_targets) t.removed = true;
+
+  auto update = [this](pjs::Str *id, int weight) {
+    auto i = m_target_map.find(id);
+    if (i != m_target_map.end()) {
+      auto *t = i->second;
+      if (t->weight == weight) {
+        t->removed = false;
+        return;
+      }
+    }
+    set(id, weight);
+  };
+
+  if (targets->is_array()) {
+    targets->as<pjs::Array>()->iterate_all(
+      [&](pjs::Value &v, int) {
+        auto s = v.to_string();
+        update(s, 1);
+        s->release();
+      }
+    );
+  } else {
+    targets->iterate_all(
+      [&](pjs::Str *k, pjs::Value &v) {
+        update(k, v.to_int32());
+      }
+    );
+  }
+
+  for (auto i = m_targets.begin(); i != m_targets.end(); ) {
+    auto p = i++;
+    if (p->removed) {
+      m_target_map.erase(p->id);
+      m_targets.erase(p);
+    }
+  }
 }
 
 void RoundRobinLoadBalancer::set(pjs::Str *target, int weight) {
@@ -612,6 +669,7 @@ void RoundRobinLoadBalancer::set(pjs::Str *target, int weight) {
     t.hits = weight * min_usage;
     t.usage = min_usage;
     t.healthy = weight > 0;
+    t.removed = false;
     m_target_map[target] = &t;
   } else {
     auto *t = i->second;
@@ -619,6 +677,7 @@ void RoundRobinLoadBalancer::set(pjs::Str *target, int weight) {
     t->hits = weight * min_usage;
     t->usage = min_usage;
     t->healthy = weight > 0;
+    t->removed = false;
   }
 }
 
@@ -630,7 +689,10 @@ auto RoundRobinLoadBalancer::select(const pjs::Value &key, Cache *unhealthy) -> 
     }
     pjs::Value target;
     if (m_target_cache->get(key, target)) {
-      return target.s();
+      if (m_target_map.count(target.s())) {
+        return target.s();
+      }
+      m_target_cache->remove(key);
     }
   }
 
@@ -698,7 +760,7 @@ LeastWorkLoadBalancer::LeastWorkLoadBalancer(pjs::Object *targets, Cache *unheal
     } else {
       targets->iterate_all(
         [this](pjs::Str *k, pjs::Value &v) {
-          set(k, v.to_number());
+          set(k, v.to_int32());
         }
       );
     }
@@ -707,6 +769,46 @@ LeastWorkLoadBalancer::LeastWorkLoadBalancer(pjs::Object *targets, Cache *unheal
 
 LeastWorkLoadBalancer::~LeastWorkLoadBalancer()
 {
+}
+
+void LeastWorkLoadBalancer::set(pjs::Object *targets) {
+  if (!targets) return;
+  for (auto &t : m_targets) t.second.removed = true;
+
+  auto update = [this](pjs::Str *id, int weight) {
+    auto i = m_targets.find(id);
+    if (i != m_targets.end()) {
+      auto &t = i->second;
+      if (t.weight == weight) {
+        t.removed = false;
+        return;
+      }
+    }
+    set(id, weight);
+  };
+
+  if (targets->is_array()) {
+    targets->as<pjs::Array>()->iterate_all(
+      [&](pjs::Value &v, int) {
+        auto s = v.to_string();
+        update(s, 1);
+        s->release();
+      }
+    );
+  } else {
+    targets->iterate_all(
+      [&](pjs::Str *k, pjs::Value &v) {
+        update(k, v.to_int32());
+      }
+    );
+  }
+
+  for (auto i = m_targets.begin(); i != m_targets.end(); ) {
+    auto p = i++;
+    if (p->second.removed) {
+      m_targets.erase(p);
+    }
+  }
 }
 
 void LeastWorkLoadBalancer::set(pjs::Str *target, double weight) {
@@ -718,10 +820,12 @@ void LeastWorkLoadBalancer::set(pjs::Str *target, double weight) {
     t.weight = weight;
     t.hits = 0;
     t.usage = 0;
+    t.removed = false;
   } else {
     auto &t = i->second;
     t.weight = weight;
     t.usage = double(t.hits) / weight;
+    t.removed = false;
   }
 }
 
@@ -1067,10 +1171,16 @@ template<> void ClassDef<HashingLoadBalancer>::init() {
   super<LoadBalancer>();
 
   ctor([](Context &ctx) -> Object* {
-    Array *targets = nullptr;
+    Object *targets = nullptr;
     Cache *unhealthy = nullptr;
     if (!ctx.arguments(0, &targets, &unhealthy)) return nullptr;
     return HashingLoadBalancer::make(targets, unhealthy);
+  });
+
+  method("set", [](Context &ctx, Object *obj, Value &ret) {
+    Object *targets;
+    if (!ctx.arguments(1, &targets)) return;
+    obj->as<HashingLoadBalancer>()->set(targets);
   });
 
   method("add", [](Context &ctx, Object *obj, Value &ret) {
@@ -1100,10 +1210,17 @@ template<> void ClassDef<RoundRobinLoadBalancer>::init() {
   });
 
   method("set", [](Context &ctx, Object *obj, Value &ret) {
+    Object *targets;
     Str *target;
     int weight;
-    if (!ctx.arguments(2, &target, &weight)) return;
-    obj->as<RoundRobinLoadBalancer>()->set(target, weight);
+    if (ctx.get(0, targets)) {
+      obj->as<RoundRobinLoadBalancer>()->set(targets);
+    } else if (ctx.get(0, target)) {
+      if (!ctx.check(1, weight)) return;
+      obj->as<RoundRobinLoadBalancer>()->set(target, weight);
+    } else {
+      ctx.error_argument_type(0, "a string or an object");
+    }
   });
 }
 
@@ -1127,10 +1244,17 @@ template<> void ClassDef<LeastWorkLoadBalancer>::init() {
   });
 
   method("set", [](Context &ctx, Object *obj, Value &ret) {
+    Object *targets;
     Str *target;
     int weight;
-    if (!ctx.arguments(2, &target, &weight)) return;
-    obj->as<LeastWorkLoadBalancer>()->set(target, weight);
+    if (ctx.get(0, targets)) {
+      obj->as<LeastWorkLoadBalancer>()->set(targets);
+    } else if (ctx.get(0, target)) {
+      if (!ctx.check(1, weight)) return;
+      obj->as<LeastWorkLoadBalancer>()->set(target, weight);
+    } else {
+      ctx.error_argument_type(0, "a string or an object");
+    }
   });
 }
 
