@@ -953,7 +953,7 @@ template<> void ClassDef<Global>::init() {
         idx.set(i);
         (*f)(ctx, 1, &idx, ret);
         if (!ctx.ok()) break;
-        if (!ret.to_boolean()) break;
+        if (!ret.is_undefined()) break;
       }
     } else if (ctx.try_arguments(2, &count, &f)) {
       Value idx;
@@ -961,7 +961,7 @@ template<> void ClassDef<Global>::init() {
         idx.set(i);
         (*f)(ctx, 1, &idx, ret);
         if (!ctx.ok()) break;
-        if (!ret.to_boolean()) break;
+        if (!ret.is_undefined()) break;
       }
     } else {
       ctx.error_argument_type(0, "a function");
