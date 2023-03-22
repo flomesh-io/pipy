@@ -250,7 +250,7 @@ auto Str::make(uint64_t n) -> Str* {
 
 auto Str::parse_int(int base) const -> double {
   char *p = nullptr;
-  auto n = std::strtol(c_str(), &p, base);
+  auto n = std::strtoll(c_str(), &p, base);
   while (*p && std::isblank(*p)) p++;
   return *p ? NAN : n;
 }

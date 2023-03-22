@@ -1294,9 +1294,9 @@ public:
       case Value::Type::Empty: return 0;
       case Value::Type::Undefined: return 0;
       case Value::Type::Boolean: return b();
-      case Value::Type::Number: return n();
-      case Value::Type::String: return s()->parse_float();
-      case Value::Type::Object: return value_of();
+      case Value::Type::Number: return int64_t(n());
+      case Value::Type::String: return int64_t(s()->parse_int());
+      case Value::Type::Object: return int64_t(value_of());
     }
     return 0;
   }
