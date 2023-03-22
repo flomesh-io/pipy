@@ -946,23 +946,40 @@ template<> void ClassDef<Global>::init() {
   // repeat
   method("repeat", [](Context &ctx, Object *obj, Value &ret) {
     int count;
+    Array *array;
     Function *f;
-    if (ctx.try_arguments(1, &f)) {
-      Value idx;
+
+    if (ctx.get(0, f)) {
       for (int i = 0;; i++) {
-        idx.set(i);
+        Value idx(i);
         (*f)(ctx, 1, &idx, ret);
         if (!ctx.ok()) break;
         if (!ret.is_undefined()) break;
       }
-    } else if (ctx.try_arguments(2, &count, &f)) {
-      Value idx;
+
+    } else if (ctx.get(0, count)) {
+      if (!ctx.check(1, f)) return;
       for (int i = 0; i < count; i++) {
-        idx.set(i);
+        Value idx(i);
         (*f)(ctx, 1, &idx, ret);
         if (!ctx.ok()) break;
         if (!ret.is_undefined()) break;
       }
+
+    } else if (ctx.get(0, array)) {
+      if (!ctx.check(1, f)) return;
+      array->iterate_while(
+        [&](Value &v, int i) {
+          Value args[2];
+          args[0] = v;
+          args[1].set(i);
+          (*f)(ctx, 2, args, ret);
+          if (!ctx.ok()) return false;
+          if (!ret.is_undefined()) return false;
+          return true;
+        }
+      );
+
     } else {
       ctx.error_argument_type(0, "a function");
     }
