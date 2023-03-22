@@ -1794,6 +1794,38 @@ template<> void ClassDef<FilterConfigurator>::init() {
     }
   });
 
+  // FilterConfigurator.repeat
+  method("repeat", [](Context &ctx, Object *thiz, Value &result) {
+    int count;
+    Array* array;
+    Function *f;
+    if (ctx.get(0, count)) {
+      if (!ctx.check(1, f)) return;
+      for (int i = 0; i < count; i++) {
+        Value args[2], ret;
+        args[0].set(thiz);
+        args[1].set(i);
+        (*f)(ctx, 2, args, ret);
+        if (!ctx.ok()) return;
+      }
+    } else if (ctx.get(0, array)) {
+      if (!ctx.check(1, f)) return;
+      array->iterate_while(
+        [&](Value &v, int i) {
+          Value args[3], ret;
+          args[0].set(thiz);
+          args[1] = v;
+          args[2].set(i);
+          (*f)(ctx, 3, args, ret);
+          return ctx.ok();
+        }
+      );
+    } else {
+      ctx.error_argument_type(0, "a number or an array");
+    }
+    result.set(thiz);
+  });
+
   // FilterConfigurator.replaceData
   method("replaceData", [](Context &ctx, Object *thiz, Value &result) {
     Value replacement;
