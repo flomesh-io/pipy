@@ -2026,7 +2026,7 @@ public:
     if (i >= argc()) return false;
     auto &a = arg(i);
     if (a.is_null()) { v = nullptr; return true; }
-    if (a.is<T>()) { v = a.as<T>(); return true; }
+    if (a.is_instance_of<T>()) { v = a.as<T>(); return true; }
     return false;
   }
 
