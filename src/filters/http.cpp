@@ -630,10 +630,10 @@ void Decoder::message_end() {
 }
 
 void Decoder::stream_end(StreamEnd *end) {
-  if (m_is_response && (m_state == HEAD || m_state == HEADER) && end->error()) {
+  if (m_is_response && (m_state == HEAD || m_state == HEADER) && end->has_error()) {
     int status_code = 0;
     pjs::Str *status_text = nullptr;
-    switch (end->error()) {
+    switch (end->error_code()) {
     case StreamEnd::CANNOT_RESOLVE:
       status_code = 502;
       status_text = s_cannot_resolve;

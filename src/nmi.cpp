@@ -886,8 +886,7 @@ NMI_EXPORT pjs_value pipy_StreamEnd_get_error(pjs_value obj) {
   if (auto *pv = nmi::s_values.get(obj)) {
     auto &v = pv->v;
     if (v.is_instance_of<StreamEnd>()) {
-      auto err = v.as<StreamEnd>()->error();
-      return to_local_value(pjs::EnumDef<StreamEnd::Error>::name(err));
+      return to_local_value(v.as<StreamEnd>()->error());
     }
   }
   return 0;

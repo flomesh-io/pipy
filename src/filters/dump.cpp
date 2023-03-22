@@ -67,11 +67,16 @@ auto Dump::clone() -> Filter* {
 
 void Dump::process(Event *evt) {
   static const char s_hex[] = { "0123456789ABCDEF" };
+  static const std::string s_type_Data("Data");
+  static const std::string s_type_MessageStart("MessageStart");
+  static const std::string s_type_MessageEnd("MessageEnd");
+  static const std::string s_type_StreamEnd("StreamEnd");
   static const std::string s_prefix_worker("[dump] [worker=");
   static const std::string s_prefix_context("] [context=");
   static const std::string s_prefix_head(", head = ");
   static const std::string s_prefix_tail(", tail = ");
   static const std::string s_prefix_payload(", payload = ");
+  static const std::string s_prefix_error(", error = ");
   static const std::string s_hline(16*3+4+16, '-');
   static const std::string s_ellipsis("...");
 
@@ -110,7 +115,12 @@ void Dump::process(Event *evt) {
     s->release();
   }
 
-  db.push(evt->name());
+  switch (evt->type()) {
+  case Event::Type::Data: db.push(s_type_Data); break;
+  case Event::Type::MessageStart: db.push(s_type_MessageStart); break;
+  case Event::Type::MessageEnd: db.push(s_type_MessageEnd); break;
+  case Event::Type::StreamEnd: db.push(s_type_StreamEnd); break;
+  }
 
   if (auto start = evt->as<MessageStart>()) {
     if (auto head = start->head()) {
@@ -130,12 +140,9 @@ void Dump::process(Event *evt) {
     }
 
   } else if (auto end = evt->as<StreamEnd>()) {
-    if (end->error() != StreamEnd::NO_ERROR) {
-      db.push(' ');
-      db.push('[');
-      db.push(end->message());
-      db.push(']');
-      db.push(' ');
+    if (end->has_error()) {
+      db.push(s_prefix_error);
+      Console::dump(end->error(), db);
     }
 
   } else if (auto data = evt->as<Data>()) {

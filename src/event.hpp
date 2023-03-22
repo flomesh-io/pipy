@@ -32,7 +32,6 @@
 namespace pipy {
 
 class EventBuffer;
-class Pipeline;
 
 //
 // Event
@@ -43,7 +42,7 @@ class Event :
   public List<Event>::Item
 {
 public:
-  enum Type {
+  enum class Type {
     Data,
     MessageStart,
     MessageEnd,
@@ -51,7 +50,6 @@ public:
   };
 
   auto type() const -> Type { return m_type; }
-  auto name() const -> const char*;
 
   virtual auto clone() const -> Event* = 0;
 
@@ -101,7 +99,7 @@ protected:
 
 class MessageStart : public EventTemplate<MessageStart> {
 public:
-  static const Type __TYPE = Event::MessageStart;
+  static const Type __TYPE = Type::MessageStart;
 
   auto head() const -> pjs::Object* { return m_head; }
 
@@ -125,7 +123,7 @@ private:
 
 struct MessageEnd : public EventTemplate<MessageEnd> {
 public:
-  static const Type __TYPE = Event::MessageEnd;
+  static const Type __TYPE = Type::MessageEnd;
 
   auto tail() const -> pjs::Object* { return m_tail; }
   auto payload() const -> const pjs::Value& { return m_payload; }
@@ -156,12 +154,11 @@ private:
 
 class StreamEnd : public EventTemplate<StreamEnd> {
 public:
-  static const Type __TYPE = Event::StreamEnd;
+  static const Type __TYPE = Type::StreamEnd;
 
   enum Error {
     NO_ERROR = 0,
     REPLAY,
-    UNKNOWN_ERROR,
     RUNTIME_ERROR,
     READ_ERROR,
     WRITE_ERROR,
@@ -178,16 +175,19 @@ public:
     UNAUTHORIZED,
   };
 
-  auto error() const -> Error { return m_error; }
-  auto message() const -> const char*;
+  auto error() const -> const pjs::Value & { return m_error; }
+  auto error_code() const -> Error { return m_error_code; }
+  bool has_error() const { return !m_error.is_undefined() || m_error_code != Error::NO_ERROR; }
 
 private:
-  StreamEnd(Error error = NO_ERROR) : m_error(error) {}
+  StreamEnd(Error error_code = NO_ERROR) : m_error_code(error_code) {}
 
   StreamEnd(const StreamEnd &r)
-    : m_error(r.m_error) {}
+    : m_error(r.m_error)
+    , m_error_code(r.m_error_code) {}
 
-  Error m_error;
+  pjs::Value m_error;
+  pjs::EnumValue<Error> m_error_code;
 
   friend class pjs::ObjectTemplate<StreamEnd, Event>;
 };

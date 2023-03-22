@@ -117,7 +117,7 @@ void Replay::replay() {
 void ReplayReceiver::on_event(Event *evt) {
   auto *filter = static_cast<Replay*>(this);
   if (auto *end = evt->as<StreamEnd>()) {
-    if (end->error() == StreamEnd::Error::REPLAY) {
+    if (end->error_code() == StreamEnd::Error::REPLAY) {
       filter->schedule_replay();
       return;
     }

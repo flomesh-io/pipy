@@ -29,43 +29,6 @@
 namespace pipy {
 
 //
-// Event
-//
-
-auto Event::name() const -> const char* {
-  switch (m_type) {
-  case Data: return "Data";
-  case MessageStart: return "MessageStart";
-  case MessageEnd: return "MessageEnd";
-  case StreamEnd: return "StreamEnd";
-  }
-  return "???";
-}
-
-auto StreamEnd::message() const -> const char* {
-  switch (m_error) {
-    case NO_ERROR: return "no error";
-    case REPLAY: return "replay";
-    case UNKNOWN_ERROR: return "unknown error";
-    case RUNTIME_ERROR: return "runtime error";
-    case READ_ERROR: return "read error";
-    case WRITE_ERROR: return "write error";
-    case CANNOT_RESOLVE: return "cannot resolve";
-    case CONNECTION_CANCELED: return "connection canceled";
-    case CONNECTION_RESET: return "connection reset";
-    case CONNECTION_REFUSED: return "connection refused";
-    case CONNECTION_TIMEOUT: return "connection timeout";
-    case READ_TIMEOUT: return "read timeout";
-    case WRITE_TIMEOUT: return "write timeout";
-    case IDLE_TIMEOUT: return "idle timeout";
-    case BUFFER_OVERFLOW: return "buffer overflow";
-    case PROTOCOL_ERROR: return "protocol error";
-    case UNAUTHORIZED: return "unauthorized";
-  }
-  return "???";
-}
-
-//
 // EventTarget::Input
 //
 
@@ -88,36 +51,23 @@ namespace pjs {
 
 using namespace pipy;
 
-template<> void ClassDef<Event>::init()
-{
+//
+// Event::Type
+//
+
+template<> void EnumDef<Event::Type>::init() {
+  define(Event::Type::Data, "Data");
+  define(Event::Type::MessageStart, "MessageStart");
+  define(Event::Type::MessageEnd, "MessageEnd");
+  define(Event::Type::StreamEnd, "StreamEnd");
 }
 
-template<> void ClassDef<MessageStart>::init() {
-  super<Event>();
-  ctor([](Context &ctx) -> Object* {
-    Object *head = nullptr;
-    if (!ctx.arguments(0, &head)) return nullptr;
-    return MessageStart::make(head);
-  });
-  accessor("head", [](Object *obj, Value &val) { val.set(obj->as<MessageStart>()->head()); });
-}
-
-template<> void ClassDef<MessageEnd>::init() {
-  super<Event>();
-  ctor([](Context &ctx) -> Object* {
-    Object *tail = nullptr;
-    Object *payload = nullptr;
-    if (!ctx.arguments(0, &tail, &payload)) return nullptr;
-    return MessageEnd::make(tail, payload);
-  });
-  accessor("tail", [](Object *obj, Value &val) { val.set(obj->as<MessageEnd>()->tail()); });
-  accessor("payload", [](Object *obj, Value &val) { val = obj->as<MessageEnd>()->payload(); });
-}
+//
+// StreamEnd::Error
+//
 
 template<> void EnumDef<StreamEnd::Error>::init() {
-  define(StreamEnd::NO_ERROR           , "");
   define(StreamEnd::REPLAY             , "Replay");
-  define(StreamEnd::UNKNOWN_ERROR      , "UnknownError");
   define(StreamEnd::RUNTIME_ERROR      , "RuntimeError");
   define(StreamEnd::READ_ERROR         , "ReadError");
   define(StreamEnd::WRITE_ERROR        , "WriteError");
@@ -134,27 +84,70 @@ template<> void EnumDef<StreamEnd::Error>::init() {
   define(StreamEnd::UNAUTHORIZED       , "Unauthorized");
 }
 
-template<> void ClassDef<StreamEnd>::init() {
-  super<Event>();
+//
+// Event
+//
 
-  ctor([](Context &ctx) -> Object* {
-    Str *error = nullptr;
-    if (!ctx.arguments(0, &error)) return nullptr;
-    StreamEnd::Error err = StreamEnd::NO_ERROR;
-    if (error) {
-      err = EnumDef<StreamEnd::Error>::value(error);
-      if (int(err) < 0) {
-        ctx.error("unknown error type");
-        return nullptr;
-      }
-    }
-    return StreamEnd::make(err);
-  });
-
-  accessor("error", [](Object *obj, Value &val) {
-    val.set(EnumDef<StreamEnd::Error>::name(obj->as<StreamEnd>()->error()));
+template<> void ClassDef<Event>::init() {
+  accessor("type", [](Object *obj, Value &ret) {
+    ret.set(EnumDef<Event::Type>::name(obj->as<Event>()->type()));
   });
 }
+
+//
+// MessageStart
+//
+
+template<> void ClassDef<MessageStart>::init() {
+  super<Event>();
+  ctor([](Context &ctx) -> Object* {
+    Object *head = nullptr;
+    if (!ctx.arguments(0, &head)) return nullptr;
+    return MessageStart::make(head);
+  });
+  accessor("head", [](Object *obj, Value &val) { val.set(obj->as<MessageStart>()->head()); });
+}
+
+//
+// MessageEnd
+//
+
+template<> void ClassDef<MessageEnd>::init() {
+  super<Event>();
+  ctor([](Context &ctx) -> Object* {
+    Object *tail = nullptr;
+    Value payload;
+    if (!ctx.arguments(0, &tail, &payload)) return nullptr;
+    return MessageEnd::make(tail, payload);
+  });
+  accessor("tail", [](Object *obj, Value &val) { val.set(obj->as<MessageEnd>()->tail()); });
+  accessor("payload", [](Object *obj, Value &val) { val = obj->as<MessageEnd>()->payload(); });
+}
+
+//
+// StreamEnd
+//
+
+template<> void ClassDef<StreamEnd>::init() {
+  super<Event>();
+  ctor([](Context &ctx) -> Object* {
+    EnumValue<StreamEnd::Error> error = StreamEnd::Error::NO_ERROR;
+    if (!ctx.arguments(0, &error)) return nullptr;
+    return StreamEnd::make(error);
+  });
+  accessor("error", [](Object *obj, Value &val) {
+    auto *se = obj->as<StreamEnd>();
+    if (se->error().is_undefined() && se->error_code() != StreamEnd::Error::NO_ERROR) {
+      val.set(EnumDef<StreamEnd::Error>::name(se->error_code()));
+    } else {
+      val = se->error();
+    }
+  });
+}
+
+//
+// Constructors
+//
 
 template<> void ClassDef<Constructor<MessageStart>>::init() {
   super<Function>();

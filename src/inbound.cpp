@@ -295,7 +295,7 @@ void InboundTCP::on_event(Event *evt) {
     } else if (auto end = evt->as<StreamEnd>()) {
       m_ended = true;
       if (m_buffer.empty()) {
-        close(end->error());
+        close(end->error_code());
       } else {
         pump();
       }

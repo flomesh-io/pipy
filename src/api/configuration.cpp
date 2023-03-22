@@ -1490,7 +1490,7 @@ template<> void ClassDef<FilterConfigurator>::init() {
     Function *callback = nullptr;
     if (!ctx.arguments(1, &callback)) return;
     try {
-      thiz->as<FilterConfigurator>()->handle_event(Event::Data, callback);
+      thiz->as<FilterConfigurator>()->handle_event(Event::Type::Data, callback);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1540,7 +1540,7 @@ template<> void ClassDef<FilterConfigurator>::init() {
     Function *callback = nullptr;
     if (!ctx.arguments(1, &callback)) return;
     try {
-      thiz->as<FilterConfigurator>()->handle_event(Event::MessageEnd, callback);
+      thiz->as<FilterConfigurator>()->handle_event(Event::Type::MessageEnd, callback);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1552,7 +1552,7 @@ template<> void ClassDef<FilterConfigurator>::init() {
     Function *callback = nullptr;
     if (!ctx.arguments(1, &callback)) return;
     try {
-      thiz->as<FilterConfigurator>()->handle_event(Event::MessageStart, callback);
+      thiz->as<FilterConfigurator>()->handle_event(Event::Type::MessageStart, callback);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1564,7 +1564,7 @@ template<> void ClassDef<FilterConfigurator>::init() {
     Function *callback = nullptr;
     if (!ctx.arguments(1, &callback)) return;
     try {
-      thiz->as<FilterConfigurator>()->handle_event(Event::StreamEnd, callback);
+      thiz->as<FilterConfigurator>()->handle_event(Event::Type::StreamEnd, callback);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1831,7 +1831,7 @@ template<> void ClassDef<FilterConfigurator>::init() {
     Value replacement;
     if (!ctx.arguments(0, &replacement)) return;
     try {
-      thiz->as<FilterConfigurator>()->replace_event(Event::Data, replacement);
+      thiz->as<FilterConfigurator>()->replace_event(Event::Type::Data, replacement);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1881,7 +1881,7 @@ template<> void ClassDef<FilterConfigurator>::init() {
     Value replacement;
     if (!ctx.arguments(0, &replacement)) return;
     try {
-      thiz->as<FilterConfigurator>()->replace_event(Event::MessageEnd, replacement);
+      thiz->as<FilterConfigurator>()->replace_event(Event::Type::MessageEnd, replacement);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1893,7 +1893,7 @@ template<> void ClassDef<FilterConfigurator>::init() {
     Value replacement;
     if (!ctx.arguments(0, &replacement)) return;
     try {
-      thiz->as<FilterConfigurator>()->replace_event(Event::MessageStart, replacement);
+      thiz->as<FilterConfigurator>()->replace_event(Event::Type::MessageStart, replacement);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1905,7 +1905,7 @@ template<> void ClassDef<FilterConfigurator>::init() {
     Value replacement;
     if (!ctx.arguments(0, &replacement)) return;
     try {
-      thiz->as<FilterConfigurator>()->replace_event(Event::StreamEnd, replacement);
+      thiz->as<FilterConfigurator>()->replace_event(Event::Type::StreamEnd, replacement);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

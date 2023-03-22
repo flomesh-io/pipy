@@ -49,7 +49,7 @@ private:
   struct View;
 
 public:
-  static const Type __TYPE = Event::Data;
+  static const Type __TYPE = Type::Data;
 
   enum class Encoding {
     utf8,
