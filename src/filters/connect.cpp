@@ -136,11 +136,13 @@ void Connect::process(Event *evt) {
         if (m_options.bind_f) {
           pjs::Value ret;
           if (!Filter::eval(m_options.bind_f, ret)) return;
-          if (!ret.is_string()) {
-            Log::error("[connect] options.bind expected to return a string");
-            return;
+          if (!ret.is_undefined()) {
+            if (!ret.is_string()) {
+              Log::error("[connect] options.bind expected to return a string");
+              return;
+            }
+            bind = ret.s();
           }
-          bind = ret.s();
         }
 
         if (m_options.on_state_f) {
