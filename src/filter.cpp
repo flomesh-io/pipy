@@ -38,6 +38,7 @@ Filter::Filter()
 
 Filter::Filter(const Filter &r)
   : m_subs(r.m_subs)
+  , m_location(r.m_location)
 {
 }
 
@@ -173,6 +174,10 @@ void Filter::on_event(Event *evt) {
   process(evt);
 }
 
+void Filter::output(Event *evt) {
+  EventFunction::output(evt);
+}
+
 bool Filter::output(const pjs::Value &evt) {
   if (!Message::output(evt, output())) {
     Log::error("[filter] output is not events or messages");
@@ -186,6 +191,7 @@ bool Filter::callback(pjs::Function *func, int argc, pjs::Value argv[], pjs::Val
   (*func)(*c, argc, argv, result);
   if (c->ok()) return true;
   Log::pjs_error(c->error());
+  error(pjs::Error::make(c->error()));
   c->reset();
   return false;
 }
@@ -197,6 +203,7 @@ bool Filter::eval(pjs::Value &param, pjs::Value &result) {
     (*f)(*c, 0, nullptr, result);
     if (c->ok()) return true;
     Log::pjs_error(c->error());
+    error(pjs::Error::make(c->error()));
     c->reset();
     return false;
   } else {
@@ -211,12 +218,47 @@ bool Filter::eval(pjs::Function *func, pjs::Value &result) {
   (*func)(*c, 0, nullptr, result);
   if (c->ok()) return true;
   Log::pjs_error(c->error());
+  error(pjs::Error::make(c->error()));
   c->reset();
   return false;
 }
 
 void Filter::error(StreamEnd::Error type) {
+  m_stream_end = true;
   output(StreamEnd::make(type));
+}
+
+void Filter::error(pjs::Error *error) {
+  m_stream_end = true;
+  output(StreamEnd::make(error));
+}
+
+void Filter::error(const char *message) {
+  Dump d; dump(d);
+  char str[1000];
+  auto source = m_location.source;
+  if (!source || source->filename.empty()) {
+    std::snprintf(
+      str, sizeof(str),
+      "%s() at line %d column %d: %s",
+      d.name.c_str(),
+      m_location.line,
+      m_location.column,
+      message
+    );
+  } else {
+    std::snprintf(
+      str, sizeof(str),
+      "%s() at line %d column %d in %s: %s",
+      d.name.c_str(),
+      m_location.line,
+      m_location.column,
+      m_location.source->filename.c_str(),
+      message
+    );
+  }
+  Log::error("%s", str);
+  error(pjs::Error::make(pjs::Str::make(str)));
 }
 
 } // namespace pipy

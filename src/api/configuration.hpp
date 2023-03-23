@@ -131,6 +131,7 @@ public:
   void use(const std::list<JSModule*> modules, pjs::Str *pipeline, pjs::Str *pipeline_down, pjs::Function *when);
   void wait(pjs::Function *condition, pjs::Object *options);
 
+  auto trace_location(pjs::Context &ctx) -> FilterConfigurator*;
   void to(pjs::Str *layout_name);
   void to(const std::string &name, const std::function<void(FilterConfigurator*)> &cb);
   auto sub_pipeline(const std::string &name, const std::function<void(FilterConfigurator*)> &cb) -> int;
@@ -164,6 +165,7 @@ private:
   PipelineConfig* m_config;
   Filter* m_current_filter = nullptr;
   Filter* m_current_joint_filter = nullptr;
+  pjs::Context::Location m_current_location;
 
   friend class pjs::ObjectTemplate<FilterConfigurator>;
 };

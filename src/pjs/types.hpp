@@ -1915,13 +1915,23 @@ private:
 };
 
 //
+// Source
+//
+
+class Source {
+public:
+  std::string filename;
+  std::string content;
+};
+
+//
 // Context
 //
 
 class Context {
 public:
   struct Location {
-    const Source* source;
+    const Source* source = nullptr;
     std::string name;
     int line = 0;
     int column = 0;
@@ -1963,6 +1973,7 @@ public:
     , m_error(ctx.m_error) {}
 
   auto root() const -> Context* { return m_root; }
+  auto caller() const -> Context* { return m_caller; }
   auto g() const -> Object* { return m_g; }
   auto l(int i) const -> Object* { return i >= 0 && m_l ? m_l[i].get() : nullptr; }
   auto scope() const -> Scope* { return m_scope; }
@@ -1970,6 +1981,7 @@ public:
   auto level() const -> int { return m_level; }
   auto argc() const -> int { return m_argc; }
   auto arg(int i) const -> Value& { return m_argv[i]; }
+  auto call_site() const -> const Location& { return m_call_site; }
 
   void reset();
   bool ok() const { return !m_has_error; }
@@ -1980,6 +1992,7 @@ public:
   void error_argument_count(int min, int max);
   void error_argument_type(int i, const char *type);
   void error_invalid_enum_value(int i);
+  void trace(const Source *source, int line, int column);
   void backtrace(const Source *source, int line, int column);
   void backtrace(const std::string &name);
 
@@ -2171,6 +2184,7 @@ private:
   int m_level;
   int m_argc;
   Value* m_argv;
+  Location m_call_site;
   bool m_has_error = false;
   std::shared_ptr<Error> m_error;
 
@@ -2918,14 +2932,18 @@ public:
   auto name() const -> Str*;
   auto message() const -> Str* { return m_message; }
   auto cause() const -> Error* { return m_cause; }
+  auto stack() const -> Str* { return m_stack; }
 
 private:
   Error(Str *message = nullptr, Object *cause = nullptr)
     : m_message(message ? message : Str::empty.get())
     , m_cause(cause) {}
 
+  Error(const Context::Error &error);
+
   Ref<Str> m_message;
   Ref<Error> m_cause;
+  Ref<Str> m_stack;
 
   friend class ObjectTemplate<Error>;
 };

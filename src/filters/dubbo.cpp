@@ -81,7 +81,7 @@ auto Decoder::on_state(int state, int c) -> int {
       if (head[0] != 0xda ||
           head[1] != 0xbb
       ) {
-        Filter::error(StreamEnd::PROTOCOL_ERROR);
+        Filter::output(StreamEnd::make(StreamEnd::PROTOCOL_ERROR));
         return -1;
       }
       auto flags = head[2];

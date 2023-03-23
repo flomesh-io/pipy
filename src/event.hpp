@@ -181,6 +181,7 @@ public:
 
 private:
   StreamEnd(Error error_code = NO_ERROR) : m_error_code(error_code) {}
+  StreamEnd(const pjs::Value &error) : m_error(error), m_error_code(RUNTIME_ERROR) {}
 
   StreamEnd(const StreamEnd &r)
     : m_error(r.m_error)

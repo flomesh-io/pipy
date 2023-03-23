@@ -25,6 +25,7 @@
 
 #include "http.hpp"
 #include "api/http.hpp"
+#include "api/console.hpp"
 #include "compress.hpp"
 #include "context.hpp"
 #include "pipeline.hpp"
@@ -671,6 +672,13 @@ void Decoder::stream_end(StreamEnd *end) {
     head->status(status_code);
     head->status_text(status_text);
     output(MessageStart::make(head));
+    if (!end->error().is_undefined()) {
+      Data buf;
+      Data::Builder db(buf, &s_dp);
+      Console::dump(end->error(), db);
+      db.flush();
+      output(Data::make(std::move(buf)));
+    }
     output(end);
   } else {
     output(end);

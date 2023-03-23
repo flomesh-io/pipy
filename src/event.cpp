@@ -132,8 +132,13 @@ template<> void ClassDef<StreamEnd>::init() {
   super<Event>();
   ctor([](Context &ctx) -> Object* {
     EnumValue<StreamEnd::Error> error = StreamEnd::Error::NO_ERROR;
-    if (!ctx.arguments(0, &error)) return nullptr;
-    return StreamEnd::make(error);
+    if (ctx.get(0, error)) {
+      return StreamEnd::make(error);
+    } else if (!ctx.is_undefined(0)) {
+      return StreamEnd::make(ctx.arg(0));
+    } else {
+      return StreamEnd::make();
+    }
   });
   accessor("error", [](Object *obj, Value &val) {
     auto *se = obj->as<StreamEnd>();

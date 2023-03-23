@@ -881,6 +881,7 @@ bool Invocation::eval(Context &ctx, Value &result) {
   for (size_t i = 0; i < argc; i++) {
     if (!m_argv[i]->eval(ctx, argv[i])) return false;
   }
+  ctx.trace(source(), line(), column());
   (*f.as<Function>())(ctx, argc, argv, result);
   if (ctx.ok()) return true;
   ctx.backtrace(source(), line(), column());

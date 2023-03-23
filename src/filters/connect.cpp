@@ -26,7 +26,6 @@
 #include "connect.hpp"
 #include "outbound.hpp"
 #include "utils.hpp"
-#include "log.hpp"
 
 namespace pjs {
 
@@ -126,65 +125,70 @@ void Connect::process(Event *evt) {
     if (evt->is<StreamEnd>()) {
       Filter::output(evt);
       return;
-    } else {
-      pjs::Value target;
-      if (!eval(m_target, target)) return;
-      auto s = target.to_string();
-      std::string host; int port;
-      if (utils::get_host_port(s->str(), host, port)) {
-        pjs::Ref<pjs::Str> bind(m_options.bind);
-        if (m_options.bind_f) {
-          pjs::Value ret;
-          if (!Filter::eval(m_options.bind_f, ret)) return;
-          if (!ret.is_undefined()) {
-            if (!ret.is_string()) {
-              Log::error("[connect] options.bind expected to return a string");
-              return;
-            }
-            bind = ret.s();
-          }
-        }
-
-        if (m_options.on_state_f) {
-          m_options.on_state_changed = [this](Outbound *ob) {
-            pjs::Value arg(ob), ret;
-            Filter::callback(m_options.on_state_f, 1, &arg, ret);
-          };
-        }
-
-        Outbound *outbound = nullptr;
-        switch (m_options.protocol) {
-          case Outbound::Protocol::TCP:
-            outbound = OutboundTCP::make(ConnectReceiver::input(), m_options);
-            break;
-          case Outbound::Protocol::UDP:
-            outbound = OutboundUDP::make(ConnectReceiver::input(), m_options);
-            break;
-        }
-
-        if (bind) {
-          const auto &str = bind->str();
-          std::string ip;
-          int port;
-          if (!utils::get_host_port(str, ip, port)) {
-            ip = str;
-            port = 0;
-          }
-          try {
-            outbound->bind(ip, port);
-          } catch (std::runtime_error &e) {
-            Log::error("[connect] %s", e.what());
-          }
-        }
-
-        outbound->connect(host, port);
-        m_outbound = outbound;
-
-      } else {
-        Log::error("[connect] invalid target: %s", s->c_str());
-      }
-      s->release();
     }
+
+    pjs::Value target;
+    if (!eval(m_target, target)) return;
+
+    if (!target.is_string()) {
+      Filter::error("target expected to be or return a string");
+      return;
+    }
+
+    std::string host; int port;
+    if (!utils::get_host_port(target.s()->str(), host, port)) {
+      Filter::error("invalid target format");
+      return;
+    }
+
+    pjs::Ref<pjs::Str> bind(m_options.bind);
+    if (m_options.bind_f) {
+      pjs::Value ret;
+      if (!Filter::eval(m_options.bind_f, ret)) return;
+      if (!ret.is_undefined()) {
+        if (!ret.is_string()) {
+          Filter::error("bind expected to be or return a string");
+          return;
+        }
+        bind = ret.s();
+      }
+    }
+
+    if (m_options.on_state_f) {
+      m_options.on_state_changed = [this](Outbound *ob) {
+        pjs::Value arg(ob), ret;
+        Filter::callback(m_options.on_state_f, 1, &arg, ret);
+      };
+    }
+
+    Outbound *outbound = nullptr;
+    switch (m_options.protocol) {
+      case Outbound::Protocol::TCP:
+        outbound = OutboundTCP::make(ConnectReceiver::input(), m_options);
+        break;
+      case Outbound::Protocol::UDP:
+        outbound = OutboundUDP::make(ConnectReceiver::input(), m_options);
+        break;
+    }
+
+    if (bind) {
+      const auto &str = bind->str();
+      std::string ip;
+      int port;
+      if (!utils::get_host_port(str, ip, port)) {
+        ip = str;
+        port = 0;
+      }
+      try {
+        outbound->bind(ip, port);
+      } catch (std::runtime_error &e) {
+        Filter::error(e.what());
+        return;
+      }
+    }
+
+    outbound->connect(host, port);
+    m_outbound = outbound;
   }
 
   if (m_outbound) {

@@ -86,6 +86,7 @@ public:
   auto module() const -> ModuleBase*;
   auto context() const -> Context*;
 
+  void set_location(const pjs::Context::Location &loc) { m_location = loc; }
   void add_sub_pipeline(PipelineLayout *layout);
   void add_sub_pipeline(pjs::Str *name);
   void add_sub_pipeline(int index);
@@ -114,11 +115,14 @@ protected:
   using EventFunction::output;
 
   auto pipeline() const -> Pipeline* { return m_pipeline; }
+  void output(Event *evt);
   bool output(const pjs::Value &evt);
   bool callback(pjs::Function *func, int argc, pjs::Value argv[], pjs::Value &result);
   bool eval(pjs::Value &param, pjs::Value &result);
   bool eval(pjs::Function *func, pjs::Value &result);
   void error(StreamEnd::Error type);
+  void error(pjs::Error *error);
+  void error(const char *message);
 
 private:
   struct Sub {
@@ -131,6 +135,7 @@ private:
 
   PipelineLayout* m_pipeline_layout = nullptr;
   Pipeline* m_pipeline = nullptr;
+  pjs::Context::Location m_location;
   bool m_stream_end = false;
 
   virtual void on_event(Event *evt) override;

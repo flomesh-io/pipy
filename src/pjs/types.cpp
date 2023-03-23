@@ -513,6 +513,12 @@ void Context::error_invalid_enum_value(int i) {
   error(s);
 }
 
+void Context::trace(const Source *source, int line, int column) {
+  m_call_site.source = source;
+  m_call_site.line = line;
+  m_call_site.column = column;
+}
+
 void Context::backtrace(const Source *source, int line, int column) {
   Location l;
   l.source = source;
@@ -1798,11 +1804,32 @@ template<> void ClassDef<Error>::init() {
   accessor("name", [](Object *obj, Value &val) { val.set(obj->as<Error>()->name()); });
   accessor("message", [](Object *obj, Value &val) { val.set(obj->as<Error>()->message()); });
   accessor("cause", [](Object *obj, Value &val) { val.set(obj->as<Error>()->cause()); });
+  accessor("stack", [](Object *obj, Value &val) { val.set(obj->as<Error>()->stack()); });
 }
 
 template<> void ClassDef<Constructor<Error>>::init() {
   super<Function>();
   ctor();
+}
+
+Error::Error(const Context::Error &error) {
+  std::string str;
+  for (const auto &l : error.backtrace) {
+    str += "In ";
+    str += l.name;
+    if (l.line && l.column) {
+      char s[100];
+      std::sprintf(
+        s, " at line %d column %d in %s\n",
+        l.line, l.column, l.source->filename.c_str()
+      );
+      str += s;
+    } else {
+      str += '\n';
+    }
+  }
+  m_stack = Str::make(std::move(str));
+  m_message = Str::make(error.message);
 }
 
 auto Error::name() const -> Str* {

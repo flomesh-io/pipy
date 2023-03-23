@@ -37,16 +37,6 @@
 namespace pjs {
 
 //
-// Source
-//
-
-class Source {
-public:
-  std::string filename;
-  std::string content;
-};
-
-//
 // Expression base
 //
 

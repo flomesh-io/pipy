@@ -427,6 +427,13 @@ void FilterConfigurator::wait(pjs::Function *condition, pjs::Object *options) {
   append_filter(new Wait(condition, options));
 }
 
+auto FilterConfigurator::trace_location(pjs::Context &ctx) -> FilterConfigurator* {
+  if (auto caller = ctx.caller()) {
+    m_current_location = caller->call_site();
+  }
+  return this;
+}
+
 void FilterConfigurator::to(pjs::Str *layout_name) {
   if (!m_current_joint_filter) {
     throw std::runtime_error("calling to() without a joint-filter");
@@ -464,6 +471,7 @@ auto FilterConfigurator::append_filter(Filter *filter) -> Filter* {
     throw std::runtime_error("no pipeline found");
   }
   check_integrity();
+  filter->set_location(m_current_location);
   m_config->filters.emplace_back(filter);
   m_current_filter = filter;
   return filter;
@@ -1076,7 +1084,7 @@ template<> void ClassDef<FilterConfigurator>::init() {
     Object *options = nullptr;
     if (!ctx.arguments(1, &target, &options)) return;
     try {
-      thiz->as<FilterConfigurator>()->connect(target, options);
+      thiz->as<FilterConfigurator>()->trace_location(ctx)->connect(target, options);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
