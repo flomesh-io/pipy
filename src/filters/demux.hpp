@@ -41,7 +41,7 @@ namespace pipy {
 class QueueDemuxer : public EventFunction {
 public:
   void reset();
-  void isolate();
+  void dedicate();
   void shutdown();
 
 protected:
@@ -56,7 +56,7 @@ private:
 
   List<Stream> m_streams;
   pjs::Ref<Pipeline> m_one_way_pipeline;
-  bool m_isolated = false;
+  bool m_dedicated = false;
   bool m_shutdown = false;
 
   void on_event(Event *evt) override;
@@ -94,7 +94,7 @@ private:
     pjs::Ref<Pipeline> m_pipeline;
     List<Response> m_responses;
     bool m_input_end = false;
-    bool m_isolated = false;
+    bool m_dedicated = false;
 
     virtual void on_reply(Event *evt) override;
 

@@ -41,15 +41,15 @@ void QueueDemuxer::reset() {
     delete stream;
   }
   m_one_way_pipeline = nullptr;
-  m_isolated = false;
+  m_dedicated = false;
   m_shutdown = false;
 }
 
-void QueueDemuxer::isolate() {
+void QueueDemuxer::dedicate() {
   if (auto stream = m_streams.tail()) {
-    stream->m_isolated = true;
+    stream->m_dedicated = true;
   }
-  m_isolated = true;
+  m_dedicated = true;
 }
 
 void QueueDemuxer::shutdown() {
@@ -61,7 +61,7 @@ void QueueDemuxer::shutdown() {
 }
 
 void QueueDemuxer::on_event(Event *evt) {
-  if (m_isolated) {
+  if (m_dedicated) {
     if (auto stream = m_streams.tail()) {
       stream->output(evt);
     }
@@ -181,7 +181,7 @@ QueueDemuxer::Stream::~Stream() {
 void QueueDemuxer::Stream::on_reply(Event *evt) {
   auto demuxer = m_demuxer;
 
-  if (m_isolated) {
+  if (m_dedicated) {
     demuxer->output(evt);
     return;
   }

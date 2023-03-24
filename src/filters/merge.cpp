@@ -33,8 +33,8 @@ namespace pipy {
 // Merge
 //
 
-Merge::Merge(pjs::Function *group, pjs::Object *options)
-  : MuxBase(group, options)
+Merge::Merge(pjs::Function *session_selector, pjs::Object *options)
+  : MuxBase(session_selector, options)
 {
 }
 

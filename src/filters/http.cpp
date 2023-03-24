@@ -1413,7 +1413,7 @@ void Demux::on_encode_response(pjs::Object *head) {
 
 void Demux::on_encode_tunnel() {
   Decoder::set_tunnel(true);
-  QueueDemuxer::isolate();
+  QueueDemuxer::dedicate();
 }
 
 void Demux::on_http2_pass() {
@@ -1454,19 +1454,19 @@ Mux::Mux()
 {
 }
 
-Mux::Mux(pjs::Function *group)
-  : pipy::MuxQueue(group)
+Mux::Mux(pjs::Function *session_selector)
+  : pipy::MuxQueue(session_selector)
 {
 }
 
-Mux::Mux(pjs::Function *group, const Options &options)
-  : pipy::MuxQueue(group, options)
+Mux::Mux(pjs::Function *session_selector, const Options &options)
+  : pipy::MuxQueue(session_selector, options)
   , m_options(options)
 {
 }
 
-Mux::Mux(pjs::Function *group, pjs::Function *options)
-  : pipy::MuxQueue(group, options)
+Mux::Mux(pjs::Function *session_selector, pjs::Function *options)
+  : pipy::MuxQueue(session_selector, options)
   , m_options_f(options)
 {
 }
@@ -1558,7 +1558,7 @@ void Mux::Session::on_decode_response(http::ResponseHead *head) {
 
 void Mux::Session::on_decode_tunnel() {
   Encoder::set_tunnel(true);
-  QueueMuxer::isolate();
+  QueueMuxer::dedicate();
 }
 
 void Mux::Session::on_decode_error()

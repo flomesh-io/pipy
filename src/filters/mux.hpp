@@ -62,9 +62,9 @@ protected:
   class SessionCluster;
 
   MuxBase();
-  MuxBase(pjs::Function *group);
-  MuxBase(pjs::Function *group, const Options &options);
-  MuxBase(pjs::Function *group, pjs::Function *options);
+  MuxBase(pjs::Function *session_selector);
+  MuxBase(pjs::Function *session_selector, const Options &options);
+  MuxBase(pjs::Function *session_selector, pjs::Function *options);
   MuxBase(const MuxBase &r);
 
   auto session() -> Session* { return m_session; }
@@ -82,7 +82,7 @@ private:
   pjs::Ref<pjs::Function> m_options_f;
   pjs::Ref<SessionManager> m_session_manager;
   pjs::Ref<Session> m_session;
-  pjs::Ref<pjs::Function> m_group;
+  pjs::Ref<pjs::Function> m_session_selector;
   pjs::Value m_session_key;
   EventFunction* m_stream = nullptr;
   EventBuffer m_waiting_events;
@@ -115,8 +115,8 @@ protected:
     virtual ~Session() {}
 
     auto pipeline() const -> Pipeline* { return m_pipeline; }
-    bool isolated() const { return !m_cluster; }
-    void isolate();
+    bool dedicated() const { return !m_cluster; }
+    void dedicate();
     bool is_free() const { return !m_share_count; }
     bool is_pending() const { return m_is_pending; }
     void set_pending(bool pending);
@@ -218,14 +218,14 @@ public:
   void set_one_way(EventFunction *stream);
   void increase_queue_count();
   void reset();
-  void isolate();
+  void dedicate();
 
 private:
   class Stream;
 
   pjs::Ref<Input> m_session_input;
   List<Stream> m_streams;
-  bool m_isolated = false;
+  bool m_dedicated = false;
 
   void on_reply(Event *evt) override;
 
@@ -252,7 +252,7 @@ private:
     int m_queued_count = 0;
     bool m_one_way = false;
     bool m_started = false;
-    bool m_isolated = false;
+    bool m_dedicated = false;
 
     friend class QueueMuxer;
   };
@@ -273,9 +273,9 @@ public:
   };
 
   MuxQueue();
-  MuxQueue(pjs::Function *group);
-  MuxQueue(pjs::Function *group, const Options &options);
-  MuxQueue(pjs::Function *group, pjs::Function *options);
+  MuxQueue(pjs::Function *session_selector);
+  MuxQueue(pjs::Function *session_selector, const Options &options);
+  MuxQueue(pjs::Function *session_selector, pjs::Function *options);
 
 protected:
   MuxQueue(const MuxQueue &r);
@@ -328,9 +328,9 @@ private:
 class Mux : public MuxBase {
 public:
   Mux();
-  Mux(pjs::Function *group);
-  Mux(pjs::Function *group, const Options &options);
-  Mux(pjs::Function *group, pjs::Function *options);
+  Mux(pjs::Function *session_selector);
+  Mux(pjs::Function *session_selector, const Options &options);
+  Mux(pjs::Function *session_selector, pjs::Function *options);
 
 private:
   Mux(const Mux &r);

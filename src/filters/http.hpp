@@ -423,9 +423,9 @@ public:
   };
 
   Mux();
-  Mux(pjs::Function *group);
-  Mux(pjs::Function *group, const Options &options);
-  Mux(pjs::Function *group, pjs::Function *options);
+  Mux(pjs::Function *session_selector);
+  Mux(pjs::Function *session_selector, const Options &options);
+  Mux(pjs::Function *session_selector, pjs::Function *options);
 
 private:
   Mux(const Mux &r);

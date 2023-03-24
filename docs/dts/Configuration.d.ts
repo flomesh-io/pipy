@@ -981,7 +981,7 @@ interface Configuration {
    * - **SUB-INPUT** - _Messages_ from multiple _mux_ filters.
    * - **SUB-OUTPUT** - Discarded.
    *
-   * @param target A function that returns a key identifiying the shared sub-pipeline to merge messages to.
+   * @param sessionSelector A function that returns a key identifiying the shared sub-pipeline to merge messages to.
    * @param options Options or a function that returns the options including:
    *   - _maxIdle_ - Maximum time an idle sub-pipeline should stay around.
    *       Can be a number in seconds or a string with one of the time unit suffixes such as `s`, `m` or `h`.
@@ -991,12 +991,12 @@ interface Configuration {
    * @returns The same _Configuration_ object.
    */
   mux(
-    target: () => any,
+    sessionSelector: () => any,
     options?: MuxOptions | (() => MuxOptions),
   ): Configuration;
 
   /**
-   * Appends a _mux_ filter that merges to the same target sub-pipline
+   * Appends a _mux_ filter that merges to the same sub-pipline
    * as other _mux_ filters coming from the same inbound connection.
    *
    * @param options Options or a function that returns the options including:
@@ -1022,7 +1022,7 @@ interface Configuration {
    * - **SUB-INPUT** - _Messages_ from multiple _muxQueue_ filters.
    * - **SUB-OUTPUT** - _Messages_ to be dequeued by multiple _muxQueue_ filters.
    *
-   * @param target A function that returns a key identifiying the shared sub-pipeline to merge messages to.
+   * @param sessionSelector A function that returns a key identifiying the shared sub-pipeline to merge messages to.
    * @param options Options or a function that returns the options including:
    *   - _maxIdle_ - Maximum time an idle sub-pipeline should stay around.
    *       Can be a number in seconds or a string with one of the time unit suffixes such as `s`, `m` or `h`.
@@ -1033,12 +1033,12 @@ interface Configuration {
    * @returns The same _Configuration_ object.
    */
   muxQueue(
-    target: () => any,
+    sessionSelector: () => any,
     options?: MuxQueueOptions | (() => MuxQueueOptions),
   ): Configuration;
 
   /**
-   * Appends a _muxQueue_ filter that merges to the same target sub-pipline
+   * Appends a _muxQueue_ filter that merges to the same sub-pipline
    * as other _muxQueue_ filters coming from the same inbound connection.
    *
    * @param options Options or a function that returns the options including:
@@ -1064,7 +1064,7 @@ interface Configuration {
    * - **SUB-INPUT** - _Data_ stream to send to the server with HTTP/1 or HTTP/2 requests.
    * - **SUB-OUTPUT** - _Data_ stream received from the server with HTTP/1 or HTTP/2 responses.
    *
-   * @param target A function that returns a key identifiying the shared sub-pipeline to merge messages to.
+   * @param sessionSelector A function that returns a key identifiying the shared sub-pipeline to merge messages to.
    * @param options Options or a function that returns the options including:
    *   - _maxIdle_ - Maximum time an idle sub-pipeline should stay around.
    *       Can be a number in seconds or a string with one of the time unit suffixes such as `s`, `m` or `h`.
@@ -1078,12 +1078,12 @@ interface Configuration {
    * @returns The same _Configuration_ object.
    */
   muxHTTP(
-    target: () => any,
+    sessionSelector: () => any,
     options?: MuxHTTPOptions | (() => MuxHTTPOptions),
   ): Configuration;
 
   /**
-   * Appends a _muxHTTP_ filter that merges to the same target sub-pipline
+   * Appends a _muxHTTP_ filter that merges to the same sub-pipline
    * as other _muxHTTP_ filters coming from the same inbound connection.
    *
    * @param options Options or a function that returns the options including:

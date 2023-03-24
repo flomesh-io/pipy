@@ -104,10 +104,10 @@ public:
   void handle_tls_client_hello(pjs::Function *callback);
   void input(pjs::Function *callback);
   void link(size_t count, pjs::Str **targets, pjs::Function **conditions);
-  void merge(pjs::Function *group, pjs::Object *options);
-  void mux(pjs::Function *group, pjs::Object *options);
-  void mux_queue(pjs::Function *group, pjs::Object *options);
-  void mux_http(pjs::Function *group, pjs::Object *options);
+  void merge(pjs::Function *session_selector, pjs::Object *options);
+  void mux(pjs::Function *session_selector, pjs::Object *options);
+  void mux_queue(pjs::Function *session_selector, pjs::Object *options);
+  void mux_http(pjs::Function *session_selector, pjs::Object *options);
   void output(pjs::Function *output_f);
   void pack(int batch_size, pjs::Object *options);
   void print();

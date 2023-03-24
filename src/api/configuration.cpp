@@ -311,31 +311,31 @@ void FilterConfigurator::link(size_t count, pjs::Str **layouts, pjs::Function **
   append_filter(filter);
 }
 
-void FilterConfigurator::merge(pjs::Function *group, pjs::Object *options) {
-  require_sub_pipeline(append_filter(new Merge(group, options)));
+void FilterConfigurator::merge(pjs::Function *session_selector, pjs::Object *options) {
+  require_sub_pipeline(append_filter(new Merge(session_selector, options)));
 }
 
-void FilterConfigurator::mux(pjs::Function *group, pjs::Object *options) {
+void FilterConfigurator::mux(pjs::Function *session_selector, pjs::Object *options) {
   if (options && options->is_function()) {
-    require_sub_pipeline(append_filter(new Mux(group, options->as<pjs::Function>())));
+    require_sub_pipeline(append_filter(new Mux(session_selector, options->as<pjs::Function>())));
   } else {
-    require_sub_pipeline(append_filter(new Mux(group, options)));
+    require_sub_pipeline(append_filter(new Mux(session_selector, options)));
   }
 }
 
-void FilterConfigurator::mux_queue(pjs::Function *group, pjs::Object *options) {
+void FilterConfigurator::mux_queue(pjs::Function *session_selector, pjs::Object *options) {
   if (options && options->is_function()) {
-    require_sub_pipeline(append_filter(new MuxQueue(group, options->as<pjs::Function>())));
+    require_sub_pipeline(append_filter(new MuxQueue(session_selector, options->as<pjs::Function>())));
   } else {
-    require_sub_pipeline(append_filter(new MuxQueue(group, options)));
+    require_sub_pipeline(append_filter(new MuxQueue(session_selector, options)));
   }
 }
 
-void FilterConfigurator::mux_http(pjs::Function *group, pjs::Object *options) {
+void FilterConfigurator::mux_http(pjs::Function *session_selector, pjs::Object *options) {
   if (options && options->is_function()) {
-    require_sub_pipeline(append_filter(new http::Mux(group, options->as<pjs::Function>())));
+    require_sub_pipeline(append_filter(new http::Mux(session_selector, options->as<pjs::Function>())));
   } else {
-    require_sub_pipeline(append_filter(new http::Mux(group, options)));
+    require_sub_pipeline(append_filter(new http::Mux(session_selector, options)));
   }
 }
 
@@ -1655,19 +1655,19 @@ template<> void ClassDef<FilterConfigurator>::init() {
   method("merge", [](Context &ctx, Object *thiz, Value &result) {
     try {
       Str *layout;
-      Function *group = nullptr;
+      Function *session_selector = nullptr;
       Object *options = nullptr;
       if (
-        ctx.try_arguments(1, &layout, &group, &options) ||
+        ctx.try_arguments(1, &layout, &session_selector, &options) ||
         ctx.try_arguments(1, &layout, &options)
       ) {
-        thiz->as<FilterConfigurator>()->merge(group, options);
+        thiz->as<FilterConfigurator>()->merge(session_selector, options);
         thiz->as<FilterConfigurator>()->to(layout);
       } else if (
-        ctx.try_arguments(0, &group, &options) ||
+        ctx.try_arguments(0, &session_selector, &options) ||
         ctx.try_arguments(0, &options)
       ) {
-        thiz->as<FilterConfigurator>()->merge(group, options);
+        thiz->as<FilterConfigurator>()->merge(session_selector, options);
       } else {
         ctx.error_argument_type(0, "a function");
       }
@@ -1681,19 +1681,19 @@ template<> void ClassDef<FilterConfigurator>::init() {
   method("mux", [](Context &ctx, Object *thiz, Value &result) {
     try {
       Str *layout;
-      Function *group = nullptr;
+      Function *session_selector = nullptr;
       Object *options = nullptr;
       if (
-        ctx.try_arguments(1, &layout, &group, &options) ||
+        ctx.try_arguments(1, &layout, &session_selector, &options) ||
         ctx.try_arguments(1, &layout, &options)
       ) {
-        thiz->as<FilterConfigurator>()->mux(group, options);
+        thiz->as<FilterConfigurator>()->mux(session_selector, options);
         thiz->as<FilterConfigurator>()->to(layout);
       } else if (
-        ctx.try_arguments(0, &group, &options) ||
+        ctx.try_arguments(0, &session_selector, &options) ||
         ctx.try_arguments(0, &options)
       ) {
-        thiz->as<FilterConfigurator>()->mux(group, options);
+        thiz->as<FilterConfigurator>()->mux(session_selector, options);
       } else {
         ctx.error_argument_type(0, "a function");
       }
@@ -1707,19 +1707,19 @@ template<> void ClassDef<FilterConfigurator>::init() {
   method("muxQueue", [](Context &ctx, Object *thiz, Value &result) {
     try {
       Str *layout;
-      Function *group = nullptr;
+      Function *session_selector = nullptr;
       Object *options = nullptr;
       if (
-        ctx.try_arguments(1, &layout, &group, &options) ||
+        ctx.try_arguments(1, &layout, &session_selector, &options) ||
         ctx.try_arguments(1, &layout, &options)
       ) {
-        thiz->as<FilterConfigurator>()->mux_queue(group, options);
+        thiz->as<FilterConfigurator>()->mux_queue(session_selector, options);
         thiz->as<FilterConfigurator>()->to(layout);
       } else if (
-        ctx.try_arguments(0, &group, &options) ||
+        ctx.try_arguments(0, &session_selector, &options) ||
         ctx.try_arguments(0, &options)
       ) {
-        thiz->as<FilterConfigurator>()->mux_queue(group, options);
+        thiz->as<FilterConfigurator>()->mux_queue(session_selector, options);
       } else {
         ctx.error_argument_type(0, "a function");
       }
@@ -1733,19 +1733,19 @@ template<> void ClassDef<FilterConfigurator>::init() {
   method("muxHTTP", [](Context &ctx, Object *thiz, Value &result) {
     try {
       Str *layout;
-      Function *group = nullptr;
+      Function *session_selector = nullptr;
       Object *options = nullptr;
       if (
-        ctx.try_arguments(1, &layout, &group, &options) ||
+        ctx.try_arguments(1, &layout, &session_selector, &options) ||
         ctx.try_arguments(1, &layout, &options)
       ) {
-        thiz->as<FilterConfigurator>()->mux_http(group, options);
+        thiz->as<FilterConfigurator>()->mux_http(session_selector, options);
         thiz->as<FilterConfigurator>()->to(layout);
       } else if (
-        ctx.try_arguments(0, &group, &options) ||
+        ctx.try_arguments(0, &session_selector, &options) ||
         ctx.try_arguments(0, &options)
       ) {
-        thiz->as<FilterConfigurator>()->mux_http(group, options);
+        thiz->as<FilterConfigurator>()->mux_http(session_selector, options);
       } else {
         ctx.error_argument_type(0, "a function");
       }

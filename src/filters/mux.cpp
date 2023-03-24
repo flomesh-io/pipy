@@ -61,23 +61,23 @@ MuxBase::MuxBase()
 {
 }
 
-MuxBase::MuxBase(pjs::Function *group)
+MuxBase::MuxBase(pjs::Function *session_selector)
   : m_session_manager(new SessionManager())
-  , m_group(group)
+  , m_session_selector(session_selector)
 {
 }
 
-MuxBase::MuxBase(pjs::Function *group, const Options &options)
+MuxBase::MuxBase(pjs::Function *session_selector, const Options &options)
   : m_options(options)
   , m_session_manager(new SessionManager())
-  , m_group(group)
+  , m_session_selector(session_selector)
 {
 }
 
-MuxBase::MuxBase(pjs::Function *group, pjs::Function *options)
+MuxBase::MuxBase(pjs::Function *session_selector, pjs::Function *options)
   : m_options_f(options)
   , m_session_manager(new SessionManager())
-  , m_group(group)
+  , m_session_selector(session_selector)
 {
 }
 
@@ -86,7 +86,7 @@ MuxBase::MuxBase(const MuxBase &r)
   , m_options(r.m_options)
   , m_options_f(r.m_options_f)
   , m_session_manager(r.m_session_manager)
-  , m_group(r.m_group)
+  , m_session_selector(r.m_session_selector)
 {
 }
 
@@ -114,7 +114,7 @@ void MuxBase::process(Event *evt) {
   if (!m_stream) {
     auto session = m_session.get();
     if (!session) {
-      if (m_group && !eval(m_group, m_session_key)) return;
+      if (m_session_selector && !eval(m_session_selector, m_session_key)) return;
       if (m_session_key.is_undefined()) {
         m_session_key.set(context()->inbound());
       }
@@ -181,7 +181,7 @@ void MuxBase::stop_waiting() {
 //
 // Destruction:
 //   - When share count is 0 for a time of maxIdle
-//   - When freed by MuxBase after being isolated
+//   - When freed by MuxBase if it is dedicated to a stream
 //
 // Session owns streams:
 //   - Session::open_stream(): Creates a new stream
@@ -196,7 +196,7 @@ void MuxBase::Session::close() {
   forward(StreamEnd::make());
 }
 
-void MuxBase::Session::isolate() {
+void MuxBase::Session::dedicate() {
   if (auto cluster = m_cluster) {
     m_cluster = nullptr;
     cluster->discard(this);
@@ -235,7 +235,7 @@ void MuxBase::Session::reset() {
     Pipeline::auto_release(p);
     m_pipeline = nullptr;
   }
-  isolate();
+  dedicate();
 }
 
 void MuxBase::Session::on_input(Event *evt) {
@@ -498,17 +498,17 @@ void QueueMuxer::reset() {
     m_streams.remove(s);
     s->release();
   }
-  m_isolated = false;
+  m_dedicated = false;
 }
 
-void QueueMuxer::isolate() {
-  m_isolated = true;
+void QueueMuxer::dedicate() {
+  m_dedicated = true;
 }
 
 void QueueMuxer::on_reply(Event *evt) {
-  if (m_isolated) {
+  if (m_dedicated) {
     if (auto s = m_streams.head()) {
-      s->m_isolated = true;
+      s->m_dedicated = true;
       s->output(evt);
     }
     return;
@@ -569,7 +569,7 @@ void QueueMuxer::on_reply(Event *evt) {
 void QueueMuxer::Stream::on_event(Event *evt) {
   auto muxer = m_muxer;
 
-  if (m_isolated) {
+  if (m_dedicated) {
     muxer->output(evt);
     return;
   }
@@ -621,19 +621,19 @@ MuxQueue::MuxQueue()
 {
 }
 
-MuxQueue::MuxQueue(pjs::Function *group)
-  : MuxBase(group)
+MuxQueue::MuxQueue(pjs::Function *session_selector)
+  : MuxBase(session_selector)
 {
 }
 
-MuxQueue::MuxQueue(pjs::Function *group, const Options &options)
-  : MuxBase(group, options)
+MuxQueue::MuxQueue(pjs::Function *session_selector, const Options &options)
+  : MuxBase(session_selector, options)
   , m_options(options)
 {
 }
 
-MuxQueue::MuxQueue(pjs::Function *group, pjs::Function *options)
-  : MuxBase(group, options)
+MuxQueue::MuxQueue(pjs::Function *session_selector, pjs::Function *options)
+  : MuxBase(session_selector, options)
 {
 }
 
@@ -715,18 +715,18 @@ Mux::Mux()
 {
 }
 
-Mux::Mux(pjs::Function *group)
-  : MuxBase(group)
+Mux::Mux(pjs::Function *session_selector)
+  : MuxBase(session_selector)
 {
 }
 
-Mux::Mux(pjs::Function *group, const Options &options)
-  : MuxBase(group, options)
+Mux::Mux(pjs::Function *session_selector, const Options &options)
+  : MuxBase(session_selector, options)
 {
 }
 
-Mux::Mux(pjs::Function *group, pjs::Function *options)
-  : MuxBase(group, options)
+Mux::Mux(pjs::Function *session_selector, pjs::Function *options)
+  : MuxBase(session_selector, options)
 {
 }
 
