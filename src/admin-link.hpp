@@ -31,6 +31,7 @@
 #include "message.hpp"
 #include "module.hpp"
 #include "pipeline.hpp"
+#include "api/crypto.hpp"
 #include "api/url.hpp"
 
 #include <string>
@@ -46,7 +47,13 @@ class AdminLink {
 public:
   typedef std::function<bool(const std::string &, const Data &)> Handler;
 
-  AdminLink(const std::string &url);
+  struct TLSSettings {
+    pjs::Ref<crypto::Certificate> cert;
+    pjs::Ref<crypto::PrivateKey> key;
+    std::vector<pjs::Ref<crypto::Certificate>> trusted;
+  };
+
+  AdminLink(const std::string &url, const TLSSettings *tls_settings = nullptr);
 
   auto connect() -> int;
   void add_handler(const Handler &handler);

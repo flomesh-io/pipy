@@ -108,11 +108,11 @@ static void reload_codebase(bool force) {
 // Establish admin link
 //
 
-static void start_admin_link(const std::string &url) {
+static void start_admin_link(const std::string &url, const AdminLink::TLSSettings *tls_settings) {
   std::string url_path = url;
   if (url_path.back() != '/') url_path += '/';
   url_path += Status::LocalInstance::uuid;
-  s_admin_link = new AdminLink(url_path);
+  s_admin_link = new AdminLink(url_path, tls_settings);
   s_admin_link->add_handler(
     [](const std::string &command, const Data &) {
       if (command == "reload") {
@@ -556,7 +556,11 @@ int main(int argc, char *argv[]) {
             s_code_updater.start();
 
             if (is_remote) {
-              start_admin_link(opts.filename);
+              AdminLink::TLSSettings tls_settings;
+              tls_settings.cert = opts.tls_cert;
+              tls_settings.key = opts.tls_key;
+              tls_settings.trusted = opts.tls_trusted;
+              start_admin_link(opts.filename, is_tls ? &tls_settings : nullptr);
               s_status_reporter.start();
               s_metric_reporter.start();
             }

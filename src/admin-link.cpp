@@ -28,6 +28,7 @@
 #include "pipeline.hpp"
 #include "filters/connect.hpp"
 #include "filters/http.hpp"
+#include "filters/tls.hpp"
 #include "filters/websocket.hpp"
 
 #include <random>
@@ -38,7 +39,7 @@ namespace pipy {
 // AdminLink
 //
 
-AdminLink::AdminLink(const std::string &url)
+AdminLink::AdminLink(const std::string &url, const TLSSettings *tls_settings)
   : m_module(new Module())
   , m_url(URL::make(url))
 {
@@ -63,6 +64,19 @@ AdminLink::AdminLink(const std::string &url)
 
   auto *ppl_connect = PipelineLayout::make(m_module);
   ppl_connect->append(new Connect(pjs::Str::make(host), Connect::Options()));
+
+  if (tls_settings) {
+    tls::Client::Options opts;
+    opts.trusted = tls_settings->trusted;
+    if (tls_settings->cert) {
+      opts.certificate = pjs::Object::make();
+      opts.certificate->set("cert", tls_settings->cert.get());
+      opts.certificate->set("key", tls_settings->key.get());
+    }
+    auto *ppl_tls = PipelineLayout::make(m_module);
+    ppl_tls->append(new tls::Client(opts))->add_sub_pipeline(ppl_connect);
+    ppl_connect = ppl_tls;
+  }
 
   auto *ppl_tunnel = PipelineLayout::make(m_module);
   ppl_tunnel->append(new http::Mux(nullptr, nullptr))->add_sub_pipeline(ppl_connect);

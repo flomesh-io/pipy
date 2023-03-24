@@ -89,10 +89,9 @@ Fetch::Fetch(pjs::Str *host, const Options &options)
     tls::Client::Options opts;
     opts.trusted = options.trusted;
     if (options.cert) {
-      auto certificate = pjs::Object::make();
-      certificate->set("cert", options.cert.get());
-      certificate->set("key", options.key.get());
-      opts.certificate = certificate;
+      opts.certificate = pjs::Object::make();
+      opts.certificate->set("cert", options.cert.get());
+      opts.certificate->set("key", options.key.get());
     }
     auto *ppl_tls = PipelineLayout::make(m_module);
     ppl_tls->append(new tls::Client(opts))->add_sub_pipeline(ppl_connect);
