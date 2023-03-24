@@ -522,9 +522,6 @@ void InboundTCP::close(StreamEnd::Error err) {
     }
   }
 
-  InputContext ic(this);
-  output(StreamEnd::make(err));
-
   if (m_receiving_state == PAUSED) {
     m_receiving_state = RECEIVING;
     release();
