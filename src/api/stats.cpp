@@ -452,7 +452,7 @@ void MetricData::to_prometheus(const std::string &extra_labels, const std::funct
 
 auto MetricData::Node::make(int dimensions) -> Node* {
   auto len = sizeof(Node) + (dimensions - 1) * sizeof(double);
-  auto ptr = (Node *)std::malloc(len);
+  auto ptr = (Node *)std::calloc(len, 1);
   new (ptr) Node;
   return ptr;
 }
@@ -892,7 +892,7 @@ void MetricDataSum::to_prometheus(const std::function<void(const void *, size_t)
 
 auto MetricDataSum::Node::make(int dimensions) -> Node* {
   auto len = sizeof(Node) + (dimensions - 1) * sizeof(double);
-  auto ptr = (Node *)std::malloc(len);
+  auto ptr = (Node *)std::calloc(len, 1);
   new (ptr) Node;
   return ptr;
 }
