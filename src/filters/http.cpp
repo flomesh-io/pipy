@@ -526,6 +526,7 @@ void Decoder::on_event(Event *evt) {
           char buf[len];
           pjs::Ref<pjs::Str> key(read_str_lower(dr, ':', s_strmap_headers, buf));
           pjs::Ref<pjs::Str> val(read_str(dr, '\r', s_strmap_header_values, buf));
+          if (!key || !val) { error(); break; }
           auto headers = m_head->headers();
           if (key == s_set_cookie) {
             pjs::Value old;
