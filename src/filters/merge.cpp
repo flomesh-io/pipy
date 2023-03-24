@@ -63,22 +63,6 @@ void Merge::process(Event *evt) {
   output(evt);
 }
 
-auto Merge::on_new_cluster(pjs::Object *options) -> MuxBase::SessionCluster* {
-  return new SessionCluster(this, options);
-}
-
-//
-// Merge::Session
-//
-
-auto Merge::Session::open_stream() -> EventFunction* {
-  return new Stream(this);
-}
-
-void Merge::Session::close_stream(EventFunction *stream) {
-  delete static_cast<Stream*>(stream);
-}
-
 //
 // Merge::Stream
 //

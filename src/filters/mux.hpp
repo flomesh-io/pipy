@@ -76,11 +76,11 @@ protected:
   virtual auto on_new_cluster(pjs::Object *options) -> SessionCluster* = 0;
 
 private:
-  class SessionManager;
+  class SessionPool;
 
   Options m_options;
   pjs::Ref<pjs::Function> m_options_f;
-  pjs::Ref<SessionManager> m_session_manager;
+  pjs::Ref<SessionPool> m_session_pool;
   pjs::Ref<Session> m_session;
   pjs::Ref<pjs::Function> m_session_selector;
   pjs::Value m_session_key;
@@ -106,25 +106,25 @@ protected:
     public EventProxy
   {
   protected:
-    virtual void open();
+    virtual void open() = 0;
     virtual auto open_stream() -> EventFunction* = 0;
     virtual void close_stream(EventFunction *stream) = 0;
-    virtual void close();
+    virtual void close() = 0;
 
     Session() {}
     virtual ~Session() {}
 
     auto pipeline() const -> Pipeline* { return m_pipeline; }
-    bool dedicated() const { return !m_cluster; }
-    void dedicate();
+    bool detached() const { return !m_cluster; }
+    void detach();
     bool is_free() const { return !m_share_count; }
     bool is_pending() const { return m_is_pending; }
     void set_pending(bool pending);
 
   private:
-    void init(Pipeline *pipeline);
+    void link(Pipeline *pipeline);
+    void unlink();
     void free();
-    void reset();
 
     SessionCluster* m_cluster = nullptr;
     pjs::Ref<Pipeline> m_pipeline;
@@ -162,7 +162,7 @@ protected:
     void free(Session *session);
     void discard(Session *session);
 
-    pjs::Ref<SessionManager> m_manager;
+    pjs::Ref<SessionPool> m_pool;
     pjs::Value m_key;
     pjs::WeakRef<pjs::Object> m_weak_key;
     List<Session> m_sessions;
@@ -184,13 +184,13 @@ protected:
 private:
 
   //
-  // MuxBase::SessionManager
+  // MuxBase::SessionPool
   //
 
-  class SessionManager : public pjs::RefCount<SessionManager> {
-    ~SessionManager();
+  class SessionPool : public pjs::RefCount<SessionPool> {
+    ~SessionPool();
 
-    auto get(MuxBase *mux, const pjs::Value &key) -> Session*;
+    auto alloc(MuxBase *mux, const pjs::Value &key) -> Session*;
     void shutdown();
 
     std::unordered_map<pjs::Value, SessionCluster*> m_clusters;
@@ -202,7 +202,7 @@ private:
 
     void recycle();
 
-    friend class pjs::RefCount<SessionManager>;
+    friend class pjs::RefCount<SessionPool>;
     friend class MuxBase;
   };
 };
@@ -213,11 +213,11 @@ private:
 
 class QueueMuxer : public EventSource {
 public:
-  auto open() -> EventFunction*;
-  void close(EventFunction *stream);
+  void reset();
+  auto open_stream() -> EventFunction*;
+  void close_stream(EventFunction *stream);
   void set_one_way(EventFunction *stream);
   void increase_queue_count();
-  void reset();
   void dedicate();
 
 private:
@@ -339,15 +339,20 @@ private:
   virtual auto clone() -> Filter* override;
   virtual void process(Event *evt) override;
   virtual void dump(Dump &d) override;
-  virtual auto on_new_cluster(pjs::Object *options) -> MuxBase::SessionCluster* override;
+
+  virtual auto on_new_cluster(pjs::Object *options) -> MuxBase::SessionCluster* override {
+    return new SessionCluster(this, options);
+  }
 
   //
   // Mux::Session
   //
 
   class Session : public pjs::Pooled<Session, MuxBase::Session> {
-    virtual auto open_stream() -> EventFunction* override;
-    virtual void close_stream(EventFunction *stream) override;
+    virtual void open() override {}
+    virtual auto open_stream() -> EventFunction* override { return new Stream(this); }
+    virtual void close_stream(EventFunction *stream) override { delete static_cast<Stream*>(stream); }
+    virtual void close() override {}
 
     friend class Stream;
   };

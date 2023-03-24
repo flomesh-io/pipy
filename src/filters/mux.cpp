@@ -55,28 +55,43 @@ MuxBase::Options::Options(pjs::Object *options) {
 //
 // MuxBase
 //
+// This is the base implementation for all mux filters.
+//
+// - On arrival of the very first event:
+//     1. Call the session selector provided by user to get a session key
+//     2. Allocate a Session with the requested session key
+// - On arrival of messages:
+//     1. Create a Stream from the selected Session if haven't yet and pass the first message to it
+//     2. Buffer up all following messages if the current Stream hasn't outputted StreamEnd yet
+// - On arrival of a StreamEnd from the current Stream:
+//     1. Close the current Stream
+//     2. Create a new Stream and pass the next message to it if there is one in the buffer
+// - On filter reset
+//     1. Close the current Stream if any
+//     2. Free the selected Session
+//
 
 MuxBase::MuxBase()
-  : m_session_manager(new SessionManager())
+  : m_session_pool(new SessionPool())
 {
 }
 
 MuxBase::MuxBase(pjs::Function *session_selector)
-  : m_session_manager(new SessionManager())
+  : m_session_pool(new SessionPool())
   , m_session_selector(session_selector)
 {
 }
 
 MuxBase::MuxBase(pjs::Function *session_selector, const Options &options)
   : m_options(options)
-  , m_session_manager(new SessionManager())
+  , m_session_pool(new SessionPool())
   , m_session_selector(session_selector)
 {
 }
 
 MuxBase::MuxBase(pjs::Function *session_selector, pjs::Function *options)
   : m_options_f(options)
-  , m_session_manager(new SessionManager())
+  , m_session_pool(new SessionPool())
   , m_session_selector(session_selector)
 {
 }
@@ -85,7 +100,7 @@ MuxBase::MuxBase(const MuxBase &r)
   : Filter(r)
   , m_options(r.m_options)
   , m_options_f(r.m_options_f)
-  , m_session_manager(r.m_session_manager)
+  , m_session_pool(r.m_session_pool)
   , m_session_selector(r.m_session_selector)
 {
 }
@@ -107,7 +122,7 @@ void MuxBase::reset() {
 }
 
 void MuxBase::shutdown() {
-  m_session_manager->shutdown();
+  m_session_pool->shutdown();
 }
 
 void MuxBase::process(Event *evt) {
@@ -118,7 +133,7 @@ void MuxBase::process(Event *evt) {
       if (m_session_key.is_undefined()) {
         m_session_key.set(context()->inbound());
       }
-      session = m_session_manager->get(this, m_session_key);
+      session = m_session_pool->alloc(this, m_session_key);
       if (!session) return;
       m_session = session;
     }
@@ -128,7 +143,7 @@ void MuxBase::process(Event *evt) {
       args[0] = m_session_key;
       args[1].set((int)session->m_cluster->m_sessions.size());
       auto p = sub_pipeline(0, true, session->reply(), nullptr, 2, args);
-      session->init(p);
+      session->link(p);
     }
 
     if (session->is_pending()) {
@@ -177,26 +192,18 @@ void MuxBase::stop_waiting() {
 // MuxBase::Session
 //
 // Construction:
-//   - When a new session key is requested
+//   - When a new session key is requested by MuxBase
 //
 // Destruction:
 //   - When share count is 0 for a time of maxIdle
-//   - When freed by MuxBase if it is dedicated to a stream
+//   - When freed by MuxBase if it is detached from its SessionCluster
 //
 // Session owns streams:
 //   - Session::open_stream(): Creates a new stream
 //   - Session::close_stream(): Destroys an existing stream
 //
 
-void MuxBase::Session::open()
-{
-}
-
-void MuxBase::Session::close() {
-  forward(StreamEnd::make());
-}
-
-void MuxBase::Session::dedicate() {
+void MuxBase::Session::detach() {
   if (auto cluster = m_cluster) {
     m_cluster = nullptr;
     cluster->discard(this);
@@ -215,27 +222,27 @@ void MuxBase::Session::set_pending(bool pending) {
   }
 }
 
-void MuxBase::Session::init(Pipeline *pipeline) {
+void MuxBase::Session::link(Pipeline *pipeline) {
   m_pipeline = pipeline;
   chain_forward(pipeline->input());
   open();
+}
+
+void MuxBase::Session::unlink() {
+  if (auto p = m_pipeline.get()) {
+    close();
+    forward(StreamEnd::make());
+    Pipeline::auto_release(p);
+    m_pipeline = nullptr;
+  }
 }
 
 void MuxBase::Session::free() {
   if (m_cluster) {
     m_cluster->free(this);
   } else {
-    reset();
+    unlink();
   }
-}
-
-void MuxBase::Session::reset() {
-  if (auto p = m_pipeline.get()) {
-    close();
-    Pipeline::auto_release(p);
-    m_pipeline = nullptr;
-  }
-  dedicate();
 }
 
 void MuxBase::Session::on_input(Event *evt) {
@@ -251,6 +258,8 @@ void MuxBase::Session::on_reply(Event *evt) {
 
 //
 // MuxBase::SessionCluster
+//
+// This is the container for all Sessions with the same session key.
 //
 
 MuxBase::SessionCluster::SessionCluster(MuxBase *mux, pjs::Object *options) {
@@ -334,9 +343,9 @@ void MuxBase::SessionCluster::sort(Session *session) {
 
   if (m_sessions.empty()) {
     if (m_weak_key.original_ptr()) {
-      m_manager->m_weak_clusters.erase(m_weak_key);
+      m_pool->m_weak_clusters.erase(m_weak_key);
     } else {
-      m_manager->m_clusters.erase(m_key);
+      m_pool->m_clusters.erase(m_key);
     }
     free();
   }
@@ -346,13 +355,13 @@ void MuxBase::SessionCluster::schedule_recycling() {
   auto s = m_sessions.head();
   if (!s || s->m_share_count > 0) {
     if (m_recycle_scheduled) {
-      m_manager->m_recycle_clusters.remove(this);
+      m_pool->m_recycle_clusters.remove(this);
       m_recycle_scheduled = false;
     }
   } else {
     if (!m_recycle_scheduled) {
-      m_manager->m_recycle_clusters.push(this);
-      m_manager->recycle();
+      m_pool->m_recycle_clusters.push(this);
+      m_pool->recycle();
       m_recycle_scheduled = true;
     }
   }
@@ -368,27 +377,28 @@ void MuxBase::SessionCluster::recycle(double now) {
        (m_max_messages > 0 && session->m_message_count >= m_max_messages) ||
        (now - session->m_free_time >= max_idle))
     {
-      session->reset();
+      session->unlink();
+      session->detach();
     }
   }
 }
 
 void MuxBase::SessionCluster::on_weak_ptr_gone() {
   m_weak_ptr_gone = true;
-  m_manager->m_weak_clusters.erase(m_weak_key);
+  m_pool->m_weak_clusters.erase(m_weak_key);
   schedule_recycling();
 }
 
 //
-// MuxBase::SessionManager
+// MuxBase::SessionPool
 //
 
-MuxBase::SessionManager::~SessionManager() {
+MuxBase::SessionPool::~SessionPool() {
   for (const auto &p : m_clusters) p.second->free();
   for (const auto &p : m_weak_clusters) p.second->free();
 }
 
-auto MuxBase::SessionManager::get(MuxBase *mux, const pjs::Value &key) -> Session* {
+auto MuxBase::SessionPool::alloc(MuxBase *mux, const pjs::Value &key) -> Session* {
   bool is_weak = (key.is_object() && key.o());
   SessionCluster *cluster = nullptr;
 
@@ -420,7 +430,7 @@ auto MuxBase::SessionManager::get(MuxBase *mux, const pjs::Value &key) -> Sessio
     }
 
     cluster = mux->on_new_cluster(options);
-    cluster->m_manager = this;
+    cluster->m_pool = this;
 
   } catch (std::runtime_error &err) {
     Log::error("[mux] %s", err.what());
@@ -439,11 +449,11 @@ auto MuxBase::SessionManager::get(MuxBase *mux, const pjs::Value &key) -> Sessio
   return cluster->alloc();
 }
 
-void MuxBase::SessionManager::shutdown() {
+void MuxBase::SessionPool::shutdown() {
   m_has_shutdown = true;
 }
 
-void MuxBase::SessionManager::recycle() {
+void MuxBase::SessionPool::recycle() {
   if (m_recycling) return;
   if (m_recycle_clusters.empty()) return;
 
@@ -471,13 +481,21 @@ void MuxBase::SessionManager::recycle() {
 // QueueMuxer
 //
 
-auto QueueMuxer::open() -> EventFunction* {
+void QueueMuxer::reset() {
+  while (auto s = m_streams.head()) {
+    m_streams.remove(s);
+    s->release();
+  }
+  m_dedicated = false;
+}
+
+auto QueueMuxer::open_stream() -> EventFunction* {
   auto s = new Stream(this);
   s->retain();
   return s;
 }
 
-void QueueMuxer::close(EventFunction *stream) {
+void QueueMuxer::close_stream(EventFunction *stream) {
   auto s = static_cast<Stream*>(stream);
   s->release();
 }
@@ -491,14 +509,6 @@ void QueueMuxer::increase_queue_count() {
   if (auto s = m_streams.head()) {
     s->m_queued_count++;
   }
-}
-
-void QueueMuxer::reset() {
-  while (auto s = m_streams.head()) {
-    m_streams.remove(s);
-    s->release();
-  }
-  m_dedicated = false;
 }
 
 void QueueMuxer::dedicate() {
@@ -695,16 +705,15 @@ void MuxQueue::Session::open() {
 }
 
 auto MuxQueue::Session::open_stream() -> EventFunction* {
-  return QueueMuxer::open();
+  return QueueMuxer::open_stream();
 }
 
 void MuxQueue::Session::close_stream(EventFunction *stream) {
-  return QueueMuxer::close(stream);
+  return QueueMuxer::close_stream(stream);
 }
 
 void MuxQueue::Session::close() {
   QueueMuxer::reset();
-  MuxBase::Session::close();
 }
 
 //
@@ -753,22 +762,6 @@ auto Mux::clone() -> Filter* {
 void Mux::process(Event *evt) {
   MuxBase::process(evt->clone());
   output(evt);
-}
-
-auto Mux::on_new_cluster(pjs::Object *options) -> MuxBase::SessionCluster* {
-  return new SessionCluster(this, options);
-}
-
-//
-// Mux::Session
-//
-
-auto Mux::Session::open_stream() -> EventFunction* {
-  return new Stream(this);
-}
-
-void Mux::Session::close_stream(EventFunction *stream) {
-  delete static_cast<Stream*>(stream);
 }
 
 //

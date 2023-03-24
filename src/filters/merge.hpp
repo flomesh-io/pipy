@@ -45,15 +45,20 @@ private:
   virtual auto clone() -> Filter* override;
   virtual void process(Event *evt) override;
   virtual void dump(Dump &d) override;
-  virtual auto on_new_cluster(pjs::Object *options) -> MuxBase::SessionCluster* override;
+
+  virtual auto on_new_cluster(pjs::Object *options) -> MuxBase::SessionCluster* override {
+    return new SessionCluster(this, options);
+  }
 
   //
   // Merge::Session
   //
 
   class Session : public pjs::Pooled<Session, MuxBase::Session> {
-    virtual auto open_stream() -> EventFunction* override;
-    virtual void close_stream(EventFunction *stream) override;
+    virtual void open() override {}
+    virtual auto open_stream() -> EventFunction* override { return new Stream(this); }
+    virtual void close_stream(EventFunction *stream) override { delete static_cast<Stream*>(stream); }
+    virtual void close() override {}
 
     friend class Stream;
   };

@@ -1513,7 +1513,7 @@ auto Mux::Session::open_stream() -> EventFunction* {
   if (m_http2_muxer) {
     return m_http2_muxer->stream();
   } else {
-    return QueueMuxer::open();
+    return QueueMuxer::open_stream();
   }
 }
 
@@ -1521,7 +1521,7 @@ void Mux::Session::close_stream(EventFunction *stream) {
   if (m_http2_muxer) {
     m_http2_muxer->close(stream);
   } else {
-    QueueMuxer::close(stream);
+    QueueMuxer::close_stream(stream);
   }
 }
 
@@ -1532,7 +1532,6 @@ void Mux::Session::close() {
     InputContext ic;
     m_http2_muxer->go_away();
   }
-  MuxBase::Session::close();
 }
 
 void Mux::Session::on_encode_request(pjs::Object *head) {
