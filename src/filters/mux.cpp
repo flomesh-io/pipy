@@ -76,37 +76,12 @@ MuxBase::MuxBase()
 {
 }
 
-MuxBase::MuxBase(pjs::Function *session_selector)
-  : m_session_pool(new SessionPool())
-  , m_session_selector(session_selector)
-{
-}
-
-MuxBase::MuxBase(pjs::Function *session_selector, const Options &options)
-  : m_options(options)
-  , m_session_pool(new SessionPool())
-  , m_session_selector(session_selector)
-{
-}
-
-MuxBase::MuxBase(pjs::Function *session_selector, pjs::Function *options)
-  : m_options_f(options)
-  , m_session_pool(new SessionPool())
-  , m_session_selector(session_selector)
-{
-}
-
 MuxBase::MuxBase(const MuxBase &r)
-  : Filter(r)
-  , m_options(r.m_options)
-  , m_options_f(r.m_options_f)
-  , m_session_pool(r.m_session_pool)
-  , m_session_selector(r.m_session_selector)
+  : m_session_pool(r.m_session_pool)
 {
 }
 
 void MuxBase::reset() {
-  Filter::reset();
   if (m_session) {
     stop_waiting();
     if (m_stream) {
@@ -125,14 +100,11 @@ void MuxBase::shutdown() {
   m_session_pool->shutdown();
 }
 
-void MuxBase::process(Event *evt) {
+void MuxBase::open_stream(EventTarget::Input *output) {
   if (!m_stream) {
     auto session = m_session.get();
     if (!session) {
-      if (m_session_selector && !eval(m_session_selector, m_session_key)) return;
-      if (m_session_key.is_undefined()) {
-        m_session_key.set(context()->inbound());
-      }
+      if (!on_select_session(m_session_key)) return;
       session = m_session_pool->alloc(this, m_session_key);
       if (!session) return;
       m_session = session;
@@ -142,26 +114,27 @@ void MuxBase::process(Event *evt) {
       pjs::Value args[2];
       args[0] = m_session_key;
       args[1].set((int)session->m_cluster->m_sessions.size());
-      auto p = sub_pipeline(0, true, session->reply(), nullptr, 2, args);
+      auto p = on_new_pipeline(session->reply(), args);
       session->link(p);
     }
 
     if (session->is_pending()) {
       start_waiting();
-      m_waiting_events.push(evt);
       return;
     }
 
-    open_stream();
+    auto s = m_session->open_stream();
+    s->chain(output);
+    m_stream = s;
   }
-
-  Filter::output(evt, m_stream->input());
 }
 
-void MuxBase::open_stream() {
-  auto s = m_session->open_stream();
-  s->chain(output());
-  m_stream = s;
+void MuxBase::write_stream(Event *evt) {
+  if (m_waiting) {
+    m_waiting_events.push(evt);
+  } else if (m_stream) {
+    m_stream->input()->input(evt);
+  }
 }
 
 void MuxBase::start_waiting() {
@@ -172,12 +145,7 @@ void MuxBase::start_waiting() {
 }
 
 void MuxBase::flush_waiting() {
-  open_stream();
-  m_waiting_events.flush(
-    [this](Event *evt) {
-      output(evt, m_stream->input());
-    }
-  );
+  on_pending_session_open();
   stop_waiting();
 }
 
@@ -262,17 +230,10 @@ void MuxBase::Session::on_reply(Event *evt) {
 // This is the container for all Sessions with the same session key.
 //
 
-MuxBase::SessionCluster::SessionCluster(MuxBase *mux, pjs::Object *options) {
-  if (options) {
-    Options opts(options);
-    m_max_idle = opts.max_idle;
-    m_max_queue = opts.max_queue;
-    m_max_messages = opts.max_messages;
-  } else {
-    m_max_idle = mux->m_options.max_idle;
-    m_max_queue = mux->m_options.max_queue;
-    m_max_messages = mux->m_options.max_messages;
-  }
+MuxBase::SessionCluster::SessionCluster(MuxBase *mux, const Options &options) {
+  m_max_idle = options.max_idle;
+  m_max_queue = options.max_queue;
+  m_max_messages = options.max_messages;
 }
 
 auto MuxBase::SessionCluster::alloc() -> Session* {
@@ -417,25 +378,10 @@ auto MuxBase::SessionPool::alloc(MuxBase *mux, const pjs::Value &key) -> Session
 
   if (cluster) return cluster->alloc();
 
-  try {
-    pjs::Value opts;
-    pjs::Object *options = nullptr;
-    if (auto f = mux->m_options_f.get()) {
-      if (!mux->eval(f, opts)) return nullptr;
-      if (!opts.is_object()) {
-        Log::error("[mux] options callback did not return an object");
-        return nullptr;
-      }
-      options = opts.o();
-    }
+  cluster = mux->on_new_cluster();
+  if (!cluster) return nullptr;
 
-    cluster = mux->on_new_cluster(options);
-    cluster->m_pool = this;
-
-  } catch (std::runtime_error &err) {
-    Log::error("[mux] %s", err.what());
-    return nullptr;
-  }
+  cluster->m_pool = this;
 
   if (is_weak) {
     cluster->m_weak_key = key.o();
@@ -632,23 +578,28 @@ MuxQueue::MuxQueue()
 }
 
 MuxQueue::MuxQueue(pjs::Function *session_selector)
-  : MuxBase(session_selector)
+  : m_session_selector(session_selector)
 {
 }
 
 MuxQueue::MuxQueue(pjs::Function *session_selector, const Options &options)
-  : MuxBase(session_selector, options)
+  : m_session_selector(session_selector)
   , m_options(options)
 {
 }
 
 MuxQueue::MuxQueue(pjs::Function *session_selector, pjs::Function *options)
-  : MuxBase(session_selector, options)
+  : m_session_selector(session_selector)
+  , m_options_f(options)
 {
 }
 
 MuxQueue::MuxQueue(const MuxQueue &r)
-  : MuxBase(r)
+  : Filter(r)
+  , MuxBase(r)
+  , m_session_selector(r.m_session_selector)
+  , m_options(r.m_options)
+  , m_options_f(r.m_options_f)
 {
 }
 
@@ -666,12 +617,14 @@ auto MuxQueue::clone() -> Filter* {
 }
 
 void MuxQueue::reset() {
+  Filter::reset();
   MuxBase::reset();
   m_started = false;
 }
 
 void MuxQueue::process(Event *evt) {
-  MuxBase::process(evt);
+  MuxBase::open_stream(Filter::output());
+  MuxBase::write_stream(evt);
 
   if (auto *f = m_options.is_one_way.get()) {
     if (!m_started) {
@@ -691,8 +644,34 @@ void MuxQueue::process(Event *evt) {
   }
 }
 
-auto MuxQueue::on_new_cluster(pjs::Object *options) -> MuxBase::SessionCluster* {
-  return new SessionCluster(this, options);
+bool MuxQueue::on_select_session(pjs::Value &key) {
+  if (m_session_selector && !eval(m_session_selector, key)) return false;
+  if (key.is_undefined()) key.set(Filter::context()->inbound());
+  return true;
+}
+
+auto MuxQueue::on_new_cluster() -> MuxBase::SessionCluster* {
+  if (auto f = m_options_f.get()) {
+    pjs::Value opts;
+    if (!Filter::eval(f, opts)) return nullptr;
+    if (!opts.is_object()) {
+      Filter::error("callback did not return an object for options");
+      return nullptr;
+    }
+    try {
+      Options options(opts.o());
+      return new SessionCluster(this, options);
+    } catch (std::runtime_error &err) {
+      Filter::error(err.what());
+      return nullptr;
+    }
+  } else {
+    return new SessionCluster(this, m_options);
+  }
+}
+
+auto MuxQueue::on_new_pipeline(EventTarget::Input *output, pjs::Value args[2]) -> Pipeline* {
+  return Filter::sub_pipeline(0, true, output, nullptr, 2, args);
 }
 
 //
@@ -725,22 +704,28 @@ Mux::Mux()
 }
 
 Mux::Mux(pjs::Function *session_selector)
-  : MuxBase(session_selector)
+  : m_session_selector(session_selector)
 {
 }
 
 Mux::Mux(pjs::Function *session_selector, const Options &options)
-  : MuxBase(session_selector, options)
+  : m_session_selector(session_selector)
+  , m_options(options)
 {
 }
 
 Mux::Mux(pjs::Function *session_selector, pjs::Function *options)
-  : MuxBase(session_selector, options)
+  : m_session_selector(session_selector)
+  , m_options_f(options)
 {
 }
 
 Mux::Mux(const Mux &r)
-  : MuxBase(r)
+  : Filter(r)
+  , MuxBase(r)
+  , m_session_selector(r.m_session_selector)
+  , m_options(r.m_options)
+  , m_options_f(r.m_options_f)
 {
 }
 
@@ -759,9 +744,45 @@ auto Mux::clone() -> Filter* {
   return new Mux(*this);
 }
 
+void Mux::reset() {
+  Filter::reset();
+  MuxBase::reset();
+}
+
 void Mux::process(Event *evt) {
-  MuxBase::process(evt->clone());
+  MuxBase::open_stream(Filter::output());
+  MuxBase::write_stream(evt);
   output(evt);
+}
+
+bool Mux::on_select_session(pjs::Value &key) {
+  if (m_session_selector && !eval(m_session_selector, key)) return false;
+  if (key.is_undefined()) key.set(Filter::context()->inbound());
+  return true;
+}
+
+auto Mux::on_new_cluster() -> MuxBase::SessionCluster* {
+  if (auto f = m_options_f.get()) {
+    pjs::Value opts;
+    if (!Filter::eval(f, opts)) return nullptr;
+    if (!opts.is_object()) {
+      Filter::error("callback did not return an object for options");
+      return nullptr;
+    }
+    try {
+      Options options(opts.o());
+      return new SessionCluster(this, options);
+    } catch (std::runtime_error &err) {
+      Filter::error(err.what());
+      return nullptr;
+    }
+  } else {
+    return new SessionCluster(this, m_options);
+  }
+}
+
+auto Mux::on_new_pipeline(EventTarget::Input *output, pjs::Value args[2]) -> Pipeline* {
+  return Filter::sub_pipeline(0, true, output, nullptr, 2, args);
 }
 
 //

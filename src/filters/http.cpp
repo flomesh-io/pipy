@@ -1493,8 +1493,24 @@ auto Mux::clone() -> Filter* {
   return new Mux(*this);
 }
 
-auto Mux::on_new_cluster(pjs::Object *options) -> MuxBase::SessionCluster* {
-  return new SessionCluster(this, options);
+auto Mux::on_new_cluster() -> MuxBase::SessionCluster* {
+  if (auto f = m_options_f.get()) {
+    pjs::Value opts;
+    if (!Filter::eval(f, opts)) return nullptr;
+    if (!opts.is_object()) {
+      Filter::error("callback did not return an object for options");
+      return nullptr;
+    }
+    try {
+      Options options(opts.o());
+      return new SessionCluster(this, options);
+    } catch (std::runtime_error &err) {
+      Filter::error(err.what());
+      return nullptr;
+    }
+  } else {
+    return new SessionCluster(this, m_options);
+  }
 }
 
 //
@@ -1617,6 +1633,12 @@ void Mux::Session::upgrade_http2() {
 //
 // Mux::SessionCluster
 //
+
+Mux::SessionCluster::SessionCluster(Mux *mux, const Options &options)
+  : pjs::Pooled<SessionCluster, MuxBase::SessionCluster>(mux, options)
+  , m_options(options)
+{
+}
 
 auto Mux::SessionCluster::session() -> MuxBase::Session* {
   return new Session(m_options);

@@ -436,7 +436,7 @@ private:
 
   virtual auto clone() -> Filter* override;
   virtual void dump(Dump &d) override;
-  virtual auto on_new_cluster(pjs::Object *options) -> MuxBase::SessionCluster* override;
+  virtual auto on_new_cluster() -> MuxBase::SessionCluster* override;
 
   //
   // Mux::Session
@@ -482,16 +482,12 @@ private:
   //
 
   class SessionCluster : public pjs::Pooled<SessionCluster, MuxBase::SessionCluster> {
-    SessionCluster(Mux *mux, pjs::Object *options)
-      : pjs::Pooled<SessionCluster, MuxBase::SessionCluster>(mux, options)
-      , m_local_options(options)
-      , m_options(options ? m_local_options : mux->m_options) {}
+    SessionCluster(Mux *mux, const Options &options);
 
     virtual auto session() -> MuxBase::Session* override;
     virtual void free() override { delete this; }
 
-    Options m_local_options;
-    Options& m_options;
+    Options m_options;
 
     friend class Mux;
   };

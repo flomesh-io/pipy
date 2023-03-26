@@ -34,12 +34,16 @@ namespace pipy {
 //
 
 Merge::Merge(pjs::Function *session_selector, pjs::Object *options)
-  : MuxBase(session_selector, options)
+  : m_session_selector(session_selector)
+  , m_options(options)
 {
 }
 
 Merge::Merge(const Merge &r)
-  : MuxBase(r)
+  : Filter(r)
+  , MuxBase(r)
+  , m_session_selector(r.m_session_selector)
+  , m_options(r.m_options)
 {
 }
 
@@ -58,9 +62,29 @@ auto Merge::clone() -> Filter* {
   return new Merge(*this);
 }
 
+void Merge::reset() {
+  Filter::reset();
+  MuxBase::reset();
+}
+
 void Merge::process(Event *evt) {
-  MuxBase::process(evt->clone());
+  MuxBase::open_stream(Filter::output());
+  MuxBase::write_stream(evt);
   output(evt);
+}
+
+bool Merge::on_select_session(pjs::Value &key) {
+  if (m_session_selector && !eval(m_session_selector, key)) return false;
+  if (key.is_undefined()) key.set(Filter::context()->inbound());
+  return true;
+}
+
+auto Merge::on_new_cluster() -> MuxBase::SessionCluster* {
+  return new SessionCluster(this, m_options);
+}
+
+auto Merge::on_new_pipeline(EventTarget::Input *output, pjs::Value args[2]) -> Pipeline* {
+  return Filter::sub_pipeline(0, true, output, nullptr, 2, args);
 }
 
 //
