@@ -50,6 +50,7 @@ public:
   };
 
   auto type() const -> Type { return m_type; }
+  bool is_end() const { return m_type == Type::MessageEnd || m_type == Type::StreamEnd; }
 
   virtual auto clone() const -> Event* = 0;
 
@@ -121,7 +122,7 @@ private:
 // MessageEnd
 //
 
-struct MessageEnd : public EventTemplate<MessageEnd> {
+class MessageEnd : public EventTemplate<MessageEnd> {
 public:
   static const Type __TYPE = Type::MessageEnd;
 

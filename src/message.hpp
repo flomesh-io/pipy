@@ -27,21 +27,34 @@
 #define MESSAGE_HPP
 
 #include "data.hpp"
+#include "list.hpp"
 
 namespace pipy {
+
+class MessageStart;
+class MessageEnd;
+class MessageBuffer;
 
 //
 // Message
 //
 
-class Message : public pjs::ObjectTemplate<Message> {
+class Message :
+  public pjs::ObjectTemplate<Message>,
+  public List<Message>::Item
+{
 public:
+  static auto from(MessageStart *start, Data *body, MessageEnd *end) -> Message*;
   static bool output(const pjs::Value &evt, EventTarget::Input *input);
 
   auto head() const -> pjs::Object* { return m_head; }
   auto tail() const -> pjs::Object* { return m_tail; }
   auto body() const -> Data* { return m_body; }
   auto payload() const -> const pjs::Value& { return m_payload; }
+
+  auto clone() const -> Message* {
+    return Message::make(m_head, m_body, m_tail, m_payload);
+  }
 
 private:
   Message() {}
@@ -88,10 +101,73 @@ private:
   pjs::Ref<pjs::Object> m_tail;
   pjs::Ref<Data> m_body;
   pjs::Value m_payload;
+  bool m_in_buffer = false;
 
   thread_local static Data::Producer s_dp;
 
   friend class pjs::ObjectTemplate<Message>;
+  friend class MessageBuffer;
+};
+
+//
+// MessageBuffer
+//
+
+class MessageBuffer {
+public:
+  bool empty() const {
+    return m_messages.empty();
+  }
+
+  void push(Message *m) {
+    if (m->m_in_buffer) m = m->clone();
+    m->m_in_buffer = true;
+    m->retain();
+    m_messages.push(m);
+  }
+
+  auto shift() -> Message* {
+    if (m_messages.empty()) return nullptr;
+    auto m = m_messages.head();
+    m_messages.remove(m);
+    m->m_in_buffer = false;
+    return m;
+  }
+
+  void unshift(Message *m) {
+    if (m->m_in_buffer) m = m->clone();
+    m->m_in_buffer = true;
+    m->retain();
+    m_messages.unshift(m);
+  }
+
+  void iterate(const std::function<void(Message*)> &cb) {
+    for (auto m = m_messages.head(); m; m = m->next()) {
+      cb(m);
+    }
+  }
+
+  void flush(const std::function<void(Message*)> &out) {
+    List<Message> messages(std::move(m_messages));
+    while (auto m = messages.head()) {
+      messages.remove(m);
+      m->m_in_buffer = false;
+      out(m);
+      m->release();
+    }
+  }
+
+  void clear() {
+    List<Message> messages(std::move(m_messages));
+    while (auto m = messages.head()) {
+      messages.remove(m);
+      m->m_in_buffer = false;
+      m->release();
+    }
+  }
+
+private:
+  List<Message> m_messages;
 };
 
 } // namespace pipy

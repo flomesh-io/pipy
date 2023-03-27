@@ -24,10 +24,18 @@
  */
 
 #include "message.hpp"
+#include "event.hpp"
 
 namespace pipy {
 
 thread_local Data::Producer Message::s_dp("Message");
+
+auto Message::from(MessageStart *start, Data *body, MessageEnd *end) -> Message* {
+  auto head = start ? start->head() : nullptr;
+  return (end
+    ? Message::make(head, body, end->tail(), end->payload())
+    : Message::make(head, body));
+}
 
 bool Message::output(const pjs::Value &evt, EventTarget::Input *input) {
   if (evt.is_instance_of(pjs::class_of<Event>())) {
