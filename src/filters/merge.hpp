@@ -34,7 +34,7 @@ namespace pipy {
 // Merge
 //
 
-class Merge : public Filter, public MuxBase {
+class Merge : public MuxBase {
 public:
   Merge(pjs::Function *session_selector, pjs::Object *options);
 
@@ -43,13 +43,10 @@ private:
   ~Merge();
 
   virtual auto clone() -> Filter* override;
-  virtual void reset() override;
   virtual void process(Event *evt) override;
   virtual void dump(Dump &d) override;
 
-  virtual bool on_select_session(pjs::Value &key) override;
-  virtual auto on_new_cluster() -> MuxBase::SessionCluster* override;
-  virtual auto on_new_pipeline(EventTarget::Input *output, pjs::Value args[2]) -> Pipeline* override;
+  virtual auto on_new_cluster(pjs::Object *options) -> MuxBase::SessionCluster* override;
 
   //
   // Merge::Session

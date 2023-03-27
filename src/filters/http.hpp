@@ -409,10 +409,10 @@ public:
 // Mux
 //
 
-class Mux : public pipy::MuxQueue {
+class Mux : public MuxBase {
 public:
   struct Options :
-    public pipy::MuxQueue::Options,
+    public MuxBase::Options,
     public http2::Endpoint::Options
   {
     size_t buffer_size = DATA_CHUNK_SIZE;
@@ -432,11 +432,10 @@ private:
   ~Mux();
 
   Options m_options;
-  pjs::Ref<pjs::Function> m_options_f;
 
   virtual auto clone() -> Filter* override;
   virtual void dump(Dump &d) override;
-  virtual auto on_new_cluster() -> MuxBase::SessionCluster* override;
+  virtual auto on_new_cluster(pjs::Object *options) -> MuxBase::SessionCluster* override;
 
   //
   // Mux::Session
@@ -444,7 +443,7 @@ private:
 
   class Session :
     public pjs::Pooled<Session, MuxBase::Session>,
-    public QueueMuxer,
+    public StreamQueue,
     protected Encoder,
     protected Decoder,
     public ContextGroup::Waiter
