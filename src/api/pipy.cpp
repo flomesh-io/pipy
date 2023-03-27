@@ -32,12 +32,84 @@
 #include "net.hpp"
 #include "utils.hpp"
 
+#include <unistd.h>
+#include <sys/wait.h>
+
 namespace pipy {
 
 static std::function<void(int)> s_on_exit;
 
 void Pipy::on_exit(const std::function<void(int)> &on_exit) {
   s_on_exit = on_exit;
+}
+
+static auto exec_args(const std::list<std::string> &args) -> Data* {
+  thread_local static Data::Producer s_dp("pipy.exec()");
+
+  auto argc = args.size();
+  if (!argc) return nullptr;
+
+  int n = 0;
+  char *argv[argc + 1];
+  for (const auto &arg : args) argv[n++] = strdup(arg.c_str());
+  argv[n] = nullptr;
+
+  int in[2], out[2];
+  pipe(in);
+  pipe(out);
+
+  auto pid = fork();
+  if (!pid) {
+    dup2(in[0], 0);
+    dup2(out[1], 1);
+    execvp(argv[0], argv);
+    exit(-1);
+  } else if (pid < 0) {
+    return nullptr;
+  }
+
+  std::thread t(
+    [&]() {
+      int status;
+      waitpid(pid, &status, 0);
+      close(out[1]);
+    }
+  );
+
+  Data output;
+  char buf[DATA_CHUNK_SIZE];
+  while (auto len = read(out[0], buf, sizeof(buf))) {
+    output.push(buf, len, &s_dp);
+  }
+
+  t.join();
+
+  close(out[0]);
+  close(in[0]);
+  close(in[1]);
+
+  for (int i = 0; i < n; i++) std::free(argv[i]);
+
+  return Data::make(std::move(output));
+}
+
+auto Pipy::exec(const std::string &cmd) -> Data* {
+  return exec_args(utils::split(cmd, ' '));
+}
+
+auto Pipy::exec(pjs::Array *argv) -> Data* {
+  if (!argv) return nullptr;
+
+  std::list<std::string> args;
+  argv->iterate_all(
+    [&](pjs::Value &v, int) {
+      auto *s = v.to_string();
+      args.push_back(s->str());
+      s->release();
+    }
+  );
+
+  return exec_args(args);
 }
 
 void Pipy::operator()(pjs::Context &ctx, pjs::Object *obj, pjs::Value &ret) {
@@ -112,6 +184,18 @@ template<> void ClassDef<Pipy>::init() {
         if (s_on_exit) s_on_exit(exit_code);
       }
     );
+  });
+
+  method("exec", [](Context &ctx, Object*, Value &ret) {
+    Str *cmd;
+    Array *argv;
+    if (ctx.get(0, cmd)) {
+      ret.set(Pipy::exec(cmd->str()));
+    } else if (ctx.get(0, argv)) {
+      ret.set(Pipy::exec(argv));
+    } else {
+      ctx.error_argument_type(0, "a string or an array");
+    }
   });
 }
 

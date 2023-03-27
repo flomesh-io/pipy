@@ -27,6 +27,7 @@
 #define API_PIPY_H
 
 #include "pjs/pjs.hpp"
+#include "data.hpp"
 
 #include <functional>
 
@@ -39,6 +40,8 @@ namespace pipy {
 class Pipy : public pjs::FunctionTemplate<Pipy> {
 public:
   static void on_exit(const std::function<void(int)> &on_exit);
+  static auto exec(const std::string &cmd) -> Data*;
+  static auto exec(pjs::Array *args) -> Data*;
 
   void operator()(pjs::Context &ctx, pjs::Object *obj, pjs::Value &ret);
 };
