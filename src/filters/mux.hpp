@@ -244,6 +244,10 @@ protected:
       Muxer* m_muxer;
       Queue* m_queue;
       MessageReader m_reader;
+      pjs::Ref<StreamEnd> m_stream_end;
+      int m_receiver_count = 0;
+
+      void output_end();
 
       friend class Queue;
     };

@@ -515,10 +515,25 @@ void Muxer::Queue::Stream::on_event(Event *evt) {
       if (n > 0) {
         auto r = new Receiver(this, n);
         queue->m_receivers.push(r);
+        m_receiver_count++;
       }
       msg->write(queue->output());
     }
     msg->release();
+  }
+
+  if (auto end = evt->as<StreamEnd>()) {
+    if (m_receiver_count > 0) {
+      m_stream_end = end;
+    } else {
+      EventFunction::output(evt);
+    }
+  }
+}
+
+void Muxer::Queue::Stream::output_end() {
+  if (auto end = m_stream_end.get()) {
+    EventFunction::output(end);
   }
 }
 
@@ -529,8 +544,13 @@ void Muxer::Queue::Stream::on_event(Event *evt) {
 bool Muxer::Queue::Receiver::receive(Event *evt) {
   if (auto start = m_reader.filter(evt, m_stream->output())) {
     start->release();
-    if (m_output_count > 0) {
-      return !--m_output_count;
+    if (!--m_output_count) {
+      if (!--m_stream->m_receiver_count) {
+        if (!evt->is<StreamEnd>()) {
+          m_stream->output_end(); // Output StreamEnd if haven't yet
+        }
+      }
+      return true;
     }
   }
   return false;
