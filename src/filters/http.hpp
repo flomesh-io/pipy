@@ -443,7 +443,7 @@ private:
 
   class Session :
     public pjs::Pooled<Session, MuxBase::Session>,
-    public StreamQueue,
+    public Muxer::Queue,
     protected Encoder,
     protected Decoder,
     public ContextGroup::Waiter

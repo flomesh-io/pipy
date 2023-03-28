@@ -56,6 +56,8 @@ public:
     return Message::make(m_head, m_body, m_tail, m_payload);
   }
 
+  void write(EventTarget::Input *input);
+
 private:
   Message() {}
 
@@ -168,6 +170,21 @@ public:
 
 private:
   List<Message> m_messages;
+};
+
+//
+// MessageReader
+//
+
+class MessageReader {
+public:
+  void reset();
+  auto read(Event *evt) -> Message*;
+  auto filter(Event *evt, EventTarget::Input *out) -> MessageStart*;
+
+private:
+  pjs::Ref<MessageStart> m_start;
+  Data m_buffer;
 };
 
 } // namespace pipy

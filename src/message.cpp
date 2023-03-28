@@ -28,6 +28,10 @@
 
 namespace pipy {
 
+//
+// Message
+//
+
 thread_local Data::Producer Message::s_dp("Message");
 
 auto Message::from(MessageStart *start, Data *body, MessageEnd *end) -> Message* {
@@ -42,11 +46,7 @@ bool Message::output(const pjs::Value &evt, EventTarget::Input *input) {
     input->input(evt.as<Event>());
     return true;
   } else if (evt.is_instance_of(pjs::class_of<Message>())) {
-    auto *msg = evt.as<Message>();
-    auto *body = msg->body();
-    input->input(MessageStart::make(msg->head()));
-    if (body) input->input(body);
-    input->input(MessageEnd::make(msg->tail(), msg->payload()));
+    evt.as<Message>()->write(input);
     return true;
   } else if (evt.is_array()) {
     auto *a = evt.as<pjs::Array>();
@@ -55,11 +55,7 @@ bool Message::output(const pjs::Value &evt, EventTarget::Input *input) {
         input->input(v.as<Event>());
         return true;
       } else if (v.is_instance_of(pjs::class_of<Message>())) {
-        auto *msg = v.as<Message>();
-        auto *body = msg->body();
-        input->input(MessageStart::make(msg->head()));
-        if (body) input->input(body);
-        input->input(MessageEnd::make(msg->tail(), msg->payload()));
+        v.as<Message>()->write(input);
         return true;
       } else {
         return v.is_null() || v.is_undefined();
@@ -71,6 +67,65 @@ bool Message::output(const pjs::Value &evt, EventTarget::Input *input) {
   } else {
     return false;
   }
+}
+
+void Message::write(EventTarget::Input *input) {
+  input->input(MessageStart::make(m_head));
+  if (m_body && !m_body->empty()) input->input(m_body);
+  input->input(MessageEnd::make(m_tail, m_payload));
+}
+
+//
+// MessageReader
+//
+
+void MessageReader::reset() {
+  m_start = nullptr;
+  m_buffer.clear();
+}
+
+auto MessageReader::read(Event *evt) -> Message* {
+  if (auto start = evt->as<MessageStart>()) {
+    if (!m_start) {
+      m_start = start;
+    }
+  } else if (auto data = evt->as<Data>()) {
+    if (m_start) {
+      m_buffer.push(*data);
+    }
+  } else if (evt->is_end()) {
+    if (m_start) {
+      auto head = m_start->head();
+      auto body = Data::make(std::move(m_buffer));
+      auto end = evt->as<MessageEnd>();
+      auto msg = end ?
+        Message::make(head, body, end->tail(), end->payload()) :
+        Message::make(head, body);
+      msg->retain();
+      m_start = nullptr;
+      return msg;
+    }
+  }
+  return nullptr;
+}
+
+auto MessageReader::filter(Event *evt, EventTarget::Input *out) -> MessageStart* {
+  if (auto start = evt->as<MessageStart>()) {
+    if (!m_start) {
+      m_start = start;
+      if (out) out->input(evt);
+    }
+  } else if (evt->is<Data>()) {
+    if (m_start) {
+      if (out) out->input(evt);
+    }
+  } else if (evt->is_end()) {
+    if (m_start) {
+      if (out) out->input(evt);
+      return m_start.release();
+    }
+  }
+  return nullptr;
 }
 
 } // namespace pipy

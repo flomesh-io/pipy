@@ -1521,7 +1521,7 @@ auto Mux::Session::open_stream(Muxer *muxer) -> EventFunction* {
   if (m_http2_muxer) {
     return m_http2_muxer->stream();
   } else {
-    return StreamQueue::open_stream(muxer);
+    return Muxer::Queue::open_stream(muxer);
   }
 }
 
@@ -1529,12 +1529,12 @@ void Mux::Session::close_stream(EventFunction *stream) {
   if (m_http2_muxer) {
     m_http2_muxer->close(stream);
   } else {
-    StreamQueue::close_stream(stream);
+    Muxer::Queue::close_stream(stream);
   }
 }
 
 void Mux::Session::close() {
-  StreamQueue::reset();
+  Muxer::Queue::reset();
   m_request_queue.reset();
   if (m_http2_muxer) {
     InputContext ic;
@@ -1555,7 +1555,7 @@ void Mux::Session::on_decode_response(http::ResponseHead *head) {
   if (head->status() == 100) {
     if (m_request_queue.head()) {
       Decoder::set_bodiless(true);
-      StreamQueue::increase_queue_count();
+      Muxer::Queue::increase_queue_count();
     }
   } else if (auto *req = m_request_queue.shift()) {
     Decoder::set_bodiless(req->is_bodiless());
@@ -1566,7 +1566,7 @@ void Mux::Session::on_decode_response(http::ResponseHead *head) {
 
 void Mux::Session::on_decode_tunnel() {
   Encoder::set_tunnel(true);
-  StreamQueue::dedicate();
+  Muxer::Queue::dedicate();
 }
 
 void Mux::Session::on_decode_error()
@@ -1604,10 +1604,10 @@ void Mux::Session::select_protocol() {
       Log::error("[muxHTTP] invalid HTTP version: %d", m_version_selected);
       m_version_selected = 1;
     }
-    StreamQueue::chain(Encoder::input());
+    Muxer::Queue::chain(Encoder::input());
     Encoder::chain(MuxBase::Session::input());
     MuxBase::Session::chain(Decoder::input());
-    Decoder::chain(StreamQueue::reply());
+    Decoder::chain(Muxer::Queue::reply());
     Encoder::set_buffer_size(m_options.buffer_size);
     break;
   }

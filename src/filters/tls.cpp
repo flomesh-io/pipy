@@ -384,6 +384,11 @@ void TLSSession::handshake_done() {
     SSL_get0_alpn_selected(m_ssl, &str, &len);
     if (str) arg.set(pjs::Str::make((const char *)str, len));
     (*m_handshake)(ctx, 1, &arg, ret);
+    if (m_is_server) {
+      output(Data::make());
+    } else {
+      forward(Data::make());
+    }
   }
 }
 
