@@ -1495,13 +1495,13 @@ auto Mux::on_new_cluster(pjs::Object *options) -> MuxBase::SessionCluster* {
   if (options) {
     try {
       Options opts(options);
-      return new SessionCluster(this, opts);
+      return new SessionCluster(opts);
     } catch (std::runtime_error &err) {
       Filter::error(err.what());
       return nullptr;
     }
   } else {
-    return new SessionCluster(this, m_options);
+    return new SessionCluster(m_options);
   }
 }
 
@@ -1517,11 +1517,11 @@ void Mux::Session::open() {
   select_protocol();
 }
 
-auto Mux::Session::open_stream() -> EventFunction* {
+auto Mux::Session::open_stream(Muxer *muxer) -> EventFunction* {
   if (m_http2_muxer) {
     return m_http2_muxer->stream();
   } else {
-    return StreamQueue::open_stream();
+    return StreamQueue::open_stream(muxer);
   }
 }
 
@@ -1620,20 +1620,6 @@ void Mux::Session::upgrade_http2() {
     m_http2_muxer = new HTTP2Muxer(m_options);
     m_http2_muxer->open(static_cast<MuxBase::Session*>(this));
   }
-}
-
-//
-// Mux::SessionCluster
-//
-
-Mux::SessionCluster::SessionCluster(Mux *mux, const Options &options)
-  : pjs::Pooled<SessionCluster, MuxBase::SessionCluster>(mux, options)
-  , m_options(options)
-{
-}
-
-auto Mux::SessionCluster::session() -> MuxBase::Session* {
-  return new Session(m_options);
 }
 
 //

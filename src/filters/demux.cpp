@@ -245,79 +245,13 @@ void QueueDemuxer::Stream::on_reply(Event *evt) {
 }
 
 //
-// DemuxQueue::Options
+// Demux::Options
 //
 
-DemuxQueue::Options::Options(pjs::Object *options) {
+Demux::Options::Options(pjs::Object *options) {
   Value(options, "isOneWay")
     .get(is_one_way)
     .check_nullable();
-}
-
-//
-// DemuxQueue
-//
-
-DemuxQueue::DemuxQueue()
-{
-}
-
-DemuxQueue::DemuxQueue(const Options &options)
-  : m_options(options)
-{
-}
-
-DemuxQueue::DemuxQueue(const DemuxQueue &r)
-  : Filter(r)
-  , m_options(r.m_options)
-{
-}
-
-DemuxQueue::~DemuxQueue()
-{
-}
-
-void DemuxQueue::dump(Dump &d) {
-  Filter::dump(d);
-  d.name = "demuxQueue";
-  d.sub_type = Dump::DEMUX;
-}
-
-auto DemuxQueue::clone() -> Filter* {
-  return new DemuxQueue(*this);
-}
-
-void DemuxQueue::chain() {
-  Filter::chain();
-  QueueDemuxer::chain(Filter::output());
-}
-
-void DemuxQueue::reset() {
-  Filter::reset();
-  QueueDemuxer::reset();
-}
-
-void DemuxQueue::process(Event *evt) {
-  Filter::output(evt, QueueDemuxer::input());
-}
-
-void DemuxQueue::shutdown() {
-  Filter::shutdown();
-  QueueDemuxer::shutdown();
-}
-
-auto DemuxQueue::on_new_sub_pipeline(Input *chain_to) -> Pipeline* {
-  return sub_pipeline(0, true, chain_to);
-}
-
-bool DemuxQueue::on_request_start(MessageStart *start) {
-  if (auto *f = m_options.is_one_way.get()) {
-    pjs::Value arg(start), ret;
-    if (Filter::callback(f, 1, &arg, ret)) {
-      return !ret.to_boolean();
-    }
-  }
-  return true;
 }
 
 //
@@ -328,8 +262,14 @@ Demux::Demux()
 {
 }
 
+Demux::Demux(const Options &options)
+  : m_options(options)
+{
+}
+
 Demux::Demux(const Demux &r)
   : Filter(r)
+  , m_options(r.m_options)
 {
 }
 
@@ -341,37 +281,44 @@ void Demux::dump(Dump &d) {
   Filter::dump(d);
   d.name = "demux";
   d.sub_type = Dump::DEMUX;
-  d.out_type = Dump::NO_OUTPUT;
 }
 
 auto Demux::clone() -> Filter* {
   return new Demux(*this);
 }
 
+void Demux::chain() {
+  Filter::chain();
+  QueueDemuxer::chain(Filter::output());
+}
+
 void Demux::reset() {
   Filter::reset();
-  m_pipeline = nullptr;
+  QueueDemuxer::reset();
 }
 
 void Demux::process(Event *evt) {
-  if (evt->is<MessageStart>()) {
-    if (!m_pipeline) {
-      m_pipeline = sub_pipeline(0, true, nullptr);
-      m_pipeline->input()->input(evt);
-    }
+  Filter::output(evt, QueueDemuxer::input());
+  if (evt->is<StreamEnd>()) Filter::output(evt);
+}
 
-  } else if (evt->is<Data>()) {
-    if (m_pipeline) {
-      m_pipeline->input()->input(evt);
-    }
+void Demux::shutdown() {
+  Filter::shutdown();
+  QueueDemuxer::shutdown();
+}
 
-  } else if (evt->is<MessageEnd>()) {
-    if (m_pipeline) {
-      m_pipeline->input()->input(evt);
-      Pipeline::auto_release(m_pipeline);
-      m_pipeline = nullptr;
+auto Demux::on_new_sub_pipeline(Input *chain_to) -> Pipeline* {
+  return sub_pipeline(0, true, chain_to);
+}
+
+bool Demux::on_request_start(MessageStart *start) {
+  if (auto *f = m_options.is_one_way.get()) {
+    pjs::Value arg(start), ret;
+    if (Filter::callback(f, 1, &arg, ret)) {
+      return !ret.to_boolean();
     }
   }
+  return true;
 }
 
 } // namespace pipy

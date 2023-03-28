@@ -199,7 +199,6 @@ add_executable(pipy
   src/filters/link.cpp
   src/filters/link-input.cpp
   src/filters/link-output.cpp
-  src/filters/merge.cpp
   src/filters/mime.cpp
   src/filters/mqtt.cpp
   src/filters/mux.cpp

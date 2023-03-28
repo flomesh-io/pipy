@@ -456,7 +456,7 @@ private:
     ~Session();
 
     virtual void open() override;
-    virtual auto open_stream() -> EventFunction* override;
+    virtual auto open_stream(Muxer *muxer) -> EventFunction* override;
     virtual void close_stream(EventFunction *stream) override;
     virtual void close() override;
     virtual void on_encode_request(pjs::Object *head) override;
@@ -481,9 +481,11 @@ private:
   //
 
   class SessionCluster : public pjs::Pooled<SessionCluster, MuxBase::SessionCluster> {
-    SessionCluster(Mux *mux, const Options &options);
+    SessionCluster(const Options &options)
+      : pjs::Pooled<SessionCluster, MuxBase::SessionCluster>(options)
+      , m_options(options) {}
 
-    virtual auto session() -> MuxBase::Session* override;
+    virtual auto session() -> MuxBase::Session* override { return new Session(m_options); }
     virtual void free() override { delete this; }
 
     Options m_options;

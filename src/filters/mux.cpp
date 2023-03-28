@@ -55,18 +55,8 @@ Muxer::Options::Options(pjs::Object *options) {
 //
 // Muxer
 //
-// - On arrival of the very first event:
-//     1. Call the session selector provided by user to get a session key
-//     2. Allocate a Session with the requested session key
-// - On arrival of messages:
-//     1. Create a Stream from the selected Session if haven't yet and pass the first message to it
-//     2. Buffer up all following messages if the current Stream hasn't outputted StreamEnd yet
-// - On arrival of a StreamEnd from the current Stream:
-//     1. Close the current Stream
-//     2. Create a new Stream and pass the next message to it if there is one in the buffer
-// - On reset
-//     1. Close the current Stream if any
-//     2. Free the selected Session
+// Manages one single stream (as EventFunction) sharing a specific Session
+// from the SessionPool according to the session key.
 //
 
 Muxer::Muxer()
@@ -121,7 +111,7 @@ void Muxer::open_stream(EventTarget::Input *output) {
       return;
     }
 
-    auto s = m_session->open_stream();
+    auto s = m_session->open_stream(this);
     s->chain(output);
     m_stream = s;
   }
@@ -228,7 +218,7 @@ void Muxer::Session::on_reply(Event *evt) {
 // This is the container for all Sessions with the same session key.
 //
 
-Muxer::SessionCluster::SessionCluster(Muxer *mux, const Options &options) {
+Muxer::SessionCluster::SessionCluster(const Options &options) {
   m_max_idle = options.max_idle;
   m_max_queue = options.max_queue;
   m_max_messages = options.max_messages;
@@ -433,8 +423,8 @@ void Muxer::StreamQueue::reset() {
   m_dedicated = false;
 }
 
-auto Muxer::StreamQueue::open_stream() -> EventFunction* {
-  auto s = new Stream(this);
+auto Muxer::StreamQueue::open_stream(Muxer *muxer) -> EventFunction* {
+  auto s = new Stream(muxer, this);
   s->retain();
   return s;
 }
@@ -609,119 +599,15 @@ auto MuxBase::on_new_pipeline(EventTarget::Input *output, pjs::Value args[2]) ->
 }
 
 //
-// MuxQueue::Options
+// Mux::Options
 //
 
-MuxQueue::Options::Options(pjs::Object *options)
+Mux::Options::Options(pjs::Object *options)
   : MuxBase::Options(options)
 {
   Value(options, "isOneWay")
     .get(is_one_way)
     .check_nullable();
-}
-
-//
-// MuxQueue
-//
-
-MuxQueue::MuxQueue()
-{
-}
-
-MuxQueue::MuxQueue(pjs::Function *session_selector)
-  : MuxBase(session_selector)
-{
-}
-
-MuxQueue::MuxQueue(pjs::Function *session_selector, const Options &options)
-  : MuxBase(session_selector)
-  , m_options(options)
-{
-}
-
-MuxQueue::MuxQueue(pjs::Function *session_selector, pjs::Function *options)
-  : MuxBase(session_selector, options)
-{
-}
-
-MuxQueue::MuxQueue(const MuxQueue &r)
-  : MuxBase(r)
-  , m_options(r.m_options)
-{
-}
-
-MuxQueue::~MuxQueue() {
-}
-
-void MuxQueue::dump(Dump &d) {
-  Filter::dump(d);
-  d.name = "muxQueue";
-  d.sub_type = Dump::MUX;
-}
-
-auto MuxQueue::clone() -> Filter* {
-  return new MuxQueue(*this);
-}
-
-void MuxQueue::reset() {
-  MuxBase::reset();
-  m_started = false;
-}
-
-void MuxQueue::process(Event *evt) {
-  MuxBase::process(evt);
-
-  if (auto *f = m_options.is_one_way.get()) {
-    if (!m_started) {
-      if (auto *start = evt->as<MessageStart>()) {
-        if (auto *s = MuxBase::stream()) {
-          pjs::Value arg(start), ret;
-          if (Filter::callback(f, 1, &arg, ret)) {
-            if (ret.to_boolean()) {
-              auto *session = static_cast<Session*>(MuxBase::session());
-              static_cast<StreamQueue*>(session)->set_one_way(s);
-            }
-          }
-        }
-        m_started = true;
-      }
-    }
-  }
-}
-
-auto MuxQueue::on_new_cluster(pjs::Object *options) -> MuxBase::SessionCluster* {
-  if (options) {
-    try {
-      Options opts(options);
-      return new SessionCluster(this, opts);
-    } catch (std::runtime_error &err) {
-      Filter::error(err.what());
-      return nullptr;
-    }
-  } else {
-    return new SessionCluster(this, m_options);
-  }
-}
-
-//
-// MuxQueue::Session
-//
-
-void MuxQueue::Session::open() {
-  StreamQueue::chain(MuxBase::Session::input());
-  MuxBase::Session::chain(StreamQueue::reply());
-}
-
-auto MuxQueue::Session::open_stream() -> EventFunction* {
-  return StreamQueue::open_stream();
-}
-
-void MuxQueue::Session::close_stream(EventFunction *stream) {
-  return StreamQueue::close_stream(stream);
-}
-
-void MuxQueue::Session::close() {
-  StreamQueue::reset();
 }
 
 //
@@ -754,65 +640,80 @@ Mux::Mux(const Mux &r)
 {
 }
 
-Mux::~Mux()
-{
+Mux::~Mux() {
 }
 
 void Mux::dump(Dump &d) {
   Filter::dump(d);
   d.name = "mux";
   d.sub_type = Dump::MUX;
-  d.out_type = Dump::OUTPUT_FROM_SELF;
 }
 
 auto Mux::clone() -> Filter* {
   return new Mux(*this);
 }
 
+void Mux::reset() {
+  MuxBase::reset();
+  m_started = false;
+}
+
 void Mux::process(Event *evt) {
   MuxBase::process(evt);
-  output(evt);
+
+  if (auto *f = m_options.is_one_way.get()) {
+    if (!m_started) {
+      if (auto *start = evt->as<MessageStart>()) {
+        if (auto *s = MuxBase::stream()) {
+          pjs::Value arg(start), ret;
+          if (Filter::callback(f, 1, &arg, ret)) {
+            if (ret.to_boolean()) {
+              auto *session = static_cast<Session*>(MuxBase::session());
+              static_cast<StreamQueue*>(session)->set_one_way(s);
+            }
+          }
+        }
+        m_started = true;
+      }
+    }
+  }
+
+  if (evt->is<StreamEnd>()) Filter::output(evt);
 }
 
 auto Mux::on_new_cluster(pjs::Object *options) -> MuxBase::SessionCluster* {
   if (options) {
     try {
       Options opts(options);
-      return new SessionCluster(this, opts);
+      return new SessionCluster(opts);
     } catch (std::runtime_error &err) {
       Filter::error(err.what());
       return nullptr;
     }
   } else {
-    return new SessionCluster(this, m_options);
+    return new SessionCluster(m_options);
   }
 }
 
 //
-// Mux::Stream
+// Mux::Session
 //
 
-void Mux::Stream::on_event(Event *evt) {
-  if (auto start = evt->as<MessageStart>()) {
-    if (!m_start) {
-      m_start = start;
-    }
+void Mux::Session::open() {
+  StreamQueue::chain(MuxBase::Session::input());
+  MuxBase::Session::chain(StreamQueue::reply());
+}
 
-  } else if (auto data = evt->as<Data>()) {
-    if (m_start) {
-      m_buffer.push(*data);
-    }
+auto Mux::Session::open_stream(Muxer *muxer) -> EventFunction* {
+  return StreamQueue::open_stream(muxer);
+}
 
-  } else if (evt->is<MessageEnd>() || evt->is<StreamEnd>()) {
-    if (m_start) {
-      auto inp = m_output.get();
-      inp->input(m_start);
-      if (!m_buffer.empty()) {
-        inp->input(Data::make(std::move(m_buffer)));
-      }
-      inp->input(evt->is<StreamEnd>() ? MessageEnd::make() : evt);
-    }
-  }
+void Mux::Session::close_stream(EventFunction *stream) {
+  return StreamQueue::close_stream(stream);
+}
+
+void Mux::Session::close() {
+  StreamQueue::reset();
 }
 
 } // namespace pipy

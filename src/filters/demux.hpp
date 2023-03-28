@@ -105,10 +105,10 @@ private:
 };
 
 //
-// DemuxQueue
+// Demux
 //
 
-class DemuxQueue : public Filter, public QueueDemuxer {
+class Demux : public Filter, public QueueDemuxer {
 public:
   struct Options : public pipy::Options {
     pjs::Ref<pjs::Function> is_one_way;
@@ -116,12 +116,12 @@ public:
     Options(pjs::Object *options);
   };
 
-  DemuxQueue();
-  DemuxQueue(const Options &options);
+  Demux();
+  Demux(const Options &options);
 
 private:
-  DemuxQueue(const DemuxQueue &r);
-  ~DemuxQueue();
+  Demux(const Demux &r);
+  ~Demux();
 
   virtual auto clone() -> Filter* override;
   virtual void chain() override;
@@ -134,29 +134,6 @@ private:
   virtual bool on_request_start(MessageStart *start) override;
 
   Options m_options;
-};
-
-//
-// Demux
-//
-
-class Demux :
-  public Filter,
-  public EventSource
-{
-public:
-  Demux();
-
-private:
-  Demux(const Demux &r);
-  ~Demux();
-
-  virtual auto clone() -> Filter* override;
-  virtual void reset() override;
-  virtual void process(Event *evt) override;
-  virtual void dump(Dump &d) override;
-
-  pjs::Ref<Pipeline> m_pipeline;
 };
 
 } // namespace pipy

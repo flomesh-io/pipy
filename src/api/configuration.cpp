@@ -55,7 +55,6 @@
 #include "filters/link.hpp"
 #include "filters/link-input.hpp"
 #include "filters/link-output.hpp"
-#include "filters/merge.hpp"
 #include "filters/mime.hpp"
 #include "filters/mqtt.hpp"
 #include "filters/mux.hpp"
@@ -210,12 +209,8 @@ void FilterConfigurator::deframe(pjs::Object *states) {
   append_filter(new Deframe(states));
 }
 
-void FilterConfigurator::demux() {
-  require_sub_pipeline(append_filter(new Demux()));
-}
-
-void FilterConfigurator::demux_queue(pjs::Object *options) {
-  require_sub_pipeline(append_filter(new DemuxQueue(options)));
+void FilterConfigurator::demux(pjs::Object *options) {
+  require_sub_pipeline(append_filter(new Demux(options)));
 }
 
 void FilterConfigurator::demux_http(pjs::Object *options) {
@@ -311,23 +306,11 @@ void FilterConfigurator::link(size_t count, pjs::Str **layouts, pjs::Function **
   append_filter(filter);
 }
 
-void FilterConfigurator::merge(pjs::Function *session_selector, pjs::Object *options) {
-  require_sub_pipeline(append_filter(new Merge(session_selector, options)));
-}
-
 void FilterConfigurator::mux(pjs::Function *session_selector, pjs::Object *options) {
   if (options && options->is_function()) {
     require_sub_pipeline(append_filter(new Mux(session_selector, options->as<pjs::Function>())));
   } else {
     require_sub_pipeline(append_filter(new Mux(session_selector, options)));
-  }
-}
-
-void FilterConfigurator::mux_queue(pjs::Function *session_selector, pjs::Object *options) {
-  if (options && options->is_function()) {
-    require_sub_pipeline(append_filter(new MuxQueue(session_selector, options->as<pjs::Function>())));
-  } else {
-    require_sub_pipeline(append_filter(new MuxQueue(session_selector, options)));
   }
 }
 
@@ -1288,25 +1271,12 @@ template<> void ClassDef<FilterConfigurator>::init() {
   method("demux", [](Context &ctx, Object *thiz, Value &result) {
     try {
       Str *layout = nullptr;
-      if (!ctx.arguments(0, &layout)) return;
-      thiz->as<FilterConfigurator>()->demux();
-      if (layout) thiz->as<FilterConfigurator>()->to(layout);
-      result.set(thiz);
-    } catch (std::runtime_error &err) {
-      ctx.error(err);
-    }
-  });
-
-  // FilterConfigurator.demuxQueue
-  method("demuxQueue", [](Context &ctx, Object *thiz, Value &result) {
-    try {
-      Str *layout = nullptr;
       pjs::Object *options = nullptr;
       if (ctx.try_arguments(1, &layout, &options)) {
-        thiz->as<FilterConfigurator>()->demux_queue(options);
+        thiz->as<FilterConfigurator>()->demux(options);
         thiz->as<FilterConfigurator>()->to(layout);
       } else if (ctx.arguments(0, &options)) {
-        thiz->as<FilterConfigurator>()->demux_queue(options);
+        thiz->as<FilterConfigurator>()->demux(options);
       }
       result.set(thiz);
     } catch (std::runtime_error &err) {
@@ -1651,32 +1621,6 @@ template<> void ClassDef<FilterConfigurator>::init() {
     }
   });
 
-  // FilterConfigurator.merge
-  method("merge", [](Context &ctx, Object *thiz, Value &result) {
-    try {
-      Str *layout;
-      Function *session_selector = nullptr;
-      Object *options = nullptr;
-      if (
-        ctx.try_arguments(1, &layout, &session_selector, &options) ||
-        ctx.try_arguments(1, &layout, &options)
-      ) {
-        thiz->as<FilterConfigurator>()->merge(session_selector, options);
-        thiz->as<FilterConfigurator>()->to(layout);
-      } else if (
-        ctx.try_arguments(0, &session_selector, &options) ||
-        ctx.try_arguments(0, &options)
-      ) {
-        thiz->as<FilterConfigurator>()->merge(session_selector, options);
-      } else {
-        ctx.error_argument_type(0, "a function");
-      }
-      result.set(thiz);
-    } catch (std::runtime_error &err) {
-      ctx.error(err);
-    }
-  });
-
   // FilterConfigurator.mux
   method("mux", [](Context &ctx, Object *thiz, Value &result) {
     try {
@@ -1694,32 +1638,6 @@ template<> void ClassDef<FilterConfigurator>::init() {
         ctx.try_arguments(0, &options)
       ) {
         thiz->as<FilterConfigurator>()->mux(session_selector, options);
-      } else {
-        ctx.error_argument_type(0, "a function");
-      }
-      result.set(thiz);
-    } catch (std::runtime_error &err) {
-      ctx.error(err);
-    }
-  });
-
-  // FilterConfigurator.muxQueue
-  method("muxQueue", [](Context &ctx, Object *thiz, Value &result) {
-    try {
-      Str *layout;
-      Function *session_selector = nullptr;
-      Object *options = nullptr;
-      if (
-        ctx.try_arguments(1, &layout, &session_selector, &options) ||
-        ctx.try_arguments(1, &layout, &options)
-      ) {
-        thiz->as<FilterConfigurator>()->mux_queue(session_selector, options);
-        thiz->as<FilterConfigurator>()->to(layout);
-      } else if (
-        ctx.try_arguments(0, &session_selector, &options) ||
-        ctx.try_arguments(0, &options)
-      ) {
-        thiz->as<FilterConfigurator>()->mux_queue(session_selector, options);
       } else {
         ctx.error_argument_type(0, "a function");
       }

@@ -69,7 +69,6 @@ protected:
   void shutdown();
   void open_stream(EventTarget::Input *output);
   void write_stream(Event *evt);
-  void close_stream();
 
   virtual bool on_select_session(pjs::Value &key) = 0;
   virtual auto on_new_cluster() -> SessionCluster* = 0;
@@ -102,7 +101,7 @@ protected:
   {
   protected:
     virtual void open() = 0;
-    virtual auto open_stream() -> EventFunction* = 0;
+    virtual auto open_stream(Muxer *muxer) -> EventFunction* = 0;
     virtual void close_stream(EventFunction *stream) = 0;
     virtual void close() = 0;
 
@@ -148,7 +147,7 @@ protected:
     public List<SessionCluster>::Item
   {
   protected:
-    SessionCluster(Muxer *mux, const Options &options);
+    SessionCluster(const Options &options);
     virtual auto session() -> Session* = 0;
     virtual void free() = 0;
 
@@ -206,7 +205,7 @@ protected:
   class StreamQueue : public EventSource {
   public:
     void reset();
-    auto open_stream() -> EventFunction*;
+    auto open_stream(Muxer *muxer) -> EventFunction*;
     void close_stream(EventFunction *stream);
     void set_one_way(EventFunction *stream);
     void increase_queue_count();
@@ -232,12 +231,14 @@ protected:
       public EventFunction
     {
     protected:
-      Stream(StreamQueue *queue)
-        : m_queue(queue) {}
+      Stream(Muxer *muxer, StreamQueue *queue)
+        : m_muxer(muxer)
+        , m_queue(queue) {}
 
       virtual void on_event(Event *evt) override;
 
     private:
+      Muxer* m_muxer;
       StreamQueue* m_queue;
       pjs::Ref<MessageStart> m_start;
       Data m_buffer;
@@ -277,10 +278,10 @@ protected:
 };
 
 //
-// MuxQueue
+// Mux
 //
 
-class MuxQueue : public MuxBase {
+class Mux : public MuxBase {
 public:
   struct Options : public MuxBase::Options {
     pjs::Ref<pjs::Function> is_one_way;
@@ -288,14 +289,14 @@ public:
     Options(pjs::Object *options);
   };
 
-  MuxQueue();
-  MuxQueue(pjs::Function *session_selector);
-  MuxQueue(pjs::Function *session_selector, const Options &options);
-  MuxQueue(pjs::Function *session_selector, pjs::Function *options);
+  Mux();
+  Mux(pjs::Function *session_selector);
+  Mux(pjs::Function *session_selector, const Options &options);
+  Mux(pjs::Function *session_selector, pjs::Function *options);
 
 protected:
-  MuxQueue(const MuxQueue &r);
-  ~MuxQueue();
+  Mux(const Mux &r);
+  ~Mux();
 
   virtual auto clone() -> Filter* override;
   virtual void dump(Dump &d) override;
@@ -305,7 +306,7 @@ protected:
   virtual auto on_new_cluster(pjs::Object *options) -> MuxBase::SessionCluster* override;
 
   //
-  // MuxQueue::Session
+  // Mux::Session
   //
 
   class Session :
@@ -313,63 +314,11 @@ protected:
     public StreamQueue
   {
     virtual void open() override;
-    virtual auto open_stream() -> EventFunction* override;
+    virtual auto open_stream(Muxer *muxer) -> EventFunction* override;
     virtual void close_stream(EventFunction *stream) override;
     virtual void close() override;
 
-    friend class MuxQueue;
-  };
-
-  //
-  // MuxQueue::SessionCluster
-  //
-
-  class SessionCluster : public pjs::Pooled<SessionCluster, MuxBase::SessionCluster> {
-    using pjs::Pooled<SessionCluster, MuxBase::SessionCluster>::Pooled;
-
-    virtual auto session() -> Session* override { return new Session(); }
-    virtual void free() override { delete this; }
-
-    friend class MuxQueue;
-  };
-
-private:
-  Options m_options;
-  bool m_started = false;
-};
-
-//
-// Mux
-//
-
-class Mux : public MuxBase {
-public:
-  Mux();
-  Mux(pjs::Function *session_selector);
-  Mux(pjs::Function *session_selector, const Options &options);
-  Mux(pjs::Function *session_selector, pjs::Function *options);
-
-private:
-  Mux(const Mux &r);
-  ~Mux();
-
-  virtual auto clone() -> Filter* override;
-  virtual void process(Event *evt) override;
-  virtual void dump(Dump &d) override;
-
-  virtual auto on_new_cluster(pjs::Object *options) -> MuxBase::SessionCluster* override;
-
-  //
-  // Mux::Session
-  //
-
-  class Session : public pjs::Pooled<Session, MuxBase::Session> {
-    virtual void open() override {}
-    virtual auto open_stream() -> EventFunction* override { return new Stream(this); }
-    virtual void close_stream(EventFunction *stream) override { delete static_cast<Stream*>(stream); }
-    virtual void close() override {}
-
-    friend class Stream;
+    friend class Mux;
   };
 
   //
@@ -379,33 +328,15 @@ private:
   class SessionCluster : public pjs::Pooled<SessionCluster, MuxBase::SessionCluster> {
     using pjs::Pooled<SessionCluster, MuxBase::SessionCluster>::Pooled;
 
-    virtual auto session() -> MuxBase::Session* override { return new Session(); }
+    virtual auto session() -> Session* override { return new Session(); }
     virtual void free() override { delete this; }
 
     friend class Mux;
   };
 
-  //
-  // Mux::Stream
-  //
-
-  class Stream :
-    public pjs::Pooled<Stream>,
-    public EventFunction
-  {
-    Stream(Session *session)
-      : m_output(session->input()) {}
-
-    virtual void on_event(Event *evt) override;
-
-    pjs::Ref<Input> m_output;
-    pjs::Ref<MessageStart> m_start;
-    Data m_buffer;
-
-    friend class Session;
-  };
-
+private:
   Options m_options;
+  bool m_started = false;
 };
 
 } // namespace pipy
