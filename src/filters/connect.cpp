@@ -80,6 +80,9 @@ Connect::Options::Options(pjs::Object *options) {
   Value(options, "keepAlive")
     .get(keep_alive)
     .check_nullable();
+  Value(options, "noDelay")
+    .get(no_delay)
+    .check_nullable();
 }
 
 //

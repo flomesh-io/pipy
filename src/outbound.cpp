@@ -396,6 +396,7 @@ void OutboundTCP::connect(const asio::ip::tcp::endpoint &target) {
           m_connected = true;
           m_connecting = false;
           m_socket.set_option(asio::socket_base::keep_alive(m_options.keep_alive));
+          m_socket.set_option(tcp::no_delay(m_options.no_delay));
           state(State::connected);
           receive();
           pump();

@@ -58,6 +58,7 @@ public:
     double write_timeout = 0;
     double idle_timeout = 60;
     bool keep_alive = true;
+    bool no_delay = true;
     bool transparent = false;
     bool masquerade = false;
     bool peer_stats = false;

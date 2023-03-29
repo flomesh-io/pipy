@@ -1581,9 +1581,9 @@ void Endpoint::debug_dump_i() const {
   std::cerr << Log::format_elapsed_time();
   std::cerr << " http2 ";
   if (m_is_server_side) {
-    std::cerr << ">> [ep #" << std::setw(3) << m_id << "]   ";
+    std::cerr << ">> [ep #" << std::left << std::setw(3) << m_id << "]   ";
   } else {
-    std::cerr << "   [ep #" << std::setw(3) << m_id << "] <<";
+    std::cerr << "   [ep #" << std::left << std::setw(3) << m_id << "] <<";
   }
 #endif
 }
@@ -1593,9 +1593,9 @@ void Endpoint::debug_dump_o() const {
   std::cerr << Log::format_elapsed_time();
   std::cerr << " http2 ";
   if (m_is_server_side) {
-    std::cerr << "<< [ep #" << std::setw(3) << m_id << "]   ";
+    std::cerr << "<< [ep #" << std::left << std::setw(3) << m_id << "]   ";
   } else {
-    std::cerr << "   [ep #" << std::setw(3) << m_id << "] >>";
+    std::cerr << "   [ep #" << std::left << std::setw(3) << m_id << "] >>";
   }
 #endif
 }
@@ -1844,10 +1844,10 @@ void Endpoint::StreamBase::on_event(Event *evt) {
   } else if (auto data = evt->as<Data>()) {
     if (m_is_message_started && !data->empty()) {
       if (m_state == OPEN || m_state == HALF_CLOSED_REMOTE) {
+        m_send_buffer.push(*data);
         pump();
         set_pending(true);
         flush();
-        m_send_buffer.push(*data);
       }
     }
 

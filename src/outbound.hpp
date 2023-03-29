@@ -73,6 +73,7 @@ public:
     double    write_timeout = 0;
     double    idle_timeout = 60;
     bool      keep_alive = true;
+    bool      no_delay = true;
 
     std::function<void(Outbound*)> on_state_changed;
   };

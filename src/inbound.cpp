@@ -238,6 +238,7 @@ void InboundTCP::accept(asio::ip::tcp::acceptor &acceptor) {
 
           if (m_listener && m_listener->pipeline_layout()) {
             m_socket.set_option(asio::socket_base::keep_alive(m_options.keep_alive));
+            m_socket.set_option(tcp::no_delay(m_options.no_delay));
             InputContext ic(this);
             start();
           }
