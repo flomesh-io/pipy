@@ -1284,6 +1284,23 @@ template<> void ClassDef<FilterConfigurator>::init() {
     }
   });
 
+  // FilterConfigurator.demuxQueue
+  method("demuxQueue", [](Context &ctx, Object *thiz, Value &result) {
+    try {
+      Str *layout = nullptr;
+      pjs::Object *options = nullptr;
+      if (ctx.try_arguments(1, &layout, &options)) {
+        thiz->as<FilterConfigurator>()->demux(options);
+        thiz->as<FilterConfigurator>()->to(layout);
+      } else if (ctx.arguments(0, &options)) {
+        thiz->as<FilterConfigurator>()->demux(options);
+      }
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
   // FilterConfigurator.demuxHTTP
   method("demuxHTTP", [](Context &ctx, Object *thiz, Value &result) {
     try {
@@ -1623,6 +1640,32 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.mux
   method("mux", [](Context &ctx, Object *thiz, Value &result) {
+    try {
+      Str *layout;
+      Function *session_selector = nullptr;
+      Object *options = nullptr;
+      if (
+        ctx.try_arguments(1, &layout, &session_selector, &options) ||
+        ctx.try_arguments(1, &layout, &options)
+      ) {
+        thiz->as<FilterConfigurator>()->mux(session_selector, options);
+        thiz->as<FilterConfigurator>()->to(layout);
+      } else if (
+        ctx.try_arguments(0, &session_selector, &options) ||
+        ctx.try_arguments(0, &options)
+      ) {
+        thiz->as<FilterConfigurator>()->mux(session_selector, options);
+      } else {
+        ctx.error_argument_type(0, "a function");
+      }
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // FilterConfigurator.muxQueue
+  method("muxQueue", [](Context &ctx, Object *thiz, Value &result) {
     try {
       Str *layout;
       Function *session_selector = nullptr;
