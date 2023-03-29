@@ -100,6 +100,39 @@ bool Log::is_enabled(Topic topic) {
   return (s_log_level <= DEBUG) && (s_log_topics & topic);
 }
 
+auto Log::format_elapsed_time() -> const char* {
+  thread_local static char s_buf[12];
+  format_elapsed_time(s_buf, sizeof(s_buf), true);
+  return s_buf;
+}
+
+auto Log::format_elapsed_time(char *buf, size_t len, bool fill) -> size_t {
+  thread_local static std::chrono::high_resolution_clock::time_point s_time;
+  thread_local static bool s_started = false;
+
+  auto t = std::chrono::high_resolution_clock::now();
+  auto d = s_started ? std::chrono::duration_cast<std::chrono::microseconds>(t - s_time).count() : 0;
+  auto p = 0;
+
+  s_time = t;
+  s_started = true;
+
+  if (d >= 1000000) {
+    p = std::snprintf(buf, len, "T+%.2fs", (double)d / 1000000);
+  } else if (d >= 1000) {
+    p = std::snprintf(buf, len, "T+%.2fms", (double)d / 1000);
+  } else {
+    p = std::snprintf(buf, len, "T+%d", (int)d);
+  }
+
+  if (fill) {
+    while (p + 1 < len) buf[p++] = ' ';
+  }
+
+  buf[p] = 0;
+  return p;
+}
+
 auto Log::format_header(Level level, char *buf, size_t len) -> size_t {
   auto now = std::chrono::system_clock::now().time_since_epoch();
   auto cnt = std::chrono::duration_cast<std::chrono::milliseconds>(now).count();

@@ -37,6 +37,7 @@
 
 #include <map>
 #include <vector>
+#include <iostream>
 
 namespace pipy {
 namespace http2 {
@@ -120,8 +121,9 @@ struct Frame {
   bool is_PADDED() const { return flags & BIT_PADDED; }
   bool is_PRIORITY() const { return flags & BIT_PRIORITY; }
 
-  auto decode_window_update(int &increment) -> ErrorCode;
+  auto decode_window_update(int &increment) const -> ErrorCode;
   void encode_window_update(int increment);
+  void debug_dump(std::ostream &out) const;
 };
 
 //
@@ -383,6 +385,7 @@ protected:
   virtual void on_delete_stream(StreamBase *stream) = 0;
 
 private:
+  uint32_t m_id;
   Options m_options;
   List<StreamBase> m_streams;
   List<StreamBase> m_streams_pending;
@@ -400,6 +403,8 @@ private:
   bool m_is_server_side;
   bool m_has_sent_preface = false;
   bool m_has_gone_away = false;
+
+  static std::atomic<uint32_t> s_endpoint_id;
 
 protected:
   void upgrade_request(http::RequestHead *head, const Data &body);
@@ -419,6 +424,13 @@ protected:
   void stream_error(int id, ErrorCode err);
   void connection_error(ErrorCode err);
   void end_all(StreamEnd *evt = nullptr);
+
+  void debug_dump_i() const;
+  void debug_dump_o() const;
+  void debug_dump_i(const Data &data) const;
+  void debug_dump_o(const Data &data) const;
+  void debug_dump_i(const Frame &frm) const;
+  void debug_dump_o(const Frame &frm) const;
 
   //
   // StreamBase

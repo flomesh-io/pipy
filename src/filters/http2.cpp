@@ -27,6 +27,12 @@
 #include "api/stats.hpp"
 #include "log.hpp"
 
+#define DEBUG_HTTP2 1
+
+#if DEBUG_HTTP2
+#include <iomanip>
+#endif
+
 namespace pipy {
 namespace http2 {
 
@@ -460,10 +466,10 @@ auto Settings::encode(uint8_t *data) const -> int {
 // Frame
 //
 
-auto Frame::decode_window_update(int &increment) -> ErrorCode {
+auto Frame::decode_window_update(int &increment) const -> ErrorCode {
   if (payload.size() != 4) return FRAME_SIZE_ERROR;
   uint8_t buf[4];
-  payload.shift(sizeof(buf), buf);
+  payload.to_bytes(buf);
   increment = (
     ((buf[0] & 0x7f) << 24) |
     ((buf[1] & 0xff) << 16) |
@@ -480,6 +486,62 @@ void Frame::encode_window_update(int increment) {
   buf[2] = 0xff & (increment >>  8);
   buf[3] = 0xff & (increment >>  0);
   payload.push(buf, sizeof(buf), &s_dp);
+}
+
+void Frame::debug_dump(std::ostream &out) const {
+#if DEBUG_HTTP2
+  switch (type) {
+    case DATA:          out << "DATA         "; break;
+    case HEADERS:       out << "HEADERS      "; break;
+    case PRIORITY:      out << "PRIORITY     "; break;
+    case RST_STREAM:    out << "RST_STREAM   "; break;
+    case SETTINGS:      out << "SETTINGS     "; break;
+    case PUSH_PROMISE:  out << "PUSH_PROMISE "; break;
+    case PING:          out << "PING         "; break;
+    case GOAWAY:        out << "GOAWAY       "; break;
+    case WINDOW_UPDATE: out << "WINDOW_UPDATE"; break;
+    case CONTINUATION:  out << "CONTINUATION "; break;
+  }
+  out << std::left << " stream " << std::setw(3) << stream_id;
+  if (type == SETTINGS || type == PING) {
+    out << " ack " << is_ACK();
+  } else {
+    out << " eos " << is_END_STREAM();
+  }
+  out << " eoh " << is_END_HEADERS();
+  out << " pad " << is_PADDED();
+  out << " pri " << is_PRIORITY();
+  switch (type) {
+    case DATA: {
+      out << " dat_siz " << payload.size();
+      break;
+    }
+    case SETTINGS: {
+      if (!is_ACK()) {
+        Settings settings;
+        int len = payload.size();
+        uint8_t buf[len];
+        payload.to_bytes(buf);
+        settings.decode(buf, len);
+        out << " enb_psh " << settings.enable_push;
+        out << " max_stm " << std::setw(3) << settings.max_concurrent_streams;
+        out << " max_frm " << std::setw(5) << settings.max_frame_size;
+        out << " max_hdr " << std::setw(5) << settings.max_header_list_size;
+        out << " tab_siz " << std::setw(5) << settings.header_table_size;
+        out << " win_siz " << std::setw(8) << settings.initial_window_size;
+        out << std::setw(0);
+      }
+      break;
+    }
+    case WINDOW_UPDATE: {
+      int inc = -1;
+      decode_window_update(inc);
+      out << " win_inc " << inc;
+      break;
+    }
+    default: break;
+  }
+#endif // DEBUG_HTTP2
 }
 
 //
@@ -1149,6 +1211,8 @@ auto HeaderEncoder::StaticTable::find(pjs::Str *name) -> const Entry* {
 // Endpoint
 //
 
+std::atomic<uint32_t> Endpoint::s_endpoint_id(0);
+
 thread_local bool Endpoint::s_metrics_initialized = false;
 thread_local int Endpoint::s_server_stream_count = 0;
 thread_local int Endpoint::s_client_stream_count = 0;
@@ -1163,7 +1227,8 @@ Endpoint::Options::Options(pjs::Object *options) {
 }
 
 Endpoint::Endpoint(bool is_server_side, const Options &options)
-  : m_options(options)
+  : m_id(s_endpoint_id.fetch_add(1, std::memory_order_relaxed))
+  , m_options(options)
   , m_header_decoder(m_settings)
   , m_is_server_side(is_server_side)
 {
@@ -1226,6 +1291,9 @@ void Endpoint::on_event(Event *evt) {
 
   if (auto data = evt->as<Data>()) {
     if (!data->empty()) {
+#if DEBUG_HTTP2
+      debug_dump_i(*data);
+#endif
       FrameDecoder::deframe(data);
     }
 
@@ -1241,6 +1309,9 @@ void Endpoint::on_flush() {
 }
 
 void Endpoint::on_deframe(Frame &frm) {
+#if DEBUG_HTTP2
+  debug_dump_i(frm);
+#endif
   if (m_header_decoder.started() && frm.type != Frame::CONTINUATION) {
     connection_error(PROTOCOL_ERROR);
   } else if (auto id = frm.stream_id) {
@@ -1384,6 +1455,9 @@ void Endpoint::send_window_updates() {
     frm.type = Frame::WINDOW_UPDATE;
     frm.flags = 0;
     frm.encode_window_update(m_recv_window_max - m_recv_window);
+#if DEBUG_HTTP2
+    debug_dump_o(frm);
+#endif
     FrameEncoder::frame(frm, m_output_buffer);
     m_recv_window = m_recv_window_max;
   }
@@ -1396,6 +1470,9 @@ void Endpoint::send_window_updates() {
       frm.type = Frame::WINDOW_UPDATE;
       frm.flags = 0;
       frm.encode_window_update(s->m_recv_window_max - s->m_recv_window);
+#if DEBUG_HTTP2
+      debug_dump_o(frm);
+#endif
       FrameEncoder::frame(frm, m_output_buffer);
       s->m_recv_window = s->m_recv_window_max;
     }
@@ -1421,11 +1498,18 @@ void Endpoint::frame(Frame &frm) {
     frm.type = Frame::SETTINGS;
     frm.flags = 0;
     frm.payload.push(buf, len, &s_dp);
+#if DEBUG_HTTP2
+    debug_dump_o(frm);
+#endif
     FrameEncoder::frame(frm, m_output_buffer);
   }
 
   // Send window updates
   send_window_updates();
+
+#if DEBUG_HTTP2
+  debug_dump_o(frm);
+#endif
 
   // Send the frame
   FrameEncoder::frame(frm, m_output_buffer);
@@ -1434,9 +1518,12 @@ void Endpoint::frame(Frame &frm) {
 
 void Endpoint::flush() {
   if (!m_output_buffer.empty()) {
-    auto *data = Data::make();
-    data->pack(m_output_buffer, &s_dp, 1);
-    on_output(data);
+    Data data;
+    data.pack(m_output_buffer, &s_dp, 1);
+#if DEBUG_HTTP2
+    debug_dump_o(data);
+#endif
+    on_output(Data::make(std::move(data)));
     m_output_buffer.clear();
   }
 }
@@ -1489,6 +1576,70 @@ void Endpoint::end_all(StreamEnd *evt) {
   );
 }
 
+void Endpoint::debug_dump_i() const {
+#if DEBUG_HTTP2
+  std::cerr << Log::format_elapsed_time();
+  std::cerr << " http2 ";
+  if (m_is_server_side) {
+    std::cerr << ">> [ep #" << std::setw(3) << m_id << "]   ";
+  } else {
+    std::cerr << "   [ep #" << std::setw(3) << m_id << "] <<";
+  }
+#endif
+}
+
+void Endpoint::debug_dump_o() const {
+#if DEBUG_HTTP2
+  std::cerr << Log::format_elapsed_time();
+  std::cerr << " http2 ";
+  if (m_is_server_side) {
+    std::cerr << "<< [ep #" << std::setw(3) << m_id << "]   ";
+  } else {
+    std::cerr << "   [ep #" << std::setw(3) << m_id << "] >>";
+  }
+#endif
+}
+
+void Endpoint::debug_dump_i(const Data &data) const {
+#if DEBUG_HTTP2
+  if (Log::is_enabled(Log::HTTP2)) {
+    debug_dump_i();
+    std::cerr << " | Recv " << data.size() << std::endl;
+  }
+#endif
+}
+
+void Endpoint::debug_dump_o(const Data &data) const {
+#if DEBUG_HTTP2
+  if (Log::is_enabled(Log::HTTP2)) {
+    debug_dump_o();
+    std::cerr << " | Send " << data.size() << std::endl;
+  }
+#endif
+}
+
+void Endpoint::debug_dump_i(const Frame &frm) const {
+#if DEBUG_HTTP2
+  if (Log::is_enabled(Log::HTTP2)) {
+    debug_dump_i();
+    std::cerr << " |   ";
+    frm.debug_dump(std::cerr);
+    std::cerr << std::endl;
+  }
+#endif
+}
+
+void Endpoint::debug_dump_o(const Frame &frm) const {
+#if DEBUG_HTTP2
+  if (Log::is_enabled(Log::HTTP2)) {
+    debug_dump_o();
+    std::cerr << " |   ";
+    frm.debug_dump(std::cerr);
+    std::cerr << std::endl;
+  }
+#endif
+}
+
 void Endpoint::init_metrics() {
   if (!s_metrics_initialized) {
     thread_local static pjs::ConstStr s_server("Server");
@@ -1513,6 +1664,7 @@ void Endpoint::init_metrics() {
     s_metrics_initialized = true;
   }
 }
+
 
 //
 // Endpoint::StreamBase
@@ -1692,10 +1844,10 @@ void Endpoint::StreamBase::on_event(Event *evt) {
   } else if (auto data = evt->as<Data>()) {
     if (m_is_message_started && !data->empty()) {
       if (m_state == OPEN || m_state == HALF_CLOSED_REMOTE) {
-        m_send_buffer.push(*data);
         pump();
         set_pending(true);
         flush();
+        m_send_buffer.push(*data);
       }
     }
 

@@ -29,6 +29,8 @@
 #include "utils.hpp"
 #include "log.hpp"
 
+#include <iostream>
+
 namespace pipy {
 
 using tcp = asio::ip::tcp;
@@ -460,8 +462,14 @@ void OutboundTCP::receive() {
               buffer->push(buf);
             }
           }
+
           m_metric_traffic_in->increase(buffer->size());
           s_metric_traffic_in->increase(buffer->size());
+
+          if (Log::is_enabled(Log::INPUT)) {
+            std::cerr << Log::format_elapsed_time() << " outbound recv " << buffer->size() << std::endl;
+          }
+
           output(buffer);
         }
 
@@ -521,6 +529,10 @@ void OutboundTCP::pump() {
       m_socket.shutdown(tcp::socket::shutdown_send, ec);
     }
     return;
+  }
+
+  if (Log::is_enabled(Log::OUTPUT)) {
+    std::cerr << Log::format_elapsed_time() << " outbound send " << m_buffer.size() << std::endl;
   }
 
   m_socket.async_write_some(

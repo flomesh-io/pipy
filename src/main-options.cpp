@@ -69,8 +69,11 @@ static const struct {
   { Log::DUMP     , "dump" },
   { Log::INBOUND  , "inbound" },
   { Log::OUTBOUND , "outbound" },
+  { Log::INPUT    , "input" },
+  { Log::OUTPUT   , "output" },
   { Log::FILES    , "files" },
   { Log::SUBPROC  , "subproc" },
+  { Log::HTTP2    , "http2" },
   { Log::USER     , "user" },
   { Log::NO_TOPIC , nullptr },
 };

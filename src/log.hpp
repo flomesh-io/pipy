@@ -51,9 +51,12 @@ public:
     DUMP      = 1<<1,
     INBOUND   = 1<<2,
     OUTBOUND  = 1<<3,
-    FILES     = 1<<4,
-    SUBPROC   = 1<<5,
-    USER      = 1<<6,
+    INPUT     = 1<<4,
+    OUTPUT    = 1<<5,
+    FILES     = 1<<6,
+    SUBPROC   = 1<<7,
+    HTTP2     = 1<<8,
+    USER      = 1<<9,
   };
 
   static void init();
@@ -63,6 +66,8 @@ public:
   static bool is_enabled(Level level);
   static bool is_enabled(Topic topic);
 
+  static auto format_elapsed_time() -> const char*;
+  static auto format_elapsed_time(char *buf, size_t len, bool fill = false) -> size_t;
   static auto format_header(Level level, char *buf, size_t len) -> size_t;
 
   static void write(const Data &data);
