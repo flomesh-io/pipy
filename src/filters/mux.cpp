@@ -542,12 +542,13 @@ void Muxer::Queue::Stream::output_end() {
 //
 
 bool Muxer::Queue::Receiver::receive(Event *evt) {
-  if (auto start = m_reader.filter(evt, m_stream->output())) {
-    start->release();
+  if (m_reader.filter(evt, m_stream->output())) {
     if (!--m_output_count) {
       if (!--m_stream->m_receiver_count) {
-        if (!evt->is<StreamEnd>()) {
-          m_stream->output_end(); // Output StreamEnd if haven't yet
+        if (evt->is<StreamEnd>()) {
+          m_stream->output(evt);
+        } else {
+          m_stream->output_end();
         }
       }
       return true;

@@ -27,9 +27,155 @@
 #include "context.hpp"
 #include "pipeline.hpp"
 #include "module.hpp"
-#include "log.hpp"
 
 namespace pipy {
+
+//
+// Demuxer
+//
+
+auto Demuxer::open_stream(Pipeline *pipeline) -> EventFunction* {
+  auto s = new Stream(this);
+  s->open(pipeline);
+  return s;
+}
+
+void Demuxer::close_stream(EventFunction *stream) {
+  auto s = static_cast<Stream*>(stream);
+  s->close();
+}
+
+//
+// Demuxer::Stream
+//
+
+void Demuxer::Stream::open(Pipeline *pipeline) {
+  m_pipeline = pipeline;
+  EventProxy::chain_forward(pipeline->input());
+  pipeline->chain(EventProxy::reply());
+}
+
+void Demuxer::Stream::close() {
+  m_closed = true;
+  recycle();
+}
+
+void Demuxer::Stream::on_event(Event *evt) {
+  EventProxy::forward(evt);
+}
+
+void Demuxer::Stream::on_reply(Event *evt) {
+  EventProxy::output(evt);
+  if (evt->is<StreamEnd>()) {
+    m_stream_end = true;
+    recycle();
+  }
+}
+
+//
+// Demuxer::Queue
+//
+
+void Demuxer::Queue::reset() {
+  if (m_stream) {
+    on_close_stream(m_stream);
+    m_stream = nullptr;
+  }
+  while (auto r = m_receivers.head()) {
+    m_receivers.remove(r);
+    delete r;
+  }
+}
+
+void Demuxer::Queue::dedicate() {
+}
+
+void Demuxer::Queue::shutdown() {
+}
+
+void Demuxer::Queue::on_event(Event *evt) {
+  if (auto start = evt->as<MessageStart>()) {
+    if (!m_stream) {
+      int n = on_queue_message(start);
+      if (n >= 0) {
+        if (auto s = on_open_stream()) {
+          m_stream = s;
+          if (n > 0) {
+            auto r = new Receiver(this, n);
+            s->chain(r->input());
+            m_receivers.push(r);
+          }
+          s->input()->input(evt);
+        }
+      }
+    }
+
+  } else if (evt->is<Data>()) {
+    if (auto s = m_stream) {
+      s->input()->input(evt);
+    }
+
+  } else if (evt->is_end()) {
+    if (auto s = m_stream) {
+      if (evt->is<StreamEnd>()) {
+        s->input()->input(MessageEnd::make());
+        if (m_receivers.empty()) {
+          EventFunction::output(evt);
+        } else {
+          m_stream_end = evt->as<StreamEnd>();
+        }
+      } else {
+        s->input()->input(evt);
+      }
+      on_close_stream(s);
+      m_stream = nullptr;
+    }
+  }
+}
+
+void Demuxer::Queue::shift() {
+  auto r = m_receivers.head();
+  m_receivers.remove(r);
+  delete r;
+  while (auto r = m_receivers.head()) {
+    if (r->flush()) {
+      m_receivers.remove(r);
+      delete r;
+    }
+  }
+}
+
+//
+// Demuxer::Queue::Receiver
+//
+
+bool Demuxer::Queue::Receiver::flush() {
+  m_buffer.flush(
+    [this](Message *msg) {
+      msg->write(m_queue->EventFunction::output());
+    }
+  );
+  return !m_output_count;
+}
+
+void Demuxer::Queue::Receiver::on_event(Event *evt) {
+  if (m_queue->m_receivers.head() == this) {
+    if (m_reader.filter(evt, m_queue->EventFunction::output())) {
+      if (!--m_output_count) {
+        m_queue->shift();
+      }
+    }
+  } else {
+    if (auto msg = m_reader.read(evt)) {
+      if (m_output_count > 0) {
+        m_buffer.push(msg);
+        m_output_count--;
+      }
+      msg->release();
+    }
+  }
+}
+
 
 //
 // QueueDemuxer

@@ -421,7 +421,7 @@ private:
 //                   +------------+     reply()
 //
 
-class EventProxy : protected EventFunction, protected EventSource {
+class EventProxy : public EventFunction, protected EventSource {
 public:
   auto input() -> Input* {
     return EventFunction::input();

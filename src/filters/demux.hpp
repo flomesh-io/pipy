@@ -29,10 +29,112 @@
 #include "filter.hpp"
 #include "data.hpp"
 #include "list.hpp"
+#include "message.hpp"
 #include "pipeline.hpp"
 #include "options.hpp"
 
 namespace pipy {
+
+//
+// Demuxer
+//
+
+class Demuxer {
+private:
+
+  //
+  // Demuxer::Stream
+  //
+
+  class Stream :
+    public pjs::Pooled<Stream>,
+    public List<Stream>::Item,
+    public EventProxy
+  {
+  public:
+    Stream(Demuxer *demuxer) : m_demuxer(demuxer) {
+      demuxer->m_streams.push(this);
+    }
+
+    ~Stream() {
+      m_demuxer->m_streams.remove(this);
+    }
+
+    void open(Pipeline *pipeline);
+    void close();
+
+  private:
+    Demuxer* m_demuxer;
+    pjs::Ref<Pipeline> m_pipeline;
+    bool m_closed = false;
+    bool m_stream_end = false;
+
+    void recycle() {
+      if (m_closed && m_stream_end) {
+        delete this;
+      }
+    }
+
+    virtual void on_event(Event *evt) override;
+    virtual void on_reply(Event *evt) override;
+  };
+
+protected:
+  auto open_stream(Pipeline *pipeline) -> EventFunction*;
+  void close_stream(EventFunction *stream);
+
+  List<Stream> m_streams;
+
+  //
+  // Demuxer::Queue
+  //
+
+  class Queue : public EventFunction {
+  public:
+    void reset();
+    void dedicate();
+    void shutdown();
+
+  protected:
+    virtual auto on_queue_message(MessageStart *start) -> int { return 1; }
+    virtual auto on_open_stream() -> EventFunction* = 0;
+    virtual void on_close_stream(EventFunction *stream) = 0;
+
+  private:
+    virtual void on_event(Event *evt) override;
+
+    void shift();
+
+    //
+    // Demuxer::Queue::Receiver
+    //
+
+    class Receiver :
+      public pjs::Pooled<Receiver>,
+      public List<Receiver>::Item,
+      public EventTarget
+    {
+    public:
+      Receiver(Queue *queue, int output_count)
+        : m_queue(queue)
+        , m_output_count(output_count) {}
+
+      bool flush();
+
+    private:
+      virtual void on_event(Event *evt) override;
+
+      Queue* m_queue;
+      MessageReader m_reader;
+      MessageBuffer m_buffer;
+      int m_output_count;
+    };
+
+    EventFunction* m_stream = nullptr;
+    List<Receiver> m_receivers;
+    pjs::Ref<StreamEnd> m_stream_end;
+  };
+};
 
 //
 // QueueDemuxer
