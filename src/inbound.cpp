@@ -359,8 +359,8 @@ void InboundTCP::receive() {
           m_metric_traffic_in->increase(buffer->size());
           s_metric_traffic_in->increase(buffer->size());
 
-          if (Log::is_enabled(Log::INPUT)) {
-            std::cerr << Log::format_elapsed_time() << " inbound recv " << buffer->size() << std::endl;
+          if (Log::is_enabled(Log::TCP)) {
+            std::cerr << Log::format_elapsed_time() << " tcp >>>> recv " << buffer->size() << std::endl;
           }
 
           output(buffer);
@@ -442,8 +442,8 @@ void InboundTCP::pump() {
   if (m_pumping) return;
   if (m_buffer.empty()) return;
 
-  if (Log::is_enabled(Log::OUTPUT)) {
-    std::cerr << Log::format_elapsed_time() << " inbound send " << m_buffer.size() << std::endl;
+  if (Log::is_enabled(Log::TCP)) {
+    std::cerr << Log::format_elapsed_time() << " tcp <<<< send " << m_buffer.size() << std::endl;
   }
 
   m_socket.async_write_some(

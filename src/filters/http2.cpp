@@ -1580,11 +1580,8 @@ void Endpoint::debug_dump_i() const {
 #if DEBUG_HTTP2
   std::cerr << Log::format_elapsed_time();
   std::cerr << " http2 ";
-  if (m_is_server_side) {
-    std::cerr << ">> [ep #" << std::left << std::setw(3) << m_id << "]   ";
-  } else {
-    std::cerr << "   [ep #" << std::left << std::setw(3) << m_id << "] <<";
-  }
+  std::cerr << " endpoint #" << std::left << std::setw(3) << m_id;
+  std::cerr << (m_is_server_side ? "| >> |    |" : "|    | << |");
 #endif
 }
 
@@ -1592,11 +1589,8 @@ void Endpoint::debug_dump_o() const {
 #if DEBUG_HTTP2
   std::cerr << Log::format_elapsed_time();
   std::cerr << " http2 ";
-  if (m_is_server_side) {
-    std::cerr << "<< [ep #" << std::left << std::setw(3) << m_id << "]   ";
-  } else {
-    std::cerr << "   [ep #" << std::left << std::setw(3) << m_id << "] >>";
-  }
+  std::cerr << " endpoint #" << std::left << std::setw(3) << m_id;
+  std::cerr << (m_is_server_side ? "| << |    |" : "|    | >> |");
 #endif
 }
 
@@ -1604,7 +1598,7 @@ void Endpoint::debug_dump_i(const Data &data) const {
 #if DEBUG_HTTP2
   if (Log::is_enabled(Log::HTTP2)) {
     debug_dump_i();
-    std::cerr << " | Recv " << data.size() << std::endl;
+    std::cerr << " Recv " << data.size() << std::endl;
   }
 #endif
 }
@@ -1613,7 +1607,7 @@ void Endpoint::debug_dump_o(const Data &data) const {
 #if DEBUG_HTTP2
   if (Log::is_enabled(Log::HTTP2)) {
     debug_dump_o();
-    std::cerr << " | Send " << data.size() << std::endl;
+    std::cerr << " Send " << data.size() << std::endl;
   }
 #endif
 }
@@ -1622,7 +1616,7 @@ void Endpoint::debug_dump_i(const Frame &frm) const {
 #if DEBUG_HTTP2
   if (Log::is_enabled(Log::HTTP2)) {
     debug_dump_i();
-    std::cerr << " |   ";
+    std::cerr << "   ";
     frm.debug_dump(std::cerr);
     std::cerr << std::endl;
   }
@@ -1633,7 +1627,7 @@ void Endpoint::debug_dump_o(const Frame &frm) const {
 #if DEBUG_HTTP2
   if (Log::is_enabled(Log::HTTP2)) {
     debug_dump_o();
-    std::cerr << " |   ";
+    std::cerr << "   ";
     frm.debug_dump(std::cerr);
     std::cerr << std::endl;
   }

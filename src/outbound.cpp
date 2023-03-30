@@ -467,8 +467,8 @@ void OutboundTCP::receive() {
           m_metric_traffic_in->increase(buffer->size());
           s_metric_traffic_in->increase(buffer->size());
 
-          if (Log::is_enabled(Log::INPUT)) {
-            std::cerr << Log::format_elapsed_time() << " outbound recv " << buffer->size() << std::endl;
+          if (Log::is_enabled(Log::TCP)) {
+            std::cerr << Log::format_elapsed_time() << " tcp recv <<<< " << buffer->size() << std::endl;
           }
 
           output(buffer);
@@ -532,8 +532,8 @@ void OutboundTCP::pump() {
     return;
   }
 
-  if (Log::is_enabled(Log::OUTPUT)) {
-    std::cerr << Log::format_elapsed_time() << " outbound send " << m_buffer.size() << std::endl;
+  if (Log::is_enabled(Log::TCP)) {
+    std::cerr << Log::format_elapsed_time() << " tcp send >>>> " << m_buffer.size() << std::endl;
   }
 
   m_socket.async_write_some(
