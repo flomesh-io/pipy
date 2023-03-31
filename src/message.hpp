@@ -180,12 +180,6 @@ class MessageReader {
 public:
   void reset();
   auto read(Event *evt) -> Message*;
-  bool filter(
-    Event *evt, EventTarget::Input *out,
-    const std::function<void(MessageStart*)> &on_start = nullptr,
-    const std::function<void(Data*)> &on_data = nullptr,
-    const std::function<void(MessageEnd*)> &on_end = nullptr
-  );
 
 private:
   pjs::Ref<MessageStart> m_start;

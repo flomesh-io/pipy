@@ -531,9 +531,11 @@ void Muxer::Queue::Stream::on_event(Event *evt) {
   }
 }
 
-void Muxer::Queue::Stream::output_end() {
-  if (auto end = m_stream_end.get()) {
-    EventFunction::output(end);
+void Muxer::Queue::Stream::shift() {
+  if (!--m_receiver_count) {
+    if (auto end = m_stream_end.get()) {
+      EventFunction::output(end);
+    }
   }
 }
 
@@ -542,17 +544,41 @@ void Muxer::Queue::Stream::output_end() {
 //
 
 bool Muxer::Queue::Receiver::receive(Event *evt) {
-  if (m_reader.filter(evt, m_stream->output())) {
-    if (!--m_output_count) {
-      if (!--m_stream->m_receiver_count) {
-        if (evt->is<StreamEnd>()) {
-          m_stream->output(evt);
-        } else {
-          m_stream->output_end();
+  switch (evt->type()) {
+    case Event::Type::MessageStart:
+      if (!m_message_started) {
+        m_stream->output(evt);
+        m_message_started = true;
+      }
+      break;
+    case Event::Type::Data:
+      if (m_message_started) {
+        m_stream->output(evt);
+      }
+      break;
+    case Event::Type::MessageEnd:
+      if (m_message_started) {
+        m_stream->output(evt);
+        m_message_started = false;
+        if (!--m_output_count) {
+          m_stream->shift();
+          return true;
         }
       }
-      return true;
-    }
+      break;
+    case Event::Type::StreamEnd:
+      if (m_message_started && m_output_count == 1) {
+        m_stream->output(MessageEnd::make(evt->as<StreamEnd>()));
+        m_message_started = false;
+        if (!--m_output_count) {
+          m_stream->shift();
+          return true;
+        }
+      } else {
+        m_stream->output(evt);
+        m_stream->m_stream_end = nullptr;
+      }
+      break;
   }
   return false;
 }

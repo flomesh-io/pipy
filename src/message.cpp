@@ -109,40 +109,6 @@ auto MessageReader::read(Event *evt) -> Message* {
   return nullptr;
 }
 
-bool MessageReader::filter(
-  Event *evt, EventTarget::Input *out,
-  const std::function<void(MessageStart*)> &on_start,
-  const std::function<void(Data*)> &on_data,
-  const std::function<void(MessageEnd*)> &on_end
-) {
-  if (auto start = evt->as<MessageStart>()) {
-    if (!m_start) {
-      m_start = start;
-      if (on_start) on_start(start);
-      if (out) out->input(evt);
-    }
-  } else if (auto data = evt->as<Data>()) {
-    if (m_start) {
-      if (on_data) on_data(data);
-      if (out) out->input(evt);
-    }
-  } else if (evt->is_end()) {
-    if (m_start) {
-      if (auto end = evt->as<MessageEnd>()) {
-        if (on_end) on_end(end);
-        if (out) out->input(evt);
-      } else {
-        pjs::Ref<MessageEnd> e(MessageEnd::make());
-        if (on_end) on_end(e);
-        if (out) out->input(e);
-      }
-      m_start = nullptr;
-      return true;
-    }
-  }
-  return false;
-}
-
 } // namespace pipy
 
 namespace pjs {

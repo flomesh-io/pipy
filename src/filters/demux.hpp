@@ -79,11 +79,14 @@ private:
     virtual void on_reply(Event *evt) override;
   };
 
+  List<Stream> m_streams;
+
 protected:
+  void reset();
   auto open_stream(Pipeline *pipeline) -> EventFunction*;
   void close_stream(EventFunction *stream);
 
-  List<Stream> m_streams;
+public:
 
   //
   // Demuxer::Queue
@@ -104,6 +107,8 @@ protected:
     virtual void on_event(Event *evt) override;
 
     void shift();
+    void clear();
+    void close();
 
     //
     // Demuxer::Queue::Receiver
@@ -128,11 +133,13 @@ protected:
       MessageReader m_reader;
       MessageBuffer m_buffer;
       int m_output_count;
+      bool m_message_started = false;
     };
 
     EventFunction* m_stream = nullptr;
     List<Receiver> m_receivers;
     pjs::Ref<StreamEnd> m_stream_end;
+    bool m_closed = false;
   };
 };
 
@@ -210,10 +217,11 @@ private:
 // Demux
 //
 
-class Demux : public Filter, public QueueDemuxer {
+class Demux : public Filter, public Demuxer, public Demuxer::Queue {
 public:
   struct Options : public pipy::Options {
-    pjs::Ref<pjs::Function> is_one_way;
+    int output_count = 1;
+    pjs::Ref<pjs::Function> output_count_f;
     Options() {}
     Options(pjs::Object *options);
   };
@@ -232,8 +240,9 @@ private:
   virtual void shutdown() override;
   virtual void dump(Dump &d) override;
 
-  virtual auto on_new_sub_pipeline(Input *chain_to) -> Pipeline* override;
-  virtual bool on_request_start(MessageStart *start) override;
+  virtual auto on_queue_message(MessageStart *start) -> int override;
+  virtual auto on_open_stream() -> EventFunction* override;
+  virtual void on_close_stream(EventFunction *stream) override;
 
   Options m_options;
 };

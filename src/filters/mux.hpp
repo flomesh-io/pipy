@@ -247,7 +247,7 @@ protected:
       pjs::Ref<StreamEnd> m_stream_end;
       int m_receiver_count = 0;
 
-      void output_end();
+      void shift();
 
       friend class Queue;
     };
@@ -271,8 +271,8 @@ protected:
 
     private:
       pjs::Ref<Stream> m_stream;
-      MessageReader m_reader;
       int m_output_count;
+      bool m_message_started = false;
     };
 
     friend class Stream;
