@@ -70,6 +70,24 @@ TLSContext::~TLSContext() {
   if (m_ctx) SSL_CTX_free(m_ctx);
 }
 
+void TLSContext::set_protocol_versions(ProtocolVersion min, ProtocolVersion max) {
+  auto f = [](ProtocolVersion v) {
+    switch (v) {
+      case ProtocolVersion::TLS1  : return TLS1_VERSION;
+      case ProtocolVersion::TLS1_1: return TLS1_1_VERSION;
+      case ProtocolVersion::TLS1_2: return TLS1_2_VERSION;
+      case ProtocolVersion::TLS1_3: return TLS1_3_VERSION;
+    }
+    return SSL3_VERSION;
+  };
+  SSL_CTX_set_min_proto_version(m_ctx, f(min));
+  SSL_CTX_set_max_proto_version(m_ctx, f(max));
+}
+
+void TLSContext::set_ciphers(const std::string &ciphers) {
+  SSL_CTX_set_cipher_list(m_ctx, ciphers.c_str());
+}
+
 void TLSContext::add_certificate(crypto::Certificate *cert) {
   X509_STORE_add_cert(m_verify_store, cert->x509());
   SSL_CTX_set_verify(m_ctx, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, on_verify);
@@ -509,6 +527,18 @@ void TLSSession::close(StreamEnd::Error err) {
 //
 
 Options::Options(pjs::Object *options, const char *base_name) {
+  Value(options, "minVersion")
+    .get(minVersion)
+    .check_nullable();
+
+  Value(options, "maxVersion")
+    .get(maxVersion)
+    .check_nullable();
+
+  Value(options, "ciphers")
+    .get(ciphers)
+    .check_nullable();
+
   Value(options, "certificate", base_name)
     .get(certificate)
     .check_nullable();
@@ -585,7 +615,16 @@ Client::Client(const Options &options)
   : m_tls_context(std::make_shared<TLSContext>(false))
   , m_options(std::make_shared<Options>(options))
 {
-  for (const auto &cert : m_options->trusted) {
+  m_tls_context->set_protocol_versions(
+    options.minVersion,
+    options.maxVersion
+  );
+
+  if (options.ciphers) {
+    m_tls_context->set_ciphers(options.ciphers->str());
+  }
+
+  for (const auto &cert : options.trusted) {
     m_tls_context->add_certificate(cert);
   }
 
@@ -688,7 +727,16 @@ Server::Server(const Options &options)
   : m_tls_context(std::make_shared<TLSContext>(true))
   , m_options(std::make_shared<Options>(options))
 {
-  for (const auto &cert : m_options->trusted) {
+  m_tls_context->set_protocol_versions(
+    options.minVersion,
+    options.maxVersion
+  );
+
+  if (options.ciphers) {
+    m_tls_context->set_ciphers(options.ciphers->str());
+  }
+
+  for (const auto &cert : options.trusted) {
     m_tls_context->add_certificate(cert);
   }
 
@@ -997,3 +1045,16 @@ void OnClientHello::process(Event *evt) {
 
 } // namespace tls
 } // namespace pipy
+
+namespace pjs {
+
+using namespace pipy::tls;
+
+template<> void EnumDef<ProtocolVersion>::init() {
+  define(ProtocolVersion::TLS1, "TLS1");
+  define(ProtocolVersion::TLS1_1, "TLS1.1");
+  define(ProtocolVersion::TLS1_2, "TLS1.2");
+  define(ProtocolVersion::TLS1_3, "TLS1.3");
+}
+
+} // namespace pjs

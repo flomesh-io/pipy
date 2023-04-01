@@ -45,6 +45,17 @@ namespace tls {
 class TLSFilter;
 
 //
+// ProtocolVersion
+//
+
+enum class ProtocolVersion {
+  TLS1,
+  TLS1_1,
+  TLS1_2,
+  TLS1_3,
+};
+
+//
 // TLSContext
 //
 
@@ -54,6 +65,8 @@ public:
   ~TLSContext();
 
   auto ctx() const -> SSL_CTX* { return m_ctx; }
+  void set_protocol_versions(ProtocolVersion min, ProtocolVersion max);
+  void set_ciphers(const std::string &ciphers);
   void add_certificate(crypto::Certificate *cert);
   void set_client_alpn(const std::vector<std::string> &protocols);
   void set_server_alpn(const std::set<pjs::Ref<pjs::Str>> &protocols);
@@ -146,6 +159,9 @@ private:
 //
 
 struct Options : public pipy::Options {
+  pjs::EnumValue<ProtocolVersion> minVersion = ProtocolVersion::TLS1_2;
+  pjs::EnumValue<ProtocolVersion> maxVersion = ProtocolVersion::TLS1_3;
+  pjs::Ref<pjs::Str> ciphers;
   pjs::Ref<pjs::Object> certificate;
   std::vector<pjs::Ref<crypto::Certificate>> trusted;
   pjs::Ref<pjs::Function> verify;

@@ -78,6 +78,16 @@ struct Options {
     }
 
     template<class T>
+    Value& get(pjs::EnumValue<T> &value) {
+      if (auto *s = get_string()) {
+        auto v = pjs::EnumDef<T>::value(s);
+        if (int(v) < 0) invalid_enum(pjs::EnumDef<T>::all_names());
+        value = v;
+      }
+      return *this;
+    }
+
+    template<class T>
     Value& get_enum(T &value) {
       if (auto *s = get_string()) {
         auto v = pjs::EnumDef<T>::value(s);
