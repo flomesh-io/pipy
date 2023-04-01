@@ -331,7 +331,8 @@ private:
 
 class Demux :
   public Filter,
-  public QueueDemuxer,
+  protected Demuxer,
+  protected Demuxer::Queue,
   protected Decoder,
   protected Encoder
 {
@@ -382,8 +383,8 @@ private:
   HTTP2Demuxer* m_http2_demuxer = nullptr;
   bool m_shutdown = false;
 
-  virtual auto on_new_sub_pipeline(Input *chain_to) -> Pipeline* override;
-  virtual bool on_response_start(MessageStart *start) override;
+  virtual auto on_open_stream() -> EventFunction* override;
+  virtual void on_close_stream(EventFunction *stream) override;
   virtual void on_decode_error() override;
   virtual void on_decode_request(http::RequestHead *head) override;
   virtual void on_encode_response(pjs::Object *head) override;

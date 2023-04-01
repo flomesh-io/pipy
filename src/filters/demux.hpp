@@ -75,7 +75,7 @@ private:
       }
     }
 
-    virtual void on_event(Event *evt) override;
+    virtual void on_input(Event *evt) override;
     virtual void on_reply(Event *evt) override;
   };
 
@@ -95,6 +95,7 @@ public:
   class Queue : public EventFunction {
   public:
     void reset();
+    void increase_queue_count();
     void dedicate();
     void shutdown();
 
@@ -124,6 +125,7 @@ public:
         : m_queue(queue)
         , m_output_count(output_count) {}
 
+      void increase_output_count(int n) { m_output_count += n; }
       bool flush();
 
     private:
@@ -139,78 +141,10 @@ public:
     EventFunction* m_stream = nullptr;
     List<Receiver> m_receivers;
     pjs::Ref<StreamEnd> m_stream_end;
+    bool m_dedicated = false;
+    bool m_shutdown = false;
     bool m_closed = false;
   };
-};
-
-//
-// QueueDemuxer
-//
-
-class QueueDemuxer : public EventFunction {
-public:
-  void reset();
-  void dedicate();
-  void shutdown();
-
-protected:
-  QueueDemuxer() {}
-
-  virtual auto on_new_sub_pipeline(Input *chain_to) -> Pipeline* = 0;
-  virtual bool on_request_start(MessageStart *start) { return true; }
-  virtual bool on_response_start(MessageStart *start) { return true; }
-
-private:
-  class Stream;
-
-  List<Stream> m_streams;
-  pjs::Ref<Pipeline> m_one_way_pipeline;
-  bool m_dedicated = false;
-  bool m_shutdown = false;
-
-  void on_event(Event *evt) override;
-  void flush();
-
-  //
-  // QueueDemuxer::Response
-  //
-
-  struct Response :
-    public pjs::Pooled<Response>,
-    public List<Response>::Item
-  {
-    pjs::Ref<MessageStart> start;
-    pjs::Ref<MessageEnd> end;
-    Data buffer;
-  };
-
-  //
-  // QueueDemuxer::Stream
-  //
-
-  class Stream :
-    public pjs::Pooled<Stream>,
-    public List<Stream>::Item,
-    public EventSource
-  {
-    Stream(QueueDemuxer *demux);
-    ~Stream();
-
-    void data(Data *data);
-    void end(MessageEnd *end);
-
-    QueueDemuxer* m_demuxer;
-    pjs::Ref<Pipeline> m_pipeline;
-    List<Response> m_responses;
-    bool m_input_end = false;
-    bool m_dedicated = false;
-
-    virtual void on_reply(Event *evt) override;
-
-    friend class QueueDemuxer;
-  };
-
-  friend class Stream;
 };
 
 //

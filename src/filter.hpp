@@ -94,7 +94,7 @@ public:
   auto sub_pipeline(
     int i,
     bool clone_context,
-    Input *chain_to,
+    Input *chain_to = nullptr,
     Output *output_to = nullptr,
     int argc = 0,
     pjs::Value *argv = nullptr

@@ -1323,8 +1323,8 @@ auto Demux::clone() -> Filter* {
 
 void Demux::chain() {
   Filter::chain();
-  Decoder::chain(QueueDemuxer::input());
-  QueueDemuxer::chain(Encoder::input());
+  Decoder::chain(Demuxer::Queue::input());
+  Demuxer::Queue::chain(Encoder::input());
   Encoder::chain(Filter::output());
   Encoder::set_buffer_size(m_options.buffer_size);
 }
@@ -1333,10 +1333,11 @@ void Demux::reset() {
   Filter::reset();
   Decoder::reset();
   Encoder::reset();
-  QueueDemuxer::reset();
+  Demuxer::reset();
+  Demuxer::Queue::reset();
   m_request_queue.reset();
   if (m_http2_demuxer) {
-    Decoder::chain(QueueDemuxer::input());
+    Decoder::chain(Demuxer::Queue::input());
     delete m_http2_demuxer;
     m_http2_demuxer = nullptr;
   }
@@ -1358,18 +1359,14 @@ void Demux::shutdown() {
   }
 }
 
-auto Demux::on_new_sub_pipeline(Input *chain_to) -> Pipeline* {
-  return sub_pipeline(0, true, chain_to);
+auto Demux::on_open_stream() -> EventFunction* {
+  return Demuxer::open_stream(
+    Filter::sub_pipeline(0, true)
+  );
 }
 
-bool Demux::on_response_start(MessageStart *start) {
-  int status;
-  auto head = start->head();
-  if (head && m_prop_status.get(head, status) && status == 100) {
-    return false; // not the last response
-  } else {
-    return true;
-  }
+void Demux::on_close_stream(EventFunction *stream) {
+  Demuxer::close_stream(stream);
 }
 
 void Demux::on_decode_error() {
@@ -1404,6 +1401,7 @@ void Demux::on_encode_response(pjs::Object *head) {
     if (m_request_queue.head()) {
       Encoder::set_bodiless(true);
     }
+    Demuxer::Queue::increase_queue_count();
   } else if (auto req = m_request_queue.shift()) {
     Encoder::set_final(req->is_final() || (m_shutdown && m_request_queue.empty()));
     Encoder::set_bodiless(req->is_bodiless());
@@ -1414,7 +1412,7 @@ void Demux::on_encode_response(pjs::Object *head) {
 
 void Demux::on_encode_tunnel() {
   Decoder::set_tunnel(true);
-  QueueDemuxer::dedicate();
+  Demuxer::Queue::dedicate();
 }
 
 void Demux::on_http2_pass() {
