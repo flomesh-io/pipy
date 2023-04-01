@@ -67,6 +67,7 @@ TLSContext::TLSContext(bool is_server) {
 }
 
 TLSContext::~TLSContext() {
+  if (m_dhparam) DH_free(m_dhparam);
   if (m_ctx) SSL_CTX_free(m_ctx);
 }
 
@@ -86,6 +87,18 @@ void TLSContext::set_protocol_versions(ProtocolVersion min, ProtocolVersion max)
 
 void TLSContext::set_ciphers(const std::string &ciphers) {
   SSL_CTX_set_cipher_list(m_ctx, ciphers.c_str());
+}
+
+void TLSContext::set_dhparam(const std::string &data) {
+  if (data == "auto") {
+    SSL_CTX_set_dh_auto(m_ctx, 1);
+  } else {
+    auto bio = BIO_new_mem_buf(data.c_str(), data.length());
+    m_dhparam = PEM_read_bio_DHparams(bio, nullptr, nullptr, nullptr);
+    BIO_free(bio);
+    SSL_CTX_set_dh_auto(m_ctx, 0);
+    if (m_dhparam) SSL_CTX_set_tmp_dh(m_ctx, m_dhparam);
+  }
 }
 
 void TLSContext::add_certificate(crypto::Certificate *cert) {
@@ -699,6 +712,11 @@ void Client::process(Event *evt) {
 Server::Options::Options(pjs::Object *options)
   : tls::Options(options)
 {
+  Value(options, "dhparam")
+    .get(dhparam)
+    .get(dhparam_s)
+    .check_nullable();
+
   pjs::Ref<pjs::Array> alpn_array;
   Value(options, "alpn")
     .get(alpn)
@@ -734,6 +752,12 @@ Server::Server(const Options &options)
 
   if (options.ciphers) {
     m_tls_context->set_ciphers(options.ciphers->str());
+  }
+
+  if (options.dhparam_s) {
+    m_tls_context->set_dhparam(options.dhparam_s->str());
+  } else if (options.dhparam) {
+    m_tls_context->set_dhparam(options.dhparam->to_string());
   }
 
   for (const auto &cert : options.trusted) {
