@@ -68,7 +68,7 @@ private:
     } else if (auto start = evt->as<MessageStart>()) {
       auto head = start->head()->as<http::RequestHead>();
       if (!m_pipeline) {
-        auto &path = head->path()->str();
+        auto &path = head->path->str();
         if (
           utils::starts_with(path, "/api/") ||
           utils::starts_with(path, "/repo/")
@@ -179,8 +179,8 @@ auto AdminProxy::handle(http::RequestHead *head) -> Message* {
   static const std::string header_accept("accept");
   static const std::string text_html("text/html");
 
-  auto method = head->method()->str();
-  auto path = head->path()->str();
+  auto method = head->method->str();
+  auto path = head->path->str();
 
   try {
 
@@ -198,7 +198,7 @@ auto AdminProxy::handle(http::RequestHead *head) -> Message* {
       }
 #endif
       if (f) {
-        auto headers = head->headers();
+        auto headers = head->headers.get();
         pjs::Value v;
         if (headers) headers->ht_get("accept-encoding", v);
         return f->to_message(v.is_string() ? v.s() : pjs::Str::empty.get());
@@ -237,8 +237,8 @@ auto AdminProxy::response_head(int status) -> http::ResponseHead* {
   auto head = http::ResponseHead::make();
   auto headers_obj = pjs::Object::make();
   headers_obj->ht_set("server", s_server_name);
-  head->headers(headers_obj);
-  head->status(status);
+  head->headers = headers_obj;
+  head->status = status;
   return head;
 }
 
@@ -247,7 +247,7 @@ auto AdminProxy::response_head(
   const std::map<std::string, std::string> &headers
 ) -> http::ResponseHead* {
   auto head = response_head(status);
-  auto headers_obj = head->headers();
+  auto headers_obj = head->headers.get();
   for (const auto &i : headers) headers_obj->ht_set(i.first, i.second);
   return head;
 }

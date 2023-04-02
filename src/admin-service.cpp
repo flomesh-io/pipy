@@ -67,7 +67,7 @@ AdminService::AdminService(CodebaseStore *store)
     headers->ht_set("server", s_server_name);
     headers->ht_set("content-type", content_type);
     if (gzip) headers->ht_set("content-encoding", "gzip");
-    head->headers(headers);
+    head->headers = headers;
     return head;
   };
 
@@ -75,8 +75,8 @@ AdminService::AdminService(CodebaseStore *store)
     auto head = http::ResponseHead::make();
     auto headers = pjs::Object::make();
     headers->ht_set("server", s_server_name);
-    head->headers(headers);
-    head->status(status);
+    head->headers = headers;
+    head->status = status;
     return Message::make(head, nullptr);
   };
 
@@ -194,23 +194,24 @@ auto AdminService::handle(Context *ctx, Message *req) -> Message* {
 
   auto head = req->head()->as<http::RequestHead>();
   auto body = req->body();
-  auto method = head->method()->str();
-  auto path = head->path()->str();
+  auto method = head->method->str();
+  auto path = head->path->str();
+  auto headers = head->headers.get();
 
   pjs::Value accept, upgrade;
-  head->headers()->get(s_accept, accept);
-  head->headers()->get(s_upgrade, upgrade);
+  headers->get(s_accept, accept);
+  headers->get(s_upgrade, upgrade);
   bool is_browser = (accept.is_string() && accept.s()->str().find(text_html) != std::string::npos);
   bool is_websocket = (upgrade.is_string() && upgrade.s() == s_websocket);
 
   if (is_websocket) {
     pjs::Value sec_key;
-    head->headers()->get(s_sec_websocket_key, sec_key);
+    headers->get(s_sec_websocket_key, sec_key);
     if (sec_key.is_string()) {
       auto headers = pjs::Object::make();
       auto head = http::ResponseHead::make();
-      head->status(101);
-      head->headers(headers);
+      head->status = 101;
+      head->headers = headers;
       pjs::Ref<crypto::Hash> hash = crypto::Hash::make("sha1");
       hash->update(sec_key.s()->str() + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11");
       headers->set(s_sec_websocket_accept, hash->digest(Data::Encoding::base64));
@@ -237,7 +238,7 @@ auto AdminService::handle(Context *ctx, Message *req) -> Message* {
     // GET /metrics
     } else if (path == "/metrics") {
       if (method == "GET") {
-        return metrics_GET(head->headers());
+        return metrics_GET(headers);
       } else {
         return m_response_method_not_allowed;
       }
@@ -423,7 +424,7 @@ auto AdminService::handle(Context *ctx, Message *req) -> Message* {
       }
 #endif
       if (f) {
-        auto headers = req->head()->as<http::RequestHead>()->headers();
+        auto headers = req->head()->as<http::RequestHead>()->headers.get();
         pjs::Value v;
         if (headers) headers->ht_get("accept-encoding", v);
         return f->to_message(v.is_string() ? v.s() : pjs::Str::empty.get());
@@ -1173,8 +1174,8 @@ auto AdminService::response_head(
   auto headers_obj = pjs::Object::make();
   headers_obj->ht_set("server", s_server_name);
   for (const auto &i : headers) headers_obj->ht_set(i.first, i.second);
-  head->headers(headers_obj);
-  head->status(status);
+  head->headers = headers_obj;
+  head->status = status;
   return head;
 }
 

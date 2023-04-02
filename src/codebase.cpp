@@ -374,15 +374,15 @@ void CodebaseFromHTTP::sync(bool force, const std::function<void(bool)> &on_upda
     nullptr,
     nullptr,
     [=](http::ResponseHead *head, Data *body) {
-      if (!head || head->status() != 200) {
+      if (!head || head->status != 200) {
         response_error("HEAD", m_url->href()->c_str(), head);
         on_update(false);
         return;
       }
 
       pjs::Value etag, date;
-      head->headers()->get(s_etag, etag);
-      head->headers()->get(s_date, date);
+      head->headers->get(s_etag, etag);
+      head->headers->get(s_date, date);
 
       std::string etag_str;
       std::string date_str;
@@ -419,7 +419,7 @@ void CodebaseFromHTTP::download(const std::function<void(bool)> &on_update) {
     nullptr,
     nullptr,
     [=](http::ResponseHead *head, Data *body) {
-      if (!head || head->status() != 200) {
+      if (!head || head->status != 200) {
         response_error("GET", m_url->href()->c_str(), head);
         on_update(false);
         return;
@@ -433,8 +433,8 @@ void CodebaseFromHTTP::download(const std::function<void(bool)> &on_update) {
       }
 
       pjs::Value etag, date;
-      head->headers()->get(s_etag, etag);
-      head->headers()->get(s_date, date);
+      head->headers->get(s_etag, etag);
+      head->headers->get(s_date, date);
       if (etag.is_string()) m_etag = etag.s()->str(); else m_etag.clear();
       if (date.is_string()) m_date = date.s()->str(); else m_date.clear();
 
@@ -491,7 +491,7 @@ void CodebaseFromHTTP::download_next(const std::function<void(bool)> &on_update)
     nullptr,
     nullptr,
     [=](http::ResponseHead *head, Data *body) {
-      if (!head || head->status() != 200) {
+      if (!head || head->status != 200) {
         response_error("GET", path.c_str(), head);
         on_update(false);
         return;
@@ -525,10 +525,10 @@ void CodebaseFromHTTP::watch_next() {
     nullptr,
     nullptr,
     [=](http::ResponseHead *head, Data *body) {
-      if (head && head->status() == 200) {
+      if (head && head->status == 200) {
         pjs::Value etag, date;
-        head->headers()->get(s_etag, etag);
-        head->headers()->get(s_date, date);
+        head->headers->get(s_etag, etag);
+        head->headers->get(s_date, date);
 
         std::string etag_str;
         std::string date_str;
@@ -550,14 +550,14 @@ void CodebaseFromHTTP::watch_next() {
               nullptr,
               nullptr,
               [=](http::ResponseHead *head, Data *body) {
-                if (head && head->status() == 200) {
+                if (head && head->status == 200) {
                   m_mutex.lock();
                   auto i = m_watched_files.find(name);
                   if (i != m_watched_files.end()) {
                     auto &wf = i->second;
                     pjs::Value etag, date;
-                    head->headers()->get(s_etag, etag);
-                    head->headers()->get(s_date, date);
+                    head->headers->get(s_etag, etag);
+                    head->headers->get(s_date, date);
                     if (etag.is_string()) wf.etag = etag.s()->str(); else wf.etag.clear();
                     if (date.is_string()) wf.date = date.s()->str(); else wf.date.clear();
                     m_files[name] = SharedData::make(body ? *body : Data());
@@ -588,8 +588,8 @@ void CodebaseFromHTTP::response_error(const char *method, const char *path, http
   Log::error(
     "[codebase] %s %s -> %d %s",
     method, path,
-    head ? head->status() : 0,
-    head ? head->status_text()->c_str() : "Empty"
+    head ? head->status : 0,
+    head ? head->statusText->c_str() : "Empty"
   );
   m_fetch.close();
 }

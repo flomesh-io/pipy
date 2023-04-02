@@ -390,9 +390,9 @@ Logger::HTTPTarget::HTTPTarget(pjs::Str *url, const Options &options)
   if (!has_host) headers->set(s_host, url_obj->host());
 
   auto *head = http::RequestHead::make();
-  head->method(options.method ? options.method.get() : s_POST.get());
-  head->path(url_obj->path());
-  head->headers(headers);
+  head->method = options.method ? options.method.get() : s_POST.get();
+  head->path = url_obj->path();
+  head->headers = headers;
   m_message_start = MessageStart::make(head);
 }
 

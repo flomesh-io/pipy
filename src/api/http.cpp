@@ -157,7 +157,7 @@ auto File::to_message(pjs::Str *accept_encoding) -> pipy::Message* {
     if (!m_message_br) {
       auto head = ResponseHead::make();
       auto headers = Object::make();
-      head->headers(headers);
+      head->headers = headers;
       headers->set(
         pjs::EnumDef<StringConstants>::name(CONTENT_TYPE),
         m_content_type.get()
@@ -174,7 +174,7 @@ auto File::to_message(pjs::Str *accept_encoding) -> pipy::Message* {
     if (!m_message_gz) {
       auto head = ResponseHead::make();
       auto headers = Object::make();
-      head->headers(headers);
+      head->headers = headers;
       headers->set(
         pjs::EnumDef<StringConstants>::name(CONTENT_TYPE),
         m_content_type.get()
@@ -192,12 +192,12 @@ auto File::to_message(pjs::Str *accept_encoding) -> pipy::Message* {
       if (!m_data) decompress();
       if (!m_data) {
         auto head = ResponseHead::make();
-        head->status(400);
+        head->status = 400;
         m_message = Message::make(head, nullptr);
       } else {
         auto head = ResponseHead::make();
         auto headers = Object::make();
-        head->headers(headers);
+        head->headers = headers;
         headers->set(pjs::EnumDef<StringConstants>::name(CONTENT_TYPE), m_content_type.get());
         m_message = Message::make(head, m_data);
       }
@@ -236,28 +236,28 @@ template<> void EnumDef<StringConstants>::init() {
 }
 
 template<> void ClassDef<MessageHead>::init() {
-  variable("protocol", MessageHead::Field::protocol);
-  variable("headers", MessageHead::Field::headers);
+  field<pjs::Ref<pjs::Str>>("protocol", [](MessageHead *obj) { return &obj->protocol; });
+  field<pjs::Ref<pjs::Object>>("headers", [](MessageHead *obj) { return &obj->headers; });
 }
 
 template<> void ClassDef<MessageTail>::init() {
-  variable("headers", MessageTail::Field::headers);
+  field<pjs::Ref<pjs::Object>>("headers", [](MessageTail *obj) { return &obj->headers; });
 }
 
 template<> void ClassDef<RequestHead>::init() {
   super<MessageHead>();
   ctor();
-  variable("method", RequestHead::Field::method);
-  variable("scheme", RequestHead::Field::scheme);
-  variable("authority", RequestHead::Field::authority);
-  variable("path", RequestHead::Field::path);
+  field<pjs::Ref<pjs::Str>>("method", [](RequestHead *obj) { return &obj->method; });
+  field<pjs::Ref<pjs::Str>>("scheme", [](RequestHead *obj) { return &obj->scheme; });
+  field<pjs::Ref<pjs::Str>>("authority", [](RequestHead *obj) { return &obj->authority; });
+  field<pjs::Ref<pjs::Str>>("path", [](RequestHead *obj) { return &obj->path; });
 }
 
 template<> void ClassDef<ResponseHead>::init() {
   super<MessageHead>();
   ctor();
-  variable("status", ResponseHead::Field::status);
-  variable("statusText", ResponseHead::Field::statusText);
+  field<int>("status", [](ResponseHead *obj) { return &obj->status; });
+  field<pjs::Ref<pjs::Str>>("statusText", [](ResponseHead *obj) { return &obj->statusText; });
 }
 
 template<> void ClassDef<File>::init() {

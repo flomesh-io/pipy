@@ -705,7 +705,7 @@ void HeaderDecoder::start(bool is_response, bool is_trailer) {
   } else {
     m_head = http::RequestHead::make();
   }
-  m_head->headers(pjs::Object::make());
+  m_head->headers = pjs::Object::make();
   m_buffer.clear();
   m_state = INDEX_PREFIX;
   m_is_response = is_response;
@@ -795,9 +795,9 @@ auto HeaderDecoder::end(pjs::Ref<http::MessageHead> &head) -> ErrorCode {
   if (!m_is_response && !m_is_trailer) {
     auto req = head->as<http::RequestHead>();
     if (
-      req->method() == pjs::Str::empty ||
-      req->scheme() == pjs::Str::empty ||
-      req->path() == pjs::Str::empty
+      !req->method || !req->method->length() ||
+      !req->scheme || !req->scheme->length() ||
+      !req->path || !req->path->length()
     ) {
       // missing mandatory request headers
       return PROTOCOL_ERROR;
@@ -941,7 +941,7 @@ bool HeaderDecoder::add_field(pjs::Str *name, pjs::Str *value) {
     } else if (m_is_response) {
       if (name == s_colon_status) {
         auto res = m_head->as<http::ResponseHead>();
-        res->status(std::atoi(value->c_str()));
+        res->status = std::atoi(value->c_str());
       } else {
         error(PROTOCOL_ERROR);
         return false;
@@ -949,34 +949,34 @@ bool HeaderDecoder::add_field(pjs::Str *name, pjs::Str *value) {
     } else {
       if (name == s_colon_method) {
         auto req = m_head->as<http::RequestHead>();
-        if (req->method() != pjs::Str::empty) {
+        if (req->method) {
           error(PROTOCOL_ERROR);
           return false;
         } else {
-          req->method(value);
+          req->method = value;
         }
       } else if (name == s_colon_scheme) {
         auto req = m_head->as<http::RequestHead>();
-        if (req->scheme() != pjs::Str::empty) {
+        if (req->scheme) {
           error(PROTOCOL_ERROR);
           return false;
         } else {
-          req->scheme(value);
+          req->scheme = value;
         }
       } else if (name == s_colon_authority) {
         auto req = m_head->as<http::RequestHead>();
         pjs::Value v;
-        auto headers = m_head->headers();
+        auto headers = m_head->headers.get();
         headers->get(s_host, v);
         if (v.is_undefined()) headers->set(s_host, value);
-        req->authority(value);
+        req->authority = value;
       } else if (name == s_colon_path) {
         auto req = m_head->as<http::RequestHead>();
-        if (req->path() != pjs::Str::empty) {
+        if (req->path) {
           error(PROTOCOL_ERROR);
           return false;
         } else {
-          req->path(value);
+          req->path = value;
         }
       } else {
         error(PROTOCOL_ERROR);
@@ -1000,10 +1000,10 @@ bool HeaderDecoder::add_field(pjs::Str *name, pjs::Str *value) {
     if (name == s_content_length) {
       m_content_length = std::atoi(value->c_str());
     }
-    auto headers = m_head->headers();
+    auto headers = m_head->headers.get();
     if (!headers) {
       headers = pjs::Object::make();
-      m_head->headers(headers);
+      m_head->headers = headers;
     }
     headers->set(name, value);
     m_is_pseudo_end = true;
@@ -1079,41 +1079,33 @@ void HeaderEncoder::encode(bool is_response, bool is_tail, pjs::Object *head, Da
   bool has_authority = false;
   if (!is_tail) {
     if (is_response) {
-      pjs::Value status;
-      if (head) head->get(s_status, status);
-      if (status.is_number()) {
-        pjs::Ref<pjs::Str> str(pjs::Str::make(status.n()));
-        encode_header_field(db, s_colon_status, str);
-      } else {
+      pjs::Ref<http::ResponseHead> h = pjs::coerce<http::ResponseHead>(head);
+      auto status = h->status;
+      if (status == 200) {
         encode_header_field(db, s_colon_status, s_200);
+      } else {
+        pjs::Ref<pjs::Str> str(pjs::Str::make(status));
+        encode_header_field(db, s_colon_status, str);
       }
 
     } else {
-      pjs::Value method, scheme, authority, path;
-      if (head) {
-        head->get(s_method, method);
-        head->get(s_scheme, scheme);
-        head->get(s_authority, authority);
-        head->get(s_path, path);
-      }
-      if (method.is_string()) {
-        encode_header_field(db, s_colon_method, method.s());
-      } else {
-        encode_header_field(db, s_colon_method, s_GET);
-      }
-      if (scheme.is_string()) {
-        encode_header_field(db, s_colon_scheme, scheme.s());
-      } else {
-        encode_header_field(db, s_colon_scheme, s_http);
-      }
-      if (authority.is_string()) {
-        encode_header_field(db, s_colon_authority, authority.s());
+      pjs::Ref<http::RequestHead> h = pjs::coerce<http::RequestHead>(head);
+      auto method = h->method.get();
+      auto scheme = h->scheme.get();
+      auto path = h->path.get();
+      auto authority = h->authority.get();
+
+      if (!method || !method->length()) method = s_GET;
+      if (!scheme || !scheme->length()) scheme = s_http;
+      if (!path || !path->length()) path = s_root_path;
+
+      encode_header_field(db, s_colon_method, method);
+      encode_header_field(db, s_colon_scheme, scheme);
+      encode_header_field(db, s_colon_path, path);
+
+      if (authority && authority->length() > 0) {
+        encode_header_field(db, s_colon_authority, authority);
         has_authority = true;
-      }
-      if (path.is_string()) {
-        encode_header_field(db, s_colon_path, path.s());
-      } else {
-        encode_header_field(db, s_colon_path, s_root_path);
       }
     }
   }
@@ -1251,7 +1243,7 @@ Endpoint::~Endpoint() {
 
 void Endpoint::upgrade_request(http::RequestHead *head, const Data &body) {
   auto *s = stream_open(1);
-  if (auto headers = head->headers()) {
+  if (auto headers = head->headers.get()) {
     pjs::Value settings;
     headers->get(s_http2_settings, settings);
     if (settings.is_string()) {
@@ -1950,7 +1942,7 @@ void Endpoint::StreamBase::parse_headers(Frame &frm) {
 
     if (m_header_decoder.is_trailer()) {
       tail = http::MessageTail::make();
-      tail->headers(head->headers());
+      tail->headers = head->headers;
 
     } else {
       m_end_headers = true;
@@ -1958,7 +1950,7 @@ void Endpoint::StreamBase::parse_headers(Frame &frm) {
     }
 
     if (m_is_server_side) {
-      if (head->as<http::RequestHead>()->method() == s_CONNECT) {
+      if (head->as<http::RequestHead>()->method == s_CONNECT) {
         m_is_tunnel = true;
         event(MessageEnd::make());
       }

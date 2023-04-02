@@ -133,16 +133,16 @@ void Fetch::fetch(
   headers->set(s_Host, m_host.get());
 
   auto head = http::RequestHead::make();
-  head->path(path);
-  head->headers(headers);
+  head->path = path;
+  head->headers = headers;
 
   switch (method) {
-    case HEAD: head->method(s_HEAD); break;
-    case GET: head->method(s_GET); break;
-    case PUT: head->method(s_PUT); break;
-    case POST: head->method(s_POST); break;
-    case PATCH: head->method(s_PATCH); break;
-    case DELETE: head->method(s_DELETE); break;
+    case HEAD: head->method = s_HEAD; break;
+    case GET: head->method = s_GET; break;
+    case PUT: head->method = s_PUT; break;
+    case POST: head->method = s_POST; break;
+    case PATCH: head->method = s_PATCH; break;
+    case DELETE: head->method = s_DELETE; break;
   }
 
   m_request_queue.emplace_back();

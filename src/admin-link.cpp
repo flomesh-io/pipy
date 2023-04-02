@@ -55,8 +55,8 @@ AdminLink::AdminLink(const std::string &url, const TLSSettings *tls_settings)
   auto head = http::RequestHead::make();
   auto headers = pjs::Object::make();
   m_handshake = Message::make(head, nullptr);
-  head->headers(headers);
-  head->path(m_url->path());
+  head->headers = headers;
+  head->path = m_url->path();
   headers->set("upgrade", "websocket");
   headers->set("connection", "upgrade");
   headers->set("sec-websocket-key", key_base64);

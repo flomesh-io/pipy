@@ -53,6 +53,7 @@ thread_local static const pjs::ConstStr s_PUT("PUT");
 thread_local static const pjs::ConstStr s_PATCH("PATCH");
 thread_local static const pjs::ConstStr s_CONNECT("CONNECT");
 thread_local static const pjs::ConstStr s_path("path");
+thread_local static const pjs::ConstStr s_path_root("/");
 thread_local static const pjs::ConstStr s_status("status");
 thread_local static const pjs::ConstStr s_status_text("statusText");
 thread_local static const pjs::ConstStr s_headers("headers");
@@ -482,9 +483,9 @@ void Decoder::on_event(Event *evt) {
           status = read_uint(dr, ' '); if (status < 100 || status > 599) { error(); break; }
           status_text = read_str(dr, '\r', s_strmap_statuses, buf); if (!status_text) { error(); break; }
           auto res = ResponseHead::make();
-          res->protocol(protocol);
-          res->status(status);
-          res->status_text(status_text);
+          res->protocol = protocol;
+          res->status = status;
+          res->statusText = status_text;
           m_head = res;
         } else {
           pjs::Ref<pjs::Str> method, path, protocol;
@@ -504,13 +505,13 @@ void Decoder::on_event(Event *evt) {
             break;
           } else {
             auto req = RequestHead::make();
-            req->method(method);
-            req->path(path);
-            req->protocol(protocol);
+            req->method = method;
+            req->path = path;
+            req->protocol = protocol;
             m_head = req;
           }
         }
-        m_head->headers(pjs::Object::make());
+        m_head->headers = pjs::Object::make();
         m_header_transfer_encoding = nullptr;
         m_header_content_length = nullptr;
         m_header_connection = nullptr;
@@ -527,7 +528,7 @@ void Decoder::on_event(Event *evt) {
           pjs::Ref<pjs::Str> key(read_str_lower(dr, ':', s_strmap_headers, buf));
           pjs::Ref<pjs::Str> val(read_str(dr, '\r', s_strmap_header_values, buf));
           if (!key || !val) { error(); break; }
-          auto headers = m_head->headers();
+          auto headers = m_head->headers.get();
           if (key == s_set_cookie) {
             pjs::Value old;
             headers->get(key, old);
@@ -575,7 +576,7 @@ void Decoder::on_event(Event *evt) {
             if (m_header_content_length) {
               m_body_size = std::atoi(m_header_content_length->c_str());
             } else if (m_is_response && !m_is_bodiless) {
-              auto status = m_head->as<ResponseHead>()->status();
+              auto status = m_head->as<ResponseHead>()->status;
               if (status >= 200 && status != 204 && status != 304) {
                 m_body_size = std::numeric_limits<int>::max();
               }
@@ -668,10 +669,10 @@ void Decoder::stream_end(StreamEnd *end) {
       break;
     }
     auto head = ResponseHead::make();
-    head->headers(pjs::Object::make());
-    head->protocol(s_http_1_1);
-    head->status(status_code);
-    head->status_text(status_text);
+    head->headers = pjs::Object::make();
+    head->protocol = s_http_1_1;
+    head->status = status_code;
+    head->statusText = status_text;
     output(MessageStart::make(head));
     if (!end->error().is_undefined()) {
       Data buf;
@@ -691,19 +692,13 @@ void Decoder::stream_end(StreamEnd *end) {
 //
 
 Encoder::Encoder(bool is_response)
-  : m_prop_protocol(s_protocol)
-  , m_prop_headers(s_headers)
-  , m_prop_method(s_method)
-  , m_prop_path(s_path)
-  , m_prop_status(s_status)
-  , m_prop_status_text(s_status_text)
-  , m_is_response(is_response)
+  : m_is_response(is_response)
 {
 }
 
 void Encoder::reset() {
   m_buffer.clear();
-  m_start = nullptr;
+  m_head = nullptr;
   m_protocol = nullptr;
   m_method = nullptr;
   m_header_connection = nullptr;
@@ -722,26 +717,23 @@ void Encoder::on_event(Event *evt) {
   }
 
   if (auto start = evt->as<MessageStart>()) {
-    m_start = start;
+    if (m_is_response) {
+      m_head = pjs::coerce<ResponseHead>(start->head());
+    } else {
+      m_head = pjs::coerce<RequestHead>(start->head());
+    }
     m_content_length = 0;
     m_chunked = false;
     m_buffer.clear();
 
     if (m_is_response) {
-      m_status_code = 200;
-      pjs::Value status;
-      if (auto head = m_start->head()) m_prop_status.get(head, status);
-      if (status.is_number()) {
-        m_status_code = status.n();
-      } else if (status.is_string()) {
-        m_status_code = std::atoi(status.s()->c_str());
-      }
+      m_status_code = m_head->as<ResponseHead>()->status;
       on_encode_response(start->head());
       if (is_turning_tunnel()) on_encode_tunnel();
     }
 
   } else if (auto data = evt->as<Data>()) {
-    if (m_start) {
+    if (m_head) {
       if (is_bodiless_response()) {
         m_content_length += data->size();
       } else if (m_chunked) {
@@ -759,7 +751,7 @@ void Encoder::on_event(Event *evt) {
     }
 
   } else if (evt->is<MessageEnd>()) {
-    if (m_start) {
+    if (m_head) {
       if (m_is_response && m_is_final) {
         output_end(StreamEnd::make());
       } else {
@@ -768,12 +760,12 @@ void Encoder::on_event(Event *evt) {
     }
 
     m_buffer.clear();
-    m_start = nullptr;
+    m_head = nullptr;
 
   } else if (evt->is<StreamEnd>()) {
     output(evt);
     m_buffer.clear();
-    m_start = nullptr;
+    m_head = nullptr;
   }
 }
 
@@ -784,14 +776,9 @@ void Encoder::output_head() {
   Data::Builder db(*buffer, &s_dp);
 
   if (m_is_response) {
-    pjs::Value protocol, status_text;
-    if (auto head = m_start->head()) {
-      m_prop_protocol.get(head, protocol);
-      m_prop_status_text.get(head, status_text);
-    }
-
-    if (protocol.is_string()) {
-      db.push(protocol.s()->str());
+    auto protocol = m_head->as<ResponseHead>()->protocol.get();
+    if (protocol && protocol->length() > 0) {
+      db.push(protocol->str());
       db.push(' ');
     } else {
       db.push("HTTP/1.1 ");
@@ -806,12 +793,12 @@ void Encoder::output_head() {
       no_content_length = true;
     }
 
-    char status_str[100];
-    std::sprintf(status_str, "%d ", m_status_code);
-    db.push(status_str);
+    char str[100];
+    auto len = std::snprintf(str, sizeof(str), "%d ", m_status_code);
+    db.push(str, len);
 
-    if (status_text.is_string()) {
-      db.push(status_text.s()->str());
+    if (auto s = m_head->as<ResponseHead>()->statusText.get()) {
+      db.push(s->str());
       db.push("\r\n");
     } else {
       if (auto str = lookup_status_text(m_status_code)) {
@@ -823,46 +810,28 @@ void Encoder::output_head() {
     }
 
   } else {
-    pjs::Value method, path, protocol;
-    if (auto head = m_start->head()) {
-      m_prop_method.get(head, method);
-      m_prop_path.get(head, path);
-      m_prop_protocol.get(head, protocol);
-    }
+    auto head = m_head->as<RequestHead>();
+    auto method = head->method.get();
+    auto path = head->path.get();
+    auto protocol = head->protocol.get();
 
-    if (method.is_string()) {
-      m_method = method.s();
-      db.push(method.s()->str());
-      db.push(' ');
-    } else {
-      m_method = s_GET;
-      db.push("GET ");
-    }
+    if (!method || !method->length()) method = s_GET;
+    if (!path || !path->length()) path = s_path_root;
+    if (!protocol || !protocol->length()) protocol = s_http_1_1;
 
-    if (path.is_string()) {
-      db.push(path.s()->str());
-      db.push(' ');
-    } else {
-      db.push("/ ");
-    }
+    m_method = method;
+    m_protocol = protocol;
 
-    if (protocol.is_string()) {
-      m_protocol = protocol.s();
-      db.push(protocol.s()->str());
-      db.push("\r\n");
-    } else {
-      m_protocol = s_http_1_1;
-      db.push("HTTP/1.1\r\n");
-    }
+    db.push(method->str());
+    db.push(' ');
+    db.push(path->str());
+    db.push(' ');
+    db.push(protocol->str());
+    db.push("\r\n");
   }
 
-  pjs::Value headers;
-  if (auto head = m_start->head()) {
-    m_prop_headers.get(head, headers);
-  }
-
-  if (headers.is_object()) {
-    headers.o()->iterate_all(
+  if (auto headers = m_head->headers.get()) {
+    headers->iterate_all(
       [&](pjs::Str *k, pjs::Value &v) {
         if (k == s_keep_alive) return;
         if (k == s_transfer_encoding) return;
@@ -907,7 +876,7 @@ void Encoder::output_head() {
   }
 
   if (!m_is_response) {
-    on_encode_request(m_start->head());
+    on_encode_request(m_head);
   }
 
   if (!no_content_length) {
@@ -939,7 +908,7 @@ void Encoder::output_head() {
   db.push("\r\n");
   db.flush();
 
-  output(m_start);
+  output(MessageStart::make(m_head));
   output(buffer);
 }
 
@@ -1380,16 +1349,16 @@ void Demux::on_decode_error() {
 
 void Demux::on_decode_request(http::RequestHead *head) {
   auto req = new RequestQueue::Request;
-  req->protocol = head->protocol();
-  req->method = head->method();
+  req->protocol = head->protocol;
+  req->method = head->method;
   req->header_connection = Decoder::header_connection();
   req->header_upgrade = Decoder::header_upgrade();
   m_request_queue.push(req);
   if (req->is_http2()) {
     auto head = ResponseHead::make();
     auto headers = pjs::Object::make();
-    head->status(101);
-    head->headers(headers);
+    head->status = 101;
+    head->headers = headers;
     headers->set(s_connection, s_upgrade.get());
     headers->set(s_upgrade, s_h2c.get());
     auto inp = Encoder::input();
@@ -1555,7 +1524,7 @@ void Mux::Session::on_encode_request(pjs::Object *head) {
 }
 
 void Mux::Session::on_decode_response(http::ResponseHead *head) {
-  if (head->status() == 100) {
+  if (head->status == 100) {
     if (m_request_queue.head()) {
       Decoder::set_bodiless(true);
       Muxer::Queue::increase_queue_count();
@@ -1710,16 +1679,16 @@ void Server::on_decode_error() {
 
 void Server::on_decode_request(http::RequestHead *head) {
   auto *req = new RequestQueue::Request;
-  req->protocol = head->protocol();
-  req->method = head->method();
+  req->protocol = head->protocol;
+  req->method = head->method;
   req->header_connection = Decoder::header_connection();
   req->header_upgrade = Decoder::header_upgrade();
   m_request_queue.push(req);
   if (req->is_http2()) {
     auto head = ResponseHead::make();
     auto headers = pjs::Object::make();
-    head->status(101);
-    head->headers(headers);
+    head->status = 101;
+    head->headers = headers;
     headers->set(s_connection, s_upgrade.get());
     headers->set(s_upgrade, s_h2c.get());
     auto inp = Encoder::input();

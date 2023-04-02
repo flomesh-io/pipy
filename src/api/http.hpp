@@ -39,102 +39,27 @@ namespace http {
 
 class MessageHead : public pjs::ObjectTemplate<MessageHead> {
 public:
-  enum class Field {
-    protocol,
-    headers,
-  };
-
-  auto protocol() -> pjs::Str* {
-    pjs::Value ret;
-    pjs::get<MessageHead>(this, MessageHead::Field::protocol, ret);
-    return ret.is_string() ? ret.s() : pjs::Str::empty.get();
-  }
-
-  auto headers() -> Object* {
-    pjs::Value ret;
-    pjs::get<MessageHead>(this, MessageHead::Field::headers, ret);
-    return ret.is_object() ? ret.o() : nullptr;
-  }
-
-  void protocol(pjs::Str *s) { pjs::set<MessageHead>(this, MessageHead::Field::protocol, s); }
-  void headers(pjs::Object *o) { pjs::set<MessageHead>(this, MessageHead::Field::headers, o); }
+  pjs::Ref<pjs::Str> protocol;
+  pjs::Ref<pjs::Object> headers;
 };
 
 class MessageTail : public pjs::ObjectTemplate<MessageTail> {
 public:
-  enum class Field {
-    headers,
-  };
-
-  auto headers() -> Object* {
-    pjs::Value ret;
-    pjs::get<MessageTail>(this, MessageTail::Field::headers, ret);
-    return ret.is_object() ? ret.o() : nullptr;
-  }
-
-  void headers(pjs::Object *o) { pjs::set<MessageTail>(this, MessageTail::Field::headers, o); }
+  pjs::Ref<pjs::Object> headers;
 };
 
 class RequestHead : public pjs::ObjectTemplate<RequestHead, MessageHead> {
 public:
-  enum class Field {
-    method,
-    scheme,
-    authority,
-    path,
-  };
-
-  auto method() -> pjs::Str* {
-    pjs::Value ret;
-    pjs::get<RequestHead>(this, RequestHead::Field::method, ret);
-    return ret.is_string() ? ret.s() : pjs::Str::empty.get();
-  }
-
-  auto scheme() -> pjs::Str* {
-    pjs::Value ret;
-    pjs::get<RequestHead>(this, RequestHead::Field::scheme, ret);
-    return ret.is_string() ? ret.s() : pjs::Str::empty.get();
-  }
-
-  auto authority() -> pjs::Str* {
-    pjs::Value ret;
-    pjs::get<RequestHead>(this, RequestHead::Field::authority, ret);
-    return ret.is_string() ? ret.s() : pjs::Str::empty.get();
-  }
-
-  auto path() -> pjs::Str* {
-    pjs::Value ret;
-    pjs::get<RequestHead>(this, RequestHead::Field::path, ret);
-    return ret.is_string() ? ret.s() : pjs::Str::empty.get();
-  }
-
-  void method(pjs::Str *s) { pjs::set<RequestHead>(this, RequestHead::Field::method, s); }
-  void scheme(pjs::Str *s) { pjs::set<RequestHead>(this, RequestHead::Field::scheme, s); }
-  void authority(pjs::Str *s) { pjs::set<RequestHead>(this, RequestHead::Field::authority, s); }
-  void path(pjs::Str *s) { pjs::set<RequestHead>(this, RequestHead::Field::path, s); }
+  pjs::Ref<pjs::Str> method;
+  pjs::Ref<pjs::Str> scheme;
+  pjs::Ref<pjs::Str> authority;
+  pjs::Ref<pjs::Str> path;
 };
 
 class ResponseHead : public pjs::ObjectTemplate<ResponseHead, MessageHead> {
 public:
-  enum class Field {
-    status,
-    statusText,
-  };
-
-  auto status() -> int {
-    pjs::Value ret;
-    pjs::get<ResponseHead>(this, ResponseHead::Field::status, ret);
-    return ret.is_number() ? ret.n() : 0;
-  }
-
-  auto status_text() -> pjs::Str* {
-    pjs::Value ret;
-    pjs::get<ResponseHead>(this, ResponseHead::Field::statusText, ret);
-    return ret.is_string() ? ret.s() : pjs::Str::empty.get();
-  }
-
-  void status(int n) { pjs::set<ResponseHead>(this, ResponseHead::Field::status, n); }
-  void status_text(pjs::Str *s) { pjs::set<ResponseHead>(this, ResponseHead::Field::statusText, s); }
+  int status = 200;
+  pjs::Ref<pjs::Str> statusText;
 };
 
 //

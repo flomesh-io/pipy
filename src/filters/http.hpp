@@ -107,7 +107,7 @@ private:
 
   bool is_turning_tunnel() const {
     if (m_is_response && m_is_switching && m_head) {
-      auto status = m_head->as<ResponseHead>()->status();
+      auto status = m_head->as<ResponseHead>()->status;
       return (101 <= status && status < 300);
     }
     return false;
@@ -146,17 +146,11 @@ protected:
   virtual void on_encode_tunnel() {}
 
 private:
-  pjs::Ref<MessageStart> m_start;
+  pjs::Ref<MessageHead> m_head;
   pjs::Ref<pjs::Str> m_protocol;
   pjs::Ref<pjs::Str> m_method;
   pjs::Ref<pjs::Str> m_header_connection;
   pjs::Ref<pjs::Str> m_header_upgrade;
-  pjs::PropertyCache m_prop_protocol;
-  pjs::PropertyCache m_prop_headers;
-  pjs::PropertyCache m_prop_method;
-  pjs::PropertyCache m_prop_path;
-  pjs::PropertyCache m_prop_status;
-  pjs::PropertyCache m_prop_status_text;
   Data m_buffer;
   int m_buffer_size = DATA_CHUNK_SIZE;
   int m_status_code = 0;
