@@ -797,7 +797,12 @@ void Encoder::output_head() {
       db.push("HTTP/1.1 ");
     }
 
-    if (m_status_code < 200 || m_status_code == 204) {
+    auto status = m_status_code;
+    if (!status) status = 200;
+    if (
+      (status < 200 || status == 204) ||
+      (m_is_switching && (200 <= status && status < 300))
+    ) {
       no_content_length = true;
     }
 
@@ -921,14 +926,14 @@ void Encoder::output_head() {
       db.push(s_content_length.get()->str());
       db.push(str, len);
     }
+  }
 
-    if (m_is_final) {
-      static const std::string str("connection: close\r\n");
-      db.push(str);
-    } else {
-      static const std::string str("connection: keep-alive\r\n");
-      db.push(str);
-    }
+  if (m_is_final) {
+    static const std::string str("connection: close\r\n");
+    db.push(str);
+  } else {
+    static const std::string str("connection: keep-alive\r\n");
+    db.push(str);
   }
 
   db.push("\r\n");
@@ -1915,12 +1920,13 @@ void TunnelServer::process(Event *evt) {
           return;
         }
 
+        pjs::Value status;
         if (auto head = res->head()) {
-          pjs::Value status;
           m_prop_status.get(head, status);
-          if (status.is_undefined() || (status.is_number() && 100 <= status.n() && status.n() < 300)) {
-            m_pipeline = sub_pipeline(0, true, output());
-          }
+        }
+
+        if (status.is_undefined() || (status.is_number() && 100 <= status.n() && status.n() < 300)) {
+          m_pipeline = sub_pipeline(0, true, output());
         }
 
         output(MessageStart::make(res->head()));

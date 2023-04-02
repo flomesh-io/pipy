@@ -63,6 +63,12 @@ public:
   auto head() const -> T* { return static_cast<T*>(m_head); }
   auto tail() const -> T* { return static_cast<T*>(m_tail); }
 
+  void clear() {
+    m_size = 0;
+    m_head = nullptr;
+    m_tail = nullptr;
+  }
+
   void push(Item *item) {
     item->m_back = m_tail;
     if (m_tail) {

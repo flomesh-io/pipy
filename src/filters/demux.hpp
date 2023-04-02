@@ -62,15 +62,16 @@ private:
 
     void open(Pipeline *pipeline);
     void close();
+    void end();
 
   private:
     Demuxer* m_demuxer;
     pjs::Ref<Pipeline> m_pipeline;
     bool m_closed = false;
-    bool m_stream_end = false;
+    bool m_ended = false;
 
     void recycle() {
-      if (m_closed && m_stream_end) {
+      if (m_closed && m_ended) {
         delete this;
       }
     }

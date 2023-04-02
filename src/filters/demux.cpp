@@ -35,8 +35,9 @@ namespace pipy {
 //
 
 void Demuxer::reset() {
-  while (auto s = m_streams.head()) {
-    delete s;
+  for (auto s = m_streams.head(); s; ) {
+    auto stream = s; s = s->next();
+    stream->end();
   }
 }
 
@@ -62,8 +63,17 @@ void Demuxer::Stream::open(Pipeline *pipeline) {
 }
 
 void Demuxer::Stream::close() {
-  m_closed = true;
-  recycle();
+  if (!m_closed) {
+    m_closed = true;
+    recycle();
+  }
+}
+
+void Demuxer::Stream::end() {
+  if (!m_ended) {
+    m_ended = true;
+    recycle();
+  }
 }
 
 void Demuxer::Stream::on_input(Event *evt) {
@@ -72,10 +82,7 @@ void Demuxer::Stream::on_input(Event *evt) {
 
 void Demuxer::Stream::on_reply(Event *evt) {
   EventProxy::output(evt);
-  if (evt->is<StreamEnd>()) {
-    m_stream_end = true;
-    recycle();
-  }
+  if (evt->is<StreamEnd>()) end();
 }
 
 //
@@ -164,16 +171,20 @@ void Demuxer::Queue::on_event(Event *evt) {
       if (auto s = m_stream) {
         auto input = s->input();
         input->input(evt);
-        input->input(StreamEnd::make());
-        on_close_stream(s);
-        m_stream = nullptr;
+        if (!m_dedicated) {
+          input->input(StreamEnd::make());
+          on_close_stream(s);
+          m_stream = nullptr;
+        }
       }
       break;
     case Event::Type::StreamEnd:
       if (auto s = m_stream) {
         s->input()->input(evt);
-        on_close_stream(s);
-        m_stream = nullptr;
+        if (!m_dedicated) {
+          on_close_stream(s);
+          m_stream = nullptr;
+        }
       }
       if (m_receivers.empty()) {
         EventFunction::output(evt);
