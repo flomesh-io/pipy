@@ -377,6 +377,7 @@ private:
   HTTP2Demuxer* m_http2_demuxer = nullptr;
   bool m_shutdown = false;
 
+  virtual auto on_queue_message(MessageStart *start) -> int override;
   virtual auto on_open_stream() -> EventFunction* override;
   virtual void on_close_stream(EventFunction *stream) override;
   virtual void on_decode_error() override;
@@ -531,6 +532,8 @@ private:
     Handler(Server *server)
       : m_server(server) {}
 
+    void reset();
+
   private:
     Server* m_server;
     MessageReader m_message_reader;
@@ -594,9 +597,7 @@ private:
 
   pjs::Ref<pjs::Function> m_handler;
   pjs::Ref<Pipeline> m_pipeline;
-  pjs::Ref<MessageStart> m_start;
-  pjs::PropertyCache m_prop_status;
-  Data m_buffer;
+  MessageReader m_message_reader;
 };
 
 //

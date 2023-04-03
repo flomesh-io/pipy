@@ -25,6 +25,8 @@
 
 #include "event.hpp"
 #include "pipeline.hpp"
+#include "input.hpp"
+#include "net.hpp"
 
 namespace pipy {
 
@@ -43,6 +45,30 @@ auto EventTarget::Input::make(Input *input) -> Input* {
 
 auto EventTarget::Input::make(EventTarget *target) -> Input* {
   return new TargetInput(target);
+}
+
+void EventTarget::Input::input_async(Event *evt) {
+  retain();
+  evt->retain();
+  Net::current().post(
+    [=]() {
+      InputContext ic;
+      input(evt);
+      release();
+      evt->release();
+    }
+  );
+}
+
+void EventTarget::Input::flush_async() {
+  retain();
+  Net::current().post(
+    [this]() {
+      InputContext ic;
+      input(Data::make());
+      release();
+    }
+  );
 }
 
 } // namespace pipy

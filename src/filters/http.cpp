@@ -1329,6 +1329,11 @@ void Demux::shutdown() {
   }
 }
 
+auto Demux::on_queue_message(MessageStart *start) -> int {
+  auto head = m_request_queue.head();
+  return head->is_switching() ? -1 : 1;
+}
+
 auto Demux::on_open_stream() -> EventFunction* {
   return Demuxer::open_stream(
     Filter::sub_pipeline(0, true)
@@ -1370,7 +1375,7 @@ void Demux::on_encode_response(ResponseHead *head) {
     if (m_request_queue.head()) {
       Encoder::set_bodiless(true);
     }
-    Demuxer::Queue::increase_queue_count();
+    Demuxer::Queue::increase_output_count();
   } else if (auto req = m_request_queue.shift()) {
     Encoder::set_final(req->is_final() || (m_shutdown && m_request_queue.empty()));
     Encoder::set_bodiless(req->is_bodiless());
@@ -1643,6 +1648,7 @@ void Server::reset() {
   Filter::reset();
   Decoder::reset();
   Encoder::reset();
+  m_handler->reset();
   m_request_queue.reset();
   m_tunnel = nullptr;
   if (m_http2_server) {
@@ -1741,6 +1747,10 @@ void Server::on_tunnel_end(StreamEnd *end) {
 // Server::Handler
 //
 
+void Server::Handler::reset() {
+  m_message_reader.reset();
+}
+
 void Server::Handler::on_event(Event *evt) {
   Pipeline::auto_release(this);
 
@@ -1759,7 +1769,7 @@ void Server::Handler::on_event(Event *evt) {
   }
 
   if (auto req = m_message_reader.read(evt)) {
-    Message *res = nullptr;
+    pjs::Ref<Message> res;
 
     if (auto &func = m_server->m_handler_func) {
       res = func(m_server, req);
@@ -1784,9 +1794,7 @@ void Server::Handler::on_event(Event *evt) {
     req->release();
 
     if (res) {
-      output(MessageStart::make(res->head()));
-      if (auto *body = res->body()) output(body);
-      output(evt);
+      res->write(EventFunction::output());
     } else {
       m_server->Filter::error("handler is not or did not return a Message");
     }
@@ -1799,14 +1807,12 @@ void Server::Handler::on_event(Event *evt) {
 
 TunnelServer::TunnelServer(pjs::Function *handler)
   : m_handler(handler)
-  , m_prop_status(s_status)
 {
 }
 
 TunnelServer::TunnelServer(const TunnelServer &r)
   : Filter(r)
   , m_handler(r.m_handler)
-  , m_prop_status(s_status)
 {
 }
 
@@ -1826,66 +1832,35 @@ auto TunnelServer::clone() -> Filter* {
 void TunnelServer::reset() {
   Filter::reset();
   m_pipeline = nullptr;
-  m_start = nullptr;
-  m_buffer.clear();
+  m_message_reader.reset();
 }
 
 void TunnelServer::process(Event *evt) {
-  if (!m_pipeline) {
-    if (auto start = evt->as<MessageStart>()) {
-      if (!m_start) {
-        m_start = start;
-      }
-    } else if (auto data = evt->as<Data>()) {
-      if (m_start) {
-        m_buffer.push(*data);
-      }
-    } else if (evt->is<MessageEnd>()) {
-      if (m_start) {
-        pjs::Ref<Message> res, req(
-          Message::make(
-            m_start->head(),
-            Data::make(m_buffer)
-          )
-        );
-
-        m_start = nullptr;
-        m_buffer.clear();
-
-        pjs::Value arg(req), ret;
-        if (!callback(m_handler, 1, &arg, ret)) return;
-        if (ret.is_object()) {
-          if (auto obj = ret.o()) {
-            if (obj->is_instance_of<Message>()) {
-              res = obj->as<Message>();
-            }
-          }
-        }
-
-        if (!res) {
-          Log::error("[acceptHTTPTunnel] handler did not return a valid message");
-          return;
-        }
-
-        pjs::Value status;
-        if (auto head = res->head()) {
-          m_prop_status.get(head, status);
-        }
-
-        if (status.is_undefined() || (status.is_number() && 100 <= status.n() && status.n() < 300)) {
-          m_pipeline = sub_pipeline(0, true, output());
-        }
-
-        output(MessageStart::make(res->head()));
-        if (auto *body = res->body()) output(body);
-        output(evt);
-        return;
-      }
-    }
-  }
-
   if (m_pipeline) {
     m_pipeline->input()->input(evt);
+
+  } else if (auto req = m_message_reader.read(evt)) {
+    pjs::Value arg(req), ret;
+    req->release();
+    if (!callback(m_handler, 1, &arg, ret)) return;
+
+    pjs::Ref<Message> res;
+    if (ret.is_nullish()) {
+      res = Message::make();
+    } else if (ret.is_instance_of<Message>()) {
+      res = ret.as<Message>();
+    } else {
+      Filter::error("handler did not return a Message");
+      return;
+    }
+
+    pjs::Ref<ResponseHead> head = pjs::coerce<ResponseHead>(res->head());
+    auto status = head->status;
+    if (100 <= status && status < 300) {
+      m_pipeline = sub_pipeline(0, true, output());
+    }
+
+    res->write(Filter::output());
   }
 }
 

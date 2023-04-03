@@ -96,7 +96,7 @@ public:
   class Queue : public EventFunction {
   public:
     void reset();
-    void increase_queue_count();
+    void increase_output_count();
     void dedicate();
     void shutdown();
 
@@ -108,6 +108,9 @@ public:
   private:
     virtual void on_event(Event *evt) override;
 
+    void queue(Event *evt);
+    void wait_output();
+    void continue_input();
     void shift();
     void clear();
     void close();
@@ -140,8 +143,12 @@ public:
     };
 
     EventFunction* m_stream = nullptr;
+    EventBuffer m_buffer;
     List<Receiver> m_receivers;
     pjs::Ref<StreamEnd> m_stream_end;
+    pjs::Ref<InputSource::Tap> m_closed_tap;
+    bool m_waiting_output_required = false;
+    bool m_waiting_output = false;
     bool m_dedicated = false;
     bool m_shutdown = false;
     bool m_closed = false;

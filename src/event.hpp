@@ -223,6 +223,9 @@ public:
     virtual void input(Event *evt) = 0;
     virtual void close() = 0;
 
+    void input_async(Event *evt);
+    void flush_async();
+
   protected:
     virtual ~Input() {}
 

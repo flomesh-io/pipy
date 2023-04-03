@@ -95,12 +95,14 @@ void Demuxer::Queue::reset() {
     m_stream = nullptr;
   }
   clear();
+  m_waiting_output_required = false;
+  m_waiting_output = false;
   m_dedicated = false;
   m_shutdown = false;
   m_closed = false;
 }
 
-void Demuxer::Queue::increase_queue_count() {
+void Demuxer::Queue::increase_output_count() {
   if (auto r = m_receivers.head()) {
     r->increase_output_count(1);
   }
@@ -123,6 +125,7 @@ void Demuxer::Queue::dedicate() {
     }
     clear();
     m_dedicated = true;
+    continue_input();
   }
 }
 
@@ -145,20 +148,37 @@ void Demuxer::Queue::on_event(Event *evt) {
     return;
   }
 
+  while (!m_waiting_output && !m_buffer.empty()) {
+    auto evt = m_buffer.shift();
+    queue(evt);
+    evt->release();
+  }
+
+  if (m_waiting_output) {
+    m_buffer.push(evt);
+    return;
+  }
+
+  queue(evt);
+}
+
+void Demuxer::Queue::queue(Event *evt) {
   switch (evt->type()) {
     case Event::Type::MessageStart:
       if (!m_stream) {
         int n = on_queue_message(evt->as<MessageStart>());
-        if (n >= 0) {
-          if (auto s = on_open_stream()) {
-            m_stream = s;
-            if (n > 0) {
-              auto r = new Receiver(this, n);
-              s->chain(r->input());
-              m_receivers.push(r);
-            }
-            s->input()->input(evt);
+        if (n < 0) {
+          m_waiting_output_required = true;
+          n = -n;
+        }
+        if (auto s = on_open_stream()) {
+          m_stream = s;
+          if (n > 0) {
+            auto r = new Receiver(this, n);
+            s->chain(r->input());
+            m_receivers.push(r);
           }
+          s->input()->input(evt);
         }
       }
       break;
@@ -169,9 +189,13 @@ void Demuxer::Queue::on_event(Event *evt) {
       break;
     case Event::Type::MessageEnd:
       if (auto s = m_stream) {
+        if (m_waiting_output_required) {
+          m_waiting_output_required = false;
+          wait_output();
+        }
         auto input = s->input();
         input->input(evt);
-        if (!m_dedicated) {
+        if (!m_dedicated && !m_waiting_output) {
           input->input(StreamEnd::make());
           on_close_stream(s);
           m_stream = nullptr;
@@ -195,6 +219,27 @@ void Demuxer::Queue::on_event(Event *evt) {
   }
 }
 
+void Demuxer::Queue::wait_output() {
+  if (!m_waiting_output) {
+    m_waiting_output = true;
+    if (auto *tap = InputContext::tap()) {
+      tap->close();
+      m_closed_tap = tap;
+    }
+  }
+}
+
+void Demuxer::Queue::continue_input() {
+  if (m_waiting_output) {
+    m_waiting_output = false;
+    EventFunction::input()->flush_async();
+    if (auto tap = m_closed_tap.get()) {
+      tap->open();
+      m_closed_tap = nullptr;
+    }
+  }
+}
+
 void Demuxer::Queue::shift() {
   auto r = m_receivers.head();
   m_receivers.remove(r);
@@ -205,6 +250,16 @@ void Demuxer::Queue::shift() {
     delete r;
   }
   if (m_receivers.empty()) {
+    if (m_waiting_output) {
+      if (!m_dedicated) {
+        if (auto s = m_stream) {
+          s->input()->input_async(StreamEnd::make());
+          on_close_stream(s);
+          m_stream = nullptr;
+        }
+      }
+      continue_input();
+    }
     if (m_stream_end) {
       EventFunction::output(m_stream_end);
       close();
