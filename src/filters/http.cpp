@@ -746,7 +746,6 @@ void Encoder::on_event(Event *evt) {
         m_protocol = protocol;
         m_method = method;
         m_path = path;
-        on_encode_request(head);
       }
     }
 
@@ -872,6 +871,10 @@ void Encoder::output_head() {
         }
       }
     );
+  }
+
+  if (!m_is_response) {
+    on_encode_request(m_head->as<RequestHead>());
   }
 
   if (!no_content_length) {
