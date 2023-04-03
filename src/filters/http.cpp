@@ -619,9 +619,9 @@ void Decoder::on_event(Event *evt) {
 
 void Decoder::message_start() {
   if (m_is_response) {
-    on_decode_response(m_head->as<http::ResponseHead>());
+    on_decode_response(m_head->as<ResponseHead>());
   } else {
-    on_decode_request(m_head->as<http::RequestHead>());
+    on_decode_request(m_head->as<RequestHead>());
   }
   if (is_turning_tunnel()) on_decode_tunnel();
   output(MessageStart::make(m_head));
@@ -717,19 +717,37 @@ void Encoder::on_event(Event *evt) {
   }
 
   if (auto start = evt->as<MessageStart>()) {
-    if (m_is_response) {
-      m_head = pjs::coerce<ResponseHead>(start->head());
-    } else {
-      m_head = pjs::coerce<RequestHead>(start->head());
-    }
-    m_content_length = 0;
-    m_chunked = false;
-    m_buffer.clear();
+    if (!m_head) {
+      m_content_length = 0;
+      m_chunked = false;
+      m_buffer.clear();
 
-    if (m_is_response) {
-      m_status_code = m_head->as<ResponseHead>()->status;
-      on_encode_response(start->head());
-      if (is_turning_tunnel()) on_encode_tunnel();
+      if (m_is_response) {
+        auto head = pjs::coerce<ResponseHead>(start->head());
+        auto protocol = head->protocol.get();
+        auto status = head->status;
+        if (!protocol || !protocol->length()) protocol = s_http_1_1;
+        if (status <= 0) status = 200;
+        m_head = head;
+        m_protocol = protocol;
+        m_status_code = status;
+        on_encode_response(head);
+        if (is_turning_tunnel()) on_encode_tunnel();
+
+      } else {
+        auto head = pjs::coerce<RequestHead>(start->head());
+        auto protocol = head->protocol.get();
+        auto method = head->method.get();
+        auto path = head->path.get();
+        if (!protocol || !protocol->length()) protocol = s_http_1_1;
+        if (!method || !method->length()) method = s_GET;
+        if (!path || !path->length()) path = s_path_root;
+        m_head = head;
+        m_protocol = protocol;
+        m_method = method;
+        m_path = path;
+        on_encode_request(head);
+      }
     }
 
   } else if (auto data = evt->as<Data>()) {
@@ -776,28 +794,13 @@ void Encoder::output_head() {
   Data::Builder db(*buffer, &s_dp);
 
   if (m_is_response) {
-    auto protocol = m_head->as<ResponseHead>()->protocol.get();
-    if (protocol && protocol->length() > 0) {
-      db.push(protocol->str());
-      db.push(' ');
-    } else {
-      db.push("HTTP/1.1 ");
-    }
-
-    auto status = m_status_code;
-    if (!status) status = 200;
-    if (
-      (status < 200 || status == 204) ||
-      (m_is_switching && (200 <= status && status < 300))
-    ) {
-      no_content_length = true;
-    }
-
+    auto head = m_head->as<ResponseHead>();
+    db.push(m_protocol->str());
+    db.push(' ');
     char str[100];
     auto len = std::snprintf(str, sizeof(str), "%d ", m_status_code);
     db.push(str, len);
-
-    if (auto s = m_head->as<ResponseHead>()->statusText.get()) {
+    if (auto s = head->statusText.get()) {
       db.push(s->str());
       db.push("\r\n");
     } else {
@@ -809,24 +812,20 @@ void Encoder::output_head() {
       }
     }
 
+    auto status = m_status_code;
+    if (
+      (status < 200 || status == 204) ||
+      (m_is_switching && (200 <= status && status < 300))
+    ) {
+      no_content_length = true;
+    }
+
   } else {
-    auto head = m_head->as<RequestHead>();
-    auto method = head->method.get();
-    auto path = head->path.get();
-    auto protocol = head->protocol.get();
-
-    if (!method || !method->length()) method = s_GET;
-    if (!path || !path->length()) path = s_path_root;
-    if (!protocol || !protocol->length()) protocol = s_http_1_1;
-
-    m_method = method;
-    m_protocol = protocol;
-
-    db.push(method->str());
+    db.push(m_method->str());
     db.push(' ');
-    db.push(path->str());
+    db.push(m_path->str());
     db.push(' ');
-    db.push(protocol->str());
+    db.push(m_protocol->str());
     db.push("\r\n");
   }
 
@@ -873,10 +872,6 @@ void Encoder::output_head() {
         }
       }
     );
-  }
-
-  if (!m_is_response) {
-    on_encode_request(m_head);
   }
 
   if (!no_content_length) {
@@ -1042,7 +1037,7 @@ void ResponseDecoder::process(Event *evt) {
   Filter::output(evt, Decoder::input());
 }
 
-void ResponseDecoder::on_decode_response(http::ResponseHead *head) {
+void ResponseDecoder::on_decode_response(ResponseHead *head) {
   if (m_options.bodiless_f) {
     pjs::Value ret;
     if (callback(m_options.bodiless_f, 0, nullptr, ret)) {
@@ -1268,7 +1263,6 @@ Demux::Demux(const Options &options)
   : Decoder(false)
   , Encoder(true)
   , m_options(options)
-  , m_prop_status(s_status)
 {
 }
 
@@ -1277,7 +1271,6 @@ Demux::Demux(const Demux &r)
   , Decoder(false)
   , Encoder(true)
   , m_options(r.m_options)
-  , m_prop_status(s_status)
 {
 }
 
@@ -1347,7 +1340,7 @@ void Demux::on_decode_error() {
   Filter::output(StreamEnd::make());
 }
 
-void Demux::on_decode_request(http::RequestHead *head) {
+void Demux::on_decode_request(RequestHead *head) {
   auto req = new RequestQueue::Request;
   req->protocol = head->protocol;
   req->method = head->method;
@@ -1369,9 +1362,8 @@ void Demux::on_decode_request(http::RequestHead *head) {
   }
 }
 
-void Demux::on_encode_response(pjs::Object *head) {
-  int status;
-  if (head && m_prop_status.get(head, status) && status == 100) {
+void Demux::on_encode_response(ResponseHead *head) {
+  if (head->status == 100) {
     if (m_request_queue.head()) {
       Encoder::set_bodiless(true);
     }
@@ -1514,7 +1506,7 @@ void Mux::Session::close() {
   }
 }
 
-void Mux::Session::on_encode_request(pjs::Object *head) {
+void Mux::Session::on_encode_request(RequestHead *head) {
   auto *req = new RequestQueue::Request;
   req->protocol = Encoder::protocol();
   req->method = Encoder::method();
@@ -1523,7 +1515,7 @@ void Mux::Session::on_encode_request(pjs::Object *head) {
   m_request_queue.push(req);
 }
 
-void Mux::Session::on_decode_response(http::ResponseHead *head) {
+void Mux::Session::on_decode_response(ResponseHead *head) {
   if (head->status == 100) {
     if (m_request_queue.head()) {
       Decoder::set_bodiless(true);
@@ -1677,7 +1669,7 @@ void Server::on_decode_error() {
   Filter::output(StreamEnd::make());
 }
 
-void Server::on_decode_request(http::RequestHead *head) {
+void Server::on_decode_request(RequestHead *head) {
   auto *req = new RequestQueue::Request;
   req->protocol = head->protocol;
   req->method = head->method;
@@ -1699,7 +1691,7 @@ void Server::on_decode_request(http::RequestHead *head) {
   }
 }
 
-void Server::on_encode_response(pjs::Object *head) {
+void Server::on_encode_response(ResponseHead *head) {
   if (auto *req = m_request_queue.shift()) {
     Encoder::set_final(req->is_final() || (m_shutdown && m_request_queue.empty()));
     Encoder::set_bodiless(req->is_bodiless());

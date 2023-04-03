@@ -57,8 +57,8 @@ public:
   void set_tunnel(bool b) { m_is_tunnel = b; }
 
 protected:
-  virtual void on_decode_request(http::RequestHead *head) {}
-  virtual void on_decode_response(http::ResponseHead *head) {}
+  virtual void on_decode_request(RequestHead *head) {}
+  virtual void on_decode_response(ResponseHead *head) {}
   virtual void on_decode_tunnel() {}
   virtual void on_decode_error() {}
   virtual void on_http2_pass() {}
@@ -141,14 +141,15 @@ public:
   void set_tunnel(bool b) { m_is_tunnel = b; }
 
 protected:
-  virtual void on_encode_request(pjs::Object *head) {}
-  virtual void on_encode_response(pjs::Object *head) {}
+  virtual void on_encode_request(RequestHead *head) {}
+  virtual void on_encode_response(ResponseHead *head) {}
   virtual void on_encode_tunnel() {}
 
 private:
   pjs::Ref<MessageHead> m_head;
   pjs::Ref<pjs::Str> m_protocol;
   pjs::Ref<pjs::Str> m_method;
+  pjs::Ref<pjs::Str> m_path;
   pjs::Ref<pjs::Str> m_header_connection;
   pjs::Ref<pjs::Str> m_header_upgrade;
   Data m_buffer;
@@ -228,7 +229,7 @@ private:
 
   Options m_options;
 
-  virtual void on_decode_response(http::ResponseHead *head) override;
+  virtual void on_decode_response(ResponseHead *head) override;
 };
 
 //
@@ -373,15 +374,14 @@ private:
 
   Options m_options;
   RequestQueue m_request_queue;
-  pjs::PropertyCache m_prop_status;
   HTTP2Demuxer* m_http2_demuxer = nullptr;
   bool m_shutdown = false;
 
   virtual auto on_open_stream() -> EventFunction* override;
   virtual void on_close_stream(EventFunction *stream) override;
   virtual void on_decode_error() override;
-  virtual void on_decode_request(http::RequestHead *head) override;
-  virtual void on_encode_response(pjs::Object *head) override;
+  virtual void on_decode_request(RequestHead *head) override;
+  virtual void on_encode_response(ResponseHead *head) override;
   virtual void on_encode_tunnel() override;
   virtual void on_http2_pass() override;
 
@@ -454,8 +454,8 @@ private:
     virtual auto open_stream(Muxer *muxer) -> EventFunction* override;
     virtual void close_stream(EventFunction *stream) override;
     virtual void close() override;
-    virtual void on_encode_request(pjs::Object *head) override;
-    virtual void on_decode_response(http::ResponseHead *head) override;
+    virtual void on_encode_request(RequestHead *head) override;
+    virtual void on_decode_response(ResponseHead *head) override;
     virtual void on_decode_tunnel() override;
     virtual void on_decode_error() override;
     virtual void on_notify() override;
@@ -514,8 +514,8 @@ private:
   virtual void dump(Dump &d) override;
 
   virtual void on_decode_error() override;
-  virtual void on_decode_request(http::RequestHead *head) override;
-  virtual void on_encode_response(pjs::Object *head) override;
+  virtual void on_decode_request(RequestHead *head) override;
+  virtual void on_encode_response(ResponseHead *head) override;
   virtual void on_encode_tunnel() override;
   virtual void on_http2_pass() override;
 
