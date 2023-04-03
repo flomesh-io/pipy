@@ -533,8 +533,7 @@ private:
 
   private:
     Server* m_server;
-    pjs::Ref<MessageStart> m_start;
-    Data m_buffer;
+    MessageReader m_message_reader;
 
     virtual void on_event(Event *evt) override;
     virtual void on_recycle() override { delete static_cast<Handler*>(this); }

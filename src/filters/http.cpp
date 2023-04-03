@@ -1747,63 +1747,46 @@ void Server::Handler::on_event(Event *evt) {
     } else if (auto end = evt->as<StreamEnd>()) {
       m_server->on_tunnel_end(end);
     }
+    return;
+  }
 
-  } else if (auto start = evt->as<MessageStart>()) {
-    if (!m_start) {
-      m_start = start;
-      m_buffer.clear();
-    }
+  if (evt->is<StreamEnd>()) {
+    m_server->shutdown();
+    return;
+  }
 
-  } else if (auto data = evt->as<Data>()) {
-    if (m_start) {
-      m_buffer.push(*data);
-    }
+  if (auto req = m_message_reader.read(evt)) {
+    Message *res = nullptr;
 
-  } else if (evt->is<MessageEnd>()) {
-    if (m_start) {
-      pjs::Ref<Message> res, req(
-        Message::make(
-          m_start->head(),
-          Data::make(m_buffer)
-        )
-      );
+    if (auto &func = m_server->m_handler_func) {
+      res = func(m_server, req);
 
-      m_start = nullptr;
-      m_buffer.clear();
+    } else if (auto &handler = m_server->m_handler_obj) {
+      if (handler->is_instance_of<Message>()) {
+        res = handler->as<Message>();
 
-      if (auto &func = m_server->m_handler_func) {
-        res = func(m_server, req);
-
-      } else if (auto &handler = m_server->m_handler_obj) {
-        if (handler->is_instance_of<Message>()) {
-          res = handler->as<Message>();
-
-        } else if (handler->is_function()) {
-          pjs::Value arg(req), ret;
-          if (!m_server->callback(handler->as<pjs::Function>(), 1, &arg, ret)) return;
-          if (ret.is_object()) {
-            if (auto obj = ret.o()) {
-              if (obj->is_instance_of<Message>()) {
-                res = obj->as<Message>();
-              }
+      } else if (handler->is_function()) {
+        pjs::Value arg(req), ret;
+        if (!m_server->callback(handler->as<pjs::Function>(), 1, &arg, ret)) return;
+        if (ret.is_object()) {
+          if (auto obj = ret.o()) {
+            if (obj->is_instance_of<Message>()) {
+              res = obj->as<Message>();
             }
           }
         }
       }
-
-      if (res) {
-        output(MessageStart::make(res->head()));
-        if (auto *body = res->body()) output(body);
-        output(evt);
-      } else {
-        Log::error("[serveHTTP] handler did not return a valid message");
-        output(MessageStart::make());
-        output(evt);
-      }
     }
 
-  } else if (evt->is<StreamEnd>()) {
-    m_server->shutdown();
+    req->release();
+
+    if (res) {
+      output(MessageStart::make(res->head()));
+      if (auto *body = res->body()) output(body);
+      output(evt);
+    } else {
+      m_server->Filter::error("handler is not or did not return a Message");
+    }
   }
 }
 
