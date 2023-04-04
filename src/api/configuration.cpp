@@ -145,8 +145,8 @@ void FilterConfigurator::connect(const pjs::Value &target, pjs::Object *options)
   append_filter(new Connect(target, options));
 }
 
-void FilterConfigurator::connect_http_tunnel(const pjs::Value &address) {
-  require_sub_pipeline(append_filter(new http::TunnelClient(address)));
+void FilterConfigurator::connect_http_tunnel(pjs::Object *handshake) {
+  require_sub_pipeline(append_filter(new http::TunnelClient(handshake)));
 }
 
 void FilterConfigurator::connect_proxy_protocol(const pjs::Value &address) {
@@ -169,12 +169,12 @@ void FilterConfigurator::decode_dubbo() {
   append_filter(new dubbo::Decoder());
 }
 
-void FilterConfigurator::decode_http_request() {
-  append_filter(new http::RequestDecoder());
+void FilterConfigurator::decode_http_request(pjs::Function *handler) {
+  append_filter(new http::RequestDecoder(handler));
 }
 
-void FilterConfigurator::decode_http_response(pjs::Object *options) {
-  append_filter(new http::ResponseDecoder(options));
+void FilterConfigurator::decode_http_response(pjs::Function *handler) {
+  append_filter(new http::ResponseDecoder(handler));
 }
 
 void FilterConfigurator::decode_mqtt() {
@@ -241,12 +241,12 @@ void FilterConfigurator::encode_dubbo() {
   append_filter(new dubbo::Encoder());
 }
 
-void FilterConfigurator::encode_http_request(pjs::Object *options) {
-  append_filter(new http::RequestEncoder(options));
+void FilterConfigurator::encode_http_request(pjs::Object *options, pjs::Function *handler) {
+  append_filter(new http::RequestEncoder(options, handler));
 }
 
-void FilterConfigurator::encode_http_response(pjs::Object *options) {
-  append_filter(new http::ResponseEncoder(options));
+void FilterConfigurator::encode_http_response(pjs::Object *options, pjs::Function *handler) {
+  append_filter(new http::ResponseEncoder(options, handler));
 }
 
 void FilterConfigurator::encode_mqtt() {
@@ -1077,13 +1077,14 @@ template<> void ClassDef<FilterConfigurator>::init() {
   // FilterConfigurator.connectHTTPTunnel
   method("connectHTTPTunnel", [](Context &ctx, Object *thiz, Value &result) {
     try {
-      Str *layout;
-      Value address;
-      if (ctx.try_arguments(2, &layout, &address)) {
-        thiz->as<FilterConfigurator>()->connect_http_tunnel(address);
-        thiz->as<FilterConfigurator>()->to(layout);
-      } else if (ctx.arguments(1, &address)) {
-        thiz->as<FilterConfigurator>()->connect_http_tunnel(address);
+      Message *handshake;
+      Function *handshake_f;
+      if (ctx.get(0, handshake)) {
+        thiz->as<FilterConfigurator>()->connect_http_tunnel(handshake);
+      } else if (ctx.get(0, handshake_f)) {
+        thiz->as<FilterConfigurator>()->connect_http_tunnel(handshake_f);
+      } else {
+        ctx.error_argument_type(0, "a Message or a function");
       }
       result.set(thiz);
     } catch (std::runtime_error &err) {
@@ -1161,8 +1162,10 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.decodeHTTPRequest
   method("decodeHTTPRequest", [](Context &ctx, Object *thiz, Value &result) {
+    Function *handler = nullptr;
+    if (!ctx.arguments(0, &handler)) return;
     try {
-      thiz->as<FilterConfigurator>()->decode_http_request();
+      thiz->as<FilterConfigurator>()->decode_http_request(handler);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1171,10 +1174,10 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.decodeHTTPResponse
   method("decodeHTTPResponse", [](Context &ctx, Object *thiz, Value &result) {
-    Object *options = nullptr;
-    if (!ctx.arguments(0, &options)) return;
+    Function *handler = nullptr;
+    if (!ctx.arguments(0, &handler)) return;
     try {
-      thiz->as<FilterConfigurator>()->decode_http_response(options);
+      thiz->as<FilterConfigurator>()->decode_http_response(handler);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1390,9 +1393,14 @@ template<> void ClassDef<FilterConfigurator>::init() {
   // FilterConfigurator.encodeHTTPRequest
   method("encodeHTTPRequest", [](Context &ctx, Object *thiz, Value &result) {
     Object *options = nullptr;
-    if (!ctx.arguments(0, &options)) return;
+    Function *handler = nullptr;
+    if (ctx.is_function(0)) {
+      if (!ctx.arguments(1, &handler, &options)) return;
+    } else {
+      if (!ctx.arguments(0, &options)) return;
+    }
     try {
-      thiz->as<FilterConfigurator>()->encode_http_request(options);
+      thiz->as<FilterConfigurator>()->encode_http_request(options, handler);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1402,9 +1410,14 @@ template<> void ClassDef<FilterConfigurator>::init() {
   // FilterConfigurator.encodeHTTPResponse
   method("encodeHTTPResponse", [](Context &ctx, Object *thiz, Value &result) {
     Object *options = nullptr;
-    if (!ctx.arguments(0, &options)) return;
+    Function *handler = nullptr;
+    if (ctx.is_function(0)) {
+      if (!ctx.arguments(1, &handler, &options)) return;
+    } else {
+      if (!ctx.arguments(0, &options)) return;
+    }
     try {
-      thiz->as<FilterConfigurator>()->encode_http_response(options);
+      thiz->as<FilterConfigurator>()->encode_http_response(options, handler);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

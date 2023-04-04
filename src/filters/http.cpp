@@ -343,17 +343,15 @@ void Decoder::reset() {
   m_head = nullptr;
   m_header_transfer_encoding = nullptr;
   m_header_content_length = nullptr;
-  m_header_connection = nullptr;
-  m_header_upgrade = nullptr;
+  m_responded_tunnel_type = TunnelType::NONE;
   m_body_size = 0;
   m_is_bodiless = false;
-  m_is_switching = false;
   m_is_tunnel = false;
   m_has_error = false;
 }
 
 void Decoder::on_event(Event *evt) {
-  if (m_state == HTTP2_PASS) {
+  if (m_is_tunnel) {
     EventFunction::output(evt);
     return;
   }
@@ -361,11 +359,6 @@ void Decoder::on_event(Event *evt) {
   if (auto e = evt->as<StreamEnd>()) {
     stream_end(e);
     reset();
-    return;
-  }
-
-  if (m_is_tunnel) {
-    output(evt);
     return;
   }
 
@@ -514,8 +507,6 @@ void Decoder::on_event(Event *evt) {
         m_head->headers = pjs::Object::make();
         m_header_transfer_encoding = nullptr;
         m_header_content_length = nullptr;
-        m_header_connection = nullptr;
-        m_header_upgrade = nullptr;
         state = HEADER;
         m_head_buffer.clear();
         break;
@@ -547,8 +538,6 @@ void Decoder::on_event(Event *evt) {
             headers->set(key, v);
             if (key == s_transfer_encoding) m_header_transfer_encoding = v;
             else if (key == s_content_length) m_header_content_length = v;
-            else if (key == s_connection) m_header_connection = v;
-            else if (key == s_upgrade) m_header_upgrade = v;
           }
           state = HEADER;
           m_head_buffer.clear();
@@ -565,7 +554,7 @@ void Decoder::on_event(Event *evt) {
             utils::starts_with(m_header_transfer_encoding->str(), s_chunked)
           ) {
             message_start();
-            if (is_bodiless_response()) {
+            if (m_is_bodiless) {
               message_end();
               state = HEAD;
             } else {
@@ -582,7 +571,7 @@ void Decoder::on_event(Event *evt) {
               }
             }
             if (m_body_size > 0) {
-              if (is_bodiless_response()) {
+              if (m_is_bodiless) {
                 message_end();
                 state = HEAD;
               } else {
@@ -602,8 +591,8 @@ void Decoder::on_event(Event *evt) {
         }
         break;
       case HTTP2_PASS: {
-        on_http2_pass();
-        EventFunction::output(Data::make(std::move(*data)));
+        m_is_tunnel = true;
+        on_decode_tunnel(TunnelType::HTTP2);
         break;
       }
       default: break;
@@ -619,17 +608,26 @@ void Decoder::on_event(Event *evt) {
 
 void Decoder::message_start() {
   if (m_is_response) {
-    on_decode_response(m_head->as<ResponseHead>());
+    m_is_bodiless = false;
+    auto res = m_head->as<ResponseHead>();
+    if (auto req = on_decode_response(res)) {
+      m_is_bodiless = req->is_bodiless();
+      auto tt = req->tunnel_type();
+      if (res->is_tunnel(tt)) m_responded_tunnel_type = tt;
+      req->release();
+    }
   } else {
     on_decode_request(m_head->as<RequestHead>());
   }
-  if (is_turning_tunnel()) on_decode_tunnel();
   output(MessageStart::make(m_head));
 }
 
 void Decoder::message_end() {
+  if (m_responded_tunnel_type != TunnelType::NONE) {
+    m_is_tunnel = true;
+    on_decode_tunnel(m_responded_tunnel_type);
+  }
   output(MessageEnd::make());
-  if (is_turning_tunnel()) m_is_tunnel = true;
 }
 
 void Decoder::stream_end(StreamEnd *end) {
@@ -701,12 +699,13 @@ void Encoder::reset() {
   m_head = nullptr;
   m_protocol = nullptr;
   m_method = nullptr;
-  m_header_connection = nullptr;
-  m_header_upgrade = nullptr;
+  m_path = nullptr;
+  m_responded_tunnel_type = TunnelType::NONE;
   m_status_code = 0;
+  m_content_length = 0;
+  m_chunked = false;
   m_is_final = false;
   m_is_bodiless = false;
-  m_is_switching = false;
   m_is_tunnel = false;
 }
 
@@ -725,14 +724,19 @@ void Encoder::on_event(Event *evt) {
       if (m_is_response) {
         auto head = pjs::coerce<ResponseHead>(start->head());
         auto protocol = head->protocol.get();
-        auto status = head->status;
         if (!protocol || !protocol->length()) protocol = s_http_1_1;
-        if (status <= 0) status = 200;
         m_head = head;
         m_protocol = protocol;
-        m_status_code = status;
-        on_encode_response(head);
-        if (is_turning_tunnel()) on_encode_tunnel();
+        m_status_code = head->status;
+        m_is_final = false;
+        m_is_bodiless = false;
+        if (auto req = on_encode_response(head)) {
+          m_is_final = req->is_final();
+          m_is_bodiless = req->is_bodiless();
+          auto tt = req->tunnel_type();
+          if (head->is_tunnel(tt)) m_responded_tunnel_type = tt;
+          req->release();
+        }
 
       } else {
         auto head = pjs::coerce<RequestHead>(start->head());
@@ -751,7 +755,7 @@ void Encoder::on_event(Event *evt) {
 
   } else if (auto data = evt->as<Data>()) {
     if (m_head) {
-      if (is_bodiless_response()) {
+      if (m_is_bodiless) {
         m_content_length += data->size();
       } else if (m_chunked) {
         if (!data->empty()) output_chunk(*data);
@@ -814,7 +818,7 @@ void Encoder::output_head() {
     auto status = m_status_code;
     if (
       (status < 200 || status == 204) ||
-      (m_is_switching && (200 <= status && status < 300))
+      (m_responded_tunnel_type != TunnelType::NONE)
     ) {
       no_content_length = true;
     }
@@ -834,21 +838,17 @@ void Encoder::output_head() {
         if (k == s_keep_alive) return;
         if (k == s_transfer_encoding) return;
         if (k == s_content_length) {
-          if (is_bodiless_response()) {
+          if (m_is_bodiless) {
             no_content_length = true;
           } else {
             return;
           }
         } else if (k == s_connection) {
-          auto *s = v.to_string();
-          auto is_upgrade = utils::iequals(s->str(), s_upgrade.get()->str());
-          m_header_connection = s;
-          s->release();
-          if (!is_upgrade) return;
-        } else if (k == s_upgrade) {
-          auto *s = v.to_string();
-          m_header_upgrade = s;
-          s->release();
+          if (v.is_string()) {
+            if (!utils::iequals(v.s()->str(), s_upgrade.get()->str())) {
+              return;
+            }
+          }
         }
         if (k == s_set_cookie && v.is_array()) {
           v.as<pjs::Array>()->iterate_all(
@@ -921,7 +921,7 @@ void Encoder::output_chunk(const Data &data) {
 }
 
 void Encoder::output_end(Event *evt) {
-  if (is_bodiless_response()) {
+  if (m_is_bodiless) {
     output_head();
   } else if (m_chunked) {
     output(s_dp.make("0\r\n\r\n"));
@@ -931,26 +931,27 @@ void Encoder::output_end(Event *evt) {
       output(Data::make(std::move(m_buffer)));
     }
   }
+  if (m_responded_tunnel_type != TunnelType::NONE) {
+    m_is_tunnel = true;
+    on_encode_tunnel(m_responded_tunnel_type);
+  }
   output(evt);
-  if (is_turning_tunnel()) m_is_tunnel = true;
-  m_protocol = nullptr;
-  m_method = nullptr;
-  m_header_connection = nullptr;
-  m_header_upgrade = nullptr;
 }
 
 //
 // RequestDecoder
 //
 
-RequestDecoder::RequestDecoder()
-  : m_ef_decode(false)
+RequestDecoder::RequestDecoder(pjs::Function *handler)
+  : Decoder(false)
+  , m_handler(handler)
 {
 }
 
 RequestDecoder::RequestDecoder(const RequestDecoder &r)
   : Filter(r)
-  , m_ef_decode(false)
+  , Decoder(false)
+  , m_handler(r.m_handler)
 {
 }
 
@@ -969,47 +970,42 @@ auto RequestDecoder::clone() -> Filter* {
 
 void RequestDecoder::chain() {
   Filter::chain();
-  m_ef_decode.chain(output());
+  Decoder::chain(Filter::output());
 }
 
 void RequestDecoder::reset() {
   Filter::reset();
-  m_ef_decode.reset();
+  Decoder::reset();
 }
 
 void RequestDecoder::process(Event *evt) {
   if (evt->is<Data>()) {
-    output(evt, m_ef_decode.input());
+    Decoder::input()->input(evt);
   } else if (evt->is<StreamEnd>()) {
-    output(evt);
+    Filter::output(evt);
   }
 }
 
-//
-// ResponseDecoder::Options
-//
-
-ResponseDecoder::Options::Options(pjs::Object *options) {
-  Value(options, "bodiless")
-    .get(bodiless)
-    .get(bodiless_f)
-    .check_nullable();
+void RequestDecoder::on_decode_request(RequestHead *head) {
+  if (!m_handler) return;
+  pjs::Value arg(head), ret;
+  Filter::callback(m_handler, 1, &arg, ret);
 }
 
 //
 // ResponseDecoder
 //
 
-ResponseDecoder::ResponseDecoder(const Options &options)
+ResponseDecoder::ResponseDecoder(pjs::Function *handler)
   : Decoder(true)
-  , m_options(options)
+  , m_handler(handler)
 {
 }
 
 ResponseDecoder::ResponseDecoder(const ResponseDecoder &r)
   : Filter(r)
   , Decoder(true)
-  , m_options(r.m_options)
+  , m_handler(r.m_handler)
 {
 }
 
@@ -1040,15 +1036,18 @@ void ResponseDecoder::process(Event *evt) {
   Filter::output(evt, Decoder::input());
 }
 
-void ResponseDecoder::on_decode_response(ResponseHead *head) {
-  if (m_options.bodiless_f) {
-    pjs::Value ret;
-    if (callback(m_options.bodiless_f, 0, nullptr, ret)) {
-      Decoder::set_bodiless(ret.to_boolean());
+auto ResponseDecoder::on_decode_response(ResponseHead *head) -> RequestHead* {
+  if (!m_handler) return nullptr;
+  pjs::Value arg(head), ret;
+  if (Filter::callback(m_handler, 1, &arg, ret)) {
+    if (ret.is_nullish()) return nullptr;
+    if (ret.is_object()) {
+      pjs::Ref<RequestHead> req = pjs::coerce<RequestHead>(ret.o());
+      return req.release();
     }
-  } else {
-    Decoder::set_bodiless(m_options.bodiless);
+    Filter::error("callback did not return an object for request head");
   }
+  return nullptr;
 }
 
 //
@@ -1065,9 +1064,10 @@ RequestEncoder::Options::Options(pjs::Object *options) {
 // RequestEncoder
 //
 
-RequestEncoder::RequestEncoder(const Options &options)
+RequestEncoder::RequestEncoder(const Options &options, pjs::Function *handler)
   : Encoder(false)
   , m_options(options)
+  , m_handler(handler)
 {
 }
 
@@ -1075,6 +1075,7 @@ RequestEncoder::RequestEncoder(const RequestEncoder &r)
   : Filter(r)
   , Encoder(false)
   , m_options(r.m_options)
+  , m_handler(r.m_handler)
 {
 }
 
@@ -1106,8 +1107,14 @@ void RequestEncoder::process(Event *evt) {
   if (evt->is<StreamEnd>()) {
     Filter::output(evt);
   } else {
-    Filter::output(evt, Encoder::input());
+    Encoder::input()->input(evt);
   }
+}
+
+void RequestEncoder::on_encode_request(RequestHead *head) {
+  if (!m_handler) return;
+  pjs::Value arg(head), ret;
+  Filter::callback(m_handler, 1, &arg, ret);
 }
 
 //
@@ -1115,14 +1122,6 @@ void RequestEncoder::process(Event *evt) {
 //
 
 ResponseEncoder::Options::Options(pjs::Object *options) {
-  Value(options, "final")
-    .get(final)
-    .get(final_f)
-    .check_nullable();
-  Value(options, "bodiless")
-    .get(bodiless)
-    .get(bodiless_f)
-    .check_nullable();
   Value(options, "bufferSize")
     .get_binary_size(buffer_size)
     .check_nullable();
@@ -1132,9 +1131,10 @@ ResponseEncoder::Options::Options(pjs::Object *options) {
 // ResponseEncoder
 //
 
-ResponseEncoder::ResponseEncoder(const Options &options)
+ResponseEncoder::ResponseEncoder(const Options &options, pjs::Function *handler)
   : Encoder(true)
   , m_options(options)
+  , m_handler(handler)
 {
 }
 
@@ -1142,6 +1142,7 @@ ResponseEncoder::ResponseEncoder(const ResponseEncoder &r)
   : Filter(r)
   , Encoder(true)
   , m_options(r.m_options)
+  , m_handler(r.m_handler)
 {
 }
 
@@ -1173,26 +1174,22 @@ void ResponseEncoder::process(Event *evt) {
   if (evt->is<StreamEnd>()) {
     Filter::output(evt);
   } else {
-    if (evt->is<MessageStart>()) {
-      if (m_options.final_f) {
-        pjs::Value ret;
-        if (callback(m_options.final_f, 0, nullptr, ret)) {
-          Encoder::set_final(ret.to_boolean());
-        }
-      } else {
-        Encoder::set_final(m_options.final);
-      }
-      if (m_options.bodiless_f) {
-        pjs::Value ret;
-        if (callback(m_options.bodiless_f, 0, nullptr, ret)) {
-          Encoder::set_bodiless(ret.to_boolean());
-        }
-      } else {
-        Encoder::set_bodiless(m_options.bodiless);
-      }
-    }
-    Filter::output(evt, Encoder::input());
+    Encoder::input()->input(evt);
   }
+}
+
+auto ResponseEncoder::on_encode_response(ResponseHead *head) -> RequestHead* {
+  if (!m_handler) return nullptr;
+  pjs::Value arg(head), ret;
+  if (Filter::callback(m_handler, 1, &arg, ret)) {
+    if (ret.is_nullish()) return nullptr;
+    if (ret.is_object()) {
+      pjs::Ref<RequestHead> req = pjs::coerce<RequestHead>(ret.o());
+      return req.release();
+    }
+    Filter::error("callback did not return an object for request head");
+  }
+  return nullptr;
 }
 
 //
@@ -1206,44 +1203,24 @@ void RequestQueue::reset() {
   }
 }
 
-void RequestQueue::push(Request *req) {
-  m_queue.push(req);
+void RequestQueue::push(RequestHead *head) {
+  auto r = new Request;
+  r->head = head;
+  m_queue.push(r);
 }
 
-auto RequestQueue::shift() -> Request* {
-  auto req = m_queue.head();
-  if (req) m_queue.remove(req);
-  return req;
+auto RequestQueue::head() const -> RequestHead* {
+  auto r = m_queue.head();
+  return r ? r->head : nullptr;
 }
 
-//
-// RequestQueue
-//
-
-bool RequestQueue::Request::is_final() const {
-  if (header_connection) {
-    return (header_connection == s_close);
-  } else {
-    return (protocol == s_http_1_0);
-  }
-}
-
-bool RequestQueue::Request::is_bodiless() const {
-  return (
-    method == s_HEAD ||
-    method == s_CONNECT || (
-      header_upgrade &&
-      header_upgrade != s_h2c
-    )
-  );
-}
-
-bool RequestQueue::Request::is_switching() const {
-  return (method == s_CONNECT || header_upgrade);
-}
-
-bool RequestQueue::Request::is_http2() const {
-  return (header_upgrade == s_h2c);
+auto RequestQueue::shift() -> RequestHead* {
+  auto r = m_queue.head();
+  if (!r) return nullptr;
+  auto head = r->head.release();
+  m_queue.remove(r);
+  delete r;
+  return head;
 }
 
 //
@@ -1331,7 +1308,7 @@ void Demux::shutdown() {
 
 auto Demux::on_queue_message(MessageStart *start) -> int {
   auto head = m_request_queue.head();
-  return head->is_switching() ? -1 : 1;
+  return head->tunnel_type() == TunnelType::NONE ? 1 : -1;
 }
 
 auto Demux::on_open_stream() -> EventFunction* {
@@ -1349,50 +1326,27 @@ void Demux::on_decode_error() {
 }
 
 void Demux::on_decode_request(RequestHead *head) {
-  auto req = new RequestQueue::Request;
-  req->protocol = head->protocol;
-  req->method = head->method;
-  req->header_connection = Decoder::header_connection();
-  req->header_upgrade = Decoder::header_upgrade();
-  m_request_queue.push(req);
-  if (req->is_http2()) {
-    auto head = ResponseHead::make();
-    auto headers = pjs::Object::make();
-    head->status = 101;
-    head->headers = headers;
-    headers->set(s_connection, s_upgrade.get());
-    headers->set(s_upgrade, s_h2c.get());
-    auto inp = Encoder::input();
-    inp->input(MessageStart::make(head));
-    inp->input(MessageEnd::make());
-    upgrade_http2();
-    Decoder::chain(m_http2_demuxer->initial_stream());
-  }
+  m_request_queue.push(head);
 }
 
-void Demux::on_encode_response(ResponseHead *head) {
+auto Demux::on_encode_response(ResponseHead *head) -> RequestHead* {
   if (head->status == 100) {
-    if (m_request_queue.head()) {
-      Encoder::set_bodiless(true);
-    }
     Demuxer::Queue::increase_output_count();
-  } else if (auto req = m_request_queue.shift()) {
-    Encoder::set_final(req->is_final() || (m_shutdown && m_request_queue.empty()));
-    Encoder::set_bodiless(req->is_bodiless());
-    Encoder::set_switching(req->is_switching());
-    delete req;
+    return nullptr;
+  } else {
+    return m_request_queue.shift();
   }
 }
 
-void Demux::on_encode_tunnel() {
-  Decoder::set_tunnel(true);
-  Demuxer::Queue::dedicate();
-}
-
-void Demux::on_http2_pass() {
-  upgrade_http2();
-  m_http2_demuxer->open();
-  Decoder::chain(m_http2_demuxer->EventTarget::input());
+void Demux::on_encode_tunnel(TunnelType tt) {
+  Decoder::set_tunnel();
+  if (tt == TunnelType::HTTP2) {
+    upgrade_http2();
+    m_http2_demuxer->open();
+    Decoder::chain(m_http2_demuxer->EventTarget::input());
+  } else {
+    Demuxer::Queue::dedicate();
+  }
 }
 
 void Demux::upgrade_http2() {
@@ -1515,29 +1469,20 @@ void Mux::Session::close() {
 }
 
 void Mux::Session::on_encode_request(RequestHead *head) {
-  auto *req = new RequestQueue::Request;
-  req->protocol = Encoder::protocol();
-  req->method = Encoder::method();
-  req->header_connection = Encoder::header_connection();
-  req->header_upgrade = Encoder::header_upgrade();
-  m_request_queue.push(req);
+  m_request_queue.push(head);
 }
 
-void Mux::Session::on_decode_response(ResponseHead *head) {
+auto Mux::Session::on_decode_response(ResponseHead *head) -> RequestHead* {
   if (head->status == 100) {
-    if (m_request_queue.head()) {
-      Decoder::set_bodiless(true);
-      Muxer::Queue::increase_queue_count();
-    }
-  } else if (auto *req = m_request_queue.shift()) {
-    Decoder::set_bodiless(req->is_bodiless());
-    Decoder::set_switching(req->is_switching());
-    delete req;
+    Muxer::Queue::increase_queue_count();
+    return nullptr;
+  } else {
+    return m_request_queue.shift();
   }
 }
 
-void Mux::Session::on_decode_tunnel() {
-  Encoder::set_tunnel(true);
+void Mux::Session::on_decode_tunnel(TunnelType tt) {
+  Encoder::set_tunnel();
   Muxer::Queue::dedicate();
 }
 
@@ -1679,49 +1624,26 @@ void Server::on_decode_error() {
 }
 
 void Server::on_decode_request(RequestHead *head) {
-  auto *req = new RequestQueue::Request;
-  req->protocol = head->protocol;
-  req->method = head->method;
-  req->header_connection = Decoder::header_connection();
-  req->header_upgrade = Decoder::header_upgrade();
-  m_request_queue.push(req);
-  if (req->is_http2()) {
-    auto head = ResponseHead::make();
-    auto headers = pjs::Object::make();
-    head->status = 101;
-    head->headers = headers;
-    headers->set(s_connection, s_upgrade.get());
-    headers->set(s_upgrade, s_h2c.get());
-    auto inp = Encoder::input();
-    inp->input(MessageStart::make(head));
-    inp->input(MessageEnd::make());
+  m_request_queue.push(head);
+}
+
+auto Server::on_encode_response(ResponseHead *head) -> RequestHead* {
+  return m_request_queue.shift();
+}
+
+void Server::on_encode_tunnel(TunnelType tt) {
+  Decoder::set_tunnel();
+  if (tt == TunnelType::HTTP2) {
     upgrade_http2();
-    Decoder::chain(m_http2_server->initial_stream());
-  }
-}
-
-void Server::on_encode_response(ResponseHead *head) {
-  if (auto *req = m_request_queue.shift()) {
-    Encoder::set_final(req->is_final() || (m_shutdown && m_request_queue.empty()));
-    Encoder::set_bodiless(req->is_bodiless());
-    Encoder::set_switching(req->is_switching());
-    delete req;
-  }
-}
-
-void Server::on_encode_tunnel() {
-  Decoder::set_tunnel(true);
-  if (!m_tunnel) {
-    if (num_sub_pipelines() > 0) {
-      m_tunnel = sub_pipeline(0, false, Filter::output());
+    m_http2_server->open();
+    Decoder::chain(m_http2_server->EventTarget::input());
+  } else {
+    if (!m_tunnel) {
+      if (num_sub_pipelines() > 0) {
+        m_tunnel = sub_pipeline(0, false, Filter::output());
+      }
     }
   }
-}
-
-void Server::on_http2_pass() {
-  upgrade_http2();
-  m_http2_server->open();
-  Decoder::chain(m_http2_server->EventTarget::input());
 }
 
 void Server::upgrade_http2() {
@@ -1854,9 +1776,9 @@ void TunnelServer::process(Event *evt) {
       return;
     }
 
-    pjs::Ref<ResponseHead> head = pjs::coerce<ResponseHead>(res->head());
-    auto status = head->status;
-    if (100 <= status && status < 300) {
+    pjs::Ref<RequestHead> req_head = pjs::coerce<RequestHead>(req->head());
+    pjs::Ref<ResponseHead> res_head = pjs::coerce<ResponseHead>(res->head());
+    if (res_head->is_tunnel(req_head->tunnel_type())) {
       m_pipeline = sub_pipeline(0, true, output());
     }
 
@@ -1868,20 +1790,14 @@ void TunnelServer::process(Event *evt) {
 // TunnelClient
 //
 
-void TunnelClientReceiver::on_event(Event *evt) {
-  static_cast<TunnelClient*>(this)->on_receive(evt);
-}
-
-TunnelClient::TunnelClient(const pjs::Value &handshake)
+TunnelClient::TunnelClient(pjs::Object *handshake)
   : m_handshake(handshake)
-  , m_prop_status(s_status)
 {
 }
 
 TunnelClient::TunnelClient(const TunnelClient &r)
   : Filter(r)
   , m_handshake(r.m_handshake)
-  , m_prop_status(s_status)
 {
 }
 
@@ -1900,55 +1816,61 @@ auto TunnelClient::clone() -> Filter* {
 
 void TunnelClient::reset() {
   Filter::reset();
-  TunnelClientReceiver::close();
-  m_pipeline = nullptr;
-  m_status_code = 0;
-  m_is_tunnel_started = false;
   m_buffer.clear();
+  m_pipeline = nullptr;
+  m_request_head = nullptr;
+  m_response_head = nullptr;
+  m_is_tunnel_started = false;
 }
 
 void TunnelClient::process(Event *evt) {
   if (!m_pipeline) {
-    pjs::Value handshake;
-    if (!eval(m_handshake, handshake)) return;
-    if (!handshake.is<Message>()) {
-      Log::error("[connectHTTPTunnel] invalid handshake request");
+    auto handshake = m_handshake.get();
+    if (handshake && handshake->is_function()) {
+      pjs::Value ret;
+      if (!eval(handshake->as<pjs::Function>(), ret)) return;
+    }
+    if (!handshake || !handshake->is_instance_of<Message>()) {
+      Filter::error("handshake is not or did not return a request Message");
       return;
     }
-    m_pipeline = sub_pipeline(0, true, TunnelClientReceiver::input());
-    auto inp = m_pipeline->input();
-    auto msg = handshake.as<Message>();
-    inp->input(MessageStart::make(msg->head()));
-    if (auto body = msg->body()) inp->input(body);
-    inp->input(MessageEnd::make(msg->tail()));
+    auto msg = handshake->as<Message>();
+    m_request_head = pjs::coerce<RequestHead>(msg->head());
+    m_pipeline = sub_pipeline(0, true, EventSource::reply());
+    msg->as<Message>()->write(m_pipeline->input());
   }
 
   if (m_is_tunnel_started) {
+    if (!m_buffer.empty()) {
+      m_pipeline->input()->input(Data::make(std::move(m_buffer)));
+    }
     m_pipeline->input()->input(evt);
   } else if (auto *data = evt->as<Data>()) {
     m_buffer.push(*data);
   }
 }
 
-void TunnelClient::on_receive(Event *evt) {
+void TunnelClient::on_reply(Event *evt) {
   if (m_is_tunnel_started || evt->is<StreamEnd>()) {
-    output(evt);
+    Filter::output(evt);
+
   } else if (auto start = evt->as<MessageStart>()) {
-    pjs::Value status;
-    if (auto *head = start->head()) m_prop_status.get(head, status);
-    if (status.is_number()) m_status_code = status.n();
-  } else if (evt->is<MessageEnd>()) {
-    if (101 <= m_status_code && m_status_code < 300) {
-      m_is_tunnel_started = true;
-      if (!m_buffer.empty()) {
-        m_pipeline->input()->input(Data::make(std::move(m_buffer)));
-      }
+    if (!m_response_head) {
+      m_response_head = pjs::coerce<ResponseHead>(start->head());
     }
-  }
-  if (evt->is<StreamEnd>()) {
-    Pipeline::auto_release(m_pipeline);
-    m_pipeline = nullptr;
-    m_is_tunnel_started = false;
+
+  } else if (evt->is<MessageEnd>()) {
+    if (m_response_head) {
+      auto tt = m_request_head->tunnel_type();
+      if (m_response_head->is_tunnel(tt)) {
+        m_is_tunnel_started = true;
+        EventFunction::input()->flush_async();
+      } else {
+        Filter::output(StreamEnd::make());
+      }
+      m_request_head = nullptr;
+      m_response_head = nullptr;
+    }
   }
 }
 

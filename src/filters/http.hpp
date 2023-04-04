@@ -47,21 +47,14 @@ public:
     : m_is_response(is_response) {}
 
   void reset();
-
-  auto header_connection() const -> pjs::Str* { return m_header_connection; }
-  auto header_upgrade() const -> pjs::Str* { return m_header_upgrade; }
   bool has_error() const { return m_has_error; }
-
-  void set_bodiless(bool b) { m_is_bodiless = b; }
-  void set_switching(bool b) { m_is_switching = b; }
-  void set_tunnel(bool b) { m_is_tunnel = b; }
+  void set_tunnel() { m_is_tunnel = true; }
 
 protected:
   virtual void on_decode_request(RequestHead *head) {}
-  virtual void on_decode_response(ResponseHead *head) {}
-  virtual void on_decode_tunnel() {}
+  virtual auto on_decode_response(ResponseHead *head) -> RequestHead* { return nullptr; }
+  virtual void on_decode_tunnel(TunnelType tt) {}
   virtual void on_decode_error() {}
-  virtual void on_http2_pass() {}
 
 private:
   const static int MAX_HEADER_SIZE = 0x1000;
@@ -81,17 +74,14 @@ private:
   };
 
   State m_state = HEAD;
-  Data m_buffer;
   Data m_head_buffer;
   pjs::Ref<MessageHead> m_head;
   pjs::Ref<pjs::Str> m_header_transfer_encoding;
   pjs::Ref<pjs::Str> m_header_content_length;
-  pjs::Ref<pjs::Str> m_header_connection;
-  pjs::Ref<pjs::Str> m_header_upgrade;
+  TunnelType m_responded_tunnel_type = TunnelType::NONE;
   int m_body_size = 0;
   bool m_is_response;
   bool m_is_bodiless = false;
-  bool m_is_switching = false;
   bool m_is_tunnel = false;
   bool m_has_error = false;
 
@@ -100,18 +90,6 @@ private:
   void message_start();
   void message_end();
   void stream_end(StreamEnd *end);
-
-  bool is_bodiless_response() const {
-    return m_is_response && m_is_bodiless;
-  }
-
-  bool is_turning_tunnel() const {
-    if (m_is_response && m_is_switching && m_head) {
-      auto status = m_head->as<ResponseHead>()->status;
-      return (101 <= status && status < 300);
-    }
-    return false;
-  }
 
   void error() {
     m_has_error = true;
@@ -128,31 +106,21 @@ public:
   Encoder(bool is_response);
 
   void reset();
-
-  auto protocol() const -> pjs::Str* { return m_protocol; }
-  auto method() const -> pjs::Str* { return m_method; }
-  auto header_connection() const -> pjs::Str* { return m_header_connection; }
-  auto header_upgrade() const -> pjs::Str* { return m_header_upgrade; }
-
   void set_buffer_size(int size) { m_buffer_size = size; }
-  void set_final(bool b) { m_is_final = b; }
-  void set_bodiless(bool b) { m_is_bodiless = b; }
-  void set_switching(bool b) { m_is_switching = b; }
-  void set_tunnel(bool b) { m_is_tunnel = b; }
+  void set_tunnel() { m_is_tunnel = true; }
 
 protected:
   virtual void on_encode_request(RequestHead *head) {}
-  virtual void on_encode_response(ResponseHead *head) {}
-  virtual void on_encode_tunnel() {}
+  virtual auto on_encode_response(ResponseHead *head) -> RequestHead* { return nullptr; }
+  virtual void on_encode_tunnel(TunnelType tt) {}
 
 private:
+  Data m_buffer;
   pjs::Ref<MessageHead> m_head;
   pjs::Ref<pjs::Str> m_protocol;
   pjs::Ref<pjs::Str> m_method;
   pjs::Ref<pjs::Str> m_path;
-  pjs::Ref<pjs::Str> m_header_connection;
-  pjs::Ref<pjs::Str> m_header_upgrade;
-  Data m_buffer;
+  TunnelType m_responded_tunnel_type = TunnelType::NONE;
   int m_buffer_size = DATA_CHUNK_SIZE;
   int m_status_code = 0;
   int m_content_length = 0;
@@ -160,7 +128,6 @@ private:
   bool m_is_response;
   bool m_is_final = false;
   bool m_is_bodiless = false;
-  bool m_is_switching = false;
   bool m_is_tunnel = false;
 
   virtual void on_event(Event *evt) override;
@@ -168,26 +135,15 @@ private:
   void output_head();
   void output_chunk(const Data &data);
   void output_end(Event *evt);
-
-  bool is_bodiless_response() const {
-    return m_is_response && m_is_bodiless;
-  }
-
-  bool is_turning_tunnel() const {
-    return (
-      m_is_response && m_is_switching &&
-      101 <= m_status_code && m_status_code < 300
-    );
-  }
 };
 
 //
 // RequestDecoder
 //
 
-class RequestDecoder : public Filter {
+class RequestDecoder : public Filter, public Decoder {
 public:
-  RequestDecoder();
+  RequestDecoder(pjs::Function *handler = nullptr);
 
 private:
   RequestDecoder(const RequestDecoder &r);
@@ -199,7 +155,9 @@ private:
   virtual void process(Event *evt) override;
   virtual void dump(Dump &d) override;
 
-  Decoder m_ef_decode;
+  pjs::Ref<pjs::Function> m_handler;
+
+  virtual void on_decode_request(RequestHead *head) override;
 };
 
 //
@@ -208,14 +166,7 @@ private:
 
 class ResponseDecoder : public Filter, public Decoder {
 public:
-  struct Options : public pipy::Options {
-    bool bodiless = false;
-    pjs::Ref<pjs::Function> bodiless_f;
-    Options() {}
-    Options(pjs::Object *options);
-  };
-
-  ResponseDecoder(const Options &options);
+  ResponseDecoder(pjs::Function *handler = nullptr);
 
 private:
   ResponseDecoder(const ResponseDecoder &r);
@@ -227,9 +178,9 @@ private:
   virtual void process(Event *evt) override;
   virtual void dump(Dump &d) override;
 
-  Options m_options;
+  pjs::Ref<pjs::Function> m_handler;
 
-  virtual void on_decode_response(ResponseHead *head) override;
+  virtual auto on_decode_response(ResponseHead *head) -> RequestHead* override;
 };
 
 //
@@ -244,7 +195,7 @@ public:
     Options(pjs::Object *options);
   };
 
-  RequestEncoder(const Options &options);
+  RequestEncoder(const Options &options, pjs::Function *handler = nullptr);
 
 private:
   RequestEncoder(const RequestEncoder &r);
@@ -257,6 +208,9 @@ private:
   virtual void dump(Dump &d) override;
 
   Options m_options;
+  pjs::Ref<pjs::Function> m_handler;
+
+  virtual void on_encode_request(RequestHead *head) override;
 };
 
 //
@@ -266,16 +220,12 @@ private:
 class ResponseEncoder : public Filter, public Encoder {
 public:
   struct Options : pipy::Options {
-    bool final = false;
-    bool bodiless = false;
-    pjs::Ref<pjs::Function> final_f;
-    pjs::Ref<pjs::Function> bodiless_f;
     size_t buffer_size = DATA_CHUNK_SIZE;
     Options() {}
     Options(pjs::Object *options);
   };
 
-  ResponseEncoder(const Options &options);
+  ResponseEncoder(const Options &options, pjs::Function *handler = nullptr);
 
 private:
   ResponseEncoder(const ResponseEncoder &r);
@@ -288,6 +238,9 @@ private:
   virtual void dump(Dump &d) override;
 
   Options m_options;
+  pjs::Ref<pjs::Function> m_handler;
+
+  virtual auto on_encode_response(ResponseHead *head) -> RequestHead* override;
 };
 
 //
@@ -296,27 +249,20 @@ private:
 
 class RequestQueue {
 public:
+  bool empty() const { return m_queue.empty(); }
+  void reset();
+  void push(RequestHead *head);
+  auto head() const -> RequestHead*;
+  auto shift() -> RequestHead*;
+
+private:
   struct Request :
     public pjs::Pooled<Request>,
     public List<Request>::Item
   {
-    pjs::Ref<pjs::Str> protocol;
-    pjs::Ref<pjs::Str> method;
-    pjs::Ref<pjs::Str> header_connection;
-    pjs::Ref<pjs::Str> header_upgrade;
-    bool is_final() const;
-    bool is_bodiless() const;
-    bool is_switching() const;
-    bool is_http2() const;
+    pjs::Ref<RequestHead> head;
   };
 
-  bool empty() const { return m_queue.empty(); }
-  void reset();
-  void push(Request *req);
-  auto head() const -> Request* { return m_queue.head(); }
-  auto shift() -> Request*;
-
-private:
   List<Request> m_queue;
 };
 
@@ -382,9 +328,8 @@ private:
   virtual void on_close_stream(EventFunction *stream) override;
   virtual void on_decode_error() override;
   virtual void on_decode_request(RequestHead *head) override;
-  virtual void on_encode_response(ResponseHead *head) override;
-  virtual void on_encode_tunnel() override;
-  virtual void on_http2_pass() override;
+  virtual auto on_encode_response(ResponseHead *head) -> RequestHead* override;
+  virtual void on_encode_tunnel(TunnelType tt) override;
 
   void upgrade_http2();
 };
@@ -456,8 +401,8 @@ private:
     virtual void close_stream(EventFunction *stream) override;
     virtual void close() override;
     virtual void on_encode_request(RequestHead *head) override;
-    virtual void on_decode_response(ResponseHead *head) override;
-    virtual void on_decode_tunnel() override;
+    virtual auto on_decode_response(ResponseHead *head) -> RequestHead* override;
+    virtual void on_decode_tunnel(TunnelType tt) override;
     virtual void on_decode_error() override;
     virtual void on_notify() override;
 
@@ -516,9 +461,8 @@ private:
 
   virtual void on_decode_error() override;
   virtual void on_decode_request(RequestHead *head) override;
-  virtual void on_encode_response(ResponseHead *head) override;
-  virtual void on_encode_tunnel() override;
-  virtual void on_http2_pass() override;
+  virtual auto on_encode_response(ResponseHead *head) -> RequestHead* override;
+  virtual void on_encode_tunnel(TunnelType tt) override;
 
   //
   // Server::Handler
@@ -604,13 +548,9 @@ private:
 // TunnelClient
 //
 
-class TunnelClientReceiver : public EventTarget {
-  virtual void on_event(Event *evt) override;
-};
-
-class TunnelClient : public Filter, public TunnelClientReceiver {
+class TunnelClient : public Filter, public EventSource {
 public:
-  TunnelClient(const pjs::Value &handshake);
+  TunnelClient(pjs::Object *handshake);
 
 private:
   TunnelClient(const TunnelClient &r);
@@ -620,14 +560,13 @@ private:
   virtual void reset() override;
   virtual void process(Event *evt) override;
   virtual void dump(Dump &d) override;
+  virtual void on_reply(Event *evt) override;
 
-  void on_receive(Event *evt);
-
-  pjs::Value m_handshake;
-  pjs::PropertyCache m_prop_status;
+  pjs::Ref<pjs::Object> m_handshake;
   pjs::Ref<Pipeline> m_pipeline;
+  pjs::Ref<RequestHead> m_request_head;
+  pjs::Ref<ResponseHead> m_response_head;
   Data m_buffer;
-  int m_status_code = 0;
   bool m_is_tunnel_started = false;
 
   friend class TunnelClientReceiver;

@@ -33,6 +33,60 @@
 namespace pipy {
 namespace http {
 
+//
+// RequestHead
+//
+
+thread_local static const pjs::ConstStr s_HEAD("HEAD");
+thread_local static const pjs::ConstStr s_CONNECT("CONNECT");
+thread_local static const pjs::ConstStr s_connection("connection");
+thread_local static const pjs::ConstStr s_upgrade("upgrade");
+thread_local static const pjs::ConstStr s_close("close");
+thread_local static const pjs::ConstStr s_http_1_0("HTTP/1.0");
+thread_local static const pjs::ConstStr s_websocket("websocket");
+thread_local static const pjs::ConstStr s_h2c("h2c");
+
+bool RequestHead::is_final() const {
+  pjs::Value v;
+  if (headers && headers->get(s_connection, v)) {
+    return v.is_string() && v.s() == s_close;
+  } else {
+    return protocol == s_http_1_0;
+  }
+}
+
+bool RequestHead::is_bodiless() const {
+  return method == s_HEAD;
+}
+
+auto RequestHead::tunnel_type() const -> TunnelType {
+  if (method == s_CONNECT) return TunnelType::CONNECT;
+  pjs::Value v;
+  if (headers && headers->get(s_upgrade, v) && v.is_string()) {
+    if (v.s() == s_websocket) return TunnelType::WEBSOCKET;
+    if (v.s() == s_h2c) return TunnelType::HTTP2;
+  }
+  return TunnelType::NONE;
+}
+
+//
+// ResponseHead
+//
+
+bool ResponseHead::is_tunnel(TunnelType requested) {
+  switch (requested) {
+    case TunnelType::NONE: break;
+    case TunnelType::CONNECT: return (200 <= status && status < 300);
+    case TunnelType::WEBSOCKET: return (status == 101);
+    case TunnelType::HTTP2: return (status == 101);
+  }
+  return false;
+}
+
+//
+// File
+//
+
 enum StringConstants {
   CONTENT_TYPE,
   CONTENT_ENCODING,

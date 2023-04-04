@@ -64,14 +64,14 @@ public:
   void compress_http(pjs::Object *options);
   void compress_message(pjs::Object *options);
   void connect(const pjs::Value &target, pjs::Object *options);
-  void connect_http_tunnel(const pjs::Value &address);
+  void connect_http_tunnel(pjs::Object *handshake);
   void connect_proxy_protocol(const pjs::Value &address);
   void connect_socks(const pjs::Value &address);
   void connect_tls(pjs::Object *options);
   void decode_bgp(pjs::Object *options);
   void decode_dubbo();
-  void decode_http_request();
-  void decode_http_response(pjs::Object *options);
+  void decode_http_request(pjs::Function *handler);
+  void decode_http_response(pjs::Function *handler);
   void decode_mqtt();
   void decode_multipart();
   void decode_resp();
@@ -88,8 +88,8 @@ public:
   void dump(const pjs::Value &tag);
   void encode_bgp(pjs::Object *options);
   void encode_dubbo();
-  void encode_http_request(pjs::Object *options);
-  void encode_http_response(pjs::Object *options);
+  void encode_http_request(pjs::Object *options, pjs::Function *handler);
+  void encode_http_response(pjs::Object *options, pjs::Function *handler);
   void encode_mqtt();
   void encode_resp();
   void encode_thrift();

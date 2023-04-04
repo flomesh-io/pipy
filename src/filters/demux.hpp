@@ -97,7 +97,7 @@ public:
   public:
     void reset();
     void increase_output_count();
-    void dedicate();
+    void dedicate() { m_dedicated_requested = true; }
     void shutdown();
 
   protected:
@@ -111,6 +111,7 @@ public:
     void queue(Event *evt);
     void wait_output();
     void continue_input();
+    bool check_dedicated();
     void shift();
     void clear();
     void close();
@@ -147,8 +148,9 @@ public:
     List<Receiver> m_receivers;
     pjs::Ref<StreamEnd> m_stream_end;
     pjs::Ref<InputSource::Tap> m_closed_tap;
-    bool m_waiting_output_required = false;
+    bool m_waiting_output_requested = false;
     bool m_waiting_output = false;
+    bool m_dedicated_requested = false;
     bool m_dedicated = false;
     bool m_shutdown = false;
     bool m_closed = false;

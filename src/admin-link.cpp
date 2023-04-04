@@ -83,7 +83,7 @@ AdminLink::AdminLink(const std::string &url, const TLSSettings *tls_settings)
 
   m_ppl = PipelineLayout::make(m_module);
   m_ppl->append(new websocket::Encoder());
-  m_ppl->append(new http::TunnelClient(m_handshake.get()))->add_sub_pipeline(ppl_tunnel);
+  m_ppl->append(new http::TunnelClient(m_handshake))->add_sub_pipeline(ppl_tunnel);
   m_ppl->append(new websocket::Decoder());
   m_ppl->append(new Receiver(this));
 }

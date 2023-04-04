@@ -37,6 +37,13 @@ class Tarball;
 
 namespace http {
 
+enum class TunnelType {
+  NONE,
+  CONNECT,
+  WEBSOCKET,
+  HTTP2,
+};
+
 class MessageHead : public pjs::ObjectTemplate<MessageHead> {
 public:
   pjs::Ref<pjs::Str> protocol;
@@ -54,12 +61,18 @@ public:
   pjs::Ref<pjs::Str> scheme;
   pjs::Ref<pjs::Str> authority;
   pjs::Ref<pjs::Str> path;
+
+  bool is_final() const;
+  bool is_bodiless() const;
+  auto tunnel_type() const -> TunnelType;
 };
 
 class ResponseHead : public pjs::ObjectTemplate<ResponseHead, MessageHead> {
 public:
   int status = 200;
   pjs::Ref<pjs::Str> statusText;
+
+  bool is_tunnel(TunnelType requested);
 };
 
 //

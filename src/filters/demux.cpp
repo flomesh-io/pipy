@@ -95,8 +95,9 @@ void Demuxer::Queue::reset() {
     m_stream = nullptr;
   }
   clear();
-  m_waiting_output_required = false;
+  m_waiting_output_requested = false;
   m_waiting_output = false;
+  m_dedicated_requested = false;
   m_dedicated = false;
   m_shutdown = false;
   m_closed = false;
@@ -105,27 +106,6 @@ void Demuxer::Queue::reset() {
 void Demuxer::Queue::increase_output_count() {
   if (auto r = m_receivers.head()) {
     r->increase_output_count(1);
-  }
-}
-
-void Demuxer::Queue::dedicate() {
-  if (m_stream) {
-    m_stream->chain(EventFunction::output());
-    if (m_stream_end) {
-      auto evt = m_stream_end.release();
-      auto inp = m_stream->input()->retain();
-      Net::current().post(
-        [=]() {
-          InputContext ic;
-          inp->input(evt);
-          inp->release();
-          evt->release();
-        }
-      );
-    }
-    clear();
-    m_dedicated = true;
-    continue_input();
   }
 }
 
@@ -168,7 +148,7 @@ void Demuxer::Queue::queue(Event *evt) {
       if (!m_stream) {
         int n = on_queue_message(evt->as<MessageStart>());
         if (n < 0) {
-          m_waiting_output_required = true;
+          m_waiting_output_requested = true;
           n = -n;
         }
         if (auto s = on_open_stream()) {
@@ -189,8 +169,8 @@ void Demuxer::Queue::queue(Event *evt) {
       break;
     case Event::Type::MessageEnd:
       if (auto s = m_stream) {
-        if (m_waiting_output_required) {
-          m_waiting_output_required = false;
+        if (m_waiting_output_requested) {
+          m_waiting_output_requested = false;
           wait_output();
         }
         auto input = s->input();
@@ -238,6 +218,30 @@ void Demuxer::Queue::continue_input() {
       m_closed_tap = nullptr;
     }
   }
+}
+
+bool Demuxer::Queue::check_dedicated() {
+  if (m_dedicated_requested) {
+    if (m_stream) {
+      m_stream->chain(EventFunction::output());
+      if (m_stream_end) {
+        auto evt = m_stream_end.release();
+        auto inp = m_stream->input()->retain();
+        Net::current().post(
+          [=]() {
+            InputContext ic;
+            inp->input(evt);
+            inp->release();
+            evt->release();
+          }
+        );
+      }
+      clear();
+      m_dedicated = true;
+      continue_input();
+    }
+  }
+  return m_dedicated;
 }
 
 void Demuxer::Queue::shift() {
@@ -315,14 +319,22 @@ void Demuxer::Queue::Receiver::on_event(Event *evt) {
         if (m_message_started) {
           m_queue->EventFunction::output(evt);
           m_message_started = false;
-          if (!--m_output_count) m_queue->shift();
+          if (!m_queue->check_dedicated()) {
+            if (!--m_output_count) {
+              m_queue->shift();
+            }
+          }
         }
         break;
       case Event::Type::StreamEnd:
         if (m_message_started && m_output_count == 1) {
           m_queue->EventFunction::output(MessageEnd::make(evt->as<StreamEnd>()));
           m_message_started = false;
-          if (!--m_output_count) m_queue->shift();
+          if (!m_queue->check_dedicated()) {
+            if (!--m_output_count) {
+              m_queue->shift();
+            }
+          }
         } else {
           m_queue->EventFunction::output(evt);
           m_queue->close();
