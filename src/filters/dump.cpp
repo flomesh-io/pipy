@@ -76,6 +76,7 @@ void Dump::process(Event *evt) {
   static const std::string s_prefix_head(", head = ");
   static const std::string s_prefix_tail(", tail = ");
   static const std::string s_prefix_payload(", payload = ");
+  static const std::string s_prefix_code(", code = ");
   static const std::string s_prefix_error(", error = ");
   static const std::string s_hline(16*3+4+16, '-');
   static const std::string s_ellipsis("...");
@@ -140,7 +141,11 @@ void Dump::process(Event *evt) {
     }
 
   } else if (auto end = evt->as<StreamEnd>()) {
-    if (end->has_error()) {
+    if (auto s = pjs::EnumDef<StreamEnd::Error>::name(end->error_code())) {
+      db.push(s_prefix_code);
+      db.push(s->str());
+    }
+    if (!end->error().is_nullish()) {
       db.push(s_prefix_error);
       Console::dump(end->error(), db);
     }
