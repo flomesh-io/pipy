@@ -453,22 +453,22 @@ LoadBalancer::~LoadBalancer() {
   }
 }
 
-auto LoadBalancer::next(pjs::Object *session_key, const pjs::Value &target_key, Cache *unhealthy) -> Resource* {
-  if (!session_key) {
+auto LoadBalancer::borrow(pjs::Object *borrower, const pjs::Value &target_key, Cache *unhealthy) -> Resource* {
+  if (!borrower) {
     auto id = select(target_key, unhealthy);
     if (!id) return nullptr;
     return Resource::make(id);
   }
 
-  auto &s = m_sessions[session_key];
-  if (!s) s = new Session(this, session_key);
+  auto &s = m_sessions[borrower];
+  if (!s) s = new Session(this, borrower);
 
   auto *session = s;
   auto *res = session->resource();
   if (res && !is_healthy(res->id(), unhealthy)) {
     close_session(session);
-    session = new Session(this, session_key);
-    m_sessions[session_key] = session;
+    session = new Session(this, borrower);
+    m_sessions[borrower] = session;
     res = nullptr;
   }
 
@@ -1130,13 +1130,22 @@ template<> void ClassDef<Constructor<URLRouter>>::init() {
 //
 
 template<> void ClassDef<LoadBalancer>::init() {
-  method("next", [](Context &ctx, Object *obj, Value &ret) {
-    pjs::Object *session_key = nullptr;
+  method("borrow", [](Context &ctx, Object *obj, Value &ret) {
+    pjs::Object *borrower = nullptr;
     pjs::Value target_key;
     Cache *unhealthy = nullptr;
-    if (!ctx.arguments(0, &session_key, &target_key, &unhealthy)) return;
-    if (!session_key) session_key = static_cast<pipy::Context*>(ctx.root())->inbound();
-    ret.set(obj->as<LoadBalancer>()->next(session_key, target_key, unhealthy));
+    if (!ctx.arguments(0, &borrower, &target_key, &unhealthy)) return;
+    if (!borrower) borrower = static_cast<pipy::Context*>(ctx.root())->inbound();
+    ret.set(obj->as<LoadBalancer>()->borrow(borrower, target_key, unhealthy));
+  });
+
+  method("next", [](Context &ctx, Object *obj, Value &ret) {
+    pjs::Object *borrower = nullptr;
+    pjs::Value target_key;
+    Cache *unhealthy = nullptr;
+    if (!ctx.arguments(0, &borrower, &target_key, &unhealthy)) return;
+    if (!borrower) borrower = static_cast<pipy::Context*>(ctx.root())->inbound();
+    ret.set(obj->as<LoadBalancer>()->borrow(borrower, target_key, unhealthy));
   });
 
   method("select", [](Context &ctx, Object *obj, Value &ret) {

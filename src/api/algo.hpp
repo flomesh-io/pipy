@@ -238,7 +238,7 @@ public:
     friend class pjs::ObjectTemplate<Resource>;
   };
 
-  auto next(pjs::Object *session_key, const pjs::Value &target_key = pjs::Value::undefined, Cache *unhealthy = nullptr) -> Resource*;
+  auto borrow(pjs::Object *borrower, const pjs::Value &target_key = pjs::Value::undefined, Cache *unhealthy = nullptr) -> Resource*;
 
   virtual auto select(const pjs::Value &key, Cache *unhealthy) -> pjs::Str* = 0;
   virtual void deselect(pjs::Str *id) = 0;
