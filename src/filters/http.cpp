@@ -591,8 +591,9 @@ void Decoder::on_event(Event *evt) {
         }
         break;
       case HTTP2_PASS: {
-        m_is_tunnel = true;
-        on_decode_tunnel(TunnelType::HTTP2);
+        if (on_decode_tunnel(TunnelType::HTTP2)) {
+          m_is_tunnel = true;
+        }
         break;
       }
       default: break;
@@ -624,8 +625,9 @@ void Decoder::message_start() {
 
 void Decoder::message_end() {
   if (m_responded_tunnel_type != TunnelType::NONE) {
-    m_is_tunnel = true;
-    on_decode_tunnel(m_responded_tunnel_type);
+    if (on_decode_tunnel(m_responded_tunnel_type)) {
+      m_is_tunnel = true;
+    }
   }
   output(MessageEnd::make());
 }
@@ -932,8 +934,9 @@ void Encoder::output_end(Event *evt) {
     }
   }
   if (m_responded_tunnel_type != TunnelType::NONE) {
-    m_is_tunnel = true;
-    on_encode_tunnel(m_responded_tunnel_type);
+    if (on_encode_tunnel(m_responded_tunnel_type)) {
+      m_is_tunnel = true;
+    }
   }
   output(evt);
 }
@@ -1327,6 +1330,19 @@ void Demux::on_decode_error() {
 
 void Demux::on_decode_request(RequestHead *head) {
   m_request_queue.push(head);
+  if (head->tunnel_type() == TunnelType::HTTP2) {
+    upgrade_http2();
+    Decoder::chain(m_http2_demuxer->initial_stream());
+    auto head = ResponseHead::make();
+    auto headers = pjs::Object::make();
+    head->status = 101;
+    head->headers = headers;
+    headers->set(s_connection, s_upgrade.get());
+    headers->set(s_upgrade, s_h2c.get());
+    auto out = Encoder::input();
+    out->input(MessageStart::make(head));
+    out->input(MessageEnd::make());
+  }
 }
 
 auto Demux::on_encode_response(ResponseHead *head) -> RequestHead* {
@@ -1338,15 +1354,25 @@ auto Demux::on_encode_response(ResponseHead *head) -> RequestHead* {
   }
 }
 
-void Demux::on_encode_tunnel(TunnelType tt) {
-  Decoder::set_tunnel();
+bool Demux::on_decode_tunnel(TunnelType tt) {
   if (tt == TunnelType::HTTP2) {
     upgrade_http2();
-    m_http2_demuxer->open();
+    m_http2_demuxer->init();
     Decoder::chain(m_http2_demuxer->EventTarget::input());
+    return true;
   } else {
+    return false;
+  }
+}
+
+bool Demux::on_encode_tunnel(TunnelType tt) {
+  if (tt == TunnelType::HTTP2) {
+    return true;
+  } else {
+    Decoder::set_tunnel();
     Demuxer::Queue::dedicate();
   }
+  return true;
 }
 
 void Demux::upgrade_http2() {
@@ -1481,9 +1507,10 @@ auto Mux::Session::on_decode_response(ResponseHead *head) -> RequestHead* {
   }
 }
 
-void Mux::Session::on_decode_tunnel(TunnelType tt) {
+bool Mux::Session::on_decode_tunnel(TunnelType tt) {
   Encoder::set_tunnel();
   Muxer::Queue::dedicate();
+  return true;
 }
 
 void Mux::Session::on_decode_error()
@@ -1625,24 +1652,45 @@ void Server::on_decode_error() {
 
 void Server::on_decode_request(RequestHead *head) {
   m_request_queue.push(head);
+  if (head->tunnel_type() == TunnelType::HTTP2) {
+    upgrade_http2();
+    Decoder::chain(m_http2_server->initial_stream());
+    auto head = ResponseHead::make();
+    auto headers = pjs::Object::make();
+    head->status = 101;
+    head->headers = headers;
+    headers->set(s_connection, s_upgrade.get());
+    headers->set(s_upgrade, s_h2c.get());
+    auto out = Encoder::input();
+    out->input(MessageStart::make(head));
+    out->input(MessageEnd::make());
+  }
 }
 
 auto Server::on_encode_response(ResponseHead *head) -> RequestHead* {
   return m_request_queue.shift();
 }
 
-void Server::on_encode_tunnel(TunnelType tt) {
-  Decoder::set_tunnel();
+bool Server::on_decode_tunnel(TunnelType tt) {
   if (tt == TunnelType::HTTP2) {
     upgrade_http2();
-    m_http2_server->open();
+    m_http2_server->init();
     Decoder::chain(m_http2_server->EventTarget::input());
+    return true;
   } else {
-    if (!m_tunnel) {
-      if (num_sub_pipelines() > 0) {
-        m_tunnel = sub_pipeline(0, false, Filter::output());
-      }
-    }
+    return false;
+  }
+}
+
+bool Server::on_encode_tunnel(TunnelType tt) {
+  if (tt == TunnelType::HTTP2) {
+    return true;
+  } else if (num_sub_pipelines() > 0) {
+    Decoder::set_tunnel();
+    if (!m_tunnel) m_tunnel = sub_pipeline(0, false, Filter::output());
+    return true;
+  } else {
+    return false;
   }
 }
 

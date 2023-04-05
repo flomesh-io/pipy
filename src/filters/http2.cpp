@@ -33,10 +33,24 @@
 #include <iomanip>
 #endif
 
+//
+// HTTP/2 Frame Format
+//
+// +-----------------------------------------------+
+// |                 Length (24)                   |
+// +---------------+---------------+---------------+
+// |   Type (8)    |   Flags (8)   |
+// +-+-------------+---------------+-------------------------------+
+// |R|                 Stream Identifier (31)                      |
+// +=+=============================================================+
+// |                   Frame Payload (0...)                      ...
+// +---------------------------------------------------------------+
+//
+
 namespace pipy {
 namespace http2 {
 
-thread_local static Data::Producer s_dp("HTTP2");
+thread_local static Data::Producer s_dp("HTTP/2");
 
 //
 // HPACK static table
@@ -1241,24 +1255,8 @@ Endpoint::~Endpoint() {
   );
 }
 
-void Endpoint::upgrade_request(http::RequestHead *head, const Data &body) {
-  auto *s = stream_open(1);
-  if (auto headers = head->headers.get()) {
-    pjs::Value settings;
-    headers->get(s_http2_settings, settings);
-    if (settings.is_string()) {
-      const auto &b64 = settings.s()->str();
-      const auto size = b64.size() / 4 * 3 + 3;
-      if (size < Settings::MAX_SIZE) {
-        uint8_t buf[size];
-        auto len = utils::decode_base64url(buf, b64.c_str(), b64.length());
-        m_peer_settings.decode(buf, len);
-      }
-    }
-  }
-  s->event(MessageStart::make(head));
-  if (!body.empty()) s->event(Data::make(body));
-  s->event(MessageEnd::make());
+void Endpoint::init_settings(const uint8_t *data, size_t size) {
+  m_peer_settings.decode(data, size);
 }
 
 bool Endpoint::for_each_stream(const std::function<bool(StreamBase*)> &cb) {
@@ -2094,14 +2092,31 @@ Server::~Server() {
 
 auto Server::initial_stream() -> Input* {
   if (!m_initial_stream) {
-    m_initial_stream = new InitialStream(this);
+    m_initial_stream = new InitialStream();
   }
   return m_initial_stream->input();
 }
 
-void Server::open() {
+void Server::init() {
   if (m_initial_stream) {
-    m_initial_stream->start();
+    if (auto msg = m_initial_stream->initial_request()) {
+      auto *s = stream_open(1);
+      pjs::Ref<http::RequestHead> head = pjs::coerce<http::RequestHead>(msg->head());
+      if (auto headers = head->headers.get()) {
+        pjs::Value settings;
+        headers->get(s_http2_settings, settings);
+        if (settings.is_string()) {
+          const auto &b64 = settings.s()->str();
+          const auto size = b64.size() / 4 * 3 + 3;
+          if (size < Settings::MAX_SIZE) {
+            uint8_t buf[size];
+            auto len = utils::decode_base64url(buf, b64.c_str(), b64.length());
+            init_settings(buf, len);
+          }
+        }
+      }
+      msg->write(static_cast<Stream*>(s)->output());
+    }
     delete m_initial_stream;
     m_initial_stream = nullptr;
   }
@@ -2125,32 +2140,6 @@ Server::Stream::Stream(Server *server, int id)
 
 Server::Stream::~Stream() {
   PipelineBase::auto_release(m_pipeline);
-}
-
-//
-// Server::InitialStream
-//
-
-void Server::InitialStream::start() {
-  if (m_head) {
-    m_server->upgrade_request(m_head, m_body);
-  }
-}
-
-void Server::InitialStream::on_event(Event *evt) {
-  if (auto *start = evt->as<MessageStart>()) {
-    if (!m_started) {
-      m_head = start->head()->as<http::RequestHead>();
-      m_body.clear();
-      m_started = true;
-    }
-  } else if (auto *data = evt->as<Data>()) {
-    if (m_started) {
-      m_body.push(*data);
-    }
-  } else if (evt->is<MessageEnd>()) {
-    m_started = false;
-  }
 }
 
 //

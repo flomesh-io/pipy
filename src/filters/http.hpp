@@ -53,7 +53,7 @@ public:
 protected:
   virtual void on_decode_request(RequestHead *head) {}
   virtual auto on_decode_response(ResponseHead *head) -> RequestHead* { return nullptr; }
-  virtual void on_decode_tunnel(TunnelType tt) {}
+  virtual bool on_decode_tunnel(TunnelType tt) { return false; }
   virtual void on_decode_error() {}
 
 private:
@@ -112,7 +112,7 @@ public:
 protected:
   virtual void on_encode_request(RequestHead *head) {}
   virtual auto on_encode_response(ResponseHead *head) -> RequestHead* { return nullptr; }
-  virtual void on_encode_tunnel(TunnelType tt) {}
+  virtual bool on_encode_tunnel(TunnelType tt) { return false; }
 
 private:
   Data m_buffer;
@@ -329,7 +329,8 @@ private:
   virtual void on_decode_error() override;
   virtual void on_decode_request(RequestHead *head) override;
   virtual auto on_encode_response(ResponseHead *head) -> RequestHead* override;
-  virtual void on_encode_tunnel(TunnelType tt) override;
+  virtual bool on_decode_tunnel(TunnelType tt) override;
+  virtual bool on_encode_tunnel(TunnelType tt) override;
 
   void upgrade_http2();
 };
@@ -402,7 +403,7 @@ private:
     virtual void close() override;
     virtual void on_encode_request(RequestHead *head) override;
     virtual auto on_decode_response(ResponseHead *head) -> RequestHead* override;
-    virtual void on_decode_tunnel(TunnelType tt) override;
+    virtual bool on_decode_tunnel(TunnelType tt) override;
     virtual void on_decode_error() override;
     virtual void on_notify() override;
 
@@ -462,7 +463,8 @@ private:
   virtual void on_decode_error() override;
   virtual void on_decode_request(RequestHead *head) override;
   virtual auto on_encode_response(ResponseHead *head) -> RequestHead* override;
-  virtual void on_encode_tunnel(TunnelType tt) override;
+  virtual bool on_decode_tunnel(TunnelType tt) override;
+  virtual bool on_encode_tunnel(TunnelType tt) override;
 
   //
   // Server::Handler

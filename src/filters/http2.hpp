@@ -29,6 +29,7 @@
 #include "api/http.hpp"
 #include "data.hpp"
 #include "input.hpp"
+#include "message.hpp"
 #include "pipeline.hpp"
 #include "list.hpp"
 #include "scarce.hpp"
@@ -407,7 +408,7 @@ private:
   static std::atomic<uint32_t> s_endpoint_id;
 
 protected:
-  void upgrade_request(http::RequestHead *head, const Data &body);
+  void init_settings(const uint8_t *data, size_t size);
   bool for_each_stream(const std::function<bool(StreamBase*)> &cb);
   bool for_each_pending_stream(const std::function<bool(StreamBase*)> &cb);
 
@@ -525,7 +526,7 @@ public:
   virtual ~Server();
 
   auto initial_stream() -> Input*;
-  void open();
+  void init();
   void go_away();
 
 protected:
@@ -562,18 +563,18 @@ private:
     public EventTarget
   {
   public:
-    InitialStream(Server *server)
-      : m_server(server) {}
+    auto initial_request() const -> Message* { return m_initial_request; }
 
-    void start();
-
-    virtual void on_event(Event *evt) override;
+    virtual void on_event(Event *evt) override {
+      if (auto msg = m_message_reader.read(evt)) {
+        m_initial_request = msg;
+        msg->release();
+      }
+    }
 
   private:
-    Server* m_server = nullptr;
-    pjs::Ref<http::RequestHead> m_head;
-    Data m_body;
-    bool m_started = false;
+    MessageReader m_message_reader;
+    pjs::Ref<Message> m_initial_request;
   };
 
   InitialStream* m_initial_stream = nullptr;
