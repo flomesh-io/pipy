@@ -595,6 +595,7 @@ MuxBase::MuxBase()
 
 MuxBase::MuxBase(const MuxBase &r)
   : Filter(r)
+  , Muxer(r)
   , m_session_selector(r.m_session_selector)
   , m_options(r.m_options)
 {
