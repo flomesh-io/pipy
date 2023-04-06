@@ -81,7 +81,6 @@ private:
   pjs::Ref<Session> m_session;
   pjs::Value m_session_key;
   EventFunction* m_stream = nullptr;
-  EventBuffer m_waiting_events;
   bool m_waiting = false;
 
   void start_waiting();
@@ -101,10 +100,11 @@ protected:
     public EventProxy
   {
   protected:
-    virtual void open() = 0;
+    virtual void open(Muxer *muxer) = 0;
     virtual auto open_stream(Muxer *muxer) -> EventFunction* = 0;
     virtual void close_stream(EventFunction *stream) = 0;
     virtual void close() = 0;
+    virtual bool should_continue(Muxer *muxer) { return false; }
 
     Session() {}
     virtual ~Session() {}
@@ -116,9 +116,10 @@ protected:
     bool is_free() const { return !m_share_count; }
     bool is_pending() const { return m_is_pending; }
     void set_pending(bool pending);
+    auto first_waiting() const -> Muxer* { return m_waiting_muxers.head(); }
 
   private:
-    void link(Pipeline *pipeline);
+    void link(Muxer *muxer, Pipeline *pipeline);
     void unlink();
     void free();
 
@@ -287,6 +288,7 @@ protected:
 class MuxBase : public Filter, public Muxer {
 protected:
   MuxBase();
+  MuxBase(const MuxBase &r);
   MuxBase(pjs::Function *session_selector);
   MuxBase(pjs::Function *session_selector, pjs::Function *options);
 
@@ -301,6 +303,7 @@ protected:
 
   pjs::Ref<pjs::Function> m_session_selector;
   pjs::Ref<pjs::Function> m_options;
+  EventBuffer m_waiting_events;
 };
 
 //
@@ -338,7 +341,7 @@ protected:
     public pjs::Pooled<Session, MuxBase::Session>,
     public Muxer::Queue
   {
-    virtual void open() override;
+    virtual void open(Muxer *muxer) override;
     virtual auto open_stream(Muxer *muxer) -> EventFunction* override;
     virtual void close_stream(EventFunction *stream) override;
     virtual void close() override;

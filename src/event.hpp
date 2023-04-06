@@ -225,6 +225,7 @@ public:
 
     void input_async(Event *evt);
     void flush_async();
+    void flush();
 
   protected:
     virtual ~Input() {}

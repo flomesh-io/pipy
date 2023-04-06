@@ -359,6 +359,7 @@ public:
   {
     size_t buffer_size = DATA_CHUNK_SIZE;
     int version = 1;
+    pjs::Ref<pjs::Str> version_s;
     pjs::Ref<pjs::Function> version_f;
     Options() {}
     Options(pjs::Object *options);
@@ -374,10 +375,14 @@ private:
   ~Mux();
 
   Options m_options;
+  EventBuffer m_waiting_events;
 
   virtual auto clone() -> Filter* override;
   virtual void dump(Dump &d) override;
   virtual auto on_new_cluster(pjs::Object *options) -> MuxBase::SessionCluster* override;
+
+  auto verify_http_version(int version) -> int;
+  auto verify_http_version(pjs::Str *name) -> int;
 
   //
   // Mux::Session
@@ -387,8 +392,7 @@ private:
     public pjs::Pooled<Session, MuxBase::Session>,
     public Muxer::Queue,
     protected Encoder,
-    protected Decoder,
-    public ContextGroup::Waiter
+    protected Decoder
   {
     Session(const Options &options)
       : Encoder(false)
@@ -397,22 +401,22 @@ private:
 
     ~Session();
 
-    virtual void open() override;
+    virtual void open(Muxer *muxer) override;
     virtual auto open_stream(Muxer *muxer) -> EventFunction* override;
     virtual void close_stream(EventFunction *stream) override;
     virtual void close() override;
+    virtual bool should_continue(Muxer *muxer) override;
     virtual void on_encode_request(RequestHead *head) override;
     virtual auto on_decode_response(ResponseHead *head) -> RequestHead* override;
     virtual bool on_decode_tunnel(TunnelType tt) override;
     virtual void on_decode_error() override;
-    virtual void on_notify() override;
 
     const Options& m_options;
     int m_version_selected = 0;
     RequestQueue m_request_queue;
     HTTP2Muxer* m_http2_muxer = nullptr;
 
-    void select_protocol();
+    bool select_protocol(Muxer *muxer);
     void upgrade_http2();
 
     friend class Mux;

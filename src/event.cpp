@@ -71,6 +71,10 @@ void EventTarget::Input::flush_async() {
   );
 }
 
+void EventTarget::Input::flush() {
+  input(Data::make());
+}
+
 } // namespace pipy
 
 namespace pjs {

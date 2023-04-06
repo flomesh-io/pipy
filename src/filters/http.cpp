@@ -1395,6 +1395,7 @@ Mux::Options::Options(pjs::Object *options)
     .check_nullable();
   Value(options, "version")
     .get(version)
+    .get(version_s)
     .get(version_f)
     .check_nullable();
 }
@@ -1457,6 +1458,24 @@ auto Mux::on_new_cluster(pjs::Object *options) -> MuxBase::SessionCluster* {
   }
 }
 
+auto Mux::verify_http_version(int version) -> int {
+  if (version == 1 || version == 2) return version;
+  Filter::error("invalid HTTP version number");
+  return 0;
+}
+
+auto Mux::verify_http_version(pjs::Str *name) -> int {
+  thread_local static const pjs::ConstStr s_http_1("http/1");
+  thread_local static const pjs::ConstStr s_http_2("http/2");
+  thread_local static const pjs::ConstStr s_http_1_0("http/1.0");
+  thread_local static const pjs::ConstStr s_http_1_1("http/1.1");
+  thread_local static const pjs::ConstStr s_h2("h2");
+  if (name == s_http_2 || name == s_h2) return 2;
+  if (name == s_http_1 || name == s_http_1_0 || name == s_http_1_1) return 1;
+  Filter::error("invalid HTTP version name");
+  return 0;
+}
+
 //
 // Mux::Session
 //
@@ -1465,8 +1484,11 @@ Mux::Session::~Session() {
   delete m_http2_muxer;
 }
 
-void Mux::Session::open() {
-  select_protocol();
+void Mux::Session::open(Muxer *muxer) {
+  if (!select_protocol(muxer)) {
+    set_pending(true);
+    pipeline()->input()->flush();
+  }
 }
 
 auto Mux::Session::open_stream(Muxer *muxer) -> EventFunction* {
@@ -1494,6 +1516,10 @@ void Mux::Session::close() {
   }
 }
 
+bool Mux::Session::should_continue(Muxer *muxer) {
+  return select_protocol(muxer);
+}
+
 void Mux::Session::on_encode_request(RequestHead *head) {
   m_request_queue.push(head);
 }
@@ -1517,46 +1543,41 @@ void Mux::Session::on_decode_error()
 {
 }
 
-void Mux::Session::on_notify() {
-  select_protocol();
-}
+bool Mux::Session::select_protocol(Muxer *muxer) {
+  if (m_version_selected) return true;
 
-void Mux::Session::select_protocol() {
-  if (m_version_selected) return;
+  auto mux = static_cast<Mux*>(muxer);
   if (m_options.version_f) {
-    auto *ctx = pipeline()->context();
     pjs::Value ret;
-    (*m_options.version_f)(*ctx, 0, nullptr, ret);
-    if (!ctx->ok()) return;
-    if (!ret.is_number()) {
-      set_pending(true);
-      ContextGroup::Waiter::wait(ctx->group());
-      MuxBase::Session::input()->input(Data::make());
-      return;
+    if (!mux->eval(m_options.version_f, ret)) return false;
+    if (ret.is_nullish()) return false;
+    if (ret.is_number()) {
+      m_version_selected = mux->verify_http_version(ret.to_int32());
+    } else if (ret.is_string()) {
+      m_version_selected = mux->verify_http_version(ret.s());
     }
-    m_version_selected = ret.n();
+  } else if (m_options.version_s) {
+    m_version_selected = mux->verify_http_version(m_options.version_s);
   } else {
-    m_version_selected = m_options.version;
+    m_version_selected = mux->verify_http_version(m_options.version);
   }
 
   switch (m_version_selected) {
-  case 2:
-    upgrade_http2();
-    break;
-  default:
-    if (m_version_selected != 1) {
-      Log::error("[muxHTTP] invalid HTTP version: %d", m_version_selected);
-      m_version_selected = 1;
-    }
+  case 1:
     Muxer::Queue::chain(Encoder::input());
     Encoder::chain(MuxBase::Session::input());
     MuxBase::Session::chain(Decoder::input());
     Decoder::chain(Muxer::Queue::reply());
     Encoder::set_buffer_size(m_options.buffer_size);
+    return true;
+  case 2:
+    upgrade_http2();
+    return true;
+  default:
     break;
   }
 
-  set_pending(false);
+  return false;
 }
 
 void Mux::Session::upgrade_http2() {

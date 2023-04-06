@@ -66,10 +66,8 @@ Muxer::Options::Options(pjs::Object *options) {
 // +-------------+       +----------------+       +---------+       +------------------------+
 //
 // After creation, a Session can be in "pending mode" due to some asynchronous
-// handshaking going on in the Session's pipeline (such as TLS handshake before
-// the actual protocol is selected by ALPN). In that case, events are stored
-// in m_waiting_events before allocating and feeding to a stream after "pending mode"
-// is over.
+// handshaking going on in the Session's pipeline, such as TLS handshake before
+// the actual protocol is selected by ALPN.
 //
 
 Muxer::Muxer()
@@ -93,7 +91,6 @@ void Muxer::reset() {
     m_session->free();
     m_session = nullptr;
   }
-  m_waiting_events.clear();
   m_session_key = pjs::Value::undefined;
 }
 
@@ -116,7 +113,7 @@ void Muxer::open(EventTarget::Input *output) {
       args[0] = m_session_key;
       args[1].set((int)session->m_cluster->m_sessions.size());
       auto p = on_new_pipeline(session->reply(), args);
-      session->link(p);
+      session->link(this, p);
     }
 
     if (session->is_pending()) {
@@ -131,9 +128,7 @@ void Muxer::open(EventTarget::Input *output) {
 }
 
 void Muxer::write(Event *evt) {
-  if (m_waiting) {
-    m_waiting_events.push(evt);
-  } else if (m_stream) {
+  if (m_stream) {
     m_stream->input()->input(evt);
   }
 }
@@ -146,8 +141,8 @@ void Muxer::start_waiting() {
 }
 
 void Muxer::flush_waiting() {
-  on_pending_session_open();
   stop_waiting();
+  on_pending_session_open();
 }
 
 void Muxer::stop_waiting() {
@@ -207,10 +202,10 @@ void Muxer::Session::set_pending(bool pending) {
   }
 }
 
-void Muxer::Session::link(Pipeline *pipeline) {
+void Muxer::Session::link(Muxer *muxer, Pipeline *pipeline) {
   m_pipeline = pipeline;
   chain_forward(pipeline->input());
-  open();
+  open(muxer);
 }
 
 void Muxer::Session::unlink() {
@@ -235,9 +230,16 @@ void Muxer::Session::on_input(Event *evt) {
 }
 
 void Muxer::Session::on_reply(Event *evt) {
-  output(evt);
   if (evt->is<StreamEnd>()) {
+    output(evt);
     m_is_closed = true;
+  } else {
+    if (auto muxer = first_waiting()) {
+      if (should_continue(muxer)) {
+        set_pending(false);
+      }
+    }
+    output(evt);
   }
 }
 
@@ -351,7 +353,7 @@ void Muxer::SessionCluster::recycle(double now) {
   while (s) {
     auto session = s; s = s->next();
     if (session->m_share_count > 0) break;
-    if (session->m_is_closed || m_weak_ptr_gone ||
+    if (session->m_is_closed || session->m_is_pending || m_weak_ptr_gone ||
        (m_max_messages > 0 && session->m_message_count >= m_max_messages) ||
        (now - session->m_free_time >= max_idle))
     {
@@ -591,6 +593,13 @@ MuxBase::MuxBase()
 {
 }
 
+MuxBase::MuxBase(const MuxBase &r)
+  : Filter(r)
+  , m_session_selector(r.m_session_selector)
+  , m_options(r.m_options)
+{
+}
+
 MuxBase::MuxBase(pjs::Function *session_selector)
   : m_session_selector(session_selector)
 {
@@ -605,11 +614,23 @@ MuxBase::MuxBase(pjs::Function *session_selector, pjs::Function *options)
 void MuxBase::reset() {
   Filter::reset();
   Muxer::reset();
+  m_waiting_events.clear();
 }
 
 void MuxBase::process(Event *evt) {
   Muxer::open(Filter::output());
-  Muxer::write(evt);
+  if (Muxer::stream()) {
+    if (!m_waiting_events.empty()) {
+      m_waiting_events.flush(
+        [this](Event *evt) {
+          Muxer::write(evt);
+        }
+      );
+    }
+    Muxer::write(evt);
+  } else {
+    m_waiting_events.push(evt);
+  }
 }
 
 bool MuxBase::on_select_session(pjs::Value &key) {
@@ -633,11 +654,12 @@ auto MuxBase::on_new_cluster() -> MuxBase::SessionCluster* {
 }
 
 auto MuxBase::on_new_pipeline(EventTarget::Input *output, pjs::Value args[2]) -> Pipeline* {
-  return Filter::sub_pipeline(0, true, output, nullptr, 2, args);
+  return Filter::sub_pipeline(0, false, output, nullptr, 2, args);
 }
 
 void MuxBase::on_pending_session_open() {
   Muxer::open(Filter::output());
+  Filter::input()->flush_async();
 }
 
 //
@@ -714,7 +736,7 @@ auto Mux::on_new_cluster(pjs::Object *options) -> MuxBase::SessionCluster* {
 // Mux::Session
 //
 
-void Mux::Session::open() {
+void Mux::Session::open(Muxer *muxer) {
   Muxer::Queue::chain(MuxBase::Session::input());
   MuxBase::Session::chain(Muxer::Queue::reply());
 }
