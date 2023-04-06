@@ -102,7 +102,7 @@ private:
   public:
     Module() : ModuleBase("Fetch") {}
     virtual auto new_context(pipy::Context *base) -> pipy::Context* override {
-      return new Context();
+      return Context::make();
     }
   };
 

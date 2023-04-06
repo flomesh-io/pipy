@@ -257,7 +257,7 @@ auto Worker::get_export(pjs::Str *ns, pjs::Str *name) -> int {
 }
 
 auto Worker::new_loading_context() -> Context* {
-  return new Context(nullptr, this, m_global_object);
+  return Context::make(nullptr, this, m_global_object);
 }
 
 auto Worker::new_runtime_context(Context *base) -> Context* {
@@ -265,11 +265,11 @@ auto Worker::new_runtime_context(Context *base) -> Context* {
   for (size_t i = 0; i < m_modules.size(); i++) {
     if (auto mod = m_modules[i]) {
       pjs::Object *proto = nullptr;
-      if (base) proto = base->m_data->at(i);
+      if (base) proto = base->data(i);
       data->at(i) = mod->new_context_data(proto);
     }
   }
-  return new Context(base, this, m_global_object, data);
+  return Context::make(base, this, m_global_object, data);
 }
 
 bool Worker::solve(pjs::Context &ctx, pjs::Str *filename, pjs::Value &result) {

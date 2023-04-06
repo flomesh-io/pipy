@@ -44,14 +44,10 @@ class Worker;
 //
 
 class Context :
-  public pjs::Context,
-  public pjs::RefCount<Context>,
-  public pjs::Pooled<Context>,
+  public pjs::ContextTemplate<Context>,
   public List<Context>::Item
 {
 public:
-  Context(Context *base = nullptr);
-
   auto id() const -> uint64_t { return m_id; }
   auto data(int i) const -> ContextDataBase* { return m_data->at(i)->as<ContextDataBase>(); }
   auto group() const -> ContextGroup* { return m_group; }
@@ -59,6 +55,7 @@ public:
   auto inbound() const -> Inbound* { return m_inbound; }
 
 protected:
+  Context() : Context(nullptr) {}
   ~Context();
 
   virtual void finalize() { delete this; }
@@ -66,7 +63,12 @@ protected:
 private:
   typedef pjs::PooledArray<pjs::Ref<pjs::Object>> ContextData;
 
-  Context(Context *base, Worker *worker, pjs::Object *global, ContextData *data = nullptr);
+  Context(
+    Context *base,
+    Worker *worker = nullptr,
+    pjs::Object *global = nullptr,
+    ContextData *data = nullptr
+  );
 
   uint64_t m_id;
   ContextGroup* m_group;
@@ -76,25 +78,9 @@ private:
 
   static std::atomic<uint64_t> s_context_id;
 
-  friend class pjs::RefCount<Context>;
-  friend class Worker;
+  friend class pjs::ContextTemplate<Context>;
   friend class Waiter;
   friend class Inbound;
-};
-
-//
-// ContextTemplate
-//
-
-template<class T, class Base = Context>
-class ContextTemplate : public pjs::Pooled<T, Base> {
-public:
-  virtual void finalize() {
-    delete static_cast<T*>(this);
-  }
-
-protected:
-  using pjs::Pooled<T, Base>::Pooled;
 };
 
 //

@@ -121,9 +121,9 @@ private:
   // AdminService::Context
   //
 
-  class Context : public ContextTemplate<Context> {
+  class Context : public pjs::ContextTemplate<Context, pipy::Context> {
   public:
-    Context() {}
+
     ~Context() { delete log_watcher; }
     std::string instance_uuid;
     std::string log_name;
@@ -139,7 +139,7 @@ private:
   public:
     Module() : ModuleBase("AdminService") {}
     virtual auto new_context(pipy::Context *base) -> pipy::Context* override {
-      return new Context();
+      return Context::make();
     }
   };
 

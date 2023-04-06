@@ -90,7 +90,7 @@ AdminLink::AdminLink(const std::string &url, const TLSSettings *tls_settings)
 
 auto AdminLink::connect() -> int {
   if (!m_pipeline) {
-    auto ctx = new Context();
+    auto ctx = Context::make();
     m_pipeline = Pipeline::make(m_ppl, ctx);
     m_connection_id++;
     if (m_connection_id <= 0) m_connection_id = 1;

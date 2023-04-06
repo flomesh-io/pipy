@@ -1928,7 +1928,7 @@ public:
 // Context
 //
 
-class Context {
+class Context : public RefCount<Context> {
 public:
   struct Location {
     const Source* source = nullptr;
@@ -2176,6 +2176,11 @@ public:
     return get_args(false, n, 0, argv...);
   }
 
+protected:
+  virtual void finalize() {
+    delete this;
+  }
+
 private:
   Context* m_root;
   Context* m_caller;
@@ -2367,6 +2372,24 @@ private:
       return false;
     }
   }
+
+  friend class RefCount<Context>;
+};
+
+template<class T, class Base = Context>
+class ContextTemplate : public Pooled<T, Base> {
+public:
+  template<typename... Args>
+  static auto make(Args&&... args) -> T* {
+    return new T(std::forward<Args>(args)...);
+  }
+
+protected:
+  virtual void finalize() override {
+    delete static_cast<T*>(this);
+  }
+
+  using Pooled<T, Base>::Pooled;
 };
 
 inline auto Class::construct() -> Object* {

@@ -280,7 +280,7 @@ Logger::FileTarget::FileTarget(pjs::Str *filename)
   ppl->append(new Tee(filename));
 
   m_pipeline_layout = ppl;
-  m_pipeline = Pipeline::make(ppl, new Context());
+  m_pipeline = Pipeline::make(ppl, Context::make());
 }
 
 void Logger::FileTarget::write(const Data &msg) {
@@ -397,7 +397,7 @@ Logger::HTTPTarget::HTTPTarget(pjs::Str *url, const Options &options)
 }
 
 void Logger::HTTPTarget::write(const Data &msg) {
-  m_pipeline = Pipeline::make(m_ppl, new Context());
+  m_pipeline = Pipeline::make(m_ppl, Context::make());
   auto *input = m_pipeline->input();
   input->input(m_message_start);
   input->input(Data::make(msg));

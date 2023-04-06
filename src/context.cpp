@@ -35,13 +35,8 @@ namespace pipy {
 
 std::atomic<uint64_t> Context::s_context_id(0);
 
-Context::Context(Context *base)
-  : Context(base, nullptr, nullptr)
-{
-}
-
 Context::Context(Context *base, Worker *worker, pjs::Object *global, ContextData *data)
-  : pjs::Context(global, data ? data->elements() : nullptr)
+  : pjs::ContextTemplate<Context>(global, data ? data->elements() : nullptr)
   , m_group(base ? base->group() : new ContextGroup())
   , m_worker(worker)
   , m_data(data)

@@ -69,7 +69,7 @@ private:
   public:
     Module() : ModuleBase("AdminProxy") {}
     virtual auto new_context(pipy::Context *base) -> pipy::Context* override {
-      return new Context(base);
+      return Context::make(base);
     }
   };
 
