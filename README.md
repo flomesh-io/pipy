@@ -69,7 +69,7 @@ Open the browser of your choice, point to `http://localhost:6060`. You will now 
   * [PipyJS Reference](https://flomesh.io/pipy/docs/reference/pjs)
 * Learning Resources
   * [Blog](https://blog.flomesh.io/)
-  * [Katacoda](https://katacoda.com/flomesh-io) - Katacoda scenarios
+  * [Docker Desktop Extension](https://open.docker.com/extensions/marketplace?extensionId=flomesh/pipy-docker-ext) - Flomesh Pipy Docker Desktop Extension
   * [InfoQ article](https://www.infoq.com/articles/network-proxy-stream-processor-pipy/) - Brief Introduction
 * [Copyright](COPYRIGHT)
 * [Licence](LICENCE)
