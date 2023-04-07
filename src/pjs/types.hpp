@@ -267,6 +267,11 @@ public:
     }
   }
 
+  T* pass() {
+    m_refs--;
+    return static_cast<T*>(this);
+  }
+
 protected:
   ~RefCount() {
     if (m_weak_ptr) {
@@ -974,6 +979,13 @@ public:
       m_c->retain();
     }
     return m_c;
+  }
+
+  static Field* field(const char *name) {
+    Ref<Str> s(Str::make(name));
+    auto c = get();
+    auto i = c->find_field(s);
+    return c->field(i);
   }
 
 private:
@@ -2025,6 +2037,12 @@ public:
   bool get(int i, int64_t &v);
   bool get(int i, double &v);
   bool get(int i, Str* &v);
+
+  bool get(int i, Value &v) {
+    if (i >= argc()) return false;
+    v = arg(i);
+    return true;
+  }
 
   template<class T>
   bool get(int i, EnumValue<T> &v) {

@@ -216,6 +216,76 @@ private:
 };
 
 //
+// Promise
+//
+
+class Promise : public ObjectTemplate<Promise> {
+public:
+  static void run();
+
+  //
+  // Promise::Settler
+  //
+
+  class Settler : public ObjectTemplate<Settler> {
+  public:
+    void resolve(const Value &value);
+    void reject(const Value &error);
+
+  private:
+    Settler(Promise *promise) : m_promise(promise) {}
+
+    pjs::Ref<Promise> m_promise;
+    pjs::Ref<Function> m_handler;
+    Settler *m_next = nullptr;
+
+    friend class ObjectTemplate<Settler>;
+    friend class Promise;
+  };
+
+  auto then(Function *on_resolved, Function *on_rejected = nullptr) -> Promise*;
+  auto finally(Function *on_finally) -> Promise*;
+
+private:
+
+  //
+  // Promise::SettlerList
+  //
+
+  class SettlerList {
+  public:
+    ~SettlerList();
+    void push(Settler *settler);
+    auto shift() -> Settler*;
+  private:
+    Settler* m_head = nullptr;
+    Settler* m_tail = nullptr;
+  };
+
+  enum State {
+    PENDING,
+    RESOLVED,
+    REJECTED,
+  };
+
+  Promise() {}
+  ~Promise();
+
+  void settle();
+
+  State m_state = PENDING;
+  pjs::Value m_result;
+  SettlerList m_on_resolved;
+  SettlerList m_on_rejected;
+  SettlerList m_on_finally;
+  pjs::Ref<Promise> m_next;
+
+  thread_local static SettlerList s_settled_list;
+
+  friend class ObjectTemplate<Promise>;
+};
+
+//
 // Global
 //
 

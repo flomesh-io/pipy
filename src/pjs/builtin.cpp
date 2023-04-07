@@ -896,6 +896,94 @@ template<> void ClassDef<Constructor<Set>>::init() {
 }
 
 //
+// Promise
+//
+
+thread_local Promise::SettlerList Promise::s_settled_list;
+
+void Promise::run() {
+  while (auto settler = s_settled_list.shift()) {
+    settler->m_promise->settle();
+    settler->release();
+  }
+}
+
+Promise::~Promise() {
+}
+
+auto Promise::then(Function *on_resolved, Function *on_rejected) -> Promise* {
+  return nullptr;
+}
+
+auto Promise::finally(Function *on_finally) -> Promise* {
+  return nullptr;
+}
+
+void Promise::settle() {
+}
+
+template<> void ClassDef<Promise>::init() {
+  thread_local static const auto s_field_res = static_cast<Method*>(ClassDef<Promise::Settler>::field("resolve"));
+  thread_local static const auto s_field_rej = static_cast<Method*>(ClassDef<Promise::Settler>::field("reject"));
+  ctor([](Context &ctx) -> Object* {
+    Function *executor;
+    if (!ctx.arguments(1, &executor)) return nullptr;
+    auto promise = Promise::make();
+    auto settler = Promise::Settler::make(promise);
+    {
+      promise->retain();
+      Value args[2], ret;
+      args[0].set(Function::make(s_field_res, settler));
+      args[1].set(Function::make(s_field_rej, settler));
+      (*executor)(ctx, 2, args, ret);
+    }
+    if (!ctx.ok()) return nullptr;
+    return promise->pass();
+  });
+}
+
+//
+// Promise::Settler
+//
+
+void Promise::Settler::resolve(const Value &value) {
+  if (m_promise->m_state == PENDING) {
+    m_promise->m_state = RESOLVED;
+    m_promise->m_result = value;
+    s_settled_list.push(this);
+  }
+}
+
+void Promise::Settler::reject(const Value &error) {
+  if (m_promise->m_state == PENDING) {
+    m_promise->m_state = REJECTED;
+    m_promise->m_result = error;
+    s_settled_list.push(this);
+  }
+}
+
+template<> void ClassDef<Promise::Settler>::init() {
+  method("resolve", [](Context &ctx, Object *obj, Value &) {
+    Value value; ctx.get(0, value);
+    obj->as<Promise::Settler>()->resolve(value);
+  });
+  method("reject", [](Context &ctx, Object *obj, Value &) {
+    Value error; ctx.get(0, error);
+    obj->as<Promise::Settler>()->reject(error);
+  });
+}
+
+Promise::SettlerList::~SettlerList() {
+}
+
+void Promise::SettlerList::push(Settler *settler) {
+}
+
+auto Promise::SettlerList::shift() -> Settler* {
+  return nullptr;
+}
+
+//
 // Global
 //
 
