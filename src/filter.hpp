@@ -91,8 +91,18 @@ public:
   void add_sub_pipeline(pjs::Str *name);
   void add_sub_pipeline(int index);
   auto num_sub_pipelines() const -> int { return m_subs->size(); }
+
   auto sub_pipeline(
     int i,
+    bool clone_context,
+    Input *chain_to = nullptr,
+    Output *output_to = nullptr,
+    int argc = 0,
+    pjs::Value *argv = nullptr
+  ) -> Pipeline*;
+
+  auto sub_pipeline(
+    PipelineLayout *layout,
     bool clone_context,
     Input *chain_to = nullptr,
     Output *output_to = nullptr,

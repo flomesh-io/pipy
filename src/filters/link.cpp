@@ -24,6 +24,7 @@
  */
 
 #include "link.hpp"
+#include "module.hpp"
 #include "pipeline.hpp"
 
 namespace pipy {
@@ -32,14 +33,14 @@ namespace pipy {
 // Link
 //
 
-Link::Link()
-  : m_conditions(std::make_shared<std::vector<Condition>>())
+Link::Link(pjs::Function *name)
+  : m_name_f(name)
 {
 }
 
 Link::Link(const Link &r)
   : Filter(r)
-  , m_conditions(r.m_conditions)
+  , m_name_f(r.m_name_f)
 {
 }
 
@@ -52,16 +53,6 @@ void Link::dump(Dump &d) {
   d.name = "link";
 }
 
-void Link::add_condition(pjs::Function *func) {
-  m_conditions->emplace_back();
-  m_conditions->back().func = func;
-}
-
-void Link::add_condition(const std::function<bool()> &func) {
-  m_conditions->emplace_back();
-  m_conditions->back().cpp_func = func;
-}
-
 auto Link::clone() -> Filter* {
   return new Link(*this);
 }
@@ -70,45 +61,47 @@ void Link::reset() {
   Filter::reset();
   m_buffer.clear();
   m_pipeline = nullptr;
-  m_chosen = false;
+  m_started = false;
 }
 
 void Link::process(Event *evt) {
-  if (!m_chosen) {
-    const auto &conditions = *m_conditions;
-    for (int i = 0; i < conditions.size(); i++) {
-      const auto &cond = conditions[i];
-      if (cond.func) {
-        pjs::Value ret;
-        if (!callback(cond.func, 0, nullptr, ret)) return;
-        m_chosen = ret.to_boolean();
-      } else if (cond.cpp_func) {
-        m_chosen = cond.cpp_func();
+  if (!m_started) {
+    if (m_name_f) {
+      pjs::Value ret;
+      if (!Filter::eval(m_name_f, ret)) return;
+      if (ret.is_nullish()) return;
+      m_started = true;
+
+      if (!ret.is_string()) {
+        Filter::error("callback did not return a string");
+        return;
+      }
+
+      if (auto layout = module()->get_pipeline(ret.s())) {
+        m_pipeline = sub_pipeline(layout, false, Filter::output());
       } else {
-        m_chosen = true;
+        Filter::error("unknown pipeline layout name");
+        return;
       }
-      if (m_chosen) {
-        if (auto *pipeline = sub_pipeline(i, false, output())) {
-          m_pipeline = pipeline;
-          m_buffer.flush([&](Event *evt) {
-            output(evt, pipeline->input());
-          });
-        } else {
-          m_buffer.flush([&](Event *evt) {
-            output(evt);
-          });
-        }
-        break;
-      }
+
+    } else if (Filter::num_sub_pipelines() > 0) {
+      m_pipeline = sub_pipeline(0, false, Filter::output());
+      m_started = true;
     }
   }
 
-  if (!m_chosen) {
+  if (!m_started) {
     m_buffer.push(evt);
+
   } else if (auto *p = m_pipeline.get()) {
-    output(evt, p->input());
-  } else {
-    output(evt);
+    if (!m_buffer.empty()) {
+      m_buffer.flush(
+        [=](Event *evt) {
+          Filter::output(evt, p->input());
+        }
+      );
+    }
+    Filter::output(evt, p->input());
   }
 }
 

@@ -297,13 +297,12 @@ void FilterConfigurator::input(pjs::Function *callback) {
   require_sub_pipeline(append_filter(new LinkInput(callback)));
 }
 
-void FilterConfigurator::link(size_t count, pjs::Str **layouts, pjs::Function **conditions) {
-  auto *filter = new Link();
-  for (size_t i = 0; i < count; i++) {
-    filter->add_sub_pipeline(layouts[i]);
-    filter->add_condition(conditions[i]);
+void FilterConfigurator::link(pjs::Function *name) {
+  if (name) {
+    append_filter(new Link(name));
+  } else {
+    require_sub_pipeline(append_filter(new Link()));
   }
-  append_filter(filter);
 }
 
 void FilterConfigurator::mux(pjs::Function *session_selector, pjs::Object *options) {
@@ -1622,29 +1621,17 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.link
   method("link", [](Context &ctx, Object *thiz, Value &result) {
-    int n = (ctx.argc() + 1) >> 1;
-    Str *layouts[n];
-    Function *conditions[n];
-    for (int i = 0; i < n; i++) {
-      int a = (i << 1);
-      int b = (i << 1) + 1;
-      if (ctx.arg(a).is_string()) {
-        layouts[i] = ctx.arg(a).s();
-      } else {
-        ctx.error_argument_type(a, "a string");
-        return;
-      }
-      if (b >= ctx.argc()) {
-        conditions[i] = nullptr;
-      } else if (!ctx.arg(b).is_function()) {
-        ctx.error_argument_type(b, "a function");
-        return;
-      } else {
-        conditions[i] = ctx.arg(b).f();
-      }
-    }
     try {
-      thiz->as<FilterConfigurator>()->link(n, layouts, conditions);
+      Str *name;
+      Function *name_f;
+      if (ctx.get(0, name)) {
+        thiz->as<FilterConfigurator>()->link();
+        thiz->as<FilterConfigurator>()->to(name);
+      } else if (ctx.get(0, name_f)) {
+        thiz->as<FilterConfigurator>()->link(name_f);
+      } else {
+        ctx.error_argument_type(0, "a string or a function");
+      }
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

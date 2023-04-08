@@ -148,6 +148,17 @@ auto Filter::sub_pipeline(
 
   auto layout = m_subs->at(i).layout.get();
   if (!layout) return nullptr;
+  return sub_pipeline(layout, clone_context, chain_to, output_to, argc, argv);
+}
+
+auto Filter::sub_pipeline(
+  PipelineLayout *layout,
+  bool clone_context,
+  Input *chain_to,
+  Output *output_to,
+  int argc,
+  pjs::Value *argv
+) -> Pipeline* {
 
   auto ctx = m_pipeline->m_context.get();
   if (clone_context) {

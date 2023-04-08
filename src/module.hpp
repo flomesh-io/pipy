@@ -48,6 +48,7 @@ public:
   auto label() const -> const std::string { return m_label; }
 
   virtual auto new_context(Context *base = nullptr) -> Context* = 0;
+  virtual auto get_pipeline(pjs::Str *name) -> PipelineLayout* { return nullptr; }
 
   void for_each_pipeline(const std::function<void(PipelineLayout*)> &cb);
   void shutdown();
@@ -105,6 +106,7 @@ public:
   auto find_indexed_pipeline(int index) -> PipelineLayout*;
 
   virtual auto new_context(Context *base = nullptr) -> Context* override;
+  virtual auto get_pipeline(pjs::Str *name) -> PipelineLayout* override { return find_named_pipeline(name); }
 
 private:
   bool load(const std::string &path);

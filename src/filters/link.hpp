@@ -40,10 +40,7 @@ namespace pipy {
 
 class Link : public Filter {
 public:
-  Link();
-
-  void add_condition(pjs::Function *func);
-  void add_condition(const std::function<bool()> &func);
+  Link(pjs::Function *name = nullptr);
 
 private:
   Link(const Link &r);
@@ -54,15 +51,10 @@ private:
   virtual void process(Event *evt) override;
   virtual void dump(Dump &d) override;
 
-  struct Condition {
-    pjs::Ref<pjs::Function> func;
-    std::function<bool()> cpp_func;
-  };
-
-  std::shared_ptr<std::vector<Condition>> m_conditions;
+  pjs::Ref<pjs::Function> m_name_f;
   pjs::Ref<Pipeline> m_pipeline;
   EventBuffer m_buffer;
-  bool m_chosen = false;
+  bool m_started = false;
 };
 
 } // namespace pipy
