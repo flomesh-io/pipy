@@ -899,88 +899,187 @@ template<> void ClassDef<Constructor<Set>>::init() {
 // Promise
 //
 
-thread_local Promise::SettlerList Promise::s_settled_list;
+thread_local Promise* Promise::s_settled_queue_head = nullptr;
+thread_local Promise* Promise::s_settled_queue_tail = nullptr;
 
-void Promise::run() {
-  while (auto settler = s_settled_list.shift()) {
-    settler->m_promise->settle();
-    settler->release();
+bool Promise::run() {
+  auto p = s_settled_queue_head;
+  s_settled_queue_head = nullptr;
+  s_settled_queue_tail = nullptr;
+  while (p) {
+    auto promise = p; p = p->m_next;
+    promise->dequeue();
   }
+  return s_settled_queue_head;
 }
 
 Promise::~Promise() {
+  auto p = m_thens_head;
+  while (p) {
+    auto then = p; p = p->m_next;
+    delete then;
+  }
 }
 
-auto Promise::then(Function *on_resolved, Function *on_rejected) -> Promise* {
-  return nullptr;
+auto Promise::then(
+  Context *context,
+  Function *on_resolved,
+  Function *on_rejected,
+  Function *on_finally
+) -> Promise* {
+  auto t = new Then(context, on_resolved, on_rejected, on_finally);
+  if (m_thens_tail) {
+    m_thens_tail->m_next = t;
+    m_thens_tail = t;
+  } else {
+    m_thens_head = t;
+    m_thens_tail = t;
+  }
+  if (m_state != PENDING) enqueue();
+  return t->m_promise;
 }
 
-auto Promise::finally(Function *on_finally) -> Promise* {
-  return nullptr;
+void Promise::resolve(const Value &value) {
+  if (m_state == PENDING) {
+    m_state = RESOLVED;
+    m_result = value;
+    enqueue();
+    if (m_dependent) {
+      m_dependent->resolve(value);
+      m_dependent = nullptr;
+    }
+  }
 }
 
-void Promise::settle() {
+void Promise::reject(const Value &error) {
+  if (m_state == PENDING) {
+    m_state = REJECTED;
+    m_result = error;
+    enqueue();
+    if (m_dependent) {
+      m_dependent->reject(error);
+      m_dependent = nullptr;
+    }
+  }
+}
+
+void Promise::enqueue() {
+  if (!m_queued) {
+    if (s_settled_queue_tail) {
+      s_settled_queue_tail->m_next = this;
+      s_settled_queue_tail = this;
+    } else {
+      s_settled_queue_head = this;
+      s_settled_queue_tail = this;
+    }
+    m_queued = true;
+    retain();
+  }
+}
+
+void Promise::dequeue() {
+  if (m_queued) {
+    auto p = m_thens_head;
+    m_thens_head = nullptr;
+    m_thens_tail = nullptr;
+    while (p) {
+      auto then = p; p = p->m_next;
+      then->execute(m_state, m_result);
+      delete then;
+    }
+    m_next = nullptr;
+    m_queued = false;
+    release();
+  }
 }
 
 template<> void ClassDef<Promise>::init() {
-  thread_local static const auto s_field_res = static_cast<Method*>(ClassDef<Promise::Settler>::field("resolve"));
-  thread_local static const auto s_field_rej = static_cast<Method*>(ClassDef<Promise::Settler>::field("reject"));
+  thread_local static const auto s_field_res = static_cast<Method*>(ClassDef<Promise::Handler>::field("resolve"));
+  thread_local static const auto s_field_rej = static_cast<Method*>(ClassDef<Promise::Handler>::field("reject"));
+
   ctor([](Context &ctx) -> Object* {
     Function *executor;
     if (!ctx.arguments(1, &executor)) return nullptr;
     auto promise = Promise::make();
-    auto settler = Promise::Settler::make(promise);
+    auto handler = Promise::Handler::make(promise);
     {
       promise->retain();
       Value args[2], ret;
-      args[0].set(Function::make(s_field_res, settler));
-      args[1].set(Function::make(s_field_rej, settler));
+      args[0].set(Function::make(s_field_res, handler));
+      args[1].set(Function::make(s_field_rej, handler));
       (*executor)(ctx, 2, args, ret);
     }
     if (!ctx.ok()) return nullptr;
     return promise->pass();
   });
+
+  method("then", [](Context &ctx, Object *obj, Value &ret) {
+    Function *on_resolved;
+    Function *on_rejected = nullptr;
+    if (!ctx.arguments(1, &on_resolved, &on_rejected)) return;
+    ret.set(obj->as<Promise>()->then(ctx.root(), on_resolved, on_rejected));
+  });
+
+  method("catch", [](Context &ctx, Object *obj, Value &ret) {
+    Function *on_rejected;
+    if (!ctx.arguments(1, &on_rejected)) return;
+    ret.set(obj->as<Promise>()->then(ctx.root(), nullptr, on_rejected));
+  });
+
+  method("finally", [](Context &ctx, Object *obj, Value &ret) {
+    Function *on_finally;
+    if (!ctx.arguments(1, &on_finally)) return;
+    ret.set(obj->as<Promise>()->then(ctx.root(), nullptr, nullptr, on_finally));
+  });
 }
 
 //
-// Promise::Settler
+// Promise::Then
 //
 
-void Promise::Settler::resolve(const Value &value) {
-  if (m_promise->m_state == PENDING) {
-    m_promise->m_state = RESOLVED;
-    m_promise->m_result = value;
-    s_settled_list.push(this);
+void Promise::Then::execute(State state, const Value &result) {
+  Value arg(result), ret;
+  if (state == RESOLVED) {
+    if (m_on_resolved) {
+      (*m_on_resolved)(*m_context, 1, &arg, ret);
+    }
+  } else {
+    if (m_on_rejected) {
+      (*m_on_rejected)(*m_context, 1, &arg, ret);
+    }
   }
+
+  if (!m_context->ok()) {
+    m_promise->reject(Error::make(m_context->error()));
+    return;
+  }
+
+  if (ret.is<Promise>()) {
+    auto promise = ret.as<Promise>();
+    switch (promise->m_state) {
+      case PENDING: promise->m_dependent = m_promise; break;
+      case RESOLVED: m_promise->resolve(promise->m_result); break;
+      case REJECTED: m_promise->reject(promise->m_result); break;
+    }
+    return;
+  }
+
+  m_promise->resolve(ret);
 }
 
-void Promise::Settler::reject(const Value &error) {
-  if (m_promise->m_state == PENDING) {
-    m_promise->m_state = REJECTED;
-    m_promise->m_result = error;
-    s_settled_list.push(this);
-  }
-}
+//
+// Promise::Handler
+//
 
-template<> void ClassDef<Promise::Settler>::init() {
+template<> void ClassDef<Promise::Handler>::init() {
   method("resolve", [](Context &ctx, Object *obj, Value &) {
     Value value; ctx.get(0, value);
-    obj->as<Promise::Settler>()->resolve(value);
+    obj->as<Promise::Handler>()->resolve(value);
   });
   method("reject", [](Context &ctx, Object *obj, Value &) {
     Value error; ctx.get(0, error);
-    obj->as<Promise::Settler>()->reject(error);
+    obj->as<Promise::Handler>()->reject(error);
   });
-}
-
-Promise::SettlerList::~SettlerList() {
-}
-
-void Promise::SettlerList::push(Settler *settler) {
-}
-
-auto Promise::SettlerList::shift() -> Settler* {
-  return nullptr;
 }
 
 //

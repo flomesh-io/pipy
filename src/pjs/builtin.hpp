@@ -221,66 +221,83 @@ private:
 
 class Promise : public ObjectTemplate<Promise> {
 public:
-  static void run();
 
   //
-  // Promise::Settler
+  // Promise::Handler
   //
 
-  class Settler : public ObjectTemplate<Settler> {
+  class Handler : public ObjectTemplate<Handler> {
   public:
-    void resolve(const Value &value);
-    void reject(const Value &error);
-
+    void resolve(const Value &value) { m_promise->resolve(value); }
+    void reject(const Value &error) { m_promise->reject(error); }
   private:
-    Settler(Promise *promise) : m_promise(promise) {}
-
-    pjs::Ref<Promise> m_promise;
-    pjs::Ref<Function> m_handler;
-    Settler *m_next = nullptr;
-
-    friend class ObjectTemplate<Settler>;
-    friend class Promise;
+    Handler(Promise *promise) : m_promise(promise) {}
+    Ref<Promise> m_promise;
+    friend class ObjectTemplate<Handler>;
   };
 
-  auto then(Function *on_resolved, Function *on_rejected = nullptr) -> Promise*;
-  auto finally(Function *on_finally) -> Promise*;
+  static bool run();
+
+  auto then(
+    Context *context,
+    Function *on_resolved,
+    Function *on_rejected = nullptr,
+    Function *on_finally = nullptr
+  ) -> Promise*;
 
 private:
-
-  //
-  // Promise::SettlerList
-  //
-
-  class SettlerList {
-  public:
-    ~SettlerList();
-    void push(Settler *settler);
-    auto shift() -> Settler*;
-  private:
-    Settler* m_head = nullptr;
-    Settler* m_tail = nullptr;
-  };
-
   enum State {
     PENDING,
     RESOLVED,
     REJECTED,
   };
 
+  //
+  // Promise::Then
+  //
+
+  class Then : public Pooled<Then> {
+    Then(
+      Context *context,
+      Function *on_resolved,
+      Function *on_rejected,
+      Function *on_finally
+    ) : m_context(context)
+      , m_on_resolved(on_resolved)
+      , m_on_rejected(on_rejected)
+      , m_on_finally(on_finally)
+      , m_promise(Promise::make()) {}
+
+    void execute(State state, const Value &result);
+
+    Then* m_next = nullptr;
+    Ref<Context> m_context;
+    Ref<Function> m_on_resolved;
+    Ref<Function> m_on_rejected;
+    Ref<Function> m_on_finally;
+    Ref<Promise> m_promise;
+
+    friend class Promise;
+  };
+
   Promise() {}
   ~Promise();
 
-  void settle();
+  void resolve(const Value &value);
+  void reject(const Value &error);
+  void enqueue();
+  void dequeue();
 
   State m_state = PENDING;
-  pjs::Value m_result;
-  SettlerList m_on_resolved;
-  SettlerList m_on_rejected;
-  SettlerList m_on_finally;
-  pjs::Ref<Promise> m_next;
+  Value m_result;
+  Then* m_thens_head = nullptr;
+  Then* m_thens_tail = nullptr;
+  Promise* m_next = nullptr;
+  Ref<Promise> m_dependent;
+  bool m_queued = false;
 
-  thread_local static SettlerList s_settled_list;
+  thread_local static Promise *s_settled_queue_head;
+  thread_local static Promise *s_settled_queue_tail;
 
   friend class ObjectTemplate<Promise>;
 };
