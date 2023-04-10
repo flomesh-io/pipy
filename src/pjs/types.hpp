@@ -1008,7 +1008,8 @@ private:
   static void accessor(
     const std::string &name,
     std::function<void(Object*, Value&)> getter,
-    std::function<void(Object*, const Value&)> setter = nullptr
+    std::function<void(Object*, const Value&)> setter = nullptr,
+    int options = 0
   );
 
   static void method(
@@ -1146,8 +1147,9 @@ private:
   Accessor(
     const std::string &name,
     std::function<void(Object*, Value&)> getter,
-    std::function<void(Object*, const Value&)> setter = nullptr
-  ) : Field(name, Field::Accessor)
+    std::function<void(Object*, const Value&)> setter = nullptr,
+    int options = 0
+  ) : Field(name, Field::Accessor, options)
     , m_getter(getter)
     , m_setter(setter) {}
 
@@ -1162,9 +1164,10 @@ template<class T>
 void ClassDef<T>::accessor(
   const std::string &name,
   std::function<void(Object*, Value&)> getter,
-  std::function<void(Object*, const Value&)> setter
+  std::function<void(Object*, const Value&)> setter,
+  int options
 ) {
-  m_init_data->fields.push_back(new Accessor(name, getter, setter));
+  m_init_data->fields.push_back(new Accessor(name, getter, setter, options));
 }
 
 //
@@ -1836,7 +1839,12 @@ inline void Object::iterate_all(const std::function<void(Str*, Value&)> &callbac
   assert_same_thread(*this);
   for (size_t i = 0, n = m_class->field_count(); i < n; i++) {
     auto f = m_class->field(i);
-    if (f->is_enumerable()) {
+    if (!f->is_enumerable()) continue;
+    if (f->is_accessor()) {
+      Value v;
+      static_cast<Accessor*>(f)->get(this, v);
+      callback(f->name(), v);
+    } else {
       callback(f->name(), m_data->at(i));
     }
   }
@@ -1852,10 +1860,13 @@ inline bool Object::iterate_while(const std::function<bool(Str*, Value&)> &callb
   assert_same_thread(*this);
   for (size_t i = 0, n = m_class->field_count(); i < n; i++) {
     auto f = m_class->field(i);
-    if (f->is_enumerable()) {
-      if (!callback(f->name(), m_data->at(i))) {
-        return false;
-      }
+    if (!f->is_enumerable()) continue;
+    if (f->is_accessor()) {
+      Value v;
+      static_cast<Accessor*>(f)->get(this, v);
+      if (!callback(f->name(), v)) return false;
+    } else if (!callback(f->name(), m_data->at(i))) {
+      return false;
     }
   }
   return iterate_hash(callback);
@@ -2482,7 +2493,8 @@ void ClassDef<T>::field(const std::string &name, const std::function<U*(T*)> &lo
   accessor(
     name,
     [=](Object *obj, Value &ret) { ret.from(*locate(obj->as<T>())); },
-    [=](Object *obj, const Value &ret) { ret.to(*locate(obj->as<T>())); }
+    [=](Object *obj, const Value &ret) { ret.to(*locate(obj->as<T>())); },
+    Field::Enumerable
   );
 }
 
