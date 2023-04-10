@@ -109,10 +109,10 @@ void Muxer::open(EventTarget::Input *output) {
     }
 
     if (!session->m_pipeline) {
-      pjs::Value args[2];
-      args[0] = m_session_key;
-      args[1].set((int)session->m_cluster->m_sessions.size());
-      auto p = on_new_pipeline(session->reply(), args);
+      pjs::Ref<SessionInfo> si = SessionInfo::make();
+      si->sessionKey = m_session_key;
+      si->sessionCount = session->m_cluster->m_sessions.size();
+      auto p = on_new_pipeline(session->reply(), si);
       session->link(this, p);
     }
 
@@ -654,8 +654,9 @@ auto MuxBase::on_new_cluster() -> MuxBase::SessionCluster* {
   }
 }
 
-auto MuxBase::on_new_pipeline(EventTarget::Input *output, pjs::Value args[2]) -> Pipeline* {
-  return Filter::sub_pipeline(0, false, output, nullptr, 2, args);
+auto MuxBase::on_new_pipeline(EventTarget::Input *output, pjs::Object *session_info) -> Pipeline* {
+  pjs::Value arg(session_info);
+  return Filter::sub_pipeline(0, false, output, nullptr, 1, &arg);
 }
 
 void MuxBase::on_pending_session_open() {
@@ -770,3 +771,14 @@ auto Mux::Session::on_queue_message(Muxer *muxer, Message *msg) -> int {
 }
 
 } // namespace pipy
+
+namespace pjs {
+
+using namespace pipy;
+
+template<> void ClassDef<Muxer::SessionInfo>::init() {
+  field<Value>("sessionKey", [](Muxer::SessionInfo *obj) { return &obj->sessionKey; });
+  field<int>("sessionCount", [](Muxer::SessionInfo *obj) { return &obj->sessionCount; });
+}
+
+} // namespace pjs

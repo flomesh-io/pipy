@@ -55,6 +55,11 @@ public:
     Options(pjs::Object *options);
   };
 
+  struct SessionInfo : public pjs::ObjectTemplate<SessionInfo> {
+    pjs::Value sessionKey;
+    int sessionCount = 0;
+  };
+
 protected:
   class Session;
   class SessionCluster;
@@ -73,7 +78,7 @@ protected:
 
   virtual bool on_select_session(pjs::Value &key) = 0;
   virtual auto on_new_cluster() -> SessionCluster* = 0;
-  virtual auto on_new_pipeline(EventTarget::Input *output, pjs::Value args[2]) -> Pipeline* = 0;
+  virtual auto on_new_pipeline(EventTarget::Input *output, pjs::Object *session_info) -> Pipeline* = 0;
   virtual void on_pending_session_open() {}
 
 private:
@@ -298,7 +303,7 @@ protected:
   virtual bool on_select_session(pjs::Value &key) override;
   virtual auto on_new_cluster() -> MuxBase::SessionCluster* override;
   virtual auto on_new_cluster(pjs::Object *options) -> MuxBase::SessionCluster* = 0;
-  virtual auto on_new_pipeline(EventTarget::Input *output, pjs::Value args[2]) -> Pipeline* override;
+  virtual auto on_new_pipeline(EventTarget::Input *output, pjs::Object *session_info) -> Pipeline* override;
   virtual void on_pending_session_open() override;
 
   pjs::Ref<pjs::Function> m_session_selector;
