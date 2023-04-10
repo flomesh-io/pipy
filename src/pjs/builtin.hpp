@@ -228,8 +228,8 @@ public:
 
   class Handler : public ObjectTemplate<Handler> {
   public:
-    void resolve(const Value &value) { m_promise->resolve(value); }
-    void reject(const Value &error) { m_promise->reject(error); }
+    void resolve(const Value &value) { m_promise->settle(RESOLVED, value); }
+    void reject(const Value &error) { m_promise->settle(REJECTED, error); }
   private:
     Handler(Promise *promise) : m_promise(promise) {}
     Ref<Promise> m_promise;
@@ -237,6 +237,8 @@ public:
   };
 
   static bool run();
+  static auto resolve(const Value &value) -> Promise*;
+  static auto reject(const Value &error) -> Promise*;
 
   auto then(
     Context *context,
@@ -283,8 +285,7 @@ private:
   Promise() {}
   ~Promise();
 
-  void resolve(const Value &value);
-  void reject(const Value &error);
+  void settle(State state, const Value &result);
   void enqueue();
   void dequeue();
 

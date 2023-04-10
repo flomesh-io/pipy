@@ -26,7 +26,6 @@
 #include "input.hpp"
 #include "context.hpp"
 #include "pipeline.hpp"
-#include "log.hpp"
 
 namespace pipy {
 
@@ -100,6 +99,10 @@ InputContext::~InputContext() {
     target->on_flush();
     target->m_origin = nullptr;
   }
+
+  // Run micro-tasks
+  int max_runs = 100;
+  while (max_runs > 0 && pjs::Promise::run()) max_runs--;
 
   s_stack = m_next;
 }

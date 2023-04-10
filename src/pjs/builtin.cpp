@@ -913,6 +913,18 @@ bool Promise::run() {
   return s_settled_queue_head;
 }
 
+auto Promise::resolve(const Value &value) -> Promise* {
+  auto p = Promise::make();
+  p->settle(RESOLVED, value);
+  return p;
+}
+
+auto Promise::reject(const Value &error) -> Promise* {
+  auto p = Promise::make();
+  p->settle(REJECTED, error);
+  return p;
+}
+
 Promise::~Promise() {
   auto p = m_thens_head;
   while (p) {
@@ -939,25 +951,13 @@ auto Promise::then(
   return t->m_promise;
 }
 
-void Promise::resolve(const Value &value) {
+void Promise::settle(State state, const Value &result) {
   if (m_state == PENDING) {
-    m_state = RESOLVED;
-    m_result = value;
+    m_state = state;
+    m_result = result;
     enqueue();
     if (m_dependent) {
-      m_dependent->resolve(value);
-      m_dependent = nullptr;
-    }
-  }
-}
-
-void Promise::reject(const Value &error) {
-  if (m_state == PENDING) {
-    m_state = REJECTED;
-    m_result = error;
-    enqueue();
-    if (m_dependent) {
-      m_dependent->reject(error);
+      m_dependent->settle(state, result);
       m_dependent = nullptr;
     }
   }
@@ -1033,6 +1033,21 @@ template<> void ClassDef<Promise>::init() {
   });
 }
 
+template<> void ClassDef<Constructor<Promise>>::init() {
+  super<Function>();
+  ctor();
+
+  method("resolve", [](Context &ctx, Object *obj, Value &ret) {
+    Value value; ctx.get(0, value);
+    ret.set(Promise::resolve(value));
+  });
+
+  method("reject", [](Context &ctx, Object *obj, Value &ret) {
+    Value error; ctx.get(0, error);
+    ret.set(Promise::reject(error));
+  });
+}
+
 //
 // Promise::Then
 //
@@ -1050,7 +1065,7 @@ void Promise::Then::execute(State state, const Value &result) {
   }
 
   if (!m_context->ok()) {
-    m_promise->reject(Error::make(m_context->error()));
+    m_promise->settle(REJECTED, Error::make(m_context->error()));
     return;
   }
 
@@ -1058,13 +1073,13 @@ void Promise::Then::execute(State state, const Value &result) {
     auto promise = ret.as<Promise>();
     switch (promise->m_state) {
       case PENDING: promise->m_dependent = m_promise; break;
-      case RESOLVED: m_promise->resolve(promise->m_result); break;
-      case REJECTED: m_promise->reject(promise->m_result); break;
+      case RESOLVED: m_promise->settle(RESOLVED, promise->m_result); break;
+      case REJECTED: m_promise->settle(REJECTED, promise->m_result); break;
     }
     return;
   }
 
-  m_promise->resolve(ret);
+  m_promise->settle(RESOLVED, ret);
 }
 
 //
@@ -1129,6 +1144,9 @@ template<> void ClassDef<Global>::init() {
 
   // RegExp
   variable("RegExp", class_of<Constructor<RegExp>>());
+
+  // Promise
+  variable("Promise", class_of<Constructor<Promise>>());
 
   // repeat
   method("repeat", [](Context &ctx, Object *obj, Value &ret) {
