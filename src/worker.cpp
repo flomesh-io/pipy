@@ -52,6 +52,7 @@
 #include "api/protobuf.hpp"
 #include "api/resp.hpp"
 #include "api/stats.hpp"
+#include "api/timeout.hpp"
 #include "api/url.hpp"
 #include "api/xml.hpp"
 #include "log.hpp"
@@ -137,6 +138,9 @@ template<> void ClassDef<pipy::Global>::init() {
 
   // StreamEnd
   variable("StreamEnd", class_of<Constructor<StreamEnd>>());
+
+  // Timeout
+  variable("Timeout", class_of<Constructor<Timeout>>());
 
   // logging
   variable("logging", class_of<logging::Logging>());
