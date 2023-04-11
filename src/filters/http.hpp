@@ -370,6 +370,61 @@ public:
   Mux(pjs::Function *session_selector, const Options &options);
   Mux(pjs::Function *session_selector, pjs::Function *options);
 
+  //
+  // Mux::Session
+  //
+
+  class Session :
+    public pjs::Pooled<Session, MuxBase::Session>,
+    public Muxer::Queue,
+    protected Encoder,
+    protected Decoder
+  {
+  public:
+
+    //
+    // Mux::Session::VersionSelector
+    //
+
+    class VersionSelector : public pjs::ObjectTemplate<VersionSelector> {
+    public:
+      void select(const pjs::Value &version) { if (m_session) m_session->select_protocol(m_mux, version); }
+      void close() { m_session = nullptr; }
+    private:
+      VersionSelector(Mux *mux, Session *session) : m_mux(mux), m_session(session) {}
+      Mux* m_mux;
+      Session* m_session;
+      friend class pjs::ObjectTemplate<VersionSelector>;
+    };
+
+    Session(const Options &options)
+      : Encoder(false)
+      , Decoder(true)
+      , m_options(options) {}
+
+    ~Session();
+
+  private:
+    virtual void open(Muxer *muxer) override;
+    virtual auto open_stream(Muxer *muxer) -> EventFunction* override;
+    virtual void close_stream(EventFunction *stream) override;
+    virtual void close() override;
+    virtual void on_encode_request(RequestHead *head) override;
+    virtual auto on_decode_response(ResponseHead *head) -> RequestHead* override;
+    virtual bool on_decode_tunnel(TunnelType tt) override;
+    virtual void on_decode_error() override;
+
+    const Options& m_options;
+    int m_version_selected = 0;
+    pjs::Ref<VersionSelector> m_version_selector;
+    RequestQueue m_request_queue;
+    HTTP2Muxer* m_http2_muxer = nullptr;
+
+    bool select_protocol(Muxer *muxer);
+    bool select_protocol(Muxer *muxer, const pjs::Value &version);
+    void upgrade_http2();
+  };
+
 private:
   Mux(const Mux &r);
   ~Mux();
@@ -383,44 +438,6 @@ private:
 
   auto verify_http_version(int version) -> int;
   auto verify_http_version(pjs::Str *name) -> int;
-
-  //
-  // Mux::Session
-  //
-
-  class Session :
-    public pjs::Pooled<Session, MuxBase::Session>,
-    public Muxer::Queue,
-    protected Encoder,
-    protected Decoder
-  {
-    Session(const Options &options)
-      : Encoder(false)
-      , Decoder(true)
-      , m_options(options) {}
-
-    ~Session();
-
-    virtual void open(Muxer *muxer) override;
-    virtual auto open_stream(Muxer *muxer) -> EventFunction* override;
-    virtual void close_stream(EventFunction *stream) override;
-    virtual void close() override;
-    virtual bool should_continue(Muxer *muxer) override;
-    virtual void on_encode_request(RequestHead *head) override;
-    virtual auto on_decode_response(ResponseHead *head) -> RequestHead* override;
-    virtual bool on_decode_tunnel(TunnelType tt) override;
-    virtual void on_decode_error() override;
-
-    const Options& m_options;
-    int m_version_selected = 0;
-    RequestQueue m_request_queue;
-    HTTP2Muxer* m_http2_muxer = nullptr;
-
-    bool select_protocol(Muxer *muxer);
-    void upgrade_http2();
-
-    friend class Mux;
-  };
 
   //
   // Mux::SessionCluster

@@ -234,11 +234,6 @@ void Muxer::Session::on_reply(Event *evt) {
     output(evt);
     m_is_closed = true;
   } else {
-    if (auto muxer = first_waiting()) {
-      if (should_continue(muxer)) {
-        set_pending(false);
-      }
-    }
     output(evt);
   }
 }

@@ -109,7 +109,6 @@ protected:
     virtual auto open_stream(Muxer *muxer) -> EventFunction* = 0;
     virtual void close_stream(EventFunction *stream) = 0;
     virtual void close() = 0;
-    virtual bool should_continue(Muxer *muxer) { return false; }
 
     Session() {}
     virtual ~Session() {}
@@ -121,7 +120,6 @@ protected:
     bool is_free() const { return !m_share_count; }
     bool is_pending() const { return m_is_pending; }
     void set_pending(bool pending);
-    auto first_waiting() const -> Muxer* { return m_waiting_muxers.head(); }
 
   private:
     void link(Muxer *muxer, Pipeline *pipeline);

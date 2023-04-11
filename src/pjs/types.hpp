@@ -51,6 +51,7 @@ class Boolean;
 class Class;
 class Context;
 class Field;
+class Method;
 class Function;
 class Int;
 class Number;
@@ -981,12 +982,8 @@ public:
     return m_c;
   }
 
-  static Field* field(const char *name) {
-    Ref<Str> s(Str::make(name));
-    auto c = get();
-    auto i = c->find_field(s);
-    return c->field(i);
-  }
+  static Field* field(const char *name);
+  static Method* method(const char *name);
 
 private:
   static void init();
@@ -1038,6 +1035,14 @@ Class* class_of() { return ClassDef<T>::get(); }
 
 template<class T> thread_local Class* ClassDef<T>::m_c = nullptr;
 template<class T> thread_local typename ClassDef<T>::InitData* ClassDef<T>::m_init_data = nullptr;
+
+template<class T>
+Field* ClassDef<T>::field(const char *name) {
+  Ref<Str> s(Str::make(name));
+  auto c = get();
+  auto i = c->find_field(s);
+  return i >= 0 ? c->field(i) : nullptr;
+}
 
 //
 // EnumDef
@@ -2487,6 +2492,15 @@ private:
   std::function<void(Context&, Object*, Value&)> m_invoke;
   Class* m_constructor_class;
 };
+
+template<class T>
+Method* ClassDef<T>::method(const char *name) {
+  Ref<Str> s(Str::make(name));
+  auto c = get();
+  auto i = c->find_field(s);
+  auto f = i >= 0 ? c->field(i) : nullptr;
+  return f && f->is_method() ? static_cast<Method*>(f) : nullptr;
+}
 
 template<class T>
 void ClassDef<T>::method(

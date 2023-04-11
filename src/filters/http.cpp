@@ -1481,6 +1481,7 @@ auto Mux::verify_http_version(pjs::Str *name) -> int {
 //
 
 Mux::Session::~Session() {
+  if (m_version_selector) m_version_selector->close();
   delete m_http2_muxer;
 }
 
@@ -1516,10 +1517,6 @@ void Mux::Session::close() {
   }
 }
 
-bool Mux::Session::should_continue(Muxer *muxer) {
-  return select_protocol(muxer);
-}
-
 void Mux::Session::on_encode_request(RequestHead *head) {
   m_request_queue.push(head);
 }
@@ -1544,22 +1541,35 @@ void Mux::Session::on_decode_error()
 }
 
 bool Mux::Session::select_protocol(Muxer *muxer) {
+  thread_local static auto s_method_select = pjs::ClassDef<VersionSelector>::method("select");
+
   if (m_version_selected) return true;
 
   auto mux = static_cast<Mux*>(muxer);
   if (m_options.version_f) {
     pjs::Value ret;
     if (!mux->eval(m_options.version_f, ret)) return false;
-    if (ret.is_nullish()) return false;
-    if (ret.is_number()) {
-      m_version_selected = mux->verify_http_version(ret.to_int32());
-    } else if (ret.is_string()) {
-      m_version_selected = mux->verify_http_version(ret.s());
+    if (ret.is<pjs::Promise>()) {
+      m_version_selector = VersionSelector::make(mux, this);
+      ret.as<pjs::Promise>()->then(mux->context(), pjs::Function::make(s_method_select, m_version_selector));
+      return false;
     }
+    return select_protocol(muxer, ret);
   } else if (m_options.version_s) {
-    m_version_selected = mux->verify_http_version(m_options.version_s);
+    return select_protocol(muxer, m_options.version_s.get());
   } else {
-    m_version_selected = mux->verify_http_version(m_options.version);
+    return select_protocol(muxer, m_options.version);
+  }
+}
+
+bool Mux::Session::select_protocol(Muxer *muxer, const pjs::Value &version) {
+  auto mux = static_cast<Mux*>(muxer);
+  if (version.is_number()) {
+    m_version_selected = mux->verify_http_version(version.to_int32());
+  } else if (version.is_string()) {
+    m_version_selected = mux->verify_http_version(version.s());
+  } else {
+    mux->error("invalid HTTP version");
   }
 
   switch (m_version_selected) {
@@ -1569,9 +1579,11 @@ bool Mux::Session::select_protocol(Muxer *muxer) {
     MuxBase::Session::chain(Decoder::input());
     Decoder::chain(Muxer::Queue::reply());
     Encoder::set_buffer_size(m_options.buffer_size);
+    MuxBase::Session::set_pending(false);
     return true;
   case 2:
     upgrade_http2();
+    MuxBase::Session::set_pending(false);
     return true;
   default:
     break;
@@ -1945,3 +1957,16 @@ void TunnelClient::on_reply(Event *evt) {
 
 } // namespace http
 } // namespace pipy
+
+namespace pjs {
+
+using namespace pipy::http;
+
+template<> void ClassDef<Mux::Session::VersionSelector>::init() {
+  method("select", [](Context &ctx, Object *obj, Value &) {
+    Value version; ctx.get(0, version);
+    obj->as<Mux::Session::VersionSelector>()->select(version);
+  });
+}
+
+} // namespace pjs
