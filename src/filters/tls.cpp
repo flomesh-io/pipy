@@ -441,11 +441,12 @@ bool TLSSession::handshake_step() {
 void TLSSession::handshake_done() {
   if (m_handshake) {
     Context &ctx = *m_pipeline->context();
-    pjs::Value arg, ret;
+    auto info = HandshakeInfo::make();
     const unsigned char *str = nullptr;
     unsigned int len = 0;
     SSL_get0_alpn_selected(m_ssl, &str, &len);
-    if (str) arg.set(pjs::Str::make((const char *)str, len));
+    info->alpn = pjs::Str::make((const char *)str, len);
+    pjs::Value arg(info), ret;
     (*m_handshake)(ctx, 1, &arg, ret);
     if (m_is_server) {
       forward(Data::make());
@@ -1111,6 +1112,10 @@ template<> void EnumDef<ProtocolVersion>::init() {
   define(ProtocolVersion::TLS1_1, "TLS1.1");
   define(ProtocolVersion::TLS1_2, "TLS1.2");
   define(ProtocolVersion::TLS1_3, "TLS1.3");
+}
+
+template<> void ClassDef<TLSSession::HandshakeInfo>::init() {
+  field<Ref<Str>>("alpn", [](TLSSession::HandshakeInfo *obj) { return &obj->alpn; });
 }
 
 } // namespace pjs

@@ -99,6 +99,15 @@ class TLSSession :
   public EventProxy
 {
 public:
+
+  //
+  // HandshakeInfo
+  //
+
+  struct HandshakeInfo : public pjs::ObjectTemplate<HandshakeInfo> {
+    pjs::Ref<pjs::Str> alpn;
+  };
+
   static void init();
   static auto get(SSL *ssl) -> TLSSession*;
 
