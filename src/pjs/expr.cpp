@@ -305,6 +305,7 @@ bool ObjectLiteral::unpack(Context &ctx, Value &arg, int &var) {
       }
     }
   }
+  obj->release();
   return true;
 }
 
