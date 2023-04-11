@@ -1803,15 +1803,25 @@ inline bool Object::get(Str *key, Value &val) {
   assert_same_thread(*this);
   auto i = m_class->find_field(key);
   if (i < 0) return ht_get(key, val);
-  val = m_data->at(i);
+  auto f = m_class->field(i);
+  if (f->is_accessor()) {
+    static_cast<Accessor*>(f)->get(this, val);
+  } else {
+    val = m_data->at(i);
+  }
   return true;
 }
 
 inline void Object::set(Str *key, const Value &val) {
   assert_same_thread(*this);
   auto i = m_class->find_field(key);
-  if (i >= 0) m_data->at(i) = val;
-  else ht_set(key, val);
+  if (i < 0) { ht_set(key, val); return; }
+  auto f = m_class->field(i);
+  if (f->is_accessor()) {
+    static_cast<Accessor*>(f)->set(this, val);
+  } else {
+    m_data->at(i) = val;
+  }
 }
 
 inline bool Object::ht_get(Str *key, Value &val) {
