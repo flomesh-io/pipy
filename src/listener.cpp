@@ -107,17 +107,18 @@ Listener::~Listener() {
   s_listeners[int(m_protocol)].erase(this);
 }
 
-void Listener::pipeline_layout(PipelineLayout *layout) {
+bool Listener::pipeline_layout(PipelineLayout *layout) {
   if (m_pipeline_layout.get() != layout) {
     if (layout) {
       if (!m_pipeline_layout) {
-        start();
+        if (!start()) return false;
       }
     } else if (m_pipeline_layout) {
       close();
     }
     m_pipeline_layout = layout;
   }
+  return true;
 }
 
 void Listener::close() {
@@ -149,7 +150,7 @@ void Listener::for_each_inbound(const std::function<void(Inbound*)> &cb) {
   }
 }
 
-void Listener::start() {
+bool Listener::start() {
   char desc[200];
   describe(desc, sizeof(desc));
 
@@ -178,14 +179,12 @@ void Listener::start() {
     }
 
     Log::info("[listener] Listening on %s", desc);
+    return true;
 
   } catch (std::runtime_error &err) {
     m_acceptor = nullptr;
-    std::string msg("[listener] Cannot start listening on ");
-    msg += desc;
-    msg += ": ";
-    msg += err.what();
-    throw std::runtime_error(msg);
+    Log::error("[listener] Cannot start listening on %s: %s", desc, err.what());
+    return false;
   }
 }
 

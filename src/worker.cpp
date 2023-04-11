@@ -357,23 +357,19 @@ bool Worker::start(bool force) {
 
   // Open new ports
   std::set<Listener*> new_open;
-  try {
-    for (const auto &i : m_listeners) {
-      auto l = i.first;
-      if (!l->is_open()) {
-        l->set_options(i.second.options);
-        l->pipeline_layout(i.second.pipeline_layout);
-        new_open.insert(l);
+  for (const auto &i : m_listeners) {
+    auto l = i.first;
+    if (!l->is_open()) {
+      l->set_options(i.second.options);
+      if (!l->pipeline_layout(i.second.pipeline_layout)) {
+        if (force) continue;
+        for (auto *l : new_open) {
+          l->pipeline_layout(nullptr);
+        }
+        return false;
       }
+      new_open.insert(l);
     }
-  } catch (std::runtime_error &err) {
-    if (!force) {
-      for (auto *l : new_open) {
-        l->pipeline_layout(nullptr);
-      }
-    }
-    Log::error("%s", err.what());
-    if (!force) return false;
   }
 
   // Update existing ports

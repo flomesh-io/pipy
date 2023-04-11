@@ -88,7 +88,7 @@ public:
   bool is_open() const { return m_pipeline_layout; }
   bool reserved() const { return m_options.reserved; }
   auto pipeline_layout() const -> PipelineLayout* { return m_pipeline_layout; }
-  void pipeline_layout(PipelineLayout *layout);
+  bool pipeline_layout(PipelineLayout *layout);
   auto current_connections() const -> int { return m_acceptor->count(); }
   auto peak_connections() const -> int { return m_peak_connections; }
 
@@ -184,7 +184,7 @@ private:
     void receive();
   };
 
-  void start();
+  bool start();
   void pause();
   void resume();
   void open(Inbound *inbound);
