@@ -76,3 +76,6 @@ yarn-error.log
 /bin/
 /build/
 /public/
+
+# Debugging/testing files
+rfc-8998.hpp

@@ -32,6 +32,10 @@
 
 #include <openssl/err.h>
 
+#if PIPY_USE_RFC8998
+#include "rfc-8998.hpp"
+#endif
+
 namespace pipy {
 namespace tls {
 
@@ -51,7 +55,11 @@ static void throw_error() {
 //
 
 TLSContext::TLSContext(bool is_server) {
+#if PIPY_USE_RFC8998
+  m_ctx = SSL_CTX_new(is_server ? TLS_server_method() : TLS_client_method_rfc8998());
+#else
   m_ctx = SSL_CTX_new(is_server ? TLS_server_method() : TLS_client_method());
+#endif
 
   if (!m_ctx) throw_error();
 
@@ -368,6 +376,30 @@ void TLSSession::use_certificate(pjs::Str *sni) {
   } else {
     Log::error("[tls] certificate.cert requires a Certificate or a CertificateChain object");
   }
+
+#if PIPY_USE_RFC8998
+  pjs::Value cert_enc, key_enc;
+  certificate.o()->get("certEnc", cert_enc);
+  certificate.o()->get("keyEnc", key_enc);
+
+  if (!key_enc.is_undefined() && !key_enc.is<crypto::PrivateKey>()) {
+    Log::error("[tls] certificate.keyEnc requires a PrivateKey object");
+    return;
+  }
+
+  if (!cert_enc.is_undefined() && !cert_enc.is<crypto::Certificate>()) {
+    Log::error("[tls] certificate.certEnc requires a Certificate object");
+    return;
+  }
+
+  if (!key_enc.is_undefined()) {
+    SSL_use_PrivateKey_rfc8998(m_ssl, key_enc.as<crypto::PrivateKey>()->pkey());
+  }
+
+  if (!cert_enc.is_undefined()) {
+    SSL_use_certificate_rfc8998(m_ssl, cert_enc.as<crypto::Certificate>()->x509());
+  }
+#endif
 }
 
 bool TLSSession::handshake_step() {

@@ -15,6 +15,7 @@ option(PIPY_OPENSSL "external libopenssl location" "")
 option(PIPY_BROTLI "external brotli location" "")
 option(PIPY_STATIC "statically link to libc" OFF)
 option(PIPY_LTO "enable LTO" ON)
+option(PIPY_RFC8998 "enable support for RFC 9889: SM Cipher Suite for TLS" OFF)
 
 add_subdirectory(deps/yajl-2.1.0)
 
@@ -314,6 +315,10 @@ endif()
 if(PIPY_ASSERT_SAME_THREAD)
   add_definitions(-DPIPY_ASSERT_SAME_THREAD)
 endif()
+
+if(PIPY_RFC8998)
+  add_definitions(-DPIPY_USE_RFC8998)
+endif(PIPY_RFC8998)
 
 if(APPLE)
   set(CMAKE_EXE_LINKER_FLAGS "-Wl,-exported_symbols_list ${CMAKE_SOURCE_DIR}/include/pipy/nmi-exports.lst")
