@@ -123,7 +123,7 @@ protected:
 
   private:
     void link(Muxer *muxer, Pipeline *pipeline);
-    void unlink();
+    void unlink(bool forward);
     void free();
 
     SessionCluster* m_cluster = nullptr;
@@ -133,7 +133,6 @@ protected:
     double m_free_time = 0;
     List<Muxer> m_waiting_muxers;
     bool m_is_pending = false;
-    bool m_is_closed = false;
 
     virtual void on_input(Event *evt) override;
     virtual void on_reply(Event *evt) override;

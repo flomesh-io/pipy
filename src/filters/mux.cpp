@@ -208,10 +208,10 @@ void Muxer::Session::link(Muxer *muxer, Pipeline *pipeline) {
   open(muxer);
 }
 
-void Muxer::Session::unlink() {
+void Muxer::Session::unlink(bool forward) {
   if (auto p = m_pipeline.get()) {
     close();
-    forward(StreamEnd::make());
+    if (forward) EventProxy::forward(StreamEnd::make());
     Pipeline::auto_release(p);
     m_pipeline = nullptr;
   }
@@ -221,7 +221,7 @@ void Muxer::Session::free() {
   if (m_cluster) {
     m_cluster->free(this);
   } else {
-    unlink();
+    unlink(true);
   }
 }
 
@@ -232,7 +232,8 @@ void Muxer::Session::on_input(Event *evt) {
 void Muxer::Session::on_reply(Event *evt) {
   if (evt->is<StreamEnd>()) {
     output(evt);
-    m_is_closed = true;
+    unlink(false);
+    detach();
   } else {
     output(evt);
   }
@@ -255,15 +256,13 @@ auto Muxer::SessionCluster::alloc() -> Session* {
   auto max_message_count = m_max_messages;
   auto *s = m_sessions.head();
   while (s) {
-    if (!s->m_is_closed) {
-      if ((max_share_count <= 0 || s->m_share_count < max_share_count) &&
-          (max_message_count <= 0 || s->m_message_count < max_message_count)
-       ) {
-        s->m_share_count++;
-        s->m_message_count++;
-        sort(s);
-        return s;
-      }
+    if ((max_share_count <= 0 || s->m_share_count < max_share_count) &&
+        (max_message_count <= 0 || s->m_message_count < max_message_count)
+      ) {
+      s->m_share_count++;
+      s->m_message_count++;
+      sort(s);
+      return s;
     }
     s = s->next();
   }
@@ -348,11 +347,11 @@ void Muxer::SessionCluster::recycle(double now) {
   while (s) {
     auto session = s; s = s->next();
     if (session->m_share_count > 0) break;
-    if (session->m_is_closed || session->m_is_pending || m_weak_ptr_gone ||
+    if (session->m_is_pending || m_weak_ptr_gone ||
        (m_max_messages > 0 && session->m_message_count >= m_max_messages) ||
        (now - session->m_free_time >= max_idle))
     {
-      session->unlink();
+      session->unlink(true);
       session->detach();
     }
   }
