@@ -716,14 +716,8 @@ void MetricDataSum::sum(MetricData &data, bool initial) {
   std::function<void(int, Node*, MetricData::Node*)> sum;
 
   sum = [&](int dimensions, Node *node, MetricData::Node* src_node) {
-    if (initial) {
-      for (int i = 0; i < dimensions; i++) {
-        node->values[i] = src_node->values[i];
-      }
-    } else {
-      for (int i = 0; i < dimensions; i++) {
-        node->values[i] += src_node->values[i];
-      }
+    for (int i = 0; i < dimensions; i++) {
+      node->values[i] += src_node->values[i];
     }
 
     auto &submap = node->submap;
@@ -769,6 +763,10 @@ void MetricDataSum::sum(MetricData &data, bool initial) {
     name->release();
     type->release();
     shape->release();
+
+    if (initial) {
+      ent->root->zero(e->dimensions);
+    }
 
     sum(
       std::min(ent->dimensions, e->dimensions),
@@ -902,6 +900,13 @@ MetricDataSum::Node::~Node() {
   while (s) {
     auto sub = s; s = s->next();
     delete sub;
+  }
+}
+
+void MetricDataSum::Node::zero(int dimensions) {
+  std::memset(values, 0, sizeof(values[0]) * dimensions);
+  for (auto sub = subs.head(); sub; sub = sub->next()) {
+    sub->zero(dimensions);
   }
 }
 

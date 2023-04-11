@@ -289,6 +289,7 @@ private:
     double values[1];
     static auto make(int dimensions) -> Node*;
     ~Node();
+    void zero(int dimensions);
     auto get_key() -> pjs::Str::CharData* { return key->data(); }
     void for_subs(const std::function<void(Node*)> &cb) {
       for (const auto &p : submap) {
