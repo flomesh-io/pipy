@@ -96,6 +96,7 @@ public:
   auto name_or_label() const -> pjs::Str*;
   auto allocated() const -> size_t { return m_allocated; }
   auto active() const -> size_t { return m_pipelines.size(); }
+  void on_start_location(pjs::Context::Location &loc) { m_on_start_location = loc; }
   void on_start(pjs::Object *e) { m_on_start = e; }
   void on_end(pjs::Function *f) { m_on_end = f; }
   auto append(Filter *filter) -> Filter*;
@@ -119,6 +120,7 @@ private:
   pjs::Ref<ModuleBase> m_module;
   pjs::Ref<pjs::Object> m_on_start;
   pjs::Ref<pjs::Function> m_on_end;
+  pjs::Context::Location m_on_start_location;
   std::list<std::unique_ptr<Filter>> m_filters;
   Pipeline* m_pool = nullptr;
   List<Pipeline> m_pipelines;
@@ -171,7 +173,7 @@ private:
   ~Pipeline();
 
   virtual void on_event(Event *evt) override;
-  virtual void on_recycle() override;
+  virtual void on_auto_release() override;
 
   PipelineLayout* m_layout;
   Pipeline* m_next_free = nullptr;

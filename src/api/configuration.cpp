@@ -96,6 +96,7 @@ void FilterConfigurator::on_start(pjs::Object *handler) {
   if (m_current_filter) throw std::runtime_error("onStart() is only allowed prior to filters");
   if (m_config->on_start) throw std::runtime_error("duplicated onStart()");
   m_config->on_start = handler;
+  m_config->on_start_location = m_current_location;
 }
 
 void FilterConfigurator::on_end(pjs::Function *handler) {
@@ -638,6 +639,7 @@ void Configuration::apply(JSModule *mod) {
   ) -> PipelineLayout*
   {
     auto layout = PipelineLayout::make(mod, index, name, label);
+    layout->on_start_location(config.on_start_location);
     layout->on_start(config.on_start);
     layout->on_end(config.on_end);
     for (auto &f : config.filters) {

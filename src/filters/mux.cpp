@@ -113,6 +113,11 @@ void Muxer::open(EventTarget::Input *output) {
       si->sessionKey = m_session_key;
       si->sessionCount = session->m_cluster->m_sessions.size();
       auto p = on_new_pipeline(session->reply(), si);
+      if (auto *end = session->stream_end()) {
+        output->input(end);
+        m_session = nullptr;
+        return;
+      }
       session->link(this, p);
     }
 
@@ -230,7 +235,8 @@ void Muxer::Session::on_input(Event *evt) {
 }
 
 void Muxer::Session::on_reply(Event *evt) {
-  if (evt->is<StreamEnd>()) {
+  if (auto end = evt->as<StreamEnd>()) {
+    m_stream_end = end;
     output(evt);
     unlink(false);
     detach();

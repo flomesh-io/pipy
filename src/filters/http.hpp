@@ -413,6 +413,7 @@ public:
     virtual auto on_decode_response(ResponseHead *head) -> RequestHead* override;
     virtual bool on_decode_tunnel(TunnelType tt) override;
     virtual void on_decode_error() override;
+    virtual void on_auto_release() override { delete this; }
 
     const Options& m_options;
     int m_version_selected = 0;
@@ -506,7 +507,7 @@ private:
     MessageReader m_message_reader;
 
     virtual void on_event(Event *evt) override;
-    virtual void on_recycle() override { delete static_cast<Handler*>(this); }
+    virtual void on_auto_release() override { delete static_cast<Handler*>(this); }
   };
 
   //

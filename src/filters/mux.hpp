@@ -115,6 +115,7 @@ protected:
 
     auto cluster() const -> SessionCluster* { return m_cluster; }
     auto pipeline() const -> Pipeline* { return m_pipeline; }
+    auto stream_end() const -> StreamEnd* { return m_stream_end; }
     bool detached() const { return !m_cluster; }
     void detach();
     bool is_free() const { return !m_share_count; }
@@ -128,6 +129,7 @@ protected:
 
     SessionCluster* m_cluster = nullptr;
     pjs::Ref<Pipeline> m_pipeline;
+    pjs::Ref<StreamEnd> m_stream_end;
     int m_share_count = 1;
     int m_message_count = 0;
     double m_free_time = 0;
@@ -136,7 +138,7 @@ protected:
 
     virtual void on_input(Event *evt) override;
     virtual void on_reply(Event *evt) override;
-    virtual void on_recycle() override { delete this; }
+    virtual void on_auto_release() override { delete this; }
 
     friend class pjs::RefCount<Session>;
     friend class Muxer;
@@ -347,6 +349,7 @@ protected:
     virtual auto open_stream(Muxer *muxer) -> EventFunction* override;
     virtual void close_stream(EventFunction *stream) override;
     virtual void close() override;
+    virtual void on_auto_release() override { delete this; }
     virtual auto on_queue_message(Muxer *muxer, Message *msg) -> int override;
 
     friend class Mux;

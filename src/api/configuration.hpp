@@ -137,6 +137,7 @@ public:
 protected:
   struct PipelineConfig {
     int index;
+    pjs::Context::Location on_start_location;
     pjs::Ref<pjs::Object> on_start;
     pjs::Ref<pjs::Function> on_end;
     std::list<std::unique_ptr<Filter>> filters;

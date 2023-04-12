@@ -176,7 +176,7 @@ protected:
   }
 
 private:
-  virtual void on_recycle() = 0;
+  virtual void on_auto_release() = 0;
 
   AutoReleased* m_next_auto_release = nullptr;
   bool m_auto_release = false;
@@ -188,7 +188,7 @@ private:
   }
 
   void finalize() {
-    on_recycle();
+    on_auto_release();
   }
 
   friend class pjs::RefCount<AutoReleased>;

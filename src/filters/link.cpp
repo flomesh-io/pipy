@@ -80,7 +80,7 @@ void Link::process(Event *evt) {
       if (auto layout = module()->get_pipeline(ret.s())) {
         m_pipeline = sub_pipeline(layout, false, Filter::output());
       } else {
-        Filter::error("unknown pipeline layout name");
+        Filter::error("unknown pipeline layout name: %s", ret.s()->c_str());
         return;
       }
 
