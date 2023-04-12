@@ -229,7 +229,7 @@ function createAttacks(proc, port, options) {
           });
         } else {
           return new Promise((resolve, reject) => {
-            const s = net.createConnection({ port }, () => resolve(true));
+            const s = net.createConnection({ host: '127.0.0.1', port }, () => resolve(true));
             s.on('data', data => {
               this.responseBuffer.push(data);
               this.receivedSize += data.byteLength;
