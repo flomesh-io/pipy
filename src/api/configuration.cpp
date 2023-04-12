@@ -780,6 +780,7 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.onStart
   method("onStart", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     try {
       Object *starting_events = nullptr;
       if (!ctx.arguments(1, &starting_events)) return;
@@ -792,7 +793,7 @@ template<> void ClassDef<FilterConfigurator>::init() {
         ctx.error_argument_type(1, "an Event, a Message, a function or an array");
         return;
       }
-      thiz->as<FilterConfigurator>()->on_start(starting_events);
+      config->on_start(starting_events);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -801,10 +802,11 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.onEnd
   method("onEnd", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     try {
       Function *handler;
       if (!ctx.arguments(1, &handler)) return;
-      thiz->as<FilterConfigurator>()->on_end(handler);
+      config->on_end(handler);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -835,14 +837,15 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.acceptHTTPTunnel
   method("acceptHTTPTunnel", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     try {
       Str *layout;
       Function *handler;
       if (ctx.try_arguments(2, &layout, &handler)) {
-        thiz->as<FilterConfigurator>()->accept_http_tunnel(handler);
-        thiz->as<FilterConfigurator>()->to(layout);
+        config->accept_http_tunnel(handler);
+        config->to(layout);
       } else if (ctx.arguments(1, &handler)) {
-        thiz->as<FilterConfigurator>()->accept_http_tunnel(handler);
+        config->accept_http_tunnel(handler);
       }
       result.set(thiz);
     } catch (std::runtime_error &err) {
@@ -852,10 +855,11 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.acceptProxyProtocol
   method("acceptProxyProtocol", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     try {
       Function *handler;
       if (!ctx.arguments(1, &handler)) return;
-      thiz->as<FilterConfigurator>()->accept_proxy_protocol(handler);
+      config->accept_proxy_protocol(handler);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -864,14 +868,15 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.acceptSOCKS
   method("acceptSOCKS", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     try {
       Str *layout;
       Function *on_connect;
       if (ctx.try_arguments(2, &layout, &on_connect)) {
-        thiz->as<FilterConfigurator>()->accept_socks(on_connect);
-        thiz->as<FilterConfigurator>()->to(layout);
+        config->accept_socks(on_connect);
+        config->to(layout);
       } else if (ctx.arguments(1, &on_connect)) {
-        thiz->as<FilterConfigurator>()->accept_socks(on_connect);
+        config->accept_socks(on_connect);
       }
       result.set(thiz);
     } catch (std::runtime_error &err) {
@@ -881,14 +886,15 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.acceptTLS
   method("acceptTLS", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     try {
       Str *layout;
       Object *options = nullptr;
       if (ctx.try_arguments(1, &layout, &options)) {
-        thiz->as<FilterConfigurator>()->accept_tls(options);
-        thiz->as<FilterConfigurator>()->to(layout);
+        config->accept_tls(options);
+        config->to(layout);
       } else if (ctx.arguments(0, &options)) {
-        thiz->as<FilterConfigurator>()->accept_tls(options);
+        config->accept_tls(options);
       }
       result.set(thiz);
     } catch (std::runtime_error &err) {
@@ -898,6 +904,7 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.branch
   method("branch", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     try {
       int n = ctx.argc();
       if (n < 2) throw std::runtime_error("requires at least 2 arguments");
@@ -944,7 +951,7 @@ template<> void ClassDef<FilterConfigurator>::init() {
             layouts[i].set(layout.s());
           } else {
             layouts[i].set(
-              thiz->as<FilterConfigurator>()->sub_pipeline(
+              config->sub_pipeline(
                 layout.f()->to_string(),
                 [&](FilterConfigurator *fc) {
                   Value arg(fc), ret;
@@ -955,7 +962,7 @@ template<> void ClassDef<FilterConfigurator>::init() {
             if (!ctx.ok()) return;
           }
         }
-        thiz->as<FilterConfigurator>()->branch(n, conds, layouts);
+        config->branch(n, conds, layouts);
 
       // Static branch
       } else {
@@ -996,11 +1003,12 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.chain
   method("chain", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     Array *modules = nullptr;
     if (!ctx.arguments(0, &modules)) return;
     if (!modules) {
       try {
-        thiz->as<FilterConfigurator>()->chain_next();
+        config->chain_next();
         result.set(thiz);
       } catch (std::runtime_error &err) {
         ctx.error(err);
@@ -1027,7 +1035,7 @@ template<> void ClassDef<FilterConfigurator>::init() {
       );
       if (mods.size() == modules->length()) {
         try {
-          thiz->as<FilterConfigurator>()->chain(mods);
+          config->chain(mods);
           result.set(thiz);
         } catch (std::runtime_error &err) {
           ctx.error(err);
@@ -1038,35 +1046,38 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.compressHTTP
   method("compressHTTP", [](Context &ctx, Object *thiz, Value &result) {
-      Object *options = nullptr;
-      if (!ctx.arguments(0, &options)) return;
-      try {
-        thiz->as<FilterConfigurator>()->compress_http(options);
-        result.set(thiz);
-      } catch (std::runtime_error &err) {
-        ctx.error(err);
-      }
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
+    Object *options = nullptr;
+    if (!ctx.arguments(0, &options)) return;
+    try {
+      config->compress_http(options);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
   });
 
   // FilterConfigurator.compressMessage
   method("compressMessage", [](Context &ctx, Object *thiz, Value &result) {
-      Object *options = nullptr;
-      if (!ctx.arguments(0, &options)) return;
-      try {
-        thiz->as<FilterConfigurator>()->compress_message(options);
-        result.set(thiz);
-      } catch (std::runtime_error &err) {
-        ctx.error(err);
-      }
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
+    Object *options = nullptr;
+    if (!ctx.arguments(0, &options)) return;
+    try {
+      config->compress_message(options);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
   });
 
   // FilterConfigurator.connect
   method("connect", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     Value target;
     Object *options = nullptr;
     if (!ctx.arguments(1, &target, &options)) return;
     try {
-      thiz->as<FilterConfigurator>()->trace_location(ctx)->connect(target, options);
+      config->connect(target, options);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1075,13 +1086,14 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.connectHTTPTunnel
   method("connectHTTPTunnel", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     try {
       Message *handshake;
       Function *handshake_f;
       if (ctx.get(0, handshake)) {
-        thiz->as<FilterConfigurator>()->connect_http_tunnel(handshake);
+        config->connect_http_tunnel(handshake);
       } else if (ctx.get(0, handshake_f)) {
-        thiz->as<FilterConfigurator>()->connect_http_tunnel(handshake_f);
+        config->connect_http_tunnel(handshake_f);
       } else {
         ctx.error_argument_type(0, "a Message or a function");
       }
@@ -1093,10 +1105,11 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.connectProxyProtocol
   method("connectProxyProtocol", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     Value target;
     if (!ctx.arguments(1, &target)) return;
     try {
-      thiz->as<FilterConfigurator>()->connect_proxy_protocol(target);
+      config->connect_proxy_protocol(target);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1105,14 +1118,15 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.connectSOCKS
   method("connectSOCKS", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     try {
       Str *layout;
       Value address;
       if (ctx.try_arguments(2, &layout, &address)) {
-        thiz->as<FilterConfigurator>()->connect_socks(address);
-        thiz->as<FilterConfigurator>()->to(layout);
+        config->connect_socks(address);
+        config->to(layout);
       } else if (ctx.arguments(1, &address)) {
-        thiz->as<FilterConfigurator>()->connect_socks(address);
+        config->connect_socks(address);
       }
       result.set(thiz);
     } catch (std::runtime_error &err) {
@@ -1122,14 +1136,15 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.connectTLS
   method("connectTLS", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     try {
       Str *layout;
       Object *options = nullptr;
       if (ctx.try_arguments(1, &layout, &options)) {
-        thiz->as<FilterConfigurator>()->connect_tls(options);
-        thiz->as<FilterConfigurator>()->to(layout);
+        config->connect_tls(options);
+        config->to(layout);
       } else if (ctx.arguments(0, &options)) {
-        thiz->as<FilterConfigurator>()->connect_tls(options);
+        config->connect_tls(options);
       }
       result.set(thiz);
     } catch (std::runtime_error &err) {
@@ -1139,10 +1154,11 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.decodeBGP
   method("decodeBGP", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     try {
       Object *options = nullptr;
       if (!ctx.arguments(0, &options)) return;
-      thiz->as<FilterConfigurator>()->decode_bgp(options);
+      config->decode_bgp(options);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1151,8 +1167,9 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.decodeDubbo
   method("decodeDubbo", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     try {
-      thiz->as<FilterConfigurator>()->decode_dubbo();
+      config->decode_dubbo();
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1161,10 +1178,11 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.decodeHTTPRequest
   method("decodeHTTPRequest", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     Function *handler = nullptr;
     if (!ctx.arguments(0, &handler)) return;
     try {
-      thiz->as<FilterConfigurator>()->decode_http_request(handler);
+      config->decode_http_request(handler);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1173,10 +1191,11 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.decodeHTTPResponse
   method("decodeHTTPResponse", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     Function *handler = nullptr;
     if (!ctx.arguments(0, &handler)) return;
     try {
-      thiz->as<FilterConfigurator>()->decode_http_response(handler);
+      config->decode_http_response(handler);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1185,8 +1204,9 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.decodeMQTT
   method("decodeMQTT", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     try {
-      thiz->as<FilterConfigurator>()->decode_mqtt();
+      config->decode_mqtt();
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1195,8 +1215,9 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.decodeMultipart
   method("decodeMultipart", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     try {
-      thiz->as<FilterConfigurator>()->decode_multipart();
+      config->decode_multipart();
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1205,8 +1226,9 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.decodeRESP
   method("decodeRESP", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     try {
-      thiz->as<FilterConfigurator>()->decode_resp();
+      config->decode_resp();
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1215,8 +1237,9 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.decodeThrift
   method("decodeThrift", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     try {
-      thiz->as<FilterConfigurator>()->decode_thrift();
+      config->decode_thrift();
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1225,8 +1248,9 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.decodeWebSocket
   method("decodeWebSocket", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     try {
-      thiz->as<FilterConfigurator>()->decode_websocket();
+      config->decode_websocket();
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1235,10 +1259,11 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.decompressHTTP
   method("decompressHTTP", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     Function *enable = nullptr;
     if (!ctx.arguments(0, &enable)) return;
     try {
-      thiz->as<FilterConfigurator>()->decompress_http(enable);
+      config->decompress_http(enable);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1247,10 +1272,11 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.decompressMessage
   method("decompressMessage", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     pjs::Value algorithm;
     if (!ctx.arguments(1, &algorithm)) return;
     try {
-      thiz->as<FilterConfigurator>()->decompress_message(algorithm);
+      config->decompress_message(algorithm);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1259,10 +1285,11 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.deframe
   method("deframe", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     pjs::Object *states;
     if (!ctx.arguments(1, &states)) return;
     try {
-      thiz->as<FilterConfigurator>()->deframe(states);
+      config->deframe(states);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1271,14 +1298,15 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.demux
   method("demux", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     try {
       Str *layout = nullptr;
       pjs::Object *options = nullptr;
       if (ctx.try_arguments(1, &layout, &options)) {
-        thiz->as<FilterConfigurator>()->demux(options);
-        thiz->as<FilterConfigurator>()->to(layout);
+        config->demux(options);
+        config->to(layout);
       } else if (ctx.arguments(0, &options)) {
-        thiz->as<FilterConfigurator>()->demux(options);
+        config->demux(options);
       }
       result.set(thiz);
     } catch (std::runtime_error &err) {
@@ -1288,14 +1316,15 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.demuxQueue
   method("demuxQueue", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     try {
       Str *layout = nullptr;
       pjs::Object *options = nullptr;
       if (ctx.try_arguments(1, &layout, &options)) {
-        thiz->as<FilterConfigurator>()->demux(options);
-        thiz->as<FilterConfigurator>()->to(layout);
+        config->demux(options);
+        config->to(layout);
       } else if (ctx.arguments(0, &options)) {
-        thiz->as<FilterConfigurator>()->demux(options);
+        config->demux(options);
       }
       result.set(thiz);
     } catch (std::runtime_error &err) {
@@ -1305,14 +1334,15 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.demuxHTTP
   method("demuxHTTP", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     try {
       Str *layout;
       Object *options = nullptr;
       if (ctx.try_arguments(1, &layout, &options)) {
-        thiz->as<FilterConfigurator>()->demux_http(options);
-        thiz->as<FilterConfigurator>()->to(layout);
+        config->demux_http(options);
+        config->to(layout);
       } else if (ctx.arguments(0, &options)) {
-        thiz->as<FilterConfigurator>()->demux_http(options);
+        config->demux_http(options);
       }
       result.set(thiz);
     } catch (std::runtime_error &err) {
@@ -1322,11 +1352,12 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.depositMessage
   method("depositMessage", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     Value filename;
     Object *options = nullptr;
     if (!ctx.arguments(1, &filename, &options)) return;
     try {
-      thiz->as<FilterConfigurator>()->deposit_message(filename, options);
+      config->deposit_message(filename, options);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1335,10 +1366,11 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.detectProtocol
   method("detectProtocol", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     Function *callback;
     if (!ctx.arguments(1, &callback)) return;
     try {
-      thiz->as<FilterConfigurator>()->detect_protocol(callback);
+      config->detect_protocol(callback);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1347,8 +1379,9 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.dummy
   method("dummy", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     try {
-      thiz->as<FilterConfigurator>()->dummy();
+      config->dummy();
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1357,10 +1390,11 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.dump
   method("dump", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     Value tag;
     if (!ctx.arguments(0, &tag)) return;
     try {
-      thiz->as<FilterConfigurator>()->dump(tag);
+      config->dump(tag);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1369,10 +1403,11 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.encodeBGP
   method("encodeBGP", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     try {
       Object *options = nullptr;
       if (!ctx.arguments(0, &options)) return;
-      thiz->as<FilterConfigurator>()->encode_bgp(options);
+      config->encode_bgp(options);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1381,8 +1416,9 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.encodeDubbo
   method("encodeDubbo", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     try {
-      thiz->as<FilterConfigurator>()->encode_dubbo();
+      config->encode_dubbo();
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1391,6 +1427,7 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.encodeHTTPRequest
   method("encodeHTTPRequest", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     Object *options = nullptr;
     Function *handler = nullptr;
     if (ctx.is_function(0)) {
@@ -1399,7 +1436,7 @@ template<> void ClassDef<FilterConfigurator>::init() {
       if (!ctx.arguments(0, &options)) return;
     }
     try {
-      thiz->as<FilterConfigurator>()->encode_http_request(options, handler);
+      config->encode_http_request(options, handler);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1408,6 +1445,7 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.encodeHTTPResponse
   method("encodeHTTPResponse", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     Object *options = nullptr;
     Function *handler = nullptr;
     if (ctx.is_function(0)) {
@@ -1416,7 +1454,7 @@ template<> void ClassDef<FilterConfigurator>::init() {
       if (!ctx.arguments(0, &options)) return;
     }
     try {
-      thiz->as<FilterConfigurator>()->encode_http_response(options, handler);
+      config->encode_http_response(options, handler);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1425,8 +1463,9 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.encodeMQTT
   method("encodeMQTT", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     try {
-      thiz->as<FilterConfigurator>()->encode_mqtt();
+      config->encode_mqtt();
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1435,8 +1474,9 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.encodeRESP
   method("encodeRESP", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     try {
-      thiz->as<FilterConfigurator>()->encode_resp();
+      config->encode_resp();
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1445,8 +1485,9 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.encodeThrift
   method("encodeThrift", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     try {
-      thiz->as<FilterConfigurator>()->encode_thrift();
+      config->encode_thrift();
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1455,8 +1496,9 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.encodeWebSocket
   method("encodeWebSocket", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     try {
-      thiz->as<FilterConfigurator>()->encode_websocket();
+      config->encode_websocket();
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1465,10 +1507,11 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.exec
   method("exec", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     Value command;
     if (!ctx.arguments(1, &command)) return;
     try {
-      thiz->as<FilterConfigurator>()->exec(command);
+      config->exec(command);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1477,14 +1520,15 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.fork
   method("fork", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     try {
       Str *layout;
       Value init_arg;
       if (ctx.try_arguments(1, &layout, &init_arg)) {
-        thiz->as<FilterConfigurator>()->fork(init_arg);
-        thiz->as<FilterConfigurator>()->to(layout);
+        config->fork(init_arg);
+        config->to(layout);
       } else if (ctx.arguments(0, &init_arg)) {
-        thiz->as<FilterConfigurator>()->fork(init_arg);
+        config->fork(init_arg);
       }
       result.set(thiz);
     } catch (std::runtime_error &err) {
@@ -1494,10 +1538,11 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.handleData
   method("handleData", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     Function *callback = nullptr;
     if (!ctx.arguments(1, &callback)) return;
     try {
-      thiz->as<FilterConfigurator>()->handle_event(Event::Type::Data, callback);
+      config->handle_event(Event::Type::Data, callback);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1506,6 +1551,7 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.handleMessage
   method("handleMessage", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     Function *callback = nullptr;
     int size_limit = -1;
     std::string size_limit_str;
@@ -1516,7 +1562,7 @@ template<> void ClassDef<FilterConfigurator>::init() {
       !ctx.arguments(1, &callback)
     ) return;
     try {
-      thiz->as<FilterConfigurator>()->handle_message(callback, size_limit);
+      config->handle_message(callback, size_limit);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1525,6 +1571,7 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.handleMessageBody
   method("handleMessageBody", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     Function *callback = nullptr;
     int size_limit = -1;
     std::string size_limit_str;
@@ -1535,7 +1582,7 @@ template<> void ClassDef<FilterConfigurator>::init() {
       !ctx.arguments(1, &callback)
     ) return;
     try {
-      thiz->as<FilterConfigurator>()->handle_body(callback, size_limit);
+      config->handle_body(callback, size_limit);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1544,10 +1591,11 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.handleMessageEnd
   method("handleMessageEnd", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     Function *callback = nullptr;
     if (!ctx.arguments(1, &callback)) return;
     try {
-      thiz->as<FilterConfigurator>()->handle_event(Event::Type::MessageEnd, callback);
+      config->handle_event(Event::Type::MessageEnd, callback);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1556,10 +1604,11 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.handleMessageStart
   method("handleMessageStart", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     Function *callback = nullptr;
     if (!ctx.arguments(1, &callback)) return;
     try {
-      thiz->as<FilterConfigurator>()->handle_event(Event::Type::MessageStart, callback);
+      config->handle_event(Event::Type::MessageStart, callback);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1568,10 +1617,11 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.handleStreamEnd
   method("handleStreamEnd", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     Function *callback = nullptr;
     if (!ctx.arguments(1, &callback)) return;
     try {
-      thiz->as<FilterConfigurator>()->handle_event(Event::Type::StreamEnd, callback);
+      config->handle_event(Event::Type::StreamEnd, callback);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1580,10 +1630,11 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.handleStreamStart
   method("handleStreamStart", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     Function *callback = nullptr;
     if (!ctx.arguments(1, &callback)) return;
     try {
-      thiz->as<FilterConfigurator>()->handle_start(callback);
+      config->handle_start(callback);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1592,10 +1643,11 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.handleTLSClientHello
   method("handleTLSClientHello", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     Function *callback = nullptr;
     if (!ctx.arguments(1, &callback)) return;
     try {
-      thiz->as<FilterConfigurator>()->handle_tls_client_hello(callback);
+      config->handle_tls_client_hello(callback);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1604,14 +1656,15 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.input
   method("input", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     try {
       pjs::Str *layout;
       pjs::Function *callback = nullptr;
       if (ctx.try_arguments(1, &layout, &callback)) {
-        thiz->as<FilterConfigurator>()->input(callback);
-        thiz->as<FilterConfigurator>()->to(layout);
+        config->input(callback);
+        config->to(layout);
       } else if (ctx.arguments(0, &callback)) {
-        thiz->as<FilterConfigurator>()->input(callback);
+        config->input(callback);
       }
       result.set(thiz);
     } catch (std::runtime_error &err) {
@@ -1621,14 +1674,15 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.link
   method("link", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     try {
       Str *name;
       Function *name_f;
       if (ctx.get(0, name)) {
-        thiz->as<FilterConfigurator>()->link();
-        thiz->as<FilterConfigurator>()->to(name);
+        config->link();
+        config->to(name);
       } else if (ctx.get(0, name_f)) {
-        thiz->as<FilterConfigurator>()->link(name_f);
+        config->link(name_f);
       } else {
         ctx.error_argument_type(0, "a string or a function");
       }
@@ -1640,6 +1694,7 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.mux
   method("mux", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     try {
       Str *layout;
       Function *session_selector = nullptr;
@@ -1648,13 +1703,13 @@ template<> void ClassDef<FilterConfigurator>::init() {
         ctx.try_arguments(1, &layout, &session_selector, &options) ||
         ctx.try_arguments(1, &layout, &options)
       ) {
-        thiz->as<FilterConfigurator>()->mux(session_selector, options);
-        thiz->as<FilterConfigurator>()->to(layout);
+        config->mux(session_selector, options);
+        config->to(layout);
       } else if (
         ctx.try_arguments(0, &session_selector, &options) ||
         ctx.try_arguments(0, &options)
       ) {
-        thiz->as<FilterConfigurator>()->mux(session_selector, options);
+        config->mux(session_selector, options);
       } else {
         ctx.error_argument_type(0, "a function");
       }
@@ -1666,6 +1721,7 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.muxQueue
   method("muxQueue", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     try {
       Str *layout;
       Function *session_selector = nullptr;
@@ -1674,13 +1730,13 @@ template<> void ClassDef<FilterConfigurator>::init() {
         ctx.try_arguments(1, &layout, &session_selector, &options) ||
         ctx.try_arguments(1, &layout, &options)
       ) {
-        thiz->as<FilterConfigurator>()->mux(session_selector, options);
-        thiz->as<FilterConfigurator>()->to(layout);
+        config->mux(session_selector, options);
+        config->to(layout);
       } else if (
         ctx.try_arguments(0, &session_selector, &options) ||
         ctx.try_arguments(0, &options)
       ) {
-        thiz->as<FilterConfigurator>()->mux(session_selector, options);
+        config->mux(session_selector, options);
       } else {
         ctx.error_argument_type(0, "a function");
       }
@@ -1692,6 +1748,7 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.muxHTTP
   method("muxHTTP", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     try {
       Str *layout;
       Function *session_selector = nullptr;
@@ -1700,13 +1757,13 @@ template<> void ClassDef<FilterConfigurator>::init() {
         ctx.try_arguments(1, &layout, &session_selector, &options) ||
         ctx.try_arguments(1, &layout, &options)
       ) {
-        thiz->as<FilterConfigurator>()->mux_http(session_selector, options);
-        thiz->as<FilterConfigurator>()->to(layout);
+        config->mux_http(session_selector, options);
+        config->to(layout);
       } else if (
         ctx.try_arguments(0, &session_selector, &options) ||
         ctx.try_arguments(0, &options)
       ) {
-        thiz->as<FilterConfigurator>()->mux_http(session_selector, options);
+        config->mux_http(session_selector, options);
       } else {
         ctx.error_argument_type(0, "a function");
       }
@@ -1718,10 +1775,11 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.output
   method("output", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     pjs::Function *output_f = nullptr;
     if (!ctx.arguments(0, &output_f)) return;
     try {
-      thiz->as<FilterConfigurator>()->output(output_f);
+      config->output(output_f);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1730,11 +1788,12 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.pack
   method("pack", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     int batch_size = 1;
     Object *options = nullptr;
     if (!ctx.arguments(0, &batch_size, &options)) return;
     try {
-      thiz->as<FilterConfigurator>()->pack(batch_size, options);
+      config->pack(batch_size, options);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1743,8 +1802,9 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.print
   method("print", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     try {
-      thiz->as<FilterConfigurator>()->print();
+      config->print();
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1753,10 +1813,11 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.read
   method("read", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     Value pathname;
     if (!ctx.arguments(1, &pathname)) return;
     try {
-      thiz->as<FilterConfigurator>()->read(pathname);
+      config->read(pathname);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1797,10 +1858,11 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.replaceData
   method("replaceData", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     Value replacement;
     if (!ctx.arguments(0, &replacement)) return;
     try {
-      thiz->as<FilterConfigurator>()->replace_event(Event::Type::Data, replacement);
+      config->replace_event(Event::Type::Data, replacement);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1809,6 +1871,7 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.replaceMessage
   method("replaceMessage", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     Value replacement;
     int size_limit = -1;
     std::string size_limit_str;
@@ -1819,7 +1882,7 @@ template<> void ClassDef<FilterConfigurator>::init() {
       !ctx.arguments(0, &replacement)
     ) return;
     try {
-      thiz->as<FilterConfigurator>()->replace_message(replacement, size_limit);
+      config->replace_message(replacement, size_limit);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1828,6 +1891,7 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.replaceMessageBody
   method("replaceMessageBody", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     Value replacement;
     int size_limit = -1;
     std::string size_limit_str;
@@ -1838,7 +1902,7 @@ template<> void ClassDef<FilterConfigurator>::init() {
       !ctx.arguments(0, &replacement)
     ) return;
     try {
-      thiz->as<FilterConfigurator>()->replace_body(replacement, size_limit);
+      config->replace_body(replacement, size_limit);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1847,10 +1911,11 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.replaceMessageEnd
   method("replaceMessageEnd", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     Value replacement;
     if (!ctx.arguments(0, &replacement)) return;
     try {
-      thiz->as<FilterConfigurator>()->replace_event(Event::Type::MessageEnd, replacement);
+      config->replace_event(Event::Type::MessageEnd, replacement);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1859,10 +1924,11 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.replaceMessageStart
   method("replaceMessageStart", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     Value replacement;
     if (!ctx.arguments(0, &replacement)) return;
     try {
-      thiz->as<FilterConfigurator>()->replace_event(Event::Type::MessageStart, replacement);
+      config->replace_event(Event::Type::MessageStart, replacement);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1871,10 +1937,11 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.replaceStreamEnd
   method("replaceStreamEnd", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     Value replacement;
     if (!ctx.arguments(0, &replacement)) return;
     try {
-      thiz->as<FilterConfigurator>()->replace_event(Event::Type::StreamEnd, replacement);
+      config->replace_event(Event::Type::StreamEnd, replacement);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1883,10 +1950,11 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.replaceStreamStart
   method("replaceStreamStart", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     Value replacement;
     if (!ctx.arguments(0, &replacement)) return;
     try {
-      thiz->as<FilterConfigurator>()->replace_start(replacement);
+      config->replace_start(replacement);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1895,10 +1963,11 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.replay
   method("replay", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     Object *options = nullptr;
     if (!ctx.arguments(0, &options)) return;
     try {
-      thiz->as<FilterConfigurator>()->replay(options);
+      config->replay(options);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1907,10 +1976,11 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.serveHTTP
   method("serveHTTP", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     Object *handler;
     if (!ctx.arguments(1, &handler)) return;
     try {
-      thiz->as<FilterConfigurator>()->serve_http(handler);
+      config->serve_http(handler);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1919,16 +1989,17 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.split
   method("split", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     pipy::Data *separator;
     Str *separator_str;
     Function *callback;
     try {
       if (ctx.try_arguments(1, &separator)) {
-        thiz->as<FilterConfigurator>()->split(separator);
+        config->split(separator);
       } else if (ctx.try_arguments(1, &separator_str)) {
-        thiz->as<FilterConfigurator>()->split(separator_str);
+        config->split(separator_str);
       } else if (ctx.try_arguments(1, &callback)) {
-        thiz->as<FilterConfigurator>()->split(callback);
+        config->split(callback);
       } else {
         ctx.error_argument_type(0, "a string, Data or function");
       }
@@ -1940,10 +2011,11 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.tee
   method("tee", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     Value filename;
     if (!ctx.arguments(1, &filename)) return;
     try {
-      thiz->as<FilterConfigurator>()->tee(filename);
+      config->tee(filename);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1952,10 +2024,11 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.throttleConcurrency
   method("throttleConcurrency", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     pjs::Object *quota;
     if (!ctx.arguments(1, &quota)) return;
     try {
-      thiz->as<FilterConfigurator>()->throttle_concurrency(quota);
+      config->throttle_concurrency(quota);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1964,10 +2037,11 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.throttleDataRate
   method("throttleDataRate", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     pjs::Object *quota;
     if (!ctx.arguments(1, &quota)) return;
     try {
-      thiz->as<FilterConfigurator>()->throttle_data_rate(quota);
+      config->throttle_data_rate(quota);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1976,10 +2050,11 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.throttleMessageRate
   method("throttleMessageRate", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     pjs::Object *quota;
     if (!ctx.arguments(1, &quota)) return;
     try {
-      thiz->as<FilterConfigurator>()->throttle_message_rate(quota);
+      config->throttle_message_rate(quota);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -1989,6 +2064,7 @@ template<> void ClassDef<FilterConfigurator>::init() {
   // FilterConfigurator.use
   method("use", [](Context &ctx, Object *thiz, Value &result) {
     static const std::string s_dot_so(".so");
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     std::string module;
     Array *modules;
     Str *pipeline = nullptr;
@@ -2019,7 +2095,7 @@ template<> void ClassDef<FilterConfigurator>::init() {
       );
       if (mods.size() == modules->length()) {
         try {
-          thiz->as<FilterConfigurator>()->use(mods, pipeline, pipeline_down, when);
+          config->use(mods, pipeline, pipeline_down, when);
           result.set(thiz);
         } catch (std::runtime_error &err) {
           ctx.error(err);
@@ -2029,7 +2105,7 @@ template<> void ClassDef<FilterConfigurator>::init() {
       if (utils::ends_with(module, s_dot_so)) {
         try {
           auto mod = worker->load_native_module(module);
-          thiz->as<FilterConfigurator>()->use(mod, pipeline);
+          config->use(mod, pipeline);
           result.set(thiz);
         } catch (std::runtime_error &err) {
           ctx.error(err);
@@ -2044,7 +2120,7 @@ template<> void ClassDef<FilterConfigurator>::init() {
           return;
         }
         try {
-          thiz->as<FilterConfigurator>()->use(mod, pipeline);
+          config->use(mod, pipeline);
           result.set(thiz);
         } catch (std::runtime_error &err) {
           ctx.error(err);
@@ -2055,11 +2131,12 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.wait
   method("wait", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     Function *condition;
     Object *options = nullptr;
     if (!ctx.arguments(1, &condition, &options)) return;
     try {
-      thiz->as<FilterConfigurator>()->wait(condition, options);
+      config->wait(condition, options);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
