@@ -219,7 +219,8 @@ TLSSession::TLSSession(
   pjs::Function *alpn,
   pjs::Function *handshake
 )
-  : m_certificate(certificate)
+  : m_filter(filter)
+  , m_certificate(certificate)
   , m_verify(verify)
   , m_alpn(alpn)
   , m_handshake(handshake)
@@ -344,7 +345,7 @@ void TLSSession::use_certificate(pjs::Str *sni) {
   }
 
   if (!certificate.is_object()) {
-    Log::error("[tls] certificate callback did not return an object");
+    m_filter->error("certificate callback did not return an object");
     return;
   }
 
@@ -355,7 +356,7 @@ void TLSSession::use_certificate(pjs::Str *sni) {
   certificate.o()->get("key", key);
 
   if (!key.is<crypto::PrivateKey>()) {
-    Log::error("[tls] certificate.key requires a PrivateKey object");
+    m_filter->error("certificate.key requires a PrivateKey object");
     return;
   }
 
@@ -366,7 +367,7 @@ void TLSSession::use_certificate(pjs::Str *sni) {
   } else if (cert.is<crypto::CertificateChain>()) {
     auto chain = cert.as<crypto::CertificateChain>();
     if (chain->size() < 1) {
-      Log::error("[tls] empty certificate chain");
+      m_filter->error("empty certificate chain");
     } else {
       SSL_use_certificate(m_ssl, chain->x509(0));
       for (int i = 1; i < chain->size(); i++) {
@@ -374,7 +375,7 @@ void TLSSession::use_certificate(pjs::Str *sni) {
       }
     }
   } else {
-    Log::error("[tls] certificate.cert requires a Certificate or a CertificateChain object");
+    m_filter->error("certificate.cert requires a Certificate or a CertificateChain object");
   }
 
 #if PIPY_USE_RFC8998
@@ -383,12 +384,12 @@ void TLSSession::use_certificate(pjs::Str *sni) {
   certificate.o()->get("keyEnc", key_enc);
 
   if (!key_enc.is_undefined() && !key_enc.is<crypto::PrivateKey>()) {
-    Log::error("[tls] certificate.keyEnc requires a PrivateKey object");
+    m_filter->error("certificate.keyEnc requires a PrivateKey object");
     return;
   }
 
   if (!cert_enc.is_undefined() && !cert_enc.is<crypto::Certificate>()) {
-    Log::error("[tls] certificate.certEnc requires a Certificate object");
+    m_filter->error("certificate.certEnc requires a Certificate object");
     return;
   }
 
@@ -423,7 +424,7 @@ bool TLSSession::handshake_step() {
         blocked = true;
       }
     } else if (status != SSL_ERROR_WANT_WRITE) {
-      Log::warn("[tls] Handshake failed (error = %d)", status);
+      Log::warn("[tls] handshake failed (error = %d)", status);
       while (auto err = ERR_get_error()) {
         char str[256];
         ERR_error_string(err, str);
@@ -729,7 +730,7 @@ void Client::process(Event *evt) {
       if (sni.is_string()) {
         m_session->set_sni(sni.s()->c_str());
       } else {
-        Log::error("[tls] options.sni did not return a string");
+        Filter::error("options.sni did not return a string");
       }
     }
     m_session->start_handshake();

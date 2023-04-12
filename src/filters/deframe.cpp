@@ -25,7 +25,6 @@
 
 #include "deframe.hpp"
 #include "context.hpp"
-#include "log.hpp"
 
 namespace pipy {
 
@@ -117,7 +116,7 @@ auto Deframe::on_state(int state, int c) -> int {
     if (!size.is_nullish()) {
       n = int(size.to_number());
       if (n <= 0) {
-        Log::error("[deframe] invalid reading length %d", n);
+        Filter::error("invalid reading length %d", n);
         return -1;
       }
 
@@ -130,7 +129,7 @@ auto Deframe::on_state(int state, int c) -> int {
       } else if (buf.is_nullish()) {
         Deframer::pass(n);
       } else {
-        Log::error("[deframe] invalid read buffer");
+        Filter::error("invalid read buffer");
         return -1;
       }
     }
@@ -144,11 +143,11 @@ auto Deframe::on_state(int state, int c) -> int {
     if (id.is_number()) {
       return id.n();
     } else {
-      Log::error("[deframe] invalid state: %s", v.s()->c_str());
+      Filter::error("invalid state: %s", v.s()->c_str());
       return -1;
     }
   } else {
-    Log::error("[deframe] invalid state returned");
+    Filter::error("invalid state returned");
     return -1;
   }
 }

@@ -140,7 +140,7 @@ void Connect::process(Event *evt) {
 
     std::string host; int port;
     if (!utils::get_host_port(target.s()->str(), host, port)) {
-      Filter::error("invalid target format");
+      Filter::error("invalid target format: %s", target.s()->c_str());
       return;
     }
 
@@ -185,7 +185,7 @@ void Connect::process(Event *evt) {
       try {
         outbound->bind(ip, port);
       } catch (std::runtime_error &e) {
-        Filter::error(e.what());
+        Filter::error("%s", e.what());
         return;
       }
     }

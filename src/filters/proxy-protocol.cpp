@@ -27,7 +27,6 @@
 #include "data.hpp"
 #include "pipeline.hpp"
 #include "module.hpp"
-#include "log.hpp"
 
 #define ASIO_STANDALONE
 #include <asio.hpp>
@@ -348,7 +347,7 @@ void Client::process(Event *evt) {
       return;
     }
     if (!obj.is_object()) {
-      Log::error("[connectProxyProtocol] an object containing source/target addresses is expected");
+      Filter::error("an object containing source/target addresses is expected");
       m_error = true;
       return;
     }

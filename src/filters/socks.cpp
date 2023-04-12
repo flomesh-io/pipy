@@ -27,7 +27,6 @@
 #include "data.hpp"
 #include "pipeline.hpp"
 #include "module.hpp"
-#include "log.hpp"
 
 namespace pipy {
 namespace socks {
@@ -497,8 +496,9 @@ void Client::connect() {
       len = 4 + 16 + 2;
     } else {
       if (host.length() > 255) {
-        Log::warn("[connectSOCKS] domain name too long: %s", host.c_str());
-        host = host.substr(0, 255);
+        Filter::error("domain name too long: %s", host.c_str());
+        s->release();
+        return;
       }
       auto n = host.length();
       buf[3] = 0x03;
@@ -511,7 +511,7 @@ void Client::connect() {
     send(buf, len);
     m_state = STATE_READ_CONN_HEAD;
   } else {
-    Log::error("[connectSOCKS] invalid target: %s", s->c_str());
+    Filter::error("invalid target: %s", s->c_str());
   }
   s->release();
 }

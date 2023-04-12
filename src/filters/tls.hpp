@@ -127,6 +127,7 @@ public:
   void start_handshake();
 
 private:
+  Filter* m_filter;
   SSL* m_ssl;
   BIO* m_rbio;
   BIO* m_wbio;

@@ -33,7 +33,6 @@
 #include "inbound.hpp"
 #include "str-map.hpp"
 #include "utils.hpp"
-#include "log.hpp"
 
 #include <cctype>
 #include <queue>

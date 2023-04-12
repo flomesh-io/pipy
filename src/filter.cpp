@@ -244,32 +244,36 @@ void Filter::error(pjs::Error *error) {
   output(StreamEnd::make(error));
 }
 
-void Filter::error(const char *message) {
+void Filter::error(const char *format, ...) {
+  va_list ap;
+  va_start(ap, format);
+  va_end(ap);
+  char msg[1000], buf[1000];
+  auto len = std::vsnprintf(msg, sizeof(msg), format, ap);
   Dump d; dump(d);
-  char str[1000];
   auto source = m_location.source;
   if (!source || source->filename.empty()) {
-    std::snprintf(
-      str, sizeof(str),
+    len = std::snprintf(
+      buf, sizeof(buf),
       "%s() at line %d column %d: %s",
       d.name.c_str(),
       m_location.line,
       m_location.column,
-      message
+      msg
     );
   } else {
-    std::snprintf(
-      str, sizeof(str),
+    len = std::snprintf(
+      buf, sizeof(buf),
       "%s() at line %d column %d in %s: %s",
       d.name.c_str(),
       m_location.line,
       m_location.column,
       m_location.source->filename.c_str(),
-      message
+      msg
     );
   }
-  Log::error("%s", str);
-  error(pjs::Error::make(pjs::Str::make(str)));
+  Log::error("%s", buf);
+  error(pjs::Error::make(pjs::Str::make(buf, len)));
 }
 
 } // namespace pipy

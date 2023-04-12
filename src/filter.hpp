@@ -118,12 +118,6 @@ public:
   virtual void shutdown();
   virtual void dump(Dump &d);
 
-protected:
-  Filter();
-  Filter(const Filter &r);
-
-  using EventFunction::output;
-
   auto pipeline() const -> Pipeline* { return m_pipeline; }
   void output(Event *evt);
   bool output(const pjs::Value &evt);
@@ -132,7 +126,13 @@ protected:
   bool eval(pjs::Function *func, pjs::Value &result);
   void error(StreamEnd::Error type);
   void error(pjs::Error *error);
-  void error(const char *message);
+  void error(const char *format, ...);
+
+protected:
+  Filter();
+  Filter(const Filter &r);
+
+  using EventFunction::output;
 
 private:
   struct Sub {

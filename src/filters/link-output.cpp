@@ -26,7 +26,6 @@
 #include "link-output.hpp"
 #include "pipeline.hpp"
 #include "context.hpp"
-#include "log.hpp"
 
 namespace pipy {
 
@@ -80,7 +79,7 @@ void LinkOutput::process(Event *evt) {
       } else if (ret.is<Output>()) {
         m_output = ret.as<Output>();
       } else {
-        Log::error("[output] callback did not return an Output object");
+        Filter::error("callback did not return an Output object");
         return;
       }
     }

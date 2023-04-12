@@ -26,7 +26,6 @@
 #include "compress-message.hpp"
 #include "compress.hpp"
 #include "data.hpp"
-#include "log.hpp"
 
 namespace pipy {
 
@@ -123,11 +122,11 @@ auto CompressMessageBase::new_compressor(
     if (v.is_string()) {
       method = pjs::EnumDef<Method>::value(v.s());
       if (int(method) < 0) {
-        Log::error("[compress] invalid method: %s", v.s()->c_str());
+        Filter::error("invalid method: %s", v.s()->c_str());
         return nullptr;
       }
     } else {
-      Log::error("[compress] invalid non-string method name");
+      Filter::error("invalid non-string method name");
       return nullptr;
     }
   } else {
@@ -140,11 +139,11 @@ auto CompressMessageBase::new_compressor(
     if (v.is_string()) {
       level = pjs::EnumDef<Level>::value(v.s());
       if (int(level) < 0) {
-        Log::error("[compress] invalid level: %s", v.s()->c_str());
+        Filter::error("invalid level: %s", v.s()->c_str());
         return nullptr;
       }
     } else {
-      Log::error("[compress] invalid non-string level name");
+      Filter::error("invalid non-string level name");
       return nullptr;
     }
   } else {

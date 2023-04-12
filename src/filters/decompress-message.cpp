@@ -26,7 +26,6 @@
 #include "decompress-message.hpp"
 #include "compress.hpp"
 #include "data.hpp"
-#include "log.hpp"
 
 namespace pipy {
 
@@ -64,7 +63,7 @@ void DecompressMessageBase::process(Event *evt) {
     if (m_message_started) {
       if (m_decompressor) {
         if (!m_decompressor->process(data)) {
-          Log::warn("[decompress] decompression error");
+          Filter::error("decompression error");
           m_decompressor->end();
           m_decompressor = nullptr;
         }
@@ -143,7 +142,7 @@ auto DecompressMessage::new_decompressor(
   } else if (s == s_brotli) {
     return Decompressor::brotli(out);
   } else {
-    Log::error("[decompress] unknown compression algorithm: %s", s->c_str());
+    Filter::error("unknown compression algorithm: %s", s->c_str());
     return nullptr;
   }
 }

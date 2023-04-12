@@ -26,7 +26,6 @@
 #include "throttle.hpp"
 #include "pipeline.hpp"
 #include "utils.hpp"
-#include "log.hpp"
 
 namespace pipy {
 
@@ -74,7 +73,7 @@ void ThrottleBase::process(Event *evt) {
     pjs::Value ret;
     if (!eval(m_quota_f, ret)) return;
     if (!ret.is<algo::Quota>()) {
-      Log::error("[throttle] function did not return an object of type algo.Quota");
+      Filter::error("function did not return an object of type algo.Quota");
       return;
     }
     m_quota = ret.as<algo::Quota>();

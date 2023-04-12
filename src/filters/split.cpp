@@ -24,7 +24,6 @@
  */
 
 #include "split.hpp"
-#include "log.hpp"
 
 namespace pipy {
 
@@ -96,14 +95,14 @@ void Split::process(Event *evt) {
         if (ret.is_string()) {
           auto *s = ret.s();
           if (s->size() > MAX_SEPARATOR) {
-            Log::error("[split] %s", s_separator_too_long.c_str());
+            Filter::error("%s", s_separator_too_long.c_str());
             return;
           }
           m_kmp = new KMP(s->c_str(), s->size());
         } else if (ret.is<Data>()) {
           auto *d = ret.as<Data>();
           if (d->size() > MAX_SEPARATOR) {
-            Log::error("[split] %s", s_separator_too_long.c_str());
+            Filter::error("%s", s_separator_too_long.c_str());
             return;
           }
           auto len = d->size();
@@ -111,7 +110,7 @@ void Split::process(Event *evt) {
           d->to_bytes((uint8_t*)buf);
           m_kmp = new KMP(buf, len);
         } else {
-          Log::error("[split] callback did not return a string or a Data");
+          Filter::error("callback did not return a string or a Data");
         }
       }
       m_split = m_kmp->split(

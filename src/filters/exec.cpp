@@ -104,7 +104,7 @@ void Exec::process(Event *evt) {
 
     auto argc = args.size();
     if (!argc) {
-      Log::error("[exec] command is empty");
+      Filter::error("command is empty");
       return;
     }
 
@@ -132,10 +132,10 @@ void Exec::process(Event *evt) {
         if (!cmd.empty()) cmd += ' ';
         cmd += arg;
       }
-      Log::error("[exec] unable to exec: %s", cmd.c_str());
+      Filter::error("unable to exec: %s", cmd.c_str());
       exit(-1);
     } else if (m_pid < 0) {
-      Log::error("[exec] unable to fork");
+      Filter::error("unable to fork");
     } else {
       s_child_process_monitor.monitor(m_pid, this);
     }
