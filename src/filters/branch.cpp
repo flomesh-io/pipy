@@ -88,6 +88,7 @@ void Branch::process(Event *evt) {
       }
       if (m_chosen) {
         if (auto *pipeline = sub_pipeline(i, false, output())) {
+          pipeline->start();
           m_pipeline = pipeline;
           m_buffer.flush([&](Event *evt) {
             output(evt, pipeline->input());

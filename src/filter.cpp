@@ -141,23 +141,19 @@ auto Filter::sub_pipeline(
   int i,
   bool clone_context,
   Input *chain_to,
-  Output *output_to,
-  int argc,
-  pjs::Value *argv
+  Output *output_to
 ) -> Pipeline* {
 
   auto layout = m_subs->at(i).layout.get();
   if (!layout) return nullptr;
-  return sub_pipeline(layout, clone_context, chain_to, output_to, argc, argv);
+  return sub_pipeline(layout, clone_context, chain_to, output_to);
 }
 
 auto Filter::sub_pipeline(
   PipelineLayout *layout,
   bool clone_context,
   Input *chain_to,
-  Output *output_to,
-  int argc,
-  pjs::Value *argv
+  Output *output_to
 ) -> Pipeline* {
 
   auto ctx = m_pipeline->m_context.get();
@@ -171,8 +167,6 @@ auto Filter::sub_pipeline(
   p->chain(pipeline()->chain());
   if (chain_to) p->chain(chain_to);
   if (output_to) p->output(output_to); else p->output(pipeline()->output());
-
-  p->start(argc, argv);
 
   return p;
 }

@@ -96,18 +96,14 @@ public:
     int i,
     bool clone_context,
     Input *chain_to = nullptr,
-    Output *output_to = nullptr,
-    int argc = 0,
-    pjs::Value *argv = nullptr
+    Output *output_to = nullptr
   ) -> Pipeline*;
 
   auto sub_pipeline(
     PipelineLayout *layout,
     bool clone_context,
     Input *chain_to = nullptr,
-    Output *output_to = nullptr,
-    int argc = 0,
-    pjs::Value *argv = nullptr
+    Output *output_to = nullptr
   ) -> Pipeline*;
 
   virtual void bind();

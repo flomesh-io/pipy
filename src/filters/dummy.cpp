@@ -53,8 +53,10 @@ auto Dummy::clone() -> Filter* {
   return new Dummy(*this);
 }
 
-void Dummy::process(Event *evt)
-{
+void Dummy::process(Event *evt) {
+  if (evt->is<StreamEnd>()) {
+    Filter::output(evt);
+  }
 }
 
 } // namespace pipy

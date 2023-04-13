@@ -78,14 +78,14 @@ void Link::process(Event *evt) {
       }
 
       if (auto layout = module()->get_pipeline(ret.s())) {
-        m_pipeline = sub_pipeline(layout, false, Filter::output());
+        m_pipeline = sub_pipeline(layout, false, Filter::output())->start();
       } else {
         Filter::error("unknown pipeline layout name: %s", ret.s()->c_str());
         return;
       }
 
     } else if (Filter::num_sub_pipelines() > 0) {
-      m_pipeline = sub_pipeline(0, false, Filter::output());
+      m_pipeline = sub_pipeline(0, false, Filter::output())->start();
       m_started = true;
     }
   }

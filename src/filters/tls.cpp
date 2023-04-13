@@ -234,7 +234,7 @@ TLSSession::TLSSession(
 
   SSL_set_bio(m_ssl, m_rbio, m_wbio);
 
-  m_pipeline = filter->sub_pipeline(0, false, reply());
+  m_pipeline = filter->sub_pipeline(0, false, reply())->start();
   chain_forward(m_pipeline->input());
 
   if (is_server) {

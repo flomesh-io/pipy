@@ -1719,7 +1719,9 @@ bool Server::on_encode_tunnel(TunnelType tt) {
     return true;
   } else if (num_sub_pipelines() > 0) {
     Decoder::set_tunnel();
-    if (!m_tunnel) m_tunnel = sub_pipeline(0, false, Filter::output());
+    if (!m_tunnel) {
+      m_tunnel = sub_pipeline(0, false, Filter::output())->start();
+    }
     return true;
   } else {
     return false;
@@ -1859,7 +1861,7 @@ void TunnelServer::process(Event *evt) {
     pjs::Ref<RequestHead> req_head = pjs::coerce<RequestHead>(req->head());
     pjs::Ref<ResponseHead> res_head = pjs::coerce<ResponseHead>(res->head());
     if (res_head->is_tunnel(req_head->tunnel_type())) {
-      m_pipeline = sub_pipeline(0, true, output());
+      m_pipeline = sub_pipeline(0, true, output())->start();
     }
 
     res->write(Filter::output());
@@ -1916,7 +1918,7 @@ void TunnelClient::process(Event *evt) {
     }
     auto msg = handshake->as<Message>();
     m_request_head = pjs::coerce<RequestHead>(msg->head());
-    m_pipeline = sub_pipeline(0, true, EventSource::reply());
+    m_pipeline = sub_pipeline(0, true, EventSource::reply())->start();
     msg->as<Message>()->write(m_pipeline->input());
   }
 

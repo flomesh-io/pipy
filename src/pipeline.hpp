@@ -162,8 +162,9 @@ public:
   auto chain() const -> PipelineLayout::Chain* { return m_chain; }
   void chain(PipelineLayout::Chain *chain) { m_chain = chain; }
 
-  void start(int argc = 0, pjs::Value *argv = nullptr) {
+  auto start(int argc = 0, pjs::Value *argv = nullptr) -> Pipeline* {
     m_layout->start(this, argc, argv);
+    return this;
   }
 
   virtual void chain(Input *input) override;

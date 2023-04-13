@@ -77,7 +77,7 @@ void Replay::reset() {
 
 void Replay::process(Event *evt) {
   if (!m_pipeline) {
-    m_pipeline = sub_pipeline(0, false, ReplayReceiver::input());
+    m_pipeline = sub_pipeline(0, false, ReplayReceiver::input())->start();
   }
   m_buffer.push(evt);
   Filter::output(evt, m_pipeline->input());
@@ -102,7 +102,7 @@ void Replay::schedule_replay() {
 void Replay::replay() {
   InputContext ic;
   Pipeline::auto_release(m_pipeline);
-  m_pipeline = sub_pipeline(0, false, ReplayReceiver::input());
+  m_pipeline = sub_pipeline(0, false, ReplayReceiver::input())->start();
   m_buffer.iterate(
     [this](Event *evt) {
       Filter::output(evt->clone(), m_pipeline->input());

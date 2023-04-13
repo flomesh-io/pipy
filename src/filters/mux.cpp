@@ -656,7 +656,7 @@ auto MuxBase::on_new_cluster() -> MuxBase::SessionCluster* {
 
 auto MuxBase::on_new_pipeline(EventTarget::Input *output, pjs::Object *session_info) -> Pipeline* {
   pjs::Value arg(session_info);
-  return Filter::sub_pipeline(0, false, output, nullptr, 1, &arg);
+  return Filter::sub_pipeline(0, false, output)->start(1, &arg);
 }
 
 void MuxBase::on_pending_session_open() {

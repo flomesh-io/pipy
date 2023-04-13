@@ -60,6 +60,7 @@ void Demuxer::Stream::open(Pipeline *pipeline) {
   m_pipeline = pipeline;
   EventProxy::chain_forward(pipeline->input());
   pipeline->chain(EventProxy::reply());
+  pipeline->start();
 }
 
 void Demuxer::Stream::close() {

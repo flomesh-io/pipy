@@ -281,7 +281,7 @@ void Server::start(pjs::Value &obj) {
     return;
   }
 
-  m_pipeline = Filter::sub_pipeline(0, false, Filter::output());
+  m_pipeline = Filter::sub_pipeline(0, false, Filter::output())->start();
 }
 
 void Server::error() {
@@ -429,7 +429,7 @@ void Client::process(Event *evt) {
 
     db.flush();
 
-    m_pipeline = Filter::sub_pipeline(0, false, Filter::output());
+    m_pipeline = Filter::sub_pipeline(0, false, Filter::output())->start();
     m_pipeline->input()->input(Data::make(std::move(header)));
   }
 

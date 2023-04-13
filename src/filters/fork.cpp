@@ -82,12 +82,12 @@ void Fork::process(Event *evt) {
       for (int i = 0; i < len; i++) {
         pjs::Value v;
         arr->get(i, v);
-        auto pipeline = sub_pipeline(0, true, nullptr, nullptr, 1, &v);
+        auto pipeline = sub_pipeline(0, true)->start(1, &v);
         m_pipelines->at(i) = pipeline;
       }
     } else {
       m_pipelines = pjs::PooledArray<pjs::Ref<Pipeline>>::make(1);
-      auto pipeline = sub_pipeline(0, false, nullptr, nullptr, 1, &init_arg);
+      auto pipeline = sub_pipeline(0, false)->start(1, &init_arg);
       m_pipelines->at(0) = pipeline;
     }
   }
