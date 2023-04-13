@@ -29,6 +29,8 @@
 #include "message.hpp"
 #include "log.hpp"
 
+#include <cstdarg>
+
 namespace pipy {
 
 Filter::Filter()
