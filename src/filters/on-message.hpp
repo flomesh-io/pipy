@@ -26,8 +26,8 @@
 #ifndef ON_MESSAGE_HPP
 #define ON_MESSAGE_HPP
 
-#include "filter.hpp"
-#include "data.hpp"
+#include "handle.hpp"
+#include "buffer.hpp"
 
 namespace pipy {
 
@@ -35,9 +35,9 @@ namespace pipy {
 // OnMessage
 //
 
-class OnMessage : public Filter {
+class OnMessage : public Handle {
 public:
-  OnMessage(pjs::Function *callback, int size_limit = -1);
+  OnMessage(pjs::Function *callback, const Buffer::Options &options);
 
 private:
   OnMessage(const OnMessage &r);
@@ -45,14 +45,12 @@ private:
 
   virtual auto clone() -> Filter* override;
   virtual void reset() override;
-  virtual void process(Event *evt) override;
   virtual void dump(Dump &d) override;
 
   pjs::Ref<pjs::Object> m_head;
-  pjs::Ref<Data> m_body;
-  pjs::Ref<pjs::Function> m_callback;
-  int m_size_limit;
-  int m_discarded_size = 0;
+  Buffer m_body_buffer;
+
+  virtual void handle(Event *evt) override;
 };
 
 } // namespace pipy

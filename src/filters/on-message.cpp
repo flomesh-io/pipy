@@ -25,7 +25,6 @@
 
 #include "on-message.hpp"
 #include "message.hpp"
-#include "log.hpp"
 
 namespace pipy {
 
@@ -33,16 +32,15 @@ namespace pipy {
 // OnMessage
 //
 
-OnMessage::OnMessage(pjs::Function *callback, int size_limit)
-  : m_callback(callback)
-  , m_size_limit(size_limit)
+OnMessage::OnMessage(pjs::Function *callback, const Buffer::Options &options)
+  : Handle(callback)
+  , m_body_buffer(options)
 {
 }
 
 OnMessage::OnMessage(const OnMessage &r)
-  : Filter(r)
-  , m_callback(r.m_callback)
-  , m_size_limit(r.m_size_limit)
+  : Handle(r)
+  , m_body_buffer(r.m_body_buffer)
 {
 }
 
@@ -62,58 +60,35 @@ auto OnMessage::clone() -> Filter* {
 void OnMessage::reset() {
   Filter::reset();
   m_head = nullptr;
-  m_body = nullptr;
-  m_discarded_size = 0;
+  m_body_buffer.clear();
 }
 
-void OnMessage::process(Event *evt) {
+void OnMessage::handle(Event *evt) {
   if (auto e = evt->as<MessageStart>()) {
     m_head = e->head();
-    m_body = Data::make();
+    m_body_buffer.clear();
 
   } else if (auto *data = evt->as<Data>()) {
-    if (m_body && data->size() > 0) {
-      if (m_size_limit >= 0) {
-        auto room = m_size_limit - m_body->size();
-        if (room >= data->size()) {
-          m_body->push(*data);
-        } else if (room > 0) {
-          Data buf(*data);
-          auto discard = buf.size() - room;
-          buf.pop(discard);
-          m_body->push(buf);
-          m_discarded_size += discard;
-        } else {
-          m_discarded_size += data->size();
-        }
-      } else {
-        m_body->push(*data);
-      }
+    if (m_head) {
+      m_body_buffer.push(*data);
     }
 
   } else if (evt->is<MessageEnd>() || evt->is<StreamEnd>()) {
-    if (m_body) {
-      if (m_discarded_size > 0 && m_size_limit > 0) {
-        Log::error(
-          "[handleMessage] %d bytes were discarded due to buffer size limit of %d",
-          m_discarded_size, m_size_limit
-        );
-      }
+    if (m_head) {
       pjs::Object *tail = nullptr;
       pjs::Value payload;
       if (auto *end = evt->as<MessageEnd>()) {
         tail = end->tail();
         payload = end->payload();
       }
-      pjs::Value arg(Message::make(m_head, m_body, tail, payload)), result;
-      if (!callback(m_callback, 1, &arg, result)) return;
+      auto body = m_body_buffer.flush();
+      pjs::Value arg(Message::make(m_head, body, tail, payload)), result;
+      if (!Handle::callback(arg)) return;
       m_head = nullptr;
-      m_body = nullptr;
-      m_discarded_size = 0;
     }
   }
 
-  output(evt);
+  Handle::pass(evt);
 }
 
 } // namespace pipy

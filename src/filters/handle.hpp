@@ -23,63 +23,54 @@
  *  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include "on-body.hpp"
+#ifndef ON_HANDLE_HPP
+#define ON_HANDLE_HPP
+
+#include "filter.hpp"
 
 namespace pipy {
 
 //
-// OnBody
+// Handle
 //
 
-OnBody::OnBody(pjs::Function *callback, const Buffer::Options &options)
-  : Handle(callback)
-  , m_data_buffer(options)
-{
-}
+class Handle : public Filter {
+public:
+  Handle(pjs::Function *callback);
 
-OnBody::OnBody(const OnBody &r)
-  : Handle(r)
-  , m_data_buffer(r.m_data_buffer)
-{
-}
+protected:
+  Handle(const Handle &r);
+  ~Handle();
 
-OnBody::~OnBody()
-{
-}
+  virtual void handle(Event *evt) {}
 
-void OnBody::dump(Dump &d) {
-  Filter::dump(d);
-  d.name = "handleMessageBody";
-}
+  bool callback(const pjs::Value &arg);
+  void pass(Event *evt);
 
-auto OnBody::clone() -> Filter* {
-  return new OnBody(*this);
-}
+  virtual void reset() override;
+  virtual void process(Event *evt) override;
 
-void OnBody::reset() {
-  Handle::reset();
-  m_data_buffer.clear();
-  m_started = false;
-}
+private:
 
-void OnBody::handle(Event *evt) {
-  if (evt->is<MessageStart>()) {
-    m_started = true;
+  //
+  // Handle::Callback
+  //
 
-  } else if (auto data = evt->as<Data>()) {
-    if (m_started) {
-      m_data_buffer.push(*data);
-    }
+  class Callback : public pjs::ObjectTemplate<Callback, pjs::Promise::Callback> {
+    Callback(Handle *filter) : m_filter(filter) {}
+    virtual void on_resolved(const pjs::Value &value) override;
+    virtual void on_rejected(const pjs::Value &error) override;
+    friend class pjs::ObjectTemplate<Callback, pjs::Promise::Callback>;
+    Handle* m_filter;
+  };
 
-  } else if (evt->is<MessageEnd>() || evt->is<StreamEnd>()) {
-    if (m_started) {
-      auto body = m_data_buffer.flush();
-      if (!Handle::callback(body)) return;
-      m_started = false;
-    }
-  }
+  pjs::Ref<pjs::Function> m_callback;
+  EventBuffer m_event_buffer;
+  bool m_waiting = false;
 
-  Handle::pass(evt);
-}
+  void flush();
+};
 
 } // namespace pipy
+
+#endif // ON_HANDLE_HPP
