@@ -120,6 +120,7 @@ public:
   bool callback(pjs::Function *func, int argc, pjs::Value argv[], pjs::Value &result);
   bool eval(pjs::Value &param, pjs::Value &result);
   bool eval(pjs::Function *func, pjs::Value &result);
+  void error(StreamEnd *end);
   void error(StreamEnd::Error type);
   void error(pjs::Error *error);
   void error(const char *format, ...);

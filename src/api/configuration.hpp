@@ -96,7 +96,7 @@ public:
   void encode_websocket();
   void exec(const pjs::Value &command);
   void fork(const pjs::Value &init_arg);
-  void handle_body(pjs::Function *callback, int size_limit);
+  void handle_body(pjs::Function *callback, pjs::Object *options);
   void handle_event(Event::Type type, pjs::Function *callback);
   void handle_message(pjs::Function *callback, int size_limit);
   void handle_start(pjs::Function *callback);

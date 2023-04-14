@@ -230,6 +230,11 @@ bool Filter::eval(pjs::Function *func, pjs::Value &result) {
   return false;
 }
 
+void Filter::error(StreamEnd *end) {
+  m_stream_end = true;
+  output(end);
+}
+
 void Filter::error(StreamEnd::Error type) {
   m_stream_end = true;
   output(StreamEnd::make(type));

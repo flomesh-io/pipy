@@ -24,7 +24,7 @@
  */
 
 #include "on-body.hpp"
-#include "log.hpp"
+#include "context.hpp"
 
 namespace pipy {
 
@@ -32,16 +32,16 @@ namespace pipy {
 // OnBody
 //
 
-OnBody::OnBody(pjs::Function *callback, int size_limit)
+OnBody::OnBody(pjs::Function *callback, const Buffer::Options &options)
   : m_callback(callback)
-  , m_size_limit(size_limit)
+  , m_data_buffer(options)
 {
 }
 
 OnBody::OnBody(const OnBody &r)
   : Filter(r)
   , m_callback(r.m_callback)
-  , m_size_limit(r.m_size_limit)
+  , m_data_buffer(r.m_data_buffer)
 {
 }
 
@@ -60,50 +60,79 @@ auto OnBody::clone() -> Filter* {
 
 void OnBody::reset() {
   Filter::reset();
-  m_body = nullptr;
-  m_discarded_size = 0;
+  m_data_buffer.clear();
+  m_event_buffer.clear();
+  m_waiting = false;
+  m_started = false;
 }
 
 void OnBody::process(Event *evt) {
+  if (m_waiting) {
+    m_event_buffer.push(evt);
+  } else {
+    handle(evt);
+  }
+}
+
+void OnBody::handle(Event *evt) {
   if (evt->is<MessageStart>()) {
-    m_body = Data::make();
+    m_started = true;
 
   } else if (auto data = evt->as<Data>()) {
-    if (m_body && data->size() > 0) {
-      if (m_size_limit >= 0) {
-        auto room = m_size_limit - m_body->size();
-        if (room >= data->size()) {
-          m_body->push(*data);
-        } else if (room > 0) {
-          Data buf(*data);
-          auto discard = buf.size() - room;
-          buf.pop(discard);
-          m_body->push(buf);
-          m_discarded_size += discard;
-        } else {
-          m_discarded_size += data->size();
-        }
-      } else {
-        m_body->push(*data);
-      }
+    if (m_started) {
+      m_data_buffer.push(*data);
     }
 
   } else if (evt->is<MessageEnd>() || evt->is<StreamEnd>()) {
-    if (m_body) {
-      if (m_discarded_size > 0 && m_size_limit > 0) {
-        Log::error(
-          "[handleMessageBody] %d bytes were discarded due to buffer size limit of %d",
-          m_discarded_size, m_size_limit
-        );
+    if (m_started) {
+      auto body = m_data_buffer.flush();
+      pjs::Value arg(body), result;
+      if (!Filter::callback(m_callback, 1, &arg, result)) return;
+      if (result.is_promise()) {
+        auto cb = Callback::make(this);
+        result.as<pjs::Promise>()->then(context(), cb->resolved(), cb->rejected());
+        m_waiting = true;
       }
-      pjs::Value arg(m_body), result;
-      if (!callback(m_callback, 1, &arg, result)) return;
-      m_body = nullptr;
-      m_discarded_size = 0;
+      m_started = false;
     }
   }
 
-  output(evt);
+  if (m_waiting) {
+    m_event_buffer.push(evt);
+  } else {
+    Filter::output(evt);
+  }
+}
+
+void OnBody::flush() {
+  m_waiting = false;
+  m_event_buffer.flush([this](Event *evt) { handle(evt); });
+}
+
+//
+// OnBody::Callback
+//
+
+void OnBody::Callback::on_resolved(const pjs::Value &value) {
+  m_filter->flush();
+}
+
+void OnBody::Callback::on_rejected(const pjs::Value &error) {
+  if (error.is_error()) {
+    m_filter->error(error.as<pjs::Error>());
+  } else {
+    m_filter->error(StreamEnd::make(error));
+  }
 }
 
 } // namespace pipy
+
+namespace pjs {
+
+using namespace pipy;
+
+template<> void ClassDef<OnBody::Callback>::init() {
+  super<Promise::Callback>();
+}
+
+} // namespace pjs

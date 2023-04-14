@@ -23,54 +23,42 @@
  *  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef ON_BODY_HPP
-#define ON_BODY_HPP
+#ifndef BUFFER_HPP
+#define BUFFER_HPP
 
-#include "filter.hpp"
-#include "buffer.hpp"
+#include "data.hpp"
+#include "options.hpp"
 
 namespace pipy {
 
 //
-// OnBody
+// Buffer
 //
 
-class OnBody : public Filter {
+class Buffer {
 public:
-  OnBody(pjs::Function *callback, const Buffer::Options &options);
-
-private:
-  OnBody(const OnBody &r);
-  ~OnBody();
-
-  virtual auto clone() -> Filter* override;
-  virtual void reset() override;
-  virtual void process(Event *evt) override;
-  virtual void dump(Dump &d) override;
 
   //
-  // OnBody::Callback
+  // Buffer::Options
   //
 
-  class Callback : public pjs::ObjectTemplate<Callback, pjs::Promise::Callback> {
-    Callback(OnBody *filter) : m_filter(filter) {}
-    virtual void on_resolved(const pjs::Value &value) override;
-    virtual void on_rejected(const pjs::Value &error) override;
-    friend class pjs::ObjectTemplate<Callback, pjs::Promise::Callback>;
-    OnBody* m_filter;
+  struct Options : public pipy::Options {
+    int bufferLimit = -1;
+    Options() {}
+    Options(pjs::Object *options);
   };
 
-  pjs::Ref<Data> m_body;
-  pjs::Ref<pjs::Function> m_callback;
-  Buffer m_data_buffer;
-  EventBuffer m_event_buffer;
-  bool m_waiting = false;
-  bool m_started = false;
+  Buffer(const Options &options) : m_options(options) {}
 
-  void handle(Event *evt);
-  void flush();
+  void clear();
+  void push(const Data &data);
+  auto flush() -> Data*;
+
+private:
+  Options m_options;
+  Data m_buffer;
 };
 
 } // namespace pipy
 
-#endif // ON_BODY_HPP
+#endif // BUFFER_HPP

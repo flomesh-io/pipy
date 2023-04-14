@@ -274,8 +274,8 @@ void FilterConfigurator::fork(const pjs::Value &init_arg) {
   require_sub_pipeline(append_filter(new Fork(init_arg)));
 }
 
-void FilterConfigurator::handle_body(pjs::Function *callback, int size_limit) {
-  append_filter(new OnBody(callback, size_limit));
+void FilterConfigurator::handle_body(pjs::Function *callback, pjs::Object *options) {
+  append_filter(new OnBody(callback, options));
 }
 
 void FilterConfigurator::handle_event(Event::Type type, pjs::Function *callback) {
@@ -1574,17 +1574,11 @@ template<> void ClassDef<FilterConfigurator>::init() {
   // FilterConfigurator.handleMessageBody
   method("handleMessageBody", [](Context &ctx, Object *thiz, Value &result) {
     auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
-    Function *callback = nullptr;
-    int size_limit = -1;
-    std::string size_limit_str;
-    if (ctx.try_arguments(2, &size_limit_str, &callback)) {
-      size_limit = utils::get_byte_size(size_limit_str);
-    } else if (
-      !ctx.try_arguments(2, &size_limit, &callback) &&
-      !ctx.arguments(1, &callback)
-    ) return;
+    Function *callback;
+    Object *options = nullptr;
     try {
-      config->handle_body(callback, size_limit);
+      if (!ctx.arguments(1, &callback, &options)) return;
+      config->handle_body(callback, options);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

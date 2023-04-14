@@ -23,54 +23,38 @@
  *  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef ON_BODY_HPP
-#define ON_BODY_HPP
-
-#include "filter.hpp"
 #include "buffer.hpp"
 
 namespace pipy {
 
 //
-// OnBody
+// Buffer::Options
 //
 
-class OnBody : public Filter {
-public:
-  OnBody(pjs::Function *callback, const Buffer::Options &options);
+Buffer::Options::Options(pjs::Object *options) {
+  Value(options, "bufferLimit")
+    .get_binary_size(bufferLimit)
+    .check_nullable();
+}
 
-private:
-  OnBody(const OnBody &r);
-  ~OnBody();
+//
+// Buffer
+//
 
-  virtual auto clone() -> Filter* override;
-  virtual void reset() override;
-  virtual void process(Event *evt) override;
-  virtual void dump(Dump &d) override;
+void Buffer::clear() {
+  m_buffer.clear();
+}
 
-  //
-  // OnBody::Callback
-  //
+void Buffer::push(const Data &data) {
+  if (data.empty()) return;
+  m_buffer.push(data);
+  if (m_options.bufferLimit >= 0 && m_buffer.size() > m_options.bufferLimit) {
+    m_buffer.pop(m_buffer.size() - m_options.bufferLimit);
+  }
+}
 
-  class Callback : public pjs::ObjectTemplate<Callback, pjs::Promise::Callback> {
-    Callback(OnBody *filter) : m_filter(filter) {}
-    virtual void on_resolved(const pjs::Value &value) override;
-    virtual void on_rejected(const pjs::Value &error) override;
-    friend class pjs::ObjectTemplate<Callback, pjs::Promise::Callback>;
-    OnBody* m_filter;
-  };
-
-  pjs::Ref<Data> m_body;
-  pjs::Ref<pjs::Function> m_callback;
-  Buffer m_data_buffer;
-  EventBuffer m_event_buffer;
-  bool m_waiting = false;
-  bool m_started = false;
-
-  void handle(Event *evt);
-  void flush();
-};
+auto Buffer::flush() -> Data* {
+  return Data::make(std::move(m_buffer));
+}
 
 } // namespace pipy
-
-#endif // ON_BODY_HPP

@@ -50,12 +50,14 @@ class Array;
 class Boolean;
 class Class;
 class Context;
+class Error;
 class Field;
 class Method;
 class Function;
 class Int;
 class Number;
 class Object;
+class Promise;
 class RegExp;
 class String;
 class Value;
@@ -1245,6 +1247,8 @@ public:
   bool is_class(Class *c) const { return m_t == Type::Object && o() && type_of(o()) == c; }
   bool is_instance_of(Class *c) const { return m_t == Type::Object && o() && type_of(o())->is_derived_from(c); }
   bool is_function() const { return is_instance_of(class_of<Function>()); }
+  bool is_error() const { return is_instance_of(class_of<Error>()); }
+  bool is_promise() const { return is_instance_of(class_of<Promise>()); }
   bool is_array() const { return is_instance_of(class_of<Array>()); }
   bool is_number_like() const { return is_number() || is<Number>() || is<Int>(); }
   bool is_string_like() const { return is_string() || is<String>(); }
@@ -2575,6 +2579,106 @@ protected:
   }
 
   void operator()(Context &ctx, Object *obj, Value &ret) {}
+};
+
+//
+// Promise
+//
+
+class Promise : public ObjectTemplate<Promise> {
+public:
+
+  //
+  // Promise::Callback
+  //
+
+  class Callback : public Object {
+  public:
+    auto resolved() -> Function*;
+    auto rejected() -> Function*;
+    virtual void on_resolved(const Value &value) {}
+    virtual void on_rejected(const Value &error) {}
+  };
+
+  //
+  // Promise::Handler
+  //
+
+  class Handler : public ObjectTemplate<Handler> {
+  public:
+    void resolve(const Value &value) { m_promise->settle(RESOLVED, value); }
+    void reject(const Value &error) { m_promise->settle(REJECTED, error); }
+  private:
+    Handler(Promise *promise) : m_promise(promise) {}
+    Ref<Promise> m_promise;
+    friend class ObjectTemplate<Handler>;
+  };
+
+  static bool run();
+  static auto resolve(const Value &value) -> Promise*;
+  static auto reject(const Value &error) -> Promise*;
+
+  auto then(
+    Context *context,
+    Function *on_resolved,
+    Function *on_rejected = nullptr,
+    Function *on_finally = nullptr
+  ) -> Promise*;
+
+private:
+  enum State {
+    PENDING,
+    RESOLVED,
+    REJECTED,
+  };
+
+  //
+  // Promise::Then
+  //
+
+  class Then : public Pooled<Then> {
+    Then(
+      Context *context,
+      Function *on_resolved,
+      Function *on_rejected,
+      Function *on_finally
+    ) : m_context(context)
+      , m_on_resolved(on_resolved)
+      , m_on_rejected(on_rejected)
+      , m_on_finally(on_finally)
+      , m_promise(Promise::make()) {}
+
+    void execute(State state, const Value &result);
+
+    Then* m_next = nullptr;
+    Ref<Context> m_context;
+    Ref<Function> m_on_resolved;
+    Ref<Function> m_on_rejected;
+    Ref<Function> m_on_finally;
+    Ref<Promise> m_promise;
+
+    friend class Promise;
+  };
+
+  Promise() {}
+  ~Promise();
+
+  void settle(State state, const Value &result);
+  void enqueue();
+  void dequeue();
+
+  State m_state = PENDING;
+  Value m_result;
+  Then* m_thens_head = nullptr;
+  Then* m_thens_tail = nullptr;
+  Promise* m_next = nullptr;
+  Ref<Promise> m_dependent;
+  bool m_queued = false;
+
+  thread_local static Promise *s_settled_queue_head;
+  thread_local static Promise *s_settled_queue_tail;
+
+  friend class ObjectTemplate<Promise>;
 };
 
 //

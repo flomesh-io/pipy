@@ -171,6 +171,7 @@ add_executable(pipy
   src/api/timeout.cpp
   src/api/url.cpp
   src/api/xml.cpp
+  src/buffer.cpp
   src/codebase.cpp
   src/codebase-store.cpp
   src/compress.cpp

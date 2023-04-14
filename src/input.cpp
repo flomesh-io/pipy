@@ -71,6 +71,10 @@ InputContext::InputContext(InputSource *source)
 
 InputContext::~InputContext() {
 
+  // Run micro-tasks
+  int max_runs = 100;
+  while (max_runs > 0 && pjs::Promise::run()) max_runs--;
+
   // Notify context groups
   for (auto *g = m_context_groups.head(); g; g = g->next()) g->notify();
   while (auto *g = m_context_groups.head()) {
@@ -99,10 +103,6 @@ InputContext::~InputContext() {
     target->on_flush();
     target->m_origin = nullptr;
   }
-
-  // Run micro-tasks
-  int max_runs = 100;
-  while (max_runs > 0 && pjs::Promise::run()) max_runs--;
 
   s_stack = m_next;
 }

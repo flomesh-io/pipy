@@ -1838,6 +1838,233 @@ auto Error::name() const -> Str* {
 }
 
 //
+// Promise
+//
+
+thread_local Promise* Promise::s_settled_queue_head = nullptr;
+thread_local Promise* Promise::s_settled_queue_tail = nullptr;
+
+bool Promise::run() {
+  auto p = s_settled_queue_head;
+  s_settled_queue_head = nullptr;
+  s_settled_queue_tail = nullptr;
+  while (p) {
+    auto promise = p; p = p->m_next;
+    promise->dequeue();
+  }
+  return s_settled_queue_head;
+}
+
+auto Promise::resolve(const Value &value) -> Promise* {
+  auto p = Promise::make();
+  p->settle(RESOLVED, value);
+  return p;
+}
+
+auto Promise::reject(const Value &error) -> Promise* {
+  auto p = Promise::make();
+  p->settle(REJECTED, error);
+  return p;
+}
+
+Promise::~Promise() {
+  auto p = m_thens_head;
+  while (p) {
+    auto then = p; p = p->m_next;
+    delete then;
+  }
+}
+
+auto Promise::then(
+  Context *context,
+  Function *on_resolved,
+  Function *on_rejected,
+  Function *on_finally
+) -> Promise* {
+  auto t = new Then(context, on_resolved, on_rejected, on_finally);
+  if (m_thens_tail) {
+    m_thens_tail->m_next = t;
+    m_thens_tail = t;
+  } else {
+    m_thens_head = t;
+    m_thens_tail = t;
+  }
+  if (m_state != PENDING) enqueue();
+  return t->m_promise;
+}
+
+void Promise::settle(State state, const Value &result) {
+  if (m_state == PENDING) {
+    m_state = state;
+    m_result = result;
+    enqueue();
+    if (m_dependent) {
+      m_dependent->settle(state, result);
+      m_dependent = nullptr;
+    }
+  }
+}
+
+void Promise::enqueue() {
+  if (!m_queued) {
+    if (s_settled_queue_tail) {
+      s_settled_queue_tail->m_next = this;
+      s_settled_queue_tail = this;
+    } else {
+      s_settled_queue_head = this;
+      s_settled_queue_tail = this;
+    }
+    m_queued = true;
+    retain();
+  }
+}
+
+void Promise::dequeue() {
+  if (m_queued) {
+    auto p = m_thens_head;
+    m_thens_head = nullptr;
+    m_thens_tail = nullptr;
+    while (p) {
+      auto then = p; p = p->m_next;
+      then->execute(m_state, m_result);
+      delete then;
+    }
+    m_next = nullptr;
+    m_queued = false;
+    release();
+  }
+}
+
+template<> void ClassDef<Promise>::init() {
+  thread_local static const auto s_field_res = static_cast<Method*>(ClassDef<Promise::Handler>::field("resolve"));
+  thread_local static const auto s_field_rej = static_cast<Method*>(ClassDef<Promise::Handler>::field("reject"));
+
+  ctor([](Context &ctx) -> Object* {
+    Function *executor;
+    if (!ctx.arguments(1, &executor)) return nullptr;
+    auto promise = Promise::make();
+    auto handler = Promise::Handler::make(promise);
+    {
+      promise->retain();
+      Value args[2], ret;
+      args[0].set(Function::make(s_field_res, handler));
+      args[1].set(Function::make(s_field_rej, handler));
+      (*executor)(ctx, 2, args, ret);
+    }
+    if (!ctx.ok()) return nullptr;
+    return promise->pass();
+  });
+
+  method("then", [](Context &ctx, Object *obj, Value &ret) {
+    Function *on_resolved;
+    Function *on_rejected = nullptr;
+    if (!ctx.arguments(1, &on_resolved, &on_rejected)) return;
+    ret.set(obj->as<Promise>()->then(ctx.root(), on_resolved, on_rejected));
+  });
+
+  method("catch", [](Context &ctx, Object *obj, Value &ret) {
+    Function *on_rejected;
+    if (!ctx.arguments(1, &on_rejected)) return;
+    ret.set(obj->as<Promise>()->then(ctx.root(), nullptr, on_rejected));
+  });
+
+  method("finally", [](Context &ctx, Object *obj, Value &ret) {
+    Function *on_finally;
+    if (!ctx.arguments(1, &on_finally)) return;
+    ret.set(obj->as<Promise>()->then(ctx.root(), nullptr, nullptr, on_finally));
+  });
+}
+
+template<> void ClassDef<Constructor<Promise>>::init() {
+  super<Function>();
+  ctor();
+
+  method("resolve", [](Context &ctx, Object *obj, Value &ret) {
+    Value value; ctx.get(0, value);
+    ret.set(Promise::resolve(value));
+  });
+
+  method("reject", [](Context &ctx, Object *obj, Value &ret) {
+    Value error; ctx.get(0, error);
+    ret.set(Promise::reject(error));
+  });
+}
+
+//
+// Promise::Callback
+//
+
+auto Promise::Callback::resolved() -> Function* {
+  thread_local static Method* s_method = ClassDef<Promise::Callback>::method("on_resolved");
+  return Function::make(s_method, this);
+}
+
+auto Promise::Callback::rejected() -> Function* {
+  thread_local static Method* s_method = ClassDef<Promise::Callback>::method("on_rejected");
+  return Function::make(s_method, this);
+}
+
+template<> void ClassDef<Promise::Callback>::init() {
+  method("on_resolved", [](Context &ctx, Object *obj, Value &ret) {
+    Value value; ctx.get(0, value);
+    obj->as<Promise::Callback>()->on_resolved(value);
+  });
+  method("on_rejected", [](Context &ctx, Object *obj, Value &ret) {
+    Value error; ctx.get(0, error);
+    obj->as<Promise::Callback>()->on_rejected(error);
+  });
+}
+
+//
+// Promise::Then
+//
+
+void Promise::Then::execute(State state, const Value &result) {
+  Value arg(result), ret;
+  if (state == RESOLVED) {
+    if (m_on_resolved) {
+      (*m_on_resolved)(*m_context, 1, &arg, ret);
+    }
+  } else {
+    if (m_on_rejected) {
+      (*m_on_rejected)(*m_context, 1, &arg, ret);
+    }
+  }
+
+  if (!m_context->ok()) {
+    m_promise->settle(REJECTED, Error::make(m_context->error()));
+    return;
+  }
+
+  if (ret.is<Promise>()) {
+    auto promise = ret.as<Promise>();
+    switch (promise->m_state) {
+      case PENDING: promise->m_dependent = m_promise; break;
+      case RESOLVED: m_promise->settle(RESOLVED, promise->m_result); break;
+      case REJECTED: m_promise->settle(REJECTED, promise->m_result); break;
+    }
+    return;
+  }
+
+  m_promise->settle(RESOLVED, ret);
+}
+
+//
+// Promise::Handler
+//
+
+template<> void ClassDef<Promise::Handler>::init() {
+  method("resolve", [](Context &ctx, Object *obj, Value &) {
+    Value value; ctx.get(0, value);
+    obj->as<Promise::Handler>()->resolve(value);
+  });
+  method("reject", [](Context &ctx, Object *obj, Value &) {
+    Value error; ctx.get(0, error);
+    obj->as<Promise::Handler>()->reject(error);
+  });
+}
+
+//
 // Array
 //
 
