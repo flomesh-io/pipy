@@ -36,6 +36,19 @@ namespace pipy {
 
 class Handle : public Filter {
 public:
+
+  //
+  // Handle::Callback
+  //
+
+  class Callback : public pjs::ObjectTemplate<Callback, pjs::Promise::Callback> {
+    Callback(Handle *filter) : m_filter(filter) {}
+    virtual void on_resolved(const pjs::Value &value) override;
+    virtual void on_rejected(const pjs::Value &error) override;
+    friend class pjs::ObjectTemplate<Callback, pjs::Promise::Callback>;
+    Handle* m_filter;
+  };
+
   Handle(pjs::Function *callback);
 
 protected:
@@ -51,19 +64,6 @@ protected:
   virtual void process(Event *evt) override;
 
 private:
-
-  //
-  // Handle::Callback
-  //
-
-  class Callback : public pjs::ObjectTemplate<Callback, pjs::Promise::Callback> {
-    Callback(Handle *filter) : m_filter(filter) {}
-    virtual void on_resolved(const pjs::Value &value) override;
-    virtual void on_rejected(const pjs::Value &error) override;
-    friend class pjs::ObjectTemplate<Callback, pjs::Promise::Callback>;
-    Handle* m_filter;
-  };
-
   pjs::Ref<pjs::Function> m_callback;
   EventBuffer m_event_buffer;
   bool m_waiting = false;
