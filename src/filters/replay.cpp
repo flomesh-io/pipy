@@ -119,10 +119,13 @@ void ReplayReceiver::on_event(Event *evt) {
   if (auto *end = evt->as<StreamEnd>()) {
     if (end->error_code() == StreamEnd::Error::REPLAY) {
       filter->schedule_replay();
+      filter->m_pipeline->chain(EventTarget::Input::dummy());
       return;
     }
   }
-  filter->Filter::output(evt);
+  if (!filter->m_replay_scheduled) {
+    filter->Filter::output(evt);
+  }
 }
 
 } // namespace pipy
