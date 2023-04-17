@@ -45,7 +45,8 @@ class Message :
 {
 public:
   static auto from(MessageStart *start, Data *body, MessageEnd *end) -> Message*;
-  static bool output(const pjs::Value &evt, EventTarget::Input *input);
+  static bool output(const pjs::Value &events, EventTarget::Input *input);
+  static bool output(pjs::Object *events, EventTarget::Input *input);
 
   auto head() const -> pjs::Object* { return m_head; }
   auto tail() const -> pjs::Object* { return m_tail; }

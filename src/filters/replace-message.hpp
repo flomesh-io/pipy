@@ -26,8 +26,8 @@
 #ifndef REPLACE_MESSAGE_HPP
 #define REPLACE_MESSAGE_HPP
 
-#include "filter.hpp"
-#include "data.hpp"
+#include "replace.hpp"
+#include "buffer.hpp"
 
 namespace pipy {
 
@@ -35,9 +35,9 @@ namespace pipy {
 // ReplaceMessage
 //
 
-class ReplaceMessage : public Filter {
+class ReplaceMessage : public Replace {
 public:
-  ReplaceMessage(const pjs::Value &replacement, int size_limit = -1);
+  ReplaceMessage(pjs::Object *replacement, const Buffer::Options &options);
 
 private:
   ReplaceMessage(const ReplaceMessage &r);
@@ -45,14 +45,11 @@ private:
 
   virtual auto clone() -> Filter* override;
   virtual void reset() override;
-  virtual void process(Event *evt) override;
   virtual void dump(Dump &d) override;
+  virtual void handle(Event *evt) override;
 
-  pjs::Ref<pjs::Object> m_head;
-  pjs::Ref<Data> m_body;
-  pjs::Value m_replacement;
-  int m_size_limit;
-  int m_discarded_size = 0;
+  pjs::Ref<MessageStart> m_start;
+  Buffer m_body_buffer;
 };
 
 } // namespace pipy

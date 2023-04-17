@@ -41,15 +41,27 @@ auto Message::from(MessageStart *start, Data *body, MessageEnd *end) -> Message*
     : Message::make(head, body));
 }
 
-bool Message::output(const pjs::Value &evt, EventTarget::Input *input) {
-  if (evt.is_instance_of(pjs::class_of<Event>())) {
-    input->input(evt.as<Event>());
+bool Message::output(const pjs::Value &events, EventTarget::Input *input) {
+  if (events.is_undefined()) {
     return true;
-  } else if (evt.is_instance_of(pjs::class_of<Message>())) {
-    evt.as<Message>()->write(input);
+  } else if (events.is_object()) {
+    return output(events.o(), input);
+  } else {
+    return false;
+  }
+}
+
+bool Message::output(pjs::Object *events, EventTarget::Input *input) {
+  if (!events) {
     return true;
-  } else if (evt.is_array()) {
-    auto *a = evt.as<pjs::Array>();
+  } else if (events->is_instance_of<Event>()) {
+    input->input(events->as<Event>());
+    return true;
+  } else if (events->is_instance_of<Message>()) {
+    events->as<Message>()->write(input);
+    return true;
+  } else if (events->is_array()) {
+    auto *a = events->as<pjs::Array>();
     auto last = a->iterate_while([&](pjs::Value &v, int i) -> bool {
       if (v.is_instance_of(pjs::class_of<Event>())) {
         input->input(v.as<Event>());
@@ -62,8 +74,6 @@ bool Message::output(const pjs::Value &evt, EventTarget::Input *input) {
       }
     });
     return last == a->length();
-  } else if (evt.is_null() || evt.is_undefined()) {
-    return true;
   } else {
     return false;
   }

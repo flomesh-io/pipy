@@ -23,36 +23,33 @@
  *  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef ON_MESSAGE_HPP
-#define ON_MESSAGE_HPP
+#ifndef ON_REPLACE_HPP
+#define ON_REPLACE_HPP
 
 #include "handle.hpp"
-#include "buffer.hpp"
 
 namespace pipy {
 
 //
-// OnMessage
+// Replace
 //
 
-class OnMessage : public Handle {
+class Replace : public Handle {
 public:
-  OnMessage(pjs::Function *callback, const Buffer::Options &options);
+  Replace(pjs::Object *replacement);
+
+protected:
+  Replace(const Replace &r);
+  ~Replace();
+
+  bool callback(pjs::Object *arg);
+
+  virtual bool on_callback_return(const pjs::Value &result) override;
 
 private:
-  OnMessage(const OnMessage &r);
-  ~OnMessage();
-
-  virtual auto clone() -> Filter* override;
-  virtual void reset() override;
-  virtual void dump(Dump &d) override;
-
-  pjs::Ref<MessageStart> m_start;
-  Buffer m_body_buffer;
-
-  virtual void handle(Event *evt) override;
+  pjs::Ref<pjs::Object> m_replacement;
 };
 
 } // namespace pipy
 
-#endif // ON_MESSAGE_HPP
+#endif // ON_REPLACE_HPP

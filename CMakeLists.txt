@@ -214,6 +214,7 @@ add_executable(pipy
   src/filters/print.cpp
   src/filters/proxy-protocol.cpp
   src/filters/read.cpp
+  src/filters/replace.cpp
   src/filters/replace-body.cpp
   src/filters/replace-event.cpp
   src/filters/replace-message.cpp

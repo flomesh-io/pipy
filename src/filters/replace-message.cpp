@@ -25,7 +25,6 @@
 
 #include "replace-message.hpp"
 #include "message.hpp"
-#include "log.hpp"
 
 namespace pipy {
 
@@ -33,14 +32,15 @@ namespace pipy {
 // ReplaceMessage
 //
 
-ReplaceMessage::ReplaceMessage(const pjs::Value &replacement, int size_limit)
-  : m_replacement(replacement)
-  , m_size_limit(size_limit)
+ReplaceMessage::ReplaceMessage(pjs::Object *replacement, const Buffer::Options &options)
+  : Replace(replacement)
+  , m_body_buffer(options)
 {
 }
 
 ReplaceMessage::ReplaceMessage(const ReplaceMessage &r)
-  : ReplaceMessage(r.m_replacement, r.m_size_limit)
+  : Replace(r)
+  , m_body_buffer(r.m_body_buffer)
 {
 }
 
@@ -58,71 +58,36 @@ auto ReplaceMessage::clone() -> Filter* {
 }
 
 void ReplaceMessage::reset() {
-  Filter::reset();
-  m_head = nullptr;
-  m_body = nullptr;
-  m_discarded_size = 0;
+  Replace::reset();
+  m_start = nullptr;
+  m_body_buffer.clear();
 }
 
-void ReplaceMessage::process(Event *evt) {
-  if (auto e = evt->as<MessageStart>()) {
-    m_head = e->head();
-    m_body = Data::make();
-    return;
-
-  } else if (auto data = evt->as<Data>()) {
-    if (m_body) {
-      if (data->size() > 0) {
-        if (m_size_limit >= 0) {
-          auto room = m_size_limit - m_body->size();
-          if (room >= data->size()) {
-            m_body->push(*data);
-          } else if (room > 0) {
-            Data buf(*data);
-            auto discard = buf.size() - room;
-            buf.pop(discard);
-            m_body->push(buf);
-            m_discarded_size += discard;
-          } else {
-            m_discarded_size += data->size();
-          }
-        } else {
-          m_body->push(*data);
-        }
-      }
-      return;
+void ReplaceMessage::handle(Event *evt) {
+  if (!m_start) {
+    if (auto start = evt->as<MessageStart>()) {
+      m_start = start;
+      m_body_buffer.clear();
+    } else {
+      Replace::pass(evt);
     }
 
-  } else if (evt->is<MessageEnd>() || evt->is<StreamEnd>()) {
-    if (m_body) {
-      if (m_discarded_size > 0 && m_size_limit > 0) {
-        Log::error(
-          "[replaceMessage] %d bytes were discarded due to buffer size limit of %d",
-          m_discarded_size, m_size_limit
-        );
+  } else {
+    if (auto data = evt->as<Data>()) {
+      m_body_buffer.push(*data);
+
+    } else if (evt->is<MessageEnd>() || evt->is<StreamEnd>()) {
+      pjs::Object *tail = nullptr;
+      pjs::Value payload;
+      if (auto *end = evt->as<MessageEnd>()) {
+        tail = end->tail();
+        payload = end->payload();
       }
-      if (m_replacement.is_function()) {
-        pjs::Object *tail = nullptr;
-        pjs::Value payload;
-        if (auto *end = evt->as<MessageEnd>()) {
-          tail = end->tail();
-          payload = end->payload();
-        }
-        pjs::Value arg(Message::make(m_head, m_body, tail, payload)), result;
-        if (callback(m_replacement.f(), 1, &arg, result)) {
-          output(result);
-        }
-      } else {
-        output(m_replacement);
-      }
-      m_head = nullptr;
-      m_body = nullptr;
-      m_discarded_size = 0;
-      return;
+      pjs::Ref<Message> msg(Message::make(m_start->head(), m_body_buffer.flush(), tail, payload));
+      if (!Replace::callback(msg)) return;
+      m_start = nullptr;
     }
   }
-
-  output(evt);
 }
 
 } // namespace pipy

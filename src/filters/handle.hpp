@@ -56,8 +56,9 @@ protected:
   ~Handle();
 
   virtual void handle(Event *evt) {}
+  virtual bool on_callback_return(const pjs::Value &result);
 
-  bool callback(const pjs::Value &arg);
+  bool callback(pjs::Object *arg);
   void pass(Event *evt);
 
   virtual void reset() override;
@@ -67,8 +68,6 @@ private:
   pjs::Ref<pjs::Function> m_callback;
   EventBuffer m_event_buffer;
   bool m_waiting = false;
-
-  void flush();
 };
 
 } // namespace pipy

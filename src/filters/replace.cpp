@@ -23,36 +23,47 @@
  *  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef ON_MESSAGE_HPP
-#define ON_MESSAGE_HPP
-
-#include "handle.hpp"
-#include "buffer.hpp"
+#include "replace.hpp"
+#include "message.hpp"
 
 namespace pipy {
 
 //
-// OnMessage
+// Replace
 //
 
-class OnMessage : public Handle {
-public:
-  OnMessage(pjs::Function *callback, const Buffer::Options &options);
+Replace::Replace(pjs::Object *replacement)
+  : Handle(replacement && replacement->is_function() ? replacement->as<pjs::Function>() : nullptr)
+  , m_replacement(replacement)
+{
+}
 
-private:
-  OnMessage(const OnMessage &r);
-  ~OnMessage();
+Replace::Replace(const Replace &r)
+  : Handle(r)
+  , m_replacement(r.m_replacement)
+{
+}
 
-  virtual auto clone() -> Filter* override;
-  virtual void reset() override;
-  virtual void dump(Dump &d) override;
+Replace::~Replace()
+{
+}
 
-  pjs::Ref<MessageStart> m_start;
-  Buffer m_body_buffer;
+bool Replace::callback(pjs::Object *arg) {
+  if (!m_replacement) return true;
+  if (!m_replacement->is_function()) {
+    if (Message::output(m_replacement, Filter::output())) return true;
+    Filter::error("replacement is not an event or Message or an array of those");
+    return false;
+  }
+  return Handle::callback(arg);
+}
 
-  virtual void handle(Event *evt) override;
-};
+bool Replace::on_callback_return(const pjs::Value &result) {
+  if (!Message::output(result, Filter::output())) {
+    Filter::error("callback did not return an event or Message or an array of those");
+    return false;
+  }
+  return Handle::on_callback_return(result);
+}
 
 } // namespace pipy
-
-#endif // ON_MESSAGE_HPP

@@ -61,14 +61,22 @@ void Handle::process(Event *evt) {
   }
 }
 
-bool Handle::callback(const pjs::Value &arg) {
+bool Handle::callback(pjs::Object *arg) {
   pjs::Value a(arg), result;
   if (!Filter::callback(m_callback, 1, &a, result)) return false;
   if (result.is_promise()) {
     auto cb = Callback::make(this);
     result.as<pjs::Promise>()->then(context(), cb->resolved(), cb->rejected());
     m_waiting = true;
+    return true;
+  } else {
+    return on_callback_return(result);
   }
+}
+
+bool Handle::on_callback_return(const pjs::Value &result) {
+  m_waiting = false;
+  m_event_buffer.flush([this](Event *evt) { handle(evt); });
   return true;
 }
 
@@ -80,17 +88,12 @@ void Handle::pass(Event *evt) {
   }
 }
 
-void Handle::flush() {
-  m_waiting = false;
-  m_event_buffer.flush([this](Event *evt) { handle(evt); });
-}
-
 //
 // Handle::Callback
 //
 
 void Handle::Callback::on_resolved(const pjs::Value &value) {
-  m_filter->flush();
+  m_filter->on_callback_return(value);
 }
 
 void Handle::Callback::on_rejected(const pjs::Value &error) {

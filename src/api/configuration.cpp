@@ -346,8 +346,8 @@ void FilterConfigurator::replace_event(Event::Type type, const pjs::Value &repla
   append_filter(new ReplaceEvent(type, replacement));
 }
 
-void FilterConfigurator::replace_message(const pjs::Value &replacement, int size_limit) {
-  append_filter(new ReplaceMessage(replacement, size_limit));
+void FilterConfigurator::replace_message(pjs::Object *replacement, pjs::Object *options) {
+  append_filter(new ReplaceMessage(replacement, options));
 }
 
 void FilterConfigurator::replace_start(const pjs::Value &replacement) {
@@ -1862,17 +1862,11 @@ template<> void ClassDef<FilterConfigurator>::init() {
   // FilterConfigurator.replaceMessage
   method("replaceMessage", [](Context &ctx, Object *thiz, Value &result) {
     auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
-    Value replacement;
-    int size_limit = -1;
-    std::string size_limit_str;
-    if (ctx.try_arguments(1, &size_limit_str, &replacement)) {
-      size_limit = utils::get_byte_size(size_limit_str);
-    } else if (
-      !ctx.try_arguments(1, &size_limit, &replacement) &&
-      !ctx.arguments(0, &replacement)
-    ) return;
+    Object *replacement = nullptr;
+    Object *options = nullptr;
     try {
-      config->replace_message(replacement, size_limit);
+      if (!ctx.arguments(0, &replacement, &options)) return;
+      config->replace_message(replacement, options);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

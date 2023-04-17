@@ -111,7 +111,7 @@ public:
   void read(const pjs::Value &pathname);
   void replace_body(const pjs::Value &replacement, int size_limit);
   void replace_event(Event::Type type, const pjs::Value &replacement);
-  void replace_message(const pjs::Value &replacement, int size_limit);
+  void replace_message(pjs::Object *replacement, pjs::Object *options);
   void replace_start(const pjs::Value &replacement);
   void replay(pjs::Object *options);
   void serve_http(pjs::Object *handler);

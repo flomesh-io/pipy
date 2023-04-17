@@ -59,22 +59,22 @@ auto OnMessage::clone() -> Filter* {
 
 void OnMessage::reset() {
   Filter::reset();
-  m_head = nullptr;
+  m_start = nullptr;
   m_body_buffer.clear();
 }
 
 void OnMessage::handle(Event *evt) {
-  if (auto e = evt->as<MessageStart>()) {
-    m_head = e->head();
+  if (auto start = evt->as<MessageStart>()) {
+    m_start = start;
     m_body_buffer.clear();
 
   } else if (auto *data = evt->as<Data>()) {
-    if (m_head) {
+    if (m_start) {
       m_body_buffer.push(*data);
     }
 
   } else if (evt->is<MessageEnd>() || evt->is<StreamEnd>()) {
-    if (m_head) {
+    if (m_start) {
       pjs::Object *tail = nullptr;
       pjs::Value payload;
       if (auto *end = evt->as<MessageEnd>()) {
@@ -82,9 +82,9 @@ void OnMessage::handle(Event *evt) {
         payload = end->payload();
       }
       auto body = m_body_buffer.flush();
-      pjs::Value arg(Message::make(m_head, body, tail, payload)), result;
-      if (!Handle::callback(arg)) return;
-      m_head = nullptr;
+      pjs::Ref<Message> msg(Message::make(m_start->head(), body, tail, payload)), result;
+      if (!Handle::callback(msg)) return;
+      m_start = nullptr;
     }
   }
 
