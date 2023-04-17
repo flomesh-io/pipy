@@ -109,7 +109,7 @@ public:
   void pack(int batch_size, pjs::Object *options);
   void print();
   void read(const pjs::Value &pathname);
-  void replace_body(const pjs::Value &replacement, int size_limit);
+  void replace_body(pjs::Object *replacement, pjs::Object *options);
   void replace_event(Event::Type type, const pjs::Value &replacement);
   void replace_message(pjs::Object *replacement, pjs::Object *options);
   void replace_start(const pjs::Value &replacement);

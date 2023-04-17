@@ -26,8 +26,8 @@
 #ifndef REPLACE_BODY_HPP
 #define REPLACE_BODY_HPP
 
-#include "filter.hpp"
-#include "data.hpp"
+#include "replace.hpp"
+#include "buffer.hpp"
 
 namespace pipy {
 
@@ -35,9 +35,9 @@ namespace pipy {
 // ReplaceBody
 //
 
-class ReplaceBody : public Filter {
+class ReplaceBody : public Replace {
 public:
-  ReplaceBody(const pjs::Value &replacement, int size_limit = -1);
+  ReplaceBody(pjs::Object *replacement, const Buffer::Options &options);
 
 private:
   ReplaceBody(const ReplaceBody &r);
@@ -45,13 +45,11 @@ private:
 
   virtual auto clone() -> Filter* override;
   virtual void reset() override;
-  virtual void process(Event *evt) override;
   virtual void dump(Dump &d) override;
+  virtual void handle(Event *evt) override;
 
-  pjs::Ref<Data> m_body;
-  pjs::Value m_replacement;
-  int m_size_limit;
-  int m_discarded_size = 0;
+  Buffer m_body_buffer;
+  bool m_started = false;
 };
 
 } // namespace pipy

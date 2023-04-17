@@ -24,7 +24,6 @@
  */
 
 #include "replace-body.hpp"
-#include "log.hpp"
 
 namespace pipy {
 
@@ -32,16 +31,15 @@ namespace pipy {
 // ReplaceBody
 //
 
-ReplaceBody::ReplaceBody(const pjs::Value &replacement, int size_limit)
-  : m_replacement(replacement)
-  , m_size_limit(size_limit)
+ReplaceBody::ReplaceBody(pjs::Object *replacement, const Buffer::Options &options)
+  : Replace(replacement)
+  , m_body_buffer(options)
 {
 }
 
 ReplaceBody::ReplaceBody(const ReplaceBody &r)
-  : Filter(r)
-  , m_replacement(r.m_replacement)
-  , m_size_limit(r.m_size_limit)
+  : Replace(r)
+  , m_body_buffer(r.m_body_buffer)
 {
 }
 
@@ -59,58 +57,30 @@ auto ReplaceBody::clone() -> Filter* {
 }
 
 void ReplaceBody::reset() {
-  Filter::reset();
-  m_body = nullptr;
-  m_discarded_size = 0;
+  Replace::reset();
+  m_started = false;
+  m_body_buffer.clear();
 }
 
-void ReplaceBody::process(Event *evt) {
-  if (evt->is<MessageStart>()) {
-    m_body = Data::make();
-
-  } else if (auto data = evt->as<Data>()) {
-    if (m_body && data->size() > 0) {
-      if (m_size_limit >= 0) {
-        auto room = m_size_limit - m_body->size();
-        if (room >= data->size()) {
-          m_body->push(*data);
-        } else if (room > 0) {
-          Data buf(*data);
-          auto discard = buf.size() - room;
-          buf.pop(discard);
-          m_body->push(buf);
-          m_discarded_size += discard;
-        } else {
-          m_discarded_size += data->size();
-        }
-      } else {
-        m_body->push(*data);
-      }
-      return;
+void ReplaceBody::handle(Event *evt) {
+  if (!m_started) {
+    if (evt->is<MessageStart>()) {
+      m_started = true;
+      m_body_buffer.clear();
     }
+    Replace::pass(evt);
 
-  } else if (evt->is<MessageEnd>() || evt->is<StreamEnd>()) {
-    if (m_body) {
-      if (m_discarded_size > 0 && m_size_limit > 0) {
-        Log::error(
-          "[replaceBody] %d bytes were discarded due to buffer size limit of %d",
-          m_discarded_size, m_size_limit
-        );
-      }
-      if (m_replacement.is_function()) {
-        pjs::Value arg(m_body), result;
-        if (callback(m_replacement.f(), 1, &arg, result)) {
-          output(result);
-        }
-      } else {
-        output(m_replacement);
-      }
-      m_body = nullptr;
-      m_discarded_size = 0;
+  } else {
+    if (auto data = evt->as<Data>()) {
+      m_body_buffer.push(*data);
+
+    } else if (evt->is<MessageEnd>() || evt->is<StreamEnd>()) {
+      pjs::Ref<Data> body = m_body_buffer.flush();
+      if (!Replace::callback(body)) return;
+      m_started = false;
+      Replace::pass(evt);
     }
   }
-
-  output(evt);
 }
 
 } // namespace pipy
