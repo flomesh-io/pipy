@@ -1877,20 +1877,34 @@ Promise::~Promise() {
 
 auto Promise::then(
   Context *context,
+  const Value &resolved_value,
+  const Value &rejected_value
+) -> Promise* {
+  auto t = new Then(context, resolved_value, rejected_value);
+  add_then(t);
+  return t->m_promise;
+}
+
+auto Promise::then(
+  Context *context,
   Function *on_resolved,
   Function *on_rejected,
   Function *on_finally
 ) -> Promise* {
   auto t = new Then(context, on_resolved, on_rejected, on_finally);
+  add_then(t);
+  return t->m_promise;
+}
+
+void Promise::add_then(Then *then) {
   if (m_thens_tail) {
-    m_thens_tail->m_next = t;
-    m_thens_tail = t;
+    m_thens_tail->m_next = then;
+    m_thens_tail = then;
   } else {
-    m_thens_head = t;
-    m_thens_tail = t;
+    m_thens_head = then;
+    m_thens_tail = then;
   }
   if (m_state != PENDING) enqueue();
-  return t->m_promise;
 }
 
 void Promise::settle(State state, const Value &result) {
@@ -1956,8 +1970,8 @@ template<> void ClassDef<Promise>::init() {
   });
 
   method("then", [](Context &ctx, Object *obj, Value &ret) {
-    Function *on_resolved;
-    Function *on_rejected = nullptr;
+    Value on_resolved;
+    Value on_rejected;
     if (!ctx.arguments(1, &on_resolved, &on_rejected)) return;
     ret.set(obj->as<Promise>()->then(ctx.root(), on_resolved, on_rejected));
   });
@@ -2019,15 +2033,32 @@ template<> void ClassDef<Promise::Callback>::init() {
 // Promise::Then
 //
 
+Promise::Then::Then(
+  Context *context,
+  const Value &resolved_value,
+  const Value &rejected_value
+) : m_context(context)
+  , m_promise(Promise::make())
+  , m_resolved_value(resolved_value)
+  , m_rejected_value(rejected_value)
+{
+  if (resolved_value.is_function()) m_on_resolved = resolved_value.f();
+  if (rejected_value.is_function()) m_on_rejected = rejected_value.f();
+}
+
 void Promise::Then::execute(State state, const Value &result) {
   Value arg(result), ret;
   if (state == RESOLVED) {
     if (m_on_resolved) {
       (*m_on_resolved)(*m_context, 1, &arg, ret);
+    } else {
+      ret = m_resolved_value;
     }
   } else {
     if (m_on_rejected) {
       (*m_on_rejected)(*m_context, 1, &arg, ret);
+    } else {
+      ret = m_rejected_value;
     }
   }
 

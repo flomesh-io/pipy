@@ -2620,6 +2620,12 @@ public:
 
   auto then(
     Context *context,
+    const Value &on_resolved,
+    const Value &on_rejected
+  ) -> Promise*;
+
+  auto then(
+    Context *context,
     Function *on_resolved,
     Function *on_rejected = nullptr,
     Function *on_finally = nullptr
@@ -2648,6 +2654,12 @@ private:
       , m_on_finally(on_finally)
       , m_promise(Promise::make()) {}
 
+    Then(
+      Context *context,
+      const Value &resolved_value,
+      const Value &rejected_value
+    );
+
     void execute(State state, const Value &result);
 
     Then* m_next = nullptr;
@@ -2656,6 +2668,8 @@ private:
     Ref<Function> m_on_rejected;
     Ref<Function> m_on_finally;
     Ref<Promise> m_promise;
+    Value m_resolved_value;
+    Value m_rejected_value;
 
     friend class Promise;
   };
@@ -2663,6 +2677,7 @@ private:
   Promise() {}
   ~Promise();
 
+  void add_then(Then *then);
   void settle(State state, const Value &result);
   void enqueue();
   void dequeue();
