@@ -26,7 +26,7 @@
 #ifndef REPLACE_EVENT_HPP
 #define REPLACE_EVENT_HPP
 
-#include "filter.hpp"
+#include "replace.hpp"
 
 namespace pipy {
 
@@ -34,20 +34,19 @@ namespace pipy {
 // ReplaceEvent
 //
 
-class ReplaceEvent : public Filter {
+class ReplaceEvent : public Replace {
 public:
-  ReplaceEvent(Event::Type type, const pjs::Value &replacement);
+  ReplaceEvent(Event::Type type, pjs::Object *replacement);
 
 private:
   ReplaceEvent(const ReplaceEvent &r);
   ~ReplaceEvent();
 
   virtual auto clone() -> Filter* override;
-  virtual void process(Event *evt) override;
+  virtual void handle(Event *evt) override;
   virtual void dump(Dump &d) override;
 
   Event::Type m_type;
-  pjs::Value m_replacement;
 };
 
 } // namespace pipy

@@ -342,7 +342,7 @@ void FilterConfigurator::replace_body(pjs::Object *replacement, pjs::Object *opt
   append_filter(new ReplaceBody(replacement, options));
 }
 
-void FilterConfigurator::replace_event(Event::Type type, const pjs::Value &replacement) {
+void FilterConfigurator::replace_event(Event::Type type, pjs::Object *replacement) {
   append_filter(new ReplaceEvent(type, replacement));
 }
 
@@ -1849,7 +1849,7 @@ template<> void ClassDef<FilterConfigurator>::init() {
   // FilterConfigurator.replaceData
   method("replaceData", [](Context &ctx, Object *thiz, Value &result) {
     auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
-    Value replacement;
+    Object *replacement = nullptr;
     if (!ctx.arguments(0, &replacement)) return;
     try {
       config->replace_event(Event::Type::Data, replacement);
@@ -1890,7 +1890,7 @@ template<> void ClassDef<FilterConfigurator>::init() {
   // FilterConfigurator.replaceMessageEnd
   method("replaceMessageEnd", [](Context &ctx, Object *thiz, Value &result) {
     auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
-    Value replacement;
+    Object *replacement = nullptr;
     if (!ctx.arguments(0, &replacement)) return;
     try {
       config->replace_event(Event::Type::MessageEnd, replacement);
@@ -1903,7 +1903,7 @@ template<> void ClassDef<FilterConfigurator>::init() {
   // FilterConfigurator.replaceMessageStart
   method("replaceMessageStart", [](Context &ctx, Object *thiz, Value &result) {
     auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
-    Value replacement;
+    Object *replacement = nullptr;
     if (!ctx.arguments(0, &replacement)) return;
     try {
       config->replace_event(Event::Type::MessageStart, replacement);
@@ -1916,7 +1916,7 @@ template<> void ClassDef<FilterConfigurator>::init() {
   // FilterConfigurator.replaceStreamEnd
   method("replaceStreamEnd", [](Context &ctx, Object *thiz, Value &result) {
     auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
-    Value replacement;
+    Object *replacement = nullptr;
     if (!ctx.arguments(0, &replacement)) return;
     try {
       config->replace_event(Event::Type::StreamEnd, replacement);

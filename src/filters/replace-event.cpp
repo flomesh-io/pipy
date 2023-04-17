@@ -28,15 +28,15 @@
 
 namespace pipy {
 
-ReplaceEvent::ReplaceEvent(Event::Type type, const pjs::Value &replacement)
-  : m_type(type)
-  , m_replacement(replacement)
+ReplaceEvent::ReplaceEvent(Event::Type type, pjs::Object *replacement)
+  : Replace(replacement)
+  , m_type(type)
 {
 }
 
 ReplaceEvent::ReplaceEvent(const ReplaceEvent &r)
-  : m_type(r.m_type)
-  , m_replacement(r.m_replacement)
+  : Replace(r)
+  , m_type(r.m_type)
 {
 }
 
@@ -59,18 +59,11 @@ auto ReplaceEvent::clone() -> Filter* {
   return new ReplaceEvent(*this);
 }
 
-void ReplaceEvent::process(Event *evt) {
+void ReplaceEvent::handle(Event *evt) {
   if (evt->type() == m_type) {
-    if (m_replacement.is_function()) {
-      pjs::Value arg(evt), result;
-      if (callback(m_replacement.f(), 1, &arg, result)) {
-        output(result);
-      }
-    } else {
-      output(m_replacement);
-    }
+    if (!Replace::callback(evt)) return;
   } else {
-    output(evt);
+    Replace::pass(evt);
   }
 }
 

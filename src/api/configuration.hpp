@@ -110,7 +110,7 @@ public:
   void print();
   void read(const pjs::Value &pathname);
   void replace_body(pjs::Object *replacement, pjs::Object *options);
-  void replace_event(Event::Type type, const pjs::Value &replacement);
+  void replace_event(Event::Type type, pjs::Object *replacement);
   void replace_message(pjs::Object *replacement, pjs::Object *options);
   void replace_start(pjs::Object *replacement);
   void replay(pjs::Object *options);
