@@ -26,7 +26,7 @@
 #ifndef REPLACE_START_HPP
 #define REPLACE_START_HPP
 
-#include "filter.hpp"
+#include "replace.hpp"
 
 namespace pipy {
 
@@ -34,9 +34,9 @@ namespace pipy {
 // ReplaceStart
 //
 
-class ReplaceStart : public Filter {
+class ReplaceStart : public Replace {
 public:
-  ReplaceStart(const pjs::Value &replacement);
+  ReplaceStart(pjs::Object *replacement);
 
 private:
   ReplaceStart(const ReplaceStart &r);
@@ -44,10 +44,9 @@ private:
 
   virtual auto clone() -> Filter* override;
   virtual void reset() override;
-  virtual void process(Event *evt) override;
   virtual void dump(Dump &d) override;
+  virtual void handle(Event *evt) override;
 
-  pjs::Value m_replacement;
   bool m_started = false;
 };
 

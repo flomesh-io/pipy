@@ -350,7 +350,7 @@ void FilterConfigurator::replace_message(pjs::Object *replacement, pjs::Object *
   append_filter(new ReplaceMessage(replacement, options));
 }
 
-void FilterConfigurator::replace_start(const pjs::Value &replacement) {
+void FilterConfigurator::replace_start(pjs::Object *replacement) {
   append_filter(new ReplaceStart(replacement));
 }
 
@@ -1864,8 +1864,8 @@ template<> void ClassDef<FilterConfigurator>::init() {
     auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     Object *replacement = nullptr;
     Object *options = nullptr;
+    if (!ctx.arguments(0, &replacement, &options)) return;
     try {
-      if (!ctx.arguments(0, &replacement, &options)) return;
       config->replace_message(replacement, options);
       result.set(thiz);
     } catch (std::runtime_error &err) {
@@ -1878,8 +1878,8 @@ template<> void ClassDef<FilterConfigurator>::init() {
     auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     Object *replacement = nullptr;
     Object *options = nullptr;
+    if (!ctx.arguments(0, &replacement, &options)) return;
     try {
-      if (!ctx.arguments(0, &replacement, &options)) return;
       config->replace_body(replacement, options);
       result.set(thiz);
     } catch (std::runtime_error &err) {
@@ -1929,7 +1929,7 @@ template<> void ClassDef<FilterConfigurator>::init() {
   // FilterConfigurator.replaceStreamStart
   method("replaceStreamStart", [](Context &ctx, Object *thiz, Value &result) {
     auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
-    Value replacement;
+    Object *replacement = nullptr;
     if (!ctx.arguments(0, &replacement)) return;
     try {
       config->replace_start(replacement);

@@ -27,13 +27,13 @@
 
 namespace pipy {
 
-ReplaceStart::ReplaceStart(const pjs::Value &replacement)
-  : m_replacement(replacement)
+ReplaceStart::ReplaceStart(pjs::Object *replacement)
+  : Replace(replacement)
 {
 }
 
 ReplaceStart::ReplaceStart(const ReplaceStart &r)
-  : m_replacement(r.m_replacement)
+  : Replace(r)
 {
 }
 
@@ -55,20 +55,12 @@ void ReplaceStart::reset() {
   m_started = false;
 }
 
-void ReplaceStart::process(Event *evt) {
+void ReplaceStart::handle(Event *evt) {
   if (!m_started) {
+    if (!Replace::callback(evt)) return;
     m_started = true;
-    if (m_replacement.is_function()) {
-      pjs::Value arg(evt), result;
-      if (callback(m_replacement.f(), 1, &arg, result)) {
-        output(result);
-      }
-    } else {
-      output(m_replacement);
-    }
-
   } else {
-    output(evt);
+    Replace::pass(evt);
   }
 }
 
