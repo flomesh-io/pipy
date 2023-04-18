@@ -248,9 +248,9 @@ void Filter::error(pjs::Error *error) {
 void Filter::error(const char *format, ...) {
   va_list ap;
   va_start(ap, format);
-  va_end(ap);
   char msg[1000], buf[1000];
   auto len = std::vsnprintf(msg, sizeof(msg), format, ap);
+  va_end(ap);
   Dump d; dump(d);
   auto source = m_location.source;
   if (!source || source->filename.empty()) {
