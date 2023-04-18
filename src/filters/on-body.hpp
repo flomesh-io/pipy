@@ -46,12 +46,10 @@ private:
   virtual auto clone() -> Filter* override;
   virtual void reset() override;
   virtual void dump(Dump &d) override;
-
-  pjs::Ref<pjs::Function> m_callback;
-  Buffer m_data_buffer;
-  bool m_started = false;
-
   virtual void handle(Event *evt) override;
+
+  Buffer m_body_buffer;
+  bool m_started = false;
 };
 
 } // namespace pipy

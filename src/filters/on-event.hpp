@@ -26,7 +26,7 @@
 #ifndef ON_EVENT_HPP
 #define ON_EVENT_HPP
 
-#include "filter.hpp"
+#include "handle.hpp"
 
 namespace pipy {
 
@@ -34,7 +34,7 @@ namespace pipy {
 // OnEvent
 //
 
-class OnEvent : public Filter {
+class OnEvent : public Handle {
 public:
   OnEvent(Event::Type type, pjs::Function *callback);
 
@@ -43,11 +43,10 @@ private:
   ~OnEvent();
 
   virtual auto clone() -> Filter* override;
-  virtual void process(Event *evt) override;
   virtual void dump(Dump &d) override;
+  virtual void handle(Event *evt) override;
 
   Event::Type m_type;
-  pjs::Ref<pjs::Function> m_callback;
 };
 
 } // namespace pipy

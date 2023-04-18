@@ -28,13 +28,12 @@
 namespace pipy {
 
 OnStart::OnStart(pjs::Function *callback)
-  : m_callback(callback)
+  : Handle(callback)
 {
 }
 
 OnStart::OnStart(const OnStart &r)
-  : Filter(r)
-  , m_callback(r.m_callback)
+  : Handle(r)
 {
 }
 
@@ -56,14 +55,15 @@ void OnStart::reset() {
   m_started = false;
 }
 
-void OnStart::process(Event *evt) {
+void OnStart::handle(Event *evt) {
   if (!m_started) {
+    if (Handle::callback(evt)) {
+      Handle::defer(evt);
+    }
     m_started = true;
-    pjs::Value arg(evt), result;
-    if (!callback(m_callback, 1, &arg, result)) return;
+    return;
   }
-
-  output(evt);
+  Handle::pass(evt);
 }
 
 } // namespace pipy

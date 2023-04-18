@@ -29,15 +29,14 @@
 namespace pipy {
 
 OnEvent::OnEvent(Event::Type type, pjs::Function *callback)
-  : m_type(type)
-  , m_callback(callback)
+  : Handle(callback)
+  , m_type(type)
 {
 }
 
 OnEvent::OnEvent(const OnEvent &r)
-  : Filter(r)
+  : Handle(r)
   , m_type(r.m_type)
-  , m_callback(r.m_callback)
 {
 }
 
@@ -60,15 +59,14 @@ auto OnEvent::clone() -> Filter* {
   return new OnEvent(*this);
 }
 
-void OnEvent::process(Event *evt) {
+void OnEvent::handle(Event *evt) {
   if (evt->type() == m_type) {
-    if (!Data::is_flush(evt)) {
-      pjs::Value arg(evt), result;
-      if (!callback(m_callback, 1, &arg, result)) return;
+    if (Handle::callback(evt)) {
+      Handle::defer(evt);
     }
+    return;
   }
-
-  output(evt);
+  Handle::pass(evt);
 }
 
 } // namespace pipy

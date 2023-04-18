@@ -50,6 +50,10 @@ Handle::~Handle()
 void Handle::reset() {
   Filter::reset();
   m_event_buffer.clear();
+  if (m_promise_callback) {
+    m_promise_callback->close();
+    m_promise_callback = nullptr;
+  }
   m_waiting = false;
 }
 
@@ -65,8 +69,9 @@ bool Handle::callback(pjs::Object *arg) {
   pjs::Value a(arg), result;
   if (!Filter::callback(m_callback, 1, &a, result)) return false;
   if (result.is_promise()) {
-    auto cb = Callback::make(this);
+    auto cb = PromiseCallback::make(this);
     result.as<pjs::Promise>()->then(context(), cb->resolved(), cb->rejected());
+    m_promise_callback = cb;
     m_waiting = true;
     return true;
   } else {
@@ -76,8 +81,22 @@ bool Handle::callback(pjs::Object *arg) {
 
 bool Handle::on_callback_return(const pjs::Value &result) {
   m_waiting = false;
-  m_event_buffer.flush([this](Event *evt) { handle(evt); });
+  if (m_deferred_event) {
+    Filter::output(m_deferred_event);
+    m_deferred_event = nullptr;
+  }
+  m_event_buffer.flush([this](Event *evt) {
+    handle(evt);
+  });
   return true;
+}
+
+void Handle::defer(Event *evt) {
+  if (m_waiting) {
+    m_deferred_event = evt;
+  } else {
+    Filter::output(evt);
+  }
 }
 
 void Handle::pass(Event *evt) {
@@ -89,18 +108,22 @@ void Handle::pass(Event *evt) {
 }
 
 //
-// Handle::Callback
+// Handle::PromiseCallback
 //
 
-void Handle::Callback::on_resolved(const pjs::Value &value) {
-  m_filter->on_callback_return(value);
+void Handle::PromiseCallback::on_resolved(const pjs::Value &value) {
+  if (m_filter) {
+    m_filter->on_callback_return(value);
+  }
 }
 
-void Handle::Callback::on_rejected(const pjs::Value &error) {
-  if (error.is_error()) {
-    m_filter->error(error.as<pjs::Error>());
-  } else {
-    m_filter->error(StreamEnd::make(error));
+void Handle::PromiseCallback::on_rejected(const pjs::Value &error) {
+  if (m_filter) {
+    if (error.is_error()) {
+      m_filter->error(error.as<pjs::Error>());
+    } else {
+      m_filter->error(StreamEnd::make(error));
+    }
   }
 }
 
@@ -110,7 +133,7 @@ namespace pjs {
 
 using namespace pipy;
 
-template<> void ClassDef<Handle::Callback>::init() {
+template<> void ClassDef<Handle::PromiseCallback>::init() {
   super<Promise::Callback>();
 }
 

@@ -26,7 +26,7 @@
 #ifndef ON_START_HPP
 #define ON_START_HPP
 
-#include "filter.hpp"
+#include "handle.hpp"
 
 namespace pipy {
 
@@ -34,7 +34,7 @@ namespace pipy {
 // OnStart
 //
 
-class OnStart : public Filter {
+class OnStart : public Handle {
 public:
   OnStart(pjs::Function *callback);
 
@@ -44,10 +44,9 @@ private:
 
   virtual auto clone() -> Filter* override;
   virtual void reset() override;
-  virtual void process(Event *evt) override;
   virtual void dump(Dump &d) override;
+  virtual void handle(Event *evt) override;
 
-  pjs::Ref<pjs::Function> m_callback;
   bool m_started = false;
 };
 

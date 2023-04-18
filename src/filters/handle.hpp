@@ -38,15 +38,17 @@ class Handle : public Filter {
 public:
 
   //
-  // Handle::Callback
+  // Handle::PromiseCallback
   //
 
-  class Callback : public pjs::ObjectTemplate<Callback, pjs::Promise::Callback> {
-    Callback(Handle *filter) : m_filter(filter) {}
+  class PromiseCallback : public pjs::ObjectTemplate<PromiseCallback, pjs::Promise::Callback> {
+    PromiseCallback(Handle *filter) : m_filter(filter) {}
     virtual void on_resolved(const pjs::Value &value) override;
     virtual void on_rejected(const pjs::Value &error) override;
-    friend class pjs::ObjectTemplate<Callback, pjs::Promise::Callback>;
+    friend class pjs::ObjectTemplate<PromiseCallback, pjs::Promise::Callback>;
     Handle* m_filter;
+  public:
+    void close() { m_filter = nullptr; }
   };
 
   Handle(pjs::Function *callback);
@@ -59,6 +61,7 @@ protected:
   virtual bool on_callback_return(const pjs::Value &result);
 
   bool callback(pjs::Object *arg);
+  void defer(Event *evt);
   void pass(Event *evt);
 
   virtual void reset() override;
@@ -66,6 +69,8 @@ protected:
 
 private:
   pjs::Ref<pjs::Function> m_callback;
+  pjs::Ref<PromiseCallback> m_promise_callback;
+  pjs::Ref<Event> m_deferred_event;
   EventBuffer m_event_buffer;
   bool m_waiting = false;
 };

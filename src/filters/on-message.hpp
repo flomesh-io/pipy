@@ -46,11 +46,10 @@ private:
   virtual auto clone() -> Filter* override;
   virtual void reset() override;
   virtual void dump(Dump &d) override;
+  virtual void handle(Event *evt) override;
 
   pjs::Ref<MessageStart> m_start;
   Buffer m_body_buffer;
-
-  virtual void handle(Event *evt) override;
 };
 
 } // namespace pipy

@@ -33,13 +33,13 @@ namespace pipy {
 
 OnBody::OnBody(pjs::Function *callback, const Buffer::Options &options)
   : Handle(callback)
-  , m_data_buffer(options)
+  , m_body_buffer(options)
 {
 }
 
 OnBody::OnBody(const OnBody &r)
   : Handle(r)
-  , m_data_buffer(r.m_data_buffer)
+  , m_body_buffer(r.m_body_buffer)
 {
 }
 
@@ -58,8 +58,8 @@ auto OnBody::clone() -> Filter* {
 
 void OnBody::reset() {
   Handle::reset();
-  m_data_buffer.clear();
   m_started = false;
+  m_body_buffer.clear();
 }
 
 void OnBody::handle(Event *evt) {
@@ -68,14 +68,17 @@ void OnBody::handle(Event *evt) {
 
   } else if (auto data = evt->as<Data>()) {
     if (m_started) {
-      m_data_buffer.push(*data);
+      m_body_buffer.push(*data);
     }
 
   } else if (evt->is<MessageEnd>() || evt->is<StreamEnd>()) {
     if (m_started) {
-      auto body = m_data_buffer.flush();
-      if (!Handle::callback(body)) return;
+      auto body = m_body_buffer.flush();
+      if (Handle::callback(body)) {
+        Handle::defer(evt);
+      }
       m_started = false;
+      return;
     }
   }
 
