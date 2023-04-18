@@ -51,12 +51,66 @@ static void throw_error() {
 }
 
 //
+// Options
+//
+
+Options::Options(pjs::Object *options, const char *base_name) {
+  Value(options, "minVersion")
+    .get(minVersion)
+    .check_nullable();
+
+  Value(options, "maxVersion")
+    .get(maxVersion)
+    .check_nullable();
+
+  Value(options, "ciphers")
+    .get(ciphers)
+    .check_nullable();
+
+  Value(options, "certificate", base_name)
+    .get(certificate)
+    .check_nullable();
+
+  pjs::Ref<pjs::Array> trusted_array;
+  Value(options, "trusted", base_name)
+    .get(trusted_array)
+    .check_nullable();
+
+  if (trusted_array) {
+    trusted.resize(trusted_array->length());
+    trusted_array->iterate_all([&](pjs::Value &v, int i) {
+      if (!v.is<crypto::Certificate>()) {
+        char msg[100];
+        auto options = base_name ? base_name : "options";
+        std::sprintf(msg, "%s.trusted[%d] expects an object of type crypto.Certificate", options, i);
+        throw std::runtime_error(msg);
+      }
+      trusted[i] = v.as<crypto::Certificate>();
+    });
+  }
+
+  Value(options, "verify", base_name)
+    .get(verify)
+    .check_nullable();
+
+  Value(options, "handshake", base_name)
+    .get(handshake)
+    .check_nullable();
+
+#if PIPY_USE_RFC8998
+  Value(options, "rfc8998", base_name)
+    .get(rfc8998)
+    .check_nullable();
+#endif
+}
+
+//
 // TLSContext
 //
 
-TLSContext::TLSContext(bool is_server) {
+TLSContext::TLSContext(bool is_server, const Options &options) {
 #if PIPY_USE_RFC8998
-  m_ctx = SSL_CTX_new(is_server ? TLS_server_method() : TLS_client_method_rfc8998());
+  m_ctx = SSL_CTX_new(is_server ? TLS_server_method() : (options.rfc8998 ? TLS_client_method_rfc8998() : TLS_client_method()));
 #else
   m_ctx = SSL_CTX_new(is_server ? TLS_server_method() : TLS_client_method());
 #endif
@@ -214,6 +268,9 @@ TLSSession::TLSSession(
   TLSContext *ctx,
   Filter *filter,
   bool is_server,
+#if PIPY_USE_RFC8998
+  bool is_rfc8998,
+#endif
   pjs::Object *certificate,
   pjs::Function *verify,
   pjs::Function *alpn,
@@ -225,6 +282,9 @@ TLSSession::TLSSession(
   , m_alpn(alpn)
   , m_handshake(handshake)
   , m_is_server(is_server)
+#if PIPY_USE_RFC8998
+  , m_is_rfc8998(is_rfc8998)
+#endif
 {
   m_ssl = SSL_new(ctx->ctx());
   SSL_set_ex_data(m_ssl, s_user_data_index, this);
@@ -379,26 +439,28 @@ void TLSSession::use_certificate(pjs::Str *sni) {
   }
 
 #if PIPY_USE_RFC8998
-  pjs::Value cert_enc, key_enc;
-  certificate.o()->get("certEnc", cert_enc);
-  certificate.o()->get("keyEnc", key_enc);
+  if (m_is_rfc8998) {
+    pjs::Value cert_enc, key_enc;
+    certificate.o()->get("certEnc", cert_enc);
+    certificate.o()->get("keyEnc", key_enc);
 
-  if (!key_enc.is_undefined() && !key_enc.is<crypto::PrivateKey>()) {
-    m_filter->error("certificate.keyEnc requires a PrivateKey object");
-    return;
-  }
+    if (!key_enc.is_undefined() && !key_enc.is<crypto::PrivateKey>()) {
+      m_filter->error("certificate.keyEnc requires a PrivateKey object");
+      return;
+    }
 
-  if (!cert_enc.is_undefined() && !cert_enc.is<crypto::Certificate>()) {
-    m_filter->error("certificate.certEnc requires a Certificate object");
-    return;
-  }
+    if (!cert_enc.is_undefined() && !cert_enc.is<crypto::Certificate>()) {
+      m_filter->error("certificate.certEnc requires a Certificate object");
+      return;
+    }
 
-  if (!key_enc.is_undefined()) {
-    SSL_use_PrivateKey_rfc8998(m_ssl, key_enc.as<crypto::PrivateKey>()->pkey());
-  }
+    if (!key_enc.is_undefined()) {
+      SSL_use_PrivateKey_rfc8998(m_ssl, key_enc.as<crypto::PrivateKey>()->pkey());
+    }
 
-  if (!cert_enc.is_undefined()) {
-    SSL_use_certificate_rfc8998(m_ssl, cert_enc.as<crypto::Certificate>()->x509());
+    if (!cert_enc.is_undefined()) {
+      SSL_use_certificate_rfc8998(m_ssl, cert_enc.as<crypto::Certificate>()->x509());
+    }
   }
 #endif
 }
@@ -570,54 +632,6 @@ void TLSSession::close(StreamEnd::Error err) {
 }
 
 //
-// Options
-//
-
-Options::Options(pjs::Object *options, const char *base_name) {
-  Value(options, "minVersion")
-    .get(minVersion)
-    .check_nullable();
-
-  Value(options, "maxVersion")
-    .get(maxVersion)
-    .check_nullable();
-
-  Value(options, "ciphers")
-    .get(ciphers)
-    .check_nullable();
-
-  Value(options, "certificate", base_name)
-    .get(certificate)
-    .check_nullable();
-
-  pjs::Ref<pjs::Array> trusted_array;
-  Value(options, "trusted", base_name)
-    .get(trusted_array)
-    .check_nullable();
-
-  if (trusted_array) {
-    trusted.resize(trusted_array->length());
-    trusted_array->iterate_all([&](pjs::Value &v, int i) {
-      if (!v.is<crypto::Certificate>()) {
-        char msg[100];
-        auto options = base_name ? base_name : "options";
-        std::sprintf(msg, "%s.trusted[%d] expects an object of type crypto.Certificate", options, i);
-        throw std::runtime_error(msg);
-      }
-      trusted[i] = v.as<crypto::Certificate>();
-    });
-  }
-
-  Value(options, "verify", base_name)
-    .get(verify)
-    .check_nullable();
-
-  Value(options, "handshake", base_name)
-    .get(handshake)
-    .check_nullable();
-}
-
-//
 // Client::Options
 //
 
@@ -659,7 +673,7 @@ Client::Options::Options(pjs::Object *options, const char *base_name)
 //
 
 Client::Client(const Options &options)
-  : m_tls_context(std::make_shared<TLSContext>(false))
+  : m_tls_context(std::make_shared<TLSContext>(false, options))
   , m_options(std::make_shared<Options>(options))
 {
   m_tls_context->set_protocol_versions(
@@ -718,6 +732,9 @@ void Client::process(Event *evt) {
       m_tls_context.get(),
       this,
       false,
+#if PIPY_USE_RFC8998
+      m_options->rfc8998,
+#endif
       m_options->certificate,
       m_options->verify,
       nullptr,
@@ -776,7 +793,7 @@ Server::Options::Options(pjs::Object *options)
 //
 
 Server::Server(const Options &options)
-  : m_tls_context(std::make_shared<TLSContext>(true))
+  : m_tls_context(std::make_shared<TLSContext>(true, options))
   , m_options(std::make_shared<Options>(options))
 {
   m_tls_context->set_protocol_versions(
@@ -832,6 +849,9 @@ void Server::process(Event *evt) {
       m_tls_context.get(),
       this,
       true,
+#if PIPY_USE_RFC8998
+      m_options->rfc8998,
+#endif
       m_options->certificate,
       m_options->verify,
       m_options->alpn,

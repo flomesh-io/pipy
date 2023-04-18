@@ -56,12 +56,32 @@ enum class ProtocolVersion {
 };
 
 //
+// Options
+//
+
+struct Options : public pipy::Options {
+  pjs::EnumValue<ProtocolVersion> minVersion = ProtocolVersion::TLS1_2;
+  pjs::EnumValue<ProtocolVersion> maxVersion = ProtocolVersion::TLS1_3;
+  pjs::Ref<pjs::Str> ciphers;
+  pjs::Ref<pjs::Object> certificate;
+  std::vector<pjs::Ref<crypto::Certificate>> trusted;
+  pjs::Ref<pjs::Function> verify;
+  pjs::Ref<pjs::Function> handshake;
+#if PIPY_USE_RFC8998
+  bool rfc8998 = false;
+#endif
+
+  Options() {}
+  Options(pjs::Object *options, const char *base_name = nullptr);
+};
+
+//
 // TLSContext
 //
 
 class TLSContext {
 public:
-  TLSContext(bool is_server);
+  TLSContext(bool is_server, const Options &options);
   ~TLSContext();
 
   auto ctx() const -> SSL_CTX* { return m_ctx; }
@@ -115,6 +135,9 @@ public:
     TLSContext *ctx,
     Filter *filter,
     bool is_server,
+#if PIPY_USE_RFC8998
+    bool is_rfc8998,
+#endif
     pjs::Object *certificate,
     pjs::Function *verify,
     pjs::Function *alpn,
@@ -140,6 +163,9 @@ private:
   pjs::Ref<pjs::Function> m_alpn;
   pjs::Ref<pjs::Function> m_handshake;
   bool m_is_server;
+#if PIPY_USE_RFC8998
+  bool m_is_rfc8998;
+#endif
   bool m_closed_input = false;
   bool m_closed_output = false;
 
@@ -164,23 +190,6 @@ private:
 
   friend class pjs::RefCount<TLSSession>;
   friend class TLSContext;
-};
-
-//
-// Options
-//
-
-struct Options : public pipy::Options {
-  pjs::EnumValue<ProtocolVersion> minVersion = ProtocolVersion::TLS1_2;
-  pjs::EnumValue<ProtocolVersion> maxVersion = ProtocolVersion::TLS1_3;
-  pjs::Ref<pjs::Str> ciphers;
-  pjs::Ref<pjs::Object> certificate;
-  std::vector<pjs::Ref<crypto::Certificate>> trusted;
-  pjs::Ref<pjs::Function> verify;
-  pjs::Ref<pjs::Function> handshake;
-
-  Options() {}
-  Options(pjs::Object *options, const char *base_name = nullptr);
 };
 
 //
