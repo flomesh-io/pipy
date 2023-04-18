@@ -444,21 +444,21 @@ void TLSSession::use_certificate(pjs::Str *sni) {
     certificate.o()->get("certEnc", cert_enc);
     certificate.o()->get("keyEnc", key_enc);
 
-    if (!key_enc.is_undefined() && !key_enc.is<crypto::PrivateKey>()) {
+    if (!key_enc.is_nullish() && !key_enc.is<crypto::PrivateKey>()) {
       m_filter->error("certificate.keyEnc requires a PrivateKey object");
       return;
     }
 
-    if (!cert_enc.is_undefined() && !cert_enc.is<crypto::Certificate>()) {
+    if (!cert_enc.is_nullish() && !cert_enc.is<crypto::Certificate>()) {
       m_filter->error("certificate.certEnc requires a Certificate object");
       return;
     }
 
-    if (!key_enc.is_undefined()) {
+    if (!key_enc.is_nullish()) {
       SSL_use_PrivateKey_rfc8998(m_ssl, key_enc.as<crypto::PrivateKey>()->pkey());
     }
 
-    if (!cert_enc.is_undefined()) {
+    if (!cert_enc.is_nullish()) {
       SSL_use_certificate_rfc8998(m_ssl, cert_enc.as<crypto::Certificate>()->x509());
     }
   }
@@ -676,12 +676,19 @@ Client::Client(const Options &options)
   : m_tls_context(std::make_shared<TLSContext>(false, options))
   , m_options(std::make_shared<Options>(options))
 {
+#if PIPY_USE_RFC8998
   if (!options.rfc8998) {
     m_tls_context->set_protocol_versions(
       options.minVersion,
       options.maxVersion
     );
   }
+#else
+  m_tls_context->set_protocol_versions(
+    options.minVersion,
+    options.maxVersion
+  );
+#endif
 
   if (options.ciphers) {
     m_tls_context->set_ciphers(options.ciphers->str());
@@ -798,12 +805,19 @@ Server::Server(const Options &options)
   : m_tls_context(std::make_shared<TLSContext>(true, options))
   , m_options(std::make_shared<Options>(options))
 {
+#if PIPY_USE_RFC8998
   if (!options.rfc8998) {
     m_tls_context->set_protocol_versions(
       options.minVersion,
       options.maxVersion
     );
   }
+#else
+  m_tls_context->set_protocol_versions(
+    options.minVersion,
+    options.maxVersion
+  );
+#endif
 
   if (options.ciphers) {
     m_tls_context->set_ciphers(options.ciphers->str());
