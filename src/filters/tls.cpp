@@ -676,10 +676,12 @@ Client::Client(const Options &options)
   : m_tls_context(std::make_shared<TLSContext>(false, options))
   , m_options(std::make_shared<Options>(options))
 {
-  m_tls_context->set_protocol_versions(
-    options.minVersion,
-    options.maxVersion
-  );
+  if (!options.rfc8998) {
+    m_tls_context->set_protocol_versions(
+      options.minVersion,
+      options.maxVersion
+    );
+  }
 
   if (options.ciphers) {
     m_tls_context->set_ciphers(options.ciphers->str());
@@ -796,10 +798,12 @@ Server::Server(const Options &options)
   : m_tls_context(std::make_shared<TLSContext>(true, options))
   , m_options(std::make_shared<Options>(options))
 {
-  m_tls_context->set_protocol_versions(
-    options.minVersion,
-    options.maxVersion
-  );
+  if (!options.rfc8998) {
+    m_tls_context->set_protocol_versions(
+      options.minVersion,
+      options.maxVersion
+    );
+  }
 
   if (options.ciphers) {
     m_tls_context->set_ciphers(options.ciphers->str());
