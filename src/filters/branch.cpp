@@ -29,10 +29,10 @@
 namespace pipy {
 
 //
-// Branch
+// BranchBase
 //
 
-Branch::Branch(int count, pjs::Function **conds, const pjs::Value *layout)
+BranchBase::BranchBase(int count, pjs::Function **conds, const pjs::Value *layout)
   : m_conditions(std::make_shared<std::vector<Condition>>())
 {
   m_conditions->resize(count);
@@ -48,15 +48,69 @@ Branch::Branch(int count, pjs::Function **conds, const pjs::Value *layout)
   }
 }
 
-Branch::Branch(const Branch &r)
+BranchBase::BranchBase(const BranchBase &r)
   : Filter(r)
   , m_conditions(r.m_conditions)
 {
 }
 
-Branch::~Branch()
+BranchBase::~BranchBase()
 {
 }
+
+void BranchBase::reset() {
+  Filter::reset();
+  m_buffer.clear();
+  m_pipeline = nullptr;
+  m_chosen = false;
+}
+
+void BranchBase::process(Event *evt) {
+  if (!m_chosen) {
+    if (!choose(evt)) return;
+  }
+
+  if (!m_chosen) {
+    m_buffer.push(evt);
+  } else if (auto *p = m_pipeline.get()) {
+    output(evt, p->input());
+  } else {
+    output(evt);
+  }
+}
+
+bool BranchBase::find_branch(int argc, pjs::Value *args) {
+  const auto &conditions = *m_conditions;
+  for (int i = 0; i < conditions.size(); i++) {
+    const auto &cond = conditions[i];
+    if (cond.func) {
+      pjs::Value ret;
+      if (!callback(cond.func, argc, args, ret)) return false;
+      m_chosen = ret.to_boolean();
+    } else {
+      m_chosen = true;
+    }
+    if (m_chosen) {
+      if (auto *pipeline = sub_pipeline(i, false, output())) {
+        pipeline->start();
+        m_pipeline = pipeline;
+        m_buffer.flush([&](Event *evt) {
+          output(evt, pipeline->input());
+        });
+      } else {
+        m_buffer.flush([&](Event *evt) {
+          output(evt);
+        });
+      }
+      break;
+    }
+  }
+  return true;
+}
+
+//
+// Branch
+//
 
 void Branch::dump(Dump &d) {
   Filter::dump(d);
@@ -67,48 +121,56 @@ auto Branch::clone() -> Filter* {
   return new Branch(*this);
 }
 
-void Branch::reset() {
-  Filter::reset();
-  m_buffer.clear();
-  m_pipeline = nullptr;
-  m_chosen = false;
+bool Branch::choose(Event *evt) {
+  return find_branch(0, nullptr);
 }
 
-void Branch::process(Event *evt) {
-  if (!m_chosen) {
-    const auto &conditions = *m_conditions;
-    for (int i = 0; i < conditions.size(); i++) {
-      const auto &cond = conditions[i];
-      if (cond.func) {
-        pjs::Value ret;
-        if (!eval(cond.func, ret)) return;
-        m_chosen = ret.to_boolean();
-      } else {
-        m_chosen = true;
-      }
-      if (m_chosen) {
-        if (auto *pipeline = sub_pipeline(i, false, output())) {
-          pipeline->start();
-          m_pipeline = pipeline;
-          m_buffer.flush([&](Event *evt) {
-            output(evt, pipeline->input());
-          });
-        } else {
-          m_buffer.flush([&](Event *evt) {
-            output(evt);
-          });
-        }
-        break;
-      }
-    }
-  }
+//
+// BranchMessageStart
+//
 
-  if (!m_chosen) {
-    m_buffer.push(evt);
-  } else if (auto *p = m_pipeline.get()) {
-    output(evt, p->input());
+void BranchMessageStart::dump(Dump &d) {
+  Filter::dump(d);
+  d.name = "branchMessageStart";
+}
+
+auto BranchMessageStart::clone() -> Filter* {
+  return new BranchMessageStart(*this);
+}
+
+bool BranchMessageStart::choose(Event *evt) {
+  if (evt->is<MessageStart>()) {
+    pjs::Value arg(evt);
+    return find_branch(1, &arg);
   } else {
-    output(evt);
+    return true;
+  }
+}
+
+//
+// BranchMessage
+//
+
+void BranchMessage::dump(Dump &d) {
+  Filter::dump(d);
+  d.name = "branchMessage";
+}
+
+auto BranchMessage::clone() -> Filter* {
+  return new BranchMessage(*this);
+}
+
+void BranchMessage::reset() {
+  BranchBase::reset();
+  m_reader.reset();
+}
+
+bool BranchMessage::choose(Event *evt) {
+  if (auto *msg = m_reader.read(evt)) {
+    pjs::Value arg(msg);
+    return find_branch(1, &arg);
+  } else {
+    return true;
   }
 }
 

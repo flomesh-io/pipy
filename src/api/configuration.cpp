@@ -126,6 +126,14 @@ void FilterConfigurator::branch(int count, pjs::Function **conds, const pjs::Val
   append_filter(new Branch(count, conds, layout));
 }
 
+void FilterConfigurator::branch_message_start(int count, pjs::Function **conds, const pjs::Value *layout) {
+  append_filter(new BranchMessageStart(count, conds, layout));
+}
+
+void FilterConfigurator::branch_message(int count, pjs::Function **conds, const pjs::Value *layout) {
+  append_filter(new BranchMessage(count, conds, layout));
+}
+
 void FilterConfigurator::chain(const std::list<JSModule*> modules) {
   append_filter(new Chain(modules));
 }
@@ -440,6 +448,49 @@ auto FilterConfigurator::sub_pipeline(const std::string &name, const std::functi
   cb(fc);
   fc->check_integrity();
   return index;
+}
+
+bool FilterConfigurator::get_branches(pjs::Context &ctx, int n, pjs::Function **conds, pjs::Value *layouts) {
+  for (int i = 0; i < n; i++) {
+    auto p = i * 2;
+    if (p + 1 < ctx.argc()) {
+      if (!ctx.arg(p).is_function()) {
+        ctx.error_argument_type(p, "a function");
+        return false;
+      }
+      p++;
+    }
+    if (!ctx.arg(p).is_string() && !ctx.arg(p).is_function()) {
+      ctx.error_argument_type(p, "a string or a function");
+      return false;
+    }
+  }
+  for (int i = 0; i < n; i++) {
+    auto p = i * 2;
+    auto &cond = ctx.arg(p);
+    if (p + 1 < ctx.argc()) {
+      conds[i] = cond.f();
+      p++;
+    } else {
+      conds[i] = nullptr;
+    }
+    auto &layout = ctx.arg(p);
+    if (layout.is_string()) {
+      layouts[i].set(layout.s());
+    } else {
+      layouts[i].set(
+        sub_pipeline(
+          layout.f()->to_string(),
+          [&](FilterConfigurator *fc) {
+            pjs::Value arg(fc), ret;
+            (*layout.f())(ctx, 1, &arg, ret);
+          }
+        )
+      );
+      if (!ctx.ok()) return false;
+    }
+  }
+  return true;
 }
 
 void FilterConfigurator::check_integrity() {
@@ -923,47 +974,9 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
       // Dynamic branch
       if (has_functions) {
-        for (int i = 0; i < n; i++) {
-          auto p = i * 2;
-          if (p + 1 < ctx.argc()) {
-            if (!ctx.arg(p).is_function()) {
-              ctx.error_argument_type(p, "a function");
-              return;
-            }
-            p++;
-          }
-          if (!ctx.arg(p).is_string() && !ctx.arg(p).is_function()) {
-            ctx.error_argument_type(p, "a string or a function");
-            return;
-          }
-        }
         Function *conds[n];
         Value layouts[n];
-        for (int i = 0; i < n; i++) {
-          auto p = i * 2;
-          auto &cond = ctx.arg(p);
-          if (p + 1 < ctx.argc()) {
-            conds[i] = cond.f();
-            p++;
-          } else {
-            conds[i] = nullptr;
-          }
-          auto &layout = ctx.arg(p);
-          if (layout.is_string()) {
-            layouts[i].set(layout.s());
-          } else {
-            layouts[i].set(
-              config->sub_pipeline(
-                layout.f()->to_string(),
-                [&](FilterConfigurator *fc) {
-                  Value arg(fc), ret;
-                  (*layout.f())(ctx, 1, &arg, ret);
-                }
-              )
-            );
-            if (!ctx.ok()) return;
-          }
-        }
+        if (!config->get_branches(ctx, n, conds, layouts)) return;
         config->branch(n, conds, layouts);
 
       // Static branch
@@ -998,6 +1011,38 @@ template<> void ClassDef<FilterConfigurator>::init() {
         }
       }
       result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // FilterConfigurator.branchMessageStart
+  method("branchMessageStart", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
+    try {
+      int n = ctx.argc();
+      if (n < 2) throw std::runtime_error("requires at least 2 arguments");
+      n = (n + 1) / 2;
+      Function *conds[n];
+      Value layouts[n];
+      if (!config->get_branches(ctx, n, conds, layouts)) return;
+      config->branch_message_start(n, conds, layouts);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // FilterConfigurator.branchMessage
+  method("branchMessage", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
+    try {
+      int n = ctx.argc();
+      if (n < 2) throw std::runtime_error("requires at least 2 arguments");
+      n = (n + 1) / 2;
+      Function *conds[n];
+      Value layouts[n];
+      if (!config->get_branches(ctx, n, conds, layouts)) return;
+      config->branch_message(n, conds, layouts);
     } catch (std::runtime_error &err) {
       ctx.error(err);
     }

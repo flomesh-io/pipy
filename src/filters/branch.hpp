@@ -27,6 +27,7 @@
 #define BRANCH_HPP
 
 #include "filter.hpp"
+#include "message.hpp"
 
 #include <vector>
 #include <memory>
@@ -35,22 +36,24 @@
 namespace pipy {
 
 //
-// Branch
+// BranchBase
 //
 
-class Branch : public Filter {
+class BranchBase : public Filter {
 public:
-  Branch(int count, pjs::Function **conds, const pjs::Value *layout);
+  BranchBase(int count, pjs::Function **conds, const pjs::Value *layout);
 
-private:
-  Branch(const Branch &r);
-  ~Branch();
+protected:
+  BranchBase(const BranchBase &r);
+  ~BranchBase();
 
-  virtual auto clone() -> Filter* override;
   virtual void reset() override;
   virtual void process(Event *evt) override;
-  virtual void dump(Dump &d) override;
+  virtual bool choose(Event *evt) = 0;
 
+  bool find_branch(int argc, pjs::Value *args);
+
+private:
   struct Condition {
     pjs::Ref<pjs::Function> func;
   };
@@ -59,6 +62,52 @@ private:
   pjs::Ref<Pipeline> m_pipeline;
   EventBuffer m_buffer;
   bool m_chosen = false;
+};
+
+//
+// Branch
+//
+
+class Branch : public BranchBase {
+public:
+  using BranchBase::BranchBase;
+
+protected:
+  virtual auto clone() -> Filter* override;
+  virtual void dump(Dump &d) override;
+  virtual bool choose(Event *evt) override;
+};
+
+//
+// BranchMessageStart
+//
+
+class BranchMessageStart : public BranchBase {
+public:
+  using BranchBase::BranchBase;
+
+protected:
+  virtual auto clone() -> Filter* override;
+  virtual void dump(Dump &d) override;
+  virtual bool choose(Event *evt) override;
+};
+
+//
+// BranchMessage
+//
+
+class BranchMessage : public BranchBase {
+public:
+  using BranchBase::BranchBase;
+
+protected:
+  virtual auto clone() -> Filter* override;
+  virtual void reset() override;
+  virtual void dump(Dump &d) override;
+  virtual bool choose(Event *evt) override;
+
+private:
+  MessageReader m_reader;
 };
 
 } // namespace pipy

@@ -59,6 +59,8 @@ public:
   void accept_socks(pjs::Function *on_connect);
   void accept_tls(pjs::Object *options);
   void branch(int count, pjs::Function **conds, const pjs::Value *layout);
+  void branch_message_start(int count, pjs::Function **conds, const pjs::Value *layout);
+  void branch_message(int count, pjs::Function **conds, const pjs::Value *layout);
   void chain(const std::list<JSModule*> modules);
   void chain_next();
   void compress_http(pjs::Object *options);
@@ -132,6 +134,7 @@ public:
   void to(pjs::Str *layout_name);
   void to(const std::string &name, const std::function<void(FilterConfigurator*)> &cb);
   auto sub_pipeline(const std::string &name, const std::function<void(FilterConfigurator*)> &cb) -> int;
+  bool get_branches(pjs::Context &ctx, int n, pjs::Function **conds, pjs::Value *layouts);
   void check_integrity();
 
 protected:

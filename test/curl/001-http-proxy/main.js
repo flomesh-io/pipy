@@ -25,11 +25,8 @@ pipy({
 .listen(8000)
 .demuxHTTP().to(
   $=>$
-  .handleMessageStart(
-    msg => _target = router.find(msg.head.path)?.next?.()
-  )
-  .branch(
-    () => _target, (
+  .branchMessageStart(
+    msg => _target = router.find(msg.head.path)?.borrow?.(), (
       $=>$.muxHTTP(() => _target).to(
         $=>$.connect(() => _target.id, { idleTimeout: 5 })
       )
