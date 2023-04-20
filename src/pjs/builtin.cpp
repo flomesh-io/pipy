@@ -33,6 +33,7 @@
 #include <random>
 #include <sstream>
 #include <stack>
+#include <time.h>
 
 namespace pjs {
 
@@ -569,7 +570,10 @@ auto Date::toTimeString() -> std::string {
 
 auto Date::toISOString() -> std::string {
   char str[100];
-  auto len = std::strftime(str, sizeof(str), "%Y-%m-%dT%H:%M:%S.000Z", &m_tm);
+  std::tm tm;
+  auto t = std::mktime(&m_tm);
+  gmtime_r(&t, &tm);
+  auto len = std::strftime(str, sizeof(str), "%Y-%m-%dT%H:%M:%S.000Z", &tm);
   str[20] = (m_msec % 1000) / 100 + '0';
   str[21] = (m_msec % 100) / 10 + '0';
   str[22] = (m_msec % 10) + '0';
@@ -578,7 +582,10 @@ auto Date::toISOString() -> std::string {
 
 auto Date::toUTCString() -> std::string {
   char str[100];
-  auto len = std::strftime(str, sizeof(str), "%a, %e %b %Y %H:%M:%S GMT", &m_tm);
+  std::tm tm;
+  auto t = std::mktime(&m_tm);
+  gmtime_r(&t, &tm);
+  auto len = std::strftime(str, sizeof(str), "%a, %e %b %Y %H:%M:%S GMT", &tm);
   return std::string(str, len);
 }
 
