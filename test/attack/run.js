@@ -37,6 +37,10 @@ function split(count, buffers) {
   return new Array(count).fill(0).map((_, i) => buffer.subarray(i * size, Math.min(i * size + size, buffer.byteLength)));
 }
 
+function repeat(count, messages) {
+  return new Array(count).fill(messages).flat()
+}
+
 function startProcess(cmd, args, onStdout) {
   const proc = spawn(cmd, args);
   const lineBuffer = [];
@@ -389,7 +393,11 @@ function createAttacks(proc, port, options) {
           throw e;
         }
       }
-      dumpStats(tick);
+      if (options.stats) {
+        dumpStats(tick);
+      } else {
+        log(`T=${tick}`);
+      }
       if (done) break;
       if (reloads[tick++]) triggerReload();
       await sleep(0.1);
@@ -419,7 +427,7 @@ async function runTestByName(name, options) {
 
     const { attack, reload, run } = createAttacks(worker, 8000, options);
     const f = await import(join(currentDir, name, 'test.js'));
-    f.default({ attack, http, split, reload });
+    f.default({ attack, http, split, repeat, reload });
 
     log('Running attacks...');
     await run();
@@ -476,6 +484,7 @@ async function start(id, options) {
 
 program
   .argument('[testcase-id]')
+  .option('--no-stats', 'Without showing stats')
   .option('--no-reload', 'Without reloading tests')
   .action((id, options) => start(id, options))
   .parse(process.argv)
