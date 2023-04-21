@@ -40,9 +40,22 @@ async function test(name) {
   const pipyProc = await startPipy(join(currentDir, name, 'main.js'));
   if (pipyProc) {
     try {
+      let output, expected;
+      log('Reading expected output...');
+      try {
+        expected = fs.readFileSync(join(currentDir, name, 'output'));
+      } catch (e) {
+        error('Failed reading expected output');
+        throw e;
+      }
       log('Running curl...');
-      const output = execFileSync(join(currentDir, name, 'test.sh'), { stdio: ['ignore', 'pipe', 'ignore'] });
-      const expected = fs.readFileSync(join(currentDir, name, 'output'));
+      try {
+        output = execFileSync(join(currentDir, name, 'test.sh'), { stdio: 'pipe' });
+      } catch (e) {
+        error('Failed running curl');
+        log(e.message);
+        throw e;
+      }
       if (Buffer.compare(output, expected)) {
         error('Test', name, 'failed with unexpected output:');
         log(output.toString());
@@ -50,7 +63,6 @@ async function test(name) {
         log('Test OK.');
       }
     } catch (e) {
-      throw e;
     } finally {
       pipyProc.kill();
     }
