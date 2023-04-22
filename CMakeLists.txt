@@ -345,3 +345,5 @@ target_link_libraries(
   -pthread
   -ldl
 )
+
+add_subdirectory(test/benchmark/baseline)

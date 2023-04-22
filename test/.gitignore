@@ -6,5 +6,6 @@
 !/scripts/
 !/testcases/
 !/attack/
+!/benchmark/
 !/codec/
 !/curl/
