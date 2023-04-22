@@ -1,3 +1,40 @@
 {
-  "port": 8080
+  "http": [
+    {
+      "listen": {
+        "tcp": {
+          "ports": [8080]
+        },
+        "tls": {
+          "ports": [8443],
+          "certificates": {
+            "cert": "secret/server-cert.pem",
+            "key": "secret/server-key.pem"
+          }
+        }
+      },
+      "services": {
+        "foo": {
+          "type": "files",
+          "path": "www"
+        },
+        "bar": {
+          "type": "proxy",
+          "targets": [
+            "127.0.0.1:9000",
+            "127.0.0.1:9001",
+            "127.0.0.1:9002"
+          ],
+          "rewrite": {
+            "pattern": "^/api",
+            "replace": ""
+          }
+        }
+      },
+      "routes": {
+        "/api/*": "bar",
+        "/*": "foo"
+      }
+    }
+  ]
 }
