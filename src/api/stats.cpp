@@ -973,6 +973,54 @@ void MetricHistory::update(MetricData &data) {
   }
 }
 
+void MetricHistory::update(MetricDataSum &data) {
+  int i = m_current % m_duration;
+
+  std::function<void(int, Node*, MetricDataSum::Node*)> update;
+  update = [&](int dimensions, Node *node, MetricDataSum::Node *src_node) {
+    int base = i * dimensions;
+    for (int d = 0; d < dimensions; d++) {
+      node->values[base + d] = src_node->values[d];
+    }
+
+    auto &submap = node->submap;
+    for (auto s = src_node->subs.head(); s; s = s->next()) {
+      auto *key = s->key.get();
+      Node *sub = nullptr;
+      auto it = submap.find(key);
+      if (it == submap.end()) {
+        submap[key] = sub = Node::make(dimensions, m_duration);
+        sub->key = key;
+      } else {
+        sub = it->second;
+      }
+      update(dimensions, sub, s);
+    }
+  };
+
+  for (auto *e = data.m_entries.head(); e; e = e->next()) {
+    auto *name = e->name.get();
+    auto *type = e->type.get();
+    auto *shape = e->shape.get();
+
+    auto &ent = m_entries[name];
+    if (!ent ||
+      ent->type != type ||
+      ent->shape != shape ||
+      ent->dimensions != e->dimensions
+    ) {
+      if (!ent) ent = new Entry;
+      ent->name = name;
+      ent->type = type;
+      ent->shape = shape;
+      ent->dimensions = e->dimensions;
+      ent->root.reset(Node::make(ent->dimensions, m_duration));
+    }
+
+    update(ent->dimensions, ent->root.get(), e->root.get());
+  }
+}
+
 void MetricHistory::step() {
   auto old = m_current;
   auto cur = old + 1;

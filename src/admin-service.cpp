@@ -1230,8 +1230,9 @@ void AdminService::on_metrics(Context *ctx, const Data &data) {
 }
 
 void AdminService::metrics_history_step() {
-  WorkerManager::get().stats(0, m_local_metric_data);
-  m_local_metric_history.update(m_local_metric_data);
+  stats::MetricDataSum sum;
+  WorkerManager::get().stats(sum);
+  m_local_metric_history.update(sum);
   m_local_metric_history.step();
   m_metrics_timestamp = std::chrono::steady_clock::now();
   for (const auto &p : m_instances) {

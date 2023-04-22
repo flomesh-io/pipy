@@ -315,6 +315,8 @@ private:
 
   List<Entry> m_entries;
   std::unordered_map<pjs::Str*, Entry*> m_entry_map;
+
+  friend class MetricHistory;
 };
 
 //
@@ -327,6 +329,7 @@ public:
   ~MetricHistory();
 
   void update(MetricData &data);
+  void update(MetricDataSum &data_sum);
   void step();
   void serialize(Data::Builder &db);
   void serialize(Data::Builder &db, const std::string &metric_name);
