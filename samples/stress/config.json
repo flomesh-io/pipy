@@ -1,0 +1,7 @@
+{
+  "url": "http://localhost:8000",
+  "method": "GET",
+  "headers": {},
+  "payloadSize": 0,
+  "concurrency": 100
+}
