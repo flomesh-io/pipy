@@ -153,6 +153,27 @@ template<> void ClassDef<Pipy>::init() {
     if (data) data->release();
   });
 
+  method("list", [](Context &ctx, Object*, Value &ret) {
+    std::string pathname;
+    if (!ctx.arguments(1, &pathname)) return;
+    auto codebase = Codebase::current();
+    auto a = Array::make();
+    std::function<void(const std::string&, const std::string&)> list_dir;
+    list_dir = [&](const std::string &path, const std::string &base) {
+      for (const auto &name : codebase->list(path)) {
+        if (name.back() == '/') {
+          auto sub = name.substr(0, name.length() - 1);
+          auto str = path + '/' + sub;
+          list_dir(str, base + sub + '/');
+        } else {
+          a->push(Str::make(base + name));
+        }
+      }
+    };
+    list_dir(utils::path_normalize(pathname), "");
+    ret.set(a);
+  });
+
   method("solve", [](Context &ctx, Object*, Value &ret) {
     Str *filename;
     if (!ctx.arguments(1, &filename)) return;
