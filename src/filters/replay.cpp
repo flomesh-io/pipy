@@ -73,6 +73,18 @@ void Replay::reset() {
   m_pipeline = nullptr;
   m_timer.cancel();
   m_replay_scheduled = false;
+  m_shutdown = false;
+}
+
+void Replay::shutdown() {
+  Filter::shutdown();
+  if (m_replay_scheduled) {
+    m_timer.cancel();
+    m_replay_scheduled = false;
+    Filter::output(StreamEnd::make());
+  } else {
+    m_shutdown = true;
+  }
 }
 
 void Replay::process(Event *evt) {
@@ -117,7 +129,7 @@ void Replay::replay() {
 void ReplayReceiver::on_event(Event *evt) {
   auto *filter = static_cast<Replay*>(this);
   if (auto *end = evt->as<StreamEnd>()) {
-    if (end->error_code() == StreamEnd::Error::REPLAY) {
+    if (!filter->m_shutdown && end->error_code() == StreamEnd::Error::REPLAY) {
       filter->schedule_replay();
       filter->m_pipeline->chain(EventTarget::Input::dummy());
       return;
