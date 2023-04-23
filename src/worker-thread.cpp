@@ -382,6 +382,8 @@ void WorkerThread::main() {
 
       Log::info("[start] Thread %d done", m_index);
 
+      if (m_shutdown) break;
+
       Timer timer;
       std::function<void()> wait_for_work;
       wait_for_work = [&]() {
