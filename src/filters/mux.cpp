@@ -99,6 +99,10 @@ void Muxer::shutdown() {
 }
 
 void Muxer::open(EventTarget::Input *output) {
+  if (m_session && m_session->detached()) {
+    m_session = nullptr;
+    m_stream = nullptr;
+  }
   if (!m_stream) {
     auto session = m_session.get();
     if (!session) {
