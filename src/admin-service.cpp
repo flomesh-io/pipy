@@ -1225,19 +1225,15 @@ void AdminService::on_log_tail(Context *ctx, const std::string &name, const Data
 void AdminService::on_metrics(Context *ctx, const Data &data) {
   if (auto inst = get_instance(ctx->instance_uuid)) {
     inst->metric_data.deserialize(data);
-    inst->metric_history.update(inst->metric_data);
+    inst->metric_history.step(inst->metric_data);
   }
 }
 
 void AdminService::metrics_history_step() {
   stats::MetricDataSum sum;
   WorkerManager::get().stats(sum);
-  m_local_metric_history.update(sum);
-  m_local_metric_history.step();
+  m_local_metric_history.step(sum);
   m_metrics_timestamp = std::chrono::steady_clock::now();
-  for (const auto &p : m_instances) {
-    p.second->metric_history.step();
-  }
   m_metrics_history_timer.schedule(
     5, [this]() { metrics_history_step(); }
   );

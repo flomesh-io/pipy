@@ -920,7 +920,9 @@ MetricHistory::~MetricHistory() {
   }
 }
 
-void MetricHistory::update(MetricData &data) {
+void MetricHistory::step(MetricData &data) {
+  step();
+
   int i = m_current % m_duration;
 
   std::function<void(int, Node*, MetricData::Node*)> update;
@@ -973,7 +975,9 @@ void MetricHistory::update(MetricData &data) {
   }
 }
 
-void MetricHistory::update(MetricDataSum &data) {
+void MetricHistory::step(MetricDataSum &data) {
+  step();
+
   int i = m_current % m_duration;
 
   std::function<void(int, Node*, MetricDataSum::Node*)> update;
@@ -1026,27 +1030,8 @@ void MetricHistory::step() {
   auto cur = old + 1;
   m_current = cur;
 
-  if (cur - m_start >= m_duration) m_start = cur - (m_duration - 1);
-
-  old %= m_duration;
-  cur %= m_duration;
-
-  std::function<void(int, Node*)> step;
-  step = [&](int dimensions, Node *node) {
-    std::memcpy(
-      &node->values[cur * dimensions],
-      &node->values[old * dimensions],
-      sizeof(double) * dimensions
-    );
-
-    for (const auto &i : node->submap) {
-      step(dimensions, i.second);
-    }
-  };
-
-  for (const auto &i : m_entries) {
-    auto ent = i.second;
-    step(ent->dimensions, ent->root.get());
+  if (cur - m_start >= m_duration) {
+    m_start = cur - (m_duration - 1);
   }
 }
 

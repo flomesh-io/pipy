@@ -328,9 +328,8 @@ public:
   MetricHistory(size_t duration = 1) : m_duration(duration) {}
   ~MetricHistory();
 
-  void update(MetricData &data);
-  void update(MetricDataSum &data_sum);
-  void step();
+  void step(MetricData &data);
+  void step(MetricDataSum &data_sum);
   void serialize(Data::Builder &db);
   void serialize(Data::Builder &db, const std::string &metric_name);
 
@@ -367,6 +366,7 @@ private:
   size_t m_start = 0;
   std::unordered_map<pjs::Str*, Entry*> m_entries;
 
+  void step();
   void serialize(Data::Builder &db, Entry *entry, Node *node, int level, bool recursive);
 };
 
