@@ -79,14 +79,20 @@ void Filter::bind() {
   for (auto &sub : *m_subs) {
     if (!sub.layout) {
       if (sub.name) {
-        if (sub.name != pjs::Str::empty) {
+        if (sub.name == pjs::Str::empty) {
+          char loc[1000];
+          std::string msg(loc, error_location(loc, sizeof(loc)));
+          throw std::runtime_error(msg + ": empty pipeline name");
+        } else {
           if (auto mod = dynamic_cast<JSModule*>(module())) {
             if (auto p = mod->find_named_pipeline(sub.name)) {
               sub.layout = p;
               continue;
             }
           }
-          std::string msg("pipeline not found with name: ");
+          char loc[1000];
+          std::string msg(loc, error_location(loc, sizeof(loc)));
+          msg += ": pipeline not found with name: ";
           msg += sub.name->str();
           throw std::runtime_error(msg);
         }
@@ -97,7 +103,9 @@ void Filter::bind() {
             continue;
           }
         }
-        std::string msg("pipeline not found with index: ");
+        char loc[1000];
+        std::string msg(loc, error_location(loc, sizeof(loc)));
+        msg += ": pipeline not found with index: ";
         msg += std::to_string(sub.index);
         throw std::runtime_error(msg);
       }
@@ -246,35 +254,38 @@ void Filter::error(pjs::Error *error) {
 }
 
 void Filter::error(const char *format, ...) {
+  char loc[1000], msg[1000], buf[2000];
+  error_location(loc, sizeof(loc));
   va_list ap;
   va_start(ap, format);
-  char msg[1000], buf[1000];
-  auto len = std::vsnprintf(msg, sizeof(msg), format, ap);
+  std::vsnprintf(msg, sizeof(msg), format, ap);
   va_end(ap);
+  auto len = std::snprintf(buf, sizeof(buf), "%s: %s", loc, msg);
+  Log::error("%s", buf);
+  error(pjs::Error::make(pjs::Str::make(buf, len)));
+}
+
+auto Filter::error_location(char *buf, size_t len) -> size_t {
   Dump d; dump(d);
   auto source = m_location.source;
   if (!source || source->filename.empty()) {
-    len = std::snprintf(
-      buf, sizeof(buf),
-      "%s() at line %d column %d: %s",
+    return std::snprintf(
+      buf, len,
+      "%s() at line %d column %d",
       d.name.c_str(),
       m_location.line,
-      m_location.column,
-      msg
+      m_location.column
     );
   } else {
-    len = std::snprintf(
-      buf, sizeof(buf),
-      "%s() at line %d column %d in %s: %s",
+    return std::snprintf(
+      buf, len,
+      "%s() at line %d column %d in %s",
       d.name.c_str(),
       m_location.line,
       m_location.column,
-      m_location.source->filename.c_str(),
-      msg
+      m_location.source->filename.c_str()
     );
   }
-  Log::error("%s", buf);
-  error(pjs::Error::make(pjs::Str::make(buf, len)));
 }
 
 } // namespace pipy

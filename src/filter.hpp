@@ -124,6 +124,7 @@ public:
   void error(StreamEnd::Error type);
   void error(pjs::Error *error);
   void error(const char *format, ...);
+  auto error_location(char *buf, size_t len) -> size_t;
 
 protected:
   Filter();
