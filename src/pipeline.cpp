@@ -108,7 +108,9 @@ auto PipelineLayout::alloc(Context *ctx) -> Pipeline* {
   pipeline->m_context = ctx;
   m_pipelines.push(pipeline);
   s_active_pipeline_count++;
-  Log::debug(Log::ALLOC, "[pipeline %p] ++ name = %s, context = %llu", pipeline, name_or_label()->c_str(), ctx->id());
+  if (Log::is_enabled(Log::ALLOC)) {
+    Log::debug(Log::ALLOC, "[pipeline %p] ++ name = %s, context = %llu", pipeline, name_or_label()->c_str(), ctx->id());
+  }
   return pipeline;
 }
 
@@ -117,8 +119,8 @@ void PipelineLayout::start(Pipeline *pipeline, int argc, pjs::Value *argv) {
     "initial input is not or did not return events or messages. "
     "Consider using void(...) if no initial input is intended"
   );
-  pjs::Value starting_events;
   if (auto *o = m_on_start.get()) {
+    pjs::Value starting_events;
     if (o->is<pjs::Function>()) {
       auto &ctx = *pipeline->context();
       (*o->as<pjs::Function>())(ctx, argc, argv, starting_events);
@@ -129,32 +131,32 @@ void PipelineLayout::start(Pipeline *pipeline, int argc, pjs::Value *argv) {
     } else {
       starting_events.set(o);
     }
-  }
-  if (!starting_events.is_nullish()) {
-    if (!Message::output(starting_events, pipeline->input())) {
-      const auto &loc = m_on_start_location;
-      char buf[200];
-      auto len = (!loc.source || loc.source->filename.empty() ?
-        std::snprintf(
-          buf, sizeof(buf),
-          "onStart() at line %d column %d: %s",
-          loc.line,
-          loc.column,
-          s_invalid_input_events.c_str()
-        ) :
-        std::snprintf(
-          buf, sizeof(buf),
-          "onStart() at line %d column %d in %s: %s",
-          loc.line,
-          loc.column,
-          loc.source->filename.c_str(),
-          s_invalid_input_events.c_str()
-        )
-      );
-      Log::error("%s", buf);
-      pipeline->input()->input(StreamEnd::make(
-        pjs::Error::make(pjs::Str::make(buf, len))
-      ));
+    if (!starting_events.is_nullish()) {
+      if (!Message::output(starting_events, pipeline->input())) {
+        const auto &loc = m_on_start_location;
+        char buf[200];
+        auto len = (!loc.source || loc.source->filename.empty() ?
+          std::snprintf(
+            buf, sizeof(buf),
+            "onStart() at line %d column %d: %s",
+            loc.line,
+            loc.column,
+            s_invalid_input_events.c_str()
+          ) :
+          std::snprintf(
+            buf, sizeof(buf),
+            "onStart() at line %d column %d in %s: %s",
+            loc.line,
+            loc.column,
+            loc.source->filename.c_str(),
+            s_invalid_input_events.c_str()
+          )
+        );
+        Log::error("%s", buf);
+        pipeline->input()->input(StreamEnd::make(
+          pjs::Error::make(pjs::Str::make(buf, len))
+        ));
+      }
     }
   }
 }
@@ -176,7 +178,9 @@ void PipelineLayout::free(Pipeline *pipeline) {
   pipeline->m_next_free = m_pool;
   m_pool = pipeline;
   s_active_pipeline_count--;
-  Log::debug(Log::ALLOC, "[pipeline %p] -- name = %s", pipeline, name_or_label()->c_str());
+  if (Log::is_enabled(Log::ALLOC)) {
+    Log::debug(Log::ALLOC, "[pipeline %p] -- name = %s", pipeline, name_or_label()->c_str());
+  }
   release();
 }
 
