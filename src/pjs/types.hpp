@@ -407,39 +407,72 @@ struct hash<pjs::WeakRef<T>> {
 namespace pjs {
 
 //
+// PooledArrayBase
+//
+
+class PooledArrayBase {
+public:
+
+  //
+  // PooledArrayBase::Pool
+  //
+
+  class Pool {
+  public:
+    Pool(size_t alloc_size)
+      : m_alloc_size(alloc_size) {}
+
+    auto alloc() -> PooledArrayBase* {
+      if (auto p = m_free) {
+        m_free = p->m_next;
+        return p;
+      } else {
+        p = (PooledArrayBase*)std::malloc(m_alloc_size);
+        p->m_pool = this;
+        return p;
+      }
+    }
+
+    void free(PooledArrayBase *p) {
+      p->m_next = m_free;
+      m_free = p;
+    }
+
+  private:
+    size_t m_alloc_size;
+    PooledArrayBase* m_free = nullptr;
+  };
+
+  void recycle() {
+    m_pool->free(this);
+  }
+
+private:
+  Pool* m_pool;
+  PooledArrayBase* m_next;
+};
+
+//
 // PooledArray
 //
 
 template<class T>
-class PooledArray {
+class PooledArray : public PooledArrayBase {
 public:
   static auto make(size_t size) -> PooledArray* {
     auto slot = slot_of_size(size);
-    if (slot < m_pools.size()) {
-      if (auto pool = m_pools[slot]) {
-        m_pools[slot] = *(PooledArray**)pool;
-        new (pool) PooledArray(size);
-        return pool;
-      }
+    auto &pools = m_pools;
+    for (auto i = pools.size(); i <= slot; i++) {
+      pools.push_back(Pool(sizeof(PooledArray) + sizeof(T) * size_of_slot(i)));
     }
-    auto p = std::malloc(sizeof(PooledArray) + sizeof(T) * size_of_slot(slot));
+    auto p = static_cast<PooledArray*>(pools[slot].alloc());
     new (p) PooledArray(size);
-    return reinterpret_cast<PooledArray*>(p);
+    return p;
   }
 
   void free() {
     this->~PooledArray();
     recycle();
-  }
-
-  void recycle() {
-    auto size = m_size;
-    auto slot = slot_of_size(size);
-    if (slot >= m_pools.size()) {
-      m_pools.resize(slot + 1);
-    }
-    *(PooledArray**)this = m_pools[slot];
-    m_pools[slot] = this;
   }
 
   auto size() const -> size_t {
@@ -485,11 +518,11 @@ private:
     return 1 << (slot - 256 + 8);
   }
 
-  thread_local static std::vector<PooledArray*> m_pools;
+  thread_local static std::vector<PooledArrayBase::Pool> m_pools;
 };
 
 template<class T>
-thread_local std::vector<PooledArray<T>*> PooledArray<T>::m_pools;
+thread_local std::vector<PooledArrayBase::Pool> PooledArray<T>::m_pools;
 
 //
 // OrderedHash
