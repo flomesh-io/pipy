@@ -147,6 +147,8 @@ include_directories(
   "${BROTLI_INC_DIR}"
 )
 
+add_subdirectory(test/benchmark/baseline)
+
 add_executable(pipy
   src/admin-link.cpp
   src/admin-proxy.cpp
@@ -345,5 +347,3 @@ target_link_libraries(
   -pthread
   -ldl
 )
-
-add_subdirectory(test/benchmark/baseline)

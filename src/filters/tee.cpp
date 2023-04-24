@@ -28,13 +28,29 @@
 
 namespace pipy {
 
-Tee::Tee(const pjs::Value &filename)
-  : m_filename(filename)
+//
+// Tee::Options
+//
+
+Tee::Options::Options(pjs::Object *options) {
+  Value(options, "append")
+    .get(append)
+    .check_nullable();
+}
+
+//
+// Tee
+//
+
+Tee::Tee(const pjs::Value &filename, const Options &options)
+  : m_options(options)
+  , m_filename(filename)
 {
 }
 
 Tee::Tee(const Tee &r)
   : Filter(r)
+  , m_options(r.m_options)
   , m_filename(r.m_filename)
 {
 }
@@ -70,7 +86,7 @@ void Tee::process(Event *evt) {
       m_resolved_filename = s;
       s->release();
       m_file = File::make(m_resolved_filename->str());
-      m_file->open_write();
+      m_file->open_write(m_options.append);
       keep_alive();
     }
 

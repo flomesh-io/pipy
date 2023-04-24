@@ -120,7 +120,7 @@ public:
   void split(Data *separator);
   void split(pjs::Str *separator);
   void split(pjs::Function *callback);
-  void tee(const pjs::Value &filename);
+  void tee(const pjs::Value &filename, pjs::Object *options);
   void throttle_concurrency(pjs::Object *quota);
   void throttle_data_rate(pjs::Object *quota);
   void throttle_message_rate(pjs::Object *quota);

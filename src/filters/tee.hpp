@@ -29,6 +29,7 @@
 #include "filter.hpp"
 #include "file.hpp"
 #include "data.hpp"
+#include "options.hpp"
 #include "fstream.hpp"
 #include "timer.hpp"
 
@@ -40,7 +41,13 @@ namespace pipy {
 
 class Tee : public Filter {
 public:
-  Tee(const pjs::Value &filename);
+  struct Options : public pipy::Options {
+    bool append = false;
+    Options() {}
+    Options(pjs::Object *options);
+  };
+
+  Tee(const pjs::Value &filename, const Options &options);
 
 private:
   Tee(const Tee &r);
@@ -51,6 +58,7 @@ private:
   virtual void process(Event *evt) override;
   virtual void dump(Dump &d) override;
 
+  Options m_options;
   pjs::Value m_filename;
   pjs::Ref<pjs::Str> m_resolved_filename;
   pjs::Ref<File> m_file;

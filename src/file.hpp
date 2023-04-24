@@ -49,7 +49,7 @@ public:
 
   void open_read(const std::function<void(FileStream*)> &cb);
   void open_read(int seek, const std::function<void(FileStream*)> &cb);
-  void open_write();
+  void open_write(bool append);
   void write(const Data &data);
   void close();
   void unlink();

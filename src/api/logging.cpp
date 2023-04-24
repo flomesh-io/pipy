@@ -277,7 +277,9 @@ Logger::FileTarget::FileTarget(pjs::Str *filename)
   : m_module(new Module)
 {
   PipelineLayout *ppl = PipelineLayout::make();
-  ppl->append(new Tee(filename));
+  Tee::Options options;
+  options.append = true;
+  ppl->append(new Tee(filename, options));
 
   m_pipeline_layout = ppl;
   m_pipeline = Pipeline::make(ppl, Context::make());

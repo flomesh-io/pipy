@@ -77,7 +77,7 @@ void File::open_read(int seek, const std::function<void(FileStream*)> &cb) {
   );
 }
 
-void File::open_write() {
+void File::open_write(bool append) {
   if (m_f || m_closed) return;
 
   auto *net = &Net::current();
@@ -95,7 +95,7 @@ void File::open_write() {
             release();
           }
         );
-      } else if (auto f = (path == "-" ? stdout : fopen(path.c_str(), "wb"))) {
+      } else if (auto f = (path == "-" ? stdout : fopen(path.c_str(), append ? "ab" : "wb"))) {
         net->post(
           [=]() {
             m_f = f;

@@ -382,8 +382,8 @@ void FilterConfigurator::split(pjs::Function *callback) {
   append_filter(new Split(callback));
 }
 
-void FilterConfigurator::tee(const pjs::Value &filename) {
-  append_filter(new Tee(filename));
+void FilterConfigurator::tee(const pjs::Value &filename, pjs::Object *options) {
+  append_filter(new Tee(filename, options));
 }
 
 void FilterConfigurator::throttle_concurrency(pjs::Object *quota) {
@@ -2036,9 +2036,10 @@ template<> void ClassDef<FilterConfigurator>::init() {
   method("tee", [](Context &ctx, Object *thiz, Value &result) {
     auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     Value filename;
-    if (!ctx.arguments(1, &filename)) return;
+    Object *options = nullptr;
+    if (!ctx.arguments(1, &filename, &options)) return;
     try {
-      config->tee(filename);
+      config->tee(filename, options);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

@@ -119,7 +119,7 @@ void DepositMessage::process(Event *evt) {
           m_resolved_filename = s;
           s->release();
           m_file_w = File::make(m_resolved_filename->str());
-          m_file_w->open_write();
+          m_file_w->open_write(false);
           if (!m_buffer.empty()) {
             m_file_w->write(m_buffer);
           }
