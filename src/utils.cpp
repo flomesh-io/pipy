@@ -85,6 +85,21 @@ auto to_string(double n) -> std::string {
   return std::to_string(n);
 }
 
+auto to_string(char *str, size_t len, int n) -> size_t {
+  auto p = str;
+  if (!len) return 0;
+  if (!n) { *p = '0'; return 1; }
+  if (n < 0) { *p++ = '-'; len--; n = -n; }
+  char buf[100]; int i = 0;
+  while (n > 0) {
+    buf[i++] = '0' + (n % 10);
+    n = n / 10;
+  }
+  if (i > len) i = len;
+  while (i > 0) *p++ = buf[--i];
+  return p - str;
+}
+
 auto now() -> double {
   auto t = std::chrono::system_clock::now().time_since_epoch();
   auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(t).count();

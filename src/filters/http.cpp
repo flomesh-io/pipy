@@ -799,11 +799,12 @@ void Encoder::output_head() {
 
   if (m_is_response) {
     auto head = m_head->as<ResponseHead>();
+    char str[100];
+    auto len = utils::to_string(str, sizeof(str), m_status_code);
     db.push(m_protocol->str());
     db.push(' ');
-    char str[100];
-    auto len = std::snprintf(str, sizeof(str), "%d ", m_status_code);
     db.push(str, len);
+    db.push(' ');
     if (auto s = head->statusText.get()) {
       db.push(s->str());
       db.push("\r\n");
@@ -890,9 +891,11 @@ void Encoder::output_head() {
       m_method == s_PATCH
     ) {
       char str[100];
-      auto len = std::snprintf(str, sizeof(str), ": %d\r\n", m_content_length);
+      auto len = utils::to_string(str, sizeof(str), m_content_length);
       db.push(s_content_length.get()->str());
+      db.push(": ", 2);
       db.push(str, len);
+      db.push("\r\n", 2);
     }
   }
 

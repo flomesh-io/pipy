@@ -38,6 +38,7 @@ namespace pipy {
 namespace utils {
 
 auto to_string(double n) -> std::string;
+auto to_string(char *str, size_t len, int n) -> size_t;
 auto now() -> double;
 bool is_host_port(const std::string &str);
 bool get_host_port(const std::string &str, std::string &ip, int &port);
