@@ -50,7 +50,7 @@ private:
 
 private:
   pjs::Value m_init_arg;
-  pjs::PooledArray<pjs::Ref<Pipeline>>* m_pipelines = nullptr;;
+  pjs::PooledArray<pjs::Ref<Pipeline>>* m_pipelines = nullptr;
 };
 
 } // namespace pipy

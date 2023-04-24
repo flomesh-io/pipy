@@ -460,12 +460,12 @@ template<class T>
 class PooledArray : public PooledArrayBase {
 public:
   static auto make(size_t size) -> PooledArray* {
-    auto slot = slot_of_size(size);
     auto &pools = m_pools;
+    auto slot = slot_of_size(size);
     for (auto i = pools.size(); i <= slot; i++) {
-      pools.push_back(Pool(sizeof(PooledArray) + sizeof(T) * size_of_slot(i)));
+      pools.emplace_back(new Pool(sizeof(PooledArray) + sizeof(T) * size_of_slot(i)));
     }
-    auto p = static_cast<PooledArray*>(pools[slot].alloc());
+    auto p = static_cast<PooledArray*>(pools[slot]->alloc());
     new (p) PooledArray(size);
     return p;
   }
@@ -518,11 +518,11 @@ private:
     return 1 << (slot - 256 + 8);
   }
 
-  thread_local static std::vector<PooledArrayBase::Pool> m_pools;
+  thread_local static std::vector<std::unique_ptr<PooledArrayBase::Pool>> m_pools;
 };
 
 template<class T>
-thread_local std::vector<PooledArrayBase::Pool> PooledArray<T>::m_pools;
+thread_local std::vector<std::unique_ptr<PooledArrayBase::Pool>> PooledArray<T>::m_pools;
 
 //
 // OrderedHash
