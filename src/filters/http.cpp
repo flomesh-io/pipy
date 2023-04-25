@@ -1914,6 +1914,7 @@ void TunnelClient::process(Event *evt) {
     if (handshake && handshake->is_function()) {
       pjs::Value ret;
       if (!eval(handshake->as<pjs::Function>(), ret)) return;
+      if (ret.is_instance_of<Message>()) handshake = ret.as<Message>(); else handshake = nullptr;
     }
     if (!handshake || !handshake->is_instance_of<Message>()) {
       Filter::error("handshake is not or did not return a request Message");
