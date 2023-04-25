@@ -1910,13 +1910,17 @@ void TunnelClient::reset() {
 
 void TunnelClient::process(Event *evt) {
   if (!m_pipeline) {
-    auto handshake = m_handshake.get();
-    if (handshake && handshake->is_function()) {
-      pjs::Value ret;
-      if (!eval(handshake->as<pjs::Function>(), ret)) return;
-      if (ret.is_instance_of<Message>()) handshake = ret.as<Message>(); else handshake = nullptr;
+    pjs::Ref<pjs::Object> handshake;
+    if (m_handshake) {
+      if (m_handshake->is_instance_of<Message>()) {
+        handshake = m_handshake;
+      } else if (m_handshake->is_function()) {
+        pjs::Value ret;
+        if (!eval(m_handshake->as<pjs::Function>(), ret)) return;
+        if (ret.is_instance_of<Message>()) handshake = ret.o();
+      }
     }
-    if (!handshake || !handshake->is_instance_of<Message>()) {
+    if (!handshake) {
       Filter::error("handshake is not or did not return a request Message");
       return;
     }
