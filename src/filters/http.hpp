@@ -38,6 +38,37 @@ namespace pipy {
 namespace http {
 
 //
+// RequestQueue
+//
+
+class RequestQueue {
+public:
+
+  //
+  // RequestQueue::Request
+  //
+
+  struct Request :
+    public pjs::Pooled<Request>,
+    public List<Request>::Item
+  {
+    pjs::Ref<RequestHead> head;
+    bool is_final = false;
+    bool is_bodiless = false;
+    TunnelType tunnel_type = TunnelType::NONE;
+  };
+
+  bool empty() const { return m_queue.empty(); }
+  void reset() { while (auto *r = m_queue.head()) { m_queue.remove(r); delete r; } }
+  void push(Request *req) { m_queue.push(req); }
+  auto head() const -> Request* { return m_queue.head(); }
+  auto shift() -> Request* { auto r = head(); if (r) m_queue.remove(r); return r; }
+
+private:
+  List<Request> m_queue;
+};
+
+//
 // Decoder
 //
 
@@ -51,8 +82,8 @@ public:
   void set_tunnel() { m_is_tunnel = true; }
 
 protected:
-  virtual void on_decode_request(RequestHead *head) {}
-  virtual auto on_decode_response(ResponseHead *head) -> RequestHead* { return nullptr; }
+  virtual void on_decode_request(RequestQueue::Request *req) { delete req; }
+  virtual auto on_decode_response(ResponseHead *head) -> RequestQueue::Request* { return nullptr; }
   virtual bool on_decode_tunnel(TunnelType tt) { return false; }
   virtual void on_decode_error() {}
 
@@ -78,6 +109,8 @@ private:
   pjs::Ref<MessageHead> m_head;
   pjs::Ref<pjs::Str> m_header_transfer_encoding;
   pjs::Ref<pjs::Str> m_header_content_length;
+  pjs::Ref<pjs::Str> m_header_connection;
+  pjs::Ref<pjs::Str> m_header_upgrade;
   TunnelType m_responded_tunnel_type = TunnelType::NONE;
   int m_body_size = 0;
   bool m_is_response;
@@ -110,8 +143,8 @@ public:
   void set_tunnel() { m_is_tunnel = true; }
 
 protected:
-  virtual void on_encode_request(RequestHead *head) {}
-  virtual auto on_encode_response(ResponseHead *head) -> RequestHead* { return nullptr; }
+  virtual void on_encode_request(RequestQueue::Request *req) { delete req; }
+  virtual auto on_encode_response(ResponseHead *head) -> RequestQueue::Request* { return nullptr; }
   virtual bool on_encode_tunnel(TunnelType tt) { return false; }
 
 private:
@@ -120,6 +153,8 @@ private:
   pjs::Ref<pjs::Str> m_protocol;
   pjs::Ref<pjs::Str> m_method;
   pjs::Ref<pjs::Str> m_path;
+  pjs::Ref<pjs::Str> m_header_connection;
+  pjs::Ref<pjs::Str> m_header_upgrade;
   TunnelType m_responded_tunnel_type = TunnelType::NONE;
   int m_buffer_size = DATA_CHUNK_SIZE;
   int m_status_code = 0;
@@ -157,7 +192,7 @@ private:
 
   pjs::Ref<pjs::Function> m_handler;
 
-  virtual void on_decode_request(RequestHead *head) override;
+  virtual void on_decode_request(RequestQueue::Request *req) override;
 };
 
 //
@@ -180,7 +215,7 @@ private:
 
   pjs::Ref<pjs::Function> m_handler;
 
-  virtual auto on_decode_response(ResponseHead *head) -> RequestHead* override;
+  virtual auto on_decode_response(ResponseHead *head) -> RequestQueue::Request* override;
 };
 
 //
@@ -210,7 +245,7 @@ private:
   Options m_options;
   pjs::Ref<pjs::Function> m_handler;
 
-  virtual void on_encode_request(RequestHead *head) override;
+  virtual void on_encode_request(RequestQueue::Request *req) override;
 };
 
 //
@@ -240,30 +275,7 @@ private:
   Options m_options;
   pjs::Ref<pjs::Function> m_handler;
 
-  virtual auto on_encode_response(ResponseHead *head) -> RequestHead* override;
-};
-
-//
-// RequestQueue
-//
-
-class RequestQueue {
-public:
-  bool empty() const { return m_queue.empty(); }
-  void reset();
-  void push(RequestHead *head);
-  auto head() const -> RequestHead*;
-  auto shift() -> RequestHead*;
-
-private:
-  struct Request :
-    public pjs::Pooled<Request>,
-    public List<Request>::Item
-  {
-    pjs::Ref<RequestHead> head;
-  };
-
-  List<Request> m_queue;
+  virtual auto on_encode_response(ResponseHead *head) -> RequestQueue::Request* override;
 };
 
 //
@@ -327,8 +339,8 @@ private:
   virtual auto on_open_stream() -> EventFunction* override;
   virtual void on_close_stream(EventFunction *stream) override;
   virtual void on_decode_error() override;
-  virtual void on_decode_request(RequestHead *head) override;
-  virtual auto on_encode_response(ResponseHead *head) -> RequestHead* override;
+  virtual void on_decode_request(RequestQueue::Request *req) override;
+  virtual auto on_encode_response(ResponseHead *head) -> RequestQueue::Request* override;
   virtual bool on_decode_tunnel(TunnelType tt) override;
   virtual bool on_encode_tunnel(TunnelType tt) override;
 
@@ -409,8 +421,8 @@ public:
     virtual auto open_stream(Muxer *muxer) -> EventFunction* override;
     virtual void close_stream(EventFunction *stream) override;
     virtual void close() override;
-    virtual void on_encode_request(RequestHead *head) override;
-    virtual auto on_decode_response(ResponseHead *head) -> RequestHead* override;
+    virtual void on_encode_request(RequestQueue::Request *req) override;
+    virtual auto on_decode_response(ResponseHead *head) -> RequestQueue::Request* override;
     virtual bool on_decode_tunnel(TunnelType tt) override;
     virtual void on_decode_error() override;
     virtual void on_auto_release() override { delete this; }
@@ -483,8 +495,8 @@ private:
   virtual void dump(Dump &d) override;
 
   virtual void on_decode_error() override;
-  virtual void on_decode_request(RequestHead *head) override;
-  virtual auto on_encode_response(ResponseHead *head) -> RequestHead* override;
+  virtual void on_decode_request(RequestQueue::Request *req) override;
+  virtual auto on_encode_response(ResponseHead *head) -> RequestQueue::Request* override;
   virtual bool on_decode_tunnel(TunnelType tt) override;
   virtual bool on_encode_tunnel(TunnelType tt) override;
 

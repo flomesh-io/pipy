@@ -342,6 +342,8 @@ void Decoder::reset() {
   m_head = nullptr;
   m_header_transfer_encoding = nullptr;
   m_header_content_length = nullptr;
+  m_header_connection = nullptr;
+  m_header_upgrade = nullptr;
   m_responded_tunnel_type = TunnelType::NONE;
   m_body_size = 0;
   m_is_bodiless = false;
@@ -506,6 +508,8 @@ void Decoder::on_event(Event *evt) {
         m_head->headers = pjs::Object::make();
         m_header_transfer_encoding = nullptr;
         m_header_content_length = nullptr;
+        m_header_connection = nullptr;
+        m_header_upgrade = nullptr;
         state = HEADER;
         m_head_buffer.clear();
         break;
@@ -537,6 +541,8 @@ void Decoder::on_event(Event *evt) {
             headers->set(key, v);
             if (key == s_transfer_encoding) m_header_transfer_encoding = v;
             else if (key == s_content_length) m_header_content_length = v;
+            else if (key == s_connection) m_header_connection = v;
+            else if (key == s_upgrade) m_header_upgrade = v;
           }
           state = HEADER;
           m_head_buffer.clear();
@@ -611,13 +617,19 @@ void Decoder::message_start() {
     m_is_bodiless = false;
     auto res = m_head->as<ResponseHead>();
     if (auto req = on_decode_response(res)) {
-      m_is_bodiless = req->is_bodiless();
-      auto tt = req->tunnel_type();
+      m_is_bodiless = req->is_bodiless;
+      auto tt = req->tunnel_type;
       if (res->is_tunnel(tt)) m_responded_tunnel_type = tt;
-      req->release();
+      delete req;
     }
   } else {
-    on_decode_request(m_head->as<RequestHead>());
+    auto head = m_head->as<RequestHead>();
+    auto req = new RequestQueue::Request;
+    req->head = head;
+    req->is_final = head->is_final(m_header_connection);
+    req->is_bodiless = head->is_bodiless();
+    req->tunnel_type = head->tunnel_type(m_header_upgrade);
+    on_decode_request(req);
   }
   output(MessageStart::make(m_head));
 }
@@ -701,6 +713,8 @@ void Encoder::reset() {
   m_protocol = nullptr;
   m_method = nullptr;
   m_path = nullptr;
+  m_header_connection = nullptr;
+  m_header_upgrade = nullptr;
   m_responded_tunnel_type = TunnelType::NONE;
   m_status_code = 0;
   m_content_length = 0;
@@ -732,11 +746,11 @@ void Encoder::on_event(Event *evt) {
         m_is_final = false;
         m_is_bodiless = false;
         if (auto req = on_encode_response(head)) {
-          m_is_final = req->is_final();
-          m_is_bodiless = req->is_bodiless();
-          auto tt = req->tunnel_type();
+          m_is_final = req->is_final;
+          m_is_bodiless = req->is_bodiless;
+          auto tt = req->tunnel_type;
           if (head->is_tunnel(tt)) m_responded_tunnel_type = tt;
-          req->release();
+          delete req;
         }
 
       } else {
@@ -847,10 +861,13 @@ void Encoder::output_head() {
           }
         } else if (k == s_connection) {
           if (v.is_string()) {
+            m_header_connection = v.s();
             if (!utils::iequals(v.s()->str(), s_upgrade.get()->str())) {
               return;
             }
           }
+        } else if (k == s_upgrade) {
+          if (v.is_string()) m_header_upgrade = v.s();
         }
         if (k == s_set_cookie && v.is_array()) {
           v.as<pjs::Array>()->iterate_all(
@@ -876,7 +893,13 @@ void Encoder::output_head() {
   }
 
   if (!m_is_response) {
-    on_encode_request(m_head->as<RequestHead>());
+    auto head = m_head->as<RequestHead>();
+    auto req = new RequestQueue::Request;
+    req->head = head;
+    req->is_final = head->is_final(m_header_connection);
+    req->is_bodiless = head->is_bodiless();
+    req->tunnel_type = head->tunnel_type(m_header_upgrade);
+    on_encode_request(req);
   }
 
   if (!no_content_length) {
@@ -941,6 +964,8 @@ void Encoder::output_end(Event *evt) {
     }
   }
   output(evt);
+  m_header_connection = nullptr;
+  m_header_upgrade = nullptr;
 }
 
 //
@@ -991,10 +1016,12 @@ void RequestDecoder::process(Event *evt) {
   }
 }
 
-void RequestDecoder::on_decode_request(RequestHead *head) {
-  if (!m_handler) return;
-  pjs::Value arg(head), ret;
-  Filter::callback(m_handler, 1, &arg, ret);
+void RequestDecoder::on_decode_request(RequestQueue::Request *req) {
+  if (m_handler) {
+    pjs::Value arg(req->head), ret;
+    Filter::callback(m_handler, 1, &arg, ret);
+  }
+  delete req;
 }
 
 //
@@ -1041,14 +1068,15 @@ void ResponseDecoder::process(Event *evt) {
   Filter::output(evt, Decoder::input());
 }
 
-auto ResponseDecoder::on_decode_response(ResponseHead *head) -> RequestHead* {
+auto ResponseDecoder::on_decode_response(ResponseHead *head) -> RequestQueue::Request* {
   if (!m_handler) return nullptr;
   pjs::Value arg(head), ret;
   if (Filter::callback(m_handler, 1, &arg, ret)) {
     if (ret.is_nullish()) return nullptr;
     if (ret.is_object()) {
-      pjs::Ref<RequestHead> req = pjs::coerce<RequestHead>(ret.o());
-      return req.release();
+      auto req = new RequestQueue::Request;
+      req->head = pjs::coerce<RequestHead>(ret.o());
+      return req;
     }
     Filter::error("callback did not return an object for request head");
   }
@@ -1116,10 +1144,12 @@ void RequestEncoder::process(Event *evt) {
   }
 }
 
-void RequestEncoder::on_encode_request(RequestHead *head) {
-  if (!m_handler) return;
-  pjs::Value arg(head), ret;
-  Filter::callback(m_handler, 1, &arg, ret);
+void RequestEncoder::on_encode_request(RequestQueue::Request *req) {
+  if (m_handler) {
+    pjs::Value arg(req->head), ret;
+    Filter::callback(m_handler, 1, &arg, ret);
+  }
+  delete req;
 }
 
 //
@@ -1183,49 +1213,19 @@ void ResponseEncoder::process(Event *evt) {
   }
 }
 
-auto ResponseEncoder::on_encode_response(ResponseHead *head) -> RequestHead* {
+auto ResponseEncoder::on_encode_response(ResponseHead *head) -> RequestQueue::Request* {
   if (!m_handler) return nullptr;
   pjs::Value arg(head), ret;
   if (Filter::callback(m_handler, 1, &arg, ret)) {
     if (ret.is_nullish()) return nullptr;
     if (ret.is_object()) {
-      pjs::Ref<RequestHead> req = pjs::coerce<RequestHead>(ret.o());
-      return req.release();
+      auto req = new RequestQueue::Request;
+      req->head = pjs::coerce<RequestHead>(ret.o());
+      return req;
     }
     Filter::error("callback did not return an object for request head");
   }
   return nullptr;
-}
-
-//
-// RequestQueue
-//
-
-void RequestQueue::reset() {
-  while (auto *r = m_queue.head()) {
-    m_queue.remove(r);
-    delete r;
-  }
-}
-
-void RequestQueue::push(RequestHead *head) {
-  auto r = new Request;
-  r->head = head;
-  m_queue.push(r);
-}
-
-auto RequestQueue::head() const -> RequestHead* {
-  auto r = m_queue.head();
-  return r ? r->head : nullptr;
-}
-
-auto RequestQueue::shift() -> RequestHead* {
-  auto r = m_queue.head();
-  if (!r) return nullptr;
-  auto head = r->head.release();
-  m_queue.remove(r);
-  delete r;
-  return head;
 }
 
 //
@@ -1312,8 +1312,8 @@ void Demux::shutdown() {
 }
 
 auto Demux::on_queue_message(MessageStart *start) -> int {
-  auto head = m_request_queue.head();
-  return head->tunnel_type() == TunnelType::NONE ? 1 : -1;
+  auto req = m_request_queue.head();
+  return req->tunnel_type == TunnelType::NONE ? 1 : -1;
 }
 
 auto Demux::on_open_stream() -> EventFunction* {
@@ -1330,9 +1330,9 @@ void Demux::on_decode_error() {
   Filter::output(StreamEnd::make());
 }
 
-void Demux::on_decode_request(RequestHead *head) {
-  m_request_queue.push(head);
-  if (head->tunnel_type() == TunnelType::HTTP2) {
+void Demux::on_decode_request(RequestQueue::Request *req) {
+  m_request_queue.push(req);
+  if (req->tunnel_type == TunnelType::HTTP2) {
     upgrade_http2();
     Decoder::chain(m_http2_demuxer->initial_stream());
     auto head = ResponseHead::make();
@@ -1347,7 +1347,7 @@ void Demux::on_decode_request(RequestHead *head) {
   }
 }
 
-auto Demux::on_encode_response(ResponseHead *head) -> RequestHead* {
+auto Demux::on_encode_response(ResponseHead *head) -> RequestQueue::Request* {
   if (head->status == 100) {
     Demuxer::Queue::increase_output_count();
     return nullptr;
@@ -1519,11 +1519,11 @@ void Mux::Session::close() {
   }
 }
 
-void Mux::Session::on_encode_request(RequestHead *head) {
-  m_request_queue.push(head);
+void Mux::Session::on_encode_request(RequestQueue::Request *req) {
+  m_request_queue.push(req);
 }
 
-auto Mux::Session::on_decode_response(ResponseHead *head) -> RequestHead* {
+auto Mux::Session::on_decode_response(ResponseHead *head) -> RequestQueue::Request* {
   if (head->status == 100) {
     Muxer::Queue::increase_queue_count();
     return nullptr;
@@ -1685,9 +1685,9 @@ void Server::on_decode_error() {
   Filter::output(StreamEnd::make());
 }
 
-void Server::on_decode_request(RequestHead *head) {
-  m_request_queue.push(head);
-  if (head->tunnel_type() == TunnelType::HTTP2) {
+void Server::on_decode_request(RequestQueue::Request *req) {
+  m_request_queue.push(req);
+  if (req->tunnel_type == TunnelType::HTTP2) {
     upgrade_http2();
     Decoder::chain(m_http2_server->initial_stream());
     auto head = ResponseHead::make();
@@ -1702,7 +1702,7 @@ void Server::on_decode_request(RequestHead *head) {
   }
 }
 
-auto Server::on_encode_response(ResponseHead *head) -> RequestHead* {
+auto Server::on_encode_response(ResponseHead *head) -> RequestQueue::Request* {
   return m_request_queue.shift();
 }
 

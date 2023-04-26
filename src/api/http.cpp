@@ -55,6 +55,14 @@ bool RequestHead::is_final() const {
   }
 }
 
+bool RequestHead::is_final(pjs::Str *header_connection) const {
+  if (header_connection) {
+    return header_connection == s_close;
+  } else {
+    return protocol == s_http_1_0;
+  }
+}
+
 bool RequestHead::is_bodiless() const {
   return method == s_HEAD;
 }
@@ -68,6 +76,16 @@ auto RequestHead::tunnel_type() const -> TunnelType {
   }
   return TunnelType::NONE;
 }
+
+auto RequestHead::tunnel_type(pjs::Str *header_upgrade) const -> TunnelType {
+  if (method == s_CONNECT) return TunnelType::CONNECT;
+  if (header_upgrade) {
+    if (header_upgrade == s_websocket) return TunnelType::WEBSOCKET;
+    if (header_upgrade == s_h2c) return TunnelType::HTTP2;
+  }
+  return TunnelType::NONE;
+}
+
 
 //
 // ResponseHead
