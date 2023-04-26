@@ -74,7 +74,7 @@ jobs:
           RELEASE_VERSION: ${{ needs.set-release-version.outputs.release_version }}
         run: |
           set -x
-          ./build.sh -sp -t ${RELEASE_VERSION}
+          ./build.sh -p -t ${RELEASE_VERSION}
           ls -l
           echo "artifact_name=$(ls *${RELEASE_VERSION}*.tar.gz)" >> $GITHUB_OUTPUT
           echo "arch=$(uname -m)" >> $GITHUB_OUTPUT
@@ -178,7 +178,7 @@ jobs:
         env:
           RELEASE_VERSION: ${{ needs.set-release-version.outputs.release_version }}
         run: |
-          ./build.sh -sp -t ${RELEASE_VERSION}
+          ./build.sh -p -t ${RELEASE_VERSION}
           ls -l
           echo "artifact_name=$(ls *${RELEASE_VERSION}*.tar.gz)" >> $GITHUB_OUTPUT
           echo "arch=$(uname -m)" >> $GITHUB_OUTPUT
