@@ -69,7 +69,10 @@ Task::Task(const std::string &when, PipelineLayout *layout)
   , m_signal_set(Net::context())
   , m_pipeline_layout(layout)
 {
-  if (!when.empty()) {
+  if (when.empty()) {
+    m_type = ONE_SHOT;
+    keep_alive();
+  } else {
     if (std::isdigit(when[0])) {
       m_type = CRON;
       m_interval = utils::get_seconds(when);
@@ -126,6 +129,16 @@ void Task::schedule(double interval) {
   );
 }
 
+void Task::keep_alive() {
+  m_timer.schedule(
+    1, [this]() {
+      if (!m_stream_end) {
+        keep_alive();
+      }
+    }
+  );
+}
+
 void Task::wait() {
   m_signal_set.async_wait(
     [this](const std::error_code &ec, int) {
@@ -137,6 +150,7 @@ void Task::wait() {
 
 void Task::run() {
   if (!active()) {
+    m_stream_end = false;
     m_pipeline = Pipeline::make(
       m_pipeline_layout,
       m_pipeline_layout->new_context()
@@ -150,6 +164,7 @@ void Task::run() {
 void Task::on_event(Event *evt) {
   if (evt->is<StreamEnd>()) {
     m_pipeline = nullptr;
+    m_stream_end = true;
   }
 }
 

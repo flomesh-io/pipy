@@ -72,8 +72,10 @@ private:
   asio::signal_set m_signal_set;
   pjs::Ref<PipelineLayout> m_pipeline_layout;
   pjs::Ref<Pipeline> m_pipeline;
+  bool m_stream_end = false;
 
   void schedule(double interval);
+  void keep_alive();
   void wait();
   void tick();
   void run();
