@@ -221,8 +221,8 @@ void MultipartDecoder::Multipart::on_data(Data *data) {
                 pjs::Ref<pjs::Str> key(pjs::Str::make(name));
                 pjs::Ref<pjs::Str> val(pjs::Str::make(value));
                 if (!m_head) m_head = MessageHead::make();
-                auto headers = m_head->headers();
-                if (!headers) m_head->headers(headers = pjs::Object::make());
+                auto headers = m_head->headers.get();
+                if (!headers) m_head->headers = (headers = pjs::Object::make());
                 pjs::Value existing;
                 headers->get(key, existing);
                 if (existing.is_undefined()) {
@@ -240,7 +240,7 @@ void MultipartDecoder::Multipart::on_data(Data *data) {
           } else {
             pjs::Value content_type;
             if (m_head) {
-              if (auto *headers = m_head->headers()) {
+              if (auto *headers = m_head->headers.get()) {
                 headers->get(s_content_type, content_type);
               }
             }
@@ -301,8 +301,7 @@ namespace pjs {
 using namespace pipy::mime;
 
 template<> void ClassDef<MessageHead>::init() {
-  ctor();
-  variable("headers", MessageHead::Field::headers);
+  field<pjs::Ref<pjs::Object>>("headers", [](MessageHead *obj) { return &obj->headers; });
 }
 
 } // namespace pjs

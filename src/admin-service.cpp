@@ -1288,7 +1288,7 @@ void AdminService::WebSocketHandler::reset() {
 void AdminService::WebSocketHandler::process(Event *evt) {
   if (auto start = evt->as<MessageStart>()) {
     auto msg = start->head()->as<websocket::MessageHead>();
-    if (msg->opcode() == 8) {
+    if (msg->opcode == 8) {
       auto ctx = static_cast<Context*>(context());
       delete ctx->log_watcher;
       ctx->log_watcher = nullptr;

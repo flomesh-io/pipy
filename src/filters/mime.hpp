@@ -38,17 +38,7 @@ namespace mime {
 
 class MessageHead : public pjs::ObjectTemplate<MessageHead> {
 public:
-  enum class Field {
-    headers,
-  };
-
-  auto headers() -> Object* {
-    pjs::Value ret;
-    pjs::get<MessageHead>(this, Field::headers, ret);
-    return ret.is_object() ? ret.o() : nullptr;
-  }
-
-  void headers(pjs::Object *o) { pjs::set<MessageHead>(this, Field::headers, o); }
+  pjs::Ref<pjs::Object> headers;
 };
 
 //

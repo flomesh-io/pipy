@@ -1031,11 +1031,8 @@ private:
   static void seti(std::function<void(Object*, int, const Value&)> f) { m_init_data->seti = f; }
 
   static void variable(const std::string &name);
-  static void variable(const std::string &name, typename T::Field id, int options = Field::Enumerable | Field::Writable);
   static void variable(const std::string &name, const Value &value, int options = Field::Enumerable | Field::Writable);
-  static void variable(const std::string &name, const Value &value, typename T::Field id, int options = Field::Enumerable | Field::Writable);
   static void variable(const std::string &name, Class *clazz, int options = Field::Enumerable | Field::Writable);
-  static void variable(const std::string &name, Class *clazz, typename T::Field id, int options = Field::Enumerable | Field::Writable);
 
   static void accessor(
     const std::string &name,
@@ -1566,8 +1563,6 @@ typedef PooledArray<Value> Data;
 
 class Object : public Pooled<Object>, public RefCount<Object> {
 public:
-  enum class Field {};
-
   static auto make() -> Object* {
     auto obj = new Object();
     class_of<Object>()->init(obj);
@@ -1751,28 +1746,13 @@ void ClassDef<T>::variable(const std::string &name) {
 }
 
 template<class T>
-void ClassDef<T>::variable(const std::string &name, typename T::Field id, int options) {
-  m_init_data->fields.push_back(Variable::make(name, options, int(id)));
-}
-
-template<class T>
 void ClassDef<T>::variable(const std::string &name, const Value &value, int options) {
   m_init_data->fields.push_back(Variable::make(name, value, options));
 }
 
 template<class T>
-void ClassDef<T>::variable(const std::string &name, const Value &value, typename T::Field id, int options) {
-  m_init_data->fields.push_back(Variable::make(name, value, options, int(id)));
-}
-
-template<class T>
 void ClassDef<T>::variable(const std::string &name, Class *clazz, int options) {
   m_init_data->fields.push_back(Variable::make(name, clazz->construct(), options));
-}
-
-template<class T>
-void ClassDef<T>::variable(const std::string &name, Class *clazz, typename T::Field id, int options) {
-  m_init_data->fields.push_back(Variable::make(name, clazz->construct(), options, int(id)));
 }
 
 inline auto Class::init(Object *obj, Object *prototype) -> Object* {
@@ -1818,20 +1798,6 @@ inline void Class::get(Object *obj, int id, Value &val) {
 inline void Class::set(Object *obj, int id, const Value &val) {
   Object::assert_same_thread(*obj);
   obj->m_data->at(m_field_index[id]) = val;
-}
-
-template<class T>
-inline void get(Object *obj, typename T::Field id, Value &val) {
-  Object::assert_same_thread(*obj);
-  auto c = class_of<T>();
-  c->get(obj, int(id), val);
-}
-
-template<class T>
-inline void set(Object *obj, typename T::Field id, const Value &val) {
-  Object::assert_same_thread(*obj);
-  auto c = class_of<T>();
-  c->set(obj, int(id), val);
 }
 
 inline bool Object::has(Str *key) {

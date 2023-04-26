@@ -169,8 +169,8 @@ void Decoder::on_pass(Data &data) {
 auto Decoder::message_start() -> State {
   if (!m_started) {
     auto head = MessageHead::make();
-    pjs::set<MessageHead>(head, MessageHead::Field::opcode, int(m_opcode & 0x0f));
-    pjs::set<MessageHead>(head, MessageHead::Field::masked, m_has_mask);
+    head->opcode = int(m_opcode & 0x0f);
+    head->masked = m_has_mask;
     Filter::output(MessageStart::make(head));
     m_started = true;
   }
@@ -196,8 +196,6 @@ void Decoder::message_end() {
 //
 
 Encoder::Encoder()
-  : m_prop_opcode("opcode")
-  , m_prop_masked("masked")
 {
 }
 
@@ -238,13 +236,9 @@ void Encoder::process(Event *evt) {
   if (auto start = evt->as<MessageStart>()) {
     if (!m_start) {
       m_start = start;
-      auto *head = start->head();
-      int opcode;
-      bool masked;
-      if (!m_prop_opcode.get(head, opcode)) opcode = 1;
-      if (!m_prop_masked.get(head, masked)) masked = false;
-      m_opcode = opcode;
-      m_masked = masked;
+      auto head = pjs::coerce<MessageHead>(start->head());
+      m_opcode = head->opcode;
+      m_masked = head->masked;
       m_continuation = false;
       m_buffer.clear();
       output(evt);
@@ -342,9 +336,8 @@ namespace pjs {
 using namespace pipy::websocket;
 
 template<> void ClassDef<MessageHead>::init() {
-  ctor();
-  variable("opcode", MessageHead::Field::opcode);
-  variable("masked", MessageHead::Field::masked);
+  field<int>("opcode", [](MessageHead *obj) { return &obj->opcode; });
+  field<bool>("masked", [](MessageHead *obj) { return &obj->masked; });
 }
 
 } // namespace pjs

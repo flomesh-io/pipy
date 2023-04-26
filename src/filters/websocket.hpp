@@ -40,25 +40,8 @@ namespace websocket {
 
 class MessageHead : public pjs::ObjectTemplate<MessageHead> {
 public:
-  enum class Field {
-    opcode,
-    masked,
-  };
-
-  auto opcode() -> int {
-    pjs::Value ret;
-    pjs::get<MessageHead>(this, Field::opcode, ret);
-    return ret.to_number();
-  }
-
-  auto masked() -> bool {
-    pjs::Value ret;
-    pjs::get<MessageHead>(this, Field::masked, ret);
-    return ret.to_boolean();
-  }
-
-  void opcode(int v) { pjs::set<MessageHead>(this, Field::opcode, v); }
-  void masked(bool v) { pjs::set<MessageHead>(this, Field::masked, v); }
+  int opcode = 1;
+  bool masked = false;
 };
 
 //
@@ -124,8 +107,6 @@ private:
 private:
   Data m_buffer;
   pjs::Ref<MessageStart> m_start;
-  pjs::PropertyCache m_prop_opcode;
-  pjs::PropertyCache m_prop_masked;
   std::minstd_rand m_rand;
   uint8_t m_opcode;
   bool m_masked;

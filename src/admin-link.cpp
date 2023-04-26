@@ -105,8 +105,8 @@ void AdminLink::add_handler(const Handler &handler) {
 void AdminLink::send(const Data &data) {
   if (m_pipeline) {
     auto head = websocket::MessageHead::make();
-    head->opcode(1);
-    head->masked(true);
+    head->opcode = 1;
+    head->masked = true;
     auto inp = m_pipeline->input();
     inp->input(MessageStart::make(head));
     inp->input(Data::make(data));
