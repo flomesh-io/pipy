@@ -190,17 +190,16 @@ void Console::dump(const pjs::Value &value, Data::Builder &db) {
               bool first = true;
               for (int i = 0, n = t->field_count(); i < n; i++) {
                 auto f = t->field(i);
-                if (f->type() == pjs::Field::Variable ||
-                    f->type() == pjs::Field::Accessor
-                ) {
+                if (f->is_variable() || f->is_accessor()) {
                   if (first) first = false; else db.push(s_comma);
                   db.push(f->name()->str());
                   db.push(s_colon);
-                  if (f->type() == pjs::Field::Accessor) {
+                  if (f->is_accessor()) {
                     pjs::Value v;
                     static_cast<pjs::Accessor*>(f)->get(obj, v);
                     write(v);
                   } else {
+                    auto i = static_cast<pjs::Variable*>(f)->index();
                     write(obj->data()->at(i));
                   }
                 }

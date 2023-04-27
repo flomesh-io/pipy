@@ -260,7 +260,8 @@ ObjectLiteral::ObjectLiteral(std::list<std::pair<std::unique_ptr<Expr>, std::uni
   m_class = Class::make("", class_of<Object>(), fields);
   for (auto &e : m_entries) {
     if (auto *s = dynamic_cast<StringLiteral*>(e.key.get())) {
-      e.index = m_class->find_field(s->s());
+      auto f = m_class->field(m_class->find_field(s->s()));
+      e.index = static_cast<Variable*>(f)->index();
     }
   }
 }

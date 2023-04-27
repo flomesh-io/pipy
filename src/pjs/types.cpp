@@ -558,6 +558,7 @@ Class::Class(
   if (super) {
     m_field_map = super->m_field_map;
     m_fields = super->m_fields;
+    m_variables = super->m_variables;
   }
   for (const auto f : fields) {
     auto k = f->name();
@@ -575,9 +576,14 @@ Class::Class(
         m_field_index[f->id()] = i;
       }
     }
+    if (f->is_variable()) {
+      auto v = static_cast<Variable*>(f);
+      v->m_index = m_variables.size();
+      m_variables.push_back(v);
+    }
   }
   for (auto &p : m_field_map) p.first->retain();
-  m_class_map[name] = this;
+  if (!name.empty()) m_class_map[name] = this;
   if (auto id = m_class_slot_free) {
     m_id = id;
     m_class_slot_free = m_class_slots[id].next_slot;
@@ -589,7 +595,7 @@ Class::Class(
 }
 
 Class::~Class() {
-  m_class_map.erase(m_name->str());
+  if (!m_name->str().empty()) m_class_map.erase(m_name->str());
   auto &slot = m_class_slots[m_id];
   slot.class_ptr = nullptr;
   slot.next_slot = m_class_slot_free;
@@ -602,14 +608,15 @@ Class::~Class() {
 void Class::assign(Object *obj, Object *src) {
   for (size_t i = 0, n = m_fields.size(); i < n; i++) {
     auto *f = m_fields[i].get();
-    if (f->type() != Field::Method) {
+    if (!f->is_method()) {
       auto *k = f->name();
       Value v;
       if (src->get(k, v)) {
-        if (f->type() == Field::Accessor) {
+        if (f->is_accessor()) {
           static_cast<Accessor*>(f)->set(obj, v);
         } else {
-          obj->data()->at(i) = v;
+          auto index = static_cast<Variable*>(f)->index();
+          obj->data()->at(index) = v;
         }
       }
     }

@@ -52,6 +52,7 @@ class Class;
 class Context;
 class Error;
 class Field;
+class Variable;
 class Method;
 class Function;
 class Int;
@@ -971,6 +972,7 @@ private:
   std::function<void(Object*, int, Value&)> m_geti;
   std::function<void(Object*, int, const Value&)> m_seti;
   std::vector<Ref<Field>> m_fields;
+  std::vector<Variable*> m_variables;
   std::vector<int> m_field_index;
   std::unordered_map<Str*, int> m_field_map;
   size_t m_id;
@@ -1731,13 +1733,17 @@ public:
     return new Variable(std::forward<Args>(args)...);
   }
 
+  auto index() const -> size_t { return m_index; }
   auto value() const -> const Value& { return m_value; }
 
 private:
   Variable(const std::string &name, int options = 0, int id = -1) : Field(name, Field::Variable, options, id) {}
   Variable(const std::string &name, const Value &value, int options = 0, int id = -1) : Field(name, Field::Variable, options, id), m_value(value) {}
 
+  size_t m_index = 0;
   Value m_value;
+
+  friend class Class;
 };
 
 template<class T>
@@ -1756,25 +1762,23 @@ void ClassDef<T>::variable(const std::string &name, Class *clazz, int options) {
 }
 
 inline auto Class::init(Object *obj, Object *prototype) -> Object* {
-  auto size = m_fields.size();
+  auto size = m_variables.size();
   auto data = Data::make(size);
   if (!prototype) {
     for (size_t i = 0; i < size; i++) {
-      auto f = m_fields[i].get();
-      if (f->is_variable()) {
-        const auto &v = static_cast<Variable*>(f)->value();
-        data->at(i) = v;
-      }
+      auto v = m_variables[i];
+      data->at(i) = v->value();
     }
   } else if (prototype->type() == this) {
     for (size_t i = 0; i < size; i++) {
-      auto f = m_fields[i].get();
-      if (f->is_variable()) {
-        data->at(i) = prototype->m_data->at(i);
-      }
+      data->at(i) = prototype->data()->at(i);
     }
     obj->m_hash = prototype->m_hash;
   } else {
+    for (size_t i = 0; i < size; i++) {
+      auto v = m_variables[i];
+      data->at(i) = v->value();
+    }
     Object::assign(obj, prototype);
   }
   obj->m_class = this;
@@ -1790,46 +1794,11 @@ inline void Class::free(Object *obj) {
   m_object_count--;
 }
 
-inline void Class::get(Object *obj, int id, Value &val) {
-  Object::assert_same_thread(*obj);
-  val = obj->m_data->at(m_field_index[id]);
-}
-
-inline void Class::set(Object *obj, int id, const Value &val) {
-  Object::assert_same_thread(*obj);
-  obj->m_data->at(m_field_index[id]) = val;
-}
-
 inline bool Object::has(Str *key) {
   assert_same_thread(*this);
   auto i = m_class->find_field(key);
   if (i >= 0) return true;
   else return ht_has(key);
-}
-
-inline bool Object::get(Str *key, Value &val) {
-  assert_same_thread(*this);
-  auto i = m_class->find_field(key);
-  if (i < 0) return ht_get(key, val);
-  auto f = m_class->field(i);
-  if (f->is_accessor()) {
-    static_cast<Accessor*>(f)->get(this, val);
-  } else {
-    val = m_data->at(i);
-  }
-  return true;
-}
-
-inline void Object::set(Str *key, const Value &val) {
-  assert_same_thread(*this);
-  auto i = m_class->find_field(key);
-  if (i < 0) { ht_set(key, val); return; }
-  auto f = m_class->field(i);
-  if (f->is_accessor()) {
-    static_cast<Accessor*>(f)->set(this, val);
-  } else {
-    m_data->at(i) = val;
-  }
 }
 
 inline bool Object::ht_get(Str *key, Value &val) {
@@ -1862,8 +1831,8 @@ inline void Object::iterate_all(const std::function<void(Str*, Value&)> &callbac
       Value v;
       static_cast<Accessor*>(f)->get(this, v);
       callback(f->name(), v);
-    } else {
-      callback(f->name(), m_data->at(i));
+    } else if (f->is_variable()) {
+      callback(f->name(), m_data->at(static_cast<Variable*>(f)->index()));
     }
   }
   if (m_hash) {
@@ -1883,8 +1852,8 @@ inline bool Object::iterate_while(const std::function<bool(Str*, Value&)> &callb
       Value v;
       static_cast<Accessor*>(f)->get(this, v);
       if (!callback(f->name(), v)) return false;
-    } else if (!callback(f->name(), m_data->at(i))) {
-      return false;
+    } else if (f->is_variable()) {
+      if (!callback(f->name(), m_data->at(static_cast<Variable*>(f)->index()))) return false;
     }
   }
   return iterate_hash(callback);
@@ -2581,6 +2550,67 @@ protected:
 };
 
 //
+// Class::get()/set()
+//
+
+inline void Class::get(Object *obj, int id, Value &val) {
+  Object::assert_same_thread(*obj);
+  auto f = field(m_field_index[id]);
+  if (f->is_variable()) {
+    val = obj->data()->at(static_cast<Variable*>(f)->index());
+  } else if (f->is_accessor()) {
+    static_cast<Accessor*>(f)->get(obj, val);
+  } else if (f->is_method()) {
+    val.set(Function::make(static_cast<Method*>(f), obj));
+  } else {
+    val = Value::undefined;
+  }
+}
+
+inline void Class::set(Object *obj, int id, const Value &val) {
+  Object::assert_same_thread(*obj);
+  auto f = field(m_field_index[id]);
+  if (f->is_variable()) {
+    obj->m_data->at(static_cast<Variable*>(f)->index()) = val;
+  } else if (f->is_accessor()) {
+    static_cast<Accessor*>(f)->set(obj, val);
+  }
+}
+
+//
+// Object::get()/set()
+//
+
+inline bool Object::get(Str *key, Value &val) {
+  assert_same_thread(*this);
+  auto i = m_class->find_field(key);
+  if (i < 0) return ht_get(key, val);
+  auto f = m_class->field(i);
+  if (f->is_variable()) {
+    val = m_data->at(static_cast<Variable*>(f)->index());
+  } else if (f->is_accessor()) {
+    static_cast<Accessor*>(f)->get(this, val);
+  } else if (f->is_method()) {
+    val.set(Function::make(static_cast<Method*>(f), this));
+  } else {
+    return false;
+  }
+  return true;
+}
+
+inline void Object::set(Str *key, const Value &val) {
+  assert_same_thread(*this);
+  auto i = m_class->find_field(key);
+  if (i < 0) { ht_set(key, val); return; }
+  auto f = m_class->field(i);
+  if (f->is_variable()) {
+    m_data->at(static_cast<Variable*>(f)->index()) = val;
+  } else if (f->is_accessor()) {
+    static_cast<Accessor*>(f)->set(this, val);
+  }
+}
+
+//
 // Promise
 //
 
@@ -2797,7 +2827,7 @@ public:
         val.set(v);
         return;
       }
-      val = obj->data()->at(i);
+      val = obj->data()->at(static_cast<Variable*>(f)->index());
       return;
     }
     obj->ht_get(key, val);
@@ -2812,8 +2842,8 @@ public:
         static_cast<Accessor*>(f)->set(obj, val);
         return;
       }
-      if (f->is_writable()) {
-        obj->data()->at(i) = val;
+      if (f->is_variable() && f->is_writable()) {
+        obj->data()->at(static_cast<Variable*>(f)->index()) = val;
         return;
       }
     }
