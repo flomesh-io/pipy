@@ -68,4 +68,29 @@ pipy({
   )()
 ))
 
+.repeat(config.tcp, (
+  ($, { listen, targets }, i) => (
+    (
+      balancer = new algo.RoundRobinLoadBalancer(targets),
+    ) => (
+      $
+      .repeat(listen, ($, p) => $.listen(p).link(`tcp-${i}`))
+      .pipeline(`tcp-${i}`)
+        .onStart(
+          () => (
+            _target = balancer.borrow(),
+            new Data
+          )
+        )
+        .branch(
+          () => _target, (
+            $=>$.connect(() => _target.id)
+          ), (
+            $=>$.replaceStreamStart(new StreamEnd)
+          )
+        )
+    )
+  )()
+))
+
 )()
