@@ -622,6 +622,11 @@ void MuxBase::reset() {
   m_waiting_events.clear();
 }
 
+void MuxBase::shutdown() {
+  Filter::shutdown();
+  Muxer::shutdown();
+}
+
 void MuxBase::process(Event *evt) {
   Muxer::open(Filter::output());
   if (Muxer::stream()) {

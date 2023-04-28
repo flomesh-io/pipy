@@ -297,6 +297,7 @@ protected:
   MuxBase(pjs::Function *session_selector, pjs::Function *options);
 
   virtual void reset() override;
+  virtual void shutdown() override;
   virtual void process(Event *evt) override;
 
   virtual bool on_select_session(pjs::Value &key) override;
