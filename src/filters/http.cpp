@@ -1304,8 +1304,6 @@ void Demux::shutdown() {
   Filter::shutdown();
   if (m_http2_demuxer) {
     m_http2_demuxer->go_away();
-  } else if (m_request_queue.empty()) {
-    Filter::output(StreamEnd::make());
   } else {
     m_shutdown = true;
   }
@@ -1352,7 +1350,9 @@ auto Demux::on_encode_response(ResponseHead *head) -> RequestQueue::Request* {
     Demuxer::Queue::increase_output_count();
     return nullptr;
   } else {
-    return m_request_queue.shift();
+    auto req = m_request_queue.shift();
+    if (m_shutdown && m_request_queue.empty()) req->is_final = true;
+    return req;
   }
 }
 
