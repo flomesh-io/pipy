@@ -1726,7 +1726,7 @@ void Endpoint::StreamBase::on_frame(Frame &frm) {
           } else if (m_state == HALF_CLOSED_LOCAL) {
             m_state = CLOSED;
             stream_end(nullptr);
-            close();
+            recycle();
           }
         }
       } else {
@@ -1963,7 +1963,7 @@ void Endpoint::StreamBase::parse_headers(Frame &frm) {
       } else if (m_state == HALF_CLOSED_LOCAL) {
         m_state = CLOSED;
         stream_end(tail);
-        close();
+        recycle();
       }
     }
   }
@@ -2061,6 +2061,10 @@ void Endpoint::StreamBase::pump() {
 
 void Endpoint::StreamBase::recycle() {
   if (m_state == CLOSED && m_send_buffer.empty()) {
+    if (!m_stream_end) {
+      m_stream_end = true;
+      event(StreamEnd::make());
+    }
     close();
   }
 }

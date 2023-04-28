@@ -486,6 +486,7 @@ protected:
     bool m_end_headers = false;
     bool m_end_input = false;
     bool m_end_output = false;
+    bool m_stream_end = false;
     State m_state = IDLE;
     HeaderDecoder& m_header_decoder;
     HeaderEncoder& m_header_encoder;
