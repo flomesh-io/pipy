@@ -30,6 +30,8 @@ $ nohup pipy -e "pipy().listen(9001).serveHTTP(()=>new Message('9001\n'))" &
 $ nohup pipy -e "pipy().listen(9002).serveHTTP(()=>new Message('9002\n'))" &
 ```
 
+运行代理：
+
 ```shell
 $ pipy main.js
 ```
@@ -37,8 +39,8 @@ $ pipy main.js
 测试：
 
 ```shell
-$ curl localhost:8080/
-$ curl localhost:8080/api
-$ curl localhost:8080/api
-$ curl localhost:8080/api
+$ curl localhost:8080/ #返回静态页面
+$ curl localhost:8080/api #返回 9000
+$ curl localhost:8080/api #返回 9001
+$ curl localhost:8080/api #返回 9002
 ```
