@@ -127,15 +127,11 @@ class MessageEnd : public EventTemplate<MessageEnd> {
 public:
   static const Type __TYPE = Type::MessageEnd;
 
-  auto eos() const -> StreamEnd* { return m_eos; }
   auto tail() const -> pjs::Object* { return m_tail; }
   auto payload() const -> const pjs::Value& { return m_payload; }
 
 private:
   MessageEnd() {}
-
-  MessageEnd(StreamEnd *eos)
-    : m_eos(eos) {}
 
   MessageEnd(pjs::Object *tail)
     : m_tail(tail) {}
@@ -148,7 +144,6 @@ private:
     : m_tail(r.m_tail)
     , m_payload(r.m_payload) {}
 
-  pjs::Ref<StreamEnd> m_eos;
   pjs::Ref<pjs::Object> m_tail;
   pjs::Value m_payload;
 
