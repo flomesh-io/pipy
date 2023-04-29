@@ -1,5 +1,5 @@
 //
-// Basic routing test with throttling
+// Basic load-balancing test with throttling
 //
 // - /foo -----------------> localhost:8080 --> "8080"
 // - /bar --> (throttle) --> localhost:8081 --> "8081"

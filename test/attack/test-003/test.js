@@ -1,4 +1,4 @@
-export default function({ attack, http, split, reload }) {
+export default function({ attack, http, split }) {
 
   function makeVerifier(targets) {
     const total = Object.values(targets).reduce((a, b) => a + b);
@@ -48,6 +48,4 @@ export default function({ attack, http, split, reload }) {
     )),
     verify: makeVerifier({ '8088': 2, '8089': 8 }),
   });
-
-  for (let i = 1; i <= 10; i++) reload(i * 50);
 }

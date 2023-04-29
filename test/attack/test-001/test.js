@@ -1,4 +1,4 @@
-export default function({ attack, http, split, reload }) {
+export default function({ attack, http, split, repeat }) {
 
   const expected = [
     '8080',
@@ -17,53 +17,43 @@ export default function({ attack, http, split, reload }) {
 
   attack({
     delay: 0,
-    messages: [].concat.apply([], new Array(100).fill(
-      [
-        http('GET', '/foo'),
-        http('GET', '/bar'),
-        http('GET', '/xyz'),
-      ]
-    )),
+    messages: repeat(100, [
+      http('GET', '/foo'),
+      http('GET', '/bar'),
+      http('GET', '/xyz'),
+    ]),
     verify,
   });
 
   attack({
     delay: 10,
-    messages: [].concat.apply([], new Array(50).fill(
-      [
-        split(2, http('GET', '/foo')),
-        split(2, http('GET', '/bar')),
-        split(2, http('GET', '/xyz')),
-      ]
-    )),
+    messages: repeat(50, [
+      split(2, http('GET', '/foo')),
+      split(2, http('GET', '/bar')),
+      split(2, http('GET', '/xyz')),
+    ]),
     verify,
   });
 
   attack({
     delay: 100,
-    messages: [].concat.apply([], new Array(30).fill(
-      [
-        split(2, http('GET', '/foo')),
-        split(2, http('GET', '/bar')),
-        split(6, http('POST', '/xyz', 'X'.repeat(3000))),
-      ]
-    )),
+    messages: repeat(30, [
+      split(2, http('GET', '/foo')),
+      split(2, http('GET', '/bar')),
+      split(6, http('POST', '/xyz', 'X'.repeat(3000))),
+    ]),
     verify,
   });
 
   for (let i = 0; i < 10; i++) {
     attack({
       delay: i * 20,
-      messages: [].concat.apply([], new Array(30).fill(
-        [
-          split(3, http('POST', '/foo', 'Hello!')),
-          split(3, http('POST', '/bar', 'Hello!')),
-          split(3, http('POST', '/xyz', 'Hello!')),
-        ]
-      )),
+      messages: repeat(30, [
+        split(3, http('POST', '/foo', 'Hello!')),
+        split(3, http('POST', '/bar', 'Hello!')),
+        split(3, http('POST', '/xyz', 'Hello!')),
+      ]),
       verify,
     });
   }
-
-  for (let i = 1; i <= 10; i++) reload(i * 50);
 }
