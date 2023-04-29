@@ -1,0 +1,155 @@
+sending 10 separate requests..
+3:8080
+4:8081
+1:8082
+3:8080
+4:8081
+1:8082
+3:8080
+4:8081
+1:8082
+3:8080
+sending 10 requests in a batch...
+4:8081
+4:8081
+4:8081
+4:8081
+4:8081
+4:8081
+4:8081
+4:8081
+4:8081
+4:8081
+sending 10 requests in a batch with --http2...
+1:8082
+1:8082
+1:8082
+1:8082
+1:8082
+1:8082
+1:8082
+1:8082
+1:8082
+1:8082
+sending 10 requests in a batch with --http2-prior-knowledge...
+3:8080
+3:8080
+3:8080
+3:8080
+3:8080
+3:8080
+3:8080
+3:8080
+3:8080
+3:8080
+sending 10 separate requests over HTTPS...
+HTTP2:8083
+HTTP:8084
+HTTP:8085
+HTTP2:8083
+HTTP:8084
+HTTP:8085
+HTTP2:8083
+HTTP:8084
+HTTP:8085
+HTTP2:8083
+sending 10 requests in a batch over HTTPS...
+HTTP:8084
+HTTP:8084
+HTTP:8084
+HTTP:8084
+HTTP:8084
+HTTP:8084
+HTTP:8084
+HTTP:8084
+HTTP:8084
+HTTP:8084
+sending 10 requests in a batch over HTTPS with --http2...
+HTTP:8085
+HTTP:8085
+HTTP:8085
+HTTP:8085
+HTTP:8085
+HTTP:8085
+HTTP:8085
+HTTP:8085
+HTTP:8085
+HTTP:8085
+sleeping for 6 seconds...
+sending 10 separate requests..
+12:8081
+14:8082
+10:8080
+12:8081
+14:8082
+10:8080
+12:8081
+14:8082
+10:8080
+12:8081
+sending 10 requests in a batch...
+14:8082
+14:8082
+14:8082
+14:8082
+14:8082
+14:8082
+14:8082
+14:8082
+14:8082
+14:8082
+sending 10 requests in a batch with --http2...
+10:8080
+10:8080
+10:8080
+10:8080
+10:8080
+10:8080
+10:8080
+10:8080
+10:8080
+10:8080
+sending 10 requests in a batch with --http2-prior-knowledge...
+12:8081
+12:8081
+12:8081
+12:8081
+12:8081
+12:8081
+12:8081
+12:8081
+12:8081
+12:8081
+sending 10 separate requests over HTTPS...
+HTTP2:8083
+HTTP:8084
+HTTP:8085
+HTTP2:8083
+HTTP:8084
+HTTP:8085
+HTTP2:8083
+HTTP:8084
+HTTP:8085
+HTTP2:8083
+sending 10 requests in a batch over HTTPS...
+HTTP:8084
+HTTP:8084
+HTTP:8084
+HTTP:8084
+HTTP:8084
+HTTP:8084
+HTTP:8084
+HTTP:8084
+HTTP:8084
+HTTP:8084
+sending 10 requests in a batch over HTTPS with --http2...
+HTTP:8085
+HTTP:8085
+HTTP:8085
+HTTP:8085
+HTTP:8085
+HTTP:8085
+HTTP:8085
+HTTP:8085
+HTTP:8085
+HTTP:8085

@@ -3,7 +3,7 @@
 import fs from 'fs';
 import chalk from 'chalk';
 
-import { spawn, execFileSync } from 'child_process';
+import { spawn, execFileSync, execFile } from 'child_process';
 import { join, dirname } from 'path';
 import { program } from 'commander';
 
@@ -36,7 +36,7 @@ async function start(id) {
 }
 
 async function test(name) {
-  log('Testing', chalk.green(name), '...');
+  log('Testing', chalk.cyan(name), '...');
   const pipyProc = await startPipy(join(currentDir, name, 'main.js'));
   if (pipyProc) {
     try {
@@ -50,7 +50,18 @@ async function test(name) {
       }
       log('Running curl...');
       try {
-        output = execFileSync(join(currentDir, name, 'test.sh'), { stdio: 'pipe' });
+        const buffer = [];
+        await new Promise((resolve, reject) => {
+          const subproc = execFile(
+            join(currentDir, name, 'test.sh'), { encoding: 'buffer' },
+            err => { if (err) reject(err); else resolve(); },
+          );
+          subproc.stdout.on('data', data => {
+            process.stdout.write(data);
+            buffer.push(data);
+          });
+        });
+        output = Buffer.concat(buffer);
       } catch (e) {
         error('Failed running curl');
         log(e.message);
@@ -59,8 +70,9 @@ async function test(name) {
       if (Buffer.compare(output, expected)) {
         error('Test', name, 'failed with unexpected output:');
         log(output.toString());
+        error(`Test ${name} failed!`);
       } else {
-        log('Test OK.');
+        log(chalk.green(`Test ${name} OK.`));
       }
     } catch (e) {
     } finally {
