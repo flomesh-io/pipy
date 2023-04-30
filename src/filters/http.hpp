@@ -337,7 +337,6 @@ private:
 
   virtual auto on_queue_message(MessageStart *start) -> int override;
   virtual auto on_open_stream() -> EventFunction* override;
-  virtual void on_close_stream(EventFunction *stream) override;
   virtual void on_decode_error() override;
   virtual void on_decode_request(RequestQueue::Request *req) override;
   virtual auto on_encode_response(ResponseHead *head) -> RequestQueue::Request* override;

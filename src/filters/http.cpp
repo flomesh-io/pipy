@@ -1320,10 +1320,6 @@ auto Demux::on_open_stream() -> EventFunction* {
   );
 }
 
-void Demux::on_close_stream(EventFunction *stream) {
-  Demuxer::close_stream(stream);
-}
-
 void Demux::on_decode_error() {
   Filter::output(StreamEnd::make());
 }

@@ -82,20 +82,25 @@ InputContext::~InputContext() {
     m_context_groups.remove(g);
   }
 
-  // Flush all pumping targets
-  while (auto *target = m_flush_targets_pumping.head()) {
-    m_flush_targets_pumping.remove(target);
-    target->on_flush();
-    target->m_origin = nullptr;
-  }
+  do {
 
-  // Clean up pipelines
-  m_cleaning_up = true;
-  for (auto *p = m_auto_released; p; ) {
-    auto *obj = p; p = p->m_next_auto_release;
-    obj->m_auto_release = false;
-    obj->release();
-  }
+    // Flush all pumping targets
+    while (auto *target = m_flush_targets_pumping.head()) {
+      m_flush_targets_pumping.remove(target);
+      target->on_flush();
+      target->m_origin = nullptr;
+    }
+
+    // Clean up pipelines
+    auto *p = m_auto_released;
+    m_auto_released = nullptr;
+    while (p) {
+      auto *obj = p; p = p->m_next_auto_release;
+      obj->m_auto_release = false;
+      obj->release();
+    }
+
+  } while (!m_flush_targets_pumping.empty() || m_auto_released);
 
   // Flush all terminating targets
   while (auto *target = m_flush_targets_terminating.head()) {
@@ -109,7 +114,6 @@ InputContext::~InputContext() {
 
 void InputContext::auto_release(AutoReleased *obj) {
   if (s_stack) {
-    if (s_stack->m_cleaning_up) return;
     obj->retain();
     obj->m_auto_release = true;
     obj->m_next_auto_release = s_stack->m_auto_released;

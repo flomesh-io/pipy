@@ -61,17 +61,17 @@ private:
     }
 
     void open(Pipeline *pipeline);
-    void close();
-    void end();
+    void end_input();
+    void end_output();
 
   private:
     Demuxer* m_demuxer;
     pjs::Ref<Pipeline> m_pipeline;
-    bool m_closed = false;
-    bool m_ended = false;
+    bool m_input_end = false;
+    bool m_output_end = false;
 
     void recycle() {
-      if (m_closed && m_ended) {
+      if (m_input_end && m_output_end) {
         delete this;
       }
     }
@@ -85,7 +85,6 @@ private:
 protected:
   void reset();
   auto open_stream(Pipeline *pipeline) -> EventFunction*;
-  void close_stream(EventFunction *stream);
 
 public:
 
@@ -101,9 +100,8 @@ public:
     void shutdown();
 
   protected:
-    virtual auto on_queue_message(MessageStart *start) -> int { return 1; }
     virtual auto on_open_stream() -> EventFunction* = 0;
-    virtual void on_close_stream(EventFunction *stream) = 0;
+    virtual auto on_queue_message(MessageStart *start) -> int { return 1; }
 
   private:
     virtual void on_event(Event *evt) override;
@@ -184,9 +182,8 @@ private:
   virtual void shutdown() override;
   virtual void dump(Dump &d) override;
 
-  virtual auto on_queue_message(MessageStart *start) -> int override;
   virtual auto on_open_stream() -> EventFunction* override;
-  virtual void on_close_stream(EventFunction *stream) override;
+  virtual auto on_queue_message(MessageStart *start) -> int override;
 
   Options m_options;
 };

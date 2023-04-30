@@ -148,7 +148,6 @@ private:
   List<FlushTarget> m_flush_targets_terminating;
   pjs::Ref<InputSource::Tap> m_tap;
   AutoReleased* m_auto_released = nullptr;
-  bool m_cleaning_up = false;
 
   thread_local static InputContext* s_stack;
 
