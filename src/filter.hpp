@@ -144,7 +144,6 @@ private:
   PipelineLayout* m_pipeline_layout = nullptr;
   Pipeline* m_pipeline = nullptr;
   pjs::Context::Location m_location;
-  bool m_stream_end = false;
 
   virtual void on_event(Event *evt) override;
 

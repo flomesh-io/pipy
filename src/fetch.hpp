@@ -73,7 +73,7 @@ public:
   ~Fetch();
 
   bool busy() const {
-    return m_current_request;
+    return !m_request_queue.empty();
   }
 
   auto outbound() const -> Outbound* {

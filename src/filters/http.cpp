@@ -1315,7 +1315,7 @@ auto Demux::on_queue_message(MessageStart *start) -> int {
 }
 
 auto Demux::on_open_stream() -> EventFunction* {
-  return Demuxer::open_stream(
+  return Demuxer::stream(
     Filter::sub_pipeline(0, true)
   );
 }
@@ -1490,19 +1490,19 @@ void Mux::Session::open(Muxer *muxer) {
   }
 }
 
-auto Mux::Session::open_stream(Muxer *muxer) -> EventFunction* {
+auto Mux::Session::stream(Muxer *muxer) -> EventFunction* {
   if (m_http2_muxer) {
     return m_http2_muxer->stream();
   } else {
-    return Muxer::Queue::open_stream(muxer);
+    return Muxer::Queue::stream(muxer);
   }
 }
 
-void Mux::Session::close_stream(EventFunction *stream) {
+void Mux::Session::close(EventFunction *stream) {
   if (m_http2_muxer) {
     m_http2_muxer->close(stream);
   } else {
-    Muxer::Queue::close_stream(stream);
+    Muxer::Queue::close(stream);
   }
 }
 
@@ -1573,15 +1573,15 @@ bool Mux::Session::select_protocol(Muxer *muxer, const pjs::Value &version) {
   switch (m_version_selected) {
   case 1:
     Muxer::Queue::chain(Encoder::input());
-    Encoder::chain(MuxBase::Session::input());
-    MuxBase::Session::chain(Decoder::input());
+    Encoder::chain(Muxer::Session::input());
+    Muxer::Session::chain(Decoder::input());
     Decoder::chain(Muxer::Queue::reply());
     Encoder::set_buffer_size(m_options.buffer_size);
-    MuxBase::Session::set_pending(false);
+    Muxer::Session::set_pending(false);
     return true;
   case 2:
     upgrade_http2();
-    MuxBase::Session::set_pending(false);
+    Muxer::Session::set_pending(false);
     return true;
   default:
     break;
@@ -1593,7 +1593,7 @@ bool Mux::Session::select_protocol(Muxer *muxer, const pjs::Value &version) {
 void Mux::Session::upgrade_http2() {
   if (!m_http2_muxer) {
     m_http2_muxer = new HTTP2Muxer(m_options);
-    m_http2_muxer->open(static_cast<MuxBase::Session*>(this));
+    m_http2_muxer->open(static_cast<Muxer::Session*>(this));
   }
 }
 

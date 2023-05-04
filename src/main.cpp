@@ -93,7 +93,6 @@ static void show_version() {
 
 static void reload_codebase(bool force) {
   if (auto *codebase = Codebase::current()) {
-    InputContext ic;
     codebase->sync(
       force, [](bool ok) {
         if (ok) {

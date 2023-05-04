@@ -25,7 +25,6 @@
 
 #include "input.hpp"
 #include "context.hpp"
-#include "pipeline.hpp"
 
 namespace pipy {
 
@@ -64,16 +63,12 @@ thread_local InputContext* InputContext::s_stack = nullptr;
 InputContext::InputContext(InputSource *source)
   : m_tap(source ? source->tap() : new InputSource::Tap())
 {
-  m_origin = s_stack ? s_stack : this;
+  m_origin = s_stack ? s_stack->m_origin : this;
   m_next = s_stack;
   s_stack = this;
 }
 
 InputContext::~InputContext() {
-
-  // Run micro-tasks
-  int max_runs = 100;
-  while (max_runs > 0 && pjs::Promise::run()) max_runs--;
 
   // Notify context groups
   for (auto *g = m_context_groups.head(); g; g = g->next()) g->notify();
@@ -82,7 +77,11 @@ InputContext::~InputContext() {
     m_context_groups.remove(g);
   }
 
-  do {
+  if (m_origin == this) {
+
+    // Run micro-tasks
+    int max_runs = 100;
+    while (max_runs > 0 && pjs::Promise::run()) max_runs--;
 
     // Flush all pumping targets
     while (auto *target = m_flush_targets_pumping.head()) {
@@ -100,24 +99,25 @@ InputContext::~InputContext() {
       obj->release();
     }
 
-  } while (!m_flush_targets_pumping.empty() || m_auto_released);
+    // Flush all terminating targets
+    while (auto *target = m_flush_targets_terminating.head()) {
+      m_flush_targets_terminating.remove(target);
+      target->on_flush();
+      target->m_origin = nullptr;
+    }
 
-  // Flush all terminating targets
-  while (auto *target = m_flush_targets_terminating.head()) {
-    m_flush_targets_terminating.remove(target);
-    target->on_flush();
-    target->m_origin = nullptr;
   }
 
   s_stack = m_next;
 }
 
 void InputContext::auto_release(AutoReleased *obj) {
-  if (s_stack) {
+  if (!obj->m_auto_release) {
+    auto ctx = s_stack->m_origin;
     obj->retain();
     obj->m_auto_release = true;
-    obj->m_next_auto_release = s_stack->m_auto_released;
-    s_stack->m_auto_released = obj;
+    obj->m_next_auto_release = ctx->m_auto_released;
+    ctx->m_auto_released = obj;
   }
 }
 

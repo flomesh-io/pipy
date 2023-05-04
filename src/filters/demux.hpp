@@ -84,7 +84,7 @@ private:
 
 protected:
   void reset();
-  auto open_stream(Pipeline *pipeline) -> EventFunction*;
+  auto stream(Pipeline *pipeline) -> EventFunction*;
 
 public:
 
@@ -100,8 +100,8 @@ public:
     void shutdown();
 
   protected:
-    virtual auto on_open_stream() -> EventFunction* = 0;
     virtual auto on_queue_message(MessageStart *start) -> int { return 1; }
+    virtual auto on_open_stream() -> EventFunction* = 0;
 
   private:
     virtual void on_event(Event *evt) override;

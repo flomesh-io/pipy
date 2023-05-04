@@ -386,7 +386,7 @@ public:
   //
 
   class Session :
-    public pjs::Pooled<Session, MuxBase::Session>,
+    public pjs::Pooled<Session, Muxer::Session>,
     public Muxer::Queue,
     protected Encoder,
     protected Decoder
@@ -417,8 +417,8 @@ public:
 
   private:
     virtual void open(Muxer *muxer) override;
-    virtual auto open_stream(Muxer *muxer) -> EventFunction* override;
-    virtual void close_stream(EventFunction *stream) override;
+    virtual auto stream(Muxer *muxer) -> EventFunction* override;
+    virtual void close(EventFunction *stream) override;
     virtual void close() override;
     virtual void on_encode_request(RequestQueue::Request *req) override;
     virtual auto on_decode_response(ResponseHead *head) -> RequestQueue::Request* override;
@@ -460,7 +460,7 @@ private:
       : pjs::Pooled<SessionCluster, MuxBase::SessionCluster>(options)
       , m_options(options) {}
 
-    virtual auto session() -> MuxBase::Session* override { return new Session(m_options); }
+    virtual auto session() -> Muxer::Session* override { return new Session(m_options); }
     virtual void free() override { delete this; }
 
     Options m_options;

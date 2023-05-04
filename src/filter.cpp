@@ -121,8 +121,8 @@ void Filter::chain() {
   }
 }
 
-void Filter::reset() {
-  m_stream_end = false;
+void Filter::reset()
+{
 }
 
 void Filter::shutdown()
@@ -182,8 +182,6 @@ auto Filter::sub_pipeline(
 }
 
 void Filter::on_event(Event *evt) {
-  if (m_stream_end) return;
-  if (evt->is<StreamEnd>()) m_stream_end = true;
   context()->group()->touch();
   Pipeline::auto_release(m_pipeline);
   process(evt);
@@ -239,17 +237,14 @@ bool Filter::eval(pjs::Function *func, pjs::Value &result) {
 }
 
 void Filter::error(StreamEnd *end) {
-  m_stream_end = true;
   output(end);
 }
 
 void Filter::error(StreamEnd::Error type) {
-  m_stream_end = true;
   output(StreamEnd::make(type));
 }
 
 void Filter::error(pjs::Error *error) {
-  m_stream_end = true;
   output(StreamEnd::make(error));
 }
 

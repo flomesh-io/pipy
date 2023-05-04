@@ -163,15 +163,15 @@ void Fetch::close() {
 
 void Fetch::pump() {
   if (!m_current_request && !m_request_queue.empty()) {
-    m_pipeline = Pipeline::make(m_ppl, m_ppl->new_context());
     m_current_request = &m_request_queue.front();
     auto msg = m_current_request->message;
-
-    InputContext ic;
-    auto inp = m_pipeline->input();
-    inp->input(MessageStart::make(msg->head()));
-    if (auto *body = msg->body()) inp->input(body);
-    inp->input(MessageEnd::make(msg->tail()));
+    Net::current().post(
+      [=]() {
+        InputContext ic;
+        m_pipeline = Pipeline::make(m_ppl, m_ppl->new_context());
+        msg->write(m_pipeline->input());
+      }
+    );
   }
 }
 

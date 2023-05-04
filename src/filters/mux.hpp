@@ -73,8 +73,8 @@ protected:
 
   void reset();
   void shutdown();
-  void open(EventTarget::Input *output);
-  void write(Event *evt);
+  void alloc(EventTarget::Input *output);
+  void stream(Event *evt);
 
   virtual bool on_select_session(pjs::Value &key) = 0;
   virtual auto on_new_cluster() -> SessionCluster* = 0;
@@ -106,8 +106,8 @@ protected:
   {
   protected:
     virtual void open(Muxer *muxer) = 0;
-    virtual auto open_stream(Muxer *muxer) -> EventFunction* = 0;
-    virtual void close_stream(EventFunction *stream) = 0;
+    virtual auto stream(Muxer *muxer) -> EventFunction* = 0;
+    virtual void close(EventFunction *stream) = 0;
     virtual void close() = 0;
 
     Session() {}
@@ -117,15 +117,15 @@ protected:
     auto pipeline() const -> Pipeline* { return m_pipeline; }
     auto stream_end() const -> StreamEnd* { return m_stream_end; }
     bool detached() const { return !m_cluster; }
-    void detach();
     bool is_free() const { return !m_share_count; }
     bool is_pending() const { return m_is_pending; }
     void set_pending(bool pending);
 
   private:
     void link(Muxer *muxer, Pipeline *pipeline);
-    void unlink(bool forward);
+    void unlink();
     void free();
+    void detach();
 
     SessionCluster* m_cluster = nullptr;
     pjs::Ref<Pipeline> m_pipeline;
@@ -161,7 +161,7 @@ protected:
   private:
     auto alloc() -> Session*;
     void free(Session *session);
-    void discard(Session *session);
+    void detach(Session *session);
 
     pjs::Ref<SessionPool> m_pool;
     pjs::Value m_key;
@@ -187,8 +187,6 @@ protected:
   //
 
   class SessionPool : public pjs::RefCount<SessionPool> {
-    ~SessionPool();
-
     auto alloc(Muxer *mux, const pjs::Value &key) -> Session*;
     void shutdown();
 
@@ -212,8 +210,8 @@ protected:
   class Queue : public EventSource {
   public:
     void reset();
-    auto open_stream(Muxer *muxer) -> EventFunction*;
-    void close_stream(EventFunction *stream);
+    auto stream(Muxer *muxer) -> EventFunction*;
+    void close(EventFunction *stream);
     void increase_queue_count();
     void dedicate();
 
@@ -249,10 +247,14 @@ protected:
       Muxer* m_muxer;
       Queue* m_queue;
       MessageReader m_reader;
-      pjs::Ref<StreamEnd> m_stream_end;
       int m_receiver_count = 0;
+      bool m_end_input = false;
+      bool m_end_output = false;
 
       void shift();
+      void end_input();
+      void end_output();
+      void recycle();
 
       friend class Queue;
     };
@@ -336,19 +338,19 @@ protected:
   virtual auto clone() -> Filter* override;
   virtual void dump(Dump &d) override;
 
-  virtual auto on_new_cluster(pjs::Object *options) -> MuxBase::SessionCluster* override;
+  virtual auto on_new_cluster(pjs::Object *options) -> Muxer::SessionCluster* override;
 
   //
   // Mux::Session
   //
 
   class Session :
-    public pjs::Pooled<Session, MuxBase::Session>,
+    public pjs::Pooled<Session, Muxer::Session>,
     public Muxer::Queue
   {
     virtual void open(Muxer *muxer) override;
-    virtual auto open_stream(Muxer *muxer) -> EventFunction* override;
-    virtual void close_stream(EventFunction *stream) override;
+    virtual auto stream(Muxer *muxer) -> EventFunction* override;
+    virtual void close(EventFunction *stream) override;
     virtual void close() override;
     virtual void on_auto_release() override { delete this; }
     virtual auto on_queue_message(Muxer *muxer, Message *msg) -> int override;

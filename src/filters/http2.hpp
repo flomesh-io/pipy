@@ -424,7 +424,7 @@ protected:
   void stream_close(int id);
   void stream_error(int id, ErrorCode err);
   void connection_error(ErrorCode err);
-  void end_all(StreamEnd *evt = nullptr);
+  void end_all();
 
   void debug_dump_i() const;
   void debug_dump_o() const;
@@ -473,6 +473,8 @@ protected:
     bool deduct_recv(int size);
     void stream_error(ErrorCode err) { m_endpoint->stream_error(id(), err); }
     void connection_error(ErrorCode err) { m_endpoint->connection_error(err); }
+    void end_input();
+    void end_output();
 
   private:
     Endpoint* m_endpoint;
@@ -484,6 +486,8 @@ protected:
     bool m_is_message_started = false;
     bool m_is_message_ended = false;
     bool m_end_headers = false;
+    bool m_end_stream_recv = false;
+    bool m_end_stream_send = false;
     bool m_end_input = false;
     bool m_end_output = false;
     bool m_stream_end = false;
@@ -508,6 +512,7 @@ protected:
     void set_clearing(bool clearing);
     void pump();
     void recycle();
+    void check_content_length();
     void stream_end(http::MessageTail *tail);
 
     friend class Endpoint;
@@ -625,7 +630,7 @@ private:
   virtual void on_event(Event *evt) override { Endpoint::on_event(evt); }
   virtual void on_output(Event *evt) override { EventSource::output(evt); }
   virtual auto on_new_stream(int id) -> StreamBase* override { return new Stream(this, id); }
-  virtual void on_delete_stream(StreamBase *stream) override { /* do not delete it here  */ }
+  virtual void on_delete_stream(StreamBase *stream) override { delete static_cast<Stream*>(stream); }
 };
 
 } // namespace http2

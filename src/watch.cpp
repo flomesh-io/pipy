@@ -58,15 +58,15 @@ void Watch::end() {
 void Watch::on_update() {
   m_net.post(
     [this]() {
-        if (!active()) {
-            m_pipeline = Pipeline::make(
-            m_pipeline_layout,
-            m_pipeline_layout->new_context()
-            );
-            InputContext ic;
-            m_pipeline->chain(EventTarget::input());
-            m_pipeline->start();
-        }
+      if (!active()) {
+        m_pipeline = Pipeline::make(
+          m_pipeline_layout,
+          m_pipeline_layout->new_context()
+        );
+        InputContext ic;
+        m_pipeline->chain(EventTarget::input());
+        m_pipeline->start();
+      }
     }
   );
 }

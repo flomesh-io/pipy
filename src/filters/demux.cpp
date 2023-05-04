@@ -24,9 +24,7 @@
  */
 
 #include "demux.hpp"
-#include "context.hpp"
-#include "pipeline.hpp"
-#include "module.hpp"
+#include "net.hpp"
 
 namespace pipy {
 
@@ -38,10 +36,11 @@ void Demuxer::reset() {
   for (auto s = m_streams.head(); s; ) {
     auto stream = s; s = s->next();
     stream->end_input();
+    stream->end_output();
   }
 }
 
-auto Demuxer::open_stream(Pipeline *pipeline) -> EventFunction* {
+auto Demuxer::stream(Pipeline *pipeline) -> EventFunction* {
   auto s = new Stream(this);
   s->open(pipeline);
   return s;
@@ -50,9 +49,9 @@ auto Demuxer::open_stream(Pipeline *pipeline) -> EventFunction* {
 //
 // Demuxer::Stream
 //
-// A stream in demuxer is freed when 2 conditions are all met:
-// - Its input end has received a StreamEnd
-// - Its output end has sent a StreamEnd or the demuxer has been reset
+// A stream in demuxer is freed after both of the following methods have been called:
+//   - end_input()
+//   - end_output()
 //
 
 void Demuxer::Stream::open(Pipeline *pipeline) {
@@ -95,11 +94,8 @@ void Demuxer::Stream::on_reply(Event *evt) {
 //
 
 void Demuxer::Queue::reset() {
-  if (m_stream) {
-    m_stream->input()->input(StreamEnd::make());
-    m_stream = nullptr;
-  }
   clear();
+  m_stream = nullptr;
   m_waiting_output_requested = false;
   m_waiting_output = false;
   m_dedicated_requested = false;
@@ -178,20 +174,22 @@ void Demuxer::Queue::queue(Event *evt) {
           m_waiting_output_requested = false;
           wait_output();
         }
-        auto input = s->input();
-        input->input(evt);
-        if (!m_dedicated && !m_waiting_output) {
-          input->input(StreamEnd::make());
+        auto i = s->input();
+        i->input(evt);
+        if (!m_dedicated) {
+          i->input(StreamEnd::make());
           m_stream = nullptr;
         }
       }
       break;
     case Event::Type::StreamEnd:
       if (auto s = m_stream) {
-        s->input()->input(evt);
+        auto i = s->input();
         if (!m_dedicated) {
-          m_stream = nullptr;
+          i->input(MessageEnd::make());
         }
+        i->input(evt);
+        m_stream = nullptr;
       }
       if (m_receivers.empty()) {
         EventFunction::output(evt);
@@ -238,10 +236,11 @@ bool Demuxer::Queue::check_dedicated() {
             evt->release();
           }
         );
+      } else {
+        continue_input();
       }
       clear();
       m_dedicated = true;
-      continue_input();
     }
   }
   return m_dedicated;
@@ -292,10 +291,6 @@ void Demuxer::Queue::close() {
 //
 // Demuxer::Queue::Receiver
 //
-// A receiver in the queue is deleted when either of 2 conditions is met:
-// - The receiver is shifted out of the queue
-// - The queue has been reset
-//
 
 bool Demuxer::Queue::Receiver::flush() {
   m_buffer.flush(
@@ -333,17 +328,17 @@ void Demuxer::Queue::Receiver::on_event(Event *evt) {
         }
         break;
       case Event::Type::StreamEnd:
-        if (m_message_started && m_output_count == 1) {
-          m_queue->EventFunction::output(MessageEnd::make(evt->as<StreamEnd>()));
+        if (m_message_started) {
+          m_queue->EventFunction::output(MessageEnd::make());
           m_message_started = false;
           if (!m_queue->check_dedicated()) {
             if (!--m_output_count) {
               m_queue->shift();
+            } else {
+              m_queue->EventFunction::output(evt);
+              m_queue->close();
             }
           }
-        } else {
-          m_queue->EventFunction::output(evt);
-          m_queue->close();
         }
         break;
     }
@@ -433,7 +428,7 @@ auto Demux::on_queue_message(MessageStart *start) -> int {
 }
 
 auto Demux::on_open_stream() -> EventFunction* {
-  return Demuxer::open_stream(
+  return Demuxer::stream(
     Filter::sub_pipeline(0, true)
   );
 }
