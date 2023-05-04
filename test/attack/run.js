@@ -140,7 +140,7 @@ async function startCodebase(url) {
     pipyBinPath, ['--no-graph', url],
     line => {
       log(chalk.bgGreen('worker >>>'), line);
-      if (line.indexOf('Listening on TCP port') >= 0) {
+      if (line.indexOf('Thread 0 started') >= 0) {
         started = true;
       }
     }
@@ -412,18 +412,18 @@ function createAttacks(proc, port, options) {
 async function runTestByName(name, options) {
   const basePath = join(currentDir, name);
 
-  let worker;
+  let worker, exitCode;
   try {
-    log('Uploading codebase', chalk.magenta(name), '...');
-    await uploadCodebase(`test/${name}`, basePath);
+    if (options.pipy) {
+      log('Uploading codebase', chalk.magenta(name), '...');
+      await uploadCodebase(`test/${name}`, basePath);
 
-    log('Starting codebase...');
-    worker = await startCodebase(`http://localhost:6060/repo/test/${name}/`);
+      log('Starting codebase...');
+      worker = await startCodebase(`http://localhost:6060/repo/test/${name}/`);
+      worker.on('exit', code => exitCode = code);
 
-    let exitCode;
-    worker.on('exit', code => exitCode = code);
-
-    log('Codebase', chalk.magenta(name), 'started');
+      log('Codebase', chalk.magenta(name), 'started');
+    }
 
     const { attack, reload, run } = createAttacks(worker, 8000, options);
     const f = await import(join(currentDir, name, 'test.js'));
@@ -433,10 +433,12 @@ async function runTestByName(name, options) {
     await run();
     log('All attacks done');
 
-    worker.kill('SIGINT');
-    for (let i = 0; i < 10 && exitCode === undefined; i++) await sleep(1);
-    if (exitCode === undefined) throw new Error('Worker did not quit timely');
-    log('Worker exited with code', exitCode);
+    if (options.pipy) {
+      worker.kill('SIGINT');
+      for (let i = 0; i < 10 && exitCode === undefined; i++) await sleep(1);
+      if (exitCode === undefined) throw new Error('Worker did not quit timely');
+      log('Worker exited with code', exitCode);
+    }
 
   } catch (e) {
     if (worker) worker.kill();
@@ -457,8 +459,10 @@ function runTest(id, options) {
 async function start(id, options) {
   let repo;
   try {
-    log('Starting repo...');
-    repo = await startRepo();
+    if (options.pipy) {
+      log('Starting repo...');
+      repo = await startRepo();
+    }
 
     if (id) {
       await runTest(id, options);
@@ -484,6 +488,7 @@ async function start(id, options) {
 
 program
   .argument('[testcase-id]')
+  .option('--no-pipy', 'Without running Pipy')
   .option('--no-stats', 'Without showing stats')
   .option('--no-reload', 'Without reloading tests')
   .action((id, options) => start(id, options))
