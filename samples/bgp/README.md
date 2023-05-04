@@ -1,6 +1,6 @@
 ## BGP Speaker
 
-Border Gateway Protocol (BGP) is a TCP based network routing protocol, which is commonly used for routing exchange between different Autonomous Systems (AS). BGP is responsible for announcing a set of IP addresses or prefixes to other routers on the network, and routers will select the best path to deliver packets to their destinations.
+Border Gateway Protocol (BGP) is a TCP based network routing protocol, which is commonly used for exchange routing information between different Autonomous Systems (AS). BGP is responsible for announcing a set of IP addresses or prefixes to other routers on the network, and routers will select the best path to deliver packets to their destinations.
 
 In this example, we will demonstrate how to use Pipy to implement BGP announcement. The component used for BGP announcement is called a BGP speaker.
 
@@ -25,4 +25,4 @@ This example contains three files:
 
 ## Running
 
-For information on how to run the program, please refer to our [blog](https://blog.flomesh.cn/implement-bgp-speaker-with-pipy/) for detailed instructions.
+For information on how to run the program, please refer to our [blog](https://blog.flomesh.io/how-to-code-programmable-proxy-pipy-to-act-as-a-bgp-speaker-f1a9987df5b8) for detailed instructions.
