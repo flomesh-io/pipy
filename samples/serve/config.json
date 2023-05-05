@@ -20,6 +20,7 @@
         },
         "bar": {
           "type": "proxy",
+          "protocol": "http",
           "targets": [
             "127.0.0.1:9000",
             "127.0.0.1:9001",

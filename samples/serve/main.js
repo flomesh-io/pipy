@@ -5,6 +5,7 @@
 
 pipy({
   _service: undefined,
+  _session: undefined,
   _target: undefined,
 })
 
@@ -16,6 +17,7 @@ pipy({
       Object.values(services).forEach(
         s => select(s.type,
           'proxy', () => Object.assign(s, {
+            version: s.protocol === 'http2' ? 2 : 1,
             balancer: new algo.RoundRobinLoadBalancer(s.targets),
             rewrite: s.rewrite && (
               (
@@ -56,8 +58,19 @@ pipy({
               )
             ),
             ({ head }) => _service?.type === 'proxy' && !void(_service.rewrite?.(head)), (
-              $=>$.muxHTTP(() => _target = _service.balancer.borrow()).to(
-                $=>$.connect(() => _target.id)
+              $=>$
+              .onStart(
+                () => void (
+                  _session = _service.balancer.borrow(),
+                  _target = _session?.id,
+                  _service.version === 2 && (_session = _target)
+                )
+              )
+              .muxHTTP(
+                () => _session,
+                { version: () => _service.version }
+              ).to(
+                $=>$.connect(() => _target)
               )
             ), (
               $=>$.replaceMessage(response404)
