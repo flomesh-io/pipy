@@ -1248,7 +1248,7 @@ Endpoint::Endpoint(bool is_server_side, const Options &options)
 Endpoint::~Endpoint() {
   for_each_stream(
     [this](StreamBase *s) {
-      m_stream_map.set(s->id(), nullptr);
+      m_stream_map.set(s->m_id, nullptr);
       delete s;
       return true;
     }
@@ -1565,9 +1565,8 @@ void Endpoint::end_all() {
     }
   );
   for_each_stream(
-    [=](StreamBase *s) {
-      s->end_input();
-      s->end_output();
+    [](StreamBase *s) {
+      s->end();
       return true;
     }
   );
@@ -1656,18 +1655,17 @@ void Endpoint::init_metrics() {
   }
 }
 
-
 //
 // Endpoint::StreamBase
 //
 // For server-side: on_frame() -> event() ---(I)--> pipeline ---(O)--> on_event() -> frame()
 // For client-side: on_event() -> frame() ---(O)--> pipeline ---(I)--> on_frame() -> event()
 //
-// A StreamBase is recycled when both its input and output ended by either:
-//   - Receiving or sending a StreamEnd or
-//   - Closing programatically
+// A StreamBase is recycled when both its input and output ended.
+//   - Input is ended passively as receiving a RST_STREAM
+//   - Output is ended actively when a server shuts down or a client aborts a stream
 //
-// Which end is the input or output depends on what side the Endpoint is:
+// Which end is the input or output depends on what side the endpoint is:
 //   - For server-side, the input/output are the same ends as the pipeline for the stream
 //   - For client-size, the input/output are opposite to the ends of the pipeline for the stream
 //
@@ -1702,27 +1700,73 @@ Endpoint::StreamBase::~StreamBase() {
   }
 }
 
-bool Endpoint::StreamBase::update_send_window(int delta) {
-  if (!delta) {
-    stream_error(PROTOCOL_ERROR);
-    return false;
-  }
-  if (delta > 0 && m_send_window > 0) {
-    auto n = (uint32_t)m_send_window + (uint32_t)delta;
-    if (n > 0x7fffffff) {
-      stream_error(FLOW_CONTROL_ERROR);
-      return false;
+void Endpoint::StreamBase::input(Event *evt) {
+  if (auto start = evt->as<MessageStart>()) {
+    if (!m_is_message_started) {
+      Data buf;
+      m_header_encoder.encode(m_is_server_side, false, start->head(), buf);
+      write_header_block(buf);
+      if (m_state == IDLE) {
+        m_state = OPEN;
+      } else if (m_state == RESERVED_LOCAL) {
+        m_state = HALF_CLOSED_REMOTE;
+      }
+      if (!m_is_server_side) {
+        if (auto head = start->head()) {
+          pjs::Value method;
+          head->get(s_method, method);
+          if (method.is_string() && method.s() == s_CONNECT) {
+            m_is_tunnel = true;
+          }
+        }
+      }
+      m_is_message_started = true;
+    }
+
+  } else if (auto data = evt->as<Data>()) {
+    if (m_is_message_started && !data->empty()) {
+      if (m_state == OPEN || m_state == HALF_CLOSED_REMOTE) {
+        m_send_buffer.push(*data);
+        pump();
+        set_pending(true);
+        flush();
+      }
+    }
+
+  } else if (
+    (evt->is<MessageEnd>() && !m_is_tunnel) ||
+    (evt->is<StreamEnd>()))
+  {
+    if (m_is_message_started && !m_is_message_ended) {
+      if (auto *end = evt->as<MessageEnd>()) {
+        if (auto tail = end->tail()) {
+          m_header_encoder.encode(m_is_server_side, true, tail, m_tail_buffer);
+        }
+      }
+      if (m_state == OPEN) {
+        m_state = HALF_CLOSED_LOCAL;
+      } else if (m_state == HALF_CLOSED_REMOTE) {
+        m_state = CLOSED;
+      }
+      m_is_message_ended = true;
+      m_end_stream_send = true;
+      pump();
     }
   }
-  m_send_window += delta;
-  pump();
-  recycle();
-  return true;
 }
 
-void Endpoint::StreamBase::update_connection_send_window() {
-  pump();
-  recycle();
+void Endpoint::StreamBase::end_input() {
+  if (!m_end_input) {
+    m_end_input = true;
+    recycle();
+  }
+}
+
+void Endpoint::StreamBase::end_output() {
+  if (!m_end_output) {
+    m_end_output = true;
+    recycle();
+  }
 }
 
 void Endpoint::StreamBase::on_frame(Frame &frm) {
@@ -1733,7 +1777,7 @@ void Endpoint::StreamBase::on_frame(Frame &frm) {
         auto size = frm.payload.size();
         if (size > 0) {
           if (!deduct_recv(size)) break;
-          event(Data::make(frm.payload));
+          output(Data::make(frm.payload));
           m_recv_payload_size += size;
         }
         if (frm.is_END_STREAM()) {
@@ -1820,102 +1864,6 @@ void Endpoint::StreamBase::on_frame(Frame &frm) {
   }
 }
 
-void Endpoint::StreamBase::on_event(Event *evt) {
-  if (auto start = evt->as<MessageStart>()) {
-    if (!m_is_message_started) {
-      Data buf;
-      m_header_encoder.encode(m_is_server_side, false, start->head(), buf);
-      write_header_block(buf);
-      if (m_state == IDLE) {
-        m_state = OPEN;
-      } else if (m_state == RESERVED_LOCAL) {
-        m_state = HALF_CLOSED_REMOTE;
-      }
-      if (!m_is_server_side) {
-        if (auto head = start->head()) {
-          pjs::Value method;
-          head->get(s_method, method);
-          if (method.is_string() && method.s() == s_CONNECT) {
-            m_is_tunnel = true;
-          }
-        }
-      }
-      m_is_message_started = true;
-    }
-
-  } else if (auto data = evt->as<Data>()) {
-    if (m_is_message_started && !data->empty()) {
-      if (m_state == OPEN || m_state == HALF_CLOSED_REMOTE) {
-        m_send_buffer.push(*data);
-        pump();
-        set_pending(true);
-        flush();
-      }
-    }
-
-  } else if (
-    (evt->is<MessageEnd>() && !m_is_tunnel) ||
-    (evt->is<StreamEnd>()))
-  {
-    if (m_is_message_started && !m_is_message_ended) {
-      if (auto *end = evt->as<MessageEnd>()) {
-        if (auto tail = end->tail()) {
-          m_header_encoder.encode(m_is_server_side, true, tail, m_tail_buffer);
-        }
-      }
-      if (m_state == OPEN) {
-        m_state = HALF_CLOSED_LOCAL;
-      } else if (m_state == HALF_CLOSED_REMOTE) {
-        m_state = CLOSED;
-      }
-      m_is_message_ended = true;
-      m_end_stream_send = true;
-      pump();
-    }
-    if (evt->is<StreamEnd>()) end_output();
-  }
-}
-
-auto Endpoint::StreamBase::deduct_send(int size) -> int {
-  auto &win_size = m_endpoint->m_send_window;
-  if (size > win_size) {
-    size = win_size;
-  }
-  win_size -= size;
-  return size;
-}
-
-bool Endpoint::StreamBase::deduct_recv(int size) {
-  if (size > m_recv_window) {
-    connection_error(FLOW_CONTROL_ERROR);
-    return false;
-  }
-  auto &connection_recv_window = m_endpoint->m_recv_window;
-  if (size > connection_recv_window) {
-    connection_error(FLOW_CONTROL_ERROR);
-    return false;
-  }
-  connection_recv_window -= size;
-  m_recv_window -= size;
-  if (m_recv_window <= m_recv_window_low) set_clearing(true);
-  if (m_is_clearing || connection_recv_window <= m_endpoint->m_recv_window_low) flush();
-  return true;
-}
-
-void Endpoint::StreamBase::end_input() {
-  if (!m_end_input) {
-    m_end_input = true;
-    recycle();
-  }
-}
-
-void Endpoint::StreamBase::end_output() {
-  if (!m_end_output) {
-    m_end_output = true;
-    recycle();
-  }
-}
-
 bool Endpoint::StreamBase::parse_padding(Frame &frm) {
   uint8_t pad_length = 0;
   frm.payload.shift(1, &pad_length);
@@ -1976,16 +1924,16 @@ void Endpoint::StreamBase::parse_headers(Frame &frm) {
 
     } else {
       m_end_headers = true;
-      event(MessageStart::make(head));
+      output(MessageStart::make(head));
     }
 
     if (m_is_server_side) {
       if (head->as<http::RequestHead>()->method == s_CONNECT) {
         m_is_tunnel = true;
-        event(MessageEnd::make());
+        output(MessageEnd::make());
       }
     } else if (m_is_tunnel) {
-      event(MessageEnd::make());
+      output(MessageEnd::make());
     }
 
     if (m_end_stream_recv) {
@@ -2002,6 +1950,62 @@ void Endpoint::StreamBase::parse_headers(Frame &frm) {
   }
 }
 
+void Endpoint::StreamBase::check_content_length() {
+  auto content_length = m_header_decoder.content_length();
+  if (content_length >= 0 && content_length != m_recv_payload_size) {
+    connection_error(PROTOCOL_ERROR);
+  }
+}
+
+bool Endpoint::StreamBase::deduct_recv(int size) {
+  if (size > m_recv_window) {
+    connection_error(FLOW_CONTROL_ERROR);
+    return false;
+  }
+  auto &connection_recv_window = m_endpoint->m_recv_window;
+  if (size > connection_recv_window) {
+    connection_error(FLOW_CONTROL_ERROR);
+    return false;
+  }
+  connection_recv_window -= size;
+  m_recv_window -= size;
+  if (m_recv_window <= m_recv_window_low) set_clearing(true);
+  if (m_is_clearing || connection_recv_window <= m_endpoint->m_recv_window_low) flush();
+  return true;
+}
+
+auto Endpoint::StreamBase::deduct_send(int size) -> int {
+  auto &win_size = m_endpoint->m_send_window;
+  if (size > win_size) {
+    size = win_size;
+  }
+  win_size -= size;
+  return size;
+}
+
+bool Endpoint::StreamBase::update_send_window(int delta) {
+  if (!delta) {
+    stream_error(PROTOCOL_ERROR);
+    return false;
+  }
+  if (delta > 0 && m_send_window > 0) {
+    auto n = (uint32_t)m_send_window + (uint32_t)delta;
+    if (n > 0x7fffffff) {
+      stream_error(FLOW_CONTROL_ERROR);
+      return false;
+    }
+  }
+  m_send_window += delta;
+  pump();
+  recycle();
+  return true;
+}
+
+void Endpoint::StreamBase::update_connection_send_window() {
+  pump();
+  recycle();
+}
+
 void Endpoint::StreamBase::write_header_block(Data &data) {
   Frame frm;
   frm.stream_id = m_id;
@@ -2015,6 +2019,16 @@ void Endpoint::StreamBase::write_header_block(Data &data) {
     frm.type = Frame::CONTINUATION;
     frm.payload.clear();
   }
+}
+
+void Endpoint::StreamBase::stream_end(http::MessageTail *tail) {
+  if (m_is_tunnel) {
+    output(StreamEnd::make());
+  } else {
+    output(MessageEnd::make(tail));
+    output(StreamEnd::make());
+  }
+  end_input();
 }
 
 void Endpoint::StreamBase::set_pending(bool pending) {
@@ -2098,23 +2112,6 @@ void Endpoint::StreamBase::recycle() {
   }
 }
 
-void Endpoint::StreamBase::check_content_length() {
-  auto content_length = m_header_decoder.content_length();
-  if (content_length >= 0 && content_length != m_recv_payload_size) {
-    connection_error(PROTOCOL_ERROR);
-  }
-}
-
-void Endpoint::StreamBase::stream_end(http::MessageTail *tail) {
-  if (m_is_tunnel) {
-    event(StreamEnd::make());
-  } else {
-    event(MessageEnd::make(tail));
-    event(StreamEnd::make());
-  }
-  end_input();
-}
-
 //
 // Server
 //
@@ -2152,7 +2149,7 @@ void Server::init() {
           }
         }
       }
-      msg->write(static_cast<Stream*>(s)->output());
+      msg->write(static_cast<Stream*>(s)->EventSource::output());
     }
     delete m_initial_stream;
     m_initial_stream = nullptr;

@@ -91,6 +91,7 @@ private:
   void start_waiting();
   void flush_waiting();
   void stop_waiting();
+  void reset_stream();
 
 protected:
 
@@ -116,7 +117,7 @@ protected:
     auto cluster() const -> SessionCluster* { return m_cluster; }
     auto pipeline() const -> Pipeline* { return m_pipeline; }
     auto stream_end() const -> StreamEnd* { return m_stream_end; }
-    bool detached() const { return !m_cluster; }
+    bool is_unlinked() const { return !m_pipeline; }
     bool is_free() const { return !m_share_count; }
     bool is_pending() const { return m_is_pending; }
     void set_pending(bool pending);

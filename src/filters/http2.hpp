@@ -458,26 +458,37 @@ protected:
     StreamBase(Endpoint *endpoint, int id, bool is_server_side);
     virtual ~StreamBase();
 
-    auto id() const -> int { return m_id; }
-
-    bool update_send_window(int delta);
-    void update_connection_send_window();
-    void on_frame(Frame &frm);
-    void on_event(Event *evt);
-
-    virtual void event(Event *evt) = 0;
-
-    void frame(Frame &frm) { m_endpoint->frame(frm); }
-    void flush() { m_endpoint->FlushTarget::need_flush(); }
-    void close() { m_endpoint->stream_close(id()); }
-    auto deduct_send(int size) -> int;
-    bool deduct_recv(int size);
-    void stream_error(ErrorCode err) { m_endpoint->stream_error(id(), err); }
-    void connection_error(ErrorCode err) { m_endpoint->connection_error(err); }
+    void input(Event *evt);
     void end_input();
     void end_output();
 
+    virtual void output(Event *evt) = 0;
+    virtual void end() = 0;
+
   private:
+    void on_frame(Frame &frm);
+    bool parse_padding(Frame &frm);
+    bool parse_priority(Frame &frm);
+    void parse_headers(Frame &frm);
+    void check_content_length();
+    bool deduct_recv(int size);
+    auto deduct_send(int size) -> int;
+    bool update_send_window(int delta);
+    void update_connection_send_window();
+    void write_header_block(Data &data);
+    void stream_end(http::MessageTail *tail);
+
+    void frame(Frame &frm) { m_endpoint->frame(frm); }
+    void flush() { m_endpoint->FlushTarget::need_flush(); }
+    void close() { m_endpoint->stream_close(m_id); }
+    void stream_error(ErrorCode err) { m_endpoint->stream_error(m_id, err); }
+    void connection_error(ErrorCode err) { m_endpoint->connection_error(err); }
+  
+    void set_pending(bool pending);
+    void set_clearing(bool clearing);
+    void pump();
+    void recycle();
+
     Endpoint* m_endpoint;
     int m_id;
     bool m_is_server_side;
@@ -491,7 +502,6 @@ protected:
     bool m_end_stream_send = false;
     bool m_end_input = false;
     bool m_end_output = false;
-    bool m_stream_end = false;
     State m_state = IDLE;
     HeaderDecoder& m_header_decoder;
     HeaderEncoder& m_header_encoder;
@@ -503,18 +513,6 @@ protected:
     int m_recv_window_low;
     int m_recv_payload_size = 0;
     const Settings& m_peer_settings;
-
-    bool parse_padding(Frame &frm);
-    bool parse_priority(Frame &frm);
-    void parse_headers(Frame &frm);
-    bool parse_window_update(Frame &frm);
-    void write_header_block(Data &data);
-    void set_pending(bool pending);
-    void set_clearing(bool clearing);
-    void pump();
-    void recycle();
-    void check_content_length();
-    void stream_end(http::MessageTail *tail);
 
     friend class Endpoint;
   };
@@ -555,8 +553,9 @@ private:
     Stream(Server *server, int id);
     ~Stream();
     pjs::Ref<PipelineBase> m_pipeline;
-    void event(Event *evt) override { EventSource::output(evt); }
-    void on_event(Event *evt) override  { StreamBase::on_event(evt); }
+    void on_event(Event *evt) override  { StreamBase::input(evt); }
+    void output(Event *evt) override { EventSource::output(evt); }
+    void end() override { end_input(); end_output(); }
     friend class Server;
     friend class InitialStream;
   };
@@ -623,8 +622,9 @@ private:
     public EventFunction
   {
     Stream(Client *client, int id);
-    void on_event(Event *evt) override { StreamBase::on_event(evt); }
-    void event(Event *evt) override { EventFunction::output(evt); }
+    void on_event(Event *evt) override { StreamBase::input(evt); }
+    void output(Event *evt) override { EventFunction::output(evt); }
+    void end() override { end_input(); }
     friend class Client;
   };
 

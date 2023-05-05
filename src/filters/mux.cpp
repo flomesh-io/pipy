@@ -100,10 +100,7 @@ Muxer::Muxer(const Muxer &r)
 void Muxer::reset() {
   if (m_session) {
     stop_waiting();
-    if (m_stream) {
-      m_session->close(m_stream);
-      m_stream = nullptr;
-    }
+    reset_stream();
     m_session->free();
     m_session = nullptr;
   }
@@ -115,12 +112,9 @@ void Muxer::shutdown() {
 }
 
 void Muxer::alloc(EventTarget::Input *output) {
-  if (m_session && m_session->detached()) {
+  if (m_session && m_session->is_unlinked()) {
     stop_waiting();
-    if (m_stream) {
-      m_stream->input()->input(StreamEnd::make());
-      m_stream = nullptr;
-    }
+    reset_stream();
     m_session = nullptr;
   }
 
@@ -133,7 +127,7 @@ void Muxer::alloc(EventTarget::Input *output) {
       m_session = session;
     }
 
-    if (!session->m_pipeline) {
+    if (session->is_unlinked()) {
       pjs::Ref<SessionInfo> si = SessionInfo::make();
       si->sessionKey = m_session_key;
       si->sessionCount = session->m_cluster->m_sessions.size();
@@ -158,9 +152,8 @@ void Muxer::alloc(EventTarget::Input *output) {
 }
 
 void Muxer::stream(Event *evt) {
-  if (m_stream) {
-    m_stream->input()->input(evt);
-    if (evt->is<StreamEnd>()) m_stream = nullptr;
+  if (auto *s = m_stream) {
+    s->input()->input(evt);
   }
 }
 
@@ -180,6 +173,14 @@ void Muxer::stop_waiting() {
   if (m_waiting) {
     m_session->m_waiting_muxers.remove(this);
     m_waiting = false;
+  }
+}
+
+void Muxer::reset_stream() {
+  if (auto *s = m_stream) {
+    s->chain(nullptr);
+    m_session->close(s);
+    m_stream = nullptr;
   }
 }
 
@@ -268,7 +269,7 @@ void Muxer::Session::on_reply(Event *evt) {
 //
 // SessionCluster manages all Sessions by the same session key.
 // It is constructed when the first Session is to be allocated.
-// It is destructed when all Sessions it manages are done.
+// It is destructed when all Sessions it manages are closed.
 //
 
 Muxer::SessionCluster::SessionCluster(const Options &options) {
