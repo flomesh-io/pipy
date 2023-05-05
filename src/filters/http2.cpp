@@ -1700,7 +1700,7 @@ Endpoint::StreamBase::~StreamBase() {
   }
 }
 
-void Endpoint::StreamBase::input(Event *evt) {
+void Endpoint::StreamBase::encoder_input(Event *evt) {
   if (auto start = evt->as<MessageStart>()) {
     if (!m_is_message_started) {
       Data buf;
@@ -1777,7 +1777,7 @@ void Endpoint::StreamBase::on_frame(Frame &frm) {
         auto size = frm.payload.size();
         if (size > 0) {
           if (!deduct_recv(size)) break;
-          output(Data::make(frm.payload));
+          decoder_output(Data::make(frm.payload));
           m_recv_payload_size += size;
         }
         if (frm.is_END_STREAM()) {
@@ -1924,16 +1924,16 @@ void Endpoint::StreamBase::parse_headers(Frame &frm) {
 
     } else {
       m_end_headers = true;
-      output(MessageStart::make(head));
+      decoder_output(MessageStart::make(head));
     }
 
     if (m_is_server_side) {
       if (head->as<http::RequestHead>()->method == s_CONNECT) {
         m_is_tunnel = true;
-        output(MessageEnd::make());
+        decoder_output(MessageEnd::make());
       }
     } else if (m_is_tunnel) {
-      output(MessageEnd::make());
+      decoder_output(MessageEnd::make());
     }
 
     if (m_end_stream_recv) {
@@ -2023,12 +2023,11 @@ void Endpoint::StreamBase::write_header_block(Data &data) {
 
 void Endpoint::StreamBase::stream_end(http::MessageTail *tail) {
   if (m_is_tunnel) {
-    output(StreamEnd::make());
+    decoder_output(StreamEnd::make());
   } else {
-    output(MessageEnd::make(tail));
-    output(StreamEnd::make());
+    decoder_output(MessageEnd::make(tail));
+    decoder_output(StreamEnd::make());
   }
-  end_input();
 }
 
 void Endpoint::StreamBase::set_pending(bool pending) {

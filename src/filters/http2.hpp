@@ -458,11 +458,11 @@ protected:
     StreamBase(Endpoint *endpoint, int id, bool is_server_side);
     virtual ~StreamBase();
 
-    void input(Event *evt);
+    void encoder_input(Event *evt);
     void end_input();
     void end_output();
 
-    virtual void output(Event *evt) = 0;
+    virtual void decoder_output(Event *evt) = 0;
     virtual void end() = 0;
 
   private:
@@ -553,13 +553,23 @@ private:
     Stream(Server *server, int id);
     ~Stream();
     pjs::Ref<PipelineBase> m_pipeline;
-    void on_event(Event *evt) override  { StreamBase::input(evt); }
-    void output(Event *evt) override {
+
+    // Response (output)
+    virtual void on_event(Event *evt) override {
       auto is_end = evt->is<StreamEnd>();
-      EventSource::output(evt);
+      StreamBase::encoder_input(evt);
       if (is_end) end_output();
     }
-    void end() override { end_input(); end_output(); }
+
+    // Request (input)
+    virtual void decoder_output(Event *evt) override {
+      auto is_end = evt->is<StreamEnd>();
+      EventSource::output(evt);
+      if (is_end) end_input();
+    }
+
+    virtual void end() override { end_input(); end_output(); }
+
     friend class Server;
     friend class InitialStream;
   };
@@ -626,9 +636,21 @@ private:
     public EventFunction
   {
     Stream(Client *client, int id);
-    void on_event(Event *evt) override { StreamBase::input(evt); }
-    void output(Event *evt) override { EventFunction::output(evt); }
+
+    // Request (output)
+    virtual void on_event(Event *evt) override {
+      StreamBase::encoder_input(evt);
+    }
+
+    // Response (input)
+    virtual void decoder_output(Event *evt) override {
+      auto is_end = evt->is<StreamEnd>();
+      EventFunction::output(evt);
+      if (is_end) end_input();
+    }
+
     void end() override { end_input(); }
+
     friend class Client;
   };
 
