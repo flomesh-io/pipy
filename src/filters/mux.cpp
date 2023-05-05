@@ -228,7 +228,6 @@ void Muxer::Session::link(Muxer *muxer, Pipeline *pipeline) {
 void Muxer::Session::unlink() {
   if (auto p = m_pipeline.get()) {
     close();
-    Pipeline::auto_release(p);
     m_pipeline = nullptr;
   }
 }
@@ -237,7 +236,6 @@ void Muxer::Session::free() {
   if (m_cluster) {
     m_cluster->free(this);
   } else {
-    EventProxy::forward(StreamEnd::make());
     unlink();
   }
 }
