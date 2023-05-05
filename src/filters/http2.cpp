@@ -1289,7 +1289,11 @@ void Endpoint::stream_close(int id) {
     s->set_pending(false);
     m_streams.remove(s);
     on_delete_stream(s);
-    if (m_has_shutdown) shutdown();
+    if (m_has_shutdown) {
+      if (m_streams.empty() && m_streams_pending.empty()) {
+        connection_error(ErrorCode::NO_ERROR);
+      }
+    }
   }
 }
 
@@ -1307,11 +1311,7 @@ void Endpoint::connection_error(ErrorCode err) {
 }
 
 void Endpoint::shutdown() {
-  if (m_streams.empty() && m_streams_pending.empty()) {
-    connection_error(ErrorCode::NO_ERROR);
-  } else {
-    m_has_shutdown = true;
-  }
+  m_has_shutdown = true;
 }
 
 void Endpoint::on_flush() {

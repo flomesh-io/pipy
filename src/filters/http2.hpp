@@ -554,7 +554,11 @@ private:
     ~Stream();
     pjs::Ref<PipelineBase> m_pipeline;
     void on_event(Event *evt) override  { StreamBase::input(evt); }
-    void output(Event *evt) override { EventSource::output(evt); }
+    void output(Event *evt) override {
+      auto is_end = evt->is<StreamEnd>();
+      EventSource::output(evt);
+      if (is_end) end_output();
+    }
     void end() override { end_input(); end_output(); }
     friend class Server;
     friend class InitialStream;

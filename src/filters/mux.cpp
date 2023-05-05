@@ -508,6 +508,16 @@ void Muxer::Queue::on_reply(Event *evt) {
       m_receivers.remove(r);
       delete r;
     }
+    if (evt->is<StreamEnd>()) {
+      for (auto r = m_receivers.head(); r; r = r->next()) {
+        auto s = r->stream();
+        if (!s->m_end_output) {
+          s->output(evt->clone());
+          s->end_output();
+        }
+      }
+      reset();
+    }
   }
 }
 
@@ -520,10 +530,6 @@ void Muxer::Queue::Stream::on_event(Event *evt) {
 
   if (auto s = queue->m_dedicated_stream.get()) {
     if (s == this) queue->output(evt);
-    if (evt->is<StreamEnd>()) {
-      end_input();
-      end_output();
-    }
     return;
   }
 
@@ -539,26 +545,12 @@ void Muxer::Queue::Stream::on_event(Event *evt) {
     }
     msg->release();
   }
-
-  if (auto end = evt->as<StreamEnd>()) {
-    if (!m_end_input) {
-      if (!m_receiver_count && !m_end_output) {
-        EventFunction::output(StreamEnd::make());
-        end_input();
-        end_output();
-      } else {
-        end_input();
-      }
-    }
-  }
 }
 
 void Muxer::Queue::Stream::shift() {
   if (!--m_receiver_count) {
-    if (m_end_input && !m_end_output) {
-      EventFunction::output(StreamEnd::make());
-      end_output();
-    }
+    EventFunction::output(StreamEnd::make());
+    end_output();
   }
 }
 
@@ -600,20 +592,14 @@ bool Muxer::Queue::Receiver::receive(Event *evt) {
       }
       break;
     case Event::Type::MessageEnd:
+    case Event::Type::StreamEnd:
       if (m_message_started) {
-        m_stream->output(evt);
+        m_stream->output(evt->is<StreamEnd>() ? MessageEnd::make() : evt);
         m_message_started = false;
         if (!--m_output_count) {
           m_stream->shift();
           return true;
         }
-      }
-      break;
-    case Event::Type::StreamEnd:
-      m_message_started = false;
-      if (!m_stream->m_end_output) {
-        m_stream->output(evt);
-        m_stream->end_output();
       }
       break;
   }

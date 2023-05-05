@@ -77,15 +77,17 @@ void Demuxer::Stream::end_output() {
 
 void Demuxer::Stream::on_input(Event *evt) {
   if (!m_input_end) {
+    bool is_end = evt->is<StreamEnd>();
     EventProxy::forward(evt);
-    if (evt->is<StreamEnd>()) end_input();
+    if (is_end) end_input();
   }
 }
 
 void Demuxer::Stream::on_reply(Event *evt) {
   if (!m_output_end) {
+    bool is_end = evt->is<StreamEnd>();
     EventProxy::output(evt);
-    if (evt->is<StreamEnd>()) end_output();
+    if (is_end) end_output();
   }
 }
 
