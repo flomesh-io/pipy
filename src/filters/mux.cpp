@@ -490,7 +490,9 @@ void Muxer::Queue::increase_queue_count() {
 
 void Muxer::Queue::dedicate() {
   if (auto r = m_receivers.head()) {
-    m_dedicated_stream = r->stream();
+    auto s = r->stream();
+    s->m_muxer->m_session->detach();
+    m_dedicated_stream = s;
     while (auto r = m_receivers.head()) {
       m_receivers.remove(r);
       delete r;
