@@ -78,6 +78,7 @@ thread_local static const pjs::ConstStr s_gateway_timeout("Gateway Timeout");
 thread_local static const pjs::ConstStr s_http2_preface_method("PRI");
 thread_local static const pjs::ConstStr s_http2_preface_path("*");
 thread_local static const pjs::ConstStr s_http2_preface_protocol("HTTP/2.0");
+thread_local static const pjs::ConstStr s_http2_settings("http2-settings");
 
 thread_local static const StrMap s_strmap_methods({
   "PRI", "GET", "HEAD", "POST", "PUT",
@@ -1327,6 +1328,8 @@ void Demux::on_decode_error() {
 void Demux::on_decode_request(RequestQueue::Request *req) {
   m_request_queue.push(req);
   if (req->tunnel_type == TunnelType::HTTP2) {
+    req->head->headers->ht_delete(s_upgrade);
+    req->head->headers->ht_delete(s_http2_settings);
     upgrade_http2();
     Decoder::chain(m_http2_demuxer->initial_stream());
     auto head = ResponseHead::make();
@@ -1684,6 +1687,8 @@ void Server::on_decode_error() {
 void Server::on_decode_request(RequestQueue::Request *req) {
   m_request_queue.push(req);
   if (req->tunnel_type == TunnelType::HTTP2) {
+    req->head->headers->ht_delete(s_upgrade);
+    req->head->headers->ht_delete(s_http2_settings);
     upgrade_http2();
     Decoder::chain(m_http2_server->initial_stream());
     auto head = ResponseHead::make();
