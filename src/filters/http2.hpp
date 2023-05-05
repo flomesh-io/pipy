@@ -354,12 +354,6 @@ class Endpoint :
   public FrameEncoder,
   public FlushTarget
 {
-private:
-  enum {
-    INITIAL_SEND_WINDOW_SIZE = 0xffff,
-    INITIAL_RECV_WINDOW_SIZE = 0xffff,
-  };
-
 public:
   struct Options : public pipy::Options {
     size_t connection_window_size = 0x100000;
@@ -367,13 +361,6 @@ public:
     Options() {}
     Options(pjs::Object *options);
   };
-
-private:
-  thread_local static bool s_metrics_initialized;
-  thread_local static int s_server_stream_count;
-  thread_local static int s_client_stream_count;
-
-  static void init_metrics();
 
 protected:
   Endpoint(bool is_server_side, const Options &options);
@@ -385,7 +372,20 @@ protected:
   virtual auto on_new_stream(int id) -> StreamBase* = 0;
   virtual void on_delete_stream(StreamBase *stream) = 0;
 
+  void init_settings(const uint8_t *data, size_t size);
+  void process_event(Event *evt);
+  auto stream_open(int id) -> StreamBase*;
+  void stream_close(int id);
+  void stream_error(int id, ErrorCode err);
+  void connection_error(ErrorCode err);
+  void shutdown();
+
 private:
+  enum {
+    INITIAL_SEND_WINDOW_SIZE = 0xffff,
+    INITIAL_RECV_WINDOW_SIZE = 0xffff,
+  };
+
   uint32_t m_id;
   Options m_options;
   List<StreamBase> m_streams;
@@ -403,27 +403,26 @@ private:
   int m_recv_window_low;
   bool m_is_server_side;
   bool m_has_sent_preface = false;
+  bool m_has_shutdown = false;
   bool m_has_gone_away = false;
 
   static std::atomic<uint32_t> s_endpoint_id;
 
-protected:
-  void init_settings(const uint8_t *data, size_t size);
-  bool for_each_stream(const std::function<bool(StreamBase*)> &cb);
-  bool for_each_pending_stream(const std::function<bool(StreamBase*)> &cb);
+  thread_local static bool s_metrics_initialized;
+  thread_local static int s_server_stream_count;
+  thread_local static int s_client_stream_count;
 
-  void on_event(Event *evt);
+  static void init_metrics();
+
   void on_flush() override;
   void on_deframe(Frame &frm) override;
   void on_deframe_error(ErrorCode err) override;
+
+  bool for_each_stream(const std::function<bool(StreamBase*)> &cb);
+  bool for_each_pending_stream(const std::function<bool(StreamBase*)> &cb);
   void send_window_updates();
   void frame(Frame &frm);
   void flush();
-
-  auto stream_open(int id) -> StreamBase*;
-  void stream_close(int id);
-  void stream_error(int id, ErrorCode err);
-  void connection_error(ErrorCode err);
   void end_all();
 
   void debug_dump_i() const;
@@ -432,6 +431,8 @@ protected:
   void debug_dump_o(const Data &data) const;
   void debug_dump_i(const Frame &frm) const;
   void debug_dump_o(const Frame &frm) const;
+
+protected:
 
   //
   // StreamBase
@@ -533,7 +534,7 @@ public:
 
   auto initial_stream() -> Input*;
   void init();
-  void go_away();
+  void shutdown() { Endpoint::shutdown(); }
 
 protected:
   virtual auto on_new_stream_pipeline(Input *chain_to) -> PipelineBase* = 0;
@@ -585,7 +586,7 @@ private:
 
   InitialStream* m_initial_stream = nullptr;
 
-  virtual void on_event(Event *evt) override { Endpoint::on_event(evt); }
+  virtual void on_event(Event *evt) override { Endpoint::process_event(evt); }
   virtual void on_output(Event *evt) override { EventFunction::output(evt); }
   virtual auto on_new_stream(int id) -> StreamBase* override { return new Stream(this, id); }
   virtual void on_delete_stream(StreamBase *stream) override { delete static_cast<Stream*>(stream); }
@@ -605,7 +606,7 @@ public:
   void open(EventFunction *session);
   auto stream() -> EventFunction*;
   void close(EventFunction *stream);
-  void go_away();
+  void shutdown() { Endpoint::shutdown(); }
 
 private:
   class Stream;
@@ -627,7 +628,7 @@ private:
     friend class Client;
   };
 
-  virtual void on_event(Event *evt) override { Endpoint::on_event(evt); }
+  virtual void on_event(Event *evt) override { Endpoint::process_event(evt); }
   virtual void on_output(Event *evt) override { EventSource::output(evt); }
   virtual auto on_new_stream(int id) -> StreamBase* override { return new Stream(this, id); }
   virtual void on_delete_stream(StreamBase *stream) override { delete static_cast<Stream*>(stream); }

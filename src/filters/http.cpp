@@ -1303,7 +1303,7 @@ void Demux::process(Event *evt) {
 void Demux::shutdown() {
   Filter::shutdown();
   if (m_http2_demuxer) {
-    m_http2_demuxer->go_away();
+    m_http2_demuxer->shutdown();
   } else {
     m_shutdown = true;
   }
@@ -1511,7 +1511,7 @@ void Mux::Session::close() {
   m_request_queue.reset();
   if (m_http2_muxer) {
     InputContext ic;
-    m_http2_muxer->go_away();
+    m_http2_muxer->shutdown();
   }
 }
 
@@ -1669,7 +1669,7 @@ void Server::process(Event *evt) {
 void Server::shutdown() {
   Filter::shutdown();
   if (m_http2_server) {
-    m_http2_server->go_away();
+    m_http2_server->shutdown();
   } else if (m_request_queue.empty()) {
     Filter::output(StreamEnd::make());
   } else {

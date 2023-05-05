@@ -1259,24 +1259,7 @@ void Endpoint::init_settings(const uint8_t *data, size_t size) {
   m_peer_settings.decode(data, size);
 }
 
-bool Endpoint::for_each_stream(const std::function<bool(StreamBase*)> &cb) {
-  if (!for_each_pending_stream(cb)) return false;
-  for (auto *p = m_streams.head(); p; ) {
-    auto *s = p; p = p->next();
-    if (!cb(s)) return false;
-  }
-  return true;
-}
-
-bool Endpoint::for_each_pending_stream(const std::function<bool(StreamBase*)> &cb) {
-  for (auto *p = m_streams_pending.head(); p; ) {
-    auto *s = p; p = p->next();
-    if (!cb(s)) return false;
-  }
-  return true;
-}
-
-void Endpoint::on_event(Event *evt) {
+void Endpoint::process_event(Event *evt) {
   if (m_has_gone_away) return;
 
   if (auto data = evt->as<Data>()) {
@@ -1290,6 +1273,44 @@ void Endpoint::on_event(Event *evt) {
   } else if (evt->is<StreamEnd>()) {
     end_all();
     on_output(StreamEnd::make());
+  }
+}
+
+auto Endpoint::stream_open(int id) -> StreamBase* {
+  auto stream = on_new_stream(id);
+  stream->m_send_window = m_peer_settings.initial_window_size;
+  m_streams.push(stream);
+  m_stream_map.set(id, stream);
+  return stream;
+}
+
+void Endpoint::stream_close(int id) {
+  if (auto s = m_stream_map.set(id, nullptr)) {
+    s->set_pending(false);
+    m_streams.remove(s);
+    on_delete_stream(s);
+    if (m_has_shutdown) shutdown();
+  }
+}
+
+void Endpoint::stream_error(int id, ErrorCode err) {
+  stream_close(id);
+  FrameEncoder::RST_STREAM(id, err, m_output_buffer);
+  FlushTarget::need_flush();
+}
+
+void Endpoint::connection_error(ErrorCode err) {
+  end_all();
+  FrameEncoder::GOAWAY(m_last_received_stream_id, err, m_output_buffer);
+  on_output(Data::make(std::move(m_output_buffer)));
+  on_output(StreamEnd::make());
+}
+
+void Endpoint::shutdown() {
+  if (m_streams.empty() && m_streams_pending.empty()) {
+    connection_error(ErrorCode::NO_ERROR);
+  } else {
+    m_has_shutdown = true;
   }
 }
 
@@ -1436,6 +1457,23 @@ void Endpoint::on_deframe_error(ErrorCode err) {
   connection_error(err);
 }
 
+bool Endpoint::for_each_stream(const std::function<bool(StreamBase*)> &cb) {
+  if (!for_each_pending_stream(cb)) return false;
+  for (auto *p = m_streams.head(); p; ) {
+    auto *s = p; p = p->next();
+    if (!cb(s)) return false;
+  }
+  return true;
+}
+
+bool Endpoint::for_each_pending_stream(const std::function<bool(StreamBase*)> &cb) {
+  for (auto *p = m_streams_pending.head(); p; ) {
+    auto *s = p; p = p->next();
+    if (!cb(s)) return false;
+  }
+  return true;
+}
+
 void Endpoint::send_window_updates() {
   if (m_has_gone_away) return;
 
@@ -1516,35 +1554,6 @@ void Endpoint::flush() {
     on_output(Data::make(std::move(data)));
     m_output_buffer.clear();
   }
-}
-
-auto Endpoint::stream_open(int id) -> StreamBase* {
-  auto stream = on_new_stream(id);
-  stream->m_send_window = m_peer_settings.initial_window_size;
-  m_streams.push(stream);
-  m_stream_map.set(id, stream);
-  return stream;
-}
-
-void Endpoint::stream_close(int id) {
-  if (auto s = m_stream_map.set(id, nullptr)) {
-    s->set_pending(false);
-    m_streams.remove(s);
-    on_delete_stream(s);
-  }
-}
-
-void Endpoint::stream_error(int id, ErrorCode err) {
-  stream_close(id);
-  FrameEncoder::RST_STREAM(id, err, m_output_buffer);
-  FlushTarget::need_flush();
-}
-
-void Endpoint::connection_error(ErrorCode err) {
-  end_all();
-  FrameEncoder::GOAWAY(m_last_received_stream_id, err, m_output_buffer);
-  on_output(Data::make(std::move(m_output_buffer)));
-  on_output(StreamEnd::make());
 }
 
 void Endpoint::end_all() {
@@ -2150,10 +2159,6 @@ void Server::init() {
   }
 }
 
-void Server::go_away() {
-  // TODO
-}
-
 //
 // Server::Stream
 //
@@ -2192,10 +2197,6 @@ auto Client::stream() -> EventFunction* {
 void Client::close(EventFunction *stream) {
   auto *s = static_cast<Stream*>(stream);
   s->end_output();
-}
-
-void Client::go_away() {
-  connection_error(NO_ERROR);
 }
 
 //
