@@ -23,7 +23,7 @@ pipy({
   [8080, 8081, 8082], ($, port) => ($
     .listen(port)
     .serveHTTP(
-      () => new Message(`${__inbound.id}:${port}\n`)
+      () => new Message(`${port}\n`)
     )
   )
 )
@@ -54,10 +54,7 @@ pipy({
     () => (_target = lb.borrow().id),
     { version: 2 }
   ).to(
-    $=>$.connect(
-      () => _target,
-      { idleTimeout: 5 }
-    )
+    $=>$.connect(() => _target)
   )
 )
 

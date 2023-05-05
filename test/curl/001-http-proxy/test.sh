@@ -30,13 +30,3 @@ curl http://localhost:8000/foo \
      http://localhost:8000/bar \
      http://localhost:8000/bar \
      http://localhost:8000/bar
-
-echo 'sleeping...'
-sleep 6
-
-curl http://localhost:8000/foo \
-     http://localhost:8000/foo \
-     http://localhost:8000/foo \
-     http://localhost:8000/bar \
-     http://localhost:8000/bar \
-     http://localhost:8000/bar

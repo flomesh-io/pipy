@@ -18,7 +18,7 @@ pipy({
 .repeat(
   [8080, 8081, 8082], ($, port) => ($
     .listen(port)
-    .serveHTTP(() => new Message(`${__inbound.id}:${port}\n`))
+    .serveHTTP(() => new Message(`${port}\n`))
   )
 )
 
@@ -28,7 +28,7 @@ pipy({
   .branchMessageStart(
     msg => _target = router.find(msg.head.path)?.borrow?.(), (
       $=>$.muxHTTP(() => _target).to(
-        $=>$.connect(() => _target.id, { idleTimeout: 5 })
+        $=>$.connect(() => _target.id)
       )
     ), (
       $=>$.replaceMessage(
