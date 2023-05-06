@@ -27,6 +27,7 @@ function listFilenames(dirpath, base, filenames) {
     const abspath = path.join(dirpath, name);
     const st = fs.statSync(abspath);
     if (st.isFile()) {
+      if (name.endsWith('.md') && name !== 'README.md') continue;
       filenames.push(base + name);
     } else if (st.isDirectory()) {
       listFilenames(abspath, base + name + '/', filenames);
