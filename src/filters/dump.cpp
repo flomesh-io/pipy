@@ -107,13 +107,29 @@ void Dump::process(Event *evt) {
   db.push(']');
   db.push(' ');
 
-  if (m_tag.to_boolean()) {
-    auto s = tag.to_string();
+  const auto &loc = Filter::location();
+  if (loc.line > 0) {
     db.push('[');
-    db.push(s->str());
+    if (loc.source) {
+      db.push(loc.source->filename);
+      db.push(' ');
+    }
+    db.push(str, utils::to_string(str, sizeof(str), loc.line));
+    db.push(':');
+    db.push(str, utils::to_string(str, sizeof(str), loc.column));
     db.push(']');
     db.push(' ');
-    s->release();
+  }
+
+  if (!m_tag.is_undefined()) {
+    db.push('[');
+    if (tag.is_string()) {
+      db.push(tag.s()->str());
+    } else {
+      Console::dump(tag, db);
+    }
+    db.push(']');
+    db.push(' ');
   }
 
   switch (evt->type()) {
