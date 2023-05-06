@@ -55,6 +55,7 @@ public:
   int         threads = 1;
   Log::Level  log_level = Log::ERROR;
   int         log_topics = 0;
+  bool        log_local_only = false;
   std::string admin_port;
   std::string instance_uuid;
   std::string instance_name;

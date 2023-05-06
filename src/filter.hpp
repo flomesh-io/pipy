@@ -85,6 +85,7 @@ public:
 
   auto module() const -> ModuleBase*;
   auto context() const -> Context*;
+  auto location() const -> const pjs::Context::Location& { return m_location; }
 
   void set_location(const pjs::Context::Location &loc) { m_location = loc; }
   void add_sub_pipeline(PipelineLayout *layout);

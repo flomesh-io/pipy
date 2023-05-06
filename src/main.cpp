@@ -394,6 +394,7 @@ int main(int argc, char *argv[]) {
     Log::init();
     Log::set_level(opts.log_level);
     Log::set_topics(opts.log_topics);
+    Log::set_local_only(opts.log_local_only);
     Listener::set_reuse_port(opts.reuse_port);
     pjs::Math::init();
     crypto::Crypto::init(opts.openssl_engine);

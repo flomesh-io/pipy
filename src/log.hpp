@@ -63,6 +63,7 @@ public:
   static void shutdown();
   static void set_level(Level level);
   static void set_topics(int topics);
+  static void set_local_only(bool b);
   static bool is_enabled(Level level);
   static bool is_enabled(Topic topic);
 

@@ -45,6 +45,7 @@ void MainOptions::show_help() {
   std::cout << "  -e, -eval, --eval                    Evaluate the given string as script" << std::endl;
   std::cout << "  --threads=<number>                   Number of worker threads (1, 2, ... max)" << std::endl;
   std::cout << "  --log-level=<debug|info|warn|error>  Set the level of log output" << std::endl;
+  std::cout << "  --log-local-only                     Do not send out system log" << std::endl;
   std::cout << "  --verify                             Verify configuration only" << std::endl;
   std::cout << "  --no-graph                           Do not print pipeline graphs to the log" << std::endl;
   std::cout << "  --instance-uuid=<uuid>               Specify a UUID for this worker process" << std::endl;
@@ -152,6 +153,8 @@ MainOptions::MainOptions(int argc, char *argv[]) {
           std::string msg("unknown log level: ");
           throw std::runtime_error(msg + v);
         }
+      } else if (k == "--log-local-only") {
+        log_local_only = true;
       } else if (k == "--verify") {
         verify = true;
       } else if (k == "--no-graph") {

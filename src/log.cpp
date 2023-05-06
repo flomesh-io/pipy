@@ -42,6 +42,7 @@ namespace pipy {
 
 static Log::Level s_log_level = Log::ERROR;
 static int s_log_topics = 0;
+static bool s_log_local_only = false;
 
 thread_local static logging::Logger *s_logger = nullptr;
 thread_local static Data::Producer s_dp("Log");
@@ -57,7 +58,7 @@ static void logf(Log::Level level, const char *fmt, va_list ap) {
   static bool s_is_logging = false;
   if (Log::is_enabled(level)) {
     char header[100], msg[1000];
-    if (s_is_logging) {
+    if (s_is_logging || s_log_local_only) {
       Log::format_header(level, header, sizeof(header));
       std::vsnprintf(msg, sizeof(msg), fmt, ap);
       std::cerr << header << msg << std::endl;
@@ -90,6 +91,10 @@ void Log::set_level(Level level) {
 
 void Log::set_topics(int topics) {
   s_log_topics = topics;
+}
+
+void Log::set_local_only(bool b) {
+  s_log_local_only = b;
 }
 
 bool Log::is_enabled(Level level) {
@@ -146,13 +151,26 @@ auto Log::format_header(Level level, char *buf, size_t len) -> size_t {
 }
 
 void Log::write(const Data &data) {
-  s_logger->write(data);
+  if (s_log_local_only) {
+    for (const auto &c : data.chunks()) {
+      auto ptr = std::get<0>(c);
+      auto len = std::get<1>(c);
+      std::cerr.write(ptr, len);
+    }
+    std::cerr << std::endl;
+  } else {
+    s_logger->write(data);
+  }
 }
 
 void Log::write(const std::string &data) {
-  Data buf;
-  s_dp.push(&buf, data);
-  s_logger->write(buf);
+  if (s_log_local_only) {
+    std::cerr << data << std::endl;
+  } else {
+    Data buf;
+    s_dp.push(&buf, data);
+    s_logger->write(buf);
+  }
 }
 
 void Log::debug(Topic topic, const char *fmt, ...) {
