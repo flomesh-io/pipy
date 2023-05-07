@@ -671,6 +671,16 @@ void FrameEncoder::header(uint8_t *buf, int id, uint8_t type, uint8_t flags, siz
 // DynamicTable
 //
 
+void DynamicTable::reset() {
+  for (auto i = m_tail; i < m_head; i++) {
+    auto entry = m_entries[i % MAX_ENTRY_COUNT];
+    delete entry;
+  }
+  m_size = 0;
+  m_head = 0;
+  m_tail = 0;
+}
+
 auto DynamicTable::get(size_t i) const -> const TableEntry* {
   auto n = m_head - m_tail;
   if (i >= n) return nullptr;
@@ -711,6 +721,14 @@ const HeaderDecoder::HuffmanTree HeaderDecoder::s_huffman_tree;
 HeaderDecoder::HeaderDecoder(const Settings &settings)
   : m_settings(settings)
 {
+}
+
+void HeaderDecoder::reset() {
+  m_entry_prefix = 0;
+  m_buffer.clear();
+  m_head = nullptr;
+  m_name = nullptr;
+  m_dynamic_table.reset();
 }
 
 void HeaderDecoder::start(bool is_response, bool is_trailer) {
@@ -1246,13 +1264,23 @@ Endpoint::Endpoint(bool is_server_side, const Options &options)
 }
 
 Endpoint::~Endpoint() {
-  for_each_stream(
-    [this](StreamBase *s) {
-      m_stream_map.set(s->m_id, nullptr);
-      delete s;
-      return true;
-    }
-  );
+  clear();
+}
+
+void Endpoint::reset() {
+  clear();
+  m_id = s_endpoint_id.fetch_add(1, std::memory_order_relaxed);
+  m_streams.clear();
+  m_streams_pending.clear();
+  m_header_decoder.reset();
+  m_peer_settings = Settings();
+  m_output_buffer.clear();
+  m_last_received_stream_id = 0;
+  m_send_window = INITIAL_SEND_WINDOW_SIZE;
+  m_recv_window = INITIAL_RECV_WINDOW_SIZE;
+  m_has_sent_preface = false;
+  m_has_shutdown = false;
+  m_has_gone_away = false;
 }
 
 void Endpoint::init_settings(const uint8_t *data, size_t size) {
@@ -1271,7 +1299,7 @@ void Endpoint::process_event(Event *evt) {
     }
 
   } else if (evt->is<StreamEnd>()) {
-    end_all();
+    end();
     on_output(StreamEnd::make());
   }
 }
@@ -1304,7 +1332,7 @@ void Endpoint::stream_error(int id, ErrorCode err) {
 }
 
 void Endpoint::connection_error(ErrorCode err) {
-  end_all();
+  end();
   FrameEncoder::GOAWAY(m_last_received_stream_id, err, m_output_buffer);
   on_output(Data::make(std::move(m_output_buffer)));
   on_output(StreamEnd::make());
@@ -1556,7 +1584,7 @@ void Endpoint::flush() {
   }
 }
 
-void Endpoint::end_all() {
+void Endpoint::end() {
   m_has_gone_away = true;
   for_each_pending_stream(
     [](StreamBase *s) {
@@ -1567,6 +1595,16 @@ void Endpoint::end_all() {
   for_each_stream(
     [](StreamBase *s) {
       s->end();
+      return true;
+    }
+  );
+}
+
+void Endpoint::clear() {
+  for_each_stream(
+    [this](StreamBase *s) {
+      m_stream_map.set(s->m_id, nullptr);
+      delete s;
       return true;
     }
   );
@@ -2162,13 +2200,14 @@ void Server::init() {
 Server::Stream::Stream(Server *server, int id)
   : StreamBase(server, id, true)
 {
-  auto p = server->on_new_stream_pipeline(EventSource::reply());
-  EventSource::chain(p->input());
-  m_pipeline = p;
+  auto h = m_handler = server->on_demux_open_stream();
+  EventSource::chain(h->input());
+  h->chain(EventSource::reply());
 }
 
 Server::Stream::~Stream() {
-  PipelineBase::auto_release(m_pipeline);
+  auto server = static_cast<Server*>(endpoint());
+  server->on_demux_close_stream(m_handler);
 }
 
 //

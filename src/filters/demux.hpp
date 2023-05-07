@@ -59,6 +59,9 @@ public:
   void increase_output_count(int n) { if (auto r = m_receivers.head()) r->increase_output_count(n); }
   void dedicate() { m_dedication_requested = true; }
 
+protected:
+  virtual void on_demux_queue_dedicate(EventFunction *stream) {}
+
 private:
 
   //

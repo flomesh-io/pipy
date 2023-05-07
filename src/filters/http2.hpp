@@ -34,6 +34,7 @@
 #include "list.hpp"
 #include "scarce.hpp"
 #include "deframer.hpp"
+#include "demux.hpp"
 #include "options.hpp"
 
 #include <map>
@@ -184,6 +185,9 @@ struct TableEntry : public pjs::Pooled<TableEntry> {
 
 class DynamicTable {
 public:
+  ~DynamicTable() { reset(); }
+
+  void reset();
   auto capacity() const -> size_t { return m_capacity; }
   void resize(size_t size) { m_capacity = size; evict(); }
   auto get(size_t i) const -> const TableEntry*;
@@ -209,6 +213,7 @@ class HeaderDecoder {
 public:
   HeaderDecoder(const Settings &settings);
 
+  void reset();
   void start(bool is_response, bool is_trailer);
   bool started() const { return m_head; }
   auto decode(Data &data) -> ErrorCode;
@@ -364,7 +369,7 @@ public:
 
 protected:
   Endpoint(bool is_server_side, const Options &options);
-  virtual ~Endpoint();
+  ~Endpoint();
 
   class StreamBase;
 
@@ -372,6 +377,7 @@ protected:
   virtual auto on_new_stream(int id) -> StreamBase* = 0;
   virtual void on_delete_stream(StreamBase *stream) = 0;
 
+  void reset();
   void init_settings(const uint8_t *data, size_t size);
   void process_event(Event *evt);
   auto stream_open(int id) -> StreamBase*;
@@ -423,7 +429,8 @@ private:
   void send_window_updates();
   void frame(Frame &frm);
   void flush();
-  void end_all();
+  void end();
+  void clear();
 
   void debug_dump_i() const;
   void debug_dump_o() const;
@@ -458,6 +465,7 @@ protected:
     StreamBase(Endpoint *endpoint, int id, bool is_server_side);
     virtual ~StreamBase();
 
+    auto endpoint() const -> Endpoint* { return m_endpoint; }
     void encoder_input(Event *evt);
     void end_input();
     void end_output();
@@ -524,7 +532,7 @@ protected:
 
 class Server :
   public Endpoint,
-  public EventFunction
+  public DemuxBase
 {
 public:
   Server(const Options &options);
@@ -533,9 +541,6 @@ public:
   auto initial_stream() -> Input*;
   void init();
   void shutdown() { Endpoint::shutdown(); }
-
-protected:
-  virtual auto on_new_stream_pipeline(Input *chain_to) -> PipelineBase* = 0;
 
 private:
   class Stream;
@@ -552,7 +557,8 @@ private:
   {
     Stream(Server *server, int id);
     ~Stream();
-    pjs::Ref<PipelineBase> m_pipeline;
+
+    EventFunction* m_handler;
 
     // Response (output)
     virtual void on_event(Event *evt) override {

@@ -286,7 +286,8 @@ class Demux :
   public Filter,
   protected DemuxQueue,
   protected Decoder,
-  protected Encoder
+  protected Encoder,
+  protected http2::Server
 {
 public:
   struct Options : public http2::Endpoint::Options {
@@ -297,7 +298,7 @@ public:
 
   Demux(const Options &options);
 
-private:
+protected:
   Demux(const Demux &r);
   ~Demux();
 
@@ -308,31 +309,10 @@ private:
   virtual void shutdown() override;
   virtual void dump(Dump &d) override;
 
-  //
-  // Demux::HTTP2Demuxer
-  //
-
-  class HTTP2Demuxer :
-    public pjs::Pooled<HTTP2Demuxer>,
-    public http2::Server
-  {
-  public:
-    HTTP2Demuxer(Demux *demux)
-      : http2::Server(demux->m_options)
-      , m_demux(demux) {}
-
-    auto on_new_stream_pipeline(Input *chain_to) -> PipelineBase* override {
-      return m_demux->sub_pipeline(0, true, chain_to);
-    }
-
-  private:
-    Demux* m_demux;
-  };
-
   Options m_options;
   RequestQueue m_request_queue;
-  HTTP2Demuxer* m_http2_demuxer = nullptr;
   pjs::Ref<StreamEnd> m_eos;
+  bool m_http2 = false;
   bool m_shutdown = false;
 
   virtual auto on_demux_open_stream() -> EventFunction* override;
@@ -344,8 +324,6 @@ private:
   virtual auto on_encode_response(ResponseHead *head) -> RequestQueue::Request* override;
   virtual bool on_decode_tunnel(TunnelType tt) override;
   virtual bool on_encode_tunnel(TunnelType tt) override;
-
-  void upgrade_http2();
 };
 
 //
@@ -475,31 +453,24 @@ private:
 // Server
 //
 
-class Server :
-  public Filter,
-  protected Decoder,
-  protected Encoder
-{
+class Server : public Demux {
 public:
-  Server(const std::function<Message*(Server*, Message*)> &handler);
-  Server(pjs::Object *handler);
+  Server(pjs::Object *handler, const Options &options);
+  Server(const std::function<Message*(Server*, Message*)> &handler, const Options &options);
 
 private:
   Server(const Server &r);
   ~Server();
 
   virtual auto clone() -> Filter* override;
-  virtual void chain() override;
-  virtual void reset() override;
-  virtual void process(Event *evt) override;
-  virtual void shutdown() override;
   virtual void dump(Dump &d) override;
 
-  virtual void on_decode_error() override;
-  virtual void on_decode_request(RequestQueue::Request *req) override;
-  virtual auto on_encode_response(ResponseHead *head) -> RequestQueue::Request* override;
-  virtual bool on_decode_tunnel(TunnelType tt) override;
-  virtual bool on_encode_tunnel(TunnelType tt) override;
+  virtual auto on_demux_open_stream() -> EventFunction* override;
+  virtual void on_demux_close_stream(EventFunction *stream) override;
+  virtual void on_demux_queue_dedicate(EventFunction *stream) override;
+
+  pjs::Ref<pjs::Object> m_handler_obj;
+  std::function<Message*(Server*, Message*)> m_handler_func;
 
   //
   // Server::Handler
@@ -507,56 +478,19 @@ private:
 
   class Handler :
     public pjs::Pooled<Handler>,
-    public PipelineBase
+    public EventFunction
   {
   public:
-    Handler(Server *server)
-      : m_server(server) {}
-
-    void reset();
+    Handler(Server *server) : m_server(server) {}
+    void tunnel(Pipeline *pipeline) { m_tunnel = pipeline; }
 
   private:
     Server* m_server;
     MessageReader m_message_reader;
+    pjs::Ref<Pipeline> m_tunnel;
 
     virtual void on_event(Event *evt) override;
-    virtual void on_auto_release() override { delete static_cast<Handler*>(this); }
   };
-
-  //
-  // Server::HTTP2Server
-  //
-
-  class HTTP2Server :
-    public pjs::Pooled<HTTP2Server>,
-    public http2::Server
-  {
-  public:
-    HTTP2Server(http::Server *server)
-      : http2::Server(http2::Server::Options())
-      , m_server(server) {}
-
-  private:
-    http::Server* m_server;
-
-    auto on_new_stream_pipeline(Input *chain_to) -> PipelineBase* override {
-      auto handler = new Handler(m_server);
-      handler->chain(chain_to);
-      return handler;
-    }
-  };
-
-  std::function<Message*(Server*, Message*)> m_handler_func;
-  pjs::Ref<pjs::Object> m_handler_obj;
-  pjs::Ref<Handler> m_handler;
-  RequestQueue m_request_queue;
-  pjs::Ref<Pipeline> m_tunnel;
-  HTTP2Server* m_http2_server = nullptr;
-  bool m_shutdown = false;
-
-  void upgrade_http2();
-  void on_tunnel_data(Data *data);
-  void on_tunnel_end(StreamEnd *end);
 };
 
 //

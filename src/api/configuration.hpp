@@ -116,7 +116,7 @@ public:
   void replace_message(pjs::Object *replacement, pjs::Object *options);
   void replace_start(pjs::Object *replacement);
   void replay(pjs::Object *options);
-  void serve_http(pjs::Object *handler);
+  void serve_http(pjs::Object *handler, pjs::Object *options);
   void split(Data *separator);
   void split(pjs::Str *separator);
   void split(pjs::Function *callback);

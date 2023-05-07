@@ -366,8 +366,8 @@ void FilterConfigurator::replay(pjs::Object *options) {
   require_sub_pipeline(append_filter(new Replay(options)));
 }
 
-void FilterConfigurator::serve_http(pjs::Object *handler) {
-  append_filter(new http::Server(handler));
+void FilterConfigurator::serve_http(pjs::Object *handler, pjs::Object *options) {
+  append_filter(new http::Server(handler, options));
 }
 
 void FilterConfigurator::split(Data *separator) {
@@ -2001,9 +2001,10 @@ template<> void ClassDef<FilterConfigurator>::init() {
   method("serveHTTP", [](Context &ctx, Object *thiz, Value &result) {
     auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     Object *handler;
-    if (!ctx.arguments(1, &handler)) return;
+    Object *options = nullptr;
+    if (!ctx.arguments(1, &handler, &options)) return;
     try {
-      config->serve_http(handler);
+      config->serve_http(handler, options);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

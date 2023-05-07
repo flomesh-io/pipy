@@ -139,7 +139,8 @@ void AdminService::open(const std::string &ip, int port, const Options &options)
       [this](http::Server *server, Message *msg) {
         auto *ctx = static_cast<Context*>(server->context());
         return handle(ctx, msg);
-      }
+      },
+      http::Server::Options()
     )
   )->add_sub_pipeline(ppl_ws);
 
