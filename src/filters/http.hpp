@@ -284,8 +284,7 @@ private:
 
 class Demux :
   public Filter,
-  protected Demuxer,
-  protected Demuxer::Queue,
+  protected DemuxQueue,
   protected Decoder,
   protected Encoder
 {
@@ -333,10 +332,13 @@ private:
   Options m_options;
   RequestQueue m_request_queue;
   HTTP2Demuxer* m_http2_demuxer = nullptr;
+  pjs::Ref<StreamEnd> m_eos;
   bool m_shutdown = false;
 
-  virtual auto on_queue_message(MessageStart *start) -> int override;
-  virtual auto on_open_stream() -> EventFunction* override;
+  virtual auto on_demux_open_stream() -> EventFunction* override;
+  virtual void on_demux_close_stream(EventFunction *stream) override;
+  virtual void on_demux_complete() override;
+
   virtual void on_decode_error() override;
   virtual void on_decode_request(RequestQueue::Request *req) override;
   virtual auto on_encode_response(ResponseHead *head) -> RequestQueue::Request* override;
@@ -571,6 +573,7 @@ private:
 
   virtual auto clone() -> Filter* override;
   virtual void reset() override;
+  virtual void chain() override;
   virtual void process(Event *evt) override;
   virtual void dump(Dump &d) override;
 

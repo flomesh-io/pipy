@@ -606,7 +606,9 @@ void Decoder::on_event(Event *evt) {
     }
 
     if (m_is_tunnel) {
-      EventFunction::output(Data::make(std::move(*data)));
+      if (!data->empty()) {
+        EventFunction::output(Data::make(std::move(*data)));
+      }
     }
 
     m_state = state;
@@ -1276,8 +1278,8 @@ auto Demux::clone() -> Filter* {
 
 void Demux::chain() {
   Filter::chain();
-  Decoder::chain(Demuxer::Queue::input());
-  Demuxer::Queue::chain(Encoder::input());
+  Decoder::chain(DemuxQueue::input());
+  DemuxQueue::chain(Encoder::input());
   Encoder::chain(Filter::output());
   Encoder::set_buffer_size(m_options.buffer_size);
 }
@@ -1286,19 +1288,26 @@ void Demux::reset() {
   Filter::reset();
   Decoder::reset();
   Encoder::reset();
-  Demuxer::reset();
-  Demuxer::Queue::reset();
+  DemuxQueue::reset();
   m_request_queue.reset();
   if (m_http2_demuxer) {
-    Decoder::chain(Demuxer::Queue::input());
+    Decoder::chain(DemuxQueue::input());
     delete m_http2_demuxer;
     m_http2_demuxer = nullptr;
   }
+  m_eos = nullptr;
   m_shutdown = false;
 }
 
 void Demux::process(Event *evt) {
-  Filter::output(evt, Decoder::input());
+  Decoder::input()->input(evt);
+  if (auto eos = evt->as<StreamEnd>()) {
+    if (DemuxQueue::stream_count() > 0) {
+      m_eos = eos;
+    } else {
+      Filter::output(evt);
+    }
+  }
 }
 
 void Demux::shutdown() {
@@ -1310,15 +1319,22 @@ void Demux::shutdown() {
   }
 }
 
-auto Demux::on_queue_message(MessageStart *start) -> int {
-  auto req = m_request_queue.head();
-  return req->tunnel_type == TunnelType::NONE ? 1 : -1;
+auto Demux::on_demux_open_stream() -> EventFunction* {
+  auto p = Filter::sub_pipeline(0, true);
+  p->retain();
+  return p;
 }
 
-auto Demux::on_open_stream() -> EventFunction* {
-  return Demuxer::stream(
-    Filter::sub_pipeline(0, true)
-  );
+void Demux::on_demux_close_stream(EventFunction *stream) {
+  auto p = static_cast<Pipeline*>(stream);
+  p->release();
+}
+
+void Demux::on_demux_complete() {
+  if (auto eos = m_eos) {
+    Filter::output(eos);
+    m_eos = nullptr;
+  }
 }
 
 void Demux::on_decode_error() {
@@ -1327,26 +1343,29 @@ void Demux::on_decode_error() {
 
 void Demux::on_decode_request(RequestQueue::Request *req) {
   m_request_queue.push(req);
-  if (req->tunnel_type == TunnelType::HTTP2) {
-    req->head->headers->ht_delete(s_upgrade);
-    req->head->headers->ht_delete(s_http2_settings);
-    upgrade_http2();
-    Decoder::chain(m_http2_demuxer->initial_stream());
-    auto head = ResponseHead::make();
-    auto headers = pjs::Object::make();
-    head->status = 101;
-    head->headers = headers;
-    headers->set(s_connection, s_upgrade.get());
-    headers->set(s_upgrade, s_h2c.get());
-    auto out = Encoder::input();
-    out->input(MessageStart::make(head));
-    out->input(MessageEnd::make());
+  if (req->tunnel_type != TunnelType::NONE) {
+    DemuxQueue::wait_output();
+    if (req->tunnel_type == TunnelType::HTTP2) {
+      req->head->headers->ht_delete(s_upgrade);
+      req->head->headers->ht_delete(s_http2_settings);
+      upgrade_http2();
+      Decoder::chain(m_http2_demuxer->initial_stream());
+      auto head = ResponseHead::make();
+      auto headers = pjs::Object::make();
+      head->status = 101;
+      head->headers = headers;
+      headers->set(s_connection, s_upgrade.get());
+      headers->set(s_upgrade, s_h2c.get());
+      auto out = Encoder::input();
+      out->input(MessageStart::make(head));
+      out->input(MessageEnd::make());
+    }
   }
 }
 
 auto Demux::on_encode_response(ResponseHead *head) -> RequestQueue::Request* {
   if (head->status == 100) {
-    Demuxer::Queue::increase_output_count();
+    DemuxQueue::increase_output_count(1);
     return nullptr;
   } else {
     auto req = m_request_queue.shift();
@@ -1371,7 +1390,7 @@ bool Demux::on_encode_tunnel(TunnelType tt) {
     return true;
   } else {
     Decoder::set_tunnel();
-    Demuxer::Queue::dedicate();
+    DemuxQueue::dedicate();
   }
   return true;
 }
@@ -1843,6 +1862,13 @@ void TunnelServer::reset() {
   m_message_reader.reset();
 }
 
+void TunnelServer::chain() {
+  Filter::chain();
+  if (m_pipeline) {
+    m_pipeline->chain(Filter::output());
+  }
+}
+
 void TunnelServer::process(Event *evt) {
   if (m_pipeline) {
     m_pipeline->input()->input(evt);
@@ -1865,7 +1891,7 @@ void TunnelServer::process(Event *evt) {
     pjs::Ref<RequestHead> req_head = pjs::coerce<RequestHead>(req->head());
     pjs::Ref<ResponseHead> res_head = pjs::coerce<ResponseHead>(res->head());
     if (res_head->is_tunnel(req_head->tunnel_type())) {
-      m_pipeline = sub_pipeline(0, true, output())->start();
+      m_pipeline = sub_pipeline(0, true, Filter::output())->start();
     }
 
     res->write(Filter::output());

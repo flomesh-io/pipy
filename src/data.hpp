@@ -51,6 +51,10 @@ private:
 public:
   static const Type __TYPE = Type::Data;
 
+  static bool is_flush(Event *evt) {
+    return evt->type() == Type::Data && static_cast<Data*>(evt)->empty();
+  }
+
   enum class Encoding {
     utf8,
     hex,

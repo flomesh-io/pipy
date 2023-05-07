@@ -36,130 +36,162 @@
 namespace pipy {
 
 //
-// Demuxer
+// DemuxBase
 //
 
-class Demuxer {
+class DemuxBase : public EventFunction {
+protected:
+  virtual auto on_demux_open_stream() -> EventFunction* = 0;
+  virtual void on_demux_close_stream(EventFunction *stream) = 0;
+  virtual void on_demux_complete() = 0;
+};
+
+//
+// DemuxQueue
+//
+
+class DemuxQueue : public DemuxBase {
+public:
+  void reset();
+  auto stream_count() const -> int { return m_stream_count; }
+  void output_count(int output_count) { m_output_count = output_count; }
+  void wait_output() { m_waiting_output_requested = true; }
+  void increase_output_count(int n) { if (auto r = m_receivers.head()) r->increase_output_count(n); }
+  void dedicate() { m_dedication_requested = true; }
+
 private:
 
   //
-  // Demuxer::Stream
+  // DemuxQueue::Stream
   //
 
-  class Stream :
-    public pjs::Pooled<Stream>,
-    public List<Stream>::Item,
-    public EventProxy
-  {
-  public:
-    Stream(Demuxer *demuxer) : m_demuxer(demuxer) {
-      demuxer->m_streams.push(this);
-    }
-
-    ~Stream() {
-      m_demuxer->m_streams.remove(this);
-    }
-
-    void open(Pipeline *pipeline);
-    void end_input();
-    void end_output();
-
-  private:
-    Demuxer* m_demuxer;
-    pjs::Ref<Pipeline> m_pipeline;
-    bool m_input_end = false;
-    bool m_output_end = false;
-
-    void recycle() {
-      if (m_input_end && m_output_end) {
-        delete this;
-      }
-    }
-
-    virtual void on_input(Event *evt) override;
-    virtual void on_reply(Event *evt) override;
+  struct Stream : public pjs::Pooled<Stream> {
+    EventFunction* handler;
+    bool end_input = false;
+    bool end_output = false;
   };
 
-  List<Stream> m_streams;
+  auto open_stream() -> Stream* {
+    auto s = new Stream;
+    s->handler = on_demux_open_stream();
+    m_stream_count++;
+    return s;
+  }
 
-protected:
-  void reset();
-  auto stream(Pipeline *pipeline) -> EventFunction*;
+  void close_stream_input(Stream *s) {
+    if (s) {
+      if (!s->end_input) {
+        s->end_input = true;
+        recycle_stream(s);
+      }
+    }
+  }
 
-public:
+  void close_stream_output(Stream *s) {
+    if (s) {
+      if (!s->end_output) {
+        s->end_output = true;
+        recycle_stream(s);
+      }
+    }
+  }
+
+  void close_stream(Stream *s) {
+    if (s) {
+      auto h = s->handler;
+      on_demux_close_stream(h);
+      delete s;
+    }
+  }
+
+  void recycle_stream(Stream *s) {
+    if (s->end_input && s->end_output) {
+      close_stream(s);
+      if (!--m_stream_count) on_demux_complete();
+    }
+  }
 
   //
-  // Demuxer::Queue
+  // DemuxQueue::Receiver
   //
 
-  class Queue : public EventFunction {
+  class Receiver :
+    public pjs::Pooled<Receiver>,
+    public List<Receiver>::Item,
+    public EventTarget
+  {
   public:
-    void reset();
-    void increase_output_count();
-    void dedicate() { m_dedicated_requested = true; }
-    void shutdown();
+    Receiver(DemuxQueue *queue, Stream *stream, int output_count)
+      : m_queue(queue)
+      , m_stream(stream)
+      , m_output_count(output_count) {}
 
-  protected:
-    virtual auto on_queue_message(MessageStart *start) -> int { return 1; }
-    virtual auto on_open_stream() -> EventFunction* = 0;
+    auto stream() const -> Stream* { return m_stream; }
+    void increase_output_count(int n) { m_output_count += n; }
+    bool flush();
 
   private:
     virtual void on_event(Event *evt) override;
 
-    void queue(Event *evt);
-    void wait_output();
-    void continue_input();
-    bool check_dedicated();
-    void shift();
-    void clear();
-    void close();
-
-    //
-    // Demuxer::Queue::Receiver
-    //
-
-    class Receiver :
-      public pjs::Pooled<Receiver>,
-      public List<Receiver>::Item,
-      public EventTarget
-    {
-    public:
-      Receiver(Queue *queue, int output_count)
-        : m_queue(queue)
-        , m_output_count(output_count) {}
-
-      void increase_output_count(int n) { m_output_count += n; }
-      bool flush();
-
-    private:
-      virtual void on_event(Event *evt) override;
-
-      Queue* m_queue;
-      MessageReader m_reader;
-      MessageBuffer m_buffer;
-      int m_output_count;
-      bool m_message_started = false;
-    };
-
-    EventFunction* m_stream = nullptr;
-    EventBuffer m_buffer;
-    List<Receiver> m_receivers;
-    pjs::Ref<StreamEnd> m_stream_end;
-    pjs::Ref<InputSource::Tap> m_closed_tap;
-    bool m_waiting_output_requested = false;
-    bool m_waiting_output = false;
-    bool m_dedicated_requested = false;
-    bool m_dedicated = false;
-    bool m_shutdown = false;
-    bool m_closed = false;
+    DemuxQueue* m_queue;
+    Stream* m_stream;
+    MessageReader m_reader;
+    MessageBuffer m_buffer;
+    int m_output_count;
+    bool m_has_message_started = false;
   };
+
+  //
+  // DemuxQueue::Waiter
+  //
+
+  class Waiter :
+    public pjs::Pooled<Waiter>,
+    public List<Waiter>::Item,
+    public EventTarget
+  {
+  public:
+    Waiter(DemuxQueue *queue, Stream *stream)
+      : m_queue(queue)
+      , m_stream(stream) {}
+
+    auto stream() const -> Stream* { return m_stream; }
+
+  private:
+    virtual void on_event(Event *evt) override;
+
+    DemuxQueue* m_queue;
+    Stream* m_stream;
+  };
+
+  virtual void on_event(Event *evt) override;
+
+  void queue_event(Event *evt);
+  void start_waiting_output();
+  void continue_input();
+  bool check_dedicated();
+  void shift_receiver();
+  void clear_receivers();
+  void clear_waiters();
+
+  Stream* m_input_stream = nullptr;
+  EventBuffer m_buffer;
+  List<Receiver> m_receivers;
+  List<Waiter> m_waiters;
+  pjs::Ref<InputSource::Tap> m_closed_tap;
+  int m_stream_count = 0;
+  int m_output_count = 1;
+  bool m_waiting_output_requested = false;
+  bool m_waiting_output = false;
+  bool m_dedication_requested = false;
+  bool m_dedicated = false;
 };
 
 //
 // Demux
 //
 
-class Demux : public Filter, public Demuxer, public Demuxer::Queue {
+class Demux : public Filter, public DemuxQueue {
 public:
   struct Options : public pipy::Options {
     int output_count = 1;
@@ -179,13 +211,14 @@ private:
   virtual void chain() override;
   virtual void reset() override;
   virtual void process(Event *evt) override;
-  virtual void shutdown() override;
   virtual void dump(Dump &d) override;
 
-  virtual auto on_open_stream() -> EventFunction* override;
-  virtual auto on_queue_message(MessageStart *start) -> int override;
+  virtual auto on_demux_open_stream() -> EventFunction* override;
+  virtual void on_demux_close_stream(EventFunction *stream) override;
+  virtual void on_demux_complete() override;
 
   Options m_options;
+  pjs::Ref<StreamEnd> m_eos;
 };
 
 } // namespace pipy

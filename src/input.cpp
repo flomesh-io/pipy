@@ -112,13 +112,11 @@ InputContext::~InputContext() {
 }
 
 void InputContext::auto_release(AutoReleased *obj) {
-  if (!obj->m_auto_release) {
-    auto ctx = s_stack->m_origin;
-    obj->retain();
-    obj->m_auto_release = true;
-    obj->m_next_auto_release = ctx->m_auto_released;
-    ctx->m_auto_released = obj;
-  }
+  auto ctx = s_stack->m_origin;
+  obj->retain();
+  obj->m_auto_release = true;
+  obj->m_next_auto_release = ctx->m_auto_released;
+  ctx->m_auto_released = obj;
 }
 
 void InputContext::defer_notify(ContextGroup *grp) {
