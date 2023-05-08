@@ -25,6 +25,7 @@
 
 #include "http2.hpp"
 #include "api/stats.hpp"
+#include "api/console.hpp"
 #include "log.hpp"
 
 #define DEBUG_HTTP2 1
@@ -1298,9 +1299,10 @@ void Endpoint::process_event(Event *evt) {
       FrameDecoder::deframe(data);
     }
 
-  } else if (evt->is<StreamEnd>()) {
-    end();
+  } else if (auto eos = evt->as<StreamEnd>()) {
+    end(eos);
     on_output(StreamEnd::make());
+    on_endpoint_close(eos);
   }
 }
 
@@ -1332,10 +1334,12 @@ void Endpoint::stream_error(int id, ErrorCode err) {
 }
 
 void Endpoint::connection_error(ErrorCode err) {
-  end();
+  pjs::Ref<StreamEnd> eos(StreamEnd::make());
+  end(eos);
   FrameEncoder::GOAWAY(m_last_received_stream_id, err, m_output_buffer);
   on_output(Data::make(std::move(m_output_buffer)));
-  on_output(StreamEnd::make());
+  on_output(eos);
+  on_endpoint_close(eos);
 }
 
 void Endpoint::shutdown() {
@@ -1584,16 +1588,27 @@ void Endpoint::flush() {
   }
 }
 
-void Endpoint::end() {
+void Endpoint::end(StreamEnd *eos) {
   m_has_gone_away = true;
+
   for_each_pending_stream(
     [](StreamBase *s) {
       s->set_pending(false);
       return true;
     }
   );
+
+  if (eos) {
+    for_each_stream(
+      [=](StreamBase *s) {
+        s->decoder_output(eos->clone());
+        return true;
+      }
+    );
+  }
+
   for_each_stream(
-    [](StreamBase *s) {
+    [=](StreamBase *s) {
       s->end();
       return true;
     }
@@ -2210,6 +2225,26 @@ Server::Stream::~Stream() {
   server->on_demux_close_stream(m_handler);
 }
 
+// Request (input)
+void Server::Stream::decoder_output(Event *evt) {
+  auto is_eos = evt->is<StreamEnd>();
+  EventSource::output(evt);
+  if (is_eos) end_input();
+}
+
+// Response (output)
+void Server::Stream::on_event(Event *evt) {
+  auto is_eos = evt->is<StreamEnd>();
+  StreamBase::encoder_input(evt);
+  if (is_eos) end_output();
+}
+
+// Close endpoint
+void Server::Stream::end() {
+  end_input();
+  end_output();
+}
+
 //
 // Client
 //
@@ -2236,6 +2271,57 @@ void Client::close(EventFunction *stream) {
 Client::Stream::Stream(Client *client, int id)
   : StreamBase(client, id, false)
 {
+}
+
+// Request (output)
+void Client::Stream::on_event(Event *evt) {
+  StreamBase::encoder_input(evt);
+}
+
+// Response (input)
+void Client::Stream::decoder_output(Event *evt) {
+  switch (evt->type()) {
+    case Event::Type::MessageStart:
+      m_has_message_started = true;
+      EventFunction::output(evt);
+      break;
+    case Event::Type::MessageEnd:
+      m_has_message_ended = true;
+      EventFunction::output(evt);
+      break;
+    case Event::Type::StreamEnd:
+      if (!m_has_message_started) {
+        auto eos = evt->as<StreamEnd>();
+        auto status_code = 0;
+        auto status_text = http::ResponseHead::error_to_status(eos->error_code(), status_code);
+        auto head = http::ResponseHead::make();
+        head->headers = pjs::Object::make();
+        head->status = status_code;
+        head->statusText = status_text;
+        EventFunction::output(MessageStart::make(head));
+        if (!eos->error().is_undefined()) {
+          Data buf;
+          Data::Builder db(buf, &s_dp);
+          Console::dump(eos->error(), db);
+          db.flush();
+          EventFunction::output(Data::make(std::move(buf)));
+        }
+        EventFunction::output(MessageEnd::make());
+      } else if (!m_has_message_ended) {
+        EventFunction::output(MessageEnd::make());
+      }
+      EventFunction::output(evt);
+      end_input();
+      break;
+    default:
+      EventFunction::output(evt);
+      break;
+  }
+}
+
+// Close endpoint
+void Client::Stream::end() {
+  end_input();
 }
 
 } // namespace http2

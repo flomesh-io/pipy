@@ -376,6 +376,7 @@ protected:
   virtual void on_output(Event *evt) = 0;
   virtual auto on_new_stream(int id) -> StreamBase* = 0;
   virtual void on_delete_stream(StreamBase *stream) = 0;
+  virtual void on_endpoint_close(StreamEnd *eos) {}
 
   void reset();
   void init_settings(const uint8_t *data, size_t size);
@@ -429,7 +430,7 @@ private:
   void send_window_updates();
   void frame(Frame &frm);
   void flush();
-  void end();
+  void end(StreamEnd *eos);
   void clear();
 
   void debug_dump_i() const;
@@ -557,21 +558,14 @@ private:
 
     EventFunction* m_handler;
 
-    // Response (output)
-    virtual void on_event(Event *evt) override {
-      auto is_end = evt->is<StreamEnd>();
-      StreamBase::encoder_input(evt);
-      if (is_end) end_output();
-    }
-
     // Request (input)
-    virtual void decoder_output(Event *evt) override {
-      auto is_end = evt->is<StreamEnd>();
-      EventSource::output(evt);
-      if (is_end) end_input();
-    }
+    virtual void decoder_output(Event *evt) override;
 
-    virtual void end() override { end_input(); end_output(); }
+    // Response (output)
+    virtual void on_event(Event *evt) override;
+
+    // Close endpoint
+    virtual void end() override;
 
     friend class Server;
     friend class InitialStream;
@@ -636,19 +630,17 @@ private:
   {
     Stream(Client *client, int id);
 
+    bool m_has_message_started = false;
+    bool m_has_message_ended = false;
+
     // Request (output)
-    virtual void on_event(Event *evt) override {
-      StreamBase::encoder_input(evt);
-    }
+    virtual void on_event(Event *evt) override;
 
     // Response (input)
-    virtual void decoder_output(Event *evt) override {
-      auto is_end = evt->is<StreamEnd>();
-      EventFunction::output(evt);
-      if (is_end) end_input();
-    }
+    virtual void decoder_output(Event *evt) override;
 
-    void end() override { end_input(); }
+    // Close endpoint
+    virtual void end() override;
 
     friend class Client;
   };

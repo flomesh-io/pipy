@@ -86,13 +86,14 @@ private:
 
 template<class T>
 class EventTemplate : public pjs::ObjectTemplate<T, Event> {
-protected:
-  EventTemplate()
-    : pjs::ObjectTemplate<T, Event>(T::__TYPE) {}
-
+public:
   virtual auto clone() const -> Event* override {
     return T::make(*static_cast<const T*>(this));
   }
+
+protected:
+  EventTemplate()
+    : pjs::ObjectTemplate<T, Event>(T::__TYPE) {}
 };
 
 //

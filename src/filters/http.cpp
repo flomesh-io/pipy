@@ -68,13 +68,6 @@ thread_local static const pjs::ConstStr s_content_encoding("content-encoding");
 thread_local static const pjs::ConstStr s_upgrade("upgrade");
 thread_local static const pjs::ConstStr s_websocket("websocket");
 thread_local static const pjs::ConstStr s_h2c("h2c");
-thread_local static const pjs::ConstStr s_bad_gateway("Bad Gateway");
-thread_local static const pjs::ConstStr s_cannot_resolve("Cannot Resolve");
-thread_local static const pjs::ConstStr s_connection_refused("Connection Refused");
-thread_local static const pjs::ConstStr s_unauthorized("Unauthorized");
-thread_local static const pjs::ConstStr s_read_error("Read Error");
-thread_local static const pjs::ConstStr s_write_error("Write Error");
-thread_local static const pjs::ConstStr s_gateway_timeout("Gateway Timeout");
 thread_local static const pjs::ConstStr s_http2_preface_method("PRI");
 thread_local static const pjs::ConstStr s_http2_preface_path("*");
 thread_local static const pjs::ConstStr s_http2_preface_protocol("HTTP/2.0");
@@ -358,8 +351,8 @@ void Decoder::on_event(Event *evt) {
     return;
   }
 
-  if (auto e = evt->as<StreamEnd>()) {
-    stream_end(e);
+  if (auto eos = evt->as<StreamEnd>()) {
+    stream_end(eos);
     reset();
     return;
   }
@@ -646,59 +639,26 @@ void Decoder::message_end() {
   output(MessageEnd::make());
 }
 
-void Decoder::stream_end(StreamEnd *end) {
-  if (m_is_response && (m_state == HEAD || m_state == HEADER) && end->has_error()) {
-    int status_code = 0;
-    pjs::Str *status_text = nullptr;
-    switch (end->error_code()) {
-    case StreamEnd::CANNOT_RESOLVE:
-      status_code = 502;
-      status_text = s_cannot_resolve;
-      break;
-    case StreamEnd::CONNECTION_REFUSED:
-      status_code = 502;
-      status_text = s_connection_refused;
-      break;
-    case StreamEnd::UNAUTHORIZED:
-      status_code = 401;
-      status_text = s_unauthorized;
-      break;
-    case StreamEnd::READ_ERROR:
-      status_code = 502;
-      status_text = s_read_error;
-      break;
-    case StreamEnd::WRITE_ERROR:
-      status_code = 502;
-      status_text = s_write_error;
-      break;
-    case StreamEnd::CONNECTION_TIMEOUT:
-    case StreamEnd::READ_TIMEOUT:
-    case StreamEnd::WRITE_TIMEOUT:
-      status_code = 504;
-      status_text = s_gateway_timeout;
-      break;
-    default:
-      status_code = 502;
-      status_text = s_bad_gateway;
-      break;
-    }
+void Decoder::stream_end(StreamEnd *eos) {
+  if (m_is_response && (m_state == HEAD || m_state == HEADER) && eos->has_error()) {
+    auto status_code = 0;
+    auto status_text = ResponseHead::error_to_status(eos->error_code(), status_code);
     auto head = ResponseHead::make();
     head->headers = pjs::Object::make();
     head->protocol = s_http_1_1;
     head->status = status_code;
     head->statusText = status_text;
     output(MessageStart::make(head));
-    if (!end->error().is_undefined()) {
+    if (!eos->error().is_undefined()) {
       Data buf;
       Data::Builder db(buf, &s_dp);
-      Console::dump(end->error(), db);
+      Console::dump(eos->error(), db);
       db.flush();
       output(Data::make(std::move(buf)));
     }
-    output(end);
-  } else {
-    output(end);
+    output(MessageEnd::make());
   }
+  output(eos);
 }
 
 //
@@ -1567,6 +1527,10 @@ void Mux::Session::on_queue_end(StreamEnd *eos) {
   MuxSession::end(eos);
 }
 
+void Mux::Session::on_endpoint_close(StreamEnd *eos) {
+  MuxSession::end(eos);
+}
+
 bool Mux::Session::select_protocol(Mux *mux) {
   thread_local static auto s_method_select = pjs::ClassDef<VersionSelector>::method("select");
 
@@ -1839,14 +1803,15 @@ void TunnelClient::process(Event *evt) {
     auto msg = handshake->as<Message>();
     m_request_head = pjs::coerce<RequestHead>(msg->head());
     m_pipeline = sub_pipeline(0, true, EventSource::reply())->start();
-    msg->as<Message>()->write(m_pipeline->input());
+    EventSource::chain(m_pipeline->input());
+    msg->as<Message>()->write(EventSource::output());
   }
 
   if (m_is_tunnel_started) {
     if (!m_buffer.empty()) {
-      m_pipeline->input()->input(Data::make(std::move(m_buffer)));
+      EventSource::output(Data::make(std::move(m_buffer)));
     }
-    m_pipeline->input()->input(evt);
+    EventSource::output(evt);
   } else if (auto *data = evt->as<Data>()) {
     m_buffer.push(*data);
   }

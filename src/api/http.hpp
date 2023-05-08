@@ -75,6 +75,8 @@ public:
   pjs::Ref<pjs::Str> statusText;
 
   bool is_tunnel(TunnelType requested);
+
+  static auto error_to_status(StreamEnd::Error err, int &status) -> pjs::Str*;
 };
 
 //

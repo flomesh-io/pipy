@@ -45,6 +45,13 @@ thread_local static const pjs::ConstStr s_close("close");
 thread_local static const pjs::ConstStr s_http_1_0("HTTP/1.0");
 thread_local static const pjs::ConstStr s_websocket("websocket");
 thread_local static const pjs::ConstStr s_h2c("h2c");
+thread_local static const pjs::ConstStr s_bad_gateway("Bad Gateway");
+thread_local static const pjs::ConstStr s_cannot_resolve("Cannot Resolve");
+thread_local static const pjs::ConstStr s_connection_refused("Connection Refused");
+thread_local static const pjs::ConstStr s_unauthorized("Unauthorized");
+thread_local static const pjs::ConstStr s_read_error("Read Error");
+thread_local static const pjs::ConstStr s_write_error("Write Error");
+thread_local static const pjs::ConstStr s_gateway_timeout("Gateway Timeout");
 
 bool RequestHead::is_final() const {
   pjs::Value v;
@@ -86,7 +93,6 @@ auto RequestHead::tunnel_type(pjs::Str *header_upgrade) const -> TunnelType {
   return TunnelType::NONE;
 }
 
-
 //
 // ResponseHead
 //
@@ -99,6 +105,34 @@ bool ResponseHead::is_tunnel(TunnelType requested) {
     case TunnelType::HTTP2: return (status == 101);
   }
   return false;
+}
+
+auto ResponseHead::error_to_status(StreamEnd::Error err, int &status) -> pjs::Str* {
+  switch (err) {
+  case StreamEnd::CANNOT_RESOLVE:
+    status = 502;
+    return s_cannot_resolve;
+  case StreamEnd::CONNECTION_REFUSED:
+    status = 502;
+    return s_connection_refused;
+  case StreamEnd::UNAUTHORIZED:
+    status = 401;
+    return s_unauthorized;
+  case StreamEnd::READ_ERROR:
+    status = 502;
+    return s_read_error;
+  case StreamEnd::WRITE_ERROR:
+    status = 502;
+    return s_write_error;
+  case StreamEnd::CONNECTION_TIMEOUT:
+  case StreamEnd::READ_TIMEOUT:
+  case StreamEnd::WRITE_TIMEOUT:
+    status = 504;
+    return s_gateway_timeout;
+  default:
+    status = 502;
+    return s_bad_gateway;
+  }
 }
 
 //

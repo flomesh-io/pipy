@@ -35,37 +35,44 @@
 
 //
 // All mux filters should derive from MuxSource.
+// The main mux logic should be implemented in MuxSession, tho.
+//
+// +----------+      +-----------+      +---------------+      +----------------+      +----------+
+// | Pipeline |----->| MuxSource |----->| EventFunction |----->|   MuxSession   |----->| Pipeline |
+// | (client) |<-----| (filter)  |<-----|   (stream)    |<-----| (client/agent) |<-----| (server) |
+// +----------+      +-----------+      +---------------+      +----------------+      +----------+
 //
 // MuxSource manages a single stream (as an EventFunction), which is allocated from a MuxSession.
 // The MuxSession is allocated from a MuxSessionPool.
 // The MuxSessionPool is allocated with a given session key from the MuxSessionMap.
 // The MuxSessionMap is shared among all MuxSources that are copy-constructed from the same MuxSource.
 //
-// +----------+ 1
-// |          |------------------------------------------------------------+
-// |  Source  |                                                            |
-// |          |------------------------------------+                       |
-// +----------+ *                                  |                       | ptr
-//    * |                                          | ref                   |
-//      | ref                                      |                       |
-//    1 V                                        1 V                     1 V
-// +------------+  ptr  +-------------+       +---------+       +------------------------+
-// |            |------>|             | 1   * |         | 1   * |                        |
-// | SessionMap | 1   * | SessionPool |------>| Session |------>| Stream (EventFunction) |
-// |            |<------|             |  ref  |         |       |                        |
-// +------------+  ref  +-------------+       +---------+       +------------------------+
+// +-------------+ 1
+// |             |----------------------------------------------------------------+
+// |  MuxSource  |                                                                |
+// |             |----------------------------------------+                       | ptr
+// +-------------+ *                                      |                       | mux_session_open_stream()
+//      * |                                               | ref                   | mux_session_close_stream()
+//        | ref                                           |                       |
+//      1 V                                             1 V                     1 V
+// +---------------+  ptr  +----------------+       +------------+       +------------------------+
+// |               |------>|                | 1   * |            | 1   * |                        |
+// | MuxSessionMap | 1   * | MuxSessionPool |------>| MuxSession |------>| EventFunction (stream) |
+// |               |<------|                |  ref  |            |       |                        |
+// +---------------+  ref  +----------------+       +------------+       +------------------------+
 //
 // A MuxSource needs to implement:
 //
 //   - on_mux_new_pool()
-//   - on_mux_new_session()
-//   - on_mux_pending_session_open()
+//   - on_mux_new_pipeline()
 //
-//   > Note about on_mux_pending_session_open()
+//   > Note about pending sessions:
 //   >
 //   > After creation, a MuxSession can be in "pending mode" due to any asynchronous
-//   > operations going on during the initialization of the session, such as a TLS handshake
-//   > becore the actual protocol being used is decided by ALPN.
+//   > operations going on during the setup of the session, such as a TLS handshake
+//   > before the actual protocol being used is decided via ALPN. In such case, all
+//   > input events are buffered up and won't be written to the session until pending
+//   > mode is over.
 //
 // A MuxSession needs to implement:
 //
@@ -73,12 +80,11 @@
 //   - mux_session_open_stream()
 //   - mux_session_close_stream()
 //   - mux_session_close()
-//   - mux_session_free()
 //
 // A MuxSessionPool needs to implement:
 //
 //   - session() : Creates a new MuxSession
-//   - free()    : Deletes the MuxSessionPool
+//   - free() : Deletes the MuxSessionPool
 //
 
 namespace pipy {
@@ -276,6 +282,7 @@ void MuxSessionPool::recycle(double now) {
        (m_max_messages > 0 && session->m_message_count >= m_max_messages) ||
        (now - session->m_free_time >= max_idle))
     {
+      AutoReleased::auto_release(session);
       session->pipeline()->input()->input(StreamEnd::make());
       session->close();
       session->detach();
@@ -379,15 +386,33 @@ void MuxSource::reset() {
     m_session->free();
     m_session = nullptr;
   }
+  m_waiting_events.clear();
   m_session_key = pjs::Value::undefined;
   m_has_alloc_error = false;
 }
 
-void MuxSource::chain(EventTarget::Input *input) {
-  m_output = input;
-  if (m_stream) {
-    m_stream->chain(input);
+void MuxSource::on_input(Event *evt) {
+  alloc_stream();
+
+  if (m_is_waiting) {
+    m_waiting_events.push(evt);
+
+  } else if (auto i = EventProxy::forward()) {
+    AutoReleased::auto_release(m_session);
+    if (!m_waiting_events.empty()) {
+      m_waiting_events.flush(
+        [=](Event *evt) {
+          i->input(evt);
+        }
+      );
+    }
+    i->input(evt);
   }
+}
+
+void MuxSource::on_reply(Event *evt) {
+  AutoReleased::auto_release(m_session);
+  EventProxy::output(evt);
 }
 
 void MuxSource::alloc_stream() {
@@ -413,7 +438,7 @@ void MuxSource::alloc_stream() {
       session->open(this, on_mux_new_pipeline()); // might've got EOS after
       if (auto eos = session->m_eos.get()) {
         m_session = nullptr;
-        m_output->input(eos);
+        EventProxy::output(eos);
         return;
       }
     }
@@ -424,7 +449,8 @@ void MuxSource::alloc_stream() {
     }
 
     auto s = m_session->mux_session_open_stream(this);
-    s->chain(m_output);
+    EventProxy::chain_forward(s->input());
+    s->chain(EventProxy::reply());
     m_stream = s;
   }
 }
@@ -438,7 +464,7 @@ void MuxSource::start_waiting() {
 
 void MuxSource::flush_waiting() {
   stop_waiting();
-  on_mux_pending_session_open();
+  EventProxy::input()->flush_async();
 }
 
 void MuxSource::stop_waiting() {
@@ -631,7 +657,6 @@ MuxBase::MuxBase(pjs::Function *session_selector, pjs::Function *options)
 void MuxBase::reset() {
   Filter::reset();
   MuxSource::reset();
-  m_waiting_events.clear();
   m_session_key_ready = false;
 }
 
@@ -656,19 +681,7 @@ void MuxBase::process(Event *evt) {
     MuxSource::key(key);
   }
 
-  if (auto s = MuxSource::stream()) {
-    auto i = s->input();
-    if (!m_waiting_events.empty()) {
-      m_waiting_events.flush(
-        [=](Event *evt) {
-          i->input(evt);
-        }
-      );
-    }
-    i->input(evt);
-  } else {
-    m_waiting_events.push(evt);
-  }
+  MuxSource::input()->input(evt);
 }
 
 auto MuxBase::on_mux_new_pool() -> MuxSessionPool* {
@@ -687,10 +700,6 @@ auto MuxBase::on_mux_new_pool() -> MuxSessionPool* {
 
 auto MuxBase::on_mux_new_pipeline() -> Pipeline* {
   return sub_pipeline(0, false);
-}
-
-void MuxBase::on_mux_pending_session_open() {
-  Filter::input()->flush_async();
 }
 
 //

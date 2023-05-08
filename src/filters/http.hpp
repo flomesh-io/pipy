@@ -122,7 +122,7 @@ private:
 
   void message_start();
   void message_end();
-  void stream_end(StreamEnd *end);
+  void stream_end(StreamEnd *eos);
 
   void error() {
     m_has_error = true;
@@ -392,13 +392,14 @@ public:
     virtual auto mux_session_open_stream(MuxSource *source) -> EventFunction* override;
     virtual void mux_session_close_stream(EventFunction *stream) override;
     virtual void mux_session_close() override;
-    virtual void mux_session_free() override { delete this; }
 
     virtual void on_encode_request(RequestQueue::Request *req) override;
     virtual auto on_decode_response(ResponseHead *head) -> RequestQueue::Request* override;
     virtual bool on_decode_tunnel(TunnelType tt) override;
     virtual void on_decode_error() override;
     virtual void on_queue_end(StreamEnd *eos) override;
+    virtual void on_endpoint_close(StreamEnd *eos) override;
+    virtual void on_auto_release() override { delete this; }
 
     const Mux::Options& m_options;
     int m_version_selected = 0;
