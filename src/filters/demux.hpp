@@ -36,10 +36,10 @@
 namespace pipy {
 
 //
-// DemuxBase
+// DemuxSession
 //
 
-class DemuxBase : public EventFunction {
+class DemuxSession : public EventFunction {
 protected:
   virtual auto on_demux_open_stream() -> EventFunction* = 0;
   virtual void on_demux_close_stream(EventFunction *stream) = 0;
@@ -50,7 +50,7 @@ protected:
 // DemuxQueue
 //
 
-class DemuxQueue : public DemuxBase {
+class DemuxQueue : public DemuxSession {
 public:
   void reset();
   auto stream_count() const -> int { return m_stream_count; }

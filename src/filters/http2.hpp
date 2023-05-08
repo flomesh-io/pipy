@@ -530,10 +530,7 @@ protected:
 // Server
 //
 
-class Server :
-  public Endpoint,
-  public DemuxBase
-{
+class Server : public Endpoint, public DemuxSession {
 public:
   Server(const Options &options);
   virtual ~Server();
@@ -615,10 +612,7 @@ private:
 // Client
 //
 
-class Client :
-  public Endpoint,
-  public EventSource
-{
+class Client : public Endpoint, public EventSource {
 public:
   Client(const Options &options);
 
