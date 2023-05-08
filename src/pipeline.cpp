@@ -241,7 +241,7 @@ void Pipeline::shutdown() {
 }
 
 void Pipeline::reset() {
-  PipelineBase::reset();
+  AutoReleased::reset();
   EventTarget::close();
   EventFunction::chain(nullptr);
   for (auto f = m_filters.head(); f; f = f->next()) {

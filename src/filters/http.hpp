@@ -327,18 +327,6 @@ protected:
 };
 
 //
-// HTTP2Muxer
-//
-
-class HTTP2Muxer :
-  public pjs::Pooled<HTTP2Muxer>,
-  public http2::Client
-{
-public:
-  using http2::Client::Client;
-};
-
-//
 // Mux
 //
 

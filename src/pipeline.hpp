@@ -135,19 +135,12 @@ private:
 };
 
 //
-// PipelineBase
-//
-
-class PipelineBase : public AutoReleased, public EventFunction
-{
-};
-
-//
 // Pipeline
 //
 
 class Pipeline :
-  public PipelineBase,
+  public EventFunction,
+  public AutoReleased,
   public List<Pipeline>::Item
 {
 public:

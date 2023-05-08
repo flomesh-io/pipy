@@ -1280,10 +1280,15 @@ auto Demux::clone() -> Filter* {
 
 void Demux::chain() {
   Filter::chain();
-  Decoder::chain(DemuxQueue::input());
-  DemuxQueue::chain(Encoder::input());
-  Encoder::chain(Filter::output());
-  Encoder::set_buffer_size(m_options.buffer_size);
+  if (m_http2) {
+    Decoder::chain(http2::Server::input());
+    http2::Server::chain(Filter::output());
+  } else {
+    Decoder::chain(DemuxQueue::input());
+    DemuxQueue::chain(Encoder::input());
+    Encoder::chain(Filter::output());
+    Encoder::set_buffer_size(m_options.buffer_size);
+  }
 }
 
 void Demux::reset() {
