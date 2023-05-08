@@ -2218,11 +2218,6 @@ Client::Client(const Options &options) : Endpoint(false, options)
 {
 }
 
-void Client::open(EventFunction *session) {
-  EventSource::chain(session->input());
-  session->chain(EventSource::reply());
-}
-
 auto Client::stream() -> EventFunction* {
   auto id = (m_last_sent_stream_id += 2);
   auto stream = Endpoint::stream_open(id);

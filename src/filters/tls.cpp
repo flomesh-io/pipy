@@ -722,6 +722,13 @@ auto Client::clone() -> Filter* {
   return new Client(*this);
 }
 
+void Client::chain() {
+  Filter::chain();
+  if (m_session) {
+    m_session->chain(Filter::output());
+  }
+}
+
 void Client::reset() {
   Filter::reset();
   delete m_session;
@@ -749,7 +756,7 @@ void Client::process(Event *evt) {
       nullptr,
       m_options->handshake
     );
-    m_session->chain(output());
+    m_session->chain(Filter::output());
     pjs::Value sni(m_options->sni);
     if (!eval(m_options->sni_f, sni)) return;
     if (!sni.is_undefined()) {
@@ -762,7 +769,7 @@ void Client::process(Event *evt) {
     m_session->start_handshake();
   }
 
-  output(evt, m_session->input());
+  m_session->input()->input(evt);
 }
 
 //
@@ -861,6 +868,13 @@ void Server::reset() {
   m_session = nullptr;
 }
 
+void Server::chain() {
+  Filter::chain();
+  if (m_session) {
+    m_session->chain(Filter::output());
+  }
+}
+
 void Server::process(Event *evt) {
   if (!m_session) {
     m_session = new TLSSession(
@@ -875,10 +889,10 @@ void Server::process(Event *evt) {
       m_options->alpn,
       m_options->handshake
     );
-    m_session->chain(output());
+    m_session->chain(Filter::output());
   }
 
-  output(evt, m_session->input());
+  m_session->input()->input(evt);
 }
 
 //

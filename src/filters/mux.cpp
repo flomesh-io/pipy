@@ -24,6 +24,7 @@
  */
 
 #include "mux.hpp"
+#include "context.hpp"
 #include "pipeline.hpp"
 #include "input.hpp"
 #include "utils.hpp"
@@ -32,13 +33,61 @@
 
 #include <limits>
 
+//
+// All mux filters should derive from MuxSource.
+//
+// MuxSource manages a single stream (as an EventFunction), which is allocated from a MuxSession.
+// The MuxSession is allocated from a MuxSessionPool.
+// The MuxSessionPool is allocated with a given session key from the MuxSessionMap.
+// The MuxSessionMap is shared among all MuxSources that are copy-constructed from the same MuxSource.
+//
+// +----------+ 1
+// |          |------------------------------------------------------------+
+// |  Source  |                                                            |
+// |          |------------------------------------+                       |
+// +----------+ *                                  |                       | ptr
+//    * |                                          | ref                   |
+//      | ref                                      |                       |
+//    1 V                                        1 V                     1 V
+// +------------+  ptr  +-------------+       +---------+       +------------------------+
+// |            |------>|             | 1   * |         | 1   * |                        |
+// | SessionMap | 1   * | SessionPool |------>| Session |------>| Stream (EventFunction) |
+// |            |<------|             |  ref  |         |       |                        |
+// +------------+  ref  +-------------+       +---------+       +------------------------+
+//
+// A MuxSource needs to implement:
+//
+//   - on_mux_new_pool()
+//   - on_mux_new_session()
+//   - on_mux_pending_session_open()
+//
+//   > Note about on_mux_pending_session_open()
+//   >
+//   > After creation, a MuxSession can be in "pending mode" due to any asynchronous
+//   > operations going on during the initialization of the session, such as a TLS handshake
+//   > becore the actual protocol being used is decided by ALPN.
+//
+// A MuxSession needs to implement:
+//
+//   - mux_session_open()
+//   - mux_session_open_stream()
+//   - mux_session_close_stream()
+//   - mux_session_close()
+//   - mux_session_free()
+//
+// A MuxSessionPool needs to implement:
+//
+//   - session() : Creates a new MuxSession
+//   - free()    : Deletes the MuxSessionPool
+//
+
 namespace pipy {
 
 //
-// Muxer::Options
+// MuxSession::Options
 //
 
-Muxer::Options::Options(pjs::Object *options) {
+MuxSession::Options::Options(pjs::Object *options) {
   thread_local static pjs::ConstStr s_max_idle("maxIdle");
   thread_local static pjs::ConstStr s_max_queue("maxQueue");
   thread_local static pjs::ConstStr s_max_messages("maxMessages");
@@ -54,229 +103,81 @@ Muxer::Options::Options(pjs::Object *options) {
 }
 
 //
-// Muxer
+// MuxSession
 //
-// Manages one single stream (as an EventFunction), which is allocated from a Session
-// with a given session key, which is allocated from the SessionPool.
-//
-// +-------------+       +----------------+       +---------+       +------------------------+
-// |             | 1   * |                | 1   * |         | 1   * |                        |
-// | SessionPool |------>| SessionCluster |------>| Session |------>| Stream (EventFunction) |
-// |             |       |                |       |         |       |                        |
-// +-------------+       +----------------+       +---------+       +------------------------+
-//
-// Methods to be used by derived classes:
-//   - Call Muxer::alloc() to allocate a stream
-//   - Call Muxer::stream() to write events to the allocated stream
-//
-// Methods to be implemented by derived classes:
-//   - on_select_session()
-//   - on_new_cluster()
-//   - on_new_pipeline()
-//   - on_pending_session_open()
-//
-// Object lifecycles:
-//   - SessionPools are reference-counted by both Muxers and SessionClusters
-//   - SessionClusters are retained only as long as it has Sessions
-//   - Sessions are reference-counted by both Muxers and SessionClusters
-//   - Sessions are auto-released after detached from its SessionCluster
-//   - Streams are deleted when both its input and output ended
-//
-// After creation, a Session can be in "pending mode" due to any asynchronous
-// operations going on during the initialization of the session, such as a TLS handshake
-// becore the actual protocol being used is decided by ALPN.
+// Referenced and retained by:
+//   - MuxSources
+//   - MuxSessionPools
 //
 
-Muxer::Muxer()
-  : m_session_pool(new SessionPool())
-{
-}
-
-Muxer::Muxer(const Muxer &r)
-  : m_session_pool(r.m_session_pool)
-{
-}
-
-void Muxer::reset() {
-  if (m_session) {
-    stop_waiting();
-    reset_stream();
-    m_session->free();
-    m_session = nullptr;
-  }
-  m_session_key = pjs::Value::undefined;
-}
-
-void Muxer::shutdown() {
-  m_session_pool->shutdown();
-}
-
-void Muxer::alloc(EventTarget::Input *output) {
-  if (m_session && m_session->is_unlinked()) {
-    stop_waiting();
-    reset_stream();
-    m_session = nullptr;
-  }
-
-  if (!m_stream) {
-    auto session = m_session.get();
-    if (!session) {
-      if (!on_select_session(m_session_key)) return;
-      session = m_session_pool->alloc(this, m_session_key);
-      if (!session) return;
-      m_session = session;
-    }
-
-    if (session->is_unlinked()) {
-      pjs::Ref<SessionInfo> si = SessionInfo::make();
-      si->sessionKey = m_session_key;
-      si->sessionCount = session->m_cluster->m_sessions.size();
-      auto p = on_new_pipeline(session->reply(), si);
-      if (auto *end = session->stream_end()) {
-        output->input(end);
-        m_session = nullptr;
-        return;
-      }
-      session->link(this, p);
-    }
-
-    if (session->is_pending()) {
-      start_waiting();
-      return;
-    }
-
-    auto s = m_session->stream(this);
-    s->chain(output);
-    m_stream = s;
-  }
-}
-
-void Muxer::stream(Event *evt) {
-  if (auto *s = m_stream) {
-    s->input()->input(evt);
-  }
-}
-
-void Muxer::start_waiting() {
-  if (!m_waiting) {
-    m_session->m_waiting_muxers.push(this);
-    m_waiting = true;
-  }
-}
-
-void Muxer::flush_waiting() {
-  stop_waiting();
-  on_pending_session_open();
-}
-
-void Muxer::stop_waiting() {
-  if (m_waiting) {
-    m_session->m_waiting_muxers.remove(this);
-    m_waiting = false;
-  }
-}
-
-void Muxer::reset_stream() {
-  if (auto *s = m_stream) {
-    s->chain(nullptr);
-    m_session->close(s);
-    m_stream = nullptr;
-  }
-}
-
-//
-// Muxer::Session
-//
-// A Session is an EventProxy that wraps up a pipeline within it.
-// Sessions are reference-counted by both Muxers and SessionClusters.
-//
-// Methods:
-//   - link(): Set up the pipeline
-//   - unlink(): Free the pipeline
-//   - free(): Reduce its share count by 1
-//   - detach(): Detach from the current SessionCluster
-//
-// Methods to be implemented by derived classes:
-//   - open(): Called when session is open
-//   - stream(): Allocate a stream (as an EventFunction)
-//   - close(): Called when session is closed
-//
-// A Session can be destructed in a few different cases:
-//   - When the Muxer no longer uses it by calling free()
-//   - When the pipeline outputs a StreamEnd
-//   - When the SessionPool finds that it's been free for too long
-//
-
-void Muxer::Session::set_pending(bool pending) {
+void MuxSession::set_pending(bool pending) {
   if (pending != m_is_pending) {
     if (!pending) {
-      for (auto *p = m_waiting_muxers.head(); p; ) {
-        auto *muxer = p; p = p->List<Muxer>::Item::next();
-        muxer->flush_waiting();
+      for (auto *p = m_waiting_sources.head(); p; ) {
+        auto *s = p; p = p->List<MuxSource>::Item::next();
+        s->flush_waiting();
       }
     }
     m_is_pending = pending;
   }
 }
 
-void Muxer::Session::link(Muxer *muxer, Pipeline *pipeline) {
-  m_pipeline = pipeline;
-  chain_forward(pipeline->input());
-  open(muxer);
+void MuxSession::detach() {
+  if (auto p = m_pool) {
+    m_pool = nullptr;
+    p->detach(this); // potentially deleted
+  }
 }
 
-void Muxer::Session::unlink() {
-  if (auto p = m_pipeline.get()) {
-    close();
+void MuxSession::end(StreamEnd *eos) {
+  m_eos = eos;
+  close();
+  detach();
+}
+
+void MuxSession::open(MuxSource *source, Pipeline *pipeline) {
+  m_pipeline = pipeline;
+  mux_session_open(source);
+
+  auto si = StartInfo::make();
+  si->sessionCount = m_pool->m_sessions.size();
+  if (auto obj = m_pool->m_weak_key.ptr()) {
+    si->sessionKey.set(obj);
+  } else {
+    si->sessionKey = m_pool->m_key;
+  }
+  pjs::Value arg(si);
+  pipeline->start(1, &arg);
+}
+
+void MuxSession::close() {
+  if (m_pipeline) {
+    mux_session_close();
     m_pipeline = nullptr;
   }
 }
 
-void Muxer::Session::free() {
-  if (m_cluster) {
-    m_cluster->free(this);
+void MuxSession::free() {
+  if (m_pool) {
+    m_pool->free(this);
   } else {
-    unlink();
-  }
-}
-
-void Muxer::Session::detach() {
-  if (auto cluster = m_cluster) {
-    m_cluster = nullptr;
-    cluster->detach(this);
-  }
-}
-
-void Muxer::Session::on_input(Event *evt) {
-  forward(evt);
-}
-
-void Muxer::Session::on_reply(Event *evt) {
-  if (auto end = evt->as<StreamEnd>()) {
-    m_stream_end = end;
-    output(evt);
-    unlink();
-    detach();
-  } else {
-    output(evt);
+    close();
   }
 }
 
 //
-// Muxer::SessionCluster
+// MuxSessionPool
 //
-// SessionCluster manages all Sessions by the same session key.
-// It is constructed when the first Session is to be allocated.
-// It is destructed when all Sessions it manages are closed.
+// Will be deleted when the number of MuxSessions goes down to zero.
 //
 
-Muxer::SessionCluster::SessionCluster(const Options &options) {
+MuxSessionPool::MuxSessionPool(const MuxSession::Options &options) {
   m_max_idle = options.max_idle;
   m_max_queue = options.max_queue;
   m_max_messages = options.max_messages;
 }
 
-auto Muxer::SessionCluster::alloc() -> Session* {
+auto MuxSessionPool::alloc() -> MuxSession* {
   auto max_share_count = m_max_queue;
   auto max_message_count = m_max_messages;
   auto *s = m_sessions.head();
@@ -292,13 +193,13 @@ auto Muxer::SessionCluster::alloc() -> Session* {
     s = s->next();
   }
   s = session();
-  s->m_cluster = this;
   s->retain();
+  s->m_pool = this;
   m_sessions.unshift(s);
   return s;
 }
 
-void Muxer::SessionCluster::free(Session *session) {
+void MuxSessionPool::free(MuxSession *session) {
   session->m_share_count--;
   if (session->is_free()) {
     session->m_free_time = utils::now();
@@ -306,14 +207,13 @@ void Muxer::SessionCluster::free(Session *session) {
   sort(session);
 }
 
-void Muxer::SessionCluster::detach(Session *session) {
-  Session::auto_release(session);
+void MuxSessionPool::detach(MuxSession *session) {
   m_sessions.remove(session);
   session->release();
   sort(nullptr);
 }
 
-void Muxer::SessionCluster::sort(Session *session) {
+void MuxSessionPool::sort(MuxSession *session) {
   if (session) {
     auto p = session->back();
     while (p && p->m_share_count > session->m_share_count) p = p->back();
@@ -342,31 +242,31 @@ void Muxer::SessionCluster::sort(Session *session) {
 
   if (m_sessions.empty()) {
     if (m_weak_key.original_ptr()) {
-      m_pool->m_weak_clusters.erase(m_weak_key);
+      m_map->m_weak_pools.erase(m_weak_key);
     } else {
-      m_pool->m_clusters.erase(m_key);
+      m_map->m_pools.erase(m_key);
     }
     free();
   }
 }
 
-void Muxer::SessionCluster::schedule_recycling() {
+void MuxSessionPool::schedule_recycling() {
   auto s = m_sessions.head();
   if (!s || s->m_share_count > 0) {
     if (m_recycle_scheduled) {
-      m_pool->m_recycle_clusters.remove(this);
+      m_map->m_recycle_pools.remove(this);
       m_recycle_scheduled = false;
     }
   } else {
     if (!m_recycle_scheduled) {
-      m_pool->m_recycle_clusters.push(this);
-      m_pool->recycle();
+      m_map->m_recycle_pools.push(this);
+      m_map->schedule_recycling();
       m_recycle_scheduled = true;
     }
   }
 }
 
-void Muxer::SessionCluster::recycle(double now) {
+void MuxSessionPool::recycle(double now) {
   auto max_idle = m_max_idle * 1000;
   auto s = m_sessions.head();
   while (s) {
@@ -376,92 +276,191 @@ void Muxer::SessionCluster::recycle(double now) {
        (m_max_messages > 0 && session->m_message_count >= m_max_messages) ||
        (now - session->m_free_time >= max_idle))
     {
-      session->forward(StreamEnd::make());
-      session->unlink();
+      session->pipeline()->input()->input(StreamEnd::make());
+      session->close();
       session->detach();
     }
   }
 }
 
-void Muxer::SessionCluster::on_weak_ptr_gone() {
+void MuxSessionPool::on_weak_ptr_gone() {
   m_weak_ptr_gone = true;
-  m_pool->m_weak_clusters.erase(m_weak_key);
+  m_map->m_weak_pools.erase(m_weak_key);
   schedule_recycling();
 }
 
 //
-// Muxer::SessionPool
+// MuxSessionMap
+//
+// Referenced and retained by:
+//   - MuxSources
+//   - MuxSessionPool
+//   - Asynchronous recycling operations
 //
 
-auto Muxer::SessionPool::alloc(Muxer *mux, const pjs::Value &key) -> Session* {
+auto MuxSessionMap::alloc(const pjs::Value &key, MuxSource *source) -> MuxSession* {
   bool is_weak = (key.is_object() && key.o());
-  SessionCluster *cluster = nullptr;
+  MuxSessionPool *pool = nullptr;
 
   if (is_weak) {
     pjs::WeakRef<pjs::Object> o(key.o());
-    auto i = m_weak_clusters.find(o);
-    if (i != m_weak_clusters.end()) {
-      cluster = i->second;
+    auto i = m_weak_pools.find(o);
+    if (i != m_weak_pools.end()) {
+      pool = i->second;
     }
   } else {
-    auto i = m_clusters.find(key);
-    if (i != m_clusters.end()) {
-      cluster = i->second;
+    auto i = m_pools.find(key);
+    if (i != m_pools.end()) {
+      pool = i->second;
     }
   }
 
-  if (cluster) return cluster->alloc();
+  if (pool) return pool->alloc();
 
-  cluster = mux->on_new_cluster();
-  if (!cluster) return nullptr;
+  pool = source->on_mux_new_pool();
+  if (!pool) return nullptr;
 
-  cluster->m_pool = this;
+  pool->m_map = this;
 
   if (is_weak) {
-    cluster->m_weak_key = key.o();
-    cluster->watch(key.o()->weak_ptr());
-    m_weak_clusters[key.o()] = cluster;
+    pool->m_weak_key = key.o();
+    pool->watch(key.o()->weak_ptr());
+    m_weak_pools[key.o()] = pool;
   } else {
-    cluster->m_key = key;
-    m_clusters[key] = cluster;
+    pool->m_key = key;
+    m_pools[key] = pool;
   }
 
-  return cluster->alloc();
+  return pool->alloc();
 }
 
-void Muxer::SessionPool::shutdown() {
-  m_has_shutdown = true;
-}
-
-void Muxer::SessionPool::recycle() {
-  if (m_recycling) return;
-  if (m_recycle_clusters.empty()) return;
+void MuxSessionMap::schedule_recycling() {
+  if (m_has_recycling_scheduled) return;
+  if (m_recycle_pools.empty()) return;
 
   m_recycle_timer.schedule(
     1.0,
     [this]() {
       InputContext ic;
-      m_recycling = false;
+      m_has_recycling_scheduled = false;
       auto now = m_has_shutdown ? std::numeric_limits<double>::infinity() : utils::now();
-      auto c = m_recycle_clusters.head();
-      while (c) {
-        auto cluster = c; c = c->next();
-        cluster->recycle(now);
+      auto p = m_recycle_pools.head();
+      while (p) {
+        auto pool = p; p = p->next();
+        pool->recycle(now);
       }
-      recycle();
+      schedule_recycling();
       release();
     }
   );
 
   retain();
-  m_recycling = true;
+  m_has_recycling_scheduled = true;
 }
 
 //
-// Muxer::Queue
+// MuxSource
 //
 
-void Muxer::Queue::reset() {
+MuxSource::MuxSource()
+  : m_map(new MuxSessionMap())
+{
+}
+
+MuxSource::MuxSource(const MuxSource &r)
+  : m_map(r.m_map)
+{
+}
+
+void MuxSource::reset() {
+  if (m_session) {
+    stop_waiting();
+    close_stream();
+    m_session->free();
+    m_session = nullptr;
+  }
+  m_session_key = pjs::Value::undefined;
+  m_has_alloc_error = false;
+}
+
+void MuxSource::chain(EventTarget::Input *input) {
+  m_output = input;
+  if (m_stream) {
+    m_stream->chain(input);
+  }
+}
+
+void MuxSource::alloc_stream() {
+  if (m_session && !m_session->is_open()) {
+    stop_waiting();
+    close_stream();
+    m_session->free();
+    m_session = nullptr;
+  }
+
+  if (!m_stream && !m_has_alloc_error) {
+    auto session = m_session.get();
+    if (!session) {
+      session = m_map->alloc(m_session_key, this);
+      if (!session) {
+        m_has_alloc_error = true;
+        return;
+      }
+      m_session = session;
+    }
+
+    if (!session->is_open()) {
+      session->open(this, on_mux_new_pipeline()); // might've got EOS after
+      if (auto eos = session->m_eos.get()) {
+        m_session = nullptr;
+        m_output->input(eos);
+        return;
+      }
+    }
+
+    if (session->is_pending()) {
+      start_waiting();
+      return;
+    }
+
+    auto s = m_session->mux_session_open_stream(this);
+    s->chain(m_output);
+    m_stream = s;
+  }
+}
+
+void MuxSource::start_waiting() {
+  if (!m_is_waiting) {
+    m_session->m_waiting_sources.push(this);
+    m_is_waiting = true;
+  }
+}
+
+void MuxSource::flush_waiting() {
+  stop_waiting();
+  on_mux_pending_session_open();
+}
+
+void MuxSource::stop_waiting() {
+  if (m_is_waiting) {
+    m_session->m_waiting_sources.remove(this);
+    m_is_waiting = false;
+  }
+}
+
+void MuxSource::close_stream() {
+  if (auto *s = m_stream) {
+    s->chain(nullptr);
+    m_session->mux_session_close_stream(s);
+    m_stream = nullptr;
+  }
+}
+
+//
+// MuxQueue
+//
+
+void MuxQueue::reset() {
   while (auto r = m_receivers.head()) {
     m_receivers.remove(r);
     delete r;
@@ -469,28 +468,15 @@ void Muxer::Queue::reset() {
   m_dedicated_stream = nullptr;
 }
 
-auto Muxer::Queue::stream(Muxer *muxer) -> EventFunction* {
-  auto s = new Stream(muxer, this);
-  s->retain();
-  return s;
-}
-
-void Muxer::Queue::close(EventFunction *stream) {
-  auto s = static_cast<Stream*>(stream);
-  s->end_input();
-}
-
-void Muxer::Queue::increase_queue_count() {
+void MuxQueue::increase_output_count(int n) {
   if (auto r = m_receivers.head()) {
-    r->increase_output_count(1);
+    r->increase_output_count(n);
   }
 }
 
-void Muxer::Queue::dedicate() {
+void MuxQueue::dedicate() {
   if (auto r = m_receivers.head()) {
-    auto s = r->stream();
-    s->m_muxer->m_session->detach();
-    m_dedicated_stream = s;
+    m_dedicated_stream = r->stream();
     while (auto r = m_receivers.head()) {
       m_receivers.remove(r);
       delete r;
@@ -498,102 +484,113 @@ void Muxer::Queue::dedicate() {
   }
 }
 
-void Muxer::Queue::on_reply(Event *evt) {
+auto MuxQueue::stream(MuxSource *source) -> EventFunction* {
+  auto s = new Stream(this, source);
+  s->retain();
+  return s;
+}
+
+void MuxQueue::close(EventFunction *stream) {
+  auto s = static_cast<Stream*>(stream);
+  s->release();
+}
+
+void MuxQueue::on_reply(Event *evt) {
   if (auto s = m_dedicated_stream.get()) {
     s->output(evt);
+    if (auto eos = evt->as<StreamEnd>()) {
+      on_queue_end(eos);
+    }
+
   } else if (auto r = m_receivers.head()) {
     if (r->receive(evt)) {
       m_receivers.remove(r);
       delete r;
     }
-    if (evt->is<StreamEnd>()) {
+    if (auto eos = evt->as<StreamEnd>()) {
       for (auto r = m_receivers.head(); r; r = r->next()) {
         auto s = r->stream();
-        if (!s->m_end_output) {
-          s->output(evt->clone());
-          s->end_output();
-        }
+        s->output(evt->clone());
       }
       reset();
+      on_queue_end(eos);
     }
+
+  } else if (auto eos = evt->as<StreamEnd>()) {
+    on_queue_end(eos);
   }
 }
 
 //
-// Muxer::Queue::Stream
+// MuxQueue::Stream
+//
+// Referenced and retained by:
+//   - MuxSource, via mux_session_open_stream() and mux_session_close_stream()
+//   - MuxQueue if dedicated
+//   - MuxQueue::Receiver
 //
 
-void Muxer::Queue::Stream::on_event(Event *evt) {
-  auto queue = m_queue;
+void MuxQueue::Stream::on_event(Event *evt) {
+  auto q = m_queue;
 
-  if (auto s = queue->m_dedicated_stream.get()) {
-    if (s == this) queue->output(evt);
+  if (auto s = q->m_dedicated_stream.get()) {
+    if (s == this) q->output(evt);
     return;
   }
 
   if (auto msg = m_reader.read(evt)) {
-    int n = queue->on_queue_message(m_muxer, msg);
+    int n = q->on_queue_message(m_source, msg);
     if (n >= 0) {
       if (n > 0) {
         auto r = new Receiver(this, n);
-        queue->m_receivers.push(r);
+        q->m_receivers.push(r);
         m_receiver_count++;
       }
-      msg->write(queue->output());
+      msg->write(q->output());
     }
     msg->release();
   }
+
+  if (auto eos = evt->as<StreamEnd>()) {
+    if (m_receiver_count > 0) {
+      m_eos = eos;
+    } else {
+      EventFunction::output(evt);
+    }
+  }
 }
 
-void Muxer::Queue::Stream::shift() {
+void MuxQueue::Stream::shift() {
   if (!--m_receiver_count) {
-    EventFunction::output(StreamEnd::make());
-    end_output();
-  }
-}
-
-void Muxer::Queue::Stream::end_input() {
-  if (!m_end_input) {
-    m_end_input = true;
-    recycle();
-  }
-}
-
-void Muxer::Queue::Stream::end_output() {
-  if (!m_end_output) {
-    m_end_output = true;
-    recycle();
-  }
-}
-
-void Muxer::Queue::Stream::recycle() {
-  if (m_end_input && m_end_output) {
-    release();
+    if (m_eos) {
+      EventFunction::output(m_eos);
+      m_eos = nullptr;
+    }
   }
 }
 
 //
-// Muxer::Queue::Receiver
+// MuxQueue::Receiver
 //
 
-bool Muxer::Queue::Receiver::receive(Event *evt) {
+bool MuxQueue::Receiver::receive(Event *evt) {
   switch (evt->type()) {
     case Event::Type::MessageStart:
-      if (!m_message_started) {
+      if (!m_has_message_started) {
         m_stream->output(evt);
-        m_message_started = true;
+        m_has_message_started = true;
       }
       break;
     case Event::Type::Data:
-      if (m_message_started) {
+      if (m_has_message_started) {
         m_stream->output(evt);
       }
       break;
     case Event::Type::MessageEnd:
     case Event::Type::StreamEnd:
-      if (m_message_started) {
+      if (m_has_message_started) {
         m_stream->output(evt->is<StreamEnd>() ? MessageEnd::make() : evt);
-        m_message_started = false;
+        m_has_message_started = false;
         if (!--m_output_count) {
           m_stream->shift();
           return true;
@@ -614,7 +611,7 @@ MuxBase::MuxBase()
 
 MuxBase::MuxBase(const MuxBase &r)
   : Filter(r)
-  , Muxer(r)
+  , MuxSource(r)
   , m_session_selector(r.m_session_selector)
   , m_options(r.m_options)
 {
@@ -633,38 +630,48 @@ MuxBase::MuxBase(pjs::Function *session_selector, pjs::Function *options)
 
 void MuxBase::reset() {
   Filter::reset();
-  Muxer::reset();
+  MuxSource::reset();
   m_waiting_events.clear();
+  m_session_key_ready = false;
+}
+
+void MuxBase::chain() {
+  Filter::chain();
+  MuxSource::chain(Filter::output());
 }
 
 void MuxBase::shutdown() {
   Filter::shutdown();
-  Muxer::shutdown();
+  if (auto map = MuxSource::map()) {
+    map->shutdown();
+  }
 }
 
 void MuxBase::process(Event *evt) {
-  Muxer::alloc(Filter::output());
-  if (Muxer::stream()) {
+  if (!m_session_key_ready) {
+    m_session_key_ready = true;
+    pjs::Value key;
+    if (m_session_selector && !Filter::eval(m_session_selector, key)) return;
+    if (key.is_undefined()) key.set(Filter::context()->inbound());
+    MuxSource::key(key);
+  }
+
+  if (auto s = MuxSource::stream()) {
+    auto i = s->input();
     if (!m_waiting_events.empty()) {
       m_waiting_events.flush(
-        [this](Event *evt) {
-          Muxer::stream(evt);
+        [=](Event *evt) {
+          i->input(evt);
         }
       );
     }
-    Muxer::stream(evt);
+    i->input(evt);
   } else {
     m_waiting_events.push(evt);
   }
 }
 
-bool MuxBase::on_select_session(pjs::Value &key) {
-  if (m_session_selector && !Filter::eval(m_session_selector, key)) return false;
-  if (key.is_undefined()) key.set(Filter::context()->inbound());
-  return true;
-}
-
-auto MuxBase::on_new_cluster() -> MuxBase::SessionCluster* {
+auto MuxBase::on_mux_new_pool() -> MuxSessionPool* {
   if (auto f = m_options.get()) {
     pjs::Value opts;
     if (!Filter::eval(f, opts)) return nullptr;
@@ -672,18 +679,17 @@ auto MuxBase::on_new_cluster() -> MuxBase::SessionCluster* {
       Filter::error("callback did not return an object for options");
       return nullptr;
     }
-    return on_new_cluster(opts.o());
+    return on_mux_new_pool(opts.o());
   } else {
-    return on_new_cluster(nullptr);
+    return on_mux_new_pool(nullptr);
   }
 }
 
-auto MuxBase::on_new_pipeline(EventTarget::Input *output, pjs::Object *session_info) -> Pipeline* {
-  pjs::Value arg(session_info);
-  return Filter::sub_pipeline(0, false, output)->start(1, &arg);
+auto MuxBase::on_mux_new_pipeline() -> Pipeline* {
+  return sub_pipeline(0, false);
 }
 
-void MuxBase::on_pending_session_open() {
+void MuxBase::on_mux_pending_session_open() {
   Filter::input()->flush_async();
 }
 
@@ -692,7 +698,7 @@ void MuxBase::on_pending_session_open() {
 //
 
 Mux::Options::Options(pjs::Object *options)
-  : MuxBase::Options(options)
+  : MuxSession::Options(options)
 {
   Value(options, "outputCount")
     .get(output_count)
@@ -730,7 +736,8 @@ Mux::Mux(const Mux &r)
 {
 }
 
-Mux::~Mux() {
+Mux::~Mux()
+{
 }
 
 void Mux::dump(Dump &d) {
@@ -743,17 +750,17 @@ auto Mux::clone() -> Filter* {
   return new Mux(*this);
 }
 
-auto Mux::on_new_cluster(pjs::Object *options) -> MuxBase::SessionCluster* {
+auto Mux::on_mux_new_pool(pjs::Object *options) -> MuxSessionPool* {
   if (options) {
     try {
       Options opts(options);
-      return new SessionCluster(opts);
+      return new SessionPool(opts);
     } catch (std::runtime_error &err) {
       Filter::error(err.what());
       return nullptr;
     }
   } else {
-    return new SessionCluster(m_options);
+    return new SessionPool(m_options);
   }
 }
 
@@ -761,36 +768,37 @@ auto Mux::on_new_cluster(pjs::Object *options) -> MuxBase::SessionCluster* {
 // Mux::Session
 //
 
-void Mux::Session::open(Muxer *muxer) {
-  Muxer::Queue::chain(MuxBase::Session::input());
-  MuxBase::Session::chain(Muxer::Queue::reply());
+void Mux::Session::mux_session_open(MuxSource *source) {
+  MuxQueue::chain(MuxSession::pipeline()->input());
+  MuxSession::pipeline()->chain(MuxQueue::reply());
 }
 
-auto Mux::Session::stream(Muxer *muxer) -> EventFunction* {
-  return Muxer::Queue::stream(muxer);
+auto Mux::Session::mux_session_open_stream(MuxSource *source) -> EventFunction* {
+  return MuxQueue::stream(source);
 }
 
-void Mux::Session::close(EventFunction *stream) {
-  return Muxer::Queue::close(stream);
+void Mux::Session::mux_session_close_stream(EventFunction *stream) {
+  MuxQueue::close(stream);
 }
 
-void Mux::Session::close() {
-  Muxer::Queue::reset();
+void Mux::Session::mux_session_close() {
+  MuxQueue::reset();
 }
 
-auto Mux::Session::on_queue_message(Muxer *muxer, Message *msg) -> int {
-  auto cluster = static_cast<SessionCluster*>(Mux::Session::cluster());
-  if (auto f = cluster->m_output_count_f.get()) {
-    auto mux = static_cast<Mux*>(muxer);
+auto Mux::Session::on_queue_message(MuxSource *source, Message *msg) -> int {
+  auto pool = static_cast<SessionPool*>(MuxSession::pool());
+  if (auto f = pool->m_output_count_f.get()) {
+    auto mux = static_cast<Mux*>(source);
     pjs::Value arg(msg), ret;
-    if (!mux->Filter::callback(f, 1, &arg, ret)) {
-      close();
-      return -1;
-    }
+    if (!mux->Filter::callback(f, 1, &arg, ret)) return 1;
     return ret.to_int32();
   } else {
-    return cluster->m_output_count;
+    return pool->m_output_count;
   }
+}
+
+void Mux::Session::on_queue_end(StreamEnd *eos) {
+  MuxSession::end(eos);
 }
 
 } // namespace pipy
@@ -799,9 +807,9 @@ namespace pjs {
 
 using namespace pipy;
 
-template<> void ClassDef<Muxer::SessionInfo>::init() {
-  field<Value>("sessionKey", [](Muxer::SessionInfo *obj) { return &obj->sessionKey; });
-  field<int>("sessionCount", [](Muxer::SessionInfo *obj) { return &obj->sessionCount; });
+template<> void ClassDef<MuxSession::StartInfo>::init() {
+  field<Value>("sessionKey", [](MuxSession::StartInfo *obj) { return &obj->sessionKey; });
+  field<int>("sessionCount", [](MuxSession::StartInfo *obj) { return &obj->sessionCount; });
 }
 
 } // namespace pjs

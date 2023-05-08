@@ -64,6 +64,13 @@ void Link::reset() {
   m_started = false;
 }
 
+void Link::chain() {
+  Filter::chain();
+  if (m_pipeline) {
+    m_pipeline->chain(Filter::output());
+  }
+}
+
 void Link::process(Event *evt) {
   if (!m_started) {
     if (m_name_f) {
@@ -97,11 +104,11 @@ void Link::process(Event *evt) {
     if (!m_buffer.empty()) {
       m_buffer.flush(
         [=](Event *evt) {
-          Filter::output(evt, p->input());
+          p->input()->input(evt);
         }
       );
     }
-    Filter::output(evt, p->input());
+    p->input()->input(evt);
   }
 }
 

@@ -345,7 +345,7 @@ public:
 class Mux : public MuxBase {
 public:
   struct Options :
-    public MuxBase::Options,
+    public MuxSession::Options,
     public http2::Endpoint::Options
   {
     size_t buffer_size = DATA_CHUNK_SIZE;
@@ -366,12 +366,20 @@ public:
   //
 
   class Session :
-    public pjs::Pooled<Session, Muxer::Session>,
-    public Muxer::Queue,
+    public pjs::Pooled<Session, MuxSession>,
+    protected MuxQueue,
     protected Encoder,
-    protected Decoder
+    protected Decoder,
+    protected http2::Client
   {
   public:
+    Session(const Mux::Options &options)
+      : Encoder(false)
+      , Decoder(true)
+      , http2::Client(options)
+      , m_options(options) {}
+
+    ~Session();
 
     //
     // Mux::Session::VersionSelector
@@ -379,42 +387,39 @@ public:
 
     class VersionSelector : public pjs::ObjectTemplate<VersionSelector> {
     public:
-      void select(const pjs::Value &version) { if (m_session) m_session->select_protocol(m_mux, version); }
+      void select(const pjs::Value &version) {
+        if (m_session) m_session->select_protocol(m_mux, version);
+      }
       void close() { m_session = nullptr; }
     private:
-      VersionSelector(Mux *mux, Session *session) : m_mux(mux), m_session(session) {}
+      VersionSelector(Mux *mux, Session *session)
+        : m_mux(mux), m_session(session) {}
       Mux* m_mux;
       Session* m_session;
       friend class pjs::ObjectTemplate<VersionSelector>;
     };
 
-    Session(const Options &options)
-      : Encoder(false)
-      , Decoder(true)
-      , m_options(options) {}
-
-    ~Session();
-
   private:
-    virtual void open(Muxer *muxer) override;
-    virtual auto stream(Muxer *muxer) -> EventFunction* override;
-    virtual void close(EventFunction *stream) override;
-    virtual void close() override;
+    virtual void mux_session_open(MuxSource *source) override;
+    virtual auto mux_session_open_stream(MuxSource *source) -> EventFunction* override;
+    virtual void mux_session_close_stream(EventFunction *stream) override;
+    virtual void mux_session_close() override;
+    virtual void mux_session_free() override { delete this; }
+
     virtual void on_encode_request(RequestQueue::Request *req) override;
     virtual auto on_decode_response(ResponseHead *head) -> RequestQueue::Request* override;
     virtual bool on_decode_tunnel(TunnelType tt) override;
     virtual void on_decode_error() override;
-    virtual void on_auto_release() override { delete this; }
+    virtual void on_queue_end(StreamEnd *eos) override;
 
-    const Options& m_options;
+    const Mux::Options& m_options;
     int m_version_selected = 0;
     pjs::Ref<VersionSelector> m_version_selector;
     RequestQueue m_request_queue;
-    HTTP2Muxer* m_http2_muxer = nullptr;
+    bool m_http2 = false;
 
-    bool select_protocol(Muxer *muxer);
-    bool select_protocol(Muxer *muxer, const pjs::Value &version);
-    void upgrade_http2();
+    bool select_protocol(Mux *muxer);
+    bool select_protocol(Mux *muxer, const pjs::Value &version);
   };
 
 private:
@@ -426,26 +431,24 @@ private:
 
   virtual auto clone() -> Filter* override;
   virtual void dump(Dump &d) override;
-  virtual auto on_new_cluster(pjs::Object *options) -> MuxBase::SessionCluster* override;
+  virtual auto on_mux_new_pool(pjs::Object *options) -> MuxSessionPool* override;
 
   auto verify_http_version(int version) -> int;
   auto verify_http_version(pjs::Str *name) -> int;
 
   //
-  // Mux::SessionCluster
+  // Mux::SessionPool
   //
 
-  class SessionCluster : public pjs::Pooled<SessionCluster, MuxBase::SessionCluster> {
-    SessionCluster(const Options &options)
-      : pjs::Pooled<SessionCluster, MuxBase::SessionCluster>(options)
+  struct SessionPool : public pjs::Pooled<SessionPool, MuxSessionPool> {
+    SessionPool(const Options &options)
+      : pjs::Pooled<SessionPool, MuxSessionPool>(options)
       , m_options(options) {}
 
-    virtual auto session() -> Muxer::Session* override { return new Session(m_options); }
+    virtual auto session() -> MuxSession* override { return new Session(m_options); }
     virtual void free() override { delete this; }
 
     Options m_options;
-
-    friend class Mux;
   };
 };
 
