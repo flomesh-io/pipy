@@ -150,12 +150,12 @@ void Task::wait() {
 
 void Task::run() {
   if (!active()) {
+    InputContext ic;
     m_stream_end = false;
     m_pipeline = Pipeline::make(
       m_pipeline_layout,
       m_pipeline_layout->new_context()
     );
-    InputContext ic;
     m_pipeline->chain(EventTarget::input());
     m_pipeline->start();
   }

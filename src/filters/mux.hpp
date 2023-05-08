@@ -31,6 +31,7 @@
 #include "event.hpp"
 #include "message.hpp"
 #include "input.hpp"
+#include "pipeline.hpp"
 #include "list.hpp"
 #include "timer.hpp"
 #include "options.hpp"
@@ -48,7 +49,11 @@ class MuxSource;
 // MuxSession
 //
 
-class MuxSession : public AutoReleased, public List<MuxSession>::Item {
+class MuxSession :
+  public AutoReleased,
+  public EventProxy,
+  public List<MuxSession>::Item
+{
 public:
 
   //
@@ -79,7 +84,7 @@ public:
 
 protected:
   auto pool() const -> MuxSessionPool* { return m_pool; }
-  auto pipeline() const -> Pipeline* { return m_pipeline; }
+  auto input() const -> EventTarget::Input* { return m_pipeline->input(); }
   bool is_open() const { return m_pipeline; }
   bool is_free() const { return !m_share_count; }
   bool is_pending() const { return m_is_pending; }
@@ -100,6 +105,11 @@ private:
   int m_message_count = 0;
   double m_free_time = 0;
   bool m_is_pending = false;
+
+  virtual void on_reply(Event *evt) override {
+    MuxSession::auto_release(this);
+    EventProxy::output(evt);
+  }
 
   friend class pjs::RefCount<MuxSession>;
   friend class MuxSource;
@@ -174,7 +184,7 @@ private:
 // MuxSource
 //
 
-class MuxSource : public List<MuxSource>::Item, public EventProxy {
+class MuxSource : public List<MuxSource>::Item {
 protected:
   MuxSource();
   MuxSource(const MuxSource &r);
@@ -183,16 +193,17 @@ protected:
   void key(const pjs::Value &key) { m_session_key = key; }
   auto map() -> MuxSessionMap* { return m_map; }
 
+  void chain(EventTarget::Input *input);
+  void input(Event *evt);
+
   virtual auto on_mux_new_pool() -> MuxSessionPool* = 0;
   virtual auto on_mux_new_pipeline() -> Pipeline* = 0;
 
 private:
-  virtual void on_input(Event *evt) override;
-  virtual void on_reply(Event *evt) override;
-
   pjs::Ref<MuxSessionMap> m_map;
   pjs::Ref<MuxSession> m_session;
   pjs::Value m_session_key;
+  pjs::Ref<EventTarget::Input> m_output;
   EventFunction* m_stream = nullptr;
   EventBuffer m_waiting_events;
   bool m_is_waiting = false;

@@ -53,7 +53,6 @@ void ModuleBase::for_each_pipeline(const std::function<void(PipelineLayout*)> &c
 void ModuleBase::shutdown() {
   retain();
   {
-    InputContext ic;
     for (const auto &p : m_pipelines) {
       p->shutdown();
     }

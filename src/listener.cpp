@@ -396,10 +396,10 @@ void Listener::AcceptorUDP::receive() {
     asio::null_buffers(),
     m_peer,
     [=](const std::error_code &ec, std::size_t n) {
+      InputContext ic;
+
       if (ec != asio::error::operation_aborted) {
         if (!ec) {
-          InputContext ic;
-
           auto max_size = m_listener->m_options.max_packet_size;
           auto iov_size = (max_size + DATA_CHUNK_SIZE - 1) / DATA_CHUNK_SIZE;
           Data buf(max_size, &s_dp_udp);

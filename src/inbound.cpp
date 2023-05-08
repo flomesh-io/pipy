@@ -215,6 +215,8 @@ void InboundTCP::accept(asio::ip::tcp::acceptor &acceptor) {
   acceptor.async_accept(
     m_socket, m_peer,
     [this](const std::error_code &ec) {
+      InputContext ic(this);
+
       if (ec == asio::error::operation_aborted) {
         dangle();
       } else {
@@ -236,7 +238,6 @@ void InboundTCP::accept(asio::ip::tcp::acceptor &acceptor) {
           if (m_listener && m_listener->pipeline_layout()) {
             m_socket.set_option(asio::socket_base::keep_alive(m_options.keep_alive));
             m_socket.set_option(tcp::no_delay(m_options.no_delay));
-            InputContext ic(this);
             start();
           }
         }
@@ -407,6 +408,7 @@ void InboundTCP::receive() {
     m_read_timer.schedule(
       m_options.read_timeout,
       [this]() {
+        InputContext ic;
         close(StreamEnd::READ_TIMEOUT);
       }
     );
@@ -426,7 +428,6 @@ void InboundTCP::linger() {
         describe(desc);
         Log::error("%s socket error: %s", desc, ec.message().c_str());
       }
-      InputContext ic(this);
       release();
     }
   );
@@ -481,6 +482,7 @@ void InboundTCP::pump() {
     m_write_timer.schedule(
       m_options.write_timeout,
       [this]() {
+        InputContext ic;
         close(StreamEnd::WRITE_TIMEOUT);
       }
     );
@@ -499,6 +501,7 @@ void InboundTCP::wait() {
     m_idle_timer.schedule(
       m_options.idle_timeout,
       [this]() {
+        InputContext ic;
         close(StreamEnd::IDLE_TIMEOUT);
       }
     );
@@ -628,7 +631,6 @@ void InboundUDP::start() {
 void InboundUDP::receive(Data *data) {
   start();
   wait_idle();
-  InputContext ic;
   m_input->input(MessageStart::make());
   m_input->input(data);
   m_input->input(MessageEnd::make());

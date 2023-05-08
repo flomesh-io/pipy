@@ -1470,7 +1470,7 @@ void Mux::Session::mux_session_open(MuxSource *source) {
   auto mux = static_cast<Mux*>(source);
   if (!select_protocol(mux)) {
     MuxSession::set_pending(true);
-    pipeline()->input()->flush();
+    MuxSession::input()->flush();
   }
 }
 
@@ -1564,16 +1564,16 @@ bool Mux::Session::select_protocol(Mux *mux, const pjs::Value &version) {
   switch (m_version_selected) {
   case 1:
     MuxQueue::chain(Encoder::input());
-    Encoder::chain(MuxSession::pipeline()->input());
-    MuxSession::pipeline()->chain(Decoder::input());
+    Encoder::chain(MuxSession::input());
+    MuxSession::chain(Decoder::input());
     Decoder::chain(MuxQueue::reply());
     Encoder::set_buffer_size(m_options.buffer_size);
     MuxSession::set_pending(false);
     return true;
   case 2:
     m_http2 = true;
-    http2::Client::chain(MuxSession::pipeline()->input());
-    MuxSession::pipeline()->chain(http2::Client::reply());
+    http2::Client::chain(MuxSession::input());
+    MuxSession::chain(http2::Client::reply());
     MuxSession::set_pending(false);
     return true;
   default:

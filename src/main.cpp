@@ -211,10 +211,10 @@ private:
     if (!m_fetch->busy()) {
       WorkerManager::get().status(
         [this](Status &status) {
+          InputContext ic;
           std::stringstream ss;
           status.ip = m_local_ip;
           status.to_json(ss);
-          InputContext ic;
           (*m_fetch)(
             Fetch::POST,
             m_url->path(),
@@ -290,6 +290,7 @@ private:
   void wait() {
     m_signals.async_wait(
       [this](const std::error_code &ec, int sig) {
+        InputContext ic;
         if (!ec) handle(sig);
         if (ec != asio::error::operation_aborted) wait();
       }

@@ -25,8 +25,7 @@
 
 #include "mux.hpp"
 #include "context.hpp"
-#include "pipeline.hpp"
-#include "input.hpp"
+#include "net.hpp"
 #include "utils.hpp"
 
 #include "api/console.hpp"
@@ -142,6 +141,8 @@ void MuxSession::end(StreamEnd *eos) {
 }
 
 void MuxSession::open(MuxSource *source, Pipeline *pipeline) {
+  EventProxy::chain_forward(pipeline->input());
+  pipeline->chain(EventSource::reply());
   m_pipeline = pipeline;
   mux_session_open(source);
 
@@ -283,7 +284,7 @@ void MuxSessionPool::recycle(double now) {
        (now - session->m_free_time >= max_idle))
     {
       MuxSession::auto_release(session);
-      session->pipeline()->input()->input(StreamEnd::make());
+      session->forward(StreamEnd::make());
       session->close();
       session->detach();
     }
@@ -391,13 +392,21 @@ void MuxSource::reset() {
   m_has_alloc_error = false;
 }
 
-void MuxSource::on_input(Event *evt) {
+void MuxSource::chain(EventTarget::Input *input) {
+  m_output = input;
+  if (m_stream) {
+    m_stream->chain(input);
+  }
+}
+
+void MuxSource::input(Event *evt) {
   alloc_stream();
 
   if (m_is_waiting) {
     m_waiting_events.push(evt);
 
-  } else if (auto i = EventProxy::forward()) {
+  } else if (auto s = m_stream) {
+    auto i = s->input();
     MuxSession::auto_release(m_session);
     if (!m_waiting_events.empty()) {
       m_waiting_events.flush(
@@ -408,11 +417,6 @@ void MuxSource::on_input(Event *evt) {
     }
     i->input(evt);
   }
-}
-
-void MuxSource::on_reply(Event *evt) {
-  MuxSession::auto_release(m_session);
-  EventProxy::output(evt);
 }
 
 void MuxSource::alloc_stream() {
@@ -438,7 +442,7 @@ void MuxSource::alloc_stream() {
       session->open(this, on_mux_new_pipeline()); // might've got EOS after
       if (auto eos = session->m_eos.get()) {
         m_session = nullptr;
-        EventProxy::output(eos);
+        m_output->input(eos);
         return;
       }
     }
@@ -449,8 +453,7 @@ void MuxSource::alloc_stream() {
     }
 
     auto s = m_session->mux_session_open_stream(this);
-    EventProxy::chain_forward(s->input());
-    s->chain(EventProxy::reply());
+    s->chain(m_output);
     m_stream = s;
   }
 }
@@ -464,7 +467,12 @@ void MuxSource::start_waiting() {
 
 void MuxSource::flush_waiting() {
   stop_waiting();
-  EventProxy::input()->flush_async();
+  Net::current().post(
+    [this]() {
+      InputContext ic;
+      MuxSource::input(Data::make());
+    }
+  );
 }
 
 void MuxSource::stop_waiting() {
@@ -681,7 +689,7 @@ void MuxBase::process(Event *evt) {
     MuxSource::key(key);
   }
 
-  MuxSource::input()->input(evt);
+  MuxSource::input(evt);
 }
 
 auto MuxBase::on_mux_new_pool() -> MuxSessionPool* {
@@ -778,8 +786,8 @@ auto Mux::on_mux_new_pool(pjs::Object *options) -> MuxSessionPool* {
 //
 
 void Mux::Session::mux_session_open(MuxSource *source) {
-  MuxQueue::chain(MuxSession::pipeline()->input());
-  MuxSession::pipeline()->chain(MuxQueue::reply());
+  MuxQueue::chain(MuxSession::input());
+  MuxSession::chain(MuxQueue::reply());
 }
 
 auto Mux::Session::mux_session_open_stream(MuxSource *source) -> EventFunction* {

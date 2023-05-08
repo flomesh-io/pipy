@@ -98,11 +98,11 @@ void File::open_write(bool append) {
       } else if (auto f = (path == "-" ? stdout : fopen(path.c_str(), append ? "ab" : "wb"))) {
         net->post(
           [=]() {
+            InputContext ic;
             m_f = f;
             m_writing = true;
             m_stream = FileStream::make(false, f, &s_dp);
             if (!m_buffer.empty()) {
-              InputContext ic;
               m_stream->input()->input(Data::make(m_buffer));
               m_buffer.clear();
             }

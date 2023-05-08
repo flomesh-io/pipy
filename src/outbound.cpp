@@ -111,7 +111,6 @@ void Outbound::output(Event *evt) {
 
 void Outbound::error(StreamEnd::Error err) {
   m_error = err;
-  InputContext ic(this);
   output(StreamEnd::make(err));
   state(State::closed);
 }
@@ -304,6 +303,8 @@ void OutboundTCP::resolve() {
       const std::error_code &ec,
       tcp::resolver::results_type results
     ) {
+      InputContext ic;
+
       if (ec && m_options.connect_timeout > 0) {
         m_connect_timer.cancel();
       }
@@ -366,6 +367,8 @@ void OutboundTCP::connect(const asio::ip::tcp::endpoint &target) {
   m_socket.async_connect(
     target,
     [=](const std::error_code &ec) {
+      InputContext ic;
+
       if (m_options.connect_timeout > 0) {
         m_connect_timer.cancel();
       }
@@ -512,6 +515,7 @@ void OutboundTCP::receive() {
     m_read_timer.schedule(
       m_options.read_timeout,
       [this]() {
+        InputContext ic;
         close(StreamEnd::READ_TIMEOUT);
       }
     );
@@ -579,6 +583,7 @@ void OutboundTCP::pump() {
     m_write_timer.schedule(
       m_options.write_timeout,
       [this]() {
+        InputContext ic;
         close(StreamEnd::WRITE_TIMEOUT);
       }
     );
@@ -597,6 +602,7 @@ void OutboundTCP::wait() {
     m_idle_timer.schedule(
       m_options.idle_timeout,
       [this]() {
+        InputContext ic;
         close(StreamEnd::IDLE_TIMEOUT);
       }
     );
@@ -755,6 +761,8 @@ void OutboundUDP::resolve() {
       const std::error_code &ec,
       udp::resolver::results_type results
     ) {
+      InputContext ic;
+
       if (ec && m_options.connect_timeout > 0) {
         m_connect_timer.cancel();
       }
@@ -817,6 +825,8 @@ void OutboundUDP::connect(const asio::ip::udp::endpoint &target) {
   m_socket.async_connect(
     target,
     [=](const std::error_code &ec) {
+      InputContext ic;
+
       if (m_options.connect_timeout > 0) {
         m_connect_timer.cancel();
       }
@@ -986,6 +996,7 @@ void OutboundUDP::wait() {
     m_idle_timer.schedule(
       m_options.idle_timeout,
       [this]() {
+        InputContext ic;
         close(StreamEnd::IDLE_TIMEOUT);
       }
     );

@@ -104,6 +104,7 @@ void Replay::schedule_replay() {
       pipy::Options::get_seconds(ret, delay);
     }
     m_timer.schedule(delay, [this]() {
+      InputContext ic;
       m_replay_scheduled = false;
       replay();
     });
@@ -112,7 +113,6 @@ void Replay::schedule_replay() {
 }
 
 void Replay::replay() {
-  InputContext ic;
   m_pipeline = sub_pipeline(0, false, ReplayReceiver::input())->start();
   m_buffer.iterate(
     [this](Event *evt) {
