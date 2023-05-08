@@ -113,7 +113,6 @@ void Replay::schedule_replay() {
 
 void Replay::replay() {
   InputContext ic;
-  Pipeline::auto_release(m_pipeline);
   m_pipeline = sub_pipeline(0, false, ReplayReceiver::input())->start();
   m_buffer.iterate(
     [this](Event *evt) {

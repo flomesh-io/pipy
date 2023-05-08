@@ -66,9 +66,6 @@ Inbound::Inbound() {
 
 Inbound::~Inbound() {
   Log::debug(Log::ALLOC, "[inbound  %p] --", this);
-  if (m_pipeline) {
-    Pipeline::auto_release(m_pipeline);
-  }
 }
 
 auto Inbound::output() -> Output* {

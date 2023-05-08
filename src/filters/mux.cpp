@@ -282,7 +282,7 @@ void MuxSessionPool::recycle(double now) {
        (m_max_messages > 0 && session->m_message_count >= m_max_messages) ||
        (now - session->m_free_time >= max_idle))
     {
-      AutoReleased::auto_release(session);
+      MuxSession::auto_release(session);
       session->pipeline()->input()->input(StreamEnd::make());
       session->close();
       session->detach();
@@ -398,7 +398,7 @@ void MuxSource::on_input(Event *evt) {
     m_waiting_events.push(evt);
 
   } else if (auto i = EventProxy::forward()) {
-    AutoReleased::auto_release(m_session);
+    MuxSession::auto_release(m_session);
     if (!m_waiting_events.empty()) {
       m_waiting_events.flush(
         [=](Event *evt) {
@@ -411,7 +411,7 @@ void MuxSource::on_input(Event *evt) {
 }
 
 void MuxSource::on_reply(Event *evt) {
-  AutoReleased::auto_release(m_session);
+  MuxSession::auto_release(m_session);
   EventProxy::output(evt);
 }
 
