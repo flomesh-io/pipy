@@ -653,7 +653,7 @@ private:
     friend class Client;
   };
 
-  virtual void on_event(Event *evt) override { printf("Client::on_event %d\n", evt->type()); Endpoint::process_event(evt); }
+  virtual void on_event(Event *evt) override { Endpoint::process_event(evt); }
   virtual void on_output(Event *evt) override { EventSource::output(evt); }
   virtual auto on_new_stream(int id) -> StreamBase* override { return new Stream(this, id); }
   virtual void on_delete_stream(StreamBase *stream) override { delete static_cast<Stream*>(stream); }
