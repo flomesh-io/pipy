@@ -308,7 +308,6 @@ TLSSession::TLSSession(
 }
 
 TLSSession::~TLSSession() {
-  close();
   SSL_free(m_ssl);
 }
 
