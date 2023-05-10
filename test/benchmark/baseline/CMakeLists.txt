@@ -8,7 +8,7 @@ add_definitions(
 )
 
 include_directories(
-  "${CMAKE_SOURCE_DIR}/../../../deps/asio-1.24.0/include"
+  "${CMAKE_SOURCE_DIR}/../../../deps/asio-1.28.0/include"
 )
 
 add_executable(baseline

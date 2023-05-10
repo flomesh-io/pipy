@@ -136,7 +136,7 @@ add_compile_options(
 include_directories(
   "${CMAKE_SOURCE_DIR}/src"
   "${CMAKE_SOURCE_DIR}/include"
-  "${CMAKE_SOURCE_DIR}/deps/asio-1.24.0/include"
+  "${CMAKE_SOURCE_DIR}/deps/asio-1.28.0/include"
   "${CMAKE_BINARY_DIR}/deps"
   "${CMAKE_BINARY_DIR}/deps/yajl-2.1.0/yajl-2.1.0/include"
   "${CMAKE_BINARY_DIR}/deps/libexpat-R_2_2_6/expat/lib"
