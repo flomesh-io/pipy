@@ -5,6 +5,12 @@
 #define ASIO_STANDALONE
 #include <asio.hpp>
 
+#define CONFIG_DATA_CHUNK_SIZE  16*1024
+#define CONFIG_TCP_NO_DELAY     1
+#define CONFIG_RECV_EXTRA_READ  0
+#define CONFIG_WRITE_ASYNC_SOME 0
+#define CONFIG_CUSTOM_ALLOCATOR 1
+
 using tcp = asio::ip::tcp;
 
 asio::io_service g_io_service;
@@ -13,13 +19,53 @@ std::string g_target_port("8080");
 std::string g_target_addr("127.0.0.1");
 
 //
+// HandlerAllocator
+//
+
+template<typename T>
+class HandlerAllocator {
+public:
+  using value_type = T;
+
+  template<typename U>
+  struct rebind {
+    using other = HandlerAllocator<U>;
+  };
+
+  HandlerAllocator() = default;
+
+  template<typename U>
+  HandlerAllocator(const HandlerAllocator<U> &other) {};
+
+  T* allocate(size_t n) {
+    if (auto p = m_pool) {
+      m_pool = *reinterpret_cast<T**>(p);
+      return p;
+    } else {
+      return static_cast<T*>(std::malloc(std::max(sizeof(T), sizeof(T*))));
+    }
+  }
+
+  void deallocate(T *p, size_t n) {
+    *reinterpret_cast<T**>(p) = m_pool;
+    m_pool = p;
+  }
+
+private:
+  thread_local static T* m_pool;
+};
+
+template<typename T>
+thread_local T* HandlerAllocator<T>::m_pool = nullptr;
+
+//
 // Buffer
 //
 
 struct Buffer {
   Buffer* next = nullptr;
   size_t size = 0;
-  char data[16*1024];
+  char data[CONFIG_DATA_CHUNK_SIZE];
 
   static auto alloc() -> Buffer* {
     if (auto p = s_pool) {
@@ -60,10 +106,10 @@ struct Queue {
   }
 
   auto shift() -> Buffer* {
-    if (auto b = head) {
-      head = b->next;
+    if (auto p = head) {
+      head = p->next;
       if (!head) tail = nullptr;
-      return b;
+      return p;
     } else {
       return nullptr;
     }
@@ -95,6 +141,135 @@ struct Session {
       delete this;
     }
   }
+
+  void set_socket_options() {
+    socket_d.set_option(asio::socket_base::keep_alive(true));
+    socket_u.set_option(asio::socket_base::keep_alive(true));
+    socket_d.set_option(tcp::no_delay(CONFIG_TCP_NO_DELAY));
+    socket_u.set_option(tcp::no_delay(CONFIG_TCP_NO_DELAY));
+  }
+
+  //
+  // Session::Handler
+  //
+
+  template<typename T>
+  struct Handler {
+    using allocator_type = HandlerAllocator<T>;
+    allocator_type get_allocator() const {
+      return allocator_type();
+    }
+
+    Session* session;
+    Buffer* buffer;
+
+    Handler() = default;
+    Handler(Session *s, Buffer *b) : session(s), buffer(b) {}
+    Handler(const Handler &r) : session(r.session), buffer(r.buffer) {}
+    Handler(Handler &&r) : session(r.session), buffer(r.buffer) {}
+  };
+
+  //
+  // Session::RecvHandlerD
+  //
+
+  struct RecvHandlerD : public Handler<RecvHandlerD> {
+    using Handler::Handler;
+    void operator()(const std::error_code &ec, size_t n) {
+      if (ec) {
+        if (ec == asio::error::eof) {
+          std::cout << "downstream EOF" << std::endl;
+        } else {
+          std::cerr << "downstream async_read_some error: " << ec.message() << std::endl;
+        }
+        session->close();
+      } else {
+        buffer->size = n;
+        session->queue_u.push(buffer);
+        if (CONFIG_RECV_EXTRA_READ) {
+          if (auto more = session->socket_d.available()) {
+            while (more > 0) {
+              auto buf = Buffer::alloc();
+              more -= (buf->size = session->socket_d.read_some(asio::buffer(buf->data, sizeof(buf->data))));
+              session->queue_u.push(buf);
+            }
+          }
+        }
+        session->send_u();
+        session->recv_d();
+      }
+      session->release();
+    }
+  };
+
+  //
+  // Session::RecvHandlerU
+  //
+
+  struct RecvHandlerU : public Handler<RecvHandlerU> {
+    using Handler::Handler;
+    void operator()(const std::error_code &ec, size_t n) {
+      if (ec) {
+        if (ec == asio::error::eof) {
+          std::cout << "upstream EOF" << std::endl;
+        } else {
+          std::cerr << "upstream async_read_some error: " << ec.message() << std::endl;
+        }
+        session->close();
+      } else {
+        buffer->size = n;
+        session->queue_d.push(buffer);
+        if (CONFIG_RECV_EXTRA_READ) {
+          if (auto more = session->socket_u.available()) {
+            while (more > 0) {
+              auto buf = Buffer::alloc();
+              more -= (buf->size = session->socket_u.read_some(asio::buffer(buf->data, sizeof(buf->data))));
+              session->queue_d.push(buf);
+            }
+          }
+        }
+        session->send_d();
+        session->recv_u();
+      }
+      session->release();
+    }
+  };
+
+  //
+  // Session::SendHandlerD
+  //
+
+  struct SendHandlerD : public Handler<SendHandlerD> {
+    using Handler::Handler;
+    void operator()(const std::error_code &ec, size_t n) {
+      Buffer::free(buffer);
+      if (ec) {
+        std::cerr << "downstream async_write error: " << ec.message() << std::endl;
+        session->close();
+      } else {
+        session->send_d();
+      }
+      session->release();
+    }
+  };
+
+  //
+  // Session::SendHandlerU
+  //
+
+  struct SendHandlerU : public Handler<SendHandlerU> {
+    using Handler::Handler;
+    void operator()(const std::error_code &ec, size_t n) {
+      Buffer::free(buffer);
+      if (ec) {
+        std::cerr << "upstream async_write error: " << ec.message() << std::endl;
+        session->close();
+      } else {
+        session->send_u();
+      }
+      session->release();
+    }
+  };
 
   void accept(tcp::acceptor &acceptor, std::function<void()> cb) {
     acceptor.async_accept(socket_d, peer_d, [=](const std::error_code &ec) {
@@ -139,6 +314,7 @@ struct Session {
         std::cout << "new session "
                   << peer_d.address().to_string() << ':' << peer_d.port() << " => "
                   << peer_u.address().to_string() << ':' << peer_u.port() << std::endl;
+        set_socket_options();
         recv_d();
         recv_u();
       }
@@ -149,8 +325,12 @@ struct Session {
 
   void recv_d() {
     auto buf = Buffer::alloc();
+
     socket_d.async_read_some(
       asio::buffer(buf->data, sizeof(buf->data)),
+#if CONFIG_CUSTOM_ALLOCATOR
+      RecvHandlerD(this, buf)
+#else
       [=](const std::error_code &ec, size_t n) {
         if (ec) {
           if (ec == asio::error::eof) {
@@ -162,11 +342,13 @@ struct Session {
         } else {
           buf->size = n;
           queue_u.push(buf);
-          if (auto more = socket_d.available()) {
-            while (more > 0) {
-              auto buf = Buffer::alloc();
-              more -= (buf->size = socket_d.read_some(asio::buffer(buf->data, sizeof(buf->data))));
-              queue_u.push(buf);
+          if (CONFIG_RECV_EXTRA_READ) {
+            if (auto more = socket_d.available()) {
+              while (more > 0) {
+                auto buf = Buffer::alloc();
+                more -= (buf->size = socket_d.read_some(asio::buffer(buf->data, sizeof(buf->data))));
+                queue_u.push(buf);
+              }
             }
           }
           send_u();
@@ -174,6 +356,7 @@ struct Session {
         }
         release();
       }
+#endif // CONFIG_CUSTOM_ALLOCATOR
     );
     retain();
   }
@@ -182,6 +365,9 @@ struct Session {
     auto buf = Buffer::alloc();
     socket_u.async_read_some(
       asio::buffer(buf->data, sizeof(buf->data)),
+#if CONFIG_CUSTOM_ALLOCATOR
+      RecvHandlerU(this, buf)
+#else
       [=](const std::error_code &ec, size_t n) {
         if (ec) {
           if (ec == asio::error::eof) {
@@ -193,11 +379,13 @@ struct Session {
         } else {
           buf->size = n;
           queue_d.push(buf);
-          if (auto more = socket_u.available()) {
-            while (more > 0) {
-              auto buf = Buffer::alloc();
-              more -= (buf->size = socket_u.read_some(asio::buffer(buf->data, sizeof(buf->data))));
-              queue_d.push(buf);
+          if (CONFIG_RECV_EXTRA_READ) {
+            if (auto more = socket_u.available()) {
+              while (more > 0) {
+                auto buf = Buffer::alloc();
+                more -= (buf->size = socket_u.read_some(asio::buffer(buf->data, sizeof(buf->data))));
+                queue_d.push(buf);
+              }
             }
           }
           send_d();
@@ -205,15 +393,22 @@ struct Session {
         }
         release();
       }
+#endif // CONFIG_CUSTOM_ALLOCATOR
     );
     retain();
   }
 
   void send_d() {
     if (auto buf = queue_d.shift()) {
-      asio::async_write(
-        socket_d,
+#if CONFIG_WRITE_ASYNC_SOME
+      socket_d.async_write_some(
+#else
+      asio::async_write(socket_d,
+#endif
         asio::buffer(buf->data, buf->size),
+#if CONFIG_CUSTOM_ALLOCATOR
+        SendHandlerD(this, buf)
+#else
         [=](const std::error_code &ec, size_t n) {
           Buffer::free(buf);
           if (ec) {
@@ -224,6 +419,7 @@ struct Session {
           }
           release();
         }
+#endif // CONFIG_CUSTOM_ALLOCATOR
       );
       retain();
     }
@@ -231,9 +427,15 @@ struct Session {
 
   void send_u() {
     if (auto buf = queue_u.shift()) {
-      asio::async_write(
-        socket_u,
+#if CONFIG_WRITE_ASYNC_SOME
+      socket_u.async_write_some(
+#else
+      asio::async_write(socket_u,
+#endif
         asio::buffer(buf->data, buf->size),
+#if CONFIG_CUSTOM_ALLOCATOR
+        SendHandlerU(this, buf)
+#else
         [=](const std::error_code &ec, size_t n) {
           Buffer::free(buf);
           if (ec) {
@@ -244,6 +446,7 @@ struct Session {
           }
           release();
         }
+#endif // CONFIG_CUSTOM_ALLOCATOR
       );
       retain();
     }
