@@ -60,6 +60,7 @@ Outbound::Outbound(EventTarget::Input *output, const Options &options)
 
 Outbound::~Outbound() {
   Log::debug(Log::ALLOC, "[outbound %p] --", this);
+  Ticker::get()->unwatch(this);
   s_all_outbounds.remove(this);
 }
 
@@ -219,15 +220,15 @@ void OutboundTCP::send(Event *evt) {
     if (!m_ended) {
       if (data->size() > 0) {
         if (!m_overflowed) {
-          if (m_options.buffer_limit > 0 && m_buffer.size() >= m_options.buffer_limit) {
+          if (m_options.buffer_limit > 0 && m_buffer_send.size() >= m_options.buffer_limit) {
             Log::error(
               "OutboundTCP: %p to host = %s port = %d buffer overflow, size = %d",
-              this, m_host.c_str(), m_port, m_buffer.size());
+              this, m_host.c_str(), m_port, m_buffer_send.size());
             m_overflowed = true;
           }
         }
         if (!m_overflowed) {
-          m_buffer.push(*data);
+          m_buffer_send.push(*data);
           need_flush();
         } else {
           m_discarded_data_size += data->size();
@@ -250,9 +251,6 @@ void OutboundTCP::reset() {
     m_connect_timer.cancel();
     m_resolver.cancel();
     m_socket.cancel(ec);
-  } else if (m_connected) {
-    m_read_timer.cancel();
-    m_write_timer.cancel();
   }
 
   m_discarded_data_size = 0;
@@ -260,7 +258,8 @@ void OutboundTCP::reset() {
   m_ended = false;
   m_retries = 0;
   m_connected = false;
-  m_buffer.clear();
+  m_buffer_receive.clear();
+  m_buffer_send.clear();
   m_socket.shutdown(tcp::socket::shutdown_both, ec);
   m_socket.close(ec);
 }
@@ -277,6 +276,33 @@ void OutboundTCP::on_tap_open()
 
 void OutboundTCP::on_tap_close()
 {
+}
+
+void OutboundTCP::on_tick(double tick) {
+  auto r = tick - m_tick_read;
+  auto w = tick - m_tick_write;
+
+  if (m_options.idle_timeout > 0) {
+    auto t = m_options.idle_timeout;
+    if (r >= t && w >= t) {
+      close(StreamEnd::IDLE_TIMEOUT);
+      return;
+    }
+  }
+
+  if (m_options.read_timeout > 0) {
+    if (r >= m_options.read_timeout) {
+      close(StreamEnd::READ_TIMEOUT);
+      return;
+    }
+  }
+
+  if (m_options.write_timeout > 0) {
+    if (r >= m_options.write_timeout) {
+      close(StreamEnd::WRITE_TIMEOUT);
+      return;
+    }
+  }
 }
 
 void OutboundTCP::start(double delay) {
@@ -398,6 +424,8 @@ void OutboundTCP::connect(const asio::ip::tcp::endpoint &target) {
           }
           m_connected = true;
           m_connecting = false;
+          m_tick_read = m_tick_write = Ticker::get()->tick();
+          Ticker::get()->watch(this);
           m_socket.set_option(asio::socket_base::keep_alive(m_options.keep_alive));
           m_socket.set_option(tcp::no_delay(m_options.no_delay));
           state(State::connected);
@@ -444,82 +472,11 @@ void OutboundTCP::restart(StreamEnd::Error err) {
 void OutboundTCP::receive() {
   if (!m_socket.is_open()) return;
 
-  pjs::Ref<Data> buffer(Data::make(RECEIVE_BUFFER_SIZE, &s_dp_tcp));
-
+  m_buffer_receive.push(Data(RECEIVE_BUFFER_SIZE, &s_dp_tcp));
   m_socket.async_read_some(
-    DataChunks(buffer->chunks()),
-    [=](const std::error_code &ec, size_t n) {
-      InputContext ic(this);
-
-      if (m_options.read_timeout > 0){
-        m_read_timer.cancel();
-      }
-
-      if (ec != asio::error::operation_aborted) {
-        if (n > 0) {
-          if (m_socket.is_open()) {
-            buffer->pop(buffer->size() - n);
-            if (auto more = m_socket.available()) {
-              Data buf(more, &s_dp_tcp);
-              auto n = m_socket.read_some(DataChunks(buf.chunks()));
-              if (n < more) buf.pop(more - n);
-              buffer->push(buf);
-            }
-          }
-
-          m_metric_traffic_in->increase(buffer->size());
-          s_metric_traffic_in->increase(buffer->size());
-
-          if (Log::is_enabled(Log::TCP)) {
-            std::cerr << Log::format_elapsed_time() << " tcp recv <<<< " << buffer->size() << std::endl;
-          }
-
-          output(buffer);
-        }
-
-        if (ec) {
-          if (ec == asio::error::eof) {
-            if (Log::is_enabled(Log::OUTBOUND)) {
-              char desc[200];
-              describe(desc);
-              Log::debug(Log::OUTBOUND, "%s connection closed by peer", desc);
-            }
-            close(StreamEnd::NO_ERROR);
-          } else if (ec == asio::error::connection_reset) {
-            if (Log::is_enabled(Log::WARN)) {
-              char desc[200];
-              describe(desc);
-              Log::warn("%s connection reset by peer", desc);
-            }
-            close(StreamEnd::CONNECTION_RESET);
-          } else {
-            if (Log::is_enabled(Log::WARN)) {
-              char desc[200];
-              describe(desc);
-              Log::warn("%s error reading from peer: %s", desc, ec.message().c_str());
-            }
-            close(StreamEnd::READ_ERROR);
-          }
-
-        } else {
-          receive();
-          wait();
-        }
-      }
-
-      release();
-    }
+    DataChunks(m_buffer_receive.chunks()),
+    ReceiveHandler(this)
   );
-
-  if (m_options.read_timeout > 0) {
-    m_read_timer.schedule(
-      m_options.read_timeout,
-      [this]() {
-        InputContext ic;
-        close(StreamEnd::READ_TIMEOUT);
-      }
-    );
-  }
 
   retain();
 }
@@ -528,7 +485,7 @@ void OutboundTCP::pump() {
   if (!m_socket.is_open()) return;
   if (m_pumping || !m_connected) return;
 
-  if (m_buffer.empty()) {
+  if (m_buffer_send.empty()) {
     if (m_ended) {
       std::error_code ec;
       m_socket.shutdown(tcp::socket::shutdown_send, ec);
@@ -537,82 +494,23 @@ void OutboundTCP::pump() {
   }
 
   if (Log::is_enabled(Log::TCP)) {
-    std::cerr << Log::format_elapsed_time() << " tcp send >>>> " << m_buffer.size() << std::endl;
+    std::cerr << Log::format_elapsed_time() << " tcp send >>>> " << m_buffer_send.size() << std::endl;
   }
 
   m_socket.async_write_some(
-    DataChunks(m_buffer.chunks()),
-    [=](const std::error_code &ec, std::size_t n) {
-      m_pumping = false;
-
-      if (m_options.write_timeout > 0) {
-        m_write_timer.cancel();
-      }
-
-      if (ec != asio::error::operation_aborted) {
-        m_buffer.shift(n);
-        m_metric_traffic_out->increase(n);
-        s_metric_traffic_out->increase(n);
-
-        if (ec) {
-          if (Log::is_enabled(Log::WARN)) {
-            char desc[200];
-            describe(desc);
-            Log::warn("%s error writing to peer: %s", desc, ec.message().c_str());
-          }
-          close(StreamEnd::WRITE_ERROR);
-
-        } else if (m_overflowed && m_buffer.empty()) {
-          if (Log::is_enabled(Log::ERROR)) {
-            char desc[200];
-            describe(desc);
-            Log::error("%s overflowed by %d bytes", desc, m_discarded_data_size);
-          }
-          close(StreamEnd::BUFFER_OVERFLOW);
-
-        } else {
-          pump();
-        }
-      }
-
-      release();
-    }
+    DataChunks(m_buffer_send.chunks()),
+    SendHandler(this)
   );
 
-  if (m_options.write_timeout > 0) {
-    m_write_timer.schedule(
-      m_options.write_timeout,
-      [this]() {
-        InputContext ic;
-        close(StreamEnd::WRITE_TIMEOUT);
-      }
-    );
-  }
-
-  wait();
-  retain();
-
   m_pumping = true;
-}
 
-void OutboundTCP::wait() {
-  if (!m_socket.is_open()) return;
-  if (m_options.idle_timeout > 0) {
-    m_idle_timer.cancel();
-    m_idle_timer.schedule(
-      m_options.idle_timeout,
-      [this]() {
-        InputContext ic;
-        close(StreamEnd::IDLE_TIMEOUT);
-      }
-    );
-  }
+  retain();
 }
 
 void OutboundTCP::close(StreamEnd::Error err) {
   if (!m_connected) return;
 
-  m_buffer.clear();
+  m_buffer_send.clear();
   m_discarded_data_size = 0;
   m_overflowed = false;
   m_ended = false;
@@ -640,6 +538,98 @@ void OutboundTCP::close(StreamEnd::Error err) {
   }
 
   error(err);
+}
+
+void OutboundTCP::on_receive(const std::error_code &ec, std::size_t n) {
+  InputContext ic(this);
+  m_tick_read = Ticker::get()->tick();
+
+  if (ec != asio::error::operation_aborted) {
+    if (n > 0) {
+      if (m_socket.is_open()) {
+        m_buffer_receive.pop(m_buffer_receive.size() - n);
+        if (auto more = m_socket.available()) {
+          Data buf(more, &s_dp_tcp);
+          auto n = m_socket.read_some(DataChunks(buf.chunks()));
+          if (n < more) buf.pop(more - n);
+          m_buffer_receive.push(buf);
+        }
+      }
+
+      auto size = m_buffer_receive.size();
+      m_metric_traffic_in->increase(size);
+      s_metric_traffic_in->increase(size);
+
+      if (Log::is_enabled(Log::TCP)) {
+        std::cerr << Log::format_elapsed_time() << " tcp recv <<<< " << size << std::endl;
+      }
+
+      output(Data::make(std::move(m_buffer_receive)));
+    }
+
+    if (ec) {
+      if (ec == asio::error::eof) {
+        if (Log::is_enabled(Log::OUTBOUND)) {
+          char desc[200];
+          describe(desc);
+          Log::debug(Log::OUTBOUND, "%s connection closed by peer", desc);
+        }
+        close(StreamEnd::NO_ERROR);
+      } else if (ec == asio::error::connection_reset) {
+        if (Log::is_enabled(Log::WARN)) {
+          char desc[200];
+          describe(desc);
+          Log::warn("%s connection reset by peer", desc);
+        }
+        close(StreamEnd::CONNECTION_RESET);
+      } else {
+        if (Log::is_enabled(Log::WARN)) {
+          char desc[200];
+          describe(desc);
+          Log::warn("%s error reading from peer: %s", desc, ec.message().c_str());
+        }
+        close(StreamEnd::READ_ERROR);
+      }
+
+    } else {
+      receive();
+    }
+  }
+
+  release();
+}
+
+void OutboundTCP::on_send(const std::error_code &ec, std::size_t n) {
+  m_pumping = false;
+  m_tick_write = Ticker::get()->tick();
+
+  if (ec != asio::error::operation_aborted) {
+    m_buffer_send.shift(n);
+    m_metric_traffic_out->increase(n);
+    s_metric_traffic_out->increase(n);
+
+    if (ec) {
+      if (Log::is_enabled(Log::WARN)) {
+        char desc[200];
+        describe(desc);
+        Log::warn("%s error writing to peer: %s", desc, ec.message().c_str());
+      }
+      close(StreamEnd::WRITE_ERROR);
+
+    } else if (m_overflowed && m_buffer_send.empty()) {
+      if (Log::is_enabled(Log::ERROR)) {
+        char desc[200];
+        describe(desc);
+        Log::error("%s overflowed by %d bytes", desc, m_discarded_data_size);
+      }
+      close(StreamEnd::BUFFER_OVERFLOW);
+
+    } else {
+      pump();
+    }
+  }
+
+  release();
 }
 
 //
@@ -734,6 +724,10 @@ void OutboundUDP::on_tap_open()
 }
 
 void OutboundUDP::on_tap_close()
+{
+}
+
+void OutboundUDP::on_tick(double tick)
 {
 }
 

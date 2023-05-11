@@ -27,6 +27,7 @@
 #define NET_HPP
 
 #include "data.hpp"
+#include "allocator.hpp"
 
 #define ASIO_STANDALONE
 #include <asio.hpp>
@@ -102,6 +103,26 @@ public:
   DataChunks(const Data::Chunks &chunks) : m_chunks(chunks) {}
   auto begin() const -> Iterator { return Iterator(m_chunks.begin()); }
   auto end() const -> Iterator { return Iterator(m_chunks.end()); }
+};
+
+//
+// SelfHandler
+//
+
+template<typename T>
+struct SelfHandler {
+  using allocator_type = PooledAllocator<SelfHandler>;
+
+  allocator_type get_allocator() const {
+    return allocator_type();
+  }
+
+  SelfHandler() = default;
+  SelfHandler(T *s) : self(s) {}
+  SelfHandler(const SelfHandler &r) : self(r.self) {}
+  SelfHandler(SelfHandler &&r) : self(r.self) {}
+
+  T* self;
 };
 
 } // namespace pipy

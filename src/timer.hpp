@@ -74,6 +74,61 @@ private:
   thread_local static List<Timer> s_all_timers;
 };
 
+//
+// Ticker
+//
+
+class Ticker {
+public:
+
+  //
+  // Ticker::Watcher
+  //
+
+  class Watcher : public List<Watcher>::Item {
+    Ticker* m_ticker = nullptr;
+    virtual void on_tick(double tick) = 0;
+    friend class Ticker;
+  };
+
+  static auto get() -> Ticker*;
+
+  double tick() const {
+    return m_tick;
+  }
+
+  void watch(Watcher *w) {
+    if (!w->m_ticker) {
+      m_watchers.push(w);
+      w->m_ticker = this;
+      start();
+    }
+  }
+
+  void unwatch(Watcher *w) {
+    if (w->m_ticker == this) {
+      if (w == m_visiting) {
+        m_visiting = w->next();
+      }
+      m_watchers.remove(w);
+      if (m_watchers.empty()) {
+        stop();
+      }
+    }
+  }
+
+private:
+  List<Watcher> m_watchers;
+  Timer m_timer;
+  Watcher* m_visiting = nullptr;
+  double m_tick = 0;
+  bool m_is_running = false;
+
+  void start();
+  void stop();
+  void schedule();
+};
+
 } // namespace pipy
 
 #endif // TIMER_HPP

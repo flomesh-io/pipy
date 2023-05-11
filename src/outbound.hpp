@@ -46,6 +46,7 @@ class Data;
 class Outbound :
   public pjs::ObjectTemplate<Outbound>,
   public InputSource,
+  public Ticker::Watcher,
   public List<Outbound>::Item
 {
 public:
@@ -151,7 +152,7 @@ class OutboundTCP :
 {
 public:
   bool overflowed() const { return m_overflowed; }
-  auto buffered() const -> int { return m_buffer.size(); }
+  auto buffered() const -> int { return m_buffer_send.size(); }
 
   virtual void bind(const std::string &ip, int port) override;
   virtual void connect(const std::string &host, int port) override;
@@ -168,11 +169,11 @@ private:
   asio::ip::tcp::socket m_socket;
   Timer m_connect_timer;
   Timer m_retry_timer;
-  Timer m_read_timer;
-  Timer m_write_timer;
-  Timer m_idle_timer;
-  Data m_buffer;
+  Data m_buffer_receive;
+  Data m_buffer_send;
   size_t m_discarded_data_size = 0;
+  double m_tick_read;
+  double m_tick_write;
   bool m_connecting = false;
   bool m_connected = false;
   bool m_overflowed = false;
@@ -182,6 +183,7 @@ private:
   virtual void on_flush() override;
   virtual void on_tap_open() override;
   virtual void on_tap_close() override;
+  virtual void on_tick(double tick) override;
 
   void start(double delay);
   void resolve();
@@ -189,8 +191,22 @@ private:
   void restart(StreamEnd::Error err);
   void receive();
   void pump();
-  void wait();
   void close(StreamEnd::Error err);
+
+  struct ReceiveHandler : public SelfHandler<OutboundTCP> {
+    using SelfHandler::SelfHandler;
+    ReceiveHandler(const ReceiveHandler &r) : SelfHandler(r) {}
+    void operator()(const std::error_code &ec, std::size_t n) { self->on_receive(ec, n); }
+  };
+
+  struct SendHandler : public SelfHandler<OutboundTCP> {
+    using SelfHandler::SelfHandler;
+    SendHandler(const SendHandler &r) : SelfHandler(r) {}
+    void operator()(const std::error_code &ec, std::size_t n) { self->on_send(ec, n); }
+  };
+
+  void on_receive(const std::error_code &ec, std::size_t n);
+  void on_send(const std::error_code &ec, std::size_t n);
 
   friend class pjs::ObjectTemplate<OutboundTCP, Outbound>;
 };
@@ -226,6 +242,7 @@ private:
 
   virtual void on_tap_open() override;
   virtual void on_tap_close() override;
+  virtual void on_tick(double tick) override;
 
   void start(double delay);
   void resolve();

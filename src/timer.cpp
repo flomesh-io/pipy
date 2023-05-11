@@ -24,6 +24,7 @@
  */
 
 #include "timer.hpp"
+#include "input.hpp"
 
 namespace pipy {
 
@@ -42,6 +43,7 @@ void Timer::schedule(double timeout, const std::function<void()> &handler) {
   m_timer.expires_after(std::chrono::milliseconds((long long)(timeout * 1000)));
   m_timer.async_wait(
     [=](const asio::error_code &ec) {
+      InputContext ic;
       h->trigger(ec);
     }
   );
@@ -64,6 +66,43 @@ void Timer::Handler::trigger(const asio::error_code &ec) {
 
 void Timer::Handler::cancel() {
   m_canceled = true;
+}
+
+//
+// Ticker
+//
+
+auto Ticker::get() -> Ticker* {
+  thread_local static Ticker s_ticker;
+  return &s_ticker;
+}
+
+void Ticker::start() {
+  if (!m_is_running) {
+    schedule();
+    m_is_running = true;
+  }
+}
+
+void Ticker::stop() {
+  if (m_is_running) {
+    m_timer.cancel();
+    m_is_running = false;
+  }
+}
+
+void Ticker::schedule() {
+  m_timer.schedule(
+    1, [this]() {
+      auto t = ++m_tick;
+      m_visiting = m_watchers.head();
+      while (auto w = m_visiting) {
+        w->on_tick(t);
+        m_visiting = m_visiting->next();
+      }
+      schedule();
+    }
+  );
 }
 
 } // namespace pipy

@@ -65,6 +65,7 @@ Inbound::Inbound() {
 }
 
 Inbound::~Inbound() {
+  Ticker::get()->unwatch(this);
   Log::debug(Log::ALLOC, "[inbound  %p] --", this);
 }
 
@@ -106,6 +107,7 @@ void Inbound::start(PipelineLayout *layout) {
     ctx->m_inbound = this;
     m_pipeline = Pipeline::make(layout, ctx);
   }
+  Ticker::get()->watch(this);
 }
 
 void Inbound::stop() {
@@ -287,13 +289,13 @@ void InboundTCP::on_event(Event *evt) {
   if (!m_ended) {
     if (auto data = evt->as<Data>()) {
       if (data->size() > 0) {
-        m_buffer.push(*data);
+        m_buffer_send.push(*data);
         need_flush();
       }
 
     } else if (auto end = evt->as<StreamEnd>()) {
       m_ended = true;
-      if (m_buffer.empty()) {
+      if (m_buffer_send.empty()) {
         close(end->error_code());
       } else {
         pump();
@@ -305,6 +307,36 @@ void InboundTCP::on_event(Event *evt) {
 void InboundTCP::on_flush() {
   if (!m_ended) {
     pump();
+  }
+}
+
+void InboundTCP::on_tick(double tick) {
+  auto r = tick - m_tick_read;
+  auto w = tick - m_tick_write;
+
+  if (m_options.idle_timeout > 0) {
+    auto t = m_options.idle_timeout;
+    if (r >= t && w >= t) {
+      output(StreamEnd::make(StreamEnd::IDLE_TIMEOUT));
+      close(StreamEnd::IDLE_TIMEOUT);
+      return;
+    }
+  }
+
+  if (m_options.read_timeout > 0) {
+    if (r >= m_options.read_timeout) {
+      output(StreamEnd::make(StreamEnd::READ_TIMEOUT));
+      close(StreamEnd::READ_TIMEOUT);
+      return;
+    }
+  }
+
+  if (m_options.write_timeout > 0) {
+    if (r >= m_options.write_timeout) {
+      output(StreamEnd::make(StreamEnd::WRITE_TIMEOUT));
+      close(StreamEnd::WRITE_TIMEOUT);
+      return;
+    }
   }
 }
 
@@ -321,6 +353,7 @@ void InboundTCP::start() {
   labels[0] = m_listener->pipeline_layout()->name_or_label();
   if (m_options.peer_stats) labels[n++] = remote_address();
 
+  m_tick_read = m_tick_write = Ticker::get()->tick();
   m_metric_traffic_in = Inbound::s_metric_traffic_in->with_labels(labels, n);
   m_metric_traffic_out = Inbound::s_metric_traffic_out->with_labels(labels, n);
 
@@ -331,88 +364,11 @@ void InboundTCP::start() {
 void InboundTCP::receive() {
   if (!m_socket.is_open()) return;
 
-  pjs::Ref<Data> buffer(Data::make(RECEIVE_BUFFER_SIZE, &s_dp_tcp));
-
+  m_buffer_receive.push(Data(RECEIVE_BUFFER_SIZE, &s_dp_tcp));
   m_socket.async_read_some(
-    DataChunks(buffer->chunks()),
-    [=](const std::error_code &ec, std::size_t n) {
-      InputContext ic(this);
-
-      if (m_options.read_timeout > 0) {
-        m_read_timer.cancel();
-      }
-
-      if (ec != asio::error::operation_aborted) {
-        if (n > 0) {
-          buffer->pop(buffer->size() - n);
-          if (m_socket.is_open()) {
-            if (auto more = m_socket.available()) {
-              Data buf(more, &s_dp_tcp);
-              auto n = m_socket.read_some(DataChunks(buf.chunks()));
-              if (n < more) buf.pop(more - n);
-              buffer->push(buf);
-            }
-          }
-
-          m_metric_traffic_in->increase(buffer->size());
-          s_metric_traffic_in->increase(buffer->size());
-
-          if (Log::is_enabled(Log::TCP)) {
-            std::cerr << Log::format_elapsed_time() << " tcp >>>> recv " << buffer->size() << std::endl;
-          }
-
-          output(buffer);
-        }
-
-        if (ec) {
-          if (ec == asio::error::eof) {
-            if (Log::is_enabled(Log::INBOUND)) {
-              char desc[200];
-              describe(desc);
-              Log::debug(Log::INBOUND, "%s EOF from peer", desc);
-            }
-            linger();
-            output(StreamEnd::make());
-          } else if (ec == asio::error::connection_reset) {
-            if (Log::is_enabled(Log::WARN)) {
-              char desc[200];
-              describe(desc);
-              Log::warn("%s connection reset by peer", desc);
-            }
-            close(StreamEnd::CONNECTION_RESET);
-          } else {
-            if (Log::is_enabled(Log::WARN)) {
-              char desc[200];
-              describe(desc);
-              Log::warn("%s error reading from peer: %s", desc, ec.message().c_str());
-            }
-            close(StreamEnd::READ_ERROR);
-          }
-
-        } else if (m_receiving_state == PAUSING) {
-          m_receiving_state = PAUSED;
-          retain();
-          wait();
-
-        } else if (m_receiving_state == RECEIVING) {
-          receive();
-          wait();
-        }
-      }
-
-      release();
-    }
+    DataChunks(m_buffer_receive.chunks()),
+    ReceiveHandler(this)
   );
-
-  if (m_options.read_timeout > 0) {
-    m_read_timer.schedule(
-      m_options.read_timeout,
-      [this]() {
-        InputContext ic;
-        close(StreamEnd::READ_TIMEOUT);
-      }
-    );
-  }
 
   retain();
 }
@@ -438,74 +394,20 @@ void InboundTCP::linger() {
 void InboundTCP::pump() {
   if (!m_socket.is_open()) return;
   if (m_pumping) return;
-  if (m_buffer.empty()) return;
+  if (m_buffer_send.empty()) return;
 
   if (Log::is_enabled(Log::TCP)) {
-    std::cerr << Log::format_elapsed_time() << " tcp <<<< send " << m_buffer.size() << std::endl;
+    std::cerr << Log::format_elapsed_time() << " tcp <<<< send " << m_buffer_send.size() << std::endl;
   }
 
   m_socket.async_write_some(
-    DataChunks(m_buffer.chunks()),
-    [=](const std::error_code &ec, std::size_t n) {
-      m_pumping = false;
-
-      if (m_options.write_timeout > 0) {
-        m_write_timer.cancel();
-      }
-
-      if (ec != asio::error::operation_aborted) {
-        m_buffer.shift(n);
-        m_metric_traffic_out->increase(n);
-        s_metric_traffic_out->increase(n);
-
-        if (ec) {
-          if (Log::is_enabled(Log::WARN)) {
-            char desc[200];
-            describe(desc);
-            Log::warn("%s error writing to peer: %s", desc, ec.message().c_str());
-          }
-          close(StreamEnd::WRITE_ERROR);
-
-        } else if (m_ended && m_buffer.empty()) {
-          close(StreamEnd::NO_ERROR);
-
-        } else {
-          pump();
-        }
-      }
-
-      release();
-    }
+    DataChunks(m_buffer_send.chunks()),
+    SendHandler(this)
   );
 
-  if (m_options.write_timeout > 0) {
-    m_write_timer.schedule(
-      m_options.write_timeout,
-      [this]() {
-        InputContext ic;
-        close(StreamEnd::WRITE_TIMEOUT);
-      }
-    );
-  }
-
-  wait();
-  retain();
-
   m_pumping = true;
-}
 
-void InboundTCP::wait() {
-  if (!m_socket.is_open()) return;
-  if (m_options.idle_timeout > 0) {
-    m_idle_timer.cancel();
-    m_idle_timer.schedule(
-      m_options.idle_timeout,
-      [this]() {
-        InputContext ic;
-        close(StreamEnd::IDLE_TIMEOUT);
-      }
-    );
-  }
+  retain();
 }
 
 void InboundTCP::output(Event *evt) {
@@ -562,6 +464,98 @@ void InboundTCP::describe(char *buf) {
       m_local_port
     );
   }
+}
+
+void InboundTCP::on_receive(const std::error_code &ec, std::size_t n) {
+  InputContext ic(this);
+  m_tick_read = Ticker::get()->tick();
+
+  if (ec != asio::error::operation_aborted) {
+    if (n > 0) {
+      m_buffer_receive.pop(m_buffer_receive.size() - n);
+      if (m_socket.is_open()) {
+        if (auto more = m_socket.available()) {
+          Data buf(more, &s_dp_tcp);
+          auto n = m_socket.read_some(DataChunks(buf.chunks()));
+          if (n < more) buf.pop(more - n);
+          m_buffer_receive.push(buf);
+        }
+      }
+
+      auto size = m_buffer_receive.size();
+      m_metric_traffic_in->increase(size);
+      s_metric_traffic_in->increase(size);
+
+      if (Log::is_enabled(Log::TCP)) {
+        std::cerr << Log::format_elapsed_time() << " tcp >>>> recv " << size << std::endl;
+      }
+
+      output(Data::make(std::move(m_buffer_receive)));
+    }
+
+    if (ec) {
+      if (ec == asio::error::eof) {
+        if (Log::is_enabled(Log::INBOUND)) {
+          char desc[200];
+          describe(desc);
+          Log::debug(Log::INBOUND, "%s EOF from peer", desc);
+        }
+        linger();
+        output(StreamEnd::make());
+      } else if (ec == asio::error::connection_reset) {
+        if (Log::is_enabled(Log::WARN)) {
+          char desc[200];
+          describe(desc);
+          Log::warn("%s connection reset by peer", desc);
+        }
+        close(StreamEnd::CONNECTION_RESET);
+      } else {
+        if (Log::is_enabled(Log::WARN)) {
+          char desc[200];
+          describe(desc);
+          Log::warn("%s error reading from peer: %s", desc, ec.message().c_str());
+        }
+        close(StreamEnd::READ_ERROR);
+      }
+
+    } else if (m_receiving_state == PAUSING) {
+      m_receiving_state = PAUSED;
+      retain();
+
+    } else if (m_receiving_state == RECEIVING) {
+      receive();
+    }
+  }
+
+  release();
+}
+
+void InboundTCP::on_send(const std::error_code &ec, std::size_t n) {
+  m_pumping = false;
+  m_tick_write = Ticker::get()->tick();
+
+  if (ec != asio::error::operation_aborted) {
+    m_buffer_send.shift(n);
+    m_metric_traffic_out->increase(n);
+    s_metric_traffic_out->increase(n);
+
+    if (ec) {
+      if (Log::is_enabled(Log::WARN)) {
+        char desc[200];
+        describe(desc);
+        Log::warn("%s error writing to peer: %s", desc, ec.message().c_str());
+      }
+      close(StreamEnd::WRITE_ERROR);
+
+    } else if (m_ended && m_buffer_send.empty()) {
+      close(StreamEnd::NO_ERROR);
+
+    } else {
+      pump();
+    }
+  }
+
+  release();
 }
 
 //
@@ -715,6 +709,10 @@ void InboundUDP::on_event(Event *evt) {
       }
     }
   }
+}
+
+void InboundUDP::on_tick(double tick)
+{
 }
 
 void InboundUDP::wait_idle() {
