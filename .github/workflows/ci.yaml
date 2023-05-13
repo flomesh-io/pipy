@@ -55,7 +55,7 @@ jobs:
   x86-binary:
     needs: set-release-version
     name: x86-binary
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v3
         with:
