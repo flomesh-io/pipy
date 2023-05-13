@@ -402,7 +402,7 @@ public:
   auto value() const -> double { return m_value; }
 
 private:
-  Counter(pjs::Str *name, pjs::Array *label_names, MetricSet *set = nullptr);
+  Counter(pjs::Str *name, pjs::Array *label_names, const std::function<void(Counter*)> &on_collect = nullptr, MetricSet *set = nullptr);
   Counter(Metric *parent, pjs::Str **labels);
 
   virtual void value_of(pjs::Value &out) override {
@@ -420,7 +420,14 @@ private:
     create_value();
   }
 
+  virtual void collect() override {
+    if (m_on_collect) {
+      m_on_collect(this);
+    }
+  }
+
   double m_value = 0;
+  std::function<void(Counter*)> m_on_collect;
 
   friend class pjs::ObjectTemplate<Counter, Metric>;
 };

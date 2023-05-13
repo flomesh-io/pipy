@@ -1145,8 +1145,9 @@ MetricHistory::Node::~Node() {
 // Counter
 //
 
-Counter::Counter(pjs::Str *name, pjs::Array *label_names, MetricSet *set)
+Counter::Counter(pjs::Str *name, pjs::Array *label_names, const std::function<void(Counter*)> &on_collect, MetricSet *set)
   : MetricTemplate<Counter>(name, label_names, set)
+  , m_on_collect(on_collect)
 {
 }
 
