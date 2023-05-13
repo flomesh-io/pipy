@@ -118,7 +118,7 @@ void Connect::reset() {
   Filter::reset();
   ConnectReceiver::close();
   if (m_outbound) {
-    m_outbound->reset();
+    m_outbound->close();
     m_outbound = nullptr;
   }
 }

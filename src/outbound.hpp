@@ -27,6 +27,7 @@
 #define OUTBOUND_HPP
 
 #include "net.hpp"
+#include "socket.hpp"
 #include "event.hpp"
 #include "input.hpp"
 #include "timer.hpp"
@@ -45,8 +46,6 @@ class Data;
 
 class Outbound :
   public pjs::ObjectTemplate<Outbound>,
-  public InputSource,
-  public Ticker::Watcher,
   public List<Outbound>::Item
 {
 public:
@@ -63,18 +62,12 @@ public:
     closed,
   };
 
-  struct Options {
+  struct Options : public SocketTCP::Options {
     Protocol  protocol = Protocol::TCP;
     size_t    max_packet_size = 16 * 1024;
-    size_t    buffer_limit = 0;
     int       retry_count = 0;
     double    retry_delay = 0;
     double    connect_timeout = 0;
-    double    read_timeout = 0;
-    double    write_timeout = 0;
-    double    idle_timeout = 60;
-    bool      keep_alive = true;
-    bool      no_delay = true;
 
     std::function<void(Outbound*)> on_state_changed;
   };
@@ -91,7 +84,6 @@ public:
   auto host() const -> const std::string& { return m_host; }
   auto port() const -> int { return m_port; }
   auto state() const -> State { return m_state; }
-  auto error() const -> StreamEnd::Error { return m_error; }
   auto local_address() -> pjs::Str*;
   auto local_port() -> int { address(); return m_local_port; }
   auto remote_address() -> pjs::Str*;
@@ -102,10 +94,14 @@ public:
   virtual void bind(const std::string &ip, int port) = 0;
   virtual void connect(const std::string &host, int port) = 0;
   virtual void send(Event *evt) = 0;
-  virtual void reset() = 0;
+  virtual void close() = 0;
+
+  virtual auto get_buffered() const -> size_t = 0;
+  virtual auto get_traffic_in() ->size_t = 0;
+  virtual auto get_traffic_out() ->size_t = 0;
 
 protected:
-  Outbound(EventTarget::Input *output, const Options &options);
+  Outbound(EventTarget::Input *input, const Options &options);
   ~Outbound();
 
   Options m_options;
@@ -115,7 +111,7 @@ protected:
   pjs::Ref<pjs::Str> m_address;
   pjs::Ref<pjs::Str> m_local_addr_str;
   pjs::Ref<pjs::Str> m_remote_addr_str;
-  pjs::Ref<EventTarget::Input> m_output;
+  pjs::Ref<EventTarget::Input> m_input;
   State m_state = State::idle;
   StreamEnd::Error m_error = StreamEnd::Error::NO_ERROR;
   int m_port = 0;
@@ -123,16 +119,22 @@ protected:
   int m_retries = 0;
   double m_start_time = 0;
   double m_connection_time = 0;
+  bool m_connecting = false;
+
+  auto options() const -> const Options& { return m_options; }
 
   void state(State state);
-  void output(Event *evt);
+  void input(Event *evt);
   void error(StreamEnd::Error err);
-  void describe(char *desc);
+  void describe(char *buf, size_t len);
 
   thread_local static pjs::Ref<stats::Gauge> s_metric_concurrency;
   thread_local static pjs::Ref<stats::Counter> s_metric_traffic_in;
   thread_local static pjs::Ref<stats::Counter> s_metric_traffic_out;
   thread_local static pjs::Ref<stats::Histogram> s_metric_conn_time;
+
+  pjs::Ref<stats::Counter> m_metric_traffic_out;
+  pjs::Ref<stats::Counter> m_metric_traffic_in;
 
 private:
   thread_local static List<Outbound> s_all_outbounds;
@@ -148,65 +150,40 @@ private:
 
 class OutboundTCP :
   public pjs::ObjectTemplate<OutboundTCP, Outbound>,
-  public FlushTarget
+  public SocketTCP
 {
 public:
-  bool overflowed() const { return m_overflowed; }
-  auto buffered() const -> int { return m_buffer_send.size(); }
+  auto buffered() const -> size_t { return SocketTCP::buffered(); }
 
   virtual void bind(const std::string &ip, int port) override;
   virtual void connect(const std::string &host, int port) override;
   virtual void send(Event *evt) override;
-  virtual void reset() override;
+  virtual void close() override;
 
 private:
-  OutboundTCP(EventTarget::Input *output, const Options &options);
+  OutboundTCP(EventTarget::Input *output, const Outbound::Options &options);
 
-  pjs::Ref<stats::Counter> m_metric_traffic_out;
-  pjs::Ref<stats::Counter> m_metric_traffic_in;
   pjs::Ref<stats::Histogram> m_metric_conn_time;
   asio::ip::tcp::resolver m_resolver;
-  asio::ip::tcp::socket m_socket;
   Timer m_connect_timer;
   Timer m_retry_timer;
   Data m_buffer_receive;
   Data m_buffer_send;
-  size_t m_discarded_data_size = 0;
-  double m_tick_read;
-  double m_tick_write;
-  bool m_connecting = false;
-  bool m_connected = false;
-  bool m_overflowed = false;
-  bool m_pumping = false;
-  bool m_ended = false;
-
-  virtual void on_flush() override;
-  virtual void on_tap_open() override;
-  virtual void on_tap_close() override;
-  virtual void on_tick(double tick) override;
 
   void start(double delay);
   void resolve();
   void connect(const asio::ip::tcp::endpoint &target);
-  void restart(StreamEnd::Error err);
-  void receive();
-  void pump();
-  void close(StreamEnd::Error err);
+  void connect_error(StreamEnd::Error err);
 
-  struct ReceiveHandler : public SelfHandler<OutboundTCP> {
-    using SelfHandler::SelfHandler;
-    ReceiveHandler(const ReceiveHandler &r) : SelfHandler(r) {}
-    void operator()(const std::error_code &ec, std::size_t n) { self->on_receive(ec, n); }
-  };
+  virtual auto get_buffered() const -> size_t override { return SocketTCP::buffered(); }
+  virtual auto get_traffic_in() ->size_t override;
+  virtual auto get_traffic_out() ->size_t override;
 
-  struct SendHandler : public SelfHandler<OutboundTCP> {
-    using SelfHandler::SelfHandler;
-    SendHandler(const SendHandler &r) : SelfHandler(r) {}
-    void operator()(const std::error_code &ec, std::size_t n) { self->on_send(ec, n); }
-  };
-
-  void on_receive(const std::error_code &ec, std::size_t n);
-  void on_send(const std::error_code &ec, std::size_t n);
+  virtual void on_socket_start() override { retain(); }
+  virtual void on_socket_input(Event *evt) override { Outbound::input(evt); }
+  virtual void on_socket_overflow(size_t size) override {}
+  virtual void on_socket_describe(char *buf, size_t len) override { describe(buf, len); }
+  virtual void on_socket_stop() override { release(); }
 
   friend class pjs::ObjectTemplate<OutboundTCP, Outbound>;
 };
@@ -220,13 +197,11 @@ public:
   virtual void bind(const std::string &ip, int port) override;
   virtual void connect(const std::string &host, int port) override;
   virtual void send(Event *evt) override;
-  virtual void reset() override;
+  virtual void close() override;
 
 private:
   OutboundUDP(EventTarget::Input *output, const Options &options);
 
-  pjs::Ref<stats::Counter> m_metric_traffic_out;
-  pjs::Ref<stats::Counter> m_metric_traffic_in;
   pjs::Ref<stats::Histogram> m_metric_conn_time;
   asio::ip::udp::resolver m_resolver;
   asio::ip::udp::socket m_socket;
@@ -240,10 +215,6 @@ private:
   bool m_connected = false;
   bool m_ended = false;
 
-  virtual void on_tap_open() override;
-  virtual void on_tap_close() override;
-  virtual void on_tick(double tick) override;
-
   void start(double delay);
   void resolve();
   void connect(const asio::ip::udp::endpoint &target);
@@ -252,6 +223,10 @@ private:
   void pump();
   void wait();
   void close(StreamEnd::Error err);
+
+  virtual auto get_buffered() const -> size_t override;
+  virtual auto get_traffic_in() -> size_t override;
+  virtual auto get_traffic_out() -> size_t override;
 
   friend class pjs::ObjectTemplate<OutboundUDP, Outbound>;
 };

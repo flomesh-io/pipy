@@ -27,6 +27,7 @@
 #define INBOUND_HPP
 
 #include "net.hpp"
+#include "socket.hpp"
 #include "event.hpp"
 #include "input.hpp"
 #include "output.hpp"
@@ -49,17 +50,10 @@ class Pipeline;
 class Inbound :
   public pjs::ObjectTemplate<Inbound>,
   public EventTarget,
-  public InputSource,
-  public Ticker::Watcher,
   public Output::WeakPtr::Watcher
 {
 public:
-  struct Options {
-    double read_timeout = 0;
-    double write_timeout = 0;
-    double idle_timeout = 60;
-    bool keep_alive = true;
-    bool no_delay = true;
+  struct Options : public SocketTCP::Options {
     bool transparent = false;
     bool masquerade = false;
     bool peer_stats = false;
@@ -76,7 +70,9 @@ public:
   auto ori_dst_port() -> int { address(); return m_ori_dst_port; }
   bool is_receiving() const { return m_receiving_state == RECEIVING; }
 
-  virtual auto size_in_buffer() const -> size_t = 0;
+  virtual auto get_buffered() const -> size_t = 0;
+  virtual auto get_traffic_in() ->size_t = 0;
+  virtual auto get_traffic_out() ->size_t = 0;
 
 protected:
   Inbound();
@@ -105,9 +101,11 @@ protected:
   thread_local static pjs::Ref<stats::Counter> s_metric_traffic_in;
   thread_local static pjs::Ref<stats::Counter> s_metric_traffic_out;
 
+  pjs::Ref<stats::Counter> m_metric_traffic_in;
+  pjs::Ref<stats::Counter> m_metric_traffic_out;
+
 private:
   virtual void on_get_address() = 0;
-  virtual void on_inbound_resume() = 0;
 
   uint64_t m_id;
   pjs::WeakRef<Output> m_output;
@@ -117,8 +115,6 @@ private:
   pjs::Ref<pjs::Str> m_str_ori_dst_addr;
   bool m_addressed = false;
 
-  virtual void on_tap_open() override;
-  virtual void on_tap_close() override;
   virtual void on_weak_ptr_gone() override;
 
   static std::atomic<uint64_t> s_inbound_id;
@@ -135,36 +131,31 @@ private:
 class InboundTCP :
   public pjs::ObjectTemplate<InboundTCP, Inbound>,
   public List<InboundTCP>::Item,
-  public FlushTarget
+  public SocketTCP
 {
 public:
   void accept(asio::ip::tcp::acceptor &acceptor);
   void dangle() { m_listener = nullptr; }
 
 private:
-  InboundTCP(Listener *listener, const Options &options);
+  InboundTCP(Listener *listener, const Inbound::Options &options);
   ~InboundTCP();
 
   Listener* m_listener;
-  Options m_options;
+  Inbound::Options m_options;
   pjs::Ref<EventTarget::Input> m_input;
   asio::ip::tcp::endpoint m_peer;
-  asio::ip::tcp::socket m_socket;
-  pjs::Ref<stats::Counter> m_metric_traffic_in;
-  pjs::Ref<stats::Counter> m_metric_traffic_out;
-  Data m_buffer_receive;
-  Data m_buffer_send;
-  double m_tick_read;
-  double m_tick_write;
-  bool m_pumping = false;
-  bool m_ended = false;
 
-  virtual auto size_in_buffer() const -> size_t override { return m_buffer_send.size(); }
+  virtual auto get_buffered() const -> size_t override { return SocketTCP::buffered(); }
+  virtual auto get_traffic_in() -> size_t override;
+  virtual auto get_traffic_out() -> size_t override;
   virtual void on_get_address() override;
-  virtual void on_inbound_resume() override { receive(); }
-  virtual void on_event(Event *evt) override;
-  virtual void on_flush() override;
-  virtual void on_tick(double tick) override;
+  virtual void on_event(Event *evt) override { SocketTCP::output(evt); }
+  virtual void on_socket_start() override { retain(); }
+  virtual void on_socket_input(Event *evt) override { m_input->input(evt); }
+  virtual void on_socket_overflow(size_t size) override {}
+  virtual void on_socket_describe(char *buf, size_t len) override { describe(buf, len); }
+  virtual void on_socket_stop() override { release(); }
 
   void start();
   void receive();
@@ -172,7 +163,7 @@ private:
   void pump();
   void output(Event *evt);
   void close(StreamEnd::Error err);
-  void describe(char *desc);
+  void describe(char *desc, size_t len);
   void get_original_dest(int sock);
 
   struct ReceiveHandler : public SelfHandler<InboundTCP> {
@@ -238,11 +229,11 @@ private:
   uint8_t m_datagram_header[20+8];
   size_t m_sending_size = 0;
 
-  virtual auto size_in_buffer() const -> size_t override;
+  virtual auto get_buffered() const -> size_t override;
+  virtual auto get_traffic_in() -> size_t override;
+  virtual auto get_traffic_out() -> size_t override;
   virtual void on_get_address() override;
-  virtual void on_inbound_resume() override {}
   virtual void on_event(Event *evt) override;
-  virtual void on_tick(double tick) override;
 
   void wait_idle();
 

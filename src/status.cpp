@@ -143,7 +143,7 @@ void Status::update_local() {
     int buffered = 0;
     listener->for_each_inbound([&](Inbound *inbound) {
       count++;
-      buffered += inbound->size_in_buffer();
+      buffered += inbound->get_buffered();
     });
     inbounds.insert({
       protocol,

@@ -49,9 +49,9 @@ thread_local pjs::Ref<stats::Counter> Outbound::s_metric_traffic_in;
 thread_local pjs::Ref<stats::Counter> Outbound::s_metric_traffic_out;
 thread_local pjs::Ref<stats::Histogram> Outbound::s_metric_conn_time;
 
-Outbound::Outbound(EventTarget::Input *output, const Options &options)
+Outbound::Outbound(EventTarget::Input *input, const Options &options)
   : m_options(options)
-  , m_output(output)
+  , m_input(input)
 {
   init_metrics();
   Log::debug(Log::ALLOC, "[outbound %p] ++", this);
@@ -60,7 +60,6 @@ Outbound::Outbound(EventTarget::Input *output, const Options &options)
 
 Outbound::~Outbound() {
   Log::debug(Log::ALLOC, "[outbound %p] --", this);
-  Ticker::get()->unwatch(this);
   s_all_outbounds.remove(this);
 }
 
@@ -106,19 +105,20 @@ void Outbound::state(State state) {
   }
 }
 
-void Outbound::output(Event *evt) {
-  m_output->input(evt);
+void Outbound::input(Event *evt) {
+  m_input->input(evt);
 }
 
 void Outbound::error(StreamEnd::Error err) {
   m_error = err;
-  output(StreamEnd::make(err));
+  input(StreamEnd::make(err));
   state(State::closed);
 }
 
-void Outbound::describe(char *desc) {
-  sprintf(
-    desc, "[outbound %p] [%s]:%d -> [%s]:%d (%s)",
+void Outbound::describe(char *buf, size_t len) {
+  std::snprintf(
+    buf, len,
+    "[outbound %p] [%s]:%d -> [%s]:%d (%s)",
     this,
     m_local_addr.empty() ? "0.0.0.0" : m_local_addr.c_str(),
     m_local_port,
@@ -155,12 +155,26 @@ void Outbound::init_metrics() {
 
     s_metric_traffic_in = stats::Counter::make(
       pjs::Str::make("pipy_outbound_in"),
-      label_names
+      label_names,
+      [=](stats::Counter *counter) {
+        Outbound::for_each([&](Outbound *outbound) {
+          auto n = outbound->get_traffic_in();
+          outbound->m_metric_traffic_in->increase(n);
+          s_metric_traffic_in->increase(n);
+        });
+      }
     );
 
     s_metric_traffic_out = stats::Counter::make(
       pjs::Str::make("pipy_outbound_out"),
-      label_names
+      label_names,
+      [=](stats::Counter *counter) {
+        Outbound::for_each([&](Outbound *outbound) {
+          auto n = outbound->get_traffic_out();
+          outbound->m_metric_traffic_out->increase(n);
+          s_metric_traffic_out->increase(n);
+        });
+      }
     );
 
     pjs::Ref<pjs::Array> buckets = pjs::Array::make(21);
@@ -182,19 +196,19 @@ void Outbound::init_metrics() {
 // OutboundTCP
 //
 
-OutboundTCP::OutboundTCP(EventTarget::Input *output, const Options &options)
+OutboundTCP::OutboundTCP(EventTarget::Input *output, const Outbound::Options &options)
   : pjs::ObjectTemplate<OutboundTCP, Outbound>(output, options)
-  , FlushTarget(true)
+  , SocketTCP(false, options)
   , m_resolver(Net::context())
-  , m_socket(Net::context())
 {
 }
 
 void OutboundTCP::bind(const std::string &ip, int port) {
+  auto &s = SocketTCP::socket();
   tcp::endpoint ep(asio::ip::make_address(ip), port);
-  m_socket.open(ep.protocol());
-  m_socket.bind(ep);
-  const auto &local = m_socket.local_endpoint();
+  s.open(ep.protocol());
+  s.bind(ep);
+  const auto &local = s.local_endpoint();
   m_local_addr = local.address().to_string();
   m_local_port = local.port();
   m_local_addr_str = nullptr;
@@ -203,7 +217,6 @@ void OutboundTCP::bind(const std::string &ip, int port) {
 void OutboundTCP::connect(const std::string &host, int port) {
   m_host = host;
   m_port = port;
-  m_connecting = true;
 
   pjs::Str *keys[2];
   keys[0] = protocol_name();
@@ -216,93 +229,24 @@ void OutboundTCP::connect(const std::string &host, int port) {
 }
 
 void OutboundTCP::send(Event *evt) {
-  if (auto *data = evt->as<Data>()) {
-    if (!m_ended) {
-      if (data->size() > 0) {
-        if (!m_overflowed) {
-          if (m_options.buffer_limit > 0 && m_buffer_send.size() >= m_options.buffer_limit) {
-            Log::error(
-              "OutboundTCP: %p to host = %s port = %d buffer overflow, size = %d",
-              this, m_host.c_str(), m_port, m_buffer_send.size());
-            m_overflowed = true;
-          }
-        }
-        if (!m_overflowed) {
-          m_buffer_send.push(*data);
-          need_flush();
-        } else {
-          m_discarded_data_size += data->size();
-        }
-      }
-    }
-  } else if (evt->is<StreamEnd>()) {
-    if (!m_ended) {
-      m_ended = true;
-      pump();
-    }
-  }
+  SocketTCP::output(evt);
 }
 
-void OutboundTCP::reset() {
+void OutboundTCP::close() {
   asio::error_code ec;
-
-  if (m_connecting) {
-    m_connecting = false;
-    m_connect_timer.cancel();
-    m_resolver.cancel();
-    m_socket.cancel(ec);
+  switch (state()) {
+    case State::resolving:
+    case State::connecting:
+      m_resolver.cancel();
+      m_connect_timer.cancel();
+      SocketTCP::socket().cancel(ec);
+      break;
+    case State::connected:
+      SocketTCP::close();
+      break;
+    default: break;
   }
-
-  m_discarded_data_size = 0;
-  m_overflowed = false;
-  m_ended = false;
-  m_retries = 0;
-  m_connected = false;
-  m_buffer_receive.clear();
-  m_buffer_send.clear();
-  m_socket.shutdown(tcp::socket::shutdown_both, ec);
-  m_socket.close(ec);
-}
-
-void OutboundTCP::on_flush() {
-  if (!m_ended) {
-    pump();
-  }
-}
-
-void OutboundTCP::on_tap_open()
-{
-}
-
-void OutboundTCP::on_tap_close()
-{
-}
-
-void OutboundTCP::on_tick(double tick) {
-  auto r = tick - m_tick_read;
-  auto w = tick - m_tick_write;
-
-  if (m_options.idle_timeout > 0) {
-    auto t = m_options.idle_timeout;
-    if (r >= t && w >= t) {
-      close(StreamEnd::IDLE_TIMEOUT);
-      return;
-    }
-  }
-
-  if (m_options.read_timeout > 0) {
-    if (r >= m_options.read_timeout) {
-      close(StreamEnd::READ_TIMEOUT);
-      return;
-    }
-  }
-
-  if (m_options.write_timeout > 0) {
-    if (r >= m_options.write_timeout) {
-      close(StreamEnd::WRITE_TIMEOUT);
-      return;
-    }
-  }
+  m_state = State::closed;
 }
 
 void OutboundTCP::start(double delay) {
@@ -320,8 +264,9 @@ void OutboundTCP::start(double delay) {
 }
 
 void OutboundTCP::resolve() {
-  auto host = m_host;
-  if (host == "localhost") host = "127.0.0.1";
+  static const std::string s_localhost("localhost");
+  static const std::string s_localhost_ip("127.0.0.1");
+  const auto &host = (m_host == s_localhost ? s_localhost_ip : m_host);
 
   m_resolver.async_resolve(
     tcp::resolver::query(host, std::to_string(m_port)),
@@ -331,20 +276,20 @@ void OutboundTCP::resolve() {
     ) {
       InputContext ic;
 
-      if (ec && m_options.connect_timeout > 0) {
+      if (ec && options().connect_timeout > 0) {
         m_connect_timer.cancel();
       }
 
       if (ec != asio::error::operation_aborted) {
         if (ec) {
           if (Log::is_enabled(Log::ERROR)) {
-            char desc[200];
-            describe(desc);
+            char desc[1000];
+            describe(desc, sizeof(desc));
             Log::error("%s cannot resolve hostname: %s", desc, ec.message().c_str());
           }
-          restart(StreamEnd::CANNOT_RESOLVE);
+          connect_error(StreamEnd::CANNOT_RESOLVE);
 
-        } else {
+        } else if (state() == State::resolving) {
           auto &result = *results;
           const auto &target = result.endpoint();
           m_remote_addr = target.address().to_string();
@@ -357,20 +302,13 @@ void OutboundTCP::resolve() {
     }
   );
 
-  if (Log::is_enabled(Log::OUTBOUND)) {
-    char desc[200];
-    describe(desc);
-    Log::debug(Log::OUTBOUND, "%s resolving hostname...", desc);
-  }
+  log_debug("resolving hostname...");
 
-  if (m_options.connect_timeout > 0) {
+  if (options().connect_timeout > 0) {
     m_connect_timer.schedule(
-      m_options.connect_timeout,
+      options().connect_timeout,
       [this]() {
-        asio::error_code ec;
-        m_resolver.cancel();
-        m_socket.cancel(ec);
-        restart(StreamEnd::CONNECTION_TIMEOUT);
+        connect_error(StreamEnd::CONNECTION_TIMEOUT);
       }
     );
   }
@@ -380,7 +318,7 @@ void OutboundTCP::resolve() {
   if (m_retries > 0) {
     if (Log::is_enabled(Log::WARN)) {
       char desc[200];
-      describe(desc);
+      describe(desc, sizeof(desc));
       Log::warn("%s retry connecting... (retries = %d)", desc, m_retries);
     }
   }
@@ -390,12 +328,12 @@ void OutboundTCP::resolve() {
 }
 
 void OutboundTCP::connect(const asio::ip::tcp::endpoint &target) {
-  m_socket.async_connect(
+  socket().async_connect(
     target,
     [=](const std::error_code &ec) {
       InputContext ic;
 
-      if (m_options.connect_timeout > 0) {
+      if (options().connect_timeout > 0) {
         m_connect_timer.cancel();
       }
 
@@ -403,42 +341,30 @@ void OutboundTCP::connect(const asio::ip::tcp::endpoint &target) {
         if (ec) {
           if (Log::is_enabled(Log::ERROR)) {
             char desc[200];
-            describe(desc);
+            describe(desc, sizeof(desc));
             Log::error("%s cannot connect: %s", desc, ec.message().c_str());
           }
-          restart(StreamEnd::CONNECTION_REFUSED);
+          connect_error(StreamEnd::CONNECTION_REFUSED);
 
-        } else if (m_connecting) {
-          const auto &ep = m_socket.local_endpoint();
+        } else if (state() == State::connecting) {
+          const auto &ep = socket().local_endpoint();
           m_local_addr = ep.address().to_string();
           m_local_port = ep.port();
           m_local_addr_str = nullptr;
+
           auto conn_time = utils::now() - m_start_time;
           m_connection_time += conn_time;
           m_metric_conn_time->observe(conn_time);
           s_metric_conn_time->observe(conn_time);
+
           if (Log::is_enabled(Log::OUTBOUND)) {
             char desc[200];
-            describe(desc);
+            describe(desc, sizeof(desc));
             Log::debug(Log::OUTBOUND, "%s connected in %g ms", desc, conn_time);
           }
-          m_connected = true;
-          m_connecting = false;
-          m_tick_read = m_tick_write = Ticker::get()->tick();
-          Ticker::get()->watch(this);
-          m_socket.set_option(asio::socket_base::keep_alive(m_options.keep_alive));
-          m_socket.set_option(tcp::no_delay(m_options.no_delay));
-          state(State::connected);
-          receive();
-          pump();
 
-        } else {
-          close(StreamEnd::CONNECTION_CANCELED);
-          if (Log::is_enabled(Log::OUTBOUND)) {
-            char desc[200];
-            describe(desc);
-            Log::debug(Log::OUTBOUND, "%s cancelled", desc);
-          }
+          state(State::connected);
+          SocketTCP::start();
         }
       }
 
@@ -448,7 +374,7 @@ void OutboundTCP::connect(const asio::ip::tcp::endpoint &target) {
 
   if (Log::is_enabled(Log::OUTBOUND)) {
     char desc[200];
-    describe(desc);
+    describe(desc, sizeof(desc));
     Log::debug(Log::OUTBOUND, "%s connecting...", desc);
   }
 
@@ -456,180 +382,29 @@ void OutboundTCP::connect(const asio::ip::tcp::endpoint &target) {
   state(State::connecting);
 }
 
-void OutboundTCP::restart(StreamEnd::Error err) {
-  if (m_options.retry_count >= 0 && m_retries >= m_options.retry_count) {
-    m_connecting = false;
+void OutboundTCP::connect_error(StreamEnd::Error err) {
+  if (options().retry_count >= 0 && m_retries >= options().retry_count) {
     error(err);
   } else {
     m_retries++;
     std::error_code ec;
-    m_socket.shutdown(tcp::socket::shutdown_both, ec);
-    m_socket.close(ec);
-    start(m_options.retry_delay);
+    socket().close(ec);
+    m_resolver.cancel();
+    state(State::idle);
+    start(options().retry_delay);
   }
 }
 
-void OutboundTCP::receive() {
-  if (!m_socket.is_open()) return;
-
-  m_buffer_receive.push(Data(RECEIVE_BUFFER_SIZE, &s_dp_tcp));
-  m_socket.async_read_some(
-    DataChunks(m_buffer_receive.chunks()),
-    ReceiveHandler(this)
-  );
-
-  retain();
+auto OutboundTCP::get_traffic_in() -> size_t {
+  auto n = SocketTCP::m_traffic_read;
+  SocketTCP::m_traffic_read = 0;
+  return n;
 }
 
-void OutboundTCP::pump() {
-  if (!m_socket.is_open()) return;
-  if (m_pumping || !m_connected) return;
-
-  if (m_buffer_send.empty()) {
-    if (m_ended) {
-      std::error_code ec;
-      m_socket.shutdown(tcp::socket::shutdown_send, ec);
-    }
-    return;
-  }
-
-  if (Log::is_enabled(Log::TCP)) {
-    std::cerr << Log::format_elapsed_time() << " tcp send >>>> " << m_buffer_send.size() << std::endl;
-  }
-
-  m_socket.async_write_some(
-    DataChunks(m_buffer_send.chunks()),
-    SendHandler(this)
-  );
-
-  m_pumping = true;
-
-  retain();
-}
-
-void OutboundTCP::close(StreamEnd::Error err) {
-  if (!m_connected) return;
-
-  m_buffer_send.clear();
-  m_discarded_data_size = 0;
-  m_overflowed = false;
-  m_ended = false;
-  m_retries = 0;
-  m_connected = false;
-
-  if (m_socket.is_open()) {
-    std::error_code ec;
-    m_socket.shutdown(tcp::socket::shutdown_both, ec);
-    m_socket.close(ec);
-
-    if (ec) {
-      if (Log::is_enabled(Log::ERROR)) {
-        char desc[200];
-        describe(desc);
-        Log::error("%s error closing socket: %s", desc, ec.message().c_str());
-      }
-    } else {
-      if (Log::is_enabled(Log::OUTBOUND)) {
-        char desc[200];
-        describe(desc);
-        Log::debug(Log::OUTBOUND, "%s connection closed to peer", desc);
-      }
-    }
-  }
-
-  error(err);
-}
-
-void OutboundTCP::on_receive(const std::error_code &ec, std::size_t n) {
-  InputContext ic(this);
-  m_tick_read = Ticker::get()->tick();
-
-  if (ec != asio::error::operation_aborted) {
-    if (n > 0) {
-      if (m_socket.is_open()) {
-        m_buffer_receive.pop(m_buffer_receive.size() - n);
-        if (auto more = m_socket.available()) {
-          Data buf(more, &s_dp_tcp);
-          auto n = m_socket.read_some(DataChunks(buf.chunks()));
-          if (n < more) buf.pop(more - n);
-          m_buffer_receive.push(buf);
-        }
-      }
-
-      auto size = m_buffer_receive.size();
-      m_metric_traffic_in->increase(size);
-      s_metric_traffic_in->increase(size);
-
-      if (Log::is_enabled(Log::TCP)) {
-        std::cerr << Log::format_elapsed_time() << " tcp recv <<<< " << size << std::endl;
-      }
-
-      output(Data::make(std::move(m_buffer_receive)));
-    }
-
-    if (ec) {
-      if (ec == asio::error::eof) {
-        if (Log::is_enabled(Log::OUTBOUND)) {
-          char desc[200];
-          describe(desc);
-          Log::debug(Log::OUTBOUND, "%s connection closed by peer", desc);
-        }
-        close(StreamEnd::NO_ERROR);
-      } else if (ec == asio::error::connection_reset) {
-        if (Log::is_enabled(Log::WARN)) {
-          char desc[200];
-          describe(desc);
-          Log::warn("%s connection reset by peer", desc);
-        }
-        close(StreamEnd::CONNECTION_RESET);
-      } else {
-        if (Log::is_enabled(Log::WARN)) {
-          char desc[200];
-          describe(desc);
-          Log::warn("%s error reading from peer: %s", desc, ec.message().c_str());
-        }
-        close(StreamEnd::READ_ERROR);
-      }
-
-    } else {
-      receive();
-    }
-  }
-
-  release();
-}
-
-void OutboundTCP::on_send(const std::error_code &ec, std::size_t n) {
-  m_pumping = false;
-  m_tick_write = Ticker::get()->tick();
-
-  if (ec != asio::error::operation_aborted) {
-    m_buffer_send.shift(n);
-    m_metric_traffic_out->increase(n);
-    s_metric_traffic_out->increase(n);
-
-    if (ec) {
-      if (Log::is_enabled(Log::WARN)) {
-        char desc[200];
-        describe(desc);
-        Log::warn("%s error writing to peer: %s", desc, ec.message().c_str());
-      }
-      close(StreamEnd::WRITE_ERROR);
-
-    } else if (m_overflowed && m_buffer_send.empty()) {
-      if (Log::is_enabled(Log::ERROR)) {
-        char desc[200];
-        describe(desc);
-        Log::error("%s overflowed by %d bytes", desc, m_discarded_data_size);
-      }
-      close(StreamEnd::BUFFER_OVERFLOW);
-
-    } else {
-      pump();
-    }
-  }
-
-  release();
+auto OutboundTCP::get_traffic_out() -> size_t {
+  auto n = SocketTCP::m_traffic_write;
+  SocketTCP::m_traffic_write = 0;
+  return n;
 }
 
 //
@@ -696,7 +471,7 @@ void OutboundUDP::send(Event *evt) {
   }
 }
 
-void OutboundUDP::reset() {
+void OutboundUDP::close() {
   asio::error_code ec;
 
   if (m_connecting) {
@@ -717,18 +492,6 @@ void OutboundUDP::reset() {
   m_pending_buffer.clear();
   m_socket.shutdown(udp::socket::shutdown_both, ec);
   m_socket.close(ec);
-}
-
-void OutboundUDP::on_tap_open()
-{
-}
-
-void OutboundUDP::on_tap_close()
-{
-}
-
-void OutboundUDP::on_tick(double tick)
-{
 }
 
 void OutboundUDP::start(double delay) {
@@ -765,7 +528,7 @@ void OutboundUDP::resolve() {
         if (ec) {
           if (Log::is_enabled(Log::ERROR)) {
             char desc[200];
-            describe(desc);
+            describe(desc, sizeof(desc));
             Log::error("%s cannot resolve hostname: %s", desc, ec.message().c_str());
           }
           restart(StreamEnd::CANNOT_RESOLVE);
@@ -785,7 +548,7 @@ void OutboundUDP::resolve() {
 
   if (Log::is_enabled(Log::OUTBOUND)) {
     char desc[200];
-    describe(desc);
+    describe(desc, sizeof(desc));
     Log::debug(Log::OUTBOUND, "%s resolving hostname...", desc);
   }
 
@@ -806,7 +569,7 @@ void OutboundUDP::resolve() {
   if (m_retries > 0) {
     if (Log::is_enabled(Log::WARN)) {
       char desc[200];
-      describe(desc);
+      describe(desc, sizeof(desc));
       Log::warn("%s retry connecting... (retries = %d)", desc, m_retries);
     }
   }
@@ -829,7 +592,7 @@ void OutboundUDP::connect(const asio::ip::udp::endpoint &target) {
         if (ec) {
           if (Log::is_enabled(Log::ERROR)) {
             char desc[200];
-            describe(desc);
+            describe(desc, sizeof(desc));
             Log::error("%s cannot connect: %s", desc, ec.message().c_str());
           }
           restart(StreamEnd::CONNECTION_REFUSED);
@@ -837,7 +600,7 @@ void OutboundUDP::connect(const asio::ip::udp::endpoint &target) {
         } else {
           if (Log::is_enabled(Log::OUTBOUND)) {
             char desc[200];
-            describe(desc);
+            describe(desc, sizeof(desc));
             Log::debug(Log::OUTBOUND, "%s connected", desc);
           }
           if (m_connecting) {
@@ -866,7 +629,7 @@ void OutboundUDP::connect(const asio::ip::udp::endpoint &target) {
 
   if (Log::is_enabled(Log::OUTBOUND)) {
     char desc[200];
-    describe(desc);
+    describe(desc, sizeof(desc));
     Log::debug(Log::OUTBOUND, "%s connecting...", desc);
   }
 
@@ -895,7 +658,7 @@ void OutboundUDP::receive() {
   m_socket.async_receive(
     DataChunks(buffer->chunks()),
     [=](const std::error_code &ec, size_t n) {
-      InputContext ic(this);
+      InputContext ic;
 
       if (ec != asio::error::operation_aborted) {
         if (n > 0) {
@@ -904,30 +667,30 @@ void OutboundUDP::receive() {
           }
           m_metric_traffic_in->increase(buffer->size());
           s_metric_traffic_in->increase(buffer->size());
-          output(MessageStart::make());
-          output(buffer);
-          output(MessageEnd::make());
+          input(MessageStart::make());
+          input(buffer);
+          input(MessageEnd::make());
         }
 
         if (ec) {
           if (ec == asio::error::eof) {
             if (Log::is_enabled(Log::OUTBOUND)) {
               char desc[200];
-              describe(desc);
+              describe(desc, sizeof(desc));
               Log::debug(Log::OUTBOUND, "%s connection closed by peer", desc);
             }
             close(StreamEnd::NO_ERROR);
           } else if (ec == asio::error::connection_reset) {
             if (Log::is_enabled(Log::WARN)) {
               char desc[200];
-              describe(desc);
+              describe(desc, sizeof(desc));
               Log::warn("%s connection reset by peer", desc);
             }
             close(StreamEnd::CONNECTION_RESET);
           } else {
             if (Log::is_enabled(Log::WARN)) {
               char desc[200];
-              describe(desc);
+              describe(desc, sizeof(desc));
               Log::warn("%s error reading from peer: %s", desc, ec.message().c_str());
             }
             close(StreamEnd::READ_ERROR);
@@ -963,7 +726,7 @@ void OutboundUDP::pump() {
             if (ec) {
               if (Log::is_enabled(Log::WARN)) {
                 char desc[200];
-                describe(desc);
+                describe(desc, sizeof(desc));
                 Log::warn("%s error writing to peer: %s", desc, ec.message().c_str());
               }
               close(StreamEnd::WRITE_ERROR);
@@ -1014,19 +777,31 @@ void OutboundUDP::close(StreamEnd::Error err) {
     if (ec) {
       if (Log::is_enabled(Log::ERROR)) {
         char desc[200];
-        describe(desc);
+        describe(desc, sizeof(desc));
         Log::error("%s error closing socket: %s", desc, ec.message().c_str());
       }
     } else {
       if (Log::is_enabled(Log::OUTBOUND)) {
         char desc[200];
-        describe(desc);
+        describe(desc, sizeof(desc));
         Log::debug(Log::OUTBOUND, "%s connection closed to peer", desc);
       }
     }
   }
 
   error(err);
+}
+
+auto OutboundUDP::get_buffered() const -> size_t {
+  return 0;
+}
+
+auto OutboundUDP::get_traffic_in() -> size_t {
+  return 0;
+}
+
+auto OutboundUDP::get_traffic_out() -> size_t {
+  return 0;
 }
 
 } // namespace pipy
