@@ -58,6 +58,8 @@ void SocketTCP::start() {
   } else if (!m_buffer_send.empty()) {
     FlushTarget::need_flush();
   }
+
+  Ticker::get()->watch(this);
 }
 
 void SocketTCP::output(Event *evt) {
@@ -134,11 +136,13 @@ void SocketTCP::send() {
 }
 
 void SocketTCP::drain() {
-  m_socket.async_wait(
-    tcp::socket::wait_error,
-    ErrorHandler(this)
-  );
-  handler_retain();
+  if (!m_sending_end) {
+    m_socket.async_wait(
+      tcp::socket::wait_error,
+      ErrorHandler(this)
+    );
+    handler_retain();
+  }
 }
 
 void SocketTCP::close(bool shutdown) {
