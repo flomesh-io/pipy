@@ -1,0 +1,22 @@
+Access a normal HTTP port
+HTTP/1.1 200 OK
+content-length: 7
+connection: keep-alive
+
+Hello!
+Access a port with concurrent connections limited to 1
+HTTP/1.1 200 OK
+content-length: 7
+connection: keep-alive
+
+Hello!
+Access that port a second time
+HTTP/1.1 200 OK
+content-length: 7
+connection: keep-alive
+
+Hello!
+Access a port that closes at all connections
+curl: (52) Empty reply from server
+Access a non-listening port with retries
+curl: (52) Empty reply from server
