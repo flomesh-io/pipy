@@ -1,6 +1,0 @@
-{
-  "routes": {
-    "/api/*": { "service": "api" },
-    "/www/*": { "service": "www" }
-  }
-}

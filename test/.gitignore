@@ -1,10 +1,6 @@
 /*
 
 !/.gitignore
-!/package.json
-!/run.js
-!/scripts/
-!/testcases/
 !/attack/
 !/benchmark/
 !/codec/
