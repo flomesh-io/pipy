@@ -309,6 +309,7 @@ void Listener::AcceptorTCP::accept() {
 
 void Listener::AcceptorTCP::cancel() {
   m_acceptor.cancel();
+  m_accepting = nullptr;
 }
 
 void Listener::AcceptorTCP::open(Inbound *inbound) {

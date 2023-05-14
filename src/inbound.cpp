@@ -221,12 +221,9 @@ void InboundTCP::accept(asio::ip::tcp::acceptor &acceptor) {
           log_error("error accepting connection", ec);
           dangle();
 
-        } else {
+        } else if (m_listener && m_listener->pipeline_layout()) {
           log_debug("connection accepted");
-
-          if (m_listener && m_listener->pipeline_layout()) {
-            start();
-          }
+          start();
         }
       }
 
