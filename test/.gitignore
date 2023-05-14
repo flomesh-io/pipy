@@ -1,6 +1,7 @@
 /*
 
 !/.gitignore
+!/package.json
 !/attack/
 !/benchmark/
 !/codec/
