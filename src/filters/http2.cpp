@@ -673,7 +673,7 @@ void FrameEncoder::header(uint8_t *buf, int id, uint8_t type, uint8_t flags, siz
 //
 
 void DynamicTable::reset() {
-  for (auto i = m_tail; i < m_head; i++) {
+  for (auto i = m_tail + 1; i <= m_head; i++) {
     auto entry = m_entries[i % MAX_ENTRY_COUNT];
     delete entry;
   }
