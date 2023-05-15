@@ -62,9 +62,11 @@ ThrottleBase::~ThrottleBase()
 void ThrottleBase::reset() {
   Filter::reset();
   resume();
-  for (auto p = m_consumers.head(); p; p = p->next()) {
-    p->cancel();
+  for (auto p = m_consumers.head(); p;) {
+    auto c = p; p = p->next();
+    delete c;
   }
+  m_consumers.clear();
   if (m_quota_f) {
     m_quota = nullptr;
   }
@@ -131,16 +133,13 @@ void ThrottleBase::dequeue(EventConsumer *consumer) {
 //
 
 bool ThrottleBase::EventConsumer::on_consume(algo::Quota *quota) {
-  if (m_throttle) {
-    if (auto stalled = m_throttle->consume(m_event, quota)) {
-      m_event = stalled;
-      return false;
-    } else {
-      m_throttle->dequeue(this);
-      return true;
-    }
+  auto *t = m_throttle;
+  t->auto_release();
+  if (auto stalled = t->consume(m_event, quota)) {
+    m_event = stalled;
+    return false;
   } else {
-    delete this;
+    t->dequeue(this);
     return true;
   }
 }

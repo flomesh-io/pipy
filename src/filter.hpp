@@ -28,6 +28,7 @@
 
 #include "event.hpp"
 #include "list.hpp"
+#include "pipeline.hpp"
 
 #include <memory>
 #include <string>
@@ -37,8 +38,6 @@ namespace pipy {
 
 class Context;
 class ModuleBase;
-class PipelineLayout;
-class Pipeline;
 class Output;
 
 //
@@ -116,6 +115,7 @@ public:
   virtual void dump(Dump &d);
 
   auto pipeline() const -> Pipeline* { return m_pipeline; }
+  void auto_release() const { Pipeline::auto_release(m_pipeline); }
   void output(Event *evt);
   bool output(const pjs::Value &evt);
   bool callback(pjs::Function *func, int argc, pjs::Value argv[], pjs::Value &result);

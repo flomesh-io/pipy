@@ -70,11 +70,6 @@ protected:
       return List<EventConsumer>::Item::next();
     }
 
-    void cancel() {
-      m_throttle = nullptr;
-      m_event = nullptr;
-    }
-
   private:
     ThrottleBase* m_throttle;
     pjs::Ref<Event> m_event;

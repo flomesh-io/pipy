@@ -183,7 +183,7 @@ auto Filter::sub_pipeline(
 
 void Filter::on_event(Event *evt) {
   context()->group()->touch();
-  Pipeline::auto_release(m_pipeline);
+  auto_release();
   process(evt);
 }
 
