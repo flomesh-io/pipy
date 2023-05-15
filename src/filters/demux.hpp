@@ -130,6 +130,7 @@ private:
       , m_output_count(output_count) {}
 
     auto stream() const -> Stream* { return m_stream; }
+    auto eos() const -> StreamEnd* { return m_eos; }
     void increase_output_count(int n) { m_output_count += n; }
     bool flush();
 
@@ -138,8 +139,8 @@ private:
 
     DemuxQueue* m_queue;
     Stream* m_stream;
-    MessageReader m_reader;
-    MessageBuffer m_buffer;
+    EventBuffer m_buffer;
+    pjs::Ref<StreamEnd> m_eos;
     int m_output_count;
     bool m_has_message_started = false;
   };

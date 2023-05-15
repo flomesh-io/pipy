@@ -510,6 +510,16 @@ public:
     }
   }
 
+  void flush(EventTarget::Input *input) {
+    List<Event> events(std::move(m_events));
+    while (auto e = events.head()) {
+      events.remove(e);
+      e->m_in_buffer = false;
+      input->input(e);
+      e->release();
+    }
+  }
+
   void flush(const std::function<void(Event*)> &out) {
     List<Event> events(std::move(m_events));
     while (auto e = events.head()) {

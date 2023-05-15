@@ -178,7 +178,13 @@ void DemuxQueue::shift_receiver() {
   m_receivers.remove(r);
   delete r;
   while (auto r = m_receivers.head()) {
-    if (!r->flush()) break;
+    if (!r->flush()) {
+      if (auto eos = r->eos()) { // Short of output count, abort
+        EventFunction::output(eos);
+        reset();
+      }
+      return;
+    }
     close_stream_output(r->stream());
     m_receivers.remove(r);
     delete r;
@@ -215,11 +221,7 @@ void DemuxQueue::clear_waiters(bool reset) {
 //
 
 bool DemuxQueue::Receiver::flush() {
-  m_buffer.flush(
-    [this](Message *msg) {
-      msg->write(m_queue->EventFunction::output());
-    }
-  );
+  m_buffer.flush(m_queue->EventFunction::output());
   return !m_output_count;
 }
 
@@ -266,13 +268,38 @@ void DemuxQueue::Receiver::on_event(Event *evt) {
         break;
     }
   } else if (m_output_count > 0) {
-    if (auto msg = m_reader.read(evt)) {
-      m_buffer.push(msg);
-      if (!--m_output_count) {
+    switch (evt->type()) {
+      case Event::Type::MessageStart:
+        if (!m_has_message_started) {
+          m_buffer.push(evt);
+          m_has_message_started = true;
+        }
+        break;
+      case Event::Type::Data:
+        if (m_has_message_started) {
+          m_buffer.push(evt);
+        }
+        break;
+      case Event::Type::MessageEnd:
+        if (m_has_message_started) {
+          m_buffer.push(evt);
+          m_has_message_started = false;
+          if (!--m_output_count) {
+            q->close_stream_output(m_stream);
+            m_stream = nullptr;
+          }
+        }
+        break;
+      case Event::Type::StreamEnd:
         q->close_stream_output(m_stream);
         m_stream = nullptr;
-      }
-      msg->release();
+        m_eos = evt->as<StreamEnd>();
+        if (m_has_message_started) {
+          m_buffer.push(MessageEnd::make());
+          m_has_message_started = false;
+          m_output_count--;
+        }
+        break;
     }
   }
 }
