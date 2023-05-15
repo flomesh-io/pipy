@@ -40,10 +40,7 @@ namespace pipy {
 // ThrottleBase
 //
 
-class ThrottleBase :
-  public Filter,
-  public algo::Quota::Consumer
-{
+class ThrottleBase : public Filter {
 public:
   ThrottleBase(pjs::Object *quota);
 
@@ -55,15 +52,46 @@ protected:
   virtual void process(Event *evt) override;
   virtual auto consume(Event *evt, algo::Quota *quota) -> Event* = 0;
 
+  //
+  // ThrottleBase::EventConsumer
+  //
+
+  class EventConsumer :
+    public pjs::Pooled<EventConsumer>,
+    public algo::Quota::Consumer,
+    public List<EventConsumer>::Item
+  {
+  public:
+    EventConsumer(ThrottleBase *throttle, Event *event)
+      : m_throttle(throttle)
+      , m_event(event) {}
+
+    auto next() const -> EventConsumer* {
+      return List<EventConsumer>::Item::next();
+    }
+
+    void cancel() {
+      m_throttle = nullptr;
+      m_event = nullptr;
+    }
+
+  private:
+    ThrottleBase* m_throttle;
+    pjs::Ref<Event> m_event;
+
+    virtual bool on_consume(algo::Quota *quota) override;
+  };
+
   pjs::Ref<algo::Quota> m_quota;
   pjs::Ref<pjs::Function> m_quota_f;
-  EventBuffer m_buffer;
+  List<EventConsumer> m_consumers;
   pjs::Ref<InputSource::Tap> m_closed_tap;
+  bool m_paused = false;
 
   void pause();
   void resume();
-
-  virtual void on_consume(algo::Quota *quota) override;
+  void enqueue(Event *evt);
+  void dequeue(EventConsumer *consumer);
 };
 
 //

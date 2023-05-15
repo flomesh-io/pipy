@@ -25,7 +25,6 @@
 
 #include "algo.hpp"
 #include "context.hpp"
-#include "input.hpp"
 #include "utils.hpp"
 #include "log.hpp"
 
@@ -249,12 +248,18 @@ void Quota::reset() {
 void Quota::produce(double value) {
   if (value <= 0) return;
   m_current_value += value;
-  auto *p = m_consumers.head();
-  while (p) {
-    auto *consumer = p; p = p->next();
-    consumer->on_consume(this);
+  retain();
+  while (auto c = m_consumers.head()) {
+    m_consumers.remove(c);
+    c->m_quota = nullptr;
+    if (!c->on_consume(this)) {
+      c->m_quota = this;
+      m_consumers.unshift(c);
+      break;
+    }
     if (m_current_value <= 0) break;
   }
+  release();
 }
 
 auto Quota::consume(double value) -> double {
@@ -271,7 +276,6 @@ void Quota::schedule_producing() {
   m_timer.schedule(
     m_options.per,
     [this]() {
-      InputContext ic;
       m_is_producing_scheduled = false;
       double value = m_initial_value - m_current_value;
       if (m_options.produce > 0 && m_options.produce < value) {
@@ -284,17 +288,17 @@ void Quota::schedule_producing() {
   m_is_producing_scheduled = true;
 }
 
-//
-// Quota::Consumer
-//
+void Quota::enqueue(Consumer *consumer) {
+  if (!consumer->m_quota) {
+    consumer->m_quota = this;
+    m_consumers.push(consumer);
+  }
+}
 
-void Quota::Consumer::set_quota(Quota *quota) {
-  if (quota != m_quota) {
-    if (m_quota) {
-      m_quota->m_consumers.remove(this);
-    }
-    m_quota = quota;
-    if (quota) quota->m_consumers.push(this);
+void Quota::dequeue(Consumer *consumer) {
+  if (consumer->m_quota == this) {
+    m_consumers.remove(consumer);
+    consumer->m_quota = nullptr;
   }
 }
 

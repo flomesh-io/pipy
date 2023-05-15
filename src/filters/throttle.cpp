@@ -44,7 +44,7 @@ ThrottleBase::ThrottleBase(pjs::Object *quota) {
     }
   }
   throw std::runtime_error(
-    "throttle filter expects an algo.Quota or a function that returns that"
+    "throttle filter expects an algo.Quota or a function returning that"
   );
 }
 
@@ -62,8 +62,12 @@ ThrottleBase::~ThrottleBase()
 void ThrottleBase::reset() {
   Filter::reset();
   resume();
-  if (m_quota_f) m_quota = nullptr;
-  m_buffer.clear();
+  for (auto p = m_consumers.head(); p; p = p->next()) {
+    p->cancel();
+  }
+  if (m_quota_f) {
+    m_quota = nullptr;
+  }
 }
 
 void ThrottleBase::process(Event *evt) {
@@ -79,44 +83,66 @@ void ThrottleBase::process(Event *evt) {
     m_quota = ret.as<algo::Quota>();
   }
 
-  if (m_closed_tap) {
-    m_buffer.push(evt);
+  if (m_paused) {
+    enqueue(evt);
 
-  } else if (m_quota) {
-    if (auto stalled = consume(evt, m_quota)) {
-      pause();
-      m_buffer.push(stalled);
-    }
+  } else if (auto stalled = consume(evt, m_quota)) {
+    pause();
+    enqueue(stalled);
   }
 }
 
 void ThrottleBase::pause() {
-  if (!m_closed_tap) {
-    m_closed_tap = InputContext::tap();
-    m_closed_tap->close();
-    if (m_quota) m_quota->enqueue(this);
+  if (!m_paused) {
+    if (auto tap = InputContext::tap()) {
+      tap->close();
+      m_closed_tap = tap;
+    }
+    m_paused = true;
   }
 }
 
 void ThrottleBase::resume() {
-  if (m_closed_tap) {
-    if (m_quota) m_quota->dequeue(this);
-    m_closed_tap->open();
-    m_closed_tap = nullptr;
+  if (m_paused) {
+    if (auto tap = m_closed_tap.get()) {
+      tap->open();
+      m_closed_tap = nullptr;
+    }
+    m_paused = false;
   }
 }
 
-void ThrottleBase::on_consume(algo::Quota *quota) {
-  while (auto evt = m_buffer.shift()) {
-    if (auto stalled = consume(evt, quota)) {
-      m_buffer.unshift(stalled);
-      evt->release();
-      return;
-    } else {
-      evt->release();
-    }
+void ThrottleBase::enqueue(Event *evt) {
+  auto c = new EventConsumer(this, evt);
+  m_consumers.push(c);
+  m_quota->enqueue(c);
+}
+
+void ThrottleBase::dequeue(EventConsumer *consumer) {
+  m_consumers.remove(consumer);
+  if (m_consumers.empty()) {
+    resume();
   }
-  resume();
+  delete consumer;
+}
+
+//
+// ThrottleBase::EventConsumer
+//
+
+bool ThrottleBase::EventConsumer::on_consume(algo::Quota *quota) {
+  if (m_throttle) {
+    if (auto stalled = m_throttle->consume(m_event, quota)) {
+      m_event = stalled;
+      return false;
+    } else {
+      m_throttle->dequeue(this);
+      return true;
+    }
+  } else {
+    delete this;
+    return true;
+  }
 }
 
 //
@@ -135,13 +161,13 @@ auto ThrottleMessageRate::clone() -> Filter* {
 auto ThrottleMessageRate::consume(Event *evt, algo::Quota *quota) -> Event* {
   if (evt->is<MessageStart>()) {
     if (quota->consume(1) > 0) {
-      output(evt);
+      Filter::output(evt);
       return nullptr;
     } else {
       return evt;
     }
   } else {
-    output(evt);
+    Filter::output(evt);
     return nullptr;
   }
 }
@@ -161,19 +187,18 @@ auto ThrottleDataRate::clone() -> Filter* {
 
 auto ThrottleDataRate::consume(Event *evt, algo::Quota *quota) -> Event* {
   if (auto data = evt->as<Data>()) {
-    auto n = quota->consume(data->size());
+    int n = quota->consume(data->size());
     if (n == data->size()) {
-      output(data);
+      Filter::output(data);
       return nullptr;
     } else {
       auto partial = Data::make();
-      data->shift(n, *partial);
-      quota = 0;
-      output(partial);
-      return data;
+      data->pop(data->size() - n, *partial);
+      Filter::output(data);
+      return partial;
     }
   } else {
-    output(evt);
+    Filter::output(evt);
     return nullptr;
   }
 }

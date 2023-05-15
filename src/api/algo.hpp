@@ -107,13 +107,14 @@ public:
 
   class Consumer : public List<Consumer>::Item {
   public:
-    virtual void on_consume(Quota *quota) = 0;
+    virtual bool on_consume(Quota *quota) = 0;
 
   protected:
-    Consumer() {}
-    ~Consumer() { set_quota(nullptr); }
-
-    void set_quota(Quota *quota);
+    ~Consumer() {
+      if (m_quota) {
+        m_quota->dequeue(this);
+      }
+    }
 
     pjs::Ref<Quota> m_quota;
 
@@ -125,8 +126,8 @@ public:
   auto current() const -> double { return m_current_value; }
   void produce(double value);
   auto consume(double value) -> double;
-  void enqueue(Consumer *consumer) { consumer->set_quota(this); }
-  void dequeue(Consumer *consumer) { consumer->set_quota(nullptr); }
+  void enqueue(Consumer *consumer);
+  void dequeue(Consumer *consumer);
 
 private:
   Quota(double initial_value, const Options &options);
