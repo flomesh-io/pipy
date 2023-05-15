@@ -174,8 +174,8 @@ private:
   void continue_input();
   bool check_dedicated();
   void shift_receiver();
-  void clear_receivers();
-  void clear_waiters();
+  void clear_receivers(bool reset);
+  void clear_waiters(bool reset);
 
   Stream* m_input_stream = nullptr;
   EventBuffer m_buffer;

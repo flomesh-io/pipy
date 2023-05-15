@@ -39,8 +39,8 @@ namespace pipy {
 //
 
 void DemuxQueue::reset() {
-  clear_receivers();
-  clear_waiters();
+  clear_receivers(true);
+  clear_waiters(true);
   if (auto *s = m_input_stream) {
     close_stream(s);
     m_input_stream = nullptr;
@@ -165,7 +165,7 @@ bool DemuxQueue::check_dedicated() {
         on_demux_queue_dedicate(s->handler);
       }
       continue_input();
-      clear_receivers();
+      clear_receivers(false);
     }
     return (m_dedicated = true);
   }
@@ -186,17 +186,25 @@ void DemuxQueue::shift_receiver() {
   if (m_receivers.empty()) continue_input();
 }
 
-void DemuxQueue::clear_receivers() {
+void DemuxQueue::clear_receivers(bool reset) {
   while (auto r = m_receivers.head()) {
-    close_stream_output(r->stream());
+    if (reset) {
+      close_stream(r->stream());
+    } else {
+      close_stream_output(r->stream());
+    }
     m_receivers.remove(r);
     delete r;
   }
 }
 
-void DemuxQueue::clear_waiters() {
+void DemuxQueue::clear_waiters(bool reset) {
   while (auto w = m_waiters.head()) {
-    close_stream_output(w->stream());
+    if (reset) {
+      close_stream(w->stream());
+    } else {
+      close_stream_output(w->stream());
+    }
     m_waiters.remove(w);
     delete w;
   }
