@@ -52,7 +52,7 @@ protected:
 class DemuxQueue : public DemuxSession {
 public:
   void reset();
-  auto stream_count() const -> int { return m_stream_count; }
+  bool empty() const { return m_receivers.empty() && m_waiters.empty(); }
   void output_count(int output_count) { m_output_count = output_count; }
   void wait_output() { m_waiting_output_requested = true; }
   void increase_output_count(int n) { if (auto r = m_receivers.head()) r->increase_output_count(n); }
@@ -76,7 +76,6 @@ private:
   auto open_stream() -> Stream* {
     auto s = new Stream;
     s->handler = on_demux_open_stream();
-    m_stream_count++;
     return s;
   }
 
@@ -181,7 +180,6 @@ private:
   List<Receiver> m_receivers;
   List<Waiter> m_waiters;
   pjs::Ref<InputSource::Tap> m_closed_tap;
-  int m_stream_count = 0;
   int m_output_count = 1;
   bool m_waiting_output_requested = false;
   bool m_waiting_output = false;

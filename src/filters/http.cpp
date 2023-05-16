@@ -1267,10 +1267,10 @@ void Demux::reset() {
 void Demux::process(Event *evt) {
   Decoder::input()->input(evt);
   if (auto eos = evt->as<StreamEnd>()) {
-    if (DemuxQueue::stream_count() > 0) {
-      m_eos = eos;
-    } else {
+    if (DemuxQueue::empty()) {
       Filter::output(evt);
+    } else {
+      m_eos = eos;
     }
   }
 }

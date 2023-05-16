@@ -49,7 +49,6 @@ void DemuxQueue::reset() {
     tap->open();
     m_closed_tap = nullptr;
   }
-  m_stream_count = 0;
   m_output_count = 1;
   m_waiting_output_requested = false;
   m_waiting_output = false;
@@ -403,10 +402,10 @@ void Demux::process(Event *evt) {
     DemuxQueue::input()->input(evt);
 
     if (auto eos = evt->as<StreamEnd>()) {
-      if (DemuxQueue::stream_count() > 0) {
-        m_eos = eos;
-      } else {
+      if (DemuxQueue::empty()) {
         Filter::output(evt);
+      } else {
+        m_eos = eos;
       }
     }
   }
