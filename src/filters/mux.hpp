@@ -29,7 +29,6 @@
 #include "filter.hpp"
 #include "data.hpp"
 #include "event.hpp"
-#include "message.hpp"
 #include "input.hpp"
 #include "pipeline.hpp"
 #include "list.hpp"
@@ -231,7 +230,7 @@ protected:
   void increase_output_count(int n);
   void dedicate();
 
-  virtual auto on_queue_message(MuxSource *source, Message *msg) -> int { return 1; }
+  virtual auto on_queue_message(MuxSource *source, MessageStart *msg) -> int { return 1; }
   virtual void on_queue_end(StreamEnd *eos) {}
 
 private:
@@ -256,8 +255,9 @@ private:
   private:
     MuxQueue* m_queue;
     MuxSource* m_source;
-    MessageReader m_reader;
+    pjs::Ref<MessageStart> m_message_start;
     pjs::Ref<StreamEnd> m_eos;
+    Data m_buffer;
     int m_receiver_count = 0;
 
     void shift();
@@ -357,7 +357,7 @@ protected:
     virtual auto mux_session_open_stream(MuxSource *source) -> EventFunction* override;
     virtual void mux_session_close_stream(EventFunction *stream) override;
     virtual void mux_session_close() override;
-    virtual auto on_queue_message(MuxSource *source, Message *msg) -> int override;
+    virtual auto on_queue_message(MuxSource *source, MessageStart *msg) -> int override;
     virtual void on_queue_end(StreamEnd *eos) override;
     virtual void on_auto_release() override { delete this; }
   };

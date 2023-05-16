@@ -572,25 +572,43 @@ void MuxQueue::Stream::on_event(Event *evt) {
     return;
   }
 
-  if (auto msg = m_reader.read(evt)) {
-    int n = q->on_queue_message(m_source, msg);
-    if (n >= 0) {
-      if (n > 0) {
-        auto r = new Receiver(this, n);
-        q->m_receivers.push(r);
-        m_receiver_count++;
+  switch (evt->type()) {
+    case Event::Type::MessageStart:
+      if (!m_message_start) {
+        m_message_start = evt->as<MessageStart>();
+        m_buffer.clear();
       }
-      msg->write(q->output());
-    }
-    msg->release();
-  }
-
-  if (auto eos = evt->as<StreamEnd>()) {
-    if (m_receiver_count > 0) {
-      m_eos = eos;
-    } else {
-      EventFunction::output(evt);
-    }
+      break;
+    case Event::Type::Data:
+      if (m_message_start) {
+        m_buffer.push(*evt->as<Data>());
+      }
+      break;
+    case Event::Type::MessageEnd:
+      if (m_message_start) {
+        int n = q->on_queue_message(m_source, m_message_start);
+        if (n >= 0) {
+          if (n > 0) {
+            auto r = new Receiver(this, n);
+            q->m_receivers.push(r);
+            m_receiver_count++;
+          }
+          auto i = q->output();
+          i->input(m_message_start);
+          if (!m_buffer.empty()) i->input(Data::make(std::move(m_buffer)));
+          i->input(evt);
+        }
+        m_message_start = nullptr;
+      }
+      break;
+    case Event::Type::StreamEnd:
+      m_message_start = nullptr;
+      if (m_receiver_count > 0) {
+        m_eos = evt->as<StreamEnd>();
+      } else {
+        EventFunction::output(evt);
+      }
+      break;
   }
 }
 
@@ -802,7 +820,7 @@ void Mux::Session::mux_session_close() {
   MuxQueue::reset();
 }
 
-auto Mux::Session::on_queue_message(MuxSource *source, Message *msg) -> int {
+auto Mux::Session::on_queue_message(MuxSource *source, MessageStart *msg) -> int {
   auto pool = static_cast<SessionPool*>(MuxSession::pool());
   if (auto f = pool->m_output_count_f.get()) {
     auto mux = static_cast<Mux*>(source);

@@ -138,7 +138,7 @@ void DemuxQueue::start_waiting_output() {
   }
 }
 
-void DemuxQueue::continue_input() {
+bool DemuxQueue::continue_input() {
   if (m_waiting_output) {
     m_waiting_output = false;
     EventFunction::input()->flush_async();
@@ -146,6 +146,9 @@ void DemuxQueue::continue_input() {
       tap->open();
       m_closed_tap = nullptr;
     }
+    return true;
+  } else {
+    return false;
   }
 }
 
@@ -189,7 +192,11 @@ void DemuxQueue::shift_receiver() {
     m_receivers.remove(r);
     delete r;
   }
-  if (m_receivers.empty()) continue_input();
+  if (m_receivers.empty()) {
+    if (!continue_input()) {
+      on_demux_complete();
+    }
+  }
 }
 
 void DemuxQueue::clear_receivers(bool reset) {

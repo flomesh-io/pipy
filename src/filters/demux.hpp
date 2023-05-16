@@ -29,7 +29,6 @@
 #include "filter.hpp"
 #include "data.hpp"
 #include "list.hpp"
-#include "message.hpp"
 #include "pipeline.hpp"
 #include "options.hpp"
 
@@ -110,7 +109,6 @@ private:
   void recycle_stream(Stream *s) {
     if (s->end_input && s->end_output) {
       close_stream(s);
-      if (!--m_stream_count) on_demux_complete();
     }
   }
 
@@ -172,7 +170,7 @@ private:
 
   void queue_event(Event *evt);
   void start_waiting_output();
-  void continue_input();
+  bool continue_input();
   bool check_dedicated();
   void shift_receiver();
   void clear_receivers(bool reset);
