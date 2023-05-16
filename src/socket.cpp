@@ -97,6 +97,7 @@ void SocketTCP::close() {
 void SocketTCP::receive() {
   if (m_closed) return;
   if (m_receiving) return;
+  if (m_paused) return;
 
   m_buffer_receive.push(Data(RECEIVE_BUFFER_SIZE, &s_dp));
   m_socket.async_read_some(
@@ -162,19 +163,26 @@ void SocketTCP::close(bool shutdown) {
     m_sending_end = true;
     m_closed = true;
 
-    if (m_paused && !m_receiving) {
+    if (m_paused) {
+      m_paused = false;
       handler_release();
     }
   }
 }
 
 void SocketTCP::on_tap_open() {
-  m_paused = false;
-  receive();
+  if (m_paused) {
+    m_paused = false;
+    receive();
+    handler_release();
+  }
 }
 
 void SocketTCP::on_tap_close() {
-  m_paused = true;
+  if (!m_paused) {
+    m_paused = true;
+    handler_retain();
+  }
 }
 
 void SocketTCP::on_flush() {
@@ -255,9 +263,6 @@ void SocketTCP::on_receive(const std::error_code &ec, std::size_t n) {
         on_socket_input(StreamEnd::make(StreamEnd::READ_ERROR));
         close(false);
       }
-
-    } else if (m_paused) {
-      handler_retain();
 
     } else {
       receive();
