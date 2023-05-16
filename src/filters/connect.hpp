@@ -56,6 +56,7 @@ public:
   };
 
   Connect(const pjs::Value &target, const Options &options);
+  Connect(const pjs::Value &target, pjs::Function *options);
 
 private:
   Connect(const Connect &r);
@@ -68,6 +69,7 @@ private:
 
   pjs::Value m_target;
   pjs::Ref<Outbound> m_outbound;
+  pjs::Ref<pjs::Function> m_options_f;
   Options m_options;
 
   friend class ConnectReceiver;

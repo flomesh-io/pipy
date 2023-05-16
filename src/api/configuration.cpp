@@ -151,7 +151,11 @@ void FilterConfigurator::compress_message(pjs::Object *options) {
 }
 
 void FilterConfigurator::connect(const pjs::Value &target, pjs::Object *options) {
-  append_filter(new Connect(target, options));
+  if (options && options->is_function()) {
+    append_filter(new Connect(target, options->as<pjs::Function>()));
+  } else {
+    append_filter(new Connect(target, options));
+  }
 }
 
 void FilterConfigurator::connect_http_tunnel(pjs::Object *handshake) {

@@ -95,9 +95,16 @@ Connect::Connect(const pjs::Value &target, const Options &options)
 {
 }
 
+Connect::Connect(const pjs::Value &target, pjs::Function *options)
+  : m_target(target)
+  , m_options_f(options)
+{
+}
+
 Connect::Connect(const Connect &r)
   : Filter(r)
   , m_target(r.m_target)
+  , m_options_f(r.m_options_f)
   , m_options(r.m_options)
 {
 }
@@ -144,10 +151,28 @@ void Connect::process(Event *evt) {
       return;
     }
 
-    pjs::Ref<pjs::Str> bind(m_options.bind);
-    if (m_options.bind_f) {
+    Options eval_options;
+    if (auto f = m_options_f.get()) {
       pjs::Value ret;
-      if (!Filter::eval(m_options.bind_f, ret)) return;
+      if (!Filter::eval(f, ret)) return;
+      if (!ret.is_object()) {
+        Filter::error("callback did not return an object for options");
+        return;
+      }
+      try {
+        eval_options = Options(ret.o());
+      } catch (std::runtime_error &err) {
+        Filter::error(err.what());
+        return;
+      }
+    }
+
+    auto &options = m_options_f ? eval_options : m_options;
+
+    pjs::Ref<pjs::Str> bind(options.bind);
+    if (options.bind_f) {
+      pjs::Value ret;
+      if (!Filter::eval(options.bind_f, ret)) return;
       if (!ret.is_undefined()) {
         if (!ret.is_string()) {
           Filter::error("bind expected to be or return a string");
@@ -157,20 +182,21 @@ void Connect::process(Event *evt) {
       }
     }
 
-    if (m_options.on_state_f) {
-      m_options.on_state_changed = [this](Outbound *ob) {
+    if (options.on_state_f) {
+      pjs::Ref<pjs::Function> f = options.on_state_f;
+      options.on_state_changed = [=](Outbound *ob) {
         pjs::Value arg(ob), ret;
-        Filter::callback(m_options.on_state_f, 1, &arg, ret);
+        Filter::callback(f, 1, &arg, ret);
       };
     }
 
     Outbound *outbound = nullptr;
-    switch (m_options.protocol) {
+    switch (options.protocol) {
       case Outbound::Protocol::TCP:
-        outbound = OutboundTCP::make(ConnectReceiver::input(), m_options);
+        outbound = OutboundTCP::make(ConnectReceiver::input(), options);
         break;
       case Outbound::Protocol::UDP:
-        outbound = OutboundUDP::make(ConnectReceiver::input(), m_options);
+        outbound = OutboundUDP::make(ConnectReceiver::input(), options);
         break;
     }
 
