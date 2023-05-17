@@ -80,9 +80,10 @@ void Fork::process(Event *evt) {
       auto len = arr->length();
       m_pipelines = pjs::PooledArray<pjs::Ref<Pipeline>>::make(len);
       for (int i = 0; i < len; i++) {
-        pjs::Value v;
-        arr->get(i, v);
-        auto pipeline = sub_pipeline(0, true)->start(1, &v);
+        pjs::Value args[2];
+        arr->get(i, args[0]);
+        args[1].set(i);
+        auto pipeline = sub_pipeline(0, true)->start(2, args);
         m_pipelines->at(i) = pipeline;
       }
     } else {
