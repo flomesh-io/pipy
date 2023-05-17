@@ -60,7 +60,22 @@ private:
   virtual void dump(Dump &d) override;
   virtual void on_notify() override;
 
+  //
+  // Wait::PromiseCallback
+  //
+
+  class PromiseCallback : public pjs::ObjectTemplate<PromiseCallback, pjs::Promise::Callback> {
+    PromiseCallback(Wait *filter) : m_filter(filter) {}
+    virtual void on_resolved(const pjs::Value &value) override;
+    virtual void on_rejected(const pjs::Value &error) override;
+    friend class pjs::ObjectTemplate<PromiseCallback, pjs::Promise::Callback>;
+    Wait* m_filter;
+  public:
+    void close() { m_filter = nullptr; }
+  };
+
   pjs::Ref<pjs::Function> m_condition;
+  pjs::Ref<PromiseCallback> m_promise_callback;
   Options m_options;
   EventBuffer m_buffer;
   Timer m_timer;

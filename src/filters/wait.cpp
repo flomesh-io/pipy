@@ -72,6 +72,10 @@ auto Wait::clone() -> Filter* {
 void Wait::reset() {
   Filter::reset();
   Waiter::cancel();
+  if (m_promise_callback) {
+    m_promise_callback->close();
+    m_promise_callback = nullptr;
+  }
   m_timer.cancel();
   m_buffer.clear();
   m_fulfilled = false;
@@ -84,10 +88,16 @@ void Wait::process(Event *evt) {
   } else {
     pjs::Value ret;
     if (!callback(m_condition, 0, nullptr, ret)) return;
-    if (ret.to_boolean()) {
+    if (ret.is_promise()) {
+      auto cb = PromiseCallback::make(this);
+      ret.as<pjs::Promise>()->then(context(), cb->resolved(), cb->rejected());
+      m_promise_callback = cb;
+    } else if (ret.to_boolean()) {
       fulfill();
       output(evt);
-    } else {
+    }
+
+    if (!m_fulfilled) {
       if (m_buffer.empty() && m_options.timeout > 0) {
         m_timer.schedule(
           m_options.timeout,
@@ -121,4 +131,34 @@ void Wait::fulfill() {
   }
 }
 
+//
+// Wait::PromiseCallback
+//
+
+void Wait::PromiseCallback::on_resolved(const pjs::Value &value) {
+  if (m_filter) {
+    m_filter->fulfill();
+  }
+}
+
+void Wait::PromiseCallback::on_rejected(const pjs::Value &error) {
+  if (m_filter) {
+    if (error.is_error()) {
+      m_filter->error(error.as<pjs::Error>());
+    } else {
+      m_filter->error(StreamEnd::make(error));
+    }
+  }
+}
+
 } // namespace pipy
+
+namespace pjs {
+
+using namespace pipy;
+
+template<> void ClassDef<Wait::PromiseCallback>::init() {
+  super<Promise::Callback>();
+}
+
+} // namespace pjs
