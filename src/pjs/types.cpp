@@ -1874,6 +1874,38 @@ auto Promise::reject(const Value &error) -> Promise* {
   return p;
 }
 
+auto Promise::all(Array *promises) -> Promise* {
+  auto n = promises->length();
+  if (!n) return resolve(Array::make());
+  auto p = Promise::make();
+  new Aggregator(Aggregator::ALL, Handler::make(p), promises);
+  return p;
+}
+
+auto Promise::all_settled(Array *promises) -> Promise* {
+  auto n = promises->length();
+  if (!n) return resolve(Array::make());
+  auto p = Promise::make();
+  new Aggregator(Aggregator::ALL_SETTLED, Handler::make(p), promises);
+  return p;
+}
+
+auto Promise::any(Array *promises) -> Promise* {
+  auto n = promises->length();
+  if (!n) return reject(Array::make());
+  auto p = Promise::make();
+  new Aggregator(Aggregator::ANY, Handler::make(p), promises);
+  return p;
+}
+
+auto Promise::race(Array *promises) -> Promise* {
+  auto p = Promise::make();
+  auto n = promises->length();
+  if (!n) return p;
+  new Aggregator(Aggregator::ANY, Handler::make(p), promises);
+  return p;
+}
+
 Promise::~Promise() {
   auto p = m_thens_head;
   while (p) {
@@ -2009,6 +2041,34 @@ template<> void ClassDef<Constructor<Promise>>::init() {
     Value error; ctx.get(0, error);
     ret.set(Promise::reject(error));
   });
+
+  method("all", [](Context &ctx, Object *obj, Value &ret) {
+    Array *promises;
+    if (!ctx.arguments(1, &promises)) return;
+    if (!promises) { ctx.error_argument_type(0, "an array"); return; }
+    ret.set(Promise::all(promises));
+  });
+
+  method("allSettled", [](Context &ctx, Object *obj, Value &ret) {
+    Array *promises;
+    if (!ctx.arguments(1, &promises)) return;
+    if (!promises) { ctx.error_argument_type(0, "an array"); return; }
+    ret.set(Promise::all_settled(promises));
+  });
+
+  method("any", [](Context &ctx, Object *obj, Value &ret) {
+    Array *promises;
+    if (!ctx.arguments(1, &promises)) return;
+    if (!promises) { ctx.error_argument_type(0, "an array"); return; }
+    ret.set(Promise::any(promises));
+  });
+
+  method("race", [](Context &ctx, Object *obj, Value &ret) {
+    Array *promises;
+    if (!ctx.arguments(1, &promises)) return;
+    if (!promises) { ctx.error_argument_type(0, "an array"); return; }
+    ret.set(Promise::race(promises));
+  });
 }
 
 //
@@ -2054,23 +2114,32 @@ Promise::Then::Then(
 }
 
 void Promise::Then::execute(State state, const Value &result) {
+  if (m_context) {
+    execute(m_context, state, result);
+  } else {
+    Context ctx;
+    execute(&ctx, state, result);
+  }
+}
+
+void Promise::Then::execute(Context *ctx, State state, const Value &result) {
   Value arg(result), ret;
   if (state == RESOLVED) {
     if (m_on_resolved) {
-      (*m_on_resolved)(*m_context, 1, &arg, ret);
+      (*m_on_resolved)(*ctx, 1, &arg, ret);
     } else {
       ret = m_resolved_value;
     }
   } else {
     if (m_on_rejected) {
-      (*m_on_rejected)(*m_context, 1, &arg, ret);
+      (*m_on_rejected)(*ctx, 1, &arg, ret);
     } else {
       ret = m_rejected_value;
     }
   }
 
-  if (!m_context->ok()) {
-    m_promise->settle(REJECTED, Error::make(m_context->error()));
+  if (!ctx->ok()) {
+    m_promise->settle(REJECTED, Error::make(ctx->error()));
     return;
   }
 
@@ -2100,6 +2169,129 @@ template<> void ClassDef<Promise::Handler>::init() {
     Value error; ctx.get(0, error);
     obj->as<Promise::Handler>()->reject(error);
   });
+}
+
+//
+// Promise::Result
+//
+
+template<> void ClassDef<Promise::Result>::init() {
+  field<Value>("status", [](Promise::Result *obj) { return &obj->status; });
+  field<Value>("value", [](Promise::Result *obj) { return &obj->value; });
+  field<Value>("reason", [](Promise::Result *obj) { return &obj->reason; });
+}
+
+//
+// Promise::Aggregator
+//
+
+Promise::Aggregator::Aggregator(Type type, Handler *handler, Array *promises)
+  : m_type(type)
+  , m_handler(handler)
+{
+  auto n = promises->length();
+  auto d = PooledArray<Ref<Dependency>>::make(n);
+  m_dependencies = d;
+  for (int i = 0; i < n; i++) {
+    Value v; promises->get(i, v);
+    auto p = v.is_promise() ? v.as<Promise>() : Promise::resolve(v);
+    d->at(i) = Dependency::make(this, p);
+    retain();
+  }
+  for (int i = 0; i < n; i++) {
+    d->at(i)->init();
+  }
+}
+
+Promise::Aggregator::~Aggregator() {
+  if (m_dependencies) {
+    m_dependencies->free();
+  }
+}
+
+void Promise::Aggregator::settle(Dependency *dep) {
+  thread_local static const ConstStr s_fulfilled("fulfilled");
+  thread_local static const ConstStr s_rejected("rejected");
+
+  switch (m_type) {
+    case ALL:
+      if (dep->state() == REJECTED) {
+        m_handler->reject(dep->result());
+      } else if (++m_counter == m_dependencies->size()) {
+        auto n = m_dependencies->size();
+        auto a = Array::make(n);
+        for (int i = 0; i < n; i++) a->set(i, m_dependencies->at(i)->result());
+        m_handler->resolve(a);
+      }
+      break;
+    case ALL_SETTLED:
+      if (++m_counter == m_dependencies->size()) {
+        auto n = m_dependencies->size();
+        auto a = Array::make(n);
+        for (int i = 0; i < n; i++) {
+          auto d = m_dependencies->at(i).get();
+          auto r = Result::make();
+          if (d->state() == RESOLVED) {
+            r->status = s_fulfilled.get();
+            r->value = d->result();
+          } else {
+            r->status = s_rejected.get();
+            r->reason = d->result();
+          }
+          a->set(i, d);
+        }
+        m_handler->resolve(a);
+      }
+      break;
+    case ANY:
+      if (dep->state() == RESOLVED) {
+        m_handler->resolve(dep->result());
+      } else if (++m_counter == m_dependencies->size()) {
+        auto n = m_dependencies->size();
+        auto a = Array::make(n);
+        for (int i = 0; i < n; i++) a->set(i, m_dependencies->at(i)->result());
+        m_handler->reject(a);
+      }
+      break;
+    case RACE:
+      if (dep->state() == RESOLVED) {
+        m_handler->resolve(dep->result());
+      } else {
+        m_handler->reject(dep->result());
+      }
+      break;
+  }
+}
+
+//
+// Promise::Aggregator::Dependency
+//
+
+void Promise::Aggregator::Dependency::init() {
+  Promise::WeakPtr::Watcher::watch(m_promise->weak_ptr());
+  m_state = m_promise->m_state;
+  m_result = m_promise->m_result;
+  m_promise->then(nullptr, Callback::resolved(), Callback::rejected());
+}
+
+void Promise::Aggregator::Dependency::on_resolved(const Value &value) {
+  m_state = RESOLVED;
+  m_result = value;
+  m_aggregator->settle(this);
+}
+
+void Promise::Aggregator::Dependency::on_rejected(const Value &error) {
+  m_state = REJECTED;
+  m_result = error;
+  m_aggregator->settle(this);
+}
+
+void Promise::Aggregator::Dependency::on_weak_ptr_gone() {
+  m_aggregator = nullptr;
+}
+
+template<> void ClassDef<Promise::Aggregator::Dependency>::init() {
+  super<Promise::Callback>();
 }
 
 //
