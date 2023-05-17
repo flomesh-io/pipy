@@ -104,7 +104,7 @@ void Wait::process(Event *evt) {
           [=]() { fulfill(); }
         );
       }
-      Waiter::wait(context()->group());
+      if (!m_promise_callback) Waiter::wait(context()->group());
       m_buffer.push(evt);
     }
   }
