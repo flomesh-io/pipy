@@ -15,6 +15,33 @@ const error = (...args) => log.apply(this, [chalk.bgRed('ERROR')].concat(args.ma
 const sleep = (t) => new Promise(resolve => setTimeout(resolve, t * 1000));
 const currentDir = dirname(new URL(import.meta.url).pathname);
 const pipyBinPath = join(currentDir, '../../bin/pipy');
+const allTests = [];
+const testResults = {};
+
+fs.readdirSync(currentDir, { withFileTypes: true })
+  .filter(ent => ent.isDirectory())
+  .forEach(ent => {
+    const n = parseInt(ent.name.substring(0, 3));
+    if (!isNaN(n)) allTests[n] = ent.name;
+  });
+
+function summary() {
+  const maxWidth = Math.max.apply(null, Object.keys(testResults).map(name => name.length));
+  const width = maxWidth + 20;
+  log('='.repeat(width));
+  log('Summary');
+  log('-'.repeat(width));
+  Object.keys(testResults).sort().forEach(
+    name => {
+      if (testResults[name]) {
+        log(name + ' '.repeat(width - 2 - name.length) + chalk.green('OK'));
+      } else {
+        log(name + ' '.repeat(width - 4 - name.length) + chalk.red('FAIL'));
+      }
+    }
+  );
+  log('='.repeat(width));
+}
 
 function http(method, path, headers, body) {
   if (typeof headers !== 'object') {
@@ -156,7 +183,7 @@ async function startCodebase(url) {
   return proc;
 }
 
-function createAttacks(proc, port, options) {
+function createSessions(proc, port, options) {
 
   function formatSize(size) {
     let n, unit;
@@ -177,7 +204,7 @@ function createAttacks(proc, port, options) {
     return str + ' '.repeat(Math.max(0, width - str.length));
   }
 
-  class Attack {
+  class Session {
     constructor(id, messages, verify, delay) {
       this.id = id;
       this.messages = messages.map(
@@ -287,7 +314,7 @@ function createAttacks(proc, port, options) {
         const head = readLine();
         const status = parseInt(head.split(' ')[1]);
         if (!(100 <= status && status <= 599)) {
-          throw new Error(`Invalid status code ${status} in response from attack #${this.id}`);
+          throw new Error(`Invalid status code ${status} in response from session #${this.id}`);
         }
 
         const headers = {};
@@ -307,9 +334,9 @@ function createAttacks(proc, port, options) {
             if (size >= 0) {
               body += readBlock(size);
             } else {
-              throw new Error(`Invalid chunked encoding in response from attack #${this.id}`);
+              throw new Error(`Invalid chunked encoding in response from session #${this.id}`);
             }
-            if (readLine() !== '') throw new Error(`Invalid chunked encoding in response from attack #${this.id}`);
+            if (readLine() !== '') throw new Error(`Invalid chunked encoding in response from session #${this.id}`);
             if (size === 0) break;
           }
         } else if ('content-length' in headers) {
@@ -317,12 +344,12 @@ function createAttacks(proc, port, options) {
           if (length >= 0) {
             body = readBlock(length);
           } else {
-            throw new Error(`Invalid Content-Length in response from attack #${this.id}`);
+            throw new Error(`Invalid Content-Length in response from session #${this.id}`);
           }
         }
 
         if (this.cursorVerify >= this.cursorSend) {
-          throw new Error(`Received extra responses from attack #${this.id}`);
+          throw new Error(`Received extra responses from session #${this.id}`);
         }
         this.verify({ status, headers, body }, this.cursorVerify);
         if (++this.cursorVerify >= this.messages.length) {
@@ -343,7 +370,7 @@ function createAttacks(proc, port, options) {
         status = 'WAIT';
       }
       return (
-        formatPadding(12, `Attack #${this.id}`) +
+        formatPadding(12, `Session #${this.id}`) +
         formatPadding( 6, status) +
         formatPadding(20, 'UP ' + formatSize(this.sentSize)) +
         formatPadding( 0, 'DOWN ' + formatSize(this.receivedSize))
@@ -351,13 +378,13 @@ function createAttacks(proc, port, options) {
     }
   }
 
-  const attacks = [];
+  const sessions = [];
   const reloads = [];
 
   function dumpStats(t) {
     logUpdate(
       `T = ${t}\n` +
-      attacks.map(a => a.stats()).join('\n')
+      sessions.map(a => a.stats()).join('\n')
     );
   }
 
@@ -366,9 +393,9 @@ function createAttacks(proc, port, options) {
     proc.kill('SIGHUP');
   }
 
-  function attack({ delay, messages, verify }) {
-    const a = new Attack(attacks.length, messages, verify, delay || 0);
-    attacks.push(a);
+  function session({ delay, messages, verify }) {
+    const a = new Session(sessions.length, messages, verify, delay || 0);
+    sessions.push(a);
     return a;
   }
 
@@ -383,13 +410,13 @@ function createAttacks(proc, port, options) {
 
     for (;;) {
       let done = true;
-      for (let i = 0, n = attacks.length; i < n; i++) {
+      for (let i = 0, n = sessions.length; i < n; i++) {
         try {
-          if (await attacks[i].step()) {
+          if (await sessions[i].step()) {
             done = false;
           }
         } catch (e) {
-          error(`Error from attack #${i}`);
+          error(`Error from session #${i}`);
           throw e;
         }
       }
@@ -406,10 +433,10 @@ function createAttacks(proc, port, options) {
     logUpdate.done();
   }
 
-  return { attack, run, reload };
+  return { session, run, reload };
 }
 
-async function runTestByName(name, options) {
+async function runTest(name, options) {
   const basePath = join(currentDir, name);
 
   let worker, exitCode;
@@ -425,13 +452,13 @@ async function runTestByName(name, options) {
       log('Codebase', chalk.magenta(name), 'started');
     }
 
-    const { attack, reload, run } = createAttacks(worker, 8000, options);
+    const { session, reload, run } = createSessions(worker, 8000, options);
     const f = await import(join(currentDir, name, 'test.js'));
-    f.default({ attack, http, split, repeat, reload });
+    f.default({ session, http, split, repeat, reload });
 
-    log('Running attacks...');
+    log('Running...');
     await run();
-    log('All attacks done');
+    log('All sessions done');
 
     if (options.pipy) {
       worker.kill('SIGINT');
@@ -440,19 +467,12 @@ async function runTestByName(name, options) {
       log('Worker exited with code', exitCode);
     }
 
+    testResults[name] = true;
+
   } catch (e) {
+    testResults[name] = false;
     if (worker) worker.kill();
     throw e;
-  }
-}
-
-function runTest(id, options) {
-  if (isNaN(parseInt(id))) {
-    return runTestByName(id, options);
-  } else {
-    id = id.toString();
-    id = '0'.repeat(Math.max(0, 3 - id.length)) + id;
-    return runTestByName(`test-${id}`, options);
   }
 }
 
@@ -464,14 +484,18 @@ async function start(id, options) {
       repo = await startRepo();
     }
 
-    if (id) {
-      await runTest(id, options);
+    if (id === undefined) {
+      for (const i in allTests) {
+        await runTest(allTests[i], options);
+      }
+      summary();
+
+    } else if (id in allTests) {
+      await runTest(allTests[id], options);
+      summary();
 
     } else {
-      const dirnames = fs.readdirSync(currentDir).filter(n => n.startsWith('test-'));
-      for (const dir of dirnames) {
-        await runTest(dir, options);
-      }
+      throw new Error('Unknown test ID');
     }
 
   } catch (e) {

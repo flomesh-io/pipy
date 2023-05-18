@@ -1,4 +1,4 @@
-export default function({ attack, http, split }) {
+export default function({ session, http, split }) {
 
   function makeVerifier(targets) {
     const total = Object.values(targets).reduce((a, b) => a + b);
@@ -29,7 +29,7 @@ export default function({ attack, http, split }) {
     }
   }
 
-  attack({
+  session({
     messages: [].concat.apply([], new Array(100).fill(
       [
         http('GET', '/foo'),
@@ -39,7 +39,7 @@ export default function({ attack, http, split }) {
     verify: makeVerifier({ '8080': 2, '8081': 1, '8082': 1 }),
   });
 
-  attack({
+  session({
     messages: [].concat.apply([], new Array(100).fill(
       [
         split(3, http('POST', '/bar', 'Hello!')),

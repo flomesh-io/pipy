@@ -1,4 +1,4 @@
-export default function({ attack, http, split, repeat }) {
+export default function({ session, http, split, repeat }) {
 
   const expected = [
     '8080',
@@ -15,7 +15,7 @@ export default function({ attack, http, split, repeat }) {
     }
   }
 
-  attack({
+  session({
     delay: 0,
     messages: repeat(100, [
       http('GET', '/foo'),
@@ -25,7 +25,7 @@ export default function({ attack, http, split, repeat }) {
     verify,
   });
 
-  attack({
+  session({
     delay: 10,
     messages: repeat(50, [
       split(2, http('GET', '/foo')),
@@ -35,7 +35,7 @@ export default function({ attack, http, split, repeat }) {
     verify,
   });
 
-  attack({
+  session({
     delay: 100,
     messages: repeat(30, [
       split(2, http('GET', '/foo')),
@@ -46,7 +46,7 @@ export default function({ attack, http, split, repeat }) {
   });
 
   for (let i = 0; i < 10; i++) {
-    attack({
+    session({
       delay: i * 20,
       messages: repeat(30, [
         split(3, http('POST', '/foo', 'Hello!')),

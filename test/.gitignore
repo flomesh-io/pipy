@@ -2,7 +2,7 @@
 
 !/.gitignore
 !/package.json
-!/attack/
 !/benchmark/
 !/codec/
 !/curl/
+!/mux/
