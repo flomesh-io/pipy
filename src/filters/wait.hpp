@@ -48,18 +48,6 @@ public:
     Options(pjs::Object *options);
   };
 
-  Wait(pjs::Function *condition, const Options &options);
-
-private:
-  Wait(const Wait &r);
-  ~Wait();
-
-  virtual auto clone() -> Filter* override;
-  virtual void reset() override;
-  virtual void process(Event *evt) override;
-  virtual void dump(Dump &d) override;
-  virtual void on_notify() override;
-
   //
   // Wait::PromiseCallback
   //
@@ -73,6 +61,18 @@ private:
   public:
     void close() { m_filter = nullptr; }
   };
+
+  Wait(pjs::Function *condition, const Options &options);
+
+private:
+  Wait(const Wait &r);
+  ~Wait();
+
+  virtual auto clone() -> Filter* override;
+  virtual void reset() override;
+  virtual void process(Event *evt) override;
+  virtual void dump(Dump &d) override;
+  virtual void on_notify() override;
 
   pjs::Ref<pjs::Function> m_condition;
   pjs::Ref<PromiseCallback> m_promise_callback;
