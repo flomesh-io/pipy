@@ -2677,8 +2677,6 @@ public:
     Aggregator(Type type, Handler *handler, Array *promises);
     ~Aggregator();
 
-  private:
-
     //
     // Promise::Aggregator::Dependency
     //
@@ -2705,6 +2703,7 @@ public:
       friend class ObjectTemplate<Dependency, Callback>;
     };
 
+  private:
     Type m_type;
     Ref<Handler> m_handler;
     PooledArray<Ref<Dependency>>* m_dependencies = nullptr;
