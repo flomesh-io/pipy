@@ -14,6 +14,7 @@ const currentDir = dirname(new URL(import.meta.url).pathname);
 const pipyBinPath = join(currentDir, '../../bin/pipy');
 const hexMap = new Array(256).fill().map((_, i) => (i < 16 ? '0' + i.toString(16) : i.toString(16)));
 const charMap = new Array(256).fill().map((_, i) => (0x20 <= i && i < 0x80 ? String.fromCharCode(i) : '.'));
+const testResults = {};
 
 function startProcess(cmd, args, onStderr, onStdout) {
   const proc = spawn(cmd, args);
@@ -109,9 +110,11 @@ async function runTest(name) {
     const stdout = Buffer.concat(stdoutBuffer);
     const expected = fs.readFileSync(`${basePath}/output`);
     if (Buffer.compare(stdout, expected)) {
+      testResults[name] = false;
       diff(expected, stdout);
       error(`Test ${name} did not output expected data`);
     } else {
+      testResults[name] = true;
       log(`Test ${chalk.cyan(name)} OK`);
     }
 
@@ -125,12 +128,14 @@ async function start(id) {
   try {
     if (id) {
       await runTest(id);
+      summary();
 
     } else {
       const entries = fs.readdirSync(currentDir, { withFileTypes: true }).filter(e => e.isDirectory());
       for (const ent of entries) {
         await runTest(ent.name);
       }
+      summary();
     }
 
   } catch (e) {
@@ -141,6 +146,24 @@ async function start(id) {
 
   log('All tests done.');
   process.exit(0);
+}
+
+function summary() {
+  const maxWidth = Math.max.apply(null, Object.keys(testResults).map(name => name.length));
+  const width = maxWidth + 20;
+  log('='.repeat(width));
+  log('Summary');
+  log('-'.repeat(width));
+  Object.keys(testResults).sort().forEach(
+    name => {
+      if (testResults[name]) {
+        log(name + ' '.repeat(width - 2 - name.length) + chalk.green('OK'));
+      } else {
+        log(name + ' '.repeat(width - 4 - name.length) + chalk.red('FAIL'));
+      }
+    }
+  );
+  log('='.repeat(width));
 }
 
 program

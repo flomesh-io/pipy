@@ -3,7 +3,7 @@
 import fs from 'fs';
 import chalk from 'chalk';
 
-import { spawn, execFileSync, execFile } from 'child_process';
+import { spawn, execFile } from 'child_process';
 import { join, dirname } from 'path';
 import { program } from 'commander';
 
@@ -14,6 +14,7 @@ const sleep = (t) => new Promise(resolve => setTimeout(resolve, t * 1000));
 const currentDir = dirname(new URL(import.meta.url).pathname);
 const pipyBinPath = join(currentDir, '../../bin/pipy');
 const allTests = [];
+const testResults = {};
 
 fs.readdirSync(currentDir, { withFileTypes: true })
   .filter(ent => ent.isDirectory())
@@ -22,13 +23,34 @@ fs.readdirSync(currentDir, { withFileTypes: true })
     if (!isNaN(n)) allTests[n] = ent.name;
   });
 
+function summary() {
+  const maxWidth = Math.max.apply(null, Object.keys(testResults).map(name => name.length));
+  const width = maxWidth + 20;
+  log('='.repeat(width));
+  log('Summary');
+  log('-'.repeat(width));
+  Object.keys(testResults).sort().forEach(
+    name => {
+      if (testResults[name]) {
+        log(name + ' '.repeat(width - 2 - name.length) + chalk.green('OK'));
+      } else {
+        log(name + ' '.repeat(width - 4 - name.length) + chalk.red('FAIL'));
+      }
+    }
+  );
+  log('='.repeat(width));
+}
+
 async function start(id) {
   if (id === undefined) {
     for (const i in allTests) {
       await test(allTests[i]);
     }
+    summary();
+
   } else if (id in allTests) {
     await test(allTests[id]);
+    summary();
 
   } else {
     error('Unknown test ID');
@@ -68,10 +90,12 @@ async function test(name) {
         throw e;
       }
       if (Buffer.compare(output, expected)) {
+        testResults[name] = false;
         error('Test', name, 'failed with unexpected output:');
         log(output.toString());
         error(`Test ${name} failed!`);
       } else {
+        testResults[name] = true;
         log(chalk.green(`Test ${name} OK.`));
       }
     } catch (e) {
