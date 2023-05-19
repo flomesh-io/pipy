@@ -93,6 +93,7 @@ private:
   bool m_started = false;
   bool m_closed = false;
   bool m_receiving = false;
+  bool m_receiving_end = false;
   bool m_sending = false;
   bool m_sending_end = false;
   bool m_paused = false;
@@ -103,7 +104,8 @@ private:
 
   void receive();
   void send();
-  void drain();
+  void close_receive();
+  void close_send();
   void close(bool shutdown);
 
   virtual void on_tap_open() override;
@@ -113,7 +115,6 @@ private:
 
   void on_receive(const std::error_code &ec, std::size_t n);
   void on_send(const std::error_code &ec, std::size_t n);
-  void on_error(const std::error_code &ec);
 
   struct ReceiveHandler : public SelfHandler<SocketTCP> {
     using SelfHandler::SelfHandler;
@@ -125,12 +126,6 @@ private:
     using SelfHandler::SelfHandler;
     SendHandler(const SendHandler &r) : SelfHandler(r) {}
     void operator()(const std::error_code &ec, std::size_t n) { self->on_send(ec, n); }
-  };
-
-  struct ErrorHandler : public SelfHandler<SocketTCP> {
-    using SelfHandler::SelfHandler;
-    ErrorHandler(const ErrorHandler &r) : SelfHandler(r) {}
-    void operator()(const std::error_code &ec) { self->on_error(ec); }
   };
 
   thread_local static Data::Producer s_dp;

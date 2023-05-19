@@ -115,8 +115,7 @@ void SocketTCP::send() {
 
   if (m_buffer_send.empty()) {
     if (m_sending_end) {
-      std::error_code ec;
-      m_socket.shutdown(tcp::socket::shutdown_send, ec);
+      close_send();
     }
     return;
   }
@@ -136,13 +135,19 @@ void SocketTCP::send() {
   handler_retain();
 }
 
-void SocketTCP::drain() {
+void SocketTCP::close_receive() {
   if (!m_sending_end) {
-    m_socket.async_wait(
-      tcp::socket::wait_error,
-      ErrorHandler(this)
-    );
     handler_retain();
+  }
+}
+
+void SocketTCP::close_send() {
+  if (m_receiving_end) {
+    close(true);
+    handler_release();
+  } else {
+    std::error_code ec;
+    m_socket.shutdown(tcp::socket::shutdown_send, ec);
   }
 }
 
@@ -251,9 +256,10 @@ void SocketTCP::on_receive(const std::error_code &ec, std::size_t n) {
 
     if (ec) {
       if (ec == asio::error::eof) {
+        m_receiving_end = true;
         log_debug("EOF from peer");
         on_socket_input(StreamEnd::make());
-        drain();
+        close_receive();
       } else if (ec == asio::error::connection_reset) {
         log_warn("connection reset by peer", ec);
         on_socket_input(StreamEnd::make(StreamEnd::CONNECTION_RESET));
@@ -285,20 +291,13 @@ void SocketTCP::on_send(const std::error_code &ec, std::size_t n) {
       close(false);
 
     } else if (m_sending_end && m_buffer_send.empty()) {
-      close(true);
+      close_send();
 
     } else {
       send();
     }
   }
 
-  handler_release();
-}
-
-void SocketTCP::on_error(const std::error_code &ec) {
-  if (ec && ec != asio::error::operation_aborted) {
-    log_error("socket error", ec);
-  }
   handler_release();
 }
 
