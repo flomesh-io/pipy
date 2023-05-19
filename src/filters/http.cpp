@@ -334,13 +334,13 @@ void Decoder::reset() {
   m_state = HEAD;
   m_head_buffer.clear();
   m_head = nullptr;
+  m_method = nullptr;
   m_header_transfer_encoding = nullptr;
   m_header_content_length = nullptr;
   m_header_connection = nullptr;
   m_header_upgrade = nullptr;
   m_responded_tunnel_type = TunnelType::NONE;
   m_body_size = 0;
-  m_is_bodiless = false;
   m_is_tunnel = false;
   m_has_error = false;
 }
@@ -553,7 +553,7 @@ void Decoder::on_event(Event *evt) {
             utils::starts_with(m_header_transfer_encoding->str(), s_chunked)
           ) {
             message_start();
-            if (m_is_bodiless) {
+            if (m_method == s_HEAD) {
               message_end();
               state = HEAD;
             } else {
@@ -563,14 +563,14 @@ void Decoder::on_event(Event *evt) {
             message_start();
             if (m_header_content_length) {
               m_body_size = std::atoi(m_header_content_length->c_str());
-            } else if (m_is_response && !m_is_bodiless) {
+            } else if (m_is_response && m_method != s_HEAD && m_method != s_CONNECT) {
               auto status = m_head->as<ResponseHead>()->status;
               if (status >= 200 && status != 204 && status != 304) {
                 m_body_size = std::numeric_limits<int>::max();
               }
             }
             if (m_body_size > 0) {
-              if (m_is_bodiless) {
+              if (m_method == s_HEAD) {
                 message_end();
                 state = HEAD;
               } else {
@@ -610,10 +610,11 @@ void Decoder::on_event(Event *evt) {
 
 void Decoder::message_start() {
   if (m_is_response) {
-    m_is_bodiless = false;
+    m_method = nullptr;
+    m_responded_tunnel_type = TunnelType::NONE;
     auto res = m_head->as<ResponseHead>();
     if (auto req = on_decode_response(res)) {
-      m_is_bodiless = req->is_bodiless;
+      m_method = req->head->method;
       auto tt = req->tunnel_type;
       if (res->is_tunnel(tt)) m_responded_tunnel_type = tt;
       delete req;
@@ -623,7 +624,6 @@ void Decoder::message_start() {
     auto req = new RequestQueue::Request;
     req->head = head;
     req->is_final = head->is_final(m_header_connection);
-    req->is_bodiless = head->is_bodiless();
     req->tunnel_type = head->tunnel_type(m_header_upgrade);
     on_decode_request(req);
   }
@@ -683,7 +683,6 @@ void Encoder::reset() {
   m_content_length = 0;
   m_chunked = false;
   m_is_final = false;
-  m_is_bodiless = false;
   m_is_tunnel = false;
 }
 
@@ -706,11 +705,11 @@ void Encoder::on_event(Event *evt) {
         m_head = head;
         m_protocol = protocol;
         m_status_code = head->status;
+        m_method = nullptr;
         m_is_final = false;
-        m_is_bodiless = false;
         if (auto req = on_encode_response(head)) {
+          m_method = req->head->method;
           m_is_final = req->is_final;
-          m_is_bodiless = req->is_bodiless;
           auto tt = req->tunnel_type;
           if (head->is_tunnel(tt)) m_responded_tunnel_type = tt;
           delete req;
@@ -733,7 +732,7 @@ void Encoder::on_event(Event *evt) {
 
   } else if (auto data = evt->as<Data>()) {
     if (m_head) {
-      if (m_is_bodiless) {
+      if (m_method == s_HEAD) {
         m_content_length += data->size();
       } else if (m_chunked) {
         if (!data->empty()) output_chunk(*data);
@@ -817,7 +816,7 @@ void Encoder::output_head() {
         if (k == s_keep_alive) return;
         if (k == s_transfer_encoding) return;
         if (k == s_content_length) {
-          if (m_is_bodiless) {
+          if (m_method == s_HEAD) {
             no_content_length = true;
           } else {
             return;
@@ -860,7 +859,6 @@ void Encoder::output_head() {
     auto req = new RequestQueue::Request;
     req->head = head;
     req->is_final = head->is_final(m_header_connection);
-    req->is_bodiless = head->is_bodiless();
     req->tunnel_type = head->tunnel_type(m_header_upgrade);
     on_encode_request(req);
   }
@@ -911,7 +909,7 @@ void Encoder::output_chunk(const Data &data) {
 }
 
 void Encoder::output_end(Event *evt) {
-  if (m_is_bodiless) {
+  if (m_method == s_HEAD) {
     output_head();
   } else if (m_chunked) {
     output(s_dp.make("0\r\n\r\n"));
@@ -1814,6 +1812,8 @@ void TunnelClient::process(Event *evt) {
     EventSource::output(evt);
   } else if (auto *data = evt->as<Data>()) {
     m_buffer.push(*data);
+  } else if (auto eos = evt->as<StreamEnd>()) {
+    m_eos = eos;
   }
 }
 
@@ -1831,7 +1831,11 @@ void TunnelClient::on_reply(Event *evt) {
       auto tt = m_request_head->tunnel_type();
       if (m_response_head->is_tunnel(tt)) {
         m_is_tunnel_started = true;
-        EventFunction::input()->flush_async();
+        if (m_eos) {
+          EventFunction::input()->input_async(m_eos);
+        } else {
+          EventFunction::input()->flush_async();
+        }
       } else {
         Filter::output(StreamEnd::make());
       }

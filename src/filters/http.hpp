@@ -54,7 +54,6 @@ public:
   {
     pjs::Ref<RequestHead> head;
     bool is_final = false;
-    bool is_bodiless = false;
     TunnelType tunnel_type = TunnelType::NONE;
   };
 
@@ -107,6 +106,7 @@ private:
   State m_state = HEAD;
   Data m_head_buffer;
   pjs::Ref<MessageHead> m_head;
+  pjs::Ref<pjs::Str> m_method;
   pjs::Ref<pjs::Str> m_header_transfer_encoding;
   pjs::Ref<pjs::Str> m_header_content_length;
   pjs::Ref<pjs::Str> m_header_connection;
@@ -114,7 +114,6 @@ private:
   TunnelType m_responded_tunnel_type = TunnelType::NONE;
   int m_body_size = 0;
   bool m_is_response;
-  bool m_is_bodiless = false;
   bool m_is_tunnel = false;
   bool m_has_error = false;
 
@@ -162,7 +161,6 @@ private:
   bool m_chunked = false;
   bool m_is_response;
   bool m_is_final = false;
-  bool m_is_bodiless = false;
   bool m_is_tunnel = false;
 
   virtual void on_event(Event *evt) override;
@@ -530,6 +528,7 @@ private:
   pjs::Ref<Pipeline> m_pipeline;
   pjs::Ref<RequestHead> m_request_head;
   pjs::Ref<ResponseHead> m_response_head;
+  pjs::Ref<StreamEnd> m_eos;
   Data m_buffer;
   bool m_is_tunnel_started = false;
 

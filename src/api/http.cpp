@@ -70,10 +70,6 @@ bool RequestHead::is_final(pjs::Str *header_connection) const {
   }
 }
 
-bool RequestHead::is_bodiless() const {
-  return method == s_HEAD;
-}
-
 auto RequestHead::tunnel_type() const -> TunnelType {
   if (method == s_CONNECT) return TunnelType::CONNECT;
   pjs::Value v;

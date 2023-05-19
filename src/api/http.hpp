@@ -64,7 +64,6 @@ public:
 
   bool is_final() const;
   bool is_final(pjs::Str *header_connection) const;
-  bool is_bodiless() const;
   auto tunnel_type() const -> TunnelType;
   auto tunnel_type(pjs::Str *header_upgrade) const -> TunnelType;
 };
