@@ -38,6 +38,7 @@ namespace pipy {
 
 class Context;
 class ModuleBase;
+class Message;
 class Output;
 
 //
@@ -115,9 +116,12 @@ public:
   virtual void dump(Dump &d);
 
   auto pipeline() const -> Pipeline* { return m_pipeline; }
-  void auto_release() const { Pipeline::auto_release(m_pipeline); }
   void output(Event *evt);
-  bool output(const pjs::Value &evt);
+  void output(Event *evt, EventTarget::Input *input);
+  void output(Message *msg);
+  void output(Message *msg, EventTarget::Input *input);
+  bool output(pjs::Object *obj);
+  bool output(pjs::Object *obj, EventTarget::Input *input);
   bool callback(pjs::Function *func, int argc, pjs::Value argv[], pjs::Value &result);
   bool eval(pjs::Value &param, pjs::Value &result);
   bool eval(pjs::Function *func, pjs::Value &result);

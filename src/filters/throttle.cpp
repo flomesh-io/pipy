@@ -134,7 +134,6 @@ void ThrottleBase::dequeue(EventConsumer *consumer) {
 
 bool ThrottleBase::EventConsumer::on_consume(algo::Quota *quota) {
   auto *t = m_throttle;
-  t->auto_release();
   if (auto stalled = t->consume(m_event, quota)) {
     m_event = stalled;
     return false;

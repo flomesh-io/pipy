@@ -51,7 +51,7 @@ Replace::~Replace()
 bool Replace::callback(pjs::Object *arg) {
   if (!m_replacement) return true;
   if (!m_replacement->is_function()) {
-    if (Message::output(m_replacement, Filter::output())) return true;
+    if (Filter::output(m_replacement.get())) return true;
     Filter::error("replacement is not an event or Message or an array of those");
     return false;
   }
@@ -59,9 +59,11 @@ bool Replace::callback(pjs::Object *arg) {
 }
 
 bool Replace::on_callback_return(const pjs::Value &result) {
-  if (!Message::output(result, Filter::output())) {
-    Filter::error("callback did not return an event or Message or an array of those");
-    return false;
+  if (!result.is_undefined()) {
+    if (!result.is_object() || !Filter::output(result.o())) {
+      Filter::error("callback did not return an event or Message or an array of those");
+      return false;
+    }
   }
   return Handle::on_callback_return(result);
 }

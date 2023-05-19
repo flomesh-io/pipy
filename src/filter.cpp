@@ -183,20 +183,38 @@ auto Filter::sub_pipeline(
 
 void Filter::on_event(Event *evt) {
   context()->group()->touch();
-  auto_release();
+  Pipeline::auto_release(m_pipeline);
   process(evt);
 }
 
 void Filter::output(Event *evt) {
+  Pipeline::auto_release(m_pipeline);
   EventFunction::output(evt);
 }
 
-bool Filter::output(const pjs::Value &evt) {
-  if (!Message::output(evt, output())) {
-    Log::error("[filter] output is not events or messages");
-    return false;
-  }
-  return true;
+void Filter::output(Event *evt, EventTarget::Input *input) {
+  Pipeline::auto_release(m_pipeline);
+  input->input(evt);
+}
+
+void Filter::output(Message *msg) {
+  Pipeline::auto_release(m_pipeline);
+  msg->write(EventFunction::output());
+}
+
+void Filter::output(Message *msg, EventTarget::Input *input) {
+  Pipeline::auto_release(m_pipeline);
+  msg->write(input);
+}
+
+bool Filter::output(pjs::Object *obj) {
+  Pipeline::auto_release(m_pipeline);
+  return Message::output(obj, EventFunction::output());
+}
+
+bool Filter::output(pjs::Object *obj, EventTarget::Input *input) {
+  Pipeline::auto_release(m_pipeline);
+  return Message::output(obj, input);
 }
 
 bool Filter::callback(pjs::Function *func, int argc, pjs::Value argv[], pjs::Value &result) {
