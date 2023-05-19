@@ -134,9 +134,9 @@ private:
   void free(MuxSession *session);
   void detach(MuxSession *session);
 
-  pjs::Ref<MuxSessionMap> m_map;
   pjs::Value m_key;
-  pjs::WeakRef<pjs::Object> m_weak_key;
+  pjs::Ref<pjs::Object::WeakPtr> m_weak_key;
+  pjs::Ref<MuxSessionMap> m_map;
   List<MuxSession> m_sessions;
   double m_max_idle;
   int m_max_queue;
@@ -165,13 +165,14 @@ public:
 
 private:
   std::unordered_map<pjs::Value, MuxSessionPool*> m_pools;
-  std::unordered_map<pjs::WeakRef<pjs::Object>, MuxSessionPool*> m_weak_pools;
+  std::unordered_map<pjs::Ref<pjs::Object::WeakPtr>, MuxSessionPool*> m_weak_pools;
   List<MuxSessionPool> m_recycle_pools;
   Timer m_recycle_timer;
   bool m_has_recycling_scheduled = false;
   bool m_has_shutdown = false;
 
   auto alloc(const pjs::Value &key, MuxSource *source) -> MuxSession*;
+  auto alloc(pjs::Object::WeakPtr *weak_key, MuxSource *source) -> MuxSession*;
   void schedule_recycling();
 
   friend class pjs::RefCount<MuxSessionMap>;
@@ -189,7 +190,7 @@ protected:
   MuxSource(const MuxSource &r);
 
   void reset();
-  void key(const pjs::Value &key) { m_session_key = key; }
+  void key(const pjs::Value &key);
   auto map() -> MuxSessionMap* { return m_map; }
 
   void chain(EventTarget::Input *input);
@@ -202,6 +203,7 @@ private:
   pjs::Ref<MuxSessionMap> m_map;
   pjs::Ref<MuxSession> m_session;
   pjs::Value m_session_key;
+  pjs::Ref<pjs::Object::WeakPtr> m_session_weak_key;
   pjs::Ref<EventTarget::Input> m_output;
   EventFunction* m_stream = nullptr;
   EventBuffer m_waiting_events;

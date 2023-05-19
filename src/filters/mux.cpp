@@ -148,8 +148,8 @@ void MuxSession::open(MuxSource *source, Pipeline *pipeline) {
 
   auto si = StartInfo::make();
   si->sessionCount = m_pool->m_sessions.size();
-  if (auto obj = m_pool->m_weak_key.ptr()) {
-    si->sessionKey.set(obj);
+  if (m_pool->m_weak_key) {
+    si->sessionKey.set(m_pool->m_weak_key->ptr());
   } else {
     si->sessionKey = m_pool->m_key;
   }
@@ -248,7 +248,7 @@ void MuxSessionPool::sort(MuxSession *session) {
   schedule_recycling();
 
   if (m_sessions.empty()) {
-    if (m_weak_key.original_ptr()) {
+    if (m_weak_key) {
       m_map->m_weak_pools.erase(m_weak_key);
     } else {
       m_map->m_pools.erase(m_key);
@@ -307,37 +307,34 @@ void MuxSessionPool::on_weak_ptr_gone() {
 //
 
 auto MuxSessionMap::alloc(const pjs::Value &key, MuxSource *source) -> MuxSession* {
-  bool is_weak = (key.is_object() && key.o());
-  MuxSessionPool *pool = nullptr;
-
-  if (is_weak) {
-    pjs::WeakRef<pjs::Object> o(key.o());
-    auto i = m_weak_pools.find(o);
-    if (i != m_weak_pools.end()) {
-      pool = i->second;
-    }
-  } else {
-    auto i = m_pools.find(key);
-    if (i != m_pools.end()) {
-      pool = i->second;
-    }
+  auto i = m_pools.find(key);
+  if (i != m_pools.end()) {
+    return i->second->alloc();
   }
 
-  if (pool) return pool->alloc();
-
-  pool = source->on_mux_new_pool();
+  auto pool = source->on_mux_new_pool();
   if (!pool) return nullptr;
 
   pool->m_map = this;
+  pool->m_key = key;
+  m_pools[key] = pool;
 
-  if (is_weak) {
-    pool->m_weak_key = key.o();
-    pool->watch(key.o()->weak_ptr());
-    m_weak_pools[key.o()] = pool;
-  } else {
-    pool->m_key = key;
-    m_pools[key] = pool;
+  return pool->alloc();
+}
+
+auto MuxSessionMap::alloc(pjs::Object::WeakPtr *weak_key, MuxSource *source) -> MuxSession* {
+  auto i = m_weak_pools.find(weak_key);
+  if (i != m_weak_pools.end()) {
+    return i->second->alloc();
   }
+
+  auto pool = source->on_mux_new_pool();
+  if (!pool) return nullptr;
+
+  pool->m_map = this;
+  pool->m_weak_key = weak_key;
+  pool->watch(weak_key);
+  m_weak_pools[weak_key] = pool;
 
   return pool->alloc();
 }
@@ -389,7 +386,16 @@ void MuxSource::reset() {
   }
   m_waiting_events.clear();
   m_session_key = pjs::Value::undefined;
+  m_session_weak_key = nullptr;
   m_has_alloc_error = false;
+}
+
+void MuxSource::key(const pjs::Value &key) {
+  if (key.is_object() && key.o()) {
+    m_session_weak_key = key.o()->weak_ptr();
+  } else {
+    m_session_key = key;
+  }
 }
 
 void MuxSource::chain(EventTarget::Input *input) {
@@ -430,7 +436,11 @@ void MuxSource::alloc_stream() {
   if (!m_stream && !m_has_alloc_error) {
     auto session = m_session.get();
     if (!session) {
-      session = m_map->alloc(m_session_key, this);
+      session = (
+        m_session_weak_key ?
+          m_map->alloc(m_session_weak_key, this) :
+          m_map->alloc(m_session_key, this)
+      );
       if (!session) {
         m_has_alloc_error = true;
         return;
