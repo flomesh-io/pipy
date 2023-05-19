@@ -1,8 +1,16 @@
+Access HTTP tunnel as a normal HTTP server
 method not allowed
 method not allowed
 method not allowed
 method not allowed
 method not allowed
+Access HTTP tunnel using CONNECT
+Hello!
+Hello!
+Hello!
+Hello!
+Hello!
+Access HTTP proxy that connects upstreams with HTTP tunnel
 Hello!
 Hello!
 Hello!
