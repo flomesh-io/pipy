@@ -1779,6 +1779,7 @@ void TunnelClient::reset() {
   m_pipeline = nullptr;
   m_request_head = nullptr;
   m_response_head = nullptr;
+  m_eos = nullptr;
   m_is_tunnel_started = false;
 }
 
@@ -1801,15 +1802,14 @@ void TunnelClient::process(Event *evt) {
     auto msg = handshake->as<Message>();
     m_request_head = pjs::coerce<RequestHead>(msg->head());
     m_pipeline = sub_pipeline(0, true, EventSource::reply())->start();
-    EventSource::chain(m_pipeline->input());
-    msg->as<Message>()->write(EventSource::output());
+    Filter::output(msg->as<Message>(), m_pipeline->input());
   }
 
   if (m_is_tunnel_started) {
     if (!m_buffer.empty()) {
-      EventSource::output(Data::make(std::move(m_buffer)));
+      Filter::output(Data::make(std::move(m_buffer)), m_pipeline->input());
     }
-    EventSource::output(evt);
+    Filter::output(evt, m_pipeline->input());
   } else if (auto *data = evt->as<Data>()) {
     m_buffer.push(*data);
   } else if (auto eos = evt->as<StreamEnd>()) {

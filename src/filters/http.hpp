@@ -531,8 +531,6 @@ private:
   pjs::Ref<StreamEnd> m_eos;
   Data m_buffer;
   bool m_is_tunnel_started = false;
-
-  friend class TunnelClientReceiver;
 };
 
 } // namespace http

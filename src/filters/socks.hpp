@@ -105,7 +105,7 @@ private:
 // Client
 //
 
-class Client : public Filter, public EventSource {
+class Client : public Filter, public EventSource, public Deframer {
 public:
   Client(const pjs::Value &target);
 
@@ -117,33 +117,26 @@ private:
   virtual void reset() override;
   virtual void process(Event *evt) override;
   virtual void on_reply(Event *evt) override;
+  virtual auto on_state(int state, int c) -> int override;
+  virtual void on_pass(Data &data) override;
   virtual void dump(Dump &d) override;
-
-  void send(Data *data);
-  void send(const uint8_t *buf, size_t len);
-  void connect();
-  void close(StreamEnd::Error err);
 
   enum State {
     STATE_INIT,
     STATE_READ_AUTH,
     STATE_READ_CONN_HEAD,
     STATE_READ_CONN_ADDR,
-    STATE_READ_CONN_ADDR_IPV4,
-    STATE_READ_CONN_ADDR_IPV6,
-    STATE_READ_CONN_ADDR_DOMAIN,
     STATE_CONNECTED,
-    STATE_CLOSED,
   };
 
   pjs::Value m_target;
   pjs::Ref<Pipeline> m_pipeline;
-  State m_state = STATE_INIT;
+  pjs::Ref<StreamEnd> m_eos;
   Data m_buffer;
-  uint8_t m_read_buffer[3];
-  int m_read_size = 0;
+  uint8_t m_read_buffer[256+2];
+  bool m_is_started = false;
 
-  friend class ClientReceiver;
+  bool start();
 };
 
 } // namespace socks

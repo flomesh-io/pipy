@@ -282,198 +282,139 @@ auto Client::clone() -> Filter* {
 
 void Client::reset() {
   Filter::reset();
-  m_pipeline = nullptr;
-  m_state = STATE_INIT;
-  m_read_size = 0;
+  Deframer::reset(STATE_INIT);
+  Deframer::pass_all(false);
   m_buffer.clear();
+  m_pipeline = nullptr;
+  m_eos = nullptr;
+  m_is_started = false;
 }
 
 void Client::process(Event *evt) {
-  if (m_state == STATE_CLOSED) return;
-
   if (!m_pipeline) {
     m_pipeline = sub_pipeline(0, false, EventSource::reply())->start();
-  }
-
-  if (evt->is<StreamEnd>()) {
-    Filter::output(evt, m_pipeline->input());
-    return;
-  }
-
-  if (auto data = evt->as<Data>()) {
-    if (m_state == STATE_CONNECTED) {
-      if (!data->empty()) send(data);
-      return;
-    } else {
-      m_buffer.push(*data);
-    }
-  }
-
-  if (m_state == STATE_INIT) {
     uint8_t greeting[] = { 0x05, 1, 0 };
-    send(greeting, sizeof(greeting));
-    m_state = STATE_READ_AUTH;
+    Filter::output(s_dp.make(greeting, sizeof(greeting)), m_pipeline->input());
+  }
+
+  if (m_is_started) {
+    if (!m_buffer.empty()) {
+      Filter::output(Data::make(std::move(m_buffer)), m_pipeline->input());
+    }
+    Filter::output(evt, m_pipeline->input());
+  } else if (auto data = evt->as<Data>()) {
+    m_buffer.push(*data);
+  } else if (auto eos = evt->as<StreamEnd>()) {
+    m_eos = eos;
   }
 }
 
 void Client::on_reply(Event *evt) {
-  if (m_state == STATE_CLOSED) return;
-
-  if (evt->is<StreamEnd>()) {
-    m_state = STATE_CLOSED;
-    m_pipeline = nullptr;
+  if (m_is_started || evt->is<StreamEnd>()) {
     Filter::output(evt);
-    return;
+  } else if (auto data = evt->as<Data>()) {
+    Deframer::deframe(*data);
   }
+}
 
-  if (auto data = evt->as<Data>()) {
-    if (m_state == STATE_CONNECTED) {
-      Filter::output(data);
-      return;
-    }
-
-    Data parsed;
-    data->shift_to(
-      [&](int c) -> bool {
-        switch (m_state) {
-          case STATE_READ_AUTH: {
-            m_read_buffer[m_read_size++] = c;
-            if (m_read_size == 2) {
-              if (
-                m_read_buffer[0] != 0x05 ||
-                m_read_buffer[1] != 0x00
-              ) {
-                close(StreamEnd::UNAUTHORIZED);
-                return true;
-              }
-              connect();
-              m_state = STATE_READ_CONN_HEAD;
-              m_read_size = 0;
-            }
-            break;
-          }
-          case STATE_READ_CONN_HEAD: {
-            m_read_buffer[m_read_size++] = c;
-            if (m_read_size == 3) {
-              if (
-                m_read_buffer[0] != 0x05 ||
-                m_read_buffer[1] != 0x00 ||
-                m_read_buffer[2] != 0x00
-              ) {
-                close(StreamEnd::CONNECTION_REFUSED);
-                return true;
-              }
-              m_state = STATE_READ_CONN_ADDR;
-              m_read_size = 0;
-            }
-            break;
-          }
-          case STATE_READ_CONN_ADDR: {
-            m_read_buffer[m_read_size++] = c;
-            if (m_read_size == 2) {
-              switch (m_read_buffer[0]) {
-                case 0x01: m_state = STATE_READ_CONN_ADDR_IPV4; break;
-                case 0x04: m_state = STATE_READ_CONN_ADDR_IPV6; break;
-                case 0x03: m_state = STATE_READ_CONN_ADDR_DOMAIN; break;
-                default: close(StreamEnd::READ_ERROR); return true;
-              }
-            }
-            break;
-          }
-          case STATE_READ_CONN_ADDR_IPV4: {
-            if (++m_read_size == 1 + 4 + 2) {
-              m_state = STATE_CONNECTED;
-              return true;
-            }
-            break;
-          }
-          case STATE_READ_CONN_ADDR_IPV6: {
-            if (++m_read_size == 1 + 16 + 2) {
-              m_state = STATE_CONNECTED;
-              return true;
-            }
-            break;
-          }
-          case STATE_READ_CONN_ADDR_DOMAIN: {
-            if (++m_read_size == 2 + m_read_buffer[1] + 2) {
-              m_state = STATE_CONNECTED;
-              return true;
-            }
-            break;
-          }
-          default: break;
+auto Client::on_state(int state, int c) -> int {
+  switch (state) {
+    case STATE_INIT:
+      m_read_buffer[0] = c;
+      return STATE_READ_AUTH;
+    case STATE_READ_AUTH:
+      m_read_buffer[1] = c;
+      if (
+        m_read_buffer[0] == 0x05 &&
+        m_read_buffer[1] == 0x00
+      ) {
+        if (start()) {
+          Deframer::read(3, m_read_buffer);
+          return STATE_READ_CONN_HEAD;
         }
-        return false;
-      },
-      parsed
-    );
-
-    if (m_state == STATE_CONNECTED) {
-      if (!m_buffer.empty()) {
-        send(Data::make(m_buffer));
-        m_buffer.clear();
       }
-      if (!data->empty()) Filter::output(data);
-    }
+      break;
+    case STATE_READ_CONN_HEAD:
+      if (
+        m_read_buffer[0] == 0x05 &&
+        m_read_buffer[1] == 0x00 &&
+        m_read_buffer[2] == 0x00
+      ) {
+        Deframer::read(2, m_read_buffer);
+        return STATE_READ_CONN_ADDR;
+      }
+      break;
+    case STATE_READ_CONN_ADDR:
+      switch (m_read_buffer[0]) {
+        case 0x01: Deframer::read(4-1+2, m_read_buffer); return STATE_CONNECTED;
+        case 0x04: Deframer::read(16-1+2, m_read_buffer); return STATE_CONNECTED;
+        case 0x03: Deframer::read(m_read_buffer[1]+2, m_read_buffer); return STATE_CONNECTED;
+      }
+      break;
+    case STATE_CONNECTED:
+      Deframer::pass_all(true);
+      m_is_started = true;
+      if (m_eos) {
+        EventFunction::input()->input_async(m_eos);
+      } else {
+        EventFunction::input()->flush_async();
+      }
+      return STATE_CONNECTED;
   }
+  Filter::output(StreamEnd::make());
+  return -1;
 }
 
-void Client::send(Data *data) {
-  auto inp = m_pipeline->input();
-  Filter::output(data, inp);
+void Client::on_pass(Data &data) {
+  Filter::output(Data::make(std::move(data)));
 }
 
-void Client::send(const uint8_t *buf, size_t len) {
-  send(s_dp.make(buf, len));
-}
-
-void Client::connect() {
+bool Client::start() {
   pjs::Value target;
-  if (!eval(m_target, target)) return;
-  auto s = target.to_string();
-  std::string host; int port;
-  if (utils::get_host_port(s->str(), host, port)) {
-    uint8_t buf[300];
-    buf[0] = 0x05;
-    buf[1] = 0x01;
-    buf[2] = 0x00;
-    size_t len = 0;
-    if (utils::get_ip_v4(host, buf + 4)) {
-      buf[3] = 0x01;
-      buf[8] = (port >> 8) & 0xff;
-      buf[9] = (port >> 0) & 0xff;
-      len = 4 + 4 + 2;
-    } else if (utils::get_ip_v6(host, buf + 4)) {
-      buf[3] = 0x04;
-      buf[20] = (port >> 8) & 0xff;
-      buf[21] = (port >> 0) & 0xff;
-      len = 4 + 16 + 2;
-    } else {
-      if (host.length() > 255) {
-        Filter::error("domain name too long: %s", host.c_str());
-        s->release();
-        return;
-      }
-      auto n = host.length();
-      buf[3] = 0x03;
-      buf[4] = n;
-      std::memcpy(buf + 5, host.c_str(), n);
-      buf[5 + n] = (port >> 8) & 0xff;
-      buf[6 + n] = (port >> 0) & 0xff;
-      len = 5 + n + 2;
-    }
-    send(buf, len);
-    m_state = STATE_READ_CONN_HEAD;
-  } else {
-    Filter::error("invalid target: %s", s->c_str());
+  if (!eval(m_target, target)) return false;
+  if (!target.is_string()) {
+    Filter::error("target is not or did not return a string");
+    return false;
   }
-  s->release();
-}
+  auto s = target.s();
+  std::string host; int port;
+  if (!utils::get_host_port(s->str(), host, port)) {
+    Filter::error("invalid target: %s", s->c_str());
+    return false;
+  }
 
-void Client::close(StreamEnd::Error err) {
-  m_state = STATE_CLOSED;
-  m_pipeline = nullptr;
-  Filter::output(StreamEnd::make(err));
+  size_t len = 0;
+  uint8_t buf[300];
+  buf[0] = 0x05;
+  buf[1] = 0x01;
+  buf[2] = 0x00;
+
+  if (utils::get_ip_v4(host, buf + 4)) {
+    buf[3] = 0x01;
+    buf[8] = (port >> 8) & 0xff;
+    buf[9] = (port >> 0) & 0xff;
+    len = 4 + 4 + 2;
+  } else if (utils::get_ip_v6(host, buf + 4)) {
+    buf[3] = 0x04;
+    buf[20] = (port >> 8) & 0xff;
+    buf[21] = (port >> 0) & 0xff;
+    len = 4 + 16 + 2;
+  } else {
+    if (host.length() > 255) {
+      Filter::error("domain name too long: %s", host.c_str());
+      return false;
+    }
+    auto n = host.length();
+    buf[3] = 0x03;
+    buf[4] = n;
+    std::memcpy(buf + 5, host.c_str(), n);
+    buf[5 + n] = (port >> 8) & 0xff;
+    buf[6 + n] = (port >> 0) & 0xff;
+    len = 5 + n + 2;
+  }
+
+  Filter::output(s_dp.make(buf, len), m_pipeline->input());
+  return true;
 }
 
 } // namespace socks
