@@ -27,7 +27,7 @@
 #define SOCKS_HPP
 
 #include "filter.hpp"
-#include "data.hpp"
+#include "deframer.hpp"
 
 namespace pipy {
 
@@ -37,8 +37,20 @@ namespace socks {
 // Server
 //
 
-class Server : public Filter {
+class Server : public Filter, public Deframer {
 public:
+
+  //
+  // Server::Request
+  //
+
+  struct Request : public pjs::ObjectTemplate<Request> {
+    pjs::Ref<pjs::Str> id;
+    pjs::Ref<pjs::Str> ip;
+    pjs::Ref<pjs::Str> domain;
+    int port;
+  };
+
   Server(pjs::Function *on_connect);
 
 private:
@@ -51,7 +63,7 @@ private:
   virtual void dump(Dump &d) override;
 
   enum State {
-    READ_VERSION,
+    READ_VERSION = 0,
 
     // SOCKS4
     READ_SOCKS4_CMD,
@@ -69,18 +81,24 @@ private:
     READ_SOCKS5_DOMAIN,
     READ_SOCKS5_DSTIP,
     READ_SOCKS5_DSTPORT,
+
+    STARTED,
   };
 
-  pjs::Ref<pjs::Str> m_target;
+  virtual auto on_state(int state, int c) -> int override;
+  virtual void on_pass(Data &data) override;
+
   pjs::Ref<pjs::Function> m_on_connect;
   pjs::Ref<Pipeline> m_pipeline;
-  State m_state = READ_VERSION;
-  uint8_t m_port[2];
+  uint8_t m_buffer[256];
   uint8_t m_ip[4];
-  uint8_t m_id[256];
-  uint8_t m_domain[256];
-  int m_read_len = 0;
+  pjs::Ref<pjs::Str> m_id;
+  pjs::Ref<pjs::Str> m_domain;
+  int m_port = 0;
   int m_read_ptr = 0;
+
+  bool start(int version);
+  void reply(int version, int code);
 };
 
 //

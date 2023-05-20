@@ -63,234 +63,192 @@ auto Server::clone() -> Filter* {
 
 void Server::reset() {
   Filter::reset();
+  Deframer::reset(READ_VERSION);
+  Deframer::pass_all(false);
   m_pipeline = nullptr;
-  m_state = READ_VERSION;
+  m_id = nullptr;
+  m_domain = nullptr;
+  m_port = 0;
+  m_read_ptr = 0;
 }
 
 void Server::process(Event *evt) {
+  if (m_pipeline) {
+    Filter::output(evt, m_pipeline->input());
+  } else if (auto data = evt->as<Data>()) {
+    Deframer::deframe(*data);
+  } else if (evt->is<StreamEnd>()) {
+    Filter::output(evt);
+  }
+}
 
-  auto reply = [this](const uint8_t *buf, size_t len) {
-    output(s_dp.make(buf, len));
-  };
+auto Server::on_state(int state, int c) -> int {
+  switch (state) {
+    case READ_VERSION:
+      if (c == 4) {
+        return READ_SOCKS4_CMD;
+      } else if (c == 5) {
+        return READ_SOCKS5_NAUTH;
+      }
+      break;
 
-  auto reply_socks4 = [this](int rep) {
+    // SOCKS4
+    case READ_SOCKS4_CMD:
+      if (c == 0x01) {
+        Deframer::read(2, m_buffer);
+        return READ_SOCKS4_DSTPORT;
+      }
+      reply(4, 0x5b);
+      break;
+    case READ_SOCKS4_DSTPORT:
+      m_port = (
+        ((uint16_t)m_buffer[0] << 8)|
+        ((uint16_t)m_buffer[1] << 0)
+      );
+      Deframer::read(4, m_ip);
+      return READ_SOCKS4_DSTIP;
+    case READ_SOCKS4_DSTIP: {
+      m_read_ptr = 0;
+      return READ_SOCKS4_ID;
+    }
+    case READ_SOCKS4_ID:
+      if (c) {
+        if (m_read_ptr < sizeof(m_buffer)-1) {
+          m_buffer[m_read_ptr++] = c;
+          return READ_SOCKS4_ID;
+        } else {
+          reply(4, 0x5b);
+        }
+      } else {
+        m_id = pjs::Str::make((char*)m_buffer, m_read_ptr);
+        if (!m_ip[0] && !m_ip[1] && !m_ip[2]) {
+          m_read_ptr = 0;
+          return READ_SOCKS4_DOMAIN;
+        } else if (start(4)) {
+          Deframer::pass_all(true);
+          return STARTED;
+        }
+      }
+      break;
+    case READ_SOCKS4_DOMAIN:
+      if (c) {
+        if (m_read_ptr < sizeof(m_buffer)-1) {
+          m_buffer[m_read_ptr++] = c;
+          return READ_SOCKS4_DOMAIN;
+        } else {
+          reply(4, 0x5b);
+        }
+      } else {
+        m_domain = pjs::Str::make((char*)m_buffer, m_read_ptr);
+        if (start(4)) {
+          Deframer::pass_all(true);
+          return STARTED;
+        }
+      }
+      break;
+
+    // SOCKS5
+    case READ_SOCKS5_NAUTH:
+      Deframer::read(c, m_id);
+      return READ_SOCKS5_AUTH;
+    case READ_SOCKS5_AUTH:
+      uint8_t buf[2];
+      buf[0] = 0x05;
+      buf[1] = 0x00;
+      Filter::output(s_dp.make(buf, sizeof(buf)));
+      Deframer::read(3, m_buffer);
+      return READ_SOCKS5_CMD;
+    case READ_SOCKS5_CMD:
+      if (
+        m_buffer[0] == 0x05 &&
+        m_buffer[1] == 0x01 &&
+        m_buffer[2] == 0x00
+      ) {
+        return READ_SOCKS5_ADDR_TYPE;
+      } else {
+        reply(5, 0x01);
+      }
+      break;
+    case READ_SOCKS5_ADDR_TYPE:
+      if (c == 0x01) {
+        Deframer::read(4, m_ip);
+        return READ_SOCKS5_DSTIP;
+      } else if (c == 0x03) {
+        return READ_SOCKS5_DOMAIN_LEN;
+      } else {
+        reply(5, 0x08);
+      }
+      break;
+    case READ_SOCKS5_DOMAIN_LEN:
+      m_read_ptr = c;
+      Deframer::read(c, m_buffer);
+      return READ_SOCKS5_DOMAIN;
+    case READ_SOCKS5_DOMAIN:
+      m_domain = pjs::Str::make((char*)m_buffer, m_read_ptr);
+      Deframer::read(2, m_buffer);
+      return READ_SOCKS5_DSTPORT;
+    case READ_SOCKS5_DSTIP:
+      Deframer::read(2, m_buffer);
+      return READ_SOCKS5_DSTPORT;
+    case READ_SOCKS5_DSTPORT:
+      m_port = (
+        ((uint16_t)m_buffer[0] << 8)|
+        ((uint16_t)m_buffer[1] << 0)
+      );
+      if (start(5)) {
+        Deframer::pass_all(true);
+        return STARTED;
+      }
+      break;
+  }
+
+  Filter::output(StreamEnd::make());
+  m_pipeline = nullptr;
+  return -1;
+}
+
+void Server::on_pass(Data &data) {
+  if (m_pipeline) {
+    Filter::output(Data::make(std::move(data)), m_pipeline->input());
+  }
+}
+
+bool Server::start(int version) {
+  auto req = Request::make();
+  req->id = m_id;
+  req->port = m_port;
+
+  if (m_domain) {
+    req->domain = m_domain;
+  } else {
+    char str[100];
+    auto len = std::snprintf(str, sizeof(str), "%d.%d.%d.%d", m_ip[0], m_ip[1], m_ip[2], m_ip[3]);
+    req->ip = pjs::Str::make(str, len);
+  }
+
+  pjs::Value arg(req), ret;
+  if (!Filter::callback(m_on_connect, 1, &arg, ret)) return false;
+  if (!ret.to_boolean()) {
+    reply(version, (version == 4 ? 0x5b : 0x02));
+    return false;
+  }
+
+  reply(version, (version == 4 ? 0x5a : 0x00));
+  m_pipeline = Filter::sub_pipeline(0, false, Filter::output())->start();
+  return true;
+}
+
+void Server::reply(int version, int code) {
+  if (version == 4) {
     uint8_t buf[8] = { 0 };
-    buf[1] = rep;
-    output(s_dp.make(buf, sizeof(buf)));
-  };
-
-  auto reply_socks5 = [this](int rep) {
+    buf[1] = code;
+    Filter::output(s_dp.make(buf, sizeof(buf)));
+  } else {
     uint8_t buf[10] = { 0 };
     buf[0] = 0x05;
-    buf[1] = rep;
+    buf[1] = code;
     buf[3] = 0x01;
-    output(s_dp.make(buf, sizeof(buf)));
-  };
-
-  auto close = [this](Event *evt) {
-    m_pipeline = nullptr;
-    output(evt);
-  };
-
-  auto connect = [&](int version) {
-    pjs::Value argv[3], ret;
-    if (m_domain[0]) {
-      argv[0].set(pjs::Str::make((char*)m_domain));
-    } else {
-      char addr[100];
-      std::sprintf(addr, "%d.%d.%d.%d", m_ip[0], m_ip[1], m_ip[2], m_ip[3]);
-      argv[0].set(addr);
-    }
-    int port = (int(m_port[0]) << 8) + m_port[1];
-    argv[1].set(port);
-    if (m_id[0]) {
-      argv[2].set(pjs::Str::make((char*)m_id));
-    }
-    callback(m_on_connect, 3, argv, ret);
-    if (ret.to_boolean()) {
-      auto pipeline = sub_pipeline(0, false, output())->start();
-      m_pipeline = pipeline;
-      if (version == 4) {
-        reply_socks4(0x5a);
-      } else {
-        reply_socks5(0x00);
-      }
-      return;
-    }
-    if (version == 4) {
-      reply_socks4(0x5b);
-    } else {
-      reply_socks5(0x02);
-    }
-    close(StreamEnd::make());
-  };
-
-  if (auto *data = evt->as<Data>()) {
-    if (m_pipeline) {
-      output(data, m_pipeline->input());
-
-    } else {
-      Data parsed;
-      data->shift_to(
-        [&](int c) -> bool {
-          switch (m_state) {
-          case READ_VERSION:
-            m_id[0] = 0;
-            m_domain[0] = 0;
-            if (c == 4) {
-              m_state = READ_SOCKS4_CMD;
-            } else if (c == 5) {
-              m_state = READ_SOCKS5_NAUTH;
-            } else {
-              close(StreamEnd::make());
-              return true;
-            }
-            break;
-
-          // SOCKS4
-          case READ_SOCKS4_CMD:
-            if (c == 0x01) {
-              m_state = READ_SOCKS4_DSTPORT;
-              m_read_ptr = 0;
-            } else {
-              reply_socks4(0x5b);
-              close(StreamEnd::make());
-              return true;
-            }
-            break;
-          case READ_SOCKS4_DSTPORT:
-            m_port[m_read_ptr++] = c;
-            if (m_read_ptr == 2) {
-              m_state = READ_SOCKS4_DSTIP;
-              m_read_ptr = 0;
-            }
-            break;
-          case READ_SOCKS4_DSTIP:
-            m_ip[m_read_ptr++] = c;
-            if (m_read_ptr == 4) {
-              m_state = READ_SOCKS4_ID;
-              m_read_ptr = 0;
-            }
-            break;
-          case READ_SOCKS4_ID:
-            if (c) {
-              if (m_read_ptr < sizeof(m_id)-1) {
-                m_id[m_read_ptr++] = c;
-              } else {
-                reply_socks4(0x5b);
-                close(StreamEnd::make());
-                return true;
-              }
-            } else {
-              m_id[m_read_ptr] = 0;
-              if (!m_ip[0] && !m_ip[1] && !m_ip[2]) {
-                m_state = READ_SOCKS4_DOMAIN;
-                m_read_ptr = 0;
-              } else {
-                connect(4);
-                return true;
-              }
-            }
-            break;
-          case READ_SOCKS4_DOMAIN:
-            if (c) {
-              if (m_read_ptr < sizeof(m_domain)-1) {
-                m_domain[m_read_ptr++] = c;
-              } else {
-                reply_socks4(0x5b);
-                close(StreamEnd::make());
-                return true;
-              }
-            } else {
-              m_domain[m_read_ptr] = 0;
-              connect(4);
-              return true;
-            }
-            break;
-
-          // SOCKS5
-          case READ_SOCKS5_NAUTH:
-            m_read_len = c;
-            m_read_ptr = 0;
-            m_state = READ_SOCKS5_AUTH;
-            break;
-          case READ_SOCKS5_AUTH:
-            if (++m_read_ptr == m_read_len) {
-              uint8_t buf[2];
-              buf[0] = 0x05;
-              buf[1] = 0x00;
-              reply(buf, sizeof(buf));
-              m_state = READ_SOCKS5_CMD;
-              m_read_ptr = 0;
-            }
-            break;
-          case READ_SOCKS5_CMD:
-            if ((m_read_ptr == 0 && c != 0x05) ||
-                (m_read_ptr == 1 && c != 0x01) ||
-                (m_read_ptr == 2 && c != 0x00))
-            {
-              reply_socks5(0x01);
-              close(StreamEnd::make());
-              return true;
-            } else if (++m_read_ptr == 3) {
-              m_state = READ_SOCKS5_ADDR_TYPE;
-            }
-            break;
-          case READ_SOCKS5_ADDR_TYPE:
-            if (c == 0x01) {
-              m_state = READ_SOCKS5_DSTIP;
-              m_read_ptr = 0;
-            } else if (c == 0x3) {
-              m_state = READ_SOCKS5_DOMAIN_LEN;
-            } else {
-              reply_socks5(0x08);
-              close(StreamEnd::make());
-              return true;
-            }
-            break;
-          case READ_SOCKS5_DOMAIN_LEN:
-            m_read_len = c & 0xff;
-            m_read_ptr = 0;
-            m_state = READ_SOCKS5_DOMAIN;
-            break;
-          case READ_SOCKS5_DOMAIN:
-            m_domain[m_read_ptr++] = c;
-            if (m_read_ptr == m_read_len) {
-              m_domain[m_read_ptr] = 0;
-              m_state = READ_SOCKS5_DSTPORT;
-              m_read_ptr = 0;
-            }
-            break;
-          case READ_SOCKS5_DSTIP:
-            m_ip[m_read_ptr++] = c;
-            if (m_read_ptr == 4) {
-              m_state = READ_SOCKS5_DSTPORT;
-              m_read_ptr = 0;
-            }
-            break;
-          case READ_SOCKS5_DSTPORT:
-            m_port[m_read_ptr++] = c;
-            if (m_read_ptr == 2) {
-              connect(5);
-              return true;
-            }
-            break;
-          }
-          return false;
-        },
-        parsed
-      );
-
-      if (m_pipeline && !data->empty()) {
-        output(data, m_pipeline->input());
-      }
-    }
-
-  } else if (evt->is<StreamEnd>()) {
-    if (m_pipeline) {
-      output(evt, m_pipeline->input());
-    }
-    close(evt);
+    Filter::output(s_dp.make(buf, sizeof(buf)));
   }
 }
 
@@ -524,3 +482,16 @@ void Client::close(StreamEnd::Error err) {
 
 } // namespace socks
 } // namespace pipy
+
+namespace pjs {
+
+using namespace pipy::socks;
+
+template<> void ClassDef<Server::Request>::init() {
+  field<pjs::Ref<pjs::Str>>("id", [](Server::Request *obj) { return &obj->id; });
+  field<pjs::Ref<pjs::Str>>("ip", [](Server::Request *obj) { return &obj->ip; });
+  field<pjs::Ref<pjs::Str>>("domain", [](Server::Request *obj) { return &obj->domain; });
+  field<int>("port", [](Server::Request *obj) { return &obj->port; });
+}
+
+} // namespace pjs
