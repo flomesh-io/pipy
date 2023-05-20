@@ -23,3 +23,10 @@ curl --proxy socks5://127.0.0.1:8000 \
      http://localhost:8080 \
      http://localhost:8080 \
      http://localhost:8080
+
+echo 'Proxy HTTP requests over SOCKS5'
+curl http://localhost:9000 \
+     http://localhost:9000 \
+     http://localhost:9000 \
+     http://localhost:9000 \
+     http://localhost:9000

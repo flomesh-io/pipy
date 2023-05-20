@@ -16,3 +16,8 @@ pipy({
 ).to(
   $=>$.connect(() => _target)
 )
+
+.listen(9000)
+.connectSOCKS('localhost:8080').to($=>$
+  .connect('localhost:8000')
+)
