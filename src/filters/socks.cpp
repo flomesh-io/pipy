@@ -256,10 +256,6 @@ void Server::reply(int version, int code) {
 // Client
 //
 
-void ClientReceiver::on_event(Event *evt) {
-  static_cast<Client*>(this)->on_receive(evt);
-}
-
 Client::Client(const pjs::Value &target)
   : m_target(target)
 {
@@ -296,11 +292,11 @@ void Client::process(Event *evt) {
   if (m_state == STATE_CLOSED) return;
 
   if (!m_pipeline) {
-    m_pipeline = sub_pipeline(0, false, ClientReceiver::input())->start();
+    m_pipeline = sub_pipeline(0, false, EventSource::reply())->start();
   }
 
   if (evt->is<StreamEnd>()) {
-    output(evt, m_pipeline->input());
+    Filter::output(evt, m_pipeline->input());
     return;
   }
 
@@ -320,19 +316,19 @@ void Client::process(Event *evt) {
   }
 }
 
-void Client::on_receive(Event *evt) {
+void Client::on_reply(Event *evt) {
   if (m_state == STATE_CLOSED) return;
 
   if (evt->is<StreamEnd>()) {
     m_state = STATE_CLOSED;
     m_pipeline = nullptr;
-    output(evt);
+    Filter::output(evt);
     return;
   }
 
   if (auto data = evt->as<Data>()) {
     if (m_state == STATE_CONNECTED) {
-      output(data);
+      Filter::output(data);
       return;
     }
 
@@ -417,14 +413,14 @@ void Client::on_receive(Event *evt) {
         send(Data::make(m_buffer));
         m_buffer.clear();
       }
-      if (!data->empty()) output(data);
+      if (!data->empty()) Filter::output(data);
     }
   }
 }
 
 void Client::send(Data *data) {
   auto inp = m_pipeline->input();
-  output(data, inp);
+  Filter::output(data, inp);
 }
 
 void Client::send(const uint8_t *buf, size_t len) {
@@ -477,7 +473,7 @@ void Client::connect() {
 void Client::close(StreamEnd::Error err) {
   m_state = STATE_CLOSED;
   m_pipeline = nullptr;
-  output(StreamEnd::make(err));
+  Filter::output(StreamEnd::make(err));
 }
 
 } // namespace socks

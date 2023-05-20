@@ -105,11 +105,7 @@ private:
 // Client
 //
 
-class ClientReceiver : public EventTarget {
-  virtual void on_event(Event *evt) override;
-};
-
-class Client : public Filter, public ClientReceiver {
+class Client : public Filter, public EventSource {
 public:
   Client(const pjs::Value &target);
 
@@ -120,9 +116,9 @@ private:
   virtual auto clone() -> Filter* override;
   virtual void reset() override;
   virtual void process(Event *evt) override;
+  virtual void on_reply(Event *evt) override;
   virtual void dump(Dump &d) override;
 
-  void on_receive(Event *evt);
   void send(Data *data);
   void send(const uint8_t *buf, size_t len);
   void connect();

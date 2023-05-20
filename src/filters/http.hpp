@@ -521,8 +521,8 @@ private:
   virtual auto clone() -> Filter* override;
   virtual void reset() override;
   virtual void process(Event *evt) override;
-  virtual void dump(Dump &d) override;
   virtual void on_reply(Event *evt) override;
+  virtual void dump(Dump &d) override;
 
   pjs::Ref<pjs::Object> m_handshake;
   pjs::Ref<Pipeline> m_pipeline;
