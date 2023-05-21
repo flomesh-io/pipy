@@ -37,6 +37,82 @@ thread_local static const pjs::ConstStr s_inflate("inflate");
 thread_local static const pjs::ConstStr s_brotli("brotli");
 
 //
+// Decompress
+//
+
+Decompress::Decompress(const pjs::Value &algorithm)
+  : m_algorithm(algorithm)
+{
+}
+
+Decompress::Decompress(const Decompress &r)
+  : Filter(r)
+  , m_algorithm(r.m_algorithm)
+{
+}
+
+Decompress::~Decompress()
+{
+}
+
+void Decompress::dump(Dump &d) {
+  Filter::dump(d);
+  d.name = "decompress";
+}
+
+auto Decompress::clone() -> Filter* {
+  return new Decompress(*this);
+}
+
+void Decompress::reset() {
+  Filter::reset();
+  if (m_decompressor) {
+    m_decompressor->end();
+    m_decompressor = nullptr;
+  }
+  m_is_started = false;
+}
+
+void Decompress::process(Event *evt) {
+  if (!m_is_started) {
+    m_is_started = true;
+    pjs::Value algorithm;
+    if (!Filter::eval(m_algorithm, algorithm)) return;
+    if (!algorithm.is_string()) {
+      Filter::error("algorithm is not or did not return a string");
+      return;
+    }
+    auto out = [this](Data &data) { decompressor_output(data); };
+    auto str = algorithm.s();
+    if (str == s_inflate) {
+      m_decompressor = Decompressor::inflate(out);
+    } else if (str == s_brotli) {
+      m_decompressor = Decompressor::brotli(out);
+    } else {
+      Filter::error("unknown compression algorithm: %s", str->c_str());
+      return;
+    }
+  }
+
+  if (m_decompressor) {
+    if (auto data = evt->as<Data>()) {
+      m_decompressor->input(*data);
+    } else if (evt->is<StreamEnd>()) {
+      m_decompressor->end();
+      m_decompressor = nullptr;
+    }
+  }
+
+  if (evt->is<StreamEnd>()) {
+    Filter::output(evt);
+  }
+}
+
+void Decompress::decompressor_output(Data &data) {
+  Filter::output(Data::make(std::move(data)));
+}
+
+//
 // DecompressMessageBase
 //
 
@@ -62,7 +138,7 @@ void DecompressMessageBase::process(Event *evt) {
   if (auto *data = evt->as<Data>()) {
     if (m_message_started) {
       if (m_decompressor) {
-        if (!m_decompressor->process(data)) {
+        if (!m_decompressor->input(*data)) {
           Filter::error("decompression error");
           m_decompressor->end();
           m_decompressor = nullptr;
@@ -78,8 +154,8 @@ void DecompressMessageBase::process(Event *evt) {
     if (!m_message_started) {
       m_decompressor = new_decompressor(
         start,
-        [this](Data *data) {
-          output(data);
+        [this](Data &data) {
+          output(Data::make(std::move(data)));
         }
       );
       m_message_started = true;
@@ -126,7 +202,7 @@ auto DecompressMessage::clone() -> Filter* {
 
 auto DecompressMessage::new_decompressor(
   MessageStart *start,
-  const std::function<void(Data*)> &out
+  const std::function<void(Data&)> &out
 ) -> Decompressor* {
   pjs::Value algorithm;
   if (m_algorithm.is_function()) {
@@ -177,7 +253,7 @@ auto DecompressHTTP::clone() -> Filter* {
 
 auto DecompressHTTP::new_decompressor(
   MessageStart *start,
-  const std::function<void(Data*)> &out
+  const std::function<void(Data&)> &out
 ) -> Decompressor* {
   auto head = start->head();
   if (!head) return nullptr;

@@ -312,11 +312,12 @@ bool File::decompress() {
   Decompressor *decomp;
   bool result = false;
   if(m_data_gz || m_data_br) {
-    auto func = [this](Data *data) {
-      m_data = data;
+    m_data = Data::make();
+    auto func = [this](Data &data) {
+      m_data->push(std::move(data));
     };
     decomp = m_data_gz ? Decompressor::inflate(func) : Decompressor::brotli(func);
-    result = decomp->process(m_data_gz ? m_data_gz : m_data_br);
+    result = decomp->input(m_data_gz ? *m_data_gz : *m_data_br);
     decomp->end();
   }
   return result;

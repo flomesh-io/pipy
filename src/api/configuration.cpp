@@ -210,6 +210,10 @@ void FilterConfigurator::decode_websocket() {
   append_filter(new websocket::Decoder());
 }
 
+void FilterConfigurator::decompress(const pjs::Value &algorithm) {
+  append_filter(new Decompress(algorithm));
+}
+
 void FilterConfigurator::decompress_http(pjs::Function *enable) {
   append_filter(new DecompressHTTP(enable));
 }
@@ -1302,6 +1306,19 @@ template<> void ClassDef<FilterConfigurator>::init() {
     auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     try {
       config->decode_websocket();
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // FilterConfigurator.decompress
+  method("decompress", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
+    Function *enable = nullptr;
+    if (!ctx.arguments(0, &enable)) return;
+    try {
+      config->decompress(enable);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

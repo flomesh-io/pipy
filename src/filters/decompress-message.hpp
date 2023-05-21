@@ -34,6 +34,30 @@ class Decompressor;
 class Data;
 
 //
+// Decompress
+//
+
+class Decompress : public Filter {
+public:
+  Decompress(const pjs::Value &algorithm);
+
+private:
+  Decompress(const Decompress &r);
+  ~Decompress();
+
+  virtual auto clone() -> Filter* override;
+  virtual void reset() override;
+  virtual void process(Event *evt) override;
+  virtual void dump(Dump &d) override;
+
+  pjs::Value m_algorithm;
+  Decompressor* m_decompressor = nullptr;
+  bool m_is_started = false;
+
+  void decompressor_output(Data &data);
+};
+
+//
 // DecompressMessageBase
 //
 
@@ -44,7 +68,7 @@ protected:
 
   virtual auto new_decompressor(
     MessageStart *start,
-    const std::function<void(Data*)> &out
+    const std::function<void(Data&)> &out
   ) -> Decompressor* = 0;
 
 private:
@@ -72,7 +96,7 @@ private:
 
   virtual auto new_decompressor(
     MessageStart *start,
-    const std::function<void(Data*)> &out
+    const std::function<void(Data&)> &out
   ) -> Decompressor* override;
 
   pjs::Value m_algorithm;
@@ -95,7 +119,7 @@ private:
 
   virtual auto new_decompressor(
     MessageStart *start,
-    const std::function<void(Data*)> &out
+    const std::function<void(Data&)> &out
   ) -> Decompressor* override;
 
   pjs::Ref<pjs::Function> m_enable;

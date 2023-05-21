@@ -43,7 +43,7 @@ thread_local static Data::Producer s_dp_brotli("brotli");
 
 class Inflate : public pjs::Pooled<Inflate>, public Decompressor {
 public:
-  Inflate(const std::function<void(Data*)> &out)
+  Inflate(const std::function<void(Data&)> &out)
     : m_out(out)
   {
     m_zs.zalloc = Z_NULL;
@@ -55,7 +55,7 @@ public:
   }
 
 private:
-  const std::function<void(Data*)> m_out;
+  const std::function<void(Data&)> m_out;
   z_stream m_zs;
   bool m_done = false;
 
@@ -63,11 +63,14 @@ private:
     inflateEnd(&m_zs);
   }
 
-  virtual bool process(const Data *data) override {
+  virtual bool input(const Data &data) override {
     if (m_done) return true;
+
     unsigned char buf[DATA_CHUNK_SIZE];
-    pjs::Ref<Data> output_data(Data::make());
-    for (const auto chk : data->chunks()) {
+    Data output_data;
+    Data::Builder db(output_data, &s_dp);
+
+    for (const auto chk : data.chunks()) {
       m_zs.next_in = (const unsigned char *)std::get<0>(chk);
       m_zs.avail_in = std::get<1>(chk);
       do {
@@ -75,13 +78,15 @@ private:
         m_zs.avail_out = sizeof(buf);
         auto ret = ::inflate(&m_zs, Z_NO_FLUSH);
         if (auto size = sizeof(buf) - m_zs.avail_out) {
-          s_dp_inflate.push(output_data, buf, size);
+          db.push(buf, size);
         }
         if (ret == Z_STREAM_END) { m_done = true; break; }
         if (ret != Z_OK) return false;
       } while (m_zs.avail_out == 0);
       if (m_done) break;
     }
+
+    db.flush();
     m_out(output_data);
     return true;
   }
@@ -90,7 +95,11 @@ private:
     delete this;
     return true;
   }
+
+  thread_local static Data::Producer s_dp;
 };
+
+thread_local Data::Producer Inflate::s_dp("Decompress (inflate)");
 
 //
 // BrotliDecoder
@@ -98,18 +107,15 @@ private:
 
 class BrotliDecoder : public pjs::Pooled<BrotliDecoder>, public Decompressor {
 public:
-  BrotliDecoder(const std::function<void(Data*)> &out)
+  BrotliDecoder(const std::function<void(Data&)> &out)
     : m_out(out)
+    , m_ds(BrotliDecoderCreateInstance(NULL, NULL, NULL))
   {
-    m_ds = BrotliDecoderCreateInstance(NULL, NULL, NULL);
-    if (!m_ds) {
-      throw std::runtime_error("[BrotliDecoder] unable to instantiate.");
-    }
     BrotliDecoderSetParameter(m_ds, BROTLI_DECODER_PARAM_LARGE_WINDOW, 1u);
   }
 
 private:
-  const std::function<void(Data*)> m_out;
+  const std::function<void(Data&)> m_out;
   BrotliDecoderState* m_ds;
   bool m_done = false;
 
@@ -117,16 +123,19 @@ private:
     BrotliDecoderDestroyInstance(m_ds);
   }
 
-  virtual bool process(const Data *data) override {
+  virtual bool input(const Data &data) override {
     if (m_done) return true;
+
     uint8_t buf[DATA_CHUNK_SIZE];
-    pjs::Ref<Data> output_data(Data::make());
+    Data output_data;
+    Data::Builder db(output_data, &s_dp);
+
     const unsigned char *next_in = nullptr;
     uint8_t *next_out = buf;
     size_t avail_in = 0, avail_out = DATA_CHUNK_SIZE;
     BrotliDecoderResult result;
 
-    for (const auto chk : data->chunks()) {
+    for (const auto chk : data.chunks()) {
       next_in = (const unsigned char *)std::get<0>(chk);
       avail_in = std::get<1>(chk);
 
@@ -135,14 +144,14 @@ private:
         switch (result) {
           case BROTLI_DECODER_RESULT_NEEDS_MORE_OUTPUT:
             if (auto size = (size_t)(next_out - buf)) {
-              s_dp_brotli.push(output_data, buf, size);
+              db.push(buf, size);
             }
             avail_out = DATA_CHUNK_SIZE;
             next_out = buf;
             break;
           case BROTLI_DECODER_RESULT_SUCCESS:
             if (auto size = (size_t)(next_out - buf)) {
-              s_dp_brotli.push(output_data, buf, size);
+              db.push(buf, size);
             }
             avail_out = 0;
             if (avail_in != 0) return false;
@@ -157,6 +166,8 @@ private:
             result == BROTLI_DECODER_RESULT_SUCCESS) break;
       }
     }
+
+    db.flush();
     m_out(output_data);
     return true;
   }
@@ -165,7 +176,11 @@ private:
     delete this;
     return true;
   }
+
+  thread_local static Data::Producer s_dp;
 };
+
+thread_local Data::Producer BrotliDecoder::s_dp("Decompress (brotli)");
 
 //
 // Deflate
@@ -224,15 +239,16 @@ private:
     return true;
   }
 };
+
 //
 // Decompressor
 //
 
-Decompressor* Decompressor::inflate(const std::function<void(Data*)> &out) {
+Decompressor* Decompressor::inflate(const std::function<void(Data&)> &out) {
   return new Inflate(out);
 }
 
-Decompressor* Decompressor::brotli(const std::function<void(Data*)> &out) {
+Decompressor* Decompressor::brotli(const std::function<void(Data&)> &out) {
   return new BrotliDecoder(out);
 }
 

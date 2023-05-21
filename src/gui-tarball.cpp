@@ -42,15 +42,13 @@ size_t s_decompressed_gui_tar_size = 0;
 static void decompress_gui_tar() {
   Data out;
   auto *decompressor = Decompressor::brotli(
-    [&](Data *data) {
-      out.push(*data);
+    [&](Data &data) {
+      out.push(std::move(data));
     }
   );
 
-  Data *inp = Data::make(s_gui_tar, sizeof(s_gui_tar), &s_dp);
-  decompressor->process(inp);
+  decompressor->input(Data(s_gui_tar, sizeof(s_gui_tar), &s_dp));
   decompressor->end();
-  inp->release();
   s_decompressed_gui_tar = new uint8_t[out.size()];
   s_decompressed_gui_tar_size = out.size();
   out.to_bytes(s_decompressed_gui_tar);
