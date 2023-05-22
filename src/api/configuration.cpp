@@ -41,7 +41,7 @@
 #include "filters/chain.hpp"
 #include "filters/connect.hpp"
 #include "filters/compress-message.hpp"
-#include "filters/decompress-message.hpp"
+#include "filters/decompress.hpp"
 #include "filters/deframe.hpp"
 #include "filters/demux.hpp"
 #include "filters/deposit-message.hpp"
@@ -218,12 +218,8 @@ void FilterConfigurator::decompress(const pjs::Value &algorithm) {
   append_filter(new Decompress(algorithm));
 }
 
-void FilterConfigurator::decompress_http(pjs::Function *enable) {
-  append_filter(new DecompressHTTP(enable));
-}
-
-void FilterConfigurator::decompress_message(const pjs::Value &algorithm) {
-  append_filter(new DecompressMessage(algorithm));
+void FilterConfigurator::decompress_http() {
+  append_filter(new DecompressHTTP());
 }
 
 void FilterConfigurator::deframe(pjs::Object *states) {
@@ -1345,23 +1341,8 @@ template<> void ClassDef<FilterConfigurator>::init() {
   // FilterConfigurator.decompressHTTP
   method("decompressHTTP", [](Context &ctx, Object *thiz, Value &result) {
     auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
-    Function *enable = nullptr;
-    if (!ctx.arguments(0, &enable)) return;
     try {
-      config->decompress_http(enable);
-      result.set(thiz);
-    } catch (std::runtime_error &err) {
-      ctx.error(err);
-    }
-  });
-
-  // FilterConfigurator.decompressMessage
-  method("decompressMessage", [](Context &ctx, Object *thiz, Value &result) {
-    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
-    pjs::Value algorithm;
-    if (!ctx.arguments(1, &algorithm)) return;
-    try {
-      config->decompress_message(algorithm);
+      config->decompress_http();
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

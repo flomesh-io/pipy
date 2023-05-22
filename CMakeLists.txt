@@ -189,7 +189,7 @@ add_executable(pipy
   src/filters/chain.cpp
   src/filters/compress-message.cpp
   src/filters/connect.cpp
-  src/filters/decompress-message.cpp
+  src/filters/decompress.cpp
   src/filters/deframe.cpp
   src/filters/demux.cpp
   src/filters/deposit-message.cpp

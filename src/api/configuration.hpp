@@ -81,8 +81,7 @@ public:
   void decode_thrift();
   void decode_websocket();
   void decompress(const pjs::Value &algorithm);
-  void decompress_http(pjs::Function *enable);
-  void decompress_message(const pjs::Value &algorithm);
+  void decompress_http();
   void deframe(pjs::Object *states);
   void demux(pjs::Object *options);
   void demux_http(pjs::Object *options);

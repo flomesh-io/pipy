@@ -23,8 +23,8 @@
  *  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef DECOMPRESS_MESSAGE_HPP
-#define DECOMPRESS_MESSAGE_HPP
+#ifndef DECOMPRESS_HPP
+#define DECOMPRESS_HPP
 
 #include "filter.hpp"
 
@@ -58,73 +58,28 @@ private:
 };
 
 //
-// DecompressMessageBase
-//
-
-class DecompressMessageBase : public Filter {
-protected:
-  DecompressMessageBase();
-  DecompressMessageBase(const DecompressMessageBase &r);
-
-  virtual auto new_decompressor(
-    MessageStart *start,
-    const std::function<void(Data&)> &out
-  ) -> Decompressor* = 0;
-
-private:
-  virtual void reset() override;
-  virtual void process(Event *evt) override;
-
-  Decompressor* m_decompressor = nullptr;
-  bool m_message_started = false;
-};
-
-//
-// DecompressMessage
-//
-
-class DecompressMessage : public DecompressMessageBase {
-public:
-  DecompressMessage(const pjs::Value &algorithm);
-
-private:
-  DecompressMessage(const DecompressMessage &r);
-  ~DecompressMessage();
-
-  virtual auto clone() -> Filter* override;
-  virtual void dump(Dump &d) override;
-
-  virtual auto new_decompressor(
-    MessageStart *start,
-    const std::function<void(Data&)> &out
-  ) -> Decompressor* override;
-
-  pjs::Value m_algorithm;
-};
-
-//
 // DecompressHTTP
 //
 
-class DecompressHTTP : public DecompressMessageBase {
+class DecompressHTTP : public Filter {
 public:
-  DecompressHTTP(pjs::Function *enable);
+  DecompressHTTP();
 
 private:
   DecompressHTTP(const DecompressHTTP &r);
   ~DecompressHTTP();
 
   virtual auto clone() -> Filter* override;
+  virtual void reset() override;
+  virtual void process(Event *evt) override;
   virtual void dump(Dump &d) override;
 
-  virtual auto new_decompressor(
-    MessageStart *start,
-    const std::function<void(Data&)> &out
-  ) -> Decompressor* override;
+  Decompressor* m_decompressor = nullptr;
+  bool m_is_message_started = false;
 
-  pjs::Ref<pjs::Function> m_enable;
+  void decompressor_output(Data &data);
 };
 
 } // namespace pipy
 
-#endif // DECOMPRESS_MESSAGE_HPP
+#endif // DECOMPRESS_HPP
