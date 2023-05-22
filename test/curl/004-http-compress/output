@@ -1,0 +1,77 @@
+Response compressed with gzip
+HTTP/1.1 200 OK
+content-encoding: gzip
+content-length: 173
+connection: keep-alive
+
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Hello, People!</title>
+  </head>
+  <body>
+    <h1>The Quick Brown Fox Jumps Over the Lazy Dog</h1>
+    <h2>The Quick Brown Fox Jumps Over the Lazy Dog</h2>
+    <h3>The Quick Brown Fox Jumps Over the Lazy Dog</h3>
+    <h4>The Quick Brown Fox Jumps Over the Lazy Dog</h4>
+    <h5>The Quick Brown Fox Jumps Over the Lazy Dog</h5>
+    <h6>The Quick Brown Fox Jumps Over the Lazy Dog</h6>
+  </body>
+</html>
+Response compressed with deflate
+HTTP/1.1 200 OK
+content-encoding: deflate
+content-length: 161
+connection: keep-alive
+
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Hello, People!</title>
+  </head>
+  <body>
+    <h1>The Quick Brown Fox Jumps Over the Lazy Dog</h1>
+    <h2>The Quick Brown Fox Jumps Over the Lazy Dog</h2>
+    <h3>The Quick Brown Fox Jumps Over the Lazy Dog</h3>
+    <h4>The Quick Brown Fox Jumps Over the Lazy Dog</h4>
+    <h5>The Quick Brown Fox Jumps Over the Lazy Dog</h5>
+    <h6>The Quick Brown Fox Jumps Over the Lazy Dog</h6>
+  </body>
+</html>
+Responses decompressed by proxy
+HTTP/1.1 200 OK
+content-length: 445
+connection: keep-alive
+
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Hello, People!</title>
+  </head>
+  <body>
+    <h1>The Quick Brown Fox Jumps Over the Lazy Dog</h1>
+    <h2>The Quick Brown Fox Jumps Over the Lazy Dog</h2>
+    <h3>The Quick Brown Fox Jumps Over the Lazy Dog</h3>
+    <h4>The Quick Brown Fox Jumps Over the Lazy Dog</h4>
+    <h5>The Quick Brown Fox Jumps Over the Lazy Dog</h5>
+    <h6>The Quick Brown Fox Jumps Over the Lazy Dog</h6>
+  </body>
+</html>
+HTTP/1.1 200 OK
+content-length: 445
+connection: keep-alive
+
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Hello, People!</title>
+  </head>
+  <body>
+    <h1>The Quick Brown Fox Jumps Over the Lazy Dog</h1>
+    <h2>The Quick Brown Fox Jumps Over the Lazy Dog</h2>
+    <h3>The Quick Brown Fox Jumps Over the Lazy Dog</h3>
+    <h4>The Quick Brown Fox Jumps Over the Lazy Dog</h4>
+    <h5>The Quick Brown Fox Jumps Over the Lazy Dog</h5>
+    <h6>The Quick Brown Fox Jumps Over the Lazy Dog</h6>
+  </body>
+</html>
