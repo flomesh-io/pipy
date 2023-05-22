@@ -97,8 +97,8 @@ void Ticker::schedule() {
       auto t = ++m_tick;
       m_visiting = m_watchers.head();
       while (auto w = m_visiting) {
-        w->on_tick(t);
         m_visiting = m_visiting->next();
+        w->on_tick(t);
       }
       schedule();
     }
