@@ -30,10 +30,22 @@
 namespace pipy {
 
 //
+// ThrottleBase::Options
+//
+
+ThrottleBase::Options::Options(pjs::Object *options) {
+  Value(options, "blockInput")
+    .get(block_input)
+    .check_nullable();
+}
+
+//
 // ThrottleBase
 //
 
-ThrottleBase::ThrottleBase(pjs::Object *quota) {
+ThrottleBase::ThrottleBase(pjs::Object *quota, const Options &options)
+  : m_options(options)
+{
   if (quota) {
     if (quota->is<algo::Quota>()) {
       m_quota = quota->as<algo::Quota>();
@@ -50,6 +62,7 @@ ThrottleBase::ThrottleBase(pjs::Object *quota) {
 
 ThrottleBase::ThrottleBase(const ThrottleBase &r)
   : Filter(r)
+  , m_options(r.m_options)
   , m_quota(r.m_quota)
   , m_quota_f(r.m_quota_f)
 {
@@ -96,9 +109,11 @@ void ThrottleBase::process(Event *evt) {
 
 void ThrottleBase::pause() {
   if (!m_paused) {
-    if (auto tap = InputContext::tap()) {
-      tap->close();
-      m_closed_tap = tap;
+    if (m_options.block_input) {
+      if (auto tap = InputContext::tap()) {
+        tap->close();
+        m_closed_tap = tap;
+      }
     }
     m_paused = true;
   }

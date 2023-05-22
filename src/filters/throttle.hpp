@@ -42,7 +42,13 @@ namespace pipy {
 
 class ThrottleBase : public Filter {
 public:
-  ThrottleBase(pjs::Object *quota);
+  struct Options : public pipy::Options {
+    bool block_input = true;
+    Options() {}
+    Options(pjs::Object *options);
+  };
+
+  ThrottleBase(pjs::Object *quota, const Options &options);
 
 protected:
   ThrottleBase(const ThrottleBase &r);
@@ -77,6 +83,7 @@ protected:
     virtual bool on_consume(algo::Quota *quota) override;
   };
 
+  Options m_options;
   pjs::Ref<algo::Quota> m_quota;
   pjs::Ref<pjs::Function> m_quota_f;
   List<EventConsumer> m_consumers;

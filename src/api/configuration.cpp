@@ -390,16 +390,16 @@ void FilterConfigurator::tee(const pjs::Value &filename, pjs::Object *options) {
   append_filter(new Tee(filename, options));
 }
 
-void FilterConfigurator::throttle_concurrency(pjs::Object *quota) {
-  append_filter(new ThrottleConcurrency(quota));
+void FilterConfigurator::throttle_concurrency(pjs::Object *quota, pjs::Object *options) {
+  append_filter(new ThrottleConcurrency(quota, options));
 }
 
-void FilterConfigurator::throttle_data_rate(pjs::Object *quota) {
-  append_filter(new ThrottleDataRate(quota));
+void FilterConfigurator::throttle_data_rate(pjs::Object *quota, pjs::Object *options) {
+  append_filter(new ThrottleDataRate(quota, options));
 }
 
-void FilterConfigurator::throttle_message_rate(pjs::Object *quota) {
-  append_filter(new ThrottleMessageRate(quota));
+void FilterConfigurator::throttle_message_rate(pjs::Object *quota, pjs::Object *options) {
+  append_filter(new ThrottleMessageRate(quota, options));
 }
 
 void FilterConfigurator::use(JSModule *module, pjs::Str *pipeline) {
@@ -2053,9 +2053,10 @@ template<> void ClassDef<FilterConfigurator>::init() {
   method("throttleConcurrency", [](Context &ctx, Object *thiz, Value &result) {
     auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     pjs::Object *quota;
-    if (!ctx.arguments(1, &quota)) return;
+    pjs::Object *options = nullptr;
+    if (!ctx.arguments(1, &quota, &options)) return;
     try {
-      config->throttle_concurrency(quota);
+      config->throttle_concurrency(quota, options);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -2066,9 +2067,10 @@ template<> void ClassDef<FilterConfigurator>::init() {
   method("throttleDataRate", [](Context &ctx, Object *thiz, Value &result) {
     auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     pjs::Object *quota;
-    if (!ctx.arguments(1, &quota)) return;
+    pjs::Object *options = nullptr;
+    if (!ctx.arguments(1, &quota, &options)) return;
     try {
-      config->throttle_data_rate(quota);
+      config->throttle_data_rate(quota, options);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
@@ -2079,9 +2081,10 @@ template<> void ClassDef<FilterConfigurator>::init() {
   method("throttleMessageRate", [](Context &ctx, Object *thiz, Value &result) {
     auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     pjs::Object *quota;
-    if (!ctx.arguments(1, &quota)) return;
+    pjs::Object *options = nullptr;
+    if (!ctx.arguments(1, &quota, &options)) return;
     try {
-      config->throttle_message_rate(quota);
+      config->throttle_message_rate(quota, options);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

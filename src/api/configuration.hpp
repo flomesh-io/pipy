@@ -121,9 +121,9 @@ public:
   void split(pjs::Str *separator);
   void split(pjs::Function *callback);
   void tee(const pjs::Value &filename, pjs::Object *options);
-  void throttle_concurrency(pjs::Object *quota);
-  void throttle_data_rate(pjs::Object *quota);
-  void throttle_message_rate(pjs::Object *quota);
+  void throttle_concurrency(pjs::Object *quota, pjs::Object *options);
+  void throttle_data_rate(pjs::Object *quota, pjs::Object *options);
+  void throttle_message_rate(pjs::Object *quota, pjs::Object *options);
   void use(JSModule *module, pjs::Str *pipeline);
   void use(nmi::NativeModule *module, pjs::Str *pipeline);
   void use(const std::list<JSModule*> modules, pjs::Str *pipeline, pjs::Function *when);
