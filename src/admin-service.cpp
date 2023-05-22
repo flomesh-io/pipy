@@ -39,7 +39,7 @@
 #include "module.hpp"
 #include "status.hpp"
 #include "graph.hpp"
-#include "compress.hpp"
+#include "compressor.hpp"
 #include "fs.hpp"
 #include "log.hpp"
 
@@ -480,8 +480,8 @@ Message* AdminService::metrics_GET(pjs::Object *headers) {
 
   Data data;
   Data::Builder db(data, &s_dp);
-  auto db_input = [&](const void *data, size_t size) {
-    db.push((const char *)data, size);
+  auto db_input = [&](Data &data) {
+    db.push(std::move(data));
   };
 
   Compressor *compressor = nullptr;
@@ -495,7 +495,8 @@ Message* AdminService::metrics_GET(pjs::Object *headers) {
       if (size == 1) {
         buf[buf_ptr++] = *(const char *)data;
         if (buf_ptr >= sizeof(buf)) {
-          compressor->input(buf, buf_ptr, false);
+          Data data(buf, buf_ptr, &s_dp);
+          compressor->input(data, false);
           buf_ptr = 0;
         }
       } else {
@@ -506,7 +507,8 @@ Message* AdminService::metrics_GET(pjs::Object *headers) {
           p += n;
           buf_ptr += n;
           if (buf_ptr >= sizeof(buf)) {
-            compressor->input(buf, buf_ptr, false);
+            Data data(buf, buf_ptr, &s_dp);
+            compressor->input(data, false);
             buf_ptr = 0;
           }
         }
@@ -537,8 +539,9 @@ Message* AdminService::metrics_GET(pjs::Object *headers) {
   }
 
   if (compressor) {
-    compressor->input(buf, buf_ptr, true);
-    compressor->end();
+    Data data(buf, buf_ptr, &s_dp);
+    compressor->input(data, true);
+    compressor->finalize();
   }
 
   db.flush();

@@ -26,7 +26,6 @@
 #include "http.hpp"
 #include "api/http.hpp"
 #include "api/console.hpp"
-#include "compress.hpp"
 #include "context.hpp"
 #include "pipeline.hpp"
 #include "module.hpp"

@@ -176,7 +176,7 @@ add_executable(pipy
   src/buffer.cpp
   src/codebase.cpp
   src/codebase-store.cpp
-  src/compress.cpp
+  src/compressor.cpp
   src/context.cpp
   src/data.cpp
   src/deframer.cpp

@@ -24,7 +24,6 @@
  */
 
 #include "stats.hpp"
-#include "compress.hpp"
 #include "utils.hpp"
 #include "log.hpp"
 

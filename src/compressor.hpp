@@ -39,11 +39,13 @@ class Data;
 
 class Decompressor {
 public:
-  static Decompressor* inflate(const std::function<void(Data&)> &out);
-  static Decompressor* brotli(const std::function<void(Data&)> &out);
+  typedef std::function<void(Data&)> Output;
+
+  static Decompressor* inflate(const Output &out);
+  static Decompressor* brotli(const Output &out);
 
   virtual bool input(const Data &data) = 0;
-  virtual bool end() = 0;
+  virtual bool finalize() = 0;
 
 protected:
   ~Decompressor() {}
@@ -55,14 +57,14 @@ protected:
 
 class Compressor {
 public:
-  typedef std::function<void(const void *, size_t)> Output;
+  typedef std::function<void(Data&)> Output;
 
-  static Compressor* deflate(const Output &out, int compression_level = -1);
-  static Compressor* gzip(const Output &out, int compression_level = -1);
-  static Compressor* brotli(const Output &out, int compression_level = -1);
+  static Compressor* deflate(const Output &out);
+  static Compressor* gzip(const Output &out);
 
-  virtual bool input(const void *data, size_t size, bool is_final) = 0;
-  virtual bool end() = 0;
+  virtual bool input(const Data &data, bool flush) = 0;
+  virtual bool flush() = 0;
+  virtual bool finalize() = 0;
 
 protected:
   ~Compressor() {}

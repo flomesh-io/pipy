@@ -24,7 +24,7 @@
  */
 
 #include "gui-tarball.hpp"
-#include "compress.hpp"
+#include "compressor.hpp"
 #include "data.hpp"
 
 #ifdef PIPY_USE_GUI
@@ -48,7 +48,7 @@ static void decompress_gui_tar() {
   );
 
   decompressor->input(Data(s_gui_tar, sizeof(s_gui_tar), &s_dp));
-  decompressor->end();
+  decompressor->finalize();
   s_decompressed_gui_tar = new uint8_t[out.size()];
   s_decompressed_gui_tar_size = out.size();
   out.to_bytes(s_decompressed_gui_tar);

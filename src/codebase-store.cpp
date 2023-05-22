@@ -24,7 +24,7 @@
  */
 
 #include "codebase-store.hpp"
-#include "compress.hpp"
+#include "compressor.hpp"
 #include "tar.hpp"
 #include "utils.hpp"
 
@@ -171,7 +171,7 @@ CodebaseStore::CodebaseStore(Store *store)
     }
   );
   decompressor->input(input);
-  decompressor->end();
+  decompressor->finalize();
 
   auto len = output.size();
   char buf[output.size()];

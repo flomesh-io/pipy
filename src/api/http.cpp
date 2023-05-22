@@ -28,7 +28,7 @@
 #include "context.hpp"
 #include "tar.hpp"
 #include "utils.hpp"
-#include "compress.hpp"
+#include "compressor.hpp"
 
 namespace pipy {
 namespace http {
@@ -318,7 +318,7 @@ bool File::decompress() {
     };
     decomp = m_data_gz ? Decompressor::inflate(func) : Decompressor::brotli(func);
     result = decomp->input(m_data_gz ? *m_data_gz : *m_data_br);
-    decomp->end();
+    decomp->finalize();
   }
   return result;
 }

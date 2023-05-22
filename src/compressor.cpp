@@ -23,7 +23,7 @@
  *  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include "compress.hpp"
+#include "compressor.hpp"
 #include "data.hpp"
 #include "pjs/pjs.hpp"
 
@@ -67,8 +67,8 @@ private:
     if (m_done) return true;
 
     unsigned char buf[DATA_CHUNK_SIZE];
-    Data output_data;
-    Data::Builder db(output_data, &s_dp);
+    Data output;
+    Data::Builder db(output, &s_dp);
 
     for (const auto chk : data.chunks()) {
       m_zs.next_in = (const unsigned char *)std::get<0>(chk);
@@ -87,11 +87,11 @@ private:
     }
 
     db.flush();
-    m_out(output_data);
+    m_out(output);
     return true;
   }
 
-  virtual bool end() override {
+  virtual bool finalize() override {
     delete this;
     return true;
   }
@@ -127,8 +127,8 @@ private:
     if (m_done) return true;
 
     uint8_t buf[DATA_CHUNK_SIZE];
-    Data output_data;
-    Data::Builder db(output_data, &s_dp);
+    Data output;
+    Data::Builder db(output, &s_dp);
 
     const unsigned char *next_in = nullptr;
     uint8_t *next_out = buf;
@@ -168,11 +168,11 @@ private:
     }
 
     db.flush();
-    m_out(output_data);
+    m_out(output);
     return true;
   }
 
-  virtual bool end() override {
+  virtual bool finalize() override {
     delete this;
     return true;
   }
@@ -193,7 +193,7 @@ public:
     gzip,
   };
 
-  Deflate(const Output &out, Method method = Method::gzip, int level = Z_DEFAULT_COMPRESSION)
+  Deflate(const Output &out, bool gzip)
     : m_out(out)
   {
     m_zs.zalloc = Z_NULL;
@@ -204,9 +204,9 @@ public:
 
     deflateInit2(
       &m_zs,
-      level,
+      Z_DEFAULT_COMPRESSION,
       Z_DEFLATED,
-      method == Method::deflate ? MAX_WBITS : 16 + MAX_WBITS,
+      gzip ? 16 + MAX_WBITS : MAX_WBITS,
       8,
       Z_DEFAULT_STRATEGY
     );
@@ -220,25 +220,54 @@ private:
     deflateEnd(&m_zs);
   }
 
-  virtual bool input(const void *data, size_t size, bool is_final) override {
+  virtual bool input(const Data &data, bool flush) override {
+    Data output;
+    Data::Builder db(output, &s_dp);
+
+    for (const auto chk : data.chunks()) {
+      auto buf = std::get<0>(chk);
+      auto len = std::get<1>(chk);
+      if (!deflate(buf, len, flush, db)) return false;
+    }
+
+    db.flush();
+    m_out(output);
+    return true;
+  }
+
+  virtual bool flush() override {
+    Data output;
+    Data::Builder db(output, &s_dp);
+    auto ret = deflate(nullptr, 0, true, db);
+    db.flush();
+    m_out(output);
+    delete this;
+    return ret;
+  }
+
+  virtual bool finalize() override {
+    delete this;
+    return true;
+  }
+
+  bool deflate(const char *data, size_t size, bool flush, Data::Builder &db) {
     unsigned char buf[DATA_CHUNK_SIZE];
     m_zs.next_in = (const Bytef *)data;
     m_zs.avail_in = size;
     do {
       m_zs.next_out = buf;
       m_zs.avail_out = sizeof(buf);
-      auto ret = ::deflate(&m_zs, is_final ? Z_FINISH : Z_NO_FLUSH);
+      auto ret = ::deflate(&m_zs, flush ? Z_FINISH : Z_NO_FLUSH);
       if (ret == Z_STREAM_ERROR) return false;
-      if (auto size = sizeof(buf) - m_zs.avail_out) m_out(buf, size);
+      if (auto size = sizeof(buf) - m_zs.avail_out) db.push(buf, size);
     } while (m_zs.avail_out == 0);
     return true;
   }
 
-  virtual bool end() override {
-    delete this;
-    return true;
-  }
+  thread_local static Data::Producer s_dp;
 };
+
+thread_local Data::Producer Deflate::s_dp("Compress (defalte)");
 
 //
 // Decompressor
@@ -256,16 +285,12 @@ Decompressor* Decompressor::brotli(const std::function<void(Data&)> &out) {
 // Compressor
 //
 
-Compressor *Compressor::deflate(const Output &out, int compression_level) {
-  return new Deflate(out, Deflate::Method::deflate, compression_level);
+Compressor *Compressor::deflate(const Output &out) {
+  return new Deflate(out, false);
 }
 
-Compressor *Compressor::gzip(const Output &out, int compression_level) {
-  return new Deflate(out, Deflate::Method::gzip, compression_level);
-}
-
-Compressor *Compressor::brotli(const Output &out, int compression_level) {
-  throw std::runtime_error("Brotli compression not implemented");
+Compressor *Compressor::gzip(const Output &out) {
+  return new Deflate(out, true);
 }
 
 } // namespace pipy

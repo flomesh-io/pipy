@@ -24,7 +24,7 @@
  */
 
 #include "compress-message.hpp"
-#include "compress.hpp"
+#include "compressor.hpp"
 #include "data.hpp"
 
 namespace pipy {
@@ -59,15 +59,15 @@ CompressMessageBase::CompressMessageBase(const CompressMessageBase &r)
   : Filter(r)
   , m_options(r.m_options)
 {
-  m_output = [this](const void *data, size_t size) {
-    output(s_dp.make(data, size));
+  m_output = [this](Data &data) {
+    output(Data::make(std::move(data)));
   };
 }
 
 void CompressMessageBase::reset() {
   Filter::reset();
   if (m_compressor) {
-    m_compressor->end();
+    m_compressor->finalize();
     m_compressor = nullptr;
   }
   m_message_started = false;
@@ -84,20 +84,15 @@ void CompressMessageBase::process(Event *evt) {
 
   } else if (auto *data = evt->as<Data>()) {
     if (m_compressor) {
-      size_t size = data->size();
-      for (const auto chk : data->chunks()) {
-        auto buf = std::get<0>(chk);
-        auto len = std::get<1>(chk);
-        size -= len;
-        m_compressor->input(buf, len, !size);
-      }
+      m_compressor->input(*data, false);
     } else {
       output(evt);
     }
 
   } else if (evt->is<MessageEnd>()) {
     if (m_compressor) {
-      m_compressor->end();
+      m_compressor->flush();
+      m_compressor->finalize();
       m_compressor = nullptr;
     }
     m_message_started = false;
@@ -110,7 +105,7 @@ auto CompressMessageBase::new_compressor(
   MessageStart *start,
   Method &method,
   Level &level,
-  const std::function<void(const void *, size_t)> &out
+  const std::function<void(Data&)> &out
 ) -> Compressor* {
 
   method = Method::NO_COMPRESSION;
@@ -155,8 +150,6 @@ auto CompressMessageBase::new_compressor(
     return Compressor::deflate(out);
   case Method::GZIP:
     return Compressor::gzip(out);
-  case Method::BROTLI:
-    return Compressor::brotli(out);
   default:
     return nullptr;
   }
@@ -219,7 +212,7 @@ auto CompressHTTP::new_compressor(
   MessageStart *start,
   Method &method,
   Level &level,
-  const std::function<void(const void *, size_t)> &out
+  const std::function<void(Data&)> &out
 ) -> Compressor* {
   thread_local static pjs::ConstStr s_headers("headers");
   thread_local static pjs::ConstStr s_content_encoding("content-encoding");

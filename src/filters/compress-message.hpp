@@ -71,7 +71,7 @@ protected:
     MessageStart *start,
     Method &method,
     Level &level,
-    const std::function<void(const void *, size_t)> &out
+    const std::function<void(Data&)> &out
   ) -> Compressor*;
 
 private:
@@ -80,7 +80,7 @@ private:
 
   Options m_options;
   Compressor* m_compressor = nullptr;
-  std::function<void(const void *, size_t)> m_output;
+  std::function<void(Data&)> m_output;
   bool m_message_started = false;
 };
 
@@ -119,7 +119,7 @@ private:
     MessageStart *start,
     Method &method,
     Level &level,
-    const std::function<void(const void *, size_t)> &out
+    const std::function<void(Data&)> &out
   ) -> Compressor* override;
 };
 

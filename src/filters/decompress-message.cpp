@@ -24,7 +24,7 @@
  */
 
 #include "decompress-message.hpp"
-#include "compress.hpp"
+#include "compressor.hpp"
 #include "data.hpp"
 
 namespace pipy {
@@ -67,7 +67,7 @@ auto Decompress::clone() -> Filter* {
 void Decompress::reset() {
   Filter::reset();
   if (m_decompressor) {
-    m_decompressor->end();
+    m_decompressor->finalize();
     m_decompressor = nullptr;
   }
   m_is_started = false;
@@ -98,7 +98,7 @@ void Decompress::process(Event *evt) {
     if (auto data = evt->as<Data>()) {
       m_decompressor->input(*data);
     } else if (evt->is<StreamEnd>()) {
-      m_decompressor->end();
+      m_decompressor->finalize();
       m_decompressor = nullptr;
     }
   }
@@ -128,7 +128,7 @@ DecompressMessageBase::DecompressMessageBase(const DecompressMessageBase &r)
 void DecompressMessageBase::reset() {
   Filter::reset();
   if (m_decompressor) {
-    m_decompressor->end();
+    m_decompressor->finalize();
     m_decompressor = nullptr;
   }
   m_message_started = false;
@@ -140,7 +140,7 @@ void DecompressMessageBase::process(Event *evt) {
       if (m_decompressor) {
         if (!m_decompressor->input(*data)) {
           Filter::error("decompression error");
-          m_decompressor->end();
+          m_decompressor->finalize();
           m_decompressor = nullptr;
         }
       } else {
@@ -163,7 +163,7 @@ void DecompressMessageBase::process(Event *evt) {
 
   } else if (evt->is<MessageEnd>()) {
     if (m_decompressor) {
-      m_decompressor->end();
+      m_decompressor->finalize();
       m_decompressor = nullptr;
     }
     m_message_started = false;
