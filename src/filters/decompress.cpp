@@ -87,6 +87,8 @@ void Decompress::process(Event *evt) {
     auto str = algorithm.s();
     if (str == s_inflate) {
       m_decompressor = Decompressor::inflate(out);
+    } else if (str == s_gzip) {
+      m_decompressor = Decompressor::gzip(out);
     } else if (str == s_brotli) {
       m_decompressor = Decompressor::brotli(out);
     } else {
