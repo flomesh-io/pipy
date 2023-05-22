@@ -33,6 +33,7 @@ namespace pipy {
 thread_local static const pjs::ConstStr s_content_encoding("content-encoding");
 thread_local static const pjs::ConstStr s_gzip("gzip");
 thread_local static const pjs::ConstStr s_br("br");
+thread_local static const pjs::ConstStr s_deflate("deflate");
 thread_local static const pjs::ConstStr s_inflate("inflate");
 thread_local static const pjs::ConstStr s_brotli("brotli");
 
@@ -156,7 +157,8 @@ void DecompressHTTP::process(Event *evt) {
         if (headers->get(s_content_encoding, v) && v.is_string()) {
           auto str = v.s();
           auto out = [this](Data &data) { decompressor_output(data); };
-          if (str == s_gzip) m_decompressor = Decompressor::inflate(out);
+          if (str == s_gzip) m_decompressor = Decompressor::gzip(out);
+          if (str == s_deflate) m_decompressor = Decompressor::inflate(out);
           else if (str == s_br) m_decompressor = Decompressor::brotli(out);
           if (m_decompressor) head->headers->ht_delete(s_content_encoding);
         }

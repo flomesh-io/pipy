@@ -187,7 +187,7 @@ add_executable(pipy
   src/filters/bgp.cpp
   src/filters/branch.cpp
   src/filters/chain.cpp
-  src/filters/compress-message.cpp
+  src/filters/compress.cpp
   src/filters/connect.cpp
   src/filters/decompress.cpp
   src/filters/deframe.cpp

@@ -43,7 +43,7 @@ thread_local static Data::Producer s_dp_brotli("brotli");
 
 class Inflate : public pjs::Pooled<Inflate>, public Decompressor {
 public:
-  Inflate(const std::function<void(Data&)> &out)
+  Inflate(const std::function<void(Data&)> &out, bool gzip)
     : m_out(out)
   {
     m_zs.zalloc = Z_NULL;
@@ -51,7 +51,7 @@ public:
     m_zs.opaque = Z_NULL;
     m_zs.next_in = Z_NULL;
     m_zs.avail_in = 0;
-    inflateInit2(&m_zs, 16 + MAX_WBITS);
+    inflateInit2(&m_zs, gzip ? 16 + MAX_WBITS : MAX_WBITS);
   }
 
 private:
@@ -273,7 +273,11 @@ thread_local Data::Producer Deflate::s_dp("Compress (defalte)");
 //
 
 Decompressor* Decompressor::inflate(const std::function<void(Data&)> &out) {
-  return new Inflate(out);
+  return new Inflate(out, false);
+}
+
+Decompressor* Decompressor::gzip(const std::function<void(Data&)> &out) {
+  return new Inflate(out, true);
 }
 
 Decompressor* Decompressor::brotli(const std::function<void(Data&)> &out) {

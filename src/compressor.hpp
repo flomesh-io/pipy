@@ -23,8 +23,8 @@
  *  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef COMPRESS_HPP
-#define COMPRESS_HPP
+#ifndef COMPRESSOR_HPP
+#define COMPRESSOR_HPP
 
 #include <cstddef>
 #include <functional>
@@ -42,6 +42,7 @@ public:
   typedef std::function<void(Data&)> Output;
 
   static Decompressor* inflate(const Output &out);
+  static Decompressor* gzip(const Output &out);
   static Decompressor* brotli(const Output &out);
 
   virtual bool input(const Data &data) = 0;
@@ -71,4 +72,4 @@ protected:
 };
 } // namespace pipy
 
-#endif // COMPRESS_HPP
+#endif // COMPRESSOR_HPP

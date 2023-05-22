@@ -40,7 +40,7 @@
 #include "filters/branch.hpp"
 #include "filters/chain.hpp"
 #include "filters/connect.hpp"
-#include "filters/compress-message.hpp"
+#include "filters/compress.hpp"
 #include "filters/decompress.hpp"
 #include "filters/deframe.hpp"
 #include "filters/demux.hpp"
@@ -146,12 +146,8 @@ void FilterConfigurator::compress(const pjs::Value &algorithm) {
   append_filter(new Compress(algorithm));
 }
 
-void FilterConfigurator::compress_http(pjs::Object *options) {
-  append_filter(new CompressHTTP(options));
-}
-
-void FilterConfigurator::compress_message(pjs::Object *options) {
-  append_filter(new CompressMessage(options));
+void FilterConfigurator::compress_http(const pjs::Value &algorithm) {
+  append_filter(new CompressHTTP(algorithm));
 }
 
 void FilterConfigurator::connect(const pjs::Value &target, pjs::Object *options) {
@@ -1115,23 +1111,10 @@ template<> void ClassDef<FilterConfigurator>::init() {
   // FilterConfigurator.compressHTTP
   method("compressHTTP", [](Context &ctx, Object *thiz, Value &result) {
     auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
-    Object *options = nullptr;
-    if (!ctx.arguments(0, &options)) return;
+    Value algorithm;
+    if (!ctx.arguments(1, &algorithm)) return;
     try {
-      config->compress_http(options);
-      result.set(thiz);
-    } catch (std::runtime_error &err) {
-      ctx.error(err);
-    }
-  });
-
-  // FilterConfigurator.compressMessage
-  method("compressMessage", [](Context &ctx, Object *thiz, Value &result) {
-    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
-    Object *options = nullptr;
-    if (!ctx.arguments(0, &options)) return;
-    try {
-      config->compress_message(options);
+      config->compress_http(algorithm);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

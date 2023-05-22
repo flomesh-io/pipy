@@ -64,8 +64,7 @@ public:
   void chain(const std::list<JSModule*> modules);
   void chain_next();
   void compress(const pjs::Value &algorithm);
-  void compress_http(pjs::Object *options);
-  void compress_message(pjs::Object *options);
+  void compress_http(const pjs::Value &algorithm);
   void connect(const pjs::Value &target, pjs::Object *options);
   void connect_http_tunnel(pjs::Object *handshake);
   void connect_proxy_protocol(const pjs::Value &address);
