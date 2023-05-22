@@ -142,6 +142,10 @@ void FilterConfigurator::chain_next() {
   append_filter(new ChainNext());
 }
 
+void FilterConfigurator::compress(const pjs::Value &algorithm) {
+  append_filter(new Compress(algorithm));
+}
+
 void FilterConfigurator::compress_http(pjs::Object *options) {
   append_filter(new CompressHTTP(options));
 }
@@ -1099,6 +1103,19 @@ template<> void ClassDef<FilterConfigurator>::init() {
     }
   });
 
+  // FilterConfigurator.compress
+  method("compress", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
+    Value algorithm;
+    if (!ctx.arguments(1, &algorithm)) return;
+    try {
+      config->compress(algorithm);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
   // FilterConfigurator.compressHTTP
   method("compressHTTP", [](Context &ctx, Object *thiz, Value &result) {
     auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
@@ -1315,10 +1332,10 @@ template<> void ClassDef<FilterConfigurator>::init() {
   // FilterConfigurator.decompress
   method("decompress", [](Context &ctx, Object *thiz, Value &result) {
     auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
-    Function *enable = nullptr;
-    if (!ctx.arguments(0, &enable)) return;
+    Value algorithm;
+    if (!ctx.arguments(1, &algorithm)) return;
     try {
-      config->decompress(enable);
+      config->decompress(algorithm);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

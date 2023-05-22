@@ -35,6 +35,30 @@ class Compressor;
 class Data;
 
 //
+// Compress
+//
+
+class Compress : public Filter {
+public:
+  Compress(const pjs::Value &algorithm);
+
+private:
+  Compress(const Compress &r);
+  ~Compress();
+
+  virtual auto clone() -> Filter* override;
+  virtual void reset() override;
+  virtual void process(Event *evt) override;
+  virtual void dump(Dump &d) override;
+
+  pjs::Value m_algorithm;
+  Compressor* m_compressor = nullptr;
+  bool m_is_started = false;
+
+  void compressor_output(Data &data);
+};
+
+//
 // CompressMessageBase
 //
 

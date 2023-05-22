@@ -63,6 +63,7 @@ public:
   void branch_message(int count, pjs::Function **conds, const pjs::Value *layout);
   void chain(const std::list<JSModule*> modules);
   void chain_next();
+  void compress(const pjs::Value &algorithm);
   void compress_http(pjs::Object *options);
   void compress_message(pjs::Object *options);
   void connect(const pjs::Value &target, pjs::Object *options);

@@ -29,7 +29,92 @@
 
 namespace pipy {
 
+thread_local static const pjs::ConstStr s_headers("headers");
+thread_local static const pjs::ConstStr s_content_encoding("content-encoding");
+thread_local static const pjs::ConstStr s_gzip("gzip");
+thread_local static const pjs::ConstStr s_br("br");
+thread_local static const pjs::ConstStr s_inflate("inflate");
+thread_local static const pjs::ConstStr s_deflate("deflate");
+thread_local static const pjs::ConstStr s_brotli("brotli");
+
 thread_local static Data::Producer s_dp("compressMessage()");
+
+//
+// Compress
+//
+
+Compress::Compress(const pjs::Value &algorithm)
+  : m_algorithm(algorithm)
+{
+}
+
+Compress::Compress(const Compress &r)
+  : Filter(r)
+  , m_algorithm(r.m_algorithm)
+{
+}
+
+Compress::~Compress()
+{
+}
+
+void Compress::dump(Dump &d) {
+  Filter::dump(d);
+  d.name = "compress";
+}
+
+auto Compress::clone() -> Filter* {
+  return new Compress(*this);
+}
+
+void Compress::reset() {
+  Filter::reset();
+  if (m_compressor) {
+    m_compressor->finalize();
+    m_compressor = nullptr;
+  }
+  m_is_started = false;
+}
+
+void Compress::process(Event *evt) {
+  if (!m_is_started) {
+    m_is_started = true;
+    pjs::Value algorithm;
+    if (!Filter::eval(m_algorithm, algorithm)) return;
+    if (!algorithm.is_string()) {
+      Filter::error("algorithm is not or did not return a string");
+      return;
+    }
+    auto out = [this](Data &data) { compressor_output(data); };
+    auto str = algorithm.s();
+    if (str == s_deflate) {
+      m_compressor = Compressor::deflate(out);
+    } else if (str == s_gzip) {
+      m_compressor = Compressor::gzip(out);
+    } else {
+      Filter::error("unknown compression algorithm: %s", str->c_str());
+      return;
+    }
+  }
+
+  if (m_compressor) {
+    if (auto data = evt->as<Data>()) {
+      m_compressor->input(*data, false);
+    } else if (evt->is<StreamEnd>()) {
+      m_compressor->flush();
+      m_compressor->finalize();
+      m_compressor = nullptr;
+    }
+  }
+
+  if (evt->is<StreamEnd>()) {
+    Filter::output(evt);
+  }
+}
+
+void Compress::compressor_output(Data &data) {
+  Filter::output(Data::make(std::move(data)));
+}
 
 //
 // CompressMessageBase::Options

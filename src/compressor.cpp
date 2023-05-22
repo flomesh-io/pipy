@@ -238,11 +238,10 @@ private:
   virtual bool flush() override {
     Data output;
     Data::Builder db(output, &s_dp);
-    auto ret = deflate(nullptr, 0, true, db);
+    if (!deflate(nullptr, 0, true, db)) return false;
     db.flush();
     m_out(output);
-    delete this;
-    return ret;
+    return true;
   }
 
   virtual bool finalize() override {
