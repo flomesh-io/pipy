@@ -123,7 +123,7 @@ auto Connect::clone() -> Filter* {
 
 void Connect::reset() {
   Filter::reset();
-  ConnectReceiver::close();
+  EventSource::close();
   if (m_outbound) {
     m_outbound->close();
     m_outbound = nullptr;
@@ -193,10 +193,10 @@ void Connect::process(Event *evt) {
     Outbound *outbound = nullptr;
     switch (options.protocol) {
       case Outbound::Protocol::TCP:
-        outbound = OutboundTCP::make(ConnectReceiver::input(), options);
+        outbound = OutboundTCP::make(EventSource::reply(), options);
         break;
       case Outbound::Protocol::UDP:
-        outbound = OutboundUDP::make(ConnectReceiver::input(), options);
+        outbound = OutboundUDP::make(EventSource::reply(), options);
         break;
     }
 
@@ -225,13 +225,8 @@ void Connect::process(Event *evt) {
   }
 }
 
-//
-// ConnectReceiver
-//
-
-void ConnectReceiver::on_event(Event *evt) {
-  auto *conn = static_cast<Connect*>(this);
-  conn->output(evt);
+void Connect::on_reply(Event *evt) {
+  Filter::output(evt);
 }
 
 } // namespace pipy
