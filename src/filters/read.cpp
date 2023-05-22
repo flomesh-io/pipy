@@ -58,6 +58,7 @@ auto Read::clone() -> Filter* {
 
 void Read::reset() {
   Filter::reset();
+  EventSource::close();
   if (m_file) {
     m_file->close();
     m_file = nullptr;
@@ -77,12 +78,16 @@ void Read::process(Event *evt) {
       [this](FileStream *fs) {
         m_keep_alive.cancel();
         if (fs) {
-          fs->chain(Filter::output());
+          fs->chain(EventSource::reply());
         }
       }
     );
     keep_alive();
   }
+}
+
+void Read::on_reply(Event *evt) {
+  Filter::output(evt);
 }
 
 void Read::keep_alive() {

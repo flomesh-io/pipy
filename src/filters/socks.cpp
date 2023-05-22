@@ -282,6 +282,7 @@ auto Client::clone() -> Filter* {
 
 void Client::reset() {
   Filter::reset();
+  EventSource::close();
   Deframer::reset(STATE_INIT);
   Deframer::pass_all(false);
   m_buffer.clear();

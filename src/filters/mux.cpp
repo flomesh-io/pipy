@@ -505,6 +505,7 @@ void MuxSource::close_stream() {
 //
 
 void MuxQueue::reset() {
+  EventSource::close();
   while (auto r = m_receivers.head()) {
     m_receivers.remove(r);
     delete r;

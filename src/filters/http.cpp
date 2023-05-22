@@ -1774,6 +1774,7 @@ auto TunnelClient::clone() -> Filter* {
 
 void TunnelClient::reset() {
   Filter::reset();
+  EventSource::close();
   m_buffer.clear();
   m_pipeline = nullptr;
   m_request_head = nullptr;
