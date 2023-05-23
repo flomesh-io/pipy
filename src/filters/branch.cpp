@@ -32,19 +32,13 @@ namespace pipy {
 // BranchBase
 //
 
-BranchBase::BranchBase(int count, pjs::Function **conds, const pjs::Value *layout)
+BranchBase::BranchBase(int count, pjs::Function **conds, const pjs::Value *layouts)
   : m_conditions(std::make_shared<std::vector<Condition>>())
 {
   m_conditions->resize(count);
   for (int i = 0; i < count; i++) {
     m_conditions->at(i).func = conds[i];
-    if (layout[i].is_number()) {
-      add_sub_pipeline(layout[i].n());
-    } else if (layout[i].is_string()) {
-      add_sub_pipeline(layout[i].s());
-    } else {
-      add_sub_pipeline(pjs::Str::empty);
-    }
+    add_sub_pipeline(layouts[i]);
   }
 }
 

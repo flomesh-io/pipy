@@ -50,7 +50,6 @@ private:
 
   virtual auto clone() -> Filter* override;
   virtual void reset() override;
-  virtual void chain() override;
   virtual void process(Event *evt) override;
   virtual void on_reply(Event *evt) override;
   virtual void dump(Dump &d) override;
@@ -58,9 +57,12 @@ private:
   pjs::Ref<pjs::Function> m_name_f;
   pjs::Ref<Pipeline> m_pipeline;
   pjs::Ref<Swap> m_swap;
+  pjs::Ref<EventTarget::Input> m_swap_input;
   EventBuffer m_buffer;
-  bool m_started = false;
+  bool m_is_started = false;
+  bool m_is_outputting = false;
 
+  auto input() -> EventTarget::Input*;
   void flush(EventTarget::Input *input);
 };
 

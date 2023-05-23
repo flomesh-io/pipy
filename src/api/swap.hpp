@@ -36,19 +36,15 @@ namespace pipy {
 
 class Swap : public pjs::ObjectTemplate<Swap>, protected EventProxy {
 public:
-  auto input() -> EventTarget::Input* { return EventProxy::forward(); }
-  auto output() -> EventTarget::Input* { return EventProxy::output(); }
-  void input(Event *evt);
-  void output(Event *evt);
-  bool chain_input(EventTarget::Input *input);
-  bool chain_output(EventTarget::Input *input);
+  auto link(EventTarget::Input *output) -> EventTarget::Input*;
 
 private:
   Swap() {}
   ~Swap() {}
 
-  bool m_is_input_chained = false;
-  bool m_is_output_chained = false;
+  int m_party_count = 0;
+
+  virtual void on_input(Event *evt) override;
 
   friend class pjs::ObjectTemplate<Swap>;
 };

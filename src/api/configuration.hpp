@@ -58,9 +58,9 @@ public:
   void accept_proxy_protocol(pjs::Function *handler);
   void accept_socks(pjs::Function *on_connect);
   void accept_tls(pjs::Object *options);
-  void branch(int count, pjs::Function **conds, const pjs::Value *layout);
-  void branch_message_start(int count, pjs::Function **conds, const pjs::Value *layout);
-  void branch_message(int count, pjs::Function **conds, const pjs::Value *layout);
+  void branch(int count, pjs::Function **conds, const pjs::Value *layouts);
+  void branch_message_start(int count, pjs::Function **conds, const pjs::Value *layouts);
+  void branch_message(int count, pjs::Function **conds, const pjs::Value *layouts);
   void chain(const std::list<JSModule*> modules);
   void chain_next();
   void compress(const pjs::Value &algorithm);
@@ -120,7 +120,6 @@ public:
   void split(Data *separator);
   void split(pjs::Str *separator);
   void split(pjs::Function *callback);
-  void swap(pjs::Object *swap);
   void tee(const pjs::Value &filename, pjs::Object *options);
   void throttle_concurrency(pjs::Object *quota, pjs::Object *options);
   void throttle_data_rate(pjs::Object *quota, pjs::Object *options);

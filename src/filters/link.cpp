@@ -64,27 +64,21 @@ void Link::reset() {
   m_buffer.clear();
   m_pipeline = nullptr;
   m_swap = nullptr;
-  m_started = false;
-}
-
-void Link::chain() {
-  Filter::chain();
-  if (m_pipeline) {
-    m_pipeline->chain(Filter::output());
-  }
+  m_swap_input = nullptr;
+  m_is_started = false;
 }
 
 void Link::process(Event *evt) {
-  if (!m_started) {
+  if (!m_is_started) {
     if (m_name_f) {
       pjs::Value ret;
       if (!Filter::eval(m_name_f, ret)) return;
       if (ret.is_nullish()) return;
-      m_started = true;
 
       if (ret.is_string()) {
         if (auto layout = module()->get_pipeline(ret.s())) {
           m_pipeline = sub_pipeline(layout, false, EventSource::reply())->start();
+          m_is_started = true;
         } else {
           Filter::error("unknown pipeline layout name: %s", ret.s()->c_str());
           return;
@@ -92,11 +86,14 @@ void Link::process(Event *evt) {
 
       } else if (ret.is<Swap>()) {
         auto swap = ret.as<Swap>();
-        if (!swap->chain_input(EventSource::reply())) {
-          Filter::error("Swap's input end occupied");
+        auto input = swap->link(EventSource::reply());
+        if (!input) {
+          Filter::error("cannot link to a fully occupied Swap");
           return;
         }
         m_swap = swap;
+        m_swap_input = input;
+        m_is_started = true;
 
       } else {
         Filter::error("callback did not return a string");
@@ -105,26 +102,42 @@ void Link::process(Event *evt) {
 
     } else if (Filter::num_sub_pipelines() > 0) {
       m_pipeline = sub_pipeline(0, false, EventSource::reply())->start();
-      m_started = true;
+      m_is_started = true;
     }
   }
 
-  if (!m_started) {
+  if (!m_is_started) {
     m_buffer.push(evt);
 
-  } else if (auto *p = m_pipeline.get()) {
-    auto i = p->input();
-    flush(i);
-    i->input(evt);
-
-  } else if (auto *s = m_swap.get()) {
-    flush(s->output());
-    s->output(evt);
+  } else if (auto i = input()) {
+    if (m_is_outputting) {
+      m_buffer.push(evt);
+      Net::current().post(
+        [this]() {
+          if (auto i = input()) {
+            flush(i);
+          }
+        }
+      );
+    } else {
+      m_is_outputting = true;
+      flush(i);
+      i->input(evt);
+      m_is_outputting = false;
+    }
   }
 }
 
 void Link::on_reply(Event *evt) {
   Filter::output(evt);
+}
+
+auto Link::input() -> EventTarget::Input* {
+  if (auto *p = m_pipeline.get()) {
+    return p->input();
+  } else {
+    return m_swap_input.get();
+  }
 }
 
 void Link::flush(EventTarget::Input *input) {

@@ -41,7 +41,7 @@ namespace pipy {
 
 class BranchBase : public Filter {
 public:
-  BranchBase(int count, pjs::Function **conds, const pjs::Value *layout);
+  BranchBase(int count, pjs::Function **conds, const pjs::Value *layouts);
 
 protected:
   BranchBase(const BranchBase &r);

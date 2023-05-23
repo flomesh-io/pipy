@@ -91,6 +91,7 @@ public:
   void add_sub_pipeline(PipelineLayout *layout);
   void add_sub_pipeline(pjs::Str *name);
   void add_sub_pipeline(int index);
+  void add_sub_pipeline(const pjs::Value &name);
   auto num_sub_pipelines() const -> int { return m_subs->size(); }
 
   auto sub_pipeline(

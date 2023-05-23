@@ -55,7 +55,6 @@
 #include "filters/link.hpp"
 #include "filters/link-input.hpp"
 #include "filters/link-output.hpp"
-#include "filters/link-swap.hpp"
 #include "filters/mime.hpp"
 #include "filters/mqtt.hpp"
 #include "filters/mux.hpp"
@@ -123,16 +122,16 @@ void FilterConfigurator::accept_tls(pjs::Object *options) {
   require_sub_pipeline(append_filter(new tls::Server(options)));
 }
 
-void FilterConfigurator::branch(int count, pjs::Function **conds, const pjs::Value *layout) {
-  append_filter(new Branch(count, conds, layout));
+void FilterConfigurator::branch(int count, pjs::Function **conds, const pjs::Value *layouts) {
+  append_filter(new Branch(count, conds, layouts));
 }
 
-void FilterConfigurator::branch_message_start(int count, pjs::Function **conds, const pjs::Value *layout) {
-  append_filter(new BranchMessageStart(count, conds, layout));
+void FilterConfigurator::branch_message_start(int count, pjs::Function **conds, const pjs::Value *layouts) {
+  append_filter(new BranchMessageStart(count, conds, layouts));
 }
 
-void FilterConfigurator::branch_message(int count, pjs::Function **conds, const pjs::Value *layout) {
-  append_filter(new BranchMessage(count, conds, layout));
+void FilterConfigurator::branch_message(int count, pjs::Function **conds, const pjs::Value *layouts) {
+  append_filter(new BranchMessage(count, conds, layouts));
 }
 
 void FilterConfigurator::chain(const std::list<JSModule*> modules) {
@@ -385,10 +384,6 @@ void FilterConfigurator::split(pjs::Str *separator) {
 
 void FilterConfigurator::split(pjs::Function *callback) {
   append_filter(new Split(callback));
-}
-
-void FilterConfigurator::swap(pjs::Object *swap) {
-  append_filter(new LinkSwap(swap));
 }
 
 void FilterConfigurator::tee(const pjs::Value &filename, pjs::Object *options) {
@@ -2034,19 +2029,6 @@ template<> void ClassDef<FilterConfigurator>::init() {
       } else {
         ctx.error_argument_type(0, "a string, Data or function");
       }
-      result.set(thiz);
-    } catch (std::runtime_error &err) {
-      ctx.error(err);
-    }
-  });
-
-  // FilterConfigurator.swap
-  method("swap", [](Context &ctx, Object *thiz, Value &result) {
-    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
-    Object *swap;
-    if (!ctx.arguments(1, &swap)) return;
-    try {
-      config->swap(swap);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

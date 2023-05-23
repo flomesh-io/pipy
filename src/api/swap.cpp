@@ -27,34 +27,22 @@
 
 namespace pipy {
 
-void Swap::input(Event *evt) {
-  if (m_is_input_chained) {
-    EventProxy::forward(evt);
-  } else if (evt->is<StreamEnd>()) {
-    EventProxy::output(evt);
+auto Swap::link(EventTarget::Input *output) -> EventTarget::Input* {
+  switch (m_party_count) {
+    case 0:
+      m_party_count = 1;
+      EventProxy::chain(output);
+      return EventProxy::input();
+    case 1:
+      m_party_count = 2;
+      EventProxy::chain_forward(output);
+      return EventProxy::output();
+    default: return nullptr;
   }
 }
 
-void Swap::output(Event *evt) {
-  if (m_is_output_chained) {
-    EventProxy::output(evt);
-  } else if (evt->is<StreamEnd>()) {
-    EventProxy::forward(evt);
-  }
-}
-
-bool Swap::chain_input(EventTarget::Input *input) {
-  if (m_is_input_chained) return false;
-  chain_forward(input);
-  m_is_input_chained = true;
-  return true;
-}
-
-bool Swap::chain_output(EventTarget::Input *input) {
-  if (m_is_output_chained) return false;
-  chain(input);
-  m_is_output_chained = true;
-  return true;
+void Swap::on_input(Event *evt) {
+  EventProxy::forward(evt);
 }
 
 } // namespace pipy

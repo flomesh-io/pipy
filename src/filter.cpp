@@ -75,6 +75,16 @@ void Filter::add_sub_pipeline(int index) {
   m_subs->back().index = index;
 }
 
+void Filter::add_sub_pipeline(const pjs::Value &name) {
+  if (name.is_number()) {
+    add_sub_pipeline(name.n());
+  } else if (name.is_string()) {
+    add_sub_pipeline(name.s());
+  } else {
+    add_sub_pipeline(pjs::Str::empty);
+  }
+}
+
 void Filter::bind() {
   for (auto &sub : *m_subs) {
     if (!sub.layout) {
