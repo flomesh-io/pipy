@@ -105,6 +105,7 @@ public:
   void handle_tls_client_hello(pjs::Function *callback);
   void input(pjs::Function *callback);
   void link(pjs::Function *name = nullptr);
+  void loop();
   void mux(pjs::Function *session_selector, pjs::Object *options);
   void mux_http(pjs::Function *session_selector, pjs::Object *options);
   void output(pjs::Function *output_f);

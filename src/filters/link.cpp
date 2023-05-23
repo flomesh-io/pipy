@@ -27,6 +27,8 @@
 #include "module.hpp"
 #include "pipeline.hpp"
 #include "api/swap.hpp"
+#include "input.hpp"
+#include "net.hpp"
 
 namespace pipy {
 
@@ -114,6 +116,7 @@ void Link::process(Event *evt) {
       m_buffer.push(evt);
       Net::current().post(
         [this]() {
+          InputContext ic;
           if (auto i = input()) {
             flush(i);
           }
@@ -143,7 +146,7 @@ auto Link::input() -> EventTarget::Input* {
 void Link::flush(EventTarget::Input *input) {
   if (!m_buffer.empty()) {
     m_buffer.flush(
-      [=](Event *evt) {
+      [&](Event *evt) {
         input->input(evt);
       }
     );

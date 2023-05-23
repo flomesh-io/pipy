@@ -23,26 +23,24 @@
  *  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef LINK_HPP
-#define LINK_HPP
+#ifndef LOOP_HPP
+#define LOOP_HPP
 
 #include "filter.hpp"
 
 namespace pipy {
 
-class Swap;
-
 //
-// Link
+// Loop
 //
 
-class Link : public Filter, public EventSource {
+class Loop : public Filter, public EventSource {
 public:
-  Link(pjs::Function *name = nullptr);
+  Loop();
 
 private:
-  Link(const Link &r);
-  ~Link();
+  Loop(const Loop &r);
+  ~Loop();
 
   virtual auto clone() -> Filter* override;
   virtual void reset() override;
@@ -50,18 +48,11 @@ private:
   virtual void on_reply(Event *evt) override;
   virtual void dump(Dump &d) override;
 
-  pjs::Ref<pjs::Function> m_name_f;
   pjs::Ref<Pipeline> m_pipeline;
-  pjs::Ref<Swap> m_swap;
-  pjs::Ref<EventTarget::Input> m_swap_input;
   EventBuffer m_buffer;
-  bool m_is_started = false;
   bool m_is_outputting = false;
-
-  auto input() -> EventTarget::Input*;
-  void flush(EventTarget::Input *input);
 };
 
 } // namespace pipy
 
-#endif // LINK_HPP
+#endif // LOOP_HPP

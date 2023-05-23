@@ -55,6 +55,7 @@
 #include "filters/link.hpp"
 #include "filters/link-input.hpp"
 #include "filters/link-output.hpp"
+#include "filters/loop.hpp"
 #include "filters/mime.hpp"
 #include "filters/mqtt.hpp"
 #include "filters/mux.hpp"
@@ -316,6 +317,10 @@ void FilterConfigurator::link(pjs::Function *name) {
   } else {
     require_sub_pipeline(append_filter(new Link()));
   }
+}
+
+void FilterConfigurator::loop() {
+  require_sub_pipeline(append_filter(new Loop()));
 }
 
 void FilterConfigurator::mux(pjs::Function *session_selector, pjs::Object *options) {
@@ -877,7 +882,7 @@ template<> void ClassDef<FilterConfigurator>::init() {
       pjs::Function *layout_builder;
       if (ctx.try_arguments(1, &layout_name)) {
         thiz->as<FilterConfigurator>()->to(layout_name);
-      } else if (ctx.try_arguments(1, &layout_builder)) {
+      } else if (ctx.try_arguments(1, &layout_builder) && layout_builder) {
         thiz->as<FilterConfigurator>()->to(
           layout_builder->to_string(),
           [&](FilterConfigurator *fc) {
@@ -885,6 +890,9 @@ template<> void ClassDef<FilterConfigurator>::init() {
             (*layout_builder)(ctx, 1, &arg, ret);
           }
         );
+      } else {
+        ctx.error_argument_type(0, "a string or a function");
+        return;
       }
       result.set(thiz);
     } catch (std::runtime_error &err) {
@@ -1723,6 +1731,30 @@ template<> void ClassDef<FilterConfigurator>::init() {
       } else {
         ctx.error_argument_type(0, "a string or a function");
       }
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // FilterConfigurator.loop
+  method("loop", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
+    Function *layout_builder;
+    if (!ctx.arguments(1, &layout_builder)) return;
+    if (!layout_builder) {
+      ctx.error_argument_type(0, "a function");
+      return;
+    }
+    try {
+      config->loop();
+      config->to(
+        layout_builder->to_string(),
+        [&](FilterConfigurator *fc) {
+          pjs::Value arg(fc), ret;
+          (*layout_builder)(ctx, 1, &arg, ret);
+        }
+      );
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
