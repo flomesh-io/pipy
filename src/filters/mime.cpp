@@ -41,7 +41,6 @@ thread_local static pjs::ConstStr s_content_type("content-type");
 //
 
 MultipartDecoder::MultipartDecoder()
-  : m_prop_headers("headers")
 {
 }
 
@@ -70,16 +69,14 @@ void MultipartDecoder::reset() {
 }
 
 void MultipartDecoder::process(Event *evt) {
-  if (auto *start = evt->as<MessageStart>()) {
+  if (auto *ms = evt->as<MessageStart>()) {
     if (!m_current_multipart) {
-      if (auto *head = start->head()) {
+      pjs::Ref<http::MessageHead> head = pjs::coerce<http::MessageHead>(ms->head());
+      if (auto headers = head->headers.get()) {
         pjs::Value v;
-        m_prop_headers.get(head, v);
-        if (v.is_object()) {
-          v.o()->get(s_content_type, v);
-          if (v.is_string()) {
-            m_current_multipart = multipart_start(v.s()->str());
-          }
+        headers->get(s_content_type, v);
+        if (v.is_string()) {
+          m_current_multipart = multipart_start(v.s()->str());
         }
       }
     }
@@ -92,12 +89,13 @@ void MultipartDecoder::process(Event *evt) {
       Filter::output(evt);
     }
 
-  } else if (evt->is<MessageEnd>() || evt->is<StreamEnd>()) {
+  } else if (evt->is_end()) {
     if (m_current_multipart) {
       m_current_multipart->end();
       delete m_current_multipart;
       m_current_multipart = nullptr;
-    } else {
+    }
+    if (evt->is<StreamEnd>()) {
       Filter::output(evt);
     }
   }
@@ -220,7 +218,7 @@ void MultipartDecoder::Multipart::on_data(Data *data) {
                 for (auto &c : name) c = std::tolower(c);
                 pjs::Ref<pjs::Str> key(pjs::Str::make(name));
                 pjs::Ref<pjs::Str> val(pjs::Str::make(value));
-                if (!m_head) m_head = MessageHead::make();
+                if (!m_head) m_head = http::MessageHead::make();
                 auto headers = m_head->headers.get();
                 if (!headers) m_head->headers = (headers = pjs::Object::make());
                 pjs::Value existing;
@@ -259,49 +257,5 @@ void MultipartDecoder::Multipart::on_data(Data *data) {
   }
 }
 
-//
-// MultipartEncoder
-//
-
-MultipartEncoder::MultipartEncoder()
-  : m_prop_headers("headers")
-{
-}
-
-MultipartEncoder::MultipartEncoder(const MultipartEncoder &r)
-  : MultipartEncoder()
-{
-}
-
-MultipartEncoder::~MultipartEncoder()
-{
-}
-
-void MultipartEncoder::dump(Dump &d) {
-  Filter::dump(d);
-  d.name = "encodeMultipart";
-}
-
-auto MultipartEncoder::clone() -> Filter* {
-  return new MultipartEncoder(*this);
-}
-
-void MultipartEncoder::reset() {
-  Filter::reset();
-}
-
-void MultipartEncoder::process(Event *evt) {
-}
-
 } // namespace mime
 } // namespace pipy
-
-namespace pjs {
-
-using namespace pipy::mime;
-
-template<> void ClassDef<MessageHead>::init() {
-  field<pjs::Ref<pjs::Object>>("headers", [](MessageHead *obj) { return &obj->headers; });
-}
-
-} // namespace pjs

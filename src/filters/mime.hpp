@@ -28,18 +28,10 @@
 
 #include "filter.hpp"
 #include "kmp.hpp"
+#include "api/http.hpp"
 
 namespace pipy {
 namespace mime {
-
-//
-// MessageHead
-//
-
-class MessageHead : public pjs::ObjectTemplate<MessageHead> {
-public:
-  pjs::Ref<pjs::Object> headers;
-};
 
 //
 // MultipartDecoder
@@ -86,36 +78,14 @@ private:
     KMP::Split* m_split;
     State m_state = START;
     Data m_header;
-    pjs::Ref<MessageHead> m_head;
+    pjs::Ref<http::MessageHead> m_head;
 
     void on_data(Data *data);
   };
 
-  pjs::PropertyCache m_prop_headers;
   Multipart* m_current_multipart = nullptr;
 
   auto multipart_start(const std::string &content_type) -> Multipart*;
-};
-
-//
-// MultipartEncoder
-//
-
-class MultipartEncoder : public Filter {
-public:
-  MultipartEncoder();
-
-private:
-  MultipartEncoder(const MultipartEncoder &r);
-  ~MultipartEncoder();
-
-  virtual auto clone() -> Filter* override;
-  virtual void reset() override;
-  virtual void process(Event *evt) override;
-  virtual void dump(Dump &d) override;
-
-private:
-  pjs::PropertyCache m_prop_headers;
 };
 
 } // namespace mime
