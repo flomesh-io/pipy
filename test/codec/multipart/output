@@ -1,0 +1,14 @@
+HTTP/1.1 200 OK
+content-type: text/plain
+content-length: 34
+connection: keep-alive
+
+This is the body of the message.
+HTTP/1.1 200 OK
+content-type: application/octet-stream
+content-transfer-encoding: base64
+content-length: 136
+connection: keep-alive
+
+PGh0bWw+CiAgPGhlYWQ+CiAgPC9oZWFkPgogIDxib2R5PgogICAgPHA+VGhpcyBpcyB0aGUg
+Ym9keSBvZiB0aGUgbWVzc2FnZS48L3A+CiAgPC9ib2R5Pgo8L2h0bWw+Cg==
