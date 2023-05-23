@@ -55,6 +55,7 @@
 #include "filters/link.hpp"
 #include "filters/link-input.hpp"
 #include "filters/link-output.hpp"
+#include "filters/link-swap.hpp"
 #include "filters/mime.hpp"
 #include "filters/mqtt.hpp"
 #include "filters/mux.hpp"
@@ -384,6 +385,10 @@ void FilterConfigurator::split(pjs::Str *separator) {
 
 void FilterConfigurator::split(pjs::Function *callback) {
   append_filter(new Split(callback));
+}
+
+void FilterConfigurator::swap(pjs::Object *swap) {
+  append_filter(new LinkSwap(swap));
 }
 
 void FilterConfigurator::tee(const pjs::Value &filename, pjs::Object *options) {
@@ -2029,6 +2034,19 @@ template<> void ClassDef<FilterConfigurator>::init() {
       } else {
         ctx.error_argument_type(0, "a string, Data or function");
       }
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // FilterConfigurator.swap
+  method("swap", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
+    Object *swap;
+    if (!ctx.arguments(1, &swap)) return;
+    try {
+      config->swap(swap);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

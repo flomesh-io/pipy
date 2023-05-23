@@ -169,6 +169,7 @@ add_executable(pipy
   src/api/protobuf.cpp
   src/api/resp.cpp
   src/api/stats.cpp
+  src/api/swap.cpp
   src/api/thrift.cpp
   src/api/timeout.cpp
   src/api/url.cpp
@@ -205,6 +206,7 @@ add_executable(pipy
   src/filters/link.cpp
   src/filters/link-input.cpp
   src/filters/link-output.cpp
+  src/filters/link-swap.cpp
   src/filters/mime.cpp
   src/filters/mqtt.cpp
   src/filters/mux.cpp

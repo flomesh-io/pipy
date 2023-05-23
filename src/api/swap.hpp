@@ -23,47 +23,36 @@
  *  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef LINK_HPP
-#define LINK_HPP
+#ifndef API_SWAP_HPP
+#define API_SWAP_HPP
 
-#include "filter.hpp"
-
-#include <vector>
-#include <memory>
-#include <utility>
+#include "event.hpp"
 
 namespace pipy {
 
-class Swap;
-
 //
-// Link
+// Swap
 //
 
-class Link : public Filter, public EventSource {
+class Swap : public pjs::ObjectTemplate<Swap>, protected EventProxy {
 public:
-  Link(pjs::Function *name = nullptr);
+  auto input() -> EventTarget::Input* { return EventProxy::forward(); }
+  auto output() -> EventTarget::Input* { return EventProxy::output(); }
+  void input(Event *evt);
+  void output(Event *evt);
+  bool chain_input(EventTarget::Input *input);
+  bool chain_output(EventTarget::Input *input);
 
 private:
-  Link(const Link &r);
-  ~Link();
+  Swap() {}
+  ~Swap() {}
 
-  virtual auto clone() -> Filter* override;
-  virtual void reset() override;
-  virtual void chain() override;
-  virtual void process(Event *evt) override;
-  virtual void on_reply(Event *evt) override;
-  virtual void dump(Dump &d) override;
+  bool m_is_input_chained = false;
+  bool m_is_output_chained = false;
 
-  pjs::Ref<pjs::Function> m_name_f;
-  pjs::Ref<Pipeline> m_pipeline;
-  pjs::Ref<Swap> m_swap;
-  EventBuffer m_buffer;
-  bool m_started = false;
-
-  void flush(EventTarget::Input *input);
+  friend class pjs::ObjectTemplate<Swap>;
 };
 
 } // namespace pipy
 
-#endif // LINK_HPP
+#endif // API_SWAP_HPP

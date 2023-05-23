@@ -26,6 +26,7 @@
 #include "link.hpp"
 #include "module.hpp"
 #include "pipeline.hpp"
+#include "api/swap.hpp"
 
 namespace pipy {
 
@@ -59,8 +60,10 @@ auto Link::clone() -> Filter* {
 
 void Link::reset() {
   Filter::reset();
+  EventSource::close();
   m_buffer.clear();
   m_pipeline = nullptr;
+  m_swap = nullptr;
   m_started = false;
 }
 
@@ -79,20 +82,29 @@ void Link::process(Event *evt) {
       if (ret.is_nullish()) return;
       m_started = true;
 
-      if (!ret.is_string()) {
+      if (ret.is_string()) {
+        if (auto layout = module()->get_pipeline(ret.s())) {
+          m_pipeline = sub_pipeline(layout, false, EventSource::reply())->start();
+        } else {
+          Filter::error("unknown pipeline layout name: %s", ret.s()->c_str());
+          return;
+        }
+
+      } else if (ret.is<Swap>()) {
+        auto swap = ret.as<Swap>();
+        if (!swap->chain_input(EventSource::reply())) {
+          Filter::error("Swap's input end occupied");
+          return;
+        }
+        m_swap = swap;
+
+      } else {
         Filter::error("callback did not return a string");
         return;
       }
 
-      if (auto layout = module()->get_pipeline(ret.s())) {
-        m_pipeline = sub_pipeline(layout, false, Filter::output())->start();
-      } else {
-        Filter::error("unknown pipeline layout name: %s", ret.s()->c_str());
-        return;
-      }
-
     } else if (Filter::num_sub_pipelines() > 0) {
-      m_pipeline = sub_pipeline(0, false, Filter::output())->start();
+      m_pipeline = sub_pipeline(0, false, EventSource::reply())->start();
       m_started = true;
     }
   }
@@ -101,14 +113,27 @@ void Link::process(Event *evt) {
     m_buffer.push(evt);
 
   } else if (auto *p = m_pipeline.get()) {
-    if (!m_buffer.empty()) {
-      m_buffer.flush(
-        [=](Event *evt) {
-          p->input()->input(evt);
-        }
-      );
-    }
-    p->input()->input(evt);
+    auto i = p->input();
+    flush(i);
+    i->input(evt);
+
+  } else if (auto *s = m_swap.get()) {
+    flush(s->output());
+    s->output(evt);
+  }
+}
+
+void Link::on_reply(Event *evt) {
+  Filter::output(evt);
+}
+
+void Link::flush(EventTarget::Input *input) {
+  if (!m_buffer.empty()) {
+    m_buffer.flush(
+      [=](Event *evt) {
+        input->input(evt);
+      }
+    );
   }
 }
 

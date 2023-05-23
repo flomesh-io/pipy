@@ -23,47 +23,37 @@
  *  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef LINK_HPP
-#define LINK_HPP
+#ifndef LINK_SWAP_HPP
+#define LINK_SWAP_HPP
 
 #include "filter.hpp"
-
-#include <vector>
-#include <memory>
-#include <utility>
+#include "api/swap.hpp"
 
 namespace pipy {
 
-class Swap;
-
 //
-// Link
+// LinkSwap
 //
 
-class Link : public Filter, public EventSource {
+class LinkSwap : public Filter, public EventSource {
 public:
-  Link(pjs::Function *name = nullptr);
+  LinkSwap(pjs::Object *swap);
 
 private:
-  Link(const Link &r);
-  ~Link();
+  LinkSwap(const LinkSwap &r);
+  ~LinkSwap();
 
   virtual auto clone() -> Filter* override;
   virtual void reset() override;
-  virtual void chain() override;
   virtual void process(Event *evt) override;
   virtual void on_reply(Event *evt) override;
   virtual void dump(Dump &d) override;
 
-  pjs::Ref<pjs::Function> m_name_f;
-  pjs::Ref<Pipeline> m_pipeline;
   pjs::Ref<Swap> m_swap;
-  EventBuffer m_buffer;
-  bool m_started = false;
-
-  void flush(EventTarget::Input *input);
+  pjs::Ref<pjs::Function> m_swap_f;
+  bool m_is_linked = false;
 };
 
 } // namespace pipy
 
-#endif // LINK_HPP
+#endif // LINK_SWAP_HPP
