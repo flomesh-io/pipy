@@ -279,6 +279,7 @@ void NativeModule::schedule(double timeout, const std::function<void()> &fn) {
           callback(fn);
         });
       } else {
+        InputContext ic;
         callback(fn);
       }
     }
