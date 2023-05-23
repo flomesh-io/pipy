@@ -233,15 +233,6 @@ void SocketTCP::on_receive(const std::error_code &ec, std::size_t n) {
   if (ec != asio::error::operation_aborted && !m_closed) {
     if (n > 0) {
       m_buffer_receive.pop(m_buffer_receive.size() - n);
-      if (m_socket.is_open()) {
-        if (auto more = m_socket.available()) {
-          Data buf(more, &s_dp);
-          auto n = m_socket.read_some(DataChunks(buf.chunks()));
-          if (n < more) buf.pop(more - n);
-          m_buffer_receive.push(buf);
-        }
-      }
-
       auto size = m_buffer_receive.size();
       m_traffic_read += size;
 
