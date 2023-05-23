@@ -1458,7 +1458,11 @@ template<class T> bool Value::to(Ref<T> &v) const {
 }
 
 template<> inline bool Value::to(Ref<Str> &v) const {
-  (v = to_string())->release();
+  if (is_nullish()) {
+    v = nullptr;
+  } else {
+    (v = to_string())->release();
+  }
   return true;
 }
 
