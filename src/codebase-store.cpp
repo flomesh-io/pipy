@@ -165,7 +165,7 @@ CodebaseStore::CodebaseStore(Store *store)
 {
 #ifdef PIPY_USE_SAMPLES
   Data input(s_samples_tar_gz, sizeof(s_samples_tar_gz), &s_dp), output;
-  auto decompressor = Decompressor::inflate(
+  auto decompressor = Decompressor::gzip(
     [&](Data &data) {
       output.push(std::move(data));
     }
