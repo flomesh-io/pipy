@@ -71,7 +71,8 @@ private:
         auto &path = head->path->str();
         if (
           utils::starts_with(path, "/api/") ||
-          utils::starts_with(path, "/repo/")
+          utils::starts_with(path, "/repo/") ||
+          utils::starts_with(path, "/metrics")
         ) {
           m_pipeline = sub_pipeline(0, false, Filter::output());
         }
