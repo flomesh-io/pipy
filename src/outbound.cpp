@@ -198,7 +198,7 @@ void Outbound::init_metrics() {
 
 OutboundTCP::OutboundTCP(EventTarget::Input *output, const Outbound::Options &options)
   : pjs::ObjectTemplate<OutboundTCP, Outbound>(output, options)
-  , SocketTCP(false, options)
+  , SocketTCP(false, Outbound::m_options)
   , m_resolver(Net::context())
 {
 }
