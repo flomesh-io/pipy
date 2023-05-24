@@ -721,6 +721,9 @@ auto RoundRobinLoadBalancer::select(const pjs::Value &key, Cache *unhealthy) -> 
       t.healthy = true;
       t.usage = min;
       t.hits = t.weight * t.usage;
+      total_weight += t.weight;
+      total_hits += t.hits;
+      if (!p) p = &t;
     }
   }
 
