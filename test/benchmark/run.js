@@ -17,6 +17,7 @@ const currentDir = dirname(new URL(import.meta.url).pathname);
 const binDir = join(currentDir, '../../bin');
 const allTests = [];
 const testResults = {};
+const testResultVariances = {};
 
 fs.readdirSync(currentDir, { withFileTypes: true })
   .filter(ent => ent.isDirectory() && ent.name !== 'baseline' && ent.name !== 'stress')
@@ -36,7 +37,8 @@ async function summary() {
         sysinfo.push([ label, '' ]);
         collectSysinfo(v, depth + 1);
       } else {
-        sysinfo.push([ label, v.toString() ]);
+        const value = v.toString();
+        if (value && value.length < 50) sysinfo.push([ label, value ]);
       }
     }
   };
@@ -44,7 +46,7 @@ async function summary() {
   collectSysinfo({ OS: await si.osInfo() });
   collectSysinfo({ CPU: await si.cpu() });
 
-  const width = 20 + Math.max(
+  const width = 30 + Math.max(
     Math.max.apply(null, sysinfo.map(([k, v]) => k.length + v.length)),
     Math.max.apply(null, Object.keys(testResults).map(name => name.length)),
   );
@@ -72,7 +74,7 @@ async function summary() {
   Object.keys(testResults).sort().forEach(
     name => {
       const result = testResults[name]|0;
-      const count = (result).toString();
+      const count = (result).toString() + ' (±' + (Math.sqrt(testResultVariances[name])/result*100).toFixed(2) + '%)';
       const ratio = (result / maxResult * 100).toFixed(2);
       const columns = [
         name,
@@ -143,7 +145,7 @@ async function wait(time, msg) {
   }
 }
 
-async function measure(time) {
+async function measure(name, time) {
   const client = got.extend({
     prefixUrl: 'http://localhost:6060',
   });
@@ -153,6 +155,7 @@ async function measure(time) {
   );
 
   let lastCount = await getCount();
+  log(`Measure ${time} times...`);
   await sleep(1);
 
   const samples = [];
@@ -160,27 +163,29 @@ async function measure(time) {
     const count = await getCount();
     const delta = count - lastCount;
     samples.push(delta);
-    log(`Count = ${count}, RPS = ${delta}`);
+    log(`Count = ${count}, Increment = ${delta}`);
     lastCount = count;
     await sleep(1);
   }
 
-  const avg = samples.reduce((a, b) => a + b) / samples.length;
-  const min = Math.min.apply(null, samples);
   const max = Math.max.apply(null, samples);
+  const min = Math.min.apply(null, samples);
+  const average = samples.reduce((a, b) => a + b) / samples.length;
+  const variance = samples.map(v => (v - average) * (v - average)).reduce((a, b) => a + b) / samples.length;
 
-  log('Result: ',
-    'average =', chalk.green(avg),
-    'minimum =', chalk.green(min),
-    'maximum =', chalk.green(max),
+  log('Result' +
+    ': maximum =', chalk.green(max) +
+    ', minimum =', chalk.green(min) +
+    ', average =', chalk.green(average + ' (±' + (Math.sqrt(variance) / average * 100).toFixed(2) + '%)')
   );
 
-  return avg;
+  testResults[name] = average;
+  testResultVariances[name] = variance;
 }
 
 async function benchmark(name, port) {
   log('Benchmarking', chalk.magenta(name), '...');
-  await wait(3, 'Cooling down');
+  await wait(10, 'Cool down');
 
   let proc;
   try {
@@ -190,6 +195,7 @@ async function benchmark(name, port) {
       '--admin-port=6060',
       '--threads=2',
     ];
+
     const env = {
       URL: `http://localhost:${port}/`,
       METHOD: 'GET',
@@ -198,8 +204,8 @@ async function benchmark(name, port) {
     };
 
     proc = await startPipy(args, env);
-    await wait(3, 'Warming up');
-    testResults[name] = await measure(10);
+    await wait(3, 'Warm up');
+    await measure(name, 10);
 
     log('Benchmark', chalk.magenta(name), 'done');
 
