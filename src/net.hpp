@@ -125,6 +125,31 @@ struct SelfHandler {
   T* self;
 };
 
+//
+// SelfTask
+//
+
+template<typename T, typename S>
+class SelfTask : public pjs::Pooled<T>, public pjs::RefCount<T> {
+private:
+  S* m_self;
+
+public:
+  SelfTask(S *self) : m_self(self) {
+    pjs::RefCount<T>::retain();
+    Net::current().post(
+      [this]() {
+        if (m_self) {
+          static_cast<T*>(this)->execute(m_self);
+        }
+        pjs::RefCount<T>::release();
+      }
+    );
+  }
+
+  void cancel() { m_self = nullptr; }
+};
+
 } // namespace pipy
 
 namespace asio {

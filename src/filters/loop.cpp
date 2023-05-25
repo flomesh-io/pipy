@@ -26,7 +26,6 @@
 #include "loop.hpp"
 #include "pipeline.hpp"
 #include "input.hpp"
-#include "net.hpp"
 
 namespace pipy {
 
@@ -61,11 +60,16 @@ void Loop::reset() {
   EventSource::close();
   m_buffer.clear();
   m_pipeline = nullptr;
+  if (m_flush_task) {
+    m_flush_task->cancel();
+    m_flush_task = nullptr;
+  }
 }
 
 void Loop::process(Event *evt) {
   if (!m_pipeline) {
-    m_pipeline = Filter::sub_pipeline(0, false, EventSource::reply())->start();
+    m_pipeline = Filter::sub_pipeline(0, false, EventSource::reply());
+    m_pipeline->start();
   }
 
   m_is_outputting = true;
@@ -76,25 +80,27 @@ void Loop::process(Event *evt) {
 void Loop::on_reply(Event *evt) {
   if (m_is_outputting) {
     m_buffer.push(evt);
-    Net::current().post(
-      [this]() {
-        InputContext ic;
-        EventBuffer events(std::move(m_buffer));
-        auto *i = m_pipeline->input();
-        events.flush(
-          [&](Event *evt) {
-            Filter::output(evt);
-            i->input(evt);
-          }
-        );
-      }
-    );
+    if (!m_flush_task) {
+      m_flush_task = new FlushTask(this);
+    }
   } else {
     Filter::output(evt);
     m_is_outputting = true;
     m_pipeline->input()->input(evt);
     m_is_outputting = false;
   }
+}
+
+void Loop::flush() {
+  InputContext ic;
+  EventBuffer events(std::move(m_buffer));
+  auto *i = m_pipeline->input();
+  events.flush(
+    [&](Event *evt) {
+      Filter::output(evt);
+      i->input(evt);
+    }
+  );
 }
 
 } // namespace pipy

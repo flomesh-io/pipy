@@ -27,6 +27,7 @@
 #define LOOP_HPP
 
 #include "filter.hpp"
+#include "net.hpp"
 
 namespace pipy {
 
@@ -48,9 +49,17 @@ private:
   virtual void on_reply(Event *evt) override;
   virtual void dump(Dump &d) override;
 
+  struct FlushTask : public SelfTask<FlushTask, Loop> {
+    using SelfTask::SelfTask;
+    void execute(Loop *loop) { loop->flush(); }
+  };
+
   pjs::Ref<Pipeline> m_pipeline;
+  pjs::Ref<FlushTask> m_flush_task;
   EventBuffer m_buffer;
   bool m_is_outputting = false;
+
+  void flush();
 };
 
 } // namespace pipy
