@@ -55,8 +55,10 @@ WorkerThread::~WorkerThread() {
   }
 }
 
-bool WorkerThread::start() {
+bool WorkerThread::start(bool force) {
   std::unique_lock<std::mutex> lock(m_mutex);
+
+  m_force_start = force;
 
   m_thread = std::thread(
     [this]() {
@@ -358,7 +360,7 @@ void WorkerThread::main() {
   auto &entry = Codebase::current()->entry();
   auto worker = Worker::make(m_graph_enabled);
   auto mod = worker->load_js_module(entry);
-  bool started = (mod && worker->bind() && worker->start(false));
+  bool started = (mod && worker->bind() && worker->start(m_force_start));
 
   {
     std::lock_guard<std::mutex> lock(m_mutex);
@@ -422,12 +424,12 @@ auto WorkerManager::get() -> WorkerManager& {
   return s_worker_manager;
 }
 
-bool WorkerManager::start(int concurrency) {
+bool WorkerManager::start(int concurrency, bool force) {
   if (started()) return false;
 
   for (int i = 0; i < concurrency; i++) {
     auto wt = new WorkerThread(this, i, m_graph_enabled && (i == 0));
-    if (!wt->start()) {
+    if (!wt->start(force)) {
       delete wt;
       stop(true);
       return false;

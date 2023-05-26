@@ -544,7 +544,7 @@ int main(int argc, char *argv[]) {
               );
             }
 
-            if (!WorkerManager::get().start(opts.threads)) {
+            if (!WorkerManager::get().start(opts.threads, opts.force_start)) {
               fail();
               return;
             }

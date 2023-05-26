@@ -364,6 +364,7 @@ bool Worker::start(bool force) {
   for (const auto &i : m_listeners) {
     auto l = i.first;
     if (!l->is_open()) {
+      new_open.insert(l);
       l->set_options(i.second.options);
       if (!l->pipeline_layout(i.second.pipeline_layout)) {
         if (force) continue;
@@ -372,7 +373,6 @@ bool Worker::start(bool force) {
         }
         return false;
       }
-      new_open.insert(l);
     }
   }
 

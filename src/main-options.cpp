@@ -48,6 +48,7 @@ void MainOptions::show_help() {
   std::cout << "  --log-local-only                     Do not send out system log" << std::endl;
   std::cout << "  --verify                             Verify configuration only" << std::endl;
   std::cout << "  --no-graph                           Do not print pipeline graphs to the log" << std::endl;
+  std::cout << "  --force-start                        Force to start even at failure of port listening" << std::endl;
   std::cout << "  --instance-uuid=<uuid>               Specify a UUID for this worker process" << std::endl;
   std::cout << "  --instance-name=<name>               Specify a name for this worker process" << std::endl;
   std::cout << "  --reuse-port                         Enable kernel load balancing for all listening ports" << std::endl;
@@ -159,6 +160,8 @@ MainOptions::MainOptions(int argc, char *argv[]) {
         verify = true;
       } else if (k == "--no-graph") {
         no_graph = true;
+      } else if (k == "--force-start") {
+        force_start = true;
       } else if (k == "--instance-uuid") {
         instance_uuid = v;
       } else if (k == "--instance-name") {

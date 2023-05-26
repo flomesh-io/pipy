@@ -57,7 +57,7 @@ public:
   bool done() { return m_done; }
   auto active_pipeline_count() const -> size_t { return m_active_pipeline_count.load(std::memory_order_relaxed); }
 
-  bool start();
+  bool start(bool force);
   void status(Status &status, const std::function<void()> &cb);
   void status(const std::function<void(Status&)> &cb);
   void stats(stats::MetricData &metric_data, const std::function<void()> &cb);
@@ -86,6 +86,7 @@ private:
   std::mutex m_mutex;
   std::condition_variable m_cv;
   bool m_graph_enabled = false;
+  bool m_force_start = false;
   bool m_started = false;
   bool m_failed = false;
 
@@ -108,7 +109,7 @@ public:
   void enable_graph(bool b) { m_graph_enabled = b; }
   void on_done(const std::function<void()> &cb) { m_on_done = cb; }
   bool started() const { return !m_worker_threads.empty(); }
-  bool start(int concurrency = 1);
+  bool start(int concurrency = 1, bool force = false);
   void status(Status &status);
   void status(const std::function<void(Status&)> &cb);
   void stats(int i, stats::MetricData &stats);
