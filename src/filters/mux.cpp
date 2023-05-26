@@ -145,16 +145,7 @@ void MuxSession::open(MuxSource *source, Pipeline *pipeline) {
   pipeline->chain(EventSource::reply());
   m_pipeline = pipeline;
   mux_session_open(source);
-
-  auto si = StartInfo::make();
-  si->sessionCount = m_pool->m_sessions.size();
-  if (m_pool->m_weak_key) {
-    si->sessionKey.set(m_pool->m_weak_key->ptr());
-  } else {
-    si->sessionKey = m_pool->m_key;
-  }
-  pjs::Value arg(si);
-  pipeline->start(1, &arg);
+  pipeline->start();
 }
 
 void MuxSession::close() {
@@ -848,14 +839,3 @@ void Mux::Session::on_queue_end(StreamEnd *eos) {
 }
 
 } // namespace pipy
-
-namespace pjs {
-
-using namespace pipy;
-
-template<> void ClassDef<MuxSession::StartInfo>::init() {
-  field<Value>("sessionKey", [](MuxSession::StartInfo *obj) { return &obj->sessionKey; });
-  field<int>("sessionCount", [](MuxSession::StartInfo *obj) { return &obj->sessionCount; });
-}
-
-} // namespace pjs

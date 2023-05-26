@@ -67,15 +67,6 @@ public:
     Options(pjs::Object *options);
   };
 
-  //
-  // MuxSession::StartInfo
-  //
-
-  struct StartInfo : public pjs::ObjectTemplate<StartInfo> {
-    pjs::Value sessionKey;
-    int sessionCount = 0;
-  };
-
   virtual void mux_session_open(MuxSource *source) = 0;
   virtual auto mux_session_open_stream(MuxSource *source) -> EventFunction* = 0;
   virtual void mux_session_close_stream(EventFunction *stream) = 0;
