@@ -150,8 +150,6 @@ public:
 
   auto layout() const -> PipelineLayout* { return m_layout; }
   auto context() const -> Context* { return m_context; }
-  auto output() const -> Output* { return m_output; }
-  void output(Output *output) { m_output = output; }
   auto chain() const -> PipelineLayout::Chain* { return m_chain; }
   void chain(PipelineLayout::Chain *chain) { m_chain = chain; }
 
@@ -173,7 +171,6 @@ private:
   Pipeline* m_next_free = nullptr;
   List<Filter> m_filters;
   pjs::Ref<Context> m_context;
-  pjs::Ref<Output> m_output;
   pjs::Ref<PipelineLayout::Chain> m_chain;
 
   void shutdown();

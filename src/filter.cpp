@@ -160,20 +160,18 @@ void Filter::dump(Dump &d) {
 auto Filter::sub_pipeline(
   int i,
   bool clone_context,
-  Input *chain_to,
-  Output *output_to
+  Input *chain_to
 ) -> Pipeline* {
 
   auto layout = m_subs->at(i).layout.get();
   if (!layout) return nullptr;
-  return sub_pipeline(layout, clone_context, chain_to, output_to);
+  return sub_pipeline(layout, clone_context, chain_to);
 }
 
 auto Filter::sub_pipeline(
   PipelineLayout *layout,
   bool clone_context,
-  Input *chain_to,
-  Output *output_to
+  Input *chain_to
 ) -> Pipeline* {
 
   auto ctx = m_pipeline->m_context.get();
@@ -186,7 +184,6 @@ auto Filter::sub_pipeline(
   auto *p = Pipeline::make(layout, ctx);
   p->chain(pipeline()->chain());
   if (chain_to) p->chain(chain_to);
-  if (output_to) p->output(output_to); else p->output(pipeline()->output());
 
   return p;
 }

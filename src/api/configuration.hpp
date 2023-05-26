@@ -103,12 +103,10 @@ public:
   void handle_message(pjs::Function *callback, pjs::Object *options);
   void handle_start(pjs::Function *callback);
   void handle_tls_client_hello(pjs::Function *callback);
-  void input(pjs::Function *callback);
   void link(pjs::Function *name = nullptr);
   void loop();
   void mux(pjs::Function *session_selector, pjs::Object *options);
   void mux_http(pjs::Function *session_selector, pjs::Object *options);
-  void output(pjs::Function *output_f);
   void pack(int batch_size, pjs::Object *options);
   void print();
   void read(const pjs::Value &pathname);

@@ -53,8 +53,6 @@
 #include "filters/fork.hpp"
 #include "filters/http.hpp"
 #include "filters/link.hpp"
-#include "filters/link-input.hpp"
-#include "filters/link-output.hpp"
 #include "filters/loop.hpp"
 #include "filters/mime.hpp"
 #include "filters/mqtt.hpp"
@@ -307,10 +305,6 @@ void FilterConfigurator::handle_tls_client_hello(pjs::Function *callback) {
   append_filter(new tls::OnClientHello(callback));
 }
 
-void FilterConfigurator::input(pjs::Function *callback) {
-  require_sub_pipeline(append_filter(new LinkInput(callback)));
-}
-
 void FilterConfigurator::link(pjs::Function *name) {
   if (name) {
     append_filter(new Link(name));
@@ -337,10 +331,6 @@ void FilterConfigurator::mux_http(pjs::Function *session_selector, pjs::Object *
   } else {
     require_sub_pipeline(append_filter(new http::Mux(session_selector, options)));
   }
-}
-
-void FilterConfigurator::output(pjs::Function *output_f) {
-  append_filter(new LinkOutput(output_f));
 }
 
 void FilterConfigurator::pack(int batch_size, pjs::Object *options) {
@@ -1699,24 +1689,6 @@ template<> void ClassDef<FilterConfigurator>::init() {
     }
   });
 
-  // FilterConfigurator.input
-  method("input", [](Context &ctx, Object *thiz, Value &result) {
-    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
-    try {
-      pjs::Str *layout;
-      pjs::Function *callback = nullptr;
-      if (ctx.try_arguments(1, &layout, &callback)) {
-        config->input(callback);
-        config->to(layout);
-      } else if (ctx.arguments(0, &callback)) {
-        config->input(callback);
-      }
-      result.set(thiz);
-    } catch (std::runtime_error &err) {
-      ctx.error(err);
-    }
-  });
-
   // FilterConfigurator.link
   method("link", [](Context &ctx, Object *thiz, Value &result) {
     auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
@@ -1836,19 +1808,6 @@ template<> void ClassDef<FilterConfigurator>::init() {
       } else {
         ctx.error_argument_type(0, "a function");
       }
-      result.set(thiz);
-    } catch (std::runtime_error &err) {
-      ctx.error(err);
-    }
-  });
-
-  // FilterConfigurator.output
-  method("output", [](Context &ctx, Object *thiz, Value &result) {
-    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
-    pjs::Function *output_f = nullptr;
-    if (!ctx.arguments(0, &output_f)) return;
-    try {
-      config->output(output_f);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

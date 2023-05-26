@@ -204,8 +204,6 @@ add_executable(pipy
   src/filters/http.cpp
   src/filters/http2.cpp
   src/filters/link.cpp
-  src/filters/link-input.cpp
-  src/filters/link-output.cpp
   src/filters/loop.cpp
   src/filters/mime.cpp
   src/filters/mqtt.cpp
