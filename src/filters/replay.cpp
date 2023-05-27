@@ -69,10 +69,12 @@ auto Replay::clone() -> Filter* {
 
 void Replay::reset() {
   Filter::reset();
+  EventSource::close();
   m_buffer.clear();
   m_pipeline = nullptr;
   m_timer.cancel();
   m_replay_scheduled = false;
+  m_paused = false;
   m_shutdown = false;
 }
 
@@ -88,54 +90,65 @@ void Replay::shutdown() {
 
 void Replay::process(Event *evt) {
   if (!m_pipeline) {
-    m_pipeline = sub_pipeline(0, false, ReplayReceiver::input())->start();
+    m_pipeline = sub_pipeline(0, false, EventSource::reply())->start();
   }
   m_buffer.push(evt);
   Filter::output(evt, m_pipeline->input());
 }
 
+void Replay::on_reply(Event *evt) {
+  if (auto *end = evt->as<StreamEnd>()) {
+    if (!m_shutdown && end->error_code() == StreamEnd::Error::REPLAY) {
+      schedule_replay();
+      m_pipeline->chain(EventTarget::Input::dummy());
+      return;
+    }
+  }
+  if (!m_replay_scheduled) {
+    Filter::output(evt);
+  }
+}
+
+void Replay::on_tap_open() {
+  if (m_paused) {
+    m_paused = false;
+    if (m_replay_scheduled) {
+      m_replay_scheduled = false;
+      schedule_replay();
+    }
+  }
+}
+
+void Replay::on_tap_close() {
+  m_paused = true;
+}
+
 void Replay::schedule_replay() {
   if (!m_replay_scheduled) {
-    double delay = m_options.delay;
-    if (auto *f = m_options.delay_f.get()) {
-      pjs::Value ret;
-      if (!Filter::eval(f, ret)) return;
-      pipy::Options::get_seconds(ret, delay);
-    }
-    m_timer.schedule(delay, [this]() {
-      InputContext ic;
-      m_replay_scheduled = false;
-      replay();
-    });
     m_replay_scheduled = true;
+    if (!m_paused) {
+      double delay = m_options.delay;
+      if (auto *f = m_options.delay_f.get()) {
+        pjs::Value ret;
+        if (!Filter::eval(f, ret)) return;
+        pipy::Options::get_seconds(ret, delay);
+      }
+      m_timer.schedule(delay, [this]() {
+        InputContext ic(this);
+        m_replay_scheduled = false;
+        replay();
+      });
+    }
   }
 }
 
 void Replay::replay() {
-  m_pipeline = sub_pipeline(0, false, ReplayReceiver::input())->start();
+  m_pipeline = sub_pipeline(0, false, EventSource::input())->start();
   m_buffer.iterate(
     [this](Event *evt) {
       Filter::output(evt->clone(), m_pipeline->input());
     }
   );
-}
-
-//
-// ReplayReceiver
-//
-
-void ReplayReceiver::on_event(Event *evt) {
-  auto *filter = static_cast<Replay*>(this);
-  if (auto *end = evt->as<StreamEnd>()) {
-    if (!filter->m_shutdown && end->error_code() == StreamEnd::Error::REPLAY) {
-      filter->schedule_replay();
-      filter->m_pipeline->chain(EventTarget::Input::dummy());
-      return;
-    }
-  }
-  if (!filter->m_replay_scheduled) {
-    filter->Filter::output(evt);
-  }
 }
 
 } // namespace pipy

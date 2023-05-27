@@ -29,6 +29,27 @@
 namespace pipy {
 
 //
+// InputSource::Congestion
+//
+
+void InputSource::Congestion::begin() {
+  if (auto tap = InputContext::tap()) {
+    if (!tap->m_closed) {
+      tap->close();
+      m_closed_taps.push(new ClosedTap(tap));
+    }
+  }
+}
+
+void InputSource::Congestion::end() {
+  while (auto *ct = m_closed_taps.head()) {
+    m_closed_taps.remove(ct);
+    ct->tap->open();
+    delete ct;
+  }
+}
+
+//
 // FlushTarget
 //
 

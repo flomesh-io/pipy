@@ -50,6 +50,7 @@ class SocketTCP :
 
 public:
   struct Options {
+    size_t congestion_limit = 1024*1024;
     size_t buffer_limit = 0;
     double read_timeout = 0;
     double write_timeout = 0;
@@ -87,6 +88,7 @@ private:
   const Options& m_options;
   Data m_buffer_receive;
   Data m_buffer_send;
+  Congestion m_congestion;
   double m_tick_read;
   double m_tick_write;
   bool m_is_inbound;

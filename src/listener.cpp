@@ -65,6 +65,12 @@ Listener::Options::Options(pjs::Object *options) {
   Value(options, "idleTimeout")
     .get_seconds(idle_timeout)
     .check_nullable();
+  Value(options, "congestionLimit")
+    .get_binary_size(congestion_limit)
+    .check_nullable();
+  Value(options, "bufferLimit")
+    .get_binary_size(buffer_limit)
+    .check_nullable();
   Value(options, "keepAlive")
     .get(keep_alive)
     .check_nullable();

@@ -27,24 +27,17 @@
 #define REPLAY_HPP
 
 #include "filter.hpp"
+#include "input.hpp"
 #include "timer.hpp"
 #include "options.hpp"
 
 namespace pipy {
 
 //
-// ReplayReceiver
-//
-
-class ReplayReceiver : public EventTarget {
-  virtual void on_event(Event *evt) override;
-};
-
-//
 // Replay
 //
 
-class Replay : public Filter, public ReplayReceiver {
+class Replay : public Filter, public EventSource, public InputSource {
 public:
   struct Options : public pipy::Options {
     double delay = 0;
@@ -63,6 +56,9 @@ private:
   virtual void reset() override;
   virtual void shutdown() override;
   virtual void process(Event *evt) override;
+  virtual void on_reply(Event *evt) override;
+  virtual void on_tap_open() override;
+  virtual void on_tap_close() override;
   virtual void dump(Dump &d) override;
 
   Options m_options;
@@ -70,12 +66,11 @@ private:
   EventBuffer m_buffer;
   Timer m_timer;
   bool m_replay_scheduled = false;
+  bool m_paused = false;
   bool m_shutdown = false;
 
   void schedule_replay();
   void replay();
-
-  friend class ReplayReceiver;
 };
 
 } // namespace pipy

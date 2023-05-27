@@ -47,20 +47,22 @@ public:
   //
 
   class Tap :
-    public pjs::RefCount<Tap>,
-    public pjs::Pooled<Tap>
+    public pjs::Pooled<Tap>,
+    public pjs::RefCount<Tap>
   {
   public:
     void open() {
       if (m_source) {
         m_source->on_tap_open();
       }
+      m_closed = false;
     }
 
     void close() {
       if (m_source) {
         m_source->on_tap_close();
       }
+      m_closed = true;
     }
 
   private:
@@ -72,9 +74,30 @@ public:
     }
 
     InputSource* m_source;
+    bool m_closed = false;
 
     friend class InputSource;
     friend class InputContext;
+  };
+
+  //
+  // InputSource::Congestion
+  //
+
+  class Congestion {
+  private:
+    struct ClosedTap : public pjs::Pooled<ClosedTap>, public List<ClosedTap>::Item {
+      pjs::Ref<InputSource::Tap> tap;
+      ClosedTap(InputSource::Tap *t) : tap(t) {}
+    };
+
+    List<ClosedTap> m_closed_taps;
+
+  public:
+    ~Congestion() { end(); }
+
+    void begin();
+    void end();
   };
 
 protected:

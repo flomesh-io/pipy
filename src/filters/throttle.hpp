@@ -87,7 +87,7 @@ protected:
   pjs::Ref<algo::Quota> m_quota;
   pjs::Ref<pjs::Function> m_quota_f;
   List<EventConsumer> m_consumers;
-  pjs::Ref<InputSource::Tap> m_closed_tap;
+  InputSource::Congestion m_congestion;
   bool m_paused = false;
 
   void pause();

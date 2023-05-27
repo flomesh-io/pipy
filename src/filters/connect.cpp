@@ -56,6 +56,9 @@ Connect::Options::Options(pjs::Object *options) {
   Value(options, "onState")
     .get(on_state_f)
     .check_nullable();
+  Value(options, "congestionLimit")
+    .get_binary_size(congestion_limit)
+    .check_nullable();
   Value(options, "bufferLimit")
     .get_binary_size(buffer_limit)
     .check_nullable();

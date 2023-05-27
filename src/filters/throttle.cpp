@@ -108,25 +108,15 @@ void ThrottleBase::process(Event *evt) {
 }
 
 void ThrottleBase::pause() {
-  if (!m_paused) {
-    if (m_options.block_input) {
-      if (auto tap = InputContext::tap()) {
-        tap->close();
-        m_closed_tap = tap;
-      }
-    }
-    m_paused = true;
+  if (m_options.block_input) {
+    m_congestion.begin();
   }
+  m_paused = true;
 }
 
 void ThrottleBase::resume() {
-  if (m_paused) {
-    if (auto tap = m_closed_tap.get()) {
-      tap->open();
-      m_closed_tap = nullptr;
-    }
-    m_paused = false;
-  }
+  m_congestion.end();
+  m_paused = false;
 }
 
 void ThrottleBase::enqueue(Event *evt) {

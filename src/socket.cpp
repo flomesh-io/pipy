@@ -66,9 +66,10 @@ void SocketTCP::output(Event *evt) {
   if (!m_sending_end) {
     if (auto data = evt->as<Data>()) {
       if (data->size() > 0) {
+        auto size = m_buffer_send.size();
         auto limit = m_options.buffer_limit;
-        if (limit > 0 && m_buffer_send.size() >= limit) {
-          auto excess = m_buffer_send.size() + data->size() - limit;
+        if (limit > 0 && size >= limit) {
+          auto excess = size + data->size() - limit;
           char msg[200];
           std::snprintf(msg, sizeof(msg), "buffer overflow by %d bytes over the limit of %d", (int)excess, (int)limit);
           Log::error(msg);
@@ -76,6 +77,10 @@ void SocketTCP::output(Event *evt) {
           close(false);
         } else {
           m_buffer_send.push(*data);
+          auto limit = m_options.congestion_limit;
+          if (limit > 0 && m_buffer_send.size() >= limit) {
+            m_congestion.begin();
+          }
           if (m_started) {
             FlushTarget::need_flush();
           }
@@ -276,6 +281,11 @@ void SocketTCP::on_send(const std::error_code &ec, std::size_t n) {
   if (ec != asio::error::operation_aborted && !m_closed) {
     m_buffer_send.shift(n);
     m_traffic_write += n;
+
+    auto limit = m_options.congestion_limit;
+    if (limit > 0 && m_buffer_send.size() < limit) {
+      m_congestion.end();
+    }
 
     if (ec) {
       log_warn("error writing to peer", ec);
