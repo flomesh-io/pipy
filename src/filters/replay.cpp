@@ -81,7 +81,6 @@ void Replay::shutdown() {
   if (m_replay_scheduled) {
     m_timer.cancel();
     m_replay_scheduled = false;
-    Filter::output(StreamEnd::make());
   } else {
     m_shutdown = true;
   }
