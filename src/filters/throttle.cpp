@@ -221,7 +221,9 @@ auto ThrottleConcurrency::clone() -> Filter* {
 
 void ThrottleConcurrency::reset() {
   if (m_active) {
-    if (m_quota) m_quota->produce(1);
+    if (auto q = m_quota.get()) {
+      q->produce_async(1);
+    }
     m_active = false;
   }
   ThrottleBase::reset();
@@ -229,7 +231,7 @@ void ThrottleConcurrency::reset() {
 
 auto ThrottleConcurrency::consume(Event *evt, algo::Quota *quota) -> Event* {
   if (m_active) {
-    output(evt);
+    Filter::output(evt);
     return nullptr;
   }
 
@@ -239,7 +241,7 @@ auto ThrottleConcurrency::consume(Event *evt, algo::Quota *quota) -> Event* {
 
   m_active = true;
 
-  output(evt);
+  Filter::output(evt);
   return nullptr;
 }
 

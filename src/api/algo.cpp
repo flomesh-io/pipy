@@ -262,6 +262,17 @@ void Quota::produce(double value) {
   release();
 }
 
+void Quota::produce_async(double value) {
+  retain();
+  Net::current().post(
+    [=]() {
+      InputContext ic;
+      produce(value);
+      release();
+    }
+  );
+}
+
 auto Quota::consume(double value) -> double {
   if (value <= 0) return 0;
   if (value > m_current_value) value = m_current_value;

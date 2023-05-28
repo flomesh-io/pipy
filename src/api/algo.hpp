@@ -125,6 +125,7 @@ public:
   auto initial() const -> double { return m_initial_value; }
   auto current() const -> double { return m_current_value; }
   void produce(double value);
+  void produce_async(double value);
   auto consume(double value) -> double;
   void enqueue(Consumer *consumer);
   void dequeue(Consumer *consumer);
