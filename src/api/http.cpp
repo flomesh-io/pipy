@@ -24,11 +24,13 @@
  */
 
 #include "http.hpp"
+#include "filters/connect.hpp"
+#include "filters/http.hpp"
+#include "filters/tls.hpp"
 #include "codebase.hpp"
-#include "context.hpp"
 #include "tar.hpp"
-#include "utils.hpp"
 #include "compressor.hpp"
+#include "utils.hpp"
 
 namespace pipy {
 namespace http {
@@ -45,6 +47,8 @@ thread_local static const pjs::ConstStr s_close("close");
 thread_local static const pjs::ConstStr s_http_1_0("HTTP/1.0");
 thread_local static const pjs::ConstStr s_websocket("websocket");
 thread_local static const pjs::ConstStr s_h2c("h2c");
+thread_local static const pjs::ConstStr s_host("host");
+thread_local static const pjs::ConstStr s_Host("Host");
 thread_local static const pjs::ConstStr s_bad_gateway("Bad Gateway");
 thread_local static const pjs::ConstStr s_cannot_resolve("Cannot Resolve");
 thread_local static const pjs::ConstStr s_connection_refused("Connection Refused");
@@ -128,6 +132,114 @@ auto ResponseHead::error_to_status(StreamEnd::Error err, int &status) -> pjs::St
   default:
     status = 502;
     return s_bad_gateway;
+  }
+}
+
+//
+// Agent
+//
+
+thread_local Data::Producer Agent::s_dp("http.Agent");
+
+Agent::Agent(pjs::Str *host, pjs::Object *options)
+  : m_module(new Module)
+  , m_host(host)
+{
+  pjs::Ref<pjs::Object> tls;
+  pipy::Options::Value(options, "tls").get(tls).check_nullable();
+
+  std::string target, addr;
+  uint16_t ip[8];
+  int port;
+
+  if (utils::get_ip_v6(host->str(), ip)) {
+    target = std::string("[") + host->str() + (tls ? "]:443" : "]:80");
+  } else if (utils::get_host_port(host->str(), addr, port)) {
+    target = host->str();
+  } else {
+    target = host->str() + (tls ? ":443" : ":80");
+  }
+
+  auto pl_connect = PipelineLayout::make(m_module);
+  pl_connect->append(new Connect(target, options));
+
+  if (tls) {
+    auto pl_tls = PipelineLayout::make(m_module);
+    pl_tls->append(new tls::Client(tls.get()))->add_sub_pipeline(pl_connect);
+    pl_connect = pl_tls;
+  }
+
+  m_pipeline_layout = PipelineLayout::make(m_module);
+  m_pipeline_layout->append(new http::Mux(nullptr, options))->add_sub_pipeline(pl_connect);
+}
+
+auto Agent::request(Message *req) -> pjs::Promise* {
+  pjs::Ref<RequestHead> head(pjs::coerce<RequestHead>(req->head()));
+  return request(head->method, head->path, head->headers, req->body());
+}
+
+auto Agent::request(pjs::Str *method, pjs::Str *path, pjs::Object *headers, Data *body) -> pjs::Promise* {
+  if (!headers || (!headers->ht_has(s_host) && headers->ht_has(s_Host))) {
+    if (headers) {
+      auto *new_headers = pjs::Object::make();
+      pjs::Object::assign(new_headers, headers);
+      headers = new_headers;
+    } else {
+      headers = pjs::Object::make();
+    }
+    headers->set(s_host, m_host.get());
+  }
+
+  auto head = RequestHead::make();
+  head->method = method;
+  head->path = path;
+  head->headers = headers;
+
+  auto r = new Request(this);
+  return r->start(head, body);
+}
+
+auto Agent::request(pjs::Str *method, pjs::Str *path, pjs::Object *headers, pjs::Str *body) -> pjs::Promise* {
+  return request(method, path, headers, Data::make(body->str(), &s_dp));
+}
+
+//
+// Agent::Request
+//
+
+auto Agent::Request::start(RequestHead *head, Data *body) -> pjs::Promise* {
+  auto pl = m_agent->m_pipeline_layout.get();
+  auto p = Pipeline::make(pl, pl->new_context());
+  p->chain(EventSource::reply());
+  m_pipeline = p;
+
+  auto promise = pjs::Promise::make();
+  m_handler = pjs::Promise::Handler::make(promise);
+
+  if (InputContext::origin()) {
+    send(head, body);
+  } else {
+    InputContext ic;
+    send(head, body);
+  }
+
+  return promise;
+}
+
+void Agent::Request::send(RequestHead *head, Data *body) {
+  Pipeline::auto_release(m_pipeline);
+  auto i = m_pipeline->input();
+  i->input(MessageStart::make(head));
+  if (body) i->input(body);
+  i->input(MessageEnd::make());
+}
+
+void Agent::Request::on_reply(Event *evt) {
+  Pipeline::auto_release(m_pipeline);
+  if (auto msg = m_message_reader.read(evt)) {
+    m_handler->resolve(msg);
+    EventSource::close();
+    delete this;
   }
 }
 
@@ -363,6 +475,45 @@ template<> void ClassDef<ResponseHead>::init() {
   field<pjs::Ref<pjs::Str>>("statusText", [](ResponseHead *obj) { return &obj->statusText; });
 }
 
+template<> void ClassDef<Agent>::init() {
+  ctor([](Context &ctx) -> Object* {
+    pjs::Str *target;
+    pjs::Object *options = nullptr;
+    if (!ctx.arguments(1, &target, &options)) return nullptr;
+    try {
+      return Agent::make(target, options);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+      return nullptr;
+    }
+  });
+
+  method("request", [](Context &ctx, Object *obj, Value &ret) {
+    Message *req;
+    Str *method, *path, *body_str;
+    Object *headers = nullptr;
+    pipy::Data *body;
+    if (ctx.try_arguments(1, &req) && req) {
+      ret.set(static_cast<Agent*>(obj)->request(req));
+    } else if (ctx.arguments(2, &method, &path, &headers)) {
+      if (ctx.is_undefined(3)) {
+        ret.set(static_cast<Agent*>(obj)->request(method, path, headers));
+      } else if (ctx.get(3, body_str)) {
+        ret.set(static_cast<Agent*>(obj)->request(method, path, headers, body_str));
+      } else if (ctx.get(3, body)) {
+        ret.set(static_cast<Agent*>(obj)->request(method, path, headers, body));
+      } else {
+        ctx.error_argument_type(3, "a string or a Data object");
+      }
+    }
+  });
+}
+
+template<> void ClassDef<Constructor<Agent>>::init() {
+  super<Function>();
+  ctor();
+}
+
 template<> void ClassDef<File>::init() {
   ctor([](Context &ctx) -> Object* {
     std::string path;
@@ -395,6 +546,7 @@ template<> void ClassDef<Constructor<File>>::init() {
 
 template<> void ClassDef<Http>::init() {
   ctor();
+  variable("Agent", class_of<Constructor<Agent>>());
   variable("File", class_of<Constructor<File>>());
 }
 

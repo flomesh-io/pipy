@@ -27,6 +27,8 @@
 #define API_HTTP_HPP
 
 #include "pjs/pjs.hpp"
+#include "pipeline.hpp"
+#include "module.hpp"
 #include "message.hpp"
 
 #include <string>
@@ -76,6 +78,61 @@ public:
   bool is_tunnel(TunnelType requested);
 
   static auto error_to_status(StreamEnd::Error err, int &status) -> pjs::Str*;
+};
+
+//
+// Agent
+//
+
+class Agent : public pjs::ObjectTemplate<Agent> {
+public:
+  auto request(Message *req) -> pjs::Promise*;
+  auto request(pjs::Str *method, pjs::Str *path, pjs::Object *headers = nullptr, Data *body = nullptr) -> pjs::Promise*;
+  auto request(pjs::Str *method, pjs::Str *path, pjs::Object *headers, pjs::Str *body) -> pjs::Promise*;
+
+private:
+  Agent(pjs::Str *host, pjs::Object *options = nullptr);
+
+  //
+  // Agent::Module
+  //
+
+  class Module : public ModuleBase {
+  public:
+    Module() : ModuleBase("HTTP Agent") {}
+    virtual auto new_context(pipy::Context *base) -> pipy::Context* override {
+      return Context::make();
+    }
+  };
+
+  //
+  // Agent::Request
+  //
+
+  class Request : public pjs::Pooled<Request>, public EventSource {
+  public:
+    Request(Agent *agent) : m_agent(agent) {}
+
+    auto start(RequestHead *head, Data *body) -> pjs::Promise*;
+
+  private:
+    void send(RequestHead *head, Data *body);
+
+    pjs::Ref<Agent> m_agent;
+    pjs::Ref<Pipeline> m_pipeline;
+    pjs::Ref<pjs::Promise::Handler> m_handler;
+    MessageReader m_message_reader;
+
+    virtual void on_reply(Event *evt) override;
+  };
+
+  pjs::Ref<Module> m_module;
+  pjs::Ref<PipelineLayout> m_pipeline_layout;
+  pjs::Ref<pjs::Str> m_host;
+
+  thread_local static Data::Producer s_dp;
+
+  friend class pjs::ObjectTemplate<Agent>;
 };
 
 //
