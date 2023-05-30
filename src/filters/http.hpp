@@ -448,20 +448,6 @@ public:
   Server(pjs::Object *handler, const Options &options);
   Server(const std::function<Message*(Server*, Message*)> &handler, const Options &options);
 
-private:
-  Server(const Server &r);
-  ~Server();
-
-  virtual auto clone() -> Filter* override;
-  virtual void dump(Dump &d) override;
-
-  virtual auto on_demux_open_stream() -> EventFunction* override;
-  virtual void on_demux_close_stream(EventFunction *stream) override;
-  virtual void on_demux_queue_dedicate(EventFunction *stream) override;
-
-  pjs::Ref<pjs::Object> m_handler_obj;
-  std::function<Message*(Server*, Message*)> m_handler_func;
-
   //
   // Server::Handler
   //
@@ -485,6 +471,20 @@ private:
 
     friend class pjs::ObjectTemplate<Handler, pjs::Promise::Callback>;
   };
+
+private:
+  Server(const Server &r);
+  ~Server();
+
+  virtual auto clone() -> Filter* override;
+  virtual void dump(Dump &d) override;
+
+  virtual auto on_demux_open_stream() -> EventFunction* override;
+  virtual void on_demux_close_stream(EventFunction *stream) override;
+  virtual void on_demux_queue_dedicate(EventFunction *stream) override;
+
+  pjs::Ref<pjs::Object> m_handler_obj;
+  std::function<Message*(Server*, Message*)> m_handler_func;
 };
 
 //
