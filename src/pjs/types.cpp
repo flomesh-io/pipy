@@ -1526,7 +1526,7 @@ auto String::indexOf(Str *search, int position) -> int {
 
 auto String::lastIndexOf(Str *search, int position) -> int {
   if (!search->size()) return std::max(0, std::min(m_s->length(), position));
-  if (position >= m_s->length()) return -1;
+  if (position >= m_s->length()) position = m_s->length() - 1;
   if (position < 0) position = 0;
   auto p = m_s->str().rfind(search->str(), m_s->chr_to_pos(position));
   if (p == std::string::npos) return -1;
