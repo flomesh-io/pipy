@@ -467,7 +467,7 @@ private:
   //
 
   class Handler :
-    public pjs::Pooled<Handler>,
+    public pjs::ObjectTemplate<Handler, pjs::Promise::Callback>,
     public EventFunction
   {
   public:
@@ -480,6 +480,10 @@ private:
     pjs::Ref<Pipeline> m_tunnel;
 
     virtual void on_event(Event *evt) override;
+    virtual void on_resolved(const pjs::Value &value) override;
+    virtual void on_rejected(const pjs::Value &error) override;
+
+    friend class pjs::ObjectTemplate<Handler, pjs::Promise::Callback>;
   };
 };
 

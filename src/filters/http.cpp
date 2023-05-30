@@ -1617,11 +1617,13 @@ auto Server::clone() -> Filter* {
 }
 
 auto Server::on_demux_open_stream() -> EventFunction* {
-  return new Handler(this);
+  auto handler = Handler::make(this);
+  handler->retain();
+  return handler;
 }
 
 void Server::on_demux_close_stream(EventFunction *stream) {
-  delete static_cast<Handler*>(stream);
+  static_cast<Handler*>(stream)->release();
 }
 
 void Server::on_demux_queue_dedicate(EventFunction *stream) {
@@ -1658,6 +1660,14 @@ void Server::Handler::on_event(Event *evt) {
           if (auto obj = ret.o()) {
             if (obj->is_instance_of<Message>()) {
               res = obj->as<Message>();
+            } else if (obj->is<pjs::Promise>()) {
+              obj->as<pjs::Promise>()->then(
+                m_server->context(),
+                pjs::Promise::Callback::resolved(),
+                pjs::Promise::Callback::rejected()
+              );
+              req->release();
+              return;
             }
           }
         }
@@ -1672,6 +1682,18 @@ void Server::Handler::on_event(Event *evt) {
       m_server->Filter::error("handler is not or did not return a Message");
     }
   }
+}
+
+void Server::Handler::on_resolved(const pjs::Value &value) {
+  if (value.is<Message>()) {
+    value.as<Message>()->write(EventFunction::output());
+  } else {
+    m_server->Filter::error("Promise did not resolve to a Message");
+  }
+}
+
+void Server::Handler::on_rejected(const pjs::Value &error) {
+  m_server->Filter::error(StreamEnd::make(error));
 }
 
 //
@@ -1857,6 +1879,10 @@ template<> void ClassDef<Mux::Session::VersionSelector>::init() {
     Value version; ctx.get(0, version);
     obj->as<Mux::Session::VersionSelector>()->select(version);
   });
+}
+
+template<> void ClassDef<Server::Handler>::init() {
+  super<Promise::Callback>();
 }
 
 } // namespace pjs
