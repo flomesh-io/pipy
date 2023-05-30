@@ -37,11 +37,9 @@ std::atomic<uint64_t> Context::s_context_id(0);
 
 Context::Context(Context *base, Worker *worker, pjs::Object *global, ContextData *data)
   : pjs::ContextTemplate<Context>(global, data ? data->elements() : nullptr)
-  , m_group(base ? base->group() : new ContextGroup())
   , m_worker(worker)
   , m_data(data)
 {
-  m_group->add(this);
   if (data) {
     for (size_t i = 0, n = data->size(); i < n; i++) {
       if (auto l = data->at(i)) {
@@ -60,7 +58,6 @@ Context::Context(Context *base, Worker *worker, pjs::Object *global, ContextData
 }
 
 Context::~Context() {
-  m_group->remove(this);
   if (m_data) m_data->free();
   Log::debug(Log::ALLOC, "[context  %p] -- id = %llu", this, m_id);
 }

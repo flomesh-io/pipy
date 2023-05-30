@@ -27,7 +27,6 @@
 #define WAIT_HPP
 
 #include "filter.hpp"
-#include "context.hpp"
 #include "timer.hpp"
 #include "options.hpp"
 
@@ -39,7 +38,7 @@ namespace pipy {
 // Wait
 //
 
-class Wait : public Filter, public ContextGroup::Waiter {
+class Wait : public Filter {
 public:
   struct Options : public pipy::Options {
     double timeout = 0;
@@ -72,7 +71,6 @@ private:
   virtual void reset() override;
   virtual void process(Event *evt) override;
   virtual void dump(Dump &d) override;
-  virtual void on_notify() override;
 
   pjs::Ref<pjs::Function> m_condition;
   pjs::Ref<PromiseCallback> m_promise_callback;

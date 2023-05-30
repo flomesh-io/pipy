@@ -24,8 +24,7 @@
  */
 
 #include "wait.hpp"
-#include "pipeline.hpp"
-#include "log.hpp"
+#include "context.hpp"
 
 namespace pipy {
 
@@ -71,7 +70,6 @@ auto Wait::clone() -> Filter* {
 
 void Wait::reset() {
   Filter::reset();
-  Waiter::cancel();
   if (m_promise_callback) {
     m_promise_callback->close();
     m_promise_callback = nullptr;
@@ -88,39 +86,27 @@ void Wait::process(Event *evt) {
   } else {
     pjs::Value ret;
     if (!callback(m_condition, 0, nullptr, ret)) return;
-    if (ret.is_promise()) {
-      auto cb = PromiseCallback::make(this);
-      ret.as<pjs::Promise>()->then(context(), cb->resolved(), cb->rejected());
-      m_promise_callback = cb;
-    } else if (ret.to_boolean()) {
-      fulfill();
-      output(evt);
+    if (!ret.is_promise()) {
+      Filter::error("callback did not return a Promise");
+      return;
     }
 
-    if (!m_fulfilled) {
-      if (m_buffer.empty() && m_options.timeout > 0) {
-        m_timer.schedule(
-          m_options.timeout,
-          [=]() { fulfill(); }
-        );
-      }
-      if (!m_promise_callback) Waiter::wait(context()->group());
-      m_buffer.push(evt);
-    }
-  }
-}
+    auto cb = PromiseCallback::make(this);
+    ret.as<pjs::Promise>()->then(context(), cb->resolved(), cb->rejected());
+    m_promise_callback = cb;
 
-void Wait::on_notify() {
-  pjs::Value ret;
-  if (!callback(m_condition, 0, nullptr, ret)) return;
-  if (ret.to_boolean()) {
-    fulfill();
+    if (m_buffer.empty() && m_options.timeout > 0) {
+      m_timer.schedule(
+        m_options.timeout,
+        [=]() { fulfill(); }
+      );
+    }
+    m_buffer.push(evt);
   }
 }
 
 void Wait::fulfill() {
   if (!m_fulfilled) {
-    Waiter::cancel();
     m_timer.cancel();
     m_fulfilled = true;
     m_buffer.flush(

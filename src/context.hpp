@@ -35,7 +35,6 @@
 
 namespace pipy {
 
-class ContextGroup;
 class ContextDataBase;
 class Worker;
 
@@ -50,7 +49,6 @@ class Context :
 public:
   auto id() const -> uint64_t { return m_id; }
   auto data(int i) const -> ContextDataBase* { return m_data->at(i)->as<ContextDataBase>(); }
-  auto group() const -> ContextGroup* { return m_group; }
   auto worker() const -> Worker* { return m_worker; }
   auto inbound() const -> Inbound* { return m_inbound; }
 
@@ -71,7 +69,6 @@ private:
   );
 
   uint64_t m_id;
-  ContextGroup* m_group;
   Worker* m_worker;
   ContextData* m_data;
   pjs::WeakRef<Inbound> m_inbound;
@@ -81,73 +78,6 @@ private:
   friend class pjs::ContextTemplate<Context>;
   friend class Waiter;
   friend class Inbound;
-};
-
-//
-// ContextGroup
-//
-
-class ContextGroup :
-  public pjs::Pooled<ContextGroup>,
-  public List<ContextGroup>::Item
-{
-public:
-  class Waiter : public List<Waiter>::Item {
-  public:
-    void wait(ContextGroup *context_group) {
-      if (!m_context_group) {
-        m_context_group = context_group;
-        m_context_group->m_waiters.push(this);
-      }
-    }
-
-    void cancel() {
-      if (m_context_group) {
-        m_context_group->m_waiters.remove(this);
-        m_context_group = nullptr;
-      }
-    }
-
-  private:
-    virtual void on_notify() = 0;
-
-    ContextGroup* m_context_group = nullptr;
-
-    friend class ContextGroup;
-  };
-
-  void add(Context *ctx) {
-    m_contexts.push(ctx);
-  }
-
-  void remove(Context *ctx) {
-    m_contexts.remove(ctx);
-    if (m_contexts.empty()) {
-      delete this;
-    }
-  }
-
-  void touch() {
-    if (!m_input_context && !m_waiters.empty()) {
-      InputContext::defer_notify(this);
-    }
-  }
-
-  void notify() {
-    Waiter *p = m_waiters.head();
-    while (p) {
-      auto waiter = p;
-      p = p->next();
-      waiter->on_notify();
-    }
-  }
-
-private:
-  List<Context> m_contexts;
-  List<Waiter> m_waiters;
-  InputContext* m_input_context = nullptr;
-
-  friend class InputContext;
 };
 
 //

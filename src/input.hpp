@@ -175,7 +175,6 @@ private:
   thread_local static InputContext* s_stack;
 
   static void auto_release(AutoReleased *obj);
-  static void defer_notify(ContextGroup *grp);
 
   friend class FlushTarget;
   friend class AutoReleased;
