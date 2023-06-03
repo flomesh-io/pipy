@@ -38,6 +38,7 @@
 #include "status.hpp"
 #include "api/algo.hpp"
 #include "api/bgp.hpp"
+#include "api/bpf.hpp"
 #include "api/configuration.hpp"
 #include "api/console.hpp"
 #include "api/crypto.hpp"
@@ -160,6 +161,9 @@ template<> void ClassDef<pipy::Global>::init() {
 
   // algo
   variable("algo", class_of<algo::Algo>());
+
+  // bpf
+  variable("bpf", class_of<bpf::BPF>());
 
   // pipy
   variable("pipy", class_of<Pipy>());

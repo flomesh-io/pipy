@@ -155,6 +155,7 @@ add_executable(pipy
   src/admin-service.cpp
   src/api/algo.cpp
   src/api/bgp.cpp
+  src/api/bpf.cpp
   src/api/configuration.cpp
   src/api/console.cpp
   src/api/crypto.cpp
