@@ -225,7 +225,7 @@ public:
   auto remove_listener(int port, pjs::Object *options = nullptr) -> Listener*;
   auto remove_listener(pjs::Str *port, pjs::Object *options = nullptr) -> Listener*;
   void set_default_options(pjs::Object *options);
-  bool apply(Worker *worker, PipelineLayout *layout);
+  void apply(Worker *worker, PipelineLayout *layout);
 
 private:
   ListenerArray() {}

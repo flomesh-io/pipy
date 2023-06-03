@@ -598,14 +598,15 @@ void ListenerArray::set_default_options(pjs::Object *options) {
   m_default_options = options;
 }
 
-bool ListenerArray::apply(Worker *worker, PipelineLayout *layout) {
-  if (m_worker) return false;
+void ListenerArray::apply(Worker *worker, PipelineLayout *layout) {
+  if (m_worker) {
+    throw std::runtime_error("ListenerArray is being listened already");
+  }
   m_worker = worker;
   m_pipeline_layout = layout;
   for (const auto &p : m_listeners) {
     worker->add_listener(p.first, layout, p.second);
   }
-  return true;
 }
 
 void ListenerArray::get_ip_port(const std::string &ip_port, std::string &ip, int &port) {
