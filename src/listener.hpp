@@ -37,6 +37,7 @@
 
 namespace pipy {
 
+class Worker;
 class PipelineLayout;
 
 //
@@ -211,6 +212,30 @@ private:
   friend class InboundTCP;
   friend class InboundUDP;
   friend class pjs::RefCount<Listener>;
+};
+
+//
+// ListenerArray
+//
+
+class ListenerArray : public pjs::ObjectTemplate<ListenerArray> {
+public:
+  auto add_listener(int port, const Listener::Options &options) -> Listener*;
+  auto add_listener(pjs::Str *port, const Listener::Options &options) -> Listener*;
+  auto remove_listener(int port, const Listener::Options &options) -> Listener*;
+  auto remove_listener(pjs::Str *port, const Listener::Options &options) -> Listener*;
+  bool apply(Worker *worker, PipelineLayout *layout);
+
+private:
+  ListenerArray() {}
+
+  void get_ip_port(const std::string &ip_port, std::string &ip, int &port);
+
+  Worker* m_worker = nullptr;
+  pjs::Ref<PipelineLayout> m_pipeline_layout;
+  std::map<Listener*, Listener::Options> m_listeners;
+
+  friend class pjs::ObjectTemplate<ListenerArray>;
 };
 
 } // namespace pipy

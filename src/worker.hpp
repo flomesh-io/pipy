@@ -63,6 +63,8 @@ public:
   auto load_js_module(const std::string &path) -> JSModule*;
   auto load_native_module(const std::string &path) -> nmi::NativeModule*;
   void add_listener(Listener *listener, PipelineLayout *layout, const Listener::Options &options);
+  void remove_listener(Listener *listener);
+  bool update_listeners(bool force);
   void add_task(Task *task);
   void add_watch(Watch *watch);
   void add_export(pjs::Str *ns, pjs::Str *name, Module *module);

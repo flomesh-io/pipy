@@ -567,33 +567,33 @@ void Configuration::listen(int port, pjs::Object *options) {
   m_listens.emplace_back();
   auto &config = m_listens.back();
   config.index = next_pipeline_index();
-  config.ip = "0.0.0.0";
-  config.port = port;
-  config.options = Listener::Options(options);
+  config.listeners = ListenerArray::make();
+  auto l = config.listeners->add_listener(pjs::Str::make(std::string("0.0.0.0:") + std::to_string(port)), options);
+  config.ip = l->ip();
+  config.port = l->port();
   FilterConfigurator::set_pipeline_config(&config);
 }
 
 void Configuration::listen(const std::string &port, pjs::Object *options) {
   check_integrity();
-  std::string addr;
-  int port_num;
-  if (!utils::get_host_port(port, addr, port_num)) {
-    std::string msg("invalid 'ip:port' form: ");
-    throw std::runtime_error(msg + port);
-  }
-
-  uint8_t ip[16];
-  if (!utils::get_ip_v4(addr, ip) && !utils::get_ip_v6(addr, ip)) {
-    std::string msg("invalid IP address: ");
-    throw std::runtime_error(msg + addr);
-  }
-
   m_listens.emplace_back();
   auto &config = m_listens.back();
   config.index = next_pipeline_index();
-  config.ip = addr;
-  config.port = port_num;
-  config.options = Listener::Options(options);
+  config.listeners = ListenerArray::make();
+  auto l = config.listeners->add_listener(pjs::Str::make(port), options);
+  config.ip = l->ip();
+  config.port = l->port();
+  FilterConfigurator::set_pipeline_config(&config);
+}
+
+void Configuration::listen(ListenerArray *listeners) {
+  check_integrity();
+  m_listens.emplace_back();
+  auto &config = m_listens.back();
+  config.index = next_pipeline_index();
+  config.listeners = listeners;
+  config.ip = "?";
+  config.port = -1;
   FilterConfigurator::set_pipeline_config(&config);
 }
 
@@ -722,17 +722,7 @@ void Configuration::apply(JSModule *mod) {
     if (!i.port) continue;
     auto name = std::to_string(i.port) + '@' + i.ip;
     auto p = make_pipeline(i.index, "", name, i);
-    auto listener = Listener::get(i.options.protocol, i.ip, i.port);
-    if (listener->reserved()) {
-      std::string msg("Port reserved: ");
-      throw std::runtime_error(msg + std::to_string(i.port));
-    }
-#ifndef __linux__
-    if (i.options.transparent) {
-      Log::error("Trying to listen on %d in transparent mode, which is not supported on this platform", i.port);
-    }
-#endif
-    worker->add_listener(listener, p, i.options);
+    i.listeners->apply(worker, p);
   }
 
   for (auto &i : m_tasks) {
@@ -2198,6 +2188,7 @@ template<> void ClassDef<Configuration>::init() {
   method("listen", [](Context &ctx, Object *thiz, Value &result) {
     int port;
     Str *port_str;
+    ListenerArray *listeners;
     pjs::Object *options = nullptr;
     try {
       if (ctx.try_arguments(1, &port_str, &options)) {
@@ -2206,8 +2197,11 @@ template<> void ClassDef<Configuration>::init() {
       } else if (ctx.try_arguments(1, &port, &options)) {
         thiz->as<Configuration>()->listen(port, options);
         result.set(thiz);
+      } else if (ctx.try_arguments(1, &listeners)) {
+        thiz->as<Configuration>()->listen(listeners);
+        result.set(thiz);
       } else {
-        ctx.error_argument_type(0, "a number of string");
+        ctx.error_argument_type(0, "a number, string or ListenerArray");
       }
     } catch (std::runtime_error &err) {
       ctx.error(err);

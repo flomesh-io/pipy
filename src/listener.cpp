@@ -25,6 +25,7 @@
 
 #include "listener.hpp"
 #include "pipeline.hpp"
+#include "worker.hpp"
 #include "log.hpp"
 
 namespace pjs {
@@ -527,4 +528,139 @@ void Listener::AcceptorUDP::for_each_inbound(const std::function<void(Inbound*)>
   }
 }
 
+//
+// ListenerArray
+//
+
+auto ListenerArray::add_listener(int port, const Listener::Options &options) -> Listener* {
+  std::string ip_port("0.0.0.0:");
+  ip_port += std::to_string(port);
+  return add_listener(pjs::Str::make(ip_port), options);
+}
+
+auto ListenerArray::add_listener(pjs::Str *port, const Listener::Options &options) -> Listener* {
+  std::string ip;
+  int port_num;
+  get_ip_port(port->str(), ip, port_num);
+
+  auto listener = Listener::get(options.protocol, ip, port_num);
+  if (listener->reserved()) {
+    std::string msg("Port reserved: ");
+    throw std::runtime_error(msg + std::to_string(port_num));
+  }
+#ifndef __linux__
+  if (options.transparent) {
+    Log::error("Trying to listen on %d in transparent mode, which is not supported on this platform", port_num);
+  }
+#endif
+
+  m_listeners[listener] = options;
+
+  if (auto *w = m_worker) {
+    w->add_listener(listener, m_pipeline_layout, options);
+    w->update_listeners(true);
+  }
+
+  return listener;
+}
+
+auto ListenerArray::remove_listener(int port, const Listener::Options &options) -> Listener* {
+  std::string ip_port("0.0.0.0:");
+  ip_port += std::to_string(port);
+  return remove_listener(pjs::Str::make(ip_port), options);
+}
+
+auto ListenerArray::remove_listener(pjs::Str *port, const Listener::Options &options) -> Listener* {
+  std::string ip;
+  int port_num;
+  get_ip_port(port->str(), ip, port_num);
+
+  auto listener = Listener::get(options.protocol, ip, port_num);
+  if (m_listeners.find(listener) != m_listeners.end()) {
+    m_listeners.erase(listener);
+  }
+
+  if (auto *w = m_worker) {
+    w->remove_listener(listener);
+    w->update_listeners(true);
+  }
+
+  return listener;
+}
+
+bool ListenerArray::apply(Worker *worker, PipelineLayout *layout) {
+  if (m_worker) return false;
+  m_worker = worker;
+  m_pipeline_layout = layout;
+  for (const auto &p : m_listeners) {
+    worker->add_listener(p.first, layout, p.second);
+  }
+  return true;
+}
+
+void ListenerArray::get_ip_port(const std::string &ip_port, std::string &ip, int &port) {
+  if (!utils::get_host_port(ip_port, ip, port)) {
+    std::string msg("invalid 'ip:port' form: ");
+    throw std::runtime_error(msg + ip_port);
+  }
+
+  uint8_t buf[16];
+  if (!utils::get_ip_v4(ip, buf) && !utils::get_ip_v6(ip, buf)) {
+    std::string msg("invalid IP address: ");
+    throw std::runtime_error(msg + ip);
+  }
+}
+
 } // namespace pipy
+
+namespace pjs {
+
+using namespace pipy;
+
+template<> void ClassDef<ListenerArray>::init() {
+  ctor();
+
+  method("add", [](Context &ctx, Object *obj, Value &ret) {
+    try {
+      int port;
+      Str *port_str;
+      Object *options = nullptr;
+      if (ctx.try_arguments(1, &port, &options)) {
+        obj->as<ListenerArray>()->add_listener(port, options);
+      } else if (ctx.try_arguments(1, &port_str, &options)) {
+        obj->as<ListenerArray>()->add_listener(port_str, options);
+      } else {
+        ctx.error_argument_type(0, "a number or string");
+        return;
+      }
+      obj->as<ListenerArray>()->add_listener(port, options);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  method("remove", [](Context &ctx, Object *obj, Value &ret) {
+    try {
+      int port;
+      Str *port_str;
+      Object *options = nullptr;
+      if (ctx.try_arguments(1, &port, &options)) {
+        obj->as<ListenerArray>()->remove_listener(port, options);
+      } else if (ctx.try_arguments(1, &port_str, &options)) {
+        obj->as<ListenerArray>()->remove_listener(port_str, options);
+      } else {
+        ctx.error_argument_type(0, "a number or string");
+        return;
+      }
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+}
+
+template<> void ClassDef<Constructor<ListenerArray>>::init() {
+  super<Function>();
+  ctor();
+}
+
+} // namespace psj

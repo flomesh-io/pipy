@@ -141,6 +141,9 @@ template<> void ClassDef<pipy::Global>::init() {
   // StreamEnd
   variable("StreamEnd", class_of<Constructor<StreamEnd>>());
 
+  // ListenerArray
+  variable("ListenerArray", class_of<Constructor<ListenerArray>>());
+
   // Swap
   variable("Swap", class_of<Constructor<Swap>>());
 
@@ -237,6 +240,51 @@ void Worker::add_listener(Listener *listener, PipelineLayout *layout, const List
   auto &p = m_listeners[listener];
   p.pipeline_layout = layout;
   p.options = options;
+}
+
+void Worker::remove_listener(Listener *listener) {
+  m_listeners.erase(listener);
+}
+
+bool Worker::update_listeners(bool force) {
+
+  // Open new ports
+  std::set<Listener*> new_open;
+  for (const auto &i : m_listeners) {
+    auto l = i.first;
+    if (!l->is_open()) {
+      new_open.insert(l);
+      l->set_options(i.second.options);
+      if (!l->pipeline_layout(i.second.pipeline_layout)) {
+        if (force) continue;
+        for (auto *l : new_open) {
+          l->pipeline_layout(nullptr);
+        }
+        return false;
+      }
+    }
+  }
+
+  // Update existing ports
+  for (const auto &i : m_listeners) {
+    auto l = i.first;
+    if (!new_open.count(l)) {
+      l->set_options(i.second.options);
+      l->pipeline_layout(i.second.pipeline_layout);
+    }
+  }
+
+  // Close old ports
+  Listener::for_each(
+    [&](Listener *l) {
+      if (l->reserved()) return;
+      if (m_listeners.find(l) == m_listeners.end()) {
+        l->pipeline_layout(nullptr);
+      }
+    }
+  );
+
+  return true;
 }
 
 void Worker::add_task(Task *task) {
@@ -363,41 +411,10 @@ bool Worker::bind() {
 
 bool Worker::start(bool force) {
 
-  // Open new ports
-  std::set<Listener*> new_open;
-  for (const auto &i : m_listeners) {
-    auto l = i.first;
-    if (!l->is_open()) {
-      new_open.insert(l);
-      l->set_options(i.second.options);
-      if (!l->pipeline_layout(i.second.pipeline_layout)) {
-        if (force) continue;
-        for (auto *l : new_open) {
-          l->pipeline_layout(nullptr);
-        }
-        return false;
-      }
-    }
+  // Update listening ports
+  if (!update_listeners(force)) {
+    return false;
   }
-
-  // Update existing ports
-  for (const auto &i : m_listeners) {
-    auto l = i.first;
-    if (!new_open.count(l)) {
-      l->set_options(i.second.options);
-      l->pipeline_layout(i.second.pipeline_layout);
-    }
-  }
-
-  // Close old ports
-  Listener::for_each(
-    [&](Listener *l) {
-      if (l->reserved()) return;
-      if (m_listeners.find(l) == m_listeners.end()) {
-        l->pipeline_layout(nullptr);
-      }
-    }
-  );
 
   // Start tasks
   for (auto *task : m_tasks) {

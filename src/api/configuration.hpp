@@ -193,6 +193,7 @@ public:
 
   void listen(int port, pjs::Object *options);
   void listen(const std::string &port, pjs::Object *options);
+  void listen(ListenerArray *listeners);
   void task(const std::string &when);
   void watch(const std::string &filename);
   void pipeline(const std::string &name);
@@ -208,9 +209,9 @@ private:
   Configuration(pjs::Object *context_prototype);
 
   struct ListenConfig : public PipelineConfig {
+    pjs::Ref<ListenerArray> listeners;
     std::string ip;
     int port;
-    Listener::Options options;
   };
 
   struct TaskConfig : public PipelineConfig {
