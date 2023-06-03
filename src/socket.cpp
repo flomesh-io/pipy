@@ -86,8 +86,9 @@ void SocketTCP::output(Event *evt) {
           }
         }
       }
-    } else if (evt->is<StreamEnd>()) {
+    } else if (auto eos = evt->as<StreamEnd>()) {
       m_sending_end = true;
+      m_eos = (eos->error_code() == StreamEnd::NO_ERROR);
       if (m_started) {
         send();
       }
@@ -150,9 +151,11 @@ void SocketTCP::close_send() {
   if (m_receiving_end) {
     close(true);
     handler_release();
-  } else {
+  } else if (m_eos) {
     std::error_code ec;
     m_socket.shutdown(tcp::socket::shutdown_send, ec);
+  } else {
+    close(false);
   }
 }
 
@@ -160,7 +163,9 @@ void SocketTCP::close(bool shutdown) {
   if (m_started && !m_closed) {
     if (m_socket.is_open()) {
       std::error_code ec;
-      if (shutdown) m_socket.shutdown(tcp::socket::shutdown_both, ec);
+      if (shutdown && m_eos) {
+        m_socket.shutdown(tcp::socket::shutdown_both, ec);
+      }
       m_socket.close(ec);
 
       if (ec) {

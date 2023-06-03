@@ -98,6 +98,7 @@ private:
   bool m_receiving_end = false;
   bool m_sending = false;
   bool m_sending_end = false;
+  bool m_eos = false;
   bool m_paused = false;
   int m_retain_count = 0;
 
