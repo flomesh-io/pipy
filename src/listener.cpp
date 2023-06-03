@@ -532,50 +532,56 @@ void Listener::AcceptorUDP::for_each_inbound(const std::function<void(Inbound*)>
 // ListenerArray
 //
 
-auto ListenerArray::add_listener(int port, const Listener::Options &options) -> Listener* {
+auto ListenerArray::add_listener(int port, pjs::Object *options) -> Listener* {
   std::string ip_port("0.0.0.0:");
   ip_port += std::to_string(port);
   return add_listener(pjs::Str::make(ip_port), options);
 }
 
-auto ListenerArray::add_listener(pjs::Str *port, const Listener::Options &options) -> Listener* {
+auto ListenerArray::add_listener(pjs::Str *port, pjs::Object *options) -> Listener* {
+  if (!options) options = m_default_options;
+  Listener::Options opts(options);
+
   std::string ip;
   int port_num;
   get_ip_port(port->str(), ip, port_num);
 
-  auto listener = Listener::get(options.protocol, ip, port_num);
+  auto listener = Listener::get(opts.protocol, ip, port_num);
   if (listener->reserved()) {
     std::string msg("Port reserved: ");
     throw std::runtime_error(msg + std::to_string(port_num));
   }
 #ifndef __linux__
-  if (options.transparent) {
+  if (opts.transparent) {
     Log::error("Trying to listen on %d in transparent mode, which is not supported on this platform", port_num);
   }
 #endif
 
-  m_listeners[listener] = options;
+  m_listeners[listener] = opts;
 
   if (auto *w = m_worker) {
-    w->add_listener(listener, m_pipeline_layout, options);
+    w->add_listener(listener, m_pipeline_layout, opts);
     w->update_listeners(true);
   }
 
   return listener;
 }
 
-auto ListenerArray::remove_listener(int port, const Listener::Options &options) -> Listener* {
+auto ListenerArray::remove_listener(int port, pjs::Object *options) -> Listener* {
   std::string ip_port("0.0.0.0:");
   ip_port += std::to_string(port);
   return remove_listener(pjs::Str::make(ip_port), options);
 }
 
-auto ListenerArray::remove_listener(pjs::Str *port, const Listener::Options &options) -> Listener* {
+auto ListenerArray::remove_listener(pjs::Str *port, pjs::Object *options) -> Listener* {
+  if (!options) options = m_default_options;
+  Listener::Options opts(options);
+
   std::string ip;
   int port_num;
   get_ip_port(port->str(), ip, port_num);
 
-  auto listener = Listener::get(options.protocol, ip, port_num);
+  auto listener = Listener::get(opts.protocol, ip, port_num);
   if (m_listeners.find(listener) != m_listeners.end()) {
     m_listeners.erase(listener);
   }
@@ -586,6 +592,10 @@ auto ListenerArray::remove_listener(pjs::Str *port, const Listener::Options &opt
   }
 
   return listener;
+}
+
+void ListenerArray::set_default_options(pjs::Object *options) {
+  m_default_options = options;
 }
 
 bool ListenerArray::apply(Worker *worker, PipelineLayout *layout) {

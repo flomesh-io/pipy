@@ -220,10 +220,11 @@ private:
 
 class ListenerArray : public pjs::ObjectTemplate<ListenerArray> {
 public:
-  auto add_listener(int port, const Listener::Options &options) -> Listener*;
-  auto add_listener(pjs::Str *port, const Listener::Options &options) -> Listener*;
-  auto remove_listener(int port, const Listener::Options &options) -> Listener*;
-  auto remove_listener(pjs::Str *port, const Listener::Options &options) -> Listener*;
+  auto add_listener(int port, pjs::Object *options = nullptr) -> Listener*;
+  auto add_listener(pjs::Str *port, pjs::Object *options = nullptr) -> Listener*;
+  auto remove_listener(int port, pjs::Object *options = nullptr) -> Listener*;
+  auto remove_listener(pjs::Str *port, pjs::Object *options = nullptr) -> Listener*;
+  void set_default_options(pjs::Object *options);
   bool apply(Worker *worker, PipelineLayout *layout);
 
 private:
@@ -233,6 +234,7 @@ private:
 
   Worker* m_worker = nullptr;
   pjs::Ref<PipelineLayout> m_pipeline_layout;
+  pjs::Ref<pjs::Object> m_default_options;
   std::map<Listener*, Listener::Options> m_listeners;
 
   friend class pjs::ObjectTemplate<ListenerArray>;

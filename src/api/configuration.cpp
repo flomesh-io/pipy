@@ -586,12 +586,13 @@ void Configuration::listen(const std::string &port, pjs::Object *options) {
   FilterConfigurator::set_pipeline_config(&config);
 }
 
-void Configuration::listen(ListenerArray *listeners) {
+void Configuration::listen(ListenerArray *listeners, pjs::Object *options) {
   check_integrity();
   m_listens.emplace_back();
   auto &config = m_listens.back();
   config.index = next_pipeline_index();
   config.listeners = listeners;
+  config.listeners->set_default_options(options);
   config.ip = "?";
   config.port = -1;
   FilterConfigurator::set_pipeline_config(&config);
@@ -2197,8 +2198,8 @@ template<> void ClassDef<Configuration>::init() {
       } else if (ctx.try_arguments(1, &port, &options)) {
         thiz->as<Configuration>()->listen(port, options);
         result.set(thiz);
-      } else if (ctx.try_arguments(1, &listeners)) {
-        thiz->as<Configuration>()->listen(listeners);
+      } else if (ctx.try_arguments(1, &listeners, &options)) {
+        thiz->as<Configuration>()->listen(listeners, options);
         result.set(thiz);
       } else {
         ctx.error_argument_type(0, "a number, string or ListenerArray");
