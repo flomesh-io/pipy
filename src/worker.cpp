@@ -42,6 +42,7 @@
 #include "api/configuration.hpp"
 #include "api/console.hpp"
 #include "api/crypto.hpp"
+#include "api/c-struct.hpp"
 #include "api/dns.hpp"
 #include "api/hessian.hpp"
 #include "api/http.hpp"
@@ -89,6 +90,9 @@ using namespace pipy;
 
 template<> void ClassDef<pipy::Global>::init() {
   super<pjs::Global>();
+
+  // CStruct
+  variable("CStruct", class_of<CStruct>());
 
   // JSON
   variable("JSON", class_of<JSON>());

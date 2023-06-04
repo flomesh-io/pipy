@@ -159,6 +159,7 @@ add_executable(pipy
   src/api/configuration.cpp
   src/api/console.cpp
   src/api/crypto.cpp
+  src/api/c-struct.cpp
   src/api/dns.cpp
   src/api/hessian.cpp
   src/api/http.cpp
