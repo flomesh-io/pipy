@@ -92,7 +92,7 @@ template<> void ClassDef<pipy::Global>::init() {
   super<pjs::Global>();
 
   // CStruct
-  variable("CStruct", class_of<CStruct>());
+  variable("CStruct", class_of<Constructor<CStruct>>());
 
   // JSON
   variable("JSON", class_of<JSON>());

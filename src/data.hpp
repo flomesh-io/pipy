@@ -126,6 +126,8 @@ public:
       delete m_chunk;
     }
 
+    int size() const { return m_size; }
+
     void flush() {
       if (m_ptr > 0) {
         m_data.push_view(new View(m_chunk, 0, m_ptr));
@@ -136,6 +138,7 @@ public:
 
     void push(char c) {
       m_chunk->data[m_ptr++] = c;
+      m_size++;
       if (m_ptr >= sizeof(m_chunk->data)) {
         flush();
       }
@@ -151,6 +154,7 @@ public:
 
     void push(const char *s, int n) {
       auto &p = m_ptr;
+      m_size += n;
       while (n > 0) {
         int l = sizeof(m_chunk->data) - p;
         if (l > n) l = n;
@@ -188,6 +192,7 @@ public:
 
     void push(Data &&d) {
       flush();
+      m_size += d.size();
       m_data.push(std::move(d));
     }
 
@@ -197,6 +202,7 @@ public:
     Producer* m_producer;
     Chunk* m_chunk;
     int m_ptr = 0;
+    int m_size = 0;
   };
 
   //

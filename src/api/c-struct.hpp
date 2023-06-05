@@ -40,7 +40,6 @@ class CStruct : public pjs::ObjectTemplate<CStruct> {
 public:
   struct Options : public pipy::Options {
     bool is_union = false;
-    bool big_endian = false;
     Options() {}
     Options(pjs::Object *options);
   };
@@ -59,14 +58,22 @@ private:
     size_t size;
     size_t count;
     bool is_array;
+    bool is_integral;
     bool is_unsigned;
     pjs::Value::Type type;
-    pjs::Ref<CStruct> c_struct;
+    pjs::Ref<CStruct> layout;
     pjs::Ref<pjs::Str> name;
   };
 
   Options m_options;
   std::list<Field> m_fields;
+  size_t m_size = 0;
+
+  static auto align(size_t offset, size_t alignment) -> size_t;
+  static auto align_size(size_t size) -> size_t;
+  static void zero(Data::Builder &db, size_t count);
+  static void encode(Data::Builder &db, pjs::Object *values, CStruct *layout);
+  static void encode(Data::Builder &db, int size, bool is_integral, bool is_unsigned, pjs::Value &value);
 
   friend class pjs::ObjectTemplate<CStruct>;
 };
