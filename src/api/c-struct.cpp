@@ -167,7 +167,8 @@ auto CStruct::encode(pjs::Object *obj) -> Data* {
 }
 
 auto CStruct::decode(const Data &data) -> pjs::Object* {
-  return nullptr;
+  Data::Reader dr(data);
+  return decode(dr, this);
 }
 
 auto CStruct::align(size_t offset, size_t alignment) -> size_t {
@@ -234,7 +235,7 @@ void CStruct::encode(Data::Builder &db, pjs::Object *values, CStruct *layout) {
   }
 }
 
-void CStruct::encode(Data::Builder &db, int size, bool is_integral, bool is_unsigned, pjs::Value &value) {
+void CStruct::encode(Data::Builder &db, int size, bool is_integral, bool is_unsigned, const pjs::Value &value) {
   char buf[8];
   if (!is_integral) {
     if (size == 4) {
@@ -258,6 +259,76 @@ void CStruct::encode(Data::Builder &db, int size, bool is_integral, bool is_unsi
     }
   }
   db.push(buf, size);
+}
+
+auto CStruct::decode(Data::Reader &dr, CStruct *layout) -> pjs::Object* {
+  auto values = pjs::Object::make();
+  if (layout->m_options.is_union) {
+    Data buf;
+    dr.read(layout->m_size, buf);
+    for (const auto &f : layout->m_fields) {
+      Data::Reader dr(buf);
+      decode(dr, f, values);
+    }
+  } else {
+    auto start = dr.position();
+    for (const auto &f : layout->m_fields) {
+      auto offset = dr.position() - start;
+      if (offset < f.offset) dr.skip(f.offset - offset);
+      decode(dr, f, values);
+    }
+  }
+  return values;
+}
+
+void CStruct::decode(Data::Reader &dr, const Field &field, pjs::Object *values) {
+  if (auto layout = field.layout.get()) {
+    values->set(field.name, decode(dr, layout));
+  } else if (field.type == pjs::Value::Type::String) {
+    auto n = field.size * field.count;
+    char s[n + 1];
+    s[dr.read(n, s)] = 0;
+    values->set(field.name, pjs::Str::make(s));
+  } else if (field.is_array) {
+    auto a = pjs::Array::make(field.count);
+    for (int i = 0; i < field.count; i++) {
+      pjs::Value v;
+      decode(dr, field.size, field.is_integral, field.is_unsigned, v);
+      a->set(i, v);
+    }
+    values->set(field.name, a);
+  } else {
+    pjs::Value v;
+    decode(dr, field.size, field.is_integral, field.is_unsigned, v);
+    values->set(field.name, v);
+  }
+}
+
+void CStruct::decode(Data::Reader &dr, int size, bool is_integral, bool is_unsigned, pjs::Value &value) {
+  char buf[size];
+  auto len = dr.read(size, buf);
+  if (len < size) std::memset(buf + len, 0, size - len);
+  if (!is_integral) {
+    if (size == 4) {
+      value.set(*(float*)buf);
+    } else {
+      value.set(*(double*)buf);
+    }
+  } else if (is_unsigned) {
+    switch (size) {
+      case 1: value.set(*(int8_t*)buf); break;
+      case 2: value.set(*(int16_t*)buf); break;
+      case 4: value.set(*(int32_t*)buf); break;
+      case 8: value.set(*(int64_t*)buf); break;
+    }
+  } else {
+    switch (size) {
+      case 1: value.set(*(uint8_t*)buf); break;
+      case 2: value.set(*(uint16_t*)buf); break;
+      case 4: value.set(*(uint32_t*)buf); break;
+      case 8: value.set(*(uint64_t*)buf); break;
+    }
+  }
 }
 
 } // namespace pipy

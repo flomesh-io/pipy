@@ -126,7 +126,9 @@ public:
       delete m_chunk;
     }
 
-    int size() const { return m_size; }
+    int size() const {
+      return m_size;
+    }
 
     void flush() {
       if (m_ptr > 0) {
@@ -214,8 +216,12 @@ public:
     Reader(const Data &data)
       : m_view(data.m_head) {}
 
-    bool eof() {
+    bool eof() const {
       return !m_view;
+    }
+
+    int position() const {
+      return m_position;
     }
 
     int get() {
@@ -226,7 +232,28 @@ public:
         m_view = v->next;
         m_offset = 0;
       }
+      m_position++;
       return c;
+    }
+
+    int skip(int n) {
+      int i = 0;
+      while (i < n) {
+        auto v = m_view;
+        if (!v) break;
+        auto a = v->length - m_offset;
+        auto b = n - i;
+        if (a <= b) {
+          i += a;
+          m_view = v->next;
+          m_offset = 0;
+        } else {
+          i += b;
+          m_offset += b;
+        }
+      }
+      m_position += i;
+      return i;
     }
 
     int read(int n, void *out) {
@@ -250,6 +277,7 @@ public:
           m_offset += b;
         }
       }
+      m_position += i;
       return i;
     }
 
@@ -265,10 +293,12 @@ public:
           i += a;
           m_view = v->next;
           m_offset = 0;
+          m_position += a;
         } else {
           out.push_view(new View(v->chunk, v->offset + m_offset, b));
           i += b;
           m_offset += b;
+          m_position += b;
         }
       }
       return i;
@@ -285,12 +315,14 @@ public:
         m_offset = 0;
       }
       m_view = nullptr;
+      m_position += n;
       return n;
     }
 
   private:
     View* m_view;
     int m_offset = 0;
+    int m_position = 0;
   };
 
 private:

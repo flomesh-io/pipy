@@ -73,7 +73,10 @@ private:
   static auto align_size(size_t size) -> size_t;
   static void zero(Data::Builder &db, size_t count);
   static void encode(Data::Builder &db, pjs::Object *values, CStruct *layout);
-  static void encode(Data::Builder &db, int size, bool is_integral, bool is_unsigned, pjs::Value &value);
+  static void encode(Data::Builder &db, int size, bool is_integral, bool is_unsigned, const pjs::Value &value);
+  static auto decode(Data::Reader &dr, CStruct *layout) -> pjs::Object*;
+  static void decode(Data::Reader &dr, const Field &field, pjs::Object *values);
+  static void decode(Data::Reader &dr, int size, bool is_integral, bool is_unsigned, pjs::Value &value);
 
   friend class pjs::ObjectTemplate<CStruct>;
 };
