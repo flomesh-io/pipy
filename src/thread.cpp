@@ -31,6 +31,7 @@ using namespace pipy;
 
 template<> void ClassDef<Thread>::init() {
   accessor("id", [](Object *obj, Value &ret) { ret.set(obj->as<Thread>()->index()); });
+  accessor("concurrency", [](Object *obj, Value &ret) { ret.set(obj->as<Thread>()->concurrency()); });
 }
 
 } // namespace pjs

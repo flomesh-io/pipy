@@ -53,6 +53,7 @@ public:
 
   static auto current() -> WorkerThread* { return s_current; }
 
+  auto manager() const -> WorkerManager* { return m_manager; }
   auto index() const -> int { return m_index; }
   bool done() { return m_done; }
   auto active_pipeline_count() const -> size_t { return m_active_pipeline_count.load(std::memory_order_relaxed); }
@@ -117,6 +118,7 @@ public:
   void stats(const std::function<void(stats::MetricDataSum&)> &cb);
   void recycle();
   void reload();
+  auto concurrency() const -> int { return m_concurrency; }
   auto active_pipeline_count() -> size_t;
   bool stop(bool force = false);
 
@@ -126,6 +128,7 @@ private:
   int m_status_counter = -1;
   stats::MetricDataSum m_metric_data_sum;
   int m_metric_data_sum_counter = -1;
+  int m_concurrency = 0;
   bool m_graph_enabled = false;
   std::function<void()> m_on_done;
 

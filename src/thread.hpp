@@ -40,6 +40,7 @@ class WorkerThread;
 class Thread : public pjs::ObjectTemplate<Thread> {
 public:
   auto index() const -> int { return m_worker_thread->index(); }
+  auto concurrency() const -> int { return m_worker_thread->manager()->concurrency(); }
 
 private:
   Thread(WorkerThread *worker_thread) : m_worker_thread(worker_thread) {}

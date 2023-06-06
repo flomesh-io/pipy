@@ -427,6 +427,8 @@ auto WorkerManager::get() -> WorkerManager& {
 bool WorkerManager::start(int concurrency, bool force) {
   if (started()) return false;
 
+  m_concurrency = concurrency;
+
   for (int i = 0; i < concurrency; i++) {
     auto wt = new WorkerThread(this, i, m_graph_enabled && (i == 0));
     if (!wt->start(force)) {
