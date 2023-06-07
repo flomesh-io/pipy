@@ -823,9 +823,7 @@ void Encoder::output_head() {
         } else if (k == s_connection) {
           if (v.is_string()) {
             m_header_connection = v.s();
-            if (!utils::iequals(v.s()->str(), s_upgrade.get()->str())) {
-              return;
-            }
+            return;
           }
         } else if (k == s_upgrade) {
           if (v.is_string()) m_header_upgrade = v.s();
@@ -885,6 +883,11 @@ void Encoder::output_head() {
   if (m_is_final) {
     static const std::string str("connection: close\r\n");
     db.push(str);
+  } else if (m_header_connection) {
+    static const std::string str("connection: ");
+    db.push(str);
+    db.push(m_header_connection->str());
+    db.push("\r\n");
   } else {
     static const std::string str("connection: keep-alive\r\n");
     db.push(str);
