@@ -148,8 +148,10 @@ void Logger::write(const Data &msg) {
     Net::current().post(
       [=]() {
         write_async(msg);
+        release();
       }
     );
+    retain();
   } else {
     write_async(msg);
   }
