@@ -61,6 +61,29 @@ auto Map::list() -> pjs::Array* {
     attr.start_id = id;
     if (syscall_bpf(BPF_MAP_GET_NEXT_ID, &attr, size)) break;
     id = attr.next_id;
+
+    size = attr_size(open_flags);
+    std::memset(&attr, 0, size);
+    attr.map_id = id;
+    int fd = syscall_bpf(BPF_MAP_GET_FD_BY_ID, &attr, size);
+
+		struct bpf_map_info info = {};
+	  size = attr_size(info);
+	  memset(&attr, 0, size);
+    attr.info.bpf_fd = fd;
+    attr.info.info_len = sizeof(info);
+    attr.info.info = (uint64_t)&info;
+    syscall_bpf(BPF_OBJ_GET_INFO_BY_FD, &attr, size);
+
+    auto i = Info::make();
+    i->name = pjs::Str::make(info.name);
+    i->id = info.id;
+    i->flags = info.map_flags;
+    i->maxEntries = info.max_entries;
+    i->keySize = info.key_size;
+    i->valueSize = info.value_size;
+
+    a->push(i);
   }
 #endif // __linux__
   return a;
@@ -105,6 +128,19 @@ template<> void ClassDef<Constructor<bpf::Map>>::init() {
 template<> void ClassDef<BPF>::init() {
   ctor();
   variable("Map", class_of<Constructor<bpf::Map>>());
+}
+
+//
+// Map::Info
+//
+
+template<> void ClassDef<bpf::Map::Info>::init() {
+  field<Ref<Str>>("name", [](bpf::Map::Info *obj) { return &obj->name; });
+  field<int>("id", [](bpf::Map::Info *obj) { return &obj->id; });
+  field<int>("flags", [](bpf::Map::Info *obj) { return &obj->flags; });
+  field<int>("maxEntries", [](bpf::Map::Info *obj) { return &obj->maxEntries; });
+  field<int>("keySize", [](bpf::Map::Info *obj) { return &obj->keySize; });
+  field<int>("valueSize", [](bpf::Map::Info *obj) { return &obj->valueSize; });
 }
 
 } // namespace pjs

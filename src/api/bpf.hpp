@@ -37,6 +37,20 @@ namespace bpf {
 
 class Map : public pjs::ObjectTemplate<Map> {
 public:
+
+  //
+  // Map::Info
+  //
+
+  struct Info : public pjs::ObjectTemplate<Info> {
+    pjs::Ref<pjs::Str> name;
+    int id = 0;
+    int flags = 0;
+    int maxEntries = 0;
+    int keySize = 0;
+    int valueSize = 0;
+  };
+
   static auto list() -> pjs::Array*;
 };
 
