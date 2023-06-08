@@ -77,11 +77,13 @@ static void logf(Log::Level level, const char *fmt, va_list ap) {
 
 void Log::init() {
   s_logger = logging::TextLogger::make(pjs::Str::make("pipy_log"));
+  s_logger->retain();
   s_logger->add_target(new logging::Logger::StdoutTarget(stderr));
 }
 
 void Log::shutdown() {
   s_logger->shutdown();
+  s_logger->release();
   s_logger = nullptr;
 }
 
