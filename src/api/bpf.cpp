@@ -157,11 +157,28 @@ auto Map::lookup(pjs::Object *key) -> pjs::Object* {
   if (m_value_type) {
     return m_value_type->decode(*value);
   } else {
-    return value->retain();
+    return value.release()->pass();
   }
 }
 
 void Map::update(pjs::Object *key, pjs::Object *value) {
+  if (!key || !value) return;
+
+  pjs::Ref<Data> k, v;
+
+  if (key->is<Data>()) {
+    k = key->as<Data>();
+  } else if (m_key_type) {
+    k = m_key_type->encode(key);
+  }
+
+  if (value->is<Data>()) {
+    v = value->as<Data>();
+  } else if (m_value_type) {
+    v = m_value_type->encode(value);
+  }
+
+  update_raw(k, v);
 }
 
 void Map::remove(pjs::Object *key) {
@@ -198,6 +215,23 @@ auto Map::lookup_raw(Data *key) -> Data* {
 }
 
 void Map::update_raw(Data *key, Data *value) {
+  if (!m_fd) return;
+#ifdef __linux__
+  uint8_t k[m_key_size];
+  uint8_t v[m_value_size];
+  key->to_bytes(k, m_key_size);
+  value->to_bytes(k, m_value_size);
+
+  union bpf_attr attr;
+  syscall_bpf(
+    BPF_MAP_UPDATE_ELEM, &attr, attr_size(flags),
+    [&](union bpf_attr &attr) {
+      attr.map_fd = m_fd;
+      attr.key = (uintptr_t)k;
+      attr.value = (uintptr_t)v;
+    }
+  );
+#endif // __linux__
 }
 
 void Map::delete_raw(Data *key) {
@@ -230,6 +264,14 @@ template<> void ClassDef<bpf::Map>::init() {
       Object *key;
       if (!ctx.arguments(1, &key)) return;
       ret.set(obj->as<bpf::Map>()->lookup(key));
+    }
+  });
+
+  method("update", [](Context &ctx, Object *obj, Value &ret) {
+    if (linux_only(ctx)) {
+      Object *key, *value;
+      if (!ctx.arguments(2, &key, &value)) return;
+      obj->as<bpf::Map>()->update(key, value);
     }
   });
 }
