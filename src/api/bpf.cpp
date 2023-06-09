@@ -38,10 +38,20 @@
 namespace pipy {
 namespace bpf {
 
+thread_local static Data::Producer s_dp("BPF");
+
 #ifdef __linux__
 
 static inline int syscall_bpf(enum bpf_cmd cmd, union bpf_attr *attr, unsigned int size) {
 	return syscall(__NR_bpf, cmd, attr, size);
+}
+
+static inline int syscall_bpf(enum bpf_cmd cmd, union bpf_attr *attr, unsigned int size,
+  const std::function<void(union bpf_attr &attr)> &in
+) {
+  std::memset(attr, 0, size);
+  in(*attr);
+  return syscall_bpf(cmd, attr, size);
 }
 
 #endif // __linux__
@@ -50,30 +60,57 @@ static inline int syscall_bpf(enum bpf_cmd cmd, union bpf_attr *attr, unsigned i
 // Map
 //
 
+Map::Map(int fd, CStruct *key_type, CStruct *value_type)
+  : m_fd(fd)
+  , m_key_type(key_type)
+  , m_value_type(value_type)
+{
+#ifdef __linux__
+  union bpf_attr attr;
+  struct bpf_map_info info = {};
+  syscall_bpf(
+    BPF_OBJ_GET_INFO_BY_FD, &attr, attr_size(info),
+    [&](union bpf_attr &attr) {
+      attr.info.bpf_fd = fd;
+      attr.info.info_len = sizeof(info);
+      attr.info.info = (uint64_t)&info;
+    }
+  );
+  m_key_size = info.key_size;
+  m_value_size = info.value_size;
+#endif // __linux__
+}
+
 auto Map::list() -> pjs::Array* {
   auto a = pjs::Array::make();
 #ifdef __linux__
+  union bpf_attr attr;
   unsigned int id = 0;
   for (;;) {
-    union bpf_attr attr;
-    auto size = attr_size(open_flags);
-    std::memset(&attr, 0, size);
-    attr.start_id = id;
-    if (syscall_bpf(BPF_MAP_GET_NEXT_ID, &attr, size)) break;
-    id = attr.next_id;
+    if (!syscall_bpf(
+      BPF_MAP_GET_NEXT_ID, &attr, attr_size(open_flags),
+      [&](union bpf_attr &attr) { attr.start_id = id; }
+    )) {
+      id = attr.next_id;
+    } else {
+      break;
+    }
 
-    size = attr_size(open_flags);
-    std::memset(&attr, 0, size);
-    attr.map_id = id;
-    int fd = syscall_bpf(BPF_MAP_GET_FD_BY_ID, &attr, size);
+    int fd = syscall_bpf(
+      BPF_MAP_GET_FD_BY_ID, &attr, attr_size(open_flags),
+      [&](union bpf_attr &attr) { attr.map_id = id; }
+    );
 
 		struct bpf_map_info info = {};
-	  size = attr_size(info);
-	  memset(&attr, 0, size);
-    attr.info.bpf_fd = fd;
-    attr.info.info_len = sizeof(info);
-    attr.info.info = (uint64_t)&info;
-    syscall_bpf(BPF_OBJ_GET_INFO_BY_FD, &attr, size);
+    syscall_bpf(
+      BPF_OBJ_GET_INFO_BY_FD, &attr, attr_size(info),
+      [&](union bpf_attr &attr) {
+        attr.info.bpf_fd = fd;
+        attr.info.info_len = sizeof(info);
+        attr.info.info = (uint64_t)&info;
+      }
+    );
+    ::close(fd);
 
     auto i = Info::make();
     i->name = pjs::Str::make(info.name);
@@ -87,6 +124,83 @@ auto Map::list() -> pjs::Array* {
   }
 #endif // __linux__
   return a;
+}
+
+auto Map::open(int id, CStruct *key_type, CStruct *value_type) -> Map* {
+#ifdef __linux__
+  union bpf_attr attr;
+  int fd = syscall_bpf(
+    BPF_MAP_GET_FD_BY_ID, &attr, attr_size(open_flags),
+    [&](union bpf_attr &attr) { attr.map_id = id; }
+  );
+  if (fd <= 0) {
+    throw std::runtime_error("failed when trying to get fd by a map id");
+  }
+  return Map::make(fd, key_type, value_type);
+#else
+  return nullptr;
+#endif // __linux__
+}
+
+auto Map::lookup(pjs::Object *key) -> pjs::Object* {
+  if (!key) return nullptr;
+
+  pjs::Ref<Data> value;
+  if (key->is<Data>()) {
+    value = lookup_raw(key->as<Data>());
+  } else if (m_key_type) {
+    pjs::Ref<Data> raw_key = m_key_type->encode(key);
+    value = lookup_raw(raw_key);
+  }
+
+  if (!value) return nullptr;
+  if (m_value_type) {
+    return m_value_type->decode(*value);
+  } else {
+    return value->retain();
+  }
+}
+
+void Map::update(pjs::Object *key, pjs::Object *value) {
+}
+
+void Map::remove(pjs::Object *key) {
+}
+
+void Map::close() {
+#ifdef __linux__
+  ::close(m_fd);
+#endif
+  m_fd = 0;
+}
+
+auto Map::lookup_raw(Data *key) -> Data* {
+  if (!m_fd) return nullptr;
+#ifdef __linux__
+  uint8_t k[m_key_size];
+  uint8_t v[m_value_size];
+  key->to_bytes(k, m_key_size);
+
+  union bpf_attr attr;
+  if (syscall_bpf(
+    BPF_MAP_LOOKUP_ELEM, &attr, attr_size(flags),
+    [&](union bpf_attr &attr) {
+      attr.map_fd = m_fd;
+      attr.key = (uintptr_t)k;
+      attr.value = (uintptr_t)v;
+    }
+  )) return nullptr;
+
+  return Data::make(&v[0], m_value_size, &s_dp);
+#else
+  return nullptr;
+#endif // __linux__
+}
+
+void Map::update_raw(Data *key, Data *value) {
+}
+
+void Map::delete_raw(Data *key) {
 }
 
 } // namespace bpf
@@ -111,7 +225,13 @@ static bool linux_only(Context &ctx) {
 //
 
 template<> void ClassDef<bpf::Map>::init() {
-  ctor();
+  method("lookup", [](Context &ctx, Object *obj, Value &ret) {
+    if (linux_only(ctx)) {
+      Object *key;
+      if (!ctx.arguments(1, &key)) return;
+      ret.set(obj->as<bpf::Map>()->lookup(key));
+    }
+  });
 }
 
 template<> void ClassDef<Constructor<bpf::Map>>::init() {
@@ -121,6 +241,20 @@ template<> void ClassDef<Constructor<bpf::Map>>::init() {
   method("list", [](Context &ctx, Object *obj, Value &ret) {
     if (linux_only(ctx)) {
       ret.set(bpf::Map::list());
+    }
+  });
+
+  method("open", [](Context &ctx, Object *obj, Value &ret) {
+    if (linux_only(ctx)) {
+      int id;
+      CStruct *key_type = nullptr;
+      CStruct *value_type = nullptr;
+      if (!ctx.arguments(1, &id, &key_type, &value_type)) return;
+      try {
+        ret.set(bpf::Map::open(id, key_type, value_type));
+      } catch (std::runtime_error &err) {
+        ctx.error(err);
+      }
     }
   });
 }

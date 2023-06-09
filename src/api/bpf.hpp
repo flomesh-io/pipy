@@ -27,6 +27,8 @@
 #define API_BPF_HPP
 
 #include "pjs/pjs.hpp"
+#include "api/c-struct.hpp"
+#include "data.hpp"
 
 namespace pipy {
 namespace bpf {
@@ -52,6 +54,27 @@ public:
   };
 
   static auto list() -> pjs::Array*;
+  static auto open(int id, CStruct *key_type = nullptr, CStruct *value_type = nullptr) -> Map*;
+
+  auto lookup(pjs::Object *key) -> pjs::Object*;
+  void update(pjs::Object *key, pjs::Object *value);
+  void remove(pjs::Object *key);
+  void close();
+
+private:
+  Map(int fd, CStruct *key_type = nullptr, CStruct *value_type = nullptr);
+
+  auto lookup_raw(Data *key) -> Data*;
+  void update_raw(Data *key, Data *value);
+  void delete_raw(Data *key);
+
+  int m_fd;
+  int m_key_size;
+  int m_value_size;
+  pjs::Ref<CStruct> m_key_type;
+  pjs::Ref<CStruct> m_value_type;
+
+  friend class pjs::ObjectTemplate<Map>;
 };
 
 //
