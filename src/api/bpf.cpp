@@ -182,6 +182,13 @@ void Map::update(pjs::Object *key, pjs::Object *value) {
 }
 
 void Map::remove(pjs::Object *key) {
+  if (!key) return;
+  if (key->is<Data>()) {
+    delete_raw(key->as<Data>());
+  } else if (m_key_type) {
+    pjs::Ref<Data> k = m_key_type->encode(key);
+    delete_raw(k);
+  }
 }
 
 void Map::close() {
@@ -235,6 +242,20 @@ void Map::update_raw(Data *key, Data *value) {
 }
 
 void Map::delete_raw(Data *key) {
+  if (!m_fd) return;
+#ifdef __linux__
+  uint8_t k[m_key_size];
+  key->to_bytes(k, m_key_size);
+
+  union bpf_attr attr;
+  syscall_bpf(
+    BPF_MAP_DELETE_ELEM, &attr, attr_size(flags),
+    [&](union bpf_attr &attr) {
+      attr.map_fd = m_fd;
+      attr.key = (uintptr_t)k;
+    }
+  );
+#endif // __linux__
 }
 
 } // namespace bpf
@@ -272,6 +293,14 @@ template<> void ClassDef<bpf::Map>::init() {
       Object *key, *value;
       if (!ctx.arguments(2, &key, &value)) return;
       obj->as<bpf::Map>()->update(key, value);
+    }
+  });
+
+  method("delete", [](Context &ctx, Object *obj, Value &ret) {
+    if (linux_only(ctx)) {
+      Object *key;
+      if (!ctx.arguments(1, &key)) return;
+      obj->as<bpf::Map>()->remove(key);
     }
   });
 }
