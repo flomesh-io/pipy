@@ -55,8 +55,9 @@ public:
     FILES     = 1<<5,
     SUBPROC   = 1<<6,
     TCP       = 1<<7,
-    HTTP2     = 1<<8,
-    USER      = 1<<9,
+    UDP       = 1<<8,
+    HTTP2     = 1<<9,
+    USER      = 1<<10,
   };
 
   static void init();

@@ -29,6 +29,51 @@
 namespace pipy {
 
 using tcp = asio::ip::tcp;
+using udp = asio::ip::udp;
+
+//
+// SocketBase
+//
+
+void SocketBase::log_debug(const char *msg) {
+  if (m_is_inbound) {
+    if (Log::is_enabled(Log::INBOUND)) {
+      char desc[1000];
+      on_socket_describe(desc, sizeof(desc));
+      Log::debug(Log::INBOUND, "%s %s", desc, msg);
+    }
+  } else {
+    if (Log::is_enabled(Log::OUTBOUND)) {
+      char desc[1000];
+      on_socket_describe(desc, sizeof(desc));
+      Log::debug(Log::OUTBOUND, "%s %s", desc, msg);
+    }
+  }
+}
+
+void SocketBase::log_warn(const char *msg, const std::error_code &ec) {
+  if (Log::is_enabled(Log::WARN)) {
+    char desc[1000];
+    on_socket_describe(desc, sizeof(desc));
+    Log::warn("%s %s: %s", desc, msg, ec.message().c_str());
+  }
+}
+
+void SocketBase::log_error(const char *msg, const std::error_code &ec) {
+  if (Log::is_enabled(Log::ERROR)) {
+    char desc[1000];
+    on_socket_describe(desc, sizeof(desc));
+    Log::error("%s %s: %s", desc, msg, ec.message().c_str());
+  }
+}
+
+void SocketBase::log_error(const char *msg) {
+  if (Log::is_enabled(Log::ERROR)) {
+    char desc[1000];
+    on_socket_describe(desc, sizeof(desc));
+    Log::error("%s %s", desc, msg);
+  }
+}
 
 //
 // SocketTCP
@@ -307,44 +352,259 @@ void SocketTCP::on_send(const std::error_code &ec, std::size_t n) {
   handler_release();
 }
 
-void SocketTCP::log_debug(const char *msg) {
-  if (m_is_inbound) {
-    if (Log::is_enabled(Log::INBOUND)) {
-      char desc[1000];
-      on_socket_describe(desc, sizeof(desc));
-      Log::debug(Log::INBOUND, "%s %s", desc, msg);
+
+//
+// SocketUDP
+//
+
+thread_local Data::Producer SocketUDP::s_dp("UDP Socket");
+
+SocketUDP::~SocketUDP() {
+  Ticker::get()->unwatch(this);
+}
+
+void SocketUDP::start() {
+  auto t = Ticker::get()->tick();
+  m_tick_read = t;
+  m_tick_write = t;
+  m_started = true;
+
+  on_socket_start();
+
+  receive();
+
+  if (m_sending_end) {
+    send(nullptr);
+  }
+
+  Ticker::get()->watch(this);
+}
+
+void SocketUDP::output(Event *evt, Peer *peer) {
+  if (!m_sending_end) {
+    if (auto data = evt->as<Data>()) {
+      if (data->size() > 0) {
+        send(data);
+      }
+    } else if (auto eos = evt->as<StreamEnd>()) {
+      m_sending_end = true;
+      m_eos = (eos->error_code() == StreamEnd::NO_ERROR);
+      if (m_started) {
+        send(nullptr);
+      }
     }
+  }
+}
+
+void SocketUDP::close() {
+  close(false);
+}
+
+void SocketUDP::receive() {
+  if (m_closed) return;
+  if (m_receiving) return;
+  if (m_paused) return;
+
+  auto *buf = Data::make(RECEIVE_BUFFER_SIZE, &s_dp);
+  buf->retain();
+
+  m_socket.async_receive_from(
+    DataChunks(buf->chunks()),
+    m_from,
+    ReceiveHandler(this, buf)
+  );
+
+  m_receiving = true;
+  handler_retain();
+}
+
+void SocketUDP::send(Data *data) {
+  if (m_closed) return;
+
+  if (data) {
+    data->retain();
+    m_sending_size += data->size();
+
+    if (Log::is_enabled(Log::UDP)) {
+      std::cerr << Log::format_elapsed_time();
+      std::cerr << (m_is_inbound ? " udp <<<< send " : " udp send >>>> ");
+      std::cerr << data->size() << std::endl;
+    }
+
+    m_socket.async_send(
+      DataChunks(data->chunks()),
+      SendHandler(this, data)
+    );
+
+    handler_retain();
+  }
+
+  if (!m_sending_size) {
+    if (m_sending_end) {
+      close_send();
+    }
+  }
+}
+
+void SocketUDP::close_receive() {
+  if (!m_sending_end) {
+    handler_retain();
+  }
+}
+
+void SocketUDP::close_send() {
+  if (m_receiving_end) {
+    close(true);
+    handler_release();
+  } else if (m_eos) {
+    std::error_code ec;
+    m_socket.shutdown(tcp::socket::shutdown_send, ec);
   } else {
-    if (Log::is_enabled(Log::OUTBOUND)) {
-      char desc[1000];
-      on_socket_describe(desc, sizeof(desc));
-      Log::debug(Log::OUTBOUND, "%s %s", desc, msg);
+    close(false);
+  }
+}
+
+void SocketUDP::close(bool shutdown) {
+  if (m_started && !m_closed) {
+    if (m_socket.is_open()) {
+      std::error_code ec;
+      if (shutdown && m_eos) {
+        m_socket.shutdown(tcp::socket::shutdown_both, ec);
+      }
+      m_socket.close(ec);
+
+      if (ec) {
+        log_error("error closing socket", ec);
+      } else {
+        log_debug("socket closed");
+      }
+    }
+
+    m_sending_end = true;
+    m_closed = true;
+
+    if (m_paused) {
+      m_paused = false;
+      handler_release();
     }
   }
 }
 
-void SocketTCP::log_warn(const char *msg, const std::error_code &ec) {
-  if (Log::is_enabled(Log::WARN)) {
-    char desc[1000];
-    on_socket_describe(desc, sizeof(desc));
-    Log::warn("%s %s: %s", desc, msg, ec.message().c_str());
+void SocketUDP::on_tap_open() {
+  if (m_paused) {
+    m_paused = false;
+    receive();
+    handler_release();
   }
 }
 
-void SocketTCP::log_error(const char *msg, const std::error_code &ec) {
-  if (Log::is_enabled(Log::ERROR)) {
-    char desc[1000];
-    on_socket_describe(desc, sizeof(desc));
-    Log::error("%s %s: %s", desc, msg, ec.message().c_str());
+void SocketUDP::on_tap_close() {
+  if (!m_paused) {
+    m_paused = true;
+    handler_retain();
   }
 }
 
-void SocketTCP::log_error(const char *msg) {
-  if (Log::is_enabled(Log::ERROR)) {
-    char desc[1000];
-    on_socket_describe(desc, sizeof(desc));
-    Log::error("%s %s", desc, msg);
+void SocketUDP::on_tick(double tick) {
+  auto r = tick - m_tick_read;
+  auto w = tick - m_tick_write;
+
+  if (m_options.idle_timeout > 0) {
+    auto t = m_options.idle_timeout;
+    if (r >= t && w >= t) {
+      on_socket_input(StreamEnd::make(StreamEnd::IDLE_TIMEOUT));
+      close(StreamEnd::IDLE_TIMEOUT);
+      return;
+    }
   }
+
+  if (m_options.read_timeout > 0) {
+    if (r >= m_options.read_timeout) {
+      on_socket_input(StreamEnd::make(StreamEnd::READ_TIMEOUT));
+      close(StreamEnd::READ_TIMEOUT);
+      return;
+    }
+  }
+
+  if (m_options.write_timeout > 0) {
+    if (r >= m_options.write_timeout) {
+      on_socket_input(StreamEnd::make(StreamEnd::WRITE_TIMEOUT));
+      close(StreamEnd::WRITE_TIMEOUT);
+      return;
+    }
+  }
+}
+
+void SocketUDP::on_receive(Data *data, const std::error_code &ec, std::size_t n) {
+  InputContext ic(this);
+
+  m_receiving = false;
+  m_tick_read = Ticker::get()->tick();
+
+  Peer *peer = nullptr;
+  auto i = m_peers.find(m_from);
+  if (i == m_peers.end()) {
+    peer = on_socket_new_peer();
+    if (peer) {
+      peer->m_socket = this;
+      peer->m_endpoint = m_from;
+      m_peers[m_from] = peer;
+    }
+  }
+
+  if (peer && ec != asio::error::operation_aborted && !m_closed) {
+    if (n > 0) {
+      data->pop(data->size() - n);
+      auto size = data->size();
+      m_traffic_read += size;
+
+      if (Log::is_enabled(Log::UDP)) {
+        std::cerr << Log::format_elapsed_time();
+        std::cerr << (m_is_inbound ? " udp >>>> recv " : " udp recv <<<< ");
+        std::cerr << size << std::endl;
+      }
+
+      peer->on_socket_input(data);
+    }
+
+    if (ec) {
+      log_warn("error reading from peers", ec);
+      on_socket_input(StreamEnd::make(StreamEnd::READ_ERROR));
+      close(false);
+
+    } else {
+      receive();
+    }
+  }
+
+  data->release();
+  handler_release();
+}
+
+void SocketUDP::on_send(Data *data, const std::error_code &ec, std::size_t n) {
+  m_tick_write = Ticker::get()->tick();
+
+  if (ec != asio::error::operation_aborted && !m_closed) {
+    m_sending_size -= data->size();
+    m_traffic_write += n;
+
+    data->release();
+
+    auto limit = m_options.congestion_limit;
+    if (limit > 0 && m_sending_size < limit) {
+      m_congestion.end();
+    }
+
+    if (ec) {
+      log_warn("error writing to peer", ec);
+      close(false);
+
+    } else if (m_sending_end && !m_sending_size) {
+      close_send();
+    }
+  }
+
+  handler_release();
 }
 
 } // namespace pipy

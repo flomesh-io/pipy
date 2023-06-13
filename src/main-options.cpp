@@ -74,6 +74,7 @@ static const struct {
   { Log::FILES    , "files" },
   { Log::SUBPROC  , "subproc" },
   { Log::TCP      , "tcp" },
+  { Log::UDP      , "udp" },
   { Log::HTTP2    , "http2" },
   { Log::USER     , "user" },
   { Log::NO_TOPIC , nullptr },

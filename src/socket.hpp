@@ -34,20 +34,10 @@
 namespace pipy {
 
 //
-// SocketTCP
+// SocketBase
 //
 
-class SocketTCP :
-  public InputSource,
-  public FlushTarget,
-  public Ticker::Watcher
-{
-  virtual void on_socket_start() = 0;
-  virtual void on_socket_input(Event *evt) = 0;
-  virtual void on_socket_overflow(size_t size) = 0;
-  virtual void on_socket_describe(char *buf, size_t len) = 0;
-  virtual void on_socket_stop() = 0;
-
+class SocketBase {
 public:
   struct Options {
     size_t congestion_limit = 1024*1024;
@@ -60,11 +50,44 @@ public:
   };
 
 protected:
+  SocketBase(bool is_inbound, const Options &options)
+    : m_is_inbound(is_inbound)
+    , m_options(options) {}
+
+  void log_debug(const char *msg);
+  void log_warn(const char *msg, const std::error_code &ec);
+  void log_error(const char *msg, const std::error_code &ec);
+  void log_error(const char *msg);
+
+  bool m_is_inbound;
+  const Options& m_options;
+  size_t m_traffic_read = 0;
+  size_t m_traffic_write = 0;
+
+private:
+  virtual void on_socket_describe(char *buf, size_t len) = 0;
+};
+
+//
+// SocketTCP
+//
+
+class SocketTCP :
+  public SocketBase,
+  public InputSource,
+  public FlushTarget,
+  public Ticker::Watcher
+{
+  virtual void on_socket_start() = 0;
+  virtual void on_socket_input(Event *evt) = 0;
+  virtual void on_socket_overflow(size_t size) = 0;
+  virtual void on_socket_stop() = 0;
+
+protected:
   SocketTCP(bool is_inbound, const Options &options)
-    : FlushTarget(true)
-    , m_socket(Net::context())
-    , m_options(options)
-    , m_is_inbound(is_inbound) {}
+    : SocketBase(is_inbound, options)
+    , FlushTarget(true)
+    , m_socket(Net::context()) {}
 
   ~SocketTCP();
 
@@ -75,17 +98,8 @@ protected:
   void output(Event *evt);
   void close();
 
-  void log_debug(const char *msg);
-  void log_warn(const char *msg, const std::error_code &ec);
-  void log_error(const char *msg, const std::error_code &ec);
-  void log_error(const char *msg);
-
-  size_t m_traffic_read = 0;
-  size_t m_traffic_write = 0;
-
 private:
   asio::ip::tcp::socket m_socket;
-  const Options& m_options;
   Data m_buffer_receive;
   Data m_buffer_send;
   Congestion m_congestion;
@@ -129,6 +143,100 @@ private:
     using SelfHandler::SelfHandler;
     SendHandler(const SendHandler &r) : SelfHandler(r) {}
     void operator()(const std::error_code &ec, std::size_t n) { self->on_send(ec, n); }
+  };
+
+  thread_local static Data::Producer s_dp;
+};
+
+//
+// SocketUDP
+//
+
+class SocketUDP :
+  public SocketBase,
+  public InputSource,
+  public Ticker::Watcher
+{
+protected:
+
+  //
+  // SocketUDP::Peer
+  //
+
+  class Peer {
+  public:
+    Peer() {}
+    ~Peer() { m_socket->m_peers.erase(m_endpoint); }
+    SocketUDP* m_socket = nullptr;
+    asio::ip::udp::endpoint m_endpoint;
+    virtual void on_socket_input(Event *evt) = 0;
+    friend class SocketUDP;
+  };
+
+  virtual void on_socket_start() = 0;
+  virtual void on_socket_input(Event *evt) = 0;
+  virtual auto on_socket_new_peer() -> Peer* = 0;
+  virtual void on_socket_overflow(size_t size) = 0;
+  virtual void on_socket_stop() = 0;
+
+  SocketUDP(bool is_inbound, const Options &options)
+    : SocketBase(is_inbound, options)
+    , m_socket(Net::context()) {}
+
+  ~SocketUDP();
+
+  auto socket() -> asio::ip::udp::socket& { return m_socket; }
+  auto buffered() const -> size_t { return m_sending_size; }
+
+  void start();
+  void output(Event *evt, Peer *peer);
+  void close();
+
+private:
+  asio::ip::udp::socket m_socket;
+  asio::ip::udp::endpoint m_from;
+  std::map<asio::ip::udp::endpoint, Peer*> m_peers;
+  Data m_buffer_receive;
+  Data m_buffer_send;
+  Congestion m_congestion;
+  int m_sending_size = 0;
+  double m_tick_read;
+  double m_tick_write;
+  bool m_started = false;
+  bool m_closed = false;
+  bool m_receiving = false;
+  bool m_receiving_end = false;
+  bool m_sending_end = false;
+  bool m_eos = false;
+  bool m_paused = false;
+  int m_retain_count = 0;
+
+  void handler_retain() { m_retain_count++; }
+  void handler_release() { if (!--m_retain_count) on_socket_stop(); }
+
+  void receive();
+  void send(Data *data);
+  void close_receive();
+  void close_send();
+  void close(bool shutdown);
+
+  virtual void on_tap_open() override;
+  virtual void on_tap_close() override;
+  virtual void on_tick(double tick) override;
+
+  void on_receive(Data *data, const std::error_code &ec, std::size_t n);
+  void on_send(Data *data, const std::error_code &ec, std::size_t n);
+
+  struct ReceiveHandler : public SelfDataHandler<SocketUDP, Data> {
+    using SelfDataHandler::SelfDataHandler;
+    ReceiveHandler(const ReceiveHandler &r) : SelfDataHandler(r) {}
+    void operator()(const std::error_code &ec, std::size_t n) { self->on_receive(data, ec, n); }
+  };
+
+  struct SendHandler : public SelfDataHandler<SocketUDP, Data> {
+    using SelfDataHandler::SelfDataHandler;
+    SendHandler(const SendHandler &r) : SelfDataHandler(r) {}
+    void operator()(const std::error_code &ec, std::size_t n) { self->on_send(data, ec, n); }
   };
 
   thread_local static Data::Producer s_dp;
