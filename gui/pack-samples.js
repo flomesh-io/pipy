@@ -15,8 +15,13 @@ const {
 } = require('./pack-utils.js');
 
 const dirnames = [].concat(
-  fs.readdirSync(TUTORIAL_PATH).sort().map(s => `tutorial/${s}`),
-  fs.readdirSync(SAMPLES_PATH).filter(s => s !== 'nmi' && s !== 'bpf').sort().map(s => `samples/${s}`),
+  fs.readdirSync(TUTORIAL_PATH, { withFileTypes: true })
+    .filter(e => e.isDirectory() && !e.name.startsWith('.'))
+    .sort().map(e => `tutorial/${e.name}`),
+  fs.readdirSync(SAMPLES_PATH, { withFileTypes: true })
+    .filter(e => e.isDirectory() && !e.name.startsWith('.'))
+    .filter(e => e.name !== 'nmi' && e.name !== 'bpf')
+    .sort().map(e => `samples/${e.name}`),
 );
 
 const codebases = [];
