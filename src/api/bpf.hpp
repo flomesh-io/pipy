@@ -56,6 +56,8 @@ public:
   static auto list() -> pjs::Array*;
   static auto open(int id, CStruct *key_type = nullptr, CStruct *value_type = nullptr) -> Map*;
 
+  auto keys() -> pjs::Array*;
+  auto entries() -> pjs::Array*;
   auto lookup(pjs::Object *key) -> pjs::Object*;
   void update(pjs::Object *key, pjs::Object *value);
   void remove(pjs::Object *key);

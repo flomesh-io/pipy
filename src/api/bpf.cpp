@@ -142,6 +142,91 @@ auto Map::open(int id, CStruct *key_type, CStruct *value_type) -> Map* {
 #endif // __linux__
 }
 
+auto Map::keys() -> pjs::Array* {
+  if (!m_fd) return nullptr;
+#ifdef __linux__
+  uint8_t k[m_key_size];
+
+  auto a = pjs::Array::make();
+  uint8_t *p = nullptr;
+
+  union bpf_attr attr;
+  while (!syscall_bpf(
+    BPF_MAP_GET_NEXT_KEY, &attr, attr_size(next_key),
+    [&](union bpf_attr &attr) {
+      attr.map_fd = m_fd;
+      attr.key = (uintptr_t)p;
+      attr.next_key = (uintptr_t)k;
+    }
+  )) {
+    Data data(k, m_key_size, &s_dp);
+    if (m_key_type) {
+      a->push(m_key_type->decode(data));
+    } else {
+      a->push(Data::make(std::move(data)));
+    }
+    p = k;
+  }
+
+  return a;
+#else
+  return nullptr;
+#endif // __linux__
+}
+
+auto Map::entries() -> pjs::Array* {
+  if (!m_fd) return nullptr;
+#ifdef __linux__
+  uint8_t k[m_key_size];
+  uint8_t v[m_value_size];
+
+  auto a = pjs::Array::make();
+  uint8_t *p = nullptr;
+
+  union bpf_attr attr;
+  while (!syscall_bpf(
+    BPF_MAP_GET_NEXT_KEY, &attr, attr_size(next_key),
+    [&](union bpf_attr &attr) {
+      attr.map_fd = m_fd;
+      attr.key = (uintptr_t)p;
+      attr.next_key = (uintptr_t)k;
+    }
+  )) {
+    if (syscall_bpf(
+      BPF_MAP_LOOKUP_ELEM, &attr, attr_size(flags),
+      [&](union bpf_attr &attr) {
+        attr.map_fd = m_fd;
+        attr.key = (uintptr_t)k;
+        attr.value = (uintptr_t)v;
+      }
+    )) break;
+
+    Data data_k(k, m_key_size, &s_dp);
+    Data data_v(v, m_value_size, &s_dp);
+    auto ent = pjs::Array::make(2);
+    a->push(ent);
+
+    if (m_key_type) {
+      ent->set(0, m_key_type->decode(data_k));
+    } else {
+      ent->set(0, Data::make(std::move(data_k)));
+    }
+
+    if (m_value_type) {
+      ent->set(1, m_value_type->decode(data_v));
+    } else {
+      ent->set(1, Data::make(std::move(data_v)));
+    }
+
+    p = k;
+  }
+
+  return a;
+#else
+  return nullptr;
+#endif // __linux__
+}
+
 auto Map::lookup(pjs::Object *key) -> pjs::Object* {
   if (!key) return nullptr;
 
@@ -280,6 +365,18 @@ static bool linux_only(Context &ctx) {
 //
 
 template<> void ClassDef<bpf::Map>::init() {
+  method("keys", [](Context &ctx, Object *obj, Value &ret) {
+    if (linux_only(ctx)) {
+      ret.set(obj->as<bpf::Map>()->keys());
+    }
+  });
+
+  method("entries", [](Context &ctx, Object *obj, Value &ret) {
+    if (linux_only(ctx)) {
+      ret.set(obj->as<bpf::Map>()->entries());
+    }
+  });
+
   method("lookup", [](Context &ctx, Object *obj, Value &ret) {
     if (linux_only(ctx)) {
       Object *key;
