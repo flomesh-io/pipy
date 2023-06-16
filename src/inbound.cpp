@@ -68,14 +68,6 @@ Inbound::~Inbound() {
   Log::debug(Log::ALLOC, "[inbound  %p] --", this);
 }
 
-auto Inbound::output() -> Output* {
-  if (!m_output) {
-    m_output = Output::make(EventTarget::input());
-    Output::WeakPtr::Watcher::watch(m_output.get());
-  }
-  return m_output.ptr();
-}
-
 auto Inbound::local_address() -> pjs::Str* {
   if (!m_str_local_addr) {
     address();
@@ -117,10 +109,6 @@ void Inbound::address() {
     on_get_address();
     m_addressed = true;
   }
-}
-
-void Inbound::on_weak_ptr_gone() {
-  m_output = nullptr;
 }
 
 void Inbound::init_metrics() {
@@ -512,7 +500,6 @@ template<> void ClassDef<Inbound>::init() {
   accessor("remotePort"         , [](Object *obj, Value &ret) { ret.set(obj->as<Inbound>()->remote_port()); });
   accessor("destinationAddress" , [](Object *obj, Value &ret) { ret.set(obj->as<Inbound>()->ori_dst_address()); });
   accessor("destinationPort"    , [](Object *obj, Value &ret) { ret.set(obj->as<Inbound>()->ori_dst_port()); });
-  accessor("output"             , [](Object *obj, Value &ret) { ret.set(obj->as<Inbound>()->output()); });
 }
 
 template<> void ClassDef<InboundTCP>::init() {

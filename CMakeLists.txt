@@ -251,7 +251,6 @@ add_executable(pipy
   src/nmi.cpp
   src/options.cpp
   src/outbound.cpp
-  src/output.cpp
   src/pipeline.cpp
   src/pjs/builtin.cpp
   src/pjs/expr.cpp

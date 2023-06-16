@@ -39,7 +39,6 @@ namespace pipy {
 class Context;
 class ModuleBase;
 class Message;
-class Output;
 
 //
 // Filter

@@ -30,7 +30,6 @@
 #include "socket.hpp"
 #include "event.hpp"
 #include "input.hpp"
-#include "output.hpp"
 #include "timer.hpp"
 #include "list.hpp"
 #include "api/stats.hpp"
@@ -49,8 +48,7 @@ class Pipeline;
 
 class Inbound :
   public pjs::ObjectTemplate<Inbound>,
-  public EventTarget,
-  public Output::WeakPtr::Watcher
+  public EventTarget
 {
 public:
   struct Options : public SocketTCP::Options {
@@ -60,7 +58,6 @@ public:
   };
 
   auto id() const -> uint64_t { return m_id; }
-  auto output() -> Output*;
   auto pipeline() const -> Pipeline* { return m_pipeline; }
   auto local_address() -> pjs::Str*;
   auto local_port() -> int { address(); return m_local_port; }
@@ -108,14 +105,11 @@ private:
   virtual void on_get_address() = 0;
 
   uint64_t m_id;
-  pjs::WeakRef<Output> m_output;
   pjs::Ref<Pipeline> m_pipeline;
   pjs::Ref<pjs::Str> m_str_local_addr;
   pjs::Ref<pjs::Str> m_str_remote_addr;
   pjs::Ref<pjs::Str> m_str_ori_dst_addr;
   bool m_addressed = false;
-
-  virtual void on_weak_ptr_gone() override;
 
   static std::atomic<uint64_t> s_inbound_id;
 

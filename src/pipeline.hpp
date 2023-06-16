@@ -29,7 +29,6 @@
 #include "pjs/pjs.hpp"
 #include "event.hpp"
 #include "input.hpp"
-#include "output.hpp"
 #include "list.hpp"
 
 #include <list>
