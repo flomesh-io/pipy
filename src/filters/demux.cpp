@@ -270,6 +270,9 @@ void DemuxQueue::Receiver::on_event(Event *evt) {
             q->EventFunction::output(evt);
             q->reset();
           }
+        } else { // EOS without a MessageStart, abort
+          q->EventFunction::output(evt);
+          q->reset();
         }
         break;
     }
