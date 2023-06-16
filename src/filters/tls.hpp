@@ -184,7 +184,7 @@ private:
   auto pump_receive() -> int;
   void pump_read();
   void pump_write();
-  void close(StreamEnd::Error err = StreamEnd::NO_ERROR);
+  void close();
 
   static int s_user_data_index;
 

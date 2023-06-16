@@ -322,7 +322,7 @@ void TLSSession::start_handshake() {
 void TLSSession::on_input(Event *evt) {
   if (m_closed_input) return;
 
-  if (evt->is<MessageEnd>() || Data::is_flush(evt)) {
+  if (Data::is_flush(evt)) {
     forward(evt);
 
   } else if (auto *data = evt->as<Data>()) {
@@ -343,7 +343,7 @@ void TLSSession::on_input(Event *evt) {
 void TLSSession::on_reply(Event *evt) {
   if (m_closed_output) return;
 
-  if (evt->is<MessageEnd>() || Data::is_flush(evt)) {
+  if (Data::is_flush(evt)) {
     output(evt);
 
   } else if (auto *data = evt->as<Data>()) {
@@ -491,7 +491,7 @@ bool TLSSession::handshake_step() {
         ERR_error_string(err, str);
         Log::warn("[tls] %s", str);
       }
-      close(StreamEnd::UNAUTHORIZED);
+      close();
       return false;
     }
     pump_send();
@@ -572,7 +572,7 @@ void TLSSession::pump_read() {
         } else if (status == SSL_ERROR_WANT_READ || status == SSL_ERROR_WANT_WRITE) {
           break;
         } else {
-          close(StreamEnd::READ_ERROR);
+          close();
           return;
         }
       } else {
@@ -604,7 +604,7 @@ void TLSSession::pump_write() {
         } else if (status == SSL_ERROR_WANT_READ || status == SSL_ERROR_WANT_WRITE) {
           break;
         } else {
-          close(StreamEnd::WRITE_ERROR);
+          close();
           return;
         }
       }
@@ -616,16 +616,16 @@ void TLSSession::pump_write() {
   }
 }
 
-void TLSSession::close(StreamEnd::Error err) {
+void TLSSession::close() {
   if (m_is_server) {
     if (!m_closed_output) {
       m_closed_output = true;
-      output(StreamEnd::make(err));
+      output(StreamEnd::make());
     }
   } else {
-    if (m_closed_input) {
+    if (!m_closed_input) {
       m_closed_input = true;
-      forward(StreamEnd::make(err));
+      forward(StreamEnd::make());
     }
   }
 }
