@@ -470,6 +470,7 @@ protected:
     void encoder_input(Event *evt);
     void end_input();
     void end_output();
+    bool is_tunnel() const { return m_is_tunnel_confirmed; }
 
     virtual void decoder_output(Event *evt) = 0;
     virtual void end() = 0;
@@ -501,7 +502,8 @@ protected:
     Endpoint* m_endpoint;
     int m_id;
     bool m_is_server_side;
-    bool m_is_tunnel = false;
+    bool m_is_tunnel_requested = false;
+    bool m_is_tunnel_confirmed = false;
     bool m_is_pending = false;
     bool m_is_clearing = false;
     bool m_is_message_started = false;

@@ -1764,12 +1764,27 @@ void Endpoint::StreamBase::encoder_input(Event *evt) {
       } else if (m_state == RESERVED_LOCAL) {
         m_state = HALF_CLOSED_REMOTE;
       }
-      if (!m_is_server_side) {
+      if (m_is_server_side) {
+        if (m_is_tunnel_requested) {
+          pjs::Value status;
+          if (auto head = start->head()) {
+            head->get(s_status, status);
+          }
+          if (status.is_undefined()) {
+            m_is_tunnel_confirmed = true;
+          } else {
+            auto n = status.to_int32();
+            if (200 <= n && n < 300) {
+              m_is_tunnel_confirmed = true;
+            }
+          }
+        }
+      } else {
         if (auto head = start->head()) {
           pjs::Value method;
           head->get(s_method, method);
           if (method.is_string() && method.s() == s_CONNECT) {
-            m_is_tunnel = true;
+            m_is_tunnel_requested = true;
           }
         }
       }
@@ -1786,12 +1801,14 @@ void Endpoint::StreamBase::encoder_input(Event *evt) {
       }
     }
 
-  } else if (
-    (evt->is<MessageEnd>() && !m_is_tunnel) ||
-    (evt->is<StreamEnd>()))
-  {
+  } else if (evt->is<MessageEnd>() || evt->is<StreamEnd>()) {
     if (m_is_message_started && !m_is_message_ended) {
       if (auto *end = evt->as<MessageEnd>()) {
+        if (m_is_server_side) {
+          if (m_is_tunnel_confirmed) return;
+        } else {
+          if (m_is_tunnel_requested) return;
+        }
         if (auto tail = end->tail()) {
           m_header_encoder.encode(m_is_server_side, true, tail, m_tail_buffer);
         }
@@ -1982,10 +1999,14 @@ void Endpoint::StreamBase::parse_headers(Frame &frm) {
 
     if (m_is_server_side) {
       if (head->as<http::RequestHead>()->method == s_CONNECT) {
-        m_is_tunnel = true;
+        m_is_tunnel_requested = true;
         decoder_output(MessageEnd::make());
       }
-    } else if (m_is_tunnel) {
+    } else if (m_is_tunnel_requested) {
+      auto n = head->as<http::ResponseHead>()->status;
+      if (200 <= n && n < 300) {
+        m_is_tunnel_confirmed = true;
+      }
       decoder_output(MessageEnd::make());
     }
 
@@ -2075,7 +2096,7 @@ void Endpoint::StreamBase::write_header_block(Data &data) {
 }
 
 void Endpoint::StreamBase::stream_end(http::MessageTail *tail) {
-  if (m_is_tunnel) {
+  if (m_is_tunnel_confirmed) {
     decoder_output(StreamEnd::make());
   } else {
     decoder_output(MessageEnd::make(tail));
@@ -2235,8 +2256,9 @@ void Server::Stream::decoder_output(Event *evt) {
 // Response (output)
 void Server::Stream::on_event(Event *evt) {
   auto is_eos = evt->is<StreamEnd>();
+  auto is_end = evt->is<MessageEnd>() && !is_tunnel();
   StreamBase::encoder_input(evt);
-  if (is_eos) end_output();
+  if (is_eos || is_end) end_output();
 }
 
 // Close endpoint
