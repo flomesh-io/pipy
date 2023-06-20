@@ -1802,25 +1802,42 @@ void Endpoint::StreamBase::encoder_input(Event *evt) {
     }
 
   } else if (evt->is<MessageEnd>() || evt->is<StreamEnd>()) {
-    if (m_is_message_started && !m_is_message_ended) {
-      if (auto *end = evt->as<MessageEnd>()) {
-        if (m_is_server_side) {
-          if (m_is_tunnel_confirmed) return;
-        } else {
-          if (m_is_tunnel_requested) return;
+    if (m_is_message_started) {
+      if (!m_is_message_ended) {
+        if (auto *end = evt->as<MessageEnd>()) {
+          if (m_is_server_side) {
+            if (m_is_tunnel_confirmed) return;
+          } else {
+            if (m_is_tunnel_requested) return;
+          }
+          if (auto tail = end->tail()) {
+            m_header_encoder.encode(m_is_server_side, true, tail, m_tail_buffer);
+          }
         }
-        if (auto tail = end->tail()) {
-          m_header_encoder.encode(m_is_server_side, true, tail, m_tail_buffer);
+        if (m_state == OPEN) {
+          m_state = HALF_CLOSED_LOCAL;
+        } else if (m_state == HALF_CLOSED_REMOTE) {
+          m_state = CLOSED;
         }
+        m_is_message_ended = true;
+        m_end_stream_send = true;
+        pump();
       }
-      if (m_state == OPEN) {
-        m_state = HALF_CLOSED_LOCAL;
-      } else if (m_state == HALF_CLOSED_REMOTE) {
-        m_state = CLOSED;
+    } else if (evt->is<StreamEnd>()) { // EOS without message start
+      if (m_is_server_side) {
+        if (m_state == OPEN) {
+          m_state = HALF_CLOSED_LOCAL;
+        } else if (m_state == HALF_CLOSED_REMOTE) {
+          m_state = CLOSED;
+        }
+        m_end_stream_send = true;
+        pjs::Ref<http::ResponseHead> head = http::ResponseHead::make();
+        head->status = 502;
+        Data buf;
+        m_header_encoder.encode(true, false, head, buf);
+        write_header_block(buf);
+        pump();
       }
-      m_is_message_ended = true;
-      m_end_stream_send = true;
-      pump();
     }
   }
 }
