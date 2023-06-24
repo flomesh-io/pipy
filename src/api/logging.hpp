@@ -151,6 +151,7 @@ public:
   public:
     struct Options : public pipy::Options {
       size_t batch_size = 1000;
+      int buffer_limit = 8*1024*1024;
       Pack::Options batch;
       tls::Client::Options tls;
       pjs::Ref<pjs::Str> method;

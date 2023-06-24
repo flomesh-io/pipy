@@ -339,6 +339,9 @@ Logger::HTTPTarget::Options::Options(pjs::Object *options) {
   Value(batch_options, "size", options_batch)
     .get(batch_size)
     .check_nullable();
+  Value(options, "bufferLimit")
+    .get(buffer_limit)
+    .check_nullable();
   batch = Pack::Options(batch_options, options_batch);
   tls = tls::Client::Options(tls_options, options_tls);
   Value(options, "method")
@@ -377,7 +380,11 @@ Logger::HTTPTarget::HTTPTarget(pjs::Str *url, const Options &options)
     ppl_pack = ppl_connect;
   }
 
-  ppl_pack->append(new Connect(url_obj->host(), Connect::Options()));
+  Connect::Options conn_opts;
+  conn_opts.buffer_limit = options.buffer_limit;
+  conn_opts.retry_delay = 5;
+  conn_opts.retry_count = -1;
+  ppl_pack->append(new Connect(url_obj->host(), conn_opts));
 
   m_ppl = ppl;
 
