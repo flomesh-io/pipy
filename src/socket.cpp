@@ -119,7 +119,9 @@ void SocketTCP::output(Event *evt) {
           std::snprintf(msg, sizeof(msg), "buffer overflow by %d bytes over the limit of %d", (int)excess, (int)limit);
           Log::error(msg);
           on_socket_overflow(excess);
+          if (!m_sending) m_buffer_send.clear();
           close(false);
+          on_socket_input(StreamEnd::make(StreamEnd::BUFFER_OVERFLOW));
         } else {
           m_buffer_send.push(*data);
           auto limit = m_options.congestion_limit;
@@ -257,7 +259,7 @@ void SocketTCP::on_tick(double tick) {
     auto t = m_options.idle_timeout;
     if (r >= t && w >= t) {
       on_socket_input(StreamEnd::make(StreamEnd::IDLE_TIMEOUT));
-      close(StreamEnd::IDLE_TIMEOUT);
+      close(false);
       return;
     }
   }
@@ -265,7 +267,7 @@ void SocketTCP::on_tick(double tick) {
   if (m_options.read_timeout > 0) {
     if (r >= m_options.read_timeout) {
       on_socket_input(StreamEnd::make(StreamEnd::READ_TIMEOUT));
-      close(StreamEnd::READ_TIMEOUT);
+      close(false);
       return;
     }
   }
@@ -273,7 +275,7 @@ void SocketTCP::on_tick(double tick) {
   if (m_options.write_timeout > 0) {
     if (r >= m_options.write_timeout) {
       on_socket_input(StreamEnd::make(StreamEnd::WRITE_TIMEOUT));
-      close(StreamEnd::WRITE_TIMEOUT);
+      close(false);
       return;
     }
   }
@@ -513,7 +515,7 @@ void SocketUDP::on_tick(double tick) {
     auto t = m_options.idle_timeout;
     if (r >= t && w >= t) {
       on_socket_input(StreamEnd::make(StreamEnd::IDLE_TIMEOUT));
-      close(StreamEnd::IDLE_TIMEOUT);
+      close(false);
       return;
     }
   }
@@ -521,7 +523,7 @@ void SocketUDP::on_tick(double tick) {
   if (m_options.read_timeout > 0) {
     if (r >= m_options.read_timeout) {
       on_socket_input(StreamEnd::make(StreamEnd::READ_TIMEOUT));
-      close(StreamEnd::READ_TIMEOUT);
+      close(false);
       return;
     }
   }
@@ -529,7 +531,7 @@ void SocketUDP::on_tick(double tick) {
   if (m_options.write_timeout > 0) {
     if (r >= m_options.write_timeout) {
       on_socket_input(StreamEnd::make(StreamEnd::WRITE_TIMEOUT));
-      close(StreamEnd::WRITE_TIMEOUT);
+      close(false);
       return;
     }
   }
