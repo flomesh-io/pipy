@@ -201,7 +201,9 @@ void DemuxQueue::shift_receiver() {
 void DemuxQueue::clear_receivers(bool reset) {
   while (auto r = m_receivers.head()) {
     if (reset) {
-      close_stream(r->stream());
+      auto s = r->stream();
+      close_stream(s);
+      if (s == m_input_stream) m_input_stream = nullptr;
     } else {
       close_stream_output(r->stream());
     }
@@ -213,7 +215,9 @@ void DemuxQueue::clear_receivers(bool reset) {
 void DemuxQueue::clear_waiters(bool reset) {
   while (auto w = m_waiters.head()) {
     if (reset) {
-      close_stream(w->stream());
+      auto s = w->stream();
+      close_stream(s);
+      if (s == m_input_stream) m_input_stream = nullptr;
     } else {
       close_stream_output(w->stream());
     }
