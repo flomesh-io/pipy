@@ -1065,7 +1065,12 @@ template<> void ClassDef<Quota>::init() {
     double initial_value = 0;
     pjs::Object *options = nullptr;
     if (!ctx.arguments(0, &initial_value, &options)) return nullptr;
-    return Quota::make(initial_value, options);
+    try {
+      return Quota::make(initial_value, options);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+      return nullptr;
+    }
   });
 
   accessor("initial", [](pjs::Object *obj, pjs::Value &ret) { ret.set(obj->as<Quota>()->initial()); });
