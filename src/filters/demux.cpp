@@ -162,7 +162,7 @@ bool DemuxQueue::check_dedicated() {
         m_input_stream = s;
       }
       if (s) {
-        s->end_input = true; // reopen input if it's closed already
+        s->end_input = false; // reopen input if it's closed already
         s->handler->chain(EventFunction::output());
         on_demux_queue_dedicate(s->handler);
       }
