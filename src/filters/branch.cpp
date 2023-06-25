@@ -59,6 +59,13 @@ void BranchBase::reset() {
   m_chosen = false;
 }
 
+void BranchBase::chain() {
+  Filter::chain();
+  if (m_pipeline) {
+    m_pipeline->chain(Filter::output());
+  }
+}
+
 void BranchBase::process(Event *evt) {
   if (!m_chosen) {
     if (!choose(evt)) return;
@@ -85,7 +92,7 @@ bool BranchBase::find_branch(int argc, pjs::Value *args) {
       m_chosen = true;
     }
     if (m_chosen) {
-      if (auto *pipeline = sub_pipeline(i, false, output())) {
+      if (auto *pipeline = sub_pipeline(i, false, Filter::output())) {
         pipeline->start();
         m_pipeline = pipeline;
         m_buffer.flush([&](Event *evt) {

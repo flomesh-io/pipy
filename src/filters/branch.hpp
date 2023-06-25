@@ -48,6 +48,7 @@ protected:
   ~BranchBase();
 
   virtual void reset() override;
+  virtual void chain() override;
   virtual void process(Event *evt) override;
   virtual bool choose(Event *evt) = 0;
 
