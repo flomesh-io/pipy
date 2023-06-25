@@ -93,6 +93,13 @@ void Chain::reset() {
   m_entrance = nullptr;
 }
 
+void Chain::chain() {
+  Filter::chain();
+  if (m_entrance) {
+    m_entrance->chain(Filter::output());
+  }
+}
+
 void Chain::process(Event *evt) {
   if (!m_entrance && m_chain) {
     auto *p = Pipeline::make(m_chain->layout, context());
@@ -137,6 +144,13 @@ auto ChainNext::clone() -> Filter* {
 void ChainNext::reset() {
   Filter::reset();
   m_next = nullptr;
+}
+
+void ChainNext::chain() {
+  Filter::chain();
+  if (m_next) {
+    m_next->chain(Filter::output());
+  }
 }
 
 void ChainNext::process(Event *evt) {
