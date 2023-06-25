@@ -45,6 +45,7 @@ void MainOptions::show_help() {
   std::cout << "  -e, -eval, --eval                    Evaluate the given string as script" << std::endl;
   std::cout << "  --threads=<number>                   Number of worker threads (1, 2, ... max)" << std::endl;
   std::cout << "  --log-level=<debug|info|warn|error>  Set the level of log output" << std::endl;
+  std::cout << "  --log-history-limit=<size>           Set size limit of log history" << std::endl;
   std::cout << "  --log-local-only                     Do not send out system log" << std::endl;
   std::cout << "  --verify                             Verify configuration only" << std::endl;
   std::cout << "  --no-graph                           Do not print pipeline graphs to the log" << std::endl;
@@ -155,6 +156,8 @@ MainOptions::MainOptions(int argc, char *argv[]) {
           std::string msg("unknown log level: ");
           throw std::runtime_error(msg + v);
         }
+      } else if (k == "--log-history-limit") {
+        log_history_limit = utils::get_byte_size(v);
       } else if (k == "--log-local-only") {
         log_local_only = true;
       } else if (k == "--verify") {
@@ -194,6 +197,10 @@ MainOptions::MainOptions(int argc, char *argv[]) {
 
   if (eval && filename.empty()) {
     throw std::runtime_error("missing script to evaluate");
+  }
+
+  if (log_history_limit > 256*1024*1024) {
+    throw std::runtime_error("maximum value supported by --log-history-limit is 256MB");
   }
 
   if (!instance_uuid.empty() && instance_uuid.find('/') != std::string::npos) {

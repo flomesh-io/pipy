@@ -57,6 +57,7 @@ thread_local static Data::Producer s_dp_json("JSONLogger");
 
 AdminService* Logger::s_admin_service = nullptr;
 AdminLink* Logger::s_admin_link = nullptr;
+size_t Logger::s_history_limit = 0;
 
 thread_local std::set<Logger*> Logger::s_all_loggers;
 
@@ -121,6 +122,7 @@ void Logger::shutdown_all() {
 
 Logger::Logger(pjs::Str *name)
   : m_name(name)
+  , m_history_sending_size(0)
 {
   s_all_loggers.insert(this);
 }
@@ -131,33 +133,24 @@ Logger::~Logger() {
 
 void Logger::write(const Data &msg) {
   if (Net::main().is_running()) {
-    auto name = m_name->data()->retain();
-    auto *sd = SharedData::make(msg)->retain();
-    Net::main().post(
-      [=]() {
-        Data msg;
-        sd->to_data(msg);
-        History::write(name->str(), msg);
-        name->release();
-        sd->release();
-      }
-    );
+    if (m_history_sending_size < s_history_limit) {
+      auto name = m_name->data()->retain();
+      auto *sd = SharedData::make(msg)->retain();
+      m_history_sending_size += msg.size();
+
+      Net::main().post(
+        [=]() {
+          Data msg;
+          sd->to_data(msg);
+          m_history_sending_size -= msg.size();
+          History::write(name->str(), msg);
+          name->release();
+          sd->release();
+        }
+      );
+    }
   }
 
-  if (Net::current().is_running()) {
-    Net::current().post(
-      [=]() {
-        write_async(msg);
-        release();
-      }
-    );
-    retain();
-  } else {
-    write_async(msg);
-  }
-}
-
-void Logger::write_async(const Data &msg) {
   if (InputContext::origin()) {
     write_targets(msg);
   } else {
@@ -215,7 +208,7 @@ void Logger::History::write_message(const Data &msg) {
 
   m_messages.push(new LogMessage(msg));
   m_size += msg.size();
-  while (m_size > m_size_max) {
+  while (m_size > s_history_limit) {
     auto *m = m_messages.head();
     m_messages.remove(m);
     m_size -= m->data.size();

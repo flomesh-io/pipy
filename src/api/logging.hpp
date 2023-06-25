@@ -33,6 +33,7 @@
 #include "filters/pack.hpp"
 #include "filters/tls.hpp"
 
+#include <atomic>
 #include <list>
 #include <memory>
 #include <set>
@@ -58,6 +59,7 @@ class Logger : public pjs::ObjectTemplate<Logger> {
 public:
   static void set_admin_service(AdminService *admin_service);
   static void set_admin_link(AdminLink *admin_link);
+  static void set_history_limit(size_t size) { s_history_limit = size; }
   static void get_names(const std::function<void(const std::string &)> &cb);
   static void tail(const std::string &name, Data &buffer);
   static void shutdown_all();
@@ -241,7 +243,6 @@ private:
     std::string m_name;
     List<LogMessage> m_messages;
     size_t m_size = 0;
-    size_t m_size_max = 256 * 1024;
     bool m_streaming_enabled = false;
 
     void write_message(const Data &msg);
@@ -252,12 +253,13 @@ private:
 
   pjs::Ref<pjs::Str> m_name;
   std::list<std::unique_ptr<Target>> m_targets;
+  std::atomic<int> m_history_sending_size;
 
-  void write_async(const Data &msg);
   void write_targets(const Data &msg);
 
   static AdminService* s_admin_service;
   static AdminLink* s_admin_link;
+  static size_t s_history_limit;
 
   thread_local static std::set<Logger*> s_all_loggers;
 
