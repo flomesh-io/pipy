@@ -1020,6 +1020,7 @@ template<> void ClassDef<FilterConfigurator>::init() {
       Value layouts[n];
       if (!config->get_branches(ctx, n, conds, layouts)) return;
       config->branch_message_start(n, conds, layouts);
+      result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
     }
@@ -1036,6 +1037,7 @@ template<> void ClassDef<FilterConfigurator>::init() {
       Value layouts[n];
       if (!config->get_branches(ctx, n, conds, layouts)) return;
       config->branch_message(n, conds, layouts);
+      result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
     }
