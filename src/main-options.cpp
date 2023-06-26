@@ -49,6 +49,8 @@ void MainOptions::show_help() {
   std::cout << "  --log-local-only                     Do not send out system log" << std::endl;
   std::cout << "  --verify                             Verify configuration only" << std::endl;
   std::cout << "  --no-graph                           Do not print pipeline graphs to the log" << std::endl;
+  std::cout << "  --no-status                          Do not report current status to the repo" << std::endl;
+  std::cout << "  --no-metrics                         Do not report metrics to the repo" << std::endl;
   std::cout << "  --force-start                        Force to start even at failure of port listening" << std::endl;
   std::cout << "  --instance-uuid=<uuid>               Specify a UUID for this worker process" << std::endl;
   std::cout << "  --instance-name=<name>               Specify a name for this worker process" << std::endl;
@@ -164,6 +166,10 @@ MainOptions::MainOptions(int argc, char *argv[]) {
         verify = true;
       } else if (k == "--no-graph") {
         no_graph = true;
+      } else if (k == "--no-status") {
+        no_status = true;
+      } else if (k == "--no-metrics") {
+        no_metrics = true;
       } else if (k == "--force-start") {
         force_start = true;
       } else if (k == "--instance-uuid") {

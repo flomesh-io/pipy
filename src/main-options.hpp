@@ -51,6 +51,8 @@ public:
   bool        eval = false;
   bool        verify = false;
   bool        no_graph = false;
+  bool        no_status = false;
+  bool        no_metrics = false;
   bool        force_start = false;
   bool        reuse_port = false;
   int         threads = 1;

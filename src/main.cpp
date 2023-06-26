@@ -563,8 +563,8 @@ int main(int argc, char *argv[]) {
               tls_settings.key = opts.tls_key;
               tls_settings.trusted = opts.tls_trusted;
               start_admin_link(opts.filename, is_tls ? &tls_settings : nullptr);
-              s_status_reporter.start();
-              s_metric_reporter.start();
+              if (!opts.no_status) s_status_reporter.start();
+              if (!opts.no_metrics) s_metric_reporter.start();
             }
 
             Pipy::on_exit(
