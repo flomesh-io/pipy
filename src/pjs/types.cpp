@@ -2196,7 +2196,6 @@ Promise::Aggregator::Aggregator(Type type, Handler *handler, Array *promises)
     Value v; promises->get(i, v);
     auto p = v.is_promise() ? v.as<Promise>() : Promise::resolve(v);
     d->at(i) = Dependency::make(this, p);
-    retain();
   }
   for (int i = 0; i < n; i++) {
     d->at(i)->init();
@@ -2287,7 +2286,9 @@ void Promise::Aggregator::Dependency::on_rejected(const Value &error) {
 }
 
 void Promise::Aggregator::Dependency::on_weak_ptr_gone() {
+  retain();
   m_aggregator = nullptr;
+  release();
 }
 
 template<> void ClassDef<Promise::Aggregator::Dependency>::init() {
