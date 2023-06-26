@@ -724,6 +724,7 @@ void Configuration::apply(JSModule *mod) {
     auto name = std::to_string(i.port) + '@' + i.ip;
     auto p = make_pipeline(i.index, "", name, i);
     i.listeners->apply(worker, p);
+    i.listeners = nullptr;
   }
 
   for (auto &i : m_tasks) {

@@ -59,8 +59,6 @@ AdminService* Logger::s_admin_service = nullptr;
 AdminLink* Logger::s_admin_link = nullptr;
 size_t Logger::s_history_limit = 0;
 
-thread_local std::set<Logger*> Logger::s_all_loggers;
-
 void Logger::set_admin_service(AdminService *admin_service) {
   s_admin_service = admin_service;
 }
@@ -114,21 +112,16 @@ void Logger::tail(const std::string &name, Data &buffer) {
   History::tail(name, buffer);
 }
 
-void Logger::shutdown_all() {
-  for (auto *logger : s_all_loggers) {
-    logger->shutdown();
-  }
-}
-
 Logger::Logger(pjs::Str *name)
   : m_name(name)
   , m_history_sending_size(0)
 {
-  s_all_loggers.insert(this);
 }
 
 Logger::~Logger() {
-  s_all_loggers.erase(this);
+  for (const auto &p : m_targets) {
+    p->shutdown();
+  }
 }
 
 void Logger::write(const Data &msg) {
@@ -162,12 +155,6 @@ void Logger::write(const Data &msg) {
 void Logger::write_targets(const Data &msg) {
   for (const auto &p : m_targets) {
     p->write(msg);
-  }
-}
-
-void Logger::shutdown() {
-  for (const auto &p : m_targets) {
-    p->shutdown();
   }
 }
 

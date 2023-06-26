@@ -62,7 +62,6 @@ public:
   static void set_history_limit(size_t size) { s_history_limit = size; }
   static void get_names(const std::function<void(const std::string &)> &cb);
   static void tail(const std::string &name, Data &buffer);
-  static void shutdown_all();
 
   //
   // Logger::Target
@@ -198,7 +197,6 @@ public:
   void write(const Data &msg);
 
   virtual void log(int argc, const pjs::Value *args) = 0;
-  virtual void shutdown();
 
 protected:
   Logger(pjs::Str *name);
@@ -260,8 +258,6 @@ private:
   static AdminService* s_admin_service;
   static AdminLink* s_admin_link;
   static size_t s_history_limit;
-
-  thread_local static std::set<Logger*> s_all_loggers;
 
   friend class pjs::ObjectTemplate<Logger>;
 };

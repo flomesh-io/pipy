@@ -29,7 +29,6 @@
 #include "timer.hpp"
 #include "net.hpp"
 #include "log.hpp"
-#include "api/logging.hpp"
 #include "utils.hpp"
 
 namespace pipy {
@@ -350,7 +349,6 @@ void WorkerThread::init_metrics() {
 
 void WorkerThread::shutdown_all() {
   if (auto worker = Worker::current()) worker->stop();
-  logging::Logger::shutdown_all();
   Listener::for_each([&](Listener *l) { l->pipeline_layout(nullptr); });
 }
 

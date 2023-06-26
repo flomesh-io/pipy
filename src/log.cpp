@@ -82,7 +82,6 @@ void Log::init() {
 }
 
 void Log::shutdown() {
-  s_logger->shutdown();
   s_logger->release();
   s_logger = nullptr;
 }
