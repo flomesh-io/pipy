@@ -120,7 +120,7 @@ private:
 
     pjs::Ref<Agent> m_agent;
     pjs::Ref<Pipeline> m_pipeline;
-    pjs::Ref<pjs::Promise::Handler> m_handler;
+    pjs::Ref<pjs::Promise::Settler> m_settler;
     MessageReader m_message_reader;
 
     virtual void on_reply(Event *evt) override;

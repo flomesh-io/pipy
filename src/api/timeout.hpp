@@ -57,7 +57,7 @@ private:
     public pjs::Pooled<Waiter>,
     public List<Waiter>::Item
   {
-    pjs::Ref<pjs::Promise::Handler> handler;
+    pjs::Ref<pjs::Promise::Settler> settler;
   };
 
   double m_duration;

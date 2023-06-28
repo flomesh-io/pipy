@@ -214,7 +214,7 @@ auto Agent::Request::start(RequestHead *head, Data *body) -> pjs::Promise* {
   m_pipeline = p;
 
   auto promise = pjs::Promise::make();
-  m_handler = pjs::Promise::Handler::make(promise);
+  m_settler = pjs::Promise::Settler::make(promise);
 
   if (InputContext::origin()) {
     send(head, body);
@@ -237,7 +237,7 @@ void Agent::Request::send(RequestHead *head, Data *body) {
 void Agent::Request::on_reply(Event *evt) {
   Pipeline::auto_release(m_pipeline);
   if (auto msg = m_message_reader.read(evt)) {
-    m_handler->resolve(msg);
+    m_settler->resolve(msg);
     EventSource::close();
     delete this;
   }

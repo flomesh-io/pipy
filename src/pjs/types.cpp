@@ -1878,7 +1878,7 @@ auto Promise::all(Array *promises) -> Promise* {
   auto n = promises->length();
   if (!n) return resolve(Array::make());
   auto p = Promise::make();
-  new Aggregator(Aggregator::ALL, Handler::make(p), promises);
+  new Aggregator(Aggregator::ALL, Settler::make(p), promises);
   return p;
 }
 
@@ -1886,7 +1886,7 @@ auto Promise::all_settled(Array *promises) -> Promise* {
   auto n = promises->length();
   if (!n) return resolve(Array::make());
   auto p = Promise::make();
-  new Aggregator(Aggregator::ALL_SETTLED, Handler::make(p), promises);
+  new Aggregator(Aggregator::ALL_SETTLED, Settler::make(p), promises);
   return p;
 }
 
@@ -1894,7 +1894,7 @@ auto Promise::any(Array *promises) -> Promise* {
   auto n = promises->length();
   if (!n) return reject(Array::make());
   auto p = Promise::make();
-  new Aggregator(Aggregator::ANY, Handler::make(p), promises);
+  new Aggregator(Aggregator::ANY, Settler::make(p), promises);
   return p;
 }
 
@@ -1902,7 +1902,7 @@ auto Promise::race(Array *promises) -> Promise* {
   auto p = Promise::make();
   auto n = promises->length();
   if (!n) return p;
-  new Aggregator(Aggregator::ANY, Handler::make(p), promises);
+  new Aggregator(Aggregator::ANY, Settler::make(p), promises);
   return p;
 }
 
@@ -1998,19 +1998,19 @@ void Promise::dequeue() {
 }
 
 template<> void ClassDef<Promise>::init() {
-  thread_local static const auto s_field_res = static_cast<Method*>(ClassDef<Promise::Handler>::field("resolve"));
-  thread_local static const auto s_field_rej = static_cast<Method*>(ClassDef<Promise::Handler>::field("reject"));
+  thread_local static const auto s_field_res = static_cast<Method*>(ClassDef<Promise::Settler>::field("resolve"));
+  thread_local static const auto s_field_rej = static_cast<Method*>(ClassDef<Promise::Settler>::field("reject"));
 
   ctor([](Context &ctx) -> Object* {
     Function *executor;
     if (!ctx.arguments(1, &executor)) return nullptr;
     auto promise = Promise::make();
-    auto handler = Promise::Handler::make(promise);
+    auto settler = Promise::Settler::make(promise);
     {
       promise->retain();
       Value args[2], ret;
-      args[0].set(Function::make(s_field_res, handler));
-      args[1].set(Function::make(s_field_rej, handler));
+      args[0].set(Function::make(s_field_res, settler));
+      args[1].set(Function::make(s_field_rej, settler));
       (*executor)(ctx, 2, args, ret);
     }
     if (!ctx.ok()) return nullptr;
@@ -2179,17 +2179,17 @@ void Promise::Then::execute(Context *ctx, State state, const Value &result) {
 }
 
 //
-// Promise::Handler
+// Promise::Settler
 //
 
-template<> void ClassDef<Promise::Handler>::init() {
+template<> void ClassDef<Promise::Settler>::init() {
   method("resolve", [](Context &ctx, Object *obj, Value &) {
     Value value; ctx.get(0, value);
-    obj->as<Promise::Handler>()->resolve(value);
+    obj->as<Promise::Settler>()->resolve(value);
   });
   method("reject", [](Context &ctx, Object *obj, Value &) {
     Value error; ctx.get(0, error);
-    obj->as<Promise::Handler>()->reject(error);
+    obj->as<Promise::Settler>()->reject(error);
   });
 }
 
@@ -2207,9 +2207,9 @@ template<> void ClassDef<Promise::Result>::init() {
 // Promise::Aggregator
 //
 
-Promise::Aggregator::Aggregator(Type type, Handler *handler, Array *promises)
+Promise::Aggregator::Aggregator(Type type, Settler *settler, Array *promises)
   : m_type(type)
-  , m_handler(handler)
+  , m_settler(settler)
 {
   auto n = promises->length();
   auto d = PooledArray<Ref<Dependency>>::make(n);
@@ -2237,12 +2237,12 @@ void Promise::Aggregator::settle(Dependency *dep) {
   switch (m_type) {
     case ALL:
       if (dep->state() == REJECTED) {
-        m_handler->reject(dep->result());
+        m_settler->reject(dep->result());
       } else if (++m_counter == m_dependencies->size()) {
         auto n = m_dependencies->size();
         auto a = Array::make(n);
         for (int i = 0; i < n; i++) a->set(i, m_dependencies->at(i)->result());
-        m_handler->resolve(a);
+        m_settler->resolve(a);
       }
       break;
     case ALL_SETTLED:
@@ -2261,24 +2261,24 @@ void Promise::Aggregator::settle(Dependency *dep) {
           }
           a->set(i, d);
         }
-        m_handler->resolve(a);
+        m_settler->resolve(a);
       }
       break;
     case ANY:
       if (dep->state() == RESOLVED) {
-        m_handler->resolve(dep->result());
+        m_settler->resolve(dep->result());
       } else if (++m_counter == m_dependencies->size()) {
         auto n = m_dependencies->size();
         auto a = Array::make(n);
         for (int i = 0; i < n; i++) a->set(i, m_dependencies->at(i)->result());
-        m_handler->reject(a);
+        m_settler->reject(a);
       }
       break;
     case RACE:
       if (dep->state() == RESOLVED) {
-        m_handler->resolve(dep->result());
+        m_settler->resolve(dep->result());
       } else {
-        m_handler->reject(dep->result());
+        m_settler->reject(dep->result());
       }
       break;
   }

@@ -2640,18 +2640,18 @@ public:
   };
 
   //
-  // Promise::Handler
+  // Promise::Settler
   //
 
-  class Handler : public ObjectTemplate<Handler> {
+  class Settler : public ObjectTemplate<Settler> {
   public:
     void resolve(const Value &value) { m_promise->settle(RESOLVED, value); }
     void reject(const Value &error) { m_promise->settle(REJECTED, error); }
   private:
-    Handler(Promise *promise) : m_promise(promise) {}
-    ~Handler() { m_promise->cancel(); }
+    Settler(Promise *promise) : m_promise(promise) {}
+    ~Settler() { m_promise->cancel(); }
     Ref<Promise> m_promise;
-    friend class ObjectTemplate<Handler>;
+    friend class ObjectTemplate<Settler>;
   };
 
   //
@@ -2680,7 +2680,7 @@ public:
       RACE,
     };
 
-    Aggregator(Type type, Handler *handler, Array *promises);
+    Aggregator(Type type, Settler *handler, Array *promises);
     ~Aggregator();
 
     //
@@ -2711,7 +2711,7 @@ public:
 
   private:
     Type m_type;
-    Ref<Handler> m_handler;
+    Ref<Settler> m_settler;
     PooledArray<Ref<Dependency>>* m_dependencies = nullptr;
     int m_counter = 0;
 

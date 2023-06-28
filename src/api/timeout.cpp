@@ -46,9 +46,9 @@ auto Timeout::wait() -> pjs::Promise* {
     return pjs::Promise::reject(this);
   } else {
     auto promise = pjs::Promise::make();
-    auto handler = pjs::Promise::Handler::make(promise);
+    auto settler = pjs::Promise::Settler::make(promise);
     auto w = new Waiter;
-    w->handler = handler;
+    w->settler = settler;
     m_waiters.push(w);
     return promise;
   }
@@ -98,9 +98,9 @@ void Timeout::notify_waiters() {
     while (auto w = m_waiters.head()) {
       m_waiters.remove(w);
       if (m_state == TIMEOUT) {
-        w->handler->resolve(v);
+        w->settler->resolve(v);
       } else {
-        w->handler->reject(v);
+        w->settler->reject(v);
       }
       delete w;
     }
