@@ -309,6 +309,14 @@ auto NativeModule::new_context_data(pjs::Object *prototype) -> pjs::Object* {
 } // namespace nmi
 } // namespace pipy
 
+namespace pjs {
+
+template<> void ClassDef<pipy::nmi::NativeObject>::init()
+{
+}
+
+} // namespace pjs
+
 using namespace pipy;
 
 template<typename T>
@@ -341,6 +349,10 @@ NMI_EXPORT pjs_value pjs_object() {
 
 NMI_EXPORT pjs_value pjs_array(int len) {
   return to_local_value(pjs::Array::make(len));
+}
+
+NMI_EXPORT pjs_value pjs_native(void *ptr, fn_object_free free) {
+  return to_local_value(nmi::NativeObject::make(ptr, free));
 }
 
 NMI_EXPORT pjs_value pjs_copy(pjs_value v, pjs_value src) {
@@ -444,6 +456,13 @@ NMI_EXPORT int pjs_is_array(pjs_value v) {
 NMI_EXPORT int pjs_is_function(pjs_value v) {
   if (auto *r = nmi::s_values.get(v)) {
     return r->v.is_function();
+  }
+  return false;
+}
+
+NMI_EXPORT int pjs_is_native(pjs_value v) {
+  if (auto *r = nmi::s_values.get(v)) {
+    return r->v.is<nmi::NativeObject>();
   }
   return false;
 }
@@ -707,6 +726,16 @@ NMI_EXPORT pjs_value pjs_array_splice(pjs_value arr, int pos, int del_cnt, int i
     }
   }
   return 0;
+}
+
+NMI_EXPORT void* pjs_native_ptr(pjs_value obj) {
+  if (auto *r = nmi::s_values.get(obj)) {
+    if (r->v.is<nmi::NativeObject>()) {
+      auto *n = r->v.as<nmi::NativeObject>();
+      return n->ptr();
+    }
+  }
+  return nullptr;
 }
 
 NMI_EXPORT int pipy_is_Data(pjs_value obj) {

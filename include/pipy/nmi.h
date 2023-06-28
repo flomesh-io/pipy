@@ -48,12 +48,15 @@ typedef enum _pjs_type {
   PJS_TYPE_OBJECT    = 4,
 } pjs_type;
 
+typedef void (*fn_object_free)(void *ptr);
+
 NMI_EXPORT pjs_value   pjs_undefined();
 NMI_EXPORT pjs_value   pjs_boolean(int b);
 NMI_EXPORT pjs_value   pjs_number(double n);
 NMI_EXPORT pjs_value   pjs_string(const char *s, int len);
 NMI_EXPORT pjs_value   pjs_object();
 NMI_EXPORT pjs_value   pjs_array(int len);
+NMI_EXPORT pjs_value   pjs_native(void *ptr, fn_object_free free);
 NMI_EXPORT pjs_value   pjs_copy(pjs_value v, pjs_value src);
 NMI_EXPORT pjs_value   pjs_hold(pjs_value v);
 NMI_EXPORT void        pjs_free(pjs_value v);
@@ -67,6 +70,7 @@ NMI_EXPORT int         pjs_is_empty_string(pjs_value v);
 NMI_EXPORT int         pjs_is_instance_of(pjs_value v, int class_id);
 NMI_EXPORT int         pjs_is_array(pjs_value v);
 NMI_EXPORT int         pjs_is_function(pjs_value v);
+NMI_EXPORT int         pjs_is_native(pjs_value v);
 NMI_EXPORT int         pjs_is_equal(pjs_value a, pjs_value b);
 NMI_EXPORT int         pjs_is_identical(pjs_value a, pjs_value b);
 NMI_EXPORT int         pjs_to_boolean(pjs_value v);
@@ -90,6 +94,7 @@ NMI_EXPORT pjs_value   pjs_array_pop(pjs_value arr);
 NMI_EXPORT pjs_value   pjs_array_shift(pjs_value arr);
 NMI_EXPORT int         pjs_array_unshift(pjs_value arr, pjs_value v);
 NMI_EXPORT pjs_value   pjs_array_splice(pjs_value arr, int pos, int del_cnt, int ins_cnt, pjs_value v[]);
+NMI_EXPORT void*       pjs_native_ptr(pjs_value obj);
 
 /*
  * Pipy API

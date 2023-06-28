@@ -187,6 +187,31 @@ private:
   friend class PipelineLayout;
 };
 
+//
+// NativeObject
+//
+
+class NativeObject : public pjs::ObjectTemplate<NativeObject> {
+public:
+  auto ptr() const -> void* { return m_ptr; }
+
+private:
+  NativeObject(void *ptr, fn_object_free free)
+    : m_ptr(ptr)
+    , m_free(free) {}
+
+  ~NativeObject() {
+    if (m_free) {
+      m_free(m_ptr);
+    }
+  }
+
+  void* m_ptr;
+  fn_object_free m_free;
+
+  friend class pjs::ObjectTemplate<NativeObject>;
+};
+
 } // nmi
 } // pipy
 

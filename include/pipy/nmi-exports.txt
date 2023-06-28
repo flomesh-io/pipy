@@ -6,6 +6,7 @@
     pjs_string;
     pjs_object;
     pjs_array;
+    pjs_native;
     pjs_copy;
     pjs_hold;
     pjs_free;
@@ -19,6 +20,7 @@
     pjs_is_instance_of;
     pjs_is_array;
     pjs_is_function;
+    pjs_is_native;
     pjs_is_equal;
     pjs_is_identical;
     pjs_to_boolean;
@@ -42,6 +44,7 @@
     pjs_array_shift;
     pjs_array_unshift;
     pjs_array_splice;
+    pjs_native_ptr;
     pipy_is_Data;
     pipy_is_MessageStart;
     pipy_is_MessageEnd;

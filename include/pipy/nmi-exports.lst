@@ -4,6 +4,7 @@ _pjs_number
 _pjs_string
 _pjs_object
 _pjs_array
+_pjs_native
 _pjs_copy
 _pjs_hold
 _pjs_free
@@ -17,6 +18,7 @@ _pjs_is_empty_string
 _pjs_is_instance_of
 _pjs_is_array
 _pjs_is_function
+_pjs_is_native
 _pjs_is_equal
 _pjs_is_identical
 _pjs_to_boolean
@@ -40,6 +42,7 @@ _pjs_array_pop
 _pjs_array_shift
 _pjs_array_unshift
 _pjs_array_splice
+_pjs_native_ptr
 _pipy_is_Data
 _pipy_is_MessageStart
 _pipy_is_MessageEnd
