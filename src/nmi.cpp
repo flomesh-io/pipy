@@ -568,7 +568,7 @@ NMI_EXPORT int pjs_object_delete(pjs_value obj, pjs_value k) {
   return 0;
 }
 
-NMI_EXPORT void pjs_object_iterate(pjs_value obj, int (*cb)(pjs_value k, pjs_value v)) {
+NMI_EXPORT void pjs_object_iterate(pjs_value obj, int (*cb)(pjs_value k, pjs_value v, void *user_ptr), void *user_ptr) {
   if (auto *r = nmi::s_values.get(obj)) {
     if (r->v.is_object()) {
       r->v.o()->iterate_while(
@@ -578,7 +578,7 @@ NMI_EXPORT void pjs_object_iterate(pjs_value obj, int (*cb)(pjs_value k, pjs_val
           auto j = nmi::s_values.alloc(v);
           lrp.add(i);
           lrp.add(j);
-          return (bool)(*cb)(i, j);
+          return (bool)(*cb)(i, j, user_ptr);
         }
       );
     }

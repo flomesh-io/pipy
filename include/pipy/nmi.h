@@ -79,7 +79,7 @@ NMI_EXPORT int         pjs_string_get_utf8_data(pjs_value str, char *buf, int le
 NMI_EXPORT int         pjs_object_get_property(pjs_value obj, pjs_value k, pjs_value v);
 NMI_EXPORT int         pjs_object_set_property(pjs_value obj, pjs_value k, pjs_value v);
 NMI_EXPORT int         pjs_object_delete(pjs_value obj, pjs_value k);
-NMI_EXPORT void        pjs_object_iterate(pjs_value obj, int (*cb)(pjs_value k, pjs_value v));
+NMI_EXPORT void        pjs_object_iterate(pjs_value obj, int (*cb)(pjs_value k, pjs_value v, void *user_ptr), void *user_ptr);
 NMI_EXPORT int         pjs_array_get_length(pjs_value arr);
 NMI_EXPORT int         pjs_array_set_length(pjs_value arr, int len);
 NMI_EXPORT int         pjs_array_get_element(pjs_value arr, int i, pjs_value v);
