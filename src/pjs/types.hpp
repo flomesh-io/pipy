@@ -2743,19 +2743,17 @@ private:
   // Promise::Then
   //
 
-  class Then : public Pooled<Then> {
+  class Then : public Pooled<Then>, public Promise::WeakPtr::Watcher {
     Then(
+      Promise *dependency,
       Context *context,
       Function *on_resolved,
       Function *on_rejected,
       Function *on_finally
-    ) : m_context(context)
-      , m_on_resolved(on_resolved)
-      , m_on_rejected(on_rejected)
-      , m_on_finally(on_finally)
-      , m_promise(Promise::make()) {}
+    );
 
     Then(
+      Promise *dependency,
       Context *context,
       const Value &resolved_value,
       const Value &rejected_value
@@ -2769,9 +2767,12 @@ private:
     Ref<Function> m_on_resolved;
     Ref<Function> m_on_rejected;
     Ref<Function> m_on_finally;
-    Ref<Promise> m_promise;
+    Ref<Promise> m_dependency;
+    WeakRef<Promise> m_promise;
     Value m_resolved_value;
     Value m_rejected_value;
+
+    virtual void on_weak_ptr_gone() override;
 
     friend class Promise;
   };

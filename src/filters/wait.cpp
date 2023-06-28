@@ -74,6 +74,7 @@ void Wait::reset() {
     m_promise_callback->close();
     m_promise_callback = nullptr;
   }
+  m_promise = nullptr;
   m_timer.cancel();
   m_buffer.clear();
   m_fulfilled = false;
@@ -92,7 +93,7 @@ void Wait::process(Event *evt) {
     }
 
     auto cb = PromiseCallback::make(this);
-    ret.as<pjs::Promise>()->then(context(), cb->resolved(), cb->rejected());
+    m_promise = ret.as<pjs::Promise>()->then(context(), cb->resolved(), cb->rejected());
     m_promise_callback = cb;
 
     if (m_buffer.empty() && m_options.timeout > 0) {

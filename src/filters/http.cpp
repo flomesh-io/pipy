@@ -1541,7 +1541,7 @@ bool Mux::Session::select_protocol(Mux *mux) {
     if (!mux->eval(m_options.version_f, ret)) return false;
     if (ret.is<pjs::Promise>()) {
       m_version_selector = VersionSelector::make(mux, this);
-      ret.as<pjs::Promise>()->then(mux->context(), pjs::Function::make(s_method_select, m_version_selector));
+      m_version_promise = ret.as<pjs::Promise>()->then(mux->context(), pjs::Function::make(s_method_select, m_version_selector));
       return false;
     }
     return select_protocol(mux, ret);
