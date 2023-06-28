@@ -1541,7 +1541,7 @@ bool Mux::Session::select_protocol(Mux *mux) {
     if (!mux->eval(m_options.version_f, ret)) return false;
     if (ret.is<pjs::Promise>()) {
       m_version_selector = VersionSelector::make(mux, this);
-      m_version_promise = ret.as<pjs::Promise>()->then(mux->context(), pjs::Function::make(s_method_select, m_version_selector));
+      ret.as<pjs::Promise>()->then(nullptr, pjs::Function::make(s_method_select, m_version_selector));
       return false;
     }
     return select_protocol(mux, ret);
@@ -1665,7 +1665,7 @@ void Server::Handler::on_event(Event *evt) {
               res = obj->as<Message>();
             } else if (obj->is<pjs::Promise>()) {
               obj->as<pjs::Promise>()->then(
-                m_server->context(),
+                nullptr,
                 pjs::Promise::Callback::resolved(),
                 pjs::Promise::Callback::rejected()
               );

@@ -1906,20 +1906,12 @@ auto Promise::race(Array *promises) -> Promise* {
   return p;
 }
 
-Promise::~Promise() {
-  auto p = m_thens_head;
-  while (p) {
-    auto then = p; p = p->m_next;
-    delete then;
-  }
-}
-
 auto Promise::then(
   Context *context,
   const Value &resolved_value,
   const Value &rejected_value
 ) -> Promise* {
-  auto t = new Then(this, context, resolved_value, rejected_value);
+  auto t = new Then(context, resolved_value, rejected_value);
   add_then(t);
   return t->m_promise;
 }
@@ -1930,7 +1922,7 @@ auto Promise::then(
   Function *on_rejected,
   Function *on_finally
 ) -> Promise* {
-  auto t = new Then(this, context, on_resolved, on_rejected, on_finally);
+  auto t = new Then(context, on_resolved, on_rejected, on_finally);
   add_then(t);
   return t->m_promise;
 }
@@ -1946,6 +1938,16 @@ void Promise::add_then(Then *then) {
   if (m_state != PENDING) enqueue();
 }
 
+void Promise::clear_thens() {
+  auto p = m_thens_head;
+  while (p) {
+    auto then = p; p = p->m_next;
+    delete then;
+  }
+  m_thens_head = nullptr;
+  m_thens_tail = nullptr;
+}
+
 void Promise::settle(State state, const Value &result) {
   if (m_state == PENDING) {
     m_state = state;
@@ -1955,6 +1957,13 @@ void Promise::settle(State state, const Value &result) {
       m_dependent->settle(state, result);
       m_dependent = nullptr;
     }
+  }
+}
+
+void Promise::cancel() {
+  if (m_state == PENDING) {
+    clear_thens();
+    m_state = CANCELED;
   }
 }
 
@@ -2101,35 +2110,29 @@ template<> void ClassDef<Promise::Callback>::init() {
 //
 
 Promise::Then::Then(
-  Promise *dependency,
   Context *context,
   Function *on_resolved,
   Function *on_rejected,
   Function *on_finally
-) : m_dependency(dependency)
-  , m_context(context)
+) : m_context(context)
   , m_on_resolved(on_resolved)
   , m_on_rejected(on_rejected)
   , m_on_finally(on_finally)
   , m_promise(Promise::make())
 {
-  Promise::WeakPtr::Watcher::watch(m_promise.get());
 }
 
 Promise::Then::Then(
-  Promise *dependency,
   Context *context,
   const Value &resolved_value,
   const Value &rejected_value
-) : m_dependency(dependency)
-  , m_context(context)
+) : m_context(context)
   , m_promise(Promise::make())
   , m_resolved_value(resolved_value)
   , m_rejected_value(rejected_value)
 {
   if (resolved_value.is_function()) m_on_resolved = resolved_value.f();
   if (rejected_value.is_function()) m_on_rejected = rejected_value.f();
-  Promise::WeakPtr::Watcher::watch(m_promise.get());
 }
 
 void Promise::Then::execute(State state, const Value &result) {
@@ -2142,47 +2145,37 @@ void Promise::Then::execute(State state, const Value &result) {
 }
 
 void Promise::Then::execute(Context *ctx, State state, const Value &result) {
-  if (m_promise.ptr()) {
-    Value arg(result), ret;
-    if (state == RESOLVED) {
-      if (m_on_resolved) {
-        (*m_on_resolved)(*ctx, 1, &arg, ret);
-      } else {
-        ret = m_resolved_value;
-      }
+  Value arg(result), ret;
+  if (state == RESOLVED) {
+    if (m_on_resolved) {
+      (*m_on_resolved)(*ctx, 1, &arg, ret);
     } else {
-      if (m_on_rejected) {
-        (*m_on_rejected)(*ctx, 1, &arg, ret);
-      } else {
-        ret = m_rejected_value;
-      }
+      ret = m_resolved_value;
     }
-
-    if (!ctx->ok()) {
-      m_promise->settle(REJECTED, Error::make(ctx->error()));
-      return;
+  } else {
+    if (m_on_rejected) {
+      (*m_on_rejected)(*ctx, 1, &arg, ret);
+    } else {
+      ret = m_rejected_value;
     }
-
-    if (ret.is<Promise>()) {
-      auto promise = ret.as<Promise>();
-      switch (promise->m_state) {
-        case PENDING: promise->m_dependent = m_promise; break;
-        case RESOLVED: m_promise->settle(RESOLVED, promise->m_result); break;
-        case REJECTED: m_promise->settle(REJECTED, promise->m_result); break;
-      }
-      return;
-    }
-
-    m_promise->settle(RESOLVED, ret);
   }
-}
 
-void Promise::Then::on_weak_ptr_gone() {
-  m_on_resolved = nullptr;
-  m_on_rejected = nullptr;
-  m_on_finally = nullptr;
-  m_context = nullptr;
-  m_dependency = nullptr;
+  if (!ctx->ok()) {
+    m_promise->settle(REJECTED, Error::make(ctx->error()));
+    return;
+  }
+
+  if (ret.is<Promise>()) {
+    auto promise = ret.as<Promise>();
+    switch (promise->m_state) {
+      case PENDING: promise->m_dependent = m_promise; break;
+      case RESOLVED: m_promise->settle(RESOLVED, promise->m_result); break;
+      case REJECTED: m_promise->settle(REJECTED, promise->m_result); break;
+    }
+    return;
+  }
+
+  m_promise->settle(RESOLVED, ret);
 }
 
 //

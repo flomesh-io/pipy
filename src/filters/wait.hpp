@@ -73,7 +73,6 @@ private:
   virtual void dump(Dump &d) override;
 
   pjs::Ref<pjs::Function> m_condition;
-  pjs::Ref<pjs::Promise> m_promise;
   pjs::Ref<PromiseCallback> m_promise_callback;
   Options m_options;
   EventBuffer m_buffer;

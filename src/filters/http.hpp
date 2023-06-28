@@ -401,7 +401,6 @@ public:
 
     const Mux::Options& m_options;
     int m_version_selected = 0;
-    pjs::Ref<pjs::Promise> m_version_promise;
     pjs::Ref<VersionSelector> m_version_selector;
     RequestQueue m_request_queue;
     bool m_http2 = false;

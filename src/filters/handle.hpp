@@ -69,7 +69,6 @@ protected:
 
 private:
   pjs::Ref<pjs::Function> m_callback;
-  pjs::Ref<pjs::Promise> m_promise;
   pjs::Ref<PromiseCallback> m_promise_callback;
   pjs::Ref<Event> m_deferred_event;
   EventBuffer m_event_buffer;

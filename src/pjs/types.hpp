@@ -2624,6 +2624,7 @@ public:
     PENDING,
     RESOLVED,
     REJECTED,
+    CANCELED,
   };
 
   //
@@ -2648,6 +2649,7 @@ public:
     void reject(const Value &error) { m_promise->settle(REJECTED, error); }
   private:
     Handler(Promise *promise) : m_promise(promise) {}
+    ~Handler() { m_promise->cancel(); }
     Ref<Promise> m_promise;
     friend class ObjectTemplate<Handler>;
   };
@@ -2743,9 +2745,8 @@ private:
   // Promise::Then
   //
 
-  class Then : public Pooled<Then>, public Promise::WeakPtr::Watcher {
+  class Then : public Pooled<Then> {
     Then(
-      Promise *dependency,
       Context *context,
       Function *on_resolved,
       Function *on_rejected,
@@ -2753,7 +2754,6 @@ private:
     );
 
     Then(
-      Promise *dependency,
       Context *context,
       const Value &resolved_value,
       const Value &rejected_value
@@ -2767,21 +2767,20 @@ private:
     Ref<Function> m_on_resolved;
     Ref<Function> m_on_rejected;
     Ref<Function> m_on_finally;
-    Ref<Promise> m_dependency;
-    WeakRef<Promise> m_promise;
+    Ref<Promise> m_promise;
     Value m_resolved_value;
     Value m_rejected_value;
-
-    virtual void on_weak_ptr_gone() override;
 
     friend class Promise;
   };
 
   Promise() {}
-  ~Promise();
+  ~Promise() { clear_thens(); }
 
   void add_then(Then *then);
+  void clear_thens();
   void settle(State state, const Value &result);
+  void cancel();
   void enqueue();
   void dequeue();
 
