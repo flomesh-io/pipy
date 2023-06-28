@@ -180,8 +180,9 @@ NativeModule::NativeModule(int index, const std::string &filename)
 
   auto *handle = dlopen(filename.c_str(), RTLD_NOW);
   if (!handle) {
-    std::string msg("cannot load native module ");
-    throw std::runtime_error(msg + filename);
+    std::string msg("cannot load native module '");
+    std::string err(dlerror());
+    throw std::runtime_error(msg + filename + "' due to: " + err);
   }
 
   auto *init_fn = dlsym(handle, "pipy_module_init");
