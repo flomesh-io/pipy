@@ -111,11 +111,10 @@ public:
   void on_done(const std::function<void()> &cb) { m_on_done = cb; }
   bool started() const { return !m_worker_threads.empty(); }
   bool start(int concurrency = 1, bool force = false);
-  void status(Status &status);
-  void status(const std::function<void(Status&)> &cb);
-  void stats(int i, stats::MetricData &stats);
-  void stats(stats::MetricDataSum &stats);
-  void stats(const std::function<void(stats::MetricDataSum&)> &cb);
+  auto status() -> Status&;
+  bool status(const std::function<void(Status&)> &cb);
+  auto stats() -> stats::MetricDataSum&;
+  bool stats(const std::function<void(stats::MetricDataSum&)> &cb);
   void recycle();
   void reload();
   auto concurrency() const -> int { return m_concurrency; }
@@ -130,8 +129,14 @@ private:
   int m_metric_data_sum_counter = -1;
   int m_concurrency = 0;
   bool m_graph_enabled = false;
+  bool m_reloading_requested = false;
+  bool m_reloading = false;
+  bool m_querying_status = false;
+  bool m_querying_stats = false;
   std::function<void()> m_on_done;
 
+  void check_reloading();
+  void start_reloading();
   void on_thread_done(int index);
 
   friend class WorkerThread;

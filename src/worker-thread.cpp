@@ -440,38 +440,48 @@ bool WorkerManager::start(int concurrency, bool force) {
   return true;
 }
 
-void WorkerManager::status(Status &status) {
-  if (auto n = m_worker_threads.size()) {
-    std::mutex m;
-    std::condition_variable cv;
-    Status statuses[n];
+auto WorkerManager::status() -> Status& {
+  if (!m_querying_status && !m_reloading) {
+    m_querying_status = true;
 
-    for (auto *wt : m_worker_threads) {
-      auto i = wt->index();
-      wt->status(
-        statuses[i],
-        [&]() {
-          std::lock_guard<std::mutex> lock(m);
-          n--;
-          cv.notify_one();
-        }
-      );
+    if (auto n = m_worker_threads.size()) {
+      std::mutex m;
+      std::condition_variable cv;
+      Status statuses[n];
+
+      for (auto *wt : m_worker_threads) {
+        auto i = wt->index();
+        wt->status(
+          statuses[i],
+          [&]() {
+            std::lock_guard<std::mutex> lock(m);
+            n--;
+            cv.notify_one();
+          }
+        );
+      }
+
+      std::unique_lock<std::mutex> lock(m);
+      cv.wait(lock, [&]{ return n == 0; });
+
+      m_status = std::move(statuses[0]);
+      for (auto i = 1; i < m_worker_threads.size(); i++) {
+        m_status.merge(statuses[i]);
+      }
+      m_status.update_global();
     }
 
-    std::unique_lock<std::mutex> lock(m);
-    cv.wait(lock, [&]{ return n == 0; });
-
-    status = std::move(statuses[0]);
-    for (auto i = 1; i < m_worker_threads.size(); i++) {
-      status.merge(statuses[i]);
-    }
-    status.update_global();
+    m_querying_status = false;
+    check_reloading();
   }
+  return m_status;
 }
 
-void WorkerManager::status(const std::function<void(Status&)> &cb) {
-  if (m_worker_threads.empty()) return;
-  if (m_status_counter >= 0) return;
+bool WorkerManager::status(const std::function<void(Status&)> &cb) {
+  if (m_querying_status || m_reloading) return false;
+  if (m_worker_threads.empty()) return false;
+
+  m_querying_status = true;
 
   auto &main = Net::current();
   m_status_counter = 0;
@@ -489,67 +499,59 @@ void WorkerManager::status(const std::function<void(Status&)> &cb) {
             if (++m_status_counter == m_worker_threads.size()) {
               m_status.update_global();
               cb(m_status);
-              m_status_counter = -1;
+              m_querying_status = false;
+              check_reloading();
             }
           }
         );
       }
     );
   }
+
+  return true;
 }
 
-void WorkerManager::stats(int i, stats::MetricData &stats) {
-  if (0 <= i && i < m_worker_threads.size()) {
-    std::mutex m;
-    std::condition_variable cv;
-    bool done = false;
+auto WorkerManager::stats() -> stats::MetricDataSum& {
+  if (!m_querying_stats && !m_reloading) {
+    m_querying_stats = true;
 
-    if (auto *wt = m_worker_threads[i]) {
-      wt->stats(
-        stats,
-        [&]() {
-          std::lock_guard<std::mutex> lock(m);
-          done = true;
-          cv.notify_one();
-        }
-      );
+    if (auto n = m_worker_threads.size()) {
+      std::mutex m;
+      std::condition_variable cv;
+      stats::MetricData metric_data[n];
+
+      for (auto *wt : m_worker_threads) {
+        auto i = wt->index();
+        wt->stats(
+          metric_data[i],
+          [&]() {
+            std::lock_guard<std::mutex> lock(m);
+            n--;
+            cv.notify_one();
+          }
+        );
+      }
+
+      std::unique_lock<std::mutex> lock(m);
+      cv.wait(lock, [&]{ return n == 0; });
+
+      for (auto i = 0; i < m_worker_threads.size(); i++) {
+        m_metric_data_sum.sum(metric_data[i], i == 0);
+      }
     }
 
-    std::unique_lock<std::mutex> lock(m);
-    cv.wait(lock, [&]{ return done; });
+    m_querying_stats = false;
+    check_reloading();
   }
+
+  return m_metric_data_sum;
 }
 
-void WorkerManager::stats(stats::MetricDataSum &stats) {
-  if (auto n = m_worker_threads.size()) {
-    std::mutex m;
-    std::condition_variable cv;
-    stats::MetricData metric_data[n];
+bool WorkerManager::stats(const std::function<void(stats::MetricDataSum&)> &cb) {
+  if (m_querying_stats || m_reloading) return false;
+  if (m_worker_threads.empty()) return false;
 
-    for (auto *wt : m_worker_threads) {
-      auto i = wt->index();
-      wt->stats(
-        metric_data[i],
-        [&]() {
-          std::lock_guard<std::mutex> lock(m);
-          n--;
-          cv.notify_one();
-        }
-      );
-    }
-
-    std::unique_lock<std::mutex> lock(m);
-    cv.wait(lock, [&]{ return n == 0; });
-
-    for (auto i = 0; i < m_worker_threads.size(); i++) {
-      stats.sum(metric_data[i], i == 0);
-    }
-  }
-}
-
-void WorkerManager::stats(const std::function<void(stats::MetricDataSum&)> &cb) {
-  if (m_worker_threads.empty()) return;
-  if (m_metric_data_sum_counter >= 0) return;
+  m_querying_stats = true;
 
   auto &main = Net::current();
   m_metric_data_sum_counter = 0;
@@ -562,13 +564,16 @@ void WorkerManager::stats(const std::function<void(stats::MetricDataSum&)> &cb) 
             m_metric_data_sum.sum(metric_data, m_metric_data_sum_counter == 0);
             if (++m_metric_data_sum_counter == m_worker_threads.size()) {
               cb(m_metric_data_sum);
-              m_metric_data_sum_counter = -1;
+              m_querying_stats = false;
+              check_reloading();
             }
           }
         );
       }
     );
   }
+
+  return true;
 }
 
 void WorkerManager::recycle() {
@@ -578,7 +583,24 @@ void WorkerManager::recycle() {
 }
 
 void WorkerManager::reload() {
+  if (m_reloading || m_querying_status || m_querying_stats) {
+    m_reloading_requested = true;
+  } else {
+    start_reloading();
+  }
+}
+
+void WorkerManager::check_reloading() {
+  if (m_reloading_requested) {
+    m_reloading_requested = false;
+    start_reloading();
+  }
+}
+
+void WorkerManager::start_reloading() {
   if (auto n = m_worker_threads.size()) {
+    m_reloading = true;
+
     std::mutex m;
     std::condition_variable cv;
     bool all_ok = true;
@@ -600,6 +622,8 @@ void WorkerManager::reload() {
     for (auto *wt : m_worker_threads) {
       wt->reload_done(all_ok);
     }
+
+    m_reloading = false;
   }
 }
 

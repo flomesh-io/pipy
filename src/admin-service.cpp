@@ -444,8 +444,7 @@ auto AdminService::handle(Context *ctx, Message *req) -> Message* {
 Message* AdminService::dump_GET(const std::string &path) {
   Data buf;
   Data::Builder db(buf, &s_dp);
-  Status status;
-  WorkerManager::get().status(status);
+  auto &status = WorkerManager::get().status();
   auto items = utils::split(path, '+');
   for (const auto &item : items) {
     if (item == "pools") {
@@ -522,8 +521,7 @@ Message* AdminService::metrics_GET(pjs::Object *headers) {
     }
   };
 
-  stats::MetricDataSum stats;
-  WorkerManager::get().stats(stats);
+  auto &stats = WorkerManager::get().stats();
   stats.to_prometheus(output);
 
   for (const auto &p : m_instances) {
@@ -1030,8 +1028,7 @@ Message* AdminService::api_v1_program_DELETE() {
 
 Message* AdminService::api_v1_status_GET() {
   std::stringstream ss;
-  Status status;
-  WorkerManager::get().status(status);
+  auto &status = WorkerManager::get().status();
   status.to_json(ss);
   return Message::make(
     m_response_head_json,
@@ -1234,8 +1231,7 @@ void AdminService::on_metrics(Context *ctx, const Data &data) {
 }
 
 void AdminService::metrics_history_step() {
-  stats::MetricDataSum sum;
-  WorkerManager::get().stats(sum);
+  auto &sum = WorkerManager::get().stats();
   m_local_metric_history.step(sum);
   m_metrics_timestamp = std::chrono::steady_clock::now();
   m_metrics_history_timer.schedule(
