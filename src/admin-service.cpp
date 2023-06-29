@@ -196,7 +196,7 @@ auto AdminService::handle(Context *ctx, Message *req) -> Message* {
   auto head = req->head()->as<http::RequestHead>();
   auto body = req->body();
   auto method = head->method->str();
-  auto path = head->path->str();
+  auto path = utils::decode_uri(head->path->str());
   auto headers = head->headers.get();
 
   pjs::Value accept, upgrade;
