@@ -51,6 +51,7 @@ typedef enum _pjs_type {
 typedef void (*fn_object_free)(void *ptr);
 
 NMI_EXPORT pjs_value   pjs_undefined();
+NMI_EXPORT pjs_value   pjs_null();
 NMI_EXPORT pjs_value   pjs_boolean(int b);
 NMI_EXPORT pjs_value   pjs_number(double n);
 NMI_EXPORT pjs_value   pjs_string(const char *s, int len);

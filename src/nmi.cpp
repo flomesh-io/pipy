@@ -344,6 +344,10 @@ NMI_EXPORT pjs_value pjs_undefined() {
   return to_local_value(pjs::Value::undefined);
 }
 
+NMI_EXPORT pjs_value pjs_null() {
+  return to_local_value(pjs::Value::null);
+}
+
 NMI_EXPORT pjs_value pjs_boolean(int b) {
   return to_local_value(bool(b));
 }

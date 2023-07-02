@@ -1,6 +1,7 @@
 {
   extern "C" {
     pjs_undefined;
+    pjs_null;
     pjs_boolean;
     pjs_number;
     pjs_string;
