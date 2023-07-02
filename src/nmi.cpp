@@ -120,6 +120,19 @@ thread_local LocalRefPool* LocalRefPool::s_current = nullptr;
 
 SharedTable<Pipeline*> Pipeline::m_pipeline_table;
 
+Pipeline::Pipeline(PipelineLayout *layout, Context *ctx, EventTarget::Input *out)
+  : m_layout(layout)
+  , m_id(m_pipeline_table.alloc(this))
+  , m_context(ctx)
+  , m_output(out)
+  , m_retain_count(1)
+{
+  LocalRefPool lrf;
+  NativeModule::set_current(layout->m_module);
+  layout->m_pipeline_init(m_id, &m_user_ptr);
+  NativeModule::set_current(nullptr);
+}
+
 void Pipeline::check_thread() {
   if (module()->net() != &Net::current()) {
     throw std::runtime_error("operating native pipeline from a different thread");
@@ -141,6 +154,7 @@ void Pipeline::output(Event *evt) {
 
 void Pipeline::release() {
   if (m_retain_count.fetch_sub(1, std::memory_order_acq_rel) == 1) {
+    LocalRefPool lrf;
     NativeModule::set_current(module());
     m_layout->m_pipeline_free(m_id, m_user_ptr);
     NativeModule::set_current(nullptr);

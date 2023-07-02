@@ -163,17 +163,7 @@ public:
   void release();
 
 private:
-  Pipeline(PipelineLayout *layout, Context *ctx, EventTarget::Input *out)
-    : m_layout(layout)
-    , m_id(m_pipeline_table.alloc(this))
-    , m_context(ctx)
-    , m_output(out)
-    , m_retain_count(1)
-  {
-    NativeModule::set_current(layout->m_module);
-    layout->m_pipeline_init(m_id, &m_user_ptr);
-    NativeModule::set_current(nullptr);
-  }
+  Pipeline(PipelineLayout *layout, Context *ctx, EventTarget::Input *out);
 
   PipelineLayout* m_layout;
   int m_id;
