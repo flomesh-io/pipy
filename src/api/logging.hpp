@@ -251,13 +251,13 @@ private:
 
   pjs::Ref<pjs::Str> m_name;
   std::list<std::unique_ptr<Target>> m_targets;
-  std::atomic<int> m_history_sending_size;
 
   void write_targets(const Data &msg);
 
   static AdminService* s_admin_service;
   static AdminLink* s_admin_link;
   static size_t s_history_limit;
+  static std::atomic<int> s_history_sending_size;
 
   friend class pjs::ObjectTemplate<Logger>;
 };
