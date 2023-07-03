@@ -1206,8 +1206,7 @@ static size_t integral_number_to_string(char *str, size_t len, double n) {
 size_t Number::to_string(char *str, size_t len, double n) {
   if (auto l = special_number_to_string(str, len, n)) return l;
   if (auto l = integral_number_to_string(str, len, n)) return l;
-  auto max = std::numeric_limits<double>::digits10 + 1;
-  len = std::snprintf(str, len, "%.*f", max, n);
+  len = std::snprintf(str, len, "%.6f", n);
   while (len > 1 && str[len-1] == '0') len--;
   if (len > 1 && str[len-1] == '.') len--;
   return len;
