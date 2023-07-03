@@ -118,9 +118,11 @@ void DemuxQueue::queue_event(Event *evt) {
           start_waiting_output();
         }
         s->handler->input()->input(evt); // might've turned dedicated after
-        if (!m_dedicated) {
-          close_stream_input(s);
-          m_input_stream = nullptr;
+        if (auto s = m_input_stream) { // obtain the stream again because it may have been resetted by now
+          if (!m_dedicated) {
+            close_stream_input(s);
+            m_input_stream = nullptr;
+          }
         }
       }
       break;
