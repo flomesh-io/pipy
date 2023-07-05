@@ -1483,7 +1483,7 @@ auto String::to_string() const -> std::string {
 
 auto String::charAt(int i) -> Str* {
   auto c = m_s->chr_at(i);
-  if (i < 0) return Str::empty;
+  if (c < 0) return Str::empty;
   uint32_t code = c;
   return Str::make(&code, 1);
 }
