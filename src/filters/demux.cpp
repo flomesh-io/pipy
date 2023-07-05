@@ -423,6 +423,7 @@ void Demux::process(Event *evt) {
 auto Demux::on_demux_open_stream() -> EventFunction* {
   auto p = Filter::sub_pipeline(0, true);
   p->retain();
+  p->start();
   return p;
 }
 
