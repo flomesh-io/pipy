@@ -169,6 +169,7 @@ void BranchMessage::reset() {
 bool BranchMessage::choose(Event *evt) {
   if (auto *msg = m_reader.read(evt)) {
     pjs::Value arg(msg);
+    msg->release();
     return find_branch(1, &arg);
   } else {
     return true;
