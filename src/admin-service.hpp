@@ -50,7 +50,7 @@ namespace pipy {
 // AdminService
 //
 
-class AdminService {
+class AdminService : public pjs::RefCount<AdminService> {
 public:
   struct Options {
     pjs::Ref<crypto::Certificate> cert;
@@ -91,7 +91,7 @@ private:
     virtual void process(Event *evt) override;
     virtual void dump(Dump &d) override;
 
-    AdminService* m_service;
+    pjs::Ref<AdminService> m_service;
     Data m_payload;
     bool m_started;
   };
@@ -110,7 +110,7 @@ private:
     void send(const Data &data);
 
   private:
-    AdminService *m_service;
+    pjs::Ref<AdminService> m_service;
     std::string m_uuid;
     std::string m_name;
     WebSocketHandler *m_handler = nullptr;

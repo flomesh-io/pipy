@@ -1398,14 +1398,16 @@ AdminService::LogWatcher::LogWatcher(AdminService *service, const std::string &u
 }
 
 AdminService::LogWatcher::~LogWatcher() {
-  if (m_uuid.empty()) {
-    auto &watchers = m_service->m_local_log_watchers[m_name];
-    watchers.erase(this);
-    if (watchers.empty()) m_service->m_local_log_watchers.erase(m_name);
-  } else if (auto *inst = m_service->get_instance(m_uuid)) {
-    auto &watchers = inst->log_watchers[m_name];
-    watchers.erase(this);
-    if (watchers.empty()) inst->log_watchers.erase(m_name);
+  if (m_service) {
+    if (m_uuid.empty()) {
+      auto &watchers = m_service->m_local_log_watchers[m_name];
+      watchers.erase(this);
+      if (watchers.empty()) m_service->m_local_log_watchers.erase(m_name);
+    } else if (auto *inst = m_service->get_instance(m_uuid)) {
+      auto &watchers = inst->log_watchers[m_name];
+      watchers.erase(this);
+      if (watchers.empty()) inst->log_watchers.erase(m_name);
+    }
   }
 }
 

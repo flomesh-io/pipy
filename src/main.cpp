@@ -134,11 +134,12 @@ static void toggle_admin_port() {
     if (s_admin) {
       logging::Logger::set_admin_service(nullptr);
       s_admin->close();
-      delete s_admin;
+      s_admin->release();
       s_admin = nullptr;
       Log::info("[admin] Admin service stopped on port %d", s_admin_port);
     } else {
       s_admin = new AdminService(nullptr);
+      s_admin->retain();
       s_admin->open(s_admin_ip, s_admin_port, s_admin_options);
       logging::Logger::set_admin_service(s_admin);
     }
