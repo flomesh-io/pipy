@@ -554,7 +554,9 @@ int main(int argc, char *argv[]) {
             s_admin_ip = admin_ip;
             s_admin_port = admin_port;
 
-            if (!opts.admin_port.empty()) toggle_admin_port();
+            if (!opts.admin_port.empty() && !opts.admin_port_off) {
+              toggle_admin_port();
+            }
 
             s_code_updater.start();
 

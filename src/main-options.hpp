@@ -60,6 +60,7 @@ public:
   size_t      log_history_limit = 1024 * 1024;
   int         log_topics = 0;
   bool        log_local_only = false;
+  bool        admin_port_off = false;
   std::string admin_port;
   std::string instance_uuid;
   std::string instance_name;

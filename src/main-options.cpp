@@ -56,6 +56,7 @@ void MainOptions::show_help() {
   std::cout << "  --instance-name=<name>               Specify a name for this worker process" << std::endl;
   std::cout << "  --reuse-port                         Enable kernel load balancing for all listening ports" << std::endl;
   std::cout << "  --admin-port=<[[ip]:]port>           Enable administration service on the specified port" << std::endl;
+  std::cout << "  --admin-port-off                     Do not start administration service at startup" << std::endl;
   std::cout << "  --admin-tls-cert=<filename>          Administration service certificate" << std::endl;
   std::cout << "  --admin-tls-key=<filename>           Administration service private key" << std::endl;
   std::cout << "  --admin-tls-trusted=<filename>       Client certificate(s) trusted by administration service" << std::endl;
@@ -178,6 +179,8 @@ MainOptions::MainOptions(int argc, char *argv[]) {
         instance_name = v;
       } else if (k == "--reuse-port") {
         reuse_port = true;
+      } else if (k == "--admin-port-off") {
+        admin_port_off = true;
       } else if (k == "--admin-port") {
         admin_port = v;
       } else if (k == "--admin-tls-cert") {
