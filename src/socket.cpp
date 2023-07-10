@@ -85,70 +85,64 @@ SocketTCP::~SocketTCP() {
   Ticker::get()->unwatch(this);
 }
 
-void SocketTCP::start() {
+void SocketTCP::open() {
+  if (m_state != IDLE) return;
+
   m_socket.set_option(asio::socket_base::keep_alive(m_options.keep_alive));
   m_socket.set_option(tcp::no_delay(m_options.no_delay));
 
   auto t = Ticker::get()->tick();
   m_tick_read = t;
   m_tick_write = t;
-  m_started = true;
+  m_state = OPEN;
 
-  on_socket_start();
-
-  receive();
-
-  if (m_sending_end) {
+  if (m_eos) {
     send();
-  } else if (!m_buffer_send.empty()) {
+    return;
+  }
+
+  if (!m_buffer_send.empty()) {
     FlushTarget::need_flush();
   }
 
+  receive();
   Ticker::get()->watch(this);
 }
 
 void SocketTCP::output(Event *evt) {
-  if (!m_sending_end) {
-    if (auto data = evt->as<Data>()) {
-      if (data->size() > 0) {
-        auto size = m_buffer_send.size();
-        auto limit = m_options.buffer_limit;
-        if (limit > 0 && size >= limit) {
-          auto excess = size + data->size() - limit;
-          char msg[200];
-          std::snprintf(msg, sizeof(msg), "buffer overflow by %d bytes over the limit of %d", (int)excess, (int)limit);
-          Log::error(msg);
-          on_socket_overflow(excess);
-          if (!m_sending) m_buffer_send.clear();
-          close(false);
-          on_socket_input(StreamEnd::make(StreamEnd::BUFFER_OVERFLOW));
-        } else {
-          m_buffer_send.push(*data);
-          auto limit = m_options.congestion_limit;
-          if (limit > 0 && m_buffer_send.size() >= limit) {
-            m_congestion.begin();
-          }
-          if (m_started) {
-            FlushTarget::need_flush();
-          }
+  if (m_state == CLOSED) return;
+  if (m_state == HALF_CLOSED_LOCAL) return;
+
+  if (auto data = evt->as<Data>()) {
+    if (data->size() > 0) {
+      auto limit = m_options.buffer_limit;
+      if (limit > 0 && m_buffer_send.size() >= limit) {
+        log_error("buffer overflow");
+        on_socket_input(StreamEnd::make(StreamEnd::BUFFER_OVERFLOW));
+        close();
+      } else {
+        m_buffer_send.push(*data);
+        auto limit = m_options.congestion_limit;
+        if (limit > 0 && m_buffer_send.size() >= limit) {
+          m_congestion.begin();
         }
-      }
-    } else if (auto eos = evt->as<StreamEnd>()) {
-      m_sending_end = true;
-      m_eos = (eos->error_code() == StreamEnd::NO_ERROR);
-      if (m_started) {
-        send();
+        if (m_state != IDLE) FlushTarget::need_flush();
       }
     }
+  } else if (auto eos = evt->as<StreamEnd>()) {
+    if (!m_eos) m_eos = eos;
+    if (m_state != IDLE) FlushTarget::need_flush();
   }
 }
 
 void SocketTCP::close() {
-  close(false);
+  m_state = CLOSED;
+  close_socket();
+  close_async();
 }
 
 void SocketTCP::receive() {
-  if (m_closed) return;
+  if (m_state != OPEN && m_state != HALF_CLOSED_LOCAL) return;
   if (m_receiving) return;
   if (m_paused) return;
 
@@ -159,16 +153,24 @@ void SocketTCP::receive() {
   );
 
   m_receiving = true;
-  handler_retain();
 }
 
 void SocketTCP::send() {
-  if (m_closed) return;
+  if (m_state != OPEN && m_state != HALF_CLOSED_REMOTE) return;
   if (m_sending) return;
 
   if (m_buffer_send.empty()) {
-    if (m_sending_end) {
-      close_send();
+    if (m_eos) {
+      if (m_eos->error_code() == StreamEnd::NO_ERROR) {
+        shutdown_socket();
+        if (m_state == OPEN) {
+          m_state = HALF_CLOSED_LOCAL;
+        } else {
+          close();
+        }
+      } else {
+        close();
+      }
     }
     return;
   }
@@ -185,66 +187,48 @@ void SocketTCP::send() {
   );
 
   m_sending = true;
-  handler_retain();
 }
 
-void SocketTCP::close_receive() {
-  if (!m_sending_end) {
-    handler_retain();
-  }
-}
-
-void SocketTCP::close_send() {
-  if (m_receiving_end) {
-    close(true);
-    handler_release();
-  } else if (m_eos) {
+void SocketTCP::shutdown_socket() {
+  if (m_socket.is_open()) {
     std::error_code ec;
     m_socket.shutdown(tcp::socket::shutdown_send, ec);
-  } else {
-    close(false);
+    if (ec) {
+      log_error("error when socket shutdown", ec);
+    } else {
+      log_debug("socket shutdown");
+    }
   }
 }
 
-void SocketTCP::close(bool shutdown) {
-  if (m_started && !m_closed) {
-    if (m_socket.is_open()) {
-      std::error_code ec;
-      if (shutdown && m_eos) {
-        m_socket.shutdown(tcp::socket::shutdown_both, ec);
-      }
-      m_socket.close(ec);
-
-      if (ec) {
-        log_error("error closing socket", ec);
-      } else {
-        log_debug("socket closed");
-      }
-    }
-
-    m_sending_end = true;
-    m_closed = true;
-
-    if (m_paused) {
-      m_paused = false;
-      handler_release();
+void SocketTCP::close_socket() {
+  if (m_socket.is_open()) {
+    std::error_code ec;
+    m_socket.close(ec);
+    if (ec) {
+      log_error("error closing socket", ec);
+    } else {
+      log_debug("socket closed");
     }
   }
+}
+
+void SocketTCP::close_async() {
+  if (m_closed) return;
+  if (m_receiving) return;
+  if (m_sending) return;
+  if (m_state != CLOSED) return;
+  m_closed = true;
+  on_socket_close();
 }
 
 void SocketTCP::on_tap_open() {
-  if (m_paused) {
-    m_paused = false;
-    receive();
-    handler_release();
-  }
+  m_paused = false;
+  receive();
 }
 
 void SocketTCP::on_tap_close() {
-  if (!m_paused) {
-    m_paused = true;
-    handler_retain();
-  }
+  m_paused = true;
 }
 
 void SocketTCP::on_flush() {
@@ -259,7 +243,7 @@ void SocketTCP::on_tick(double tick) {
     auto t = m_options.idle_timeout;
     if (r >= t && w >= t) {
       on_socket_input(StreamEnd::make(StreamEnd::IDLE_TIMEOUT));
-      close(false);
+      close();
       return;
     }
   }
@@ -267,7 +251,7 @@ void SocketTCP::on_tick(double tick) {
   if (m_options.read_timeout > 0) {
     if (r >= m_options.read_timeout) {
       on_socket_input(StreamEnd::make(StreamEnd::READ_TIMEOUT));
-      close(false);
+      close();
       return;
     }
   }
@@ -275,7 +259,7 @@ void SocketTCP::on_tick(double tick) {
   if (m_options.write_timeout > 0) {
     if (r >= m_options.write_timeout) {
       on_socket_input(StreamEnd::make(StreamEnd::WRITE_TIMEOUT));
-      close(false);
+      close();
       return;
     }
   }
@@ -287,7 +271,7 @@ void SocketTCP::on_receive(const std::error_code &ec, std::size_t n) {
   m_receiving = false;
   m_tick_read = Ticker::get()->tick();
 
-  if (ec != asio::error::operation_aborted && !m_closed) {
+  if (ec != asio::error::operation_aborted && m_state != CLOSED) {
     if (n > 0) {
       m_buffer_receive.pop(m_buffer_receive.size() - n);
       auto size = m_buffer_receive.size();
@@ -304,18 +288,25 @@ void SocketTCP::on_receive(const std::error_code &ec, std::size_t n) {
 
     if (ec) {
       if (ec == asio::error::eof) {
-        m_receiving_end = true;
         log_debug("EOF from peer");
         on_socket_input(StreamEnd::make());
-        close_receive();
+        if (m_state == OPEN) {
+          m_state = HALF_CLOSED_REMOTE;
+        } else if (m_state == HALF_CLOSED_LOCAL) {
+          m_state = CLOSED;
+          close_socket();
+        }
       } else if (ec == asio::error::connection_reset) {
         log_warn("connection reset by peer", ec);
         on_socket_input(StreamEnd::make(StreamEnd::CONNECTION_RESET));
-        close(false);
+        m_state = CLOSED;
+        close_socket();
       } else {
         log_warn("error reading from peer", ec);
         on_socket_input(StreamEnd::make(StreamEnd::READ_ERROR));
-        close(false);
+        m_state = CLOSED;
+        close_socket();
+        return;
       }
 
     } else {
@@ -323,14 +314,14 @@ void SocketTCP::on_receive(const std::error_code &ec, std::size_t n) {
     }
   }
 
-  handler_release();
+  close_async();
 }
 
 void SocketTCP::on_send(const std::error_code &ec, std::size_t n) {
   m_sending = false;
   m_tick_write = Ticker::get()->tick();
 
-  if (ec != asio::error::operation_aborted && !m_closed) {
+  if (ec != asio::error::operation_aborted && m_state != CLOSED) {
     m_buffer_send.shift(n);
     m_traffic_write += n;
 
@@ -341,19 +332,32 @@ void SocketTCP::on_send(const std::error_code &ec, std::size_t n) {
 
     if (ec) {
       log_warn("error writing to peer", ec);
-      close(false);
+      m_state = CLOSED;
+      close_socket();
 
-    } else if (m_sending_end && m_buffer_send.empty()) {
-      close_send();
+    } else if (m_buffer_send.empty()) {
+      if (m_eos) {
+        if (m_eos->error_code() != StreamEnd::NO_ERROR) {
+          m_state = CLOSED;
+          close_socket();
+        } else {
+          shutdown_socket();
+          if (m_state == OPEN) {
+            m_state = HALF_CLOSED_LOCAL;
+          } else if (m_state == HALF_CLOSED_REMOTE) {
+            m_state = CLOSED;
+            close_socket();
+          }
+        }
+      }
 
     } else {
       send();
     }
   }
 
-  handler_release();
+  close_async();
 }
-
 
 //
 // SocketUDP
@@ -365,45 +369,42 @@ SocketUDP::~SocketUDP() {
   Ticker::get()->unwatch(this);
 }
 
-void SocketUDP::start() {
-  auto t = Ticker::get()->tick();
-  m_tick_read = t;
-  m_tick_write = t;
-  m_started = true;
-
-  on_socket_start();
-
+void SocketUDP::open() {
+  m_endpoint = m_socket.local_endpoint();
   receive();
-
-  if (m_sending_end) {
-    send(nullptr);
-  }
-
   Ticker::get()->watch(this);
 }
 
-void SocketUDP::output(Event *evt, Peer *peer) {
-  if (!m_sending_end) {
-    if (auto data = evt->as<Data>()) {
-      if (data->size() > 0) {
-        send(data);
-      }
-    } else if (auto eos = evt->as<StreamEnd>()) {
-      m_sending_end = true;
-      m_eos = (eos->error_code() == StreamEnd::NO_ERROR);
-      if (m_started) {
-        send(nullptr);
-      }
+void SocketUDP::close() {
+  m_closing = true;
+  close_peers();
+  close_socket();
+  close_async();
+}
+
+void SocketUDP::output(Event *evt) {
+  if (auto data = evt->as<Data>()) {
+    if (data->size() > 0) {
+      send(data);
     }
   }
 }
 
-void SocketUDP::close() {
-  close(false);
+void SocketUDP::output(Event *evt, Peer *peer) {
+  if (auto data = evt->as<Data>()) {
+    if (data->size() > 0) {
+      peer->m_tick_write = Ticker::get()->tick();
+      send(data, peer->m_endpoint);
+    }
+  } else if (evt->is<StreamEnd>()) {
+    m_peers.erase(peer->m_endpoint);
+    peer->m_socket = nullptr;
+    peer->on_peer_close();
+  }
 }
 
 void SocketUDP::receive() {
-  if (m_closed) return;
+  if (m_closing) return;
   if (m_receiving) return;
   if (m_paused) return;
 
@@ -417,123 +418,89 @@ void SocketUDP::receive() {
   );
 
   m_receiving = true;
-  handler_retain();
 }
 
 void SocketUDP::send(Data *data) {
+  if (m_closing) return;
+
+  data->retain();
+  m_sending_size += data->size();
+
+  if (Log::is_enabled(Log::UDP)) {
+    std::cerr << Log::format_elapsed_time();
+    std::cerr << (m_is_inbound ? " udp <<<< send " : " udp send >>>> ");
+    std::cerr << data->size() << std::endl;
+  }
+
+  m_socket.async_send(
+    DataChunks(data->chunks()),
+    SendHandler(this, data)
+  );
+}
+
+void SocketUDP::send(Data *data, const asio::ip::udp::endpoint &endpoint) {
   if (m_closed) return;
 
-  if (data) {
-    data->retain();
-    m_sending_size += data->size();
+  data->retain();
+  m_sending_size += data->size();
 
-    if (Log::is_enabled(Log::UDP)) {
-      std::cerr << Log::format_elapsed_time();
-      std::cerr << (m_is_inbound ? " udp <<<< send " : " udp send >>>> ");
-      std::cerr << data->size() << std::endl;
-    }
-
-    m_socket.async_send(
-      DataChunks(data->chunks()),
-      SendHandler(this, data)
-    );
-
-    handler_retain();
+  if (Log::is_enabled(Log::UDP)) {
+    std::cerr << Log::format_elapsed_time();
+    std::cerr << (m_is_inbound ? " udp <<<< send " : " udp send >>>> ");
+    std::cerr << data->size() << std::endl;
   }
 
-  if (!m_sending_size) {
-    if (m_sending_end) {
-      close_send();
-    }
+  m_socket.async_send_to(
+    DataChunks(data->chunks()),
+    endpoint,
+    SendHandler(this, data)
+  );
+}
+
+void SocketUDP::close_peers(StreamEnd::Error err) {
+  std::map<asio::ip::udp::endpoint, Peer*> peers(std::move(m_peers));
+  for (const auto &pair : peers) {
+    auto p = pair.second;
+    p->m_socket = nullptr;
+    p->on_peer_input(StreamEnd::make(err));
+    p->on_peer_close();
   }
 }
 
-void SocketUDP::close_receive() {
-  if (!m_sending_end) {
-    handler_retain();
-  }
-}
-
-void SocketUDP::close_send() {
-  if (m_receiving_end) {
-    close(true);
-    handler_release();
-  } else if (m_eos) {
+void SocketUDP::close_socket() {
+  if (m_socket.is_open()) {
     std::error_code ec;
-    m_socket.shutdown(tcp::socket::shutdown_send, ec);
-  } else {
-    close(false);
+    m_socket.close(ec);
+    if (ec) {
+      log_error("error closing socket", ec);
+    } else {
+      log_debug("socket closed");
+    }
   }
 }
 
-void SocketUDP::close(bool shutdown) {
-  if (m_started && !m_closed) {
-    if (m_socket.is_open()) {
-      std::error_code ec;
-      if (shutdown && m_eos) {
-        m_socket.shutdown(tcp::socket::shutdown_both, ec);
-      }
-      m_socket.close(ec);
-
-      if (ec) {
-        log_error("error closing socket", ec);
-      } else {
-        log_debug("socket closed");
-      }
-    }
-
-    m_sending_end = true;
+void SocketUDP::close_async() {
+  if (m_closed) return;
+  if (m_receiving) return;
+  if (m_sending_size > 0) return;
+  if (m_closing) {
     m_closed = true;
-
-    if (m_paused) {
-      m_paused = false;
-      handler_release();
-    }
+    on_socket_close();
   }
 }
 
 void SocketUDP::on_tap_open() {
-  if (m_paused) {
-    m_paused = false;
-    receive();
-    handler_release();
-  }
+  m_paused = false;
+  receive();
 }
 
 void SocketUDP::on_tap_close() {
-  if (!m_paused) {
-    m_paused = true;
-    handler_retain();
-  }
+  m_paused = true;
 }
 
 void SocketUDP::on_tick(double tick) {
-  auto r = tick - m_tick_read;
-  auto w = tick - m_tick_write;
-
-  if (m_options.idle_timeout > 0) {
-    auto t = m_options.idle_timeout;
-    if (r >= t && w >= t) {
-      on_socket_input(StreamEnd::make(StreamEnd::IDLE_TIMEOUT));
-      close(false);
-      return;
-    }
-  }
-
-  if (m_options.read_timeout > 0) {
-    if (r >= m_options.read_timeout) {
-      on_socket_input(StreamEnd::make(StreamEnd::READ_TIMEOUT));
-      close(false);
-      return;
-    }
-  }
-
-  if (m_options.write_timeout > 0) {
-    if (r >= m_options.write_timeout) {
-      on_socket_input(StreamEnd::make(StreamEnd::WRITE_TIMEOUT));
-      close(false);
-      return;
-    }
+  for (const auto &p : m_peers) {
+    p.second->tick(tick);
   }
 }
 
@@ -541,7 +508,6 @@ void SocketUDP::on_receive(Data *data, const std::error_code &ec, std::size_t n)
   InputContext ic(this);
 
   m_receiving = false;
-  m_tick_read = Ticker::get()->tick();
 
   Peer *peer = nullptr;
   auto i = m_peers.find(m_from);
@@ -550,11 +516,14 @@ void SocketUDP::on_receive(Data *data, const std::error_code &ec, std::size_t n)
     if (peer) {
       peer->m_socket = this;
       peer->m_endpoint = m_from;
+      peer->m_tick_read = peer->m_tick_write = Ticker::get()->tick();
       m_peers[m_from] = peer;
+    } else {
+      on_socket_input(data);
     }
   }
 
-  if (peer && ec != asio::error::operation_aborted && !m_closed) {
+  if (peer && ec != asio::error::operation_aborted && !m_closing) {
     if (n > 0) {
       data->pop(data->size() - n);
       auto size = data->size();
@@ -566,13 +535,15 @@ void SocketUDP::on_receive(Data *data, const std::error_code &ec, std::size_t n)
         std::cerr << size << std::endl;
       }
 
-      peer->on_socket_input(data);
+      peer->m_tick_read = Ticker::get()->tick();
+      peer->on_peer_input(data);
     }
 
     if (ec) {
       log_warn("error reading from peers", ec);
-      on_socket_input(StreamEnd::make(StreamEnd::READ_ERROR));
-      close(false);
+      m_closing = true;
+      close_peers(StreamEnd::READ_ERROR);
+      close_socket();
 
     } else {
       receive();
@@ -580,17 +551,13 @@ void SocketUDP::on_receive(Data *data, const std::error_code &ec, std::size_t n)
   }
 
   data->release();
-  handler_release();
+  close_async();
 }
 
 void SocketUDP::on_send(Data *data, const std::error_code &ec, std::size_t n) {
-  m_tick_write = Ticker::get()->tick();
-
-  if (ec != asio::error::operation_aborted && !m_closed) {
+  if (ec != asio::error::operation_aborted && !m_closing) {
     m_sending_size -= data->size();
     m_traffic_write += n;
-
-    data->release();
 
     auto limit = m_options.congestion_limit;
     if (limit > 0 && m_sending_size < limit) {
@@ -598,15 +565,48 @@ void SocketUDP::on_send(Data *data, const std::error_code &ec, std::size_t n) {
     }
 
     if (ec) {
-      log_warn("error writing to peer", ec);
-      close(false);
-
-    } else if (m_sending_end && !m_sending_size) {
-      close_send();
+      log_warn("error writing to peers", ec);
+      m_closing = true;
+      close_peers(StreamEnd::WRITE_ERROR);
+      close_socket();
     }
   }
 
-  handler_release();
+  data->release();
+  close_async();
+}
+
+//
+// SocketUDP::Peer
+//
+
+void SocketUDP::Peer::tick(double t) {
+  const auto &options = m_socket->m_options;
+
+  auto r = t - m_tick_read;
+  auto w = t - m_tick_write;
+
+  if (options.idle_timeout > 0) {
+    auto t = options.idle_timeout;
+    if (r >= t && w >= t) {
+      on_peer_input(StreamEnd::make(StreamEnd::IDLE_TIMEOUT));
+      return;
+    }
+  }
+
+  if (options.read_timeout > 0) {
+    if (r >= options.read_timeout) {
+      on_peer_input(StreamEnd::make(StreamEnd::READ_TIMEOUT));
+      return;
+    }
+  }
+
+  if (options.write_timeout > 0) {
+    if (r >= options.write_timeout) {
+      on_peer_input(StreamEnd::make(StreamEnd::WRITE_TIMEOUT));
+      return;
+    }
+  }
 }
 
 } // namespace pipy

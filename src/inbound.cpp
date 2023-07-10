@@ -53,7 +53,10 @@ thread_local pjs::Ref<stats::Gauge> Inbound::s_metric_concurrency;
 thread_local pjs::Ref<stats::Counter> Inbound::s_metric_traffic_in;
 thread_local pjs::Ref<stats::Counter> Inbound::s_metric_traffic_out;
 
-Inbound::Inbound() {
+Inbound::Inbound(Listener *listener, const Options &options)
+  : m_listener(listener)
+  , m_options(options)
+{
   init_metrics();
   Log::debug(Log::ALLOC, "[inbound  %p] ++", this);
   for (;;) {
@@ -66,6 +69,9 @@ Inbound::Inbound() {
 
 Inbound::~Inbound() {
   Log::debug(Log::ALLOC, "[inbound  %p] --", this);
+  if (m_listener) {
+    m_listener->close(this);
+  }
 }
 
 auto Inbound::local_address() -> pjs::Str* {
@@ -92,11 +98,27 @@ auto Inbound::ori_dst_address() -> pjs::Str* {
   return m_str_ori_dst_addr;
 }
 
-void Inbound::start(PipelineLayout *layout) {
+void Inbound::start() {
   if (!m_pipeline) {
+    auto layout = m_listener->pipeline_layout();
     auto ctx = layout->new_context();
     ctx->m_inbound = this;
-    m_pipeline = Pipeline::make(layout, ctx);
+    auto p = Pipeline::make(layout, ctx);
+    m_pipeline = p;
+
+    p->chain(EventTarget::input());
+    m_input = p->input();
+    m_listener->open(this);
+
+    int n = 1;
+    pjs::Str *labels[2];
+    labels[0] = layout->name_or_label();
+    if (m_options.peer_stats) labels[n++] = remote_address();
+
+    m_metric_traffic_in = Inbound::s_metric_traffic_in->with_labels(labels, n);
+    m_metric_traffic_out = Inbound::s_metric_traffic_out->with_labels(labels, n);
+
+    p->start();
   }
 }
 
@@ -184,16 +206,12 @@ void Inbound::init_metrics() {
 //
 
 InboundTCP::InboundTCP(Listener *listener, const Inbound::Options &options)
-  : SocketTCP(true, options)
-  , m_listener(listener)
-  , m_options(options)
+  : pjs::ObjectTemplate<InboundTCP, Inbound>(listener, options)
+  , SocketTCP(true, options)
 {
 }
 
 InboundTCP::~InboundTCP() {
-  if (m_listener) {
-    m_listener->close(this);
-  }
 }
 
 void InboundTCP::accept(asio::ip::tcp::acceptor &acceptor) {
@@ -204,7 +222,7 @@ void InboundTCP::accept(asio::ip::tcp::acceptor &acceptor) {
 
       if (ec == asio::error::operation_aborted) {
         dangle();
-      } else {
+      } else if (!m_canceled) {
         if (ec) {
           log_error("error accepting connection", ec);
           dangle();
@@ -246,7 +264,7 @@ void InboundTCP::on_get_address() {
   m_remote_port = m_peer.port();
 
 #ifdef __linux__
-  if (m_options.transparent && s.is_open()) {
+  if (Inbound::m_options.transparent && s.is_open()) {
     struct sockaddr addr;
     socklen_t len = sizeof(addr);
     if (!getsockopt(s.native_handle(), SOL_IP, SO_ORIGINAL_DST, &addr, &len)) {
@@ -269,29 +287,14 @@ void InboundTCP::on_get_address() {
 }
 
 void InboundTCP::start() {
-  Inbound::start(m_listener->pipeline_layout());
-
-  auto p = pipeline();
-  p->chain(EventTarget::input());
-  m_input = p->input();
-  m_listener->open(this);
-
-  int n = 1;
-  pjs::Str *labels[2];
-  labels[0] = m_listener->pipeline_layout()->name_or_label();
-  if (m_options.peer_stats) labels[n++] = remote_address();
-
-  m_metric_traffic_in = Inbound::s_metric_traffic_in->with_labels(labels, n);
-  m_metric_traffic_out = Inbound::s_metric_traffic_out->with_labels(labels, n);
-
-  p->start();
-
-  SocketTCP::start();
+  Inbound::start();
+  retain();
+  SocketTCP::open();
 }
 
 void InboundTCP::describe(char *buf, size_t len) {
   address();
-  if (m_options.transparent) {
+  if (Inbound::m_options.transparent) {
     std::snprintf(
       buf, len,
       "[inbound  %p] [%s]:%d -> [%s]:%d -> [%s]:%d",
@@ -320,82 +323,19 @@ void InboundTCP::describe(char *buf, size_t len) {
 // InboundUDP
 //
 
-InboundUDP::InboundUDP(
-  Listener* listener,
-  const Options &options,
-  asio::ip::udp::socket &socket,
-  asio::generic::raw_protocol::socket &socket_raw,
-  const asio::ip::udp::endpoint &local,
-  const asio::ip::udp::endpoint &peer,
-  const asio::ip::udp::endpoint &destination
-) : m_listener(listener)
-  , m_options(options)
-  , m_socket_raw(socket_raw)
-  , m_socket(socket)
-  , m_local(local)
-  , m_peer(peer)
-  , m_destination(destination)
+InboundUDP::InboundUDP(Listener* listener, const Options &options)
+  : pjs::ObjectTemplate<InboundUDP, Inbound>(listener, options)
 {
-  listener->open(this);
-#ifdef __linux__
-  if (m_options.masquerade) {
-    auto &src = destination.port() ? destination : local;
-    auto &dst = peer;
-    auto &ip = *reinterpret_cast<struct iphdr*>(m_datagram_header);
-    auto &udp = *reinterpret_cast<struct udphdr*>(m_datagram_header + 20);
-    ip.version = 4;
-    ip.ihl = 20/4;
-    ip.tos = 0;
-    ip.tot_len = 0;
-    ip.id = 0;
-    ip.frag_off = 0;
-    ip.ttl = 23;
-    ip.protocol = 17; // UDP
-    ip.check = 0;
-    ip.saddr = htonl(src.address().to_v4().to_uint());
-    ip.daddr = htonl(dst.address().to_v4().to_uint());
-    udp.source = htons(src.port());
-    udp.dest = htons(dst.port());
-    udp.len = 0;
-    udp.check = 0;
-  }
-#endif // __linux__
+  Inbound::retain();
+  Inbound::start();
 }
 
-InboundUDP::~InboundUDP() {
-  if (m_listener) {
-    m_listener->close(this);
-  }
-}
-
-void InboundUDP::start() {
-  if (!pipeline()) {
-    retain();
-    Inbound::start(m_listener->pipeline_layout());
-    auto p = pipeline();
-    p->chain(EventTarget::input());
-    m_input = p->input();
-    p->start();
-    wait_idle();
-  }
-}
-
-void InboundUDP::receive(Data *data) {
-  start();
-  wait_idle();
-  m_input->input(MessageStart::make());
-  m_input->input(data);
-  m_input->input(MessageEnd::make());
-}
-
-void InboundUDP::stop() {
-  m_idle_timer.cancel();
-  Inbound::stop();
-  release();
+InboundUDP::~InboundUDP()
+{
 }
 
 auto InboundUDP::get_buffered() const -> size_t {
-  return m_buffer.size() + m_sending_size;
+  return 0;
 }
 
 auto InboundUDP::get_traffic_in() -> size_t {
@@ -408,82 +348,25 @@ auto InboundUDP::get_traffic_out() -> size_t {
 
 void InboundUDP::on_get_address() {
   if (m_listener) {
-    m_local_addr = m_local.address().to_string();
-    m_local_port = m_local.port();
-    m_remote_addr = m_peer.address().to_string();
-    m_remote_port = m_peer.port();
-    if (m_options.transparent) {
-      m_ori_dst_addr = m_destination.address().to_string();
-      m_ori_dst_port = m_destination.port();
-    }
+    const auto &local = SocketUDP::Peer::local();
+    const auto &peer = SocketUDP::Peer::peer();
+    m_local_addr = local.address().to_string();
+    m_local_port = local.port();
+    m_remote_addr = peer.address().to_string();
+    m_remote_port = peer.port();
   }
 }
 
 void InboundUDP::on_event(Event *evt) {
-  wait_idle();
-
-  if (evt->is<MessageStart>()) {
-    m_message_started = true;
-    m_buffer.clear();
-
-  } else if (auto *data = evt->as<Data>()) {
-    if (m_message_started) {
-      m_buffer.push(*data);
-    }
-
-  } else if (evt->is<MessageEnd>()) {
-    if (m_message_started) {
-      m_message_started = false;
-      if (m_listener) {
-#ifdef __linux__
-        if (m_options.masquerade) {
-          auto *buf = Data::make();
-          auto *ip = reinterpret_cast<struct iphdr *>(m_datagram_header);
-          auto *udp = reinterpret_cast<struct udphdr *>(m_datagram_header + 20);
-          auto size = m_buffer.size();
-          ip->tot_len = htons(20 + 8 + size);
-          udp->len = htons(8 + size);
-          buf->push(m_datagram_header, sizeof(m_datagram_header), &s_dp_udp);
-          buf->push(std::move(m_buffer));
-          m_socket_raw.async_send_to(
-            DataChunks(buf->chunks()),
-            m_peer,
-            [=](const std::error_code &ec, std::size_t n) {
-              m_sending_size -= size;
-              buf->release();
-            }
-          );
-          m_sending_size += size;
-          buf->retain();
-
-        } else
-#endif // __linux__
-        {
-          auto *buf = Data::make(std::move(m_buffer));
-          auto size = m_buffer.size();
-          m_socket.async_send_to(
-            DataChunks(buf->chunks()),
-            m_peer,
-            [=](const std::error_code &ec, std::size_t n) {
-              m_sending_size -= size;
-              buf->release();
-            }
-          );
-          m_sending_size += size;
-          buf->retain();
-        }
-      }
-    }
-  }
+  SocketUDP::Peer::output(evt);
 }
 
-void InboundUDP::wait_idle() {
-  if (m_options.idle_timeout > 0) {
-    m_idle_timer.schedule(
-      m_options.idle_timeout,
-      [this]() { stop(); }
-    );
-  }
+void InboundUDP::on_peer_input(Event *evt) {
+  m_input->input(evt);
+}
+
+void InboundUDP::on_peer_close() {
+  Inbound::release();
 }
 
 } // namespace pipy

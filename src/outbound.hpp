@@ -179,11 +179,9 @@ private:
   virtual auto get_traffic_in() ->size_t override;
   virtual auto get_traffic_out() ->size_t override;
 
-  virtual void on_socket_start() override { retain(); }
   virtual void on_socket_input(Event *evt) override { Outbound::input(evt); }
-  virtual void on_socket_overflow(size_t size) override {}
+  virtual void on_socket_close() override { release(); }
   virtual void on_socket_describe(char *buf, size_t len) override { describe(buf, len); }
-  virtual void on_socket_stop() override { release(); }
 
   friend class pjs::ObjectTemplate<OutboundTCP, Outbound>;
 };
@@ -192,7 +190,10 @@ private:
 // OutboundUDP
 //
 
-class OutboundUDP : public pjs::ObjectTemplate<OutboundUDP, Outbound> {
+class OutboundUDP :
+  public pjs::ObjectTemplate<OutboundUDP, Outbound>,
+  public SocketUDP
+{
 public:
   virtual void bind(const std::string &ip, int port) override;
   virtual void connect(const std::string &host, int port) override;
@@ -200,17 +201,13 @@ public:
   virtual void close() override;
 
 private:
-  OutboundUDP(EventTarget::Input *output, const Options &options);
+  OutboundUDP(EventTarget::Input *output, const Outbound::Options &options);
 
   pjs::Ref<stats::Histogram> m_metric_conn_time;
   asio::ip::udp::resolver m_resolver;
-  asio::ip::udp::socket m_socket;
   Timer m_connect_timer;
   Timer m_retry_timer;
-  Timer m_idle_timer;
-  Data m_buffer;
   EventBuffer m_pending_buffer;
-  bool m_message_started = false;
   bool m_connecting = false;
   bool m_connected = false;
   bool m_ended = false;
@@ -218,15 +215,16 @@ private:
   void start(double delay);
   void resolve();
   void connect(const asio::ip::udp::endpoint &target);
-  void restart(StreamEnd::Error err);
-  void receive();
-  void pump();
-  void wait();
-  void close(StreamEnd::Error err);
+  void connect_error(StreamEnd::Error err);
 
-  virtual auto get_buffered() const -> size_t override;
+  virtual auto get_buffered() const -> size_t override { return SocketUDP::buffered(); }
   virtual auto get_traffic_in() -> size_t override;
   virtual auto get_traffic_out() -> size_t override;
+
+  virtual void on_socket_input(Event *evt) override { Outbound::input(evt); }
+  virtual auto on_socket_new_peer() -> Peer* override { return nullptr; }
+  virtual void on_socket_describe(char *buf, size_t len) override { describe(buf, len); }
+  virtual void on_socket_close() override { release(); }
 
   friend class pjs::ObjectTemplate<OutboundUDP, Outbound>;
 };

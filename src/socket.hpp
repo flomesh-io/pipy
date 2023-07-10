@@ -64,7 +64,8 @@ protected:
   size_t m_traffic_read = 0;
   size_t m_traffic_write = 0;
 
-private:
+  virtual void on_socket_input(Event *evt) = 0;
+  virtual void on_socket_close() = 0;
   virtual void on_socket_describe(char *buf, size_t len) = 0;
 };
 
@@ -78,11 +79,6 @@ class SocketTCP :
   public FlushTarget,
   public Ticker::Watcher
 {
-  virtual void on_socket_start() = 0;
-  virtual void on_socket_input(Event *evt) = 0;
-  virtual void on_socket_overflow(size_t size) = 0;
-  virtual void on_socket_stop() = 0;
-
 protected:
   SocketTCP(bool is_inbound, const Options &options)
     : SocketBase(is_inbound, options)
@@ -94,36 +90,37 @@ protected:
   auto socket() -> asio::ip::tcp::socket& { return m_socket; }
   auto buffered() const -> size_t { return m_buffer_send.size(); }
 
-  void start();
+  void open();
   void output(Event *evt);
   void close();
 
 private:
+  enum State {
+    IDLE,
+    OPEN,
+    HALF_CLOSED_REMOTE,
+    HALF_CLOSED_LOCAL,
+    CLOSED,
+  };
+
   asio::ip::tcp::socket m_socket;
   Data m_buffer_receive;
   Data m_buffer_send;
+  pjs::Ref<StreamEnd> m_eos;
   Congestion m_congestion;
   double m_tick_read;
   double m_tick_write;
-  bool m_is_inbound;
-  bool m_started = false;
-  bool m_closed = false;
+  State m_state = IDLE;
   bool m_receiving = false;
-  bool m_receiving_end = false;
   bool m_sending = false;
-  bool m_sending_end = false;
-  bool m_eos = false;
   bool m_paused = false;
-  int m_retain_count = 0;
-
-  void handler_retain() { m_retain_count++; }
-  void handler_release() { if (!--m_retain_count) on_socket_stop(); }
+  bool m_closed = false;
 
   void receive();
   void send();
-  void close_receive();
-  void close_send();
-  void close(bool shutdown);
+  void shutdown_socket();
+  void close_socket();
+  void close_async();
 
   virtual void on_tap_open() override;
   virtual void on_tap_close() override;
@@ -157,7 +154,7 @@ class SocketUDP :
   public InputSource,
   public Ticker::Watcher
 {
-protected:
+public:
 
   //
   // SocketUDP::Peer
@@ -166,19 +163,28 @@ protected:
   class Peer {
   public:
     Peer() {}
-    ~Peer() { m_socket->m_peers.erase(m_endpoint); }
+    ~Peer() { if (auto s = m_socket) s->m_peers.erase(m_endpoint); }
+
+  protected:
+    void output(Event *evt) { if (auto s = m_socket) s->output(evt, this); }
+    auto local() const -> const asio::ip::udp::endpoint& { return m_socket->m_endpoint; }
+    auto peer() const -> const asio::ip::udp::endpoint& { return m_endpoint; }
+
+  private:
+    void tick(double t);
+
     SocketUDP* m_socket = nullptr;
     asio::ip::udp::endpoint m_endpoint;
-    virtual void on_socket_input(Event *evt) = 0;
+    double m_tick_read;
+    double m_tick_write;
+
+    virtual void on_peer_input(Event *evt) = 0;
+    virtual void on_peer_close() = 0;
+
     friend class SocketUDP;
   };
 
-  virtual void on_socket_start() = 0;
-  virtual void on_socket_input(Event *evt) = 0;
-  virtual auto on_socket_new_peer() -> Peer* = 0;
-  virtual void on_socket_overflow(size_t size) = 0;
-  virtual void on_socket_stop() = 0;
-
+protected:
   SocketUDP(bool is_inbound, const Options &options)
     : SocketBase(is_inbound, options)
     , m_socket(Net::context()) {}
@@ -188,37 +194,31 @@ protected:
   auto socket() -> asio::ip::udp::socket& { return m_socket; }
   auto buffered() const -> size_t { return m_sending_size; }
 
-  void start();
-  void output(Event *evt, Peer *peer);
+  void open();
   void close();
+  void output(Event *evt);
 
 private:
+  virtual auto on_socket_new_peer() -> Peer* = 0;
+
   asio::ip::udp::socket m_socket;
+  asio::ip::udp::endpoint m_endpoint;
   asio::ip::udp::endpoint m_from;
   std::map<asio::ip::udp::endpoint, Peer*> m_peers;
-  Data m_buffer_receive;
-  Data m_buffer_send;
   Congestion m_congestion;
   int m_sending_size = 0;
-  double m_tick_read;
-  double m_tick_write;
-  bool m_started = false;
-  bool m_closed = false;
   bool m_receiving = false;
-  bool m_receiving_end = false;
-  bool m_sending_end = false;
-  bool m_eos = false;
   bool m_paused = false;
-  int m_retain_count = 0;
+  bool m_closing = false;
+  bool m_closed = false;
 
-  void handler_retain() { m_retain_count++; }
-  void handler_release() { if (!--m_retain_count) on_socket_stop(); }
-
+  void output(Event *evt, Peer *peer);
   void receive();
   void send(Data *data);
-  void close_receive();
-  void close_send();
-  void close(bool shutdown);
+  void send(Data *data, const asio::ip::udp::endpoint &endpoint);
+  void close_peers(StreamEnd::Error err = StreamEnd::Error::NO_ERROR);
+  void close_socket();
+  void close_async();
 
   virtual void on_tap_open() override;
   virtual void on_tap_close() override;

@@ -42,10 +42,6 @@ void EnumDef<Listener::Protocol>::init() {
 
 namespace pipy {
 
-using tcp = asio::ip::tcp;
-
-thread_local static Data::Producer s_dp_udp("InboundUDP");
-
 //
 // Listener::Options
 //
@@ -121,21 +117,11 @@ bool Listener::pipeline_layout(PipelineLayout *layout) {
         if (!start()) return false;
       }
     } else if (m_pipeline_layout) {
-      close();
+      stop();
     }
     m_pipeline_layout = layout;
   }
   return true;
-}
-
-void Listener::close() {
-  if (m_acceptor) {
-    m_acceptor->close();
-    m_acceptor = nullptr;
-    char desc[200];
-    describe(desc, sizeof(desc));
-    Log::info("[listener] Stopped listening on %s", desc);
-  }
 }
 
 void Listener::set_options(const Options &options) {
@@ -143,7 +129,7 @@ void Listener::set_options(const Options &options) {
   m_options.protocol = m_protocol;
   if (m_acceptor) {
     int n = m_options.max_connections;
-    if (n >= 0 && m_acceptor->count() >= n) {
+    if (n >= 0 && m_inbounds.size() >= n) {
       pause();
     } else {
       resume();
@@ -152,8 +138,8 @@ void Listener::set_options(const Options &options) {
 }
 
 void Listener::for_each_inbound(const std::function<void(Inbound*)> &cb) {
-  if (m_acceptor) {
-    m_acceptor->for_each_inbound(cb);
+  for (auto i = m_inbounds.head(); i; i = i->next()) {
+    cb(i);
   }
 }
 
@@ -166,29 +152,33 @@ bool Listener::start() {
       case Protocol::TCP: {
         asio::ip::tcp::endpoint endpoint(m_address, m_port);
         auto *acceptor = new AcceptorTCP(this);
-        m_paused = !acceptor->start(endpoint);
+        acceptor->start(endpoint);
         m_acceptor = acceptor;
         break;
       }
       case Protocol::UDP: {
         asio::ip::udp::endpoint endpoint(m_address, m_port);
-        auto *acceptor = new AcceptorUDP(
-          this,
-          m_options.transparent,
-          m_options.masquerade
-        );
+        auto *acceptor = new AcceptorUDP(this);
         acceptor->start(endpoint);
-        m_paused = false;
         m_acceptor = acceptor;
         break;
       }
       default: break;
     }
 
+    if (m_options.max_connections < 0 || m_inbounds.size() < m_options.max_connections) {
+      m_acceptor->accept();
+      m_paused = false;
+    } else {
+      m_acceptor->cancel();
+      m_paused = true;
+    }
+
     Log::info("[listener] Listening on %s", desc);
     return true;
 
   } catch (std::runtime_error &err) {
+    delete m_acceptor;
     m_acceptor = nullptr;
     Log::error("[listener] Cannot start listening on %s: %s", desc, err.what());
     return false;
@@ -209,9 +199,24 @@ void Listener::resume() {
   }
 }
 
+void Listener::stop() {
+  List<Inbound> inbounds(std::move(m_inbounds));
+  for (auto i = inbounds.head(); i; i = i->next()) {
+    i->dangle();
+  }
+  if (m_acceptor) {
+    m_acceptor->stop();
+    delete m_acceptor;
+    m_acceptor = nullptr;
+    char desc[200];
+    describe(desc, sizeof(desc));
+    Log::info("[listener] Stopped listening on %s", desc);
+  }
+}
+
 void Listener::open(Inbound *inbound) {
-  m_acceptor->open(inbound);
-  auto n = m_acceptor->count();
+  m_inbounds.push(inbound);
+  auto n = m_inbounds.size();
   m_peak_connections = std::max(m_peak_connections, int(n));
   int max = m_options.max_connections;
   if (max > 0 && n >= max) {
@@ -222,8 +227,8 @@ void Listener::open(Inbound *inbound) {
 }
 
 void Listener::close(Inbound *inbound) {
-  m_acceptor->close(inbound);
-  auto n = m_acceptor->count();
+  m_inbounds.remove(inbound);
+  auto n = m_inbounds.size();
   int max = m_options.max_connections;
   if (max < 0 || n < max) {
     resume();
@@ -282,12 +287,10 @@ Listener::AcceptorTCP::AcceptorTCP(Listener *listener)
 }
 
 Listener::AcceptorTCP::~AcceptorTCP() {
-  close();
+  stop();
 }
 
-bool Listener::AcceptorTCP::start(const asio::ip::tcp::endpoint &endpoint) {
-  const auto &options = m_listener->m_options;
-
+void Listener::AcceptorTCP::start(const asio::ip::tcp::endpoint &endpoint) {
   m_acceptor.open(endpoint.protocol());
   m_acceptor.set_option(asio::socket_base::reuse_address(true));
 
@@ -295,17 +298,6 @@ bool Listener::AcceptorTCP::start(const asio::ip::tcp::endpoint &endpoint) {
 
   m_acceptor.bind(endpoint);
   m_acceptor.listen(asio::socket_base::max_connections);
-
-  if (options.max_connections < 0 || m_inbounds.size() < options.max_connections) {
-    accept();
-    return true;
-  } else {
-    return false;
-  }
-}
-
-auto Listener::AcceptorTCP::count() -> size_t const {
-  return m_inbounds.size();
 }
 
 void Listener::AcceptorTCP::accept() {
@@ -316,29 +308,17 @@ void Listener::AcceptorTCP::accept() {
 
 void Listener::AcceptorTCP::cancel() {
   m_acceptor.cancel();
-  m_accepting = nullptr;
-}
-
-void Listener::AcceptorTCP::open(Inbound *inbound) {
-  m_inbounds.push(static_cast<InboundTCP*>(inbound));
-}
-
-void Listener::AcceptorTCP::close(Inbound *inbound) {
-  m_inbounds.remove(static_cast<InboundTCP*>(inbound));
-}
-
-void Listener::AcceptorTCP::close() {
-  m_acceptor.close();
-  if (m_accepting) m_accepting->dangle();
-  while (auto *ib = m_inbounds.head()) {
-    ib->dangle();
-    m_inbounds.remove(ib);
+  if (m_accepting) {
+    m_accepting->cancel();
+    m_accepting = nullptr;
   }
 }
 
-void Listener::AcceptorTCP::for_each_inbound(const std::function<void(Inbound*)> &cb) {
-  for (auto p = m_inbounds.head(); p; p = p->List<InboundTCP>::Item::next()) {
-    cb(p);
+void Listener::AcceptorTCP::stop() {
+  m_acceptor.close();
+  if (m_accepting) {
+    m_accepting->dangle();
+    m_accepting = nullptr;
   }
 }
 
@@ -346,12 +326,9 @@ void Listener::AcceptorTCP::for_each_inbound(const std::function<void(Inbound*)>
 // Listener::AcceptorUDP
 //
 
-Listener::AcceptorUDP::AcceptorUDP(Listener *listener, bool transparent, bool masquerade)
-  : m_listener(listener)
-  , m_socket(Net::context())
-  , m_socket_raw(Net::context())
-  , m_transparent(transparent)
-  , m_masquerade(masquerade)
+Listener::AcceptorUDP::AcceptorUDP(Listener *listener)
+  : SocketUDP(true, listener->m_options)
+  , m_listener(listener)
 {
 }
 
@@ -360,172 +337,46 @@ Listener::AcceptorUDP::~AcceptorUDP() {
 }
 
 void Listener::AcceptorUDP::start(const asio::ip::udp::endpoint &endpoint) {
-  m_socket.open(endpoint.protocol());
-  m_socket.set_option(asio::socket_base::reuse_address(true));
-  m_listener->set_sock_opts(m_socket.native_handle());
-  m_socket.bind(endpoint);
-  m_local = m_socket.local_endpoint();
-  if (m_masquerade) {
-    m_socket_raw.open(asio::generic::raw_protocol(AF_INET, IPPROTO_RAW));
-  }
-  receive();
-}
-
-auto Listener::AcceptorUDP::inbound(
-  const asio::ip::udp::endpoint &src,
-  const asio::ip::udp::endpoint &dst,
-  bool create
-) -> InboundUDP* {
-  auto i = m_inbound_map.find(dst);
-  if (i != m_inbound_map.end()) {
-    auto &peers = i->second;
-    auto j = peers.find(src);
-    if (j != peers.end()) return j->second;
-  }
-  if (create) {
-    auto *inbound = InboundUDP::make(
-      m_listener,
-      m_listener->m_options,
-      m_socket,
-      m_socket_raw,
-      m_local, src, dst
-    );
-    return inbound;
-  }
-  return nullptr;
-}
-
-auto Listener::AcceptorUDP::count() -> size_t const {
-  return m_inbounds.size();
-}
-
-void Listener::AcceptorUDP::receive() {
-  m_socket.async_receive_from(
-    asio::null_buffers(),
-    m_peer,
-    [=](const std::error_code &ec, std::size_t n) {
-      InputContext ic;
-
-      if (ec != asio::error::operation_aborted) {
-        if (!ec) {
-          auto max_size = m_listener->m_options.max_packet_size;
-          auto iov_size = (max_size + DATA_CHUNK_SIZE - 1) / DATA_CHUNK_SIZE;
-          Data buf(max_size, &s_dp_udp);
-
-          auto s = m_socket.native_handle();
-
-          struct sockaddr_in addr;
-          struct msghdr msg;
-          struct iovec iov[iov_size];
-
-          int i = 0;
-          for (auto c : buf.chunks()) {
-            auto buf = std::get<0>(c);
-            auto len = std::get<1>(c);
-            iov[i].iov_base = buf;
-            iov[i].iov_len = len;
-            i++;
-          }
-
-          msg.msg_name = &addr;
-          msg.msg_namelen = sizeof(addr);
-          msg.msg_iov = iov;
-          msg.msg_iovlen = iov_size;
-          msg.msg_flags = 0;
-
-          char control_data[1000];
-          if (m_transparent) {
-            msg.msg_control = control_data;
-            msg.msg_controllen = sizeof(control_data);
-          } else {
-            msg.msg_control = nullptr;
-            msg.msg_controllen = 0;
-          }
-
-          auto n = recvmsg(s, &msg, 0);
-          if (n > 0) {
-            buf.pop(buf.size() - n);
-            m_peer.address(asio::ip::make_address_v4(ntohl(addr.sin_addr.s_addr)));
-            m_peer.port(ntohs(addr.sin_port));
-            asio::ip::udp::endpoint destination;
-
-#ifdef __linux__
-            if (m_transparent) {
-              for (auto *cmsg = CMSG_FIRSTHDR(&msg); cmsg; cmsg = CMSG_NXTHDR(&msg, cmsg)) {
-                if (cmsg->cmsg_level == SOL_IP && cmsg->cmsg_type == IP_ORIGDSTADDR) {
-                  auto *addr = (struct sockaddr_in *)CMSG_DATA(cmsg);
-                  destination.address(asio::ip::make_address_v4(ntohl(addr->sin_addr.s_addr)));
-                  destination.port(ntohs(addr->sin_port));
-                  break;
-                }
-              }
-            }
-#endif // __linux__
-
-            InboundUDP *inb = inbound(m_peer, destination, !m_paused);
-            if (inb && inb->is_receiving()) {
-              inb->receive(Data::make(std::move(buf)));
-            }
-          }
-
-        } else {
-          if (Log::is_enabled(Log::WARN)) {
-            char desc[200];
-            m_listener->describe(desc, sizeof(desc));
-            Log::warn(
-              "[listener] error receiving on %s: %s",
-              desc, ec.message().c_str()
-            );
-          }
-        }
-
-        receive();
-      }
-
-      release();
-    }
-  );
-
-  retain();
+  auto &s = SocketUDP::socket();
+  s.open(endpoint.protocol());
+  s.set_option(asio::socket_base::reuse_address(true));
+  m_listener->set_sock_opts(s.native_handle());
+  s.bind(endpoint);
+  const auto &ep = s.local_endpoint();
+  m_local_addr = ep.address().to_string();
+  m_local_port = ep.port();
+  SocketUDP::open();
 }
 
 void Listener::AcceptorUDP::accept() {
-  m_paused = false;
+  m_accepting = true;
 }
 
 void Listener::AcceptorUDP::cancel() {
-  m_paused = true;
+  m_accepting = false;
 }
 
-void Listener::AcceptorUDP::open(Inbound *inbound) {
-  auto *inb = static_cast<InboundUDP*>(inbound);
-  m_inbounds.push(static_cast<InboundUDP*>(inbound));
-  auto &peers = m_inbound_map[inb->destination()];
-  peers[inb->peer()] = inb;
+void Listener::AcceptorUDP::stop() {
+  SocketUDP::close();
 }
 
-void Listener::AcceptorUDP::close(Inbound *inbound) {
-  auto *inb = static_cast<InboundUDP*>(inbound);
-  m_inbounds.remove(inb);
-  auto i = m_inbound_map.find(inb->destination());
-  if (i != m_inbound_map.end()) {
-    i->second.erase(inb->peer());
-    if (i->second.empty()) m_inbound_map.erase(i);
+auto Listener::AcceptorUDP::on_socket_new_peer() -> Peer* {
+  if (m_accepting) {
+    auto i = InboundUDP::make(m_listener, m_listener->m_options);
+    return i;
+  } else {
+    return nullptr;
   }
 }
 
-void Listener::AcceptorUDP::close() {
-  m_socket.close();
-  for (auto *p = m_inbounds.head(); p; ) {
-    auto *i = p; p = p->List<InboundUDP>::Item::next();
-    i->release();
-  }
-}
-
-void Listener::AcceptorUDP::for_each_inbound(const std::function<void(Inbound*)> &cb) {
-  for (auto p = m_inbounds.head(); p; p = p->List<InboundUDP>::Item::next()) {
-    cb(p);
-  }
+void Listener::AcceptorUDP::on_socket_describe(char *buf, size_t len) {
+  std::snprintf(
+    buf, len,
+    "[acceptor %p] UDP -> [%s]:%d",
+    this,
+    m_local_addr.c_str(),
+    m_local_port
+  );
 }
 
 //

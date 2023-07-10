@@ -27,6 +27,7 @@
 #define LISTENER_HPP
 
 #include "net.hpp"
+#include "socket.hpp"
 #include "inbound.hpp"
 #include "options.hpp"
 
@@ -90,7 +91,7 @@ public:
   bool reserved() const { return m_options.reserved; }
   auto pipeline_layout() const -> PipelineLayout* { return m_pipeline_layout; }
   bool pipeline_layout(PipelineLayout *layout);
-  auto current_connections() const -> int { return m_acceptor->count(); }
+  auto current_connections() const -> int { return m_inbounds.size(); }
   auto peak_connections() const -> int { return m_peak_connections; }
 
   void set_options(const Options &options);
@@ -104,18 +105,12 @@ private:
   // Listener::Acceptor
   //
 
-  class Acceptor : public pjs::RefCount<Acceptor> {
+  class Acceptor {
   public:
-    virtual auto count() -> size_t const = 0;
+    virtual ~Acceptor() {}
     virtual void accept() = 0;
     virtual void cancel() = 0;
-    virtual void open(Inbound *inbound) = 0;
-    virtual void close(Inbound *inbound) = 0;
-    virtual void close() = 0;
-    virtual void for_each_inbound(const std::function<void(Inbound*)> &cb) = 0;
-  protected:
-    virtual ~Acceptor() {}
-    friend class pjs::RefCount<Acceptor>;
+    virtual void stop() = 0;
   };
 
   //
@@ -127,70 +122,51 @@ private:
     AcceptorTCP(Listener *listener);
     virtual ~AcceptorTCP();
 
-    bool start(const asio::ip::tcp::endpoint &endpoint);
+    void start(const asio::ip::tcp::endpoint &endpoint);
 
-    virtual auto count() -> size_t const override;
     virtual void accept() override;
     virtual void cancel() override;
-    virtual void open(Inbound *inbound) override;
-    virtual void close(Inbound *inbound) override;
-    virtual void close() override;
-    virtual void for_each_inbound(const std::function<void(Inbound*)> &cb) override;
+    virtual void stop() override;
 
   private:
     Listener* m_listener;
     asio::ip::tcp::acceptor m_acceptor;
     pjs::Ref<InboundTCP> m_accepting;
-    List<InboundTCP> m_inbounds;
   };
 
   //
   // Listener::AcceptorUDP
   //
 
-  class AcceptorUDP : public Acceptor {
+  class AcceptorUDP : public Acceptor, public SocketUDP {
   public:
-    AcceptorUDP(Listener *listener, bool transparent, bool masquerade);
+    AcceptorUDP(Listener *listener);
     virtual ~AcceptorUDP();
 
     void start(const asio::ip::udp::endpoint &endpoint);
-    auto inbound(
-      const asio::ip::udp::endpoint &src,
-      const asio::ip::udp::endpoint &dst,
-      bool create = false
-    ) -> InboundUDP*;
 
-    virtual auto count() -> size_t const override;
     virtual void accept() override;
     virtual void cancel() override;
-    virtual void open(Inbound *inbound) override;
-    virtual void close(Inbound *inbound) override;
-    virtual void close() override;
-    virtual void for_each_inbound(const std::function<void(Inbound*)> &cb) override;
+    virtual void stop() override;
 
   private:
-    typedef std::map<asio::ip::udp::endpoint, InboundUDP*> PeerMap;
-
     Listener* m_listener;
-    List<InboundUDP> m_inbounds;
-    asio::ip::udp::endpoint m_local;
-    asio::ip::udp::endpoint m_peer;
-    asio::ip::udp::socket m_socket;
-    asio::generic::raw_protocol::socket m_socket_raw;
-    std::map<asio::ip::udp::endpoint, PeerMap> m_inbound_map;
-    bool m_transparent;
-    bool m_masquerade;
-    bool m_paused = false;
+    std::string m_local_addr;
+    int m_local_port = 0;
+    bool m_accepting = false;
 
-    void receive();
+    virtual void on_socket_input(Event *evt) override {}
+    virtual auto on_socket_new_peer() -> Peer* override;
+    virtual void on_socket_describe(char *buf, size_t len) override;
+    virtual void on_socket_close() override {}
   };
 
   bool start();
   void pause();
   void resume();
+  void stop();
   void open(Inbound *inbound);
   void close(Inbound *inbound);
-  void close();
   void describe(char *buf, size_t len);
   void set_sock_opts(int sock);
 
@@ -201,16 +177,16 @@ private:
   int m_peak_connections = 0;
   bool m_paused = false;
   asio::ip::address m_address;
-  pjs::Ref<Acceptor> m_acceptor;
+  Acceptor* m_acceptor = nullptr;
   pjs::Ref<PipelineLayout> m_pipeline_layout;
+  List<Inbound> m_inbounds;
 
   thread_local static std::set<Listener*> s_listeners[];
   static bool s_reuse_port;
 
   static auto find(Protocol protocol, const std::string &ip, int port) -> Listener*;
 
-  friend class InboundTCP;
-  friend class InboundUDP;
+  friend class Inbound;
   friend class pjs::RefCount<Listener>;
 };
 

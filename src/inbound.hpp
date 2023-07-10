@@ -48,6 +48,7 @@ class Pipeline;
 
 class Inbound :
   public pjs::ObjectTemplate<Inbound>,
+  public List<Inbound>::Item,
   public EventTarget
 {
 public:
@@ -71,8 +72,10 @@ public:
   virtual auto get_traffic_in() ->size_t = 0;
   virtual auto get_traffic_out() ->size_t = 0;
 
+  void dangle() { m_listener = nullptr; }
+
 protected:
-  Inbound();
+  Inbound(Listener *listener, const Options &options);
   ~Inbound();
 
   enum ReceivingState {
@@ -81,6 +84,8 @@ protected:
     PAUSED,
   };
 
+  Listener* m_listener;
+  Options m_options;
   std::string m_local_addr;
   std::string m_remote_addr;
   std::string m_ori_dst_addr;
@@ -88,8 +93,9 @@ protected:
   int m_remote_port = 0;
   int m_ori_dst_port = 0;
   ReceivingState m_receiving_state = RECEIVING;
+  pjs::Ref<EventTarget::Input> m_input;
 
-  void start(PipelineLayout *layout);
+  void start();
   void stop();
   void address();
 
@@ -124,32 +130,27 @@ private:
 
 class InboundTCP :
   public pjs::ObjectTemplate<InboundTCP, Inbound>,
-  public List<InboundTCP>::Item,
   public SocketTCP
 {
 public:
   void accept(asio::ip::tcp::acceptor &acceptor);
-  void dangle() { m_listener = nullptr; }
+  void cancel() { m_canceled = true; }
 
 private:
   InboundTCP(Listener *listener, const Inbound::Options &options);
   ~InboundTCP();
 
-  Listener* m_listener;
-  Inbound::Options m_options;
-  pjs::Ref<EventTarget::Input> m_input;
   asio::ip::tcp::endpoint m_peer;
+  bool m_canceled = false;
 
   virtual auto get_buffered() const -> size_t override { return SocketTCP::buffered(); }
   virtual auto get_traffic_in() -> size_t override;
   virtual auto get_traffic_out() -> size_t override;
   virtual void on_get_address() override;
   virtual void on_event(Event *evt) override { SocketTCP::output(evt); }
-  virtual void on_socket_start() override { retain(); }
   virtual void on_socket_input(Event *evt) override { m_input->input(evt); }
-  virtual void on_socket_overflow(size_t size) override {}
+  virtual void on_socket_close() override { release(); }
   virtual void on_socket_describe(char *buf, size_t len) override { describe(buf, len); }
-  virtual void on_socket_stop() override { release(); }
 
   void start();
   void receive();
@@ -184,52 +185,18 @@ private:
 
 class InboundUDP :
   public pjs::ObjectTemplate<InboundUDP, Inbound>,
-  public List<InboundUDP>::Item
+  public SocketUDP::Peer
 {
-public:
-  auto local() const -> const asio::ip::udp::endpoint& { return m_local; }
-  auto peer() const -> const asio::ip::udp::endpoint& { return m_peer; }
-  auto destination() const -> const asio::ip::udp::endpoint& { return m_destination; }
-
-  void start();
-  void receive(Data *data);
-  void dangle() { m_listener = nullptr; }
-  void stop();
-
-private:
-  InboundUDP(
-    Listener* listener,
-    const Options &options,
-    asio::ip::udp::socket &socket,
-    asio::generic::raw_protocol::socket &socket_raw,
-    const asio::ip::udp::endpoint &local,
-    const asio::ip::udp::endpoint &peer,
-    const asio::ip::udp::endpoint &destination
-  );
-
+  InboundUDP(Listener* listener, const Options &options);
   ~InboundUDP();
-
-  Listener* m_listener;
-  Options m_options;
-  Timer m_idle_timer;
-  asio::generic::raw_protocol::socket& m_socket_raw;
-  asio::ip::udp::socket& m_socket;
-  asio::ip::udp::endpoint m_local;
-  asio::ip::udp::endpoint m_peer;
-  asio::ip::udp::endpoint m_destination;
-  pjs::Ref<EventTarget::Input> m_input;
-  Data m_buffer;
-  bool m_message_started = false;
-  uint8_t m_datagram_header[20+8];
-  size_t m_sending_size = 0;
 
   virtual auto get_buffered() const -> size_t override;
   virtual auto get_traffic_in() -> size_t override;
   virtual auto get_traffic_out() -> size_t override;
   virtual void on_get_address() override;
   virtual void on_event(Event *evt) override;
-
-  void wait_idle();
+  virtual void on_peer_input(Event *evt) override;
+  virtual void on_peer_close() override;
 
   friend class pjs::ObjectTemplate<InboundUDP, Inbound>;
 };
