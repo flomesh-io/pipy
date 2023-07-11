@@ -512,8 +512,10 @@ void SocketUDP::on_tap_close() {
 }
 
 void SocketUDP::on_tick(double tick) {
-  for (const auto &p : m_peers) {
-    p.second->tick(tick);
+  auto i = m_peers.begin();
+  while (i != m_peers.end()) {
+    auto p = i->second; i++;
+    p->tick(tick);
   }
 }
 
@@ -544,6 +546,8 @@ void SocketUDP::on_receive(Data *data, const std::error_code &ec, std::size_t n)
           peer->m_tick_write = Ticker::get()->tick();
           m_peers[m_from] = peer;
         }
+      } else {
+        peer = i->second;
       }
 
       if (peer) {
