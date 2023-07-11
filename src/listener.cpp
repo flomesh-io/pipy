@@ -152,15 +152,15 @@ bool Listener::start() {
       case Protocol::TCP: {
         asio::ip::tcp::endpoint endpoint(m_address, m_port);
         auto *acceptor = new AcceptorTCP(this);
-        acceptor->start(endpoint);
         m_acceptor = acceptor;
+        acceptor->start(endpoint);
         break;
       }
       case Protocol::UDP: {
         asio::ip::udp::endpoint endpoint(m_address, m_port);
         auto *acceptor = new AcceptorUDP(this);
-        acceptor->start(endpoint);
         m_acceptor = acceptor;
+        acceptor->start(endpoint);
         break;
       }
       default: break;
@@ -178,7 +178,6 @@ bool Listener::start() {
     return true;
 
   } catch (std::runtime_error &err) {
-    delete m_acceptor;
     m_acceptor = nullptr;
     Log::error("[listener] Cannot start listening on %s: %s", desc, err.what());
     return false;
@@ -206,7 +205,6 @@ void Listener::stop() {
   }
   if (m_acceptor) {
     m_acceptor->stop();
-    delete m_acceptor;
     m_acceptor = nullptr;
     char desc[200];
     describe(desc, sizeof(desc));
@@ -340,11 +338,15 @@ void Listener::AcceptorUDP::start(const asio::ip::udp::endpoint &endpoint) {
   auto &s = SocketUDP::socket();
   s.open(endpoint.protocol());
   s.set_option(asio::socket_base::reuse_address(true));
+
   m_listener->set_sock_opts(s.native_handle());
+
   s.bind(endpoint);
   const auto &ep = s.local_endpoint();
   m_local_addr = ep.address().to_string();
   m_local_port = ep.port();
+
+  retain();
   SocketUDP::open();
 }
 

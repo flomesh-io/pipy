@@ -105,7 +105,7 @@ private:
   // Listener::Acceptor
   //
 
-  class Acceptor {
+  class Acceptor : public pjs::RefCount<Acceptor> {
   public:
     virtual ~Acceptor() {}
     virtual void accept() = 0;
@@ -158,7 +158,7 @@ private:
     virtual void on_socket_input(Event *evt) override {}
     virtual auto on_socket_new_peer() -> Peer* override;
     virtual void on_socket_describe(char *buf, size_t len) override;
-    virtual void on_socket_close() override {}
+    virtual void on_socket_close() override { release(); }
   };
 
   bool start();
@@ -177,7 +177,7 @@ private:
   int m_peak_connections = 0;
   bool m_paused = false;
   asio::ip::address m_address;
-  Acceptor* m_acceptor = nullptr;
+  pjs::Ref<Acceptor> m_acceptor;
   pjs::Ref<PipelineLayout> m_pipeline_layout;
   List<Inbound> m_inbounds;
 

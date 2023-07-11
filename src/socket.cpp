@@ -589,21 +589,30 @@ void SocketUDP::Peer::tick(double t) {
   if (options.idle_timeout > 0) {
     auto t = options.idle_timeout;
     if (r >= t && w >= t) {
+      m_socket->m_peers.erase(m_endpoint);
+      m_socket = nullptr;
       on_peer_input(StreamEnd::make(StreamEnd::IDLE_TIMEOUT));
+      on_peer_close();
       return;
     }
   }
 
   if (options.read_timeout > 0) {
     if (r >= options.read_timeout) {
+      m_socket->m_peers.erase(m_endpoint);
+      m_socket = nullptr;
       on_peer_input(StreamEnd::make(StreamEnd::READ_TIMEOUT));
+      on_peer_close();
       return;
     }
   }
 
   if (options.write_timeout > 0) {
     if (r >= options.write_timeout) {
+      m_socket->m_peers.erase(m_endpoint);
+      m_socket = nullptr;
       on_peer_input(StreamEnd::make(StreamEnd::WRITE_TIMEOUT));
+      on_peer_close();
       return;
     }
   }
