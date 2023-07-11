@@ -580,6 +580,7 @@ void OutboundUDP::connect(const asio::ip::udp::endpoint &target) {
           }
 
           state(State::connected);
+          retain();
           SocketUDP::open();
         }
       }

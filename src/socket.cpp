@@ -521,21 +521,7 @@ void SocketUDP::on_receive(Data *data, const std::error_code &ec, std::size_t n)
 
   m_receiving = false;
 
-  Peer *peer = nullptr;
-  auto i = m_peers.find(m_from);
-  if (i == m_peers.end()) {
-    peer = on_socket_new_peer();
-    if (peer) {
-      peer->m_socket = this;
-      peer->m_endpoint = m_from;
-      peer->m_tick_read = peer->m_tick_write = Ticker::get()->tick();
-      m_peers[m_from] = peer;
-    } else {
-      on_socket_input(data);
-    }
-  }
-
-  if (peer && ec != asio::error::operation_aborted && !m_closing) {
+  if (ec != asio::error::operation_aborted && !m_closing) {
     if (n > 0) {
       data->pop(data->size() - n);
       auto size = data->size();
@@ -547,8 +533,24 @@ void SocketUDP::on_receive(Data *data, const std::error_code &ec, std::size_t n)
         std::cerr << size << std::endl;
       }
 
-      peer->m_tick_read = Ticker::get()->tick();
-      peer->on_peer_input(data);
+      Peer *peer = nullptr;
+      auto i = m_peers.find(m_from);
+      if (i == m_peers.end()) {
+        peer = on_socket_new_peer();
+        if (peer) {
+          peer->m_socket = this;
+          peer->m_endpoint = m_from;
+          peer->m_tick_write = Ticker::get()->tick();
+          m_peers[m_from] = peer;
+        }
+      }
+
+      if (peer) {
+        peer->m_tick_read = Ticker::get()->tick();
+        peer->on_peer_input(data);
+      } else {
+        on_socket_input(data);
+      }
     }
 
     if (ec) {
