@@ -371,6 +371,18 @@ SocketUDP::~SocketUDP() {
 
 void SocketUDP::open() {
   m_endpoint = m_socket.local_endpoint();
+  m_open = true;
+
+  if (!m_buffer.empty()) {
+    m_buffer.flush(
+      [this](Event *evt) {
+        if (auto data = evt->as<Data>()) {
+          send(data);
+        }
+      }
+    );
+  }
+
   receive();
   Ticker::get()->watch(this);
 }
@@ -384,18 +396,18 @@ void SocketUDP::close() {
 
 void SocketUDP::output(Event *evt) {
   if (auto data = evt->as<Data>()) {
-    if (data->size() > 0) {
+    if (m_open) {
       send(data);
+    } else {
+      m_buffer.push(data);
     }
   }
 }
 
 void SocketUDP::output(Event *evt, Peer *peer) {
   if (auto data = evt->as<Data>()) {
-    if (data->size() > 0) {
-      peer->m_tick_write = Ticker::get()->tick();
-      send(data, peer->m_endpoint);
-    }
+    peer->m_tick_write = Ticker::get()->tick();
+    send(data, peer->m_endpoint);
   } else if (evt->is<StreamEnd>()) {
     m_peers.erase(peer->m_endpoint);
     peer->m_socket = nullptr;

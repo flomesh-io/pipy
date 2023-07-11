@@ -205,9 +205,11 @@ private:
   asio::ip::udp::endpoint m_endpoint;
   asio::ip::udp::endpoint m_from;
   std::map<asio::ip::udp::endpoint, Peer*> m_peers;
+  EventBuffer m_buffer;
   Congestion m_congestion;
   int m_sending_size = 0;
   bool m_receiving = false;
+  bool m_open = false;
   bool m_paused = false;
   bool m_closing = false;
   bool m_closed = false;
