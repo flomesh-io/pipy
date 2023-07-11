@@ -470,6 +470,7 @@ void SocketUDP::send(Data *data, const asio::ip::udp::endpoint &endpoint) {
 }
 
 void SocketUDP::close_peers(StreamEnd::Error err) {
+  InputContext ic;
   std::map<asio::ip::udp::endpoint, Peer*> peers(std::move(m_peers));
   for (const auto &pair : peers) {
     auto p = pair.second;
