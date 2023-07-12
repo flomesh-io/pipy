@@ -476,6 +476,7 @@ int main(int argc, char *argv[]) {
         : Store::open_level_db(opts.filename);
       repo = new CodebaseStore(store);
       s_admin = new AdminService(repo);
+      s_admin->retain();
       s_admin->open(admin_ip, admin_port, s_admin_options);
       logging::Logger::set_admin_service(s_admin);
 
@@ -597,7 +598,11 @@ int main(int argc, char *argv[]) {
 
     Net::current().run();
 
-    delete s_admin;
+    if (s_admin) {
+      s_admin->close();
+      s_admin->release();
+    }
+
     delete s_admin_link;
     delete s_admin_proxy;
     delete repo;
