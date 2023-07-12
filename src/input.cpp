@@ -99,11 +99,11 @@ InputContext::~InputContext() {
     // Flush all pumping targets
     while (auto *target = m_flush_targets_pumping.head()) {
       m_flush_targets_pumping.remove(target);
-      target->on_flush();
       target->m_origin = nullptr;
+      target->on_flush();
     }
 
-    // Clean up pipelines
+    // Clean up auto-released objects
     auto *p = m_auto_released;
     m_auto_released = nullptr;
     while (p) {
@@ -115,8 +115,8 @@ InputContext::~InputContext() {
     // Flush all terminating targets
     while (auto *target = m_flush_targets_terminating.head()) {
       m_flush_targets_terminating.remove(target);
-      target->on_flush();
       target->m_origin = nullptr;
+      target->on_flush();
     }
 
   }
