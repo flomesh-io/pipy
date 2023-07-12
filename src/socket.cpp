@@ -396,18 +396,22 @@ void SocketUDP::close() {
 
 void SocketUDP::output(Event *evt) {
   if (auto data = evt->as<Data>()) {
-    if (m_open) {
-      send(data);
-    } else {
-      m_buffer.push(data);
+    if (!data->empty()) {
+      if (m_open) {
+        send(data);
+      } else {
+        m_buffer.push(data);
+      }
     }
   }
 }
 
 void SocketUDP::output(Event *evt, Peer *peer) {
   if (auto data = evt->as<Data>()) {
-    peer->m_tick_write = Ticker::get()->tick();
-    send(data, peer->m_endpoint);
+    if (!data->empty()) {
+      peer->m_tick_write = Ticker::get()->tick();
+      send(data, peer->m_endpoint);
+    }
   } else if (evt->is<StreamEnd>()) {
     m_peers.erase(peer->m_endpoint);
     peer->m_socket = nullptr;
@@ -437,6 +441,7 @@ void SocketUDP::send(Data *data) {
 
   data->retain();
   m_sending_size += data->size();
+  m_sending_count++;
 
   if (Log::is_enabled(Log::UDP)) {
     std::cerr << Log::format_elapsed_time();
@@ -455,6 +460,7 @@ void SocketUDP::send(Data *data, const asio::ip::udp::endpoint &endpoint) {
 
   data->retain();
   m_sending_size += data->size();
+  m_sending_count++;
 
   if (Log::is_enabled(Log::UDP)) {
     std::cerr << Log::format_elapsed_time();
@@ -495,7 +501,7 @@ void SocketUDP::close_socket() {
 void SocketUDP::close_async() {
   if (m_closed) return;
   if (m_receiving) return;
-  if (m_sending_size > 0) return;
+  if (m_sending_count > 0) return;
   if (m_closing) {
     m_closed = true;
     on_socket_close();
@@ -574,6 +580,8 @@ void SocketUDP::on_receive(Data *data, const std::error_code &ec, std::size_t n)
 }
 
 void SocketUDP::on_send(Data *data, const std::error_code &ec, std::size_t n) {
+  m_sending_count--;
+
   if (ec != asio::error::operation_aborted && !m_closing) {
     m_sending_size -= data->size();
     m_traffic_write += n;

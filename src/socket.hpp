@@ -208,6 +208,7 @@ private:
   EventBuffer m_buffer;
   Congestion m_congestion;
   int m_sending_size = 0;
+  int m_sending_count = 0;
   bool m_receiving = false;
   bool m_open = false;
   bool m_paused = false;
