@@ -81,7 +81,7 @@ bool read_file(const std::string &filename, std::vector<uint8_t> &data) {
   std::ifstream fs(filename, std::ios::in);
   if (!fs.is_open()) return false;
   uint8_t buf[1024];
-  while (!fs.eof()) {
+  while (fs.good()) {
     fs.read((char *)buf, sizeof(buf));
     data.insert(data.end(), buf, buf + fs.gcount());
   }

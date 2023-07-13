@@ -91,7 +91,7 @@ template<> void ClassDef<OS>::init() {
     }
     auto *data = pipy::Data::make();
     char buf[1024];
-    while (!fs.eof()) {
+    while (fs.good()) {
       fs.read(buf, sizeof(buf));
       s_dp.push(data, buf, fs.gcount());
     }
