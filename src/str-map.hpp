@@ -76,6 +76,7 @@ public:
         m_current_node = n = n->children[i - s];
         return n ? n->str : pjs::Str::empty;
       } else {
+        m_current_node = nullptr;
         return pjs::Str::empty;
       }
     }
