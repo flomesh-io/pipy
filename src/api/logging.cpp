@@ -144,12 +144,8 @@ void Logger::write(const Data &msg) {
     }
   }
 
-  if (InputContext::origin()) {
-    write_targets(msg);
-  } else {
-    InputContext ic;
-    write_targets(msg);
-  }
+  InputContext ic;
+  write_targets(msg);
 }
 
 void Logger::write_targets(const Data &msg) {
