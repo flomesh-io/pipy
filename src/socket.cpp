@@ -86,8 +86,6 @@ SocketTCP::~SocketTCP() {
 }
 
 void SocketTCP::open() {
-  if (m_state != IDLE) return;
-
   m_socket.set_option(asio::socket_base::keep_alive(m_options.keep_alive));
   m_socket.set_option(tcp::no_delay(m_options.no_delay));
 
@@ -95,6 +93,7 @@ void SocketTCP::open() {
   m_tick_read = t;
   m_tick_write = t;
   m_state = OPEN;
+  m_opened = true;
 
   if (m_eos) {
     send();
@@ -219,7 +218,7 @@ void SocketTCP::close_async() {
   if (m_sending) return;
   if (m_state != CLOSED) return;
   m_closed = true;
-  on_socket_close();
+  if (m_opened) on_socket_close();
 }
 
 void SocketTCP::on_tap_open() {
@@ -371,7 +370,7 @@ SocketUDP::~SocketUDP() {
 
 void SocketUDP::open() {
   m_endpoint = m_socket.local_endpoint();
-  m_open = true;
+  m_opened = true;
 
   if (!m_buffer.empty()) {
     m_buffer.flush(
@@ -397,7 +396,7 @@ void SocketUDP::close() {
 void SocketUDP::output(Event *evt) {
   if (auto data = evt->as<Data>()) {
     if (!data->empty()) {
-      if (m_open) {
+      if (m_opened) {
         send(data);
       } else {
         m_buffer.push(data);
@@ -504,7 +503,7 @@ void SocketUDP::close_async() {
   if (m_sending_count > 0) return;
   if (m_closing) {
     m_closed = true;
-    on_socket_close();
+    if (m_opened) on_socket_close();
   }
 }
 

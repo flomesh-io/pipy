@@ -111,6 +111,7 @@ private:
   double m_tick_read;
   double m_tick_write;
   State m_state = IDLE;
+  bool m_opened = false;
   bool m_receiving = false;
   bool m_sending = false;
   bool m_paused = false;
@@ -210,7 +211,7 @@ private:
   int m_sending_size = 0;
   int m_sending_count = 0;
   bool m_receiving = false;
-  bool m_open = false;
+  bool m_opened = false;
   bool m_paused = false;
   bool m_closing = false;
   bool m_closed = false;
