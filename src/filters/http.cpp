@@ -361,12 +361,12 @@ void Decoder::on_event(Event *evt) {
 
   while (!m_has_error && !data->empty()) {
     auto state = m_state;
-    pjs::Ref<Data> output(Data::make());
+    Data output;
 
     // fast scan over the body
     if (state == BODY || state == CHUNK_BODY) {
       auto n = std::min(m_body_size, data->size());
-      data->shift(n, *output);
+      data->shift(n, output);
       if (0 == (m_body_size -= n)) state = (state == BODY ? HEAD : CHUNK_TAIL);
 
     // byte scan the head
@@ -438,7 +438,7 @@ void Decoder::on_event(Event *evt) {
             return true;
           }
         },
-        *output
+        output
       );
     }
 
@@ -446,18 +446,21 @@ void Decoder::on_event(Event *evt) {
     switch (m_state) {
       case HEAD:
       case HEADER:
-        if (m_head_buffer.size() + output->size() > MAX_HEADER_SIZE) {
-          auto room = MAX_HEADER_SIZE - m_head_buffer.size();
-          output->pop(output->size() - room);
+        if (m_head_buffer.size() + output.size() <= m_max_header_size) {
+          m_head_buffer.push(output);
+        } else {
+          Log::error("HTTP header size overflow");
+          error();
         }
-        m_head_buffer.push(*output);
         break;
       case BODY:
       case CHUNK_BODY:
-        EventFunction::output(output);
+        EventFunction::output(Data::make(std::move(output)));
         break;
       default: break;
     }
+
+    if (m_has_error) break;
 
     // new state
     switch (state) {
@@ -1201,6 +1204,9 @@ Demux::Options::Options(pjs::Object *options)
   Value(options, "bufferSize")
     .get_binary_size(buffer_size)
     .check_nullable();
+  Value(options, "maxHeaderSize")
+    .get_binary_size(max_header_size)
+    .check_nullable();
 }
 
 //
@@ -1213,6 +1219,7 @@ Demux::Demux(const Options &options)
   , http2::Server(options)
   , m_options(options)
 {
+  Decoder::set_max_header_size(options.max_header_size);
 }
 
 Demux::Demux(const Demux &r)
@@ -1374,6 +1381,9 @@ Mux::Options::Options(pjs::Object *options)
   Value(options, "bufferSize")
     .get_binary_size(buffer_size)
     .check_nullable();
+  Value(options, "maxHeaderSize")
+    .get_binary_size(max_header_size)
+    .check_nullable();
   Value(options, "version")
     .get(version)
     .get(version_s)
@@ -1460,6 +1470,15 @@ auto Mux::verify_http_version(pjs::Str *name) -> int {
 //
 // Mux::Session
 //
+
+Mux::Session::Session(const Mux::Options &options)
+  : Encoder(false)
+  , Decoder(true)
+  , http2::Client(options)
+  , m_options(options)
+{
+  Decoder::set_max_header_size(options.max_header_size);
+}
 
 Mux::Session::~Session() {
   if (m_version_selector) {

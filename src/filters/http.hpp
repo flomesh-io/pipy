@@ -78,6 +78,7 @@ public:
 
   void reset();
   bool has_error() const { return m_has_error; }
+  void set_max_header_size(size_t size) { m_max_header_size = size; }
   void set_tunnel() { m_is_tunnel = true; }
 
 protected:
@@ -87,8 +88,6 @@ protected:
   virtual void on_decode_error() {}
 
 private:
-  const static int MAX_HEADER_SIZE = 0x1000;
-
   enum State {
     HEAD,
     HEAD_EOL,
@@ -105,6 +104,7 @@ private:
 
   State m_state = HEAD;
   Data m_head_buffer;
+  size_t m_max_header_size = DATA_CHUNK_SIZE;
   pjs::Ref<MessageHead> m_head;
   pjs::Ref<pjs::Str> m_method;
   pjs::Ref<pjs::Str> m_header_transfer_encoding;
@@ -290,6 +290,7 @@ class Demux :
 public:
   struct Options : public http2::Endpoint::Options {
     size_t buffer_size = DATA_CHUNK_SIZE;
+    size_t max_header_size = DATA_CHUNK_SIZE;
     Options() {}
     Options(pjs::Object *options);
   };
@@ -335,6 +336,7 @@ public:
     public http2::Endpoint::Options
   {
     size_t buffer_size = DATA_CHUNK_SIZE;
+    size_t max_header_size = DATA_CHUNK_SIZE;
     int version = 1;
     pjs::Ref<pjs::Str> version_s;
     pjs::Ref<pjs::Function> version_f;
@@ -359,12 +361,7 @@ public:
     protected http2::Client
   {
   public:
-    Session(const Mux::Options &options)
-      : Encoder(false)
-      , Decoder(true)
-      , http2::Client(options)
-      , m_options(options) {}
-
+    Session(const Mux::Options &options);
     ~Session();
 
     //
