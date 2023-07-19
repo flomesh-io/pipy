@@ -614,8 +614,6 @@ int main(int argc, char *argv[]) {
     Log::shutdown();
     Timer::cancel_all();
 
-    std::cerr << "Done." << std::endl;
-
   } catch (std::runtime_error &e) {
     std::cerr << e.what() << std::endl;
     return -1;

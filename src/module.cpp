@@ -133,15 +133,24 @@ bool JSModule::load(const std::string &path) {
   }
 
   if (!result.is_class(pjs::class_of<Configuration>())) {
-    Data out;
-    Console::dump(result, out);
-    out.to_chunks(
-      [](const uint8_t *ptr, int len) {
-        std::cout.write((const char *)ptr, len);
-      }
-    );
-    std::cout << std::endl;
-    Log::error("[pjs] Script did not result in a Configuration");
+    if (result.is_string()) {
+      std::cout << result.s()->str();
+    } else if (result.is<Data>()) {
+      result.as<Data>()->to_chunks(
+        [](const uint8_t *ptr, int len) {
+          std::cout.write((const char *)ptr, len);
+        }
+      );
+    } else {
+      Data out;
+      Console::dump(result, out);
+      out.to_chunks(
+        [](const uint8_t *ptr, int len) {
+          std::cout.write((const char *)ptr, len);
+        }
+      );
+      std::cout << std::endl;
+    }
     return false;
   }
 
