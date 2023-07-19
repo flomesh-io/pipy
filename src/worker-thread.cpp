@@ -157,7 +157,7 @@ void WorkerThread::reload_done(bool ok) {
         if (m_new_worker) {
           pjs::Ref<Worker> current_worker = Worker::current();
           m_new_worker->start(true);
-          current_worker->stop();
+          current_worker->stop(true);
           m_new_worker = nullptr;
           m_version = m_new_version;
           m_working = true;
@@ -169,7 +169,7 @@ void WorkerThread::reload_done(bool ok) {
     m_net->post(
       [this]() {
         if (m_new_worker) {
-          m_new_worker->stop();
+          m_new_worker->stop(true);
           m_new_worker = nullptr;
           m_new_version.clear();
           Log::error("[restart] Failed reloading codebase %d", m_index);
@@ -185,7 +185,7 @@ bool WorkerThread::stop(bool force) {
       [this]() {
         m_shutdown = true;
         m_new_worker = nullptr;
-        shutdown_all();
+        shutdown_all(true);
         Net::current().stop();
       }
     );
@@ -198,7 +198,7 @@ bool WorkerThread::stop(bool force) {
       m_net->post(
         [this]() {
           m_new_worker = nullptr;
-          shutdown_all();
+          shutdown_all(false);
         }
       );
     }
@@ -347,8 +347,8 @@ void WorkerThread::init_metrics() {
   );
 }
 
-void WorkerThread::shutdown_all() {
-  if (auto worker = Worker::current()) worker->stop();
+void WorkerThread::shutdown_all(bool force) {
+  if (auto worker = Worker::current()) worker->stop(force);
   Listener::for_each([&](Listener *l) { l->pipeline_layout(nullptr); });
 }
 
@@ -404,9 +404,6 @@ void WorkerThread::main() {
     }
 
     Log::info("[start] Thread %d ended", m_index);
-
-  } else {
-    Log::error("[start] Thread %d failed to start", m_index);
   }
 
   Log::shutdown();

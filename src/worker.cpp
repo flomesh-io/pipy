@@ -299,6 +299,11 @@ void Worker::add_watch(Watch *watch) {
   m_watches.insert(watch);
 }
 
+void Worker::add_exit(PipelineLayout *layout) {
+  m_exits.emplace_back();
+  m_exits.back() = new Exit(this, layout);
+}
+
 void Worker::add_export(pjs::Str *ns, pjs::Str *name, Module *module) {
   auto &names = m_namespaces[ns];
   auto i = names.find(name);
@@ -434,11 +439,15 @@ bool Worker::start(bool force) {
   return true;
 }
 
-void Worker::stop() {
-  for (auto *task : m_tasks) task->end();
-  for (auto *watch : m_watches) watch->end();
-  for (auto *mod : m_modules) if (mod) mod->unload();
-  if (s_current == this) s_current = nullptr;
+void Worker::stop(bool force) {
+  if (force || m_exits.empty()) {
+    end_all();
+  } else {
+    keep_alive();
+    for (auto *exit : m_exits) {
+      exit->start();
+    }
+  }
 }
 
 auto Worker::new_module_index() -> int {
@@ -459,6 +468,62 @@ void Worker::remove_module(int i) {
   auto mod = m_modules[i];
   m_modules[i] = nullptr;
   m_module_map.erase(mod->filename()->str());
+}
+
+void Worker::keep_alive() {
+  m_keep_alive.schedule(
+    1, [this]() {
+      keep_alive();
+    }
+  );
+}
+
+void Worker::on_exit(Exit *exit) {
+  bool done = true;
+  for (auto *exit : m_exits) {
+    if (!exit->done()) {
+      done = false;
+      break;
+    }
+  }
+  if (done) {
+    m_keep_alive.cancel();
+    end_all();
+  }
+}
+
+void Worker::end_all() {
+  for (auto *task : m_tasks) task->end();
+  for (auto *watch : m_watches) watch->end();
+  for (auto *exit : m_exits) exit->end();
+  for (auto *mod : m_modules) if (mod) mod->unload();
+  if (s_current == this) s_current = nullptr;
+}
+
+//
+// Worker::Exit
+//
+
+void Worker::Exit::start() {
+  InputContext ic;
+  m_stream_end = false;
+  m_pipeline = Pipeline::make(
+    m_pipeline_layout,
+    m_pipeline_layout->new_context()
+  );
+  m_pipeline->chain(EventTarget::input());
+  m_pipeline->start();
+}
+
+void Worker::Exit::end() {
+  delete this;
+}
+
+void Worker::Exit::on_event(Event *evt) {
+  if (evt->is<StreamEnd>()) {
+    m_stream_end = true;
+    m_worker->on_exit(this);
+  }
 }
 
 } // namespace pipy

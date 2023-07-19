@@ -620,6 +620,14 @@ void Configuration::watch(const std::string &filename) {
   FilterConfigurator::set_pipeline_config(&config);
 }
 
+void Configuration::exit() {
+  check_integrity();
+  m_exits.emplace_back();
+  auto &config = m_exits.back();
+  config.index = next_pipeline_index();
+  FilterConfigurator::set_pipeline_config(&config);
+}
+
 void Configuration::pipeline(const std::string &name) {
   check_integrity();
   if (name.empty()) throw std::runtime_error("pipeline name cannot be empty");
@@ -739,6 +747,19 @@ void Configuration::apply(JSModule *mod) {
     auto w = Watch::make(i.filename, p);
     worker->add_watch(w);
   }
+
+  if (m_exits.size() == 1) {
+    auto &exit = m_exits.front();
+    auto p = make_pipeline(exit.index, "", "Exit", exit);
+    worker->add_exit(p);
+  } else {
+    int n = 1;
+    for (auto &i : m_exits) {
+      std::string name("Exit ");
+      auto p = make_pipeline(i.index, "", name + std::to_string(n++), i);
+      worker->add_exit(p);
+    }
+  }
 }
 
 void Configuration::draw(Graph &g) {
@@ -803,6 +824,25 @@ void Configuration::draw(Graph &g) {
     p.label += i.filename;
     add_filters(p, i.filters);
     g.add_pipeline(std::move(p));
+  }
+
+  if (m_exits.size() == 1) {
+    auto &exit = m_exits.front();
+    Graph::Pipeline p;
+    p.index = exit.index;
+    p.label = "Exit";
+    add_filters(p, exit.filters);
+    g.add_pipeline(std::move(p));
+  } else {
+    int n = 1;
+    for (const auto &i : m_exits) {
+      Graph::Pipeline p;
+      p.index = i.index;
+      p.label = "Exit ";
+      p.label += std::to_string(n++);
+      add_filters(p, i.filters);
+      g.add_pipeline(std::move(p));
+    }
   }
 }
 
@@ -2251,6 +2291,16 @@ template<> void ClassDef<Configuration>::init() {
     try {
       if (!ctx.arguments(1, &filename)) return;
       thiz->as<Configuration>()->watch(filename);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // Configuration.exit
+  method("exit", [](Context &ctx, Object *thiz, Value &result) {
+    try {
+      thiz->as<Configuration>()->exit();
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

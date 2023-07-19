@@ -66,6 +66,7 @@ public:
   void recycle();
   void reload(const std::function<void(bool)> &cb);
   void reload_done(bool ok);
+  void exit(const std::function<void()> &cb);
   bool stop(bool force = false);
 
 private:
@@ -92,7 +93,7 @@ private:
   bool m_failed = false;
 
   static void init_metrics();
-  static void shutdown_all();
+  static void shutdown_all(bool force);
 
   void main();
 

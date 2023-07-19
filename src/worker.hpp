@@ -28,6 +28,7 @@
 
 #include "context.hpp"
 #include "listener.hpp"
+#include "timer.hpp"
 #include "nmi.hpp"
 
 #include <list>
@@ -67,6 +68,7 @@ public:
   bool update_listeners(bool force);
   void add_task(Task *task);
   void add_watch(Watch *watch);
+  void add_exit(PipelineLayout *layout);
   void add_export(pjs::Str *ns, pjs::Str *name, Module *module);
   auto get_export(pjs::Str *ns, pjs::Str *name) -> int;
   auto new_loading_context() -> Context*;
@@ -74,7 +76,7 @@ public:
   bool solve(pjs::Context &ctx, pjs::Str *filename, pjs::Value &result);
   bool bind();
   bool start(bool force);
-  void stop();
+  void stop(bool force);
 
 private:
   Worker(bool is_graph_enabled);
@@ -88,6 +90,22 @@ private:
     Listener::Options options;
   };
 
+  class Exit : public EventTarget {
+  public:
+    Exit(Worker *worker, PipelineLayout *pipeline_layout)
+      : m_worker(worker)
+      , m_pipeline_layout(pipeline_layout) {}
+    bool done() const { return m_stream_end; }
+    void start();
+    void end();
+    virtual void on_event(Event *evt) override;
+  private:
+    Worker* m_worker;
+    pjs::Ref<PipelineLayout> m_pipeline_layout;
+    pjs::Ref<Pipeline> m_pipeline;
+    bool m_stream_end = false;
+  };
+
   struct SolvedFile {
     int index;
     pjs::Ref<pjs::Str> filename;
@@ -98,6 +116,7 @@ private:
   };
 
   Module* m_root = nullptr;
+  Timer m_keep_alive;
   pjs::Ref<Thread> m_thread;
   pjs::Ref<pjs::Object> m_global_object;
   std::vector<Module*> m_modules;
@@ -106,6 +125,7 @@ private:
   std::map<Listener*, ListeningPipeline> m_listeners;
   std::set<Task*> m_tasks;
   std::set<Watch*> m_watches;
+  std::list<Exit*> m_exits;
   std::map<pjs::Ref<pjs::Str>, Namespace> m_namespaces;
   std::map<pjs::Ref<pjs::Str>, SolvedFile> m_solved_files;
   bool m_graph_enabled = false;
@@ -113,6 +133,9 @@ private:
   auto new_module_index() -> int;
   void add_module(Module *m);
   void remove_module(int i);
+  void keep_alive();
+  void on_exit(Exit *exit);
+  void end_all();
 
   thread_local static pjs::Ref<Worker> s_current;
 
