@@ -57,7 +57,8 @@ thread_local static Data::Producer s_dp_json("JSONLogger");
 
 AdminService* Logger::s_admin_service = nullptr;
 AdminLink* Logger::s_admin_link = nullptr;
-size_t Logger::s_history_limit = 0;
+size_t Logger::s_history_length = 1000;
+size_t Logger::s_history_size = 1024 * 1024;
 std::atomic<int> Logger::s_history_sending_size(0);
 
 void Logger::set_admin_service(AdminService *admin_service) {
@@ -126,7 +127,7 @@ Logger::~Logger() {
 
 void Logger::write(const Data &msg) {
   if (Net::main().is_running()) {
-    if (s_history_sending_size < s_history_limit) {
+    if (s_history_sending_size < s_history_size) {
       auto name = m_name->data()->retain();
       auto *sd = SharedData::make(msg)->retain();
       s_history_sending_size += msg.size();
@@ -191,7 +192,7 @@ void Logger::History::write_message(const Data &msg) {
 
   m_messages.push(new LogMessage(msg));
   m_size += msg.size();
-  while (m_size > s_history_limit) {
+  while (m_size > s_history_size || m_messages.size() > s_history_length) {
     auto *m = m_messages.head();
     m_messages.remove(m);
     m_size -= m->data.size();

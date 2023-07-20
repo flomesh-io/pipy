@@ -57,7 +57,7 @@ public:
   bool        reuse_port = false;
   int         threads = 1;
   Log::Level  log_level = Log::ERROR;
-  size_t      log_history_limit = 1024 * 1024;
+  size_t      log_history_limit = 1000;
   int         log_topics = 0;
   bool        log_local_only = false;
   bool        admin_port_off = false;

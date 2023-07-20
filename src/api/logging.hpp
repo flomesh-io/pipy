@@ -59,7 +59,8 @@ class Logger : public pjs::ObjectTemplate<Logger> {
 public:
   static void set_admin_service(AdminService *admin_service);
   static void set_admin_link(AdminLink *admin_link);
-  static void set_history_limit(size_t size) { s_history_limit = size; }
+  static void set_history_length(size_t length) { s_history_length = length; }
+  static void set_history_size(size_t size) { s_history_size = size; }
   static void get_names(const std::function<void(const std::string &)> &cb);
   static void tail(const std::string &name, Data &buffer);
 
@@ -256,7 +257,8 @@ private:
 
   static AdminService* s_admin_service;
   static AdminLink* s_admin_link;
-  static size_t s_history_limit;
+  static size_t s_history_length;
+  static size_t s_history_size;
   static std::atomic<int> s_history_sending_size;
 
   friend class pjs::ObjectTemplate<Logger>;

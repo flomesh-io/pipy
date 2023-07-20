@@ -160,7 +160,9 @@ MainOptions::MainOptions(int argc, char *argv[]) {
           throw std::runtime_error(msg + v);
         }
       } else if (k == "--log-history-limit") {
-        log_history_limit = utils::get_byte_size(v);
+        char *end;
+        log_history_limit = std::strtol(v.c_str(), &end, 10);
+        if (*end || log_history_limit < 0) throw std::runtime_error("--log-history-limit expects a non-negative number");
       } else if (k == "--log-local-only") {
         log_local_only = true;
       } else if (k == "--verify") {
