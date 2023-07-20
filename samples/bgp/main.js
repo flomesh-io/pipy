@@ -1,7 +1,8 @@
 ((
   config = JSON.decode(pipy.load('config.json')),
   newPeer = pipy.solve('peer.js'),
-  allPeers = config.peers.map(addr => newPeer(config, addr))
+  allPeers = config.peers.map(addr => newPeer(config, addr)),
+  isExiting = false,
 
 ) => pipy({
   _peer: null,
@@ -33,12 +34,38 @@
   (
     update = JSON.decode(pipy.load('config.json')),
   ) => (
-    console.info('config.json updated to', update),
-    config.ipv4 = update.ipv4,
-    config.ipv6 = update.ipv6,
-    allPeers.forEach(peer => peer.update()),
+    isExiting || (
+      console.info('config.json updated to', update),
+      config.ipv4 = update.ipv4,
+      config.ipv6 = update.ipv6,
+      allPeers.forEach(peer => peer.update())
+    ),
     new StreamEnd
   )
 )())
+
+.exit()
+.onStart(() => (
+  isExiting = true,
+  console.info('Updating all routes as unreachable as BGP speaker exits...'),
+  config.ipv4 && (
+    config.ipv4.unreachable = [
+      ...(config.ipv4.unreachable || []),
+      ...(config.ipv4.reachable || []),
+    ],
+    config.ipv4.reachable = []
+  ),
+  config.ipv6 && (
+    config.ipv6.unreachable = [
+      ...(config.ipv6.unreachable || []),
+      ...(config.ipv6.reachable || []),
+    ],
+    config.ipv6.reachable = []
+  ),
+  allPeers.forEach(peer => peer.update()),
+  new StreamEnd
+))
+.wait(() => new Timeout(10).wait())
+.handleStreamEnd(() => console.info('Done.'))
 
 )()
