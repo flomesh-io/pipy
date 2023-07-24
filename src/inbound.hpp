@@ -96,7 +96,7 @@ protected:
   pjs::Ref<EventTarget::Input> m_input;
 
   void start();
-  void stop();
+  void collect();
   void address();
 
 protected:

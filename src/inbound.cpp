@@ -122,8 +122,13 @@ void Inbound::start() {
   }
 }
 
-void Inbound::stop() {
-  m_pipeline = nullptr;
+void Inbound::collect() {
+  auto in = get_traffic_in();
+  auto out = get_traffic_out();
+  s_metric_traffic_in->increase(in);
+  s_metric_traffic_out->increase(out);
+  if (m_metric_traffic_in) m_metric_traffic_in->increase(in);
+  if (m_metric_traffic_out) m_metric_traffic_out->increase(out);
 }
 
 void Inbound::address() {
@@ -212,6 +217,7 @@ InboundTCP::InboundTCP(Listener *listener, const Inbound::Options &options)
 }
 
 InboundTCP::~InboundTCP() {
+  collect();
 }
 
 void InboundTCP::accept(asio::ip::tcp::acceptor &acceptor) {
@@ -330,8 +336,8 @@ InboundUDP::InboundUDP(Listener* listener, const Options &options)
   Inbound::start();
 }
 
-InboundUDP::~InboundUDP()
-{
+InboundUDP::~InboundUDP() {
+  Inbound::collect();
 }
 
 auto InboundUDP::get_buffered() const -> size_t {

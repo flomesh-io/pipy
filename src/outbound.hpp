@@ -127,6 +127,7 @@ protected:
   void input(Event *evt);
   void error(StreamEnd::Error err);
   void describe(char *buf, size_t len);
+  void collect();
 
   thread_local static pjs::Ref<stats::Gauge> s_metric_concurrency;
   thread_local static pjs::Ref<stats::Counter> s_metric_traffic_in;
@@ -162,6 +163,7 @@ public:
 
 private:
   OutboundTCP(EventTarget::Input *output, const Outbound::Options &options);
+  ~OutboundTCP();
 
   pjs::Ref<stats::Histogram> m_metric_conn_time;
   asio::ip::tcp::resolver m_resolver;
@@ -202,6 +204,7 @@ public:
 
 private:
   OutboundUDP(EventTarget::Input *output, const Outbound::Options &options);
+  ~OutboundUDP();
 
   pjs::Ref<stats::Histogram> m_metric_conn_time;
   asio::ip::udp::resolver m_resolver;

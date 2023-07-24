@@ -128,6 +128,15 @@ void Outbound::describe(char *buf, size_t len) {
   );
 }
 
+void Outbound::collect() {
+  auto in = get_traffic_in();
+  auto out = get_traffic_out();
+  s_metric_traffic_in->increase(in);
+  s_metric_traffic_out->increase(out);
+  if (m_metric_traffic_in) m_metric_traffic_in->increase(in);
+  if (m_metric_traffic_out) m_metric_traffic_out->increase(out);
+}
+
 void Outbound::init_metrics() {
   if (!s_metric_concurrency) {
     pjs::Ref<pjs::Array> label_names = pjs::Array::make();
@@ -201,6 +210,10 @@ OutboundTCP::OutboundTCP(EventTarget::Input *output, const Outbound::Options &op
   , SocketTCP(false, Outbound::m_options)
   , m_resolver(Net::context())
 {
+}
+
+OutboundTCP::~OutboundTCP() {
+  Outbound::collect();
 }
 
 void OutboundTCP::bind(const std::string &ip, int port) {
@@ -417,6 +430,10 @@ OutboundUDP::OutboundUDP(EventTarget::Input *output, const Outbound::Options &op
   , SocketUDP(false, Outbound::m_options)
   , m_resolver(Net::context())
 {
+}
+
+OutboundUDP::~OutboundUDP() {
+  Outbound::collect();
 }
 
 void OutboundUDP::bind(const std::string &ip, int port) {
