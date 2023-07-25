@@ -7,7 +7,7 @@ import chalk from 'chalk';
 import logUpdate from 'log-update';
 
 import { spawn } from 'child_process';
-import { join, dirname } from 'path';
+import { join, dirname, basename } from 'path';
 import { program } from 'commander';
 
 const log = console.log;
@@ -18,6 +18,10 @@ const pipyBinPath = join(currentDir, '../../bin/pipy');
 const allTests = [];
 const testResults = {};
 
+//
+// Find all testcases
+//
+
 fs.readdirSync(currentDir, { withFileTypes: true })
   .filter(ent => ent.isDirectory())
   .forEach(ent => {
@@ -25,23 +29,9 @@ fs.readdirSync(currentDir, { withFileTypes: true })
     if (!isNaN(n)) allTests[n] = ent.name;
   });
 
-function summary() {
-  const maxWidth = Math.max.apply(null, Object.keys(testResults).map(name => name.length));
-  const width = maxWidth + 20;
-  log('='.repeat(width));
-  log('Summary');
-  log('-'.repeat(width));
-  Object.keys(testResults).sort().forEach(
-    name => {
-      if (testResults[name]) {
-        log(name + ' '.repeat(width - 2 - name.length) + chalk.green('OK'));
-      } else {
-        log(name + ' '.repeat(width - 4 - name.length) + chalk.red('FAIL'));
-      }
-    }
-  );
-  log('='.repeat(width));
-}
+//
+// Send an HTTP request
+//
 
 function http(method, path, headers, body) {
   if (typeof headers !== 'object') {
@@ -58,15 +48,9 @@ function http(method, path, headers, body) {
   return [Buffer.concat([Buffer.from(head + '\r\n'), body])];
 }
 
-function split(count, buffers) {
-  const buffer = Buffer.concat(buffers);
-  const size = Math.ceil(buffer.byteLength / count);
-  return new Array(count).fill(0).map((_, i) => buffer.subarray(i * size, Math.min(i * size + size, buffer.byteLength)));
-}
-
-function repeat(count, messages) {
-  return new Array(count).fill(messages).flat()
-}
+//
+// Spawn a process
+//
 
 function startProcess(cmd, args, onStdout) {
   const proc = spawn(cmd, args);
@@ -87,6 +71,10 @@ function startProcess(cmd, args, onStdout) {
   });
   return proc;
 }
+
+//
+// Start Pipy repo
+//
 
 async function startRepo() {
   let started = false;
@@ -109,6 +97,10 @@ async function startRepo() {
 
   return proc;
 }
+
+//
+// Upload a codebase to Pipy repo
+//
 
 async function uploadCodebase(codebaseName, basePath) {
   log(`Creating codebase ${codebaseName}...`);
@@ -146,7 +138,17 @@ async function uploadCodebase(codebaseName, basePath) {
   }
 
   try {
-    await uploadDir('/');
+    if (fs.statSync(basePath).isDirectory()) {
+      await uploadDir('/');
+    } else {
+      const name = basename(basePath);
+      log('Uploading', name);
+      const body = fs.readFileSync(basePath);
+      await client.post(
+        join(codebaseFilePath, 'main.js'),
+        { body }
+      )
+    }
   } catch (e) {
     throw new Error('Failed uploading codebase files');
   }
@@ -161,14 +163,20 @@ async function uploadCodebase(codebaseName, basePath) {
   }
 }
 
-async function startCodebase(url) {
+//
+// Start a Pipy worker
+//
+
+async function startCodebase(url, options) {
   let started = false;
   const proc = startProcess(
     pipyBinPath, ['--no-graph', url],
     line => {
-      log(chalk.bgGreen('worker >>>'), line);
-      if (line.indexOf('Thread 0 started') >= 0) {
-        started = true;
+      if (!options?.silent || !started) {
+        log(chalk.bgGreen('worker >>>'), line);
+        if (line.indexOf('Thread 0 started') >= 0) {
+          started = true;
+        }
       }
     }
   );
@@ -182,6 +190,10 @@ async function startCodebase(url) {
 
   return proc;
 }
+
+//
+// Start testing sessions
+//
 
 function createSessions(proc, port, options) {
 
@@ -436,6 +448,10 @@ function createSessions(proc, port, options) {
   return { session, run, reload };
 }
 
+//
+// Run a test
+//
+
 async function runTest(name, options) {
   const basePath = join(currentDir, name);
 
@@ -446,10 +462,20 @@ async function runTest(name, options) {
       await uploadCodebase(`test/${name}`, basePath);
 
       log('Starting codebase...');
-      worker = await startCodebase(`http://localhost:6060/repo/test/${name}/`);
+      worker = await startCodebase(`http://localhost:6060/repo/test/${name}/`, { silent: true });
       worker.on('exit', code => exitCode = code);
 
       log('Codebase', chalk.magenta(name), 'started');
+    }
+
+    function split(count, buffers) {
+      const buffer = Buffer.concat(buffers);
+      const size = Math.ceil(buffer.byteLength / count);
+      return new Array(count).fill(0).map((_, i) => buffer.subarray(i * size, Math.min(i * size + size, buffer.byteLength)));
+    }
+
+    function repeat(count, messages) {
+      return new Array(count).fill(messages).flat()
     }
 
     const { session, reload, run } = createSessions(worker, 8000, options);
@@ -475,6 +501,32 @@ async function runTest(name, options) {
     throw e;
   }
 }
+
+//
+// Summarize test results
+//
+
+function summary() {
+  const maxWidth = Math.max.apply(null, Object.keys(testResults).map(name => name.length));
+  const width = maxWidth + 20;
+  log('='.repeat(width));
+  log('Summary');
+  log('-'.repeat(width));
+  Object.keys(testResults).sort().forEach(
+    name => {
+      if (testResults[name]) {
+        log(name + ' '.repeat(width - 2 - name.length) + chalk.green('OK'));
+      } else {
+        log(name + ' '.repeat(width - 4 - name.length) + chalk.red('FAIL'));
+      }
+    }
+  );
+  log('='.repeat(width));
+}
+
+//
+// Starting point
+//
 
 async function start(id, options) {
   let repo;
