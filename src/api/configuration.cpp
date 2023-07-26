@@ -905,8 +905,16 @@ template<> void ClassDef<FilterConfigurator>::init() {
       if (ctx.try_arguments(1, &layout_name)) {
         thiz->as<FilterConfigurator>()->to(layout_name);
       } else if (ctx.try_arguments(1, &layout_builder) && layout_builder) {
+        std::string name;
+        if (auto caller = ctx.caller()) {
+          auto loc = caller->call_site();
+          name = "Pipeline at line ";
+          name += std::to_string(loc.line);
+        } else {
+          name = layout_builder->to_string();
+        }
         thiz->as<FilterConfigurator>()->to(
-          layout_builder->to_string(),
+          name,
           [&](FilterConfigurator *fc) {
             pjs::Value arg(fc), ret;
             (*layout_builder)(ctx, 1, &arg, ret);
