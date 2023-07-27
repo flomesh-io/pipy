@@ -28,25 +28,6 @@ fs.readdirSync(currentDir, { withFileTypes: true })
   });
 
 //
-// Send an HTTP request
-//
-
-function http(method, path, headers, body) {
-  if (typeof headers !== 'object') {
-    body = headers;
-    headers = {};
-  }
-  body = Buffer.from(body || '');
-  const hasBody = !(method === 'GET' || method === 'HEAD' || method === 'DELETE');
-  const head = [
-    `${method} ${path} HTTP/1.1`,
-    ...Object.entries(headers).map(([k, v]) => `${k}: ${v}`),
-    hasBody ? `Content-Length: ${body.byteLength}\r\n` : '',
-  ].join('\r\n');
-  return [Buffer.concat([Buffer.from(head + '\r\n'), body])];
-}
-
-//
 // Spawn a process
 //
 
@@ -165,12 +146,12 @@ async function uploadCodebase(codebaseName, basePath) {
 // Start a Pipy worker
 //
 
-async function startCodebase(url, options) {
+async function startCodebase(url, opt) {
   let started = false;
   const proc = startProcess(
-    pipyBinPath, ['--no-graph', url],
+    pipyBinPath, ['--no-graph', url, ...(opt?.options || [])],
     line => {
-      if (!options?.silent || !started) {
+      if (!opt?.silent || !started) {
         log(chalk.bgGreen('worker >>>'), line);
         if (line.indexOf('Thread 0 started') >= 0) {
           started = true;
@@ -206,13 +187,18 @@ async function runTest(name) {
     log('Starting codebases', chalk.magenta(name), '...');
     for (const w of workers) {
       log(`Starting ${w.name}...`);
-      w.worker = await startCodebase(`http://localhost:6060/repo/test/${name}/${w.name}/`, { silent: true });
+      w.worker = await startCodebase(
+        `http://localhost:6060/repo/test/${name}/${w.name}/`, {
+          silent: true,
+          options: w.name === 'proxy' ? ['--admin-port=7070'] : [],
+        }
+      );
       w.worker.on('exit', code => w.exitCode = code);
     }
 
     log('Codebases', chalk.magenta(name), 'all started');
 
-    await sleep(10);
+    await dump(10);
 
     log('Stopping all workers...');
 
@@ -227,6 +213,31 @@ async function runTest(name) {
     testResults[name] = false;
     workers.forEach(w => w.worker?.kill?.());
     throw e;
+  }
+}
+
+//
+// Dump stats
+//
+
+async function dump(count) {
+  const client = got.extend({
+    prefixUrl: 'http://localhost:7070',
+  });
+
+  for (let i = 0; i < count; i++) {
+    try {
+      const res = await client.get('dump');
+      const stats = JSON.parse(res.body);
+      const pools = Object.values(stats.pools).map(i => i.size).reduce((a, b) => a + b);
+      const inbound = stats.inbound.map(i => i.connections).reduce((a, b) => a + b);
+      const outbound = stats.outbound.map(i => i.connections).reduce((a, b) => a + b);
+      log(pools, inbound, outbound);
+    } catch (e) {
+      error('Unable to dump stats');
+    }
+
+    await sleep(1);
   }
 }
 

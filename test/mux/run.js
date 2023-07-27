@@ -30,25 +30,6 @@ fs.readdirSync(currentDir, { withFileTypes: true })
   });
 
 //
-// Send an HTTP request
-//
-
-function http(method, path, headers, body) {
-  if (typeof headers !== 'object') {
-    body = headers;
-    headers = {};
-  }
-  body = Buffer.from(body || '');
-  const hasBody = !(method === 'GET' || method === 'HEAD' || method === 'DELETE');
-  const head = [
-    `${method} ${path} HTTP/1.1`,
-    ...Object.entries(headers).map(([k, v]) => `${k}: ${v}`),
-    hasBody ? `Content-Length: ${body.byteLength}\r\n` : '',
-  ].join('\r\n');
-  return [Buffer.concat([Buffer.from(head + '\r\n'), body])];
-}
-
-//
 // Spawn a process
 //
 
@@ -167,12 +148,12 @@ async function uploadCodebase(codebaseName, basePath) {
 // Start a Pipy worker
 //
 
-async function startCodebase(url, options) {
+async function startCodebase(url, opt) {
   let started = false;
   const proc = startProcess(
-    pipyBinPath, ['--no-graph', url],
+    pipyBinPath, ['--no-graph', url, ...(opt?.options || [])],
     line => {
-      if (!options?.silent || !started) {
+      if (!opt?.silent || !started) {
         log(chalk.bgGreen('worker >>>'), line);
         if (line.indexOf('Thread 0 started') >= 0) {
           started = true;
@@ -466,6 +447,21 @@ async function runTest(name, options) {
       worker.on('exit', code => exitCode = code);
 
       log('Codebase', chalk.magenta(name), 'started');
+    }
+
+    function http(method, path, headers, body) {
+      if (typeof headers !== 'object') {
+        body = headers;
+        headers = {};
+      }
+      body = Buffer.from(body || '');
+      const hasBody = !(method === 'GET' || method === 'HEAD' || method === 'DELETE');
+      const head = [
+        `${method} ${path} HTTP/1.1`,
+        ...Object.entries(headers).map(([k, v]) => `${k}: ${v}`),
+        hasBody ? `Content-Length: ${body.byteLength}\r\n` : '',
+      ].join('\r\n');
+      return [Buffer.concat([Buffer.from(head + '\r\n'), body])];
     }
 
     function split(count, buffers) {
