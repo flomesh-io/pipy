@@ -228,8 +228,16 @@ auto AdminService::handle(Context *ctx, Message *req) -> Message* {
 
   try {
 
+    // GET /dump
+    if (path == "/dump") {
+      if (method == "GET") {
+        return dump_GET();
+      } else {
+        return m_response_method_not_allowed;
+      }
+
     // GET /dump/*
-    if (utils::starts_with(path, prefix_dump)) {
+    } else if (utils::starts_with(path, prefix_dump)) {
       if (method == "GET") {
         return dump_GET(path.substr(prefix_dump.length()));
       } else {
@@ -439,6 +447,14 @@ auto AdminService::handle(Context *ctx, Message *req) -> Message* {
   } catch (std::runtime_error &err) {
     return response(500, err.what());
   }
+}
+
+Message* AdminService::dump_GET() {
+  Data buf;
+  Data::Builder db(buf, &s_dp);
+  WorkerManager::get().status().dump_json(db);
+  db.flush();
+  return Message::make(m_response_head_json, Data::make(std::move(buf)));
 }
 
 Message* AdminService::dump_GET(const std::string &path) {

@@ -97,9 +97,9 @@ void Status::update_local() {
     if (c->allocated() + c->pooled() > 1) {
       pools.insert({
         c->name(),
-        (int)c->size(),
-        (int)c->allocated(),
-        (int)c->pooled(),
+        (size_t)c->size(),
+        (size_t)c->allocated(),
+        (size_t)c->pooled(),
       });
     }
   }
@@ -115,8 +115,8 @@ void Status::update_local() {
   Data::Producer::for_each([&](Data::Producer *producer) {
     chunks.insert({
       producer->name()->str(),
-      producer->current(),
-      producer->peak(),
+      (size_t)producer->current(),
+      (size_t)producer->peak(),
     });
   });
 
@@ -438,6 +438,102 @@ void Status::dump_outbound(Data::Builder &db) {
     });
   }
   print_table(db, { "OUTBOUND", "PORT", "#CONNECTIONS", "BUFFERED(KB)" }, rows);
+}
+
+void Status::dump_json(Data::Builder &db) {
+  bool first;
+  db.push('{');
+  db.push("\"pools\":{");
+  first = true;
+  for (const auto &i : pools) {
+    if (first) first = false; else db.push(',');
+    db.push('"');
+    db.push(i.name);
+    db.push("\":{\"size\":");
+    db.push(std::to_string(i.size * (i.allocated + i.pooled)));
+    db.push(",\"allocated\":");
+    db.push(std::to_string(i.allocated));
+    db.push(",\"pooled\":");
+    db.push(std::to_string(i.pooled));
+    db.push('}');
+  }
+  db.push("},\"chunks\":{");
+  first = true;
+  for (const auto &i : chunks) {
+    if (first) first = false; else db.push(',');
+    db.push('"');
+    db.push(i.name);
+    db.push("\":{\"current\":");
+    db.push(std::to_string(DATA_CHUNK_SIZE * i.current / 1024));
+    db.push(",\"peak\":");
+    db.push(std::to_string(DATA_CHUNK_SIZE * i.peak / 1024));
+    db.push('}');
+  }
+  db.push("},\"objects\":{");
+  first = true;
+  for (const auto &i : objects) {
+    if (first) first = false; else db.push(',');
+    db.push('"');
+    db.push(i.name);
+    db.push("\":");
+    db.push(std::to_string(i.count));
+  }
+  db.push("},\"pipelines\":[");
+  first = true;
+  for (const auto &i : pipelines) {
+    if (first) first = false; else db.push(',');
+    db.push("{\"module\":\"");
+    db.push(utils::escape(i.module));
+    db.push("\",\"name\":\"");
+    db.push(utils::escape(i.name));
+    db.push("\",\"allocated\":");
+    db.push(std::to_string(i.allocated));
+    db.push(",\"active\":");
+    db.push(std::to_string(i.active));
+    db.push(",\"stale\":");
+    db.push(i.stale ? "true" : "false");
+    db.push('}');
+  }
+  db.push("],\"inbound\":[");
+  first = true;
+  for (const auto &i : inbounds) {
+    if (first) first = false; else db.push(',');
+    db.push("{\"ip\":\"");
+    db.push(i.ip);
+    db.push("\",\"port\":");
+    db.push(std::to_string(i.port));
+    db.push(",\"protocol\":\"");
+    switch (i.protocol) {
+      case Protocol::TCP: db.push("TCP"); break;
+      case Protocol::UDP: db.push("UDP"); break;
+      default: break;
+    }
+    db.push("\",\"connections\":");
+    db.push(std::to_string(i.connections));
+    db.push(",\"buffered\":");
+    db.push(std::to_string(i.buffered/1024));
+    db.push('}');
+  }
+  db.push("],\"outbound\":[");
+  first = true;
+  for (const auto &i : outbounds) {
+    if (first) first = false; else db.push(',');
+    db.push("{\"port\":");
+    db.push(std::to_string(i.port));
+    db.push(",\"protocol\":\"");
+    switch (i.protocol) {
+      case Protocol::TCP: db.push("TCP"); break;
+      case Protocol::UDP: db.push("UDP"); break;
+      default: break;
+    }
+    db.push("\",\"connections\":");
+    db.push(std::to_string(i.connections));
+    db.push(",\"buffered\":");
+    db.push(std::to_string(i.buffered/1024));
+    db.push('}');
+  }
+  db.push(']');
+  db.push('}');
 }
 
 } // namespace pipy

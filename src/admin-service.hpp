@@ -193,6 +193,7 @@ private:
 
   auto handle(Context *ctx, Message *req) -> Message*;
 
+  Message* dump_GET();
   Message* dump_GET(const std::string &path);
   Message* metrics_GET(pjs::Object *headers);
 

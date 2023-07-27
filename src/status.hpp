@@ -65,9 +65,9 @@ public:
 
   struct PoolInfo {
     std::string name;
-    int size;
-    mutable int allocated;
-    mutable int pooled;
+    size_t size;
+    mutable size_t allocated;
+    mutable size_t pooled;
 
     bool operator<(const PoolInfo &r) const {
       return name < r.name;
@@ -96,8 +96,8 @@ public:
 
   struct ChunkInfo {
     std::string name;
-    mutable int current;
-    mutable int peak;
+    mutable size_t current;
+    mutable size_t peak;
 
     bool operator<(const ChunkInfo &r) const {
       return name < r.name;
@@ -199,6 +199,7 @@ public:
   void dump_pipelines(Data::Builder &db);
   void dump_inbound(Data::Builder &db);
   void dump_outbound(Data::Builder &db);
+  void dump_json(Data::Builder &db);
 };
 
 } // namespace pipy
