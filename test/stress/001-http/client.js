@@ -39,6 +39,7 @@
       )
     )
     .replaceMessage(new StreamEnd('Replay'))
+    .replaceStreamEnd(new StreamEnd('Replay'))
   )
 )
 

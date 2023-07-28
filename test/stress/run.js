@@ -171,10 +171,17 @@ async function startCodebase(url, opt) {
 }
 
 //
+// Randomly reload Pipy worker
+//
+
+function startReloading() {
+}
+
+//
 // Run a test
 //
 
-async function runTest(name) {
+async function runTest(name, options) {
   const basePath = join(currentDir, name);
   const workers = ['server', 'proxy', 'client'].map(name => ({ name }));
 
@@ -198,7 +205,18 @@ async function runTest(name) {
 
     log('Codebases', chalk.magenta(name), 'all started');
 
-    await dump(10);
+    const reloadTimer = setInterval(() => {
+      if (options.reload) {
+        got.patch({
+          url: `http://localhost:6060/api/v1/repo/test/${name}/proxy`,
+          json: { version: (Date.now() / 1000) | 0 },
+        }).catch(err => error(err));
+      }
+    }, 5000);
+
+    await dump(options.duration || 60);
+
+    clearInterval(reloadTimer);
 
     log('Stopping all workers...');
 
@@ -225,6 +243,22 @@ async function dump(count) {
     prefixUrl: 'http://localhost:7070',
   });
 
+  const KB = 1024;
+  const MB = 1024*KB;
+  const GB = 1024*MB;
+
+  function prettySize(size) {
+    if (size >= GB) {
+      return (size / GB).toFixed(2) + 'GB';
+    } else if (size >= MB) {
+      return (size / MB).toFixed(2) + 'MB';
+    } else if (size >= KB) {
+      return (size / KB).toFixed(2) + 'KB';
+    } else {
+      return size + 'B';
+    }
+  }
+
   for (let i = 0; i < count; i++) {
     try {
       const res = await client.get('dump');
@@ -232,7 +266,12 @@ async function dump(count) {
       const pools = Object.values(stats.pools).map(i => i.size).reduce((a, b) => a + b);
       const inbound = stats.inbound.map(i => i.connections).reduce((a, b) => a + b);
       const outbound = stats.outbound.map(i => i.connections).reduce((a, b) => a + b);
-      log(pools, inbound, outbound);
+      log(
+        chalk.magenta((count - i) + 's'), ' ',
+        'Pool size:', chalk.green(prettySize(pools)),
+        'Inbound connections:', chalk.yellow(inbound),
+        'Outbound connections:', chalk.yellow(outbound),
+      );
     } catch (e) {
       error('Unable to dump stats');
     }
@@ -301,6 +340,7 @@ async function start(id, options) {
 
 program
   .argument('[testcase-id]')
+  .option('-d, --duration <seconds>', 'Test duration in seconds')
   .option('--no-reload', 'Without reloading tests')
   .action((id, options) => start(id, options))
   .parse(process.argv)
