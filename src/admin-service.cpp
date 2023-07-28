@@ -613,7 +613,8 @@ Message* AdminService::repo_POST(Context *ctx, const std::string &path, Data *da
       Status status;
       if (!status.from_json(*data)) return response(400, "Invalid JSON");
       Instance *inst = get_instance(status.uuid);
-      if (inst->status.uuid.empty()) {
+      if (inst->codebase_name != codebase->id()) {
+        if (!inst->codebase_name.empty()) m_codebase_instances[inst->codebase_name].erase(inst->index);
         m_codebase_instances[codebase->id()].insert(inst->index);
         inst->codebase_name = codebase->id();
       }
