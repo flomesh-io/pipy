@@ -24,6 +24,7 @@
  */
 
 #include "status.hpp"
+#include "buffer.hpp"
 #include "worker.hpp"
 #include "module.hpp"
 #include "pipeline.hpp"
@@ -70,6 +71,7 @@ void Status::update_local() {
   objects.clear();
   chunks.clear();
   pipelines.clear();
+  buffers.clear();
   inbounds.clear();
   outbounds.clear();
 
@@ -119,6 +121,20 @@ void Status::update_local() {
       (size_t)producer->peak(),
     });
   });
+
+  BufferStats::for_each(
+    [&](BufferStats *bs) {
+      if (!bs->name.empty() && bs->size > 0) {
+        BufferInfo bi{ bs->name, bs->size };
+        auto i = buffers.find(bi);
+        if (i != buffers.end()) {
+          i->size += bi.size;
+        } else {
+          buffers.insert(bi);
+        }
+      }
+    }
+  );
 
   PipelineLayout::for_each([&](PipelineLayout *p) {
     if (auto mod = dynamic_cast<JSModule*>(p->module())) {
@@ -201,6 +217,7 @@ void Status::merge(const Status &other) {
   merge_sets(objects, other.objects);
   merge_sets(chunks, other.chunks);
   merge_sets(pipelines, other.pipelines);
+  merge_sets(buffers, other.buffers);
   merge_sets(inbounds, other.inbounds);
   merge_sets(outbounds, other.outbounds);
 }
@@ -379,6 +396,17 @@ void Status::dump_chunks(Data::Builder &db) {
   print_table(db, { "DATA", "CURRENT(KB)", "PEAK(KB)" }, rows);
 }
 
+void Status::dump_buffers(Data::Builder &db) {
+  std::list<std::array<std::string, 2>> rows;
+  for (const auto &i : buffers) {
+    rows.push_back({
+      i.name,
+      std::to_string(i.size / 1024),
+    });
+  }
+  print_table(db, { "BUFFER", "SIZE(KB)" }, rows);
+}
+
 void Status::dump_pipelines(Data::Builder &db) {
   static const std::string s_draining("Draining");
   static const std::string s_running("Running");
@@ -468,6 +496,15 @@ void Status::dump_json(Data::Builder &db) {
     db.push(",\"peak\":");
     db.push(std::to_string(DATA_CHUNK_SIZE * i.peak / 1024));
     db.push('}');
+  }
+  db.push("},\"buffers\":{");
+  first = true;
+  for (const auto &i : buffers) {
+    if (first) first = false; else db.push(',');
+    db.push('"');
+    db.push(i.name);
+    db.push("\":");
+    db.push(std::to_string(i.size / 1024));
   }
   db.push("},\"objects\":{");
   first = true;

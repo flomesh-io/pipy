@@ -29,6 +29,7 @@
 #include "event.hpp"
 #include "constants.hpp"
 #include "list.hpp"
+#include "options.hpp"
 #include "utils.hpp"
 
 #include <cstring>

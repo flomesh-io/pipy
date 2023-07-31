@@ -28,33 +28,50 @@
 namespace pipy {
 
 //
-// Buffer::Options
+// BufferStats
 //
 
-Buffer::Options::Options(pjs::Object *options) {
+thread_local List<BufferStats> BufferStats::s_all;
+
+//
+// DataBuffer::Options
+//
+
+DataBuffer::Options::Options(pjs::Object *options) {
   Value(options, "bufferLimit")
     .get_binary_size(bufferLimit)
     .check_nullable();
 }
 
 //
-// Buffer
+// DataBuffer
 //
 
-void Buffer::clear() {
+void DataBuffer::clear() {
+  if (m_stats) m_stats->size -= m_buffer.size();
   m_buffer.clear();
 }
 
-void Buffer::push(const Data &data) {
+void DataBuffer::push(const Data &data) {
   if (data.empty()) return;
+  if (m_stats) m_stats->size += data.size();
   m_buffer.push(data);
   if (m_options.bufferLimit >= 0 && m_buffer.size() > m_options.bufferLimit) {
-    m_buffer.pop(m_buffer.size() - m_options.bufferLimit);
+    auto n = m_buffer.size() - m_options.bufferLimit;
+    if (m_stats) m_stats->size -= n;
+    m_buffer.pop(n);
   }
 }
 
-auto Buffer::flush() -> Data* {
+auto DataBuffer::flush() -> Data* {
+  if (m_stats) m_stats->size -= m_buffer.size();
   return Data::make(std::move(m_buffer));
 }
+
+void DataBuffer::flush(Data &out) {
+  if (m_stats) m_stats->size -= m_buffer.size();
+  out.push(std::move(m_buffer));
+}
+
 
 } // namespace pipy

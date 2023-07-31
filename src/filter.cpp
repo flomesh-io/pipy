@@ -35,11 +35,13 @@ namespace pipy {
 
 Filter::Filter()
   : m_subs(std::make_shared<std::vector<Sub>>())
+  , m_buffer_stats(std::make_shared<BufferStats>())
 {
 }
 
 Filter::Filter(const Filter &r)
   : m_subs(r.m_subs)
+  , m_buffer_stats(r.m_buffer_stats)
   , m_location(r.m_location)
 {
 }
@@ -57,6 +59,17 @@ auto Filter::context() const -> Context* {
     return m_pipeline->context();
   } else {
     return nullptr;
+  }
+}
+
+void Filter::set_location(const pjs::Context::Location &loc) {
+  m_location = loc;
+  if (auto src = loc.source) {
+    std::string buffer_name("Filter in ");
+    buffer_name += src->filename;
+    buffer_name += " at line ";
+    buffer_name += std::to_string(loc.line);
+    m_buffer_stats->name = buffer_name;
   }
 }
 

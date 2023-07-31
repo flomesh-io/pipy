@@ -37,7 +37,7 @@ namespace pipy {
 
 class OnMessage : public Handle {
 public:
-  OnMessage(pjs::Function *callback, const Buffer::Options &options);
+  OnMessage(pjs::Function *callback, const DataBuffer::Options &options);
 
 private:
   OnMessage(const OnMessage &r);
@@ -49,7 +49,7 @@ private:
   virtual void handle(Event *evt) override;
 
   pjs::Ref<MessageStart> m_start;
-  Buffer m_body_buffer;
+  DataBuffer m_body_buffer;
 };
 
 } // namespace pipy

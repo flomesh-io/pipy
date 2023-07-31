@@ -37,7 +37,7 @@ namespace pipy {
 
 class ReplaceBody : public Replace {
 public:
-  ReplaceBody(pjs::Object *replacement, const Buffer::Options &options);
+  ReplaceBody(pjs::Object *replacement, const DataBuffer::Options &options);
 
 private:
   ReplaceBody(const ReplaceBody &r);
@@ -48,7 +48,7 @@ private:
   virtual void dump(Dump &d) override;
   virtual void handle(Event *evt) override;
 
-  Buffer m_body_buffer;
+  DataBuffer m_body_buffer;
   bool m_started = false;
 };
 

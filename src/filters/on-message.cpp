@@ -32,9 +32,9 @@ namespace pipy {
 // OnMessage
 //
 
-OnMessage::OnMessage(pjs::Function *callback, const Buffer::Options &options)
+OnMessage::OnMessage(pjs::Function *callback, const DataBuffer::Options &options)
   : Handle(callback)
-  , m_body_buffer(options)
+  , m_body_buffer(options, Filter::buffer_stats())
 {
 }
 

@@ -29,6 +29,7 @@
 #include "net.hpp"
 #include "input.hpp"
 #include "data.hpp"
+#include "buffer.hpp"
 #include "timer.hpp"
 
 namespace pipy {

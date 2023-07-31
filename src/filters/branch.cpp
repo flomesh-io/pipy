@@ -34,6 +34,7 @@ namespace pipy {
 
 BranchBase::BranchBase(int count, pjs::Function **conds, const pjs::Value *layouts)
   : m_conditions(std::make_shared<std::vector<Condition>>())
+  , m_buffer(Filter::buffer_stats())
 {
   m_conditions->resize(count);
   for (int i = 0; i < count; i++) {

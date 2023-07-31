@@ -469,6 +469,8 @@ Message* AdminService::dump_GET(const std::string &path) {
       status.dump_objects(db);
     } else if (item == "chunks") {
       status.dump_chunks(db);
+    } else if (item == "buffers") {
+      status.dump_buffers(db);
     } else if (item == "pipelines") {
       status.dump_pipelines(db);
     } else if (item == "inbound") {

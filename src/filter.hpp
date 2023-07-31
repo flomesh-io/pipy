@@ -27,6 +27,7 @@
 #define FILTER_HPP
 
 #include "event.hpp"
+#include "buffer.hpp"
 #include "list.hpp"
 #include "pipeline.hpp"
 
@@ -85,8 +86,9 @@ public:
   auto module() const -> ModuleBase*;
   auto context() const -> Context*;
   auto location() const -> const pjs::Context::Location& { return m_location; }
+  auto buffer_stats() const -> std::shared_ptr<BufferStats> { return m_buffer_stats; }
 
-  void set_location(const pjs::Context::Location &loc) { m_location = loc; }
+  void set_location(const pjs::Context::Location &loc);
   void add_sub_pipeline(PipelineLayout *layout);
   void add_sub_pipeline(pjs::Str *name);
   void add_sub_pipeline(int index);
@@ -143,6 +145,7 @@ private:
   };
 
   std::shared_ptr<std::vector<Sub>> m_subs;
+  std::shared_ptr<BufferStats> m_buffer_stats;
 
   PipelineLayout* m_pipeline_layout = nullptr;
   Pipeline* m_pipeline = nullptr;

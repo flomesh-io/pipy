@@ -31,9 +31,9 @@ namespace pipy {
 // ReplaceBody
 //
 
-ReplaceBody::ReplaceBody(pjs::Object *replacement, const Buffer::Options &options)
+ReplaceBody::ReplaceBody(pjs::Object *replacement, const DataBuffer::Options &options)
   : Replace(replacement)
-  , m_body_buffer(options)
+  , m_body_buffer(options, Filter::buffer_stats())
 {
 }
 

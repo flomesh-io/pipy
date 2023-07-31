@@ -32,9 +32,9 @@ namespace pipy {
 // ReplaceMessage
 //
 
-ReplaceMessage::ReplaceMessage(pjs::Object *replacement, const Buffer::Options &options)
+ReplaceMessage::ReplaceMessage(pjs::Object *replacement, const DataBuffer::Options &options)
   : Replace(replacement)
-  , m_body_buffer(options)
+  , m_body_buffer(options, Filter::buffer_stats())
 {
 }
 

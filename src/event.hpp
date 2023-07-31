@@ -29,6 +29,8 @@
 #include "pjs/pjs.hpp"
 #include "list.hpp"
 
+#include <memory>
+
 namespace pipy {
 
 class EventBuffer;
@@ -470,77 +472,6 @@ protected:
   void output(Event *evt, EventTarget::Input *input) {
     EventFunction::output(evt, input);
   }
-};
-
-//
-// EventBuffer
-//
-
-class EventBuffer {
-public:
-  bool empty() const {
-    return m_events.empty();
-  }
-
-  void push(Event *e) {
-    if (e->m_in_buffer) e = e->clone();
-    e->m_in_buffer = true;
-    e->retain();
-    m_events.push(e);
-  }
-
-  auto shift() -> Event* {
-    if (m_events.empty()) return nullptr;
-    auto e = m_events.head();
-    m_events.remove(e);
-    e->m_in_buffer = false;
-    return e;
-  }
-
-  void unshift(Event *e) {
-    if (e->m_in_buffer) e = e->clone();
-    e->m_in_buffer = true;
-    e->retain();
-    m_events.unshift(e);
-  }
-
-  void iterate(const std::function<void(Event*)> &cb) {
-    for (auto e = m_events.head(); e; e = e->next()) {
-      cb(e);
-    }
-  }
-
-  void flush(EventTarget::Input *input) {
-    List<Event> events(std::move(m_events));
-    while (auto e = events.head()) {
-      events.remove(e);
-      e->m_in_buffer = false;
-      input->input(e);
-      e->release();
-    }
-  }
-
-  void flush(const std::function<void(Event*)> &out) {
-    List<Event> events(std::move(m_events));
-    while (auto e = events.head()) {
-      events.remove(e);
-      e->m_in_buffer = false;
-      out(e);
-      e->release();
-    }
-  }
-
-  void clear() {
-    List<Event> events(std::move(m_events));
-    while (auto e = events.head()) {
-      events.remove(e);
-      e->m_in_buffer = false;
-      e->release();
-    }
-  }
-
-private:
-  List<Event> m_events;
 };
 
 } // namespace pipy

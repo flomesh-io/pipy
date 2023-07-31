@@ -135,7 +135,7 @@ private:
 
 class Encoder : public EventFunction {
 public:
-  Encoder(bool is_response);
+  Encoder(bool is_response, std::shared_ptr<BufferStats> buffer_stats = nullptr);
 
   void reset();
   void set_buffer_size(int size) { m_buffer_size = size; }
@@ -147,7 +147,7 @@ protected:
   virtual bool on_encode_tunnel(TunnelType tt) { return false; }
 
 private:
-  Data m_buffer;
+  DataBuffer m_buffer;
   pjs::Ref<MessageHead> m_head;
   pjs::Ref<pjs::Str> m_protocol;
   pjs::Ref<pjs::Str> m_method;
@@ -361,7 +361,7 @@ public:
     protected http2::Client
   {
   public:
-    Session(const Mux::Options &options);
+    Session(const Mux::Options &options, std::shared_ptr<BufferStats> buffer_stats);
     ~Session();
 
     //
@@ -425,14 +425,16 @@ private:
   //
 
   struct SessionPool : public pjs::Pooled<SessionPool, MuxSessionPool> {
-    SessionPool(const Options &options)
+    SessionPool(const Options &options, std::shared_ptr<BufferStats> buffer_stats)
       : pjs::Pooled<SessionPool, MuxSessionPool>(options)
-      , m_options(options) {}
+      , m_options(options)
+      , m_buffer_stats(buffer_stats) {}
 
-    virtual auto session() -> MuxSession* override { return new Session(m_options); }
+    virtual auto session() -> MuxSession* override { return new Session(m_options, m_buffer_stats); }
     virtual void free() override { delete this; }
 
     Options m_options;
+    std::shared_ptr<BufferStats> m_buffer_stats;
   };
 };
 

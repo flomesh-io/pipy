@@ -37,7 +37,7 @@ namespace pipy {
 
 class ReplaceMessage : public Replace {
 public:
-  ReplaceMessage(pjs::Object *replacement, const Buffer::Options &options);
+  ReplaceMessage(pjs::Object *replacement, const DataBuffer::Options &options);
 
 private:
   ReplaceMessage(const ReplaceMessage &r);
@@ -49,7 +49,7 @@ private:
   virtual void handle(Event *evt) override;
 
   pjs::Ref<MessageStart> m_start;
-  Buffer m_body_buffer;
+  DataBuffer m_body_buffer;
 };
 
 } // namespace pipy

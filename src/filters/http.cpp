@@ -667,8 +667,9 @@ void Decoder::stream_end(StreamEnd *eos) {
 // Encoder
 //
 
-Encoder::Encoder(bool is_response)
-  : m_is_response(is_response)
+Encoder::Encoder(bool is_response, std::shared_ptr<BufferStats> buffer_stats)
+  : m_buffer(buffer_stats)
+  , m_is_response(is_response)
 {
 }
 
@@ -743,9 +744,10 @@ void Encoder::on_event(Event *evt) {
         m_content_length += data->size();
         if (m_buffer.size() > m_buffer_size) {
           m_chunked = true;
+          Data body;
+          m_buffer.flush(body);
           output_head();
-          output_chunk(m_buffer);
-          m_buffer.clear();
+          output_chunk(body);
         }
       }
     }
@@ -921,7 +923,7 @@ void Encoder::output_end(Event *evt) {
   } else {
     output_head();
     if (!m_buffer.empty()) {
-      output(Data::make(std::move(m_buffer)));
+      output(m_buffer.flush());
     }
   }
   if (m_responded_tunnel_type != TunnelType::NONE) {
@@ -1064,7 +1066,7 @@ RequestEncoder::Options::Options(pjs::Object *options) {
 //
 
 RequestEncoder::RequestEncoder(const Options &options, pjs::Function *handler)
-  : Encoder(false)
+  : Encoder(false, Filter::buffer_stats())
   , m_options(options)
   , m_handler(handler)
 {
@@ -1072,7 +1074,7 @@ RequestEncoder::RequestEncoder(const Options &options, pjs::Function *handler)
 
 RequestEncoder::RequestEncoder(const RequestEncoder &r)
   : Filter(r)
-  , Encoder(false)
+  , Encoder(false, Filter::buffer_stats())
   , m_options(r.m_options)
   , m_handler(r.m_handler)
 {
@@ -1133,7 +1135,7 @@ ResponseEncoder::Options::Options(pjs::Object *options) {
 //
 
 ResponseEncoder::ResponseEncoder(const Options &options, pjs::Function *handler)
-  : Encoder(true)
+  : Encoder(true, Filter::buffer_stats())
   , m_options(options)
   , m_handler(handler)
 {
@@ -1141,7 +1143,7 @@ ResponseEncoder::ResponseEncoder(const Options &options, pjs::Function *handler)
 
 ResponseEncoder::ResponseEncoder(const ResponseEncoder &r)
   : Filter(r)
-  , Encoder(true)
+  , Encoder(true, Filter::buffer_stats())
   , m_options(r.m_options)
   , m_handler(r.m_handler)
 {
@@ -1215,7 +1217,7 @@ Demux::Options::Options(pjs::Object *options)
 
 Demux::Demux(const Options &options)
   : Decoder(false)
-  , Encoder(true)
+  , Encoder(true, Filter::buffer_stats())
   , http2::Server(options)
   , m_options(options)
 {
@@ -1225,7 +1227,7 @@ Demux::Demux(const Options &options)
 Demux::Demux(const Demux &r)
   : Filter(r)
   , Decoder(false)
-  , Encoder(true)
+  , Encoder(true, Filter::buffer_stats())
   , http2::Server(r.m_options)
   , m_options(r.m_options)
 {
@@ -1439,13 +1441,13 @@ auto Mux::on_mux_new_pool(pjs::Object *options) -> MuxSessionPool* {
   if (options) {
     try {
       Options opts(options);
-      return new SessionPool(opts);
+      return new SessionPool(opts, Filter::buffer_stats());
     } catch (std::runtime_error &err) {
       Filter::error(err.what());
       return nullptr;
     }
   } else {
-    return new SessionPool(m_options);
+    return new SessionPool(m_options, Filter::buffer_stats());
   }
 }
 
@@ -1471,8 +1473,8 @@ auto Mux::verify_http_version(pjs::Str *name) -> int {
 // Mux::Session
 //
 
-Mux::Session::Session(const Mux::Options &options)
-  : Encoder(false)
+Mux::Session::Session(const Mux::Options &options, std::shared_ptr<BufferStats> buffer_stats)
+  : Encoder(false, buffer_stats)
   , Decoder(true)
   , http2::Client(options)
   , m_options(options)

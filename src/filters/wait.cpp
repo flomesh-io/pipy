@@ -45,6 +45,7 @@ Wait::Options::Options(pjs::Object *options) {
 Wait::Wait(pjs::Function *condition, const Options &options)
   : m_condition(condition)
   , m_options(options)
+  , m_buffer(Filter::buffer_stats())
 {
 }
 
@@ -52,6 +53,7 @@ Wait::Wait(const Wait &r)
   : Filter(r)
   , m_condition(r.m_condition)
   , m_options(r.m_options)
+  , m_buffer(r.m_buffer)
 {
 }
 

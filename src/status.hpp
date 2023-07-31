@@ -132,6 +132,20 @@ public:
     }
   };
 
+  struct BufferInfo {
+    std::string name;
+    mutable size_t size;
+
+    bool operator<(const BufferInfo &r) const {
+      return name < r.name;
+    }
+
+    auto operator+=(const BufferInfo &r) const -> const BufferInfo& {
+      size += r.size;
+      return *this;
+    }
+  };
+
   struct InboundInfo {
     Protocol protocol;
     std::string ip;
@@ -184,6 +198,7 @@ public:
   std::set<ObjectInfo> objects;
   std::set<ChunkInfo> chunks;
   std::set<PipelineInfo> pipelines;
+  std::set<BufferInfo> buffers;
   std::set<InboundInfo> inbounds;
   std::set<OutboundInfo> outbounds;
   std::set<std::string> log_names;
@@ -196,6 +211,7 @@ public:
   void dump_pools(Data::Builder &db);
   void dump_objects(Data::Builder &db);
   void dump_chunks(Data::Builder &db);
+  void dump_buffers(Data::Builder &db);
   void dump_pipelines(Data::Builder &db);
   void dump_inbound(Data::Builder &db);
   void dump_outbound(Data::Builder &db);

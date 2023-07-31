@@ -37,7 +37,7 @@ namespace pipy {
 
 class OnBody : public Handle {
 public:
-  OnBody(pjs::Function *callback, const Buffer::Options &options);
+  OnBody(pjs::Function *callback, const DataBuffer::Options &options);
 
 private:
   OnBody(const OnBody &r);
@@ -48,7 +48,7 @@ private:
   virtual void dump(Dump &d) override;
   virtual void handle(Event *evt) override;
 
-  Buffer m_body_buffer;
+  DataBuffer m_body_buffer;
   bool m_started = false;
 };
 
