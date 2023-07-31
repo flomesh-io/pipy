@@ -96,16 +96,14 @@ public:
 
   struct ChunkInfo {
     std::string name;
-    mutable size_t current;
-    mutable size_t peak;
+    mutable size_t count;
 
     bool operator<(const ChunkInfo &r) const {
       return name < r.name;
     }
 
     auto operator+=(const ChunkInfo &r) const -> const ChunkInfo& {
-      current += r.current;
-      peak += r.peak;
+      count += r.count;
       return *this;
     }
   };

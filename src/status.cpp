@@ -117,8 +117,7 @@ void Status::update_local() {
   Data::Producer::for_each([&](Data::Producer *producer) {
     chunks.insert({
       producer->name()->str(),
-      (size_t)producer->current(),
-      (size_t)producer->peak(),
+      producer->count(),
     });
   });
 
@@ -385,15 +384,14 @@ void Status::dump_objects(Data::Builder &db) {
 }
 
 void Status::dump_chunks(Data::Builder &db) {
-  std::list<std::array<std::string, 3>> rows;
+  std::list<std::array<std::string, 2>> rows;
   for (const auto &i : chunks) {
     rows.push_back({
       i.name,
-      std::to_string(DATA_CHUNK_SIZE * i.current / 1024),
-      std::to_string(DATA_CHUNK_SIZE * i.peak / 1024),
+      std::to_string(DATA_CHUNK_SIZE * i.count / 1024),
     });
   }
-  print_table(db, { "DATA", "CURRENT(KB)", "PEAK(KB)" }, rows);
+  print_table(db, { "DATA", "SIZE(KB)" }, rows);
 }
 
 void Status::dump_buffers(Data::Builder &db) {
@@ -491,11 +489,8 @@ void Status::dump_json(Data::Builder &db) {
     if (first) first = false; else db.push(',');
     db.push('"');
     db.push(i.name);
-    db.push("\":{\"current\":");
-    db.push(std::to_string(DATA_CHUNK_SIZE * i.current / 1024));
-    db.push(",\"peak\":");
-    db.push(std::to_string(DATA_CHUNK_SIZE * i.peak / 1024));
-    db.push('}');
+    db.push("\":");
+    db.push(std::to_string(DATA_CHUNK_SIZE * i.count / 1024));
   }
   db.push("},\"buffers\":{");
   first = true;

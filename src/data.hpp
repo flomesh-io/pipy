@@ -75,13 +75,12 @@ public:
       }
     }
 
-    Producer(const std::string &name) : m_name(pjs::Str::make(name)) {
+    Producer(const std::string &name) : m_name(pjs::Str::make(name)), m_count(0) {
       s_all_producers.push(this);
     }
 
     auto name() const -> pjs::Str* { return m_name; }
-    auto peak() const -> int { return m_peak; }
-    auto current() const -> int { return m_current; }
+    auto count() const -> size_t { return m_count.load(std::memory_order_relaxed); }
 
     Data* make(int size) { return Data::make(size, this); }
     Data* make(int size, int value) { return Data::make(size, value, this); }
@@ -99,11 +98,10 @@ public:
 
   private:
     pjs::Ref<pjs::Str> m_name;
-    int m_peak;
-    int m_current;
+    std::atomic<size_t> m_count;
 
-    void increase() { if (++m_current > m_peak) m_peak = m_current; }
-    void decrease() { m_current--; }
+    void increase() { m_count.fetch_add(1, std::memory_order_relaxed); }
+    void decrease() { m_count.fetch_sub(1, std::memory_order_relaxed); }
 
     thread_local static List<Producer> s_all_producers;
 

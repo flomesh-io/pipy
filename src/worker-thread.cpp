@@ -304,7 +304,7 @@ void WorkerThread::init_metrics() {
     [](stats::Gauge *gauge) {
       double total = 0;
       Data::Producer::for_each([&](Data::Producer *producer) {
-        if (auto n = producer->current()) {
+        if (auto n = producer->count()) {
           pjs::Str *name = producer->name();
           auto metric = gauge->with_labels(&name, 1);
           metric->set(n);
