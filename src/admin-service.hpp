@@ -195,6 +195,8 @@ private:
 
   Message* dump_GET();
   Message* dump_GET(const std::string &path);
+  Message* log_GET();
+  Message* log_GET(const std::string &path);
   Message* metrics_GET(pjs::Object *headers);
 
   Message* repo_HEAD(const std::string &path);

@@ -62,7 +62,7 @@ public:
   static void set_history_length(size_t length) { s_history_length = length; }
   static void set_history_size(size_t size) { s_history_size = size; }
   static void get_names(const std::function<void(const std::string &)> &cb);
-  static void tail(const std::string &name, Data &buffer);
+  static bool tail(const std::string &name, Data &buffer);
 
   //
   // Logger::Target
@@ -224,7 +224,7 @@ private:
   class History {
   public:
     static void write(const std::string &name, const Data &msg);
-    static void tail(const std::string &name, Data &buffer);
+    static bool tail(const std::string &name, Data &buffer);
     static void enable_streaming(const std::string &name, bool enabled);
     static void for_each(const std::function<void(History*)> &cb);
 

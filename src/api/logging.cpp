@@ -110,8 +110,8 @@ void Logger::get_names(const std::function<void(const std::string &)> &cb) {
   );
 }
 
-void Logger::tail(const std::string &name, Data &buffer) {
-  History::tail(name, buffer);
+bool Logger::tail(const std::string &name, Data &buffer) {
+  return History::tail(name, buffer);
 }
 
 Logger::Logger(pjs::Str *name)
@@ -167,11 +167,11 @@ void Logger::History::write(const std::string &name, const Data &msg) {
   h.write_message(msg);
 }
 
-void Logger::History::tail(const std::string &name, Data &buffer) {
+bool Logger::History::tail(const std::string &name, Data &buffer) {
   auto p = s_all_histories.find(name);
-  if (p != s_all_histories.end()) {
-    p->second.dump_messages(buffer);
-  }
+  if (p == s_all_histories.end()) return false;
+  p->second.dump_messages(buffer);
+  return true;
 }
 
 void Logger::History::enable_streaming(const std::string &name, bool enabled) {

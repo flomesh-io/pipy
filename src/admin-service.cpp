@@ -178,6 +178,7 @@ void AdminService::write_log(const std::string &name, const Data &data) {
 
 auto AdminService::handle(Context *ctx, Message *req) -> Message* {
   static const std::string prefix_dump("/dump/");
+  static const std::string prefix_log("/log/");
   static const std::string prefix_repo("/repo/");
   static const std::string prefix_api_v1_repo("/api/v1/repo/");
   static const std::string prefix_api_v1_repo_files("/api/v1/repo-files/");
@@ -228,8 +229,16 @@ auto AdminService::handle(Context *ctx, Message *req) -> Message* {
 
   try {
 
+    // GET /status
+    if (path == "/status") {
+      if (method == "GET") {
+        return api_v1_status_GET();
+      } else {
+        return m_response_method_not_allowed;
+      }
+
     // GET /dump
-    if (path == "/dump") {
+    } else if (path == "/dump") {
       if (method == "GET") {
         return dump_GET();
       } else {
@@ -240,6 +249,22 @@ auto AdminService::handle(Context *ctx, Message *req) -> Message* {
     } else if (utils::starts_with(path, prefix_dump)) {
       if (method == "GET") {
         return dump_GET(path.substr(prefix_dump.length()));
+      } else {
+        return m_response_method_not_allowed;
+      }
+
+    // GET /log
+    } else if (path == "/log") {
+      if (method == "GET") {
+        return log_GET();
+      } else {
+        return m_response_method_not_allowed;
+      }
+
+    // GET /log/*
+    } else if (utils::starts_with(path, prefix_log)) {
+      if (method == "GET") {
+        return log_GET(path.substr(prefix_log.length()));
       } else {
         return m_response_method_not_allowed;
       }
@@ -485,6 +510,21 @@ Message* AdminService::dump_GET(const std::string &path) {
   }
   db.flush();
   return response(buf);
+}
+
+Message* AdminService::log_GET() {
+  Data buf;
+  logging::Logger::tail("pipy_log", buf);
+  return response(buf);
+}
+
+Message* AdminService::log_GET(const std::string &path) {
+  Data buf;
+  if (logging::Logger::tail(path, buf)) {
+    return response(buf);
+  } else {
+    return m_response_not_found;
+  }
 }
 
 Message* AdminService::metrics_GET(pjs::Object *headers) {
