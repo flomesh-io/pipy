@@ -69,6 +69,14 @@ public:
   EventBuffer(const EventBuffer &r)
     : m_stats(r.m_stats) {}
 
+  EventBuffer(EventBuffer &&r)
+    : m_events(std::move(r.m_events))
+    , m_stats(r.m_stats) {}
+
+  ~EventBuffer() {
+    clear();
+  }
+
   bool empty() const {
     return m_events.empty();
   }
@@ -123,7 +131,7 @@ public:
       e->m_in_buffer = false;
       if (m_stats) {
         if (auto data = e->as<Data>()) {
-          m_stats->size += data->size();
+          m_stats->size -= data->size();
         }
       }
       input->input(e);
@@ -136,6 +144,11 @@ public:
     while (auto e = events.head()) {
       events.remove(e);
       e->m_in_buffer = false;
+      if (m_stats) {
+        if (auto data = e->as<Data>()) {
+          m_stats->size -= data->size();
+        }
+      }
       out(e);
       e->release();
     }
@@ -146,6 +159,11 @@ public:
     while (auto e = events.head()) {
       events.remove(e);
       e->m_in_buffer = false;
+      if (m_stats) {
+        if (auto data = e->as<Data>()) {
+          m_stats->size -= data->size();
+        }
+      }
       e->release();
     }
   }
@@ -184,6 +202,15 @@ public:
   DataBuffer(const DataBuffer &r)
     : m_options(r.m_options)
     , m_stats(r.m_stats) {}
+
+  DataBuffer(DataBuffer &&r)
+    : m_options(r.m_options)
+    , m_stats(r.m_stats)
+    , m_buffer(std::move(r.m_buffer)) {}
+
+  ~DataBuffer() {
+    clear();
+  }
 
   void clear();
   bool empty() const { return m_buffer.empty(); }

@@ -38,12 +38,14 @@ namespace pipy {
 
 Link::Link(pjs::Function *name)
   : m_name_f(name)
+  , m_buffer(Filter::buffer_stats())
 {
 }
 
 Link::Link(const Link &r)
   : Filter(r)
   , m_name_f(r.m_name_f)
+  , m_buffer(r.m_buffer)
 {
 }
 

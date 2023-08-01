@@ -45,12 +45,14 @@ Replay::Options::Options(pjs::Object *options) {
 
 Replay::Replay(const Options &options)
   : m_options(options)
+  , m_buffer(Filter::buffer_stats())
 {
 }
 
 Replay::Replay(const Replay &r)
   : Filter(r)
   , m_options(r.m_options)
+  , m_buffer(r.m_buffer)
 {
 }
 

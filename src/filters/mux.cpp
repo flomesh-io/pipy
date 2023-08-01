@@ -358,13 +358,15 @@ void MuxSessionMap::schedule_recycling() {
 // MuxSource
 //
 
-MuxSource::MuxSource()
+MuxSource::MuxSource(std::shared_ptr<BufferStats> buffer_stats)
   : m_map(new MuxSessionMap())
+  , m_waiting_events(buffer_stats)
 {
 }
 
 MuxSource::MuxSource(const MuxSource &r)
   : m_map(r.m_map)
+  , m_waiting_events(r.m_waiting_events)
 {
 }
 
@@ -660,6 +662,7 @@ bool MuxQueue::Receiver::receive(Event *evt) {
 //
 
 MuxBase::MuxBase()
+  : MuxSource(Filter::buffer_stats())
 {
 }
 

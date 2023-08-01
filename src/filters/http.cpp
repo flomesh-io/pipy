@@ -1216,7 +1216,8 @@ Demux::Options::Options(pjs::Object *options)
 //
 
 Demux::Demux(const Options &options)
-  : Decoder(false)
+  : DemuxQueue(Filter::buffer_stats())
+  , Decoder(false)
   , Encoder(true, Filter::buffer_stats())
   , http2::Server(options)
   , m_options(options)
@@ -1226,6 +1227,7 @@ Demux::Demux(const Options &options)
 
 Demux::Demux(const Demux &r)
   : Filter(r)
+  , DemuxQueue(Filter::buffer_stats())
   , Decoder(false)
   , Encoder(true, Filter::buffer_stats())
   , http2::Server(r.m_options)
@@ -1398,28 +1400,33 @@ Mux::Options::Options(pjs::Object *options)
 //
 
 Mux::Mux()
+  : m_waiting_events(Filter::buffer_stats())
 {
 }
 
 Mux::Mux(pjs::Function *session_selector)
   : MuxBase(session_selector)
+  , m_waiting_events(Filter::buffer_stats())
 {
 }
 
 Mux::Mux(pjs::Function *session_selector, const Options &options)
   : MuxBase(session_selector)
   , m_options(options)
+  , m_waiting_events(Filter::buffer_stats())
 {
 }
 
 Mux::Mux(pjs::Function *session_selector, pjs::Function *options)
   : MuxBase(session_selector, options)
+  , m_waiting_events(Filter::buffer_stats())
 {
 }
 
 Mux::Mux(const Mux &r)
   : MuxBase(r)
   , m_options(r.m_options)
+  , m_waiting_events(r.m_waiting_events)
 {
 }
 

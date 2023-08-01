@@ -177,7 +177,7 @@ private:
 
 class MuxSource : public List<MuxSource>::Item {
 protected:
-  MuxSource();
+  MuxSource(std::shared_ptr<BufferStats> buffer_stats = nullptr);
   MuxSource(const MuxSource &r);
 
   void reset();

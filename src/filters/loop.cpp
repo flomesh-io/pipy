@@ -34,11 +34,13 @@ namespace pipy {
 //
 
 Loop::Loop()
+  : m_buffer(Filter::buffer_stats())
 {
 }
 
 Loop::Loop(const Loop &r)
   : Filter(r)
+  , m_buffer(r.m_buffer)
 {
 }
 

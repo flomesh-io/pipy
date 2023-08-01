@@ -59,6 +59,9 @@ public:
   void dedicate() { m_dedication_requested = true; }
 
 protected:
+  DemuxQueue(std::shared_ptr<BufferStats> buffer_stats = nullptr)
+    : m_buffer(buffer_stats) {}
+
   virtual void on_demux_queue_dedicate(EventFunction *stream) {}
 
 private:
@@ -124,6 +127,7 @@ private:
     Receiver(DemuxQueue *queue, Stream *stream, int output_count)
       : m_queue(queue)
       , m_stream(stream)
+      , m_buffer(queue->m_buffer)
       , m_output_count(output_count) {}
 
     auto stream() const -> Stream* { return m_stream; }

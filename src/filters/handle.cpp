@@ -34,12 +34,14 @@ namespace pipy {
 
 Handle::Handle(pjs::Function *callback)
   : m_callback(callback)
+  , m_event_buffer(Filter::buffer_stats())
 {
 }
 
 Handle::Handle(const Handle &r)
   : Filter(r)
   , m_callback(r.m_callback)
+  , m_event_buffer(r.m_event_buffer)
 {
 }
 
