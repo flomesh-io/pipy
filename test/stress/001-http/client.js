@@ -4,7 +4,9 @@
     new Data(
       new Array(i * 2000).fill('x'.charCodeAt(0))
     )
-  ))
+  )),
+  requests = new stats.Counter('requests'),
+  errors = new stats.Counter('errors'),
 
 ) => pipy({
   _session: null,
@@ -33,8 +35,11 @@
     )
     .handleMessageStart(
       ({ head }) => (
-        head.status === 200 && head.headers['x-tag'] !== _tag && (
+        head.status == 200 && head.headers['x-tag'] !== _tag ? (
+          errors.increase(),
           console.log('Sent tag', _tag, 'but got', head.headers['x-tag'])
+        ) : (
+          requests.increase()
         )
       )
     )

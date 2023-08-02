@@ -197,7 +197,7 @@ async function runTest(name, options) {
       w.worker = await startCodebase(
         `http://localhost:6060/repo/test/${name}/${w.name}/`, {
           silent: true,
-          options: w.name === 'proxy' ? ['--admin-port=7070'] : [],
+          options: w.name === 'proxy' ? ['--admin-port=7070'] : (w.name === 'client' ? ['--admin-port=7071'] : []),
         }
       );
       w.worker.on('exit', code => w.exitCode = code);
@@ -212,20 +212,20 @@ async function runTest(name, options) {
           json: { version: (Date.now() / 1000) | 0 },
         }).catch(err => error(err));
       }
-    }, 5000);
+    }, 10000);
 
-    await dump(options.duration || 60);
+    const errors = await dump(options.duration || 60);
 
     clearInterval(reloadTimer);
 
     log('Stopping all workers...');
 
     workers.forEach(w => w.worker.kill('SIGINT'));
-    for (let i = 0; i < 30 && workers.some(w => w.exitCode === undefined); i++) await sleep(1);
+    for (let i = 0; i < 90 && workers.some(w => w.exitCode === undefined); i++) await sleep(1);
     if (workers.some(w => w.exitCode === undefined)) throw new Error('Worker did not quit timely');
     log('Workers exited');
 
-    testResults[name] = true;
+    testResults[name] = (errors === 0);
 
   } catch (e) {
     testResults[name] = false;
@@ -239,10 +239,6 @@ async function runTest(name, options) {
 //
 
 async function dump(count) {
-  const client = got.extend({
-    prefixUrl: 'http://localhost:7070',
-  });
-
   const KB = 1024;
   const MB = 1024*KB;
   const GB = 1024*MB;
@@ -259,18 +255,43 @@ async function dump(count) {
     }
   }
 
+  let currentRequests = 0;
+  let currentErrors = 0;
+  let unchangeCount = 0;
+
   for (let i = 0; i < count; i++) {
     try {
-      const res = await client.get('dump');
-      const stats = JSON.parse(res.body);
+      const metrics = await got.get('http://localhost:6060/metrics');
+      const dump = await got.get('http://localhost:7070/dump');
+      const requests = metrics.body.split('\n').find(l => l.startsWith('requests'))?.split?.(' ')?.[1] | 0;
+      const errors = metrics.body.split('\n').find(l => l.startsWith('errors'))?.split?.(' ')?.[1] | 0;
+      const stats = JSON.parse(dump.body);
       const pools = Object.values(stats.pools).map(i => i.size).reduce((a, b) => a + b);
       const inbound = stats.inbound.map(i => i.connections).reduce((a, b) => a + b);
       const outbound = stats.outbound.map(i => i.connections).reduce((a, b) => a + b);
+
+      let requestRate = requests.toString();
+      if (i > 0) {
+        if (requests === currentRequests) {
+          unchangeCount++;
+        } else {
+          requestRate += ' (';
+          requestRate += ((requests - currentRequests) / (unchangeCount + 1)).toFixed(2);
+          requestRate += ' per sec)';
+          unchangeCount = 0;
+        }
+      }
+
+      currentRequests = requests;
+      currentErrors = errors;
+
       log(
         chalk.magenta((count - i) + 's'), ' ',
         'Pool size:', chalk.green(prettySize(pools)),
         'Inbound connections:', chalk.yellow(inbound),
         'Outbound connections:', chalk.yellow(outbound),
+        'Errors:', chalk.yellow(errors),
+        'Requests:', chalk.yellow(requestRate),
       );
     } catch (e) {
       error('Unable to dump stats');
@@ -278,6 +299,8 @@ async function dump(count) {
 
     await sleep(1);
   }
+
+  return currentErrors;
 }
 
 //
