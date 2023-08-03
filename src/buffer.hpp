@@ -42,7 +42,7 @@ namespace pipy {
 
 struct BufferStats : public List<BufferStats>::Item {
   std::string name;
-  size_t size;
+  size_t size = 0;
 
   BufferStats() { s_all.push(this); }
   ~BufferStats() { s_all.remove(this); }
