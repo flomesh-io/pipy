@@ -44,6 +44,7 @@ void MainOptions::show_help() {
   std::cout << "  -v, -version, --version              Show version information" << std::endl;
   std::cout << "  -e, -eval, --eval                    Evaluate the given string as script" << std::endl;
   std::cout << "  --threads=<number>                   Number of worker threads (1, 2, ... max)" << std::endl;
+  std::cout << "  --log-file=<filename>                Set the pathname of the log file" << std::endl;
   std::cout << "  --log-level=<debug|info|warn|error>  Set the level of log output" << std::endl;
   std::cout << "  --log-history-limit=<size>           Set size limit of log history" << std::endl;
   std::cout << "  --log-local-only                     Do not send out system log" << std::endl;
@@ -118,6 +119,8 @@ MainOptions::MainOptions(int argc, char *argv[]) {
             throw std::runtime_error(msg + std::to_string(max_threads));
           }
         }
+      } else if (k == "--log-file") {
+        log_file = v;
       } else if (k == "--log-level") {
         if (
           utils::starts_with(v, "debug") && (

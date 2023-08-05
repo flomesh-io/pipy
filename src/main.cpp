@@ -393,7 +393,7 @@ int main(int argc, char *argv[]) {
     }
 
     Net::init();
-    Log::init();
+    Log::init(opts.log_file);
     Log::set_level(opts.log_level);
     Log::set_topics(opts.log_topics);
     Log::set_local_only(opts.log_local_only);

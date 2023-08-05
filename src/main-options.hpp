@@ -56,6 +56,7 @@ public:
   bool        force_start = false;
   bool        reuse_port = false;
   int         threads = 1;
+  std::string log_file;
   Log::Level  log_level = Log::ERROR;
   size_t      log_history_limit = 1000;
   int         log_topics = 0;

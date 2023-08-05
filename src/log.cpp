@@ -75,10 +75,14 @@ static void logf(Log::Level level, const char *fmt, va_list ap) {
   }
 }
 
-void Log::init() {
+void Log::init(const std::string &filename) {
   s_logger = logging::TextLogger::make(pjs::Str::make("pipy_log"));
   s_logger->retain();
   s_logger->add_target(new logging::Logger::StdoutTarget(stderr));
+  if (!filename.empty()) {
+    pjs::Ref<pjs::Str> s(pjs::Str::make(filename));
+    s_logger->add_target(new logging::Logger::FileTarget(s));
+  }
 }
 
 void Log::shutdown() {
