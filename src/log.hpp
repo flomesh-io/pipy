@@ -60,8 +60,9 @@ public:
     USER      = 1<<10,
   };
 
-  static void init(const std::string &filename = std::string());
+  static void init();
   static void shutdown();
+  static void set_filename(const std::string &filename);
   static void set_level(Level level);
   static void set_topics(int topics);
   static void set_local_only(bool b);

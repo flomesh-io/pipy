@@ -99,6 +99,8 @@ public:
     FileTarget(pjs::Str *filename);
 
   private:
+    virtual void write(const Data &msg) override;
+    virtual void shutdown() override;
 
     //
     // Logger::FileTarget::Module
@@ -112,12 +114,24 @@ public:
       }
     };
 
-    virtual void write(const Data &msg) override;
-    virtual void shutdown() override;
+    //
+    // Logger::FileTarget::Writer
+    //
 
-    pjs::Ref<Module> m_module;
-    pjs::Ref<PipelineLayout> m_pipeline_layout;
-    pjs::Ref<Pipeline> m_pipeline;
+    class Writer {
+    public:
+      Writer(const std::string &filename);
+      void write(const Data &msg);
+      void shutdown();
+    private:
+      pjs::Ref<Module> m_module;
+      pjs::Ref<PipelineLayout> m_pipeline_layout;
+      pjs::Ref<Pipeline> m_pipeline;
+    };
+
+    pjs::Ref<pjs::Str> m_filename;
+
+    static std::map<std::string, std::unique_ptr<Writer>> s_all_writers;
   };
 
   //

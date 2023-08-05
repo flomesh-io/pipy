@@ -29,6 +29,7 @@
 #include "data.hpp"
 #include "pipeline.hpp"
 #include "input.hpp"
+#include "fs.hpp"
 #include "fstream.hpp"
 #include "admin-service.hpp"
 #include "admin-link.hpp"
@@ -129,7 +130,7 @@ void Logger::write(const Data &msg) {
   if (Net::main().is_running()) {
     if (s_history_sending_size < s_history_size) {
       auto name = m_name->data()->retain();
-      auto *sd = SharedData::make(msg)->retain();
+      auto sd = SharedData::make(msg)->retain();
       s_history_sending_size += msg.size();
 
       Net::main().post(
@@ -253,6 +254,56 @@ void Logger::StdoutTarget::write(const Data &msg) {
 //
 
 Logger::FileTarget::FileTarget(pjs::Str *filename)
+  : m_filename(pjs::Str::make(fs::abs_path(filename->str())))
+{
+}
+
+void Logger::FileTarget::write(const Data &msg) {
+  auto name = m_filename->data()->retain();
+  auto sd = SharedData::make(msg)->retain();
+  Net::main().post(
+    [=]() {
+      Writer *writer = nullptr;
+      const auto &filename = name->str();
+      auto i = s_all_writers.find(filename);
+      if (i != s_all_writers.end()) {
+        writer = i->second.get();
+      } else {
+        writer = new Writer(filename);
+        s_all_writers[filename].reset(writer);
+      }
+      InputContext ic;
+      Data data;
+      sd->to_data(data);
+      writer->write(data);
+      name->release();
+      sd->release();
+    }
+  );
+}
+
+void Logger::FileTarget::shutdown() {
+  auto name = m_filename->data()->retain();
+  Net::main().post(
+    [=]() {
+      const auto &filename = name->str();
+      auto i = s_all_writers.find(filename);
+      if (i != s_all_writers.end()) {
+        InputContext ic;
+        i->second->shutdown();
+        s_all_writers.erase(i);
+      }
+    }
+  );
+}
+
+//
+// Logger::FileTarget::Writer
+//
+
+std::map<std::string, std::unique_ptr<Logger::FileTarget::Writer>> Logger::FileTarget::s_all_writers;
+
+Logger::FileTarget::Writer::Writer(const std::string &filename)
   : m_module(new Module)
 {
   PipelineLayout *ppl = PipelineLayout::make();
@@ -264,14 +315,14 @@ Logger::FileTarget::FileTarget(pjs::Str *filename)
   m_pipeline = Pipeline::make(ppl, Context::make());
 }
 
-void Logger::FileTarget::write(const Data &msg) {
+void Logger::FileTarget::Writer::write(const Data &msg) {
   Data *buf = Data::make();
   s_dp.push(buf, &msg);
   s_dp.push(buf, '\n');
   m_pipeline->input()->input(buf);
 }
 
-void Logger::FileTarget::shutdown() {
+void Logger::FileTarget::Writer::shutdown() {
   m_module->shutdown();
   m_pipeline = nullptr;
 }

@@ -40,6 +40,7 @@ namespace pipy {
 // Logging
 //
 
+static std::string s_log_filename;
 static Log::Level s_log_level = Log::ERROR;
 static int s_log_topics = 0;
 static bool s_log_local_only = false;
@@ -75,12 +76,12 @@ static void logf(Log::Level level, const char *fmt, va_list ap) {
   }
 }
 
-void Log::init(const std::string &filename) {
+void Log::init() {
   s_logger = logging::TextLogger::make(pjs::Str::make("pipy_log"));
   s_logger->retain();
   s_logger->add_target(new logging::Logger::StdoutTarget(stderr));
-  if (!filename.empty()) {
-    pjs::Ref<pjs::Str> s(pjs::Str::make(filename));
+  if (!s_log_filename.empty()) {
+    pjs::Ref<pjs::Str> s(pjs::Str::make(s_log_filename));
     s_logger->add_target(new logging::Logger::FileTarget(s));
   }
 }
@@ -88,6 +89,10 @@ void Log::init(const std::string &filename) {
 void Log::shutdown() {
   s_logger->release();
   s_logger = nullptr;
+}
+
+void Log::set_filename(const std::string &filename) {
+  s_log_filename = filename;
 }
 
 void Log::set_level(Level level) {
