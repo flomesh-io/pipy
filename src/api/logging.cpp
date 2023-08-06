@@ -115,6 +115,10 @@ bool Logger::tail(const std::string &name, Data &buffer) {
   return History::tail(name, buffer);
 }
 
+void Logger::close_all() {
+  FileTarget::close_all_writers();
+}
+
 Logger::Logger(pjs::Str *name)
   : m_name(name)
 {
@@ -253,6 +257,10 @@ void Logger::StdoutTarget::write(const Data &msg) {
 // Logger::FileTarget
 //
 
+void Logger::FileTarget::close_all_writers() {
+  s_all_writers.clear();
+}
+
 Logger::FileTarget::FileTarget(pjs::Str *filename)
   : m_filename(pjs::Str::make(fs::abs_path(filename->str())))
 {
@@ -278,21 +286,6 @@ void Logger::FileTarget::write(const Data &msg) {
       writer->write(data);
       name->release();
       sd->release();
-    }
-  );
-}
-
-void Logger::FileTarget::shutdown() {
-  auto name = m_filename->data()->retain();
-  Net::main().post(
-    [=]() {
-      const auto &filename = name->str();
-      auto i = s_all_writers.find(filename);
-      if (i != s_all_writers.end()) {
-        InputContext ic;
-        i->second->shutdown();
-        s_all_writers.erase(i);
-      }
     }
   );
 }

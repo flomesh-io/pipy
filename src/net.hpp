@@ -54,6 +54,8 @@ public:
     return s_current.m_io_context;
   }
 
+  static bool is_main() { return &s_current == s_main; }
+
   bool is_running() const { return m_is_running; }
 
   void run();

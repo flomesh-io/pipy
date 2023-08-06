@@ -613,6 +613,7 @@ int main(int argc, char *argv[]) {
     crypto::Crypto::free();
     stats::Metric::local().clear();
     Log::shutdown();
+    logging::Logger::close_all();
     Timer::cancel_all();
 
   } catch (std::runtime_error &e) {

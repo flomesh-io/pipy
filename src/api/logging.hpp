@@ -63,6 +63,7 @@ public:
   static void set_history_size(size_t size) { s_history_size = size; }
   static void get_names(const std::function<void(const std::string &)> &cb);
   static bool tail(const std::string &name, Data &buffer);
+  static void close_all();
 
   //
   // Logger::Target
@@ -96,11 +97,12 @@ public:
 
   class FileTarget : public Target {
   public:
+    static void close_all_writers();
+
     FileTarget(pjs::Str *filename);
 
   private:
     virtual void write(const Data &msg) override;
-    virtual void shutdown() override;
 
     //
     // Logger::FileTarget::Module
