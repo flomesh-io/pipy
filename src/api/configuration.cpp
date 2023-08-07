@@ -52,6 +52,7 @@
 #include "filters/exec.hpp"
 #include "filters/fork.hpp"
 #include "filters/http.hpp"
+#include "filters/insert.hpp"
 #include "filters/link.hpp"
 #include "filters/loop.hpp"
 #include "filters/mime.hpp"
@@ -303,6 +304,10 @@ void FilterConfigurator::handle_start(pjs::Function *callback) {
 
 void FilterConfigurator::handle_tls_client_hello(pjs::Function *callback) {
   append_filter(new tls::OnClientHello(callback));
+}
+
+void FilterConfigurator::insert(pjs::Object *events) {
+  append_filter(new Insert(events));
 }
 
 void FilterConfigurator::link(pjs::Function *name) {
@@ -1725,6 +1730,28 @@ template<> void ClassDef<FilterConfigurator>::init() {
     if (!ctx.arguments(1, &callback)) return;
     try {
       config->handle_tls_client_hello(callback);
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // FilterConfigurator.insert
+  method("insert", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
+    Object *events = nullptr;
+    if (!ctx.arguments(1, &events)) return;
+    if (!events || (
+        !events->is<Event>() &&
+        !events->is<Message>() &&
+        !events->is<Array>() &&
+        !events->is<Function>()
+    )) {
+      ctx.error_argument_type(1, "an Event, a Message, a function or an array");
+      return;
+    }
+    try {
+      config->insert(events);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

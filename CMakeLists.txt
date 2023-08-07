@@ -205,6 +205,7 @@ add_executable(pipy
   src/filters/handle.cpp
   src/filters/http.cpp
   src/filters/http2.cpp
+  src/filters/insert.cpp
   src/filters/link.cpp
   src/filters/loop.cpp
   src/filters/mime.cpp

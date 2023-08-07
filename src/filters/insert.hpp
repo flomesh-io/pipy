@@ -23,49 +23,51 @@
  *  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include "replace.hpp"
-#include "message.hpp"
+#ifndef INSERT_HPP
+#define INSERT_HPP
+
+#include "filter.hpp"
 
 namespace pipy {
 
 //
-// Replace
+// Insert
 //
 
-Replace::Replace(pjs::Object *replacement)
-  : Handle(replacement && replacement->is_function() ? replacement->as<pjs::Function>() : nullptr)
-  , m_replacement(replacement)
-{
-}
+class Insert : public Filter {
+public:
+  Insert(pjs::Object *events);
 
-Replace::Replace(const Replace &r)
-  : Handle(r)
-  , m_replacement(r.m_replacement)
-{
-}
+private:
+  Insert(const Insert &r);
+  ~Insert();
 
-Replace::~Replace()
-{
-}
+  //
+  // Insert::PromiseCallback
+  //
 
-bool Replace::callback(pjs::Object *arg) {
-  if (!m_replacement) return true;
-  if (!m_replacement->is_function()) {
-    if (Filter::output(m_replacement.get())) return true;
-    Filter::error("replacement is not an event or Message or an array of those");
-    return false;
-  }
-  return Handle::callback(arg);
-}
+  class PromiseCallback : public pjs::ObjectTemplate<PromiseCallback, pjs::Promise::Callback> {
+    PromiseCallback(Insert *filter) : m_filter(filter) {}
+    virtual void on_resolved(const pjs::Value &value) override;
+    virtual void on_rejected(const pjs::Value &error) override;
+    friend class pjs::ObjectTemplate<PromiseCallback, pjs::Promise::Callback>;
+    Insert* m_filter;
+  public:
+    void close() { m_filter = nullptr; }
+  };
 
-bool Replace::on_callback_return(const pjs::Value &result) {
-  if (!result.is_undefined()) {
-    if (!result.is_object() || !Filter::output(result.o())) {
-      Filter::error("Promise was not fulfilled with an event or Message or an array of those");
-      return false;
-    }
-  }
-  return Handle::on_callback_return(result);
-}
+  virtual auto clone() -> Filter* override;
+  virtual void reset() override;
+  virtual void process(Event *evt) override;
+  virtual void dump(Dump &d) override;
+
+  void on_callback_return(const pjs::Value &result);
+
+  pjs::Ref<pjs::Object> m_events;
+  pjs::Ref<PromiseCallback> m_promise_callback;
+  bool m_inserted;
+};
 
 } // namespace pipy
+
+#endif // INSERT_HPP
