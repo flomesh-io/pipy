@@ -72,9 +72,16 @@ public:
     std::function<void(Outbound*)> on_state_changed;
   };
 
-  static void for_each(const std::function<void(Outbound*)> &cb) {
-    for (auto p = s_all_outbounds.head(); p; p = p->List<Outbound>::Item::next()) {
-      cb(p);
+  static auto count() -> int {
+    return s_all_outbounds.size();
+  }
+
+  static void for_each(const std::function<bool(Outbound*)> &cb) {
+    auto p = s_all_outbounds.head();
+    while (p) {
+      pjs::Ref<Outbound> ob(p);
+      if (!cb(p)) break;
+      p = ob->List<Outbound>::Item::next();
     }
   }
 
@@ -99,6 +106,8 @@ public:
   virtual auto get_buffered() const -> size_t = 0;
   virtual auto get_traffic_in() ->size_t = 0;
   virtual auto get_traffic_out() ->size_t = 0;
+
+  void close(StreamEnd *eos);
 
 protected:
   Outbound(EventTarget::Input *input, const Options &options);

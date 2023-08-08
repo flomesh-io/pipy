@@ -193,6 +193,7 @@ void Status::update_local() {
       info.connections++;
       info.buffered += buffered;
     }
+    return true;
   });
   for (auto &p : outbound_tcp) outbounds.insert(p.second);
   for (auto &p : outbound_udp) outbounds.insert(p.second);

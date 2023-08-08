@@ -98,6 +98,12 @@ auto Outbound::address() -> pjs::Str* {
   return m_address;
 }
 
+void Outbound::close(StreamEnd *eos) {
+  InputContext ic;
+  close();
+  input(eos);
+}
+
 void Outbound::state(State state) {
   m_state = state;
   if (const auto &f = m_options.on_state_changed) {
@@ -157,6 +163,7 @@ void Outbound::init_metrics() {
           auto cnt = gauge->with_labels(k, 2);
           cnt->increase();
           total++;
+          return true;
         });
         gauge->set(total);
       }
@@ -170,6 +177,7 @@ void Outbound::init_metrics() {
           auto n = outbound->get_traffic_in();
           outbound->m_metric_traffic_in->increase(n);
           s_metric_traffic_in->increase(n);
+          return true;
         });
       }
     );
@@ -182,6 +190,7 @@ void Outbound::init_metrics() {
           auto n = outbound->get_traffic_out();
           outbound->m_metric_traffic_out->increase(n);
           s_metric_traffic_out->increase(n);
+          return true;
         });
       }
     );
@@ -661,6 +670,10 @@ template<> void ClassDef<Outbound>::init() {
   accessor("localPort"    , [](Object *obj, Value &ret) { ret.set(obj->as<Outbound>()->local_port()); });
   accessor("remoteAddress", [](Object *obj, Value &ret) { ret.set(obj->as<Outbound>()->remote_address()); });
   accessor("remotePort"   , [](Object *obj, Value &ret) { ret.set(obj->as<Outbound>()->remote_port()); });
+
+  method("close", [](Context &ctx, Object *obj, Value &ret) {
+    obj->as<Outbound>()->close(StreamEnd::make(StreamEnd::CONNECTION_ABORTED));
+  });
 }
 
 template<> void ClassDef<OutboundTCP>::init() {

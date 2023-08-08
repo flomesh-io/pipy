@@ -102,7 +102,7 @@ template<> void EnumDef<StreamEnd::Error>::init() {
   define(StreamEnd::READ_ERROR         , "ReadError");
   define(StreamEnd::WRITE_ERROR        , "WriteError");
   define(StreamEnd::CANNOT_RESOLVE     , "CannotResolve");
-  define(StreamEnd::CONNECTION_CANCELED, "ConnectionCanceled");
+  define(StreamEnd::CONNECTION_ABORTED , "ConnectionAborted");
   define(StreamEnd::CONNECTION_RESET   , "ConnectionReset");
   define(StreamEnd::CONNECTION_REFUSED , "ConnectionRefused");
   define(StreamEnd::CONNECTION_TIMEOUT , "ConnectionTimeout");

@@ -44,6 +44,12 @@ public:
   static auto exec(pjs::Array *args) -> Data*;
 
   void operator()(pjs::Context &ctx, pjs::Object *obj, pjs::Value &ret);
+
+  //
+  // Pipy::Outbound
+  //
+
+  class Outbound : public pjs::ObjectTemplate<Outbound> {};
 };
 
 } // namespace pipy

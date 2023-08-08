@@ -30,6 +30,7 @@
 #include "worker.hpp"
 #include "worker-thread.hpp"
 #include "net.hpp"
+#include "outbound.hpp"
 #include "utils.hpp"
 
 #include <unistd.h>
@@ -144,6 +145,8 @@ template<> void ClassDef<Pipy>::init() {
   super<Function>();
   ctor();
 
+  variable("outbound", class_of<Pipy::Outbound>());
+
   method("load", [](Context &ctx, Object*, Value &ret) {
     std::string filename;
     if (!ctx.arguments(1, &filename)) return;
@@ -217,6 +220,24 @@ template<> void ClassDef<Pipy>::init() {
     } else {
       ctx.error_argument_type(0, "a string or an array");
     }
+  });
+}
+
+template<> void ClassDef<Pipy::Outbound>::init() {
+  ctor();
+
+  accessor("count", [](Object*, Value &ret) { ret.set(pipy::Outbound::count()); });
+
+  method("forEach", [](Context &ctx, Object*, Value&) {
+    Function *cb;
+    if (!ctx.arguments(1, &cb)) return;
+    pipy::Outbound::for_each(
+      [&](pipy::Outbound *ob) {
+        Value arg(ob), ret;
+        (*cb)(ctx, 1, &arg, ret);
+        return ctx.ok();
+      }
+    );
   });
 }
 
