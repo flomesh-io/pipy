@@ -36,11 +36,6 @@ namespace pipy {
 
 class Insert : public Filter {
 public:
-  Insert(pjs::Object *events);
-
-private:
-  Insert(const Insert &r);
-  ~Insert();
 
   //
   // Insert::PromiseCallback
@@ -55,6 +50,12 @@ private:
   public:
     void close() { m_filter = nullptr; }
   };
+
+  Insert(pjs::Object *events);
+
+private:
+  Insert(const Insert &r);
+  ~Insert();
 
   virtual auto clone() -> Filter* override;
   virtual void reset() override;
