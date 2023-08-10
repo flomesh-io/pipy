@@ -97,6 +97,13 @@ AdminService::AdminService(CodebaseStore *store)
     m_current_program = "/";
   }
 
+  m_handler_method = pjs::Method::make(
+    "admin-service-handler",
+    [this](pjs::Context &ctx, pjs::Object*, pjs::Value &ret) {
+      ret.set(handle(static_cast<AdminService::Context*>(ctx.root()), ctx.arg(0).as<Message>()));
+    }
+  );
+
   WorkerManager::get().on_done(
     [this]() {
       WorkerManager::get().stop(true);
@@ -136,10 +143,7 @@ void AdminService::open(const std::string &ip, int port, const Options &options)
 
   ppl_inbound->append(
     new http::Server(
-      [this](http::Server *server, Message *msg) {
-        auto *ctx = static_cast<Context*>(server->context());
-        return handle(ctx, msg);
-      },
+      pjs::Function::make(m_handler_method),
       http::Server::Options()
     )
   )->add_sub_pipeline(ppl_ws);

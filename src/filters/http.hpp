@@ -445,7 +445,6 @@ private:
 class Server : public Demux {
 public:
   Server(pjs::Object *handler, const Options &options);
-  Server(const std::function<Message*(Server*, Message*)> &handler, const Options &options);
 
   //
   // Server::Handler
@@ -482,8 +481,7 @@ private:
   virtual void on_demux_close_stream(EventFunction *stream) override;
   virtual void on_demux_queue_dedicate(EventFunction *stream) override;
 
-  pjs::Ref<pjs::Object> m_handler_obj;
-  std::function<Message*(Server*, Message*)> m_handler_func;
+  pjs::Ref<pjs::Object> m_handler;
 };
 
 //

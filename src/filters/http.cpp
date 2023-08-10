@@ -1618,20 +1618,13 @@ bool Mux::Session::select_protocol(Mux *mux, const pjs::Value &version) {
 
 Server::Server(pjs::Object *handler, const Options &options)
   : Demux(options)
-  , m_handler_obj(handler)
-{
-}
-
-Server::Server(const std::function<Message*(Server*, Message*)> &handler, const Options &options)
-  : Demux(options)
-  , m_handler_func(handler)
+  , m_handler(handler)
 {
 }
 
 Server::Server(const Server &r)
   : Demux(r)
-  , m_handler_obj(r.m_handler_obj)
-  , m_handler_func(r.m_handler_func)
+  , m_handler(r.m_handler)
 {
 }
 
@@ -1678,10 +1671,7 @@ void Server::Handler::on_event(Event *evt) {
   if (auto req = m_message_reader.read(evt)) {
     pjs::Ref<Message> res;
 
-    if (auto &func = m_server->m_handler_func) {
-      res = func(m_server, req);
-
-    } else if (auto &handler = m_server->m_handler_obj) {
+    if (auto &handler = m_server->m_handler) {
       if (handler->is_instance_of<Message>()) {
         res = handler->as<Message>();
 

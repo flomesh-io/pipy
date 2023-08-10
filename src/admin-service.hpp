@@ -163,6 +163,7 @@ private:
   std::string m_ip;
   int m_port;
   int m_last_instance_index = 0;
+  pjs::Ref<pjs::Method> m_handler_method;
   CodebaseStore* m_store;
   std::string m_current_codebase;
   std::string m_current_program;
