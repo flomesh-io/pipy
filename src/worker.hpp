@@ -28,6 +28,7 @@
 
 #include "context.hpp"
 #include "listener.hpp"
+#include "message.hpp"
 #include "timer.hpp"
 #include "nmi.hpp"
 
@@ -69,6 +70,7 @@ public:
   void add_task(Task *task);
   void add_watch(Watch *watch);
   void add_exit(PipelineLayout *layout);
+  void add_admin(const std::string &path, PipelineLayout *layout);
   void add_export(pjs::Str *ns, pjs::Str *name, Module *module);
   auto get_export(pjs::Str *ns, pjs::Str *name) -> int;
   auto new_loading_context() -> Context*;
@@ -77,6 +79,7 @@ public:
   bool bind();
   bool start(bool force);
   void stop(bool force);
+  bool admin(Message *request, const std::function<void(Message*)> &respond);
 
 private:
   Worker(bool is_graph_enabled);
@@ -106,6 +109,37 @@ private:
     bool m_stream_end = false;
   };
 
+  class Admin : public EventTarget {
+  public:
+    Admin(const std::string &path, PipelineLayout *pipeline_layout)
+      : m_path(path)
+      , m_pipeline_layout(pipeline_layout) {}
+
+    ~Admin();
+
+    bool handle(Message *request, const std::function<void(Message*)> &respond);
+    void end();
+
+  private:
+    class Handler : public pjs::Pooled<Handler>, public List<Handler>::Item, public EventTarget {
+    public:
+      Handler(Admin *admin, Message *request, const std::function<void(Message*)> &respond);
+      ~Handler();
+
+      virtual void on_event(Event *evt) override;
+
+    private:
+      Admin* m_admin;
+      const std::function<void(Message*)> m_respond;
+      pjs::Ref<Pipeline> m_pipeline;
+      MessageReader m_response_reader;
+    };
+
+    std::string m_path;
+    pjs::Ref<PipelineLayout> m_pipeline_layout;
+    List<Handler> m_handlers;
+  };
+
   struct SolvedFile {
     int index;
     pjs::Ref<pjs::Str> filename;
@@ -126,6 +160,7 @@ private:
   std::set<Task*> m_tasks;
   std::set<Watch*> m_watches;
   std::list<Exit*> m_exits;
+  std::list<Admin*> m_admins;
   std::map<pjs::Ref<pjs::Str>, Namespace> m_namespaces;
   std::map<pjs::Ref<pjs::Str>, SolvedFile> m_solved_files;
   bool m_graph_enabled = false;

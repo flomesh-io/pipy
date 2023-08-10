@@ -198,6 +198,7 @@ public:
   void task(const std::string &when);
   void watch(const std::string &filename);
   void exit();
+  void admin(const std::string &path);
   void pipeline(const std::string &name);
   void pipeline();
 
@@ -227,6 +228,10 @@ private:
 
   struct ExitConfig : public PipelineConfig {};
 
+  struct AdminConfig : public PipelineConfig {
+    std::string path;
+  };
+
   struct NamedPipelineConfig : public PipelineConfig {
     std::string name;
   };
@@ -239,6 +244,7 @@ private:
   std::list<TaskConfig> m_tasks;
   std::list<WatchConfig> m_watches;
   std::list<ExitConfig> m_exits;
+  std::list<AdminConfig> m_admins;
   std::list<NamedPipelineConfig> m_named_pipelines;
   std::map<int, NamedPipelineConfig> m_indexed_pipelines;
   std::unique_ptr<PipelineConfig> m_entrance_pipeline;

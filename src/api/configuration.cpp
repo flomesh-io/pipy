@@ -633,6 +633,20 @@ void Configuration::exit() {
   FilterConfigurator::set_pipeline_config(&config);
 }
 
+void Configuration::admin(const std::string &path) {
+  static const std::string s_prefix("/admin/");
+  if (!utils::starts_with(path, s_prefix)) {
+    std::string msg("path must start with ");
+    throw std::runtime_error(msg + s_prefix);
+  }
+  check_integrity();
+  m_admins.emplace_back();
+  auto &config = m_admins.back();
+  config.index = next_pipeline_index();
+  config.path = path;
+  FilterConfigurator::set_pipeline_config(&config);
+}
+
 void Configuration::pipeline(const std::string &name) {
   check_integrity();
   if (name.empty()) throw std::runtime_error("pipeline name cannot be empty");
@@ -2336,6 +2350,18 @@ template<> void ClassDef<Configuration>::init() {
   method("exit", [](Context &ctx, Object *thiz, Value &result) {
     try {
       thiz->as<Configuration>()->exit();
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // Configuration.admin
+  method("admin", [](Context &ctx, Object *thiz, Value &result) {
+    std::string path;
+    try {
+      if (!ctx.arguments(1, &path)) return;
+      thiz->as<Configuration>()->admin(path);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

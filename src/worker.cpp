@@ -59,6 +59,7 @@
 #include "api/url.hpp"
 #include "api/xml.hpp"
 #include "log.hpp"
+#include "utils.hpp"
 
 #include <array>
 #include <limits>
@@ -304,6 +305,11 @@ void Worker::add_exit(PipelineLayout *layout) {
   m_exits.back() = new Exit(this, layout);
 }
 
+void Worker::add_admin(const std::string &path, PipelineLayout *layout) {
+  m_admins.emplace_back();
+  m_admins.back() = new Admin(path, layout);
+}
+
 void Worker::add_export(pjs::Str *ns, pjs::Str *name, Module *module) {
   auto &names = m_namespaces[ns];
   auto i = names.find(name);
@@ -496,6 +502,7 @@ void Worker::end_all() {
   for (auto *task : m_tasks) task->end();
   for (auto *watch : m_watches) watch->end();
   for (auto *exit : m_exits) exit->end();
+  for (auto *admin : m_admins) admin->end();
   for (auto *mod : m_modules) if (mod) mod->unload();
   if (s_current == this) s_current = nullptr;
 }
@@ -523,6 +530,57 @@ void Worker::Exit::on_event(Event *evt) {
   if (evt->is<StreamEnd>()) {
     m_stream_end = true;
     m_worker->on_exit(this);
+  }
+}
+
+//
+// Worker::Admin
+//
+
+Worker::Admin::~Admin() {
+  while (auto h = m_handlers.head()) {
+    delete h;
+  }
+}
+
+bool Worker::Admin::handle(Message *request, const std::function<void(Message*)> &respond) {
+  pjs::Ref<http::RequestHead> head = pjs::coerce<http::RequestHead>(request);
+  if (!utils::starts_with(head->path->str(), m_path)) return false;
+  new Handler(this, request, respond);
+  return true;
+}
+
+void Worker::Admin::end() {
+  delete this;
+}
+
+//
+// Worker::Admin::Handler
+//
+
+Worker::Admin::Handler::Handler(Admin *admin, Message *message, const std::function<void(Message*)> &respond)
+  : m_admin(admin)
+  , m_respond(respond)
+{
+  InputContext ic;
+  admin->m_handlers.push(this);
+  auto pl = admin->m_pipeline_layout.get();
+  auto *p = Pipeline::make(pl, pl->new_context());
+  p->chain(EventTarget::input());
+  p->start();
+  message->write(p->input());
+}
+
+Worker::Admin::Handler::~Handler() {
+  m_admin->m_handlers.remove(this);
+}
+
+void Worker::Admin::Handler::on_event(Event *evt) {
+  if (auto m = m_response_reader.read(evt)) {
+    if (m_respond) {
+      m_respond(m);
+    }
+    m->release();
   }
 }
 
