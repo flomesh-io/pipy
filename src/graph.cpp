@@ -718,11 +718,16 @@ auto Graph::build_text(Node *root) -> std::vector<std::string> {
         push_line("----->|");
         push_line("      |");
         auto base = base_pipeline + "     ";
-        for (Node *child = node->children(); child; child = child->next()) {
-          draw_node(child, base, base, parallel);
+        if (auto child = node->children()) {
+          while (child) {
+            draw_node(child, base, base, parallel);
+            child = child->next();
+          }
+          push_line(base_filter);
+          draw_output(node, base_filter, false);
+        } else {
+          push_line("<-----|");
         }
-        push_line(base_filter);
-        draw_output(node, base_filter, false);
         break;
       }
       case Node::PIPELINE: {
