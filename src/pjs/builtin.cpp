@@ -953,6 +953,24 @@ template<> void ClassDef<Global>::init() {
   // RegExp
   variable("RegExp", class_of<Constructor<RegExp>>());
 
+  // invoke
+  method("invoke", [](Context &ctx, Object *obj, Value &ret) {
+    Function *func;
+    Value catcher;
+    if (!ctx.arguments(1, &func, &catcher)) return;
+    (*func)(ctx, 0, nullptr, ret);
+    if (!ctx.ok()) {
+      if (catcher.is_function()) {
+        Value exception(ctx.error().message);
+        ctx.reset();
+        (*catcher.f())(ctx, 1, &exception, ret);
+      } else {
+        ctx.reset();
+        ret = catcher;
+      }
+    }
+  });
+
   // repeat
   method("repeat", [](Context &ctx, Object *obj, Value &ret) {
     int count;
