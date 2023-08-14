@@ -160,6 +160,28 @@ auto Log::format_header(Level level, char *buf, size_t len) -> size_t {
   return i;
 }
 
+auto Log::format_location(char *buf, size_t len, const pjs::Context::Location &loc, const char *func_name) -> size_t {
+  auto source = loc.source;
+  if (!source || source->filename.empty()) {
+    return std::snprintf(
+      buf, len,
+      "%s() at line %d column %d",
+      func_name,
+      loc.line,
+      loc.column
+    );
+  } else {
+    return std::snprintf(
+      buf, len,
+      "%s() at line %d column %d in %s",
+      func_name,
+      loc.line,
+      loc.column,
+      loc.source->filename.c_str()
+    );
+  }
+}
+
 void Log::write(const Data &data) {
   if (s_log_local_only) {
     for (const auto &c : data.chunks()) {

@@ -299,25 +299,7 @@ void Filter::error(const char *format, ...) {
 
 auto Filter::error_location(char *buf, size_t len) -> size_t {
   Dump d; dump(d);
-  auto source = m_location.source;
-  if (!source || source->filename.empty()) {
-    return std::snprintf(
-      buf, len,
-      "%s() at line %d column %d",
-      d.name.c_str(),
-      m_location.line,
-      m_location.column
-    );
-  } else {
-    return std::snprintf(
-      buf, len,
-      "%s() at line %d column %d in %s",
-      d.name.c_str(),
-      m_location.line,
-      m_location.column,
-      m_location.source->filename.c_str()
-    );
-  }
+  return Log::format_location(buf, len, m_location, d.name.c_str());
 }
 
 } // namespace pipy

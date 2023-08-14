@@ -72,6 +72,7 @@ public:
   static auto format_elapsed_time() -> const char*;
   static auto format_elapsed_time(char *buf, size_t len, bool fill = false) -> size_t;
   static auto format_header(Level level, char *buf, size_t len) -> size_t;
+  static auto format_location(char *buf, size_t len, const pjs::Context::Location &loc, const char *func_name) -> size_t;
 
   static void write(const Data &data);
   static void write(const std::string &data);

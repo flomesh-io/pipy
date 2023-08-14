@@ -115,16 +115,14 @@ auto PipelineLayout::alloc(Context *ctx) -> Pipeline* {
 }
 
 void PipelineLayout::start(Pipeline *pipeline, int argc, pjs::Value *argv) {
-  static const std::string s_invalid_input_events(
-    "initial input is not or did not return events or messages. "
-    "Consider using void(...) if no initial input is intended"
-  );
   if (auto *o = m_on_start.get()) {
     pjs::Value starting_events;
     if (o->is<pjs::Function>()) {
       auto &ctx = *pipeline->context();
       (*o->as<pjs::Function>())(ctx, argc, argv, starting_events);
       if (!ctx.ok()) {
+        Log::pjs_error(ctx.error());
+        ctx.reset();
         pipeline->input()->input(StreamEnd::make(StreamEnd::RUNTIME_ERROR));
         return;
       }
@@ -133,24 +131,13 @@ void PipelineLayout::start(Pipeline *pipeline, int argc, pjs::Value *argv) {
     }
     if (!starting_events.is_nullish()) {
       if (!Message::output(starting_events, pipeline->input())) {
-        const auto &loc = m_on_start_location;
-        char buf[200];
-        auto len = (!loc.source || loc.source->filename.empty() ?
-          std::snprintf(
-            buf, sizeof(buf),
-            "onStart() at line %d column %d: %s",
-            loc.line,
-            loc.column,
-            s_invalid_input_events.c_str()
-          ) :
-          std::snprintf(
-            buf, sizeof(buf),
-            "onStart() at line %d column %d in %s: %s",
-            loc.line,
-            loc.column,
-            loc.source->filename.c_str(),
-            s_invalid_input_events.c_str()
-          )
+        char loc[100];
+        Log::format_location(loc, sizeof(loc), m_on_start_location, "onStart");
+        char buf[300];
+        auto len = std::snprintf(
+          buf, sizeof(buf),
+          "%s: initial input is not or did not return events or messages. "
+          "Consider using void(...) if no initial input is intended", loc
         );
         Log::error("%s", buf);
         pipeline->input()->input(StreamEnd::make(
