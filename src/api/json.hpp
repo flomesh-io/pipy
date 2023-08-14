@@ -56,15 +56,25 @@ public:
     virtual void map_end() {}
     virtual void array_start() {}
     virtual void array_end() {}
+    virtual void error(const std::string &err) {}
   };
 
   static bool visit(const std::string &str, Visitor *visitor);
+  static bool visit(const std::string &str, Visitor *visitor, std::string &err);
   static bool visit(const Data &data, Visitor *visitor);
+  static bool visit(const Data &data, Visitor *visitor, std::string &err);
 
   static bool parse(
     const std::string &str,
     const std::function<bool(pjs::Object*, const pjs::Value&, pjs::Value&)> &reviver,
     pjs::Value &val
+  );
+
+  static bool parse(
+    const std::string &str,
+    const std::function<bool(pjs::Object*, const pjs::Value&, pjs::Value&)> &reviver,
+    pjs::Value &val,
+    std::string &err
   );
 
   static auto stringify(
@@ -77,6 +87,13 @@ public:
     const Data &data,
     const std::function<bool(pjs::Object*, const pjs::Value&, pjs::Value&)> &reviver,
     pjs::Value &val
+  );
+
+  static bool decode(
+    const Data &data,
+    const std::function<bool(pjs::Object*, const pjs::Value&, pjs::Value&)> &reviver,
+    pjs::Value &val,
+    std::string &err
   );
 
   static bool encode(

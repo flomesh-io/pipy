@@ -55,7 +55,9 @@ template<> void ClassDef<JSON>::init() {
         return ctx.ok();
       };
     }
-    if (!JSON::parse(str->str(), rev, ret)) {
+    std::string err;
+    if (!JSON::parse(str->str(), rev, ret, err)) {
+      ctx.error(err);
       ret = Value::undefined;
     }
   });
@@ -98,7 +100,9 @@ template<> void ClassDef<JSON>::init() {
         return ctx.ok();
       };
     }
-    if (!data || !JSON::decode(*data, rev, ret)) {
+    std::string err;
+    if (!data || !JSON::decode(*data, rev, ret, err)) {
+      ctx.error(err);
       ret = Value::undefined;
     }
   });
@@ -144,23 +148,48 @@ public:
   JSONVisitor(JSON::Visitor *visitor) : m_parser(yajl_alloc(&s_callbacks, nullptr, visitor)) {}
   ~JSONVisitor() { yajl_free(m_parser); }
 
-  bool visit(const std::string &str) {
-    if (yajl_status_ok != yajl_parse(m_parser, (const unsigned char*)str.c_str(), str.length())) return false;
-    if (yajl_status_ok != yajl_complete_parse(m_parser)) return false;
-    return true;
+  bool visit(const std::string &str, std::string &err) {
+    if (yajl_status_ok == yajl_parse(m_parser, (const unsigned char*)str.c_str(), str.length()) &&
+        yajl_status_ok == yajl_complete_parse(m_parser)
+    ) return true;
+    get_error(0, err);
+    return false;
   }
 
-  bool visit(const Data &data) {
+  bool visit(const Data &data, std::string &err) {
+    size_t pos = 0;
     for (const auto c : data.chunks()) {
-      auto ret = yajl_parse(m_parser, (const unsigned char*)std::get<0>(c), std::get<1>(c));
-      if (ret != yajl_status_ok) return false;
+      auto ptr = std::get<0>(c);
+      auto len = std::get<1>(c);
+      auto ret = yajl_parse(m_parser, (const unsigned char*)ptr, len);
+      if (ret != yajl_status_ok) {
+        get_error(pos, err);
+        return false;
+      }
+      pos += len;
     }
-    if (yajl_status_ok != yajl_complete_parse(m_parser)) return false;
+    if (yajl_status_ok != yajl_complete_parse(m_parser)) {
+      get_error(pos, err);
+      return false;
+    }
     return true;
   }
 
 private:
   yajl_handle m_parser;
+
+  void get_error(size_t base_position, std::string &err) {
+    auto err_str = yajl_get_error(m_parser, false, nullptr, 0);
+    char str_buf[1000];
+    std::snprintf(
+      str_buf, sizeof(str_buf),
+      "In JSON at position %d: %s",
+      int(base_position + yajl_get_bytes_consumed(m_parser)),
+      err_str
+    );
+    err.assign(str_buf);
+    yajl_free_error(m_parser, err_str);
+  }
 
   static yajl_callbacks s_callbacks;
 
@@ -208,14 +237,14 @@ public:
     }
   }
 
-  bool parse(const std::string &str, pjs::Value &val) {
-    if (!visit(str)) return false;
+  bool parse(const std::string &str, pjs::Value &val, std::string &err) {
+    if (!visit(str, err)) return false;
     val = m_root;
     return true;
   }
 
-  bool parse(const Data &data, pjs::Value &val) {
-    if (!visit(data)) return false;
+  bool parse(const Data &data, pjs::Value &val, std::string &err) {
+    if (!visit(data, err)) return false;
     val = m_root;
     return true;
   }
@@ -315,13 +344,25 @@ private:
 };
 
 bool JSON::visit(const std::string &str, Visitor *visitor) {
+  std::string err;
   JSONVisitor v(visitor);
-  return v.visit(str);
+  return v.visit(str, err);
+}
+
+bool JSON::visit(const std::string &str, Visitor *visitor, std::string &err) {
+  JSONVisitor v(visitor);
+  return v.visit(str, err);
 }
 
 bool JSON::visit(const Data &data, Visitor *visitor) {
+  std::string err;
   JSONVisitor v(visitor);
-  return v.visit(data);
+  return v.visit(data, err);
+}
+
+bool JSON::visit(const Data &data, Visitor *visitor, std::string &err) {
+  JSONVisitor v(visitor);
+  return v.visit(data, err);
 }
 
 bool JSON::parse(
@@ -329,8 +370,19 @@ bool JSON::parse(
   const std::function<bool(pjs::Object*, const pjs::Value&, pjs::Value&)> &reviver,
   pjs::Value &val
 ) {
+  std::string err;
   JSONParser parser(reviver);
-  return parser.parse(str, val);
+  return parser.parse(str, val, err);
+}
+
+bool JSON::parse(
+  const std::string &str,
+  const std::function<bool(pjs::Object*, const pjs::Value&, pjs::Value&)> &reviver,
+  pjs::Value &val,
+  std::string &err
+) {
+  JSONParser parser(reviver);
+  return parser.parse(str, val, err);
 }
 
 auto JSON::stringify(
@@ -348,8 +400,19 @@ bool JSON::decode(
   const std::function<bool(pjs::Object*, const pjs::Value&, pjs::Value&)> &reviver,
   pjs::Value &val
 ) {
+  std::string err;
   JSONParser parser(reviver);
-  return parser.parse(data, val);
+  return parser.parse(data, val, err);
+}
+
+bool JSON::decode(
+  const Data &data,
+  const std::function<bool(pjs::Object*, const pjs::Value&, pjs::Value&)> &reviver,
+  pjs::Value &val,
+  std::string &err
+) {
+  JSONParser parser(reviver);
+  return parser.parse(data, val, err);
 }
 
 bool JSON::encode(
