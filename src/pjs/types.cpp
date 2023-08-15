@@ -1197,15 +1197,22 @@ static size_t special_number_to_string(char *str, size_t len, double n) {
 static size_t integral_number_to_string(char *str, size_t len, double n) {
   double i; std::modf(n, &i);
   if (std::modf(n, &i) == 0) {
-    return std::snprintf(str, len, "%lld", (long long)i);
-  } else {
-    return 0;
+    bool is_neg = (i < 0);
+    if (is_neg) i = -i;
+    if (i <= (double)std::numeric_limits<unsigned long long>::max()) {
+      if (is_neg) {
+        return std::snprintf(str, len, "-%llu", (unsigned long long)i);
+      } else {
+        return std::snprintf(str, len, "%llu", (unsigned long long)i);
+      }
+    }
   }
+  return 0;
 }
 
 size_t Number::to_string(char *str, size_t len, double n) {
   if (auto l = special_number_to_string(str, len, n)) return l;
-  if (auto l = integral_number_to_string(str, len, n)) return l;
+  // if (auto l = integral_number_to_string(str, len, n)) return l;
   len = std::snprintf(str, len, "%.6f", n);
   while (len > 1 && str[len-1] == '0') len--;
   if (len > 1 && str[len-1] == '.') len--;
@@ -2170,6 +2177,7 @@ void Promise::Then::execute(Context *ctx, State state, const Value &result) {
       case PENDING: promise->m_dependent = m_promise; break;
       case RESOLVED: m_promise->settle(RESOLVED, promise->m_result); break;
       case REJECTED: m_promise->settle(REJECTED, promise->m_result); break;
+      case CANCELED: break;
     }
     return;
   }
