@@ -1194,25 +1194,8 @@ static size_t special_number_to_string(char *str, size_t len, double n) {
   return 0;
 }
 
-static size_t integral_number_to_string(char *str, size_t len, double n) {
-  double i; std::modf(n, &i);
-  if (std::modf(n, &i) == 0) {
-    bool is_neg = (i < 0);
-    if (is_neg) i = -i;
-    if (i <= (double)std::numeric_limits<unsigned long long>::max()) {
-      if (is_neg) {
-        return std::snprintf(str, len, "-%llu", (unsigned long long)i);
-      } else {
-        return std::snprintf(str, len, "%llu", (unsigned long long)i);
-      }
-    }
-  }
-  return 0;
-}
-
 size_t Number::to_string(char *str, size_t len, double n) {
   if (auto l = special_number_to_string(str, len, n)) return l;
-  // if (auto l = integral_number_to_string(str, len, n)) return l;
   len = std::snprintf(str, len, "%.6f", n);
   while (len > 1 && str[len-1] == '0') len--;
   if (len > 1 && str[len-1] == '.') len--;
@@ -1221,7 +1204,6 @@ size_t Number::to_string(char *str, size_t len, double n) {
 
 size_t Number::to_precision(char *str, size_t len, double n, int precision) {
   if (auto l = special_number_to_string(str, len, n)) return l;
-  if (auto l = integral_number_to_string(str, len, n)) return l;
   auto max = std::numeric_limits<double>::digits10 + 1;
   if (precision < 0) precision = 0;
   if (precision > max) precision = max;
@@ -1230,7 +1212,6 @@ size_t Number::to_precision(char *str, size_t len, double n, int precision) {
 
 size_t Number::to_fixed(char *str, size_t len, double n, int digits) {
   if (auto l = special_number_to_string(str, len, n)) return l;
-  if (auto l = integral_number_to_string(str, len, n)) return l;
   auto max = std::numeric_limits<double>::digits10 + 1;
   if (digits < 0) digits = 0;
   if (digits > max) digits = max;
@@ -1239,7 +1220,6 @@ size_t Number::to_fixed(char *str, size_t len, double n, int digits) {
 
 size_t Number::to_exponential(char *str, size_t len, double n) {
   if (auto l = special_number_to_string(str, len, n)) return l;
-  if (auto l = integral_number_to_string(str, len, n)) return l;
   auto max = std::numeric_limits<double>::digits10 + 1;
   len = std::snprintf(str, len, "%.*e", max, n);
   auto p = len;
@@ -1257,7 +1237,6 @@ size_t Number::to_exponential(char *str, size_t len, double n) {
 
 size_t Number::to_exponential(char *str, size_t len, double n, int digits) {
   if (auto l = special_number_to_string(str, len, n)) return l;
-  if (auto l = integral_number_to_string(str, len, n)) return l;
   auto max = std::numeric_limits<double>::digits10 + 1;
   if (digits < 0) digits = 0;
   if (digits > max) digits = max;
