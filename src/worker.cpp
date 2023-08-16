@@ -456,6 +456,15 @@ void Worker::stop(bool force) {
   }
 }
 
+bool Worker::admin(Message *request, const std::function<void(Message*)> &respond) {
+  for (auto *admin : m_admins) {
+    if (admin->handle(request, respond)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 auto Worker::new_module_index() -> int {
   int index = 0;
   while (index < m_modules.size() && m_modules[index]) index++;
@@ -544,7 +553,7 @@ Worker::Admin::~Admin() {
 }
 
 bool Worker::Admin::handle(Message *request, const std::function<void(Message*)> &respond) {
-  pjs::Ref<http::RequestHead> head = pjs::coerce<http::RequestHead>(request);
+  pjs::Ref<http::RequestHead> head = pjs::coerce<http::RequestHead>(request->head());
   if (!utils::starts_with(head->path->str(), m_path)) return false;
   new Handler(this, request, respond);
   return true;

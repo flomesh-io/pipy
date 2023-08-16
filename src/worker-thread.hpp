@@ -27,6 +27,7 @@
 #define WORKER_THREAD_HPP
 
 #include "net.hpp"
+#include "list.hpp"
 #include "status.hpp"
 #include "api/stats.hpp"
 
@@ -66,6 +67,7 @@ public:
   void recycle();
   void reload(const std::function<void(bool)> &cb);
   void reload_done(bool ok);
+  void admin(pjs::Str *path, SharedData *request, const std::function<void(SharedData*)> &respond);
   void exit(const std::function<void()> &cb);
   bool stop(bool force = false);
 
@@ -118,11 +120,30 @@ public:
   bool stats(const std::function<void(stats::MetricDataSum&)> &cb);
   void recycle();
   void reload();
+  bool admin(pjs::Str *path, const Data &request, const std::function<void(const Data *)> &respond);
   auto concurrency() const -> int { return m_concurrency; }
   auto active_pipeline_count() -> size_t;
   bool stop(bool force = false);
 
 private:
+  class AdminRequest : public List<AdminRequest>::Item {
+  public:
+    AdminRequest(WorkerManager *manager, pjs::Str *path, const Data &request, const std::function<void(const Data *)> &respond);
+    ~AdminRequest();
+    void start();
+  private:
+    struct Response {
+      Data data;
+      bool successful = false;
+    };
+    WorkerManager* m_manager;
+    pjs::Ref<pjs::Str> m_path;
+    Data m_request;
+    std::vector<Response> m_responses;
+    size_t m_response_count = 0;
+    const std::function<void(const Data *)> m_respond;
+  };
+
   std::vector<WorkerThread*> m_worker_threads;
   Status m_status;
   int m_status_counter = -1;
@@ -134,10 +155,12 @@ private:
   bool m_reloading = false;
   bool m_querying_status = false;
   bool m_querying_stats = false;
+  List<AdminRequest> m_admin_requests;
   std::function<void()> m_on_done;
 
   void check_reloading();
   void start_reloading();
+  void next_admin_request();
   void on_thread_done(int index);
 
   friend class WorkerThread;

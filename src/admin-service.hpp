@@ -192,7 +192,7 @@ private:
 
   pjs::Ref<Module> m_module;
 
-  auto handle(Context *ctx, Message *req) -> Message*;
+  auto handle(Context *ctx, Message *req) -> pjs::Object*;
 
   Message* dump_GET();
   Message* dump_GET(const std::string &path);

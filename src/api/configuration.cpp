@@ -779,6 +779,12 @@ void Configuration::apply(JSModule *mod) {
       worker->add_exit(p);
     }
   }
+
+  for (auto &i : m_admins) {
+    std::string name("Admin ");
+    auto p = make_pipeline(i.index, "", name + i.path, i);
+    worker->add_admin(i.path, p);
+  }
 }
 
 void Configuration::draw(Graph &g) {
@@ -862,6 +868,15 @@ void Configuration::draw(Graph &g) {
       add_filters(p, i.filters);
       g.add_pipeline(std::move(p));
     }
+  }
+
+  for (const auto &i : m_admins) {
+    Graph::Pipeline p;
+    p.index = i.index;
+    p.label = "Admin ";
+    p.label += i.path;
+    add_filters(p, i.filters);
+    g.add_pipeline(std::move(p));
   }
 }
 

@@ -179,6 +179,33 @@ void WorkerThread::reload_done(bool ok) {
   }
 }
 
+void WorkerThread::admin(pjs::Str *path, SharedData *request, const std::function<void(SharedData*)> &respond) {
+  auto name = path->data()->retain();
+  request->retain();
+  m_net->post(
+    [=]() {
+      Data buf;
+      request->to_data(buf);
+      auto head = http::RequestHead::make();
+      head->path = pjs::Str::make(name);
+      pjs::Ref<Message> req = Message::make(head, Data::make(std::move(buf)));
+      if (!Worker::current()->admin(
+        req.get(),
+        [=](Message *response) {
+          auto body = response->body();
+          auto data = body ? SharedData::make(*body) : SharedData::make(Data());
+          data->retain();
+          Net::main().post([=]() { respond(data); data->release(); });
+        }
+      )) {
+        Net::main().post([=]() { respond(nullptr); });
+      }
+      request->release();
+      name->release();
+    }
+  );
+}
+
 bool WorkerThread::stop(bool force) {
   if (force) {
     m_net->post(
@@ -580,11 +607,19 @@ void WorkerManager::recycle() {
 }
 
 void WorkerManager::reload() {
-  if (m_reloading || m_querying_status || m_querying_stats) {
+  if (m_reloading || m_querying_status || m_querying_stats || !m_admin_requests.empty()) {
     m_reloading_requested = true;
   } else {
     start_reloading();
   }
+}
+
+bool WorkerManager::admin(pjs::Str *path, const Data &request, const std::function<void(const Data *)> &respond) {
+  if (m_reloading) return false;
+  if (m_worker_threads.empty()) return false;
+  new AdminRequest(this, path, request, respond);
+  next_admin_request();
+  return true;
 }
 
 void WorkerManager::check_reloading() {
@@ -651,6 +686,14 @@ bool WorkerManager::stop(bool force) {
   return true;
 }
 
+void WorkerManager::next_admin_request() {
+  if (auto r = m_admin_requests.head()) {
+    r->start();
+  } else {
+    check_reloading();
+  }
+}
+
 void WorkerManager::on_thread_done(int index) {
   if (m_on_done) {
     Net::main().post(
@@ -659,6 +702,54 @@ void WorkerManager::on_thread_done(int index) {
           if (wt && !wt->done()) return;
         }
         m_on_done();
+      }
+    );
+  }
+}
+
+//
+// WorkerManager::AdminRequest
+//
+
+WorkerManager::AdminRequest::AdminRequest(WorkerManager *manager, pjs::Str *path, const Data &request, const std::function<void(const Data *)> &respond)
+  : m_manager(manager)
+  , m_path(path)
+  , m_request(request)
+  , m_responses(manager->m_worker_threads.size())
+  , m_respond(respond)
+{
+  manager->m_admin_requests.push(this);
+}
+
+WorkerManager::AdminRequest::~AdminRequest() {
+  m_manager->m_admin_requests.remove(this);
+  m_manager->next_admin_request();
+}
+
+void WorkerManager::AdminRequest::start() {
+  pjs::Ref<SharedData> req = SharedData::make(m_request);
+  for (size_t i = 0; i < m_manager->m_worker_threads.size(); i++) {
+    m_manager->m_worker_threads[i]->admin(
+      m_path, req, [=](SharedData *res) {
+        auto &r = m_responses[i];
+        if (res) {
+          res->to_data(r.data);
+          r.successful = true;
+        } else {
+          r.successful = false;
+        }
+        if (++m_response_count == m_responses.size()) {
+          Data response;
+          bool successful = false;
+          for (const auto &r : m_responses) {
+            if (r.successful) {
+              successful = true;
+              response.push(r.data);
+            }
+          }
+          m_respond(successful ? &response : nullptr);
+          delete this;
+        }
       }
     );
   }

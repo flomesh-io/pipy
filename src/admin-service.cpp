@@ -180,7 +180,7 @@ void AdminService::write_log(const std::string &name, const Data &data) {
   }
 }
 
-auto AdminService::handle(Context *ctx, Message *req) -> Message* {
+auto AdminService::handle(Context *ctx, Message *req) -> pjs::Object* {
   static const std::string prefix_dump("/dump/");
   static const std::string prefix_log("/log/");
   static const std::string prefix_repo("/repo/");
@@ -189,6 +189,7 @@ auto AdminService::handle(Context *ctx, Message *req) -> Message* {
   static const std::string prefix_api_v1_files("/api/v1/files/");
   static const std::string prefix_api_v1_metrics("/api/v1/metrics/");
   static const std::string prefix_api_v1_log("/api/v1/log/");
+  static const std::string prefix_admin("/admin/");
   static const std::string text_html("text/html");
 
   thread_local static pjs::ConstStr s_accept("accept");
@@ -446,6 +447,27 @@ auto AdminService::handle(Context *ctx, Message *req) -> Message* {
       } else {
         return m_response_method_not_allowed;
       }
+    }
+
+    // Custom administration functionality
+    if (utils::starts_with(path, prefix_admin)) {
+      auto promise = pjs::Promise::make();
+      auto settler = pjs::Promise::Settler::make(promise);
+      settler->retain();
+      pjs::Ref<pjs::Str> path_str = pjs::Str::make(path);
+      WorkerManager::get().admin(
+        path_str, *body,
+        [=](const Data *res) {
+          InputContext ic;
+          if (res) {
+            settler->resolve(response(*res));
+          } else {
+            settler->resolve(m_response_not_found.get());
+          }
+          settler->release();
+        }
+      );
+      return promise;
     }
 
     // Static GUI content
