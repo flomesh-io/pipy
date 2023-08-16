@@ -2895,7 +2895,7 @@ void Array::reduceRight(std::function<bool(Value&, Value&, int)> callback, Value
 }
 
 auto Array::reverse() -> Array* {
-  for (int i = 0; i < m_size; i++) {
+  for (int i = 0, n = m_size / 2; i < n; i++) {
     int j = m_size - i - 1;
     if (i != j) {
       Value a, b;
