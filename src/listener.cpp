@@ -400,16 +400,6 @@ auto ListenerArray::add_listener(pjs::Str *port, pjs::Object *options) -> Listen
   get_ip_port(port->str(), ip, port_num);
 
   auto listener = Listener::get(opts.protocol, ip, port_num);
-  if (listener->reserved()) {
-    std::string msg("Port reserved: ");
-    throw std::runtime_error(msg + std::to_string(port_num));
-  }
-#ifndef __linux__
-  if (opts.transparent) {
-    Log::error("Trying to listen on %d in transparent mode, which is not supported on this platform", port_num);
-  }
-#endif
-
   m_listeners[listener] = opts;
 
   if (auto *w = m_worker) {
@@ -447,6 +437,63 @@ auto ListenerArray::remove_listener(pjs::Str *port, pjs::Object *options) -> Lis
   return listener;
 }
 
+void ListenerArray::set_listeners(pjs::Array *array) {
+  std::map<Listener*, Listener::Options> listeners;
+  if (array) {
+    array->iterate_all(
+      [&](pjs::Value &v, int i) {
+        std::string ip;
+        int port_num;
+        if (v.is_number()) {
+          auto l = Listener::get(Listener::Protocol::TCP, "0.0.0.0", v.to_int32());
+          listeners[l] = m_default_options.get();
+        } else if (v.is_string()) {
+          get_ip_port(v.s()->str(), ip, port_num);
+          auto l = Listener::get(Listener::Protocol::TCP, ip, port_num);
+          listeners[l] = m_default_options.get();
+        } else if (v.is_object() && v.o()) {
+          pjs::Value port;
+          v.o()->get("port", port);
+          if (port.is_number()) {
+            ip = "0.0.0.0";
+            port_num = port.to_int32();
+          } else if (port.is_string()) {
+            get_ip_port(port.s()->str(), ip, port_num);
+          } else {
+            std::string err("invalid value type for the port property in element ");
+            err += std::to_string(i);
+            throw std::runtime_error(err);
+          }
+          Listener::Options opt(v.o());
+          auto l = Listener::get(opt.protocol, ip, port_num);
+          listeners[l] = opt;
+        } else {
+          std::string err("invalid value type for a listening port in element ");
+          err += std::to_string(i);
+          throw std::runtime_error(err);
+        }
+      }
+    );
+  }
+
+  if (m_worker) {
+    for (const auto &i : m_listeners) {
+      auto l = i.first;
+      if (listeners.find(l) == listeners.end()) {
+        m_worker->remove_listener(l);
+      }
+    }
+
+    for (const auto &i : listeners) {
+      m_worker->add_listener(i.first, m_pipeline_layout, i.second);
+    }
+
+    m_worker->update_listeners(true);
+  }
+
+  m_listeners.swap(listeners);
+}
+
 void ListenerArray::set_default_options(pjs::Object *options) {
   m_default_options = options;
 }
@@ -482,7 +529,29 @@ namespace pjs {
 using namespace pipy;
 
 template<> void ClassDef<ListenerArray>::init() {
-  ctor();
+  ctor([](Context &ctx) -> Object* {
+    Array *listeners = nullptr;
+    if (!ctx.arguments(0, &listeners)) return nullptr;
+    auto la = ListenerArray::make();
+    if (listeners) {
+      try {
+        la->set_listeners(listeners);
+      } catch (std::runtime_error &err) {
+        ctx.error(err);
+      }
+    }
+    return la;
+  });
+
+  method("set", [](Context &ctx, Object *obj, Value &ret) {
+    Array *listeners = nullptr;
+    if (!ctx.arguments(0, &listeners)) return;
+    try {
+      obj->as<ListenerArray>()->set_listeners(listeners);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
 
   method("add", [](Context &ctx, Object *obj, Value &ret) {
     try {

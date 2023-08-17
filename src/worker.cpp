@@ -258,6 +258,11 @@ bool Worker::update_listeners(bool force) {
   for (const auto &i : m_listeners) {
     auto l = i.first;
     if (!l->is_open()) {
+#ifndef __linux__
+      if (l->options().transparent) {
+        Log::error("Trying to listen on %d in transparent mode, which is not supported on this platform", l->port());
+      }
+#endif
       new_open.insert(l);
       l->set_options(i.second.options);
       if (!l->pipeline_layout(i.second.pipeline_layout)) {

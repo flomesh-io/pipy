@@ -57,7 +57,6 @@ public:
     Protocol protocol = Protocol::TCP;
     size_t max_packet_size = 16 * 1024;
     int max_connections = -1;
-    bool reserved = false;
 
     Options() {}
     Options(pjs::Object *options);
@@ -88,12 +87,13 @@ public:
   auto ip() const -> const std::string& { return m_ip; }
   auto port() const -> int { return m_port; }
   bool is_open() const { return m_pipeline_layout; }
-  bool reserved() const { return m_options.reserved; }
+  bool reserved() const { return m_reserved; }
   auto pipeline_layout() const -> PipelineLayout* { return m_pipeline_layout; }
   bool pipeline_layout(PipelineLayout *layout);
   auto current_connections() const -> int { return m_inbounds.size(); }
   auto peak_connections() const -> int { return m_peak_connections; }
 
+  void set_reserved(bool b) { m_reserved = b; }
   void set_options(const Options &options);
   void for_each_inbound(const std::function<void(Inbound*)> &cb);
 
@@ -175,6 +175,7 @@ private:
   std::string m_ip;
   int m_port;
   int m_peak_connections = 0;
+  bool m_reserved = false;
   bool m_paused = false;
   asio::ip::address m_address;
   pjs::Ref<Acceptor> m_acceptor;
@@ -200,6 +201,7 @@ public:
   auto add_listener(pjs::Str *port, pjs::Object *options = nullptr) -> Listener*;
   auto remove_listener(int port, pjs::Object *options = nullptr) -> Listener*;
   auto remove_listener(pjs::Str *port, pjs::Object *options = nullptr) -> Listener*;
+  void set_listeners(pjs::Array *array);
   void set_default_options(pjs::Object *options);
   void apply(Worker *worker, PipelineLayout *layout);
 
