@@ -580,6 +580,7 @@ Worker::Admin::Handler::Handler(Admin *admin, Message *message, const std::funct
   admin->m_handlers.push(this);
   auto pl = admin->m_pipeline_layout.get();
   auto *p = Pipeline::make(pl, pl->new_context());
+  m_pipeline = p;
   p->chain(EventTarget::input());
   p->start();
   message->write(p->input());
@@ -595,6 +596,7 @@ void Worker::Admin::Handler::on_event(Event *evt) {
       m_respond(m);
     }
     m->release();
+    delete this;
   }
 }
 
