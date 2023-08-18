@@ -687,10 +687,13 @@ bool WorkerManager::stop(bool force) {
 }
 
 void WorkerManager::next_admin_request() {
-  if (auto r = m_admin_requests.head()) {
-    r->start();
-  } else {
-    check_reloading();
+  if (!m_current_admin_request) {
+    if (auto r = m_admin_requests.head()) {
+      m_current_admin_request = r;
+      r->start();
+    } else {
+      check_reloading();
+    }
   }
 }
 
@@ -748,6 +751,7 @@ void WorkerManager::AdminRequest::start() {
             }
           }
           m_respond(successful ? &response : nullptr);
+          m_manager->m_current_admin_request = nullptr;
           delete this;
         }
       }

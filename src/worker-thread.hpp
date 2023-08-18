@@ -156,6 +156,7 @@ private:
   bool m_querying_status = false;
   bool m_querying_stats = false;
   List<AdminRequest> m_admin_requests;
+  AdminRequest* m_current_admin_request = nullptr;
   std::function<void()> m_on_done;
 
   void check_reloading();
