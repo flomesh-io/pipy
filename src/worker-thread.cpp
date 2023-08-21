@@ -184,20 +184,24 @@ void WorkerThread::admin(pjs::Str *path, SharedData *request, const std::functio
   request->retain();
   m_net->post(
     [=]() {
-      Data buf;
-      request->to_data(buf);
-      auto head = http::RequestHead::make();
-      head->path = pjs::Str::make(name);
-      pjs::Ref<Message> req = Message::make(head, Data::make(std::move(buf)));
-      if (!Worker::current()->admin(
-        req.get(),
-        [=](Message *response) {
-          auto body = response->body();
-          auto data = body ? SharedData::make(*body) : SharedData::make(Data());
-          data->retain();
-          Net::main().post([=]() { respond(data); data->release(); });
+      if (auto worker = Worker::current()) {
+        Data buf;
+        request->to_data(buf);
+        auto head = http::RequestHead::make();
+        head->path = pjs::Str::make(name);
+        pjs::Ref<Message> req = Message::make(head, Data::make(std::move(buf)));
+        if (!worker->admin(
+          req.get(),
+          [=](Message *response) {
+            auto body = response->body();
+            auto data = body ? SharedData::make(*body) : SharedData::make(Data());
+            data->retain();
+            Net::main().post([=]() { respond(data); data->release(); });
+          }
+        )) {
+          Net::main().post([=]() { respond(nullptr); });
         }
-      )) {
+      } else {
         Net::main().post([=]() { respond(nullptr); });
       }
       request->release();
