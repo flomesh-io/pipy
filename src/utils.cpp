@@ -650,8 +650,9 @@ auto path_normalize(const std::string &path) -> std::string {
     while (j < path.length() && path[j] != '/') j++;
     if (j == 0) continue;
     if (path[i] == '.') {
-      if (j == 1) continue;
-      if (j == 2 && path[i+1] == '.') {
+      int l = j - i;
+      if (l == 1) continue;
+      if (l == 2 && path[i+1] == '.') {
         auto p = output.find_last_of('/');
         if (p == std::string::npos) output.clear();
         else output = output.substr(0, p);
