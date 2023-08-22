@@ -1846,8 +1846,10 @@ bool PostIncrement::eval(Context &ctx, Value &result) {
   if (result.is<Int>()) {
     Value v(result.as<Int>()->inc());
     return m_x->assign(ctx, v);
+  } else if (!result.is_number()) {
+    result.set(result.to_number());
   }
-  Value v(result.to_number() + 1);
+  Value v(result.n() + 1);
   return m_x->assign(ctx, v);
 }
 
@@ -1869,8 +1871,10 @@ bool PostDecrement::eval(Context &ctx, Value &result) {
   if (result.is<Int>()) {
     Value v(result.as<Int>()->dec());
     return m_x->assign(ctx, v);
+  } else if (!result.is_number()) {
+    result.set(result.to_number());
   }
-  Value v(result.to_number() - 1);
+  Value v(result.n() - 1);
   return m_x->assign(ctx, v);
 }
 
