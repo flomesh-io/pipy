@@ -28,7 +28,7 @@
 #include "filters/http.hpp"
 #include "filters/tls.hpp"
 #include "codebase.hpp"
-#include "tar.hpp"
+#include "fs.hpp"
 #include "compressor.hpp"
 #include "utils.hpp"
 
@@ -56,6 +56,27 @@ thread_local static const pjs::ConstStr s_unauthorized("Unauthorized");
 thread_local static const pjs::ConstStr s_read_error("Read Error");
 thread_local static const pjs::ConstStr s_write_error("Write Error");
 thread_local static const pjs::ConstStr s_gateway_timeout("Gateway Timeout");
+thread_local static const pjs::ConstStr s_accept_encoding("accept-encoding");
+thread_local static const pjs::ConstStr s_content_encoding("content-encoding");
+thread_local static const pjs::ConstStr s_content_type("content-type");
+thread_local static const pjs::ConstStr s_gzip("gzip");
+thread_local static const pjs::ConstStr s_br("br");
+
+static const std::map<std::string, std::string> s_content_types = {
+  { "html"  , "text/html" },
+  { "css"   , "text/css" },
+  { "xml"   , "text/xml" },
+  { "txt"   , "text/plain" },
+  { "gif"   , "image/gif" },
+  { "png"   , "image/png" },
+  { "jpg"   , "image/jpeg" },
+  { "svg"   , "image/svg+xml" },
+  { "woff"  , "font/woff" },
+  { "woff2" , "font/woff2" },
+  { "ico"   , "image/x-icon" },
+  { "js"    , "application/javascript" },
+  { "json"  , "application/json" },
+};
 
 bool RequestHead::is_final() const {
   pjs::Value v;
@@ -244,6 +265,185 @@ void Agent::Request::on_reply(Event *evt) {
 }
 
 //
+// Directory::Options
+//
+
+Directory::Options::Options(pjs::Object *options) {
+  Value(options, "fs")
+    .get(fs)
+    .check_nullable();
+  Value(options, "tarball")
+    .get(tarball)
+    .check_nullable();
+}
+
+//
+// Directory
+//
+
+thread_local Data::Producer Directory::s_dp("http::Directory");
+
+Directory::Directory(const std::string &path)
+  : Directory(path, Options()) {}
+
+Directory::Directory(const std::string &path, const Options &options) {
+  if (options.tarball) {
+    std::vector<uint8_t> data;
+    if (options.fs) {
+      fs::read_file(path, data);
+    } else if (auto codebase = Codebase::current()) {
+      if (auto sd = codebase->get(path)) {
+        Data buf;
+        sd->to_data(buf);
+        sd->release();
+        buf.to_bytes(data);
+      }
+    }
+    if (data.size() > 0) {
+      m_loader = new TarballLoader((const char *)&data[0], data.size());
+    }
+  } else if (options.fs) {
+    m_loader = new FileSystemLoader(path);
+  } else {
+    m_loader = new CodebaseLoader(path);
+  }
+}
+
+Directory::~Directory() {
+  delete m_loader;
+}
+
+auto Directory::serve(Message *request) -> Message* {
+  if (!m_loader) return nullptr;
+
+  auto head = pjs::coerce<RequestHead>(request->head());
+  auto path = head->path ? utils::path_normalize(head->path->str()) : std::string();
+  auto n = path.find('?');
+  if (n != std::string::npos) path = path.substr(0, n);
+
+  auto i = m_cache.find(path);
+  if (i == m_cache.end()) {
+    Data raw, gz, br;
+    if (!m_loader->load_file(path, raw)) return nullptr;
+    m_loader->load_file(path + ".gz", gz);
+    m_loader->load_file(path + ".br", br);
+
+    auto &f = m_cache[path];
+    f.raw = std::move(raw);
+    f.gz = std::move(gz);
+    f.br = std::move(br);
+
+    std::string ext;
+    auto p = path.find('.', path.rfind('/'));
+    if (p != std::string::npos) ext = path.substr(p+1);
+    for (auto &c : ext) c = std::tolower(c);
+    auto i = s_content_types.find(ext);
+    f.content_type = pjs::Str::make(
+      i == s_content_types.end() ? "application/octet-stream" : i->second
+    );
+
+    return get_encoded_response(f, head->headers);
+  }
+
+  return get_encoded_response(i->second, head->headers);
+}
+
+auto Directory::get_encoded_response(const File &file, pjs::Object *request_headers) -> Message* {
+  bool has_gz = false;
+  bool has_br = false;
+
+  pjs::Value accept_encoding;
+  request_headers->get(s_accept_encoding.get(), accept_encoding);
+  if (accept_encoding.is_string()) {
+    auto &s = accept_encoding.s()->str();
+    for (size_t i = 0; i < s.length(); i++) {
+      while (i < s.length() && std::isblank(s[i])) i++;
+      if (i < s.length()) {
+        auto n = 0; while (std::isalpha(s[i+n])) n++;
+        if (n == 4 && !strncasecmp(&s[i], "gzip", n)) has_gz = true;
+        else if (n == 2 && !strncasecmp(&s[i], "br", n)) has_br = true;
+        i += n;
+        while (i < s.length() && s[i] != ',') i++;
+      }
+    }
+  }
+
+  Message *response = nullptr;
+  auto head = ResponseHead::make();
+  auto headers = Object::make();
+  head->headers = headers;
+  headers->set(s_content_type.get(), file.content_type.get());
+
+  if (has_br && !file.br.empty()) {
+    headers->set(s_content_encoding.get(), s_br.get());
+    response = Message::make(headers, Data::make(file.br));
+  } else if (has_gz && !file.gz.empty()) {
+    headers->set(s_content_encoding.get(), s_br.get());
+    response = Message::make(headers, Data::make(file.br));
+  } else {
+    response = Message::make(Data::make(file.raw));
+  }
+
+  return response;
+}
+
+//
+// Directory::CodebaseLoader
+//
+
+Directory::CodebaseLoader::CodebaseLoader(const std::string &path)
+  : m_root_path(path)
+{
+}
+
+bool Directory::CodebaseLoader::load_file(const std::string &path, Data &data) {
+  if (auto codebase = Codebase::current()) {
+    if (auto sd = codebase->get(utils::path_join(m_root_path, path))) {
+      sd->to_data(data);
+      sd->release();
+      return true;
+    }
+  }
+  return false;
+}
+
+//
+// FileSystemLoader
+//
+
+Directory::FileSystemLoader::FileSystemLoader(const std::string &path)
+  : m_root_path(path)
+{
+}
+
+bool Directory::FileSystemLoader::load_file(const std::string &path, Data &data) {
+  std::vector<uint8_t> buf;
+  if (fs::read_file(utils::path_join(m_root_path, path), buf)) {
+    data.push(&buf[0], buf.size(), &s_dp);
+    return true;
+  }
+  return false;
+}
+
+//
+// TarballLoader
+//
+
+Directory::TarballLoader::TarballLoader(const char *data, size_t size)
+  : m_tarball(data, size)
+{
+}
+
+bool Directory::TarballLoader::load_file(const std::string &path, Data &data) {
+  size_t size;
+  if (auto ptr = m_tarball.get(path, size)) {
+    data.push(ptr, size, &s_dp);
+    return true;
+  }
+  return false;
+}
+
+//
 // File
 //
 
@@ -252,22 +452,6 @@ enum StringConstants {
   CONTENT_ENCODING,
   CONTENT_ENCODING_GZIP,
   CONTENT_ENCODING_BR,
-};
-
-static std::map<std::string, std::string> s_content_types = {
-  { "html"  , "text/html" },
-  { "css"   , "text/css" },
-  { "xml"   , "text/xml" },
-  { "txt"   , "text/plain" },
-  { "gif"   , "image/gif" },
-  { "png"   , "image/png" },
-  { "jpg"   , "image/jpeg" },
-  { "svg"   , "image/svg+xml" },
-  { "woff"  , "font/woff" },
-  { "woff2" , "font/woff2" },
-  { "ico"   , "image/x-icon" },
-  { "js"    , "application/javascript" },
-  { "json"  , "application/json" },
 };
 
 thread_local static Data::Producer s_dp_http_file("http.File");
@@ -514,6 +698,31 @@ template<> void ClassDef<Constructor<Agent>>::init() {
   ctor();
 }
 
+template<> void ClassDef<Directory>::init() {
+  ctor([](Context &ctx) -> Object* {
+    pjs::Str *path;
+    pjs::Object *options = nullptr;
+    if (!ctx.arguments(1, &path, &options)) return nullptr;
+    try {
+      return Directory::make(path->str(), options);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+      return nullptr;
+    }
+  });
+
+  method("serve", [](Context &ctx, Object *obj, Value &ret) {
+    Message *request;
+    if (!ctx.arguments(1, &request)) return;
+    ret.set(obj->as<Directory>()->serve(request));
+  });
+}
+
+template<> void ClassDef<Constructor<Directory>>::init() {
+  super<Function>();
+  ctor();
+}
+
 template<> void ClassDef<File>::init() {
   ctor([](Context &ctx) -> Object* {
     std::string path;
@@ -547,6 +756,7 @@ template<> void ClassDef<Constructor<File>>::init() {
 template<> void ClassDef<Http>::init() {
   ctor();
   variable("Agent", class_of<Constructor<Agent>>());
+  variable("Directory", class_of<Constructor<Directory>>());
   variable("File", class_of<Constructor<File>>());
 }
 

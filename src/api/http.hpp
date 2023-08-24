@@ -30,8 +30,11 @@
 #include "pipeline.hpp"
 #include "module.hpp"
 #include "message.hpp"
+#include "tar.hpp"
+#include "options.hpp"
 
 #include <string>
+#include <unordered_map>
 
 namespace pipy {
 
@@ -133,6 +136,66 @@ private:
   thread_local static Data::Producer s_dp;
 
   friend class pjs::ObjectTemplate<Agent>;
+};
+
+//
+// Directory
+//
+
+class Directory : public pjs::ObjectTemplate<Directory> {
+public:
+  struct Options : public pipy::Options {
+    bool fs = false;
+    bool tarball = false;
+    Options() {}
+    Options(pjs::Object *options);
+  };
+
+  Directory(const std::string &path);
+  Directory(const std::string &path, const Options &options);
+  ~Directory();
+
+  auto serve(Message *request) -> Message*;
+
+private:
+  struct File {
+    Data raw, gz, br;
+    pjs::Ref<pjs::Str> content_type;
+  };
+
+  class Loader {
+  public:
+    virtual ~Loader() {}
+    virtual bool load_file(const std::string &path, Data &data) = 0;
+  };
+
+  class CodebaseLoader : public Loader {
+  public:
+    CodebaseLoader(const std::string &path);
+    virtual bool load_file(const std::string &path, Data &data) override;
+    std::string m_root_path;
+  };
+
+  class FileSystemLoader : public Loader {
+  public:
+    FileSystemLoader(const std::string &path);
+    virtual bool load_file(const std::string &path, Data &data) override;
+    std::string m_root_path;
+  };
+
+  class TarballLoader : public Loader {
+  public:
+    TarballLoader(const char *data, size_t size);
+    virtual bool load_file(const std::string &path, Data &data) override;
+    Tarball m_tarball;
+  };
+
+  std::unordered_map<std::string, File> m_cache;
+  Loader* m_loader = nullptr;
+
+  auto get_encoded_response(const File &file, pjs::Object *request_headers) -> Message*;
+
+  thread_local static Data::Producer s_dp;
 };
 
 //
