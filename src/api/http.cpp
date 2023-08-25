@@ -641,6 +641,8 @@ template<> void ClassDef<MessageHead>::init() {
 
 template<> void ClassDef<MessageTail>::init() {
   field<pjs::Ref<pjs::Object>>("headers", [](MessageTail *obj) { return &obj->headers; });
+  field<int>("headSize", [](MessageTail *obj) { return &obj->headSize; });
+  field<int>("bodySize", [](MessageTail *obj) { return &obj->bodySize; });
 }
 
 template<> void ClassDef<RequestHead>::init() {

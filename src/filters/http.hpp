@@ -112,6 +112,8 @@ private:
   pjs::Ref<pjs::Str> m_header_connection;
   pjs::Ref<pjs::Str> m_header_upgrade;
   TunnelType m_responded_tunnel_type = TunnelType::NONE;
+  int m_current_size = 0;
+  int m_head_size = 0;
   int m_body_size = 0;
   bool m_is_response;
   bool m_is_tunnel = false;

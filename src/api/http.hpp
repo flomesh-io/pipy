@@ -58,6 +58,8 @@ public:
 class MessageTail : public pjs::ObjectTemplate<MessageTail> {
 public:
   pjs::Ref<pjs::Object> headers;
+  int headSize = 0;
+  int bodySize = 0;
 };
 
 class RequestHead : public pjs::ObjectTemplate<RequestHead, MessageHead> {

@@ -339,6 +339,8 @@ void Decoder::reset() {
   m_header_connection = nullptr;
   m_header_upgrade = nullptr;
   m_responded_tunnel_type = TunnelType::NONE;
+  m_current_size = 0;
+  m_head_size = 0;
   m_body_size = 0;
   m_is_tunnel = false;
   m_has_error = false;
@@ -365,9 +367,9 @@ void Decoder::on_event(Event *evt) {
 
     // fast scan over the body
     if (state == BODY || state == CHUNK_BODY) {
-      auto n = std::min(m_body_size, data->size());
+      auto n = std::min(m_current_size, data->size());
       data->shift(n, output);
-      if (0 == (m_body_size -= n)) state = (state == BODY ? HEAD : CHUNK_TAIL);
+      if (0 == (m_current_size -= n)) state = (state == BODY ? HEAD : CHUNK_TAIL);
 
     // byte scan the head
     } else {
@@ -389,8 +391,9 @@ void Decoder::on_event(Event *evt) {
             return false;
 
           case CHUNK_HEAD:
+            m_body_size++;
             if (c == '\n') {
-              if (m_body_size > 0) {
+              if (m_current_size > 0) {
                 state = CHUNK_BODY;
                 return true;
               } else {
@@ -398,19 +401,21 @@ void Decoder::on_event(Event *evt) {
                 return false;
               }
             }
-            else if ('0' <= c && c <= '9') m_body_size = (m_body_size << 4) + (c - '0');
-            else if ('a' <= c && c <= 'f') m_body_size = (m_body_size << 4) + (c - 'a') + 10;
-            else if ('A' <= c && c <= 'F') m_body_size = (m_body_size << 4) + (c - 'A') + 10;
+            else if ('0' <= c && c <= '9') m_current_size = (m_current_size << 4) + (c - '0');
+            else if ('a' <= c && c <= 'f') m_current_size = (m_current_size << 4) + (c - 'a') + 10;
+            else if ('A' <= c && c <= 'F') m_current_size = (m_current_size << 4) + (c - 'A') + 10;
             return false;
 
           case CHUNK_TAIL:
+            m_body_size++;
             if (c == '\n') {
               state = CHUNK_HEAD;
-              m_body_size = 0;
+              m_current_size = 0;
             }
             return false;
 
           case CHUNK_LAST:
+            m_body_size++;
             if (c == '\n') {
               state = HEAD;
               return true;
@@ -422,7 +427,7 @@ void Decoder::on_event(Event *evt) {
             return false;
 
           case HTTP2_PREFACE:
-            if (!--m_body_size) {
+            if (!--m_current_size) {
               state = HTTP2_PASS;
               return true;
             }
@@ -455,6 +460,7 @@ void Decoder::on_event(Event *evt) {
         break;
       case BODY:
       case CHUNK_BODY:
+        m_body_size += output.size();
         EventFunction::output(Data::make(std::move(output)));
         break;
       default: break;
@@ -466,7 +472,9 @@ void Decoder::on_event(Event *evt) {
     switch (state) {
       case HEAD_EOL: {
         Data::Reader dr(m_head_buffer);
-        char buf[m_head_buffer.size()];
+        auto len = m_head_buffer.size();
+        char buf[len];
+        m_head_size += len;
         if (m_is_response) {
           pjs::Ref<pjs::Str> protocol, status_text; int status;
           protocol = read_str(dr, ' ', s_strmap_protocols); if (!protocol) { error(); break; }
@@ -487,7 +495,7 @@ void Decoder::on_event(Event *evt) {
             (s_http2_preface_path == path) &&
             (s_http2_preface_protocol == protocol)
           ) {
-            m_body_size = 8;
+            m_current_size = 8;
             state = HTTP2_PREFACE;
             break;
           } else if (protocol != s_http_1_0 && protocol != s_http_1_1) {
@@ -512,9 +520,10 @@ void Decoder::on_event(Event *evt) {
       }
       case HEADER_EOL: {
         auto len = m_head_buffer.size();
+        char buf[len];
+        m_head_size += len;
         if (len > 2) {
           Data::Reader dr(m_head_buffer);
-          char buf[len];
           pjs::Ref<pjs::Str> key(read_str_lower(dr, ':', s_strmap_headers, buf));
           pjs::Ref<pjs::Str> val(read_str(dr, '\r', s_strmap_header_values, buf));
           if (!key || !val) { error(); break; }
@@ -544,7 +553,7 @@ void Decoder::on_event(Event *evt) {
           m_head_buffer.clear();
 
         } else {
-          m_body_size = 0;
+          m_current_size = 0;
           m_head_buffer.clear();
 
           static const std::string s_chunked("chunked");
@@ -564,14 +573,14 @@ void Decoder::on_event(Event *evt) {
           } else {
             message_start();
             if (m_header_content_length) {
-              m_body_size = std::atoi(m_header_content_length->c_str());
+              m_current_size = std::atoi(m_header_content_length->c_str());
             } else if (m_is_response && m_method != s_HEAD && m_method != s_CONNECT) {
               auto status = m_head->as<ResponseHead>()->status;
               if (status >= 200 && status != 204 && status != 304) {
-                m_body_size = std::numeric_limits<int>::max();
+                m_current_size = std::numeric_limits<int>::max();
               }
             }
-            if (m_body_size > 0) {
+            if (m_current_size > 0) {
               if (m_method == s_HEAD) {
                 message_end();
                 state = HEAD;
@@ -638,7 +647,12 @@ void Decoder::message_end() {
       m_is_tunnel = true;
     }
   }
-  output(MessageEnd::make());
+  auto tail = MessageTail::make();
+  tail->headSize = m_head_size;
+  tail->bodySize = m_body_size;
+  m_head_size = 0;
+  m_body_size = 0;
+  output(MessageEnd::make(tail));
 }
 
 void Decoder::stream_end(StreamEnd *eos) {
