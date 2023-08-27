@@ -316,7 +316,7 @@ Directory::~Directory() {
 auto Directory::serve(Message *request) -> Message* {
   if (!m_loader) return nullptr;
 
-  auto head = pjs::coerce<RequestHead>(request->head());
+  pjs::Ref<RequestHead> head = pjs::coerce<RequestHead>(request->head());
   auto path = head->path ? utils::path_normalize(head->path->str()) : std::string();
   auto n = path.find('?');
   if (n != std::string::npos) path = path.substr(0, n);
@@ -376,12 +376,12 @@ auto Directory::get_encoded_response(const File &file, pjs::Object *request_head
 
   if (has_br && !file.br.empty()) {
     headers->set(s_content_encoding.get(), s_br.get());
-    response = Message::make(headers, Data::make(file.br));
+    response = Message::make(head, Data::make(file.br));
   } else if (has_gz && !file.gz.empty()) {
-    headers->set(s_content_encoding.get(), s_br.get());
-    response = Message::make(headers, Data::make(file.br));
+    headers->set(s_content_encoding.get(), s_gzip.get());
+    response = Message::make(head, Data::make(file.gz));
   } else {
-    response = Message::make(Data::make(file.raw));
+    response = Message::make(head, Data::make(file.raw));
   }
 
   return response;
