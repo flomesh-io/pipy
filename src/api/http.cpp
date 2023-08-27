@@ -324,7 +324,13 @@ auto Directory::serve(Message *request) -> Message* {
   auto i = m_cache.find(path);
   if (i == m_cache.end()) {
     Data raw, gz, br;
-    if (!m_loader->load_file(path, raw)) return nullptr;
+    if (!m_loader->load_file(path, raw)) {
+      if (path.back() != '/') path += '/';
+      path += "index.html";
+      if (!m_loader->load_file(path, raw)) {
+        return nullptr;
+      }
+    }
     m_loader->load_file(path + ".gz", gz);
     m_loader->load_file(path + ".br", br);
 
