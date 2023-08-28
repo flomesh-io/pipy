@@ -71,10 +71,8 @@ pipy().listen(8080) // 返回与之前相同配置对象
 #### 多路复用和分路
 
 * [demux()](/reference/api/Configuration/demux)
-* [demuxQueue()](/reference/api/Configuration/demuxQueue)
 * [demuxHTTP()](/reference/api/Configuration/demuxHTTP)
 * [mux()](/reference/api/Configuration/mux)
-* [muxQueue()](/reference/api/Configuration/muxQueue)
 * [muxHTTP()](/reference/api/Configuration/muxHTTP)
 * [serveHTTP()](/reference/api/Configuration/serveHTTP)
 
@@ -85,16 +83,13 @@ pipy().listen(8080) // 返回与之前相同配置对象
 * [branch()](/reference/api/Configuration/branch)
 * [chain()](/reference/api/Configuration/chain)
 * [fork()](/reference/api/Configuration/fork)
-* [input()](/reference/api/Configuration/input)
 * [link()](/reference/api/Configuration/link)
-* [output()](/reference/api/Configuration/output)
 * [use()](/reference/api/Configuration/use)
 
 这些过滤器将流从一个管道传递到另一个管道。与*多路复用和分路*不同，它们只修改流传输的方向，而不修改流本身的内容。
 
 #### 缓冲
 
-* [depositMessage()](/reference/api/Configuration/depositMessage)
 * [throttleConcurrency()](/reference/api/Configuration/throttleConcurrency)
 * [throttleDataRate()](/reference/api/Configuration/throttleDataRate)
 * [throttleMessageRate()](/reference/api/Configuration/throttleMessageRate)
@@ -119,10 +114,10 @@ pipy().listen(8080) // 返回与之前相同配置对象
 
 #### 转换器
 
+* [compress()](/reference/api/Configuration/compress)
 * [compressHTTP()](/reference/api/Configuration/compressHTTP)
-* [compressMessage()](/reference/api/Configuration/compressMessage)
+* [decompress()](/reference/api/Configuration/decompress)
 * [decompressHTTP()](/reference/api/Configuration/decompressHTTP)
-* [decompressMessage()](/reference/api/Configuration/decompressMessage)
 * [exec()](/reference/api/Configuration/exec)
 * [pack()](/reference/api/Configuration/pack)
 * [read()](/reference/api/Configuration/read)

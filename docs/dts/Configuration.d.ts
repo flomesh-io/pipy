@@ -6,28 +6,33 @@
 
 interface ListenOptions {
   protocol?: 'tcp' | 'udp',
-  maxPacketSize?: number | string,
   maxConnections?: number,
   readTimeout?: number | string,
   writeTimeout?: number | string,
   idleTimeout?: number | string,
+  congestionLimit?: number | string,
+  bufferLimit?: number | string,
+  keepAlive?: boolean,
+  noDelay?: boolean,
   transparent?: boolean,
   masquerade?: boolean,
+  peerStats?: boolean,
 }
 
-interface MuxOptions {
+interface MuxSessionOptions {
   maxIdle?: number | string,
   maxQueue?: number,
   maxMessages?: number,
 }
 
-interface MuxQueueOptions extends MuxOptions {
-  isOneWay?: (msg: MessageStart) => boolean,
+interface MuxOptions extends MuxSessionOptions {
+  outputCount?: number | (() => number),
 }
 
 interface MuxHTTPOptions extends MuxOptions {
   bufferSize?: number | string,
-  version?: number | (() => number),
+  maxHeaderSize?: number | string,
+  version?: number | string | (() => number | string),
 }
 
 interface CertificateOptions {
@@ -113,6 +118,27 @@ interface Configuration {
    * @returns The same _Configuration_ object.
    */
   task(intervalOrSignal?: number | string): Configuration;
+
+  /**
+   * Creates a codebase file watcher.
+   *
+   * @returns The same _Configuration_ object.
+   */
+  watch(filename: string): Configuration;
+
+  /**
+   * Creates a process exit handler.
+   *
+   * @returns The same _Configuration_ object.
+   */
+  exit(): Configuration;
+
+  /**
+   * Creates a custom administration handler.
+   *
+   * @returns The same _Configuration_ object.
+   */
+  admin(path: string): Configuration;
 
   /**
    * Creates a _sub-pipeline layout_.
@@ -268,6 +294,28 @@ interface Configuration {
   ): Configuration;
 
   /**
+   * Appends a _branchMessageStart_ filter to the current pipeline layout.
+   *
+   * @returns The same _Configuration_ object.
+   */
+  branchMessageStart(
+    condition: (evt: MessageStart) => boolean,
+    pipelineLayout: string|((pipelineConfigurator: Configuration) => void),
+    ...restBranches: (((evt: MessageStart) => boolean)|string|((pipelineConfigurator: Configuration) => void))[]
+  ): Configuration;
+
+  /**
+   * Appends a _branchMessage_ filter to the current pipeline layout.
+   *
+   * @returns The same _Configuration_ object.
+   */
+  branchMessage(
+    condition: (msg: Message) => boolean,
+    pipelineLayout: string|((pipelineConfigurator: Configuration) => void),
+    ...restBranches: (((msg: Message) => boolean)|string|((pipelineConfigurator: Configuration) => void))[]
+  ): Configuration;
+
+  /**
    * Appends a _chain_ filter to the current pipeline layout.
    *
    * When given a list of module filenames,
@@ -285,6 +333,20 @@ interface Configuration {
    * @returns The same _Configuration_ object.
    */
   chain(modules?: string[]): Configuration;
+
+  /**
+   * Appends a _compress_ filter to the current pipeline layout.
+   *
+   * A _compress_ filter compresses messages.
+   *
+   * - **INPUT** - _Messages_ to compress.
+   * - **OUTPUT** - Compressed _Messages_.
+   *
+   * @param algorithm Compression algorithm or a function that returns the compression algorithm.
+   *       Available compression algorithms are `"deflate"`, `"gzip"`.
+   * @returns The same _Configuration_ object.
+   */
+  compress(algorithm: string | (() => string)): Configuration;
 
   /**
    * Appends a _compressHTTP_ filter to the current pipeline layout.
@@ -311,30 +373,6 @@ interface Configuration {
   ): Configuration;
 
   /**
-   * Appends a _compressMessage_ filter to the current pipeline layout.
-   *
-   * A _compressMessage_ filter compresses messages.
-   *
-   * - **INPUT** - _Messages_ to compress.
-   * - **OUTPUT** - Compressed _Messages_.
-   *
-   * @param options Options including:
-   *   - method - Compression method or a function that returns the compression method.
-   *       Available compression methods are `"deflate"`, `"gzip"` and  `""` for no compression.
-   *       Default is `""`.
-   *   - level - Compression level or a function that returns the compression level.
-   *       Available compression levels are `"default"`, `"speed"` and `"best"`.
-   *       Default is `"default"`.
-   * @returns The same _Configuration_ object.
-   */
-  compressMessage(
-    options?: {
-      method?: '' | 'deflate' | 'gzip' | (() => (''|'deflate'|'gzip')),
-      level?: 'default' | 'speed' | 'best' | (() => ('default'|'speed'|'best')),
-    }
-  ): Configuration;
-
-  /**
    * Appends a _connect_ filter to the current pipeline layout.
    *
    * A _connect_ filter establishes a TCP connection to a remote host.
@@ -345,7 +383,10 @@ interface Configuration {
    * @param target The target to connect to, in form of `"<host>:<port>"`, or a function that returns the target.
    * @param options Options including:
    *   - _protocol_ - Protocol to use. Can be `"TCP"` or `"UDP"`. Default is `"TCP"`.
-   *   - _bufferLimit_ - Maximum size of data allowed to stay in buffer due to slow outbound bandwidth.
+   *   - _bind_ - A string in form of `"<IP>:<port>"` providing the local IP and port to bind to or a function that returns that.
+   *   - _congestionLimit_ - Size threshold of data backlog in output buffer where congestion feedback starts.
+   *       Can be a number in bytes or a string with a unit suffix such as `'k'`, `'m'`, `'g'` and `'t'`.
+   *   - _bufferLimit_ - Maximum size of data allowed to stay in output buffer as a result of insufficient outbound bandwidth.
    *       Can be a number in bytes or a string with a unit suffix such as `'k'`, `'m'`, `'g'` and `'t'`.
    *   - _retryCount_ - How many times it should retry connection after a failure, or -1 for the infinite retries. Defaults to 0.
    *   - _retryDelay_ - Time duration to wait between connection retries. Defaults to 0.
@@ -361,11 +402,16 @@ interface Configuration {
    *   - _idleTimeout_ - Duration before connection is closed due to no active reading or writing.
    *       Can be a number in seconds or a string with one of the time unit suffixes such as `s`, `m` or `h`.
    *       Defaults to 1 minute.
+   *   - _keepAlive_ - Enable sending of keep-alive messages on TCP connections. Defaults to true.
+   *   - _noDelay_ - If set, disable the Nagle algorithm. Defaults to true.
    * @returns The same _Configuration_ object.
    */
   connect(
     target: string | (() => string),
     options?: {
+      protocol?: string,
+      bind?: string | (() => string),
+      congestionLimit?: number | string,
       bufferLimit?: number | string,
       retryCount?: number,
       retryDelay?: number | string,
@@ -373,6 +419,8 @@ interface Configuration {
       readTimeout?: number | string,
       writeTimeout?: number | string,
       idleTimeout?: number | string,
+      keepAlive?: boolean,
+      noDelay?: boolean,
     }
   ): Configuration;
 
@@ -386,10 +434,10 @@ interface Configuration {
    * - **SUB-INPUT** - _Data_ stream to send to the server with a leading HTTP CONNECT request _Message_.
    * - **SUB-OUTPUT** - _Data_ stream received from the server with a leading HTTP CONNECT response _Message_.
    *
-   * @param target The target to connect to, or a function that returns the target.
+   * @param handshake The starting CONNECT request, or a function that returns the target.
    * @returns The same _Configuration_ object.
    */
-  connectHTTPTunnel(target: string | (() => string)): Configuration;
+  connectHTTPTunnel(handshake: Message | (() => Message)): Configuration;
 
   /**
    * Appends a _connectProxyProtocol_ filter to the current pipeline layout.
@@ -423,10 +471,10 @@ interface Configuration {
    * - **SUB-INPUT** - _Data_ stream to send to the server with a leading SOCKS connection request.
    * - **SUB-OUTPUT** - _Data_ stream received from the server with a leading SOCKS connection response.
    *
-   * @param target The destination to connect to, in form of `"<host>:<port>"`, or a function that returns the destination.
+   * @param address The destination address to connect to, in form of `"<host>:<port>"`, or a function that returns the destination.
    * @returns The same _Configuration_ object.
    */
-  connectSOCKS(target: string | (() => string)): Configuration;
+  connectSOCKS(address: string | (() => string)): Configuration;
 
   /**
    * Appends a connectTLS filter to the current pipeline layout.
@@ -464,6 +512,17 @@ interface Configuration {
   ): Configuration;
 
   /**
+   * Appends a _decodeBGP_ filter to the current pipeline layout.
+   *
+   * @returns The same _Configuration_ object.
+   */
+  decodeBGP(
+    options?: {
+      enableAS4?: boolean | (() => boolean),
+    }
+  ): Configuration;
+
+  /**
    * Appends a _decodeDubbo_ filter to the current pipeline layout.
    *
    * A _decodeDubbo_ filter decodes [Dubbo](https://dubbo.apache.org/) messages from a raw byte stream.
@@ -485,7 +544,7 @@ interface Configuration {
    *
    * @returns The same _Configuration_ object.
    */
-  decodeHTTPRequest(): Configuration;
+  decodeHTTPRequest(handler?: (evt: MessageStart) => void): Configuration;
 
   /**
    * Appends a _decodeHTTPResponse_ filter to the current pipeline layout.
@@ -495,15 +554,9 @@ interface Configuration {
    * - **INPUT** - _Data_ stream to decode HTTP/1 response messages from.
    * - **OUTPUT** - HTTP/1 response _Messages_ decoded from the input _Data_ stream.
    *
-   * @param options Options including:
-   *   - _bodiless_ - (optional) A boolean or a function that returns a boolean
-   *       indicating whether the message is a response to a HEAD request.
-   *       Default is `false`.
    * @returns The same _Configuration_ object.
    */
-  decodeHTTPResponse(
-    options?: { bodiless?: boolean | (() => boolean) }
-  ): Configuration;
+  decodeHTTPResponse(handler?: (evt: MessageStart) => MessageStart): Configuration;
 
   /**
    * Appends a _decodeMQTT_ filter to the current pipeline layout.
@@ -513,31 +566,9 @@ interface Configuration {
    * - **INPUT** - _Data_ stream to decode MQTT packets from.
    * - **OUTPUT** - MQTT packets _(Messages)_ decoded from the input _Data_ stream.
    *
-   * @param options Options including:
-   *   - _protocolLevel_ - Version of MQTT protocol.
-   *     Can be 4 for MQTT v3.1.1, or 5 for MQTT v5.0, or a function that returns 4 or 5.
    * @returns The same _Configuration_ object.
    */
-  decodeMQTT(
-    options?: { protocolLevel?: number | (() => number) }
-  ): Configuration;
-
-  /**
-   * Appends a _decodeThrift_ filter to the current pipeline layout.
-   *
-   * A _decodeThrift_ filter decodes [Thrift](https://thrift.apache.org/) messages from a raw byte stream.
-   *
-   * - **INPUT** - _Data_ stream to decode Thrift messages from.
-   * - **OUTPUT** - Thrift _Messages_ decoded from the input _Data_ stream.
-   *
-   * @param options Options including:
-   *   - _payload_ - A boolean indicating if the message payload struct should be decoded into an object.
-   *       After decoding, the object can be found as the _payload_ property of a _MessageEnd_ event.
-   * @returns The same _Configuration_ object.
-   */
-  decodeThrift(
-    options?: { payload?: boolean }
-  ): Configuration;
+  decodeMQTT(): Configuration;
 
   /**
    * Appends a _decodeMultipart_ filter to the current pipeline layout.
@@ -552,6 +583,26 @@ interface Configuration {
   decodeMultipart(): Configuration;
 
   /**
+   * Appends a _decodeRESP_ filter to the current pipeline layout.
+   *
+   * @returns The same _Configuration_ object.
+   */
+  decodeRESP(): Configuration;
+
+  /**
+   * Appends a _decodeThrift_ filter to the current pipeline layout.
+   *
+   * A _decodeThrift_ filter decodes [Thrift](https://thrift.apache.org/) messages from a raw byte stream.
+   *
+   * - **INPUT** - _Data_ stream to decode Thrift messages from.
+   * - **OUTPUT** - Thrift _Messages_ decoded from the input _Data_ stream.
+   *
+   * @returns The same _Configuration_ object.
+   */
+  decodeThrift(): Configuration;
+
+
+  /**
    * Appends a _decodeWebSocket_ filter to the current pipeline layout.
    *
    * A _decodeWebSocket_ filter decodes [WebSocket](https://en.wikipedia.org/wiki/WebSocket) messages from a raw byte stream.
@@ -564,6 +615,21 @@ interface Configuration {
   decodeWebSocket(): Configuration;
 
   /**
+   * Appends a _decompress_ filter to the current pipeline layout.
+   *
+   * A _decompress_ filter decompresses input Data stream.
+   *
+   * - **INPUT** - _Data_ to decompress.
+   * - **OUTPUT** - Decompressed _Data_.
+   *
+   * @param algorithm Algorithm used in decompression.
+   *   Available algorithms include `"inflate"`, `"brotli"`.
+   *   Can be one of these strings or a function that returns one of them.
+   * @returns The same _Configuration_ object.
+   */
+  decompress(algorithm: string | (() => 'inflate' | 'brotli')): Configuration;
+
+  /**
    * Appends a _decompressHTTP_ filter to the current pipeline layout.
    *
    * A _decompressHTTP_ filter decompresses HTTP messages.
@@ -571,25 +637,9 @@ interface Configuration {
    * - **INPUT** - HTTP _Messages_ to decompress.
    * - **OUTPUT** - Decompressed HTTP _Messages_.
    *
-   * @param enable A function that returns _true_ to enable HTTP message decompression.
    * @returns The same _Configuration_ object.
    */
-  decompressHTTP(enable?: () => boolean): Configuration;
-
-  /**
-   * Appends a _decompressMessage_ filter to the current pipeline layout.
-   *
-   * A _decompressMessage_ filter decompresses messages.
-   *
-   * - **INPUT** - _Messages_ to decompress.
-   * - **OUTPUT** - Decompressed _Messages_.
-   *
-   * @param algorithm Algorithm used in decompression.
-   *   Available algorithms include `"inflate"`, `"brotli"`, and `""` for no decompression.
-   *   Can be one of these strings or a function that returns one of them.
-   * @returns The same _Configuration_ object.
-   */
-  decompressMessage(algorithm: string | (() => '' | 'inflate' | 'brotli')): Configuration;
+  decompressHTTP(): Configuration;
 
   /**
    * Appends a _deframe_ filter to the current pipeline layout.
@@ -615,7 +665,11 @@ interface Configuration {
    *
    * @returns The same _Configuration_ object.
    */
-  demux(): Configuration;
+  demux(
+    options?: {
+      outputCount: number | (() => number),
+    }
+  ): Configuration;
 
   /**
    * Appends a _demuxHTTP_ filter to the current pipeline layout.
@@ -634,51 +688,9 @@ interface Configuration {
    * @returns The same _Configuration_ object.
    */
   demuxHTTP(options? : {
-    bufferSize: number | string
+    bufferSize: number | string,
+    maxHeaderSize: number | string,
   }): Configuration;
-
-  /**
-   * Appends a _demuxQueue_ filter to the current pipeline layout.
-   *
-   * A _demuxQueue_ filter distributes each input _Message_ to a separate sub-pipeline
-   * and outputs _Messages_ streaming out from those sub-pipelines in the same order as they are in the input.
-   *
-   * - **INPUT** - _Messages_ to distribute to different sub-pipelines.
-   * - **OUTPUT** - _Messages_ streaming out from the sub-pipelines.
-   * - **SUB-INPUT** - A _Message_ streaming into the _demuxQueue_ filter.
-   * - **SUB-OUTPUT** - A _Message_ to stream out the _demuxQueue_ filter.
-   *
-   * @param options Options including:
-   *   - _isOneWay_ - A function that receives a _MessageStart_ object and returns a boolean indicating if the message is one-way.
-   * @returns The same _Configuration_ object.
-   */
-  demuxQueue(options? : {
-    isOneWay: (evt: MessageStart) => boolean,
-  }): Configuration;
-
-  /**
-   * Appends a _depositMessage_ filter to the current pipeline layout.
-   *
-   * A _depositMessage_ filter buffers a whole message body in a temporary file.
-   *
-   * - **INPUT** - _Message_ to store in a file.
-   * - **OUTPUT** - The same _Message_ as input.
-   *
-   * @param filename Filename of a temporary file to write to, or a function that returns it.
-   * @param options Options including:
-   *   - _threshold_ - Minimum message body size for the file writing to start.
-   *     Can be a number in bytes or a string with one of the size unit suffixes such as `'k'`, `'m'`, `'g'` and `'t'`.
-   *     Default is zero.
-   *   - _keep_ - Whether the temporary file should be kept after the message has fully passed.
-   * @returns The same _Configuration_ object.
-   */
-  depositMessage(
-    filename: string | (() => string),
-    options? : {
-      threshold?: number | string,
-      keep?: boolean,
-    }
-  ): Configuration;
 
   /**
    * Appends a _detectProtocol_ filter to the current pipeline layout.
@@ -719,6 +731,17 @@ interface Configuration {
    * @returns The same _Configuration_ object.
    */
   dump(tag?: string | (() => any)): Configuration;
+
+  /**
+   * Appends a _encodeBGP_ filter to the current pipeline layout.
+   *
+   * @returns The same _Configuration_ object.
+   */
+  encodeBGP(
+    options?: {
+      enableAS4?: boolean | (() => boolean),
+    }
+  ): Configuration;
 
   /**
    * Appends an _encodeDubbo_ filter to the current pipeline layout.
@@ -781,6 +804,13 @@ interface Configuration {
    * @returns The same _Configuration_ object.
    */
   encodeMQTT(): Configuration;
+
+  /**
+   * Appends an _encodeRESP_ filter to the current pipeline layout.
+   *
+   * @returns The same _Configuration_ object.
+   */
+  encodeRESP(): Configuration;
 
   /**
    * Appends an _encodeThrift_ filter to the current pipeline layout.
@@ -944,17 +974,11 @@ interface Configuration {
   handleTLSClientHello(handler: (msg: { serverNames: string[], protocolNames: string[] }) => void): Configuration;
 
   /**
-   * Appends an _input_ filter to the current pipeline layout.
+   * Appends an _insert_ filter to the current pipeline layout.
    *
-   * An _input_ filter starts a sub-pipeline where _Events_ are outputted via _output_ filters.
-   *
-   * - **INPUT** - Any types of _Events_.
-   * - **OUTPUT** - _Events_ outputted from _output_ filters in the sub-pipeline.
-   *
-   * @param callback A function to receive an _Output_ object representing the _input_ filter's output.
    * @returns The same _Configuration_ object.
    */
-  input(callback?: (out: Output) => void): Configuration;
+  insert(handler?: () => Event | Message | (Event|Message)[] | void): Configuration;
 
   /**
    * Appends a _link_ filter to the current pipeline layout.
@@ -966,10 +990,17 @@ interface Configuration {
    * - **SUB-INPUT** - _Events_ streaming into the _link_ filter.
    * - **SUB-OUTPUT** - Any types of _Events_.
    *
-   * @param pipelineLayoutName The name of the sub-pipeline layout to link to.
+   * @param pipelineLayoutName The name of the sub-pipeline layout to link to, or a function that returns that.
    * @returns The same _Configuration_ object.
    */
-  link(pipelineLayoutName: string): Configuration;
+  link(pipelineLayoutName: string | (() => string)): Configuration;
+
+  /**
+   * Appends a _loop_ filter to the current pipeline layout.
+   *
+   * @returns The same _Configuration_ object.
+   */
+  loop(pipelineLayout: (config: Configuration) => void): Configuration;
 
   /**
    * Appends a _mux_ filter to the current pipeline layout.
@@ -1009,49 +1040,6 @@ interface Configuration {
    */
   mux(
     options?: MuxOptions | (() => MuxOptions),
-  ): Configuration;
-
-  /**
-   * Appends a _muxQueue_ filter to the current pipeline layout.
-   *
-   * Multiple _muxQueue_ filters queue input _Messages_ into a shared sub-pipeline
-   * as well as dequeue output _Messages_ from the sub-pipeline.
-   *
-   * - **INPUT** - A _Message_ to queue into the shared sub-pipeline.
-   * - **OUTPUT** - A _Message_ dequeued from the shared sub-pipeline.
-   * - **SUB-INPUT** - _Messages_ from multiple _muxQueue_ filters.
-   * - **SUB-OUTPUT** - _Messages_ to be dequeued by multiple _muxQueue_ filters.
-   *
-   * @param sessionSelector A function that returns a key identifiying the shared sub-pipeline to merge messages to.
-   * @param options Options or a function that returns the options including:
-   *   - _maxIdle_ - Maximum time an idle sub-pipeline should stay around.
-   *       Can be a number in seconds or a string with one of the time unit suffixes such as `s`, `m` or `h`.
-   *       Defaults is _60 seconds_.
-   *   - _maxQueue_ - Maximum number of messages allowed to run concurrently in one sub-pipeline.
-   *   - _maxMessages_ - Maximum number of messages allowed to run accumulatively in one sub-pipeline.
-   *   - _isOneWay_ - A function that receives a _MessageStart_ object and returns a boolean indicating if the message is one-way.
-   * @returns The same _Configuration_ object.
-   */
-  muxQueue(
-    sessionSelector: () => any,
-    options?: MuxQueueOptions | (() => MuxQueueOptions),
-  ): Configuration;
-
-  /**
-   * Appends a _muxQueue_ filter that merges to the same sub-pipline
-   * as other _muxQueue_ filters coming from the same inbound connection.
-   *
-   * @param options Options or a function that returns the options including:
-   *   - _maxIdle_ - Maximum time an idle sub-pipeline should stay around.
-   *       Can be a number in seconds or a string with one of the time unit suffixes such as `s`, `m` or `h`.
-   *       Defaults is _60 seconds_.
-   *   - _maxQueue_ - Maximum number of messages allowed to run concurrently in one sub-pipeline.
-   *   - _maxMessages_ - Maximum number of messages allowed to run accumulatively in one sub-pipeline.
-   *   - _isOneWay_ - A function that receives a _MessageStart_ object and returns a boolean indicating if the message is one-way.
-   * @returns The same _Configuration_ object.
-   */
-  muxQueue(
-    options?: MuxQueueOptions | (() => MuxQueueOptions),
   ): Configuration;
 
   /**
@@ -1103,19 +1091,6 @@ interface Configuration {
   ): Configuration;
 
   /**
-   * Appends an _output_ filter to the current pipeline layout.
-   *
-   * An _output_ filter forwards its input _Events_ to the output of an _input_ filter.
-   *
-   * - **INPUT** - Any types of _Events_.
-   * - **OUTPUT** - Nothing.
-   *
-   * @param out A function that returns an _Output_ object representing an _input_ filter's output.
-   * @returns The same _Configuration_ object.
-   */
-  output(out?: () => Output): Configuration;
-
-  /**
    * Appends a _pack_ filter to the current pipeline layout.
    *
    * A _pack_ filter combines multiple input messages into one.
@@ -1164,6 +1139,13 @@ interface Configuration {
    * @returns The same _Configuration_ object.
    */
   read(filename: string | (() => string)): Configuration;
+
+  /**
+   * Performs batch configuration.
+   *
+   * @returns The same _Configuration_ object.
+   */
+  repeat(count: number | any[], cb: (config: Configuration, value: any, i?: number) => void): Configuration;
 
   /**
    * Appends a _replaceData_ filter to the current pipeline layout.
@@ -1293,7 +1275,7 @@ interface Configuration {
    * @param handler A callback function that receives a request _Message_ and returns the corresponding response _Message_.
    * @returns The same _Configuration_ object.
    */
-  serveHTTP(handler: (request: Message) => Message): Configuration;
+  serveHTTP(handler: (request: Message) => Message | Promise<Message>): Configuration;
 
   /**
    * Appends a _split_ filter to the current pipeline layout.
@@ -1389,5 +1371,5 @@ interface Configuration {
    * @param condition A callback function that returns `true` to let through input events.
    * @returns The same _Configuration_ object.
    */
-  wait(condition: () => boolean): Configuration;
+  wait(condition: () => boolean | Promise<any>): Configuration;
 }

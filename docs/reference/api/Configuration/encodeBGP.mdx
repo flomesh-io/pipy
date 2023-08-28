@@ -1,0 +1,75 @@
+---
+title: Configuration.encodeBGP()
+api: Configuration.encodeBGP
+---
+
+## Description
+
+<Summary/>
+
+<FilterDiagram
+  name="encodeBGP"
+  input="Message"
+  output="Data"
+/>
+
+The encoder expects an input [Message](/reference/api/Message) to have:
+
+* _head_
+  - _id_ - Request ID as a string
+  - _status_ - Status code
+  - _isRequest_ - Is it a request?
+  - _isTwoWay_ - Is it 2-way?
+  - _isEvent_ - Is it an event?
+* _body_ - Binary data in the body
+
+The body data is a [Data](/reference/api/Data) object and will be left unchanged after encoding. To produce data in [Hessian](https://en.wikipedia.org/wiki/Hessian_(Web_service_protocol)) format, use [Hessian.encode()](/reference/api/Hessian/encode).
+
+## Syntax
+
+``` js
+pipy()
+  .pipeline()
+  .encodeDubbo()
+```
+
+## Parameters
+
+<Parameters/>
+
+## Example
+
+``` js
+pipy()
+
+.listen(20880)
+  .decodeDubbo()
+  .demux().to(
+    $=>$
+    .replaceMessageBody(
+      data => (
+        JSON.encode(
+          Hessian.decode(data)
+        )
+      )
+    )
+    .muxHTTP().to(
+      $=>$.connect('localhost:8080')
+    )
+    .replaceMessageBody(
+      data => (
+        Hessian.encode(
+          JSON.decode(data)
+        )
+      )
+    )
+  )
+  .encodeDubbo({
+    isRequest: false,
+  })
+```
+
+## See Also
+
+* [Configuration](/reference/api/Configuration)
+* [decodeBGP()](/reference/api/Configuration/decodeBGP)
