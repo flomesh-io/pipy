@@ -424,9 +424,12 @@ Directory::FileSystemLoader::FileSystemLoader(const std::string &path)
 
 bool Directory::FileSystemLoader::load_file(const std::string &path, Data &data) {
   std::vector<uint8_t> buf;
-  if (fs::read_file(utils::path_join(m_root_path, path), buf)) {
-    data.push(&buf[0], buf.size(), &s_dp);
-    return true;
+  auto full_path = utils::path_join(m_root_path, path);
+  if (fs::is_file(full_path)) {
+    if (fs::read_file(full_path, buf)) {
+      data.push(&buf[0], buf.size(), &s_dp);
+      return true;
+    }
   }
   return false;
 }
