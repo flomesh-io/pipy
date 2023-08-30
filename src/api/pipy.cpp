@@ -29,6 +29,7 @@
 #include "context.hpp"
 #include "worker.hpp"
 #include "worker-thread.hpp"
+#include "status.hpp"
 #include "net.hpp"
 #include "outbound.hpp"
 #include "utils.hpp"
@@ -146,6 +147,32 @@ template<> void ClassDef<Pipy>::init() {
   ctor();
 
   variable("outbound", class_of<Pipy::Outbound>());
+
+  accessor("pid", [](Object *, Value &ret) {
+    ret.set((int)getpid());
+  });
+
+  accessor("since", [](Object *, Value &ret) {
+    ret.set(Status::LocalInstance::since);
+  });
+
+  accessor("source", [](Object *, Value &ret) {
+    thread_local static pjs::Ref<pjs::Str> str;
+    if (!str) str = pjs::Str::make(Status::LocalInstance::source);
+    ret.set(str);
+  });
+
+  accessor("name", [](Object *, Value &ret) {
+    thread_local static pjs::Ref<pjs::Str> str;
+    if (!str) str = pjs::Str::make(Status::LocalInstance::name);
+    ret.set(str);
+  });
+
+  accessor("uuid", [](Object *, Value &ret) {
+    thread_local static pjs::Ref<pjs::Str> str;
+    if (!str) str = pjs::Str::make(Status::LocalInstance::uuid);
+    ret.set(str);
+  });
 
   method("load", [](Context &ctx, Object*, Value &ret) {
     std::string filename;

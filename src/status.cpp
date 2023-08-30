@@ -48,6 +48,7 @@
 namespace pipy {
 
 double Status::LocalInstance::since;
+std::string Status::LocalInstance::source;
 std::string Status::LocalInstance::uuid;
 std::string Status::LocalInstance::name;
 

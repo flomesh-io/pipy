@@ -384,6 +384,7 @@ int main(int argc, char *argv[]) {
     }
 
     Status::LocalInstance::since = utils::now();
+    Status::LocalInstance::source = opts.filename;
     Status::LocalInstance::name = opts.instance_name;
 
     if (opts.instance_uuid.empty()) {
