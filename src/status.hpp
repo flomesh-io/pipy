@@ -46,6 +46,7 @@ public:
 
   struct LocalInstance {
     static double since;
+    static std::string source;
     static std::string uuid;
     static std::string name;
   };

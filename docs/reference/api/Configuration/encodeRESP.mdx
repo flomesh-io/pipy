@@ -1,0 +1,62 @@
+---
+title: Configuration.encodeRESP()
+api: Configuration.encodeRESP
+---
+
+## Description
+
+<Summary/>
+
+<FilterDiagram
+  name="encodeRESP"
+  input="Message"
+  output="Data"
+/>
+
+The encoder expects an input [Message](/reference/api/Message) to have:
+
+* _head_
+  - _seqID_ - Sequence ID as a number
+  - _type_ - Type of the message: `"call"`, `"reply"`, `"exception"` or `"oneway"`
+  - _name_ - Name of the message
+  - _protocol_ - Encoding protocol: `"binary"` or `"compact"`
+* _body_ - Payload of the message in raw binary
+
+## Syntax
+
+``` js
+pipy()
+  .pipeline()
+  .encodeThrift()
+```
+
+## Parameters
+
+<Parameters/>
+
+## Example
+
+``` js
+pipy()
+
+  .listen(9000)
+  .decodeThrift()
+  .demuxQueue({
+    isOneWay: msg => msg.head.type === 'oneway',
+  }).to(
+    $=>$.muxQueue({
+      isOneWay: msg => msg.head.type === 'oneway',
+    }).to(
+      $=>$
+      .encodeThrift()
+      .connect('localhost:9090')
+      .decodeThrift()
+    )
+  )
+  .encodeThrift()
+```
+
+## See Also
+
+* [Configuration](/reference/api/Configuration)
+* [decodeRESP()](/reference/api/Configuration/decodeRESP)
