@@ -239,14 +239,12 @@ class Prometheus {
 public:
   Prometheus(
     const std::string &name,
-    const std::string &type,
     const std::string &extra_labels,
     const std::vector<std::string> &label_names,
     pjs::Str::CharData *label_values[],
     const char *le_str,
     const std::function<void(const void *, size_t)> &out
   ) : m_name(name)
-    , m_type(type)
     , m_extra_labels(extra_labels)
     , m_label_names(label_names)
     , m_label_values(label_values)
@@ -262,13 +260,6 @@ public:
 
     if (level > 0) {
       m_label_values[level-1] = node->get_key();
-    }
-
-    if(!m_annotated) {
-      std::ostringstream oss;
-      oss << "# TYPE " << m_name << " " << m_type << "\n";
-      output(oss.str());
-      m_annotated = true;
     }
 
     if (m_le_str) {
@@ -306,13 +297,12 @@ public:
 
 private:
   const std::string &m_name;
-  const std::string &m_type;
   const std::string &m_extra_labels;
   const std::vector<std::string> &m_label_names;
   pjs::Str::CharData **m_label_values;
   const char *m_le_str;
   const std::function<void(const void *, size_t)> &m_out;
-  bool m_annotated = false;
+
   void output(char c) { m_out(&c, 1); }
   void output(const std::string &s) { m_out(s.c_str(), s.length()); }
   void output(const void *data, size_t size) { m_out(data, size); }
@@ -449,7 +439,7 @@ void MetricData::to_prometheus(const std::string &extra_labels, const std::funct
         for (auto &s : labels) { ent->labels[i++] = std::move(s); }
       }
       pjs::Str::CharData *label_values[ent->labels.size()];
-      Prometheus<Node> prom(name->str(), type->str(), extra_labels, ent->labels, label_values, le_str, out);
+      Prometheus<Node> prom(name->str(), extra_labels, ent->labels, label_values, le_str, out);
       prom.output(root, 0);
     }
   }
@@ -872,12 +862,24 @@ void MetricDataSum::serialize(Data::Builder &db, bool initial) {
 }
 
 void MetricDataSum::to_prometheus(const std::function<void(const void *, size_t)> &out) const {
+  static const std::string s_prefix_TYPE("# TYPE ");
+  static const std::string s_type_counter(" counter\n");
+  static const std::string s_type_gauge(" gauge\n");
+  static const std::string s_type_histogram(" histogram\n");
+  auto print = [&](const std::string &str) { out(str.c_str(), str.length()); };
   for (const auto &p : m_entry_map) {
     auto ent = p.second;
     if (auto root = ent->root.get()) {
+      print(s_prefix_TYPE);
+      print(ent->name->str());
       const char *le_str = nullptr;
       if (utils::starts_with(ent->type->str(), s_prefix_histogram)) {
         le_str = ent->type->c_str() + s_prefix_histogram.length();
+        print(s_type_histogram);
+      } else if (ent->type->str() == "Gauge") {
+        print(s_type_gauge);
+      } else {
+        print(s_type_counter);
       }
       if (ent->shape->size() > 0 && ent->labels.empty()) {
         auto labels = utils::split(ent->shape->str(), '/');
@@ -887,7 +889,7 @@ void MetricDataSum::to_prometheus(const std::function<void(const void *, size_t)
       }
       pjs::Str::CharData *label_values[ent->labels.size()];
       std::string empty;
-      Prometheus<Node> prom(ent->name->str(), ent->type->str(), empty, ent->labels, label_values, le_str, out);
+      Prometheus<Node> prom(ent->name->str(), empty, ent->labels, label_values, le_str, out);
       prom.output(root, 0);
     }
   }
