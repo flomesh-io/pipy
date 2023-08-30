@@ -862,12 +862,24 @@ void MetricDataSum::serialize(Data::Builder &db, bool initial) {
 }
 
 void MetricDataSum::to_prometheus(const std::function<void(const void *, size_t)> &out) const {
+  static const std::string s_prefix_TYPE("# TYPE ");
+  static const std::string s_type_counter(" counter\n");
+  static const std::string s_type_gauge(" gauge\n");
+  static const std::string s_type_histogram(" histogram\n");
+  auto print = [&](const std::string &str) { out(str.c_str(), str.length()); };
   for (const auto &p : m_entry_map) {
     auto ent = p.second;
     if (auto root = ent->root.get()) {
+      print(s_prefix_TYPE);
+      print(ent->name->str());
       const char *le_str = nullptr;
       if (utils::starts_with(ent->type->str(), s_prefix_histogram)) {
         le_str = ent->type->c_str() + s_prefix_histogram.length();
+        print(s_type_histogram);
+      } else if (ent->type->str() == "Gauge") {
+        print(s_type_gauge);
+      } else {
+        print(s_type_counter);
       }
       if (ent->shape->size() > 0 && ent->labels.empty()) {
         auto labels = utils::split(ent->shape->str(), '/');
