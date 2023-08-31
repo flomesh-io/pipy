@@ -49,9 +49,13 @@ FileStream::FileStream(bool read, FILE *f, Data::Producer *dp)
   if (read) this->read();
 }
 
-void FileStream::close() {
+void FileStream::close(bool close_fd) {
   std::error_code ec;
-  m_stream.close(ec);
+  if (close_fd) {
+    m_stream.close(ec);
+  } else {
+    m_stream.release();
+  }
 
   if (m_receiving_state == PAUSED) {
     m_receiving_state = RECEIVING;
@@ -65,7 +69,7 @@ void FileStream::close() {
   }
 
   if (m_f) {
-    fclose(m_f);
+    if (close_fd) fclose(m_f);
     m_f = nullptr;
   }
 }

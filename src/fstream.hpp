@@ -58,7 +58,7 @@ public:
 
   auto fd() const -> int { return m_fd; }
   void set_buffer_limit(size_t size) { m_buffer_limit = size; }
-  void close();
+  void close(bool close_fd = true);
 
 private:
   FileStream(bool read, int fd, Data::Producer *dp);

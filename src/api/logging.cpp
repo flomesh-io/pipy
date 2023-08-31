@@ -236,6 +236,12 @@ void Logger::History::dump_messages(Data &buffer) {
 // Logger::StdoutTarget
 //
 
+Logger::StdoutTarget::~StdoutTarget() {
+  if (m_file_stream) {
+    m_file_stream->close(false);
+  }
+}
+
 void Logger::StdoutTarget::write(const Data &msg) {
   if (Net::current().is_running()) {
     if (!m_file_stream) m_file_stream = FileStream::make(false, m_f, &s_dp_stdout);

@@ -83,6 +83,7 @@ public:
   class StdoutTarget : public Target {
   public:
     StdoutTarget(FILE *f) : m_f(f) {}
+    ~StdoutTarget();
 
   private:
     virtual void write(const Data &msg) override;
