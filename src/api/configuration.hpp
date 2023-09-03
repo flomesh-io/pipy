@@ -194,7 +194,7 @@ public:
 
   void listen(int port, pjs::Object *options);
   void listen(const std::string &port, pjs::Object *options);
-  void listen(ListenerArray *listeners, pjs::Object *options);
+  void listen(ListenerArray *listeners);
   void task(const std::string &when);
   void watch(const std::string &filename);
   void exit();

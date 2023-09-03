@@ -202,11 +202,11 @@ public:
   auto remove_listener(int port, pjs::Object *options = nullptr) -> Listener*;
   auto remove_listener(pjs::Str *port, pjs::Object *options = nullptr) -> Listener*;
   void set_listeners(pjs::Array *array);
-  void set_default_options(pjs::Object *options);
   void apply(Worker *worker, PipelineLayout *layout);
 
 private:
-  ListenerArray() {}
+  ListenerArray(pjs::Object *options = nullptr)
+    : m_default_options(options) {}
 
   void get_ip_port(const std::string &ip_port, std::string &ip, int &port);
 

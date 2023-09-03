@@ -494,10 +494,6 @@ void ListenerArray::set_listeners(pjs::Array *array) {
   m_listeners.swap(listeners);
 }
 
-void ListenerArray::set_default_options(pjs::Object *options) {
-  m_default_options = options;
-}
-
 void ListenerArray::apply(Worker *worker, PipelineLayout *layout) {
   if (m_worker) {
     throw std::runtime_error("ListenerArray is being listened already");
@@ -531,8 +527,9 @@ using namespace pipy;
 template<> void ClassDef<ListenerArray>::init() {
   ctor([](Context &ctx) -> Object* {
     Array *listeners = nullptr;
-    if (!ctx.arguments(0, &listeners)) return nullptr;
-    auto la = ListenerArray::make();
+    Object *options = nullptr;
+    if (!ctx.arguments(0, &listeners, &options)) return nullptr;
+    auto la = ListenerArray::make(options);
     if (listeners) {
       try {
         la->set_listeners(listeners);
