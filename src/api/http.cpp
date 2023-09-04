@@ -275,6 +275,10 @@ Directory::Options::Options(pjs::Object *options) {
   Value(options, "tarball")
     .get(tarball)
     .check_nullable();
+  Value(options, "index")
+    .get(index)
+    .get(index_list)
+    .check_nullable();
 }
 
 //
@@ -307,6 +311,21 @@ Directory::Directory(const std::string &path, const Options &options) {
   } else {
     m_loader = new CodebaseLoader(path);
   }
+
+  if (auto a = options.index_list.get()) {
+    a->iterate_all(
+      [this](pjs::Value &v, int) {
+        auto s = v.to_string();
+        m_index_filenames.push_back(s->str());
+        s->release();
+      }
+    );
+  } else if (auto s = options.index.get()) {
+    m_index_filenames.push_back(s->str());
+  } else {
+    m_index_filenames.push_back("index");
+    m_index_filenames.push_back("index.html");
+  }
 }
 
 Directory::~Directory() {
@@ -326,10 +345,16 @@ auto Directory::serve(Message *request) -> Message* {
     Data raw, gz, br;
     if (!m_loader->load_file(path, raw)) {
       if (path.back() != '/') path += '/';
-      path += "index.html";
-      if (!m_loader->load_file(path, raw)) {
-        return nullptr;
+      bool found = false;
+      for (const auto &s : m_index_filenames) {
+        auto index_path = path + s;
+        if (m_loader->load_file(index_path, raw)) {
+          path = index_path;
+          found = true;
+          break;
+        }
       }
+      if (!found) return nullptr;
     }
     m_loader->load_file(path + ".gz", gz);
     m_loader->load_file(path + ".br", br);

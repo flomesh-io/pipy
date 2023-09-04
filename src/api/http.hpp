@@ -149,6 +149,8 @@ public:
   struct Options : public pipy::Options {
     bool fs = false;
     bool tarball = false;
+    pjs::Ref<pjs::Str> index;
+    pjs::Ref<pjs::Array> index_list;
     Options() {}
     Options(pjs::Object *options);
   };
@@ -192,8 +194,9 @@ private:
     Tarball m_tarball;
   };
 
-  std::unordered_map<std::string, File> m_cache;
   Loader* m_loader = nullptr;
+  std::unordered_map<std::string, File> m_cache;
+  std::list<std::string> m_index_filenames;
 
   auto get_encoded_response(const File &file, pjs::Object *request_headers) -> Message*;
 
