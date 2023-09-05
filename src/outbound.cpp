@@ -105,9 +105,11 @@ void Outbound::close(StreamEnd *eos) {
 }
 
 void Outbound::state(State state) {
-  m_state = state;
-  if (const auto &f = m_options.on_state_changed) {
-    f(this);
+  if (m_state != state) {
+    m_state = state;
+    if (const auto &f = m_options.on_state_changed) {
+      f(this);
+    }
   }
 }
 
@@ -268,7 +270,7 @@ void OutboundTCP::close() {
       break;
     default: break;
   }
-  Outbound::m_state = Outbound::State::closed;
+  state(Outbound::State::closed);
 }
 
 void OutboundTCP::start(double delay) {
@@ -488,7 +490,7 @@ void OutboundUDP::close() {
       break;
     default: break;
   }
-  m_state = State::closed;
+  state(Outbound::State::closed);
 }
 
 void OutboundUDP::start(double delay) {
