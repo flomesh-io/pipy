@@ -423,14 +423,26 @@ void MetricData::deserialize(const Data &in) {
 }
 
 void MetricData::to_prometheus(const std::string &extra_labels, const std::function<void(const void *, size_t)> &out) const {
+  static const std::string s_prefix_TYPE("# TYPE ");
+  static const std::string s_type_counter(" counter\n");
+  static const std::string s_type_gauge(" gauge\n");
+  static const std::string s_type_histogram(" histogram\n");
+  auto print = [&](const std::string &str) { out(str.c_str(), str.length()); };
   for (auto *ent = m_entries; ent; ent = ent->next) {
     if (auto root = ent->root.get()) {
+      print(s_prefix_TYPE);
+      print(ent->name->str());
       const char *le_str = nullptr;
       auto *name = ent->name.get();
       auto *type = ent->type.get();
       auto *shape = ent->shape.get();
       if (utils::starts_with(type->str(), s_prefix_histogram)) {
         le_str = type->c_str() + s_prefix_histogram.length();
+        print(s_type_histogram);
+      } else if (ent->type->str() == "Gauge") {
+        print(s_type_gauge);
+      } else {
+        print(s_type_counter);
       }
       if (shape->size() > 0 && ent->labels.empty()) {
         auto labels = utils::split(shape->str(), '/');
