@@ -59,10 +59,11 @@ thread_local static const pjs::ConstStr s_gateway_timeout("Gateway Timeout");
 thread_local static const pjs::ConstStr s_accept_encoding("accept-encoding");
 thread_local static const pjs::ConstStr s_content_encoding("content-encoding");
 thread_local static const pjs::ConstStr s_content_type("content-type");
+thread_local static const pjs::ConstStr s_application_octet_stream("application/octet-stream");
 thread_local static const pjs::ConstStr s_gzip("gzip");
 thread_local static const pjs::ConstStr s_br("br");
 
-static const std::map<std::string, std::string> s_content_types = {
+static const std::map<std::string, std::string> s_default_content_types = {
   { "html"  , "text/html" },
   { "css"   , "text/css" },
   { "xml"   , "text/xml" },
@@ -279,6 +280,12 @@ Directory::Options::Options(pjs::Object *options) {
     .get(index)
     .get(index_list)
     .check_nullable();
+  Value(options, "contentTypes")
+    .get(content_types)
+    .check_nullable();
+  Value(options, "defaultContentType")
+    .get(default_content_type)
+    .check_nullable();
 }
 
 //
@@ -326,6 +333,20 @@ Directory::Directory(const std::string &path, const Options &options) {
     m_index_filenames.push_back("index");
     m_index_filenames.push_back("index.html");
   }
+
+  if (auto o = options.content_types.get()) {
+    set_content_types(o);
+  } else {
+    for (const auto &p : s_default_content_types) {
+      m_content_types[p.first] = pjs::Str::make(p.second);
+    }
+  }
+
+  if (auto s = options.default_content_type.get()) {
+    m_default_content_type = s;
+  } else {
+    m_default_content_type = s_application_octet_stream;
+  }
 }
 
 Directory::~Directory() {
@@ -368,15 +389,26 @@ auto Directory::serve(Message *request) -> Message* {
     auto p = path.find('.', path.rfind('/'));
     if (p != std::string::npos) ext = path.substr(p+1);
     for (auto &c : ext) c = std::tolower(c);
-    auto i = s_content_types.find(ext);
-    f.content_type = pjs::Str::make(
-      i == s_content_types.end() ? "application/octet-stream" : i->second
-    );
+    auto i = m_content_types.find(ext);
+    f.content_type = i == m_content_types.end() ? m_default_content_type.get() : i->second.get();
 
     return get_encoded_response(f, head->headers);
   }
 
   return get_encoded_response(i->second, head->headers);
+}
+
+void Directory::set_content_types(pjs::Object *obj) {
+  m_content_types.clear();
+  if (obj) {
+    obj->iterate_all(
+      [this](pjs::Str *k, pjs::Value v) {
+        auto s = v.to_string();
+        m_content_types[k->str()] = s;
+        s->release();
+      }
+    );
+  }
 }
 
 auto Directory::get_encoded_response(const File &file, pjs::Object *request_headers) -> Message* {
@@ -559,8 +591,8 @@ void File::load(const std::string &filename, std::function<Data*(const std::stri
   auto k = ext;
   for (auto &c : k) c = std::tolower(c);
 
-  auto i = s_content_types.find(k);
-  auto ct = (i == s_content_types.end() ? "application/octet-stream" : i->second);
+  auto i = s_default_content_types.find(k);
+  auto ct = (i == s_default_content_types.end() ? "application/octet-stream" : i->second);
 
   m_name = pjs::Str::make(name);
   m_extension = pjs::Str::make(ext);
@@ -757,6 +789,13 @@ template<> void ClassDef<Directory>::init() {
 template<> void ClassDef<Constructor<Directory>>::init() {
   super<Function>();
   ctor();
+  accessor("defaultContentTypes", [](Object *, Value &ret) {
+    Object *obj = Object::make();
+    for (const auto &i : s_default_content_types) {
+      obj->set(Str::make(i.first), Str::make(i.second));
+    }
+    ret.set(obj);
+  });
 }
 
 template<> void ClassDef<File>::init() {

@@ -151,6 +151,8 @@ public:
     bool tarball = false;
     pjs::Ref<pjs::Str> index;
     pjs::Ref<pjs::Array> index_list;
+    pjs::Ref<pjs::Object> content_types;
+    pjs::Ref<pjs::Str> default_content_type;
     Options() {}
     Options(pjs::Object *options);
   };
@@ -160,6 +162,7 @@ public:
   ~Directory();
 
   auto serve(Message *request) -> Message*;
+  void set_content_types(pjs::Object *obj);
 
 private:
   struct File {
@@ -197,6 +200,8 @@ private:
   Loader* m_loader = nullptr;
   std::unordered_map<std::string, File> m_cache;
   std::list<std::string> m_index_filenames;
+  std::map<std::string, pjs::Ref<pjs::Str>> m_content_types;
+  pjs::Ref<pjs::Str> m_default_content_type;
 
   auto get_encoded_response(const File &file, pjs::Object *request_headers) -> Message*;
 
