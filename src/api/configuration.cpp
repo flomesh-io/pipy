@@ -747,7 +747,12 @@ void Configuration::apply(JSModule *mod) {
 
   for (auto &i : m_listens) {
     if (!i.port) continue;
-    auto name = std::to_string(i.port) + '@' + i.ip;
+    char name[100];
+    if (i.port > 0) {
+      std::snprintf(name, sizeof(name), "[%s]:%d", i.ip.c_str(), i.port);
+    } else {
+      std::snprintf(name, sizeof(name), "ListenerArray#%d", i.index);
+    }
     auto p = make_pipeline(i.index, "", name, i);
     i.listeners->apply(worker, p);
     i.listeners = nullptr;

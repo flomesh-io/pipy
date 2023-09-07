@@ -112,7 +112,7 @@ void Inbound::start() {
 
     int n = 1;
     pjs::Str *labels[2];
-    labels[0] = layout->name_or_label();
+    labels[0] = m_listener->label();
     if (m_options.peer_stats) labels[n++] = remote_address();
 
     m_metric_traffic_in = Inbound::s_metric_traffic_in->with_labels(labels, n);
@@ -151,8 +151,8 @@ void Inbound::init_metrics() {
       [=](stats::Gauge *gauge) {
         int total = 0;
         Listener::for_each([&](Listener *listener) {
-          if (auto *p = listener->pipeline_layout()) {
-            auto k = p->name_or_label();
+          if (listener->is_open()) {
+            auto k = listener->label();
             auto l = gauge->with_labels(&k, 1);
             if (listener->options().peer_stats) {
               auto n = 0;

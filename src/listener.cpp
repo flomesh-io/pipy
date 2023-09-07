@@ -103,6 +103,19 @@ Listener::Listener(Protocol protocol, const std::string &ip, int port)
 {
   m_address = asio::ip::make_address(m_ip);
   m_ip = m_address.to_string();
+  char label[100];
+  const char *proto;
+  switch (m_protocol) {
+  case Protocol::TCP: proto = "TCP"; break;
+  case Protocol::UDP: proto = "UDP"; break;
+  default: proto = "?"; break;
+  }
+  std::snprintf(
+    label, sizeof(label),
+    "[%s]:%d/%s",
+    m_ip.c_str(), port, proto
+  );
+  m_label = pjs::Str::make(label);
   s_listeners[int(protocol)].insert(this);
 }
 

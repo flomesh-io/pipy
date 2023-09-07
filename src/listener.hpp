@@ -86,6 +86,7 @@ public:
   auto protocol() const -> Protocol { return m_protocol; }
   auto ip() const -> const std::string& { return m_ip; }
   auto port() const -> int { return m_port; }
+  auto label() const -> pjs::Str* { return m_label; }
   bool is_open() const { return m_pipeline_layout; }
   bool reserved() const { return m_reserved; }
   auto pipeline_layout() const -> PipelineLayout* { return m_pipeline_layout; }
@@ -180,6 +181,7 @@ private:
   asio::ip::address m_address;
   pjs::Ref<Acceptor> m_acceptor;
   pjs::Ref<PipelineLayout> m_pipeline_layout;
+  pjs::Ref<pjs::Str> m_label;
   List<Inbound> m_inbounds;
 
   thread_local static std::set<Listener*> s_listeners[];
