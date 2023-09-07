@@ -167,8 +167,9 @@ public:
 
 private:
   struct File {
-    Data raw, gz, br;
+    pjs::Ref<pjs::Str> pathname;
     pjs::Ref<pjs::Str> content_type;
+    Data raw, gz, br;
   };
 
   class Loader {

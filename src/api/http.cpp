@@ -387,6 +387,7 @@ auto Directory::serve(pjs::Context &ctx, Message *request) -> Message* {
     m_loader->load_file(path + ".br", br);
 
     auto &f = m_cache[k];
+    f.pathname = pjs::Str::make(path);
     f.raw = std::move(raw);
     f.gz = std::move(gz);
     f.br = std::move(br);
@@ -460,11 +461,12 @@ auto Directory::get_encoded_response(pjs::Context &ctx, File &file, RequestHead 
       auto accept_encoding = pjs::Object::make();
       if (has_gz) accept_encoding->set(s_gzip, true);
       if (has_br) accept_encoding->set(s_br, true);
-      pjs::Value args[3], ret;
+      pjs::Value args[4], ret;
       args[0].set(request);
       args[1].set(accept_encoding);
-      args[2].set(file.raw.size());
-      (*m_options.compression_f)(ctx, 3, args, ret);
+      args[2].set(file.pathname.get());
+      args[3].set(file.raw.size());
+      (*m_options.compression_f)(ctx, 4, args, ret);
       if (!ctx.ok()) return nullptr;
       if (ret.to_boolean()) {
         if (!ret.is_string()) {
