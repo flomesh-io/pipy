@@ -286,6 +286,9 @@ Directory::Options::Options(pjs::Object *options) {
   Value(options, "defaultContentType")
     .get(default_content_type)
     .check_nullable();
+  Value(options, "compression")
+    .get(compression_f)
+    .check_nullable();
 }
 
 //
@@ -297,7 +300,9 @@ thread_local Data::Producer Directory::s_dp("http::Directory");
 Directory::Directory(const std::string &path)
   : Directory(path, Options()) {}
 
-Directory::Directory(const std::string &path, const Options &options) {
+Directory::Directory(const std::string &path, const Options &options)
+  : m_options(options)
+{
   if (options.tarball) {
     std::vector<uint8_t> data;
     if (options.fs) {
@@ -353,7 +358,7 @@ Directory::~Directory() {
   delete m_loader;
 }
 
-auto Directory::serve(Message *request) -> Message* {
+auto Directory::serve(pjs::Context &ctx, Message *request) -> Message* {
   if (!m_loader) return nullptr;
 
   pjs::Ref<RequestHead> head = pjs::coerce<RequestHead>(request->head());
@@ -361,7 +366,8 @@ auto Directory::serve(Message *request) -> Message* {
   auto n = path.find('?');
   if (n != std::string::npos) path = path.substr(0, n);
 
-  auto i = m_cache.find(path);
+  auto k = path;
+  auto i = m_cache.find(k);
   if (i == m_cache.end()) {
     Data raw, gz, br;
     if (!m_loader->load_file(path, raw)) {
@@ -380,7 +386,7 @@ auto Directory::serve(Message *request) -> Message* {
     m_loader->load_file(path + ".gz", gz);
     m_loader->load_file(path + ".br", br);
 
-    auto &f = m_cache[path];
+    auto &f = m_cache[k];
     f.raw = std::move(raw);
     f.gz = std::move(gz);
     f.br = std::move(br);
@@ -392,10 +398,10 @@ auto Directory::serve(Message *request) -> Message* {
     auto i = m_content_types.find(ext);
     f.content_type = i == m_content_types.end() ? m_default_content_type.get() : i->second.get();
 
-    return get_encoded_response(f, head->headers);
+    return get_encoded_response(ctx, f, head);
   }
 
-  return get_encoded_response(i->second, head->headers);
+  return get_encoded_response(ctx, i->second, head);
 }
 
 void Directory::set_content_types(pjs::Object *obj) {
@@ -411,12 +417,12 @@ void Directory::set_content_types(pjs::Object *obj) {
   }
 }
 
-auto Directory::get_encoded_response(const File &file, pjs::Object *request_headers) -> Message* {
+auto Directory::get_encoded_response(pjs::Context &ctx, File &file, RequestHead *request) -> Message* {
   bool has_gz = false;
   bool has_br = false;
 
   pjs::Value accept_encoding;
-  request_headers->get(s_accept_encoding.get(), accept_encoding);
+  request->headers->get(s_accept_encoding.get(), accept_encoding);
   if (accept_encoding.is_string()) {
     auto &s = accept_encoding.s()->str();
     for (size_t i = 0; i < s.length(); i++) {
@@ -440,11 +446,49 @@ auto Directory::get_encoded_response(const File &file, pjs::Object *request_head
   if (has_br && !file.br.empty()) {
     headers->set(s_content_encoding.get(), s_br.get());
     response = Message::make(head, Data::make(file.br));
+
   } else if (has_gz && !file.gz.empty()) {
     headers->set(s_content_encoding.get(), s_gzip.get());
     response = Message::make(head, Data::make(file.gz));
+
   } else {
-    response = Message::make(head, Data::make(file.raw));
+    Data *body = nullptr;
+    Compressor *compressor = nullptr;
+    auto output = [&](const Data &data) { body->push(data); };
+
+    if ((has_gz || has_br) && m_options.compression_f) {
+      auto accept_encoding = pjs::Object::make();
+      if (has_gz) accept_encoding->set(s_gzip, true);
+      if (has_br) accept_encoding->set(s_br, true);
+      pjs::Value args[3], ret;
+      args[0].set(request);
+      args[1].set(accept_encoding);
+      args[2].set(file.raw.size());
+      (*m_options.compression_f)(ctx, 3, args, ret);
+      if (!ctx.ok()) return nullptr;
+      if (ret.to_boolean()) {
+        if (!ret.is_string()) {
+          ctx.error("callback expected to return a string");
+          return nullptr;
+        }
+        if (ret.s() == s_gzip) {
+          compressor = Compressor::gzip(output);
+          body = &file.gz;
+          headers->set(s_content_encoding.get(), s_gzip.get());
+        } else {
+          ctx.error("callback returned an unsupported compression algorithm");
+          return nullptr;
+        }
+      }
+    }
+
+    if (compressor) {
+      compressor->input(file.raw, true);
+      compressor->finalize();
+      response = Message::make(head, Data::make(*body));
+    } else {
+      response = Message::make(head, Data::make(file.raw));
+    }
   }
 
   return response;
@@ -782,7 +826,7 @@ template<> void ClassDef<Directory>::init() {
   method("serve", [](Context &ctx, Object *obj, Value &ret) {
     Message *request;
     if (!ctx.arguments(1, &request)) return;
-    ret.set(obj->as<Directory>()->serve(request));
+    ret.set(obj->as<Directory>()->serve(ctx, request));
   });
 }
 

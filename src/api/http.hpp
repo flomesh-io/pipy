@@ -153,6 +153,7 @@ public:
     pjs::Ref<pjs::Array> index_list;
     pjs::Ref<pjs::Object> content_types;
     pjs::Ref<pjs::Str> default_content_type;
+    pjs::Ref<pjs::Function> compression_f;
     Options() {}
     Options(pjs::Object *options);
   };
@@ -161,7 +162,7 @@ public:
   Directory(const std::string &path, const Options &options);
   ~Directory();
 
-  auto serve(Message *request) -> Message*;
+  auto serve(pjs::Context &ctx, Message *request) -> Message*;
   void set_content_types(pjs::Object *obj);
 
 private:
@@ -197,13 +198,14 @@ private:
     Tarball m_tarball;
   };
 
+  Options m_options;
   Loader* m_loader = nullptr;
   std::unordered_map<std::string, File> m_cache;
   std::list<std::string> m_index_filenames;
   std::map<std::string, pjs::Ref<pjs::Str>> m_content_types;
   pjs::Ref<pjs::Str> m_default_content_type;
 
-  auto get_encoded_response(const File &file, pjs::Object *request_headers) -> Message*;
+  auto get_encoded_response(pjs::Context &ctx, File &file, RequestHead *request) -> Message*;
 
   thread_local static Data::Producer s_dp;
 };
