@@ -97,7 +97,7 @@ void SocketTCP::open() {
 
   if (m_eos) {
     send();
-    return;
+    if (m_state == CLOSED) return;
   }
 
   if (!m_buffer_send.empty()) {
