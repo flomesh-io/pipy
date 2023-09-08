@@ -305,7 +305,6 @@ void SocketTCP::on_receive(const std::error_code &ec, std::size_t n) {
         on_socket_input(StreamEnd::make(StreamEnd::READ_ERROR));
         m_state = CLOSED;
         close_socket();
-        return;
       }
 
     } else {
