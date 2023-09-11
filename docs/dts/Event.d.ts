@@ -2,6 +2,11 @@
  * _Event_ base interface.
  */
 interface Event {
+
+  /**
+   * Type of the event.
+   */
+  type: 'Data' | 'MessageStart' | 'MessageEnd' | 'StreamEnd';
 }
 
 /**
@@ -35,6 +40,11 @@ interface MessageEnd extends Event {
    * Protocol-dependent message footer.
    */
   tail?: object;
+
+  /**
+   * Value representation of the message body after decoding.
+   */
+  payload?: any;
 }
 
 interface MessageEndConstructor {
@@ -43,9 +53,10 @@ interface MessageEndConstructor {
    * Creates an instance of _MessageEnd_.
    *
    * @param tail An object containing protocol-dependent message footer.
-   * @returns A _MessageEnd_ object with the specified message footer.
+   * @param payload Value representation of the message body after decoding.
+   * @returns A _MessageEnd_ object with the specified message footer and payload.
    */
-   new(tail?: object): MessageEnd;
+   new(tail?: object, payload?: any): MessageEnd;
 }
 
 /**
@@ -57,37 +68,37 @@ interface StreamEnd extends Event {
    * Error type if any. Possible values include:
    *   - `""` (no error)
    *   - `"Replay"` (used with _replay_ filter)
-   *   - `"UnknownError"`
    *   - `"RuntimeError"`
    *   - `"ReadError"`
    *   - `"WriteError"`
    *   - `"CannotResolve"`
-   *   - `"ConnectionCanceled"`
+   *   - `"ConnectionAborted"`
    *   - `"ConnectionReset"`
    *   - `"ConnectionRefused"`
    *   - `"ConnectionTimeout"`
    *   - `"ReadTimeout"`
    *   - `"WriteTimeout"`
    *   - `"IdleTimeout"`
-   *   - `"Unauthorized"`
    *   - `"BufferOverflow"`
+   *   - `"ProtocolError"`
+   *   - `"Unauthorized"`
    */
   error: ''
     | 'Replay'
-    | 'UnknownError'
     | 'RuntimeError'
     | 'ReadError'
     | 'WriteError'
     | 'CannotResolve'
-    | 'ConnectionCanceled'
+    | 'ConnectionAborted'
     | 'ConnectionReset'
     | 'ConnectionRefused'
     | 'ConnectionTimeout'
     | 'ReadTimeout'
     | 'WriteTimeout'
     | 'IdleTimeout'
-    | 'Unauthorized'
-    | 'BufferOverflow';
+    | 'BufferOverflow'
+    | 'ProtocolError'
+    | 'Unauthorized';
 
 }
 
@@ -99,39 +110,39 @@ interface StreamEndConstructor extends StreamEnd {
    * @param error Error type. Available error types include:
    *   - `""` (default)
    *   - `"Replay"` (used with _replay_ filter)
-   *   - `"UnknownError"`
    *   - `"RuntimeError"`
    *   - `"ReadError"`
    *   - `"WriteError"`
    *   - `"CannotResolve"`
-   *   - `"ConnectionCanceled"`
+   *   - `"ConnectionAborted"`
    *   - `"ConnectionReset"`
    *   - `"ConnectionRefused"`
    *   - `"ConnectionTimeout"`
    *   - `"ReadTimeout"`
    *   - `"WriteTimeout"`
    *   - `"IdleTimeout"`
-   *   - `"Unauthorized"`
    *   - `"BufferOverflow"`
+   *   - `"ProtocolError"`
+   *   - `"Unauthorized"`
    * @returns A _StreamEnd_ object with the specified error if any.
    */
   new(error?: ''
     | 'Replay'
-    | 'UnknownError'
     | 'RuntimeError'
     | 'ReadError'
     | 'WriteError'
     | 'CannotResolve'
-    | 'ConnectionCanceled'
+    | 'ConnectionAborted'
     | 'ConnectionReset'
     | 'ConnectionRefused'
     | 'ConnectionTimeout'
     | 'ReadTimeout'
     | 'WriteTimeout'
     | 'IdleTimeout'
-    | 'Unauthorized'
     | 'BufferOverflow'
-  ): StreamEnd;
+    | 'ProtocolError'
+    | 'Unauthorized'
+    ): StreamEnd;
 }
 
 /**
@@ -175,6 +186,13 @@ interface Data extends Event {
    * @returns A _Data_ object containing bytes removed from the beginning.
    */
   shiftWhile(callback: (byte: number) => boolean): Data;
+
+  /**
+   * Converts to an array of bytes.
+   *
+   * @returns An array of numbers where each number represents a byte ranging from 0 to 255.
+   */
+  toArray(): number[];
 
   /**
    * Converts to a string.

@@ -1,0 +1,27 @@
+---
+title: MessageEnd.payload
+api: MessageEnd.payload
+---
+
+## Description
+
+<Summary/>
+
+### For each protocol
+
+The content of _payload_ can vary depending on the protocol used by the message.
+
+#### Thrift
+
+A Thrift message can have the decoded struct in the _payload_ property if [decodeThrift()](/reference/api/Configuration/decodeThrift) has its _paylaod_ option set to true.
+
+## Syntax
+
+``` js
+messageEnd.payload
+```
+
+## See Also
+
+* [MessageEnd](/reference/api/MessageEnd)
+* [Message](/reference/api/Message)

@@ -1,6 +1,6 @@
 /// <reference path="./Event.d.ts" />
 /// <reference path="./Message.d.ts" />
-/// <reference path="./Output.d.ts" />
+/// <reference path="./Inbound.d.ts" />
 /// <reference path="./algo.d.ts" />
 /// <reference path="./crypto.d.ts" />
 
@@ -421,6 +421,7 @@ interface Configuration {
       idleTimeout?: number | string,
       keepAlive?: boolean,
       noDelay?: boolean,
+      onState?: (inbound: Inbound) => void,
     }
   ): Configuration;
 
