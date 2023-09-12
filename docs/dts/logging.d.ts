@@ -77,10 +77,15 @@ interface Logger {
     options?: {
       method?: string,
       headers?: { [name: string]: string },
+      bufferLimit?: number,
       batch?: {
         size?: number,
         vacancy?: number,
+        timeout?: number | string,
         interval?: number | string,
+        prefix?: string,
+        postfix?: string,
+        separator?: string,
       },
       tls: {
         certificate?: {

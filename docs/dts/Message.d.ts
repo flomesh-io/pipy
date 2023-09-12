@@ -16,9 +16,14 @@ interface Message {
   tail?: object;
 
   /**
-   * Message body or payload as a _Data_ object.
+   * Message body as a _Data_ object.
    */
   body?: Data;
+
+  /**
+   * Value representation of the message body after decoding.
+   */
+  payload?: any;
 }
 
 interface MessageConstructor {
