@@ -281,6 +281,7 @@ Directory::Options::Options(pjs::Object *options) {
     .get(index_list)
     .check_nullable();
   Value(options, "contentTypes")
+    .get(content_types_f)
     .get(content_types)
     .check_nullable();
   Value(options, "defaultContentType")
@@ -396,8 +397,30 @@ auto Directory::serve(pjs::Context &ctx, Message *request) -> Message* {
     auto p = path.find('.', path.rfind('/'));
     if (p != std::string::npos) ext = path.substr(p+1);
     for (auto &c : ext) c = std::tolower(c);
-    auto i = m_content_types.find(ext);
-    f.content_type = i == m_content_types.end() ? m_default_content_type.get() : i->second.get();
+
+    if (auto *cb = m_options.content_types_f.get()) {
+      pjs::Value arg[2], ret;
+      arg[0].set(request);
+      arg[1].set(f.pathname);
+      (*cb)(ctx, 2, arg, ret);
+      if (!ctx.ok()) return nullptr;
+      if (ret.is_object()) {
+        pjs::Value ct;
+        ret.o()->get(ext, ct);
+        auto s = ct.to_string();
+        f.content_type = s;
+        s->release();
+      } else if (!ret.is_nullish()) {
+        auto s = ret.to_string();
+        f.content_type = s;
+        s->release();
+      }
+    }
+
+    if (!f.content_type) {
+      auto i = m_content_types.find(ext);
+      f.content_type = i == m_content_types.end() ? m_default_content_type.get() : i->second.get();
+    }
 
     return get_encoded_response(ctx, f, head);
   }

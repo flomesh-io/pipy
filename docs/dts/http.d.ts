@@ -1,5 +1,28 @@
 /// <reference path="./Message.d.ts" />
 
+interface HttpMessageHead {
+  protocol: string;
+  headers: { [name: string]: string };
+}
+
+interface HttpMessageTail {
+  headers: { [name: string]: string };
+  headSize: number;
+  bodySize: number;
+}
+
+interface HttpRequestHead extends HttpMessageHead {
+  method: string;
+  scheme: string;
+  authority: string;
+  path: string;
+}
+
+interface HttpResponseHead extends HttpMessageHead {
+  status: number;
+  statusText: string;
+}
+
 /**
  * Asynchronous HTTP client.
  */
@@ -91,10 +114,13 @@ interface HttpDirectoryConstructor {
       fs?: boolean,
       tarball?: boolean,
       index?: string[],
-      contentTypes?: { [extension: string]: string },
+      contentTypes?: (
+        { [extension: string]: string } |
+        ( (request: HttpRequestHead, pathname: string) => (string | { [extension: string]: string }) )
+      ),
       defaultContentType?: string,
       compression?: (
-        request: Message,
+        request: HttpRequestHead,
         acceptEncoding: { [algorithm: string]: true },
         pathname: string,
         size: number,

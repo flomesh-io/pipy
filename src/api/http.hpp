@@ -152,6 +152,7 @@ public:
     pjs::Ref<pjs::Str> index;
     pjs::Ref<pjs::Array> index_list;
     pjs::Ref<pjs::Object> content_types;
+    pjs::Ref<pjs::Function> content_types_f;
     pjs::Ref<pjs::Str> default_content_type;
     pjs::Ref<pjs::Function> compression_f;
     Options() {}
