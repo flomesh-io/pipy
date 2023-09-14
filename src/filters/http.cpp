@@ -1228,6 +1228,9 @@ Demux::Options::Options(pjs::Object *options)
   Value(options, "maxHeaderSize")
     .get_binary_size(max_header_size)
     .check_nullable();
+  Value(options, "maxMessages")
+    .get(max_messages)
+    .check_nullable();
 }
 
 //
@@ -1290,6 +1293,7 @@ void Demux::reset() {
   Decoder::chain(DemuxQueue::input());
   m_request_queue.reset();
   m_eos = nullptr;
+  m_message_count = 0;
   m_http2 = false;
   m_shutdown = false;
 }
@@ -1366,7 +1370,13 @@ auto Demux::on_encode_response(ResponseHead *head) -> RequestQueue::Request* {
     return nullptr;
   } else {
     auto req = m_request_queue.shift();
-    if (m_shutdown && m_request_queue.empty()) req->is_final = true;
+    m_message_count++;
+    if (
+      (m_options.max_messages > 0 && m_message_count >= m_options.max_messages) ||
+      (m_shutdown && m_request_queue.empty())
+    ) {
+      req->is_final = true;
+    }
     return req;
   }
 }

@@ -294,6 +294,7 @@ public:
   struct Options : public http2::Endpoint::Options {
     size_t buffer_size = DATA_CHUNK_SIZE;
     size_t max_header_size = DATA_CHUNK_SIZE;
+    int max_messages = 0;
     Options() {}
     Options(pjs::Object *options);
   };
@@ -314,6 +315,7 @@ protected:
   Options m_options;
   RequestQueue m_request_queue;
   pjs::Ref<StreamEnd> m_eos;
+  int m_message_count = 0;
   bool m_http2 = false;
   bool m_shutdown = false;
 
