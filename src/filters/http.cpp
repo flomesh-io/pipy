@@ -543,11 +543,11 @@ void Decoder::on_event(Event *evt) {
             }
           } else {
             auto v = val.get();
-            headers->set(key, v);
             if (key == s_transfer_encoding) m_header_transfer_encoding = v;
             else if (key == s_content_length) m_header_content_length = v;
-            else if (key == s_connection) m_header_connection = v;
+            else if (key == s_connection) { m_header_connection = v; v = nullptr; }
             else if (key == s_upgrade) m_header_upgrade = v;
+            if (v) headers->set(key, v);
           }
           state = HEADER;
           m_head_buffer.clear();
@@ -627,7 +627,7 @@ void Decoder::message_start() {
     if (auto req = on_decode_response(res)) {
       m_method = req->head->method;
       auto tt = req->tunnel_type;
-      if (res->is_tunnel(tt)) m_responded_tunnel_type = tt;
+      if (res->is_tunnel_ok(tt)) m_responded_tunnel_type = tt;
       delete req;
     }
   } else {
@@ -653,6 +653,11 @@ void Decoder::message_end() {
   m_head_size = 0;
   m_body_size = 0;
   output(MessageEnd::make(tail));
+  if (m_is_response) {
+    if (m_head->as<ResponseHead>()->is_final(m_header_connection)) {
+      on_decode_final();
+    }
+  }
 }
 
 void Decoder::stream_end(StreamEnd *eos) {
@@ -728,7 +733,7 @@ void Encoder::on_event(Event *evt) {
           m_method = req->head->method;
           m_is_final = req->is_final;
           auto tt = req->tunnel_type;
-          if (head->is_tunnel(tt)) m_responded_tunnel_type = tt;
+          if (head->is_tunnel_ok(tt)) m_responded_tunnel_type = tt;
           delete req;
         }
 
@@ -1562,6 +1567,10 @@ bool Mux::Session::on_decode_tunnel(TunnelType tt) {
   return true;
 }
 
+void Mux::Session::on_decode_final() {
+  MuxSession::end(StreamEnd::make());
+}
+
 void Mux::Session::on_decode_error()
 {
 }
@@ -1794,7 +1803,7 @@ void TunnelServer::process(Event *evt) {
 
     pjs::Ref<RequestHead> req_head = pjs::coerce<RequestHead>(req->head());
     pjs::Ref<ResponseHead> res_head = pjs::coerce<ResponseHead>(res->head());
-    if (res_head->is_tunnel(req_head->tunnel_type())) {
+    if (res_head->is_tunnel_ok(req_head->tunnel_type())) {
       m_pipeline = sub_pipeline(0, true, Filter::output())->start();
     }
 
@@ -1887,7 +1896,7 @@ void TunnelClient::on_reply(Event *evt) {
   } else if (evt->is<MessageEnd>()) {
     if (m_response_head) {
       auto tt = m_request_head->tunnel_type();
-      if (m_response_head->is_tunnel(tt)) {
+      if (m_response_head->is_tunnel_ok(tt)) {
         m_is_tunnel_started = true;
         if (m_eos) {
           EventFunction::input()->input_async(m_eos);

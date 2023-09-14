@@ -85,6 +85,7 @@ protected:
   virtual void on_decode_request(RequestQueue::Request *req) { delete req; }
   virtual auto on_decode_response(ResponseHead *head) -> RequestQueue::Request* { return nullptr; }
   virtual bool on_decode_tunnel(TunnelType tt) { return false; }
+  virtual void on_decode_final() {}
   virtual void on_decode_error() {}
 
 private:
@@ -393,6 +394,7 @@ public:
     virtual void on_encode_request(RequestQueue::Request *req) override;
     virtual auto on_decode_response(ResponseHead *head) -> RequestQueue::Request* override;
     virtual bool on_decode_tunnel(TunnelType tt) override;
+    virtual void on_decode_final() override;
     virtual void on_decode_error() override;
     virtual void on_queue_end(StreamEnd *eos) override;
     virtual void on_endpoint_close(StreamEnd *eos) override;

@@ -79,7 +79,7 @@ static const std::map<std::string, std::string> s_default_content_types = {
   { "json"  , "application/json" },
 };
 
-bool RequestHead::is_final() const {
+bool MessageHead::is_final() const {
   pjs::Value v;
   if (headers && headers->get(s_connection, v)) {
     return v.is_string() && v.s() == s_close;
@@ -88,7 +88,7 @@ bool RequestHead::is_final() const {
   }
 }
 
-bool RequestHead::is_final(pjs::Str *header_connection) const {
+bool MessageHead::is_final(pjs::Str *header_connection) const {
   if (header_connection) {
     return header_connection == s_close;
   } else {
@@ -119,7 +119,7 @@ auto RequestHead::tunnel_type(pjs::Str *header_upgrade) const -> TunnelType {
 // ResponseHead
 //
 
-bool ResponseHead::is_tunnel(TunnelType requested) {
+bool ResponseHead::is_tunnel_ok(TunnelType requested) {
   switch (requested) {
     case TunnelType::NONE: break;
     case TunnelType::CONNECT: return (200 <= status && status < 300);

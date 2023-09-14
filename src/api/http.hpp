@@ -53,6 +53,9 @@ class MessageHead : public pjs::ObjectTemplate<MessageHead> {
 public:
   pjs::Ref<pjs::Str> protocol;
   pjs::Ref<pjs::Object> headers;
+
+  bool is_final() const;
+  bool is_final(pjs::Str *header_connection) const;
 };
 
 class MessageTail : public pjs::ObjectTemplate<MessageTail> {
@@ -69,8 +72,6 @@ public:
   pjs::Ref<pjs::Str> authority;
   pjs::Ref<pjs::Str> path;
 
-  bool is_final() const;
-  bool is_final(pjs::Str *header_connection) const;
   auto tunnel_type() const -> TunnelType;
   auto tunnel_type(pjs::Str *header_upgrade) const -> TunnelType;
 };
@@ -80,7 +81,7 @@ public:
   int status = 200;
   pjs::Ref<pjs::Str> statusText;
 
-  bool is_tunnel(TunnelType requested);
+  bool is_tunnel_ok(TunnelType requested);
 
   static auto error_to_status(StreamEnd::Error err, int &status) -> pjs::Str*;
 };
