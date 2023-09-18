@@ -27,6 +27,7 @@
 #define NMI_HPP
 
 #include "pipy/nmi.h"
+#include "pipy/nmi-cpp.h"
 #include "pjs/pjs.hpp"
 #include "context.hpp"
 #include "module.hpp"
@@ -60,7 +61,7 @@ public:
 
   auto net() const -> Net* { return m_net; }
   auto filename() const -> pjs::Str* { return m_filename; }
-  void define_variable(int id, const char *name, const char *ns, const pjs::Value &value);
+  auto define_variable(int id, const char *name, const char *ns, const pjs::Value &value) -> int;
   void define_pipeline(const char *name, fn_pipeline_init init, fn_pipeline_free free, fn_pipeline_process process);
   auto pipeline_layout(pjs::Str *name) -> PipelineLayout*;
   void schedule(double timeout, const std::function<void()> &fn);
@@ -111,6 +112,7 @@ private:
 
   thread_local static std::vector<NativeModule*> m_native_modules;
   thread_local static NativeModule* m_current;
+  thread_local static int m_last_variable_id;
 };
 
 //

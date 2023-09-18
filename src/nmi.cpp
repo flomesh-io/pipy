@@ -169,6 +169,7 @@ void Pipeline::release() {
 
 thread_local std::vector<NativeModule*> NativeModule::m_native_modules;
 thread_local NativeModule* NativeModule::m_current = nullptr;
+thread_local int NativeModule::m_last_variable_id = 0;
 
 auto NativeModule::find(const std::string &filename) -> NativeModule* {
   for (auto *m : m_native_modules) {
@@ -256,13 +257,15 @@ NativeModule::NativeModule(int index, const std::string &filename)
   }
 }
 
-void NativeModule::define_variable(int id, const char *name, const char *ns, const pjs::Value &value) {
+auto NativeModule::define_variable(int id, const char *name, const char *ns, const pjs::Value &value) -> int {
+  if (id < 0) id = m_last_variable_id++;
   m_variable_defs.emplace_back();
   auto &v = m_variable_defs.back();
   v.id = id;
   v.name = name;
   v.ns = ns ? pjs::Str::make(ns) : nullptr;
   v.value = value;
+  return id;
 }
 
 void NativeModule::define_pipeline(const char *name, fn_pipeline_init init, fn_pipeline_free free, fn_pipeline_process process) {
@@ -941,16 +944,17 @@ NMI_EXPORT pjs_value pipy_StreamEnd_get_error(pjs_value obj) {
   return 0;
 }
 
-NMI_EXPORT void pipy_define_variable(int id, const char *name, const char *ns, pjs_value value) {
+NMI_EXPORT int pipy_define_variable(int id, const char *name, const char *ns, pjs_value value) {
   if (auto *m = nmi::NativeModule::current()) {
     if (value) {
       if (auto *pv = nmi::s_values.get(value)) {
-        m->define_variable(id, name, ns, pv->v);
+        return m->define_variable(id, name, ns, pv->v);
       }
     } else {
-      m->define_variable(id, name, ns, pjs::Value::undefined);
+      return m->define_variable(id, name, ns, pjs::Value::undefined);
     }
   }
+  return -1;
 }
 
 NMI_EXPORT void pipy_define_pipeline(const char *name, fn_pipeline_init init, fn_pipeline_free free, fn_pipeline_process process) {
