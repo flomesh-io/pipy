@@ -32,6 +32,7 @@
 #include "filters/demux.hpp"
 #include "filters/http.hpp"
 #include "filters/tls.hpp"
+#include "utils.hpp"
 
 namespace pipy {
 
@@ -93,6 +94,10 @@ Fetch::Fetch(pjs::Str *host, const Options &options)
       opts.certificate->set("cert", options.cert.get());
       opts.certificate->set("key", options.key.get());
     }
+    std::string sni;
+    int port;
+    utils::get_host_port(host->str(), sni, port);
+    opts.sni = pjs::Str::make(sni);
     auto *ppl_tls = PipelineLayout::make(m_module);
     ppl_tls->append(new tls::Client(opts))->add_sub_pipeline(ppl_connect);
     ppl_connect = ppl_tls;
