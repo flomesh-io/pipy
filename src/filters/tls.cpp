@@ -403,12 +403,12 @@ void TLSSession::use_certificate(pjs::Str *sni) {
     if (!ctx.ok()) return;
   }
 
+  if (certificate.is_nullish()) return;
+
   if (!certificate.is_object()) {
     m_filter->error("certificate callback did not return an object");
     return;
   }
-
-  if (certificate.is_null()) return;
 
   pjs::Value cert, key;
   certificate.o()->get("cert", cert);
