@@ -126,7 +126,7 @@ NMI_EXPORT pjs_value pipy_MessageEnd_get_payload(pjs_value obj);
 NMI_EXPORT pjs_value pipy_StreamEnd_new(pjs_value error);
 NMI_EXPORT pjs_value pipy_StreamEnd_get_error(pjs_value obj);
 
-NMI_EXPORT void pipy_define_variable(int id, const char *name, const char *ns, pjs_value value);
+NMI_EXPORT int  pipy_define_variable(int id, const char *name, const char *ns, pjs_value value);
 NMI_EXPORT void pipy_define_pipeline(const char *name, fn_pipeline_init init, fn_pipeline_free free, fn_pipeline_process process);
 NMI_EXPORT void pipy_hold(pipy_pipeline ppl);
 NMI_EXPORT void pipy_free(pipy_pipeline ppl);
