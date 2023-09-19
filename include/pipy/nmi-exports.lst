@@ -15,7 +15,9 @@ _pjs_class_id
 _pjs_is_undefined
 _pjs_is_null
 _pjs_is_nullish
+_pjs_is_string
 _pjs_is_empty_string
+_pjs_is_object
 _pjs_is_instance_of
 _pjs_is_array
 _pjs_is_function

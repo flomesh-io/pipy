@@ -29,15 +29,17 @@
 #include <pipy/nmi.h>
 
 #include <string>
+#include <vector>
 
 namespace pipy {
 namespace nmi {
 
 class Local;
+class Global;
 class String;
 class Object;
 class Array;
-class Global;
+class Data;
 
 class Local {
 public:
@@ -63,8 +65,10 @@ public:
   bool is_undefined() const { return pjs_is_undefined(m_id); }
   bool is_null() const { return pjs_is_null(m_id); }
   bool is_nullish() const { return pjs_is_nullish(m_id); }
+  bool is_string() const { return pjs_is_string(m_id); }
   bool is_empty_string() const { return pjs_is_empty_string(m_id); }
   bool is_instance_of(int class_id) const { return pjs_is_instance_of(m_id, class_id); }
+  bool is_object() const { return pjs_is_object(m_id); }
   bool is_array() const { return pjs_is_array(m_id); }
   bool is_function() const { return pjs_is_function(m_id); }
   bool is_native() const { return pjs_is_native(m_id); }
@@ -77,11 +81,25 @@ public:
   auto as_object() const -> Object;
   auto as_array() const -> Array;
 
+  template<class T> bool is() const;
+  template<class T> auto as() const -> T;
+
   auto operator=(const Local &v) -> Local& { pjs_copy(m_id, v.m_id); return *this; }
   bool operator==(const Local &v) const { return is_equal_to(v.m_id); }
 
 protected:
   pjs_value m_id;
+};
+
+class Global : public Local {
+public:
+  Global(const Local &value) : Local(value.id()) {
+    pjs_hold(m_id);
+  }
+
+  ~Global() {
+    pjs_free(m_id);
+  }
 };
 
 class String : public Local {
@@ -92,16 +110,30 @@ public:
 
   auto length() const -> size_t { return pjs_string_get_length(m_id); }
   auto utf8_size() const -> size_t { return pjs_string_get_utf8_size(m_id); }
+  auto utf8_data(char *buf, size_t len) const -> size_t { return pjs_string_get_utf8_data(m_id, buf, len); }
   auto utf8_data() const -> std::string;
-  auto utf8_data(char *buf, size_t len) -> size_t { return pjs_string_get_utf8_data(m_id, buf, len); }
   auto char_code_at(int pos) -> int { return pjs_string_get_char_code(m_id, pos); }
 
 protected:
-  String(const pjs_value value)
-    : Local(value) {}
+  String(const pjs_value value) : Local(value) {}
 
   friend class Local;
 };
+
+inline auto String::utf8_data() const -> std::string {
+  auto n = utf8_size();
+  if (n >= 0) {
+    auto buf = new char[n];
+    utf8_data(buf, n);
+    std::string str(buf, n);
+    delete [] buf;
+    return str;
+  } else {
+    char buf[n];
+    utf8_data(buf, n);
+    return std::string(buf, n);
+  }
+}
 
 inline auto Local::to_string() const -> String {
   return String(pjs_to_string(m_id));
@@ -115,9 +147,18 @@ class Object : public Local {
 public:
   Object() : Object(pjs_object()) {}
 
+  auto get(String k) const -> Local {
+    Local v;
+    pjs_object_get_property(m_id, k.id(), v.id());
+    return v;
+  }
+
+  void set(String k, Local v) {
+    pjs_object_set_property(m_id, k.id(), v.id());
+  }
+
 protected:
-  Object(const pjs_value value)
-    : Local(value) {}
+  Object(const pjs_value value) : Local(value) {}
 
   friend class Local;
 };
@@ -131,8 +172,7 @@ public:
   Array(size_t len = 0) : Array(pjs_array(len)) {}
 
 protected:
-  Array(const pjs_value value)
-    : Local(value) {}
+  Array(const pjs_value value) : Local(value) {}
 
   friend class Local;
 };
@@ -141,16 +181,30 @@ inline auto Local::as_array() const -> Array {
   return Array(m_id);
 }
 
-class Global : public Local {
+class Data : public Local {
 public:
-  Global(const Local &value) : Local(value.id()) {
-    pjs_hold(m_id);
-  }
+  Data() : Data(pipy_Data_new(nullptr, 0)) {}
+  Data(const char *buf, size_t len) : Data(pipy_Data_new(buf, len)) {}
 
-  ~Global() {
-    pjs_free(m_id);
-  }
+  auto size() const -> size_t { return pipy_Data_get_size(m_id); }
+  auto read(char *buf, size_t len) const -> size_t { return pipy_Data_get_data(m_id, buf, len); }
+  auto push(Local data) -> Data { return Data(pipy_Data_push(m_id, data.id())); }
+  auto pop(size_t len) -> Data { return Data(pipy_Data_pop(m_id, len)); }
+  auto shift(size_t len) -> Data { return Data(pipy_Data_shift(m_id, len)); }
+
+protected:
+  Data(const pjs_value value) : Local(value) {}
+
+  friend class Local;
 };
+
+template<> bool Local::is<Data>() const {
+  return pipy_is_Data(m_id);
+}
+
+template<> auto Local::as<Data>() const -> Data {
+  return Data(m_id);
+}
 
 class PipelineBase {
 public:

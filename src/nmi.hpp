@@ -27,7 +27,6 @@
 #define NMI_HPP
 
 #include "pipy/nmi.h"
-#include "pipy/nmi-cpp.h"
 #include "pjs/pjs.hpp"
 #include "context.hpp"
 #include "module.hpp"

@@ -17,7 +17,9 @@
     pjs_is_undefined;
     pjs_is_null;
     pjs_is_nullish;
+    pjs_is_string;
     pjs_is_empty_string;
+    pjs_is_object;
     pjs_is_instance_of;
     pjs_is_array;
     pjs_is_function;

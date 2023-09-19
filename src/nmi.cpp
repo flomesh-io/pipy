@@ -449,9 +449,23 @@ NMI_EXPORT int pjs_is_nullish(pjs_value v) {
   return false;
 }
 
+NMI_EXPORT int pjs_is_string(pjs_value v) {
+  if (auto *r = nmi::s_values.get(v)) {
+    return r->v.is_string();
+  }
+  return false;
+}
+
 NMI_EXPORT int pjs_is_empty_string(pjs_value v) {
   if (auto *r = nmi::s_values.get(v)) {
     return r->v.is_string() && r->v.s()->length() == 0;
+  }
+  return false;
+}
+
+NMI_EXPORT int pjs_is_object(pjs_value v) {
+  if (auto *r = nmi::s_values.get(v)) {
+    return r->v.is_object();
   }
   return false;
 }
