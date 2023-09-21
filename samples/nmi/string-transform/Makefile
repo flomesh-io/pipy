@@ -15,7 +15,7 @@ endif
 all: ${PRODUCT}
 
 ${PRODUCT}: ${ROOT_DIR}/string-transform.cpp
-	clang++ -I${INC_DIR} ${LDFLAGS} -shared -fPIC $< -o $@
+	clang++ -std=c++11 -I${INC_DIR} ${LDFLAGS} -shared -fPIC $< -o $@
 
 clean:
 	rm -f ${PRODUCT}

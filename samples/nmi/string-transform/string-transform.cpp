@@ -24,6 +24,14 @@ public:
   }
 
 private:
+  enum State {
+    NORMAL,
+    LINE_COMMENT,
+    BLOCK_COMMENT,
+    REGEXP_MAYBE,
+    REGEXP,
+  };
+
   void scan(const char *buf, int len) {
     for (auto i = 0; i < len; i++) {
       auto c = buf[i];
@@ -53,9 +61,38 @@ private:
         }
       } else {
         output(c);
-        if (c == '"' || c == '\'') {
+        if (m_state == LINE_COMMENT) {
+          if (c == '\n') {
+            m_state = NORMAL;
+          }
+        } else if (m_state == BLOCK_COMMENT) {
+          if (c == '/' && m_last_char == '*') {
+            m_state = NORMAL;
+          }
+        } else if (m_state == REGEXP) {
+          if (m_has_escaped) {
+            m_has_escaped = false;
+          } else if (c == '\\') {
+            m_has_escaped = true;
+          } else if (c == '/') {
+            m_state = NORMAL;
+          }
+        } else if (c == '/') {
+          if (m_last_char == '/') {
+            m_state = LINE_COMMENT;
+          } else if (m_last_char != '_' && !std::isalnum(m_last_char)) {
+            m_state = REGEXP_MAYBE;
+          }
+        } else if (c == '*') {
+          if (m_last_char == '/') {
+            m_state = BLOCK_COMMENT;
+          }
+        } else if (m_state == REGEXP_MAYBE) {
+          m_state = REGEXP;
+        } else if (c == '"' || c == '\'') {
           m_current_quote = c;
         }
+        m_last_char = c;
       }
     }
   }
@@ -76,18 +113,21 @@ private:
       }
     }
     for (auto c : s) {
-      switch (c) {
-        case '"' : output('\\'); output('"'); break;
-        case '\'': output('\\'); output('\''); break;
-        case '\\': output('\\'); output('\\'); break;
-        case '\a': output('\\'); output('a'); break;
-        case '\b': output('\\'); output('b'); break;
-        case '\f': output('\\'); output('f'); break;
-        case '\n': output('\\'); output('n'); break;
-        case '\r': output('\\'); output('r'); break;
-        case '\t': output('\\'); output('t'); break;
-        case '\v': output('\\'); output('v'); break;
-        default: output(c); break;
+      if (c == m_current_quote) {
+        output('\\');
+        output(c);
+      } else {
+        switch (c) {
+          case '\\': output('\\'); output('\\'); break;
+          case '\a': output('\\'); output('a'); break;
+          case '\b': output('\\'); output('b'); break;
+          case '\f': output('\\'); output('f'); break;
+          case '\n': output('\\'); output('n'); break;
+          case '\r': output('\\'); output('r'); break;
+          case '\t': output('\\'); output('t'); break;
+          case '\v': output('\\'); output('v'); break;
+          default: output(c); break;
+        }
       }
     }
   }
@@ -103,6 +143,8 @@ private:
   int m_output_pointer = 0;
   int m_current_quote = 0;
   std::string m_current_string;
+  State m_state = NORMAL;
+  char m_last_char = 0;
   bool m_has_escaped = false;
 };
 
