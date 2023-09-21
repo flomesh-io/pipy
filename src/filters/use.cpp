@@ -194,6 +194,23 @@ void Use::reset() {
   }
 }
 
+void Use::chain() {
+  Filter::chain();
+  if (!m_stages.empty()) {
+    if (m_pipeline_name_down) {
+      auto &s = m_stages.front();
+      if (auto p = s.m_pipeline_down.get()) {
+        p->chain(Filter::output());
+      }
+    } else {
+      auto &s = m_stages.back();
+      if (auto p = s.m_pipeline.get()) {
+        p->chain(Filter::output());
+      }
+    }
+  }
+}
+
 void Use::process(Event *evt) {
   if (m_native) {
     if (!m_native_pipeline) {
