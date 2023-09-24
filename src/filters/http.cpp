@@ -1273,15 +1273,10 @@ auto Demux::clone() -> Filter* {
 
 void Demux::chain() {
   Filter::chain();
-  if (m_http2) {
-    Decoder::chain(http2::Server::input());
-    http2::Server::chain(Filter::output());
-  } else {
-    Decoder::chain(DemuxQueue::input());
-    DemuxQueue::chain(Encoder::input());
-    Encoder::chain(Filter::output());
-    Encoder::set_buffer_size(m_options.buffer_size);
-  }
+  Decoder::chain(DemuxQueue::input());
+  DemuxQueue::chain(Encoder::input());
+  Encoder::chain(Filter::output());
+  Encoder::set_buffer_size(m_options.buffer_size);
 }
 
 void Demux::reset() {
@@ -1783,13 +1778,6 @@ void TunnelServer::reset() {
   Filter::reset();
   m_pipeline = nullptr;
   m_message_reader.reset();
-}
-
-void TunnelServer::chain() {
-  Filter::chain();
-  if (m_pipeline) {
-    m_pipeline->chain(Filter::output());
-  }
 }
 
 void TunnelServer::process(Event *evt) {

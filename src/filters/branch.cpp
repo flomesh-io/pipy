@@ -60,13 +60,6 @@ void BranchBase::reset() {
   m_chosen = false;
 }
 
-void BranchBase::chain() {
-  Filter::chain();
-  if (m_pipeline) {
-    m_pipeline->chain(Filter::output());
-  }
-}
-
 void BranchBase::process(Event *evt) {
   if (!m_chosen) {
     if (!choose(evt)) return;
