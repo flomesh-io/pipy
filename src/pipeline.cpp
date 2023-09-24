@@ -185,9 +185,17 @@ Pipeline::Pipeline(PipelineLayout *layout)
     filter->m_pipeline = this;
     m_filters.push(filter);
   }
-  for (auto f = m_filters.head(); f; f = f->next()) {
-    f->chain();
-    f->reset();
+  if (auto f = m_filters.head()) {
+    EventProxy::chain_forward(f->EventFunction::input());
+    while (f) {
+      auto n = f->next();
+      f->EventFunction::chain(n ? n->EventFunction::input() : EventProxy::reply());
+      f->chain();
+      f->reset();
+      f = n;
+    }
+  } else {
+    EventProxy::chain_forward(EventProxy::reply());
   }
 }
 
@@ -200,19 +208,13 @@ Pipeline::~Pipeline() {
   }
 }
 
-void Pipeline::chain(Input *input) {
-  EventFunction::chain(input);
-  if (auto f = m_filters.tail()) {
-    f->chain();
-  }
+void Pipeline::on_input(Event *evt) {
+  EventProxy::forward(evt);
 }
 
-void Pipeline::on_event(Event *evt) {
-  if (auto f = m_filters.head()) {
-    EventFunction::output(evt, f->input());
-  } else {
-    EventFunction::output(evt);
-  }
+void Pipeline::on_reply(Event *evt) {
+  auto_release(this);
+  EventProxy::output(evt);
 }
 
 void Pipeline::on_auto_release() {
@@ -229,8 +231,8 @@ void Pipeline::shutdown() {
 
 void Pipeline::reset() {
   AutoReleased::reset();
-  EventTarget::close();
-  EventFunction::chain(nullptr);
+  EventFunction::close();
+  EventProxy::chain(nullptr);
   for (auto f = m_filters.head(); f; f = f->next()) {
     f->reset();
   }

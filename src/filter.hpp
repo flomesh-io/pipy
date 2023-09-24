@@ -116,8 +116,6 @@ public:
   virtual void dump(Dump &d);
 
   auto pipeline() const -> Pipeline* { return m_pipeline; }
-  void output(Event *evt);
-  void output(Event *evt, EventTarget::Input *input);
   void output(Message *msg);
   void output(Message *msg, EventTarget::Input *input);
   bool output(pjs::Object *obj);

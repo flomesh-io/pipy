@@ -138,7 +138,7 @@ private:
 //
 
 class Pipeline :
-  public EventFunction,
+  public EventProxy,
   public AutoReleased,
   public List<Pipeline>::Item
 {
@@ -151,19 +151,19 @@ public:
   auto context() const -> Context* { return m_context; }
   auto chain() const -> PipelineLayout::Chain* { return m_chain; }
   void chain(PipelineLayout::Chain *chain) { m_chain = chain; }
+  void chain(Input *input) { EventProxy::chain(input); }
 
   auto start(int argc = 0, pjs::Value *argv = nullptr) -> Pipeline* {
     m_layout->start(this, argc, argv);
     return this;
   }
 
-  virtual void chain(Input *input) override;
-
 private:
   Pipeline(PipelineLayout *layout);
   ~Pipeline();
 
-  virtual void on_event(Event *evt) override;
+  virtual void on_input(Event *evt) override;
+  virtual void on_reply(Event *evt) override;
   virtual void on_auto_release() override;
 
   PipelineLayout* m_layout;

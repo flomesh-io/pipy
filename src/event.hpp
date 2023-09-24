@@ -333,7 +333,7 @@ private:
 
 class EventFunction : public EventTarget {
 public:
-  virtual void chain(Input *input) {
+  void chain(Input *input) {
     if (input) {
       m_output = input;
     } else {
@@ -435,7 +435,7 @@ public:
     return EventFunction::input();
   }
 
-  virtual void chain(Input *input) override {
+  void chain(Input *input) {
     EventFunction::chain(input);
   }
 

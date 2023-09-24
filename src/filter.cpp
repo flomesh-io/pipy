@@ -136,12 +136,8 @@ void Filter::bind() {
   }
 }
 
-void Filter::chain() {
-  if (auto f = next()) {
-    EventFunction::chain(f->EventFunction::input());
-  } else if (auto p = m_pipeline) {
-    EventFunction::chain(p->EventFunction::output());
-  }
+void Filter::chain()
+{
 }
 
 void Filter::reset()
@@ -206,33 +202,19 @@ void Filter::on_event(Event *evt) {
   process(evt);
 }
 
-void Filter::output(Event *evt) {
-  Pipeline::auto_release(m_pipeline);
-  EventFunction::output(evt);
-}
-
-void Filter::output(Event *evt, EventTarget::Input *input) {
-  Pipeline::auto_release(m_pipeline);
-  input->input(evt);
-}
-
 void Filter::output(Message *msg) {
-  Pipeline::auto_release(m_pipeline);
   msg->write(EventFunction::output());
 }
 
 void Filter::output(Message *msg, EventTarget::Input *input) {
-  Pipeline::auto_release(m_pipeline);
   msg->write(input);
 }
 
 bool Filter::output(pjs::Object *obj) {
-  Pipeline::auto_release(m_pipeline);
   return Message::output(obj, EventFunction::output());
 }
 
 bool Filter::output(pjs::Object *obj, EventTarget::Input *input) {
-  Pipeline::auto_release(m_pipeline);
   return Message::output(obj, input);
 }
 
