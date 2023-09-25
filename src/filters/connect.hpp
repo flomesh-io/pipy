@@ -36,7 +36,7 @@ namespace pipy {
 // Connect
 //
 
-class Connect : public Filter, public EventSource {
+class Connect : public Filter {
 public:
   struct Options : public pipy::Options, public Outbound::Options {
     pjs::Ref<pjs::Str> bind;
@@ -57,7 +57,6 @@ private:
   virtual auto clone() -> Filter* override;
   virtual void reset() override;
   virtual void process(Event *evt) override;
-  virtual void on_reply(Event *evt) override;
   virtual void dump(Dump &d) override;
 
   pjs::Value m_target;
