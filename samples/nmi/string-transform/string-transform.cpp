@@ -46,10 +46,12 @@ private:
             case 't': c = '\t'; break;
             case 'v': c = '\v'; break;
             case '0': c = '\0'; break;
+            case 'x': c = '\x10'; break;
+            case 'u': c = '\x11'; break;
           }
           m_current_string += c;
           m_has_escaped = false;
-        } if (c == m_current_quote) {
+        } else if (c == m_current_quote) {
           output(m_current_string);
           output(c);
           m_current_string.clear();
@@ -80,7 +82,7 @@ private:
         } else if (c == '/') {
           if (m_last_char == '/') {
             m_state = LINE_COMMENT;
-          } else if (m_last_char != '_' && !std::isalnum(m_last_char)) {
+          } else if (m_last_non_space != '_' && !std::isalnum(m_last_non_space)) {
             m_state = REGEXP_MAYBE;
           }
         } else if (c == '*') {
@@ -89,10 +91,12 @@ private:
           }
         } else if (m_state == REGEXP_MAYBE) {
           m_state = REGEXP;
+          m_has_escaped = (c == '\\');
         } else if (c == '"' || c == '\'') {
           m_current_quote = c;
         }
         m_last_char = c;
+        if (!std::isspace(c)) m_last_non_space = c;
       }
     }
   }
@@ -118,6 +122,7 @@ private:
         output(c);
       } else {
         switch (c) {
+          case '\0': output('\\'); output('0'); break;
           case '\\': output('\\'); output('\\'); break;
           case '\a': output('\\'); output('a'); break;
           case '\b': output('\\'); output('b'); break;
@@ -126,6 +131,8 @@ private:
           case '\r': output('\\'); output('r'); break;
           case '\t': output('\\'); output('t'); break;
           case '\v': output('\\'); output('v'); break;
+          case '\x10': output('\\'); output('x'); break;
+          case '\x11': output('\\'); output('u'); break;
           default: output(c); break;
         }
       }
@@ -145,6 +152,7 @@ private:
   std::string m_current_string;
   State m_state = NORMAL;
   char m_last_char = 0;
+  char m_last_non_space = 0;
   bool m_has_escaped = false;
 };
 
