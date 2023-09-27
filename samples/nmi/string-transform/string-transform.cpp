@@ -82,7 +82,12 @@ private:
         } else if (c == '/') {
           if (m_last_char == '/') {
             m_state = LINE_COMMENT;
-          } else if (m_last_non_space != '_' && !std::isalnum(m_last_non_space)) {
+          } else if (
+            m_last_non_space != '_' &&
+            m_last_non_space != ')' &&
+            m_last_non_space != ']' &&
+            !std::isalnum(m_last_non_space)
+          ) {
             m_state = REGEXP_MAYBE;
           }
         } else if (c == '*') {
