@@ -386,10 +386,10 @@ void WorkerThread::shutdown_all(bool force) {
 void WorkerThread::main() {
   Log::init();
 
+  m_new_worker = Worker::make(m_graph_enabled);
   auto &entry = Codebase::current()->entry();
-  auto worker = Worker::make(m_graph_enabled);
-  auto mod = worker->load_js_module(entry);
-  bool started = (mod && worker->bind() && worker->start(m_force_start));
+  auto mod = m_new_worker->load_js_module(entry);
+  bool started = (mod && m_new_worker->bind() && m_new_worker->start(m_force_start));
 
   {
     std::lock_guard<std::mutex> lock(m_mutex);
@@ -435,6 +435,9 @@ void WorkerThread::main() {
     }
 
     Log::info("[start] Thread %d ended", m_index);
+
+  } else {
+    m_new_worker->stop(true);
   }
 
   Log::shutdown();

@@ -59,7 +59,7 @@ static void logf(Log::Level level, const char *fmt, va_list ap) {
   static bool s_is_logging = false;
   if (Log::is_enabled(level)) {
     char header[100], msg[1000];
-    if (s_is_logging || s_log_local_only) {
+    if (!s_logger || s_is_logging || s_log_local_only) {
       Log::format_header(level, header, sizeof(header));
       std::vsnprintf(msg, sizeof(msg), fmt, ap);
       std::cerr << header << msg << std::endl;
