@@ -1,5 +1,9 @@
 #include <pipy/nmi-cpp.h>
 
+#include <cctype>
+#include <set>
+#include <string>
+
 using namespace pipy;
 
 thread_local static nmi::Variable s_str_map;
@@ -37,30 +41,27 @@ private:
       auto c = buf[i];
       if (m_current_quote) {
         if (m_has_escaped) {
-          switch (c) {
-            case 'a': c = '\a'; break;
-            case 'b': c = '\b'; break;
-            case 'f': c = '\f'; break;
-            case 'n': c = '\n'; break;
-            case 'r': c = '\r'; break;
-            case 't': c = '\t'; break;
-            case 'v': c = '\v'; break;
-            case '0': c = '\0'; break;
-          }
           m_current_string += c;
           m_has_escaped = false;
-        } if (c == m_current_quote) {
+        } else if (c == m_current_quote) {
           output(m_current_string);
           output(c);
           m_current_string.clear();
           m_current_quote = 0;
         } else if (c == '\\') {
+          m_current_string += c;
           m_has_escaped = true;
         } else {
           m_current_string += c;
         }
       } else {
         output(c);
+        if (is_identifier_char(c)) {
+          if (!is_identifier_char(m_last_char)) {
+            m_last_keyword.clear();
+          }
+          m_last_keyword += c;
+        }
         if (m_state == LINE_COMMENT) {
           if (c == '\n') {
             m_state = NORMAL;
@@ -80,7 +81,9 @@ private:
         } else if (c == '/') {
           if (m_last_char == '/') {
             m_state = LINE_COMMENT;
-          } else if (m_last_char != '_' && !std::isalnum(m_last_char)) {
+          } else if (is_identifier_char(m_last_non_space)) {
+            if (s_keywords_prior_to_regexps.count(m_last_keyword)) m_state = REGEXP_MAYBE;
+          } else if (m_last_non_space != ')' && m_last_non_space != ']') {
             m_state = REGEXP_MAYBE;
           }
         } else if (c == '*') {
@@ -89,10 +92,12 @@ private:
           }
         } else if (m_state == REGEXP_MAYBE) {
           m_state = REGEXP;
+          m_has_escaped = (c == '\\');
         } else if (c == '"' || c == '\'') {
           m_current_quote = c;
         }
         m_last_char = c;
+        if (!std::isspace(c)) m_last_non_space = c;
       }
     }
   }
@@ -113,22 +118,7 @@ private:
       }
     }
     for (auto c : s) {
-      if (c == m_current_quote) {
-        output('\\');
-        output(c);
-      } else {
-        switch (c) {
-          case '\\': output('\\'); output('\\'); break;
-          case '\a': output('\\'); output('a'); break;
-          case '\b': output('\\'); output('b'); break;
-          case '\f': output('\\'); output('f'); break;
-          case '\n': output('\\'); output('n'); break;
-          case '\r': output('\\'); output('r'); break;
-          case '\t': output('\\'); output('t'); break;
-          case '\v': output('\\'); output('v'); break;
-          default: output(c); break;
-        }
-      }
+      output(c);
     }
   }
 
@@ -139,13 +129,25 @@ private:
     }
   }
 
+  static bool is_identifier_char(char c) {
+    return std::isalnum(c) || c == '_' || c == '$';
+  }
+
+  static std::set<std::string> s_keywords_prior_to_regexps;
+
   char m_output_buffer[1000];
   int m_output_pointer = 0;
   int m_current_quote = 0;
   std::string m_current_string;
+  std::string m_last_keyword;
   State m_state = NORMAL;
   char m_last_char = 0;
+  char m_last_non_space = 0;
   bool m_has_escaped = false;
+};
+
+std::set<std::string> StringTransformPipeline::s_keywords_prior_to_regexps = {
+  "return", "yield", "void",
 };
 
 extern "C" void pipy_module_init() {
