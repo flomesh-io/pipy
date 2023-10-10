@@ -41,6 +41,18 @@ template<> void pjs::EnumDef<expr::TypeOf::Type>::init() {
 }
 
 //
+// Expr
+//
+
+Expr::Expr()
+{
+}
+
+Expr::~Expr()
+{
+}
+
+//
 // Expr::Imports
 //
 

@@ -156,7 +156,8 @@ public:
   // Expression base methods
   //
 
-  virtual ~Expr() {}
+  Expr();
+  virtual ~Expr();
   virtual bool is_left_value() const { return false; }
   virtual bool is_argument_list() const { return false; }
   virtual bool is_argument() const { return false; }

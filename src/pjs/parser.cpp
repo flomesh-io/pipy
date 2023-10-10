@@ -1121,6 +1121,8 @@ Expr* ExpressionParser::expression(bool no_comma) {
               delete a;
               delete b;
               return error(UnexpectedToken);
+            } else {
+              delete b;
             }
             e = (o.id() == Token::OPR("?.") ? opt_prop(a, s) : prop(a, s));
             break;
