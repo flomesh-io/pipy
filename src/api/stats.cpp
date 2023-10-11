@@ -84,12 +84,15 @@ auto Metric::local() -> MetricSet& {
   return s_local_metric_set;
 }
 
+static int s_count = 0;
+
 Metric::Metric(pjs::Str *name, pjs::Array *label_names, MetricSet *set)
   : m_root(nullptr)
   , m_name(name)
   , m_label_index(-1)
   , m_label_names(std::make_shared<std::vector<pjs::Ref<pjs::Str>>>())
 {
+  // printf("metric count = %d\n", ++s_count);
   if (label_names) {
     std::string shape;
     auto n = label_names->length();
@@ -121,9 +124,14 @@ Metric::Metric(Metric *parent, pjs::Str **labels)
   , m_label_index(parent->m_label_index + 1)
   , m_label_names(parent->m_label_names)
 {
+  // printf("metric count = %d\n", ++s_count);
   parent->m_subs.emplace_back();
   parent->m_subs.back() = this;
   parent->m_sub_map[m_label] = this;
+}
+
+Metric::~Metric() {
+  // printf("metric count = %d\n", --s_count);
 }
 
 auto Metric::with_labels(pjs::Str *const *labels, int count) -> Metric* {

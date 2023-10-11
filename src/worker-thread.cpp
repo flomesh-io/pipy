@@ -438,6 +438,7 @@ void WorkerThread::main() {
 
   } else {
     m_new_worker->stop(true);
+    m_new_worker = nullptr;
   }
 
   Log::shutdown();
