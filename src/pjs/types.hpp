@@ -887,28 +887,66 @@ protected:
 };
 
 //
+// ClassMap
+//
+
+class ClassMap : public RefCount<ClassMap> {
+public:
+  static auto get() -> ClassMap* {
+    if (!m_singleton) {
+      m_singleton = new ClassMap;
+    }
+    return m_singleton;
+  }
+
+  auto get(const std::string &name) -> Class* {
+    auto i = m_class_map.find(name);
+    return i == m_class_map.end() ? nullptr : i->second;
+  }
+
+  auto get(size_t id) -> Class* {
+    if (id >= m_class_slots.size()) return nullptr;
+    return m_class_slots[id].class_ptr;
+  }
+
+  auto all() -> const std::map<std::string, Class*>& { return m_class_map; }
+
+  auto add(Class *c) -> size_t;
+  void remove(Class *c);
+
+private:
+  struct Slot {
+    Class *class_ptr;
+    size_t next_slot;
+  };
+
+  std::map<std::string, Class*> m_class_map;
+  std::vector<Slot> m_class_slots;
+  size_t m_class_slot_free = 0;
+
+  thread_local static Ref<ClassMap> m_singleton;
+};
+
+//
 // Class
 //
 
-class Class :
-  public RefCount<Class>,
-  public Pooled<Class> // TODO: crashes when reload on Ubuntu without being pooled, why?
-{
+class Class : public RefCount<Class> {
 public:
   static auto make(const std::string &name, Class *super, const std::list<Field*> &fields) -> Class* {
     return new Class(name, super, fields);
   }
 
-  static auto all() -> const std::map<std::string, Class*>& { return m_class_map; }
+  static auto all() -> const std::map<std::string, Class*>& {
+    return ClassMap::get()->all();
+  }
 
   static auto get(const std::string &name) -> Class* {
-    auto i = m_class_map.find(name);
-    return i == m_class_map.end() ? nullptr : i->second;
+    return ClassMap::get()->get(name);
   }
 
   static auto get(size_t id) -> Class* {
-    if (id >= m_class_slots.size()) return nullptr;
-    return m_class_slots[id].class_ptr;
+    return ClassMap::get()->get(id);
   }
 
   auto name() const -> pjs::Str* { return m_name; }
@@ -967,7 +1005,8 @@ private:
   ~Class();
 
   Class* m_super = nullptr;
-  pjs::Ref<pjs::Str> m_name;
+  Ref<Str> m_name;
+  Ref<ClassMap> m_class_map;
   std::function<Object*(Context&)> m_ctor;
   std::function<void(Object*, int, Value&)> m_geti;
   std::function<void(Object*, int, const Value&)> m_seti;
@@ -977,15 +1016,6 @@ private:
   std::unordered_map<Str*, int> m_field_map;
   size_t m_id;
   size_t m_object_count = 0;
-
-  struct ClassSlot {
-    Class *class_ptr;
-    size_t next_slot;
-  };
-
-  thread_local static std::map<std::string, Class*> m_class_map;
-  thread_local static std::vector<ClassSlot> m_class_slots;
-  thread_local static size_t m_class_slot_free;
 
   friend class RefCount<Class>;
 };
@@ -1014,7 +1044,6 @@ public:
       }
       delete m_init_data;
       m_init_data = nullptr;
-      m_c->retain();
     }
     return m_c;
   }
@@ -1060,14 +1089,14 @@ private:
     std::function<void(Object*, int, const Value&)> seti;
   };
 
-  thread_local static Class* m_c;
+  thread_local static Ref<Class> m_c;
   thread_local static InitData* m_init_data;
 };
 
 template<class T>
 Class* class_of() { return ClassDef<T>::get(); }
 
-template<class T> thread_local Class* ClassDef<T>::m_c = nullptr;
+template<class T> thread_local Ref<Class> ClassDef<T>::m_c;
 template<class T> thread_local typename ClassDef<T>::InitData* ClassDef<T>::m_init_data = nullptr;
 
 template<class T>
@@ -1794,8 +1823,8 @@ inline auto Class::init(Object *obj, Object *prototype) -> Object* {
 
 inline void Class::free(Object *obj) {
   obj->m_data->free();
-  release();
   m_object_count--;
+  release();
 }
 
 inline bool Object::has(Str *key) {

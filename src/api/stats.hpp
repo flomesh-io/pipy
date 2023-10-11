@@ -68,7 +68,7 @@ public:
 protected:
   Metric(pjs::Str *name, pjs::Array *label_names, MetricSet *set = nullptr);
   Metric(Metric *parent, pjs::Str **labels);
-  virtual ~Metric(); // {}
+  virtual ~Metric() {}
 
   bool has_value() const { return m_has_value; }
   void create_value();

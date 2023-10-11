@@ -59,20 +59,16 @@ Cache::Options::Options(pjs::Object *options) {
 // Cache
 //
 
-static int s_count = 0;
-
 Cache::Cache(const Options &options, pjs::Function *allocate, pjs::Function *free)
   : m_options(options)
   , m_allocate(allocate)
   , m_free(free)
   , m_cache(pjs::OrderedHash<pjs::Value, Entry>::make())
 {
-  // printf("cache count = %d\n", ++s_count);
   m_options.ttl *= 1000;
 }
 
 Cache::~Cache() {
-  // printf("cache count = %d\n", --s_count);
 }
 
 bool Cache::get(pjs::Context &ctx, const pjs::Value &key, pjs::Value &value) {

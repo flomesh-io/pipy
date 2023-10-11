@@ -541,12 +541,35 @@ void Context::backtrace(const std::string &name) {
 }
 
 //
-// Class
+// ClassMap
 //
 
-thread_local std::map<std::string, Class*> Class::m_class_map;
-thread_local std::vector<Class::ClassSlot> Class::m_class_slots(1);
-thread_local size_t Class::m_class_slot_free = 0;
+thread_local Ref<ClassMap> ClassMap::m_singleton;
+
+auto ClassMap::add(Class *c) -> size_t {
+  auto id = m_class_slot_free;
+  if (!id) {
+    id = m_class_slots.size();
+    m_class_slots.push_back({ c });
+  } else {
+    m_class_slot_free = m_class_slots[id].next_slot;
+    m_class_slots[id].class_ptr = c;
+  }
+  if (c->name() != Str::empty) m_class_map[c->name()->str()] = c;
+  return id;
+}
+
+void ClassMap::remove(Class *c) {
+  if (c->name() != Str::empty) m_class_map.erase(c->name()->str());
+  auto &slot = m_class_slots[c->id()];
+  slot.class_ptr = nullptr;
+  slot.next_slot = m_class_slot_free;
+  m_class_slot_free = c->id();
+}
+
+//
+// Class
+//
 
 Class::Class(
   const std::string &name,
@@ -554,6 +577,7 @@ Class::Class(
   const std::list<Field*> &fields)
   : m_super(super)
   , m_name(pjs::Str::make(name))
+  , m_class_map(ClassMap::get())
 {
   if (super) {
     m_field_map = super->m_field_map;
@@ -583,26 +607,14 @@ Class::Class(
     }
   }
   for (auto &p : m_field_map) p.first->retain();
-  if (!name.empty()) m_class_map[name] = this;
-  if (auto id = m_class_slot_free) {
-    m_id = id;
-    m_class_slot_free = m_class_slots[id].next_slot;
-    m_class_slots[id].class_ptr = this;
-  } else {
-    m_id = m_class_slots.size();
-    m_class_slots.push_back({ this });
-  }
+  m_id = m_class_map->add(this);
 }
 
 Class::~Class() {
-  if (!m_name->str().empty()) m_class_map.erase(m_name->str());
-  auto &slot = m_class_slots[m_id];
-  slot.class_ptr = nullptr;
-  slot.next_slot = m_class_slot_free;
-  m_class_slot_free = m_id;
   for (auto &p : m_field_map) {
     p.first->release();
   }
+  if (m_class_map) m_class_map->remove(this);
 }
 
 void Class::assign(Object *obj, Object *src) {
