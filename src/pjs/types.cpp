@@ -462,6 +462,20 @@ bool Value::is_equal(const Value &a, const Value &b) {
 }
 
 //
+// Instance
+//
+
+Instance::~Instance() {
+  while (m_scopes) {
+    auto s = m_scopes;
+    remove(s);
+    s->retain();
+    s->clear(true);
+    s->release();
+  }
+}
+
+//
 // Context
 //
 
@@ -2136,7 +2150,7 @@ void Promise::Then::execute(State state, const Value &result) {
   if (m_context) {
     execute(m_context, state, result);
   } else {
-    Context ctx;
+    Context ctx(nullptr);
     execute(&ctx, state, result);
   }
 }

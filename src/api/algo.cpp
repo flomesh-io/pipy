@@ -68,7 +68,8 @@ Cache::Cache(const Options &options, pjs::Function *allocate, pjs::Function *fre
   m_options.ttl *= 1000;
 }
 
-Cache::~Cache() {
+Cache::~Cache()
+{
 }
 
 bool Cache::get(pjs::Context &ctx, const pjs::Value &key, pjs::Value &value) {

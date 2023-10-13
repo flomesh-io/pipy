@@ -49,7 +49,9 @@ class Source;
 class Array;
 class Boolean;
 class Class;
+class Instance;
 class Context;
+class Scope;
 class Error;
 class Field;
 class Variable;
@@ -1906,6 +1908,28 @@ inline bool Object::iterate_hash(const std::function<bool(Str*, Value&)> &callba
 }
 
 //
+// Instance
+//
+
+class Instance : public RefCount<Instance> {
+public:
+  static auto make() -> Instance* {
+    return new Instance;
+  }
+
+private:
+  ~Instance();
+
+  void add(Scope *scope);
+  void remove(Scope *scope);
+
+  Scope* m_scopes = nullptr;
+
+  friend class RefCount<Instance>;
+  friend class Scope;
+};
+
+//
 // Scope
 //
 
@@ -1916,8 +1940,8 @@ public:
     bool is_closure = false;
   };
 
-  static auto make(Scope *parent, int size, Variable *variables = nullptr) -> Scope* {
-    return new Scope(parent, size, variables);
+  static auto make(Instance *instance, Scope *parent, int size, Variable *variables = nullptr) -> Scope* {
+    return new Scope(instance, parent, size, variables);
   }
 
   auto parent() const -> Scope* { return m_parent; }
@@ -1933,28 +1957,36 @@ public:
     for (int i = argc; i < size; i++) data[i] = Value::undefined;
   }
 
-  void clear() {
+  void clear(bool all = false) {
     auto values = m_data->elements();
     for (size_t i = 0, n = m_data->size(); i < n; i++) {
-      if (!m_variables || !m_variables[i].is_closure) {
+      if (all || !m_variables || !m_variables[i].is_closure) {
         values[i] = Value::undefined;
       }
     }
   }
 
 private:
-  Scope(Scope *parent, int size, Variable *variables)
-    : m_parent(parent)
+  Scope(Instance *instance, Scope *parent, int size, Variable *variables)
+    : m_instance(instance)
+    , m_parent(parent)
     , m_data(Data::make(size))
-    , m_variables(variables) {}
+    , m_variables(variables) { if (instance) instance->add(this); }
 
-  ~Scope() { m_data->free(); }
+  ~Scope() {
+    m_data->free();
+    if (m_instance) m_instance->remove(this);
+  }
 
+  Instance* m_instance;
   Ref<Scope> m_parent;
   Data* m_data;
   Variable* m_variables;
+  Scope* m_prev;
+  Scope* m_next;
 
   friend class RefCount<Scope>;
+  friend class Instance;
 };
 
 //
@@ -1986,16 +2018,18 @@ public:
     auto where() const -> const Location*;
   };
 
-  Context()
-    : m_root(this)
+  Context(Instance *instance)
+    : m_instance(instance)
+    , m_root(this)
     , m_caller(nullptr)
     , m_level(0)
     , m_argc(0)
     , m_argv(nullptr)
     , m_error(std::make_shared<Error>()) {}
 
-  Context(Object *g, Ref<Object> *l = nullptr)
-    : m_root(this)
+  Context(Instance *instance, Object *g, Ref<Object> *l = nullptr)
+    : m_instance(instance)
+    , m_root(this)
     , m_caller(nullptr)
     , m_g(g)
     , m_l(l)
@@ -2005,7 +2039,8 @@ public:
     , m_error(std::make_shared<Error>()) {}
 
   Context(Context &ctx, int argc, Value *argv, Scope *scope)
-    : m_root(ctx.m_root)
+    : m_instance(ctx.m_instance)
+    , m_root(ctx.m_root)
     , m_caller(&ctx)
     , m_g(ctx.m_g)
     , m_l(ctx.m_l)
@@ -2015,6 +2050,7 @@ public:
     , m_argv(argv)
     , m_error(ctx.m_error) {}
 
+  auto instance() const -> Instance* { return m_instance; }
   auto root() const -> Context* { return m_root; }
   auto caller() const -> Context* { return m_caller; }
   auto g() const -> Object* { return m_g; }
@@ -2040,7 +2076,7 @@ public:
   void backtrace(const std::string &name);
 
   auto new_scope(int argc, int nvar, Scope::Variable *variables) -> Scope* {
-    auto *scope = Scope::make(m_scope, nvar, variables);
+    auto *scope = Scope::make(m_instance, m_scope, nvar, variables);
     scope->init(std::min(m_argc, argc), m_argv);
     m_scope = scope;
     return scope;
@@ -2231,8 +2267,11 @@ protected:
   }
 
 private:
+  Instance* m_instance;
   Context* m_root;
   Context* m_caller;
+  Context* m_prev;
+  Context* m_next;
   Ref<Object> m_g, *m_l;
   Ref<Scope> m_scope;
   int m_level;
@@ -2423,6 +2462,7 @@ private:
   }
 
   friend class RefCount<Context>;
+  friend class Instance;
 };
 
 template<class T, class Base = Context>
@@ -2442,8 +2482,20 @@ protected:
 };
 
 inline auto Class::construct() -> Object* {
-  Context ctx;
+  Context ctx(nullptr);
   return construct(ctx);
+}
+
+inline void Instance::add(Scope *s) {
+  s->m_prev = nullptr;
+  s->m_next = m_scopes;
+  if (m_scopes) m_scopes->m_prev = s;
+  m_scopes = s;
+}
+
+inline void Instance::remove(Scope *s) {
+  if (auto p = s->m_prev) p->m_next = s->m_next; else m_scopes = s->m_next;
+  if (auto n = s->m_next) n->m_prev = s->m_prev;
 }
 
 //

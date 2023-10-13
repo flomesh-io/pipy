@@ -152,6 +152,7 @@ private:
   Module* m_root = nullptr;
   Timer m_keep_alive;
   pjs::Ref<Thread> m_thread;
+  pjs::Ref<pjs::Instance> m_instance;
   pjs::Ref<pjs::Object> m_global_object;
   std::vector<Module*> m_modules;
   std::map<std::string, JSModule*> m_module_map;

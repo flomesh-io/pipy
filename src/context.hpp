@@ -27,7 +27,6 @@
 #define CONTEXT_HPP
 
 #include "pjs/pjs.hpp"
-#include "list.hpp"
 #include "inbound.hpp"
 #include "input.hpp"
 
@@ -42,10 +41,7 @@ class Worker;
 // Context
 //
 
-class Context :
-  public pjs::ContextTemplate<Context>,
-  public List<Context>::Item
-{
+class Context : public pjs::ContextTemplate<Context> {
 public:
   auto id() const -> uint64_t { return m_id; }
   auto data(int i) const -> ContextDataBase* { return m_data->at(i)->as<ContextDataBase>(); }
@@ -53,7 +49,7 @@ public:
   auto inbound() const -> Inbound* { return m_inbound; }
 
 protected:
-  Context() : Context(nullptr) {}
+  Context() : Context(nullptr, nullptr) {}
   ~Context();
 
   virtual void finalize() { delete this; }
@@ -62,6 +58,7 @@ private:
   typedef pjs::PooledArray<pjs::Ref<pjs::Object>> ContextData;
 
   Context(
+    pjs::Instance *instance,
     Context *base,
     Worker *worker = nullptr,
     pjs::Object *global = nullptr,
