@@ -96,6 +96,13 @@ void Listener::set_reuse_port(bool reuse) {
   s_reuse_port = reuse;
 }
 
+void Listener::delete_all() {
+  for (int i = 0; i < int(Listener::Protocol::MAX); i++) {
+    std::set<Listener*> all(std::move(s_listeners[i]));
+    for (auto l : all) delete l;
+  }
+}
+
 Listener::Listener(Protocol protocol, const std::string &ip, int port)
   : m_protocol(protocol)
   , m_ip(ip)
@@ -401,7 +408,7 @@ void Listener::AcceptorUDP::on_socket_describe(char *buf, size_t len) {
 auto ListenerArray::add_listener(int port, pjs::Object *options) -> Listener* {
   std::string ip_port("0.0.0.0:");
   ip_port += std::to_string(port);
-  return add_listener(pjs::Str::make(ip_port), options);
+  return add_listener(pjs::Ref<pjs::Str>(pjs::Str::make(ip_port)), options);
 }
 
 auto ListenerArray::add_listener(pjs::Str *port, pjs::Object *options) -> Listener* {
@@ -426,7 +433,7 @@ auto ListenerArray::add_listener(pjs::Str *port, pjs::Object *options) -> Listen
 auto ListenerArray::remove_listener(int port, pjs::Object *options) -> Listener* {
   std::string ip_port("0.0.0.0:");
   ip_port += std::to_string(port);
-  return remove_listener(pjs::Str::make(ip_port), options);
+  return remove_listener(pjs::Ref<pjs::Str>(pjs::Str::make(ip_port)), options);
 }
 
 auto ListenerArray::remove_listener(pjs::Str *port, pjs::Object *options) -> Listener* {

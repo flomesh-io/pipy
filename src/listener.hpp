@@ -82,6 +82,8 @@ public:
     }
   }
 
+  static void delete_all();
+
   auto options() const -> const Options& { return m_options; }
   auto protocol() const -> Protocol { return m_protocol; }
   auto ip() const -> const std::string& { return m_ip; }

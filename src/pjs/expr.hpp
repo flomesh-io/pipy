@@ -450,7 +450,7 @@ private:
 class Global : public Expr {
 public:
   Global(const std::string &key) : m_key(Str::make(key)) {}
-  Global(Str *key) : m_key(key->retain()) {}
+  Global(Str *key) : m_key(key) {}
 
   virtual bool is_left_value() const override;
   virtual bool eval(Context &ctx, Value &result) override;
@@ -470,7 +470,7 @@ private:
 class Local : public Expr {
 public:
   Local(const std::string &key) : m_key(Str::make(key)) {}
-  Local(int l, Str *key) : m_l(l), m_key(key->retain()) {}
+  Local(int l, Str *key) : m_l(l), m_key(key) {}
 
   virtual bool is_left_value() const override;
   virtual bool eval(Context &ctx, Value &result) override;

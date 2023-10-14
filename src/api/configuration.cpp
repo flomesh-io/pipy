@@ -573,7 +573,10 @@ void Configuration::listen(int port, pjs::Object *options) {
   auto &config = m_listens.back();
   config.index = next_pipeline_index();
   config.listeners = ListenerArray::make();
-  auto l = config.listeners->add_listener(pjs::Str::make(std::string("0.0.0.0:") + std::to_string(port)), options);
+  auto l = config.listeners->add_listener(
+    pjs::Ref<pjs::Str>(pjs::Str::make(std::string("0.0.0.0:") + std::to_string(port))),
+    options
+  );
   config.ip = l->ip();
   config.port = l->port();
   FilterConfigurator::set_pipeline_config(&config);
@@ -585,7 +588,7 @@ void Configuration::listen(const std::string &port, pjs::Object *options) {
   auto &config = m_listens.back();
   config.index = next_pipeline_index();
   config.listeners = ListenerArray::make();
-  auto l = config.listeners->add_listener(pjs::Str::make(port), options);
+  auto l = config.listeners->add_listener(pjs::Ref<pjs::Str>(pjs::Str::make(port)), options);
   config.ip = l->ip();
   config.port = l->port();
   FilterConfigurator::set_pipeline_config(&config);

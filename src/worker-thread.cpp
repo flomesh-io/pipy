@@ -442,6 +442,7 @@ void WorkerThread::main() {
   }
 
   Log::shutdown();
+  Listener::delete_all();
   Timer::cancel_all();
 }
 
