@@ -770,6 +770,70 @@ auto Object::values(Object *obj) -> Array* {
 }
 
 //
+// SharedValue
+//
+
+SharedValue::SharedValue(const Value &v)
+  : m_t(v.type())
+{
+  switch (m_t) {
+    case Value::Type::Boolean: m_v.b = v.b(); break;
+    case Value::Type::Number: m_v.n = v.n(); break;
+    case Value::Type::String: m_v.s = v.s()->data()->retain(); break;
+    case Value::Type::Object: m_v.o = SharedObject::make(v.o())->retain(); break;
+    default: break;
+  }
+}
+
+SharedValue::~SharedValue() {
+  switch (m_t) {
+    case Value::Type::String: m_v.s->release(); break;
+    case Value::Type::Object: if (auto o = m_v.o) o->release(); break;
+    default: break;
+  }
+}
+
+void SharedValue::to_value(Value &v) const {
+  switch (m_t) {
+    case Value::Type::Boolean: v.set(m_v.b); break;
+    case Value::Type::Number: v.set(m_v.n); break;
+    case Value::Type::String: v.set(Str::make(m_v.s)); break;
+    case Value::Type::Object: v.set(m_v.o ? m_v.o->to_object() : nullptr); break;
+    default: break;
+  }
+}
+
+//
+// SharedObject
+//
+
+SharedObject::SharedObject(Object *o) {
+  m_entries = PooledArray<Entry>::make(o->type()->field_count() + o->ht_size());
+  auto ents = m_entries->elements();
+  int i = 0;
+  o->iterate_all(
+    [&](Str *k, Value &v) {
+      auto &ent = ents[i++];
+      ent.k = k->data();
+      new (&ent.v) SharedValue(v);
+    }
+  );
+}
+
+auto SharedObject::to_object() -> Object* {
+  auto obj = Object::make();
+  auto ents = m_entries->elements();
+  for (size_t i = 0, n = m_entries->size(); i < n; i++) {
+    const auto &ent = ents[i];
+    if (ent.k) {
+      Value v; ent.v.to_value(v);
+      obj->set(Str::make(ent.k), v);
+    }
+  }
+  return obj;
+}
+
+//
 // Boolean
 //
 

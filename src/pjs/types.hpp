@@ -64,6 +64,8 @@ class Promise;
 class RegExp;
 class String;
 class Value;
+class SharedObject;
+class SharedValue;
 
 template<class T> Class* class_of();
 template<class T> T* coerce(Object *obj);
@@ -1756,6 +1758,54 @@ inline auto Value::value_of() const -> double {
   }
   return 0;
 }
+
+//
+// SharedValue
+//
+
+class SharedValue {
+public:
+  SharedValue() {}
+  SharedValue(const Value &v);
+  ~SharedValue();
+  void to_value(Value &v) const;
+
+private:
+  Value::Type m_t;
+  union {
+    bool b;
+    double n;
+    Str::CharData* s;
+    SharedObject* o;
+  } m_v;
+};
+
+//
+// SharedObject
+//
+
+class SharedObject : public Pooled<SharedObject> {
+public:
+  static auto make(Object *o) -> SharedObject* {
+    return new SharedObject(o);
+  }
+
+  auto retain() -> SharedObject* { m_refs.fetch_add(1, std::memory_order_relaxed); return this; }
+  void release() { if (m_refs.fetch_sub(1, std::memory_order_acq_rel) == 1) delete this; }
+  auto to_object() -> Object*;
+
+private:
+  SharedObject(Object *o);
+  ~SharedObject() { m_entries->free(); }
+
+  struct Entry {
+    Ref<Str::CharData> k;
+    SharedValue v;
+  };
+
+  PooledArray<Entry>* m_entries;
+  std::atomic<int> m_refs;
+};
 
 //
 // Variable
