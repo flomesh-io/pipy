@@ -184,6 +184,7 @@ add_executable(pipy
   src/data.cpp
   src/deframer.cpp
   src/event.cpp
+  src/event-queue.cpp
   src/fetch.cpp
   src/file.cpp
   src/filter.cpp
