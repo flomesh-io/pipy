@@ -56,6 +56,7 @@ public:
 
   static bool is_main() { return &s_current == s_main; }
 
+  auto io_context() -> asio::io_context& { return m_io_context; }
   bool is_running() const { return m_is_running; }
 
   void run();

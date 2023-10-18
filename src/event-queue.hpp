@@ -39,14 +39,11 @@ namespace pipy {
 // EventQueue
 //
 
-class EventQueue : public pjs::Pooled<EventQueue> {
+class EventQueue {
 public:
-  static auto make() -> EventQueue* {
-    return new EventQueue;
-  }
+  EventQueue();
+  ~EventQueue();
 
-  auto retain() -> EventQueue* { m_refs.fetch_add(1, std::memory_order_relaxed); return this; }
-  void release() { if (m_refs.fetch_sub(1, std::memory_order_acq_rel) == 1) delete this; }
   void enqueue(Event *evt);
   auto dequeue() -> Event*;
 
@@ -109,9 +106,6 @@ private:
     pjs::Ref<SharedData> data;
     std::atomic<SharedEventPtr> next;
   };
-
-  EventQueue();
-  ~EventQueue();
 
   auto alloc(Event *evt) -> SharedEventPtr {
     return s_event_pool.alloc(evt);
