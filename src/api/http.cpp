@@ -446,7 +446,9 @@ auto Directory::get_encoded_response(pjs::Context &ctx, File &file, RequestHead 
   bool has_br = false;
 
   pjs::Value accept_encoding;
-  request->headers->get(s_accept_encoding.get(), accept_encoding);
+  if (auto headers = request->headers.get()) {
+    headers->get(s_accept_encoding.get(), accept_encoding);
+  }
   if (accept_encoding.is_string()) {
     auto &s = accept_encoding.s()->str();
     for (size_t i = 0; i < s.length(); i++) {
