@@ -184,7 +184,6 @@ add_executable(pipy
   src/data.cpp
   src/deframer.cpp
   src/event.cpp
-  src/event-connection.cpp
   src/event-queue.cpp
   src/fetch.cpp
   src/file.cpp
@@ -255,6 +254,7 @@ add_executable(pipy
   src/options.cpp
   src/outbound.cpp
   src/pipeline.cpp
+  src/pipeline-async.cpp
   src/pjs/builtin.cpp
   src/pjs/expr.cpp
   src/pjs/parser.cpp

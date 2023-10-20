@@ -23,12 +23,13 @@
  *  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef EVENT_CONNECTION_HPP
-#define EVENT_CONNECTION_HPP
+#ifndef PIPELINE_ASYNC_HPP
+#define PIPELINE_ASYNC_HPP
 
 #include "event.hpp"
 #include "event-queue.hpp"
 #include "net.hpp"
+#include "pipeline.hpp"
 
 #include <atomic>
 #include <mutex>
@@ -36,43 +37,44 @@
 namespace pipy {
 
 //
-// EventConnection
+// PipelineAsyncWrapper
 //
 
-class EventConnection : public pjs::Pooled<EventConnection> {
+class PipelineAsyncWrapper : public EventTarget {
 public:
-  static void register_port(const std::string &port);
-  static void unregister_ports();
+  static void register_pipeline_layout(PipelineLayout *layout);
+  static void unregister_all_pipeline_layouts();
 
-  static auto make(const std::string &port) -> EventConnection* {
-    return new EventConnection(port);
+  static auto make(const std::string &name, EventTarget::Input *output) -> PipelineAsyncWrapper* {
+    return new PipelineAsyncWrapper(name, output);
   }
 
-  auto retain() -> EventConnection* { m_refs.fetch_add(1, std::memory_order_relaxed); return this; }
+  auto retain() -> PipelineAsyncWrapper* { m_refs.fetch_add(1, std::memory_order_relaxed); return this; }
   void release() { if (m_refs.fetch_sub(1, std::memory_order_acq_rel) == 1) delete this; }
 
   void input(Event *evt);
-  void output(Event *evt);
+  void close();
 
 private:
 
   //
-  // EventConnection::Listener
+  // PipelineAsyncWrapper::PipelineOwner
   //
 
-  struct Listener {
+  struct PipelineOwner {
     Net* net = nullptr;
-    Listener* next = nullptr;
+    pjs::Ref<PipelineLayout> layout;
+    PipelineOwner* next = nullptr;
   };
 
   //
-  // EventConnection::Port
+  // PipelineAsyncWrapper::PipelineEntry
   //
 
-  struct Port {
-    Listener* listeners = nullptr;
-    Listener* current = nullptr;
-    void add(Net *net);
+  struct PipelineEntry {
+    PipelineOwner* owners = nullptr;
+    PipelineOwner* current = nullptr;
+    void add(Net *net, PipelineLayout *layout);
     void remove(Net *net);
     auto next() -> Net*;
   };
@@ -81,32 +83,34 @@ private:
   // Handlers
   //
 
-  struct OpenHandler : SelfHandler<EventConnection> {
+  struct OpenHandler : SelfHandler<PipelineAsyncWrapper> {
     using SelfHandler::SelfHandler;
     OpenHandler(const OpenHandler &r) : SelfHandler(r) {}
     void operator()() { self->on_open(); }
   };
 
-  struct CloseHandler : SelfHandler<EventConnection> {
+  struct CloseHandler : SelfHandler<PipelineAsyncWrapper> {
     using SelfHandler::SelfHandler;
     CloseHandler(const CloseHandler &r) : SelfHandler(r) {}
     void operator()() { self->on_close(); }
   };
 
-  struct InputHandler : SelfHandler<EventConnection> {
+  struct InputHandler : SelfHandler<PipelineAsyncWrapper> {
     using SelfHandler::SelfHandler;
     InputHandler(const InputHandler &r) : SelfHandler(r) {}
     void operator()() { self->on_input(); }
   };
 
-  struct OutputHandler : SelfHandler<EventConnection> {
+  struct OutputHandler : SelfHandler<PipelineAsyncWrapper> {
     using SelfHandler::SelfHandler;
     OutputHandler(const OutputHandler &r) : SelfHandler(r) {}
     void operator()() { self->on_input(); }
   };
 
-  EventConnection(const std::string &port);
-  ~EventConnection() {}
+  PipelineAsyncWrapper(const std::string &name, EventTarget::Input *output);
+  ~PipelineAsyncWrapper() {}
+
+  virtual void on_event(Event *evt) override;
 
   void on_open();
   void on_close();
@@ -118,11 +122,14 @@ private:
   EventQueue m_output_queue;
   Net* m_input_net = nullptr;
   Net* m_output_net;
+  pjs::Ref<PipelineLayout> m_pipeline_layout;
+  pjs::Ref<Pipeline> m_pipeline;
+  pjs::Ref<EventTarget::Input> m_output;
 
-  static std::map<std::string, Port> m_ports;
-  static std::mutex m_ports_mutex;
+  static std::map<std::string, PipelineEntry> m_registry;
+  static std::mutex m_registry_mutex;
 };
 
 } // namespace pipy
 
-#endif // EVENT_CONNECTION_HPP
+#endif // PIPELINE_ASYNC_HPP
