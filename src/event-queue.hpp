@@ -56,7 +56,7 @@ private:
 
   class SharedEventPtr {
   public:
-    SharedEventPtr(uint32_t index = 0, uint32_t count = 0)
+    SharedEventPtr(uint32_t index = 0, uint32_t count = 0) noexcept
       : m_index_count(((uint64_t)count << 32) | index) {}
 
     auto index() const -> uint32_t {
