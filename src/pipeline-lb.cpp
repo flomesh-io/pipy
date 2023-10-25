@@ -28,6 +28,18 @@
 
 namespace pipy {
 
+PipelineLoadBalancer::~PipelineLoadBalancer() {
+  for (const auto &m : m_modules) {
+    for (const auto &p : m.second.pipelines) {
+      auto t = p.second.targets;
+      while (t) {
+        auto target = t; t = t->next;
+        delete t;
+      }
+    }
+  }
+}
+
 void PipelineLoadBalancer::add_target(PipelineLayout *layout) {
   std::lock_guard<std::mutex> lock(m_mutex);
   auto *m = static_cast<Module*>(layout->module());

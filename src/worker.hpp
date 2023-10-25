@@ -40,6 +40,7 @@ namespace pipy {
 
 class Thread;
 class PipelineLayout;
+class PipelineLoadBalancer;
 class Task;
 class Watch;
 
@@ -49,8 +50,8 @@ class Watch;
 
 class Worker : public pjs::RefCount<Worker> {
 public:
-  static auto make(bool is_graph_enabled = false) -> Worker* {
-    return new Worker(is_graph_enabled);
+  static auto make(PipelineLoadBalancer *plb, bool is_graph_enabled = false) -> Worker* {
+    return new Worker(plb, is_graph_enabled);
   }
 
   static auto current() -> Worker* {
@@ -82,7 +83,7 @@ public:
   bool admin(Message *request, const std::function<void(Message*)> &respond);
 
 private:
-  Worker(bool is_graph_enabled);
+  Worker(PipelineLoadBalancer *plb, bool is_graph_enabled);
   ~Worker();
 
   typedef pjs::PooledArray<pjs::Ref<pjs::Object>> ContextData;
@@ -151,6 +152,7 @@ private:
 
   Module* m_root = nullptr;
   Timer m_keep_alive;
+  pjs::Ref<PipelineLoadBalancer> m_pipeline_lb;
   pjs::Ref<Thread> m_thread;
   pjs::Ref<pjs::Instance> m_instance;
   pjs::Ref<pjs::Object> m_global_object;

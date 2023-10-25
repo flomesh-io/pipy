@@ -42,6 +42,7 @@ namespace pipy {
 
 class Worker;
 class WorkerManager;
+class PipelineLoadBalancer;
 
 //
 // WorkerThread
@@ -49,7 +50,7 @@ class WorkerManager;
 
 class WorkerThread {
 public:
-  WorkerThread(WorkerManager *manager, int index, bool is_graph_enabled);
+  WorkerThread(WorkerManager *manager, int index);
   ~WorkerThread();
 
   static auto current() -> WorkerThread* { return s_current; }
@@ -89,7 +90,6 @@ private:
   std::thread m_thread;
   std::mutex m_mutex;
   std::condition_variable m_cv;
-  bool m_graph_enabled = false;
   bool m_force_start = false;
   bool m_started = false;
   bool m_failed = false;
@@ -110,6 +110,9 @@ class WorkerManager {
 public:
   static auto get() -> WorkerManager&;
 
+  auto running_pipeline_lb() const -> PipelineLoadBalancer* { return m_running_pipeline_lb; }
+  auto loading_pipeline_lb() const -> PipelineLoadBalancer* { return m_loading_pipeline_lb; }
+  bool is_graph_enabled() const { return m_graph_enabled; }
   void enable_graph(bool b) { m_graph_enabled = b; }
   void on_done(const std::function<void()> &cb) { m_on_done = cb; }
   bool started() const { return !m_worker_threads.empty(); }
@@ -145,6 +148,8 @@ private:
   };
 
   std::vector<WorkerThread*> m_worker_threads;
+  pjs::Ref<PipelineLoadBalancer> m_running_pipeline_lb;
+  pjs::Ref<PipelineLoadBalancer> m_loading_pipeline_lb;
   Status m_status;
   int m_status_counter = -1;
   stats::MetricDataSum m_metric_data_sum;

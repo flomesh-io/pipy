@@ -115,7 +115,6 @@ private:
     s_event_pool.free(ptr.index());
   }
 
-  std::atomic<int> m_refs;
   std::atomic<SharedEventPtr> m_head;
   std::atomic<SharedEventPtr> m_tail;
 

@@ -43,11 +43,11 @@ Pool::Pool(const std::string &name, size_t size)
   : m_name(name)
   , m_size(std::max(size, sizeof(void*)))
   , m_free_list(nullptr)
-  , m_retain_count(1)
   , m_return_list(nullptr)
   , m_allocated(0)
   , m_pooled(0)
 {
+  retain();
   all()[name] = this;
 }
 

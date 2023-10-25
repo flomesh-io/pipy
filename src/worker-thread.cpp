@@ -26,6 +26,7 @@
 #include "worker-thread.hpp"
 #include "worker.hpp"
 #include "codebase.hpp"
+#include "pipeline-lb.hpp"
 #include "timer.hpp"
 #include "net.hpp"
 #include "log.hpp"
@@ -35,7 +36,7 @@ namespace pipy {
 
 thread_local WorkerThread* WorkerThread::s_current = nullptr;
 
-WorkerThread::WorkerThread(WorkerManager *manager, int index, bool is_graph_enabled)
+WorkerThread::WorkerThread(WorkerManager *manager, int index)
   : m_manager(manager)
   , m_index(index)
   , m_active_pipeline_count(0)
@@ -44,7 +45,6 @@ WorkerThread::WorkerThread(WorkerManager *manager, int index, bool is_graph_enab
   , m_shutdown(false)
   , m_done(false)
   , m_ended(false)
-  , m_graph_enabled(is_graph_enabled)
 {
 }
 
@@ -143,7 +143,7 @@ void WorkerThread::reload(const std::function<void(bool)> &cb) {
       Log::info("[restart] Reloading codebase on thread %d...", m_index);
 
       m_new_version = codebase->version();
-      m_new_worker = Worker::make();
+      m_new_worker = Worker::make(m_manager->loading_pipeline_lb());
 
       cb(m_new_worker->load_js_module(entry) && m_new_worker->bind());
     }
@@ -386,7 +386,11 @@ void WorkerThread::shutdown_all(bool force) {
 void WorkerThread::main() {
   Log::init();
 
-  m_new_worker = Worker::make(m_graph_enabled);
+  m_new_worker = Worker::make(
+    m_manager->loading_pipeline_lb(),
+    m_manager->is_graph_enabled() && m_index == 0
+  );
+
   auto &entry = Codebase::current()->entry();
   auto mod = m_new_worker->load_js_module(entry);
   bool started = (mod && m_new_worker->bind() && m_new_worker->start(m_force_start));
@@ -459,16 +463,21 @@ bool WorkerManager::start(int concurrency, bool force) {
   if (started()) return false;
 
   m_concurrency = concurrency;
+  m_loading_pipeline_lb = PipelineLoadBalancer::make();
 
   for (int i = 0; i < concurrency; i++) {
-    auto wt = new WorkerThread(this, i, m_graph_enabled && (i == 0));
+    auto wt = new WorkerThread(this, i);
     if (!wt->start(force)) {
       delete wt;
       stop(true);
+      m_loading_pipeline_lb = nullptr;
       return false;
     }
     m_worker_threads.push_back(wt);
   }
+
+  m_running_pipeline_lb = m_loading_pipeline_lb;
+  m_loading_pipeline_lb = nullptr;
 
   return true;
 }
@@ -641,6 +650,7 @@ void WorkerManager::check_reloading() {
 void WorkerManager::start_reloading() {
   if (auto n = m_worker_threads.size()) {
     m_reloading = true;
+    m_loading_pipeline_lb = PipelineLoadBalancer::make();
 
     std::mutex m;
     std::condition_variable cv;
@@ -664,6 +674,11 @@ void WorkerManager::start_reloading() {
       wt->reload_done(all_ok);
     }
 
+    if (all_ok) {
+      m_running_pipeline_lb = m_loading_pipeline_lb;
+    }
+
+    m_loading_pipeline_lb = nullptr;
     m_reloading = false;
   }
 }

@@ -71,10 +71,39 @@ template<class T> Class* class_of();
 template<class T> T* coerce(Object *obj);
 
 //
+// RefCountMT
+//
+
+template<class T>
+class RefCountMT {
+public:
+  auto retain() -> T* {
+    m_refs.fetch_add(1, std::memory_order_relaxed);
+    return static_cast<T*>(this);
+  }
+
+  void release() {
+    if (m_refs.fetch_sub(1, std::memory_order_acq_rel) == 1) {
+      static_cast<T*>(this)->finalize();
+    }
+  }
+
+protected:
+  RefCountMT() : m_refs(0) {}
+
+  void finalize() {
+    delete static_cast<T*>(this);
+  }
+
+private:
+  std::atomic<int> m_refs;
+};
+
+//
 // Pool
 //
 
-class Pool {
+class Pool : public RefCountMT<Pool> {
 public:
   static auto all() -> std::map<std::string, Pool*> &;
 
@@ -90,9 +119,6 @@ public:
   void free(void *p);
   void clean();
 
-  void retain() { m_retain_count.fetch_add(1, std::memory_order_relaxed); }
-  void release() { if (m_retain_count.fetch_sub(1, std::memory_order_acq_rel) == 1) delete this; }
-
 private:
   enum { CURVE_LENGTH = 3 };
 
@@ -104,7 +130,6 @@ private:
   std::string m_name;
   size_t m_size;
   Head* m_free_list;
-  std::atomic<int> m_retain_count;
   std::atomic<Head*> m_return_list;
   int m_allocated;
   int m_pooled;
@@ -113,6 +138,8 @@ private:
 
   void add_return(Head *h);
   void accept_returns();
+
+  friend class RefCountMT<Pool>;
 };
 
 //

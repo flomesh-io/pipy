@@ -34,6 +34,7 @@
 #include "event.hpp"
 #include "message.hpp"
 #include "pipeline.hpp"
+#include "pipeline-lb.hpp"
 #include "codebase.hpp"
 #include "status.hpp"
 #include "api/algo.hpp"
@@ -193,8 +194,9 @@ namespace pipy {
 
 thread_local pjs::Ref<Worker> Worker::s_current;
 
-Worker::Worker(bool is_graph_enabled)
-  : m_thread(Thread::make(WorkerThread::current()))
+Worker::Worker(PipelineLoadBalancer *plb, bool is_graph_enabled)
+  : m_pipeline_lb(plb)
+  , m_thread(Thread::make(WorkerThread::current()))
   , m_instance(pjs::Instance::make())
   , m_global_object(Global::make(this))
   , m_graph_enabled(is_graph_enabled)
@@ -431,6 +433,11 @@ bool Worker::bind() {
 }
 
 bool Worker::start(bool force) {
+
+  // Register pipelines to the pipeline load balancer
+  for (const auto &p : m_module_map) {
+    p.second->setup_pipeline_lb(m_pipeline_lb);
+  }
 
   // Update listening ports
   if (!update_listeners(force)) {

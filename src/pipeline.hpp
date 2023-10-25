@@ -48,7 +48,7 @@ class InputContext;
 //
 
 class PipelineLayout :
-  public pjs::RefCount<PipelineLayout>,
+  public pjs::RefCountMT<PipelineLayout>,
   public List<PipelineLayout>::Item
 {
 public:
@@ -128,7 +128,7 @@ private:
   thread_local static List<PipelineLayout> s_all_pipeline_layouts;
   thread_local static size_t s_active_pipeline_count;
 
-  friend class pjs::RefCount<PipelineLayout>;
+  friend class pjs::RefCountMT<PipelineLayout>;
   friend class Pipeline;
   friend class Graph;
 };

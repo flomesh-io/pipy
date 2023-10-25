@@ -31,7 +31,6 @@
 #include "net.hpp"
 #include "pipeline.hpp"
 
-#include <atomic>
 #include <mutex>
 #include <map>
 
@@ -41,17 +40,21 @@ namespace pipy {
 // PipelineLoadBalancer
 //
 
-class PipelineLoadBalancer {
+class PipelineLoadBalancer : public pjs::RefCountMT<PipelineLoadBalancer> {
 public:
+  static auto make() -> PipelineLoadBalancer* {
+    return new PipelineLoadBalancer;
+  }
 
   //
   // AsyncWrapper
   //
 
-  class AsyncWrapper : public EventTarget {
+  class AsyncWrapper :
+    public pjs::Pooled<AsyncWrapper>,
+    public pjs::RefCountMT<AsyncWrapper>,
+    public EventTarget {
   public:
-    auto retain() -> AsyncWrapper* { m_refs.fetch_add(1, std::memory_order_relaxed); return this; }
-    void release() { if (m_refs.fetch_sub(1, std::memory_order_acq_rel) == 1) delete this; }
     void input(Event *evt);
     void close();
 
@@ -89,7 +92,6 @@ public:
     void on_input();
     void on_output();
 
-    std::atomic<int> m_refs;
     EventQueue m_input_queue;
     EventQueue m_output_queue;
     Net* m_input_net = nullptr;
@@ -98,6 +100,7 @@ public:
     pjs::Ref<Pipeline> m_pipeline;
     pjs::Ref<EventTarget::Input> m_output;
 
+    friend class pjs::RefCountMT<AsyncWrapper>;
     friend class PipelineLoadBalancer;
   };
 
@@ -105,6 +108,8 @@ public:
   auto allocate(const std::string &module, const std::string &name, EventTarget::Input *output) -> AsyncWrapper*;
 
 private:
+  PipelineLoadBalancer() {}
+  ~PipelineLoadBalancer();
 
   //
   // PipelineLoadBalancer::Target
@@ -137,6 +142,8 @@ private:
 
   std::map<std::string, ModuleInfo> m_modules;
   std::mutex m_mutex;
+
+  friend class pjs::RefCountMT<PipelineLoadBalancer>;
 };
 
 } // namespace pipy

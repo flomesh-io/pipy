@@ -27,6 +27,7 @@
 #include "codebase.hpp"
 #include "worker.hpp"
 #include "pipeline.hpp"
+#include "pipeline-lb.hpp"
 #include "api/configuration.hpp"
 #include "api/console.hpp"
 #include "api/json.hpp"
@@ -88,6 +89,12 @@ auto JSModule::find_indexed_pipeline(int index) -> PipelineLayout* {
   auto i = m_indexed_pipelines.find(index);
   if (i == m_indexed_pipelines.end()) return nullptr;
   return i->second;
+}
+
+void JSModule::setup_pipeline_lb(PipelineLoadBalancer *plb) {
+  for (const auto &p : m_named_pipelines) {
+    plb->add_target(p.second);
+  }
 }
 
 auto JSModule::new_context(Context *base) -> Context* {

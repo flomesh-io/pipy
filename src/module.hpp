@@ -38,6 +38,7 @@ namespace pipy {
 class Context;
 class Configuration;
 class PipelineLayout;
+class PipelineLoadBalancer;
 
 //
 // ModuleBase
@@ -104,6 +105,7 @@ public:
   auto entrance_pipeline() -> PipelineLayout* { return m_entrance_pipeline; }
   auto find_named_pipeline(pjs::Str *name) -> PipelineLayout*;
   auto find_indexed_pipeline(int index) -> PipelineLayout*;
+  void setup_pipeline_lb(PipelineLoadBalancer *plb);
 
   virtual auto new_context(Context *base = nullptr) -> Context* override;
   virtual auto get_pipeline(pjs::Str *name) -> PipelineLayout* override { return find_named_pipeline(name); }
