@@ -254,7 +254,7 @@ add_executable(pipy
   src/options.cpp
   src/outbound.cpp
   src/pipeline.cpp
-  src/pipeline-async.cpp
+  src/pipeline-lb.cpp
   src/pjs/builtin.cpp
   src/pjs/expr.cpp
   src/pjs/parser.cpp
