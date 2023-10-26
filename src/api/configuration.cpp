@@ -54,6 +54,7 @@
 #include "filters/http.hpp"
 #include "filters/insert.hpp"
 #include "filters/link.hpp"
+#include "filters/link-async.hpp"
 #include "filters/loop.hpp"
 #include "filters/mime.hpp"
 #include "filters/mqtt.hpp"
@@ -315,6 +316,14 @@ void FilterConfigurator::link(pjs::Function *name) {
     append_filter(new Link(name));
   } else {
     require_sub_pipeline(append_filter(new Link()));
+  }
+}
+
+void FilterConfigurator::link_async(pjs::Function *name) {
+  if (name) {
+    append_filter(new LinkAsync(name));
+  } else {
+    require_sub_pipeline(append_filter(new LinkAsync()));
   }
 }
 
@@ -1805,6 +1814,26 @@ template<> void ClassDef<FilterConfigurator>::init() {
         config->to(name);
       } else if (ctx.get(0, name_f)) {
         config->link(name_f);
+      } else {
+        ctx.error_argument_type(0, "a string or a function");
+      }
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // FilterConfigurator.linkAsync
+  method("linkAsync", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
+    try {
+      Str *name;
+      Function *name_f;
+      if (ctx.get(0, name)) {
+        config->link_async();
+        config->to(name);
+      } else if (ctx.get(0, name_f)) {
+        config->link_async(name_f);
       } else {
         ctx.error_argument_type(0, "a string or a function");
       }

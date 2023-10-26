@@ -28,7 +28,7 @@
 
 #include "pjs/pjs.hpp"
 #include "context.hpp"
-#include "task.hpp"
+#include "pipeline-lb.hpp"
 
 #include <map>
 #include <set>
@@ -106,6 +106,7 @@ public:
   auto find_named_pipeline(pjs::Str *name) -> PipelineLayout*;
   auto find_indexed_pipeline(int index) -> PipelineLayout*;
   void setup_pipeline_lb(PipelineLoadBalancer *plb);
+  auto alloc_pipeline_lb(pjs::Str *name, EventTarget::Input *output) -> PipelineLoadBalancer::AsyncWrapper*;
 
   virtual auto new_context(Context *base = nullptr) -> Context* override;
   virtual auto get_pipeline(pjs::Str *name) -> PipelineLayout* override { return find_named_pipeline(name); }

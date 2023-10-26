@@ -97,6 +97,10 @@ void JSModule::setup_pipeline_lb(PipelineLoadBalancer *plb) {
   }
 }
 
+auto JSModule::alloc_pipeline_lb(pjs::Str *name, EventTarget::Input *output) -> PipelineLoadBalancer::AsyncWrapper* {
+  return m_worker->m_pipeline_lb->allocate(filename()->str(), name->str(), output);
+}
+
 auto JSModule::new_context(Context *base) -> Context* {
   return m_worker->new_runtime_context(base);
 }
