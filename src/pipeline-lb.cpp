@@ -34,7 +34,7 @@ PipelineLoadBalancer::~PipelineLoadBalancer() {
       auto t = p.second.targets;
       while (t) {
         auto target = t; t = t->next;
-        delete t;
+        delete target;
       }
     }
   }
