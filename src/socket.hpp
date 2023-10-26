@@ -180,6 +180,7 @@ public:
     double m_tick_read;
     double m_tick_write;
 
+    virtual void on_peer_open() = 0;
     virtual void on_peer_input(Event *evt) = 0;
     virtual void on_peer_close() = 0;
 

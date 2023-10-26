@@ -195,6 +195,7 @@ class InboundUDP :
   virtual auto get_traffic_out() -> size_t override;
   virtual void on_get_address() override;
   virtual void on_event(Event *evt) override;
+  virtual void on_peer_open() override;
   virtual void on_peer_input(Event *evt) override;
   virtual void on_peer_close() override;
 

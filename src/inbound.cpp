@@ -332,8 +332,6 @@ void InboundTCP::describe(char *buf, size_t len) {
 InboundUDP::InboundUDP(Listener* listener, const Options &options)
   : pjs::ObjectTemplate<InboundUDP, Inbound>(listener, options)
 {
-  Inbound::retain();
-  Inbound::start();
 }
 
 InboundUDP::~InboundUDP() {
@@ -365,6 +363,11 @@ void InboundUDP::on_get_address() {
 
 void InboundUDP::on_event(Event *evt) {
   SocketUDP::Peer::output(evt);
+}
+
+void InboundUDP::on_peer_open() {
+  Inbound::retain();
+  Inbound::start();
 }
 
 void InboundUDP::on_peer_input(Event *evt) {

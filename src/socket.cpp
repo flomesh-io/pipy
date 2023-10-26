@@ -549,6 +549,7 @@ void SocketUDP::on_receive(Data *data, const std::error_code &ec, std::size_t n)
           peer->m_endpoint = m_from;
           peer->m_tick_write = Ticker::get()->tick();
           m_peers[m_from] = peer;
+          peer->on_peer_open();
         }
       } else {
         peer = i->second;
