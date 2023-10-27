@@ -197,7 +197,7 @@ async function runTest(name, options) {
       w.worker = await startCodebase(
         `http://localhost:6060/repo/test/${name}/${w.name}/`, {
           silent: true,
-          options: w.name === 'proxy' ? ['--admin-port=7070'] : (w.name === 'client' ? ['--admin-port=7071'] : []),
+          options: w.name === 'proxy' ? ['--admin-port=7070', '--threads=max', '--reuse-port'] : (w.name === 'client' ? ['--admin-port=7071'] : []),
         }
       );
       w.worker.on('exit', code => w.exitCode = code);
