@@ -106,16 +106,18 @@ exports.sourceNodes = ({ actions, createNodeId, createContentDigest }) => {
         classes[node.name] = classNode;
       } else {
         const namespaceNode = findNode('Interface', node.type.name);
-        for (const child of namespaceNode.children) {
-          if (child.kindString === 'Property') {
-            if (child.type.type === 'reference' && child.type.name.endsWith('Constructor')) {
-              const classNode = findClassFromConstructor(child.type.name);
-              delete classes[classNode.name];
+        if (namespaceNode) {
+          for (const child of namespaceNode.children) {
+            if (child.kindString === 'Property') {
+              if (child.type.type === 'reference' && child.type.name.endsWith('Constructor')) {
+                const classNode = findClassFromConstructor(child.type.name);
+                delete classes[classNode.name];
+              }
             }
           }
+          delete classes[node.type.name];
+          namespaces[node.name] = namespaceNode;
         }
-        delete classes[node.type.name];
-        namespaces[node.name] = namespaceNode;
       }
     } else if (node.kindString === 'Namespace') {
       for (const child of node.children) {

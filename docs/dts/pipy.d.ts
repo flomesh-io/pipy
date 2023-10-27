@@ -8,12 +8,12 @@
  */
 declare function pipy(contextPrototype? : { [name: string]: any }) : Configuration;
 
-declare interface pipy {
+declare namespace pipy {
 
   /**
-   *
+   * Retreives the current process ID.
    */
-  pid: number;
+  var pid: number;
 
   /**
    * Reads content of a file from the current codebase.
@@ -21,7 +21,7 @@ declare interface pipy {
    * @param filename A pathname in the current codebase.
    * @returns A _Data_ object containing the entire content of the specified file.
    */
-  load(filename: string): Data;
+  function load(filename: string): Data;
 
   /**
    * Evaluates expression from a file in the current codebase.
@@ -29,17 +29,17 @@ declare interface pipy {
    * @param filename A pathname in the current codebase.
    * @returns A value of any type after evaluating the expression in the specified file.
    */
-  solve(filename: string): any;
+  function solve(filename: string): any;
 
   /**
    * Reloads the current codebase.
    */
-  restart(): void;
+  function restart(): void;
 
   /**
    * Gracefully shuts down Pipy.
    *
    * @param exitCode A number for the process exit code.
    */
-  exit(exitCode?: number): void;
+  function exit(exitCode?: number): void;
 }
