@@ -25,6 +25,7 @@
 
 #include "pipeline-lb.hpp"
 #include "module.hpp"
+#include "input.hpp"
 
 namespace pipy {
 
@@ -65,7 +66,12 @@ auto PipelineLoadBalancer::allocate(const std::string &module, const std::string
 // PipelineLoadBalancer::AsyncWrapper
 //
 
-PipelineLoadBalancer::AsyncWrapper::AsyncWrapper(Net *net, PipelineLayout *layout, EventTarget::Input *output) {
+PipelineLoadBalancer::AsyncWrapper::AsyncWrapper(Net *net, PipelineLayout *layout, EventTarget::Input *output)
+  : m_input_net(net)
+  , m_output_net(&Net::current())
+  , m_pipeline_layout(layout)
+  , m_output(output)
+{
 }
 
 void PipelineLoadBalancer::AsyncWrapper::input(Event *evt) {
@@ -105,6 +111,7 @@ void PipelineLoadBalancer::AsyncWrapper::on_close() {
 void PipelineLoadBalancer::AsyncWrapper::on_input() {
   if (auto evt = m_input_queue.dequeue()) {
     if (m_pipeline) {
+      InputContext ic;
       m_pipeline->input()->input(evt);
     } else {
       evt->retain();

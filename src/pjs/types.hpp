@@ -1814,7 +1814,7 @@ private:
 class SharedObject : public Pooled<SharedObject> {
 public:
   static auto make(Object *o) -> SharedObject* {
-    return new SharedObject(o);
+    return o ? new SharedObject(o) : nullptr;
   }
 
   auto retain() -> SharedObject* { m_refs.fetch_add(1, std::memory_order_relaxed); return this; }

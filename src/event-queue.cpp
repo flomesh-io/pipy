@@ -117,12 +117,12 @@ auto EventQueue::SharedEvent::to_event() -> Event* {
       return d;
     }
     case Event::Type::MessageStart: {
-      return MessageStart::make(head_tail->to_object());
+      return MessageStart::make(head_tail ? head_tail->to_object() : nullptr);
     }
     case Event::Type::MessageEnd: {
       pjs::Value p;
       payload.to_value(p);
-      return MessageEnd::make(head_tail->to_object(), p);
+      return MessageEnd::make(head_tail ? head_tail->to_object() : nullptr, p);
     }
     case Event::Type::StreamEnd: {
       if (error_code == StreamEnd::RUNTIME_ERROR) {

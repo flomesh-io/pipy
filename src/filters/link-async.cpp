@@ -122,6 +122,7 @@ void LinkAsync::on_reply(Event *evt) {
 
 void LinkAsync::flush() {
   if (!m_buffer.empty()) {
+    InputContext ic;
     auto i = m_pipeline->input();
     m_buffer.flush(
       [&](Event *evt) {

@@ -780,7 +780,7 @@ SharedValue::SharedValue(const Value &v)
     case Value::Type::Boolean: m_v.b = v.b(); break;
     case Value::Type::Number: m_v.n = v.n(); break;
     case Value::Type::String: m_v.s = v.s()->data()->retain(); break;
-    case Value::Type::Object: m_v.o = SharedObject::make(v.o())->retain(); break;
+    case Value::Type::Object: if (auto o = m_v.o = SharedObject::make(v.o())) o->retain(); break;
     default: break;
   }
 }

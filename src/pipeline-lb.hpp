@@ -94,7 +94,7 @@ public:
 
     EventQueue m_input_queue;
     EventQueue m_output_queue;
-    Net* m_input_net = nullptr;
+    Net* m_input_net;
     Net* m_output_net;
     pjs::Ref<PipelineLayout> m_pipeline_layout;
     pjs::Ref<Pipeline> m_pipeline;
