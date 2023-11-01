@@ -54,6 +54,7 @@
 #include "api/pipy.hpp"
 #include "api/protobuf.hpp"
 #include "api/resp.hpp"
+#include "api/sqlite.hpp"
 #include "api/stats.hpp"
 #include "api/swap.hpp"
 #include "api/timeout.hpp"
@@ -173,6 +174,9 @@ template<> void ClassDef<pipy::Global>::init() {
 
   // bpf
   variable("bpf", class_of<bpf::BPF>());
+
+  // sqlite
+  variable("sqlite", class_of<sqlite::Sqlite>());
 
   // pipy
   variable("pipy", class_of<Pipy>());

@@ -142,6 +142,7 @@ include_directories(
   "${CMAKE_BINARY_DIR}/deps/libexpat-R_2_2_6/expat/lib"
   "${CMAKE_SOURCE_DIR}/deps/libexpat-R_2_2_6/expat/lib"
   "${CMAKE_SOURCE_DIR}/deps/leveldb-1.23/include"
+  "${CMAKE_SOURCE_DIR}/deps/sqlite-3.43.2"
   "${ZLIB_INC_DIR}"
   "${OPENSSL_INC_DIR}"
   "${BROTLI_INC_DIR}"
@@ -171,6 +172,7 @@ add_executable(pipy
   src/api/protobuf.cpp
   src/api/resp.cpp
   src/api/stats.cpp
+  src/api/sqlite.cpp
   src/api/swap.cpp
   src/api/thrift.cpp
   src/api/timeout.cpp
@@ -273,6 +275,7 @@ add_executable(pipy
   src/watch.cpp
   src/worker.cpp
   src/worker-thread.cpp
+  deps/sqlite-3.43.2/sqlite3.c
 )
 
 add_custom_command(
