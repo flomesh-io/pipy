@@ -42,6 +42,7 @@ class Statement;
 class Database : public pjs::ObjectTemplate<Database> {
 public:
   auto sql(pjs::Str *sql) -> Statement*;
+  auto exec(pjs::Str *sql) -> pjs::Array*;
 
 private:
   Database(pjs::Str *filename);
@@ -75,6 +76,7 @@ public:
   auto bind(int i, const pjs::Value &v) -> Statement*;
   auto step() -> Result;
   void column(int i, pjs::Value &v);
+  auto row() -> pjs::Object*;
 
 private:
   Statement(sqlite3_stmt *stmt) : m_stmt(stmt) {}
@@ -92,7 +94,6 @@ private:
 class Sqlite : public pjs::FunctionTemplate<Sqlite> {
 public:
   static auto database(pjs::Str *filename) -> Database*;
-  static auto exec(const pjs::Str *sql) -> pjs::Array*;
 
   void operator()(pjs::Context &ctx, pjs::Object *obj, pjs::Value &ret);
 };
