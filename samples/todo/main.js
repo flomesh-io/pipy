@@ -1,6 +1,6 @@
 pipy()
 
-.listen(8000)
+.listen(8080)
 .demuxHTTP().to($=>$
   .branchMessageStart(
 
@@ -17,7 +17,7 @@ pipy()
                 'content-type': 'application/json'
               }
             },
-            JSON.encode(obj || { status })
+            status === 204 ? undefined : JSON.encode(obj || { status })
           )
         ),
 
@@ -54,6 +54,13 @@ pipy()
               )
             )
           )(),
+
+          '/api/check-todo/*': req => (
+            response(200, db.checkTodo(
+              req.head.path.substring(16)|0,
+              req.body.toString() === 'true',
+            ))
+          ),
 
           '/*': () => response(404),
         }),
