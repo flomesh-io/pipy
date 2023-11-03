@@ -51,6 +51,7 @@ private:
   sqlite3* m_db;
 
   friend class pjs::ObjectTemplate<Database>;
+  friend class Statement;
 };
 
 //
@@ -59,29 +60,18 @@ private:
 
 class Statement : public pjs::ObjectTemplate<Statement> {
 public:
-
-  //
-  // Statement::Result
-  //
-
-  enum class Result {
-    ROW,
-    DONE,
-    BUSY,
-    ERROR,
-    MISUSE,
-  };
-
   auto reset() -> Statement*;
   auto bind(int i, const pjs::Value &v) -> Statement*;
-  auto step() -> Result;
+  bool step();
+  auto exec() -> pjs::Array*;
   void column(int i, pjs::Value &v);
   auto row() -> pjs::Object*;
 
 private:
-  Statement(sqlite3_stmt *stmt) : m_stmt(stmt) {}
+  Statement(Database *db, sqlite3_stmt *stmt) : m_db(db), m_stmt(stmt) {}
   ~Statement() { sqlite3_finalize(m_stmt); }
 
+  pjs::Ref<Database> m_db;
   sqlite3_stmt* m_stmt;
 
   friend class pjs::ObjectTemplate<Statement>;

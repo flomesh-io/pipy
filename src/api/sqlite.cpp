@@ -102,17 +102,19 @@ static int append_exec_row(void *rows, int n, char **values, char **names) {
   return 0;
 }
 
+static void throw_error(sqlite3 *db) {
+  std::string msg("SQLite error: ");
+  msg += sqlite3_errmsg(db);
+  throw std::runtime_error(msg);
+}
+
 //
 // Database
 //
 
 Database::Database(pjs::Str *filename) {
   if (sqlite3_open(filename->c_str(), &m_db) != SQLITE_OK) {
-    std::string msg("Unable to open Sqlite database at ");
-    msg += filename->str();
-    msg += ": ";
-    msg += sqlite3_errmsg(m_db);
-    throw std::runtime_error(msg);
+    throw_error(m_db);
   }
 }
 
@@ -121,7 +123,11 @@ Database::~Database() {
 }
 
 auto Database::sql(pjs::Str *sql) -> Statement* {
-  return nullptr;
+  sqlite3_stmt *stmt = nullptr;
+  if (SQLITE_OK != sqlite3_prepare_v2(m_db, sql->c_str(), sql->size(), &stmt, nullptr)) {
+    throw_error(m_db);
+  }
+  return Statement::make(this, stmt);
 }
 
 auto Database::exec(pjs::Str *sql) -> pjs::Array* {
@@ -131,7 +137,7 @@ auto Database::exec(pjs::Str *sql) -> pjs::Array* {
   if (err) {
     rows->retain();
     rows->release();
-    std::string msg("SQLite exec() error: ");
+    std::string msg("SQLite error: ");
     msg += err;
     throw std::runtime_error(msg);
   }
@@ -176,14 +182,32 @@ auto Statement::bind(int i, const pjs::Value &v) -> Statement* {
   return this;
 }
 
-auto Statement::step() -> Result {
+bool Statement::step() {
   switch (sqlite3_step(m_stmt)) {
-    case SQLITE_ROW: return Result::ROW;
-    case SQLITE_DONE: return Result::DONE;
-    case SQLITE_BUSY: return Result::BUSY;
-    case SQLITE_ERROR: return Result::ERROR;
-    case SQLITE_MISUSE: return Result::MISUSE;
-    default: return Result::ERROR;
+    case SQLITE_ROW: return false;
+    case SQLITE_DONE: return true;
+    case SQLITE_BUSY: throw std::runtime_error("SQLITE_BUSY");
+    case SQLITE_MISUSE: throw std::runtime_error("SQLITE_MISUSE");
+    default: throw_error(m_db->m_db); return false;
+  }
+}
+
+auto Statement::exec() -> pjs::Array* {
+  auto rows = pjs::Array::make();
+  try {
+    for (;;) {
+      switch (sqlite3_step(m_stmt)) {
+        case SQLITE_ROW: rows->push(get_row_values(m_stmt)); break;
+        case SQLITE_DONE: return rows;
+        case SQLITE_BUSY: throw std::runtime_error("SQLITE_BUSY");
+        case SQLITE_MISUSE: throw std::runtime_error("SQLITE_MISUSE");
+        default: throw_error(m_db->m_db); break;
+      }
+    }
+  } catch (std::runtime_error &err) {
+    rows->retain();
+    rows->release();
+    throw;
   }
 }
 
@@ -229,7 +253,11 @@ template<> void ClassDef<Database>::init() {
   method("sql", [](Context &ctx, Object *obj, Value &ret) {
     pjs::Str *sql;
     if (!ctx.arguments(1, &sql)) return;
-    ret.set(static_cast<Database*>(obj)->sql(sql));
+    try {
+      ret.set(static_cast<Database*>(obj)->sql(sql));
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
   });
 
   method("exec", [](Context &ctx, Object *obj, Value &ret) {
@@ -241,14 +269,6 @@ template<> void ClassDef<Database>::init() {
       ctx.error(err);
     }
   });
-}
-
-template<> void EnumDef<Statement::Result>::init() {
-  define(Statement::Result::ROW, "row");
-  define(Statement::Result::DONE, "done");
-  define(Statement::Result::BUSY, "busy");
-  define(Statement::Result::ERROR, "error");
-  define(Statement::Result::MISUSE, "misuse");
 }
 
 template<> void ClassDef<Statement>::init() {
@@ -264,8 +284,19 @@ template<> void ClassDef<Statement>::init() {
   });
 
   method("step", [](Context &ctx, Object *obj, Value &ret) {
-    auto result = static_cast<Statement*>(obj)->step();
-    ret.set(EnumDef<Statement::Result>::name(result));
+    try {
+      ret.set(static_cast<Statement*>(obj)->step());
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  method("exec", [](Context &ctx, Object *obj, Value &ret) {
+    try {
+      ret.set(static_cast<Statement*>(obj)->exec());
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
   });
 
   method("column", [](Context &ctx, Object *obj, Value &ret) {
