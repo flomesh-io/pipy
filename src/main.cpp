@@ -464,6 +464,10 @@ int main(int argc, char *argv[]) {
       }
     }
 
+    if (!is_repo && !opts.init_repo.empty()) {
+      throw std::runtime_error("invalid option --init-repo for non-repo mode");
+    }
+
     Store *store = nullptr;
     CodebaseStore *repo = nullptr;
     Codebase *codebase = nullptr;
@@ -476,7 +480,7 @@ int main(int argc, char *argv[]) {
       store = opts.filename.empty()
         ? Store::open_memory()
         : Store::open_level_db(opts.filename);
-      repo = new CodebaseStore(store);
+      repo = new CodebaseStore(store, opts.init_repo);
       s_admin = new AdminService(repo);
       s_admin->retain();
       s_admin->open(admin_ip, admin_port, s_admin_options);

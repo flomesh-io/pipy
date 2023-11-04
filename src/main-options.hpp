@@ -65,6 +65,7 @@ public:
   std::string admin_port;
   std::string instance_uuid;
   std::string instance_name;
+  std::string init_repo;
   std::string openssl_engine;
 
   pjs::Ref<crypto::Certificate>               admin_tls_cert;

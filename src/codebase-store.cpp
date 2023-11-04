@@ -25,6 +25,7 @@
 
 #include "codebase-store.hpp"
 #include "compressor.hpp"
+#include "fs.hpp"
 #include "tar.hpp"
 #include "utils.hpp"
 
@@ -160,9 +161,63 @@ static void read_record(const std::string &str, std::map<std::string, std::strin
 // CodebaseStore
 //
 
-CodebaseStore::CodebaseStore(Store *store)
+static void init_codebase_files(
+  CodebaseStore::Codebase *codebase,
+  const std::string &basename,
+  const std::string &dirname
+) {
+  printf("%s %s\n", basename.c_str(), dirname.c_str());
+  std::list<std::string> filenames;
+  if (fs::read_dir(dirname, filenames)) {
+    for (auto &filename : filenames) {
+      if (filename.back() == '/') {
+        filename.pop_back();
+        init_codebase_files(
+          codebase,
+          basename + filename + '/',
+          dirname + '/' + filename
+        );
+      } else {
+        std::vector<uint8_t> buf;
+        if (fs::read_file(dirname + '/' + filename, buf)) {
+          Data data(&buf[0], buf.size(), &s_dp);
+          codebase->set_file(basename + filename, data);
+        }
+      }
+    }
+  }
+}
+
+CodebaseStore::CodebaseStore(Store *store, const std::string &init_path)
   : m_store(store)
 {
+  if (!init_path.empty()) {
+    std::list<std::string> codebases;
+    if (!fs::read_dir(init_path, codebases)) {
+      std::string msg("Cannot read codebase initialization directory: ");
+      msg += init_path;
+      throw std::runtime_error(msg);
+    }
+
+    for (auto &name : codebases) {
+      if (name.back() == '/') {
+        std::string root_name("/");
+        root_name += name;
+        root_name.pop_back();
+        auto codebase = find_codebase(root_name);
+        if (!codebase) {
+          std::string root_path = utils::path_join(init_path, root_name);
+          codebase = make_codebase(root_name, "0");
+          init_codebase_files(codebase, "/", root_path);
+          std::list<std::string> update_list;
+          codebase->commit("1", update_list);
+        }
+      }
+    }
+
+    return;
+  }
+
 #ifdef PIPY_USE_SAMPLES
   Data input(s_samples_tar_gz, sizeof(s_samples_tar_gz), &s_dp), output;
   auto decompressor = Decompressor::gzip(

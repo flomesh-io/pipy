@@ -64,6 +64,7 @@ void MainOptions::show_help() {
   std::cout << "  --tls-cert=<filename>                Client certificate in communication to administration service" << std::endl;
   std::cout << "  --tls-key=<filename>                 Client private key in communication to administration service" << std::endl;
   std::cout << "  --tls-trusted=<filename>             Administration service certificate(s) trusted by client" << std::endl;
+  std::cout << "  --init-repo=<dirname>                Populate the repo with codebases under the specified directory" << std::endl;
   std::cout << "  --openssl-engine=<id>                Select an OpenSSL engine for the ciphers" << std::endl;
   std::cout << std::endl;
 }
@@ -200,6 +201,8 @@ MainOptions::MainOptions(int argc, char *argv[]) {
         tls_key = load_private_key(v);
       } else if (k == "--tls-trusted") {
         load_certificate_list(v, tls_trusted);
+      } else if (k == "--init-repo") {
+        init_repo = v;
       } else if (k == "--openssl-engine") {
         openssl_engine = v;
       } else {

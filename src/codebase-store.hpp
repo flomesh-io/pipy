@@ -36,7 +36,7 @@ namespace pipy {
 
 class CodebaseStore {
 public:
-  CodebaseStore(Store *store);
+  CodebaseStore(Store *store, const std::string &init_path = std::string());
   ~CodebaseStore();
 
   class Codebase {
