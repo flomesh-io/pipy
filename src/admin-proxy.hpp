@@ -54,7 +54,7 @@ public:
     std::vector<pjs::Ref<crypto::Certificate>> trusted;
   };
 
-  AdminProxy(const std::string &target);
+  AdminProxy(const std::string &target, const std::string &gui_files = std::string());
 
   void open(const std::string &ip, int port, const Options &options);
   void close();
@@ -81,6 +81,7 @@ private:
 
   Tarball m_www_files;
   std::map<std::string, pjs::Ref<http::File>> m_www_file_cache;
+  pjs::Ref<http::Directory> m_gui_files;
 
   pjs::Ref<Message> m_response_not_found;
   pjs::Ref<Message> m_response_method_not_allowed;

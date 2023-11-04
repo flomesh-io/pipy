@@ -58,7 +58,7 @@ public:
     std::vector<pjs::Ref<crypto::Certificate>> trusted;
   };
 
-  AdminService(CodebaseStore *store);
+  AdminService(CodebaseStore *store, const std::string &gui_files = std::string());
   ~AdminService();
 
   void open(const std::string &ip, int port, const Options &options);
@@ -178,6 +178,7 @@ private:
 
   Tarball m_www_files;
   std::map<std::string, pjs::Ref<http::File>> m_www_file_cache;
+  pjs::Ref<http::Directory> m_gui_files;
 
   pjs::Ref<http::ResponseHead> m_response_head_text;
   pjs::Ref<http::ResponseHead> m_response_head_json;

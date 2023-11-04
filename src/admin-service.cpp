@@ -55,12 +55,19 @@ static std::string s_server_name("pipy-repo");
 // AdminService
 //
 
-AdminService::AdminService(CodebaseStore *store)
+AdminService::AdminService(CodebaseStore *store, const std::string &gui_files)
   : m_store(store)
   , m_local_metric_history(METRIC_HISTORY_SIZE)
   , m_www_files(GuiTarball::data(), GuiTarball::size())
   , m_module(new Module())
 {
+  if (!gui_files.empty()) {
+    if (!fs::is_dir(gui_files)) throw std::runtime_error("cannot locate the admin GUI front-end files");
+    http::Directory::Options options;
+    options.fs = true;
+    m_gui_files = http::Directory::make(gui_files, options);
+  }
+
   auto create_response_head = [](const std::string &content_type, bool gzip) -> http::ResponseHead* {
     auto head = http::ResponseHead::make();
     auto headers = pjs::Object::make();
@@ -472,6 +479,14 @@ auto AdminService::handle(Context *ctx, Message *req) -> pjs::Object* {
 
     // Static GUI content
     if (method == "GET") {
+      if (m_gui_files) {
+        if (auto response = m_gui_files->serve(*ctx, req)) {
+          return response;
+        } else {
+          return m_response_not_found.get();
+        }
+      }
+
       http::File *f = nullptr;
 #ifdef PIPY_USE_GUI
       if (path == "/home" || path == "/home/") path = "/home/index.html";

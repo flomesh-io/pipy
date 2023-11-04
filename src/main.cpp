@@ -481,7 +481,7 @@ int main(int argc, char *argv[]) {
         ? Store::open_memory()
         : Store::open_level_db(opts.filename);
       repo = new CodebaseStore(store, opts.init_repo);
-      s_admin = new AdminService(repo);
+      s_admin = new AdminService(repo, opts.admin_gui);
       s_admin->retain();
       s_admin->open(admin_ip, admin_port, s_admin_options);
       logging::Logger::set_admin_service(s_admin);
@@ -508,7 +508,7 @@ int main(int argc, char *argv[]) {
       options.fetch_options.cert = opts.tls_cert;
       options.fetch_options.key = opts.tls_key;
       options.fetch_options.trusted = opts.tls_trusted;
-      s_admin_proxy = new AdminProxy(opts.filename);
+      s_admin_proxy = new AdminProxy(opts.filename, opts.admin_gui);
       s_admin_proxy->open(admin_ip, admin_port, options);
 
     // Start as a static codebase

@@ -58,6 +58,7 @@ void MainOptions::show_help() {
   std::cout << "  --reuse-port                         Enable kernel load balancing for all listening ports" << std::endl;
   std::cout << "  --admin-port=<[[ip]:]port>           Enable administration service on the specified port" << std::endl;
   std::cout << "  --admin-port-off                     Do not start administration service at startup" << std::endl;
+  std::cout << "  --admin-gui=<dirname>                Specify the location of administration GUI front-end files" << std::endl;
   std::cout << "  --admin-tls-cert=<filename>          Administration service certificate" << std::endl;
   std::cout << "  --admin-tls-key=<filename>           Administration service private key" << std::endl;
   std::cout << "  --admin-tls-trusted=<filename>       Client certificate(s) trusted by administration service" << std::endl;
@@ -189,6 +190,8 @@ MainOptions::MainOptions(int argc, char *argv[]) {
         admin_port_off = true;
       } else if (k == "--admin-port") {
         admin_port = v;
+      } else if (k == "--admin-gui") {
+        admin_gui = v;
       } else if (k == "--admin-tls-cert") {
         admin_tls_cert = load_certificate(v);
       } else if (k == "--admin-tls-key") {

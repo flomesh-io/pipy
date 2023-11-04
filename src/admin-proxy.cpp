@@ -28,6 +28,7 @@
 #include "filters/http.hpp"
 #include "filters/tls.hpp"
 #include "gui-tarball.hpp"
+#include "fs.hpp"
 #include "listener.hpp"
 #include "log.hpp"
 
@@ -105,11 +106,18 @@ private:
 // AdminProxy
 //
 
-AdminProxy::AdminProxy(const std::string &target)
+AdminProxy::AdminProxy(const std::string &target, const std::string &gui_files)
   : m_module(new Module())
   , m_target(target)
   , m_www_files(GuiTarball::data(), GuiTarball::size())
 {
+  if (!gui_files.empty()) {
+    if (!fs::is_dir(gui_files)) throw std::runtime_error("cannot locate the admin GUI front-end files");
+    http::Directory::Options options;
+    options.fs = true;
+    m_gui_files = http::Directory::make(gui_files, options);
+  }
+
   m_response_not_found = response(404);
   m_response_method_not_allowed = response(405);
 }
@@ -187,6 +195,16 @@ auto AdminProxy::handle(http::RequestHead *head) -> Message* {
 
     // Static GUI content
     if (method == "GET") {
+      if (m_gui_files) {
+        pjs::Context ctx(nullptr);
+        pjs::Ref<Message> req = Message::make(head, nullptr);
+        if (auto response = m_gui_files->serve(ctx, req)) {
+          return response;
+        } else {
+          return m_response_not_found.get();
+        }
+      }
+
       http::File *f = nullptr;
 #ifdef PIPY_USE_GUI
       if (path == "/home" || path == "/home/") path = "/home/index.html";
