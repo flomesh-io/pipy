@@ -305,17 +305,12 @@ endif()
 if(PIPY_SAMPLES)
   add_definitions(-DPIPY_USE_SAMPLES)
 
-  file(GLOB_RECURSE SAMPLE_FILES LIST_DIRECTORIES false
-    ${CMAKE_SOURCE_DIR}/tutorial/*
-    ${CMAKE_SOURCE_DIR}/samples/*
-  )
-
   add_custom_command(
     OUTPUT ${CMAKE_BINARY_DIR}/deps/samples.tar.gz.h
     COMMAND node
     ARGS pack-samples.js ${CMAKE_BINARY_DIR}/deps/samples.tar.gz.h
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/gui
-    DEPENDS gui/pack-samples.js ${SAMPLE_FILES}
+    DEPENDS gui/pack-samples.js ${CMAKE_SOURCE_DIR}/tutorial ${CMAKE_SOURCE_DIR}/samples
   )
 
   add_custom_target(PackSamples DEPENDS ${CMAKE_BINARY_DIR}/deps/samples.tar.gz.h)
