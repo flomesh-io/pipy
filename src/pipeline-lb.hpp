@@ -27,7 +27,6 @@
 #define PIPELINE_LB_HPP
 
 #include "event.hpp"
-#include "event-queue.hpp"
 #include "net.hpp"
 #include "pipeline.hpp"
 
@@ -73,27 +72,29 @@ public:
       void operator()() { self->on_close(); }
     };
 
-    struct InputHandler : SelfHandler<AsyncWrapper> {
-      using SelfHandler::SelfHandler;
-      InputHandler(const InputHandler &r) : SelfHandler(r) {}
-      void operator()() { self->on_input(); }
+    struct InputHandler : SelfDataHandler<AsyncWrapper, SharedEvent> {
+      using SelfDataHandler::SelfDataHandler;
+      InputHandler(AsyncWrapper *s, SharedEvent *d) : SelfDataHandler(s, d) { d->retain(); }
+      InputHandler(const InputHandler &r) : SelfDataHandler(r) { r.data->retain(); }
+      ~InputHandler() { data->release(); }
+      void operator()() { self->on_input(data); }
     };
 
-    struct OutputHandler : SelfHandler<AsyncWrapper> {
-      using SelfHandler::SelfHandler;
-      OutputHandler(const OutputHandler &r) : SelfHandler(r) {}
-      void operator()() { self->on_output(); }
+    struct OutputHandler : SelfDataHandler<AsyncWrapper, SharedEvent> {
+      using SelfDataHandler::SelfDataHandler;
+      OutputHandler(AsyncWrapper *s, SharedEvent *d) : SelfDataHandler(s, d) { d->retain(); }
+      OutputHandler(const OutputHandler &r) : SelfDataHandler(r) { r.data->retain(); }
+      ~OutputHandler() { data->release(); }
+      void operator()() { self->on_output(data); }
     };
 
     virtual void on_event(Event *evt) override;
 
     void on_open();
     void on_close();
-    void on_input();
-    void on_output();
+    void on_input(SharedEvent *se);
+    void on_output(SharedEvent *se);
 
-    EventQueue m_input_queue;
-    EventQueue m_output_queue;
     Net* m_input_net;
     Net* m_output_net;
     pjs::Ref<PipelineLayout> m_pipeline_layout;

@@ -35,6 +35,7 @@ namespace pipy {
 
 class EventBuffer;
 class StreamEnd;
+class SharedData;
 
 //
 // Event
@@ -196,6 +197,35 @@ private:
   pjs::EnumValue<Error> m_error_code;
 
   friend class pjs::ObjectTemplate<StreamEnd, Event>;
+};
+
+//
+// SharedEvent
+//
+
+class SharedEvent :
+  public pjs::RefCountMT<SharedEvent>,
+  public pjs::Pooled<SharedEvent>
+{
+public:
+  static auto make(Event *evt) -> SharedEvent* {
+    return new SharedEvent(evt);
+  }
+
+  auto to_event() -> Event*;
+
+private:
+  SharedEvent(Event *evt);
+  ~SharedEvent();
+
+  Event::Type m_type;
+  StreamEnd::Error m_error_code;
+  pjs::SharedValue m_error;
+  pjs::SharedValue m_payload;
+  pjs::Ref<pjs::SharedObject> m_head_tail;
+  pjs::Ref<SharedData> m_data;
+
+  friend class pjs::RefCountMT<SharedEvent>;
 };
 
 //

@@ -78,8 +78,7 @@ PipelineLoadBalancer::AsyncWrapper::AsyncWrapper(Net *net, PipelineLayout *layou
 
 void PipelineLoadBalancer::AsyncWrapper::input(Event *evt) {
   if (m_input_net) {
-    m_input_queue.enqueue(evt);
-    m_input_net->io_context().post(InputHandler(this));
+    m_input_net->io_context().post(InputHandler(this, SharedEvent::make(evt)));
   }
 }
 
@@ -91,8 +90,7 @@ void PipelineLoadBalancer::AsyncWrapper::close() {
 
 void PipelineLoadBalancer::AsyncWrapper::on_event(Event *evt) {
   if (m_output_net) {
-    m_output_queue.enqueue(evt);
-    m_output_net->io_context().post(OutputHandler(this));
+    m_output_net->io_context().post(OutputHandler(this, SharedEvent::make(evt)));
   }
 }
 
@@ -102,6 +100,7 @@ void PipelineLoadBalancer::AsyncWrapper::on_open() {
     auto mod = m_pipeline_layout->module();
     m_pipeline = Pipeline::make(m_pipeline_layout, mod->new_context());
     m_pipeline->chain(EventTarget::input());
+    m_pipeline->start();
   }
 }
 
@@ -111,8 +110,8 @@ void PipelineLoadBalancer::AsyncWrapper::on_close() {
   m_output = nullptr;
 }
 
-void PipelineLoadBalancer::AsyncWrapper::on_input() {
-  if (auto evt = m_input_queue.dequeue()) {
+void PipelineLoadBalancer::AsyncWrapper::on_input(SharedEvent *se) {
+  if (auto evt = se->to_event()) {
     if (m_pipeline) {
       InputContext ic;
       m_pipeline->input()->input(evt);
@@ -123,8 +122,8 @@ void PipelineLoadBalancer::AsyncWrapper::on_input() {
   }
 }
 
-void PipelineLoadBalancer::AsyncWrapper::on_output() {
-  if (auto evt = m_output_queue.dequeue()) {
+void PipelineLoadBalancer::AsyncWrapper::on_output(SharedEvent *se) {
+  if (auto evt = se->to_event()) {
     if (m_output) {
       InputContext ic;
       m_output->input(evt);

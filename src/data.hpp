@@ -1069,7 +1069,10 @@ private:
 // SharedData
 //
 
-class SharedData : public pjs::Pooled<SharedData> {
+class SharedData :
+  public pjs::RefCountMT<SharedData>,
+  public pjs::Pooled<SharedData>
+{
 public:
   static auto make(const Data &data) -> SharedData* {
     return new SharedData(data);
@@ -1082,17 +1085,6 @@ public:
         v->offset,
         v->length
       ));
-    }
-  }
-
-  auto retain() -> SharedData* {
-    m_retain_count.fetch_add(1, std::memory_order_relaxed);
-    return this;
-  }
-
-  void release() {
-    if (m_retain_count.fetch_sub(1, std::memory_order_acq_rel) == 1) {
-      delete this;
     }
   }
 
@@ -1121,7 +1113,7 @@ private:
     }
   };
 
-  SharedData(const Data &data) : m_retain_count(0) {
+  SharedData(const Data &data) {
     auto **p = &m_views;
     for (auto *v = data.m_head; v; v = v->next) {
       p = &(*p = new View(v))->next;
@@ -1137,7 +1129,8 @@ private:
   }
 
   View* m_views = nullptr;
-  std::atomic<int> m_retain_count;
+
+  friend class pjs::RefCountMT<SharedData>;
 };
 
 inline Data::Data(const SharedData &other)

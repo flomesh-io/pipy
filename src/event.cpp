@@ -24,11 +24,70 @@
  */
 
 #include "event.hpp"
+#include "data.hpp"
 #include "pipeline.hpp"
 #include "input.hpp"
 #include "net.hpp"
 
 namespace pipy {
+
+//
+// SharedEvent
+//
+
+SharedEvent::SharedEvent(Event *evt)
+  : m_type(evt ? evt->type() : (Event::Type)-1)
+{
+  switch (m_type) {
+    case Event::Type::Data:
+      m_data = SharedData::make(*evt->as<Data>());
+      break;
+    case Event::Type::MessageStart:
+      m_head_tail = pjs::SharedObject::make(evt->as<MessageStart>()->head());
+      break;
+    case Event::Type::MessageEnd:
+      m_head_tail = pjs::SharedObject::make(evt->as<MessageEnd>()->tail());
+      new (&m_payload) pjs::SharedValue(evt->as<MessageEnd>()->payload());
+      break;
+    case Event::Type::StreamEnd:
+      m_error_code = evt->as<StreamEnd>()->error_code();
+      m_error = evt->as<StreamEnd>()->error();
+      break;
+    default: break;
+  }
+}
+
+SharedEvent::~SharedEvent()
+{
+}
+
+auto SharedEvent::to_event() -> Event* {
+  switch (m_type) {
+    case Event::Type::Data: {
+      auto d = Data::make();
+      m_data->to_data(*d);
+      return d;
+    }
+    case Event::Type::MessageStart: {
+      return MessageStart::make(m_head_tail ? m_head_tail->to_object() : nullptr);
+    }
+    case Event::Type::MessageEnd: {
+      pjs::Value p;
+      m_payload.to_value(p);
+      return MessageEnd::make(m_head_tail ? m_head_tail->to_object() : nullptr, p);
+    }
+    case Event::Type::StreamEnd: {
+      if (m_error_code == StreamEnd::RUNTIME_ERROR) {
+        pjs::Value e;
+        m_error.to_value(e);
+        return StreamEnd::make(e);
+      } else {
+        return StreamEnd::make(m_error_code);
+      }
+    }
+    default: return nullptr;
+  }
+}
 
 //
 // EventTarget::Input
