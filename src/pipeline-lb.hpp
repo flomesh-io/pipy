@@ -82,7 +82,7 @@ public:
     struct OutputHandler : SelfHandler<AsyncWrapper> {
       using SelfHandler::SelfHandler;
       OutputHandler(const OutputHandler &r) : SelfHandler(r) {}
-      void operator()() { self->on_input(); }
+      void operator()() { self->on_output(); }
     };
 
     virtual void on_event(Event *evt) override;

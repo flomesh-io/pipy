@@ -47,6 +47,7 @@ void PipelineLoadBalancer::add_target(PipelineLayout *layout) {
   auto &p = m_modules[m->filename()->str()].pipelines[layout->name()->str()];
   auto *t = new Target;
   t->net = &Net::current();
+  t->layout = layout;
   t->next = p.targets;
   p.targets = t;
 }
@@ -72,6 +73,7 @@ PipelineLoadBalancer::AsyncWrapper::AsyncWrapper(Net *net, PipelineLayout *layou
   , m_pipeline_layout(layout)
   , m_output(output)
 {
+  m_input_net->io_context().post(OpenHandler(this));
 }
 
 void PipelineLoadBalancer::AsyncWrapper::input(Event *evt) {
@@ -96,6 +98,7 @@ void PipelineLoadBalancer::AsyncWrapper::on_event(Event *evt) {
 
 void PipelineLoadBalancer::AsyncWrapper::on_open() {
   if (m_pipeline_layout && !m_pipeline) {
+    InputContext ic;
     auto mod = m_pipeline_layout->module();
     m_pipeline = Pipeline::make(m_pipeline_layout, mod->new_context());
     m_pipeline->chain(EventTarget::input());
@@ -123,6 +126,7 @@ void PipelineLoadBalancer::AsyncWrapper::on_input() {
 void PipelineLoadBalancer::AsyncWrapper::on_output() {
   if (auto evt = m_output_queue.dequeue()) {
     if (m_output) {
+      InputContext ic;
       m_output->input(evt);
     } else {
       evt->retain();
