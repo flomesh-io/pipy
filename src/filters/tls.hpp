@@ -67,8 +67,8 @@ struct Options : public pipy::Options {
   std::vector<pjs::Ref<crypto::Certificate>> trusted;
   pjs::Ref<pjs::Function> verify;
   pjs::Ref<pjs::Function> handshake;
-#if PIPY_USE_RFC8998
-  bool rfc8998 = false;
+#if PIPY_USE_NTLS
+  bool ntls = false;
 #endif
 
   Options() {}
@@ -135,8 +135,8 @@ public:
     TLSContext *ctx,
     Filter *filter,
     bool is_server,
-#if PIPY_USE_RFC8998
-    bool is_rfc8998,
+#if PIPY_USE_NTLS
+    bool is_ntls,
 #endif
     pjs::Object *certificate,
     pjs::Function *verify,
@@ -163,8 +163,8 @@ private:
   pjs::Ref<pjs::Function> m_alpn;
   pjs::Ref<pjs::Function> m_handshake;
   bool m_is_server;
-#if PIPY_USE_RFC8998
-  bool m_is_rfc8998;
+#if PIPY_USE_NTLS
+  bool m_is_ntls;
 #endif
   bool m_closed_input = false;
   bool m_closed_output = false;

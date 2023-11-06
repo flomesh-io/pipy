@@ -72,7 +72,11 @@ static void show_version() {
   std::cout << "Commit      : " << PIPY_COMMIT << std::endl;
   std::cout << "Commit Date : " << PIPY_COMMIT_DATE << std::endl;
   std::cout << "Host        : " << PIPY_HOST << std::endl;
+#ifdef PIPY_USE_NTLS
+  std::cout << "Tongsuo     : " << TONGSUO_VERSION_TEXT << std::endl;
+#else
   std::cout << "OpenSSL     : " << OPENSSL_VERSION_TEXT << std::endl;
+#endif
 
 #ifdef PIPY_USE_GUI
   std::cout << "Builtin GUI : " << "Yes" << std::endl;

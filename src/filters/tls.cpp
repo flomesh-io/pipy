@@ -32,10 +32,6 @@
 
 #include <openssl/err.h>
 
-#if PIPY_USE_RFC8998
-#include "rfc-8998.hpp"
-#endif
-
 namespace pipy {
 namespace tls {
 
@@ -97,9 +93,9 @@ Options::Options(pjs::Object *options, const char *base_name) {
     .get(handshake)
     .check_nullable();
 
-#if PIPY_USE_RFC8998
-  Value(options, "rfc8998", base_name)
-    .get(rfc8998)
+#if PIPY_USE_NTLS
+  Value(options, "ntls", base_name)
+    .get(ntls)
     .check_nullable();
 #endif
 }
@@ -109,14 +105,22 @@ Options::Options(pjs::Object *options, const char *base_name) {
 //
 
 TLSContext::TLSContext(bool is_server, const Options &options) {
-#if PIPY_USE_RFC8998
-  m_ctx = SSL_CTX_new(is_server ? TLS_server_method() : (options.rfc8998 ? TLS_client_method_rfc8998() : TLS_client_method()));
+#if PIPY_USE_NTLS
+  if(options.ntls) {
+    m_ctx = SSL_CTX_new(is_server ? NTLS_server_method() : NTLS_client_method());
+  } else {
+    m_ctx = SSL_CTX_new(is_server ? TLS_server_method() : TLS_client_method());
+  }
 #else
   m_ctx = SSL_CTX_new(is_server ? TLS_server_method() : TLS_client_method());
 #endif
 
   if (!m_ctx) throw_error();
-
+#if PIPY_USE_NTLS
+  if (options.ntls) {
+    SSL_CTX_enable_ntls(m_ctx);
+  }
+#endif
   m_verify_store = X509_STORE_new();
   if (!m_verify_store) throw_error();
 
@@ -268,8 +272,8 @@ TLSSession::TLSSession(
   TLSContext *ctx,
   Filter *filter,
   bool is_server,
-#if PIPY_USE_RFC8998
-  bool is_rfc8998,
+#if PIPY_USE_NTLS
+  bool is_ntls,
 #endif
   pjs::Object *certificate,
   pjs::Function *verify,
@@ -282,8 +286,8 @@ TLSSession::TLSSession(
   , m_alpn(alpn)
   , m_handshake(handshake)
   , m_is_server(is_server)
-#if PIPY_USE_RFC8998
-  , m_is_rfc8998(is_rfc8998)
+#if PIPY_USE_NTLS
+  , m_is_ntls(is_ntls)
 #endif
 {
   m_ssl = SSL_new(ctx->ctx());
@@ -419,6 +423,52 @@ void TLSSession::use_certificate(pjs::Str *sni) {
     return;
   }
 
+#if PIPY_USE_NTLS
+  if (m_is_ntls) {
+    pjs::Value cert_enc, cert_sign, key_enc, key_sign;
+    certificate.o()->get("certSign", cert_sign);
+    certificate.o()->get("certEnc", cert_enc);
+    certificate.o()->get("keySign", key_sign);
+    certificate.o()->get("keyEnc", key_enc);
+
+    if (!key_sign.is_nullish() && !key_sign.is<crypto::PrivateKey>()) {
+      m_filter->error("certificate.keySign requires a PrivateKey object");
+      return;
+    }
+
+    if (!key_enc.is_nullish() && !key_enc.is<crypto::PrivateKey>()) {
+      m_filter->error("certificate.keyEnc requires a PrivateKey object");
+      return;
+    }
+
+    if (!cert_sign.is_nullish() && !cert_sign.is<crypto::Certificate>()) {
+      m_filter->error("certificate.certSign requires a Certificate object");
+      return;
+    }
+
+    if (!cert_enc.is_nullish() && !cert_enc.is<crypto::Certificate>()) {
+      m_filter->error("certificate.certEnc requires a Certificate object");
+      return;
+    }
+
+    if (!key_sign.is_nullish()) {
+      if (SSL_use_sign_PrivateKey(m_ssl,key_sign.as<crypto::PrivateKey>()->pkey()) == 0) throw_error();
+    }
+
+    if (!key_enc.is_nullish()) {
+      if (SSL_use_enc_PrivateKey(m_ssl,key_enc.as<crypto::PrivateKey>()->pkey()) == 0) throw_error();
+    }
+
+    if (!cert_sign.is_nullish()) {
+      if (SSL_use_sign_certificate(m_ssl,cert_sign.as<crypto::Certificate>()->x509()) == 0) throw_error();
+    }
+
+    if (!cert_enc.is_nullish()) {
+      if (SSL_use_enc_certificate(m_ssl,cert_enc.as<crypto::Certificate>()->x509()) == 0) throw_error();
+    }
+  }
+#endif
+
   SSL_use_PrivateKey(m_ssl, key.as<crypto::PrivateKey>()->pkey());
 
   if (cert.is<crypto::Certificate>()) {
@@ -436,32 +486,6 @@ void TLSSession::use_certificate(pjs::Str *sni) {
   } else {
     m_filter->error("certificate.cert requires a Certificate or a CertificateChain object");
   }
-
-#if PIPY_USE_RFC8998
-  if (m_is_rfc8998) {
-    pjs::Value cert_enc, key_enc;
-    certificate.o()->get("certEnc", cert_enc);
-    certificate.o()->get("keyEnc", key_enc);
-
-    if (!key_enc.is_nullish() && !key_enc.is<crypto::PrivateKey>()) {
-      m_filter->error("certificate.keyEnc requires a PrivateKey object");
-      return;
-    }
-
-    if (!cert_enc.is_nullish() && !cert_enc.is<crypto::Certificate>()) {
-      m_filter->error("certificate.certEnc requires a Certificate object");
-      return;
-    }
-
-    if (!key_enc.is_nullish()) {
-      SSL_use_PrivateKey_rfc8998(m_ssl, key_enc.as<crypto::PrivateKey>()->pkey());
-    }
-
-    if (!cert_enc.is_nullish()) {
-      SSL_use_certificate_rfc8998(m_ssl, cert_enc.as<crypto::Certificate>()->x509());
-    }
-  }
-#endif
 }
 
 bool TLSSession::handshake_step() {
@@ -675,8 +699,8 @@ Client::Client(const Options &options)
   : m_tls_context(std::make_shared<TLSContext>(false, options))
   , m_options(std::make_shared<Options>(options))
 {
-#if PIPY_USE_RFC8998
-  if (!options.rfc8998) {
+#if PIPY_USE_NTLS
+  if (!options.ntls) {
     m_tls_context->set_protocol_versions(
       options.minVersion,
       options.maxVersion
@@ -740,8 +764,8 @@ void Client::process(Event *evt) {
       m_tls_context.get(),
       this,
       false,
-#if PIPY_USE_RFC8998
-      m_options->rfc8998,
+#if PIPY_USE_NTLS
+      m_options->ntls,
 #endif
       m_options->certificate,
       m_options->verify,
@@ -804,8 +828,8 @@ Server::Server(const Options &options)
   : m_tls_context(std::make_shared<TLSContext>(true, options))
   , m_options(std::make_shared<Options>(options))
 {
-#if PIPY_USE_RFC8998
-  if (!options.rfc8998) {
+#if PIPY_USE_NTLS
+  if (!options.ntls) {
     m_tls_context->set_protocol_versions(
       options.minVersion,
       options.maxVersion
@@ -866,8 +890,8 @@ void Server::process(Event *evt) {
       m_tls_context.get(),
       this,
       true,
-#if PIPY_USE_RFC8998
-      m_options->rfc8998,
+#if PIPY_USE_NTLS
+      m_options->ntls,
 #endif
       m_options->certificate,
       m_options->verify,
