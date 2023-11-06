@@ -15,7 +15,7 @@ option(PIPY_OPENSSL "external libopenssl location" "")
 option(PIPY_BROTLI "external brotli location" "")
 option(PIPY_STATIC "statically link to libc" OFF)
 option(PIPY_LTO "enable LTO" ON)
-option(PIPY_USE_NTLS, "Use TongSuo Crypto library instead of OpenSSL" OFF)
+option(PIPY_USE_NTLS, "Use externally compiled TongSuo Crypto library instead of OpenSSL. Used with PIPY_OPENSSL" OFF)
 
 add_subdirectory(deps/yajl-2.1.0)
 
@@ -83,31 +83,24 @@ else()
 endif()
 
 if(PIPY_OPENSSL)
+  if(PIPY_USE_NTLS)
+    add_definitions(-DPIPY_USE_NTLS)
+  endif(PIPY_USE_NTLS)
+
   set(OPENSSL_INC_DIR ${PIPY_OPENSSL}/include)
   set(OPENSSL_LIB_DIR ${PIPY_OPENSSL}/lib)
 else()
-  if(PIPY_USE_NTLS)
-    add_definitions(-DPIPY_USE_NTLS)
-    set(OPENSSL_BUILD_NAME "Building Tongsuo")
-    set(OPENSSL_BUILD_ARGS "../config --api=1.1.1 no-shared no-tests enable-ec_elgamal enable-paillier enable-ntls")
-    set(OPENSSL_SRC_DIR ${CMAKE_SOURCE_DIR}/deps/Tongsuo)
-  else()
-    set(OPENSSL_BUILD_NAME "Building OpenSSL")
-    set(OPENSSL_BUILD_ARGS "../config no-shared no-tests")
-    set(OPENSSL_SRC_DIR ${CMAKE_SOURCE_DIR}/deps/openssl-1.1.1q)
-  endif(PIPY_USE_NTLS)
-
+  set(OPENSSL_SRC_DIR ${CMAKE_SOURCE_DIR}/deps/openssl-1.1.1q)
   set(OPENSSL_LIB_DIR ${OPENSSL_SRC_DIR}/build)
   set(OPENSSL_INC_DIR ${OPENSSL_SRC_DIR}/include ${OPENSSL_LIB_DIR}/include)
-  separate_arguments(OPENSSL_CONFIG_CMD UNIX_COMMAND ${OPENSSL_BUILD_ARGS})
 
   add_custom_command(
     OUTPUT ${OPENSSL_LIB_DIR}/libcrypto.a ${OPENSSL_LIB_DIR}/libssl.a
     WORKING_DIRECTORY ${OPENSSL_SRC_DIR}
     COMMAND mkdir -p ${OPENSSL_SRC_DIR}/build
-    COMMAND cd ${OPENSSL_SRC_DIR}/build && ${OPENSSL_CONFIG_CMD} && make -j
+    COMMAND cd ${OPENSSL_SRC_DIR}/build && ../config no-shared no-tests && make -j
     VERBATIM
-    COMMENT ${OPENSSL_BUILD_NAME}
+    COMMENT "Building OpenSSL"
   )
 endif()
 
