@@ -1,7 +1,7 @@
 #!/bin/sh
 set -e
 
-function set_pipy_spawn() {
+function set_pipy_threads() {
   # cgroup v1
   if [ -f "/sys/fs/cgroup/cpu/cpu.cfs_quota_us" ]
   then
@@ -18,18 +18,25 @@ function set_pipy_spawn() {
 
   if [ "$QUOTA" = "-1" ] || [ "$QUOTA" = "max" ]
   then
-    export DEFAULT_SPAWN=0
+    export DEFAULT_SPAWN=1
   else
-    export DEFAULT_SPAWN=$(($QUOTA/$PERIOD - 1))
+    export DEFAULT_SPAWN=$(($QUOTA/$PERIOD))
   fi
 
   export PIPY_SPAWN=${PIPY_SPAWN:-$DEFAULT_SPAWN}
+  export PIPY_THREADS=${PIPY_THREADS:-$PIPY_SPAWN}
+
+  if [ $PIPY_THREADS -le 1 ]; then
+    export THREAD_ARGS=""
+  else
+    export THREAD_ARGS=" --threads=$PIPY_THREADS --reuse-port "
+  fi
 }
 
 if [ $(readlink /proc/$$/ns/pid) = $(readlink /proc/1/ns/pid) ]
 then
   # in container
-  set_pipy_spawn
+  set_pipy_threads
 
   # workaround for https://github.com/moby/moby/issues/31243
   chmod o+w /proc/self/fd/1 || true
@@ -43,21 +50,12 @@ if [[ "$1" == "pipy" || "$1" == "/usr/local/bin/pipy" ]]; then
       PIPY_CONFIG_FILE=/etc/pipy/tutorial/02-echo/hello.js
     fi
     if [ "$(id -u)" != "0" ]; then
-      for i in $(seq 1 1 $PIPY_SPAWN); do
-        exec /usr/local/bin/pipy ${PIPY_CONFIG_FILE} --reuse-port &
-      done
-      exec /usr/local/bin/pipy ${PIPY_CONFIG_FILE} --reuse-port
+      exec /usr/local/bin/pipy $THREAD_ARGS ${PIPY_CONFIG_FILE}
     else
-      for i in $(seq 1 1 $PIPY_SPAWN); do
-        exec su-exec pipy /usr/local/bin/pipy ${PIPY_CONFIG_FILE} --reuse-port &
-      done
-      exec su-exec pipy /usr/local/bin/pipy ${PIPY_CONFIG_FILE} --reuse-port 
+      exec su-exec pipy /usr/local/bin/pipy $THREAD_ARGS ${PIPY_CONFIG_FILE}
     fi
   else
-    for i in $(seq 1 1 $PIPY_SPAWN); do
-      exec "$@" --reuse-port &
-    done
-    exec "$@" --reuse-port
+    exec "$@" $THREAD_ARGS
   fi
 fi
 
