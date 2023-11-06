@@ -107,6 +107,7 @@ enum class Options {
 };
 
 static void set_pkey_options(EVP_PKEY *pkey, pjs::Object *options) {
+#ifndef PIPY_USE_NTLS
   if (options) {
     pjs::Value v;
     options->get(pjs::EnumDef<Options>::name(Options::alias_type), v);
@@ -121,9 +122,11 @@ static void set_pkey_options(EVP_PKEY *pkey, pjs::Object *options) {
       }
     }
   }
+#endif
 }
 
 static void set_pkey_ctx_options(EVP_PKEY_CTX *ctx, pjs::Object *options) {
+#ifndef PIPY_USE_NTLS
   if (options) {
     pjs::Value v;
     options->get(pjs::EnumDef<Options>::name(Options::id), v);
@@ -133,6 +136,7 @@ static void set_pkey_ctx_options(EVP_PKEY_CTX *ctx, pjs::Object *options) {
       if (EVP_PKEY_CTX_set1_id(ctx, &buf[0], buf.size()) <= 0) throw_error();
     }
   }
+#endif
 }
 
 static auto get_cipher_key(const EVP_CIPHER *cipher, pjs::Object *options, uint8_t *key) -> size_t {

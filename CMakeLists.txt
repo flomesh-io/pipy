@@ -1,7 +1,7 @@
 if(PIPY_STATIC)
-  cmake_minimum_required (VERSION 3.13)
+  cmake_minimum_required(VERSION 3.13)
 else()
-  cmake_minimum_required (VERSION 3.10)
+  cmake_minimum_required(VERSION 3.10)
 endif()
 
 project(pipy)
@@ -15,7 +15,7 @@ option(PIPY_OPENSSL "external libopenssl location" "")
 option(PIPY_BROTLI "external brotli location" "")
 option(PIPY_STATIC "statically link to libc" OFF)
 option(PIPY_LTO "enable LTO" ON)
-option(PIPY_RFC8998 "enable support for RFC 9889: SM Cipher Suite for TLS" OFF)
+option(PIPY_USE_NTLS, "Use TongSuo Crypto library instead of OpenSSL" OFF)
 
 add_subdirectory(deps/yajl-2.1.0)
 
@@ -54,7 +54,7 @@ find_program(CCACHE_PROGRAM ccache)
 mark_as_advanced(FORCE CCACHE_PROGRAM)
 
 if(CCACHE_PROGRAM)
-   set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "${CCACHE_PROGRAM}")
+  set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "${CCACHE_PROGRAM}")
 endif()
 
 include(c++-standards)
@@ -65,7 +65,7 @@ include(sanitizers)
 cxx_11()
 
 # enable LTO/IPO for all targets. Doesn't work with GCC.
-if(PIPY_LTO AND (NOT CMAKE_BUILD_TYPE STREQUAL "Debug"))
+if(PIPY_LTO AND(NOT CMAKE_BUILD_TYPE STREQUAL "Debug"))
   message("Enabling LTO")
   include(link-time-optimization)
   link_time_optimization()
@@ -73,7 +73,7 @@ else()
   message("LTO is disabled")
 endif()
 
-if (PIPY_ZLIB)
+if(PIPY_ZLIB)
   set(ZLIB_INC_DIR ${PIPY_ZLIB}/include)
   set(ZLIB_LIB ${PIPY_ZLIB}/lib/libz.a)
 else()
@@ -86,17 +86,28 @@ if(PIPY_OPENSSL)
   set(OPENSSL_INC_DIR ${PIPY_OPENSSL}/include)
   set(OPENSSL_LIB_DIR ${PIPY_OPENSSL}/lib)
 else()
-  set(OPENSSL_SRC_DIR ${CMAKE_SOURCE_DIR}/deps/openssl-1.1.1q)
+  if(PIPY_USE_NTLS)
+    add_definitions(-DPIPY_USE_NTLS)
+    set(OPENSSL_BUILD_NAME "Building Tongsuo")
+    set(OPENSSL_BUILD_ARGS "../config --api=1.1.1 no-shared no-tests enable-ec_elgamal enable-paillier enable-ntls")
+    set(OPENSSL_SRC_DIR ${CMAKE_SOURCE_DIR}/deps/Tongsuo)
+  else()
+    set(OPENSSL_BUILD_NAME "Building OpenSSL")
+    set(OPENSSL_BUILD_ARGS "../config no-shared no-tests")
+    set(OPENSSL_SRC_DIR ${CMAKE_SOURCE_DIR}/deps/openssl-1.1.1q)
+  endif(PIPY_USE_NTLS)
+
   set(OPENSSL_LIB_DIR ${OPENSSL_SRC_DIR}/build)
   set(OPENSSL_INC_DIR ${OPENSSL_SRC_DIR}/include ${OPENSSL_LIB_DIR}/include)
+  separate_arguments(OPENSSL_CONFIG_CMD UNIX_COMMAND ${OPENSSL_BUILD_ARGS})
 
   add_custom_command(
     OUTPUT ${OPENSSL_LIB_DIR}/libcrypto.a ${OPENSSL_LIB_DIR}/libssl.a
     WORKING_DIRECTORY ${OPENSSL_SRC_DIR}
     COMMAND mkdir -p ${OPENSSL_SRC_DIR}/build
-    COMMAND cd ${OPENSSL_SRC_DIR}/build && ../config no-shared no-tests && make
+    COMMAND cd ${OPENSSL_SRC_DIR}/build && ${OPENSSL_CONFIG_CMD} && make -j
     VERBATIM
-    COMMENT "Building OpenSSL"
+    COMMENT ${OPENSSL_BUILD_NAME}
   )
 endif()
 
@@ -121,10 +132,12 @@ add_definitions(
 include(CheckCXXCompilerFlag)
 check_cxx_compiler_flag("-Wdelete-non-abstract-non-virtual-dtor"
   COMPILER_SUPPORTS_DELETE_NON_ABSTRACT_NON_VIRTUAL_DTOR)
+
 if(COMPILER_SUPPORTS_DELETE_NON_ABSTRACT_NON_VIRTUAL_DTOR)
   add_compile_options(
     $<$<COMPILE_LANGUAGE:CXX>:-Wno-delete-non-abstract-non-virtual-dtor>)
 endif()
+
 add_compile_options(
   -Wall
   -Wno-overloaded-virtual
