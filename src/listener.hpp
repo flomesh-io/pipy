@@ -74,12 +74,13 @@ public:
     return false;
   }
 
-  static void for_each(const std::function<void(Listener*)> &cb) {
+  static bool for_each(const std::function<bool(Listener*)> &cb) {
     for (int i = 0; i < int(Protocol::MAX); i++) {
       for (auto *l : s_listeners[i]) {
-        cb(l);
+        if (!cb(l)) return false;
       }
     }
+    return true;
   }
 
   static void delete_all();
@@ -98,7 +99,7 @@ public:
 
   void set_reserved(bool b) { m_reserved = b; }
   void set_options(const Options &options);
-  void for_each_inbound(const std::function<void(Inbound*)> &cb);
+  bool for_each_inbound(const std::function<bool(Inbound*)> &cb);
 
 private:
   Listener(Protocol protocol, const std::string &ip, int port);

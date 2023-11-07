@@ -380,7 +380,7 @@ void WorkerThread::init_metrics() {
 
 void WorkerThread::shutdown_all(bool force) {
   if (auto worker = Worker::current()) worker->stop(force);
-  Listener::for_each([&](Listener *l) { l->pipeline_layout(nullptr); });
+  Listener::for_each([&](Listener *l) { l->pipeline_layout(nullptr); return true; });
 }
 
 void WorkerThread::main() {

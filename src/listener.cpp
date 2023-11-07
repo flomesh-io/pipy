@@ -157,10 +157,11 @@ void Listener::set_options(const Options &options) {
   }
 }
 
-void Listener::for_each_inbound(const std::function<void(Inbound*)> &cb) {
+bool Listener::for_each_inbound(const std::function<bool(Inbound*)> &cb) {
   for (auto i = m_inbounds.head(); i; i = i->next()) {
-    cb(i);
+    if (!cb(i)) return false;
   }
+  return true;
 }
 
 bool Listener::start() {

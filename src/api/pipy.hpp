@@ -46,6 +46,12 @@ public:
   void operator()(pjs::Context &ctx, pjs::Object *obj, pjs::Value &ret);
 
   //
+  // Pipy::Inbound
+  //
+
+  class Inbound : public pjs::ObjectTemplate<Inbound> {};
+
+  //
   // Pipy::Outbound
   //
 

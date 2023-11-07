@@ -58,6 +58,9 @@ public:
     bool peer_stats = false;
   };
 
+  static auto count() -> int;
+  static void for_each(const std::function<bool(Inbound*)> &cb);
+
   auto id() const -> uint64_t { return m_id; }
   auto pipeline() const -> Pipeline* { return m_pipeline; }
   auto local_address() -> pjs::Str*;

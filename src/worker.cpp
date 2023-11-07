@@ -294,10 +294,11 @@ bool Worker::update_listeners(bool force) {
   // Close old ports
   Listener::for_each(
     [&](Listener *l) {
-      if (l->reserved()) return;
+      if (l->reserved()) return true;
       if (m_listeners.find(l) == m_listeners.end()) {
         l->pipeline_layout(nullptr);
       }
+      return true;
     }
   );
 

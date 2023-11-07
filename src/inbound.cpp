@@ -53,6 +53,25 @@ thread_local pjs::Ref<stats::Gauge> Inbound::s_metric_concurrency;
 thread_local pjs::Ref<stats::Counter> Inbound::s_metric_traffic_in;
 thread_local pjs::Ref<stats::Counter> Inbound::s_metric_traffic_out;
 
+auto Inbound::count() -> int {
+  int n = 0;
+  Listener::for_each(
+    [&](Listener *l) {
+      n += l->current_connections();
+      return true;
+    }
+  );
+  return n;
+}
+
+void Inbound::for_each(const std::function<bool(Inbound*)> &cb) {
+  Listener::for_each(
+    [&](Listener *l) {
+      return l->for_each_inbound(cb);
+    }
+  );
+}
+
 Inbound::Inbound(Listener *listener, const Options &options)
   : m_listener(listener)
   , m_options(options)
@@ -162,6 +181,7 @@ void Inbound::init_metrics() {
                 auto m = l->with_labels(&k, 1);
                 m->increase();
                 n++;
+                return true;
               });
               l->set(n);
               total += n;
@@ -171,6 +191,7 @@ void Inbound::init_metrics() {
               total += n;
             }
           }
+          return true;
         });
         gauge->set(total);
       }
@@ -185,7 +206,9 @@ void Inbound::init_metrics() {
             auto n = inbound->get_traffic_in();
             inbound->m_metric_traffic_in->increase(n);
             s_metric_traffic_in->increase(n);
+            return true;
           });
+          return true;
         });
       }
     );
@@ -199,7 +222,9 @@ void Inbound::init_metrics() {
             auto n = inbound->get_traffic_out();
             inbound->m_metric_traffic_out->increase(n);
             s_metric_traffic_out->increase(n);
+            return true;
           });
+          return true;
         });
       }
     );

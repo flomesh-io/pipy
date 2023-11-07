@@ -160,6 +160,7 @@ void Status::update_local() {
     listener->for_each_inbound([&](Inbound *inbound) {
       count++;
       buffered += inbound->get_buffered();
+      return true;
     });
     inbounds.insert({
       protocol,
@@ -168,6 +169,7 @@ void Status::update_local() {
       count,
       buffered,
     });
+    return true;
   });
 
   std::map<int, OutboundInfo> outbound_tcp, outbound_udp;
