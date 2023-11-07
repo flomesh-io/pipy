@@ -2099,6 +2099,7 @@ public:
     : m_instance(instance)
     , m_root(this)
     , m_caller(nullptr)
+    , m_l(nullptr)
     , m_level(0)
     , m_argc(0)
     , m_argv(nullptr)

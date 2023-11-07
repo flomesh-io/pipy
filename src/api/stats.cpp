@@ -24,6 +24,7 @@
  */
 
 #include "stats.hpp"
+#include "worker.hpp"
 #include "utils.hpp"
 #include "log.hpp"
 
@@ -1412,8 +1413,21 @@ template<> void ClassDef<Gauge>::init() {
   ctor([](Context &ctx) -> Object* {
     Str *name;
     Array *labels = nullptr;
-    if (!ctx.arguments(1, &name, &labels)) return nullptr;
-    return Gauge::make(name, labels);
+    Function *on_collect = nullptr;
+    if (!ctx.arguments(1, &name, &labels, &on_collect)) return nullptr;
+    if (!on_collect) return Gauge::make(name, labels);
+    Ref<Function> f(on_collect);
+    return Gauge::make(
+      name, labels,
+      [=](Gauge *g) {
+        Context ctx(nullptr, Worker::current()->global_object());
+        Value arg(g), ret;
+        (*f)(ctx, 1, &arg, ret);
+        if (!ctx.ok()) {
+          Log::pjs_error(ctx.error());
+        }
+      }
+    );
   });
 
   method("zero", [](Context &ctx, Object *obj, Value &ret) {
