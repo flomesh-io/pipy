@@ -34,6 +34,12 @@ PipelineLoadBalancer::~PipelineLoadBalancer() {
     for (const auto &p : m.second.pipelines) {
       auto t = p.second.targets;
       while (t) {
+        auto pl = t->layout.release();
+        t->net->post(
+          [=]() {
+            pl->release();
+          }
+        );
         auto target = t; t = t->next;
         delete target;
       }
@@ -73,41 +79,38 @@ PipelineLoadBalancer::AsyncWrapper::AsyncWrapper(Net *net, PipelineLayout *layou
   , m_pipeline_layout(layout)
   , m_output(output)
 {
+  retain();
   m_input_net->io_context().post(OpenHandler(this));
 }
 
 void PipelineLoadBalancer::AsyncWrapper::input(Event *evt) {
-  if (m_input_net) {
-    m_input_net->io_context().post(InputHandler(this, SharedEvent::make(evt)));
-  }
+  retain();
+  m_input_net->io_context().post(InputHandler(this, SharedEvent::make(evt)));
 }
 
 void PipelineLoadBalancer::AsyncWrapper::close() {
-  if (m_input_net) {
-    m_input_net->io_context().post(CloseHandler(this));
-  }
+  m_output = nullptr;
+  m_input_net->io_context().post(CloseHandler(this));
 }
 
 void PipelineLoadBalancer::AsyncWrapper::on_event(Event *evt) {
-  if (m_output_net) {
-    m_output_net->io_context().post(OutputHandler(this, SharedEvent::make(evt)));
-  }
+  retain();
+  m_output_net->io_context().post(OutputHandler(this, SharedEvent::make(evt)));
 }
 
 void PipelineLoadBalancer::AsyncWrapper::on_open() {
-  if (m_pipeline_layout && !m_pipeline) {
-    InputContext ic;
-    auto mod = m_pipeline_layout->module();
-    m_pipeline = Pipeline::make(m_pipeline_layout, mod->new_context());
-    m_pipeline->chain(EventTarget::input());
-    m_pipeline->start();
-  }
+  InputContext ic;
+  auto mod = m_pipeline_layout->module();
+  m_pipeline = Pipeline::make(m_pipeline_layout, mod->new_context());
+  m_pipeline->chain(EventTarget::input());
+  m_pipeline->start();
 }
 
 void PipelineLoadBalancer::AsyncWrapper::on_close() {
   m_pipeline = nullptr;
   m_pipeline_layout = nullptr;
-  m_output = nullptr;
+  EventTarget::close();
+  release();
 }
 
 void PipelineLoadBalancer::AsyncWrapper::on_input(SharedEvent *se) {
@@ -120,6 +123,7 @@ void PipelineLoadBalancer::AsyncWrapper::on_input(SharedEvent *se) {
       evt->release();
     }
   }
+  release();
 }
 
 void PipelineLoadBalancer::AsyncWrapper::on_output(SharedEvent *se) {
@@ -132,6 +136,7 @@ void PipelineLoadBalancer::AsyncWrapper::on_output(SharedEvent *se) {
       evt->release();
     }
   }
+  release();
 }
 
 } // namespace pipy

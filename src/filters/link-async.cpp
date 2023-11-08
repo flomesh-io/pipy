@@ -67,7 +67,10 @@ void LinkAsync::reset() {
   EventSource::close();
   m_buffer.clear();
   m_pipeline = nullptr;
-  m_async_wrapper = nullptr;
+  if (m_async_wrapper) {
+    m_async_wrapper->close();
+    m_async_wrapper = nullptr;
+  }
   m_is_started = false;
 }
 
@@ -106,7 +109,7 @@ void LinkAsync::process(Event *evt) {
   } else if (auto p = m_pipeline.get()) {
     m_buffer.push(evt);
     Net::current().io_context().post(FlushHandler(this));
-  } else if (auto aw = m_async_wrapper.get()) {
+  } else if (auto aw = m_async_wrapper) {
     m_buffer.flush(
       [&](Event *evt) {
         aw->input(evt);

@@ -808,26 +808,38 @@ void SharedValue::to_value(Value &v) const {
 //
 
 SharedObject::SharedObject(Object *o) {
-  m_entries = PooledArray<Entry>::make(o->type()->field_count() + o->ht_size());
-  auto ents = m_entries->elements();
-  int i = 0;
+  auto p = &m_entry_blocks;
+  auto b = *p;
   o->iterate_all(
     [&](Str *k, Value &v) {
-      auto &ent = ents[i++];
-      ent.k = k->data();
-      new (&ent.v) SharedValue(v);
+      if (!b || b->length >= sizeof(b->entries) / sizeof(Entry)) {
+        b = *p = new EntryBlock;
+        p = &b->next;
+      }
+      auto &e = b->entries[b->length++];
+      e.k = k->data();
+      new (&e.v) SharedValue(v);
     }
   );
 }
 
+SharedObject::~SharedObject() {
+  auto b = m_entry_blocks;
+  while (b) {
+    auto block = b; b = b->next;
+    delete block;
+  }
+}
+
 auto SharedObject::to_object() -> Object* {
   auto obj = Object::make();
-  auto ents = m_entries->elements();
-  for (size_t i = 0, n = m_entries->size(); i < n; i++) {
-    const auto &ent = ents[i];
-    if (ent.k) {
-      Value v; ent.v.to_value(v);
-      obj->set(Str::make(ent.k), v);
+  for (auto b = m_entry_blocks; b; b = b->next) {
+    for (auto i = 0, n = b->length; i < n; i++) {
+      const auto &e = b->entries[i];
+      if (e.k) {
+        Value v; e.v.to_value(v);
+        obj->set(Str::make(e.k), v);
+      }
     }
   }
   return obj;

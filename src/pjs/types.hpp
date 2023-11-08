@@ -1823,14 +1823,20 @@ public:
 
 private:
   SharedObject(Object *o);
-  ~SharedObject() { m_entries->free(); }
+  ~SharedObject();
 
   struct Entry {
     Ref<Str::CharData> k;
     SharedValue v;
   };
 
-  PooledArray<Entry>* m_entries;
+  struct EntryBlock : public Pooled<EntryBlock> {
+    EntryBlock* next = nullptr;
+    Entry entries[8];
+    int length = 0;
+  };
+
+  EntryBlock* m_entry_blocks = nullptr;
   std::atomic<int> m_refs;
 };
 

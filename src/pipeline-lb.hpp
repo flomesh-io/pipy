@@ -101,7 +101,7 @@ public:
     pjs::Ref<Pipeline> m_pipeline;
     pjs::Ref<EventTarget::Input> m_output;
 
-    friend class pjs::RefCountMT<AsyncWrapper>;
+    friend class pjs::RefCount<AsyncWrapper>;
     friend class PipelineLoadBalancer;
   };
 

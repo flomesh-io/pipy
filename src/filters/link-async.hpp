@@ -58,7 +58,7 @@ private:
 
   pjs::Ref<pjs::Function> m_name_f;
   pjs::Ref<Pipeline> m_pipeline;
-  pjs::Ref<PipelineLoadBalancer::AsyncWrapper> m_async_wrapper;
+  PipelineLoadBalancer::AsyncWrapper* m_async_wrapper = nullptr;
   EventBuffer m_buffer;
   bool m_is_started = false;
 
