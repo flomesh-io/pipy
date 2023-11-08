@@ -20,7 +20,7 @@ const dirnames = [].concat(
     .sort().map(e => `tutorial/${e.name}`),
   fs.readdirSync(SAMPLES_PATH, { withFileTypes: true })
     .filter(e => e.isDirectory() && !e.name.startsWith('.'))
-    .filter(e => e.name !== 'nmi' && e.name !== 'bpf' && e.name !== 'todo')
+    .filter(e => e.name !== 'nmi' && e.name !== 'bpf' && e.name !== 'webapp')
     .sort().map(e => `samples/${e.name}`),
 );
 
