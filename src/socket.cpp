@@ -193,7 +193,7 @@ void SocketTCP::shutdown_socket() {
     std::error_code ec;
     m_socket.shutdown(tcp::socket::shutdown_send, ec);
     if (ec) {
-      log_error("error when socket shutdown", ec);
+      log_warn("error when socket shutdown", ec);
     } else {
       log_debug("socket shutdown");
     }
@@ -205,7 +205,7 @@ void SocketTCP::close_socket() {
     std::error_code ec;
     m_socket.close(ec);
     if (ec) {
-      log_error("error closing socket", ec);
+      log_warn("error closing socket", ec);
     } else {
       log_debug("socket closed");
     }
@@ -489,7 +489,7 @@ void SocketUDP::close_socket() {
     std::error_code ec;
     m_socket.close(ec);
     if (ec) {
-      log_error("error closing socket", ec);
+      log_warn("error closing socket", ec);
     } else {
       log_debug("socket closed");
     }
