@@ -222,6 +222,7 @@ private:
 
   Message* api_v1_program_GET();
   Message* api_v1_program_POST(Data *data);
+  Message* api_v1_program_PATCH(Data *data);
   Message* api_v1_program_DELETE();
 
   Message* api_v1_status_GET();
@@ -249,6 +250,7 @@ private:
   void on_log_tail(Context *ctx, const std::string &name, const Data &data);
   void on_metrics(Context *ctx, const Data &data);
 
+  auto change_program(const std::string &path, bool reload) -> Message*;
   void metrics_history_step();
   void inactive_instance_removal_step();
 };

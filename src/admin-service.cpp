@@ -406,12 +406,14 @@ auto AdminService::handle(Context *ctx, Message *req) -> pjs::Object* {
       }
     }
 
-    // GET|POST|DELETE /api/v1/program
+    // GET|POST|PATCH|DELETE /api/v1/program
     if (path == "/api/v1/program") {
       if (method == "GET") {
         return api_v1_program_GET();
       } else if (method == "POST") {
         return api_v1_program_POST(body);
+      } else if (method == "PATCH") {
+        return api_v1_program_PATCH(body);
       } else if (method == "DELETE") {
         return api_v1_program_DELETE();
       } else {
@@ -1074,50 +1076,11 @@ Message* AdminService::api_v1_program_GET() {
 }
 
 Message* AdminService::api_v1_program_POST(Data *data) {
-  auto name = data->to_string();
+  return change_program(data->to_string(), false);
+}
 
-  Codebase *old_codebase = Codebase::current();
-  Codebase *new_codebase = nullptr;
-
-  if (m_store) {
-    if (name == "/") name = m_current_codebase;
-    new_codebase = Codebase::from_store(m_store, name);
-  } else if (name == "/") {
-    m_current_codebase = "/";
-    new_codebase = old_codebase;
-  }
-
-  if (!new_codebase) return response(400, "No codebase");
-
-  auto &entry = new_codebase->entry();
-  if (entry.empty()) {
-    if (new_codebase != old_codebase) delete new_codebase;
-    return response(400, "No main script");
-  }
-
-  if (new_codebase != old_codebase) {
-    new_codebase->set_current();
-  }
-
-  if (WorkerManager::get().started()) {
-    WorkerManager::get().stop(true);
-    m_current_program.clear();
-  }
-
-  if (WorkerManager::get().start()) {
-    if (new_codebase != old_codebase) delete old_codebase;
-    if (name != "/") m_current_codebase = name;
-    m_current_program = m_current_codebase;
-    return m_response_created;
-  } else {
-    if (new_codebase != old_codebase) {
-      if (old_codebase) {
-        old_codebase->set_current();
-        delete new_codebase;
-      }
-    }
-    return response(400, "Failed to start up");
-  }
+Message* AdminService::api_v1_program_PATCH(Data *data) {
+  return change_program(data->to_string(), true);
 }
 
 Message* AdminService::api_v1_program_DELETE() {
@@ -1328,6 +1291,59 @@ void AdminService::on_metrics(Context *ctx, const Data &data) {
     inst->metric_data.deserialize(data);
     inst->metric_history.step(inst->metric_data);
   }
+}
+
+auto AdminService::change_program(const std::string &path, bool reload) -> Message* {
+  std::string name = path;
+
+  Codebase *old_codebase = Codebase::current();
+  Codebase *new_codebase = nullptr;
+
+  if (m_store) {
+    if (name == "/") name = m_current_codebase;
+    new_codebase = Codebase::from_store(m_store, name);
+  } else if (name == "/") {
+    m_current_codebase = "/";
+    new_codebase = old_codebase;
+  }
+
+  if (!new_codebase) return response(400, "No codebase");
+
+  auto &entry = new_codebase->entry();
+  if (entry.empty()) {
+    if (new_codebase != old_codebase) delete new_codebase;
+    return response(400, "No main script");
+  }
+
+  if (new_codebase != old_codebase) {
+    new_codebase->set_current();
+  }
+
+  if (reload) {
+    WorkerManager::get().reload();
+    return m_response_created;
+  }
+
+  if (WorkerManager::get().started()) {
+    WorkerManager::get().stop(true);
+    m_current_program.clear();
+  }
+
+  if (WorkerManager::get().start()) {
+    if (new_codebase != old_codebase) delete old_codebase;
+    if (name != "/") m_current_codebase = name;
+    m_current_program = m_current_codebase;
+    return m_response_created;
+  }
+
+  if (new_codebase != old_codebase) {
+    if (old_codebase) {
+      old_codebase->set_current();
+      delete new_codebase;
+    }
+  }
+
+  return response(400, "Failed to start up");
 }
 
 void AdminService::metrics_history_step() {
