@@ -700,7 +700,7 @@ public:
   // Str::CharData
   //
 
-  class CharData : public Pooled<CharData> {
+  class CharData : public RefCountMT<CharData>, public Pooled<CharData> {
   public:
     auto str() const -> const std::string& { return m_str; }
     auto c_str() const -> const char * { return m_str.c_str(); }
@@ -711,19 +711,17 @@ public:
     auto chr_to_pos(int i) const -> int;
     auto chr_at(int i) const -> int;
 
-    auto retain() -> CharData* { m_refs.fetch_add(1, std::memory_order_relaxed); return this; }
-    void release() { if (m_refs.fetch_sub(1, std::memory_order_acq_rel) == 1) delete this; }
-
   private:
     enum { CHUNK_SIZE = 32 };
 
     CharData(std::string &&str);
+    ~CharData() {}
 
     const std::string m_str;
     int m_length;
     std::vector<uint32_t> m_chunks;
-    std::atomic<int> m_refs;
 
+    friend class RefCountMT<CharData>;
     friend class Str;
   };
 
@@ -1811,14 +1809,12 @@ private:
 // SharedObject
 //
 
-class SharedObject : public Pooled<SharedObject> {
+class SharedObject : public RefCountMT<SharedObject>, public Pooled<SharedObject> {
 public:
   static auto make(Object *o) -> SharedObject* {
     return o ? new SharedObject(o) : nullptr;
   }
 
-  auto retain() -> SharedObject* { m_refs.fetch_add(1, std::memory_order_relaxed); return this; }
-  void release() { if (m_refs.fetch_sub(1, std::memory_order_acq_rel) == 1) delete this; }
   auto to_object() -> Object*;
 
 private:
@@ -1837,7 +1833,8 @@ private:
   };
 
   EntryBlock* m_entry_blocks = nullptr;
-  std::atomic<int> m_refs;
+
+  friend class RefCountMT<SharedObject>;
 };
 
 //

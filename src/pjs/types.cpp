@@ -279,10 +279,7 @@ auto Str::substring(int start, int end) -> std::string {
 // Str::CharData
 //
 
-Str::CharData::CharData(std::string &&str)
-  : m_str(std::move(str))
-  , m_refs(0)
-{
+Str::CharData::CharData(std::string &&str) : m_str(std::move(str)) {
   int n = 0, p = 0, i = 0;
   Utf8Decoder decoder(
     [&](int cp) {
