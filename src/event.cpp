@@ -47,7 +47,7 @@ SharedEvent::SharedEvent(Event *evt)
       break;
     case Event::Type::MessageEnd:
       m_head_tail = pjs::SharedObject::make(evt->as<MessageEnd>()->tail());
-      new (&m_payload) pjs::SharedValue(evt->as<MessageEnd>()->payload());
+      m_payload = evt->as<MessageEnd>()->payload();
       break;
     case Event::Type::StreamEnd:
       m_error_code = evt->as<StreamEnd>()->error_code();

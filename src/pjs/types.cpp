@@ -770,10 +770,18 @@ auto Object::values(Object *obj) -> Array* {
 // SharedValue
 //
 
-SharedValue::SharedValue(const Value &v)
-  : m_t(v.type())
-{
+void SharedValue::to_value(Value &v) const {
   switch (m_t) {
+    case Value::Type::Boolean: v.set(m_v.b); break;
+    case Value::Type::Number: v.set(m_v.n); break;
+    case Value::Type::String: v.set(Str::make(m_v.s)); break;
+    case Value::Type::Object: v.set(m_v.o ? m_v.o->to_object() : nullptr); break;
+    default: break;
+  }
+}
+
+void SharedValue::from_value(const Value &v) {
+  switch (m_t = v.type()) {
     case Value::Type::Boolean: m_v.b = v.b(); break;
     case Value::Type::Number: m_v.n = v.n(); break;
     case Value::Type::String: m_v.s = v.s()->data()->retain(); break;
@@ -782,20 +790,10 @@ SharedValue::SharedValue(const Value &v)
   }
 }
 
-SharedValue::~SharedValue() {
+void SharedValue::release() {
   switch (m_t) {
     case Value::Type::String: m_v.s->release(); break;
     case Value::Type::Object: if (auto o = m_v.o) o->release(); break;
-    default: break;
-  }
-}
-
-void SharedValue::to_value(Value &v) const {
-  switch (m_t) {
-    case Value::Type::Boolean: v.set(m_v.b); break;
-    case Value::Type::Number: v.set(m_v.n); break;
-    case Value::Type::String: v.set(Str::make(m_v.s)); break;
-    case Value::Type::Object: v.set(m_v.o ? m_v.o->to_object() : nullptr); break;
     default: break;
   }
 }
@@ -815,7 +813,7 @@ SharedObject::SharedObject(Object *o) {
       }
       auto &e = b->entries[b->length++];
       e.k = k->data();
-      new (&e.v) SharedValue(v);
+      e.v = v;
     }
   );
 }

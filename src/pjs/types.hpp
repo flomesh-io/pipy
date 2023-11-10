@@ -1790,9 +1790,11 @@ inline auto Value::value_of() const -> double {
 
 class SharedValue {
 public:
-  SharedValue() {}
-  SharedValue(const Value &v);
-  ~SharedValue();
+  SharedValue() : m_t(Value::Type::Empty) {}
+  SharedValue(const Value &v) { from_value(v); }
+  ~SharedValue() { release(); }
+
+  auto operator=(const Value &v) -> SharedValue& { release(); from_value(v); return *this; }
   void to_value(Value &v) const;
 
 private:
@@ -1803,6 +1805,9 @@ private:
     Str::CharData* s;
     SharedObject* o;
   } m_v;
+
+  void from_value(const Value &v);
+  void release();
 };
 
 //
