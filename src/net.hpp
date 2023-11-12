@@ -150,6 +150,47 @@ struct SelfDataHandler {
 };
 
 //
+// SelfHandlerMT
+//
+
+template<typename T>
+struct SelfHandlerMT {
+  using allocator_type = PooledAllocatorMT<SelfHandlerMT>;
+
+  allocator_type get_allocator() const {
+    return allocator_type();
+  }
+
+  SelfHandlerMT() = default;
+  SelfHandlerMT(T *s) : self(s) {}
+  SelfHandlerMT(const SelfHandlerMT &r) : self(r.self) {}
+  SelfHandlerMT(SelfHandlerMT &&r) : self(r.self) {}
+
+  T* self;
+};
+
+//
+// SelfDataHandlerMT
+//
+
+template<typename T, typename U>
+struct SelfDataHandlerMT {
+  using allocator_type = PooledAllocatorMT<SelfDataHandlerMT>;
+
+  allocator_type get_allocator() const {
+    return allocator_type();
+  }
+
+  SelfDataHandlerMT() = default;
+  SelfDataHandlerMT(T *s, U *d) : self(s), data(d) {}
+  SelfDataHandlerMT(const SelfDataHandlerMT &r) : self(r.self), data(r.data) {}
+  SelfDataHandlerMT(SelfDataHandlerMT &&r) : self(r.self), data(r.data) {}
+
+  T* self;
+  U* data;
+};
+
+//
 // SelfTask
 //
 

@@ -60,30 +60,30 @@ public:
   private:
     AsyncWrapper(Net *net, PipelineLayout *layout, EventTarget::Input *output);
 
-    struct OpenHandler : SelfHandler<AsyncWrapper> {
-      using SelfHandler::SelfHandler;
-      OpenHandler(const OpenHandler &r) : SelfHandler(r) {}
+    struct OpenHandler : SelfHandlerMT<AsyncWrapper> {
+      using SelfHandlerMT::SelfHandlerMT;
+      OpenHandler(const OpenHandler &r) : SelfHandlerMT(r) {}
       void operator()() { self->on_open(); }
     };
 
-    struct CloseHandler : SelfHandler<AsyncWrapper> {
-      using SelfHandler::SelfHandler;
-      CloseHandler(const CloseHandler &r) : SelfHandler(r) {}
+    struct CloseHandler : SelfHandlerMT<AsyncWrapper> {
+      using SelfHandlerMT::SelfHandlerMT;
+      CloseHandler(const CloseHandler &r) : SelfHandlerMT(r) {}
       void operator()() { self->on_close(); }
     };
 
-    struct InputHandler : SelfDataHandler<AsyncWrapper, SharedEvent> {
-      using SelfDataHandler::SelfDataHandler;
-      InputHandler(AsyncWrapper *s, SharedEvent *d) : SelfDataHandler(s, d) { d->retain(); }
-      InputHandler(const InputHandler &r) : SelfDataHandler(r) { r.data->retain(); }
+    struct InputHandler : SelfDataHandlerMT<AsyncWrapper, SharedEvent> {
+      using SelfDataHandlerMT::SelfDataHandlerMT;
+      InputHandler(AsyncWrapper *s, SharedEvent *d) : SelfDataHandlerMT(s, d) { d->retain(); }
+      InputHandler(const InputHandler &r) : SelfDataHandlerMT(r) { r.data->retain(); }
       ~InputHandler() { data->release(); }
       void operator()() { self->on_input(data); }
     };
 
-    struct OutputHandler : SelfDataHandler<AsyncWrapper, SharedEvent> {
-      using SelfDataHandler::SelfDataHandler;
-      OutputHandler(AsyncWrapper *s, SharedEvent *d) : SelfDataHandler(s, d) { d->retain(); }
-      OutputHandler(const OutputHandler &r) : SelfDataHandler(r) { r.data->retain(); }
+    struct OutputHandler : SelfDataHandlerMT<AsyncWrapper, SharedEvent> {
+      using SelfDataHandlerMT::SelfDataHandlerMT;
+      OutputHandler(AsyncWrapper *s, SharedEvent *d) : SelfDataHandlerMT(s, d) { d->retain(); }
+      OutputHandler(const OutputHandler &r) : SelfDataHandlerMT(r) { r.data->retain(); }
       ~OutputHandler() { data->release(); }
       void operator()() { self->on_output(data); }
     };

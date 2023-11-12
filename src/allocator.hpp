@@ -26,6 +26,8 @@
 #ifndef ALLOCATOR_HPP
 #define ALLOCATOR_HPP
 
+#include "pjs/pjs.hpp"
+
 namespace pipy {
 
 //
@@ -67,6 +69,35 @@ private:
 
 template<typename T>
 thread_local T* PooledAllocator<T>::m_pool = nullptr;
+
+//
+// PooledAllocatorMT
+//
+
+template<typename T>
+class PooledAllocatorMT {
+public:
+  using value_type = T;
+
+  template<typename U>
+  struct rebind {
+    using other = PooledAllocatorMT<U>;
+  };
+
+  PooledAllocatorMT() = default;
+
+  template<typename U>
+  PooledAllocatorMT(const PooledAllocatorMT<U> &other) {};
+
+  T* allocate(size_t) { return (T*)pool().alloc(); }
+  void deallocate(T *p, size_t) { pool().free(p); }
+
+private:
+  static auto pool() -> pjs::Pool& {
+    thread_local static pjs::PooledClass s_class(nullptr, sizeof(T));
+    return s_class.pool();
+  }
+};
 
 } // namespace pipy
 

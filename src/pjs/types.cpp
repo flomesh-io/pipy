@@ -48,7 +48,9 @@ Pool::Pool(const std::string &name, size_t size)
   , m_pooled(0)
 {
   retain();
-  all()[name] = this;
+  if (!name.empty()) {
+    all()[name] = this;
+  }
 }
 
 Pool::~Pool() {
@@ -147,8 +149,8 @@ void Pool::clean() {
 
 PooledClass::PooledClass(const char *c_name, size_t size) {
   int status;
-  auto cxx_name = abi::__cxa_demangle(c_name, 0, 0, &status);
-  m_pool = new Pool(cxx_name ? cxx_name : c_name, size);
+  auto cxx_name = c_name ? abi::__cxa_demangle(c_name, 0, 0, &status) : nullptr;
+  m_pool = new Pool(cxx_name ? cxx_name : (c_name ? c_name : ""), size);
 }
 
 PooledClass::~PooledClass() {
