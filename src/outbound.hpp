@@ -52,6 +52,7 @@ public:
   enum class Protocol {
     TCP,
     UDP,
+    NETLINK,
   };
 
   enum class State {
@@ -128,7 +129,6 @@ protected:
   int m_retries = 0;
   double m_start_time = 0;
   double m_connection_time = 0;
-  bool m_connecting = false;
 
   auto options() const -> const Options& { return m_options; }
 
@@ -178,8 +178,6 @@ private:
   asio::ip::tcp::resolver m_resolver;
   Timer m_connect_timer;
   Timer m_retry_timer;
-  Data m_buffer_receive;
-  Data m_buffer_send;
 
   void start(double delay);
   void resolve();
@@ -219,10 +217,6 @@ private:
   asio::ip::udp::resolver m_resolver;
   Timer m_connect_timer;
   Timer m_retry_timer;
-  EventBuffer m_pending_buffer;
-  bool m_connecting = false;
-  bool m_connected = false;
-  bool m_ended = false;
 
   void start(double delay);
   void resolve();
@@ -239,6 +233,35 @@ private:
   virtual void on_socket_close() override { release(); }
 
   friend class pjs::ObjectTemplate<OutboundUDP, Outbound>;
+};
+
+//
+// OutboundNetlink
+//
+
+class OutboundNetlink :
+  public pjs::ObjectTemplate<OutboundNetlink, Outbound>,
+  public SocketNetlink
+{
+public:
+  virtual void bind(const std::string &ip, int port) override;
+  virtual void connect(const std::string &host, int port) override;
+  virtual void send(Event *evt) override;
+  virtual void close() override;
+
+private:
+  OutboundNetlink(EventTarget::Input *output, const Outbound::Options &options);
+  ~OutboundNetlink();
+
+  virtual auto get_buffered() const -> size_t override { return SocketNetlink::buffered(); }
+  virtual auto get_traffic_in() -> size_t override;
+  virtual auto get_traffic_out() -> size_t override;
+
+  virtual void on_socket_input(Event *evt) override { Outbound::input(evt); }
+  virtual void on_socket_describe(char *buf, size_t len) override { describe(buf, len); }
+  virtual void on_socket_close() override { release(); }
+
+  friend class pjs::ObjectTemplate<OutboundNetlink, Outbound>;
 };
 
 } // namespace pipy

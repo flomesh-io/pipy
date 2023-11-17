@@ -172,7 +172,7 @@ void Status::update_local() {
     return true;
   });
 
-  std::map<int, OutboundInfo> outbound_tcp, outbound_udp;
+  std::map<int, OutboundInfo> outbound_tcp, outbound_udp, outbound_netlink;
   Outbound::for_each([&](Outbound *outbound) {
     std::map<int, OutboundInfo> *m = nullptr;
     auto protocol = Protocol::UNKNOWN;
@@ -187,6 +187,10 @@ void Status::update_local() {
         protocol = Protocol::UDP;
         m = &outbound_udp;
         break;
+      case Outbound::Protocol::NETLINK:
+        protocol = Protocol::NETLINK;
+        m = &outbound_netlink;
+        break;
     }
     if (m) {
       auto port = outbound->port();
@@ -200,6 +204,7 @@ void Status::update_local() {
   });
   for (auto &p : outbound_tcp) outbounds.insert(p.second);
   for (auto &p : outbound_udp) outbounds.insert(p.second);
+  for (auto &p : outbound_netlink) outbounds.insert(p.second);
 }
 
 template<class T>

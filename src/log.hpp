@@ -54,10 +54,11 @@ public:
     RECEIVE   = 1<<4,
     FILES     = 1<<5,
     SUBPROC   = 1<<6,
-    TCP       = 1<<7,
-    UDP       = 1<<8,
-    HTTP2     = 1<<9,
-    USER      = 1<<10,
+    NETLINK   = 1<<7,
+    TCP       = 1<<8,
+    UDP       = 1<<9,
+    HTTP2     = 1<<10,
+    USER      = 1<<11,
   };
 
   static void init();

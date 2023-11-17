@@ -31,13 +31,14 @@
 
 #include <iostream>
 
+#ifdef __linux__
+#include <linux/netlink.h>
+#endif
+
 namespace pipy {
 
 using tcp = asio::ip::tcp;
 using udp = asio::ip::udp;
-
-thread_local static Data::Producer s_dp_tcp("OutboundTCP");
-thread_local static Data::Producer s_dp_udp("OutboundUDP");
 
 //
 // Outbound
@@ -66,9 +67,11 @@ Outbound::~Outbound() {
 auto Outbound::protocol_name() const -> pjs::Str* {
   thread_local static pjs::ConstStr s_TCP("TCP");
   thread_local static pjs::ConstStr s_UDP("UDP");
+  thread_local static pjs::ConstStr s_Netlink("Netlink");
   switch (m_options.protocol) {
     case Protocol::TCP: return s_TCP;
     case Protocol::UDP: return s_UDP;
+    case Protocol::NETLINK: return s_Netlink;
   }
   return nullptr;
 }
@@ -652,11 +655,86 @@ auto OutboundUDP::get_traffic_out() -> size_t {
   return n;
 }
 
+//
+// OutboundNetlink
+//
+
+OutboundNetlink::OutboundNetlink(EventTarget::Input *output, const Outbound::Options &options)
+  : pjs::ObjectTemplate<OutboundNetlink, Outbound>(output, options)
+  , SocketNetlink(false, Outbound::m_options)
+{
+}
+
+OutboundNetlink::~OutboundNetlink() {
+  Outbound::collect();
+}
+
+void OutboundNetlink::bind(const std::string &ip, int port) {
+#ifdef __linux__
+  auto &s = SocketNetlink::socket();
+  sockaddr_nl addr;
+  std::memset(&addr, 0, sizeof(addr));
+  addr.nl_family = AF_NETLINK;
+  addr.nl_pid = port;
+  addr.nl_groups = std::atoi(ip.c_str());
+  asio::generic::raw_protocol::endpoint ep(&addr, sizeof(addr));
+  s.open(asio::generic::raw_protocol(AF_NETLINK, NETLINK_ROUTE));
+  s.bind(ep);
+  m_local_addr = ip;
+  m_local_port = port;
+  m_local_addr_str = nullptr;
+#else // !__linux__
+  throw std::runtime_error("netlink not supported on this platform");
+#endif // __linux__
+}
+
+void OutboundNetlink::connect(const std::string &host, int port) {
+  m_host = host;
+  m_port = port;
+
+  pjs::Str *keys[2];
+  keys[0] = protocol_name();
+  keys[1] = address();
+  m_metric_traffic_out = Outbound::s_metric_traffic_out->with_labels(keys, 2);
+  m_metric_traffic_in = Outbound::s_metric_traffic_in->with_labels(keys, 2);
+
+  state(State::connected);
+  retain();
+  SocketNetlink::open();
+}
+
+void OutboundNetlink::send(Event *evt) {
+  SocketNetlink::output(evt);
+}
+
+void OutboundNetlink::close() {
+  SocketNetlink::close();
+  state(Outbound::State::closed);
+}
+
+auto OutboundNetlink::get_traffic_in() -> size_t {
+  auto n = SocketNetlink::m_traffic_read;
+  SocketNetlink::m_traffic_read = 0;
+  return n;
+}
+
+auto OutboundNetlink::get_traffic_out() -> size_t {
+  auto n = SocketNetlink::m_traffic_write;
+  SocketNetlink::m_traffic_write = 0;
+  return n;
+}
+
 } // namespace pipy
 
 namespace pjs {
 
 using namespace pipy;
+
+template<> void EnumDef<Outbound::Protocol>::init() {
+  define(Outbound::Protocol::TCP, "tcp");
+  define(Outbound::Protocol::UDP, "udp");
+  define(Outbound::Protocol::NETLINK, "netlink");
+}
 
 template<> void EnumDef<Outbound::State>::init() {
   define(Outbound::State::idle, "idle");
@@ -683,6 +761,10 @@ template<> void ClassDef<OutboundTCP>::init() {
 }
 
 template<> void ClassDef<OutboundUDP>::init() {
+  super<Outbound>();
+}
+
+template<> void ClassDef<OutboundNetlink>::init() {
   super<Outbound>();
 }
 

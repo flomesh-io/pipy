@@ -644,4 +644,169 @@ void SocketUDP::Peer::tick(double t) {
   }
 }
 
+//
+// SocketNetlink
+//
+
+thread_local Data::Producer SocketNetlink::s_dp("Netlink Socket");
+
+void SocketNetlink::open() {
+  m_endpoint = m_socket.local_endpoint();
+  m_opened = true;
+
+  if (!m_buffer.empty()) {
+    m_buffer.flush(
+      [this](Event *evt) {
+        if (auto data = evt->as<Data>()) {
+          send(data);
+        }
+      }
+    );
+  }
+
+  receive();
+}
+
+void SocketNetlink::close() {
+  m_closing = true;
+  close_socket();
+  close_async();
+}
+
+void SocketNetlink::output(Event *evt) {
+  if (auto data = evt->as<Data>()) {
+    if (!data->empty()) {
+      if (m_opened) {
+        send(data);
+      } else {
+        m_buffer.push(data);
+      }
+    }
+  }
+}
+
+void SocketNetlink::receive() {
+  if (m_closing) return;
+  if (m_receiving) return;
+  if (m_paused) return;
+
+  auto *buf = Data::make(RECEIVE_BUFFER_SIZE, &s_dp);
+  buf->retain();
+
+  m_socket.async_receive_from(
+    DataChunks(buf->chunks()),
+    m_from,
+    ReceiveHandler(this, buf)
+  );
+
+  m_receiving = true;
+}
+
+void SocketNetlink::send(Data *data) {
+  if (m_closing) return;
+
+  data->retain();
+  m_sending_size += data->size();
+  m_sending_count++;
+
+  if (Log::is_enabled(Log::NETLINK)) {
+    std::cerr << Log::format_elapsed_time();
+    std::cerr << (m_is_inbound ? " netlink <<<< send " : " netlink send >>>> ");
+    std::cerr << data->size() << std::endl;
+  }
+
+  m_socket.async_send(
+    DataChunks(data->chunks()),
+    SendHandler(this, data)
+  );
+}
+
+void SocketNetlink::close_socket() {
+  if (m_socket.is_open()) {
+    std::error_code ec;
+    m_socket.close(ec);
+    if (ec) {
+      log_warn("error closing socket", ec);
+    } else {
+      log_debug("socket closed");
+    }
+  }
+}
+
+void SocketNetlink::close_async() {
+  if (m_closed) return;
+  if (m_receiving) return;
+  if (m_sending_count > 0) return;
+  if (m_closing) {
+    m_closed = true;
+    if (m_opened) on_socket_close();
+  }
+}
+
+void SocketNetlink::on_tap_open() {
+  m_paused = false;
+  receive();
+}
+
+void SocketNetlink::on_tap_close() {
+  m_paused = true;
+}
+
+void SocketNetlink::on_receive(Data *data, const std::error_code &ec, std::size_t n) {
+  InputContext ic(this);
+
+  m_receiving = false;
+
+  if (ec != asio::error::operation_aborted && !m_closing) {
+    if (n > 0) {
+      data->pop(data->size() - n);
+      auto size = data->size();
+      m_traffic_read += size;
+
+      if (Log::is_enabled(Log::UDP)) {
+        std::cerr << Log::format_elapsed_time();
+        std::cerr << (m_is_inbound ? " netlink >>>> recv " : " netlink recv <<<< ");
+        std::cerr << size << std::endl;
+      }
+
+      on_socket_input(data);
+    }
+
+    if (ec) {
+      log_warn("error reading from peers", ec);
+      m_closing = true;
+      close_socket();
+
+    } else {
+      receive();
+    }
+  }
+
+  data->release();
+  close_async();
+}
+
+void SocketNetlink::on_send(Data *data, const std::error_code &ec, std::size_t n) {
+  m_sending_count--;
+
+  if (ec != asio::error::operation_aborted && !m_closing) {
+    m_sending_size -= data->size();
+    m_traffic_write += n;
+
+    auto limit = m_options.congestion_limit;
+    if (limit > 0 && m_sending_size < limit) {
+      m_congestion.end();
+    }
+
+    if (ec) {
+      log_warn("error writing to peers", ec);
+      m_closing = true;
+      close_socket();
+    }
+  }
+
+  data->release();
+  close_async();
+}
+
 } // namespace pipy

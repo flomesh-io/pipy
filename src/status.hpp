@@ -42,6 +42,7 @@ public:
     UNKNOWN,
     TCP,
     UDP,
+    NETLINK,
   };
 
   struct LocalInstance {

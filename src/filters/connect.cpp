@@ -27,18 +27,6 @@
 #include "outbound.hpp"
 #include "utils.hpp"
 
-namespace pjs {
-
-using namespace pipy;
-
-template<>
-void EnumDef<Outbound::Protocol>::init() {
-  define(Outbound::Protocol::TCP, "tcp");
-  define(Outbound::Protocol::UDP, "udp");
-}
-
-} // namespace pjs
-
 namespace pipy {
 
 //
@@ -147,12 +135,6 @@ void Connect::process(Event *evt) {
       return;
     }
 
-    std::string host; int port;
-    if (!utils::get_host_port(target.s()->str(), host, port)) {
-      Filter::error("invalid target format: %s", target.s()->c_str());
-      return;
-    }
-
     Options eval_options;
     if (auto f = m_options_f.get()) {
       pjs::Value ret;
@@ -170,6 +152,17 @@ void Connect::process(Event *evt) {
     }
 
     auto &options = m_options_f ? eval_options : m_options;
+
+    std::string host; int port;
+    if (options.protocol == Outbound::Protocol::NETLINK) {
+      host = "0";
+      port = 0;
+    } else {
+      if (!utils::get_host_port(target.s()->str(), host, port)) {
+        Filter::error("invalid target format: %s", target.s()->c_str());
+        return;
+      }
+    }
 
     pjs::Ref<pjs::Str> bind(options.bind);
     if (options.bind_f) {
@@ -192,13 +185,15 @@ void Connect::process(Event *evt) {
       };
     }
 
-    Outbound *outbound = nullptr;
     switch (options.protocol) {
       case Outbound::Protocol::TCP:
-        outbound = OutboundTCP::make(Filter::output(), options);
+        m_outbound = OutboundTCP::make(Filter::output(), options);
         break;
       case Outbound::Protocol::UDP:
-        outbound = OutboundUDP::make(Filter::output(), options);
+        m_outbound = OutboundUDP::make(Filter::output(), options);
+        break;
+      case Outbound::Protocol::NETLINK:
+        m_outbound = OutboundNetlink::make(Filter::output(), options);
         break;
     }
 
@@ -211,15 +206,23 @@ void Connect::process(Event *evt) {
         port = 0;
       }
       try {
-        outbound->bind(ip, port);
+        m_outbound->bind(ip, port);
       } catch (std::runtime_error &e) {
+        m_outbound = nullptr;
+        Filter::error("%s", e.what());
+        return;
+      }
+    } else if (options.protocol == Outbound::Protocol::NETLINK) {
+      try {
+        m_outbound->bind("0", 0);
+      } catch (std::runtime_error &e) {
+        m_outbound = nullptr;
         Filter::error("%s", e.what());
         return;
       }
     }
 
-    outbound->connect(host, port);
-    m_outbound = outbound;
+    m_outbound->connect(host, port);
   }
 
   if (m_outbound) {
