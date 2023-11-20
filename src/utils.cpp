@@ -130,6 +130,36 @@ bool get_host_port(const std::string &str, std::string &host, int &port) {
   }
 }
 
+void get_prop_list(
+  const std::string &str, char line_sep, char kv_sep,
+  const std::function<void(const std::string &, const std::string &)> &cb
+) {
+  if (size_t n = str.length()) {
+    size_t a = n, b = 0, p = 0;
+    for (size_t i = 0; i <= n; i++) {
+      if (i == n || str[i] == line_sep) {
+        if (a > b) break;
+        if (p > 0) {
+          auto m = p - 1; while (m > a && std::isspace(str[m])) m--;
+          auto n = p + 1; while (n < b && std::isspace(str[n])) n++;
+          cb(std::string(&str[a], m - a + 1), std::string(&str[n], b - n + 1));
+        } else {
+          cb(std::string(&str[a], b - a + 1), std::string());
+        }
+        a = n;
+        b = 0;
+        p = 0;
+      } else {
+        if (!std::isspace(str[i])) {
+          a = std::min(a, i);
+          b = std::max(b, i);
+        }
+        if (str[i] == kv_sep && !p) p = i;
+      }
+    }
+  }
+}
+
 bool get_ip_v4(const std::string &str, uint8_t ip[]) {
   return get_ip_v4(str.c_str(), ip);
 }

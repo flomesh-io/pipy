@@ -148,6 +148,13 @@ void Outbound::collect() {
   if (m_metric_traffic_out) m_metric_traffic_out->increase(out);
 }
 
+void Outbound::to_ip_addr(const std::string &address, std::string &host, int &port) {
+  if (!utils::get_host_port(address, host, port)) {
+    std::string msg("invalid address format: ");
+    throw std::runtime_error(msg + address);
+  }
+}
+
 void Outbound::init_metrics() {
   if (!s_metric_concurrency) {
     pjs::Ref<pjs::Array> label_names = pjs::Array::make();
@@ -230,7 +237,10 @@ OutboundTCP::~OutboundTCP() {
   Outbound::collect();
 }
 
-void OutboundTCP::bind(const std::string &ip, int port) {
+void OutboundTCP::bind(const std::string &address) {
+  std::string ip;
+  int port;
+  to_ip_addr(address, ip, port);
   auto &s = SocketTCP::socket();
   tcp::endpoint ep(asio::ip::make_address(ip), port);
   s.open(ep.protocol());
@@ -241,13 +251,11 @@ void OutboundTCP::bind(const std::string &ip, int port) {
   m_local_addr_str = nullptr;
 }
 
-void OutboundTCP::connect(const std::string &host, int port) {
-  m_host = host;
-  m_port = port;
-
+void OutboundTCP::connect(const std::string &address) {
+  to_ip_addr(address, m_host, m_port);
   pjs::Str *keys[2];
   keys[0] = protocol_name();
-  keys[1] = address();
+  keys[1] = Outbound::address();
   m_metric_traffic_out = Outbound::s_metric_traffic_out->with_labels(keys, 2);
   m_metric_traffic_in = Outbound::s_metric_traffic_in->with_labels(keys, 2);
   m_metric_conn_time = Outbound::s_metric_conn_time->with_labels(keys, 2);
@@ -450,7 +458,10 @@ OutboundUDP::~OutboundUDP() {
   Outbound::collect();
 }
 
-void OutboundUDP::bind(const std::string &ip, int port) {
+void OutboundUDP::bind(const std::string &address) {
+  std::string ip;
+  int port;
+  to_ip_addr(address, ip, port);
   auto &s = SocketUDP::socket();
   udp::endpoint ep(asio::ip::make_address(ip), port);
   s.open(ep.protocol());
@@ -461,13 +472,11 @@ void OutboundUDP::bind(const std::string &ip, int port) {
   m_local_addr_str = nullptr;
 }
 
-void OutboundUDP::connect(const std::string &host, int port) {
-  m_host = host;
-  m_port = port;
-
+void OutboundUDP::connect(const std::string &address) {
+  to_ip_addr(address, m_host, m_port);
   pjs::Str *keys[2];
   keys[0] = protocol_name();
-  keys[1] = address();
+  keys[1] = Outbound::address();
   m_metric_traffic_out = Outbound::s_metric_traffic_out->with_labels(keys, 2);
   m_metric_traffic_in = Outbound::s_metric_traffic_in->with_labels(keys, 2);
   m_metric_conn_time = Outbound::s_metric_conn_time->with_labels(keys, 2);
@@ -659,9 +668,10 @@ auto OutboundUDP::get_traffic_out() -> size_t {
 // OutboundNetlink
 //
 
-OutboundNetlink::OutboundNetlink(EventTarget::Input *output, const Outbound::Options &options)
+OutboundNetlink::OutboundNetlink(int family, EventTarget::Input *output, const Outbound::Options &options)
   : pjs::ObjectTemplate<OutboundNetlink, Outbound>(output, options)
   , SocketNetlink(false, Outbound::m_options)
+  , m_family(family)
 {
 }
 
@@ -669,32 +679,33 @@ OutboundNetlink::~OutboundNetlink() {
   Outbound::collect();
 }
 
-void OutboundNetlink::bind(const std::string &ip, int port) {
+void OutboundNetlink::bind(const std::string &address) {
 #ifdef __linux__
+  int pid = 0, groups = 0;
+  to_nl_addr(address, pid, groups);
   auto &s = SocketNetlink::socket();
   sockaddr_nl addr;
   std::memset(&addr, 0, sizeof(addr));
   addr.nl_family = AF_NETLINK;
-  addr.nl_pid = port;
-  addr.nl_groups = std::atoi(ip.c_str());
+  addr.nl_pid = pid;
+  addr.nl_groups = groups;
   asio::generic::raw_protocol::endpoint ep(&addr, sizeof(addr));
-  s.open(asio::generic::raw_protocol(AF_NETLINK, NETLINK_ROUTE));
+  s.open(asio::generic::raw_protocol(AF_NETLINK, m_family));
   s.bind(ep);
-  m_local_addr = ip;
-  m_local_port = port;
+  m_local_addr = "localhost";
+  m_local_port = 0;
   m_local_addr_str = nullptr;
 #else // !__linux__
   throw std::runtime_error("netlink not supported on this platform");
 #endif // __linux__
 }
 
-void OutboundNetlink::connect(const std::string &host, int port) {
-  m_host = host;
-  m_port = port;
-
+void OutboundNetlink::connect(const std::string &address) {
+  int pid = 0, groups = 0;
+  to_nl_addr(address, pid, groups);
   pjs::Str *keys[2];
   keys[0] = protocol_name();
-  keys[1] = address();
+  keys[1] = Outbound::address();
   m_metric_traffic_out = Outbound::s_metric_traffic_out->with_labels(keys, 2);
   m_metric_traffic_in = Outbound::s_metric_traffic_in->with_labels(keys, 2);
 
@@ -722,6 +733,22 @@ auto OutboundNetlink::get_traffic_out() -> size_t {
   auto n = SocketNetlink::m_traffic_write;
   SocketNetlink::m_traffic_write = 0;
   return n;
+}
+
+void OutboundNetlink::to_nl_addr(const std::string &address, int &pid, int &groups) {
+  utils::get_prop_list(
+    address, ';', '=',
+    [&](const std::string &k, const std::string &v) {
+      if (k == "pid") {
+        pid = std::atoi(v.c_str());
+      } else if (k == "groups") {
+        groups = std::atoi(v.c_str());
+      } else {
+        std::string msg("invalid address field for Netlink: ");
+        throw std::runtime_error(msg + k);
+      }
+    }
+  );
 }
 
 } // namespace pipy

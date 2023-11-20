@@ -42,6 +42,10 @@ auto to_string(char *str, size_t len, int n) -> size_t;
 auto now() -> double;
 bool is_host_port(const std::string &str);
 bool get_host_port(const std::string &str, std::string &ip, int &port);
+void get_prop_list(
+  const std::string &str, char line_sep, char kv_sep,
+  const std::function<void(const std::string &, const std::string &)> &cb
+);
 bool get_ip_v4(const std::string &str, uint8_t ip[]);
 bool get_ip_v6(const std::string &str, uint8_t ip[]);
 bool get_ip_v6(const std::string &str, uint16_t ip[]);

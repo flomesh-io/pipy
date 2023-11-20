@@ -37,6 +37,9 @@ Connect::Options::Options(pjs::Object *options) {
   Value(options, "protocol")
     .get_enum(protocol)
     .check_nullable();
+  Value(options, "netlinkFamily")
+    .get(netlink_family)
+    .check_nullable();
   Value(options, "bind")
     .get(bind)
     .get(bind_f)
@@ -153,17 +156,6 @@ void Connect::process(Event *evt) {
 
     auto &options = m_options_f ? eval_options : m_options;
 
-    std::string host; int port;
-    if (options.protocol == Outbound::Protocol::NETLINK) {
-      host = "0";
-      port = 0;
-    } else {
-      if (!utils::get_host_port(target.s()->str(), host, port)) {
-        Filter::error("invalid target format: %s", target.s()->c_str());
-        return;
-      }
-    }
-
     pjs::Ref<pjs::Str> bind(options.bind);
     if (options.bind_f) {
       pjs::Value ret;
@@ -193,36 +185,24 @@ void Connect::process(Event *evt) {
         m_outbound = OutboundUDP::make(Filter::output(), options);
         break;
       case Outbound::Protocol::NETLINK:
-        m_outbound = OutboundNetlink::make(Filter::output(), options);
+        m_outbound = OutboundNetlink::make(options.netlink_family, Filter::output(), options);
         break;
     }
 
-    if (bind) {
-      const auto &str = bind->str();
-      std::string ip;
-      int port;
-      if (!utils::get_host_port(str, ip, port)) {
-        ip = str;
-        port = 0;
+    try {
+      if (bind) {
+        m_outbound->bind(bind->str());
+      } else if (options.protocol == Outbound::Protocol::NETLINK) {
+        m_outbound->bind("");
       }
-      try {
-        m_outbound->bind(ip, port);
-      } catch (std::runtime_error &e) {
-        m_outbound = nullptr;
-        Filter::error("%s", e.what());
-        return;
-      }
-    } else if (options.protocol == Outbound::Protocol::NETLINK) {
-      try {
-        m_outbound->bind("0", 0);
-      } catch (std::runtime_error &e) {
-        m_outbound = nullptr;
-        Filter::error("%s", e.what());
-        return;
-      }
-    }
 
-    m_outbound->connect(host, port);
+      m_outbound->connect(target.s()->str());
+
+    } catch (std::runtime_error &e) {
+      m_outbound = nullptr;
+      Filter::error("%s", e.what());
+      return;
+    }
   }
 
   if (m_outbound) {

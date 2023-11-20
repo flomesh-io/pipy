@@ -65,6 +65,7 @@ public:
 
   struct Options : public SocketTCP::Options {
     Protocol  protocol = Protocol::TCP;
+    int       netlink_family = 0;
     size_t    max_packet_size = 16 * 1024;
     int       retry_count = 0;
     double    retry_delay = 0;
@@ -99,8 +100,8 @@ public:
   auto retries() const -> int { return m_retries; }
   auto connection_time() const -> double { return m_connection_time; }
 
-  virtual void bind(const std::string &ip, int port) = 0;
-  virtual void connect(const std::string &host, int port) = 0;
+  virtual void bind(const std::string &address) = 0;
+  virtual void connect(const std::string &address) = 0;
   virtual void send(Event *evt) = 0;
   virtual void close() = 0;
 
@@ -138,6 +139,8 @@ protected:
   void describe(char *buf, size_t len);
   void collect();
 
+  static void to_ip_addr(const std::string &address, std::string &host, int &port);
+
   thread_local static pjs::Ref<stats::Gauge> s_metric_concurrency;
   thread_local static pjs::Ref<stats::Counter> s_metric_traffic_in;
   thread_local static pjs::Ref<stats::Counter> s_metric_traffic_out;
@@ -165,8 +168,8 @@ class OutboundTCP :
 public:
   auto buffered() const -> size_t { return SocketTCP::buffered(); }
 
-  virtual void bind(const std::string &ip, int port) override;
-  virtual void connect(const std::string &host, int port) override;
+  virtual void bind(const std::string &address) override;
+  virtual void connect(const std::string &address) override;
   virtual void send(Event *evt) override;
   virtual void close() override;
 
@@ -204,8 +207,8 @@ class OutboundUDP :
   public SocketUDP
 {
 public:
-  virtual void bind(const std::string &ip, int port) override;
-  virtual void connect(const std::string &host, int port) override;
+  virtual void bind(const std::string &address) override;
+  virtual void connect(const std::string &address) override;
   virtual void send(Event *evt) override;
   virtual void close() override;
 
@@ -244,13 +247,13 @@ class OutboundNetlink :
   public SocketNetlink
 {
 public:
-  virtual void bind(const std::string &ip, int port) override;
-  virtual void connect(const std::string &host, int port) override;
+  virtual void bind(const std::string &address) override;
+  virtual void connect(const std::string &address) override;
   virtual void send(Event *evt) override;
   virtual void close() override;
 
 private:
-  OutboundNetlink(EventTarget::Input *output, const Outbound::Options &options);
+  OutboundNetlink(int family, EventTarget::Input *output, const Outbound::Options &options);
   ~OutboundNetlink();
 
   virtual auto get_buffered() const -> size_t override { return SocketNetlink::buffered(); }
@@ -260,6 +263,10 @@ private:
   virtual void on_socket_input(Event *evt) override { Outbound::input(evt); }
   virtual void on_socket_describe(char *buf, size_t len) override { describe(buf, len); }
   virtual void on_socket_close() override { release(); }
+
+  int m_family;
+
+  static void to_nl_addr(const std::string &address, int &pid, int &groups);
 
   friend class pjs::ObjectTemplate<OutboundNetlink, Outbound>;
 };
