@@ -221,6 +221,7 @@ add_executable(pipy
   src/filters/mime.cpp
   src/filters/mqtt.cpp
   src/filters/mux.cpp
+  src/filters/netlink.cpp
   src/filters/on-body.cpp
   src/filters/on-event.cpp
   src/filters/on-message.cpp

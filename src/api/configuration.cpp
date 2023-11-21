@@ -59,6 +59,7 @@
 #include "filters/mime.hpp"
 #include "filters/mqtt.hpp"
 #include "filters/mux.hpp"
+#include "filters/netlink.hpp"
 #include "filters/on-body.hpp"
 #include "filters/on-event.hpp"
 #include "filters/on-message.hpp"
@@ -199,6 +200,10 @@ void FilterConfigurator::decode_multipart() {
   append_filter(new mime::MultipartDecoder());
 }
 
+void FilterConfigurator::decode_netlink() {
+  append_filter(new netlink::Decoder());
+}
+
 void FilterConfigurator::decode_resp() {
   append_filter(new resp::Decoder());
 }
@@ -265,6 +270,10 @@ void FilterConfigurator::encode_http_response(pjs::Object *options, pjs::Functio
 
 void FilterConfigurator::encode_mqtt() {
   append_filter(new mqtt::Encoder());
+}
+
+void FilterConfigurator::encode_netlink() {
+  append_filter(new netlink::Encoder());
 }
 
 void FilterConfigurator::encode_resp() {
@@ -1365,6 +1374,17 @@ template<> void ClassDef<FilterConfigurator>::init() {
     }
   });
 
+  // FilterConfigurator.decodeNetlink
+  method("decodeNetlink", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
+    try {
+      config->decode_netlink();
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
   // FilterConfigurator.decodeRESP
   method("decodeRESP", [](Context &ctx, Object *thiz, Value &result) {
     auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
@@ -1605,6 +1625,17 @@ template<> void ClassDef<FilterConfigurator>::init() {
     auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     try {
       config->encode_mqtt();
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // FilterConfigurator.encodeNetlink
+  method("encodeNetlink", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
+    try {
+      config->encode_netlink();
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

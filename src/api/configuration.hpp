@@ -76,6 +76,7 @@ public:
   void decode_http_response(pjs::Function *handler);
   void decode_mqtt();
   void decode_multipart();
+  void decode_netlink();
   void decode_resp();
   void decode_thrift();
   void decode_websocket();
@@ -93,6 +94,7 @@ public:
   void encode_http_request(pjs::Object *options, pjs::Function *handler);
   void encode_http_response(pjs::Object *options, pjs::Function *handler);
   void encode_mqtt();
+  void encode_netlink();
   void encode_resp();
   void encode_thrift();
   void encode_websocket();
