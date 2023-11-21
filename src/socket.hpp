@@ -174,11 +174,14 @@ public:
 
   private:
     void tick(double t);
+    void close();
 
     SocketUDP* m_socket = nullptr;
     asio::ip::udp::endpoint m_endpoint;
     double m_tick_read;
     double m_tick_write;
+    bool m_opened = false;
+    bool m_closed = false;
 
     virtual void on_peer_open() = 0;
     virtual void on_peer_input(Event *evt) = 0;

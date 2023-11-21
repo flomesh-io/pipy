@@ -413,7 +413,7 @@ void SocketUDP::output(Event *evt, Peer *peer) {
   } else if (evt->is<StreamEnd>()) {
     m_peers.erase(peer->m_endpoint);
     peer->m_socket = nullptr;
-    peer->on_peer_close();
+    peer->close();
   }
 }
 
@@ -480,7 +480,7 @@ void SocketUDP::close_peers(StreamEnd::Error err) {
     auto p = pair.second;
     p->m_socket = nullptr;
     p->on_peer_input(StreamEnd::make(err));
-    p->on_peer_close();
+    p->close();
   }
 }
 
@@ -550,6 +550,12 @@ void SocketUDP::on_receive(Data *data, const std::error_code &ec, std::size_t n)
           peer->m_tick_write = Ticker::get()->tick();
           m_peers[m_from] = peer;
           peer->on_peer_open();
+          if (peer->m_closed) {
+            peer->on_peer_close();
+            peer = nullptr;
+          } else {
+            peer->m_opened = true;
+          }
         }
       } else {
         peer = i->second;
@@ -618,7 +624,7 @@ void SocketUDP::Peer::tick(double t) {
       m_socket->m_peers.erase(m_endpoint);
       m_socket = nullptr;
       on_peer_input(StreamEnd::make(StreamEnd::IDLE_TIMEOUT));
-      on_peer_close();
+      close();
       return;
     }
   }
@@ -628,7 +634,7 @@ void SocketUDP::Peer::tick(double t) {
       m_socket->m_peers.erase(m_endpoint);
       m_socket = nullptr;
       on_peer_input(StreamEnd::make(StreamEnd::READ_TIMEOUT));
-      on_peer_close();
+      close();
       return;
     }
   }
@@ -638,9 +644,16 @@ void SocketUDP::Peer::tick(double t) {
       m_socket->m_peers.erase(m_endpoint);
       m_socket = nullptr;
       on_peer_input(StreamEnd::make(StreamEnd::WRITE_TIMEOUT));
-      on_peer_close();
+      close();
       return;
     }
+  }
+}
+
+void SocketUDP::Peer::close() {
+  m_closed = true;
+  if (m_opened) {
+    on_peer_close();
   }
 }
 
