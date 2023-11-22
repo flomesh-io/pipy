@@ -3254,7 +3254,7 @@ public:
   static bool is_finite(double n);
   static bool is_integer(double n);
 
-  static size_t to_string(char *str, size_t len, double n);
+  static size_t to_string(char *str, size_t len, double n, int radix = 10);
   static size_t to_precision(char *str, size_t len, double n, int precision);
   static size_t to_fixed(char *str, size_t len, double n, int digits);
   static size_t to_exponential(char *str, size_t len, double n);

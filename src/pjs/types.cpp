@@ -1172,17 +1172,35 @@ template<> void ClassDef<Number>::init() {
     return Number::make(ctx.argc() > 0 ? ctx.arg(0).to_number() : 0);
   });
 
+  method("toString", [](Context &ctx, Object *obj, Value &ret) {
+    int radix = 10;
+    if (!ctx.arguments(0, &radix)) return;
+    if (radix < 2 || radix > 36) {
+      ctx.error("invalid radix");
+      return;
+    }
+    auto n = obj->as<Number>()->value();
+    char str[200];
+    auto len = Number::to_string(str, sizeof(str), n, radix);
+    ret.set(Str::make(str, len));
+  });
+
   method("toExponential", [](Context &ctx, Object *obj, Value &ret) {
     auto n = obj->as<Number>()->value();
     Value digits;
     if (!ctx.arguments(0, &digits)) return;
     if (digits.is_undefined()) {
-      char str[100];
+      char str[200];
       auto len = Number::to_exponential(str, sizeof(str), n);
       ret.set(Str::make(str, len));
     } else if (digits.is_number()) {
-      char str[100];
-      auto len = Number::to_exponential(str, sizeof(str), n, digits.n());
+      auto d = digits.n();
+      if (d < 0 || d > 100) {
+        ctx.error("invalid fraction digits");
+        return;
+      }
+      char str[200];
+      auto len = Number::to_exponential(str, sizeof(str), n, d);
       ret.set(Str::make(str, len));
     } else {
       ctx.error_argument_type(0, "a number");
@@ -1193,7 +1211,11 @@ template<> void ClassDef<Number>::init() {
     auto n = obj->as<Number>()->value();
     int digits = 0;
     if (!ctx.arguments(0, &digits)) return;
-    char str[100];
+    if (digits < 0 || digits > 100) {
+      ctx.error("invalid digits");
+      return;
+    }
+    char str[200];
     auto len = Number::to_fixed(str, sizeof(str), n, digits);
     ret.set(Str::make(str, len));
   });
@@ -1203,12 +1225,17 @@ template<> void ClassDef<Number>::init() {
     Value digits;
     if (!ctx.arguments(0, &digits)) return;
     if (digits.is_undefined()) {
-      char str[100];
+      char str[200];
       auto len = Number::to_string(str, sizeof(str), n);
       ret.set(Str::make(str, len));
     } else if (digits.is_number()) {
-      char str[100];
-      auto len = Number::to_precision(str, sizeof(str), n, digits.n());
+      auto d = digits.n();
+      if (d < 1 || d > 100) {
+        ctx.error("invalid precision");
+        return;
+      }
+      char str[200];
+      auto len = Number::to_precision(str, sizeof(str), n, d);
       ret.set(Str::make(str, len));
     } else {
       ctx.error_argument_type(0, "a number");
@@ -1293,12 +1320,45 @@ static size_t special_number_to_string(char *str, size_t len, double n) {
   return 0;
 }
 
-size_t Number::to_string(char *str, size_t len, double n) {
+static size_t number_to_string(char *str, size_t len, double n, int digits, int radix = 10) {
+  static const char s_symbols[] = { "0123456789abcdefghijklmnopqrstuvwxyz" };
   if (auto l = special_number_to_string(str, len, n)) return l;
-  len = std::snprintf(str, len, "%.6f", n);
-  while (len > 1 && str[len-1] == '0') len--;
-  if (len > 1 && str[len-1] == '.') len--;
-  return len;
+  bool sign = std::signbit(n);
+  double i, f = std::modf(n, &i);
+  size_t p = 0;
+  do {
+    auto j = std::trunc(i / radix);
+    auto c = s_symbols[(int)std::fabs(i - j * radix)];
+    str[p++] = c;
+    i = j;
+  } while (i != 0 && p < len);
+  if (sign && p < len) {
+    str[p++] = '-';
+    f = -f;
+  }
+  for (size_t i = 0, n = p >> 1; i < n; i++) {
+    auto j = p - i - 1;
+    auto t = str[i];
+    str[i] = str[j];
+    str[j] = t;
+  }
+  if (p >= len) return p;
+  if (digits > 0 && f != 0) {
+    if (p < len) str[p++] = '.';
+    while (p < len && digits > 0 && f != 0) {
+      f = std::modf(f * radix, &i);
+      str[p++] = s_symbols[int(i)];
+      digits--;
+    }
+  }
+  return p;
+}
+
+size_t Number::to_string(char *str, size_t len, double n, int radix) {
+  auto p = number_to_string(str, len, n, 12, radix);
+  while (str[p-1] == '0') p--;
+  if (str[p-1] == '.') p--;
+  return p;
 }
 
 size_t Number::to_precision(char *str, size_t len, double n, int precision) {
@@ -1310,11 +1370,7 @@ size_t Number::to_precision(char *str, size_t len, double n, int precision) {
 }
 
 size_t Number::to_fixed(char *str, size_t len, double n, int digits) {
-  if (auto l = special_number_to_string(str, len, n)) return l;
-  auto max = std::numeric_limits<double>::digits10 + 1;
-  if (digits < 0) digits = 0;
-  if (digits > max) digits = max;
-  return std::snprintf(str, len, "%.*f", digits, n);
+  return number_to_string(str, len, n, digits, 10);
 }
 
 size_t Number::to_exponential(char *str, size_t len, double n) {
