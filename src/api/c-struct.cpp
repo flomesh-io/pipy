@@ -344,6 +344,10 @@ template<> void ClassDef<CStruct>::init() {
     return CStruct::make(options);
   });
 
+  accessor("size", [](Object *obj, Value &ret) {
+    ret.set((int)obj->as<CStruct>()->size());
+  });
+
   method("field", [](Context &ctx, Object *obj, Value &ret) {
     Str *type, *name = nullptr;
     CStruct *c_struct;

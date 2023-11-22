@@ -44,6 +44,7 @@ public:
     Options(pjs::Object *options);
   };
 
+  auto size() -> size_t { return m_size; }
   void field(const char *type, pjs::Str *name);
   void field(CStruct *type, pjs::Str *name = nullptr);
   auto encode(pjs::Object *values) -> Data*;
