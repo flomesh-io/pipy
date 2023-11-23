@@ -356,10 +356,41 @@ using namespace pipy;
 
 template<> void ClassDef<Netmask>::init() {
   ctor([](Context &ctx) -> Object* {
+    int mask;
+    Array *bytes;
     Str *cidr;
-    if (!ctx.arguments(1, &cidr)) return nullptr;
     try {
-      return Netmask::make(cidr);
+      if (ctx.get(0, cidr)) {
+        return Netmask::make(cidr);
+      } else if (ctx.get(0, mask)) {
+        if (ctx.get(1, bytes)) {
+          if (bytes && bytes->length() > 4) {
+            uint16_t ip[8];
+            for (int i = 0; i < 16; i++) {
+              Value v; bytes->get(i, v);
+              if (i & 1) {
+                ip[i>>1] |= (uint8_t)v.to_int32();
+              } else {
+                ip[i>>1] = (uint16_t)v.to_int32() << 8;
+              }
+            }
+            return Netmask::make(mask, ip);
+          } else {
+            uint8_t ip[4];
+            for (int i = 0; i < 4; i++) {
+              Value v; if (bytes) bytes->get(i, v);
+              ip[i] = v.to_int32();
+            }
+            return Netmask::make(mask, ip);
+          }
+        } else {
+          ctx.error_argument_type(1, "an array");
+          return nullptr;
+        }
+      } else {
+        ctx.error_argument_type(0, "a number or a string");
+        return nullptr;
+      }
     } catch (std::runtime_error &err) {
       ctx.error(err);
       return nullptr;
