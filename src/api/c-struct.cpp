@@ -316,17 +316,17 @@ void CStruct::decode(Data::Reader &dr, int size, bool is_integral, bool is_unsig
     }
   } else if (is_unsigned) {
     switch (size) {
-      case 1: value.set(*(int8_t*)buf); break;
-      case 2: value.set(*(int16_t*)buf); break;
-      case 4: value.set(*(int32_t*)buf); break;
-      case 8: value.set(*(int64_t*)buf); break;
-    }
-  } else {
-    switch (size) {
       case 1: value.set(*(uint8_t*)buf); break;
       case 2: value.set(*(uint16_t*)buf); break;
       case 4: value.set(*(uint32_t*)buf); break;
       case 8: value.set(*(uint64_t*)buf); break;
+    }
+  } else {
+    switch (size) {
+      case 1: value.set(*(int8_t*)buf); break;
+      case 2: value.set(*(int16_t*)buf); break;
+      case 4: value.set(*(int32_t*)buf); break;
+      case 8: value.set(*(int64_t*)buf); break;
     }
   }
 }
