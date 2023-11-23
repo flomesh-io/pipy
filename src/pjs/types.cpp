@@ -1323,6 +1323,15 @@ static size_t special_number_to_string(char *str, size_t len, double n) {
 static size_t number_to_string(char *str, size_t len, double n, int digits, int radix = 10) {
   static const char s_symbols[] = { "0123456789abcdefghijklmnopqrstuvwxyz" };
   if (auto l = special_number_to_string(str, len, n)) return l;
+  if (radix == 10) {
+    auto d = digits; if (d < 0) d = -d;
+    auto l = std::snprintf(str, len, "%.*f", d, n);
+    if (digits < 0) {
+      while (l > 1 && str[l-1] == '0') l--;
+      if (l > 1 && str[l-1] == '.') l--;
+    }
+    return l;
+  }
   bool sign = std::signbit(n);
   double i, f = std::modf(n, &i);
   size_t p = 0;
@@ -1343,22 +1352,25 @@ static size_t number_to_string(char *str, size_t len, double n, int digits, int 
     str[j] = t;
   }
   if (p >= len) return p;
-  if (digits > 0 && f != 0) {
+  if (digits && f != 0) {
+    auto n = digits;
+    if (n < 0) n = -n;
     if (p < len) str[p++] = '.';
-    while (p < len && digits > 0 && f != 0) {
+    while (p < len && n > 0 && f != 0) {
       f = std::modf(f * radix, &i);
       str[p++] = s_symbols[int(i)];
-      digits--;
+      n--;
+    }
+    if (digits < 0) {
+      while (str[p-1] == '0') p--;
+      if (str[p-1] == '.') p--;
     }
   }
   return p;
 }
 
 size_t Number::to_string(char *str, size_t len, double n, int radix) {
-  auto p = number_to_string(str, len, n, 12, radix);
-  while (str[p-1] == '0') p--;
-  if (str[p-1] == '.') p--;
-  return p;
+  return number_to_string(str, len, n, -12, radix);
 }
 
 size_t Number::to_precision(char *str, size_t len, double n, int precision) {

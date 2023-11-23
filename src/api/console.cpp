@@ -83,7 +83,7 @@ void Console::dump(const pjs::Value &value, Data::Builder &db) {
       case pjs::Value::Type::Undefined: db.push(s_undefined); break;
       case pjs::Value::Type::Boolean: db.push(value.b() ? s_true : s_false); break;
       case pjs::Value::Type::Number: {
-        char str[100];
+        char str[200];
         auto len = pjs::Number::to_string(str, sizeof(str), value.n());
         db.push(str, len);
         break;
