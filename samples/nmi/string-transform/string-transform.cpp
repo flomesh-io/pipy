@@ -75,6 +75,10 @@ private:
             m_has_escaped = false;
           } else if (c == '\\') {
             m_has_escaped = true;
+          } else if (m_has_bracket) {
+            if (c == ']') m_has_bracket = false;
+          } else if (c == '[') {
+            m_has_bracket = true;
           } else if (c == '/') {
             m_state = NORMAL;
           }
@@ -144,6 +148,7 @@ private:
   char m_last_char = 0;
   char m_last_non_space = 0;
   bool m_has_escaped = false;
+  bool m_has_bracket = false;
 };
 
 std::set<std::string> StringTransformPipeline::s_keywords_prior_to_regexps = {
