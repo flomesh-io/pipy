@@ -145,6 +145,7 @@ private:
     pjs::Ref<pjs::Str::CharData> key;
     Node* subs = nullptr;
     Node* next = nullptr;
+    bool has_value = false;
     double values[1];
     static auto make(int dimensions) -> Node*;
     ~Node();
@@ -286,6 +287,7 @@ private:
     std::map<pjs::Str*, Node*> submap;
     List<Node> subs;
     bool serialized = false;
+    bool has_value = false;
     double values[1];
     static auto make(int dimensions) -> Node*;
     ~Node();

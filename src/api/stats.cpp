@@ -263,32 +263,34 @@ public:
       m_label_values[level-1] = node->get_key();
     }
 
-    if (m_le_str) {
-      auto le = 0;
-      auto *p = m_le_str;
-      while (p) {
-        auto q = p;
-        while (*q && *q != ',' && *q != ']') q++;
-        auto n = q - p;
-        if (*p == '"') {
-          p++; n--;
-          if (n > 1 && *(q-1) == '"') n--;
+    if (node->has_value) {
+      if (m_le_str) {
+        auto le = 0;
+        auto *p = m_le_str;
+        while (p) {
+          auto q = p;
+          while (*q && *q != ',' && *q != ']') q++;
+          auto n = q - p;
+          if (*p == '"') {
+            p++; n--;
+            if (n > 1 && *(q-1) == '"') n--;
+          }
+          output(m_name);
+          output(s_bucket);
+          output(level, node->values[le++], p, n);
+          p = (*q == ',' ? q+1 : nullptr);
         }
         output(m_name);
-        output(s_bucket);
-        output(level, node->values[le++], p, n);
-        p = (*q == ',' ? q+1 : nullptr);
-      }
-      output(m_name);
-      output(s_count);
-      output(level, node->values[le++]);
-      output(m_name);
-      output(s_sum);
-      output(level, node->values[le++]);
+        output(s_count);
+        output(level, node->values[le++]);
+        output(m_name);
+        output(s_sum);
+        output(level, node->values[le++]);
 
-    } else {
-      output(m_name);
-      output(level, node->values[0]);
+      } else {
+        output(m_name);
+        output(level, node->values[0]);
+      }
     }
 
     node->for_subs([=](Node *sub) {
@@ -364,6 +366,7 @@ void MetricData::update(MetricSet &metrics) {
     if (level > 0) node->key = metric->label()->data();
 
     auto dim = metric->dimensions();
+    node->has_value = metric->has_value();
     for (int d = 0; d < dim; d++) {
       node->values[d] = metric->get_value(d);
     }
@@ -728,6 +731,7 @@ void MetricDataSum::sum(MetricData &data, bool initial) {
   std::function<void(int, Node*, MetricData::Node*)> sum;
 
   sum = [&](int dimensions, Node *node, MetricData::Node* src_node) {
+    node->has_value |= src_node->has_value;
     for (int i = 0; i < dimensions; i++) {
       node->values[i] += src_node->values[i];
     }
@@ -928,6 +932,7 @@ MetricDataSum::Node::~Node() {
 }
 
 void MetricDataSum::Node::zero(int dimensions) {
+  has_value = false;
   std::memset(values, 0, sizeof(values[0]) * dimensions);
   for (auto sub = subs.head(); sub; sub = sub->next()) {
     sub->zero(dimensions);
