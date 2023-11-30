@@ -507,7 +507,33 @@ void MetricData::Deserializer::error() {
 }
 
 void MetricData::Deserializer::null() {
-  error();
+  if (!m_has_error) {
+    if (auto level = m_current_level) {
+      switch (level->kind) {
+        case Level::Kind::ENTRIES: {
+          if (auto ent = m_entries.next()) {
+            m_current_entry = ent;
+            if (auto node = ent->root.get()) {
+              node->has_value = false;
+              return;
+            }
+          }
+          break;
+        }
+        case Level::Kind::METRIC: {
+          if (auto *node = level->node) {
+            if (level->field == Level::Field::VALUE) {
+              node->has_value = false;
+              return;
+            }
+          }
+          break;
+        }
+        default: break;
+      }
+    }
+    error();
+  }
 }
 
 void MetricData::Deserializer::boolean(bool b) {
@@ -526,6 +552,7 @@ void MetricData::Deserializer::number(double n) {
           if (auto ent = m_entries.next()) {
             m_current_entry = ent;
             if (auto node = ent->root.get()) {
+              node->has_value = true;
               node->values[0] = n;
               return;
             }
@@ -542,6 +569,7 @@ void MetricData::Deserializer::number(double n) {
         case Level::Kind::METRIC: {
           if (auto *node = level->node) {
             if (level->field == Level::Field::VALUE) {
+              node->has_value = true;
               node->values[0] = n;
               return;
             }
@@ -693,6 +721,7 @@ void MetricData::Deserializer::array_start() {
         case Level::Kind::METRIC: {
           if (auto *node = level->node) {
             if (level->field == Level::Field::VALUE) {
+              node->has_value = true;
               push(new Level(Level::Kind::VALUES, node));
               return;
             } else if (level->field == Level::Field::SUB) {
@@ -804,6 +833,7 @@ void MetricDataSum::serialize(Data::Builder &db, bool initial) {
   static const std::string s_v("\"v\":"); // value
   static const std::string s_l("\"l\":"); // label
   static const std::string s_s("\"s\":"); // sub
+  static const std::string s_null("null");
 
   std::function<void(int, Entry*, Node*)> write_node;
   write_node = [&](int level, Entry *ent, Node *node) {
@@ -838,17 +868,22 @@ void MetricDataSum::serialize(Data::Builder &db, bool initial) {
       db.push(s_v);
     }
 
-    int dim = ent->dimensions;
-    if (dim > 1) db.push('[');
+    if (node->has_value) {
+      int dim = ent->dimensions;
+      if (dim > 1) db.push('[');
 
-    for (int d = 0; d < dim; d++) {
-      if (d > 0) db.push(',');
-      char buf[100];
-      auto len = pjs::Number::to_string(buf, sizeof(buf), node->values[d]);
-      db.push(buf, len);
+      for (int d = 0; d < dim; d++) {
+        if (d > 0) db.push(',');
+        char buf[100];
+        auto len = pjs::Number::to_string(buf, sizeof(buf), node->values[d]);
+        db.push(buf, len);
+      }
+
+      if (dim > 1) db.push(']');
+
+    } else {
+      db.push(s_null);
     }
-
-    if (dim > 1) db.push(']');
 
     if (!node->subs.empty()) {
       db.push(',');
