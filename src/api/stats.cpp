@@ -520,6 +520,13 @@ void MetricData::Deserializer::null() {
           }
           break;
         }
+        case Level::Kind::SUBS: {
+          if (auto sub = level->subs.next()) {
+            sub->has_value = false;
+            return;
+          }
+          break;
+        }
         case Level::Kind::METRIC: {
           if (auto *node = level->node) {
             if (level->field == Level::Field::VALUE) {
