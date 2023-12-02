@@ -148,10 +148,15 @@ void Outbound::collect() {
   if (m_metric_traffic_out) m_metric_traffic_out->increase(out);
 }
 
-void Outbound::to_ip_addr(const std::string &address, std::string &host, int &port) {
+void Outbound::to_ip_addr(const std::string &address, std::string &host, int &port, int default_port) {
   if (!utils::get_host_port(address, host, port)) {
-    std::string msg("invalid address format: ");
-    throw std::runtime_error(msg + address);
+    if (default_port >= 0) {
+      host = address;
+      port = default_port;
+    } else {
+      std::string msg("invalid address format: ");
+      throw std::runtime_error(msg + address);
+    }
   }
 }
 
@@ -240,7 +245,7 @@ OutboundTCP::~OutboundTCP() {
 void OutboundTCP::bind(const std::string &address) {
   std::string ip;
   int port;
-  to_ip_addr(address, ip, port);
+  to_ip_addr(address, ip, port, 0);
   auto &s = SocketTCP::socket();
   tcp::endpoint ep(asio::ip::make_address(ip), port);
   s.open(ep.protocol());
@@ -461,7 +466,7 @@ OutboundUDP::~OutboundUDP() {
 void OutboundUDP::bind(const std::string &address) {
   std::string ip;
   int port;
-  to_ip_addr(address, ip, port);
+  to_ip_addr(address, ip, port, 0);
   auto &s = SocketUDP::socket();
   udp::endpoint ep(asio::ip::make_address(ip), port);
   s.open(ep.protocol());

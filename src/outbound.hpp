@@ -139,7 +139,7 @@ protected:
   void describe(char *buf, size_t len);
   void collect();
 
-  static void to_ip_addr(const std::string &address, std::string &host, int &port);
+  static void to_ip_addr(const std::string &address, std::string &host, int &port, int default_port = -1);
 
   thread_local static pjs::Ref<stats::Gauge> s_metric_concurrency;
   thread_local static pjs::Ref<stats::Counter> s_metric_traffic_in;
