@@ -42,6 +42,7 @@
 #include "compressor.hpp"
 #include "fs.hpp"
 #include "log.hpp"
+#include "utils.hpp"
 
 #include <limits>
 
@@ -55,12 +56,23 @@ static std::string s_server_name("pipy-repo");
 // AdminService
 //
 
-AdminService::AdminService(CodebaseStore *store, const std::string &gui_files)
+AdminService::AdminService(CodebaseStore *store, const std::string &log_filename, const std::string &gui_files)
   : m_store(store)
   , m_local_metric_history(METRIC_HISTORY_SIZE)
   , m_www_files(GuiTarball::data(), GuiTarball::size())
   , m_module(new Module())
 {
+  if (!log_filename.empty()) {
+    if (fs::exists(log_filename)) {
+      if (fs::is_dir(log_filename)) throw std::runtime_error("invalid admin log file");
+    } else {
+      auto dir = utils::path_dirname(fs::abs_path(log_filename));
+      if (!fs::is_dir(dir)) throw std::runtime_error("directory does not exist for the admin log file");
+    }
+    m_logger = logging::TextLogger::make(pjs::Str::make("pipy_admin_log"));
+    m_logger->add_target(new logging::Logger::FileTarget(pjs::Str::make(log_filename)));
+  }
+
   if (!gui_files.empty()) {
     if (!fs::is_dir(gui_files)) throw std::runtime_error("cannot locate the admin GUI front-end files");
     http::Directory::Options options;
@@ -106,8 +118,32 @@ AdminService::AdminService(CodebaseStore *store, const std::string &gui_files)
 
   m_handler_method = pjs::Method::make(
     "admin-service-handler",
-    [this](pjs::Context &ctx, pjs::Object*, pjs::Value &ret) {
-      ret.set(handle(static_cast<AdminService::Context*>(ctx.root()), ctx.arg(0).as<Message>()));
+    [this](pjs::Context &context, pjs::Object*, pjs::Value &ret) {
+      auto *ctx = static_cast<AdminService::Context*>(context.root());
+      auto *req = context.arg(0).as<Message>();
+      auto *res = handle(ctx, req)->as<Message>();
+      if (m_logger) {
+        auto *req_head = req->head()->as<http::RequestHead>();
+        auto *res_head = res->head()->as<http::ResponseHead>();
+        auto &method = req_head->method->str();
+        if (method == "POST" || method == "PATCH" || method == "DELETE") {
+          char ts[100];
+          Log::format_time(ts, sizeof(ts));
+          pjs::Value args[5];
+          args[0].set(ts);
+          args[1].set(res_head->status);
+          args[2].set(req_head->method);
+          args[3].set(req_head->path);
+          if (auto *body = req->body()) {
+            pjs::Value json_val;
+            if (JSON::decode(*body, nullptr, json_val)) {
+              args[4].set(JSON::stringify(json_val, nullptr, 0));
+            }
+          }
+          m_logger->log(sizeof(args) / sizeof(args[0]), args);
+        }
+      }
+      ret.set(res);
     }
   );
 

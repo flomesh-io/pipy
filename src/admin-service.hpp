@@ -29,6 +29,7 @@
 #include "api/http.hpp"
 #include "api/crypto.hpp"
 #include "api/stats.hpp"
+#include "api/logging.hpp"
 #include "filter.hpp"
 #include "module.hpp"
 #include "context.hpp"
@@ -58,7 +59,7 @@ public:
     std::vector<pjs::Ref<crypto::Certificate>> trusted;
   };
 
-  AdminService(CodebaseStore *store, const std::string &gui_files = std::string());
+  AdminService(CodebaseStore *store, const std::string &log_filename = std::string(), const std::string &gui_files = std::string());
   ~AdminService();
 
   void open(const std::string &ip, int port, const Options &options);
@@ -175,6 +176,7 @@ private:
   Timer m_metrics_history_timer;
   Timer m_inactive_instance_removal_timer;
   std::chrono::time_point<std::chrono::steady_clock> m_metrics_timestamp;
+  pjs::Ref<logging::Logger> m_logger;
 
   Tarball m_www_files;
   std::map<std::string, pjs::Ref<http::File>> m_www_file_cache;

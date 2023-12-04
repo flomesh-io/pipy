@@ -62,6 +62,7 @@ void MainOptions::show_help() {
   std::cout << "  --admin-tls-cert=<filename>          Administration service certificate" << std::endl;
   std::cout << "  --admin-tls-key=<filename>           Administration service private key" << std::endl;
   std::cout << "  --admin-tls-trusted=<filename>       Client certificate(s) trusted by administration service" << std::endl;
+  std::cout << "  --admin-log-file=<filename>          Set the pathname of the administration log file" << std::endl;
   std::cout << "  --tls-cert=<filename>                Client certificate in communication to administration service" << std::endl;
   std::cout << "  --tls-key=<filename>                 Client private key in communication to administration service" << std::endl;
   std::cout << "  --tls-trusted=<filename>             Administration service certificate(s) trusted by client" << std::endl;
@@ -198,6 +199,8 @@ MainOptions::MainOptions(int argc, char *argv[]) {
         admin_tls_key = load_private_key(v);
       } else if (k == "--admin-tls-trusted") {
         load_certificate_list(v, admin_tls_trusted);
+      } else if (k == "--admin-log-file") {
+        admin_log_file = v;
       } else if (k == "--tls-cert") {
         tls_cert = load_certificate(v);
       } else if (k == "--tls-key") {

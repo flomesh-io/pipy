@@ -61,6 +61,8 @@ static AdminLink *s_admin_link = nullptr;
 static std::string s_admin_ip;
 static int s_admin_port = 0;
 static AdminService::Options s_admin_options;
+static std::string s_admin_log_file;
+static std::string s_admin_gui;
 static bool s_has_shutdown = false;
 
 //
@@ -142,7 +144,7 @@ static void toggle_admin_port() {
       s_admin = nullptr;
       Log::info("[admin] Admin service stopped on port %d", s_admin_port);
     } else {
-      s_admin = new AdminService(nullptr);
+      s_admin = new AdminService(nullptr, s_admin_log_file, s_admin_gui);
       s_admin->retain();
       s_admin->open(s_admin_ip, s_admin_port, s_admin_options);
       logging::Logger::set_admin_service(s_admin);
@@ -412,6 +414,8 @@ int main(int argc, char *argv[]) {
     s_admin_options.cert = opts.admin_tls_cert;
     s_admin_options.key = opts.admin_tls_key;
     s_admin_options.trusted = opts.admin_tls_trusted;
+    s_admin_log_file = opts.admin_log_file;
+    s_admin_gui = opts.admin_gui;
 
     std::string admin_ip("::");
     int admin_port = 6060; // default repo port
@@ -485,7 +489,7 @@ int main(int argc, char *argv[]) {
         ? Store::open_memory()
         : Store::open_level_db(opts.filename);
       repo = new CodebaseStore(store, opts.init_repo);
-      s_admin = new AdminService(repo, opts.admin_gui);
+      s_admin = new AdminService(repo, s_admin_log_file, s_admin_gui);
       s_admin->retain();
       s_admin->open(admin_ip, admin_port, s_admin_options);
       logging::Logger::set_admin_service(s_admin);

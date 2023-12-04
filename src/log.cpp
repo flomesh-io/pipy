@@ -148,7 +148,7 @@ auto Log::format_elapsed_time(char *buf, size_t len, bool fill) -> size_t {
   return p;
 }
 
-auto Log::format_header(Level level, char *buf, size_t len) -> size_t {
+auto Log::format_time(char *buf, size_t len) -> size_t {
   auto now = std::chrono::system_clock::now().time_since_epoch();
   auto cnt = std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
   auto sec = cnt / 1000;
@@ -156,7 +156,13 @@ auto Log::format_header(Level level, char *buf, size_t len) -> size_t {
   std::time_t t = sec;
   auto i = 0;
   i += std::strftime(buf + i, len - i, "%F %T", std::localtime(&t));
-  i += std::snprintf(buf + i, len - i, ".%03d %s ", msec, s_levels[level]);
+  i += std::snprintf(buf + i, len - i, ".%03d", msec);
+  return i;
+}
+
+auto Log::format_header(Level level, char *buf, size_t len) -> size_t {
+  auto i = format_time(buf, len);
+  i += std::snprintf(buf + i, len - i, " %s ", s_levels[level]);
   return i;
 }
 

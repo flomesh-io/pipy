@@ -64,6 +64,7 @@ public:
   bool        admin_port_off = false;
   std::string admin_port;
   std::string admin_gui;
+  std::string admin_log_file;
   std::string instance_uuid;
   std::string instance_name;
   std::string init_repo;
