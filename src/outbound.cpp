@@ -103,8 +103,10 @@ auto Outbound::address() -> pjs::Str* {
 
 void Outbound::close(StreamEnd *eos) {
   InputContext ic;
-  close();
+  retain();
   input(eos);
+  close();
+  release();
 }
 
 void Outbound::state(State state) {
@@ -117,7 +119,9 @@ void Outbound::state(State state) {
 }
 
 void Outbound::input(Event *evt) {
-  m_input->input(evt);
+  if (m_state != State::closed) {
+    m_input->input(evt);
+  }
 }
 
 void Outbound::error(StreamEnd::Error err) {
