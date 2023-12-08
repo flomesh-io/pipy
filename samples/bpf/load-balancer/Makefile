@@ -2,7 +2,7 @@ SRC_DIR = $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 BIN_DIR = $(abspath ${SRC_DIR}/../../../bin)
 INC_DIR = $(abspath ${SRC_DIR}/include)
 
-OUT = packet-counter.o
+OUT = load-balancer.o
 SRC = $(patsubst %.o,%.c,${OUT})
 
 CFLAGS = \
