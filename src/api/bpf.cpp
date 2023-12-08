@@ -288,6 +288,7 @@ auto Map::lookup_raw(Data *key) -> Data* {
 #ifdef __linux__
   uint8_t k[m_key_size];
   uint8_t v[m_value_size];
+  std::memset(k, 0, m_key_size);
   key->to_bytes(k, m_key_size);
 
   union bpf_attr attr;
@@ -311,8 +312,10 @@ void Map::update_raw(Data *key, Data *value) {
 #ifdef __linux__
   uint8_t k[m_key_size];
   uint8_t v[m_value_size];
+  std::memset(k, 0, m_key_size);
+  std::memset(v, 0, m_value_size);
   key->to_bytes(k, m_key_size);
-  value->to_bytes(k, m_value_size);
+  value->to_bytes(v, m_value_size);
 
   union bpf_attr attr;
   syscall_bpf(
@@ -330,6 +333,7 @@ void Map::delete_raw(Data *key) {
   if (!m_fd) return;
 #ifdef __linux__
   uint8_t k[m_key_size];
+  std::memset(k, 0, m_key_size);
   key->to_bytes(k, m_key_size);
 
   union bpf_attr attr;
