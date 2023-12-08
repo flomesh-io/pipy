@@ -147,7 +147,7 @@ void CStruct::field(CStruct *type, pjs::Str *name) {
     f.layout = type;
     f.name = name;
     m_fields.push_back(f);
-    m_size = f.offset + f.size;
+    m_size = f.offset + align(f.size, 4);
   } else {
     if (!type->m_options.is_union) throw std::runtime_error("struct field name expected");
     auto offset = align(m_size, align_size(type->m_size));
