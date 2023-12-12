@@ -480,7 +480,7 @@ protected:
     bool parse_padding(Frame &frm);
     bool parse_priority(Frame &frm);
     void parse_headers(Frame &frm);
-    void check_content_length();
+    bool check_content_length();
     bool deduct_recv(int size);
     auto deduct_send(int size) -> int;
     bool update_send_window(int delta);

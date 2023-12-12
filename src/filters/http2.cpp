@@ -1871,12 +1871,10 @@ void Endpoint::StreamBase::on_frame(Frame &frm) {
           set_clearing(false);
           if (m_state == OPEN) {
             m_state = HALF_CLOSED_REMOTE;
-            check_content_length();
-            stream_end(nullptr);
+            if (check_content_length()) stream_end(nullptr);
           } else if (m_state == HALF_CLOSED_LOCAL) {
             m_state = CLOSED;
-            check_content_length();
-            stream_end(nullptr);
+            if (check_content_length()) stream_end(nullptr);
           }
         }
       } else {
@@ -2030,22 +2028,22 @@ void Endpoint::StreamBase::parse_headers(Frame &frm) {
     if (m_end_stream_recv) {
       if (m_state == OPEN) {
         m_state = HALF_CLOSED_REMOTE;
-        check_content_length();
-        stream_end(tail);
+        if (check_content_length()) stream_end(tail);
       } else if (m_state == HALF_CLOSED_LOCAL) {
         m_state = CLOSED;
-        check_content_length();
-        stream_end(tail);
+        if (check_content_length()) stream_end(tail);
       }
     }
   }
 }
 
-void Endpoint::StreamBase::check_content_length() {
+bool Endpoint::StreamBase::check_content_length() {
   auto content_length = m_header_decoder.content_length();
   if (content_length >= 0 && content_length != m_recv_payload_size) {
     connection_error(PROTOCOL_ERROR);
+    return false;
   }
+  return true;
 }
 
 bool Endpoint::StreamBase::deduct_recv(int size) {
