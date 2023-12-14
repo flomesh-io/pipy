@@ -100,44 +100,10 @@ void Crypto::free() {
 //
 
 enum class Options {
-  alias_type,
   id,
   key,
   iv,
 };
-
-static void set_pkey_options(EVP_PKEY *pkey, pjs::Object *options) {
-#ifndef PIPY_USE_NTLS
-  if (options) {
-    pjs::Value v;
-    options->get(pjs::EnumDef<Options>::name(Options::alias_type), v);
-    if (!v.is_undefined()) {
-      if (!v.is_string()) throw std::runtime_error("options.aliasType requires a string");
-      auto alias_type = pjs::EnumDef<AliasType>::value(v.s());
-      if (int(alias_type) < 0) throw std::runtime_error("invalid options.aliasType");
-      switch (alias_type) {
-        case AliasType::sm2:
-          if (EVP_PKEY_set_alias_type(pkey, EVP_PKEY_SM2) <= 0) throw_error();
-          break;
-      }
-    }
-  }
-#endif
-}
-
-static void set_pkey_ctx_options(EVP_PKEY_CTX *ctx, pjs::Object *options) {
-#ifndef PIPY_USE_NTLS
-  if (options) {
-    pjs::Value v;
-    options->get(pjs::EnumDef<Options>::name(Options::id), v);
-    if (!v.is_undefined()) {
-      if (!v.is<Data>()) throw std::runtime_error("options.id requires a Data object");
-      auto buf = v.as<Data>()->to_bytes();
-      if (EVP_PKEY_CTX_set1_id(ctx, &buf[0], buf.size()) <= 0) throw_error();
-    }
-  }
-#endif
-}
 
 static auto get_cipher_key(const EVP_CIPHER *cipher, pjs::Object *options, uint8_t *key) -> size_t {
   pjs::Value val;
@@ -195,7 +161,6 @@ PublicKey::PublicKey(Data *data, pjs::Object *options) {
     auto buf = data->to_bytes();
     m_pkey = read_pem(&buf[0], buf.size());
   }
-  set_pkey_options(m_pkey, options);
 }
 
 PublicKey::PublicKey(pjs::Str *data, pjs::Object *options) {
@@ -204,7 +169,6 @@ PublicKey::PublicKey(pjs::Str *data, pjs::Object *options) {
   } else {
     m_pkey = read_pem(data->c_str(), data->size());
   }
-  set_pkey_options(m_pkey, options);
 }
 
 PublicKey::~PublicKey() {
@@ -240,7 +204,6 @@ PrivateKey::PrivateKey(Data *data, pjs::Object *options) {
     auto buf = data->to_bytes();
     m_pkey = read_pem(&buf[0], buf.size());
   }
-  set_pkey_options(m_pkey, options);
 }
 
 PrivateKey::PrivateKey(pjs::Str *data, pjs::Object *options) {
@@ -249,7 +212,6 @@ PrivateKey::PrivateKey(pjs::Str *data, pjs::Object *options) {
   } else {
     m_pkey = read_pem(data->c_str(), data->size());
   }
-  set_pkey_options(m_pkey, options);
 }
 
 PrivateKey::~PrivateKey() {
@@ -762,7 +724,6 @@ auto Sign::sign(PrivateKey *key, Object *options) -> Data* {
   if (EVP_PKEY_CTX_set_signature_md(ctx, m_md) <= 0) throw_error();
 
   EVP_PKEY_CTX_set_rsa_padding(ctx, RSA_PKCS1_PADDING);
-  set_pkey_ctx_options(ctx, options);
 
   size_t sig_len;
   if (EVP_PKEY_sign(ctx, nullptr, &sig_len, hash, size) <= 0) throw_error();
@@ -825,7 +786,6 @@ bool Verify::verify(PublicKey *key, Data *signature, Object *options) {
   if (EVP_PKEY_CTX_set_signature_md(ctx, m_md) < 0) throw_error();
 
   EVP_PKEY_CTX_set_rsa_padding(ctx, RSA_PKCS1_PADDING);
-  set_pkey_ctx_options(ctx, options);
 
   auto sig = signature->to_bytes();
   auto result = EVP_PKEY_verify(ctx, &sig[0], sig.size(), hash, size);
@@ -1120,18 +1080,9 @@ using namespace pipy::crypto;
 //
 
 template<> void EnumDef<Options>::init() {
-  define(Options::alias_type, "aliasType");
   define(Options::id, "id");
   define(Options::key, "key");
   define(Options::iv, "iv");
-}
-
-//
-// AliasType
-//
-
-template<> void EnumDef<AliasType>::init() {
-  define(AliasType::sm2, "sm2");
 }
 
 //

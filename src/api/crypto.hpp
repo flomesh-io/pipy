@@ -35,14 +35,6 @@ namespace pipy {
 namespace crypto {
 
 //
-// AliasType
-//
-
-enum class AliasType {
-  sm2,
-};
-
-//
 // PublicKey
 //
 
