@@ -90,7 +90,7 @@ if(PIPY_OPENSSL)
   set(OPENSSL_INC_DIR ${PIPY_OPENSSL}/include)
   set(OPENSSL_LIB_DIR ${PIPY_OPENSSL}/lib)
 else()
-  set(OPENSSL_SRC_DIR ${CMAKE_SOURCE_DIR}/deps/openssl-1.1.1q)
+  set(OPENSSL_SRC_DIR ${CMAKE_SOURCE_DIR}/deps/openssl-3.2.0)
   set(OPENSSL_LIB_DIR ${OPENSSL_SRC_DIR}/build)
   set(OPENSSL_INC_DIR ${OPENSSL_SRC_DIR}/include ${OPENSSL_LIB_DIR}/include)
 
