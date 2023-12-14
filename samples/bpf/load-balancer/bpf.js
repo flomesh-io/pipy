@@ -25,7 +25,8 @@
     .field('uint32', 'neighbor'),
 
   Neighbor = new CStruct()
-    .field(`uint8[${ETH_ALEN}]`, 'mac'),
+    .field(`uint8[${ETH_ALEN}]`, 'mac')
+    .field('uint32', 'interface'),
 
   map = (name, key, value) => (
     bpf.Map.open(
