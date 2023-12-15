@@ -33,27 +33,23 @@
 namespace pipy {
 
 //
-// CStruct
+// CStructBase
 //
 
-class CStruct : public pjs::ObjectTemplate<CStruct> {
+class CStructBase : public pjs::ObjectTemplate<CStructBase> {
 public:
-  struct Options : public pipy::Options {
-    bool is_union = false;
-    Options() {}
-    Options(pjs::Object *options);
-  };
-
   auto size() -> size_t { return m_size; }
-  void field(const char *type, pjs::Str *name);
-  void field(CStruct *type, pjs::Str *name = nullptr);
+  void add_fields(pjs::Object *fields);
+  void add_field(pjs::Str *name, const char *type);
+  void add_field(pjs::Str *name, CStructBase *type);
   auto encode(pjs::Object *values) -> Data*;
   auto decode(const Data &data) -> pjs::Object*;
 
-private:
-  CStruct(const Options &options)
-    : m_options(options) {}
+protected:
+  CStructBase(bool is_union)
+    : m_is_union(is_union) {}
 
+private:
   struct Field {
     size_t offset;
     size_t size;
@@ -62,24 +58,42 @@ private:
     bool is_integral;
     bool is_unsigned;
     pjs::Value::Type type;
-    pjs::Ref<CStruct> layout;
+    pjs::Ref<CStructBase> layout;
     pjs::Ref<pjs::Str> name;
   };
 
-  Options m_options;
+  bool m_is_union;
   std::list<Field> m_fields;
   size_t m_size = 0;
 
   static auto align(size_t offset, size_t alignment) -> size_t;
   static auto align_size(size_t size) -> size_t;
   static void zero(Data::Builder &db, size_t count);
-  static void encode(Data::Builder &db, pjs::Object *values, CStruct *layout);
+  static void encode(Data::Builder &db, pjs::Object *values, CStructBase *layout);
   static void encode(Data::Builder &db, int size, bool is_integral, bool is_unsigned, const pjs::Value &value);
-  static auto decode(Data::Reader &dr, CStruct *layout) -> pjs::Object*;
+  static auto decode(Data::Reader &dr, CStructBase *layout) -> pjs::Object*;
   static void decode(Data::Reader &dr, const Field &field, pjs::Object *values);
   static void decode(Data::Reader &dr, int size, bool is_integral, bool is_unsigned, pjs::Value &value);
 
-  friend class pjs::ObjectTemplate<CStruct>;
+  friend class pjs::ObjectTemplate<CStructBase>;
+};
+
+//
+// CStruct
+//
+
+class CStruct : public pjs::ObjectTemplate<CStruct, CStructBase> {
+  CStruct() : pjs::ObjectTemplate<CStruct, CStructBase>(false) {}
+  friend class pjs::ObjectTemplate<CStruct, CStructBase>;
+};
+
+//
+// CUnion
+//
+
+class CUnion : public pjs::ObjectTemplate<CUnion, CStructBase> {
+  CUnion() : pjs::ObjectTemplate<CUnion, CStructBase>(true) {}
+  friend class pjs::ObjectTemplate<CUnion, CStructBase>;
 };
 
 } // namespace pipy

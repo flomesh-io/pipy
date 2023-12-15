@@ -97,6 +97,9 @@ template<> void ClassDef<pipy::Global>::init() {
   // CStruct
   variable("CStruct", class_of<Constructor<CStruct>>());
 
+  // CUnion
+  variable("CUnion", class_of<Constructor<CUnion>>());
+
   // JSON
   variable("JSON", class_of<JSON>());
 

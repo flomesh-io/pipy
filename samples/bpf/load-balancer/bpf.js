@@ -2,31 +2,38 @@
   ETH_ALEN = 6,
   RING_SIZE = 63356,
 
-  ID = new CStruct()
-    .field('uint32', 'id'),
+  ID = new CStruct({
+    id: 'uint32',
+  }),
 
-  IP = new CStruct()
-    .field('uint8[4]', 'v4'),
+  IP = new CStruct({
+    v4: 'uint8[4]',
+  }),
 
-  Address = new CStruct()
-    .field(IP, 'ip')
-    .field('uint16', 'port'),
+  Address = new CStruct({
+    ip: IP,
+    port: 'uint16',
+  }),
 
-  Endpoint = new CStruct()
-    .field(Address, 'addr')
-    .field('uint8', 'proto'),
+  Endpoint = new CStruct({
+    addr: Address,
+    proto: 'uint8',
+  }),
 
-  Balancer = new CStruct()
-    .field(`uint32[${RING_SIZE}]`, 'ring')
-    .field('uint32', 'hint'),
+  Balancer = new CStruct({
+    ring: `uint32[${RING_SIZE}]`,
+    hint: 'uint32',
+  }),
 
-  Upstream = new CStruct()
-    .field(Address, 'addr')
-    .field('uint32', 'neighbor'),
+  Upstream = new CStruct({
+    addr: Address,
+    neighbor: 'uint32',
+  }),
 
-  Neighbor = new CStruct()
-    .field(`uint8[${ETH_ALEN}]`, 'mac')
-    .field('uint32', 'interface'),
+  Neighbor = new CStruct({
+    mac: `uint8[${ETH_ALEN}]`,
+    interface: 'uint32',
+  }),
 
   map = (name, key, value) => (
     bpf.Map.open(

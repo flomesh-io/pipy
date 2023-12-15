@@ -1,25 +1,28 @@
 ((
   // struct rtattr (linux/rtnetlink.h)
-  rtattr = new CStruct()
-    .field('uint16', 'len')
-    .field('uint16', 'type'),
+  rtattr = new CStruct({
+    len: 'uint16',
+    type: 'uint16',
+  }),
 
   // struct ifinfomsg (linux/rtnetlink.h)
-  ifinfomsg = new CStruct()
-    .field('uint8', 'family')
-    .field('uint8', 'pad')
-    .field('uint16', 'type')
-    .field('uint32', 'index')
-    .field('uint32', 'flags')
-    .field('uint32', 'change'),
+  ifinfomsg = new CStruct({
+    family: 'uint8',
+    pad: 'uint8',
+    type: 'uint16',
+    index: 'uint32',
+    flags: 'uint32',
+    change: 'uint32',
+  }),
 
   // struct ifaddrmsg (linux/ifaddr.h)
-  ifaddrmsg = new CStruct()
-    .field('uint8', 'family')
-    .field('uint8', 'prefixlen')
-    .field('uint8', 'flags')
-    .field('uint8', 'scope')
-    .field('uint32', 'index'),
+  ifaddrmsg = new CStruct({
+    family: 'uint8',
+    prefixlen: 'uint8',
+    flags: 'uint8',
+    scope: 'uint8',
+    index: 'uint32',
+  }),
 
   extractAttrs = data => (
     (

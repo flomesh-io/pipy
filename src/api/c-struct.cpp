@@ -25,25 +25,42 @@
 
 #include "api/c-struct.hpp"
 
+#include <cctype>
+
 namespace pipy {
 
 thread_local static Data::Producer s_dp("CStruct");
 
 //
-// CStruct::Options
+// CStructBase
 //
 
-CStruct::Options::Options(pjs::Object *options) {
-  Value(options, "isUnion")
-    .get(is_union)
-    .check_nullable();
+void CStructBase::add_fields(pjs::Object *fields) {
+  fields->iterate_all(
+    [this](pjs::Str *k, pjs::Value &v) {
+      auto name = k;
+      if (k->size() > 0 && std::isdigit(k->str()[0])) {
+        if (!v.is<CUnion>()) {
+          std::string msg("anonymous field of non-union type is not allowed: ");
+          msg += k->str();
+          throw std::runtime_error(msg);
+        }
+        name = nullptr;
+      }
+      if (v.is_instance_of<CStructBase>()) {
+        add_field(name, v.as<CStructBase>());
+      } else if (v.is_string()) {
+        add_field(name, v.s()->c_str());
+      } else {
+        std::string msg("invalid field type: ");
+        msg += k->str();
+        throw std::runtime_error(msg);
+      }
+    }
+  );
 }
 
-//
-// CStruct
-//
-
-void CStruct::field(const char *type, pjs::Str *name) {
+void CStructBase::add_field(pjs::Str *name, const char *type) {
   Field f;
   f.name = name;
 
@@ -120,10 +137,12 @@ void CStruct::field(const char *type, pjs::Str *name) {
     f.is_unsigned = false;
     f.type = pjs::Value::Type::String;
   } else {
-    throw std::runtime_error("unknown type name");
+    std::string msg("unknown type name: ");
+    msg += type;
+    throw std::runtime_error(msg);
   }
 
-  if (m_options.is_union) {
+  if (m_is_union) {
     f.offset = 0;
     m_size = std::max(m_size, f.size * f.count);
   } else {
@@ -134,7 +153,7 @@ void CStruct::field(const char *type, pjs::Str *name) {
   m_fields.push_back(f);
 }
 
-void CStruct::field(CStruct *type, pjs::Str *name) {
+void CStructBase::add_field(pjs::Str *name, CStructBase *type) {
   if (name) {
     Field f;
     f.offset = align(m_size, align_size(type->m_size));
@@ -149,7 +168,7 @@ void CStruct::field(CStruct *type, pjs::Str *name) {
     m_fields.push_back(f);
     m_size = f.offset + align(f.size, 4);
   } else {
-    if (!type->m_options.is_union) throw std::runtime_error("struct field name expected");
+    if (!type->m_is_union) throw std::runtime_error("struct field name expected");
     auto offset = align(m_size, align_size(type->m_size));
     for (const auto &f : type->m_fields) {
       m_fields.push_back(f);
@@ -158,7 +177,7 @@ void CStruct::field(CStruct *type, pjs::Str *name) {
   }
 }
 
-auto CStruct::encode(pjs::Object *obj) -> Data* {
+auto CStructBase::encode(pjs::Object *obj) -> Data* {
   Data buf;
   Data::Builder db(buf, &s_dp);
   encode(db, obj, this);
@@ -166,23 +185,23 @@ auto CStruct::encode(pjs::Object *obj) -> Data* {
   return Data::make(std::move(buf));
 }
 
-auto CStruct::decode(const Data &data) -> pjs::Object* {
+auto CStructBase::decode(const Data &data) -> pjs::Object* {
   Data::Reader dr(data);
   return decode(dr, this);
 }
 
-auto CStruct::align(size_t offset, size_t alignment) -> size_t {
+auto CStructBase::align(size_t offset, size_t alignment) -> size_t {
   return (offset + alignment - 1) / alignment * alignment;
 }
 
-auto CStruct::align_size(size_t size) -> size_t {
+auto CStructBase::align_size(size_t size) -> size_t {
   if (size <= 1) return 1;
   if (size <= 2) return 2;
   if (size <= 4) return 4;
   return 8;
 }
 
-void CStruct::zero(Data::Builder &db, size_t count) {
+void CStructBase::zero(Data::Builder &db, size_t count) {
   if (count > 0) {
     char zero[count];
     std::memset(zero, 0, count);
@@ -190,13 +209,13 @@ void CStruct::zero(Data::Builder &db, size_t count) {
   }
 }
 
-void CStruct::encode(Data::Builder &db, pjs::Object *values, CStruct *layout) {
+void CStructBase::encode(Data::Builder &db, pjs::Object *values, CStructBase *layout) {
   auto start = db.size();
   bool found = false;
   for (const auto &f : layout->m_fields) {
     pjs::Value v;
     values->get(f.name, v);
-    if (layout->m_options.is_union && v.is_undefined()) continue; else found = true;
+    if (layout->m_is_union && v.is_undefined()) continue; else found = true;
     auto offset = db.size() - start;
     if (offset < f.offset) zero(db, f.offset - offset);
     if (auto layout = f.layout.get()) {
@@ -230,12 +249,12 @@ void CStruct::encode(Data::Builder &db, pjs::Object *values, CStruct *layout) {
       encode(db, f.size, f.is_integral, f.is_unsigned, v);
     }
   }
-  if (layout->m_options.is_union && !found) {
+  if (layout->m_is_union && !found) {
     zero(db, layout->m_size);
   }
 }
 
-void CStruct::encode(Data::Builder &db, int size, bool is_integral, bool is_unsigned, const pjs::Value &value) {
+void CStructBase::encode(Data::Builder &db, int size, bool is_integral, bool is_unsigned, const pjs::Value &value) {
   char buf[8];
   if (!is_integral) {
     if (size == 4) {
@@ -261,9 +280,9 @@ void CStruct::encode(Data::Builder &db, int size, bool is_integral, bool is_unsi
   db.push(buf, size);
 }
 
-auto CStruct::decode(Data::Reader &dr, CStruct *layout) -> pjs::Object* {
+auto CStructBase::decode(Data::Reader &dr, CStructBase *layout) -> pjs::Object* {
   auto values = pjs::Object::make();
-  if (layout->m_options.is_union) {
+  if (layout->m_is_union) {
     Data buf;
     dr.read(layout->m_size, buf);
     for (const auto &f : layout->m_fields) {
@@ -281,7 +300,7 @@ auto CStruct::decode(Data::Reader &dr, CStruct *layout) -> pjs::Object* {
   return values;
 }
 
-void CStruct::decode(Data::Reader &dr, const Field &field, pjs::Object *values) {
+void CStructBase::decode(Data::Reader &dr, const Field &field, pjs::Object *values) {
   if (auto layout = field.layout.get()) {
     values->set(field.name, decode(dr, layout));
   } else if (field.type == pjs::Value::Type::String) {
@@ -304,7 +323,7 @@ void CStruct::decode(Data::Reader &dr, const Field &field, pjs::Object *values) 
   }
 }
 
-void CStruct::decode(Data::Reader &dr, int size, bool is_integral, bool is_unsigned, pjs::Value &value) {
+void CStructBase::decode(Data::Reader &dr, int size, bool is_integral, bool is_unsigned, pjs::Value &value) {
   char buf[size];
   auto len = dr.read(size, buf);
   if (len < size) std::memset(buf + len, 0, size - len);
@@ -337,50 +356,68 @@ namespace pjs {
 
 using namespace pipy;
 
-template<> void ClassDef<CStruct>::init() {
-  ctor([](Context &ctx) -> Object* {
-    Object *options = nullptr;
-    if (!ctx.arguments(0, &options)) return nullptr;
-    return CStruct::make(options);
-  });
-
+template<> void ClassDef<CStructBase>::init() {
   accessor("size", [](Object *obj, Value &ret) {
-    ret.set((int)obj->as<CStruct>()->size());
-  });
-
-  method("field", [](Context &ctx, Object *obj, Value &ret) {
-    Str *type, *name = nullptr;
-    CStruct *c_struct;
-    try {
-      if (ctx.get(0, c_struct) && c_struct) {
-        if (!ctx.arguments(1, &c_struct, &name)) return;
-        obj->as<CStruct>()->field(c_struct, name);
-      } else {
-        if (!ctx.arguments(2, &type, &name)) return;
-        obj->as<CStruct>()->field(type->c_str(), name);
-      }
-      ret.set(obj);
-    } catch (std::runtime_error &err) {
-      ctx.error(err);
-    }
+    ret.set((int)obj->as<CStructBase>()->size());
   });
 
   method("encode", [](Context &ctx, Object *obj, Value &ret) {
     Object *values;
     if (!ctx.arguments(1, &values)) return;
     if (!values) { ret = Value::null; return; }
-    ret.set(obj->as<CStruct>()->encode(values));
+    ret.set(obj->as<CStructBase>()->encode(values));
   });
 
   method("decode", [](Context &ctx, Object *obj, Value &ret) {
     pipy::Data *data;
     if (!ctx.arguments(1, &data)) return;
     if (!data) { ret = Value::null; return; }
-    ret.set(obj->as<CStruct>()->decode(*data));
+    ret.set(obj->as<CStructBase>()->decode(*data));
+  });
+}
+
+template<> void ClassDef<CStruct>::init() {
+  super<CStructBase>();
+  ctor([](Context &ctx) -> Object* {
+    Object *fields;
+    if (!ctx.arguments(1, &fields)) return nullptr;
+    auto s = CStruct::make();
+    try {
+      if (fields) s->add_fields(fields);
+      return s;
+    } catch (std::runtime_error &err) {
+      s->retain();
+      s->release();
+      ctx.error(err);
+      return nullptr;
+    }
+  });
+}
+
+template<> void ClassDef<CUnion>::init() {
+  super<CStructBase>();
+  ctor([](Context &ctx) -> Object* {
+    Object *fields;
+    if (!ctx.arguments(1, &fields)) return nullptr;
+    auto s = CUnion::make();
+    try {
+      if (fields) s->add_fields(fields);
+      return s;
+    } catch (std::runtime_error &err) {
+      s->retain();
+      s->release();
+      ctx.error(err);
+      return nullptr;
+    }
   });
 }
 
 template<> void ClassDef<Constructor<CStruct>>::init() {
+  super<Function>();
+  ctor();
+}
+
+template<> void ClassDef<Constructor<CUnion>>::init() {
   super<Function>();
   ctor();
 }

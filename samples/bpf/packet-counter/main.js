@@ -3,8 +3,8 @@
     bpf.Map.list().find(
       i => i.name === 'pkt_cnt_stats'
     )?.id,
-    new CStruct().field('uint8[4]', 'ip'),
-    new CStruct().field('uint32', 'count'),
+    new CStruct({ ip: 'uint8[4]' }),
+    new CStruct({ count: 'uint32' }),
   ),
 
 ) => pipy()
