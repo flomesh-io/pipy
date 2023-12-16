@@ -3,14 +3,9 @@
   rt = pipy.solve('rt.js'),
 
   main = (ctx) => (
-    bpf.maps.neighbors.update(
-      { id: 0 },
-      { mac: [0, 0, 0, 0, 0, 0] },
-    ),
-
     bpf.maps.upstreams.update(
       { id: 0 },
-      { addr: { ip: { v4: [127, 0, 0, 1] }, port: 8080 }, neighbor: 0 },
+      { addr: { ip: { v4: [127, 0, 0, 1] }, port: 8080 }, mac: [0, 0, 0, 0, 0, 0] },
     ),
 
     bpf.maps.balancers.update(

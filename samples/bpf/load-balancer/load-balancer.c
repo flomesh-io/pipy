@@ -41,12 +41,8 @@ struct Balancer {
 
 struct Upstream {
   struct Address addr;
-  __u32 neighbor;
-};
-
-struct Neighbor {
-  __u8 mac[ETH_ALEN];
   __u32 interface;
+  __u8 mac[ETH_ALEN];
 };
 
 struct NATKey {
@@ -58,7 +54,6 @@ struct NATKey {
 struct NATVal {
   struct Address src;
   struct Address dst;
-  __u32 neighbor;
   __u32 interface;
   __u8 mac[ETH_ALEN];
   __u8 is_return;
@@ -81,13 +76,6 @@ struct {
   __u32 *key;
   struct Upstream *value;
 } map_upstreams SEC(".maps");
-
-struct {
-  int (*type)[BPF_MAP_TYPE_HASH];
-  int (*max_entries)[MAX_UPSTREAMS];
-  __u32 *key;
-  struct Neighbor *value;
-} map_neighbors SEC(".maps");
 
 struct {
   int (*type)[BPF_MAP_TYPE_LRU_HASH];
@@ -364,18 +352,14 @@ int xdp_main(struct xdp_md *ctx) {
       alter_l4_src(&pkt, &nat->src);
       alter_l4_dst(&pkt, &nat->dst);
       TRACE("translate return");
-      return XDP_TX;
     } else {
-      __u8 *mac = bpf_map_lookup_elem(&map_neighbors, &nat->neighbor);
-      if (mac) {
-        alter_eth_src(&pkt, pkt.eth.dst);
-        alter_eth_dst(&pkt, mac);
-        alter_l4_src(&pkt, &nat->src);
-        alter_l4_dst(&pkt, &nat->dst);
-        TRACE("translate forward");
-        return XDP_TX;
-      }
+      alter_eth_src(&pkt, pkt.eth.dst);
+      alter_eth_dst(&pkt, nat->mac);
+      alter_l4_src(&pkt, &nat->src);
+      alter_l4_dst(&pkt, &nat->dst);
+      TRACE("translate forward");
     }
+    return XDP_TX;
   }
 
   struct Endpoint ep;
@@ -388,42 +372,39 @@ int xdp_main(struct xdp_md *ctx) {
     __u32 sel = balancer->hint % RING_SIZE;
     struct Upstream *upstream = bpf_map_lookup_elem(&map_upstreams, &balancer->ring[sel]);
     if (upstream) {
-      struct Neighbor *neighbor = bpf_map_lookup_elem(&map_neighbors, &upstream->neighbor);
-      if (neighbor) {
-        struct Address fwd_src, fwd_dst;
-        fwd_src = dst;
-        fwd_dst = upstream->addr;
+      struct Address fwd_src, fwd_dst;
+      fwd_src = dst;
+      fwd_dst = upstream->addr;
 
-        struct NATKey nat_key;
-        struct NATVal nat_val;
-        __builtin_memset(&nat_key, 0, sizeof(nat_key));
-        __builtin_memset(&nat_val, 0, sizeof(nat_val));
+      struct NATKey nat_key;
+      struct NATVal nat_val;
+      __builtin_memset(&nat_key, 0, sizeof(nat_key));
+      __builtin_memset(&nat_val, 0, sizeof(nat_val));
 
-        nat_key.proto = pkt.ip.proto;
-        nat_key.src = src;
-        nat_key.dst = dst;
-        nat_val.src = fwd_src;
-        nat_val.dst = fwd_dst;
-        nat_val.neighbor = upstream->neighbor;
-        bpf_map_update_elem(&map_nat, &nat_key, &nat_val, BPF_ANY);
+      nat_key.proto = pkt.ip.proto;
+      nat_key.src = src;
+      nat_key.dst = dst;
+      nat_val.src = fwd_src;
+      nat_val.dst = fwd_dst;
+      __builtin_memcpy(&nat_val.mac, &upstream->mac, sizeof(nat_val.mac));
+      bpf_map_update_elem(&map_nat, &nat_key, &nat_val, BPF_ANY);
 
-        nat_key.src = fwd_dst;
-        nat_key.dst = fwd_src;
-        nat_val.src = dst;
-        nat_val.dst = src;
-        nat_val.interface = ctx->ingress_ifindex;
-        nat_val.is_return = 1;
-        __builtin_memcpy(&nat_val.mac, &pkt.eth.src, sizeof(nat_val.mac));
-        bpf_map_update_elem(&map_nat, &nat_key, &nat_val, BPF_ANY);
+      nat_key.src = fwd_dst;
+      nat_key.dst = fwd_src;
+      nat_val.src = dst;
+      nat_val.dst = src;
+      nat_val.interface = ctx->ingress_ifindex;
+      nat_val.is_return = 1;
+      __builtin_memcpy(&nat_val.mac, &pkt.eth.src, sizeof(nat_val.mac));
+      bpf_map_update_elem(&map_nat, &nat_key, &nat_val, BPF_ANY);
 
-        alter_eth_src(&pkt, pkt.eth.dst);
-        alter_eth_dst(&pkt, neighbor->mac);
-        alter_l4_src(&pkt, &nat_key.dst);
-        alter_l4_dst(&pkt, &upstream->addr);
+      alter_eth_src(&pkt, pkt.eth.dst);
+      alter_eth_dst(&pkt, upstream->mac);
+      alter_l4_src(&pkt, &nat_key.dst);
+      alter_l4_dst(&pkt, &upstream->addr);
 
-        TRACE("start tracking");
-        return XDP_TX;
-      }
+      TRACE("start tracking");
+      return XDP_TX;
     }
   }
 

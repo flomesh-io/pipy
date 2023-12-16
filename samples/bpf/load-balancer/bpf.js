@@ -27,12 +27,8 @@
 
   Upstream = new CStruct({
     addr: Address,
-    neighbor: 'uint32',
-  }),
-
-  Neighbor = new CStruct({
-    mac: `uint8[${ETH_ALEN}]`,
     interface: 'uint32',
+    mac: `uint8[${ETH_ALEN}]`,
   }),
 
   map = (name, key, value) => (
@@ -44,7 +40,6 @@
 
 ) => ({
   maps: {
-    neighbors: map('map_neighbors', ID, Neighbor),
     upstreams: map('map_upstreams', ID, Upstream),
     balancers: map('map_balancers', Endpoint, Balancer),
   },
