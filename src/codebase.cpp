@@ -75,11 +75,17 @@ private:
     chdir(m_base.c_str());
   }
 
+  struct WatchedFile {
+    double time;
+    std::set<pjs::Ref<Watch>> watches;
+  };
+
   std::mutex m_mutex;
   std::string m_version;
   std::string m_base;
   std::string m_entry;
   std::string m_script;
+  std::map<std::string, WatchedFile> m_watched_files;
 };
 
 CodebaseFromFS::CodebaseFromFS(const std::string &path) {
@@ -165,13 +171,43 @@ void CodebaseFromFS::set(const std::string &path, SharedData *data) {
 }
 
 auto CodebaseFromFS::watch(const std::string &path, const std::function<void()> &on_update) -> Watch* {
-  return new Watch(on_update);
+  std::lock_guard<std::mutex> lock(m_mutex);
+  auto w = new Watch(on_update);
+  auto &wf = m_watched_files[path];
+  auto norm_path = utils::path_normalize(path);
+  auto full_path = utils::path_join(m_base, norm_path);
+  wf.time = fs::get_file_time(full_path);
+  wf.watches.insert(w);
+  return w;
 }
 
 void CodebaseFromFS::sync(bool force, const std::function<void(bool)> &on_update) {
   if (force || m_version.empty()) {
     m_version = "1";
     on_update(true);
+  } else {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    for (auto &p : m_watched_files) {
+      auto &path = p.first;
+      auto &file = p.second;
+      auto &watches = file.watches;
+      auto i = watches.begin();
+      while (i != watches.end()) {
+        const auto w = i++;
+        if ((*w)->closed()) {
+          watches.erase(w);
+        }
+      }
+      if (!watches.empty()) {
+        auto norm_path = utils::path_normalize(path);
+        auto full_path = utils::path_join(m_base, norm_path);
+        auto t = fs::get_file_time(full_path);
+        if (t != file.time) {
+          file.time = t;
+          for (const auto &w : watches) notify(w);
+        }
+      }
+    }
   }
 }
 
@@ -353,11 +389,10 @@ auto CodebaseFromHTTP::get(const std::string &path) -> SharedData* {
 }
 
 auto CodebaseFromHTTP::watch(const std::string &path, const std::function<void()> &on_update) -> Watch* {
+  std::lock_guard<std::mutex> lock(m_mutex);
   auto w = new Watch(on_update);
-  m_mutex.lock();
   auto &wf = m_watched_files[path];
   wf.watches.insert(w);
-  m_mutex.unlock();
   return w;
 }
 

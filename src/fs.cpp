@@ -58,6 +58,12 @@ bool is_file(const std::string &filename) {
   return S_ISREG(st.st_mode);
 }
 
+auto get_file_time(const std::string &filename) -> double {
+  struct stat st;
+  if (stat(filename.c_str(), &st)) return 0;
+  return st.st_mtim.tv_sec + st.st_mtim.tv_nsec / 1e9;
+}
+
 bool make_dir(const std::string &filename) {
   return mkdir(filename.c_str(), S_IRWXU | S_IRWXG | S_IRWXO) == 0;
 }
