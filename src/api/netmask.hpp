@@ -46,9 +46,10 @@ public:
   auto size() const -> int { return 1 << (32 - m_bitmask); }
   auto first() -> pjs::Str*;
   auto last() -> pjs::Str*;
-  auto decompose() -> pjs::Array*;
   bool decompose_v4(uint8_t ip[]);
   bool decompose_v6(uint16_t ip[]);
+  auto decompose() -> pjs::Array*;
+  auto to_bytes() -> pjs::Array*;
   bool contains(pjs::Str *addr);
   auto next() -> pjs::Str*;
 

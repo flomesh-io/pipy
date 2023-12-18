@@ -243,18 +243,6 @@ auto Netmask::first() -> pjs::Str* {
   return m_first;
 }
 
-auto Netmask::decompose() -> pjs::Array* {
-  if (m_is_v6) {
-    auto *arr = pjs::Array::make(8);
-    for (int i = 0; i < 8; i++) arr->set(i, m_ip_full.v6[i]);
-    return arr;
-  } else {
-    auto *arr = pjs::Array::make(4);
-    for (int i = 0; i < 4; i++) arr->set(i, (m_ip_full.v4 >> (24 - i * 8)) & 255);
-    return arr;
-  }
-}
-
 bool Netmask::decompose_v4(uint8_t ip[]) {
   if (m_is_v6) return false;
   for (int i = 0; i < 4; i++) {
@@ -269,6 +257,37 @@ bool Netmask::decompose_v6(uint16_t ip[]) {
     ip[i] = m_ip_full.v6[i];
   }
   return true;
+}
+
+auto Netmask::decompose() -> pjs::Array* {
+  if (m_is_v6) {
+    auto *arr = pjs::Array::make(8);
+    for (int i = 0; i < 8; i++) arr->set(i, m_ip_full.v6[i]);
+    return arr;
+  } else {
+    auto *arr = pjs::Array::make(4);
+    uint8_t ip[4];
+    decompose_v4(ip);
+    for (int i = 0; i < 4; i++) arr->set(i, ip[i]);
+    return arr;
+  }
+}
+
+auto Netmask::to_bytes() -> pjs::Array* {
+  if (m_is_v6) {
+    auto *arr = pjs::Array::make(16);
+    for (int i = 0; i < 8; i++) {
+      arr->set(i*2+0, m_ip_full.v6[i] >> 8);
+      arr->set(i*2+1, m_ip_full.v6[i] & 0xff);
+    }
+    return arr;
+  } else {
+    auto *arr = pjs::Array::make(4);
+    uint8_t ip[4];
+    decompose_v4(ip);
+    for (int i = 0; i < 4; i++) arr->set(i, ip[i]);
+    return arr;
+  }
 }
 
 auto Netmask::last() -> pjs::Str* {
@@ -410,6 +429,10 @@ template<> void ClassDef<Netmask>::init() {
 
   method("decompose", [](Context &ctx, Object *obj, Value &ret) {
     ret.set(obj->as<Netmask>()->decompose());
+  });
+
+  method("toBytes", [](Context &ctx, Object *obj, Value &ret) {
+    ret.set(obj->as<Netmask>()->to_bytes());
   });
 
   method("contains", [](Context &ctx, Object *obj, Value &ret) {
