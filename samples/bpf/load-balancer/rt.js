@@ -1,5 +1,99 @@
 ((
   nl = pipy.solve('nl.js'),
+  bpf = pipy.solve('bpf.js'),
+
+  epFromIPPort = (ip, port) => `${ip}/${port}`,
+  epFromUpstream = (upstream) => epFromIPPort(upstream.ip, upstream.port),
+  ipFromString = (str) => new Netmask(str).toBytes(),
+
+  links = {},
+  neighbours = {},
+  routes = [],
+  unknownIPs = {},
+
+  lookupIP = (ip) => (
+    neighbours[ip] || (
+      ranges.find(
+        ({ mask }) => mask.contains(ip)
+      )
+    )
+  ),
+
+  upstreams = (
+    (
+      mapByID = {},
+      mapByEP = {},
+      idNext = 1,
+      idPool = new algo.ResourcePool(() => idNext++),
+
+    ) => ({
+      byID: (id) => mapByID[id],
+
+      make: (ip, port) => (
+        mapByEP[epFromIPPort(ip, port)] ??= (
+          (
+            id = idPool.allocate(),
+            nextHop = lookupIP(ip),
+          ) => (
+            nextHop || (unknownIPs[ip] = true),
+            bpf.maps.upstreams.update({ id }, {
+              addr: {
+                ip: ipFromString(ip),
+                port,
+              },
+              interface: nextHop?.interface,
+              mac: nextHop?.mac,
+            }),
+            mapByID[id] = { ip, port, id }
+          )
+        )()
+      ),
+
+      cleanup: (upstreams) => (
+        Object.keys(mapByID).forEach(
+          id => (id in mapByID) && (
+            delete mapByID[id],
+            delete mapByEP(epFromUpstream[upstreams[id]]),
+            idPool.free(id),
+            bpf.maps.upstreams.delete({ id })
+          )
+        )
+      ),
+    })
+  )(),
+
+  newLink = (link) => (
+    console.log('new link:', 'address', link.address, 'ifname', link.ifname, 'index', link.index)
+  ),
+
+  delLink = (link) => (
+    console.log('del link:', 'address', link.address, 'ifname', link.ifname, 'index', link.index)
+  ),
+
+  newAddress = (addr) => (
+    console.log('new addr:', 'address', addr.address, 'index', addr.index)
+  ),
+
+  delAddress = (addr) => (
+    console.log('del addr:', 'address', addr.address, 'index', addr.index)
+  ),
+
+  newRoute = (route) => (
+    console.log('new route:', 'dst', route.dst, 'dst_len', route.dst_len, 'oif', route.oif)
+  ),
+
+  delRoute = (route) => (
+    console.log('del route:', 'dst', route.dst, 'dst_len', route.dst_len, 'oif', route.oif)
+  ),
+
+  newNeighbour = (neigh) => (
+    console.log('new neigh:', 'dst', neigh.dst, 'lladdr', neigh.lladdr)
+  ),
+
+  delNeighbour = (neigh) => (
+    console.log('new neigh:', 'dst', neigh.dst, 'lladdr', neigh.lladdr)
+  ),
+
 ) => ({
 
   initialRequests: [
@@ -47,26 +141,42 @@
     ),
   ],
 
+  updateBalancers: (balancers) => (
+    (
+      newBalancers = {},
+      newUpstreams = {},
+    ) => (
+      balancers.forEach(
+        ({ ip, port, targets }) => (
+          newBalancers[epFromIPPort(ip, port)] = {
+            ip, port,
+            targets: targets.map(
+              ({ ip, port, weight }) => (
+                (
+                  upstream = upstreams.make(ip, port)
+                ) => (
+                  newUpstreams[upstream.id] = upstream,
+                  { upstream, weight }
+                )
+              )()
+            )
+          }
+        )
+      ),
+      upstreams.cleanup(newUpstreams)
+    )
+  )(),
+
   handleRouteChange: (msg) => (
     select(msg.head.type,
-      16, () => ( // RTM_NEWLINK
-        console.log('new link:', nl.link.decode(msg.body))
-      ),
-      17, () => ( // RTM_DELLINK
-        console.log('del link:', nl.link.decode(msg.body))
-      ),
-      20, () => ( // RTM_NEWADDR
-        console.log('new addr:', nl.addr.decode(msg.body))
-      ),
-      21, () => ( // RTM_DELADDR
-        console.log('del addr:', nl.addr.decode(msg.body))
-      ),
-      24, () => ( // RTM_NEWROUTE
-        console.log('new route:', nl.route.decode(msg.body))
-      ),
-      28, () => ( // RTM_NEWNEIGH
-        console.log('new neigh:', nl.neigh.decode(msg.body))
-      ),
+      16, () => newLink(nl.link.decode(msg.body)), // RTM_NEWLINK
+      17, () => delLink(nl.link.decode(msg.body)), // RTM_DELLINK
+      20, () => newAddress(nl.addr.decode(msg.body)), // RTM_NEWADDR
+      21, () => delAddress(nl.addr.decode(msg.body)), // RTM_DELADDR
+      24, () => newRoute(nl.route.decode(msg.body)), // RTM_NEWROUTE
+      25, () => delRoute(nl.route.decode(msg.body)), // RTM_DELROUTE
+      28, () => newNeighbour(nl.neigh.decode(msg.body)), // RTM_NEWNEIGH
+      29, () => delNeighbour(nl.neigh.decode(msg.body)), // RTM_DELNEIGH
     )
   ),
 
