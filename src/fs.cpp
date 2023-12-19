@@ -61,7 +61,12 @@ bool is_file(const std::string &filename) {
 auto get_file_time(const std::string &filename) -> double {
   struct stat st;
   if (stat(filename.c_str(), &st)) return 0;
-  return st.st_mtim.tv_sec + st.st_mtim.tv_nsec / 1e9;
+#ifdef __APPLE__
+  auto &ts = st.st_mtimespec;
+#else
+  auto &ts = st.st_mtim;
+#endif
+  return ts.tv_sec + ts.tv_nsec / 1e9;
 }
 
 bool make_dir(const std::string &filename) {
