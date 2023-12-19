@@ -2582,6 +2582,7 @@ inline void Instance::add(Scope *s) {
 inline void Instance::remove(Scope *s) {
   if (auto p = s->m_prev) p->m_next = s->m_next; else m_scopes = s->m_next;
   if (auto n = s->m_next) n->m_prev = s->m_prev;
+  s->m_instance = nullptr;
 }
 
 //
