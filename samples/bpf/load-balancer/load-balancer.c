@@ -10,9 +10,11 @@
 #include "bpf-utils.h"
 
 #define TRACING 0
+#define MAX_ROUTES 100
 #define MAX_BALANCERS 1024
 #define MAX_UPSTREAMS 65536
-#define RING_SIZE 65536
+#define MAX_CONNECTIONS 65536
+#define RING_SIZE 16
 
 char __license[] SEC("license") = "Dual MIT/GPL";
 
@@ -22,6 +24,11 @@ char __license[] SEC("license") = "Dual MIT/GPL";
 
 struct IP {
   __u32 v4;
+};
+
+struct IPMask {
+  struct bpf_lpm_trie_key mask;
+  struct IP ip;
 };
 
 struct Address {
@@ -34,6 +41,11 @@ struct Endpoint {
   __u8 proto;
 };
 
+struct Route {
+  __u32 interface;
+  __u8 broadcast[ETH_ALEN];
+};
+
 struct Balancer {
   __u32 ring[RING_SIZE];
   __u32 hint;
@@ -41,8 +53,6 @@ struct Balancer {
 
 struct Upstream {
   struct Address addr;
-  __u32 interface;
-  __u8 mac[ETH_ALEN];
 };
 
 struct NATKey {
@@ -64,6 +74,14 @@ struct NATVal {
 //
 
 struct {
+  int (*type)[BPF_MAP_TYPE_LPM_TRIE];
+  int (*max_entries)[MAX_ROUTES];
+  int (*map_flags)[BPF_F_NO_PREALLOC];
+  struct IPMask *key;
+  struct Route *value;
+} map_routes SEC(".maps");
+
+struct {
   int (*type)[BPF_MAP_TYPE_HASH];
   int (*max_entries)[MAX_BALANCERS];
   struct Endpoint *key;
@@ -79,7 +97,7 @@ struct {
 
 struct {
   int (*type)[BPF_MAP_TYPE_LRU_HASH];
-  int (*max_entries)[MAX_UPSTREAMS];
+  int (*max_entries)[MAX_CONNECTIONS];
   struct NATKey *key;
   struct NATVal *value;
 } map_nat SEC(".maps");
@@ -376,6 +394,13 @@ int xdp_main(struct xdp_md *ctx) {
       fwd_src = dst;
       fwd_dst = upstream->addr;
 
+      struct IPMask rt_key;
+      rt_key.mask.prefixlen = 32;
+      rt_key.ip = fwd_dst.ip;
+
+      struct Route *route = bpf_map_lookup_elem(&map_routes, &rt_key);
+      if (!route) return XDP_DROP;
+
       struct NATKey nat_key;
       struct NATVal nat_val;
       __builtin_memset(&nat_key, 0, sizeof(nat_key));
@@ -386,7 +411,8 @@ int xdp_main(struct xdp_md *ctx) {
       nat_key.dst = dst;
       nat_val.src = fwd_src;
       nat_val.dst = fwd_dst;
-      __builtin_memcpy(&nat_val.mac, &upstream->mac, sizeof(nat_val.mac));
+      nat_val.interface = route->interface;
+      __builtin_memcpy(&nat_val.mac, route->broadcast, sizeof(nat_val.mac));
       bpf_map_update_elem(&map_nat, &nat_key, &nat_val, BPF_ANY);
 
       nat_key.src = fwd_dst;
@@ -399,7 +425,7 @@ int xdp_main(struct xdp_md *ctx) {
       bpf_map_update_elem(&map_nat, &nat_key, &nat_val, BPF_ANY);
 
       alter_eth_src(&pkt, pkt.eth.dst);
-      alter_eth_dst(&pkt, upstream->mac);
+      alter_eth_dst(&pkt, route->broadcast);
       alter_l4_src(&pkt, &nat_key.dst);
       alter_l4_dst(&pkt, &upstream->addr);
 

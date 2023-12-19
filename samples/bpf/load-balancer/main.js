@@ -1,18 +1,12 @@
 ((
-  bpf = pipy.solve('bpf.js'),
   rt = pipy.solve('rt.js'),
 
+  setupBalancers = () => (
+    rt.setupBalancers(JSON.decode(pipy.load('config.json')).balancers)
+  ),
+
   main = (ctx) => (
-    bpf.maps.upstreams.update(
-      { id: 0 },
-      { addr: { ip: { v4: [127, 0, 0, 1] }, port: 8080 }, mac: [0, 0, 0, 0, 0, 0] },
-    ),
-
-    bpf.maps.balancers.update(
-      { addr: { ip: { v4: [127, 0, 0, 1] }, port: 8000 }, proto: 6 },
-      { ring: [0], hint: 0 },
-    ),
-
+    setupBalancers(),
     pipy(ctx)
   ),
 
@@ -36,10 +30,16 @@
   .connect('pid=0;groups=0', {
     protocol: 'netlink',
     netlinkFamily: 0,
-    bind: `pid=0;groups=${1|0x10|0x100}`, // groups = RTMGRP_LINK | RTMGRP_IPV4_IFADDR | RTMGRP_IPV6_IFADDR
+    bind: `pid=0;groups=${1|4|0x40|0x400}`, // groups = RTMGRP_LINK | RTMGRP_NEIGH | RTMGRP_IPV4_ROUTE | RTMGRP_IPV6_ROUTE
   })
   .decodeNetlink()
   .handleMessage(rt.handleRouteChange)
+
+.watch('config.json')
+  .onStart(() => (
+    setupBalancers(),
+    new StreamEnd
+  ))
 
 .listen(8080)
   .serveHTTP(new Message('hi'))

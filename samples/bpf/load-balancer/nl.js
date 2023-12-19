@@ -113,6 +113,7 @@
         attrs = extractAttrs(data),
       ) => ({
         address: hex(attrs[1]), // IFLA_ADDRESS
+        broadcast: hex(attrs[2]), // IFLA_BROADCAST
         ifname: attrs[3]?.toString(), // IFLA_IFNAME
         mtu: i32(attrs[4]), // IFLA_MTU
         master: i32(attrs[10]), // IFLA_MASTER

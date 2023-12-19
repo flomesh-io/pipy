@@ -1,6 +1,6 @@
 ((
   ETH_ALEN = 6,
-  RING_SIZE = 63356,
+  RING_SIZE = 16,
 
   ID = new CStruct({
     id: 'uint32',
@@ -8,6 +8,18 @@
 
   IP = new CStruct({
     v4: 'uint8[4]',
+  }),
+
+  IPMask = new CStruct({
+    mask: new CStruct({
+      prefixlen: 'uint32',
+    }),
+    ip: IP,
+  }),
+
+  Route = new CStruct({
+    interface: 'uint32',
+    broadcast: `uint8[${ETH_ALEN}]`,
   }),
 
   Address = new CStruct({
@@ -27,8 +39,6 @@
 
   Upstream = new CStruct({
     addr: Address,
-    interface: 'uint32',
-    mac: `uint8[${ETH_ALEN}]`,
   }),
 
   map = (name, key, value) => (
@@ -39,7 +49,9 @@
   ),
 
 ) => ({
+  IPMask,
   maps: {
+    routes: map('map_routes', IPMask, Route),
     upstreams: map('map_upstreams', ID, Upstream),
     balancers: map('map_balancers', Endpoint, Balancer),
   },
