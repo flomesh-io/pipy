@@ -75,6 +75,76 @@ void Data::pack(const Data &data, Producer *producer, double vacancy) {
   }
 }
 
+auto Data::to_string(Encoding encoding) const -> std::string {
+  assert_same_thread(*this);
+  switch (encoding) {
+    case Encoding::utf8: {
+      pjs::Utf8Decoder decoder([](int) {});
+      for (const auto c : chunks()) {
+        auto ptr = std::get<0>(c);
+        auto len = std::get<1>(c);
+        for (int i = 0; i < len; i++) {
+          if (!decoder.input(ptr[i])) {
+            throw std::runtime_error("invalid UTF-8 encoding");
+          }
+        }
+      }
+      return to_string();
+    }
+    case Encoding::utf16be:
+    case Encoding::utf16le: {
+      std::string str;
+      utils::Utf16Decoder decoder(
+        encoding == Encoding::utf16be,
+        [&](uint32_t code) {
+          char buf[4];
+          auto len = pjs::Utf8Decoder::encode(code, buf, sizeof(buf));
+          str.append(buf, len);
+        }
+      );
+      for (const auto c : chunks()) {
+        auto ptr = std::get<0>(c);
+        auto len = std::get<1>(c);
+        for (int i = 0; i < len; i++) decoder.input(ptr[i]);
+      }
+      return str;
+    }
+    case Encoding::hex: {
+      std::string str;
+      utils::HexEncoder encoder([&](char c) { str += c; });
+      for (const auto c : chunks()) {
+        auto ptr = std::get<0>(c);
+        auto len = std::get<1>(c);
+        for (int i = 0; i < len; i++) encoder.input(ptr[i]);
+      }
+      return str;
+    }
+    case Encoding::base64: {
+      std::string str;
+      utils::Base64Encoder encoder([&](char c) { str += c; });
+      for (const auto c : chunks()) {
+        auto ptr = std::get<0>(c);
+        auto len = std::get<1>(c);
+        for (int i = 0; i < len; i++) encoder.input(ptr[i]);
+      }
+      encoder.flush();
+      return str;
+    }
+    case Encoding::base64url: {
+      std::string str;
+      utils::Base64UrlEncoder encoder([&](char c) { str += c; });
+      for (const auto c : chunks()) {
+        auto ptr = std::get<0>(c);
+        auto len = std::get<1>(c);
+        for (int i = 0; i < len; i++) encoder.input(ptr[i]);
+      }
+      encoder.flush();
+      return str;
+    }
+    default: return to_string();
+  }
+}
+
 } // namespace pipy
 
 namespace pjs {
@@ -83,6 +153,8 @@ using namespace pipy;
 
 template<> void EnumDef<pipy::Data::Encoding>::init() {
   define(pipy::Data::Encoding::utf8, "utf8");
+  define(pipy::Data::Encoding::utf16be, "utf16be");
+  define(pipy::Data::Encoding::utf16le, "utf16le");
   define(pipy::Data::Encoding::hex, "hex");
   define(pipy::Data::Encoding::base64, "base64");
   define(pipy::Data::Encoding::base64url, "base64url");

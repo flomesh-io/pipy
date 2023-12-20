@@ -915,5 +915,77 @@ bool Base64UrlDecoder::flush() {
   }
 }
 
+//
+// Utf16Encoder
+//
+
+void Utf16Encoder::input(uint32_t ch) {
+  if (ch <= 0xffff) {
+    if (m_big_endian) {
+      m_output(ch >> 8);
+      m_output(ch & 0xff);
+    } else {
+      m_output(ch & 0xff);
+      m_output(ch >> 8);
+    }
+  } else if (ch <= 0x10ffff) {
+    ch -= 0x10000;
+    uint16_t h = 0xd800 | (ch >> 10);
+    uint16_t l = 0xdc00 | (ch & 0x3ff);
+    if (m_big_endian) {
+      m_output(h >> 8);
+      m_output(h & 0xff);
+      m_output(l >> 8);
+      m_output(l & 0xff);
+    } else {
+      m_output(h & 0xff);
+      m_output(h >> 8);
+      m_output(l & 0xff);
+      m_output(l >> 8);
+    }
+  }
+}
+
+//
+// Utf16Decoder
+//
+
+void Utf16Decoder::input(uint8_t b) {
+  if (m_has_half_word) {
+    auto w = m_half_word | (uint16_t(b) << (m_big_endian ? 0 : 8));
+    if (m_surrogate) {
+      if ((w & 0xfc00) == 0xdc00) {
+        uint32_t h = 0x3ff & m_surrogate;
+        uint32_t l = 0x3ff & w;
+        m_output(((h << 10) | l) + 0x10000);
+        m_surrogate = 0;
+      } else {
+        m_output(m_surrogate);
+        if ((w & 0xfc00) == 0xd800) {
+          m_surrogate = w;
+        } else {
+          m_surrogate = 0;
+          m_output(w);
+        }
+      }
+    } else if ((w & 0xfc00) == 0xd800) {
+      m_surrogate = w;
+    } else {
+      m_output(w);
+    }
+    m_has_half_word = false;
+  } else {
+    m_half_word = uint16_t(b) << (m_big_endian ? 8 : 0);
+    m_has_half_word = true;
+  }
+}
+
+void Utf16Decoder::flush() {
+  if (auto w = m_surrogate) {
+    m_surrogate = 0;
+    m_output(w);
+  }
+}
+
 } // namespace utils
 } // namespace pipy

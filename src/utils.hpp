@@ -210,6 +210,44 @@ private:
   bool m_done = false;
 };
 
+//
+// Utf16Encoder
+//
+
+class Utf16Encoder {
+public:
+  Utf16Encoder(bool big_endian, const std::function<void(uint8_t)> &output)
+    : m_output(output)
+    , m_big_endian(big_endian) {}
+
+  void input(uint32_t ch);
+
+private:
+  const std::function<void(uint8_t)> m_output;
+  bool m_big_endian;
+};
+
+//
+// Utf16Decoder
+//
+
+class Utf16Decoder {
+public:
+  Utf16Decoder(bool big_endian, const std::function<void(uint32_t)> &output)
+    : m_output(output)
+    , m_big_endian(big_endian) {}
+
+  void input(uint8_t b);
+  void flush();
+
+private:
+  const std::function<void(uint32_t)> m_output;
+  bool m_big_endian;
+  bool m_has_half_word = false;
+  uint16_t m_half_word = 0;
+  uint16_t m_surrogate = 0;
+};
+
 } // namespace utils
 } // namespace pipy
 

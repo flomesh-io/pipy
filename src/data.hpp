@@ -58,6 +58,8 @@ public:
 
   enum class Encoding {
     utf8,
+    utf16be,
+    utf16le,
     hex,
     base64,
     base64url,
@@ -508,6 +510,15 @@ public:
       case Encoding::utf8:
         push(str, producer);
         break;
+      case Encoding::utf16be:
+      case Encoding::utf16le: {
+        Builder db(*this, producer);
+        utils::Utf16Encoder encoder(encoding == Encoding::utf16be, [&](uint8_t b) { db.push(b); });
+        pjs::Utf8Decoder decoder([&](int ch) { encoder.input(ch); });
+        for (auto c : str) decoder.input(c);
+        db.flush();
+        break;
+      }
       case Encoding::hex: {
         if (str.length() % 2) throw std::runtime_error("incomplete hex string");
         Builder db(*this, producer);
@@ -936,57 +947,7 @@ public:
     return str;
   }
 
-  auto to_string(Encoding encoding) const -> std::string {
-    assert_same_thread(*this);
-    switch (encoding) {
-      case Encoding::utf8: {
-        pjs::Utf8Decoder decoder([](int) {});
-        for (const auto c : chunks()) {
-          auto ptr = std::get<0>(c);
-          auto len = std::get<1>(c);
-          for (int i = 0; i < len; i++) {
-            if (!decoder.input(ptr[i])) {
-              throw std::runtime_error("invalid UTF-8 encoding");
-            }
-          }
-        }
-        return to_string();
-      }
-      case Encoding::hex: {
-        std::string str;
-        utils::HexEncoder encoder([&](char c) { str += c; });
-        for (const auto c : chunks()) {
-          auto ptr = std::get<0>(c);
-          auto len = std::get<1>(c);
-          for (int i = 0; i < len; i++) encoder.input(ptr[i]);
-        }
-        return str;
-      }
-      case Encoding::base64: {
-        std::string str;
-        utils::Base64Encoder encoder([&](char c) { str += c; });
-        for (const auto c : chunks()) {
-          auto ptr = std::get<0>(c);
-          auto len = std::get<1>(c);
-          for (int i = 0; i < len; i++) encoder.input(ptr[i]);
-        }
-        encoder.flush();
-        return str;
-      }
-      case Encoding::base64url: {
-        std::string str;
-        utils::Base64UrlEncoder encoder([&](char c) { str += c; });
-        for (const auto c : chunks()) {
-          auto ptr = std::get<0>(c);
-          auto len = std::get<1>(c);
-          for (int i = 0; i < len; i++) encoder.input(ptr[i]);
-        }
-        encoder.flush();
-        return str;
-      }
-      default: return to_string();
-    }
-  }
+  auto to_string(Encoding encoding) const -> std::string;
 
 private:
   View*  m_head;

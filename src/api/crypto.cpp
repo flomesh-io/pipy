@@ -576,8 +576,6 @@ auto Hash::digest(Data::Encoding enc) -> pjs::Str* {
   char hash[EVP_MAX_MD_SIZE];
   auto size = digest(hash);
   switch (enc) {
-    case Data::Encoding::utf8:
-      return pjs::Str::make(hash, size);
     case Data::Encoding::hex: {
       char str[size * 2];
       auto len = utils::encode_hex(str, hash, size);
@@ -593,6 +591,7 @@ auto Hash::digest(Data::Encoding enc) -> pjs::Str* {
       auto len = utils::encode_base64url(str, hash, size);
       return pjs::Str::make(str, len);
     }
+    default: throw std::runtime_error("invalid encoding");
   }
   return nullptr;
 }
@@ -656,8 +655,6 @@ auto Hmac::digest(Data::Encoding enc) -> pjs::Str* {
   unsigned int size;
   HMAC_Final(m_ctx, (unsigned char *)hash, &size);
   switch (enc) {
-    case Data::Encoding::utf8:
-      return pjs::Str::make(hash, size);
     case Data::Encoding::hex: {
       char str[size * 2];
       auto len = utils::encode_hex(str, hash, size);
@@ -673,6 +670,7 @@ auto Hmac::digest(Data::Encoding enc) -> pjs::Str* {
       auto len = utils::encode_base64url(str, hash, size);
       return pjs::Str::make(str, len);
     }
+    default: throw std::runtime_error("invalid encoding");
   }
   return nullptr;
 }
@@ -1337,15 +1335,19 @@ template<> void ClassDef<Hash>::init() {
   method("digest", [](Context &ctx, Object *obj, Value &ret) {
     Str *encoding_name = nullptr;
     if (!ctx.arguments(0, &encoding_name)) return;
-    if (encoding_name) {
-      auto encoding = EnumDef<pipy::Data::Encoding>::value(encoding_name);
-      if (int(encoding) < 0) {
-        ctx.error("unknown encoding");
+    try {
+      if (encoding_name) {
+        auto encoding = EnumDef<pipy::Data::Encoding>::value(encoding_name);
+        if (int(encoding) < 0) {
+          ctx.error("unknown encoding");
+        } else {
+          ret.set(obj->as<Hash>()->digest(encoding));
+        }
       } else {
-        ret.set(obj->as<Hash>()->digest(encoding));
+        ret.set(obj->as<Hash>()->digest());
       }
-    } else {
-      ret.set(obj->as<Hash>()->digest());
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
     }
   });
 }
@@ -1394,15 +1396,19 @@ template<> void ClassDef<Hmac>::init() {
   method("digest", [](Context &ctx, Object *obj, Value &ret) {
     Str *encoding_name = nullptr;
     if (!ctx.arguments(0, &encoding_name)) return;
-    if (encoding_name) {
-      auto encoding = EnumDef<pipy::Data::Encoding>::value(encoding_name);
-      if (int(encoding) < 0) {
-        ctx.error("unknown encoding");
+    try {
+      if (encoding_name) {
+        auto encoding = EnumDef<pipy::Data::Encoding>::value(encoding_name);
+        if (int(encoding) < 0) {
+          ctx.error("unknown encoding");
+        } else {
+          ret.set(obj->as<Hmac>()->digest(encoding));
+        }
       } else {
-        ret.set(obj->as<Hmac>()->digest(encoding));
+        ret.set(obj->as<Hmac>()->digest());
       }
-    } else {
-      ret.set(obj->as<Hmac>()->digest());
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
     }
   });
 }

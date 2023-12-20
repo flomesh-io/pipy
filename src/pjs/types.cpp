@@ -198,26 +198,9 @@ auto Str::make(const uint32_t *codes, size_t len) -> Str* {
   auto buf = str_make_tmp_buf(len);
   int p = 0;
   for (size_t i = 0; i < len; i++) {
-    auto c = codes[i];
-    if (c <= 0x7f) {
-      if (p + 1 > sizeof(buf)) break;
-      buf[p++] = c;
-    } else if (c <= 0x7ff) {
-      if (p + 2 > sizeof(buf)) break;
-      buf[p++] = 0xc0 | (0x1f & (c >> 6));
-      buf[p++] = 0x80 | (0x3f & (c >> 0));
-    } else if (c <= 0xffff) {
-      if (p + 3 > sizeof(buf)) break;
-      buf[p++] = 0xe0 | (0x0f & (c >> 12));
-      buf[p++] = 0x80 | (0x3f & (c >>  6));
-      buf[p++] = 0x80 | (0x3f & (c >>  0));
-    } else {
-      if (p + 4 > sizeof(buf)) break;
-      buf[p++] = 0xf0 | (0x07 & (c >> 18));
-      buf[p++] = 0x80 | (0x3f & (c >> 12));
-      buf[p++] = 0x80 | (0x3f & (c >>  6));
-      buf[p++] = 0x80 | (0x3f & (c >>  0));
-    }
+    auto n = Utf8Decoder::encode(codes[i], buf + p, len - p);
+    if (!n) break;
+    p += n;
   }
   auto *s = make(buf, p);
   str_free_tmp_buf(buf);
@@ -3309,6 +3292,32 @@ auto RegExp::chars_to_flags(Str *chars, bool &global) -> std::regex::flag_type {
 //
 // Utf8Decoder
 //
+
+size_t Utf8Decoder::encode(uint32_t code, char *output, size_t size) {
+  if (code <= 0x7f) {
+    if (size < 1) return 0;
+    output[0] = code;
+    return 1;
+  } else if (code <= 0x7ff) {
+    if (size < 2) return 0;
+    output[0] = 0xc0 | (0x1f & (code >> 6));
+    output[1] = 0x80 | (0x3f & (code >> 0));
+    return 2;
+  } else if (code <= 0xffff) {
+    if (size < 3) return 0;
+    output[0] = 0xe0 | (0x0f & (code >> 12));
+    output[1] = 0x80 | (0x3f & (code >>  6));
+    output[2] = 0x80 | (0x3f & (code >>  0));
+    return 3;
+  } else {
+    if (size < 4) return 0;
+    output[0] = 0xf0 | (0x07 & (code >> 18));
+    output[1] = 0x80 | (0x3f & (code >> 12));
+    output[2] = 0x80 | (0x3f & (code >>  6));
+    output[3] = 0x80 | (0x3f & (code >>  0));
+    return 4;
+  }
+}
 
 void Utf8Decoder::reset() {
   m_codepoint = 0;

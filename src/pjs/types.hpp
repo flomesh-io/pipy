@@ -3589,6 +3589,8 @@ public:
     return input_size * 2;
   }
 
+  static size_t encode(uint32_t code, char *output, size_t size);
+
   Utf8Decoder(const std::function<void(int)> &output)
     : m_output(output) {}
 
