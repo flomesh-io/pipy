@@ -315,6 +315,15 @@ INLINE void trace_packet(struct Packet *pkt, const char *msg) {
 #define TRACE(msg) do {} while (0)
 #endif // TRACING
 
+INLINE int redirect_packet(struct xdp_md *ctx, __u32 out_if) {
+  if (out_if != ctx->ingress_ifindex) {
+    bpf_redirect(out_if, 0);
+    return XDP_REDIRECT;
+  } else {
+    return XDP_TX;
+  }
+}
+
 //
 // XDP packet entrance point
 //
@@ -365,19 +374,17 @@ int xdp_main(struct xdp_md *ctx) {
 
   if (nat) {
     if (nat->is_return) {
-      alter_eth_src(&pkt, pkt.eth.dst);
       alter_eth_dst(&pkt, nat->mac);
       alter_l4_src(&pkt, &nat->src);
       alter_l4_dst(&pkt, &nat->dst);
       TRACE("translate return");
     } else {
-      alter_eth_src(&pkt, pkt.eth.dst);
       alter_eth_dst(&pkt, nat->mac);
       alter_l4_src(&pkt, &nat->src);
       alter_l4_dst(&pkt, &nat->dst);
       TRACE("translate forward");
     }
-    return XDP_TX;
+    return redirect_packet(ctx, nat->interface);
   }
 
   struct Endpoint ep;
@@ -409,14 +416,14 @@ int xdp_main(struct xdp_md *ctx) {
       nat_key.proto = pkt.ip.proto;
       nat_key.src = src;
       nat_key.dst = dst;
-      nat_val.src = fwd_src;
+      nat_val.src = dst;
       nat_val.dst = fwd_dst;
       nat_val.interface = route->interface;
       __builtin_memcpy(&nat_val.mac, route->broadcast, sizeof(nat_val.mac));
       bpf_map_update_elem(&map_nat, &nat_key, &nat_val, BPF_ANY);
 
       nat_key.src = fwd_dst;
-      nat_key.dst = fwd_src;
+      nat_key.dst = src;
       nat_val.src = dst;
       nat_val.dst = src;
       nat_val.interface = ctx->ingress_ifindex;
@@ -424,13 +431,12 @@ int xdp_main(struct xdp_md *ctx) {
       __builtin_memcpy(&nat_val.mac, &pkt.eth.src, sizeof(nat_val.mac));
       bpf_map_update_elem(&map_nat, &nat_key, &nat_val, BPF_ANY);
 
-      alter_eth_src(&pkt, pkt.eth.dst);
       alter_eth_dst(&pkt, route->broadcast);
       alter_l4_src(&pkt, &nat_key.dst);
       alter_l4_dst(&pkt, &upstream->addr);
 
       TRACE("start tracking");
-      return XDP_TX;
+      return redirect_packet(ctx, route->interface);
     }
   }
 

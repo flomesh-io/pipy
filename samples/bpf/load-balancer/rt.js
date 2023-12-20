@@ -171,7 +171,7 @@
           Object.entries(oldBalancers).forEach(
             ([k, v]) => k in newBalancers || (
               bpf.maps.balancers.delete(balancerKey(v.ip, v.port, 6)),
-              console.log(' Delete balancer', ip, port)
+              console.log('  Delete balancer', v.ip, v.port)
             )
           ),
           upstreams.cleanup(newUpstreams),
