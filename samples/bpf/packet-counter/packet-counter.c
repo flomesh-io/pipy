@@ -1,74 +1,42 @@
+#include <linux/bpf.h>
 #include <linux/if_ether.h>
 #include <linux/ip.h>
 
-#include "bpf.h"
-#include "bpf_endian.h"
-#include "bpf_helpers.h"
+#include "bpf-builtin.h"
+#include "bpf-utils.h"
 
 char __license[] SEC("license") = "Dual MIT/GPL";
 
-#define MAX_MAP_ENTRIES 16
+#define MAX_ENTRIES 16
 
-/* Define an LRU hash map for storing packet count by source IPv4 address */
 struct {
-  __uint(type, BPF_MAP_TYPE_LRU_HASH);
-  __uint(max_entries, MAX_MAP_ENTRIES);
-  __type(key, __u32);   // source IPv4 address
-  __type(value, __u32); // packet count
-} pkt_cnt_stats SEC(".maps");
-
-/*
-Attempt to parse the IPv4 source address from the packet.
-Returns 0 if there is no IPv4 header field; otherwise returns non-zero.
-*/
-static __always_inline int parse_ip_src_addr(struct xdp_md *ctx,
-                                             __u32 *ip_src_addr) {
-  void *data_end = (void *)(long)ctx->data_end;
-  void *data = (void *)(long)ctx->data;
-
-  // First, parse the ethernet header.
-  struct ethhdr *eth = data;
-  if ((void *)(eth + 1) > data_end) {
-    return 0;
-  }
-
-  if (eth->h_proto != bpf_htons(ETH_P_IP)) {
-    // The protocol is not IPv4, so we can't parse an IPv4 source address.
-    return 0;
-  }
-
-  // Then parse the IP header.
-  struct iphdr *ip = (void *)(eth + 1);
-  if ((void *)(ip + 1) > data_end) {
-    return 0;
-  }
-
-  // Return the source IP address in network byte order.
-  *ip_src_addr = (__u32)(ip->saddr);
-  return 1;
-}
+  int (*type)[BPF_MAP_TYPE_LRU_HASH];
+  int (*max_entries)[MAX_ENTRIES];
+  __u32 *key;
+  __u32 *value;
+} packet_counts SEC(".maps");
 
 SEC("xdp")
 int xdp_prog_func(struct xdp_md *ctx) {
-  __u32 ip;
-  if (!parse_ip_src_addr(ctx, &ip)) {
-    // Not an IPv4 packet, so don't count it.
-    goto done;
-  }
+  void *pkt = (void *)(long)ctx->data;
+  void *end = (void *)(long)ctx->data_end;
 
-  __u32 *pkt_count = bpf_map_lookup_elem(&pkt_cnt_stats, &ip);
-  if (!pkt_count) {
-    // No entry in the map for this IP address yet, so set the initial value
-    // to 1.
-    __u32 init_pkt_count = 1;
-    bpf_map_update_elem(&pkt_cnt_stats, &ip, &init_pkt_count, BPF_ANY);
+  struct ethhdr *eth = pkt;
+  if (eth + 1 > end) return XDP_PASS;
+  if (ntohs(eth->h_proto) != ETH_P_IP) return XDP_PASS;
+
+  struct iphdr *ip = (void *)(eth + 1);
+  if (ip + 1 > end) return XDP_PASS;
+
+  __u32 addr = ip->saddr;
+  __u32 *cnt = bpf_map_lookup_elem(&packet_counts, &addr);
+
+  if (!cnt) {
+    __u32 n = 1;
+    bpf_map_update_elem(&packet_counts, &addr, &n, BPF_ANY);
   } else {
-    // Entry already exists for this IP address,
-    // so increment it atomically using an LLVM built-in.
-    __sync_fetch_and_add(pkt_count, 1);
+    __sync_fetch_and_add(cnt, 1);
   }
 
-done:
-  // Try changing this to XDP_DROP and see what happens!
   return XDP_PASS;
 }

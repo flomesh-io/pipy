@@ -1,7 +1,7 @@
 ((
   map = bpf.Map.open(
     bpf.Map.list().find(
-      i => i.name === 'pkt_cnt_stats'
+      i => i.name === 'packet_counts'
     )?.id,
     new CStruct({ ip: 'uint8[4]' }),
     new CStruct({ count: 'uint32' }),
