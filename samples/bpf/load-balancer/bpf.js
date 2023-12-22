@@ -17,9 +17,14 @@
     ip: IP,
   }),
 
-  Route = new CStruct({
+  Link = new CStruct({
+    mac: `uint8[${ETH_ALEN}]`,
+    ip: IP,
+  }),
+
+  Neighbour = new CStruct({
     interface: 'uint32',
-    broadcast: `uint8[${ETH_ALEN}]`,
+    mac: `uint8[${ETH_ALEN}]`,
   }),
 
   Address = new CStruct({
@@ -51,7 +56,9 @@
 ) => ({
   IPMask,
   maps: {
-    routes: map('map_routes', IPMask, Route),
+    links: map('map_links', ID, Link),
+    neighbours: map('map_neighbours', IP, Neighbour),
+    routes: map('map_routes', IPMask, IP),
     upstreams: map('map_upstreams', ID, Upstream),
     balancers: map('map_balancers', Endpoint, Balancer),
   },

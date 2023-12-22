@@ -10,6 +10,8 @@
 #include "bpf-utils.h"
 
 #define TRACING 0
+#define MAX_LINKS 100
+#define MAX_NEIGHBOURS 1000
 #define MAX_ROUTES 100
 #define MAX_BALANCERS 1024
 #define MAX_UPSTREAMS 65536
@@ -41,9 +43,14 @@ struct Endpoint {
   __u8 proto;
 };
 
-struct Route {
+struct Link {
+  __u8 mac[ETH_ALEN];
+  struct IP ip;
+};
+
+struct Neighbour {
   __u32 interface;
-  __u8 broadcast[ETH_ALEN];
+  __u8 mac[ETH_ALEN];
 };
 
 struct Balancer {
@@ -65,8 +72,8 @@ struct NATVal {
   struct Address src;
   struct Address dst;
   __u32 interface;
-  __u8 mac[ETH_ALEN];
-  __u8 is_return;
+  __u8 src_mac[ETH_ALEN];
+  __u8 dst_mac[ETH_ALEN];
 };
 
 //
@@ -74,11 +81,25 @@ struct NATVal {
 //
 
 struct {
+  int (*type)[BPF_MAP_TYPE_HASH];
+  int (*max_entries)[MAX_LINKS];
+  __u32 *key;
+  struct Link *value;
+} map_links SEC(".maps");
+
+struct {
+  int (*type)[BPF_MAP_TYPE_HASH];
+  int (*max_entries)[MAX_NEIGHBOURS];
+  struct IP *key;
+  struct Neighbour *value;
+} map_neighbours SEC(".maps");
+
+struct {
   int (*type)[BPF_MAP_TYPE_LPM_TRIE];
   int (*max_entries)[MAX_ROUTES];
   int (*map_flags)[BPF_F_NO_PREALLOC];
   struct IPMask *key;
-  struct Route *value;
+  struct IP *value;
 } map_routes SEC(".maps");
 
 struct {
@@ -185,8 +206,12 @@ INLINE int parse_udp(struct Packet *pkt) {
   return 1;
 }
 
+INLINE __u32 fold_u32(__u32 n) {
+  return (n & 0xffff) + (n >> 16);
+}
+
 INLINE __u16 fold_csum(__u32 csum) {
-  return (csum & 0xffff) + (csum >> 16);
+  return fold_u32(fold_u32(csum));
 }
 
 INLINE void alter_eth_src(struct Packet *pkt, __u8 mac[ETH_ALEN]) {
@@ -373,17 +398,11 @@ int xdp_main(struct xdp_md *ctx) {
   nat = bpf_map_lookup_elem(&map_nat, &nat_key);
 
   if (nat) {
-    if (nat->is_return) {
-      alter_eth_dst(&pkt, nat->mac);
-      alter_l4_src(&pkt, &nat->src);
-      alter_l4_dst(&pkt, &nat->dst);
-      TRACE("translate return");
-    } else {
-      alter_eth_dst(&pkt, nat->mac);
-      alter_l4_src(&pkt, &nat->src);
-      alter_l4_dst(&pkt, &nat->dst);
-      TRACE("translate forward");
-    }
+    alter_eth_src(&pkt, nat->src_mac);
+    alter_eth_dst(&pkt, nat->dst_mac);
+    alter_l4_src(&pkt, &nat->src);
+    alter_l4_dst(&pkt, &nat->dst);
+    TRACE("translate");
     return redirect_packet(ctx, nat->interface);
   }
 
@@ -398,15 +417,26 @@ int xdp_main(struct xdp_md *ctx) {
     struct Upstream *upstream = bpf_map_lookup_elem(&map_upstreams, &balancer->ring[sel]);
     if (upstream) {
       struct Address fwd_src, fwd_dst;
-      fwd_src = dst;
       fwd_dst = upstream->addr;
 
-      struct IPMask rt_key;
-      rt_key.mask.prefixlen = 32;
-      rt_key.ip = fwd_dst.ip;
+      struct Neighbour *neigh = bpf_map_lookup_elem(&map_neighbours, &upstream->addr.ip);
+      if (!neigh) {
+        struct IPMask rt_key;
+        rt_key.mask.prefixlen = 32;
+        rt_key.ip = fwd_dst.ip;
 
-      struct Route *route = bpf_map_lookup_elem(&map_routes, &rt_key);
-      if (!route) return XDP_DROP;
+        struct IP *via = bpf_map_lookup_elem(&map_routes, &rt_key);
+        if (!via) return XDP_DROP;
+
+        neigh = bpf_map_lookup_elem(&map_neighbours, &via);
+        if (!neigh) return XDP_DROP;
+      }
+
+      struct Link *link = bpf_map_lookup_elem(&map_links, &neigh->interface);
+      if (!link) return XDP_DROP;
+
+      fwd_src.ip = link->ip;
+      fwd_src.port = src.port; // TODO: solve port number collision
 
       struct NATKey nat_key;
       struct NATVal nat_val;
@@ -416,27 +446,29 @@ int xdp_main(struct xdp_md *ctx) {
       nat_key.proto = pkt.ip.proto;
       nat_key.src = src;
       nat_key.dst = dst;
-      nat_val.src = dst;
+      nat_val.src = fwd_src;
       nat_val.dst = fwd_dst;
-      nat_val.interface = route->interface;
-      __builtin_memcpy(&nat_val.mac, route->broadcast, sizeof(nat_val.mac));
+      nat_val.interface = neigh->interface;
+      __builtin_memcpy(&nat_val.src_mac, link->mac, ETH_ALEN);
+      __builtin_memcpy(&nat_val.dst_mac, neigh->mac, ETH_ALEN);
       bpf_map_update_elem(&map_nat, &nat_key, &nat_val, BPF_ANY);
 
       nat_key.src = fwd_dst;
-      nat_key.dst = src;
+      nat_key.dst = fwd_src;
       nat_val.src = dst;
       nat_val.dst = src;
       nat_val.interface = ctx->ingress_ifindex;
-      nat_val.is_return = 1;
-      __builtin_memcpy(&nat_val.mac, &pkt.eth.src, sizeof(nat_val.mac));
+      __builtin_memcpy(&nat_val.src_mac, &link->mac, ETH_ALEN);
+      __builtin_memcpy(&nat_val.dst_mac, &pkt.eth.src, ETH_ALEN);
       bpf_map_update_elem(&map_nat, &nat_key, &nat_val, BPF_ANY);
 
-      alter_eth_dst(&pkt, route->broadcast);
+      alter_eth_src(&pkt, link->mac);
+      alter_eth_dst(&pkt, neigh->mac);
       alter_l4_src(&pkt, &nat_key.dst);
       alter_l4_dst(&pkt, &upstream->addr);
 
       TRACE("start tracking");
-      return redirect_packet(ctx, route->interface);
+      return redirect_packet(ctx, neigh->interface);
     }
   }
 

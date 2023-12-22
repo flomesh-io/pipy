@@ -5,6 +5,7 @@
   epFromIPPort = (ip, port) => `${ip}/${port}`,
   epFromUpstream = (upstream) => epFromIPPort(upstream.ip, upstream.port),
   ipFromString = (str) => ({ v4: new Netmask(str).toBytes() }),
+  macFromString = (str) => str.split(':').map(x => Number.parseInt(x, 16)),
 
   links = {},
 
@@ -60,25 +61,35 @@
 
   newLink = (link) => (
     console.log('new link:', 'address', link.address, 'broadcast', link.broadcast, 'ifname', link.ifname, 'index', link.index),
-    links[link.index] = link
+    bpf.maps.links.update(
+      { id: link.index },
+      Object.assign(links[link.index] ??= {}, { mac: macFromString(link.address) }),
+    )
   ),
 
   delLink = (link) => (
     console.log('del link:', 'address', link.address, 'ifname', link.ifname, 'index', link.index),
-    delete links[link.index]
+    bpf.maps.links.delete({ id: link.index })
+  ),
+
+  newAddress = (addr) => (
+    console.log('add addr:', 'address', addr.address, 'prefixlen', addr.prefixlen, 'index', addr.index),
+    new Netmask(addr.address).version === 4 && (
+      bpf.maps.links.update(
+        { id: addr.index },
+        Object.assign(links[addr.index] ??= {}, { ip: ipFromString(addr.address) }),
+      )
+    )
+  ),
+
+  delAddress = (addr) => (
+    console.log('del addr:', 'address', addr.address, 'prefixlen', addr.prefixlen, 'index', addr.index)
   ),
 
   newRoute = (route) => (
-    (
-      link = links[route.oif]
-    ) => (
-      console.log('new route:', 'dst', route.dst, 'dst_len', route.dst_len, 'oif', route.oif),
-      bpf.maps.routes.update(routeKey(route), {
-        interface: link.index,
-        broadcast: link.broadcast.split(':').map(x => Number.parseInt(x, 16)),
-      })
-    )
-  )(),
+    console.log('new route:', 'dst', route.dst, 'dst_len', route.dst_len, 'oif', route.oif, 'gateway', route.gateway),
+    route.gateway && bpf.maps.routes.update(routeKey(route), ipFromString(route.gateway))
+  ),
 
   delRoute = (route) => (
     console.log('del route:', 'dst', route.dst, 'dst_len', route.dst_len, 'oif', route.oif),
@@ -86,11 +97,18 @@
   ),
 
   newNeighbour = (neigh) => (
-    console.log('new neigh:', 'dst', neigh.dst, 'lladdr', neigh.lladdr)
+    console.log('new neigh:', 'dst', neigh.dst, 'lladdr', neigh.lladdr, 'ifindex', neigh.ifindex),
+    bpf.maps.neighbours.update(
+      ipFromString(neigh.dst), {
+        interface: neigh.ifindex,
+        mac: macFromString(neigh.lladdr),
+      }
+    )
   ),
 
   delNeighbour = (neigh) => (
-    console.log('new neigh:', 'dst', neigh.dst, 'lladdr', neigh.lladdr)
+    console.log('new neigh:', 'dst', neigh.dst, 'lladdr', neigh.lladdr, 'ifindex', neigh.ifindex),
+    bpf.maps.neighbours.delete(ipFromString(neigh.dst))
   ),
 
 ) => ({
@@ -101,32 +119,28 @@
         type: 18, // RTM_GETLINK
         flags: 0x01 | 0x0100 | 0x0200, // NLM_F_REQUEST | NLM_F_ROOT | NLM_F_MATCH
       },
-      nl.link.encode({
-        family: 0, // FAMILY_ALL
-        attrs: {
-          [29]: new Data([1, 0, 0, 0]), // IFLA_EXT_MASK: RTEXT_FILTER_VF
-        }
-      })
+      nl.link.encode({})
+    ),
+    new Message(
+      {
+        type: 22, // RTM_GETADDR
+        flags: 0x01 | 0x0100 | 0x0200, // NLM_F_REQUEST | NLM_F_ROOT | NLM_F_MATCH
+      },
+      nl.addr.encode({})
     ),
     new Message(
       {
         type: 26, // RTM_GETROUTE
         flags: 0x01 | 0x0100 | 0x0200, // NLM_F_REQUEST | NLM_F_ROOT | NLM_F_MATCH
       },
-      nl.addr.encode({
-        family: 0, // FAMILY_ALL
-        index: 0,
-      })
+      nl.route.encode({})
     ),
     new Message(
       {
         type: 30, // RTM_GETNEIGH
         flags: 0x01 | 0x0100 | 0x0200, // NLM_F_REQUEST | NLM_F_ROOT | NLM_F_MATCH
       },
-      nl.addr.encode({
-        family: 0, // FAMILY_ALL
-        index: 0,
-      })
+      nl.neigh.encode({})
     ),
   ],
 
@@ -186,6 +200,8 @@
     select(msg.head.type,
       16, () => newLink(nl.link.decode(msg.body)), // RTM_NEWLINK
       17, () => delLink(nl.link.decode(msg.body)), // RTM_DELLINK
+      20, () => newAddress(nl.addr.decode(msg.body)), // RTM_NEWADDR
+      21, () => delAddress(nl.addr.decode(msg.body)), // RTM_DELADDR
       24, () => newRoute(nl.route.decode(msg.body)), // RTM_NEWROUTE
       25, () => delRoute(nl.route.decode(msg.body)), // RTM_DELROUTE
       28, () => newNeighbour(nl.neigh.decode(msg.body)), // RTM_NEWNEIGH

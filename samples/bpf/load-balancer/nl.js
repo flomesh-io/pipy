@@ -148,6 +148,7 @@
         dst: ip(attrs[1]), // RTA_DST
         oif: i32(attrs[4]), // RTA_OIF
         gateway: ip(attrs[5]), // RTA_GATEWAY
+        via: ip(attrs[18]), // RTA_VIA
         ...info,
       })
     )(),
@@ -162,6 +163,7 @@
       ) => ({
         dst: ip(attrs[1]), // NDA_DST
         lladdr: hex(attrs[2]), // NDA_LLADDR
+        ifindex: i32(attrs[8]), // NDA_IFINDEX
         ...info,
       })
     )(),
