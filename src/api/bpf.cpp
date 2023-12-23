@@ -29,6 +29,7 @@
 #include <unistd.h>
 #include <sys/syscall.h>
 #include <linux/bpf.h>
+#include <elf.h>
 
 #define attr_size(FIELD) \
   (offsetof(bpf_attr, FIELD) + sizeof(bpf_attr::FIELD))
@@ -54,7 +55,200 @@ static inline int syscall_bpf(enum bpf_cmd cmd, union bpf_attr *attr, unsigned i
   return syscall_bpf(cmd, attr, size);
 }
 
+//
+// OBJ
+//
+
+class OBJ {
+public:
+
+  //
+  // OBJ::Section
+  //
+
+  struct Section {
+    std::string name;
+    int type;
+    int flags;
+    const uint8_t *data;
+    size_t size;
+    size_t addr;
+    size_t addralign;
+    int link;
+    int info;
+  };
+
+  OBJ(const Data &elf) {
+    elf.to_bytes(m_elf);
+
+    if (m_elf.size() <= EI_NIDENT ||
+      m_elf[EI_MAG0] != ELFMAG0 ||
+      m_elf[EI_MAG1] != ELFMAG1 ||
+      m_elf[EI_MAG2] != ELFMAG2 ||
+      m_elf[EI_MAG3] != ELFMAG3 ||
+      m_elf[EI_CLASS] <= ELFCLASSNONE ||
+      m_elf[EI_CLASS] >= ELFCLASSNUM ||
+      m_elf[EI_VERSION] != EV_CURRENT
+    ) throw std::runtime_error("not an ELF file");
+
+    if (
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+      m_elf[EI_DATA] != ELFDATA2LSB
+#else
+      m_elf[EI_DATA] != ELFDATA2MSB
+#endif
+    ) throw std::runtime_error("mismatched ELF endianness");
+
+    if (m_elf[EI_OSABI] != ELFOSABI_SYSV) {
+      throw std::runtime_error("unsupported ABI");
+    }
+
+    size_t phoff, shoff, ehsize, shstrndx;
+    size_t phentsize, phnum;
+    size_t shentsize, shnum;
+
+    (void)ehsize;
+    (void)phoff;
+    (void)phentsize;
+    (void)phnum;
+
+    switch (m_elf[EI_CLASS]) {
+      case ELFCLASS32: {
+        auto &hdr = *(Elf32_Ehdr *)m_elf.data();
+        type = hdr.e_type;
+        machine = hdr.e_machine;
+        version = hdr.e_version;
+        entry = hdr.e_entry;
+        phoff = hdr.e_phoff;
+        shoff = hdr.e_shoff;
+        flags = hdr.e_flags;
+        ehsize = hdr.e_ehsize;
+        phentsize = hdr.e_phentsize;
+        phnum = hdr.e_phnum;
+        shentsize = hdr.e_shentsize;
+        shnum = hdr.e_shnum;
+        shstrndx = hdr.e_shstrndx;
+        break;
+      }
+      case ELFCLASS64: {
+        auto &hdr = *(Elf64_Ehdr *)m_elf.data();
+        type = hdr.e_type;
+        machine = hdr.e_machine;
+        version = hdr.e_version;
+        entry = hdr.e_entry;
+        phoff = hdr.e_phoff;
+        shoff = hdr.e_shoff;
+        flags = hdr.e_flags;
+        ehsize = hdr.e_ehsize;
+        phentsize = hdr.e_phentsize;
+        phnum = hdr.e_phnum;
+        shentsize = hdr.e_shentsize;
+        shnum = hdr.e_shnum;
+        shstrndx = hdr.e_shstrndx;
+        break;
+      }
+      default: throw std::runtime_error("unsupported ELF file class");
+    }
+
+    if (shoff + shentsize * shnum > m_elf.size() || shstrndx >= shnum) {
+      std::runtime_error("offset out of ELF file boundary");
+    }
+
+    std::vector<size_t> name_offsets(shnum);
+    sections.resize(shnum);
+
+    for (size_t i = 0; i < shnum; i++) {
+      auto offset = shoff + shentsize * i;
+      auto &sec = sections[i];
+      switch (m_elf[EI_CLASS]) {
+        case ELFCLASS32: {
+          auto &hdr = *(Elf32_Shdr *)(m_elf.data() + offset);
+          if (hdr.sh_offset + hdr.sh_size > m_elf.size()) {
+            section_out_of_bound(i);
+          }
+          name_offsets[i] = hdr.sh_name;
+          sec.type = hdr.sh_type;
+          sec.flags = hdr.sh_flags;
+          sec.addr = hdr.sh_addr;
+          sec.data = m_elf.data() + hdr.sh_offset;
+          sec.size = hdr.sh_size;
+          sec.link = hdr.sh_link;
+          sec.info = hdr.sh_info;
+          sec.addralign = hdr.sh_addralign;
+          break;
+        }
+        case ELFCLASS64: {
+          auto &hdr = *(Elf64_Shdr *)(m_elf.data() + offset);
+          if (hdr.sh_offset + hdr.sh_size > m_elf.size()) {
+            section_out_of_bound(i);
+          }
+          name_offsets[i] = hdr.sh_name;
+          sec.type = hdr.sh_type;
+          sec.flags = hdr.sh_flags;
+          sec.addr = hdr.sh_addr;
+          sec.data = m_elf.data() + hdr.sh_offset;
+          sec.size = hdr.sh_size;
+          sec.link = hdr.sh_link;
+          sec.info = hdr.sh_info;
+          sec.addralign = hdr.sh_addralign;
+          break;
+        }
+      }
+    }
+
+    auto &str_tab_sec = sections[shstrndx];
+    auto str_tab_head = str_tab_sec.data;
+    auto str_tab_size = sections[shstrndx].size;
+
+    for (size_t i = 0; i < shnum; i++) {
+      auto offset = name_offsets[i];
+      if (offset >= str_tab_size) section_out_of_bound(i);
+      auto end = offset;
+      while (end < str_tab_size && str_tab_head[end]) end++;
+      sections[i].name = std::string((const char *)(str_tab_head + offset), end - offset);
+    }
+  }
+
+  int type;
+  int flags;
+  int machine;
+  int version;
+  size_t entry;
+  std::vector<Section> sections;
+
+private:
+  std::vector<uint8_t> m_elf;
+
+  static void section_out_of_bound(size_t i) {
+    std::string msg("out of bound section: index = ");
+    msg += std::to_string(i);
+    throw std::runtime_error(msg);
+  }
+};
+
 #endif // __linux__
+
+//
+// Program
+//
+
+auto Program::list() -> pjs::Array* {
+  return nullptr;
+}
+
+auto Program::load(Data *elf) -> Program* {
+  Program *prog = nullptr;
+
+#ifdef __linux__
+  OBJ obj(*elf);
+#endif
+
+  return prog;
+}
+
+auto Program::maps() -> pjs::Array* {
+  return nullptr;
+}
 
 //
 // Map
@@ -365,6 +559,37 @@ static bool linux_only(Context &ctx) {
 }
 
 //
+// Program
+//
+
+template<> void ClassDef<Program>::init() {
+  accessor("maps", [](Object *obj, Value &ret) { ret.set(obj->as<Program>()); });
+}
+
+template<> void ClassDef<Constructor<Program>>::init() {
+  super<Function>();
+  ctor();
+
+  method("list", [](Context &ctx, Object *obj, Value &ret) {
+    if (linux_only(ctx)) {
+      ret.set(Program::list());
+    }
+  });
+
+  method("load", [](Context &ctx, Object *obj, Value &ret) {
+    if (linux_only(ctx)) {
+      pipy::Data *data;
+      if (!ctx.arguments(1, &data)) return;
+      try {
+        ret.set(Program::load(data));
+      } catch (std::runtime_error &err) {
+        ctx.error(err);
+      }
+    }
+  });
+}
+
+//
 // Map
 //
 
@@ -433,6 +658,7 @@ template<> void ClassDef<Constructor<bpf::Map>>::init() {
 
 template<> void ClassDef<BPF>::init() {
   ctor();
+  variable("Program", class_of<Constructor<Program>>());
   variable("Map", class_of<Constructor<bpf::Map>>());
 }
 

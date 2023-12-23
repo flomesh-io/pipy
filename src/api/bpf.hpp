@@ -34,6 +34,18 @@ namespace pipy {
 namespace bpf {
 
 //
+// Program
+//
+
+class Program : public pjs::ObjectTemplate<Program> {
+public:
+  static auto list() -> pjs::Array*;
+  static auto load(Data *elf) -> Program*;
+
+  auto maps() -> pjs::Array*;
+};
+
+//
 // Map
 //
 
