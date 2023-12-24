@@ -84,6 +84,7 @@ static const struct {
   { Log::TCP      , "tcp" },
   { Log::UDP      , "udp" },
   { Log::HTTP2    , "http2" },
+  { Log::BPF      , "bpf" },
   { Log::USER     , "user" },
   { Log::NO_TOPIC , nullptr },
 };

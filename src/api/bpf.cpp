@@ -24,6 +24,7 @@
  */
 
 #include "api/bpf.hpp"
+#include "log.hpp"
 
 #ifdef __linux__
 #include <unistd.h>
@@ -78,6 +79,46 @@ public:
     int info;
   };
 
+  //
+  // OBJ::Symbol
+  //
+
+  struct Symbol {
+    std::string name;
+    size_t value;
+    size_t size;
+    size_t shndx;
+    int info;
+  };
+
+  //
+  // OBJ::Relocation
+  //
+
+  struct Relocation {
+
+    //
+    // OBJ::Relocation::Entry
+    //
+
+    struct Entry {
+      size_t offset;
+      uint64_t info;
+    };
+
+    size_t section;
+    std::vector<Entry> entries;
+  };
+
+  int type;
+  int flags;
+  int machine;
+  int version;
+  size_t entry;
+  std::vector<Section> sections;
+  std::vector<Symbol> symbols;
+  std::vector<Relocation> relocations;
+
   OBJ(const Data &elf) {
     elf.to_bytes(m_elf);
 
@@ -103,6 +144,8 @@ public:
       throw std::runtime_error("unsupported ABI");
     }
 
+    auto cls = m_elf[EI_CLASS];
+
     size_t phoff, shoff, ehsize, shstrndx;
     size_t phentsize, phnum;
     size_t shentsize, shnum;
@@ -112,7 +155,7 @@ public:
     (void)phentsize;
     (void)phnum;
 
-    switch (m_elf[EI_CLASS]) {
+    switch (cls) {
       case ELFCLASS32: {
         auto &hdr = *(Elf32_Ehdr *)m_elf.data();
         type = hdr.e_type;
@@ -160,7 +203,7 @@ public:
     for (size_t i = 0; i < shnum; i++) {
       auto offset = shoff + shentsize * i;
       auto &sec = sections[i];
-      switch (m_elf[EI_CLASS]) {
+      switch (cls) {
         case ELFCLASS32: {
           auto &hdr = *(Elf32_Shdr *)(m_elf.data() + offset);
           if (hdr.sh_offset + hdr.sh_size > m_elf.size()) {
@@ -200,27 +243,133 @@ public:
     auto str_tab_head = str_tab_sec.data;
     auto str_tab_size = sections[shstrndx].size;
 
-    for (size_t i = 0; i < shnum; i++) {
-      auto offset = name_offsets[i];
-      if (offset >= str_tab_size) section_out_of_bound(i);
+    auto find_str = [&](size_t offset, std::string &str) {
+      if (offset >= str_tab_size) return false;
       auto end = offset;
       while (end < str_tab_size && str_tab_head[end]) end++;
-      sections[i].name = std::string((const char *)(str_tab_head + offset), end - offset);
+      str = std::string((const char *)(str_tab_head + offset), end - offset);
+      return true;
+    };
+
+    for (size_t i = 0; i < shnum; i++) {
+      auto &s = sections[i];
+      if (!find_str(name_offsets[i], s.name)) {
+        section_out_of_bound(i);
+      }
+      Log::debug(Log::BPF,
+        "[bpf] SECTION #%d name '%s' addr 0x%08x size %d type %d flags %d link %d info %d",
+        int(i), s.name.c_str(), int(s.addr), int(s.size), s.type, s.flags, s.link, s.info
+      );
+    }
+
+    for (const auto &sec : sections) {
+      if (sec.type == SHT_SYMTAB) {
+        size_t entry_size = 0;
+        switch (cls) {
+          case ELFCLASS32: entry_size = sizeof(Elf32_Sym); break;
+          case ELFCLASS64: entry_size = sizeof(Elf64_Sym); break;
+        }
+        size_t n = entry_size ? sec.size / entry_size : 0;
+        symbols.resize(n);
+        for (size_t i = 0; i < n; i++) {
+          auto &s = symbols[i];
+          auto offset = entry_size * i;
+          switch (cls) {
+            case ELFCLASS32: {
+              const auto &ent = *(Elf32_Sym *)(sec.data + offset);
+              if (!find_str(ent.st_name, s.name)) {
+                symbol_out_of_bound(i);
+              }
+              s.value = ent.st_value;
+              s.size = ent.st_size;
+              s.shndx = ent.st_shndx;
+              s.info = ent.st_info;
+              break;
+            }
+            case ELFCLASS64: {
+              const auto &ent = *(Elf64_Sym *)(sec.data + offset);
+              if (!find_str(ent.st_name, s.name)) {
+                symbol_out_of_bound(i);
+              }
+              s.value = ent.st_value;
+              s.size = ent.st_size;
+              s.shndx = ent.st_shndx;
+              s.info = ent.st_info;
+              break;
+            }
+          }
+          Log::debug(Log::BPF,
+            "[bpf] SYMBOL #%d name '%s' value %d size %d shndx %d info %d",
+            int(i), s.name.c_str(), int(s.value), int(s.shndx), s.info
+          );
+        }
+        break;
+      }
+    }
+
+    for (size_t i = 0; i < sections.size(); i++) {
+      const auto &sec = sections[i];
+      if (sec.type == SHT_REL) {
+        size_t entry_size = 0;
+        switch (cls) {
+          case ELFCLASS32: entry_size = sizeof(Elf32_Rel); break;
+          case ELFCLASS64: entry_size = sizeof(Elf64_Rel); break;
+        }
+        size_t n = entry_size ? sec.size / entry_size : 0;
+        relocations.emplace_back();
+        auto &reloc = relocations.back();
+        reloc.section = sec.info;
+        reloc.entries.resize(n);
+        if (sec.info >= sections.size()) {
+          relocation_out_of_bound(i);
+        }
+        auto max_offset = sections[sec.info].size;
+        for (size_t j = 0; j < n; j++) {
+          auto &r = reloc.entries[j];
+          auto offset = entry_size * j;
+          switch (cls) {
+            case ELFCLASS32: {
+              const auto &ent = *(Elf32_Rel *)(sec.data + offset);
+              r.offset = ent.r_offset;
+              r.info = ent.r_info;
+              break;
+            }
+            case ELFCLASS64: {
+              const auto &ent = *(Elf64_Rel *)(sec.data + offset);
+              r.offset = ent.r_offset;
+              r.info = ent.r_info;
+              break;
+            }
+          }
+          Log::debug(Log::BPF,
+            "[bpf] RELOC for SECTION #%d offset %d info %llu",
+            int(reloc.section), int(r.offset), r.info
+          );
+          if (r.offset >= max_offset) {
+            relocation_out_of_bound(i);
+          }
+        }
+      }
     }
   }
-
-  int type;
-  int flags;
-  int machine;
-  int version;
-  size_t entry;
-  std::vector<Section> sections;
 
 private:
   std::vector<uint8_t> m_elf;
 
   static void section_out_of_bound(size_t i) {
     std::string msg("out of bound section: index = ");
+    msg += std::to_string(i);
+    throw std::runtime_error(msg);
+  }
+
+  static void symbol_out_of_bound(size_t i) {
+    std::string msg("out of bound symbol: index = ");
+    msg += std::to_string(i);
+    throw std::runtime_error(msg);
+  }
+
+  static void relocation_out_of_bound(size_t i) {
+    std::string msg("out of bound relocation: index = ");
     msg += std::to_string(i);
     throw std::runtime_error(msg);
   }
