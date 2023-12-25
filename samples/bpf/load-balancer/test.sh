@@ -23,13 +23,13 @@ setup_net server3 veth3 10.0.3.100/24 10.0.3.200/24
 sleep 1
 
 echo 'Starting upstream servers...'
-ip netns exec server1 ../../../bin/pipy -e 'pipy().listen(8080).serveHTTP(new Message("hi from server1\n"))' &
-ip netns exec server2 ../../../bin/pipy -e 'pipy().listen(8080).serveHTTP(new Message("hi from server2\n"))' &
-ip netns exec server3 ../../../bin/pipy -e 'pipy().listen(8080).serveHTTP(new Message("hi from server3\n"))' &
+ip netns exec server1 ../../../bin/pipy -e 'pipy().listen(8080).serveHTTP(new Message("hi from server1\n"))' 2> /dev/null &
+ip netns exec server2 ../../../bin/pipy -e 'pipy().listen(8080).serveHTTP(new Message("hi from server2\n"))' 2> /dev/null &
+ip netns exec server3 ../../../bin/pipy -e 'pipy().listen(8080).serveHTTP(new Message("hi from server3\n"))' 2> /dev/null &
 sleep 1
 
 echo 'Loading BPF programs...'
-/home/shuang/git/bpftool/src/bpftool prog load /home/shuang/git/pipy/bin/load-balancer.o /sys/fs/bpf/lb
+bpftool prog load /home/shuang/git/pipy/bin/load-balancer.o /sys/fs/bpf/lb
 ip link set lo xdpgeneric pinned /sys/fs/bpf/lb
 ip link set veth0 xdpgeneric pinned /sys/fs/bpf/lb
 ip link set veth1 xdpgeneric pinned /sys/fs/bpf/lb

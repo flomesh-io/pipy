@@ -8,6 +8,7 @@ project(pipy)
 
 option(PIPY_GUI "include builtin GUI" ON)
 option(PIPY_SAMPLES "include builtin sample scripts" ON)
+option(PIPY_BPF, "enable eBPF support" ON)
 option(PIPY_SOIL_FREED_SPACE "invalidate freed space for debugging" OFF)
 option(PIPY_ASSERT_SAME_THREAD "enable assertions for strict inner-thread data access" OFF)
 option(PIPY_ZLIB "external zlib location" "")
@@ -191,6 +192,7 @@ add_executable(pipy
   src/context.cpp
   src/data.cpp
   src/deframer.cpp
+  src/elf.cpp
   src/event.cpp
   src/event-queue.cpp
   src/fetch.cpp
@@ -322,6 +324,10 @@ if(PIPY_SAMPLES)
 
   add_custom_target(PackSamples DEPENDS ${CMAKE_BINARY_DIR}/deps/samples.tar.gz.h)
   add_dependencies(pipy PackSamples)
+endif()
+
+if(PIPY_BPF)
+  add_definitions(-DPIPY_USE_BPF)
 endif()
 
 if(PIPY_SOIL_FREED_SPACE)
