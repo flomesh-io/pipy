@@ -60,12 +60,14 @@ source /opt/rh/rh-nodejs14/enable
 %endif
 %if 0%{?rhel} == 7
 source /opt/rh/llvm-toolset-7.0/enable
+PIPY_BPF=OFF
 %endif
 cd build
 CXX=clang++ CC=clang cmake3 \
   -DPIPY_GUI=%{?with_gui:ON}%{!?with_gui:OFF} \
   -DPIPY_SAMPLES=%{?with_gui:ON}%{!?with_gui:OFF} \
   -DPIPY_STATIC=${PIPY_STATIC} \
+  -DPIPY_BPF=${PIPY_BPF} \
   -DCMAKE_BUILD_TYPE=${BUILD_TYPE} ..
 make -j$(getconf _NPROCESSORS_ONLN)
 
