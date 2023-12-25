@@ -5,6 +5,7 @@ project(zlib C)
 
 set(VERSION "1.3")
 
+option(BUILD_SAMPLES "Build minigzip and test" OFF)
 set(INSTALL_BIN_DIR "${CMAKE_INSTALL_PREFIX}/bin" CACHE PATH "Installation directory for executables")
 set(INSTALL_LIB_DIR "${CMAKE_INSTALL_PREFIX}/lib" CACHE PATH "Installation directory for libraries")
 set(INSTALL_INC_DIR "${CMAKE_INSTALL_PREFIX}/include" CACHE PATH "Installation directory for headers")
@@ -193,7 +194,7 @@ endif()
 #============================================================================
 # Example binaries
 #============================================================================
-
+if(BUILD_SAMPLES)
 add_executable(example test/example.c)
 target_link_libraries(example zlib)
 add_test(example example)
@@ -211,3 +212,4 @@ if(HAVE_OFF64_T)
     target_link_libraries(minigzip64 zlib)
     set_target_properties(minigzip64 PROPERTIES COMPILE_FLAGS "-D_FILE_OFFSET_BITS=64")
 endif()
+endif(BUILD_SAMPLES)
