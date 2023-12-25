@@ -327,7 +327,12 @@ if(PIPY_SAMPLES)
 endif()
 
 if(PIPY_BPF)
-  add_definitions(-DPIPY_USE_BPF)
+  if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    if(CMAKE_SYSTEM_VERSION VERSION_GREATER_EQUAL 4.18)
+      add_definitions(-DPIPY_USE_BPF)
+      message("eBPF is enabled")
+    endif()
+  endif()
 endif()
 
 if(PIPY_SOIL_FREED_SPACE)
