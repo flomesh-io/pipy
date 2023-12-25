@@ -32,7 +32,7 @@ BuildRequires: 	npm
 BuildRequires: 	rh-nodejs14-npm
 %endif
 %endif
-BuildRequires: 	perl-interpreter
+BuildRequires: 	perl-interpreter, perl-IPC-Cmd
 BuildRequires: 	perl(Module::Load::Conditional), perl(File::Temp)
 BuildRequires: 	zlib-devel
 #AutoReqProv: no
