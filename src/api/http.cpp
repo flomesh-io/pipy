@@ -32,6 +32,12 @@
 #include "compressor.hpp"
 #include "utils.hpp"
 
+#ifdef _MSC_VER
+#define strncasecmp _strnicmp
+#define strcasecmp _stricmp
+#undef s_host
+#endif
+
 namespace pipy {
 namespace http {
 
@@ -64,19 +70,19 @@ thread_local static const pjs::ConstStr s_gzip("gzip");
 thread_local static const pjs::ConstStr s_br("br");
 
 static const std::map<std::string, std::string> s_default_content_types = {
-  { "html"  , "text/html" },
+    { "html"  , "text/html" },
   { "css"   , "text/css" },
-  { "xml"   , "text/xml" },
+    { "xml"   , "text/xml" },
   { "txt"   , "text/plain" },
-  { "gif"   , "image/gif" },
+    { "gif"   , "image/gif" },
   { "png"   , "image/png" },
-  { "jpg"   , "image/jpeg" },
+    { "jpg"   , "image/jpeg" },
   { "svg"   , "image/svg+xml" },
-  { "woff"  , "font/woff" },
+    { "woff"  , "font/woff" },
   { "woff2" , "font/woff2" },
-  { "ico"   , "image/x-icon" },
+    { "ico"   , "image/x-icon" },
   { "js"    , "application/javascript" },
-  { "json"  , "application/json" },
+    { "json"  , "application/json" },
 };
 
 bool MessageHead::is_final() const {
@@ -131,29 +137,29 @@ bool ResponseHead::is_tunnel_ok(TunnelType requested) {
 
 auto ResponseHead::error_to_status(StreamEnd::Error err, int &status) -> pjs::Str* {
   switch (err) {
-  case StreamEnd::CANNOT_RESOLVE:
-    status = 502;
-    return s_cannot_resolve;
-  case StreamEnd::CONNECTION_REFUSED:
-    status = 502;
-    return s_connection_refused;
-  case StreamEnd::UNAUTHORIZED:
-    status = 401;
-    return s_unauthorized;
-  case StreamEnd::READ_ERROR:
-    status = 502;
-    return s_read_error;
-  case StreamEnd::WRITE_ERROR:
-    status = 502;
-    return s_write_error;
-  case StreamEnd::CONNECTION_TIMEOUT:
-  case StreamEnd::READ_TIMEOUT:
-  case StreamEnd::WRITE_TIMEOUT:
-    status = 504;
-    return s_gateway_timeout;
-  default:
-    status = 502;
-    return s_bad_gateway;
+    case StreamEnd::CANNOT_RESOLVE:
+      status = 502;
+      return s_cannot_resolve;
+    case StreamEnd::CONNECTION_REFUSED:
+      status = 502;
+      return s_connection_refused;
+    case StreamEnd::UNAUTHORIZED:
+      status = 401;
+      return s_unauthorized;
+    case StreamEnd::READ_ERROR:
+      status = 502;
+      return s_read_error;
+    case StreamEnd::WRITE_ERROR:
+      status = 502;
+      return s_write_error;
+    case StreamEnd::CONNECTION_TIMEOUT:
+    case StreamEnd::READ_TIMEOUT:
+    case StreamEnd::WRITE_TIMEOUT:
+      status = 504;
+      return s_gateway_timeout;
+    default:
+      status = 502;
+      return s_bad_gateway;
   }
 }
 
@@ -164,7 +170,7 @@ auto ResponseHead::error_to_status(StreamEnd::Error err, int &status) -> pjs::St
 thread_local Data::Producer Agent::s_dp("http.Agent");
 
 Agent::Agent(pjs::Str *host, pjs::Object *options)
-  : m_module(new Module)
+    : m_module(new Module)
   , m_host(host)
 {
   pjs::Ref<pjs::Object> tls;
@@ -281,12 +287,12 @@ Directory::Options::Options(pjs::Object *options) {
     .get(index_list)
     .check_nullable();
   Value(options, "contentTypes")
-    .get(content_types_f)
-    .get(content_types)
-    .check_nullable();
+      .get(content_types_f)
+      .get(content_types)
+      .check_nullable();
   Value(options, "defaultContentType")
-    .get(default_content_type)
-    .check_nullable();
+      .get(default_content_type)
+      .check_nullable();
   Value(options, "compression")
     .get(compression_f)
     .check_nullable();
@@ -302,7 +308,7 @@ Directory::Directory(const std::string &path)
   : Directory(path, Options()) {}
 
 Directory::Directory(const std::string &path, const Options &options)
-  : m_options(options)
+    : m_options(options)
 {
   if (options.tarball) {
     std::vector<uint8_t> data;
@@ -328,10 +334,10 @@ Directory::Directory(const std::string &path, const Options &options)
   if (auto a = options.index_list.get()) {
     a->iterate_all(
       [this](pjs::Value &v, int) {
-        auto s = v.to_string();
-        m_index_filenames.push_back(s->str());
-        s->release();
-      }
+      auto s = v.to_string();
+      m_index_filenames.push_back(s->str());
+      s->release();
+    }
     );
   } else if (auto s = options.index.get()) {
     m_index_filenames.push_back(s->str());
@@ -433,10 +439,10 @@ void Directory::set_content_types(pjs::Object *obj) {
   if (obj) {
     obj->iterate_all(
       [this](pjs::Str *k, pjs::Value v) {
-        auto s = v.to_string();
-        m_content_types[k->str()] = s;
-        s->release();
-      }
+      auto s = v.to_string();
+      m_content_types[k->str()] = s;
+      s->release();
+    }
     );
   }
 }
@@ -526,7 +532,7 @@ auto Directory::get_encoded_response(pjs::Context &ctx, File &file, RequestHead 
 //
 
 Directory::CodebaseLoader::CodebaseLoader(const std::string &path)
-  : m_root_path(path)
+    : m_root_path(path)
 {
 }
 
@@ -546,7 +552,7 @@ bool Directory::CodebaseLoader::load_file(const std::string &path, Data &data) {
 //
 
 Directory::FileSystemLoader::FileSystemLoader(const std::string &path)
-  : m_root_path(path)
+    : m_root_path(path)
 {
 }
 
@@ -567,7 +573,7 @@ bool Directory::FileSystemLoader::load_file(const std::string &path, Data &data)
 //
 
 Directory::TarballLoader::TarballLoader(const char *data, size_t size)
-  : m_tarball(data, size)
+    : m_tarball(data, size)
 {
 }
 
@@ -695,11 +701,11 @@ auto File::to_message(pjs::Str *accept_encoding) -> pipy::Message* {
       head->headers = headers;
       headers->set(
         pjs::EnumDef<StringConstants>::name(CONTENT_TYPE),
-        m_content_type.get()
+                   m_content_type.get()
       );
       headers->set(
         pjs::EnumDef<StringConstants>::name(CONTENT_ENCODING),
-        pjs::EnumDef<StringConstants>::name(CONTENT_ENCODING_BR)
+                   pjs::EnumDef<StringConstants>::name(CONTENT_ENCODING_BR)
       );
       m_message_br = Message::make(head, m_data_br);
     }
@@ -712,11 +718,11 @@ auto File::to_message(pjs::Str *accept_encoding) -> pipy::Message* {
       head->headers = headers;
       headers->set(
         pjs::EnumDef<StringConstants>::name(CONTENT_TYPE),
-        m_content_type.get()
+                   m_content_type.get()
       );
       headers->set(
         pjs::EnumDef<StringConstants>::name(CONTENT_ENCODING),
-        pjs::EnumDef<StringConstants>::name(CONTENT_ENCODING_GZIP)
+                   pjs::EnumDef<StringConstants>::name(CONTENT_ENCODING_GZIP)
       );
       m_message_gz = Message::make(head, m_data_gz);
     }

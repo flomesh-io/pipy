@@ -56,7 +56,7 @@ namespace logging {
 //
 
 class Logger : public pjs::ObjectTemplate<Logger> {
-public:
+ public:
   static void set_admin_service(AdminService *admin_service);
   static void set_admin_link(AdminLink *admin_link);
   static void set_history_length(size_t length) { s_history_length = length; }
@@ -70,7 +70,7 @@ public:
   //
 
   class Target {
-  public:
+   public:
     virtual ~Target() {}
     virtual void write(const Data &msg) = 0;
     virtual void shutdown() {}
@@ -81,11 +81,11 @@ public:
   //
 
   class StdoutTarget : public Target {
-  public:
+   public:
     StdoutTarget(FILE *f) : m_f(f) {}
     ~StdoutTarget();
 
-  private:
+   private:
     virtual void write(const Data &msg) override;
 
     FILE* m_f;
@@ -97,12 +97,12 @@ public:
   //
 
   class FileTarget : public Target {
-  public:
+   public:
     static void close_all_writers();
 
     FileTarget(pjs::Str *filename);
 
-  private:
+   private:
     virtual void write(const Data &msg) override;
 
     //
@@ -110,7 +110,7 @@ public:
     //
 
     class Module : public ModuleBase {
-    public:
+     public:
       Module() : ModuleBase("Logger::FileTarget") {}
       virtual auto new_context(pipy::Context *base) -> pipy::Context* override {
         return Context::make();
@@ -122,11 +122,11 @@ public:
     //
 
     class Writer {
-    public:
+     public:
       Writer(const std::string &filename);
       void write(const Data &msg);
       void shutdown();
-    private:
+     private:
       pjs::Ref<Module> m_module;
       pjs::Ref<PipelineLayout> m_pipeline_layout;
       pjs::Ref<Pipeline> m_pipeline;
@@ -140,9 +140,9 @@ public:
   //
   // Logger::SyslogTarget
   //
-
+#ifndef _WIN32
   class SyslogTarget : public Target {
-  public:
+   public:
     enum class Priority {
       EMERG,
       ALERT,
@@ -156,18 +156,18 @@ public:
 
     SyslogTarget(Priority prority = Priority::INFO);
 
-  private:
+   private:
     virtual void write(const Data &msg) override;
 
     int m_priority;
   };
-
+#endif
   //
   // Logger::HTTPTarget
   //
 
   class HTTPTarget : public Target {
-  public:
+   public:
     struct Options : public pipy::Options {
       size_t batch_size = 1000;
       int buffer_limit = 8*1024*1024;
@@ -182,14 +182,14 @@ public:
 
     HTTPTarget(pjs::Str *url, const Options &options);
 
-  private:
+   private:
 
     //
     // Logger::HTTPTarget::Module
     //
 
     class Module : public ModuleBase {
-    public:
+     public:
       Module() : ModuleBase("Logger::HTTPTarget") {}
       virtual auto new_context(pipy::Context *base) -> pipy::Context* override {
         return Context::make();
@@ -216,11 +216,11 @@ public:
 
   virtual void log(int argc, const pjs::Value *args) = 0;
 
-protected:
+ protected:
   Logger(pjs::Str *name);
   virtual ~Logger();
 
-private:
+ private:
 
   //
   // Logger::LogMessage
@@ -228,7 +228,7 @@ private:
 
   struct LogMessage :
     public pjs::Pooled<LogMessage>,
-    public List<LogMessage>::Item
+                      public List<LogMessage>::Item
   {
     LogMessage(const Data &msg) : data(msg) {}
     Data data;
@@ -239,7 +239,7 @@ private:
   //
 
   class History {
-  public:
+   public:
     static void write(const std::string &name, const Data &msg);
     static bool tail(const std::string &name, Data &buffer);
     static void enable_streaming(const std::string &name, bool enabled);
@@ -247,7 +247,7 @@ private:
 
     auto name() const -> const std::string& { return m_name; }
 
-  private:
+   private:
     struct Message :
       public pjs::Pooled<Message>,
       public List<Message>::Item
@@ -286,9 +286,9 @@ private:
 //
 
 class BinaryLogger : public pjs::ObjectTemplate<BinaryLogger, Logger> {
-private:
+ private:
   BinaryLogger(pjs::Str *name)
-    : pjs::ObjectTemplate<BinaryLogger, Logger>(name) {}
+      : pjs::ObjectTemplate<BinaryLogger, Logger>(name) {}
 
   virtual void log(int argc, const pjs::Value *args) override;
 
@@ -300,7 +300,7 @@ private:
 //
 
 class TextLogger : public pjs::ObjectTemplate<TextLogger, Logger> {
-private:
+ private:
   TextLogger(pjs::Str *name)
     : pjs::ObjectTemplate<TextLogger, Logger>(name) {}
 
@@ -314,7 +314,7 @@ private:
 //
 
 class JSONLogger : public pjs::ObjectTemplate<JSONLogger, Logger> {
-private:
+ private:
   JSONLogger(pjs::Str *name)
     : pjs::ObjectTemplate<JSONLogger, Logger>(name) {}
 

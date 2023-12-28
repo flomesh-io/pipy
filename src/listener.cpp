@@ -280,6 +280,9 @@ void Listener::set_sock_opts(int sock) {
     int enabled = 1;
 #ifdef __FreeBSD__
     setsockopt(sock, SOL_SOCKET, SO_REUSEPORT_LB, &enabled, sizeof(enabled));
+#elif _WIN32
+    setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (char *)&enabled,
+               sizeof(enabled));    
 #else
     setsockopt(sock, SOL_SOCKET, SO_REUSEPORT, &enabled, sizeof(enabled));
 #endif

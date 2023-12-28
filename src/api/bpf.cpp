@@ -24,26 +24,25 @@
  */
 
 #include "api/bpf.hpp"
-#include "elf.hpp"
 #include "log.hpp"
 
-#ifdef PIPY_USE_BPF
-
+#ifdef __linux__
 #include <unistd.h>
 #include <sys/syscall.h>
 #include <linux/bpf.h>
+#include <elf.h>
 
 #define attr_size(FIELD) \
   (offsetof(bpf_attr, FIELD) + sizeof(bpf_attr::FIELD))
 
-#endif // PIPY_USE_BPF
+#endif // __linux__
 
 namespace pipy {
 namespace bpf {
 
 thread_local static Data::Producer s_dp("BPF");
 
-#ifdef PIPY_USE_BPF
+#ifdef __linux__
 
 static inline int syscall_bpf(enum bpf_cmd cmd, union bpf_attr *attr, unsigned int size) {
 	return syscall(__NR_bpf, cmd, attr, size);
@@ -58,6 +57,327 @@ static inline int syscall_bpf(enum bpf_cmd cmd, union bpf_attr *attr, unsigned i
 }
 
 //
+// OBJ
+//
+
+class OBJ {
+public:
+
+  //
+  // OBJ::Section
+  //
+
+  struct Section {
+    std::string name;
+    int type;
+    int flags;
+    const uint8_t *data;
+    size_t size;
+    size_t addr;
+    size_t addralign;
+    int link;
+    int info;
+  };
+
+  //
+  // OBJ::Symbol
+  //
+
+  struct Symbol {
+    std::string name;
+    size_t value;
+    size_t size;
+    size_t shndx;
+    int info;
+  };
+
+  //
+  // OBJ::Relocation
+  //
+
+  struct Relocation {
+
+    //
+    // OBJ::Relocation::Entry
+    //
+
+    struct Entry {
+      size_t offset;
+      uint64_t info;
+    };
+
+    size_t section;
+    std::vector<Entry> entries;
+  };
+
+  int type;
+  int flags;
+  int machine;
+  int version;
+  size_t entry;
+  std::vector<Section> sections;
+  std::vector<Symbol> symbols;
+  std::vector<Relocation> relocations;
+
+  OBJ(const Data &elf) {
+    elf.to_bytes(m_elf);
+
+    if (m_elf.size() <= EI_NIDENT ||
+      m_elf[EI_MAG0] != ELFMAG0 ||
+      m_elf[EI_MAG1] != ELFMAG1 ||
+      m_elf[EI_MAG2] != ELFMAG2 ||
+      m_elf[EI_MAG3] != ELFMAG3 ||
+      m_elf[EI_CLASS] <= ELFCLASSNONE ||
+      m_elf[EI_CLASS] >= ELFCLASSNUM ||
+      m_elf[EI_VERSION] != EV_CURRENT
+    ) throw std::runtime_error("not an ELF file");
+
+    if (
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+      m_elf[EI_DATA] != ELFDATA2LSB
+#else
+      m_elf[EI_DATA] != ELFDATA2MSB
+#endif
+    ) throw std::runtime_error("mismatched ELF endianness");
+
+    if (m_elf[EI_OSABI] != ELFOSABI_SYSV) {
+      throw std::runtime_error("unsupported ABI");
+    }
+
+    auto cls = m_elf[EI_CLASS];
+
+    size_t phoff, shoff, ehsize, shstrndx;
+    size_t phentsize, phnum;
+    size_t shentsize, shnum;
+
+    (void)ehsize;
+    (void)phoff;
+    (void)phentsize;
+    (void)phnum;
+
+    switch (cls) {
+      case ELFCLASS32: {
+        auto &hdr = *(Elf32_Ehdr *)m_elf.data();
+        type = hdr.e_type;
+        machine = hdr.e_machine;
+        version = hdr.e_version;
+        entry = hdr.e_entry;
+        phoff = hdr.e_phoff;
+        shoff = hdr.e_shoff;
+        flags = hdr.e_flags;
+        ehsize = hdr.e_ehsize;
+        phentsize = hdr.e_phentsize;
+        phnum = hdr.e_phnum;
+        shentsize = hdr.e_shentsize;
+        shnum = hdr.e_shnum;
+        shstrndx = hdr.e_shstrndx;
+        break;
+      }
+      case ELFCLASS64: {
+        auto &hdr = *(Elf64_Ehdr *)m_elf.data();
+        type = hdr.e_type;
+        machine = hdr.e_machine;
+        version = hdr.e_version;
+        entry = hdr.e_entry;
+        phoff = hdr.e_phoff;
+        shoff = hdr.e_shoff;
+        flags = hdr.e_flags;
+        ehsize = hdr.e_ehsize;
+        phentsize = hdr.e_phentsize;
+        phnum = hdr.e_phnum;
+        shentsize = hdr.e_shentsize;
+        shnum = hdr.e_shnum;
+        shstrndx = hdr.e_shstrndx;
+        break;
+      }
+      default: throw std::runtime_error("unsupported ELF file class");
+    }
+
+    if (shoff + shentsize * shnum > m_elf.size() || shstrndx >= shnum) {
+      std::runtime_error("offset out of ELF file boundary");
+    }
+
+    std::vector<size_t> name_offsets(shnum);
+    sections.resize(shnum);
+
+    for (size_t i = 0; i < shnum; i++) {
+      auto offset = shoff + shentsize * i;
+      auto &sec = sections[i];
+      switch (cls) {
+        case ELFCLASS32: {
+          auto &hdr = *(Elf32_Shdr *)(m_elf.data() + offset);
+          if (hdr.sh_offset + hdr.sh_size > m_elf.size()) {
+            section_out_of_bound(i);
+          }
+          name_offsets[i] = hdr.sh_name;
+          sec.type = hdr.sh_type;
+          sec.flags = hdr.sh_flags;
+          sec.addr = hdr.sh_addr;
+          sec.data = m_elf.data() + hdr.sh_offset;
+          sec.size = hdr.sh_size;
+          sec.link = hdr.sh_link;
+          sec.info = hdr.sh_info;
+          sec.addralign = hdr.sh_addralign;
+          break;
+        }
+        case ELFCLASS64: {
+          auto &hdr = *(Elf64_Shdr *)(m_elf.data() + offset);
+          if (hdr.sh_offset + hdr.sh_size > m_elf.size()) {
+            section_out_of_bound(i);
+          }
+          name_offsets[i] = hdr.sh_name;
+          sec.type = hdr.sh_type;
+          sec.flags = hdr.sh_flags;
+          sec.addr = hdr.sh_addr;
+          sec.data = m_elf.data() + hdr.sh_offset;
+          sec.size = hdr.sh_size;
+          sec.link = hdr.sh_link;
+          sec.info = hdr.sh_info;
+          sec.addralign = hdr.sh_addralign;
+          break;
+        }
+      }
+    }
+
+    auto &str_tab_sec = sections[shstrndx];
+    auto str_tab_head = str_tab_sec.data;
+    auto str_tab_size = sections[shstrndx].size;
+
+    auto find_str = [&](size_t offset, std::string &str) {
+      if (offset >= str_tab_size) return false;
+      auto end = offset;
+      while (end < str_tab_size && str_tab_head[end]) end++;
+      str = std::string((const char *)(str_tab_head + offset), end - offset);
+      return true;
+    };
+
+    for (size_t i = 0; i < shnum; i++) {
+      auto &s = sections[i];
+      if (!find_str(name_offsets[i], s.name)) {
+        section_out_of_bound(i);
+      }
+      Log::debug(Log::BPF,
+        "[bpf] SECTION #%d name '%s' addr 0x%08x size %d type %d flags %d link %d info %d",
+        int(i), s.name.c_str(), int(s.addr), int(s.size), s.type, s.flags, s.link, s.info
+      );
+    }
+
+    for (const auto &sec : sections) {
+      if (sec.type == SHT_SYMTAB) {
+        size_t entry_size = 0;
+        switch (cls) {
+          case ELFCLASS32: entry_size = sizeof(Elf32_Sym); break;
+          case ELFCLASS64: entry_size = sizeof(Elf64_Sym); break;
+        }
+        size_t n = entry_size ? sec.size / entry_size : 0;
+        symbols.resize(n);
+        for (size_t i = 0; i < n; i++) {
+          auto &s = symbols[i];
+          auto offset = entry_size * i;
+          switch (cls) {
+            case ELFCLASS32: {
+              const auto &ent = *(Elf32_Sym *)(sec.data + offset);
+              if (!find_str(ent.st_name, s.name)) {
+                symbol_out_of_bound(i);
+              }
+              s.value = ent.st_value;
+              s.size = ent.st_size;
+              s.shndx = ent.st_shndx;
+              s.info = ent.st_info;
+              break;
+            }
+            case ELFCLASS64: {
+              const auto &ent = *(Elf64_Sym *)(sec.data + offset);
+              if (!find_str(ent.st_name, s.name)) {
+                symbol_out_of_bound(i);
+              }
+              s.value = ent.st_value;
+              s.size = ent.st_size;
+              s.shndx = ent.st_shndx;
+              s.info = ent.st_info;
+              break;
+            }
+          }
+          Log::debug(Log::BPF,
+            "[bpf] SYMBOL #%d name '%s' value %d size %d shndx %d info %d",
+            int(i), s.name.c_str(), int(s.value), int(s.shndx), s.info
+          );
+        }
+        break;
+      }
+    }
+
+    for (size_t i = 0; i < sections.size(); i++) {
+      const auto &sec = sections[i];
+      if (sec.type == SHT_REL) {
+        size_t entry_size = 0;
+        switch (cls) {
+          case ELFCLASS32: entry_size = sizeof(Elf32_Rel); break;
+          case ELFCLASS64: entry_size = sizeof(Elf64_Rel); break;
+        }
+        size_t n = entry_size ? sec.size / entry_size : 0;
+        relocations.emplace_back();
+        auto &reloc = relocations.back();
+        reloc.section = sec.info;
+        reloc.entries.resize(n);
+        if (sec.info >= sections.size()) {
+          relocation_out_of_bound(i);
+        }
+        auto max_offset = sections[sec.info].size;
+        for (size_t j = 0; j < n; j++) {
+          auto &r = reloc.entries[j];
+          auto offset = entry_size * j;
+          switch (cls) {
+            case ELFCLASS32: {
+              const auto &ent = *(Elf32_Rel *)(sec.data + offset);
+              r.offset = ent.r_offset;
+              r.info = ent.r_info;
+              break;
+            }
+            case ELFCLASS64: {
+              const auto &ent = *(Elf64_Rel *)(sec.data + offset);
+              r.offset = ent.r_offset;
+              r.info = ent.r_info;
+              break;
+            }
+          }
+          Log::debug(Log::BPF,
+            "[bpf] RELOC for SECTION #%d offset %d info %llu",
+            int(reloc.section), int(r.offset), r.info
+          );
+          if (r.offset >= max_offset) {
+            relocation_out_of_bound(i);
+          }
+        }
+      }
+    }
+  }
+
+private:
+  std::vector<uint8_t> m_elf;
+
+  static void section_out_of_bound(size_t i) {
+    std::string msg("out of bound section: index = ");
+    msg += std::to_string(i);
+    throw std::runtime_error(msg);
+  }
+
+  static void symbol_out_of_bound(size_t i) {
+    std::string msg("out of bound symbol: index = ");
+    msg += std::to_string(i);
+    throw std::runtime_error(msg);
+  }
+
+  static void relocation_out_of_bound(size_t i) {
+    std::string msg("out of bound relocation: index = ");
+    msg += std::to_string(i);
+    throw std::runtime_error(msg);
+  }
+};
+
+#endif // __linux__
+
+//
 // Program
 //
 
@@ -66,10 +386,13 @@ auto Program::list() -> pjs::Array* {
 }
 
 auto Program::load(Data *elf) -> Program* {
-  std::vector<uint8_t> data;
-  elf->to_bytes(data);
-  ELF obj(std::move(data));
-  return nullptr;
+  Program *prog = nullptr;
+
+#ifdef __linux__
+  OBJ obj(*elf);
+#endif
+
+  return prog;
 }
 
 auto Program::maps() -> pjs::Array* {
@@ -85,6 +408,7 @@ Map::Map(int fd, CStruct *key_type, CStruct *value_type)
   , m_key_type(key_type)
   , m_value_type(value_type)
 {
+#ifdef __linux__
   union bpf_attr attr;
   struct bpf_map_info info = {};
   syscall_bpf(
@@ -97,10 +421,12 @@ Map::Map(int fd, CStruct *key_type, CStruct *value_type)
   );
   m_key_size = info.key_size;
   m_value_size = info.value_size;
+#endif // __linux__
 }
 
 auto Map::list() -> pjs::Array* {
   auto a = pjs::Array::make();
+#ifdef __linux__
   union bpf_attr attr;
   unsigned int id = 0;
   for (;;) {
@@ -139,10 +465,12 @@ auto Map::list() -> pjs::Array* {
 
     a->push(i);
   }
+#endif // __linux__
   return a;
 }
 
 auto Map::open(int id, CStruct *key_type, CStruct *value_type) -> Map* {
+#ifdef __linux__
   union bpf_attr attr;
   int fd = syscall_bpf(
     BPF_MAP_GET_FD_BY_ID, &attr, attr_size(open_flags),
@@ -152,11 +480,14 @@ auto Map::open(int id, CStruct *key_type, CStruct *value_type) -> Map* {
     throw std::runtime_error("failed when trying to get fd by a map id");
   }
   return Map::make(fd, key_type, value_type);
+#else
+  return nullptr;
+#endif // __linux__
 }
 
 auto Map::keys() -> pjs::Array* {
   if (!m_fd) return nullptr;
-
+#ifdef __linux__
   uint8_t k[m_key_size];
 
   auto a = pjs::Array::make();
@@ -181,11 +512,14 @@ auto Map::keys() -> pjs::Array* {
   }
 
   return a;
+#else
+  return nullptr;
+#endif // __linux__
 }
 
 auto Map::entries() -> pjs::Array* {
   if (!m_fd) return nullptr;
-
+#ifdef __linux__
   uint8_t k[m_key_size];
   uint8_t v[m_value_size];
 
@@ -231,6 +565,9 @@ auto Map::entries() -> pjs::Array* {
   }
 
   return a;
+#else
+  return nullptr;
+#endif // __linux__
 }
 
 auto Map::lookup(pjs::Object *key) -> pjs::Object* {
@@ -283,12 +620,15 @@ void Map::remove(pjs::Object *key) {
 }
 
 void Map::close() {
+#ifdef __linux__
   ::close(m_fd);
+#endif
   m_fd = 0;
 }
 
 auto Map::lookup_raw(Data *key) -> Data* {
   if (!m_fd) return nullptr;
+#ifdef __linux__
   uint8_t k[m_key_size];
   uint8_t v[m_value_size];
   std::memset(k, 0, m_key_size);
@@ -305,10 +645,14 @@ auto Map::lookup_raw(Data *key) -> Data* {
   )) return nullptr;
 
   return Data::make(&v[0], m_value_size, &s_dp);
+#else
+  return nullptr;
+#endif // __linux__
 }
 
 void Map::update_raw(Data *key, Data *value) {
   if (!m_fd) return;
+#ifdef __linux__
   uint8_t k[m_key_size];
   uint8_t v[m_value_size];
   std::memset(k, 0, m_key_size);
@@ -325,10 +669,12 @@ void Map::update_raw(Data *key, Data *value) {
       attr.value = (uintptr_t)v;
     }
   );
+#endif // __linux__
 }
 
 void Map::delete_raw(Data *key) {
   if (!m_fd) return;
+#ifdef __linux__
   uint8_t k[m_key_size];
   std::memset(k, 0, m_key_size);
   key->to_bytes(k, m_key_size);
@@ -341,67 +687,8 @@ void Map::delete_raw(Data *key) {
       attr.key = (uintptr_t)k;
     }
   );
+#endif // __linux__
 }
-
-#else // !PIPY_USE_BPF
-
-static void unsupported() {
-  throw std::runtime_error("eBPF not supported");
-}
-
-auto Program::list() -> pjs::Array* {
-  unsupported();
-  return nullptr;
-}
-
-auto Program::load(Data *elf) -> Program* {
-  unsupported();
-  return nullptr;
-}
-
-auto Program::maps() -> pjs::Array* {
-  unsupported();
-  return nullptr;
-}
-
-auto Map::list() -> pjs::Array* {
-  unsupported();
-  return nullptr;
-}
-
-auto Map::open(int id, CStruct *key_type, CStruct *value_type) -> Map* {
-  unsupported();
-  return nullptr;
-}
-
-auto Map::keys() -> pjs::Array* {
-  unsupported();
-  return nullptr;
-}
-
-auto Map::entries() -> pjs::Array* {
-  unsupported();
-  return nullptr;
-}
-
-auto Map::lookup(pjs::Object *key) -> pjs::Object* {
-  unsupported();
-  return nullptr;
-}
-
-void Map::update(pjs::Object *key, pjs::Object *value) {
-  unsupported();
-}
-
-void Map::remove(pjs::Object *key) {
-  unsupported();
-}
-
-void Map::close() {
-  unsupported();
-}
-
-#endif // PIPY_USE_BPF
 
 } // namespace bpf
 } // namespace pipy
@@ -410,6 +697,15 @@ namespace pjs {
 
 using namespace pipy;
 using namespace pipy::bpf;
+
+static bool linux_only(Context &ctx) {
+#ifdef __linux__
+  return true;
+#else
+  ctx.error("BPF not supported");
+  return false;
+#endif
+}
 
 //
 // Program
@@ -424,20 +720,20 @@ template<> void ClassDef<Constructor<Program>>::init() {
   ctor();
 
   method("list", [](Context &ctx, Object *obj, Value &ret) {
-    try {
+    if (linux_only(ctx)) {
       ret.set(Program::list());
-    } catch (std::runtime_error &err) {
-      ctx.error(err);
     }
   });
 
   method("load", [](Context &ctx, Object *obj, Value &ret) {
-    pipy::Data *data;
-    if (!ctx.arguments(1, &data)) return;
-    try {
-      ret.set(Program::load(data));
-    } catch (std::runtime_error &err) {
-      ctx.error(err);
+    if (linux_only(ctx)) {
+      pipy::Data *data;
+      if (!ctx.arguments(1, &data)) return;
+      try {
+        ret.set(Program::load(data));
+      } catch (std::runtime_error &err) {
+        ctx.error(err);
+      }
     }
   });
 }
@@ -448,48 +744,38 @@ template<> void ClassDef<Constructor<Program>>::init() {
 
 template<> void ClassDef<bpf::Map>::init() {
   method("keys", [](Context &ctx, Object *obj, Value &ret) {
-    try {
+    if (linux_only(ctx)) {
       ret.set(obj->as<bpf::Map>()->keys());
-    } catch (std::runtime_error &err) {
-      ctx.error(err);
     }
   });
 
   method("entries", [](Context &ctx, Object *obj, Value &ret) {
-    try {
+    if (linux_only(ctx)) {
       ret.set(obj->as<bpf::Map>()->entries());
-    } catch (std::runtime_error &err) {
-      ctx.error(err);
     }
   });
 
   method("lookup", [](Context &ctx, Object *obj, Value &ret) {
-    Object *key;
-    if (!ctx.arguments(1, &key)) return;
-    try {
+    if (linux_only(ctx)) {
+      Object *key;
+      if (!ctx.arguments(1, &key)) return;
       ret.set(obj->as<bpf::Map>()->lookup(key));
-    } catch (std::runtime_error &err) {
-      ctx.error(err);
     }
   });
 
   method("update", [](Context &ctx, Object *obj, Value &ret) {
-    Object *key, *value;
-    if (!ctx.arguments(2, &key, &value)) return;
-    try {
+    if (linux_only(ctx)) {
+      Object *key, *value;
+      if (!ctx.arguments(2, &key, &value)) return;
       obj->as<bpf::Map>()->update(key, value);
-    } catch (std::runtime_error &err) {
-      ctx.error(err);
     }
   });
 
   method("delete", [](Context &ctx, Object *obj, Value &ret) {
-    Object *key;
-    if (!ctx.arguments(1, &key)) return;
-    try {
+    if (linux_only(ctx)) {
+      Object *key;
+      if (!ctx.arguments(1, &key)) return;
       obj->as<bpf::Map>()->remove(key);
-    } catch (std::runtime_error &err) {
-      ctx.error(err);
     }
   });
 }
@@ -499,22 +785,22 @@ template<> void ClassDef<Constructor<bpf::Map>>::init() {
   ctor();
 
   method("list", [](Context &ctx, Object *obj, Value &ret) {
-    try {
+    if (linux_only(ctx)) {
       ret.set(bpf::Map::list());
-    } catch (std::runtime_error &err) {
-      ctx.error(err);
     }
   });
 
   method("open", [](Context &ctx, Object *obj, Value &ret) {
-    int id;
-    CStruct *key_type = nullptr;
-    CStruct *value_type = nullptr;
-    if (!ctx.arguments(1, &id, &key_type, &value_type)) return;
-    try {
-      ret.set(bpf::Map::open(id, key_type, value_type));
-    } catch (std::runtime_error &err) {
-      ctx.error(err);
+    if (linux_only(ctx)) {
+      int id;
+      CStruct *key_type = nullptr;
+      CStruct *value_type = nullptr;
+      if (!ctx.arguments(1, &id, &key_type, &value_type)) return;
+      try {
+        ret.set(bpf::Map::open(id, key_type, value_type));
+      } catch (std::runtime_error &err) {
+        ctx.error(err);
+      }
     }
   });
 }

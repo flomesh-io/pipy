@@ -34,6 +34,10 @@
 #include <deque>
 #include <sstream>
 
+#ifdef _WIN32
+#undef ERROR
+#endif
+
 namespace pipy {
 
 //

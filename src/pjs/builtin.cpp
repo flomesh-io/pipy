@@ -29,6 +29,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <limits>
+#define _USE_MATH_DEFINES 1
 #include <math.h>
 #include <random>
 #include <sstream>
@@ -188,7 +189,40 @@ double Math::trunc(double x) {
 }
 
 int Math::clz32(int x) {
+#ifdef _WIN32
+  if (x <= 0) {
+    return x;
+  }
+  unsigned y = x;
+  int n = 32;
+  y = x >> 16;
+  if (y != 0) {
+    n = n - 16;
+    x = y;
+  }
+  y = x >> 8;
+  if (y != 0) {
+    n = n - 8;
+    x = y;
+  }
+  y = x >> 4;
+  if (y != 0) {
+    n = n - 4;
+    x = y;
+  }
+  y = x >> 2;
+  if (y != 0) {
+    n = n - 2;
+    x = y;
+  }
+  y = x >> 1;
+  if (y != 0) {
+    return n - 2;
+  }
+  return n - x;
+#else
   return __builtin_clz(x);
+#endif
 }
 
 int Math::imul(int x, int y) {
@@ -551,7 +585,11 @@ auto Date::setSeconds(int s, int ms) -> double {
 auto Date::setTime(double value) -> double {
   auto sec = std::floor(value / 1000);
   auto t = std::time_t(sec);
+#ifdef _WIN32
+  localtime_s(&m_tm, &t);
+#else
   localtime_r(&t, &m_tm);
+#endif
   m_msec = value - sec * 1000;
   return value;
 }
@@ -572,7 +610,11 @@ auto Date::toISOString() -> std::string {
   char str[100];
   std::tm tm;
   auto t = std::mktime(&m_tm);
+#ifdef _WIN32
+  gmtime_s(&tm, &t);
+#else
   gmtime_r(&t, &tm);
+#endif
   auto len = std::strftime(str, sizeof(str), "%Y-%m-%dT%H:%M:%S.000Z", &tm);
   str[20] = (m_msec % 1000) / 100 + '0';
   str[21] = (m_msec % 100) / 10 + '0';
@@ -584,7 +626,11 @@ auto Date::toUTCString() -> std::string {
   char str[100];
   std::tm tm;
   auto t = std::mktime(&m_tm);
+#ifdef _WIN32
+  gmtime_s(&tm, &t);
+#else
   gmtime_r(&t, &tm);
+#endif
   auto len = std::strftime(str, sizeof(str), "%a, %e %b %Y %H:%M:%S GMT", &tm);
   return std::string(str, len);
 }
@@ -605,7 +651,11 @@ auto Date::dump() -> Object* {
 
 auto Date::normalize() -> double {
   auto t = std::mktime(&m_tm);
+#ifdef _WIN32
+  localtime_s(&m_tm, &t);
+#else
   localtime_r(&t, &m_tm);
+#endif
   return double(t) * 1000 + m_msec;
 }
 
@@ -828,13 +878,13 @@ template<> void ClassDef<Map>::init() {
     if (!ctx.arguments(1, &cb)) return;
     obj->as<Map>()->forEach(
       [&](const Value &k, const Value &v) {
-        Value args[3], ret;
-        args[0] = k;
-        args[1] = v;
-        args[2].set(obj);
-        (*cb)(ctx, 3, args, ret);
-        return ctx.ok();
-      }
+      Value args[3], ret;
+      args[0] = k;
+      args[1] = v;
+      args[2].set(obj);
+      (*cb)(ctx, 3, args, ret);
+      return ctx.ok();
+    }
     );
   });
 }
@@ -886,13 +936,13 @@ template<> void ClassDef<Set>::init() {
     if (!ctx.arguments(1, &cb)) return;
     obj->as<Set>()->forEach(
       [&](const Value &v) {
-        Value args[3], ret;
-        args[0] = v;
-        args[1] = v;
-        args[2].set(obj);
-        (*cb)(ctx, 3, args, ret);
-        return ctx.ok();
-      }
+      Value args[3], ret;
+      args[0] = v;
+      args[1] = v;
+      args[2].set(obj);
+      (*cb)(ctx, 3, args, ret);
+      return ctx.ok();
+    }
     );
   });
 }
@@ -998,14 +1048,14 @@ template<> void ClassDef<Global>::init() {
       if (!ctx.check(1, f)) return;
       array->iterate_while(
         [&](Value &v, int i) {
-          Value args[2];
-          args[0] = v;
-          args[1].set(i);
-          (*f)(ctx, 2, args, ret);
-          if (!ctx.ok()) return false;
-          if (!ret.is_undefined()) return false;
-          return true;
-        }
+        Value args[2];
+        args[0] = v;
+        args[1].set(i);
+        (*f)(ctx, 2, args, ret);
+        if (!ctx.ok()) return false;
+        if (!ret.is_undefined()) return false;
+        return true;
+      }
       );
 
     } else {

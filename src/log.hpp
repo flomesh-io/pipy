@@ -27,6 +27,9 @@
 #define LOG_H
 
 #include "pjs/pjs.hpp"
+#ifdef _WIN32
+#undef ERROR
+#endif
 
 namespace pipy {
 
@@ -37,7 +40,7 @@ class Data;
 //
 
 class Log {
-public:
+ public:
   enum Level {
     DEBUG,
     WARN,

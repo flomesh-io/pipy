@@ -84,6 +84,10 @@ auto path_join(const std::string &base, const std::string &path) -> std::string;
 auto path_normalize(const std::string &path) -> std::string;
 auto path_dirname(const std::string &path) -> std::string;
 
+#ifdef _WIN32
+auto last_error(const std::string &function) -> std::string;
+#endif
+
 //
 // HexEncoder
 //

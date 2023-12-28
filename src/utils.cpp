@@ -31,6 +31,12 @@
 #include <random>
 #include <limits>
 
+#ifdef _WIN32
+#define NOMINMAX
+#include <Windows.h>
+#include <strsafe.h>
+#endif
+
 namespace pipy {
 namespace utils {
 
@@ -701,6 +707,25 @@ auto path_dirname(const std::string &path) -> std::string {
   return path.substr(0, i);
 }
 
+#ifdef _WIN32
+auto last_error(const std::string &function) -> std::string {
+  LPVOID lpMsgBuf;
+  LPVOID lpDisplayBuf;
+  DWORD dw = GetLastError();
+  FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
+                    FORMAT_MESSAGE_IGNORE_INSERTS,
+                NULL, dw, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+                (LPSTR)&lpMsgBuf, 0, NULL);
+  lpDisplayBuf = (LPVOID)LocalAlloc(LMEM_ZEROINIT,
+      (lstrlen((LPCTSTR)lpMsgBuf) + function.size() + 100) * sizeof(TCHAR));
+  StringCchPrintf((LPTSTR)lpDisplayBuf, LocalSize(lpDisplayBuf) / sizeof(TCHAR),
+                  TEXT("%s failed with error %d: %s"), function.c_str(), dw, lpMsgBuf);
+  std::string error((LPCTSTR)lpDisplayBuf);
+  LocalFree(lpMsgBuf);
+  LocalFree(lpDisplayBuf);
+  return error;
+}
+#endif
 //
 // HexEncoder
 //

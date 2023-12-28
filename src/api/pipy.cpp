@@ -24,6 +24,7 @@
  */
 
 #include "pipy.hpp"
+
 #include "codebase.hpp"
 #include "configuration.hpp"
 #include "context.hpp"
@@ -34,8 +35,16 @@
 #include "outbound.hpp"
 #include "utils.hpp"
 
-#include <unistd.h>
+#ifdef _WIN32
+#include <Windows.h>
+#include <fcntl.h>
+#include <io.h>
+
+#include <numeric>
+#else
 #include <sys/wait.h>
+#include <unistd.h>
+#endif
 
 namespace pipy {
 
@@ -47,7 +56,7 @@ void Pipy::on_exit(const std::function<void(int)> &on_exit) {
 
 static auto exec_args(const std::list<std::string> &args) -> Data* {
   thread_local static Data::Producer s_dp("pipy.exec()");
-
+#ifndef _WIN32
   auto argc = args.size();
   if (!argc) return nullptr;
 
@@ -72,10 +81,10 @@ static auto exec_args(const std::list<std::string> &args) -> Data* {
 
   std::thread t(
     [&]() {
-      int status;
-      waitpid(pid, &status, 0);
-      close(out[1]);
-    }
+    int status;
+    waitpid(pid, &status, 0);
+    close(out[1]);
+  }
   );
 
   Data output;
@@ -91,7 +100,55 @@ static auto exec_args(const std::list<std::string> &args) -> Data* {
   close(in[1]);
 
   for (int i = 0; i < n; i++) std::free(argv[i]);
+#else
+  SECURITY_ATTRIBUTES sa = {.nLength = sizeof(SECURITY_ATTRIBUTES),
+                            .bInheritHandle = TRUE};
 
+  Data output;
+  HANDLE in, out;
+  auto success = CreatePipe(&in, &out, &sa, 0);
+  if (success == FALSE) {
+    throw std::runtime_error("Unable to create pipe due to " +
+                             utils::last_error("CreatePipe"));
+  }
+
+  auto cmd =
+      std::accumulate(std::next(args.begin()), args.end(), args.front(),
+                      [](std::string a, std::string b) { return a + " " + b; });
+
+  std::thread t([&]() {
+    char buf[DATA_CHUNK_SIZE];
+    DWORD len;
+    while (ReadFile(in, buf, sizeof(buf), &len, NULL)) {
+      output.push(buf, len, &s_dp);
+    }
+  });
+
+  PROCESS_INFORMATION pif = {};
+  STARTUPINFO si = {.cb = sizeof(STARTUPINFO),
+                    .dwFlags = STARTF_USESTDHANDLES,
+                    .hStdInput = INVALID_HANDLE_VALUE,
+                    .hStdOutput = out,
+                    .hStdError = out};
+
+  success = CreateProcess(NULL, const_cast<char *>(cmd.c_str()), NULL, NULL,
+                          TRUE, 0, NULL, NULL, &si, &pif);
+  if (success == FALSE) {
+    CloseHandle(out);
+    CloseHandle(in);
+    throw std::runtime_error("Unable to exec process due to " +
+                             utils::last_error("CreateProcess"));
+  }
+
+  WaitForSingleObject(pif.hProcess, INFINITE);
+  CloseHandle(pif.hThread);
+  CloseHandle(pif.hProcess);
+
+  CloseHandle(out);
+  CloseHandle(in);
+
+  t.join();
+#endif
   return Data::make(std::move(output));
 }
 
@@ -105,10 +162,10 @@ auto Pipy::exec(pjs::Array *argv) -> Data* {
   std::list<std::string> args;
   argv->iterate_all(
     [&](pjs::Value &v, int) {
-      auto *s = v.to_string();
-      args.push_back(s->str());
-      s->release();
-    }
+    auto *s = v.to_string();
+    args.push_back(s->str());
+    s->release();
+  }
   );
 
   return exec_args(args);
@@ -150,7 +207,11 @@ template<> void ClassDef<Pipy>::init() {
   variable("outbound", class_of<Pipy::Outbound>());
 
   accessor("pid", [](Object *, Value &ret) {
+#ifdef _WIN32
+    ret.set((int)_getpid());
+#else
     ret.set((int)getpid());
+#endif
   });
 
   accessor("since", [](Object *, Value &ret) {
@@ -215,15 +276,15 @@ template<> void ClassDef<Pipy>::init() {
   method("restart", [](Context&, Object*, Value&) {
     Net::main().post(
       []() {
-        InputContext ic;
-        Codebase::current()->sync(
+      InputContext ic;
+      Codebase::current()->sync(
           true, [](bool ok) {
-            if (ok) {
-              WorkerManager::get().reload();
-            }
-          }
-        );
+        if (ok) {
+          WorkerManager::get().reload();
+        }
       }
+        );
+    }
     );
   });
 
@@ -232,21 +293,25 @@ template<> void ClassDef<Pipy>::init() {
     if (!ctx.arguments(0, &exit_code)) return;
     Net::main().post(
       [=]() {
-        WorkerManager::get().stop(true);
-        if (s_on_exit) s_on_exit(exit_code);
-      }
+      WorkerManager::get().stop(true);
+      if (s_on_exit) s_on_exit(exit_code);
+    }
     );
   });
 
   method("exec", [](Context &ctx, Object*, Value &ret) {
     Str *cmd;
     Array *argv;
-    if (ctx.get(0, cmd)) {
-      ret.set(Pipy::exec(cmd->str()));
-    } else if (ctx.get(0, argv)) {
-      ret.set(Pipy::exec(argv));
-    } else {
-      ctx.error_argument_type(0, "a string or an array");
+    try {
+      if (ctx.get(0, cmd)) {
+        ret.set(Pipy::exec(cmd->str()));
+      } else if (ctx.get(0, argv)) {
+        ret.set(Pipy::exec(argv));
+      } else {
+        ctx.error_argument_type(0, "a string or an array");
+      }
+    } catch (const std::runtime_error &err) {
+      ctx.error(err);
     }
   });
 }
@@ -261,10 +326,10 @@ template<> void ClassDef<Pipy::Inbound>::init() {
     if (!ctx.arguments(1, &cb)) return;
     pipy::Inbound::for_each(
       [&](pipy::Inbound *ib) {
-        Value arg(ib), ret;
-        (*cb)(ctx, 1, &arg, ret);
-        return ctx.ok();
-      }
+      Value arg(ib), ret;
+      (*cb)(ctx, 1, &arg, ret);
+      return ctx.ok();
+    }
     );
   });
 }
@@ -279,10 +344,10 @@ template<> void ClassDef<Pipy::Outbound>::init() {
     if (!ctx.arguments(1, &cb)) return;
     pipy::Outbound::for_each(
       [&](pipy::Outbound *ob) {
-        Value arg(ob), ret;
-        (*cb)(ctx, 1, &arg, ret);
-        return ctx.ok();
-      }
+      Value arg(ob), ret;
+      (*cb)(ctx, 1, &arg, ret);
+      return ctx.ok();
+    }
     );
   });
 }
