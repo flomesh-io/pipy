@@ -27,6 +27,9 @@
 #define LOG_H
 
 #include "pjs/pjs.hpp"
+#ifdef _WIN32
+#undef ERROR
+#endif
 
 namespace pipy {
 
@@ -37,7 +40,7 @@ class Data;
 //
 
 class Log {
-public:
+ public:
   enum Level {
     DEBUG,
     WARN,
@@ -46,20 +49,20 @@ public:
   };
 
   enum Topic {
-    NO_TOPIC  = 0,
-    ALLOC     = 1<<0,
-    DUMP      = 1<<1,
-    INBOUND   = 1<<2,
-    OUTBOUND  = 1<<3,
-    RECEIVE   = 1<<4,
-    FILES     = 1<<5,
-    SUBPROC   = 1<<6,
-    NETLINK   = 1<<7,
-    TCP       = 1<<8,
-    UDP       = 1<<9,
-    HTTP2     = 1<<10,
-    BPF       = 1<<11,
-    USER      = 1<<12,
+    NO_TOPIC = 0,
+    ALLOC = 1 << 0,
+    DUMP = 1 << 1,
+    INBOUND = 1 << 2,
+    OUTBOUND = 1 << 3,
+    RECEIVE = 1 << 4,
+    FILES = 1 << 5,
+    SUBPROC = 1 << 6,
+    NETLINK = 1 << 7,
+    TCP = 1 << 8,
+    UDP = 1 << 9,
+    HTTP2 = 1 << 10,
+    BPF = 1 << 11,
+    USER = 1 << 12,
   };
 
   static void init();
@@ -71,11 +74,14 @@ public:
   static bool is_enabled(Level level);
   static bool is_enabled(Topic topic);
 
-  static auto format_elapsed_time() -> const char*;
-  static auto format_elapsed_time(char *buf, size_t len, bool fill = false) -> size_t;
+  static auto format_elapsed_time() -> const char *;
+  static auto format_elapsed_time(char *buf, size_t len, bool fill = false)
+      -> size_t;
   static auto format_time(char *buf, size_t len) -> size_t;
   static auto format_header(Level level, char *buf, size_t len) -> size_t;
-  static auto format_location(char *buf, size_t len, const pjs::Context::Location &loc, const char *func_name) -> size_t;
+  static auto format_location(char *buf, size_t len,
+                              const pjs::Context::Location &loc,
+                              const char *func_name) -> size_t;
 
   static void write(const Data &data);
   static void write(const std::string &data);
@@ -85,10 +91,11 @@ public:
   static void warn(const char *fmt, ...);
   static void error(const char *fmt, ...);
 
-  static void pjs_location(const std::string &source, const std::string &filename, int line, int column);
+  static void pjs_location(const std::string &source,
+                           const std::string &filename, int line, int column);
   static void pjs_error(const pjs::Context::Error &err);
 };
 
-} // namespace pipy
+}  // namespace pipy
 
-#endif // LOG_H
+#endif  // LOG_H

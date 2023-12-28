@@ -24,18 +24,27 @@
  */
 
 #include "pipy.hpp"
+
 #include "codebase.hpp"
 #include "configuration.hpp"
 #include "context.hpp"
-#include "worker.hpp"
-#include "worker-thread.hpp"
-#include "status.hpp"
 #include "net.hpp"
 #include "outbound.hpp"
+#include "status.hpp"
 #include "utils.hpp"
+#include "worker-thread.hpp"
+#include "worker.hpp"
 
-#include <unistd.h>
+#ifdef _WIN32
+#include <Windows.h>
+#include <fcntl.h>
+#include <io.h>
+
+#include <numeric>
+#else
 #include <sys/wait.h>
+#include <unistd.h>
+#endif
 
 namespace pipy {
 
@@ -45,9 +54,9 @@ void Pipy::on_exit(const std::function<void(int)> &on_exit) {
   s_on_exit = on_exit;
 }
 
-static auto exec_args(const std::list<std::string> &args) -> Data* {
+static auto exec_args(const std::list<std::string> &args) -> Data * {
   thread_local static Data::Producer s_dp("pipy.exec()");
-
+#ifndef _WIN32
   auto argc = args.size();
   if (!argc) return nullptr;
 
@@ -70,13 +79,11 @@ static auto exec_args(const std::list<std::string> &args) -> Data* {
     return nullptr;
   }
 
-  std::thread t(
-    [&]() {
-      int status;
-      waitpid(pid, &status, 0);
-      close(out[1]);
-    }
-  );
+  std::thread t([&]() {
+    int status;
+    waitpid(pid, &status, 0);
+    close(out[1]);
+  });
 
   Data output;
   char buf[DATA_CHUNK_SIZE];
@@ -91,25 +98,71 @@ static auto exec_args(const std::list<std::string> &args) -> Data* {
   close(in[1]);
 
   for (int i = 0; i < n; i++) std::free(argv[i]);
+#else
+  SECURITY_ATTRIBUTES sa = {.nLength = sizeof(SECURITY_ATTRIBUTES),
+                            .bInheritHandle = TRUE};
 
+  Data output;
+  HANDLE in, out;
+  auto success = CreatePipe(&in, &out, &sa, 0);
+  if (success == FALSE) {
+    throw std::runtime_error("Unable to create pipe due to " +
+                             utils::last_error("CreatePipe"));
+  }
+
+  auto cmd =
+      std::accumulate(std::next(args.begin()), args.end(), args.front(),
+                      [](std::string a, std::string b) { return a + " " + b; });
+
+  std::thread t([&]() {
+    char buf[DATA_CHUNK_SIZE];
+    DWORD len;
+    while (ReadFile(in, buf, sizeof(buf), &len, NULL)) {
+      output.push(buf, len, &s_dp);
+    }
+  });
+
+  PROCESS_INFORMATION pif = {};
+  STARTUPINFO si = {.cb = sizeof(STARTUPINFO),
+                    .dwFlags = STARTF_USESTDHANDLES,
+                    .hStdInput = INVALID_HANDLE_VALUE,
+                    .hStdOutput = out,
+                    .hStdError = out};
+
+  success = CreateProcess(NULL, const_cast<char *>(cmd.c_str()), NULL, NULL,
+                          TRUE, 0, NULL, NULL, &si, &pif);
+  if (success == FALSE) {
+    CloseHandle(out);
+    CloseHandle(in);
+    throw std::runtime_error("Unable to exec process due to " +
+                             utils::last_error("CreateProcess"));
+  }
+
+  WaitForSingleObject(pif.hProcess, INFINITE);
+  CloseHandle(pif.hThread);
+  CloseHandle(pif.hProcess);
+
+  CloseHandle(out);
+  CloseHandle(in);
+
+  t.join();
+#endif
   return Data::make(std::move(output));
 }
 
-auto Pipy::exec(const std::string &cmd) -> Data* {
+auto Pipy::exec(const std::string &cmd) -> Data * {
   return exec_args(utils::split(cmd, ' '));
 }
 
-auto Pipy::exec(pjs::Array *argv) -> Data* {
+auto Pipy::exec(pjs::Array *argv) -> Data * {
   if (!argv) return nullptr;
 
   std::list<std::string> args;
-  argv->iterate_all(
-    [&](pjs::Value &v, int) {
-      auto *s = v.to_string();
-      args.push_back(s->str());
-      s->release();
-    }
-  );
+  argv->iterate_all([&](pjs::Value &v, int) {
+    auto *s = v.to_string();
+    args.push_back(s->str());
+    s->release();
+  });
 
   return exec_args(args);
 }
@@ -136,13 +189,14 @@ void Pipy::operator()(pjs::Context &ctx, pjs::Object *obj, pjs::Value &ret) {
   }
 }
 
-} // namespace pipy
+}  // namespace pipy
 
 namespace pjs {
 
 using namespace pipy;
 
-template<> void ClassDef<Pipy>::init() {
+template <>
+void ClassDef<Pipy>::init() {
   super<Function>();
   ctor();
 
@@ -150,12 +204,15 @@ template<> void ClassDef<Pipy>::init() {
   variable("outbound", class_of<Pipy::Outbound>());
 
   accessor("pid", [](Object *, Value &ret) {
+#ifdef _WIN32
+    ret.set((int)_getpid());
+#else
     ret.set((int)getpid());
+#endif
   });
 
-  accessor("since", [](Object *, Value &ret) {
-    ret.set(Status::LocalInstance::since);
-  });
+  accessor("since",
+           [](Object *, Value &ret) { ret.set(Status::LocalInstance::since); });
 
   accessor("source", [](Object *, Value &ret) {
     thread_local static pjs::Ref<pjs::Str> str;
@@ -175,7 +232,7 @@ template<> void ClassDef<Pipy>::init() {
     ret.set(str);
   });
 
-  method("load", [](Context &ctx, Object*, Value &ret) {
+  method("load", [](Context &ctx, Object *, Value &ret) {
     std::string filename;
     if (!ctx.arguments(1, &filename)) return;
     auto path = utils::path_normalize(filename);
@@ -184,12 +241,12 @@ template<> void ClassDef<Pipy>::init() {
     if (data) data->release();
   });
 
-  method("list", [](Context &ctx, Object*, Value &ret) {
+  method("list", [](Context &ctx, Object *, Value &ret) {
     std::string pathname;
     if (!ctx.arguments(1, &pathname)) return;
     auto codebase = Codebase::current();
     auto a = Array::make();
-    std::function<void(const std::string&, const std::string&)> list_dir;
+    std::function<void(const std::string &, const std::string &)> list_dir;
     list_dir = [&](const std::string &path, const std::string &base) {
       for (const auto &name : codebase->list(path)) {
         if (name.back() == '/') {
@@ -205,86 +262,84 @@ template<> void ClassDef<Pipy>::init() {
     ret.set(a);
   });
 
-  method("solve", [](Context &ctx, Object*, Value &ret) {
+  method("solve", [](Context &ctx, Object *, Value &ret) {
     Str *filename;
     if (!ctx.arguments(1, &filename)) return;
-    auto worker = static_cast<pipy::Context*>(ctx.root())->worker();
+    auto worker = static_cast<pipy::Context *>(ctx.root())->worker();
     worker->solve(ctx, filename, ret);
   });
 
-  method("restart", [](Context&, Object*, Value&) {
-    Net::main().post(
-      []() {
-        InputContext ic;
-        Codebase::current()->sync(
-          true, [](bool ok) {
-            if (ok) {
-              WorkerManager::get().reload();
-            }
-          }
-        );
-      }
-    );
+  method("restart", [](Context &, Object *, Value &) {
+    Net::main().post([]() {
+      InputContext ic;
+      Codebase::current()->sync(true, [](bool ok) {
+        if (ok) {
+          WorkerManager::get().reload();
+        }
+      });
+    });
   });
 
-  method("exit", [](Context &ctx, Object*, Value&) {
+  method("exit", [](Context &ctx, Object *, Value &) {
     int exit_code = 0;
     if (!ctx.arguments(0, &exit_code)) return;
-    Net::main().post(
-      [=]() {
-        WorkerManager::get().stop(true);
-        if (s_on_exit) s_on_exit(exit_code);
-      }
-    );
+    Net::main().post([=]() {
+      WorkerManager::get().stop(true);
+      if (s_on_exit) s_on_exit(exit_code);
+    });
   });
 
-  method("exec", [](Context &ctx, Object*, Value &ret) {
+  method("exec", [](Context &ctx, Object *, Value &ret) {
     Str *cmd;
     Array *argv;
-    if (ctx.get(0, cmd)) {
-      ret.set(Pipy::exec(cmd->str()));
-    } else if (ctx.get(0, argv)) {
-      ret.set(Pipy::exec(argv));
-    } else {
-      ctx.error_argument_type(0, "a string or an array");
+    try {
+      if (ctx.get(0, cmd)) {
+        ret.set(Pipy::exec(cmd->str()));
+      } else if (ctx.get(0, argv)) {
+        ret.set(Pipy::exec(argv));
+      } else {
+        ctx.error_argument_type(0, "a string or an array");
+      }
+    } catch (const std::runtime_error &err) {
+      ctx.error(err);
     }
   });
 }
 
-template<> void ClassDef<Pipy::Inbound>::init() {
+template <>
+void ClassDef<Pipy::Inbound>::init() {
   ctor();
 
-  accessor("count", [](Object*, Value &ret) { ret.set(pipy::Inbound::count()); });
+  accessor("count",
+           [](Object *, Value &ret) { ret.set(pipy::Inbound::count()); });
 
-  method("forEach", [](Context &ctx, Object*, Value&) {
+  method("forEach", [](Context &ctx, Object *, Value &) {
     Function *cb;
     if (!ctx.arguments(1, &cb)) return;
-    pipy::Inbound::for_each(
-      [&](pipy::Inbound *ib) {
-        Value arg(ib), ret;
-        (*cb)(ctx, 1, &arg, ret);
-        return ctx.ok();
-      }
-    );
+    pipy::Inbound::for_each([&](pipy::Inbound *ib) {
+      Value arg(ib), ret;
+      (*cb)(ctx, 1, &arg, ret);
+      return ctx.ok();
+    });
   });
 }
 
-template<> void ClassDef<Pipy::Outbound>::init() {
+template <>
+void ClassDef<Pipy::Outbound>::init() {
   ctor();
 
-  accessor("count", [](Object*, Value &ret) { ret.set(pipy::Outbound::count()); });
+  accessor("count",
+           [](Object *, Value &ret) { ret.set(pipy::Outbound::count()); });
 
-  method("forEach", [](Context &ctx, Object*, Value&) {
+  method("forEach", [](Context &ctx, Object *, Value &) {
     Function *cb;
     if (!ctx.arguments(1, &cb)) return;
-    pipy::Outbound::for_each(
-      [&](pipy::Outbound *ob) {
-        Value arg(ob), ret;
-        (*cb)(ctx, 1, &arg, ret);
-        return ctx.ok();
-      }
-    );
+    pipy::Outbound::for_each([&](pipy::Outbound *ob) {
+      Value arg(ob), ret;
+      (*cb)(ctx, 1, &arg, ret);
+      return ctx.ok();
+    });
   });
 }
 
-} // namespace pjs
+}  // namespace pjs

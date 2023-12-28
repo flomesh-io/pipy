@@ -24,11 +24,13 @@
  */
 
 #include "xml.hpp"
-#include "expat.h"
-#include "data.hpp"
-#include "utils.hpp"
 
 #include <stack>
+
+#include "data.hpp"
+#define XML_STATIC 1
+#include "expat.h"
+#include "utils.hpp"
 
 namespace pjs {
 
@@ -38,7 +40,8 @@ using namespace pipy;
 // XML
 //
 
-template<> void ClassDef<XML>::init() {
+template <>
+void ClassDef<XML>::init() {
   ctor();
 
   variable("Node", class_of<Constructor<XML::Node>>());
@@ -88,26 +91,34 @@ template<> void ClassDef<XML>::init() {
 // XML::Node
 //
 
-template<> void ClassDef<XML::Node>::init() {
-  ctor([](Context &ctx) -> Object* {
+template <>
+void ClassDef<XML::Node>::init() {
+  ctor([](Context &ctx) -> Object * {
     Str *name;
-    Object* attributes = nullptr;
-    Array* children = nullptr;
+    Object *attributes = nullptr;
+    Array *children = nullptr;
     if (!ctx.arguments(1, &name, &attributes, &children)) return nullptr;
     return XML::Node::make(name, attributes, children);
   });
 
-  accessor("name", [](Object *obj, Value &ret) { ret.set(obj->as<XML::Node>()->name()); });
-  accessor("attributes", [](Object *obj, Value &ret) { ret.set(obj->as<XML::Node>()->attributes()); });
-  accessor("children", [](Object *obj, Value &ret) { ret.set(obj->as<XML::Node>()->children()); });
+  accessor("name", [](Object *obj, Value &ret) {
+    ret.set(obj->as<XML::Node>()->name());
+  });
+  accessor("attributes", [](Object *obj, Value &ret) {
+    ret.set(obj->as<XML::Node>()->attributes());
+  });
+  accessor("children", [](Object *obj, Value &ret) {
+    ret.set(obj->as<XML::Node>()->children());
+  });
 }
 
-template<> void ClassDef<Constructor<XML::Node>>::init() {
+template <>
+void ClassDef<Constructor<XML::Node>>::init() {
   super<Function>();
   ctor();
 }
 
-} // namespace pjs
+}  // namespace pjs
 
 namespace pipy {
 
@@ -118,12 +129,13 @@ thread_local static Data::Producer s_dp("XML");
 //
 
 class XMLParser {
-public:
+ public:
   XMLParser() : m_parser(XML_ParserCreate(nullptr)) {
     XML_SetUserData(m_parser, this);
     XML_SetElementHandler(m_parser, xml_element_start, xml_element_end);
     XML_SetCharacterDataHandler(m_parser, xml_char_data);
-    auto *root = XML::Node::make(pjs::Str::empty, pjs::Object::make(), pjs::Array::make());
+    auto *root = XML::Node::make(pjs::Str::empty, pjs::Object::make(),
+                                 pjs::Array::make());
     m_stack.push(root);
   }
 
@@ -137,14 +149,14 @@ public:
     XML_ParserFree(m_parser);
   }
 
-  auto parse(const std::string &str) -> XML::Node* {
+  auto parse(const std::string &str) -> XML::Node * {
     if (!XML_Parse(m_parser, str.c_str(), str.length(), true)) return nullptr;
     auto root = m_stack.top();
     m_stack.pop();
     return root;
   }
 
-  auto parse(const Data &data) -> XML::Node* {
+  auto parse(const Data &data) -> XML::Node * {
     for (const auto c : data.chunks()) {
       if (!XML_Parse(m_parser, std::get<0>(c), std::get<1>(c), false)) {
         return nullptr;
@@ -156,9 +168,9 @@ public:
     return root;
   }
 
-private:
+ private:
   XML_Parser m_parser;
-  std::stack<XML::Node*> m_stack;
+  std::stack<XML::Node *> m_stack;
 
   void element_start(const XML_Char *name, const XML_Char **attrs) {
     auto *attributes = attrs[0] ? pjs::Object::make() : nullptr;
@@ -166,8 +178,8 @@ private:
     auto *node = XML::Node::make(pjs::Str::make(name), attributes, children);
     if (attributes) {
       for (int i = 0; attrs[i]; i += 2) {
-        std::string k(attrs[i+0]);
-        std::string v(attrs[i+1]);
+        std::string k(attrs[i + 0]);
+        std::string v(attrs[i + 1]);
         attributes->ht_set(k, v);
       }
     }
@@ -175,9 +187,7 @@ private:
     m_stack.push(node);
   }
 
-  void element_end(const XML_Char *name) {
-    m_stack.pop();
-  }
+  void element_end(const XML_Char *name) { m_stack.pop(); }
 
   void char_data(const XML_Char *str, int len) {
     append_child(std::string(str, len));
@@ -189,18 +199,19 @@ private:
     children->push(v);
   }
 
-  static void xml_element_start(void *userdata, const XML_Char *name, const XML_Char **attrs) {
-    auto *parser = static_cast<XMLParser*>(userdata);
+  static void xml_element_start(void *userdata, const XML_Char *name,
+                                const XML_Char **attrs) {
+    auto *parser = static_cast<XMLParser *>(userdata);
     parser->element_start(name, attrs);
   }
 
   static void xml_element_end(void *userdata, const XML_Char *name) {
-    auto *parser = static_cast<XMLParser*>(userdata);
+    auto *parser = static_cast<XMLParser *>(userdata);
     parser->element_end(name);
   }
 
   static void xml_char_data(void *userdata, const XML_Char *str, int len) {
-    auto *parser = static_cast<XMLParser*>(userdata);
+    auto *parser = static_cast<XMLParser *>(userdata);
     parser->char_data(str, len);
   }
 };
@@ -209,7 +220,7 @@ private:
 // XML
 //
 
-auto XML::parse(const std::string &str) -> Node* {
+auto XML::parse(const std::string &str) -> Node * {
   XMLParser parser;
   return parser.parse(str);
 }
@@ -220,7 +231,7 @@ auto XML::stringify(Node *doc, int space) -> std::string {
   return data.to_string();
 }
 
-auto XML::decode(const Data &data) -> Node* {
+auto XML::decode(const Data &data) -> Node * {
   XMLParser parser;
   return parser.parse(data);
 }
@@ -265,7 +276,7 @@ bool XML::encode(Node *doc, int space, Data &data) {
     s->release();
   };
 
-  std::function<void(XML::Node *node, int)> write;
+  std::function<void(XML::Node * node, int)> write;
 
   write = [&](XML::Node *node, int l) {
     if (node->name() == 0) return;
@@ -337,4 +348,4 @@ bool XML::encode(Node *doc, int space, Data &data) {
   return true;
 }
 
-} // namespace pipy
+}  // namespace pipy

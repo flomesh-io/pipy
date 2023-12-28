@@ -26,15 +26,15 @@
 #ifndef API_HTTP_HPP
 #define API_HTTP_HPP
 
-#include "pjs/pjs.hpp"
-#include "pipeline.hpp"
-#include "module.hpp"
-#include "message.hpp"
-#include "tar.hpp"
-#include "options.hpp"
-
 #include <string>
 #include <unordered_map>
+
+#include "message.hpp"
+#include "module.hpp"
+#include "options.hpp"
+#include "pipeline.hpp"
+#include "pjs/pjs.hpp"
+#include "tar.hpp"
 
 namespace pipy {
 
@@ -50,7 +50,7 @@ enum class TunnelType {
 };
 
 class MessageHead : public pjs::ObjectTemplate<MessageHead> {
-public:
+ public:
   pjs::Ref<pjs::Str> protocol;
   pjs::Ref<pjs::Object> headers;
 
@@ -59,14 +59,14 @@ public:
 };
 
 class MessageTail : public pjs::ObjectTemplate<MessageTail> {
-public:
+ public:
   pjs::Ref<pjs::Object> headers;
   int headSize = 0;
   int bodySize = 0;
 };
 
 class RequestHead : public pjs::ObjectTemplate<RequestHead, MessageHead> {
-public:
+ public:
   pjs::Ref<pjs::Str> method;
   pjs::Ref<pjs::Str> scheme;
   pjs::Ref<pjs::Str> authority;
@@ -77,13 +77,13 @@ public:
 };
 
 class ResponseHead : public pjs::ObjectTemplate<ResponseHead, MessageHead> {
-public:
+ public:
   int status = 200;
   pjs::Ref<pjs::Str> statusText;
 
   bool is_tunnel_ok(TunnelType requested);
 
-  static auto error_to_status(StreamEnd::Error err, int &status) -> pjs::Str*;
+  static auto error_to_status(StreamEnd::Error err, int &status) -> pjs::Str *;
 };
 
 //
@@ -91,12 +91,14 @@ public:
 //
 
 class Agent : public pjs::ObjectTemplate<Agent> {
-public:
-  auto request(Message *req) -> pjs::Promise*;
-  auto request(pjs::Str *method, pjs::Str *path, pjs::Object *headers = nullptr, Data *body = nullptr) -> pjs::Promise*;
-  auto request(pjs::Str *method, pjs::Str *path, pjs::Object *headers, pjs::Str *body) -> pjs::Promise*;
+ public:
+  auto request(Message *req) -> pjs::Promise *;
+  auto request(pjs::Str *method, pjs::Str *path, pjs::Object *headers = nullptr,
+               Data *body = nullptr) -> pjs::Promise *;
+  auto request(pjs::Str *method, pjs::Str *path, pjs::Object *headers,
+               pjs::Str *body) -> pjs::Promise *;
 
-private:
+ private:
   Agent(pjs::Str *host, pjs::Object *options = nullptr);
 
   //
@@ -104,9 +106,9 @@ private:
   //
 
   class Module : public ModuleBase {
-  public:
+   public:
     Module() : ModuleBase("HTTP Agent") {}
-    virtual auto new_context(pipy::Context *base) -> pipy::Context* override {
+    virtual auto new_context(pipy::Context *base) -> pipy::Context * override {
       return Context::make();
     }
   };
@@ -116,12 +118,12 @@ private:
   //
 
   class Request : public pjs::Pooled<Request>, public EventSource {
-  public:
+   public:
     Request(Agent *agent) : m_agent(agent) {}
 
-    auto start(RequestHead *head, Data *body) -> pjs::Promise*;
+    auto start(RequestHead *head, Data *body) -> pjs::Promise *;
 
-  private:
+   private:
     void send(RequestHead *head, Data *body);
 
     pjs::Ref<Agent> m_agent;
@@ -146,7 +148,7 @@ private:
 //
 
 class Directory : public pjs::ObjectTemplate<Directory> {
-public:
+ public:
   struct Options : public pipy::Options {
     bool fs = false;
     bool tarball = false;
@@ -164,10 +166,10 @@ public:
   Directory(const std::string &path, const Options &options);
   ~Directory();
 
-  auto serve(pjs::Context &ctx, Message *request) -> Message*;
+  auto serve(pjs::Context &ctx, Message *request) -> Message *;
   void set_content_types(pjs::Object *obj);
 
-private:
+ private:
   struct File {
     pjs::Ref<pjs::Str> pathname;
     pjs::Ref<pjs::Str> content_type;
@@ -175,40 +177,41 @@ private:
   };
 
   class Loader {
-  public:
+   public:
     virtual ~Loader() {}
     virtual bool load_file(const std::string &path, Data &data) = 0;
   };
 
   class CodebaseLoader : public Loader {
-  public:
+   public:
     CodebaseLoader(const std::string &path);
     virtual bool load_file(const std::string &path, Data &data) override;
     std::string m_root_path;
   };
 
   class FileSystemLoader : public Loader {
-  public:
+   public:
     FileSystemLoader(const std::string &path);
     virtual bool load_file(const std::string &path, Data &data) override;
     std::string m_root_path;
   };
 
   class TarballLoader : public Loader {
-  public:
+   public:
     TarballLoader(const char *data, size_t size);
     virtual bool load_file(const std::string &path, Data &data) override;
     Tarball m_tarball;
   };
 
   Options m_options;
-  Loader* m_loader = nullptr;
+  Loader *m_loader = nullptr;
   std::unordered_map<std::string, File> m_cache;
   std::list<std::string> m_index_filenames;
   std::map<std::string, pjs::Ref<pjs::Str>> m_content_types;
   pjs::Ref<pjs::Str> m_default_content_type;
 
-  auto get_encoded_response(pjs::Context &ctx, File &file, RequestHead *request) -> Message*;
+  auto get_encoded_response(pjs::Context &ctx, File &file, RequestHead *request)
+      -> Message *;
 
   thread_local static Data::Producer s_dp;
 };
@@ -218,13 +221,13 @@ private:
 //
 
 class File : public pjs::ObjectTemplate<File> {
-public:
-  static auto from(const std::string &path) -> File*;
-  static auto from(Tarball *tarball, const std::string &path) -> File*;
+ public:
+  static auto from(const std::string &path) -> File *;
+  static auto from(Tarball *tarball, const std::string &path) -> File *;
 
-  auto to_message(pjs::Str *accept_encoding) -> Message*;
+  auto to_message(pjs::Str *accept_encoding) -> Message *;
 
-private:
+ private:
   File(const std::string &path);
   File(Tarball *tarball, const std::string &path);
 
@@ -239,7 +242,8 @@ private:
   pjs::Ref<Message> m_message_gz;
   pjs::Ref<Message> m_message_br;
 
-  void load(const std::string &filename, std::function<Data*(const std::string&)> get_file);
+  void load(const std::string &filename,
+            std::function<Data *(const std::string &)> get_file);
   bool decompress();
 
   friend class pjs::ObjectTemplate<File>;
@@ -249,11 +253,9 @@ private:
 // Http
 //
 
-class Http : public pjs::ObjectTemplate<Http>
-{
-};
+class Http : public pjs::ObjectTemplate<Http> {};
 
-} // namespace http
-} // namespace pipy
+}  // namespace http
+}  // namespace pipy
 
-#endif // API_HTTP_HPP
+#endif  // API_HTTP_HPP

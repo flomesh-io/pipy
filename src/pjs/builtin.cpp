@@ -29,11 +29,13 @@
 #include <cmath>
 #include <cstdlib>
 #include <limits>
+#define _USE_MATH_DEFINES 1
 #include <math.h>
+#include <time.h>
+
 #include <random>
 #include <sstream>
 #include <stack>
-#include <time.h>
 
 namespace pjs {
 
@@ -48,69 +50,37 @@ void Math::init() {
   s_rand.seed(t);
 }
 
-double Math::abs(double x) {
-  return std::abs(x);
-}
+double Math::abs(double x) { return std::abs(x); }
 
-double Math::acos(double x) {
-  return std::acos(x);
-}
+double Math::acos(double x) { return std::acos(x); }
 
-double Math::acosh(double x) {
-  return std::acosh(x);
-}
+double Math::acosh(double x) { return std::acosh(x); }
 
-double Math::asin(double x) {
-  return std::asin(x);
-}
+double Math::asin(double x) { return std::asin(x); }
 
-double Math::asinh(double x) {
-  return std::asinh(x);
-}
+double Math::asinh(double x) { return std::asinh(x); }
 
-double Math::atan(double x) {
-  return std::atan(x);
-}
+double Math::atan(double x) { return std::atan(x); }
 
-double Math::atanh(double x) {
-  return std::atanh(x);
-}
+double Math::atanh(double x) { return std::atanh(x); }
 
-double Math::atan2(double y, double x) {
-  return std::atan2(y, x);
-}
+double Math::atan2(double y, double x) { return std::atan2(y, x); }
 
-double Math::cbrt(double x) {
-  return std::cbrt(x);
-}
+double Math::cbrt(double x) { return std::cbrt(x); }
 
-double Math::ceil(double x) {
-  return std::ceil(x);
-}
+double Math::ceil(double x) { return std::ceil(x); }
 
-double Math::cos(double x) {
-  return std::cos(x);
-}
+double Math::cos(double x) { return std::cos(x); }
 
-double Math::cosh(double x) {
-  return std::cosh(x);
-}
+double Math::cosh(double x) { return std::cosh(x); }
 
-double Math::exp(double x) {
-  return std::exp(x);
-}
+double Math::exp(double x) { return std::exp(x); }
 
-double Math::expm1(double x) {
-  return std::expm1(x);
-}
+double Math::expm1(double x) { return std::expm1(x); }
 
-double Math::floor(double x) {
-  return std::floor(x);
-}
+double Math::floor(double x) { return std::floor(x); }
 
-double Math::fround(double x) {
-  return float(x);
-}
+double Math::fround(double x) { return float(x); }
 
 double Math::hypot(const double *v, int n) {
   if (n == 0) return 0;
@@ -121,21 +91,13 @@ double Math::hypot(const double *v, int n) {
   return std::sqrt(sum);
 }
 
-double Math::log(double x) {
-  return std::log(x);
-}
+double Math::log(double x) { return std::log(x); }
 
-double Math::log1p(double x) {
-  return std::log1p(x);
-}
+double Math::log1p(double x) { return std::log1p(x); }
 
-double Math::log10(double x) {
-  return std::log10(x);
-}
+double Math::log10(double x) { return std::log10(x); }
 
-double Math::log2(double x) {
-  return std::log2(x);
-}
+double Math::log2(double x) { return std::log2(x); }
 
 double Math::max(const double *v, int n) {
   double m = -std::numeric_limits<double>::infinity();
@@ -149,9 +111,7 @@ double Math::min(const double *v, int n) {
   return m;
 }
 
-double Math::pow(double x, double y) {
-  return std::pow(x, y);
-}
+double Math::pow(double x, double y) { return std::pow(x, y); }
 
 double Math::random() {
   auto min = std::minstd_rand::min();
@@ -159,43 +119,63 @@ double Math::random() {
   return double(s_rand() - min) / double(max - min);
 }
 
-double Math::round(double x) {
-  return std::round(x);
-}
+double Math::round(double x) { return std::round(x); }
 
 double Math::sign(double x) {
   return std::copysign(std::fpclassify(x) == FP_ZERO ? 0 : 1, x);
 }
 
-double Math::sin(double x) {
-  return std::sin(x);
-}
+double Math::sin(double x) { return std::sin(x); }
 
-double Math::sqrt(double x) {
-  return std::sqrt(x);
-}
+double Math::sqrt(double x) { return std::sqrt(x); }
 
-double Math::tan(double x) {
-  return std::tan(x);
-}
+double Math::tan(double x) { return std::tan(x); }
 
-double Math::tanh(double x) {
-  return std::tanh(x);
-}
+double Math::tanh(double x) { return std::tanh(x); }
 
-double Math::trunc(double x) {
-  return std::trunc(x);
-}
+double Math::trunc(double x) { return std::trunc(x); }
 
 int Math::clz32(int x) {
+#ifdef _WIN32
+  if (x <= 0) {
+    return x;
+  }
+  unsigned y = x;
+  int n = 32;
+  y = x >> 16;
+  if (y != 0) {
+    n = n - 16;
+    x = y;
+  }
+  y = x >> 8;
+  if (y != 0) {
+    n = n - 8;
+    x = y;
+  }
+  y = x >> 4;
+  if (y != 0) {
+    n = n - 4;
+    x = y;
+  }
+  y = x >> 2;
+  if (y != 0) {
+    n = n - 2;
+    x = y;
+  }
+  y = x >> 1;
+  if (y != 0) {
+    return n - 2;
+  }
+  return n - x;
+#else
   return __builtin_clz(x);
+#endif
 }
 
-int Math::imul(int x, int y) {
-  return x * y;
-}
+int Math::imul(int x, int y) { return x * y; }
 
-template<> void ClassDef<Math>::init() {
+template <>
+void ClassDef<Math>::init() {
   ctor();
 
   variable("E", M_E);
@@ -423,20 +403,11 @@ auto Date::now() -> double {
   return double(ms);
 }
 
-Date::Date()
-  : Date(now())
-{
-}
+Date::Date() : Date(now()) {}
 
-Date::Date(const Date *date)
-  : m_tm(date->m_tm)
-  , m_msec(date->m_msec)
-{
-}
+Date::Date(const Date *date) : m_tm(date->m_tm), m_msec(date->m_msec) {}
 
-Date::Date(double value) {
-  setTime(value);
-}
+Date::Date(double value) { setTime(value); }
 
 Date::Date(int year, int mon, int day, int hour, int min, int sec, int ms) {
   m_tm.tm_year = year - 1900;
@@ -504,7 +475,10 @@ auto Date::setHours(int h, int m, int s, int ms) -> double {
 auto Date::setMilliseconds(int value) -> double {
   int s = value / 1000;
   int ms = value % 1000;
-  if (ms < 0) { ms += 1000; s--; }
+  if (ms < 0) {
+    ms += 1000;
+    s--;
+  }
   m_tm.tm_sec += s;
   m_msec = ms;
   return normalize();
@@ -551,7 +525,11 @@ auto Date::setSeconds(int s, int ms) -> double {
 auto Date::setTime(double value) -> double {
   auto sec = std::floor(value / 1000);
   auto t = std::time_t(sec);
+#ifdef _WIN32
+  localtime_s(&m_tm, &t);
+#else
   localtime_r(&t, &m_tm);
+#endif
   m_msec = value - sec * 1000;
   return value;
 }
@@ -572,7 +550,11 @@ auto Date::toISOString() -> std::string {
   char str[100];
   std::tm tm;
   auto t = std::mktime(&m_tm);
+#ifdef _WIN32
+  gmtime_s(&tm, &t);
+#else
   gmtime_r(&t, &tm);
+#endif
   auto len = std::strftime(str, sizeof(str), "%Y-%m-%dT%H:%M:%S.000Z", &tm);
   str[20] = (m_msec % 1000) / 100 + '0';
   str[21] = (m_msec % 100) / 10 + '0';
@@ -584,14 +566,16 @@ auto Date::toUTCString() -> std::string {
   char str[100];
   std::tm tm;
   auto t = std::mktime(&m_tm);
+#ifdef _WIN32
+  gmtime_s(&tm, &t);
+#else
   gmtime_r(&t, &tm);
+#endif
   auto len = std::strftime(str, sizeof(str), "%a, %e %b %Y %H:%M:%S GMT", &tm);
   return std::string(str, len);
 }
 
-void Date::value_of(Value &out) {
-  out.set(getTime());
-}
+void Date::value_of(Value &out) { out.set(getTime()); }
 
 auto Date::to_string() const -> std::string {
   char str[100];
@@ -599,24 +583,28 @@ auto Date::to_string() const -> std::string {
   return std::string(str, len);
 }
 
-auto Date::dump() -> Object* {
-  return nullptr;
-}
+auto Date::dump() -> Object * { return nullptr; }
 
 auto Date::normalize() -> double {
   auto t = std::mktime(&m_tm);
+#ifdef _WIN32
+  localtime_s(&m_tm, &t);
+#else
   localtime_r(&t, &m_tm);
+#endif
   return double(t) * 1000 + m_msec;
 }
 
-template<> void ClassDef<Date>::init() {
+template <>
+void ClassDef<Date>::init() {
   ctor([](Context &ctx) {
     Date *date;
     double value;
     int year, mon, day = 1, hour = 0, min = 0, sec = 0, ms = 0;
     if (ctx.try_arguments(1, &date)) {
       return Date::make(date);
-    } else if (ctx.try_arguments(2, &year, &mon, &day, &hour, &min, &sec, &ms)) {
+    } else if (ctx.try_arguments(2, &year, &mon, &day, &hour, &min, &sec,
+                                 &ms)) {
       return Date::make(year, mon, day, hour, min, sec, ms);
     } else if (ctx.try_arguments(1, &value)) {
       return Date::make(value);
@@ -772,27 +760,30 @@ template<> void ClassDef<Date>::init() {
   });
 }
 
-template<> void ClassDef<Constructor<Date>>::init() {
+template <>
+void ClassDef<Constructor<Date>>::init() {
   super<Function>();
   ctor();
-  method("now", [](Context &ctx, Object *obj, Value &ret) {
-    ret.set(Date::now());
-  });
+  method("now",
+         [](Context &ctx, Object *obj, Value &ret) { ret.set(Date::now()); });
 }
 
 //
 // Map
 //
 
-template<> void ClassDef<Map>::init() {
-  ctor([](Context &ctx) -> Object* {
+template <>
+void ClassDef<Map>::init() {
+  ctor([](Context &ctx) -> Object * {
     Array *entries = nullptr;
     if (!ctx.arguments(0, &entries)) return nullptr;
     if (entries) return Map::make(entries);
     return Map::make();
   });
 
-  accessor("size", [](Object *obj, Value &ret) { ret.set((int)obj->as<Map>()->size()); });
+  accessor("size", [](Object *obj, Value &ret) {
+    ret.set((int)obj->as<Map>()->size());
+  });
 
   method("clear", [](Context &ctx, Object *obj, Value &ret) {
     obj->as<Map>()->clear();
@@ -826,20 +817,19 @@ template<> void ClassDef<Map>::init() {
   method("forEach", [](Context &ctx, Object *obj, Value &ret) {
     Function *cb;
     if (!ctx.arguments(1, &cb)) return;
-    obj->as<Map>()->forEach(
-      [&](const Value &k, const Value &v) {
-        Value args[3], ret;
-        args[0] = k;
-        args[1] = v;
-        args[2].set(obj);
-        (*cb)(ctx, 3, args, ret);
-        return ctx.ok();
-      }
-    );
+    obj->as<Map>()->forEach([&](const Value &k, const Value &v) {
+      Value args[3], ret;
+      args[0] = k;
+      args[1] = v;
+      args[2].set(obj);
+      (*cb)(ctx, 3, args, ret);
+      return ctx.ok();
+    });
   });
 }
 
-template<> void ClassDef<Constructor<Map>>::init() {
+template <>
+void ClassDef<Constructor<Map>>::init() {
   super<Function>();
   ctor();
 }
@@ -848,15 +838,18 @@ template<> void ClassDef<Constructor<Map>>::init() {
 // Set
 //
 
-template<> void ClassDef<Set>::init() {
-  ctor([](Context &ctx) -> Object* {
+template <>
+void ClassDef<Set>::init() {
+  ctor([](Context &ctx) -> Object * {
     Array *entries = nullptr;
     if (!ctx.arguments(0, &entries)) return nullptr;
     if (entries) return Set::make(entries);
     return Set::make();
   });
 
-  accessor("size", [](Object *obj, Value &ret) { ret.set((int)obj->as<Set>()->size()); });
+  accessor("size", [](Object *obj, Value &ret) {
+    ret.set((int)obj->as<Set>()->size());
+  });
 
   method("clear", [](Context &ctx, Object *obj, Value &ret) {
     obj->as<Set>()->clear();
@@ -884,20 +877,19 @@ template<> void ClassDef<Set>::init() {
   method("forEach", [](Context &ctx, Object *obj, Value &ret) {
     Function *cb;
     if (!ctx.arguments(1, &cb)) return;
-    obj->as<Set>()->forEach(
-      [&](const Value &v) {
-        Value args[3], ret;
-        args[0] = v;
-        args[1] = v;
-        args[2].set(obj);
-        (*cb)(ctx, 3, args, ret);
-        return ctx.ok();
-      }
-    );
+    obj->as<Set>()->forEach([&](const Value &v) {
+      Value args[3], ret;
+      args[0] = v;
+      args[1] = v;
+      args[2].set(obj);
+      (*cb)(ctx, 3, args, ret);
+      return ctx.ok();
+    });
   });
 }
 
-template<> void ClassDef<Constructor<Set>>::init() {
+template <>
+void ClassDef<Constructor<Set>>::init() {
   super<Function>();
   ctor();
 }
@@ -906,8 +898,8 @@ template<> void ClassDef<Constructor<Set>>::init() {
 // Global
 //
 
-template<> void ClassDef<Global>::init() {
-
+template <>
+void ClassDef<Global>::init() {
   // NaN
   variable("NaN", std::numeric_limits<double>::quiet_NaN());
 
@@ -996,17 +988,15 @@ template<> void ClassDef<Global>::init() {
 
     } else if (ctx.get(0, array)) {
       if (!ctx.check(1, f)) return;
-      array->iterate_while(
-        [&](Value &v, int i) {
-          Value args[2];
-          args[0] = v;
-          args[1].set(i);
-          (*f)(ctx, 2, args, ret);
-          if (!ctx.ok()) return false;
-          if (!ret.is_undefined()) return false;
-          return true;
-        }
-      );
+      array->iterate_while([&](Value &v, int i) {
+        Value args[2];
+        args[0] = v;
+        args[1].set(i);
+        (*f)(ctx, 2, args, ret);
+        if (!ctx.ok()) return false;
+        if (!ret.is_undefined()) return false;
+        return true;
+      });
 
     } else {
       ctx.error_argument_type(0, "a function");
@@ -1032,7 +1022,7 @@ template<> void ClassDef<Global>::init() {
         is_met = cond.to_boolean();
       }
       if (is_met) {
-        const auto &result = ctx.arg(i+1);
+        const auto &result = ctx.arg(i + 1);
         if (result.is_function()) {
           (*result.f())(ctx, 0, nullptr, ret);
         } else {
@@ -1066,7 +1056,7 @@ template<> void ClassDef<Global>::init() {
         if (!ctx.ok()) return;
       }
       if (Value::is_equal(case_value, selector)) {
-        const auto &result = ctx.arg(i+1);
+        const auto &result = ctx.arg(i + 1);
         if (result.is_function()) {
           (*result.f())(ctx, 0, nullptr, ret);
         } else {
@@ -1086,4 +1076,4 @@ template<> void ClassDef<Global>::init() {
   });
 }
 
-} // namespace pjs
+}  // namespace pjs

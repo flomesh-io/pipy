@@ -26,20 +26,24 @@
 #ifndef HTTP2_HPP
 #define HTTP2_HPP
 
-#include "api/http.hpp"
-#include "data.hpp"
-#include "input.hpp"
-#include "message.hpp"
-#include "pipeline.hpp"
-#include "list.hpp"
-#include "scarce.hpp"
-#include "deframer.hpp"
-#include "demux.hpp"
-#include "options.hpp"
-
+#include <iostream>
 #include <map>
 #include <vector>
-#include <iostream>
+
+#include "api/http.hpp"
+#include "data.hpp"
+#include "deframer.hpp"
+#include "demux.hpp"
+#include "input.hpp"
+#include "list.hpp"
+#include "message.hpp"
+#include "options.hpp"
+#include "pipeline.hpp"
+#include "scarce.hpp"
+
+#ifdef _WIN32
+#undef ERROR
+#endif
 
 namespace pipy {
 namespace http2 {
@@ -49,20 +53,20 @@ namespace http2 {
 //
 
 enum ErrorCode {
-  NO_ERROR            = 0x0,
-  PROTOCOL_ERROR      = 0x1,
-  INTERNAL_ERROR      = 0x2,
-  FLOW_CONTROL_ERROR  = 0x3,
-  SETTINGS_TIMEOUT    = 0x4,
-  STREAM_CLOSED       = 0x5,
-  FRAME_SIZE_ERROR    = 0x6,
-  REFUSED_STREAM      = 0x7,
-  CANCEL              = 0x8,
-  COMPRESSION_ERROR   = 0x9,
-  CONNECT_ERROR       = 0xa,
-  ENHANCE_YOUR_CALM   = 0xb,
+  NO_ERROR = 0x0,
+  PROTOCOL_ERROR = 0x1,
+  INTERNAL_ERROR = 0x2,
+  FLOW_CONTROL_ERROR = 0x3,
+  SETTINGS_TIMEOUT = 0x4,
+  STREAM_CLOSED = 0x5,
+  FRAME_SIZE_ERROR = 0x6,
+  REFUSED_STREAM = 0x7,
+  CANCEL = 0x8,
+  COMPRESSION_ERROR = 0x9,
+  CONNECT_ERROR = 0xa,
+  ENHANCE_YOUR_CALM = 0xb,
   INADEQUATE_SECURITY = 0xc,
-  HTTP_1_1_REQUIRED   = 0xd,
+  HTTP_1_1_REQUIRED = 0xd,
 };
 
 //
@@ -92,24 +96,24 @@ struct Settings {
 
 struct Frame {
   enum Type {
-    DATA          = 0x0,
-    HEADERS       = 0x1,
-    PRIORITY      = 0x2,
-    RST_STREAM    = 0x3,
-    SETTINGS      = 0x4,
-    PUSH_PROMISE  = 0x5,
-    PING          = 0x6,
-    GOAWAY        = 0x7,
+    DATA = 0x0,
+    HEADERS = 0x1,
+    PRIORITY = 0x2,
+    RST_STREAM = 0x3,
+    SETTINGS = 0x4,
+    PUSH_PROMISE = 0x5,
+    PING = 0x6,
+    GOAWAY = 0x7,
     WINDOW_UPDATE = 0x8,
-    CONTINUATION  = 0x9,
+    CONTINUATION = 0x9,
   };
 
   enum Flags {
-    BIT_ACK         = 0x01,
-    BIT_END_STREAM  = 0x01,
+    BIT_ACK = 0x01,
+    BIT_END_STREAM = 0x01,
     BIT_END_HEADERS = 0x04,
-    BIT_PADDED      = 0x08,
-    BIT_PRIORITY    = 0x20,
+    BIT_PADDED = 0x08,
+    BIT_PRIORITY = 0x20,
   };
 
   int stream_id;
@@ -133,7 +137,7 @@ struct Frame {
 //
 
 class FrameDecoder : public Deframer {
-protected:
+ protected:
   FrameDecoder();
 
   void set_max_frame_size(int n) { m_max_frame_size = n; }
@@ -142,7 +146,7 @@ protected:
   virtual void on_deframe(Frame &frame) = 0;
   virtual void on_deframe_error(ErrorCode err) = 0;
 
-private:
+ private:
   enum State {
     STATE_HEADER,
     STATE_PAYLOAD,
@@ -161,12 +165,12 @@ private:
 //
 
 class FrameEncoder {
-protected:
+ protected:
   void frame(Frame &frm, Data &out);
   void RST_STREAM(int id, ErrorCode err, Data &out);
   void GOAWAY(int id, ErrorCode err, Data &out);
 
-private:
+ private:
   void header(uint8_t *buf, int id, uint8_t type, uint8_t flags, size_t size);
 };
 
@@ -184,19 +188,22 @@ struct TableEntry : public pjs::Pooled<TableEntry> {
 //
 
 class DynamicTable {
-public:
+ public:
   ~DynamicTable() { reset(); }
 
   void reset();
   auto capacity() const -> size_t { return m_capacity; }
-  void resize(size_t size) { m_capacity = size; evict(); }
-  auto get(size_t i) const -> const TableEntry*;
+  void resize(size_t size) {
+    m_capacity = size;
+    evict();
+  }
+  auto get(size_t i) const -> const TableEntry *;
   void add(pjs::Str *name, pjs::Str *value);
 
-private:
+ private:
   enum { MAX_ENTRY_COUNT = 128 };
 
-  TableEntry* m_entries[MAX_ENTRY_COUNT];
+  TableEntry *m_entries[MAX_ENTRY_COUNT];
   size_t m_capacity = Settings::DEFAULT_HEADER_TABLE_SIZE;
   size_t m_size = 0;
   size_t m_head = 0;
@@ -210,7 +217,7 @@ private:
 //
 
 class HeaderDecoder {
-public:
+ public:
   HeaderDecoder(const Settings &settings);
 
   void reset();
@@ -221,7 +228,7 @@ public:
   auto content_length() const -> int { return m_content_length; }
   bool is_trailer() const { return m_is_trailer; }
 
-private:
+ private:
   static const int TABLE_SIZE = 256;
 
   enum State {
@@ -247,7 +254,7 @@ private:
     };
   };
 
-  const Settings& m_settings;
+  const Settings &m_settings;
   State m_state;
   ErrorCode m_error;
   bool m_is_response;
@@ -273,7 +280,7 @@ private:
   void value_prefix(uint8_t prefix);
 
   bool add_field(pjs::Str *name, pjs::Str *value);
-  auto get_entry(size_t i) const -> const TableEntry*;
+  auto get_entry(size_t i) const -> const TableEntry *;
   void new_entry(pjs::Str *name, pjs::Str *value);
 
   void error(ErrorCode err = COMPRESSION_ERROR);
@@ -283,10 +290,11 @@ private:
   //
 
   class StaticTable {
-  public:
+   public:
     StaticTable();
-    auto get() const -> const std::vector<TableEntry>& { return m_table; }
-  private:
+    auto get() const -> const std::vector<TableEntry> & { return m_table; }
+
+   private:
     std::vector<TableEntry> m_table;
   };
 
@@ -295,15 +303,15 @@ private:
   //
 
   class HuffmanTree {
-  public:
+   public:
     HuffmanTree();
-    auto get() const -> const std::vector<Huffman>& { return m_tree; }
-  private:
+    auto get() const -> const std::vector<Huffman> & { return m_tree; }
+
+   private:
     std::vector<Huffman> m_tree;
   };
 
-  thread_local
-  static const StaticTable s_static_table;
+  thread_local static const StaticTable s_static_table;
   static const HuffmanTree s_huffman_tree;
 };
 
@@ -312,22 +320,14 @@ private:
 //
 
 class HeaderEncoder {
-public:
-  void encode(
-    bool is_response,
-    bool is_tail,
-    pjs::Object *head,
-    Data &data
-  );
+ public:
+  void encode(bool is_response, bool is_tail, pjs::Object *head, Data &data);
 
-private:
-  void encode_header_field(
-    Data::Builder &db,
-    pjs::Str *k,
-    pjs::Str *v
-  );
+ private:
+  void encode_header_field(Data::Builder &db, pjs::Str *k, pjs::Str *v);
 
-  void encode_int(Data::Builder &db, uint8_t prefix, int prefix_len, uint32_t n);
+  void encode_int(Data::Builder &db, uint8_t prefix, int prefix_len,
+                  uint32_t n);
   void encode_str(Data::Builder &db, pjs::Str *s, bool lowercase);
 
   struct Entry {
@@ -340,10 +340,11 @@ private:
   //
 
   class StaticTable {
-  public:
+   public:
     StaticTable();
-    auto find(pjs::Str *name) -> const Entry*;
-  private:
+    auto find(pjs::Str *name) -> const Entry *;
+
+   private:
     std::map<pjs::Ref<pjs::Str>, Entry> m_table;
   };
 
@@ -354,12 +355,8 @@ private:
 // Endpoint
 //
 
-class Endpoint :
-  public FrameDecoder,
-  public FrameEncoder,
-  public FlushTarget
-{
-public:
+class Endpoint : public FrameDecoder, public FrameEncoder, public FlushTarget {
+ public:
   struct Options : public pipy::Options {
     size_t connection_window_size = 0x100000;
     size_t stream_window_size = 0x100000;
@@ -367,27 +364,27 @@ public:
     Options(pjs::Object *options);
   };
 
-protected:
+ protected:
   Endpoint(bool is_server_side, const Options &options);
   ~Endpoint();
 
   class StreamBase;
 
   virtual void on_output(Event *evt) = 0;
-  virtual auto on_new_stream(int id) -> StreamBase* = 0;
+  virtual auto on_new_stream(int id) -> StreamBase * = 0;
   virtual void on_delete_stream(StreamBase *stream) = 0;
   virtual void on_endpoint_close(StreamEnd *eos) {}
 
   void reset();
   void init_settings(const uint8_t *data, size_t size);
   void process_event(Event *evt);
-  auto stream_open(int id) -> StreamBase*;
+  auto stream_open(int id) -> StreamBase *;
   void stream_close(int id);
   void stream_error(int id, ErrorCode err);
   void connection_error(ErrorCode err);
   void shutdown();
 
-private:
+ private:
   enum {
     INITIAL_SEND_WINDOW_SIZE = 0xffff,
     INITIAL_RECV_WINDOW_SIZE = 0xffff,
@@ -425,8 +422,8 @@ private:
   void on_deframe(Frame &frm) override;
   void on_deframe_error(ErrorCode err) override;
 
-  bool for_each_stream(const std::function<bool(StreamBase*)> &cb);
-  bool for_each_pending_stream(const std::function<bool(StreamBase*)> &cb);
+  bool for_each_stream(const std::function<bool(StreamBase *)> &cb);
+  bool for_each_pending_stream(const std::function<bool(StreamBase *)> &cb);
   void send_window_updates();
   void frame(Frame &frm);
   void flush();
@@ -440,14 +437,13 @@ private:
   void debug_dump_i(const Frame &frm) const;
   void debug_dump_o(const Frame &frm) const;
 
-protected:
-
+ protected:
   //
   // StreamBase
   //
 
   class StreamBase : public List<StreamBase>::Item {
-  protected:
+   protected:
     enum {
       INITIAL_SEND_WINDOW_SIZE = 0xffff,
       INITIAL_RECV_WINDOW_SIZE = 0xffff,
@@ -466,7 +462,7 @@ protected:
     StreamBase(Endpoint *endpoint, int id, bool is_server_side);
     virtual ~StreamBase();
 
-    auto endpoint() const -> Endpoint* { return m_endpoint; }
+    auto endpoint() const -> Endpoint * { return m_endpoint; }
     void encoder_input(Event *evt);
     void end_input();
     void end_output();
@@ -475,7 +471,7 @@ protected:
     virtual void decoder_output(Event *evt) = 0;
     virtual void end() = 0;
 
-  private:
+   private:
     void on_frame(Frame &frm);
     bool parse_padding(Frame &frm);
     bool parse_priority(Frame &frm);
@@ -493,13 +489,13 @@ protected:
     void close() { m_endpoint->stream_close(m_id); }
     void stream_error(ErrorCode err) { m_endpoint->stream_error(m_id, err); }
     void connection_error(ErrorCode err) { m_endpoint->connection_error(err); }
-  
+
     void set_pending(bool pending);
     void set_clearing(bool clearing);
     void pump();
     void recycle();
 
-    Endpoint* m_endpoint;
+    Endpoint *m_endpoint;
     int m_id;
     bool m_is_server_side;
     bool m_is_tunnel_requested = false;
@@ -514,8 +510,8 @@ protected:
     bool m_end_input = false;
     bool m_end_output = false;
     State m_state = IDLE;
-    HeaderDecoder& m_header_decoder;
-    HeaderEncoder& m_header_encoder;
+    HeaderDecoder &m_header_decoder;
+    HeaderEncoder &m_header_encoder;
     Data m_send_buffer;
     Data m_tail_buffer;
     int m_send_window = INITIAL_SEND_WINDOW_SIZE;
@@ -523,7 +519,7 @@ protected:
     int m_recv_window_max;
     int m_recv_window_low;
     int m_recv_payload_size = 0;
-    const Settings& m_peer_settings;
+    const Settings &m_peer_settings;
 
     friend class Endpoint;
   };
@@ -534,15 +530,15 @@ protected:
 //
 
 class Server : public Endpoint, public DemuxSession {
-public:
+ public:
   Server(const Options &options);
   virtual ~Server();
 
-  auto initial_stream() -> Input*;
+  auto initial_stream() -> Input *;
   void init();
   void shutdown() { Endpoint::shutdown(); }
 
-private:
+ private:
   class Stream;
   class InitialStream;
 
@@ -550,15 +546,13 @@ private:
   // Server::Stream
   //
 
-  class Stream :
-    public pjs::Pooled<Stream>,
-    public StreamBase,
-    public EventSource
-  {
+  class Stream : public pjs::Pooled<Stream>,
+                 public StreamBase,
+                 public EventSource {
     Stream(Server *server, int id);
     ~Stream();
 
-    EventFunction* m_handler;
+    EventFunction *m_handler;
 
     // Request (input)
     virtual void decoder_output(Event *evt) override;
@@ -577,12 +571,9 @@ private:
   // Server::InitialStream
   //
 
-  class InitialStream :
-    public pjs::Pooled<InitialStream>,
-    public EventTarget
-  {
-  public:
-    auto initial_request() const -> Message* { return m_initial_request; }
+  class InitialStream : public pjs::Pooled<InitialStream>, public EventTarget {
+   public:
+    auto initial_request() const -> Message * { return m_initial_request; }
 
     virtual void on_event(Event *evt) override {
       if (auto msg = m_message_reader.read(evt)) {
@@ -591,17 +582,21 @@ private:
       }
     }
 
-  private:
+   private:
     MessageReader m_message_reader;
     pjs::Ref<Message> m_initial_request;
   };
 
-  InitialStream* m_initial_stream = nullptr;
+  InitialStream *m_initial_stream = nullptr;
 
   virtual void on_event(Event *evt) override { Endpoint::process_event(evt); }
   virtual void on_output(Event *evt) override { EventFunction::output(evt); }
-  virtual auto on_new_stream(int id) -> StreamBase* override { return new Stream(this, id); }
-  virtual void on_delete_stream(StreamBase *stream) override { delete static_cast<Stream*>(stream); }
+  virtual auto on_new_stream(int id) -> StreamBase * override {
+    return new Stream(this, id);
+  }
+  virtual void on_delete_stream(StreamBase *stream) override {
+    delete static_cast<Stream *>(stream);
+  }
 };
 
 //
@@ -609,14 +604,14 @@ private:
 //
 
 class Client : public Endpoint, public EventSource {
-public:
+ public:
   Client(const Options &options);
 
-  auto stream() -> EventFunction*;
+  auto stream() -> EventFunction *;
   void close(EventFunction *stream);
   void shutdown() { Endpoint::shutdown(); }
 
-private:
+ private:
   class Stream;
 
   int m_last_sent_stream_id = -1;
@@ -625,11 +620,9 @@ private:
   // Client::Stream
   //
 
-  class Stream :
-    public pjs::Pooled<Stream>,
-    public StreamBase,
-    public EventFunction
-  {
+  class Stream : public pjs::Pooled<Stream>,
+                 public StreamBase,
+                 public EventFunction {
     Stream(Client *client, int id);
 
     bool m_has_message_started = false;
@@ -649,11 +642,15 @@ private:
 
   virtual void on_event(Event *evt) override { Endpoint::process_event(evt); }
   virtual void on_output(Event *evt) override { EventSource::output(evt); }
-  virtual auto on_new_stream(int id) -> StreamBase* override { return new Stream(this, id); }
-  virtual void on_delete_stream(StreamBase *stream) override { delete static_cast<Stream*>(stream); }
+  virtual auto on_new_stream(int id) -> StreamBase * override {
+    return new Stream(this, id);
+  }
+  virtual void on_delete_stream(StreamBase *stream) override {
+    delete static_cast<Stream *>(stream);
+  }
 };
 
-} // namespace http2
-} // namespace pipy
+}  // namespace http2
+}  // namespace pipy
 
-#endif // HTTP2_HPP
+#endif  // HTTP2_HPP

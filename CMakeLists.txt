@@ -6,8 +6,8 @@ endif()
 
 project(pipy)
 
-option(PIPY_GUI "include builtin GUI" ON)
-option(PIPY_SAMPLES "include builtin sample scripts" ON)
+option(PIPY_GUI "include builtin GUI" OFF)
+option(PIPY_SAMPLES "include builtin sample scripts" OFF)
 option(PIPY_SOIL_FREED_SPACE "invalidate freed space for debugging" OFF)
 option(PIPY_ASSERT_SAME_THREAD "enable assertions for strict inner-thread data access" OFF)
 option(PIPY_ZLIB "external zlib location" "")
@@ -73,14 +73,28 @@ else()
   message("LTO is disabled")
 endif()
 
+set(LIBEXT a)
+set(ZLIB_NAME libz)
+if(WIN32)
+ set(LIBEXT lib)
+ set(ZLIB_NAME zlib)
+ set(CMAKE_DL_LIBS crypt32)
+endif(WIN32)
+
 if(PIPY_ZLIB)
   set(ZLIB_INC_DIR ${PIPY_ZLIB}/include)
-  set(ZLIB_LIB ${PIPY_ZLIB}/lib/libz.a)
+  set(ZLIB_LIB ${PIPY_ZLIB}/lib/${ZLIB_NAME}.${LIBEXT})
 else()
   add_subdirectory(deps/zlib-1.3)
-  set(ZLIB_INC_DIR "${CMAKE_SOURCE_DIR}/deps/zlib-1.3" "${CMAKE_BINARY_DIR}/deps/zlib-1.3")
-  set(ZLIB_LIB zlibstatic)
+    set(ZLIB_INC_DIR "${CMAKE_SOURCE_DIR}/deps/zlib-1.3" "${CMAKE_BINARY_DIR}/deps/zlib-1.3")
+    set(ZLIB_LIB zlibstatic)
 endif()
+
+set(OPENSSL_OPTS ../config no-shared no-tests && make -j)
+if (WIN32)
+  message("ON WINDOWS")
+  set(OPENSSL_OPTS perl ../Configure no-shared no-tests VC-WIN64A && nmake)
+endif(WIN32)
 
 if(PIPY_OPENSSL)
   if(PIPY_USE_NTLS)
@@ -95,20 +109,20 @@ else()
   set(OPENSSL_INC_DIR ${OPENSSL_SRC_DIR}/include ${OPENSSL_LIB_DIR}/include)
 
   add_custom_command(
-    OUTPUT ${OPENSSL_LIB_DIR}/libcrypto.a ${OPENSSL_LIB_DIR}/libssl.a
+    OUTPUT ${OPENSSL_LIB_DIR}/libcrypto.${LIBEXT} ${OPENSSL_LIB_DIR}/libssl.${LIBEXT}
     WORKING_DIRECTORY ${OPENSSL_SRC_DIR}
     COMMAND mkdir -p ${OPENSSL_SRC_DIR}/build
-    COMMAND cd ${OPENSSL_SRC_DIR}/build && ../config no-shared no-tests && make -j
+    COMMAND cd ${OPENSSL_SRC_DIR}/build && ${OPENSSL_OPTS}
     VERBATIM
     COMMENT "Building OpenSSL"
   )
 endif()
 
-add_custom_target(OpenSSL DEPENDS ${OPENSSL_LIB_DIR}/libcrypto.a ${OPENSSL_LIB_DIR}/libssl.a)
+add_custom_target(OpenSSL DEPENDS ${OPENSSL_LIB_DIR}/libcrypto.${LIBEXT} ${OPENSSL_LIB_DIR}/libssl.${LIBEXT})
 
 if(PIPY_BROTLI)
   set(BROTLI_INC_DIR ${PIPY_BROTLI}/include)
-  set(BROTLI_LIB ${PIPY_BROTLI}/lib/libbrotlidec-static.a)
+  set(BROTLI_LIB ${PIPY_BROTLI}/lib/libbrotlidec-static.${LIBEXT})
 else()
   set(BROTLI_BUNDLED_MODE OFF CACHE BOOL "" FORCE)
   set(BROTLI_DISABLE_TESTS ON CACHE BOOL "" FORCE)
@@ -131,13 +145,19 @@ if(COMPILER_SUPPORTS_DELETE_NON_ABSTRACT_NON_VIRTUAL_DTOR)
     $<$<COMPILE_LANGUAGE:CXX>:-Wno-delete-non-abstract-non-virtual-dtor>)
 endif()
 
-add_compile_options(
-  -Wall
-  -Wno-overloaded-virtual
-  -Wno-delete-non-virtual-dtor
-  -Wno-sign-compare
-  -Wno-deprecated-declarations
-)
+if(MSVC)
+    add_compile_options(
+      -Wall
+    )
+else(MSVC)
+    add_compile_options(
+      -Wall
+      -Wno-overloaded-virtual
+      -Wno-delete-non-virtual-dtor
+      -Wno-sign-compare
+      -Wno-deprecated-declarations
+    )
+endif(MSVC)
 
 include_directories(
   "${CMAKE_SOURCE_DIR}/src"
@@ -154,7 +174,7 @@ include_directories(
   "${BROTLI_INC_DIR}"
 )
 
-add_subdirectory(test/benchmark/baseline)
+#add_subdirectory(test/benchmark/baseline)
 
 add_executable(pipy
   src/admin-link.cpp
@@ -283,17 +303,22 @@ add_executable(pipy
   src/worker.cpp
   src/worker-thread.cpp
   deps/sqlite-3.43.2/sqlite3.c
-)
+  )
+
+set(SHELL_EXT sh)
+if(WIN32)
+set(SHELL_EXT cmd) 
+endif(WIN32)
 
 add_custom_command(
   OUTPUT ${CMAKE_BINARY_DIR}/deps/version.h
-  COMMAND ${CMAKE_SOURCE_DIR}/generate_version_h.sh
+  COMMAND ${CMAKE_SOURCE_DIR}/generate_version_h.${SHELL_EXT}
   ARGS ${CMAKE_BINARY_DIR}/deps/version.h
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 
 add_custom_target(GenVer DEPENDS ${CMAKE_BINARY_DIR}/deps/version.h)
 
-add_dependencies(pipy yajl_s expat ${ZLIB_LIB} OpenSSL ${BROTLI_LIB} GenVer)
+add_dependencies(pipy yajl_s expat ${ZLIB_LIB} OpenSSL ${BROTLI_LIB})
 
 if(PIPY_GUI)
   add_definitions(-DPIPY_USE_GUI)
@@ -338,6 +363,8 @@ endif(PIPY_RFC8998)
 
 if(APPLE)
   set(CMAKE_EXE_LINKER_FLAGS "-Wl,-exported_symbols_list ${CMAKE_SOURCE_DIR}/include/pipy/nmi-exports.lst")
+elseif(WIN32)
+  set(CMAKE_EXE_LINKER_FLAGS "/DEF:${CMAKE_SOURCE_DIR}/include/pipy/nmi-exports.def")
 else()
   set(CMAKE_EXE_LINKER_FLAGS "-Wl,--dynamic-list ${CMAKE_SOURCE_DIR}/include/pipy/nmi-exports.txt")
 endif()
@@ -351,10 +378,14 @@ target_link_libraries(
   yajl_s
   expat
   ${ZLIB_LIB}
-  ${OPENSSL_LIB_DIR}/libssl.a
-  ${OPENSSL_LIB_DIR}/libcrypto.a
+  ${OPENSSL_LIB_DIR}/libssl.${LIBEXT}
+  ${OPENSSL_LIB_DIR}/libcrypto.${LIBEXT}
   ${BROTLI_LIB}
   leveldb
   -pthread
-  -ldl
+  ${CMAKE_DL_LIBS}
 )
+
+if(NOT MSVC)
+ target_link_libraries(pipy -ldl)
+endif()

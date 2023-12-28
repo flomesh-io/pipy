@@ -24,52 +24,54 @@
  */
 
 #include "exec.hpp"
-#include "fstream.hpp"
-#include "listener.hpp"
-#include "utils.hpp"
-#include "log.hpp"
 
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
+
+#include "fstream.hpp"
+#include "listener.hpp"
+#include "log.hpp"
+#include "utils.hpp"
+#ifdef _WIN32
+#include <numeric>
+#else
 #include <sys/wait.h>
+#include <unistd.h>
+#endif
 
 namespace pipy {
 
 thread_local static Data::Producer s_dp("exec()");
-
+#ifdef _WIN32
+static volatile long pipe_sn;
+#endif
 //
 // Exec
 //
 
-Exec::Exec(const pjs::Value &command)
-  : m_command(command)
-{
-}
+Exec::Exec(const pjs::Value &command) : m_command(command) {}
 
-Exec::Exec(const Exec &r)
-  : m_command(r.m_command)
-{
-}
+Exec::Exec(const Exec &r) : m_command(r.m_command) {}
 
-Exec::~Exec()
-{
-}
+Exec::~Exec() {}
 
 void Exec::dump(Dump &d) {
   Filter::dump(d);
   d.name = "exec";
 }
 
-auto Exec::clone() -> Filter* {
-  return new Exec(*this);
-}
+auto Exec::clone() -> Filter * { return new Exec(*this); }
 
 void Exec::reset() {
   Filter::reset();
   if (m_pid > 0) {
     s_child_process_monitor.remove(m_pid);
+#ifndef _WIN32
     kill(m_pid, SIGTERM);
+#else
+    CloseHandle(m_pif.hThread);
+    CloseHandle(m_pif.hProcess);
+#endif
   }
   m_pid = 0;
   if (m_stdin) {
@@ -89,13 +91,11 @@ void Exec::process(Event *evt) {
 
     std::list<std::string> args;
     if (ret.is_array()) {
-      ret.as<pjs::Array>()->iterate_all(
-        [&](pjs::Value &v, int) {
-          auto *s = v.to_string();
-          args.push_back(s->str());
-          s->release();
-        }
-      );
+      ret.as<pjs::Array>()->iterate_all([&](pjs::Value &v, int) {
+        auto *s = v.to_string();
+        args.push_back(s->str());
+        s->release();
+      });
     } else {
       auto *s = ret.to_string();
       args = utils::split(s->str(), ' ');
@@ -107,7 +107,7 @@ void Exec::process(Event *evt) {
       Filter::error("command is empty");
       return;
     }
-
+#ifndef _WIN32
     size_t i = 0;
     char *argv[argc + 1];
     for (const auto &arg : args) argv[i++] = strdup(arg.c_str());
@@ -141,6 +141,57 @@ void Exec::process(Event *evt) {
     }
 
     for (i = 0; i < argc; i++) free(argv[i]);
+#else
+    HANDLE read, write;
+    TCHAR PipeNameBuf[MAX_PATH];
+    auto nSize = 4096;
+    SECURITY_ATTRIBUTES sa = {.nLength = sizeof(SECURITY_ATTRIBUTES),
+                              .bInheritHandle = TRUE};
+
+    sprintf(PipeNameBuf, "\\\\.\\pipe\\ExecFilter.%08x.%08x",
+            GetCurrentProcessId(), InterlockedIncrement(&pipe_sn));
+    read = CreateNamedPipeA(
+        PipeNameBuf, PIPE_ACCESS_INBOUND | FILE_FLAG_OVERLAPPED,
+        PIPE_TYPE_BYTE | PIPE_WAIT, 1, nSize, nSize, 120 * 1000, &sa);
+    if (INVALID_HANDLE_VALUE == read) {
+      Filter::error("Unable to create named pipe due to %s",
+                    utils::last_error("CreateNamedPipeA").c_str());
+      return;
+    }
+    write = CreateFileA(PipeNameBuf, GENERIC_WRITE, 0, &sa, OPEN_EXISTING,
+                        FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED, NULL);
+    if (INVALID_HANDLE_VALUE == write) {
+      Filter::error("Unable to create write file due to %s",
+                    utils::last_error("CreateNamedPipeA").c_str());
+      CloseHandle(read);
+      return;
+    }
+
+    auto cmd = std::accumulate(
+        std::next(args.begin()), args.end(), args.front(),
+        [](std::string a, std::string b) { return a + " " + b; });
+
+    m_stdin = FileStream::make(false, write, &s_dp);
+    m_stdout = FileStream::make(true, read, &s_dp);
+    m_stdout->chain(output());
+
+    STARTUPINFO si = {.cb = sizeof(STARTUPINFO),
+                      .dwFlags = STARTF_USESTDHANDLES,
+                      .hStdInput = INVALID_HANDLE_VALUE,
+                      .hStdOutput = write,
+                      .hStdError = write};
+
+    auto success = CreateProcess(NULL, const_cast<char *>(cmd.c_str()), NULL,
+                                 NULL, TRUE, 0, NULL, NULL, &si, &m_pif);
+    if (success == FALSE) {
+      CloseHandle(write);
+      CloseHandle(read);
+      Filter::error("Unable to exec process due to %s",
+                    utils::last_error("CreateProcess").c_str());
+    }
+    m_pid = m_pif.dwProcessId;
+    s_child_process_monitor.monitor(m_pid, this);
+#endif
   }
 
   if (m_pid > 0 && m_stdin) {
@@ -155,8 +206,7 @@ void Exec::process(Event *evt) {
 Exec::ChildProcessMonitor Exec::s_child_process_monitor;
 
 Exec::ChildProcessMonitor::ChildProcessMonitor()
-  : m_wait_thread([this]() { wait(); })
-{
+    : m_wait_thread([this]() { wait(); }) {
   m_wait_thread.detach();
 }
 
@@ -175,27 +225,54 @@ void Exec::ChildProcessMonitor::remove(int pid) {
 void Exec::ChildProcessMonitor::wait() {
   Log::init();
   for (;;) {
+#ifndef _WIN32
     int status;
     auto pid = waitpid(-1, &status, 0);
     if (pid < 0) {
       sleep(1);
     } else if (pid > 0 && (WIFEXITED(status) || WIFSIGNALED(status))) {
+#else
+    std::vector<PROCESS_INFORMATION> filters;
+    int size = 0;
+    {
+      std::lock_guard<std::mutex> lock(m_mutex);
+      for (auto const &w : m_waiters) filters.push_back(w.second.filter->pif());
+      size = filters.size();
+    }
+    HANDLE handles[size];
+    std::transform(filters.begin(), filters.end(), handles,
+                   [](const PROCESS_INFORMATION &exe) {
+                     return exe.hProcess;
+                   }); 
+    if (size <= 0) {
+      Sleep(1000);
+      continue;
+    }
+    auto status = WaitForMultipleObjects(size, handles, FALSE, INFINITE);
+    if (WAIT_TIMEOUT == status) {
+      Sleep(1000);
+    } else {
+      auto idx = status - WAIT_OBJECT_0;
+      if (idx < 0 || idx > (size - 1)) {
+        Sleep(1000);
+        continue;
+      }
+      auto pid = filters.at(idx).dwProcessId;
+#endif
       Log::debug(Log::SUBPROC, "[exec] child process exited [pid = %d]", pid);
       std::lock_guard<std::mutex> lock(m_mutex);
       auto i = m_waiters.find(pid);
       if (i != m_waiters.end()) {
         auto &w = i->second;
         auto *f = w.filter;
-        w.net->post(
-          [=]() {
-            InputContext ic;
-            f->output(StreamEnd::make());
-          }
-        );
+        w.net->post([=]() {
+          InputContext ic;
+          f->output(StreamEnd::make());
+        });
         m_waiters.erase(i);
       }
     }
   }
 }
 
-} // namespace pipy
+}  // namespace pipy

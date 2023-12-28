@@ -32,286 +32,300 @@
 #include "buffer.hpp"
 #include "timer.hpp"
 
-namespace pipy {
+#ifdef _WIN32
+#undef NO_ERROR
+#endif
 
-//
-// SocketBase
-//
-
-class SocketBase {
-public:
-  struct Options {
-    size_t congestion_limit = 1024*1024;
-    size_t buffer_limit = 0;
-    double read_timeout = 0;
-    double write_timeout = 0;
-    double idle_timeout = 60;
-    bool keep_alive = true;
-    bool no_delay = true;
-  };
-
-protected:
-  SocketBase(bool is_inbound, const Options &options)
-    : m_is_inbound(is_inbound)
-    , m_options(options) {}
-
-  void log_debug(const char *msg);
-  void log_warn(const char *msg, const std::error_code &ec);
-  void log_error(const char *msg, const std::error_code &ec);
-  void log_error(const char *msg);
-
-  bool m_is_inbound;
-  const Options& m_options;
-  size_t m_traffic_read = 0;
-  size_t m_traffic_write = 0;
-
-  virtual void on_socket_input(Event *evt) = 0;
-  virtual void on_socket_close() = 0;
-  virtual void on_socket_describe(char *buf, size_t len) = 0;
-};
-
-//
-// SocketTCP
-//
-
-class SocketTCP :
-  public SocketBase,
-  public InputSource,
-  public FlushTarget,
-  public Ticker::Watcher
+namespace pipy
 {
-protected:
-  SocketTCP(bool is_inbound, const Options &options)
-    : SocketBase(is_inbound, options)
-    , FlushTarget(true)
-    , m_socket(Net::context()) {}
-
-  ~SocketTCP();
-
-  auto socket() -> asio::ip::tcp::socket& { return m_socket; }
-  auto buffered() const -> size_t { return m_buffer_send.size(); }
-
-  void open();
-  void output(Event *evt);
-  void close();
-
-private:
-  enum State {
-    IDLE,
-    OPEN,
-    HALF_CLOSED_REMOTE,
-    HALF_CLOSED_LOCAL,
-    CLOSED,
-  };
-
-  asio::ip::tcp::socket m_socket;
-  Data m_buffer_receive;
-  Data m_buffer_send;
-  pjs::Ref<StreamEnd> m_eos;
-  Congestion m_congestion;
-  double m_tick_read;
-  double m_tick_write;
-  State m_state = IDLE;
-  bool m_opened = false;
-  bool m_receiving = false;
-  bool m_sending = false;
-  bool m_paused = false;
-  bool m_closed = false;
-
-  void receive();
-  void send();
-  void shutdown_socket();
-  void close_socket();
-  void close_async();
-
-  virtual void on_tap_open() override;
-  virtual void on_tap_close() override;
-  virtual void on_flush() override;
-  virtual void on_tick(double tick) override;
-
-  void on_receive(const std::error_code &ec, std::size_t n);
-  void on_send(const std::error_code &ec, std::size_t n);
-
-  struct ReceiveHandler : public SelfHandler<SocketTCP> {
-    using SelfHandler::SelfHandler;
-    ReceiveHandler(const ReceiveHandler &r) : SelfHandler(r) {}
-    void operator()(const std::error_code &ec, std::size_t n) { self->on_receive(ec, n); }
-  };
-
-  struct SendHandler : public SelfHandler<SocketTCP> {
-    using SelfHandler::SelfHandler;
-    SendHandler(const SendHandler &r) : SelfHandler(r) {}
-    void operator()(const std::error_code &ec, std::size_t n) { self->on_send(ec, n); }
-  };
-
-  thread_local static Data::Producer s_dp;
-};
-
-//
-// SocketUDP
-//
-
-class SocketUDP :
-  public SocketBase,
-  public InputSource,
-  public Ticker::Watcher
-{
-public:
 
   //
-  // SocketUDP::Peer
+  // SocketBase
   //
 
-  class Peer {
+  class SocketBase
+  {
   public:
-    Peer() {}
-    ~Peer() { if (auto s = m_socket) s->m_peers.erase(m_endpoint); }
+    struct Options
+    {
+      size_t congestion_limit = 1024 * 1024;
+      size_t buffer_limit = 0;
+      double read_timeout = 0;
+      double write_timeout = 0;
+      double idle_timeout = 60;
+      bool keep_alive = true;
+      bool no_delay = true;
+    };
 
   protected:
-    void output(Event *evt) { if (auto s = m_socket) s->output(evt, this); }
-    auto local() const -> const asio::ip::udp::endpoint& { return m_socket->m_endpoint; }
-    auto peer() const -> const asio::ip::udp::endpoint& { return m_endpoint; }
+    SocketBase(bool is_inbound, const Options &options)
+        : m_is_inbound(is_inbound), m_options(options) {}
 
-  private:
-    void tick(double t);
+    void log_debug(const char *msg);
+    void log_warn(const char *msg, const std::error_code &ec);
+    void log_error(const char *msg, const std::error_code &ec);
+    void log_error(const char *msg);
+
+    bool m_is_inbound;
+    const Options &m_options;
+    size_t m_traffic_read = 0;
+    size_t m_traffic_write = 0;
+
+    virtual void on_socket_input(Event *evt) = 0;
+    virtual void on_socket_close() = 0;
+    virtual void on_socket_describe(char *buf, size_t len) = 0;
+  };
+
+  //
+  // SocketTCP
+  //
+
+  class SocketTCP : public SocketBase,
+                    public InputSource,
+                    public FlushTarget,
+                    public Ticker::Watcher
+  {
+  protected:
+    SocketTCP(bool is_inbound, const Options &options)
+        : SocketBase(is_inbound, options), FlushTarget(true), m_socket(Net::context()) {}
+
+    ~SocketTCP();
+
+    auto socket() -> asio::ip::tcp::socket & { return m_socket; }
+    auto buffered() const -> size_t { return m_buffer_send.size(); }
+
+    void open();
+    void output(Event *evt);
     void close();
 
-    SocketUDP* m_socket = nullptr;
-    asio::ip::udp::endpoint m_endpoint;
+  private:
+    enum State
+    {
+      IDLE,
+      OPEN,
+      HALF_CLOSED_REMOTE,
+      HALF_CLOSED_LOCAL,
+      CLOSED,
+    };
+
+    asio::ip::tcp::socket m_socket;
+    Data m_buffer_receive;
+    Data m_buffer_send;
+    pjs::Ref<StreamEnd> m_eos;
+    Congestion m_congestion;
     double m_tick_read;
     double m_tick_write;
+    State m_state = IDLE;
     bool m_opened = false;
+    bool m_receiving = false;
+    bool m_sending = false;
+    bool m_paused = false;
     bool m_closed = false;
 
-    virtual void on_peer_open() = 0;
-    virtual void on_peer_input(Event *evt) = 0;
-    virtual void on_peer_close() = 0;
+    void receive();
+    void send();
+    void shutdown_socket();
+    void close_socket();
+    void close_async();
 
-    friend class SocketUDP;
+    virtual void on_tap_open() override;
+    virtual void on_tap_close() override;
+    virtual void on_flush() override;
+    virtual void on_tick(double tick) override;
+
+    void on_receive(const std::error_code &ec, std::size_t n);
+    void on_send(const std::error_code &ec, std::size_t n);
+
+    struct ReceiveHandler : public SelfHandler<SocketTCP>
+    {
+      using SelfHandler::SelfHandler;
+      ReceiveHandler(const ReceiveHandler &r) : SelfHandler(r) {}
+      void operator()(const std::error_code &ec, std::size_t n) { self->on_receive(ec, n); }
+    };
+
+    struct SendHandler : public SelfHandler<SocketTCP>
+    {
+      using SelfHandler::SelfHandler;
+      SendHandler(const SendHandler &r) : SelfHandler(r) {}
+      void operator()(const std::error_code &ec, std::size_t n) { self->on_send(ec, n); }
+    };
+
+    thread_local static Data::Producer s_dp;
   };
 
-protected:
-  SocketUDP(bool is_inbound, const Options &options)
-    : SocketBase(is_inbound, options)
-    , m_socket(Net::context()) {}
+  //
+  // SocketUDP
+  //
 
-  ~SocketUDP();
+  class SocketUDP : public SocketBase,
+                    public InputSource,
+                    public Ticker::Watcher
+  {
+  public:
+    //
+    // SocketUDP::Peer
+    //
 
-  auto socket() -> asio::ip::udp::socket& { return m_socket; }
-  auto buffered() const -> size_t { return m_sending_size; }
+    class Peer
+    {
+    public:
+      Peer() {}
+      ~Peer()
+      {
+        if (auto s = m_socket)
+          s->m_peers.erase(m_endpoint);
+      }
 
-  void open();
-  void close();
-  void output(Event *evt);
+    protected:
+      void output(Event *evt)
+      {
+        if (auto s = m_socket)
+          s->output(evt, this);
+      }
+      auto local() const -> const asio::ip::udp::endpoint & { return m_socket->m_endpoint; }
+      auto peer() const -> const asio::ip::udp::endpoint & { return m_endpoint; }
 
-private:
-  virtual auto on_socket_new_peer() -> Peer* = 0;
+    private:
+      void tick(double t);
+      void close();
 
-  asio::ip::udp::socket m_socket;
-  asio::ip::udp::endpoint m_endpoint;
-  asio::ip::udp::endpoint m_from;
-  std::map<asio::ip::udp::endpoint, Peer*> m_peers;
-  EventBuffer m_buffer;
-  Congestion m_congestion;
-  int m_sending_size = 0;
-  int m_sending_count = 0;
-  bool m_receiving = false;
-  bool m_opened = false;
-  bool m_paused = false;
-  bool m_closing = false;
-  bool m_closed = false;
+      SocketUDP *m_socket = nullptr;
+      asio::ip::udp::endpoint m_endpoint;
+      double m_tick_read;
+      double m_tick_write;
+      bool m_opened = false;
+      bool m_closed = false;
 
-  void output(Event *evt, Peer *peer);
-  void receive();
-  void send(Data *data);
-  void send(Data *data, const asio::ip::udp::endpoint &endpoint);
-  void close_peers(StreamEnd::Error err = StreamEnd::Error::NO_ERROR);
-  void close_socket();
-  void close_async();
+      virtual void on_peer_open() = 0;
+      virtual void on_peer_input(Event *evt) = 0;
+      virtual void on_peer_close() = 0;
 
-  virtual void on_tap_open() override;
-  virtual void on_tap_close() override;
-  virtual void on_tick(double tick) override;
+      friend class SocketUDP;
+    };
 
-  void on_receive(Data *data, const std::error_code &ec, std::size_t n);
-  void on_send(Data *data, const std::error_code &ec, std::size_t n);
+  protected:
+    SocketUDP(bool is_inbound, const Options &options)
+        : SocketBase(is_inbound, options), m_socket(Net::context()) {}
 
-  struct ReceiveHandler : public SelfDataHandler<SocketUDP, Data> {
-    using SelfDataHandler::SelfDataHandler;
-    ReceiveHandler(const ReceiveHandler &r) : SelfDataHandler(r) {}
-    void operator()(const std::error_code &ec, std::size_t n) { self->on_receive(data, ec, n); }
+    ~SocketUDP();
+
+    auto socket() -> asio::ip::udp::socket & { return m_socket; }
+    auto buffered() const -> size_t { return m_sending_size; }
+
+    void open();
+    void close();
+    void output(Event *evt);
+
+  private:
+    virtual auto on_socket_new_peer() -> Peer * = 0;
+
+    asio::ip::udp::socket m_socket;
+    asio::ip::udp::endpoint m_endpoint;
+    asio::ip::udp::endpoint m_from;
+    std::map<asio::ip::udp::endpoint, Peer *> m_peers;
+    EventBuffer m_buffer;
+    Congestion m_congestion;
+    int m_sending_size = 0;
+    int m_sending_count = 0;
+    bool m_receiving = false;
+    bool m_opened = false;
+    bool m_paused = false;
+    bool m_closing = false;
+    bool m_closed = false;
+
+    void output(Event *evt, Peer *peer);
+    void receive();
+    void send(Data *data);
+    void send(Data *data, const asio::ip::udp::endpoint &endpoint);
+    void close_peers(StreamEnd::Error err = StreamEnd::Error::NO_ERROR);
+    void close_socket();
+    void close_async();
+
+    virtual void on_tap_open() override;
+    virtual void on_tap_close() override;
+    virtual void on_tick(double tick) override;
+
+    void on_receive(Data *data, const std::error_code &ec, std::size_t n);
+    void on_send(Data *data, const std::error_code &ec, std::size_t n);
+
+    struct ReceiveHandler : public SelfDataHandler<SocketUDP, Data>
+    {
+      using SelfDataHandler::SelfDataHandler;
+      ReceiveHandler(const ReceiveHandler &r) : SelfDataHandler(r) {}
+      void operator()(const std::error_code &ec, std::size_t n) { self->on_receive(data, ec, n); }
+    };
+
+    struct SendHandler : public SelfDataHandler<SocketUDP, Data>
+    {
+      using SelfDataHandler::SelfDataHandler;
+      SendHandler(const SendHandler &r) : SelfDataHandler(r) {}
+      void operator()(const std::error_code &ec, std::size_t n) { self->on_send(data, ec, n); }
+    };
+
+    thread_local static Data::Producer s_dp;
   };
 
-  struct SendHandler : public SelfDataHandler<SocketUDP, Data> {
-    using SelfDataHandler::SelfDataHandler;
-    SendHandler(const SendHandler &r) : SelfDataHandler(r) {}
-    void operator()(const std::error_code &ec, std::size_t n) { self->on_send(data, ec, n); }
+  //
+  // SocketNetlink
+  //
+
+  class SocketNetlink : public SocketBase,
+                        public InputSource
+  {
+  protected:
+    SocketNetlink(bool is_inbound, const Options &options)
+        : SocketBase(is_inbound, options), m_socket(Net::context()) {}
+
+    ~SocketNetlink() {}
+
+    auto socket() -> asio::generic::raw_protocol::socket & { return m_socket; }
+    auto buffered() const -> size_t { return m_sending_size; }
+
+    void open();
+    void close();
+    void output(Event *evt);
+
+  private:
+    asio::generic::raw_protocol::socket m_socket;
+    asio::generic::raw_protocol::endpoint m_endpoint;
+    asio::generic::raw_protocol::endpoint m_from;
+    EventBuffer m_buffer;
+    Congestion m_congestion;
+    int m_sending_size = 0;
+    int m_sending_count = 0;
+    bool m_receiving = false;
+    bool m_opened = false;
+    bool m_paused = false;
+    bool m_closing = false;
+    bool m_closed = false;
+
+    void receive();
+    void send(Data *data);
+    void close_socket();
+    void close_async();
+
+    virtual void on_tap_open() override;
+    virtual void on_tap_close() override;
+
+    void on_receive(Data *data, const std::error_code &ec, std::size_t n);
+    void on_send(Data *data, const std::error_code &ec, std::size_t n);
+
+    struct ReceiveHandler : public SelfDataHandler<SocketNetlink, Data>
+    {
+      using SelfDataHandler::SelfDataHandler;
+      ReceiveHandler(const ReceiveHandler &r) : SelfDataHandler(r) {}
+      void operator()(const std::error_code &ec, std::size_t n) { self->on_receive(data, ec, n); }
+    };
+
+    struct SendHandler : public SelfDataHandler<SocketNetlink, Data>
+    {
+      using SelfDataHandler::SelfDataHandler;
+      SendHandler(const SendHandler &r) : SelfDataHandler(r) {}
+      void operator()(const std::error_code &ec, std::size_t n) { self->on_send(data, ec, n); }
+    };
+
+    thread_local static Data::Producer s_dp;
   };
-
-  thread_local static Data::Producer s_dp;
-};
-
-//
-// SocketNetlink
-//
-
-class SocketNetlink :
-  public SocketBase,
-  public InputSource
-{
-protected:
-  SocketNetlink(bool is_inbound, const Options &options)
-    : SocketBase(is_inbound, options)
-    , m_socket(Net::context()) {}
-
-  ~SocketNetlink() {}
-
-  auto socket() -> asio::generic::raw_protocol::socket& { return m_socket; }
-  auto buffered() const -> size_t { return m_sending_size; }
-
-  void open();
-  void close();
-  void output(Event *evt);
-
-private:
-  asio::generic::raw_protocol::socket m_socket;
-  asio::generic::raw_protocol::endpoint m_endpoint;
-  asio::generic::raw_protocol::endpoint m_from;
-  EventBuffer m_buffer;
-  Congestion m_congestion;
-  int m_sending_size = 0;
-  int m_sending_count = 0;
-  bool m_receiving = false;
-  bool m_opened = false;
-  bool m_paused = false;
-  bool m_closing = false;
-  bool m_closed = false;
-
-  void receive();
-  void send(Data *data);
-  void close_socket();
-  void close_async();
-
-  virtual void on_tap_open() override;
-  virtual void on_tap_close() override;
-
-  void on_receive(Data *data, const std::error_code &ec, std::size_t n);
-  void on_send(Data *data, const std::error_code &ec, std::size_t n);
-
-  struct ReceiveHandler : public SelfDataHandler<SocketNetlink, Data> {
-    using SelfDataHandler::SelfDataHandler;
-    ReceiveHandler(const ReceiveHandler &r) : SelfDataHandler(r) {}
-    void operator()(const std::error_code &ec, std::size_t n) { self->on_receive(data, ec, n); }
-  };
-
-  struct SendHandler : public SelfDataHandler<SocketNetlink, Data> {
-    using SelfDataHandler::SelfDataHandler;
-    SendHandler(const SendHandler &r) : SelfDataHandler(r) {}
-    void operator()(const std::error_code &ec, std::size_t n) { self->on_send(data, ec, n); }
-  };
-
-  thread_local static Data::Producer s_dp;
-};
 
 } // namespace pipy
 

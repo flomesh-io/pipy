@@ -24,28 +24,39 @@
  */
 
 #include "fstream.hpp"
-#include "net.hpp"
+
 #include "constants.hpp"
-#include "pipeline.hpp"
 #include "log.hpp"
+#include "net.hpp"
+#include "pipeline.hpp"
+
+#ifdef _WIN32
+#include <io.h>
+#undef NO_ERROR
+#endif
 
 namespace pipy {
 
+#ifndef _WIN32
 FileStream::FileStream(bool read, int fd, Data::Producer *dp)
-  : FlushTarget(true)
-  , m_stream(Net::context(), fd)
-  , m_f(nullptr)
-  , m_dp(dp)
-{
+#else
+FileStream::FileStream(bool read, HANDLE fd, Data::Producer *dp)
+#endif
+    : FlushTarget(true), m_stream(Net::context(), fd), m_f(nullptr), m_dp(dp) {
   if (read) this->read();
 }
 
 FileStream::FileStream(bool read, FILE *f, Data::Producer *dp)
-  : FlushTarget(true)
-  , m_stream(Net::context(), fileno(f))
-  , m_f(f)
-  , m_dp(dp)
-{
+    : FlushTarget(true),
+      m_stream(Net::context(),
+#if defined(_WIN32)
+               (HANDLE)_get_osfhandle(_fileno(f))
+#else
+               fileno(f)
+#endif
+                   ),
+      m_f(f),
+      m_dp(dp) {
   if (read) this->read();
 }
 
@@ -63,9 +74,11 @@ void FileStream::close(bool close_fd) {
   }
 
   if (ec) {
-    Log::error("FileStream: %p, error closing stream [fd = %d], %s", this, m_fd, ec.message().c_str());
+    Log::error("FileStream: %p, error closing stream [fd = %d], %s", this, m_fd,
+               ec.message().c_str());
   } else if (Log::is_enabled(Log::FILES)) {
-    Log::debug(Log::FILES, "FileStream: %p, stream closed [fd = %d]", this, m_fd);
+    Log::debug(Log::FILES, "FileStream: %p, stream closed [fd = %d]", this,
+               m_fd);
   }
 
   if (m_f) {
@@ -82,9 +95,7 @@ void FileStream::on_event(Event *evt) {
   }
 }
 
-void FileStream::on_flush() {
-  pump();
-}
+void FileStream::on_flush() { pump(); }
 
 void FileStream::on_tap_open() {
   switch (m_receiving_state) {
@@ -96,7 +107,8 @@ void FileStream::on_tap_open() {
       read();
       release();
       break;
-    default: break;
+    default:
+      break;
   }
 }
 
@@ -118,21 +130,23 @@ void FileStream::read() {
     }
 
     if (ec) {
+#ifndef _WIN32
       if (ec == asio::error::eof) {
-        Log::debug(Log::FILES, "FileStream: %p, end of stream [fd = %d]", this, m_fd);
+#else
+      if (ec == asio::error::eof || ec == asio::error::broken_pipe) {
+#endif
+        Log::debug(Log::FILES, "FileStream: %p, end of stream [fd = %d]", this,
+                   m_fd);
         output(StreamEnd::make(StreamEnd::NO_ERROR));
       } else if (ec != asio::error::operation_aborted) {
         auto msg = ec.message();
-        Log::warn(
-          "FileStream: %p, error reading from stream [fd = %d]: %s",
-          this, m_fd, msg.c_str());
+        Log::warn("FileStream: %p, error reading from stream [fd = %d]: %s",
+                  this, m_fd, msg.c_str());
         output(StreamEnd::make(StreamEnd::READ_ERROR));
       }
-
     } else if (m_receiving_state == PAUSING) {
       m_receiving_state = PAUSED;
       retain();
-
     } else if (m_receiving_state == RECEIVING) {
       read();
     }
@@ -140,10 +154,7 @@ void FileStream::read() {
     release();
   };
 
-  m_stream.async_read_some(
-    DataChunks(buffer->chunks()),
-    on_received
-  );
+  m_stream.async_read_some(DataChunks(buffer->chunks()), on_received);
 
   retain();
 }
@@ -153,9 +164,8 @@ void FileStream::write(Data *data) {
     if (!data->empty()) {
       if (!m_overflowed) {
         if (m_buffer_limit > 0 && m_buffer.size() >= m_buffer_limit) {
-          Log::error(
-            "FileStream: %p, buffer overflow, size = %d, fd = %d",
-            this, m_fd, m_buffer.size());
+          Log::error("FileStream: %p, buffer overflow, size = %d, fd = %d",
+                     this, m_fd, m_buffer.size());
           m_overflowed = true;
         }
       }
@@ -189,11 +199,9 @@ void FileStream::pump() {
 
     if (ec) {
       auto msg = ec.message();
-      Log::warn(
-        "FileStream: %p, error writing to stream [fd = %d], %s",
-        this, m_fd, msg.c_str());
+      Log::warn("FileStream: %p, error writing to stream [fd = %d], %s", this,
+                m_fd, msg.c_str());
       m_buffer.clear();
-
     } else {
       pump();
     }
@@ -207,14 +215,11 @@ void FileStream::pump() {
     release();
   };
 
-  m_stream.async_write_some(
-    DataChunks(m_buffer.chunks()),
-    on_sent
-  );
+  m_stream.async_write_some(DataChunks(m_buffer.chunks()), on_sent);
 
   retain();
 
   m_pumping = true;
 }
 
-} // namespace pipy
+}  // namespace pipy

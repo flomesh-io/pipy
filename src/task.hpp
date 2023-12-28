@@ -26,21 +26,21 @@
 #ifndef TASK_HPP
 #define TASK_HPP
 
-#include "pjs/pjs.hpp"
-#include "event.hpp"
-#include "pipeline.hpp"
-#include "net.hpp"
-#include "timer.hpp"
-
 #include <set>
+
+#include "event.hpp"
+#include "net.hpp"
+#include "pipeline.hpp"
+#include "pjs/pjs.hpp"
+#include "timer.hpp"
 
 namespace pipy {
 
 class PipelineLayout;
 
 class Task : public EventTarget {
-public:
-  static auto make(const std::string &when, PipelineLayout *layout) -> Task* {
+ public:
+  static auto make(const std::string &when, PipelineLayout *layout) -> Task * {
     return new Task(when, layout);
   }
 
@@ -50,17 +50,17 @@ public:
     SIGNAL,
   };
 
-  auto when() const -> const std::string& { return m_when; }
+  auto when() const -> const std::string & { return m_when; }
   auto type() const -> Type { return m_type; }
   auto interval() const -> int { return m_interval; }
   auto signal() const -> int { return m_signal; }
-  auto pipeline_layout() const -> PipelineLayout* { return m_pipeline_layout; }
-  auto pipeline() const -> Pipeline* { return m_pipeline; }
+  auto pipeline_layout() const -> PipelineLayout * { return m_pipeline_layout; }
+  auto pipeline() const -> Pipeline * { return m_pipeline; }
   bool active() const;
   void start();
   void end();
 
-private:
+ private:
   Task(const std::string &when, PipelineLayout *layout);
   ~Task();
 
@@ -83,6 +83,6 @@ private:
   virtual void on_event(Event *evt) override;
 };
 
-} // namespace pipy
+}  // namespace pipy
 
-#endif // TASK_HPP
+#endif  // TASK_HPP

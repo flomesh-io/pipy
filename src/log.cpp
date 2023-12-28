@@ -24,8 +24,6 @@
  */
 
 #include "log.hpp"
-#include "data.hpp"
-#include "api/logging.hpp"
 
 #include <chrono>
 #include <cstdarg>
@@ -33,6 +31,13 @@
 #include <ctime>
 #include <deque>
 #include <sstream>
+
+#include "api/logging.hpp"
+#include "data.hpp"
+
+#ifdef _WIN32
+#undef ERROR
+#endif
 
 namespace pipy {
 
@@ -49,10 +54,10 @@ thread_local static logging::Logger *s_logger = nullptr;
 thread_local static Data::Producer s_dp("Log");
 
 static const char *s_levels[] = {
-  "[DBG]", // DEBUG
-  "[WRN]", // WARN
-  "[ERR]", // ERROR
-  "[INF]", // INFO
+    "[DBG]",  // DEBUG
+    "[WRN]",  // WARN
+    "[ERR]",  // ERROR
+    "[INF]",  // INFO
 };
 
 static void logf(Log::Level level, const char *fmt, va_list ap) {
@@ -95,27 +100,19 @@ void Log::set_filename(const std::string &filename) {
   s_log_filename = filename;
 }
 
-void Log::set_level(Level level) {
-  s_log_level = level;
-}
+void Log::set_level(Level level) { s_log_level = level; }
 
-void Log::set_topics(int topics) {
-  s_log_topics = topics;
-}
+void Log::set_topics(int topics) { s_log_topics = topics; }
 
-void Log::set_local_only(bool b) {
-  s_log_local_only = b;
-}
+void Log::set_local_only(bool b) { s_log_local_only = b; }
 
-bool Log::is_enabled(Level level) {
-  return (level >= s_log_level);
-}
+bool Log::is_enabled(Level level) { return (level >= s_log_level); }
 
 bool Log::is_enabled(Topic topic) {
   return (s_log_level <= DEBUG) && (s_log_topics & topic);
 }
 
-auto Log::format_elapsed_time() -> const char* {
+auto Log::format_elapsed_time() -> const char * {
   thread_local static char s_buf[12];
   format_elapsed_time(s_buf, sizeof(s_buf), true);
   return s_buf;
@@ -126,7 +123,11 @@ auto Log::format_elapsed_time(char *buf, size_t len, bool fill) -> size_t {
   thread_local static bool s_started = false;
 
   auto t = std::chrono::high_resolution_clock::now();
-  auto d = s_started ? std::chrono::duration_cast<std::chrono::microseconds>(t - s_time).count() : 0;
+  auto d =
+      s_started
+          ? std::chrono::duration_cast<std::chrono::microseconds>(t - s_time)
+                .count()
+          : 0;
   auto p = 0;
 
   s_time = t;
@@ -166,25 +167,16 @@ auto Log::format_header(Level level, char *buf, size_t len) -> size_t {
   return i;
 }
 
-auto Log::format_location(char *buf, size_t len, const pjs::Context::Location &loc, const char *func_name) -> size_t {
+auto Log::format_location(char *buf, size_t len,
+                          const pjs::Context::Location &loc,
+                          const char *func_name) -> size_t {
   auto source = loc.source;
   if (!source || source->filename.empty()) {
-    return std::snprintf(
-      buf, len,
-      "%s() at line %d column %d",
-      func_name,
-      loc.line,
-      loc.column
-    );
+    return std::snprintf(buf, len, "%s() at line %d column %d", func_name,
+                         loc.line, loc.column);
   } else {
-    return std::snprintf(
-      buf, len,
-      "%s() at line %d column %d in %s",
-      func_name,
-      loc.line,
-      loc.column,
-      loc.source->filename.c_str()
-    );
+    return std::snprintf(buf, len, "%s() at line %d column %d in %s", func_name,
+                         loc.line, loc.column, loc.source->filename.c_str());
   }
 }
 
@@ -241,21 +233,26 @@ void Log::error(const char *fmt, ...) {
   va_end(ap);
 }
 
-void Log::pjs_location(const std::string &source, const std::string &filename, int line, int column) {
+void Log::pjs_location(const std::string &source, const std::string &filename,
+                       int line, int column) {
   if (line > 0 && column > 0) {
     size_t i = 0;
     for (int l = 1; l < line; l++, i++) {
       while (i < source.length() && source[i] != '\n') i++;
       if (source[i] != '\n') return;
     }
-    while (i < source.length() && std::isblank(source[i]) && column > 1) { i++; column--; }
+    while (i < source.length() && std::isblank(source[i]) && column > 1) {
+      i++;
+      column--;
+    }
     size_t j = i;
     while (j < source.length() && source[j] != '\n') j++;
     auto str = source.substr(i, j - i);
     auto num = std::to_string(line);
     if (!filename.empty()) error("[pjs] File %s:", filename.c_str());
-    error("[pjs] Line %s:  %s" , num.c_str(), str.c_str());
-    error("[pjs]      %s   %s^", std::string(num.length(), ' ').c_str(), std::string(column - 1, ' ').c_str());
+    error("[pjs] Line %s:  %s", num.c_str(), str.c_str());
+    error("[pjs]      %s   %s^", std::string(num.length(), ' ').c_str(),
+          std::string(column - 1, ' ').c_str());
   }
 }
 
@@ -271,11 +268,12 @@ void Log::pjs_error(const pjs::Context::Error &err) {
     str += l.name;
     if (l.line && l.column) {
       char s[100];
-      std::sprintf(s, " at line %d column %d in %s", l.line, l.column, l.source->filename.c_str());
+      std::sprintf(s, " at line %d column %d in %s", l.line, l.column,
+                   l.source->filename.c_str());
       str += s;
     }
     error("    %s", str.c_str());
   }
 }
 
-} // namespace pipy
+}  // namespace pipy

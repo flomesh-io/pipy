@@ -24,15 +24,21 @@
  */
 
 #include "nmi.hpp"
+
+#include <algorithm>
+#include <cstdarg>
+#include <cstring>
+#include <list>
+
 #include "list.hpp"
 #include "worker.hpp"
 
-#include <cstdarg>
-#include <cstring>
-#include <algorithm>
-#include <list>
-
+#ifdef _WIN32
+#include <Windows.h>
+#include <strsafe.h>
+#else
 #include <dlfcn.h>
+#endif
 
 namespace pipy {
 namespace nmi {
@@ -47,9 +53,8 @@ struct Value {
   pjs::Value v;
   int hold_count = 0;
 
-  template<typename... Args>
-  Value(Args... args)
-    : v(std::forward<Args>(args)...) {}
+  template <typename... Args>
+  Value(Args... args) : v(std::forward<Args>(args)...) {}
 };
 
 thread_local static Table<Value> s_values;
@@ -58,10 +63,7 @@ thread_local static Table<Value> s_values;
 // LocalRef
 //
 
-struct LocalRef :
-  public pjs::Pooled<LocalRef>,
-  public List<LocalRef>::Item
-{
+struct LocalRef : public pjs::Pooled<LocalRef>, public List<LocalRef>::Item {
   int id;
 };
 
@@ -70,10 +72,8 @@ struct LocalRef :
 //
 
 class LocalRefPool {
-public:
-  static LocalRefPool* current() {
-    return s_current;
-  }
+ public:
+  static LocalRefPool *current() { return s_current; }
 
   static void add(int id) {
     if (s_current) {
@@ -94,7 +94,8 @@ public:
   ~LocalRefPool() {
     auto *p = m_values.head();
     while (p) {
-      auto *ref = p; p = p->next();
+      auto *ref = p;
+      p = p->next();
       if (auto *v = s_values.get(ref->id)) {
         if (!--v->hold_count) {
           s_values.free(ref->id);
@@ -105,28 +106,28 @@ public:
     s_current = m_back;
   }
 
-private:
-  LocalRefPool* m_back;
+ private:
+  LocalRefPool *m_back;
   List<LocalRef> m_values;
 
-  thread_local static LocalRefPool* s_current;
+  thread_local static LocalRefPool *s_current;
 };
 
-thread_local LocalRefPool* LocalRefPool::s_current = nullptr;
+thread_local LocalRefPool *LocalRefPool::s_current = nullptr;
 
 //
 // Pipeline
 //
 
-SharedTable<Pipeline*> Pipeline::m_pipeline_table;
+SharedTable<Pipeline *> Pipeline::m_pipeline_table;
 
-Pipeline::Pipeline(PipelineLayout *layout, Context *ctx, EventTarget::Input *out)
-  : m_layout(layout)
-  , m_id(m_pipeline_table.alloc(this))
-  , m_context(ctx)
-  , m_output(out)
-  , m_retain_count(1)
-{
+Pipeline::Pipeline(PipelineLayout *layout, Context *ctx,
+                   EventTarget::Input *out)
+    : m_layout(layout),
+      m_id(m_pipeline_table.alloc(this)),
+      m_context(ctx),
+      m_output(out),
+      m_retain_count(1) {
   LocalRefPool lrf;
   NativeModule::set_current(layout->m_module);
   layout->m_pipeline_init(m_id, &m_user_ptr);
@@ -135,7 +136,8 @@ Pipeline::Pipeline(PipelineLayout *layout, Context *ctx, EventTarget::Input *out
 
 void Pipeline::check_thread() {
   if (module()->net() != &Net::current()) {
-    throw std::runtime_error("operating native pipeline from a different thread");
+    throw std::runtime_error(
+        "operating native pipeline from a different thread");
   }
 }
 
@@ -148,9 +150,7 @@ void Pipeline::input(Event *evt) {
   NativeModule::set_current(nullptr);
 }
 
-void Pipeline::output(Event *evt) {
-  m_output->input(evt);
-}
+void Pipeline::output(Event *evt) { m_output->input(evt); }
 
 void Pipeline::release() {
   if (m_retain_count.fetch_sub(1, std::memory_order_acq_rel) == 1) {
@@ -167,18 +167,19 @@ void Pipeline::release() {
 // NativeModule
 //
 
-thread_local std::vector<NativeModule*> NativeModule::m_native_modules;
-thread_local NativeModule* NativeModule::m_current = nullptr;
+thread_local std::vector<NativeModule *> NativeModule::m_native_modules;
+thread_local NativeModule *NativeModule::m_current = nullptr;
 thread_local int NativeModule::m_last_variable_id = 0;
 
-auto NativeModule::find(const std::string &filename) -> NativeModule* {
+auto NativeModule::find(const std::string &filename) -> NativeModule * {
   for (auto *m : m_native_modules) {
     if (m && m->filename()->str() == filename) return m;
   }
   return nullptr;
 }
 
-auto NativeModule::load(const std::string &filename, int index) -> NativeModule* {
+auto NativeModule::load(const std::string &filename, int index)
+    -> NativeModule * {
   auto *m = new NativeModule(index, filename);
   if (m_native_modules.size() <= index) {
     m_native_modules.resize(index + 1);
@@ -188,11 +189,10 @@ auto NativeModule::load(const std::string &filename, int index) -> NativeModule*
 }
 
 NativeModule::NativeModule(int index, const std::string &filename)
-  : Module(index)
-  , m_net(&Net::current())
-{
+    : Module(index), m_net(&Net::current()) {
   m_filename = pjs::Str::make(filename);
 
+#ifndef _WIN32
   auto *handle = dlopen(filename.c_str(), RTLD_NOW);
   if (!handle) {
     std::string msg("cannot load native module '");
@@ -205,12 +205,37 @@ NativeModule::NativeModule(int index, const std::string &filename)
     std::string msg("pipy_module_init() not found in native module ");
     throw std::runtime_error(msg + filename);
   }
+#else
+  if (filename.size() > MAX_PATH)
+    throw std::runtime_error("native module path exceed windows path limit");
+
+  char lpModule[MAX_PATH];
+  HMODULE handle;
+
+  StringCchCopy(lpModule, MAX_PATH, filename.c_str());
+  auto len = strlen(lpModule);
+  for (auto i = 0; i < len; i++) {
+    if (lpModule[i] == '/') lpModule[i] == '\\';
+  }
+
+  handle = LoadLibraryEx(lpModule, NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
+  if (!handle) {
+    std::string msg("cannot load native module '");
+    throw std::runtime_error(msg + filename +
+                             "' due to: " + utils::last_error("LoadLibrary"));
+  }
+  FARPROC init_fn = GetProcAddress(handle, "pipy_module_init");
+  if (!init_fn) {
+    std::string msg("pipy_module_init() not found in native module ");
+    throw std::runtime_error(msg + filename);
+  }
+#endif
 
   set_current(this);
   (*(fn_pipy_module_init)init_fn)();
   set_current(nullptr);
 
-  std::list<pjs::Field*> fields;
+  std::list<pjs::Field *> fields;
 
   for (const auto &vd : m_variable_defs) {
     for (auto &prev : fields) {
@@ -222,11 +247,9 @@ NativeModule::NativeModule(int index, const std::string &filename)
         throw std::runtime_error(msg + filename);
       }
     }
-    auto *v = pjs::Variable::make(
-      vd.name, vd.value,
-      pjs::Field::Enumerable | pjs::Field::Writable,
-      vd.id
-    );
+    auto *v = pjs::Variable::make(vd.name, vd.value,
+                                  pjs::Field::Enumerable | pjs::Field::Writable,
+                                  vd.id);
     fields.push_back(v);
     if (vd.ns) {
       m_exports.emplace_back();
@@ -235,11 +258,8 @@ NativeModule::NativeModule(int index, const std::string &filename)
     }
   }
 
-  m_context_class = pjs::Class::make(
-    "ContextData",
-    pjs::class_of<ContextDataBase>(),
-    fields
-  );
+  m_context_class =
+      pjs::Class::make("ContextData", pjs::class_of<ContextDataBase>(), fields);
 
   for (const auto &pd : m_pipeline_defs) {
     if (pd.name && pd.name != pjs::Str::empty) {
@@ -250,14 +270,16 @@ NativeModule::NativeModule(int index, const std::string &filename)
         msg += filename;
         throw std::runtime_error(msg + filename);
       }
-      m_pipeline_layouts[pd.name] = new PipelineLayout(this, pd.init, pd.free, pd.process);
+      m_pipeline_layouts[pd.name] =
+          new PipelineLayout(this, pd.init, pd.free, pd.process);
     } else {
       m_entry_pipeline = new PipelineLayout(this, pd.init, pd.free, pd.process);
     }
   }
 }
 
-auto NativeModule::define_variable(int id, const char *name, const char *ns, const pjs::Value &value) -> int {
+auto NativeModule::define_variable(int id, const char *name, const char *ns,
+                                   const pjs::Value &value) -> int {
   if (id < 0) id = m_last_variable_id++;
   m_variable_defs.emplace_back();
   auto &v = m_variable_defs.back();
@@ -268,7 +290,9 @@ auto NativeModule::define_variable(int id, const char *name, const char *ns, con
   return id;
 }
 
-void NativeModule::define_pipeline(const char *name, fn_pipeline_init init, fn_pipeline_free free, fn_pipeline_process process) {
+void NativeModule::define_pipeline(const char *name, fn_pipeline_init init,
+                                   fn_pipeline_free free,
+                                   fn_pipeline_process process) {
   m_pipeline_defs.emplace_back();
   auto &p = m_pipeline_defs.back();
   p.name = name ? pjs::Str::make(name) : nullptr;
@@ -277,7 +301,7 @@ void NativeModule::define_pipeline(const char *name, fn_pipeline_init init, fn_p
   p.process = process;
 }
 
-auto NativeModule::pipeline_layout(pjs::Str *name) -> PipelineLayout* {
+auto NativeModule::pipeline_layout(pjs::Str *name) -> PipelineLayout * {
   if (name) {
     auto i = m_pipeline_layouts.find(name);
     if (i == m_pipeline_layouts.end()) return nullptr;
@@ -288,20 +312,18 @@ auto NativeModule::pipeline_layout(pjs::Str *name) -> PipelineLayout* {
 }
 
 void NativeModule::schedule(double timeout, const std::function<void()> &fn) {
-  m_net->post(
-    [=]() {
-      if (timeout > 0) {
-        auto *tmo = new Timeout;
-        tmo->timer.schedule(timeout, [=]() {
-          delete tmo;
-          callback(fn);
-        });
-      } else {
-        InputContext ic;
+  m_net->post([=]() {
+    if (timeout > 0) {
+      auto *tmo = new Timeout;
+      tmo->timer.schedule(timeout, [=]() {
+        delete tmo;
         callback(fn);
-      }
+      });
+    } else {
+      InputContext ic;
+      callback(fn);
     }
-  );
+  });
 }
 
 void NativeModule::callback(const std::function<void()> &fn) {
@@ -317,26 +339,25 @@ void NativeModule::bind_exports(Worker *worker) {
   }
 }
 
-auto NativeModule::new_context_data(pjs::Object *prototype) -> pjs::Object* {
+auto NativeModule::new_context_data(pjs::Object *prototype) -> pjs::Object * {
   auto obj = new ContextDataBase(m_filename);
   m_context_class->init(obj, prototype);
   return obj;
 }
 
-} // namespace nmi
-} // namespace pipy
+}  // namespace nmi
+}  // namespace pipy
 
 namespace pjs {
 
-template<> void ClassDef<pipy::nmi::NativeObject>::init()
-{
-}
+template <>
+void ClassDef<pipy::nmi::NativeObject>::init() {}
 
-} // namespace pjs
+}  // namespace pjs
 
 using namespace pipy;
 
-template<typename T>
+template <typename T>
 inline pjs_value to_local_value(T v) {
   auto i = nmi::s_values.alloc(v);
   nmi::LocalRefPool::add(i);
@@ -347,17 +368,11 @@ NMI_EXPORT pjs_value pjs_undefined() {
   return to_local_value(pjs::Value::undefined);
 }
 
-NMI_EXPORT pjs_value pjs_null() {
-  return to_local_value(pjs::Value::null);
-}
+NMI_EXPORT pjs_value pjs_null() { return to_local_value(pjs::Value::null); }
 
-NMI_EXPORT pjs_value pjs_boolean(int b) {
-  return to_local_value(bool(b));
-}
+NMI_EXPORT pjs_value pjs_boolean(int b) { return to_local_value(bool(b)); }
 
-NMI_EXPORT pjs_value pjs_number(double n) {
-  return to_local_value(n);
-}
+NMI_EXPORT pjs_value pjs_number(double n) { return to_local_value(n); }
 
 NMI_EXPORT pjs_value pjs_string(const char *s, int len) {
   if (len < 0) len = std::strlen(s);
@@ -401,12 +416,18 @@ NMI_EXPORT void pjs_free(pjs_value v) {
 NMI_EXPORT pjs_type pjs_type_of(pjs_value v) {
   if (auto *r = nmi::s_values.get(v)) {
     switch (r->v.type()) {
-      case pjs::Value::Type::Empty    : return PJS_TYPE_UNDEFINED;
-      case pjs::Value::Type::Undefined: return PJS_TYPE_UNDEFINED;
-      case pjs::Value::Type::Boolean  : return PJS_TYPE_BOOLEAN;
-      case pjs::Value::Type::Number   : return PJS_TYPE_NUMBER;
-      case pjs::Value::Type::String   : return PJS_TYPE_STRING;
-      case pjs::Value::Type::Object   : return PJS_TYPE_OBJECT;
+      case pjs::Value::Type::Empty:
+        return PJS_TYPE_UNDEFINED;
+      case pjs::Value::Type::Undefined:
+        return PJS_TYPE_UNDEFINED;
+      case pjs::Value::Type::Boolean:
+        return PJS_TYPE_BOOLEAN;
+      case pjs::Value::Type::Number:
+        return PJS_TYPE_NUMBER;
+      case pjs::Value::Type::String:
+        return PJS_TYPE_STRING;
+      case pjs::Value::Type::Object:
+        return PJS_TYPE_OBJECT;
     }
   }
   return PJS_TYPE_UNDEFINED;
@@ -580,7 +601,8 @@ NMI_EXPORT int pjs_string_get_utf8_data(pjs_value str, char *buf, int len) {
   return -1;
 }
 
-NMI_EXPORT int pjs_object_get_property(pjs_value obj, pjs_value k, pjs_value v) {
+NMI_EXPORT int pjs_object_get_property(pjs_value obj, pjs_value k,
+                                       pjs_value v) {
   if (auto *r = nmi::s_values.get(obj)) {
     if (r->v.is_object()) {
       auto *rk = nmi::s_values.get(k);
@@ -594,7 +616,8 @@ NMI_EXPORT int pjs_object_get_property(pjs_value obj, pjs_value k, pjs_value v) 
   return 0;
 }
 
-NMI_EXPORT int pjs_object_set_property(pjs_value obj, pjs_value k, pjs_value v) {
+NMI_EXPORT int pjs_object_set_property(pjs_value obj, pjs_value k,
+                                       pjs_value v) {
   if (auto *r = nmi::s_values.get(obj)) {
     if (r->v.is_object()) {
       auto *rk = nmi::s_values.get(k);
@@ -622,19 +645,20 @@ NMI_EXPORT int pjs_object_delete(pjs_value obj, pjs_value k) {
   return 0;
 }
 
-NMI_EXPORT void pjs_object_iterate(pjs_value obj, int (*cb)(pjs_value k, pjs_value v, void *user_ptr), void *user_ptr) {
+NMI_EXPORT void pjs_object_iterate(pjs_value obj,
+                                   int (*cb)(pjs_value k, pjs_value v,
+                                             void *user_ptr),
+                                   void *user_ptr) {
   if (auto *r = nmi::s_values.get(obj)) {
     if (r->v.is_object()) {
-      r->v.o()->iterate_while(
-        [=](pjs::Str *k, pjs::Value &v) {
-          nmi::LocalRefPool lrp;
-          auto i = nmi::s_values.alloc(k);
-          auto j = nmi::s_values.alloc(v);
-          lrp.add(i);
-          lrp.add(j);
-          return (bool)(*cb)(i, j, user_ptr);
-        }
-      );
+      r->v.o()->iterate_while([=](pjs::Str *k, pjs::Value &v) {
+        nmi::LocalRefPool lrp;
+        auto i = nmi::s_values.alloc(k);
+        auto j = nmi::s_values.alloc(v);
+        lrp.add(i);
+        lrp.add(j);
+        return (bool)(*cb)(i, j, user_ptr);
+      });
     }
   }
 }
@@ -740,7 +764,8 @@ NMI_EXPORT int pjs_array_unshift(pjs_value arr, pjs_value v) {
   return -1;
 }
 
-NMI_EXPORT pjs_value pjs_array_splice(pjs_value arr, int pos, int del_cnt, int ins_cnt, pjs_value v[]) {
+NMI_EXPORT pjs_value pjs_array_splice(pjs_value arr, int pos, int del_cnt,
+                                      int ins_cnt, pjs_value v[]) {
   if (del_cnt < 0) return 0;
   if (ins_cnt < 0) return 0;
   if (auto *r = nmi::s_values.get(arr)) {
@@ -763,7 +788,7 @@ NMI_EXPORT pjs_value pjs_array_splice(pjs_value arr, int pos, int del_cnt, int i
   return 0;
 }
 
-NMI_EXPORT void* pjs_native_ptr(pjs_value obj) {
+NMI_EXPORT void *pjs_native_ptr(pjs_value obj) {
   if (auto *r = nmi::s_values.get(obj)) {
     if (r->v.is<nmi::NativeObject>()) {
       auto *n = r->v.as<nmi::NativeObject>();
@@ -958,7 +983,8 @@ NMI_EXPORT pjs_value pipy_StreamEnd_get_error(pjs_value obj) {
   return 0;
 }
 
-NMI_EXPORT int pipy_define_variable(int id, const char *name, const char *ns, pjs_value value) {
+NMI_EXPORT int pipy_define_variable(int id, const char *name, const char *ns,
+                                    pjs_value value) {
   if (auto *m = nmi::NativeModule::current()) {
     if (value) {
       if (auto *pv = nmi::s_values.get(value)) {
@@ -971,7 +997,9 @@ NMI_EXPORT int pipy_define_variable(int id, const char *name, const char *ns, pj
   return -1;
 }
 
-NMI_EXPORT void pipy_define_pipeline(const char *name, fn_pipeline_init init, fn_pipeline_free free, fn_pipeline_process process) {
+NMI_EXPORT void pipy_define_pipeline(const char *name, fn_pipeline_init init,
+                                     fn_pipeline_free free,
+                                     fn_pipeline_process process) {
   if (auto *m = nmi::NativeModule::current()) {
     m->define_pipeline(name, init, free, process);
   }
@@ -990,9 +1018,7 @@ NMI_EXPORT void pipy_free(pipy_pipeline ppl) {
     if (&Net::current() == net) {
       p->release();
     } else {
-      net->post(
-        [=]() { p->release(); }
-      );
+      net->post([=]() { p->release(); });
     }
   }
 }
@@ -1041,15 +1067,13 @@ NMI_EXPORT void pipy_set_variable(pipy_pipeline ppl, int id, pjs_value value) {
   }
 }
 
-NMI_EXPORT void pipy_schedule(pipy_pipeline ppl, double timeout, void (*fn)(void *), void *user_ptr) {
+NMI_EXPORT void pipy_schedule(pipy_pipeline ppl, double timeout,
+                              void (*fn)(void *), void *user_ptr) {
   if (auto *p = nmi::Pipeline::get(ppl)) {
     p->retain();
-    p->module()->schedule(
-      timeout,
-      [=]() {
-        (*fn)(user_ptr);
-        p->release();
-      }
-    );
+    p->module()->schedule(timeout, [=]() {
+      (*fn)(user_ptr);
+      p->release();
+    });
   }
 }

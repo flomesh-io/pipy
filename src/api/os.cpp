@@ -24,20 +24,31 @@
  */
 
 #include "os.hpp"
-#include "fs.hpp"
-#include "data.hpp"
-#include "log.hpp"
 
 #include <sys/stat.h>
+
 #include <fstream>
+
+#include "data.hpp"
+#include "fs.hpp"
+#include "log.hpp"
+
+#ifdef _WIN32
+#define S_IFLNK (_S_IFDIR | _S_IFREG)
+#define S_ISDIR(mode) (((mode)&_S_IFMT) == _S_IFDIR)
+#define S_ISREG(mode) (((mode)&_S_IFMT) == _S_IFREG)
+#define S_ISCHR(mode) (((mode)&_S_IFMT) == _S_IFCHR)
+#define S_ISBLK(mode) (((mode)&_S_IFMT) == 0)
+#define S_ISFIFO(mode) (((mode)&_S_IFMT) == _S_IFIFO)
+#define S_ISLNK(mode) (((mode)&_S_IFMT) == S_IFLNK)
+#define S_ISSOCK(mode) (((mode)&_S_IFMT) == 0)
+#endif
 
 extern "C" char **environ;
 
 namespace pipy {
 
-OS::OS()
-  : m_env(pjs::Object::make())
-{
+OS::OS() : m_env(pjs::Object::make()) {
   for (auto e = environ; *e; e++) {
     if (auto p = std::strchr(*e, '=')) {
       std::string name(*e, p - *e);
@@ -46,25 +57,26 @@ OS::OS()
   }
 }
 
-bool OS::Stats::is_file()             { return S_ISREG(mode); }
-bool OS::Stats::is_directory()        { return S_ISDIR(mode); }
+bool OS::Stats::is_file() { return S_ISREG(mode); }
+bool OS::Stats::is_directory() { return S_ISDIR(mode); }
 bool OS::Stats::is_character_device() { return S_ISCHR(mode); }
-bool OS::Stats::is_block_device()     { return S_ISBLK(mode); }
-bool OS::Stats::is_fifo()             { return S_ISFIFO(mode); }
-bool OS::Stats::is_symbolic_link()    { return S_ISLNK(mode); }
-bool OS::Stats::is_socket()           { return S_ISSOCK(mode); }
+bool OS::Stats::is_block_device() { return S_ISBLK(mode); }
+bool OS::Stats::is_fifo() { return S_ISFIFO(mode); }
+bool OS::Stats::is_symbolic_link() { return S_ISLNK(mode); }
+bool OS::Stats::is_socket() { return S_ISSOCK(mode); }
 
-} // namespace pipy
+}  // namespace pipy
 
 namespace pjs {
 
 using namespace pipy;
 
-template<> void ClassDef<OS>::init() {
+template <>
+void ClassDef<OS>::init() {
   ctor();
 
   // os.readDir
-  method("readDir", [](Context &ctx, Object*, Value &ret) {
+  method("readDir", [](Context &ctx, Object *, Value &ret) {
     Str *pathname;
     if (!ctx.arguments(1, &pathname)) return;
     std::list<std::string> names;
@@ -78,7 +90,7 @@ template<> void ClassDef<OS>::init() {
   });
 
   // os.readFile
-  method("readFile", [](Context &ctx, Object*, Value &ret) {
+  method("readFile", [](Context &ctx, Object *, Value &ret) {
     thread_local static pipy::Data::Producer s_dp("os.readFile");
 
     Str *filename;
@@ -99,16 +111,15 @@ template<> void ClassDef<OS>::init() {
   });
 
   // os.writeFile
-  method("writeFile", [](Context &ctx, Object*, Value &ret) {
+  method("writeFile", [](Context &ctx, Object *, Value &ret) {
     Str *filename;
     Str *str = nullptr;
     pipy::Data *data = nullptr;
     if (!ctx.try_arguments(2, &filename, &str) &&
-        !ctx.arguments(2, &filename, &data))
-    {
+        !ctx.arguments(2, &filename, &data)) {
       return;
     }
-    std::ofstream fs(filename->str(), std::ios::out|std::ios::trunc);
+    std::ofstream fs(filename->str(), std::ios::out | std::ios::trunc);
     if (!fs.is_open()) {
       Log::error("os.writeFile: cannot open file: %s", filename->c_str());
       ret = Value::null;
@@ -124,11 +135,16 @@ template<> void ClassDef<OS>::init() {
   });
 
   // os.stat
-  method("stat", [](Context &ctx, Object*, Value &ret) {
+  method("stat", [](Context &ctx, Object *, Value &ret) {
     Str *filename;
     if (!ctx.arguments(1, &filename)) return;
+#ifdef _WIN32
+    struct _stat st;
+    if (_stat(filename->c_str(), &st)) {
+#else
     struct stat st;
     if (stat(filename->c_str(), &st)) {
+#endif
       ret = Value::null;
     } else {
       auto s = OS::Stats::make();
@@ -140,8 +156,13 @@ template<> void ClassDef<OS>::init() {
       s->gid = st.st_gid;
       s->rdev = st.st_rdev;
       s->size = st.st_size;
+#ifdef _WIN32
+      s->blksize = 4096;
+      s->blocks = 512;
+#else
       s->blksize = st.st_blksize;
       s->blocks = st.st_blocks;
+#endif
       s->atime = st.st_atime;
       s->mtime = st.st_mtime;
       s->ctime = st.st_ctime;
@@ -150,38 +171,76 @@ template<> void ClassDef<OS>::init() {
   });
 
   // os.unlink
-  method("unlink", [](Context &ctx, Object*, Value &ret) {
+  method("unlink", [](Context &ctx, Object *, Value &ret) {
     Str *filename;
     if (!ctx.arguments(1, &filename)) return;
     ret.set(fs::unlink(filename->str()));
   });
 
   // os.env
-  accessor("env", [](Object *obj, Value &ret) { ret.set(obj->as<OS>()->env()); });
+  accessor("env",
+           [](Object *obj, Value &ret) { ret.set(obj->as<OS>()->env()); });
 }
 
-template<> void ClassDef<OS::Stats>::init() {
-  accessor("dev",     [](Object *obj, Value &ret) { ret.set(obj->as<OS::Stats>()->dev); });
-  accessor("ino",     [](Object *obj, Value &ret) { ret.set(obj->as<OS::Stats>()->ino); });
-  accessor("mode",    [](Object *obj, Value &ret) { ret.set(obj->as<OS::Stats>()->mode); });
-  accessor("nlink",   [](Object *obj, Value &ret) { ret.set(obj->as<OS::Stats>()->nlink); });
-  accessor("uid",     [](Object *obj, Value &ret) { ret.set(obj->as<OS::Stats>()->uid); });
-  accessor("gid",     [](Object *obj, Value &ret) { ret.set(obj->as<OS::Stats>()->gid); });
-  accessor("rdev",    [](Object *obj, Value &ret) { ret.set(obj->as<OS::Stats>()->rdev); });
-  accessor("size",    [](Object *obj, Value &ret) { ret.set(obj->as<OS::Stats>()->size); });
-  accessor("blksize", [](Object *obj, Value &ret) { ret.set(obj->as<OS::Stats>()->blksize); });
-  accessor("blocks",  [](Object *obj, Value &ret) { ret.set(obj->as<OS::Stats>()->blocks); });
-  accessor("atime",   [](Object *obj, Value &ret) { ret.set(obj->as<OS::Stats>()->atime); });
-  accessor("mtime",   [](Object *obj, Value &ret) { ret.set(obj->as<OS::Stats>()->mtime); });
-  accessor("ctime",   [](Object *obj, Value &ret) { ret.set(obj->as<OS::Stats>()->ctime); });
+template <>
+void ClassDef<OS::Stats>::init() {
+  accessor("dev",
+           [](Object *obj, Value &ret) { ret.set(obj->as<OS::Stats>()->dev); });
+  accessor("ino",
+           [](Object *obj, Value &ret) { ret.set(obj->as<OS::Stats>()->ino); });
+  accessor("mode", [](Object *obj, Value &ret) {
+    ret.set(obj->as<OS::Stats>()->mode);
+  });
+  accessor("nlink", [](Object *obj, Value &ret) {
+    ret.set(obj->as<OS::Stats>()->nlink);
+  });
+  accessor("uid",
+           [](Object *obj, Value &ret) { ret.set(obj->as<OS::Stats>()->uid); });
+  accessor("gid",
+           [](Object *obj, Value &ret) { ret.set(obj->as<OS::Stats>()->gid); });
+  accessor("rdev", [](Object *obj, Value &ret) {
+    ret.set(obj->as<OS::Stats>()->rdev);
+  });
+  accessor("size", [](Object *obj, Value &ret) {
+    ret.set(obj->as<OS::Stats>()->size);
+  });
+  accessor("blksize", [](Object *obj, Value &ret) {
+    ret.set(obj->as<OS::Stats>()->blksize);
+  });
+  accessor("blocks", [](Object *obj, Value &ret) {
+    ret.set(obj->as<OS::Stats>()->blocks);
+  });
+  accessor("atime", [](Object *obj, Value &ret) {
+    ret.set(obj->as<OS::Stats>()->atime);
+  });
+  accessor("mtime", [](Object *obj, Value &ret) {
+    ret.set(obj->as<OS::Stats>()->mtime);
+  });
+  accessor("ctime", [](Object *obj, Value &ret) {
+    ret.set(obj->as<OS::Stats>()->ctime);
+  });
 
-  method("isFile",            [](Context&, Object *obj, Value &ret) { ret.set(obj->as<OS::Stats>()->is_file()); });
-  method("isDirectory",       [](Context&, Object *obj, Value &ret) { ret.set(obj->as<OS::Stats>()->is_directory()); });
-  method("isCharacterDevice", [](Context&, Object *obj, Value &ret) { ret.set(obj->as<OS::Stats>()->is_character_device()); });
-  method("isBlockDevice",     [](Context&, Object *obj, Value &ret) { ret.set(obj->as<OS::Stats>()->is_block_device()); });
-  method("isFIFO",            [](Context&, Object *obj, Value &ret) { ret.set(obj->as<OS::Stats>()->is_fifo()); });
-  method("isSymbolicLink",    [](Context&, Object *obj, Value &ret) { ret.set(obj->as<OS::Stats>()->is_symbolic_link()); });
-  method("isSocket",          [](Context&, Object *obj, Value &ret) { ret.set(obj->as<OS::Stats>()->is_socket()); });
+  method("isFile", [](Context &, Object *obj, Value &ret) {
+    ret.set(obj->as<OS::Stats>()->is_file());
+  });
+  method("isDirectory", [](Context &, Object *obj, Value &ret) {
+    ret.set(obj->as<OS::Stats>()->is_directory());
+  });
+  method("isCharacterDevice", [](Context &, Object *obj, Value &ret) {
+    ret.set(obj->as<OS::Stats>()->is_character_device());
+  });
+  method("isBlockDevice", [](Context &, Object *obj, Value &ret) {
+    ret.set(obj->as<OS::Stats>()->is_block_device());
+  });
+  method("isFIFO", [](Context &, Object *obj, Value &ret) {
+    ret.set(obj->as<OS::Stats>()->is_fifo());
+  });
+  method("isSymbolicLink", [](Context &, Object *obj, Value &ret) {
+    ret.set(obj->as<OS::Stats>()->is_symbolic_link());
+  });
+  method("isSocket", [](Context &, Object *obj, Value &ret) {
+    ret.set(obj->as<OS::Stats>()->is_socket());
+  });
 }
 
-} // namespace pjs
+}  // namespace pjs

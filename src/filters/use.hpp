@@ -26,10 +26,10 @@
 #ifndef USE_HPP
 #define USE_HPP
 
+#include <list>
+
 #include "filter.hpp"
 #include "nmi.hpp"
-
-#include <list>
 
 namespace pipy {
 
@@ -40,60 +40,46 @@ class JSModule;
 //
 
 class Use : public Filter {
-public:
-  Use(
-    JSModule *module,
-    pjs::Str *pipeline_name
-  );
+ public:
+  Use(JSModule *module, pjs::Str *pipeline_name);
 
-  Use(
-    nmi::NativeModule *module,
-    pjs::Str *pipeline_name
-  );
+  Use(nmi::NativeModule *module, pjs::Str *pipeline_name);
 
-  Use(
-    const std::list<JSModule*> &modules,
-    pjs::Str *pipeline_name,
-    pjs::Function *turn_down = nullptr
-  );
+  Use(const std::list<JSModule *> &modules, pjs::Str *pipeline_name,
+      pjs::Function *turn_down = nullptr);
 
-  Use(
-    const std::list<JSModule*> &modules,
-    pjs::Str *pipeline_name,
-    pjs::Str *pipeline_name_down,
-    pjs::Function *turn_down = nullptr
-  );
+  Use(const std::list<JSModule *> &modules, pjs::Str *pipeline_name,
+      pjs::Str *pipeline_name_down, pjs::Function *turn_down = nullptr);
 
-private:
+ private:
   Use(const Use &r);
   ~Use();
 
   virtual void bind() override;
-  virtual auto clone() -> Filter* override;
+  virtual auto clone() -> Filter * override;
   virtual void reset() override;
   virtual void process(Event *evt) override;
   virtual void dump(Dump &d) override;
 
   class Stage : public EventFunction {
-  public:
+   public:
     Stage(const Stage &r)
-      : m_pipeline_layout(r.m_pipeline_layout)
-      , m_pipeline_layout_down(r.m_pipeline_layout_down) {}
+        : m_pipeline_layout(r.m_pipeline_layout),
+          m_pipeline_layout_down(r.m_pipeline_layout_down) {}
 
     Stage(PipelineLayout *layout, PipelineLayout *layout_down)
-      : m_pipeline_layout(layout)
-      , m_pipeline_layout_down(layout_down) {}
+        : m_pipeline_layout(layout), m_pipeline_layout_down(layout_down) {}
 
     void reset();
 
-  private:
+   private:
     virtual void on_event(Event *evt) override;
 
-    auto input_down() -> EventTarget::Input*;
+    auto input_down() -> EventTarget::Input *;
 
-    Use* m_filter;
-    Stage* m_prev;
-    Stage* m_next;
+    Use *m_filter;
+    Stage *m_prev;
+    Stage *m_next;
     pjs::Ref<PipelineLayout> m_pipeline_layout;
     pjs::Ref<PipelineLayout> m_pipeline_layout_down;
     pjs::Ref<Pipeline> m_pipeline;
@@ -106,10 +92,10 @@ private:
 
   bool m_native = false;
   bool m_multiple = false;
-  nmi::NativeModule* m_native_module;
-  nmi::PipelineLayout* m_native_pipeline_layout = nullptr;
-  nmi::Pipeline* m_native_pipeline = nullptr;
-  std::list<JSModule*> m_modules;
+  nmi::NativeModule *m_native_module;
+  nmi::PipelineLayout *m_native_pipeline_layout = nullptr;
+  nmi::Pipeline *m_native_pipeline = nullptr;
+  std::list<JSModule *> m_modules;
   std::list<Stage> m_stages;
   pjs::Ref<pjs::Str> m_pipeline_name;
   pjs::Ref<pjs::Str> m_pipeline_name_down;
@@ -118,6 +104,6 @@ private:
   friend class Stage;
 };
 
-} // namespace pipy
+}  // namespace pipy
 
-#endif // USE_HPP
+#endif  // USE_HPP

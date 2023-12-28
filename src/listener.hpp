@@ -26,15 +26,15 @@
 #ifndef LISTENER_HPP
 #define LISTENER_HPP
 
-#include "net.hpp"
-#include "socket.hpp"
-#include "inbound.hpp"
-#include "options.hpp"
-
 #include <functional>
-#include <string>
-#include <set>
 #include <map>
+#include <set>
+#include <string>
+
+#include "inbound.hpp"
+#include "net.hpp"
+#include "options.hpp"
+#include "socket.hpp"
 
 namespace pipy {
 
@@ -46,7 +46,7 @@ class PipelineLayout;
 //
 
 class Listener {
-public:
+ public:
   enum class Protocol : int {
     TCP,
     UDP,
@@ -64,7 +64,8 @@ public:
 
   static void set_reuse_port(bool reuse);
 
-  static auto get(Protocol protocol, const std::string &ip, int port) -> Listener* {
+  static auto get(Protocol protocol, const std::string &ip, int port)
+      -> Listener * {
     if (auto *l = find(protocol, ip, port)) return l;
     return new Listener(protocol, ip, port);
   }
@@ -74,7 +75,7 @@ public:
     return false;
   }
 
-  static bool for_each(const std::function<bool(Listener*)> &cb) {
+  static bool for_each(const std::function<bool(Listener *)> &cb) {
     for (int i = 0; i < int(Protocol::MAX); i++) {
       for (auto *l : s_listeners[i]) {
         if (!cb(l)) return false;
@@ -85,23 +86,23 @@ public:
 
   static void delete_all();
 
-  auto options() const -> const Options& { return m_options; }
+  auto options() const -> const Options & { return m_options; }
   auto protocol() const -> Protocol { return m_protocol; }
-  auto ip() const -> const std::string& { return m_ip; }
+  auto ip() const -> const std::string & { return m_ip; }
   auto port() const -> int { return m_port; }
-  auto label() const -> pjs::Str* { return m_label; }
+  auto label() const -> pjs::Str * { return m_label; }
   bool is_open() const { return m_pipeline_layout; }
   bool reserved() const { return m_reserved; }
-  auto pipeline_layout() const -> PipelineLayout* { return m_pipeline_layout; }
+  auto pipeline_layout() const -> PipelineLayout * { return m_pipeline_layout; }
   bool pipeline_layout(PipelineLayout *layout);
   auto current_connections() const -> int { return m_inbounds.size(); }
   auto peak_connections() const -> int { return m_peak_connections; }
 
   void set_reserved(bool b) { m_reserved = b; }
   void set_options(const Options &options);
-  bool for_each_inbound(const std::function<bool(Inbound*)> &cb);
+  bool for_each_inbound(const std::function<bool(Inbound *)> &cb);
 
-private:
+ private:
   Listener(Protocol protocol, const std::string &ip, int port);
   ~Listener();
 
@@ -110,7 +111,7 @@ private:
   //
 
   class Acceptor : public pjs::RefCount<Acceptor> {
-  public:
+   public:
     virtual ~Acceptor() {}
     virtual void accept() = 0;
     virtual void cancel() = 0;
@@ -122,7 +123,7 @@ private:
   //
 
   class AcceptorTCP : public Acceptor {
-  public:
+   public:
     AcceptorTCP(Listener *listener);
     virtual ~AcceptorTCP();
 
@@ -132,8 +133,8 @@ private:
     virtual void cancel() override;
     virtual void stop() override;
 
-  private:
-    Listener* m_listener;
+   private:
+    Listener *m_listener;
     asio::ip::tcp::acceptor m_acceptor;
     pjs::Ref<InboundTCP> m_accepting;
   };
@@ -143,7 +144,7 @@ private:
   //
 
   class AcceptorUDP : public Acceptor, public SocketUDP {
-  public:
+   public:
     AcceptorUDP(Listener *listener);
     virtual ~AcceptorUDP();
 
@@ -153,14 +154,14 @@ private:
     virtual void cancel() override;
     virtual void stop() override;
 
-  private:
-    Listener* m_listener;
+   private:
+    Listener *m_listener;
     std::string m_local_addr;
     int m_local_port = 0;
     bool m_accepting = false;
 
     virtual void on_socket_input(Event *evt) override {}
-    virtual auto on_socket_new_peer() -> Peer* override;
+    virtual auto on_socket_new_peer() -> Peer * override;
     virtual void on_socket_describe(char *buf, size_t len) override;
     virtual void on_socket_close() override { release(); }
   };
@@ -187,10 +188,11 @@ private:
   pjs::Ref<pjs::Str> m_label;
   List<Inbound> m_inbounds;
 
-  thread_local static std::set<Listener*> s_listeners[];
+  thread_local static std::set<Listener *> s_listeners[];
   static bool s_reuse_port;
 
-  static auto find(Protocol protocol, const std::string &ip, int port) -> Listener*;
+  static auto find(Protocol protocol, const std::string &ip, int port)
+      -> Listener *;
 
   friend class Inbound;
   friend class pjs::RefCount<Listener>;
@@ -201,28 +203,29 @@ private:
 //
 
 class ListenerArray : public pjs::ObjectTemplate<ListenerArray> {
-public:
-  auto add_listener(int port, pjs::Object *options = nullptr) -> Listener*;
-  auto add_listener(pjs::Str *port, pjs::Object *options = nullptr) -> Listener*;
-  auto remove_listener(int port, pjs::Object *options = nullptr) -> Listener*;
-  auto remove_listener(pjs::Str *port, pjs::Object *options = nullptr) -> Listener*;
+ public:
+  auto add_listener(int port, pjs::Object *options = nullptr) -> Listener *;
+  auto add_listener(pjs::Str *port, pjs::Object *options = nullptr)
+      -> Listener *;
+  auto remove_listener(int port, pjs::Object *options = nullptr) -> Listener *;
+  auto remove_listener(pjs::Str *port, pjs::Object *options = nullptr)
+      -> Listener *;
   void set_listeners(pjs::Array *array);
   void apply(Worker *worker, PipelineLayout *layout);
 
-private:
-  ListenerArray(pjs::Object *options = nullptr)
-    : m_default_options(options) {}
+ private:
+  ListenerArray(pjs::Object *options = nullptr) : m_default_options(options) {}
 
   void get_ip_port(const std::string &ip_port, std::string &ip, int &port);
 
-  Worker* m_worker = nullptr;
+  Worker *m_worker = nullptr;
   pjs::Ref<PipelineLayout> m_pipeline_layout;
   pjs::Ref<pjs::Object> m_default_options;
-  std::map<Listener*, Listener::Options> m_listeners;
+  std::map<Listener *, Listener::Options> m_listeners;
 
   friend class pjs::ObjectTemplate<ListenerArray>;
 };
 
-} // namespace pipy
+}  // namespace pipy
 
-#endif // LISTENER_HPP
+#endif  // LISTENER_HPP

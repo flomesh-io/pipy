@@ -24,51 +24,37 @@
  */
 
 #include "task.hpp"
-#include "listener.hpp"
-#include "pipeline.hpp"
-#include "input.hpp"
-#include "worker.hpp"
-#include "utils.hpp"
 
 #include <signal.h>
 
+#include "input.hpp"
+#include "listener.hpp"
+#include "pipeline.hpp"
+#include "utils.hpp"
+#include "worker.hpp"
+
 std::map<std::string, int> s_signal_names = {
-  { "SIGHUP"    , SIGHUP    },
-  { "SIGINT"    , SIGINT    },
-  { "SIGQUIT"   , SIGQUIT   },
-  { "SIGILL"    , SIGILL    },
-  { "SIGTRAP"   , SIGTRAP   },
-  { "SIGABRT"   , SIGABRT   },
-  { "SIGFPE"    , SIGFPE    },
-  { "SIGKILL"   , SIGKILL   },
-  { "SIGBUS"    , SIGBUS    },
-  { "SIGSEGV"   , SIGSEGV   },
-  { "SIGSYS"    , SIGSYS    },
-  { "SIGPIPE"   , SIGPIPE   },
-  { "SIGALRM"   , SIGALRM   },
-  { "SIGTERM"   , SIGTERM   },
-  { "SIGURG"    , SIGURG    },
-  { "SIGSTOP"   , SIGSTOP   },
-  { "SIGTSTP"   , SIGTSTP   },
-  { "SIGCONT"   , SIGCONT   },
-  { "SIGCHLD"   , SIGCHLD   },
-  { "SIGTTIN"   , SIGTTIN   },
-  { "SIGTTOU"   , SIGTTOU   },
-  { "SIGIO"     , SIGIO     },
-  { "SIGXCPU"   , SIGXCPU   },
-  { "SIGXFSZ"   , SIGXFSZ   },
-  { "SIGVTALRM" , SIGVTALRM },
-  { "SIGPROF"   , SIGPROF   },
-  { "SIGWINCH"  , SIGWINCH  },
+#ifdef _WIN32
+    {"SIGINT", SIGINT},   {"SIGILL", SIGILL},   {"SIGFPE", SIGFPE},
+    {"SIGSEGV", SIGSEGV}, {"SIGTERM", SIGTERM}, {"SIGBREAK", SIGBREAK},
+    {"SIGABRT", SIGABRT},
+#else
+    {"SIGHUP", SIGHUP},       {"SIGINT", SIGINT},   {"SIGQUIT", SIGQUIT},
+    {"SIGILL", SIGILL},       {"SIGTRAP", SIGTRAP}, {"SIGABRT", SIGABRT},
+    {"SIGFPE", SIGFPE},       {"SIGKILL", SIGKILL}, {"SIGBUS", SIGBUS},
+    {"SIGSEGV", SIGSEGV},     {"SIGSYS", SIGSYS},   {"SIGPIPE", SIGPIPE},
+    {"SIGALRM", SIGALRM},     {"SIGTERM", SIGTERM}, {"SIGURG", SIGURG},
+    {"SIGSTOP", SIGSTOP},     {"SIGTSTP", SIGTSTP}, {"SIGCONT", SIGCONT},
+    {"SIGCHLD", SIGCHLD},     {"SIGTTIN", SIGTTIN}, {"SIGTTOU", SIGTTOU},
+    {"SIGIO", SIGIO},         {"SIGXCPU", SIGXCPU}, {"SIGXFSZ", SIGXFSZ},
+    {"SIGVTALRM", SIGVTALRM}, {"SIGPROF", SIGPROF}, {"SIGWINCH", SIGWINCH},
+#endif
 };
 
 namespace pipy {
 
 Task::Task(const std::string &when, PipelineLayout *layout)
-  : m_when(when)
-  , m_signal_set(Net::context())
-  , m_pipeline_layout(layout)
-{
+    : m_when(when), m_signal_set(Net::context()), m_pipeline_layout(layout) {
   if (when.empty()) {
     m_type = ONE_SHOT;
     keep_alive();
@@ -93,69 +79,54 @@ Task::Task(const std::string &when, PipelineLayout *layout)
   }
 }
 
-Task::~Task()
-{
-}
+Task::~Task() {}
 
-bool Task::active() const {
-  return m_pipeline;
-}
+bool Task::active() const { return m_pipeline; }
 
 void Task::start() {
   switch (m_type) {
-  case ONE_SHOT:
-    run();
-    break;
-  case CRON:
-    schedule(0);
-    break;
-  case SIGNAL:
-    wait();
-    break;
+    case ONE_SHOT:
+      run();
+      break;
+    case CRON:
+      schedule(0);
+      break;
+    case SIGNAL:
+      wait();
+      break;
   }
 }
 
-void Task::end() {
-  delete this;
-}
+void Task::end() { delete this; }
 
 void Task::schedule(double interval) {
-  m_timer.schedule(
-    interval,
-    [this]() {
-      run();
-      schedule(m_interval);
-    }
-  );
+  m_timer.schedule(interval, [this]() {
+    run();
+    schedule(m_interval);
+  });
 }
 
 void Task::keep_alive() {
-  m_timer.schedule(
-    1, [this]() {
-      if (!m_stream_end) {
-        keep_alive();
-      }
+  m_timer.schedule(1, [this]() {
+    if (!m_stream_end) {
+      keep_alive();
     }
-  );
+  });
 }
 
 void Task::wait() {
-  m_signal_set.async_wait(
-    [this](const std::error_code &ec, int) {
-      if (!ec) run();
-      wait();
-    }
-  );
+  m_signal_set.async_wait([this](const std::error_code &ec, int) {
+    if (!ec) run();
+    wait();
+  });
 }
 
 void Task::run() {
   if (!active()) {
     InputContext ic;
     m_stream_end = false;
-    m_pipeline = Pipeline::make(
-      m_pipeline_layout,
-      m_pipeline_layout->new_context()
-    );
+    m_pipeline =
+        Pipeline::make(m_pipeline_layout, m_pipeline_layout->new_context());
     m_pipeline->chain(EventTarget::input());
     m_pipeline->start();
   }
@@ -168,4 +139,4 @@ void Task::on_event(Event *evt) {
   }
 }
 
-} // namespace pipy
+}  // namespace pipy

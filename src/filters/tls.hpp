@@ -38,258 +38,266 @@
 #include <string>
 #include <set>
 
-namespace pipy {
-
-namespace tls {
-
-class TLSFilter;
-
-//
-// ProtocolVersion
-//
-
-enum class ProtocolVersion {
-  TLS1,
-  TLS1_1,
-  TLS1_2,
-  TLS1_3,
-};
-
-//
-// Options
-//
-
-struct Options : public pipy::Options {
-  pjs::EnumValue<ProtocolVersion> minVersion = ProtocolVersion::TLS1_2;
-  pjs::EnumValue<ProtocolVersion> maxVersion = ProtocolVersion::TLS1_3;
-  pjs::Ref<pjs::Str> ciphers;
-  pjs::Ref<pjs::Object> certificate;
-  std::vector<pjs::Ref<crypto::Certificate>> trusted;
-  pjs::Ref<pjs::Function> verify;
-  pjs::Ref<pjs::Function> handshake;
-#if PIPY_USE_NTLS
-  bool ntls = false;
-#endif
-
-  Options() {}
-  Options(pjs::Object *options, const char *base_name = nullptr);
-};
-
-//
-// TLSContext
-//
-
-class TLSContext {
-public:
-  TLSContext(bool is_server, const Options &options);
-  ~TLSContext();
-
-  auto ctx() const -> SSL_CTX* { return m_ctx; }
-  void set_protocol_versions(ProtocolVersion min, ProtocolVersion max);
-  void set_ciphers(const std::string &ciphers);
-  void set_dhparam(const std::string &data);
-  void add_certificate(crypto::Certificate *cert);
-  void set_client_alpn(const std::vector<std::string> &protocols);
-  void set_server_alpn(const std::set<pjs::Ref<pjs::Str>> &protocols);
-
-private:
-  SSL_CTX* m_ctx;
-  DH* m_dhparam = nullptr;
-  X509_STORE* m_verify_store;
-  std::set<pjs::Ref<pjs::Str>> m_server_alpn;
-
-  static auto on_verify(int preverify_ok, X509_STORE_CTX *ctx) -> int;
-  static auto on_server_name(SSL *ssl, int*, void*) -> int;
-  static auto on_select_alpn(
-    SSL *ssl,
-    const unsigned char **out,
-    unsigned char *outlen,
-    const unsigned char *in,
-    unsigned int inlen,
-    void *arg
-  ) -> int;
-};
-
-//
-// TLSSession
-//
-
-class TLSSession :
-  public pjs::Pooled<TLSSession>,
-  public EventProxy
+namespace pipy
 {
-public:
 
-  //
-  // HandshakeInfo
-  //
+  namespace tls
+  {
 
-  struct HandshakeInfo : public pjs::ObjectTemplate<HandshakeInfo> {
-    pjs::Ref<pjs::Str> alpn;
-  };
+    class TLSFilter;
 
-  static void init();
-  static auto get(SSL *ssl) -> TLSSession*;
+    //
+    // ProtocolVersion
+    //
 
-  TLSSession(
-    TLSContext *ctx,
-    Filter *filter,
-    bool is_server,
+    enum class ProtocolVersion
+    {
+      TLS1,
+      TLS1_1,
+      TLS1_2,
+      TLS1_3,
+    };
+
+    //
+    // Options
+    //
+
+    struct Options : public pipy::Options
+    {
+      pjs::EnumValue<ProtocolVersion> minVersion = ProtocolVersion::TLS1_2;
+      pjs::EnumValue<ProtocolVersion> maxVersion = ProtocolVersion::TLS1_3;
+      pjs::Ref<pjs::Str> ciphers;
+      pjs::Ref<pjs::Object> certificate;
+      std::vector<pjs::Ref<crypto::Certificate>> trusted;
+      pjs::Ref<pjs::Function> verify;
+      pjs::Ref<pjs::Function> handshake;
 #if PIPY_USE_NTLS
-    bool is_ntls,
+      bool ntls = false;
 #endif
-    pjs::Object *certificate,
-    pjs::Function *verify,
-    pjs::Function *alpn,
-    pjs::Function *handshake
-  );
 
-  ~TLSSession();
+      Options() {}
+      Options(pjs::Object *options, const char *base_name = nullptr);
+    };
 
-  void set_sni(const char *name);
-  void start_handshake();
+    //
+    // TLSContext
+    //
 
-private:
-  Filter* m_filter;
-  SSL* m_ssl;
-  BIO* m_rbio;
-  BIO* m_wbio;
-  Data m_buffer_write;
-  Data m_buffer_receive;
-  pjs::Ref<Pipeline> m_pipeline;
-  pjs::Ref<pjs::Object> m_certificate;
-  pjs::Ref<pjs::Object> m_ca;
-  pjs::Ref<pjs::Function> m_verify;
-  pjs::Ref<pjs::Function> m_alpn;
-  pjs::Ref<pjs::Function> m_handshake;
-  bool m_is_server;
+    class TLSContext
+    {
+    public:
+      TLSContext(bool is_server, const Options &options);
+      ~TLSContext();
+
+      auto ctx() const -> SSL_CTX * { return m_ctx; }
+      void set_protocol_versions(ProtocolVersion min, ProtocolVersion max);
+      void set_ciphers(const std::string &ciphers);
+      void set_dhparam(const std::string &data);
+      void add_certificate(crypto::Certificate *cert);
+      void set_client_alpn(const std::vector<std::string> &protocols);
+      void set_server_alpn(const std::set<pjs::Ref<pjs::Str>> &protocols);
+
+    private:
+      SSL_CTX *m_ctx;
+      DH *m_dhparam = nullptr;
+      X509_STORE *m_verify_store;
+      std::set<pjs::Ref<pjs::Str>> m_server_alpn;
+
+      static auto on_verify(int preverify_ok, X509_STORE_CTX *ctx) -> int;
+      static auto on_server_name(SSL *ssl, int *, void *) -> int;
+      static auto on_select_alpn(
+          SSL *ssl,
+          const unsigned char **out,
+          unsigned char *outlen,
+          const unsigned char *in,
+          unsigned int inlen,
+          void *arg) -> int;
+    };
+
+    //
+    // TLSSession
+    //
+
+    class TLSSession : public pjs::Pooled<TLSSession>,
+                       public EventProxy
+    {
+    public:
+      //
+      // HandshakeInfo
+      //
+
+      struct HandshakeInfo : public pjs::ObjectTemplate<HandshakeInfo>
+      {
+        pjs::Ref<pjs::Str> alpn;
+      };
+
+      static void init();
+      static auto get(SSL *ssl) -> TLSSession *;
+
+      TLSSession(
+          TLSContext *ctx,
+          Filter *filter,
+          bool is_server,
 #if PIPY_USE_NTLS
-  bool m_is_ntls;
+          bool is_ntls,
 #endif
-  bool m_closed_input = false;
-  bool m_closed_output = false;
+          pjs::Object *certificate,
+          pjs::Function *verify,
+          pjs::Function *alpn,
+          pjs::Function *handshake);
 
-  virtual void on_input(Event *evt) override;
-  virtual void on_reply(Event *evt) override;
+      ~TLSSession();
 
-  void on_receive_peer(Event *evt);
-  auto on_verify(int preverify_ok, X509_STORE_CTX *ctx) -> int;
-  void on_server_name();
-  auto on_select_alpn(pjs::Array *names) -> int;
+      void set_sni(const char *name);
+      void start_handshake();
 
-  void use_certificate(pjs::Str *sni);
-  bool handshake_step();
-  void handshake_done();
-  auto pump_send() -> int;
-  auto pump_receive() -> int;
-  void pump_read();
-  void pump_write();
-  void close();
+    private:
+      Filter *m_filter;
+      SSL *m_ssl;
+      BIO *m_rbio;
+      BIO *m_wbio;
+      Data m_buffer_write;
+      Data m_buffer_receive;
+      pjs::Ref<Pipeline> m_pipeline;
+      pjs::Ref<pjs::Object> m_certificate;
+      pjs::Ref<pjs::Object> m_ca;
+      pjs::Ref<pjs::Function> m_verify;
+      pjs::Ref<pjs::Function> m_alpn;
+      pjs::Ref<pjs::Function> m_handshake;
+      bool m_is_server;
+#if PIPY_USE_NTLS
+      bool m_is_ntls;
+#endif
+      bool m_closed_input = false;
+      bool m_closed_output = false;
 
-  static int s_user_data_index;
+      virtual void on_input(Event *evt) override;
+      virtual void on_reply(Event *evt) override;
 
-  friend class pjs::RefCount<TLSSession>;
-  friend class TLSContext;
-};
+      void on_receive_peer(Event *evt);
+      auto on_verify(int preverify_ok, X509_STORE_CTX *ctx) -> int;
+      void on_server_name();
+      auto on_select_alpn(pjs::Array *names) -> int;
 
-//
-// Client
-//
+      void use_certificate(pjs::Str *sni);
+      bool handshake_step();
+      void handshake_done();
+      auto pump_send() -> int;
+      auto pump_receive() -> int;
+      void pump_read();
+      void pump_write();
+      void close();
 
-class Client : public Filter {
-public:
-  struct Options : public tls::Options {
-    std::vector<std::string> alpn;
-    pjs::Ref<pjs::Str> sni;
-    pjs::Ref<pjs::Function> sni_f;
+      static int s_user_data_index;
 
-    Options() {}
-    Options(pjs::Object *options, const char *base_name = nullptr);
-  };
+      friend class pjs::RefCount<TLSSession>;
+      friend class TLSContext;
+    };
 
-  Client(const Options &options);
+    //
+    // Client
+    //
 
-private:
-  Client(const Client &r);
-  ~Client();
+    class Client : public Filter
+    {
+    public:
+      struct Options : public tls::Options
+      {
+        std::vector<std::string> alpn;
+        pjs::Ref<pjs::Str> sni;
+        pjs::Ref<pjs::Function> sni_f;
 
-  virtual auto clone() -> Filter* override;
-  virtual void reset() override;
-  virtual void process(Event *evt) override;
-  virtual void dump(Dump &d) override;
+        Options() {}
+        Options(pjs::Object *options, const char *base_name = nullptr);
+      };
 
-  std::shared_ptr<TLSContext> m_tls_context;
-  std::shared_ptr<Options> m_options;
-  TLSSession* m_session = nullptr;
-};
+      Client(const Options &options);
 
-//
-// Server
-//
+    private:
+      Client(const Client &r);
+      ~Client();
 
-class Server : public Filter {
-public:
-  struct Options : public tls::Options {
-    pjs::Ref<pjs::Str> dhparam_s;
-    pjs::Ref<Data> dhparam;
-    pjs::Ref<pjs::Function> alpn;
-    std::set<pjs::Ref<pjs::Str>> alpn_set;
+      virtual auto clone() -> Filter * override;
+      virtual void reset() override;
+      virtual void process(Event *evt) override;
+      virtual void dump(Dump &d) override;
 
-    Options() {}
-    Options(pjs::Object *options);
-  };
+      std::shared_ptr<TLSContext> m_tls_context;
+      std::shared_ptr<Options> m_options;
+      TLSSession *m_session = nullptr;
+    };
 
-  Server(const Options &options);
+    //
+    // Server
+    //
 
-private:
-  Server(const Server &r);
-  ~Server();
+    class Server : public Filter
+    {
+    public:
+      struct Options : public tls::Options
+      {
+        pjs::Ref<pjs::Str> dhparam_s;
+        pjs::Ref<Data> dhparam;
+        pjs::Ref<pjs::Function> alpn;
+        std::set<pjs::Ref<pjs::Str>> alpn_set;
 
-  virtual auto clone() -> Filter* override;
-  virtual void reset() override;
-  virtual void process(Event *evt) override;
-  virtual void dump(Dump &d) override;
+        Options() {}
+        Options(pjs::Object *options);
+      };
 
-  std::shared_ptr<TLSContext> m_tls_context;
-  std::shared_ptr<Options> m_options;
-  TLSSession* m_session = nullptr;
-};
+      Server(const Options &options);
 
-//
-// OnClientHello
-//
+    private:
+      Server(const Server &r);
+      ~Server();
 
-class OnClientHello : public Filter {
-public:
-  OnClientHello(pjs::Function *callback);
+      virtual auto clone() -> Filter * override;
+      virtual void reset() override;
+      virtual void process(Event *evt) override;
+      virtual void dump(Dump &d) override;
 
-private:
-  OnClientHello(const OnClientHello &r);
-  ~OnClientHello();
+      std::shared_ptr<TLSContext> m_tls_context;
+      std::shared_ptr<Options> m_options;
+      TLSSession *m_session = nullptr;
+    };
 
-  virtual auto clone() -> Filter* override;
-  virtual void reset() override;
-  virtual void process(Event *evt) override;
-  virtual void dump(Dump &d) override;
+    //
+    // OnClientHello
+    //
 
-  enum State {
-    READ_TYPE,
-    READ_SIZE,
-    READ_DATA,
-    DONE,
-  };
+    class OnClientHello : public Filter
+    {
+    public:
+      OnClientHello(pjs::Function *callback);
 
-  pjs::Ref<pjs::Function> m_callback;
-  State m_rec_state = READ_TYPE;
-  State m_hsk_state = READ_TYPE;
-  uint8_t m_rec_read_size;
-  uint8_t m_hsk_read_size;
-  uint16_t m_rec_data_size;
-  uint32_t m_hsk_data_size;
-  Data m_message;
-};
+    private:
+      OnClientHello(const OnClientHello &r);
+      ~OnClientHello();
 
-} // namespace tls
+      virtual auto clone() -> Filter * override;
+      virtual void reset() override;
+      virtual void process(Event *evt) override;
+      virtual void dump(Dump &d) override;
+
+      enum State
+      {
+        READ_TYPE,
+        READ_SIZE,
+        READ_DATA,
+        DONE,
+      };
+
+      pjs::Ref<pjs::Function> m_callback;
+      State m_rec_state = READ_TYPE;
+      State m_hsk_state = READ_TYPE;
+      uint8_t m_rec_read_size;
+      uint8_t m_hsk_read_size;
+      uint16_t m_rec_data_size;
+      uint32_t m_hsk_data_size;
+      Data m_message;
+    };
+
+  } // namespace tls
 } // namespace pipy
 
 #endif // TLS_HPP

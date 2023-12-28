@@ -31,7 +31,7 @@
 namespace pipy {
 
 class OS : public pjs::ObjectTemplate<OS> {
-public:
+ public:
   struct Stats : public pjs::ObjectTemplate<Stats> {
     int dev;
     int ino;
@@ -58,7 +58,7 @@ public:
 
   auto env() -> pjs::Object* { return m_env; }
 
-private:
+ private:
   OS();
 
   pjs::Ref<pjs::Object> m_env;
@@ -66,6 +66,6 @@ private:
   friend class pjs::ObjectTemplate<OS>;
 };
 
-} // namespace pipy
+}  // namespace pipy
 
-#endif // API_OS_HPP
+#endif  // API_OS_HPP

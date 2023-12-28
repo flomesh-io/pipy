@@ -35,6 +35,10 @@
 #include <string>
 #include <vector>
 
+#ifdef _WIN32
+#undef ERROR
+#endif
+
 namespace pipy {
 
 class Worker;

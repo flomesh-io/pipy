@@ -34,19 +34,18 @@ namespace pjs {
 // Pool
 //
 
-auto Pool::all() -> std::map<std::string, Pool*> & {
-  thread_local static std::map<std::string, Pool*> a;
+auto Pool::all() -> std::map<std::string, Pool *> & {
+  thread_local static std::map<std::string, Pool *> a;
   return a;
 }
 
 Pool::Pool(const std::string &name, size_t size)
-  : m_name(name)
-  , m_size(std::max(size, sizeof(void*)))
-  , m_free_list(nullptr)
-  , m_return_list(nullptr)
-  , m_allocated(0)
-  , m_pooled(0)
-{
+    : m_name(name),
+      m_size(std::max(size, sizeof(void *))),
+      m_free_list(nullptr),
+      m_return_list(nullptr),
+      m_allocated(0),
+      m_pooled(0) {
   retain();
   if (!name.empty()) {
     all()[name] = this;
@@ -54,30 +53,32 @@ Pool::Pool(const std::string &name, size_t size)
 }
 
 Pool::~Pool() {
-  for (auto *p = m_free_list; p; ) {
-    auto h = p; p = p->next;
+  for (auto *p = m_free_list; p;) {
+    auto h = p;
+    p = p->next;
     std::free(h);
   }
-  for (auto *p = m_return_list.load(); p; ) {
-    auto h = p; p = p->next;
+  for (auto *p = m_return_list.load(); p;) {
+    auto h = p;
+    p = p->next;
     std::free(h);
   }
 }
 
-auto Pool::alloc() -> void* {
+auto Pool::alloc() -> void * {
   accept_returns();
   m_allocated++;
   if (auto *h = m_free_list) {
     m_free_list = h->next;
     m_pooled--;
     retain();
-    return (char*)h + sizeof(Head);
+    return (char *)h + sizeof(Head);
   } else {
-    h = (Head*)std::malloc(sizeof(Head) + m_size);
+    h = (Head *)std::malloc(sizeof(Head) + m_size);
     h->pool = this;
     h->next = nullptr;
     retain();
-    return (char*)h + sizeof(Head);
+    return (char *)h + sizeof(Head);
   }
 }
 
@@ -85,7 +86,7 @@ void Pool::free(void *p) {
 #ifdef PIPY_SOIL_FREED_SPACE
   std::memset(p, 0xfe, m_size);
 #endif
-  auto *h = (Head*)((char*)p - sizeof(Head));
+  auto *h = (Head *)((char *)p - sizeof(Head));
   if (h->pool == this) {
     h->next = m_free_list;
     m_free_list = h;
@@ -101,24 +102,22 @@ void Pool::add_return(Head *h) {
   auto *p = m_return_list.load(std::memory_order_relaxed);
   do {
     h->next = p;
-  } while (!m_return_list.compare_exchange_weak(
-    p, h,
-    std::memory_order_release,
-    std::memory_order_relaxed
-  ));
+  } while (!m_return_list.compare_exchange_weak(p, h, std::memory_order_release,
+                                                std::memory_order_relaxed));
   release();
 }
 
 void Pool::accept_returns() {
   if (auto *h = m_return_list.load(std::memory_order_relaxed)) {
     while (!m_return_list.compare_exchange_weak(
-      h, nullptr,
-      std::memory_order_acquire,
-      std::memory_order_relaxed
-    )) {}
+        h, nullptr, std::memory_order_acquire, std::memory_order_relaxed)) {
+    }
     int n = 1;
     auto *p = h;
-    while (p->next) {p = p->next; n++; }
+    while (p->next) {
+      p = p->next;
+      n++;
+    }
     p->next = m_free_list;
     m_free_list = h;
     m_allocated -= n;
@@ -148,14 +147,16 @@ void Pool::clean() {
 //
 
 PooledClass::PooledClass(const char *c_name, size_t size) {
+#if defined(_MSC_VER)
+  auto cxx_name = c_name;
+#else
   int status;
   auto cxx_name = c_name ? abi::__cxa_demangle(c_name, 0, 0, &status) : nullptr;
+#endif
   m_pool = new Pool(cxx_name ? cxx_name : (c_name ? c_name : ""), size);
 }
 
-PooledClass::~PooledClass() {
-  m_pool->release();
-}
+PooledClass::~PooledClass() { m_pool->release(); }
 
 //
 // Str
@@ -174,7 +175,7 @@ size_t Str::s_max_size = 256 * 0x400 * 0x400;
 
 thread_local static char s_shared_str_tmp_buf[0x10000];
 
-static auto str_make_tmp_buf(size_t size) -> char* {
+static auto str_make_tmp_buf(size_t size) -> char * {
   if (size < sizeof(s_shared_str_tmp_buf)) {
     return s_shared_str_tmp_buf;
   } else {
@@ -184,16 +185,16 @@ static auto str_make_tmp_buf(size_t size) -> char* {
 
 static void str_free_tmp_buf(char *buf) {
   if (buf != s_shared_str_tmp_buf) {
-    delete [] buf;
+    delete[] buf;
   }
 }
 
-auto Str::local_map() -> LocalMap& {
+auto Str::local_map() -> LocalMap & {
   thread_local static LocalMap s_local_map;
   return s_local_map;
 }
 
-auto Str::make(const uint32_t *codes, size_t len) -> Str* {
+auto Str::make(const uint32_t *codes, size_t len) -> Str * {
   if (len > s_max_size) len = s_max_size;
   auto buf = str_make_tmp_buf(len);
   int p = 0;
@@ -207,7 +208,7 @@ auto Str::make(const uint32_t *codes, size_t len) -> Str* {
   return s;
 }
 
-auto Str::make(double n) -> Str* {
+auto Str::make(double n) -> Str * {
   if (std::isnan(n)) return nan;
   if (std::isinf(n)) return std::signbit(n) ? neg_inf : pos_inf;
   char str[100];
@@ -215,19 +216,19 @@ auto Str::make(double n) -> Str* {
   return make(str, len);
 }
 
-auto Str::make(int n) -> Str* {
+auto Str::make(int n) -> Str * {
   char str[100];
   auto len = std::snprintf(str, sizeof(str), "%d", n);
   return make(str, len);
 }
 
-auto Str::make(int64_t n) -> Str* {
+auto Str::make(int64_t n) -> Str * {
   char str[100];
   auto len = std::snprintf(str, sizeof(str), "%lld", (long long)n);
   return make(str, len);
 }
 
-auto Str::make(uint64_t n) -> Str* {
+auto Str::make(uint64_t n) -> Str * {
   char str[100];
   auto len = std::snprintf(str, sizeof(str), "%llu", (unsigned long long)n);
   return make(str, len);
@@ -266,16 +267,14 @@ auto Str::substring(int start, int end) -> std::string {
 
 Str::CharData::CharData(std::string &&str) : m_str(std::move(str)) {
   int n = 0, p = 0, i = 0;
-  Utf8Decoder decoder(
-    [&](int cp) {
-      if (n > 0) {
-        if (n % CHUNK_SIZE == 0) {
-          m_chunks.push_back(p);
-        }
+  Utf8Decoder decoder([&](int cp) {
+    if (n > 0) {
+      if (n % CHUNK_SIZE == 0) {
+        m_chunks.push_back(p);
       }
-      n++;
     }
-  );
+    n++;
+  });
   for (const auto c : m_str) {
     if (!(c & 0x80) || (c & 0x40)) p = i;
     if (!decoder.input(c)) break;
@@ -313,10 +312,14 @@ auto Str::CharData::pos_to_chr(int i) const -> int {
   while (p < i) {
     auto c = m_str[p];
     if (c & 0x80) {
-      if ((c & 0xe0) == 0xc0) p += 2; else
-      if ((c & 0xf0) == 0xe0) p += 3; else
-      if ((c & 0xf8) == 0xf0) p += 4; else
-      break;
+      if ((c & 0xe0) == 0xc0)
+        p += 2;
+      else if ((c & 0xf0) == 0xe0)
+        p += 3;
+      else if ((c & 0xf8) == 0xf0)
+        p += 4;
+      else
+        break;
     } else {
       p++;
     }
@@ -347,10 +350,14 @@ auto Str::CharData::chr_to_pos(int i) const -> int {
   for (int n = off; n > 0 && p < max; n--) {
     auto c = m_str[p];
     if (c & 0x80) {
-      if ((c & 0xe0) == 0xc0) p += 2; else
-      if ((c & 0xf0) == 0xe0) p += 3; else
-      if ((c & 0xf8) == 0xf0) p += 4; else
-      break;
+      if ((c & 0xe0) == 0xc0)
+        p += 2;
+      else if ((c & 0xf0) == 0xe0)
+        p += 3;
+      else if ((c & 0xf8) == 0xf0)
+        p += 4;
+      else
+        break;
     } else {
       p++;
     }
@@ -365,22 +372,15 @@ auto Str::CharData::chr_at(int i) const -> int {
   auto n = size();
   if (c & 0x80) {
     if ((c & 0xe0) == 0xc0 && i + 1 < n) {
-      return
-        ((c          & 0x1f) << 6)|
-        ((m_str[i+1] & 0x3f) << 0);
+      return ((c & 0x1f) << 6) | ((m_str[i + 1] & 0x3f) << 0);
     }
     if ((c & 0xf0) == 0xe0 && i + 2 < n) {
-      return
-        ((c          & 0x0f) << 12)|
-        ((m_str[i+1] & 0x3f) <<  6)|
-        ((m_str[i+2] & 0x3f) <<  0);
+      return ((c & 0x0f) << 12) | ((m_str[i + 1] & 0x3f) << 6) |
+             ((m_str[i + 2] & 0x3f) << 0);
     }
     if ((c & 0xf8) == 0xf0 && i + 3 < n) {
-      return
-        ((c          & 0x07) << 18)|
-        ((m_str[i+1] & 0x3f) << 12)|
-        ((m_str[i+2] & 0x3f) <<  6)|
-        ((m_str[i+3] & 0x3f) <<  0);
+      return ((c & 0x07) << 18) | ((m_str[i + 1] & 0x3f) << 12) |
+             ((m_str[i + 2] & 0x3f) << 6) | ((m_str[i + 3] & 0x3f) << 0);
     }
     return -1;
   } else {
@@ -392,21 +392,27 @@ auto Str::CharData::chr_at(int i) const -> int {
 // Value
 //
 
-const Value Value::empty((Value*)nullptr);
+const Value Value::empty((Value *)nullptr);
 const Value Value::undefined;
-const Value Value::null((Object*)nullptr);
+const Value Value::null((Object *)nullptr);
 
 bool Value::is_identical(const Value &a, const Value &b) {
   if (a.type() != b.type()) {
     return false;
   } else {
     switch (a.type()) {
-      case Value::Type::Empty: return true;
-      case Value::Type::Undefined: return true;
-      case Value::Type::Boolean: return a.b() == b.b();
-      case Value::Type::Number: return a.n() == b.n();
-      case Value::Type::String: return a.s() == b.s();
-      case Value::Type::Object: return a.o() == b.o();
+      case Value::Type::Empty:
+        return true;
+      case Value::Type::Undefined:
+        return true;
+      case Value::Type::Boolean:
+        return a.b() == b.b();
+      case Value::Type::Number:
+        return a.n() == b.n();
+      case Value::Type::String:
+        return a.s() == b.s();
+      case Value::Type::Object:
+        return a.o() == b.o();
     }
   }
   return true;
@@ -415,13 +421,20 @@ bool Value::is_identical(const Value &a, const Value &b) {
 bool Value::is_equal(const Value &a, const Value &b) {
   if (a.type() == b.type()) {
     switch (a.type()) {
-      case Value::Type::Empty: return true;
-      case Value::Type::Undefined: return true;
-      case Value::Type::Boolean: return a.b() == b.b();
-      case Value::Type::Number: return a.n() == b.n();
-      case Value::Type::String: return a.s() == b.s();
-      case Value::Type::Object: return a.o() == b.o();
-      default: return false;
+      case Value::Type::Empty:
+        return true;
+      case Value::Type::Undefined:
+        return true;
+      case Value::Type::Boolean:
+        return a.b() == b.b();
+      case Value::Type::Number:
+        return a.n() == b.n();
+      case Value::Type::String:
+        return a.s() == b.s();
+      case Value::Type::Object:
+        return a.o() == b.o();
+      default:
+        return false;
     }
   } else if (a.is_object() && b.is_object()) {
     return a.o() == b.o();
@@ -429,7 +442,8 @@ bool Value::is_equal(const Value &a, const Value &b) {
     return true;
   } else if (a.is_nullish() || b.is_nullish()) {
     return false;
-  } else if (a.is_boolean() || a.is_number() || b.is_boolean() || b.is_number()) {
+  } else if (a.is_boolean() || a.is_number() || b.is_boolean() ||
+             b.is_number()) {
     auto na = a.to_number();
     auto nb = b.to_number();
     return na == nb;
@@ -461,7 +475,7 @@ Instance::~Instance() {
 // Context
 //
 
-auto Context::Error::where() const -> const Location* {
+auto Context::Error::where() const -> const Location * {
   for (const auto &loc : backtrace) {
     if (loc.line > 0 && loc.column > 0) {
       return &loc;
@@ -481,9 +495,7 @@ void Context::error(const std::string &msg) {
   m_error->message = msg;
 }
 
-void Context::error(const std::runtime_error &err) {
-  error(err.what());
-}
+void Context::error(const std::runtime_error &err) { error(err.what()); }
 
 void Context::error_argument_count(int n) {
   char s[200];
@@ -546,7 +558,7 @@ auto ClassMap::add(Class *c) -> size_t {
   auto id = m_class_slot_free;
   if (!id) {
     id = m_class_slots.size();
-    m_class_slots.push_back({ c });
+    m_class_slots.push_back({c});
   } else {
     m_class_slot_free = m_class_slots[id].next_slot;
     m_class_slots[id].class_ptr = c;
@@ -567,14 +579,11 @@ void ClassMap::remove(Class *c) {
 // Class
 //
 
-Class::Class(
-  const std::string &name,
-  Class *super,
-  const std::list<Field*> &fields)
-  : m_super(super)
-  , m_name(pjs::Str::make(name))
-  , m_class_map(ClassMap::get())
-{
+Class::Class(const std::string &name, Class *super,
+             const std::list<Field *> &fields)
+    : m_super(super),
+      m_name(pjs::Str::make(name)),
+      m_class_map(ClassMap::get()) {
   if (super) {
     m_field_map = super->m_field_map;
     m_fields = super->m_fields;
@@ -597,7 +606,7 @@ Class::Class(
       }
     }
     if (f->is_variable()) {
-      auto v = static_cast<Variable*>(f);
+      auto v = static_cast<Variable *>(f);
       v->m_index = m_variables.size();
       m_variables.push_back(v);
     }
@@ -621,9 +630,9 @@ void Class::assign(Object *obj, Object *src) {
       Value v;
       if (src->get(k, v)) {
         if (f->is_accessor()) {
-          static_cast<Accessor*>(f)->set(obj, v);
+          static_cast<Accessor *>(f)->set(obj, v);
         } else {
-          auto index = static_cast<Variable*>(f)->index();
+          auto index = static_cast<Variable *>(f)->index();
           obj->data()->at(index) = v;
         }
       }
@@ -635,18 +644,23 @@ void Class::assign(Object *obj, Object *src) {
 // Object
 //
 
-template<> void ClassDef<Object>::init() {
-  method("toString", [](Context &ctx, Object *obj, Value &ret) { ret.set(obj->to_string()); });
-  method("valueOf", [](Context &ctx, Object *obj, Value &ret) { obj->value_of(ret); });
+template <>
+void ClassDef<Object>::init() {
+  method("toString", [](Context &ctx, Object *obj, Value &ret) {
+    ret.set(obj->to_string());
+  });
+  method("valueOf",
+         [](Context &ctx, Object *obj, Value &ret) { obj->value_of(ret); });
   m_c = Class::make("Object", nullptr, m_init_data->fields);
-  m_c->set_ctor([](Context &ctx) -> Object* { return Object::make(); });
+  m_c->set_ctor([](Context &ctx) -> Object * { return Object::make(); });
 }
 
-template<> void ClassDef<Constructor<Object>>::init() {
+template <>
+void ClassDef<Constructor<Object>>::init() {
   super<Function>();
   ctor();
 
-  method("assign", [](Context &ctx, Object*, Value &ret) {
+  method("assign", [](Context &ctx, Object *, Value &ret) {
     Value val;
     if (!ctx.arguments(1, &val)) return;
     Object *obj = val.to_object();
@@ -662,34 +676,32 @@ template<> void ClassDef<Constructor<Object>>::init() {
     }
   });
 
-  method("entries", [](Context &ctx, Object*, Value &ret) {
+  method("entries", [](Context &ctx, Object *, Value &ret) {
     Object *obj;
     if (!ctx.arguments(1, &obj)) return;
     ret.set(Object::entries(obj));
   });
 
-  method("fromEntries", [](Context &ctx, Object*, Value &ret) {
+  method("fromEntries", [](Context &ctx, Object *, Value &ret) {
     Array *arr;
     if (!ctx.arguments(1, &arr)) return;
     ret.set(Object::from_entries(arr));
   });
 
-  method("keys", [](Context &ctx, Object*, Value &ret) {
+  method("keys", [](Context &ctx, Object *, Value &ret) {
     Object *obj;
     if (!ctx.arguments(1, &obj)) return;
     ret.set(Object::keys(obj));
   });
 
-  method("values", [](Context &ctx, Object*, Value &ret) {
+  method("values", [](Context &ctx, Object *, Value &ret) {
     Object *obj;
     if (!ctx.arguments(1, &obj)) return;
     ret.set(Object::values(obj));
   });
 }
 
-void Object::value_of(Value &out) {
-  out.set(this);
-}
+void Object::value_of(Value &out) { out.set(this); }
 
 auto Object::to_string() const -> std::string {
   char s[256];
@@ -697,11 +709,9 @@ auto Object::to_string() const -> std::string {
   return s;
 }
 
-auto Object::dump() -> Object* {
-  return this;
-}
+auto Object::dump() -> Object * { return this; }
 
-auto Object::entries(Object *obj) -> Array* {
+auto Object::entries(Object *obj) -> Array * {
   if (!obj) return nullptr;
   auto *a = Array::make(obj->ht_size());
   int i = 0;
@@ -714,7 +724,7 @@ auto Object::entries(Object *obj) -> Array* {
   return a;
 }
 
-auto Object::from_entries(Array *arr) -> Object* {
+auto Object::from_entries(Array *arr) -> Object * {
   if (!arr) return nullptr;
   auto obj = make();
   arr->iterate_all([=](Value &v, int) {
@@ -731,23 +741,19 @@ auto Object::from_entries(Array *arr) -> Object* {
   return obj;
 }
 
-auto Object::keys(Object *obj) -> Array* {
+auto Object::keys(Object *obj) -> Array * {
   if (!obj) return nullptr;
   auto *a = Array::make(obj->ht_size());
   int i = 0;
-  obj->iterate_all([&](Str *k, Value &v) {
-    a->set(i++, k);
-  });
+  obj->iterate_all([&](Str *k, Value &v) { a->set(i++, k); });
   return a;
 }
 
-auto Object::values(Object *obj) -> Array* {
+auto Object::values(Object *obj) -> Array * {
   if (!obj) return nullptr;
   auto *a = Array::make(obj->ht_size());
   int i = 0;
-  obj->iterate_all([&](Str *k, Value &v) {
-    a->set(i++, v);
-  });
+  obj->iterate_all([&](Str *k, Value &v) { a->set(i++, v); });
   return a;
 }
 
@@ -757,29 +763,52 @@ auto Object::values(Object *obj) -> Array* {
 
 void SharedValue::to_value(Value &v) const {
   switch (m_t) {
-    case Value::Type::Boolean: v.set(m_v.b); break;
-    case Value::Type::Number: v.set(m_v.n); break;
-    case Value::Type::String: v.set(Str::make(m_v.s)); break;
-    case Value::Type::Object: v.set(m_v.o ? m_v.o->to_object() : nullptr); break;
-    default: break;
+    case Value::Type::Boolean:
+      v.set(m_v.b);
+      break;
+    case Value::Type::Number:
+      v.set(m_v.n);
+      break;
+    case Value::Type::String:
+      v.set(Str::make(m_v.s));
+      break;
+    case Value::Type::Object:
+      v.set(m_v.o ? m_v.o->to_object() : nullptr);
+      break;
+    default:
+      break;
   }
 }
 
 void SharedValue::from_value(const Value &v) {
   switch (m_t = v.type()) {
-    case Value::Type::Boolean: m_v.b = v.b(); break;
-    case Value::Type::Number: m_v.n = v.n(); break;
-    case Value::Type::String: m_v.s = v.s()->data()->retain(); break;
-    case Value::Type::Object: if (auto o = m_v.o = SharedObject::make(v.o())) o->retain(); break;
-    default: break;
+    case Value::Type::Boolean:
+      m_v.b = v.b();
+      break;
+    case Value::Type::Number:
+      m_v.n = v.n();
+      break;
+    case Value::Type::String:
+      m_v.s = v.s()->data()->retain();
+      break;
+    case Value::Type::Object:
+      if (auto o = m_v.o = SharedObject::make(v.o())) o->retain();
+      break;
+    default:
+      break;
   }
 }
 
 void SharedValue::release() {
   switch (m_t) {
-    case Value::Type::String: m_v.s->release(); break;
-    case Value::Type::Object: if (auto o = m_v.o) o->release(); break;
-    default: break;
+    case Value::Type::String:
+      m_v.s->release();
+      break;
+    case Value::Type::Object:
+      if (auto o = m_v.o) o->release();
+      break;
+    default:
+      break;
   }
 }
 
@@ -790,34 +819,34 @@ void SharedValue::release() {
 SharedObject::SharedObject(Object *o) {
   auto p = &m_entry_blocks;
   auto b = *p;
-  o->iterate_all(
-    [&](Str *k, Value &v) {
-      if (!b || b->length >= sizeof(b->entries) / sizeof(Entry)) {
-        b = *p = new EntryBlock;
-        p = &b->next;
-      }
-      auto &e = b->entries[b->length++];
-      e.k = k->data();
-      e.v = v;
+  o->iterate_all([&](Str *k, Value &v) {
+    if (!b || b->length >= sizeof(b->entries) / sizeof(Entry)) {
+      b = *p = new EntryBlock;
+      p = &b->next;
     }
-  );
+    auto &e = b->entries[b->length++];
+    e.k = k->data();
+    e.v = v;
+  });
 }
 
 SharedObject::~SharedObject() {
   auto b = m_entry_blocks;
   while (b) {
-    auto block = b; b = b->next;
+    auto block = b;
+    b = b->next;
     delete block;
   }
 }
 
-auto SharedObject::to_object() -> Object* {
+auto SharedObject::to_object() -> Object * {
   auto obj = Object::make();
   for (auto b = m_entry_blocks; b; b = b->next) {
     for (auto i = 0, n = b->length; i < n; i++) {
       const auto &e = b->entries[i];
       if (e.k) {
-        Value v; e.v.to_value(v);
+        Value v;
+        e.v.to_value(v);
         obj->set(Str::make(e.k), v);
       }
     }
@@ -829,20 +858,20 @@ auto SharedObject::to_object() -> Object* {
 // Boolean
 //
 
-template<> void ClassDef<Boolean>::init() {
-  ctor([](Context &ctx) -> Object* {
+template <>
+void ClassDef<Boolean>::init() {
+  ctor([](Context &ctx) -> Object * {
     return Boolean::make(ctx.argc() > 0 ? ctx.arg(0).to_boolean() : false);
   });
 }
 
-template<> void ClassDef<Constructor<Boolean>>::init() {
+template <>
+void ClassDef<Constructor<Boolean>>::init() {
   super<Function>();
   ctor();
 }
 
-void Boolean::value_of(Value &out) {
-  out.set(m_b);
-}
+void Boolean::value_of(Value &out) { out.set(m_b); }
 
 auto Boolean::to_string() const -> std::string {
   return m_b ? "true" : "false";
@@ -852,7 +881,8 @@ auto Boolean::to_string() const -> std::string {
 // Int
 //
 
-template<> void EnumDef<Int::Type>::init() {
+template <>
+void EnumDef<Int::Type>::init() {
   define(Int::Type::i8, "i8");
   define(Int::Type::u8, "u8");
   define(Int::Type::i16, "i16");
@@ -863,10 +893,15 @@ template<> void EnumDef<Int::Type>::init() {
   define(Int::Type::u64, "u64");
 }
 
-template<> void ClassDef<Int>::init() {
-  ctor([](Context &ctx) -> Object* {
+template <>
+void ClassDef<Int>::init() {
+  ctor([](Context &ctx) -> Object * {
     EnumValue<Int::Type> t = Int::Type::i32;
-    double n; Str *s; Array *a; Int *i; int l, h;
+    double n;
+    Str *s;
+    Array *a;
+    Int *i;
+    int l, h;
     if (ctx.is_string_like(0)) {
       switch (ctx.argc()) {
         case 1:
@@ -902,22 +937,30 @@ template<> void ClassDef<Int>::init() {
     }
   });
 
-  accessor("type", [](Object *obj, Value &ret) { ret.set(EnumDef<Int::Type>::name(obj->as<Int>()->type())); });
-  accessor("width", [](Object *obj, Value &ret) { ret.set(obj->as<Int>()->width()); });
-  accessor("low", [](Object *obj, Value &ret) { ret.set(obj->as<Int>()->low()); });
-  accessor("high", [](Object *obj, Value &ret) { ret.set(obj->as<Int>()->high()); });
-  accessor("isUnsigned", [](Object *obj, Value &ret) { ret.set(obj->as<Int>()->isUnsigned()); });
+  accessor("type", [](Object *obj, Value &ret) {
+    ret.set(EnumDef<Int::Type>::name(obj->as<Int>()->type()));
+  });
+  accessor("width",
+           [](Object *obj, Value &ret) { ret.set(obj->as<Int>()->width()); });
+  accessor("low",
+           [](Object *obj, Value &ret) { ret.set(obj->as<Int>()->low()); });
+  accessor("high",
+           [](Object *obj, Value &ret) { ret.set(obj->as<Int>()->high()); });
+  accessor("isUnsigned", [](Object *obj, Value &ret) {
+    ret.set(obj->as<Int>()->isUnsigned());
+  });
 
   method("toBytes", [](Context &ctx, Object *obj, Value &ret) {
     ret.set(obj->as<Int>()->toBytes());
   });
 }
 
-template<> void ClassDef<Constructor<Int>>::init() {
+template <>
+void ClassDef<Constructor<Int>>::init() {
   super<Function>();
   ctor();
 
-  method("parse", [](Context &ctx, Object*, Value &ret) {
+  method("parse", [](Context &ctx, Object *, Value &ret) {
     Str *s;
     int base = 10;
     if (!ctx.arguments(1, &s, &base)) return;
@@ -928,9 +971,14 @@ template<> void ClassDef<Constructor<Int>>::init() {
 
 Int::Int(Array *bytes) : m_i(0) {
   int n = bytes ? bytes->length() : 0;
-  if (n > 4) m_t = Type::u64; else
-  if (n > 2) m_t = Type::u32; else
-  if (n > 1) m_t = Type::u16; else m_t = Type::u8;
+  if (n > 4)
+    m_t = Type::u64;
+  else if (n > 2)
+    m_t = Type::u32;
+  else if (n > 1)
+    m_t = Type::u16;
+  else
+    m_t = Type::u8;
   fill(bytes);
 }
 
@@ -948,40 +996,62 @@ void Int::fill(Array *bytes) {
 
 auto Int::promote(Type t, Type u) -> Type {
   static const Type s_table[8][8] = {
-    //      i8         i16        i32        i64        u8         u16        u32        u64
-    { Type::i8 , Type::i16, Type::i32, Type::i64, Type::i16, Type::i32, Type::i64, Type::u64 }, // i8
-    { Type::i16, Type::i16, Type::i32, Type::i64, Type::i16, Type::i32, Type::i64, Type::u64 }, // i16
-    { Type::i32, Type::i32, Type::i32, Type::i64, Type::i32, Type::i32, Type::i64, Type::u64 }, // i32
-    { Type::i64, Type::i64, Type::i64, Type::i64, Type::i64, Type::i64, Type::i64, Type::u64 }, // i64
-    { Type::i16, Type::i16, Type::i32, Type::i64, Type::u8 , Type::u16, Type::u32, Type::u64 }, // u8
-    { Type::i32, Type::i32, Type::i32, Type::i64, Type::u16, Type::u16, Type::u32, Type::u64 }, // u16
-    { Type::i64, Type::i64, Type::i64, Type::i64, Type::u32, Type::u32, Type::u32, Type::u64 }, // u32
-    { Type::u64, Type::u64, Type::u64, Type::u64, Type::u64, Type::u64, Type::u64, Type::u64 }, // u64
+      //      i8         i16        i32        i64        u8         u16 u32 u64
+      {Type::i8, Type::i16, Type::i32, Type::i64, Type::i16, Type::i32,
+       Type::i64, Type::u64},  // i8
+      {Type::i16, Type::i16, Type::i32, Type::i64, Type::i16, Type::i32,
+       Type::i64, Type::u64},  // i16
+      {Type::i32, Type::i32, Type::i32, Type::i64, Type::i32, Type::i32,
+       Type::i64, Type::u64},  // i32
+      {Type::i64, Type::i64, Type::i64, Type::i64, Type::i64, Type::i64,
+       Type::i64, Type::u64},  // i64
+      {Type::i16, Type::i16, Type::i32, Type::i64, Type::u8, Type::u16,
+       Type::u32, Type::u64},  // u8
+      {Type::i32, Type::i32, Type::i32, Type::i64, Type::u16, Type::u16,
+       Type::u32, Type::u64},  // u16
+      {Type::i64, Type::i64, Type::i64, Type::i64, Type::u32, Type::u32,
+       Type::u32, Type::u64},  // u32
+      {Type::u64, Type::u64, Type::u64, Type::u64, Type::u64, Type::u64,
+       Type::u64, Type::u64},  // u64
   };
   return s_table[int(t)][int(u)];
 }
 
 auto Int::convert(Type t, int64_t i) -> int64_t {
   switch (t) {
-    case Type::i8 : return int8_t(i);
-    case Type::i16: return int16_t(i);
-    case Type::i32: return int32_t(i);
-    case Type::u8 : return uint8_t(i);
-    case Type::u16: return uint16_t(i);
-    case Type::u32: return uint32_t(i);
-    default: return i;
+    case Type::i8:
+      return int8_t(i);
+    case Type::i16:
+      return int16_t(i);
+    case Type::i32:
+      return int32_t(i);
+    case Type::u8:
+      return uint8_t(i);
+    case Type::u16:
+      return uint16_t(i);
+    case Type::u32:
+      return uint32_t(i);
+    default:
+      return i;
   }
 }
 
 auto Int::convert(Type t, double n) -> int64_t {
   switch (t) {
-    case Type::i8 : return int8_t(n);
-    case Type::i16: return int16_t(n);
-    case Type::i32: return int32_t(n);
-    case Type::u8 : return uint8_t(n);
-    case Type::u16: return uint16_t(n);
-    case Type::u32: return uint32_t(n);
-    default: return n;
+    case Type::i8:
+      return int8_t(n);
+    case Type::i16:
+      return int16_t(n);
+    case Type::i32:
+      return int32_t(n);
+    case Type::u8:
+      return uint8_t(n);
+    case Type::u16:
+      return uint16_t(n);
+    case Type::u32:
+      return uint32_t(n);
+    default:
+      return n;
   }
 }
 
@@ -1006,7 +1076,7 @@ auto Int::to_string(char *str, size_t len) const -> size_t {
   }
 }
 
-auto Int::toBytes() const -> Array* {
+auto Int::toBytes() const -> Array * {
   auto n = width() >> 3;
   auto a = Array::make(n);
   for (int i = 0; i < n; i++) {
@@ -1044,40 +1114,34 @@ auto Int::cmp(const Int *i) const -> int {
   }
 }
 
-auto Int::neg() const -> Int* {
-  return Int::make(m_t, -m_i);
-}
+auto Int::neg() const -> Int * { return Int::make(m_t, -m_i); }
 
-auto Int::inc() const -> Int* {
-  return Int::make(m_t, m_i + 1);
-}
+auto Int::inc() const -> Int * { return Int::make(m_t, m_i + 1); }
 
-auto Int::dec() const -> Int* {
-  return Int::make(m_t, m_i - 1);
-}
+auto Int::dec() const -> Int * { return Int::make(m_t, m_i - 1); }
 
-auto Int::add(const Int *i) const -> Int* {
+auto Int::add(const Int *i) const -> Int * {
   auto t = promote(m_t, i->m_t);
   auto a = convert(t, m_i);
   auto b = convert(t, i->m_i);
   return Int::make(t, a + b);
 }
 
-auto Int::sub(const Int *i) const -> Int* {
+auto Int::sub(const Int *i) const -> Int * {
   auto t = promote(m_t, i->m_t);
   auto a = convert(t, m_i);
   auto b = convert(t, i->m_i);
   return Int::make(t, a - b);
 }
 
-auto Int::mul(const Int *i) const -> Int* {
+auto Int::mul(const Int *i) const -> Int * {
   auto t = promote(m_t, i->m_t);
   auto a = convert(t, m_i);
   auto b = convert(t, i->m_i);
   return Int::make(t, a * b);
 }
 
-auto Int::div(const Int *i) const -> Int* {
+auto Int::div(const Int *i) const -> Int * {
   auto t = promote(m_t, i->m_t);
   auto a = convert(t, m_i);
   auto b = convert(t, i->m_i);
@@ -1088,7 +1152,7 @@ auto Int::div(const Int *i) const -> Int* {
   }
 }
 
-auto Int::mod(const Int *i) const -> Int* {
+auto Int::mod(const Int *i) const -> Int * {
   auto t = promote(m_t, i->m_t);
   auto a = convert(t, m_i);
   auto b = convert(t, i->m_i);
@@ -1099,46 +1163,38 @@ auto Int::mod(const Int *i) const -> Int* {
   }
 }
 
-auto Int::shl(int n) const -> Int* {
-  return Int::make(m_t, m_i << n);
-}
+auto Int::shl(int n) const -> Int * { return Int::make(m_t, m_i << n); }
 
-auto Int::shr(int n) const -> Int* {
-  return Int::make(m_t, m_i >> n);
-}
+auto Int::shr(int n) const -> Int * { return Int::make(m_t, m_i >> n); }
 
-auto Int::bitwise_shr(int n) const -> Int* {
+auto Int::bitwise_shr(int n) const -> Int * {
   return Int::make(m_t, int64_t(uint64_t(m_i) >> n));
 }
 
-auto Int::bitwise_not() const -> Int* {
-  return Int::make(m_t, ~m_i);
-}
+auto Int::bitwise_not() const -> Int * { return Int::make(m_t, ~m_i); }
 
-auto Int::bitwise_and(const Int *i) const -> Int* {
+auto Int::bitwise_and(const Int *i) const -> Int * {
   auto t = promote(m_t, i->m_t);
   auto a = convert(t, m_i);
   auto b = convert(t, i->m_i);
   return Int::make(t, a & b);
 }
 
-auto Int::bitwise_or(const Int *i) const -> Int* {
+auto Int::bitwise_or(const Int *i) const -> Int * {
   auto t = promote(m_t, i->m_t);
   auto a = convert(t, m_i);
   auto b = convert(t, i->m_i);
   return Int::make(t, a | b);
 }
 
-auto Int::bitwise_xor(const Int *i) const -> Int* {
+auto Int::bitwise_xor(const Int *i) const -> Int * {
   auto t = promote(m_t, i->m_t);
   auto a = convert(t, m_i);
   auto b = convert(t, i->m_i);
   return Int::make(t, a ^ b);
 }
 
-void Int::value_of(Value &out) {
-  out.set(to_number());
-}
+void Int::value_of(Value &out) { out.set(to_number()); }
 
 auto Int::to_string() const -> std::string {
   char str[100];
@@ -1150,8 +1206,9 @@ auto Int::to_string() const -> std::string {
 // Number
 //
 
-template<> void ClassDef<Number>::init() {
-  ctor([](Context &ctx) -> Object* {
+template <>
+void ClassDef<Number>::init() {
+  ctor([](Context &ctx) -> Object * {
     return Number::make(ctx.argc() > 0 ? ctx.arg(0).to_number() : 0);
   });
 
@@ -1226,7 +1283,8 @@ template<> void ClassDef<Number>::init() {
   });
 }
 
-template<> void ClassDef<Constructor<Number>>::init() {
+template <>
+void ClassDef<Constructor<Number>>::init() {
   super<Function>();
   ctor();
 
@@ -1239,31 +1297,31 @@ template<> void ClassDef<Constructor<Number>>::init() {
   variable("NEGATIVE_INFINITY", -std::numeric_limits<double>::infinity());
   variable("POSITIVE_INFINITY", std::numeric_limits<double>::infinity());
 
-  method("isNaN", [](Context &ctx, Object*, Value &ret) {
+  method("isNaN", [](Context &ctx, Object *, Value &ret) {
     double n;
     if (!ctx.arguments(1, &n)) return;
     ret.set(Number::is_nan(n));
   });
 
-  method("isFinite", [](Context &ctx, Object*, Value &ret) {
+  method("isFinite", [](Context &ctx, Object *, Value &ret) {
     double n;
     if (!ctx.arguments(1, &n)) return;
     ret.set(Number::is_finite(n));
   });
 
-  method("isInteger", [](Context &ctx, Object*, Value &ret) {
+  method("isInteger", [](Context &ctx, Object *, Value &ret) {
     double n;
     if (!ctx.arguments(1, &n)) return;
     ret.set(Number::is_integer(n));
   });
 
-  method("parseFloat", [](Context &ctx, Object*, Value &ret) {
+  method("parseFloat", [](Context &ctx, Object *, Value &ret) {
     Str *s;
     if (!ctx.arguments(1, &s)) return;
     ret.set(s->parse_float());
   });
 
-  method("parseInt", [](Context &ctx, Object*, Value &ret) {
+  method("parseInt", [](Context &ctx, Object *, Value &ret) {
     Str *s;
     int base = 10;
     if (!ctx.arguments(1, &s, &base)) return;
@@ -1271,13 +1329,9 @@ template<> void ClassDef<Constructor<Number>>::init() {
   });
 }
 
-bool Number::is_nan(double n) {
-  return std::isnan(n);
-}
+bool Number::is_nan(double n) { return std::isnan(n); }
 
-bool Number::is_finite(double n) {
-  return std::isfinite(n);
-}
+bool Number::is_finite(double n) { return std::isfinite(n); }
 
 bool Number::is_integer(double n) {
   double i;
@@ -1303,15 +1357,17 @@ static size_t special_number_to_string(char *str, size_t len, double n) {
   return 0;
 }
 
-static size_t number_to_string(char *str, size_t len, double n, int digits, int radix = 10) {
-  static const char s_symbols[] = { "0123456789abcdefghijklmnopqrstuvwxyz" };
+static size_t number_to_string(char *str, size_t len, double n, int digits,
+                               int radix = 10) {
+  static const char s_symbols[] = {"0123456789abcdefghijklmnopqrstuvwxyz"};
   if (auto l = special_number_to_string(str, len, n)) return l;
   if (radix == 10) {
-    auto d = digits; if (d < 0) d = -d;
+    auto d = digits;
+    if (d < 0) d = -d;
     auto l = std::snprintf(str, len, "%.*f", d, n);
     if (digits < 0) {
-      while (l > 1 && str[l-1] == '0') l--;
-      if (l > 1 && str[l-1] == '.') l--;
+      while (l > 1 && str[l - 1] == '0') l--;
+      if (l > 1 && str[l - 1] == '.') l--;
     }
     return l;
   }
@@ -1345,8 +1401,8 @@ static size_t number_to_string(char *str, size_t len, double n, int digits, int 
       n--;
     }
     if (digits < 0) {
-      while (str[p-1] == '0') p--;
-      if (str[p-1] == '.') p--;
+      while (str[p - 1] == '0') p--;
+      if (str[p - 1] == '.') p--;
     }
   }
   return p;
@@ -1373,10 +1429,11 @@ size_t Number::to_exponential(char *str, size_t len, double n) {
   auto max = std::numeric_limits<double>::digits10 + 1;
   len = std::snprintf(str, len, "%.*e", max, n);
   auto p = len;
-  do p--; while (p > 0 && str[p] != 'e');
+  do p--;
+  while (p > 0 && str[p] != 'e');
   if (p > 0) {
     auto i = p - 1;
-    while (i > 0 && str[i-1] == '0') i--;
+    while (i > 0 && str[i - 1] == '0') i--;
     if (i > 0) {
       std::memmove(str + i, str + p, len - p);
       len -= p - i;
@@ -1393,13 +1450,12 @@ size_t Number::to_exponential(char *str, size_t len, double n, int digits) {
   return std::snprintf(str, len, "%.*e", digits, n);
 }
 
-void Number::value_of(Value &out) {
-  out.set(m_n);
-}
+void Number::value_of(Value &out) { out.set(m_n); }
 
 auto Number::to_string() const -> std::string {
   if (std::isnan(m_n)) return Str::nan->str();
-  if (std::isinf(m_n)) return std::signbit(m_n) ? Str::neg_inf->str() : Str::pos_inf->str();
+  if (std::isinf(m_n))
+    return std::signbit(m_n) ? Str::neg_inf->str() : Str::pos_inf->str();
   char str[100];
   auto len = to_string(str, sizeof(str), m_n);
   return std::string(str, len);
@@ -1409,12 +1465,16 @@ auto Number::to_string() const -> std::string {
 // String
 //
 
-template<> void ClassDef<String>::init() {
-  ctor([](Context &ctx) -> Object* {
-    return String::make(ctx.argc() > 0 ? ctx.arg(0).to_string() : Str::empty.get());
+template <>
+void ClassDef<String>::init() {
+  ctor([](Context &ctx) -> Object * {
+    return String::make(ctx.argc() > 0 ? ctx.arg(0).to_string()
+                                       : Str::empty.get());
   });
 
-  accessor("length", [](Object *obj, Value &ret) { ret.set(obj->as<String>()->length()); });
+  accessor("length", [](Object *obj, Value &ret) {
+    ret.set(obj->as<String>()->length());
+  });
 
   method("charAt", [](Context &ctx, Object *obj, Value &ret) {
     int i = 0;
@@ -1426,14 +1486,20 @@ template<> void ClassDef<String>::init() {
     int i = 0;
     if (!ctx.arguments(0, &i)) return;
     auto n = obj->as<String>()->charCodeAt(i);
-    if (n >= 0) ret.set(n); else ret.set(NAN);
+    if (n >= 0)
+      ret.set(n);
+    else
+      ret.set(NAN);
   });
 
   method("codePointAt", [](Context &ctx, Object *obj, Value &ret) {
     int i = 0;
     if (!ctx.arguments(0, &i)) return;
     auto n = obj->as<String>()->charCodeAt(i);
-    if (n >= 0) ret.set(n); else ret.set(NAN);
+    if (n >= 0)
+      ret.set(n);
+    else
+      ret.set(NAN);
   });
 
   method("concat", [](Context &ctx, Object *obj, Value &ret) {
@@ -1586,11 +1652,12 @@ template<> void ClassDef<String>::init() {
   });
 }
 
-template<> void ClassDef<Constructor<String>>::init() {
+template <>
+void ClassDef<Constructor<String>>::init() {
   super<Function>();
   ctor();
 
-  method("fromCharCode", [](Context &ctx, Object*, Value &ret) {
+  method("fromCharCode", [](Context &ctx, Object *, Value &ret) {
     auto n = ctx.argc();
     uint32_t codes[n];
     for (int i = 0; i < n; i++) {
@@ -1599,7 +1666,7 @@ template<> void ClassDef<Constructor<String>>::init() {
     ret.set(Str::make(codes, n));
   });
 
-  method("fromCodePoint", [](Context &ctx, Object*, Value &ret) {
+  method("fromCodePoint", [](Context &ctx, Object *, Value &ret) {
     auto n = ctx.argc();
     uint32_t codes[n];
     for (int i = 0; i < n; i++) {
@@ -1609,28 +1676,20 @@ template<> void ClassDef<Constructor<String>>::init() {
   });
 }
 
-void String::value_of(Value &out) {
-  out.set(m_s);
-}
+void String::value_of(Value &out) { out.set(m_s); }
 
-auto String::to_string() const -> std::string {
-  return m_s->str();
-}
+auto String::to_string() const -> std::string { return m_s->str(); }
 
-auto String::charAt(int i) -> Str* {
+auto String::charAt(int i) -> Str * {
   auto c = m_s->chr_at(i);
   if (c < 0) return Str::empty;
   uint32_t code = c;
   return Str::make(&code, 1);
 }
 
-auto String::charCodeAt(int i) -> int {
-  return m_s->chr_at(i);
-}
+auto String::charCodeAt(int i) -> int { return m_s->chr_at(i); }
 
-bool String::endsWith(Str *search) {
-  return endsWith(search, m_s->length());
-}
+bool String::endsWith(Str *search) { return endsWith(search, m_s->length()); }
 
 bool String::endsWith(Str *search, int length) {
   if (length < 0) length = 0;
@@ -1672,40 +1731,32 @@ auto String::lastIndexOf(Str *search) -> int {
   return lastIndexOf(search, m_s->length());
 }
 
-auto String::padEnd(int length, Str *padding) -> Str* {
+auto String::padEnd(int length, Str *padding) -> Str * {
   if (m_s->length() >= length) return m_s;
   auto &buf = s_shared_str_tmp_buf;
   std::memcpy(buf, m_s->c_str(), m_s->size());
-  auto n = fill(
-    buf + m_s->size(),
-    sizeof(buf) - m_s->size(),
-    padding,
-    length - m_s->length()
-  );
+  auto n = fill(buf + m_s->size(), sizeof(buf) - m_s->size(), padding,
+                length - m_s->length());
   return Str::make(buf, n + m_s->size());
 }
 
-auto String::padStart(int length, Str *padding) -> Str* {
+auto String::padStart(int length, Str *padding) -> Str * {
   if (m_s->length() >= length) return m_s;
   auto &buf = s_shared_str_tmp_buf;
-  auto n = fill(
-    buf,
-    sizeof(buf) - m_s->size(),
-    padding,
-    length - m_s->length()
-  );
+  auto n =
+      fill(buf, sizeof(buf) - m_s->size(), padding, length - m_s->length());
   std::memcpy(buf + n, m_s->c_str(), m_s->size());
   return Str::make(buf, n + m_s->size());
 }
 
-auto String::repeat(int count) -> Str* {
+auto String::repeat(int count) -> Str * {
   if (count <= 0) return Str::empty;
   auto &buf = s_shared_str_tmp_buf;
   auto size = fill(buf, sizeof(buf), m_s, m_s->length() * count);
   return Str::make(buf, size);
 }
 
-auto String::replace(Str *pattern, Str *replacement, bool all) -> Str* {
+auto String::replace(Str *pattern, Str *replacement, bool all) -> Str * {
   std::string result;
   auto &s = m_s->str();
   auto &t = pattern->str();
@@ -1723,11 +1774,22 @@ auto String::replace(Str *pattern, Str *replacement, bool all) -> Str* {
     for (auto c : replacement->str()) {
       if (dollar) {
         switch (c) {
-          case '$' : result += '$'; break;
-          case '&' : result += t; break;
-          case '`' : result += prefix; break;
-          case '\'': result += s.substr(i); break;
-          default: result += '$'; result += c; break;
+          case '$':
+            result += '$';
+            break;
+          case '&':
+            result += t;
+            break;
+          case '`':
+            result += prefix;
+            break;
+          case '\'':
+            result += s.substr(i);
+            break;
+          default:
+            result += '$';
+            result += c;
+            break;
         }
         dollar = false;
       } else if (c == '$') {
@@ -1745,7 +1807,7 @@ auto String::replace(Str *pattern, Str *replacement, bool all) -> Str* {
   return Str::make(result);
 }
 
-auto String::replace(RegExp *pattern, Str *replacement) -> Str* {
+auto String::replace(RegExp *pattern, Str *replacement) -> Str * {
   auto &s = m_s->str();
   auto &fmt = replacement->str();
   auto &re = pattern->regex();
@@ -1760,11 +1822,9 @@ auto String::search(RegExp *pattern) -> int {
   return m_s->pos_to_chr(p);
 }
 
-auto String::slice(int start) -> Str* {
-  return slice(start, m_s->length());
-}
+auto String::slice(int start) -> Str * { return slice(start, m_s->length()); }
 
-auto String::slice(int start, int end) -> Str* {
+auto String::slice(int start, int end) -> Str * {
   if (start < 0) start = m_s->length() + start;
   if (start < 0) start = 0;
   if (start >= m_s->length()) return Str::empty;
@@ -1774,11 +1834,11 @@ auto String::slice(int start, int end) -> Str* {
   return Str::make(m_s->substring(start, end));
 }
 
-auto String::split(Str *separator) -> Array* {
+auto String::split(Str *separator) -> Array * {
   return split(separator, Array::MAX_SIZE);
 }
 
-auto String::split(Str *separator, int limit) -> Array* {
+auto String::split(Str *separator, int limit) -> Array * {
   if (limit < 0) limit = 0;
   if (limit > Array::MAX_SIZE) limit = Array::MAX_SIZE;
   if (separator == Str::empty) {
@@ -1788,12 +1848,10 @@ auto String::split(Str *separator, int limit) -> Array* {
     if (n > limit) n = limit;
     auto arr = Array::make(n);
     if (!limit) return arr;
-    Utf8Decoder decoder(
-      [&](int c) {
-        uint32_t code = c;
-        arr->set(i++, Str::make(&code, 1));
-      }
-    );
+    Utf8Decoder decoder([&](int c) {
+      uint32_t code = c;
+      arr->set(i++, Str::make(&code, 1));
+    });
     for (int i = 0, p = 0; i < n && p < m; p++) {
       decoder.input(s[p]);
     }
@@ -1836,14 +1894,14 @@ bool String::startsWith(Str *search, int position) {
   return std::strncmp(m_s->c_str() + head, search->c_str(), size) == 0;
 }
 
-auto String::substring(int start) -> Str* {
+auto String::substring(int start) -> Str * {
   int len = m_s->length();
   if (start >= len) return Str::empty;
   if (start < 0) start = 0;
   return Str::make(m_s->substring(start, len));
 }
 
-auto String::substring(int start, int end) -> Str* {
+auto String::substring(int start, int end) -> Str * {
   int len = m_s->size();
   if (start < 0) start = 0;
   if (start > len) start = len;
@@ -1857,7 +1915,7 @@ auto String::substring(int start, int end) -> Str* {
   }
 }
 
-auto String::toLowerCase() -> Str* {
+auto String::toLowerCase() -> Str * {
   auto s = m_s->str();
   for (auto &c : s) {
     c = std::tolower(c);
@@ -1865,7 +1923,7 @@ auto String::toLowerCase() -> Str* {
   return Str::make(std::move(s));
 }
 
-auto String::toUpperCase() -> Str* {
+auto String::toUpperCase() -> Str * {
   auto s = m_s->str();
   for (auto &c : s) {
     c = std::toupper(c);
@@ -1873,7 +1931,7 @@ auto String::toUpperCase() -> Str* {
   return Str::make(std::move(s));
 }
 
-auto String::trim() -> Str* {
+auto String::trim() -> Str * {
   const char *s = m_s->c_str();
   int a = 0, b = m_s->size() - 1;
   while (a <= b && s[a] <= 0x20) a++;
@@ -1882,7 +1940,7 @@ auto String::trim() -> Str* {
   return Str::make(s + a, b - a + 1);
 }
 
-auto String::trimEnd() -> Str* {
+auto String::trimEnd() -> Str * {
   const char *s = m_s->c_str();
   int a = m_s->size() - 1;
   while (a >= 0 && s[a] <= 0x20) a--;
@@ -1890,7 +1948,7 @@ auto String::trimEnd() -> Str* {
   return Str::make(s, a + 1);
 }
 
-auto String::trimStart() -> Str* {
+auto String::trimStart() -> Str * {
   const char *s = m_s->c_str();
   int a = 0, n = m_s->size();
   while (a < n && s[a] <= 0x20) a++;
@@ -1921,9 +1979,8 @@ auto String::fill(char *buf, size_t size, Str *str, int n) -> size_t {
 // Function
 //
 
-template<> void ClassDef<Function>::init()
-{
-}
+template <>
+void ClassDef<Function>::init() {}
 
 auto Function::to_string() const -> std::string {
   char s[256];
@@ -1935,21 +1992,28 @@ auto Function::to_string() const -> std::string {
 // Error
 //
 
-template<> void ClassDef<Error>::init() {
-  ctor([](Context &ctx) -> Object* {
+template <>
+void ClassDef<Error>::init() {
+  ctor([](Context &ctx) -> Object * {
     Str *message = nullptr;
     Error *cause = nullptr;
     if (!ctx.arguments(0, &message, &cause)) return nullptr;
     return Error::make(message, cause);
   });
 
-  accessor("name", [](Object *obj, Value &val) { val.set(obj->as<Error>()->name()); });
-  accessor("message", [](Object *obj, Value &val) { val.set(obj->as<Error>()->message()); });
-  accessor("cause", [](Object *obj, Value &val) { val.set(obj->as<Error>()->cause()); });
-  accessor("stack", [](Object *obj, Value &val) { val.set(obj->as<Error>()->stack()); });
+  accessor("name",
+           [](Object *obj, Value &val) { val.set(obj->as<Error>()->name()); });
+  accessor("message", [](Object *obj, Value &val) {
+    val.set(obj->as<Error>()->message());
+  });
+  accessor("cause",
+           [](Object *obj, Value &val) { val.set(obj->as<Error>()->cause()); });
+  accessor("stack",
+           [](Object *obj, Value &val) { val.set(obj->as<Error>()->stack()); });
 }
 
-template<> void ClassDef<Constructor<Error>>::init() {
+template <>
+void ClassDef<Constructor<Error>>::init() {
   super<Function>();
   ctor();
 }
@@ -1961,10 +2025,8 @@ Error::Error(const Context::Error &error) {
     str += l.name;
     if (l.line && l.column) {
       char s[100];
-      std::sprintf(
-        s, " at line %d column %d in %s\n",
-        l.line, l.column, l.source->filename.c_str()
-      );
+      std::sprintf(s, " at line %d column %d in %s\n", l.line, l.column,
+                   l.source->filename.c_str());
       str += s;
     } else {
       str += '\n';
@@ -1974,7 +2036,7 @@ Error::Error(const Context::Error &error) {
   m_message = Str::make(error.message);
 }
 
-auto Error::name() const -> Str* {
+auto Error::name() const -> Str * {
   thread_local static ConstStr s_error("Error");
   return s_error;
 }
@@ -1983,33 +2045,34 @@ auto Error::name() const -> Str* {
 // Promise
 //
 
-thread_local Promise* Promise::s_settled_queue_head = nullptr;
-thread_local Promise* Promise::s_settled_queue_tail = nullptr;
+thread_local Promise *Promise::s_settled_queue_head = nullptr;
+thread_local Promise *Promise::s_settled_queue_tail = nullptr;
 
 bool Promise::run() {
   auto p = s_settled_queue_head;
   s_settled_queue_head = nullptr;
   s_settled_queue_tail = nullptr;
   while (p) {
-    auto promise = p; p = p->m_next;
+    auto promise = p;
+    p = p->m_next;
     promise->dequeue();
   }
   return s_settled_queue_head;
 }
 
-auto Promise::resolve(const Value &value) -> Promise* {
+auto Promise::resolve(const Value &value) -> Promise * {
   auto p = Promise::make();
   p->settle(RESOLVED, value);
   return p;
 }
 
-auto Promise::reject(const Value &error) -> Promise* {
+auto Promise::reject(const Value &error) -> Promise * {
   auto p = Promise::make();
   p->settle(REJECTED, error);
   return p;
 }
 
-auto Promise::all(Array *promises) -> Promise* {
+auto Promise::all(Array *promises) -> Promise * {
   auto n = promises->length();
   if (!n) return resolve(Array::make());
   auto p = Promise::make();
@@ -2017,7 +2080,7 @@ auto Promise::all(Array *promises) -> Promise* {
   return p;
 }
 
-auto Promise::all_settled(Array *promises) -> Promise* {
+auto Promise::all_settled(Array *promises) -> Promise * {
   auto n = promises->length();
   if (!n) return resolve(Array::make());
   auto p = Promise::make();
@@ -2025,7 +2088,7 @@ auto Promise::all_settled(Array *promises) -> Promise* {
   return p;
 }
 
-auto Promise::any(Array *promises) -> Promise* {
+auto Promise::any(Array *promises) -> Promise * {
   auto n = promises->length();
   if (!n) return reject(Array::make());
   auto p = Promise::make();
@@ -2033,7 +2096,7 @@ auto Promise::any(Array *promises) -> Promise* {
   return p;
 }
 
-auto Promise::race(Array *promises) -> Promise* {
+auto Promise::race(Array *promises) -> Promise * {
   auto p = Promise::make();
   auto n = promises->length();
   if (!n) return p;
@@ -2041,22 +2104,15 @@ auto Promise::race(Array *promises) -> Promise* {
   return p;
 }
 
-auto Promise::then(
-  Context *context,
-  const Value &resolved_value,
-  const Value &rejected_value
-) -> Promise* {
+auto Promise::then(Context *context, const Value &resolved_value,
+                   const Value &rejected_value) -> Promise * {
   auto t = new Then(context, resolved_value, rejected_value);
   add_then(t);
   return t->m_promise;
 }
 
-auto Promise::then(
-  Context *context,
-  Function *on_resolved,
-  Function *on_rejected,
-  Function *on_finally
-) -> Promise* {
+auto Promise::then(Context *context, Function *on_resolved,
+                   Function *on_rejected, Function *on_finally) -> Promise * {
   auto t = new Then(context, on_resolved, on_rejected, on_finally);
   add_then(t);
   return t->m_promise;
@@ -2076,7 +2132,8 @@ void Promise::add_then(Then *then) {
 void Promise::clear_thens() {
   auto p = m_thens_head;
   while (p) {
-    auto then = p; p = p->m_next;
+    auto then = p;
+    p = p->m_next;
     delete then;
   }
   m_thens_head = nullptr;
@@ -2122,7 +2179,8 @@ void Promise::dequeue() {
     m_thens_head = nullptr;
     m_thens_tail = nullptr;
     while (p) {
-      auto then = p; p = p->m_next;
+      auto then = p;
+      p = p->m_next;
       then->execute(m_state, m_result);
       delete then;
     }
@@ -2132,11 +2190,14 @@ void Promise::dequeue() {
   }
 }
 
-template<> void ClassDef<Promise>::init() {
-  thread_local static const auto s_field_res = static_cast<Method*>(ClassDef<Promise::Settler>::field("resolve"));
-  thread_local static const auto s_field_rej = static_cast<Method*>(ClassDef<Promise::Settler>::field("reject"));
+template <>
+void ClassDef<Promise>::init() {
+  thread_local static const auto s_field_res =
+      static_cast<Method *>(ClassDef<Promise::Settler>::field("resolve"));
+  thread_local static const auto s_field_rej =
+      static_cast<Method *>(ClassDef<Promise::Settler>::field("reject"));
 
-  ctor([](Context &ctx) -> Object* {
+  ctor([](Context &ctx) -> Object * {
     Function *executor;
     if (!ctx.arguments(1, &executor)) return nullptr;
     auto promise = Promise::make();
@@ -2172,45 +2233,60 @@ template<> void ClassDef<Promise>::init() {
   });
 }
 
-template<> void ClassDef<Constructor<Promise>>::init() {
+template <>
+void ClassDef<Constructor<Promise>>::init() {
   super<Function>();
   ctor();
 
   method("resolve", [](Context &ctx, Object *obj, Value &ret) {
-    Value value; ctx.get(0, value);
+    Value value;
+    ctx.get(0, value);
     ret.set(Promise::resolve(value));
   });
 
   method("reject", [](Context &ctx, Object *obj, Value &ret) {
-    Value error; ctx.get(0, error);
+    Value error;
+    ctx.get(0, error);
     ret.set(Promise::reject(error));
   });
 
   method("all", [](Context &ctx, Object *obj, Value &ret) {
     Array *promises;
     if (!ctx.arguments(1, &promises)) return;
-    if (!promises) { ctx.error_argument_type(0, "an array"); return; }
+    if (!promises) {
+      ctx.error_argument_type(0, "an array");
+      return;
+    }
     ret.set(Promise::all(promises));
   });
 
   method("allSettled", [](Context &ctx, Object *obj, Value &ret) {
     Array *promises;
     if (!ctx.arguments(1, &promises)) return;
-    if (!promises) { ctx.error_argument_type(0, "an array"); return; }
+    if (!promises) {
+      ctx.error_argument_type(0, "an array");
+      return;
+    }
     ret.set(Promise::all_settled(promises));
   });
 
   method("any", [](Context &ctx, Object *obj, Value &ret) {
     Array *promises;
     if (!ctx.arguments(1, &promises)) return;
-    if (!promises) { ctx.error_argument_type(0, "an array"); return; }
+    if (!promises) {
+      ctx.error_argument_type(0, "an array");
+      return;
+    }
     ret.set(Promise::any(promises));
   });
 
   method("race", [](Context &ctx, Object *obj, Value &ret) {
     Array *promises;
     if (!ctx.arguments(1, &promises)) return;
-    if (!promises) { ctx.error_argument_type(0, "an array"); return; }
+    if (!promises) {
+      ctx.error_argument_type(0, "an array");
+      return;
+    }
     ret.set(Promise::race(promises));
   });
 }
@@ -2219,23 +2295,28 @@ template<> void ClassDef<Constructor<Promise>>::init() {
 // Promise::Callback
 //
 
-auto Promise::Callback::resolved() -> Function* {
-  thread_local static Method* s_method = ClassDef<Promise::Callback>::method("on_resolved");
+auto Promise::Callback::resolved() -> Function * {
+  thread_local static Method *s_method =
+      ClassDef<Promise::Callback>::method("on_resolved");
   return Function::make(s_method, this);
 }
 
-auto Promise::Callback::rejected() -> Function* {
-  thread_local static Method* s_method = ClassDef<Promise::Callback>::method("on_rejected");
+auto Promise::Callback::rejected() -> Function * {
+  thread_local static Method *s_method =
+      ClassDef<Promise::Callback>::method("on_rejected");
   return Function::make(s_method, this);
 }
 
-template<> void ClassDef<Promise::Callback>::init() {
+template <>
+void ClassDef<Promise::Callback>::init() {
   method("on_resolved", [](Context &ctx, Object *obj, Value &ret) {
-    Value value; ctx.get(0, value);
+    Value value;
+    ctx.get(0, value);
     obj->as<Promise::Callback>()->on_resolved(value);
   });
   method("on_rejected", [](Context &ctx, Object *obj, Value &ret) {
-    Value error; ctx.get(0, error);
+    Value error;
+    ctx.get(0, error);
     obj->as<Promise::Callback>()->on_rejected(error);
   });
 }
@@ -2244,28 +2325,20 @@ template<> void ClassDef<Promise::Callback>::init() {
 // Promise::Then
 //
 
-Promise::Then::Then(
-  Context *context,
-  Function *on_resolved,
-  Function *on_rejected,
-  Function *on_finally
-) : m_context(context)
-  , m_on_resolved(on_resolved)
-  , m_on_rejected(on_rejected)
-  , m_on_finally(on_finally)
-  , m_promise(Promise::make())
-{
-}
+Promise::Then::Then(Context *context, Function *on_resolved,
+                    Function *on_rejected, Function *on_finally)
+    : m_context(context),
+      m_on_resolved(on_resolved),
+      m_on_rejected(on_rejected),
+      m_on_finally(on_finally),
+      m_promise(Promise::make()) {}
 
-Promise::Then::Then(
-  Context *context,
-  const Value &resolved_value,
-  const Value &rejected_value
-) : m_context(context)
-  , m_promise(Promise::make())
-  , m_resolved_value(resolved_value)
-  , m_rejected_value(rejected_value)
-{
+Promise::Then::Then(Context *context, const Value &resolved_value,
+                    const Value &rejected_value)
+    : m_context(context),
+      m_promise(Promise::make()),
+      m_resolved_value(resolved_value),
+      m_rejected_value(rejected_value) {
   if (resolved_value.is_function()) m_on_resolved = resolved_value.f();
   if (rejected_value.is_function()) m_on_rejected = rejected_value.f();
 }
@@ -2303,10 +2376,17 @@ void Promise::Then::execute(Context *ctx, State state, const Value &result) {
   if (ret.is<Promise>()) {
     auto promise = ret.as<Promise>();
     switch (promise->m_state) {
-      case PENDING: promise->m_dependent = m_promise; break;
-      case RESOLVED: m_promise->settle(RESOLVED, promise->m_result); break;
-      case REJECTED: m_promise->settle(REJECTED, promise->m_result); break;
-      case CANCELED: break;
+      case PENDING:
+        promise->m_dependent = m_promise;
+        break;
+      case RESOLVED:
+        m_promise->settle(RESOLVED, promise->m_result);
+        break;
+      case REJECTED:
+        m_promise->settle(REJECTED, promise->m_result);
+        break;
+      case CANCELED:
+        break;
     }
     return;
   }
@@ -2318,13 +2398,16 @@ void Promise::Then::execute(Context *ctx, State state, const Value &result) {
 // Promise::Settler
 //
 
-template<> void ClassDef<Promise::Settler>::init() {
+template <>
+void ClassDef<Promise::Settler>::init() {
   method("resolve", [](Context &ctx, Object *obj, Value &) {
-    Value value; ctx.get(0, value);
+    Value value;
+    ctx.get(0, value);
     obj->as<Promise::Settler>()->resolve(value);
   });
   method("reject", [](Context &ctx, Object *obj, Value &) {
-    Value error; ctx.get(0, error);
+    Value error;
+    ctx.get(0, error);
     obj->as<Promise::Settler>()->reject(error);
   });
 }
@@ -2333,7 +2416,8 @@ template<> void ClassDef<Promise::Settler>::init() {
 // Promise::Result
 //
 
-template<> void ClassDef<Promise::Result>::init() {
+template <>
+void ClassDef<Promise::Result>::init() {
   field<Value>("status", [](Promise::Result *obj) { return &obj->status; });
   field<Value>("value", [](Promise::Result *obj) { return &obj->value; });
   field<Value>("reason", [](Promise::Result *obj) { return &obj->reason; });
@@ -2344,14 +2428,13 @@ template<> void ClassDef<Promise::Result>::init() {
 //
 
 Promise::Aggregator::Aggregator(Type type, Settler *settler, Array *promises)
-  : m_type(type)
-  , m_settler(settler)
-{
+    : m_type(type), m_settler(settler) {
   auto n = promises->length();
   auto d = PooledArray<Ref<Dependency>>::make(n);
   m_dependencies = d;
   for (int i = 0; i < n; i++) {
-    Value v; promises->get(i, v);
+    Value v;
+    promises->get(i, v);
     auto p = v.is_promise() ? v.as<Promise>() : Promise::resolve(v);
     d->at(i) = Dependency::make(this, p);
   }
@@ -2449,7 +2532,8 @@ void Promise::Aggregator::Dependency::on_weak_ptr_gone() {
   release();
 }
 
-template<> void ClassDef<Promise::Aggregator::Dependency>::init() {
+template <>
+void ClassDef<Promise::Aggregator::Dependency>::init() {
   super<Promise::Callback>();
 }
 
@@ -2457,8 +2541,9 @@ template<> void ClassDef<Promise::Aggregator::Dependency>::init() {
 // Array
 //
 
-template<> void ClassDef<Array>::init() {
-  ctor([](Context &ctx) -> Object* {
+template <>
+void ClassDef<Array>::init() {
+  ctor([](Context &ctx) -> Object * {
     int size = 0;
     if (!ctx.arguments(0, &size)) return nullptr;
     if (size < 0) {
@@ -2474,9 +2559,7 @@ template<> void ClassDef<Array>::init() {
     return a;
   });
 
-  geti([](Object *obj, int i, Value &val) {
-    obj->as<Array>()->get(i, val);
-  });
+  geti([](Object *obj, int i, Value &val) { obj->as<Array>()->get(i, val); });
 
   seti([](Object *obj, int i, const Value &val) {
     if (val.is_empty()) {
@@ -2486,10 +2569,12 @@ template<> void ClassDef<Array>::init() {
     }
   });
 
-  accessor("length",
-    [](Object *obj, Value &val) { val.set(int(obj->as<Array>()->length())); },
-    [](Object *obj, const Value &val) { obj->as<Array>()->length(val.to_number()); }
-  );
+  accessor(
+      "length",
+      [](Object *obj, Value &val) { val.set(int(obj->as<Array>()->length())); },
+      [](Object *obj, const Value &val) {
+        obj->as<Array>()->length(val.to_number());
+      });
 
   method("concat", [](Context &ctx, Object *obj, Value &ret) {
     auto a = obj->as<Array>();
@@ -2507,18 +2592,10 @@ template<> void ClassDef<Array>::init() {
       }
     }
     auto all = Array::make(size);
-    a->iterate_all(
-      [&](Value &v, int i) {
-        all->set(i, v);
-      }
-    );
+    a->iterate_all([&](Value &v, int i) { all->set(i, v); });
     for (int i = 0; i < n; i++) {
       if (auto a = arrays[i]) {
-        a->iterate_all(
-          [&](Value &v, int i) {
-            all->set(p + i, v);
-          }
-        );
+        a->iterate_all([&](Value &v, int i) { all->set(p + i, v); });
         p += a->length();
       } else {
         all->set(p++, ctx.arg(i));
@@ -2541,21 +2618,19 @@ template<> void ClassDef<Array>::init() {
     Function *callback;
     if (!ctx.arguments(1, &callback)) return;
     bool found = false;
-    obj->as<Array>()->iterate_while(
-      [&](Value &v, int i) -> bool {
-        Value argv[3], ret;
-        argv[0] = v;
-        argv[1].set(i);
-        argv[2].set(obj);
-        (*callback)(ctx, 3, argv, ret);
-        if (!ctx.ok()) return false;
-        if (!ret.to_boolean()) {
-          found = true;
-          return false;
-        }
-        return true;
+    obj->as<Array>()->iterate_while([&](Value &v, int i) -> bool {
+      Value argv[3], ret;
+      argv[0] = v;
+      argv[1].set(i);
+      argv[2].set(obj);
+      (*callback)(ctx, 3, argv, ret);
+      if (!ctx.ok()) return false;
+      if (!ret.to_boolean()) {
+        found = true;
+        return false;
       }
-    );
+      return true;
+    });
     ret.set(!found);
   });
 
@@ -2591,15 +2666,17 @@ template<> void ClassDef<Array>::init() {
   method("find", [](Context &ctx, Object *obj, Value &ret) {
     Function *callback;
     if (!ctx.arguments(1, &callback)) return;
-    obj->as<Array>()->find([&](Value &v, int i) -> bool {
-      Value argv[3], ret;
-      argv[0] = v;
-      argv[1].set(i);
-      argv[2].set(obj);
-      (*callback)(ctx, 3, argv, ret);
-      if (!ctx.ok()) return true;
-      return ret.to_boolean();
-    }, ret);
+    obj->as<Array>()->find(
+        [&](Value &v, int i) -> bool {
+          Value argv[3], ret;
+          argv[0] = v;
+          argv[1].set(i);
+          argv[2].set(obj);
+          (*callback)(ctx, 3, argv, ret);
+          if (!ctx.ok()) return true;
+          return ret.to_boolean();
+        },
+        ret);
   });
 
   method("findIndex", [](Context &ctx, Object *obj, Value &ret) {
@@ -2678,16 +2755,14 @@ template<> void ClassDef<Array>::init() {
   method("map", [](Context &ctx, Object *obj, Value &ret) {
     Function *f;
     if (!ctx.arguments(1, &f)) return;
-    ret.set(obj->as<Array>()->map(
-      [&](Value &v, int i, Value &ret) -> bool {
-        Value argv[3];
-        argv[0] = v;
-        argv[1].set(i);
-        argv[2].set(obj);
-        (*f)(ctx, 3, argv, ret);
-        return ctx.ok();
-      }
-    ));
+    ret.set(obj->as<Array>()->map([&](Value &v, int i, Value &ret) -> bool {
+      Value argv[3];
+      argv[0] = v;
+      argv[1].set(i);
+      argv[2].set(obj);
+      (*f)(ctx, 3, argv, ret);
+      return ctx.ok();
+    }));
   });
 
   method("pop", [](Context &ctx, Object *obj, Value &ret) {
@@ -2705,24 +2780,28 @@ template<> void ClassDef<Array>::init() {
     Value initial, argv[4];
     if (ctx.argc() > 1) {
       if (!ctx.arguments(2, &callback, &initial)) return;
-      obj->as<Array>()->reduce([&](Value &ret, Value &v, int i) -> bool {
-        argv[0] = ret;
-        argv[1] = v;
-        argv[2].set(i);
-        argv[3].set(obj);
-        (*callback)(ctx, 4, argv, ret);
-        return ctx.ok();
-      }, initial, ret);
+      obj->as<Array>()->reduce(
+          [&](Value &ret, Value &v, int i) -> bool {
+            argv[0] = ret;
+            argv[1] = v;
+            argv[2].set(i);
+            argv[3].set(obj);
+            (*callback)(ctx, 4, argv, ret);
+            return ctx.ok();
+          },
+          initial, ret);
     } else {
       if (!ctx.arguments(1, &callback)) return;
-      obj->as<Array>()->reduce([&](Value &ret, Value &v, int i) -> bool {
-        argv[0] = ret;
-        argv[1] = v;
-        argv[2].set(i);
-        argv[3].set(obj);
-        (*callback)(ctx, 4, argv, ret);
-        return ctx.ok();
-      }, ret);
+      obj->as<Array>()->reduce(
+          [&](Value &ret, Value &v, int i) -> bool {
+            argv[0] = ret;
+            argv[1] = v;
+            argv[2].set(i);
+            argv[3].set(obj);
+            (*callback)(ctx, 4, argv, ret);
+            return ctx.ok();
+          },
+          ret);
     }
   });
 
@@ -2731,24 +2810,28 @@ template<> void ClassDef<Array>::init() {
     Value initial, argv[4];
     if (ctx.argc() > 1) {
       if (!ctx.arguments(2, &callback, &initial)) return;
-      obj->as<Array>()->reduceRight([&](Value &ret, Value &v, int i) -> bool {
-        argv[0] = ret;
-        argv[1] = v;
-        argv[2].set(i);
-        argv[3].set(obj);
-        (*callback)(ctx, 4, argv, ret);
-        return ctx.ok();
-      }, initial, ret);
+      obj->as<Array>()->reduceRight(
+          [&](Value &ret, Value &v, int i) -> bool {
+            argv[0] = ret;
+            argv[1] = v;
+            argv[2].set(i);
+            argv[3].set(obj);
+            (*callback)(ctx, 4, argv, ret);
+            return ctx.ok();
+          },
+          initial, ret);
     } else {
       if (!ctx.arguments(1, &callback)) return;
-      obj->as<Array>()->reduceRight([&](Value &ret, Value &v, int i) -> bool {
-        argv[0] = ret;
-        argv[1] = v;
-        argv[2].set(i);
-        argv[3].set(obj);
-        (*callback)(ctx, 4, argv, ret);
-        return ctx.ok();
-      }, ret);
+      obj->as<Array>()->reduceRight(
+          [&](Value &ret, Value &v, int i) -> bool {
+            argv[0] = ret;
+            argv[1] = v;
+            argv[2].set(i);
+            argv[3].set(obj);
+            (*callback)(ctx, 4, argv, ret);
+            return ctx.ok();
+          },
+          ret);
     }
   });
 
@@ -2771,21 +2854,19 @@ template<> void ClassDef<Array>::init() {
     Function *callback;
     if (!ctx.arguments(1, &callback)) return;
     bool found = false;
-    obj->as<Array>()->iterate_while(
-      [&](Value &v, int i) -> bool {
-        Value argv[3], ret;
-        argv[0] = v;
-        argv[1].set(i);
-        argv[2].set(obj);
-        (*callback)(ctx, 3, argv, ret);
-        if (!ctx.ok()) return false;
-        if (ret.to_boolean()) {
-          found = true;
-          return false;
-        }
-        return true;
+    obj->as<Array>()->iterate_while([&](Value &v, int i) -> bool {
+      Value argv[3], ret;
+      argv[0] = v;
+      argv[1].set(i);
+      argv[2].set(obj);
+      (*callback)(ctx, 3, argv, ret);
+      if (!ctx.ok()) return false;
+      if (ret.to_boolean()) {
+        found = true;
+        return false;
       }
-    );
+      return true;
+    });
     ret.set(found);
   });
 
@@ -2794,20 +2875,18 @@ template<> void ClassDef<Array>::init() {
     if (!ctx.arguments(0, &comparator)) return;
     if (comparator) {
       bool has_error = false;
-      obj->as<Array>()->sort(
-        [&](const Value &a, const Value &b) -> bool {
-          if (has_error) return false;
-          if (&a == &b) return false;
-          if (b.is_empty() || b.is_undefined()) return true;
-          if (a.is_empty() || a.is_undefined()) return false;
-          Value argv[2], ret;
-          argv[0] = a;
-          argv[1] = b;
-          (*comparator)(ctx, 2, argv, ret);
-          if (!ctx.ok()) has_error = true;
-          return ret.is_number() && ret.n() <= 0;
-        }
-      );
+      obj->as<Array>()->sort([&](const Value &a, const Value &b) -> bool {
+        if (has_error) return false;
+        if (&a == &b) return false;
+        if (b.is_empty() || b.is_undefined()) return true;
+        if (a.is_empty() || a.is_undefined()) return false;
+        Value argv[2], ret;
+        argv[0] = a;
+        argv[1] = b;
+        (*comparator)(ctx, 2, argv, ret);
+        if (!ctx.ok()) has_error = true;
+        return ret.is_number() && ret.n() <= 0;
+      });
     } else {
       obj->as<Array>()->sort();
     }
@@ -2833,7 +2912,8 @@ template<> void ClassDef<Array>::init() {
   });
 }
 
-template<> void ClassDef<Constructor<Array>>::init() {
+template <>
+void ClassDef<Constructor<Array>>::init() {
   super<Function>();
   ctor();
 }
@@ -2877,7 +2957,7 @@ void Array::fill(const Value &v, int start, int end) {
   for (int i = end - 1; i >= start; i--) set(i, v);
 }
 
-auto Array::filter(std::function<bool(Value&, int)> callback) -> Array* {
+auto Array::filter(std::function<bool(Value &, int)> callback) -> Array * {
   auto out = make();
   iterate_all([&](Value &v, int i) {
     auto ret = callback(v, i);
@@ -2886,7 +2966,7 @@ auto Array::filter(std::function<bool(Value&, int)> callback) -> Array* {
   return out;
 }
 
-void Array::find(std::function<bool(Value&, int)> callback, Value &result) {
+void Array::find(std::function<bool(Value &, int)> callback, Value &result) {
   result = Value::undefined;
   iterate_while([&](Value &v, int i) -> bool {
     auto ret = callback(v, i);
@@ -2895,7 +2975,7 @@ void Array::find(std::function<bool(Value&, int)> callback, Value &result) {
   });
 }
 
-auto Array::findIndex(std::function<bool(Value&, int)> callback) -> int {
+auto Array::findIndex(std::function<bool(Value &, int)> callback) -> int {
   int found = -1;
   iterate_while([&](Value &v, int i) -> bool {
     auto ret = callback(v, i);
@@ -2905,33 +2985,28 @@ auto Array::findIndex(std::function<bool(Value&, int)> callback) -> int {
   return found;
 }
 
-auto Array::flat(int depth) -> Array* {
+auto Array::flat(int depth) -> Array * {
   auto out = make();
-  std::function<void(Value&, int)> expand;
+  std::function<void(Value &, int)> expand;
   expand = [&](Value &v, int d) {
     if (v.is_array() && d <= depth) {
-      v.as<Array>()->iterate_all([&](Value &v, int) {
-        expand(v, d + 1);
-      });
+      v.as<Array>()->iterate_all([&](Value &v, int) { expand(v, d + 1); });
     } else {
       out->push(v);
     }
   };
-  iterate_all([&](Value &v, int) {
-    expand(v, 1);
-  });
+  iterate_all([&](Value &v, int) { expand(v, 1); });
   return out;
 }
 
-auto Array::flatMap(std::function<bool(Value&, int, Value&)> callback) -> Array* {
+auto Array::flatMap(std::function<bool(Value &, int, Value &)> callback)
+    -> Array * {
   auto out = make();
   iterate_while([&](Value &v, int i) -> bool {
     Value ret;
     if (!callback(v, i, ret)) return false;
     if (ret.is_array()) {
-      ret.as<Array>()->iterate_all([&](Value &v, int) {
-        out->push(v);
-      });
+      ret.as<Array>()->iterate_all([&](Value &v, int) { out->push(v); });
     } else {
       out->push(ret);
     }
@@ -2940,7 +3015,7 @@ auto Array::flatMap(std::function<bool(Value&, int, Value&)> callback) -> Array*
   return out;
 }
 
-void Array::forEach(std::function<bool(Value&, int)> callback) {
+void Array::forEach(std::function<bool(Value &, int)> callback) {
   iterate_while(callback);
 }
 
@@ -2956,11 +3031,13 @@ auto Array::indexOf(const Value &value, int start) -> int {
   return -1;
 }
 
-auto Array::join(Str *separator) -> Str* {
+auto Array::join(Str *separator) -> Str * {
   std::string str;
   bool first = true;
   iterate_all([&](Value &v, int i) {
-    if (first) first = false; else {
+    if (first)
+      first = false;
+    else {
       str += separator ? separator->str() : ",";
     }
     auto s = v.to_string();
@@ -2982,7 +3059,8 @@ auto Array::lastIndexOf(const Value &value, int start) -> int {
   return -1;
 }
 
-auto Array::map(std::function<bool(Value&, int, Value&)> callback) -> Array* {
+auto Array::map(std::function<bool(Value &, int, Value &)> callback)
+    -> Array * {
   auto out = make(length());
   iterate_while([&](Value &v, int i) -> bool {
     Value ret;
@@ -3004,7 +3082,8 @@ void Array::pop(Value &result) {
   }
 }
 
-void Array::reduce(std::function<bool(Value&, Value&, int)> callback, Value &result) {
+void Array::reduce(std::function<bool(Value &, Value &, int)> callback,
+                   Value &result) {
   bool first = true;
   iterate_while([&](Value &v, int i) -> bool {
     if (first) {
@@ -3017,14 +3096,15 @@ void Array::reduce(std::function<bool(Value&, Value&, int)> callback, Value &res
   });
 }
 
-void Array::reduce(std::function<bool(Value&, Value&, int)> callback, Value &initial, Value &result) {
+void Array::reduce(std::function<bool(Value &, Value &, int)> callback,
+                   Value &initial, Value &result) {
   result = initial;
-  iterate_while([&](Value &v, int i) -> bool {
-    return callback(result, v, i);
-  });
+  iterate_while(
+      [&](Value &v, int i) -> bool { return callback(result, v, i); });
 }
 
-void Array::reduceRight(std::function<bool(Value&, Value&, int)> callback, Value &result) {
+void Array::reduceRight(std::function<bool(Value &, Value &, int)> callback,
+                        Value &result) {
   bool first = true;
   iterate_backward_while([&](Value &v, int i) -> bool {
     if (first) {
@@ -3037,14 +3117,14 @@ void Array::reduceRight(std::function<bool(Value&, Value&, int)> callback, Value
   });
 }
 
-void Array::reduceRight(std::function<bool(Value&, Value&, int)> callback, Value &initial, Value &result) {
+void Array::reduceRight(std::function<bool(Value &, Value &, int)> callback,
+                        Value &initial, Value &result) {
   result = initial;
-  iterate_backward_while([&](Value &v, int i) -> bool {
-    return callback(result, v, i);
-  });
+  iterate_backward_while(
+      [&](Value &v, int i) -> bool { return callback(result, v, i); });
 }
 
-auto Array::reverse() -> Array* {
+auto Array::reverse() -> Array * {
   for (int i = 0, n = m_size / 2; i < n; i++) {
     int j = m_size - i - 1;
     if (i != j) {
@@ -3073,7 +3153,7 @@ void Array::shift(Value &result) {
   }
 }
 
-auto Array::slice(int start, int end) -> Array* {
+auto Array::slice(int start, int end) -> Array * {
   if (start < 0) start = m_size - start;
   if (end < 0) end = m_size - end;
   if (start < 0) start = 0;
@@ -3091,33 +3171,28 @@ auto Array::slice(int start, int end) -> Array* {
 
 void Array::sort() {
   auto size = std::min(m_size, int(m_data->size()));
-  std::sort(
-    m_data->elements(),
-    m_data->elements() + size,
-    [](const Value &a, const Value &b) -> bool {
-      if (b.is_empty() || b.is_undefined()) return true;
-      if (a.is_empty() || a.is_undefined()) return false;
-      auto sa = a.to_string();
-      auto sb = b.to_string();
-      auto less = sa->str() < sb->str();
-      sa->release();
-      sb->release();
-      return less;
-    }
-  );
+  std::sort(m_data->elements(), m_data->elements() + size,
+            [](const Value &a, const Value &b) -> bool {
+              if (b.is_empty() || b.is_undefined()) return true;
+              if (a.is_empty() || a.is_undefined()) return false;
+              auto sa = a.to_string();
+              auto sb = b.to_string();
+              auto less = sa->str() < sb->str();
+              sa->release();
+              sb->release();
+              return less;
+            });
 }
 
-void Array::sort(const std::function<bool(const Value&, const Value&)> &comparator) {
+void Array::sort(
+    const std::function<bool(const Value &, const Value &)> &comparator) {
   // TODO: Re-write sorting algorithm to tolerate unstable comparators
   auto size = std::min(m_size, int(m_data->size()));
-  std::sort(
-    m_data->elements(),
-    m_data->elements() + size,
-    comparator
-  );
+  std::sort(m_data->elements(), m_data->elements() + size, comparator);
 }
 
-auto Array::splice(int start, int delete_count, const Value *values, int count) -> Array* {
+auto Array::splice(int start, int delete_count, const Value *values, int count)
+    -> Array * {
   if (start < 0) start = m_size + start;
   if (start < 0) start = 0;
   if (start + delete_count > m_size) delete_count = m_size - start;
@@ -3144,7 +3219,7 @@ auto Array::splice(int start, int delete_count, const Value *values, int count) 
       n += count - delete_count;
       if (n > m_data->size()) {
         auto new_size = 1 << power(n);
-        if (new_size > MAX_SIZE) return ret; // TODO: report error
+        if (new_size > MAX_SIZE) return ret;  // TODO: report error
         new_data = Data::make(new_size);
         new_values = new_data->elements();
       }
@@ -3176,7 +3251,7 @@ void Array::unshift(const Value *values, int count) {
     Data *new_data = nullptr;
     if (n > m_data->size()) {
       auto new_size = 1 << power(n);
-      if (new_size > MAX_SIZE) return; // TODO: report error
+      if (new_size > MAX_SIZE) return;  // TODO: report error
       new_data = Data::make(new_size);
       new_values = new_data->elements();
     }
@@ -3198,8 +3273,9 @@ void Array::unshift(const Value *values, int count) {
 // RegExp
 //
 
-template<> void ClassDef<RegExp>::init() {
-  ctor([](Context &ctx) -> Object* {
+template <>
+void ClassDef<RegExp>::init() {
+  ctor([](Context &ctx) -> Object * {
     Str *pattern, *flags = nullptr;
     if (!ctx.arguments(1, &pattern, &flags)) return nullptr;
     try {
@@ -3222,30 +3298,35 @@ template<> void ClassDef<RegExp>::init() {
     ret.set(obj->as<RegExp>()->test(str));
   });
 
-  accessor("source",      [](Object *obj, Value &ret) { ret.set(obj->as<RegExp>()->source()); });
-  accessor("global",      [](Object *obj, Value &ret) { ret.set(obj->as<RegExp>()->global()); });
-  accessor("ignoreCase",  [](Object *obj, Value &ret) { ret.set(obj->as<RegExp>()->ignore_case()); });
-  accessor("lastIndex",   [](Object *obj, Value &ret) { ret.set(obj->as<RegExp>()->last_index()); });
+  accessor("source", [](Object *obj, Value &ret) {
+    ret.set(obj->as<RegExp>()->source());
+  });
+  accessor("global", [](Object *obj, Value &ret) {
+    ret.set(obj->as<RegExp>()->global());
+  });
+  accessor("ignoreCase", [](Object *obj, Value &ret) {
+    ret.set(obj->as<RegExp>()->ignore_case());
+  });
+  accessor("lastIndex", [](Object *obj, Value &ret) {
+    ret.set(obj->as<RegExp>()->last_index());
+  });
 }
 
-template<> void ClassDef<Constructor<RegExp>>::init() {
+template <>
+void ClassDef<Constructor<RegExp>>::init() {
   super<Function>();
   ctor();
 }
 
 RegExp::RegExp(Str *pattern)
-  : m_source(pattern)
-  , m_regex(pattern->str(), chars_to_flags(nullptr, m_global))
-{
-}
+    : m_source(pattern),
+      m_regex(pattern->str(), chars_to_flags(nullptr, m_global)) {}
 
 RegExp::RegExp(Str *pattern, Str *flags)
-  : m_source(pattern)
-  , m_regex(pattern->str(), chars_to_flags(flags, m_global))
-{
-}
+    : m_source(pattern),
+      m_regex(pattern->str(), chars_to_flags(flags, m_global)) {}
 
-auto RegExp::exec(Str *str) -> Array* {
+auto RegExp::exec(Str *str) -> Array * {
   std::smatch sm;
   auto &match = m_global ? m_match : sm;
 
@@ -3279,9 +3360,15 @@ auto RegExp::chars_to_flags(Str *chars, bool &global) -> std::regex::flag_type {
   if (chars) {
     for (auto c : chars->str()) {
       switch (c) {
-        case 'i': flags |= std::regex::icase; break;
-        case 'g': global = true; break;
-        default: throw std::runtime_error(std::string("invalid RegExp flags: ") + chars->str());
+        case 'i':
+          flags |= std::regex::icase;
+          break;
+        case 'g':
+          global = true;
+          break;
+        default:
+          throw std::runtime_error(std::string("invalid RegExp flags: ") +
+                                   chars->str());
       }
     }
   }
@@ -3306,15 +3393,15 @@ size_t Utf8Decoder::encode(uint32_t code, char *output, size_t size) {
   } else if (code <= 0xffff) {
     if (size < 3) return 0;
     output[0] = 0xe0 | (0x0f & (code >> 12));
-    output[1] = 0x80 | (0x3f & (code >>  6));
-    output[2] = 0x80 | (0x3f & (code >>  0));
+    output[1] = 0x80 | (0x3f & (code >> 6));
+    output[2] = 0x80 | (0x3f & (code >> 0));
     return 3;
   } else {
     if (size < 4) return 0;
     output[0] = 0xf0 | (0x07 & (code >> 18));
     output[1] = 0x80 | (0x3f & (code >> 12));
-    output[2] = 0x80 | (0x3f & (code >>  6));
-    output[3] = 0x80 | (0x3f & (code >>  0));
+    output[2] = 0x80 | (0x3f & (code >> 6));
+    output[3] = 0x80 | (0x3f & (code >> 0));
     return 4;
   }
 }
@@ -3327,9 +3414,17 @@ void Utf8Decoder::reset() {
 bool Utf8Decoder::input(char c) {
   if (!m_shift) {
     if (c & 0x80) {
-      if ((c & 0xe0) == 0xc0) { m_codepoint = c & 0x1f; m_shift = 1; } else
-      if ((c & 0xf0) == 0xe0) { m_codepoint = c & 0x0f; m_shift = 2; } else
-      if ((c & 0xf8) == 0xf0) { m_codepoint = c & 0x07; m_shift = 3; } else return false;
+      if ((c & 0xe0) == 0xc0) {
+        m_codepoint = c & 0x1f;
+        m_shift = 1;
+      } else if ((c & 0xf0) == 0xe0) {
+        m_codepoint = c & 0x0f;
+        m_shift = 2;
+      } else if ((c & 0xf8) == 0xf0) {
+        m_codepoint = c & 0x07;
+        m_shift = 3;
+      } else
+        return false;
     } else {
       m_output(c);
     }
@@ -3343,8 +3438,6 @@ bool Utf8Decoder::input(char c) {
   return true;
 }
 
-bool Utf8Decoder::end() {
-  return !m_shift;
-}
+bool Utf8Decoder::end() { return !m_shift; }
 
-} // namespace pjs
+}  // namespace pjs

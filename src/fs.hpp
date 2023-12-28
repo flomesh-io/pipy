@@ -43,7 +43,7 @@ bool read_dir(const std::string &filename, std::list<std::string> &list);
 bool read_file(const std::string &filename, std::vector<uint8_t> &data);
 bool unlink(const std::string &filename);
 
-} // namespace fs
-} // namespace pipy
+}  // namespace fs
+}  // namespace pipy
 
-#endif // FS_HPP
+#endif  // FS_HPP

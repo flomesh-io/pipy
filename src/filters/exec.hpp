@@ -29,65 +29,78 @@
 #include "filter.hpp"
 #include "timer.hpp"
 
+#ifndef _WIN32
 #include <unistd.h>
+#else
+typedef int pid_t;
+#endif
 #include <map>
 #include <mutex>
 
-namespace pipy {
+namespace pipy
+{
 
-class FileStream;
-
-//
-// Exec
-//
-
-class Exec : public Filter {
-public:
-  Exec(const pjs::Value &command);
-
-private:
-  Exec(const Exec &r);
-  ~Exec();
-
-  virtual auto clone() -> Filter* override;
-  virtual void reset() override;
-  virtual void process(Event *evt) override;
-  virtual void dump(Dump &d) override;
-
-private:
-  pjs::Value m_command;
-  pid_t m_pid = 0;
-  pjs::Ref<FileStream> m_stdin;
-  pjs::Ref<FileStream> m_stdout;
-
-  void on_process_exit();
+  class FileStream;
 
   //
-  // Exec::ChildProcessMonitor
+  // Exec
   //
 
-  class ChildProcessMonitor {
+  class Exec : public Filter
+  {
   public:
-    ChildProcessMonitor();
+    Exec(const pjs::Value &command);
+#ifdef _WIN32
+    auto pif() const -> PROCESS_INFORMATION { return m_pif; }
+#endif
+  private:
+    Exec(const Exec &r);
+    ~Exec();
 
-    void monitor(int pid, Exec *exec);
-    void remove(int pid);
+    virtual auto clone() -> Filter * override;
+    virtual void reset() override;
+    virtual void process(Event *evt) override;
+    virtual void dump(Dump &d) override;
 
   private:
-    struct Waiter {
-      Net* net;
-      Exec* filter;
+    pjs::Value m_command;
+    pid_t m_pid = 0;
+#ifdef _WIN32
+    PROCESS_INFORMATION m_pif = {};
+#endif 
+    pjs::Ref<FileStream> m_stdin;
+    pjs::Ref<FileStream> m_stdout;
+
+    void on_process_exit();
+
+    //
+    // Exec::ChildProcessMonitor
+    //
+
+    class ChildProcessMonitor
+    {
+    public:
+      ChildProcessMonitor();
+
+      void monitor(int pid, Exec *exec);
+      void remove(int pid);
+
+    private:
+      struct Waiter
+      {
+        Net *net;
+        Exec *filter;
+      };
+
+      void wait();
+
+      std::thread m_wait_thread;
+      std::mutex m_mutex;
+      std::map<int, Waiter> m_waiters;
     };
 
-    void wait();
-
-    std::thread m_wait_thread;
-    std::mutex m_mutex;
-    std::map<int, Waiter> m_waiters;
+    static ChildProcessMonitor s_child_process_monitor;
   };
-
-  static ChildProcessMonitor s_child_process_monitor;
-};
 
 } // namespace pipy
 

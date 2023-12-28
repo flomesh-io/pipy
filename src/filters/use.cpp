@@ -24,14 +24,17 @@
  */
 
 #include "use.hpp"
-#include "context.hpp"
-#include "module.hpp"
-#include "worker.hpp"
-#include "pipeline.hpp"
-#include "log.hpp"
-#include "pipy/nmi.h"
 
+#include "context.hpp"
+#include "log.hpp"
+#include "module.hpp"
+#include "pipeline.hpp"
+#include "pipy/nmi.h"
+#include "worker.hpp"
+
+#ifndef _WIN32
 #include <dlfcn.h>
+#endif
 
 namespace pipy {
 
@@ -40,53 +43,39 @@ namespace pipy {
 //
 
 Use::Use(JSModule *module, pjs::Str *pipeline_name)
-  : m_multiple(false)
-  , m_pipeline_name(pipeline_name)
-{
+    : m_multiple(false), m_pipeline_name(pipeline_name) {
   m_modules.push_back(module);
 }
 
 Use::Use(nmi::NativeModule *module, pjs::Str *pipeline_name)
-  : m_native(true)
-  , m_multiple(false)
-  , m_native_module(module)
-  , m_pipeline_name(pipeline_name)
-{
-}
+    : m_native(true),
+      m_multiple(false),
+      m_native_module(module),
+      m_pipeline_name(pipeline_name) {}
 
-Use::Use(
-  const std::list<JSModule*> &modules,
-  pjs::Str *pipeline_name,
-  pjs::Function *turn_down
-) : m_multiple(true)
-  , m_modules(modules)
-  , m_pipeline_name(pipeline_name)
-  , m_turn_down(turn_down)
-{
-}
+Use::Use(const std::list<JSModule *> &modules, pjs::Str *pipeline_name,
+         pjs::Function *turn_down)
+    : m_multiple(true),
+      m_modules(modules),
+      m_pipeline_name(pipeline_name),
+      m_turn_down(turn_down) {}
 
-Use::Use(
-  const std::list<JSModule*> &modules,
-  pjs::Str *pipeline_name,
-  pjs::Str *pipeline_name_down,
-  pjs::Function *turn_down
-) : m_multiple(true)
-  , m_modules(modules)
-  , m_pipeline_name(pipeline_name)
-  , m_pipeline_name_down(pipeline_name_down)
-  , m_turn_down(turn_down)
-{
-}
+Use::Use(const std::list<JSModule *> &modules, pjs::Str *pipeline_name,
+         pjs::Str *pipeline_name_down, pjs::Function *turn_down)
+    : m_multiple(true),
+      m_modules(modules),
+      m_pipeline_name(pipeline_name),
+      m_pipeline_name_down(pipeline_name_down),
+      m_turn_down(turn_down) {}
 
 Use::Use(const Use &r)
-  : m_native(r.m_native)
-  , m_multiple(r.m_multiple)
-  , m_native_pipeline_layout(r.m_native_pipeline_layout)
-  , m_stages(r.m_stages)
-  , m_pipeline_name(r.m_pipeline_name)
-  , m_pipeline_name_down(r.m_pipeline_name_down)
-  , m_turn_down(r.m_turn_down)
-{
+    : m_native(r.m_native),
+      m_multiple(r.m_multiple),
+      m_native_pipeline_layout(r.m_native_pipeline_layout),
+      m_stages(r.m_stages),
+      m_pipeline_name(r.m_pipeline_name),
+      m_pipeline_name_down(r.m_pipeline_name_down),
+      m_turn_down(r.m_turn_down) {
   Stage *next = nullptr;
   for (auto i = m_stages.rbegin(); i != m_stages.rend(); i++) {
     i->m_filter = this;
@@ -106,9 +95,7 @@ Use::Use(const Use &r)
   }
 }
 
-Use::~Use()
-{
-}
+Use::~Use() {}
 
 void Use::dump(Dump &d) {
   Filter::dump(d);
@@ -145,7 +132,8 @@ void Use::dump(Dump &d) {
 void Use::bind() {
   Filter::bind();
   if (m_native) {
-    m_native_pipeline_layout = m_native_module->pipeline_layout(m_pipeline_name);
+    m_native_pipeline_layout =
+        m_native_module->pipeline_layout(m_pipeline_name);
     if (!m_native_pipeline_layout) {
       if (m_pipeline_name) {
         std::string msg("cannot find pipeline with name ");
@@ -155,12 +143,10 @@ void Use::bind() {
         throw std::runtime_error(msg + m_native_module->filename()->str());
       }
     }
-
   } else {
     for (auto *mod : m_modules) {
-      auto p = m_pipeline_name
-        ? mod->find_named_pipeline(m_pipeline_name)
-        : mod->entrance_pipeline();
+      auto p = m_pipeline_name ? mod->find_named_pipeline(m_pipeline_name)
+                               : mod->entrance_pipeline();
       if (!p && !m_multiple) {
         std::string msg("pipeline not found in module ");
         msg += mod->filename()->str();
@@ -179,9 +165,7 @@ void Use::bind() {
   }
 }
 
-auto Use::clone() -> Filter* {
-  return new Use(*this);
-}
+auto Use::clone() -> Filter * { return new Use(*this); }
 
 void Use::reset() {
   Filter::reset();
@@ -197,7 +181,8 @@ void Use::reset() {
 void Use::process(Event *evt) {
   if (m_native) {
     if (!m_native_pipeline) {
-      m_native_pipeline = nmi::Pipeline::make(m_native_pipeline_layout, Filter::context(), Filter::output());
+      m_native_pipeline = nmi::Pipeline::make(
+          m_native_pipeline_layout, Filter::context(), Filter::output());
     }
     m_native_pipeline->input(evt);
   } else {
@@ -237,7 +222,6 @@ void Use::Stage::on_event(Event *evt) {
       } else {
         chain(m_filter->output());
       }
-
     } else if (m_pipeline_layout) {
       auto p = Pipeline::make(m_pipeline_layout, m_filter->context());
       chain(p->input());
@@ -248,7 +232,6 @@ void Use::Stage::on_event(Event *evt) {
       }
       m_pipeline = p;
       p->start();
-
     } else if (m_next) {
       chain(m_next->input());
     } else {
@@ -259,7 +242,7 @@ void Use::Stage::on_event(Event *evt) {
   output(evt);
 }
 
-auto Use::Stage::input_down() -> EventTarget::Input* {
+auto Use::Stage::input_down() -> EventTarget::Input * {
   if (m_pipeline_layout_down) {
     auto *p = Pipeline::make(m_pipeline_layout_down, m_filter->context());
     if (m_prev) {
@@ -270,7 +253,6 @@ auto Use::Stage::input_down() -> EventTarget::Input* {
     m_pipeline_down = p;
     p->start();
     return p->input();
-
   } else if (m_prev) {
     return m_prev->input_down();
   } else {
@@ -278,4 +260,4 @@ auto Use::Stage::input_down() -> EventTarget::Input* {
   }
 }
 
-} // namespace pipy
+}  // namespace pipy

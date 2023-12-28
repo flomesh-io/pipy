@@ -24,21 +24,22 @@
  */
 
 #include "listener.hpp"
+
+#include "log.hpp"
 #include "pipeline.hpp"
 #include "worker.hpp"
-#include "log.hpp"
 
 namespace pjs {
 
 using namespace pipy;
 
-template<>
+template <>
 void EnumDef<Listener::Protocol>::init() {
   define(Listener::Protocol::TCP, "tcp");
   define(Listener::Protocol::UDP, "udp");
 }
 
-} // namespace pjs
+}  // namespace pjs
 
 namespace pipy {
 
@@ -47,88 +48,62 @@ namespace pipy {
 //
 
 Listener::Options::Options(pjs::Object *options) {
-  Value(options, "protocol")
-    .get_enum(protocol)
-    .check_nullable();
-  Value(options, "maxConnections")
-    .get(max_connections)
-    .check_nullable();
-  Value(options, "readTimeout")
-    .get_seconds(read_timeout)
-    .check_nullable();
-  Value(options, "writeTimeout")
-    .get_seconds(write_timeout)
-    .check_nullable();
-  Value(options, "idleTimeout")
-    .get_seconds(idle_timeout)
-    .check_nullable();
+  Value(options, "protocol").get_enum(protocol).check_nullable();
+  Value(options, "maxConnections").get(max_connections).check_nullable();
+  Value(options, "readTimeout").get_seconds(read_timeout).check_nullable();
+  Value(options, "writeTimeout").get_seconds(write_timeout).check_nullable();
+  Value(options, "idleTimeout").get_seconds(idle_timeout).check_nullable();
   Value(options, "congestionLimit")
-    .get_binary_size(congestion_limit)
-    .check_nullable();
-  Value(options, "bufferLimit")
-    .get_binary_size(buffer_limit)
-    .check_nullable();
-  Value(options, "keepAlive")
-    .get(keep_alive)
-    .check_nullable();
-  Value(options, "noDelay")
-    .get(no_delay)
-    .check_nullable();
-  Value(options, "transparent")
-    .get(transparent)
-    .check_nullable();
-  Value(options, "masquerade")
-    .get(masquerade)
-    .check_nullable();
-  Value(options, "peerStats")
-    .get(peer_stats)
-    .check_nullable();
+      .get_binary_size(congestion_limit)
+      .check_nullable();
+  Value(options, "bufferLimit").get_binary_size(buffer_limit).check_nullable();
+  Value(options, "keepAlive").get(keep_alive).check_nullable();
+  Value(options, "noDelay").get(no_delay).check_nullable();
+  Value(options, "transparent").get(transparent).check_nullable();
+  Value(options, "masquerade").get(masquerade).check_nullable();
+  Value(options, "peerStats").get(peer_stats).check_nullable();
 }
 
 //
 // Listener
 //
 
-thread_local std::set<Listener*> Listener::s_listeners[int(Listener::Protocol::MAX)];
+thread_local std::set<Listener *>
+    Listener::s_listeners[int(Listener::Protocol::MAX)];
 bool Listener::s_reuse_port = false;
 
-void Listener::set_reuse_port(bool reuse) {
-  s_reuse_port = reuse;
-}
+void Listener::set_reuse_port(bool reuse) { s_reuse_port = reuse; }
 
 void Listener::delete_all() {
   for (int i = 0; i < int(Listener::Protocol::MAX); i++) {
-    std::set<Listener*> all(std::move(s_listeners[i]));
+    std::set<Listener *> all(std::move(s_listeners[i]));
     for (auto l : all) delete l;
   }
 }
 
 Listener::Listener(Protocol protocol, const std::string &ip, int port)
-  : m_protocol(protocol)
-  , m_ip(ip)
-  , m_port(port)
-{
+    : m_protocol(protocol), m_ip(ip), m_port(port) {
   m_address = asio::ip::make_address(m_ip);
   m_ip = m_address.to_string();
   char label[100];
   const char *proto;
   switch (m_protocol) {
-  case Protocol::TCP: proto = "TCP"; break;
-  case Protocol::UDP: proto = "UDP"; break;
-  default: proto = "?"; break;
+    case Protocol::TCP:
+      proto = "TCP";
+      break;
+    case Protocol::UDP:
+      proto = "UDP";
+      break;
+    default:
+      proto = "?";
+      break;
   }
-  std::snprintf(
-    label, sizeof(label),
-    "[%s]:%d/%s",
-    m_ip.c_str(), port, proto
-  );
+  std::snprintf(label, sizeof(label), "[%s]:%d/%s", m_ip.c_str(), port, proto);
   m_label = pjs::Str::make(label);
   s_listeners[int(protocol)].insert(this);
 }
 
-Listener::~Listener() {
-  s_listeners[int(m_protocol)].erase(this);
-}
+Listener::~Listener() { s_listeners[int(m_protocol)].erase(this); }
 
 bool Listener::pipeline_layout(PipelineLayout *layout) {
   if (m_pipeline_layout.get() != layout) {
@@ -157,7 +132,7 @@ void Listener::set_options(const Options &options) {
   }
 }
 
-bool Listener::for_each_inbound(const std::function<bool(Inbound*)> &cb) {
+bool Listener::for_each_inbound(const std::function<bool(Inbound *)> &cb) {
   for (auto i = m_inbounds.head(); i; i = i->next()) {
     if (!cb(i)) return false;
   }
@@ -184,10 +159,12 @@ bool Listener::start() {
         acceptor->start(endpoint);
         break;
       }
-      default: break;
+      default:
+        break;
     }
 
-    if (m_options.max_connections < 0 || m_inbounds.size() < m_options.max_connections) {
+    if (m_options.max_connections < 0 ||
+        m_inbounds.size() < m_options.max_connections) {
       m_acceptor->accept();
       m_paused = false;
     } else {
@@ -197,7 +174,6 @@ bool Listener::start() {
 
     Log::info("[listener] Listening on %s", desc);
     return true;
-
   } catch (std::runtime_error &err) {
     m_acceptor = nullptr;
     Log::error("[listener] Cannot start listening on %s: %s", desc, err.what());
@@ -257,14 +233,17 @@ void Listener::close(Inbound *inbound) {
 void Listener::describe(char *buf, size_t len) {
   const char *proto = nullptr;
   switch (m_protocol) {
-    case Protocol::TCP: proto = "TCP"; break;
-    case Protocol::UDP: proto = "UDP"; break;
-    default: proto = "?"; break;
+    case Protocol::TCP:
+      proto = "TCP";
+      break;
+    case Protocol::UDP:
+      proto = "UDP";
+      break;
+    default:
+      proto = "?";
+      break;
   }
-  std::snprintf(
-    buf, len, "%s port %d at %s",
-    proto, m_port, m_ip.c_str()
-  );
+  std::snprintf(buf, len, "%s port %d at %s", proto, m_port, m_ip.c_str());
 }
 
 void Listener::set_sock_opts(int sock) {
@@ -280,13 +259,17 @@ void Listener::set_sock_opts(int sock) {
     int enabled = 1;
 #ifdef __FreeBSD__
     setsockopt(sock, SOL_SOCKET, SO_REUSEPORT_LB, &enabled, sizeof(enabled));
+#elif _WIN32
+    setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (char *)&enabled,
+               sizeof(enabled));
 #else
     setsockopt(sock, SOL_SOCKET, SO_REUSEPORT, &enabled, sizeof(enabled));
 #endif
   }
 }
 
-auto Listener::find(Protocol protocol, const std::string &ip, int port) -> Listener* {
+auto Listener::find(Protocol protocol, const std::string &ip, int port)
+    -> Listener * {
   for (auto *l : s_listeners[int(protocol)]) {
     if (l->ip() == ip && l->port() == port) {
       return l;
@@ -300,14 +283,9 @@ auto Listener::find(Protocol protocol, const std::string &ip, int port) -> Liste
 //
 
 Listener::AcceptorTCP::AcceptorTCP(Listener *listener)
-  : m_listener(listener)
-  , m_acceptor(Net::context())
-{
-}
+    : m_listener(listener), m_acceptor(Net::context()) {}
 
-Listener::AcceptorTCP::~AcceptorTCP() {
-  stop();
-}
+Listener::AcceptorTCP::~AcceptorTCP() { stop(); }
 
 void Listener::AcceptorTCP::start(const asio::ip::tcp::endpoint &endpoint) {
   m_acceptor.open(endpoint.protocol());
@@ -346,14 +324,9 @@ void Listener::AcceptorTCP::stop() {
 //
 
 Listener::AcceptorUDP::AcceptorUDP(Listener *listener)
-  : SocketUDP(true, listener->m_options)
-  , m_listener(listener)
-{
-}
+    : SocketUDP(true, listener->m_options), m_listener(listener) {}
 
-Listener::AcceptorUDP::~AcceptorUDP() {
-  close();
-}
+Listener::AcceptorUDP::~AcceptorUDP() { close(); }
 
 void Listener::AcceptorUDP::start(const asio::ip::udp::endpoint &endpoint) {
   auto &s = SocketUDP::socket();
@@ -371,19 +344,13 @@ void Listener::AcceptorUDP::start(const asio::ip::udp::endpoint &endpoint) {
   SocketUDP::open();
 }
 
-void Listener::AcceptorUDP::accept() {
-  m_accepting = true;
-}
+void Listener::AcceptorUDP::accept() { m_accepting = true; }
 
-void Listener::AcceptorUDP::cancel() {
-  m_accepting = false;
-}
+void Listener::AcceptorUDP::cancel() { m_accepting = false; }
 
-void Listener::AcceptorUDP::stop() {
-  SocketUDP::close();
-}
+void Listener::AcceptorUDP::stop() { SocketUDP::close(); }
 
-auto Listener::AcceptorUDP::on_socket_new_peer() -> Peer* {
+auto Listener::AcceptorUDP::on_socket_new_peer() -> Peer * {
   if (m_accepting) {
     auto i = InboundUDP::make(m_listener, m_listener->m_options);
     return i;
@@ -393,26 +360,22 @@ auto Listener::AcceptorUDP::on_socket_new_peer() -> Peer* {
 }
 
 void Listener::AcceptorUDP::on_socket_describe(char *buf, size_t len) {
-  std::snprintf(
-    buf, len,
-    "[acceptor %p] UDP -> [%s]:%d",
-    this,
-    m_local_addr.c_str(),
-    m_local_port
-  );
+  std::snprintf(buf, len, "[acceptor %p] UDP -> [%s]:%d", this,
+                m_local_addr.c_str(), m_local_port);
 }
 
 //
 // ListenerArray
 //
 
-auto ListenerArray::add_listener(int port, pjs::Object *options) -> Listener* {
+auto ListenerArray::add_listener(int port, pjs::Object *options) -> Listener * {
   std::string ip_port("0.0.0.0:");
   ip_port += std::to_string(port);
   return add_listener(pjs::Ref<pjs::Str>(pjs::Str::make(ip_port)), options);
 }
 
-auto ListenerArray::add_listener(pjs::Str *port, pjs::Object *options) -> Listener* {
+auto ListenerArray::add_listener(pjs::Str *port, pjs::Object *options)
+    -> Listener * {
   if (!options) options = m_default_options;
   Listener::Options opts(options);
 
@@ -431,13 +394,15 @@ auto ListenerArray::add_listener(pjs::Str *port, pjs::Object *options) -> Listen
   return listener;
 }
 
-auto ListenerArray::remove_listener(int port, pjs::Object *options) -> Listener* {
+auto ListenerArray::remove_listener(int port, pjs::Object *options)
+    -> Listener * {
   std::string ip_port("0.0.0.0:");
   ip_port += std::to_string(port);
   return remove_listener(pjs::Ref<pjs::Str>(pjs::Str::make(ip_port)), options);
 }
 
-auto ListenerArray::remove_listener(pjs::Str *port, pjs::Object *options) -> Listener* {
+auto ListenerArray::remove_listener(pjs::Str *port, pjs::Object *options)
+    -> Listener * {
   if (!options) options = m_default_options;
   Listener::Options opts(options);
 
@@ -459,42 +424,42 @@ auto ListenerArray::remove_listener(pjs::Str *port, pjs::Object *options) -> Lis
 }
 
 void ListenerArray::set_listeners(pjs::Array *array) {
-  std::map<Listener*, Listener::Options> listeners;
+  std::map<Listener *, Listener::Options> listeners;
   if (array) {
-    array->iterate_all(
-      [&](pjs::Value &v, int i) {
-        std::string ip;
-        int port_num;
-        if (v.is_number()) {
-          auto l = Listener::get(Listener::Protocol::TCP, "0.0.0.0", v.to_int32());
-          listeners[l] = m_default_options.get();
-        } else if (v.is_string()) {
-          get_ip_port(v.s()->str(), ip, port_num);
-          auto l = Listener::get(Listener::Protocol::TCP, ip, port_num);
-          listeners[l] = m_default_options.get();
-        } else if (v.is_object() && v.o()) {
-          pjs::Value port;
-          v.o()->get("port", port);
-          if (port.is_number()) {
-            ip = "0.0.0.0";
-            port_num = port.to_int32();
-          } else if (port.is_string()) {
-            get_ip_port(port.s()->str(), ip, port_num);
-          } else {
-            std::string err("invalid value type for the port property in element ");
-            err += std::to_string(i);
-            throw std::runtime_error(err);
-          }
-          Listener::Options opt(v.o());
-          auto l = Listener::get(opt.protocol, ip, port_num);
-          listeners[l] = opt;
+    array->iterate_all([&](pjs::Value &v, int i) {
+      std::string ip;
+      int port_num;
+      if (v.is_number()) {
+        auto l =
+            Listener::get(Listener::Protocol::TCP, "0.0.0.0", v.to_int32());
+        listeners[l] = m_default_options.get();
+      } else if (v.is_string()) {
+        get_ip_port(v.s()->str(), ip, port_num);
+        auto l = Listener::get(Listener::Protocol::TCP, ip, port_num);
+        listeners[l] = m_default_options.get();
+      } else if (v.is_object() && v.o()) {
+        pjs::Value port;
+        v.o()->get("port", port);
+        if (port.is_number()) {
+          ip = "0.0.0.0";
+          port_num = port.to_int32();
+        } else if (port.is_string()) {
+          get_ip_port(port.s()->str(), ip, port_num);
         } else {
-          std::string err("invalid value type for a listening port in element ");
+          std::string err(
+              "invalid value type for the port property in element ");
           err += std::to_string(i);
           throw std::runtime_error(err);
         }
+        Listener::Options opt(v.o());
+        auto l = Listener::get(opt.protocol, ip, port_num);
+        listeners[l] = opt;
+      } else {
+        std::string err("invalid value type for a listening port in element ");
+        err += std::to_string(i);
+        throw std::runtime_error(err);
       }
-    );
+    });
   }
 
   if (m_worker) {
@@ -526,7 +491,8 @@ void ListenerArray::apply(Worker *worker, PipelineLayout *layout) {
   }
 }
 
-void ListenerArray::get_ip_port(const std::string &ip_port, std::string &ip, int &port) {
+void ListenerArray::get_ip_port(const std::string &ip_port, std::string &ip,
+                                int &port) {
   if (!utils::get_host_port(ip_port, ip, port)) {
     std::string msg("invalid 'ip:port' form: ");
     throw std::runtime_error(msg + ip_port);
@@ -539,14 +505,15 @@ void ListenerArray::get_ip_port(const std::string &ip_port, std::string &ip, int
   }
 }
 
-} // namespace pipy
+}  // namespace pipy
 
 namespace pjs {
 
 using namespace pipy;
 
-template<> void ClassDef<ListenerArray>::init() {
-  ctor([](Context &ctx) -> Object* {
+template <>
+void ClassDef<ListenerArray>::init() {
+  ctor([](Context &ctx) -> Object * {
     Array *listeners = nullptr;
     Object *options = nullptr;
     if (!ctx.arguments(0, &listeners, &options)) return nullptr;
@@ -609,9 +576,10 @@ template<> void ClassDef<ListenerArray>::init() {
   });
 }
 
-template<> void ClassDef<Constructor<ListenerArray>>::init() {
+template <>
+void ClassDef<Constructor<ListenerArray>>::init() {
   super<Function>();
   ctor();
 }
 
-} // namespace psj
+}  // namespace pjs

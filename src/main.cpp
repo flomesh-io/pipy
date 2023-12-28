@@ -23,18 +23,23 @@
  *  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include "version.h"
+#include <openssl/opensslv.h>
+#include <signal.h>
+
+#include <list>
+#include <string>
+#include <tuple>
 
 #include "admin-link.hpp"
-#include "admin-service.hpp"
 #include "admin-proxy.hpp"
+#include "admin-service.hpp"
 #include "api/crypto.hpp"
 #include "api/logging.hpp"
 #include "api/pipy.hpp"
 #include "api/stats.hpp"
 #include "codebase.hpp"
-#include "fs.hpp"
 #include "filters/tls.hpp"
+#include "fs.hpp"
 #include "input.hpp"
 #include "listener.hpp"
 #include "main-options.hpp"
@@ -42,16 +47,9 @@
 #include "status.hpp"
 #include "timer.hpp"
 #include "utils.hpp"
-#include "worker.hpp"
+#include "version.h"
 #include "worker-thread.hpp"
-
-#include <signal.h>
-
-#include <list>
-#include <string>
-#include <tuple>
-
-#include <openssl/opensslv.h>
+#include "worker.hpp"
 
 using namespace pipy;
 
@@ -81,15 +79,19 @@ static void show_version() {
 #endif
 
 #ifdef PIPY_USE_GUI
-  std::cout << "Builtin GUI : " << "Yes" << std::endl;
+  std::cout << "Builtin GUI : "
+            << "Yes" << std::endl;
 #else
-  std::cout << "Builtin GUI : " << "No" << std::endl;
+  std::cout << "Builtin GUI : "
+            << "No" << std::endl;
 #endif
 
 #ifdef PIPY_USE_SAMPLES
-  std::cout << "Samples     : " << "Yes" << std::endl;
+  std::cout << "Samples     : "
+            << "Yes" << std::endl;
 #else
-  std::cout << "Samples     : " << "No" << std::endl;
+  std::cout << "Samples     : "
+            << "No" << std::endl;
 #endif
 }
 
@@ -99,13 +101,11 @@ static void show_version() {
 
 static void reload_codebase(bool force) {
   if (auto *codebase = Codebase::current()) {
-    codebase->sync(
-      force, [](bool ok) {
-        if (ok) {
-          WorkerManager::get().reload();
-        }
+    codebase->sync(force, [](bool ok) {
+      if (ok) {
+        WorkerManager::get().reload();
       }
-    );
+    });
   }
 }
 
@@ -113,21 +113,20 @@ static void reload_codebase(bool force) {
 // Establish admin link
 //
 
-static void start_admin_link(const std::string &url, const AdminLink::TLSSettings *tls_settings) {
+static void start_admin_link(const std::string &url,
+                             const AdminLink::TLSSettings *tls_settings) {
   std::string url_path = url;
   if (url_path.back() != '/') url_path += '/';
   url_path += Status::LocalInstance::uuid;
   s_admin_link = new AdminLink(url_path, tls_settings);
-  s_admin_link->add_handler(
-    [](const std::string &command, const Data &) {
-      if (command == "reload") {
-        reload_codebase(true);
-        return true;
-      } else {
-        return false;
-      }
+  s_admin_link->add_handler([](const std::string &command, const Data &) {
+    if (command == "reload") {
+      reload_codebase(true);
+      return true;
+    } else {
+      return false;
     }
-  );
+  });
   logging::Logger::set_admin_link(s_admin_link);
 }
 
@@ -157,13 +156,17 @@ static void toggle_admin_port() {
 //
 
 class PeriodicJob {
-public:
+ public:
   void start() { run(); }
   void stop() { m_timer.cancel(); }
-protected:
+
+ protected:
   virtual void run() = 0;
-  void next() { m_timer.schedule(5, [this]() { run(); }); }
-private:
+  void next() {
+    m_timer.schedule(5, [this]() { run(); });
+  }
+
+ private:
   Timer m_timer;
 };
 
@@ -203,36 +206,31 @@ static CodeUpdater s_code_updater;
 //
 
 class StatusReporter : public PeriodicJob {
-public:
+ public:
   void init(const std::string &address, const Fetch::Options &options) {
     m_url = URL::make(pjs::Value(address).s());
     m_headers = pjs::Object::make();
     m_headers->set("content-type", "application/json");
-    m_fetch = new Fetch(m_url->hostname()->str() + ':' + m_url->port()->str(), options);
+    m_fetch = new Fetch(m_url->hostname()->str() + ':' + m_url->port()->str(),
+                        options);
   }
 
-private:
+ private:
   virtual void run() override {
     static Data::Producer s_dp("Status Reports");
     if (s_has_shutdown) return;
     if (!m_fetch->busy()) {
-      WorkerManager::get().status(
-        [this](Status &status) {
-          InputContext ic;
-          std::stringstream ss;
-          status.ip = m_local_ip;
-          status.to_json(ss);
-          (*m_fetch)(
-            Fetch::POST,
-            m_url->path(),
-            m_headers,
-            Data::make(ss.str(), &s_dp),
-            [this](http::ResponseHead *head, Data *body) {
-              m_local_ip = m_fetch->outbound()->local_address()->str();
-            }
-          );
-        }
-      );
+      WorkerManager::get().status([this](Status &status) {
+        InputContext ic;
+        std::stringstream ss;
+        status.ip = m_local_ip;
+        status.to_json(ss);
+        (*m_fetch)(Fetch::POST, m_url->path(), m_headers,
+                   Data::make(ss.str(), &s_dp),
+                   [this](http::ResponseHead *head, Data *body) {
+                     m_local_ip = m_fetch->outbound()->local_address()->str();
+                   });
+      });
     }
     next();
   }
@@ -253,20 +251,18 @@ class MetricReporter : public PeriodicJob {
   virtual void run() override {
     static Data::Producer s_dp("Metric Reports");
     if (s_has_shutdown) return;
-    WorkerManager::get().stats(
-      [this](stats::MetricDataSum &metric_data_sum) {
-        InputContext ic;
-        Data buf;
-        Data::Builder db(buf, &s_dp);
-        db.push("metrics\n");
-        auto conn_id = s_admin_link->connect();
-        metric_data_sum.serialize(db, conn_id != m_connection_id);
-        db.flush();
-        s_admin_link->send(buf);
-        m_connection_id = conn_id;
-        next();
-      }
-    );
+    WorkerManager::get().stats([this](stats::MetricDataSum &metric_data_sum) {
+      InputContext ic;
+      Data buf;
+      Data::Builder db(buf, &s_dp);
+      db.push("metrics\n");
+      auto conn_id = s_admin_link->connect();
+      metric_data_sum.serialize(db, conn_id != m_connection_id);
+      db.flush();
+      s_admin_link->send(buf);
+      m_connection_id = conn_id;
+      next();
+    });
   }
 
   int m_connection_id = 0;
@@ -279,29 +275,32 @@ static MetricReporter s_metric_reporter;
 //
 
 class SignalHandler {
-public:
+ public:
   SignalHandler() : m_signals(Net::context()) {
     m_signals.add(SIGINT);
+#ifdef _WIN32
+    m_signals.add(SIGTERM);
+    m_signals.add(SIGBREAK);
+#else
     m_signals.add(SIGHUP);
     m_signals.add(SIGTSTP);
+#endif
   }
 
   void start() { wait(); }
   void stop() { m_signals.cancel(); }
 
-private:
+ private:
   asio::signal_set m_signals;
   bool m_admin_closed = false;
   Timer m_timer;
 
   void wait() {
-    m_signals.async_wait(
-      [this](const std::error_code &ec, int sig) {
-        InputContext ic;
-        if (!ec) handle(sig);
-        if (ec != asio::error::operation_aborted) wait();
-      }
-    );
+    m_signals.async_wait([this](const std::error_code &ec, int sig) {
+      InputContext ic;
+      if (!ec) handle(sig);
+      if (ec != asio::error::operation_aborted) wait();
+    });
   }
 
   void handle(int sig) {
@@ -336,6 +335,14 @@ private:
         break;
       }
 
+#ifdef _WIN32
+      case SIGBREAK:
+        reload_codebase(true);
+        break;
+      case SIGTERM:
+        toggle_admin_port();
+        break;
+#else
       case SIGHUP:
         reload_codebase(true);
         break;
@@ -343,6 +350,7 @@ private:
       case SIGTSTP:
         toggle_admin_port();
         break;
+#endif
     }
   }
 
@@ -418,7 +426,7 @@ int main(int argc, char *argv[]) {
     s_admin_gui = opts.admin_gui;
 
     std::string admin_ip("::");
-    int admin_port = 6060; // default repo port
+    int admin_port = 6060;  // default repo port
     auto admin_ip_port = opts.admin_port;
     if (!admin_ip_port.empty()) {
       if (!utils::get_host_port(admin_ip_port, admin_ip, admin_port)) {
@@ -435,20 +443,15 @@ int main(int argc, char *argv[]) {
 
     if (opts.eval) {
       is_eval = true;
-
     } else if (opts.filename.empty()) {
       is_repo = true;
-
     } else if (utils::starts_with(opts.filename, "http://")) {
       is_remote = true;
-
     } else if (utils::starts_with(opts.filename, "https://")) {
       is_remote = true;
       is_tls = true;
-
     } else if (utils::is_host_port(opts.filename)) {
       is_repo_proxy = true;
-
     } else {
       auto full_path = fs::abs_path(opts.filename);
       opts.filename = full_path;
@@ -461,7 +464,7 @@ int main(int argc, char *argv[]) {
 
     if (is_remote) {
       auto i = opts.filename.find('/');
-      auto target = opts.filename.substr(i+2);
+      auto target = opts.filename.substr(i + 2);
       if (!target.empty() && target.back() == '/') {
         target.resize(target.size() - 1);
       }
@@ -485,9 +488,8 @@ int main(int argc, char *argv[]) {
 
     // Start as codebase repo service
     if (is_repo) {
-      store = opts.filename.empty()
-        ? Store::open_memory()
-        : Store::open_level_db(opts.filename);
+      store = opts.filename.empty() ? Store::open_memory()
+                                    : Store::open_level_db(opts.filename);
       repo = new CodebaseStore(store, opts.init_repo);
       s_admin = new AdminService(repo, s_admin_log_file, s_admin_gui);
       s_admin->retain();
@@ -506,7 +508,7 @@ int main(int argc, char *argv[]) {
       std::cout << std::endl;
 #endif
 
-    // Start as codebase repo proxy
+      // Start as codebase repo proxy
     } else if (is_repo_proxy) {
       AdminProxy::Options options;
       options.cert = opts.admin_tls_cert;
@@ -519,7 +521,7 @@ int main(int argc, char *argv[]) {
       s_admin_proxy = new AdminProxy(opts.filename, opts.admin_gui);
       s_admin_proxy->open(admin_ip, admin_port, options);
 
-    // Start as a static codebase
+      // Start as a static codebase
     } else {
       if (is_remote) {
         Fetch::Options options;
@@ -530,10 +532,7 @@ int main(int argc, char *argv[]) {
         codebase = Codebase::from_http(opts.filename, options);
         s_status_reporter.init(opts.filename, options);
       } else if (is_eval) {
-        codebase = Codebase::from_fs(
-          fs::abs_path("."),
-          opts.filename
-        );
+        codebase = Codebase::from_fs(fs::abs_path("."), opts.filename);
       } else {
         codebase = Codebase::from_fs(opts.filename);
       }
@@ -541,58 +540,52 @@ int main(int argc, char *argv[]) {
       codebase->set_current();
 
       load = [&]() {
-        codebase->sync(
-          true, [&](bool ok) {
-            if (!ok) {
-              fail();
-              return;
-            }
-
-            WorkerManager::get().enable_graph(!opts.no_graph);
-
-            if (!is_repo && !is_remote) {
-              WorkerManager::get().on_done(
-                [&]() {
-                  exit_code = 0;
-                  s_pool_cleaner.stop();
-                  s_code_updater.stop();
-                  s_signal_handler.stop();
-                }
-              );
-            }
-
-            if (!WorkerManager::get().start(opts.threads, opts.force_start)) {
-              fail();
-              return;
-            }
-
-            s_admin_ip = admin_ip;
-            s_admin_port = admin_port;
-
-            if (!opts.admin_port.empty() && !opts.admin_port_off) {
-              toggle_admin_port();
-            }
-
-            s_code_updater.start();
-
-            if (is_remote) {
-              AdminLink::TLSSettings tls_settings;
-              tls_settings.cert = opts.tls_cert;
-              tls_settings.key = opts.tls_key;
-              tls_settings.trusted = opts.tls_trusted;
-              start_admin_link(opts.filename, is_tls ? &tls_settings : nullptr);
-              if (!opts.no_status) s_status_reporter.start();
-              if (!opts.no_metrics) s_metric_reporter.start();
-            }
-
-            Pipy::on_exit(
-              [&](int code) {
-                exit_code = code;
-                Net::current().stop();
-              }
-            );
+        codebase->sync(true, [&](bool ok) {
+          if (!ok) {
+            fail();
+            return;
           }
-        );
+
+          WorkerManager::get().enable_graph(!opts.no_graph);
+
+          if (!is_repo && !is_remote) {
+            WorkerManager::get().on_done([&]() {
+              exit_code = 0;
+              s_pool_cleaner.stop();
+              s_code_updater.stop();
+              s_signal_handler.stop();
+            });
+          }
+
+          if (!WorkerManager::get().start(opts.threads, opts.force_start)) {
+            fail();
+            return;
+          }
+
+          s_admin_ip = admin_ip;
+          s_admin_port = admin_port;
+
+          if (!opts.admin_port.empty() && !opts.admin_port_off) {
+            toggle_admin_port();
+          }
+
+          s_code_updater.start();
+
+          if (is_remote) {
+            AdminLink::TLSSettings tls_settings;
+            tls_settings.cert = opts.tls_cert;
+            tls_settings.key = opts.tls_key;
+            tls_settings.trusted = opts.tls_trusted;
+            start_admin_link(opts.filename, is_tls ? &tls_settings : nullptr);
+            if (!opts.no_status) s_status_reporter.start();
+            if (!opts.no_metrics) s_metric_reporter.start();
+          }
+
+          Pipy::on_exit([&](int code) {
+            exit_code = code;
+            Net::current().stop();
+          });
+        });
       };
 
       fail = [&]() {
@@ -628,7 +621,6 @@ int main(int argc, char *argv[]) {
     Log::shutdown();
     logging::Logger::close_all();
     Timer::cancel_all();
-
   } catch (std::runtime_error &e) {
     std::cerr << e.what() << std::endl;
     return -1;
