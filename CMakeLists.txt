@@ -6,8 +6,8 @@ endif()
 
 project(pipy)
 
-option(PIPY_GUI "include builtin GUI" OFF)
-option(PIPY_SAMPLES "include builtin sample scripts" OFF)
+option(PIPY_GUI "include builtin GUI" ON)
+option(PIPY_SAMPLES "include builtin sample scripts" ON)
 option(PIPY_SOIL_FREED_SPACE "invalidate freed space for debugging" OFF)
 option(PIPY_ASSERT_SAME_THREAD "enable assertions for strict inner-thread data access" OFF)
 option(PIPY_ZLIB "external zlib location" "")
