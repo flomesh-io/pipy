@@ -137,6 +137,8 @@ void Exec::process(Event *evt) {
     } else if (m_pid < 0) {
       Filter::error("unable to fork");
     } else {
+      ::close(in[0]);
+      ::close(out[1]);
       s_child_process_monitor.monitor(m_pid, this);
     }
 
@@ -184,12 +186,18 @@ void Exec::ChildProcessMonitor::wait() {
       std::lock_guard<std::mutex> lock(m_mutex);
       auto i = m_waiters.find(pid);
       if (i != m_waiters.end()) {
-        auto &w = i->second;
-        auto *f = w.filter;
-        w.net->post(
+        i->second.net->post(
           [=]() {
-            InputContext ic;
-            f->output(StreamEnd::make());
+            Exec *f = nullptr;
+            {
+              std::lock_guard<std::mutex> lock(m_mutex);
+              auto i = m_waiters.find(pid);
+              if (i != m_waiters.end()) f = i->second.filter;
+            }
+            if (f) {
+              InputContext ic;
+              f->output(StreamEnd::make());
+            }
           }
         );
         m_waiters.erase(i);
