@@ -45,7 +45,7 @@ public:
   auto exec(pjs::Str *sql) -> pjs::Array*;
 
 private:
-  Database(pjs::Str *filename);
+  Database(pjs::Str *filename, int flags = 0);
   ~Database();
 
   sqlite3* m_db;
@@ -83,7 +83,7 @@ private:
 
 class Sqlite : public pjs::FunctionTemplate<Sqlite> {
 public:
-  static auto database(pjs::Str *filename) -> Database*;
+  static auto database(pjs::Str *filename, int flags = 0) -> Database*;
 
   void operator()(pjs::Context &ctx, pjs::Object *obj, pjs::Value &ret);
 };
