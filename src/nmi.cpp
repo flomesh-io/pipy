@@ -32,7 +32,12 @@
 #include <algorithm>
 #include <list>
 
+#ifdef _WIN32
+#include <Windows.h>
+#include <strsafe.h>
+#else
 #include <dlfcn.h>
+#endif
 
 namespace pipy {
 namespace nmi {
@@ -193,6 +198,7 @@ NativeModule::NativeModule(int index, const std::string &filename)
 {
   m_filename = pjs::Str::make(filename);
 
+#ifndef _WIN32
   auto *handle = dlopen(filename.c_str(), RTLD_NOW);
   if (!handle) {
     std::string msg("cannot load native module '");
@@ -205,6 +211,31 @@ NativeModule::NativeModule(int index, const std::string &filename)
     std::string msg("pipy_module_init() not found in native module ");
     throw std::runtime_error(msg + filename);
   }
+#else
+  if (filename.size() > MAX_PATH)
+    throw std::runtime_error("native module path exceed windows path limit");
+
+  char lpModule[MAX_PATH];
+  HMODULE handle;
+
+  StringCchCopy(lpModule, MAX_PATH, filename.c_str());
+  auto len = strlen(lpModule);
+  for (auto i = 0; i < len; i++) {
+    if (lpModule[i] == '/') lpModule[i] = '\\';
+  }
+
+  handle = LoadLibraryEx(lpModule, NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
+  if (!handle) {
+    std::string msg("cannot load native module '");
+    throw std::runtime_error(
+      msg + filename + "' due to: " + Win32_GetLastError("LoadLibrary"));
+  }
+  FARPROC init_fn = GetProcAddress(handle, "pipy_module_init");
+  if (!init_fn) {
+    std::string msg("pipy_module_init() not found in native module ");
+    throw std::runtime_error(msg + filename);
+  }
+#endif
 
   set_current(this);
   (*(fn_pipy_module_init)init_fn)();

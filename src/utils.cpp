@@ -441,14 +441,18 @@ bool ends_with(const std::string &str, const std::string &suffix) {
   return !std::strncmp(str.c_str() + str.length() - suffix.length(), suffix.c_str(), suffix.length());
 }
 
-bool iequals(const std::string &a, const std::string &b) {
-  if (a.length() != b.length()) return false;
-  for (size_t i = 0; i < a.length(); i++) {
+bool iequals(const char *a, const char *b, size_t n) {
+  for (size_t i = 0; i < n; i++) {
     auto ca = std::tolower(a[i]);
     auto cb = std::tolower(b[i]);
     if (ca != cb) return false;
   }
   return true;
+}
+
+bool iequals(const std::string &a, const std::string &b) {
+  if (a.length() != b.length()) return false;
+  return iequals(a.c_str(), b.c_str(), a.length());
 }
 
 auto trim(const std::string &str) -> std::string {

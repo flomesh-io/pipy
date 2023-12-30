@@ -41,7 +41,9 @@
 #include "filters/http.hpp"
 #include "filters/connect.hpp"
 
+#ifndef _WIN32
 #include <syslog.h>
+#endif
 
 namespace pipy {
 namespace logging {
@@ -331,6 +333,7 @@ void Logger::FileTarget::Writer::shutdown() {
 //
 
 Logger::SyslogTarget::SyslogTarget(Priority priority) {
+#ifndef _WIN32
   switch (priority) {
     case Priority::EMERG   : m_priority = LOG_EMERG; break;
     case Priority::ALERT   : m_priority = LOG_ALERT; break;
@@ -342,14 +345,17 @@ Logger::SyslogTarget::SyslogTarget(Priority priority) {
     case Priority::DEBUG   : m_priority = LOG_DEBUG; break;
     default                : m_priority = LOG_INFO; break;
   }
+#endif
 }
 
 void Logger::SyslogTarget::write(const Data &msg) {
+#ifndef _WIN32
   auto len = msg.size();
   uint8_t buf[len+1];
   msg.to_bytes(buf);
   buf[len] = 0;
   syslog(m_priority, "%s", buf);
+#endif
 }
 
 //

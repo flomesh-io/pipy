@@ -35,8 +35,14 @@
 #include "log.hpp"
 
 #include <sys/stat.h>
+#ifdef WIN32
+#include <direct.h>
+#include <io.h>
+#define S_ISDIR(mode) (((mode)&_S_IFMT) == _S_IFDIR)
+#else
 #include <dirent.h>
 #include <unistd.h>
+#endif
 #include <limits.h>
 
 #include <fstream>
@@ -72,7 +78,11 @@ public:
 
 private:
   virtual void activate() override {
+#ifdef WIN32
+    _chdir(m_base.c_str());
+#else
     chdir(m_base.c_str());
+#endif
   }
 
   struct WatchedFile {
@@ -148,9 +158,15 @@ void CodebaseFromFS::set(const std::string &path, SharedData *data) {
       segs.pop_back();
       for (const auto &s : segs) {
         path = utils::path_join(path, s);
+#ifdef WIN32
+        struct _stat st;
+        if (_stat(path.c_str(), &st)) {
+          _mkdir(path.c_str());
+#else
         struct stat st;
         if (stat(path.c_str(), &st)) {
           mkdir(path.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+#endif
         } else if (!S_ISDIR(st.st_mode)) {
           return;
         }
@@ -166,7 +182,11 @@ void CodebaseFromFS::set(const std::string &path, SharedData *data) {
     }
   } else {
     auto full_path = utils::path_join(m_base, path);
+#ifdef WIN32
+    _unlink(full_path.c_str());
+#else
     unlink(full_path.c_str());
+#endif
   }
 }
 

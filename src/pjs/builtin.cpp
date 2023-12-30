@@ -551,7 +551,11 @@ auto Date::setSeconds(int s, int ms) -> double {
 auto Date::setTime(double value) -> double {
   auto sec = std::floor(value / 1000);
   auto t = std::time_t(sec);
+#ifdef _WIN32
+  localtime_s(&m_tm, &t);
+#else
   localtime_r(&t, &m_tm);
+#endif
   m_msec = value - sec * 1000;
   return value;
 }
@@ -572,7 +576,11 @@ auto Date::toISOString() -> std::string {
   char str[100];
   std::tm tm;
   auto t = std::mktime(&m_tm);
+#ifdef _WIN32
+  gmtime_s(&tm, &t);
+#else
   gmtime_r(&t, &tm);
+#endif
   auto len = std::strftime(str, sizeof(str), "%Y-%m-%dT%H:%M:%S.000Z", &tm);
   str[20] = (m_msec % 1000) / 100 + '0';
   str[21] = (m_msec % 100) / 10 + '0';
@@ -584,7 +592,11 @@ auto Date::toUTCString() -> std::string {
   char str[100];
   std::tm tm;
   auto t = std::mktime(&m_tm);
+#ifdef _WIN32
+  gmtime_s(&tm, &t);
+#else
   gmtime_r(&t, &tm);
+#endif
   auto len = std::strftime(str, sizeof(str), "%a, %e %b %Y %H:%M:%S GMT", &tm);
   return std::string(str, len);
 }
@@ -605,7 +617,11 @@ auto Date::dump() -> Object* {
 
 auto Date::normalize() -> double {
   auto t = std::mktime(&m_tm);
+#ifdef _WIN32
+  localtime_s(&m_tm, &t);
+#else
   localtime_r(&t, &m_tm);
+#endif
   return double(t) * 1000 + m_msec;
 }
 

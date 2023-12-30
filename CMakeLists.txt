@@ -18,6 +18,9 @@ option(PIPY_STATIC "statically link to libc" OFF)
 option(PIPY_LTO "enable LTO" ON)
 option(PIPY_USE_NTLS, "Use externally compiled TongSuo Crypto library instead of OpenSSL. Used with PIPY_OPENSSL" OFF)
 
+set(BUILD_SHARED_LIBS OFF)
+set(BUILD_TESTING OFF)
+
 add_subdirectory(deps/yajl-2.1.0)
 
 option(BUILD_tools "build the xmlwf tool for expat library" OFF)
@@ -74,9 +77,23 @@ else()
   message("LTO is disabled")
 endif()
 
+if(WIN32)
+  set(LIB_Z zlib.lib)
+  set(LIB_CRYPTO libcrypto.lib)
+  set(LIB_SSL libssl.lib)
+  set(LIB_BROTLI libbrotlidec-static.lib)
+  set(EXT_SHELL cmd)
+else(WIN32)
+  set(LIB_Z libz.a)
+  set(LIB_CRYPTO libcrypto.a)
+  set(LIB_SSL libssl.a)
+  set(LIB_BROTLI libbrotlidec-static.a)
+  set(EXT_SHELL sh)
+endif(WIN32)
+
 if(PIPY_ZLIB)
   set(ZLIB_INC_DIR ${PIPY_ZLIB}/include)
-  set(ZLIB_LIB ${PIPY_ZLIB}/lib/libz.a)
+  set(ZLIB_LIB ${PIPY_ZLIB}/lib/${LIB_Z})
 else()
   add_subdirectory(deps/zlib-1.3)
   set(ZLIB_INC_DIR "${CMAKE_SOURCE_DIR}/deps/zlib-1.3" "${CMAKE_BINARY_DIR}/deps/zlib-1.3")
@@ -90,26 +107,41 @@ if(PIPY_OPENSSL)
 
   set(OPENSSL_INC_DIR ${PIPY_OPENSSL}/include)
   set(OPENSSL_LIB_DIR ${PIPY_OPENSSL}/lib)
+
 else()
   set(OPENSSL_SRC_DIR ${CMAKE_SOURCE_DIR}/deps/openssl-3.2.0)
   set(OPENSSL_LIB_DIR ${OPENSSL_SRC_DIR}/build)
   set(OPENSSL_INC_DIR ${OPENSSL_SRC_DIR}/include ${OPENSSL_LIB_DIR}/include)
 
-  add_custom_command(
-    OUTPUT ${OPENSSL_LIB_DIR}/libcrypto.a ${OPENSSL_LIB_DIR}/libssl.a
-    WORKING_DIRECTORY ${OPENSSL_SRC_DIR}
-    COMMAND mkdir -p ${OPENSSL_SRC_DIR}/build
-    COMMAND cd ${OPENSSL_SRC_DIR}/build && ../config no-shared no-tests && make -j
-    VERBATIM
-    COMMENT "Building OpenSSL"
-  )
+  file(MAKE_DIRECTORY "${OPENSSL_SRC_DIR}/build")
+
+  if(WIN32)
+    add_custom_command(
+      OUTPUT ${OPENSSL_LIB_DIR}/${LIB_CRYPTO} ${OPENSSL_LIB_DIR}/${LIB_SSL}
+      WORKING_DIRECTORY ${OPENSSL_SRC_DIR}/build
+      COMMAND cmd ARGS /C set
+      COMMAND perl ARGS ../Configure no-shared no-tests VC-WIN64A
+      COMMAND nmake
+      VERBATIM
+      COMMENT "Building OpenSSL"
+    )
+  else()
+    add_custom_command(
+      OUTPUT ${OPENSSL_LIB_DIR}/${LIB_CRYPTO} ${OPENSSL_LIB_DIR}/${LIB_SSL}
+      WORKING_DIRECTORY ${OPENSSL_SRC_DIR}
+      COMMAND mkdir -p ${OPENSSL_SRC_DIR}/build
+      COMMAND cd ${OPENSSL_SRC_DIR}/build && ../config no-shared no-tests && make -j
+      VERBATIM
+      COMMENT "Building OpenSSL"
+    )
+  endif()
 endif()
 
-add_custom_target(OpenSSL DEPENDS ${OPENSSL_LIB_DIR}/libcrypto.a ${OPENSSL_LIB_DIR}/libssl.a)
+add_custom_target(OpenSSL DEPENDS ${OPENSSL_LIB_DIR}/${LIB_CRYPTO} ${OPENSSL_LIB_DIR}/${LIB_SSL})
 
 if(PIPY_BROTLI)
   set(BROTLI_INC_DIR ${PIPY_BROTLI}/include)
-  set(BROTLI_LIB ${PIPY_BROTLI}/lib/libbrotlidec-static.a)
+  set(BROTLI_LIB ${PIPY_BROTLI}/lib/${LIB_BROTLI})
 else()
   set(BROTLI_BUNDLED_MODE OFF CACHE BOOL "" FORCE)
   set(BROTLI_DISABLE_TESTS ON CACHE BOOL "" FORCE)
@@ -119,9 +151,18 @@ else()
 endif(PIPY_BROTLI)
 
 add_definitions(
-  -D_GNU_SOURCE
   -DPIPY_HOST="${CMAKE_HOST_SYSTEM} ${CMAKE_HOST_SYSTEM_PROCESSOR}"
+  -DXML_STATIC=1
 )
+
+if(WIN32)
+  add_definitions(
+    -D_WIN32_WINNT=0x0601
+    -D_USE_MATH_DEFINES
+  )
+else()
+  add_definitions(-D_GNU_SOURCE)
+endif()
 
 include(CheckCXXCompilerFlag)
 check_cxx_compiler_flag("-Wdelete-non-abstract-non-virtual-dtor"
@@ -132,13 +173,24 @@ if(COMPILER_SUPPORTS_DELETE_NON_ABSTRACT_NON_VIRTUAL_DTOR)
     $<$<COMPILE_LANGUAGE:CXX>:-Wno-delete-non-abstract-non-virtual-dtor>)
 endif()
 
-add_compile_options(
-  -Wall
-  -Wno-overloaded-virtual
-  -Wno-delete-non-virtual-dtor
-  -Wno-sign-compare
-  -Wno-deprecated-declarations
-)
+if(MSVC)
+  add_compile_options(
+    -Wno-unused-private-field
+    -Wno-overloaded-virtual
+    -Wno-delete-abstract-non-virtual-dtor
+    -Wno-delete-non-abstract-non-virtual-dtor
+    -Wno-deprecated-declarations
+    -Wno-inconsistent-dllimport
+  )
+else(MSVC)
+  add_compile_options(
+    -Wall
+    -Wno-overloaded-virtual
+    -Wno-delete-non-virtual-dtor
+    -Wno-sign-compare
+    -Wno-deprecated-declarations
+  )
+endif(MSVC)
 
 include_directories(
   "${CMAKE_SOURCE_DIR}/src"
@@ -264,6 +316,7 @@ add_executable(pipy
   src/net.cpp
   src/nmi.cpp
   src/options.cpp
+  src/os-platform.cpp
   src/outbound.cpp
   src/pipeline.cpp
   src/pipeline-lb.cpp
@@ -289,9 +342,10 @@ add_executable(pipy
 
 add_custom_command(
   OUTPUT ${CMAKE_BINARY_DIR}/deps/version.h
-  COMMAND ${CMAKE_SOURCE_DIR}/generate_version_h.sh
+  COMMAND ${CMAKE_SOURCE_DIR}/generate_version_h.${EXT_SHELL}
   ARGS ${CMAKE_BINARY_DIR}/deps/version.h
-  WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+)
 
 add_custom_target(GenVer DEPENDS ${CMAKE_BINARY_DIR}/deps/version.h)
 
@@ -349,6 +403,8 @@ endif(PIPY_RFC8998)
 
 if(APPLE)
   set(CMAKE_EXE_LINKER_FLAGS "-Wl,-exported_symbols_list ${CMAKE_SOURCE_DIR}/include/pipy/nmi-exports.lst")
+elseif(WIN32)
+  set(CMAKE_EXE_LINKER_FLAGS "/DEF:${CMAKE_SOURCE_DIR}/include/pipy/nmi-exports.def")
 else()
   set(CMAKE_EXE_LINKER_FLAGS "-Wl,--dynamic-list ${CMAKE_SOURCE_DIR}/include/pipy/nmi-exports.txt")
 endif()
@@ -362,10 +418,14 @@ target_link_libraries(
   yajl_s
   expat
   ${ZLIB_LIB}
-  ${OPENSSL_LIB_DIR}/libssl.a
-  ${OPENSSL_LIB_DIR}/libcrypto.a
+  ${OPENSSL_LIB_DIR}/${LIB_CRYPTO}
+  ${OPENSSL_LIB_DIR}/${LIB_SSL}
   ${BROTLI_LIB}
   leveldb
-  -pthread
-  -ldl
 )
+
+if(WIN32)
+  target_link_libraries(pipy crypt32)
+else()
+  target_link_libraries(pipy -pthread -ldl)
+endif()

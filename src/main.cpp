@@ -282,8 +282,13 @@ class SignalHandler {
 public:
   SignalHandler() : m_signals(Net::context()) {
     m_signals.add(SIGINT);
+#ifdef _WIN32
+    m_signals.add(SIGTERM);
+    m_signals.add(SIGBREAK);
+#else
     m_signals.add(SIGHUP);
     m_signals.add(SIGTSTP);
+#endif
   }
 
   void start() { wait(); }
@@ -336,6 +341,14 @@ private:
         break;
       }
 
+#ifdef _WIN32
+      case SIGBREAK:
+        reload_codebase(true);
+        break;
+      case SIGTERM:
+        toggle_admin_port();
+        break;
+#else
       case SIGHUP:
         reload_codebase(true);
         break;
@@ -343,6 +356,7 @@ private:
       case SIGTSTP:
         toggle_admin_port();
         break;
+#endif
     }
   }
 

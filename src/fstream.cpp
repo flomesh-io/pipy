@@ -29,9 +29,13 @@
 #include "pipeline.hpp"
 #include "log.hpp"
 
+#ifdef _WIN32
+#include <io.h>
+#endif
+
 namespace pipy {
 
-FileStream::FileStream(bool read, int fd, Data::Producer *dp)
+FileStream::FileStream(bool read, handle_t fd, Data::Producer *dp)
   : FlushTarget(true)
   , m_stream(Net::context(), fd)
   , m_f(nullptr)
@@ -42,7 +46,14 @@ FileStream::FileStream(bool read, int fd, Data::Producer *dp)
 
 FileStream::FileStream(bool read, FILE *f, Data::Producer *dp)
   : FlushTarget(true)
-  , m_stream(Net::context(), fileno(f))
+  , m_stream(
+    Net::context(),
+#ifdef _WIN32
+    (HANDLE)_get_osfhandle(_fileno(f))
+#else
+    fileno(f)
+#endif
+  )
   , m_f(f)
   , m_dp(dp)
 {
@@ -118,7 +129,11 @@ void FileStream::read() {
     }
 
     if (ec) {
+#ifndef _WIN32
       if (ec == asio::error::eof) {
+#else
+      if (ec == asio::error::eof || ec == asio::error::broken_pipe) {
+#endif
         Log::debug(Log::FILES, "FileStream: %p, end of stream [fd = %d]", this, m_fd);
         output(StreamEnd::make(StreamEnd::NO_ERROR));
       } else if (ec != asio::error::operation_aborted) {

@@ -31,8 +31,6 @@
 #include "log.hpp"
 #include "pipy/nmi.h"
 
-#include <dlfcn.h>
-
 namespace pipy {
 
 //

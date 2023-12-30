@@ -48,7 +48,15 @@ class FileStream :
   public FlushTarget
 {
 public:
-  static auto make(bool read, int fd, Data::Producer *dp) -> FileStream* {
+#ifdef _WIN32
+  typedef HANDLE handle_t;
+  typedef asio::windows::stream_handle stream_t;
+#else
+  typedef int handle_t;
+  asio::posix::stream_descriptor stream_t;
+#endif
+
+  static auto make(bool read, handle_t fd, Data::Producer *dp) -> FileStream* {
     return new FileStream(read, fd, dp);
   }
 
@@ -56,12 +64,12 @@ public:
     return new FileStream(read, f, dp);
   }
 
-  auto fd() const -> int { return m_fd; }
+  auto fd() const -> handle_t { return m_fd; }
   void set_buffer_limit(size_t size) { m_buffer_limit = size; }
   void close(bool close_fd = true);
 
 private:
-  FileStream(bool read, int fd, Data::Producer *dp);
+  FileStream(bool read, handle_t fd, Data::Producer *dp);
   FileStream(bool read, FILE *f, Data::Producer *dp);
 
   virtual void on_event(Event *evt) override;
@@ -75,8 +83,8 @@ private:
     PAUSED,
   };
 
-  asio::posix::stream_descriptor m_stream;
-  int m_fd;
+  stream_t m_stream;
+  handle_t m_fd;
   FILE* m_f;
   Data::Producer* m_dp;
   Data m_buffer;

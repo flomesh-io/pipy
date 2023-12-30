@@ -32,7 +32,11 @@
 extern "C" {
 #endif
 
+#if defined(_MSC_VER)
+#define NMI_EXPORT extern
+#else
 #define NMI_EXPORT extern __attribute__((used))
+#endif
 
 /*
  * PipyJS

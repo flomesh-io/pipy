@@ -30,7 +30,9 @@
 #include <cassert>
 #include <cmath>
 #include <cstring>
+#ifndef _MSC_VER
 #include <cxxabi.h>
+#endif
 #include <functional>
 #include <limits>
 #include <list>
@@ -1063,9 +1065,13 @@ public:
       if (!m_c) {
         auto s = m_init_data->super;
         if (!s) s = class_of<Object>();
-        int status;
         auto c_name = typeid(T).name();
+#ifdef _MSC_VER
+        auto cxx_name = c_name;
+#else
+        int status;
         auto cxx_name = abi::__cxa_demangle(c_name, 0, 0, &status);
+#endif
         m_c = Class::make(cxx_name ? cxx_name : c_name, s, m_init_data->fields);
         m_c->set_ctor(m_init_data->ctor);
         m_c->set_geti(m_init_data->geti);

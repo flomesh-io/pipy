@@ -31,6 +31,17 @@
 #include <sys/stat.h>
 #include <fstream>
 
+#ifdef _WIN32
+#define S_IFLNK (_S_IFDIR | _S_IFREG)
+#define S_ISDIR(mode) (((mode)&_S_IFMT) == _S_IFDIR)
+#define S_ISREG(mode) (((mode)&_S_IFMT) == _S_IFREG)
+#define S_ISCHR(mode) (((mode)&_S_IFMT) == _S_IFCHR)
+#define S_ISBLK(mode) (((mode)&_S_IFMT) == 0)
+#define S_ISFIFO(mode) (((mode)&_S_IFMT) == _S_IFIFO)
+#define S_ISLNK(mode) (((mode)&_S_IFMT) == S_IFLNK)
+#define S_ISSOCK(mode) (((mode)&_S_IFMT) == 0)
+#endif
+
 extern "C" char **environ;
 
 namespace pipy {
@@ -127,8 +138,13 @@ template<> void ClassDef<OS>::init() {
   method("stat", [](Context &ctx, Object*, Value &ret) {
     Str *filename;
     if (!ctx.arguments(1, &filename)) return;
+#ifdef _WIN32
+    struct _stat st;
+    if (_stat(filename->c_str(), &st)) {
+#else
     struct stat st;
     if (stat(filename->c_str(), &st)) {
+#endif
       ret = Value::null;
     } else {
       auto s = OS::Stats::make();
@@ -140,8 +156,13 @@ template<> void ClassDef<OS>::init() {
       s->gid = st.st_gid;
       s->rdev = st.st_rdev;
       s->size = st.st_size;
+#ifdef _WIN32
+      s->blksize = 4096;
+      s->blocks = 512;
+#else
       s->blksize = st.st_blksize;
       s->blocks = st.st_blocks;
+#endif
       s->atime = st.st_atime;
       s->mtime = st.st_mtime;
       s->ctime = st.st_ctime;

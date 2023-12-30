@@ -34,8 +34,15 @@
 #include "outbound.hpp"
 #include "utils.hpp"
 
+#ifdef _WIN32
+#include <Windows.h>
+#include <fcntl.h>
+#include <io.h>
+#include <numeric>
+#else
 #include <unistd.h>
 #include <sys/wait.h>
+#endif
 
 namespace pipy {
 
@@ -48,6 +55,7 @@ void Pipy::on_exit(const std::function<void(int)> &on_exit) {
 static auto exec_args(const std::list<std::string> &args) -> Data* {
   thread_local static Data::Producer s_dp("pipy.exec()");
 
+#ifndef _WIN32
   auto argc = args.size();
   if (!argc) return nullptr;
 
@@ -92,6 +100,57 @@ static auto exec_args(const std::list<std::string> &args) -> Data* {
 
   for (int i = 0; i < n; i++) std::free(argv[i]);
 
+#else
+  SECURITY_ATTRIBUTES sa = {.nLength = sizeof(SECURITY_ATTRIBUTES),
+                            .bInheritHandle = TRUE};
+
+  Data output;
+  HANDLE in, out;
+  auto success = CreatePipe(&in, &out, &sa, 0);
+  if (success == FALSE) {
+    throw std::runtime_error(
+      "Unable to create pipe due to " + Win32_GetLastError("CreatePipe")
+    );
+  }
+
+  auto cmd =
+      std::accumulate(std::next(args.begin()), args.end(), args.front(),
+                      [](std::string a, std::string b) { return a + " " + b; });
+
+  std::thread t([&]() {
+    char buf[DATA_CHUNK_SIZE];
+    DWORD len;
+    while (ReadFile(in, buf, sizeof(buf), &len, NULL)) {
+      output.push(buf, len, &s_dp);
+    }
+  });
+
+  PROCESS_INFORMATION pif = {};
+  STARTUPINFO si = {.cb = sizeof(STARTUPINFO),
+                    .dwFlags = STARTF_USESTDHANDLES,
+                    .hStdInput = INVALID_HANDLE_VALUE,
+                    .hStdOutput = out,
+                    .hStdError = out};
+
+  success = CreateProcess(NULL, const_cast<char *>(cmd.c_str()), NULL, NULL,
+                          TRUE, 0, NULL, NULL, &si, &pif);
+  if (success == FALSE) {
+    CloseHandle(out);
+    CloseHandle(in);
+    throw std::runtime_error(
+      "Unable to exec process due to " + Win32_GetLastError("CreateProcess")
+    );
+  }
+
+  WaitForSingleObject(pif.hProcess, INFINITE);
+  CloseHandle(pif.hThread);
+  CloseHandle(pif.hProcess);
+
+  CloseHandle(out);
+  CloseHandle(in);
+
+  t.join();
+#endif
   return Data::make(std::move(output));
 }
 
@@ -150,7 +209,11 @@ template<> void ClassDef<Pipy>::init() {
   variable("outbound", class_of<Pipy::Outbound>());
 
   accessor("pid", [](Object *, Value &ret) {
+#ifdef _WIN32
+    ret.set((int)_getpid());
+#else
     ret.set((int)getpid());
+#endif
   });
 
   accessor("since", [](Object *, Value &ret) {
@@ -241,12 +304,16 @@ template<> void ClassDef<Pipy>::init() {
   method("exec", [](Context &ctx, Object*, Value &ret) {
     Str *cmd;
     Array *argv;
-    if (ctx.get(0, cmd)) {
-      ret.set(Pipy::exec(cmd->str()));
-    } else if (ctx.get(0, argv)) {
-      ret.set(Pipy::exec(argv));
-    } else {
-      ctx.error_argument_type(0, "a string or an array");
+    try {
+      if (ctx.get(0, cmd)) {
+        ret.set(Pipy::exec(cmd->str()));
+      } else if (ctx.get(0, argv)) {
+        ret.set(Pipy::exec(argv));
+      } else {
+        ctx.error_argument_type(0, "a string or an array");
+      }
+    } catch (const std::runtime_error &err) {
+      ctx.error(err);
     }
   });
 }

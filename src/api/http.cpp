@@ -681,8 +681,8 @@ auto File::to_message(pjs::Str *accept_encoding) -> pipy::Message* {
     while (i < s.length() && std::isblank(s[i])) i++;
     if (i < s.length()) {
       auto n = 0; while (std::isalpha(s[i+n])) n++;
-      if (n == 4 && !strncasecmp(&s[i], "gzip", n)) has_gzip = true;
-      else if (n == 2 && !strncasecmp(&s[i], "br", n)) has_br = true;
+      if (n == 4 && utils::iequals(&s[i], "gzip", n)) has_gzip = true;
+      else if (n == 2 && utils::iequals(&s[i], "br", n)) has_br = true;
       i += n;
       while (i < s.length() && s[i] != ',') i++;
     }

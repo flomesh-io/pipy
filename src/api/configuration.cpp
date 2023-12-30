@@ -2249,7 +2249,11 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.use
   method("use", [](Context &ctx, Object *thiz, Value &result) {
+#ifndef _WIN32
     static const std::string s_dot_so(".so");
+#else
+    static const std::string s_dot_so(".dll");
+#endif
     auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     std::string module;
     Array *modules;

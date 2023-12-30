@@ -29,7 +29,11 @@
 #include "filter.hpp"
 #include "timer.hpp"
 
+#ifndef _WIN32
 #include <unistd.h>
+#else
+typedef int pid_t;
+#endif
 #include <map>
 #include <mutex>
 
@@ -45,6 +49,10 @@ class Exec : public Filter {
 public:
   Exec(const pjs::Value &command);
 
+#ifdef _WIN32
+  auto pif() const -> PROCESS_INFORMATION { return m_pif; }
+#endif
+
 private:
   Exec(const Exec &r);
   ~Exec();
@@ -57,6 +65,10 @@ private:
 private:
   pjs::Value m_command;
   pid_t m_pid = 0;
+
+#ifdef _WIN32
+  PROCESS_INFORMATION m_pif = {};
+#endif
   pjs::Ref<FileStream> m_stdin;
   pjs::Ref<FileStream> m_stdout;
 
