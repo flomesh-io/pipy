@@ -24,7 +24,6 @@
  */
 
 #include "xml.hpp"
-#define XML_STATIC 1
 #include "expat.h"
 #include "data.hpp"
 #include "utils.hpp"
@@ -119,7 +118,7 @@ thread_local static Data::Producer s_dp("XML");
 //
 
 class XMLParser {
- public:
+public:
   XMLParser() : m_parser(XML_ParserCreate(nullptr)) {
     XML_SetUserData(m_parser, this);
     XML_SetElementHandler(m_parser, xml_element_start, xml_element_end);
@@ -157,7 +156,7 @@ class XMLParser {
     return root;
   }
 
- private:
+private:
   XML_Parser m_parser;
   std::stack<XML::Node*> m_stack;
 

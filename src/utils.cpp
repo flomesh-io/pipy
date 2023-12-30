@@ -31,12 +31,6 @@
 #include <random>
 #include <limits>
 
-#ifdef _WIN32
-#define NOMINMAX
-#include <Windows.h>
-#include <strsafe.h>
-#endif
-
 namespace pipy {
 namespace utils {
 
@@ -447,14 +441,18 @@ bool ends_with(const std::string &str, const std::string &suffix) {
   return !std::strncmp(str.c_str() + str.length() - suffix.length(), suffix.c_str(), suffix.length());
 }
 
-bool iequals(const std::string &a, const std::string &b) {
-  if (a.length() != b.length()) return false;
-  for (size_t i = 0; i < a.length(); i++) {
+bool iequals(const char *a, const char *b, size_t n) {
+  for (size_t i = 0; i < n; i++) {
     auto ca = std::tolower(a[i]);
     auto cb = std::tolower(b[i]);
     if (ca != cb) return false;
   }
   return true;
+}
+
+bool iequals(const std::string &a, const std::string &b) {
+  if (a.length() != b.length()) return false;
+  return iequals(a.c_str(), b.c_str(), a.length());
 }
 
 auto trim(const std::string &str) -> std::string {
@@ -707,25 +705,6 @@ auto path_dirname(const std::string &path) -> std::string {
   return path.substr(0, i);
 }
 
-#ifdef _WIN32
-auto last_error(const std::string &function) -> std::string {
-  LPVOID lpMsgBuf;
-  LPVOID lpDisplayBuf;
-  DWORD dw = GetLastError();
-  FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
-                    FORMAT_MESSAGE_IGNORE_INSERTS,
-                NULL, dw, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-                (LPSTR)&lpMsgBuf, 0, NULL);
-  lpDisplayBuf = (LPVOID)LocalAlloc(LMEM_ZEROINIT,
-      (lstrlen((LPCTSTR)lpMsgBuf) + function.size() + 100) * sizeof(TCHAR));
-  StringCchPrintf((LPTSTR)lpDisplayBuf, LocalSize(lpDisplayBuf) / sizeof(TCHAR),
-                  TEXT("%s failed with error %d: %s"), function.c_str(), dw, lpMsgBuf);
-  std::string error((LPCTSTR)lpDisplayBuf);
-  LocalFree(lpMsgBuf);
-  LocalFree(lpDisplayBuf);
-  return error;
-}
-#endif
 //
 // HexEncoder
 //

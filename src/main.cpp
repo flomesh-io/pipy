@@ -101,10 +101,10 @@ static void reload_codebase(bool force) {
   if (auto *codebase = Codebase::current()) {
     codebase->sync(
       force, [](bool ok) {
-      if (ok) {
-        WorkerManager::get().reload();
+        if (ok) {
+          WorkerManager::get().reload();
+        }
       }
-    }
     );
   }
 }
@@ -120,13 +120,13 @@ static void start_admin_link(const std::string &url, const AdminLink::TLSSetting
   s_admin_link = new AdminLink(url_path, tls_settings);
   s_admin_link->add_handler(
     [](const std::string &command, const Data &) {
-    if (command == "reload") {
-      reload_codebase(true);
-      return true;
-    } else {
-      return false;
+      if (command == "reload") {
+        reload_codebase(true);
+        return true;
+      } else {
+        return false;
+      }
     }
-  }
   );
   logging::Logger::set_admin_link(s_admin_link);
 }
@@ -157,13 +157,13 @@ static void toggle_admin_port() {
 //
 
 class PeriodicJob {
- public:
+public:
   void start() { run(); }
   void stop() { m_timer.cancel(); }
- protected:
+protected:
   virtual void run() = 0;
   void next() { m_timer.schedule(5, [this]() { run(); }); }
- private:
+private:
   Timer m_timer;
 };
 
@@ -203,7 +203,7 @@ static CodeUpdater s_code_updater;
 //
 
 class StatusReporter : public PeriodicJob {
- public:
+public:
   void init(const std::string &address, const Fetch::Options &options) {
     m_url = URL::make(pjs::Value(address).s());
     m_headers = pjs::Object::make();
@@ -211,27 +211,27 @@ class StatusReporter : public PeriodicJob {
     m_fetch = new Fetch(m_url->hostname()->str() + ':' + m_url->port()->str(), options);
   }
 
- private:
+private:
   virtual void run() override {
     static Data::Producer s_dp("Status Reports");
     if (s_has_shutdown) return;
     if (!m_fetch->busy()) {
       WorkerManager::get().status(
         [this](Status &status) {
-        InputContext ic;
-        std::stringstream ss;
-        status.ip = m_local_ip;
-        status.to_json(ss);
-        (*m_fetch)(
+          InputContext ic;
+          std::stringstream ss;
+          status.ip = m_local_ip;
+          status.to_json(ss);
+          (*m_fetch)(
             Fetch::POST,
             m_url->path(),
             m_headers,
-                   Data::make(ss.str(), &s_dp),
-                   [this](http::ResponseHead *head, Data *body) {
-                     m_local_ip = m_fetch->outbound()->local_address()->str();
-                   }
+            Data::make(ss.str(), &s_dp),
+            [this](http::ResponseHead *head, Data *body) {
+              m_local_ip = m_fetch->outbound()->local_address()->str();
+            }
           );
-      }
+        }
       );
     }
     next();
@@ -255,17 +255,17 @@ class MetricReporter : public PeriodicJob {
     if (s_has_shutdown) return;
     WorkerManager::get().stats(
       [this](stats::MetricDataSum &metric_data_sum) {
-      InputContext ic;
-      Data buf;
-      Data::Builder db(buf, &s_dp);
-      db.push("metrics\n");
-      auto conn_id = s_admin_link->connect();
-      metric_data_sum.serialize(db, conn_id != m_connection_id);
-      db.flush();
-      s_admin_link->send(buf);
-      m_connection_id = conn_id;
-      next();
-    }
+        InputContext ic;
+        Data buf;
+        Data::Builder db(buf, &s_dp);
+        db.push("metrics\n");
+        auto conn_id = s_admin_link->connect();
+        metric_data_sum.serialize(db, conn_id != m_connection_id);
+        db.flush();
+        s_admin_link->send(buf);
+        m_connection_id = conn_id;
+        next();
+      }
     );
   }
 
@@ -279,7 +279,7 @@ static MetricReporter s_metric_reporter;
 //
 
 class SignalHandler {
- public:
+public:
   SignalHandler() : m_signals(Net::context()) {
     m_signals.add(SIGINT);
 #ifdef _WIN32
@@ -294,7 +294,7 @@ class SignalHandler {
   void start() { wait(); }
   void stop() { m_signals.cancel(); }
 
- private:
+private:
   asio::signal_set m_signals;
   bool m_admin_closed = false;
   Timer m_timer;
@@ -302,10 +302,10 @@ class SignalHandler {
   void wait() {
     m_signals.async_wait(
       [this](const std::error_code &ec, int sig) {
-      InputContext ic;
-      if (!ec) handle(sig);
-      if (ec != asio::error::operation_aborted) wait();
-    }
+        InputContext ic;
+        if (!ec) handle(sig);
+        if (ec != asio::error::operation_aborted) wait();
+      }
     );
   }
 
@@ -501,7 +501,7 @@ int main(int argc, char *argv[]) {
     if (is_repo) {
       store = opts.filename.empty()
         ? Store::open_memory()
-                                    : Store::open_level_db(opts.filename);
+        : Store::open_level_db(opts.filename);
       repo = new CodebaseStore(store, opts.init_repo);
       s_admin = new AdminService(repo, s_admin_log_file, s_admin_gui);
       s_admin->retain();
@@ -520,7 +520,7 @@ int main(int argc, char *argv[]) {
       std::cout << std::endl;
 #endif
 
-      // Start as codebase repo proxy
+    // Start as codebase repo proxy
     } else if (is_repo_proxy) {
       AdminProxy::Options options;
       options.cert = opts.admin_tls_cert;
@@ -533,7 +533,7 @@ int main(int argc, char *argv[]) {
       s_admin_proxy = new AdminProxy(opts.filename, opts.admin_gui);
       s_admin_proxy->open(admin_ip, admin_port, options);
 
-      // Start as a static codebase
+    // Start as a static codebase
     } else {
       if (is_remote) {
         Fetch::Options options;
@@ -557,55 +557,55 @@ int main(int argc, char *argv[]) {
       load = [&]() {
         codebase->sync(
           true, [&](bool ok) {
-          if (!ok) {
-            fail();
-            return;
-          }
-
-          WorkerManager::get().enable_graph(!opts.no_graph);
-
-          if (!is_repo && !is_remote) {
-            WorkerManager::get().on_done(
-                [&]() {
-              exit_code = 0;
-              s_pool_cleaner.stop();
-              s_code_updater.stop();
-              s_signal_handler.stop();
+            if (!ok) {
+              fail();
+              return;
             }
+
+            WorkerManager::get().enable_graph(!opts.no_graph);
+
+            if (!is_repo && !is_remote) {
+              WorkerManager::get().on_done(
+                [&]() {
+                  exit_code = 0;
+                  s_pool_cleaner.stop();
+                  s_code_updater.stop();
+                  s_signal_handler.stop();
+                }
               );
-          }
+            }
 
-          if (!WorkerManager::get().start(opts.threads, opts.force_start)) {
-            fail();
-            return;
-          }
+            if (!WorkerManager::get().start(opts.threads, opts.force_start)) {
+              fail();
+              return;
+            }
 
-          s_admin_ip = admin_ip;
-          s_admin_port = admin_port;
+            s_admin_ip = admin_ip;
+            s_admin_port = admin_port;
 
-          if (!opts.admin_port.empty() && !opts.admin_port_off) {
-            toggle_admin_port();
-          }
+            if (!opts.admin_port.empty() && !opts.admin_port_off) {
+              toggle_admin_port();
+            }
 
-          s_code_updater.start();
+            s_code_updater.start();
 
-          if (is_remote) {
-            AdminLink::TLSSettings tls_settings;
-            tls_settings.cert = opts.tls_cert;
-            tls_settings.key = opts.tls_key;
-            tls_settings.trusted = opts.tls_trusted;
-            start_admin_link(opts.filename, is_tls ? &tls_settings : nullptr);
-            if (!opts.no_status) s_status_reporter.start();
-            if (!opts.no_metrics) s_metric_reporter.start();
-          }
+            if (is_remote) {
+              AdminLink::TLSSettings tls_settings;
+              tls_settings.cert = opts.tls_cert;
+              tls_settings.key = opts.tls_key;
+              tls_settings.trusted = opts.tls_trusted;
+              start_admin_link(opts.filename, is_tls ? &tls_settings : nullptr);
+              if (!opts.no_status) s_status_reporter.start();
+              if (!opts.no_metrics) s_metric_reporter.start();
+            }
 
-          Pipy::on_exit(
+            Pipy::on_exit(
               [&](int code) {
-            exit_code = code;
-            Net::current().stop();
-          }
+                exit_code = code;
+                Net::current().stop();
+              }
             );
-        }
+          }
         );
       };
 

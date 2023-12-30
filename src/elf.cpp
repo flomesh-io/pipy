@@ -43,12 +43,6 @@ static void section_out_of_bound(size_t i) {
   throw std::runtime_error(msg);
 }
 
-static void symbol_out_of_bound(size_t i) {
-  std::string msg("out of bound symbol: index = ");
-  msg += std::to_string(i);
-  throw std::runtime_error(msg);
-}
-
 static void relocation_out_of_bound(size_t i) {
   std::string msg("out of bound relocation: index = ");
   msg += std::to_string(i);
@@ -131,6 +125,8 @@ ELF::ELF(std::vector<uint8_t> &&data) : m_data(std::move(data)) {
     std::runtime_error("offset out of ELF file boundary");
   }
 
+  m_str_tab_idx = shstrndx;
+
   std::vector<size_t> name_offsets(shnum);
   sections.resize(shnum);
 
@@ -173,23 +169,9 @@ ELF::ELF(std::vector<uint8_t> &&data) : m_data(std::move(data)) {
     }
   }
 
-  auto &str_tab_sec = sections[shstrndx];
-  auto str_tab_head = str_tab_sec.data;
-  auto str_tab_size = sections[shstrndx].size;
-
-  auto find_str = [&](size_t offset, std::string &str) {
-    if (offset >= str_tab_size) return false;
-    auto end = offset;
-    while (end < str_tab_size && str_tab_head[end]) end++;
-    str = std::string((const char *)(str_tab_head + offset), end - offset);
-    return true;
-  };
-
   for (size_t i = 0; i < shnum; i++) {
     auto &s = sections[i];
-    if (!find_str(name_offsets[i], s.name)) {
-      section_out_of_bound(i);
-    }
+    s.name = string(name_offsets[i]);
     Log::debug(Log::BPF,
       "[bpf] SECTION #%d name '%s' addr 0x%08x size %d type %d flags %d link %d info %d",
       int(i), s.name.c_str(), int(s.addr), int(s.size), s.type, s.flags, s.link, s.info
@@ -211,9 +193,7 @@ ELF::ELF(std::vector<uint8_t> &&data) : m_data(std::move(data)) {
         switch (cls) {
           case ELFCLASS32: {
             const auto &ent = *(Elf32_Sym *)(sec.data + offset);
-            if (!find_str(ent.st_name, s.name)) {
-              symbol_out_of_bound(i);
-            }
+            s.name = string(ent.st_name);
             s.value = ent.st_value;
             s.size = ent.st_size;
             s.shndx = ent.st_shndx;
@@ -222,9 +202,7 @@ ELF::ELF(std::vector<uint8_t> &&data) : m_data(std::move(data)) {
           }
           case ELFCLASS64: {
             const auto &ent = *(Elf64_Sym *)(sec.data + offset);
-            if (!find_str(ent.st_name, s.name)) {
-              symbol_out_of_bound(i);
-            }
+            s.name = string(ent.st_name);
             s.value = ent.st_value;
             s.size = ent.st_size;
             s.shndx = ent.st_shndx;
@@ -287,6 +265,137 @@ ELF::ELF(std::vector<uint8_t> &&data) : m_data(std::move(data)) {
   }
 }
 
+auto ELF::string(size_t offset) const -> std::string {
+  const auto &str_tab = sections[m_str_tab_idx];
+  auto data = str_tab.data;
+  auto size = str_tab.size;
+  if (offset >= size) {
+    std::string msg("string offset out of bound: offset = ");
+    msg += std::to_string(offset);
+    throw std::runtime_error(msg);
+  }
+  auto end = offset;
+  while (end < size && data[end]) end++;
+  return std::string((const char *)(data + offset), end - offset);
+}
+
+//
+// BTF
+//
+
+BTF::BTF(const ELF &elf, size_t sec) {
+  auto &s = elf.sections[sec];
+  auto ptr = s.data;
+  auto end = s.data + s.size;
+  while (ptr + sizeof(struct btf_type) <= end) {
+    auto &bt = *(struct btf_type *)ptr;
+    auto name = elf.string(bt.name_off);
+    auto vlen = BTF_INFO_VLEN(bt.info);
+    auto kind = BTF_INFO_KIND(bt.info);
+    auto kind_flag = BTF_INFO_KFLAG(bt.info);
+    ptr += sizeof(struct btf_type);
+    Type *type = nullptr;
+    switch (kind) {
+      case BTF_KIND_ARRAY: {
+        if (ptr + sizeof(struct btf_array) > end) break;
+        auto &ba = *(struct btf_array *)ptr;
+        auto a = new Array;
+        a->type = ba.type;
+        a->index_type = ba.index_type;
+        a->nelems = ba.nelems;
+        ptr += sizeof(ba);
+        type = a;
+        break;
+      }
+      case BTF_KIND_STRUCT:
+      case BTF_KIND_UNION: {
+        if (ptr + sizeof(struct btf_member) * vlen > end) break;
+        auto s = new Struct;
+        for (size_t i = 0; i < vlen; i++) {
+          auto &bm = *(struct btf_member *)ptr;
+          Member m;
+          m.name = elf.string(bm.name_off);
+          m.type = bm.type;
+          m.offset = bm.offset;
+          s->members.push_back(m);
+          ptr += sizeof(bm);
+        }
+        type = s;
+        break;
+      }
+      case BTF_KIND_ENUM: {
+        if (ptr + sizeof(struct btf_enum) * vlen > end) break;
+        auto e = new Enum;
+        for (size_t i = 0; i < vlen; i++) {
+          auto &be = *(struct btf_enum *)ptr;
+          e->values[elf.string(be.name_off)] = be.val;
+          ptr += sizeof(be);
+        }
+        type = e;
+        break;
+      }
+      case BTF_KIND_FUNC_PROTO: {
+        if (ptr + sizeof(struct btf_param) * vlen > end) break;
+        auto fp = new FuncProto;
+        for (size_t i = 0; i < vlen; i++) {
+          auto &bp = *(struct btf_param *)ptr;
+          Param p;
+          p.name = elf.string(bp.name_off);
+          p.type = bp.type;
+          fp->params.push_back(p);
+          ptr += sizeof(bp);
+        }
+        type = fp;
+        break;
+      }
+      case BTF_KIND_VAR: {
+        if (ptr + sizeof(struct btf_var) > end) break;
+        auto v = new Var;
+        auto &bv = *(struct btf_var *)ptr;
+        v->linkage = bv.linkage;
+        ptr += sizeof(bv);
+        type = v;
+        break;
+      }
+      case BTF_KIND_DATASEC: {
+        if (ptr + sizeof(struct btf_var_secinfo) > end) break;
+        auto ds = new DataSec;
+        for (size_t i = 0; i < vlen; i++) {
+          auto &bvs = *(struct btf_var_secinfo *)ptr;
+          VarSecInfo vsi;
+          vsi.type = bvs.type;
+          vsi.offset = bvs.offset;
+          vsi.size = bvs.size;
+          ds->vars.push_back(vsi);
+          ptr += sizeof(bvs);
+        }
+        type = ds;
+        break;
+      }
+      case BTF_KIND_INT:
+      case BTF_KIND_PTR:
+      case BTF_KIND_FWD:
+      case BTF_KIND_TYPEDEF:
+      case BTF_KIND_VOLATILE:
+      case BTF_KIND_CONST:
+      case BTF_KIND_RESTRICT:
+      case BTF_KIND_FUNC:
+      case BTF_KIND_FLOAT:
+        type = new Type;
+        break;
+      default: {
+        std::string msg("unknown BTF kind ");
+        msg += std::to_string(kind);
+        throw std::runtime_error(msg);
+      }
+    }
+    type->kind = kind;
+    type->kind_flag = kind_flag;
+    type->size = bt.size;
+    types.push_back(std::unique_ptr<Type>(type));
+  }
+}
+
 #else // !PIPY_USE_BPF
 
 static void unsupported() {
@@ -295,6 +404,10 @@ static void unsupported() {
 
 ELF::ELF(std::vector<uint8_t> &&data) {
   unsupported();
+}
+
+BTF::BTF(const ELF &elf, size_t sec) {
+  unsupported();  
 }
 
 #endif // PIPY_USE_BPF

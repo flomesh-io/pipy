@@ -26,11 +26,11 @@
 #ifndef FSTREAM_HPP
 #define FSTREAM_HPP
 
-#include <stdio.h>
-
+#include "net.hpp"
 #include "event.hpp"
 #include "input.hpp"
-#include "net.hpp"
+
+#include <stdio.h>
 
 namespace pipy {
 
@@ -42,38 +42,36 @@ class Data;
 
 class FileStream :
   public pjs::RefCount<FileStream>,
-                   public pjs::Pooled<FileStream>,
-                   public EventFunction,
-                   public InputSource,
-                   public FlushTarget
+  public pjs::Pooled<FileStream>,
+  public EventFunction,
+  public InputSource,
+  public FlushTarget
 {
- public:
+public:
+#ifdef _WIN32
+  typedef HANDLE handle_t;
+  typedef asio::windows::stream_handle stream_t;
+#else
+  typedef int handle_t;
+  asio::posix::stream_descriptor stream_t;
+#endif
+
+  static auto make(bool read, handle_t fd, Data::Producer *dp) -> FileStream* {
+    return new FileStream(read, fd, dp);
+  }
 
   static auto make(bool read, FILE *f, Data::Producer *dp) -> FileStream* {
     return new FileStream(read, f, dp);
   }
 
-#ifndef _WIN32
-  static auto make(bool read, int fd, Data::Producer *dp) -> FileStream * {
-    return new FileStream(read, fd, dp);
-  }
-  auto fd() const -> int { return m_fd; }
-#else
-  static auto make(bool read, HANDLE fd, Data::Producer *dp) -> FileStream * {
-    return new FileStream(read, fd, dp);
-  }
-  auto fd() const -> HANDLE { return m_fd; }
-#endif
+  auto fd() const -> handle_t { return m_fd; }
   void set_buffer_limit(size_t size) { m_buffer_limit = size; }
   void close(bool close_fd = true);
 
- private:
+private:
+  FileStream(bool read, handle_t fd, Data::Producer *dp);
   FileStream(bool read, FILE *f, Data::Producer *dp);
-#ifndef _WIN32
-  FileStream(bool read, int fd, Data::Producer *dp);
-#else
-  FileStream(bool read, HANDLE fd, Data::Producer *dp);
-#endif
+
   virtual void on_event(Event *evt) override;
   virtual void on_flush() override;
   virtual void on_tap_open() override;
@@ -85,14 +83,8 @@ class FileStream :
     PAUSED,
   };
 
-#if defined(_WIN32)
-  asio::windows::stream_handle m_stream;
-  HANDLE m_fd;
-#else
-  asio::posix::stream_descriptor m_stream;
-  int m_fd;
-#endif
-
+  stream_t m_stream;
+  handle_t m_fd;
   FILE* m_f;
   Data::Producer* m_dp;
   Data m_buffer;

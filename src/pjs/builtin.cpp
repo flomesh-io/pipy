@@ -29,7 +29,6 @@
 #include <cmath>
 #include <cstdlib>
 #include <limits>
-#define _USE_MATH_DEFINES 1
 #include <math.h>
 #include <random>
 #include <sstream>
@@ -189,40 +188,7 @@ double Math::trunc(double x) {
 }
 
 int Math::clz32(int x) {
-#ifdef _WIN32
-  if (x <= 0) {
-    return x;
-  }
-  unsigned y = x;
-  int n = 32;
-  y = x >> 16;
-  if (y != 0) {
-    n = n - 16;
-    x = y;
-  }
-  y = x >> 8;
-  if (y != 0) {
-    n = n - 8;
-    x = y;
-  }
-  y = x >> 4;
-  if (y != 0) {
-    n = n - 4;
-    x = y;
-  }
-  y = x >> 2;
-  if (y != 0) {
-    n = n - 2;
-    x = y;
-  }
-  y = x >> 1;
-  if (y != 0) {
-    return n - 2;
-  }
-  return n - x;
-#else
   return __builtin_clz(x);
-#endif
 }
 
 int Math::imul(int x, int y) {
@@ -878,13 +844,13 @@ template<> void ClassDef<Map>::init() {
     if (!ctx.arguments(1, &cb)) return;
     obj->as<Map>()->forEach(
       [&](const Value &k, const Value &v) {
-      Value args[3], ret;
-      args[0] = k;
-      args[1] = v;
-      args[2].set(obj);
-      (*cb)(ctx, 3, args, ret);
-      return ctx.ok();
-    }
+        Value args[3], ret;
+        args[0] = k;
+        args[1] = v;
+        args[2].set(obj);
+        (*cb)(ctx, 3, args, ret);
+        return ctx.ok();
+      }
     );
   });
 }
@@ -936,13 +902,13 @@ template<> void ClassDef<Set>::init() {
     if (!ctx.arguments(1, &cb)) return;
     obj->as<Set>()->forEach(
       [&](const Value &v) {
-      Value args[3], ret;
-      args[0] = v;
-      args[1] = v;
-      args[2].set(obj);
-      (*cb)(ctx, 3, args, ret);
-      return ctx.ok();
-    }
+        Value args[3], ret;
+        args[0] = v;
+        args[1] = v;
+        args[2].set(obj);
+        (*cb)(ctx, 3, args, ret);
+        return ctx.ok();
+      }
     );
   });
 }
@@ -1048,14 +1014,14 @@ template<> void ClassDef<Global>::init() {
       if (!ctx.check(1, f)) return;
       array->iterate_while(
         [&](Value &v, int i) {
-        Value args[2];
-        args[0] = v;
-        args[1].set(i);
-        (*f)(ctx, 2, args, ret);
-        if (!ctx.ok()) return false;
-        if (!ret.is_undefined()) return false;
-        return true;
-      }
+          Value args[2];
+          args[0] = v;
+          args[1].set(i);
+          (*f)(ctx, 2, args, ret);
+          if (!ctx.ok()) return false;
+          if (!ret.is_undefined()) return false;
+          return true;
+        }
       );
 
     } else {

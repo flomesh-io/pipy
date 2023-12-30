@@ -28,6 +28,8 @@
 
 #include <string>
 #include <vector>
+#include <map>
+#include <memory>
 
 namespace pipy {
 
@@ -96,8 +98,118 @@ public:
 
   ELF(std::vector<uint8_t> &&data);
 
+  auto string(size_t offset) const -> std::string;
+
 private:
   std::vector<uint8_t> m_data;
+  size_t m_str_tab_idx;
+};
+
+//
+// BTF
+//
+
+class BTF {
+public:
+
+  //
+  // BTF::Type
+  //
+
+  struct Type {
+    std::string name;
+    int kind;
+    int kind_flag;
+    union {
+      size_t size;
+      size_t type;
+    };
+
+    virtual ~Type() {}
+  };
+
+  //
+  // BTF::Member
+  //
+
+  struct Member {
+    std::string name;
+    size_t type;
+    size_t offset;
+  };
+
+  //
+  // BTF::Param
+  //
+
+  struct Param {
+    std::string name;
+    size_t type;
+  };
+
+  //
+  // BTF::VarSecInfo
+  //
+
+  struct VarSecInfo {
+    size_t type;
+    size_t offset;
+    size_t size;
+  };
+
+  //
+  // BTF::Array
+  //
+
+  struct Array : public Type {
+    size_t type;
+    size_t index_type;
+    size_t nelems;
+  };
+
+  //
+  // BTF::Struct
+  //
+
+  struct Struct : public Type {
+    std::vector<Member> members;
+  };
+
+  //
+  // BTF::Enum
+  //
+
+  struct Enum : public Type {
+    std::map<std::string, int> values;
+  };
+
+  //
+  // BTF::FuncProto
+  //
+
+  struct FuncProto : public Type {
+    std::vector<Param> params;
+  };
+
+  //
+  // BTF::Var
+  //
+
+  struct Var : public Type {
+    int linkage;
+  };
+
+  //
+  // BTF::DataSec
+  //
+
+  struct DataSec : public Type {
+    std::vector<VarSecInfo> vars;
+  };
+
+  std::vector<std::unique_ptr<Type>> types;
+
+  BTF(const ELF &elf, size_t sec);
 };
 
 } // namespace pipy

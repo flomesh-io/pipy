@@ -34,16 +34,18 @@
 #ifdef _WIN32
 #include <numeric>
 #else
-#include <sys/wait.h>
 #include <unistd.h>
+#include <sys/wait.h>
 #endif
 
 namespace pipy {
 
 thread_local static Data::Producer s_dp("exec()");
+
 #ifdef _WIN32
 static volatile long pipe_sn;
 #endif
+
 //
 // Exec
 //
@@ -102,10 +104,10 @@ void Exec::process(Event *evt) {
     if (ret.is_array()) {
       ret.as<pjs::Array>()->iterate_all(
         [&](pjs::Value &v, int) {
-        auto *s = v.to_string();
-        args.push_back(s->str());
-        s->release();
-      }
+          auto *s = v.to_string();
+          args.push_back(s->str());
+          s->release();
+        }
       );
     } else {
       auto *s = ret.to_string();
@@ -118,6 +120,7 @@ void Exec::process(Event *evt) {
       Filter::error("command is empty");
       return;
     }
+
 #ifndef _WIN32
     size_t i = 0;
     char *argv[argc + 1];
@@ -148,6 +151,8 @@ void Exec::process(Event *evt) {
     } else if (m_pid < 0) {
       Filter::error("unable to fork");
     } else {
+      ::close(in[0]);
+      ::close(out[1]);
       s_child_process_monitor.monitor(m_pid, this);
     }
 
@@ -165,15 +170,19 @@ void Exec::process(Event *evt) {
         PipeNameBuf, PIPE_ACCESS_INBOUND | FILE_FLAG_OVERLAPPED,
         PIPE_TYPE_BYTE | PIPE_WAIT, 1, nSize, nSize, 120 * 1000, &sa);
     if (INVALID_HANDLE_VALUE == read) {
-      Filter::error("Unable to create named pipe due to %s",
-                    utils::last_error("CreateNamedPipeA").c_str());
+      Filter::error(
+        "Unable to create named pipe due to %s",
+        Win32_GetLastError("CreateNamedPipeA").c_str()
+      );
       return;
     }
     write = CreateFileA(PipeNameBuf, GENERIC_WRITE, 0, &sa, OPEN_EXISTING,
                         FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED, NULL);
     if (INVALID_HANDLE_VALUE == write) {
-      Filter::error("Unable to create write file due to %s",
-                    utils::last_error("CreateNamedPipeA").c_str());
+      Filter::error(
+        "Unable to create write file due to %s",
+        Win32_GetLastError("CreateNamedPipeA").c_str()
+      );
       CloseHandle(read);
       return;
     }
@@ -197,8 +206,10 @@ void Exec::process(Event *evt) {
     if (success == FALSE) {
       CloseHandle(write);
       CloseHandle(read);
-      Filter::error("Unable to exec process due to %s",
-                    utils::last_error("CreateProcess").c_str());
+      Filter::error(
+        "Unable to exec process due to %s",
+        Win32_GetLastError("CreateProcess").c_str()
+      );
     }
     m_pid = m_pif.dwProcessId;
     s_child_process_monitor.monitor(m_pid, this);
@@ -217,7 +228,7 @@ void Exec::process(Event *evt) {
 Exec::ChildProcessMonitor Exec::s_child_process_monitor;
 
 Exec::ChildProcessMonitor::ChildProcessMonitor()
-    : m_wait_thread([this]() { wait(); })
+  : m_wait_thread([this]() { wait(); })
 {
   m_wait_thread.detach();
 }
@@ -255,7 +266,7 @@ void Exec::ChildProcessMonitor::wait() {
     std::transform(filters.begin(), filters.end(), handles,
                    [](const PROCESS_INFORMATION &exe) {
                      return exe.hProcess;
-                   }); 
+                   });
     if (size <= 0) {
       Sleep(1000);
       continue;
@@ -275,13 +286,19 @@ void Exec::ChildProcessMonitor::wait() {
       std::lock_guard<std::mutex> lock(m_mutex);
       auto i = m_waiters.find(pid);
       if (i != m_waiters.end()) {
-        auto &w = i->second;
-        auto *f = w.filter;
-        w.net->post(
+        i->second.net->post(
           [=]() {
-          InputContext ic;
-          f->output(StreamEnd::make());
-        }
+            Exec *f = nullptr;
+            {
+              std::lock_guard<std::mutex> lock(m_mutex);
+              auto i = m_waiters.find(pid);
+              if (i != m_waiters.end()) f = i->second.filter;
+            }
+            if (f) {
+              InputContext ic;
+              f->output(StreamEnd::make());
+            }
+          }
         );
         m_waiters.erase(i);
       }

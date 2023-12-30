@@ -40,7 +40,7 @@ auto Pool::all() -> std::map<std::string, Pool*> & {
 }
 
 Pool::Pool(const std::string &name, size_t size)
-    : m_name(name)
+  : m_name(name)
   , m_size(std::max(size, sizeof(void*)))
   , m_free_list(nullptr)
   , m_return_list(nullptr)
@@ -104,7 +104,7 @@ void Pool::add_return(Head *h) {
   } while (!m_return_list.compare_exchange_weak(
     p, h,
     std::memory_order_release,
-                                                std::memory_order_relaxed
+    std::memory_order_relaxed
   ));
   release();
 }
@@ -112,7 +112,7 @@ void Pool::add_return(Head *h) {
 void Pool::accept_returns() {
   if (auto *h = m_return_list.load(std::memory_order_relaxed)) {
     while (!m_return_list.compare_exchange_weak(
-        h, nullptr,
+      h, nullptr,
       std::memory_order_acquire,
       std::memory_order_relaxed
     )) {}
@@ -272,13 +272,13 @@ Str::CharData::CharData(std::string &&str) : m_str(std::move(str)) {
   int n = 0, p = 0, i = 0;
   Utf8Decoder decoder(
     [&](int cp) {
-    if (n > 0) {
-      if (n % CHUNK_SIZE == 0) {
-        m_chunks.push_back(p);
+      if (n > 0) {
+        if (n % CHUNK_SIZE == 0) {
+          m_chunks.push_back(p);
+        }
       }
+      n++;
     }
-    n++;
-  }
   );
   for (const auto c : m_str) {
     if (!(c & 0x80) || (c & 0x40)) p = i;
@@ -320,7 +320,7 @@ auto Str::CharData::pos_to_chr(int i) const -> int {
       if ((c & 0xe0) == 0xc0) p += 2; else
       if ((c & 0xf0) == 0xe0) p += 3; else
       if ((c & 0xf8) == 0xf0) p += 4; else
-        break;
+      break;
     } else {
       p++;
     }
@@ -354,7 +354,7 @@ auto Str::CharData::chr_to_pos(int i) const -> int {
       if ((c & 0xe0) == 0xc0) p += 2; else
       if ((c & 0xf0) == 0xe0) p += 3; else
       if ((c & 0xf8) == 0xf0) p += 4; else
-        break;
+      break;
     } else {
       p++;
     }
@@ -377,13 +377,13 @@ auto Str::CharData::chr_at(int i) const -> int {
       return
         ((c          & 0x0f) << 12)|
         ((m_str[i+1] & 0x3f) <<  6)|
-             ((m_str[i+2] & 0x3f) <<  0);
+        ((m_str[i+2] & 0x3f) <<  0);
     }
     if ((c & 0xf8) == 0xf0 && i + 3 < n) {
       return
         ((c          & 0x07) << 18)|
         ((m_str[i+1] & 0x3f) << 12)|
-             ((m_str[i+2] & 0x3f) <<  6)|
+        ((m_str[i+2] & 0x3f) <<  6)|
         ((m_str[i+3] & 0x3f) <<  0);
     }
     return -1;
@@ -574,8 +574,8 @@ void ClassMap::remove(Class *c) {
 Class::Class(
   const std::string &name,
   Class *super,
-             const std::list<Field*> &fields)
-    : m_super(super)
+  const std::list<Field*> &fields)
+  : m_super(super)
   , m_name(pjs::Str::make(name))
   , m_class_map(ClassMap::get())
 {
@@ -796,14 +796,14 @@ SharedObject::SharedObject(Object *o) {
   auto b = *p;
   o->iterate_all(
     [&](Str *k, Value &v) {
-    if (!b || b->length >= sizeof(b->entries) / sizeof(Entry)) {
-      b = *p = new EntryBlock;
-      p = &b->next;
+      if (!b || b->length >= sizeof(b->entries) / sizeof(Entry)) {
+        b = *p = new EntryBlock;
+        p = &b->next;
+      }
+      auto &e = b->entries[b->length++];
+      e.k = k->data();
+      e.v = v;
     }
-    auto &e = b->entries[b->length++];
-    e.k = k->data();
-    e.v = v;
-  }
   );
 }
 
@@ -952,15 +952,15 @@ void Int::fill(Array *bytes) {
 
 auto Int::promote(Type t, Type u) -> Type {
   static const Type s_table[8][8] = {
-      //      i8         i16        i32        i64        u8         u16        u32        u64
-      { Type::i8 , Type::i16, Type::i32, Type::i64, Type::i16, Type::i32, Type::i64, Type::u64 }, // i8
-      { Type::i16, Type::i16, Type::i32, Type::i64, Type::i16, Type::i32, Type::i64, Type::u64 }, // i16
-      { Type::i32, Type::i32, Type::i32, Type::i64, Type::i32, Type::i32, Type::i64, Type::u64 }, // i32
-      { Type::i64, Type::i64, Type::i64, Type::i64, Type::i64, Type::i64, Type::i64, Type::u64 }, // i64
-      { Type::i16, Type::i16, Type::i32, Type::i64, Type::u8 , Type::u16, Type::u32, Type::u64 }, // u8
-      { Type::i32, Type::i32, Type::i32, Type::i64, Type::u16, Type::u16, Type::u32, Type::u64 }, // u16
-      { Type::i64, Type::i64, Type::i64, Type::i64, Type::u32, Type::u32, Type::u32, Type::u64 }, // u32
-      { Type::u64, Type::u64, Type::u64, Type::u64, Type::u64, Type::u64, Type::u64, Type::u64 }, // u64
+    //      i8         i16        i32        i64        u8         u16        u32        u64
+    { Type::i8 , Type::i16, Type::i32, Type::i64, Type::i16, Type::i32, Type::i64, Type::u64 }, // i8
+    { Type::i16, Type::i16, Type::i32, Type::i64, Type::i16, Type::i32, Type::i64, Type::u64 }, // i16
+    { Type::i32, Type::i32, Type::i32, Type::i64, Type::i32, Type::i32, Type::i64, Type::u64 }, // i32
+    { Type::i64, Type::i64, Type::i64, Type::i64, Type::i64, Type::i64, Type::i64, Type::u64 }, // i64
+    { Type::i16, Type::i16, Type::i32, Type::i64, Type::u8 , Type::u16, Type::u32, Type::u64 }, // u8
+    { Type::i32, Type::i32, Type::i32, Type::i64, Type::u16, Type::u16, Type::u32, Type::u64 }, // u16
+    { Type::i64, Type::i64, Type::i64, Type::i64, Type::u32, Type::u32, Type::u32, Type::u64 }, // u32
+    { Type::u64, Type::u64, Type::u64, Type::u64, Type::u64, Type::u64, Type::u64, Type::u64 }, // u64
   };
   return s_table[int(t)][int(u)];
 }
@@ -1684,7 +1684,7 @@ auto String::padEnd(int length, Str *padding) -> Str* {
     buf + m_s->size(),
     sizeof(buf) - m_s->size(),
     padding,
-                length - m_s->length()
+    length - m_s->length()
   );
   return Str::make(buf, n + m_s->size());
 }
@@ -1794,9 +1794,9 @@ auto String::split(Str *separator, int limit) -> Array* {
     if (!limit) return arr;
     Utf8Decoder decoder(
       [&](int c) {
-      uint32_t code = c;
-      arr->set(i++, Str::make(&code, 1));
-    }
+        uint32_t code = c;
+        arr->set(i++, Str::make(&code, 1));
+      }
     );
     for (int i = 0, p = 0; i < n && p < m; p++) {
       decoder.input(s[p]);
@@ -2048,7 +2048,7 @@ auto Promise::race(Array *promises) -> Promise* {
 auto Promise::then(
   Context *context,
   const Value &resolved_value,
-                   const Value &rejected_value
+  const Value &rejected_value
 ) -> Promise* {
   auto t = new Then(context, resolved_value, rejected_value);
   add_then(t);
@@ -2058,7 +2058,7 @@ auto Promise::then(
 auto Promise::then(
   Context *context,
   Function *on_resolved,
-                   Function *on_rejected,
+  Function *on_rejected,
   Function *on_finally
 ) -> Promise* {
   auto t = new Then(context, on_resolved, on_rejected, on_finally);
@@ -2251,7 +2251,7 @@ template<> void ClassDef<Promise::Callback>::init() {
 Promise::Then::Then(
   Context *context,
   Function *on_resolved,
-                    Function *on_rejected,
+  Function *on_rejected,
   Function *on_finally
 ) : m_context(context)
   , m_on_resolved(on_resolved)
@@ -2264,7 +2264,7 @@ Promise::Then::Then(
 Promise::Then::Then(
   Context *context,
   const Value &resolved_value,
-                    const Value &rejected_value
+  const Value &rejected_value
 ) : m_context(context)
   , m_promise(Promise::make())
   , m_resolved_value(resolved_value)
@@ -2348,7 +2348,7 @@ template<> void ClassDef<Promise::Result>::init() {
 //
 
 Promise::Aggregator::Aggregator(Type type, Settler *settler, Array *promises)
-    : m_type(type)
+  : m_type(type)
   , m_settler(settler)
 {
   auto n = promises->length();
@@ -2491,8 +2491,8 @@ template<> void ClassDef<Array>::init() {
   });
 
   accessor("length",
-      [](Object *obj, Value &val) { val.set(int(obj->as<Array>()->length())); },
-      [](Object *obj, const Value &val) { obj->as<Array>()->length(val.to_number()); }
+    [](Object *obj, Value &val) { val.set(int(obj->as<Array>()->length())); },
+    [](Object *obj, const Value &val) { obj->as<Array>()->length(val.to_number()); }
   );
 
   method("concat", [](Context &ctx, Object *obj, Value &ret) {
@@ -2547,18 +2547,18 @@ template<> void ClassDef<Array>::init() {
     bool found = false;
     obj->as<Array>()->iterate_while(
       [&](Value &v, int i) -> bool {
-      Value argv[3], ret;
-      argv[0] = v;
-      argv[1].set(i);
-      argv[2].set(obj);
-      (*callback)(ctx, 3, argv, ret);
-      if (!ctx.ok()) return false;
-      if (!ret.to_boolean()) {
-        found = true;
-        return false;
+        Value argv[3], ret;
+        argv[0] = v;
+        argv[1].set(i);
+        argv[2].set(obj);
+        (*callback)(ctx, 3, argv, ret);
+        if (!ctx.ok()) return false;
+        if (!ret.to_boolean()) {
+          found = true;
+          return false;
+        }
+        return true;
       }
-      return true;
-    }
     );
     ret.set(!found);
   });
@@ -2596,14 +2596,14 @@ template<> void ClassDef<Array>::init() {
     Function *callback;
     if (!ctx.arguments(1, &callback)) return;
     obj->as<Array>()->find([&](Value &v, int i) -> bool {
-          Value argv[3], ret;
-          argv[0] = v;
-          argv[1].set(i);
-          argv[2].set(obj);
-          (*callback)(ctx, 3, argv, ret);
-          if (!ctx.ok()) return true;
-          return ret.to_boolean();
-        }, ret);
+      Value argv[3], ret;
+      argv[0] = v;
+      argv[1].set(i);
+      argv[2].set(obj);
+      (*callback)(ctx, 3, argv, ret);
+      if (!ctx.ok()) return true;
+      return ret.to_boolean();
+    }, ret);
   });
 
   method("findIndex", [](Context &ctx, Object *obj, Value &ret) {
@@ -2684,13 +2684,13 @@ template<> void ClassDef<Array>::init() {
     if (!ctx.arguments(1, &f)) return;
     ret.set(obj->as<Array>()->map(
       [&](Value &v, int i, Value &ret) -> bool {
-      Value argv[3];
-      argv[0] = v;
-      argv[1].set(i);
-      argv[2].set(obj);
-      (*f)(ctx, 3, argv, ret);
-      return ctx.ok();
-    }
+        Value argv[3];
+        argv[0] = v;
+        argv[1].set(i);
+        argv[2].set(obj);
+        (*f)(ctx, 3, argv, ret);
+        return ctx.ok();
+      }
     ));
   });
 
@@ -2710,23 +2710,23 @@ template<> void ClassDef<Array>::init() {
     if (ctx.argc() > 1) {
       if (!ctx.arguments(2, &callback, &initial)) return;
       obj->as<Array>()->reduce([&](Value &ret, Value &v, int i) -> bool {
-            argv[0] = ret;
-            argv[1] = v;
-            argv[2].set(i);
-            argv[3].set(obj);
-            (*callback)(ctx, 4, argv, ret);
-            return ctx.ok();
-          }, initial, ret);
+        argv[0] = ret;
+        argv[1] = v;
+        argv[2].set(i);
+        argv[3].set(obj);
+        (*callback)(ctx, 4, argv, ret);
+        return ctx.ok();
+      }, initial, ret);
     } else {
       if (!ctx.arguments(1, &callback)) return;
       obj->as<Array>()->reduce([&](Value &ret, Value &v, int i) -> bool {
-            argv[0] = ret;
-            argv[1] = v;
-            argv[2].set(i);
-            argv[3].set(obj);
-            (*callback)(ctx, 4, argv, ret);
-            return ctx.ok();
-          }, ret);
+        argv[0] = ret;
+        argv[1] = v;
+        argv[2].set(i);
+        argv[3].set(obj);
+        (*callback)(ctx, 4, argv, ret);
+        return ctx.ok();
+      }, ret);
     }
   });
 
@@ -2736,23 +2736,23 @@ template<> void ClassDef<Array>::init() {
     if (ctx.argc() > 1) {
       if (!ctx.arguments(2, &callback, &initial)) return;
       obj->as<Array>()->reduceRight([&](Value &ret, Value &v, int i) -> bool {
-            argv[0] = ret;
-            argv[1] = v;
-            argv[2].set(i);
-            argv[3].set(obj);
-            (*callback)(ctx, 4, argv, ret);
-            return ctx.ok();
-          }, initial, ret);
+        argv[0] = ret;
+        argv[1] = v;
+        argv[2].set(i);
+        argv[3].set(obj);
+        (*callback)(ctx, 4, argv, ret);
+        return ctx.ok();
+      }, initial, ret);
     } else {
       if (!ctx.arguments(1, &callback)) return;
       obj->as<Array>()->reduceRight([&](Value &ret, Value &v, int i) -> bool {
-            argv[0] = ret;
-            argv[1] = v;
-            argv[2].set(i);
-            argv[3].set(obj);
-            (*callback)(ctx, 4, argv, ret);
-            return ctx.ok();
-          }, ret);
+        argv[0] = ret;
+        argv[1] = v;
+        argv[2].set(i);
+        argv[3].set(obj);
+        (*callback)(ctx, 4, argv, ret);
+        return ctx.ok();
+      }, ret);
     }
   });
 
@@ -2777,18 +2777,18 @@ template<> void ClassDef<Array>::init() {
     bool found = false;
     obj->as<Array>()->iterate_while(
       [&](Value &v, int i) -> bool {
-      Value argv[3], ret;
-      argv[0] = v;
-      argv[1].set(i);
-      argv[2].set(obj);
-      (*callback)(ctx, 3, argv, ret);
-      if (!ctx.ok()) return false;
-      if (ret.to_boolean()) {
-        found = true;
-        return false;
+        Value argv[3], ret;
+        argv[0] = v;
+        argv[1].set(i);
+        argv[2].set(obj);
+        (*callback)(ctx, 3, argv, ret);
+        if (!ctx.ok()) return false;
+        if (ret.to_boolean()) {
+          found = true;
+          return false;
+        }
+        return true;
       }
-      return true;
-    }
     );
     ret.set(found);
   });
@@ -2800,17 +2800,17 @@ template<> void ClassDef<Array>::init() {
       bool has_error = false;
       obj->as<Array>()->sort(
         [&](const Value &a, const Value &b) -> bool {
-        if (has_error) return false;
-        if (&a == &b) return false;
-        if (b.is_empty() || b.is_undefined()) return true;
-        if (a.is_empty() || a.is_undefined()) return false;
-        Value argv[2], ret;
-        argv[0] = a;
-        argv[1] = b;
-        (*comparator)(ctx, 2, argv, ret);
-        if (!ctx.ok()) has_error = true;
-        return ret.is_number() && ret.n() <= 0;
-      }
+          if (has_error) return false;
+          if (&a == &b) return false;
+          if (b.is_empty() || b.is_undefined()) return true;
+          if (a.is_empty() || a.is_undefined()) return false;
+          Value argv[2], ret;
+          argv[0] = a;
+          argv[1] = b;
+          (*comparator)(ctx, 2, argv, ret);
+          if (!ctx.ok()) has_error = true;
+          return ret.is_number() && ret.n() <= 0;
+        }
       );
     } else {
       obj->as<Array>()->sort();
@@ -3098,16 +3098,16 @@ void Array::sort() {
   std::sort(
     m_data->elements(),
     m_data->elements() + size,
-            [](const Value &a, const Value &b) -> bool {
-              if (b.is_empty() || b.is_undefined()) return true;
-              if (a.is_empty() || a.is_undefined()) return false;
-              auto sa = a.to_string();
-              auto sb = b.to_string();
-              auto less = sa->str() < sb->str();
-              sa->release();
-              sb->release();
-              return less;
-            }
+    [](const Value &a, const Value &b) -> bool {
+      if (b.is_empty() || b.is_undefined()) return true;
+      if (a.is_empty() || a.is_undefined()) return false;
+      auto sa = a.to_string();
+      auto sb = b.to_string();
+      auto less = sa->str() < sb->str();
+      sa->release();
+      sb->release();
+      return less;
+    }
   );
 }
 
@@ -3238,13 +3238,13 @@ template<> void ClassDef<Constructor<RegExp>>::init() {
 }
 
 RegExp::RegExp(Str *pattern)
-    : m_source(pattern)
+  : m_source(pattern)
   , m_regex(pattern->str(), chars_to_flags(nullptr, m_global))
 {
 }
 
 RegExp::RegExp(Str *pattern, Str *flags)
-    : m_source(pattern)
+  : m_source(pattern)
   , m_regex(pattern->str(), chars_to_flags(flags, m_global))
 {
 }

@@ -43,8 +43,6 @@
 
 #ifndef _WIN32
 #include <syslog.h>
-#else
-#undef s_host
 #endif
 
 namespace pipy {
@@ -76,34 +74,34 @@ void Logger::set_admin_link(AdminLink *admin_link) {
   static const std::string s_off("log/off/");
   s_admin_link = admin_link;
   s_admin_link->add_handler(
-      [](const std::string &command, const Data &payload) {
-        if (utils::starts_with(command, s_tail)) {
-          static const std::string s_prefix("log-tail/");
-          auto name = command.substr(s_tail.length());
-          Data buf;
-          Data::Builder db(buf, &s_dp);
-          db.push(s_prefix);
-          db.push(name);
-          db.push('\n');
-          db.flush();
-          History::tail(name, buf);
-          s_admin_link->send(buf);
-          return true;
-        } else {
-          std::string name;
-          bool enabled;
-          if (utils::starts_with(command, s_on)) {
-            name = command.substr(s_on.length());
-            enabled = true;
-          } else if (utils::starts_with(command, s_off)) {
-            name = command.substr(s_off.length());
-            enabled = false;
-          }
-          if (name.empty()) return false;
-          History::enable_streaming(name, enabled);
-          return true;
+    [](const std::string &command, const Data &payload) {
+      if (utils::starts_with(command, s_tail)) {
+        static const std::string s_prefix("log-tail/");
+        auto name = command.substr(s_tail.length());
+        Data buf;
+        Data::Builder db(buf, &s_dp);
+        db.push(s_prefix);
+        db.push(name);
+        db.push('\n');
+        db.flush();
+        History::tail(name, buf);
+        s_admin_link->send(buf);
+        return true;
+      } else {
+        std::string name;
+        bool enabled;
+        if (utils::starts_with(command, s_on)) {
+          name = command.substr(s_on.length());
+          enabled = true;
+        } else if (utils::starts_with(command, s_off)) {
+          name = command.substr(s_off.length());
+          enabled = false;
         }
+        if (name.empty()) return false;
+        History::enable_streaming(name, enabled);
+        return true;
       }
+    }
   );
 }
 
@@ -143,13 +141,13 @@ void Logger::write(const Data &msg) {
 
       Net::main().post(
         [=]() {
-        Data msg;
-        sd->to_data(msg);
-        s_history_sending_size -= msg.size();
-        History::write(name->str(), msg);
-        name->release();
-        sd->release();
-      }
+          Data msg;
+          sd->to_data(msg);
+          s_history_sending_size -= msg.size();
+          History::write(name->str(), msg);
+          name->release();
+          sd->release();
+        }
       );
     }
   }
@@ -272,7 +270,7 @@ void Logger::FileTarget::close_all_writers() {
 }
 
 Logger::FileTarget::FileTarget(pjs::Str *filename)
-    : m_filename(pjs::Str::make(fs::abs_path(filename->str())))
+  : m_filename(pjs::Str::make(fs::abs_path(filename->str())))
 {
 }
 
@@ -281,22 +279,22 @@ void Logger::FileTarget::write(const Data &msg) {
   auto sd = SharedData::make(msg)->retain();
   Net::main().post(
     [=]() {
-    Writer *writer = nullptr;
-    const auto &filename = name->str();
-    auto i = s_all_writers.find(filename);
-    if (i != s_all_writers.end()) {
-      writer = i->second.get();
-    } else {
-      writer = new Writer(filename);
-      s_all_writers[filename].reset(writer);
+      Writer *writer = nullptr;
+      const auto &filename = name->str();
+      auto i = s_all_writers.find(filename);
+      if (i != s_all_writers.end()) {
+        writer = i->second.get();
+      } else {
+        writer = new Writer(filename);
+        s_all_writers[filename].reset(writer);
+      }
+      InputContext ic;
+      Data data;
+      sd->to_data(data);
+      writer->write(data);
+      name->release();
+      sd->release();
     }
-    InputContext ic;
-    Data data;
-    sd->to_data(data);
-    writer->write(data);
-    name->release();
-    sd->release();
-  }
   );
 }
 
@@ -307,7 +305,7 @@ void Logger::FileTarget::write(const Data &msg) {
 std::map<std::string, std::unique_ptr<Logger::FileTarget::Writer>> Logger::FileTarget::s_all_writers;
 
 Logger::FileTarget::Writer::Writer(const std::string &filename)
-    : m_module(new Module)
+  : m_module(new Module)
 {
   PipelineLayout *ppl = PipelineLayout::make();
   Tee::Options options;
@@ -333,8 +331,9 @@ void Logger::FileTarget::Writer::shutdown() {
 //
 // Logger::SyslogTarget
 //
-#ifndef _WIN32
+
 Logger::SyslogTarget::SyslogTarget(Priority priority) {
+#ifndef _WIN32
   switch (priority) {
     case Priority::EMERG   : m_priority = LOG_EMERG; break;
     case Priority::ALERT   : m_priority = LOG_ALERT; break;
@@ -346,16 +345,19 @@ Logger::SyslogTarget::SyslogTarget(Priority priority) {
     case Priority::DEBUG   : m_priority = LOG_DEBUG; break;
     default                : m_priority = LOG_INFO; break;
   }
+#endif
 }
 
 void Logger::SyslogTarget::write(const Data &msg) {
+#ifndef _WIN32
   auto len = msg.size();
   uint8_t buf[len+1];
   msg.to_bytes(buf);
   buf[len] = 0;
   syslog(m_priority, "%s", buf);
-}
 #endif
+}
+
 //
 // Logger::HTTPTarget
 //
@@ -384,7 +386,7 @@ Logger::HTTPTarget::Options::Options(pjs::Object *options) {
 }
 
 Logger::HTTPTarget::HTTPTarget(pjs::Str *url, const Options &options)
-    : m_module(new Module)
+  : m_module(new Module)
 {
   thread_local static pjs::ConstStr s_host("host");
   thread_local static pjs::ConstStr s_POST("POST");
@@ -394,8 +396,8 @@ Logger::HTTPTarget::HTTPTarget(pjs::Str *url, const Options &options)
 
   m_mux_grouper = pjs::Method::make(
     "", [](pjs::Context &, pjs::Object *, pjs::Value &ret) {
-        ret.set(pjs::Str::empty);
-      }
+      ret.set(pjs::Str::empty);
+    }
   );
 
   PipelineLayout *ppl = PipelineLayout::make(m_module);
@@ -426,9 +428,9 @@ Logger::HTTPTarget::HTTPTarget(pjs::Str *url, const Options &options)
   if (options.headers) {
     options.headers->iterate_all(
       [&](pjs::Str *k, pjs::Value &v) {
-      if (utils::iequals(k->str(), s_host.get()->str())) has_host = true;
-      headers->set(k, v);
-    }
+        if (utils::iequals(k->str(), s_host.get()->str())) has_host = true;
+        headers->set(k, v);
+      }
     );
   }
   if (!has_host) headers->set(s_host, url_obj->host());
@@ -471,9 +473,9 @@ void BinaryLogger::log(int argc, const pjs::Value *args) {
     } else if (v.is_array()) {
       v.as<pjs::Array>()->iterate_all(
         [&](pjs::Value &v, int) {
-        auto c = char(v.to_number());
-        db.push(c);
-      }
+          auto c = char(v.to_number());
+          db.push(c);
+        }
       );
     } else {
       auto *s = v.to_string();
@@ -532,7 +534,7 @@ using namespace pipy::logging;
 //
 // Logger
 //
-#ifndef _WIN32
+
 template<> void EnumDef<Logger::SyslogTarget::Priority>::init() {
   define(Logger::SyslogTarget::Priority::EMERG, "EMERG");
   define(Logger::SyslogTarget::Priority::ALERT, "ALERT");
@@ -543,7 +545,6 @@ template<> void EnumDef<Logger::SyslogTarget::Priority>::init() {
   define(Logger::SyslogTarget::Priority::INFO, "INFO");
   define(Logger::SyslogTarget::Priority::DEBUG, "DEBUG");
 }
-#endif
 
 template<> void ClassDef<Logger>::init() {
   method("log", [](Context &ctx, Object *obj, Value &ret) {
@@ -567,14 +568,12 @@ template<> void ClassDef<Logger>::init() {
     ret.set(obj);
   });
 
-#ifndef _WIN32
   method("toSyslog", [](Context &ctx, Object *obj, Value &ret) {
     EnumValue<Logger::SyslogTarget::Priority> priority(Logger::SyslogTarget::Priority::INFO);
     if (!ctx.arguments(0, &priority)) return;
     obj->as<Logger>()->add_target(new Logger::SyslogTarget(priority));
     ret.set(obj);
   });
-#endif
 
   method("toHTTP", [](Context &ctx, Object *obj, Value &ret) {
     pjs::Str *url;
