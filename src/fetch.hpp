@@ -39,10 +39,6 @@
 #include <list>
 #include <vector>
 
-#ifdef _WIN32
-#undef DELETE
-#endif
-
 namespace pipy {
 
 class Data;

@@ -34,14 +34,14 @@
 
 std::map<std::string, int> s_signal_names = {
 #ifdef _WIN32
-    {"SIGINT", SIGINT},
-    {"SIGILL", SIGILL},
-    {"SIGFPE", SIGFPE},
-    {"SIGSEGV", SIGSEGV},
-    {"SIGTERM", SIGTERM},
-    {"SIGBREAK", SIGBREAK},
-    {"SIGABRT", SIGABRT},
-#else  
+  {"SIGINT", SIGINT},
+  {"SIGILL", SIGILL},
+  {"SIGFPE", SIGFPE},
+  {"SIGSEGV", SIGSEGV},
+  {"SIGTERM", SIGTERM},
+  {"SIGBREAK", SIGBREAK},
+  {"SIGABRT", SIGABRT},
+#else
   { "SIGHUP"    , SIGHUP    },
   { "SIGINT"    , SIGINT    },
   { "SIGQUIT"   , SIGQUIT   },

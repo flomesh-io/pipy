@@ -34,9 +34,6 @@
 #include <iomanip>
 #endif
 
-#ifdef _WIN32
-#undef s_host
-#endif
 //
 // HTTP/2 Frame Format
 //

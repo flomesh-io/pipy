@@ -31,10 +31,6 @@
 #include "log.hpp"
 #include "pipy/nmi.h"
 
-#ifndef _WIN32
-#include <dlfcn.h>
-#endif
-
 namespace pipy {
 
 //

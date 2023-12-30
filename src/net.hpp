@@ -32,6 +32,8 @@
 #define ASIO_STANDALONE
 #include <asio.hpp>
 
+#include "os-platform.hpp"
+
 namespace pipy {
 
 //

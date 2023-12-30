@@ -31,17 +31,12 @@
 
 #ifdef _WIN32
 #include <io.h>
-#undef NO_ERROR
 #endif
 
 namespace pipy {
 
-#ifndef _WIN32
-FileStream::FileStream(bool read, int fd, Data::Producer *dp)
-#else
-FileStream::FileStream(bool read, HANDLE fd, Data::Producer *dp)
-#endif
-: FlushTarget(true)
+FileStream::FileStream(bool read, handle_t fd, Data::Producer *dp)
+  : FlushTarget(true)
   , m_stream(Net::context(), fd)
   , m_f(nullptr)
   , m_dp(dp)
@@ -50,16 +45,18 @@ FileStream::FileStream(bool read, HANDLE fd, Data::Producer *dp)
 }
 
 FileStream::FileStream(bool read, FILE *f, Data::Producer *dp)
-    : FlushTarget(true),
-      m_stream(Net::context(),
-#if defined(_WIN32)
-               (HANDLE)_get_osfhandle(_fileno(f))
+  : FlushTarget(true)
+  , m_stream(
+    Net::context(),
+#ifdef _WIN32
+    (HANDLE)_get_osfhandle(_fileno(f))
 #else
-               fileno(f)
+    fileno(f)
 #endif
-                   ),
-      m_f(f),
-      m_dp(dp) {
+  )
+  , m_f(f)
+  , m_dp(dp)
+{
   if (read) this->read();
 }
 
@@ -137,13 +134,13 @@ void FileStream::read() {
 #else
       if (ec == asio::error::eof || ec == asio::error::broken_pipe) {
 #endif
-Log::debug(Log::FILES, "FileStream: %p, end of stream [fd = %d]", this, m_fd);
+        Log::debug(Log::FILES, "FileStream: %p, end of stream [fd = %d]", this, m_fd);
         output(StreamEnd::make(StreamEnd::NO_ERROR));
       } else if (ec != asio::error::operation_aborted) {
         auto msg = ec.message();
         Log::warn(
           "FileStream: %p, error reading from stream [fd = %d]: %s",
-                  this, m_fd, msg.c_str());
+          this, m_fd, msg.c_str());
         output(StreamEnd::make(StreamEnd::READ_ERROR));
       }
 
@@ -173,7 +170,7 @@ void FileStream::write(Data *data) {
         if (m_buffer_limit > 0 && m_buffer.size() >= m_buffer_limit) {
           Log::error(
             "FileStream: %p, buffer overflow, size = %d, fd = %d",
-                     this, m_fd, m_buffer.size());
+            this, m_fd, m_buffer.size());
           m_overflowed = true;
         }
       }

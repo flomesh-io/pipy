@@ -25,8 +25,8 @@
 
 #include "fs.hpp"
 
-#include <limits.h>
 #include <sys/stat.h>
+#include <limits.h>
 
 #ifdef _WIN32
 #include <Windows.h>

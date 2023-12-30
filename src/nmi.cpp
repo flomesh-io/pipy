@@ -75,7 +75,7 @@ struct LocalRef :
 //
 
 class LocalRefPool {
- public:
+public:
   static LocalRefPool* current() {
     return s_current;
   }
@@ -110,7 +110,7 @@ class LocalRefPool {
     s_current = m_back;
   }
 
- private:
+private:
   LocalRefPool* m_back;
   List<LocalRef> m_values;
 
@@ -126,7 +126,7 @@ thread_local LocalRefPool* LocalRefPool::s_current = nullptr;
 SharedTable<Pipeline*> Pipeline::m_pipeline_table;
 
 Pipeline::Pipeline(PipelineLayout *layout, Context *ctx, EventTarget::Input *out)
-    : m_layout(layout)
+  : m_layout(layout)
   , m_id(m_pipeline_table.alloc(this))
   , m_context(ctx)
   , m_output(out)
@@ -193,7 +193,7 @@ auto NativeModule::load(const std::string &filename, int index) -> NativeModule*
 }
 
 NativeModule::NativeModule(int index, const std::string &filename)
-    : Module(index)
+  : Module(index)
   , m_net(&Net::current())
 {
   m_filename = pjs::Str::make(filename);
@@ -221,14 +221,14 @@ NativeModule::NativeModule(int index, const std::string &filename)
   StringCchCopy(lpModule, MAX_PATH, filename.c_str());
   auto len = strlen(lpModule);
   for (auto i = 0; i < len; i++) {
-    if (lpModule[i] == '/') lpModule[i] == '\\';
+    if (lpModule[i] == '/') lpModule[i] = '\\';
   }
 
   handle = LoadLibraryEx(lpModule, NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
   if (!handle) {
     std::string msg("cannot load native module '");
-    throw std::runtime_error(msg + filename +
-                             "' due to: " + utils::last_error("LoadLibrary"));
+    throw std::runtime_error(
+      msg + filename + "' due to: " + Win32_GetLastError("LoadLibrary"));
   }
   FARPROC init_fn = GetProcAddress(handle, "pipy_module_init");
   if (!init_fn) {
@@ -255,8 +255,8 @@ NativeModule::NativeModule(int index, const std::string &filename)
     }
     auto *v = pjs::Variable::make(
       vd.name, vd.value,
-                                  pjs::Field::Enumerable | pjs::Field::Writable,
-                                  vd.id
+      pjs::Field::Enumerable | pjs::Field::Writable,
+      vd.id
     );
     fields.push_back(v);
     if (vd.ns) {
@@ -321,17 +321,17 @@ auto NativeModule::pipeline_layout(pjs::Str *name) -> PipelineLayout* {
 void NativeModule::schedule(double timeout, const std::function<void()> &fn) {
   m_net->post(
     [=]() {
-    if (timeout > 0) {
-      auto *tmo = new Timeout;
-      tmo->timer.schedule(timeout, [=]() {
-        delete tmo;
+      if (timeout > 0) {
+        auto *tmo = new Timeout;
+        tmo->timer.schedule(timeout, [=]() {
+          delete tmo;
+          callback(fn);
+        });
+      } else {
+        InputContext ic;
         callback(fn);
-      });
-    } else {
-      InputContext ic;
-      callback(fn);
+      }
     }
-  }
   );
 }
 
@@ -658,13 +658,13 @@ NMI_EXPORT void pjs_object_iterate(pjs_value obj, int (*cb)(pjs_value k, pjs_val
     if (r->v.is_object()) {
       r->v.o()->iterate_while(
         [=](pjs::Str *k, pjs::Value &v) {
-        nmi::LocalRefPool lrp;
-        auto i = nmi::s_values.alloc(k);
-        auto j = nmi::s_values.alloc(v);
-        lrp.add(i);
-        lrp.add(j);
-        return (bool)(*cb)(i, j, user_ptr);
-      }
+          nmi::LocalRefPool lrp;
+          auto i = nmi::s_values.alloc(k);
+          auto j = nmi::s_values.alloc(v);
+          lrp.add(i);
+          lrp.add(j);
+          return (bool)(*cb)(i, j, user_ptr);
+        }
       );
     }
   }
@@ -1078,9 +1078,9 @@ NMI_EXPORT void pipy_schedule(pipy_pipeline ppl, double timeout, void (*fn)(void
     p->module()->schedule(
       timeout,
       [=]() {
-      (*fn)(user_ptr);
-      p->release();
-    }
+        (*fn)(user_ptr);
+        p->release();
+      }
     );
   }
 }

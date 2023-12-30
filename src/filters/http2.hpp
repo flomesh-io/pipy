@@ -41,10 +41,6 @@
 #include <vector>
 #include <iostream>
 
-#ifdef _WIN32
-#undef ERROR
-#endif
-
 namespace pipy {
 namespace http2 {
 

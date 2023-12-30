@@ -30,10 +30,6 @@
 #include "data.hpp"
 #include "deframer.hpp"
 
-#ifdef _WIN32
-#undef ERROR
-#endif
-
 namespace pipy {
 
 class Netmask;

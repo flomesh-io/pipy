@@ -32,10 +32,6 @@
 #include "buffer.hpp"
 #include "timer.hpp"
 
-#ifdef _WIN32
-#undef NO_ERROR
-#endif
-
 namespace pipy {
 
 //

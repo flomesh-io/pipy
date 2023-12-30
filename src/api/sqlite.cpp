@@ -112,9 +112,15 @@ static void throw_error(sqlite3 *db) {
 // Database
 //
 
-Database::Database(pjs::Str *filename) {
-  if (sqlite3_open(filename->c_str(), &m_db) != SQLITE_OK) {
-    throw_error(m_db);
+Database::Database(pjs::Str *filename, int flags) {
+  if (!flags) {
+    if (sqlite3_open(filename->c_str(), &m_db) != SQLITE_OK) {
+      throw_error(m_db);
+    }
+  } else {
+    if (sqlite3_open_v2(filename->c_str(), &m_db, flags, nullptr) != SQLITE_OK) {
+      throw_error(m_db);
+    }
   }
 }
 
@@ -223,15 +229,16 @@ auto Statement::row() -> pjs::Object* {
 // Sqlite
 //
 
-auto Sqlite::database(pjs::Str *filename) -> Database* {
-  return Database::make(filename);
+auto Sqlite::database(pjs::Str *filename, int flags) -> Database* {
+  return Database::make(filename, flags);
 }
 
 void Sqlite::operator()(pjs::Context &ctx, pjs::Object *obj, pjs::Value &ret) {
   pjs::Str *filename;
-  if (!ctx.arguments(1, &filename)) return;
+  int flags = 0;
+  if (!ctx.arguments(1, &filename, &flags)) return;
   try {
-    ret.set(database(filename));
+    ret.set(database(filename, flags));
   } catch (std::runtime_error &err) {
     ctx.error(err);
   }

@@ -24,7 +24,6 @@
  */
 
 #include "pipy.hpp"
-
 #include "codebase.hpp"
 #include "configuration.hpp"
 #include "context.hpp"
@@ -39,11 +38,10 @@
 #include <Windows.h>
 #include <fcntl.h>
 #include <io.h>
-
 #include <numeric>
 #else
-#include <sys/wait.h>
 #include <unistd.h>
+#include <sys/wait.h>
 #endif
 
 namespace pipy {
@@ -56,6 +54,7 @@ void Pipy::on_exit(const std::function<void(int)> &on_exit) {
 
 static auto exec_args(const std::list<std::string> &args) -> Data* {
   thread_local static Data::Producer s_dp("pipy.exec()");
+
 #ifndef _WIN32
   auto argc = args.size();
   if (!argc) return nullptr;
@@ -81,10 +80,10 @@ static auto exec_args(const std::list<std::string> &args) -> Data* {
 
   std::thread t(
     [&]() {
-    int status;
-    waitpid(pid, &status, 0);
-    close(out[1]);
-  }
+      int status;
+      waitpid(pid, &status, 0);
+      close(out[1]);
+    }
   );
 
   Data output;
@@ -100,6 +99,7 @@ static auto exec_args(const std::list<std::string> &args) -> Data* {
   close(in[1]);
 
   for (int i = 0; i < n; i++) std::free(argv[i]);
+
 #else
   SECURITY_ATTRIBUTES sa = {.nLength = sizeof(SECURITY_ATTRIBUTES),
                             .bInheritHandle = TRUE};
@@ -108,8 +108,9 @@ static auto exec_args(const std::list<std::string> &args) -> Data* {
   HANDLE in, out;
   auto success = CreatePipe(&in, &out, &sa, 0);
   if (success == FALSE) {
-    throw std::runtime_error("Unable to create pipe due to " +
-                             utils::last_error("CreatePipe"));
+    throw std::runtime_error(
+      "Unable to create pipe due to " + Win32_GetLastError("CreatePipe")
+    );
   }
 
   auto cmd =
@@ -136,8 +137,9 @@ static auto exec_args(const std::list<std::string> &args) -> Data* {
   if (success == FALSE) {
     CloseHandle(out);
     CloseHandle(in);
-    throw std::runtime_error("Unable to exec process due to " +
-                             utils::last_error("CreateProcess"));
+    throw std::runtime_error(
+      "Unable to exec process due to " + Win32_GetLastError("CreateProcess")
+    );
   }
 
   WaitForSingleObject(pif.hProcess, INFINITE);
@@ -162,10 +164,10 @@ auto Pipy::exec(pjs::Array *argv) -> Data* {
   std::list<std::string> args;
   argv->iterate_all(
     [&](pjs::Value &v, int) {
-    auto *s = v.to_string();
-    args.push_back(s->str());
-    s->release();
-  }
+      auto *s = v.to_string();
+      args.push_back(s->str());
+      s->release();
+    }
   );
 
   return exec_args(args);
@@ -276,15 +278,15 @@ template<> void ClassDef<Pipy>::init() {
   method("restart", [](Context&, Object*, Value&) {
     Net::main().post(
       []() {
-      InputContext ic;
-      Codebase::current()->sync(
+        InputContext ic;
+        Codebase::current()->sync(
           true, [](bool ok) {
-        if (ok) {
-          WorkerManager::get().reload();
-        }
-      }
+            if (ok) {
+              WorkerManager::get().reload();
+            }
+          }
         );
-    }
+      }
     );
   });
 
@@ -293,9 +295,9 @@ template<> void ClassDef<Pipy>::init() {
     if (!ctx.arguments(0, &exit_code)) return;
     Net::main().post(
       [=]() {
-      WorkerManager::get().stop(true);
-      if (s_on_exit) s_on_exit(exit_code);
-    }
+        WorkerManager::get().stop(true);
+        if (s_on_exit) s_on_exit(exit_code);
+      }
     );
   });
 
@@ -326,10 +328,10 @@ template<> void ClassDef<Pipy::Inbound>::init() {
     if (!ctx.arguments(1, &cb)) return;
     pipy::Inbound::for_each(
       [&](pipy::Inbound *ib) {
-      Value arg(ib), ret;
-      (*cb)(ctx, 1, &arg, ret);
-      return ctx.ok();
-    }
+        Value arg(ib), ret;
+        (*cb)(ctx, 1, &arg, ret);
+        return ctx.ok();
+      }
     );
   });
 }
@@ -344,10 +346,10 @@ template<> void ClassDef<Pipy::Outbound>::init() {
     if (!ctx.arguments(1, &cb)) return;
     pipy::Outbound::for_each(
       [&](pipy::Outbound *ob) {
-      Value arg(ob), ret;
-      (*cb)(ctx, 1, &arg, ret);
-      return ctx.ok();
-    }
+        Value arg(ob), ret;
+        (*cb)(ctx, 1, &arg, ret);
+        return ctx.ok();
+      }
     );
   });
 }

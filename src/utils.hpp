@@ -64,6 +64,7 @@ auto make_uuid(const uint8_t uuid[]) -> std::string;
 auto make_uuid_v4() -> std::string;
 bool starts_with(const std::string &str, const std::string &prefix);
 bool ends_with(const std::string &str, const std::string &suffix);
+bool iequals(const char *a, const char *b, size_t n);
 bool iequals(const std::string &a, const std::string &b);
 auto trim(const std::string &str) -> std::string;
 auto split(const std::string &str, char sep) -> std::list<std::string>;
@@ -83,10 +84,6 @@ auto decode_base64url(void *out, const char *inp, int len) -> int;
 auto path_join(const std::string &base, const std::string &path) -> std::string;
 auto path_normalize(const std::string &path) -> std::string;
 auto path_dirname(const std::string &path) -> std::string;
-
-#ifdef _WIN32
-auto last_error(const std::string &function) -> std::string;
-#endif
 
 //
 // HexEncoder

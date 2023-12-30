@@ -29,10 +29,6 @@
 #include "input.hpp"
 #include "net.hpp"
 
-#ifdef _WIN32
-#undef NO_ERROR
-#endif
-
 namespace pipy {
 
 //
