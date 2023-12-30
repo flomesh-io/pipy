@@ -53,7 +53,7 @@ public:
   typedef asio::windows::stream_handle stream_t;
 #else
   typedef int handle_t;
-  asio::posix::stream_descriptor stream_t;
+  typedef asio::posix::stream_descriptor stream_t;
 #endif
 
   static auto make(bool read, handle_t fd, Data::Producer *dp) -> FileStream* {

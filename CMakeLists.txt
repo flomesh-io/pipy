@@ -418,8 +418,8 @@ target_link_libraries(
   yajl_s
   expat
   ${ZLIB_LIB}
-  ${OPENSSL_LIB_DIR}/${LIB_CRYPTO}
   ${OPENSSL_LIB_DIR}/${LIB_SSL}
+  ${OPENSSL_LIB_DIR}/${LIB_CRYPTO}
   ${BROTLI_LIB}
   leveldb
 )

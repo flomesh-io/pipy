@@ -380,7 +380,6 @@ BTF::BTF(const ELF &elf, size_t sec) {
       case BTF_KIND_CONST:
       case BTF_KIND_RESTRICT:
       case BTF_KIND_FUNC:
-      case BTF_KIND_FLOAT:
         type = new Type;
         break;
       default: {
