@@ -30,9 +30,6 @@
 #include <cassert>
 #include <cmath>
 #include <cstring>
-#ifndef _MSC_VER
-#include <cxxabi.h>
-#endif
 #include <functional>
 #include <limits>
 #include <list>
@@ -44,6 +41,12 @@
 #include <thread>
 #include <unordered_map>
 #include <vector>
+
+#ifdef _MSC_VER
+#include <intrin.h>
+#else
+#include <cxxabi.h>
+#endif
 
 namespace pjs {
 
@@ -68,6 +71,17 @@ class String;
 class Value;
 class SharedObject;
 class SharedValue;
+
+#ifdef _MSC_VER
+inline static uint32_t clz(uint32_t x) {
+  unsigned long cnt;
+  return _BitScanReverse(&cnt, x) ? 31 - cnt : 32;
+}
+#else
+inline static uint32_t clz(uint32_t x) {
+  return __builtin_clz(x);
+}
+#endif
 
 template<class T> Class* class_of();
 template<class T> T* coerce(Object *obj);
@@ -543,7 +557,7 @@ private:
 
   static auto slot_of_size(size_t size) -> size_t {
     if (size < 256) return size;
-    auto power = sizeof(unsigned int) * 8 - __builtin_clz(size - 1);
+    auto power = sizeof(unsigned int) * 8 - clz(size - 1);
     return (power - 8) + 256;
   }
 
@@ -3548,7 +3562,7 @@ private:
   int m_size;
 
   static auto power(size_t size) -> size_t {
-    return size <= 1 ? 1 : sizeof(unsigned int) * 8 - __builtin_clz(size - 1);
+    return size <= 1 ? 1 : sizeof(unsigned int) * 8 - clz(size - 1);
   }
 
   friend class ObjectTemplate<Array>;

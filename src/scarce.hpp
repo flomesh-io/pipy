@@ -160,7 +160,7 @@ private:
   class LevelIterator {
   public:
     LevelIterator(size_t i) : m_i(i) {
-      auto bits = i ? sizeof(int) * 8 - __builtin_clz(int(i)) : 0;
+      auto bits = i ? sizeof(int) * 8 - pjs::clz(int(i)) : 0;
       m_level = std::max(1, int(bits + S - 1) / S);
     }
 

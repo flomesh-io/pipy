@@ -195,7 +195,7 @@ double Math::trunc(double x) {
 }
 
 int Math::clz32(int x) {
-  return __builtin_clz(x);
+  return clz(x);
 }
 
 int Math::imul(int x, int y) {
