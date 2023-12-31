@@ -29,8 +29,13 @@
 #include "pipeline.hpp"
 #include "log.hpp"
 
+#include <stdio.h>
+
 #ifdef _WIN32
 #include <io.h>
+inline static auto get_file_handle(FILE *f) -> HANDLE { return (HANDLE)_get_osfhandle(_fileno(f)); }
+#else
+inline static auto get_file_handle(FILE *f) -> int { return fileno(f); }
 #endif
 
 namespace pipy {
@@ -46,14 +51,7 @@ FileStream::FileStream(bool read, handle_t fd, Data::Producer *dp)
 
 FileStream::FileStream(bool read, FILE *f, Data::Producer *dp)
   : FlushTarget(true)
-  , m_stream(
-    Net::context(),
-#ifdef _WIN32
-    (HANDLE)_get_osfhandle(_fileno(f))
-#else
-    fileno(f)
-#endif
-  )
+  , m_stream(Net::context(), get_file_handle(f))
   , m_f(f)
   , m_dp(dp)
 {

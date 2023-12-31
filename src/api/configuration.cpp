@@ -2249,11 +2249,8 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
   // FilterConfigurator.use
   method("use", [](Context &ctx, Object *thiz, Value &result) {
-#ifndef _WIN32
     static const std::string s_dot_so(".so");
-#else
-    static const std::string s_dot_so(".dll");
-#endif
+    static const std::string s_dot_dll(".dll");
     auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     std::string module;
     Array *modules;
@@ -2292,7 +2289,10 @@ template<> void ClassDef<FilterConfigurator>::init() {
         }
       }
     } else if (ctx.arguments(1, &module, &pipeline)) {
-      if (utils::ends_with(module, s_dot_so)) {
+      if (
+        utils::ends_with(module, s_dot_so) ||
+        utils::ends_with(module, s_dot_dll)
+      ) {
         try {
           auto mod = worker->load_native_module(module);
           config->use(mod, pipeline);

@@ -174,14 +174,7 @@ if(COMPILER_SUPPORTS_DELETE_NON_ABSTRACT_NON_VIRTUAL_DTOR)
 endif()
 
 if(MSVC)
-  add_compile_options(
-    -Wno-unused-private-field
-    -Wno-overloaded-virtual
-    -Wno-delete-abstract-non-virtual-dtor
-    -Wno-delete-non-abstract-non-virtual-dtor
-    -Wno-deprecated-declarations
-    -Wno-inconsistent-dllimport
-  )
+  add_compile_options(/W0)
 else(MSVC)
   add_compile_options(
     -Wall

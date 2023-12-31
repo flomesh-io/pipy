@@ -104,6 +104,14 @@ auto get_file_time(const std::string &filename) -> double {
 #endif
 }
 
+void change_dir(const std::string &filename) {
+#ifdef _WIN32
+  _chdir(filename.c_str());
+#else
+  chdir(filename.c_str());
+#endif
+}
+
 bool make_dir(const std::string &filename) {
 #ifdef _WIN32
   return _mkdir(filename.c_str()) == 0;

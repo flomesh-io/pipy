@@ -25,9 +25,6 @@
 
 #ifdef _WIN32
 #include <Windows.h>
-
-// #define NOMINMAX
-// #include <Windows.h>
 #include <strsafe.h>
 #endif
 

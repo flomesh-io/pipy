@@ -28,6 +28,8 @@
 
 #ifdef _WIN32
 
+#include <Windows.h>
+
 // Remove name pollution from Windows.h
 #undef NO_ERROR
 #undef DELETE
@@ -39,8 +41,9 @@
 #undef s_impno
 #undef s_lh
 
-#define strncasecmp _strnicmp
-#define strcasecmp _stricmp
+#define SIGNAL_STOP   SIGINT
+#define SIGNAL_RELOAD SIGBREAK
+#define SIGNAL_ADMIN  SIGTERM
 
 #include <string>
 
@@ -49,6 +52,14 @@ namespace pipy {
 auto Win32_GetLastError(const std::string &function) -> std::string;
 
 } // namespace pipy
+
+#else // !_WIN32
+
+#include <signal.h>
+
+#define SIGNAL_STOP   SIGINT
+#define SIGNAL_RELOAD SIGHUP
+#define SIGNAL_ADMIN  SIGTSTP
 
 #endif // _WIN32
 

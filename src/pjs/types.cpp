@@ -148,7 +148,7 @@ void Pool::clean() {
 //
 
 PooledClass::PooledClass(const char *c_name, size_t size) {
-#if defined(_MSC_VER)
+#ifdef _MSC_VER
   auto cxx_name = c_name;
 #else
   int status;

@@ -39,6 +39,7 @@
 #include "listener.hpp"
 #include "main-options.hpp"
 #include "net.hpp"
+#include "os-platform.hpp"
 #include "status.hpp"
 #include "timer.hpp"
 #include "utils.hpp"
@@ -281,14 +282,9 @@ static MetricReporter s_metric_reporter;
 class SignalHandler {
 public:
   SignalHandler() : m_signals(Net::context()) {
-    m_signals.add(SIGINT);
-#ifdef _WIN32
-    m_signals.add(SIGTERM);
-    m_signals.add(SIGBREAK);
-#else
-    m_signals.add(SIGHUP);
-    m_signals.add(SIGTSTP);
-#endif
+    m_signals.add(SIGNAL_STOP);
+    m_signals.add(SIGNAL_RELOAD);
+    m_signals.add(SIGNAL_ADMIN);
   }
 
   void start() { wait(); }
@@ -317,7 +313,7 @@ private:
     }
 
     switch (sig) {
-      case SIGINT: {
+      case SIGNAL_STOP: {
         if (!m_admin_closed) {
           if (s_admin_link) s_admin_link->close();
           if (s_admin) s_admin->close();
@@ -340,23 +336,12 @@ private:
         s_has_shutdown = true;
         break;
       }
-
-#ifdef _WIN32
-      case SIGBREAK:
+      case SIGNAL_RELOAD:
         reload_codebase(true);
         break;
-      case SIGTERM:
+      case SIGNAL_ADMIN:
         toggle_admin_port();
         break;
-#else
-      case SIGHUP:
-        reload_codebase(true);
-        break;
-
-      case SIGTSTP:
-        toggle_admin_port();
-        break;
-#endif
     }
   }
 
