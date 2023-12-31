@@ -164,15 +164,6 @@ else()
   add_definitions(-D_GNU_SOURCE)
 endif()
 
-include(CheckCXXCompilerFlag)
-check_cxx_compiler_flag("-Wdelete-non-abstract-non-virtual-dtor"
-  COMPILER_SUPPORTS_DELETE_NON_ABSTRACT_NON_VIRTUAL_DTOR)
-
-if(COMPILER_SUPPORTS_DELETE_NON_ABSTRACT_NON_VIRTUAL_DTOR)
-  add_compile_options(
-    $<$<COMPILE_LANGUAGE:CXX>:-Wno-delete-non-abstract-non-virtual-dtor>)
-endif()
-
 if(MSVC)
   add_compile_options(/W0)
 else(MSVC)
