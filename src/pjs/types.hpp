@@ -66,6 +66,8 @@ class Int;
 class Number;
 class Object;
 class Promise;
+class PromiseAggregator;
+class PromiseDependency;
 class RegExp;
 class String;
 class Value;
@@ -1106,7 +1108,8 @@ private:
   template<class S>
   static void super() { m_init_data->super = class_of<S>(); }
   static void super(Class *super) { m_init_data->super = super; }
-  static void ctor(std::function<Object*(Context&)> f = [](Context&) -> Object* { return T::make(); }) { m_init_data->ctor = f; };
+  static void ctor() { m_init_data->ctor = [](Context&) -> Object* { return T::make(); }; }
+  static void ctor(std::function<Object*(Context&)> f) { m_init_data->ctor = f; };
   static void geti(std::function<void(Object*, int, Value&)> f) { m_init_data->geti = f; }
   static void seti(std::function<void(Object*, int, const Value&)> f) { m_init_data->seti = f; }
 
@@ -2852,60 +2855,6 @@ public:
     Value reason;
   };
 
-  //
-  // Promise::Aggregator
-  //
-
-  class Aggregator :
-    public Pooled<Aggregator>,
-    public RefCount<Aggregator>
-  {
-  public:
-    enum Type {
-      ALL,
-      ALL_SETTLED,
-      ANY,
-      RACE,
-    };
-
-    Aggregator(Type type, Settler *handler, Array *promises);
-    ~Aggregator();
-
-    //
-    // Promise::Aggregator::Dependency
-    //
-
-    class Dependency :
-      public ObjectTemplate<Dependency, Callback>,
-      public Promise::WeakPtr::Watcher
-    {
-    public:
-      void init();
-      auto state() const -> State { return m_state; }
-      auto result() const -> const Value& { return m_result; }
-    private:
-      Dependency(Aggregator *aggregator, Promise *promise)
-        : m_aggregator(aggregator)
-        , m_promise(promise) {}
-      Ref<Aggregator> m_aggregator;
-      WeakRef<Promise> m_promise;
-      State m_state = PENDING;
-      Value m_result;
-      virtual void on_resolved(const Value &value) override;
-      virtual void on_rejected(const Value &error) override;
-      virtual void on_weak_ptr_gone() override;
-      friend class ObjectTemplate<Dependency, Callback>;
-    };
-
-  private:
-    Type m_type;
-    Ref<Settler> m_settler;
-    PooledArray<Ref<Dependency>>* m_dependencies = nullptr;
-    int m_counter = 0;
-
-    void settle(Dependency *dep);
-  };
-
   static bool run();
   static auto resolve(const Value &value) -> Promise*;
   static auto reject(const Value &error) -> Promise*;
@@ -2984,6 +2933,67 @@ private:
   thread_local static Promise *s_settled_queue_tail;
 
   friend class ObjectTemplate<Promise>;
+  friend class PromiseDependency;
+};
+
+//
+// PromiseAggregator
+//
+
+class PromiseAggregator :
+  public Pooled<PromiseAggregator>,
+  public RefCount<PromiseAggregator>
+{
+public:
+  enum Type {
+    ALL,
+    ALL_SETTLED,
+    ANY,
+    RACE,
+  };
+
+  PromiseAggregator(Type type, Promise::Settler *handler, Array *promises);
+  ~PromiseAggregator();
+
+private:
+  Type m_type;
+  Ref<Promise::Settler> m_settler;
+  PooledArray<Ref<PromiseDependency>>* m_dependencies = nullptr;
+  int m_counter = 0;
+
+  void settle(PromiseDependency *dep);
+
+  friend class PromiseDependency;
+};
+
+//
+// PromiseDependency
+//
+
+class PromiseDependency :
+  public ObjectTemplate<PromiseDependency, Promise::Callback>,
+  public Promise::WeakPtr::Watcher
+{
+public:
+  void init();
+  auto state() const -> Promise::State { return m_state; }
+  auto result() const -> const Value& { return m_result; }
+
+private:
+  PromiseDependency(PromiseAggregator *aggregator, Promise *promise)
+    : m_aggregator(aggregator)
+    , m_promise(promise) {}
+
+  Ref<PromiseAggregator> m_aggregator;
+  WeakRef<Promise> m_promise;
+  Promise::State m_state = Promise::PENDING;
+  Value m_result;
+
+  virtual void on_resolved(const Value &value) override;
+  virtual void on_rejected(const Value &error) override;
+  virtual void on_weak_ptr_gone() override;
+
+  friend class ObjectTemplate<PromiseDependency, Promise::Callback>;
 };
 
 //

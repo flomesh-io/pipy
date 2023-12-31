@@ -2017,7 +2017,7 @@ auto Promise::all(Array *promises) -> Promise* {
   auto n = promises->length();
   if (!n) return resolve(Array::make());
   auto p = Promise::make();
-  new Aggregator(Aggregator::ALL, Settler::make(p), promises);
+  new PromiseAggregator(PromiseAggregator::ALL, Settler::make(p), promises);
   return p;
 }
 
@@ -2025,7 +2025,7 @@ auto Promise::all_settled(Array *promises) -> Promise* {
   auto n = promises->length();
   if (!n) return resolve(Array::make());
   auto p = Promise::make();
-  new Aggregator(Aggregator::ALL_SETTLED, Settler::make(p), promises);
+  new PromiseAggregator(PromiseAggregator::ALL_SETTLED, Settler::make(p), promises);
   return p;
 }
 
@@ -2033,7 +2033,7 @@ auto Promise::any(Array *promises) -> Promise* {
   auto n = promises->length();
   if (!n) return reject(Array::make());
   auto p = Promise::make();
-  new Aggregator(Aggregator::ANY, Settler::make(p), promises);
+  new PromiseAggregator(PromiseAggregator::ANY, Settler::make(p), promises);
   return p;
 }
 
@@ -2041,7 +2041,7 @@ auto Promise::race(Array *promises) -> Promise* {
   auto p = Promise::make();
   auto n = promises->length();
   if (!n) return p;
-  new Aggregator(Aggregator::ANY, Settler::make(p), promises);
+  new PromiseAggregator(PromiseAggregator::ANY, Settler::make(p), promises);
   return p;
 }
 
@@ -2344,39 +2344,39 @@ template<> void ClassDef<Promise::Result>::init() {
 }
 
 //
-// Promise::Aggregator
+// PromiseAggregator
 //
 
-Promise::Aggregator::Aggregator(Type type, Settler *settler, Array *promises)
+PromiseAggregator::PromiseAggregator(Type type, Promise::Settler *settler, Array *promises)
   : m_type(type)
   , m_settler(settler)
 {
   auto n = promises->length();
-  auto d = PooledArray<Ref<Dependency>>::make(n);
+  auto d = PooledArray<Ref<PromiseDependency>>::make(n);
   m_dependencies = d;
   for (int i = 0; i < n; i++) {
     Value v; promises->get(i, v);
     auto p = v.is_promise() ? v.as<Promise>() : Promise::resolve(v);
-    d->at(i) = Dependency::make(this, p);
+    d->at(i) = PromiseDependency::make(this, p);
   }
   for (int i = 0; i < n; i++) {
     d->at(i)->init();
   }
 }
 
-Promise::Aggregator::~Aggregator() {
+PromiseAggregator::~PromiseAggregator() {
   if (m_dependencies) {
     m_dependencies->free();
   }
 }
 
-void Promise::Aggregator::settle(Dependency *dep) {
+void PromiseAggregator::settle(PromiseDependency *dep) {
   thread_local static const ConstStr s_fulfilled("fulfilled");
   thread_local static const ConstStr s_rejected("rejected");
 
   switch (m_type) {
     case ALL:
-      if (dep->state() == REJECTED) {
+      if (dep->state() == Promise::REJECTED) {
         m_settler->reject(dep->result());
       } else if (++m_counter == m_dependencies->size()) {
         auto n = m_dependencies->size();
@@ -2391,8 +2391,8 @@ void Promise::Aggregator::settle(Dependency *dep) {
         auto a = Array::make(n);
         for (int i = 0; i < n; i++) {
           auto d = m_dependencies->at(i).get();
-          auto r = Result::make();
-          if (d->state() == RESOLVED) {
+          auto r = Promise::Result::make();
+          if (d->state() == Promise::RESOLVED) {
             r->status = s_fulfilled.get();
             r->value = d->result();
           } else {
@@ -2405,7 +2405,7 @@ void Promise::Aggregator::settle(Dependency *dep) {
       }
       break;
     case ANY:
-      if (dep->state() == RESOLVED) {
+      if (dep->state() == Promise::RESOLVED) {
         m_settler->resolve(dep->result());
       } else if (++m_counter == m_dependencies->size()) {
         auto n = m_dependencies->size();
@@ -2415,7 +2415,7 @@ void Promise::Aggregator::settle(Dependency *dep) {
       }
       break;
     case RACE:
-      if (dep->state() == RESOLVED) {
+      if (dep->state() == Promise::RESOLVED) {
         m_settler->resolve(dep->result());
       } else {
         m_settler->reject(dep->result());
@@ -2425,35 +2425,35 @@ void Promise::Aggregator::settle(Dependency *dep) {
 }
 
 //
-// Promise::Aggregator::Dependency
+// PromiseDependency
 //
 
-void Promise::Aggregator::Dependency::init() {
+void PromiseDependency::init() {
   Promise::WeakPtr::Watcher::watch(m_promise->weak_ptr());
   m_state = m_promise->m_state;
   m_result = m_promise->m_result;
   m_promise->then(nullptr, Callback::resolved(), Callback::rejected());
 }
 
-void Promise::Aggregator::Dependency::on_resolved(const Value &value) {
-  m_state = RESOLVED;
+void PromiseDependency::on_resolved(const Value &value) {
+  m_state = Promise::RESOLVED;
   m_result = value;
   m_aggregator->settle(this);
 }
 
-void Promise::Aggregator::Dependency::on_rejected(const Value &error) {
-  m_state = REJECTED;
+void PromiseDependency::on_rejected(const Value &error) {
+  m_state = Promise::REJECTED;
   m_result = error;
   m_aggregator->settle(this);
 }
 
-void Promise::Aggregator::Dependency::on_weak_ptr_gone() {
+void PromiseDependency::on_weak_ptr_gone() {
   retain();
   m_aggregator = nullptr;
   release();
 }
 
-template<> void ClassDef<Promise::Aggregator::Dependency>::init() {
+template<> void ClassDef<PromiseDependency>::init() {
   super<Promise::Callback>();
 }
 
