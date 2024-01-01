@@ -294,7 +294,7 @@ private:
   bool read(pjs::Str* &str) {
     uint16_t len;
     if (!read(len)) return false;
-    char buf[len];
+    pjs::vl_array<char, 1000> buf(len);
     for (auto i = 0; i < len; i++) {
       int c = read();
       if (c < 0) return false;

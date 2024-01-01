@@ -89,9 +89,12 @@ void Deframer::deframe(Data &data) {
       if (m_read_data) {
         m_read_data->push(read_in);
       } else if (m_read_array) {
-        uint8_t buf[n];
-        read_in.to_bytes(buf);
-        for (int i = 0; i < n; i++) m_read_array->push(int(buf[i]));
+        read_in.to_bytes(
+          [=](uint8_t c) {
+            m_read_array->push(int(c));
+            return true;
+          }
+        );
       } else if (!m_passing) {
         m_output_buffer.push(read_in);
         flush();

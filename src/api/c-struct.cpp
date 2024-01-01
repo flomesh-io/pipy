@@ -203,9 +203,7 @@ auto CStructBase::align_size(size_t size) -> size_t {
 
 void CStructBase::zero(Data::Builder &db, size_t count) {
   if (count > 0) {
-    char zero[count];
-    std::memset(zero, 0, count);
-    db.push(zero, count);
+    db.push(0, count);
   }
 }
 
@@ -228,10 +226,8 @@ void CStructBase::encode(Data::Builder &db, pjs::Object *values, CStructBase *la
       if (v.is_string()) {
         auto l = v.s()->size();
         auto n = f.size * f.count;
-        char s[n];
-        std::memset(s, 0, n);
-        std::memcpy(s, v.s()->c_str(), std::min(n, l));
-        db.push(s, n);
+        db.push(v.s()->c_str(), std::min(l, n));
+        if (l < n) db.push(0, n - l);
       } else {
         zero(db, f.size * f.count);
       }
@@ -305,7 +301,7 @@ void CStructBase::decode(Data::Reader &dr, const Field &field, pjs::Object *valu
     values->set(field.name, decode(dr, layout));
   } else if (field.type == pjs::Value::Type::String) {
     auto n = field.size * field.count;
-    char s[n + 1];
+    pjs::vl_array<char> s(n + 1);
     s[dr.read(n, s)] = 0;
     values->set(field.name, pjs::Str::make(s));
   } else if (field.is_array) {
@@ -324,28 +320,28 @@ void CStructBase::decode(Data::Reader &dr, const Field &field, pjs::Object *valu
 }
 
 void CStructBase::decode(Data::Reader &dr, int size, bool is_integral, bool is_unsigned, pjs::Value &value) {
-  char buf[size];
+  pjs::vl_array<char> buf(size);
   auto len = dr.read(size, buf);
   if (len < size) std::memset(buf + len, 0, size - len);
   if (!is_integral) {
     if (size == 4) {
-      value.set(*(float*)buf);
+      value.set(*(float*)buf.data());
     } else {
-      value.set(*(double*)buf);
+      value.set(*(double*)buf.data());
     }
   } else if (is_unsigned) {
     switch (size) {
-      case 1: value.set(*(uint8_t*)buf); break;
-      case 2: value.set(*(uint16_t*)buf); break;
-      case 4: value.set(*(uint32_t*)buf); break;
-      case 8: value.set(*(uint64_t*)buf); break;
+      case 1: value.set(*(uint8_t*)buf.data()); break;
+      case 2: value.set(*(uint16_t*)buf.data()); break;
+      case 4: value.set(*(uint32_t*)buf.data()); break;
+      case 8: value.set(*(uint64_t*)buf.data()); break;
     }
   } else {
     switch (size) {
-      case 1: value.set(*(int8_t*)buf); break;
-      case 2: value.set(*(int16_t*)buf); break;
-      case 4: value.set(*(int32_t*)buf); break;
-      case 8: value.set(*(int64_t*)buf); break;
+      case 1: value.set(*(int8_t*)buf.data()); break;
+      case 2: value.set(*(int16_t*)buf.data()); break;
+      case 4: value.set(*(int32_t*)buf.data()); break;
+      case 8: value.set(*(int64_t*)buf.data()); break;
     }
   }
 }

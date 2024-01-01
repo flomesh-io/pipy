@@ -66,8 +66,7 @@ auto Program::list() -> pjs::Array* {
 }
 
 auto Program::load(Data *elf) -> Program* {
-  std::vector<uint8_t> data;
-  elf->to_bytes(data);
+  auto data = elf->to_bytes();
   ELF obj(std::move(data));
   return nullptr;
 }

@@ -89,6 +89,39 @@ template<class T> Class* class_of();
 template<class T> T* coerce(Object *obj);
 
 //
+// Variable Length Array
+//
+
+template<typename T, size_t L = 100>
+class vl_array {
+public:
+  vl_array(size_t l) {
+    if (l > L) {
+      m_data = m_heap = new T[l];
+    } else {
+      m_data = m_stack;
+      m_heap = nullptr;
+    }
+  }
+
+  ~vl_array() {
+    delete [] m_heap;
+  }
+
+  T* data() { return m_data; }
+  T& at(size_t i) { return *(data() + i); }
+
+  operator T*() { return data(); }
+  T* operator + (size_t n) { return data() + n; }
+  T& operator [](size_t i) { return at(i); }
+
+private:
+  T* m_data;
+  T* m_heap;
+  T m_stack[L];
+};
+
+//
 // RefCountMT
 //
 

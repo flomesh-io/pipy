@@ -262,7 +262,7 @@ void Exec::ChildProcessMonitor::wait() {
       for (auto const &w : m_waiters) filters.push_back(w.second.filter->pif());
       size = filters.size();
     }
-    HANDLE handles[size];
+    pjs::vl_array<HANDLE> handles(size);
     std::transform(filters.begin(), filters.end(), handles,
                    [](const PROCESS_INFORMATION &exe) {
                      return exe.hProcess;

@@ -151,6 +151,23 @@ public:
       push((char)c);
     }
 
+    void push(uint8_t c, size_t n) {
+      auto &p = m_ptr;
+      m_size += n;
+      while (n > 0) {
+        int l = sizeof(m_chunk->data) - p;
+        if (l > n) l = n;
+        std::memset(m_chunk->data + p, c, l);
+        p += l;
+        n -= l;
+        if (p >= sizeof(m_chunk->data)) {
+          m_data.push_view(new View(m_chunk, 0, p));
+          m_chunk = new Chunk(m_producer);
+          p = 0;
+        }
+      }
+    }
+
     void push(int c) {
       push((char)c);
     }
@@ -898,6 +915,17 @@ public:
     }
   }
 
+  void to_bytes(const std::function<bool(uint8_t)>& cb) const {
+    assert_same_thread(*this);
+    for (auto view = m_head; view; view = view->next) {
+      auto p = (uint8_t*)view->chunk->data + view->offset;
+      auto n = view->length;
+      for (int i = 0; i < n; i++) {
+        if (!cb(p[i])) return;
+      }
+    }
+  }
+
   void to_bytes(uint8_t *buf) const {
     assert_same_thread(*this);
     auto p = buf;
@@ -920,15 +948,10 @@ public:
     }
   }
 
-  void to_bytes(std::vector<uint8_t> &buf) const {
-    buf.resize(size());
-    to_bytes(&buf[0]);
-  }
-
   auto to_bytes() const -> std::vector<uint8_t> {
-    std::vector<uint8_t> ret;
-    to_bytes(ret);
-    return ret;
+    std::vector<uint8_t> buf(size());
+    to_bytes(buf.data());
+    return std::vector<uint8_t>(std::move(buf));
   }
 
   virtual auto to_string() const -> std::string override {

@@ -777,7 +777,7 @@ NMI_EXPORT pjs_value pjs_array_splice(pjs_value arr, int pos, int del_cnt, int i
   if (auto *r = nmi::s_values.get(arr)) {
     if (r->v.is_array()) {
       auto *a = r->v.as<pjs::Array>();
-      pjs::Value vs[ins_cnt];
+      pjs::vl_array<pjs::Value> vs(ins_cnt);
       if (ins_cnt > 0) {
         for (int i = 0; i < ins_cnt; i++) {
           if (auto *rv = nmi::s_values.get(v[i])) {

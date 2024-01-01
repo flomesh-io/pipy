@@ -329,7 +329,7 @@ static void print_table(Data::Builder &db, const T &header, const std::list<T> &
   static const std::string spacing("  ");
 
   int n = header.size();
-  int max_width[header.size()];
+  int max_width[100]; // no more than 100 columns
 
   for (int i = 0; i < n; i++) {
     max_width[i] = header[i].length();

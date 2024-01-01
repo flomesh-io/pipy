@@ -951,9 +951,9 @@ public:
             uint8_t type;
             if (!read(type) || type != 0) return false;
             if (!read(size)) return false;
-            uint8_t buf[size];
+            pjs::vl_array<uint8_t> buf(size);
             if (!read(buf, size)) return false;
-            names->push(pjs::Str::make((const char *)buf, size));
+            names->push(pjs::Str::make((const char *)buf.data(), size));
           }
           break;
         }
@@ -965,9 +965,9 @@ public:
           for (auto end = pos() + size; pos() < end; ) {
             uint8_t len;
             if (!read(len)) return false;
-            uint8_t buf[len];
+            pjs::vl_array<uint8_t> buf(len);
             if (!read(buf, len)) return false;
-            names->push(pjs::Str::make((const char *)buf, len));
+            names->push(pjs::Str::make((const char *)buf.data(), len));
           }
           break;
         }

@@ -313,7 +313,7 @@ Directory::Directory(const std::string &path, const Options &options)
         Data buf;
         sd->to_data(buf);
         sd->release();
-        buf.to_bytes(data);
+        data = buf.to_bytes();
       }
     }
     if (data.size() > 0) {

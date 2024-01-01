@@ -312,7 +312,7 @@ template<> void ClassDef<Math>::init() {
 
   method("hypot", [](Context &ctx, Object *obj, Value &ret) {
     int n = ctx.argc();
-    double v[n];
+    vl_array<double> v(n);
     for (int i = 0; i < n; i++) v[i] = ctx.arg(i).to_number();
     ret.set(Math::hypot(v, n));
   });
@@ -343,14 +343,14 @@ template<> void ClassDef<Math>::init() {
 
   method("max", [](Context &ctx, Object *obj, Value &ret) {
     int n = ctx.argc();
-    double v[n];
+    vl_array<double> v(n);
     for (int i = 0; i < n; i++) v[i] = ctx.arg(i).to_number();
     ret.set(Math::max(v, n));
   });
 
   method("min", [](Context &ctx, Object *obj, Value &ret) {
     int n = ctx.argc();
-    double v[n];
+    vl_array<double> v(n);
     for (int i = 0; i < n; i++) v[i] = ctx.arg(i).to_number();
     ret.set(Math::min(v, n));
   });

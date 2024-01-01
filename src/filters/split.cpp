@@ -38,8 +38,8 @@ Split::Split(Data *separator) {
     throw std::runtime_error(s_separator_too_long);
   }
   auto len = separator->size();
-  char buf[len];
-  separator->to_bytes((uint8_t*)buf);
+  pjs::vl_array<char> buf(len);
+  separator->to_bytes((uint8_t*)buf.data());
   m_kmp = new KMP(buf, len);
 }
 
@@ -106,8 +106,8 @@ void Split::process(Event *evt) {
             return;
           }
           auto len = d->size();
-          char buf[len];
-          d->to_bytes((uint8_t*)buf);
+          pjs::vl_array<char> buf(len);
+          d->to_bytes((uint8_t*)buf.data());
           m_kmp = new KMP(buf, len);
         } else {
           Filter::error("callback did not return a string or a Data");

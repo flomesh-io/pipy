@@ -535,7 +535,7 @@ void Frame::debug_dump(std::ostream &out) const {
       if (!is_ACK()) {
         Settings settings;
         int len = payload.size();
-        uint8_t buf[len];
+        pjs::vl_array<uint8_t, Settings::MAX_SIZE> buf(len);
         payload.to_bytes(buf);
         settings.decode(buf, len);
         out << " enb_psh " << settings.enable_push;
@@ -1410,7 +1410,7 @@ void Endpoint::on_deframe(Frame &frm) {
           if (len % 6) {
             connection_error(FRAME_SIZE_ERROR);
           } else if (len <= Settings::MAX_SIZE) {
-            uint8_t buf[len];
+            pjs::vl_array<uint8_t, Settings::MAX_SIZE> buf(len);
             frm.payload.to_bytes(buf);
             auto old_initial_window_size = m_peer_settings.initial_window_size;
             auto err = m_peer_settings.decode(buf, len);
@@ -2231,7 +2231,7 @@ void Server::init() {
           const auto &b64 = settings.s()->str();
           const auto size = b64.size() / 4 * 3 + 3;
           if (size < Settings::MAX_SIZE) {
-            uint8_t buf[size];
+            pjs::vl_array<uint8_t, Settings::MAX_SIZE> buf(size);
             auto len = utils::decode_base64url(buf, b64.c_str(), b64.length());
             init_settings(buf, len);
           }

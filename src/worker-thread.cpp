@@ -489,7 +489,7 @@ auto WorkerManager::status() -> Status& {
     if (auto n = m_worker_threads.size()) {
       std::mutex m;
       std::condition_variable cv;
-      Status statuses[n];
+      pjs::vl_array<Status, 256> statuses(n);
 
       for (auto *wt : m_worker_threads) {
         auto i = wt->index();
@@ -560,7 +560,7 @@ auto WorkerManager::stats() -> stats::MetricDataSum& {
     if (auto n = m_worker_threads.size()) {
       std::mutex m;
       std::condition_variable cv;
-      stats::MetricData metric_data[n];
+      pjs::vl_array<stats::MetricData, 256> metric_data(n);
 
       for (auto *wt : m_worker_threads) {
         auto i = wt->index();

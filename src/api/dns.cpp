@@ -898,11 +898,9 @@ static int dns_encode(pjs::Object *dns, Data::Builder &db) {
 }
 
 auto DNS::decode(const Data &data) -> pjs::Object * {
-  std::vector<uint8_t> buffer;
   auto dns = pjs::Object::make();
-
   try {
-    data.to_bytes(buffer);
+    auto buffer = data.to_bytes();
     return dns_decode(buffer.data(), buffer.size(), dns);
   } catch (std::runtime_error &err) {
     dns->release();

@@ -319,8 +319,8 @@ auto Certificate::get_x509_name(X509_NAME *name) -> pjs::Object* {
 
 CertificateChain::CertificateChain(Data *data) {
   auto len = data->size();
-  char str[len + 1];
-  data->to_bytes((uint8_t*)str);
+  pjs::vl_array<char, 2000> str(len + 1);
+  data->to_bytes((uint8_t *)str.data());
   str[len] = 0;
   load_chain(str);
 }
@@ -410,7 +410,7 @@ Cipher::~Cipher() {
 auto Cipher::update(Data *data) -> Data* {
   auto out = Data::make();
   auto block_size = EVP_CIPHER_CTX_block_size(m_ctx);
-  uint8_t buf[DATA_CHUNK_SIZE + block_size];
+  pjs::vl_array<uint8_t, DATA_CHUNK_SIZE + 1000> buf(DATA_CHUNK_SIZE + block_size);
   for (const auto c : data->chunks()) {
     auto ptr = std::get<0>(c);
     auto len = std::get<1>(c);
@@ -427,7 +427,7 @@ auto Cipher::update(Data *data) -> Data* {
 auto Cipher::update(pjs::Str *str) -> Data* {
   auto out = Data::make();
   auto block_size = EVP_CIPHER_CTX_block_size(m_ctx);
-  uint8_t buf[DATA_CHUNK_SIZE + block_size];
+  pjs::vl_array<uint8_t, DATA_CHUNK_SIZE + 1000> buf(DATA_CHUNK_SIZE + block_size);
   for (size_t i = 0, l = str->size(); i < l; i += DATA_CHUNK_SIZE) {
     int n = 0;
     if (!EVP_EncryptUpdate(
@@ -445,7 +445,7 @@ auto Cipher::update(pjs::Str *str) -> Data* {
 
 auto Cipher::final() -> Data* {
   auto block_size = EVP_CIPHER_CTX_block_size(m_ctx);
-  uint8_t buf[block_size];
+  pjs::vl_array<uint8_t, 1000> buf(block_size);
   int len = 0;
   if (!EVP_EncryptFinal(m_ctx, buf, &len)) throw_error();
   return s_dp_cipher.make((const uint8_t *)buf, len);
@@ -477,7 +477,7 @@ Decipher::~Decipher() {
 auto Decipher::update(Data *data) -> Data* {
   auto out = Data::make();
   auto block_size = EVP_CIPHER_CTX_block_size(m_ctx);
-  uint8_t buf[DATA_CHUNK_SIZE + block_size];
+  pjs::vl_array<uint8_t, DATA_CHUNK_SIZE + 1000> buf(DATA_CHUNK_SIZE + block_size);
   for (const auto c : data->chunks()) {
     auto ptr = std::get<0>(c);
     auto len = std::get<1>(c);
@@ -494,7 +494,7 @@ auto Decipher::update(Data *data) -> Data* {
 auto Decipher::update(pjs::Str *str) -> Data* {
   auto out = Data::make();
   auto block_size = EVP_CIPHER_CTX_block_size(m_ctx);
-  uint8_t buf[DATA_CHUNK_SIZE + block_size];
+  pjs::vl_array<uint8_t, DATA_CHUNK_SIZE + 1000> buf(DATA_CHUNK_SIZE + block_size);
   for (size_t i = 0, l = str->size(); i < l; i += DATA_CHUNK_SIZE) {
     int n = 0;
     if (!EVP_DecryptUpdate(
@@ -512,7 +512,7 @@ auto Decipher::update(pjs::Str *str) -> Data* {
 
 auto Decipher::final() -> Data* {
   auto block_size = EVP_CIPHER_CTX_block_size(m_ctx);
-  uint8_t buf[block_size];
+  pjs::vl_array<uint8_t, 1000> buf(block_size);
   int len = 0;
   if (!EVP_DecryptFinal(m_ctx, buf, &len)) throw_error();
   return s_dp_decipher.make((const uint8_t *)buf, len);
@@ -577,17 +577,17 @@ auto Hash::digest(Data::Encoding enc) -> pjs::Str* {
   auto size = digest(hash);
   switch (enc) {
     case Data::Encoding::hex: {
-      char str[size * 2];
+      pjs::vl_array<char, 1000> str(size * 2);
       auto len = utils::encode_hex(str, hash, size);
       return pjs::Str::make(str, len);
     }
     case Data::Encoding::base64: {
-      char str[size * 2];
+      pjs::vl_array<char, 1000> str(size * 2);
       auto len = utils::encode_base64(str, hash, size);
       return pjs::Str::make(str, len);
     }
     case Data::Encoding::base64url: {
-      char str[size * 2];
+      pjs::vl_array<char, 1000> str(size * 2);
       auto len = utils::encode_base64url(str, hash, size);
       return pjs::Str::make(str, len);
     }
@@ -656,17 +656,17 @@ auto Hmac::digest(Data::Encoding enc) -> pjs::Str* {
   HMAC_Final(m_ctx, (unsigned char *)hash, &size);
   switch (enc) {
     case Data::Encoding::hex: {
-      char str[size * 2];
+      pjs::vl_array<char, 1000> str(size * 2);
       auto len = utils::encode_hex(str, hash, size);
       return pjs::Str::make(str, len);
     }
     case Data::Encoding::base64: {
-      char str[size * 2];
+      pjs::vl_array<char, 1000> str(size * 2);
       auto len = utils::encode_base64(str, hash, size);
       return pjs::Str::make(str, len);
     }
     case Data::Encoding::base64url: {
-      char str[size * 2];
+      pjs::vl_array<char, 1000> str(size * 2);
       auto len = utils::encode_base64url(str, hash, size);
       return pjs::Str::make(str, len);
     }
@@ -725,7 +725,7 @@ auto Sign::sign(PrivateKey *key, Object *options) -> Data* {
 
   size_t sig_len;
   if (EVP_PKEY_sign(ctx, nullptr, &sig_len, hash, size) <= 0) throw_error();
-  unsigned char sig[sig_len];
+  pjs::vl_array<unsigned char, 1000> sig(sig_len);
   if (EVP_PKEY_sign(ctx, sig, &sig_len, hash, size) <= 0) throw_error();
 
   EVP_PKEY_CTX_free(ctx);
@@ -813,14 +813,14 @@ JWK::JWK(pjs::Object *json) {
     if (!e.is_string()) throw std::runtime_error("missing \"e\"");
     const auto &n_str = n.s()->str();
     const auto &e_str = e.s()->str();
-    char n_bin[n_str.length() * 2];
-    char e_bin[e_str.length() * 2];
+    pjs::vl_array<char, 1000> n_bin(n_str.length() * 2);
+    pjs::vl_array<char, 1000> e_bin(e_str.length() * 2);
     auto n_len = utils::decode_base64url(n_bin, n_str.c_str(), n_str.length());
     auto e_len = utils::decode_base64url(e_bin, e_str.c_str(), e_str.length());
     if (n_len < 0) throw std::runtime_error("invalid \"n\"");
     if (e_len < 0) throw std::runtime_error("invalid \"e\"");
-    auto n_num = BN_bin2bn((unsigned char *)n_bin, n_len, nullptr);
-    auto e_num = BN_bin2bn((unsigned char *)e_bin, e_len, nullptr);
+    auto n_num = BN_bin2bn((unsigned char *)n_bin.data(), n_len, nullptr);
+    auto e_num = BN_bin2bn((unsigned char *)e_bin.data(), e_len, nullptr);
     auto rsa = RSA_new();
     RSA_set0_key(rsa, n_num, e_num, nullptr);
     m_pkey = EVP_PKEY_new();
@@ -837,14 +837,14 @@ JWK::JWK(pjs::Object *json) {
     if (nid == NID_undef) throw std::runtime_error("unknown \"crv\"");
     const auto &x_str = x.s()->str();
     const auto &y_str = y.s()->str();
-    char x_bin[x_str.length() * 2];
-    char y_bin[y_str.length() * 2];
+    pjs::vl_array<char, 1000> x_bin(x_str.length() * 2);
+    pjs::vl_array<char, 1000> y_bin(y_str.length() * 2);
     auto x_len = utils::decode_base64url(x_bin, x_str.c_str(), x_str.length());
     auto y_len = utils::decode_base64url(y_bin, y_str.c_str(), y_str.length());
     if (x_len < 0) throw std::runtime_error("invalid \"x\"");
     if (y_len < 0) throw std::runtime_error("invalid \"y\"");
-    auto x_num = BN_bin2bn((unsigned char *)x_bin, x_len, nullptr);
-    auto y_num = BN_bin2bn((unsigned char *)y_bin, y_len, nullptr);
+    auto x_num = BN_bin2bn((unsigned char *)x_bin.data(), x_len, nullptr);
+    auto y_num = BN_bin2bn((unsigned char *)y_bin.data(), y_len, nullptr);
     auto ec = EC_KEY_new_by_curve_name(nid);
     EC_KEY_set_public_key_affine_coordinates(ec, x_num, y_num);
     m_pkey = EVP_PKEY_new();
@@ -874,9 +874,9 @@ JWT::JWT(pjs::Str *token) {
   m_payload_str = *i++;
   m_signature_str = *i;
 
-  char buf1[m_header_str.length() * 2];
-  char buf2[m_payload_str.length() * 2];
-  char buf3[m_signature_str.length() * 2];
+  pjs::vl_array<char, 1000> buf1(m_header_str.length() * 2);
+  pjs::vl_array<char, 2000> buf2(m_payload_str.length() * 2);
+  pjs::vl_array<char, 1000> buf3(m_signature_str.length() * 2);
   auto len1 = utils::decode_base64url(buf1, m_header_str.c_str(), m_header_str.length());
   auto len2 = utils::decode_base64url(buf2, m_payload_str.c_str(), m_payload_str.length());
   auto len3 = utils::decode_base64url(buf3, m_signature_str.c_str(), m_signature_str.length());
@@ -899,7 +899,7 @@ JWT::JWT(pjs::Str *token) {
     case Algorithm::ES256:
     case Algorithm::ES384:
     case Algorithm::ES512: {
-      char out[len3 * 2];
+      pjs::vl_array<char, 1000> out(len3 * 2);
       auto len = jose2der(out, buf3, len3);
       m_signature = std::string(out, len);
       break;

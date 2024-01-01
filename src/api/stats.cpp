@@ -136,7 +136,7 @@ auto Metric::with_labels(pjs::Str *const *labels, int count) -> Metric* {
   auto s = m_label_index + 1;
   auto n = std::min(s + count, num_labels);
 
-  pjs::Str *l[n];
+  pjs::vl_array<pjs::Str*> l(n);
   for (int i = s; i < n; i++) {
     l[i] = labels[i - s];
   }
@@ -454,7 +454,7 @@ void MetricData::to_prometheus(const std::string &extra_labels, const std::funct
         int i = 0;
         for (auto &s : labels) { ent->labels[i++] = std::move(s); }
       }
-      pjs::Str::CharData *label_values[ent->labels.size()];
+      pjs::vl_array<pjs::Str::CharData*> label_values(ent->labels.size());
       Prometheus<Node> prom(name->str(), extra_labels, ent->labels, label_values, le_str, out);
       prom.output(root, 0);
     }
@@ -946,7 +946,7 @@ void MetricDataSum::to_prometheus(const std::function<void(const void *, size_t)
         int i = 0;
         for (auto &s : labels) { ent->labels[i++] = std::move(s); }
       }
-      pjs::Str::CharData *label_values[ent->labels.size()];
+      pjs::vl_array<pjs::Str::CharData*> label_values(ent->labels.size());
       std::string empty;
       Prometheus<Node> prom(ent->name->str(), empty, ent->labels, label_values, le_str, out);
       prom.output(root, 0);
@@ -1405,7 +1405,7 @@ template<> void ClassDef<Metric>::init() {
 
   method("withLabels", [](Context &ctx, Object *obj, Value &ret) {
     auto n = ctx.argc();
-    pjs::Str *labels[n];
+    pjs::vl_array<pjs::Str*> labels(n);
     for (int i = 0; i < n; i++) {
       auto *s = ctx.arg(i).to_string();
       labels[i] = s;

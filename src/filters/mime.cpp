@@ -117,7 +117,7 @@ auto MultipartDecoder::multipart_start(const std::string &content_type) -> Multi
 MultipartDecoder::Multipart::Multipart(MultipartDecoder *decoder, const char *boundary, int length)
   : m_decoder(decoder)
 {
-  char sep[length + 2];
+  pjs::vl_array<char> sep(length + 2);
   sep[0] = '-';
   sep[1] = '-';
   std::memcpy(sep + 2, boundary, length);
@@ -207,8 +207,8 @@ void MultipartDecoder::Multipart::on_data(Data *data) {
         case HEADER_EOL: {
           int len = m_header.size();
           if (len > 2) {
-            char buf[len + 1];
-            m_header.to_bytes((uint8_t *)buf);
+            pjs::vl_array<char, 1000> buf(len + 1);
+            m_header.to_bytes((uint8_t *)buf.data());
             buf[len] = 0;
             if (auto p = std::strchr(buf, ':')) {
               std::string name(buf, p - buf);

@@ -101,8 +101,10 @@ static auto exec_args(const std::list<std::string> &args) -> Data* {
   for (int i = 0; i < n; i++) std::free(argv[i]);
 
 #else
-  SECURITY_ATTRIBUTES sa = {.nLength = sizeof(SECURITY_ATTRIBUTES),
-                            .bInheritHandle = TRUE};
+  SECURITY_ATTRIBUTES sa;
+  sa.nLength = sizeof(SECURITY_ATTRIBUTES);
+  sa.lpSecurityDescriptor = NULL;
+  sa.bInheritHandle = TRUE;
 
   Data output;
   HANDLE in, out;

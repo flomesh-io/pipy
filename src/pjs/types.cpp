@@ -1443,7 +1443,7 @@ template<> void ClassDef<String>::init() {
   method("concat", [](Context &ctx, Object *obj, Value &ret) {
     auto s = obj->as<String>()->str();
     int size = s->size(), p = size, n = ctx.argc();
-    Str *strs[n];
+    vl_array<Str*> strs(n);
     for (int i = 0; i < n; i++) {
       auto s = ctx.arg(i).to_string();
       strs[i] = s;
@@ -1596,7 +1596,7 @@ template<> void ClassDef<Constructor<String>>::init() {
 
   method("fromCharCode", [](Context &ctx, Object*, Value &ret) {
     auto n = ctx.argc();
-    uint32_t codes[n];
+    vl_array<uint32_t> codes(n);
     for (int i = 0; i < n; i++) {
       codes[i] = std::max(0, int(ctx.arg(i).to_number()));
     }
@@ -1605,7 +1605,7 @@ template<> void ClassDef<Constructor<String>>::init() {
 
   method("fromCodePoint", [](Context &ctx, Object*, Value &ret) {
     auto n = ctx.argc();
-    uint32_t codes[n];
+    vl_array<uint32_t> codes(n);
     for (int i = 0; i < n; i++) {
       codes[i] = std::max(0, int(ctx.arg(i).to_number()));
     }
@@ -2498,7 +2498,7 @@ template<> void ClassDef<Array>::init() {
   method("concat", [](Context &ctx, Object *obj, Value &ret) {
     auto a = obj->as<Array>();
     int size = a->length(), p = size, n = ctx.argc();
-    Array *arrays[n];
+    vl_array<Array*> arrays(n);
     for (int i = 0; i < n; i++) {
       const auto &arg = ctx.arg(i);
       if (arg.is_array()) {

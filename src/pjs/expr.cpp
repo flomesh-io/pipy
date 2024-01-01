@@ -115,7 +115,7 @@ bool Compound::eval(Context &ctx, Value &result) {
 
 auto Compound::reduce(Reducer &r) -> Reducer::Value* {
   size_t n = m_exprs.size();
-  Reducer::Value *v[n];
+  vl_array<Reducer::Value*> v(n);
   for (size_t i = 0; i < n; i++) {
     v[i] = m_exprs[i]->reduce(r);
   }
@@ -540,7 +540,7 @@ void FunctionLiteral::resolve(Context &ctx, int l, Imports *imports) {
 
 auto FunctionLiteral::reduce(Reducer &r) -> Reducer::Value* {
   size_t argc = m_inputs.size();
-  Expr *inputs[argc];
+  vl_array<Expr*> inputs(argc);
   for (size_t i = 0; i < argc; i++) inputs[i] = m_inputs[i].get();
   return r.function(argc, inputs, m_output.get());
 }
@@ -858,7 +858,8 @@ void OptionalProperty::dump(std::ostream &out, const std::string &indent) {
 
 bool Construction::eval(Context &ctx, Value &result) {
   auto argc = m_argv.size();
-  Value f, argv[argc];
+  vl_array<Value> argv(argc);
+  Value f;
   if (!m_func->eval(ctx, f)) return false;
   if (!f.is_instance_of(class_of<Function>())) return error(ctx, "not a function");
   for (size_t i = 0; i < argc; i++) {
@@ -889,7 +890,8 @@ void Construction::dump(std::ostream &out, const std::string &indent) {
 
 bool Invocation::eval(Context &ctx, Value &result) {
   auto argc = m_argv.size();
-  Value f, argv[argc];
+  vl_array<Value> argv(argc);
+  Value f;
   if (!m_func->eval(ctx, f)) return false;
   if (!f.is_function()) return error(ctx, "not a function");
   for (size_t i = 0; i < argc; i++) {
@@ -911,7 +913,7 @@ void Invocation::resolve(Context &ctx, int l, Imports *imports) {
 
 auto Invocation::reduce(Reducer &r) -> Reducer::Value* {
   auto argc = m_argv.size();
-  Reducer::Value *argv[argc];
+  vl_array<Reducer::Value*> argv(argc);
   for (int i = 0; i < argc; i++) {
     argv[i] = m_argv[i]->reduce(r);
   }
@@ -930,7 +932,8 @@ void Invocation::dump(std::ostream &out, const std::string &indent) {
 
 bool OptionalInvocation::eval(Context &ctx, Value &result) {
   auto argc = m_argv.size();
-  Value f, argv[argc];
+  vl_array<Value> argv(argc);
+  Value f;
   if (!m_func->eval(ctx, f)) return false;
   if (f.is_undefined() || f.is_null()) {
     result = Value::undefined;

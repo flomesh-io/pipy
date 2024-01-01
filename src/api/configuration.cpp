@@ -1075,8 +1075,8 @@ template<> void ClassDef<FilterConfigurator>::init() {
 
       // Dynamic branch
       if (has_functions) {
-        Function *conds[n];
-        Value layouts[n];
+        vl_array<Function*> conds(n);
+        vl_array<Value> layouts(n);
         if (!config->get_branches(ctx, n, conds, layouts)) return;
         config->branch(n, conds, layouts);
 
@@ -1124,8 +1124,8 @@ template<> void ClassDef<FilterConfigurator>::init() {
       int n = ctx.argc();
       if (n < 2) throw std::runtime_error("requires at least 2 arguments");
       n = (n + 1) / 2;
-      Function *conds[n];
-      Value layouts[n];
+      vl_array<Function*> conds(n);
+      vl_array<Value> layouts(n);
       if (!config->get_branches(ctx, n, conds, layouts)) return;
       config->branch_message_start(n, conds, layouts);
       result.set(thiz);
@@ -1141,8 +1141,8 @@ template<> void ClassDef<FilterConfigurator>::init() {
       int n = ctx.argc();
       if (n < 2) throw std::runtime_error("requires at least 2 arguments");
       n = (n + 1) / 2;
-      Function *conds[n];
-      Value layouts[n];
+      vl_array<Function*> conds(n);
+      vl_array<Value> layouts(n);
       if (!config->get_branches(ctx, n, conds, layouts)) return;
       config->branch_message(n, conds, layouts);
       result.set(thiz);

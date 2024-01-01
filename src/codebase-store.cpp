@@ -228,11 +228,8 @@ CodebaseStore::CodebaseStore(Store *store, const std::string &init_path)
   decompressor->input(input);
   decompressor->finalize();
 
-  auto len = output.size();
-  char buf[output.size()];
-  output.to_bytes((uint8_t *)buf);
-
-  Tarball tarball(buf, len);
+  auto buf = output.to_bytes();
+  Tarball tarball((const char *)buf.data(), buf.size());
   std::set<std::string> filenames;
   tarball.list(filenames);
 
