@@ -27,33 +27,16 @@
 #define API_OS_HPP
 
 #include "pjs/pjs.hpp"
+#include "fs.hpp"
 
 namespace pipy {
 
 class OS : public pjs::ObjectTemplate<OS> {
 public:
-  struct Stats : public pjs::ObjectTemplate<Stats> {
-    int dev;
-    int ino;
-    int mode;
-    int nlink;
-    int uid;
-    int gid;
-    int rdev;
-    int size;
-    int blksize;
-    int blocks;
-    double atime;
-    double mtime;
-    double ctime;
-
-    bool is_file();
-    bool is_directory();
-    bool is_character_device();
-    bool is_block_device();
-    bool is_fifo();
-    bool is_symbolic_link();
-    bool is_socket();
+  struct Stats :
+    public pjs::ObjectTemplate<Stats>,
+    public fs::Stat
+  {
   };
 
   auto env() -> pjs::Object* { return m_env; }

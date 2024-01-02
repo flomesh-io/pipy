@@ -33,7 +33,24 @@
 namespace pipy {
 namespace fs {
 
+struct Stat {
+  int mode;
+  int size;
+  double atime;
+  double mtime;
+  double ctime;
+
+  bool is_file() const;
+  bool is_directory() const;
+  bool is_character_device() const;
+  bool is_block_device() const;
+  bool is_fifo() const;
+  bool is_symbolic_link() const;
+  bool is_socket() const;
+};
+
 auto abs_path(const std::string &filename) -> std::string;
+bool stat(const std::string &filename, Stat &s);
 bool exists(const std::string &filename);
 bool is_dir(const std::string &filename);
 bool is_file(const std::string &filename);

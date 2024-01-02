@@ -28,19 +28,7 @@
 #include "data.hpp"
 #include "log.hpp"
 
-#include <sys/stat.h>
 #include <fstream>
-
-#ifdef _WIN32
-#define S_IFLNK (_S_IFDIR | _S_IFREG)
-#define S_ISDIR(mode) (((mode)&_S_IFMT) == _S_IFDIR)
-#define S_ISREG(mode) (((mode)&_S_IFMT) == _S_IFREG)
-#define S_ISCHR(mode) (((mode)&_S_IFMT) == _S_IFCHR)
-#define S_ISBLK(mode) (((mode)&_S_IFMT) == 0)
-#define S_ISFIFO(mode) (((mode)&_S_IFMT) == _S_IFIFO)
-#define S_ISLNK(mode) (((mode)&_S_IFMT) == S_IFLNK)
-#define S_ISSOCK(mode) (((mode)&_S_IFMT) == 0)
-#endif
 
 extern "C" char **environ;
 
@@ -56,14 +44,6 @@ OS::OS()
     }
   }
 }
-
-bool OS::Stats::is_file()             { return S_ISREG(mode); }
-bool OS::Stats::is_directory()        { return S_ISDIR(mode); }
-bool OS::Stats::is_character_device() { return S_ISCHR(mode); }
-bool OS::Stats::is_block_device()     { return S_ISBLK(mode); }
-bool OS::Stats::is_fifo()             { return S_ISFIFO(mode); }
-bool OS::Stats::is_symbolic_link()    { return S_ISLNK(mode); }
-bool OS::Stats::is_socket()           { return S_ISSOCK(mode); }
 
 } // namespace pipy
 
@@ -138,35 +118,13 @@ template<> void ClassDef<OS>::init() {
   method("stat", [](Context &ctx, Object*, Value &ret) {
     Str *filename;
     if (!ctx.arguments(1, &filename)) return;
-#ifdef _WIN32
-    struct _stat st;
-    if (_stat(filename->c_str(), &st)) {
-#else
-    struct stat st;
-    if (stat(filename->c_str(), &st)) {
-#endif
-      ret = Value::null;
-    } else {
-      auto s = OS::Stats::make();
-      s->dev = st.st_dev;
-      s->ino = st.st_ino;
-      s->mode = st.st_mode;
-      s->nlink = st.st_nlink;
-      s->uid = st.st_uid;
-      s->gid = st.st_gid;
-      s->rdev = st.st_rdev;
-      s->size = st.st_size;
-#ifdef _WIN32
-      s->blksize = 4096;
-      s->blocks = 512;
-#else
-      s->blksize = st.st_blksize;
-      s->blocks = st.st_blocks;
-#endif
-      s->atime = st.st_atime;
-      s->mtime = st.st_mtime;
-      s->ctime = st.st_ctime;
+    auto s = OS::Stats::make();
+    if (fs::stat(filename->str(), *s)) {
       ret.set(s);
+    } else {
+      ret = Value::null;
+      s->retain();
+      s->release();
     }
   });
 
@@ -182,16 +140,7 @@ template<> void ClassDef<OS>::init() {
 }
 
 template<> void ClassDef<OS::Stats>::init() {
-  accessor("dev",     [](Object *obj, Value &ret) { ret.set(obj->as<OS::Stats>()->dev); });
-  accessor("ino",     [](Object *obj, Value &ret) { ret.set(obj->as<OS::Stats>()->ino); });
-  accessor("mode",    [](Object *obj, Value &ret) { ret.set(obj->as<OS::Stats>()->mode); });
-  accessor("nlink",   [](Object *obj, Value &ret) { ret.set(obj->as<OS::Stats>()->nlink); });
-  accessor("uid",     [](Object *obj, Value &ret) { ret.set(obj->as<OS::Stats>()->uid); });
-  accessor("gid",     [](Object *obj, Value &ret) { ret.set(obj->as<OS::Stats>()->gid); });
-  accessor("rdev",    [](Object *obj, Value &ret) { ret.set(obj->as<OS::Stats>()->rdev); });
   accessor("size",    [](Object *obj, Value &ret) { ret.set(obj->as<OS::Stats>()->size); });
-  accessor("blksize", [](Object *obj, Value &ret) { ret.set(obj->as<OS::Stats>()->blksize); });
-  accessor("blocks",  [](Object *obj, Value &ret) { ret.set(obj->as<OS::Stats>()->blocks); });
   accessor("atime",   [](Object *obj, Value &ret) { ret.set(obj->as<OS::Stats>()->atime); });
   accessor("mtime",   [](Object *obj, Value &ret) { ret.set(obj->as<OS::Stats>()->mtime); });
   accessor("ctime",   [](Object *obj, Value &ret) { ret.set(obj->as<OS::Stats>()->ctime); });

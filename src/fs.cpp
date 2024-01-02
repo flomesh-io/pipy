@@ -45,10 +45,39 @@ namespace fs {
 
 #ifndef _WIN32
 
+bool Stat::is_file()             const { return S_ISREG(mode); }
+bool Stat::is_directory()        const { return S_ISDIR(mode); }
+bool Stat::is_character_device() const { return S_ISCHR(mode); }
+bool Stat::is_block_device()     const { return S_ISBLK(mode); }
+bool Stat::is_fifo()             const { return S_ISFIFO(mode); }
+bool Stat::is_symbolic_link()    const { return S_ISLNK(mode); }
+bool Stat::is_socket()           const { return S_ISSOCK(mode); }
+
+inline static auto ts2secs(const struct timespec &ts) -> double {
+  return ts.tv_sec + ts.tv_nsec / 1e9;
+}
+
 auto abs_path(const std::string &filename) -> std::string {
   char full_path[PATH_MAX];
   realpath(filename.c_str(), full_path);
   return full_path;
+}
+
+bool stat(const std::string &filename, Stat &s) {
+  struct stat st;
+  if (stat(filename.c_str(), &st)) return false;
+  s.mode = st.st_mode;
+  s.size = st.st_size;
+#ifdef __APPLE__
+  s.atime = ts2secs(st.st_atimespec);
+  s.mtime = ts2secs(st.st_mtimespec);
+  s.ctime = ts2secs(st.st_ctimespec);
+#else
+  s.atime = ts2secs(st.st_atim);
+  s.mtime = ts2secs(st.st_mtim);
+  s.ctime = ts2secs(st.st_ctim);
+#endif
+  return true;
 }
 
 bool exists(const std::string &filename) {
@@ -127,6 +156,22 @@ bool unlink(const std::string &filename) {
 
 #else // _WIN32
 
+bool Stat::is_file()              const { return !(mode & FILE_ATTRIBUTE_DIRECTORY); }
+bool Stat::is_directory()         const { return mode & FILE_ATTRIBUTE_DIRECTORY; }
+bool Stat::is_character_device()  const { return false; }
+bool Stat::is_block_device()      const { return false; }
+bool Stat::is_fifo()              const { return false; }
+bool Stat::is_symbolic_link()     const { return false; }
+bool Stat::is_socket()            const { return false; }
+
+inline static auto ft2secs(const FILETIME &ft) -> double {
+  const auto msec = (
+    ((uint64_t)ft.dwHighDateTime << 32) |
+    ((uint64_t)ft.dwLowDateTime)
+  ) / 10000;
+  return (double)msec / 1000.0;
+}
+
 auto abs_path(const std::string &filename) -> std::string {
   wchar_t buf[MAX_PATH];
   auto inp = Win32_ConvertSlash(Win32_A2W(filename));
@@ -138,6 +183,20 @@ auto abs_path(const std::string &filename) -> std::string {
   pjs::vl_array<wchar_t, 1000> wca(len);
   GetFullPathNameW(inp.c_str(), len, wca.data(), NULL);
   return Win32_W2A(std::wstring(wca, len));
+}
+
+bool stat(const std::string &filename, Stat &s) {
+  WIN32_FILE_ATTRIBUTE_DATA attrs;
+  auto wpath = Win32_ConvertSlash(Win32_A2W(filename));
+  if (GetFileAttributesExW(wpath.c_str(), GetFileExInfoStandard, &attrs)) {
+    s.mode = attrs.dwFileAttributes;
+    s.size = attrs.nFileSizeLow;
+    s.atime = ft2secs(attrs.ftLastAccessTime);
+    s.mtime = ft2secs(attrs.ftLastWriteTime);
+    s.ctime = ft2secs(attrs.ftCreationTime);
+    return true;
+  }
+  return false;
 }
 
 bool exists(const std::string &filename) {
@@ -161,11 +220,7 @@ auto get_file_time(const std::string &filename) -> double {
   auto wpath = Win32_ConvertSlash(Win32_A2W(filename));
   if (GetFileAttributesExW(wpath.c_str(), GetFileExInfoStandard, &attrs)) {
     const auto &ft = attrs.ftLastWriteTime;
-    const auto msec = (
-      ((uint64_t)ft.dwHighDateTime << 32) |
-      ((uint64_t)ft.dwLowDateTime)
-    ) / 10000;
-    return double(msec) / 1000;
+    return ft2secs(ft);
   }
   return 0;
 }
