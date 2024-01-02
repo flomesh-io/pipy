@@ -30,10 +30,14 @@
 
 #include <Windows.h>
 
+#include <string>
+
 // Remove name pollution from Windows.h
 #undef NO_ERROR
 #undef DELETE
 #undef ERROR
+#undef min
+#undef max
 #undef s_addr
 #undef s_host
 #undef s_net
@@ -45,10 +49,11 @@
 #define SIGNAL_RELOAD SIGBREAK
 #define SIGNAL_ADMIN  SIGTERM
 
-#include <string>
-
 namespace pipy {
 
+auto Win32_A2W(const std::string &s) -> std::wstring;
+auto Win32_W2A(const std::wstring &s) -> std::string;
+auto Win32_ConvertSlash(const std::wstring &path) -> std::wstring;
 auto Win32_GetLastError(const std::string &function) -> std::string;
 
 } // namespace pipy

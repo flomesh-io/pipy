@@ -26,6 +26,7 @@
 #ifndef PJS_TYPES_HPP
 #define PJS_TYPES_HPP
 
+#include <algorithm>
 #include <atomic>
 #include <cassert>
 #include <cmath>

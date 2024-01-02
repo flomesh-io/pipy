@@ -24,29 +24,26 @@
  */
 
 #include "fs.hpp"
+#include "os-platform.hpp"
+
+#ifdef _WIN32
+
+#include "pjs/pjs.hpp"
+
+#else // !_WIN32
 
 #include <sys/stat.h>
 #include <limits.h>
-
-#ifdef _WIN32
-#include <Windows.h>
-#include <direct.h>
-#include <strsafe.h>
-
-#include <ctime>
-#define PATH_MAX MAX_PATH
-#define realpath(N, R) _fullpath((R), (N), _MAX_PATH)
-#define S_ISDIR(mode) (((mode)&_S_IFMT) == _S_IFDIR)
-#define S_ISREG(mode) (((mode)&_S_IFMT) == _S_IFREG)
-#else
 #include <dirent.h>
 #include <unistd.h>
-#endif
-
 #include <fstream>
+
+#endif // _WIN32
 
 namespace pipy {
 namespace fs {
+
+#ifndef _WIN32
 
 auto abs_path(const std::string &filename) -> std::string {
   char full_path[PATH_MAX];
@@ -55,44 +52,24 @@ auto abs_path(const std::string &filename) -> std::string {
 }
 
 bool exists(const std::string &filename) {
-#ifdef _WIN32
-  struct _stat st;
-  if (_stat(filename.c_str(), &st)) return false;
-#else
   struct stat st;
   if (stat(filename.c_str(), &st)) return false;
-#endif
   return true;
 }
 
 bool is_dir(const std::string &filename) {
-#ifdef _WIN32
-  struct _stat st;
-  if (_stat(filename.c_str(), &st)) return false;
-#else
   struct stat st;
   if (stat(filename.c_str(), &st)) return false;
-#endif
   return S_ISDIR(st.st_mode);
 }
 
 bool is_file(const std::string &filename) {
-#ifdef _WIN32
-  struct _stat st;
-  if (_stat(filename.c_str(), &st)) return false;
-#else
   struct stat st;
   if (stat(filename.c_str(), &st)) return false;
-#endif
   return S_ISREG(st.st_mode);
 }
 
 auto get_file_time(const std::string &filename) -> double {
-#ifdef _WIN32
-  struct _stat st;
-  if (_stat(filename.c_str(), &st)) return 0;
-  return st.st_mtime / 1e9;
-#else
   struct stat st;
   if (stat(filename.c_str(), &st)) return 0;
 #ifdef __APPLE__
@@ -101,27 +78,17 @@ auto get_file_time(const std::string &filename) -> double {
   auto &ts = st.st_mtim;
 #endif
   return ts.tv_sec + ts.tv_nsec / 1e9;
-#endif
 }
 
 void change_dir(const std::string &filename) {
-#ifdef _WIN32
-  _chdir(filename.c_str());
-#else
   chdir(filename.c_str());
-#endif
 }
 
 bool make_dir(const std::string &filename) {
-#ifdef _WIN32
-  return _mkdir(filename.c_str()) == 0;
-#else
   return mkdir(filename.c_str(), S_IRWXU | S_IRWXG | S_IRWXO) == 0;
-#endif
 }
 
 bool read_dir(const std::string &filename, std::list<std::string> &list) {
-#ifndef _WIN32
   if (DIR *dir = opendir(filename.c_str())) {
     while (auto *entry = readdir(dir)) {
       if (entry->d_name[0] == '.') continue;
@@ -134,37 +101,6 @@ bool read_dir(const std::string &filename, std::list<std::string> &list) {
   } else {
     return false;
   }
-#else
-  WIN32_FIND_DATA ffd;
-  HANDLE hFind;
-  TCHAR szDir[MAX_PATH];
-
-  if (filename.size() > (MAX_PATH - 3)) {
-    return false;
-  }
-  StringCchCopy(szDir, MAX_PATH, filename.c_str());
-  StringCchCat(szDir, MAX_PATH, TEXT("\\*"));
-
-  hFind = FindFirstFile(szDir, &ffd);
-  if (INVALID_HANDLE_VALUE == hFind) {
-    return false;
-  }
-
-  do {
-    if (ffd.cFileName[0] == '.') continue;
-    std::string name(ffd.cFileName);
-    if (ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) name += '/';
-    list.push_back(name);
-  } while (FindNextFile(hFind, &ffd) != 0);
-
-  if (GetLastError() != ERROR_NO_MORE_FILES) {
-    FindClose(hFind);
-    return false;
-  }
-
-  FindClose(hFind);
-  return true;
-#endif
 }
 
 bool read_file(const std::string &filename, std::vector<uint8_t> &data) {
@@ -178,13 +114,139 @@ bool read_file(const std::string &filename, std::vector<uint8_t> &data) {
   return true;
 }
 
-bool unlink(const std::string &filename) {
-#ifdef _WIN32
-  return ::_unlink(filename.c_str()) == 0;
-#else
-  return ::unlink(filename.c_str()) == 0;
-#endif
+bool write_file(const std::string &filename, const std::vector<uint8_t> &data) {
+  std::ofstream fs(filename, std::ios::out | std::ios::trunc);
+  if (!fs.is_open()) return false;
+  fs.write((const char *)data.data(), data.size());
+  return true;
 }
+
+bool unlink(const std::string &filename) {
+  return ::unlink(filename.c_str()) == 0;
+}
+
+#else // _WIN32
+
+auto abs_path(const std::string &filename) -> std::string {
+  wchar_t buf[MAX_PATH];
+  auto inp = Win32_ConvertSlash(Win32_A2W(filename));
+  auto len = GetFullPathNameW(inp.c_str(), sizeof(buf) / sizeof(buf[0]), buf, NULL);
+  if (len <= sizeof(buf) / sizeof(buf[0])) {
+    std::wstring ws(buf, len);
+    return Win32_W2A(ws);
+  }
+  pjs::vl_array<wchar_t, 1000> wca(len);
+  GetFullPathNameW(inp.c_str(), len, wca.data(), NULL);
+  return Win32_W2A(std::wstring(wca, len));
+}
+
+bool exists(const std::string &filename) {
+  auto wpath = Win32_ConvertSlash(Win32_A2W(filename));
+  auto attrs = GetFileAttributesW(wpath.c_str());
+  return attrs != INVALID_FILE_ATTRIBUTES;
+}
+
+bool is_dir(const std::string &filename) {
+  auto wpath = Win32_ConvertSlash(Win32_A2W(filename));
+  auto attrs = GetFileAttributesW(wpath.c_str());
+  return (attrs & FILE_ATTRIBUTE_DIRECTORY);
+}
+
+bool is_file(const std::string &filename) {
+  return !is_dir(filename);
+}
+
+auto get_file_time(const std::string &filename) -> double {
+  WIN32_FILE_ATTRIBUTE_DATA attrs;
+  auto wpath = Win32_ConvertSlash(Win32_A2W(filename));
+  if (GetFileAttributesExW(wpath.c_str(), GetFileExInfoStandard, &attrs)) {
+    const auto &ft = attrs.ftLastWriteTime;
+    const auto msec = (
+      ((uint64_t)ft.dwHighDateTime << 32) |
+      ((uint64_t)ft.dwLowDateTime)
+    ) / 10000;
+    return double(msec) / 1000;
+  }
+  return 0;
+}
+
+void change_dir(const std::string &filename) {
+  auto wpath = Win32_ConvertSlash(Win32_A2W(filename));
+  SetCurrentDirectoryW(wpath.c_str());
+}
+
+bool make_dir(const std::string &filename) {
+  auto wpath = Win32_ConvertSlash(Win32_A2W(filename));
+  return CreateDirectoryW(wpath.c_str(), NULL);
+}
+
+bool read_dir(const std::string &filename, std::list<std::string> &list) {
+  auto wpath = Win32_ConvertSlash(Win32_A2W(filename));
+  if (wpath.back() != L'\\') wpath.push_back('\\');
+  wpath.push_back(L'*');
+  WIN32_FIND_DATAW data;
+  HANDLE h = FindFirstFileW(wpath.c_str(), &data);
+  if (h == INVALID_HANDLE_VALUE) return false;
+  do {
+    if (data.cFileName[0] == L'.') continue;
+    auto name = Win32_W2A(data.cFileName);
+    if (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) name += '/';
+    list.push_back(name);
+  } while (FindNextFileW(h, &data));
+  FindClose(h);
+  return true;
+}
+
+bool read_file(const std::string &filename, std::vector<uint8_t> &data) {
+  auto wpath = Win32_ConvertSlash(Win32_A2W(filename));
+  auto h = CreateFileW(
+    wpath.c_str(),
+    GENERIC_READ,
+    FILE_SHARE_READ,
+    NULL,
+    OPEN_EXISTING,
+    FILE_ATTRIBUTE_NORMAL,
+    NULL
+  );
+  if (h == INVALID_HANDLE_VALUE) return false;
+  LARGE_INTEGER n;
+  bool ok = false;
+  if (GetFileSizeEx(h, &n)) {
+    DWORD size = n.LowPart, read = 0;
+    data.resize(size);
+    if (ReadFile(h, data.data(), size, &read, NULL)) {
+      data.resize(read);
+      ok = true;
+    }
+  }
+  CloseHandle(h);
+  return ok;
+}
+
+bool write_file(const std::string &filename, const std::vector<uint8_t> &data) {
+  auto wpath = Win32_ConvertSlash(Win32_A2W(filename));
+  auto h = CreateFileW(
+    wpath.c_str(),
+    GENERIC_READ,
+    0,
+    NULL,
+    TRUNCATE_EXISTING,
+    FILE_ATTRIBUTE_NORMAL,
+    NULL
+  );
+  if (h == INVALID_HANDLE_VALUE) return false;
+  DWORD written = 0;
+  auto ok = WriteFile(h, data.data(), data.size(), &written, NULL);
+  CloseHandle(h);
+  return ok && written == data.size();
+}
+
+bool unlink(const std::string &filename) {
+  auto wpath = Win32_ConvertSlash(Win32_A2W(filename));
+  return DeleteFileW(wpath.c_str());
+}
+
+#endif // _WIN32
 
 } // namespace fs
 } // namespace pipy

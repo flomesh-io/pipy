@@ -23,16 +23,53 @@
  *  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifdef _WIN32
-#include <Windows.h>
-#include <strsafe.h>
-#endif
-
 #include "os-platform.hpp"
+
+#ifdef _WIN32
+
+#include "pjs/pjs.hpp"
+#include "utils.hpp"
+
+#include <strsafe.h>
+#include <vector>
+
+#endif // _WIN32
 
 namespace pipy {
 
 #ifdef _WIN32
+
+auto Win32_A2W(const std::string &s) -> std::wstring {
+  std::wstring buf;
+  utils::Utf16Encoder enc([&](wchar_t c) { buf.push_back(c); });
+  pjs::Utf8Decoder dec([&](int c) { enc.input(c); });
+  for (const auto c : s) dec.input(c);
+  dec.end();
+  return std::wstring(std::move(buf));
+}
+
+auto Win32_W2A(const std::wstring &s) -> std::string {
+  std::string buf;
+  utils::Utf16Decoder dec(
+    [&](uint32_t c) {
+      char utf[5];
+      auto len = pjs::Utf8Decoder::encode(c, utf, sizeof(utf));
+      buf.append(utf, len);
+    }
+  );
+  for (const auto c : s) dec.input(c);
+  dec.flush();
+  return std::string(std::move(buf));
+}
+
+auto Win32_ConvertSlash(const std::wstring &path) -> std::wstring {
+  std::wstring copy(path);
+  for (auto &c : copy) {
+    if (c == '/') c = '\\';
+  }
+  return std::wstring(std::move(copy));
+}
+
 auto Win32_GetLastError(const std::string &function) -> std::string {
   LPVOID lpMsgBuf;
   LPVOID lpDisplayBuf;
@@ -50,6 +87,7 @@ auto Win32_GetLastError(const std::string &function) -> std::string {
   LocalFree(lpDisplayBuf);
   return error;
 }
-#endif
+
+#endif // _WIN32
 
 } // namespace pipy

@@ -130,6 +130,7 @@ auto CodebaseFromFS::get(const std::string &path) -> SharedData* {
     auto full_path = utils::path_join(m_base, norm_path);
     if (!fs::is_file(full_path)) return nullptr;
     if (!fs::read_file(full_path, data)) return nullptr;
+    if (data.empty()) return SharedData::make(Data());
     Data buf(&data[0], data.size(), &s_dp);
     return SharedData::make(buf)->retain();
   }
@@ -153,12 +154,8 @@ void CodebaseFromFS::set(const std::string &path, SharedData *data) {
     }
     auto norm_path = utils::path_normalize(path);
     auto full_path = utils::path_join(m_base, norm_path);
-    std::ofstream fs(full_path, std::ios::out | std::ios::trunc);
-    if (!fs.is_open()) return;
     Data buf(*data);
-    for (const auto c : buf.chunks()) {
-      fs.write(std::get<0>(c), std::get<1>(c));
-    }
+    fs::write_file(full_path, buf.to_bytes());
   } else {
     auto full_path = utils::path_join(m_base, path);
     fs::unlink(full_path);

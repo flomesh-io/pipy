@@ -217,14 +217,18 @@ private:
 
 class Utf16Encoder {
 public:
+  Utf16Encoder(const std::function<void(wchar_t)> &output)
+    : m_output_w(output) {}
+
   Utf16Encoder(bool big_endian, const std::function<void(uint8_t)> &output)
-    : m_output(output)
+    : m_output_b(output)
     , m_big_endian(big_endian) {}
 
   void input(uint32_t ch);
 
 private:
-  const std::function<void(uint8_t)> m_output;
+  const std::function<void(wchar_t)> m_output_w;
+  const std::function<void(uint8_t)> m_output_b;
   bool m_big_endian;
 };
 
@@ -234,11 +238,17 @@ private:
 
 class Utf16Decoder {
 public:
+  Utf16Decoder(const std::function<void(uint32_t)> &output)
+    : m_output(output)
+    , m_big_endian(false) {}
+
   Utf16Decoder(bool big_endian, const std::function<void(uint32_t)> &output)
     : m_output(output)
     , m_big_endian(big_endian) {}
 
+  void input(char c) { input((uint8_t)c); }
   void input(uint8_t b);
+  void input(wchar_t w);
   void flush();
 
 private:
