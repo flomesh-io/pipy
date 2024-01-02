@@ -161,8 +161,10 @@ void Exec::process(Event *evt) {
     HANDLE read, write;
     TCHAR PipeNameBuf[MAX_PATH];
     auto nSize = 4096;
-    SECURITY_ATTRIBUTES sa = {.nLength = sizeof(SECURITY_ATTRIBUTES),
-                              .bInheritHandle = TRUE};
+    SECURITY_ATTRIBUTES sa;
+    ZeroMemory(&sa, sizeof(sa));
+    sa.nLength = sizeof(SECURITY_ATTRIBUTES);
+    sa.bInheritHandle = TRUE;
 
     sprintf(PipeNameBuf, "\\\\.\\pipe\\ExecFilter.%08x.%08x",
             GetCurrentProcessId(), InterlockedIncrement(&pipe_sn));
@@ -195,11 +197,13 @@ void Exec::process(Event *evt) {
     m_stdout = FileStream::make(true, read, &s_dp);
     m_stdout->chain(output());
 
-    STARTUPINFO si = {.cb = sizeof(STARTUPINFO),
-                      .dwFlags = STARTF_USESTDHANDLES,
-                      .hStdInput = INVALID_HANDLE_VALUE,
-                      .hStdOutput = write,
-                      .hStdError = write};
+    STARTUPINFO si;
+    ZeroMemory(&si, sizeof(si));
+    si.cb = sizeof(STARTUPINFO);
+    si.dwFlags = STARTF_USESTDHANDLES;
+    si.hStdInput = INVALID_HANDLE_VALUE;
+    si.hStdOutput = write;
+    si.hStdError = write;
 
     auto success = CreateProcess(NULL, const_cast<char *>(cmd.c_str()), NULL,
                                  NULL, TRUE, 0, NULL, NULL, &si, &m_pif);
@@ -263,10 +267,7 @@ void Exec::ChildProcessMonitor::wait() {
       size = filters.size();
     }
     pjs::vl_array<HANDLE> handles(size);
-    std::transform(filters.begin(), filters.end(), handles,
-                   [](const PROCESS_INFORMATION &exe) {
-                     return exe.hProcess;
-                   });
+    for (int i = 0; i < size; i++) handles[i] = filters[i].hProcess;
     if (size <= 0) {
       Sleep(1000);
       continue;

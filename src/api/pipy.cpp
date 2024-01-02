@@ -102,8 +102,8 @@ static auto exec_args(const std::list<std::string> &args) -> Data* {
 
 #else
   SECURITY_ATTRIBUTES sa;
+  ZeroMemory(&sa, sizeof(sa));
   sa.nLength = sizeof(SECURITY_ATTRIBUTES);
-  sa.lpSecurityDescriptor = NULL;
   sa.bInheritHandle = TRUE;
 
   Data output;
@@ -128,11 +128,13 @@ static auto exec_args(const std::list<std::string> &args) -> Data* {
   });
 
   PROCESS_INFORMATION pif = {};
-  STARTUPINFO si = {.cb = sizeof(STARTUPINFO),
-                    .dwFlags = STARTF_USESTDHANDLES,
-                    .hStdInput = INVALID_HANDLE_VALUE,
-                    .hStdOutput = out,
-                    .hStdError = out};
+  STARTUPINFO si;
+  ZeroMemory(&si, sizeof(si));
+  si.cb = sizeof(STARTUPINFO);
+  si.dwFlags = STARTF_USESTDHANDLES;
+  si.hStdInput = INVALID_HANDLE_VALUE;
+  si.hStdOutput = out;
+  si.hStdError = out;
 
   success = CreateProcess(NULL, const_cast<char *>(cmd.c_str()), NULL, NULL,
                           TRUE, 0, NULL, NULL, &si, &pif);

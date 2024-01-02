@@ -158,6 +158,7 @@ public:
     struct Float : public I32 {
       typedef float T;
       using I32::I32;
+      Float() {}
       Float(T v) { bits = *reinterpret_cast<const uint32_t*>(&v); }
       T value() const { return *reinterpret_cast<const T*>(&bits); }
     };
@@ -165,6 +166,7 @@ public:
     struct Double : public I64 {
       typedef double T;
       using I64::I64;
+      Double() {}
       Double(T v) { bits = *reinterpret_cast<const uint64_t*>(&v); }
       T value() const { return *reinterpret_cast<const T*>(&bits); }
     };
@@ -172,6 +174,7 @@ public:
     struct Int32 : public I32 {
       typedef int32_t T;
       using I32::I32;
+      Int32() {}
       Int32(T v) { bits = v; }
       T value() const { return (T)bits; }
     };
@@ -179,6 +182,7 @@ public:
     struct Int64 : public I64 {
       typedef int64_t T;
       using I64::I64;
+      Int64() {}
       Int64(T v) { bits = v; }
       T value() const { return (T)bits; }
     };
@@ -186,6 +190,7 @@ public:
     struct Uint32 : public I32 {
       typedef int32_t T;
       using I32::I32;
+      Uint32() {}
       Uint32(T v) { bits = v; }
       T value() const { return (T)bits; }
     };
@@ -193,6 +198,7 @@ public:
     struct Uint64 : public I64 {
       typedef int64_t T;
       using I64::I64;
+      Uint64() {}
       Uint64(T v) { bits = v; }
       T value() const { return (T)bits; }
     };
@@ -200,6 +206,7 @@ public:
     struct Sint32 : public I32 {
       typedef int32_t T;
       using I32::I32;
+      Sint32() {}
       Sint32(T v) { bits = encode_sint(v); }
       T value() const { return decode_sint(bits); }
     };
@@ -207,12 +214,14 @@ public:
     struct Sint64 : public I64 {
       typedef int64_t T;
       using I64::I64;
+      Sint64() {}
       Sint64(T v) { bits = encode_sint(v); }
       T value() const { return decode_sint(bits); }
     };
 
     struct Fixed32 : public Uint32 {
       using Uint32::Uint32;
+      Fixed32() {}
       Fixed32(T v) { bits = v; }
       bool read(Data::Reader &r) { return read_uint32(r, bits); }
       void write(Data::Builder &db) { write_uint32(db, bits); }
@@ -220,6 +229,7 @@ public:
 
     struct Fixed64 : public Uint64 {
       using Uint64::Uint64;
+      Fixed64() {}
       Fixed64(T v) { bits = v; }
       bool read(Data::Reader &r) { return read_uint64(r, bits); }
       void write(Data::Builder &db) { write_uint64(db, bits); }
@@ -227,6 +237,7 @@ public:
 
     struct Sfixed32 : public Int32 {
       using Int32::Int32;
+      Sfixed32() {}
       Sfixed32(T v) { bits = v; }
       bool read(Data::Reader &r) { return read_uint32(r, bits); }
       void write(Data::Builder &db) { write_uint32(db, bits); }
@@ -234,6 +245,7 @@ public:
 
     struct Sfixed64 : public Int64 {
       using Int64::Int64;
+      Sfixed64() {}
       Sfixed64(T v) { bits = v; }
       bool read(Data::Reader &r) { return read_uint64(r, bits); }
       void write(Data::Builder &db) { write_uint64(db, bits); }
@@ -242,6 +254,7 @@ public:
     struct Bool : public I64 {
       typedef bool T;
       using I64::I64;
+      Bool() {}
       Bool(T v) { bits = v; }
       T value() const { return (T)bits; }
     };

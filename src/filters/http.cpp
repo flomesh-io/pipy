@@ -473,7 +473,7 @@ void Decoder::on_event(Event *evt) {
       case HEAD_EOL: {
         Data::Reader dr(m_head_buffer);
         auto len = m_head_buffer.size();
-        char buf[len];
+        pjs::vl_array<char, DATA_CHUNK_SIZE> buf(len);
         m_head_size += len;
         if (m_is_response) {
           pjs::Ref<pjs::Str> protocol, status_text; int status;
@@ -520,7 +520,7 @@ void Decoder::on_event(Event *evt) {
       }
       case HEADER_EOL: {
         auto len = m_head_buffer.size();
-        char buf[len];
+        pjs::vl_array<char, DATA_CHUNK_SIZE> buf(len);
         m_head_size += len;
         if (len > 2) {
           Data::Reader dr(m_head_buffer);
