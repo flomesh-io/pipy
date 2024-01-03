@@ -42,6 +42,7 @@
 #include "filters/connect.hpp"
 
 #ifndef _WIN32
+#include <unistd.h>
 #include <syslog.h>
 #endif
 
@@ -245,19 +246,29 @@ Logger::StdoutTarget::~StdoutTarget() {
 }
 
 void Logger::StdoutTarget::write(const Data &msg) {
+#ifndef _WIN32
   if (Net::current().is_running()) {
-    if (!m_file_stream) m_file_stream = FileStream::make(false, m_f, &s_dp_stdout);
+    if (!m_file_stream) {
+      m_file_stream = FileStream::make(
+        false,
+        m_is_stderr ? STDERR_FILENO : STDOUT_FILENO,
+        &s_dp_stdout
+      );
+    }
     Data *buf = Data::make();
     s_dp.push(buf, &msg);
     s_dp.push(buf, '\n');
     m_file_stream->input()->input(buf);
-  } else {
+  } else
+#endif // !_WIN32
+  {
+    std::ostream &os = (m_is_stderr ? std::cerr : std::cout);
     for (const auto c : msg.chunks()) {
       auto ptr = std::get<0>(c);
       auto len = std::get<1>(c);
-      std::fwrite(ptr, 1, len, m_f);
+      os.write(ptr, len);
     }
-    std::fputc('\n', m_f);
+    os.put('\n');
   }
 }
 
@@ -349,12 +360,14 @@ Logger::SyslogTarget::SyslogTarget(Priority priority) {
 }
 
 void Logger::SyslogTarget::write(const Data &msg) {
-#ifndef _WIN32
   auto len = msg.size();
-  uint8_t buf[len+1];
+  pjs::vl_array<uint8_t, 1000> buf(len + 1);
   msg.to_bytes(buf);
   buf[len] = 0;
-  syslog(m_priority, "%s", buf);
+#ifdef _WIN32
+  std::fprintf(stderr, "%s\n", (const char *)buf.data());
+#else
+  syslog(m_priority, "%s", (const char*)buf.data());
 #endif
 }
 

@@ -82,13 +82,13 @@ public:
 
   class StdoutTarget : public Target {
   public:
-    StdoutTarget(FILE *f) : m_f(f) {}
+    StdoutTarget(bool is_stderr = false) : m_is_stderr(is_stderr) {}
     ~StdoutTarget();
 
   private:
     virtual void write(const Data &msg) override;
 
-    FILE* m_f;
+    bool m_is_stderr;
     pjs::Ref<FileStream> m_file_stream;
   };
 

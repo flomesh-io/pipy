@@ -26,6 +26,8 @@
 #ifndef OS_PLATFORM_HPP
 #define OS_PLATFORM_HPP
 
+#include "net.hpp"
+
 #ifdef _WIN32
 
 #include <Windows.h>
@@ -50,21 +52,76 @@
 #define SIGNAL_ADMIN  SIGTERM
 
 namespace pipy {
+namespace os {
 
-auto Win32_A2W(const std::string &s) -> std::wstring;
-auto Win32_W2A(const std::wstring &s) -> std::string;
-auto Win32_ConvertSlash(const std::wstring &path) -> std::wstring;
-auto Win32_GetLastError(const std::string &function) -> std::string;
+class FileHandle {
+public:
+  FileHandle() : m_handle(INVALID_HANDLE_VALUE) {}
 
+  static auto std_input() -> FileHandle;
+  static auto std_output() -> FileHandle;
+  static auto std_error() -> FileHandle;
+  static auto read(const std::string &filename) -> FileHandle;
+  static auto write(const std::string &filename) -> FileHandle;
+  static auto append(const std::string &filename) -> FileHandle;
+
+  auto get() const -> HANDLE { return m_handle; }
+  bool valid() const { return m_handle != INVALID_HANDLE_VALUE; }
+  void seek(size_t pos);
+  void close();
+
+private:
+  FileHandle(HANDLE handle) : m_handle(handle) {}
+  HANDLE m_handle;
+};
+
+namespace windows {
+
+auto a2w(const std::string &s) -> std::wstring;
+auto w2a(const std::wstring &s) -> std::string;
+auto convert_slash(const std::wstring &path) -> std::wstring;
+auto get_last_error(const std::string &function) -> std::string;
+
+} // namespace windows
+} // namespace os
 } // namespace pipy
 
 #else // !_WIN32
 
+#include <stdio.h>
 #include <signal.h>
+#include <unistd.h>
 
 #define SIGNAL_STOP   SIGINT
 #define SIGNAL_RELOAD SIGHUP
 #define SIGNAL_ADMIN  SIGTSTP
+
+namespace pipy {
+namespace os {
+
+class FileHandle {
+public:
+  FileHandle() : m_file(nullptr) {}
+
+  static auto std_input() -> FileHandle;
+  static auto std_output() -> FileHandle;
+  static auto std_error() -> FileHandle;
+  static auto read(const std::string &filename) -> FileHandle;
+  static auto write(const std::string &filename) -> FileHandle;
+  static auto append(const std::string &filename) -> FileHandle;
+
+  auto get() const -> int { return fileno(m_file); }
+  bool valid() const { return m_file; }
+  void seek(size_t pos);
+  void close();
+
+private:
+  FileHandle(FILE *file) : m_file(file) {}
+  FILE* m_file;
+};
+
+} // namespace os
+} // namespace pipy
 
 #endif // _WIN32
 

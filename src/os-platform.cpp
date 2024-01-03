@@ -31,15 +31,85 @@
 #include "utils.hpp"
 
 #include <strsafe.h>
+#include <io.h>
 #include <vector>
 
 #endif // _WIN32
 
 namespace pipy {
+namespace os {
 
 #ifdef _WIN32
 
-auto Win32_A2W(const std::string &s) -> std::wstring {
+auto FileHandle::std_input() -> FileHandle {
+  auto h = GetStdHandle(STD_INPUT_HANDLE);
+  return FileHandle(h);
+}
+
+auto FileHandle::std_output() -> FileHandle {
+  auto h = GetStdHandle(STD_OUTPUT_HANDLE );
+  return FileHandle(h);
+}
+
+auto FileHandle::std_error() -> FileHandle {
+  auto h = GetStdHandle(STD_ERROR_HANDLE );
+  return FileHandle(h);
+}
+
+auto FileHandle::read(const std::string &filename) -> FileHandle {
+  auto wpath = windows::convert_slash(windows::a2w(filename));
+  auto h = CreateFileW(
+    wpath.c_str(),
+    GENERIC_READ,
+    FILE_SHARE_READ,
+    NULL,
+    OPEN_EXISTING,
+    FILE_FLAG_OVERLAPPED,
+    NULL
+  );
+  return FileHandle(h);
+}
+
+auto FileHandle::write(const std::string &filename) -> FileHandle {
+  auto wpath = windows::convert_slash(windows::a2w(filename));
+  auto h = CreateFileW(
+    wpath.c_str(),
+    GENERIC_WRITE,
+    0,
+    NULL,
+    CREATE_ALWAYS,
+    FILE_FLAG_OVERLAPPED,
+    NULL
+  );
+  return FileHandle(h);
+}
+
+auto FileHandle::append(const std::string &filename) -> FileHandle {
+  auto wpath = windows::convert_slash(windows::a2w(filename));
+  auto h = CreateFileW(
+    wpath.c_str(),
+    GENERIC_WRITE,
+    0,
+    NULL,
+    OPEN_ALWAYS,
+    FILE_FLAG_OVERLAPPED,
+    NULL
+  );
+  if (h != INVALID_HANDLE_VALUE) SetFilePointer(h, 0, NULL, FILE_END);
+  return FileHandle(h);
+}
+
+void FileHandle::seek(size_t pos) {
+  SetFilePointer(m_handle, pos, NULL, FILE_BEGIN);
+}
+
+void FileHandle::close() {
+  CloseHandle(m_handle);
+}
+
+namespace windows {
+
+auto a2w(const std::string &s) -> std::wstring {
   std::wstring buf;
   utils::Utf16Encoder enc([&](wchar_t c) { buf.push_back(c); });
   pjs::Utf8Decoder dec([&](int c) { enc.input(c); });
@@ -48,7 +118,7 @@ auto Win32_A2W(const std::string &s) -> std::wstring {
   return std::wstring(std::move(buf));
 }
 
-auto Win32_W2A(const std::wstring &s) -> std::string {
+auto w2a(const std::wstring &s) -> std::string {
   std::string buf;
   utils::Utf16Decoder dec(
     [&](uint32_t c) {
@@ -62,7 +132,7 @@ auto Win32_W2A(const std::wstring &s) -> std::string {
   return std::string(std::move(buf));
 }
 
-auto Win32_ConvertSlash(const std::wstring &path) -> std::wstring {
+auto convert_slash(const std::wstring &path) -> std::wstring {
   std::wstring copy(path);
   for (auto &c : copy) {
     if (c == '/') c = '\\';
@@ -70,7 +140,7 @@ auto Win32_ConvertSlash(const std::wstring &path) -> std::wstring {
   return std::wstring(std::move(copy));
 }
 
-auto Win32_GetLastError(const std::string &function) -> std::string {
+auto get_last_error(const std::string &function) -> std::string {
   LPVOID lpMsgBuf;
   LPVOID lpDisplayBuf;
   DWORD dw = GetLastError();
@@ -88,6 +158,46 @@ auto Win32_GetLastError(const std::string &function) -> std::string {
   return error;
 }
 
+} // namespace windows
+
+#else // !_WIN32
+
+auto FileHandle::std_input() -> FileHandle {
+  return FileHandle(stdin);
+}
+
+auto FileHandle::std_output() -> FileHandle {
+  return FileHandle(stdout);
+}
+
+auto FileHandle::std_error() -> FileHandle {
+  return FileHandle(stderr);
+}
+
+auto FileHandle::read(const std::string &filename) -> FileHandle {
+  auto f = fopen(filename.c_str(), "rb");
+  return FileHandle(f);
+}
+
+auto FileHandle::write(const std::string &filename) -> FileHandle {
+  auto f = fopen(filename.c_str(), "wb");
+  return FileHandle(f);
+}
+
+auto FileHandle::append(const std::string &filename) -> FileHandle {
+  auto f = fopen(filename.c_str(), "ab");
+  return FileHandle(f);
+}
+
+void FileHandle::seek(size_t pos) {
+  fseek(m_file, pos, SEEK_SET);
+}
+
+void FileHandle::close() {
+  fclose(m_file);
+}
+
 #endif // _WIN32
 
+} // namespace os
 } // namespace pipy

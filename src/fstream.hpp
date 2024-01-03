@@ -60,17 +60,12 @@ public:
     return new FileStream(read, fd, dp);
   }
 
-  static auto make(bool read, FILE *f, Data::Producer *dp) -> FileStream* {
-    return new FileStream(read, f, dp);
-  }
-
   auto fd() const -> handle_t { return m_fd; }
   void set_buffer_limit(size_t size) { m_buffer_limit = size; }
   void close(bool close_fd = true);
 
 private:
   FileStream(bool read, handle_t fd, Data::Producer *dp);
-  FileStream(bool read, FILE *f, Data::Producer *dp);
 
   virtual void on_event(Event *evt) override;
   virtual void on_flush() override;
@@ -85,7 +80,6 @@ private:
 
   stream_t m_stream;
   handle_t m_fd;
-  FILE* m_f;
   Data::Producer* m_dp;
   Data m_buffer;
   size_t m_buffer_limit = 0;

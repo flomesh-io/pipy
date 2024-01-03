@@ -228,7 +228,7 @@ NativeModule::NativeModule(int index, const std::string &filename)
   if (!handle) {
     std::string msg("cannot load native module '");
     throw std::runtime_error(
-      msg + filename + "' due to: " + Win32_GetLastError("LoadLibrary"));
+      msg + filename + "' due to: " + os::windows::get_last_error("LoadLibrary"));
   }
   FARPROC init_fn = GetProcAddress(handle, "pipy_module_init");
   if (!init_fn) {

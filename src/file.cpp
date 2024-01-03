@@ -24,7 +24,6 @@
  */
 
 #include "file.hpp"
-#include "fstream.hpp"
 #include "fs.hpp"
 #include "net.hpp"
 #include "input.hpp"
@@ -43,7 +42,7 @@ void File::open_read(const std::function<void(FileStream*)> &cb) {
 }
 
 void File::open_read(int seek, const std::function<void(FileStream*)> &cb) {
-  if (m_f || m_closed) return;
+  if (m_f.valid() || m_closed) return;
 
   auto *net = &Net::current();
   std::string path = m_path;
@@ -52,12 +51,13 @@ void File::open_read(int seek, const std::function<void(FileStream*)> &cb) {
 
   Net::main().post(
     [=]() {
-      if (auto f = (path == "-" ? stdin : fopen(path.c_str(), "rb"))) {
-        if (seek > 0) fseek(f, seek, SEEK_SET);
+      auto f = (path == "-" ? os::FileHandle::std_input() : os::FileHandle::read(path));
+      if (f.valid()) {
+        if (seek > 0) f.seek(seek);
         net->post(
           [=]() {
             m_f = f;
-            m_stream = FileStream::make(true, f, &s_dp);
+            m_stream = FileStream::make(true, f.get(), &s_dp);
             if (m_closed) {
               close();
             }
@@ -78,7 +78,7 @@ void File::open_read(int seek, const std::function<void(FileStream*)> &cb) {
 }
 
 void File::open_write(bool append) {
-  if (m_f || m_closed) return;
+  if (m_f.valid() || m_closed) return;
 
   auto *net = &Net::current();
   std::string path = m_path;
@@ -95,30 +95,40 @@ void File::open_write(bool append) {
             release();
           }
         );
-      } else if (auto f = (path == "-" ? stdout : fopen(path.c_str(), append ? "ab" : "wb"))) {
-        net->post(
-          [=]() {
-            InputContext ic;
-            m_f = f;
-            m_writing = true;
-            m_stream = FileStream::make(false, f, &s_dp);
-            if (!m_buffer.empty()) {
-              m_stream->input()->input(Data::make(m_buffer));
-              m_buffer.clear();
-            }
-            if (m_closed) {
-              close();
-            }
-            release();
-          }
-        );
       } else {
-        net->post(
-          [=]() {
-            Log::error("[file] cannot open file for writing: %s", m_path.c_str());
-            release();
-          }
-        );
+        os::FileHandle f;
+        if (path == "-") {
+          f = os::FileHandle::std_output();
+        } else if (append) {
+          f = os::FileHandle::append(path);
+        } else {
+          f = os::FileHandle::write(path);
+        }
+        if (f.valid()) {
+          net->post(
+            [=]() {
+              InputContext ic;
+              m_f = f;
+              m_writing = true;
+              m_stream = FileStream::make(false, f.get(), &s_dp);
+              if (!m_buffer.empty()) {
+                m_stream->input()->input(Data::make(m_buffer));
+                m_buffer.clear();
+              }
+              if (m_closed) {
+                close();
+              }
+              release();
+            }
+          );
+        } else {
+          net->post(
+            [=]() {
+              Log::error("[file] cannot open file for writing: %s", m_path.c_str());
+              release();
+            }
+          );
+        }
       }
     }
   );
@@ -139,7 +149,7 @@ void File::close() {
       m_stream->input()->input(StreamEnd::make());
     }
     m_stream = nullptr;
-    m_f = nullptr;
+    m_f = os::FileHandle();
   }
   m_closed = true;
 }

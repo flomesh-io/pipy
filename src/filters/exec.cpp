@@ -174,7 +174,7 @@ void Exec::process(Event *evt) {
     if (INVALID_HANDLE_VALUE == read) {
       Filter::error(
         "Unable to create named pipe due to %s",
-        Win32_GetLastError("CreateNamedPipeA").c_str()
+        os::windows::get_last_error("CreateNamedPipeA").c_str()
       );
       return;
     }
@@ -183,7 +183,7 @@ void Exec::process(Event *evt) {
     if (INVALID_HANDLE_VALUE == write) {
       Filter::error(
         "Unable to create write file due to %s",
-        Win32_GetLastError("CreateNamedPipeA").c_str()
+        os::windows::get_last_error("CreateNamedPipeA").c_str()
       );
       CloseHandle(read);
       return;
@@ -212,7 +212,7 @@ void Exec::process(Event *evt) {
       CloseHandle(read);
       Filter::error(
         "Unable to exec process due to %s",
-        Win32_GetLastError("CreateProcess").c_str()
+        os::windows::get_last_error("CreateProcess").c_str()
       );
     }
     m_pid = m_pif.dwProcessId;

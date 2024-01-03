@@ -28,31 +28,13 @@
 #include "constants.hpp"
 #include "pipeline.hpp"
 #include "log.hpp"
-
-#include <stdio.h>
-
-#ifdef _WIN32
-#include <io.h>
-inline static auto get_file_handle(FILE *f) -> HANDLE { return (HANDLE)_get_osfhandle(_fileno(f)); }
-#else
-inline static auto get_file_handle(FILE *f) -> int { return fileno(f); }
-#endif
+#include "os-platform.hpp"
 
 namespace pipy {
 
 FileStream::FileStream(bool read, handle_t fd, Data::Producer *dp)
   : FlushTarget(true)
   , m_stream(Net::context(), fd)
-  , m_f(nullptr)
-  , m_dp(dp)
-{
-  if (read) this->read();
-}
-
-FileStream::FileStream(bool read, FILE *f, Data::Producer *dp)
-  : FlushTarget(true)
-  , m_stream(Net::context(), get_file_handle(f))
-  , m_f(f)
   , m_dp(dp)
 {
   if (read) this->read();
@@ -75,11 +57,6 @@ void FileStream::close(bool close_fd) {
     Log::error("FileStream: %p, error closing stream [fd = %d], %s", this, m_fd, ec.message().c_str());
   } else if (Log::is_enabled(Log::FILES)) {
     Log::debug(Log::FILES, "FileStream: %p, stream closed [fd = %d]", this, m_fd);
-  }
-
-  if (m_f) {
-    if (close_fd) fclose(m_f);
-    m_f = nullptr;
   }
 }
 
@@ -127,11 +104,7 @@ void FileStream::read() {
     }
 
     if (ec) {
-#ifndef _WIN32
-      if (ec == asio::error::eof) {
-#else
       if (ec == asio::error::eof || ec == asio::error::broken_pipe) {
-#endif
         Log::debug(Log::FILES, "FileStream: %p, end of stream [fd = %d]", this, m_fd);
         output(StreamEnd::make(StreamEnd::NO_ERROR));
       } else if (ec != asio::error::operation_aborted) {

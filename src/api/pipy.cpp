@@ -111,7 +111,7 @@ static auto exec_args(const std::list<std::string> &args) -> Data* {
   auto success = CreatePipe(&in, &out, &sa, 0);
   if (success == FALSE) {
     throw std::runtime_error(
-      "Unable to create pipe due to " + Win32_GetLastError("CreatePipe")
+      "Unable to create pipe due to " + os::windows::get_last_error("CreatePipe")
     );
   }
 
@@ -142,7 +142,7 @@ static auto exec_args(const std::list<std::string> &args) -> Data* {
     CloseHandle(out);
     CloseHandle(in);
     throw std::runtime_error(
-      "Unable to exec process due to " + Win32_GetLastError("CreateProcess")
+      "Unable to exec process due to " + os::windows::get_last_error("CreateProcess")
     );
   }
 

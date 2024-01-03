@@ -174,20 +174,20 @@ inline static auto ft2secs(const FILETIME &ft) -> double {
 
 auto abs_path(const std::string &filename) -> std::string {
   wchar_t buf[MAX_PATH];
-  auto inp = Win32_ConvertSlash(Win32_A2W(filename));
+  auto inp = os::windows::convert_slash(os::windows::a2w(filename));
   auto len = GetFullPathNameW(inp.c_str(), sizeof(buf) / sizeof(buf[0]), buf, NULL);
   if (len <= sizeof(buf) / sizeof(buf[0])) {
     std::wstring ws(buf, len);
-    return Win32_W2A(ws);
+    return os::windows::w2a(ws);
   }
   pjs::vl_array<wchar_t, 1000> wca(len);
   GetFullPathNameW(inp.c_str(), len, wca.data(), NULL);
-  return Win32_W2A(std::wstring(wca, len));
+  return os::windows::w2a(std::wstring(wca, len));
 }
 
 bool stat(const std::string &filename, Stat &s) {
   WIN32_FILE_ATTRIBUTE_DATA attrs;
-  auto wpath = Win32_ConvertSlash(Win32_A2W(filename));
+  auto wpath = os::windows::convert_slash(os::windows::a2w(filename));
   if (GetFileAttributesExW(wpath.c_str(), GetFileExInfoStandard, &attrs)) {
     s.mode = attrs.dwFileAttributes;
     s.size = attrs.nFileSizeLow;
@@ -200,13 +200,13 @@ bool stat(const std::string &filename, Stat &s) {
 }
 
 bool exists(const std::string &filename) {
-  auto wpath = Win32_ConvertSlash(Win32_A2W(filename));
+  auto wpath = os::windows::convert_slash(os::windows::a2w(filename));
   auto attrs = GetFileAttributesW(wpath.c_str());
   return attrs != INVALID_FILE_ATTRIBUTES;
 }
 
 bool is_dir(const std::string &filename) {
-  auto wpath = Win32_ConvertSlash(Win32_A2W(filename));
+  auto wpath = os::windows::convert_slash(os::windows::a2w(filename));
   auto attrs = GetFileAttributesW(wpath.c_str());
   return (attrs & FILE_ATTRIBUTE_DIRECTORY);
 }
@@ -217,7 +217,7 @@ bool is_file(const std::string &filename) {
 
 auto get_file_time(const std::string &filename) -> double {
   WIN32_FILE_ATTRIBUTE_DATA attrs;
-  auto wpath = Win32_ConvertSlash(Win32_A2W(filename));
+  auto wpath = os::windows::convert_slash(os::windows::a2w(filename));
   if (GetFileAttributesExW(wpath.c_str(), GetFileExInfoStandard, &attrs)) {
     const auto &ft = attrs.ftLastWriteTime;
     return ft2secs(ft);
@@ -226,17 +226,17 @@ auto get_file_time(const std::string &filename) -> double {
 }
 
 void change_dir(const std::string &filename) {
-  auto wpath = Win32_ConvertSlash(Win32_A2W(filename));
+  auto wpath = os::windows::convert_slash(os::windows::a2w(filename));
   SetCurrentDirectoryW(wpath.c_str());
 }
 
 bool make_dir(const std::string &filename) {
-  auto wpath = Win32_ConvertSlash(Win32_A2W(filename));
+  auto wpath = os::windows::convert_slash(os::windows::a2w(filename));
   return CreateDirectoryW(wpath.c_str(), NULL);
 }
 
 bool read_dir(const std::string &filename, std::list<std::string> &list) {
-  auto wpath = Win32_ConvertSlash(Win32_A2W(filename));
+  auto wpath = os::windows::convert_slash(os::windows::a2w(filename));
   if (wpath.back() != L'\\') wpath.push_back('\\');
   wpath.push_back(L'*');
   WIN32_FIND_DATAW data;
@@ -244,7 +244,7 @@ bool read_dir(const std::string &filename, std::list<std::string> &list) {
   if (h == INVALID_HANDLE_VALUE) return false;
   do {
     if (data.cFileName[0] == L'.') continue;
-    auto name = Win32_W2A(data.cFileName);
+    auto name = os::windows::w2a(data.cFileName);
     if (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) name += '/';
     list.push_back(name);
   } while (FindNextFileW(h, &data));
@@ -253,7 +253,7 @@ bool read_dir(const std::string &filename, std::list<std::string> &list) {
 }
 
 bool read_file(const std::string &filename, std::vector<uint8_t> &data) {
-  auto wpath = Win32_ConvertSlash(Win32_A2W(filename));
+  auto wpath = os::windows::convert_slash(os::windows::a2w(filename));
   auto h = CreateFileW(
     wpath.c_str(),
     GENERIC_READ,
@@ -279,7 +279,7 @@ bool read_file(const std::string &filename, std::vector<uint8_t> &data) {
 }
 
 bool write_file(const std::string &filename, const std::vector<uint8_t> &data) {
-  auto wpath = Win32_ConvertSlash(Win32_A2W(filename));
+  auto wpath = os::windows::convert_slash(os::windows::a2w(filename));
   auto h = CreateFileW(
     wpath.c_str(),
     GENERIC_READ,
@@ -297,7 +297,7 @@ bool write_file(const std::string &filename, const std::vector<uint8_t> &data) {
 }
 
 bool unlink(const std::string &filename) {
-  auto wpath = Win32_ConvertSlash(Win32_A2W(filename));
+  auto wpath = os::windows::convert_slash(os::windows::a2w(filename));
   return DeleteFileW(wpath.c_str());
 }
 

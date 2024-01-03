@@ -26,11 +26,9 @@
 #ifndef FILE_HPP
 #define FILE_HPP
 
+#include "os-platform.hpp"
 #include "data.hpp"
 #include "fstream.hpp"
-
-#include <fstream>
-#include <stdio.h>
 
 namespace pipy {
 
@@ -61,9 +59,9 @@ private:
   ~File() {}
 
   std::string m_path;
-  FILE* m_f = nullptr;
-  Data m_buffer;
   pjs::Ref<FileStream> m_stream;
+  os::FileHandle m_f;
+  Data m_buffer;
   bool m_writing = false;
   bool m_closed = false;
 
