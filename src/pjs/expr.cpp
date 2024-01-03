@@ -513,7 +513,7 @@ void FunctionLiteral::resolve(Context &ctx, int l, Imports *imports) {
   m_method = Method::make(
     name,
     [this](Context &ctx, Object*, Value &result) {
-      auto *scope = ctx.new_scope(m_argc, m_variables.size(), &m_variables[0]);
+      auto *scope = ctx.new_scope(m_argc, m_variables.size(), m_variables.data());
       int var_index = m_argc;
       for (const auto &p : m_parameters) {
         auto &arg = scope->value(p.index);
@@ -533,7 +533,7 @@ void FunctionLiteral::resolve(Context &ctx, int l, Imports *imports) {
     }
   );
 
-  Context fctx(ctx, 0, nullptr, Scope::make(ctx.instance(), ctx.scope(), m_variables.size(), &m_variables[0]));
+  Context fctx(ctx, 0, nullptr, Scope::make(ctx.instance(), ctx.scope(), m_variables.size(), m_variables.data()));
   for (auto &i : m_inputs) i->resolve(fctx, l, imports);
   m_output->resolve(fctx, l, imports);
 }
