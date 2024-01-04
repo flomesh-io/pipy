@@ -32,6 +32,10 @@ thread_local Net Net::s_current;
 
 void Net::init() {
   s_main = &s_current;
+
+#ifdef _WIN32
+  asio::detail::win_thread::set_terminate_threads(true);
+#endif
 }
 
 void Net::run() {
