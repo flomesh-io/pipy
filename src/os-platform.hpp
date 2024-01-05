@@ -28,6 +28,14 @@
 
 #include "net.hpp"
 
+namespace pipy {
+namespace os {
+
+void init();
+
+} // namespace os
+} // namespace pipy
+
 #ifdef _WIN32
 
 #include <Windows.h>
@@ -80,6 +88,7 @@ namespace windows {
 auto a2w(const std::string &s) -> std::wstring;
 auto w2a(const std::wstring &s) -> std::string;
 auto convert_slash(const std::wstring &path) -> std::wstring;
+auto get_last_error() -> std::string;
 auto get_last_error(const std::string &function) -> std::string;
 
 } // namespace windows

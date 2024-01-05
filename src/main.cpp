@@ -398,6 +398,7 @@ int main(int argc, char *argv[]) {
       Status::LocalInstance::uuid = opts.instance_uuid;
     }
 
+    os::init();
     Net::init();
     Log::set_filename(opts.log_file);
     Log::set_level(opts.log_level);

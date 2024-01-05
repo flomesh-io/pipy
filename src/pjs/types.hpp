@@ -96,7 +96,7 @@ template<class T> T* coerce(Object *obj);
 template<typename T, size_t L = 100>
 class vl_array {
 public:
-  vl_array(size_t l) {
+  vl_array(size_t l) : m_size(l) {
     if (l > L) {
       m_data = m_heap = new T[l];
     } else {
@@ -109,6 +109,7 @@ public:
     delete [] m_heap;
   }
 
+  size_t size() const { return m_size; }
   T* data() { return m_data; }
   T& at(size_t i) { return *(data() + i); }
 
@@ -117,6 +118,7 @@ public:
   T& operator [](size_t i) { return at(i); }
 
 private:
+  size_t m_size;
   T* m_data;
   T* m_heap;
   T m_stack[L];

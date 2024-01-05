@@ -28,12 +28,9 @@
 
 #include "filter.hpp"
 #include "timer.hpp"
+#include "os-platform.hpp"
 
-#ifndef _WIN32
-#include <unistd.h>
-#else
-typedef int pid_t;
-#endif
+#include <atomic>
 #include <map>
 #include <mutex>
 
@@ -49,10 +46,6 @@ class Exec : public Filter {
 public:
   Exec(const pjs::Value &command);
 
-#ifdef _WIN32
-  auto pif() const -> PROCESS_INFORMATION { return m_pif; }
-#endif
-
 private:
   Exec(const Exec &r);
   ~Exec();
@@ -64,13 +57,13 @@ private:
 
 private:
   pjs::Value m_command;
-  pid_t m_pid = 0;
+  pjs::Ref<FileStream> m_stdin;
+  pjs::Ref<FileStream> m_stdout;
+  int m_pid = 0;
 
 #ifdef _WIN32
   PROCESS_INFORMATION m_pif = {};
 #endif
-  pjs::Ref<FileStream> m_stdin;
-  pjs::Ref<FileStream> m_stdout;
 
   void on_process_exit();
 
@@ -81,21 +74,18 @@ private:
   class ChildProcessMonitor {
   public:
     ChildProcessMonitor();
+    ~ChildProcessMonitor();
 
-    void monitor(int pid, Exec *exec);
-    void remove(int pid);
+    void monitor(Exec *exec);
+    void remove(Exec *exec);
 
   private:
-    struct Waiter {
-      Net* net;
-      Exec* filter;
-    };
-
     void wait();
 
+    std::atomic<bool> m_exited;
     std::thread m_wait_thread;
     std::mutex m_mutex;
-    std::map<int, Waiter> m_waiters;
+    std::map<Exec*, Net*> m_filters;
   };
 
   static ChildProcessMonitor s_child_process_monitor;

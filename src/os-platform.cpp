@@ -41,18 +41,23 @@ namespace os {
 
 #ifdef _WIN32
 
+void init() {
+  SetConsoleCP(65001);
+  SetConsoleOutputCP(65001);
+}
+
 auto FileHandle::std_input() -> FileHandle {
   auto h = GetStdHandle(STD_INPUT_HANDLE);
   return FileHandle(h);
 }
 
 auto FileHandle::std_output() -> FileHandle {
-  auto h = GetStdHandle(STD_OUTPUT_HANDLE );
+  auto h = GetStdHandle(STD_OUTPUT_HANDLE);
   return FileHandle(h);
 }
 
 auto FileHandle::std_error() -> FileHandle {
-  auto h = GetStdHandle(STD_ERROR_HANDLE );
+  auto h = GetStdHandle(STD_ERROR_HANDLE);
   return FileHandle(h);
 }
 
@@ -140,6 +145,21 @@ auto convert_slash(const std::wstring &path) -> std::wstring {
   return std::wstring(std::move(copy));
 }
 
+auto get_last_error() -> std::string {
+  wchar_t *msg = nullptr;
+  auto dw = GetLastError();
+  FormatMessageW(
+    FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+    NULL,
+    GetLastError(),
+    MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+    (LPWSTR)&msg, 0, NULL
+  );
+  auto ret = w2a(msg);
+  LocalFree(msg);
+  return std::string(std::move(ret));
+}
+
 auto get_last_error(const std::string &function) -> std::string {
   LPVOID lpMsgBuf;
   LPVOID lpDisplayBuf;
@@ -161,6 +181,10 @@ auto get_last_error(const std::string &function) -> std::string {
 } // namespace windows
 
 #else // !_WIN32
+
+void init()
+{
+}
 
 auto FileHandle::std_input() -> FileHandle {
   return FileHandle(stdin);
