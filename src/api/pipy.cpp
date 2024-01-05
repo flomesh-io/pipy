@@ -36,8 +36,11 @@
 #include "utils.hpp"
 #include "log.hpp"
 
+#include <exception>
+
 #ifndef _WIN32
 #include <unistd.h>
+#include <signal.h>
 #include <sys/wait.h>
 #endif
 
@@ -73,7 +76,7 @@ static auto exec_args(const std::list<std::string> &args) -> Data* {
     dup2(in[0], 0);
     dup2(out[1], 1);
     execvp(argv[0], argv);
-    exit(-1);
+    std::terminate();
   } else if (pid < 0) {
     throw std::runtime_error("unable to fork");
   }
