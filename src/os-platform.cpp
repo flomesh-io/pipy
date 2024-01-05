@@ -46,6 +46,10 @@ void init() {
   SetConsoleOutputCP(65001);
 }
 
+auto process_id() -> int {
+  return GetCurrentProcessId();
+}
+
 auto FileHandle::std_input() -> FileHandle {
   auto h = GetStdHandle(STD_INPUT_HANDLE);
   return FileHandle(h);
@@ -184,6 +188,10 @@ auto get_last_error(const std::string &function) -> std::string {
 
 void init()
 {
+}
+
+auto process_id() -> int {
+  return getpid();
 }
 
 auto FileHandle::std_input() -> FileHandle {

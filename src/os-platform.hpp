@@ -32,6 +32,7 @@ namespace pipy {
 namespace os {
 
 void init();
+auto process_id() -> int;
 
 } // namespace os
 } // namespace pipy

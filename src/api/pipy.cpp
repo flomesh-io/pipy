@@ -32,10 +32,10 @@
 #include "status.hpp"
 #include "net.hpp"
 #include "outbound.hpp"
+#include "os-platform.hpp"
 #include "utils.hpp"
 
 #ifdef _WIN32
-#include <Windows.h>
 #include <fcntl.h>
 #include <io.h>
 #include <numeric>
@@ -213,11 +213,7 @@ template<> void ClassDef<Pipy>::init() {
   variable("outbound", class_of<Pipy::Outbound>());
 
   accessor("pid", [](Object *, Value &ret) {
-#ifdef _WIN32
-    ret.set((int)_getpid());
-#else
-    ret.set((int)getpid());
-#endif
+    ret.set(os::process_id());
   });
 
   accessor("since", [](Object *, Value &ret) {
