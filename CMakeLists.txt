@@ -21,6 +21,14 @@ option(PIPY_USE_NTLS, "Use externally compiled TongSuo Crypto library instead of
 set(BUILD_SHARED_LIBS OFF)
 set(BUILD_TESTING OFF)
 
+if(MSVC)
+  add_compile_options(/W0
+  $<$<CONFIG:>:/MT>
+  $<$<CONFIG:Debug>:/MTd>
+  $<$<CONFIG:Release>:/MT>
+  )
+endif(MSVC)
+
 add_subdirectory(deps/yajl-2.1.0)
 
 option(BUILD_tools "build the xmlwf tool for expat library" OFF)
@@ -164,9 +172,7 @@ else()
   add_definitions(-D_GNU_SOURCE)
 endif()
 
-if(MSVC)
-  add_compile_options(/W0)
-else(MSVC)
+if(NOT MSVC)
   add_compile_options(
     -Wall
     -Wno-overloaded-virtual
