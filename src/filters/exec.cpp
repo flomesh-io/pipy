@@ -141,12 +141,6 @@ void Exec::process(Event *evt) {
       dup2(in[0], 0);
       dup2(out[1], 1);
       execvp(argv[0], argv);
-      std::string cmd;
-      for (const auto &arg : args) {
-        if (!cmd.empty()) cmd += ' ';
-        cmd += arg;
-      }
-      Filter::error("unable to exec: %s", cmd.c_str());
       exit(-1);
     } else if (pid < 0) {
       Filter::error("unable to fork");

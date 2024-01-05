@@ -34,6 +34,7 @@
 #include "outbound.hpp"
 #include "os-platform.hpp"
 #include "utils.hpp"
+#include "log.hpp"
 
 #ifndef _WIN32
 #include <unistd.h>
@@ -54,7 +55,9 @@ static auto exec_args(const std::list<std::string> &args) -> Data* {
 #ifndef _WIN32
 
   auto argc = args.size();
-  if (!argc) return nullptr;
+  if (!argc) {
+    throw std::runtime_error("exec() with no arguments");
+  }
 
   int n = 0;
   char *argv[argc + 1];
@@ -72,30 +75,52 @@ static auto exec_args(const std::list<std::string> &args) -> Data* {
     execvp(argv[0], argv);
     exit(-1);
   } else if (pid < 0) {
-    return nullptr;
+    throw std::runtime_error("unable to fork");
   }
 
+  pjs::Ref<SharedData> output_sd;
   std::thread t(
     [&]() {
-      int status;
-      waitpid(pid, &status, 0);
-      close(out[1]);
+      Data output;
+      Data::Builder output_db(output, &s_dp);
+      char buf[DATA_CHUNK_SIZE];
+      while (auto len = read(out[0], buf, sizeof(buf))) {
+        output_db.push(buf, len);
+      }
+      output_db.flush();
+      output_sd = SharedData::make(output);
     }
   );
 
-  Data output;
-  char buf[DATA_CHUNK_SIZE];
-  while (auto len = read(out[0], buf, sizeof(buf))) {
-    output.push(buf, len, &s_dp);
+  int status;
+  waitpid(pid, &status, 0);
+  close(out[1]);
+
+  if (Log::is_enabled(Log::SUBPROC)) {
+    std::string cmd_line;
+    for (const auto &arg : args) {
+      if (!cmd_line.empty()) cmd_line += ' ';
+      cmd_line += arg;
+    }
+    Log::debug(Log::SUBPROC,
+      "[exec] child process started [pid = %d]: %s",
+      pid, cmd_line.c_str()
+    );
   }
 
   t.join();
 
+  Log::debug(Log::SUBPROC, "[exec] child process exited [pid = %d]", pid);
+
   close(out[0]);
+  close(out[1]);
   close(in[0]);
   close(in[1]);
 
   for (int i = 0; i < n; i++) std::free(argv[i]);
+
+  Data output;
+  if (output_sd) output_sd->to_data(output);
 
 #else // _WIN32
 
