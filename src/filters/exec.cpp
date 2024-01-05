@@ -31,9 +31,8 @@
 
 #include <stdlib.h>
 #include <string.h>
-#ifdef _WIN32
-#include <numeric>
-#else
+
+#ifndef _WIN32
 #include <unistd.h>
 #include <sys/wait.h>
 #endif

@@ -35,11 +35,7 @@
 #include "os-platform.hpp"
 #include "utils.hpp"
 
-#ifdef _WIN32
-#include <fcntl.h>
-#include <io.h>
-#include <numeric>
-#else
+#ifndef _WIN32
 #include <unistd.h>
 #include <sys/wait.h>
 #endif
@@ -56,6 +52,7 @@ static auto exec_args(const std::list<std::string> &args) -> Data* {
   thread_local static Data::Producer s_dp("pipy.exec()");
 
 #ifndef _WIN32
+
   auto argc = args.size();
   if (!argc) return nullptr;
 
@@ -100,35 +97,32 @@ static auto exec_args(const std::list<std::string> &args) -> Data* {
 
   for (int i = 0; i < n; i++) std::free(argv[i]);
 
-#else
+#else // _WIN32
+
   SECURITY_ATTRIBUTES sa;
   ZeroMemory(&sa, sizeof(sa));
   sa.nLength = sizeof(SECURITY_ATTRIBUTES);
   sa.bInheritHandle = TRUE;
 
-  Data output;
   HANDLE in, out;
-  auto success = CreatePipe(&in, &out, &sa, 0);
-  if (success == FALSE) {
+  if (!CreatePipe(&in, &out, &sa, 0)) {
     throw std::runtime_error(
-      "Unable to create pipe due to " + os::windows::get_last_error("CreatePipe")
+      "unable to create pipe: " + os::windows::get_last_error()
     );
   }
 
-  auto cmd =
-      std::accumulate(std::next(args.begin()), args.end(), args.front(),
-                      [](std::string a, std::string b) { return a + " " + b; });
-
+  Data output;
+  Data::Builder output_db(output, &s_dp);
   std::thread t([&]() {
     char buf[DATA_CHUNK_SIZE];
     DWORD len;
     while (ReadFile(in, buf, sizeof(buf), &len, NULL)) {
-      output.push(buf, len, &s_dp);
+      output_db.push(buf, len);
     }
   });
 
   PROCESS_INFORMATION pif = {};
-  STARTUPINFO si;
+  STARTUPINFOW si;
   ZeroMemory(&si, sizeof(si));
   si.cb = sizeof(STARTUPINFO);
   si.dwFlags = STARTF_USESTDHANDLES;
@@ -136,25 +130,46 @@ static auto exec_args(const std::list<std::string> &args) -> Data* {
   si.hStdOutput = out;
   si.hStdError = out;
 
-  success = CreateProcess(NULL, const_cast<char *>(cmd.c_str()), NULL, NULL,
-                          TRUE, 0, NULL, NULL, &si, &pif);
-  if (success == FALSE) {
+  std::string cmd_line;
+  for (const auto &arg : args) {
+    if (cmd_line.empty()) {
+      cmd_line += '"';
+      cmd_line += arg;
+      cmd_line += '"';
+    } else {
+      cmd_line += ' ';
+      cmd_line += arg;
+    }
+  }
+
+  auto cmd_line_w = os::windows::a2w(cmd_line);
+  pjs::vl_array<wchar_t, 1000> buf_cl(cmd_line_w.length() + 1);
+  std::memcpy(buf_cl.data(), cmd_line_w.c_str(), buf_cl.size() * sizeof(wchar_t));
+
+  if (!CreateProcessW(
+    NULL,
+    buf_cl.data(),
+    NULL, NULL, TRUE, 0, NULL, NULL,
+    &si, &pif
+  )) {
     CloseHandle(out);
     CloseHandle(in);
     throw std::runtime_error(
-      "Unable to exec process due to " + os::windows::get_last_error("CreateProcess")
+      "unable to create process '" + cmd_line + "': " + os::windows::get_last_error()
     );
   }
 
   WaitForSingleObject(pif.hProcess, INFINITE);
   CloseHandle(pif.hThread);
   CloseHandle(pif.hProcess);
-
   CloseHandle(out);
   CloseHandle(in);
 
   t.join();
-#endif
+  output_db.flush();
+
+#endif // _WIN32
+
   return Data::make(std::move(output));
 }
 
