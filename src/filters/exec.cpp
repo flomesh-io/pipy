@@ -79,6 +79,7 @@ void Exec::reset() {
 #ifndef _WIN32
     kill(m_pid, SIGTERM);
 #else
+    TerminateProcess(m_pif.hProcess, 0);
     CloseHandle(m_pif.hThread);
     CloseHandle(m_pif.hProcess);
 #endif
