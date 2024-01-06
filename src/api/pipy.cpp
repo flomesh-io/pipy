@@ -139,16 +139,6 @@ static auto exec_args(const std::list<std::string> &args) -> Data* {
     );
   }
 
-  Data output;
-  Data::Builder output_db(output, &s_dp);
-  std::thread t([&]() {
-    char buf[DATA_CHUNK_SIZE];
-    DWORD len;
-    while (ReadFile(in, buf, sizeof(buf), &len, NULL)) {
-      output_db.push(buf, len);
-    }
-  });
-
   PROCESS_INFORMATION pif = {};
   STARTUPINFOW si;
   ZeroMemory(&si, sizeof(si));
@@ -186,6 +176,16 @@ static auto exec_args(const std::list<std::string> &args) -> Data* {
       "unable to create process '" + cmd_line + "': " + os::windows::get_last_error()
     );
   }
+
+  Data output;
+  Data::Builder output_db(output, &s_dp);
+  std::thread t([&]() {
+    char buf[DATA_CHUNK_SIZE];
+    DWORD len;
+    while (ReadFile(in, buf, sizeof(buf), &len, NULL)) {
+      output_db.push(buf, len);
+    }
+  });
 
   WaitForSingleObject(pif.hProcess, INFINITE);
   CloseHandle(pif.hThread);

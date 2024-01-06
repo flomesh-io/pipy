@@ -308,16 +308,17 @@ void Exec::ChildProcessMonitor::wait() {
       pid = ret;
     }
 #else // _WIN32
-    std::vector<int> pids;
-    std::vector<HANDLE> handles;
-    {
-      std::lock_guard<std::mutex> lock(m_mutex);
-      for (auto const &p : m_filters) {
-        auto f = p.first;
-        pids.push_back(f->m_pid);
-        handles.push_back(f->m_pif.hProcess);
-      }
+    m_mutex.lock();
+    pjs::vl_array<int> pids(m_filters.size());
+    pjs::vl_array<HANDLE> handles(m_filters.size());
+    size_t i = 0;
+    for (auto const &p : m_filters) {
+      auto f = p.first;
+      pids[i] = f->m_pid;
+      handles[i] = f->m_pif.hProcess;
+      i++;
     }
+    m_mutex.unlock();
     auto ret = WaitForMultipleObjects(handles.size(), handles.data(), FALSE, 1000);
     if (ret != WAIT_TIMEOUT) {
       auto i = ret - WAIT_OBJECT_0;
