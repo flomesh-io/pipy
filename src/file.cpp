@@ -69,6 +69,7 @@ void File::open_read(int seek, const std::function<void(FileStream*)> &cb) {
         net->post(
           [=]() {
             Log::error("[file] cannot open file for reading: %s", m_path.c_str());
+            cb(nullptr);
             release();
           }
         );

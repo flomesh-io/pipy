@@ -26,6 +26,7 @@
 #include "read.hpp"
 #include "file.hpp"
 #include "fstream.hpp"
+#include "input.hpp"
 
 namespace pipy {
 
@@ -72,14 +73,19 @@ void Read::process(Event *evt) {
     pjs::Value pathname;
     if (!Filter::eval(m_pathname, pathname)) return;
     auto *s = pathname.to_string();
-    m_file = File::make(s->str());
-    s->release();
+    auto f = File::make(s->str());
+    m_file = f->retain();
     m_file->open_read(
-      [this](FileStream *fs) {
+      [=](FileStream *fs) {
         m_keep_alive.cancel();
         if (fs) {
           fs->chain(EventSource::reply());
+        } else if (m_file == f) {
+          InputContext ic;
+          Filter::error("unable to open file for reading: %s", s->c_str());
         }
+        f->release();
+        s->release();
       }
     );
     keep_alive();
