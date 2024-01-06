@@ -74,7 +74,7 @@ template<> void ClassDef<OS>::init() {
 
     Str *filename;
     if (!ctx.arguments(1, &filename)) return;
-    std::ifstream fs(filename->str(), std::ios::in);
+    std::ifstream fs(filename->str(), std::ios::in|std::ios::binary);
     if (!fs.is_open()) {
       Log::error("os.readFile: cannot open file: %s", filename->c_str());
       ret = Value::null;
@@ -99,7 +99,7 @@ template<> void ClassDef<OS>::init() {
     {
       return;
     }
-    std::ofstream fs(filename->str(), std::ios::out|std::ios::trunc);
+    std::ofstream fs(filename->str(), std::ios::out|std::ios::binary|std::ios::trunc);
     if (!fs.is_open()) {
       Log::error("os.writeFile: cannot open file: %s", filename->c_str());
       ret = Value::null;
