@@ -169,7 +169,8 @@ inline static auto ft2secs(const FILETIME &ft) -> double {
     ((uint64_t)ft.dwHighDateTime << 32) |
     ((uint64_t)ft.dwLowDateTime)
   ) / 10000;
-  return (double)msec / 1000.0;
+  const double DAYS_FROM_1601_TO_1970 = 134774.0;
+  return (double)msec / 1000.0 - DAYS_FROM_1601_TO_1970 * 24 * 60 * 60;
 }
 
 auto abs_path(const std::string &filename) -> std::string {
