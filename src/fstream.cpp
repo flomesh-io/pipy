@@ -99,6 +99,7 @@ void FileStream::read() {
     InputContext ic(this);
 
     if (n > 0) {
+      m_file_pointer += n;
       buffer->pop(buffer->size() - n);
       output(buffer);
     }
@@ -126,10 +127,18 @@ void FileStream::read() {
     release();
   };
 
+#ifdef _WIN32
+  m_stream.async_read_some_at(
+    m_file_pointer,
+    DataChunks(buffer->chunks()),
+    on_received
+  );
+#else
   m_stream.async_read_some(
     DataChunks(buffer->chunks()),
     on_received
   );
+#endif
 
   retain();
 }
@@ -170,6 +179,7 @@ void FileStream::pump() {
   if (m_buffer.empty()) return;
 
   auto on_sent = [=](const std::error_code &ec, std::size_t n) {
+    m_file_pointer += n;
     m_buffer.shift(n);
     m_pumping = false;
 
@@ -193,10 +203,18 @@ void FileStream::pump() {
     release();
   };
 
+#ifdef _WIN32
+  m_stream.async_write_some_at(
+    m_file_pointer,
+    DataChunks(m_buffer.chunks()),
+    on_sent
+  );
+#else
   m_stream.async_write_some(
     DataChunks(m_buffer.chunks()),
     on_sent
   );
+#endif
 
   retain();
 

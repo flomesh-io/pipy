@@ -50,7 +50,7 @@ class FileStream :
 public:
 #ifdef _WIN32
   typedef HANDLE handle_t;
-  typedef asio::windows::stream_handle stream_t;
+  typedef asio::windows::random_access_handle stream_t;
 #else
   typedef int handle_t;
   typedef asio::posix::stream_descriptor stream_t;
@@ -83,6 +83,7 @@ private:
   Data::Producer* m_dp;
   Data m_buffer;
   size_t m_buffer_limit = 0;
+  size_t m_file_pointer = 0;
   ReceivingState m_receiving_state = RECEIVING;
   bool m_overflowed = false;
   bool m_pumping = false;
