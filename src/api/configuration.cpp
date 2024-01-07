@@ -2410,10 +2410,31 @@ template<> void ClassDef<Configuration>::init() {
 
   // Configuration.task
   method("task", [](Context &ctx, Object *thiz, Value &result) {
-    std::string when;
+    auto config = thiz->as<Configuration>();
+    Str *interval = nullptr;
+    Object *starting_events = nullptr;
     try {
-      if (!ctx.arguments(0, &when)) return;
-      thiz->as<Configuration>()->task(when);
+      int i = 0;
+      if (ctx.get(i, interval)) i++;
+      if (ctx.get(i, starting_events)) {
+        if (!starting_events &&
+            !starting_events->is<Event>() &&
+            !starting_events->is<Message>() &&
+            !starting_events->is<Array>() &&
+            !starting_events->is<Function>()
+        ) {
+          ctx.error_argument_type(i, "an Event, a Message, a function or an array");
+          return;
+        }
+      } else if (!ctx.is_undefined(i)) {
+        ctx.error_argument_type(i, "a string or an object");
+        return;
+      }
+      config->task(interval ? interval->str() : std::string());
+      if (starting_events) {
+        config->trace_location(ctx);
+        config->on_start(starting_events);
+      }
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
