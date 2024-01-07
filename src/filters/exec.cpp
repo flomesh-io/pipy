@@ -325,6 +325,8 @@ void Exec::ChildProcessMonitor::wait() {
       auto i = ret - WAIT_OBJECT_0;
       if (0 <= i && i < pids.size()) {
         pid = pids[i];
+      } else {
+        Sleep(1000);
       }
     }
 #endif // _WIN32
