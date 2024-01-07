@@ -158,7 +158,7 @@ void Exec::process(Event *evt) {
     static std::atomic<int> s_pipe_unique_id(0);
     std::snprintf(
       pipe_name, sizeof(pipe_name),
-      "\\\\.\\pipe\\pipy.filter.exec.%08x.%08x.",
+      "\\\\.\\pipe\\pipy.filter.exec.%08x.%08x",
       GetCurrentProcessId(),
       s_pipe_unique_id.fetch_add(1)
     );
@@ -189,7 +189,7 @@ void Exec::process(Event *evt) {
       GENERIC_READ | GENERIC_WRITE,
       0, &sa,
       OPEN_EXISTING,
-      FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED,
+      FILE_FLAG_OVERLAPPED,
       NULL
     );
 

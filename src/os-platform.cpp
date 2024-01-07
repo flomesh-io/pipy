@@ -86,7 +86,7 @@ auto StdioServer::connect() -> HANDLE {
   auto ret = WaitForSingleObject(m_connect_semaphore, INFINITE);
   if (ret != WAIT_OBJECT_0) {
     Log::error(
-      "unable to wait for stdio server '%s': %s",
+      "unable to wait for named pipeline '%s': %s",
       m_pipe_name.c_str(),
       os::windows::get_last_error().c_str()
     );
@@ -98,7 +98,7 @@ auto StdioServer::connect() -> HANDLE {
     m_read ? GENERIC_READ : GENERIC_WRITE,
     0, NULL,
     OPEN_EXISTING,
-    FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED,
+    FILE_FLAG_OVERLAPPED,
     NULL
   );
 
@@ -181,11 +181,13 @@ void StdioServer::pump(HANDLE pipe) {
   for (;;) {
     if (m_read) {
       if (!ReadFile(m_std_handle, buf, sizeof(buf), &len, NULL)) {
-        Log::error(
-          "read error from std handle %d: %s",
-          m_std_handle,
-          os::windows::get_last_error().c_str()
-        );
+        if (GetLastError() != ERROR_BROKEN_PIPE) {
+          Log::error(
+            "read error from std handle %d: %s",
+            m_std_handle,
+            os::windows::get_last_error().c_str()
+          );
+        }
         break;
       }
       if (!WriteFile(pipe, buf, len, &len, &ov)) {
@@ -198,13 +200,11 @@ void StdioServer::pump(HANDLE pipe) {
           break;
         }
         if (!GetOverlappedResult(pipe, &ov, &len, TRUE)) {
-          if (GetLastError() != ERROR_BROKEN_PIPE) {
-            Log::error(
-              "unable to get overlapped result while writing to named pipe %s: %s",
-              m_pipe_name.c_str(),
-              os::windows::get_last_error().c_str()
-            );
-          }
+          Log::error(
+            "unable to get overlapped result while writing to named pipe %s: %s",
+            m_pipe_name.c_str(),
+            os::windows::get_last_error().c_str()
+          );
           break;
         }
       }
