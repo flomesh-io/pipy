@@ -475,6 +475,39 @@ auto split(const std::string &str, char sep) -> std::list<std::string> {
   return list;
 }
 
+auto split_argv(const std::string &str) -> std::list<std::string> {
+  std::list<std::string> args;
+  std::string arg;
+  bool escaped = false, quoted = false;
+  for (auto c : str) {
+    if (escaped) {
+      arg += c;
+      escaped = false;
+    } else if (std::isblank(c)) {
+      if (quoted) {
+        arg += c;
+      } else if (!arg.empty()) {
+        args.push_back(arg);
+        arg.clear();
+      }
+    } else if (c == '\\') {
+      escaped = true;
+    } else if (c == '"') {
+      if (quoted) {
+        args.push_back(arg);
+        arg.clear();
+        quoted = false;
+      } else {
+        quoted = true;
+      }
+    } else {
+      arg += c;
+    }
+  }
+  if (!arg.empty()) args.push_back(arg);
+  return std::list<std::string>(std::move(args));
+}
+
 auto lower(const std::string &str) -> std::string {
   auto lstr = str;
   for (size_t i = 0; i < lstr.length(); i++) lstr[i] = std::tolower(lstr[i]);

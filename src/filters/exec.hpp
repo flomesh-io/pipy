@@ -75,6 +75,8 @@ private:
   PROCESS_INFORMATION m_pif = {};
 #endif
 
+  bool exec_argv(const std::list<std::string> &args);
+  bool exec_line(const std::string &line);
   void on_process_exit();
 
   //

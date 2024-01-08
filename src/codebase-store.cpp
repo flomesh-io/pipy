@@ -166,7 +166,6 @@ static void init_codebase_files(
   const std::string &basename,
   const std::string &dirname
 ) {
-  printf("%s %s\n", basename.c_str(), dirname.c_str());
   std::list<std::string> filenames;
   if (fs::read_dir(dirname, filenames)) {
     for (auto &filename : filenames) {

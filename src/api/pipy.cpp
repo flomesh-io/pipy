@@ -52,11 +52,11 @@ void Pipy::on_exit(const std::function<void(int)> &on_exit) {
   s_on_exit = on_exit;
 }
 
-static auto exec_args(const std::list<std::string> &args) -> Data* {
-  thread_local static Data::Producer s_dp("pipy.exec()");
+thread_local static Data::Producer s_dp("pipy.exec()");
 
 #ifndef _WIN32
 
+static auto exec_argv(const std::list<std::string> &args) -> Data* {
   auto argc = args.size();
   if (!argc) {
     throw std::runtime_error("exec() with no arguments");
@@ -125,8 +125,31 @@ static auto exec_args(const std::list<std::string> &args) -> Data* {
   Data output;
   if (output_sd) output_sd->to_data(output);
 
+  return Data::make(std::move(output));
+}
+
+auto Pipy::exec(const std::string &cmd) -> Data* {
+  return exec_argv(utils::split_argv(cmd));
+}
+
+auto Pipy::exec(pjs::Array *argv) -> Data* {
+  if (!argv) return nullptr;
+
+  std::list<std::string> args;
+  argv->iterate_all(
+    [&](pjs::Value &v, int) {
+      auto *s = v.to_string();
+      args.push_back(s->str());
+      s->release();
+    }
+  );
+
+  return exec_argv(args);
+}
+
 #else // _WIN32
 
+static auto exec_line(const std::string &line) {
   SECURITY_ATTRIBUTES sa;
   ZeroMemory(&sa, sizeof(sa));
   sa.nLength = sizeof(SECURITY_ATTRIBUTES);
@@ -148,32 +171,20 @@ static auto exec_args(const std::list<std::string> &args) -> Data* {
   si.hStdOutput = out;
   si.hStdError = out;
 
-  std::string cmd_line;
-  for (const auto &arg : args) {
-    if (cmd_line.empty()) {
-      cmd_line += '"';
-      cmd_line += arg;
-      cmd_line += '"';
-    } else {
-      cmd_line += ' ';
-      cmd_line += arg;
-    }
-  }
-
-  auto cmd_line_w = os::windows::a2w(cmd_line);
-  pjs::vl_array<wchar_t, 1000> buf_cl(cmd_line_w.length() + 1);
-  std::memcpy(buf_cl.data(), cmd_line_w.c_str(), buf_cl.size() * sizeof(wchar_t));
+  auto line_w = os::windows::a2w(line);
+  pjs::vl_array<wchar_t, 1000> buf_line(line_w.length() + 1);
+  std::memcpy(buf_line.data(), line_w.c_str(), buf_line.size() * sizeof(wchar_t));
 
   if (!CreateProcessW(
     NULL,
-    buf_cl.data(),
+    buf_line.data(),
     NULL, NULL, TRUE, 0, NULL, NULL,
     &si, &pif
   )) {
     CloseHandle(out);
     CloseHandle(in);
     throw std::runtime_error(
-      "unable to create process '" + cmd_line + "': " + os::windows::get_last_error()
+      "unable to create process '" + line + "': " + os::windows::get_last_error()
     );
   }
 
@@ -196,13 +207,11 @@ static auto exec_args(const std::list<std::string> &args) -> Data* {
   t.join();
   output_db.flush();
 
-#endif // _WIN32
-
   return Data::make(std::move(output));
 }
 
 auto Pipy::exec(const std::string &cmd) -> Data* {
-  return exec_args(utils::split(cmd, ' '));
+  return exec_line(cmd);
 }
 
 auto Pipy::exec(pjs::Array *argv) -> Data* {
@@ -217,8 +226,10 @@ auto Pipy::exec(pjs::Array *argv) -> Data* {
     }
   );
 
-  return exec_args(args);
+  return exec_line(os::windows::encode_argv(args));
 }
+
+#endif // _WIN32
 
 void Pipy::operator()(pjs::Context &ctx, pjs::Object *obj, pjs::Value &ret) {
   pjs::Value ret_obj;

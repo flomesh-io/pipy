@@ -106,8 +106,8 @@ void Exec::process(Event *evt) {
     pjs::Value ret;
     if (!eval(m_command, ret)) return;
 
-    std::list<std::string> args;
     if (ret.is_array()) {
+      std::list<std::string> args;
       ret.as<pjs::Array>()->iterate_all(
         [&](pjs::Value &v, int) {
           auto *s = v.to_string();
@@ -115,110 +115,13 @@ void Exec::process(Event *evt) {
           s->release();
         }
       );
+      exec_argv(args);
+
     } else {
       auto *s = ret.to_string();
-      args = utils::split(s->str(), ' ');
+      exec_line(s->str());
       s->release();
     }
-
-    auto argc = args.size();
-    if (!argc) {
-      Filter::error("command is empty");
-      return;
-    }
-
-#ifndef _WIN32
-
-    size_t i = 0;
-    char *argv[argc + 1];
-    for (const auto &arg : args) argv[i++] = strdup(arg.c_str());
-    argv[argc] = nullptr;
-
-    int in[2], out[2];
-    pipe(in);
-    pipe(out);
-
-    m_stdin = FileStream::make(false, in[1], &s_dp);
-    m_stdout = FileStream::make(true, out[0], &s_dp);
-    m_stdout->chain(output());
-
-    auto pid = fork();
-
-    if (pid == 0) {
-      dup2(in[0], 0);
-      dup2(out[1], 1);
-      execvp(argv[0], argv);
-      exit(-1);
-    } else if (pid < 0) {
-      Filter::error("unable to fork");
-    } else {
-      ::close(in[0]);
-      ::close(out[1]);
-      m_pid = pid;
-    }
-
-    for (i = 0; i < argc; i++) free(argv[i]);
-
-#else // _WIN32
-
-    if (!m_pipe_stdin.open(this, "stdin", false)) return;
-    if (!m_pipe_stdout.open(this, "stdout", true)) return;
-    if (!m_pipe_stderr.open(this, "stderr", true)) return;
-
-    STARTUPINFOW si;
-    ZeroMemory(&si, sizeof(si));
-    si.cb = sizeof(STARTUPINFO);
-    si.dwFlags = STARTF_USESTDHANDLES;
-    si.hStdInput = m_pipe_stdin.file;
-    si.hStdOutput = m_pipe_stdout.file;
-    si.hStdError = m_pipe_stderr.file;
-
-    std::string cmd_line;
-    for (const auto &arg : args) {
-      if (cmd_line.empty()) {
-        cmd_line += '"';
-        cmd_line += arg;
-        cmd_line += '"';
-      } else {
-        cmd_line += ' ';
-        cmd_line += arg;
-      }
-    }
-
-    auto cmd_line_w = os::windows::a2w(cmd_line);
-    pjs::vl_array<wchar_t, 1000> buf_cl(cmd_line_w.length() + 1);
-    std::memcpy(buf_cl.data(), cmd_line_w.c_str(), buf_cl.size() * sizeof(wchar_t));
-
-    if (!CreateProcessW(
-      NULL,
-      buf_cl.data(),
-      NULL, NULL, TRUE, 0, NULL, NULL,
-      &si, &m_pif
-    )) {
-      Filter::error(
-        "unable to create process '%s': %s",
-        cmd_line.c_str(),
-        os::windows::get_last_error().c_str()
-      );
-      return;
-    }
-
-    m_pid = m_pif.dwProcessId;
-    m_stdin = FileStream::make(false, m_pipe_stdin.pipe, &s_dp);
-    m_stdout = FileStream::make(true, m_pipe_stdout.pipe, &s_dp);
-    m_stderr = FileStream::make(true, m_pipe_stderr.pipe, &s_dp);
-    m_stdout->chain(Filter::output());
-    m_stderr->chain(Filter::output());
-    m_pipe_stdin.pipe = INVALID_HANDLE_VALUE;
-    m_pipe_stdout.pipe = INVALID_HANDLE_VALUE;
-    m_pipe_stderr.pipe = INVALID_HANDLE_VALUE;
-
-    Log::debug(Log::SUBPROC,
-      "[exec] child process started [pid = %d]: %s",
-      m_pid, cmd_line.c_str()
-    );
-
-#endif // _WIN32
 
     if (m_pid > 0) {
       s_child_process_monitor.monitor(this);
@@ -230,7 +133,118 @@ void Exec::process(Event *evt) {
   }
 }
 
-#ifdef _WIN32
+void Exec::on_process_exit() {
+  Filter::output(StreamEnd::make());
+}
+
+#ifndef _WIN32
+
+bool Exec::exec_argv(const std::list<std::string> &args) {
+  auto argc = args.size();
+  if (!argc) {
+    Filter::error("exec() with no arguments");
+    return false;
+  }
+
+  size_t i = 0;
+  pjs::vl_array<char*> argv(argc + 1);
+  for (const auto &arg : args) argv[i++] = strdup(arg.c_str());
+  argv[argc] = nullptr;
+
+  int in[2], out[2];
+  pipe(in);
+  pipe(out);
+
+  m_stdin = FileStream::make(false, in[1], &s_dp);
+  m_stdout = FileStream::make(true, out[0], &s_dp);
+  m_stdout->chain(output());
+
+  auto pid = fork();
+
+  if (pid == 0) {
+    dup2(in[0], 0);
+    dup2(out[1], 1);
+    execvp(argv[0], argv);
+    std::terminate();
+  }
+
+  for (i = 0; i < argc; i++) free(argv[i]);
+
+  if (pid < 0) {
+    Filter::error("unable to fork");
+    return false;
+  }
+
+  ::close(in[0]);
+  ::close(out[1]);
+  m_pid = pid;
+
+  Log::debug(Log::SUBPROC,
+    "[exec] child process started [pid = %d]: %s",
+    m_pid, args.front().c_str()
+  );
+
+  return true;
+}
+
+bool Exec::exec_line(const std::string &line) {
+  return exec_argv(utils::split_argv(line));
+}
+
+#else // _WIN32
+
+bool Exec::exec_argv(const std::list<std::string> &args) {
+  return exec_line(os::windows::encode_argv(args));
+}
+
+bool Exec::exec_line(const std::string &line) {
+  if (!m_pipe_stdin.open(this, "stdin", false)) return false;
+  if (!m_pipe_stdout.open(this, "stdout", true)) return false;
+  if (!m_pipe_stderr.open(this, "stderr", true)) return false;
+
+  STARTUPINFOW si;
+  ZeroMemory(&si, sizeof(si));
+  si.cb = sizeof(STARTUPINFO);
+  si.dwFlags = STARTF_USESTDHANDLES;
+  si.hStdInput = m_pipe_stdin.file;
+  si.hStdOutput = m_pipe_stdout.file;
+  si.hStdError = m_pipe_stderr.file;
+
+  auto line_w = os::windows::a2w(line);
+  pjs::vl_array<wchar_t, 1000> buf_line(line_w.length() + 1);
+  std::memcpy(buf_line.data(), line_w.c_str(), buf_line.size() * sizeof(wchar_t));
+
+  if (!CreateProcessW(
+    NULL,
+    buf_line.data(),
+    NULL, NULL, TRUE, 0, NULL, NULL,
+    &si, &m_pif
+  )) {
+    Filter::error(
+      "unable to create process '%s': %s",
+      line.c_str(),
+      os::windows::get_last_error().c_str()
+    );
+    return false;
+  }
+
+  m_pid = m_pif.dwProcessId;
+  m_stdin = FileStream::make(false, m_pipe_stdin.pipe, &s_dp);
+  m_stdout = FileStream::make(true, m_pipe_stdout.pipe, &s_dp);
+  m_stderr = FileStream::make(true, m_pipe_stderr.pipe, &s_dp);
+  m_stdout->chain(Filter::output());
+  m_stderr->chain(Filter::output());
+  m_pipe_stdin.pipe = INVALID_HANDLE_VALUE;
+  m_pipe_stdout.pipe = INVALID_HANDLE_VALUE;
+  m_pipe_stderr.pipe = INVALID_HANDLE_VALUE;
+
+  Log::debug(Log::SUBPROC,
+    "[exec] child process started [pid = %d]: %s",
+    m_pid, line.c_str()
+  );
+
+  return true;
+}
 
 //
 // Exec::StdioPipe
@@ -383,7 +397,7 @@ void Exec::ChildProcessMonitor::wait() {
               if (m_filters.find(f) == m_filters.end()) return;
             }
             InputContext ic;
-            f->output(StreamEnd::make());
+            f->on_process_exit();
           }
         );
       }

@@ -385,7 +385,21 @@ auto encode_argv(const std::list<std::string> &argv) -> std::string {
   std::string line;
   for (const auto &arg : argv) {
     if (!line.empty()) line += ' ';
-    line += arg;
+    if (arg.find_first_of(" \t\"") != std::string::npos) {
+      std::string str;
+      size_t num_slashes = 0;
+      for (auto c : arg) {
+        if (c == '"') str += std::string(num_slashes + 1, '\\');
+        if (c == '\\') num_slashes++; else num_slashes = 0;
+        str += c;
+      }
+      str += std::string(num_slashes, '\\');
+      line += '"';
+      line += str;
+      line += '"';
+    } else {
+      line += arg;
+    }
   }
   return std::string(std::move(line));
 }
