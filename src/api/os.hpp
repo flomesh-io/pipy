@@ -33,6 +33,14 @@ namespace pipy {
 
 class OS : public pjs::ObjectTemplate<OS> {
 public:
+  enum class Platform {
+    unknown,
+    linux,
+    darwin,
+    windows,
+    freebsd,
+  };
+
   struct Stats :
     public pjs::ObjectTemplate<Stats>,
     public fs::Stat
@@ -40,6 +48,7 @@ public:
   };
 
   auto env() -> pjs::Object* { return m_env; }
+  auto platform() -> Platform;
 
 private:
   OS();

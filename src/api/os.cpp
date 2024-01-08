@@ -45,6 +45,20 @@ OS::OS()
   }
 }
 
+auto OS::platform() -> Platform {
+#ifdef _WIN32
+  return Platform::windows;
+#elif defined(__linux__)
+  return Platform::linux;
+#elif defined(__APPLE__)
+  return Platform::darwin;
+#elif defined(__FreeBSD__)
+  return Platform::freebsd;
+#else
+  return Platform::unknown;
+#endif
+}
+
 } // namespace pipy
 
 namespace pjs {
@@ -136,7 +150,22 @@ template<> void ClassDef<OS>::init() {
   });
 
   // os.env
-  accessor("env", [](Object *obj, Value &ret) { ret.set(obj->as<OS>()->env()); });
+  accessor("env", [](Object *obj, Value &ret) {
+    ret.set(obj->as<OS>()->env());
+  });
+
+  // os.platform
+  accessor("platform", [](Object *obj, Value &ret) {
+    ret.set(EnumDef<OS::Platform>::name(obj->as<OS>()->platform()));
+  });
+}
+
+template<> void EnumDef<OS::Platform>::init() {
+  define(OS::Platform::unknown, "");
+  define(OS::Platform::linux, "linux");
+  define(OS::Platform::darwin, "darwin");
+  define(OS::Platform::windows, "windows");
+  define(OS::Platform::freebsd, "freebsd");
 }
 
 template<> void ClassDef<OS::Stats>::init() {
