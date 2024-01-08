@@ -26,16 +26,14 @@
 #include "nmi.hpp"
 #include "list.hpp"
 #include "worker.hpp"
+#include "os-platform.hpp"
 
 #include <cstdarg>
 #include <cstring>
 #include <algorithm>
 #include <list>
 
-#ifdef _WIN32
-#include <Windows.h>
-#include <strsafe.h>
-#else
+#ifndef _WIN32
 #include <dlfcn.h>
 #endif
 
@@ -199,43 +197,35 @@ NativeModule::NativeModule(int index, const std::string &filename)
   m_filename = pjs::Str::make(filename);
 
 #ifndef _WIN32
-  auto *handle = dlopen(filename.c_str(), RTLD_NOW);
+
+  auto handle = dlopen(filename.c_str(), RTLD_NOW);
   if (!handle) {
     std::string msg("cannot load native module '");
     std::string err(dlerror());
     throw std::runtime_error(msg + filename + "' due to: " + err);
   }
 
-  auto *init_fn = dlsym(handle, "pipy_module_init");
+  auto init_fn = dlsym(handle, "pipy_module_init");
   if (!init_fn) {
     std::string msg("pipy_module_init() not found in native module ");
     throw std::runtime_error(msg + filename);
   }
-#else
-  if (filename.size() > MAX_PATH)
-    throw std::runtime_error("native module path exceed windows path limit");
 
-  char lpModule[MAX_PATH];
-  HMODULE handle;
+#else // _WIN32
 
-  StringCchCopy(lpModule, MAX_PATH, filename.c_str());
-  auto len = strlen(lpModule);
-  for (auto i = 0; i < len; i++) {
-    if (lpModule[i] == '/') lpModule[i] = '\\';
-  }
-
-  handle = LoadLibraryEx(lpModule, NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
+  auto handle = LoadLibraryW(os::windows::convert_slash(os::windows::a2w(filename)).c_str());
   if (!handle) {
     std::string msg("cannot load native module '");
-    throw std::runtime_error(
-      msg + filename + "' due to: " + os::windows::get_last_error("LoadLibrary"));
+    throw std::runtime_error(msg + filename + "' due to: " + os::windows::get_last_error());
   }
-  FARPROC init_fn = GetProcAddress(handle, "pipy_module_init");
+
+  auto init_fn = GetProcAddress(handle, "pipy_module_init");
   if (!init_fn) {
     std::string msg("pipy_module_init() not found in native module ");
     throw std::runtime_error(msg + filename);
   }
-#endif
+
+#endif // _WIN32
 
   set_current(this);
   (*(fn_pipy_module_init)init_fn)();

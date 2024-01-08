@@ -43,6 +43,7 @@ auto process_id() -> int;
 #include <Windows.h>
 
 #include <string>
+#include <list>
 
 // Remove name pollution from Windows.h
 #undef NO_ERROR
@@ -90,8 +91,8 @@ namespace windows {
 auto a2w(const std::string &s) -> std::wstring;
 auto w2a(const std::wstring &s) -> std::string;
 auto convert_slash(const std::wstring &path) -> std::wstring;
+auto encode_argv(const std::list<std::string> &argv) -> std::string;
 auto get_last_error() -> std::string;
-auto get_last_error(const std::string &function) -> std::string;
 
 } // namespace windows
 } // namespace os

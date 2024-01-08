@@ -381,6 +381,15 @@ auto convert_slash(const std::wstring &path) -> std::wstring {
   return std::wstring(std::move(copy));
 }
 
+auto encode_argv(const std::list<std::string> &argv) -> std::string {
+  std::string line;
+  for (const auto &arg : argv) {
+    if (!line.empty()) line += ' ';
+    line += arg;
+  }
+  return std::string(std::move(line));
+}
+
 auto get_last_error() -> std::string {
   wchar_t *msg = nullptr;
   auto dw = GetLastError();
@@ -394,24 +403,6 @@ auto get_last_error() -> std::string {
   auto ret = w2a(msg);
   LocalFree(msg);
   return std::string(std::move(ret));
-}
-
-auto get_last_error(const std::string &function) -> std::string {
-  LPVOID lpMsgBuf;
-  LPVOID lpDisplayBuf;
-  DWORD dw = GetLastError();
-  FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
-                    FORMAT_MESSAGE_IGNORE_INSERTS,
-                NULL, dw, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-                (LPSTR)&lpMsgBuf, 0, NULL);
-  lpDisplayBuf = (LPVOID)LocalAlloc(LMEM_ZEROINIT,
-      (lstrlen((LPCTSTR)lpMsgBuf) + function.size() + 100) * sizeof(TCHAR));
-  StringCchPrintf((LPTSTR)lpDisplayBuf, LocalSize(lpDisplayBuf) / sizeof(TCHAR),
-                  TEXT("%s failed with error %d: %s"), function.c_str(), dw, lpMsgBuf);
-  std::string error((LPCTSTR)lpDisplayBuf);
-  LocalFree(lpMsgBuf);
-  LocalFree(lpDisplayBuf);
-  return error;
 }
 
 } // namespace windows
