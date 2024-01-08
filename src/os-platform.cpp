@@ -210,12 +210,15 @@ void StdioServer::pump(HANDLE pipe) {
       }
     } else {
       if (!ReadFile(pipe, buf, sizeof(buf), &len, &ov)) {
-        if (GetLastError() != ERROR_IO_PENDING) {
-          Log::error(
-            "read error from named pipe %s: %s",
-            m_pipe_name.c_str(),
-            os::windows::get_last_error().c_str()
-          );
+        auto error = GetLastError();
+        if (error != ERROR_IO_PENDING) {
+          if (error != ERROR_BROKEN_PIPE) {
+            Log::error(
+              "read error from named pipe %s: %s",
+              m_pipe_name.c_str(),
+              os::windows::get_last_error().c_str()
+            );
+          }
           break;
         }
         if (!GetOverlappedResult(pipe, &ov, &len, TRUE)) {

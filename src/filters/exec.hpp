@@ -59,9 +59,19 @@ private:
   pjs::Value m_command;
   pjs::Ref<FileStream> m_stdin;
   pjs::Ref<FileStream> m_stdout;
+  pjs::Ref<FileStream> m_stderr;
   int m_pid = 0;
 
 #ifdef _WIN32
+  struct StdioPipe {
+    HANDLE pipe = INVALID_HANDLE_VALUE;
+    HANDLE file = INVALID_HANDLE_VALUE;
+    bool open(Filter *filter, const char *postfix, bool is_output);
+    void close();
+  };
+  StdioPipe m_pipe_stdin;
+  StdioPipe m_pipe_stdout;
+  StdioPipe m_pipe_stderr;
   PROCESS_INFORMATION m_pif = {};
 #endif
 

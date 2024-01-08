@@ -94,6 +94,11 @@ void Exec::reset() {
     m_stdout->chain(nullptr);
     m_stdout = nullptr;
   }
+#ifdef _WIN32
+  m_pipe_stdin.close();
+  m_pipe_stdout.close();
+  m_pipe_stderr.close();
+#endif
 }
 
 void Exec::process(Event *evt) {
@@ -123,6 +128,7 @@ void Exec::process(Event *evt) {
     }
 
 #ifndef _WIN32
+
     size_t i = 0;
     char *argv[argc + 1];
     for (const auto &arg : args) argv[i++] = strdup(arg.c_str());
@@ -154,62 +160,18 @@ void Exec::process(Event *evt) {
     for (i = 0; i < argc; i++) free(argv[i]);
 
 #else // _WIN32
-    char pipe_name[100];
-    static std::atomic<int> s_pipe_unique_id(0);
-    std::snprintf(
-      pipe_name, sizeof(pipe_name),
-      "\\\\.\\pipe\\pipy.filter.exec.%08x.%08x",
-      GetCurrentProcessId(),
-      s_pipe_unique_id.fetch_add(1)
-    );
 
-    auto pipe = CreateNamedPipeA(
-      pipe_name,
-      PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED,
-      PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_REJECT_REMOTE_CLIENTS,
-      1, DATA_CHUNK_SIZE, DATA_CHUNK_SIZE, 0, NULL
-    );
-
-    if (pipe == INVALID_HANDLE_VALUE) {
-      Filter::error(
-        "unable to create named pipe '%s': %s",
-        pipe_name,
-        os::windows::get_last_error().c_str()
-      );
-      return;
-    }
-
-    SECURITY_ATTRIBUTES sa;
-    ZeroMemory(&sa, sizeof(sa));
-    sa.nLength = sizeof(SECURITY_ATTRIBUTES);
-    sa.bInheritHandle = TRUE;
-
-    auto file = CreateFileA(
-      pipe_name,
-      GENERIC_READ | GENERIC_WRITE,
-      0, &sa,
-      OPEN_EXISTING,
-      FILE_FLAG_OVERLAPPED,
-      NULL
-    );
-
-    if (file == INVALID_HANDLE_VALUE) {
-      CloseHandle(pipe);
-      Filter::error(
-        "unable to create file for named pipe '%s': %s",
-        pipe_name,
-        os::windows::get_last_error().c_str()
-      );
-      return;
-    }
+    if (!m_pipe_stdin.open(this, "stdin", false)) return;
+    if (!m_pipe_stdout.open(this, "stdout", true)) return;
+    if (!m_pipe_stderr.open(this, "stderr", true)) return;
 
     STARTUPINFOW si;
     ZeroMemory(&si, sizeof(si));
     si.cb = sizeof(STARTUPINFO);
     si.dwFlags = STARTF_USESTDHANDLES;
-    si.hStdInput = file;
-    si.hStdOutput = file;
-    si.hStdError = file;
+    si.hStdInput = m_pipe_stdin.file;
+    si.hStdOutput = m_pipe_stdout.file;
+    si.hStdError = m_pipe_stderr.file;
 
     std::string cmd_line;
     for (const auto &arg : args) {
@@ -233,8 +195,6 @@ void Exec::process(Event *evt) {
       NULL, NULL, TRUE, 0, NULL, NULL,
       &si, &m_pif
     )) {
-      CloseHandle(file);
-      CloseHandle(pipe);
       Filter::error(
         "unable to create process '%s': %s",
         cmd_line.c_str(),
@@ -244,9 +204,14 @@ void Exec::process(Event *evt) {
     }
 
     m_pid = m_pif.dwProcessId;
-    m_stdin = FileStream::make(false, file, &s_dp);
-    m_stdout = FileStream::make(true, pipe, &s_dp);
+    m_stdin = FileStream::make(false, m_pipe_stdin.pipe, &s_dp);
+    m_stdout = FileStream::make(true, m_pipe_stdout.pipe, &s_dp);
+    m_stderr = FileStream::make(true, m_pipe_stderr.pipe, &s_dp);
     m_stdout->chain(Filter::output());
+    m_stderr->chain(Filter::output());
+    m_pipe_stdin.pipe = INVALID_HANDLE_VALUE;
+    m_pipe_stdout.pipe = INVALID_HANDLE_VALUE;
+    m_pipe_stderr.pipe = INVALID_HANDLE_VALUE;
 
     Log::debug(Log::SUBPROC,
       "[exec] child process started [pid = %d]: %s",
@@ -264,6 +229,73 @@ void Exec::process(Event *evt) {
     m_stdin->input()->input(evt);
   }
 }
+
+#ifdef _WIN32
+
+//
+// Exec::StdioPipe
+//
+
+bool Exec::StdioPipe::open(Filter *filter, const char *postfix, bool is_output) {
+  char pipe_name[100];
+  static std::atomic<int> s_pipe_unique_id(0);
+  std::snprintf(
+    pipe_name, sizeof(pipe_name),
+    "\\\\.\\pipe\\pipy.filter.exec.%08x.%08x.%s",
+    GetCurrentProcessId(),
+    s_pipe_unique_id.fetch_add(1),
+    postfix
+  );
+
+  pipe = CreateNamedPipeA(
+    pipe_name,
+    FILE_FLAG_OVERLAPPED | (is_output ? PIPE_ACCESS_INBOUND: PIPE_ACCESS_OUTBOUND),
+    PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_REJECT_REMOTE_CLIENTS,
+    1, DATA_CHUNK_SIZE, DATA_CHUNK_SIZE, 0, NULL
+  );
+
+  if (pipe == INVALID_HANDLE_VALUE) {
+    filter->error(
+      "unable to create named pipe '%s': %s",
+      pipe_name,
+      os::windows::get_last_error().c_str()
+    );
+    return false;
+  }
+
+  SECURITY_ATTRIBUTES sa;
+  ZeroMemory(&sa, sizeof(sa));
+  sa.nLength = sizeof(SECURITY_ATTRIBUTES);
+  sa.bInheritHandle = TRUE;
+
+  file = CreateFileA(
+    pipe_name,
+    is_output ? GENERIC_WRITE : GENERIC_READ,
+    0, &sa,
+    OPEN_EXISTING,
+    FILE_FLAG_OVERLAPPED,
+    NULL
+  );
+
+  if (file == INVALID_HANDLE_VALUE) {
+    CloseHandle(pipe);
+    filter->error(
+      "unable to create file for named pipe '%s': %s",
+      pipe_name,
+      os::windows::get_last_error().c_str()
+    );
+    return false;
+  }
+
+  return true;
+}
+
+void Exec::StdioPipe::close() {
+  if (pipe != INVALID_HANDLE_VALUE) CloseHandle(pipe);
+  if (file != INVALID_HANDLE_VALUE) CloseHandle(file);
+}
+
+#endif // _WIN32
 
 //
 // Exec::ChildProcessMoinitor
