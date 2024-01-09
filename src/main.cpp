@@ -145,7 +145,7 @@ static void toggle_admin_port() {
       s_admin = nullptr;
       Log::info("[admin] Admin service stopped on port %d", s_admin_port);
     } else {
-      s_admin = new AdminService(nullptr, s_admin_log_file, s_admin_gui);
+      s_admin = new AdminService(nullptr, 1, s_admin_log_file, s_admin_gui);
       s_admin->retain();
       s_admin->open(s_admin_ip, s_admin_port, s_admin_options);
       logging::Logger::set_admin_service(s_admin);
@@ -472,8 +472,9 @@ int main(int argc, char *argv[]) {
       }
     }
 
-    if (!is_repo && !opts.init_repo.empty()) {
-      throw std::runtime_error("invalid option --init-repo for non-repo mode");
+    if (!is_repo) {
+      if (!opts.init_repo.empty()) throw std::runtime_error("invalid option --init-repo for non-repo mode");
+      if (!opts.init_code.empty()) throw std::runtime_error("invalid option --init-code for non-repo mode");
     }
 
     Store *store = nullptr;
@@ -489,7 +490,7 @@ int main(int argc, char *argv[]) {
         ? Store::open_memory()
         : Store::open_level_db(opts.filename);
       repo = new CodebaseStore(store, opts.init_repo);
-      s_admin = new AdminService(repo, s_admin_log_file, s_admin_gui);
+      s_admin = new AdminService(repo, opts.threads, s_admin_log_file, s_admin_gui);
       s_admin->retain();
       s_admin->open(admin_ip, admin_port, s_admin_options);
       logging::Logger::set_admin_service(s_admin);
@@ -505,6 +506,10 @@ int main(int argc, char *argv[]) {
       std::cout << "=============================================" << std::endl;
       std::cout << std::endl;
 #endif
+
+      if (!opts.init_code.empty()) {
+        s_admin->start(opts.init_code);
+      }
 
     // Start as codebase repo proxy
     } else if (is_repo_proxy) {

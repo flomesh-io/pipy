@@ -59,11 +59,17 @@ public:
     std::vector<pjs::Ref<crypto::Certificate>> trusted;
   };
 
-  AdminService(CodebaseStore *store, const std::string &log_filename = std::string(), const std::string &gui_files = std::string());
+  AdminService(
+    CodebaseStore *store,
+    int concurrency = 1,
+    const std::string &log_filename = std::string(),
+    const std::string &gui_files = std::string()
+  );
   ~AdminService();
 
   void open(const std::string &ip, int port, const Options &options);
   void close();
+  void start(const std::string &codebase);
   void write_log(const std::string &name, const Data &data);
 
 private:
@@ -163,6 +169,7 @@ private:
 
   std::string m_ip;
   int m_port;
+  int m_concurrency;
   int m_last_instance_index = 0;
   pjs::Ref<pjs::Method> m_handler_method;
   CodebaseStore* m_store;
@@ -252,7 +259,7 @@ private:
   void on_log_tail(Context *ctx, const std::string &name, const Data &data);
   void on_metrics(Context *ctx, const Data &data);
 
-  auto change_program(const std::string &path, bool reload) -> Message*;
+  void change_program(const std::string &path, bool reload);
   void metrics_history_step();
   void inactive_instance_removal_step();
 };

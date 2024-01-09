@@ -56,8 +56,13 @@ static std::string s_server_name("pipy-repo");
 // AdminService
 //
 
-AdminService::AdminService(CodebaseStore *store, const std::string &log_filename, const std::string &gui_files)
-  : m_store(store)
+AdminService::AdminService(
+  CodebaseStore *store,
+  int concurrency,
+  const std::string &log_filename,
+  const std::string &gui_files
+) : m_concurrency(concurrency)
+  , m_store(store)
   , m_local_metric_history(METRIC_HISTORY_SIZE)
   , m_www_files(GuiTarball::data(), GuiTarball::size())
   , m_module(new Module())
@@ -212,6 +217,10 @@ void AdminService::close() {
   }
   m_module->shutdown();
   m_metrics_history_timer.cancel();
+}
+
+void AdminService::start(const std::string &codebase) {
+  change_program(codebase, false);
 }
 
 void AdminService::write_log(const std::string &name, const Data &data) {
@@ -1112,11 +1121,21 @@ Message* AdminService::api_v1_program_GET() {
 }
 
 Message* AdminService::api_v1_program_POST(Data *data) {
-  return change_program(data->to_string(), false);
+  try {
+    change_program(data->to_string(), false);
+    return m_response_created;
+  } catch (std::runtime_error &err) {
+    return response(400, err.what());
+  }
 }
 
 Message* AdminService::api_v1_program_PATCH(Data *data) {
-  return change_program(data->to_string(), true);
+  try {
+    change_program(data->to_string(), true);
+    return m_response_created;
+  } catch (std::runtime_error &err) {
+    return response(400, err.what());
+  }
 }
 
 Message* AdminService::api_v1_program_DELETE() {
@@ -1329,7 +1348,7 @@ void AdminService::on_metrics(Context *ctx, const Data &data) {
   }
 }
 
-auto AdminService::change_program(const std::string &path, bool reload) -> Message* {
+void AdminService::change_program(const std::string &path, bool reload) {
   std::string name = path;
 
   Codebase *old_codebase = Codebase::current();
@@ -1343,12 +1362,12 @@ auto AdminService::change_program(const std::string &path, bool reload) -> Messa
     new_codebase = old_codebase;
   }
 
-  if (!new_codebase) return response(400, "No codebase");
+  if (!new_codebase) throw std::runtime_error("No codebase");
 
   auto &entry = new_codebase->entry();
   if (entry.empty()) {
     if (new_codebase != old_codebase) delete new_codebase;
-    return response(400, "No main script");
+    throw std::runtime_error("No main script");
   }
 
   if (new_codebase != old_codebase) {
@@ -1357,7 +1376,7 @@ auto AdminService::change_program(const std::string &path, bool reload) -> Messa
 
   if (reload) {
     WorkerManager::get().reload();
-    return m_response_created;
+    return;
   }
 
   if (WorkerManager::get().started()) {
@@ -1365,11 +1384,11 @@ auto AdminService::change_program(const std::string &path, bool reload) -> Messa
     m_current_program.clear();
   }
 
-  if (WorkerManager::get().start()) {
+  if (WorkerManager::get().start(m_concurrency)) {
     if (new_codebase != old_codebase) delete old_codebase;
     if (name != "/") m_current_codebase = name;
     m_current_program = m_current_codebase;
-    return m_response_created;
+    return;
   }
 
   if (new_codebase != old_codebase) {
@@ -1379,7 +1398,7 @@ auto AdminService::change_program(const std::string &path, bool reload) -> Messa
     }
   }
 
-  return response(400, "Failed to start up");
+  throw std::runtime_error("Failed to start up");
 }
 
 void AdminService::metrics_history_step() {
