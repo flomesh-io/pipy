@@ -94,6 +94,11 @@ void Exec::reset() {
     m_stdout->chain(nullptr);
     m_stdout = nullptr;
   }
+  if (m_stderr) {
+    m_stderr->close();
+    m_stderr->chain(nullptr);
+    m_stderr = nullptr;
+  }
 #ifdef _WIN32
   m_pipe_stdin.close();
   m_pipe_stdout.close();
@@ -151,19 +156,23 @@ bool Exec::exec_argv(const std::list<std::string> &args) {
   for (const auto &arg : args) argv[i++] = strdup(arg.c_str());
   argv[argc] = nullptr;
 
-  int in[2], out[2];
+  int in[2], out[2], err[2];
   pipe(in);
   pipe(out);
+  pipe(err);
 
   m_stdin = FileStream::make(false, in[1], &s_dp);
   m_stdout = FileStream::make(true, out[0], &s_dp);
+  m_stderr = FileStream::make(true, err[0], &s_dp);
   m_stdout->chain(output());
+  m_stderr->chain(output());
 
   auto pid = fork();
 
   if (pid == 0) {
     dup2(in[0], 0);
     dup2(out[1], 1);
+    dup2(err[1], 2);
     execvp(argv[0], argv);
     std::terminate();
   }
@@ -177,6 +186,7 @@ bool Exec::exec_argv(const std::list<std::string> &args) {
 
   ::close(in[0]);
   ::close(out[1]);
+  ::close(err[1]);
   m_pid = pid;
 
   Log::debug(Log::SUBPROC,
