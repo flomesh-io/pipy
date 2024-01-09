@@ -87,11 +87,13 @@ public:
     Data* make(int size) { return Data::make(size, this); }
     Data* make(int size, int value) { return Data::make(size, value, this); }
     Data* make(const void *data, int size) { return Data::make(data, size, this); }
+    Data* make(const std::vector<uint8_t> &bytes) { return Data::make(bytes, this); }
     Data* make(const std::string &str) { return Data::make(str, this); }
     Data* make(const std::string &str, Encoding encoding) { return Data::make(str, encoding, this); }
 
     void push(Data *data, const Data *data2) { data->push(*data2); }
     void push(Data *data, const void *p, int n) { data->push(p, n, this); }
+    void push(Data *data, const std::vector<uint8_t> &bytes) { data->push(bytes, this); }
     void push(Data *data, const std::string &str) { data->push(str, this); }
     void push(Data *data, const char *str) { data->push(str, this); }
     void push(Data *data, char ch) { data->push(ch, this); }
@@ -518,6 +520,9 @@ public:
     push(data, size, producer);
   }
 
+  Data(const std::vector<uint8_t> &bytes, Producer *producer)
+    : Data(bytes.data(), bytes.size(), producer) {}
+
   Data(const std::string &str, Producer *producer) : Data(str.c_str(), str.length(), producer)
   {
   }
@@ -713,6 +718,10 @@ public:
       n -= added;
       push_view(view);
     }
+  }
+
+  void push(const std::vector<uint8_t> &bytes, Producer *producer) {
+    push(bytes.data(), bytes.size(), producer);
   }
 
   void push(char ch, Producer *producer) {

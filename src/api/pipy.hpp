@@ -39,9 +39,17 @@ namespace pipy {
 
 class Pipy : public pjs::FunctionTemplate<Pipy> {
 public:
+  struct ExecOptions : public Options {
+    pjs::Ref<Data> buf_stdin;
+    pjs::Ref<Data> buf_stderr;
+    pjs::Ref<pjs::Function> on_exit_f;
+    ExecOptions() {}
+    ExecOptions(pjs::Object *options);
+  };
+
   static void on_exit(const std::function<void(int)> &on_exit);
-  static auto exec(const std::string &cmd) -> Data*;
-  static auto exec(pjs::Array *args) -> Data*;
+  static auto exec(const std::string &cmd, int &exit_code, const ExecOptions &options = ExecOptions()) -> Data*;
+  static auto exec(pjs::Array *args, int &exit_code, const ExecOptions &options = ExecOptions()) -> Data*;
 
   void operator()(pjs::Context &ctx, pjs::Object *obj, pjs::Value &ret);
 
