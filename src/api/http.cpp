@@ -372,7 +372,7 @@ auto Directory::serve(pjs::Context &ctx, Message *request) -> Message* {
   if (i == m_cache.end()) {
     Data raw, gz, br;
     if (!m_loader->load_file(path, raw)) {
-      if (path.back() != '/') path += '/';
+      if (path.empty() || path.back() != '/') path += '/';
       bool found = false;
       for (const auto &s : m_index_filenames) {
         auto index_path = path + s;
