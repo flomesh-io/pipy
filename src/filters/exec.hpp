@@ -29,6 +29,7 @@
 #include "filter.hpp"
 #include "timer.hpp"
 #include "os-platform.hpp"
+#include "options.hpp"
 
 #include <atomic>
 #include <map>
@@ -44,7 +45,14 @@ class FileStream;
 
 class Exec : public Filter {
 public:
-  Exec(const pjs::Value &command);
+  struct Options : public pipy::Options {
+    bool stderr_buffer = false;
+    pjs::Ref<pjs::Function> on_exit_f;
+    Options() {}
+    Options(pjs::Object *options);
+  };
+
+  Exec(const pjs::Value &command, const Options &options = Options());
 
 private:
   Exec(const Exec &r);
@@ -55,29 +63,74 @@ private:
   virtual void process(Event *evt) override;
   virtual void dump(Dump &d) override;
 
-private:
-  pjs::Value m_command;
-  pjs::Ref<FileStream> m_stdin;
-  pjs::Ref<FileStream> m_stdout;
-  pjs::Ref<FileStream> m_stderr;
-  int m_pid = 0;
+  //
+  // Exec::StdoutReader
+  //
 
-#ifdef _WIN32
+  class StdoutReader : public EventTarget {
+  public:
+    StdoutReader(Exec *exec) : m_exec(exec) {}
+    bool ended() const { return m_ended; }
+    void reset() { m_ended = false; }
+  private:
+    Exec* m_exec;
+    bool m_ended = false;
+    virtual void on_event(Event *evt) override;
+  };
+
+  //
+  // Exec::StderrReader
+  //
+
+  class StderrReader : public EventTarget {
+  public:
+    StderrReader(Exec *exec) : m_exec(exec) {}
+    auto buffer() -> Data& { return m_buffer; }
+    bool ended() const { return m_ended; }
+    void reset() { m_buffer.clear(); m_ended = false; }
+  private:
+    Exec* m_exec;
+    Data m_buffer;
+    bool m_ended = false;
+    virtual void on_event(Event *evt) override;
+  };
+
+#ifndef _WIN32
+
+  struct ChildProcess { int pid = 0; };
+
+#else // _WIN32
+
+  struct ChildProcess { int pid = 0; HANDLE process, thread; };
+
   struct StdioPipe {
     HANDLE pipe = INVALID_HANDLE_VALUE;
     HANDLE file = INVALID_HANDLE_VALUE;
     bool open(Filter *filter, const char *postfix, bool is_output);
     void close();
   };
+
   StdioPipe m_pipe_stdin;
   StdioPipe m_pipe_stdout;
   StdioPipe m_pipe_stderr;
-  PROCESS_INFORMATION m_pif = {};
-#endif
 
+#endif // _WIN32
+
+  Options m_options;
+  pjs::Value m_command;
+  pjs::Ref<FileStream> m_stdin;
+  pjs::Ref<FileStream> m_stdout;
+  pjs::Ref<FileStream> m_stderr;
+  ChildProcess m_child_proc;
+  StdoutReader m_stdout_reader;
+  StderrReader m_stderr_reader;
+  int m_child_proc_exit_code = 0;
+  bool m_child_proc_exited = false;
+
+  void on_process_exit(int exit_code);
+  void check_ending();
   bool exec_argv(const std::list<std::string> &args);
   bool exec_line(const std::string &line);
-  void on_process_exit();
 
   //
   // Exec::ChildProcessMonitor
@@ -88,16 +141,23 @@ private:
     ChildProcessMonitor();
     ~ChildProcessMonitor();
 
-    void monitor(Exec *exec);
+    void add(Exec *exec);
     void remove(Exec *exec);
 
   private:
-    void wait();
+    void main();
+
+    struct Monitor {
+      ChildProcess proc;
+      Exec *exec;
+      Net *net;
+    };
 
     std::atomic<bool> m_exited;
-    std::thread m_wait_thread;
+    std::thread m_thread;
     std::mutex m_mutex;
-    std::map<Exec*, Net*> m_filters;
+    std::condition_variable m_workload_cv;
+    std::map<int, Monitor> m_monitors;
   };
 
   static ChildProcessMonitor s_child_process_monitor;

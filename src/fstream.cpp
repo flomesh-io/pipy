@@ -40,12 +40,12 @@ FileStream::FileStream(bool read, handle_t fd, Data::Producer *dp)
   if (read) this->read();
 }
 
-void FileStream::close(bool close_fd) {
+void FileStream::close() {
   std::error_code ec;
-  if (close_fd) {
-    m_stream.close(ec);
-  } else {
+  if (m_no_close) {
     m_stream.release();
+  } else {
+    m_stream.close(ec);
   }
 
   if (m_receiving_state == PAUSED) {

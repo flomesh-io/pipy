@@ -61,8 +61,9 @@ public:
   }
 
   auto fd() const -> handle_t { return m_fd; }
+  void set_no_close() { m_no_close = true; }
   void set_buffer_limit(size_t size) { m_buffer_limit = size; }
-  void close(bool close_fd = true);
+  void close();
 
 private:
   FileStream(bool read, handle_t fd, Data::Producer *dp);
@@ -85,6 +86,7 @@ private:
   size_t m_buffer_limit = 0;
   size_t m_file_pointer = 0;
   ReceivingState m_receiving_state = RECEIVING;
+  bool m_no_close = false;
   bool m_overflowed = false;
   bool m_pumping = false;
   bool m_ended = false;

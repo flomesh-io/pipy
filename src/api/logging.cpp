@@ -241,7 +241,7 @@ void Logger::History::dump_messages(Data &buffer) {
 
 Logger::StdoutTarget::~StdoutTarget() {
   if (m_file_stream) {
-    m_file_stream->close(false);
+    m_file_stream->close();
   }
 }
 
@@ -254,6 +254,7 @@ void Logger::StdoutTarget::write(const Data &msg) {
         m_is_stderr ? STDERR_FILENO : STDOUT_FILENO,
         &s_dp_stdout
       );
+      m_file_stream->set_no_close();
     }
     Data *buf = Data::make();
     s_dp.push(buf, &msg);

@@ -51,13 +51,15 @@ void File::open_read(int seek, const std::function<void(FileStream*)> &cb) {
 
   Net::main().post(
     [=]() {
-      auto f = (path == "-" ? os::FileHandle::std_input() : os::FileHandle::read(path));
+      bool is_std = (path == "-");
+      auto f = (is_std ? os::FileHandle::std_input() : os::FileHandle::read(path));
       if (f.valid()) {
         if (seek > 0) f.seek(seek);
         net->post(
           [=]() {
             m_f = f;
             m_stream = FileStream::make(true, f.get(), &s_dp);
+            if (is_std) m_stream->set_no_close();
             if (m_closed) {
               close();
             }
@@ -98,7 +100,8 @@ void File::open_write(bool append) {
         );
       } else {
         os::FileHandle f;
-        if (path == "-") {
+        bool is_std = (path == "-");
+        if (is_std) {
           f = os::FileHandle::std_output();
         } else if (append) {
           f = os::FileHandle::append(path);
@@ -112,6 +115,7 @@ void File::open_write(bool append) {
               m_f = f;
               m_writing = true;
               m_stream = FileStream::make(false, f.get(), &s_dp);
+              if (is_std) m_stream->set_no_close();
               if (!m_buffer.empty()) {
                 m_stream->input()->input(Data::make(m_buffer));
                 m_buffer.clear();

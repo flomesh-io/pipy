@@ -288,8 +288,8 @@ void FilterConfigurator::encode_websocket() {
   append_filter(new websocket::Encoder());
 }
 
-void FilterConfigurator::exec(const pjs::Value &command) {
-  append_filter(new Exec(command));
+void FilterConfigurator::exec(const pjs::Value &command, pjs::Object *options) {
+  append_filter(new Exec(command, options));
 }
 
 void FilterConfigurator::fork(const pjs::Value &init_arg) {
@@ -1679,9 +1679,10 @@ template<> void ClassDef<FilterConfigurator>::init() {
   method("exec", [](Context &ctx, Object *thiz, Value &result) {
     auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     Value command;
-    if (!ctx.arguments(1, &command)) return;
+    Object *options = nullptr;
+    if (!ctx.arguments(1, &command, &options)) return;
     try {
-      config->exec(command);
+      config->exec(command, options);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
