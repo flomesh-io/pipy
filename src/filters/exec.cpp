@@ -47,7 +47,7 @@ thread_local static Data::Producer s_dp("exec()");
 
 Exec::Options::Options(pjs::Object *options) {
   Value(options, "stderr")
-    .get(stderr_buffer)
+    .get(std_err)
     .check_nullable();
   Value(options, "onExit")
     .get(on_exit_f)
@@ -166,7 +166,7 @@ void Exec::check_ending() {
       pjs::Value args[2], ret;
       args[0].set(m_child_proc_exit_code);
       int argc = 1;
-      if (m_options.stderr_buffer) {
+      if (!m_options.std_err) {
         args[argc++].set(Data::make(std::move(m_stderr_reader.buffer())));
       }
       Filter::callback(f, argc, args, ret);
@@ -386,10 +386,10 @@ void Exec::StdoutReader::on_event(Event *evt) {
 
 void Exec::StderrReader::on_event(Event *evt) {
   if (auto data = evt->as<Data>()) {
-    if (m_exec->m_options.stderr_buffer) {
-      m_buffer.push(*data);
-    } else {
+    if (m_exec->m_options.std_err) {
       m_exec->Filter::output(evt);
+    } else {
+      m_buffer.push(*data);
     }
   } else if (evt->is<StreamEnd>()) {
     evt->retain();

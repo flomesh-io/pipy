@@ -56,22 +56,26 @@ thread_local static Data::Producer s_dp("pipy.exec()");
 
 Pipy::ExecOptions::ExecOptions(pjs::Object *options) {
   Value(options, "stdin")
-    .get(buf_stdin)
+    .get(std_in)
     .check_nullable();
   Value(options, "stderr")
-    .get(buf_stderr)
+    .get(std_err)
     .check_nullable();
   Value(options, "onExit")
     .get(on_exit_f)
     .check_nullable();
 }
 
+inline static void no_arguments() {
+  throw std::runtime_error("exec() with no arguments");
+}
+
 #ifndef _WIN32
 
-static auto exec_argv(const std::list<std::string> &args, int &exit_code, const Pipy::ExecOptions &options) -> Data* {
+static auto exec_argv(const std::list<std::string> &args, const Pipy::ExecOptions &options) -> Pipy::ExecResult {
   auto argc = args.size();
   if (!argc) {
-    throw std::runtime_error("exec() with no arguments");
+    no_arguments();
   }
 
   int n = 0;
@@ -79,6 +83,7 @@ static auto exec_argv(const std::list<std::string> &args, int &exit_code, const 
   for (const auto &arg : args) argv[n++] = strdup(arg.c_str());
   argv[n] = nullptr;
 
+  Pipy::ExecResult result;
   std::thread t_stdout, t_stderr;
   std::vector<uint8_t> buf_stdout;
   std::vector<uint8_t> buf_stderr;
@@ -88,8 +93,8 @@ static auto exec_argv(const std::list<std::string> &args, int &exit_code, const 
 
   try {
     if (pipe(pipes[1]) ||
-      (options.buf_stdin && pipe(pipes[0])) ||
-      (options.buf_stderr && pipe(pipes[2]))
+      (options.std_in && pipe(pipes[0])) ||
+      (!options.std_err && pipe(pipes[2]))
     ) {
       throw std::runtime_error("unable to create pipes");
     }
@@ -125,7 +130,7 @@ static auto exec_argv(const std::list<std::string> &args, int &exit_code, const 
     if (pipes[1][0]) t_stdout = std::thread([&]() { buf_stdout = read_pipe(pipes[1][0]); });
     if (pipes[2][0]) t_stderr = std::thread([&]() { buf_stderr = read_pipe(pipes[2][0]); });
 
-    if (auto *data = options.buf_stdin.get()) {
+    if (auto *data = options.std_in.get()) {
       for (auto c : data->chunks()) {
         auto ptr = std::get<0>(c);
         auto len = std::get<1>(c);
@@ -149,7 +154,7 @@ static auto exec_argv(const std::list<std::string> &args, int &exit_code, const 
 
     int status;
     waitpid(pid, &status, 0);
-    exit_code = WEXITSTATUS(status);
+    result.exit_code = WEXITSTATUS(status);
 
   } catch (std::runtime_error &) {
     for (int i = 0; i < 3; i++) {
@@ -167,19 +172,21 @@ static auto exec_argv(const std::list<std::string> &args, int &exit_code, const 
     if (pipes[i][1]) close(pipes[i][1]);
   }
 
-  if (options.buf_stderr) {
-    s_dp.push(options.buf_stderr.get(), buf_stderr);
+  result.out = s_dp.make(buf_stdout);
+
+  if (!options.std_err) {
+    result.err = s_dp.make(buf_stderr);
   }
 
-  return s_dp.make(buf_stdout);
+  return result;
 }
 
-auto Pipy::exec(const std::string &cmd, int &exit_code, const ExecOptions &options) -> Data* {
-  return exec_argv(utils::split_argv(cmd), exit_code, options);
+auto Pipy::exec(const std::string &cmd, const ExecOptions &options) -> ExecResult {
+  return exec_argv(utils::split_argv(cmd), options);
 }
 
-auto Pipy::exec(pjs::Array *argv, int &exit_code, const ExecOptions &options) -> Data* {
-  if (!argv) return nullptr;
+auto Pipy::exec(pjs::Array *argv, const ExecOptions &options) -> ExecResult {
+  if (!argv || argv->length() == 0) no_arguments();
 
   std::list<std::string> args;
   argv->iterate_all(
@@ -190,12 +197,13 @@ auto Pipy::exec(pjs::Array *argv, int &exit_code, const ExecOptions &options) ->
     }
   );
 
-  return exec_argv(args, exit_code, options);
+  return exec_argv(args, options);
 }
 
 #else // _WIN32
 
-static auto exec_line(const std::string &line, int &exit_code, const Pipy::ExecOptions &options) -> Data* {
+static auto exec_line(const std::string &line, const Pipy::ExecOptions &options) -> Pipy::ExecResult {
+  Pipy::ExecResult result;
   std::thread t_stdout, t_stderr;
   std::vector<uint8_t> buf_stdout;
   std::vector<uint8_t> buf_stderr;
@@ -210,8 +218,8 @@ static auto exec_line(const std::string &line, int &exit_code, const Pipy::ExecO
     sa.bInheritHandle = TRUE;
 
     if (!CreatePipe(&pipes[1][0], &pipes[1][1], &sa, 0) ||
-      (options.buf_stdin && !CreatePipe(&pipes[0][0], &pipes[0][1], &sa, 0)) ||
-      (options.buf_stderr && !CreatePipe(&pipes[2][0], &pipes[2][1], &sa, 0))
+      (options.std_in && !CreatePipe(&pipes[0][0], &pipes[0][1], &sa, 0)) ||
+      (!options.std_err && !CreatePipe(&pipes[2][0], &pipes[2][1], &sa, 0))
     ) {
       throw std::runtime_error(
         "unable to create pipe: " + os::windows::get_last_error()
@@ -262,7 +270,7 @@ static auto exec_line(const std::string &line, int &exit_code, const Pipy::ExecO
     if (pipes[1][0]) t_stdout = std::thread([&]() { buf_stdout = read_pipe(pipes[1][0]); });
     if (pipes[2][0]) t_stderr = std::thread([&]() { buf_stderr = read_pipe(pipes[2][0]); });
 
-    if (auto *data = options.buf_stdin.get()) {
+    if (auto *data = options.std_in.get()) {
       for (auto c : data->chunks()) {
         auto ptr = std::get<0>(c);
         auto len = std::get<1>(c);
@@ -282,7 +290,7 @@ static auto exec_line(const std::string &line, int &exit_code, const Pipy::ExecO
 
     DWORD code;
     GetExitCodeProcess(pif.hProcess, &code);
-    exit_code = code;
+    result.exit_code = code;
 
     CloseHandle(pif.hThread);
     CloseHandle(pif.hProcess);
@@ -303,19 +311,21 @@ static auto exec_line(const std::string &line, int &exit_code, const Pipy::ExecO
     if (pipes[i][1]) CloseHandle(pipes[i][1]);
   }
 
-  if (options.buf_stderr) {
-    s_dp.push(options.buf_stderr.get(), buf_stderr);
+  result.out = s_dp.make(buf_stdout);
+
+  if (!options.std_err) {
+    result.err = s_dp.make(buf_stderr);
   }
 
-  return s_dp.make(buf_stdout);
+  return result;
 }
 
-auto Pipy::exec(const std::string &cmd, int &exit_code, const ExecOptions &options) -> Data* {
-  return exec_line(cmd, exit_code, options);
+auto Pipy::exec(const std::string &cmd, const ExecOptions &options) -> ExecResult {
+  return exec_line(cmd, options);
 }
 
-auto Pipy::exec(pjs::Array *argv, int &exit_code, const ExecOptions &options) -> Data* {
-  if (!argv) return nullptr;
+auto Pipy::exec(pjs::Array *argv, const ExecOptions &options) -> ExecResult {
+  if (!argv || argv->length() == 0) no_arguments();
 
   std::list<std::string> args;
   argv->iterate_all(
@@ -326,7 +336,7 @@ auto Pipy::exec(pjs::Array *argv, int &exit_code, const ExecOptions &options) ->
     }
   );
 
-  return exec_line(os::windows::encode_argv(args), exit_code, options);
+  return exec_line(os::windows::encode_argv(args), options);
 }
 
 #endif // _WIN32
@@ -463,24 +473,23 @@ template<> void ClassDef<Pipy>::init() {
         Object *options;
         if (!ctx.check<Object>(1, options, nullptr)) return;
         Pipy::ExecOptions opts(options);
-        pipy::Data *out = nullptr;
-        int exit_code = 0;
+        Pipy::ExecResult result;
         if (cmd) {
-          out = Pipy::exec(cmd->str(), exit_code, opts);
+          result = Pipy::exec(cmd->str(), opts);
         } else {
-          out = Pipy::exec(argv, exit_code, opts);
+          result = Pipy::exec(argv, opts);
         }
         if (auto f = opts.on_exit_f.get()) {
           int argc = 1;
           Value args[2], ret;
-          args[0].set(exit_code);
-          if (auto err = opts.buf_stderr.get()) {
-            args[1].set(err);
+          args[0].set(result.exit_code);
+          if (!opts.std_err) {
+            args[1].set(result.err);
             argc = 2;
           }
           (*f)(ctx, argc, args, ret);
         }
-        ret.set(out);
+        ret.set(result.out);
       } else {
         ctx.error_argument_type(0, "a string or an array");
       }
