@@ -437,7 +437,11 @@ void Map::delete_raw(Data *key) {
 #else // !PIPY_USE_BPF
 
 static void unsupported() {
-  throw std::runtime_error("eBPF not supported");
+  throw std::runtime_error("BPF not supported");
+}
+
+ObjectFile::ObjectFile(Data *data) {
+  unsupported();
 }
 
 auto Program::list() -> pjs::Array* {
