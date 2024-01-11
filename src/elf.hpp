@@ -65,7 +65,9 @@ public:
     size_t value;
     size_t size;
     size_t shndx;
-    int info;
+    int type;
+    int bind;
+    int visibility;
   };
 
   //
@@ -80,7 +82,8 @@ public:
 
     struct Entry {
       size_t offset;
-      uint64_t info;
+      int sym;
+      int type;
     };
 
     size_t section;

@@ -58,8 +58,9 @@ public:
     TCP       = 1<<8,
     UDP       = 1<<9,
     HTTP2     = 1<<10,
-    BPF       = 1<<11,
-    USER      = 1<<12,
+    ELF       = 1<<11,
+    BPF       = 1<<12,
+    USER      = 1<<13,
   };
 
   static void init();

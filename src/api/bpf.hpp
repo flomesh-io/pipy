@@ -28,10 +28,29 @@
 
 #include "pjs/pjs.hpp"
 #include "api/c-struct.hpp"
+#include "elf.hpp"
 #include "data.hpp"
 
 namespace pipy {
 namespace bpf {
+
+class Program;
+class Map;
+
+//
+// ObjectFile
+//
+
+class ObjectFile : public pjs::ObjectTemplate<ObjectFile> {
+public:
+  std::vector<pjs::Ref<Program>> programs;
+  std::vector<pjs::Ref<Map>> maps;
+
+private:
+  ObjectFile(Data *data);
+
+  friend class pjs::ObjectTemplate<ObjectFile>;
+};
 
 //
 // Program
@@ -40,9 +59,20 @@ namespace bpf {
 class Program : public pjs::ObjectTemplate<Program> {
 public:
   static auto list() -> pjs::Array*;
-  static auto load(Data *elf) -> Program*;
 
+  auto name() const -> pjs::Str* { return m_name; }
   auto maps() -> pjs::Array*;
+  void load();
+
+private:
+  Program(const std::string &name, const void *insts, size_t size);
+
+  pjs::Ref<pjs::Str> m_name;
+  std::vector<uint8_t> m_insts;
+  size_t m_inst_count;
+  int m_fd = 0;
+
+  friend class pjs::ObjectTemplate<Program>;
 };
 
 //

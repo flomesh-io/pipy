@@ -172,8 +172,8 @@ ELF::ELF(std::vector<uint8_t> &&data) : m_data(std::move(data)) {
   for (size_t i = 0; i < shnum; i++) {
     auto &s = sections[i];
     s.name = string(name_offsets[i]);
-    Log::debug(Log::BPF,
-      "[bpf] SECTION #%d name '%s' addr 0x%08x size %d type %d flags %d link %d info %d",
+    Log::debug(Log::ELF,
+      "[elf] SECTION #%d name '%s' addr 0x%08x size %d type %d flags %d link %d info %d",
       int(i), s.name.c_str(), int(s.addr), int(s.size), s.type, s.flags, s.link, s.info
     );
   }
@@ -197,7 +197,9 @@ ELF::ELF(std::vector<uint8_t> &&data) : m_data(std::move(data)) {
             s.value = ent.st_value;
             s.size = ent.st_size;
             s.shndx = ent.st_shndx;
-            s.info = ent.st_info;
+            s.type = ELF32_ST_TYPE(ent.st_info);
+            s.bind = ELF32_ST_BIND(ent.st_info);
+            s.visibility = ELF32_ST_VISIBILITY(ent.st_other);
             break;
           }
           case ELFCLASS64: {
@@ -206,13 +208,15 @@ ELF::ELF(std::vector<uint8_t> &&data) : m_data(std::move(data)) {
             s.value = ent.st_value;
             s.size = ent.st_size;
             s.shndx = ent.st_shndx;
-            s.info = ent.st_info;
+            s.type = ELF64_ST_TYPE(ent.st_info);
+            s.bind = ELF64_ST_BIND(ent.st_info);
+            s.visibility = ELF64_ST_VISIBILITY(ent.st_other);
             break;
           }
         }
-        Log::debug(Log::BPF,
-          "[bpf] SYMBOL #%d name '%s' value %d size %d shndx %d info %d",
-          int(i), s.name.c_str(), int(s.value), int(s.shndx), s.info
+        Log::debug(Log::ELF,
+          "[elf] SYMBOL #%d name '%s' value %d size %d shndx %d type %d bind %d visibility %d",
+          int(i), s.name.c_str(), int(s.value), int(s.size), int(s.shndx), s.type, s.bind, s.visibility
         );
       }
       break;
@@ -243,19 +247,21 @@ ELF::ELF(std::vector<uint8_t> &&data) : m_data(std::move(data)) {
           case ELFCLASS32: {
             const auto &ent = *(Elf32_Rel *)(sec.data + offset);
             r.offset = ent.r_offset;
-            r.info = ent.r_info;
+            r.sym = ELF32_R_SYM(ent.r_info);
+            r.type = ELF32_R_TYPE(ent.r_info);
             break;
           }
           case ELFCLASS64: {
             const auto &ent = *(Elf64_Rel *)(sec.data + offset);
             r.offset = ent.r_offset;
-            r.info = ent.r_info;
+            r.sym = ELF64_R_SYM(ent.r_info);
+            r.type = ELF64_R_TYPE(ent.r_info);
             break;
           }
         }
-        Log::debug(Log::BPF,
-          "[bpf] RELOC for SECTION #%d offset %d info %llu",
-          int(reloc.section), int(r.offset), r.info
+        Log::debug(Log::ELF,
+          "[elf] RELOC for SECTION #%d offset %d sym %d type %d",
+          int(reloc.section), int(r.offset), r.sym, r.type
         );
         if (r.offset >= max_offset) {
           relocation_out_of_bound(i);

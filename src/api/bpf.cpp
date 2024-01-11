@@ -27,9 +27,12 @@
 #include "elf.hpp"
 #include "log.hpp"
 
+#include <cstring>
+
 #ifdef PIPY_USE_BPF
 
 #include <unistd.h>
+#include <elf.h>
 #include <sys/syscall.h>
 #include <linux/bpf.h>
 
@@ -57,22 +60,81 @@ static inline int syscall_bpf(enum bpf_cmd cmd, union bpf_attr *attr, unsigned i
   return syscall_bpf(cmd, attr, size);
 }
 
+static void syscall_error(const char *name) {
+  char msg[200];
+  std::snprintf(msg, sizeof(msg), "syscall %s failed with errno = %d: ", name, errno);
+  throw std::runtime_error(std::string(msg) + std::strerror(errno));
+}
+
+//
+// ObjectFile
+//
+
+ObjectFile::ObjectFile(Data *data) {
+  auto bytes = data->to_bytes();
+  ELF obj(std::move(bytes));
+
+  for (size_t i = 0; i < obj.symbols.size(); i++) {
+    const auto &sym = obj.symbols[i];
+    if (sym.type != STT_FUNC) continue;
+    if (sym.shndx >= obj.sections.size()) continue;
+    const auto &sec = obj.sections[sym.shndx];
+    if (sec.type != SHT_PROGBITS) continue;
+    if (!(sec.flags & SHF_EXECINSTR)) continue;
+    auto offset = sym.value;
+    auto length = sym.size;
+    if (offset + length > sec.size) continue;
+    programs.push_back(
+      Program::make(sec.name, sec.data + offset, length)
+    );
+  }
+}
+
 //
 // Program
 //
+
+Program::Program(const std::string &name, const void *insts, size_t size)
+  : m_name(pjs::Str::make(name))
+  , m_insts(size)
+  , m_inst_count(size / sizeof(struct bpf_insn))
+{
+  std::memcpy(m_insts.data(), insts, size);
+}
 
 auto Program::list() -> pjs::Array* {
   return nullptr;
 }
 
-auto Program::load(Data *elf) -> Program* {
-  auto data = elf->to_bytes();
-  ELF obj(std::move(data));
+auto Program::maps() -> pjs::Array* {
   return nullptr;
 }
 
-auto Program::maps() -> pjs::Array* {
-  return nullptr;
+void Program::load() {
+  std::vector<char> log_buf(100*1024);
+  union bpf_attr attr;
+  int fd = syscall_bpf(
+    BPF_PROG_LOAD, &attr, attr_size(fd_array),
+    [&](union bpf_attr &attr) {
+      std::strncpy(attr.prog_name, m_name->c_str(), sizeof(attr.prog_name));
+      attr.prog_type = BPF_PROG_TYPE_XDP;
+      attr.insn_cnt = m_inst_count;
+      attr.insns = (uintptr_t)m_insts.data();
+      attr.license = (uintptr_t)"GPL";
+      attr.log_level = 1;
+      attr.log_size = log_buf.size();
+      attr.log_buf = (uintptr_t)log_buf.data();
+      attr.prog_ifindex = 0;
+    }
+  );
+  if (log_buf[0] && Log::is_enabled(Log::BPF)) {
+    Log::debug(Log::BPF, "[bpf] In-kernel verifier log:");
+    Log::write(log_buf.data());
+  }
+  if (fd < 0) {
+    syscall_error("BPF_PROG_LOAD");
+  }
+  m_fd = fd;
 }
 
 //
@@ -102,41 +164,56 @@ auto Map::list() -> pjs::Array* {
   auto a = pjs::Array::make();
   union bpf_attr attr;
   unsigned int id = 0;
-  for (;;) {
-    if (!syscall_bpf(
-      BPF_MAP_GET_NEXT_ID, &attr, attr_size(open_flags),
-      [&](union bpf_attr &attr) { attr.start_id = id; }
-    )) {
-      id = attr.next_id;
-    } else {
-      break;
-    }
-
-    int fd = syscall_bpf(
-      BPF_MAP_GET_FD_BY_ID, &attr, attr_size(open_flags),
-      [&](union bpf_attr &attr) { attr.map_id = id; }
-    );
-
-		struct bpf_map_info info = {};
-    syscall_bpf(
-      BPF_OBJ_GET_INFO_BY_FD, &attr, attr_size(info),
-      [&](union bpf_attr &attr) {
-        attr.info.bpf_fd = fd;
-        attr.info.info_len = sizeof(info);
-        attr.info.info = (uint64_t)&info;
+  try {
+    for (;;) {
+      if (!syscall_bpf(
+        BPF_MAP_GET_NEXT_ID, &attr, attr_size(open_flags),
+        [&](union bpf_attr &attr) { attr.start_id = id; }
+      )) {
+        id = attr.next_id;
+      } else {
+        if (errno != ENOENT) syscall_error("BPF_MAP_GET_NEXT_ID");
+        break;
       }
-    );
-    ::close(fd);
 
-    auto i = Info::make();
-    i->name = pjs::Str::make(info.name);
-    i->id = info.id;
-    i->flags = info.map_flags;
-    i->maxEntries = info.max_entries;
-    i->keySize = info.key_size;
-    i->valueSize = info.value_size;
+      int fd = syscall_bpf(
+        BPF_MAP_GET_FD_BY_ID, &attr, attr_size(open_flags),
+        [&](union bpf_attr &attr) { attr.map_id = id; }
+      );
 
-    a->push(i);
+      if (fd < 0) {
+        a->retain();
+        a->release();
+        syscall_error("BPF_MAP_GET_FD_BY_ID");
+      }
+
+      struct bpf_map_info info = {};
+      if (syscall_bpf(
+        BPF_OBJ_GET_INFO_BY_FD, &attr, attr_size(info),
+        [&](union bpf_attr &attr) {
+          attr.info.bpf_fd = fd;
+          attr.info.info_len = sizeof(info);
+          attr.info.info = (uint64_t)&info;
+        }
+      )) {
+        syscall_error("BPF_OBJ_GET_INFO_BY_FD");
+      }
+      ::close(fd);
+
+      auto i = Info::make();
+      i->name = pjs::Str::make(info.name);
+      i->id = info.id;
+      i->flags = info.map_flags;
+      i->maxEntries = info.max_entries;
+      i->keySize = info.key_size;
+      i->valueSize = info.value_size;
+
+      a->push(i);
+    }
+  } catch (std::runtime_error &err) {
+    a->retain();
+    a->release();
+    throw;
   }
   return a;
 }
@@ -147,8 +224,8 @@ auto Map::open(int id, CStruct *key_type, CStruct *value_type) -> Map* {
     BPF_MAP_GET_FD_BY_ID, &attr, attr_size(open_flags),
     [&](union bpf_attr &attr) { attr.map_id = id; }
   );
-  if (fd <= 0) {
-    throw std::runtime_error("failed when trying to get fd by a map id");
+  if (fd < 0) {
+    syscall_error("BPF_MAP_GET_FD_BY_ID");
   }
   return Map::make(fd, key_type, value_type);
 }
@@ -179,6 +256,12 @@ auto Map::keys() -> pjs::Array* {
     p = k;
   }
 
+  if (errno != ENOENT) {
+    a->retain();
+    a->release();
+    syscall_error("BPF_MAP_GET_NEXT_KEY");
+  }
+
   return a;
 }
 
@@ -191,42 +274,51 @@ auto Map::entries() -> pjs::Array* {
   auto a = pjs::Array::make();
   uint8_t *p = nullptr;
 
-  union bpf_attr attr;
-  while (!syscall_bpf(
-    BPF_MAP_GET_NEXT_KEY, &attr, attr_size(next_key),
-    [&](union bpf_attr &attr) {
-      attr.map_fd = m_fd;
-      attr.key = (uintptr_t)p;
-      attr.next_key = (uintptr_t)k;
-    }
-  )) {
-    if (syscall_bpf(
-      BPF_MAP_LOOKUP_ELEM, &attr, attr_size(flags),
+  try {
+    union bpf_attr attr;
+    while (!syscall_bpf(
+      BPF_MAP_GET_NEXT_KEY, &attr, attr_size(next_key),
       [&](union bpf_attr &attr) {
         attr.map_fd = m_fd;
-        attr.key = (uintptr_t)k;
-        attr.value = (uintptr_t)v;
+        attr.key = (uintptr_t)p;
+        attr.next_key = (uintptr_t)k;
       }
-    )) break;
+    )) {
+      if (syscall_bpf(
+        BPF_MAP_LOOKUP_ELEM, &attr, attr_size(flags),
+        [&](union bpf_attr &attr) {
+          attr.map_fd = m_fd;
+          attr.key = (uintptr_t)k;
+          attr.value = (uintptr_t)v;
+        }
+      )) syscall_error("BPF_MAP_LOOKUP_ELEM");
 
-    Data data_k(k, m_key_size, &s_dp);
-    Data data_v(v, m_value_size, &s_dp);
-    auto ent = pjs::Array::make(2);
-    a->push(ent);
+      Data data_k(k, m_key_size, &s_dp);
+      Data data_v(v, m_value_size, &s_dp);
+      auto ent = pjs::Array::make(2);
+      a->push(ent);
 
-    if (m_key_type) {
-      ent->set(0, m_key_type->decode(data_k));
-    } else {
-      ent->set(0, Data::make(std::move(data_k)));
+      if (m_key_type) {
+        ent->set(0, m_key_type->decode(data_k));
+      } else {
+        ent->set(0, Data::make(std::move(data_k)));
+      }
+
+      if (m_value_type) {
+        ent->set(1, m_value_type->decode(data_v));
+      } else {
+        ent->set(1, Data::make(std::move(data_v)));
+      }
+
+      p = k;
     }
 
-    if (m_value_type) {
-      ent->set(1, m_value_type->decode(data_v));
-    } else {
-      ent->set(1, Data::make(std::move(data_v)));
-    }
+    if (errno != ENOENT) syscall_error("BPF_MAP_GET_NEXT_KEY");
 
-    p = k;
+  } catch (std::runtime_error &) {
+    a->retain();
+    a->release();
+    throw;
   }
 
   return a;
@@ -301,7 +393,7 @@ auto Map::lookup_raw(Data *key) -> Data* {
       attr.key = (uintptr_t)k;
       attr.value = (uintptr_t)v;
     }
-  )) return nullptr;
+  )) syscall_error("BPF_MAP_LOOKUP_ELEM");
 
   return Data::make(&v[0], m_value_size, &s_dp);
 }
@@ -316,14 +408,14 @@ void Map::update_raw(Data *key, Data *value) {
   value->to_bytes(v, m_value_size);
 
   union bpf_attr attr;
-  syscall_bpf(
+  if (syscall_bpf(
     BPF_MAP_UPDATE_ELEM, &attr, attr_size(flags),
     [&](union bpf_attr &attr) {
       attr.map_fd = m_fd;
       attr.key = (uintptr_t)k;
       attr.value = (uintptr_t)v;
     }
-  );
+  )) syscall_error("BPF_MAP_UPDATE_ELEM");
 }
 
 void Map::delete_raw(Data *key) {
@@ -333,13 +425,13 @@ void Map::delete_raw(Data *key) {
   key->to_bytes(k, m_key_size);
 
   union bpf_attr attr;
-  syscall_bpf(
+  if (syscall_bpf(
     BPF_MAP_DELETE_ELEM, &attr, attr_size(flags),
     [&](union bpf_attr &attr) {
       attr.map_fd = m_fd;
       attr.key = (uintptr_t)k;
     }
-  );
+  )) syscall_error("BPF_MAP_DELETE_ELEM");
 }
 
 #else // !PIPY_USE_BPF
@@ -353,14 +445,13 @@ auto Program::list() -> pjs::Array* {
   return nullptr;
 }
 
-auto Program::load(Data *elf) -> Program* {
+auto Program::maps() -> pjs::Array* {
   unsupported();
   return nullptr;
 }
 
-auto Program::maps() -> pjs::Array* {
+void Program::load() {
   unsupported();
-  return nullptr;
 }
 
 auto Map::list() -> pjs::Array* {
@@ -411,11 +502,40 @@ using namespace pipy;
 using namespace pipy::bpf;
 
 //
+// ObjectFile
+//
+
+template<> void ClassDef<ObjectFile>::init() {
+  accessor("programs", [](Object *obj, Value &ret) {
+    const auto &programs = obj->as<ObjectFile>()->programs;
+    Array *a = Array::make(programs.size());
+    for (size_t i = 0; i < programs.size(); i++) a->set(i, programs[i].get());
+    ret.set(a);
+  });
+
+  accessor("maps", [](Object *obj, Value &ret) {
+    const auto &maps = obj->as<ObjectFile>()->maps;
+    Array *a = Array::make(maps.size());
+    for (size_t i = 0; i < maps.size(); i++) a->set(i, maps[i].get());
+    ret.set(a);
+  });
+}
+
+//
 // Program
 //
 
 template<> void ClassDef<Program>::init() {
-  accessor("maps", [](Object *obj, Value &ret) { ret.set(obj->as<Program>()); });
+  accessor("name", [](Object *obj, Value &ret) { ret.set(obj->as<Program>()->name()); });
+  accessor("maps", [](Object *obj, Value &ret) { ret.set(obj->as<Program>()->maps()); });
+
+  method("load", [](Context &ctx, Object *obj, Value &) {
+    try {
+      obj->as<Program>()->load();
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
 }
 
 template<> void ClassDef<Constructor<Program>>::init() {
@@ -425,16 +545,6 @@ template<> void ClassDef<Constructor<Program>>::init() {
   method("list", [](Context &ctx, Object *obj, Value &ret) {
     try {
       ret.set(Program::list());
-    } catch (std::runtime_error &err) {
-      ctx.error(err);
-    }
-  });
-
-  method("load", [](Context &ctx, Object *obj, Value &ret) {
-    pipy::Data *data;
-    if (!ctx.arguments(1, &data)) return;
-    try {
-      ret.set(Program::load(data));
     } catch (std::runtime_error &err) {
       ctx.error(err);
     }
@@ -520,6 +630,17 @@ template<> void ClassDef<Constructor<bpf::Map>>::init() {
 
 template<> void ClassDef<BPF>::init() {
   ctor();
+
+  method("object", [](Context &ctx, Object *obj, Value &ret) {
+    pipy::Data *data;
+    if (!ctx.arguments(1, &data)) return;
+    try {
+      ret.set(ObjectFile::make(data));
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
   variable("Program", class_of<Constructor<Program>>());
   variable("Map", class_of<Constructor<bpf::Map>>());
 }
