@@ -49,6 +49,10 @@ public:
 private:
   ObjectFile(Data *data);
 
+  void find_maps(const BTF &btf);
+  auto find_type(const BTF &btf, size_t type) -> const BTF::Type*;
+  auto make_struct(const BTF &btf, size_t type) -> CStructBase*;
+
   friend class pjs::ObjectTemplate<ObjectFile>;
 };
 
@@ -60,16 +64,25 @@ class Program : public pjs::ObjectTemplate<Program> {
 public:
   static auto list() -> pjs::Array*;
 
+  struct Reloc {
+    int position;
+    pjs::Ref<Map> map;
+  };
+
   auto name() const -> pjs::Str* { return m_name; }
-  auto maps() -> pjs::Array*;
+  auto size() const -> int;
   void load();
 
 private:
-  Program(const std::string &name, const void *insts, size_t size);
+  Program(
+    const std::string &name,
+    std::vector<uint8_t> &insts,
+    std::vector<Reloc> &relocs
+  );
 
   pjs::Ref<pjs::Str> m_name;
   std::vector<uint8_t> m_insts;
-  size_t m_inst_count;
+  std::vector<Reloc> m_relocs;
   int m_fd = 0;
 
   friend class pjs::ObjectTemplate<Program>;
@@ -89,6 +102,7 @@ public:
   struct Info : public pjs::ObjectTemplate<Info> {
     pjs::Ref<pjs::Str> name;
     int id = 0;
+    int type = 0;
     int flags = 0;
     int maxEntries = 0;
     int keySize = 0;
@@ -96,7 +110,17 @@ public:
   };
 
   static auto list() -> pjs::Array*;
-  static auto open(int id, CStruct *key_type = nullptr, CStruct *value_type = nullptr) -> Map*;
+  static auto open(int id, CStructBase *key_type = nullptr, CStructBase *value_type = nullptr) -> Map*;
+
+  auto name() const -> pjs::Str* { return m_name; }
+  auto id() const -> int { return m_id; }
+  auto type() const -> int { return m_type; }
+  auto flags() const -> int { return m_flags; }
+  auto max_entries() const -> int { return m_max_entries; }
+  auto key_size() const -> int { return m_key_size; }
+  auto key_type() const -> CStructBase* { return m_key_type; }
+  auto value_size() const -> int { return m_value_size; }
+  auto value_type() const -> CStructBase* { return m_value_type; }
 
   auto keys() -> pjs::Array*;
   auto entries() -> pjs::Array*;
@@ -106,17 +130,24 @@ public:
   void close();
 
 private:
-  Map(int fd, CStruct *key_type = nullptr, CStruct *value_type = nullptr);
+  Map(const std::string &name, int type, int flags, int max_entries, int key_size, int value_size);
+  Map(const std::string &name, int type, int flags, int max_entries, CStructBase *key_type = nullptr, CStructBase *value_type = nullptr);
+  Map(int fd, CStructBase *key_type = nullptr, CStructBase *value_type = nullptr);
 
   auto lookup_raw(Data *key) -> Data*;
   void update_raw(Data *key, Data *value);
   void delete_raw(Data *key);
 
+  pjs::Ref<pjs::Str> m_name;
   int m_fd;
+  int m_id;
+  int m_type;
+  int m_flags;
+  int m_max_entries;
   int m_key_size;
   int m_value_size;
-  pjs::Ref<CStruct> m_key_type;
-  pjs::Ref<CStruct> m_value_type;
+  pjs::Ref<CStructBase> m_key_type;
+  pjs::Ref<CStructBase> m_value_type;
 
   friend class pjs::ObjectTemplate<Map>;
 };

@@ -35,6 +35,7 @@
 #include <elf.h>
 #include <sys/syscall.h>
 #include <linux/bpf.h>
+#include <linux/btf.h>
 
 #define attr_size(FIELD) \
   (offsetof(bpf_attr, FIELD) + sizeof(bpf_attr::FIELD))
@@ -74,19 +75,220 @@ ObjectFile::ObjectFile(Data *data) {
   auto bytes = data->to_bytes();
   ELF obj(std::move(bytes));
 
+  for (size_t i = 0; i < obj.sections.size(); i++) {
+    if (obj.sections[i].name == ".BTF") {
+      BTF btf(obj, i);
+      find_maps(btf);
+      break;
+    }
+  }
+
   for (size_t i = 0; i < obj.symbols.size(); i++) {
     const auto &sym = obj.symbols[i];
+    auto sec_idx = sym.shndx;
     if (sym.type != STT_FUNC) continue;
-    if (sym.shndx >= obj.sections.size()) continue;
-    const auto &sec = obj.sections[sym.shndx];
+    if (sec_idx >= obj.sections.size()) continue;
+    const auto &sec = obj.sections[sec_idx];
     if (sec.type != SHT_PROGBITS) continue;
     if (!(sec.flags & SHF_EXECINSTR)) continue;
     auto offset = sym.value;
     auto length = sym.size;
     if (offset + length > sec.size) continue;
-    programs.push_back(
-      Program::make(sec.name, sec.data + offset, length)
-    );
+
+    std::vector<uint8_t> insts(sec.data + offset, sec.data + offset + length);
+    std::vector<Program::Reloc> relocs;
+
+    for (const auto &reloc : obj.relocations) {
+      if (reloc.section != sec_idx) continue;
+      for (const auto &ent : reloc.entries) {
+        if (ent.offset < offset) continue;
+        if (ent.offset >= offset + length) continue;
+        if (ent.sym < 0 || ent.sym >= obj.symbols.size()) {
+          throw std::runtime_error(
+            "ELF symbol index out of range: " + std::to_string(ent.sym)
+          );
+        }
+        const auto &name = obj.symbols[ent.sym].name;
+        Map *map = nullptr;
+        for (const auto &m : maps) {
+          if (m->name()->str() == name) {
+            map = m.get();
+            break;
+          }
+        }
+        if (!map) throw std::runtime_error("map not found: " + name);
+        int pos = (ent.offset - offset) / sizeof(struct bpf_insn);
+        relocs.push_back(Program::Reloc{ pos, map });
+      }
+    }
+
+    programs.push_back(Program::make(sec.name, insts, relocs));
+  }
+}
+
+void ObjectFile::find_maps(const BTF &btf) {
+  const auto get_meta_int = [&](size_t type) {
+    auto ptr_type = find_type(btf, type);
+    if (ptr_type->kind != BTF_KIND_PTR) {
+      throw std::runtime_error(
+        "BTF type " + std::to_string(type) + " of kind BTF_KIND_PTR expected"
+      );
+    }
+    auto array_type = find_type(btf, ptr_type->type);
+    if (array_type->kind != BTF_KIND_ARRAY) {
+      throw std::runtime_error(
+        "BTF type " + std::to_string(ptr_type->type) + " of kind BTF_KIND_ARRAY expected"
+      );
+    }
+    return static_cast<const BTF::Array*>(array_type)->nelems;
+  };
+
+  const auto get_meta_type = [&](size_t type) {
+    auto ptr_type = find_type(btf, type);
+    if (ptr_type->kind != BTF_KIND_PTR) {
+      throw std::runtime_error(
+        "BTF type " + std::to_string(type) + " of kind BTF_KIND_PTR expected"
+      );
+    }
+    return ptr_type->type;
+  };
+
+  for (const auto &pt : btf.types) {
+    if (!pt) continue;
+    if (pt->kind != BTF_KIND_DATASEC) continue;
+    if (pt->name != ".maps") continue;
+    const auto &sec = *static_cast<BTF::DataSec*>(pt.get());
+    for (const auto &v : sec.vars) {
+      auto meta_var = find_type(btf, v.type);
+      auto meta_type = find_type(btf, meta_var->type);
+      if (meta_var->kind != BTF_KIND_VAR) continue;
+      if (meta_type->kind != BTF_KIND_STRUCT) continue;
+      const auto &name = meta_var->name;
+      const auto &meta = *static_cast<const BTF::Struct*>(meta_type);
+      int map_type = -1;
+      int map_flags = 0;
+      int max_entries = -1;
+      int key_type = -1;
+      int value_type = -1;
+      for (const auto &m : meta.members) {
+        if (m.name == "type") map_type = get_meta_int(m.type);
+        else if (m.name == "max_entries") max_entries = get_meta_int(m.type);
+        else if (m.name == "map_flags") map_flags = get_meta_int(m.type);
+        else if (m.name == "key") key_type = m.type;
+        else if (m.name == "value") value_type = m.type;
+      }
+      if (map_type < 0) throw std::runtime_error("type missing for " + name);
+      if (max_entries < 0) throw std::runtime_error("max_entries missing for " + name);
+      if (key_type < 0) throw std::runtime_error("key missing for " + name);
+      if (value_type < 0) throw std::runtime_error("value missing for " + name);
+      Log::debug(
+        Log::BPF, "[bpf] found map '%s' type %d flags %d max_entries %d key %d type %d",
+        name.c_str(), map_type, map_flags, max_entries, key_type, value_type
+      );
+      key_type = get_meta_type(key_type);
+      value_type = get_meta_type(value_type);
+      maps.push_back(
+        Map::make(
+          name, map_type, map_flags, max_entries,
+          make_struct(btf, key_type),
+          make_struct(btf, value_type)
+        )
+      );
+    }
+  }
+}
+
+auto ObjectFile::find_type(const BTF &btf, size_t type) -> const BTF::Type* {
+  const BTF::Type *t = nullptr;
+  for (;;) {
+    if (!type || type >= btf.types.size()) {
+      throw std::runtime_error(
+        "BTF type id out of range: " + std::to_string(type)
+      );
+    }
+    t = btf.types[type].get();
+    if (t->kind != BTF_KIND_TYPEDEF) return t;
+    type = t->type;
+  }
+}
+
+auto ObjectFile::make_struct(const BTF &btf, size_t type) -> CStructBase* {
+  thread_local static pjs::ConstStr s_i("i");
+
+  const auto int_type = [&](const BTF::Int *t) -> const char * {
+    if (t->is_char && t->bits == 8) {
+      return "char";
+    } else {
+      switch (t->bits) {
+        case 8: return t->is_signed ? "int8" : "uint8";
+        case 16: return t->is_signed ? "int16" : "uint16";
+        case 32: return t->is_signed ? "int32" : "uint32";
+        case 64: return t->is_signed ? "int64" : "uint64";
+        default: throw std::runtime_error("unsupported integer bitwidth " + std::to_string(t->bits));
+      }
+    }
+  };
+
+  const auto unsupported_type = [](size_t type) {
+    throw std::runtime_error("unsupported BTF type for maps: " + std::to_string(type));
+  };
+
+  const auto *t = find_type(btf, type);
+  switch (t->kind) {
+    case BTF_KIND_STRUCT:
+    case BTF_KIND_UNION: {
+      auto cs = (t->kind == BTF_KIND_UNION
+        ? (CStructBase *)CUnion::make()
+        : (CStructBase *)CStruct::make()
+      );
+      try {
+        for (const auto &m : static_cast<const BTF::Struct*>(t)->members) {
+          const auto *mt = find_type(btf, m.type);
+          bool is_array = false;
+          int array_size = 0;
+          if (mt->kind == BTF_KIND_ARRAY) {
+            auto at = static_cast<const BTF::Array*>(mt);
+            is_array = true;
+            array_size = at->nelems;
+            mt = find_type(btf, at->elem_type);
+            if (mt->kind == BTF_KIND_ARRAY) {
+              throw std::runtime_error("multi-dimensional array not supported");
+            }
+          }
+          switch (mt->kind) {
+            case BTF_KIND_STRUCT:
+            case BTF_KIND_UNION: {
+              if (is_array) throw std::runtime_error("array of structs or unions not supported");
+              cs->add_field(pjs::Str::make(m.name), make_struct(btf, m.type));
+              break;
+            }
+            case BTF_KIND_INT: {
+              auto *it = int_type(static_cast<const BTF::Int*>(mt));
+              if (is_array) {
+                char s[100];
+                std::snprintf(s, sizeof(s), "%s[%d]", it, array_size);
+                cs->add_field(pjs::Str::make(m.name), s);
+              } else {
+                cs->add_field(pjs::Str::make(m.name), it);
+              }
+              break;
+            }
+            default: unsupported_type(m.type);
+          }
+        }
+      } catch (std::runtime_error &) {
+        cs->retain();
+        cs->release();
+        throw;
+      }
+      return cs;
+    }
+    case BTF_KIND_INT: {
+      auto cs = CStruct::make();
+      cs->add_field(s_i, int_type(static_cast<const BTF::Int*>(t)));
+      return cs;
+    }
+    default: unsupported_type(type); return nullptr;
   }
 }
 
@@ -94,20 +296,19 @@ ObjectFile::ObjectFile(Data *data) {
 // Program
 //
 
-Program::Program(const std::string &name, const void *insts, size_t size)
+Program::Program(const std::string &name, std::vector<uint8_t> &insts, std::vector<Reloc> &relocs)
   : m_name(pjs::Str::make(name))
-  , m_insts(size)
-  , m_inst_count(size / sizeof(struct bpf_insn))
+  , m_insts(std::move(insts))
+  , m_relocs(std::move(relocs))
 {
-  std::memcpy(m_insts.data(), insts, size);
 }
 
 auto Program::list() -> pjs::Array* {
   return nullptr;
 }
 
-auto Program::maps() -> pjs::Array* {
-  return nullptr;
+auto Program::size() const -> int {
+  return m_insts.size() / sizeof(struct bpf_insn);
 }
 
 void Program::load() {
@@ -118,7 +319,7 @@ void Program::load() {
     [&](union bpf_attr &attr) {
       std::strncpy(attr.prog_name, m_name->c_str(), sizeof(attr.prog_name));
       attr.prog_type = BPF_PROG_TYPE_XDP;
-      attr.insn_cnt = m_inst_count;
+      attr.insn_cnt = size();
       attr.insns = (uintptr_t)m_insts.data();
       attr.license = (uintptr_t)"GPL";
       attr.log_level = 1;
@@ -141,21 +342,53 @@ void Program::load() {
 // Map
 //
 
-Map::Map(int fd, CStruct *key_type, CStruct *value_type)
+Map::Map(const std::string &name, int type, int flags, int max_entries, int key_size, int value_size)
+  : m_name(pjs::Str::make(name))
+  , m_fd(0)
+  , m_id(0)
+  , m_type(type)
+  , m_flags(flags)
+  , m_max_entries(max_entries)
+  , m_key_size(key_size)
+  , m_value_size(value_size)
+{
+}
+
+Map::Map(const std::string &name, int type, int flags, int max_entries, CStructBase *key_type, CStructBase *value_type)
+  : m_name(pjs::Str::make(name))
+  , m_fd(0)
+  , m_id(0)
+  , m_type(type)
+  , m_flags(flags)
+  , m_max_entries(max_entries)
+  , m_key_size(key_type ? key_type->size() : 0)
+  , m_value_size(value_type ? value_type->size() : 0)
+  , m_key_type(key_type)
+  , m_value_type(value_type)
+{
+}
+
+Map::Map(int fd, CStructBase *key_type, CStructBase *value_type)
   : m_fd(fd)
   , m_key_type(key_type)
   , m_value_type(value_type)
 {
   union bpf_attr attr;
   struct bpf_map_info info = {};
-  syscall_bpf(
+  if (syscall_bpf(
     BPF_OBJ_GET_INFO_BY_FD, &attr, attr_size(info),
     [&](union bpf_attr &attr) {
       attr.info.bpf_fd = fd;
       attr.info.info_len = sizeof(info);
       attr.info.info = (uint64_t)&info;
     }
-  );
+  )) syscall_error("BPF_OBJ_GET_INFO_BY_FD");
+
+  m_name = pjs::Str::make(info.name);
+  m_id = info.id;
+  m_type = info.type;
+  m_flags = info.map_flags;
+  m_max_entries = info.max_entries;
   m_key_size = info.key_size;
   m_value_size = info.value_size;
 }
@@ -203,6 +436,7 @@ auto Map::list() -> pjs::Array* {
       auto i = Info::make();
       i->name = pjs::Str::make(info.name);
       i->id = info.id;
+      i->type = info.type;
       i->flags = info.map_flags;
       i->maxEntries = info.max_entries;
       i->keySize = info.key_size;
@@ -218,7 +452,7 @@ auto Map::list() -> pjs::Array* {
   return a;
 }
 
-auto Map::open(int id, CStruct *key_type, CStruct *value_type) -> Map* {
+auto Map::open(int id, CStructBase *key_type, CStructBase *value_type) -> Map* {
   union bpf_attr attr;
   int fd = syscall_bpf(
     BPF_MAP_GET_FD_BY_ID, &attr, attr_size(open_flags),
@@ -463,7 +697,7 @@ auto Map::list() -> pjs::Array* {
   return nullptr;
 }
 
-auto Map::open(int id, CStruct *key_type, CStruct *value_type) -> Map* {
+auto Map::open(int id, CStructBase *key_type, CStructBase *value_type) -> Map* {
   unsupported();
   return nullptr;
 }
@@ -531,7 +765,7 @@ template<> void ClassDef<ObjectFile>::init() {
 
 template<> void ClassDef<Program>::init() {
   accessor("name", [](Object *obj, Value &ret) { ret.set(obj->as<Program>()->name()); });
-  accessor("maps", [](Object *obj, Value &ret) { ret.set(obj->as<Program>()->maps()); });
+  accessor("size", [](Object *obj, Value &ret) { ret.set(obj->as<Program>()->size()); });
 
   method("load", [](Context &ctx, Object *obj, Value &) {
     try {
@@ -560,6 +794,16 @@ template<> void ClassDef<Constructor<Program>>::init() {
 //
 
 template<> void ClassDef<bpf::Map>::init() {
+  accessor("name", [](Object *obj, Value &ret) { ret.set(obj->as<bpf::Map>()->name()); });
+  accessor("id", [](Object *obj, Value &ret) { ret.set(obj->as<bpf::Map>()->id()); });
+  accessor("type", [](Object *obj, Value &ret) { ret.set(obj->as<bpf::Map>()->type()); });
+  accessor("flags", [](Object *obj, Value &ret) { ret.set(obj->as<bpf::Map>()->flags()); });
+  accessor("maxEntries", [](Object *obj, Value &ret) { ret.set(obj->as<bpf::Map>()->max_entries()); });
+  accessor("keySize", [](Object *obj, Value &ret) { ret.set(obj->as<bpf::Map>()->key_size()); });
+  accessor("keyType", [](Object *obj, Value &ret) { ret.set(obj->as<bpf::Map>()->key_type()); });
+  accessor("valueSize", [](Object *obj, Value &ret) { ret.set(obj->as<bpf::Map>()->value_size()); });
+  accessor("valueType", [](Object *obj, Value &ret) { ret.set(obj->as<bpf::Map>()->value_type()); });
+
   method("keys", [](Context &ctx, Object *obj, Value &ret) {
     try {
       ret.set(obj->as<bpf::Map>()->keys());
@@ -621,8 +865,8 @@ template<> void ClassDef<Constructor<bpf::Map>>::init() {
 
   method("open", [](Context &ctx, Object *obj, Value &ret) {
     int id;
-    CStruct *key_type = nullptr;
-    CStruct *value_type = nullptr;
+    CStructBase *key_type = nullptr;
+    CStructBase *value_type = nullptr;
     if (!ctx.arguments(1, &id, &key_type, &value_type)) return;
     try {
       ret.set(bpf::Map::open(id, key_type, value_type));

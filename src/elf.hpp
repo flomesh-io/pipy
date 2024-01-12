@@ -124,8 +124,8 @@ public:
     int kind;
     int kind_flag;
     union {
-      size_t size;
       size_t type;
+      size_t size;
     };
 
     virtual ~Type() {}
@@ -161,11 +161,23 @@ public:
   };
 
   //
+  // BTF::Int
+  //
+
+  struct Int : public Type {
+    size_t offset;
+    size_t bits;
+    bool is_signed;
+    bool is_char;
+    bool is_bool;
+  };
+
+  //
   // BTF::Array
   //
 
   struct Array : public Type {
-    size_t type;
+    size_t elem_type;
     size_t index_type;
     size_t nelems;
   };
