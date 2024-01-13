@@ -71,7 +71,10 @@ public:
 
   auto name() const -> pjs::Str* { return m_name; }
   auto size() const -> int;
-  void load();
+  auto fd() const -> int { return m_fd; }
+  auto id() const -> int { return m_id; }
+
+  void load(int type, const std::string &license);
 
 private:
   Program(
@@ -83,7 +86,9 @@ private:
   pjs::Ref<pjs::Str> m_name;
   std::vector<uint8_t> m_insts;
   std::vector<Reloc> m_relocs;
+
   int m_fd = 0;
+  int m_id = 0;
 
   friend class pjs::ObjectTemplate<Program>;
 };
@@ -113,6 +118,7 @@ public:
   static auto open(int id, CStructBase *key_type = nullptr, CStructBase *value_type = nullptr) -> Map*;
 
   auto name() const -> pjs::Str* { return m_name; }
+  auto fd() const -> int { return m_fd; }
   auto id() const -> int { return m_id; }
   auto type() const -> int { return m_type; }
   auto flags() const -> int { return m_flags; }
@@ -122,6 +128,7 @@ public:
   auto value_size() const -> int { return m_value_size; }
   auto value_type() const -> CStructBase* { return m_value_type; }
 
+  void create();
   auto keys() -> pjs::Array*;
   auto entries() -> pjs::Array*;
   auto lookup(pjs::Object *key) -> pjs::Object*;

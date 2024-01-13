@@ -311,31 +311,52 @@ auto Program::size() const -> int {
   return m_insts.size() / sizeof(struct bpf_insn);
 }
 
-void Program::load() {
+void Program::load(int type, const std::string &license) {
+  if (m_fd) return;
+
+  std::vector<struct bpf_insn> insts(size());
+  std::memcpy(insts.data(), m_insts.data(), insts.size() * sizeof(insts[0]));
+  for (const auto &reloc : m_relocs) {
+    auto &i = insts[reloc.position];
+    auto *m = reloc.map.get();
+    if (!m->fd()) m->create();
+    i.src_reg = BPF_PSEUDO_MAP_FD;
+    i.imm = m->fd();
+  }
+
   std::vector<char> log_buf(100*1024);
   union bpf_attr attr;
   int fd = syscall_bpf(
     BPF_PROG_LOAD, &attr, attr_size(fd_array),
     [&](union bpf_attr &attr) {
       std::strncpy(attr.prog_name, m_name->c_str(), sizeof(attr.prog_name));
-      attr.prog_type = BPF_PROG_TYPE_XDP;
-      attr.insn_cnt = size();
-      attr.insns = (uintptr_t)m_insts.data();
-      attr.license = (uintptr_t)"GPL";
+      attr.prog_type = type;
+      attr.insn_cnt = insts.size();
+      attr.insns = (uintptr_t)insts.data();
+      attr.license = (uintptr_t)license.c_str();
       attr.log_level = 1;
       attr.log_size = log_buf.size();
       attr.log_buf = (uintptr_t)log_buf.data();
-      attr.prog_ifindex = 0;
     }
   );
   if (log_buf[0] && Log::is_enabled(Log::BPF)) {
     Log::debug(Log::BPF, "[bpf] In-kernel verifier log:");
     Log::write(log_buf.data());
   }
-  if (fd < 0) {
-    syscall_error("BPF_PROG_LOAD");
-  }
+  if (fd < 0) syscall_error("BPF_PROG_LOAD");
+
+  struct bpf_prog_info info = {};
+  if (syscall_bpf(
+    BPF_OBJ_GET_INFO_BY_FD, &attr, attr_size(info),
+    [&](union bpf_attr &attr) {
+      attr.info.bpf_fd = fd;
+      attr.info.info_len = sizeof(info);
+      attr.info.info = (uint64_t)&info;
+    }
+  )) syscall_error("BPF_OBJ_GET_INFO_BY_FD");
+
   m_fd = fd;
+  m_id = info.id;
 }
 
 //
@@ -462,6 +483,37 @@ auto Map::open(int id, CStructBase *key_type, CStructBase *value_type) -> Map* {
     syscall_error("BPF_MAP_GET_FD_BY_ID");
   }
   return Map::make(fd, key_type, value_type);
+}
+
+void Map::create() {
+  if (m_fd) return;
+
+  union bpf_attr attr;
+  int fd = syscall_bpf(
+    BPF_MAP_CREATE, &attr, attr_size(btf_value_type_id),
+    [&](union bpf_attr &attr) {
+      std::strncpy(attr.map_name, m_name->c_str(), sizeof(attr.map_name));
+      attr.map_type = m_type;
+      attr.key_size = m_key_size;
+      attr.value_size = m_value_size;
+      attr.max_entries = m_max_entries;
+      attr.map_flags = m_flags;
+    }
+  );
+  if (fd < 0) syscall_error("BPF_MAP_CREATE");
+
+  struct bpf_map_info info = {};
+  if (syscall_bpf(
+    BPF_OBJ_GET_INFO_BY_FD, &attr, attr_size(info),
+    [&](union bpf_attr &attr) {
+      attr.info.bpf_fd = fd;
+      attr.info.info_len = sizeof(info);
+      attr.info.info = (uint64_t)&info;
+    }
+  )) syscall_error("BPF_OBJ_GET_INFO_BY_FD");
+
+  m_fd = fd;
+  m_id = info.id;
 }
 
 auto Map::keys() -> pjs::Array* {
@@ -688,13 +740,17 @@ auto Program::maps() -> pjs::Array* {
   return nullptr;
 }
 
-void Program::load() {
+void Program::load(int type, const std::string &license) {
   unsupported();
 }
 
 auto Map::list() -> pjs::Array* {
   unsupported();
   return nullptr;
+}
+
+void Map::create() {
+  unsupported();
 }
 
 auto Map::open(int id, CStructBase *key_type, CStructBase *value_type) -> Map* {
@@ -766,10 +822,16 @@ template<> void ClassDef<ObjectFile>::init() {
 template<> void ClassDef<Program>::init() {
   accessor("name", [](Object *obj, Value &ret) { ret.set(obj->as<Program>()->name()); });
   accessor("size", [](Object *obj, Value &ret) { ret.set(obj->as<Program>()->size()); });
+  accessor("fd", [](Object *obj, Value &ret) { ret.set(obj->as<Program>()->fd()); });
+  accessor("id", [](Object *obj, Value &ret) { ret.set(obj->as<Program>()->id()); });
 
-  method("load", [](Context &ctx, Object *obj, Value &) {
+  method("load", [](Context &ctx, Object *obj, Value &ret) {
+    int type;
+    Str* license;
+    if (!ctx.arguments(2, &type, &license)) return;
     try {
-      obj->as<Program>()->load();
+      obj->as<Program>()->load(type, license->str());
+      ret.set(obj);
     } catch (std::runtime_error &err) {
       ctx.error(err);
     }
@@ -795,6 +857,7 @@ template<> void ClassDef<Constructor<Program>>::init() {
 
 template<> void ClassDef<bpf::Map>::init() {
   accessor("name", [](Object *obj, Value &ret) { ret.set(obj->as<bpf::Map>()->name()); });
+  accessor("fd", [](Object *obj, Value &ret) { ret.set(obj->as<bpf::Map>()->fd()); });
   accessor("id", [](Object *obj, Value &ret) { ret.set(obj->as<bpf::Map>()->id()); });
   accessor("type", [](Object *obj, Value &ret) { ret.set(obj->as<bpf::Map>()->type()); });
   accessor("flags", [](Object *obj, Value &ret) { ret.set(obj->as<bpf::Map>()->flags()); });
@@ -803,6 +866,15 @@ template<> void ClassDef<bpf::Map>::init() {
   accessor("keyType", [](Object *obj, Value &ret) { ret.set(obj->as<bpf::Map>()->key_type()); });
   accessor("valueSize", [](Object *obj, Value &ret) { ret.set(obj->as<bpf::Map>()->value_size()); });
   accessor("valueType", [](Object *obj, Value &ret) { ret.set(obj->as<bpf::Map>()->value_type()); });
+
+  method("create", [](Context &ctx, Object *obj, Value &ret) {
+    try {
+      obj->as<bpf::Map>()->create();
+      ret.set(obj);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
 
   method("keys", [](Context &ctx, Object *obj, Value &ret) {
     try {
