@@ -735,9 +735,8 @@ auto Program::list() -> pjs::Array* {
   return nullptr;
 }
 
-auto Program::maps() -> pjs::Array* {
-  unsupported();
-  return nullptr;
+auto Program::size() const -> int {
+  return 0;
 }
 
 void Program::load(int type, const std::string &license) {
