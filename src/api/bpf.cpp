@@ -953,6 +953,7 @@ template<> void ClassDef<BPF>::init() {
   method("object", [](Context &ctx, Object *obj, Value &ret) {
     pipy::Data *data;
     if (!ctx.arguments(1, &data)) return;
+    if (!data) { return ctx.error_argument_type(0, "non-null Data"); }
     try {
       ret.set(ObjectFile::make(data));
     } catch (std::runtime_error &err) {
