@@ -189,6 +189,7 @@
         attrs: {
           [43]: { // IFLA_XDP
             [1]: nl.i32(-1), // IFLA_XDP_FD
+            [3]: nl.i32(1 << 1), // IFLA_XDP_FLAGS: XDP_FLAGS_SKB_MODE
           },
         }
       })
