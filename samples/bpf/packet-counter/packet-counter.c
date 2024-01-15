@@ -5,19 +5,21 @@
 #include "bpf-builtin.h"
 #include "bpf-utils.h"
 
-char __license[] SEC("license") = "Dual MIT/GPL";
-
-#define MAX_ENTRIES 16
+struct Key {
+  union {
+    __u8 u8[4];
+    __u32 u32;
+  } ip;
+};
 
 struct {
   int (*type)[BPF_MAP_TYPE_LRU_HASH];
-  int (*max_entries)[MAX_ENTRIES];
-  __u32 *key;
+  int (*max_entries)[1000];
+  struct Key *key;
   __u32 *value;
-} packet_counts SEC(".maps");
+} map_pkt_cnt SEC(".maps");
 
-SEC("xdp")
-int xdp_prog_func(struct xdp_md *ctx) {
+int xdp_main(struct xdp_md *ctx) {
   void *pkt = (void *)(long)ctx->data;
   void *end = (void *)(long)ctx->data_end;
 
@@ -28,12 +30,14 @@ int xdp_prog_func(struct xdp_md *ctx) {
   struct iphdr *ip = (void *)(eth + 1);
   if (ip + 1 > end) return XDP_PASS;
 
-  __u32 addr = ip->saddr;
-  __u32 *cnt = bpf_map_lookup_elem(&packet_counts, &addr);
+  struct Key k;
+  k.ip.u32 = ip->saddr;
+
+  __u32 *cnt = bpf_map_lookup_elem(&map_pkt_cnt, &k);
 
   if (!cnt) {
     __u32 n = 1;
-    bpf_map_update_elem(&packet_counts, &addr, &n, BPF_ANY);
+    bpf_map_update_elem(&map_pkt_cnt, &k, &n, BPF_ANY);
   } else {
     __sync_fetch_and_add(cnt, 1);
   }

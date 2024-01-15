@@ -20,4 +20,4 @@ clean:
 	rm -f ${BIN_DIR}/${OUT}
 
 test:
-	cd ${SRC_DIR} && ./test.sh
+	${BIN_DIR}/pipy ${SRC_DIR}/main.js
