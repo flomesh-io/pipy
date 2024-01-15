@@ -47,8 +47,7 @@
     new StreamEnd
   ))
 
-.exit()
-  .onStart(() => [...rt.cleanupRequests(), new StreamEnd])
+.exit(() => [...rt.cleanupRequests(), new StreamEnd])
   .encodeNetlink()
   .connect('pid=0;groups=0', {
     protocol: 'netlink',

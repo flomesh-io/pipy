@@ -44,6 +44,7 @@ class Message :
   public List<Message>::Item
 {
 public:
+  static bool is_events(pjs::Object *obj);
   static auto from(MessageStart *start, Data *body, MessageEnd *end) -> Message*;
   static bool output(const pjs::Value &events, EventTarget::Input *input);
   static bool output(pjs::Object *events, EventTarget::Input *input);

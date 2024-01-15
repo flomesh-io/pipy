@@ -34,6 +34,22 @@ namespace pipy {
 
 thread_local Data::Producer Message::s_dp("Message");
 
+bool Message::is_events(pjs::Object *obj) {
+  if (!obj) return false;
+  if (obj->is<Event>()) return true;
+  if (obj->is<Message>()) return true;
+  if (obj->is<pjs::Array>()) {
+    auto a = obj->as<pjs::Array>();
+    for (int i = 0, n = a->length(); i < n; i++) {
+      pjs::Value v;
+      a->get(i, v);
+      if (!v.is<Event>() && !v.is<Message>()) return false;
+    }
+    return true;
+  }
+  return false;
+}
+
 auto Message::from(MessageStart *start, Data *body, MessageEnd *end) -> Message* {
   auto head = start ? start->head() : nullptr;
   return (end

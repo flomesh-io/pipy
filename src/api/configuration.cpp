@@ -2419,12 +2419,10 @@ template<> void ClassDef<Configuration>::init() {
       if (ctx.get(i, interval)) i++;
       if (ctx.get(i, starting_events)) {
         if (!starting_events &&
-            !starting_events->is<Event>() &&
-            !starting_events->is<Message>() &&
-            !starting_events->is<Array>() &&
-            !starting_events->is<Function>()
+            !starting_events->is<Function>() &&
+            !Message::is_events(starting_events)
         ) {
-          ctx.error_argument_type(i, "an Event, a Message, a function or an array");
+          ctx.error_argument_type(i, "an Event, a Message, a function or an array of Events or Messages");
           return;
         }
       } else if (!ctx.is_undefined(i)) {
@@ -2456,8 +2454,22 @@ template<> void ClassDef<Configuration>::init() {
 
   // Configuration.exit
   method("exit", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<Configuration>();
+    Object *starting_events = nullptr;
+    if (!ctx.arguments(0, &starting_events)) return;
+    if (!starting_events &&
+        !starting_events->is<Function>() &&
+        !Message::is_events(starting_events)
+    ) {
+      ctx.error_argument_type(0, "an Event, a Message, a function or an array of Events or Messages");
+      return;
+    }
     try {
-      thiz->as<Configuration>()->exit();
+      config->exit();
+      if (starting_events) {
+        config->trace_location(ctx);
+        config->on_start(starting_events);
+      }
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
