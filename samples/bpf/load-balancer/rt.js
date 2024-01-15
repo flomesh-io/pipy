@@ -2,7 +2,7 @@
   nl = pipy.solve('nl.js'),
 
   obj = bpf.object(os.readFile('../../../bin/load-balancer.o')),
-  program = obj.programs[0].load(6, 'GPL'),
+  program = obj.programs[0].load(6, 'GPL'), // BPF_PROG_TYPE_XDP
   maps = Object.fromEntries(
     obj.maps.map(
       m => [m.name.startsWith('map_') ? m.name.substring(4) : m.name, m]

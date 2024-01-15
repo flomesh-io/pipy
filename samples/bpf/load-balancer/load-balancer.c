@@ -18,8 +18,6 @@
 #define MAX_CONNECTIONS 65536
 #define RING_SIZE 16
 
-char __license[] SEC("license") = "Dual MIT/GPL";
-
 //
 // BPF map structures
 //
@@ -356,7 +354,6 @@ INLINE int redirect_packet(struct xdp_md *ctx, __u32 out_if) {
 // XDP packet entrance point
 //
 
-SEC("xdp")
 int xdp_main(struct xdp_md *ctx) {
   struct Packet pkt;
   pkt.ptr = (void *)(long)ctx->data;
