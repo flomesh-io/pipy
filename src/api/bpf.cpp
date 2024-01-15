@@ -720,6 +720,21 @@ void Map::delete_raw(Data *key) {
   )) syscall_error("BPF_MAP_DELETE_ELEM");
 }
 
+//
+// BPF
+//
+
+void BPF::pin(const std::string &pathname, int fd) {
+  union bpf_attr attr;
+  if (syscall_bpf(
+    BPF_OBJ_PIN, &attr, attr_size(file_flags),
+    [&](union bpf_attr &attr) {
+      attr.pathname = (uintptr_t)pathname.c_str();
+      attr.bpf_fd = fd;
+    }
+  )) syscall_error("BPF_OBJ_PIN");
+}
+
 #else // !PIPY_USE_BPF
 
 static void unsupported() {
@@ -781,6 +796,10 @@ void Map::remove(pjs::Object *key) {
 }
 
 void Map::close() {
+  unsupported();
+}
+
+void BPF::pin(const std::string &pathname, int fd) {
   unsupported();
 }
 
@@ -956,6 +975,17 @@ template<> void ClassDef<BPF>::init() {
     if (!data) { return ctx.error_argument_type(0, "non-null Data"); }
     try {
       ret.set(ObjectFile::make(data));
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  method("pin", [](Context &ctx, Object *obj, Value &ret) {
+    Str *pathname;
+    int fd;
+    if (!ctx.arguments(2, &pathname, &fd)) return;
+    try {
+      BPF::pin(pathname->str(), fd);
     } catch (std::runtime_error &err) {
       ctx.error(err);
     }

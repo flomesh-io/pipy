@@ -163,8 +163,9 @@ private:
 // BPF
 //
 
-class BPF : public pjs::ObjectTemplate<BPF>
-{
+class BPF : public pjs::ObjectTemplate<BPF> {
+public:
+  static void pin(const std::string &pathname, int fd);
 };
 
 } // namespace bpf
