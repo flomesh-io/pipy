@@ -695,6 +695,13 @@ void SocketNetlink::output(Event *evt) {
         m_buffer.push(data);
       }
     }
+  } else if (evt->is<StreamEnd>()) {
+    if (m_sending_count > 0) {
+      m_ended = true;
+    } else {
+      on_socket_input(StreamEnd::make());
+      close();
+    }
   }
 }
 
@@ -816,6 +823,11 @@ void SocketNetlink::on_send(Data *data, const std::error_code &ec, std::size_t n
       m_closing = true;
       close_socket();
     }
+  }
+
+  if (!m_sending_count && m_ended) {
+    InputContext ic(this);
+    on_socket_input(StreamEnd::make());
   }
 
   data->release();

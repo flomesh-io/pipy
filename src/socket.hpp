@@ -284,6 +284,7 @@ private:
   bool m_receiving = false;
   bool m_opened = false;
   bool m_paused = false;
+  bool m_ended = false;
   bool m_closing = false;
   bool m_closed = false;
 
