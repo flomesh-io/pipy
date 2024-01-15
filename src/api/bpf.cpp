@@ -122,7 +122,7 @@ ObjectFile::ObjectFile(Data *data) {
       }
     }
 
-    programs.push_back(Program::make(sec.name, insts, relocs));
+    programs.push_back(Program::make(sym.name, insts, relocs));
   }
 }
 
