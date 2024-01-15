@@ -12,9 +12,8 @@
 
 ) => main()
 
-.task()
-  .onStart(new Data)
-  .fork(rt.initialRequests).to($=>$
+.task(new Data)
+  .fork(rt.initialRequests()).to($=>$
     .onStart(msg => msg)
     .encodeNetlink()
     .connect('pid=0;groups=0', {
@@ -25,8 +24,7 @@
     .handleMessage(rt.handleRouteChange)
   )
 
-.task()
-  .onStart(new Data)
+.task(new Data)
   .connect('pid=0;groups=0', {
     protocol: 'netlink',
     netlinkFamily: 0,
@@ -35,11 +33,27 @@
   .decodeNetlink()
   .handleMessage(rt.handleRouteChange)
 
+.task('1s', () => [...rt.pendingRequests(), new StreamEnd])
+  .encodeNetlink()
+  .connect('pid=0;groups=0', {
+    protocol: 'netlink',
+    netlinkFamily: 0,
+  })
+  .decodeNetlink()
+
 .watch('config.json')
   .onStart(() => (
     setupBalancers(),
     new StreamEnd
   ))
+
+.exit()
+  .onStart(() => [...rt.cleanupRequests(), new StreamEnd])
+  .encodeNetlink()
+  .connect('pid=0;groups=0', {
+    protocol: 'netlink',
+    netlinkFamily: 0,
+  })
 
 .listen(8080)
   .serveHTTP(new Message('hi'))

@@ -48,7 +48,9 @@
     type: 'uint8',
   }),
 
-  extractAttrs = data => (
+  i32Struct = new CStruct({ i: 'int32' }),
+
+  decodeAttrs = data => (
     (
       attrs = {},
       hdr,
@@ -61,18 +63,24 @@
     )
   )(),
 
-  appendAttrs = (data, attrs) => (
+  encodeAttrs = (attrs) => (
     attrs ? Object.entries(attrs)?.reduce(
-      (data, [k, v]) => (
+      (base, [k, v]) => (
         (
-          size = (v.size + 3) & ~3,
-        ) => (data
+          data = v instanceof Data ? v : encodeAttrs(v),
+          size = (data.size + 3) & ~3,
+        ) => (base
           .push(rtattr.encode({ len: size + rtattr.size, type: k|0 }))
-          .push(v)
-          .push(new Data(new Array(size - v.size).fill(0)))
+          .push(data)
+          .push(new Data(new Array(size - data.size).fill(0)))
         )
-      )(), data
-    ) : data
+      )(), new Data
+    ) : new Data
+  ),
+
+  appendAttrs = (data, attrs) => (
+    data.push(encodeAttrs(attrs)),
+    data
   ),
 
   i8 = data => (
@@ -110,7 +118,7 @@
     decode: data => (
       (
         info = ifinfomsg.decode(data.shift(ifinfomsg.size)),
-        attrs = extractAttrs(data),
+        attrs = decodeAttrs(data),
       ) => ({
         address: hex(attrs[1]), // IFLA_ADDRESS
         broadcast: hex(attrs[2]), // IFLA_BROADCAST
@@ -128,7 +136,7 @@
     decode: data => (
       (
         info = ifaddrmsg.decode(data.shift(ifaddrmsg.size)),
-        attrs = extractAttrs(data),
+        attrs = decodeAttrs(data),
       ) => ({
         address: ip(attrs[1]), // IFA_ADDRESS
         local: ip[attrs[2]], // IFA_LOCAL
@@ -143,7 +151,7 @@
     decode: data => (
       (
         info = rtmsg.decode(data.shift(rtmsg.size)),
-        attrs = extractAttrs(data),
+        attrs = decodeAttrs(data),
       ) => ({
         dst: ip(attrs[1]), // RTA_DST
         oif: i32(attrs[4]), // RTA_OIF
@@ -159,7 +167,7 @@
     decode: data => (
       (
         info = ndmsg.decode(data.shift(ndmsg.size)),
-        attrs = extractAttrs(data),
+        attrs = decodeAttrs(data),
       ) => ({
         dst: ip(attrs[1]), // NDA_DST
         lladdr: hex(attrs[2]), // NDA_LLADDR
@@ -168,5 +176,7 @@
       })
     )(),
   },
+
+  i32: i => i32Struct.encode({ i }),
 
 }))()

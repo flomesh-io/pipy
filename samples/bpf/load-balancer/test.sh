@@ -28,13 +28,5 @@ ip netns exec server2 ../../../bin/pipy -e 'pipy().listen(8080).serveHTTP(new Me
 ip netns exec server3 ../../../bin/pipy -e 'pipy().listen(8080).serveHTTP(new Message("hi from server3\n"))' 2> /dev/null &
 sleep 1
 
-echo 'Loading BPF programs...'
-bpftool prog load /home/shuang/git/pipy/bin/load-balancer.o /sys/fs/bpf/lb
-ip link set lo xdpgeneric pinned /sys/fs/bpf/lb
-ip link set veth0 xdpgeneric pinned /sys/fs/bpf/lb
-ip link set veth1 xdpgeneric pinned /sys/fs/bpf/lb
-ip link set veth2 xdpgeneric pinned /sys/fs/bpf/lb
-ip link set veth3 xdpgeneric pinned /sys/fs/bpf/lb
-
 echo 'Starting proxy...'
 ../../../bin/pipy main.js

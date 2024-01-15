@@ -1,11 +1,20 @@
 ((
   nl = pipy.solve('nl.js'),
-  bpf = pipy.solve('bpf.js'),
+
+  obj = bpf.object(os.readFile('../../../bin/load-balancer.o')),
+  program = obj.programs[0].load(6, 'GPL'),
+  maps = Object.fromEntries(
+    obj.maps.map(
+      m => [m.name.startsWith('map_') ? m.name.substring(4) : m.name, m]
+    )
+  ),
 
   epFromIPPort = (ip, port) => `${ip}/${port}`,
   epFromUpstream = (upstream) => epFromIPPort(upstream.ip, upstream.port),
-  ipFromString = (str) => ({ v4: new Netmask(str).toBytes() }),
+  ipFromString = (str) => ({ v4: { u8: new Netmask(str).toBytes() }}),
   macFromString = (str) => str.split(':').map(x => Number.parseInt(x, 16)),
+
+  pendingRequests = [],
 
   links = {},
 
@@ -22,7 +31,7 @@
           (
             id = idPool.allocate()
           ) => (
-            bpf.maps.upstreams.update({ id }, {
+            maps.upstreams.update({ i: id }, {
               addr: {
                 ip: ipFromString(ip),
                 port,
@@ -39,7 +48,7 @@
             delete mapByID[id],
             delete mapByEP[epFromUpstream[upstreams[id]]],
             idPool.free(id),
-            bpf.maps.upstreams.delete({ id })
+            maps.upstreams.delete({ id })
           )
         )
       ),
@@ -59,25 +68,47 @@
     proto,
   }),
 
+  initLink = (index) => (
+    links[index] || (
+      pendingRequests.push(
+        new Message(
+          {
+            type: 19, // RTM_SETLINK
+            flags: 0x01 | 0x04, // NLM_F_REQUEST | NLM_F_ACK
+          },
+          nl.link.encode({
+            index,
+            attrs: {
+              [43]: { // IFLA_XDP
+                [1]: nl.i32(program.fd), // IFLA_XDP_FD
+              },
+            }
+          })
+        )
+      ),
+      links[index] = {}
+    )
+  ),
+
   newLink = (link) => (
     console.log('new link:', 'address', link.address, 'broadcast', link.broadcast, 'ifname', link.ifname, 'index', link.index),
-    bpf.maps.links.update(
-      { id: link.index },
-      Object.assign(links[link.index] ??= {}, { mac: macFromString(link.address) }),
+    maps.links.update(
+      { i: link.index },
+      Object.assign(initLink(link.index), { mac: macFromString(link.address) }),
     )
   ),
 
   delLink = (link) => (
     console.log('del link:', 'address', link.address, 'ifname', link.ifname, 'index', link.index),
-    bpf.maps.links.delete({ id: link.index })
+    maps.links.delete({ i: link.index })
   ),
 
   newAddress = (addr) => (
     console.log('add addr:', 'address', addr.address, 'prefixlen', addr.prefixlen, 'index', addr.index),
     new Netmask(addr.address).version === 4 && (
-      bpf.maps.links.update(
-        { id: addr.index },
-        Object.assign(links[addr.index] ??= {}, { ip: ipFromString(addr.address) }),
+      maps.links.update(
+        { i: addr.index },
+        Object.assign(initLink(addr.index), { ip: ipFromString(addr.address) }),
       )
     )
   ),
@@ -88,17 +119,17 @@
 
   newRoute = (route) => (
     console.log('new route:', 'dst', route.dst, 'dst_len', route.dst_len, 'oif', route.oif, 'gateway', route.gateway),
-    route.gateway && bpf.maps.routes.update(routeKey(route), ipFromString(route.gateway))
+    route.gateway && maps.routes.update(routeKey(route), ipFromString(route.gateway))
   ),
 
   delRoute = (route) => (
     console.log('del route:', 'dst', route.dst, 'dst_len', route.dst_len, 'oif', route.oif),
-    bpf.maps.routes.delete(routeKey(route))
+    maps.routes.delete(routeKey(route))
   ),
 
   newNeighbour = (neigh) => (
     console.log('new neigh:', 'dst', neigh.dst, 'lladdr', neigh.lladdr, 'ifindex', neigh.ifindex),
-    bpf.maps.neighbours.update(
+    maps.neighbours.update(
       ipFromString(neigh.dst), {
         interface: neigh.ifindex,
         mac: macFromString(neigh.lladdr),
@@ -108,12 +139,12 @@
 
   delNeighbour = (neigh) => (
     console.log('new neigh:', 'dst', neigh.dst, 'lladdr', neigh.lladdr, 'ifindex', neigh.ifindex),
-    bpf.maps.neighbours.delete(ipFromString(neigh.dst))
+    maps.neighbours.delete(ipFromString(neigh.dst))
   ),
 
 ) => ({
 
-  initialRequests: [
+  initialRequests: () => [
     new Message(
       {
         type: 18, // RTM_GETLINK
@@ -144,6 +175,25 @@
     ),
   ],
 
+  pendingRequests: () => pendingRequests.splice(0),
+
+  cleanupRequests: () => Object.keys(links).map(
+    index => new Message(
+      {
+        type: 19, // RTM_SETLINK
+        flags: 0x01 | 0x04, // NLM_F_REQUEST | NLM_F_ACK
+      },
+      nl.link.encode({
+        index,
+        attrs: {
+          [43]: { // IFLA_XDP
+            [1]: nl.i32(-1), // IFLA_XDP_FD
+          },
+        }
+      })
+    )
+  ),
+
   setupBalancers: (
     (
       oldBalancers = {}
@@ -173,7 +223,7 @@
               ) => (
                 console.log('  Update balancer', ip, port),
                 newBalancers[epFromIPPort(ip, port)] = balancer,
-                bpf.maps.balancers.update(
+                maps.balancers.update(
                   balancerKey(ip, port, 6), {
                     ring: [balancer.targets[0].upstream.id],
                     hint: 0,
@@ -184,7 +234,7 @@
           ),
           Object.entries(oldBalancers).forEach(
             ([k, v]) => k in newBalancers || (
-              bpf.maps.balancers.delete(balancerKey(v.ip, v.port, 6)),
+              maps.balancers.delete(balancerKey(v.ip, v.port, 6)),
               console.log('  Delete balancer', v.ip, v.port)
             )
           ),

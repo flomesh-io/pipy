@@ -25,7 +25,10 @@ char __license[] SEC("license") = "Dual MIT/GPL";
 //
 
 struct IP {
-  __u32 v4;
+  union {
+    __u8 u8[4];
+    __u32 u32;
+  } v4;
 };
 
 struct IPMask {
@@ -123,6 +126,10 @@ struct {
   struct NATVal *value;
 } map_nat SEC(".maps");
 
+//
+// Packet and XXXInfo - All runtime data being used in the processing of a packet
+//
+
 struct EthInfo {
   struct ethhdr *hdr;
   __u16 proto;
@@ -145,10 +152,6 @@ struct UDPInfo {
   struct udphdr *hdr;
   __u16 src, dst;
 };
-
-//
-// Packet - All runtime data related to the processing of a packet
-//
 
 struct Packet {
   void *ptr;
@@ -178,8 +181,8 @@ INLINE int parse_ipv4(struct Packet *pkt) {
   if (pkt->end < (pkt->ptr += ip->ihl << 2)) return 0;
 
   pkt->ip.proto = ip->protocol;
-  pkt->ip.src.v4 = ip->saddr;
-  pkt->ip.dst.v4 = ip->daddr;
+  pkt->ip.src.v4.u32 = ip->saddr;
+  pkt->ip.dst.v4.u32 = ip->daddr;
 
   return 1;
 }
@@ -225,7 +228,7 @@ INLINE void alter_eth_dst(struct Packet *pkt, __u8 mac[ETH_ALEN]) {
 INLINE void alter_ip(struct Packet *pkt, void *ptr, struct IP *ip) {
   struct iphdr *h = pkt->ip.hdr;
   __u32 *p = (void *)ptr;
-  __u32 *q = (void *)&ip->v4;
+  __u32 *q = (void *)&ip->v4.u32;
   __u32 csum = bpf_csum_diff(p, sizeof(*p), q, sizeof(*q), 0xffff - h->check);
   h->check = 0xffff - fold_csum(csum);
   switch (pkt->ip.proto) {
