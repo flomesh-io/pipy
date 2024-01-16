@@ -29,6 +29,8 @@
 #include "data.hpp"
 #include "list.hpp"
 
+#include <functional>
+
 namespace pipy {
 
 class MessageStart;
@@ -45,6 +47,8 @@ class Message :
 {
 public:
   static bool is_events(pjs::Object *obj);
+  static bool to_events(pjs::Object *obj, const std::function<bool(Event*)> &cb);
+  static bool to_events(const pjs::Value &value, const std::function<bool(Event*)> &cb);
   static auto from(MessageStart *start, Data *body, MessageEnd *end) -> Message*;
   static bool output(const pjs::Value &events, EventTarget::Input *input);
   static bool output(pjs::Object *events, EventTarget::Input *input);

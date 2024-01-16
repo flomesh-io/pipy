@@ -113,6 +113,7 @@ public:
   void mux_http(pjs::Function *session_selector, pjs::Object *options);
   void pack(int batch_size, pjs::Object *options);
   void print();
+  void produce(const pjs::Value &producer);
   void read(const pjs::Value &pathname);
   void replace_body(pjs::Object *replacement, pjs::Object *options);
   void replace_event(Event::Type type, pjs::Object *replacement);

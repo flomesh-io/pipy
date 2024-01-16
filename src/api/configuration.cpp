@@ -66,6 +66,7 @@
 #include "filters/on-start.hpp"
 #include "filters/pack.hpp"
 #include "filters/print.hpp"
+#include "filters/produce.hpp"
 #include "filters/proxy-protocol.hpp"
 #include "filters/read.hpp"
 #include "filters/replace-body.hpp"
@@ -362,6 +363,10 @@ void FilterConfigurator::pack(int batch_size, pjs::Object *options) {
 
 void FilterConfigurator::print() {
   append_filter(new Print());
+}
+
+void FilterConfigurator::produce(const pjs::Value &producer) {
+  append_filter(new Produce(producer));
 }
 
 void FilterConfigurator::read(const pjs::Value &pathname) {
@@ -1999,6 +2004,19 @@ template<> void ClassDef<FilterConfigurator>::init() {
     auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
     try {
       config->print();
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // FilterConfigurator.produce
+  method("produce", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
+    Value producer;
+    if (!ctx.arguments(0, &producer)) return;
+    try {
+      config->produce(producer);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);

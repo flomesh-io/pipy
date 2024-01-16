@@ -272,6 +272,7 @@ add_executable(pipy
   src/filters/on-start.cpp
   src/filters/pack.cpp
   src/filters/print.cpp
+  src/filters/produce.cpp
   src/filters/proxy-protocol.cpp
   src/filters/read.cpp
   src/filters/replace.cpp

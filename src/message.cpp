@@ -50,6 +50,53 @@ bool Message::is_events(pjs::Object *obj) {
   return false;
 }
 
+bool Message::to_events(pjs::Object *obj, const std::function<bool(Event*)> &cb) {
+  if (!obj) {
+    return true;
+  } else if (obj->is_instance_of<Event>()) {
+    return cb(obj->as<Event>());
+  } else if (obj->is_instance_of<Message>()) {
+    auto msg = obj->as<Message>();
+    pjs::Ref<MessageStart> start(MessageStart::make(msg->head()));
+    pjs::Ref<MessageEnd> end(MessageEnd::make(msg->tail(), msg->payload()));
+    if (!cb(start)) return false;
+    if (auto body = msg->body()) if (!cb(body)) return false;
+    if (!cb(end)) return false;
+    return true;
+  } else if (obj->is_array()) {
+    auto *a = obj->as<pjs::Array>();
+    bool ret = true;
+    a->iterate_while([&](pjs::Value &v, int i) -> bool {
+      if (v.is_null() || v.is_undefined()) {
+        return true;
+      } else if (v.is_instance_of(pjs::class_of<Event>())) {
+        if (!cb(v.as<Event>())) return (ret = false);
+        return true;
+      } else if (v.is_instance_of(pjs::class_of<Message>())) {
+        auto msg = obj->as<Message>();
+        pjs::Ref<MessageStart> start(MessageStart::make(msg->head()));
+        pjs::Ref<MessageEnd> end(MessageEnd::make(msg->tail(), msg->payload()));
+        if (!cb(start)) return (ret = false);
+        if (auto body = msg->body()) if (!cb(body)) return (ret = false);
+        if (!cb(end)) return (ret = false);
+        return true;
+      } else {
+        return (ret = false);
+      }
+    });
+    return ret;
+  } else {
+    return false;
+  }
+}
+
+bool Message::to_events(const pjs::Value &value, const std::function<bool(Event*)> &cb) {
+  if (value.is_null() || value.is_undefined()) return true;
+  if (value.is_function()) return false;
+  if (value.is_object()) return to_events(value.o(), cb);
+  return false;
+}
+
 auto Message::from(MessageStart *start, Data *body, MessageEnd *end) -> Message* {
   auto head = start ? start->head() : nullptr;
   return (end
