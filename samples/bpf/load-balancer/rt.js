@@ -14,8 +14,6 @@
   ipFromString = (str) => ({ v4: { u8: new Netmask(str).toBytes() }}),
   macFromString = (str) => str.split(':').map(x => Number.parseInt(x, 16)),
 
-  pendingRequests = [],
-
   links = {},
 
   upstreams = (
@@ -55,6 +53,28 @@
     })
   )(),
 
+  pendingRequests = (
+    (
+      requests = [],
+      consumers = [],
+    ) => ({
+      enqueue: (req) => (
+        consumers.length > 0 ? (
+          consumers.shift()(req)
+        ) : (
+          requests.push(req)
+        )
+      ),
+      dequeue: () => (
+        requests.length > 0 ? (
+          requests.shift()
+        ) : (
+          new Promise(r => consumers.push(r))
+        )
+      ),
+    })
+  )(),
+
   routeKey = (route) => ({
     mask: { prefixlen: route.dst_len },
     ip: ipFromString(route.dst || '0.0.0.0'),
@@ -70,7 +90,7 @@
 
   initLink = (index) => (
     links[index] || (
-      pendingRequests.push(
+      pendingRequests.enqueue(
         new Message(
           {
             type: 19, // RTM_SETLINK
@@ -145,6 +165,8 @@
 
 ) => ({
 
+  pendingRequests,
+
   initialRequests: () => [
     new Message(
       {
@@ -175,8 +197,6 @@
       nl.neigh.encode({})
     ),
   ],
-
-  pendingRequests: () => pendingRequests.splice(0),
 
   cleanupRequests: () => Object.keys(links).map(
     index => new Message(

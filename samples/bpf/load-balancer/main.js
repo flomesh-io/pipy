@@ -33,13 +33,13 @@
   .decodeNetlink()
   .handleMessage(rt.handleRouteChange)
 
-.task('1s', () => [...rt.pendingRequests(), new StreamEnd])
+.task(new Data)
+  .produce(() => rt.pendingRequests.dequeue())
   .encodeNetlink()
   .connect('pid=0;groups=0', {
     protocol: 'netlink',
     netlinkFamily: 0,
   })
-  .decodeNetlink()
 
 .watch('config.json')
   .onStart(() => (
