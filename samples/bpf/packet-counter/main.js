@@ -3,7 +3,7 @@
     os.readFile('../../../bin/packet-counter.o')
   ),
 
-  prog = obj.programs[0].load(6, 'GPL'),
+  prog = obj.programs[0].load(6, 'GPL'), // BPF_PROG_TYPE_XDP
 
   map = obj.maps[0],
 
@@ -15,27 +15,32 @@
     pipy(ctx)
   ),
 
+  cleanup = () => (
+    pipy.exec('ip link set dev lo xdpgeneric off'),
+    pipy.exec(`rm ${PINNING_PATHNAME}`)
+  ),
+
+  dumpStats = () => void (
+    console.log('Packet stats:'),
+    map.entries().forEach(
+      ([k, v]) => (
+        console.log(' ', k.ip.u8.join('.'), v.i)
+      )
+    )
+  ),
+
 ) => main()
 
 .listen(8080)
   .serveHTTP(new Message('hello'))
 
-.task('1s')
-  .onStart(
-    () => (
-      console.log('Packet stats:'),
-      map.entries().forEach(
-        ([k, v]) => (
-          console.log(' ', k.ip.u8.join('.'), v.i)
-        )
-      ),
-      new StreamEnd
-    )
+.task(new Data)
+  .produce(
+    () => new Timeout(1).wait().then(dumpStats)
   )
 
 .exit(() => (
-  pipy.exec('ip link set dev lo xdpgeneric off'),
-  pipy.exec(`rm ${PINNING_PATHNAME}`),
+  cleanup(),
   new StreamEnd
 ))
 

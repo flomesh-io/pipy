@@ -2,7 +2,9 @@
   rt = pipy.solve('rt.js'),
 
   setupBalancers = () => (
-    rt.setupBalancers(JSON.decode(pipy.load('config.json')).balancers)
+    rt.setupBalancers(
+      JSON.decode(pipy.load('config.json')).balancers
+    )
   ),
 
   main = (ctx) => (
@@ -53,8 +55,5 @@
     protocol: 'netlink',
     netlinkFamily: 0,
   })
-
-.listen(8080)
-  .serveHTTP(new Message('hi'))
 
 )()
