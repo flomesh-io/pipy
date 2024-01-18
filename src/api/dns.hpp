@@ -27,7 +27,6 @@
 #define API_DNS_HPP
 
 #include "data.hpp"
-#include "pjs/pjs.hpp"
 
 namespace pipy {
 
@@ -35,6 +34,7 @@ class DNS : public pjs::ObjectTemplate<DNS> {
 public:
   static auto decode(const Data &data) -> pjs::Object *;
   static void encode(pjs::Object *dns, pipy::Data::Builder &db);
+  static void resolve(const std::string &hostname, const std::function<void(pjs::Array*)> &cb);
 };
 
 } // namespace pipy

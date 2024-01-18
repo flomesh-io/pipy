@@ -26,8 +26,7 @@
 #include <cstring>
 
 #include "dns.hpp"
-#include "message.hpp"
-#include "utils.hpp"
+#include "net.hpp"
 
 namespace pipy {
 
@@ -897,6 +896,47 @@ static int dns_encode(pjs::Object *dns, Data::Builder &db) {
   return skip;
 }
 
+//
+// DNSResolver
+//
+
+class DNSResolver : public pjs::Pooled<DNSResolver> {
+public:
+  DNSResolver(const std::string &hostname, const std::function<void(pjs::Array*)> &cb)
+    : m_resolver(Net::context())
+    , m_cb(cb)
+  {
+    m_resolver.async_resolve(
+      hostname, std::string(),
+      [this](
+        const std::error_code &ec,
+        asio::ip::icmp::resolver::results_type results
+      ) {
+        if (ec) {
+          m_cb(nullptr);
+        } else {
+          auto a = pjs::Array::make(results.size());
+          int i = 0;
+          for (const auto &result : results) {
+            pjs::Value v(result.endpoint().address().to_string());
+            a->set(i++, v);
+          }
+          m_cb(a);
+        }
+        delete this;
+      }
+    );
+  }
+
+private:
+  asio::ip::icmp::resolver m_resolver;
+  std::function<void(pjs::Array*)> m_cb;
+};
+
+//
+// DNS
+//
+
 auto DNS::decode(const Data &data) -> pjs::Object * {
   auto dns = pjs::Object::make();
   try {
@@ -915,24 +955,30 @@ void DNS::encode(pjs::Object *dns, Data::Builder &db) {
   dns_encode(dns, db);
 }
 
+void DNS::resolve(const std::string &hostname, const std::function<void(pjs::Array*)> &cb) {
+  new DNSResolver(hostname, cb);
+}
+
 } // namespace pipy
 
 namespace pjs {
 
-template <> void EnumDef<pipy::RecordType>::init() {
-  define(pipy::RecordType::TYPE_A, "A");
-  define(pipy::RecordType::TYPE_NS, "NS");
-  define(pipy::RecordType::TYPE_CNAME, "CNAME");
-  define(pipy::RecordType::TYPE_SOA, "SOA");
-  define(pipy::RecordType::TYPE_PTR, "PTR");
-  define(pipy::RecordType::TYPE_MX, "MX");
-  define(pipy::RecordType::TYPE_TXT, "TXT");
-  define(pipy::RecordType::TYPE_AAAA, "AAAA");
-  define(pipy::RecordType::TYPE_SRV, "SRV");
-  define(pipy::RecordType::TYPE_OPT, "OPT");
+using namespace pipy;
+
+template <> void EnumDef<RecordType>::init() {
+  define(RecordType::TYPE_A, "A");
+  define(RecordType::TYPE_NS, "NS");
+  define(RecordType::TYPE_CNAME, "CNAME");
+  define(RecordType::TYPE_SOA, "SOA");
+  define(RecordType::TYPE_PTR, "PTR");
+  define(RecordType::TYPE_MX, "MX");
+  define(RecordType::TYPE_TXT, "TXT");
+  define(RecordType::TYPE_AAAA, "AAAA");
+  define(RecordType::TYPE_SRV, "SRV");
+  define(RecordType::TYPE_OPT, "OPT");
 }
 
-template <> void ClassDef<pipy::DNS>::init() {
+template <> void ClassDef<DNS>::init() {
   ctor();
 
   method("decode", [](Context &ctx, Object *dns, Value &ret) {
@@ -942,7 +988,7 @@ template <> void ClassDef<pipy::DNS>::init() {
       return;
     }
     try {
-      ret.set(pipy::DNS::decode(*data));
+      ret.set(DNS::decode(*data));
     } catch (std::runtime_error &err) {
       ctx.error(err);
     }
@@ -956,14 +1002,30 @@ template <> void ClassDef<pipy::DNS>::init() {
     }
     try {
       pipy::Data data;
-      pipy::Data::Builder db(data, &pipy::s_dp);
+      pipy::Data::Builder db(data, &s_dp);
 
-      pipy::DNS::encode(value.o(), db);
+      DNS::encode(value.o(), db);
       db.flush();
       ret.set(pipy::Data::make(std::move(data)));
     } catch (std::runtime_error &err) {
       ctx.error(err);
     }
+  });
+
+  method("resolve", [](Context &ctx, Object *dns, Value &ret) {
+    Str* hostname;
+    if (!ctx.arguments(1, &hostname)) return;
+    auto promise = Promise::make();
+    auto settler = Promise::Settler::make(promise);
+    settler->retain();
+    DNS::resolve(
+      hostname->str(),
+      [=](Array *results) {
+        settler->resolve(results);
+        settler->release();
+      }
+    );
+    ret.set(promise);
   });
 }
 
