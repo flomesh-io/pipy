@@ -93,8 +93,7 @@ InputContext::~InputContext() {
   if (m_origin == this) {
 
     // Run micro-tasks
-    int max_runs = 100;
-    while (max_runs > 0 && pjs::Promise::run()) max_runs--;
+    pjs::Promise::Period::current()->run(10);
 
     // Flush all pumping targets
     while (auto *target = m_flush_targets_pumping.head()) {

@@ -145,7 +145,16 @@ void WorkerThread::reload(const std::function<void(bool)> &cb) {
       m_new_version = codebase->version();
       m_new_worker = Worker::make(m_manager->loading_pipeline_lb());
 
+      pjs::Ref<pjs::Promise::Period> old_period = pjs::Promise::Period::current();
+      old_period->pause();
+
+      m_new_period = pjs::Promise::Period::make();
+      m_new_period->pause();
+      m_new_period->set_current();
+
       cb(m_new_worker->load_js_module(entry) && m_new_worker->bind());
+      old_period->set_current();
+      old_period->resume();
     }
   );
 }
@@ -156,8 +165,13 @@ void WorkerThread::reload_done(bool ok) {
       [this]() {
         if (m_new_worker) {
           pjs::Ref<Worker> current_worker = Worker::current();
+          pjs::Ref<pjs::Promise::Period> current_period = pjs::Promise::Period::current();
           m_new_worker->start(true);
           current_worker->stop(true);
+          current_period->end();
+          m_new_period->set_current();
+          m_new_period->resume();
+          m_new_period = nullptr;
           m_new_worker = nullptr;
           m_version = m_new_version;
           m_working = true;
@@ -170,6 +184,8 @@ void WorkerThread::reload_done(bool ok) {
       [this]() {
         if (m_new_worker) {
           m_new_worker->stop(true);
+          m_new_period->end();
+          m_new_period = nullptr;
           m_new_worker = nullptr;
           m_new_version.clear();
           Log::error("[restart] Failed reloading codebase %d", m_index);
@@ -379,6 +395,7 @@ void WorkerThread::init_metrics() {
 }
 
 void WorkerThread::shutdown_all(bool force) {
+  if (auto period = pjs::Promise::Period::current()) period->end();
   if (auto worker = Worker::current()) worker->stop(force);
   Listener::for_each([&](Listener *l) { l->pipeline_layout(nullptr); return true; });
 }

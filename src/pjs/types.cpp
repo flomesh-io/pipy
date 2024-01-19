@@ -1987,20 +1987,6 @@ auto Error::name() const -> Str* {
 // Promise
 //
 
-thread_local Promise* Promise::s_settled_queue_head = nullptr;
-thread_local Promise* Promise::s_settled_queue_tail = nullptr;
-
-bool Promise::run() {
-  auto p = s_settled_queue_head;
-  s_settled_queue_head = nullptr;
-  s_settled_queue_tail = nullptr;
-  while (p) {
-    auto promise = p; p = p->m_next;
-    promise->dequeue();
-  }
-  return s_settled_queue_head;
-}
-
 auto Promise::resolve(const Value &value) -> Promise* {
   auto p = Promise::make();
   p->settle(RESOLVED, value);
@@ -2108,26 +2094,29 @@ void Promise::cancel() {
 
 void Promise::enqueue() {
   if (!m_queued) {
-    if (s_settled_queue_tail) {
-      s_settled_queue_tail->m_next = this;
-      s_settled_queue_tail = this;
-    } else {
-      s_settled_queue_head = this;
-      s_settled_queue_tail = this;
+    auto *period = Period::current();
+    if (!period->m_ended) {
+      if (period->m_settled_queue_tail) {
+        period->m_settled_queue_tail->m_next = this;
+        period->m_settled_queue_tail = this;
+      } else {
+        period->m_settled_queue_head = this;
+        period->m_settled_queue_tail = this;
+      }
+      m_queued = true;
+      retain();
     }
-    m_queued = true;
-    retain();
   }
 }
 
-void Promise::dequeue() {
+void Promise::dequeue(bool run) {
   if (m_queued) {
     auto p = m_thens_head;
     m_thens_head = nullptr;
     m_thens_tail = nullptr;
     while (p) {
       auto then = p; p = p->m_next;
-      then->execute(m_state, m_result);
+      if (run) then->execute(m_state, m_result);
       delete then;
     }
     m_next = nullptr;
@@ -2217,6 +2206,63 @@ template<> void ClassDef<Constructor<Promise>>::init() {
     if (!promises) { ctx.error_argument_type(0, "an array"); return; }
     ret.set(Promise::race(promises));
   });
+}
+
+//
+// Promise::Period
+//
+
+thread_local pjs::Ref<Promise::Period> Promise::Period::s_current;
+
+auto Promise::Period::current() -> Period* {
+  if (!s_current) {
+    s_current = Period::make();
+  }
+  return s_current;
+}
+
+auto Promise::Period::make() -> Period* {
+  return new Period();
+}
+
+void Promise::Period::set_current() {
+  s_current = this;
+}
+
+void Promise::Period::run(int max_iterations) {
+  auto n = max_iterations;
+  while (n > 0 && run_queue()) n--;
+}
+
+void Promise::Period::resume(int max_iterations) {
+  if (m_paused) {
+    m_paused = false;
+    run(max_iterations);
+  }
+}
+
+void Promise::Period::pause() {
+  m_paused = true;
+}
+
+void Promise::Period::end() {
+  for (auto p = m_settled_queue_head; p; p = p->m_next) {
+    p->dequeue(false);
+  }
+  m_settled_queue_head = nullptr;
+  m_settled_queue_tail = nullptr;
+  m_ended = true;
+}
+
+bool Promise::Period::run_queue() {
+  auto p = m_settled_queue_head;
+  m_settled_queue_head = nullptr;
+  m_settled_queue_tail = nullptr;
+  while (p) {
+    auto promise = p; p = p->m_next;
+    promise->dequeue(true);
+  }
+  return !m_paused && !m_ended && m_settled_queue_head;
 }
 
 //

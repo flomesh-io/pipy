@@ -2855,6 +2855,36 @@ public:
   };
 
   //
+  // Promise::Period
+  //
+
+  class Period : public pjs::RefCount<Period> {
+  public:
+    static auto current() -> Period*;
+    static auto make() -> Period*;
+
+    void set_current();
+    void run(int max_iterations = 1);
+    void resume(int max_iterations = 1);
+    void pause();
+    void end();
+
+  private:
+    Period() {}
+
+    Promise* m_settled_queue_head = nullptr;
+    Promise* m_settled_queue_tail = nullptr;
+    bool m_paused = false;
+    bool m_ended = false;
+
+    bool run_queue();
+
+    thread_local static pjs::Ref<Period> s_current;
+
+    friend class Promise;
+  };
+
+  //
   // Promise::Callback
   //
 
@@ -2891,7 +2921,6 @@ public:
     Value reason;
   };
 
-  static bool run();
   static auto resolve(const Value &value) -> Promise*;
   static auto reject(const Value &error) -> Promise*;
   static auto all(Array *promises) -> Promise*;
@@ -2955,7 +2984,7 @@ private:
   void settle(State state, const Value &result);
   void cancel();
   void enqueue();
-  void dequeue();
+  void dequeue(bool run);
 
   State m_state = PENDING;
   Value m_result;

@@ -90,6 +90,7 @@ private:
   std::thread m_thread;
   std::mutex m_mutex;
   std::condition_variable m_cv;
+  pjs::Ref<pjs::Promise::Period> m_new_period;
   bool m_force_start = false;
   bool m_started = false;
   bool m_failed = false;
