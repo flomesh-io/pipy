@@ -471,7 +471,8 @@ void Worker::stop(bool force) {
     end_all();
   } else {
     keep_alive();
-    for (auto *exit : m_exits) {
+    std::list<Exit*> exits = m_exits;
+    for (auto *exit : exits) {
       exit->start();
     }
   }
