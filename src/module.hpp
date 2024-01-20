@@ -112,7 +112,7 @@ public:
   virtual auto get_pipeline(pjs::Str *name) -> PipelineLayout* override { return find_named_pipeline(name); }
 
 private:
-  bool load(const std::string &path);
+  bool load(const std::string &path, pjs::Value &result);
   virtual void unload() override;
 
   virtual void bind_exports(Worker *worker) override;

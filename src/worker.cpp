@@ -231,13 +231,18 @@ auto Worker::find_js_module(const std::string &path) -> JSModule* {
 }
 
 auto Worker::load_js_module(const std::string &path) -> JSModule* {
+  pjs::Value result;
+  return load_js_module(path, result);
+}
+
+auto Worker::load_js_module(const std::string &path, pjs::Value &result) -> JSModule* {
   auto i = m_module_map.find(path);
   if (i != m_module_map.end()) return i->second;
   auto m = new JSModule(this, new_module_index());
   add_module(m);
   m_module_map[path] = m;
   if (!m_root) m_root = m;
-  if (!m->load(path)) return nullptr;
+  if (!m->load(path, result)) return nullptr;
   return m;
 }
 

@@ -64,6 +64,7 @@ public:
   bool handling_signal(int sig);
   auto find_js_module(const std::string &path) -> JSModule*;
   auto load_js_module(const std::string &path) -> JSModule*;
+  auto load_js_module(const std::string &path, pjs::Value &result) -> JSModule*;
   auto load_native_module(const std::string &path) -> nmi::NativeModule*;
   void add_listener(Listener *listener, PipelineLayout *layout, const Listener::Options &options);
   void remove_listener(Listener *listener);

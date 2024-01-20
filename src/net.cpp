@@ -44,8 +44,19 @@ void Net::run() {
   m_is_running = false;
 }
 
+auto Net::run_one() -> size_t {
+  m_is_running = true;
+  auto n = m_io_context.run_one();
+  m_is_running = false;
+  return n;
+}
+
 void Net::stop() {
   m_io_context.stop();
+}
+
+void Net::restart() {
+  m_io_context.restart();
 }
 
 void Net::post(const std::function<void()> &cb) {

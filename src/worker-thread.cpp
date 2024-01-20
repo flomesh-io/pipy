@@ -28,6 +28,7 @@
 #include "codebase.hpp"
 #include "pipeline-lb.hpp"
 #include "timer.hpp"
+#include "api/console.hpp"
 #include "net.hpp"
 #include "log.hpp"
 #include "utils.hpp"
@@ -409,7 +410,63 @@ void WorkerThread::main() {
   );
 
   auto &entry = Codebase::current()->entry();
-  auto mod = m_new_worker->load_js_module(entry);
+  auto result = pjs::Value::empty;
+  auto mod = m_new_worker->load_js_module(entry, result);
+
+  if (!mod && !result.is_empty()) {
+    auto output_value = [](std::ostream &out, const pjs::Value &value) {
+      if (value.is_string()) {
+        out << value.s()->str();
+      } else if (value.is<Data>()) {
+        value.as<Data>()->to_chunks(
+          [&](const uint8_t *ptr, int len) {
+            out.write((const char *)ptr, len);
+          }
+        );
+      } else {
+        Data buf;
+        Console::dump(value, buf);
+        buf.to_chunks(
+          [&](const uint8_t *ptr, int len) {
+            out.write((const char *)ptr, len);
+          }
+        );
+        out << std::endl;
+      }
+    };
+
+    if (result.is_promise()) {
+      auto promise = result.as<pjs::Promise>();
+      auto ctx = m_new_worker->new_loading_context();
+      bool done = false;
+
+      pjs::Ref<pjs::Promise::Callback> cb;
+      cb = pjs::Promise::Callback::make(
+        [&](pjs::Promise::State state, const pjs::Value &result) {
+          if (result.is_promise()) {
+            result.as<pjs::Promise>()->then(ctx, cb->resolved(), cb->rejected());
+          } else {
+            output_value(state == pjs::Promise::RESOLVED ? std::cout : std::cerr, result);
+            done = true;
+            Net::current().stop();
+          }
+        }
+      );
+
+      promise->then(ctx, cb->resolved(), cb->rejected());
+
+      for (;;) {
+        while (Net::current().run_one() > 0);
+        pjs::Promise::Period::current()->run(10);
+        if (done) break;
+        Net::current().restart();
+      }
+
+    } else {
+      output_value(std::cout, result);
+    }
+  }
+
   bool started = (mod && m_new_worker->bind() && m_new_worker->start(m_force_start));
 
   {
@@ -445,12 +502,12 @@ void WorkerThread::main() {
       };
 
       wait_for_work();
-      Net::current().context().restart();
+      Net::current().restart();
       Net::current().run();
 
       if (m_working) {
         m_done = false;
-        Net::current().context().restart();
+        Net::current().restart();
         Log::info("[start] Thread %d restarted", m_index);
       }
     }

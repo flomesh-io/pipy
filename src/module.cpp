@@ -29,7 +29,6 @@
 #include "pipeline.hpp"
 #include "pipeline-lb.hpp"
 #include "api/configuration.hpp"
-#include "api/console.hpp"
 #include "api/json.hpp"
 #include "graph.hpp"
 #include "utils.hpp"
@@ -105,7 +104,7 @@ auto JSModule::new_context(Context *base) -> Context* {
   return m_worker->new_runtime_context(base);
 }
 
-bool JSModule::load(const std::string &path) {
+bool JSModule::load(const std::string &path, pjs::Value &result) {
   m_filename = pjs::Str::make(path);
 
   auto sd = Codebase::current()->get(path);
@@ -136,36 +135,19 @@ bool JSModule::load(const std::string &path) {
   pjs::Ref<Context> ctx = m_worker->new_loading_context();
   expr->resolve(*ctx, index(), m_imports.get());
 
-  pjs::Value result;
-  if (!expr->eval(*ctx, result)) {
+  pjs::Value ret;
+  if (!expr->eval(*ctx, ret)) {
     ctx->backtrace("(root)");
     Log::pjs_error(ctx->error());
     return false;
   }
 
-  if (!result.is_class(pjs::class_of<Configuration>())) {
-    if (result.is_string()) {
-      std::cout << result.s()->str();
-    } else if (result.is<Data>()) {
-      result.as<Data>()->to_chunks(
-        [](const uint8_t *ptr, int len) {
-          std::cout.write((const char *)ptr, len);
-        }
-      );
-    } else {
-      Data out;
-      Console::dump(result, out);
-      out.to_chunks(
-        [](const uint8_t *ptr, int len) {
-          std::cout.write((const char *)ptr, len);
-        }
-      );
-      std::cout << std::endl;
-    }
+  if (!ret.is_class(pjs::class_of<Configuration>())) {
+    result = ret;
     return false;
   }
 
-  auto config = result.as<Configuration>();
+  auto config = ret.as<Configuration>();
   try {
     config->check_integrity();
   } catch (std::runtime_error &err) {

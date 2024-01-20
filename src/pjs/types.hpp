@@ -2888,12 +2888,17 @@ public:
   // Promise::Callback
   //
 
-  class Callback : public Object {
+  class Callback : public ObjectTemplate<Callback> {
   public:
     auto resolved() -> Function*;
     auto rejected() -> Function*;
-    virtual void on_resolved(const Value &value) {}
-    virtual void on_rejected(const Value &error) {}
+    virtual void on_resolved(const Value &value) { if (m_cb) m_cb(RESOLVED, value); }
+    virtual void on_rejected(const Value &error) { if (m_cb) m_cb(REJECTED, error); }
+  protected:
+    Callback(const std::function<void(State, const Value &)> &cb = nullptr) : m_cb(cb) {}
+  private:
+    std::function<void(State, const Value &)> m_cb;
+    friend class ObjectTemplate<Callback>;
   };
 
   //

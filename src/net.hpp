@@ -62,7 +62,9 @@ public:
   bool is_running() const { return m_is_running; }
 
   void run();
+  auto run_one() -> size_t;
   void stop();
+  void restart();
   void post(const std::function<void()> &cb);
   void defer(const std::function<void()> &cb);
 
