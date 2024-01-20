@@ -75,7 +75,6 @@ private:
   bool m_stream_end = false;
 
   void schedule(double interval);
-  void keep_alive();
   void wait();
   void tick();
   void run();

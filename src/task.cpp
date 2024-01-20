@@ -81,7 +81,6 @@ Task::Task(const std::string &when, PipelineLayout *layout)
 {
   if (when.empty()) {
     m_type = ONE_SHOT;
-    keep_alive();
   } else {
     if (std::isdigit(when[0])) {
       m_type = CRON;
@@ -135,16 +134,6 @@ void Task::schedule(double interval) {
     [this]() {
       run();
       schedule(m_interval);
-    }
-  );
-}
-
-void Task::keep_alive() {
-  m_timer.schedule(
-    1, [this]() {
-      if (!m_stream_end) {
-        keep_alive();
-      }
     }
   );
 }
