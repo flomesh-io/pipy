@@ -100,12 +100,17 @@ async function runTest(name) {
       data => stdoutBuffer.push(data)
     );
 
-    let exitCode;
-    worker.on('exit', code => exitCode = code);
-
-    for (let i = 0; i < 10 && exitCode === undefined; i++) await sleep(1);
-    if (exitCode === undefined) throw new Error('Worker did not quit timely');
-    log('Worker exited with code', exitCode);
+    await Promise.race([
+      new Promise(
+        resolve => {
+          worker.on('exit', code => {
+            log('Worker exited with code', code);
+            resolve();
+          })
+        }
+      ),
+      sleep(10).then(() => { throw new Error('Worker did not quit timely'); }),
+    ]);
 
     const stdout = Buffer.concat(stdoutBuffer);
     const expected = fs.readFileSync(`${basePath}/output`);

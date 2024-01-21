@@ -55,26 +55,24 @@ function startProcess(cmd, args, onStdout) {
 // Start Pipy repo
 //
 
-async function startRepo() {
-  let started = false;
-  const proc = startProcess(
-    pipyBinPath, [],
-    line => {
-      log(chalk.bgGreen('repo >>>'), line);
-      if (line.indexOf('Listening on TCP port') >= 0) {
-        started = true;
+function startRepo() {
+  return Promise.race([
+    new Promise(
+      resolve => {
+        const proc = startProcess(
+          pipyBinPath, [],
+          line => {
+            log(chalk.bgGreen('repo >>>'), line);
+            if (line.indexOf('Listening on TCP port') >= 0) {
+              log('Repo started');
+              resolve(proc);
+            }
+          }
+        );
       }
-    }
-  );
-
-  for (let i = 0; i < 10 && !started; i++) await sleep(1);
-  if (started) {
-    log('Repo started');
-  } else {
-    throw new Error('Failed starting repo');
-  }
-
-  return proc;
+    ),
+    sleep(10).then(() => Promise.reject(new Error('Failed starting repo'))),
+  ]);
 }
 
 //
@@ -146,28 +144,28 @@ async function uploadCodebase(codebaseName, basePath) {
 // Start a Pipy worker
 //
 
-async function startCodebase(url, opt) {
-  let started = false;
-  const proc = startProcess(
-    pipyBinPath, ['--no-graph', url, ...(opt?.options || [])],
-    line => {
-      if (!opt?.silent || !started) {
-        log(chalk.bgGreen('worker >>>'), line);
-        if (line.indexOf('Thread 0 started') >= 0) {
-          started = true;
-        }
+function startCodebase(url, opt) {
+  return Promise.race([
+    new Promise(
+      resolve => {
+        let started = false;
+        const proc = startProcess(
+          pipyBinPath, ['--no-graph', url, ...(opt?.options || [])],
+          line => {
+            if (!opt?.silent || !started) {
+              log(chalk.bgGreen('worker >>>'), line);
+              if (line.indexOf('Thread 0 started') >= 0) {
+                log('Worker started');
+                started = true;
+                resolve(proc);
+              }
+            }
+          }
+        );
       }
-    }
-  );
-
-  for (let i = 0; i < 10 && !started; i++) await sleep(1);
-  if (started) {
-    log('Worker started');
-  } else {
-    throw new Error('Failed starting worker');
-  }
-
-  return proc;
+    ),
+    sleep(10).then(() => Promise.reject(new Error('Failed starting worker'))),
+  ]);
 }
 
 //
@@ -200,7 +198,6 @@ async function runTest(name, options) {
           options: w.name === 'proxy' ? ['--admin-port=7070', '--threads=max', '--reuse-port'] : (w.name === 'client' ? ['--admin-port=7071'] : []),
         }
       );
-      w.worker.on('exit', code => w.exitCode = code);
     }
 
     log('Codebases', chalk.magenta(name), 'all started');
@@ -221,9 +218,23 @@ async function runTest(name, options) {
     log('Stopping all workers...');
 
     workers.forEach(w => w.worker.kill('SIGINT'));
-    for (let i = 0; i < 90 && workers.some(w => w.exitCode === undefined); i++) await sleep(1);
-    if (workers.some(w => w.exitCode === undefined)) throw new Error('Worker did not quit timely');
-    log('Workers exited');
+
+    await Promise.race([
+      Promise.all(
+        workers.map(w => new Promise(
+          resolve => w.worker.on('exit', code => {
+            w.exitCode = code;
+            resolve();
+          })
+        ))
+      ).then(() => {
+        log('All workers exited');
+      }),
+      sleep(90).then(() => {
+        const names = workers.filter(w => w.exitCode === undefined).map(w => w.name).join(', ');
+        throw new Error(`Worker ${names} did not quit timely`);
+      }),
+    ]);
 
     testResults[name] = (errors === 0);
 

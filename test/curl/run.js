@@ -112,30 +112,31 @@ async function startPipy(filename) {
   log(pipyBinPath, filename);
   const proc = spawn(pipyBinPath, [filename]);
   const lineBuffer = [];
-  let started = false, exited = false;
-  proc.stderr.on('exit', () => exited = true);
-  proc.stderr.on('data', data => {
-    let i = 0, n = data.length;
-    while (i < n) {
-      let j = i;
-      while (j < n && data[j] !== 10) j++;
-      if (j > i) lineBuffer.push(data.slice(i, j));
-      if (j < n) {
-        const line = Buffer.concat(lineBuffer).toString();
-        lineBuffer.length = 0;
-        log(chalk.bgGreen('pipy >>>'), line);
-        if (line.indexOf('Thread 0 started') >= 0) started = true;
-      }
-      i = j + 1;
-    }
-  });
-  for (let i = 0; i < 10; i++) {
-    if (started) return proc;
-    if (exited) break;
-    await sleep(1);
-  }
-  proc.kill();
-  return null;
+  return await Promise.race([
+    new Promise(
+      resolve => (
+        proc.stderr.on('data', data => {
+          let i = 0, n = data.length;
+          while (i < n) {
+            let j = i;
+            while (j < n && data[j] !== 10) j++;
+            if (j > i) lineBuffer.push(data.slice(i, j));
+            if (j < n) {
+              const line = Buffer.concat(lineBuffer).toString();
+              lineBuffer.length = 0;
+              log(chalk.bgGreen('pipy >>>'), line);
+              if (line.indexOf('Thread 0 started') >= 0) resolve(proc);
+            }
+            i = j + 1;
+          }
+        })
+      )
+    ),
+    sleep(10).then(() => {
+      proc.kill();
+      return null;
+    }),
+  ]);
 }
 
 program

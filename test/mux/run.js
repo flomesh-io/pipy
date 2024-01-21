@@ -150,26 +150,26 @@ async function uploadCodebase(codebaseName, basePath) {
 
 async function startCodebase(url, opt) {
   let started = false;
-  const proc = startProcess(
-    pipyBinPath, ['--no-graph', url, ...(opt?.options || [])],
-    line => {
-      if (!opt?.silent || !started) {
-        log(chalk.bgGreen('worker >>>'), line);
-        if (line.indexOf('Thread 0 started') >= 0) {
-          started = true;
-        }
+  return await Promise.race([
+    new Promise(
+      resolve => {
+        const proc = startProcess(
+          pipyBinPath, ['--no-graph', url, ...(opt?.options || [])],
+          line => {
+            if (!opt?.silent || !started) {
+              log(chalk.bgGreen('worker >>>'), line);
+              if (line.indexOf('Thread 0 started') >= 0) {
+                log('Worker started');
+                started = true;
+                resolve(proc);
+              }
+            }
+          }
+        );
       }
-    }
-  );
-
-  for (let i = 0; i < 10 && !started; i++) await sleep(1);
-  if (started) {
-    log('Worker started');
-  } else {
-    throw new Error('Failed starting worker');
-  }
-
-  return proc;
+    ),
+    sleep(10).then(() => Promise.reject(new Error('Failed starting worker'))),
+  ]);
 }
 
 //
@@ -436,16 +436,13 @@ function createSessions(proc, port, options) {
 async function runTest(name, options) {
   const basePath = join(currentDir, name);
 
-  let worker, exitCode;
+  let worker;
   try {
     if (options.pipy) {
       log('Uploading codebase', chalk.magenta(name), '...');
       await uploadCodebase(`test/${name}`, basePath);
-
       log('Starting codebase...');
       worker = await startCodebase(`http://localhost:6060/repo/test/${name}/`, { silent: true });
-      worker.on('exit', code => exitCode = code);
-
       log('Codebase', chalk.magenta(name), 'started');
     }
 
@@ -484,9 +481,17 @@ async function runTest(name, options) {
 
     if (options.pipy) {
       worker.kill('SIGINT');
-      for (let i = 0; i < 10 && exitCode === undefined; i++) await sleep(1);
-      if (exitCode === undefined) throw new Error('Worker did not quit timely');
-      log('Worker exited with code', exitCode);
+      await Promise.race([
+        new Promise(
+          resolve => {
+            worker.on('exit', code => {
+              log('Worker exited with code', code);
+              resolve();
+            })
+          }
+        ),
+        sleep(10).then(() => { throw new Error('Worker did not quit timely'); }),
+      ]);
     }
 
     testResults[name] = true;

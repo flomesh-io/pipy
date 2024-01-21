@@ -131,6 +131,10 @@ async function start(id) {
       error('Unknown test ID');
     }
 
+  } catch (e) {
+    error(e.message);
+    log(e);
+
   } finally {
     for (const proc of procs) {
       proc.kill();
@@ -215,40 +219,45 @@ async function benchmark(name, port) {
 }
 
 async function startProcess(bin, args, env, label, startLine) {
-  log(bin, args.join(' '));
-  const proc = spawn(bin, args, { env });
-  const lineBuffer = [];
-  const collectOutput = data => {
-    if (!started) {
-      let i = 0, n = data.length;
-      while (i < n) {
-        let j = i;
-        while (j < n && data[j] !== 10) j++;
-        if (j > i) lineBuffer.push(data.slice(i, j));
-        if (j < n) {
-          const line = Buffer.concat(lineBuffer).toString();
-          lineBuffer.length = 0;
-          log(chalk.bgGreen(label + ' >>>'), line);
-          if (line.indexOf(startLine) >= 0) {
-            started = true;
-            return;
+  const cmdline = `${bin} ${args.join(' ')}`;
+  let started = false;
+  return await Promise.race([
+    new Promise(
+      (resolve, reject) => {
+        log(cmdline);
+        const proc = spawn(bin, args, { env });
+        const lineBuffer = [];
+        const collectOutput = data => {
+          if (!started) {
+            let i = 0, n = data.length;
+            while (i < n) {
+              let j = i;
+              while (j < n && data[j] !== 10) j++;
+              if (j > i) lineBuffer.push(data.slice(i, j));
+              if (j < n) {
+                const line = Buffer.concat(lineBuffer).toString();
+                lineBuffer.length = 0;
+                log(chalk.bgGreen(label + ' >>>'), line);
+                if (line.indexOf(startLine) >= 0) {
+                  started = true;
+                  resolve(proc);
+                  return;
+                }
+              }
+              i = j + 1;
+            }
           }
-        }
-        i = j + 1;
+        };
+        proc.stderr.on('data', collectOutput);
+        proc.stdout.on('data', collectOutput);
+        proc.on('exit', () => reject(new Error(`Failed to start ${cmdline}`)));
       }
-    }
-  };
-  let started = false, exited = false;
-  proc.stderr.on('exit', () => exited = true);
-  proc.stderr.on('data', collectOutput);
-  proc.stdout.on('data', collectOutput);
-  for (let i = 0; i < 10; i++) {
-    if (started) return proc;
-    if (exited) break;
-    await sleep(1);
-  }
-  proc.kill();
-  return null;
+    ),
+    sleep(10).then(() => {
+      proc.kill();
+      throw new Error(`Failed to start ${cmdline}`);
+    }),
+  ]);
 }
 
 function startBaseline() {
