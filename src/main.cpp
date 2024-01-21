@@ -481,7 +481,7 @@ int main(int argc, char *argv[]) {
     CodebaseStore *repo = nullptr;
     Codebase *codebase = nullptr;
 
-    std::function<void()> load, fail;
+    std::function<void()> load, exit, fail;
     Timer retry_timer;
 
     // Start as codebase repo service
@@ -555,15 +555,10 @@ int main(int argc, char *argv[]) {
 
             WorkerManager::get().enable_graph(!opts.no_graph);
 
-            if (!is_repo && !is_remote) {
-              WorkerManager::get().on_done(
-                [&]() {
-                  exit_code = 0;
-                  s_pool_cleaner.stop();
-                  s_code_updater.stop();
-                  s_signal_handler.stop();
-                }
-              );
+            if (is_repo || is_remote) {
+              WorkerManager::get().on_ended(exit);
+            } else {
+              WorkerManager::get().on_done(exit);
             }
 
             if (!WorkerManager::get().start(opts.threads, opts.force_start)) {
@@ -598,6 +593,13 @@ int main(int argc, char *argv[]) {
             );
           }
         );
+      };
+
+      exit = [&]() {
+        s_pool_cleaner.stop();
+        s_code_updater.stop();
+        s_signal_handler.stop();
+        exit_code = 0;
       };
 
       fail = [&]() {

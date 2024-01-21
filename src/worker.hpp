@@ -29,10 +29,11 @@
 #include "context.hpp"
 #include "listener.hpp"
 #include "message.hpp"
-#include "timer.hpp"
+#include "signal.hpp"
 #include "nmi.hpp"
 
 #include <list>
+#include <memory>
 #include <set>
 #include <vector>
 
@@ -152,7 +153,6 @@ private:
   };
 
   Module* m_root = nullptr;
-  Timer m_keep_alive;
   pjs::Ref<PipelineLoadBalancer> m_pipeline_lb;
   pjs::Ref<Thread> m_thread;
   pjs::Ref<pjs::Instance> m_instance;
@@ -167,12 +167,12 @@ private:
   std::list<Admin*> m_admins;
   std::map<pjs::Ref<pjs::Str>, Namespace> m_namespaces;
   std::map<pjs::Ref<pjs::Str>, SolvedFile> m_solved_files;
+  std::unique_ptr<Signal> m_exit_signal;
   bool m_graph_enabled = false;
 
   auto new_module_index() -> int;
   void add_module(Module *m);
   void remove_module(int i);
-  void keep_alive();
   void on_exit(Exit *exit);
   void end_all();
 

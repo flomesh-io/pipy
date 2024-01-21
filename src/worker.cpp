@@ -475,7 +475,7 @@ void Worker::stop(bool force) {
   if (force || m_exits.empty()) {
     end_all();
   } else {
-    keep_alive();
+    m_exit_signal = std::unique_ptr<Signal>(new Signal);
     std::list<Exit*> exits = m_exits;
     for (auto *exit : exits) {
       exit->start();
@@ -512,14 +512,6 @@ void Worker::remove_module(int i) {
   m_module_map.erase(mod->filename()->str());
 }
 
-void Worker::keep_alive() {
-  m_keep_alive.schedule(
-    1, [this]() {
-      keep_alive();
-    }
-  );
-}
-
 void Worker::on_exit(Exit *exit) {
   bool done = true;
   for (auto *exit : m_exits) {
@@ -529,7 +521,7 @@ void Worker::on_exit(Exit *exit) {
     }
   }
   if (done) {
-    m_keep_alive.cancel();
+    if (m_exit_signal) m_exit_signal->fire();
     end_all();
   }
 }

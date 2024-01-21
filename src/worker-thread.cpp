@@ -56,7 +56,7 @@ WorkerThread::~WorkerThread() {
 }
 
 bool WorkerThread::start(bool force) {
-  std::unique_lock<std::mutex> lock(m_mutex);
+  std::unique_lock<std::mutex> lock(m_start_cv_mutex);
 
   m_force_start = force;
 
@@ -65,10 +65,11 @@ bool WorkerThread::start(bool force) {
       s_current = this;
       main();
       m_ended.store(true);
+      m_manager->on_thread_ended(m_index);
     }
   );
 
-  m_cv.wait(lock, [this]() { return m_started || m_failed; });
+  m_start_cv.wait(lock, [this]() { return m_started || m_failed; });
   return !m_failed;
 }
 
@@ -176,6 +177,7 @@ void WorkerThread::reload_done(bool ok) {
           m_new_worker = nullptr;
           m_version = m_new_version;
           m_working = true;
+          if (m_workload_signal) m_workload_signal->fire();
           Log::info("[restart] Codebase reloaded on thread %d", m_index);
         }
       }
@@ -249,6 +251,7 @@ bool WorkerThread::stop(bool force) {
           shutdown_all(false);
         }
       );
+      if (m_workload_signal) m_workload_signal->fire();
     }
     return m_ended.load();
   }
@@ -470,15 +473,15 @@ void WorkerThread::main() {
   bool started = (mod && m_new_worker->bind() && m_new_worker->start(m_force_start));
 
   {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    std::lock_guard<std::mutex> lock(m_start_cv_mutex);
     m_started = started;
     m_failed = !started;
     m_net = &Net::current();
-    m_cv.notify_one();
+    m_start_cv.notify_one();
   }
 
   if (started) {
-    Log::info("[start] Thread %d started", m_index);
+    Log::info("[worker] Thread %d started", m_index);
 
     init_metrics();
 
@@ -489,30 +492,27 @@ void WorkerThread::main() {
       m_done = true;
       m_manager->on_thread_done(m_index);
 
-      Log::info("[start] Thread %d done", m_index);
+      Log::info("[worker] Thread %d done", m_index);
 
       if (m_shutdown) break;
 
-      Timer timer;
-      std::function<void()> wait_for_work;
-      wait_for_work = [&]() {
-        if (!m_working && !m_shutdown) {
-          timer.schedule(1, wait_for_work);
-        }
-      };
+      m_workload_signal = std::unique_ptr<Signal>(
+        new Signal([]() { Net::current().stop(); })
+      );
 
-      wait_for_work();
       Net::current().restart();
       Net::current().run();
+
+      m_workload_signal = nullptr;
 
       if (m_working) {
         m_done = false;
         Net::current().restart();
-        Log::info("[start] Thread %d restarted", m_index);
+        Log::info("[worker] Thread %d restarted", m_index);
       }
     }
 
-    Log::info("[start] Thread %d ended", m_index);
+    Log::info("[worker] Thread %d ended", m_index);
 
   } else {
     m_new_worker->stop(true);
@@ -803,6 +803,19 @@ void WorkerManager::on_thread_done(int index) {
           if (wt && !wt->done()) return;
         }
         m_on_done();
+      }
+    );
+  }
+}
+
+void WorkerManager::on_thread_ended(int index) {
+  if (m_on_ended) {
+    Net::main().post(
+      [this]() {
+        for (auto *wt : m_worker_threads) {
+          if (wt && !wt->ended()) return;
+        }
+        m_on_ended();
       }
     );
   }

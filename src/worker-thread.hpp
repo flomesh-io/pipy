@@ -30,10 +30,12 @@
 #include "list.hpp"
 #include "status.hpp"
 #include "api/stats.hpp"
+#include "signal.hpp"
 
 #include <thread>
 #include <atomic>
 #include <condition_variable>
+#include <memory>
 #include <mutex>
 #include <functional>
 #include <vector>
@@ -58,6 +60,7 @@ public:
   auto manager() const -> WorkerManager* { return m_manager; }
   auto index() const -> int { return m_index; }
   bool done() { return m_done; }
+  bool ended() { return m_ended; }
   auto active_pipeline_count() const -> size_t { return m_active_pipeline_count.load(std::memory_order_relaxed); }
 
   bool start(bool force);
@@ -88,8 +91,9 @@ private:
   std::atomic<bool> m_done;
   std::atomic<bool> m_ended;
   std::thread m_thread;
-  std::mutex m_mutex;
-  std::condition_variable m_cv;
+  std::condition_variable m_start_cv;
+  std::mutex m_start_cv_mutex;
+  std::unique_ptr<Signal> m_workload_signal;
   pjs::Ref<pjs::Promise::Period> m_new_period;
   bool m_force_start = false;
   bool m_started = false;
@@ -116,6 +120,7 @@ public:
   bool is_graph_enabled() const { return m_graph_enabled; }
   void enable_graph(bool b) { m_graph_enabled = b; }
   void on_done(const std::function<void()> &cb) { m_on_done = cb; }
+  void on_ended(const std::function<void()> &cb) { m_on_ended = cb; }
   bool started() const { return !m_worker_threads.empty(); }
   bool start(int concurrency = 1, bool force = false);
   auto status() -> Status&;
@@ -164,11 +169,13 @@ private:
   List<AdminRequest> m_admin_requests;
   AdminRequest* m_current_admin_request = nullptr;
   std::function<void()> m_on_done;
+  std::function<void()> m_on_ended;
 
   void check_reloading();
   void start_reloading();
   void next_admin_request();
   void on_thread_done(int index);
+  void on_thread_ended(int index);
 
   friend class WorkerThread;
 };
