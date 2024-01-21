@@ -77,7 +77,6 @@ void Read::process(Event *evt) {
     m_file = f->retain();
     m_file->open_read(
       [=](FileStream *fs) {
-        m_keep_alive.cancel();
         if (fs) {
           fs->chain(EventSource::reply());
         } else if (m_file == f) {
@@ -88,20 +87,11 @@ void Read::process(Event *evt) {
         s->release();
       }
     );
-    keep_alive();
   }
 }
 
 void Read::on_reply(Event *evt) {
   Filter::output(evt);
-}
-
-void Read::keep_alive() {
-  m_keep_alive.schedule(
-    10, [this]() {
-      keep_alive();
-    }
-  );
 }
 
 } // namespace pipy

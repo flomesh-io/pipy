@@ -47,6 +47,8 @@ void File::open_read(int seek, const std::function<void(FileStream*)> &cb) {
   auto *net = &Net::current();
   std::string path = m_path;
 
+  m_open_signal = std::unique_ptr<Signal>(new Signal);
+
   retain();
 
   Net::main().post(
@@ -64,6 +66,7 @@ void File::open_read(int seek, const std::function<void(FileStream*)> &cb) {
               close();
             }
             cb(m_stream);
+            m_open_signal->fire();
             release();
           }
         );
@@ -72,6 +75,7 @@ void File::open_read(int seek, const std::function<void(FileStream*)> &cb) {
           [=]() {
             Log::error("[file] cannot open file for reading: %s", m_path.c_str());
             cb(nullptr);
+            m_open_signal->fire();
             release();
           }
         );
@@ -85,6 +89,8 @@ void File::open_write(bool append) {
 
   auto *net = &Net::current();
   std::string path = m_path;
+
+  m_open_signal = std::unique_ptr<Signal>(new Signal);
 
   retain();
 
@@ -123,6 +129,7 @@ void File::open_write(bool append) {
               if (m_closed) {
                 close();
               }
+              m_open_signal->fire();
               release();
             }
           );
@@ -130,6 +137,7 @@ void File::open_write(bool append) {
           net->post(
             [=]() {
               Log::error("[file] cannot open file for writing: %s", m_path.c_str());
+              m_open_signal->fire();
               release();
             }
           );

@@ -28,22 +28,26 @@
 
 namespace pipy {
 
+//
+// Signal
+//
+
 Signal::Signal(const std::function<void()> &handler)
   : m_timer(Net::current().context())
-  , m_handler(handler)
+  , m_handler(new Handler(handler))
 {
   wait();
 }
 
 void Signal::wait() {
+  auto handler = m_handler.get();
+  handler->retain();
   m_timer.expires_after(std::chrono::minutes(1));
   m_timer.async_wait(
     [=](const asio::error_code &) {
       if (m_fired) {
-        if (m_handler) {
-          InputContext ic;
-          m_handler();
-        }
+        handler->trigger();
+        handler->release();
       } else {
         wait();
       }
@@ -54,6 +58,17 @@ void Signal::wait() {
 void Signal::fire() {
   m_fired = true;
   m_timer.cancel();
+}
+
+//
+// Signal::Handler
+//
+
+void Signal::Handler::trigger() {
+  if (m_handler) {
+    InputContext ic;
+    m_handler();
+  }
 }
 
 } // namespace pipy

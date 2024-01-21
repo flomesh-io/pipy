@@ -29,6 +29,9 @@
 #include "os-platform.hpp"
 #include "data.hpp"
 #include "fstream.hpp"
+#include "signal.hpp"
+
+#include <memory>
 
 namespace pipy {
 
@@ -60,6 +63,7 @@ private:
 
   std::string m_path;
   pjs::Ref<FileStream> m_stream;
+  std::unique_ptr<Signal> m_open_signal;
   os::FileHandle m_f;
   Data m_buffer;
   bool m_writing = false;

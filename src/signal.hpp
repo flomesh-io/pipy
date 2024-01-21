@@ -26,6 +26,7 @@
 #ifndef SIGNAL_HPP
 #define SIGNAL_HPP
 
+#include "pjs/pjs.hpp"
 #include "net.hpp"
 
 #include <functional>
@@ -36,15 +37,34 @@ namespace pipy {
 // Signal
 //
 
-class Signal {
+class Signal : public pjs::Pooled<Signal> {
 public:
   Signal(const std::function<void()> &handler = nullptr);
 
   void fire();
 
 private:
+
+  //
+  // Signal::Handler
+  //
+
+  class Handler :
+    public pjs::RefCount<Handler>,
+    public pjs::Pooled<Handler>
+  {
+  public:
+    Handler(const std::function<void()> &handler)
+      : m_handler(handler) {}
+
+    void trigger();
+
+  private:
+    std::function<void()> m_handler;
+  };
+
   asio::steady_timer m_timer;
-  std::function<void()> m_handler;
+  pjs::Ref<Handler> m_handler;
   bool m_fired = false;
 
   void wait();
