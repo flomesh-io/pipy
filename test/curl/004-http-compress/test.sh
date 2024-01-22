@@ -9,4 +9,3 @@ curl -i --compressed http://localhost:8081
 echo 'Responses decompressed by proxy'
 curl -i http://localhost:8000
 curl -i http://localhost:8001
-

@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 
+import os from 'os';
 import fs from 'fs';
+import url from 'url';
 import got from 'got';
 import chalk from 'chalk';
 
@@ -11,8 +13,9 @@ import { program } from 'commander';
 const log = console.log;
 const error = (...args) => log.apply(this, [chalk.bgRed('ERROR')].concat(args.map(a => chalk.red(a))));
 const sleep = (t) => new Promise(resolve => setTimeout(resolve, t * 1000));
-const currentDir = dirname(new URL(import.meta.url).pathname);
-const pipyBinPath = join(currentDir, '../../bin/pipy');
+const currentDir = dirname(url.fileURLToPath(import.meta.url));
+const pipyBinName = os.platform() === 'win32' ? '..\\..\\bin\\Release\\pipy.exe' : '../../bin/pipy';
+const pipyBinPath = join(currentDir, pipyBinName);
 const allTests = [];
 const testResults = {};
 

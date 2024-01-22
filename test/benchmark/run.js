@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 
+import os from 'os';
 import fs from 'fs';
+import url from 'url';
 import got from 'got';
 import si from 'systeminformation';
 import chalk from 'chalk';
@@ -13,8 +15,11 @@ const log = console.log;
 const error = (...args) => log.apply(this, [chalk.bgRed('ERROR')].concat(args.map(a => chalk.red(a))));
 const sleep = (t) => new Promise(resolve => setTimeout(resolve, t * 1000));
 
-const currentDir = dirname(new URL(import.meta.url).pathname);
-const binDir = join(currentDir, '../../bin');
+const currentDir = dirname(url.fileURLToPath(import.meta.url));
+const binName = os.platform() === 'win32' ? '..\\..\\bin\\Release' : '../../bin';
+const pipyExe = os.platform() === 'win32' ? 'pipy.exe' : 'pipy';
+const baselineExe = os.platform() === 'win32' ? 'baseline.exe' : 'baseline';
+const binPath = join(currentDir, binName);
 const allTests = [];
 const testResults = {};
 const testResultVariances = {};
@@ -219,13 +224,13 @@ async function benchmark(name, port) {
 }
 
 async function startProcess(bin, args, env, label, startLine) {
+  const proc = spawn(bin, args, { env });
   const cmdline = `${bin} ${args.join(' ')}`;
+  log(cmdline);
   let started = false;
   return await Promise.race([
     new Promise(
       (resolve, reject) => {
-        log(cmdline);
-        const proc = spawn(bin, args, { env });
         const lineBuffer = [];
         const collectOutput = data => {
           if (!started) {
@@ -262,14 +267,14 @@ async function startProcess(bin, args, env, label, startLine) {
 
 function startBaseline() {
   return startProcess(
-    join(binDir, 'baseline'), [], {},
+    join(binPath, baselineExe), [], {},
     'baseline', 'Listening on port',
   );
 }
 
 function startPipy(args, env) {
   return startProcess(
-    join(binDir, 'pipy'), args, env,
+    join(binPath, pipyExe), args, env,
     'pipy', 'Thread 0 started',
   );
 }

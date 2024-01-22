@@ -1,9 +1,4 @@
 Response compressed with gzip
-HTTP/1.1 200 OK
-content-encoding: gzip
-content-length: 173
-connection: keep-alive
-
 <!DOCTYPE html>
 <html>
   <head>
@@ -19,11 +14,6 @@ connection: keep-alive
   </body>
 </html>
 Response compressed with deflate
-HTTP/1.1 200 OK
-content-encoding: deflate
-content-length: 161
-connection: keep-alive
-
 <!DOCTYPE html>
 <html>
   <head>
@@ -39,10 +29,6 @@ connection: keep-alive
   </body>
 </html>
 Responses decompressed by proxy
-HTTP/1.1 200 OK
-content-length: 445
-connection: keep-alive
-
 <!DOCTYPE html>
 <html>
   <head>
@@ -57,10 +43,6 @@ connection: keep-alive
     <h6>The Quick Brown Fox Jumps Over the Lazy Dog</h6>
   </body>
 </html>
-HTTP/1.1 200 OK
-content-length: 445
-connection: keep-alive
-
 <!DOCTYPE html>
 <html>
   <head>

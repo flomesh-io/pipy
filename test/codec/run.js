@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 
+import os from 'os';
 import fs from 'fs';
+import url from 'url';
 import chalk from 'chalk';
 
 import { spawn } from 'child_process';
@@ -10,8 +12,9 @@ import { program } from 'commander';
 const log = console.log;
 const error = (...args) => log.apply(this, [chalk.bgRed('ERROR')].concat(args.map(a => chalk.red(a))));
 const sleep = (t) => new Promise(resolve => setTimeout(resolve, t * 1000));
-const currentDir = dirname(new URL(import.meta.url).pathname);
-const pipyBinPath = join(currentDir, '../../bin/pipy');
+const currentDir = dirname(url.fileURLToPath(import.meta.url));
+const pipyBinName = os.platform() === 'win32' ? '..\\..\\bin\\Release\\pipy.exe' : '../../bin/pipy';
+const pipyBinPath = join(currentDir, pipyBinName);
 const hexMap = new Array(256).fill().map((_, i) => (i < 16 ? '0' + i.toString(16) : i.toString(16)));
 const charMap = new Array(256).fill().map((_, i) => (0x20 <= i && i < 0x80 ? String.fromCharCode(i) : '.'));
 const testResults = {};
@@ -124,6 +127,7 @@ async function runTest(name) {
     }
 
   } catch (e) {
+    testResults[name] = false;
     if (worker) worker.kill();
     throw e;
   }

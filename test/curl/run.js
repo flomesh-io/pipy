@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 
+import os from 'os';
 import fs from 'fs';
+import url from 'url';
 import chalk from 'chalk';
 
 import { spawn, execFile } from 'child_process';
@@ -10,9 +12,10 @@ import { program } from 'commander';
 const log = console.log;
 const error = (...args) => log.apply(this, [chalk.bgRed('ERROR')].concat(args.map(a => chalk.red(a))));
 const sleep = (t) => new Promise(resolve => setTimeout(resolve, t * 1000));
-
-const currentDir = dirname(new URL(import.meta.url).pathname);
-const pipyBinPath = join(currentDir, '../../bin/pipy');
+const currentDir = dirname(url.fileURLToPath(import.meta.url));
+const testScriptName = os.platform() === 'win32' ? 'test.cmd' : 'test.sh';
+const pipyBinName = os.platform() === 'win32' ? '..\\..\\bin\\Release\\pipy.exe' : '../../bin/pipy';
+const pipyBinPath = join(currentDir, pipyBinName);
 const allTests = [];
 const testResults = {};
 
@@ -75,13 +78,14 @@ async function test(name) {
         const buffer = [];
         await new Promise((resolve, reject) => {
           const subproc = execFile(
-            join(currentDir, name, 'test.sh'), { encoding: 'buffer' },
+            join(currentDir, name, testScriptName), { encoding: 'buffer' },
             err => { if (err) reject(err); else resolve(); },
           );
           subproc.stdout.on('data', data => {
             process.stdout.write(data);
             buffer.push(data);
           });
+          subproc.on('exit', () => resolve());
         });
         output = Buffer.concat(buffer);
       } catch (e) {
@@ -89,7 +93,9 @@ async function test(name) {
         log(e.message);
         throw e;
       }
-      if (Buffer.compare(output, expected)) {
+      const a = expected.toString().replaceAll('\r\n', '\n');
+      const b = output.toString().replaceAll('\r\n', '\n');
+      if (a !== b) {
         testResults[name] = false;
         error('Test', name, 'failed with unexpected output:');
         log(output.toString());
@@ -99,10 +105,12 @@ async function test(name) {
         log(chalk.green(`Test ${name} OK.`));
       }
     } catch (e) {
+      testResults[name] = false;
     } finally {
       pipyProc.kill();
     }
   } else {
+    testResults[name] = false;
     error('Failed to start Pipy');
   }
 }
