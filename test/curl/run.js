@@ -120,6 +120,7 @@ async function startPipy(filename) {
   log(pipyBinPath, filename);
   const proc = spawn(pipyBinPath, [filename]);
   const lineBuffer = [];
+  let started = false;
   return await Promise.race([
     new Promise(
       resolve => (
@@ -133,7 +134,10 @@ async function startPipy(filename) {
               const line = Buffer.concat(lineBuffer).toString();
               lineBuffer.length = 0;
               log(chalk.bgGreen('pipy >>>'), line);
-              if (line.indexOf('Thread 0 started') >= 0) resolve(proc);
+              if (line.indexOf('Thread 0 started') >= 0) {
+                started = true;
+                resolve(proc);
+              }
             }
             i = j + 1;
           }
@@ -141,8 +145,10 @@ async function startPipy(filename) {
       )
     ),
     sleep(10).then(() => {
-      proc.kill();
-      return null;
+      if (!started) {
+        proc.kill();
+        return null;
+      }
     }),
   ]);
 }

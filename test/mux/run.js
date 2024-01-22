@@ -60,26 +60,24 @@ function startProcess(cmd, args, onStdout) {
 // Start Pipy repo
 //
 
-async function startRepo() {
-  let started = false;
-  const proc = startProcess(
-    pipyBinPath, [],
-    line => {
-      log(chalk.bgGreen('repo >>>'), line);
-      if (line.indexOf('Listening on TCP port') >= 0) {
-        started = true;
+function startRepo() {
+  return Promise.race([
+    new Promise(
+      resolve => {
+        const proc = startProcess(
+          pipyBinPath, [],
+          line => {
+            log(chalk.bgGreen('repo >>>'), line);
+            if (line.indexOf('Listening on TCP port') >= 0) {
+              log('Repo started');
+              resolve(proc);
+            }
+          }
+        );
       }
-    }
-  );
-
-  for (let i = 0; i < 10 && !started; i++) await sleep(1);
-  if (started) {
-    log('Repo started');
-  } else {
-    throw new Error('Failed starting repo');
-  }
-
-  return proc;
+    ),
+    sleep(10).then(() => Promise.reject(new Error('Failed starting repo'))),
+  ]);
 }
 
 //

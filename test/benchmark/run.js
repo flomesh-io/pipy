@@ -259,8 +259,10 @@ async function startProcess(bin, args, env, label, startLine) {
       }
     ),
     sleep(10).then(() => {
-      proc.kill();
-      throw new Error(`Failed to start ${cmdline}`);
+      if (!started) {
+        proc.kill();
+        throw new Error(`Failed to start ${cmdline}`);
+      }
     }),
   ]);
 }
