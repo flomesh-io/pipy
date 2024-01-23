@@ -32,6 +32,10 @@ namespace pipy {
 thread_local List<Data::Producer> Data::Producer::s_all_producers;
 thread_local Data::Producer Data::s_unknown_producer("Unknown");
 
+auto Data::Producer::unknown() -> Producer* {
+  return &s_unknown_producer;
+}
+
 void Data::pack(const Data &data, Producer *producer, double vacancy) {
   assert_same_thread(*this);
   if (&data == this) return;

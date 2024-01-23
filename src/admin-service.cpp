@@ -823,7 +823,11 @@ Message* AdminService::api_v1_repo_GET(const std::string &path) {
         ss << "{\"ip\":\"" << inst->ip << '"';
         ss << ",\"timestamp\":" << uint64_t(inst->timestamp);
         ss << ",\"status\":";
-        inst->status.to_json(ss);
+        Data buf;
+        Data::Builder db(buf);
+        inst->status.to_json(db);
+        db.flush();
+        ss << buf.to_string();
         ss << '}';
       }
     }
@@ -1145,12 +1149,14 @@ Message* AdminService::api_v1_program_DELETE() {
 }
 
 Message* AdminService::api_v1_status_GET() {
-  std::stringstream ss;
+  Data buf;
+  Data::Builder db(buf);
   auto &status = WorkerManager::get().status();
-  status.to_json(ss);
+  status.to_json(db);
+  db.flush();
   return Message::make(
     m_response_head_json,
-    s_dp.make(ss.str())
+    Data::make(std::move(buf))
   );
 }
 

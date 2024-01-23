@@ -70,6 +70,7 @@ auto trim(const std::string &str) -> std::string;
 auto split(const std::string &str, char sep) -> std::list<std::string>;
 auto split_argv(const std::string &str) -> std::list<std::string>;
 auto lower(const std::string &str) -> std::string;
+void escape(const char *str, size_t len, const std::function<void(char)> &out);
 void escape(const std::string &str, const std::function<void(char)> &out);
 auto escape(const std::string &str) -> std::string;
 void unescape(const std::string &str, const std::function<void(char)> &out);

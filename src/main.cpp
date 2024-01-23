@@ -220,14 +220,16 @@ private:
       WorkerManager::get().status(
         [this](Status &status) {
           InputContext ic;
-          std::stringstream ss;
+          Data buffer;
+          Data::Builder db(buffer);
           status.ip = m_local_ip;
-          status.to_json(ss);
+          status.to_json(db);
+          db.flush();
           (*m_fetch)(
             Fetch::POST,
             m_url->path(),
             m_headers,
-            Data::make(ss.str(), &s_dp),
+            Data::make(std::move(buffer)),
             [this](http::ResponseHead *head, Data *body) {
               m_local_ip = m_fetch->outbound()->local_address()->str();
             }

@@ -71,6 +71,8 @@ public:
 
   class Producer : public List<Producer>::Item {
   public:
+    static auto unknown() -> Producer*;
+
     static void for_each(const std::function<void(Producer*)> &cb) {
       for (auto p = s_all_producers.head(); p; p = p->next()) {
         cb(p);
@@ -118,19 +120,22 @@ public:
 
   class Builder {
   public:
-    Builder(Data &data, Producer *producer)
+    Builder(Data &data, Producer *producer = nullptr)
       : m_data(data)
-      , m_buffer(new Data)
       , m_producer(producer)
       , m_chunk(new Chunk(producer)) {}
 
     ~Builder() {
-      delete m_buffer;
       delete m_chunk;
     }
 
     int size() const {
       return m_size;
+    }
+
+    void reset() {
+      m_ptr = 0;
+      m_size = 0;
     }
 
     void flush() {
@@ -220,7 +225,6 @@ public:
 
   private:
     Data& m_data;
-    Data* m_buffer;
     Producer* m_producer;
     Chunk* m_chunk;
     int m_ptr = 0;
@@ -355,7 +359,9 @@ private:
     std::atomic<int> retain_count;
     char data[DATA_CHUNK_SIZE];
 
-    Chunk(Producer *producer) : retain_count(0), m_producer(producer) { producer->increase(); }
+    Chunk(Producer *producer)
+      : retain_count(0)
+      , m_producer(producer ? producer : Producer::unknown()) { m_producer->increase(); }
     ~Chunk() { m_producer->decrease(); }
 
     auto size() const -> int { return sizeof(data); }

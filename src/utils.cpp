@@ -514,8 +514,9 @@ auto lower(const std::string &str) -> std::string {
   return lstr;
 }
 
-void escape(const std::string &str, const std::function<void(char)> &out) {
-  for (auto c : str) {
+void escape(const char *str, size_t len, const std::function<void(char)> &out) {
+  for (size_t i = 0; i < len; i++) {
+    auto c = str[i];
     switch (c) {
       case '"' : out('\\'); out('"'); break;
       case '\\': out('\\'); out('\\'); break;
@@ -529,6 +530,10 @@ void escape(const std::string &str, const std::function<void(char)> &out) {
       default: out(c); break;
     }
   }
+}
+
+void escape(const std::string &str, const std::function<void(char)> &out) {
+  escape(str.c_str(), str.length(), out);
 }
 
 auto escape(const std::string &str) -> std::string {

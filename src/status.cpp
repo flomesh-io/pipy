@@ -47,6 +47,238 @@
 
 namespace pipy {
 
+//
+// StatusDeserializer
+//
+
+class StatusDeserializer : public JSON::Visitor {
+public:
+  StatusDeserializer(Status &status)
+    : m_status(status)
+    , m_capture(m_capture_buffer) {}
+
+  enum class Key {
+    unknown,
+    timestamp,
+    since,
+    uuid,
+    name,
+    ip,
+    version,
+    modules,
+    graph,
+    metrics,
+    logs,
+  };
+
+  struct KeyName {
+    Key key;
+    const char *name;
+  };
+
+  pjs::Ref<Data> metrics;
+
+private:
+  enum { MAX_DEPTH = 4 };
+
+  struct Level {
+    Key key = Key::unknown;
+  };
+
+  Status& m_status;
+  Level m_stack[MAX_DEPTH];
+  int m_depth = 0;
+  bool m_capturing = false;
+  bool m_capturing_list_start = false;
+  Data::Builder m_capture;
+  Data m_capture_buffer;
+  std::string m_current_module;
+
+  virtual void null() override {
+    if (m_capturing) {
+      capture_comma();
+      m_capture.push("null");
+    }
+  }
+
+  virtual void boolean(bool b) override {
+    if (m_capturing) {
+      capture_comma();
+      m_capture.push(b ? "true" : "false");
+    }
+  }
+
+  virtual void integer(int64_t i) override {
+    if (m_capturing) {
+      capture_comma();
+      char str[100];
+      auto len = std::snprintf(str, sizeof(str), "%lld", (long long)i);
+      m_capture.push(str, len);
+    } else if (m_depth == 1) {
+      switch (m_stack[1].key) {
+        case Key::timestamp: m_status.timestamp = i; break;
+        case Key::since: m_status.since = i; break;
+        case Key::version: m_status.version = std::to_string(i); break;
+        default: break;
+      }
+    }
+  }
+
+  virtual void number(double n) override {
+    if (m_capturing) {
+      capture_comma();
+      char str[100];
+      auto len = pjs::Number::to_string(str, sizeof(str), n);
+      m_capture.push(str, len);
+    } else if (m_depth == 1) {
+      switch (m_stack[1].key) {
+        case Key::timestamp: m_status.timestamp = n; break;
+        case Key::since: m_status.since = n; break;
+        case Key::version: m_status.version = std::to_string(n); break;
+        default: break;
+      }
+    }
+  }
+
+  virtual void string(const char *s, size_t len) override {
+    if (m_capturing) {
+      capture_comma();
+      m_capture.push('"');
+      utils::escape(s, len, [this](char c) { m_capture.push(c); });
+      m_capture.push('"');
+    } else if (m_depth == 1) {
+      switch (m_stack[1].key) {
+        case Key::uuid: m_status.uuid = std::string(s, len); break;
+        case Key::name: m_status.name = std::string(s, len); break;
+        case Key::ip: m_status.ip = std::string(s, len); break;
+        case Key::version: m_status.version = std::string(s, len); break;
+        default: break;
+      }
+    } else if (is_at(Key::logs, Key::unknown)) {
+      m_status.log_names.insert(std::string(s, len));
+    }
+  }
+
+  virtual void map_start() override {
+    if (m_capturing) {
+      capture_comma();
+      m_capture.push('{');
+      m_capturing_list_start = true;
+    } else if (is_at(Key::modules, Key::unknown, Key::graph) || is_at(Key::metrics)) {
+      m_capture_buffer.clear();
+      m_capture.reset();
+      m_capture.push('{');
+      m_capturing = true;
+      m_capturing_list_start = true;
+    }
+    m_depth++;
+    if (m_depth < MAX_DEPTH) m_stack[m_depth].key = Key::unknown;
+  }
+
+  virtual void map_key(const char *s, size_t len) override {
+    if (m_capturing) {
+      capture_comma();
+      m_capture.push('"');
+      utils::escape(s, len, [this](char c) { m_capture.push(c); });
+      m_capture.push('"');
+      m_capture.push(':');
+      m_capturing_list_start = true;
+    } else if (is_at(Key::modules, Key::unknown)) {
+      m_current_module = std::string(s, len);
+    } else if (m_depth < MAX_DEPTH) {
+      Key k = Key::unknown;
+      for (size_t i = 0; s_key_names[i].name; i++) {
+        const auto *name = s_key_names[i].name;
+        if (!std::strncmp(name, s, len) && !name[len]) {
+          k = s_key_names[i].key;
+          break;
+        }
+      }
+      m_stack[m_depth].key = k;
+    }
+  }
+
+  virtual void map_end() override {
+    m_depth--;
+    if (m_capturing) {
+      m_capture.push('}');
+      m_capturing_list_start = false;
+      if (is_at(Key::modules, Key::unknown, Key::graph)) {
+        m_capture.flush();
+        m_capturing = false;
+        m_status.modules.insert({
+          m_current_module,
+          m_capture_buffer.to_string(),
+        });
+      } else if (is_at(Key::metrics)) {
+        m_capture.flush();
+        m_capturing = false;
+        metrics = Data::make(std::move(m_capture_buffer));
+      }
+    }
+  }
+
+  virtual void array_start() override {
+    if (m_capturing) {
+      capture_comma();
+      m_capture.push('[');
+      m_capturing_list_start = true;
+    } else if (is_at(Key::logs)) {
+      m_status.log_names.clear();
+    }
+    m_depth++;
+    if (m_depth < MAX_DEPTH) m_stack[m_depth].key = Key::unknown;
+  }
+
+  virtual void array_end() override {
+    m_depth--;
+    if (m_capturing) {
+      m_capture.push(']');
+      m_capturing_list_start = false;
+    }
+  }
+
+  bool is_at(Key k1) {
+    return m_depth == 1 && m_stack[1].key == k1;
+  }
+
+  bool is_at(Key k1, Key k2) {
+    return m_depth == 2 && m_stack[1].key == k1 && m_stack[2].key == k2;
+  }
+
+  bool is_at(Key k1, Key k2, Key k3) {
+    return m_depth == 3 && m_stack[1].key == k1 && m_stack[2].key == k2 && m_stack[3].key == k3;
+  }
+
+  void capture_comma() {
+    if (m_capturing_list_start) {
+      m_capturing_list_start = false;
+    } else {
+      m_capture.push(',');
+    }
+  }
+
+  static KeyName s_key_names[];
+};
+
+StatusDeserializer::KeyName StatusDeserializer::s_key_names[] = {
+  { Key::timestamp, "timestamp" },
+  { Key::since, "since" },
+  { Key::uuid, "uuid" },
+  { Key::name, "name" },
+  { Key::ip, "ip" },
+  { Key::version, "version" },
+  { Key::modules, "modules" },
+  { Key::graph, "graph" },
+  { Key::metrics, "metrics" },
+  { Key::logs, "logs" },
+  { Key::unknown, nullptr },
+};
+
+//
+// Status
+//
+
 double Status::LocalInstance::since;
 std::string Status::LocalInstance::source;
 std::string Status::LocalInstance::uuid;
@@ -231,97 +463,61 @@ void Status::merge(const Status &other) {
 }
 
 bool Status::from_json(const Data &data) {
-  thread_local static pjs::Ref<pjs::Str> key_timestamp(pjs::Str::make("timestamp"));
-  thread_local static pjs::Ref<pjs::Str> key_uuid(pjs::Str::make("uuid"));
-  thread_local static pjs::Ref<pjs::Str> key_name(pjs::Str::make("name"));
-  thread_local static pjs::Ref<pjs::Str> key_ip(pjs::Str::make("ip"));
-  thread_local static pjs::Ref<pjs::Str> key_version(pjs::Str::make("version"));
-  thread_local static pjs::Ref<pjs::Str> key_modules(pjs::Str::make("modules"));
-  thread_local static pjs::Ref<pjs::Str> key_filename(pjs::Str::make("filename"));
-  thread_local static pjs::Ref<pjs::Str> key_graph(pjs::Str::make("graph"));
-  thread_local static pjs::Ref<pjs::Str> key_logs(pjs::Str::make("logs"));
-
-  pjs::Value json;
-  pjs::Value val_timestamp;
-  pjs::Value val_uuid;
-  pjs::Value val_name;
-  pjs::Value val_ip;
-  pjs::Value val_version;
-  pjs::Value val_modules;
-  pjs::Value val_logs;
-
-  if (!JSON::decode(data, nullptr, json)) return false;
-  if (!json.is_object() || !json.o()) return false;
-
-  auto *root = json.o();
-  root->get(key_timestamp, val_timestamp);
-  root->get(key_uuid, val_uuid);
-  root->get(key_name, val_name);
-  root->get(key_ip, val_ip);
-  root->get(key_version, val_version);
-  root->get(key_modules, val_modules);
-  root->get(key_logs, val_logs);
-
-  if (!val_timestamp.is_number()) return false;
-  if (!val_uuid.is_string()) return false;
-  if (!val_name.is_string()) return false;
-  if (!val_ip.is_string()) return false;
-  if (!val_version.is_string()) return false;
-  if (!val_modules.is_object() || !val_modules.o()) return false;
-  if (!val_logs.is_array()) return false;
-
-  timestamp = val_timestamp.n();
-  uuid = val_uuid.s()->str();
-  name = val_name.s()->str();
-  ip = val_ip.s()->str();
-  version = val_version.s()->str();
-
-  val_modules.o()->iterate_all(
-    [this](pjs::Str *k, pjs::Value &v) {
-      if (!v.is_object() || !v.o()) return;
-      pjs::Value val_graph;
-      v.o()->get(key_graph, val_graph);
-      if (!val_graph.is_object() || !val_graph.o()) return;
-      modules.insert({
-        k->str(),
-        JSON::stringify(val_graph, nullptr, 0),
-      });
-    }
-  );
-
-  log_names.clear();
-  val_logs.as<pjs::Array>()->iterate_all(
-    [this](pjs::Value &v, int) {
-      if (v.is_string()) {
-        log_names.insert(v.s()->str());
-      }
-    }
-  );
-
+  StatusDeserializer sd(*this);
+  if (!JSON::visit(data, &sd)) return false;
+  if (sd.metrics) {
+    std::cout << sd.metrics->to_string() << std::endl;
+  } else {
+    std::cout << "no metrics" << std::endl;
+  }
   return true;
 }
 
-void Status::to_json(std::ostream &out) const {
-  out << "{\"timestamp\":" << uint64_t(timestamp);
-  out << ",\"since\":" << uint64_t(since);
-  out << ",\"uuid\":\"" << uuid << '"';
-  out << ",\"name\":\"" << name << '"';
-  out << ",\"ip\":\"" << ip << '"';
-  out << ",\"version\":\"" << utils::escape(version) << '"';
-  out << ",\"modules\":{";
-  bool first = true;
+void Status::to_json(Data::Builder &db, Data *metrics) const {
+  bool first;
+
+  auto push_uint = [&](uint64_t i) {
+    char str[100];
+    auto len = std::snprintf(str, sizeof(str), "%llu", (unsigned long long)i);
+    db.push(str, len);
+  };
+
+  auto push_str = [&](const std::string &s) {
+    db.push('"');
+    utils::escape(s, [&](char c) {
+      db.push(c);
+    });
+    db.push('"');
+  };
+
+  db.push("{\"timestamp\":"); push_uint(timestamp);
+  db.push(",\"since\":"); push_uint(since);
+  db.push(",\"uuid\":"); push_str(uuid);
+  db.push(",\"name\":"); push_str(name);
+  db.push(",\"ip\":"); push_str(ip);
+  db.push(",\"version\":"); push_str(version);
+
+  db.push(",\"modules\":{"); first = true;
   for (const auto &mod : modules) {
-    if (first) first = false; else out << ',';
-    out << '"' << utils::escape(mod.filename) << "\":{\"graph\"";
-    out << ':' << mod.graph << '}';
+    if (first) first = false; else db.push(',');
+    push_str(mod.filename);
+    db.push(":{\"graph\":");
+    db.push(mod.graph);
+    db.push('}');
   }
-  out << "},\"logs\":[";
-  first = true;
+  db.push('}');
+
+  if (metrics) {
+    db.push(",\"metrics\":");
+    db.push(std::move(*metrics));
+  }
+
+  db.push(",\"logs\":["); first = true;
   for (const auto &name : log_names) {
-    if (first) first = false; else out << ',';
-    out << '"' << utils::escape(name) << '"';
+    if (first) first = false; else db.push(',');
+    push_str(name);
   }
-  out << "]}";
+  db.push("]}");
 }
 
 template<class T>
