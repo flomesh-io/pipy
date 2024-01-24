@@ -206,7 +206,7 @@ public:
   void update_global();
   void update_local();
   void merge(const Status &other);
-  bool from_json(const Data &data);
+  bool from_json(const Data &data, Data *metrics = nullptr);
   void to_json(Data::Builder &db, Data *metrics = nullptr) const;
   void dump_pools(Data::Builder &db);
   void dump_objects(Data::Builder &db);

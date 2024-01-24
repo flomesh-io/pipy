@@ -462,14 +462,10 @@ void Status::merge(const Status &other) {
   merge_sets(outbounds, other.outbounds);
 }
 
-bool Status::from_json(const Data &data) {
+bool Status::from_json(const Data &data, Data *metrics) {
   StatusDeserializer sd(*this);
   if (!JSON::visit(data, &sd)) return false;
-  if (sd.metrics) {
-    std::cout << sd.metrics->to_string() << std::endl;
-  } else {
-    std::cout << "no metrics" << std::endl;
-  }
+  if (metrics && sd.metrics) *metrics = std::move(*sd.metrics);
   return true;
 }
 

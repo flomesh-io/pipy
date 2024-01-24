@@ -200,16 +200,21 @@ class CodeUpdater : public PeriodicJob {
 static CodeUpdater s_code_updater;
 
 //
-// Periodically report status
+// Periodically report status & metrics
 //
 
 class StatusReporter : public PeriodicJob {
 public:
-  void init(const std::string &address, const Fetch::Options &options) {
+  void init(const std::string &address, const Fetch::Options &options, bool send_metrics) {
     m_url = URL::make(pjs::Value(address).s());
     m_headers = pjs::Object::make();
     m_headers->set("content-type", "application/json");
     m_fetch = new Fetch(m_url->hostname()->str() + ':' + m_url->port()->str(), options);
+    m_send_metrics = send_metrics;
+  }
+
+  void reset() {
+    m_initial_metrics = true;
   }
 
 private:
@@ -219,63 +224,63 @@ private:
     if (!m_fetch->busy()) {
       WorkerManager::get().status(
         [this](Status &status) {
-          InputContext ic;
-          Data buffer;
-          Data::Builder db(buffer);
-          status.ip = m_local_ip;
-          status.to_json(db);
-          db.flush();
-          (*m_fetch)(
-            Fetch::POST,
-            m_url->path(),
-            m_headers,
-            Data::make(std::move(buffer)),
-            [this](http::ResponseHead *head, Data *body) {
-              m_local_ip = m_fetch->outbound()->local_address()->str();
-            }
-          );
+          if (m_send_metrics) {
+            WorkerManager::get().stats(
+              [&](stats::MetricDataSum &metric_data_sum) {
+                send(status, &metric_data_sum);
+              }
+            );
+          } else {
+            send(status, nullptr);
+          }
         }
       );
     }
     next();
   }
 
-  Fetch *m_fetch = nullptr;
-  std::string m_local_ip;
-  pjs::Ref<URL> m_url;
-  pjs::Ref<pjs::Object> m_headers;
-};
+  void send(Status &status, stats::MetricDataSum *metrics) {
+    Data buffer_metrics;
+    if (metrics) {
+      Data::Builder db(buffer_metrics);
+      metrics->serialize(db, m_initial_metrics);
+      db.flush();
+      m_initial_metrics = false;
+    }
 
-static StatusReporter s_status_reporter;
+    Data buffer;
+    Data::Builder db(buffer);
+    status.ip = m_local_ip;
+    status.to_json(db, metrics ? &buffer_metrics : nullptr);
+    db.flush();
 
-//
-// Periodically report metrics
-//
+    InputContext ic;
+    (*m_fetch)(
+      Fetch::POST,
+      m_url->path(),
+      m_headers,
+      Data::make(std::move(buffer)),
+      [this](http::ResponseHead *head, Data *body) {
+        m_local_ip = m_fetch->outbound()->local_address()->str();
 
-class MetricReporter : public PeriodicJob {
-  virtual void run() override {
-    static Data::Producer s_dp("Metric Reports");
-    if (s_has_shutdown) return;
-    WorkerManager::get().stats(
-      [this](stats::MetricDataSum &metric_data_sum) {
-        InputContext ic;
-        Data buf;
-        Data::Builder db(buf, &s_dp);
-        db.push("metrics\n");
-        auto conn_id = s_admin_link->connect();
-        metric_data_sum.serialize(db, conn_id != m_connection_id);
-        db.flush();
-        s_admin_link->send(buf);
-        m_connection_id = conn_id;
-        next();
+        // "206 Partial Content" is used by a "smart" repo
+        // to indicate that subsequent metric reports can be incremental
+        if (head->status != 206) {
+          m_initial_metrics = true;
+        }
       }
     );
   }
 
-  int m_connection_id = 0;
+  Fetch *m_fetch = nullptr;
+  std::string m_local_ip;
+  pjs::Ref<URL> m_url;
+  pjs::Ref<pjs::Object> m_headers;
+  bool m_send_metrics = true;
+  bool m_initial_metrics = true;
 };
 
-static MetricReporter s_metric_reporter;
+static StatusReporter s_status_reporter;
 
 //
 // Handle signals
@@ -363,7 +368,6 @@ private:
     s_pool_cleaner.stop();
     s_code_updater.stop();
     s_status_reporter.stop();
-    s_metric_reporter.stop();
     stop();
   }
 };
@@ -535,7 +539,7 @@ int main(int argc, char *argv[]) {
         options.key = opts.tls_key;
         options.trusted = opts.tls_trusted;
         codebase = Codebase::from_http(opts.filename, options);
-        s_status_reporter.init(opts.filename, options);
+        s_status_reporter.init(opts.filename, options, !opts.no_metrics);
       } else if (is_eval) {
         codebase = Codebase::from_fs(
           fs::abs_path("."),
@@ -584,7 +588,6 @@ int main(int argc, char *argv[]) {
               tls_settings.trusted = opts.tls_trusted;
               start_admin_link(opts.filename, is_tls ? &tls_settings : nullptr);
               if (!opts.no_status) s_status_reporter.start();
-              if (!opts.no_metrics) s_metric_reporter.start();
             }
 
             Pipy::on_exit(

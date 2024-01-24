@@ -132,7 +132,7 @@ public:
   ~MetricData();
 
   void update(MetricSet &metrics);
-  void deserialize(const Data &in);
+  bool deserialize(const Data &in);
   void to_prometheus(const std::string &inst, const std::function<void(const void *, size_t)> &out) const;
 
 private:
@@ -198,9 +198,13 @@ private:
 
   class Deserializer : public JSON::Visitor {
   public:
-    Deserializer(MetricData *metric_data) : m_entries(&metric_data->m_entries) {}
+    Deserializer(MetricData *metric_data)
+      : m_entries(&metric_data->m_entries)
+      , m_last_version(metric_data->m_version) {}
     ~Deserializer();
 
+    auto version() const -> uint64_t { return m_version; }
+    bool has_incorrect_version() const { return m_has_incorrect_version; }
     bool has_error() const { return m_has_error; }
 
   private:
@@ -215,7 +219,9 @@ private:
 
       enum class Field {
         NONE,
-        METRICS,
+        VERSION,
+        LAST,
+        ROOTS,
         KEY,
         TYPE,
         LABELS,
@@ -239,6 +245,9 @@ private:
     Level* m_current_level = nullptr;
     Entry* m_current_entry = nullptr;
     Iterator<Entry> m_entries;
+    uint64_t m_version = 0;
+    uint64_t m_last_version;
+    bool m_has_incorrect_version = false;
     bool m_has_error = false;
 
     void push(Level *level);
@@ -258,6 +267,7 @@ private:
   };
 
   Entry* m_entries = nullptr;
+  uint64_t m_version = 0;
 
   friend class MetricDataSum;
   friend class MetricHistory;
@@ -272,7 +282,6 @@ public:
   ~MetricDataSum();
 
   void sum(MetricData &data, bool initial);
-  void serialize(Data &out, bool initial);
   void serialize(Data::Builder &db, bool initial);
   void to_prometheus(const std::function<void(const void *, size_t)> &out) const;
 
@@ -317,6 +326,7 @@ private:
 
   List<Entry> m_entries;
   std::unordered_map<pjs::Str*, Entry*> m_entry_map;
+  uint64_t m_version = 0;
 
   friend class MetricHistory;
 };

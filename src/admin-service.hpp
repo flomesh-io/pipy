@@ -196,6 +196,7 @@ private:
   pjs::Ref<Message> m_response_ok;
   pjs::Ref<Message> m_response_created;
   pjs::Ref<Message> m_response_deleted;
+  pjs::Ref<Message> m_response_partial;
   pjs::Ref<Message> m_response_not_found;
   pjs::Ref<Message> m_response_method_not_allowed;
   pjs::Ref<Message> m_response_upgraded_ws;
@@ -257,7 +258,6 @@ private:
   void on_watch_start(Context *ctx, const std::string &path);
   void on_log(Context *ctx, const std::string &name, const Data &data);
   void on_log_tail(Context *ctx, const std::string &name, const Data &data);
-  void on_metrics(Context *ctx, const Data &data);
 
   void change_program(const std::string &path, bool reload);
   void metrics_history_step();

@@ -111,6 +111,7 @@ AdminService::AdminService(
   m_response_ok = create_response(200);
   m_response_created = create_response(201);
   m_response_deleted = create_response(204);
+  m_response_partial = create_response(206);
   m_response_not_found = create_response(404);
   m_response_method_not_allowed = create_response(405);
 
@@ -741,7 +742,8 @@ Message* AdminService::repo_POST(Context *ctx, const std::string &path, Data *da
     auto name = path.substr(0, path.length() - 1);
     if (auto codebase = m_store->find_codebase(name)) {
       Status status;
-      if (!status.from_json(*data)) return response(400, "Invalid JSON");
+      Data metrics;
+      if (!status.from_json(*data, &metrics)) return response(400, "Invalid JSON");
       Instance *inst = get_instance(status.uuid);
       if (inst->codebase_name != codebase->id()) {
         if (!inst->codebase_name.empty()) m_codebase_instances[inst->codebase_name].erase(inst->index);
@@ -751,6 +753,12 @@ Message* AdminService::repo_POST(Context *ctx, const std::string &path, Data *da
       inst->status = std::move(status);
       inst->timestamp = utils::now();
       inst->ip = ctx->inbound()->remote_address()->str();
+      if (!metrics.empty()) {
+        if (inst->metric_data.deserialize(metrics)) {
+          inst->metric_history.step(inst->metric_data);
+          return m_response_partial;
+        }
+      }
       return m_response_created;
     }
   }
@@ -1347,13 +1355,6 @@ void AdminService::on_log_tail(Context *ctx, const std::string &name, const Data
   }
 }
 
-void AdminService::on_metrics(Context *ctx, const Data &data) {
-  if (auto inst = get_instance(ctx->instance_uuid)) {
-    inst->metric_data.deserialize(data);
-    inst->metric_history.step(inst->metric_data);
-  }
-}
-
 void AdminService::change_program(const std::string &path, bool reload) {
   std::string name = path;
 
@@ -1498,9 +1499,6 @@ void AdminService::WebSocketHandler::process(Event *evt) {
       } else if (utils::starts_with(command, s_log_tail_prefix)) {
         auto name = utils::trim(command.substr(s_log_tail_prefix.length()));
         m_service->on_log_tail(ctx, name, m_payload);
-
-      } else if (command == "metrics\n") {
-        m_service->on_metrics(ctx, m_payload);
 
       } else if (command == "watch\n") {
         if (auto *w = ctx->log_watcher) {

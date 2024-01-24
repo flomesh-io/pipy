@@ -415,14 +415,22 @@ void MetricData::update(MetricSet &metrics) {
   }
 }
 
-void MetricData::deserialize(const Data &in) {
+bool MetricData::deserialize(const Data &in) {
   Deserializer des(this);
   if (!JSON::visit(in, &des)) {
     Log::error("[stats] JSON deserialization failed for metrics");
-    return;
+    return false;
   }
   if (des.has_error()) {
-    Log::error("[stats] Invalid JSON structure for metrics");
+    if (des.has_incorrect_version()) {
+      Log::error("[stats] Invalid version of metrics");
+    } else {
+      Log::error("[stats] Invalid JSON structure of metrics");
+    }
+    return false;
+  } else {
+    m_version = des.version();
+    return true;
   }
 }
 
@@ -555,6 +563,19 @@ void MetricData::Deserializer::number(double n) {
   if (!m_has_error) {
     if (auto level = m_current_level) {
       switch (level->kind) {
+        case Level::Kind::ROOT: {
+          switch (level->field) {
+            case Level::Field::VERSION:
+              m_version = n;
+              return;
+            case Level::Field::LAST:
+              if (n == (double)m_last_version) return;
+              m_has_incorrect_version = true;
+              break;
+            default: break;
+          }
+          break;
+        }
         case Level::Kind::ENTRIES: {
           if (auto ent = m_entries.next()) {
             m_current_entry = ent;
@@ -670,7 +691,9 @@ void MetricData::Deserializer::map_key(const char *s, size_t len) {
     if (auto *level = m_current_level) {
       switch (level->kind) {
         case Level::Kind::ROOT:
-          if (!std::strncmp(s, "metrics", len)) { level->field = Level::Field::METRICS; return; }
+          if (!std::strncmp(s, "version", len)) { level->field = Level::Field::VERSION; return; }
+          if (!std::strncmp(s, "last", len)) { level->field = Level::Field::LAST; return; }
+          if (!std::strncmp(s, "roots", len)) { level->field = Level::Field::ROOTS; return; }
           break;
         case Level::Kind::METRIC:
           if (len == 1) {
@@ -702,7 +725,7 @@ void MetricData::Deserializer::array_start() {
     if (auto level = m_current_level) {
       switch (level->kind) {
         case Level::Kind::ROOT: {
-          if (level->field == Level::Field::METRICS) {
+          if (level->field == Level::Field::ROOTS) {
             push(new Level(Level::Kind::ENTRIES));
             return;
           }
@@ -827,20 +850,24 @@ void MetricDataSum::sum(MetricData &data, bool initial) {
   }
 }
 
-void MetricDataSum::serialize(Data &out, bool initial) {
-  Data::Builder db(out, &s_dp);
-  serialize(db, initial);
-  db.flush();
-}
-
 void MetricDataSum::serialize(Data::Builder &db, bool initial) {
-  static const std::string s_metrics("\"metrics\":"); // metrics
+  static const std::string s_version("\"version\":"); // version
+  static const std::string s_last("\"last\":"); // last
+  static const std::string s_roots("\"roots\":"); // roots
   static const std::string s_k("\"k\":"); // key
   static const std::string s_t("\"t\":"); // type
   static const std::string s_v("\"v\":"); // value
   static const std::string s_l("\"l\":"); // label
   static const std::string s_s("\"s\":"); // sub
   static const std::string s_null("null");
+
+  auto last_version = m_version;
+
+  if (initial) {
+    m_version = 0;
+  } else {
+    m_version = utils::now();
+  }
 
   std::function<void(int, Entry*, Node*)> write_node;
   write_node = [&](int level, Entry *ent, Node *node) {
@@ -909,7 +936,15 @@ void MetricDataSum::serialize(Data::Builder &db, bool initial) {
   };
 
   db.push('{');
-  db.push(s_metrics);
+  db.push(s_version);
+  db.push(std::to_string(m_version));
+  db.push(',');
+  if (m_version) {
+    db.push(s_last);
+    db.push(std::to_string(last_version));
+    db.push(',');
+  }
+  db.push(s_roots);
   db.push('[');
   for (auto *e = m_entries.head(); e; e = e->next()) {
     auto *root = e->root.get();
