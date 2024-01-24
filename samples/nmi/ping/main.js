@@ -1,0 +1,5 @@
+pipy()
+  .task(new Data)
+  .produce(() => new Timeout(2).wait().then(new Message('azure.com')))
+  .use('../../../bin/ping.so')
+  .print()
