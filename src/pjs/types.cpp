@@ -2509,19 +2509,12 @@ template<> void ClassDef<PromiseDependency>::init() {
 
 template<> void ClassDef<Array>::init() {
   ctor([](Context &ctx) -> Object* {
-    int size = 0;
-    if (!ctx.arguments(0, &size)) return nullptr;
-    if (size < 0) {
-      ctx.error("invalid array length");
+    try {
+      return Array::make(ctx.argc(), ctx.argv());
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
       return nullptr;
     }
-    auto a = Array::make();
-    auto d = a->elements();
-    for (int i = 0; i < d->size(); i++) {
-      d->at(i) = Value::empty;
-    }
-    a->length(size);
-    return a;
   });
 
   geti([](Object *obj, int i, Value &val) {
@@ -2886,6 +2879,23 @@ template<> void ClassDef<Array>::init() {
 template<> void ClassDef<Constructor<Array>>::init() {
   super<Function>();
   ctor();
+}
+
+Array::Array(int argc, const Value argv[]) {
+  if (argc == 1 && argv[0].is_number()) {
+    auto n = argv[0].n();
+    int size = (int)n;
+    if (size < 0 || size != n) throw std::runtime_error("invalid array length");
+    m_size = size;
+    m_data = Data::make(1);
+    m_data->at(0) = Value::empty;
+  } else {
+    m_size = argc;
+    m_data = Data::make(std::max(1, 1 << power(argc)));
+    for (int i = 0; i < argc; i++) {
+      m_data->at(i) = argv[i];
+    }
+  }
 }
 
 void Array::copyWithin(int target, int start, int end) {

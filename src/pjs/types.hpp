@@ -2204,6 +2204,7 @@ public:
   void scope(Scope *scope) { m_scope = scope; }
   auto level() const -> int { return m_level; }
   auto argc() const -> int { return m_argc; }
+  auto argv() const -> Value* { return m_argv; }
   auto arg(int i) const -> Value& { return m_argv[i]; }
   auto call_site() const -> const Location& { return m_call_site; }
 
@@ -3081,7 +3082,11 @@ protected:
     Function::m_method = Method::make(
       c->name()->str(),
       [this](Context &ctx, Object *obj, Value &ret) {
-        (*static_cast<Constructor<T>*>(this))(ctx, obj, ret);
+        try {
+          (*static_cast<Constructor<T>*>(this))(ctx, obj, ret);
+        } catch (std::runtime_error &err) {
+          ctx.error(err);
+        }
       }, c);
   }
 
@@ -3633,6 +3638,8 @@ private:
     : m_data(Data::make(std::max(1, 1 << power(size))))
     , m_size(size) {}
 
+  Array(int argc, const Value argv[]);
+
   ~Array() {
     length(0);
     m_data->recycle();
@@ -3646,6 +3653,14 @@ private:
   }
 
   friend class ObjectTemplate<Array>;
+};
+
+template<>
+class Constructor<Array> : public ConstructorTemplate<Array> {
+public:
+  void operator()(Context &ctx, Object *obj, Value &ret) {
+    ret.set(Array::make(ctx.argc(), ctx.argv()));
+  }
 };
 
 //
