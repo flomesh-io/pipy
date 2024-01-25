@@ -199,10 +199,11 @@ auto Str::local_map() -> LocalMap& {
 
 auto Str::make(const uint32_t *codes, size_t len) -> Str* {
   if (len > s_max_size) len = s_max_size;
-  auto buf = str_make_tmp_buf(len);
+  auto buf_size = len * 4;
+  auto buf = str_make_tmp_buf(buf_size);
   int p = 0;
   for (size_t i = 0; i < len; i++) {
-    auto n = Utf8Decoder::encode(codes[i], buf + p, len - p);
+    auto n = Utf8Decoder::encode(codes[i], buf + p, buf_size - p);
     if (!n) break;
     p += n;
   }
