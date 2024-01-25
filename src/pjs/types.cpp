@@ -2887,8 +2887,7 @@ Array::Array(int argc, const Value argv[]) {
     int size = (int)n;
     if (size < 0 || size != n) throw std::runtime_error("invalid array length");
     m_size = size;
-    m_data = Data::make(1);
-    m_data->at(0) = Value::empty;
+    m_data = Data::make(1, Value::empty);
   } else {
     m_size = argc;
     m_data = Data::make(std::max(1, 1 << power(argc)));

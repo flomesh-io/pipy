@@ -436,12 +436,25 @@ bool ArrayLiteral::eval(Context &ctx, Value &result) {
   for (const auto &p : m_list) {
     auto v = p.get();
     if (auto e = dynamic_cast<ArrayExpansion*>(v)) {
-      Value a; if (!e->eval(ctx, a)) return false;
-      if (a.is_string()) {
-        return error(ctx, "TODO"); // TODO: expand a string
-      } else if (a.is_array()) {
-        auto arr = a.as<Array>();
-        arr->iterate_all([&](Value &v, int) { obj->set(i++, v); });
+      Value v; if (!e->eval(ctx, v)) return false;
+      if (v.is_string()) {
+        auto s = v.s();
+        obj->set(i + s->length() - 1, Value::undefined);
+        Utf8Decoder decoder(
+          [&](int c) {
+            uint32_t code = c;
+            obj->set(i++, Str::make(&code, 1));
+          }
+        );
+        for (auto c : s->str()) decoder.input(c);
+      } else if (v.is_array()) {
+        auto a = v.as<Array>();
+        auto n = a->length();
+        obj->set(i + n - 1, Value::undefined);
+        for (int j = 0; j < n; j++) {
+          Value v; a->get(j, v);
+          obj->set(i++, v);
+        }
       } else {
         return error(ctx, "object is not iterable");
       }

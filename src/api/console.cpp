@@ -170,7 +170,10 @@ void Console::dump(const pjs::Value &value, Data::Builder &db) {
               a->iterate_all(
                 [&](pjs::Value &v, int i) {
                   if (first) first = false; else db.push(s_comma);
-                  if (i > p) push_empty(i - p);
+                  if (i > p) {
+                    push_empty(i - p);
+                    db.push(s_comma);
+                  }
                   write(v);
                   p = i + 1;
                 }

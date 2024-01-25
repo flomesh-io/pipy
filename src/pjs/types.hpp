@@ -546,13 +546,14 @@ template<class T>
 class PooledArray : public PooledArrayBase {
 public:
   static auto make(size_t size) -> PooledArray* {
-    auto &pools = m_pools;
-    auto slot = slot_of_size(size);
-    for (auto i = pools.size(); i <= slot; i++) {
-      pools.emplace_back(new Pool(sizeof(PooledArray) + sizeof(T) * size_of_slot(i)));
-    }
-    auto p = static_cast<PooledArray*>(pools[slot]->alloc());
+    auto p = alloc(size);
     new (p) PooledArray(size);
+    return p;
+  }
+
+  static auto make(size_t size, const T &initial) -> PooledArray* {
+    auto p = alloc(size);
+    new (p) PooledArray(size, initial);
     return p;
   }
 
@@ -587,10 +588,25 @@ private:
     }
   }
 
+  PooledArray(size_t size, const T &initial) : m_size(size) {
+    for (size_t i = 0; i < size; i++) {
+      new (m_elements + i) T(initial);
+    }
+  }
+
   ~PooledArray() {
     for (size_t i = 0, n = m_size; i < n; i++) {
       m_elements[i].~T();
     }
+  }
+
+  static auto alloc(size_t size) -> PooledArray* {
+    auto &pools = m_pools;
+    auto slot = slot_of_size(size);
+    for (auto i = pools.size(); i <= slot; i++) {
+      pools.emplace_back(new Pool(sizeof(PooledArray) + sizeof(T) * size_of_slot(i)));
+    }
+    return static_cast<PooledArray*>(pools[slot]->alloc());
   }
 
   static auto slot_of_size(size_t size) -> size_t {
@@ -3545,21 +3561,22 @@ public:
 
   void get(int i, Value &v) const {
     if (0 <= i && i < m_data->size()) {
-      v = m_data->at(i);
+      const auto &e = m_data->at(i);
+      v = (e.is_empty() ? Value::undefined : e);
     } else {
       v = Value::undefined;
     }
   }
 
   void set(int i, const Value &v) {
-    if (i >= m_data->size()) {
-      auto new_size = 1 << power(i + 1);
-      if (new_size > MAX_SIZE) return; // TODO: report error
-      auto *data = Data::make(new_size);
+    auto old_size = m_data->size();
+    auto new_size = 1 << power(i + 1);
+    if (new_size > MAX_SIZE) return; // TODO: report error
+    if (new_size > old_size) {
+      auto *data = Data::make(new_size, Value::empty);
       auto *new_values = data->elements();
       auto *old_values = m_data->elements();
-      auto end = std::min((int)m_data->size(), m_size);
-      for (int i = 0; i < end; i++) new_values[i] = std::move(old_values[i]);
+      for (int i = 0; i < old_size; i++) new_values[i] = std::move(old_values[i]);
       m_data->recycle();
       m_data = data;
       new_values[i] = v;
@@ -3635,7 +3652,7 @@ public:
 
 private:
   Array(size_t size = 0)
-    : m_data(Data::make(std::max(1, 1 << power(size))))
+    : m_data(Data::make(std::max(1, 1 << power(size)), Value::empty))
     , m_size(size) {}
 
   Array(int argc, const Value argv[]);
