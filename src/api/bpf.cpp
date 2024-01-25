@@ -327,7 +327,7 @@ void Program::load(int type, const std::string &license) {
   std::vector<char> log_buf(100*1024);
   union bpf_attr attr;
   int fd = syscall_bpf(
-    BPF_PROG_LOAD, &attr, attr_size(fd_array),
+    BPF_PROG_LOAD, &attr, attr_size(line_info_cnt),
     [&](union bpf_attr &attr) {
       std::strncpy(attr.prog_name, m_name->c_str(), sizeof(attr.prog_name));
       attr.prog_type = type;
