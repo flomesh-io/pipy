@@ -106,46 +106,13 @@ auto PipelineLayout::alloc(Context *ctx) -> Pipeline* {
     m_allocated++;
   }
   pipeline->m_context = ctx;
+  pipeline->m_started = m_on_start ? false : true;
   m_pipelines.push(pipeline);
   s_active_pipeline_count++;
   if (Log::is_enabled(Log::ALLOC)) {
     Log::debug(Log::ALLOC, "[pipeline %p] ++ name = %s, context = %llu", pipeline, name_or_label()->c_str(), ctx->id());
   }
   return pipeline;
-}
-
-void PipelineLayout::start(Pipeline *pipeline, int argc, pjs::Value *argv) {
-  if (auto *o = m_on_start.get()) {
-    pjs::Value starting_events;
-    if (o->is<pjs::Function>()) {
-      auto &ctx = *pipeline->context();
-      (*o->as<pjs::Function>())(ctx, argc, argv, starting_events);
-      if (!ctx.ok()) {
-        Log::pjs_error(ctx.error());
-        ctx.reset();
-        pipeline->input()->input(StreamEnd::make(StreamEnd::RUNTIME_ERROR));
-        return;
-      }
-    } else {
-      starting_events.set(o);
-    }
-    if (!starting_events.is_nullish()) {
-      if (!Message::output(starting_events, pipeline->input())) {
-        char loc[100];
-        Log::format_location(loc, sizeof(loc), m_on_start_location, "onStart");
-        char buf[300];
-        auto len = std::snprintf(
-          buf, sizeof(buf),
-          "%s: initial input is not or did not return events or messages. "
-          "Consider using void(...) if no initial input is intended", loc
-        );
-        Log::error("%s", buf);
-        pipeline->input()->input(StreamEnd::make(
-          pjs::Error::make(pjs::Str::make(buf, len))
-        ));
-      }
-    }
-  }
 }
 
 void PipelineLayout::end(Pipeline *pipeline) {
@@ -208,8 +175,36 @@ Pipeline::~Pipeline() {
   }
 }
 
+auto Pipeline::start(int argc, pjs::Value *argv) -> Pipeline* {
+  if (auto *o = m_layout->m_on_start.get()) {
+    pjs::Value starting_events;
+    if (o->is<pjs::Function>()) {
+      auto &ctx = *m_context;
+      (*o->as<pjs::Function>())(ctx, argc, argv, starting_events);
+      if (!ctx.ok()) {
+        Log::pjs_error(ctx.error());
+        ctx.reset();
+        EventProxy::forward(StreamEnd::make(StreamEnd::RUNTIME_ERROR));
+        return this;
+      }
+    } else {
+      starting_events.set(o);
+    }
+    if (starting_events.is_promise()) {
+      wait(starting_events.as<pjs::Promise>());
+    } else {
+      start(starting_events);
+    }
+  }
+  return this;
+}
+
 void Pipeline::on_input(Event *evt) {
-  EventProxy::forward(evt);
+  if (m_started) {
+    EventProxy::forward(evt);
+  } else {
+    m_pending_events.push(evt);
+  }
 }
 
 void Pipeline::on_reply(Event *evt) {
@@ -221,6 +216,50 @@ void Pipeline::on_auto_release() {
   m_layout->end(this);
   reset();
   m_layout->free(this);
+}
+
+void Pipeline::wait(pjs::Promise *promise) {
+  auto cb = StartingPromiseCallback::make(this);
+  promise->then(nullptr, cb->resolved(), cb->rejected());
+  m_starting_promise_callback = cb;
+}
+
+void Pipeline::resolve(const pjs::Value &value) {
+  if (value.is_promise()) {
+    m_starting_promise_callback->close();
+    m_starting_promise_callback = nullptr;
+    wait(value.as<pjs::Promise>());
+  } else {
+    start(value);
+  }
+}
+
+void Pipeline::reject(const pjs::Value &value) {
+  EventProxy::forward(StreamEnd::make(value));
+}
+
+void Pipeline::start(const pjs::Value &starting_events) {
+  m_started = true;
+  if (!starting_events.is_nullish()) {
+    if (!Message::output(starting_events, EventProxy::input())) {
+      char loc[100];
+      Log::format_location(loc, sizeof(loc), m_layout->m_on_start_location, "onStart");
+      char buf[300];
+      auto len = std::snprintf(
+        buf, sizeof(buf),
+        "%s: initial input is not or did not return events or messages. "
+        "Consider using void(...) if no initial input is intended", loc
+      );
+      Log::error("%s", buf);
+      EventProxy::forward(StreamEnd::make(
+        pjs::Error::make(pjs::Str::make(buf, len))
+      ));
+      m_pending_events.clear();
+    }
+  }
+  if (!m_pending_events.empty()) {
+    m_pending_events.flush(EventProxy::input());
+  }
 }
 
 void Pipeline::shutdown() {
@@ -237,6 +276,38 @@ void Pipeline::reset() {
     f->reset();
   }
   m_context = nullptr;
+  m_started = false;
+  m_pending_events.clear();
+  if (m_starting_promise_callback) {
+    m_starting_promise_callback->close();
+    m_starting_promise_callback = nullptr;
+  }
+}
+
+//
+// Pipeline::StartingPromiseCallback
+//
+
+void Pipeline::StartingPromiseCallback::on_resolved(const pjs::Value &value) {
+  if (m_pipeline) {
+    m_pipeline->resolve(value);
+  }
+}
+
+void Pipeline::StartingPromiseCallback::on_rejected(const pjs::Value &error) {
+  if (m_pipeline) {
+    m_pipeline->reject(error);
+  }
 }
 
 } // namespace pipy
+
+namespace pjs {
+
+using namespace pipy;
+
+template<> void ClassDef<Pipeline::StartingPromiseCallback>::init() {
+  super<Promise::Callback>();
+}
+
+} // namespace pjs

@@ -30,6 +30,7 @@
 #include "event.hpp"
 #include "input.hpp"
 #include "list.hpp"
+#include "buffer.hpp"
 
 #include <list>
 #include <memory>
@@ -109,7 +110,6 @@ private:
   ~PipelineLayout();
 
   auto alloc(Context *ctx) -> Pipeline*;
-  void start(Pipeline *pipeline, int argc, pjs::Value *argv);
   void end(Pipeline *pipeline);
   void free(Pipeline *pipeline);
 
@@ -152,11 +152,7 @@ public:
   auto chain() const -> PipelineLayout::Chain* { return m_chain; }
   void chain(PipelineLayout::Chain *chain) { m_chain = chain; }
   void chain(Input *input) { EventProxy::chain(input); }
-
-  auto start(int argc = 0, pjs::Value *argv = nullptr) -> Pipeline* {
-    m_layout->start(this, argc, argv);
-    return this;
-  }
+  auto start(int argc = 0, pjs::Value *argv = nullptr) -> Pipeline*;
 
 private:
   Pipeline(PipelineLayout *layout);
@@ -166,12 +162,33 @@ private:
   virtual void on_reply(Event *evt) override;
   virtual void on_auto_release() override;
 
+  //
+  // Pipeline::StartingPromiseCallback
+  //
+
+  class StartingPromiseCallback : public pjs::ObjectTemplate<StartingPromiseCallback, pjs::Promise::Callback> {
+    StartingPromiseCallback(Pipeline *pipeline) : m_pipeline(pipeline) {}
+    virtual void on_resolved(const pjs::Value &value) override;
+    virtual void on_rejected(const pjs::Value &error) override;
+    friend class pjs::ObjectTemplate<StartingPromiseCallback, pjs::Promise::Callback>;
+    Pipeline* m_pipeline;
+  public:
+    void close() { m_pipeline = nullptr; }
+  };
+
   PipelineLayout* m_layout;
   Pipeline* m_next_free = nullptr;
   List<Filter> m_filters;
   pjs::Ref<Context> m_context;
   pjs::Ref<PipelineLayout::Chain> m_chain;
+  pjs::Ref<StartingPromiseCallback> m_starting_promise_callback;
+  EventBuffer m_pending_events;
+  bool m_started = false;
 
+  void wait(pjs::Promise *promise);
+  void resolve(const pjs::Value &value);
+  void reject(const pjs::Value &value);
+  void start(const pjs::Value &starting_events);
   void shutdown();
   void reset();
 
