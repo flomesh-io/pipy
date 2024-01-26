@@ -37,18 +37,18 @@ namespace pipy {
 thread_local static Data::Producer s_dp("Command Line Options");
 
 void MainOptions::show_help() {
-  std::cout << "Usage: pipy [options] [<filename or URL>]" << std::endl;
+  std::cout << "Usage: pipy [options] [<expression | pathname | URL>]" << std::endl;
   std::cout << std::endl;
   std::cout << "Options:" << std::endl;
   std::cout << "  -h, -help, --help                    Show help information" << std::endl;
   std::cout << "  -v, -version, --version              Show version information" << std::endl;
   std::cout << "  -e, -eval, --eval                    Evaluate the given string as script" << std::endl;
+  std::cout << "  -f, -file, --file                    Interpret the given string as a pathname" << std::endl;
   std::cout << "  --threads=<number>                   Number of worker threads (1, 2, ... max)" << std::endl;
   std::cout << "  --log-file=<filename>                Set the pathname of the log file" << std::endl;
   std::cout << "  --log-level=<debug|info|warn|error>  Set the level of log output" << std::endl;
   std::cout << "  --log-history-limit=<size>           Set size limit of log history" << std::endl;
   std::cout << "  --log-local-only                     Do not send out system log" << std::endl;
-  std::cout << "  --verify                             Verify configuration only" << std::endl;
   std::cout << "  --no-graph                           Do not print pipeline graphs to the log" << std::endl;
   std::cout << "  --no-status                          Do not report current status to the repo" << std::endl;
   std::cout << "  --no-metrics                         Do not report metrics to the repo" << std::endl;
@@ -112,6 +112,8 @@ MainOptions::MainOptions(int argc, char *argv[]) {
         help = true;
       } else if (k == "-e" || k == "-eval" || k == "--eval") {
         eval = true;
+      } else if (k == "-f" || k == "-file" || k == "--file") {
+        file = true;
       } else if (k == "--threads") {
         if (v == "max") {
           threads = max_threads;
@@ -174,8 +176,6 @@ MainOptions::MainOptions(int argc, char *argv[]) {
         if (*end || log_history_limit < 0) throw std::runtime_error("--log-history-limit expects a non-negative number");
       } else if (k == "--log-local-only") {
         log_local_only = true;
-      } else if (k == "--verify") {
-        verify = true;
       } else if (k == "--no-graph") {
         no_graph = true;
       } else if (k == "--no-status") {

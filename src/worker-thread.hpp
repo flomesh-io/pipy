@@ -59,8 +59,8 @@ public:
 
   auto manager() const -> WorkerManager* { return m_manager; }
   auto index() const -> int { return m_index; }
-  bool done() { return m_done; }
-  bool ended() { return m_ended; }
+  bool done() const { return m_done; }
+  bool ended() const { return m_ended; }
   auto active_pipeline_count() const -> size_t { return m_active_pipeline_count.load(std::memory_order_relaxed); }
 
   bool start(bool force);

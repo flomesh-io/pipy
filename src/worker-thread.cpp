@@ -69,8 +69,9 @@ bool WorkerThread::start(bool force) {
     }
   );
 
-  m_start_cv.wait(lock, [this]() { return m_started || m_failed; });
-  return !m_failed;
+  m_start_cv.wait(lock, [this]() { return m_started || m_done || m_failed; });
+  if (m_failed) throw std::runtime_error("failed to start worker thread");
+  return m_started;
 }
 
 void WorkerThread::status(Status &status, const std::function<void()> &cb) {
@@ -416,6 +417,7 @@ void WorkerThread::main() {
   auto result = pjs::Value::empty;
   auto mod = m_new_worker->load_js_module(entry, result);
 
+  // Evaluation result is not a module
   if (!mod && !result.is_empty()) {
     auto output_value = [](std::ostream &out, const pjs::Value &value) {
       if (value.is_string()) {
@@ -468,55 +470,64 @@ void WorkerThread::main() {
     } else {
       output_value(std::cout, result);
     }
-  }
 
-  bool started = (mod && m_new_worker->bind() && m_new_worker->start(m_force_start));
-
-  {
-    std::lock_guard<std::mutex> lock(m_start_cv_mutex);
-    m_started = started;
-    m_failed = !started;
-    m_net = &Net::current();
-    m_start_cv.notify_one();
-  }
-
-  if (started) {
-    Log::info("[worker] Thread %d started", m_index);
-
-    init_metrics();
-
-    m_working = true;
-    while (m_working) {
-      Net::current().run();
-      m_working = false;
+    {
+      std::lock_guard<std::mutex> lock(m_start_cv_mutex);
+      m_started = false;
+      m_failed = false;
       m_done = true;
-      m_manager->on_thread_done(m_index);
-
-      Log::info("[worker] Thread %d done", m_index);
-
-      if (m_shutdown) break;
-
-      m_workload_signal = std::unique_ptr<Signal>(
-        new Signal([]() { Net::current().stop(); })
-      );
-
-      Net::current().restart();
-      Net::current().run();
-
-      m_workload_signal = nullptr;
-
-      if (m_working) {
-        m_done = false;
-        Net::current().restart();
-        Log::info("[worker] Thread %d restarted", m_index);
-      }
+      m_start_cv.notify_one();
     }
 
-    Log::info("[worker] Thread %d ended", m_index);
-
+  // Evaluation result is a module or an error
   } else {
-    m_new_worker->stop(true);
-    m_new_worker = nullptr;
+    bool started = (mod && m_new_worker->bind() && m_new_worker->start(m_force_start));
+    {
+      std::lock_guard<std::mutex> lock(m_start_cv_mutex);
+      m_started = started;
+      m_failed = !started;
+      m_net = &Net::current();
+      m_start_cv.notify_one();
+    }
+
+    if (started) {
+      Log::info("[worker] Thread %d started", m_index);
+
+      init_metrics();
+
+      m_working = true;
+      while (m_working) {
+        Net::current().run();
+        m_working = false;
+        m_done = true;
+        m_manager->on_thread_done(m_index);
+
+        Log::info("[worker] Thread %d done", m_index);
+
+        if (m_shutdown) break;
+
+        m_workload_signal = std::unique_ptr<Signal>(
+          new Signal([]() { Net::current().stop(); })
+        );
+
+        Net::current().restart();
+        Net::current().run();
+
+        m_workload_signal = nullptr;
+
+        if (m_working) {
+          m_done = false;
+          Net::current().restart();
+          Log::info("[worker] Thread %d restarted", m_index);
+        }
+      }
+
+      Log::info("[worker] Thread %d ended", m_index);
+
+    } else {
+      m_new_worker->stop(true);
+      m_new_worker = nullptr;
+    }
   }
 
   Log::shutdown();
@@ -541,11 +552,19 @@ bool WorkerManager::start(int concurrency, bool force) {
 
   for (int i = 0; i < concurrency; i++) {
     auto wt = new WorkerThread(this, i);
-    if (!wt->start(force)) {
+    auto rollback = [&]() {
       delete wt;
       stop(true);
       m_loading_pipeline_lb = nullptr;
-      return false;
+    };
+    try {
+      if (!wt->start(force)) {
+        rollback();
+        return false;
+      }
+    } catch (std::runtime_error &) {
+      rollback();
+      throw;
     }
     m_worker_threads.push_back(wt);
   }

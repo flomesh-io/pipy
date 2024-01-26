@@ -433,36 +433,36 @@ int main(int argc, char *argv[]) {
       if (admin_ip.empty()) admin_ip = "::";
     }
 
-    bool is_eval = false;
     bool is_repo = false;
     bool is_repo_proxy = false;
     bool is_remote = false;
     bool is_tls = false;
+    bool is_file = false;
+    bool is_file_found = false;
 
-    if (opts.eval) {
-      is_eval = true;
+    if (!opts.eval) {
+      if (opts.filename.empty()) {
+        is_repo = true;
 
-    } else if (opts.filename.empty()) {
-      is_repo = true;
+      } else if (utils::starts_with(opts.filename, "http://")) {
+        is_remote = true;
 
-    } else if (utils::starts_with(opts.filename, "http://")) {
-      is_remote = true;
+      } else if (utils::starts_with(opts.filename, "https://")) {
+        is_remote = true;
+        is_tls = true;
 
-    } else if (utils::starts_with(opts.filename, "https://")) {
-      is_remote = true;
-      is_tls = true;
-
-    } else if (utils::is_host_port(opts.filename)) {
-      is_repo_proxy = true;
-
-    } else {
-      auto full_path = fs::abs_path(opts.filename);
-      opts.filename = full_path;
-      if (!fs::exists(full_path)) {
-        std::string msg("file or directory does not exist: ");
-        throw std::runtime_error(msg + full_path);
+      } else {
+        is_file = true;
+        auto full_path = fs::abs_path(opts.filename);
+        if (fs::exists(full_path)) {
+          is_file_found = true;
+          is_repo = fs::is_dir(full_path);
+          opts.filename = full_path;
+        } else if (opts.file) {
+          std::string msg("file or directory does not exist: ");
+          throw std::runtime_error(msg + full_path);
+        }
       }
-      is_repo = fs::is_dir(full_path);
     }
 
     if (is_remote) {
@@ -540,16 +540,18 @@ int main(int argc, char *argv[]) {
         options.trusted = opts.tls_trusted;
         codebase = Codebase::from_http(opts.filename, options);
         s_status_reporter.init(opts.filename, options, !opts.no_metrics);
-      } else if (is_eval) {
+      } else if (is_file_found) {
+        codebase = Codebase::from_fs(opts.filename);
+      } else {
         codebase = Codebase::from_fs(
           fs::abs_path("."),
           opts.filename
         );
-      } else {
-        codebase = Codebase::from_fs(opts.filename);
       }
 
       codebase->set_current();
+
+      bool started = false, start_error = false;
 
       load = [&]() {
         codebase->sync(
@@ -567,7 +569,13 @@ int main(int argc, char *argv[]) {
               WorkerManager::get().on_done(exit);
             }
 
-            if (!WorkerManager::get().start(opts.threads, opts.force_start)) {
+            try {
+              started = WorkerManager::get().start(opts.threads, opts.force_start);
+            } catch (std::runtime_error &) {
+              start_error = true;
+            }
+
+            if (!started) {
               fail();
               return;
             }
@@ -611,7 +619,14 @@ int main(int argc, char *argv[]) {
         if (is_remote) {
           retry_timer.schedule(5, load);
         } else {
-          exit_code = -1;
+          if (start_error) {
+            if (is_file && !is_file_found) {
+              std::cerr << "file or directory does not exist either with the input string as a pathname" << std::endl;
+            }
+            exit_code = -1;
+          } else {
+            exit_code = 0;
+          }
           Net::main().stop();
         }
       };

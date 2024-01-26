@@ -1391,7 +1391,12 @@ void AdminService::change_program(const std::string &path, bool reload) {
     m_current_program.clear();
   }
 
-  if (WorkerManager::get().start(m_concurrency)) {
+  bool started = false;
+  try {
+    started = WorkerManager::get().start(m_concurrency);
+  } catch (std::runtime_error &) {}
+
+  if (started) {
     if (new_codebase != old_codebase) delete old_codebase;
     if (name != "/") m_current_codebase = name;
     m_current_program = m_current_codebase;

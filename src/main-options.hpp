@@ -48,8 +48,8 @@ public:
   std::string filename;
   bool        version = false;
   bool        help = false;
+  bool        file = false;
   bool        eval = false;
-  bool        verify = false;
   bool        no_graph = false;
   bool        no_status = false;
   bool        no_metrics = false;
