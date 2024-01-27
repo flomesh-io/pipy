@@ -589,6 +589,7 @@ void MetricData::Deserializer::number(double n) {
         }
         case Level::Kind::SUBS: {
           if (auto sub = level->subs.next()) {
+            sub->has_value = true;
             sub->values[0] = n;
             return;
           }
@@ -607,6 +608,7 @@ void MetricData::Deserializer::number(double n) {
         case Level::Kind::VALUES: {
           int i = level->index++;
           if (i < m_current_entry->dimensions) {
+            level->node->has_value = true;
             level->node->values[i] = n;
             return;
           }
