@@ -84,6 +84,7 @@ public:
   void decompress_http();
   void deframe(pjs::Object *states);
   void demux(pjs::Object *options);
+  void demux_fcgi();
   void demux_http(pjs::Object *options);
   void deposit_message(const pjs::Value &filename, pjs::Object *options);
   void detect_protocol(pjs::Function *callback);
@@ -110,6 +111,7 @@ public:
   void link_async(pjs::Function *name = nullptr);
   void loop();
   void mux(pjs::Function *session_selector, pjs::Object *options);
+  void mux_fcgi(pjs::Function *session_selector, pjs::Object *options);
   void mux_http(pjs::Function *session_selector, pjs::Object *options);
   void pack(int batch_size, pjs::Object *options);
   void print();

@@ -254,6 +254,7 @@ add_executable(pipy
   src/filters/dummy.cpp
   src/filters/dump.cpp
   src/filters/exec.cpp
+  src/filters/fcgi.cpp
   src/filters/fork.cpp
   src/filters/handle.cpp
   src/filters/http.cpp

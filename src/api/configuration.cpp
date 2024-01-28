@@ -50,6 +50,7 @@
 #include "filters/dummy.hpp"
 #include "filters/dump.hpp"
 #include "filters/exec.hpp"
+#include "filters/fcgi.hpp"
 #include "filters/fork.hpp"
 #include "filters/http.hpp"
 #include "filters/insert.hpp"
@@ -233,6 +234,10 @@ void FilterConfigurator::demux(pjs::Object *options) {
   require_sub_pipeline(append_filter(new Demux(options)));
 }
 
+void FilterConfigurator::demux_fcgi() {
+  require_sub_pipeline(append_filter(new fcgi::Demux()));
+}
+
 void FilterConfigurator::demux_http(pjs::Object *options) {
   require_sub_pipeline(append_filter(new http::Demux(options)));
 }
@@ -346,6 +351,14 @@ void FilterConfigurator::mux(pjs::Function *session_selector, pjs::Object *optio
     require_sub_pipeline(append_filter(new Mux(session_selector, options->as<pjs::Function>())));
   } else {
     require_sub_pipeline(append_filter(new Mux(session_selector, options)));
+  }
+}
+
+void FilterConfigurator::mux_fcgi(pjs::Function *session_selector, pjs::Object *options) {
+  if (options && options->is_function()) {
+    require_sub_pipeline(append_filter(new fcgi::Mux(session_selector, options->as<pjs::Function>())));
+  } else {
+    require_sub_pipeline(append_filter(new fcgi::Mux(session_selector, options)));
   }
 }
 
@@ -1478,6 +1491,17 @@ template<> void ClassDef<FilterConfigurator>::init() {
     }
   });
 
+  // FilterConfigurator.demuxFastCGI
+  method("demuxFastCGI", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
+    try {
+      config->demux_fcgi();
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
   // FilterConfigurator.demuxQueue
   method("demuxQueue", [](Context &ctx, Object *thiz, Value &result) {
     auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
@@ -1922,6 +1946,26 @@ template<> void ClassDef<FilterConfigurator>::init() {
         ctx.try_arguments(0, &options)
       ) {
         config->mux(session_selector, options);
+      } else {
+        ctx.error_argument_type(0, "a function");
+      }
+      result.set(thiz);
+    } catch (std::runtime_error &err) {
+      ctx.error(err);
+    }
+  });
+
+  // FilterConfigurator.muxFastCGI
+  method("muxFastCGI", [](Context &ctx, Object *thiz, Value &result) {
+    auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
+    try {
+      Function *session_selector = nullptr;
+      Object *options = nullptr;
+      if (
+        ctx.try_arguments(0, &session_selector, &options) ||
+        ctx.try_arguments(0, &options)
+      ) {
+        config->mux_fcgi(session_selector, options);
       } else {
         ctx.error_argument_type(0, "a function");
       }
