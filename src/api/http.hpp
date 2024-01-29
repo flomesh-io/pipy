@@ -53,6 +53,7 @@ class MessageHead : public pjs::ObjectTemplate<MessageHead> {
 public:
   pjs::Ref<pjs::Str> protocol;
   pjs::Ref<pjs::Object> headers;
+  pjs::Ref<pjs::Object> headerNames;
 
   bool is_final() const;
   bool is_final(pjs::Str *header_connection) const;

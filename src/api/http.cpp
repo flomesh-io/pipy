@@ -772,12 +772,13 @@ template<> void EnumDef<StringConstants>::init() {
 }
 
 template<> void ClassDef<MessageHead>::init() {
-  field<pjs::Ref<pjs::Str>>("protocol", [](MessageHead *obj) { return &obj->protocol; });
-  field<pjs::Ref<pjs::Object>>("headers", [](MessageHead *obj) { return &obj->headers; });
+  field<Ref<Str>>("protocol", [](MessageHead *obj) { return &obj->protocol; });
+  field<Ref<Object>>("headers", [](MessageHead *obj) { return &obj->headers; });
+  field<Ref<Object>>("headerNames", [](MessageHead *obj) { return &obj->headerNames; });
 }
 
 template<> void ClassDef<MessageTail>::init() {
-  field<pjs::Ref<pjs::Object>>("headers", [](MessageTail *obj) { return &obj->headers; });
+  field<Ref<Object>>("headers", [](MessageTail *obj) { return &obj->headers; });
   field<int>("headSize", [](MessageTail *obj) { return &obj->headSize; });
   field<int>("bodySize", [](MessageTail *obj) { return &obj->bodySize; });
 }
@@ -785,23 +786,23 @@ template<> void ClassDef<MessageTail>::init() {
 template<> void ClassDef<RequestHead>::init() {
   super<MessageHead>();
   ctor();
-  field<pjs::Ref<pjs::Str>>("method", [](RequestHead *obj) { return &obj->method; });
-  field<pjs::Ref<pjs::Str>>("scheme", [](RequestHead *obj) { return &obj->scheme; });
-  field<pjs::Ref<pjs::Str>>("authority", [](RequestHead *obj) { return &obj->authority; });
-  field<pjs::Ref<pjs::Str>>("path", [](RequestHead *obj) { return &obj->path; });
+  field<Ref<Str>>("method", [](RequestHead *obj) { return &obj->method; });
+  field<Ref<Str>>("scheme", [](RequestHead *obj) { return &obj->scheme; });
+  field<Ref<Str>>("authority", [](RequestHead *obj) { return &obj->authority; });
+  field<Ref<Str>>("path", [](RequestHead *obj) { return &obj->path; });
 }
 
 template<> void ClassDef<ResponseHead>::init() {
   super<MessageHead>();
   ctor();
   field<int>("status", [](ResponseHead *obj) { return &obj->status; });
-  field<pjs::Ref<pjs::Str>>("statusText", [](ResponseHead *obj) { return &obj->statusText; });
+  field<Ref<Str>>("statusText", [](ResponseHead *obj) { return &obj->statusText; });
 }
 
 template<> void ClassDef<Agent>::init() {
   ctor([](Context &ctx) -> Object* {
-    pjs::Str *target;
-    pjs::Object *options = nullptr;
+    Str *target;
+    Object *options = nullptr;
     if (!ctx.arguments(1, &target, &options)) return nullptr;
     try {
       return Agent::make(target, options);
@@ -839,8 +840,8 @@ template<> void ClassDef<Constructor<Agent>>::init() {
 
 template<> void ClassDef<Directory>::init() {
   ctor([](Context &ctx) -> Object* {
-    pjs::Str *path;
-    pjs::Object *options = nullptr;
+    Str *path;
+    Object *options = nullptr;
     if (!ctx.arguments(1, &path, &options)) return nullptr;
     try {
       return Directory::make(path->str(), options);

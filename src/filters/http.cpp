@@ -290,7 +290,7 @@ static auto read_str(Data::Reader &dr, char ending, const StrMap &strmap, char *
   }
 }
 
-static auto read_str_lower(Data::Reader &dr, char ending, const StrMap &strmap, char *buf) -> pjs::Str* {
+static auto read_str_lower(Data::Reader &dr, char ending, const StrMap &strmap, char *buf, char *buf_lower) -> pjs::Str* {
   size_t i = 0;
   StrMap::Parser p(strmap);
   pjs::Str *found = nullptr;
@@ -301,12 +301,13 @@ static auto read_str_lower(Data::Reader &dr, char ending, const StrMap &strmap, 
       if (found && found != pjs::Str::empty) {
         return found;
       } else {
-        return i > 0 ? pjs::Str::make(buf, i) : nullptr;
+        return i > 0 ? pjs::Str::make(buf_lower, i) : nullptr;
       }
     }
     if (c == ' ' && !i) continue;
-    c = std::tolower(c);
-    found = p.parse(c);
+    auto l = std::tolower(c);
+    found = p.parse(l);
+    buf_lower[i] = l;
     buf[i++] = c;
   }
 }
@@ -510,6 +511,7 @@ void Decoder::on_event(Event *evt) {
           }
         }
         m_head->headers = pjs::Object::make();
+        m_head->headerNames = pjs::Object::make();
         m_header_transfer_encoding = nullptr;
         m_header_content_length = nullptr;
         m_header_connection = nullptr;
@@ -521,11 +523,12 @@ void Decoder::on_event(Event *evt) {
       case HEADER_EOL: {
         auto len = m_head_buffer.size();
         pjs::vl_array<char, DATA_CHUNK_SIZE> buf(len);
+        pjs::vl_array<char, DATA_CHUNK_SIZE> buf_lower(len);
         m_head_size += len;
         if (len > 2) {
           Data::Reader dr(m_head_buffer);
-          pjs::Ref<pjs::Str> key(read_str_lower(dr, ':', s_strmap_headers, buf));
-          pjs::Ref<pjs::Str> val(read_str(dr, '\r', s_strmap_header_values, buf));
+          pjs::Ref<pjs::Str> key(read_str_lower(dr, ':', s_strmap_headers, buf, buf_lower));
+          pjs::Ref<pjs::Str> val(read_str(dr, '\r', s_strmap_header_values, buf_lower));
           if (!key || !val) { error(); break; }
           auto headers = m_head->headers.get();
           if (key == s_set_cookie) {
@@ -548,6 +551,12 @@ void Decoder::on_event(Event *evt) {
             else if (key == s_connection) { m_header_connection = v; v = nullptr; }
             else if (key == s_upgrade) m_header_upgrade = v;
             if (v) headers->set(key, v);
+          }
+          if (auto names = m_head->headerNames.get()) {
+            pjs::Ref<pjs::Str> name(pjs::Str::make(buf, key->size()));
+            if (name != key) {
+              names->set(key, name.get());
+            }
           }
           state = HEADER;
           m_head_buffer.clear();
@@ -834,6 +843,7 @@ void Encoder::output_head() {
   }
 
   if (auto headers = m_head->headers.get()) {
+    auto names = m_head->headerNames.get();
     headers->iterate_all(
       [&](pjs::Str *k, pjs::Value &v) {
         if (k == s_keep_alive) return;
@@ -852,11 +862,20 @@ void Encoder::output_head() {
         } else if (k == s_upgrade) {
           if (v.is_string()) m_header_upgrade = v.s();
         }
+        pjs::Ref<pjs::Str> name = k;
+        if (names) {
+          pjs::Value v;
+          if (names->get(k, v)) {
+            auto s = v.to_string();
+            name = s;
+            s->release();
+          }
+        }
         if (k == s_set_cookie && v.is_array()) {
           v.as<pjs::Array>()->iterate_all(
             [&](pjs::Value &v, int) {
               auto s = v.to_string();
-              db.push(k->str());
+              db.push(name->str());
               db.push(": ");
               db.push(s->str());
               db.push("\r\n");
@@ -864,7 +883,7 @@ void Encoder::output_head() {
             }
           );
         } else {
-          db.push(k->str());
+          db.push(name->str());
           db.push(": ");
           auto s = v.to_string();
           db.push(s->str());
