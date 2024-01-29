@@ -29,32 +29,139 @@
 #include "mux.hpp"
 #include "demux.hpp"
 #include "data.hpp"
+#include "table.hpp"
+#include "deframer.hpp"
 
 namespace pipy {
 namespace fcgi {
 
-class MessageHead : public pjs::ObjectTemplate<MessageHead> {
-public:
-  int version = 1;
-  int requestID = 0;
-};
-
-class RequestHead : public pjs::ObjectTemplate<RequestHead, MessageHead> {
+class RequestHead : public pjs::ObjectTemplate<RequestHead> {
 public:
   int role = 1;
   int flags = 0;
   pjs::Ref<pjs::Array> params;
 };
 
-class ResponseHead : public pjs::ObjectTemplate<ResponseHead, MessageHead> {
+class ResponseTail : public pjs::ObjectTemplate<ResponseTail> {
 public:
   int appStatus = 0;
   int protocolStatus = 0;
+  pjs::Ref<Data> stderr_data;
 };
 
-class ResponseTail : public pjs::ObjectTemplate<ResponseTail> {
+//
+// Endpoint
+//
+
+class Endpoint : public Deframer {
+protected:
+
+  //
+  // Endpoint::Request
+  //
+
+  class Request {
+  public:
+    auto id() const -> int { return m_id; }
+
+  protected:
+    Request(int id)
+      : m_id(id) {}
+
+  private:
+    int m_id;
+  };
+
+  virtual void on_output(Event *evt) = 0;
+  virtual void on_record(int type, int request_id, Data &body) = 0;
+  virtual auto on_new_request(int id) -> Request* = 0;
+  virtual void on_delete_request(Request *request) = 0;
+
+  void reset();
+  auto request(int id) -> Request*;
+  auto request_open(int id = 0) -> Request*;
+  void request_close(Request *request);
+  void process_event(Event *evt);
+  void shutdown();
+
+private:
+  enum State {
+    STATE_RECORD_HEADER,
+    STATE_RECORD_BODY,
+  };
+
+  Table<Request*> m_requests;
+  uint8_t m_header[8];
+  int m_decoding_record_type;
+  int m_decoding_request_id;
+  int m_decoding_padding_length;
+  Data m_decoding_buffer;
+
+  virtual auto on_state(int state, int c) -> int override;
+};
+
+//
+// Client
+//
+
+class Client : public Endpoint, public EventSource {
 public:
-  pjs::Ref<Data> stderr_data;
+  auto begin() -> EventFunction*;
+  void abort(EventFunction *request);
+  void shutdown();
+
+protected:
+  virtual void on_output(Event *evt) override;
+  virtual void on_record(int type, int request_id, Data &body) override;
+  virtual auto on_new_request(int id) -> Endpoint::Request* override;
+  virtual void on_delete_request(Endpoint::Request *request) override;
+
+  //
+  // Client::Request
+  //
+
+  class Request : public pjs::Pooled<Request>, public Endpoint::Request {
+  public:
+    Request(int id) : Endpoint::Request(id) {}
+
+    void receive_end(Data &data);
+    void receive_stdout(Data &data);
+    void receive_stderr(Data &data);
+  };
+};
+
+//
+// Server
+//
+
+class Server : public Endpoint, public EventProxy {
+public:
+  void shutdown();
+
+protected:
+  virtual void on_output(Event *evt) override;
+  virtual void on_record(int type, int request_id, Data &body) override;
+  virtual auto on_new_request(int id) -> Endpoint::Request* override;
+  virtual void on_delete_request(Endpoint::Request *request) override;
+
+  //
+  // Server::Request
+  //
+
+  class Request : public pjs::Pooled<Request>, public Endpoint::Request {
+  public:
+    Request(int id) : Endpoint::Request(id) {}
+
+    void receive_begin(Data &data);
+    void receive_abort();
+    void receive_params(Data &data);
+    void receive_stdin(Data &data);
+    void receive_data(Data &data);
+
+  private:
+    int m_role;
+    int m_flags;
+  };
 };
 
 //
@@ -106,7 +213,7 @@ private:
   // Mux::Session
   //
 
-  class Session : public pjs::Pooled<Session, MuxSession> {
+  class Session : public pjs::Pooled<Session, MuxSession>, public Client {
     virtual void mux_session_open(MuxSource *source) override;
     virtual auto mux_session_open_stream(MuxSource *source) -> EventFunction* override;
     virtual void mux_session_close_stream(EventFunction *stream) override;
