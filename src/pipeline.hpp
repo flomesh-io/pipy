@@ -154,14 +154,6 @@ public:
   void chain(Input *input) { EventProxy::chain(input); }
   auto start(int argc = 0, pjs::Value *argv = nullptr) -> Pipeline*;
 
-private:
-  Pipeline(PipelineLayout *layout);
-  ~Pipeline();
-
-  virtual void on_input(Event *evt) override;
-  virtual void on_reply(Event *evt) override;
-  virtual void on_auto_release() override;
-
   //
   // Pipeline::StartingPromiseCallback
   //
@@ -175,6 +167,14 @@ private:
   public:
     void close() { m_pipeline = nullptr; }
   };
+
+private:
+  Pipeline(PipelineLayout *layout);
+  ~Pipeline();
+
+  virtual void on_input(Event *evt) override;
+  virtual void on_reply(Event *evt) override;
+  virtual void on_auto_release() override;
 
   PipelineLayout* m_layout;
   Pipeline* m_next_free = nullptr;
