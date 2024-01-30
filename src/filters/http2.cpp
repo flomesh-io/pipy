@@ -83,6 +83,7 @@ thread_local static const pjs::ConstStr s_upgrade("upgrade");
 thread_local static const pjs::ConstStr s_te("te");
 thread_local static const pjs::ConstStr s_trailers("trailers");
 thread_local static const pjs::ConstStr s_content_length("content-length");
+thread_local static const pjs::ConstStr s_set_cookie("set-cookie");
 
 static struct {
   const char *name;
@@ -1038,7 +1039,23 @@ bool HeaderDecoder::add_field(pjs::Str *name, pjs::Str *value) {
       headers = pjs::Object::make();
       m_head->headers = headers;
     }
-    headers->set(name, value);
+    if (name == s_set_cookie) {
+      pjs::Value v;
+      if (headers->get(name, v)) {
+        if (v.is_array()) {
+          v.as<pjs::Array>()->push(value);
+        } else {
+          auto a = pjs::Array::make(2);
+          a->set(0, v);
+          a->set(1, value);
+          headers->set(name, a);
+        }
+      } else {
+        headers->set(name, value);
+      }
+    } else {
+      headers->set(name, value);
+    }
     m_is_pseudo_end = true;
   }
   return true;
@@ -1159,9 +1176,19 @@ void HeaderEncoder::encode(bool is_response, bool is_tail, pjs::Object *head, Da
           if (k == s_proxy_connection) return;
           if (k == s_transfer_encoding) return;
           if (k == s_upgrade) return;
-          auto s = v.to_string();
-          encode_header_field(db, k, s);
-          s->release();
+          if (k == s_set_cookie && v.is_array()) {
+            v.as<pjs::Array>()->iterate_all(
+              [&](pjs::Value &v, int) {
+                auto s = v.to_string();
+                encode_header_field(db, k, s);
+                s->release();
+              }
+            );
+          } else {
+            auto s = v.to_string();
+            encode_header_field(db, k, s);
+            s->release();
+          }
         }
       );
     }
