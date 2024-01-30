@@ -945,13 +945,11 @@ template<> void ClassDef<FilterConfigurator>::init() {
     try {
       Object *starting_events = nullptr;
       if (!ctx.arguments(1, &starting_events)) return;
-      if (!starting_events &&
-          !starting_events->is<Event>() &&
-          !starting_events->is<Message>() &&
-          !starting_events->is<Array>() &&
-          !starting_events->is<Function>()
-      ) {
-        ctx.error_argument_type(1, "an Event, a Message, a function or an array");
+      if (!starting_events || (
+          !starting_events->is<Function>() &&
+          !Message::is_events(starting_events)
+      )) {
+        ctx.error_argument_type(0, "an Event, a Message, a function or an array");
         return;
       }
       config->on_start(starting_events);
@@ -2480,12 +2478,13 @@ template<> void ClassDef<Configuration>::init() {
       int i = 0;
       if (ctx.get(i, interval)) i++;
       if (ctx.get(i, starting_events)) {
-        if (!starting_events &&
-            !starting_events->is<Function>() &&
-            !Message::is_events(starting_events)
-        ) {
-          ctx.error_argument_type(i, "an Event, a Message, a function or an array of Events or Messages");
-          return;
+        if (starting_events) {
+          if (!starting_events->is<Function>() &&
+              !Message::is_events(starting_events)
+          ) {
+            ctx.error_argument_type(i, "an Event, a Message, a function or an array of Events or Messages");
+            return;
+          }
         }
       } else if (!ctx.is_undefined(i)) {
         ctx.error_argument_type(i, "a string or an object");
@@ -2519,12 +2518,13 @@ template<> void ClassDef<Configuration>::init() {
     auto config = thiz->as<Configuration>();
     Object *starting_events = nullptr;
     if (!ctx.arguments(0, &starting_events)) return;
-    if (!starting_events &&
-        !starting_events->is<Function>() &&
-        !Message::is_events(starting_events)
-    ) {
-      ctx.error_argument_type(0, "an Event, a Message, a function or an array of Events or Messages");
-      return;
+    if (starting_events) {
+      if (!starting_events->is<Function>() &&
+          !Message::is_events(starting_events)
+      ) {
+        ctx.error_argument_type(0, "an Event, a Message, a function or an array of Events or Messages");
+        return;
+      }
     }
     try {
       config->exit();
