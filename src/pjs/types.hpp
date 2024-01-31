@@ -3569,6 +3569,7 @@ public:
   }
 
   void set(int i, const Value &v) {
+    if (i < 0) return;
     auto old_size = m_data->size();
     auto new_size = 1 << power(i + 1);
     if (new_size > MAX_SIZE) return; // TODO: report error
@@ -3579,10 +3580,8 @@ public:
       for (int i = 0; i < old_size; i++) new_values[i] = std::move(old_values[i]);
       m_data->recycle();
       m_data = data;
-      new_values[i] = v;
-    } else if (i >= 0) {
-      m_data->at(i) = v;
     }
+    m_data->at(i) = v;
     m_size = std::max(m_size, i + 1);
   }
 

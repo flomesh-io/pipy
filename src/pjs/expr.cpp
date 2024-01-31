@@ -439,7 +439,8 @@ bool ArrayLiteral::eval(Context &ctx, Value &result) {
       Value v; if (!e->eval(ctx, v)) return false;
       if (v.is_string()) {
         auto s = v.s();
-        obj->set(i + s->length() - 1, Value::undefined);
+        auto n = s->length();
+        if (n > 0) obj->set(i + n - 1, Value::undefined);
         Utf8Decoder decoder(
           [&](int c) {
             uint32_t code = c;
@@ -450,7 +451,7 @@ bool ArrayLiteral::eval(Context &ctx, Value &result) {
       } else if (v.is_array()) {
         auto a = v.as<Array>();
         auto n = a->length();
-        obj->set(i + n - 1, Value::undefined);
+        if (n > 0) obj->set(i + n - 1, Value::undefined);
         for (int j = 0; j < n; j++) {
           Value v; a->get(j, v);
           obj->set(i++, v);
