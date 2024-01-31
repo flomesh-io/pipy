@@ -29,6 +29,7 @@
 #include "mux.hpp"
 #include "demux.hpp"
 #include "data.hpp"
+#include "scarce.hpp"
 #include "table.hpp"
 #include "list.hpp"
 #include "deframer.hpp"
@@ -48,6 +49,40 @@ public:
   int appStatus = 0;
   int protocolStatus = 0;
   pjs::Ref<Data> stderr_data;
+};
+
+//
+// ParamDecoder
+//
+
+class ParamDecoder : public Deframer {
+public:
+  ParamDecoder(pjs::Object *output = nullptr) { reset(output); }
+
+  void reset(pjs::Object *output);
+
+private:
+  enum State {
+    STATE_NAME_LEN,
+    STATE_NAME_LEN32,
+    STATE_VALUE_LEN,
+    STATE_VALUE_LEN32,
+    STATE_NAME,
+    STATE_VALUE,
+  };
+
+  virtual auto on_state(int state, int c) -> int override;
+
+  pjs::Ref<pjs::Object> m_params;
+  pjs::Ref<Data> m_name;
+  pjs::Ref<Data> m_value;
+  int m_name_length;
+  int m_value_length;
+  uint8_t m_buffer[4];
+
+  auto start_name() -> int;
+  auto start_value() -> int;
+  auto end_value() -> int;
 };
 
 //
@@ -81,11 +116,12 @@ protected:
 
   void reset();
   auto request(int id) -> Request*;
-  auto request_open(int id = 0) -> Request*;
+  auto request_open(int id) -> Request*;
   void request_close(Request *request);
   void process_event(Event *evt);
   void send_record(int type, int request_id, const void *body, size_t size);
   void send_record(int type, int request_id, Data &body);
+  void send_end();
   void shutdown();
 
 private:
@@ -102,14 +138,16 @@ private:
     int &padding
   );
 
-  Table<Request*> m_requests;
-  List<Request> m_request_list;
+  List<Request> m_requests;
+  ScarcePointerArray<Request> m_request_map;
   uint8_t m_header[8];
   int m_decoding_record_type;
   int m_decoding_request_id;
   int m_decoding_padding_length;
   pjs::Ref<Data> m_decoding_buffer;
   Data m_sending_buffer;
+  bool m_sending_eos = false;
+  bool m_sending_ended = false;
 
   virtual auto on_state(int state, int c) -> int override;
   virtual void on_flush() override;
@@ -160,29 +198,33 @@ protected:
 
     virtual void on_event(Event *evt) override;
   };
+
+  Table<Request*> m_request_id_pool;
 };
 
 //
 // Server
 //
 
-class Server : public Endpoint, public EventProxy {
+class Server : public Endpoint, public DemuxSession {
 public:
+  void reset();
   void shutdown();
 
 protected:
+  virtual void on_event(Event *evt) override;
   virtual void on_record(int type, int request_id, Data &body) override;
   virtual auto on_new_request(int id) -> Endpoint::Request* override;
   virtual void on_delete_request(Endpoint::Request *request) override;
-  virtual void on_output(Event *evt) override;
 
   //
   // Server::Request
   //
 
-  class Request : public pjs::Pooled<Request>, public Endpoint::Request {
+  class Request : public pjs::Pooled<Request>, public Endpoint::Request, public EventTarget {
   public:
-    Request(int id) : Endpoint::Request(id) {}
+    Request(Server *server, int id) : Endpoint::Request(id), m_server(server) {}
+    ~Request();
 
     void receive_begin(Data &data);
     void receive_abort();
@@ -191,8 +233,19 @@ protected:
     void receive_data(Data &data);
 
   private:
+    Server* m_server;
+    EventFunction* m_stream = nullptr;
     int m_role;
     int m_flags;
+    bool m_keep_conn;
+    pjs::Ref<pjs::Object> m_params;
+    ParamDecoder m_param_decoder;
+    bool m_request_started = false;
+    bool m_request_ended = false;
+    bool m_response_started = false;
+    bool m_response_ended = false;
+
+    virtual void on_event(Event *evt) override;
   };
 };
 
@@ -200,7 +253,7 @@ protected:
 // Demux
 //
 
-class Demux : public Filter, protected DemuxSession {
+class Demux : public Filter, public Server {
 public:
   Demux();
 
@@ -219,6 +272,7 @@ protected:
   virtual auto on_demux_open_stream() -> EventFunction* override;
   virtual void on_demux_close_stream(EventFunction *stream) override;
   virtual void on_demux_complete() override;
+  virtual void on_output(Event *evt) override;
 };
 
 //

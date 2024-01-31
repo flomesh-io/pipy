@@ -90,6 +90,83 @@ typedef struct {
 } FCGI_UnknownTypeBody;
 
 //
+// ParamDecoder
+//
+
+void ParamDecoder::reset(pjs::Object *output) {
+  m_params = output;
+  Deframer::reset(STATE_NAME_LEN);
+}
+
+auto ParamDecoder::on_state(int state, int c) -> int {
+  switch (state) {
+    case STATE_NAME_LEN:
+      if (c & 0x80) {
+        m_buffer[0] = c & 0x7f;
+        Deframer::read(3, m_buffer + 1);
+        return STATE_NAME_LEN32;
+      } else {
+        m_name_length = c & 0x7f;
+        return STATE_VALUE_LEN;
+      }
+    case STATE_NAME_LEN32:
+      m_name_length = (
+        ((uint32_t)m_buffer[0] << 24) |
+        ((uint32_t)m_buffer[1] << 16) |
+        ((uint32_t)m_buffer[2] <<  8) |
+        ((uint32_t)m_buffer[3] <<  0)
+      );
+      return STATE_VALUE_LEN;
+    case STATE_VALUE_LEN:
+      if (c & 0x80) {
+        m_buffer[0] = c & 0x7f;
+        Deframer::read(3, m_buffer + 1);
+        return STATE_VALUE_LEN32;
+      } else {
+        m_value_length = c & 0x7f;
+        return start_name();
+      }
+    case STATE_VALUE_LEN32: {
+      m_value_length = (
+        ((uint32_t)m_buffer[0] << 24) |
+        ((uint32_t)m_buffer[1] << 16) |
+        ((uint32_t)m_buffer[2] <<  8) |
+        ((uint32_t)m_buffer[3] <<  0)
+      );
+      return start_name();
+    }
+    case STATE_NAME: return start_value();
+    case STATE_VALUE: return end_value();
+    default: return -1;
+  }
+}
+
+auto ParamDecoder::start_name() -> int {
+  m_name = Data::make();
+  m_value = Data::make();
+  if (m_name_length > 0) {
+    Deframer::read(m_name_length, m_name);
+    return STATE_NAME;
+  }
+  return start_value();
+}
+
+auto ParamDecoder::start_value() -> int {
+  if (m_value_length > 0) {
+    Deframer::read(m_value_length, m_value);
+    return STATE_VALUE;
+  }
+  return end_value();
+}
+
+auto ParamDecoder::end_value() -> int {
+  pjs::Ref<pjs::Str> k = pjs::Str::make(m_name->to_string());
+  pjs::Ref<pjs::Str> v = pjs::Str::make(m_value->to_string());
+  m_params->set(k, v.get());
+  return STATE_NAME_LEN;
+}
+
+//
 // Endpoint
 //
 
@@ -97,30 +174,30 @@ void Endpoint::reset() {
   Deframer::reset(STATE_RECORD_HEADER);
   Deframer::pass_all(false);
   Deframer::read(sizeof(FCGI_Header), m_header);
-  for (auto r = m_request_list.head(); r; r = r->next()) {
-    m_requests.free(r->id());
-    on_delete_request(r);
+  for (auto r = m_requests.head(); r; ) {
+    auto req = r; r = r->next();
+    m_request_map.set(req->id(), nullptr);
+    on_delete_request(req);
   }
-  m_request_list.clear();
+  m_requests.clear();
   m_decoding_buffer = nullptr;
+  m_sending_ended = false;
 }
 
 auto Endpoint::request(int id) -> Request* {
-  auto p = m_requests.get(id);
-  return p ? *p : nullptr;
+  return m_request_map.get(id);
 }
 
 auto Endpoint::request_open(int id) -> Request* {
-  if (!id) id = m_requests.alloc();
   auto r = on_new_request(id);
-  auto p = m_requests.get(id);
-  m_request_list.push(r);
-  return (*p = r);
+  m_request_map.set(id, r);
+  m_requests.push(r);
+  return r;
 }
 
 void Endpoint::request_close(Request *request) {
-  m_request_list.remove(request);
-  m_requests.free(request->id());
+  m_requests.remove(request);
+  m_request_map.set(request->id(), nullptr);
   on_delete_request(request);
 }
 
@@ -151,7 +228,12 @@ void Endpoint::send_record(int type, int request_id, Data &body) {
   FlushTarget::need_flush();
 }
 
-void Endpoint::shutdown() {
+void Endpoint::send_end() {
+  m_sending_eos = true;
+}
+
+void Endpoint::shutdown()
+{
 }
 
 void Endpoint::write_record_header(
@@ -206,6 +288,10 @@ void Endpoint::on_flush() {
   if (!m_sending_buffer.empty()) {
     on_output(Data::make(std::move(m_sending_buffer)));
   }
+  if (m_sending_eos && !m_sending_ended) {
+    m_sending_ended = true;
+    on_output(StreamEnd::make());
+  }
 }
 
 //
@@ -213,11 +299,15 @@ void Endpoint::on_flush() {
 //
 
 auto Client::open_request() -> EventFunction* {
-  return static_cast<Request*>(Endpoint::request_open());
+  auto id = m_request_id_pool.alloc();
+  auto *p = m_request_id_pool.get(id);
+  return (*p = static_cast<Request*>(Endpoint::request_open(id)));
 }
 
 void Client::close_request(EventFunction *request) {
-  Endpoint::request_close(static_cast<Request*>(request));
+  auto r = static_cast<Request*>(request);
+  m_request_id_pool.free(r->id());
+  Endpoint::request_close(r);
 }
 
 void Client::shutdown() {
@@ -396,7 +486,16 @@ void Client::Request::on_event(Event *evt) {
 // Server
 //
 
+void Server::reset() {
+  Endpoint::reset();
+}
+
 void Server::shutdown() {
+  Endpoint::shutdown();
+}
+
+void Server::on_event(Event *evt) {
+  Endpoint::process_event(evt);
 }
 
 void Server::on_record(int type, int request_id, Data &body) {
@@ -410,6 +509,7 @@ void Server::on_record(int type, int request_id, Data &body) {
     case FCGI_ABORT_REQUEST:
       if (auto r = request(request_id)) {
         static_cast<Request*>(r)->receive_abort();
+        request_close(r);
       }
       break;
     case FCGI_PARAMS:
@@ -432,39 +532,111 @@ void Server::on_record(int type, int request_id, Data &body) {
 }
 
 auto Server::on_new_request(int id) -> Endpoint::Request* {
-  return new Request(id);
+  return new Request(this, id);
 }
 
 void Server::on_delete_request(Endpoint::Request *request) {
   delete static_cast<Request*>(request);
 }
 
-void Server::on_output(Event *evt) {
-  EventFunction::output(evt);
-}
-
 //
 // Server::Request
 //
 
+Server::Request::~Request() {
+  if (auto s = m_stream) {
+    m_server->on_demux_close_stream(s);
+  }
+}
+
 void Server::Request::receive_begin(Data &data) {
-  Data buf; data.shift(8, buf);
-  uint8_t bytes[8]; buf.to_bytes(bytes);
-  auto hdr = (const FCGI_BeginRequestBody *)bytes;
-  m_role = ((int)hdr->roleB1 << 8) | hdr->roleB0;
-  m_flags = hdr->flags;
+  if (!m_params) {
+    Data buf; data.shift(8, buf);
+    uint8_t bytes[8]; buf.to_bytes(bytes);
+    auto hdr = (const FCGI_BeginRequestBody *)bytes;
+    m_role = ((int)hdr->roleB1 << 8) | hdr->roleB0;
+    m_flags = hdr->flags;
+    m_keep_conn = hdr->flags & FCGI_KEEP_CONN;
+    m_params = pjs::Object::make();
+    m_param_decoder.reset(m_params);
+  }
 }
 
 void Server::Request::receive_abort() {
+  m_params = nullptr;
 }
 
 void Server::Request::receive_params(Data &data) {
+  if (m_params && !m_request_started) {
+    if (data.size() > 0) {
+      m_param_decoder.deframe(data);
+    } else {
+      auto head = RequestHead::make();
+      head->role = m_role;
+      head->keepAlive = m_keep_conn;
+      head->params = m_params;
+      auto s = m_stream = m_server->on_demux_open_stream();
+      s->chain(EventTarget::input());
+      s->input()->input(MessageStart::make(head));
+      m_request_started = true;
+    }
+  }
 }
 
 void Server::Request::receive_stdin(Data &data) {
+  if (m_request_started && !m_request_ended) {
+    if (data.size() > 0) {
+      m_stream->input()->input(Data::make(std::move(data)));
+    } else {
+      m_request_ended = true;
+      m_stream->input()->input(MessageEnd::make());
+    }
+  }
 }
 
 void Server::Request::receive_data(Data &data) {
+  // TODO: Deal with extra data for the filter role
+}
+
+void Server::Request::on_event(Event *evt) {
+  if (evt->is<MessageStart>()) {
+    if (!m_response_started) {
+      m_response_started = true;
+    }
+  } else if (auto data = evt->as<Data>()) {
+    if (m_response_started && !m_response_ended) {
+      m_server->Endpoint::send_record(FCGI_STDOUT, id(), *data);
+    }
+  } else if (auto me = evt->as<MessageEnd>()) {
+    if (m_response_started && !m_response_ended) {
+      m_response_ended = true;
+      pjs::Ref<ResponseTail> tail = pjs::coerce<ResponseTail>(me->tail());
+      // TODO: Deal with stderr data
+      FCGI_EndRequestBody body;
+      std::memset(&body, 0, sizeof(body));
+      body.appStatusB3 = uint8_t(tail->appStatus >> 24);
+      body.appStatusB2 = uint8_t(tail->appStatus >> 16);
+      body.appStatusB1 = uint8_t(tail->appStatus >>  8);
+      body.appStatusB0 = uint8_t(tail->appStatus >>  0);
+      body.protocolStatus = tail->protocolStatus;
+      m_server->send_record(FCGI_STDOUT, id(), nullptr, 0);
+      m_server->send_record(FCGI_END_REQUEST, id(), &body, sizeof(body));
+      if (!m_keep_conn) m_server->send_end();
+      m_server->on_demux_close_stream(m_stream);
+      m_stream = nullptr;
+    }
+  } else if (evt->is<StreamEnd>()) {
+    if (m_response_started && !m_response_ended) {
+      m_response_ended = true;
+      FCGI_EndRequestBody body;
+      std::memset(&body, 0, sizeof(body));
+      m_server->send_record(FCGI_STDOUT, id(), nullptr, 0);
+      m_server->send_record(FCGI_END_REQUEST, id(), &body, sizeof(body));
+      if (!m_keep_conn) m_server->send_end();
+      m_server->on_demux_close_stream(m_stream);
+      m_stream = nullptr;
+    }
+  }
 }
 
 //
@@ -475,10 +647,13 @@ Demux::Demux()
 {
 }
 
-Demux::Demux(const Demux &r) {
+Demux::Demux(const Demux &r)
+  : Filter(r)
+{
 }
 
-Demux::~Demux() {
+Demux::~Demux()
+{
 }
 
 void Demux::dump(Dump &d) {
@@ -493,12 +668,19 @@ auto Demux::clone() -> Filter* {
 
 void Demux::reset() {
   Filter::reset();
+  Server::reset();
+  m_eos = nullptr;
 }
 
 void Demux::process(Event *evt) {
+  Server::input()->input(evt);
+  if (auto eos = evt->as<StreamEnd>()) {
+    m_eos = eos;
+  }
 }
 
 void Demux::shutdown() {
+  Server::shutdown();
 }
 
 auto Demux::on_demux_open_stream() -> EventFunction* {
@@ -518,6 +700,10 @@ void Demux::on_demux_complete() {
     Filter::output(eos);
     m_eos = nullptr;
   }
+}
+
+void Demux::on_output(Event *evt) {
+  Filter::output(evt);
 }
 
 //
