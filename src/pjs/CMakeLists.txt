@@ -9,5 +9,6 @@ add_executable(pjs
   expr.cpp
   main.cpp
   parser.cpp
+  stmt.cpp
   types.cpp
 )

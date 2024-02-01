@@ -31,10 +31,14 @@
 
 #include <cmath>
 #include <string>
-#include <initializer_list>
+#include <list>
+#include <map>
+#include <vector>
 #include <iostream>
 
 namespace pjs {
+
+class Stmt;
 
 //
 // Expression base
@@ -153,6 +157,20 @@ public:
   };
 
   //
+  // Expr::Scope
+  //
+
+  struct Scope {
+    Scope* parent = nullptr;
+    std::map<Str*, Expr*> variables;
+    std::vector<Str*> variable_names;
+    std::vector<Str*> function_names;
+    std::vector<Expr*> functions;
+    Scope(Scope *p = nullptr) : parent(p) {}
+    bool is_function() const { return !parent; }
+  };
+
+  //
   // Expression base methods
   //
 
@@ -168,6 +186,7 @@ public:
   virtual bool eval(Context &ctx, Value &result) = 0;
   virtual bool assign(Context &ctx, Value &value) { return error(ctx, "cannot assign to a right-value"); }
   virtual bool clear(Context &ctx, Value &result) { return error(ctx, "cannot delete a value"); }
+  virtual void declare(Expr::Scope &scope) {}
   virtual void resolve(Context &ctx, int l = -1, Imports *imports = nullptr) {}
   virtual auto reduce(Reducer &r) -> Reducer::Value* { return r.undefined(); }
   virtual auto reduce_lval(Reducer &r, Reducer::Value *rval) -> Reducer::Value* { return r.undefined(); }
@@ -224,12 +243,6 @@ private:
 
 class Compound : public Expr {
 public:
-  Compound(const std::initializer_list<Expr*> &exprs) {
-    for (auto *e : exprs) {
-      m_exprs.push_back(std::unique_ptr<Expr>(e));
-    }
-  }
-
   Compound(Expr *list, Expr *append) {
     if (auto comp = dynamic_cast<Compound*>(list)) {
       comp->break_down(m_exprs);
@@ -422,6 +435,7 @@ private:
 class FunctionLiteral : public Expr {
 public:
   FunctionLiteral(Expr *inputs, Expr *output);
+  FunctionLiteral(Expr *inputs, Stmt *body);
 
   virtual bool eval(Context &ctx, Value &result) override;
   virtual void resolve(Context &ctx, int l, Imports *imports) override;
@@ -435,8 +449,11 @@ private:
     Expr* unpack = nullptr;
   };
 
+  FunctionLiteral(Expr *inputs, Expr *output, Stmt *body);
+
   std::vector<std::unique_ptr<Expr>> m_inputs;
   std::unique_ptr<Expr> m_output;
+  std::unique_ptr<Stmt> m_body;
   std::list<Parameter> m_parameters;
   size_t m_argc = 0;
   std::vector<pjs::Scope::Variable> m_variables;
@@ -510,6 +527,8 @@ private:
 class Identifier : public Expr {
 public:
   Identifier(const std::string &key) : m_key(Str::make(key)) {}
+
+  auto name() const -> Str* { return m_key; }
 
   Expr* to_string() { return new StringLiteral(m_key->str()); }
   Expr* to_global() { return new Global(m_key->str()); }
@@ -588,13 +607,6 @@ private:
 class Construction : public Expr {
 public:
   Construction(Expr *func) : m_func(func) {}
-
-  Construction(Expr *func, const std::initializer_list<Expr*> &argv) : m_func(func) {
-    for (auto *arg : argv) {
-      m_argv.push_back(std::unique_ptr<Expr>(arg));
-    }
-  }
-
   Construction(Expr *func, std::vector<std::unique_ptr<Expr>> &&argv) : m_func(func), m_argv(std::move(argv)) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
@@ -612,12 +624,6 @@ private:
 
 class Invocation : public Expr {
 public:
-  Invocation(Expr *func, const std::initializer_list<Expr*> &argv) : m_func(func) {
-    for (auto *arg : argv) {
-      m_argv.push_back(std::unique_ptr<Expr>(arg));
-    }
-  }
-
   Invocation(Expr *func, std::vector<std::unique_ptr<Expr>> &&argv) : m_func(func), m_argv(std::move(argv)) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
@@ -636,12 +642,6 @@ private:
 
 class OptionalInvocation : public Expr {
 public:
-  OptionalInvocation(Expr *func, const std::initializer_list<Expr*> &argv) : m_func(func) {
-    for (auto *arg : argv) {
-      m_argv.push_back(std::unique_ptr<Expr>(arg));
-    }
-  }
-
   OptionalInvocation(Expr *func, std::vector<std::unique_ptr<Expr>> &&argv) : m_func(func), m_argv(std::move(argv)) {}
 
   virtual bool eval(Context &ctx, Value &result) override;
@@ -1550,7 +1550,6 @@ private:
 //
 
 inline Expr* discard(Expr *x) { return new expr::Discard(x); }
-inline Expr* compound(const std::initializer_list<Expr*> &exprs) { return new expr::Compound(exprs); }
 inline Expr* compound(Expr *list, Expr *append) { return new expr::Compound(list, append); }
 inline Expr* concat(std::list<std::unique_ptr<Expr>> &&list) { return new expr::Concatenation(std::move(list)); }
 inline Expr* undefined() { return new expr::Undefined; }
@@ -1567,12 +1566,9 @@ inline Expr* local(const std::string &s) { return new expr::Local(s); }
 inline Expr* identifier(const std::string &s) { return new expr::Identifier(s); }
 inline Expr* prop(Expr *a, Expr *b) { return new expr::Property(a, b); }
 inline Expr* construct(Expr *f) { return new expr::Construction(f); }
-inline Expr* construct(Expr *f, const std::initializer_list<Expr*> &argv) { return new expr::Construction(f, argv); }
 inline Expr* construct(Expr *f, std::vector<std::unique_ptr<Expr>> &&argv) { return new expr::Construction(f, std::move(argv)); }
-inline Expr* call(Expr *f, const std::initializer_list<Expr*> &argv) { return new expr::Invocation(f, argv); }
 inline Expr* call(Expr *f, std::vector<std::unique_ptr<Expr>> &&argv) { return new expr::Invocation(f, std::move(argv)); }
 inline Expr* opt_prop(Expr *a, Expr *b) { return new expr::OptionalProperty(a, b); }
-inline Expr* opt_call(Expr *f, const std::initializer_list<Expr*> &argv) { return new expr::OptionalInvocation(f, argv); }
 inline Expr* opt_call(Expr *f, std::vector<std::unique_ptr<Expr>> &&argv) { return new expr::OptionalInvocation(f, std::move(argv)); }
 inline Expr* pos(Expr *x) { return new expr::Plus(x); }
 inline Expr* neg(Expr *x) { return new expr::Negation(x); }

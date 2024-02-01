@@ -2139,11 +2139,11 @@ private:
   }
 
   Instance* m_instance;
+  Scope* m_prev;
+  Scope* m_next;
   Ref<Scope> m_parent;
   Data* m_data;
   Variable* m_variables;
-  Scope* m_prev;
-  Scope* m_next;
 
   friend class RefCount<Scope>;
   friend class Instance;

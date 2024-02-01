@@ -24,6 +24,7 @@
  */
 
 #include "expr.hpp"
+#include "stmt.hpp"
 
 namespace pjs {
 
@@ -486,7 +487,13 @@ void ArrayLiteral::dump(std::ostream &out, const std::string &indent) {
 // FunctionLiteral
 //
 
-FunctionLiteral::FunctionLiteral(Expr *inputs, Expr *output) : m_output(output) {
+FunctionLiteral::FunctionLiteral(Expr *inputs, Expr *output)
+  : FunctionLiteral(inputs, output, nullptr) {}
+
+FunctionLiteral::FunctionLiteral(Expr *inputs, Stmt *body)
+  : FunctionLiteral(inputs, nullptr, body) {}
+
+FunctionLiteral::FunctionLiteral(Expr *inputs, Expr *output, Stmt *body) : m_output(output), m_body(body) {
   if (inputs) {
     if (auto comp = dynamic_cast<Compound*>(inputs)) {
       comp->break_down(m_inputs);
@@ -547,7 +554,7 @@ void FunctionLiteral::resolve(Context &ctx, int l, Imports *imports) {
     }
   );
 
-  Context fctx(ctx, 0, nullptr, Scope::make(ctx.instance(), ctx.scope(), m_variables.size(), m_variables.data()));
+  Context fctx(ctx, 0, nullptr, pjs::Scope::make(ctx.instance(), ctx.scope(), m_variables.size(), m_variables.data()));
   for (auto &i : m_inputs) i->resolve(fctx, l, imports);
   m_output->resolve(fctx, l, imports);
 }
@@ -560,7 +567,7 @@ auto FunctionLiteral::reduce(Reducer &r) -> Reducer::Value* {
 }
 
 void FunctionLiteral::dump(std::ostream &out, const std::string &indent) {
-  out << indent << "function " << std::endl;
+  out << indent << "function" << std::endl;
   for (const auto &p : m_inputs) {
     p->dump(out, indent + "  ");
   }
