@@ -32,13 +32,12 @@ using namespace pjs;
 class Console;
 
 //
-// Global
+// TestGlobal
 //
 
-class Global : public ObjectTemplate<Global, Object> {
-};
+class TestGlobal : public ObjectTemplate<TestGlobal, Global> {};
 
-template<> void ClassDef<Global>::init() {
+template<> void ClassDef<TestGlobal>::init() {
   ctor();
   variable("console", class_of<Console>());
 }
@@ -47,8 +46,7 @@ template<> void ClassDef<Global>::init() {
 // Console
 //
 
-class Console : public ObjectTemplate<Console, Object> {
-};
+class Console : public ObjectTemplate<Console, Object> {};
 
 template<> void ClassDef<Console>::init() {
   ctor();
@@ -89,7 +87,8 @@ static void test_parser(const char *script) {
   std::cout << "vvvvvvvvvvvvvvvv" << std::endl;
   std::string error;
   int error_line, error_column;
-  auto expr = Parser::parse(script, error, error_line, error_column);
+  Source src; src.content = script;
+  auto expr = Parser::parse(&src, error, error_line, error_column);
   if (expr) {
     expr->dump(std::cout, "");
     delete expr;
@@ -108,7 +107,8 @@ static void test_eval(Context &ctx, const char *script) {
   std::cout << "vvvvvvvvvvvvvvvv" << std::endl;
   std::string error;
   int error_line, error_column;
-  auto expr = Parser::parse(script, error, error_line, error_column);
+  Source src; src.content = script;
+  auto expr = Parser::parse(&src, error, error_line, error_column);
   if (!expr) {
     std::cerr << "Syntax error at line " << error_line << " column " << error_column << ": " << error << std::endl;
     delete expr;
@@ -146,9 +146,10 @@ static void test_eval(Context &ctx, const char *script) {
 //
 
 int main() {
-  auto g = Global::make();
+  auto i = Instance::make();
+  auto g = TestGlobal::make();
 
-  Context ctx(g);
+  Context ctx(i, g);
 
   test_tokenizer("undefined/null/true/false void new delete deleted intypeof in typeof instanceoff.instanceof ");
   test_tokenizer("(0+1)-[2]*{3}/4%5**6&7|8^9~a!b?c:d&&你||好??世界");

@@ -315,6 +315,7 @@ add_executable(pipy
   src/pjs/builtin.cpp
   src/pjs/expr.cpp
   src/pjs/parser.cpp
+  src/pjs/stmt.cpp
   src/pjs/types.cpp
   src/signal.cpp
   src/socket.cpp

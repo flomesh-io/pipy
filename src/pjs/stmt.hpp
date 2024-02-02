@@ -157,7 +157,8 @@ private:
 
 class If : public Stmt {
 public:
-  If(Expr *cond, Stmt *then, Stmt *elze) : m_cond(cond), m_then(then), m_else(elze) {}
+  If(Expr *cond, Stmt *then_clause, Stmt *else_clause)
+    : m_cond(cond), m_then(then_clause), m_else(else_clause) {}
 
   virtual void declare(Expr::Scope &scope) override;
   virtual void resolve(Context &ctx, int l, Expr::Imports *imports) override;
@@ -197,8 +198,6 @@ class Break : public Stmt {
 public:
   Break() {}
 
-  virtual void declare(Expr::Scope &scope) override;
-  virtual void resolve(Context &ctx, int l, Expr::Imports *imports) override;
   virtual void execute(Context &ctx, Result &result) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 };
@@ -218,6 +217,43 @@ public:
 
 private:
   std::unique_ptr<Expr> m_expr;
+};
+
+//
+// Throw
+//
+
+class Throw : public Stmt {
+public:
+  Throw(Expr *expr) : m_expr(expr) {}
+
+  virtual void declare(Expr::Scope &scope) override;
+  virtual void resolve(Context &ctx, int l, Expr::Imports *imports) override;
+  virtual void execute(Context &ctx, Result &result) override;
+  virtual void dump(std::ostream &out, const std::string &indent) override;
+
+private:
+  std::unique_ptr<Expr> m_expr;
+};
+
+//
+// Try
+//
+
+class Try : public Stmt {
+public:
+  Try(Stmt *try_clause, Expr *catch_clause, Stmt *finally_clause)
+    : m_try(try_clause), m_catch(catch_clause), m_finally(finally_clause) {}
+
+  virtual void declare(Expr::Scope &scope) override;
+  virtual void resolve(Context &ctx, int l, Expr::Imports *imports) override;
+  virtual void execute(Context &ctx, Result &result) override;
+  virtual void dump(std::ostream &out, const std::string &indent) override;
+
+private:
+  std::unique_ptr<Stmt> m_try;
+  std::unique_ptr<Expr> m_catch;
+  std::unique_ptr<Stmt> m_finally;
 };
 
 } // namespace stmt

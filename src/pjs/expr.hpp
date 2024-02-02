@@ -163,9 +163,6 @@ public:
   struct Scope {
     Scope* parent = nullptr;
     std::map<Str*, Expr*> variables;
-    std::vector<Str*> variable_names;
-    std::vector<Str*> function_names;
-    std::vector<Expr*> functions;
     Scope(Scope *p = nullptr) : parent(p) {}
     bool is_function() const { return !parent; }
   };

@@ -109,9 +109,9 @@ void Evaluate::dump(std::ostream &out, const std::string &indent) {
 //
 
 void Var::declare(Expr::Scope &scope) {
+  auto name = m_identifier->name();
   auto s = scope.parent;
   while (!s->is_function()) s = s->parent;
-  auto name = m_identifier->name();
   if (s->variables.count(name) == 0) s->variables[name] = nullptr;
   if (m_expr) m_expr->declare(scope);
 }
@@ -126,8 +126,7 @@ void Var::resolve(Context &ctx, int l, Expr::Imports *imports) {
 void Var::execute(Context &ctx, Result &result) {
   if (m_expr) {
     Value val;
-    if (m_expr->eval(ctx, val)) {
-      m_identifier->assign(ctx, val);
+    if (m_expr->eval(ctx, val) && m_identifier->assign(ctx, val)) {
       result.set_done();
     } else {
       result.value.set(Error::make(ctx.error()));
@@ -146,10 +145,10 @@ void Var::dump(std::ostream &out, const std::string &indent) {
 //
 
 void Function::declare(Expr::Scope &scope) {
+  auto name = m_identifier->name();
   auto s = scope.parent;
   while (!s->is_function()) s = s->parent;
-  auto name = m_identifier->name();
-  m_is_definition = s->is_function();
+  m_is_definition = scope.parent->is_function();
   s->variables[name] = (m_is_definition ? m_expr.get() : nullptr);
   m_expr->declare(scope);
 }
@@ -264,10 +263,13 @@ void Switch::execute(Context &ctx, Result &result) {
   while (p != m_cases.end()) {
     if (auto s = p->second.get()) {
       s->execute(ctx, result);
+      if (result.is_break()) break;
       if (!result.is_done()) return;
     }
     p++;
   }
+
+  result.set_done();
 }
 
 void Switch::dump(std::ostream &out, const std::string &indent) {
@@ -325,6 +327,93 @@ void Return::execute(Context &ctx, Result &result) {
 void Return::dump(std::ostream &out, const std::string &indent) {
   out << indent << "return" << std::endl;
   if (m_expr) m_expr->dump(out, indent + "  ");
+}
+
+//
+// Throw
+//
+
+void Throw::declare(Expr::Scope &scope) {
+  if (m_expr) m_expr->declare(scope);
+}
+
+void Throw::resolve(Context &ctx, int l, Expr::Imports *imports) {
+  if (m_expr) m_expr->resolve(ctx, l, imports);
+}
+
+void Throw::execute(Context &ctx, Result &result) {
+  if (m_expr) {
+    if (m_expr->eval(ctx, result.value)) {
+      result.set_throw();
+    } else {
+      result.value.set(Error::make(ctx.error()));
+      result.set_throw();
+    }
+  } else {
+    result.value = Value::undefined;
+    result.set_throw();
+  }
+}
+
+void Throw::dump(std::ostream &out, const std::string &indent) {
+  out << indent << "throw" << std::endl;
+  if (m_expr) m_expr->dump(out, indent + "  ");
+}
+
+//
+// Try
+//
+
+void Try::declare(Expr::Scope &scope) {
+  m_try->declare(scope);
+  if (m_catch) m_catch->declare(scope);
+  if (m_finally) m_finally->declare(scope);
+}
+
+void Try::resolve(Context &ctx, int l, Expr::Imports *imports) {
+  m_try->resolve(ctx, l, imports);
+  if (m_catch) m_catch->resolve(ctx, l, imports);
+  if (m_finally) m_finally->resolve(ctx, l, imports);
+}
+
+void Try::execute(Context &ctx, Result &result) {
+  m_try->execute(ctx, result);
+  if (result.is_throw() && m_catch) {
+    Value f;
+    if (m_catch->eval(ctx, f) && f.is_function()) {
+      Value e(Error::make(ctx.error()));
+      (*f.f())(ctx, 1, &e, result.value);
+      if (!ctx.ok()) {
+        result.value.set(Error::make(ctx.error()));
+        result.set_throw();
+      } else {
+        result.set_done();
+      }
+    }
+  }
+  if (m_finally) {
+    if (result.is_throw()) {
+      Result res;
+      m_finally->execute(ctx, res);
+      if (res.is_throw()) result.value = res.value;
+    } else {
+      m_finally->execute(ctx, result);
+    }
+  }
+}
+
+void Try::dump(std::ostream &out, const std::string &indent) {
+  out << indent << "try" << std::endl;
+  auto indent_str = indent + "  ";
+  m_try->dump(out, indent_str);
+  if (m_catch) {
+    out << indent << "catch" << std::endl;
+    m_catch->dump(out, indent_str);
+  }
+  if (m_finally) {
+    out << indent << "finally" << std::endl;
+    m_finally->dump(out, indent_str);
+  }
 }
 
 } // namespace stmt
