@@ -73,6 +73,25 @@ public:
   virtual void resolve(Context &ctx, int l = -1, Expr::Imports *imports = nullptr) {}
   virtual void execute(Context &ctx, Result &result) = 0;
   virtual void dump(std::ostream &out, const std::string &indent = "") = 0;
+
+  //
+  // Statement location in script
+  //
+
+  auto source() const -> const Source* { return m_source; }
+  auto line() const -> int { return m_line; }
+  auto column() const -> int { return m_column; }
+
+  void locate(const Source *source, int line, int column) {
+    m_source = source;
+    m_line = line;
+    m_column = column;
+  }
+
+private:
+  const Source* m_source = nullptr;
+  int m_line = 0;
+  int m_column = 0;
 };
 
 namespace stmt {
@@ -83,6 +102,7 @@ namespace stmt {
 
 class Block : public Stmt {
 public:
+  Block() {}
   Block(std::list<std::unique_ptr<Stmt>> &&stmts) : m_stmts(std::move(stmts)) {}
 
   virtual void declare(Expr::Scope &scope) override;
@@ -257,6 +277,21 @@ private:
 };
 
 } // namespace stmt
+
+//
+// Statement constructors
+//
+
+inline Stmt* evaluate(Expr *expr) { return new stmt::Evaluate(expr); }
+inline Stmt* block() { return new stmt::Block(); }
+inline Stmt* block(std::list<std::unique_ptr<Stmt>> &&stmts) { return new stmt::Block(std::move(stmts)); }
+inline Stmt* var(const std::string &name, Expr *expr) { return new stmt::Var(name, expr); }
+inline Stmt* function(const std::string &name, Expr *expr) { return new stmt::Function(name, expr); }
+inline Stmt* if_else(Expr *cond, Stmt *then_clause, Stmt *else_clause = nullptr) { return new stmt::If(cond, then_clause, else_clause); }
+inline Stmt* try_catch(Stmt *try_clause, Expr *catch_clause, Stmt *finally_clause) { return new stmt::Try(try_clause, catch_clause, finally_clause); }
+inline Stmt* make_break() { return new stmt::Break(); }
+inline Stmt* make_return(Expr *expr = nullptr) { return new stmt::Return(expr); }
+inline Stmt* make_throw(Expr *expr = nullptr) { return new stmt::Throw(expr); }
 
 } // namespace pjs
 

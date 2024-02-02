@@ -25,6 +25,7 @@
 
 #include "parser.hpp"
 #include "expr.hpp"
+#include "stmt.hpp"
 
 #include <map>
 #include <mutex>
@@ -235,8 +236,8 @@ void Tokenizer::init_operator_map() {
   std::lock_guard<std::mutex> lock(s_init_operator_map_mutex);
 
   static const char* operators[] = {
-    ","     , "."     ,
-    "`"     , "="     ,
+    ","     , ";"     ,
+    "."     , "="     ,
     "~"     , "!"     ,
     "++"    , "--"    ,
     "+"     , "+="    ,
@@ -262,8 +263,8 @@ void Tokenizer::init_operator_map() {
     "("     , ")"     , "?.("   ,
     "["     , "]"     , "?.["   ,
     "{"     , "}"     , "..."   ,
-    "=>"    , "void"  , "in"    ,
-    "new"   , "delete", "typeof", "instanceof",
+    "=>"    , "`"     , "new"   , "delete"    ,
+    "void"  , "in"    , "typeof", "instanceof",
     "true"  , "false" , "null"  , "undefined" ,
 
     // Reserved keywords
@@ -567,7 +568,6 @@ private:
     UnexpectedStringEnd,
     UnexpectedCodePointEnd,
     InvalidHexChar,
-
   };
 
   std::wstring m_out;
@@ -743,6 +743,7 @@ private:
     return e;
   }
 
+  Stmt* statement();
   Expr* expression(bool no_comma = false);
   Expr* operand();
 
@@ -865,6 +866,120 @@ auto ExpressionParser::parse(
     return nullptr;
   }
   return e;
+}
+
+Stmt* ExpressionParser::statement() {
+  auto t = peek();
+  switch (t.id()) {
+    case Token::OPR(";"):
+      read();
+      return block();
+    case Token::OPR("{"): {
+      read();
+      std::list<std::unique_ptr<Stmt>> list;
+      while (peek().id() != Token::OPR("}")) {
+        auto s = statement();
+        if (!s) return nullptr;
+        list.push_back(std::unique_ptr<Stmt>(s));
+      }
+      if (read().id() != Token::OPR("}")) {
+        error(UnexpectedEnd);
+        return nullptr;
+      }
+      return block(std::move(list));
+    }
+    case Token::OPR("var"): {
+      read();
+      auto t = peek();
+      if (!t.is_string()) {
+        error(UnexpectedToken);
+        return nullptr;
+      }
+      std::string name = t.s();
+      if (name[0] == '"' || name[0] == '\'') {
+        error(UnexpectedToken);
+        return nullptr;
+      }
+      Expr *e = nullptr;
+      t = peek();
+      if (t.id() == Token::OPR("=")) {
+        read();
+        e = expression();
+        if (!e) return nullptr;
+      }
+      t = peek();
+      if (t.id() != Token::OPR(";")) {
+        delete e;
+        error(UnexpectedEnd);
+        return nullptr;
+      }
+      return var(name, e);
+    }
+    case Token::OPR("function"): {
+      error(UnexpectedToken);
+      return nullptr;
+    }
+    case Token::OPR("if"): {
+      read();
+      if (peek().id() != Token::OPR("(")) error(UnexpectedToken);
+      read();
+      auto cond = std::unique_ptr<Expr>(expression());
+      if (!cond) return nullptr;
+      if (peek().id() != Token::OPR(")")) error(UnexpectedToken);
+      read();
+      auto then_clause = std::unique_ptr<Stmt>(statement());
+      if (!then_clause) return nullptr;
+      if (peek().id() == Token::OPR("else")) {
+        read();
+        auto else_clause = std::unique_ptr<Stmt>(statement());
+        if (!else_clause) return nullptr;
+        return if_else(cond.release(), then_clause.release(), else_clause.release());
+      } else {
+        return if_else(cond.release(), then_clause.release());
+      }
+    }
+    case Token::OPR("switch"): {
+      error(UnexpectedToken);
+      return nullptr;
+    }
+    case Token::OPR("break"): {
+      read();
+      if (peek().id() == Token::OPR(";")) read();
+      return make_break();
+    }
+    case Token::OPR("return"): {
+      read();
+      if (peek().id() == Token::OPR(";")) {
+        read();
+        return make_return();
+      }
+      auto e = expression();
+      if (!e) return nullptr;
+      if (peek().id() == Token::OPR(";")) read();
+      return make_return(e);
+    }
+    case Token::OPR("throw"): {
+      read();
+      if (peek().id() == Token::OPR(";")) {
+        read();
+        return make_throw();
+      }
+      auto e = expression();
+      if (!e) return nullptr;
+      if (peek().id() == Token::OPR(";")) read();
+      return make_throw(e);
+    }
+    case Token::OPR("try"): {
+      error(UnexpectedToken);
+      return nullptr;
+    }
+    default: {
+      auto e = expression();
+      if (!e) return nullptr;
+      if (peek().id() == Token::OPR(";")) read();
+      return evaluate(e);
+    }
+  }
 }
 
 Expr* ExpressionParser::expression(bool no_comma) {
@@ -1018,6 +1133,7 @@ Expr* ExpressionParser::expression(bool no_comma) {
       auto t = peek();
       auto is_end = (
         (t == Token::eof) ||
+        (t.id() == Token::OPR(";")) ||
         (t.id() == Token::OPR(")")) ||
         (t.id() == Token::OPR("]")) ||
         (t.id() == Token::OPR("}")) ||
