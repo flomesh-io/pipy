@@ -120,7 +120,7 @@ bool JSModule::load(const std::string &path, pjs::Value &result) {
 
   std::string error;
   int error_line, error_column;
-  auto expr = pjs::Parser::parse(&m_source, error, error_line, error_column);
+  auto expr = pjs::Parser::parse_expr(&m_source, error, error_line, error_column);
   m_script = std::unique_ptr<pjs::Expr>(expr);
 
   if (!expr) {

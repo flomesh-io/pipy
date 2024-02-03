@@ -1558,6 +1558,7 @@ inline Expr* object(std::list<std::pair<std::unique_ptr<Expr>, std::unique_ptr<E
 inline Expr* expand(Expr *x) { return new expr::ArrayExpansion(x); }
 inline Expr* array(std::list<std::unique_ptr<Expr>> &&list) { return new expr::ArrayLiteral(std::move(list)); }
 inline Expr* function(Expr *input, Expr *output) { return new expr::FunctionLiteral(input, output); }
+inline Expr* function(Expr *input, Stmt *output) { return new expr::FunctionLiteral(input, output); }
 inline Expr* global(const std::string &s) { return new expr::Global(s); }
 inline Expr* local(const std::string &s) { return new expr::Local(s); }
 inline Expr* identifier(const std::string &s) { return new expr::Identifier(s); }

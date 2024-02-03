@@ -427,7 +427,7 @@ bool Graph::from_script(Graph &g, const std::string &script, std::string &error)
   error.clear();
   int error_line, error_column;
   std::unique_ptr<pjs::Expr> ast(
-    pjs::Parser::parse(&src, error, error_line, error_column)
+    pjs::Parser::parse_expr(&src, error, error_line, error_column)
   );
 
   if (!error.empty()) return false;

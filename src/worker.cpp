@@ -397,7 +397,7 @@ bool Worker::solve(pjs::Context &ctx, pjs::Str *filename, pjs::Value &result) {
   std::string error;
   char error_msg[1000];
   int error_line, error_column;
-  auto expr = pjs::Parser::parse(&f.source, error, error_line, error_column);
+  auto expr = pjs::Parser::parse_expr(&f.source, error, error_line, error_column);
   if (!expr) {
     std::snprintf(
       error_msg, sizeof(error_msg), "Syntax error: %s at line %d column %d in %s",

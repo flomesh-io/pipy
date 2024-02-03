@@ -88,10 +88,10 @@ static void test_parser(const char *script) {
   std::string error;
   int error_line, error_column;
   Source src; src.content = script;
-  auto expr = Parser::parse(&src, error, error_line, error_column);
-  if (expr) {
-    expr->dump(std::cout, "");
-    delete expr;
+  auto stmt = Parser::parse(&src, error, error_line, error_column);
+  if (stmt) {
+    stmt->dump(std::cout, "");
+    delete stmt;
   } else {
     std::cerr << "ERROR at line " << error_line << " column " << error_column << ": " << error << std::endl;
   }
@@ -108,20 +108,20 @@ static void test_eval(Context &ctx, const char *script) {
   std::string error;
   int error_line, error_column;
   Source src; src.content = script;
-  auto expr = Parser::parse(&src, error, error_line, error_column);
-  if (!expr) {
+  auto stmt = Parser::parse(&src, error, error_line, error_column);
+  if (!stmt) {
     std::cerr << "Syntax error at line " << error_line << " column " << error_column << ": " << error << std::endl;
-    delete expr;
+    delete stmt;
     return;
   }
-  expr->resolve(ctx, 0);
+  stmt->resolve(ctx, 0);
   if (!ctx.error().message.empty()) {
     std::cerr << "Resolve error: " << ctx.error().message << std::endl;
-    delete expr;
+    delete stmt;
     return;
   }
   Value result;
-  auto success = expr->eval(ctx, result);
+  auto success = stmt->execute(ctx, result);
   if (!success) {
     const auto &err = ctx.error();
     std::cerr << "Evaluation error: " << err.message << std::endl;
@@ -135,7 +135,7 @@ static void test_eval(Context &ctx, const char *script) {
       }
       std::cerr << "    " << str << std::endl;
     }
-    delete expr;
+    delete stmt;
     return;
   }
   std::cout << "Result: " << result.to_string()->str() << std::endl;
@@ -162,7 +162,8 @@ int main() {
   test_parser("obj.foo()+(-a)**b**c");
   test_parser("obj.foo()+-(a**b**c)");
   test_parser("()=>100,(x,y)=>(x+=y,x*y),()=>a?b:c");
-  test_parser("{a:100,[b]:200,c,'d':300,...e},[1,'a',b,...c,]");
+  test_parser("({a:100,[b]:200,c,'d':300,...e}),[1,'a',b,...c,]");
+  test_parser("var x=y;if(x===y){x=y}else y=x;return (x+y);try{throw new Error}catch(e){throw 1+1}finally{break}");
 
   test_eval(ctx, "console.log('hello', 'world')");
   test_eval(ctx, "((x, y) => x + y)(1, 2)");

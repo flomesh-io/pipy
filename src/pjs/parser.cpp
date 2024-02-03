@@ -703,6 +703,12 @@ public:
     std::string &error,
     int &error_line,
     int &error_column
+  ) -> Stmt*;
+
+  auto parse_expr(
+    std::string &error,
+    int &error_line,
+    int &error_column
   ) -> Expr*;
 
 private:
@@ -717,6 +723,10 @@ private:
     InvalidOptionalChain,
     IncompleteExpression,
     AmbiguousPrecedence,
+    TokenExpected,
+    IdentifierExpected,
+    MissingExpression,
+    MissingCatchFinally,
   };
 
   const Source* m_source;
@@ -760,7 +770,81 @@ private:
     return true;
   }
 
-  Expr* error(Error err) {
+  bool peek(int token) {
+    return peek().id() == token;
+  }
+
+  bool peek(int token, Error err) {
+    if (peek().id() == token) return true;
+    error(err, token);
+    return false;
+  }
+
+  bool peek_end() {
+    auto t = peek();
+    if (t == Token::eof) return true;
+    if (t.id() == Token::OPR("}")) return true;
+    if (t.id() == Token::OPR(";")) {
+      read();
+      return true;
+    }
+    return false;
+  }
+
+  bool peek_end(Error err) {
+    if (!peek_end()) return false;
+    error(err);
+    return true;
+  }
+
+  bool read(int token) {
+    if (peek().id() == token) {
+      read();
+      return true;
+    } else {
+      return false;
+    }
+  }
+
+  bool read(int token, Error err) {
+    if (read(token)) return true;
+    error(err, token);
+    return false;
+  }
+
+  auto read_identifier() -> std::string {
+    auto t = read();
+    if (!t.is_string() || t.s()[0] == '"' || t.s()[0] == '\'') {
+      error(IdentifierExpected);
+      return std::string();
+    }
+    return t.s();
+  }
+
+  void read_semicolons() {
+    while (peek().id() == Token::OPR(";")) {
+      read();
+    }
+  }
+
+  bool expects(int token, Error err = UnexpectedToken) {
+    if (peek().id() == token) {
+      read();
+      return true;
+    } else {
+      error(err);
+      return false;
+    }
+  }
+
+  Expr* error(Error err, int token = 0) {
+    char tok[6];
+    tok[0] = '\'';
+    tok[1] = 255 & (token >>  0);
+    tok[2] = 255 & (token >>  8);
+    tok[3] = 255 & (token >> 16);
+    tok[4] = 255 & (token >> 24);
+    tok[5] = 0;
     switch (err) {
       case UnexpectedEnd: m_error = "unexpected end of expression"; break;
       case UnexpectedToken: m_error = "unexpected token"; break;
@@ -772,6 +856,10 @@ private:
       case InvalidOptionalChain: m_error = "invalid optional chain"; break;
       case IncompleteExpression: m_error = "incomplete expression"; break;
       case AmbiguousPrecedence: m_error = "ambiguous exponentiation precedence"; break;
+      case TokenExpected: m_error = std::string(tok) + "' expected"; break;
+      case IdentifierExpected: m_error = "identifier expected"; break;
+      case MissingExpression: m_error = "missing expression"; break;
+      case MissingCatchFinally: m_error = "missing catch or finally"; break;
     }
     return nullptr;
   }
@@ -856,6 +944,25 @@ ExpressionParser::ExpressionParser(const Source *source)
 auto ExpressionParser::parse(
   std::string &error,
   int &error_line,
+  int &error_column) -> Stmt*
+{
+  std::list<std::unique_ptr<Stmt>> list;
+  while (peek() != Token::eof) {
+    auto s = statement();
+    if (!s) {
+      error = m_error;
+      error_line = m_location.line;
+      error_column = m_location.column;
+      return nullptr;
+    }
+    list.push_back(std::unique_ptr<Stmt>(s));
+  }
+  return block(std::move(list));
+}
+
+auto ExpressionParser::parse_expr(
+  std::string &error,
+  int &error_line,
   int &error_column) -> Expr*
 {
   auto e = expression();
@@ -869,51 +976,32 @@ auto ExpressionParser::parse(
 }
 
 Stmt* ExpressionParser::statement() {
-  auto t = peek();
-  switch (t.id()) {
+  switch (peek().id()) {
     case Token::OPR(";"):
-      read();
+      read_semicolons();
       return block();
     case Token::OPR("{"): {
       read();
       std::list<std::unique_ptr<Stmt>> list;
-      while (peek().id() != Token::OPR("}")) {
+      while (!read(Token::OPR("}"))) {
         auto s = statement();
         if (!s) return nullptr;
         list.push_back(std::unique_ptr<Stmt>(s));
-      }
-      if (read().id() != Token::OPR("}")) {
-        error(UnexpectedEnd);
-        return nullptr;
       }
       return block(std::move(list));
     }
     case Token::OPR("var"): {
       read();
-      auto t = peek();
-      if (!t.is_string()) {
-        error(UnexpectedToken);
-        return nullptr;
-      }
-      std::string name = t.s();
-      if (name[0] == '"' || name[0] == '\'') {
-        error(UnexpectedToken);
-        return nullptr;
-      }
-      Expr *e = nullptr;
-      t = peek();
-      if (t.id() == Token::OPR("=")) {
-        read();
-        e = expression();
+      auto name = read_identifier();
+      if (name.empty()) return nullptr;
+      if (read(Token::OPR("="))) {
+        auto e = expression();
         if (!e) return nullptr;
+        read(Token::OPR(";"));
+        return var(name, e);
       }
-      t = peek();
-      if (t.id() != Token::OPR(";")) {
-        delete e;
-        error(UnexpectedEnd);
-        return nullptr;
-      }
-      return var(name, e);
+      read_semicolons();
+      return var(name);
     }
     case Token::OPR("function"): {
       error(UnexpectedToken);
@@ -921,16 +1009,13 @@ Stmt* ExpressionParser::statement() {
     }
     case Token::OPR("if"): {
       read();
-      if (peek().id() != Token::OPR("(")) error(UnexpectedToken);
-      read();
+      if (!expects(Token::OPR("("))) return nullptr;
       auto cond = std::unique_ptr<Expr>(expression());
       if (!cond) return nullptr;
-      if (peek().id() != Token::OPR(")")) error(UnexpectedToken);
-      read();
+      if (!expects(Token::OPR(")"))) return nullptr;
       auto then_clause = std::unique_ptr<Stmt>(statement());
       if (!then_clause) return nullptr;
-      if (peek().id() == Token::OPR("else")) {
-        read();
+      if (read(Token::OPR("else"))) {
         auto else_clause = std::unique_ptr<Stmt>(statement());
         if (!else_clause) return nullptr;
         return if_else(cond.release(), then_clause.release(), else_clause.release());
@@ -944,39 +1029,62 @@ Stmt* ExpressionParser::statement() {
     }
     case Token::OPR("break"): {
       read();
-      if (peek().id() == Token::OPR(";")) read();
+      read_semicolons();
       return make_break();
     }
     case Token::OPR("return"): {
       read();
-      if (peek().id() == Token::OPR(";")) {
-        read();
-        return make_return();
-      }
+      if (peek_end()) return make_return();
       auto e = expression();
       if (!e) return nullptr;
-      if (peek().id() == Token::OPR(";")) read();
+      read_semicolons();
       return make_return(e);
     }
     case Token::OPR("throw"): {
       read();
-      if (peek().id() == Token::OPR(";")) {
-        read();
-        return make_throw();
-      }
+      if (peek_end(MissingExpression)) return nullptr;
       auto e = expression();
       if (!e) return nullptr;
-      if (peek().id() == Token::OPR(";")) read();
+      read_semicolons();
       return make_throw(e);
     }
     case Token::OPR("try"): {
-      error(UnexpectedToken);
-      return nullptr;
+      read();
+      if (!peek(Token::OPR("{"), TokenExpected)) return nullptr;
+      auto stmt = std::unique_ptr<Stmt>(statement());
+      if (!stmt) return nullptr;
+      std::unique_ptr<Expr> catch_clause;
+      std::unique_ptr<Stmt> finally_clause;
+      if (read(Token::OPR("catch"))) {
+        std::string name;
+        if (read(Token::OPR("("))) {
+          auto name = read_identifier();
+          if (name.empty()) return nullptr;
+          if (!expects(Token::OPR(")"))) return nullptr;
+        }
+        if (!peek(Token::OPR("{"), TokenExpected)) return nullptr;
+        auto stmt = statement();
+        if (!stmt) return nullptr;
+        catch_clause = std::unique_ptr<Expr>(
+          function(name.empty() ? nullptr : identifier(name), stmt)
+        );
+      }
+      if (read(Token::OPR("finally"))) {
+        if (!peek(Token::OPR("{"), TokenExpected)) return nullptr;
+        auto stmt = statement();
+        if (!stmt) return nullptr;
+        finally_clause = std::unique_ptr<Stmt>(stmt);
+      }
+      if (!catch_clause && !finally_clause) {
+        error(MissingCatchFinally);
+        return nullptr;
+      }
+      return try_catch(stmt.release(), catch_clause.release(), finally_clause.release());
     }
     default: {
       auto e = expression();
       if (!e) return nullptr;
-      if (peek().id() == Token::OPR(";")) read();
+      read(Token::OPR(";"));
       return evaluate(e);
     }
   }
@@ -1524,11 +1632,23 @@ auto Parser::parse(
   const Source *source,
   std::string &error,
   int &error_line,
-  int &error_column) -> Expr*
+  int &error_column) -> Stmt*
 {
   Token::clear();
   ExpressionParser parser(source);
   return parser.parse(error, error_line, error_column);
+}
+
+
+auto Parser::parse_expr(
+  const Source *source,
+  std::string &error,
+  int &error_line,
+  int &error_column) -> Expr*
+{
+  Token::clear();
+  ExpressionParser parser(source);
+  return parser.parse_expr(error, error_line, error_column);
 }
 
 auto Parser::tokenize(const std::string &script) -> std::list<std::string> {

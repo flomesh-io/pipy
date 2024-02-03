@@ -41,6 +41,13 @@ Stmt::~Stmt()
 {
 }
 
+bool Stmt::execute(Context &ctx, Value &result) {
+  Result res;
+  execute(ctx, res);
+  result = res.value;
+  return !res.is_throw();
+}
+
 namespace stmt {
 
 //
@@ -137,7 +144,7 @@ void Var::execute(Context &ctx, Result &result) {
 
 void Var::dump(std::ostream &out, const std::string &indent) {
   out << indent << "var " << m_identifier->name()->str() << std::endl;
-  m_expr->dump(out, indent + "  ");
+  if (m_expr) m_expr->dump(out, indent + "  ");
 }
 
 //

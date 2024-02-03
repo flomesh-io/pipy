@@ -75,6 +75,12 @@ public:
   virtual void dump(std::ostream &out, const std::string &indent = "") = 0;
 
   //
+  // Statement execution
+  //
+
+  bool execute(Context &ctx, Value &result);
+
+  //
   // Statement location in script
   //
 
@@ -285,7 +291,7 @@ private:
 inline Stmt* evaluate(Expr *expr) { return new stmt::Evaluate(expr); }
 inline Stmt* block() { return new stmt::Block(); }
 inline Stmt* block(std::list<std::unique_ptr<Stmt>> &&stmts) { return new stmt::Block(std::move(stmts)); }
-inline Stmt* var(const std::string &name, Expr *expr) { return new stmt::Var(name, expr); }
+inline Stmt* var(const std::string &name, Expr *expr = nullptr) { return new stmt::Var(name, expr); }
 inline Stmt* function(const std::string &name, Expr *expr) { return new stmt::Function(name, expr); }
 inline Stmt* if_else(Expr *cond, Stmt *then_clause, Stmt *else_clause = nullptr) { return new stmt::If(cond, then_clause, else_clause); }
 inline Stmt* try_catch(Stmt *try_clause, Expr *catch_clause, Stmt *finally_clause) { return new stmt::Try(try_clause, catch_clause, finally_clause); }

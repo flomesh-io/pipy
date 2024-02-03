@@ -571,7 +571,11 @@ void FunctionLiteral::dump(std::ostream &out, const std::string &indent) {
   for (const auto &p : m_inputs) {
     p->dump(out, indent + "  ");
   }
-  m_output->dump(out, indent + "  ");
+  if (m_output) {
+    m_output->dump(out, indent + "  ");
+  } else {
+    m_body->dump(out, indent + "  ");
+  }
 }
 
 //
