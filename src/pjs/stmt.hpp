@@ -203,8 +203,8 @@ private:
 
 class Switch : public Stmt {
 public:
-  Switch(Expr *cond, std::list<std::pair<std::unique_ptr<Expr>, std::unique_ptr<Stmt>>> &&cases)
-    : m_cond(cond), m_cases(std::move(cases)) {}
+  Switch(Expr *cond, std::list<std::pair<std::unique_ptr<Expr>, std::unique_ptr<Stmt>>> &&cases, Stmt *default_case)
+    : m_cond(cond), m_cases(std::move(cases)), m_default(default_case) {}
 
   virtual void declare(Expr::Scope &scope) override;
   virtual void resolve(Context &ctx, int l, Expr::Imports *imports) override;
@@ -214,6 +214,7 @@ public:
 private:
   std::unique_ptr<Expr> m_cond;
   std::list<std::pair<std::unique_ptr<Expr>, std::unique_ptr<Stmt>>> m_cases;
+  std::unique_ptr<Stmt> m_default;
 };
 
 //
@@ -294,10 +295,11 @@ inline Stmt* block(std::list<std::unique_ptr<Stmt>> &&stmts) { return new stmt::
 inline Stmt* var(const std::string &name, Expr *expr = nullptr) { return new stmt::Var(name, expr); }
 inline Stmt* function(const std::string &name, Expr *expr) { return new stmt::Function(name, expr); }
 inline Stmt* if_else(Expr *cond, Stmt *then_clause, Stmt *else_clause = nullptr) { return new stmt::If(cond, then_clause, else_clause); }
+inline Stmt* switch_case(Expr *cond, std::list<std::pair<std::unique_ptr<Expr>, std::unique_ptr<Stmt>>> &&cases, Stmt *default_case = nullptr) { return new stmt::Switch(cond, std::move(cases), default_case); }
 inline Stmt* try_catch(Stmt *try_clause, Expr *catch_clause, Stmt *finally_clause) { return new stmt::Try(try_clause, catch_clause, finally_clause); }
-inline Stmt* make_break() { return new stmt::Break(); }
-inline Stmt* make_return(Expr *expr = nullptr) { return new stmt::Return(expr); }
-inline Stmt* make_throw(Expr *expr = nullptr) { return new stmt::Throw(expr); }
+inline Stmt* flow_break() { return new stmt::Break(); }
+inline Stmt* flow_return(Expr *expr = nullptr) { return new stmt::Return(expr); }
+inline Stmt* flow_throw(Expr *expr = nullptr) { return new stmt::Throw(expr); }
 
 } // namespace pjs
 

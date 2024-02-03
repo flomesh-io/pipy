@@ -291,6 +291,10 @@ void Switch::dump(std::ostream &out, const std::string &indent) {
       p.second->dump(out, indent_str);
     }
   }
+  if (m_default) {
+    out << indent << "default" << std::endl;
+    m_default->dump(out, indent_str);
+  }
 }
 
 //
