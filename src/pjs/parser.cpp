@@ -725,8 +725,10 @@ private:
     AmbiguousPrecedence,
     TokenExpected,
     IdentifierExpected,
+    CaseExpected,
     MissingExpression,
     MissingCatchFinally,
+    DuplicatedDefault,
   };
 
   const Source* m_source;
@@ -753,6 +755,7 @@ private:
     return e;
   }
 
+  Stmt* statement_block();
   Stmt* statement();
   Expr* expression(bool no_comma = false);
   Expr* operand();
@@ -784,6 +787,8 @@ private:
   bool peek_end() {
     auto t = peek();
     if (t == Token::eof) return true;
+    if (t.id() == Token::ID("case")) return true;
+    if (t.id() == Token::ID("default")) return true;
     if (t.id() == Token::ID("}")) return true;
     if (t.id() == Token::ID(";")) {
       read();
@@ -851,8 +856,10 @@ private:
       case AmbiguousPrecedence: m_error = "ambiguous exponentiation precedence"; break;
       case TokenExpected: m_error = std::string(tok) + "' expected"; break;
       case IdentifierExpected: m_error = "identifier expected"; break;
+      case CaseExpected: m_error = "case or default clause expected"; break;
       case MissingExpression: m_error = "missing expression"; break;
       case MissingCatchFinally: m_error = "missing catch or finally"; break;
+      case DuplicatedDefault: m_error = "duplicated default clause"; break;
     }
     return nullptr;
   }
@@ -968,6 +975,16 @@ auto ExpressionParser::parse_expr(
   return e;
 }
 
+Stmt* ExpressionParser::statement_block() {
+  std::list<std::unique_ptr<Stmt>> stmts;
+  while (!peek_end()) {
+    auto s = statement();
+    if (!s) return nullptr;
+    stmts.push_back(std::unique_ptr<Stmt>(s));
+  }
+  return block(std::move(stmts));
+}
+
 Stmt* ExpressionParser::statement() {
   switch (peek().id()) {
     case Token::ID(";"):
@@ -975,13 +992,10 @@ Stmt* ExpressionParser::statement() {
       return block();
     case Token::ID("{"): {
       read();
-      std::list<std::unique_ptr<Stmt>> list;
-      while (!read(Token::ID("}"))) {
-        auto s = statement();
-        if (!s) return nullptr;
-        list.push_back(std::unique_ptr<Stmt>(s));
-      }
-      return block(std::move(list));
+      auto s = std::unique_ptr<Stmt>(statement_block());
+      if (!s) return nullptr;
+      if (!read(Token::ID("}"))) return nullptr;
+      return s.release();
     }
     case Token::ID("var"): {
       read();
@@ -1018,8 +1032,33 @@ Stmt* ExpressionParser::statement() {
     }
     case Token::ID("switch"): {
       read();
-      error(UnexpectedToken);
-      return nullptr;
+      if (!read(Token::ID("("), TokenExpected)) return nullptr;
+      auto cond = std::unique_ptr<Expr>(expression());
+      if (!cond) return nullptr;
+      if (!read(Token::ID(")"), TokenExpected)) return nullptr;
+      if (!read(Token::ID("{"), TokenExpected)) return nullptr;
+      std::list<std::pair<std::unique_ptr<Expr>, std::unique_ptr<Stmt>>> cases;
+      std::unique_ptr<Stmt> default_case;
+      while (!read(Token::ID("}"))) {
+        if (read(Token::ID("default"))) {
+          if (!read(Token::ID(":"), TokenExpected)) return nullptr;
+          if (default_case) { error(DuplicatedDefault); return nullptr; }
+          auto s = statement_block();
+          if (!s) return nullptr;
+          default_case = std::unique_ptr<Stmt>(s);
+        } else if (read(Token::ID("case"))) {
+          auto e = std::unique_ptr<Expr>(expression());
+          if (!e) return nullptr;
+          if (!read(Token::ID(":"), TokenExpected)) return nullptr;
+          auto s = std::unique_ptr<Stmt>(statement_block());
+          if (!s) return nullptr;
+          cases.push_back(std::make_pair(std::move(e), std::move(s)));
+        } else {
+          error(CaseExpected);
+          return nullptr;
+        }
+      }
+      return switch_case(cond.release(), std::move(cases), default_case.release());
     }
     case Token::ID("break"): {
       read();
@@ -1239,7 +1278,10 @@ Expr* ExpressionParser::expression(bool no_comma) {
         (t.id() == Token::ID(")")) ||
         (t.id() == Token::ID("]")) ||
         (t.id() == Token::ID("}")) ||
-        (t.id() == Token::ID(",") && no_comma)
+        (t.id() == Token::ID(",") && no_comma) ||
+        (t.id() == Token::ID(":") && (operators.empty() || operators.top().id() != Token::ID("?"))) ||
+        (t.id() == Token::ID("case")) ||
+        (t.id() == Token::ID("default"))
       );
       if (t == Token::err) return error(UnknownToken);
       if (!is_end && !t.is_operator()) return error(UnexpectedToken);

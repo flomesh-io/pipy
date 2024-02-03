@@ -164,6 +164,7 @@ int main() {
   test_parser("()=>100,(x,y)=>(x+=y,x*y),()=>a?b:c");
   test_parser("({a:100,[b]:200,c,'d':300,...e}),[1,'a',b,...c,]");
   test_parser("var x=y;if(x===y){x=y}else y=x;return (x+y);try{throw new Error}catch(e){throw 1+1}finally{break}");
+  test_parser("switch(x===y){case 0:case x+y:a;b;a+b;case 1:default:a=b;break}");
 
   test_eval(ctx, "console.log('hello', 'world')");
   test_eval(ctx, "((x, y) => x + y)(1, 2)");
