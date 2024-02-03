@@ -185,6 +185,11 @@ public:
     return m_token;
   }
 
+  bool peek_eol() {
+    if (m_is_template) return false;
+    return parse_space();
+  }
+
   static bool is_identifier_name(const Token &tok, std::string &str) {
     auto i = s_identifier_names.find(tok.id());
     if (i == s_identifier_names.end()) return false;
@@ -207,6 +212,7 @@ private:
   bool m_is_template = false;
 
   auto parse(Location &loc) -> Token;
+  bool parse_space();
 
   int get() const {
     return m_script[m_ptr];
@@ -334,14 +340,10 @@ auto Tokenizer::parse(Location &loc) -> Token {
     return Token::err;
 
   // Parse normal script
-  } else for (;;) {
+  } else {
 
     // Skip white spaces
-    while (!eof()) {
-      auto c = get();
-      if (!std::isspace(c)) break;
-      count();
-    }
+    parse_space();
 
     // EOF?
     if (eof()) return Token::eof;
@@ -371,31 +373,6 @@ auto Tokenizer::parse(Location &loc) -> Token {
         count();
       }
       return Token::err;
-    }
-
-    // Comments?
-    if (c == '/') {
-      auto next = m_script[m_ptr+1];
-      if (next == '/') {
-        count();
-        count();
-        while (!eof() && get() != '\n') count();
-        continue;
-      } else if (next == '*') {
-        count();
-        count();
-        while (!eof()) {
-          if (get() == '*') {
-            if (m_script[m_ptr+1] == '/') {
-              count();
-              count();
-              break;
-            }
-          }
-          count();
-        }
-        continue;
-      }
     }
 
     // Operator?
@@ -474,6 +451,53 @@ auto Tokenizer::parse(Location &loc) -> Token {
       if (i != s_operator_map.end()) return Token(i->second);
       return Token(s);
     }
+  }
+}
+
+bool Tokenizer::parse_space() {
+  bool has_eol = false;
+  for (;;) {
+
+    // Skip white spaces
+    while (!eof()) {
+      auto c = get();
+      if (c == '\n') has_eol = true;
+      if (!std::isspace(c)) break;
+      count();
+    }
+
+    // EOF?
+    if (eof()) return has_eol;
+
+    // Comments?
+    if (get() == '/') {
+      auto next = m_script[m_ptr+1];
+      if (next == '/') {
+        count();
+        count();
+        while (!eof() && get() != '\n') count();
+        has_eol = true;
+        continue;
+      } else if (next == '*') {
+        count();
+        count();
+        while (!eof()) {
+          auto c = get();
+          if (c == '\n') has_eol = true;
+          if (c == '*') {
+            if (m_script[m_ptr+1] == '/') {
+              count();
+              count();
+              break;
+            }
+          }
+          count();
+        }
+        continue;
+      }
+    }
+
+    return has_eol;
   }
 }
 
@@ -726,6 +750,7 @@ private:
     TokenExpected,
     IdentifierExpected,
     CaseExpected,
+    MissingIdentifier,
     MissingExpression,
     MissingCatchFinally,
     DuplicatedDefault,
@@ -783,6 +808,16 @@ private:
     return false;
   }
 
+  bool peek_eol() {
+    return m_tokenizer.peek_eol();
+  }
+
+  bool peek_eol(Error err) {
+    if (!peek_eol()) return false;
+    error(err);
+    return true;
+  }
+
   bool peek_end() {
     auto t = peek();
     if (t == Token::eof) return true;
@@ -826,6 +861,12 @@ private:
     return t.s();
   }
 
+  auto read_identifier(Error err) -> std::string {
+    auto id = read_identifier();
+    if (id.empty()) error(err);
+    return id;
+  }
+
   void read_semicolons() {
     while (peek().id() == Token::ID(";")) {
       read();
@@ -854,6 +895,7 @@ private:
       case TokenExpected: m_error = std::string(tok) + "' expected"; break;
       case IdentifierExpected: m_error = "identifier expected"; break;
       case CaseExpected: m_error = "case or default clause expected"; break;
+      case MissingIdentifier: m_error = "missing identifier"; break;
       case MissingExpression: m_error = "missing expression"; break;
       case MissingCatchFinally: m_error = "missing catch or finally"; break;
       case DuplicatedDefault: m_error = "duplicated default clause"; break;
@@ -996,7 +1038,8 @@ Stmt* ScriptParser::statement() {
     }
     case Token::ID("var"): {
       read();
-      auto name = read_identifier();
+      if (peek_eol(MissingIdentifier)) return nullptr;
+      auto name = read_identifier(MissingIdentifier);
       if (name.empty()) return nullptr;
       if (read(Token::ID("="))) {
         auto e = expression();
@@ -1064,7 +1107,7 @@ Stmt* ScriptParser::statement() {
     }
     case Token::ID("return"): {
       read();
-      if (peek_end()) return flow_return();
+      if (peek_eol() || peek_end()) return flow_return();
       auto e = expression();
       if (!e) return nullptr;
       read_semicolons();
@@ -1072,7 +1115,7 @@ Stmt* ScriptParser::statement() {
     }
     case Token::ID("throw"): {
       read();
-      if (peek_end(MissingExpression)) return nullptr;
+      if (peek_eol(MissingExpression) || peek_end(MissingExpression)) return nullptr;
       auto e = expression();
       if (!e) return nullptr;
       read_semicolons();
@@ -1267,6 +1310,7 @@ Expr* ScriptParser::expression(bool no_comma) {
 
     // Parse operators
     for (;;) {
+      bool eol = peek_eol();
       auto t = peek();
       auto is_end = (
         (t == Token::eof) ||
@@ -1280,7 +1324,14 @@ Expr* ScriptParser::expression(bool no_comma) {
         (t.id() == Token::ID("default"))
       );
       if (t == Token::err) return error(UnknownToken);
-      if (!is_end && !t.is_operator()) return error(UnexpectedToken);
+      if (!is_end && !t.is_operator()) {
+        if (eol) {
+          t = Token::eof;
+          is_end = true;
+        } else {
+          return error(UnexpectedToken);
+        }
+      }
 
       // Some operators are invalid here, post operators are converted
       switch (t.id()) {
@@ -1292,10 +1343,20 @@ Expr* ScriptParser::expression(bool no_comma) {
         case Token::ID("delete"):
           return error(UnexpectedToken);
         case Token::ID("++"):
-          t = Token(Token::ID("x++"));
+          if (eol) {
+            t = Token::eof;
+            is_end = true;
+          } else {
+            t = Token(Token::ID("x++"));
+          }
           break;
         case Token::ID("--"):
-          t = Token(Token::ID("x--"));
+          if (eol) {
+            t = Token::eof;
+            is_end = true;
+          } else {
+            t = Token(Token::ID("x--"));
+          }
           break;
       }
 
