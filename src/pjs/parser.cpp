@@ -692,12 +692,12 @@ private:
 };
 
 //
-// ExpressionParser
+// ScriptParser
 //
 
-class ExpressionParser {
+class ScriptParser {
 public:
-  ExpressionParser(const Source *source);
+  ScriptParser(const Source *source);
 
   auto parse(
     std::string &error,
@@ -779,7 +779,6 @@ private:
 
   bool peek(int token, Error err) {
     if (peek().id() == token) return true;
-    read();
     error(err, token);
     return false;
   }
@@ -799,7 +798,6 @@ private:
 
   bool peek_end(Error err) {
     if (!peek_end()) return false;
-    read();
     error(err);
     return true;
   }
@@ -815,7 +813,6 @@ private:
 
   bool read(int token, Error err) {
     if (read(token)) return true;
-    read();
     error(err, token);
     return false;
   }
@@ -870,7 +867,7 @@ private:
 // Operator precedence table as in:
 // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Operator_Precedence#table
 
-const std::unordered_map<int, int> ExpressionParser::s_precedence_table = {
+const std::unordered_map<int, int> ScriptParser::s_precedence_table = {
   { Token::ID("."   ), 20 },
   { Token::ID("["   ), 20 },
   { Token::ID("("   ), 20 },
@@ -935,13 +932,13 @@ const std::unordered_map<int, int> ExpressionParser::s_precedence_table = {
   { Token::ID(","   ),  1 },
 };
 
-ExpressionParser::ExpressionParser(const Source *source)
+ScriptParser::ScriptParser(const Source *source)
   : m_source(source)
   , m_tokenizer(source->content)
 {
 }
 
-auto ExpressionParser::parse(
+auto ScriptParser::parse(
   std::string &error,
   int &error_line,
   int &error_column) -> Stmt*
@@ -960,7 +957,7 @@ auto ExpressionParser::parse(
   return block(std::move(list));
 }
 
-auto ExpressionParser::parse_expr(
+auto ScriptParser::parse_expr(
   std::string &error,
   int &error_line,
   int &error_column) -> Expr*
@@ -975,7 +972,7 @@ auto ExpressionParser::parse_expr(
   return e;
 }
 
-Stmt* ExpressionParser::statement_block() {
+Stmt* ScriptParser::statement_block() {
   std::list<std::unique_ptr<Stmt>> stmts;
   while (!peek_end()) {
     auto s = statement();
@@ -985,7 +982,7 @@ Stmt* ExpressionParser::statement_block() {
   return block(std::move(stmts));
 }
 
-Stmt* ExpressionParser::statement() {
+Stmt* ScriptParser::statement() {
   switch (peek().id()) {
     case Token::ID(";"):
       read_semicolons();
@@ -1123,7 +1120,7 @@ Stmt* ExpressionParser::statement() {
   }
 }
 
-Expr* ExpressionParser::expression(bool no_comma) {
+Expr* ScriptParser::expression(bool no_comma) {
   std::stack<Token> operators;
   std::stack<Location> locations;
   std::stack<std::unique_ptr<Expr>> operands;
@@ -1152,8 +1149,7 @@ Expr* ExpressionParser::expression(bool no_comma) {
         if (!e) return nullptr;
         argv.push_back(std::unique_ptr<Expr>(e));
         if (!is_call) break;
-        t = peek();
-        if (t.id() == Token::ID(",")) read();
+        read(Token::ID(","));
       }
 
       // Check closing parenthesis
@@ -1430,7 +1426,7 @@ Expr* ExpressionParser::expression(bool no_comma) {
   return operands.top().release();
 }
 
-Expr* ExpressionParser::operand() {
+Expr* ScriptParser::operand() {
   auto t = peek();
   if (t.id() == Token::ID("(")) {
     Location l;
@@ -1595,9 +1591,7 @@ Expr* ExpressionParser::operand() {
         read();
         k = expression();
         if (!k) return nullptr;
-        auto t = peek();
-        if (t.id() != Token::ID("]")) return error(UnexpectedToken);
-        read();
+        if (!read(Token::ID("]"), TokenExpected)) return nullptr;
       } else if (t.id() == Token::ID("...")) {
         read();
         v = expression(true);
@@ -1651,8 +1645,7 @@ Expr* ExpressionParser::operand() {
         if (!v) return nullptr;
         list.push_back(std::unique_ptr<Expr>(v));
       }
-      t = peek();
-      if (t.id() == Token::ID(",")) read();
+      read(Token::ID(","));
     }
     return locate(array(std::move(list)), l);
   }
@@ -1671,7 +1664,7 @@ auto Parser::parse(
   int &error_column) -> Stmt*
 {
   Token::clear();
-  ExpressionParser parser(source);
+  ScriptParser parser(source);
   return parser.parse(error, error_line, error_column);
 }
 
@@ -1683,7 +1676,7 @@ auto Parser::parse_expr(
   int &error_column) -> Expr*
 {
   Token::clear();
-  ExpressionParser parser(source);
+  ScriptParser parser(source);
   return parser.parse_expr(error, error_line, error_column);
 }
 
