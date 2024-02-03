@@ -237,6 +237,8 @@ class Return : public Stmt {
 public:
   Return(Expr *expr) : m_expr(expr) {}
 
+  auto value() const -> Expr* { return m_expr.get(); }
+
   virtual void declare(Expr::Scope &scope) override;
   virtual void resolve(Context &ctx, int l, Expr::Imports *imports) override;
   virtual void execute(Context &ctx, Result &result) override;

@@ -737,7 +737,8 @@ public:
 
 private:
   enum Error {
-    UnexpectedEnd,
+    UnexpectedEOF,
+    UnexpectedEOL,
     UnexpectedToken,
     UnknownToken,
     UnknownOperator,
@@ -784,6 +785,7 @@ private:
   Stmt* statement();
   Expr* expression(bool no_comma = false);
   Expr* operand();
+  Expr* arrow_function(Location &loc, Expr *arguments);
 
   bool precedes(Token a, Token b) {
     auto i = s_precedence_table.find(a.id());
@@ -873,6 +875,10 @@ private:
     }
   }
 
+  bool has_error() const {
+    return !m_error.empty();
+  }
+
   Expr* error(Error err, int token = 0) {
     char tok[6];
     tok[0] = '\'';
@@ -882,7 +888,8 @@ private:
     tok[4] = 255 & (token >> 24);
     tok[5] = 0;
     switch (err) {
-      case UnexpectedEnd: m_error = "unexpected end of expression"; break;
+      case UnexpectedEOF: m_error = "unexpected end of expression"; break;
+      case UnexpectedEOL: m_error = "unexpected end of line"; break;
       case UnexpectedToken: m_error = "unexpected token"; break;
       case UnknownToken: m_error = "unknown token"; break;
       case UnknownOperator: m_error = "unknown operator"; break;
@@ -1185,7 +1192,7 @@ Expr* ScriptParser::expression(bool no_comma) {
       std::vector<std::unique_ptr<Expr>> argv;
       for (;;) {
         auto t = peek();
-        if (t == Token::eof) return error(UnexpectedEnd);
+        if (t == Token::eof) return error(UnexpectedEOF);
         if (t == Token::err) return error(UnknownToken);
         if (t == closing) break;
         auto e = expression(is_call);
@@ -1197,7 +1204,7 @@ Expr* ScriptParser::expression(bool no_comma) {
 
       // Check closing parenthesis
       auto t = peek();
-      if (t == Token::eof) return error(UnexpectedEnd);
+      if (t == Token::eof) return error(UnexpectedEOF);
       if (t == Token::err) return error(UnknownToken);
       if (t == closing) read();
       else return error(UnexpectedToken);
@@ -1249,7 +1256,7 @@ Expr* ScriptParser::expression(bool no_comma) {
       for (;;) {
         Location l;
         auto t = peek();
-        if (t == Token::eof) return error(UnexpectedEnd);
+        if (t == Token::eof) return error(UnexpectedEOF);
         if (t == Token::err) return error(UnknownToken);
         switch (t.id()) {
           case Token::ID("+"):
@@ -1492,40 +1499,25 @@ Expr* ScriptParser::operand() {
   if (t.id() == Token::ID("(")) {
     Location l;
     read(l);
-    if (peek().id() == Token::ID(")")) {
-      read();
-      if (peek().id() != Token::ID("=>")) {
-        return error(UnexpectedToken); // must be an arrow function
-      }
-      read();
-      if (peek().id() == Token::ID("{")) {
-        return error(UnexpectedToken); // function body statements are not supported
-      }
-      auto f = expression(true);
-      if (!f) return nullptr;
-      return locate(function(nullptr, f), l);
+    if (read(Token::ID(")"))) {
+      if (auto f = arrow_function(l, nullptr)) return f;
+      if (has_error()) return nullptr;
+      return error(TokenExpected, Token::ID("=>")); // Must be an arrow function
     }
     auto e = expression();
     if (!e) return nullptr;
     auto t = peek();
-    if (t == Token::eof) return error(UnexpectedEnd);
+    if (t == Token::eof) return error(UnexpectedEOF);
     if (t == Token::err) return error(UnknownToken);
     if (t.id() != Token::ID(")")) return error(UnexpectedToken);
     Location loc;
     read(loc);
 
     // Could it be an arrow function?
-    if (peek().id() == Token::ID("=>")) {
-      if (!e->is_argument() && !e->is_argument_list()) {
-        return error(InvalidArgumentList);
-      }
-      read();
-      if (peek().id() == Token::ID("{")) {
-        return error(UnexpectedToken); // function body statements are not supported
-      }
-      auto f = expression(true);
-      if (!f) return nullptr;
-      return locate(function(e, f), l);
+    if (auto f = arrow_function(l, e)) return f;
+    if (has_error()) {
+      delete e;
+      return nullptr;
     }
 
     if (e->is_comma_ended()) {
@@ -1543,7 +1535,7 @@ Expr* ScriptParser::operand() {
     m_tokenizer.set_template_mode(true);
     for (;;) {
       auto t = peek();
-      if (t == Token::eof) return error(UnexpectedEnd);
+      if (t == Token::eof) return error(UnexpectedEOF);
       if (t == Token::err) return error(UnknownToken);
       if (t.id() == Token::ID("`")) {
         read();
@@ -1555,7 +1547,7 @@ Expr* ScriptParser::operand() {
         if (!e) return nullptr;
         list.push_back(std::unique_ptr<Expr>(e));
         auto t = peek();
-        if (t == Token::eof) return error(UnexpectedEnd);
+        if (t == Token::eof) return error(UnexpectedEOF);
         if (t == Token::err) return error(UnknownToken);
         if (t.id() != Token::ID("}")) return error(UnexpectedToken);
         read();
@@ -1605,14 +1597,10 @@ Expr* ScriptParser::operand() {
       return locate(string(str), l);
     } else {
       auto e = locate(identifier(t.s()));
-      if (peek().id() == Token::ID("=>")) {
-        read();
-        if (peek().id() == Token::ID("{")) {
-          return error(UnexpectedToken); // function body statements are not supported
-        }
-        auto f = expression(true);
-        if (!f) return nullptr;
-        e = locate(function(e, f), l);
+      if (auto f = arrow_function(l, e)) return f;
+      if (has_error()) {
+        delete e;
+        return nullptr;
       }
       return e;
     }
@@ -1712,6 +1700,23 @@ Expr* ScriptParser::operand() {
   }
 
   return error(UnexpectedToken);
+}
+
+Expr* ScriptParser::arrow_function(Location &loc, Expr *arguments) {
+  bool eol = peek_eol();
+  if (!read(Token::ID("=>"))) return nullptr;
+  if (eol) return error(UnexpectedEOL);
+  if (arguments) {
+    if (!arguments->is_argument() && !arguments->is_argument_list()) {
+      return error(InvalidArgumentList);
+    }
+  }
+  if (peek().id() == Token::ID("{")) {
+    return error(UnexpectedToken); // function body statements are not supported
+  }
+  auto f = expression(true);
+  if (!f) return nullptr;
+  return locate(function(arguments, f), loc);
 }
 
 //

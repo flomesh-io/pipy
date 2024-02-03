@@ -69,6 +69,7 @@ public:
     virtual Value* is(Value *obj, Value *ctor) { return dummy(obj, ctor); }
     virtual Value* object(Value **kv, size_t count) { return dummy(kv, count); }
     virtual Value* array(Value **v, size_t count) { return dummy(v, count); }
+    virtual Value* function(int argc, Expr **inputs, Stmt *output) { return undefined(); }
     virtual Value* function(int argc, Expr **inputs, Expr *output) { return undefined(); }
 
     // Property access
@@ -446,11 +447,8 @@ private:
     Expr* unpack = nullptr;
   };
 
-  FunctionLiteral(Expr *inputs, Expr *output, Stmt *body);
-
   std::vector<std::unique_ptr<Expr>> m_inputs;
-  std::unique_ptr<Expr> m_output;
-  std::unique_ptr<Stmt> m_body;
+  std::unique_ptr<Stmt> m_output;
   std::list<Parameter> m_parameters;
   size_t m_argc = 0;
   std::vector<pjs::Scope::Variable> m_variables;

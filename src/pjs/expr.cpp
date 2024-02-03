@@ -488,12 +488,9 @@ void ArrayLiteral::dump(std::ostream &out, const std::string &indent) {
 //
 
 FunctionLiteral::FunctionLiteral(Expr *inputs, Expr *output)
-  : FunctionLiteral(inputs, output, nullptr) {}
+  : FunctionLiteral(inputs, new stmt::Return(output)) {}
 
-FunctionLiteral::FunctionLiteral(Expr *inputs, Stmt *body)
-  : FunctionLiteral(inputs, nullptr, body) {}
-
-FunctionLiteral::FunctionLiteral(Expr *inputs, Expr *output, Stmt *body) : m_output(output), m_body(body) {
+FunctionLiteral::FunctionLiteral(Expr *inputs, Stmt *output) : m_output(output) {
   if (inputs) {
     if (auto comp = dynamic_cast<Compound*>(inputs)) {
       comp->break_down(m_inputs);
@@ -549,7 +546,13 @@ void FunctionLiteral::resolve(Context &ctx, int l, Imports *imports) {
           e->unpack(ctx, arg, var_index);
         }
       }
-      m_output->eval(ctx, result);
+      Stmt::Result res;
+      m_output->execute(ctx, res);
+      if (res.is_return()) {
+        result = res.value;
+      } else {
+        result = Value::undefined;
+      }
       scope->clear();
     }
   );
@@ -563,7 +566,11 @@ auto FunctionLiteral::reduce(Reducer &r) -> Reducer::Value* {
   size_t argc = m_inputs.size();
   vl_array<Expr*> inputs(argc);
   for (size_t i = 0; i < argc; i++) inputs[i] = m_inputs[i].get();
-  return r.function(argc, inputs, m_output.get());
+  if (auto ret = dynamic_cast<stmt::Return*>(m_output.get())) {
+    return r.function(argc, inputs, ret->value());
+  } else {
+    return r.function(argc, inputs, m_output.get());
+  }
 }
 
 void FunctionLiteral::dump(std::ostream &out, const std::string &indent) {
@@ -573,8 +580,6 @@ void FunctionLiteral::dump(std::ostream &out, const std::string &indent) {
   }
   if (m_output) {
     m_output->dump(out, indent + "  ");
-  } else {
-    m_body->dump(out, indent + "  ");
   }
 }
 
