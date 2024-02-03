@@ -1711,12 +1711,16 @@ Expr* ScriptParser::arrow_function(Location &loc, Expr *arguments) {
       return error(InvalidArgumentList);
     }
   }
-  if (peek().id() == Token::ID("{")) {
-    return error(UnexpectedToken); // function body statements are not supported
+  if (read(Token::ID("{"))) {
+    auto s = std::unique_ptr<Stmt>(statement_block());
+    if (!s) return nullptr;
+    if (!read(Token::ID("}"), TokenExpected)) return nullptr;
+    return locate(function(arguments, s.release()), loc);
+  } else {
+    auto f = expression(true);
+    if (!f) return nullptr;
+    return locate(function(arguments, f), loc);
   }
-  auto f = expression(true);
-  if (!f) return nullptr;
-  return locate(function(arguments, f), loc);
 }
 
 //
