@@ -132,7 +132,7 @@ private:
 
   pjs::Ref<Worker> m_worker;
   pjs::Source m_source;
-  std::unique_ptr<pjs::Expr> m_script;
+  std::unique_ptr<pjs::Stmt> m_script;
   std::unique_ptr<pjs::Expr::Imports> m_imports;
   pjs::Ref<Configuration> m_configuration;
   pjs::Ref<pjs::Class> m_context_class;

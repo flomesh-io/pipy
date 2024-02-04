@@ -120,10 +120,10 @@ bool JSModule::load(const std::string &path, pjs::Value &result) {
 
   std::string error;
   int error_line, error_column;
-  auto expr = pjs::Parser::parse_expr(&m_source, error, error_line, error_column);
-  m_script = std::unique_ptr<pjs::Expr>(expr);
+  auto stmt = pjs::Parser::parse(&m_source, error, error_line, error_column);
+  m_script = std::unique_ptr<pjs::Stmt>(stmt);
 
-  if (!expr) {
+  if (!stmt) {
     Log::pjs_location(m_source.content, path, error_line, error_column);
     Log::error(
       "[pjs] Syntax error: %s at line %d column %d in %s",
@@ -132,22 +132,26 @@ bool JSModule::load(const std::string &path, pjs::Value &result) {
     return false;
   }
 
+  pjs::Expr::Scope scope;
   pjs::Ref<Context> ctx = m_worker->new_loading_context();
-  expr->resolve(*ctx, index(), m_imports.get());
+  stmt->declare(scope);
+  stmt->resolve(*ctx, index(), m_imports.get());
+  scope.new_scope(*ctx);
 
-  pjs::Value ret;
-  if (!expr->eval(*ctx, ret)) {
+  pjs::Stmt::Result res;
+  stmt->execute(*ctx, res);
+  if (res.is_throw()) {
     ctx->backtrace("(root)");
     Log::pjs_error(ctx->error());
     return false;
   }
 
-  if (!ret.is_class(pjs::class_of<Configuration>())) {
-    result = ret;
+  if (!res.value.is_class(pjs::class_of<Configuration>())) {
+    result = res.value;
     return false;
   }
 
-  auto config = ret.as<Configuration>();
+  auto config = res.value.as<Configuration>();
   try {
     config->check_integrity();
   } catch (std::runtime_error &err) {

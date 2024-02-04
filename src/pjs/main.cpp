@@ -114,6 +114,8 @@ static void test_eval(Context &ctx, const char *script) {
     delete stmt;
     return;
   }
+  Expr::Scope scope;
+  stmt->declare(scope);
   stmt->resolve(ctx, 0);
   if (!ctx.error().message.empty()) {
     std::cerr << "Resolve error: " << ctx.error().message << std::endl;
@@ -121,6 +123,7 @@ static void test_eval(Context &ctx, const char *script) {
     return;
   }
   Value result;
+  scope.new_scope(ctx);
   auto success = stmt->execute(ctx, result);
   if (!success) {
     const auto &err = ctx.error();
@@ -171,6 +174,7 @@ int main() {
   test_eval(ctx, "((x, y) => x + y)(1, 2)");
   test_eval(ctx, "((x, cb) => cb(x))(1, x => x + 2)");
   test_eval(ctx, "(({x, y: [a, b]}) => x + a + b)({x: 1, y: [2, 3]})");
+  test_eval(ctx, "function max(x, y) { if (x > y) return x; else return y } max(1, 100)");
 
   return 0;
 }
