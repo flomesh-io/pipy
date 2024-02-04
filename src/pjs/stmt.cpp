@@ -117,9 +117,9 @@ void Evaluate::dump(std::ostream &out, const std::string &indent) {
 
 void Var::declare(Expr::Scope &scope) {
   auto name = m_identifier->name();
-  auto s = scope.parent;
-  while (!s->is_function()) s = s->parent;
-  if (s->variables.count(name) == 0) s->variables[name] = nullptr;
+  auto s = scope.parent();
+  while (!s->is_function()) s = s->parent();
+  s->declare_var(name, m_expr.get());
   if (m_expr) m_expr->declare(scope);
 }
 
@@ -153,10 +153,10 @@ void Var::dump(std::ostream &out, const std::string &indent) {
 
 void Function::declare(Expr::Scope &scope) {
   auto name = m_identifier->name();
-  auto s = scope.parent;
-  while (!s->is_function()) s = s->parent;
-  m_is_definition = scope.parent->is_function();
-  s->variables[name] = (m_is_definition ? m_expr.get() : nullptr);
+  auto s = scope.parent();
+  while (!s->is_function()) s = s->parent();
+  m_is_definition = scope.parent()->is_function();
+  s->declare_var(name, m_is_definition ? m_expr.get() : nullptr);
   m_expr->declare(scope);
 }
 

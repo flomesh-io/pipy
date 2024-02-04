@@ -26,6 +26,8 @@
 #include "expr.hpp"
 #include "stmt.hpp"
 
+#include <algorithm>
+
 namespace pjs {
 
 //
@@ -68,6 +70,114 @@ bool Expr::Imports::get(Str *name, int *file, Str **original_name) {
   *file = imp.first;
   *original_name = imp.second;
   return true;
+}
+
+//
+// Expr::Scope
+//
+
+void Expr::Scope::declare_arg(Expr *expr) {
+  if (!m_initialized) {
+    auto index = m_args.size();
+    auto unpack_index = m_vars.size();
+    expr->to_arguments(m_args, m_vars);
+    if (m_args.size() == index) return;
+    InitArg init;
+    init.index = index;
+    if (auto assign = dynamic_cast<expr::Assignment*>(expr)) {
+      init.default_value = assign->value();
+    }
+    if (m_args[index] == Str::empty) {
+      init.unpack = expr;
+      init.unpack_index = unpack_index;
+    }
+    if (init.default_value || init.unpack) {
+      m_init_args.push_back(init);
+    }
+  }
+}
+
+void Expr::Scope::declare_var(Str *name, Expr *value) {
+  if (!m_initialized) {
+    auto i = std::find(m_vars.begin(), m_vars.end(), name);
+    if (i != m_vars.end()) {
+      if (value) {
+        InitVar init;
+        init.index = i - m_vars.begin();
+        init.value = value;
+        m_init_vars.push_back(init);
+      }
+      return;
+    }
+    i = std::find(m_args.begin(), m_args.end(), name);
+    if (i != m_args.end()) {
+      if (value) {
+        InitArg init;
+        init.index = i - m_args.begin();
+        init.value = value;
+        m_init_args.push_back(init);
+      }
+    }
+    if (value) {
+      InitVar init;
+      init.index = m_vars.size();
+      init.value = value;
+      m_init_vars.push_back(init);
+    }
+    m_vars.push_back(name);
+  }
+}
+
+auto Expr::Scope::new_scope(Context &ctx) -> pjs::Scope* {
+  init_variables();
+
+  auto *scope = ctx.new_scope(m_size, m_variables.size(), m_variables.data());
+
+  // Initialize arguments
+  for (const auto &init : m_init_args) {
+    auto &arg = scope->value(init.index);
+    if (auto v = init.value) { // Initialize locals
+      if (!v->eval(ctx, arg)) {
+        return nullptr;
+      }
+    } else if (arg.is_undefined()) { // Populate default values
+      if (auto v = init.default_value) {
+        if (!v->eval(ctx, arg)) {
+          return nullptr;
+        }
+      }
+    }
+    if (auto v = init.unpack) { // Unpack objects
+      auto index = init.unpack_index;
+      if (!v->unpack(ctx, arg, index)) {
+        return nullptr;
+      }
+    }
+  }
+
+  // Initialize variables
+  for (const auto &init : m_init_vars) {
+    auto &var = scope->value(init.index);
+    if (auto v = init.value) {
+      if (!v->eval(ctx, var)) { // Initialize locals
+        return nullptr;
+      }
+    }
+  }
+  return scope;
+}
+
+void Expr::Scope::init_variables() {
+  if (!m_initialized) {
+    m_size = m_args.size() + m_vars.size();
+    m_variables.resize(m_size);
+    size_t i = 0;
+    for (const auto &name : m_args) m_variables[i++].name = name;
+    for (const auto &name : m_vars) m_variables[i++].name = name;
+    for (auto &init : m_init_args) init.unpack_index += m_args.size();
+    for (auto &init : m_init_vars) init.index += m_args.size();
+    m_initialized = true;
+  }
 }
 
 namespace expr {
@@ -297,18 +407,18 @@ bool ObjectLiteral::is_argument() const {
 
 void ObjectLiteral::to_arguments(std::vector<Ref<Str>> &args, std::vector<Ref<Str>> &vars) const {
   args.push_back(Str::empty);
-  unpack(args, vars);
+  unpack(vars);
 }
 
-void ObjectLiteral::unpack(std::vector<Ref<Str>> &args, std::vector<Ref<Str>> &vars) const {
+void ObjectLiteral::unpack(std::vector<Ref<Str>> &vars) const {
   for (const auto &e : m_entries) {
-    e.value->unpack(args, vars);
+    e.value->unpack(vars);
   }
 }
 
 bool ObjectLiteral::unpack(Context &ctx, Value &arg, int &var) {
   auto obj = arg.to_object();
-  if (!obj) return error(ctx, "cannot destructure null");
+  if (!obj) return error(ctx, "cannot destruct null");
   for (const auto &e : m_entries) {
     if (auto *key = dynamic_cast<StringLiteral*>(e.key.get())) {
       Value val;
@@ -409,17 +519,17 @@ bool ArrayLiteral::is_argument() const {
 
 void ArrayLiteral::to_arguments(std::vector<Ref<Str>> &args, std::vector<Ref<Str>> &vars) const {
   args.push_back(Str::empty);
-  unpack(args, vars);
+  unpack(vars);
 }
 
-void ArrayLiteral::unpack(std::vector<Ref<Str>> &args, std::vector<Ref<Str>> &vars) const {
+void ArrayLiteral::unpack(std::vector<Ref<Str>> &vars) const {
   for (const auto &i : m_list) {
-    i->unpack(args, vars);
+    i->unpack(vars);
   }
 }
 
 bool ArrayLiteral::unpack(Context &ctx, Value &arg, int &var) {
-  if (!arg.is_array()) return error(ctx, "cannot destructure");
+  if (!arg.is_array()) return error(ctx, "cannot destruct");
   auto *a = arg.as<Array>();
   int i = 0;
   for (const auto &p : m_list) {
@@ -498,24 +608,8 @@ FunctionLiteral::FunctionLiteral(Expr *inputs, Stmt *output) : m_output(output) 
     } else {
       m_inputs.push_back(std::unique_ptr<Expr>(inputs));
     }
-    int i = 0;
-    std::vector<Ref<Str>> args, vars;
-    for (const auto &p : m_inputs) {
-      p->to_arguments(args, vars);
-      Parameter param;
-      param.index = i++;
-      if (auto *assign = dynamic_cast<Assignment*>(p.get())) {
-        param.value = assign->m_r.get();
-      }
-      if (args.back() == Str::empty) {
-        param.unpack = p.get();
-      }
-      m_parameters.push_back(param);
-    }
-    m_argc = args.size();
-    m_variables.resize(m_argc + vars.size());
-    for (size_t i = 0; i < m_variables.size(); i++) {
-      m_variables[i].name = (i >= m_argc ? vars[i - m_argc] : args[i]);
+    for (const auto &input : m_inputs) {
+      m_scope.declare_arg(input.get());
     }
   }
 }
@@ -525,27 +619,18 @@ bool FunctionLiteral::eval(Context &ctx, Value &result) {
   return true;
 }
 
+void FunctionLiteral::declare(Scope &) {
+  m_output->declare(m_scope);
+}
+
 void FunctionLiteral::resolve(Context &ctx, int l, Imports *imports) {
   char name[100];
   std::sprintf(name, "(anonymous function at line %d column %d)", line(), column());
   m_method = Method::make(
     name,
     [this](Context &ctx, Object*, Value &result) {
-      auto *scope = ctx.new_scope(m_argc, m_variables.size(), m_variables.data());
-      int var_index = m_argc;
-      for (const auto &p : m_parameters) {
-        auto &arg = scope->value(p.index);
-        if (arg.is_undefined()) {
-          if (auto *v = p.value) {
-            if (!v->eval(ctx, arg)) {
-              return;
-            }
-          }
-        }
-        if (auto *e = p.unpack) {
-          e->unpack(ctx, arg, var_index);
-        }
-      }
+      auto scope = m_scope.new_scope(ctx);
+      if (!scope) return;
       Stmt::Result res;
       m_output->execute(ctx, res);
       if (res.is_return()) {
@@ -557,7 +642,8 @@ void FunctionLiteral::resolve(Context &ctx, int l, Imports *imports) {
     }
   );
 
-  Context fctx(ctx, 0, nullptr, pjs::Scope::make(ctx.instance(), ctx.scope(), m_variables.size(), m_variables.data()));
+  auto &variables = m_scope.variables();
+  Context fctx(ctx, 0, nullptr, pjs::Scope::make(ctx.instance(), ctx.scope(), variables.size(), variables.data()));
   for (auto &i : m_inputs) i->resolve(fctx, l, imports);
   m_output->resolve(fctx, l, imports);
 }
@@ -674,7 +760,7 @@ void Argument::dump(std::ostream &out, const std::string &indent) {
 bool Identifier::is_left_value() const { return true; }
 bool Identifier::is_argument() const { return true; }
 void Identifier::to_arguments(std::vector<Ref<Str>> &args, std::vector<Ref<Str>>&) const { args.push_back(m_key); }
-void Identifier::unpack(std::vector<Ref<Str>>&, std::vector<Ref<Str>> &vars) const { vars.push_back(m_key); }
+void Identifier::unpack(std::vector<Ref<Str>> &vars) const { vars.push_back(m_key); }
 
 bool Identifier::unpack(Context &ctx, Value &arg, int &var) {
   ctx.scope()->value(var++) = arg;

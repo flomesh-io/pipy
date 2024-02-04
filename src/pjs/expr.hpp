@@ -161,11 +161,40 @@ public:
   // Expr::Scope
   //
 
-  struct Scope {
-    Scope* parent = nullptr;
-    std::map<Str*, Expr*> variables;
-    Scope(Scope *p = nullptr) : parent(p) {}
-    bool is_function() const { return !parent; }
+  class Scope {
+  public:
+    Scope(Scope *p = nullptr) : m_parent(p) {}
+
+    auto parent() const -> Scope* { return m_parent; }
+    bool is_function() const { return !m_parent; }
+    void declare_arg(Expr *expr);
+    void declare_var(Str *name, Expr *value = nullptr);
+    auto variables() -> std::vector<pjs::Scope::Variable>& { init_variables(); return m_variables; }
+    auto new_scope(Context &ctx) -> pjs::Scope*;
+
+  private:
+    struct InitArg {
+      int index;
+      int unpack_index = 0;
+      Expr* value = nullptr;
+      Expr* default_value = nullptr;
+      Expr* unpack = nullptr;
+    };
+
+    struct InitVar {
+      int index;
+      Expr* value;
+    };
+
+    Scope* m_parent;
+    std::vector<pjs::Scope::Variable> m_variables;
+    std::vector<Ref<Str>> m_args, m_vars;
+    std::list<InitArg> m_init_args;
+    std::list<InitVar> m_init_vars;
+    size_t m_size = 0;
+    bool m_initialized = false;
+
+    void init_variables();
   };
 
   //
@@ -179,12 +208,12 @@ public:
   virtual bool is_argument() const { return false; }
   virtual void to_arguments(std::vector<Ref<Str>> &args, std::vector<Ref<Str>> &vars) const {}
   virtual bool is_comma_ended() const { return false; }
-  virtual void unpack(std::vector<Ref<Str>> &args, std::vector<Ref<Str>> &vars) const {}
+  virtual void unpack(std::vector<Ref<Str>> &vars) const {}
   virtual bool unpack(Context &ctx, Value &arg, int &var) { return true; }
   virtual bool eval(Context &ctx, Value &result) = 0;
   virtual bool assign(Context &ctx, Value &value) { return error(ctx, "cannot assign to a right-value"); }
   virtual bool clear(Context &ctx, Value &result) { return error(ctx, "cannot delete a value"); }
-  virtual void declare(Expr::Scope &scope) {}
+  virtual void declare(Scope &scope) {}
   virtual void resolve(Context &ctx, int l = -1, Imports *imports = nullptr) {}
   virtual auto reduce(Reducer &r) -> Reducer::Value* { return r.undefined(); }
   virtual auto reduce_lval(Reducer &r, Reducer::Value *rval) -> Reducer::Value* { return r.undefined(); }
@@ -371,7 +400,7 @@ public:
   virtual bool is_left_value() const override;
   virtual bool is_argument() const override;
   virtual void to_arguments(std::vector<Ref<Str>> &args, std::vector<Ref<Str>> &vars) const override;
-  virtual void unpack(std::vector<Ref<Str>> &args, std::vector<Ref<Str>> &vars) const override;
+  virtual void unpack(std::vector<Ref<Str>> &vars) const override;
   virtual bool unpack(Context &ctx, Value &arg, int &var) override;
   virtual bool eval(Context &ctx, Value &result) override;
   virtual void resolve(Context &ctx, int l, Imports *imports) override;
@@ -416,7 +445,7 @@ public:
   virtual bool is_left_value() const override;
   virtual bool is_argument() const override;
   virtual void to_arguments(std::vector<Ref<Str>> &args, std::vector<Ref<Str>> &vars) const override;
-  virtual void unpack(std::vector<Ref<Str>> &args, std::vector<Ref<Str>> &vars) const override;
+  virtual void unpack(std::vector<Ref<Str>> &vars) const override;
   virtual bool unpack(Context &ctx, Value &arg, int &var) override;
   virtual bool eval(Context &ctx, Value &result) override;
   virtual void resolve(Context &ctx, int l, Imports *imports) override;
@@ -433,25 +462,18 @@ private:
 class FunctionLiteral : public Expr {
 public:
   FunctionLiteral(Expr *inputs, Expr *output);
-  FunctionLiteral(Expr *inputs, Stmt *body);
+  FunctionLiteral(Expr *inputs, Stmt *output);
 
   virtual bool eval(Context &ctx, Value &result) override;
+  virtual void declare(Scope &scope) override;
   virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual auto reduce(Reducer &r) -> Reducer::Value* override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
-  struct Parameter {
-    int index;
-    Expr* value = nullptr;
-    Expr* unpack = nullptr;
-  };
-
   std::vector<std::unique_ptr<Expr>> m_inputs;
   std::unique_ptr<Stmt> m_output;
-  std::list<Parameter> m_parameters;
-  size_t m_argc = 0;
-  std::vector<pjs::Scope::Variable> m_variables;
+  Scope m_scope;
   Ref<Method> m_method;
 };
 
@@ -532,7 +554,7 @@ public:
   virtual bool is_left_value() const override;
   virtual bool is_argument() const override;
   virtual void to_arguments(std::vector<Ref<Str>> &args, std::vector<Ref<Str>> &vars) const override;
-  virtual void unpack(std::vector<Ref<Str>> &args, std::vector<Ref<Str>> &vars) const override;
+  virtual void unpack(std::vector<Ref<Str>> &vars) const override;
   virtual bool unpack(Context &ctx, Value &arg, int &var) override;
   virtual bool eval(Context &ctx, Value &result) override;
   virtual bool assign(Context &ctx, Value &value) override;
@@ -1250,6 +1272,8 @@ private:
 class Assignment : public Expr {
 public:
   Assignment(Expr *l, Expr *r) : m_l(l), m_r(r) {}
+
+  auto value() const -> Expr* { return m_r.get(); }
 
   virtual bool is_argument() const override;
   virtual void to_arguments(std::vector<Ref<Str>> &args, std::vector<Ref<Str>> &vars) const override;
