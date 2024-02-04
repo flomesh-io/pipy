@@ -1331,7 +1331,7 @@ Expr* ScriptParser::expression(bool no_comma) {
         (t.id() == Token::ID("]")) ||
         (t.id() == Token::ID("}")) ||
         (t.id() == Token::ID(",") && no_comma) ||
-        (t.id() == Token::ID(":") && (operators.empty() || operators.top().id() != Token::ID("?"))) ||
+        (t.id() == Token::ID(":") && operators.empty()) ||
         (t.id() == Token::ID("case")) ||
         (t.id() == Token::ID("default"))
       );
