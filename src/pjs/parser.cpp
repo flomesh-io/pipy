@@ -749,7 +749,6 @@ private:
     IncompleteExpression,
     AmbiguousPrecedence,
     TokenExpected,
-    IdentifierExpected,
     CaseExpected,
     MissingIdentifier,
     MissingExpression,
@@ -785,6 +784,7 @@ private:
   Stmt* statement();
   Expr* expression(bool no_comma = false);
   Expr* operand();
+  Expr* block_function(Location &loc);
   Expr* arrow_function(Location &loc, Expr *arguments);
 
   bool precedes(Token a, Token b) {
@@ -855,11 +855,11 @@ private:
   }
 
   auto read_identifier() -> std::string {
-    auto t = read();
+    auto t = peek();
     if (!t.is_string() || t.s()[0] == '"' || t.s()[0] == '\'') {
-      error(IdentifierExpected);
       return std::string();
     }
+    read();
     return t.s();
   }
 
@@ -900,7 +900,6 @@ private:
       case IncompleteExpression: m_error = "incomplete expression"; break;
       case AmbiguousPrecedence: m_error = "ambiguous exponentiation precedence"; break;
       case TokenExpected: m_error = std::string(tok) + "' expected"; break;
-      case IdentifierExpected: m_error = "identifier expected"; break;
       case CaseExpected: m_error = "case or default clause expected"; break;
       case MissingIdentifier: m_error = "missing identifier"; break;
       case MissingExpression: m_error = "missing expression"; break;
@@ -1138,7 +1137,7 @@ Stmt* ScriptParser::statement() {
       if (read(Token::ID("catch"))) {
         std::string name;
         if (read(Token::ID("("))) {
-          auto name = read_identifier();
+          auto name = read_identifier(MissingIdentifier);
           if (name.empty()) return nullptr;
           if (!read(Token::ID(")"), TokenExpected)) return nullptr;
         }
@@ -1572,6 +1571,13 @@ Expr* ScriptParser::operand() {
     return locate(concat(std::move(list)), l);
   }
 
+  if (t.id() == Token::ID("function")) {
+    Location l;
+    read(l);
+    read_identifier();
+    return block_function(l);
+  }
+
   switch (t.id()) {
     case Token::ID("undefined"): read(); return locate(undefined());
     case Token::ID("null"): read(); return locate(null());
@@ -1700,6 +1706,23 @@ Expr* ScriptParser::operand() {
   }
 
   return error(UnexpectedToken);
+}
+
+Expr* ScriptParser::block_function(Location &loc) {
+  std::unique_ptr<Expr> arguments;
+  if (!read(Token::ID("("), TokenExpected)) return nullptr;
+  if (!read(Token::ID(")"))) {
+    arguments = std::unique_ptr<Expr>(expression());
+    if (!read(Token::ID(")"), TokenExpected)) return nullptr;
+    if (!arguments->is_argument() && !arguments->is_argument_list()) {
+      return error(InvalidArgumentList);
+    }
+  }
+  if (!read(Token::ID("{"), TokenExpected)) return nullptr;
+  auto body = std::unique_ptr<Stmt>(statement_block());
+  if (!body) return nullptr;
+  if (!read(Token::ID("}"), TokenExpected)) return nullptr;
+  return locate(function(arguments.release(), body.release()), loc);
 }
 
 Expr* ScriptParser::arrow_function(Location &loc, Expr *arguments) {
