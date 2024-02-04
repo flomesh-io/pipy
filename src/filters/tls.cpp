@@ -127,7 +127,7 @@ TLSContext::TLSContext(bool is_server, const Options &options) {
   SSL_CTX_set0_verify_cert_store(m_ctx, m_verify_store);
   SSL_CTX_set_tlsext_servername_callback(m_ctx, on_server_name);
 
-  if (is_server) {
+  if (options.alpn && is_server) {
     SSL_CTX_set_alpn_select_cb(m_ctx, on_select_alpn, this);
   }
 }
@@ -232,7 +232,7 @@ auto TLSContext::on_select_alpn(
     *outlen = *names[sel];
     return SSL_TLSEXT_ERR_OK;
   } else {
-    return SSL_TLSEXT_ERR_NOACK;
+    return SSL_TLSEXT_ERR_ALERT_FATAL;
   }
 }
 
@@ -393,7 +393,7 @@ auto TLSSession::on_select_alpn(pjs::Array *names) -> int {
     if (!ctx.ok()) return -1;
     return ret.to_number();
   } else {
-    return 0;
+    return -1;
   }
 }
 
@@ -668,10 +668,12 @@ Client::Options::Options(pjs::Object *options, const char *base_name)
     .get(alpn_array)
     .check_nullable();
 
+  alpn = alpn_string || alpn_array;
+
   if (alpn_string) {
-    alpn.push_back(alpn_string->str());
+    alpn_list.push_back(alpn_string->str());
   } else if (alpn_array) {
-    alpn.resize(alpn_array->length());
+    alpn_list.resize(alpn_array->length());
     alpn_array->iterate_all(
       [&](pjs::Value &v, int i) {
         if (!v.is_string()) {
@@ -680,7 +682,7 @@ Client::Options::Options(pjs::Object *options, const char *base_name)
           std::sprintf(msg, "%s.alpn[%d] expects a string", options, i);
           throw std::runtime_error(msg);
         }
-        alpn[i] = v.s()->str();
+        alpn_list[i] = v.s()->str();
       }
     );
   }
@@ -721,8 +723,8 @@ Client::Client(const Options &options)
     m_tls_context->add_certificate(cert);
   }
 
-  if (options.alpn.size() > 0) {
-    m_tls_context->set_client_alpn(options.alpn);
+  if (options.alpn_list.size() > 0) {
+    m_tls_context->set_client_alpn(options.alpn_list);
   }
 }
 
@@ -802,9 +804,11 @@ Server::Options::Options(pjs::Object *options)
 
   pjs::Ref<pjs::Array> alpn_array;
   Value(options, "alpn")
-    .get(alpn)
+    .get(alpn_f)
     .get(alpn_array)
     .check_nullable();
+
+  alpn = alpn_f || alpn_array;
 
   if (alpn_array) {
     alpn_array->iterate_all(
@@ -895,7 +899,7 @@ void Server::process(Event *evt) {
 #endif
       m_options->certificate,
       m_options->verify,
-      m_options->alpn,
+      m_options->alpn_f,
       m_options->handshake
     );
     m_session->chain(Filter::output());

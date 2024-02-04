@@ -67,6 +67,7 @@ struct Options : public pipy::Options {
   std::vector<pjs::Ref<crypto::Certificate>> trusted;
   pjs::Ref<pjs::Function> verify;
   pjs::Ref<pjs::Function> handshake;
+  bool alpn = false;
 #if PIPY_USE_NTLS
   bool ntls = false;
 #endif
@@ -199,7 +200,7 @@ private:
 class Client : public Filter {
 public:
   struct Options : public tls::Options {
-    std::vector<std::string> alpn;
+    std::vector<std::string> alpn_list;
     pjs::Ref<pjs::Str> sni;
     pjs::Ref<pjs::Function> sni_f;
 
@@ -232,7 +233,7 @@ public:
   struct Options : public tls::Options {
     pjs::Ref<pjs::Str> dhparam_s;
     pjs::Ref<Data> dhparam;
-    pjs::Ref<pjs::Function> alpn;
+    pjs::Ref<pjs::Function> alpn_f;
     std::set<pjs::Ref<pjs::Str>> alpn_set;
 
     Options() {}
