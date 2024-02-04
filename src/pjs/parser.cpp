@@ -1057,8 +1057,14 @@ Stmt* ScriptParser::statement() {
       return var(name);
     }
     case Token::ID("function"): {
-      error(UnexpectedToken);
-      return nullptr;
+      Location l;
+      read(l);
+      auto name = read_identifier(MissingIdentifier);
+      if (name.empty()) return nullptr;
+      auto f = block_function(l);
+      if (!f) return nullptr;
+      read_semicolons();
+      return function(name, f);
     }
     case Token::ID("if"): {
       read();
