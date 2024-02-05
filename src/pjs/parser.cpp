@@ -172,6 +172,7 @@ public:
   auto read(Location &loc) -> Token {
     peek(loc);
     m_has_peeked = false;
+    m_has_peeked_eol = false;
     loc = m_token_loc;
     return m_token;
   }
@@ -186,8 +187,10 @@ public:
   }
 
   bool peek_eol() {
+    if (m_has_peeked_eol) return true;
     if (m_is_template) return false;
-    return parse_space();
+    if (parse_space()) return (m_has_peeked_eol = true);
+    return false;
   }
 
   static bool is_operator(int id) {
@@ -218,6 +221,7 @@ private:
   Location m_token_loc;
   Token m_token;
   bool m_has_peeked = false;
+  bool m_has_peeked_eol = false;
   bool m_is_template = false;
 
   auto parse(Location &loc) -> Token;

@@ -119,7 +119,7 @@ void Var::declare(Expr::Scope &scope) {
   auto name = m_identifier->name();
   auto s = scope.parent();
   while (!s->is_function()) s = s->parent();
-  s->declare_var(name, m_expr.get());
+  s->declare_var(name);
   if (m_expr) m_expr->declare(scope);
 }
 
