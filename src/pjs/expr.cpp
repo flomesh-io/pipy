@@ -26,8 +26,6 @@
 #include "expr.hpp"
 #include "stmt.hpp"
 
-#include <algorithm>
-
 namespace pjs {
 
 //
@@ -53,131 +51,6 @@ Expr::Expr()
 
 Expr::~Expr()
 {
-}
-
-//
-// Expr::Imports
-//
-
-void Expr::Imports::add(Str *name, int file, Str *original_name) {
-  m_imports[name] = { file, original_name };
-}
-
-bool Expr::Imports::get(Str *name, int *file, Str **original_name) {
-  auto i = m_imports.find(name);
-  if (i == m_imports.end()) return false;
-  const auto &imp = i->second;
-  *file = imp.first;
-  *original_name = imp.second;
-  return true;
-}
-
-//
-// Expr::Scope
-//
-
-void Expr::Scope::declare_arg(Expr *expr) {
-  if (!m_initialized) {
-    auto index = m_args.size();
-    auto unpack_index = m_vars.size();
-    expr->to_arguments(m_args, m_vars);
-    if (m_args.size() == index) return;
-    InitArg init;
-    init.index = index;
-    if (auto assign = dynamic_cast<expr::Assignment*>(expr)) {
-      init.default_value = assign->value();
-    }
-    if (m_args[index] == Str::empty) {
-      init.unpack = expr;
-      init.unpack_index = unpack_index;
-    }
-    if (init.default_value || init.unpack) {
-      m_init_args.push_back(init);
-    }
-  }
-}
-
-void Expr::Scope::declare_var(Str *name, Expr *value) {
-  if (!m_initialized) {
-    auto i = std::find(m_vars.begin(), m_vars.end(), name);
-    if (i != m_vars.end()) {
-      if (value) {
-        InitVar init;
-        init.index = i - m_vars.begin();
-        init.value = value;
-        m_init_vars.push_back(init);
-      }
-      return;
-    }
-    i = std::find(m_args.begin(), m_args.end(), name);
-    if (i != m_args.end()) {
-      if (value) {
-        InitArg init;
-        init.index = i - m_args.begin();
-        init.value = value;
-        m_init_args.push_back(init);
-      }
-    }
-    if (value) {
-      InitVar init;
-      init.index = m_vars.size();
-      init.value = value;
-      m_init_vars.push_back(init);
-    }
-    m_vars.push_back(name);
-  }
-}
-
-auto Expr::Scope::new_scope(Context &ctx) -> pjs::Scope* {
-  init_variables();
-
-  auto *scope = ctx.new_scope(m_size, m_variables.size(), m_variables.data());
-
-  // Initialize arguments
-  for (const auto &init : m_init_args) {
-    auto &arg = scope->value(init.index);
-    if (auto v = init.value) { // Initialize locals
-      if (!v->eval(ctx, arg)) {
-        return nullptr;
-      }
-    } else if (arg.is_undefined()) { // Populate default values
-      if (auto v = init.default_value) {
-        if (!v->eval(ctx, arg)) {
-          return nullptr;
-        }
-      }
-    }
-    if (auto v = init.unpack) { // Unpack objects
-      auto index = init.unpack_index;
-      if (!v->unpack(ctx, arg, index)) {
-        return nullptr;
-      }
-    }
-  }
-
-  // Initialize variables
-  for (const auto &init : m_init_vars) {
-    auto &var = scope->value(init.index);
-    if (auto v = init.value) {
-      if (!v->eval(ctx, var)) { // Initialize locals
-        return nullptr;
-      }
-    }
-  }
-  return scope;
-}
-
-void Expr::Scope::init_variables() {
-  if (!m_initialized) {
-    m_size = m_args.size() + m_vars.size();
-    m_variables.resize(m_size);
-    size_t i = 0;
-    for (const auto &name : m_args) m_variables[i++].name = name;
-    for (const auto &name : m_vars) m_variables[i++].name = name;
-    for (auto &init : m_init_args) init.unpack_index += m_args.size();
-    for (auto &init : m_init_vars) init.index += m_args.size();
-    m_initialized = true;
-  }
 }
 
 namespace expr {
@@ -600,7 +473,10 @@ void ArrayLiteral::dump(std::ostream &out, const std::string &indent) {
 FunctionLiteral::FunctionLiteral(Expr *inputs, Expr *output)
   : FunctionLiteral(inputs, new stmt::Return(output)) {}
 
-FunctionLiteral::FunctionLiteral(Expr *inputs, Stmt *output) : m_output(output) {
+FunctionLiteral::FunctionLiteral(Expr *inputs, Stmt *output)
+  : m_output(output)
+  , m_scope(Scope::FUNCTION)
+{
   if (inputs) {
     if (auto comp = dynamic_cast<Compound*>(inputs)) {
       comp->break_down(m_inputs);
@@ -619,8 +495,8 @@ bool FunctionLiteral::eval(Context &ctx, Value &result) {
   return true;
 }
 
-void FunctionLiteral::declare(Scope &) {
-  m_output->declare(m_scope);
+bool FunctionLiteral::declare(Scope &, Error &error) {
+  return m_output->declare(m_scope, error);
 }
 
 void FunctionLiteral::resolve(Context &ctx, int l, Imports *imports) {

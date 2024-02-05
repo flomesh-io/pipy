@@ -27,6 +27,7 @@
 #define PJS_EXPR_HPP
 
 #include "types.hpp"
+#include "tree.hpp"
 #include "builtin.hpp"
 
 #include <cmath>
@@ -44,7 +45,7 @@ class Stmt;
 // Expression base
 //
 
-class Expr {
+class Expr : public Tree {
 public:
 
   //
@@ -145,59 +146,6 @@ public:
   };
 
   //
-  // Expr::Imports
-  //
-
-  class Imports {
-  public:
-    void add(Str *name, int file, Str *original_name);
-    bool get(Str *name, int *file, Str **original_name);
-
-  private:
-    std::map<Ref<Str>, std::pair<int, Ref<Str>>> m_imports;
-  };
-
-  //
-  // Expr::Scope
-  //
-
-  class Scope {
-  public:
-    Scope(Scope *p = nullptr) : m_parent(p) {}
-
-    auto parent() const -> Scope* { return m_parent; }
-    bool is_function() const { return !m_parent; }
-    void declare_arg(Expr *expr);
-    void declare_var(Str *name, Expr *value = nullptr);
-    auto variables() -> std::vector<pjs::Scope::Variable>& { init_variables(); return m_variables; }
-    auto new_scope(Context &ctx) -> pjs::Scope*;
-
-  private:
-    struct InitArg {
-      int index;
-      int unpack_index = 0;
-      Expr* value = nullptr;
-      Expr* default_value = nullptr;
-      Expr* unpack = nullptr;
-    };
-
-    struct InitVar {
-      int index;
-      Expr* value;
-    };
-
-    Scope* m_parent;
-    std::vector<pjs::Scope::Variable> m_variables;
-    std::vector<Ref<Str>> m_args, m_vars;
-    std::list<InitArg> m_init_args;
-    std::list<InitVar> m_init_vars;
-    size_t m_size = 0;
-    bool m_initialized = false;
-
-    void init_variables();
-  };
-
-  //
   // Expression base methods
   //
 
@@ -213,37 +161,16 @@ public:
   virtual bool eval(Context &ctx, Value &result) = 0;
   virtual bool assign(Context &ctx, Value &value) { return error(ctx, "cannot assign to a right-value"); }
   virtual bool clear(Context &ctx, Value &result) { return error(ctx, "cannot delete a value"); }
-  virtual void declare(Scope &scope) {}
-  virtual void resolve(Context &ctx, int l = -1, Imports *imports = nullptr) {}
   virtual auto reduce(Reducer &r) -> Reducer::Value* { return r.undefined(); }
   virtual auto reduce_lval(Reducer &r, Reducer::Value *rval) -> Reducer::Value* { return r.undefined(); }
   virtual void dump(std::ostream &out, const std::string &indent = "") = 0;
 
-  //
-  // Expression location in script
-  //
-
-  auto source() const -> const Source* { return m_source; }
-  auto line() const -> int { return m_line; }
-  auto column() const -> int { return m_column; }
-
-  void locate(const Source *source, int line, int column) {
-    m_source = source;
-    m_line = line;
-    m_column = column;
-  }
-
 protected:
   bool error(Context &ctx, const std::string &msg) {
     ctx.error(msg);
-    ctx.backtrace(m_source, m_line, m_column);
+    ctx.backtrace(source(), line(), column());
     return false;
   }
-
-private:
-  const Source* m_source = nullptr;
-  int m_line = 0;
-  int m_column = 0;
 };
 
 namespace expr {
@@ -465,7 +392,7 @@ public:
   FunctionLiteral(Expr *inputs, Stmt *output);
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual void declare(Scope &scope) override;
+  virtual bool declare(Scope &scope, Error &error) override;
   virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual auto reduce(Reducer &r) -> Reducer::Value* override;
   virtual void dump(std::ostream &out, const std::string &indent) override;

@@ -68,7 +68,7 @@ void ModuleBase::shutdown() {
 JSModule::JSModule(Worker *worker, int index)
   : Module(index)
   , m_worker(worker)
-  , m_imports(new pjs::Expr::Imports)
+  , m_imports(new pjs::Tree::Imports)
 {
   Log::debug(Log::ALLOC, "[module   %p] ++ index = %d", this, index);
 }
@@ -132,9 +132,19 @@ bool JSModule::load(const std::string &path, pjs::Value &result) {
     return false;
   }
 
-  pjs::Expr::Scope scope;
+  pjs::Tree::Scope scope(pjs::Tree::Scope::MODULE);
+  pjs::Tree::Error tree_error;
+  if (!stmt->declare(scope, tree_error)) {
+    auto tree = tree_error.tree;
+    Log::pjs_location(m_source.content, path, tree->line(), tree->column());
+    Log::error(
+      "[pjs] Syntax error: %s at line %d column %d in %s",
+      tree_error.message.c_str(), tree->line(), tree->column(), path.c_str()
+    );
+    return false;
+  }
+
   pjs::Ref<Context> ctx = m_worker->new_loading_context();
-  stmt->declare(scope);
   stmt->resolve(*ctx, index(), m_imports.get());
   scope.new_scope(*ctx);
 

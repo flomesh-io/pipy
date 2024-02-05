@@ -54,14 +54,17 @@ namespace stmt {
 // Block
 //
 
-void Block::declare(Expr::Scope &scope) {
-  Expr::Scope s(&scope);
+bool Block::declare(Tree::Scope &scope, Error &error) {
+  Tree::Scope s(Tree::Scope::BLOCK, &scope);
   for (const auto &p : m_stmts) {
-    p->declare(s);
+    if (!p->declare(s, error)) {
+      return false;
+    }
   }
+  return true;
 }
 
-void Block::resolve(Context &ctx, int l, Expr::Imports *imports) {
+void Block::resolve(Context &ctx, int l, Tree::Imports *imports) {
   for (const auto &p : m_stmts) {
     p->resolve(ctx, l, imports);
   }
@@ -89,11 +92,11 @@ void Block::dump(std::ostream &out, const std::string &indent) {
 // Evaluate
 //
 
-void Evaluate::declare(Expr::Scope &scope) {
-  m_expr->declare(scope);
+bool Evaluate::declare(Tree::Scope &scope, Error &error) {
+  return m_expr->declare(scope, error);
 }
 
-void Evaluate::resolve(Context &ctx, int l, Expr::Imports *imports) {
+void Evaluate::resolve(Context &ctx, int l, Tree::Imports *imports) {
   m_expr->resolve(ctx, l, imports);
 }
 
@@ -101,7 +104,7 @@ void Evaluate::execute(Context &ctx, Result &result) {
   if (m_expr->eval(ctx, result.value)) {
     result.set_done();
   } else {
-    result.value.set(Error::make(ctx.error()));
+    result.value.set(pjs::Error::make(ctx.error()));
     result.set_throw();
   }
 }
@@ -115,15 +118,16 @@ void Evaluate::dump(std::ostream &out, const std::string &indent) {
 // Var
 //
 
-void Var::declare(Expr::Scope &scope) {
+bool Var::declare(Tree::Scope &scope, Error &error) {
   auto name = m_identifier->name();
   auto s = scope.parent();
-  while (!s->is_function()) s = s->parent();
+  while (!s->is_root()) s = s->parent();
   s->declare_var(name);
-  if (m_expr) m_expr->declare(scope);
+  if (m_expr && !m_expr->declare(scope, error)) return false;
+  return true;
 }
 
-void Var::resolve(Context &ctx, int l, Expr::Imports *imports) {
+void Var::resolve(Context &ctx, int l, Tree::Imports *imports) {
   if (m_expr) {
     m_identifier->resolve(ctx, l, imports);
     m_expr->resolve(ctx, l, imports);
@@ -136,7 +140,7 @@ void Var::execute(Context &ctx, Result &result) {
     if (m_expr->eval(ctx, val) && m_identifier->assign(ctx, val)) {
       result.set_done();
     } else {
-      result.value.set(Error::make(ctx.error()));
+      result.value.set(pjs::Error::make(ctx.error()));
       result.set_throw();
     }
   }
@@ -151,16 +155,16 @@ void Var::dump(std::ostream &out, const std::string &indent) {
 // Function
 //
 
-void Function::declare(Expr::Scope &scope) {
+bool Function::declare(Tree::Scope &scope, Error &error) {
+  m_is_definition = scope.parent()->is_root();
   auto name = m_identifier->name();
   auto s = scope.parent();
-  while (!s->is_function()) s = s->parent();
-  m_is_definition = scope.parent()->is_function();
+  while (!s->is_root()) s = s->parent();
   s->declare_var(name, m_is_definition ? m_expr.get() : nullptr);
-  m_expr->declare(scope);
+  return m_expr->declare(scope, error);
 }
 
-void Function::resolve(Context &ctx, int l, Expr::Imports *imports) {
+void Function::resolve(Context &ctx, int l, Tree::Imports *imports) {
   m_identifier->resolve(ctx, l, imports);
   m_expr->resolve(ctx, l, imports);
 }
@@ -172,7 +176,7 @@ void Function::execute(Context &ctx, Result &result) {
       m_identifier->assign(ctx, val);
       result.set_done();
     } else {
-      result.value.set(Error::make(ctx.error()));
+      result.value.set(pjs::Error::make(ctx.error()));
       result.set_throw();
     }
   }
@@ -187,13 +191,14 @@ void Function::dump(std::ostream &out, const std::string &indent) {
 // If
 //
 
-void If::declare(Expr::Scope &scope) {
-  m_cond->declare(scope);
-  m_then->declare(scope);
-  if (m_else) m_else->declare(scope);
+bool If::declare(Tree::Scope &scope, Error &error) {
+  if (!m_cond->declare(scope, error)) return false;
+  if (!m_then->declare(scope, error)) return false;
+  if (m_else && !m_else->declare(scope, error)) return false;
+  return true;
 }
 
-void If::resolve(Context &ctx, int l, Expr::Imports *imports) {
+void If::resolve(Context &ctx, int l, Tree::Imports *imports) {
   m_cond->resolve(ctx, l, imports);
   m_then->resolve(ctx, l, imports);
   if (m_else) m_else->resolve(ctx, l, imports);
@@ -202,7 +207,7 @@ void If::resolve(Context &ctx, int l, Expr::Imports *imports) {
 void If::execute(Context &ctx, Result &result) {
   Value val;
   if (!m_cond->eval(ctx, val)) {
-    result.value.set(Error::make(ctx.error()));
+    result.value.set(pjs::Error::make(ctx.error()));
     result.set_throw();
     return;
   }
@@ -230,15 +235,17 @@ void If::dump(std::ostream &out, const std::string &indent) {
 // Switch
 //
 
-void Switch::declare(Expr::Scope &scope) {
-  m_cond->declare(scope);
+bool Switch::declare(Tree::Scope &scope, Error &error) {
+  Tree::Scope s(Tree::Scope::SWITCH, &scope);
+  if (!m_cond->declare(s, error)) return false;
   for (const auto &p : m_cases) {
-    p.first->declare(scope);
-    if (p.second) p.second->declare(scope);
+    if (!p.first->declare(s, error)) return false;
+    if (p.second && !p.second->declare(s, error)) return false;
   }
+  return true;
 }
 
-void Switch::resolve(Context &ctx, int l, Expr::Imports *imports) {
+void Switch::resolve(Context &ctx, int l, Tree::Imports *imports) {
   m_cond->resolve(ctx, l, imports);
   for (const auto &p : m_cases) {
     p.first->resolve(ctx, l, imports);
@@ -249,7 +256,7 @@ void Switch::resolve(Context &ctx, int l, Expr::Imports *imports) {
 void Switch::execute(Context &ctx, Result &result) {
   Value cond_val;
   if (!m_cond->eval(ctx, cond_val)) {
-    result.value.set(Error::make(ctx.error()));
+    result.value.set(pjs::Error::make(ctx.error()));
     result.set_throw();
     return;
   }
@@ -259,7 +266,7 @@ void Switch::execute(Context &ctx, Result &result) {
     auto e = p->first.get();
     Value val;
     if (!e->eval(ctx, val)) {
-      result.value.set(Error::make(ctx.error()));
+      result.value.set(pjs::Error::make(ctx.error()));
       result.set_throw();
       return;
     }
@@ -301,6 +308,17 @@ void Switch::dump(std::ostream &out, const std::string &indent) {
 // Break
 //
 
+bool Break::declare(Tree::Scope &scope, Error &error) {
+  auto *s = &scope;
+  while (s && s->kind() != Tree::Scope::SWITCH) s = s->parent();
+  if (!s) {
+    error.tree = this;
+    error.message = "illegal break";
+    return false;
+  }
+  return true;
+}
+
 void Break::execute(Context &ctx, Result &result) {
   result.set_break();
 }
@@ -313,11 +331,12 @@ void Break::dump(std::ostream &out, const std::string &indent) {
 // Return
 //
 
-void Return::declare(Expr::Scope &scope) {
-  if (m_expr) m_expr->declare(scope);
+bool Return::declare(Tree::Scope &scope, Error &error) {
+  if (m_expr && !m_expr->declare(scope, error)) return false;
+  return true;
 }
 
-void Return::resolve(Context &ctx, int l, Expr::Imports *imports) {
+void Return::resolve(Context &ctx, int l, Tree::Imports *imports) {
   if (m_expr) m_expr->resolve(ctx, l, imports);
 }
 
@@ -326,7 +345,7 @@ void Return::execute(Context &ctx, Result &result) {
     if (m_expr->eval(ctx, result.value)) {
       result.set_return();
     } else {
-      result.value.set(Error::make(ctx.error()));
+      result.value.set(pjs::Error::make(ctx.error()));
       result.set_throw();
     }
   } else {
@@ -344,11 +363,12 @@ void Return::dump(std::ostream &out, const std::string &indent) {
 // Throw
 //
 
-void Throw::declare(Expr::Scope &scope) {
-  if (m_expr) m_expr->declare(scope);
+bool Throw::declare(Tree::Scope &scope, Error &error) {
+  if (m_expr && !m_expr->declare(scope, error)) return false;
+  return true;
 }
 
-void Throw::resolve(Context &ctx, int l, Expr::Imports *imports) {
+void Throw::resolve(Context &ctx, int l, Tree::Imports *imports) {
   if (m_expr) m_expr->resolve(ctx, l, imports);
 }
 
@@ -357,7 +377,7 @@ void Throw::execute(Context &ctx, Result &result) {
     if (m_expr->eval(ctx, result.value)) {
       result.set_throw();
     } else {
-      result.value.set(Error::make(ctx.error()));
+      result.value.set(pjs::Error::make(ctx.error()));
       result.set_throw();
     }
   } else {
@@ -375,13 +395,14 @@ void Throw::dump(std::ostream &out, const std::string &indent) {
 // Try
 //
 
-void Try::declare(Expr::Scope &scope) {
-  m_try->declare(scope);
-  if (m_catch) m_catch->declare(scope);
-  if (m_finally) m_finally->declare(scope);
+bool Try::declare(Tree::Scope &scope, Error &error) {
+  if (!m_try->declare(scope, error)) return false;
+  if (m_catch && !m_catch->declare(scope, error)) return false;
+  if (m_finally && !m_finally->declare(scope, error)) return false;
+  return true;
 }
 
-void Try::resolve(Context &ctx, int l, Expr::Imports *imports) {
+void Try::resolve(Context &ctx, int l, Tree::Imports *imports) {
   m_try->resolve(ctx, l, imports);
   if (m_catch) m_catch->resolve(ctx, l, imports);
   if (m_finally) m_finally->resolve(ctx, l, imports);
@@ -392,10 +413,10 @@ void Try::execute(Context &ctx, Result &result) {
   if (result.is_throw() && m_catch) {
     Value f;
     if (m_catch->eval(ctx, f) && f.is_function()) {
-      Value e(Error::make(ctx.error()));
+      Value e(pjs::Error::make(ctx.error()));
       (*f.f())(ctx, 1, &e, result.value);
       if (!ctx.ok()) {
-        result.value.set(Error::make(ctx.error()));
+        result.value.set(pjs::Error::make(ctx.error()));
         result.set_throw();
       } else {
         result.set_done();

@@ -210,7 +210,7 @@ public:
 
   void bind_pipelines();
   void bind_exports(Worker *worker, Module *module);
-  void bind_imports(Worker *worker, Module *module, pjs::Expr::Imports *imports);
+  void bind_imports(Worker *worker, Module *module, pjs::Tree::Imports *imports);
   void apply(JSModule *module);
   void draw(Graph &g);
 

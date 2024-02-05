@@ -807,6 +807,11 @@ private:
     return e;
   }
 
+  Stmt* locate(Stmt *s, const Location &l) {
+    s->locate(m_source, l.line, l.column);
+    return s;
+  }
+
   Stmt* statement_block();
   Stmt* statement();
   Expr* expression(bool no_comma = false);
@@ -1051,19 +1056,20 @@ Stmt* ScriptParser::statement_block() {
 }
 
 Stmt* ScriptParser::statement() {
+  Location l;
   switch (peek().id()) {
     case Token::ID(";"):
       read_semicolons();
       return block();
     case Token::ID("{"): {
-      read();
+      read(l);
       auto s = std::unique_ptr<Stmt>(statement_block());
       if (!s) return nullptr;
       if (!read(Token::ID("}"))) return nullptr;
-      return s.release();
+      return locate(s.release(), l);
     }
     case Token::ID("var"): {
-      read();
+      read(l);
       if (peek_eol(MissingIdentifier)) return nullptr;
       auto name = read_identifier(MissingIdentifier);
       if (name.empty()) return nullptr;
@@ -1071,23 +1077,22 @@ Stmt* ScriptParser::statement() {
         auto e = expression();
         if (!e) return nullptr;
         read(Token::ID(";"));
-        return var(name, e);
+        return locate(var(name, e), l);
       }
       read_semicolons();
-      return var(name);
+      return locate(var(name), l);
     }
     case Token::ID("function"): {
-      Location l;
       read(l);
       auto name = read_identifier(MissingIdentifier);
       if (name.empty()) return nullptr;
       auto f = block_function(l);
       if (!f) return nullptr;
       read_semicolons();
-      return function(name, f);
+      return locate(function(name, f), l);
     }
     case Token::ID("if"): {
-      read();
+      read(l);
       if (!read(Token::ID("("), TokenExpected)) return nullptr;
       auto cond = std::unique_ptr<Expr>(expression());
       if (!cond) return nullptr;
@@ -1097,13 +1102,13 @@ Stmt* ScriptParser::statement() {
       if (read(Token::ID("else"))) {
         auto else_clause = std::unique_ptr<Stmt>(statement());
         if (!else_clause) return nullptr;
-        return if_else(cond.release(), then_clause.release(), else_clause.release());
+        return locate(if_else(cond.release(), then_clause.release(), else_clause.release()), l);
       } else {
-        return if_else(cond.release(), then_clause.release());
+        return locate(if_else(cond.release(), then_clause.release()), l);
       }
     }
     case Token::ID("switch"): {
-      read();
+      read(l);
       if (!read(Token::ID("("), TokenExpected)) return nullptr;
       auto cond = std::unique_ptr<Expr>(expression());
       if (!cond) return nullptr;
@@ -1130,31 +1135,31 @@ Stmt* ScriptParser::statement() {
           return nullptr;
         }
       }
-      return switch_case(cond.release(), std::move(cases), default_case.release());
+      return locate(switch_case(cond.release(), std::move(cases), default_case.release()), l);
     }
     case Token::ID("break"): {
-      read();
+      read(l);
       read_semicolons();
-      return flow_break();
+      return locate(flow_break(), l);
     }
     case Token::ID("return"): {
-      read();
-      if (peek_eol() || peek_end()) return flow_return();
+      read(l);
+      if (peek_eol() || peek_end()) return locate(flow_return(), l);
       auto e = expression();
       if (!e) return nullptr;
       read_semicolons();
-      return flow_return(e);
+      return locate(flow_return(e), l);
     }
     case Token::ID("throw"): {
-      read();
+      read(l);
       if (peek_eol(MissingExpression) || peek_end(MissingExpression)) return nullptr;
       auto e = expression();
       if (!e) return nullptr;
       read_semicolons();
-      return flow_throw(e);
+      return locate(flow_throw(e), l);
     }
     case Token::ID("try"): {
-      read();
+      read(l);
       if (!peek(Token::ID("{"), TokenExpected)) return nullptr;
       auto stmt = std::unique_ptr<Stmt>(statement());
       if (!stmt) return nullptr;
@@ -1184,12 +1189,12 @@ Stmt* ScriptParser::statement() {
         error(MissingCatchFinally);
         return nullptr;
       }
-      return try_catch(stmt.release(), catch_clause.release(), finally_clause.release());
+      return locate(try_catch(stmt.release(), catch_clause.release(), finally_clause.release()), l);
     }
     default: {
       auto e = expression();
       if (!e) return nullptr;
-      read(Token::ID(";"));
+      read_semicolons();
       return evaluate(e);
     }
   }

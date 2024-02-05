@@ -114,8 +114,14 @@ static void test_eval(Context &ctx, const char *script) {
     delete stmt;
     return;
   }
-  Expr::Scope scope;
-  stmt->declare(scope);
+  Tree::Scope scope(Tree::Scope::MODULE);
+  Tree::Error tree_error;
+  if (!stmt->declare(scope, tree_error)) {
+    auto tree = tree_error.tree;
+    std::cerr << "Declaration error at line " << tree->line() << " column " << tree->column() << ": " << tree_error.message << std::endl;
+    delete stmt;
+    return;
+  }
   stmt->resolve(ctx, 0);
   if (!ctx.error().message.empty()) {
     std::cerr << "Resolve error: " << ctx.error().message << std::endl;

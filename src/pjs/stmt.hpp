@@ -37,7 +37,7 @@ namespace pjs {
 // Statement base
 //
 
-class Stmt {
+class Stmt : public Tree {
 public:
 
   //
@@ -69,8 +69,6 @@ public:
 
   Stmt();
   virtual ~Stmt();
-  virtual void declare(Expr::Scope &scope) {}
-  virtual void resolve(Context &ctx, int l = -1, Expr::Imports *imports = nullptr) {}
   virtual void execute(Context &ctx, Result &result) = 0;
   virtual void dump(std::ostream &out, const std::string &indent = "") = 0;
 
@@ -79,25 +77,6 @@ public:
   //
 
   bool execute(Context &ctx, Value &result);
-
-  //
-  // Statement location in script
-  //
-
-  auto source() const -> const Source* { return m_source; }
-  auto line() const -> int { return m_line; }
-  auto column() const -> int { return m_column; }
-
-  void locate(const Source *source, int line, int column) {
-    m_source = source;
-    m_line = line;
-    m_column = column;
-  }
-
-private:
-  const Source* m_source = nullptr;
-  int m_line = 0;
-  int m_column = 0;
 };
 
 namespace stmt {
@@ -111,8 +90,8 @@ public:
   Block() {}
   Block(std::list<std::unique_ptr<Stmt>> &&stmts) : m_stmts(std::move(stmts)) {}
 
-  virtual void declare(Expr::Scope &scope) override;
-  virtual void resolve(Context &ctx, int l, Expr::Imports *imports) override;
+  virtual bool declare(Tree::Scope &scope, Error &error) override;
+  virtual void resolve(Context &ctx, int l, Tree::Imports *imports) override;
   virtual void execute(Context &ctx, Result &result) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -128,8 +107,8 @@ class Evaluate : public Stmt {
 public:
   Evaluate(Expr *expr) : m_expr(expr) {}
 
-  virtual void declare(Expr::Scope &scope) override;
-  virtual void resolve(Context &ctx, int l, Expr::Imports *imports) override;
+  virtual bool declare(Tree::Scope &scope, Error &error) override;
+  virtual void resolve(Context &ctx, int l, Tree::Imports *imports) override;
   virtual void execute(Context &ctx, Result &result) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -146,8 +125,8 @@ public:
   Var(const std::string &name, Expr *expr)
     : m_identifier(new expr::Identifier(name)), m_expr(expr) {}
 
-  virtual void declare(Expr::Scope &scope) override;
-  virtual void resolve(Context &ctx, int l, Expr::Imports *imports) override;
+  virtual bool declare(Tree::Scope &scope, Error &error) override;
+  virtual void resolve(Context &ctx, int l, Tree::Imports *imports) override;
   virtual void execute(Context &ctx, Result &result) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -166,8 +145,8 @@ public:
   Function(const std::string &name, Expr *expr)
     : m_identifier(new expr::Identifier(name)), m_expr(expr) {}
 
-  virtual void declare(Expr::Scope &scope) override;
-  virtual void resolve(Context &ctx, int l, Expr::Imports *imports) override;
+  virtual bool declare(Tree::Scope &scope, Error &error) override;
+  virtual void resolve(Context &ctx, int l, Tree::Imports *imports) override;
   virtual void execute(Context &ctx, Result &result) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -186,8 +165,8 @@ public:
   If(Expr *cond, Stmt *then_clause, Stmt *else_clause)
     : m_cond(cond), m_then(then_clause), m_else(else_clause) {}
 
-  virtual void declare(Expr::Scope &scope) override;
-  virtual void resolve(Context &ctx, int l, Expr::Imports *imports) override;
+  virtual bool declare(Tree::Scope &scope, Error &error) override;
+  virtual void resolve(Context &ctx, int l, Tree::Imports *imports) override;
   virtual void execute(Context &ctx, Result &result) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -206,8 +185,8 @@ public:
   Switch(Expr *cond, std::list<std::pair<std::unique_ptr<Expr>, std::unique_ptr<Stmt>>> &&cases, Stmt *default_case)
     : m_cond(cond), m_cases(std::move(cases)), m_default(default_case) {}
 
-  virtual void declare(Expr::Scope &scope) override;
-  virtual void resolve(Context &ctx, int l, Expr::Imports *imports) override;
+  virtual bool declare(Tree::Scope &scope, Error &error) override;
+  virtual void resolve(Context &ctx, int l, Tree::Imports *imports) override;
   virtual void execute(Context &ctx, Result &result) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -225,6 +204,7 @@ class Break : public Stmt {
 public:
   Break() {}
 
+  virtual bool declare(Tree::Scope &scope, Error &error) override;
   virtual void execute(Context &ctx, Result &result) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 };
@@ -239,8 +219,8 @@ public:
 
   auto value() const -> Expr* { return m_expr.get(); }
 
-  virtual void declare(Expr::Scope &scope) override;
-  virtual void resolve(Context &ctx, int l, Expr::Imports *imports) override;
+  virtual bool declare(Tree::Scope &scope, Error &error) override;
+  virtual void resolve(Context &ctx, int l, Tree::Imports *imports) override;
   virtual void execute(Context &ctx, Result &result) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -256,8 +236,8 @@ class Throw : public Stmt {
 public:
   Throw(Expr *expr) : m_expr(expr) {}
 
-  virtual void declare(Expr::Scope &scope) override;
-  virtual void resolve(Context &ctx, int l, Expr::Imports *imports) override;
+  virtual bool declare(Tree::Scope &scope, Error &error) override;
+  virtual void resolve(Context &ctx, int l, Tree::Imports *imports) override;
   virtual void execute(Context &ctx, Result &result) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -274,8 +254,8 @@ public:
   Try(Stmt *try_clause, Expr *catch_clause, Stmt *finally_clause)
     : m_try(try_clause), m_catch(catch_clause), m_finally(finally_clause) {}
 
-  virtual void declare(Expr::Scope &scope) override;
-  virtual void resolve(Context &ctx, int l, Expr::Imports *imports) override;
+  virtual bool declare(Tree::Scope &scope, Error &error) override;
+  virtual void resolve(Context &ctx, int l, Tree::Imports *imports) override;
   virtual void execute(Context &ctx, Result &result) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 

@@ -10,5 +10,6 @@ add_executable(pjs
   main.cpp
   parser.cpp
   stmt.cpp
+  tree.cpp
   types.cpp
 )
