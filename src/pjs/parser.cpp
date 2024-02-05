@@ -52,10 +52,10 @@ public:
   static const Token eof;
   static const Token err;
 
-  static const int OPERATOR_BIT = (1<<31);
+  static const int BUILTIN_BIT = (1<<31);
 
   static constexpr int ID(const char *name) {
-    return OPERATOR_BIT | (
+    return BUILTIN_BIT | (
       name[1] ? (
         name[2] ? (
           name[3] ? (
@@ -106,9 +106,9 @@ public:
 
   auto id() const -> int { return m_id; }
   bool is_eof() const { return !m_id; }
-  bool is_operator() const { return m_id & OPERATOR_BIT; }
-  bool is_number() const { return !(m_id & OPERATOR_BIT) && std::isnan(s_tokens[m_id].n) == false; }
-  bool is_string() const { return !(m_id & OPERATOR_BIT) && std::isnan(s_tokens[m_id].n) == true; }
+  bool is_builtin() const { return (m_id & BUILTIN_BIT); }
+  bool is_number() const { return !(m_id & BUILTIN_BIT) && std::isnan(s_tokens[m_id].n) == false; }
+  bool is_string() const { return !(m_id & BUILTIN_BIT) && std::isnan(s_tokens[m_id].n) == true; }
   auto n() const -> double { return s_tokens[m_id].n; }
   auto s() const -> const std::string& { return s_tokens[m_id].s; }
 
@@ -120,7 +120,7 @@ public:
       return "<eof>";
     } else if (m_id == -1) {
       return "<err>";
-    } else if (is_operator()) {
+    } else if (is_builtin()) {
       char s[5] = { 0 };
       s[0] = std::toupper((m_id >>  0) & 0x7f);
       s[1] = std::toupper((m_id >>  8) & 0x7f);
@@ -190,6 +190,14 @@ public:
     return parse_space();
   }
 
+  static bool is_operator(int id) {
+    return s_operator_set.count(id);
+  }
+
+  static bool is_operator(const Token &tok) {
+    return is_operator(tok.id());
+  }
+
   static bool is_identifier_name(const Token &tok, std::string &str) {
     auto i = s_identifier_names.find(tok.id());
     if (i == s_identifier_names.end()) return false;
@@ -198,9 +206,10 @@ public:
   }
 
 private:
-  static std::mutex s_init_operator_map_mutex;
-  static std::map<std::string, int> s_operator_map;
+  static std::mutex s_builtin_token_map_init_mutex;
+  static std::map<std::string, int> s_builtin_token_map;
   static std::map<int, std::string> s_identifier_names;
+  static std::set<int> s_operator_set;
   static void init_operator_map();
 
   std::string m_script;
@@ -234,12 +243,13 @@ private:
   }
 };
 
-std::mutex Tokenizer::s_init_operator_map_mutex;
-std::map<std::string, int> Tokenizer::s_operator_map;
+std::mutex Tokenizer::s_builtin_token_map_init_mutex;
+std::map<std::string, int> Tokenizer::s_builtin_token_map;
 std::map<int, std::string> Tokenizer::s_identifier_names;
+std::set<int> Tokenizer::s_operator_set;
 
 void Tokenizer::init_operator_map() {
-  std::lock_guard<std::mutex> lock(s_init_operator_map_mutex);
+  std::lock_guard<std::mutex> lock(s_builtin_token_map_init_mutex);
 
   static const char* operators[] = {
     ","     , ";"     ,
@@ -265,44 +275,57 @@ void Tokenizer::init_operator_map() {
     "!="    , "!=="   ,
     ">"     , ">="    ,
     "<"     , "<="    ,
+    "=>"    , "`"     ,
     "?"     , ":"     , "?."    ,
     "("     , ")"     , "?.("   ,
     "["     , "]"     , "?.["   ,
     "{"     , "}"     , "..."   ,
-    "=>"    , "`"     , "new"   , "delete"    ,
+    "new"   , "delete", "await" ,
     "void"  , "in"    , "typeof", "instanceof",
-    "true"  , "false" , "null"  , "undefined" ,
+  };
 
-    // Reserved keywords
-    "var"   , "let"   , "const"  ,
-    "if"    , "else"  , "return" ,
+  static const char* keywords[] = {
+    "true"  , "false" , "null"   , "undefined" ,
+    "var"   , "let"   , "const"  , "function"  ,
+    "if"    , "else"  , "return" , "yield"     ,
     "do"    , "while" , "for"    , "continue"  ,
     "switch", "case"  , "break"  , "default"   ,
     "throw" , "try"   , "catch"  , "finally"   ,
-    "await" , "async" , "yield"  , "function"  ,
-    "import", "export", "class"  , "package"   ,
-    "with"  , "this"  , "super"  , "extends"   , "implements",
-    "static", "public", "private", "protected" , "interface" ,
+    "await" , "async" , "with"   , "package"   ,
+    "import", "export", "class"  , "interface" ,
+    "this"  , "super" , "extends", "implements",
+    "static", "public", "private", "protected" ,
   };
 
-  if (s_operator_map.empty()) {
-    for (size_t i = 0; i < sizeof(operators) / sizeof(operators[0]); i++) {
-      auto s = operators[i];
-      if (!std::isalpha(s[0])) {
-        std::string str(s);
-        for (size_t i = 0; i + 1 < str.length(); i++) {
-          s_operator_map[str.substr(0, i + 1)] = 0;
-        }
+  if (!s_builtin_token_map.empty()) return;
+
+  for (size_t i = 0; i < sizeof(operators) / sizeof(operators[0]); i++) {
+    auto s = operators[i];
+    if (!std::isalpha(s[0])) {
+      std::string str(s);
+      for (size_t i = 0; i + 1 < str.length(); i++) {
+        s_builtin_token_map[str.substr(0, i + 1)] = 0;
       }
     }
-    for (size_t i = 0; i < sizeof(operators) / sizeof(operators[0]); i++) {
-      auto s = operators[i];
-      auto id = Token::ID(s);
-      s_operator_map[s] = id;
-      auto is_identifier_name = true;
-      for (auto *p = s; *p; p++) is_identifier_name = is_identifier_name && std::isalpha(*p);
-      if (is_identifier_name) s_identifier_names[id] = s;
-    }
+  }
+
+  for (size_t i = 0; i < sizeof(operators) / sizeof(operators[0]); i++) {
+    auto s = operators[i];
+    auto id = Token::ID(s);
+    s_builtin_token_map[s] = id;
+    s_operator_set.insert(id);
+  }
+
+  for (size_t i = 0; i < sizeof(keywords) / sizeof(keywords[0]); i++) {
+    auto s = keywords[i];
+    auto id = Token::ID(s);
+    s_builtin_token_map[s] = id;
+  }
+
+  for (const auto &p : s_builtin_token_map) {
+    const auto &s = p.first;
+    const auto id = Token::ID(s.c_str());
+    if (std::isalpha(s[0])) s_identifier_names[id] = s;
   }
 }
 
@@ -383,14 +406,14 @@ auto Tokenizer::parse(Location &loc) -> Token {
         for (auto p = m_ptr; p < m_script.size(); p++) {
           auto c = m_script[p]; if (c < 0) break;
           auto k = s + char(c);
-          auto i = s_operator_map.find(k);
-          if (i == s_operator_map.end()) break;
+          auto i = s_builtin_token_map.find(k);
+          if (i == s_builtin_token_map.end()) break;
           if (i->second) op = k;
           s = k;
         }
         for (size_t i = 0; i < op.length(); i++) count();
-        auto i = s_operator_map.find(op);
-        if (i == s_operator_map.end()) return Token::err;
+        auto i = s_builtin_token_map.find(op);
+        if (i == s_builtin_token_map.end()) return Token::err;
         return i->second;
       }
     }
@@ -447,8 +470,8 @@ auto Tokenizer::parse(Location &loc) -> Token {
         s += char(c);
         count();
       }
-      auto i = s_operator_map.find(s);
-      if (i != s_operator_map.end()) return Token(i->second);
+      auto i = s_builtin_token_map.find(s);
+      if (i != s_builtin_token_map.end()) return Token(i->second);
       return Token(s);
     }
   }
@@ -880,13 +903,6 @@ private:
   }
 
   Expr* error(Error err, int token = 0) {
-    char tok[6];
-    tok[0] = '\'';
-    tok[1] = 255 & (token >>  0);
-    tok[2] = 255 & (token >>  8);
-    tok[3] = 255 & (token >> 16);
-    tok[4] = 255 & (token >> 24);
-    tok[5] = 0;
     switch (err) {
       case UnexpectedEOF: m_error = "unexpected end of expression"; break;
       case UnexpectedEOL: m_error = "unexpected end of line"; break;
@@ -899,7 +915,7 @@ private:
       case InvalidOptionalChain: m_error = "invalid optional chain"; break;
       case IncompleteExpression: m_error = "incomplete expression"; break;
       case AmbiguousPrecedence: m_error = "ambiguous exponentiation precedence"; break;
-      case TokenExpected: m_error = std::string(tok) + "' expected"; break;
+      case TokenExpected: m_error = "'" + Token(token).to_string() + "' expected"; break;
       case CaseExpected: m_error = "case or default clause expected"; break;
       case MissingIdentifier: m_error = "missing identifier"; break;
       case MissingExpression: m_error = "missing expression"; break;
@@ -1247,7 +1263,7 @@ Expr* ScriptParser::expression(bool no_comma) {
       if (t.is_string() && t.s()[0] != '"' && t.s()[0] != '\'') {
         read();
         operands.push(std::unique_ptr<Expr>(locate(identifier(t.s()))));
-      } else if (t.is_operator() && Tokenizer::is_identifier_name(t, str)) {
+      } else if (t.is_builtin() && Tokenizer::is_identifier_name(t, str)) {
         read();
         operands.push(std::unique_ptr<Expr>(locate(identifier(str))));
       } else {
@@ -1331,12 +1347,10 @@ Expr* ScriptParser::expression(bool no_comma) {
         (t.id() == Token::ID("]")) ||
         (t.id() == Token::ID("}")) ||
         (t.id() == Token::ID(",") && no_comma) ||
-        (t.id() == Token::ID(":") && operators.empty()) ||
-        (t.id() == Token::ID("case")) ||
-        (t.id() == Token::ID("default"))
+        (t.id() == Token::ID(":") && operators.empty())
       );
       if (t == Token::err) return error(UnknownToken);
-      if (!is_end && !t.is_operator()) {
+      if (!is_end && !Tokenizer::is_operator(t)) {
         if (eol) {
           t = Token::eof;
           is_end = true;
