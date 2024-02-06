@@ -1141,8 +1141,14 @@ Stmt* ScriptParser::statement() {
     }
     case Token::ID("break"): {
       read(l);
-      read_semicolons();
-      return locate(flow_break(), l);
+      auto name = read_identifier();
+      if (!name.empty()) {
+        read_semicolons();
+        return locate(flow_break(name), l);
+      } else {
+        read_semicolons();
+        return locate(flow_break(), l);
+      }
     }
     case Token::ID("return"): {
       read(l);

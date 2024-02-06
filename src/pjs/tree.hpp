@@ -78,8 +78,10 @@ public:
     };
   
     Scope(Kind kind, Scope *p = nullptr) : m_kind(kind), m_parent(p) {}
+    Scope(Str* label, Scope *p = nullptr) : m_kind(LABEL), m_parent(p), m_label(label) {}
 
     auto kind() const -> Kind { return m_kind; }
+    auto label() const -> Str* { return m_label; }
     auto parent() const -> Scope* { return m_parent; }
     bool is_root() const { return !m_parent; }
     void declare_arg(Expr *expr);
@@ -103,6 +105,7 @@ public:
 
     Kind m_kind;
     Scope* m_parent;
+    Ref<Str> m_label;
     std::vector<pjs::Scope::Variable> m_variables;
     std::vector<Ref<Str>> m_args, m_vars;
     std::list<InitArg> m_init_args;

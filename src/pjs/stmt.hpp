@@ -221,10 +221,14 @@ private:
 class Break : public Stmt {
 public:
   Break() {}
+  Break(const std::string &label) : m_label(Str::make(label)) {}
 
   virtual bool declare(Tree::Scope &scope, Error &error) override;
   virtual void execute(Context &ctx, Result &result) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
+
+private:
+  Ref<Str> m_label;
 };
 
 //
@@ -299,6 +303,7 @@ inline Stmt* if_else(Expr *cond, Stmt *then_clause, Stmt *else_clause = nullptr)
 inline Stmt* switch_case(Expr *cond, std::list<std::pair<std::unique_ptr<Expr>, std::unique_ptr<Stmt>>> &&cases, Stmt *default_case = nullptr) { return new stmt::Switch(cond, std::move(cases), default_case); }
 inline Stmt* try_catch(Stmt *try_clause, Expr *catch_clause, Stmt *finally_clause) { return new stmt::Try(try_clause, catch_clause, finally_clause); }
 inline Stmt* flow_break() { return new stmt::Break(); }
+inline Stmt* flow_break(const std::string &label) { return new stmt::Break(label); }
 inline Stmt* flow_return(Expr *expr = nullptr) { return new stmt::Return(expr); }
 inline Stmt* flow_throw(Expr *expr = nullptr) { return new stmt::Throw(expr); }
 

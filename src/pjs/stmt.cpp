@@ -93,7 +93,7 @@ void Block::dump(std::ostream &out, const std::string &indent) {
 //
 
 bool Label::declare(Tree::Scope &scope, Error &error) {
-  Tree::Scope s(Tree::Scope::LABEL, &scope);
+  Tree::Scope s(m_name, &scope);
   return m_stmt->declare(s, error);
 }
 
@@ -103,6 +103,9 @@ void Label::resolve(Context &ctx, int l, Tree::Imports *imports) {
 
 void Label::execute(Context &ctx, Result &result) {
   m_stmt->execute(ctx, result);
+  if (result.is_break() && result.label == m_name) {
+    result.set_done();
+  }
 }
 
 void Label::dump(std::ostream &out, const std::string &indent) {
@@ -332,7 +335,15 @@ void Switch::dump(std::ostream &out, const std::string &indent) {
 
 bool Break::declare(Tree::Scope &scope, Error &error) {
   auto *s = &scope;
-  while (s && s->kind() != Tree::Scope::SWITCH) s = s->parent();
+  if (m_label) {
+    while (s && s->label() != m_label) {
+      s = s->parent();
+    }
+  } else {
+    while (s && s->kind() != Tree::Scope::SWITCH) {
+      s = s->parent();
+    }
+  }
   if (!s) {
     error.tree = this;
     error.message = "illegal break";
@@ -342,7 +353,7 @@ bool Break::declare(Tree::Scope &scope, Error &error) {
 }
 
 void Break::execute(Context &ctx, Result &result) {
-  result.set_break();
+  result.set_break(m_label);
 }
 
 void Break::dump(std::ostream &out, const std::string &indent) {
