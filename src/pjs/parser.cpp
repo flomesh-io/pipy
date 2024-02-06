@@ -814,7 +814,7 @@ private:
 
   Stmt* statement_block();
   Stmt* statement();
-  Expr* expression(bool no_comma = false);
+  Expr* expression(bool no_comma = false, Expr *starting_operand = nullptr);
   Expr* operand();
   Expr* block_function(Location &loc);
   Expr* arrow_function(Location &loc, Expr *arguments);
@@ -828,6 +828,7 @@ private:
     auto pb = std::abs(j->second);
     if (pa > pb) return true;
     if (pa < pb) return false;
+    if (a.id() == b.id() && a.id() == Token::ID(":")) return true;
     if (i->second < 0) return false; // right-to-left
     return true;
   }
@@ -984,24 +985,24 @@ const std::unordered_map<int, int> ScriptParser::s_precedence_table = {
   { Token::ID("&&"  ),  7 },
   { Token::ID("||"  ),  6 },
   { Token::ID("??"  ),  5 },
-  { Token::ID("?"   ), -4 },
-  { Token::ID(":"   ), -4 },
-  { Token::ID("="   ), -3 },
-  { Token::ID("+="  ), -3 },
-  { Token::ID("-="  ), -3 },
-  { Token::ID("*="  ), -3 },
-  { Token::ID("/="  ), -3 },
-  { Token::ID("%="  ), -3 },
-  { Token::ID("**=" ), -3 },
-  { Token::ID("<<=" ), -3 },
-  { Token::ID(">>=" ), -3 },
-  { Token::ID(">>>="), -3 },
-  { Token::ID("&="  ), -3 },
-  { Token::ID("|="  ), -3 },
-  { Token::ID("^="  ), -3 },
-  { Token::ID("&&=" ), -3 },
-  { Token::ID("||=" ), -3 },
-  { Token::ID("?\?="), -3 },
+  { Token::ID("?"   ), -3 },
+  { Token::ID(":"   ), -3 },
+  { Token::ID("="   ), -2 },
+  { Token::ID("+="  ), -2 },
+  { Token::ID("-="  ), -2 },
+  { Token::ID("*="  ), -2 },
+  { Token::ID("/="  ), -2 },
+  { Token::ID("%="  ), -2 },
+  { Token::ID("**=" ), -2 },
+  { Token::ID("<<=" ), -2 },
+  { Token::ID(">>=" ), -2 },
+  { Token::ID(">>>="), -2 },
+  { Token::ID("&="  ), -2 },
+  { Token::ID("|="  ), -2 },
+  { Token::ID("^="  ), -2 },
+  { Token::ID("&&=" ), -2 },
+  { Token::ID("||=" ), -2 },
+  { Token::ID("?\?="), -2 },
   { Token::ID(","   ),  1 },
 };
 
@@ -1057,7 +1058,8 @@ Stmt* ScriptParser::statement_block() {
 
 Stmt* ScriptParser::statement() {
   Location l;
-  switch (peek().id()) {
+  auto t = peek();
+  switch (t.id()) {
     case Token::ID(";"):
       read_semicolons();
       return block();
@@ -1192,7 +1194,26 @@ Stmt* ScriptParser::statement() {
       return locate(try_catch(stmt.release(), catch_clause.release(), finally_clause.release()), l);
     }
     default: {
-      auto e = expression();
+      Expr *starting_operand = nullptr;
+      if (t.is_string() && t.s()[0] != '"' && t.s()[0] != '\'') {
+        read(l);
+        if (read(Token::ID(":"))) {
+          auto s = statement();
+          if (!s) return nullptr;
+          return locate(label(t.s(), s), l);
+        } else {
+          auto e = locate(identifier(t.s()), l);
+          if (auto f = arrow_function(l, e)) {
+            starting_operand = f;
+          } else if (has_error()) {
+            delete e;
+            return nullptr;
+          } else {
+            starting_operand = e;
+          }
+        }
+      }
+      auto e = expression(false, starting_operand);
       if (!e) return nullptr;
       read_semicolons();
       return evaluate(e);
@@ -1200,7 +1221,7 @@ Stmt* ScriptParser::statement() {
   }
 }
 
-Expr* ScriptParser::expression(bool no_comma) {
+Expr* ScriptParser::expression(bool no_comma, Expr *starting_operand) {
   std::stack<Token> operators;
   std::stack<Location> locations;
   std::stack<std::unique_ptr<Expr>> operands;
@@ -1208,140 +1229,149 @@ Expr* ScriptParser::expression(bool no_comma) {
   // Do at least once and repeat until stack is empty
   do {
 
-    // When the last operator is parenthesis-like
-    int last_operator = operators.empty() ? 0 : operators.top().id();
-    if (last_operator == Token::ID("("  ) ||
-        last_operator == Token::ID("["  ) ||
-        last_operator == Token::ID("?.(") ||
-        last_operator == Token::ID("?.["))
-    {
-      auto is_call = (last_operator == Token::ID("(") || last_operator == Token::ID("?.("));
-      Token closing(is_call ? Token::ID(")") : Token::ID("]"));
+    // Push the starting operand if any
+    if (starting_operand) {
+      operands.push(std::unique_ptr<Expr>(starting_operand));
+      starting_operand = nullptr;
 
-      // Parse arguments
-      std::vector<std::unique_ptr<Expr>> argv;
-      for (;;) {
-        auto t = peek();
-        if (t == Token::eof) return error(UnexpectedEOF);
-        if (t == Token::err) return error(UnknownToken);
-        if (t == closing) break;
-        auto e = expression(is_call);
-        if (!e) return nullptr;
-        argv.push_back(std::unique_ptr<Expr>(e));
-        if (!is_call) break;
-        read(Token::ID(","));
-      }
-
-      // Check closing parenthesis
-      auto t = peek();
-      if (t == Token::eof) return error(UnexpectedEOF);
-      if (t == Token::err) return error(UnknownToken);
-      if (t == closing) read();
-      else return error(UnexpectedToken);
-
-      // Make the operand
-      operators.pop();
-      auto l = locations.top(); locations.pop();
-      auto o = operands.top().release(); operands.pop();
-      auto is_new = (!operators.empty() && operators.top().id() == Token::ID("new"));
-      if (is_call && is_new) {
-        if (last_operator == Token::ID("?.(")) return error(InvalidOptionalChain);
-        auto e = construct(o, std::move(argv));
-        operators.pop(); // pop 'new'
-        locations.pop();
-        operands.pop(); // pop the empty operand
-        operands.push(std::unique_ptr<Expr>(locate(e, l)));
-      } else if (is_call) {
-        auto e = (last_operator == Token::ID("?.(") ? opt_call(o, std::move(argv)) : call(o, std::move(argv)));
-        operands.push(std::unique_ptr<Expr>(locate(e, l)));
-      } else if (argv.size() != 1) {
-        return error(UnexpectedToken);
-      } else {
-        auto k = argv[0].release();
-        auto e = (last_operator == Token::ID("?.[") ? opt_prop(o, k) : prop(o, k));
-        operands.push(std::unique_ptr<Expr>(locate(e, l)));
-      }
-
-    // When the last operator is dot-like
-    } else if (
-      last_operator == Token::ID(".") ||
-      last_operator == Token::ID("?.")
-    ) {
-      auto t = peek();
-      std::string str;
-      if (t.is_string() && t.s()[0] != '"' && t.s()[0] != '\'') {
-        read();
-        operands.push(std::unique_ptr<Expr>(locate(identifier(t.s()))));
-      } else if (t.is_builtin() && Tokenizer::is_identifier_name(t, str)) {
-        read();
-        operands.push(std::unique_ptr<Expr>(locate(identifier(str))));
-      } else {
-        return error(UnexpectedToken);
-      }
-
-    // Parse the operand within the current nesting level
+    // Parse the next operand
     } else {
+      int last_operator = operators.empty() ? 0 : operators.top().id();
 
-      // Parse unary operators
-      for (;;) {
-        Location l;
+      // When the last operator is parenthesis-like
+      if (last_operator == Token::ID("("  ) ||
+          last_operator == Token::ID("["  ) ||
+          last_operator == Token::ID("?.(") ||
+          last_operator == Token::ID("?.["))
+      {
+        auto is_call = (last_operator == Token::ID("(") || last_operator == Token::ID("?.("));
+        Token closing(is_call ? Token::ID(")") : Token::ID("]"));
+
+        // Parse arguments
+        std::vector<std::unique_ptr<Expr>> argv;
+        for (;;) {
+          auto t = peek();
+          if (t == Token::eof) return error(UnexpectedEOF);
+          if (t == Token::err) return error(UnknownToken);
+          if (t == closing) break;
+          auto e = expression(is_call);
+          if (!e) return nullptr;
+          argv.push_back(std::unique_ptr<Expr>(e));
+          if (!is_call) break;
+          read(Token::ID(","));
+        }
+
+        // Check closing parenthesis
         auto t = peek();
         if (t == Token::eof) return error(UnexpectedEOF);
         if (t == Token::err) return error(UnknownToken);
-        switch (t.id()) {
-          case Token::ID("+"):
-            read(l);
-            operands.push(nullptr);
-            operators.push(Token::ID("+x"));
-            locations.push(l);
-            continue;
-          case Token::ID("-"):
-            read(l);
-            operands.push(nullptr);
-            operators.push(Token::ID("-x"));
-            locations.push(l);
-            continue;
-          case Token::ID("++"):
-            read(l);
-            operands.push(nullptr);
-            operators.push(Token::ID("++x"));
-            locations.push(l);
-            continue;
-          case Token::ID("--"):
-            read(l);
-            operands.push(nullptr);
-            operators.push(Token::ID("--x"));
-            locations.push(l);
-            continue;
-          case Token::ID("~"):
-          case Token::ID("!"):
-          case Token::ID("void"):
-          case Token::ID("typeof"):
-          case Token::ID("new"):
-          case Token::ID("delete"):
-            operands.push(nullptr);
-            operators.push(read(l));
-            locations.push(l);
-            continue;
-        }
-        break;
-      }
+        if (t == closing) read();
+        else return error(UnexpectedToken);
 
-      // Trailing comma of a list
-      auto t = peek();
-      if (t.id() == Token::ID(")") &&
-          operators.size() > 0 &&
-          operators.top().id() == Token::ID(",")
+        // Make the operand
+        operators.pop();
+        auto l = locations.top(); locations.pop();
+        auto o = operands.top().release(); operands.pop();
+        auto is_new = (!operators.empty() && operators.top().id() == Token::ID("new"));
+        if (is_call && is_new) {
+          if (last_operator == Token::ID("?.(")) return error(InvalidOptionalChain);
+          auto e = construct(o, std::move(argv));
+          operators.pop(); // pop 'new'
+          locations.pop();
+          operands.pop(); // pop the empty operand
+          operands.push(std::unique_ptr<Expr>(locate(e, l)));
+        } else if (is_call) {
+          auto e = (last_operator == Token::ID("?.(") ? opt_call(o, std::move(argv)) : call(o, std::move(argv)));
+          operands.push(std::unique_ptr<Expr>(locate(e, l)));
+        } else if (argv.size() != 1) {
+          return error(UnexpectedToken);
+        } else {
+          auto k = argv[0].release();
+          auto e = (last_operator == Token::ID("?.[") ? opt_prop(o, k) : prop(o, k));
+          operands.push(std::unique_ptr<Expr>(locate(e, l)));
+        }
+
+      // When the last operator is dot-like
+      } else if (
+        last_operator == Token::ID(".") ||
+        last_operator == Token::ID("?.")
       ) {
-        operands.push(nullptr);
+        auto t = peek();
+        std::string str;
+        if (t.is_string() && t.s()[0] != '"' && t.s()[0] != '\'') {
+          read();
+          operands.push(std::unique_ptr<Expr>(locate(identifier(t.s()))));
+        } else if (t.is_builtin() && Tokenizer::is_identifier_name(t, str)) {
+          read();
+          operands.push(std::unique_ptr<Expr>(locate(identifier(str))));
+        } else {
+          return error(UnexpectedToken);
+        }
+
+      // Parse the operand within the current nesting level
       } else {
 
-        // Parse an operand
-        auto e = operand();
-        if (!e) return nullptr;
+        // Parse unary operators
+        for (;;) {
+          Location l;
+          auto t = peek();
+          if (t == Token::eof) return error(UnexpectedEOF);
+          if (t == Token::err) return error(UnknownToken);
+          switch (t.id()) {
+            case Token::ID("+"):
+              read(l);
+              operands.push(nullptr);
+              operators.push(Token::ID("+x"));
+              locations.push(l);
+              continue;
+            case Token::ID("-"):
+              read(l);
+              operands.push(nullptr);
+              operators.push(Token::ID("-x"));
+              locations.push(l);
+              continue;
+            case Token::ID("++"):
+              read(l);
+              operands.push(nullptr);
+              operators.push(Token::ID("++x"));
+              locations.push(l);
+              continue;
+            case Token::ID("--"):
+              read(l);
+              operands.push(nullptr);
+              operators.push(Token::ID("--x"));
+              locations.push(l);
+              continue;
+            case Token::ID("~"):
+            case Token::ID("!"):
+            case Token::ID("void"):
+            case Token::ID("typeof"):
+            case Token::ID("new"):
+            case Token::ID("delete"):
+              operands.push(nullptr);
+              operators.push(read(l));
+              locations.push(l);
+              continue;
+          }
+          break;
+        }
 
-        // Push the operand to stack
-        operands.push(std::unique_ptr<Expr>(e));
+        // Trailing comma of a list
+        auto t = peek();
+        if (t.id() == Token::ID(")") &&
+            operators.size() > 0 &&
+            operators.top().id() == Token::ID(",")
+        ) {
+          operands.push(nullptr);
+        } else {
+
+          // Parse an operand
+          auto e = operand();
+          if (!e) return nullptr;
+
+          // Push the operand to stack
+          operands.push(std::unique_ptr<Expr>(e));
+        }
       }
     }
 
@@ -1355,8 +1385,7 @@ Expr* ScriptParser::expression(bool no_comma) {
         (t.id() == Token::ID(")")) ||
         (t.id() == Token::ID("]")) ||
         (t.id() == Token::ID("}")) ||
-        (t.id() == Token::ID(",") && no_comma) ||
-        (t.id() == Token::ID(":") && operators.empty())
+        (t.id() == Token::ID(",") && no_comma)
       );
       if (t == Token::err) return error(UnknownToken);
       if (!is_end && !Tokenizer::is_operator(t)) {
@@ -1480,9 +1509,6 @@ Expr* ScriptParser::expression(bool no_comma) {
             break;
           }
           case Token::ID(":"): {
-            if (operators.empty() || operators.top().id() != Token::ID("?")) {
-              return error(UnexpectedToken);
-            }
             auto c = operands.top().release();
             operands.pop();
             operators.pop();
@@ -1500,6 +1526,13 @@ Expr* ScriptParser::expression(bool no_comma) {
           }
         }
         operands.push(std::unique_ptr<Expr>(locate(e, l)));
+      }
+
+      // It isn't an operator when ':' is found without a preceding '?'
+      if (t == Token::ID(":")) {
+        if (operators.empty() || operators.top().id() != Token::ID("?")) {
+          is_end = true;
+        }
       }
 
       // Push the (potentially converted) operator in stack

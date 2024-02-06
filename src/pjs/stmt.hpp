@@ -100,6 +100,24 @@ private:
 };
 
 //
+// Label
+//
+
+class Label : public Stmt {
+public:
+  Label(const std::string &name, Stmt *stmt) : m_name(Str::make(name)), m_stmt(stmt) {}
+
+  virtual bool declare(Tree::Scope &scope, Error &error) override;
+  virtual void resolve(Context &ctx, int l, Tree::Imports *imports) override;
+  virtual void execute(Context &ctx, Result &result) override;
+  virtual void dump(std::ostream &out, const std::string &indent) override;
+
+private:
+  Ref<Str> m_name;
+  std::unique_ptr<Stmt> m_stmt;
+};
+
+//
 // Evaluate
 //
 
@@ -271,9 +289,10 @@ private:
 // Statement constructors
 //
 
-inline Stmt* evaluate(Expr *expr) { return new stmt::Evaluate(expr); }
 inline Stmt* block() { return new stmt::Block(); }
 inline Stmt* block(std::list<std::unique_ptr<Stmt>> &&stmts) { return new stmt::Block(std::move(stmts)); }
+inline Stmt* label(const std::string &name, Stmt *stmt) { return new stmt::Label(name, stmt); }
+inline Stmt* evaluate(Expr *expr) { return new stmt::Evaluate(expr); }
 inline Stmt* var(const std::string &name, Expr *expr = nullptr) { return new stmt::Var(name, expr); }
 inline Stmt* function(const std::string &name, Expr *expr) { return new stmt::Function(name, expr); }
 inline Stmt* if_else(Expr *cond, Stmt *then_clause, Stmt *else_clause = nullptr) { return new stmt::If(cond, then_clause, else_clause); }

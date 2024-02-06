@@ -89,6 +89,28 @@ void Block::dump(std::ostream &out, const std::string &indent) {
 }
 
 //
+// Label
+//
+
+bool Label::declare(Tree::Scope &scope, Error &error) {
+  Tree::Scope s(Tree::Scope::LABEL, &scope);
+  return m_stmt->declare(s, error);
+}
+
+void Label::resolve(Context &ctx, int l, Tree::Imports *imports) {
+  m_stmt->resolve(ctx, l, imports);
+}
+
+void Label::execute(Context &ctx, Result &result) {
+  m_stmt->execute(ctx, result);
+}
+
+void Label::dump(std::ostream &out, const std::string &indent) {
+  out << indent << "label " << m_name->str() << std::endl;
+  m_stmt->dump(out, indent + "  ");
+}
+
+//
 // Evaluate
 //
 

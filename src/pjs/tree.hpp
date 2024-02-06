@@ -72,6 +72,7 @@ public:
       MODULE,
       FUNCTION,
       BLOCK,
+      LABEL,
       SWITCH,
       LOOP,
     };
