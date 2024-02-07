@@ -546,36 +546,36 @@ void FunctionLiteral::dump(std::ostream &out, const std::string &indent) {
 }
 
 //
-// Global
+// GlobalVariable
 //
 
-bool Global::is_left_value() const { return true; }
+bool GlobalVariable::is_left_value() const { return true; }
 
-bool Global::eval(Context &ctx, Value &result) {
+bool GlobalVariable::eval(Context &ctx, Value &result) {
   m_cache.get(ctx.g(), m_key, result);
   return true;
 }
 
-bool Global::assign(Context &ctx, Value &value) {
+bool GlobalVariable::assign(Context &ctx, Value &value) {
   m_cache.set(ctx.g(), m_key, value);
   return true;
 }
 
-bool Global::clear(Context &ctx, Value &result) {
+bool GlobalVariable::clear(Context &ctx, Value &result) {
   return error(ctx, "cannot delete a global variable");
 }
 
-void Global::dump(std::ostream &out, const std::string &indent) {
-  out << indent << "global " << m_key->c_str() << std::endl;
+void GlobalVariable::dump(std::ostream &out, const std::string &indent) {
+  out << indent << "global-variable " << m_key->c_str() << std::endl;
 }
 
 //
-// Local
+// LegacyLocal
 //
 
-bool Local::is_left_value() const { return true; }
+bool LegacyLocal::is_left_value() const { return true; }
 
-bool Local::eval(Context &ctx, Value &result) {
+bool LegacyLocal::eval(Context &ctx, Value &result) {
   if (auto l = ctx.l(m_l)) {
     m_cache.get(l, m_key, result);
     return true;
@@ -584,7 +584,7 @@ bool Local::eval(Context &ctx, Value &result) {
   }
 }
 
-bool Local::assign(Context &ctx, Value &value) {
+bool LegacyLocal::assign(Context &ctx, Value &value) {
   if (auto l = ctx.l(m_l)) {
     m_cache.set(l, m_key, value);
     return true;
@@ -593,40 +593,40 @@ bool Local::assign(Context &ctx, Value &value) {
   }
 }
 
-bool Local::clear(Context &ctx, Value &result) {
+bool LegacyLocal::clear(Context &ctx, Value &result) {
   return error(ctx, "cannot delete a local variable");
 }
 
-void Local::dump(std::ostream &out, const std::string &indent) {
-  out << indent << "local " << m_key->c_str() << std::endl;
+void LegacyLocal::dump(std::ostream &out, const std::string &indent) {
+  out << indent << "local-legacy " << m_key->c_str() << std::endl;
 }
 
 //
-// Argument
+// LocalVariable
 //
 
-bool Argument::is_left_value() const { return true; }
+bool LocalVariable::is_left_value() const { return true; }
 
-bool Argument::eval(Context &ctx, Value &result) {
+bool LocalVariable::eval(Context &ctx, Value &result) {
   auto *scope = ctx.scope();
   for (int i = 0; i < m_level; i++) scope = scope->parent();
   result = scope->value(m_i);
   return true;
 }
 
-bool Argument::assign(Context &ctx, Value &value) {
+bool LocalVariable::assign(Context &ctx, Value &value) {
   auto *scope = ctx.scope();
   for (int i = 0; i < m_level; i++) scope = scope->parent();
   scope->value(m_i) = value;
   return true;
 }
 
-bool Argument::clear(Context &ctx, Value &result) {
+bool LocalVariable::clear(Context &ctx, Value &result) {
   return error(ctx, "cannot delete an argument");
 }
 
-void Argument::dump(std::ostream &out, const std::string &indent) {
-  out << indent << "argument " << m_i << std::endl;
+void LocalVariable::dump(std::ostream &out, const std::string &indent) {
+  out << indent << "local-variable " << m_i << std::endl;
 }
 
 //
@@ -673,7 +673,7 @@ void Identifier::resolve(Context &ctx) {
     if (auto *variables = scope->variables()) {
       for (int i = 0; i < scope->size(); i++) {
         if (variables[i].name == m_key) {
-          m_resolved.reset(locate(new Argument(i, level)));
+          m_resolved.reset(locate(new LocalVariable(i, level)));
           if (scope != ctx.scope()) {
             variables[i].is_closure = true;
           }
@@ -684,7 +684,7 @@ void Identifier::resolve(Context &ctx) {
   }
   if (auto l = ctx.l(m_l)) {
     if (l->has(m_key)) {
-      m_resolved.reset(locate(new Local(m_l, m_key)));
+      m_resolved.reset(locate(new LegacyLocal(m_l, m_key)));
       return;
     }
   }
@@ -694,13 +694,13 @@ void Identifier::resolve(Context &ctx) {
     if (m_imports->get(m_key, &file, &key)) {
       auto l = ctx.l(file);
       if (l->has(key)) {
-        m_resolved.reset(locate(new Local(file, key)));
+        m_resolved.reset(locate(new LegacyLocal(file, key)));
         return;
       }
     }
   }
   if (ctx.g()->has(m_key)) {
-    m_resolved.reset(locate(new Global(m_key)));
+    m_resolved.reset(locate(new GlobalVariable(m_key)));
     return;
   }
 }

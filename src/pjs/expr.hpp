@@ -405,13 +405,13 @@ private:
 };
 
 //
-// Global
+// GlobalVariable
 //
 
-class Global : public Expr {
+class GlobalVariable : public Expr {
 public:
-  Global(const std::string &key) : m_key(Str::make(key)) {}
-  Global(Str *key) : m_key(key) {}
+  GlobalVariable(const std::string &key) : m_key(Str::make(key)) {}
+  GlobalVariable(Str *key) : m_key(key) {}
 
   virtual bool is_left_value() const override;
   virtual bool eval(Context &ctx, Value &result) override;
@@ -425,13 +425,13 @@ private:
 };
 
 //
-// Local
+// LegacyLocal
 //
 
-class Local : public Expr {
+class LegacyLocal : public Expr {
 public:
-  Local(const std::string &key) : m_key(Str::make(key)) {}
-  Local(int l, Str *key) : m_l(l), m_key(key) {}
+  LegacyLocal(const std::string &key) : m_key(Str::make(key)) {}
+  LegacyLocal(int l, Str *key) : m_l(l), m_key(key) {}
 
   virtual bool is_left_value() const override;
   virtual bool eval(Context &ctx, Value &result) override;
@@ -446,12 +446,12 @@ private:
 };
 
 //
-// Argument
+// LocalVariable
 //
 
-class Argument : public Expr {
+class LocalVariable : public Expr {
 public:
-  Argument(int i, int level) : m_i(i), m_level(level) {}
+  LocalVariable(int i, int level) : m_i(i), m_level(level) {}
 
   virtual bool is_left_value() const override;
   virtual bool eval(Context &ctx, Value &result) override;
@@ -473,10 +473,6 @@ public:
   Identifier(const std::string &key) : m_key(Str::make(key)) {}
 
   auto name() const -> Str* { return m_key; }
-
-  Expr* to_string() { return new StringLiteral(m_key->str()); }
-  Expr* to_global() { return new Global(m_key->str()); }
-  Expr* to_local() { return new Local(m_key->str()); }
 
   virtual bool is_left_value() const override;
   virtual bool is_argument() const override;
@@ -1508,8 +1504,6 @@ inline Expr* expand(Expr *x) { return new expr::ArrayExpansion(x); }
 inline Expr* array(std::list<std::unique_ptr<Expr>> &&list) { return new expr::ArrayLiteral(std::move(list)); }
 inline Expr* function(Expr *input, Expr *output) { return new expr::FunctionLiteral(input, output); }
 inline Expr* function(Expr *input, Stmt *output) { return new expr::FunctionLiteral(input, output); }
-inline Expr* global(const std::string &s) { return new expr::Global(s); }
-inline Expr* local(const std::string &s) { return new expr::Local(s); }
 inline Expr* identifier(const std::string &s) { return new expr::Identifier(s); }
 inline Expr* prop(Expr *a, Expr *b) { return new expr::Property(a, b); }
 inline Expr* construct(Expr *f) { return new expr::Construction(f); }
@@ -1572,17 +1566,7 @@ inline Expr* select(Expr *a, Expr *b, Expr *c) { return new expr::Conditional(a,
 
 inline Expr* identifier_to_string(Expr *identifier) {
   auto i = dynamic_cast<expr::Identifier*>(identifier);
-  return i ? i->to_string() : nullptr;
-}
-
-inline Expr* identifier_to_global(Expr *identifier) {
-  auto i = dynamic_cast<expr::Identifier*>(identifier);
-  return i ? i->to_global() : nullptr;
-}
-
-inline Expr* identifier_to_local(Expr *identifier) {
-  auto i = dynamic_cast<expr::Identifier*>(identifier);
-  return i ? i->to_local() : nullptr;
+  return i ? new expr::StringLiteral(i->name()->str()) : nullptr;
 }
 
 } // namespace pjs
