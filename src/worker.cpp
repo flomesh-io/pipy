@@ -418,7 +418,7 @@ bool Worker::solve(pjs::Context &ctx, pjs::Str *filename, pjs::Value &result) {
   f.filename = filename;
   f.expr = std::unique_ptr<pjs::Expr>(expr);
   f.solving = true;
-  expr->resolve(ctx, -f.index);
+  expr->resolve(nullptr, ctx, -f.index);
   auto ret = expr->eval(ctx, result);
   if (!ctx.ok()) {
     Log::pjs_error(ctx.error());

@@ -115,7 +115,7 @@ void Tree::Scope::declare_fiber_var(Str *name, Module *module) {
   }
 }
 
-auto Tree::Scope::new_scope(Context &ctx) -> pjs::Scope* {
+auto Tree::Scope::instantiate(Context &ctx) -> pjs::Scope* {
   init_variables();
 
   auto *scope = ctx.new_scope(m_size, m_variables.size(), m_variables.data());

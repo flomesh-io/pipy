@@ -89,7 +89,7 @@ public:
     void declare_var(Str *name, Expr *value = nullptr);
     void declare_fiber_var(Str *name, Module *module);
     auto variables() -> std::vector<pjs::Scope::Variable>& { init_variables(); return m_variables; }
-    auto new_scope(Context &ctx) -> pjs::Scope*;
+    auto instantiate(Context &ctx) -> pjs::Scope*;
 
   private:
     struct InitArg {
@@ -138,7 +138,7 @@ public:
   //
 
   virtual bool declare(Module *module, Scope &scope, Error &error) { return true; }
-  virtual void resolve(Context &ctx, int l = -1, Imports *imports = nullptr) {}
+  virtual void resolve(Module *module, Context &ctx, int l = -1, Imports *imports = nullptr) {}
 
 private:
   const Source* m_source = nullptr;

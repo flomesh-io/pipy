@@ -2129,6 +2129,8 @@ class Scope : public Pooled<Scope, RefCount<Scope>> {
 public:
   struct Variable {
     Ref<Str> name;
+    int index = 0;
+    bool is_fiber = false;
     bool is_closure = false;
   };
 

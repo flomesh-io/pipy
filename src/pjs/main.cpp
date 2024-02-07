@@ -114,7 +114,7 @@ static void test_eval(Context &ctx, const char *script) {
     std::cerr << "Syntax error at line " << error_line << " column " << error_column << ": " << error << std::endl;
     return;
   }
-  module->execute(ctx, 0, nullptr, result);
+  module->execute(ctx, -1, nullptr, result);
   if (!ctx.ok()) {
     const auto &err = ctx.error();
     std::cerr << "Evaluation error: " << err.message << std::endl;

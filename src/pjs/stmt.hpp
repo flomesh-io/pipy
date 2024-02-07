@@ -91,7 +91,7 @@ public:
   Block(std::list<std::unique_ptr<Stmt>> &&stmts) : m_stmts(std::move(stmts)) {}
 
   virtual bool declare(Module *module, Tree::Scope &scope, Error &error) override;
-  virtual void resolve(Context &ctx, int l, Tree::Imports *imports) override;
+  virtual void resolve(Module *module, Context &ctx, int l, Tree::Imports *imports) override;
   virtual void execute(Context &ctx, Result &result) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -108,7 +108,7 @@ public:
   Label(const std::string &name, Stmt *stmt) : m_name(Str::make(name)), m_stmt(stmt) {}
 
   virtual bool declare(Module *module, Tree::Scope &scope, Error &error) override;
-  virtual void resolve(Context &ctx, int l, Tree::Imports *imports) override;
+  virtual void resolve(Module *module, Context &ctx, int l, Tree::Imports *imports) override;
   virtual void execute(Context &ctx, Result &result) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -126,7 +126,7 @@ public:
   Evaluate(Expr *expr) : m_expr(expr) {}
 
   virtual bool declare(Module *module, Tree::Scope &scope, Error &error) override;
-  virtual void resolve(Context &ctx, int l, Tree::Imports *imports) override;
+  virtual void resolve(Module *module, Context &ctx, int l, Tree::Imports *imports) override;
   virtual void execute(Context &ctx, Result &result) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -144,7 +144,7 @@ public:
     : m_identifier(new expr::Identifier(name)), m_expr(expr) {}
 
   virtual bool declare(Module *module, Tree::Scope &scope, Error &error) override;
-  virtual void resolve(Context &ctx, int l, Tree::Imports *imports) override;
+  virtual void resolve(Module *module, Context &ctx, int l, Tree::Imports *imports) override;
   virtual void execute(Context &ctx, Result &result) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -164,7 +164,7 @@ public:
     : m_identifier(new expr::Identifier(name)), m_expr(expr) {}
 
   virtual bool declare(Module *module, Tree::Scope &scope, Error &error) override;
-  virtual void resolve(Context &ctx, int l, Tree::Imports *imports) override;
+  virtual void resolve(Module *module, Context &ctx, int l, Tree::Imports *imports) override;
   virtual void execute(Context &ctx, Result &result) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -184,7 +184,7 @@ public:
     : m_cond(cond), m_then(then_clause), m_else(else_clause) {}
 
   virtual bool declare(Module *module, Tree::Scope &scope, Error &error) override;
-  virtual void resolve(Context &ctx, int l, Tree::Imports *imports) override;
+  virtual void resolve(Module *module, Context &ctx, int l, Tree::Imports *imports) override;
   virtual void execute(Context &ctx, Result &result) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -204,7 +204,7 @@ public:
     : m_cond(cond), m_cases(std::move(cases)), m_default(default_case) {}
 
   virtual bool declare(Module *module, Tree::Scope &scope, Error &error) override;
-  virtual void resolve(Context &ctx, int l, Tree::Imports *imports) override;
+  virtual void resolve(Module *module, Context &ctx, int l, Tree::Imports *imports) override;
   virtual void execute(Context &ctx, Result &result) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -242,7 +242,7 @@ public:
   auto value() const -> Expr* { return m_expr.get(); }
 
   virtual bool declare(Module *module, Tree::Scope &scope, Error &error) override;
-  virtual void resolve(Context &ctx, int l, Tree::Imports *imports) override;
+  virtual void resolve(Module *module, Context &ctx, int l, Tree::Imports *imports) override;
   virtual void execute(Context &ctx, Result &result) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -259,7 +259,7 @@ public:
   Throw(Expr *expr) : m_expr(expr) {}
 
   virtual bool declare(Module *module, Tree::Scope &scope, Error &error) override;
-  virtual void resolve(Context &ctx, int l, Tree::Imports *imports) override;
+  virtual void resolve(Module *module, Context &ctx, int l, Tree::Imports *imports) override;
   virtual void execute(Context &ctx, Result &result) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
@@ -277,7 +277,7 @@ public:
     : m_try(try_clause), m_catch(catch_clause), m_finally(finally_clause) {}
 
   virtual bool declare(Module *module, Tree::Scope &scope, Error &error) override;
-  virtual void resolve(Context &ctx, int l, Tree::Imports *imports) override;
+  virtual void resolve(Module *module, Context &ctx, int l, Tree::Imports *imports) override;
   virtual void execute(Context &ctx, Result &result) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
