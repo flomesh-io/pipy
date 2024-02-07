@@ -8,6 +8,7 @@ add_executable(pjs
   builtin.cpp
   expr.cpp
   main.cpp
+  module.cpp
   parser.cpp
   stmt.cpp
   tree.cpp

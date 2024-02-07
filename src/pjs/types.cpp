@@ -24,6 +24,7 @@
  */
 
 #include "types.hpp"
+#include "module.hpp"
 
 #include <cstdio>
 #include <cstring>
@@ -460,6 +461,20 @@ Instance::~Instance() {
     s->clear(true);
     s->release();
   }
+}
+
+auto Instance::fiber() -> Fiber* {
+  return new Fiber(this, m_modules.size());
+}
+
+//
+// Fiber
+//
+
+auto Fiber::data(int i) -> Data* {
+  auto &slot = m_data->at(i);
+  if (!slot.data) slot.data = m_instance->module(i)->new_fiber_data();
+  return slot.data;
 }
 
 //

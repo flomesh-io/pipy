@@ -29,6 +29,7 @@
 #include "types.hpp"
 #include "expr.hpp"
 #include "stmt.hpp"
+#include "module.hpp"
 #include "parser.hpp"
 #include "builtin.hpp"
 

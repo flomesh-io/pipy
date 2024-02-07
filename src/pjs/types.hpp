@@ -56,6 +56,8 @@ class Array;
 class Boolean;
 class Class;
 class Instance;
+class Module;
+class Fiber;
 class Context;
 class Scope;
 class Error;
@@ -2077,16 +2079,46 @@ public:
     return new Instance;
   }
 
+  auto module(int i) const -> Module* { return m_modules[i]; }
+  auto fiber() -> Fiber*;
+
 private:
   ~Instance();
 
   void add(Scope *scope);
   void remove(Scope *scope);
 
+  std::vector<Module*> m_modules;
   Scope* m_scopes = nullptr;
 
   friend class RefCount<Instance>;
+  friend class Module;
   friend class Scope;
+};
+
+//
+// Fiber
+//
+
+class Fiber : public Pooled<Fiber, RefCount<Fiber>> {
+public:
+  auto data(int i) -> Data*;
+
+private:
+  struct ModuleData {
+    Data *data = nullptr;
+    ~ModuleData() { if (data) data->free(); }
+  };
+
+  Fiber(Instance *instance, int size)
+    : m_instance(instance)
+    , m_data(PooledArray<ModuleData>::make(size)) {}
+
+  Instance* m_instance;
+  PooledArray<ModuleData>* m_data;
+
+  friend class RefCount<Fiber>;
+  friend class Instance;
 };
 
 //

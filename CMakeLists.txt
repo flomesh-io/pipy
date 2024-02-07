@@ -314,6 +314,7 @@ add_executable(pipy
   src/pipeline-lb.cpp
   src/pjs/builtin.cpp
   src/pjs/expr.cpp
+  src/pjs/module.cpp
   src/pjs/parser.cpp
   src/pjs/stmt.cpp
   src/pjs/tree.cpp
