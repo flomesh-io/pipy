@@ -25,6 +25,7 @@
 
 #include "tree.hpp"
 #include "expr.hpp"
+#include "module.hpp"
 
 #include <algorithm>
 
@@ -100,6 +101,17 @@ void Tree::Scope::declare_var(Str *name, Expr *value) {
       m_init_vars.push_back(init);
     }
     m_vars.push_back(name);
+  }
+}
+
+void Tree::Scope::declare_fiber_var(Str *name, Module *module) {
+  if (!m_initialized) {
+    if (std::find(m_vars.begin(), m_vars.end(), name) != m_vars.end()) return;
+    if (std::find(m_args.begin(), m_args.end(), name) != m_args.end()) return;
+    auto i = m_fiber_vars.find(name);
+    if (i == m_fiber_vars.end()) {
+      m_fiber_vars[name] = module->add_fiber_variable();
+    }
   }
 }
 

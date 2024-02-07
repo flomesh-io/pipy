@@ -54,10 +54,10 @@ namespace stmt {
 // Block
 //
 
-bool Block::declare(Tree::Scope &scope, Error &error) {
+bool Block::declare(Module *module, Tree::Scope &scope, Error &error) {
   Tree::Scope s(Tree::Scope::BLOCK, &scope);
   for (const auto &p : m_stmts) {
-    if (!p->declare(s, error)) {
+    if (!p->declare(module, s, error)) {
       return false;
     }
   }
@@ -92,9 +92,9 @@ void Block::dump(std::ostream &out, const std::string &indent) {
 // Label
 //
 
-bool Label::declare(Tree::Scope &scope, Error &error) {
+bool Label::declare(Module *module, Tree::Scope &scope, Error &error) {
   Tree::Scope s(m_name, &scope);
-  return m_stmt->declare(s, error);
+  return m_stmt->declare(module, s, error);
 }
 
 void Label::resolve(Context &ctx, int l, Tree::Imports *imports) {
@@ -117,8 +117,8 @@ void Label::dump(std::ostream &out, const std::string &indent) {
 // Evaluate
 //
 
-bool Evaluate::declare(Tree::Scope &scope, Error &error) {
-  return m_expr->declare(scope, error);
+bool Evaluate::declare(Module *module, Tree::Scope &scope, Error &error) {
+  return m_expr->declare(module, scope, error);
 }
 
 void Evaluate::resolve(Context &ctx, int l, Tree::Imports *imports) {
@@ -143,12 +143,12 @@ void Evaluate::dump(std::ostream &out, const std::string &indent) {
 // Var
 //
 
-bool Var::declare(Tree::Scope &scope, Error &error) {
+bool Var::declare(Module *module, Tree::Scope &scope, Error &error) {
   auto name = m_identifier->name();
   auto s = scope.parent();
   while (!s->is_root()) s = s->parent();
   s->declare_var(name);
-  if (m_expr && !m_expr->declare(scope, error)) return false;
+  if (m_expr && !m_expr->declare(module, scope, error)) return false;
   return true;
 }
 
@@ -180,13 +180,13 @@ void Var::dump(std::ostream &out, const std::string &indent) {
 // Function
 //
 
-bool Function::declare(Tree::Scope &scope, Error &error) {
+bool Function::declare(Module *module, Tree::Scope &scope, Error &error) {
   m_is_definition = scope.parent()->is_root();
   auto name = m_identifier->name();
   auto s = scope.parent();
   while (!s->is_root()) s = s->parent();
   s->declare_var(name, m_is_definition ? m_expr.get() : nullptr);
-  return m_expr->declare(scope, error);
+  return m_expr->declare(module, scope, error);
 }
 
 void Function::resolve(Context &ctx, int l, Tree::Imports *imports) {
@@ -216,10 +216,10 @@ void Function::dump(std::ostream &out, const std::string &indent) {
 // If
 //
 
-bool If::declare(Tree::Scope &scope, Error &error) {
-  if (!m_cond->declare(scope, error)) return false;
-  if (!m_then->declare(scope, error)) return false;
-  if (m_else && !m_else->declare(scope, error)) return false;
+bool If::declare(Module *module, Tree::Scope &scope, Error &error) {
+  if (!m_cond->declare(module, scope, error)) return false;
+  if (!m_then->declare(module, scope, error)) return false;
+  if (m_else && !m_else->declare(module, scope, error)) return false;
   return true;
 }
 
@@ -260,12 +260,12 @@ void If::dump(std::ostream &out, const std::string &indent) {
 // Switch
 //
 
-bool Switch::declare(Tree::Scope &scope, Error &error) {
+bool Switch::declare(Module *module, Tree::Scope &scope, Error &error) {
   Tree::Scope s(Tree::Scope::SWITCH, &scope);
-  if (!m_cond->declare(s, error)) return false;
+  if (!m_cond->declare(module, s, error)) return false;
   for (const auto &p : m_cases) {
-    if (!p.first->declare(s, error)) return false;
-    if (p.second && !p.second->declare(s, error)) return false;
+    if (!p.first->declare(module, s, error)) return false;
+    if (p.second && !p.second->declare(module, s, error)) return false;
   }
   return true;
 }
@@ -333,7 +333,7 @@ void Switch::dump(std::ostream &out, const std::string &indent) {
 // Break
 //
 
-bool Break::declare(Tree::Scope &scope, Error &error) {
+bool Break::declare(Module *module, Tree::Scope &scope, Error &error) {
   auto *s = &scope;
   if (m_label) {
     while (s && s->label() != m_label) {
@@ -364,8 +364,8 @@ void Break::dump(std::ostream &out, const std::string &indent) {
 // Return
 //
 
-bool Return::declare(Tree::Scope &scope, Error &error) {
-  if (m_expr && !m_expr->declare(scope, error)) return false;
+bool Return::declare(Module *module, Tree::Scope &scope, Error &error) {
+  if (m_expr && !m_expr->declare(module, scope, error)) return false;
   return true;
 }
 
@@ -396,8 +396,8 @@ void Return::dump(std::ostream &out, const std::string &indent) {
 // Throw
 //
 
-bool Throw::declare(Tree::Scope &scope, Error &error) {
-  if (m_expr && !m_expr->declare(scope, error)) return false;
+bool Throw::declare(Module *module, Tree::Scope &scope, Error &error) {
+  if (m_expr && !m_expr->declare(module, scope, error)) return false;
   return true;
 }
 
@@ -428,10 +428,10 @@ void Throw::dump(std::ostream &out, const std::string &indent) {
 // Try
 //
 
-bool Try::declare(Tree::Scope &scope, Error &error) {
-  if (!m_try->declare(scope, error)) return false;
-  if (m_catch && !m_catch->declare(scope, error)) return false;
-  if (m_finally && !m_finally->declare(scope, error)) return false;
+bool Try::declare(Module *module, Tree::Scope &scope, Error &error) {
+  if (!m_try->declare(module, scope, error)) return false;
+  if (m_catch && !m_catch->declare(module, scope, error)) return false;
+  if (m_finally && !m_finally->declare(module, scope, error)) return false;
   return true;
 }
 

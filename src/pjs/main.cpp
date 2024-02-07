@@ -105,33 +105,17 @@ static void test_eval(Context &ctx, const char *script) {
   std::cout << "================" << std::endl;
   std::cout << script << std::endl;
   std::cout << "vvvvvvvvvvvvvvvv" << std::endl;
+  Value result;
   std::string error;
   int error_line, error_column;
-  Source src; src.content = script;
-  auto stmt = Parser::parse(&src, error, error_line, error_column);
-  if (!stmt) {
+  Ref<Instance> instance = Instance::make();
+  Ref<Module> module = Module::make(instance, "test", script);
+  if (!module->compile(error, error_line, error_column)) {
     std::cerr << "Syntax error at line " << error_line << " column " << error_column << ": " << error << std::endl;
-    delete stmt;
     return;
   }
-  Tree::Scope scope(Tree::Scope::MODULE);
-  Tree::Error tree_error;
-  if (!stmt->declare(scope, tree_error)) {
-    auto tree = tree_error.tree;
-    std::cerr << "Declaration error at line " << tree->line() << " column " << tree->column() << ": " << tree_error.message << std::endl;
-    delete stmt;
-    return;
-  }
-  stmt->resolve(ctx, 0);
-  if (!ctx.error().message.empty()) {
-    std::cerr << "Resolve error: " << ctx.error().message << std::endl;
-    delete stmt;
-    return;
-  }
-  Value result;
-  scope.new_scope(ctx);
-  auto success = stmt->execute(ctx, result);
-  if (!success) {
+  module->execute(ctx, 0, nullptr, result);
+  if (!ctx.ok()) {
     const auto &err = ctx.error();
     std::cerr << "Evaluation error: " << err.message << std::endl;
     for (const auto &l : err.backtrace) {
@@ -144,7 +128,6 @@ static void test_eval(Context &ctx, const char *script) {
       }
       std::cerr << "    " << str << std::endl;
     }
-    delete stmt;
     return;
   }
   std::cout << "Result: " << result.to_string()->str() << std::endl;

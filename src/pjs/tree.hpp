@@ -32,6 +32,7 @@ namespace pjs {
 
 class Expr;
 class Stmt;
+class Module;
 
 //
 // Tree (common base of Expr and Stmt)
@@ -86,6 +87,7 @@ public:
     bool is_root() const { return !m_parent; }
     void declare_arg(Expr *expr);
     void declare_var(Str *name, Expr *value = nullptr);
+    void declare_fiber_var(Str *name, Module *module);
     auto variables() -> std::vector<pjs::Scope::Variable>& { init_variables(); return m_variables; }
     auto new_scope(Context &ctx) -> pjs::Scope*;
 
@@ -108,6 +110,7 @@ public:
     Ref<Str> m_label;
     std::vector<pjs::Scope::Variable> m_variables;
     std::vector<Ref<Str>> m_args, m_vars;
+    std::map<Ref<Str>, int> m_fiber_vars;
     std::list<InitArg> m_init_args;
     std::list<InitVar> m_init_vars;
     size_t m_size = 0;
@@ -134,7 +137,7 @@ public:
   // Tree base methods
   //
 
-  virtual bool declare(Scope &scope, Error &error) { return true; }
+  virtual bool declare(Module *module, Scope &scope, Error &error) { return true; }
   virtual void resolve(Context &ctx, int l = -1, Imports *imports = nullptr) {}
 
 private:

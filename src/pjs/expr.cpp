@@ -495,8 +495,8 @@ bool FunctionLiteral::eval(Context &ctx, Value &result) {
   return true;
 }
 
-bool FunctionLiteral::declare(Scope &, Error &error) {
-  return m_output->declare(m_scope, error);
+bool FunctionLiteral::declare(Module *module, Scope &, Error &error) {
+  return m_output->declare(module, m_scope, error);
 }
 
 void FunctionLiteral::resolve(Context &ctx, int l, Imports *imports) {

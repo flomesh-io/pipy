@@ -392,7 +392,7 @@ public:
   FunctionLiteral(Expr *inputs, Stmt *output);
 
   virtual bool eval(Context &ctx, Value &result) override;
-  virtual bool declare(Scope &scope, Error &error) override;
+  virtual bool declare(Module *module, Scope &scope, Error &error) override;
   virtual void resolve(Context &ctx, int l, Imports *imports) override;
   virtual auto reduce(Reducer &r) -> Reducer::Value* override;
   virtual void dump(std::ostream &out, const std::string &indent) override;

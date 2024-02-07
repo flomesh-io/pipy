@@ -36,7 +36,11 @@ namespace pjs {
 
 class Module : public RefCount<Module> {
 public:
-  static auto make(Instance *instance, const std::string &name, const std::string &source) -> Module* {
+  static auto make(
+    Instance *instance,
+    const std::string &name,
+    const std::string &source
+  ) -> Module* {
     return new Module(instance, name, source);
   }
 
@@ -49,7 +53,7 @@ public:
   auto add_fiber_variable() -> int;
   auto new_fiber_data() -> Data*;
   bool compile(std::string &error, int &error_line, int &error_column);
-  void execute(Context &ctx, int l, Value &result);
+  void execute(Context &ctx, int l, Tree::Imports *imports, Value &result);
 
 private:
   Module(Instance *instance, const std::string &name, const std::string &source);
@@ -60,7 +64,6 @@ private:
   Source m_source;
   Tree::Scope m_scope;
   std::unique_ptr<Stmt> m_tree;
-  std::unique_ptr<Tree::Imports> m_imports;
 
   friend class RefCount<Module>;
 };

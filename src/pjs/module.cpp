@@ -54,7 +54,7 @@ bool Module::compile(std::string &error, int &error_line, int &error_column) {
   if (!stmt) return false;
 
   Tree::Error tree_error;
-  if (!stmt->declare(m_scope, tree_error)) {
+  if (!stmt->declare(this, m_scope, tree_error)) {
     auto tree = tree_error.tree;
     error = tree_error.message;
     error_line = tree->line();
@@ -66,8 +66,8 @@ bool Module::compile(std::string &error, int &error_line, int &error_column) {
   return true;
 }
 
-void Module::execute(Context &ctx, int l, Value &result) {
-  m_tree->resolve(ctx, l, m_imports.get());
+void Module::execute(Context &ctx, int l, Tree::Imports *imports, Value &result) {
+  m_tree->resolve(ctx, l, imports);
   m_scope.new_scope(ctx);
 
   Stmt::Result res;

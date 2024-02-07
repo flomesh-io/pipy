@@ -131,8 +131,8 @@ private:
   ~JSModule();
 
   pjs::Ref<Worker> m_worker;
+  pjs::Ref<pjs::Module> m_pjs_module;
   pjs::Source m_source;
-  std::unique_ptr<pjs::Stmt> m_script;
   std::unique_ptr<pjs::Tree::Imports> m_imports;
   pjs::Ref<Configuration> m_configuration;
   pjs::Ref<pjs::Class> m_context_class;
