@@ -2102,20 +2102,31 @@ private:
 
 class Fiber : public Pooled<Fiber, RefCount<Fiber>> {
 public:
+  auto clone() -> Fiber*;
   auto data(int i) -> Data*;
 
 private:
   struct ModuleData {
     Data *data = nullptr;
+    ModuleData() {}
+    ModuleData(const ModuleData &r);
+    ModuleData& operator=(ModuleData &&r) {
+      if (data) data->free();
+      data = r.data;
+      r.data = nullptr;
+      return *this;
+    }
     ~ModuleData() { if (data) data->free(); }
   };
 
   Fiber(Instance *instance, int size)
     : m_instance(instance)
-    , m_data(PooledArray<ModuleData>::make(size)) {}
+    , m_data_list(PooledArray<ModuleData>::make(size)) {}
+
+  ~Fiber() { m_data_list->free(); }
 
   Instance* m_instance;
-  PooledArray<ModuleData>* m_data;
+  PooledArray<ModuleData>* m_data_list;
 
   friend class RefCount<Fiber>;
   friend class Instance;

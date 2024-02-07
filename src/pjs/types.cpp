@@ -471,10 +471,34 @@ auto Instance::fiber() -> Fiber* {
 // Fiber
 //
 
+auto Fiber::clone() -> Fiber* {
+  auto src_dl = m_data_list;
+  auto n = src_dl->size();
+  auto f = new Fiber(m_instance, n);
+  auto dst_dl = f->m_data_list;
+  for (int i = 0; i < n; i++) {
+    if (auto src = src_dl->at(i).data) {
+      auto len = src->size();
+      auto dst = Data::make(len);
+      for (int i = 0; i < len; i++) dst->at(i) = src->at(i);
+      dst_dl->at(i).data = dst;
+    }
+  }
+  return f;
+}
+
 auto Fiber::data(int i) -> Data* {
-  auto &slot = m_data->at(i);
-  if (!slot.data) slot.data = m_instance->module(i)->new_fiber_data();
-  return slot.data;
+  auto dl = m_data_list;
+  auto n = dl->size();
+  if (i >= n) {
+    auto new_data = PooledArray<ModuleData>::make(i + 1);
+    for (int i = 0; i < n; i++) new_data->at(i) = std::move(dl->at(i));
+    dl->free();
+    dl = m_data_list = new_data;
+  }
+  auto &m = dl->at(i);
+  if (!m.data) m.data = m_instance->module(i)->new_fiber_data();
+  return m.data;
 }
 
 //
