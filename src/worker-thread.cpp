@@ -417,117 +417,82 @@ void WorkerThread::main() {
   auto result = pjs::Value::empty;
   auto mod = m_new_worker->load_js_module(entry, result);
 
-  // Evaluation result is not a module
-  if (!mod && !result.is_empty()) {
-    auto output_value = [](std::ostream &out, const pjs::Value &value) {
-      if (value.is_string()) {
-        out << value.s()->str();
-      } else if (value.is<Data>()) {
-        value.as<Data>()->to_chunks(
-          [&](const uint8_t *ptr, int len) {
-            out.write((const char *)ptr, len);
-          }
-        );
-      } else {
-        Data buf;
-        Console::dump(value, buf);
-        buf.to_chunks(
-          [&](const uint8_t *ptr, int len) {
-            out.write((const char *)ptr, len);
-          }
-        );
-        out << std::endl;
-      }
-    };
-
-    if (result.is_promise()) {
-      auto promise = result.as<pjs::Promise>();
-      auto ctx = m_new_worker->new_loading_context();
-      bool done = false;
-
-      pjs::Ref<pjs::Promise::Callback> cb;
-      cb = pjs::Promise::Callback::make(
-        [&](pjs::Promise::State state, const pjs::Value &result) {
-          if (result.is_promise()) {
-            result.as<pjs::Promise>()->then(ctx, cb->resolved(), cb->rejected());
-          } else {
-            output_value(state == pjs::Promise::RESOLVED ? std::cout : std::cerr, result);
-            done = true;
-            Net::current().stop();
-          }
+  if (!result.is_empty()) {
+    if (result.is_string()) {
+      std::cout << result.s()->str();
+    } else if (result.is<Data>()) {
+      result.as<Data>()->to_chunks(
+        [&](const uint8_t *ptr, int len) {
+          std::cout.write((const char *)ptr, len);
         }
       );
-
-      promise->then(ctx, cb->resolved(), cb->rejected());
-
-      for (;;) {
-        while (Net::current().run_one() > 0);
-        pjs::Promise::Period::current()->run(10);
-        if (done) break;
-        Net::current().restart();
-      }
-
     } else {
-      output_value(std::cout, result);
-    }
-
-    {
-      std::lock_guard<std::mutex> lock(m_start_cv_mutex);
-      m_started = false;
-      m_failed = false;
-      m_done = true;
-      m_start_cv.notify_one();
-    }
-
-  // Evaluation result is a module or an error
-  } else {
-    bool started = (mod && m_new_worker->bind() && m_new_worker->start(m_force_start));
-    {
-      std::lock_guard<std::mutex> lock(m_start_cv_mutex);
-      m_started = started;
-      m_failed = !started;
-      m_net = &Net::current();
-      m_start_cv.notify_one();
-    }
-
-    if (started) {
-      Log::info("[worker] Thread %d started", m_index);
-
-      init_metrics();
-
-      m_working = true;
-      while (m_working) {
-        Net::current().run();
-        m_working = false;
-        m_done = true;
-        m_manager->on_thread_done(m_index);
-
-        Log::info("[worker] Thread %d done", m_index);
-
-        if (m_shutdown) break;
-
-        m_workload_signal = std::unique_ptr<Signal>(
-          new Signal([]() { Net::current().stop(); })
-        );
-
-        Net::current().restart();
-        Net::current().run();
-
-        m_workload_signal = nullptr;
-
-        if (m_working) {
-          m_done = false;
-          Net::current().restart();
-          Log::info("[worker] Thread %d restarted", m_index);
+      Data buf;
+      Console::dump(result, buf);
+      buf.to_chunks(
+        [&](const uint8_t *ptr, int len) {
+          std::cout.write((const char *)ptr, len);
         }
-      }
-
-      Log::info("[worker] Thread %d ended", m_index);
-
-    } else {
-      m_new_worker->stop(true);
-      m_new_worker = nullptr;
+      );
+      std::cout << std::endl;
     }
+  }
+
+  bool failed = false;
+  if (mod) {
+    if (!m_new_worker->bind() || !m_new_worker->start(m_force_start)) {
+      failed = true;
+    }
+  }
+
+  Net::context().poll();
+  bool started = !Net::context().stopped();
+
+  {
+    std::lock_guard<std::mutex> lock(m_start_cv_mutex);
+    m_started = started;
+    m_failed = failed;
+    m_net = &Net::current();
+    m_start_cv.notify_one();
+  }
+
+  if (started && !failed) {
+    Log::info("[worker] Thread %d started", m_index);
+
+    init_metrics();
+
+    m_working = true;
+    while (m_working) {
+      Net::current().run();
+      m_working = false;
+      m_done = true;
+      m_manager->on_thread_done(m_index);
+
+      Log::info("[worker] Thread %d done", m_index);
+
+      if (m_shutdown) break;
+
+      m_workload_signal = std::unique_ptr<Signal>(
+        new Signal([]() { Net::current().stop(); })
+      );
+
+      Net::current().restart();
+      Net::current().run();
+
+      m_workload_signal = nullptr;
+
+      if (m_working) {
+        m_done = false;
+        Net::current().restart();
+        Log::info("[worker] Thread %d restarted", m_index);
+      }
+    }
+
+    Log::info("[worker] Thread %d ended", m_index);
+
+  } else {
+    m_new_worker->stop(true);
+    m_new_worker = nullptr;
   }
 
   Log::shutdown();
