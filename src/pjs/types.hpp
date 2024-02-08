@@ -2234,12 +2234,13 @@ public:
     , m_argv(nullptr)
     , m_error(std::make_shared<Error>()) {}
 
-  Context(Instance *instance, Object *g, Ref<Object> *l = nullptr)
+  Context(Instance *instance, Object *g, Ref<Object> *l = nullptr, Fiber *fiber = nullptr)
     : m_instance(instance)
     , m_root(this)
     , m_caller(nullptr)
     , m_g(g)
     , m_l(l)
+    , m_fiber(fiber)
     , m_level(0)
     , m_argc(0)
     , m_argv(nullptr)
@@ -2262,6 +2263,7 @@ public:
   auto caller() const -> Context* { return m_caller; }
   auto g() const -> Object* { return m_g; }
   auto l(int i) const -> Object* { return i >= 0 && m_l ? m_l[i].get() : nullptr; }
+  auto fiber() const -> Fiber* { return m_fiber; }
   auto scope() const -> Scope* { return m_scope; }
   void scope(Scope *scope) { m_scope = scope; }
   auto level() const -> int { return m_level; }
@@ -2482,6 +2484,7 @@ private:
   Context* m_prev;
   Context* m_next;
   Ref<Object> m_g, *m_l;
+  Ref<Fiber> m_fiber;
   Ref<Scope> m_scope;
   int m_level;
   int m_argc;

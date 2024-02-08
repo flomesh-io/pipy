@@ -36,7 +36,11 @@ namespace pipy {
 std::atomic<uint64_t> Context::s_context_id(0);
 
 Context::Context(pjs::Instance *instance, Context *base, Worker *worker, pjs::Object *global, ContextData *data)
-  : pjs::ContextTemplate<Context>(instance, global, data ? data->elements() : nullptr)
+  : pjs::ContextTemplate<Context>(
+    instance, global,
+    data ? data->elements() : nullptr,
+    base && base->fiber() ? base->fiber()->clone() : (instance ? instance->fiber() : nullptr)
+  )
   , m_worker(worker)
   , m_data(data)
 {
