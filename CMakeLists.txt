@@ -217,6 +217,7 @@ add_executable(pipy
   src/api/logging.cpp
   src/api/netmask.cpp
   src/api/os.cpp
+  src/api/pipeline-designer.cpp
   src/api/pipy.cpp
   src/api/protobuf.cpp
   src/api/resp.cpp

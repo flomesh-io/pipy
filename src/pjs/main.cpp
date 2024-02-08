@@ -108,13 +108,13 @@ static void test_eval(Context &ctx, const char *script) {
   Value result;
   std::string error;
   int error_line, error_column;
-  Ref<Instance> instance = Instance::make();
-  Ref<Module> module = Module::make(instance, "test", script);
-  if (!module->compile(error, error_line, error_column)) {
+  Module module(Instance::make());
+  module.load("test", script);
+  if (!module.compile(error, error_line, error_column)) {
     std::cerr << "Syntax error at line " << error_line << " column " << error_column << ": " << error << std::endl;
     return;
   }
-  module->execute(ctx, -1, nullptr, result);
+  module.execute(ctx, -1, nullptr, result);
   if (!ctx.ok()) {
     const auto &err = ctx.error();
     std::cerr << "Evaluation error: " << err.message << std::endl;

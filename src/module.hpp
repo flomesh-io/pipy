@@ -99,7 +99,7 @@ private:
 // JSModule
 //
 
-class JSModule : public Module {
+class JSModule : public Module, public pjs::Module {
 public:
   auto worker() const -> Worker* { return m_worker; }
   auto entrance_pipeline() -> PipelineLayout* { return m_entrance_pipeline; }
@@ -131,7 +131,6 @@ private:
   ~JSModule();
 
   pjs::Ref<Worker> m_worker;
-  pjs::Ref<pjs::Module> m_pjs_module;
   pjs::Source m_source;
   std::unique_ptr<pjs::Tree::Imports> m_imports;
   pjs::Ref<Configuration> m_configuration;
@@ -140,7 +139,6 @@ private:
   std::map<int, PipelineLayout*> m_indexed_pipelines;
   PipelineLayout *m_entrance_pipeline = nullptr;
 
-  friend class pjs::RefCount<Module>;
   friend class Configuration;
   friend class Worker;
 };

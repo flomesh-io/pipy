@@ -553,6 +553,13 @@ void Context::error_invalid_enum_value(int i) {
   error(s);
 }
 
+void Context::trace(Module *module, int line, int column) {
+  m_call_site.module = module;
+  m_call_site.source = &module->source();
+  m_call_site.line = line;
+  m_call_site.column = column;
+}
+
 void Context::trace(const Source *source, int line, int column) {
   m_call_site.source = source;
   m_call_site.line = line;

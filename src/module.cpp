@@ -66,7 +66,8 @@ void ModuleBase::shutdown() {
 //
 
 JSModule::JSModule(Worker *worker, int index)
-  : Module(index)
+  : pipy::Module(index)
+  , pjs::Module(worker->m_instance)
   , m_worker(worker)
   , m_imports(new pjs::Tree::Imports)
 {
@@ -121,8 +122,8 @@ bool JSModule::load(const std::string &path, pjs::Value &result) {
   std::string error;
   int error_line, error_column;
 
-  m_pjs_module = pjs::Module::make(m_worker->m_instance, path, m_source.content);
-  if (!m_pjs_module->compile(error, error_line, error_column)) {
+  pjs::Module::load(path, m_source.content);
+  if (!pjs::Module::compile(error, error_line, error_column)) {
     Log::pjs_location(m_source.content, path, error_line, error_column);
     Log::error(
       "[pjs] Syntax error: %s at line %d column %d in %s",
@@ -132,7 +133,7 @@ bool JSModule::load(const std::string &path, pjs::Value &result) {
   }
 
   pjs::Ref<Context> ctx = m_worker->new_loading_context();
-  m_pjs_module->execute(*ctx, index(), m_imports.get(), result);
+  pjs::Module::execute(*ctx, index(), m_imports.get(), result);
   if (!ctx->ok()) {
     Log::pjs_error(ctx->error());
     return false;

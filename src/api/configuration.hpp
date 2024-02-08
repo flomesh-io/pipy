@@ -208,7 +208,6 @@ public:
   void pipeline(const std::string &name);
   void pipeline();
 
-  void bind_pipelines();
   void bind_exports(Worker *worker, Module *module);
   void bind_imports(Worker *worker, Module *module, pjs::Tree::Imports *imports);
   void apply(JSModule *module);

@@ -28,13 +28,16 @@
 
 namespace pjs {
 
-Module::Module(Instance *instance, const std::string &name, const std::string &source)
+Module::Module(Instance *instance)
   : m_instance(instance)
   , m_id(instance->m_modules.size())
-  , m_source({ name, source })
   , m_scope(pjs::Tree::Scope::MODULE)
 {
   instance->m_modules.push_back(this);
+}
+
+Module::~Module() {
+  m_instance->m_modules[m_id] = nullptr;
 }
 
 auto Module::add_fiber_variable() -> int {
@@ -47,6 +50,11 @@ auto Module::new_fiber_data() -> Data* {
   } else {
     return nullptr;
   }
+}
+
+void Module::load(const std::string &name, const std::string &source) {
+  m_source.filename = name;
+  m_source.content = source;
 }
 
 bool Module::compile(std::string &error, int &error_line, int &error_column) {

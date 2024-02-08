@@ -503,8 +503,7 @@ void FunctionLiteral::resolve(Module *module, Context &ctx, int l, Imports *impo
   char name[100];
   std::sprintf(name, "(anonymous function at line %d column %d)", line(), column());
   m_method = Method::make(
-    name,
-    [this](Context &ctx, Object*, Value &result) {
+    name, [this](Context &ctx, Object*, Value &result) {
       auto scope = m_scope.instantiate(ctx);
       if (!scope) return;
       Stmt::Result res;
@@ -922,7 +921,7 @@ bool Invocation::eval(Context &ctx, Value &result) {
   for (size_t i = 0; i < argc; i++) {
     if (!m_argv[i]->eval(ctx, argv[i])) return false;
   }
-  ctx.trace(source(), line(), column());
+  ctx.trace(m_module, line(), column());
   (*f.as<Function>())(ctx, argc, argv, result);
   if (ctx.ok()) return true;
   ctx.backtrace(source(), line(), column());
@@ -930,6 +929,7 @@ bool Invocation::eval(Context &ctx, Value &result) {
 }
 
 void Invocation::resolve(Module *module, Context &ctx, int l, Imports *imports) {
+  m_module = module;
   m_func->resolve(module, ctx, l, imports);
   for (const auto &p : m_argv) {
     p->resolve(module, ctx, l, imports);

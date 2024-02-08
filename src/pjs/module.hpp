@@ -34,38 +34,30 @@ namespace pjs {
 // Module
 //
 
-class Module : public RefCount<Module> {
+class Module {
 public:
-  static auto make(
-    Instance *instance,
-    const std::string &name,
-    const std::string &source
-  ) -> Module* {
-    return new Module(instance, name, source);
-  }
+  Module(Instance *instance);
+  ~Module();
 
   auto instance() const -> Instance* { return m_instance; }
   auto id() const -> int { return m_id; }
   auto name() const -> const std::string& { return m_source.filename; }
-  auto source() const -> const std::string& { return m_source.content; }
+  auto source() const -> const Source& { return m_source; }
   auto tree() const -> Stmt* { return m_tree.get(); }
 
+  void load(const std::string &name, const std::string &source);
   auto add_fiber_variable() -> int;
   auto new_fiber_data() -> Data*;
   bool compile(std::string &error, int &error_line, int &error_column);
   void execute(Context &ctx, int l, Tree::Imports *imports, Value &result);
 
 private:
-  Module(Instance *instance, const std::string &name, const std::string &source);
-
   Ref<Instance> m_instance;
   int m_id;
   int m_fiber_variable_count = 0;
   Source m_source;
   Tree::Scope m_scope;
   std::unique_ptr<Stmt> m_tree;
-
-  friend class RefCount<Module>;
 };
 
 } // namespace pjs

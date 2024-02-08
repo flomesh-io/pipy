@@ -2211,6 +2211,7 @@ public:
 class Context : public RefCount<Context> {
 public:
   struct Location {
+    Module* module = nullptr;
     const Source* source = nullptr;
     std::string name;
     int line = 0;
@@ -2278,6 +2279,7 @@ public:
   void error_argument_count(int min, int max);
   void error_argument_type(int i, const char *type);
   void error_invalid_enum_value(int i);
+  void trace(Module *module, int line, int column);
   void trace(const Source *source, int line, int column);
   void backtrace(const Source *source, int line, int column);
   void backtrace(const std::string &name);
