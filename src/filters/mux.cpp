@@ -145,7 +145,9 @@ void MuxSession::open(MuxSource *source, Pipeline *pipeline) {
   pipeline->chain(EventSource::reply());
   m_pipeline = pipeline;
   mux_session_open(source);
-  pipeline->start();
+  auto *wk = m_pool->m_weak_key.get();
+  pjs::Value arg(wk ? wk->ptr() : m_pool->m_key);
+  pipeline->start(1, &arg);
 }
 
 void MuxSession::close() {
