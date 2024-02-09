@@ -52,9 +52,15 @@ public:
   void to(PipelineLayout *layout);
 
   void connect(const pjs::Value &target, pjs::Object *options);
+  void connect_tls(pjs::Object *options);
+  void decode_http_request(pjs::Function *handler);
+  void decode_http_response(pjs::Function *handler);
   void demux_http(pjs::Object *options);
   void dummy();
   void dump(const pjs::Value &tag);
+  void encode_http_request(pjs::Object *options, pjs::Function *handler);
+  void encode_http_response(pjs::Object *options, pjs::Function *handler);
+  void print();
   void link(pjs::Str *name);
   void link(pjs::Function *func);
   void mux_http(pjs::Function *session_selector, pjs::Object *options);
@@ -95,7 +101,26 @@ public:
     void operator()(pjs::Context &ctx, pjs::Object *obj, pjs::Value &ret);
   };
 
-  auto start(pjs::Context &ctx) -> Pipeline*;
+  //
+  // PipelineProducer::Wrapper
+  //
+
+  class Wrapper : public pjs::ObjectTemplate<Wrapper>, public EventTarget {
+  public:
+    auto eos() const -> StreamEnd* { return m_eos; }
+
+  private:
+    Wrapper(Pipeline *pipeline);
+
+    pjs::Ref<Pipeline> m_pipeline;
+    pjs::Ref<StreamEnd> m_eos;
+
+    virtual void on_event(Event *evt) override;
+
+    friend class pjs::ObjectTemplate<Wrapper>;
+  };
+
+  auto start(pjs::Context &ctx) -> Wrapper*;
 
 private:
   PipelineProducer(PipelineLayout *layout)

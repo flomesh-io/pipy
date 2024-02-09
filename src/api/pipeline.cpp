@@ -106,7 +106,7 @@ auto PipelineDesigner::trace_location(pjs::Context &ctx) -> PipelineDesigner* {
 void PipelineDesigner::on_start(pjs::Object *starting_events) {
   if (!m_layout) throw std::runtime_error("pipeline layout is already built");
   if (m_current_filter) throw std::runtime_error("onStart() is only allowed prior to filters");
-  if (m_has_on_start) throw std::runtime_error("duplicated onStart()");
+  if (m_has_on_start) throw std::runtime_error("duplicate onStart()");
   m_layout->on_start(starting_events);
   m_layout->on_start_location(m_current_location);
   m_has_on_start = true;
@@ -115,7 +115,7 @@ void PipelineDesigner::on_start(pjs::Object *starting_events) {
 void PipelineDesigner::on_end(pjs::Function *handler) {
   if (!m_layout) throw std::runtime_error("pipeline layout is already built");
   if (m_current_filter) throw std::runtime_error("onEnd() is only allowed prior to filters");
-  if (m_has_on_end) throw std::runtime_error("duplicated onEnd()");
+  if (m_has_on_end) throw std::runtime_error("duplicate onEnd()");
   m_layout->on_end(handler);
   m_has_on_end = true;
 }
@@ -144,6 +144,18 @@ void PipelineDesigner::connect(const pjs::Value &target, pjs::Object *options) {
   }
 }
 
+void PipelineDesigner::connect_tls(pjs::Object *options) {
+  require_sub_pipeline(append_filter(new tls::Client(options)));
+}
+
+void PipelineDesigner::decode_http_request(pjs::Function *handler) {
+  append_filter(new http::RequestDecoder(handler));
+}
+
+void PipelineDesigner::decode_http_response(pjs::Function *handler) {
+  append_filter(new http::ResponseDecoder(handler));
+}
+
 void PipelineDesigner::demux_http(pjs::Object *options) {
   require_sub_pipeline(append_filter(new http::Demux(options)));
 }
@@ -156,6 +168,14 @@ void PipelineDesigner::dump(const pjs::Value &tag) {
   append_filter(new Dump(tag));
 }
 
+void PipelineDesigner::encode_http_request(pjs::Object *options, pjs::Function *handler) {
+  append_filter(new http::RequestEncoder(options, handler));
+}
+
+void PipelineDesigner::encode_http_response(pjs::Object *options, pjs::Function *handler) {
+  append_filter(new http::ResponseEncoder(options, handler));
+}
+
 void PipelineDesigner::link(pjs::Str *name) {
   require_sub_pipeline(append_filter(new Link()));
   to(name);
@@ -163,6 +183,10 @@ void PipelineDesigner::link(pjs::Str *name) {
 
 void PipelineDesigner::link(pjs::Function *func) {
   append_filter(new Link(func));
+}
+
+void PipelineDesigner::print() {
+  append_filter(new Print());
 }
 
 void PipelineDesigner::mux_http(pjs::Function *session_selector, pjs::Object *options) {
@@ -205,11 +229,11 @@ void PipelineDesigner::require_sub_pipeline(Filter *filter) {
 // PipelineProducer
 //
 
-auto PipelineProducer::start(pjs::Context &ctx) -> Pipeline* {
+auto PipelineProducer::start(pjs::Context &ctx) -> Wrapper* {
   auto context = Context::make(ctx.instance(), nullptr, nullptr, ctx.g());
   auto p = Pipeline::make(m_layout, context);
   InputContext ic;
-  return p->start(ctx.argc(), ctx.argv());
+  return Wrapper::make(p->start(ctx.argc(), ctx.argv()));
 }
 
 //
@@ -222,6 +246,23 @@ void PipelineProducer::Constructor::operator()(pjs::Context &ctx, pjs::Object *o
   auto pl = PipelineDesigner::make_pipeline_layout(ctx, f);
   if (!pl) return;
   ret.set(PipelineProducer::make(pl));
+}
+
+//
+// PipelineProducer::Wrapper
+//
+
+PipelineProducer::Wrapper::Wrapper(Pipeline *pipeline)
+  : m_pipeline(pipeline)
+{
+  pipeline->chain(EventTarget::input());
+}
+
+void PipelineProducer::Wrapper::on_event(Event *evt) {
+  if (auto eos = evt->as<StreamEnd>()) {
+    m_eos = eos;
+    m_pipeline = nullptr;
+  }
 }
 
 } // namespace pipy
@@ -286,93 +327,123 @@ template<> void ClassDef<PipelineDesigner>::init() {
     }
   });
 
+  // PipelineDesigner[filterName]
+  auto filter = [](
+    const char *name,
+    const std::function<void(Context &ctx, PipelineDesigner *obj)> &f
+  ) {
+    method(name, [=](Context &ctx, Object *thiz, Value &ret) {
+      auto obj = thiz->as<PipelineDesigner>()->trace_location(ctx);
+      try {
+        f(ctx, obj);
+        ret.set(obj);
+      } catch (std::runtime_error &err) {
+        ctx.error(err);
+      }
+    });
+  };
+
   // PipelineDesigner.connect
-  method("connect", [](Context &ctx, Object *thiz, Value &result) {
-    auto config = thiz->as<PipelineDesigner>()->trace_location(ctx);
+  filter("connect", [](Context &ctx, PipelineDesigner *obj) {
     Value target;
     Object *options = nullptr;
     if (!ctx.arguments(1, &target, &options)) return;
-    try {
-      config->connect(target, options);
-      result.set(thiz);
-    } catch (std::runtime_error &err) {
-      ctx.error(err);
-    }
+    obj->connect(target, options);
+  });
+
+  // PipelineDesigner.connectTLS
+  filter("connectTLS", [](Context &ctx, PipelineDesigner *obj) {
+    Object *options = nullptr;
+    if (!ctx.arguments(0, &options)) return;
+    obj->connect_tls(options);
+  });
+
+  // PipelineDesigner.decodeHTTPRequest
+  filter("decodeHTTPRequest", [](Context &ctx, PipelineDesigner *obj) {
+    Function *handler = nullptr;
+    if (!ctx.arguments(0, &handler)) return;
+    obj->decode_http_request(handler);
+  });
+
+  // PipelineDesigner.decodeHTTPResponse
+  filter("decodeHTTPResponse", [](Context &ctx, PipelineDesigner *obj) {
+    Function *handler = nullptr;
+    if (!ctx.arguments(0, &handler)) return;
+    obj->decode_http_response(handler);
   });
 
   // PipelineDesigner.demuxHTTP
-  method("demuxHTTP", [](Context &ctx, Object *thiz, Value &result) {
-    auto config = thiz->as<PipelineDesigner>()->trace_location(ctx);
-    try {
-      Object *options = nullptr;
-      if (!ctx.arguments(0, &options)) return;
-      config->demux_http(options);
-      result.set(thiz);
-    } catch (std::runtime_error &err) {
-      ctx.error(err);
-    }
+  filter("demuxHTTP", [](Context &ctx, PipelineDesigner *obj) {
+    Object *options = nullptr;
+    if (!ctx.arguments(0, &options)) return;
+    obj->demux_http(options);
   });
 
   // PipelineDesigner.dummy
-  method("dummy", [](Context &ctx, Object *thiz, Value &result) {
-    auto config = thiz->as<PipelineDesigner>()->trace_location(ctx);
-    try {
-      config->dummy();
-      result.set(thiz);
-    } catch (std::runtime_error &err) {
-      ctx.error(err);
-    }
+  filter("dummy", [](Context &ctx, PipelineDesigner *obj) {
+    obj->dummy();
   });
 
   // PipelineDesigner.dump
-  method("dump", [](Context &ctx, Object *thiz, Value &result) {
-    auto config = thiz->as<PipelineDesigner>()->trace_location(ctx);
+  filter("dump", [](Context &ctx, PipelineDesigner *obj) {
     Value tag;
     if (!ctx.arguments(0, &tag)) return;
-    try {
-      config->dump(tag);
-      result.set(thiz);
-    } catch (std::runtime_error &err) {
-      ctx.error(err);
+    obj->dump(tag);
+  });
+
+  // PipelineDesigner.encodeHTTPRequest
+  filter("encodeHTTPRequest", [](Context &ctx, PipelineDesigner *obj) {
+    Object *options = nullptr;
+    Function *handler = nullptr;
+    if (ctx.is_function(0)) {
+      if (!ctx.arguments(1, &handler, &options)) return;
+    } else {
+      if (!ctx.arguments(0, &options)) return;
     }
+    obj->encode_http_request(options, handler);
+  });
+
+  // PipelineDesigner.encodeHTTPResponse
+  filter("encodeHTTPResponse", [](Context &ctx, PipelineDesigner *obj) {
+    Object *options = nullptr;
+    Function *handler = nullptr;
+    if (ctx.is_function(0)) {
+      if (!ctx.arguments(1, &handler, &options)) return;
+    } else {
+      if (!ctx.arguments(0, &options)) return;
+    }
+    obj->encode_http_response(options, handler);
   });
 
   // PipelineDesigner.link
-  method("link", [](Context &ctx, Object *thiz, Value &result) {
-    auto config = thiz->as<PipelineDesigner>()->trace_location(ctx);
-    try {
-      Str *name;
-      Function *func;
-      if (ctx.get(0, name)) {
-        config->link(name);
-      } else if (ctx.get(0, func) && func) {
-        config->link(func);
-      } else {
-        ctx.error_argument_type(0, "a string or a function");
-      }
-      result.set(thiz);
-    } catch (std::runtime_error &err) {
-      ctx.error(err);
+  filter("link", [](Context &ctx, PipelineDesigner *obj) {
+    Str *name;
+    Function *func;
+    if (ctx.get(0, name)) {
+      obj->link(name);
+    } else if (ctx.get(0, func) && func) {
+      obj->link(func);
+    } else {
+      ctx.error_argument_type(0, "a string or a function");
     }
   });
 
+  // PipelineDesigner.print
+  filter("print", [](Context &ctx, PipelineDesigner *obj) {
+    obj->print();
+  });
+
   // PipelineDesigner.muxHTTP
-  method("muxHTTP", [](Context &ctx, Object *thiz, Value &result) {
-    auto config = thiz->as<PipelineDesigner>()->trace_location(ctx);
-    try {
-      Function *session_selector = nullptr;
-      Object *options = nullptr;
-      if (
-        ctx.try_arguments(0, &session_selector, &options) ||
-        ctx.try_arguments(0, &options)
-      ) {
-        config->mux_http(session_selector, options);
-      } else {
-        ctx.error_argument_type(0, "a function or an object");
-      }
-      result.set(thiz);
-    } catch (std::runtime_error &err) {
-      ctx.error(err);
+  filter("muxHTTP", [](Context &ctx, PipelineDesigner *obj) {
+    Function *session_selector = nullptr;
+    Object *options = nullptr;
+    if (
+      ctx.try_arguments(0, &session_selector, &options) ||
+      ctx.try_arguments(0, &options)
+    ) {
+      obj->mux_http(session_selector, options);
+    } else {
+      ctx.error_argument_type(0, "a function or an object");
     }
   });
 }
@@ -386,6 +457,10 @@ template<> void ClassDef<PipelineProducer>::init() {
 template<> void ClassDef<PipelineProducer::Constructor>::init() {
   super<Function>();
   ctor();
+}
+
+template<> void ClassDef<PipelineProducer::Wrapper>::init() {
+  accessor("eos", [](Object *obj, Value &ret) { ret.set(obj->as<PipelineProducer::Wrapper>()->eos()); });
 }
 
 } // namespace pjs
