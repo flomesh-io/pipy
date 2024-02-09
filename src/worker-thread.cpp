@@ -452,6 +452,7 @@ void WorkerThread::main() {
     std::lock_guard<std::mutex> lock(m_start_cv_mutex);
     m_started = started;
     m_failed = failed;
+    m_done = !started && !failed;
     m_net = &Net::current();
     m_start_cv.notify_one();
   }
@@ -493,6 +494,7 @@ void WorkerThread::main() {
   } else {
     m_new_worker->stop(true);
     m_new_worker = nullptr;
+    m_manager->on_thread_done(m_index);
   }
 
   Log::shutdown();
