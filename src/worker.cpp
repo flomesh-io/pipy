@@ -52,6 +52,7 @@
 #include "api/netmask.hpp"
 #include "api/os.hpp"
 #include "api/pipy.hpp"
+#include "api/pipeline.hpp"
 #include "api/protobuf.hpp"
 #include "api/resp.hpp"
 #include "api/sqlite.hpp"
@@ -183,6 +184,9 @@ template<> void ClassDef<pipy::Global>::init() {
 
   // pipy
   variable("pipy", class_of<Pipy>());
+
+  // pipeline
+  variable("pipeline", class_of<PipelineProducer::Constructor>());
 
   // __thread
   accessor("__thread", [](Object *obj, Value &ret) {

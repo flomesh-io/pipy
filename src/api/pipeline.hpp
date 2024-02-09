@@ -23,8 +23,8 @@
  *  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef API_PIPELINE_DESIGNER_HPP
-#define API_PIPELINE_DESIGNER_HPP
+#ifndef API_PIPELINE_HPP
+#define API_PIPELINE_HPP
 
 #include "net.hpp"
 #include "pipeline.hpp"
@@ -79,6 +79,33 @@ private:
   friend class pjs::ObjectTemplate<PipelineDesigner>;
 };
 
+//
+// PipelineProducer
+//
+
+class PipelineProducer : public pjs::ObjectTemplate<PipelineProducer> {
+public:
+
+  //
+  // PipelineProducer::Constructor
+  //
+
+  class Constructor : public pjs::FunctionTemplate<Constructor> {
+  public:
+    void operator()(pjs::Context &ctx, pjs::Object *obj, pjs::Value &ret);
+  };
+
+  auto start(int argc = 0, pjs::Value *argv = nullptr) -> Pipeline*;
+
+private:
+  PipelineProducer(PipelineLayout *layout)
+    : m_layout(layout) {}
+
+  pjs::Ref<PipelineLayout> m_layout;
+
+  friend class pjs::ObjectTemplate<PipelineProducer>;
+};
+
 } // namespace pipy
 
-#endif // API_PIPELINE_DESIGNER_HPP
+#endif // API_PIPELINE_HPP

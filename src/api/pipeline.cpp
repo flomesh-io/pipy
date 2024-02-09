@@ -23,7 +23,8 @@
  *  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include "pipeline-designer.hpp"
+#include "api/pipeline.hpp"
+#include "worker.hpp"
 #include "module.hpp"
 #include "message.hpp"
 
@@ -79,6 +80,10 @@
 #include "filters/websocket.hpp"
 
 namespace pipy {
+
+//
+// PipelineDesigner
+//
 
 auto PipelineDesigner::make_pipeline_layout(pjs::Context &ctx, pjs::Function *builder) -> PipelineLayout* {
   auto m = ctx.call_site().module;
@@ -198,6 +203,33 @@ auto PipelineDesigner::append_filter(Filter *filter) -> Filter* {
 
 void PipelineDesigner::require_sub_pipeline(Filter *filter) {
   m_current_joint_filter = filter;
+}
+
+//
+// PipelineProducer
+//
+
+auto PipelineProducer::start(int argc, pjs::Value *argv) -> Pipeline* {
+  auto worker = Worker::current();
+  auto ctx = worker->new_runtime_context();
+  auto p = Pipeline::make(m_layout, ctx);
+  return p->start(argc, argv);
+}
+
+//
+// PipelineProducer::Constructor
+//
+
+void PipelineProducer::Constructor::operator()(pjs::Context &ctx, pjs::Object *obj, pjs::Value &ret) {
+  pjs::Function *f;
+  if (!ctx.arguments(1, &f)) return;
+  try {
+    auto pl = PipelineDesigner::make_pipeline_layout(ctx, f);
+    if (!pl) return;
+    ret.set(PipelineProducer::make(pl));
+  } catch (std::runtime_error &err) {
+    ctx.error(err);
+  }
 }
 
 } // namespace pipy
@@ -351,6 +383,17 @@ template<> void ClassDef<PipelineDesigner>::init() {
       ctx.error(err);
     }
   });
+}
+
+template<> void ClassDef<PipelineProducer>::init() {
+  method("start", [](Context &ctx, Object *thiz, Value &result) {
+    thiz->as<PipelineProducer>()->start(ctx.argc(), ctx.argv());
+  });
+}
+
+template<> void ClassDef<PipelineProducer::Constructor>::init() {
+  super<Function>();
+  ctor();
 }
 
 } // namespace pjs
