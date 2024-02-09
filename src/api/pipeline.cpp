@@ -24,8 +24,7 @@
  */
 
 #include "api/pipeline.hpp"
-#include "worker.hpp"
-#include "module.hpp"
+#include "input.hpp"
 #include "message.hpp"
 
 // all filters
@@ -86,9 +85,7 @@ namespace pipy {
 //
 
 auto PipelineDesigner::make_pipeline_layout(pjs::Context &ctx, pjs::Function *builder) -> PipelineLayout* {
-  auto m = ctx.call_site().module;
-  if (!m) throw std::runtime_error("cannot create pipeline layout without a module");
-  auto pl = PipelineLayout::make(static_cast<JSModule*>(m));
+  auto pl = PipelineLayout::make();
   auto pd = PipelineDesigner::make(pl);
   pjs::Value arg(pd), ret;
   (*builder)(ctx, 1, &arg, ret);
@@ -177,7 +174,6 @@ void PipelineDesigner::mux_http(pjs::Function *session_selector, pjs::Object *op
 }
 
 void PipelineDesigner::close() {
-  delete m_current_filter;
   m_current_filter = nullptr;
   m_current_joint_filter = nullptr;
   m_layout = nullptr;
@@ -209,11 +205,11 @@ void PipelineDesigner::require_sub_pipeline(Filter *filter) {
 // PipelineProducer
 //
 
-auto PipelineProducer::start(int argc, pjs::Value *argv) -> Pipeline* {
-  auto worker = Worker::current();
-  auto ctx = worker->new_runtime_context();
-  auto p = Pipeline::make(m_layout, ctx);
-  return p->start(argc, argv);
+auto PipelineProducer::start(pjs::Context &ctx) -> Pipeline* {
+  auto context = Context::make(ctx.instance(), nullptr, nullptr, ctx.g());
+  auto p = Pipeline::make(m_layout, context);
+  InputContext ic;
+  return p->start(ctx.argc(), ctx.argv());
 }
 
 //
@@ -223,13 +219,9 @@ auto PipelineProducer::start(int argc, pjs::Value *argv) -> Pipeline* {
 void PipelineProducer::Constructor::operator()(pjs::Context &ctx, pjs::Object *obj, pjs::Value &ret) {
   pjs::Function *f;
   if (!ctx.arguments(1, &f)) return;
-  try {
-    auto pl = PipelineDesigner::make_pipeline_layout(ctx, f);
-    if (!pl) return;
-    ret.set(PipelineProducer::make(pl));
-  } catch (std::runtime_error &err) {
-    ctx.error(err);
-  }
+  auto pl = PipelineDesigner::make_pipeline_layout(ctx, f);
+  if (!pl) return;
+  ret.set(PipelineProducer::make(pl));
 }
 
 } // namespace pipy
@@ -386,8 +378,8 @@ template<> void ClassDef<PipelineDesigner>::init() {
 }
 
 template<> void ClassDef<PipelineProducer>::init() {
-  method("start", [](Context &ctx, Object *thiz, Value &result) {
-    thiz->as<PipelineProducer>()->start(ctx.argc(), ctx.argv());
+  method("start", [](Context &ctx, Object *thiz, Value &) {
+    thiz->as<PipelineProducer>()->start(ctx);
   });
 }
 

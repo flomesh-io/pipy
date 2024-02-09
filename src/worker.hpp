@@ -78,6 +78,7 @@ public:
   auto get_export(pjs::Str *ns, pjs::Str *name) -> int;
   auto new_loading_context() -> Context*;
   auto new_runtime_context(Context *base = nullptr) -> Context*;
+  auto new_context(Context *base = nullptr) -> Context*;
   bool solve(pjs::Context &ctx, pjs::Str *filename, pjs::Value &result);
   bool bind();
   bool start(bool force);

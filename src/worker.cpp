@@ -372,6 +372,10 @@ auto Worker::new_runtime_context(Context *base) -> Context* {
   return Context::make(m_instance, base, this, m_global_object, data);
 }
 
+auto Worker::new_context(Context *base) -> Context* {
+  return Context::make(m_instance, base, this, m_global_object);
+}
+
 bool Worker::solve(pjs::Context &ctx, pjs::Str *filename, pjs::Value &result) {
   auto i = m_solved_files.find(filename);
   if (i != m_solved_files.end()) {

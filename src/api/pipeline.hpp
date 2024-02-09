@@ -95,7 +95,7 @@ public:
     void operator()(pjs::Context &ctx, pjs::Object *obj, pjs::Value &ret);
   };
 
-  auto start(int argc = 0, pjs::Value *argv = nullptr) -> Pipeline*;
+  auto start(pjs::Context &ctx) -> Pipeline*;
 
 private:
   PipelineProducer(PipelineLayout *layout)
