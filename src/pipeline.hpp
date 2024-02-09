@@ -123,7 +123,8 @@ private:
   std::list<std::unique_ptr<Filter>> m_filters;
   Pipeline* m_pool = nullptr;
   List<Pipeline> m_pipelines;
-  size_t m_allocated = 0;
+  int m_allocated = 0;
+  int m_active = 0;
 
   thread_local static List<PipelineLayout> s_all_pipeline_layouts;
   thread_local static size_t s_active_pipeline_count;

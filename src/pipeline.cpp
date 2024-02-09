@@ -47,11 +47,11 @@ PipelineLayout::PipelineLayout(ModuleBase *module, int index, const std::string 
 {
   s_all_pipeline_layouts.push(this);
   if (module) module->m_pipelines.push_back(this);
-  Log::debug(Log::ALLOC, "[p-layout %p] ++ name = %s", this, name_or_label()->c_str());
+  Log::debug(Log::PIPELINE, "[pipeline] create layout: %s", name_or_label()->c_str());
 }
 
 PipelineLayout::~PipelineLayout() {
-  Log::debug(Log::ALLOC, "[p-layout %p] -- name = %s", this, name_or_label()->c_str());
+  Log::debug(Log::PIPELINE, "[pipeline] delete layout: %s", name_or_label()->c_str());
   auto *ptr = m_pool;
   while (ptr) {
     auto *pipeline = ptr;
@@ -108,9 +108,16 @@ auto PipelineLayout::alloc(Context *ctx) -> Pipeline* {
   pipeline->m_context = ctx;
   pipeline->m_started = m_on_start ? false : true;
   m_pipelines.push(pipeline);
+  m_active++;
   s_active_pipeline_count++;
-  if (Log::is_enabled(Log::ALLOC)) {
-    Log::debug(Log::ALLOC, "[pipeline %p] ++ name = %s, context = %llu", pipeline, name_or_label()->c_str(), ctx->id());
+  if (Log::is_enabled(Log::PIPELINE)) {
+    Log::debug(
+      Log::PIPELINE, "[pipeline] ++ %s, active = %d, pooled = %d, context = %llu",
+      name_or_label()->c_str(),
+      m_active,
+      m_allocated - m_active,
+      ctx->id()
+    );
   }
   return pipeline;
 }
@@ -131,9 +138,15 @@ void PipelineLayout::free(Pipeline *pipeline) {
   m_pipelines.remove(pipeline);
   pipeline->m_next_free = m_pool;
   m_pool = pipeline;
+  m_active--;
   s_active_pipeline_count--;
-  if (Log::is_enabled(Log::ALLOC)) {
-    Log::debug(Log::ALLOC, "[pipeline %p] -- name = %s", pipeline, name_or_label()->c_str());
+  if (Log::is_enabled(Log::PIPELINE)) {
+    Log::debug(
+      Log::PIPELINE, "[pipeline] -- %s, active = %d, pooled = %d",
+      name_or_label()->c_str(),
+      m_active,
+      m_allocated - m_active
+    );
   }
   release();
 }

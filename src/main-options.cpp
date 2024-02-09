@@ -77,6 +77,7 @@ static const struct {
   const char *name;
 } s_topic_names[] = {
   { Log::ALLOC    , "alloc" },
+  { Log::PIPELINE , "pipeline" },
   { Log::DUMP     , "dump" },
   { Log::INBOUND  , "inbound" },
   { Log::OUTBOUND , "outbound" },
