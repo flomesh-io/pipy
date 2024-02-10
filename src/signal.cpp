@@ -39,36 +39,34 @@ Signal::Signal(const std::function<void()> &handler)
   wait();
 }
 
+Signal::~Signal() {
+  m_handler->m_closed = true;
+}
+
 void Signal::wait() {
   auto handler = m_handler.get();
   handler->retain();
   m_timer.expires_after(std::chrono::minutes(1));
   m_timer.async_wait(
     [=](const asio::error_code &) {
-      if (m_fired) {
-        handler->trigger();
-        handler->release();
-      } else {
-        wait();
+      if (!handler->m_closed) {
+        if (handler->m_fired) {
+          if (handler->m_handler) {
+            InputContext ic;
+            handler->m_handler();
+          }
+        } else {
+          wait();
+        }
       }
+      handler->release();
     }
   );
 }
 
 void Signal::fire() {
-  m_fired = true;
+  m_handler->m_fired = true;
   m_timer.cancel();
-}
-
-//
-// Signal::Handler
-//
-
-void Signal::Handler::trigger() {
-  if (m_handler) {
-    InputContext ic;
-    m_handler();
-  }
 }
 
 } // namespace pipy

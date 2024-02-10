@@ -40,6 +40,7 @@ namespace pipy {
 class Signal : public pjs::Pooled<Signal> {
 public:
   Signal(const std::function<void()> &handler = nullptr);
+  ~Signal();
 
   void fire();
 
@@ -57,15 +58,13 @@ private:
     Handler(const std::function<void()> &handler)
       : m_handler(handler) {}
 
-    void trigger();
-
-  private:
     std::function<void()> m_handler;
+    bool m_fired = false;
+    bool m_closed = false;
   };
 
   asio::steady_timer m_timer;
   pjs::Ref<Handler> m_handler;
-  bool m_fired = false;
 
   void wait();
 };
