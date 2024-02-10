@@ -80,7 +80,7 @@ void Link::process(Event *evt) {
       if (ret.is_nullish()) return;
 
       if (ret.is_string()) {
-        if (auto layout = module()->get_pipeline(ret.s())) {
+        if (auto layout = module_legacy()->get_pipeline(ret.s())) {
           m_pipeline = sub_pipeline(layout, false, EventSource::reply())->start();
           m_is_started = true;
         } else {

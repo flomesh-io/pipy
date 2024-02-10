@@ -46,7 +46,7 @@ Filter::Filter(const Filter &r)
 {
 }
 
-auto Filter::module() const -> ModuleBase* {
+auto Filter::module_legacy() const -> ModuleBase* {
   if (m_pipeline_layout) {
     return m_pipeline_layout->module();
   } else {
@@ -107,7 +107,7 @@ void Filter::bind() {
           std::string msg(loc, error_location(loc, sizeof(loc)));
           throw std::runtime_error(msg + ": empty pipeline name");
         } else {
-          if (auto mod = dynamic_cast<JSModule*>(module())) {
+          if (auto mod = dynamic_cast<JSModule*>(module_legacy())) {
             if (auto p = mod->find_named_pipeline(sub.name)) {
               sub.layout = p;
               continue;
@@ -120,7 +120,7 @@ void Filter::bind() {
           throw std::runtime_error(msg);
         }
       } else {
-        if (auto mod = dynamic_cast<JSModule*>(module())) {
+        if (auto mod = dynamic_cast<JSModule*>(module_legacy())) {
           if (auto p = mod->find_indexed_pipeline(sub.index)) {
             sub.layout = p;
             continue;
@@ -185,7 +185,7 @@ auto Filter::sub_pipeline(
 
   auto ctx = m_pipeline->m_context.get();
   if (clone_context) {
-    if (auto mod = module()) {
+    if (auto mod = module_legacy()) {
       ctx = mod->new_context(ctx);
     }
   }

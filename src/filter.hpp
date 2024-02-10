@@ -83,7 +83,7 @@ public:
 
   virtual ~Filter() {}
 
-  auto module() const -> ModuleBase*;
+  auto module_legacy() const -> ModuleBase*;
   auto context() const -> Context*;
   auto location() const -> const pjs::Context::Location& { return m_location; }
   auto buffer_stats() const -> std::shared_ptr<BufferStats> { return m_buffer_stats; }

@@ -82,10 +82,10 @@ void LinkAsync::process(Event *evt) {
       if (ret.is_nullish()) return;
 
       if (ret.is_string()) {
-        if (auto layout = module()->get_pipeline(ret.s())) {
+        if (auto layout = module_legacy()->get_pipeline(ret.s())) {
           m_pipeline = sub_pipeline(layout, false, EventSource::reply())->start();
           m_is_started = true;
-        } else if (auto aw = static_cast<JSModule*>(module())->alloc_pipeline_lb(ret.s(), Filter::output())) {
+        } else if (auto aw = static_cast<JSModule*>(module_legacy())->alloc_pipeline_lb(ret.s(), Filter::output())) {
           m_async_wrapper = aw;
           m_is_started = true;
         } else {
