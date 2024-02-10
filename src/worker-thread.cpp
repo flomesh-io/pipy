@@ -28,6 +28,7 @@
 #include "codebase.hpp"
 #include "pipeline-lb.hpp"
 #include "timer.hpp"
+#include "api/configuration.hpp"
 #include "api/console.hpp"
 #include "net.hpp"
 #include "log.hpp"
@@ -417,7 +418,7 @@ void WorkerThread::main() {
   auto result = pjs::Value::empty;
   auto mod = m_new_worker->load_js_module(entry, result);
 
-  if (!result.is_empty()) {
+  if (!result.is_empty() && !result.is<Configuration>()) {
     if (result.is_string()) {
       std::cout << result.s()->str();
     } else if (result.is<Data>()) {
