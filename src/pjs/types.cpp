@@ -461,6 +461,11 @@ Instance::~Instance() {
     s->clear(true);
     s->release();
   }
+  for (const auto &m : m_modules) {
+    if (m) {
+      m->m_instance = nullptr;
+    }
+  }
 }
 
 auto Instance::fiber() -> Fiber* {

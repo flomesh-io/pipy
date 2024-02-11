@@ -208,7 +208,6 @@ thread_local pjs::Ref<Worker> Worker::s_current;
 Worker::Worker(PipelineLoadBalancer *plb, bool is_graph_enabled)
   : m_pipeline_lb(plb)
   , m_thread(Thread::make(WorkerThread::current()))
-  , m_instance(pjs::Instance::make())
   , m_global_object(Global::make(this))
   , m_graph_enabled(is_graph_enabled)
 {
@@ -357,7 +356,7 @@ auto Worker::get_export(pjs::Str *ns, pjs::Str *name) -> int {
 }
 
 auto Worker::new_loading_context() -> Context* {
-  return Context::make(m_instance, nullptr, this, m_global_object);
+  return Context::make(this, nullptr, this, m_global_object);
 }
 
 auto Worker::new_runtime_context(Context *base) -> Context* {
@@ -369,11 +368,11 @@ auto Worker::new_runtime_context(Context *base) -> Context* {
       data->at(i) = mod->new_context_data(proto);
     }
   }
-  return Context::make(m_instance, base, this, m_global_object, data);
+  return Context::make(this, base, this, m_global_object, data);
 }
 
 auto Worker::new_context(Context *base) -> Context* {
-  return Context::make(m_instance, base, this, m_global_object);
+  return Context::make(this, base, this, m_global_object);
 }
 
 bool Worker::solve(pjs::Context &ctx, pjs::Str *filename, pjs::Value &result) {

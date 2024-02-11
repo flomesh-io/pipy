@@ -67,7 +67,7 @@ void ModuleBase::shutdown() {
 
 JSModule::JSModule(Worker *worker, int index)
   : pipy::Module(index)
-  , pjs::Module(worker->m_instance)
+  , pjs::Module(worker)
   , m_worker(worker)
   , m_imports(new pjs::Tree::Imports)
 {

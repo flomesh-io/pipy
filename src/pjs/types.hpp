@@ -2073,17 +2073,14 @@ inline bool Object::iterate_hash(const std::function<bool(Str*, Value&)> &callba
 // Instance
 //
 
-class Instance : public RefCount<Instance> {
+class Instance {
 public:
-  static auto make() -> Instance* {
-    return new Instance;
-  }
+  ~Instance();
 
   auto module(int i) const -> Module* { return m_modules[i]; }
   auto fiber() -> Fiber*;
 
 private:
-  ~Instance();
 
   void add(Scope *scope);
   void remove(Scope *scope);
@@ -2091,7 +2088,6 @@ private:
   std::vector<Module*> m_modules;
   Scope* m_scopes = nullptr;
 
-  friend class RefCount<Instance>;
   friend class Module;
   friend class Scope;
 };

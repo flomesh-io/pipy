@@ -37,7 +37,9 @@ Module::Module(Instance *instance)
 }
 
 Module::~Module() {
-  m_instance->m_modules[m_id] = nullptr;
+  if (auto instance = m_instance) {
+    instance->m_modules[m_id] = nullptr;
+  }
 }
 
 auto Module::add_fiber_variable() -> int {

@@ -52,12 +52,14 @@ public:
   void execute(Context &ctx, int l, Tree::Imports *imports, Value &result);
 
 private:
-  Ref<Instance> m_instance;
+  Instance* m_instance;
   int m_id;
   int m_fiber_variable_count = 0;
   Source m_source;
   Tree::Scope m_scope;
   std::unique_ptr<Stmt> m_tree;
+
+  friend class Instance;
 };
 
 } // namespace pjs

@@ -108,7 +108,7 @@ static void test_eval(Context &ctx, const char *script) {
   Value result;
   std::string error;
   int error_line, error_column;
-  Module module(Instance::make());
+  Module module(ctx.instance());
   module.load("test", script);
   if (!module.compile(error, error_line, error_column)) {
     std::cerr << "Syntax error at line " << error_line << " column " << error_column << ": " << error << std::endl;
@@ -138,10 +138,10 @@ static void test_eval(Context &ctx, const char *script) {
 //
 
 int main() {
-  auto i = Instance::make();
+  Instance instance;
   auto g = TestGlobal::make();
 
-  Context ctx(i, g);
+  Context ctx(&instance, g);
 
   test_tokenizer("undefined/null/true/false void new delete deleted intypeof in typeof instanceoff.instanceof ");
   test_tokenizer("(0+1)-[2]*{3}/4%5**6&7|8^9~a!b?c:d&&你||好??世界");

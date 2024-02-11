@@ -49,7 +49,7 @@ class Watch;
 // Worker
 //
 
-class Worker : public pjs::RefCount<Worker> {
+class Worker : public pjs::RefCount<Worker>, public pjs::Instance {
 public:
   static auto make(PipelineLoadBalancer *plb, bool is_graph_enabled = false) -> Worker* {
     return new Worker(plb, is_graph_enabled);
@@ -156,7 +156,6 @@ private:
   Module* m_root = nullptr;
   pjs::Ref<PipelineLoadBalancer> m_pipeline_lb;
   pjs::Ref<Thread> m_thread;
-  pjs::Ref<pjs::Instance> m_instance;
   pjs::Ref<pjs::Object> m_global_object;
   std::vector<Module*> m_modules;
   std::map<std::string, JSModule*> m_module_map;
