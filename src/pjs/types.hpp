@@ -1447,7 +1447,7 @@ public:
   auto to_number() const -> double {
     switch (m_t) {
       case Value::Type::Empty: return 0;
-      case Value::Type::Undefined: return 0;
+      case Value::Type::Undefined: return NAN;
       case Value::Type::Boolean: return b() ? 1 : 0;
       case Value::Type::Number: return n();
       case Value::Type::String: return s()->parse_float();
