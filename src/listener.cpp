@@ -96,6 +96,22 @@ void Listener::set_reuse_port(bool reuse) {
   s_reuse_port = reuse;
 }
 
+void Listener::commit_all() {
+  for (int i = 0; i < int(Listener::Protocol::MAX); i++) {
+    for (auto l : s_listeners[i]) {
+      l->commit();
+    }
+  }
+}
+
+void Listener::rollback_all() {
+  for (int i = 0; i < int(Listener::Protocol::MAX); i++) {
+    for (auto l : s_listeners[i]) {
+      l->rollback();
+    }
+  }
+}
+
 void Listener::delete_all() {
   for (int i = 0; i < int(Listener::Protocol::MAX); i++) {
     std::set<Listener*> all(std::move(s_listeners[i]));
@@ -157,6 +173,38 @@ void Listener::set_options(const Options &options) {
   }
 }
 
+bool Listener::set_next_state(PipelineLayout *pipeline_layout, const Options &options) {
+  m_new_listen = true;
+  m_pipeline_layout_next = pipeline_layout;
+  m_options_next = options;
+  if (!m_acceptor) return start_listening();
+  return true;
+}
+
+void Listener::commit() {
+  if (m_new_listen) {
+    m_pipeline_layout = m_pipeline_layout_next;
+    m_pipeline_layout_next = nullptr;
+    m_options = m_options_next;
+    m_options_next = Options();
+    if (m_pipeline_layout) {
+      if (m_acceptor) {
+        start_accepting();
+      }
+    } else {
+      stop();
+    }
+  }
+}
+
+void Listener::rollback() {
+  if (m_new_listen) {
+    m_pipeline_layout_next = nullptr;
+    m_options_next = Options();
+    if (!m_pipeline_layout) stop();
+  }
+}
+
 bool Listener::for_each_inbound(const std::function<bool(Inbound*)> &cb) {
   for (auto i = m_inbounds.head(); i; i = i->next()) {
     if (!cb(i)) return false;
@@ -165,6 +213,13 @@ bool Listener::for_each_inbound(const std::function<bool(Inbound*)> &cb) {
 }
 
 bool Listener::start() {
+  return (
+    start_listening() &&
+    start_accepting()
+  );
+}
+
+bool Listener::start_listening() {
   char desc[200];
   describe(desc, sizeof(desc));
 
@@ -186,7 +241,20 @@ bool Listener::start() {
       }
       default: break;
     }
+    return true;
 
+  } catch (std::runtime_error &err) {
+    m_acceptor = nullptr;
+    Log::error("[listener] Cannot start listening on %s: %s", desc, err.what());
+    return false;
+  }
+}
+
+bool Listener::start_accepting() {
+  char desc[200];
+  describe(desc, sizeof(desc));
+
+  try {
     if (m_options.max_connections < 0 || m_inbounds.size() < m_options.max_connections) {
       m_acceptor->accept();
       m_paused = false;

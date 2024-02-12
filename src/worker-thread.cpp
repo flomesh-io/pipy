@@ -148,6 +148,7 @@ void WorkerThread::reload(const std::function<void(bool)> &cb) {
 
       m_new_version = codebase->version();
       m_new_worker = Worker::make(m_manager->loading_pipeline_lb());
+      m_new_worker->set_forced();
 
       pjs::Ref<pjs::Promise::Period> old_period = pjs::Promise::Period::current();
       old_period->pause();
@@ -156,7 +157,11 @@ void WorkerThread::reload(const std::function<void(bool)> &cb) {
       m_new_period->pause();
       m_new_period->set_current();
 
-      cb(m_new_worker->load_js_module(entry) && m_new_worker->bind());
+      cb(
+        m_new_worker->load_js_module(entry) &&
+        m_new_worker->bind()
+      );
+
       old_period->set_current();
       old_period->resume();
     }
@@ -167,6 +172,7 @@ void WorkerThread::reload_done(bool ok) {
   if (ok) {
     m_net->post(
       [this]() {
+        Listener::commit_all();
         if (m_new_worker) {
           pjs::Ref<Worker> current_worker = Worker::current();
           pjs::Ref<pjs::Promise::Period> current_period = pjs::Promise::Period::current();
@@ -187,6 +193,7 @@ void WorkerThread::reload_done(bool ok) {
   } else {
     m_net->post(
       [this]() {
+        Listener::rollback_all();
         if (m_new_worker) {
           m_new_worker->stop(true);
           m_new_period->end();
@@ -414,6 +421,10 @@ void WorkerThread::main() {
     m_manager->is_graph_enabled() && m_index == 0
   );
 
+  if (m_force_start) {
+    m_new_worker->set_forced();
+  }
+
   auto &entry = Codebase::current()->entry();
   auto result = pjs::Value::empty;
   auto mod = m_new_worker->load_js_module(entry, result);
@@ -440,10 +451,12 @@ void WorkerThread::main() {
   }
 
   bool failed = false;
-  if (mod) {
-    if (!m_new_worker->bind() || !m_new_worker->start(m_force_start)) {
-      failed = true;
-    }
+
+  if (mod && m_new_worker->bind() && m_new_worker->start(m_force_start)) {
+    Listener::commit_all();
+  } else {
+    Listener::rollback_all();
+    failed = true;
   }
 
   Net::context().poll();

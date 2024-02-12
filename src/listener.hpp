@@ -83,6 +83,8 @@ public:
     return true;
   }
 
+  static void commit_all();
+  static void rollback_all();
   static void delete_all();
 
   auto options() const -> const Options& { return m_options; }
@@ -91,6 +93,7 @@ public:
   auto port() const -> int { return m_port; }
   auto label() const -> pjs::Str* { return m_label; }
   bool is_open() const { return m_pipeline_layout; }
+  bool is_new_listen() const { return m_new_listen; }
   bool reserved() const { return m_reserved; }
   auto pipeline_layout() const -> PipelineLayout* { return m_pipeline_layout; }
   bool pipeline_layout(PipelineLayout *layout);
@@ -99,6 +102,9 @@ public:
 
   void set_reserved(bool b) { m_reserved = b; }
   void set_options(const Options &options);
+  bool set_next_state(PipelineLayout *pipeline_layout, const Options &options);
+  void commit();
+  void rollback();
   bool for_each_inbound(const std::function<bool(Inbound*)> &cb);
 
 private:
@@ -166,6 +172,8 @@ private:
   };
 
   bool start();
+  bool start_listening();
+  bool start_accepting();
   void pause();
   void resume();
   void stop();
@@ -175,15 +183,18 @@ private:
   void set_sock_opts(int sock);
 
   Options m_options;
+  Options m_options_next;
   Protocol m_protocol;
   std::string m_ip;
   int m_port;
   int m_peak_connections = 0;
   bool m_reserved = false;
   bool m_paused = false;
+  bool m_new_listen = false; // TODO: Remove this
   asio::ip::address m_address;
   pjs::Ref<Acceptor> m_acceptor;
   pjs::Ref<PipelineLayout> m_pipeline_layout;
+  pjs::Ref<PipelineLayout> m_pipeline_layout_next;
   pjs::Ref<pjs::Str> m_label;
   List<Inbound> m_inbounds;
 

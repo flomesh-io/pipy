@@ -189,6 +189,10 @@ void PipelineDesigner::print() {
   append_filter(new Print());
 }
 
+void PipelineDesigner::serve_http(pjs::Object *handler, pjs::Object *options) {
+  append_filter(new http::Server(handler, options));
+}
+
 void PipelineDesigner::mux_http(pjs::Function *session_selector, pjs::Object *options) {
   if (options && options->is_function()) {
     require_sub_pipeline(append_filter(new http::Mux(session_selector, options->as<pjs::Function>())));
@@ -431,6 +435,14 @@ template<> void ClassDef<PipelineDesigner>::init() {
   // PipelineDesigner.print
   filter("print", [](Context &ctx, PipelineDesigner *obj) {
     obj->print();
+  });
+
+  // PipelineDesigner.serveHTTP
+  filter("serveHTTP", [](Context &ctx, PipelineDesigner *obj) {
+    Object *handler;
+    Object *options = nullptr;
+    if (!ctx.arguments(1, &handler, &options)) return;
+    obj->serve_http(handler, options);
   });
 
   // PipelineDesigner.muxHTTP

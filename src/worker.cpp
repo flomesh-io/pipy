@@ -48,6 +48,7 @@
 #include "api/hessian.hpp"
 #include "api/http.hpp"
 #include "api/json.hpp"
+#include "api/listen.hpp"
 #include "api/logging.hpp"
 #include "api/netmask.hpp"
 #include "api/os.hpp"
@@ -188,6 +189,9 @@ template<> void ClassDef<pipy::Global>::init() {
   // pipeline
   variable("pipeline", class_of<PipelineProducer::Constructor>());
 
+  // listen
+  variable("listen", class_of<Listen>());
+
   // __thread
   accessor("__thread", [](Object *obj, Value &ret) {
     ret.set(obj->as<pipy::Global>()->worker()->thread());
@@ -305,6 +309,7 @@ bool Worker::update_listeners(bool force) {
   // Close old ports
   Listener::for_each(
     [&](Listener *l) {
+      if (l->is_new_listen()) return true; // TODO: Remove this
       if (l->reserved()) return true;
       if (m_listeners.find(l) == m_listeners.end()) {
         l->pipeline_layout(nullptr);
@@ -453,6 +458,7 @@ bool Worker::bind() {
 }
 
 bool Worker::start(bool force) {
+  m_forced = force;
 
   // Register pipelines to the pipeline load balancer
   for (const auto &p : m_module_map) {
@@ -474,7 +480,9 @@ bool Worker::start(bool force) {
     watch->start();
   }
 
+  m_started = true;
   s_current = this;
+
   return true;
 }
 

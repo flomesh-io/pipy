@@ -140,7 +140,8 @@ bool JSModule::load(const std::string &path, pjs::Value &result) {
   }
 
   if (!result.is_class(pjs::class_of<Configuration>())) {
-    return false;
+    m_configuration = Configuration::make(pjs::Object::make());
+    return true;
   }
 
   auto config = result.as<Configuration>();

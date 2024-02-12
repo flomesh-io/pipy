@@ -81,6 +81,9 @@ public:
   auto new_context(Context *base = nullptr) -> Context*;
   bool solve(pjs::Context &ctx, pjs::Str *filename, pjs::Value &result);
   bool bind();
+  void set_forced() { m_forced = true; }
+  bool forced() const { return m_forced; }
+  bool started() const { return m_started; }
   bool start(bool force);
   void stop(bool force);
   bool admin(Message *request, const std::function<void(Message*)> &respond);
@@ -168,6 +171,8 @@ private:
   std::map<pjs::Ref<pjs::Str>, Namespace> m_namespaces;
   std::map<pjs::Ref<pjs::Str>, SolvedFile> m_solved_files;
   std::unique_ptr<Signal> m_exit_signal;
+  bool m_forced = false;
+  bool m_started = false;
   bool m_graph_enabled = false;
 
   auto new_module_index() -> int;

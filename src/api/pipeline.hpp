@@ -61,6 +61,7 @@ public:
   void encode_http_request(pjs::Object *options, pjs::Function *handler);
   void encode_http_response(pjs::Object *options, pjs::Function *handler);
   void print();
+  void serve_http(pjs::Object *handler, pjs::Object *options);
   void link(pjs::Str *name);
   void link(pjs::Function *func);
   void mux_http(pjs::Function *session_selector, pjs::Object *options);
