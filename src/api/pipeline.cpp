@@ -138,6 +138,30 @@ void PipelineDesigner::to(PipelineLayout *layout) {
   m_current_joint_filter = nullptr;
 }
 
+void PipelineDesigner::accept_http_tunnel(pjs::Function *handler) {
+  require_sub_pipeline(append_filter(new http::TunnelServer(handler)));
+}
+
+void PipelineDesigner::accept_proxy_protocol(pjs::Function *handler) {
+  require_sub_pipeline(append_filter(new proxy_protocol::Server(handler)));
+}
+
+void PipelineDesigner::accept_socks(pjs::Function *on_connect) {
+  require_sub_pipeline(append_filter(new socks::Server(on_connect)));
+}
+
+void PipelineDesigner::accept_tls(pjs::Object *options) {
+  require_sub_pipeline(append_filter(new tls::Server(options)));
+}
+
+void PipelineDesigner::compress(const pjs::Value &algorithm) {
+  append_filter(new Compress(algorithm));
+}
+
+void PipelineDesigner::compress_http(const pjs::Value &algorithm) {
+  append_filter(new CompressHTTP(algorithm));
+}
+
 void PipelineDesigner::connect(const pjs::Value &target, pjs::Object *options) {
   if (options && options->is_function()) {
     append_filter(new Connect(target, options->as<pjs::Function>()));
@@ -146,8 +170,28 @@ void PipelineDesigner::connect(const pjs::Value &target, pjs::Object *options) {
   }
 }
 
+void PipelineDesigner::connect_http_tunnel(pjs::Object *handshake) {
+  require_sub_pipeline(append_filter(new http::TunnelClient(handshake)));
+}
+
+void PipelineDesigner::connect_proxy_protocol(const pjs::Value &address) {
+  require_sub_pipeline(append_filter(new proxy_protocol::Client(address)));
+}
+
+void PipelineDesigner::connect_socks(const pjs::Value &address) {
+  require_sub_pipeline(append_filter(new socks::Client(address)));
+}
+
 void PipelineDesigner::connect_tls(pjs::Object *options) {
   require_sub_pipeline(append_filter(new tls::Client(options)));
+}
+
+void PipelineDesigner::decode_bgp(pjs::Object *options) {
+  append_filter(new bgp::Decoder(options));
+}
+
+void PipelineDesigner::decode_dubbo() {
+  append_filter(new dubbo::Decoder());
 }
 
 void PipelineDesigner::decode_http_request(pjs::Function *handler) {
@@ -158,8 +202,56 @@ void PipelineDesigner::decode_http_response(pjs::Function *handler) {
   append_filter(new http::ResponseDecoder(handler));
 }
 
+void PipelineDesigner::decode_mqtt() {
+  append_filter(new mqtt::Decoder());
+}
+
+void PipelineDesigner::decode_multipart() {
+  append_filter(new mime::MultipartDecoder());
+}
+
+void PipelineDesigner::decode_netlink() {
+  append_filter(new netlink::Decoder());
+}
+
+void PipelineDesigner::decode_resp() {
+  append_filter(new resp::Decoder());
+}
+
+void PipelineDesigner::decode_thrift() {
+  append_filter(new thrift::Decoder());
+}
+
+void PipelineDesigner::decode_websocket() {
+  append_filter(new websocket::Decoder());
+}
+
+void PipelineDesigner::decompress(const pjs::Value &algorithm) {
+  append_filter(new Decompress(algorithm));
+}
+
+void PipelineDesigner::decompress_http() {
+  append_filter(new DecompressHTTP());
+}
+
+void PipelineDesigner::deframe(pjs::Object *states) {
+  append_filter(new Deframe(states));
+}
+
+void PipelineDesigner::demux(pjs::Object *options) {
+  require_sub_pipeline(append_filter(new Demux(options)));
+}
+
+void PipelineDesigner::demux_fcgi() {
+  require_sub_pipeline(append_filter(new fcgi::Demux()));
+}
+
 void PipelineDesigner::demux_http(pjs::Object *options) {
   require_sub_pipeline(append_filter(new http::Demux(options)));
+}
+
+void PipelineDesigner::detect_protocol(pjs::Function *handler) {
+  append_filter(new ProtocolDetector(handler));
 }
 
 void PipelineDesigner::dummy() {
@@ -170,6 +262,14 @@ void PipelineDesigner::dump(const pjs::Value &tag) {
   append_filter(new Dump(tag));
 }
 
+void PipelineDesigner::encode_bgp(pjs::Object *options) {
+  append_filter(new bgp::Encoder(options));
+}
+
+void PipelineDesigner::encode_dubbo() {
+  append_filter(new dubbo::Encoder());
+}
+
 void PipelineDesigner::encode_http_request(pjs::Object *options, pjs::Function *handler) {
   append_filter(new http::RequestEncoder(options, handler));
 }
@@ -178,13 +278,100 @@ void PipelineDesigner::encode_http_response(pjs::Object *options, pjs::Function 
   append_filter(new http::ResponseEncoder(options, handler));
 }
 
-void PipelineDesigner::link(pjs::Str *name) {
-  require_sub_pipeline(append_filter(new Link()));
-  to(name);
+void PipelineDesigner::encode_mqtt() {
+  append_filter(new mqtt::Encoder());
 }
 
-void PipelineDesigner::link(pjs::Function *func) {
-  append_filter(new Link(func));
+void PipelineDesigner::encode_netlink() {
+  append_filter(new netlink::Encoder());
+}
+
+void PipelineDesigner::encode_resp() {
+  append_filter(new resp::Encoder());
+}
+
+void PipelineDesigner::encode_thrift() {
+  append_filter(new thrift::Encoder());
+}
+
+void PipelineDesigner::encode_websocket() {
+  append_filter(new websocket::Encoder());
+}
+
+void PipelineDesigner::exec(const pjs::Value &command, pjs::Object *options) {
+  append_filter(new Exec(command, options));
+}
+
+void PipelineDesigner::fork(const pjs::Value &init_args) {
+  require_sub_pipeline(append_filter(new Fork(init_args)));
+}
+
+void PipelineDesigner::handle(Event::Type type, pjs::Function *callback) {
+  append_filter(new OnEvent(type, callback));
+}
+
+void PipelineDesigner::handle_body(pjs::Function *callback, pjs::Object *options) {
+  append_filter(new OnBody(callback, options));
+}
+
+void PipelineDesigner::handle_message(pjs::Function *callback, pjs::Object *options) {
+  append_filter(new OnMessage(callback, options));
+}
+
+void PipelineDesigner::handle_start(pjs::Function *callback) {
+  append_filter(new OnStart(callback));
+}
+
+void PipelineDesigner::handle_tls_client_hello(pjs::Function *callback) {
+  append_filter(new tls::OnClientHello(callback));
+}
+
+void PipelineDesigner::loop() {
+  require_sub_pipeline(append_filter(new Loop()));
+}
+
+void PipelineDesigner::mux(pjs::Function *session_selector, pjs::Object *options) {
+  if (options && options->is_function()) {
+    require_sub_pipeline(append_filter(new Mux(session_selector, options->as<pjs::Function>())));
+  } else {
+    require_sub_pipeline(append_filter(new Mux(session_selector, options)));
+  }
+}
+
+void PipelineDesigner::mux_fcgi(pjs::Function *session_selector, pjs::Object *options) {
+  if (options && options->is_function()) {
+    require_sub_pipeline(append_filter(new fcgi::Mux(session_selector, options->as<pjs::Function>())));
+  } else {
+    require_sub_pipeline(append_filter(new fcgi::Mux(session_selector, options)));
+  }
+}
+
+void PipelineDesigner::mux_http(pjs::Function *session_selector, pjs::Object *options) {
+  if (options && options->is_function()) {
+    require_sub_pipeline(append_filter(new http::Mux(session_selector, options->as<pjs::Function>())));
+  } else {
+    require_sub_pipeline(append_filter(new http::Mux(session_selector, options)));
+  }
+}
+
+void PipelineDesigner::replace(Event::Type type, pjs::Object *replacement) {
+  append_filter(new ReplaceEvent(type, replacement));
+}
+
+void PipelineDesigner::replace_body(pjs::Object *replacement, pjs::Object *options) {
+  append_filter(new ReplaceBody(replacement, options));
+}
+
+void PipelineDesigner::replace_message(pjs::Object *replacement, pjs::Object *options) {
+  append_filter(new ReplaceMessage(replacement, options));
+}
+
+void PipelineDesigner::replace_start(pjs::Object *replacement) {
+  append_filter(new ReplaceStart(replacement));
+}
+
+void PipelineDesigner::replay(pjs::Object *options) {
+  require_sub_pipeline(append_filter(new Replay(options)));
 }
 
 void PipelineDesigner::print() {
@@ -195,12 +382,28 @@ void PipelineDesigner::serve_http(pjs::Object *handler, pjs::Object *options) {
   append_filter(new http::Server(handler, options));
 }
 
-void PipelineDesigner::mux_http(pjs::Function *session_selector, pjs::Object *options) {
-  if (options && options->is_function()) {
-    require_sub_pipeline(append_filter(new http::Mux(session_selector, options->as<pjs::Function>())));
-  } else {
-    require_sub_pipeline(append_filter(new http::Mux(session_selector, options)));
-  }
+void PipelineDesigner::split(const pjs::Value &separator) {
+  append_filter(new Split(separator));
+}
+
+void PipelineDesigner::tee(const pjs::Value &filename, pjs::Object *options) {
+  append_filter(new Tee(filename, options));
+}
+
+void PipelineDesigner::throttle_concurrency(pjs::Object *quota, pjs::Object *options) {
+  append_filter(new ThrottleConcurrency(quota, options));
+}
+
+void PipelineDesigner::throttle_data_rate(pjs::Object *quota, pjs::Object *options) {
+  append_filter(new ThrottleDataRate(quota, options));
+}
+
+void PipelineDesigner::throttle_message_rate(pjs::Object *quota, pjs::Object *options) {
+  append_filter(new ThrottleMessageRate(quota, options));
+}
+
+void PipelineDesigner::wait(pjs::Function *condition, pjs::Object *options) {
+  append_filter(new Wait(condition, options));
 }
 
 void PipelineDesigner::close() {
@@ -316,16 +519,13 @@ template<> void ClassDef<PipelineDesigner>::init() {
   // PipelineDesigner.to
   method("to", [](Context &ctx, Object *thiz, Value &result) {
     try {
-      pjs::Str *name;
-      pjs::Function *func;
-      if (ctx.get(0, name)) {
-        thiz->as<PipelineDesigner>()->to(name);
-      } else if (ctx.get(0, func) && func) {
-        if (auto pl = PipelineDesigner::make_pipeline_layout(ctx, func)) {
+      Function *builder;
+      if (ctx.get(0, builder) && builder) {
+        if (auto pl = PipelineDesigner::make_pipeline_layout(ctx, builder)) {
           thiz->as<PipelineDesigner>()->to(pl);
         }
       } else {
-        ctx.error_argument_type(0, "a string or a function");
+        ctx.error_argument_type(0, "a function");
         return;
       }
       result.set(thiz);
@@ -350,6 +550,48 @@ template<> void ClassDef<PipelineDesigner>::init() {
     });
   };
 
+  // PipelineDesigner.acceptHTTPTunnel
+  filter("acceptHTTPTunnel", [](Context &ctx, PipelineDesigner *obj) {
+    Function *handler;
+    if (!ctx.arguments(1, &handler)) return;
+    obj->accept_http_tunnel(handler);
+  });
+
+  // PipelineDesigner.acceptProxyProtocol
+  filter("acceptProxyProtocol", [](Context &ctx, PipelineDesigner *obj) {
+    Function *handler;
+    if (!ctx.arguments(1, &handler)) return;
+    obj->accept_proxy_protocol(handler);
+  });
+
+  // PipelineDesigner.acceptSOCKS
+  filter("acceptSOCKS", [](Context &ctx, PipelineDesigner *obj) {
+    Function *handler;
+    if (!ctx.arguments(1, &handler)) return;
+    obj->accept_socks(handler);
+  });
+
+  // PipelineDesigner.acceptTLS
+  filter("acceptTLS", [](Context &ctx, PipelineDesigner *obj) {
+    Object *options = nullptr;
+    if (!ctx.arguments(0, &options)) return;
+    obj->accept_tls(options);
+  });
+
+  // PipelineDesigner.compress
+  filter("compress", [](Context &ctx, PipelineDesigner *obj) {
+    Value algorithm;
+    if (!ctx.arguments(1, &algorithm)) return;
+    obj->compress(algorithm);
+  });
+
+  // PipelineDesigner.compressHTTP
+  filter("compressHTTP", [](Context &ctx, PipelineDesigner *obj) {
+    Value algorithm;
+    if (!ctx.arguments(1, &algorithm)) return;
+    obj->compress_http(algorithm);
+  });
+
   // PipelineDesigner.connect
   filter("connect", [](Context &ctx, PipelineDesigner *obj) {
     Value target;
@@ -358,11 +600,44 @@ template<> void ClassDef<PipelineDesigner>::init() {
     obj->connect(target, options);
   });
 
+  // PipelineDesigner.connectHTTPTunnel
+  filter("connectHTTPTunnel", [](Context &ctx, PipelineDesigner *obj) {
+    Object *handshake;
+    if (!ctx.arguments(1, &handshake)) return;
+    obj->connect_http_tunnel(handshake);
+  });
+
+  // PipelineDesigner.connectProxyProtocol
+  filter("connectProxyProtocol", [](Context &ctx, PipelineDesigner *obj) {
+    Value target;
+    if (!ctx.arguments(1, &target)) return;
+    obj->connect_proxy_protocol(target);
+  });
+
+  // PipelineDesigner.connectSOCKS
+  filter("connectSOCKS", [](Context &ctx, PipelineDesigner *obj) {
+    Value address;
+    if (!ctx.arguments(1, &address)) return;
+    obj->connect_socks(address);
+  });
+
   // PipelineDesigner.connectTLS
   filter("connectTLS", [](Context &ctx, PipelineDesigner *obj) {
     Object *options = nullptr;
     if (!ctx.arguments(0, &options)) return;
     obj->connect_tls(options);
+  });
+
+  // PipelineDesigner.decodeBGP
+  filter("decodeBGP", [](Context &ctx, PipelineDesigner *obj) {
+    Object *options = nullptr;
+    if (!ctx.arguments(0, &options)) return;
+    obj->decode_bgp(options);
+  });
+
+  // PipelineDesigner.decodeDubbo
+  filter("decodeDubbo", [](Context &ctx, PipelineDesigner *obj) {
+    obj->decode_dubbo();
   });
 
   // PipelineDesigner.decodeHTTPRequest
@@ -379,11 +654,79 @@ template<> void ClassDef<PipelineDesigner>::init() {
     obj->decode_http_response(handler);
   });
 
+  // PipelineDesigner.decodeMQTT
+  filter("decodeMQTT", [](Context &ctx, PipelineDesigner *obj) {
+    obj->decode_mqtt();
+  });
+
+  // PipelineDesigner.decodeMultipart
+  filter("decodeMultipart", [](Context &ctx, PipelineDesigner *obj) {
+    obj->decode_multipart();
+  });
+
+  // PipelineDesigner.decodeNetlink
+  filter("decodeNetlink", [](Context &ctx, PipelineDesigner *obj) {
+    obj->decode_netlink();
+  });
+
+  // PipelineDesigner.decodeRESP
+  filter("decodeRESP", [](Context &ctx, PipelineDesigner *obj) {
+    obj->decode_resp();
+  });
+
+  // PipelineDesigner.decodeThrift
+  filter("decodeThrift", [](Context &ctx, PipelineDesigner *obj) {
+    obj->decode_thrift();
+  });
+
+  // PipelineDesigner.decodeWebSocket
+  filter("decodeWebSocket", [](Context &ctx, PipelineDesigner *obj) {
+    obj->decode_websocket();
+  });
+
+  // PipelineDesigner.decompress
+  filter("decompress", [](Context &ctx, PipelineDesigner *obj) {
+    Value algorithm;
+    if (!ctx.arguments(1, &algorithm)) return;
+    obj->decompress(algorithm);
+  });
+
+  // PipelineDesigner.decompressHTTP
+  filter("decompressHTTP", [](Context &ctx, PipelineDesigner *obj) {
+    obj->decompress_http();
+  });
+
+  // PipelineDesigner.deframe
+  filter("deframe", [](Context &ctx, PipelineDesigner *obj) {
+    Object *states;
+    if (!ctx.arguments(1, &states)) return;
+    obj->deframe(states);
+  });
+
+  // PipelineDesigner.demux
+  filter("demux", [](Context &ctx, PipelineDesigner *obj) {
+    Object *options = nullptr;
+    if (!ctx.arguments(1, &options)) return;
+    obj->demux(options);
+  });
+
+  // PipelineDesigner.demuxFastCGI
+  filter("demuxFastCGI", [](Context &ctx, PipelineDesigner *obj) {
+    obj->demux_fcgi();
+  });
+
   // PipelineDesigner.demuxHTTP
   filter("demuxHTTP", [](Context &ctx, PipelineDesigner *obj) {
     Object *options = nullptr;
     if (!ctx.arguments(0, &options)) return;
     obj->demux_http(options);
+  });
+
+  // PipelineDesigner.detectProtocol
+  filter("detectProtocol", [](Context &ctx, PipelineDesigner *obj) {
+    Function *handler;
+    if (!ctx.arguments(1, &handler)) return;
+    obj->detect_protocol(handler);
   });
 
   // PipelineDesigner.dummy
@@ -396,6 +739,18 @@ template<> void ClassDef<PipelineDesigner>::init() {
     Value tag;
     if (!ctx.arguments(0, &tag)) return;
     obj->dump(tag);
+  });
+
+  // PipelineDesigner.encodeBGP
+  filter("encodeBGP", [](Context &ctx, PipelineDesigner *obj) {
+    Object *options = nullptr;
+    if (!ctx.arguments(1, &options)) return;
+    obj->encode_bgp(options);
+  });
+
+  // PipelineDesigner.encodeDubbo
+  filter("encodeDubbo", [](Context &ctx, PipelineDesigner *obj) {
+    obj->encode_dubbo();
   });
 
   // PipelineDesigner.encodeHTTPRequest
@@ -422,30 +777,150 @@ template<> void ClassDef<PipelineDesigner>::init() {
     obj->encode_http_response(options, handler);
   });
 
-  // PipelineDesigner.link
-  filter("link", [](Context &ctx, PipelineDesigner *obj) {
-    Str *name;
-    Function *func;
-    if (ctx.get(0, name)) {
-      obj->link(name);
-    } else if (ctx.get(0, func) && func) {
-      obj->link(func);
+  // PipelineDesigner.encodeMQTT
+  filter("encodeMQTT", [](Context &ctx, PipelineDesigner *obj) {
+    obj->encode_mqtt();
+  });
+
+  // PipelineDesigner.encodeNetlink
+  filter("encodeNetlink", [](Context &ctx, PipelineDesigner *obj) {
+    obj->encode_netlink();
+  });
+
+  // PipelineDesigner.encodeRESP
+  filter("encodeRESP", [](Context &ctx, PipelineDesigner *obj) {
+    obj->encode_resp();
+  });
+
+  // PipelineDesigner.encodeThrift
+  filter("encodeThrift", [](Context &ctx, PipelineDesigner *obj) {
+    obj->encode_thrift();
+  });
+
+  // PipelineDesigner.encodeWebSocket
+  filter("encodeWebSocket", [](Context &ctx, PipelineDesigner *obj) {
+    obj->encode_websocket();
+  });
+
+  // PipelineDesigner.exec
+  filter("exec", [](Context &ctx, PipelineDesigner *obj) {
+    Value command;
+    Object *options = nullptr;
+    if (!ctx.arguments(1, &command, &options)) return;
+    obj->exec(command, options);
+  });
+
+  // PipelineDesigner.fork
+  filter("fork", [](Context &ctx, PipelineDesigner *obj) {
+    Value init_args;
+    if (!ctx.arguments(0, &init_args)) return;
+    obj->fork(init_args);
+  });
+
+  // PipelineDesigner.handle
+  filter("handle", [](Context &ctx, PipelineDesigner *obj) {
+    Function *handler;
+    if (!ctx.arguments(1, &handler)) return;
+    obj->handle(Event::Type(-1), handler);
+  });
+
+  // PipelineDesigner.handleData
+  filter("handleData", [](Context &ctx, PipelineDesigner *obj) {
+    Function *handler;
+    if (!ctx.arguments(1, &handler)) return;
+    obj->handle(Event::Type::Data, handler);
+  });
+
+  // PipelineDesigner.handleMessage
+  filter("handleMessage", [](Context &ctx, PipelineDesigner *obj) {
+    Function *handler;
+    Object *options = nullptr;
+    if (!ctx.arguments(1, &handler, &options)) return;
+    obj->handle_message(handler, options);
+  });
+
+  // PipelineDesigner.handleMessageBody
+  filter("handleMessageBody", [](Context &ctx, PipelineDesigner *obj) {
+    Function *handler;
+    Object *options = nullptr;
+    if (!ctx.arguments(1, &handler, &options)) return;
+    obj->handle_body(handler, options);
+  });
+
+  // PipelineDesigner.handleMessageEnd
+  filter("handleMessageEnd", [](Context &ctx, PipelineDesigner *obj) {
+    Function *handler;
+    if (!ctx.arguments(1, &handler)) return;
+    obj->handle(Event::Type::MessageEnd, handler);
+  });
+
+  // PipelineDesigner.handleMessageStart
+  filter("handleMessageStart", [](Context &ctx, PipelineDesigner *obj) {
+    Function *handler;
+    if (!ctx.arguments(1, &handler)) return;
+    obj->handle(Event::Type::MessageStart, handler);
+  });
+
+  // PipelineDesigner.handleStreamEnd
+  filter("handleStreamEnd", [](Context &ctx, PipelineDesigner *obj) {
+    Function *handler;
+    if (!ctx.arguments(1, &handler)) return;
+    obj->handle(Event::Type::StreamEnd, handler);
+  });
+
+  // PipelineDesigner.handleStreamStart
+  filter("handleStreamStart", [](Context &ctx, PipelineDesigner *obj) {
+    Function *handler;
+    if (!ctx.arguments(1, &handler)) return;
+    obj->handle_start(handler);
+  });
+
+  // PipelineDesigner.handleTLSClientHello
+  filter("handleTLSClientHello", [](Context &ctx, PipelineDesigner *obj) {
+    Function *handler;
+    if (!ctx.arguments(1, &handler)) return;
+    obj->handle_tls_client_hello(handler);
+  });
+
+  // PipelineDesigner.loop
+  filter("loop", [](Context &ctx, PipelineDesigner *obj) {
+    Function *builder;
+    if (ctx.get(0, builder) && builder) {
+      if (auto pl = PipelineDesigner::make_pipeline_layout(ctx, builder)) {
+        obj->loop();
+        obj->to(pl);
+      }
     } else {
-      ctx.error_argument_type(0, "a string or a function");
+      ctx.error_argument_type(0, "a function");
     }
   });
 
-  // PipelineDesigner.print
-  filter("print", [](Context &ctx, PipelineDesigner *obj) {
-    obj->print();
+  // PipelineDesigner.mux
+  filter("mux", [](Context &ctx, PipelineDesigner *obj) {
+    Function *session_selector = nullptr;
+    Object *options = nullptr;
+    if (
+      ctx.try_arguments(0, &session_selector, &options) ||
+      ctx.try_arguments(0, &options)
+    ) {
+      obj->mux(session_selector, options);
+    } else {
+      ctx.error_argument_type(0, "a function or an object");
+    }
   });
 
-  // PipelineDesigner.serveHTTP
-  filter("serveHTTP", [](Context &ctx, PipelineDesigner *obj) {
-    Object *handler;
+  // PipelineDesigner.muxFastCGI
+  filter("muxFastCGI", [](Context &ctx, PipelineDesigner *obj) {
+    Function *session_selector = nullptr;
     Object *options = nullptr;
-    if (!ctx.arguments(1, &handler, &options)) return;
-    obj->serve_http(handler, options);
+    if (
+      ctx.try_arguments(0, &session_selector, &options) ||
+      ctx.try_arguments(0, &options)
+    ) {
+      obj->mux_fcgi(session_selector, options);
+    } else {
+      ctx.error_argument_type(0, "a function or an object");
+    }
   });
 
   // PipelineDesigner.muxHTTP
@@ -460,6 +935,131 @@ template<> void ClassDef<PipelineDesigner>::init() {
     } else {
       ctx.error_argument_type(0, "a function or an object");
     }
+  });
+
+  // PipelineDesigner.print
+  filter("print", [](Context &ctx, PipelineDesigner *obj) {
+    obj->print();
+  });
+
+  // PipelineDesigner.replace
+  filter("replace", [](Context &ctx, PipelineDesigner *obj) {
+    Object *replacement = nullptr;
+    if (!ctx.arguments(0, &replacement)) return;
+    obj->replace(Event::Type(-1), replacement);
+  });
+
+  // PipelineDesigner.replaceData
+  filter("replaceData", [](Context &ctx, PipelineDesigner *obj) {
+    Object *replacement = nullptr;
+    if (!ctx.arguments(0, &replacement)) return;
+    obj->replace(Event::Type::Data, replacement);
+  });
+
+  // PipelineDesigner.replaceMessage
+  filter("replaceMessage", [](Context &ctx, PipelineDesigner *obj) {
+    Object *replacement = nullptr;
+    Object *options = nullptr;
+    if (!ctx.arguments(0, &replacement, &options)) return;
+    obj->replace_message(replacement, options);
+  });
+
+  // PipelineDesigner.replaceMessageBody
+  filter("replaceMessageBody", [](Context &ctx, PipelineDesigner *obj) {
+    Object *replacement = nullptr;
+    Object *options = nullptr;
+    if (!ctx.arguments(0, &replacement, &options)) return;
+    obj->replace_body(replacement, options);
+  });
+
+  // PipelineDesigner.replaceMessageEnd
+  filter("replaceMessageEnd", [](Context &ctx, PipelineDesigner *obj) {
+    Object *replacement = nullptr;
+    if (!ctx.arguments(0, &replacement)) return;
+    obj->replace(Event::Type::MessageEnd, replacement);
+  });
+
+  // PipelineDesigner.replaceMessageStart
+  filter("replaceMessageStart", [](Context &ctx, PipelineDesigner *obj) {
+    Object *replacement = nullptr;
+    if (!ctx.arguments(0, &replacement)) return;
+    obj->replace(Event::Type::MessageStart, replacement);
+  });
+
+  // PipelineDesigner.replaceStreamEnd
+  filter("replaceStreamEnd", [](Context &ctx, PipelineDesigner *obj) {
+    Object *replacement = nullptr;
+    if (!ctx.arguments(0, &replacement)) return;
+    obj->replace(Event::Type::StreamEnd, replacement);
+  });
+
+  // PipelineDesigner.replaceStreamStart
+  filter("replaceStreamStart", [](Context &ctx, PipelineDesigner *obj) {
+    Object *replacement = nullptr;
+    if (!ctx.arguments(0, &replacement)) return;
+    obj->replace_start(replacement);
+  });
+
+  // PipelineDesigner.replay
+  filter("replay", [](Context &ctx, PipelineDesigner *obj) {
+    Object *options = nullptr;
+    if (!ctx.arguments(0, &options)) return;
+    obj->replay(options);
+  });
+
+  // PipelineDesigner.serveHTTP
+  filter("serveHTTP", [](Context &ctx, PipelineDesigner *obj) {
+    Object *handler;
+    Object *options = nullptr;
+    if (!ctx.arguments(1, &handler, &options)) return;
+    obj->serve_http(handler, options);
+  });
+
+  // PipelineDesigner.split
+  filter("split", [](Context &ctx, PipelineDesigner *obj) {
+    Value separator;
+    if (!ctx.arguments(1, &separator)) return;
+    obj->split(separator);
+  });
+
+  // PipelineDesigner.tee
+  filter("tee", [](Context &ctx, PipelineDesigner *obj) {
+    Value filename;
+    Object *options = nullptr;
+    if (!ctx.arguments(1, &filename, &options)) return;
+    obj->tee(filename, options);
+  });
+
+  // PipelineDesigner.throttleConcurrency
+  filter("throttleConcurrency", [](Context &ctx, PipelineDesigner *obj) {
+    pjs::Object *quota;
+    pjs::Object *options = nullptr;
+    if (!ctx.arguments(1, &quota, &options)) return;
+    obj->throttle_concurrency(quota, options);
+  });
+
+  // PipelineDesigner.throttleDataRate
+  filter("throttleDataRate", [](Context &ctx, PipelineDesigner *obj) {
+    pjs::Object *quota;
+    pjs::Object *options = nullptr;
+    if (!ctx.arguments(1, &quota, &options)) return;
+    obj->throttle_data_rate(quota, options);
+  });
+
+  // PipelineDesigner.throttleMessageRate
+  filter("throttleMessageRate", [](Context &ctx, PipelineDesigner *obj) {
+    pjs::Object *quota;
+    pjs::Object *options = nullptr;
+    if (!ctx.arguments(1, &quota, &options)) return;
+    obj->throttle_message_rate(quota, options);
+  });
+
+  // PipelineDesigner.wait
+  filter("wait", [](Context &ctx, PipelineDesigner *obj) {
+    Function *condition;
+    Object *options = nullptr;
+    if (!ctx.arguments(1, &condition, &options)) return;
+    obj->wait(condition, options);
   });
 }
 

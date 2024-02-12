@@ -37,9 +37,7 @@ namespace pipy {
 
 class Split : public Filter {
 public:
-  Split(Data *separator);
-  Split(pjs::Str *separator);
-  Split(pjs::Function *callback);
+  Split(const pjs::Value &separator);
 
 private:
   enum { MAX_SEPARATOR = 1024 };
@@ -52,8 +50,8 @@ private:
   virtual void process(Event *evt) override;
   virtual void dump(Dump &d) override;
 
+  pjs::Value m_separator;
   pjs::Ref<KMP> m_kmp;
-  pjs::Ref<pjs::Function> m_callback;
   pjs::Ref<pjs::Object> m_head;
   KMP::Split* m_split = nullptr;
   bool m_started = false;

@@ -123,9 +123,7 @@ public:
   void replace_start(pjs::Object *replacement);
   void replay(pjs::Object *options);
   void serve_http(pjs::Object *handler, pjs::Object *options);
-  void split(Data *separator);
-  void split(pjs::Str *separator);
-  void split(pjs::Function *callback);
+  void split(const pjs::Value &separator);
   void tee(const pjs::Value &filename, pjs::Object *options);
   void throttle_concurrency(pjs::Object *quota, pjs::Object *options);
   void throttle_data_rate(pjs::Object *quota, pjs::Object *options);

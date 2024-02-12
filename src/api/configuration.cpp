@@ -410,16 +410,8 @@ void FilterConfigurator::serve_http(pjs::Object *handler, pjs::Object *options) 
   append_filter(new http::Server(handler, options));
 }
 
-void FilterConfigurator::split(Data *separator) {
+void FilterConfigurator::split(const pjs::Value &separator) {
   append_filter(new Split(separator));
-}
-
-void FilterConfigurator::split(pjs::Str *separator) {
-  append_filter(new Split(separator));
-}
-
-void FilterConfigurator::split(pjs::Function *callback) {
-  append_filter(new Split(callback));
 }
 
 void FilterConfigurator::tee(const pjs::Value &filename, pjs::Object *options) {
@@ -2233,19 +2225,10 @@ template<> void ClassDef<FilterConfigurator>::init() {
   // FilterConfigurator.split
   method("split", [](Context &ctx, Object *thiz, Value &result) {
     auto config = thiz->as<FilterConfigurator>()->trace_location(ctx);
-    pipy::Data *separator;
-    Str *separator_str;
-    Function *callback;
+    Value separator;
     try {
-      if (ctx.try_arguments(1, &separator)) {
-        config->split(separator);
-      } else if (ctx.try_arguments(1, &separator_str)) {
-        config->split(separator_str);
-      } else if (ctx.try_arguments(1, &callback)) {
-        config->split(callback);
-      } else {
-        ctx.error_argument_type(0, "a string, Data or function");
-      }
+      if (!ctx.arguments(1, &separator)) return;
+      config->split(separator);
       result.set(thiz);
     } catch (std::runtime_error &err) {
       ctx.error(err);
