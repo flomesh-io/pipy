@@ -58,10 +58,8 @@ private:
   typedef pjs::PooledArray<pjs::Ref<pjs::Object>> ContextData;
 
   Context(
-    pjs::Instance *instance,
-    Context *base,
-    Worker *worker = nullptr,
-    pjs::Object *global = nullptr,
+    Worker *worker,
+    Context *base = nullptr,
     ContextData *data = nullptr
   );
 

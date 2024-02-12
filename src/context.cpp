@@ -24,6 +24,7 @@
  */
 
 #include "context.hpp"
+#include "worker.hpp"
 #include "inbound.hpp"
 #include "log.hpp"
 
@@ -35,11 +36,11 @@ namespace pipy {
 
 std::atomic<uint64_t> Context::s_context_id(0);
 
-Context::Context(pjs::Instance *instance, Context *base, Worker *worker, pjs::Object *global, ContextData *data)
+Context::Context(Worker *worker, Context *base, ContextData *data)
   : pjs::ContextTemplate<Context>(
-    instance, global,
+    worker,
     data ? data->elements() : nullptr,
-    base && base->fiber() ? base->fiber()->clone() : (instance ? instance->fiber() : nullptr)
+    base && base->fiber() ? base->fiber()->clone() : (worker ? worker->fiber() : nullptr)
   )
   , m_worker(worker)
   , m_data(data)

@@ -453,6 +453,11 @@ bool Value::is_equal(const Value &a, const Value &b) {
 // Instance
 //
 
+Instance::Instance(Object *global)
+  : m_global(global)
+{
+}
+
 Instance::~Instance() {
   while (m_scopes) {
     auto s = m_scopes;

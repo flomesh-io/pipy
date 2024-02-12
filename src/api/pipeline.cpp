@@ -26,6 +26,7 @@
 #include "api/pipeline.hpp"
 #include "input.hpp"
 #include "message.hpp"
+#include "worker.hpp"
 
 // all filters
 #include "filters/bgp.hpp"
@@ -85,7 +86,8 @@ namespace pipy {
 //
 
 auto PipelineDesigner::make_pipeline_layout(pjs::Context &ctx, pjs::Function *builder) -> PipelineLayout* {
-  auto pl = PipelineLayout::make();
+  auto worker = static_cast<Worker*>(ctx.instance());
+  auto pl = PipelineLayout::make(worker);
   auto pd = PipelineDesigner::make(pl);
   pjs::Value arg(pd), ret;
   (*builder)(ctx, 1, &arg, ret);
@@ -234,7 +236,8 @@ void PipelineDesigner::require_sub_pipeline(Filter *filter) {
 //
 
 auto PipelineProducer::start(pjs::Context &ctx) -> Wrapper* {
-  auto context = Context::make(ctx.instance(), nullptr, nullptr, ctx.g());
+  auto worker = static_cast<Worker*>(ctx.instance());
+  auto context = Context::make(worker, nullptr);
   auto p = Pipeline::make(m_layout, context);
   InputContext ic;
   return Wrapper::make(p->start(ctx.argc(), ctx.argv()));

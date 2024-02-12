@@ -1504,7 +1504,7 @@ template<> void ClassDef<Gauge>::init() {
     return Gauge::make(
       name, labels,
       [=](Gauge *g) {
-        Context ctx(nullptr, Worker::current()->global_object());
+        Context ctx(Worker::current());
         Value arg(g), ret;
         (*f)(ctx, 1, &arg, ret);
         if (!ctx.ok()) {

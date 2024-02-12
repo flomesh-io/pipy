@@ -88,6 +88,9 @@ public:
     void declare_arg(Expr *expr);
     void declare_var(Str *name, Expr *value = nullptr);
     void declare_fiber_var(Str *name, Module *module);
+    auto size() const -> size_t { return m_size; }
+    auto args() const -> const std::vector<Ref<Str>> & { return m_args; }
+    auto vars() const -> const std::vector<Ref<Str>> & { return m_vars; }
     auto variables() -> std::vector<pjs::Scope::Variable>& { init_variables(); return m_variables; }
     auto instantiate(Context &ctx) -> pjs::Scope*;
 

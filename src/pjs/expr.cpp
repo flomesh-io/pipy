@@ -25,6 +25,7 @@
 
 #include "expr.hpp"
 #include "stmt.hpp"
+#include "module.hpp"
 
 namespace pjs {
 
@@ -496,6 +497,16 @@ bool FunctionLiteral::eval(Context &ctx, Value &result) {
 }
 
 bool FunctionLiteral::declare(Module *module, Scope &, Error &error) {
+  auto check_name = [&](pjs::Str *s) {
+    if (!s) return true;
+    if (s->str()[0] != '$') return true;
+    if (s->length() == 1) return true;
+    error.tree = this;
+    error.message = "reserved argument name '" + s->str() + "'";
+    return false;
+  };
+  for (const auto &arg : m_scope.args()) if (!check_name(arg)) return false;
+  for (const auto &var : m_scope.vars()) if (!check_name(var)) return false;
   return m_output->declare(module, m_scope, error);
 }
 
@@ -517,8 +528,7 @@ void FunctionLiteral::resolve(Module *module, Context &ctx, int l, Imports *impo
     }
   );
 
-  auto &variables = m_scope.variables();
-  Context fctx(ctx, 0, nullptr, pjs::Scope::make(ctx.instance(), ctx.scope(), variables.size(), variables.data()));
+  Context fctx(ctx, 0, nullptr, pjs::Scope::make(ctx.instance(), ctx.scope(), m_scope.size(), m_scope.variables()));
   for (auto &i : m_inputs) i->resolve(module, fctx, l, imports);
   m_output->resolve(module, fctx, l, imports);
 }
@@ -635,15 +645,22 @@ void LocalVariable::dump(std::ostream &out, const std::string &indent) {
 bool FiberVariable::is_left_value() const { return true; }
 
 bool FiberVariable::eval(Context &ctx, Value &result) {
-  // TODO
-  if (!m_module) return false;
-  result = Value::undefined;
+  auto fiber = ctx.root()->fiber();
+  if (!fiber) {
+    ctx.error("referencing fiber variable without a fiber");
+    return false;
+  }
+  result = fiber->data(m_module->id())->at(m_i);
   return true;
 }
 
 bool FiberVariable::assign(Context &ctx, Value &value) {
-  // TODO
-  if (!m_module) return false;
+  auto fiber = ctx.root()->fiber();
+  if (!fiber) {
+    ctx.error("referencing fiber variable without a fiber");
+    return false;
+  }
+  fiber->data(m_module->id())->at(m_i) = value;
   return true;
 }
 
@@ -697,20 +714,19 @@ void Identifier::resolve(Module *module, Context &ctx, int l, Imports *imports) 
 void Identifier::resolve(Context &ctx) {
   auto *scope = ctx.scope();
   for (int level = 0; scope; scope = scope->parent(), level++) {
-    if (auto *variables = scope->variables()) {
-      for (int i = 0; i < scope->size(); i++) {
-        auto &v = variables[i];
-        if (v.name == m_key) {
-          if (v.is_fiber) {
-            m_resolved.reset(locate(new FiberVariable(i, m_module)));
-          } else {
-            m_resolved.reset(locate(new LocalVariable(i, level)));
-            if (scope != ctx.scope()) {
-              v.is_closure = true;
-            }
+    auto &variables = scope->variables();
+    for (size_t i = 0, n = variables.size(); i < n; i++) {
+      auto &v = variables[i];
+      if (v.name == m_key) {
+        if (v.is_fiber) {
+          m_resolved.reset(locate(new FiberVariable(v.index, m_module)));
+        } else {
+          m_resolved.reset(locate(new LocalVariable(i, level)));
+          if (scope != ctx.scope()) {
+            v.is_closure = true;
           }
-          return;
         }
+        return;
       }
     }
   }

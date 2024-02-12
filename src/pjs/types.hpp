@@ -2075,8 +2075,10 @@ inline bool Object::iterate_hash(const std::function<bool(Str*, Value&)> &callba
 
 class Instance {
 public:
+  Instance(Object *global);
   ~Instance();
 
+  auto global() const -> Object* { return m_global; }
   auto module(int i) const -> Module* { return m_modules[i]; }
   auto fiber() -> Fiber*;
 
@@ -2085,6 +2087,7 @@ private:
   void add(Scope *scope);
   void remove(Scope *scope);
 
+  Ref<Object> m_global;
   std::vector<Module*> m_modules;
   Scope* m_scopes = nullptr;
 
@@ -2141,15 +2144,15 @@ public:
     bool is_closure = false;
   };
 
-  static auto make(Instance *instance, Scope *parent, int size, Variable *variables = nullptr) -> Scope* {
+  static auto make(Instance *instance, Scope *parent, size_t size, std::vector<Variable> &variables) -> Scope* {
     return new Scope(instance, parent, size, variables);
   }
 
   auto parent() const -> Scope* { return m_parent; }
-  auto size() const -> int { return m_data->size(); }
+  auto size() const -> size_t { return m_data->size(); }
   auto value(int i) -> Value& { return m_data->at(i); }
   auto values() -> Value* { return m_data->elements(); }
-  auto variables() const -> Variable* { return m_variables; }
+  auto variables() const -> std::vector<Variable>& { return m_variables; }
 
   void init(int argc, const Value *args) {
     auto data = m_data->elements();
@@ -2161,14 +2164,14 @@ public:
   void clear(bool all = false) {
     auto values = m_data->elements();
     for (size_t i = 0, n = m_data->size(); i < n; i++) {
-      if (all || !m_variables || !m_variables[i].is_closure) {
+      if (all || !m_variables[i].is_closure) {
         values[i] = Value::undefined;
       }
     }
   }
 
 private:
-  Scope(Instance *instance, Scope *parent, int size, Variable *variables)
+  Scope(Instance *instance, Scope *parent, size_t size, std::vector<Variable> &variables)
     : m_instance(instance)
     , m_parent(parent)
     , m_data(Data::make(size))
@@ -2184,7 +2187,7 @@ private:
   Scope* m_next;
   Ref<Scope> m_parent;
   Data* m_data;
-  Variable* m_variables;
+  std::vector<Variable> &m_variables;
 
   friend class RefCount<Scope>;
   friend class Instance;
@@ -2220,21 +2223,11 @@ public:
     auto where() const -> const Location*;
   };
 
-  Context(Instance *instance)
+  Context(Instance *instance, Ref<Object> *l = nullptr, Fiber *fiber = nullptr)
     : m_instance(instance)
     , m_root(this)
     , m_caller(nullptr)
-    , m_l(nullptr)
-    , m_level(0)
-    , m_argc(0)
-    , m_argv(nullptr)
-    , m_error(std::make_shared<Error>()) {}
-
-  Context(Instance *instance, Object *g, Ref<Object> *l = nullptr, Fiber *fiber = nullptr)
-    : m_instance(instance)
-    , m_root(this)
-    , m_caller(nullptr)
-    , m_g(g)
+    , m_g(instance ? instance->global() : nullptr)
     , m_l(l)
     , m_fiber(fiber)
     , m_level(0)
@@ -2282,7 +2275,7 @@ public:
   void backtrace(const Source *source, int line, int column);
   void backtrace(const std::string &name);
 
-  auto new_scope(int argc, int nvar, Scope::Variable *variables) -> Scope* {
+  auto new_scope(int argc, int nvar, std::vector<Scope::Variable> &variables) -> Scope* {
     auto *scope = Scope::make(m_instance, m_scope, nvar, variables);
     scope->init(std::min(m_argc, argc), m_argv);
     m_scope = scope;

@@ -118,7 +118,7 @@ void Tree::Scope::declare_fiber_var(Str *name, Module *module) {
 auto Tree::Scope::instantiate(Context &ctx) -> pjs::Scope* {
   init_variables();
 
-  auto *scope = ctx.new_scope(m_size, m_variables.size(), m_variables.data());
+  auto *scope = ctx.new_scope(m_args.size(), m_size, m_variables);
 
   // Initialize arguments
   for (const auto &init : m_init_args) {
@@ -157,12 +157,18 @@ auto Tree::Scope::instantiate(Context &ctx) -> pjs::Scope* {
 void Tree::Scope::init_variables() {
   if (!m_initialized) {
     m_size = m_args.size() + m_vars.size();
-    m_variables.resize(m_size);
+    m_variables.resize(m_size + m_fiber_vars.size());
     size_t i = 0;
     for (const auto &name : m_args) m_variables[i++].name = name;
     for (const auto &name : m_vars) m_variables[i++].name = name;
     for (auto &init : m_init_args) init.unpack_index += m_args.size();
     for (auto &init : m_init_vars) init.index += m_args.size();
+    for (const auto &p : m_fiber_vars) {
+      auto &v = m_variables[i++];
+      v.name = p.first;
+      v.index = p.second;
+      v.is_fiber = true;
+    }
     m_initialized = true;
   }
 }

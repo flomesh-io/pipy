@@ -27,6 +27,7 @@
 #include "filter.hpp"
 #include "context.hpp"
 #include "message.hpp"
+#include "worker.hpp"
 #include "module.hpp"
 #include "log.hpp"
 
@@ -39,10 +40,11 @@ namespace pipy {
 thread_local List<PipelineLayout> PipelineLayout::s_all_pipeline_layouts;
 thread_local size_t PipelineLayout::s_active_pipeline_count = 0;
 
-PipelineLayout::PipelineLayout(ModuleBase *module, int index, const std::string &name, const std::string &label)
+PipelineLayout::PipelineLayout(Worker *worker, ModuleBase *module, int index, const std::string &name, const std::string &label)
   : m_index(index)
   , m_name(pjs::Str::make(name))
   , m_label(pjs::Str::make(label))
+  , m_worker(worker)
   , m_module(module)
 {
   s_all_pipeline_layouts.push(this);
@@ -80,7 +82,7 @@ void PipelineLayout::shutdown() {
 }
 
 auto PipelineLayout::new_context() -> Context* {
-  return m_module ? m_module->new_context() : Context::make();
+  return m_module ? m_module->new_context() : Context::make(m_worker);
 }
 
 auto PipelineLayout::name_or_label() const -> pjs::Str* {

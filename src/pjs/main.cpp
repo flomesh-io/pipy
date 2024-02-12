@@ -138,10 +138,8 @@ static void test_eval(Context &ctx, const char *script) {
 //
 
 int main() {
-  Instance instance;
-  auto g = TestGlobal::make();
-
-  Context ctx(&instance, g);
+  Instance instance(TestGlobal::make());
+  Context ctx(&instance);
 
   test_tokenizer("undefined/null/true/false void new delete deleted intypeof in typeof instanceoff.instanceof ");
   test_tokenizer("(0+1)-[2]*{3}/4%5**6&7|8^9~a!b?c:d&&你||好??世界");

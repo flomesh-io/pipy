@@ -147,7 +147,19 @@ bool Var::declare(Module *module, Tree::Scope &scope, Error &error) {
   auto name = m_identifier->name();
   auto s = scope.parent();
   while (!s->is_root()) s = s->parent();
-  s->declare_var(name);
+  const auto &str = name->str();
+  if (str[0] == '$') {
+    bool all_dollars = true;
+    for (auto c : str) if (c != '$') { all_dollars = false; break; }
+    if (all_dollars) {
+      error.tree = this;
+      error.message = "reserved variable name '" + str + "'";
+      return false;
+    }
+    s->declare_fiber_var(name, module);
+  } else {
+    s->declare_var(name);
+  }
   if (m_expr && !m_expr->declare(module, scope, error)) return false;
   return true;
 }
@@ -185,8 +197,14 @@ bool Function::declare(Module *module, Tree::Scope &scope, Error &error) {
   auto name = m_identifier->name();
   auto s = scope.parent();
   while (!s->is_root()) s = s->parent();
-  s->declare_var(name, m_is_definition ? m_expr.get() : nullptr);
-  return m_expr->declare(module, scope, error);
+  if (name->str()[0] == '$') {
+    error.tree = this;
+    error.message = "reserved function name '" + name->str() + "'";
+    return false;
+  } else {
+    s->declare_var(name, m_is_definition ? m_expr.get() : nullptr);
+    return m_expr->declare(module, scope, error);
+  }
 }
 
 void Function::resolve(Module *module, Context &ctx, int l, Tree::Imports *imports) {
