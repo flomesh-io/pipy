@@ -172,25 +172,20 @@ public:
   auto read(Location &loc) -> Token {
     peek(loc);
     m_has_peeked = false;
-    m_has_peeked_eol = false;
+    m_has_eol = false;
     loc = m_token_loc;
     return m_token;
   }
 
   auto peek(Location &loc) -> Token {
-    if (!m_has_peeked) {
-      m_token = parse(m_token_loc);
-      m_has_peeked = true;
-      loc = m_token_loc;
-    }
+    peek_token();
+    loc = m_token_loc;
     return m_token;
   }
 
   bool peek_eol() {
-    if (m_has_peeked_eol) return true;
-    if (m_is_template) return false;
-    if (parse_space()) return (m_has_peeked_eol = true);
-    return false;
+    peek_token();
+    return m_has_eol;
   }
 
   static bool is_operator(int id) {
@@ -221,8 +216,15 @@ private:
   Location m_token_loc;
   Token m_token;
   bool m_has_peeked = false;
-  bool m_has_peeked_eol = false;
+  bool m_has_eol = false;
   bool m_is_template = false;
+
+  void peek_token() {
+    if (!m_has_peeked) {
+      m_token = parse(m_token_loc);
+      m_has_peeked = true;
+    }
+  }
 
   auto parse(Location &loc) -> Token;
   bool parse_space();
@@ -370,7 +372,7 @@ auto Tokenizer::parse(Location &loc) -> Token {
   } else {
 
     // Skip white spaces
-    parse_space();
+    if (parse_space()) m_has_eol = true;
 
     // EOF?
     if (eof()) return Token::eof;
