@@ -473,7 +473,7 @@ Instance::~Instance() {
   }
 }
 
-auto Instance::fiber() -> Fiber* {
+auto Instance::new_fiber() -> Fiber* {
   return new Fiber(this, m_modules.size());
 }
 

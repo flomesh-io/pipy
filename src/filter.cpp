@@ -26,6 +26,7 @@
 #include "filter.hpp"
 #include "pipeline.hpp"
 #include "module.hpp"
+#include "worker.hpp"
 #include "message.hpp"
 #include "log.hpp"
 
@@ -187,6 +188,8 @@ auto Filter::sub_pipeline(
   if (clone_context) {
     if (auto mod = module_legacy()) {
       ctx = mod->new_context(ctx);
+    } else {
+      ctx = layout->worker()->new_context(ctx);
     }
   }
 

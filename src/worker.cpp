@@ -211,6 +211,7 @@ thread_local pjs::Ref<Worker> Worker::s_current;
 
 Worker::Worker(PipelineLoadBalancer *plb, bool is_graph_enabled)
   : pjs::Instance(Global::make(this))
+  , m_root_fiber(new_fiber())
   , m_pipeline_lb(plb)
   , m_thread(Thread::make(WorkerThread::current()))
   , m_graph_enabled(is_graph_enabled)
@@ -361,7 +362,7 @@ auto Worker::get_export(pjs::Str *ns, pjs::Str *name) -> int {
 }
 
 auto Worker::new_loading_context() -> Context* {
-  return Context::make(this, nullptr);
+  return Context::make(this, m_root_fiber);
 }
 
 auto Worker::new_runtime_context(Context *base) -> Context* {
@@ -373,11 +374,12 @@ auto Worker::new_runtime_context(Context *base) -> Context* {
       data->at(i) = mod->new_context_data(proto);
     }
   }
-  return Context::make(this, base, data);
+  return Context::make(this, nullptr, base, data);
 }
 
 auto Worker::new_context(Context *base) -> Context* {
-  return Context::make(this, base);
+  auto fiber = (base && base->fiber() ? base->fiber()->clone() : m_root_fiber->clone());
+  return Context::make(this, fiber, base);
 }
 
 bool Worker::solve(pjs::Context &ctx, pjs::Str *filename, pjs::Value &result) {

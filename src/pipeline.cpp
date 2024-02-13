@@ -82,7 +82,7 @@ void PipelineLayout::shutdown() {
 }
 
 auto PipelineLayout::new_context() -> Context* {
-  return m_module ? m_module->new_context() : Context::make(m_worker);
+  return m_module ? m_module->new_context() : m_worker->new_context();
 }
 
 auto PipelineLayout::name_or_label() const -> pjs::Str* {

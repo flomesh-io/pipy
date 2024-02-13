@@ -440,7 +440,7 @@ void PipelineDesigner::require_sub_pipeline(Filter *filter) {
 
 auto PipelineProducer::start(pjs::Context &ctx) -> Wrapper* {
   auto worker = static_cast<Worker*>(ctx.instance());
-  auto context = Context::make(worker, nullptr);
+  auto context = worker->new_context();
   auto p = Pipeline::make(m_layout, context);
   InputContext ic;
   return Wrapper::make(p->start(ctx.argc(), ctx.argv()));

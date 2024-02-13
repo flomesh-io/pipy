@@ -59,6 +59,7 @@ private:
 
   Context(
     Worker *worker,
+    pjs::Fiber *fiber = nullptr,
     Context *base = nullptr,
     ContextData *data = nullptr
   );

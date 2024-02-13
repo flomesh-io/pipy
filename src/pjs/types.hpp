@@ -2080,10 +2080,9 @@ public:
 
   auto global() const -> Object* { return m_global; }
   auto module(int i) const -> Module* { return m_modules[i]; }
-  auto fiber() -> Fiber*;
+  auto new_fiber() -> Fiber*;
 
 private:
-
   void add(Scope *scope);
   void remove(Scope *scope);
 
