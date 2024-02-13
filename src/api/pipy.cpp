@@ -402,6 +402,15 @@ template<> void ClassDef<Pipy>::init() {
     ret.set(str);
   });
 
+  method("fork", [](Context &ctx, Object *obj, Value &ret) {
+    Function *func;
+    if (!ctx.arguments(1, &func)) return;
+    auto root = static_cast<pipy::Context*>(ctx.root());
+    auto worker = static_cast<Worker*>(ctx.instance());
+    pjs::Ref<pipy::Context> context = worker->new_context(root);
+    (*func)(*context, 0, nullptr, ret);
+  });
+
   method("load", [](Context &ctx, Object*, Value &ret) {
     std::string filename;
     if (!ctx.arguments(1, &filename)) return;
