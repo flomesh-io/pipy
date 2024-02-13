@@ -101,6 +101,7 @@ public:
   void mux(pjs::Function *session_selector, pjs::Object *options);
   void mux_fcgi(pjs::Function *session_selector, pjs::Object *options);
   void mux_http(pjs::Function *session_selector, pjs::Object *options);
+  void pipe(const pjs::Value &target, pjs::Object *target_map, pjs::Object *init_args);
   void print();
   void replace(Event::Type type, pjs::Object *replacement);
   void replace_body(pjs::Object *replacement, pjs::Object *options);
@@ -136,14 +137,14 @@ private:
 };
 
 //
-// PipelineProducer
+// PipelineLayoutWrapper
 //
 
-class PipelineProducer : public pjs::ObjectTemplate<PipelineProducer> {
+class PipelineLayoutWrapper : public pjs::ObjectTemplate<PipelineLayoutWrapper> {
 public:
 
   //
-  // PipelineProducer::Constructor
+  // PipelineLayoutWrapper::Constructor
   //
 
   class Constructor : public pjs::FunctionTemplate<Constructor> {
@@ -151,34 +152,34 @@ public:
     void operator()(pjs::Context &ctx, pjs::Object *obj, pjs::Value &ret);
   };
 
-  //
-  // PipelineProducer::Wrapper
-  //
-
-  class Wrapper : public pjs::ObjectTemplate<Wrapper>, public EventTarget {
-  public:
-    auto eos() const -> StreamEnd* { return m_eos; }
-
-  private:
-    Wrapper(Pipeline *pipeline);
-
-    pjs::Ref<Pipeline> m_pipeline;
-    pjs::Ref<StreamEnd> m_eos;
-
-    virtual void on_event(Event *evt) override;
-
-    friend class pjs::ObjectTemplate<Wrapper>;
-  };
-
-  auto start(pjs::Context &ctx) -> Wrapper*;
+  auto spawn(Context *ctx) -> Pipeline*;
 
 private:
-  PipelineProducer(PipelineLayout *layout)
+  PipelineLayoutWrapper(PipelineLayout *layout)
     : m_layout(layout) {}
 
   pjs::Ref<PipelineLayout> m_layout;
 
-  friend class pjs::ObjectTemplate<PipelineProducer>;
+  friend class pjs::ObjectTemplate<PipelineLayoutWrapper>;
+};
+
+//
+// PipelineWrapper
+//
+
+class PipelineWrapper : public pjs::ObjectTemplate<PipelineWrapper>, public EventTarget {
+public:
+  auto eos() const -> StreamEnd* { return m_eos; }
+
+private:
+  PipelineWrapper(Pipeline *pipeline);
+
+  pjs::Ref<Pipeline> m_pipeline;
+  pjs::Ref<StreamEnd> m_eos;
+
+  virtual void on_event(Event *evt) override;
+
+  friend class pjs::ObjectTemplate<PipelineWrapper>;
 };
 
 } // namespace pipy

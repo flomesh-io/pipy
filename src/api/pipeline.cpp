@@ -30,14 +30,11 @@
 
 // all filters
 #include "filters/bgp.hpp"
-#include "filters/branch.hpp"
-#include "filters/chain.hpp"
 #include "filters/connect.hpp"
 #include "filters/compress.hpp"
 #include "filters/decompress.hpp"
 #include "filters/deframe.hpp"
 #include "filters/demux.hpp"
-#include "filters/deposit-message.hpp"
 #include "filters/detect-protocol.hpp"
 #include "filters/dubbo.hpp"
 #include "filters/dummy.hpp"
@@ -46,9 +43,6 @@
 #include "filters/fcgi.hpp"
 #include "filters/fork.hpp"
 #include "filters/http.hpp"
-#include "filters/insert.hpp"
-#include "filters/link.hpp"
-#include "filters/link-async.hpp"
 #include "filters/loop.hpp"
 #include "filters/mime.hpp"
 #include "filters/mqtt.hpp"
@@ -58,11 +52,9 @@
 #include "filters/on-event.hpp"
 #include "filters/on-message.hpp"
 #include "filters/on-start.hpp"
-#include "filters/pack.hpp"
+#include "filters/pipe.hpp"
 #include "filters/print.hpp"
-#include "filters/produce.hpp"
 #include "filters/proxy-protocol.hpp"
-#include "filters/read.hpp"
 #include "filters/replace-body.hpp"
 #include "filters/replace-event.hpp"
 #include "filters/replace-message.hpp"
@@ -75,7 +67,6 @@
 #include "filters/thrift.hpp"
 #include "filters/throttle.hpp"
 #include "filters/tls.hpp"
-#include "filters/use.hpp"
 #include "filters/wait.hpp"
 #include "filters/websocket.hpp"
 
@@ -374,6 +365,10 @@ void PipelineDesigner::replay(pjs::Object *options) {
   require_sub_pipeline(append_filter(new Replay(options)));
 }
 
+void PipelineDesigner::pipe(const pjs::Value &target, pjs::Object *target_map, pjs::Object *init_args) {
+  append_filter(new Pipe(target, target_map, init_args));
+}
+
 void PipelineDesigner::print() {
   append_filter(new Print());
 }
@@ -435,40 +430,37 @@ void PipelineDesigner::require_sub_pipeline(Filter *filter) {
 }
 
 //
-// PipelineProducer
+// PipelineLayoutWrapper
 //
 
-auto PipelineProducer::start(pjs::Context &ctx) -> Wrapper* {
-  auto worker = static_cast<Worker*>(ctx.instance());
-  auto context = worker->new_context();
-  auto p = Pipeline::make(m_layout, context);
+auto PipelineLayoutWrapper::spawn(Context *ctx) -> Pipeline* {
   InputContext ic;
-  return Wrapper::make(p->start(ctx.argc(), ctx.argv()));
+  return Pipeline::make(m_layout, ctx);
 }
 
 //
-// PipelineProducer::Constructor
+// PipelineLayoutWrapper::Constructor
 //
 
-void PipelineProducer::Constructor::operator()(pjs::Context &ctx, pjs::Object *obj, pjs::Value &ret) {
+void PipelineLayoutWrapper::Constructor::operator()(pjs::Context &ctx, pjs::Object *obj, pjs::Value &ret) {
   pjs::Function *f;
   if (!ctx.arguments(1, &f)) return;
   auto pl = PipelineDesigner::make_pipeline_layout(ctx, f);
   if (!pl) return;
-  ret.set(PipelineProducer::make(pl));
+  ret.set(PipelineLayoutWrapper::make(pl));
 }
 
 //
-// PipelineProducer::Wrapper
+// PipelineWrapper
 //
 
-PipelineProducer::Wrapper::Wrapper(Pipeline *pipeline)
+PipelineWrapper::PipelineWrapper(Pipeline *pipeline)
   : m_pipeline(pipeline)
 {
   pipeline->chain(EventTarget::input());
 }
 
-void PipelineProducer::Wrapper::on_event(Event *evt) {
+void PipelineWrapper::on_event(Event *evt) {
   if (auto eos = evt->as<StreamEnd>()) {
     m_eos = eos;
     m_pipeline = nullptr;
@@ -937,6 +929,40 @@ template<> void ClassDef<PipelineDesigner>::init() {
     }
   });
 
+  // PipelineDesigner.pipe
+  filter("pipe", [](Context &ctx, PipelineDesigner *obj) {
+    Value target;
+    Object *target_map = nullptr;
+    Array *init_args = nullptr;
+    Function *init_args_f = nullptr;
+    if (!ctx.get(0, target)) return ctx.error_argument_count(1);
+    if (!ctx.get(1, init_args) && !ctx.get(1, init_args_f)) {
+      if (!ctx.get(1, target_map)) return ctx.error_argument_type(1, "an object, an array or a function");
+      if (!ctx.get(2, init_args) && !ctx.get(2, init_args_f)) return ctx.error_argument_type(2, "an array or a function");
+    }
+    if (target_map) {
+      target_map->iterate_while(
+        [&](Str *k, Value &v) {
+          if (v.is<PipelineLayoutWrapper>()) return true;
+          if (v.is_function()) {
+            auto pl = PipelineDesigner::make_pipeline_layout(ctx, v.f());
+            if (!pl) return false;
+            v.set(PipelineLayoutWrapper::make(pl));
+            return true;
+          }
+          ctx.error("map entry '" + k->str() + "' doesn't contain a valid pipeline");
+          return false;
+        }
+      );
+      if (!ctx.ok()) return;
+    }
+    if (init_args_f) {
+      obj->pipe(target, target_map, init_args_f);
+    } else {
+      obj->pipe(target, target_map, init_args);
+    }
+  });
+
   // PipelineDesigner.print
   filter("print", [](Context &ctx, PipelineDesigner *obj) {
     obj->print();
@@ -1063,19 +1089,24 @@ template<> void ClassDef<PipelineDesigner>::init() {
   });
 }
 
-template<> void ClassDef<PipelineProducer>::init() {
-  method("start", [](Context &ctx, Object *thiz, Value &) {
-    thiz->as<PipelineProducer>()->start(ctx);
+template<> void ClassDef<PipelineLayoutWrapper>::init() {
+  method("spawn", [](Context &ctx, Object *thiz, Value &ret) {
+    auto worker = static_cast<Worker*>(ctx.instance());
+    auto context = worker->new_context();
+    auto p = thiz->as<PipelineLayoutWrapper>()->spawn(context);
+    auto pw = PipelineWrapper::make(p);
+    p->start(ctx.argc(), ctx.argv());
+    ret.set(pw);
   });
 }
 
-template<> void ClassDef<PipelineProducer::Constructor>::init() {
+template<> void ClassDef<PipelineLayoutWrapper::Constructor>::init() {
   super<Function>();
   ctor();
 }
 
-template<> void ClassDef<PipelineProducer::Wrapper>::init() {
-  accessor("eos", [](Object *obj, Value &ret) { ret.set(obj->as<PipelineProducer::Wrapper>()->eos()); });
+template<> void ClassDef<PipelineWrapper>::init() {
+  accessor("eos", [](Object *obj, Value &ret) { ret.set(obj->as<PipelineWrapper>()->eos()); });
 }
 
 } // namespace pjs

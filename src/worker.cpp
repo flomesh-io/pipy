@@ -187,7 +187,7 @@ template<> void ClassDef<pipy::Global>::init() {
   variable("pipy", class_of<Pipy>());
 
   // pipeline
-  variable("pipeline", class_of<PipelineProducer::Constructor>());
+  variable("pipeline", class_of<PipelineLayoutWrapper::Constructor>());
 
   // listen
   variable("listen", class_of<Listen>());
