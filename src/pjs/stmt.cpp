@@ -215,8 +215,7 @@ void Function::resolve(Module *module, Context &ctx, int l, Tree::Imports *impor
 void Function::execute(Context &ctx, Result &result) {
   if (!m_is_definition) {
     Value val;
-    if (m_expr->eval(ctx, val)) {
-      m_identifier->assign(ctx, val);
+    if (m_expr->eval(ctx, val) && m_identifier->assign(ctx, val)) {
       result.set_done();
     } else {
       result.value.set(pjs::Error::make(ctx.error()));
@@ -354,7 +353,7 @@ void Switch::dump(std::ostream &out, const std::string &indent) {
 bool Break::declare(Module *module, Tree::Scope &scope, Error &error) {
   auto *s = &scope;
   if (m_label) {
-    while (s && s->label() != m_label) {
+    while (s && s->label() != m_label->name()) {
       s = s->parent();
     }
   } else {
@@ -371,7 +370,7 @@ bool Break::declare(Module *module, Tree::Scope &scope, Error &error) {
 }
 
 void Break::execute(Context &ctx, Result &result) {
-  result.set_break(m_label);
+  result.set_break(m_label->name());
 }
 
 void Break::dump(std::ostream &out, const std::string &indent) {

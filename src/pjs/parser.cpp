@@ -907,18 +907,20 @@ private:
     return false;
   }
 
-  auto read_identifier() -> std::string {
+  auto read_identifier() -> expr::Identifier* {
     auto t = peek();
     if (!t.is_string() || t.s()[0] == '"' || t.s()[0] == '\'') {
-      return std::string();
+      return nullptr;
     }
-    read();
-    return t.s();
+    Location l; read(l);
+    auto i = new expr::Identifier(t.s());
+    locate(i, l);
+    return i;
   }
 
-  auto read_identifier(Error err) -> std::string {
+  auto read_identifier(Error err) -> expr::Identifier* {
     auto id = read_identifier();
-    if (id.empty()) error(err);
+    if (!id) error(err);
     return id;
   }
 
@@ -1094,7 +1096,7 @@ Stmt* ScriptParser::statement() {
       read(l);
       if (peek_eol(MissingIdentifier)) return nullptr;
       auto name = read_identifier(MissingIdentifier);
-      if (name.empty()) return nullptr;
+      if (!name) return nullptr;
       if (read(Token::ID("="))) {
         auto e = expression();
         if (!e) return nullptr;
@@ -1107,7 +1109,7 @@ Stmt* ScriptParser::statement() {
     case Token::ID("function"): {
       read(l);
       auto name = read_identifier(MissingIdentifier);
-      if (name.empty()) return nullptr;
+      if (!name) return nullptr;
       auto f = block_function(l);
       if (!f) return nullptr;
       read_semicolons();
@@ -1161,8 +1163,7 @@ Stmt* ScriptParser::statement() {
     }
     case Token::ID("break"): {
       read(l);
-      auto name = read_identifier();
-      if (!name.empty()) {
+      if (auto name = read_identifier()) {
         read_semicolons();
         return locate(flow_break(name), l);
       } else {
@@ -1197,7 +1198,7 @@ Stmt* ScriptParser::statement() {
         std::string name;
         if (read(Token::ID("("))) {
           auto name = read_identifier(MissingIdentifier);
-          if (name.empty()) return nullptr;
+          if (!name) return nullptr;
           if (!read(Token::ID(")"), TokenExpected)) return nullptr;
         }
         if (!peek(Token::ID("{"), TokenExpected)) return nullptr;
@@ -1639,7 +1640,7 @@ Expr* ScriptParser::operand() {
   if (t.id() == Token::ID("function")) {
     Location l;
     read(l);
-    read_identifier();
+    delete read_identifier();
     return block_function(l);
   }
 

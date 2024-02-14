@@ -140,8 +140,8 @@ private:
 
 class Var : public Stmt {
 public:
-  Var(const std::string &name, Expr *expr)
-    : m_identifier(new expr::Identifier(name)), m_expr(expr) {}
+  Var(expr::Identifier *name, Expr *expr)
+    : m_identifier(name), m_expr(expr) {}
 
   virtual bool declare(Module *module, Tree::Scope &scope, Error &error) override;
   virtual void resolve(Module *module, Context &ctx, int l, Tree::Imports *imports) override;
@@ -160,8 +160,8 @@ private:
 
 class Function : public Stmt {
 public:
-  Function(const std::string &name, Expr *expr)
-    : m_identifier(new expr::Identifier(name)), m_expr(expr) {}
+  Function(expr::Identifier *name, Expr *expr)
+    : m_identifier(name), m_expr(expr) {}
 
   virtual bool declare(Module *module, Tree::Scope &scope, Error &error) override;
   virtual void resolve(Module *module, Context &ctx, int l, Tree::Imports *imports) override;
@@ -221,14 +221,14 @@ private:
 class Break : public Stmt {
 public:
   Break() {}
-  Break(const std::string &label) : m_label(Str::make(label)) {}
+  Break(expr::Identifier *label) : m_label(label) {}
 
   virtual bool declare(Module *module, Tree::Scope &scope, Error &error) override;
   virtual void execute(Context &ctx, Result &result) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
-  Ref<Str> m_label;
+  std::unique_ptr<expr::Identifier> m_label;
 };
 
 //
@@ -297,13 +297,13 @@ inline Stmt* block() { return new stmt::Block(); }
 inline Stmt* block(std::list<std::unique_ptr<Stmt>> &&stmts) { return new stmt::Block(std::move(stmts)); }
 inline Stmt* label(const std::string &name, Stmt *stmt) { return new stmt::Label(name, stmt); }
 inline Stmt* evaluate(Expr *expr) { return new stmt::Evaluate(expr); }
-inline Stmt* var(const std::string &name, Expr *expr = nullptr) { return new stmt::Var(name, expr); }
-inline Stmt* function(const std::string &name, Expr *expr) { return new stmt::Function(name, expr); }
+inline Stmt* var(expr::Identifier *name, Expr *expr = nullptr) { return new stmt::Var(name, expr); }
+inline Stmt* function(expr::Identifier *name, Expr *expr) { return new stmt::Function(name, expr); }
 inline Stmt* if_else(Expr *cond, Stmt *then_clause, Stmt *else_clause = nullptr) { return new stmt::If(cond, then_clause, else_clause); }
 inline Stmt* switch_case(Expr *cond, std::list<std::pair<std::unique_ptr<Expr>, std::unique_ptr<Stmt>>> &&cases, Stmt *default_case = nullptr) { return new stmt::Switch(cond, std::move(cases), default_case); }
 inline Stmt* try_catch(Stmt *try_clause, Expr *catch_clause, Stmt *finally_clause) { return new stmt::Try(try_clause, catch_clause, finally_clause); }
 inline Stmt* flow_break() { return new stmt::Break(); }
-inline Stmt* flow_break(const std::string &label) { return new stmt::Break(label); }
+inline Stmt* flow_break(expr::Identifier *label) { return new stmt::Break(label); }
 inline Stmt* flow_return(Expr *expr = nullptr) { return new stmt::Return(expr); }
 inline Stmt* flow_throw(Expr *expr = nullptr) { return new stmt::Throw(expr); }
 

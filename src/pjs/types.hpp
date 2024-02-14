@@ -2263,6 +2263,7 @@ public:
   void reset();
   bool ok() const { return !m_has_error; }
   auto error() const -> Error& { return *m_error; }
+  void error(const Context &ctx);
   void error(const std::string &msg);
   void error(const std::runtime_error &err);
   void error_argument_count(int n);

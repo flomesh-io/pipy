@@ -530,6 +530,11 @@ void Context::reset() {
   m_error->backtrace.clear();
 }
 
+void Context::error(const Context &ctx) {
+  for (auto *c = this; c; c = c->m_caller) c->m_has_error = true;
+  *m_error = *ctx.m_error;
+}
+
 void Context::error(const std::string &msg) {
   for (auto *c = this; c; c = c->m_caller) c->m_has_error = true;
   m_error->message = msg;
