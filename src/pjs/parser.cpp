@@ -1414,40 +1414,17 @@ Expr* ScriptParser::expression(bool no_comma, Expr *starting_operand) {
         (t.id() == Token::ID(",") && no_comma)
       );
       if (t == Token::err) return error(UnknownToken);
-      if (!is_end && (!Tokenizer::is_operator(t) || Tokenizer::is_unary_operator(t))) {
-        if (eol) {
+      if (eol && !is_end) {
+        if (!Tokenizer::is_operator(t) || Tokenizer::is_unary_operator(t)) {
           t = Token::eof;
           is_end = true;
-        } else {
-          return error(UnexpectedToken);
         }
       }
 
-      // Some operators are invalid here, post operators are converted
+      // Convert post unary operators
       switch (t.id()) {
-        case Token::ID("~"):
-        case Token::ID("!"):
-        case Token::ID("void"):
-        case Token::ID("typeof"):
-        case Token::ID("new"):
-        case Token::ID("delete"):
-          return error(UnexpectedToken);
-        case Token::ID("++"):
-          if (eol) {
-            t = Token::eof;
-            is_end = true;
-          } else {
-            t = Token(Token::ID("x++"));
-          }
-          break;
-        case Token::ID("--"):
-          if (eol) {
-            t = Token::eof;
-            is_end = true;
-          } else {
-            t = Token(Token::ID("x--"));
-          }
-          break;
+        case Token::ID("++"): t = Token(Token::ID("x++")); break;
+        case Token::ID("--"): t = Token(Token::ID("x--")); break;
       }
 
       // Reduce earlier operators
