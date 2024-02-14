@@ -69,7 +69,7 @@ JSModule::JSModule(Worker *worker, int index)
   : pipy::Module(index)
   , pjs::Module(worker)
   , m_worker(worker)
-  , m_imports(new pjs::Tree::Imports)
+  , m_imports(new pjs::Tree::LegacyImports)
 {
   Log::debug(Log::ALLOC, "[module   %p] ++ index = %d", this, index);
 }

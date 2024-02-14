@@ -706,7 +706,7 @@ void Configuration::bind_exports(Worker *worker, Module *module) {
   }
 }
 
-void Configuration::bind_imports(Worker *worker, Module *module, pjs::Tree::Imports *imports) {
+void Configuration::bind_imports(Worker *worker, Module *module, pjs::Tree::LegacyImports *imports) {
   for (const auto &imp : m_imports) {
     auto l = worker->get_export(imp.ns, imp.original_name);
     if (l < 0) {

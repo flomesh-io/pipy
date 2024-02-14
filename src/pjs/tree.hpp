@@ -51,10 +51,10 @@ public:
   };
 
   //
-  // Tree::Imports
+  // Tree::LegacyImports
   //
 
-  class Imports {
+  class LegacyImports {
   public:
     void add(Str *name, int file, Str *original_name);
     bool get(Str *name, int *file, Str **original_name);
@@ -141,7 +141,7 @@ public:
   //
 
   virtual bool declare(Module *module, Scope &scope, Error &error) { return true; }
-  virtual void resolve(Module *module, Context &ctx, int l = -1, Imports *imports = nullptr) {}
+  virtual void resolve(Module *module, Context &ctx, int l = -1, LegacyImports *imports = nullptr) {}
 
 private:
   const Source* m_source = nullptr;

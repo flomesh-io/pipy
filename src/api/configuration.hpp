@@ -181,13 +181,13 @@ private:
 
 class Configuration : public pjs::ObjectTemplate<Configuration, FilterConfigurator> {
 public:
-  struct Export {
+  struct LegacyExport {
     pjs::Ref<pjs::Str> ns;
     pjs::Ref<pjs::Str> name;
     pjs::Value value;
   };
 
-  struct Import {
+  struct LegacyImport {
     pjs::Ref<pjs::Str> ns;
     pjs::Ref<pjs::Str> name;
     pjs::Ref<pjs::Str> original_name;
@@ -207,7 +207,7 @@ public:
   void pipeline();
 
   void bind_exports(Worker *worker, Module *module);
-  void bind_imports(Worker *worker, Module *module, pjs::Tree::Imports *imports);
+  void bind_imports(Worker *worker, Module *module, pjs::Tree::LegacyImports *imports);
   void apply(JSModule *module);
   void draw(Graph &g);
 
@@ -241,8 +241,8 @@ private:
 
   pjs::Ref<pjs::Object> m_context_prototype;
   pjs::Ref<pjs::Class> m_context_class;
-  std::list<Export> m_exports;
-  std::list<Import> m_imports;
+  std::list<LegacyExport> m_exports;
+  std::list<LegacyImport> m_imports;
   std::list<ListenConfig> m_listens;
   std::list<TaskConfig> m_tasks;
   std::list<WatchConfig> m_watches;

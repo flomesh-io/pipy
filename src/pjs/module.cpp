@@ -76,7 +76,7 @@ bool Module::compile(std::string &error, int &error_line, int &error_column) {
   return true;
 }
 
-void Module::execute(Context &ctx, int l, Tree::Imports *imports, Value &result) {
+void Module::execute(Context &ctx, int l, Tree::LegacyImports *imports, Value &result) {
   m_tree->resolve(this, ctx, l, imports);
   m_scope.instantiate(ctx);
 

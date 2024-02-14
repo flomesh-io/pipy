@@ -70,7 +70,7 @@ bool Discard::declare(Module *module, Scope &scope, Error &error) {
   return m_x->declare(module, scope, error);
 }
 
-void Discard::resolve(Module *module, Context &ctx, int l, Imports *imports) {
+void Discard::resolve(Module *module, Context &ctx, int l, LegacyImports *imports) {
   m_x->resolve(module, ctx, l, imports);
 }
 
@@ -118,7 +118,7 @@ bool Compound::declare(Module *module, Scope &scope, Error &error) {
   return true;
 }
 
-void Compound::resolve(Module *module, Context &ctx, int l, Imports *imports) {
+void Compound::resolve(Module *module, Context &ctx, int l, LegacyImports *imports) {
   for (const auto &p : m_exprs) {
     p->resolve(module, ctx, l, imports);
   }
@@ -156,7 +156,7 @@ bool Concatenation::declare(Module *module, Scope &scope, Error &error) {
   return true;
 }
 
-void Concatenation::resolve(Module *module, Context &ctx, int l, Imports *imports) {
+void Concatenation::resolve(Module *module, Context &ctx, int l, LegacyImports *imports) {
   for (const auto &p : m_exprs) {
     p->resolve(module, ctx, l, imports);
   }
@@ -362,7 +362,7 @@ bool ObjectLiteral::declare(Module *module, Scope &scope, Error &error) {
   return true;
 }
 
-void ObjectLiteral::resolve(Module *module, Context &ctx, int l, Imports *imports) {
+void ObjectLiteral::resolve(Module *module, Context &ctx, int l, LegacyImports *imports) {
   for (const auto &e : m_entries) {
     auto k = e.key.get();
     auto v = e.value.get();
@@ -397,7 +397,7 @@ bool ArrayExpansion::declare(Module *module, Scope &scope, Error &error) {
   return true;
 }
 
-void ArrayExpansion::resolve(Module *module, Context &ctx, int l, Imports *imports) {
+void ArrayExpansion::resolve(Module *module, Context &ctx, int l, LegacyImports *imports) {
   m_array->resolve(module, ctx, l, imports);
 }
 
@@ -493,7 +493,7 @@ bool ArrayLiteral::declare(Module *module, Scope &scope, Error &error) {
   return true;
 }
 
-void ArrayLiteral::resolve(Module *module, Context &ctx, int l, Imports *imports) {
+void ArrayLiteral::resolve(Module *module, Context &ctx, int l, LegacyImports *imports) {
   for (const auto &p : m_list) {
     p->resolve(module, ctx, l, imports);
   }
@@ -551,7 +551,7 @@ bool FunctionLiteral::declare(Module *module, Scope &, Error &error) {
   return m_output->declare(module, m_scope, error);
 }
 
-void FunctionLiteral::resolve(Module *module, Context &ctx, int l, Imports *imports) {
+void FunctionLiteral::resolve(Module *module, Context &ctx, int l, LegacyImports *imports) {
   char name[100];
   std::sprintf(name, "(anonymous function at line %d column %d)", line(), column());
   m_method = Method::make(
@@ -745,7 +745,7 @@ bool Identifier::clear(Context &ctx, Value &result) {
   return m_resolved->clear(ctx, result);
 }
 
-void Identifier::resolve(Module *module, Context &ctx, int l, Imports *imports) {
+void Identifier::resolve(Module *module, Context &ctx, int l, LegacyImports *imports) {
   m_l = l;
   m_imports = imports;
   m_module = module;
@@ -884,7 +884,7 @@ bool Property::declare(Module *module, Scope &scope, Error &error) {
   return true;
 }
 
-void Property::resolve(Module *module, Context &ctx, int l, Imports *imports) {
+void Property::resolve(Module *module, Context &ctx, int l, LegacyImports *imports) {
   m_obj->resolve(module, ctx, l, imports);
   m_key->resolve(module, ctx, l, imports);
 }
@@ -934,7 +934,7 @@ bool OptionalProperty::declare(Module *module, Scope &scope, Error &error) {
   return true;
 }
 
-void OptionalProperty::resolve(Module *module, Context &ctx, int l, Imports *imports) {
+void OptionalProperty::resolve(Module *module, Context &ctx, int l, LegacyImports *imports) {
   m_obj->resolve(module, ctx, l, imports);
   m_key->resolve(module, ctx, l, imports);
 }
@@ -972,7 +972,7 @@ bool Construction::declare(Module *module, Scope &scope, Error &error) {
   return true;
 }
 
-void Construction::resolve(Module *module, Context &ctx, int l, Imports *imports) {
+void Construction::resolve(Module *module, Context &ctx, int l, LegacyImports *imports) {
   m_func->resolve(module, ctx, l, imports);
   for (const auto &p : m_argv) {
     p->resolve(module, ctx, l, imports);
@@ -1013,7 +1013,7 @@ bool Invocation::declare(Module *module, Scope &scope, Error &error) {
   return true;
 }
 
-void Invocation::resolve(Module *module, Context &ctx, int l, Imports *imports) {
+void Invocation::resolve(Module *module, Context &ctx, int l, LegacyImports *imports) {
   m_module = module;
   m_func->resolve(module, ctx, l, imports);
   for (const auto &p : m_argv) {
@@ -1067,7 +1067,7 @@ bool OptionalInvocation::declare(Module *module, Scope &scope, Error &error) {
   return true;
 }
 
-void OptionalInvocation::resolve(Module *module, Context &ctx, int l, Imports *imports) {
+void OptionalInvocation::resolve(Module *module, Context &ctx, int l, LegacyImports *imports) {
   m_func->resolve(module, ctx, l, imports);
   for (const auto &p : m_argv) {
     p->resolve(module, ctx, l, imports);
@@ -1095,7 +1095,7 @@ bool Plus::declare(Module *module, Scope &scope, Error &error) {
   return m_x->declare(module, scope, error);
 }
 
-void Plus::resolve(Module *module, Context &ctx, int l, Imports *imports) {
+void Plus::resolve(Module *module, Context &ctx, int l, LegacyImports *imports) {
   m_x->resolve(module, ctx, l, imports);
 }
 
@@ -1123,7 +1123,7 @@ bool Negation::declare(Module *module, Scope &scope, Error &error) {
   return m_x->declare(module, scope, error);
 }
 
-void Negation::resolve(Module *module, Context &ctx, int l, Imports *imports) {
+void Negation::resolve(Module *module, Context &ctx, int l, LegacyImports *imports) {
   m_x->resolve(module, ctx, l, imports);
 }
 
@@ -1168,7 +1168,7 @@ bool Addition::declare(Module *module, Scope &scope, Error &error) {
   return true;
 }
 
-void Addition::resolve(Module *module, Context &ctx, int l, Imports *imports) {
+void Addition::resolve(Module *module, Context &ctx, int l, LegacyImports *imports) {
   m_a->resolve(module, ctx, l, imports);
   m_b->resolve(module, ctx, l, imports);
 }
@@ -1207,7 +1207,7 @@ bool Subtraction::declare(Module *module, Scope &scope, Error &error) {
   return true;
 }
 
-void Subtraction::resolve(Module *module, Context &ctx, int l, Imports *imports) {
+void Subtraction::resolve(Module *module, Context &ctx, int l, LegacyImports *imports) {
   m_a->resolve(module, ctx, l, imports);
   m_b->resolve(module, ctx, l, imports);
 }
@@ -1246,7 +1246,7 @@ bool Multiplication::declare(Module *module, Scope &scope, Error &error) {
   return true;
 }
 
-void Multiplication::resolve(Module *module, Context &ctx, int l, Imports *imports) {
+void Multiplication::resolve(Module *module, Context &ctx, int l, LegacyImports *imports) {
   m_a->resolve(module, ctx, l, imports);
   m_b->resolve(module, ctx, l, imports);
 }
@@ -1285,7 +1285,7 @@ bool Division::declare(Module *module, Scope &scope, Error &error) {
   return true;
 }
 
-void Division::resolve(Module *module, Context &ctx, int l, Imports *imports) {
+void Division::resolve(Module *module, Context &ctx, int l, LegacyImports *imports) {
   m_a->resolve(module, ctx, l, imports);
   m_b->resolve(module, ctx, l, imports);
 }
@@ -1324,7 +1324,7 @@ bool Remainder::declare(Module *module, Scope &scope, Error &error) {
   return true;
 }
 
-void Remainder::resolve(Module *module, Context &ctx, int l, Imports *imports) {
+void Remainder::resolve(Module *module, Context &ctx, int l, LegacyImports *imports) {
   m_a->resolve(module, ctx, l, imports);
   m_b->resolve(module, ctx, l, imports);
 }
@@ -1355,7 +1355,7 @@ bool Exponentiation::declare(Module *module, Scope &scope, Error &error) {
   return true;
 }
 
-void Exponentiation::resolve(Module *module, Context &ctx, int l, Imports *imports) {
+void Exponentiation::resolve(Module *module, Context &ctx, int l, LegacyImports *imports) {
   m_a->resolve(module, ctx, l, imports);
   m_b->resolve(module, ctx, l, imports);
 }
@@ -1390,7 +1390,7 @@ bool ShiftLeft::declare(Module *module, Scope &scope, Error &error) {
   return true;
 }
 
-void ShiftLeft::resolve(Module *module, Context &ctx, int l, Imports *imports) {
+void ShiftLeft::resolve(Module *module, Context &ctx, int l, LegacyImports *imports) {
   m_a->resolve(module, ctx, l, imports);
   m_b->resolve(module, ctx, l, imports);
 }
@@ -1425,7 +1425,7 @@ bool ShiftRight::declare(Module *module, Scope &scope, Error &error) {
   return true;
 }
 
-void ShiftRight::resolve(Module *module, Context &ctx, int l, Imports *imports) {
+void ShiftRight::resolve(Module *module, Context &ctx, int l, LegacyImports *imports) {
   m_a->resolve(module, ctx, l, imports);
   m_b->resolve(module, ctx, l, imports);
 }
@@ -1460,7 +1460,7 @@ bool UnsignedShiftRight::declare(Module *module, Scope &scope, Error &error) {
   return true;
 }
 
-void UnsignedShiftRight::resolve(Module *module, Context &ctx, int l, Imports *imports) {
+void UnsignedShiftRight::resolve(Module *module, Context &ctx, int l, LegacyImports *imports) {
   m_a->resolve(module, ctx, l, imports);
   m_b->resolve(module, ctx, l, imports);
 }
@@ -1490,7 +1490,7 @@ bool BitwiseNot::declare(Module *module, Scope &scope, Error &error) {
   return m_x->declare(module, scope, error);
 }
 
-void BitwiseNot::resolve(Module *module, Context &ctx, int l, Imports *imports) {
+void BitwiseNot::resolve(Module *module, Context &ctx, int l, LegacyImports *imports) {
   m_x->resolve(module, ctx, l, imports);
 }
 
@@ -1527,7 +1527,7 @@ bool BitwiseAnd::declare(Module *module, Scope &scope, Error &error) {
   return true;
 }
 
-void BitwiseAnd::resolve(Module *module, Context &ctx, int l, Imports *imports) {
+void BitwiseAnd::resolve(Module *module, Context &ctx, int l, LegacyImports *imports) {
   m_a->resolve(module, ctx, l, imports);
   m_b->resolve(module, ctx, l, imports);
 }
@@ -1566,7 +1566,7 @@ bool BitwiseOr::declare(Module *module, Scope &scope, Error &error) {
   return true;
 }
 
-void BitwiseOr::resolve(Module *module, Context &ctx, int l, Imports *imports) {
+void BitwiseOr::resolve(Module *module, Context &ctx, int l, LegacyImports *imports) {
   m_a->resolve(module, ctx, l, imports);
   m_b->resolve(module, ctx, l, imports);
 }
@@ -1605,7 +1605,7 @@ bool BitwiseXor::declare(Module *module, Scope &scope, Error &error) {
   return true;
 }
 
-void BitwiseXor::resolve(Module *module, Context &ctx, int l, Imports *imports) {
+void BitwiseXor::resolve(Module *module, Context &ctx, int l, LegacyImports *imports) {
   m_a->resolve(module, ctx, l, imports);
   m_b->resolve(module, ctx, l, imports);
 }
@@ -1631,7 +1631,7 @@ bool LogicalNot::declare(Module *module, Scope &scope, Error &error) {
   return m_x->declare(module, scope, error);
 }
 
-void LogicalNot::resolve(Module *module, Context &ctx, int l, Imports *imports) {
+void LogicalNot::resolve(Module *module, Context &ctx, int l, LegacyImports *imports) {
   m_x->resolve(module, ctx, l, imports);
 }
 
@@ -1657,7 +1657,7 @@ bool LogicalAnd::declare(Module *module, Scope &scope, Error &error) {
   return true;
 }
 
-void LogicalAnd::resolve(Module *module, Context &ctx, int l, Imports *imports) {
+void LogicalAnd::resolve(Module *module, Context &ctx, int l, LegacyImports *imports) {
   m_a->resolve(module, ctx, l, imports);
   m_b->resolve(module, ctx, l, imports);
 }
@@ -1685,7 +1685,7 @@ bool LogicalOr::declare(Module *module, Scope &scope, Error &error) {
   return true;
 }
 
-void LogicalOr::resolve(Module *module, Context &ctx, int l, Imports *imports) {
+void LogicalOr::resolve(Module *module, Context &ctx, int l, LegacyImports *imports) {
   m_a->resolve(module, ctx, l, imports);
   m_b->resolve(module, ctx, l, imports);
 }
@@ -1713,7 +1713,7 @@ bool NullishCoalescing::declare(Module *module, Scope &scope, Error &error) {
   return true;
 }
 
-void NullishCoalescing::resolve(Module *module, Context &ctx, int l, Imports *imports) {
+void NullishCoalescing::resolve(Module *module, Context &ctx, int l, LegacyImports *imports) {
   m_a->resolve(module, ctx, l, imports);
   m_b->resolve(module, ctx, l, imports);
 }
@@ -1750,7 +1750,7 @@ bool Equality::declare(Module *module, Scope &scope, Error &error) {
   return true;
 }
 
-void Equality::resolve(Module *module, Context &ctx, int l, Imports *imports) {
+void Equality::resolve(Module *module, Context &ctx, int l, LegacyImports *imports) {
   m_a->resolve(module, ctx, l, imports);
   m_b->resolve(module, ctx, l, imports);
 }
@@ -1787,7 +1787,7 @@ bool Inequality::declare(Module *module, Scope &scope, Error &error) {
   return true;
 }
 
-void Inequality::resolve(Module *module, Context &ctx, int l, Imports *imports) {
+void Inequality::resolve(Module *module, Context &ctx, int l, LegacyImports *imports) {
   m_a->resolve(module, ctx, l, imports);
   m_b->resolve(module, ctx, l, imports);
 }
@@ -1816,7 +1816,7 @@ bool Identity::declare(Module *module, Scope &scope, Error &error) {
   return true;
 }
 
-void Identity::resolve(Module *module, Context &ctx, int l, Imports *imports) {
+void Identity::resolve(Module *module, Context &ctx, int l, LegacyImports *imports) {
   m_a->resolve(module, ctx, l, imports);
   m_b->resolve(module, ctx, l, imports);
 }
@@ -1845,7 +1845,7 @@ bool Nonidentity::declare(Module *module, Scope &scope, Error &error) {
   return true;
 }
 
-void Nonidentity::resolve(Module *module, Context &ctx, int l, Imports *imports) {
+void Nonidentity::resolve(Module *module, Context &ctx, int l, LegacyImports *imports) {
   m_a->resolve(module, ctx, l, imports);
   m_b->resolve(module, ctx, l, imports);
 }
@@ -1888,7 +1888,7 @@ bool GreaterThan::declare(Module *module, Scope &scope, Error &error) {
   return true;
 }
 
-void GreaterThan::resolve(Module *module, Context &ctx, int l, Imports *imports) {
+void GreaterThan::resolve(Module *module, Context &ctx, int l, LegacyImports *imports) {
   m_a->resolve(module, ctx, l, imports);
   m_b->resolve(module, ctx, l, imports);
 }
@@ -1931,7 +1931,7 @@ bool GreaterThanOrEqual::declare(Module *module, Scope &scope, Error &error) {
   return true;
 }
 
-void GreaterThanOrEqual::resolve(Module *module, Context &ctx, int l, Imports *imports) {
+void GreaterThanOrEqual::resolve(Module *module, Context &ctx, int l, LegacyImports *imports) {
   m_a->resolve(module, ctx, l, imports);
   m_b->resolve(module, ctx, l, imports);
 }
@@ -1974,7 +1974,7 @@ bool LessThan::declare(Module *module, Scope &scope, Error &error) {
   return true;
 }
 
-void LessThan::resolve(Module *module, Context &ctx, int l, Imports *imports) {
+void LessThan::resolve(Module *module, Context &ctx, int l, LegacyImports *imports) {
   m_a->resolve(module, ctx, l, imports);
   m_b->resolve(module, ctx, l, imports);
 }
@@ -2017,7 +2017,7 @@ bool LessThanOrEqual::declare(Module *module, Scope &scope, Error &error) {
   return true;
 }
 
-void LessThanOrEqual::resolve(Module *module, Context &ctx, int l, Imports *imports) {
+void LessThanOrEqual::resolve(Module *module, Context &ctx, int l, LegacyImports *imports) {
   m_a->resolve(module, ctx, l, imports);
   m_b->resolve(module, ctx, l, imports);
 }
@@ -2055,7 +2055,7 @@ bool In::declare(Module *module, Scope &scope, Error &error) {
   return true;
 }
 
-void In::resolve(Module *module, Context &ctx, int l, Imports *imports) {
+void In::resolve(Module *module, Context &ctx, int l, LegacyImports *imports) {
   m_a->resolve(module, ctx, l, imports);
   m_b->resolve(module, ctx, l, imports);
 }
@@ -2093,7 +2093,7 @@ bool InstanceOf::declare(Module *module, Scope &scope, Error &error) {
   return true;
 }
 
-void InstanceOf::resolve(Module *module, Context &ctx, int l, Imports *imports) {
+void InstanceOf::resolve(Module *module, Context &ctx, int l, LegacyImports *imports) {
   m_a->resolve(module, ctx, l, imports);
   m_b->resolve(module, ctx, l, imports);
 }
@@ -2131,7 +2131,7 @@ bool TypeOf::declare(Module *module, Scope &scope, Error &error) {
   return m_x->declare(module, scope, error);
 }
 
-void TypeOf::resolve(Module *module, Context &ctx, int l, Imports *imports) {
+void TypeOf::resolve(Module *module, Context &ctx, int l, LegacyImports *imports) {
   m_x->resolve(module, ctx, l, imports);
 }
 
@@ -2160,7 +2160,7 @@ bool PostIncrement::declare(Module *module, Scope &scope, Error &error) {
   return m_x->declare(module, scope, error);
 }
 
-void PostIncrement::resolve(Module *module, Context &ctx, int l, Imports *imports) {
+void PostIncrement::resolve(Module *module, Context &ctx, int l, LegacyImports *imports) {
   m_x->resolve(module, ctx, l, imports);
 }
 
@@ -2189,7 +2189,7 @@ bool PostDecrement::declare(Module *module, Scope &scope, Error &error) {
   return m_x->declare(module, scope, error);
 }
 
-void PostDecrement::resolve(Module *module, Context &ctx, int l, Imports *imports) {
+void PostDecrement::resolve(Module *module, Context &ctx, int l, LegacyImports *imports) {
   m_x->resolve(module, ctx, l, imports);
 }
 
@@ -2216,7 +2216,7 @@ bool PreIncrement::declare(Module *module, Scope &scope, Error &error) {
   return m_x->declare(module, scope, error);
 }
 
-void PreIncrement::resolve(Module *module, Context &ctx, int l, Imports *imports) {
+void PreIncrement::resolve(Module *module, Context &ctx, int l, LegacyImports *imports) {
   m_x->resolve(module, ctx, l, imports);
 }
 
@@ -2243,7 +2243,7 @@ bool PreDecrement::declare(Module *module, Scope &scope, Error &error) {
   return m_x->declare(module, scope, error);
 }
 
-void PreDecrement::resolve(Module *module, Context &ctx, int l, Imports *imports) {
+void PreDecrement::resolve(Module *module, Context &ctx, int l, LegacyImports *imports) {
   m_x->resolve(module, ctx, l, imports);
 }
 
@@ -2264,7 +2264,7 @@ bool Delete::declare(Module *module, Scope &scope, Error &error) {
   return m_x->declare(module, scope, error);
 }
 
-void Delete::resolve(Module *module, Context &ctx, int l, Imports *imports) {
+void Delete::resolve(Module *module, Context &ctx, int l, LegacyImports *imports) {
   m_x->resolve(module, ctx, l, imports);
 }
 
@@ -2296,7 +2296,7 @@ bool Assignment::declare(Module *module, Scope &scope, Error &error) {
   return true;
 }
 
-void Assignment::resolve(Module *module, Context &ctx, int l, Imports *imports) {
+void Assignment::resolve(Module *module, Context &ctx, int l, LegacyImports *imports) {
   m_l->resolve(module, ctx, l, imports);
   m_r->resolve(module, ctx, l, imports);
 }
@@ -2345,7 +2345,7 @@ bool AdditionAssignment::declare(Module *module, Scope &scope, Error &error) {
   return true;
 }
 
-void AdditionAssignment::resolve(Module *module, Context &ctx, int l, Imports *imports) {
+void AdditionAssignment::resolve(Module *module, Context &ctx, int l, LegacyImports *imports) {
   m_l->resolve(module, ctx, l, imports);
   m_r->resolve(module, ctx, l, imports);
 }
@@ -2384,7 +2384,7 @@ bool SubtractionAssignment::declare(Module *module, Scope &scope, Error &error) 
   return true;
 }
 
-void SubtractionAssignment::resolve(Module *module, Context &ctx, int l, Imports *imports) {
+void SubtractionAssignment::resolve(Module *module, Context &ctx, int l, LegacyImports *imports) {
   m_l->resolve(module, ctx, l, imports);
   m_r->resolve(module, ctx, l, imports);
 }
@@ -2423,7 +2423,7 @@ bool MultiplicationAssignment::declare(Module *module, Scope &scope, Error &erro
   return true;
 }
 
-void MultiplicationAssignment::resolve(Module *module, Context &ctx, int l, Imports *imports) {
+void MultiplicationAssignment::resolve(Module *module, Context &ctx, int l, LegacyImports *imports) {
   m_l->resolve(module, ctx, l, imports);
   m_r->resolve(module, ctx, l, imports);
 }
@@ -2462,7 +2462,7 @@ bool DivisionAssignment::declare(Module *module, Scope &scope, Error &error) {
   return true;
 }
 
-void DivisionAssignment::resolve(Module *module, Context &ctx, int l, Imports *imports) {
+void DivisionAssignment::resolve(Module *module, Context &ctx, int l, LegacyImports *imports) {
   m_l->resolve(module, ctx, l, imports);
   m_r->resolve(module, ctx, l, imports);
 }
@@ -2501,7 +2501,7 @@ bool RemainderAssignment::declare(Module *module, Scope &scope, Error &error) {
   return true;
 }
 
-void RemainderAssignment::resolve(Module *module, Context &ctx, int l, Imports *imports) {
+void RemainderAssignment::resolve(Module *module, Context &ctx, int l, LegacyImports *imports) {
   m_l->resolve(module, ctx, l, imports);
   m_r->resolve(module, ctx, l, imports);
 }
@@ -2532,7 +2532,7 @@ bool ExponentiationAssignment::declare(Module *module, Scope &scope, Error &erro
   return true;
 }
 
-void ExponentiationAssignment::resolve(Module *module, Context &ctx, int l, Imports *imports) {
+void ExponentiationAssignment::resolve(Module *module, Context &ctx, int l, LegacyImports *imports) {
   m_l->resolve(module, ctx, l, imports);
   m_r->resolve(module, ctx, l, imports);
 }
@@ -2567,7 +2567,7 @@ bool ShiftLeftAssignment::declare(Module *module, Scope &scope, Error &error) {
   return true;
 }
 
-void ShiftLeftAssignment::resolve(Module *module, Context &ctx, int l, Imports *imports) {
+void ShiftLeftAssignment::resolve(Module *module, Context &ctx, int l, LegacyImports *imports) {
   m_l->resolve(module, ctx, l, imports);
   m_r->resolve(module, ctx, l, imports);
 }
@@ -2602,7 +2602,7 @@ bool ShiftRightAssignment::declare(Module *module, Scope &scope, Error &error) {
   return true;
 }
 
-void ShiftRightAssignment::resolve(Module *module, Context &ctx, int l, Imports *imports) {
+void ShiftRightAssignment::resolve(Module *module, Context &ctx, int l, LegacyImports *imports) {
   m_l->resolve(module, ctx, l, imports);
   m_r->resolve(module, ctx, l, imports);
 }
@@ -2637,7 +2637,7 @@ bool UnsignedShiftRightAssignment::declare(Module *module, Scope &scope, Error &
   return true;
 }
 
-void UnsignedShiftRightAssignment::resolve(Module *module, Context &ctx, int l, Imports *imports) {
+void UnsignedShiftRightAssignment::resolve(Module *module, Context &ctx, int l, LegacyImports *imports) {
   m_l->resolve(module, ctx, l, imports);
   m_r->resolve(module, ctx, l, imports);
 }
@@ -2676,7 +2676,7 @@ bool BitwiseAndAssignment::declare(Module *module, Scope &scope, Error &error) {
   return true;
 }
 
-void BitwiseAndAssignment::resolve(Module *module, Context &ctx, int l, Imports *imports) {
+void BitwiseAndAssignment::resolve(Module *module, Context &ctx, int l, LegacyImports *imports) {
   m_l->resolve(module, ctx, l, imports);
   m_r->resolve(module, ctx, l, imports);
 }
@@ -2715,7 +2715,7 @@ bool BitwiseOrAssignment::declare(Module *module, Scope &scope, Error &error) {
   return true;
 }
 
-void BitwiseOrAssignment::resolve(Module *module, Context &ctx, int l, Imports *imports) {
+void BitwiseOrAssignment::resolve(Module *module, Context &ctx, int l, LegacyImports *imports) {
   m_l->resolve(module, ctx, l, imports);
   m_r->resolve(module, ctx, l, imports);
 }
@@ -2754,7 +2754,7 @@ bool BitwiseXorAssignment::declare(Module *module, Scope &scope, Error &error) {
   return true;
 }
 
-void BitwiseXorAssignment::resolve(Module *module, Context &ctx, int l, Imports *imports) {
+void BitwiseXorAssignment::resolve(Module *module, Context &ctx, int l, LegacyImports *imports) {
   m_l->resolve(module, ctx, l, imports);
   m_r->resolve(module, ctx, l, imports);
 }
@@ -2782,7 +2782,7 @@ bool LogicalAndAssignment::declare(Module *module, Scope &scope, Error &error) {
   return true;
 }
 
-void LogicalAndAssignment::resolve(Module *module, Context &ctx, int l, Imports *imports) {
+void LogicalAndAssignment::resolve(Module *module, Context &ctx, int l, LegacyImports *imports) {
   m_l->resolve(module, ctx, l, imports);
   m_r->resolve(module, ctx, l, imports);
 }
@@ -2810,7 +2810,7 @@ bool LogicalOrAssignment::declare(Module *module, Scope &scope, Error &error) {
   return true;
 }
 
-void LogicalOrAssignment::resolve(Module *module, Context &ctx, int l, Imports *imports) {
+void LogicalOrAssignment::resolve(Module *module, Context &ctx, int l, LegacyImports *imports) {
   m_l->resolve(module, ctx, l, imports);
   m_r->resolve(module, ctx, l, imports);
 }
@@ -2838,7 +2838,7 @@ bool LogicalNullishAssignment::declare(Module *module, Scope &scope, Error &erro
   return true;
 }
 
-void LogicalNullishAssignment::resolve(Module *module, Context &ctx, int l, Imports *imports) {
+void LogicalNullishAssignment::resolve(Module *module, Context &ctx, int l, LegacyImports *imports) {
   m_l->resolve(module, ctx, l, imports);
   m_r->resolve(module, ctx, l, imports);
 }
@@ -2870,7 +2870,7 @@ bool Conditional::declare(Module *module, Scope &scope, Error &error) {
   return true;
 }
 
-void Conditional::resolve(Module *module, Context &ctx, int l, Imports *imports) {
+void Conditional::resolve(Module *module, Context &ctx, int l, LegacyImports *imports) {
   m_a->resolve(module, ctx, l, imports);
   m_b->resolve(module, ctx, l, imports);
   m_c->resolve(module, ctx, l, imports);

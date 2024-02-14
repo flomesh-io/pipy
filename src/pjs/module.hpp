@@ -49,7 +49,7 @@ public:
   auto add_fiber_variable() -> int;
   auto new_fiber_data() -> Data*;
   bool compile(std::string &error, int &error_line, int &error_column);
-  void execute(Context &ctx, int l, Tree::Imports *imports, Value &result);
+  void execute(Context &ctx, int l, Tree::LegacyImports *imports, Value &result);
 
 private:
   Instance* m_instance;

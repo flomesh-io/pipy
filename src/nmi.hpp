@@ -82,7 +82,7 @@ private:
     fn_pipeline_process process;
   };
 
-  struct Export {
+  struct LegacyExport {
     pjs::Ref<pjs::Str> ns;
     pjs::Ref<pjs::Str> name;
   };
@@ -95,7 +95,7 @@ private:
   pjs::Ref<pjs::Class> m_context_class;
   std::list<VariableDef> m_variable_defs;
   std::list<PipelineDef> m_pipeline_defs;
-  std::list<Export> m_exports;
+  std::list<LegacyExport> m_exports;
   std::map<pjs::Ref<pjs::Str>, PipelineLayout*> m_pipeline_layouts;
   PipelineLayout* m_entry_pipeline = nullptr;
 

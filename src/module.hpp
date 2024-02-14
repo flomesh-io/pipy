@@ -132,7 +132,7 @@ private:
 
   pjs::Ref<Worker> m_worker;
   pjs::Source m_source;
-  std::unique_ptr<pjs::Tree::Imports> m_imports;
+  std::unique_ptr<pjs::Tree::LegacyImports> m_imports;
   pjs::Ref<Configuration> m_configuration;
   pjs::Ref<pjs::Class> m_context_class;
   std::map<pjs::Ref<pjs::Str>, PipelineLayout*> m_named_pipelines;

@@ -32,14 +32,14 @@
 namespace pjs {
 
 //
-// Tree::Imports
+// Tree::LegacyImports
 //
 
-void Tree::Imports::add(Str *name, int file, Str *original_name) {
+void Tree::LegacyImports::add(Str *name, int file, Str *original_name) {
   m_imports[name] = { file, original_name };
 }
 
-bool Tree::Imports::get(Str *name, int *file, Str **original_name) {
+bool Tree::LegacyImports::get(Str *name, int *file, Str **original_name) {
   auto i = m_imports.find(name);
   if (i == m_imports.end()) return false;
   const auto &imp = i->second;
