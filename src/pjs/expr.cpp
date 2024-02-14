@@ -66,6 +66,10 @@ bool Discard::eval(Context &ctx, Value &result) {
   return true;
 }
 
+bool Discard::declare(Module *module, Scope &scope, Error &error) {
+  return m_x->declare(module, scope, error);
+}
+
 void Discard::resolve(Module *module, Context &ctx, int l, Imports *imports) {
   m_x->resolve(module, ctx, l, imports);
 }
@@ -107,6 +111,13 @@ auto Compound::reduce(Reducer &r) -> Reducer::Value* {
   return r.compound(v, n);
 }
 
+bool Compound::declare(Module *module, Scope &scope, Error &error) {
+  for (const auto &p : m_exprs) {
+    if (!p->declare(module, scope, error)) return false;
+  }
+  return true;
+}
+
 void Compound::resolve(Module *module, Context &ctx, int l, Imports *imports) {
   for (const auto &p : m_exprs) {
     p->resolve(module, ctx, l, imports);
@@ -135,6 +146,13 @@ bool Concatenation::eval(Context &ctx, Value &result) {
     s->release();
   }
   result.set(str);
+  return true;
+}
+
+bool Concatenation::declare(Module *module, Scope &scope, Error &error) {
+  for (const auto &p : m_exprs) {
+    if (!p->declare(module, scope, error)) return false;
+  }
   return true;
 }
 
@@ -334,6 +352,16 @@ bool ObjectLiteral::eval(Context &ctx, Value &result) {
   return true;
 }
 
+bool ObjectLiteral::declare(Module *module, Scope &scope, Error &error) {
+  for (const auto &e : m_entries) {
+    auto k = e.key.get();
+    auto v = e.value.get();
+    if (k && !k->declare(module, scope, error)) return false;
+    if (v && !v->declare(module, scope, error)) return false;
+  }
+  return true;
+}
+
 void ObjectLiteral::resolve(Module *module, Context &ctx, int l, Imports *imports) {
   for (const auto &e : m_entries) {
     auto k = e.key.get();
@@ -362,6 +390,11 @@ void ObjectLiteral::dump(std::ostream &out, const std::string &indent) {
 
 bool ArrayExpansion::eval(Context &ctx, Value &result) {
   return m_array->eval(ctx, result);
+}
+
+bool ArrayExpansion::declare(Module *module, Scope &scope, Error &error) {
+  if (!m_array->declare(module, scope, error)) return false;
+  return true;
 }
 
 void ArrayExpansion::resolve(Module *module, Context &ctx, int l, Imports *imports) {
@@ -453,6 +486,13 @@ bool ArrayLiteral::eval(Context &ctx, Value &result) {
   return true;
 }
 
+bool ArrayLiteral::declare(Module *module, Scope &scope, Error &error) {
+  for (const auto &p : m_list) {
+    if (!p->declare(module, scope, error)) return false;
+  }
+  return true;
+}
+
 void ArrayLiteral::resolve(Module *module, Context &ctx, int l, Imports *imports) {
   for (const auto &p : m_list) {
     p->resolve(module, ctx, l, imports);
@@ -507,6 +547,7 @@ bool FunctionLiteral::declare(Module *module, Scope &, Error &error) {
   };
   for (const auto &arg : m_scope.args()) if (!check_name(arg)) return false;
   for (const auto &var : m_scope.vars()) if (!check_name(var)) return false;
+  for (auto &i : m_inputs) i->declare(module, m_scope, error);
   return m_output->declare(module, m_scope, error);
 }
 
@@ -837,6 +878,12 @@ bool Property::clear(Context &ctx, Value &result) {
   return true;
 }
 
+bool Property::declare(Module *module, Scope &scope, Error &error) {
+  if (!m_obj->declare(module, scope, error)) return false;
+  if (!m_key->declare(module, scope, error)) return false;
+  return true;
+}
+
 void Property::resolve(Module *module, Context &ctx, int l, Imports *imports) {
   m_obj->resolve(module, ctx, l, imports);
   m_key->resolve(module, ctx, l, imports);
@@ -881,6 +928,12 @@ bool OptionalProperty::eval(Context &ctx, Value &result) {
   return true;
 }
 
+bool OptionalProperty::declare(Module *module, Scope &scope, Error &error) {
+  if (!m_obj->declare(module, scope, error)) return false;
+  if (!m_key->declare(module, scope, error)) return false;
+  return true;
+}
+
 void OptionalProperty::resolve(Module *module, Context &ctx, int l, Imports *imports) {
   m_obj->resolve(module, ctx, l, imports);
   m_key->resolve(module, ctx, l, imports);
@@ -909,6 +962,14 @@ bool Construction::eval(Context &ctx, Value &result) {
   if (ctx.ok()) return true;
   ctx.backtrace(source(), line(), column());
   return false;
+}
+
+bool Construction::declare(Module *module, Scope &scope, Error &error) {
+  if (!m_func->declare(module, scope, error)) return false;
+  for (const auto &p : m_argv) {
+    if (!p->declare(module, scope, error)) return false;
+  }
+  return true;
 }
 
 void Construction::resolve(Module *module, Context &ctx, int l, Imports *imports) {
@@ -942,6 +1003,14 @@ bool Invocation::eval(Context &ctx, Value &result) {
   if (ctx.ok()) return true;
   ctx.backtrace(source(), line(), column());
   return false;
+}
+
+bool Invocation::declare(Module *module, Scope &scope, Error &error) {
+  if (!m_func->declare(module, scope, error)) return false;
+  for (const auto &p : m_argv) {
+    if (!p->declare(module, scope, error)) return false;
+  }
+  return true;
 }
 
 void Invocation::resolve(Module *module, Context &ctx, int l, Imports *imports) {
@@ -990,6 +1059,14 @@ bool OptionalInvocation::eval(Context &ctx, Value &result) {
   return false;
 }
 
+bool OptionalInvocation::declare(Module *module, Scope &scope, Error &error) {
+  if (!m_func->declare(module, scope, error)) return false;
+  for (const auto &p : m_argv) {
+    if (!p->declare(module, scope, error)) return false;
+  }
+  return true;
+}
+
 void OptionalInvocation::resolve(Module *module, Context &ctx, int l, Imports *imports) {
   m_func->resolve(module, ctx, l, imports);
   for (const auto &p : m_argv) {
@@ -1014,6 +1091,10 @@ bool Plus::eval(Context &ctx, Value &result) {
   return true;
 }
 
+bool Plus::declare(Module *module, Scope &scope, Error &error) {
+  return m_x->declare(module, scope, error);
+}
+
 void Plus::resolve(Module *module, Context &ctx, int l, Imports *imports) {
   m_x->resolve(module, ctx, l, imports);
 }
@@ -1036,6 +1117,10 @@ bool Negation::eval(Context &ctx, Value &result) {
   }
   result.set(-x.to_number());
   return true;
+}
+
+bool Negation::declare(Module *module, Scope &scope, Error &error) {
+  return m_x->declare(module, scope, error);
 }
 
 void Negation::resolve(Module *module, Context &ctx, int l, Imports *imports) {
@@ -1077,6 +1162,12 @@ bool Addition::eval(Context &ctx, Value &result) {
   return true;
 }
 
+bool Addition::declare(Module *module, Scope &scope, Error &error) {
+  if (!m_a->declare(module, scope, error)) return false;
+  if (!m_b->declare(module, scope, error)) return false;
+  return true;
+}
+
 void Addition::resolve(Module *module, Context &ctx, int l, Imports *imports) {
   m_a->resolve(module, ctx, l, imports);
   m_b->resolve(module, ctx, l, imports);
@@ -1107,6 +1198,12 @@ bool Subtraction::eval(Context &ctx, Value &result) {
   auto na = a.to_number();
   auto nb = b.to_number();
   result.set(na - nb);
+  return true;
+}
+
+bool Subtraction::declare(Module *module, Scope &scope, Error &error) {
+  if (!m_a->declare(module, scope, error)) return false;
+  if (!m_b->declare(module, scope, error)) return false;
   return true;
 }
 
@@ -1143,6 +1240,12 @@ bool Multiplication::eval(Context &ctx, Value &result) {
   return true;
 }
 
+bool Multiplication::declare(Module *module, Scope &scope, Error &error) {
+  if (!m_a->declare(module, scope, error)) return false;
+  if (!m_b->declare(module, scope, error)) return false;
+  return true;
+}
+
 void Multiplication::resolve(Module *module, Context &ctx, int l, Imports *imports) {
   m_a->resolve(module, ctx, l, imports);
   m_b->resolve(module, ctx, l, imports);
@@ -1173,6 +1276,12 @@ bool Division::eval(Context &ctx, Value &result) {
   auto na = a.to_number();
   auto nb = b.to_number();
   result.set(na / nb);
+  return true;
+}
+
+bool Division::declare(Module *module, Scope &scope, Error &error) {
+  if (!m_a->declare(module, scope, error)) return false;
+  if (!m_b->declare(module, scope, error)) return false;
   return true;
 }
 
@@ -1209,6 +1318,12 @@ bool Remainder::eval(Context &ctx, Value &result) {
   return true;
 }
 
+bool Remainder::declare(Module *module, Scope &scope, Error &error) {
+  if (!m_a->declare(module, scope, error)) return false;
+  if (!m_b->declare(module, scope, error)) return false;
+  return true;
+}
+
 void Remainder::resolve(Module *module, Context &ctx, int l, Imports *imports) {
   m_a->resolve(module, ctx, l, imports);
   m_b->resolve(module, ctx, l, imports);
@@ -1231,6 +1346,12 @@ bool Exponentiation::eval(Context &ctx, Value &result) {
   auto na = a.to_number();
   auto nb = b.to_number();
   result.set(std::pow(na, nb));
+  return true;
+}
+
+bool Exponentiation::declare(Module *module, Scope &scope, Error &error) {
+  if (!m_a->declare(module, scope, error)) return false;
+  if (!m_b->declare(module, scope, error)) return false;
   return true;
 }
 
@@ -1263,6 +1384,12 @@ bool ShiftLeft::eval(Context &ctx, Value &result) {
   return true;
 }
 
+bool ShiftLeft::declare(Module *module, Scope &scope, Error &error) {
+  if (!m_a->declare(module, scope, error)) return false;
+  if (!m_b->declare(module, scope, error)) return false;
+  return true;
+}
+
 void ShiftLeft::resolve(Module *module, Context &ctx, int l, Imports *imports) {
   m_a->resolve(module, ctx, l, imports);
   m_b->resolve(module, ctx, l, imports);
@@ -1289,6 +1416,12 @@ bool ShiftRight::eval(Context &ctx, Value &result) {
   int32_t na = a.to_int32();
   int32_t nb = b.to_int32();
   result.set(na >> nb);
+  return true;
+}
+
+bool ShiftRight::declare(Module *module, Scope &scope, Error &error) {
+  if (!m_a->declare(module, scope, error)) return false;
+  if (!m_b->declare(module, scope, error)) return false;
   return true;
 }
 
@@ -1321,6 +1454,12 @@ bool UnsignedShiftRight::eval(Context &ctx, Value &result) {
   return true;
 }
 
+bool UnsignedShiftRight::declare(Module *module, Scope &scope, Error &error) {
+  if (!m_a->declare(module, scope, error)) return false;
+  if (!m_b->declare(module, scope, error)) return false;
+  return true;
+}
+
 void UnsignedShiftRight::resolve(Module *module, Context &ctx, int l, Imports *imports) {
   m_a->resolve(module, ctx, l, imports);
   m_b->resolve(module, ctx, l, imports);
@@ -1345,6 +1484,10 @@ bool BitwiseNot::eval(Context &ctx, Value &result) {
   }
   result.set(~x.to_int32());
   return true;
+}
+
+bool BitwiseNot::declare(Module *module, Scope &scope, Error &error) {
+  return m_x->declare(module, scope, error);
 }
 
 void BitwiseNot::resolve(Module *module, Context &ctx, int l, Imports *imports) {
@@ -1375,6 +1518,12 @@ bool BitwiseAnd::eval(Context &ctx, Value &result) {
   int32_t na = a.to_int32();
   int32_t nb = b.to_int32();
   result.set(na & nb);
+  return true;
+}
+
+bool BitwiseAnd::declare(Module *module, Scope &scope, Error &error) {
+  if (!m_a->declare(module, scope, error)) return false;
+  if (!m_b->declare(module, scope, error)) return false;
   return true;
 }
 
@@ -1411,6 +1560,12 @@ bool BitwiseOr::eval(Context &ctx, Value &result) {
   return true;
 }
 
+bool BitwiseOr::declare(Module *module, Scope &scope, Error &error) {
+  if (!m_a->declare(module, scope, error)) return false;
+  if (!m_b->declare(module, scope, error)) return false;
+  return true;
+}
+
 void BitwiseOr::resolve(Module *module, Context &ctx, int l, Imports *imports) {
   m_a->resolve(module, ctx, l, imports);
   m_b->resolve(module, ctx, l, imports);
@@ -1444,6 +1599,12 @@ bool BitwiseXor::eval(Context &ctx, Value &result) {
   return true;
 }
 
+bool BitwiseXor::declare(Module *module, Scope &scope, Error &error) {
+  if (!m_a->declare(module, scope, error)) return false;
+  if (!m_b->declare(module, scope, error)) return false;
+  return true;
+}
+
 void BitwiseXor::resolve(Module *module, Context &ctx, int l, Imports *imports) {
   m_a->resolve(module, ctx, l, imports);
   m_b->resolve(module, ctx, l, imports);
@@ -1466,6 +1627,10 @@ bool LogicalNot::eval(Context &ctx, Value &result) {
   return true;
 }
 
+bool LogicalNot::declare(Module *module, Scope &scope, Error &error) {
+  return m_x->declare(module, scope, error);
+}
+
 void LogicalNot::resolve(Module *module, Context &ctx, int l, Imports *imports) {
   m_x->resolve(module, ctx, l, imports);
 }
@@ -1483,6 +1648,12 @@ bool LogicalAnd::eval(Context &ctx, Value &result) {
   if (!m_a->eval(ctx, result)) return false;
   if (!result.to_boolean()) return true;
   if (!m_b->eval(ctx, result)) return false;
+  return true;
+}
+
+bool LogicalAnd::declare(Module *module, Scope &scope, Error &error) {
+  if (!m_a->declare(module, scope, error)) return false;
+  if (!m_b->declare(module, scope, error)) return false;
   return true;
 }
 
@@ -1508,6 +1679,12 @@ bool LogicalOr::eval(Context &ctx, Value &result) {
   return true;
 }
 
+bool LogicalOr::declare(Module *module, Scope &scope, Error &error) {
+  if (!m_a->declare(module, scope, error)) return false;
+  if (!m_b->declare(module, scope, error)) return false;
+  return true;
+}
+
 void LogicalOr::resolve(Module *module, Context &ctx, int l, Imports *imports) {
   m_a->resolve(module, ctx, l, imports);
   m_b->resolve(module, ctx, l, imports);
@@ -1527,6 +1704,12 @@ bool NullishCoalescing::eval(Context &ctx, Value &result) {
   if (!m_a->eval(ctx, result)) return false;
   if (!result.is_undefined() && !result.is_null()) return true;
   if (!m_b->eval(ctx, result)) return false;
+  return true;
+}
+
+bool NullishCoalescing::declare(Module *module, Scope &scope, Error &error) {
+  if (!m_a->declare(module, scope, error)) return false;
+  if (!m_b->declare(module, scope, error)) return false;
   return true;
 }
 
@@ -1561,6 +1744,12 @@ bool Equality::eval(Context &ctx, Value &result) {
   return true;
 }
 
+bool Equality::declare(Module *module, Scope &scope, Error &error) {
+  if (!m_a->declare(module, scope, error)) return false;
+  if (!m_b->declare(module, scope, error)) return false;
+  return true;
+}
+
 void Equality::resolve(Module *module, Context &ctx, int l, Imports *imports) {
   m_a->resolve(module, ctx, l, imports);
   m_b->resolve(module, ctx, l, imports);
@@ -1592,6 +1781,12 @@ bool Inequality::eval(Context &ctx, Value &result) {
   return true;
 }
 
+bool Inequality::declare(Module *module, Scope &scope, Error &error) {
+  if (!m_a->declare(module, scope, error)) return false;
+  if (!m_b->declare(module, scope, error)) return false;
+  return true;
+}
+
 void Inequality::resolve(Module *module, Context &ctx, int l, Imports *imports) {
   m_a->resolve(module, ctx, l, imports);
   m_b->resolve(module, ctx, l, imports);
@@ -1615,6 +1810,12 @@ bool Identity::eval(Context &ctx, Value &result) {
   return true;
 }
 
+bool Identity::declare(Module *module, Scope &scope, Error &error) {
+  if (!m_a->declare(module, scope, error)) return false;
+  if (!m_b->declare(module, scope, error)) return false;
+  return true;
+}
+
 void Identity::resolve(Module *module, Context &ctx, int l, Imports *imports) {
   m_a->resolve(module, ctx, l, imports);
   m_b->resolve(module, ctx, l, imports);
@@ -1635,6 +1836,12 @@ bool Nonidentity::eval(Context &ctx, Value &result) {
   if (!m_a->eval(ctx, a)) return false;
   if (!m_b->eval(ctx, b)) return false;
   result.set(!Value::is_identical(a, b));
+  return true;
+}
+
+bool Nonidentity::declare(Module *module, Scope &scope, Error &error) {
+  if (!m_a->declare(module, scope, error)) return false;
+  if (!m_b->declare(module, scope, error)) return false;
   return true;
 }
 
@@ -1675,6 +1882,12 @@ bool GreaterThan::eval(Context &ctx, Value &result) {
   return true;
 }
 
+bool GreaterThan::declare(Module *module, Scope &scope, Error &error) {
+  if (!m_a->declare(module, scope, error)) return false;
+  if (!m_b->declare(module, scope, error)) return false;
+  return true;
+}
+
 void GreaterThan::resolve(Module *module, Context &ctx, int l, Imports *imports) {
   m_a->resolve(module, ctx, l, imports);
   m_b->resolve(module, ctx, l, imports);
@@ -1709,6 +1922,12 @@ bool GreaterThanOrEqual::eval(Context &ctx, Value &result) {
     auto nb = b.to_number();
     result.set(na >= nb);
   }
+  return true;
+}
+
+bool GreaterThanOrEqual::declare(Module *module, Scope &scope, Error &error) {
+  if (!m_a->declare(module, scope, error)) return false;
+  if (!m_b->declare(module, scope, error)) return false;
   return true;
 }
 
@@ -1749,6 +1968,12 @@ bool LessThan::eval(Context &ctx, Value &result) {
   return true;
 }
 
+bool LessThan::declare(Module *module, Scope &scope, Error &error) {
+  if (!m_a->declare(module, scope, error)) return false;
+  if (!m_b->declare(module, scope, error)) return false;
+  return true;
+}
+
 void LessThan::resolve(Module *module, Context &ctx, int l, Imports *imports) {
   m_a->resolve(module, ctx, l, imports);
   m_b->resolve(module, ctx, l, imports);
@@ -1786,6 +2011,12 @@ bool LessThanOrEqual::eval(Context &ctx, Value &result) {
   return true;
 }
 
+bool LessThanOrEqual::declare(Module *module, Scope &scope, Error &error) {
+  if (!m_a->declare(module, scope, error)) return false;
+  if (!m_b->declare(module, scope, error)) return false;
+  return true;
+}
+
 void LessThanOrEqual::resolve(Module *module, Context &ctx, int l, Imports *imports) {
   m_a->resolve(module, ctx, l, imports);
   m_b->resolve(module, ctx, l, imports);
@@ -1818,6 +2049,12 @@ bool In::eval(Context &ctx, Value &result) {
   return true;
 }
 
+bool In::declare(Module *module, Scope &scope, Error &error) {
+  if (!m_a->declare(module, scope, error)) return false;
+  if (!m_b->declare(module, scope, error)) return false;
+  return true;
+}
+
 void In::resolve(Module *module, Context &ctx, int l, Imports *imports) {
   m_a->resolve(module, ctx, l, imports);
   m_b->resolve(module, ctx, l, imports);
@@ -1847,6 +2084,12 @@ bool InstanceOf::eval(Context &ctx, Value &result) {
   } else {
     result.set(a.o()->type()->is_derived_from(c));
   }
+  return true;
+}
+
+bool InstanceOf::declare(Module *module, Scope &scope, Error &error) {
+  if (!m_a->declare(module, scope, error)) return false;
+  if (!m_b->declare(module, scope, error)) return false;
   return true;
 }
 
@@ -1884,6 +2127,10 @@ bool TypeOf::eval(Context &ctx, Value &result) {
   return true;
 }
 
+bool TypeOf::declare(Module *module, Scope &scope, Error &error) {
+  return m_x->declare(module, scope, error);
+}
+
 void TypeOf::resolve(Module *module, Context &ctx, int l, Imports *imports) {
   m_x->resolve(module, ctx, l, imports);
 }
@@ -1907,6 +2154,10 @@ bool PostIncrement::eval(Context &ctx, Value &result) {
   }
   Value v(result.n() + 1);
   return m_x->assign(ctx, v);
+}
+
+bool PostIncrement::declare(Module *module, Scope &scope, Error &error) {
+  return m_x->declare(module, scope, error);
 }
 
 void PostIncrement::resolve(Module *module, Context &ctx, int l, Imports *imports) {
@@ -1934,6 +2185,10 @@ bool PostDecrement::eval(Context &ctx, Value &result) {
   return m_x->assign(ctx, v);
 }
 
+bool PostDecrement::declare(Module *module, Scope &scope, Error &error) {
+  return m_x->declare(module, scope, error);
+}
+
 void PostDecrement::resolve(Module *module, Context &ctx, int l, Imports *imports) {
   m_x->resolve(module, ctx, l, imports);
 }
@@ -1955,6 +2210,10 @@ bool PreIncrement::eval(Context &ctx, Value &result) {
     result.set(result.to_number() + 1);
   }
   return m_x->assign(ctx, result);
+}
+
+bool PreIncrement::declare(Module *module, Scope &scope, Error &error) {
+  return m_x->declare(module, scope, error);
 }
 
 void PreIncrement::resolve(Module *module, Context &ctx, int l, Imports *imports) {
@@ -1980,6 +2239,10 @@ bool PreDecrement::eval(Context &ctx, Value &result) {
   return m_x->assign(ctx, result);
 }
 
+bool PreDecrement::declare(Module *module, Scope &scope, Error &error) {
+  return m_x->declare(module, scope, error);
+}
+
 void PreDecrement::resolve(Module *module, Context &ctx, int l, Imports *imports) {
   m_x->resolve(module, ctx, l, imports);
 }
@@ -1995,6 +2258,10 @@ void PreDecrement::dump(std::ostream &out, const std::string &indent) {
 
 bool Delete::eval(Context &ctx, Value &result) {
   return m_x->clear(ctx, result);
+}
+
+bool Delete::declare(Module *module, Scope &scope, Error &error) {
+  return m_x->declare(module, scope, error);
 }
 
 void Delete::resolve(Module *module, Context &ctx, int l, Imports *imports) {
@@ -2021,6 +2288,12 @@ void Assignment::to_arguments(std::vector<Ref<Str>> &args, std::vector<Ref<Str>>
 bool Assignment::eval(Context &ctx, Value &result) {
   if (!m_r->eval(ctx, result)) return false;
   return m_l->assign(ctx, result);
+}
+
+bool Assignment::declare(Module *module, Scope &scope, Error &error) {
+  if (!m_l->declare(module, scope, error)) return false;
+  if (!m_r->declare(module, scope, error)) return false;
+  return true;
 }
 
 void Assignment::resolve(Module *module, Context &ctx, int l, Imports *imports) {
@@ -2066,6 +2339,12 @@ bool AdditionAssignment::eval(Context &ctx, Value &result) {
   return m_l->assign(ctx, result);
 }
 
+bool AdditionAssignment::declare(Module *module, Scope &scope, Error &error) {
+  if (!m_l->declare(module, scope, error)) return false;
+  if (!m_r->declare(module, scope, error)) return false;
+  return true;
+}
+
 void AdditionAssignment::resolve(Module *module, Context &ctx, int l, Imports *imports) {
   m_l->resolve(module, ctx, l, imports);
   m_r->resolve(module, ctx, l, imports);
@@ -2097,6 +2376,12 @@ bool SubtractionAssignment::eval(Context &ctx, Value &result) {
     result.set(na - nb);
   }
   return m_l->assign(ctx, result);
+}
+
+bool SubtractionAssignment::declare(Module *module, Scope &scope, Error &error) {
+  if (!m_l->declare(module, scope, error)) return false;
+  if (!m_r->declare(module, scope, error)) return false;
+  return true;
 }
 
 void SubtractionAssignment::resolve(Module *module, Context &ctx, int l, Imports *imports) {
@@ -2132,6 +2417,12 @@ bool MultiplicationAssignment::eval(Context &ctx, Value &result) {
   return m_l->assign(ctx, result);
 }
 
+bool MultiplicationAssignment::declare(Module *module, Scope &scope, Error &error) {
+  if (!m_l->declare(module, scope, error)) return false;
+  if (!m_r->declare(module, scope, error)) return false;
+  return true;
+}
+
 void MultiplicationAssignment::resolve(Module *module, Context &ctx, int l, Imports *imports) {
   m_l->resolve(module, ctx, l, imports);
   m_r->resolve(module, ctx, l, imports);
@@ -2163,6 +2454,12 @@ bool DivisionAssignment::eval(Context &ctx, Value &result) {
     result.set(na / nb);
   }
   return m_l->assign(ctx, result);
+}
+
+bool DivisionAssignment::declare(Module *module, Scope &scope, Error &error) {
+  if (!m_l->declare(module, scope, error)) return false;
+  if (!m_r->declare(module, scope, error)) return false;
+  return true;
 }
 
 void DivisionAssignment::resolve(Module *module, Context &ctx, int l, Imports *imports) {
@@ -2198,6 +2495,12 @@ bool RemainderAssignment::eval(Context &ctx, Value &result) {
   return m_l->assign(ctx, result);
 }
 
+bool RemainderAssignment::declare(Module *module, Scope &scope, Error &error) {
+  if (!m_l->declare(module, scope, error)) return false;
+  if (!m_r->declare(module, scope, error)) return false;
+  return true;
+}
+
 void RemainderAssignment::resolve(Module *module, Context &ctx, int l, Imports *imports) {
   m_l->resolve(module, ctx, l, imports);
   m_r->resolve(module, ctx, l, imports);
@@ -2221,6 +2524,12 @@ bool ExponentiationAssignment::eval(Context &ctx, Value &result) {
   auto nb = b.to_number();
   result.set(std::pow(na, nb));
   return m_l->assign(ctx, result);
+}
+
+bool ExponentiationAssignment::declare(Module *module, Scope &scope, Error &error) {
+  if (!m_l->declare(module, scope, error)) return false;
+  if (!m_r->declare(module, scope, error)) return false;
+  return true;
 }
 
 void ExponentiationAssignment::resolve(Module *module, Context &ctx, int l, Imports *imports) {
@@ -2252,6 +2561,12 @@ bool ShiftLeftAssignment::eval(Context &ctx, Value &result) {
   return m_l->assign(ctx, result);
 }
 
+bool ShiftLeftAssignment::declare(Module *module, Scope &scope, Error &error) {
+  if (!m_l->declare(module, scope, error)) return false;
+  if (!m_r->declare(module, scope, error)) return false;
+  return true;
+}
+
 void ShiftLeftAssignment::resolve(Module *module, Context &ctx, int l, Imports *imports) {
   m_l->resolve(module, ctx, l, imports);
   m_r->resolve(module, ctx, l, imports);
@@ -2281,6 +2596,12 @@ bool ShiftRightAssignment::eval(Context &ctx, Value &result) {
   return m_l->assign(ctx, result);
 }
 
+bool ShiftRightAssignment::declare(Module *module, Scope &scope, Error &error) {
+  if (!m_l->declare(module, scope, error)) return false;
+  if (!m_r->declare(module, scope, error)) return false;
+  return true;
+}
+
 void ShiftRightAssignment::resolve(Module *module, Context &ctx, int l, Imports *imports) {
   m_l->resolve(module, ctx, l, imports);
   m_r->resolve(module, ctx, l, imports);
@@ -2308,6 +2629,12 @@ bool UnsignedShiftRightAssignment::eval(Context &ctx, Value &result) {
     result.set((uint32_t)na >> nb);
   }
   return m_l->assign(ctx, result);
+}
+
+bool UnsignedShiftRightAssignment::declare(Module *module, Scope &scope, Error &error) {
+  if (!m_l->declare(module, scope, error)) return false;
+  if (!m_r->declare(module, scope, error)) return false;
+  return true;
 }
 
 void UnsignedShiftRightAssignment::resolve(Module *module, Context &ctx, int l, Imports *imports) {
@@ -2343,6 +2670,12 @@ bool BitwiseAndAssignment::eval(Context &ctx, Value &result) {
   return m_l->assign(ctx, result);
 }
 
+bool BitwiseAndAssignment::declare(Module *module, Scope &scope, Error &error) {
+  if (!m_l->declare(module, scope, error)) return false;
+  if (!m_r->declare(module, scope, error)) return false;
+  return true;
+}
+
 void BitwiseAndAssignment::resolve(Module *module, Context &ctx, int l, Imports *imports) {
   m_l->resolve(module, ctx, l, imports);
   m_r->resolve(module, ctx, l, imports);
@@ -2374,6 +2707,12 @@ bool BitwiseOrAssignment::eval(Context &ctx, Value &result) {
     result.set(na | nb);
   }
   return m_l->assign(ctx, result);
+}
+
+bool BitwiseOrAssignment::declare(Module *module, Scope &scope, Error &error) {
+  if (!m_l->declare(module, scope, error)) return false;
+  if (!m_r->declare(module, scope, error)) return false;
+  return true;
 }
 
 void BitwiseOrAssignment::resolve(Module *module, Context &ctx, int l, Imports *imports) {
@@ -2409,6 +2748,12 @@ bool BitwiseXorAssignment::eval(Context &ctx, Value &result) {
   return m_l->assign(ctx, result);
 }
 
+bool BitwiseXorAssignment::declare(Module *module, Scope &scope, Error &error) {
+  if (!m_l->declare(module, scope, error)) return false;
+  if (!m_r->declare(module, scope, error)) return false;
+  return true;
+}
+
 void BitwiseXorAssignment::resolve(Module *module, Context &ctx, int l, Imports *imports) {
   m_l->resolve(module, ctx, l, imports);
   m_r->resolve(module, ctx, l, imports);
@@ -2429,6 +2774,12 @@ bool LogicalAndAssignment::eval(Context &ctx, Value &result) {
   if (!result.to_boolean()) return true;
   if (!m_r->eval(ctx, result)) return false;
   return m_l->assign(ctx, result);
+}
+
+bool LogicalAndAssignment::declare(Module *module, Scope &scope, Error &error) {
+  if (!m_l->declare(module, scope, error)) return false;
+  if (!m_r->declare(module, scope, error)) return false;
+  return true;
 }
 
 void LogicalAndAssignment::resolve(Module *module, Context &ctx, int l, Imports *imports) {
@@ -2453,6 +2804,12 @@ bool LogicalOrAssignment::eval(Context &ctx, Value &result) {
   return m_l->assign(ctx, result);
 }
 
+bool LogicalOrAssignment::declare(Module *module, Scope &scope, Error &error) {
+  if (!m_l->declare(module, scope, error)) return false;
+  if (!m_r->declare(module, scope, error)) return false;
+  return true;
+}
+
 void LogicalOrAssignment::resolve(Module *module, Context &ctx, int l, Imports *imports) {
   m_l->resolve(module, ctx, l, imports);
   m_r->resolve(module, ctx, l, imports);
@@ -2473,6 +2830,12 @@ bool LogicalNullishAssignment::eval(Context &ctx, Value &result) {
   if (!result.is_undefined() && !result.is_null()) return true;
   if (!m_r->eval(ctx, result)) return false;
   return m_l->assign(ctx, result);
+}
+
+bool LogicalNullishAssignment::declare(Module *module, Scope &scope, Error &error) {
+  if (!m_l->declare(module, scope, error)) return false;
+  if (!m_r->declare(module, scope, error)) return false;
+  return true;
 }
 
 void LogicalNullishAssignment::resolve(Module *module, Context &ctx, int l, Imports *imports) {
@@ -2498,6 +2861,13 @@ bool Conditional::eval(Context &ctx, Value &result) {
   } else {
     return m_c->eval(ctx, result);
   }
+}
+
+bool Conditional::declare(Module *module, Scope &scope, Error &error) {
+  if (!m_a->declare(module, scope, error)) return false;
+  if (!m_b->declare(module, scope, error)) return false;
+  if (!m_c->declare(module, scope, error)) return false;
+  return true;
 }
 
 void Conditional::resolve(Module *module, Context &ctx, int l, Imports *imports) {
