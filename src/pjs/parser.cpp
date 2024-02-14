@@ -196,6 +196,24 @@ public:
     return is_operator(tok.id());
   }
 
+  static bool is_unary_operator(int id) {
+    return (
+      id == Token::ID("!") ||
+      id == Token::ID("~") ||
+      id == Token::ID("++") ||
+      id == Token::ID("--") ||
+      id == Token::ID("void") ||
+      id == Token::ID("typeof") ||
+      id == Token::ID("new") ||
+      id == Token::ID("delete") ||
+      id == Token::ID("await")
+    );
+  }
+
+  static bool is_unary_operator(const Token &tok) {
+    return is_unary_operator(tok.id());
+  }
+
   static bool is_identifier_name(const Token &tok, std::string &str) {
     auto i = s_identifier_names.find(tok.id());
     if (i == s_identifier_names.end()) return false;
@@ -1396,7 +1414,7 @@ Expr* ScriptParser::expression(bool no_comma, Expr *starting_operand) {
         (t.id() == Token::ID(",") && no_comma)
       );
       if (t == Token::err) return error(UnknownToken);
-      if (!is_end && !Tokenizer::is_operator(t)) {
+      if (!is_end && (!Tokenizer::is_operator(t) || Tokenizer::is_unary_operator(t))) {
         if (eol) {
           t = Token::eof;
           is_end = true;
