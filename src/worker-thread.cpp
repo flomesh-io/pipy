@@ -428,28 +428,6 @@ void WorkerThread::main() {
   auto &entry = Codebase::current()->entry();
   auto result = pjs::Value::empty;
   auto mod = m_new_worker->load_js_module(entry, result);
-
-  if (!result.is_empty() && !result.is<Configuration>()) {
-    if (result.is_string()) {
-      std::cout << result.s()->str();
-    } else if (result.is<Data>()) {
-      result.as<Data>()->to_chunks(
-        [&](const uint8_t *ptr, int len) {
-          std::cout.write((const char *)ptr, len);
-        }
-      );
-    } else {
-      Data buf;
-      Console::dump(result, buf);
-      buf.to_chunks(
-        [&](const uint8_t *ptr, int len) {
-          std::cout.write((const char *)ptr, len);
-        }
-      );
-      std::cout << std::endl;
-    }
-  }
-
   bool failed = false;
 
   if (mod && m_new_worker->bind() && m_new_worker->start(m_force_start)) {
@@ -461,6 +439,29 @@ void WorkerThread::main() {
 
   Net::context().poll();
   bool started = !Net::context().stopped();
+
+  if (!started) {
+    if (!result.is_empty() && !result.is<Configuration>()) {
+      if (result.is_string()) {
+        std::cout << result.s()->str();
+      } else if (result.is<Data>()) {
+        result.as<Data>()->to_chunks(
+          [&](const uint8_t *ptr, int len) {
+            std::cout.write((const char *)ptr, len);
+          }
+        );
+      } else {
+        Data buf;
+        Console::dump(result, buf);
+        buf.to_chunks(
+          [&](const uint8_t *ptr, int len) {
+            std::cout.write((const char *)ptr, len);
+          }
+        );
+        std::cout << std::endl;
+      }
+    }
+  }
 
   {
     std::lock_guard<std::mutex> lock(m_start_cv_mutex);
