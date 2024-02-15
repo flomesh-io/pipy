@@ -42,6 +42,34 @@ Module::~Module() {
   }
 }
 
+void Module::load(const std::string &name, const std::string &source) {
+  m_source.filename = name;
+  m_source.content = source;
+}
+
+auto Module::add_import(Str *name, Str *src_name, Str *path) -> Tree::Import* {
+  m_imports.emplace_back();
+  auto &i = m_imports.back();
+  i.alias = name ? name : src_name;
+  i.name = src_name;
+  i.path = path;
+  return &i;
+}
+
+void Module::add_export(Str *name, Str *src_name) {
+  m_exports.emplace_back();
+  auto &e = m_exports.back();
+  e.alias = name ? name : src_name;
+  e.name = src_name;
+}
+
+void Module::add_export(Str *name, Tree::Import *import) {
+  m_exports.emplace_back();
+  auto &e = m_exports.back();
+  e.alias = name;
+  e.import = import;
+}
+
 auto Module::add_fiber_variable() -> int {
   return m_fiber_variable_count++;
 }
@@ -54,9 +82,22 @@ auto Module::new_fiber_data() -> Data* {
   }
 }
 
-void Module::load(const std::string &name, const std::string &source) {
-  m_source.filename = name;
-  m_source.content = source;
+auto Module::find_import(Str *name) -> Tree::Import* {
+  for (auto &i : m_imports) {
+    if (i.alias == name) {
+      return &i;
+    }
+  }
+  return nullptr;
+}
+
+auto Module::find_export(Str *name) -> int {
+  for (auto &e : m_exports) {
+    if (e.name == name) {
+      return e.id;
+    }
+  }
+  return -1;
 }
 
 bool Module::compile(std::string &error, int &error_line, int &error_column) {
@@ -76,6 +117,15 @@ bool Module::compile(std::string &error, int &error_line, int &error_column) {
   return true;
 }
 
+void Module::resolve(const std::function<Module*(Str *path)> &resolver) {
+  for (auto &imp : m_imports) {
+    auto mod = resolver(imp.path);
+    imp.module = mod;
+    imp.exports = mod->exports_object();
+    check_cyclic_import(&imp, &imp);
+  }
+}
+
 void Module::execute(Context &ctx, int l, Tree::LegacyImports *imports, Value &result) {
   m_tree->resolve(this, ctx, l, imports);
   m_scope.instantiate(ctx);
@@ -88,6 +138,41 @@ void Module::execute(Context &ctx, int l, Tree::LegacyImports *imports, Value &r
   }
 
   result = res.value;
+}
+
+void Module::init_exports() {
+  if (m_exports_object) return;
+  std::list<Field*> fields;
+  int id = 0;
+  for (auto &e : m_exports) {
+    if (auto imp = e.import) {
+      fields.push_back(
+        Accessor::make(
+          e.alias->str(),
+          [=](Object *, Value &ret) { imp->get(ret); }
+        )
+      );
+    } else {
+      fields.push_back(Variable::make(e.alias->str(), 0, id));
+      e.id = id++;
+    }
+  }
+  m_exports_class = Class::make("", nullptr, fields);
+}
+
+void Module::check_cyclic_import(Tree::Import *root, Tree::Import *current) {
+  for (const auto &e : current->module->m_exports) {
+    if (e.alias == current->name || !current->name) {
+      if (e.import) {
+        if (e.import == root) {
+          throw std::runtime_error("cyclic import");
+        } else {
+          check_cyclic_import(root, e.import);
+        }
+      }
+      if (current->name) break;
+    }
+  }
 }
 
 } // namespace pjs

@@ -51,6 +51,31 @@ public:
   };
 
   //
+  // Tree::Import
+  //
+
+  struct Import {
+    Ref<Str> alias;
+    Ref<Str> name;
+    Ref<Str> path;
+    Ref<Object> exports;
+    PropertyCache cache;
+    Module* module = nullptr;
+    void get(Value &val) { cache.get(exports, name, val); }
+  };
+
+  //
+  // Tree::Export
+  //
+
+  struct Export {
+    int id = -1;
+    Ref<Str> alias;
+    Ref<Str> name;
+    Import* import = nullptr;
+  };
+
+  //
   // Tree::LegacyImports
   //
 

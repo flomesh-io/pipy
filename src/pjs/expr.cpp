@@ -620,6 +620,55 @@ void GlobalVariable::dump(std::ostream &out, const std::string &indent) {
 }
 
 //
+// ImportedVariable
+//
+
+bool ImportedVariable::is_left_value() const { return true; }
+
+bool ImportedVariable::eval(Context &ctx, Value &result) {
+  m_import->get(result);
+  return true;
+}
+
+bool ImportedVariable::assign(Context &ctx, Value &value) {
+  return error(ctx, "cannot assign to an imported variable");
+}
+
+bool ImportedVariable::clear(Context &ctx, Value &result) {
+  return error(ctx, "cannot delete an imported variable");
+}
+
+void ImportedVariable::dump(std::ostream &out, const std::string &indent) {
+  out << indent << "imported-variable " << m_import->alias->str() << std::endl;
+}
+
+//
+// ExportedVariable
+//
+
+bool ExportedVariable::is_left_value() const { return true; }
+
+bool ExportedVariable::eval(Context &ctx, Value &result) {
+  auto obj = m_module->exports_object();
+  obj->type()->get(obj, m_i, result);
+  return true;
+}
+
+bool ExportedVariable::assign(Context &ctx, Value &value) {
+  auto obj = m_module->exports_object();
+  obj->type()->set(obj, m_i, value);
+  return true;
+}
+
+bool ExportedVariable::clear(Context &ctx, Value &result) {
+  return error(ctx, "cannot delete an exported variable");
+}
+
+void ExportedVariable::dump(std::ostream &out, const std::string &indent) {
+  out << indent << "exported-variable " << m_i << std::endl;
+}
+
+//
 // LegacyLocal
 //
 
@@ -771,12 +820,26 @@ void Identifier::resolve(Context &ctx) {
       }
     }
   }
+
+  if (m_module) {
+    if (auto i = m_module->find_import(m_key)) {
+      m_resolved.reset(locate(new ImportedVariable(i)));
+      return;
+    }
+    int i = m_module->find_export(m_key);
+    if (i >= 0) {
+      m_resolved.reset(locate(new ExportedVariable(i, m_module)));
+      return;
+    }
+  }
+
   if (auto l = ctx.l(m_l)) {
     if (l->has(m_key)) {
       m_resolved.reset(locate(new LegacyLocal(m_l, m_key)));
       return;
     }
   }
+
   if (m_imports) {
     int file;
     Str *key;
@@ -788,6 +851,7 @@ void Identifier::resolve(Context &ctx) {
       }
     }
   }
+
   if (ctx.g()->has(m_key)) {
     m_resolved.reset(locate(new GlobalVariable(m_key)));
     return;

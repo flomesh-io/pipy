@@ -1309,6 +1309,15 @@ private:
 
 class Accessor : public Field {
 public:
+  static auto make(
+    const std::string &name,
+    std::function<void(Object*, Value&)> getter,
+    std::function<void(Object*, const Value&)> setter = nullptr,
+    int options = 0
+  ) -> Accessor* {
+    return new Accessor(name, getter, setter, options);
+  }
+
   void get(Object *obj, Value &val) {
     m_getter(obj, val);
   }
@@ -1329,9 +1338,6 @@ private:
 
   std::function<void(Object*, Value&)> m_getter;
   std::function<void(Object*, const Value&)> m_setter;
-
-  template<class T>
-  friend class ClassDef;
 };
 
 template<class T>
@@ -1341,7 +1347,7 @@ void ClassDef<T>::accessor(
   std::function<void(Object*, const Value&)> setter,
   int options
 ) {
-  m_init_data->fields.push_back(new Accessor(name, getter, setter, options));
+  m_init_data->fields.push_back(Accessor::make(name, getter, setter, options));
 }
 
 //

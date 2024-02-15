@@ -44,11 +44,18 @@ public:
   auto name() const -> const std::string& { return m_source.filename; }
   auto source() const -> const Source& { return m_source; }
   auto tree() const -> Stmt* { return m_tree.get(); }
+  auto exports_object() -> Object* { init_exports(); return m_exports_object; }
 
   void load(const std::string &name, const std::string &source);
+  auto add_import(Str *name, Str *src_name, Str *path) -> Tree::Import*;
+  void add_export(Str *name, Str *src_name);
+  void add_export(Str *name, Tree::Import *import);
   auto add_fiber_variable() -> int;
   auto new_fiber_data() -> Data*;
+  auto find_import(Str *name) -> Tree::Import*;
+  auto find_export(Str *name) -> int;
   bool compile(std::string &error, int &error_line, int &error_column);
+  void resolve(const std::function<Module*(Str *path)> &resolver);
   void execute(Context &ctx, int l, Tree::LegacyImports *imports, Value &result);
 
 private:
@@ -58,6 +65,14 @@ private:
   Source m_source;
   Tree::Scope m_scope;
   std::unique_ptr<Stmt> m_tree;
+  std::list<Tree::Import> m_imports;
+  std::list<Tree::Export> m_exports;
+  Ref<Class> m_exports_class;
+  Ref<Object> m_exports_object;
+
+  void init_exports();
+
+  static void check_cyclic_import(Tree::Import *root, Tree::Import *current);
 
   friend class Instance;
 };

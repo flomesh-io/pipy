@@ -431,6 +431,43 @@ private:
 };
 
 //
+// ImportedVariable
+//
+
+class ImportedVariable : public Expr {
+public:
+  ImportedVariable(Import *import) : m_import(import) {}
+
+  virtual bool is_left_value() const override;
+  virtual bool eval(Context &ctx, Value &result) override;
+  virtual bool assign(Context &ctx, Value &value) override;
+  virtual bool clear(Context &ctx, Value &result) override;
+  virtual void dump(std::ostream &out, const std::string &indent) override;
+
+private:
+  Import* m_import;
+};
+
+//
+// ExportedVariable
+//
+
+class ExportedVariable : public Expr {
+public:
+  ExportedVariable(int i, Module *module) : m_i(i), m_module(module) {}
+
+  virtual bool is_left_value() const override;
+  virtual bool eval(Context &ctx, Value &result) override;
+  virtual bool assign(Context &ctx, Value &value) override;
+  virtual bool clear(Context &ctx, Value &result) override;
+  virtual void dump(std::ostream &out, const std::string &indent) override;
+
+private:
+  int m_i;
+  Module* m_module;
+};
+
+//
 // LegacyLocal
 //
 
