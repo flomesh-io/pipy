@@ -156,6 +156,7 @@ int main() {
   test_parser("var x=y;if(x===y){x=y}else y=x;return (x+y);try{throw new Error}catch(e){throw 1+1}finally{break}");
   test_parser("switch(x===y){case 0:case x+y:a;b;a+b;case 1:default:a=b;break;xyz:if(true)break}");
   test_parser("1+1\n1+1\n(++i);return/*xxx\nxxx*/x\n[1]\n[2]\n;[3];return x;function f(){}");
+  test_parser("import x, * as ns, { default as x, a, b as b, 'c' as c } from 'xyz'");
   test_parser("export var a=1+1\nexport default 1+1\nexport * as ns from 'xyz'\nexport{a as x,b as 'y',}from 'abc'");
 
   test_eval(ctx, "console.log('hello', 'world')");

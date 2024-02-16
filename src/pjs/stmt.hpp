@@ -69,7 +69,7 @@ public:
 
   Stmt();
   virtual ~Stmt();
-  virtual void execute(Context &ctx, Result &result) = 0;
+  virtual void execute(Context &ctx, Result &result) {};
   virtual void dump(std::ostream &out, const std::string &indent = "") = 0;
 
   //
@@ -288,6 +288,23 @@ private:
 };
 
 //
+// Import
+//
+
+class Import : public Stmt {
+public:
+  Import(std::list<std::pair<std::string, std::string>> &&list, const std::string &from)
+    : m_list(std::move(list)), m_from(from) {}
+
+  virtual bool declare(Module *module, Tree::Scope &scope, Error &error) override;
+  virtual void dump(std::ostream &out, const std::string &indent) override;
+
+private:
+  std::list<std::pair<std::string, std::string>> m_list;
+  std::string m_from;
+};
+
+//
 // Export
 //
 
@@ -328,6 +345,7 @@ inline Stmt* flow_break() { return new stmt::Break(); }
 inline Stmt* flow_break(expr::Identifier *label) { return new stmt::Break(label); }
 inline Stmt* flow_return(Expr *expr = nullptr) { return new stmt::Return(expr); }
 inline Stmt* flow_throw(Expr *expr = nullptr) { return new stmt::Throw(expr); }
+inline Stmt* module_import(std::list<std::pair<std::string, std::string>> &&list, const std::string &from) { return new stmt::Import(std::move(list), from); }
 inline Stmt* module_export(std::list<std::pair<std::string, std::string>> &&list, const std::string &from = std::string()) { return new stmt::Export(std::move(list), from); }
 inline Stmt* module_export(Stmt *stmt) { return new stmt::Export(stmt, false); }
 inline Stmt* module_export_default(Stmt *stmt) { return new stmt::Export(stmt, true); }

@@ -910,12 +910,9 @@ private:
     return false;
   }
 
-  bool read(std::string &s, Error err) {
+  bool read(std::string &s) {
     auto t = peek();
-    if (!t.is_string()) {
-      error(err);
-      return false;
-    }
+    if (!t.is_string()) return false;
     auto str = read().s();
     if (str[0] == '"' || str[0] == '\'') {
       StringDecoder decoder;
@@ -929,21 +926,31 @@ private:
     return true;
   }
 
-  bool read_quoted(std::string &s, Error err) {
+  bool read(std::string &s, Error err) {
+    if (!read(s)) {
+      if (!has_error()) error(err);
+      return false;
+    }
+    return true;
+  }
+
+  bool read_quoted(std::string &s) {
     auto t = peek();
-    if (!t.is_string()) {
-      error(err);
-      return false;
-    }
+    if (!t.is_string()) return false;
     auto str = t.s();
-    if (str[0] != '"' && str[0] != '\'') {
-      error(err);
-      return false;
-    }
+    if (str[0] != '"' && str[0] != '\'') return false;
     read();
     StringDecoder decoder;
     if (!decoder.decode(t.s(), s)) {
       error(InvalidString);
+      return false;
+    }
+    return true;
+  }
+
+  bool read_quoted(std::string &s, Error err) {
+    if (!read_quoted(s)) {
+      if (!has_error()) error(err);
       return false;
     }
     return true;
@@ -1136,6 +1143,73 @@ Stmt* ScriptParser::statement() {
       if (!read(Token::ID("}"))) return nullptr;
       return locate(s.release(), l);
     }
+    case Token::ID("import"): {
+      read();
+      std::string from;
+      std::list<std::pair<std::string, std::string>> list;
+      if (read_quoted(from)) return locate(module_import(std::move(list), from), l);
+      if (has_error()) return nullptr;
+      for (;;) {
+        switch (peek().id()) {
+          case Token::ID("{"): {
+            read();
+            for (;;) {
+              bool need_alias = false;
+              std::string name, alias;
+              if (peek().id() == Token::ID("default")) {
+                read();
+                name = "default";
+                need_alias = true;
+              } else if (read_quoted(name)) {
+                need_alias = true;
+              } else if (auto id = read_identifier()) {
+                name = id->name()->str();
+              } else {
+                error(MissingExportedName);
+                return nullptr;
+              }
+              if (need_alias) {
+                if (!read(Token::ID("as"), TokenExpected)) return nullptr;
+              } else if (read(Token::ID("as"))) {
+                need_alias = true;
+              }
+              if (need_alias) {
+                auto id = read_identifier(MissingIdentifier);
+                if (!id) return nullptr;
+                alias = id->name()->str();
+              }
+              list.push_back({ name, alias });
+              if (read(Token::ID(","))) continue;
+              if (read(Token::ID("}"))) break;
+              error(UnexpectedToken);
+              return nullptr;
+            }
+            break;
+          }
+          case Token::ID("*"): {
+            read();
+            if (!read(Token::ID("as"), TokenExpected)) return nullptr;
+            auto id = read_identifier(MissingIdentifier);
+            if (!id) return nullptr;
+            list.push_back({ std::string("*"), id->name()->str() });
+            break;
+          }
+          default: {
+            auto id = read_identifier(MissingIdentifier);
+            if (!id) return nullptr;
+            list.push_back({ std::string("default"), id->name()->str() });
+            break;
+          }
+        }
+        if (read(Token::ID(","))) continue;
+        if (read(Token::ID("from"))) break;
+        error(UnexpectedToken);
+        return nullptr;
+      }
+      if (!read_quoted(from, MissingModuleName)) return nullptr;
+      read_semicolons();
+      return locate(module_import(std::move(list), from), l);
+    }
     case Token::ID("export"): {
       read(l);
       switch (peek().id()) {
@@ -1157,6 +1231,7 @@ Stmt* ScriptParser::statement() {
             default: {
               auto e = expression();
               if (!e) return nullptr;
+              read_semicolons();
               return locate(module_export_default(evaluate(e)), l);
             }
           }
@@ -1170,6 +1245,7 @@ Stmt* ScriptParser::statement() {
           if (!read(from, MissingModuleName)) return nullptr;
           std::list<std::pair<std::string, std::string>> list;
           list.push_back({ std::string("*"), alias });
+          read_semicolons();
           return locate(module_export(std::move(list), from), l);
         }
         case Token::ID("{"): {
@@ -1196,8 +1272,10 @@ Stmt* ScriptParser::statement() {
           if (read(Token::ID("from"))) {
             std::string from;
             if (!read(from, MissingModuleName)) return nullptr;
+            read_semicolons();
             return locate(module_export(std::move(list), from), l);
           } else {
+            read_semicolons();
             return locate(module_export(std::move(list)), l);
           }
         }

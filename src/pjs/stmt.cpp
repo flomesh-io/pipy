@@ -499,6 +499,24 @@ void Try::dump(std::ostream &out, const std::string &indent) {
 }
 
 //
+// Import
+//
+
+bool Import::declare(Module *module, Tree::Scope &scope, Error &error) {
+  return true;
+}
+
+void Import::dump(std::ostream &out, const std::string &indent) {
+  auto indent_str = indent + "  ";
+  out << indent << "import from '" << m_from << "'" << std::endl;
+  for (const auto &p : m_list) {
+    out << indent_str << "'" << p.first << "'";
+    if (!p.second.empty()) out << " as " << p.second;
+    out << std::endl;
+  }
+}
+
+//
 // Export
 //
 
