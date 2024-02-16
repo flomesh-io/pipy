@@ -233,8 +233,8 @@ bool Worker::handling_signal(int signal) {
 }
 
 auto Worker::find_js_module(const std::string &path) -> JSModule* {
-  auto i = m_module_map.find(path);
-  if (i == m_module_map.end()) return nullptr;
+  auto i = m_js_module_map.find(path);
+  if (i == m_js_module_map.end()) return nullptr;
   return i->second;
 }
 
@@ -244,11 +244,11 @@ auto Worker::load_js_module(const std::string &path) -> JSModule* {
 }
 
 auto Worker::load_js_module(const std::string &path, pjs::Value &result) -> JSModule* {
-  auto i = m_module_map.find(path);
-  if (i != m_module_map.end()) return i->second;
+  auto i = m_js_module_map.find(path);
+  if (i != m_js_module_map.end()) return i->second;
   auto m = new JSModule(this, new_module_index());
   add_module(m);
-  m_module_map[path] = m;
+  m_js_module_map[path] = m;
   if (!m_root) m_root = m;
   if (!m->load(path, result)) return nullptr;
   return m;
@@ -366,9 +366,9 @@ auto Worker::new_loading_context() -> Context* {
 }
 
 auto Worker::new_runtime_context(Context *base) -> Context* {
-  auto data = ContextData::make(m_modules.size());
-  for (size_t i = 0; i < m_modules.size(); i++) {
-    if (auto mod = m_modules[i]) {
+  auto data = ContextData::make(m_legacy_modules.size());
+  for (size_t i = 0; i < m_legacy_modules.size(); i++) {
+    if (auto mod = m_legacy_modules[i]) {
       pjs::Object *proto = nullptr;
       if (base) proto = base->data(i);
       data->at(i) = mod->new_context_data(proto);
@@ -448,10 +448,10 @@ bool Worker::solve(pjs::Context &ctx, pjs::Str *filename, pjs::Value &result) {
 
 bool Worker::bind() {
   try {
-    for (auto i : m_modules) if (i) i->bind_exports(this);
-    for (auto i : m_modules) if (i) i->bind_imports(this);
-    for (auto i : m_modules) if (i) i->make_pipelines();
-    for (auto i : m_modules) if (i) i->bind_pipelines();
+    for (auto i : m_legacy_modules) if (i) i->bind_exports(this);
+    for (auto i : m_legacy_modules) if (i) i->bind_imports(this);
+    for (auto i : m_legacy_modules) if (i) i->make_pipelines();
+    for (auto i : m_legacy_modules) if (i) i->bind_pipelines();
   } catch (std::runtime_error &err) {
     Log::error("%s", err.what());
     return false;
@@ -463,7 +463,7 @@ bool Worker::start(bool force) {
   m_forced = force;
 
   // Register pipelines to the pipeline load balancer
-  for (const auto &p : m_module_map) {
+  for (const auto &p : m_js_module_map) {
     p.second->setup_pipeline_lb(m_pipeline_lb);
   }
 
@@ -511,22 +511,22 @@ bool Worker::admin(Message *request, const std::function<void(Message*)> &respon
 
 auto Worker::new_module_index() -> int {
   int index = 0;
-  while (index < m_modules.size() && m_modules[index]) index++;
+  while (index < m_legacy_modules.size() && m_legacy_modules[index]) index++;
   return index;
 }
 
 void Worker::add_module(Module *m) {
   auto i = m->index();
-  if (i >= m_modules.size()) {
-    m_modules.resize(i + 1);
+  if (i >= m_legacy_modules.size()) {
+    m_legacy_modules.resize(i + 1);
   }
-  m_modules[i] = m;
+  m_legacy_modules[i] = m;
 }
 
 void Worker::remove_module(int i) {
-  auto mod = m_modules[i];
-  m_modules[i] = nullptr;
-  m_module_map.erase(mod->filename()->str());
+  auto mod = m_legacy_modules[i];
+  m_legacy_modules[i] = nullptr;
+  m_js_module_map.erase(mod->filename()->str());
 }
 
 void Worker::on_exit(Exit *exit) {
@@ -548,7 +548,7 @@ void Worker::end_all() {
   for (auto *watch : m_watches) watch->end();
   for (auto *exit : m_exits) exit->end();
   for (auto *admin : m_admins) admin->end();
-  for (auto *mod : m_modules) if (mod) mod->unload();
+  for (auto *mod : m_legacy_modules) if (mod) mod->unload();
   if (s_current == this) s_current = nullptr;
 }
 

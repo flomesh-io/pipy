@@ -160,8 +160,8 @@ private:
   pjs::Ref<pjs::Fiber> m_root_fiber;
   pjs::Ref<PipelineLoadBalancer> m_pipeline_lb;
   pjs::Ref<Thread> m_thread;
-  std::vector<Module*> m_modules;
-  std::map<std::string, JSModule*> m_module_map;
+  std::vector<Module*> m_legacy_modules;
+  std::map<std::string, JSModule*> m_js_module_map;
   std::map<std::string, nmi::NativeModule*> m_native_module_map;
   std::map<Listener*, ListeningPipeline> m_listeners;
   std::set<Task*> m_tasks;
