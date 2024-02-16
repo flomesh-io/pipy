@@ -315,10 +315,11 @@ void Tokenizer::init_operator_map() {
     "do"    , "while" , "for"    , "continue"  ,
     "switch", "case"  , "break"  , "default"   ,
     "throw" , "try"   , "catch"  , "finally"   ,
-    "await" , "async" , "with"   , "package"   ,
+    "as"    , "from"  , "with"   , "package"   ,
     "import", "export", "class"  , "interface" ,
     "this"  , "super" , "extends", "implements",
     "static", "public", "private", "protected" ,
+    "await" , "async" ,
   };
 
   if (!s_builtin_token_map.empty()) return;
@@ -800,6 +801,8 @@ private:
     MissingIdentifier,
     MissingExpression,
     MissingCatchFinally,
+    MissingExportedName,
+    MissingModuleName,
     DuplicatedDefault,
   };
 
@@ -907,7 +910,46 @@ private:
     return false;
   }
 
-  auto read_identifier() -> expr::Identifier* {
+  bool read(std::string &s, Error err) {
+    auto t = peek();
+    if (!t.is_string()) {
+      error(err);
+      return false;
+    }
+    auto str = read().s();
+    if (str[0] == '"' || str[0] == '\'') {
+      StringDecoder decoder;
+      if (!decoder.decode(str, s)) {
+        error(InvalidString);
+        return false;
+      }
+    } else {
+      s = str;
+    }
+    return true;
+  }
+
+  bool read_quoted(std::string &s, Error err) {
+    auto t = peek();
+    if (!t.is_string()) {
+      error(err);
+      return false;
+    }
+    auto str = t.s();
+    if (str[0] != '"' && str[0] != '\'') {
+      error(err);
+      return false;
+    }
+    read();
+    StringDecoder decoder;
+    if (!decoder.decode(t.s(), s)) {
+      error(InvalidString);
+      return false;
+    }
+    return true;
+  }
+
+  auto read_identifier() -> std::unique_ptr<expr::Identifier> {
     auto t = peek();
     if (!t.is_string() || t.s()[0] == '"' || t.s()[0] == '\'') {
       return nullptr;
@@ -915,10 +957,10 @@ private:
     Location l; read(l);
     auto i = new expr::Identifier(t.s());
     locate(i, l);
-    return i;
+    return std::unique_ptr<expr::Identifier>(i);
   }
 
-  auto read_identifier(Error err) -> expr::Identifier* {
+  auto read_identifier(Error err) -> std::unique_ptr<expr::Identifier> {
     auto id = read_identifier();
     if (!id) error(err);
     return id;
@@ -952,6 +994,8 @@ private:
       case MissingIdentifier: m_error = "missing identifier"; break;
       case MissingExpression: m_error = "missing expression"; break;
       case MissingCatchFinally: m_error = "missing catch or finally"; break;
+      case MissingExportedName: m_error = "missing exported name"; break;
+      case MissingModuleName: m_error = "missing module name"; break;
       case DuplicatedDefault: m_error = "duplicated default clause"; break;
     }
     return nullptr;
@@ -1092,6 +1136,74 @@ Stmt* ScriptParser::statement() {
       if (!read(Token::ID("}"))) return nullptr;
       return locate(s.release(), l);
     }
+    case Token::ID("export"): {
+      read(l);
+      switch (peek().id()) {
+        case Token::ID("var"):
+        case Token::ID("function"): {
+          auto s = statement();
+          if (!s) return nullptr;
+          return locate(module_export(s), l);
+        }
+        case Token::ID("default"): {
+          read();
+          switch (peek().id()) {
+            case Token::ID("var"):
+            case Token::ID("function"): {
+              auto s = statement();
+              if (!s) return nullptr;
+              return locate(module_export_default(s), l);
+            }
+            default: {
+              auto e = expression();
+              if (!e) return nullptr;
+              return locate(module_export_default(evaluate(e)), l);
+            }
+          }
+        }
+        case Token::ID("*"): {
+          read();
+          std::string alias, from;
+          if (!read(Token::ID("as"))) return nullptr;
+          if (!read(alias, MissingExportedName)) return nullptr;
+          if (!read(Token::ID("from"), TokenExpected)) return nullptr;
+          if (!read(from, MissingModuleName)) return nullptr;
+          std::list<std::pair<std::string, std::string>> list;
+          list.push_back({ std::string("*"), alias });
+          return locate(module_export(std::move(list), from), l);
+        }
+        case Token::ID("{"): {
+          read();
+          std::list<std::pair<std::string, std::string>> list;
+          for (;;) {
+            auto id = read_identifier(MissingIdentifier);
+            if (!id) return nullptr;
+            if (read(Token::ID("as"))) {
+              std::string alias;
+              if (!read(alias, MissingExportedName)) return nullptr;
+              list.push_back({ id->name()->str(), alias });
+            } else {
+              list.push_back({ id->name()->str(), std::string() });
+            }
+            if (read(Token::ID("}"))) break;
+            if (read(Token::ID(","))) {
+              if (read(Token::ID("}"))) break;
+              continue;
+            }
+            error(UnexpectedToken);
+            return nullptr;
+          }
+          if (read(Token::ID("from"))) {
+            std::string from;
+            if (!read(from, MissingModuleName)) return nullptr;
+            return locate(module_export(std::move(list), from), l);
+          } else {
+            return locate(module_export(std::move(list)), l);
+          }
+        }
+        default: error(UnexpectedToken); return nullptr;
+      }
+    }
     case Token::ID("var"): {
       read(l);
       if (peek_eol(MissingIdentifier)) return nullptr;
@@ -1101,10 +1213,10 @@ Stmt* ScriptParser::statement() {
         auto e = expression();
         if (!e) return nullptr;
         read(Token::ID(";"));
-        return locate(var(name, e), l);
+        return locate(var(name.release(), e), l);
       }
       read_semicolons();
-      return locate(var(name), l);
+      return locate(var(name.release()), l);
     }
     case Token::ID("function"): {
       read(l);
@@ -1113,7 +1225,7 @@ Stmt* ScriptParser::statement() {
       auto f = block_function(l);
       if (!f) return nullptr;
       read_semicolons();
-      return locate(function(name, f), l);
+      return locate(function(name.release(), f), l);
     }
     case Token::ID("if"): {
       read(l);
@@ -1165,7 +1277,7 @@ Stmt* ScriptParser::statement() {
       read(l);
       if (auto name = read_identifier()) {
         read_semicolons();
-        return locate(flow_break(name), l);
+        return locate(flow_break(name.release()), l);
       } else {
         read_semicolons();
         return locate(flow_break(), l);
@@ -1640,7 +1752,7 @@ Expr* ScriptParser::operand() {
   if (t.id() == Token::ID("function")) {
     Location l;
     read(l);
-    delete read_identifier();
+    read_identifier();
     return block_function(l);
   }
 

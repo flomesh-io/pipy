@@ -287,6 +287,28 @@ private:
   std::unique_ptr<Stmt> m_finally;
 };
 
+//
+// Export
+//
+
+class Export : public Stmt {
+public:
+  Export(Stmt *stmt, bool is_default) : m_stmt(stmt), m_default(is_default) {}
+  Export(std::list<std::pair<std::string, std::string>> &&list, const std::string &from)
+    : m_list(std::move(list)), m_from(from), m_default(false) {}
+
+  virtual bool declare(Module *module, Tree::Scope &scope, Error &error) override;
+  virtual void resolve(Module *module, Context &ctx, int l, Tree::LegacyImports *imports) override;
+  virtual void execute(Context &ctx, Result &result) override;
+  virtual void dump(std::ostream &out, const std::string &indent) override;
+
+private:
+  std::list<std::pair<std::string, std::string>> m_list;
+  std::string m_from;
+  std::unique_ptr<Stmt> m_stmt;
+  bool m_default;
+};
+
 } // namespace stmt
 
 //
@@ -306,6 +328,9 @@ inline Stmt* flow_break() { return new stmt::Break(); }
 inline Stmt* flow_break(expr::Identifier *label) { return new stmt::Break(label); }
 inline Stmt* flow_return(Expr *expr = nullptr) { return new stmt::Return(expr); }
 inline Stmt* flow_throw(Expr *expr = nullptr) { return new stmt::Throw(expr); }
+inline Stmt* module_export(std::list<std::pair<std::string, std::string>> &&list, const std::string &from = std::string()) { return new stmt::Export(std::move(list), from); }
+inline Stmt* module_export(Stmt *stmt) { return new stmt::Export(stmt, false); }
+inline Stmt* module_export_default(Stmt *stmt) { return new stmt::Export(stmt, true); }
 
 } // namespace pjs
 

@@ -498,6 +498,37 @@ void Try::dump(std::ostream &out, const std::string &indent) {
   }
 }
 
+//
+// Export
+//
+
+bool Export::declare(Module *module, Tree::Scope &scope, Error &error) {
+  return true;
+}
+
+void Export::resolve(Module *module, Context &ctx, int l, Tree::LegacyImports *imports) {
+}
+
+void Export::execute(Context &ctx, Result &result) {
+}
+
+void Export::dump(std::ostream &out, const std::string &indent) {
+  auto indent_str = indent + "  ";
+  if (m_stmt) {
+    out << indent << (m_default ? "export default" : "export") << std::endl;
+    m_stmt->dump(out, indent_str);
+  } else {
+    out << indent << "export";
+    if (!m_from.empty()) out << " from '" << m_from << "'";
+    out << std::endl;
+    for (const auto &p : m_list) {
+      out << indent_str << p.first;
+      if (!p.second.empty()) out << " as '" << p.second << "'";
+      out << std::endl;
+    }
+  }
+}
+
 } // namespace stmt
 
 } // namespace pjs
