@@ -24,6 +24,7 @@
  */
 
 #include "stmt.hpp"
+#include "module.hpp"
 
 #include <algorithm>
 
@@ -49,6 +50,8 @@ bool Stmt::execute(Context &ctx, Value &result) {
 }
 
 namespace stmt {
+
+thread_local static ConstStr s_default("default");
 
 //
 // Block
@@ -128,6 +131,10 @@ void Evaluate::resolve(Module *module, Context &ctx, int l, Tree::LegacyImports 
 void Evaluate::execute(Context &ctx, Result &result) {
   if (m_expr->eval(ctx, result.value)) {
     result.set_done();
+    if (m_export) {
+      auto obj = m_module->exports_object();
+      obj->type()->set(obj, m_export->id, result.value);
+    }
   } else {
     result.value.set(pjs::Error::make(ctx.error()));
     result.set_throw();
@@ -137,6 +144,12 @@ void Evaluate::execute(Context &ctx, Result &result) {
 void Evaluate::dump(std::ostream &out, const std::string &indent) {
   out << indent << "eval" << std::endl;
   m_expr->dump(out, indent + "  ");
+}
+
+bool Evaluate::declare_export(Module *module, bool is_default, Error &error) {
+  m_module = module;
+  m_export = module->add_export(s_default, Str::empty);
+  return true;
 }
 
 //
@@ -183,6 +196,16 @@ void Var::execute(Context &ctx, Result &result) {
   }
 }
 
+bool Var::declare_export(Module *module, bool is_default, Error &error) {
+  auto name = m_identifier->name();
+  if (is_default) {
+    module->add_export(s_default, name);
+  } else {
+    module->add_export(name, name);
+  }
+  return true;
+}
+
 void Var::dump(std::ostream &out, const std::string &indent) {
   out << indent << "var " << m_identifier->name()->str() << std::endl;
   if (m_expr) m_expr->dump(out, indent + "  ");
@@ -222,6 +245,16 @@ void Function::execute(Context &ctx, Result &result) {
       result.set_throw();
     }
   }
+}
+
+bool Function::declare_export(Module *module, bool is_default, Error &error) {
+  auto name = m_identifier->name();
+  if (is_default) {
+    module->add_export(s_default, name);
+  } else {
+    module->add_export(name, name);
+  }
+  return true;
 }
 
 void Function::dump(std::ostream &out, const std::string &indent) {
@@ -503,7 +536,18 @@ void Try::dump(std::ostream &out, const std::string &indent) {
 //
 
 bool Import::declare(Module *module, Tree::Scope &scope, Error &error) {
-  return true;
+  if (m_list.empty()) {
+    module->add_import(nullptr, nullptr, Str::make(m_from));
+    return true;
+  } else {
+    Ref<Str> from(Str::make(m_from));
+    for (const auto &p : m_list) {
+      Ref<Str> id(Str::make(p.first));
+      Ref<Str> as(Str::make(p.second));
+      module->add_import(as == Str::empty ? id : as, id, from);
+    }
+    return true;
+  }
 }
 
 void Import::dump(std::ostream &out, const std::string &indent) {
@@ -521,13 +565,50 @@ void Import::dump(std::ostream &out, const std::string &indent) {
 //
 
 bool Export::declare(Module *module, Tree::Scope &scope, Error &error) {
-  return true;
+  if (scope.kind() != Tree::Scope::MODULE) {
+    error.tree = this;
+    error.message = "illegal export";
+    return false;
+  }
+  if (m_stmt) {
+    if (auto exportable = dynamic_cast<Exportable*>(m_stmt.get())) {
+      return exportable->declare_export(module, m_default, error);
+    } else {
+      error.tree = this;
+      error.message = "cannot export";
+      return false;
+    }
+  } else if (m_from.empty()) {
+    for (const auto &p : m_list) {
+      Ref<Str> id(Str::make(p.first));
+      Ref<Str> as(Str::make(p.second));
+      module->add_export(as == Str::empty ? id : as, id);
+    }
+    return true;
+  } else {
+    Ref<Str> from(Str::make(m_from));
+    for (const auto &p : m_list) {
+      Ref<Str> id(Str::make(p.first));
+      Ref<Str> as(Str::make(p.second));
+      module->add_export(
+        as == Str::empty ? id : as,
+        module->add_import(nullptr, id, from)
+      );
+    }
+    return true;
+  }
 }
 
 void Export::resolve(Module *module, Context &ctx, int l, Tree::LegacyImports *imports) {
+  if (m_stmt) {
+    m_stmt->resolve(module, ctx, l, imports);
+  }
 }
 
 void Export::execute(Context &ctx, Result &result) {
+  if (m_stmt) {
+    m_stmt->execute(ctx, result);
+  }
 }
 
 void Export::dump(std::ostream &out, const std::string &indent) {

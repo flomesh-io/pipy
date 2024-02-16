@@ -50,17 +50,18 @@ void Module::load(const std::string &name, const std::string &source) {
 auto Module::add_import(Str *name, Str *src_name, Str *path) -> Tree::Import* {
   m_imports.emplace_back();
   auto &i = m_imports.back();
-  i.alias = name ? name : src_name;
+  i.alias = name;
   i.name = src_name;
   i.path = path;
   return &i;
 }
 
-void Module::add_export(Str *name, Str *src_name) {
+auto Module::add_export(Str *name, Str *src_name) -> Tree::Export* {
   m_exports.emplace_back();
   auto &e = m_exports.back();
-  e.alias = name ? name : src_name;
+  e.alias = name;
   e.name = src_name;
+  return &e;
 }
 
 void Module::add_export(Str *name, Tree::Import *import) {

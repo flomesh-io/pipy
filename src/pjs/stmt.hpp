@@ -79,6 +79,15 @@ public:
   bool execute(Context &ctx, Value &result);
 };
 
+//
+// Exportable
+//
+
+class Exportable : public Stmt {
+public:
+  virtual bool declare_export(Module *module, bool is_default, Error &error) = 0;
+};
+
 namespace stmt {
 
 //
@@ -121,16 +130,19 @@ private:
 // Evaluate
 //
 
-class Evaluate : public Stmt {
+class Evaluate : public Exportable {
 public:
   Evaluate(Expr *expr) : m_expr(expr) {}
 
   virtual bool declare(Module *module, Tree::Scope &scope, Error &error) override;
   virtual void resolve(Module *module, Context &ctx, int l, Tree::LegacyImports *imports) override;
   virtual void execute(Context &ctx, Result &result) override;
+  virtual bool declare_export(Module *module, bool is_default, Error &error) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
+  Module* m_module = nullptr;
+  Export* m_export = nullptr;
   std::unique_ptr<Expr> m_expr;
 };
 
@@ -138,7 +150,7 @@ private:
 // Var
 //
 
-class Var : public Stmt {
+class Var : public Exportable {
 public:
   Var(expr::Identifier *name, Expr *expr)
     : m_identifier(name), m_expr(expr) {}
@@ -146,6 +158,7 @@ public:
   virtual bool declare(Module *module, Tree::Scope &scope, Error &error) override;
   virtual void resolve(Module *module, Context &ctx, int l, Tree::LegacyImports *imports) override;
   virtual void execute(Context &ctx, Result &result) override;
+  virtual bool declare_export(Module *module, bool is_default, Error &error) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
@@ -158,7 +171,7 @@ private:
 // Function
 //
 
-class Function : public Stmt {
+class Function : public Exportable {
 public:
   Function(expr::Identifier *name, Expr *expr)
     : m_identifier(name), m_expr(expr) {}
@@ -166,6 +179,7 @@ public:
   virtual bool declare(Module *module, Tree::Scope &scope, Error &error) override;
   virtual void resolve(Module *module, Context &ctx, int l, Tree::LegacyImports *imports) override;
   virtual void execute(Context &ctx, Result &result) override;
+  virtual bool declare_export(Module *module, bool is_default, Error &error) override;
   virtual void dump(std::ostream &out, const std::string &indent) override;
 
 private:
