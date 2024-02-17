@@ -1221,19 +1221,25 @@ Stmt* ScriptParser::statement() {
         }
         case Token::ID("default"): {
           read();
-          switch (peek().id()) {
-            case Token::ID("var"):
-            case Token::ID("function"): {
-              auto s = statement();
-              if (!s) return nullptr;
+          auto t = peek();
+          if (t.id() == Token::ID("function")) {
+            Location func_loc;
+            read(func_loc);
+            auto name = read_identifier();
+            auto f = block_function(func_loc);
+            if (!f) return nullptr;
+            read_semicolons();
+            if (name) {
+              auto s = locate(function(name.release(), f), func_loc);
               return locate(module_export_default(s), l);
+            } else {
+              return locate(module_export_default(evaluate(f)), l);
             }
-            default: {
-              auto e = expression();
-              if (!e) return nullptr;
-              read_semicolons();
-              return locate(module_export_default(evaluate(e)), l);
-            }
+          } else {
+            auto e = expression();
+            if (!e) return nullptr;
+            read_semicolons();
+            return locate(module_export_default(evaluate(e)), l);
           }
         }
         case Token::ID("*"): {
