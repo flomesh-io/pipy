@@ -2334,6 +2334,15 @@ public:
     return false;
   }
 
+  template<class T>
+  bool get(int i, T* &v, T *def) {
+    if (i >= argc()) { v = def; return true; }
+    auto &a = arg(i);
+    if (a.is_null()) { v = nullptr; return true; }
+    if (a.is_instance_of<T>()) { v = a.as<T>(); return true; }
+    return false;
+  }
+
   bool check(int i, bool &v) {
     auto &a = arg(i);
     if (!a.is_boolean()) {

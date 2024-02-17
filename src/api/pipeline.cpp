@@ -942,8 +942,8 @@ template<> void ClassDef<PipelineDesigner>::init() {
     Function *init_args_f = nullptr;
     if (!ctx.get(0, target)) return ctx.error_argument_count(1);
     if (!ctx.get(1, init_args) && !ctx.get(1, init_args_f)) {
-      if (!ctx.get(1, target_map)) return ctx.error_argument_type(1, "an object, an array or a function");
-      if (!ctx.get(2, init_args) && !ctx.get(2, init_args_f)) return ctx.error_argument_type(2, "an array or a function");
+      if (!ctx.get(1, target_map, (Object *)nullptr)) return ctx.error_argument_type(1, "an object, an array or a function");
+      if (!ctx.get(2, init_args, (Array *)nullptr) && !ctx.get(2, init_args_f, (Function *)nullptr)) return ctx.error_argument_type(2, "an array or a function");
     }
     if (target_map) {
       target_map->iterate_while(
