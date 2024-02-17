@@ -165,6 +165,11 @@ private:
   std::unique_ptr<expr::Identifier> m_identifier;
   std::unique_ptr<Expr> m_resolved;
   std::unique_ptr<Expr> m_expr;
+
+  bool check_reserved(const std::string &name, Error &error);
+
+  static bool is_fiber(const std::string &name);
+  static bool is_reserved(const std::string &name);
 };
 
 //

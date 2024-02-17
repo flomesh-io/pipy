@@ -149,7 +149,7 @@ void Evaluate::dump(std::ostream &out, const std::string &indent) {
 bool Evaluate::declare_export(Module *module, bool is_default, Error &error) {
   m_module = module;
   m_export = module->add_export(s_default, Str::empty);
-  return true;
+  return m_expr->declare(module, module->scope(), error);
 }
 
 //
@@ -160,15 +160,8 @@ bool Var::declare(Module *module, Tree::Scope &scope, Error &error) {
   auto name = m_identifier->name();
   auto s = scope.parent();
   while (!s->is_root()) s = s->parent();
-  const auto &str = name->str();
-  if (str[0] == '$') {
-    bool all_dollars = true;
-    for (auto c : str) if (c != '$') { all_dollars = false; break; }
-    if (all_dollars) {
-      error.tree = this;
-      error.message = "reserved variable name '" + str + "'";
-      return false;
-    }
+  if (is_fiber(name->str())) {
+    if (!check_reserved(name->str(), error)) return false;
     s->declare_fiber_var(name, module);
   } else {
     s->declare_var(name);
@@ -198,17 +191,42 @@ void Var::execute(Context &ctx, Result &result) {
 
 bool Var::declare_export(Module *module, bool is_default, Error &error) {
   auto name = m_identifier->name();
+  if (!check_reserved(name->str(), error)) return false;
+  if (is_fiber(name->str())) {
+    error.tree = this;
+    error.message = "cannot export a fiber variable";
+    return false;
+  }
   if (is_default) {
     module->add_export(s_default, name);
   } else {
     module->add_export(name, name);
   }
+  if (m_expr && !m_expr->declare(module, module->scope(), error)) return false;
   return true;
 }
 
 void Var::dump(std::ostream &out, const std::string &indent) {
   out << indent << "var " << m_identifier->name()->str() << std::endl;
   if (m_expr) m_expr->dump(out, indent + "  ");
+}
+
+bool Var::check_reserved(const std::string &name, Error &error) {
+  if (!is_reserved(name)) return true;
+  error.tree = this;
+  error.message = "reserved variable name '" + name + "'";
+  return false;
+}
+
+bool Var::is_reserved(const std::string &name) {
+  for (auto c : name) {
+    if (c != '$') return false;
+  }
+  return true;
+}
+
+bool Var::is_fiber(const std::string &name) {
+  return name[0] == '$';
 }
 
 //
@@ -249,13 +267,18 @@ void Function::execute(Context &ctx, Result &result) {
 
 bool Function::declare_export(Module *module, bool is_default, Error &error) {
   auto name = m_identifier->name();
+  if (name->str()[0] == '$') {
+    error.tree = this;
+    error.message = "reserved function name '" + name->str() + "'";
+    return false;
+  }
   if (is_default) {
     module->add_export(s_default, name, m_expr.get());
   } else {
     module->add_export(name, name, m_expr.get());
   }
   m_is_definition = true;
-  return true;
+  return m_expr->declare(module, module->scope(), error);
 }
 
 void Function::dump(std::ostream &out, const std::string &indent) {

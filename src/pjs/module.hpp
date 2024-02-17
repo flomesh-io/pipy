@@ -44,6 +44,7 @@ public:
   auto name() const -> const std::string& { return m_source.filename; }
   auto source() const -> const Source& { return m_source; }
   auto tree() const -> Stmt* { return m_tree.get(); }
+  auto scope() -> Tree::Scope& { return m_scope; }
   auto exports_object() const -> Object* { return m_exports_object; }
 
   void load(const std::string &name, const std::string &source);
