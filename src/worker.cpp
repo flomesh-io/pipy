@@ -264,6 +264,63 @@ auto Worker::load_native_module(const std::string &path) -> nmi::NativeModule* {
   return m;
 }
 
+auto Worker::load_module(pjs::Module *referer, const std::string &path) -> pjs::Module* {
+  std::string name;
+
+  if (path[0] == '/') {
+    name = utils::path_normalize(path);
+  } else if (path[0] == '.') {
+    auto base = utils::path_dirname(referer->name());
+    name = utils::path_normalize(utils::path_join(base, path));
+  } else {
+    return nullptr;
+  }
+
+  auto i = m_module_map.find(name);
+  if (i != m_module_map.end()) return i->second.get();
+
+  auto sd = Codebase::current()->get(name);
+  if (!sd) {
+    Log::error("[pjs] Cannot open script %s", name.c_str());
+    return nullptr;
+  }
+
+  Data data(*sd);
+  auto source = data.to_string();
+  sd->release();
+
+  auto mod = new pjs::Module(this);
+  m_module_map[name] = std::unique_ptr<pjs::Module>(mod);
+  mod->load(name, source);
+
+  std::string error;
+  int error_line, error_column;
+  if (!mod->compile(error, error_line, error_column)) {
+    Log::pjs_location(source, name, error_line, error_column);
+    Log::error(
+      "[pjs] Syntax error: %s at line %d column %d in %s",
+      error.c_str(), error_line, error_column, path.c_str()
+    );
+    return nullptr;
+  }
+
+  mod->resolve(
+    [this](pjs::Module *referer, pjs::Str *path) {
+      return load_module(referer, path->str());
+    }
+  );
+
+  pjs::Ref<Context> ctx = new_loading_context();
+  pjs::Value result;
+  mod->execute(*ctx, -1, nullptr, result);
+  if (!ctx->ok()) {
+    Log::pjs_error(ctx->error());
+    return nullptr;
+  }
+
+  return mod;
+}
+
 void Worker::add_listener(Listener *listener, PipelineLayout *layout, const Listener::Options &options) {
   auto &p = m_listeners[listener];
   p.pipeline_layout = layout;

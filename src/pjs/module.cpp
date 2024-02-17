@@ -28,6 +28,18 @@
 
 namespace pjs {
 
+class ExportsObjectBase : public ObjectTemplate<ExportsObjectBase> {
+public:
+  static auto make(Class *type) -> ExportsObjectBase* {
+    auto obj = new ExportsObjectBase();
+    type->init(obj);
+    return obj;
+  }
+
+private:
+  ExportsObjectBase() {}
+};
+
 Module::Module(Instance *instance)
   : m_instance(instance)
   , m_id(instance->m_modules.size())
@@ -118,9 +130,34 @@ bool Module::compile(std::string &error, int &error_line, int &error_column) {
   return true;
 }
 
-void Module::resolve(const std::function<Module*(Str *path)> &resolver) {
+void Module::resolve(const std::function<Module*(Module*, Str*)> &resolver) {
+  int field_id = 0;
+  std::list<Field*> fields;
+
+  for (auto &exp : m_exports) {
+    if (auto imp = exp.import) {
+      fields.push_back(
+        Accessor::make(
+          exp.alias->str(),
+          [=](Object *, Value &ret) { imp->get(ret); }
+        )
+      );
+    } else {
+      fields.push_back(Variable::make(exp.alias->str(), 0, field_id));
+      exp.id = field_id++;
+    }
+  }
+
+  m_exports_class = Class::make("", nullptr, fields);
+  m_exports_object = ExportsObjectBase::make(m_exports_class);
+
   for (auto &imp : m_imports) {
-    auto mod = resolver(imp.path);
+    auto mod = resolver(this, imp.path);
+    if (!mod) {
+      throw std::runtime_error(
+        "cannot load module: " + imp.path->str()
+      );
+    }
     imp.module = mod;
     imp.exports = mod->exports_object();
     check_cyclic_import(&imp, &imp);
@@ -139,26 +176,6 @@ void Module::execute(Context &ctx, int l, Tree::LegacyImports *imports, Value &r
   }
 
   result = res.value;
-}
-
-void Module::init_exports() {
-  if (m_exports_object) return;
-  std::list<Field*> fields;
-  int id = 0;
-  for (auto &e : m_exports) {
-    if (auto imp = e.import) {
-      fields.push_back(
-        Accessor::make(
-          e.alias->str(),
-          [=](Object *, Value &ret) { imp->get(ret); }
-        )
-      );
-    } else {
-      fields.push_back(Variable::make(e.alias->str(), 0, id));
-      e.id = id++;
-    }
-  }
-  m_exports_class = Class::make("", nullptr, fields);
 }
 
 void Module::check_cyclic_import(Tree::Import *root, Tree::Import *current) {

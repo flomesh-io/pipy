@@ -67,6 +67,7 @@ public:
   auto load_js_module(const std::string &path) -> JSModule*;
   auto load_js_module(const std::string &path, pjs::Value &result) -> JSModule*;
   auto load_native_module(const std::string &path) -> nmi::NativeModule*;
+  auto load_module(pjs::Module *referer, const std::string &path) -> pjs::Module*;
   void add_listener(Listener *listener, PipelineLayout *layout, const Listener::Options &options);
   void remove_listener(Listener *listener);
   bool update_listeners(bool force);
@@ -163,6 +164,7 @@ private:
   std::vector<Module*> m_legacy_modules;
   std::map<std::string, JSModule*> m_js_module_map;
   std::map<std::string, nmi::NativeModule*> m_native_module_map;
+  std::map<std::string, std::unique_ptr<pjs::Module>> m_module_map;
   std::map<Listener*, ListeningPipeline> m_listeners;
   std::set<Task*> m_tasks;
   std::set<Watch*> m_watches;

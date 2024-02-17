@@ -536,6 +536,11 @@ void Try::dump(std::ostream &out, const std::string &indent) {
 //
 
 bool Import::declare(Module *module, Tree::Scope &scope, Error &error) {
+  if (scope.parent()->kind() != Tree::Scope::MODULE) {
+    error.tree = this;
+    error.message = "illegal import";
+    return false;
+  }
   if (m_list.empty()) {
     module->add_import(nullptr, nullptr, Str::make(m_from));
     return true;
@@ -565,7 +570,7 @@ void Import::dump(std::ostream &out, const std::string &indent) {
 //
 
 bool Export::declare(Module *module, Tree::Scope &scope, Error &error) {
-  if (scope.kind() != Tree::Scope::MODULE) {
+  if (scope.parent()->kind() != Tree::Scope::MODULE) {
     error.tree = this;
     error.message = "illegal export";
     return false;

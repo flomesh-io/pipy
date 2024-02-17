@@ -132,6 +132,21 @@ bool JSModule::load(const std::string &path, pjs::Value &result) {
     return false;
   }
 
+  try {
+    auto worker = m_worker.get();
+    pjs::Module::resolve(
+      [=](pjs::Module *referer, pjs::Str *path) {
+        return worker->load_module(referer, path->str());
+      }
+    );
+  } catch (std::runtime_error &err) {
+    Log::error(
+      "[pjs] Unable to load module '%s': %s",
+      path.c_str(), err.what()
+    );
+    return false;
+  }
+
   pjs::Ref<Context> ctx = m_worker->new_loading_context();
   pjs::Module::execute(*ctx, index(), m_imports.get(), result);
   if (!ctx->ok()) {
