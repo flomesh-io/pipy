@@ -517,12 +517,15 @@ template<> void ClassDef<PipelineDesigner>::init() {
   method("to", [](Context &ctx, Object *thiz, Value &result) {
     try {
       Function *builder;
+      PipelineLayoutWrapper *wrapper;
       if (ctx.get(0, builder) && builder) {
         if (auto pl = PipelineDesigner::make_pipeline_layout(ctx, builder)) {
           thiz->as<PipelineDesigner>()->to(pl);
         }
+      } else if (ctx.get(0, wrapper) && wrapper) {
+        thiz->as<PipelineDesigner>()->to(wrapper->get());
       } else {
-        ctx.error_argument_type(0, "a function");
+        ctx.error_argument_type(0, "a function or a pipeline");
         return;
       }
       result.set(thiz);
