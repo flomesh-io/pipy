@@ -28,6 +28,7 @@
 #include "worker.hpp"
 #include "pipeline.hpp"
 #include "pipeline-lb.hpp"
+#include "input.hpp"
 #include "api/configuration.hpp"
 #include "api/json.hpp"
 #include "graph.hpp"
@@ -147,11 +148,14 @@ bool JSModule::load(const std::string &path, pjs::Value &result) {
     return false;
   }
 
-  pjs::Ref<Context> ctx = m_worker->new_loading_context();
-  pjs::Module::execute(*ctx, index(), m_imports.get(), result);
-  if (!ctx->ok()) {
-    Log::pjs_error(ctx->error());
-    return false;
+  {
+    InputContext ic;
+    pjs::Ref<Context> ctx = m_worker->new_loading_context();
+    pjs::Module::execute(*ctx, index(), m_imports.get(), result);
+    if (!ctx->ok()) {
+      Log::pjs_error(ctx->error());
+      return false;
+    }
   }
 
   if (!result.is_class(pjs::class_of<Configuration>())) {
