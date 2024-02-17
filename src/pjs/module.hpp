@@ -48,7 +48,7 @@ public:
 
   void load(const std::string &name, const std::string &source);
   auto add_import(Str *name, Str *src_name, Str *path) -> Tree::Import*;
-  auto add_export(Str *name, Str *src_name) -> Tree::Export*;
+  auto add_export(Str *name, Str *src_name, Expr *value = nullptr) -> Tree::Export*;
   void add_export(Str *name, Tree::Import *import);
   auto add_fiber_variable() -> int;
   auto new_fiber_data() -> Data*;

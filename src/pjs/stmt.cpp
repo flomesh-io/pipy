@@ -250,10 +250,11 @@ void Function::execute(Context &ctx, Result &result) {
 bool Function::declare_export(Module *module, bool is_default, Error &error) {
   auto name = m_identifier->name();
   if (is_default) {
-    module->add_export(s_default, name);
+    module->add_export(s_default, name, m_expr.get());
   } else {
-    module->add_export(name, name);
+    module->add_export(name, name, m_expr.get());
   }
+  m_is_definition = true;
   return true;
 }
 

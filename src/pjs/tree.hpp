@@ -72,6 +72,7 @@ public:
     int id = -1;
     Ref<Str> alias;
     Ref<Str> name;
+    Expr* value = nullptr;
     Import* import = nullptr;
   };
 

@@ -68,11 +68,12 @@ auto Module::add_import(Str *name, Str *src_name, Str *path) -> Tree::Import* {
   return &i;
 }
 
-auto Module::add_export(Str *name, Str *src_name) -> Tree::Export* {
+auto Module::add_export(Str *name, Str *src_name, Expr *value) -> Tree::Export* {
   m_exports.emplace_back();
   auto &e = m_exports.back();
   e.alias = name;
   e.name = src_name;
+  e.value = value;
   return &e;
 }
 
@@ -167,6 +168,14 @@ void Module::resolve(const std::function<Module*(Module*, Str*)> &resolver) {
 void Module::execute(Context &ctx, int l, Tree::LegacyImports *imports, Value &result) {
   m_tree->resolve(this, ctx, l, imports);
   m_scope.instantiate(ctx);
+
+  for (auto &exp : m_exports) {
+    if (auto v = exp.value) {
+      Value val;
+      if (!v->eval(ctx, val)) return;
+      m_exports_class->set(m_exports_object, exp.id, val);
+    }
+  }
 
   Stmt::Result res;
   m_tree->execute(ctx, res);
