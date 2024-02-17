@@ -458,12 +458,14 @@ PipelineWrapper::PipelineWrapper(Pipeline *pipeline)
   : m_pipeline(pipeline)
 {
   pipeline->chain(EventTarget::input());
+  retain();
 }
 
 void PipelineWrapper::on_event(Event *evt) {
   if (auto eos = evt->as<StreamEnd>()) {
     m_eos = eos;
     m_pipeline = nullptr;
+    release();
   }
 }
 
