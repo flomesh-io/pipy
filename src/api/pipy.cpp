@@ -442,6 +442,18 @@ template<> void ClassDef<Pipy>::init() {
     ret.set(a);
   });
 
+  method("import", [](Context &ctx, Object*, Value &ret) {
+    Str *path;
+    if (!ctx.arguments(1, &path)) return;
+    auto worker = static_cast<pipy::Context*>(ctx.root())->worker();
+    auto referer = ctx.caller()->call_site().module;
+    if (auto mod = worker->load_module(referer, path->str())) {
+      ret.set(mod->exports_object());
+    } else {
+      ctx.error("cannot import module: " + path->str());
+    }
+  });
+
   method("solve", [](Context &ctx, Object*, Value &ret) {
     Str *filename;
     if (!ctx.arguments(1, &filename)) return;
