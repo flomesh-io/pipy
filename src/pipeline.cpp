@@ -190,6 +190,20 @@ Pipeline::~Pipeline() {
   }
 }
 
+void Pipeline::start(const pjs::Value &args) {
+  m_args = args;
+  if (args.is_empty()) {
+    start();
+  } else if (args.is<pjs::Array>()) {
+    auto a = args.as<pjs::Array>();
+    auto d = a->elements();
+    auto n = std::min((int)d->size(), a->length());
+    start(n, d->elements());
+  } else {
+    start(1, &m_args);
+  }
+}
+
 auto Pipeline::start(int argc, pjs::Value *argv) -> Pipeline* {
   if (auto *o = m_layout->m_on_start.get()) {
     pjs::Value starting_events;
@@ -208,7 +222,7 @@ auto Pipeline::start(int argc, pjs::Value *argv) -> Pipeline* {
     if (starting_events.is_promise()) {
       wait(starting_events.as<pjs::Promise>());
     } else {
-      start(starting_events);
+      start_with(starting_events);
     }
   }
   return this;
@@ -245,7 +259,7 @@ void Pipeline::resolve(const pjs::Value &value) {
     m_starting_promise_callback = nullptr;
     wait(value.as<pjs::Promise>());
   } else {
-    start(value);
+    start_with(value);
   }
 }
 
@@ -253,7 +267,7 @@ void Pipeline::reject(const pjs::Value &value) {
   EventProxy::forward(StreamEnd::make(value));
 }
 
-void Pipeline::start(const pjs::Value &starting_events) {
+void Pipeline::start_with(const pjs::Value &starting_events) {
   m_started = true;
   if (!starting_events.is_nullish()) {
     if (!Message::output(starting_events, EventProxy::input())) {

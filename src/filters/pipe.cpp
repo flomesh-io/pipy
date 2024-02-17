@@ -124,16 +124,7 @@ void Pipe::process(Event *evt) {
         }
       }
 
-      if (args.is_empty()) {
-        p->start();
-      } else if (args.is<pjs::Array>()) {
-        auto a = args.as<pjs::Array>();
-        auto d = a->elements();
-        auto n = std::min((int)d->size(), a->length());
-        p->start(n, d->elements());
-      } else {
-        p->start(1, &args);
-      }
+      p->start(args);
     }
 
     m_is_started = true;
@@ -232,12 +223,12 @@ void PipeNext::reset() {
 }
 
 void PipeNext::process(Event *evt) {
-  if (auto *chain = pipeline()->chain()) {
+  if (auto *chain = Filter::pipeline()->chain()) {
     if (!m_next) {
       auto *p = Pipeline::make(chain->layout, context());
       p->chain(Filter::output());
       p->chain(chain->next);
-      p->start();
+      p->start(Filter::pipeline()->args());
       m_next = p;
     }
   }

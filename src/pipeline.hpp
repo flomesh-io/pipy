@@ -160,10 +160,12 @@ public:
   }
 
   auto layout() const -> PipelineLayout* { return m_layout; }
+  auto args() const -> const pjs::Value& { return m_args; }
   auto context() const -> Context* { return m_context; }
   auto chain() const -> PipelineLayout::Chain* { return m_chain; }
   void chain(PipelineLayout::Chain *chain) { m_chain = chain; }
   void chain(Input *input) { EventProxy::chain(input); }
+  void start(const pjs::Value &args);
   auto start(int argc = 0, pjs::Value *argv = nullptr) -> Pipeline*;
 
   //
@@ -191,6 +193,7 @@ private:
   PipelineLayout* m_layout;
   Pipeline* m_next_free = nullptr;
   List<Filter> m_filters;
+  pjs::Value m_args;
   pjs::Ref<Context> m_context;
   pjs::Ref<PipelineLayout::Chain> m_chain;
   pjs::Ref<StartingPromiseCallback> m_starting_promise_callback;
@@ -200,7 +203,7 @@ private:
   void wait(pjs::Promise *promise);
   void resolve(const pjs::Value &value);
   void reject(const pjs::Value &value);
-  void start(const pjs::Value &starting_events);
+  void start_with(const pjs::Value &starting_events);
   void shutdown();
   void reset();
 
