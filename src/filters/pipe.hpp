@@ -55,8 +55,32 @@ private:
   pjs::Ref<pjs::Object> m_target_map;
   pjs::Ref<pjs::Object> m_init_args;
   pjs::Ref<Pipeline> m_pipeline;
+  pjs::Ref<PipelineLayout::Chain> m_chain;
   EventBuffer m_buffer;
   bool m_is_started = false;
+
+  auto pipeline_layout(const pjs::Value &val) -> PipelineLayout*;
+  void create_chain(pjs::Array *array);
+};
+
+//
+// PipeNext
+//
+
+class PipeNext : public Filter {
+public:
+  PipeNext();
+
+private:
+  PipeNext(const PipeNext &r);
+  ~PipeNext();
+
+  virtual auto clone() -> Filter* override;
+  virtual void reset() override;
+  virtual void process(Event *evt) override;
+  virtual void dump(Dump &d) override;
+
+  pjs::Ref<Pipeline> m_next;
 };
 
 } // namespace pipy

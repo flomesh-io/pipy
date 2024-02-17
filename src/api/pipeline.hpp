@@ -102,6 +102,7 @@ public:
   void mux_fcgi(pjs::Function *session_selector, pjs::Object *options);
   void mux_http(pjs::Function *session_selector, pjs::Object *options);
   void pipe(const pjs::Value &target, pjs::Object *target_map, pjs::Object *init_args);
+  void pipe_next();
   void print();
   void replace(Event::Type type, pjs::Object *replacement);
   void replace_body(pjs::Object *replacement, pjs::Object *options);
@@ -152,6 +153,7 @@ public:
     void operator()(pjs::Context &ctx, pjs::Object *obj, pjs::Value &ret);
   };
 
+  auto get() const -> PipelineLayout* { return m_layout; }
   auto spawn(Context *ctx) -> Pipeline*;
 
 private:

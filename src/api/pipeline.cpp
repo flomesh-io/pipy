@@ -369,6 +369,10 @@ void PipelineDesigner::pipe(const pjs::Value &target, pjs::Object *target_map, p
   append_filter(new Pipe(target, target_map, init_args));
 }
 
+void PipelineDesigner::pipe_next() {
+  append_filter(new PipeNext());
+}
+
 void PipelineDesigner::print() {
   append_filter(new Print());
 }
@@ -434,7 +438,6 @@ void PipelineDesigner::require_sub_pipeline(Filter *filter) {
 //
 
 auto PipelineLayoutWrapper::spawn(Context *ctx) -> Pipeline* {
-  InputContext ic;
   return Pipeline::make(m_layout, ctx);
 }
 
@@ -963,6 +966,11 @@ template<> void ClassDef<PipelineDesigner>::init() {
     } else {
       obj->pipe(target, target_map, init_args);
     }
+  });
+
+  // PipelineDesigner.pipeNext
+  filter("pipeNext", [](Context &ctx, PipelineDesigner *obj) {
+    obj->pipe_next();
   });
 
   // PipelineDesigner.print

@@ -40,6 +40,9 @@ Pipe::Pipe(
   , m_target_map(target_map)
   , m_init_args(init_args)
 {
+  if (target.is_array()) {
+    create_chain(target.as<pjs::Array>());
+  }
 }
 
 Pipe::Pipe(const Pipe &r)
@@ -47,6 +50,7 @@ Pipe::Pipe(const Pipe &r)
   , m_target(r.m_target)
   , m_target_map(r.m_target_map)
   , m_init_args(r.m_init_args)
+  , m_chain(r.m_chain)
   , m_buffer(r.m_buffer)
 {
 }
@@ -69,41 +73,47 @@ void Pipe::reset() {
   m_buffer.clear();
   m_pipeline = nullptr;
   m_is_started = false;
+  if (!m_target.is_array()) {
+    m_chain = nullptr;
+  }
 }
 
 void Pipe::process(Event *evt) {
   if (!m_is_started) {
-    pjs::Value val;
-    if (m_target.is_function()) {
-      pjs::Value arg(evt);
-      if (!Filter::callback(m_target.f(), 1, &arg, val)) return;
-    } else {
-      val = m_target;
-    }
-
-    if (!val.is_nullish()) {
-      PipelineLayoutWrapper *pl = nullptr;
-      if (val.is<PipelineLayoutWrapper>()) {
-        pl = val.as<PipelineLayoutWrapper>();
+    if (!m_chain) {
+      pjs::Value val;
+      if (m_target.is_function()) {
+        pjs::Value arg(evt);
+        if (!Filter::callback(m_target.f(), 1, &arg, val)) return;
       } else {
-        auto s = val.to_string();
-        if (m_target_map && m_target_map->get(s, val)) {
-          if (val.is<PipelineLayoutWrapper>()) {
-            pl = val.as<PipelineLayoutWrapper>();
-          }
-        }
-        if (!pl) {
-          Filter::error("pipeline '%s' not found", s->c_str());
-          s->release();
-          return;
-        }
-        s->release();
+        val = m_target;
       }
 
-      auto p = pl->spawn(Filter::context());
-      p->chain(Filter::output());
-      m_pipeline = p;
+      if (!val.is_nullish()) {
+        if (val.is_array()) {
+          try {
+            create_chain(val.as<pjs::Array>());
+          } catch (std::runtime_error &err) {
+            Filter::error("%s", err.what());
+          }
+        } else {
+          auto pl = pipeline_layout(val);
+          if (!pl) return;
+          auto p = Pipeline::make(pl, Filter::context());
+          p->chain(Filter::output());
+          m_pipeline = p;
+        }
+      }
+    }
 
+    if (m_chain) {
+      auto p = Pipeline::make(m_chain->layout, context());
+      p->chain(Filter::output());
+      p->chain(m_chain->next);
+      m_pipeline = p;
+    }
+
+    if (auto *p = m_pipeline.get()) {
       auto args = pjs::Value::empty;
       if (m_init_args) {
         if (m_init_args->is<pjs::Array>()) {
@@ -124,9 +134,9 @@ void Pipe::process(Event *evt) {
       } else {
         p->start(1, &args);
       }
-
-      m_is_started = true;
     }
+
+    m_is_started = true;
   }
 
   if (!m_is_started) {
@@ -142,6 +152,100 @@ void Pipe::process(Event *evt) {
       );
     }
     i->input(evt);
+
+  } else {
+    Filter::output(evt);
+  }
+}
+
+auto Pipe::pipeline_layout(const pjs::Value &val) -> PipelineLayout* {
+  if (val.is<PipelineLayoutWrapper>()) {
+    return val.as<PipelineLayoutWrapper>()->get();
+  } else {
+    pjs::Value v;
+    auto s = val.to_string();
+    if (m_target_map && m_target_map->get(s, v)) {
+      if (v.is<PipelineLayoutWrapper>()) {
+        s->release();
+        return v.as<PipelineLayoutWrapper>()->get();
+      } else {
+        Filter::error("map entry '%s' is not a pipeline", s->c_str());
+        s->release();
+        return nullptr;
+      }
+    } else {
+      Filter::error("pipeline '%s' not found", s->c_str());
+      s->release();
+      return nullptr;
+    }
+  }
+}
+
+void Pipe::create_chain(pjs::Array *array) {
+  PipelineLayout::Chain *chain = nullptr;
+  for (int i = 0; i < array->length(); i++) {
+    pjs::Value v; array->get(i, v);
+    auto p = pipeline_layout(v);
+    if (!p) {
+      delete chain;
+      throw std::runtime_error(
+        "cannot create pipeline array at index " + std::to_string(i)
+      );
+    }
+    if (chain) {
+      chain = chain->next = new PipelineLayout::Chain;
+    } else {
+      m_chain = chain = new PipelineLayout::Chain;
+    }
+    chain->layout = p;
+  }
+}
+
+//
+// PipeNext
+//
+
+PipeNext::PipeNext()
+{
+}
+
+PipeNext::PipeNext(const PipeNext &r)
+{
+}
+
+PipeNext::~PipeNext()
+{
+}
+
+void PipeNext::dump(Dump &d) {
+  Filter::dump(d);
+  d.name = "pipeNext";
+}
+
+auto PipeNext::clone() -> Filter* {
+  return new PipeNext(*this);
+}
+
+void PipeNext::reset() {
+  Filter::reset();
+  m_next = nullptr;
+}
+
+void PipeNext::process(Event *evt) {
+  if (auto *chain = pipeline()->chain()) {
+    if (!m_next) {
+      auto *p = Pipeline::make(chain->layout, context());
+      p->chain(Filter::output());
+      p->chain(chain->next);
+      p->start();
+      m_next = p;
+    }
+  }
+
+  if (m_next) {
+    Filter::output(evt, m_next->input());
+  } else {
+    Filter::output(evt);
   }
 }
 
