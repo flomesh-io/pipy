@@ -59,7 +59,7 @@ public:
   // PipelineLayout::Chain
   //
 
-  struct Chain : public pjs::RefCount<Chain> {
+  struct Chain : public pjs::RefCount<Chain>, public pjs::Pooled<Chain> {
     pjs::Ref<Chain> next;
     pjs::Ref<PipelineLayout> layout;
   };
@@ -160,11 +160,11 @@ public:
   }
 
   auto layout() const -> PipelineLayout* { return m_layout; }
-  auto args() const -> const pjs::Value& { return m_args; }
   auto context() const -> Context* { return m_context; }
   auto chain() const -> PipelineLayout::Chain* { return m_chain; }
-  void chain(PipelineLayout::Chain *chain) { m_chain = chain; }
   void chain(Input *input) { EventProxy::chain(input); }
+  void chain(PipelineLayout::Chain *chain, const pjs::Value &args = pjs::Value::undefined) { m_chain = chain; m_chain_args = args; }
+  auto chain_args() const -> const pjs::Value& { return m_chain_args; }
   void start(const pjs::Value &args);
   auto start(int argc = 0, pjs::Value *argv = nullptr) -> Pipeline*;
 
@@ -193,10 +193,10 @@ private:
   PipelineLayout* m_layout;
   Pipeline* m_next_free = nullptr;
   List<Filter> m_filters;
-  pjs::Value m_args;
   pjs::Ref<Context> m_context;
-  pjs::Ref<PipelineLayout::Chain> m_chain;
   pjs::Ref<StartingPromiseCallback> m_starting_promise_callback;
+  pjs::Ref<PipelineLayout::Chain> m_chain;
+  pjs::Value m_chain_args;
   EventBuffer m_pending_events;
   bool m_started = false;
 

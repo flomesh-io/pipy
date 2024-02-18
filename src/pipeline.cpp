@@ -191,7 +191,6 @@ Pipeline::~Pipeline() {
 }
 
 void Pipeline::start(const pjs::Value &args) {
-  m_args = args;
   if (args.is_empty()) {
     start();
   } else if (args.is<pjs::Array>()) {
@@ -200,7 +199,8 @@ void Pipeline::start(const pjs::Value &args) {
     auto n = std::min((int)d->size(), a->length());
     start(n, d->elements());
   } else {
-    start(1, &m_args);
+    pjs::Value arg(args);
+    start(1, &arg);
   }
 }
 

@@ -100,6 +100,8 @@ void Pipe::process(Event *evt) {
           auto pl = pipeline_layout(val);
           if (!pl) return;
           auto p = Pipeline::make(pl, Filter::context());
+          auto q = Filter::pipeline();
+          p->chain(q->chain(), q->chain_args());
           p->chain(Filter::output());
           m_pipeline = p;
         }
@@ -109,7 +111,6 @@ void Pipe::process(Event *evt) {
     if (m_chain) {
       auto p = Pipeline::make(m_chain->layout, context());
       p->chain(Filter::output());
-      p->chain(m_chain->next);
       m_pipeline = p;
     }
 
@@ -122,6 +123,10 @@ void Pipe::process(Event *evt) {
           pjs::Value arg(evt);
           if (!Filter::callback(m_init_args->as<pjs::Function>(), 1, &arg, args)) return;
         }
+      }
+
+      if (m_chain) {
+        p->chain(m_chain->next, args);
       }
 
       p->start(args);
@@ -201,6 +206,7 @@ PipeNext::PipeNext()
 }
 
 PipeNext::PipeNext(const PipeNext &r)
+  : Filter(r)
 {
 }
 
@@ -225,10 +231,11 @@ void PipeNext::reset() {
 void PipeNext::process(Event *evt) {
   if (auto *chain = Filter::pipeline()->chain()) {
     if (!m_next) {
+      auto &a = Filter::pipeline()->chain_args();
       auto *p = Pipeline::make(chain->layout, context());
+      p->chain(chain->next, a);
       p->chain(Filter::output());
-      p->chain(chain->next);
-      p->start(Filter::pipeline()->args());
+      p->start(a);
       m_next = p;
     }
   }
