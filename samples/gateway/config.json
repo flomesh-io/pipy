@@ -1,0 +1,71 @@
+{
+  "listen": 8000,
+  "listenTLS": 8443,
+  "plugins": [
+    "router",
+    "jwt",
+    "hello",
+    "balancer",
+    "serve-files",
+    "default"
+  ],
+  "endpoints": {
+    "/hi": {
+      "route": "hi"
+    },
+    "/api": {
+      "route": "api",
+      "rewrite": ["^/api/?", "/"]
+    },
+    "/api/private": {
+      "route": "private"
+    },
+    "/*": {
+      "route": "home"
+    }
+  },
+  "hello": {
+    "hi": {
+      "head": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/plain"
+        }
+      },
+      "body": "Hi, there!\n"
+    },
+    "private": {
+      "body": "Staff only\n"
+    }
+  },
+  "upstreams": {
+    "api": {
+      "policy": "round-robin",
+      "targets": ["localhost:80"]
+    }
+  },
+  "serve-files": {
+    "home": {
+      "root": "home",
+      "fs": false
+    }
+  },
+  "jwt": {
+    "private": {
+      "keys": [
+        "sample-key-rsa",
+        "sample-key-ecdsa"
+      ]
+    }
+  },
+  "log": [
+    {
+      "url": "http://localhost:8123",
+      "headers": {},
+      "batch": {
+        "size": 1000,
+        "separator": "\n"
+      }
+    }
+  ]
+}
