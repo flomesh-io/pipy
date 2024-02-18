@@ -205,6 +205,23 @@ class InboundUDP :
   friend class pjs::ObjectTemplate<InboundUDP, Inbound>;
 };
 
+//
+// InboundWrapper
+//
+
+class InboundWrapper : public pjs::ObjectTemplate<InboundWrapper> {
+public:
+  auto get() const -> Inbound* { return m_weak_ref; }
+
+private:
+  InboundWrapper(Inbound *inbound)
+    : m_weak_ref(inbound) {}
+
+  pjs::WeakRef<Inbound> m_weak_ref;
+
+  friend class pjs::ObjectTemplate<InboundWrapper>;
+};
+
 } // namespace pipy
 
 #endif // INBOUND_HPP

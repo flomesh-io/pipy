@@ -137,7 +137,8 @@ void Inbound::start() {
     m_metric_traffic_in = Inbound::s_metric_traffic_in->with_labels(labels, n);
     m_metric_traffic_out = Inbound::s_metric_traffic_out->with_labels(labels, n);
 
-    p->start();
+    pjs::Value arg(InboundWrapper::make(this));
+    p->start(1, &arg);
   }
 }
 
@@ -425,6 +426,16 @@ template<> void ClassDef<InboundTCP>::init() {
 
 template<> void ClassDef<InboundUDP>::init() {
   super<Inbound>();
+}
+
+template<> void ClassDef<InboundWrapper>::init() {
+  accessor("id"                 , [](Object *obj, Value &ret) { if (auto i = obj->as<InboundWrapper>()->get()) ret.set(i->id()); });
+  accessor("localAddress"       , [](Object *obj, Value &ret) { if (auto i = obj->as<InboundWrapper>()->get()) ret.set(i->local_address()); });
+  accessor("localPort"          , [](Object *obj, Value &ret) { if (auto i = obj->as<InboundWrapper>()->get()) ret.set(i->local_port()); });
+  accessor("remoteAddress"      , [](Object *obj, Value &ret) { if (auto i = obj->as<InboundWrapper>()->get()) ret.set(i->remote_address()); });
+  accessor("remotePort"         , [](Object *obj, Value &ret) { if (auto i = obj->as<InboundWrapper>()->get()) ret.set(i->remote_port()); });
+  accessor("destinationAddress" , [](Object *obj, Value &ret) { if (auto i = obj->as<InboundWrapper>()->get()) ret.set(i->ori_dst_address()); });
+  accessor("destinationPort"    , [](Object *obj, Value &ret) { if (auto i = obj->as<InboundWrapper>()->get()) ret.set(i->ori_dst_port()); });
 }
 
 } // namespace pjs
