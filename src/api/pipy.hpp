@@ -56,6 +56,7 @@ public:
   static void on_exit(const std::function<void(int)> &on_exit);
   static auto exec(const std::string &cmd, const ExecOptions &options = ExecOptions()) -> ExecResult;
   static auto exec(pjs::Array *args, const ExecOptions &options = ExecOptions()) -> ExecResult;
+  static void listen(pjs::Context &ctx);
 
   void operator()(pjs::Context &ctx, pjs::Object *obj, pjs::Value &ret);
 

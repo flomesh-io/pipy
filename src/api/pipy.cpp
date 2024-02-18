@@ -31,7 +31,9 @@
 #include "worker-thread.hpp"
 #include "status.hpp"
 #include "net.hpp"
+#include "listener.hpp"
 #include "outbound.hpp"
+#include "api/pipeline.hpp"
 #include "os-platform.hpp"
 #include "utils.hpp"
 #include "log.hpp"
@@ -341,6 +343,81 @@ auto Pipy::exec(pjs::Array *argv, const ExecOptions &options) -> ExecResult {
 
 #endif // _WIN32
 
+void Pipy::listen(pjs::Context &ctx) {
+  thread_local static pjs::ConstStr s_tcp("tcp");
+  thread_local static pjs::ConstStr s_udp("udp");
+
+  auto instance = ctx.root()->instance();
+  auto worker = instance ? static_cast<Worker*>(instance) : nullptr;
+
+  int i = 0;
+  int port = 0;
+  pjs::Str *address = nullptr;
+  pjs::Str *protocol = nullptr;
+  pjs::Object *options = nullptr;
+  pjs::Function *builder = nullptr;
+
+  if (ctx.get(i, address) || ctx.get(i, port)) i++;
+  else {
+    ctx.error_argument_type(i, "a number or a string");
+    return;
+  }
+
+  if (ctx.get(i, protocol)) i++;
+
+  if (!ctx.get(i, builder)) {
+    if (!ctx.check(i, options)) return;
+    if (!ctx.check(i + 1, builder)) return;
+  }
+
+  Listener::Protocol proto = Listener::Protocol::TCP;
+  if (protocol) {
+    if (protocol == s_tcp) proto = Listener::Protocol::TCP; else
+    if (protocol == s_udp) proto = Listener::Protocol::UDP; else {
+      ctx.error("unknown protocol");
+      return;
+    }
+  }
+
+  std::string ip;
+
+  if (address) {
+    if (!utils::get_host_port(address->str(), ip, port)) {
+      ctx.error("invalid 'address:port' form");
+      return;
+    }
+    uint8_t buf[16];
+    if (!utils::get_ip_v4(ip, buf) && !utils::get_ip_v6(ip, buf)) {
+      ctx.error("invalid IP address");
+      return;
+    }
+  } else {
+    ip = "0.0.0.0";
+  }
+
+  if (port < 1 || 65535 < port) {
+    ctx.error("port out of range");
+    return;
+  }
+
+  PipelineLayout *pl = nullptr;
+  if (builder) {
+    pl = PipelineDesigner::make_pipeline_layout(ctx, builder);
+    if (!pl) return;
+  }
+
+  auto l = Listener::get(proto, ip, port);
+  if (!l->set_next_state(pl, options) && worker && !worker->started() && !worker->forced()) {
+    l->rollback();
+    ctx.error("unable to listen on [" + ip + "]:" + std::to_string(port));
+    return;
+  }
+
+  if (!worker || worker->started()) {
+    l->commit();
+  }
+}
+
 void Pipy::operator()(pjs::Context &ctx, pjs::Object *obj, pjs::Value &ret) {
   pjs::Value ret_obj;
   pjs::Object *context_prototype = nullptr;
@@ -518,6 +595,10 @@ template<> void ClassDef<Pipy>::init() {
     } catch (const std::runtime_error &err) {
       ctx.error(err);
     }
+  });
+
+  method("listen", [](Context &ctx, Object*, Value &ret) {
+    Pipy::listen(ctx);
   });
 }
 

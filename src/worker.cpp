@@ -48,7 +48,6 @@
 #include "api/hessian.hpp"
 #include "api/http.hpp"
 #include "api/json.hpp"
-#include "api/listen.hpp"
 #include "api/logging.hpp"
 #include "api/netmask.hpp"
 #include "api/os.hpp"
@@ -188,9 +187,6 @@ template<> void ClassDef<pipy::Global>::init() {
 
   // pipeline
   variable("pipeline", class_of<PipelineLayoutWrapper::Constructor>());
-
-  // listen
-  variable("listen", class_of<Listen>());
 
   // __thread
   accessor("__thread", [](Object *obj, Value &ret) {

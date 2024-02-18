@@ -214,7 +214,6 @@ add_executable(pipy
   src/api/hessian.cpp
   src/api/http.cpp
   src/api/json.cpp
-  src/api/listen.cpp
   src/api/logging.cpp
   src/api/netmask.cpp
   src/api/os.cpp
