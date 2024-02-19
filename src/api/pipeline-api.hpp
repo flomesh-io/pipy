@@ -169,17 +169,24 @@ private:
 // PipelineWrapper
 //
 
-class PipelineWrapper : public pjs::ObjectTemplate<PipelineWrapper>, public EventTarget {
+class PipelineWrapper :
+  public pjs::RefCount<PipelineWrapper>,
+  public pjs::Pooled<PipelineWrapper>,
+  public EventTarget,
+  public Pipeline::ResultCallback
+{
 public:
-  auto eos() const -> StreamEnd* { return m_eos; }
+  PipelineWrapper(Pipeline *pipeline)
+    : m_pipeline(pipeline) {}
+
+  auto start(int argc, pjs::Value argv[]) -> pjs::Promise*;
 
 private:
-  PipelineWrapper(Pipeline *pipeline);
-
   pjs::Ref<Pipeline> m_pipeline;
-  pjs::Ref<StreamEnd> m_eos;
+  pjs::Ref<pjs::Promise::Settler> m_settler;
 
   virtual void on_event(Event *evt) override;
+  virtual void on_pipeline_result(Pipeline *p, pjs::Value &result) override;
 
   friend class pjs::ObjectTemplate<PipelineWrapper>;
 };

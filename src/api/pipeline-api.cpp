@@ -456,19 +456,26 @@ void PipelineLayoutWrapper::Constructor::operator()(pjs::Context &ctx, pjs::Obje
 // PipelineWrapper
 //
 
-PipelineWrapper::PipelineWrapper(Pipeline *pipeline)
-  : m_pipeline(pipeline)
-{
-  pipeline->chain(EventTarget::input());
+auto PipelineWrapper::start(int argc, pjs::Value argv[]) -> pjs::Promise* {
   retain();
+  auto p = m_pipeline.get();
+  auto promise = pjs::Promise::make();
+  m_settler = pjs::Promise::Settler::make(promise);
+  p->on_end(this);
+  p->chain(EventTarget::input());
+  p->start(argc, argv);
+  return promise;
 }
 
 void PipelineWrapper::on_event(Event *evt) {
-  if (auto eos = evt->as<StreamEnd>()) {
-    m_eos = eos;
+  if (evt->is<StreamEnd>()) {
     m_pipeline = nullptr;
-    release();
   }
+}
+
+void PipelineWrapper::on_pipeline_result(Pipeline *p, pjs::Value &result) {
+  m_settler->resolve(result);
+  release();
 }
 
 } // namespace pipy
@@ -1106,19 +1113,14 @@ template<> void ClassDef<PipelineLayoutWrapper>::init() {
     auto worker = static_cast<Worker*>(ctx.instance());
     auto context = worker->new_context();
     auto p = thiz->as<PipelineLayoutWrapper>()->spawn(context);
-    auto pw = PipelineWrapper::make(p);
-    p->start(ctx.argc(), ctx.argv());
-    ret.set(pw);
+    auto pw = new PipelineWrapper(p);
+    ret.set(pw->start(ctx.argc(), ctx.argv()));
   });
 }
 
 template<> void ClassDef<PipelineLayoutWrapper::Constructor>::init() {
   super<Function>();
   ctor();
-}
-
-template<> void ClassDef<PipelineWrapper>::init() {
-  accessor("eos", [](Object *obj, Value &ret) { ret.set(obj->as<PipelineWrapper>()->eos()); });
 }
 
 } // namespace pjs
