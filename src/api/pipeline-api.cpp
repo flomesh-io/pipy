@@ -23,7 +23,7 @@
  *  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include "api/pipeline.hpp"
+#include "api/pipeline-api.hpp"
 #include "input.hpp"
 #include "message.hpp"
 #include "worker.hpp"

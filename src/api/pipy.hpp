@@ -28,10 +28,15 @@
 
 #include "pjs/pjs.hpp"
 #include "data.hpp"
+#include "pipeline.hpp"
 
 #include <functional>
 
 namespace pipy {
+
+class File;
+class FileStream;
+class Worker;
 
 //
 // Pipy
@@ -51,6 +56,32 @@ public:
     pjs::Ref<Data> out;
     pjs::Ref<Data> err;
     int exit_code = 0;
+  };
+
+  class FileReader :
+    public pjs::RefCount<FileReader>,
+    public pjs::Pooled<FileReader>,
+    public EventTarget,
+    public Pipeline::ResultCallback
+  {
+  public:
+    FileReader(Worker *worker, pjs::Str *pathname, PipelineLayout *pt);
+
+    auto start() -> pjs::Promise*;
+
+  private:
+    pjs::Ref<Worker> m_worker;
+    pjs::Ref<pjs::Str> m_pathname;
+    pjs::Ref<PipelineLayout> m_pt;
+    pjs::Ref<Pipeline> m_pipeline;
+    pjs::Ref<File> m_file;
+    pjs::Ref<pjs::Promise> m_promise;
+    pjs::Ref<pjs::Promise::Settler> m_settler;
+
+    void on_open(FileStream *fs);
+
+    virtual void on_event(Event *evt) override;
+    virtual void on_pipeline_result(Pipeline *p, pjs::Value &result) override;
   };
 
   static void on_exit(const std::function<void(int)> &on_exit);

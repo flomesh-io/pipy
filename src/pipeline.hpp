@@ -120,7 +120,7 @@ private:
   ~PipelineLayout();
 
   auto alloc(Context *ctx) -> Pipeline*;
-  void end(Pipeline *pipeline);
+  void end(Pipeline *pipeline, pjs::Value &result);
   void free(Pipeline *pipeline);
 
   int m_index;
@@ -159,15 +159,6 @@ public:
     return layout->alloc(ctx);
   }
 
-  auto layout() const -> PipelineLayout* { return m_layout; }
-  auto context() const -> Context* { return m_context; }
-  auto chain() const -> PipelineLayout::Chain* { return m_chain; }
-  void chain(Input *input) { EventProxy::chain(input); }
-  void chain(PipelineLayout::Chain *chain, const pjs::Value &args = pjs::Value::undefined) { m_chain = chain; m_chain_args = args; }
-  auto chain_args() const -> const pjs::Value& { return m_chain_args; }
-  void start(const pjs::Value &args);
-  auto start(int argc = 0, pjs::Value *argv = nullptr) -> Pipeline*;
-
   //
   // Pipeline::StartingPromiseCallback
   //
@@ -181,6 +172,25 @@ public:
   public:
     void close() { m_pipeline = nullptr; }
   };
+
+  //
+  // Pipeline::ResultCallback
+  //
+
+  class ResultCallback {
+    virtual void on_pipeline_result(Pipeline *p, pjs::Value &value) = 0;
+    friend class Pipeline;
+  };
+
+  auto layout() const -> PipelineLayout* { return m_layout; }
+  auto context() const -> Context* { return m_context; }
+  auto chain() const -> PipelineLayout::Chain* { return m_chain; }
+  void chain(Input *input) { EventProxy::chain(input); }
+  void chain(PipelineLayout::Chain *chain, const pjs::Value &args = pjs::Value::undefined) { m_chain = chain; m_chain_args = args; }
+  auto chain_args() const -> const pjs::Value& { return m_chain_args; }
+  void start(const pjs::Value &args);
+  auto start(int argc = 0, pjs::Value *argv = nullptr) -> Pipeline*;
+  void on_end(ResultCallback *cb) { m_result_cb = cb; }
 
 private:
   Pipeline(PipelineLayout *layout);
@@ -198,6 +208,7 @@ private:
   pjs::Ref<PipelineLayout::Chain> m_chain;
   pjs::Value m_chain_args;
   EventBuffer m_pending_events;
+  ResultCallback* m_result_cb = nullptr;
   bool m_started = false;
 
   void wait(pjs::Promise *promise);

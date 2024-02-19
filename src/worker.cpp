@@ -52,7 +52,7 @@
 #include "api/netmask.hpp"
 #include "api/os.hpp"
 #include "api/pipy.hpp"
-#include "api/pipeline.hpp"
+#include "api/pipeline-api.hpp"
 #include "api/protobuf.hpp"
 #include "api/resp.hpp"
 #include "api/sqlite.hpp"

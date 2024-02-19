@@ -24,7 +24,7 @@
  */
 
 #include "pipe.hpp"
-#include "api/pipeline.hpp"
+#include "api/pipeline-api.hpp"
 
 namespace pipy {
 

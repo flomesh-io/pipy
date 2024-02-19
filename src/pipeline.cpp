@@ -124,11 +124,10 @@ auto PipelineLayout::alloc(Context *ctx) -> Pipeline* {
   return pipeline;
 }
 
-void PipelineLayout::end(Pipeline *pipeline) {
+void PipelineLayout::end(Pipeline *pipeline, pjs::Value &result) {
   if (m_on_end) {
     auto &ctx = *pipeline->context();
-    pjs::Value ret;
-    (*m_on_end)(ctx, 0, nullptr, ret);
+    (*m_on_end)(ctx, 0, nullptr, result);
     if (!ctx.ok()) {
       Log::pjs_error(ctx.error());
       ctx.reset();
@@ -242,7 +241,11 @@ void Pipeline::on_reply(Event *evt) {
 }
 
 void Pipeline::on_auto_release() {
-  m_layout->end(this);
+  pjs::Value result;
+  m_layout->end(this, result);
+  if (m_result_cb) {
+    m_result_cb->on_pipeline_result(this, result);
+  }
   reset();
   m_layout->free(this);
 }

@@ -33,7 +33,9 @@
 #include "net.hpp"
 #include "listener.hpp"
 #include "outbound.hpp"
-#include "api/pipeline.hpp"
+#include "file.hpp"
+#include "fstream.hpp"
+#include "api/pipeline-api.hpp"
 #include "os-platform.hpp"
 #include "utils.hpp"
 #include "log.hpp"
@@ -440,6 +442,51 @@ void Pipy::operator()(pjs::Context &ctx, pjs::Object *obj, pjs::Value &ret) {
   }
 }
 
+//
+// Pipy::FileReader
+//
+
+Pipy::FileReader::FileReader(Worker *worker, pjs::Str *pathname, PipelineLayout *pt)
+  : m_worker(worker)
+  , m_pathname(pathname)
+  , m_pt(pt)
+  , m_file(File::make(pathname->str()))
+{
+}
+
+auto Pipy::FileReader::start() -> pjs::Promise* {
+  auto promise = pjs::Promise::make();
+  m_settler = pjs::Promise::Settler::make(promise);
+  m_file->open_read([this](FileStream *fs) { on_open(fs); });
+  retain();
+  return promise;
+}
+
+void Pipy::FileReader::on_open(FileStream *fs) {
+  if (fs) {
+    m_pipeline = Pipeline::make(m_pt, m_worker->new_context());
+    m_pipeline->on_end(this);
+    m_pipeline->chain(EventTarget::input());
+    m_pipeline->start();
+    fs->chain(m_pipeline->input());
+  } else {
+    std::string msg = "cannot open file: " + m_pathname->str();
+    m_settler->reject(pjs::Error::make(pjs::Str::make(msg)));
+    release();
+  }
+}
+
+void Pipy::FileReader::on_event(Event *evt) {
+  if (evt->is<StreamEnd>()) {
+    m_pipeline = nullptr;
+  }
+}
+
+void Pipy::FileReader::on_pipeline_result(Pipeline *p, pjs::Value &result) {
+  m_settler->resolve(result);
+  release();
+}
+
 } // namespace pipy
 
 namespace pjs {
@@ -595,6 +642,18 @@ template<> void ClassDef<Pipy>::init() {
     } catch (const std::runtime_error &err) {
       ctx.error(err);
     }
+  });
+
+  method("read", [](Context &ctx, Object*, Value &ret) {
+    auto instance = ctx.root()->instance();
+    auto worker = instance ? static_cast<Worker*>(instance) : nullptr;
+    Str *pathname;
+    Function *builder = nullptr;
+    if (!ctx.arguments(2, &pathname, &builder)) return;
+    auto pt = PipelineDesigner::make_pipeline_layout(ctx, builder);
+    if (!pt) return;
+    auto fr = new Pipy::FileReader(worker, pathname, pt);
+    ret.set(fr->start());
   });
 
   method("listen", [](Context &ctx, Object*, Value &ret) {
