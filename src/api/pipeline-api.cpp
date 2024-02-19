@@ -98,7 +98,7 @@ auto PipelineDesigner::trace_location(pjs::Context &ctx) -> PipelineDesigner* {
 
 void PipelineDesigner::on_start(pjs::Object *starting_events) {
   if (!m_layout) throw std::runtime_error("pipeline layout is already built");
-  if (m_current_filter) throw std::runtime_error("onStart() is only allowed prior to filters");
+  if (m_current_filter) throw std::runtime_error("onStart() is only allowed prior to all filters");
   if (m_has_on_start) throw std::runtime_error("duplicate onStart()");
   m_layout->on_start(starting_events);
   m_layout->on_start_location(m_current_location);
@@ -107,7 +107,6 @@ void PipelineDesigner::on_start(pjs::Object *starting_events) {
 
 void PipelineDesigner::on_end(pjs::Function *handler) {
   if (!m_layout) throw std::runtime_error("pipeline layout is already built");
-  if (m_current_filter) throw std::runtime_error("onEnd() is only allowed prior to filters");
   if (m_has_on_end) throw std::runtime_error("duplicate onEnd()");
   m_layout->on_end(handler);
   m_has_on_end = true;
