@@ -58,6 +58,16 @@ public:
     friend class List;
   };
 
+  List& operator=(List &&r) {
+    m_size = r.m_size;
+    m_head = r.m_head;
+    m_tail = r.m_tail;
+    r.m_size = 0;
+    r.m_head = 0;
+    r.m_tail = 0;
+    return *this;
+  }
+
   bool empty() const { return !m_head; }
   auto size() const -> size_t { return m_size; }
   auto head() const -> T* { return static_cast<T*>(m_head); }

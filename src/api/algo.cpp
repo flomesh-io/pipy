@@ -456,7 +456,218 @@ void URLRouter::dump(Node *node, int level) {
 // LoadBalancer
 //
 
-LoadBalancer::~LoadBalancer() {
+LoadBalancer::Options::Options(pjs::Object *options) {
+  Value(options, "algorithm")
+    .get_enum<LoadBalancer::Algorithm>(algorithm)
+    .check_nullable();
+  Value(options, "key")
+    .get(key_f)
+    .check_nullable();
+  Value(options, "weight")
+    .get(weight_f)
+    .check_nullable();
+  Value(options, "capacity")
+    .get(capacity)
+    .get(capacity_f)
+    .check_nullable();
+}
+
+void LoadBalancer::provision(pjs::Context &ctx, pjs::Array *targets) {
+  if (targets) {
+    std::map<pjs::Value, Pool*> new_targets;
+    std::vector<pjs::Ref<Pool>> new_pools(targets->length());
+    List<Pool> new_queue;
+
+    targets->iterate_while(
+      [&](pjs::Value &target, int i) {
+        pjs::Value key;
+        if (m_options.key_f) {
+          (*m_options.key_f)(ctx, 1, &target, key);
+          if (!ctx.ok()) return false;
+        } else key = target;
+
+        Pool* p = nullptr;
+        auto it = m_targets.find(key);
+        if (it != m_targets.end()) {
+          p = it->second;
+        } else {
+          p = new Pool(key, target);
+        }
+
+        new_targets[key] = p;
+        new_pools[i] = p;
+        new_queue.unshift(p);
+        sort_forward(new_queue, p);
+
+        pjs::Value weight, capacity(m_options.capacity);
+        if (m_options.weight_f) {
+          (*m_options.weight_f)(ctx, 1, &target, weight);
+          if (!ctx.ok()) return false;
+        }
+        if (m_options.capacity_f) {
+          (*m_options.capacity_f)(ctx, 1, &target, capacity);
+          if (!ctx.ok()) return false;
+        }
+
+        p->weight = weight.is_undefined() ? 1 : weight.to_number();
+        p->capacity = capacity.is_undefined() ? 0 : capacity.to_int32();
+
+        return true;
+      }
+    );
+
+    if (!ctx.ok()) return;
+
+    m_targets = std::move(new_targets);
+    m_pools = std::move(new_pools);
+    m_queue = std::move(new_queue);
+
+  } else {
+    m_targets.clear();
+    m_pools.clear();
+    m_queue.clear();
+  }
+
+  double weight_total = 0;
+  for (const auto &p : m_pools) weight_total += p->weight;
+  for (const auto &p : m_pools) p->step = weight_total / p->weight;
+
+  if (m_options.algorithm == ROUND_ROBIN) {
+    for (const auto &p : m_pools) p->load = 0;
+    for (const auto &p : m_pools) {
+      p->load = p->step;
+      sort_forward(m_queue, p);
+    }
+  }
+}
+
+auto LoadBalancer::schedule(int size, Cache *exclusive) -> pjs::Array* {
+  if (size < 0) return nullptr;
+  auto a = pjs::Array::make(size);
+  for (int i = 0; i < size; i++) {
+    if (auto p = next(exclusive)) {
+      a->set(i, p->target);
+    }
+  }
+  return a;
+}
+
+auto LoadBalancer::allocate(pjs::Context &ctx, const pjs::Value &tag, Cache *exclusive) -> Resource* {
+  auto p = next(exclusive);
+  if (!p) return nullptr;
+  return p->allocate();
+}
+
+auto LoadBalancer::next(Cache *exclusive) -> Pool* {
+  pjs::Value val;
+  for (auto p = m_queue.head(); p; p = p->next()) {
+    if (!exclusive || !exclusive->find(p->key, val)) {
+      increase_load(p);
+      return p;
+    }
+  }
+  return nullptr;
+}
+
+void LoadBalancer::increase_load(Pool *pool) {
+  pool->load += pool->step;
+  sort_forward(m_queue, pool);
+}
+
+void LoadBalancer::decrease_load(Pool *pool) {
+  pool->load -= pool->step;
+  sort_backward(m_queue, pool);
+}
+
+void LoadBalancer::sort_forward(List<Pool> &queue, Pool *pool) {
+  if (auto p = pool->next()) {
+    while (p && p->load <= pool->load) {
+      p = p->next();
+    }
+    if (p != pool->next()) {
+      queue.remove(pool);
+      if (p) {
+        queue.insert(pool, p);
+      } else {
+        queue.push(pool);
+      }
+    }
+  }
+}
+
+void LoadBalancer::sort_backward(List<Pool> &queue, Pool *pool) {
+  if (auto p = pool->back()) {
+    while (p && p->load > pool->load) {
+      p = p->back();
+    }
+    if (p != pool->back()) {
+      queue.remove(pool);
+      if (p) {
+        queue.insert(pool, p->next());
+      } else {
+        queue.unshift(pool);
+      }
+    }
+  }
+}
+
+auto LoadBalancer::Pool::allocate() -> Resource* {
+  auto r = m_resources.head();
+  if (!r || (r->m_load > 0 && (capacity <= 0 || capacity > m_resources.size()))) {
+    r = Resource::make(this, target);
+    m_resources.unshift(r);
+  }
+  r->increase_load();
+  return r;
+}
+
+LoadBalancer::Resource::~Resource() {
+  m_pool->m_resources.remove(this);
+}
+
+void LoadBalancer::Resource::free() {
+  if (m_load > 0) {
+    m_load--;
+    if (auto r = back()) {
+      while (r && r->m_load > m_load) {
+        r = r->back();
+      }
+      if (r != back()) {
+        auto &list = m_pool->m_resources;
+        list.remove(this);
+        if (r) {
+          list.insert(this, r->next());
+        } else {
+          list.unshift(this);
+        }
+      }
+    }
+  }
+}
+
+void LoadBalancer::Resource::increase_load() {
+  m_load++;
+  if (auto r = next()) {
+    while (r && r->m_load <= m_load) {
+      r = r->next();
+    }
+    if (r != next()) {
+      auto &list = m_pool->m_resources;
+      list.remove(this);
+      if (r) {
+        list.insert(this, r);
+      } else {
+        list.push(this);
+      }
+    }
+  }
+}
+
+//
+// LoadBalancerBase
+//
+
+LoadBalancerBase::~LoadBalancerBase() {
   for (const auto &i : m_sessions) {
     delete i.second;
   }
@@ -469,7 +680,7 @@ LoadBalancer::~LoadBalancer() {
   }
 }
 
-auto LoadBalancer::borrow(pjs::Object *borrower, const pjs::Value &target_key, Cache *unhealthy) -> Resource* {
+auto LoadBalancerBase::borrow(pjs::Object *borrower, const pjs::Value &target_key, Cache *unhealthy) -> Resource* {
   if (!borrower) {
     auto id = select(target_key, unhealthy);
     if (!id) return nullptr;
@@ -511,7 +722,7 @@ auto LoadBalancer::borrow(pjs::Object *borrower, const pjs::Value &target_key, C
   return res;
 }
 
-bool LoadBalancer::is_healthy(pjs::Str *target, Cache *unhealthy) {
+bool LoadBalancerBase::is_healthy(pjs::Str *target, Cache *unhealthy) {
   pjs::Value v;
   if (!unhealthy && !m_unhealthy) return true;
   if (m_unhealthy && m_unhealthy->find(target, v) && v.to_boolean()) return false;
@@ -519,7 +730,7 @@ bool LoadBalancer::is_healthy(pjs::Str *target, Cache *unhealthy) {
   return true;
 }
 
-void LoadBalancer::close_session(Session *session) {
+void LoadBalancerBase::close_session(Session *session) {
   if (auto *res = session->resource()) {
     deselect(res->id());
     auto &target = m_targets[res->id()];
@@ -531,17 +742,17 @@ void LoadBalancer::close_session(Session *session) {
 }
 
 //
-// LoadBalancer::Session
+// LoadBalancerBase::Session
 //
 
-LoadBalancer::Session::Session(LoadBalancer *lb, pjs::Object *key)
+LoadBalancerBase::Session::Session(LoadBalancerBase *lb, pjs::Object *key)
   : m_lb(lb)
   , m_key(key)
 {
   watch(key->weak_ptr());
 }
 
-void LoadBalancer::Session::on_weak_ptr_gone() {
+void LoadBalancerBase::Session::on_weak_ptr_gone() {
   m_lb->close_session(this);
 }
 
@@ -550,7 +761,7 @@ void LoadBalancer::Session::on_weak_ptr_gone() {
 //
 
 HashingLoadBalancer::HashingLoadBalancer(pjs::Object *targets, Cache *unhealthy)
-  : pjs::ObjectTemplate<HashingLoadBalancer, LoadBalancer>(unhealthy)
+  : pjs::ObjectTemplate<HashingLoadBalancer, LoadBalancerBase>(unhealthy)
 {
   set(targets);
 }
@@ -598,7 +809,7 @@ auto HashingLoadBalancer::select(const pjs::Value &key, Cache *unhealthy) -> pjs
 //
 
 RoundRobinLoadBalancer::RoundRobinLoadBalancer(pjs::Object *targets, Cache *unhealthy)
-  : pjs::ObjectTemplate<RoundRobinLoadBalancer, LoadBalancer>(unhealthy)
+  : pjs::ObjectTemplate<RoundRobinLoadBalancer, LoadBalancerBase>(unhealthy)
 {
   if (targets) {
     if (targets->is_array()) {
@@ -767,7 +978,7 @@ auto RoundRobinLoadBalancer::select(const pjs::Value &key, Cache *unhealthy) -> 
 //
 
 LeastWorkLoadBalancer::LeastWorkLoadBalancer(pjs::Object *targets, Cache *unhealthy)
-  : pjs::ObjectTemplate<LeastWorkLoadBalancer, LoadBalancer>(unhealthy)
+  : pjs::ObjectTemplate<LeastWorkLoadBalancer, LoadBalancerBase>(unhealthy)
 {
   if (targets) {
     if (targets->is_array()) {
@@ -1155,14 +1366,69 @@ template<> void ClassDef<Constructor<URLRouter>>::init() {
 // LoadBalancer
 //
 
+template<> void EnumDef<LoadBalancer::Algorithm>::init() {
+  define(LoadBalancer::ROUND_ROBIN, "round-robin");
+  define(LoadBalancer::LEAST_LOAD, "least-load");
+}
+
+template<> void ClassDef<LoadBalancer::Resource>::init() {
+  accessor("target", [](Object *obj, Value &ret) {
+    ret = obj->as<LoadBalancer::Resource>()->target();
+  });
+
+  method("free", [](Context &ctx, Object *obj, Value &) {
+    obj->as<LoadBalancer::Resource>()->free();
+  });
+}
+
 template<> void ClassDef<LoadBalancer>::init() {
+  ctor([](Context &ctx) -> Object* {
+    Array *targets = nullptr;
+    Object *options = nullptr;
+    if (!ctx.arguments(0, &targets, &options)) return nullptr;
+    auto lb = LoadBalancer::make(options);
+    lb->provision(ctx, targets);
+    return lb;
+  });
+
+  method("provision", [](Context &ctx, Object *obj, Value &ret) {
+    Array *targets = nullptr;
+    if (!ctx.arguments(1, &targets)) return;
+    obj->as<LoadBalancer>()->provision(ctx, targets);
+  });
+
+  method("schedule", [](Context &ctx, Object *obj, Value &ret) {
+    int size;
+    Cache *exclusive = nullptr;
+    if (!ctx.arguments(1, &size, &exclusive)) return;
+    ret.set(obj->as<LoadBalancer>()->schedule(size, exclusive));
+  });
+
+  method("allocate", [](Context &ctx, Object *obj, Value &ret) {
+    Value tag;
+    Cache *exclusive = nullptr;
+    if (!ctx.arguments(0, &tag, &exclusive)) return;
+    ret.set(obj->as<LoadBalancer>()->allocate(ctx, tag, exclusive));
+  });
+}
+
+template<> void ClassDef<Constructor<LoadBalancer>>::init() {
+  super<Function>();
+  ctor();
+}
+
+//
+// LoadBalancerBase
+//
+
+template<> void ClassDef<LoadBalancerBase>::init() {
   method("borrow", [](Context &ctx, Object *obj, Value &ret) {
     pjs::Object *borrower = nullptr;
     pjs::Value target_key;
     Cache *unhealthy = nullptr;
     if (!ctx.arguments(0, &borrower, &target_key, &unhealthy)) return;
     if (!borrower) borrower = static_cast<pipy::Context*>(ctx.root())->inbound();
-    ret.set(obj->as<LoadBalancer>()->borrow(borrower, target_key, unhealthy));
+    ret.set(obj->as<LoadBalancerBase>()->borrow(borrower, target_key, unhealthy));
   });
 
   method("next", [](Context &ctx, Object *obj, Value &ret) {
@@ -1171,14 +1437,14 @@ template<> void ClassDef<LoadBalancer>::init() {
     Cache *unhealthy = nullptr;
     if (!ctx.arguments(0, &borrower, &target_key, &unhealthy)) return;
     if (!borrower) borrower = static_cast<pipy::Context*>(ctx.root())->inbound();
-    ret.set(obj->as<LoadBalancer>()->borrow(borrower, target_key, unhealthy));
+    ret.set(obj->as<LoadBalancerBase>()->borrow(borrower, target_key, unhealthy));
   });
 
   method("select", [](Context &ctx, Object *obj, Value &ret) {
     pjs::Value key;
     Cache *unhealthy = nullptr;
     if (!ctx.arguments(0, &key, &unhealthy)) return;
-    if (auto target = obj->as<LoadBalancer>()->select(key, unhealthy)) {
+    if (auto target = obj->as<LoadBalancerBase>()->select(key, unhealthy)) {
       ret.set(target);
     }
   });
@@ -1186,16 +1452,16 @@ template<> void ClassDef<LoadBalancer>::init() {
   method("deselect", [](Context &ctx, Object *obj, Value &ret) {
     Str *target = nullptr;
     if (!ctx.arguments(0, &target)) return;
-    obj->as<LoadBalancer>()->deselect(target);
+    obj->as<LoadBalancerBase>()->deselect(target);
   });
 }
 
 //
-// LoadBalancer::Resource
+// LoadBalancerBase::Resource
 //
 
-template<> void ClassDef<LoadBalancer::Resource>::init() {
-  accessor("id", [](Object *obj, Value &val) { val.set(obj->as<LoadBalancer::Resource>()->id()); });
+template<> void ClassDef<LoadBalancerBase::Resource>::init() {
+  accessor("id", [](Object *obj, Value &val) { val.set(obj->as<LoadBalancerBase::Resource>()->id()); });
 }
 
 //
@@ -1203,7 +1469,7 @@ template<> void ClassDef<LoadBalancer::Resource>::init() {
 //
 
 template<> void ClassDef<HashingLoadBalancer>::init() {
-  super<LoadBalancer>();
+  super<LoadBalancerBase>();
 
   ctor([](Context &ctx) -> Object* {
     Object *targets = nullptr;
@@ -1235,7 +1501,7 @@ template<> void ClassDef<Constructor<HashingLoadBalancer>>::init() {
 //
 
 template<> void ClassDef<RoundRobinLoadBalancer>::init() {
-  super<LoadBalancer>();
+  super<LoadBalancerBase>();
 
   ctor([](Context &ctx) -> Object* {
     Object *targets = nullptr;
@@ -1269,7 +1535,7 @@ template<> void ClassDef<Constructor<RoundRobinLoadBalancer>>::init() {
 //
 
 template<> void ClassDef<LeastWorkLoadBalancer>::init() {
-  super<LoadBalancer>();
+  super<LoadBalancerBase>();
 
   ctor([](Context &ctx) -> Object* {
     Object *targets = nullptr;
@@ -1374,6 +1640,7 @@ template<> void ClassDef<Algo>::init() {
   variable("Cache", class_of<Constructor<Cache>>());
   variable("Quota", class_of<Constructor<Quota>>());
   variable("URLRouter", class_of<Constructor<URLRouter>>());
+  variable("LoadBalancer", class_of<Constructor<LoadBalancer>>());
   variable("HashingLoadBalancer", class_of<Constructor<HashingLoadBalancer>>());
   variable("RoundRobinLoadBalancer", class_of<Constructor<RoundRobinLoadBalancer>>());
   variable("LeastWorkLoadBalancer", class_of<Constructor<LeastWorkLoadBalancer>>());

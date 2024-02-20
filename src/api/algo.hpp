@@ -220,9 +220,117 @@ private:
 
 class LoadBalancer : public pjs::ObjectTemplate<LoadBalancer> {
 public:
+  class Resource;
+
+private:
+  //
+  // LoadBalancer::Pool
+  //
+
+  class Pool : public pjs::RefCount<Pool>, public List<Pool>::Item {
+  public:
+    Pool(const pjs::Value &k, const pjs::Value &t)
+      : key(k), target(t) {}
+
+    pjs::Value key;
+    pjs::Value target;
+    int capacity = 0;
+    double weight = 1;
+    double step = 0;
+    double load = 0;
+
+    auto allocate() -> Resource*;
+
+  private:
+    List<Resource> m_resources;
+
+    friend class Resource;
+  };
+
+public:
+
+  //
+  // LoadBalancer::Algorithm
+  //
+
+  enum Algorithm {
+    ROUND_ROBIN,
+    LEAST_LOAD,
+  };
+
+  //
+  // LoadBalancer::Options
+  //
+
+  struct Options : public pipy::Options {
+    Algorithm algorithm = ROUND_ROBIN;
+    pjs::Ref<pjs::Function> key_f;
+    pjs::Ref<pjs::Function> weight_f;
+    pjs::Ref<pjs::Function> capacity_f;
+    int capacity = 0;
+    Options() {}
+    Options(pjs::Object *options);
+  };
 
   //
   // LoadBalancer::Resource
+  //
+
+  class Resource :
+    public pjs::ObjectTemplate<Resource>,
+    public List<Resource>::Item
+  {
+  public:
+    auto target() const -> const pjs::Value & { return m_target; }
+    void free();
+
+  private:
+    Resource(Pool *pool, const pjs::Value &target)
+      : m_pool(pool), m_target(target) {}
+
+    ~Resource();
+
+    pjs::Ref<Pool> m_pool;
+    pjs::Value m_target;
+    int m_load = 0;
+
+    void increase_load();
+
+    friend class pjs::ObjectTemplate<Resource>;
+    friend class Pool;
+  };
+
+  void provision(pjs::Context &ctx, pjs::Array *targets);
+  auto schedule(int size, Cache *exclusive = nullptr) -> pjs::Array*;
+  auto allocate(pjs::Context &ctx, const pjs::Value &tag = pjs::Value::undefined, Cache *exclusive = nullptr) -> Resource*;
+
+private:
+  LoadBalancer(const Options &options)
+    : m_options(options) {}
+
+  Options m_options;
+  std::map<pjs::Value, Pool*> m_targets;
+  std::vector<pjs::Ref<Pool>> m_pools;
+  List<Pool> m_queue;
+
+  auto next(Cache *exclusive) -> Pool*;
+  void increase_load(Pool *pool);
+  void decrease_load(Pool *pool);
+  void sort_forward(List<Pool> &queue, Pool *pool);
+  void sort_backward(List<Pool> &queue, Pool *pool);
+
+  friend class pjs::ObjectTemplate<LoadBalancer>;
+};
+
+//
+// LoadBalancerBase
+//
+
+class LoadBalancerBase : public pjs::ObjectTemplate<LoadBalancerBase> {
+public:
+
+  //
+  // LoadBalancerBase::Resource
   //
 
   class Resource :
@@ -246,15 +354,15 @@ public:
   virtual void deselect(pjs::Str *id) = 0;
 
 protected:
-  LoadBalancer(Cache *unhealthy) : m_unhealthy(unhealthy) {}
-  ~LoadBalancer();
+  LoadBalancerBase(Cache *unhealthy) : m_unhealthy(unhealthy) {}
+  ~LoadBalancerBase();
 
   bool is_healthy(pjs::Str *target, Cache *unhealthy);
 
 private:
 
   //
-  // LoadBalancer::Session
+  // LoadBalancerBase::Session
   //
 
   class Session :
@@ -262,7 +370,7 @@ private:
     public pjs::Object::WeakPtr::Watcher
   {
   public:
-    Session(LoadBalancer *lb, pjs::Object *key);
+    Session(LoadBalancerBase *lb, pjs::Object *key);
 
     auto key() const -> const pjs::WeakRef<pjs::Object>& { return m_key; }
     auto resource() const -> Resource* { return m_resource; }
@@ -271,13 +379,13 @@ private:
   private:
     virtual void on_weak_ptr_gone() override;
 
-    LoadBalancer* m_lb;
+    LoadBalancerBase* m_lb;
     pjs::WeakRef<pjs::Object> m_key;
     pjs::Ref<Resource> m_resource;
   };
 
   //
-  // LoadBalancer::Target
+  // LoadBalancerBase::Target
   //
 
   struct Target : public pjs::Pooled<Target> {
@@ -290,14 +398,14 @@ private:
 
   void close_session(Session *session);
 
-  friend class pjs::ObjectTemplate<LoadBalancer>;
+  friend class pjs::ObjectTemplate<LoadBalancerBase>;
 };
 
 //
 // HashingLoadBalancer
 //
 
-class HashingLoadBalancer : public pjs::ObjectTemplate<HashingLoadBalancer, LoadBalancer> {
+class HashingLoadBalancer : public pjs::ObjectTemplate<HashingLoadBalancer, LoadBalancerBase> {
 public:
   void set(pjs::Object *targets);
   void add(pjs::Str *target);
@@ -311,14 +419,14 @@ private:
 
   std::vector<pjs::Ref<pjs::Str>> m_targets;
 
-  friend class pjs::ObjectTemplate<HashingLoadBalancer, LoadBalancer>;
+  friend class pjs::ObjectTemplate<HashingLoadBalancer, LoadBalancerBase>;
 };
 
 //
 // RoundRobinLoadBalancer
 //
 
-class RoundRobinLoadBalancer : public pjs::ObjectTemplate<RoundRobinLoadBalancer, LoadBalancer> {
+class RoundRobinLoadBalancer : public pjs::ObjectTemplate<RoundRobinLoadBalancer, LoadBalancerBase> {
 public:
   void set(pjs::Object *targets);
   void set(pjs::Str *target, int weight);
@@ -343,14 +451,14 @@ private:
   std::map<pjs::Str*, Target*> m_target_map;
   pjs::Ref<Cache> m_target_cache;
 
-  friend class pjs::ObjectTemplate<RoundRobinLoadBalancer, LoadBalancer>;
+  friend class pjs::ObjectTemplate<RoundRobinLoadBalancer, LoadBalancerBase>;
 };
 
 //
 // LeastWorkLoadBalancer
 //
 
-class LeastWorkLoadBalancer : public pjs::ObjectTemplate<LeastWorkLoadBalancer, LoadBalancer> {
+class LeastWorkLoadBalancer : public pjs::ObjectTemplate<LeastWorkLoadBalancer, LoadBalancerBase> {
 public:
   void set(pjs::Object *targets);
   void set(pjs::Str *target, double weight);
@@ -372,7 +480,7 @@ private:
   std::map<pjs::Ref<pjs::Str>, Target> m_targets;
   pjs::Ref<Cache> m_target_cache;
 
-  friend class pjs::ObjectTemplate<LeastWorkLoadBalancer, LoadBalancer>;
+  friend class pjs::ObjectTemplate<LeastWorkLoadBalancer, LoadBalancerBase>;
 };
 
 //
