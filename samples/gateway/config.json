@@ -40,8 +40,14 @@
   },
   "upstreams": {
     "api": {
-      "policy": "round-robin",
-      "targets": ["localhost:80"]
+      "targets": [
+        {
+          "address": "localhost:80",
+          "weight": 1,
+          "capacity": 100
+        }
+      ],
+      "algorithm": "round-robin"
     }
   },
   "serve-files": {

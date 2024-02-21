@@ -1,21 +1,22 @@
 import config from '/config.js'
 
-var policies = {
-  'round-robin': algo.RoundRobinLoadBalancer,
-  'least-work': algo.LeastWorkLoadBalancer,
-}
-
 var balancers = Object.fromEntries(
   Object.entries(config.upstreams).map(
-    ([name, lb]) => [
+    ([name, { targets, algorithm }]) => [
       name,
-      new policies[lb.policy](lb.targets)
+      new algo.LoadBalancer(
+        targets, {
+          algorithm,
+          weight: t => t.weight,
+          capacity: t => t.capacity,
+        }
+      )
     ]
   )
 )
 
 var $ctx
-var $target
+var $conn
 
 export default pipeline($=>$
   .onStart(ctx => void ($ctx = ctx))
@@ -23,15 +24,16 @@ export default pipeline($=>$
     function() {
       var lb = balancers[$ctx.route]
       if (lb) {
-        $target = lb.borrow()
-        if ($target) return 'proxy'
+        $conn = lb.allocate()
+        if ($conn) return 'proxy'
       }
       return 'pass'
     }, {
       'proxy': ($=>$
-        .muxHTTP(() => $target).to($=>$
-          .connect(() => $target.id)
+        .muxHTTP(() => $conn).to($=>$
+          .connect(() => $conn.target.address)
         )
+        .onEnd(() => $conn.free())
       ),
       'pass': ($=>$.pipeNext())
     }
