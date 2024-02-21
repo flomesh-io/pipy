@@ -30,6 +30,7 @@ if(MSVC)
 endif(MSVC)
 
 add_subdirectory(deps/yajl-2.1.0)
+add_subdirectory(deps/libyaml-0.2.5)
 
 option(BUILD_tools "build the xmlwf tool for expat library" OFF)
 option(BUILD_examples "build the examples for expat library" OFF)
@@ -188,6 +189,7 @@ include_directories(
   "${CMAKE_SOURCE_DIR}/deps/asio-1.28.0/include"
   "${CMAKE_BINARY_DIR}/deps"
   "${CMAKE_BINARY_DIR}/deps/yajl-2.1.0/yajl-2.1.0/include"
+  "${CMAKE_BINARY_DIR}/deps/libyaml-0.2.5/include"
   "${CMAKE_BINARY_DIR}/deps/libexpat-R_2_2_6/expat/lib"
   "${CMAKE_SOURCE_DIR}/deps/libexpat-R_2_2_6/expat/lib"
   "${CMAKE_SOURCE_DIR}/deps/leveldb-1.23/include"
@@ -228,6 +230,7 @@ add_executable(pipy
   src/api/timeout.cpp
   src/api/url.cpp
   src/api/xml.cpp
+  src/api/yaml.cpp
   src/buffer.cpp
   src/codebase.cpp
   src/codebase-store.cpp
@@ -414,6 +417,7 @@ endif()
 target_link_libraries(
   pipy
   yajl_s
+  yaml
   expat
   ${ZLIB_LIB}
   ${OPENSSL_LIB_DIR}/${LIB_SSL}

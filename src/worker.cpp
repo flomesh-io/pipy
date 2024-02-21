@@ -61,6 +61,7 @@
 #include "api/timeout.hpp"
 #include "api/url.hpp"
 #include "api/xml.hpp"
+#include "api/yaml.hpp"
 #include "log.hpp"
 #include "utils.hpp"
 
@@ -103,6 +104,9 @@ template<> void ClassDef<pipy::Global>::init() {
 
   // JSON
   variable("JSON", class_of<JSON>());
+
+  // YAML
+  variable("YAML", class_of<YAML>());
 
   // XML
   variable("XML", class_of<XML>());
