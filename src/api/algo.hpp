@@ -268,6 +268,7 @@ public:
     pjs::Ref<pjs::Function> weight_f;
     pjs::Ref<pjs::Function> capacity_f;
     int capacity = 0;
+    pjs::Ref<Cache> session_cache;
     Options() {}
     Options(pjs::Object *options);
   };
