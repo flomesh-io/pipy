@@ -560,6 +560,7 @@ void Try::dump(std::ostream &out, const std::string &indent) {
 //
 
 bool Import::declare(Module *module, Tree::Scope &scope, Error &error) {
+  thread_local static ConstStr s_star("*");
   if (scope.parent()->kind() != Tree::Scope::MODULE) {
     error.tree = this;
     error.message = "illegal import";
@@ -573,7 +574,11 @@ bool Import::declare(Module *module, Tree::Scope &scope, Error &error) {
     for (const auto &p : m_list) {
       Ref<Str> id(Str::make(p.first));
       Ref<Str> as(Str::make(p.second));
-      module->add_import(as == Str::empty ? id : as, id, from);
+      module->add_import(
+        as == Str::empty ? id : as,
+        id == s_star ? nullptr : id.get(),
+        from
+      );
     }
     return true;
   }

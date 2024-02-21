@@ -61,7 +61,14 @@ public:
     Ref<Object> exports;
     PropertyCache cache;
     Module* module = nullptr;
-    void get(Value &val) { cache.get(exports, name, val); }
+
+    void get(Value &val) {
+      if (name) {
+        cache.get(exports, name, val);
+      } else {
+        val.set(exports);
+      }
+    }
   };
 
   //
