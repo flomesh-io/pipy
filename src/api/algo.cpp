@@ -28,6 +28,8 @@
 #include "utils.hpp"
 #include "log.hpp"
 
+#include <algorithm>
+
 namespace pipy {
 namespace algo {
 
@@ -509,7 +511,7 @@ void LoadBalancer::provision(pjs::Context &ctx, pjs::Array *targets) {
           if (!ctx.ok()) return false;
         }
 
-        p->weight = weight.is_undefined() ? 1 : weight.to_number();
+        p->weight = std::max(0.0, weight.is_undefined() ? 1.0 : weight.to_number());
         p->capacity = capacity.is_undefined() ? 0 : capacity.to_int32();
 
         return true;
@@ -561,7 +563,7 @@ auto LoadBalancer::allocate(pjs::Context &ctx, const pjs::Value &tag, Cache *exc
 auto LoadBalancer::next(Cache *exclusive) -> Pool* {
   pjs::Value val;
   for (auto p = m_queue.head(); p; p = p->next()) {
-    if (!exclusive || !exclusive->find(p->key, val)) {
+    if (p->weight > 0 && (!exclusive || !exclusive->find(p->key, val))) {
       increase_load(p);
       return p;
     }
