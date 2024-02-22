@@ -366,7 +366,9 @@ function Editor({ root, dts }) {
           const content = await res.text();
           const type = (
             filename.endsWith('.js') ? 'javascript' :
-            filename.endsWith('.json') ? 'json' : 'text'
+            filename.endsWith('.json') ? 'json' :
+            filename.endsWith('.yaml') ? 'yaml' :
+            filename.endsWith('.yml') ? 'yaml' : 'text'
           );
           const model = monaco.editor.createModel(content, type);
           const file = new File(filename, model);
