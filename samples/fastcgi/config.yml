@@ -1,0 +1,8 @@
+# Server listening port
+listen: 8080
+
+# FastCGI application address
+application: localhost:9000
+
+# Root directory of server-side script files
+documents: /var/www/html

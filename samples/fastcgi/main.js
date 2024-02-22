@@ -1,51 +1,36 @@
-((
-  config = JSON.decode(
-    pipy.load('config.json')
-  ),
+var config = YAML.decode(pipy.load('config.yml'))
 
-  main = (ctx) => (
-    pipy(ctx)
-  ),
-
-  makeHeaderEnv = (headers) => (
-    Object.fromEntries(
-      Object.entries(headers).map(
-        ([k, v]) => ['HTTP_' + k.toUpperCase().replaceAll('-', '_'), v]
-      )
+pipy.listen(config.listen, $=>$
+  .demuxHTTP().to($=>$
+    .replaceMessage(
+      function (msg) {
+        var head = msg.head
+        var url = new URL(head.path)
+        var path = url.pathname
+        if (path === '/') path = '/index.php'
+        return new Message(
+          {
+            keepAlive: true,
+            params: {
+              REQUEST_METHOD: head.method,
+              REQUEST_URI: url.pathname,
+              QUERY_STRING: url.query,
+              SCRIPT_FILENAME: `${config.documents}${path}`,
+              SCRIPT_NAME: path,
+              ...Object.fromEntries(Object.entries(head.headers).map(
+                ([k, v]) => ['HTTP_' + k.toUpperCase().replaceAll('-', '_'), v]
+              )),
+            },
+          },
+          msg.body
+        )
+      }
     )
-  ),
-
-  makeFastCGIRequest = (msg, url, path) => (
-    url = new URL(msg.head.path),
-    path = url.pathname,
-    path === '/' && (path = '/index.php'),
-    new Message(
-      {
-        keepAlive: true,
-        params: {
-          REQUEST_METHOD: msg.head.method,
-          REQUEST_URI: url.pathname,
-          QUERY_STRING: url.query,
-          ...makeHeaderEnv(msg.head.headers),
-          SCRIPT_FILENAME: `${config.documents}${path}`,
-          SCRIPT_NAME: path,
-        },
-      },
-      msg.body
+    .muxFastCGI().to($=>$
+      .connect(config.application)
     )
-  ),
-
-) => main()
-
-.listen(config.listen)
-.demuxHTTP().to($=>$
-  .replaceMessage(makeFastCGIRequest)
-  .muxFastCGI().to($=>$
-    .connect(config.application)
+    .replaceMessageStart(() => new Data('HTTP/1.1 200 OK\r\n'))
+    .replaceMessageEnd(new StreamEnd)
+    .decodeHTTPResponse()
   )
-  .replaceMessageStart(() => new Data('HTTP/1.1 200 OK\r\n'))
-  .replaceMessageEnd(new StreamEnd)
-  .decodeHTTPResponse()
 )
-
-)()

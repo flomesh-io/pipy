@@ -1,5 +1,0 @@
-{
-  "listen": 8080,
-  "application": "localhost:9000",
-  "documents": "/var/www/html"
-}
