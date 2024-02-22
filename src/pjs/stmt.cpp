@@ -427,7 +427,11 @@ bool Break::declare(Module *module, Tree::Scope &scope, Error &error) {
 }
 
 void Break::execute(Context &ctx, Result &result) {
-  result.set_break(m_label->name());
+  if (m_label) {
+    result.set_break(m_label->name());
+  } else {
+    result.set_break();
+  }
 }
 
 void Break::dump(std::ostream &out, const std::string &indent) {
